@@ -30,7 +30,7 @@ class TabControl final: public Control
 {
 public:
 	TabControl(DialogRect rect, std::u16string label, bool selected, bool first, bool last, std::function<void()> select,
-	           int textSize = DialogPainter::k_MidTextSize)
+	           int textSize = DialogPainter::MidTextSize())
 	    : Control(rect)
 	    , _label(std::move(label))
 	    , _textSize(textSize)
@@ -206,7 +206,7 @@ bool Dialog::MouseUp(glm::ivec2 point)
 	}
 	if (auto* picture = dynamic_cast<SymbolPicture*>(pressed); picture != nullptr && released != pressed)
 	{
-		picture->Release();
+		picture->CloseRing();
 	}
 	if (pressed == nullptr || released != pressed)
 	{
@@ -351,7 +351,7 @@ void Dialog::Reset()
 	        std::ranges::find_if(_controls, [](const auto& c) { return dynamic_cast<SymbolPicture*>(c.get()) != nullptr; });
 	    it != _controls.end())
 	{
-		static_cast<SymbolPicture&>(**it).Release();
+		static_cast<SymbolPicture&>(**it).CloseRing();
 	}
 }
 

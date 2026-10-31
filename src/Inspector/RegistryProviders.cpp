@@ -17,6 +17,7 @@
 #include <utility>
 #include <vector>
 
+#include <InspectorJson.h>
 #include <InspectorQuery.h>
 #include <fmt/format.h>
 #include <glm/geometric.hpp>
@@ -83,6 +84,63 @@ std::vector<ParameterDescription> FindParameters()
 	     .description = "Only entities whose label holds this text, in any case",
 	     .required = false},
 	};
+}
+
+/// The most bytes that one field of a component keeps when its component is too large for the answer
+constexpr size_t k_MostFieldBytes = 1024;
+
+/// Makes the components of an entity fit in the bytes that an answer may take. The largest component goes first: it keeps
+/// the fields that are small and lists the others by their bytes under "omitted_fields", so that a creature's animation
+/// gives its state and not its bone matrices, and the components beside it are not lost with it. A reader asks for an
+/// omitted field by its path in "fields".
+void ShrinkComponents(Json& data, size_t maxBytes)
+{
+	// The bytes that the answer takes besides the components: its names, place and the keys of the data
+	constexpr size_t k_Envelope = 1024;
+	const auto bytesOf = [](const Json& value) { return Dump(value).size(); };
+	if (!data.is_object() || bytesOf(data) + k_Envelope <= maxBytes)
+	{
+		return;
+	}
+	std::vector<std::pair<size_t, std::string>> bySize;
+	for (const auto& [name, component] : data.items())
+	{
+		bySize.emplace_back(bytesOf(component), name);
+	}
+	std::ranges::sort(bySize, std::ranges::greater {});
+	size_t total = bytesOf(data);
+	for (const auto& [size, name] : bySize)
+	{
+		if (total + k_Envelope <= maxBytes)
+		{
+			break;
+		}
+		auto& component = data[name];
+		if (!component.is_object())
+		{
+			continue;
+		}
+		Json kept = Json::object();
+		Json omitted = Json::object();
+		for (const auto& [field, value] : component.items())
+		{
+			if (const auto fieldBytes = bytesOf(value); fieldBytes > k_MostFieldBytes)
+			{
+				omitted[field] = fieldBytes;
+			}
+			else
+			{
+				kept[field] = value;
+			}
+		}
+		if (omitted.empty())
+		{
+			continue;
+		}
+		kept["omitted_fields"] = std::move(omitted);
+		component = std::move(kept);
+		total = total - size + bytesOf(component);
+	}
 }
 
 } // namespace
@@ -193,7 +251,11 @@ std::vector<QueryDescription> RegistryProvider::Describe() const
 	     .kind = ResultKind::List,
 	     .needsNear = false},
 	    {.name = "entity",
-	     .description = "One entity: its kind, label, place and component names; their fields on request",
+	     .description =
+	         "One entity: its kind, label, place and component names; their fields on request. A component can be larger than "
+	         "max_bytes (a creature's animation is): the answer then keeps its small fields and lists the others by their "
+	         "bytes under "
+	         "omitted_fields, to ask for by their paths in fields",
 	     .parameters = {{.name = "id", .type = "integer", .description = "The entity's id", .required = true},
 	                    {.name = "components",
 	                     .type = "array or \"all\"",
@@ -253,7 +315,7 @@ QueryResult RegistryProvider::Run(std::string_view query, const QueryContext& co
 	}
 	if (query == "entity")
 	{
-		return Entity(*registry, context.params);
+		return Entity(*registry, context.params, context.options);
 	}
 	if (query == "components")
 	{
@@ -274,7 +336,7 @@ QueryResult RegistryProvider::Run(std::string_view query, const QueryContext& co
 	return QueryResult::Error("no query ecs." + std::string(query));
 }
 
-QueryResult RegistryProvider::Entity(const ecs::Registry& registry, const Json& params) const
+QueryResult RegistryProvider::Entity(const ecs::Registry& registry, const Json& params, const QueryOptions& options) const
 {
 	const auto id = params.find("id");
 	const auto entity = id == params.end() ? std::nullopt : FromId(*id);
@@ -293,7 +355,13 @@ QueryResult RegistryProvider::Entity(const ecs::Registry& registry, const Json& 
 		const auto names = all ? std::vector<std::string> {} : Names(params, "components");
 		if (all || !names.empty())
 		{
-			result["data"] = ComponentsToJson(registry, _context, *entity, names);
+			auto data = ComponentsToJson(registry, _context, *entity, names);
+			// Fields asked for by name must stay whole: they are cut after this, by their paths
+			if (options.fields.empty())
+			{
+				ShrinkComponents(data, options.maxBytes);
+			}
+			result["data"] = std::move(data);
 		}
 	}
 	return QueryResult::Value(std::move(result));

@@ -67,7 +67,26 @@ struct Leave
 {
 };
 
+/// A winning condition that the host of a network game picked: the number of the condition (0 to 14, in the order of
+/// the game) and the value that a god must get to
+struct ConditionValue
+{
+	uint8_t condition {0};
+	uint32_t value {0};
+
+	[[nodiscard]] bool operator==(const ConditionValue&) const = default;
+};
+
 /// Server to client: "game.start". The world starts to turn from this turn.
+/// A human god of the game, for the names in the chat
+struct God
+{
+	uint8_t slot {0};
+	/// The name of the account
+	std::string name;
+	bool operator==(const God&) const = default;
+};
+
 struct Start
 {
 	/// The script of the land, as a path under the Scripts folder of the game (for example "Land1.txt" or
@@ -82,8 +101,24 @@ struct Start
 	std::string opening;
 	/// The network map for 32 gods in place of a land ("gods_ring_map", optional)
 	bool godsRingMap {false};
+	/// Tools: every god with a citadel is a computer god, and the room has no human god ("all_computer_gods", optional).
+	/// Only a developer build plays such a game.
+	bool allComputerGods {false};
+	/// Tools: the seed of the personalities of the computer gods ("ai_seed", optional). None: the built-in personalities.
+	std::optional<uint32_t> aiSeed;
+	/// Tools: the id of the testbed scenario that every computer plays from the first turn ("scenario", optional). Only a
+	/// developer build plays such a game.
+	std::optional<std::string> scenario;
+	/// The time limit of the game in minutes ("time_limit", optional). Every computer decides the game at the same turn
+	/// when the time is up. None: the default time limit of the game.
+	std::optional<uint32_t> timeLimit;
+	/// The winning conditions of the game ("conditions", optional). Each god gets each condition at the start. Empty: the
+	/// game has no winning conditions.
+	std::vector<ConditionValue> conditions;
 	/// The names of the players of the gods, by god slot ("names", optional). A slot with no player has an empty name.
 	std::vector<std::string> names;
+	/// The human gods of the game, by slot, as the game starts or as an observer joins ("gods", optional)
+	std::vector<God> gods;
 };
 
 /// Server to client: "room.joined". The server accepted the ticket.

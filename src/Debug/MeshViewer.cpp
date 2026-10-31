@@ -33,6 +33,7 @@
 #include "ECS/Systems/HandSystemInterface.h"
 #include "Graphics/GraphicsHandleBgfx.h"
 #include "Graphics/IndexBuffer.h"
+#include "Graphics/Mesh.h"
 #include "Graphics/RendererInterface.h"
 #include "Graphics/ShaderManager.h"
 #include "Graphics/Texture2D.h"
@@ -293,9 +294,9 @@ void MeshViewer::Update() noexcept
 
 	auto const& meshes = Locator::resources::value().GetMeshes();
 	auto const& animations = Locator::resources::value().GetAnimations();
-	auto& shaderManager = renderer.GetShaderManager();
-	const auto* objectShader = shaderManager.GetShader("Object");
-	const auto* debugShader = shaderManager.GetShader("DebugLine");
+	const auto* shaderManager = renderer.GetShaderManager();
+	const auto* objectShader = shaderManager != nullptr ? shaderManager->GetShader("Object") : nullptr;
+	const auto* debugShader = shaderManager != nullptr ? shaderManager->GetShader("DebugLine") : nullptr;
 
 	// TODO(bwrsandman): use camera class
 	glm::mat4 perspective = glm::perspective(glm::radians(70.0f), 1.0f, 1.0f, 1024.0f);

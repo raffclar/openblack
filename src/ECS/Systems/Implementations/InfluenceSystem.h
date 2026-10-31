@@ -17,6 +17,7 @@
 
 #include "Common/VirtualInfluence.h"
 #include "ECS/Systems/InfluenceSystemInterface.h"
+#include "PlayerSlots.h"
 
 #if !defined(LOCATOR_IMPLEMENTATIONS)
 #error "ECS System implementations should only be included in Locator.cpp"
@@ -41,22 +42,26 @@ public:
 
 	using InfluenceSystemInterface::PlayerInfluence;
 	[[nodiscard]] float PlayerInfluence(PlayerNames player, const map_coords::MapCoords& position) const override;
+	[[nodiscard]] float PlayerOwnInfluence(PlayerNames player, const map_coords::MapCoords& position) const override;
 	[[nodiscard]] float HandPointInfluence(PlayerNames player, const map_coords::MapCoords& hand) const override;
 	using InfluenceSystemInterface::PlayerRawInfluence;
 	[[nodiscard]] float PlayerRawInfluence(PlayerNames player, const map_coords::MapCoords& position) const override;
 	void HeldThingUsedOnLand(PlayerNames player) override;
 	void SetInGameTurn(bool inGameTurn) override { _inGameTurn = inGameTurn; }
 	void FixCitadelReaches() override;
+	void LandLaidOut() override;
 
 	[[nodiscard]] std::span<const influence::Circle> GetCircles() const override { return _circles; }
 	[[nodiscard]] bool IsBorderShown(PlayerNames player) const override;
+	void NoteInfluencePower(PlayerNames player) override;
 	[[nodiscard]] float InfluencePower(PlayerNames player) const override;
 	[[nodiscard]] float CitadelReachOf(PlayerNames player) const override;
 	[[nodiscard]] glm::vec2 GetScrollOffset() const override { return influence::ScrollOffset(_scrollClock); }
 	[[nodiscard]] std::span<const influence::Ripple> GetRipples() const override { return _ripples; }
 
 private:
-	static constexpr size_t k_Players = 8;
+	/// A place for each player number of a network game with the most players
+	static constexpr size_t k_Players = player_slots::k_PlayerNumbers;
 
 	void ProcessCitadels();
 	void DrawBorders();
@@ -71,6 +76,8 @@ private:
 	void ProcessVirtualInfluence(uint32_t turn);
 	/// One turn of what a player's hand keeps past the border, with the hand where it is
 	void ProcessVirtualInfluence(entt::entity playerEntity, PlayerNames player, glm::vec3 hand, uint32_t turn);
+	/// The own influence of a player at a place, or where it is none or less, the influence that an ally lends there
+	[[nodiscard]] float WithAllies(PlayerNames player, const map_coords::MapCoords& position, float own) const;
 	/// What a player's hand keeps of their influence past the border, if they have a hand
 	[[nodiscard]] static const virtual_influence::State* VirtualStateOf(PlayerNames player);
 	/// The game turn last played

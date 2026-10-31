@@ -27,6 +27,7 @@
 #include "Animals/AnimalRules.h"
 #include "Animals/BirdRules.h"
 #include "Animals/GrazerRules.h"
+#include "Animals/HunterRules.h"
 #include "Common/GUtilsAngle.h"
 #include "Common/GUtilsDistance.h"
 #include "Common/GameRandom.h"
@@ -34,6 +35,8 @@
 #include "ECS/Components/Mesh.h"
 #include "ECS/Components/Town.h"
 #include "ECS/Components/Transform.h"
+#include "ECS/Map.h"
+#include "ECS/PlayerTowns.h"
 #include "ECS/Registry.h"
 #include "ECS/ScriptFind.h"
 #include "InfoConstants.h"
@@ -182,6 +185,8 @@ inline size_t GameStateOf(AnimalState state)
 		return 49;
 	case AnimalState::GivesBirth:
 		return 50;
+	case AnimalState::HideInLair:
+		return 51;
 	case AnimalState::DecideWhatToDo:
 	default:
 		return 43;
@@ -244,6 +249,41 @@ inline AnimId GrazerClipFor(const Animal& animal, AnimalState state)
 	    {.walk = static_cast<uint16_t>(row.speedMaxWalk), .run = static_cast<uint16_t>(row.speedMaxRun)}, RandomWhole);
 }
 
+/// A wild hunter's clip of a state: it stands to decide, to give birth, while a script holds it and while it looks at a
+/// thing. It eats, settles down to eat, gets up from its food, sleeps and leaps. Otherwise it moves: it prowls, walks or
+/// runs by its speed
+inline AnimId HunterClipFor(const Animal& animal, AnimalState state, const animals::hunters::KindClips& clips)
+{
+	switch (state)
+	{
+	case AnimalState::DecideWhatToDo:
+	case AnimalState::InScript:
+	case AnimalState::FleeingAndLookingAtObject:
+	case AnimalState::LookingAtObject:
+	case AnimalState::InteractDecideWhatToDo:
+	case AnimalState::GivesBirth:
+		return clips.stand;
+	case AnimalState::Eat:
+		return clips.eat;
+	case AnimalState::StartToEat:
+		return clips.startToEat;
+	case AnimalState::FinishEating:
+		return clips.upFromEat;
+	case AnimalState::Sleeps:
+	case AnimalState::HideInLair:
+		return clips.sleep;
+	case AnimalState::Pounce:
+		return clips.pounce;
+	default:
+		break;
+	}
+	const auto& info = InfoOf(animal.type);
+	const auto& row =
+	    Locator::infoConstants::value().speedThreshold.at(static_cast<size_t>(animals::hunters::ThresholdRowOf(animal.type)));
+	return animals::hunters::MoveClip(clips, animal.move.speed, SpeedStateOf(info, animals::hunters::k_UsualSpeed),
+	                                  static_cast<uint16_t>(row.speedMaxRun));
+}
+
 /// The clip of a state that every kind of animal has: falling when brought down, lying dead, in a hand, flying and
 /// landed. Each kind has its own clips. A kind with no clip for the state keeps the clip that it plays. None for the
 /// other states
@@ -269,8 +309,8 @@ inline std::optional<AnimId> CommonStateClip(const Animal& animal, AnimalState s
 }
 
 /// The clip of a state: the miracle's doves always flap their clip and its bats theirs; its wolves stand to decide,
-/// leap, settle down to eat and eat, and run otherwise; the land's birds choose a flying clip afresh; the grazers take
-/// their own
+/// leap, settle down to eat and eat, and run otherwise; the land's birds choose a flying clip afresh; the grazers and
+/// the wild hunters take their own
 inline AnimId ClipFor(const Animal& animal, AnimalState state)
 {
 	const auto type = animal.type;
@@ -281,6 +321,10 @@ inline AnimId ClipFor(const Animal& animal, AnimalState state)
 	if (animals::grazers::IsGrazer(type))
 	{
 		return GrazerClipFor(animal, state);
+	}
+	if (const auto clips = animals::hunters::ClipsOf(type))
+	{
+		return HunterClipFor(animal, state, *clips);
 	}
 	if (animals::birds::IsLandBird(type))
 	{
@@ -367,12 +411,30 @@ inline float RadiusOf(entt::entity entity)
 	return std::max(half.x, half.z) * transform->scale.x;
 }
 
-/// Where the animal is in the world and the way it faces, from its move and height
-inline void SyncWorld(Animal& animal)
+/// Where the animal is in the world, from its move and height, facing the given way. An animal that turns comes out of
+/// its map cell and goes in again, at the front of the cell's list, unless its walk did that already.
+inline void SyncWorldFacing(Animal& animal, float heading, bool walkReinserted)
 {
 	const auto xz = Metres(animal.move.position);
 	animal.position = {xz.x, Ground(xz) + animal.height, xz.y};
-	animal.heading = gutils::ConvertGameAngleTo3D(animal.move.angle);
+	const bool turned = heading != animal.heading;
+	animal.heading = heading;
+	if (Locator::entitiesMap::has_value())
+	{
+		const auto entity = EntityRegistry().ToEntity(animal);
+		if (turned && !walkReinserted)
+		{
+			Locator::entitiesMap::value().Reinsert(entity);
+		}
+		// It goes into the map cell that it moved into at once
+		Locator::entitiesMap::value().Moved(entity);
+	}
+}
+
+/// Where the animal is in the world and the way it faces, from its move and height
+inline void SyncWorld(Animal& animal)
+{
+	SyncWorldFacing(animal, gutils::ConvertGameAngleTo3D(animal.move.angle), false);
 }
 
 /// Whether a map position is somewhere an animal of a collision mask can't stand: off the map or on no land, or in the
@@ -405,24 +467,14 @@ inline bool CellCollides(glm::vec2 point, uint32_t mask)
 /// player in turn and the neutral towns last. The first town that it finds wins a tie.
 inline entt::entity NearestTown(glm::vec2 point, float reach)
 {
-	struct Entry
-	{
-		PlayerNames owner;
-		uint32_t id;
-		script_find::Candidate candidate;
-	};
-	std::vector<Entry> towns;
-	EntityRegistry().Each<const components::Town, const Transform>(
-	    [&towns](entt::entity entity, const components::Town& town, const Transform& transform) {
-		    towns.push_back(
-		        {.owner = town.owner,
-		         .id = town.id,
-		         .candidate = {.entity = entity, .at = map_coords::FromMetres({transform.position.x, transform.position.z})}});
-	    });
-	std::ranges::sort(towns, [](const Entry& a, const Entry& b) { return std::tie(a.owner, a.id) < std::tie(b.owner, b.id); });
 	std::vector<script_find::Candidate> ordered;
-	ordered.reserve(towns.size());
-	std::ranges::transform(towns, std::back_inserter(ordered), &Entry::candidate);
+	for (const auto town : player_towns::AllInOrder(EntityRegistry()))
+	{
+		if (const auto* transform = EntityRegistry().TryGet<const Transform>(town))
+		{
+			ordered.push_back({.entity = town, .at = map_coords::FromMetres({transform->position.x, transform->position.z})});
+		}
+	}
 	return script_find::FindNearestTown(map_coords::FromMetres(point), reach, ordered);
 }
 

@@ -13,7 +13,11 @@
 
 #include <algorithm>
 
+#include <fmt/format.h>
+
+#include "ECS/PlayerColour.h"
 #include "Online/OnlineMapLand.h"
+#include "PingDisplay.h"
 
 namespace openblack::gui::multiplayer
 {
@@ -52,15 +56,8 @@ char16_t Lower(char16_t c)
 
 /// The observers' grey, as 0xAARRGGBB
 constexpr uint32_t k_ObserverColour = 0xFF808080;
-/// The chat colour of each of the 32 gods, as 0xAARRGGBB. The first four are the game room's team colours: red, green,
-/// blue and yellow. The others are far from each other, from the grey of the observers and from the player's own lines,
-/// and bright enough to read on the dark chat box. A god earlier in the list is further from the colours before it.
-constexpr std::array<uint32_t, 32> k_GodColours = {
-    0xFFFF0000, 0xFF00FF00, 0xFF0000FF, 0xFFFFFF00, 0xFFFF33BB, 0xFF3377EE, 0xFF11FFBB, 0xFF559900,
-    0xFFDD5566, 0xFFEEFF99, 0xFFEEAAFF, 0xFF00BBFF, 0xFFDD11FF, 0xFF119977, 0xFF66FFFF, 0xFFAA55DD,
-    0xFFAAFF55, 0xFF778844, 0xFFFF7700, 0xFFEEAA88, 0xFFFFCC33, 0xFF00FF77, 0xFFBB7799, 0xFFAAEEBB,
-    0xFF2299AA, 0xFFFF0077, 0xFF7788CC, 0xFFFF77BB, 0xFF00AA55, 0xFFBBCC33, 0xFFFF0044, 0xFF00BB00,
-};
+/// The chat colour of each of the 32 gods, as 0xAARRGGBB: the colours that the gods after the seventh also have on the land
+constexpr const auto& k_GodColours = player_colour::k_GodChatColours;
 /// The player's own chat lines
 constexpr uint32_t k_OwnLine = 0xFFC8C8C8;
 
@@ -136,10 +133,14 @@ uint32_t ReadU32(std::span<const uint8_t> bytes, size_t at)
 	       (static_cast<uint32_t>(bytes[at + 2]) << 16u) | (static_cast<uint32_t>(bytes[at + 3]) << 24u);
 }
 
-/// The nearest of the greys (i, i, i) to a colour is the grey of the mean of its three parts, rounded
+/// The grey that Windows gives a colour when it copies the colour into a picture of 256 greys. Each part goes to the
+/// middle of its step of eight, then the grey is the mean of the three parts, rounded.
 uint8_t NearestGrey(uint32_t red, uint32_t green, uint32_t blue)
 {
-	return static_cast<uint8_t>(((red + green + blue) * 2u + 3u) / 6u);
+	constexpr uint32_t k_StepMask = 0xF8;
+	constexpr uint32_t k_StepMiddles = 12;
+	const auto sum = (red & k_StepMask) + (green & k_StepMask) + (blue & k_StepMask) + k_StepMiddles;
+	return static_cast<uint8_t>((sum + 1) / 3);
 }
 
 } // namespace
@@ -359,6 +360,29 @@ std::vector<Seat> Seats(std::span<const lobby_api::RoomPlayer> players)
 	return seats;
 }
 
+std::u16string RosterLine(const Seat& seat, std::u16string_view name, bool own, const RosterTexts& texts,
+                          const std::optional<std::u16string>& ping)
+{
+	std::u16string line;
+	if (seat.god > 0)
+	{
+		const std::array<TextArgument, 1> god = {int64_t {seat.god}};
+		line = FormatText(texts.god, god);
+	}
+	else
+	{
+		line = texts.observers;
+	}
+	line += u": ";
+	line += name;
+	if (own)
+	{
+		line += texts.current;
+		line = ping_display::AfterOwnName(std::move(line), ping);
+	}
+	return line;
+}
+
 uint32_t GodColourBits(int32_t god) noexcept
 {
 	if (god <= 0 || god > static_cast<int32_t>(k_GodColours.size()))
@@ -561,9 +585,79 @@ std::optional<LogoOpacities> DecodeClanLogo(std::span<const uint8_t> bmp)
 	return logo;
 }
 
+std::vector<std::u16string> PlayerDetailLines(std::span<const PlayerDetail> details)
+{
+	std::vector<std::u16string> lines;
+	lines.reserve(details.size());
+	for (const auto& detail : details)
+	{
+		lines.push_back(detail.label + u":" + detail.value);
+	}
+	return lines;
+}
+
 std::string_view ConditionText(size_t index) noexcept
 {
 	return index < k_Conditions.size() ? k_Conditions.at(index).text : std::string_view();
+}
+
+std::optional<size_t> ConditionIndex(std::string_view key) noexcept
+{
+	const auto place = std::ranges::find(k_Conditions, key, &ConditionName::key);
+	if (place == k_Conditions.end())
+	{
+		return std::nullopt;
+	}
+	return static_cast<size_t>(place - k_Conditions.begin());
+}
+
+std::optional<std::string> ConditionsRefusal(const std::optional<ConditionTemplate>& limits,
+                                             std::span<const game_end::ConditionPick> picks)
+{
+	if (!limits.has_value())
+	{
+		return "the template of the winning conditions has no block for the land";
+	}
+	for (const auto& pick : picks)
+	{
+		const auto index = static_cast<size_t>(pick.condition);
+		const auto& each = limits->at(index);
+		if (pick.value < each.least || pick.value > each.most)
+		{
+			return fmt::format("the value {} of {} is not from {} to {}", pick.value, k_Conditions.at(index).key, each.least,
+			                   each.most);
+		}
+	}
+	return std::nullopt;
+}
+
+std::vector<game_end::ConditionPick> ConditionLines(std::span<const game_end::ConditionPick> picks)
+{
+	// The value of each condition, in the order of the game. The last pick of a condition sets its value.
+	std::array<std::optional<int32_t>, k_ConditionCount> values {};
+	for (const auto& pick : picks)
+	{
+		if (const auto index = static_cast<size_t>(pick.condition); index < values.size())
+		{
+			values.at(index) = pick.value;
+		}
+	}
+	// Each condition goes to the top of the list, so the list shows the conditions from the last to the first
+	std::vector<game_end::ConditionPick> lines;
+	for (size_t index = values.size(); index-- > 0;)
+	{
+		if (const auto& value = values.at(index); value.has_value())
+		{
+			lines.push_back({.condition = static_cast<game_end::Condition>(index), .value = *value});
+		}
+	}
+	return lines;
+}
+
+std::u16string ConditionLineText(std::u16string_view name, int32_t value)
+{
+	const std::array<TextArgument, 2> arguments = {name, static_cast<int64_t>(value)};
+	return FormatText(u"%s (%d)", arguments);
 }
 
 std::optional<ConditionTemplate> FindConditions(std::string_view text, std::string_view landFile)

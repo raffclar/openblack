@@ -176,6 +176,39 @@ struct ServerEntry
 	std::string url;
 	/// "updated": the time of the last status of the server, 0 for none
 	int64_t updated {0};
+	/// "map": the SHA-256 (64 hex digits) of the land of the room that the players get from the lobby (an entry of GET
+	/// /api/v1/maps), or empty when the room plays a land of the game
+	std::string map;
+};
+
+/// A land of a network game in GET /api/v1/maps: a land that the players do not have, which the lobby gives to the
+/// players of a room that plays it. The list has the columns of the game's own list of lands and the place to get the
+/// file, with the hash and the start checksum of the file, so that a player asks only for a file that it does not have.
+struct OnlineMap
+{
+	/// "number": the number of the land in the list
+	int64_t number {0};
+	/// "name": the name that the list shows
+	std::string name;
+	/// "file": the name of the file with no folder and no extension, for example "obm_32p_1"
+	std::string file;
+	/// "players": the gods that the land takes
+	int32_t players {0};
+	/// "sha256": the SHA-256 of the bytes of the file, as 64 hex digits
+	std::string sha256;
+	/// "checksum": the start checksum of the file (the checksum that the players compare before the start), as 16 hex
+	/// digits
+	uint64_t checksum {0};
+	/// "size": the bytes of the file
+	int64_t size {0};
+	/// "url": the path of the file on the lobby, /api/v1/maps/<sha256>
+	std::string url;
+};
+
+/// GET /api/v1/maps: {"maps": [...]}
+struct MapList
+{
+	std::vector<OnlineMap> maps;
 };
 
 /// A god or an observer in the status report of a game server
@@ -214,6 +247,21 @@ struct ServerStatus
 struct ServerList
 {
 	std::vector<ServerEntry> servers;
+};
+
+/// A ban of an account from one game server
+struct ServerBan
+{
+	/// "account"
+	AccountRef account;
+	/// "reason"
+	std::string reason;
+};
+
+/// GET /api/v1/servers/{id}/bans: {"bans": [...]}, the bans of the server that did not end, over mutual TLS
+struct ServerBanList
+{
+	std::vector<ServerBan> bans;
 };
 
 /// The roles of a join ticket
@@ -358,10 +406,10 @@ struct Date
 };
 
 /// POST /api/v1/me/creatures: the files of the player's creature as multipart/form-data, as the creature upload tool of
-/// the game sent them. Not in the contract of the lobby yet.
+/// the game sent them
 struct CreatureUpload
 {
-	/// The field "creature": creature.lhp, the package of the values and the pictures of the creature's web page
+	/// The field "lhp": creature.lhp, the package of the values and the pictures of the creature's web page
 	std::vector<uint8_t> package;
 	/// The field "mind": the creature's mind file, with its file name
 	std::vector<uint8_t> mind;
@@ -372,7 +420,7 @@ struct CreatureUpload
 };
 
 /// The names of the fields of the creature upload
-constexpr std::string_view k_UploadPackageField = "creature";
+constexpr std::string_view k_UploadPackageField = "lhp";
 constexpr std::string_view k_UploadMindField = "mind";
 constexpr std::string_view k_UploadPhysiqueField = "physique";
 constexpr std::string_view k_UploadPackageFileName = "creature.lhp";

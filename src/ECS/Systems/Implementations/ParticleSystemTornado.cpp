@@ -23,7 +23,7 @@
 #include "ECS/Systems/WeatherSystemInterface.h"
 #include "InfoConstants.h"
 #include "Locator.h"
-#include "ParticleSystem.h"
+#include "ParticleRuleSystem.h"
 
 using namespace openblack;
 using namespace openblack::ecs::systems;

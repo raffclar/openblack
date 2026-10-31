@@ -15,7 +15,6 @@
 #include <spdlog/spdlog.h>
 
 #include "BoneBudget.h"
-#include "DescriptorSetTally.h"
 #include "DrawEncoder.h"
 #include "DrawWindow.h"
 #include "FileSystem/FileSystemInterface.h"
@@ -68,7 +67,6 @@ ShaderProgram::ShaderProgram(const std::string& name, ShaderHandle vertexShader,
 	}
 	// A sampler the backend's build of the shader doesn't have can't be bound, nor needs to be
 	std::erase_if(_samplers, [this](const shader_samplers::Sampler& sampler) { return !_uniforms.Contains(sampler.name); });
-	// Each draw can bind the samplers, so their uniforms are looked up by name only here
 	_samplerUniforms.reserve(_samplers.size());
 	std::ranges::transform(_samplers, std::back_inserter(_samplerUniforms),
 	                       [this](const shader_samplers::Sampler& sampler) { return *_uniforms.Find(sampler.name); });
@@ -97,10 +95,6 @@ void ShaderProgram::Bind(DrawEncoder& to, uint8_t bindPoint, UniformHandle sampl
 {
 	to.encoder->setTexture(bindPoint, toBgfx(sampler), toBgfx(texture), samplerFlags);
 	to.stages.Set(bindPoint);
-	if (to.tally != nullptr)
-	{
-		to.tally->SetTexture(bindPoint, toBgfx(texture).idx);
-	}
 }
 
 void ShaderProgram::SetTextureSampler(DrawEncoder& to, const char* samplerName, uint8_t bindPoint,
@@ -156,22 +150,13 @@ void ShaderProgram::Submit(DrawEncoder& to, uint16_t viewId, uint32_t depth, uin
 			Bind(to, sampler.stage, _samplerUniforms[i], texture);
 		}
 	}
-	const bool dropsBindings = (discardFlags & BGFX_DISCARD_BINDINGS) != 0;
 	// Only the game's thread draws while the window is open
 	if (&to == &_main && _window != nullptr && !_window->Admit(viewId))
 	{
 		// The draw goes in a later frame. Its state stays or goes as the draw would keep or drop it.
-		if (to.tally != nullptr && dropsBindings)
-		{
-			to.tally->DiscardBindings();
-		}
 		to.encoder->discard(discardFlags);
 		to.stages.Discarded(discardFlags);
 		return;
-	}
-	if (to.tally != nullptr)
-	{
-		to.tally->Submit(viewId, toBgfx(_program).idx, depth, dropsBindings);
 	}
 	to.encoder->submit(viewId, toBgfx(_program), depth, discardFlags);
 	to.stages.Discarded(discardFlags);

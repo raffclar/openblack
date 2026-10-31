@@ -12,7 +12,9 @@
 #include <cstdint>
 
 #include <array>
+#include <bit>
 #include <optional>
+#include <utility>
 #include <vector>
 
 /// The help system's profile of the player: how often and how lately the player has done each of the things the help
@@ -100,6 +102,10 @@ constexpr uint32_t k_MillisecondsPerTurn = 100;
 constexpr uint32_t k_TimesKept = 64;
 /// How quickly the smoothed rate follows the turns the event happens on
 constexpr float k_RateFollow = 0.005f;
+/// The seconds since an event that never happened: 0, the bits 0x00000000
+constexpr float k_SecondsSinceNever = std::bit_cast<float>(0x00000000U);
+/// The float scale from milliseconds to seconds: 0.001, the bits 0x3A83126F
+constexpr float k_SecondsPerMillisecond = std::bit_cast<float>(0x3A83126FU);
 
 /// One event's count: its total, the times it last happened, and a smoothed share of the turns it happens on. It
 /// counts at most once a turn.
@@ -161,6 +167,23 @@ struct WorldCameraView
 /// - No land shows there and the camera looks up at the sky: k_CameraSeesSky.
 [[nodiscard]] std::vector<uint32_t> CameraViewEvents(const WorldCameraView& view);
 
+/// The help events of the input of this computer's player, which wait for the next report of the help. One bit keeps
+/// each event, thus an event that occurs many times before a report goes once.
+class ReportedEvents
+{
+public:
+	/// The event occurs. Nothing for a number past the last.
+	void Add(uint32_t event);
+	/// The events that occurred since the last take, one bit for each event (bit n is event n). The kept events go.
+	[[nodiscard]] uint64_t Take();
+
+private:
+	uint64_t _events {0};
+};
+
+/// The events of the bits of a report, in the order of their numbers. The bits past the last event give nothing.
+[[nodiscard]] std::vector<uint32_t> EventsOf(uint64_t events);
+
 /// Every event's count and the profile's clock
 class HelpProfile
 {
@@ -169,6 +192,9 @@ public:
 	void Trigger(uint32_t event);
 	/// A game turn ends: each event may happen again, and the clock moves on
 	void EndTurn();
+	/// A land is cleared: the clock starts again from 0. The counts keep their times, which then are ahead of the clock
+	/// until the clock catches up.
+	void ResetClock() { _clock = 0; }
 
 	[[nodiscard]] uint32_t Clock() const { return _clock; }
 	[[nodiscard]] const EventCount& Count(uint32_t event) const { return _counts.at(event); }

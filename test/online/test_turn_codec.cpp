@@ -13,11 +13,13 @@
 #include <bit>
 #include <limits>
 #include <random>
+#include <string>
 #include <vector>
 
 #include <gtest/gtest.h>
 
 #include "Commands/TurnCodec.h"
+#include "PlayerSlots.h"
 
 using namespace openblack;
 using namespace openblack::turn_codec;
@@ -29,6 +31,12 @@ namespace
 entt::entity Entity(uint32_t value)
 {
 	return static_cast<entt::entity>(value);
+}
+
+/// The player of a god slot, with the slot taken from any number
+PlayerNames GodOf(uint64_t number)
+{
+	return *player_slots::PlayerOfSlot(static_cast<size_t>(number % player_slots::k_MaxPlayers));
 }
 
 /// One command of each kind, with fields that show the order of the bytes
@@ -44,7 +52,7 @@ std::vector<Action> EachCommand()
 	        .velocity = {1.5f, -2.25f, 1e-30f},
 	        .start = {.angularMomentum = {0.0f, -0.0f, 2.0f}, .origin = {100.5f, 7.0f, -9.0f}, .angles = {0.1f, -3.1f, 1.5f}}},
 	    HandTap {.object = entt::null},
-	    HandGive {.creature = Entity(10), .object = Entity(11)},
+	    HandGive {.creature = Entity(10), .object = Entity(11), .leftHand = true},
 	    LeashOrder {.kind = LeashOrder::Kind::AtPlace, .object = entt::null, .place = {1000.5f, 12.0f, -3.0f}},
 	    LeashPostTap {.post = Entity(12)},
 	    HandReport {.collidePoint = {1.0f, 2.0f, 3.0f},
@@ -62,14 +70,7 @@ std::vector<Action> EachCommand()
 	    FightGround {.creature = Entity(19), .point = {-1.5f, 2.0f, 3.25f}, .replace = true},
 	    FightMove {.target = Entity(20), .kind = 6, .value = 0x01020304, .replace = false},
 	    FightCharge {.heldMs = 1200},
-	    CreatureReaction {.creature = Entity(21),
-	                      .animation = 0x0A0B0C0D,
-	                      .mirrored = true,
-	                      .pullsFace = true,
-	                      .face = 3,
-	                      .faceMs = 2000.0f,
-	                      .cue = 15,
-	                      .interruptsAfter = 0.25f},
+	    CreatureReaction {.creature = Entity(21), .animation = 0x0A0B0C0D, .mirrored = true, .interruptsAfter = 0.8},
 	    HandClick {.thing = Entity(22), .release = true, .hasPlace = true, .placeX = -5, .placeZ = 0x7FFFFFFF},
 	    SeedGesture {.kind = SeedGesture::Kind::PowerUp, .level = -1},
 	    HandPick {.object = Entity(23)},
@@ -87,6 +88,40 @@ std::vector<Action> EachCommand()
 	    LeashPick {.type = LeashType::Good},
 	    HandShakeOff {},
 	    GripDust {.point = {2000.5f, 104.25f, -2363.0f}},
+	    HelpReport {.events = 0x0102030405060708,
+	                .boxShows = false,
+	                .cursorOnPoint = true,
+	                .cameraSeesLand = true,
+	                .cameraNearAndSteep = true,
+	                .cameraSeesSky = false},
+	    HelpQuery {.thing = Entity(26), .hasGround = true, .ground = {1.0f, 2.0f, 3.0f}},
+	    CreatureFightCheat {},
+	    ViewReport {.eye = {1.0f, 2.0f, 3.0f},
+	                .focus = {4.0f, 5.0f, 6.0f},
+	                .lens = 1.2f,
+	                .nearClip = 0.5f,
+	                .screenWidth = 1280,
+	                .screenHeight = 1024,
+	                .aspect = 1.25f,
+	                .inclusionDistance = 30.0f,
+	                .cameraOrders = 7,
+	                .cameraArrived = true,
+	                .gripsLand = false,
+	                .otherButton = true},
+	    TempleLeashOff {},
+	    GiveCallOff {.creature = Entity(27)},
+	    CreatureTattoo {.creature = Entity(28),
+	                    .slots = {creature_tattoo::Slot {.design = 3, .site = 1, .colour = {10, 20, 30}}},
+	                    .hasPictures = true,
+	                    .pictures = {1, 2, 3}},
+	    LeashLength {.length = 12.5f},
+	    ChatSpeech {.recipients = {PlayerNames::PLAYER_TWO, PlayerNames::PLAYER_FOUR}, .text = u"Hello"},
+	    ChatTaunt {.recipients = {PlayerNames::PLAYER_ONE}, .taunt = 30},
+	    QuickSave {},
+	    QuickLoad {},
+	    MusicMood {.creature = Entity(29), .track = 0x89ABCDEF, .mood = -0.75f},
+	    IconChargeStop {},
+	    DialogueClick {.click = true, .skipKey = true},
 	};
 }
 
@@ -109,8 +144,9 @@ Action RandomAction(std::mt19937& random)
 	std::uniform_int_distribution<uint32_t> bits;
 	const auto entity = [&]() { return Entity(bits(random)); };
 	const auto number = [&]() { return std::bit_cast<float>(bits(random)); };
+	const auto wide = [&]() { return (static_cast<uint64_t>(bits(random)) << 32U) | bits(random); };
 	const auto vector = [&]() { return glm::vec3 {number(), number(), number()}; };
-	switch (bits(random) % 32)
+	switch (bits(random) % 47)
 	{
 	case 0:
 		return LeashKey {.key = static_cast<creature_leash::LeashKey>(bits(random) % 3)};
@@ -127,7 +163,7 @@ Action RandomAction(std::mt19937& random)
 	case 5:
 		return HandTap {.object = entity()};
 	case 6:
-		return HandGive {.creature = entity(), .object = entity()};
+		return HandGive {.creature = entity(), .object = entity(), .leftHand = bits(random) % 2 == 1};
 	case 7:
 		return LeashOrder {.kind = static_cast<LeashOrder::Kind>(bits(random) % 4), .object = entity(), .place = vector()};
 	case 8:
@@ -154,17 +190,10 @@ Action RandomAction(std::mt19937& random)
 	case 17:
 		return FightCharge {.heldMs = bits(random)};
 	case 18:
-	{
-		const bool face = bits(random) % 2 == 0;
 		return CreatureReaction {.creature = entity(),
 		                         .animation = bits(random),
 		                         .mirrored = bits(random) % 2 == 0,
-		                         .pullsFace = face,
-		                         .face = face ? static_cast<uint8_t>(bits(random) % 12) : uint8_t {0},
-		                         .faceMs = face ? number() : 0.0f,
-		                         .cue = face ? static_cast<uint8_t>(bits(random) % 19) : uint8_t {0},
-		                         .interruptsAfter = number()};
-	}
+		                         .interruptsAfter = std::bit_cast<double>(wide())};
 	case 22:
 		return HandPick {.object = entity()};
 	case 20:
@@ -212,6 +241,83 @@ Action RandomAction(std::mt19937& random)
 		return HandShakeOff {};
 	case 30:
 		return GripDust {.point = vector()};
+	case 31:
+		return HelpReport {.events = (uint64_t {bits(random)} << 32) | bits(random),
+		                   .boxShows = bits(random) % 2 == 0,
+		                   .cursorOnPoint = bits(random) % 2 == 0,
+		                   .cameraSeesLand = bits(random) % 2 == 0,
+		                   .cameraNearAndSteep = bits(random) % 2 == 0,
+		                   .cameraSeesSky = bits(random) % 2 == 0};
+	case 32:
+		return HelpQuery {.thing = entity(), .hasGround = bits(random) % 2 == 0, .ground = vector()};
+	case 33:
+		return ViewReport {.eye = vector(),
+		                   .focus = vector(),
+		                   .lens = number(),
+		                   .nearClip = number(),
+		                   .screenWidth = static_cast<uint16_t>(bits(random)),
+		                   .screenHeight = static_cast<uint16_t>(bits(random)),
+		                   .aspect = number(),
+		                   .inclusionDistance = number(),
+		                   .cameraOrders = bits(random),
+		                   .cameraArrived = bits(random) % 2 == 0,
+		                   .gripsLand = bits(random) % 2 == 0,
+		                   .otherButton = bits(random) % 2 == 0};
+	case 34:
+		return GiveCallOff {.creature = entity()};
+	case 35:
+	{
+		CreatureTattoo tattoo {.creature = entity()};
+		for (auto& slot : tattoo.slots)
+		{
+			slot = {.design = static_cast<uint8_t>(bits(random) % 16),
+			        .site = static_cast<uint8_t>(bits(random) % 16),
+			        .colour = glm::u8vec3(bits(random) % 256, bits(random) % 256, bits(random) % 256)};
+		}
+		tattoo.hasPictures = bits(random) % 2 == 0;
+		if (tattoo.hasPictures)
+		{
+			tattoo.pictures.resize(bits(random) % 64);
+			for (auto& byte : tattoo.pictures)
+			{
+				byte = static_cast<uint8_t>(bits(random));
+			}
+		}
+		return tattoo;
+	}
+	case 36:
+		return LeashLength {.length = number()};
+	case 37:
+		return CreatureFightCheat {};
+	case 38:
+		return TempleLeashOff {};
+	case 39:
+	{
+		ChatSpeech speech;
+		speech.recipients.resize(bits(random) % 33);
+		for (auto& recipient : speech.recipients)
+		{
+			recipient = GodOf(bits(random));
+		}
+		speech.text.resize(bits(random) % 300);
+		for (auto& character : speech.text)
+		{
+			character = static_cast<char16_t>(bits(random));
+		}
+		return speech;
+	}
+	case 40:
+		return ChatTaunt {.recipients = {GodOf(bits(random))}, .taunt = bits(random)};
+	case 41:
+		return QuickSave {};
+	case 42:
+		return QuickLoad {};
+	case 43:
+		return MusicMood {.creature = entity(), .track = bits(random), .mood = number()};
+	case 44:
+		return IconChargeStop {};
+	case 45:
+		return DialogueClick {.click = bits(random) % 2 == 0, .skipKey = bits(random) % 2 == 0};
 	default:
 		return PlayerLeft {};
 	}
@@ -241,9 +347,8 @@ Frame RandomFrame(std::mt19937& random)
 		turn.blocks.resize(random() % 40);
 		for (auto& block : turn.blocks)
 		{
-			block = StampedBlock {.sender = static_cast<PlayerNames>(random() % 32),
-			                      .sequence = static_cast<uint16_t>(random()),
-			                      .actions = RandomActions(random)};
+			block = StampedBlock {
+			    .sender = GodOf(random()), .sequence = static_cast<uint16_t>(random()), .actions = RandomActions(random)};
 		}
 		return turn;
 	}
@@ -273,8 +378,8 @@ std::vector<Action> BusyCommands()
 
 TEST(TurnCodec, EachCommandHasItsSize)
 {
-	const std::vector<size_t> sizes {2, 5,  9,  5, 53, 5,  9, 18, 5, 49, 17, 5,  5, 5, 9, 12,
-	                                 1, 18, 11, 5, 21, 15, 3, 5,  1, 2,  1,  61, 5, 2, 1, 13};
+	const std::vector<size_t> sizes {2, 5, 9, 5,  53, 5, 10, 18, 5,  49, 17, 5,  5, 5, 9,  12, 1,  18, 11, 5, 18, 15, 3, 5,
+	                                 1, 2, 1, 61, 5,  2, 1,  13, 10, 18, 1,  50, 1, 5, 51, 5,  16, 7,  1,  1, 13, 1,  2};
 	const auto commands = EachCommand();
 	ASSERT_EQ(commands.size(), sizes.size());
 	for (size_t i = 0; i < commands.size(); ++i)
@@ -285,6 +390,15 @@ TEST(TurnCodec, EachCommandHasItsSize)
 		if (std::holds_alternative<PlayerLeft>(commands[i]))
 		{
 			tag = 17;
+		}
+		// The lines of the chat have the tags 41 and 42
+		if (std::holds_alternative<ChatSpeech>(commands[i]))
+		{
+			tag = 41;
+		}
+		if (std::holds_alternative<ChatTaunt>(commands[i]))
+		{
+			tag = 42;
 		}
 		EXPECT_EQ(static_cast<size_t>(TagOf(commands[i])), tag) << i;
 	}
@@ -319,8 +433,7 @@ TEST(TurnCodec, EachFrameKindGoesToBytesAndBack)
 	TurnBundle turn {.turn = 81'201, .blocks = {}};
 	for (size_t i = 0; i < all.size(); ++i)
 	{
-		turn.blocks.push_back(
-		    {.sender = static_cast<PlayerNames>((i * 2) % 31), .sequence = static_cast<uint16_t>(i), .actions = {all[i]}});
+		turn.blocks.push_back({.sender = GodOf((i * 2) % 31), .sequence = static_cast<uint16_t>(i), .actions = {all[i]}});
 	}
 	ExpectRoundTrip(turn);
 	ExpectRoundTrip(TurnBundle {.turn = 0, .blocks = {}});
@@ -408,8 +521,10 @@ TEST(TurnCodec, TheEncoderRefusesAFrameThatBreaksALimit)
 	commands.resize(k_MostBlockCommands + 1, HandTake {.object = Entity(1)});
 	EXPECT_TRUE(Encode(CommandBlock {.sequence = 0, .turn = 0, .actions = commands}).empty());
 	EXPECT_TRUE(
-	    Encode(TurnBundle {.turn = 0, .blocks = {{.sender = static_cast<PlayerNames>(32), .sequence = 0, .actions = {}}}})
+	    Encode(TurnBundle {.turn = 0, .blocks = {{.sender = static_cast<PlayerNames>(33), .sequence = 0, .actions = {}}}})
 	        .empty());
+	EXPECT_TRUE(
+	    Encode(TurnBundle {.turn = 0, .blocks = {{.sender = PlayerNames::NEUTRAL, .sequence = 0, .actions = {}}}}).empty());
 	// A turn larger than the largest frame
 	TurnBundle huge {.turn = 0, .blocks = {}};
 	huge.blocks.resize(2000, StampedBlock {.sender = PlayerNames::PLAYER_ONE, .sequence = 0, .actions = commands});
@@ -467,10 +582,10 @@ TEST(TurnCodec, TheDecoderRefusesABadFrame)
 	move[14] = 6;
 	move.back() = 2;
 	EXPECT_EQ(Decode(move).error, DecodeError::Value);
-	// A reaction with no face keeps the bytes of the face empty
+	// A reaction is mirrored or not
 	auto reaction = Encode(CommandBlock {.sequence = 0, .turn = 0, .actions = {CreatureReaction {.creature = Entity(1)}}});
 	EXPECT_EQ(Decode(reaction).error, DecodeError::None);
-	reaction[20] = 1;
+	reaction[18] = 2;
 	EXPECT_EQ(Decode(reaction).error, DecodeError::Value);
 	// A press of the hand has no place
 	auto click = Encode(CommandBlock {.sequence = 0, .turn = 0, .actions = {HandClick {.thing = Entity(1)}}});
@@ -481,8 +596,25 @@ TEST(TurnCodec, TheDecoderRefusesABadFrame)
 	auto gesture = Encode(CommandBlock {.sequence = 0, .turn = 0, .actions = {SeedGesture {}}});
 	gesture[10] = 3;
 	EXPECT_EQ(Decode(gesture).error, DecodeError::Value);
+	// A tattoo of a design that is not one of the sixteen, a pictures flag that is not 0 or 1, pictures with no flag, or
+	// a block of pictures larger than eight pictures
+	auto tattoo = Encode(CommandBlock {.sequence = 0, .turn = 0, .actions = {CreatureTattoo {.creature = Entity(1)}}});
+	EXPECT_EQ(Decode(tattoo).error, DecodeError::None);
+	tattoo[14] = 16;
+	EXPECT_EQ(Decode(tattoo).error, DecodeError::Value);
+	tattoo[14] = 0;
+	tattoo[54] = 2;
+	EXPECT_EQ(Decode(tattoo).error, DecodeError::Value);
+	tattoo[54] = 0;
+	tattoo[55] = 1;
+	EXPECT_EQ(Decode(tattoo).error, DecodeError::Value);
+	tattoo[54] = 1;
+	EXPECT_EQ(Decode(tattoo).error, DecodeError::Truncated);
+	tattoo[55] = 0x29;
+	tattoo[56] = 0x40;
+	EXPECT_EQ(Decode(tattoo).error, DecodeError::Value);
 
-	auto turn = Encode(TurnBundle {.turn = 1, .blocks = {{.sender = PlayerNames::NEUTRAL, .sequence = 0, .actions = {}}}});
+	auto turn = Encode(TurnBundle {.turn = 1, .blocks = {{.sender = PlayerNames::PLAYER_ONE, .sequence = 0, .actions = {}}}});
 	turn[8] = 32;
 	EXPECT_EQ(Decode(turn).error, DecodeError::Value);
 
@@ -602,7 +734,7 @@ TEST(TurnCodec, ATurnOf32BusyPlayersFitsTheBudgetOfTheReport)
 	TurnBundle turn {.turn = 1, .blocks = {}};
 	for (size_t player = 0; player < 32; ++player)
 	{
-		turn.blocks.push_back({.sender = static_cast<PlayerNames>(player), .sequence = 0, .actions = commands});
+		turn.blocks.push_back({.sender = GodOf(player), .sequence = 0, .actions = commands});
 	}
 	const auto encoded = Encode(turn);
 	// The commands without the hand report
@@ -679,4 +811,235 @@ TEST(TurnCodec, AMiracleRequestCarriesOnlyASeedOfTheGame)
 	auto wrong = bytes;
 	wrong.back() = static_cast<uint8_t>(SpellSeedType::BeamExplosion) + 1;
 	EXPECT_EQ(Decode(wrong).error, DecodeError::Value);
+}
+
+TEST(TurnCodec, AGiveCarriesTheSideOfTheHandOfTheGiver)
+{
+	for (const bool leftHand : {false, true})
+	{
+		const auto bytes =
+		    Encode(CommandBlock {.sequence = 0,
+		                         .turn = 0,
+		                         .actions = {HandGive {.creature = Entity(3), .object = Entity(4), .leftHand = leftHand}}});
+		const auto decoded = Decode(bytes);
+		ASSERT_EQ(decoded.error, DecodeError::None);
+		ASSERT_TRUE(decoded.frame.has_value());
+		const auto& give = std::get<HandGive>(std::get<CommandBlock>(*decoded.frame).actions.at(0));
+		EXPECT_EQ(give.creature, Entity(3));
+		EXPECT_EQ(give.object, Entity(4));
+		EXPECT_EQ(give.leftHand, leftHand);
+		// The side is the last byte of the command
+		EXPECT_EQ(bytes.back(), leftHand ? 1 : 0);
+	}
+}
+
+TEST(TurnCodec, AHelpReportKeepsItsEventsAndRefusesUnknownFlags)
+{
+	const HelpReport report {.events = uint64_t {1} << 48, .boxShows = true, .cameraSeesSky = true};
+	const auto bytes = Encode(CommandBlock {.sequence = 0, .turn = 0, .actions = {report}});
+	const auto decoded = Decode(bytes);
+	ASSERT_EQ(decoded.error, DecodeError::None);
+	ASSERT_TRUE(decoded.frame.has_value());
+	EXPECT_EQ(std::get<HelpReport>(std::get<CommandBlock>(*decoded.frame).actions.at(0)), report);
+
+	// The byte of the flags comes last, after the tag and the eight bytes of the events. A flag after the fifth is
+	// refused.
+	auto wrong = bytes;
+	wrong.back() = 32;
+	EXPECT_EQ(Decode(wrong).error, DecodeError::Value);
+}
+
+TEST(TurnCodec, AViewReportKeepsItsFieldsAndRefusesUnknownFlags)
+{
+	const ViewReport report {.eye = {10.0f, 20.0f, 30.0f},
+	                         .focus = {-1.0f, 0.0f, 1.0f},
+	                         .lens = 1.2217305f,
+	                         .nearClip = 2.0f,
+	                         .screenWidth = 0x0A0B,
+	                         .screenHeight = 0x0C0D,
+	                         .aspect = 1.7777778f,
+	                         .inclusionDistance = 12.5f,
+	                         .cameraOrders = 0x01020304,
+	                         .cameraArrived = false,
+	                         .gripsLand = true,
+	                         .otherButton = true};
+	const auto bytes = Encode(CommandBlock {.sequence = 0, .turn = 0, .actions = {report}});
+	const auto decoded = Decode(bytes);
+	ASSERT_EQ(decoded.error, DecodeError::None);
+	ASSERT_TRUE(decoded.frame.has_value());
+	EXPECT_EQ(std::get<ViewReport>(std::get<CommandBlock>(*decoded.frame).actions.at(0)), report);
+
+	// The byte of the flags comes last. A flag after the third is refused.
+	auto wrong = bytes;
+	wrong.back() = 8;
+	EXPECT_EQ(Decode(wrong).error, DecodeError::Value);
+}
+
+TEST(TurnCodec, ALineOfTheChatHasItsPlayersThenItsCharacters)
+{
+	const CommandBlock block {
+	    .sequence = 1,
+	    .turn = 2,
+	    .actions = {ChatSpeech {.recipients = {PlayerNames::PLAYER_THREE}, .text = u"Hi\u00E9"}},
+	};
+	const std::vector<uint8_t> expected {
+	    k_Version, 1,         // version, kind Commands
+	    1,         0,         // sequence
+	    2,         0, 0,   0, // turn
+	    1,                    // count
+	    41,                   // tag ChatSpeech
+	    1,         2,         // one player, slot 2
+	    3,         0,         // three characters
+	    'H',       0, 'i', 0, 0xE9, 0,
+	};
+	EXPECT_EQ(Encode(block), expected);
+	const auto decoded = Decode(expected);
+	ASSERT_EQ(decoded.error, DecodeError::None);
+	const auto& actions = std::get<CommandBlock>(*decoded.frame).actions;
+	ASSERT_EQ(actions.size(), 1);
+	EXPECT_EQ(std::get<ChatSpeech>(actions[0]), std::get<ChatSpeech>(block.actions[0]));
+}
+
+TEST(TurnCodec, TheKeysOfTheQuickSaveAndLoadHaveOnlyTheirTags)
+{
+	const CommandBlock block {.sequence = 0, .turn = 0, .actions = {QuickSave {}, QuickLoad {}}};
+	const std::vector<uint8_t> expected {k_Version, 1, 0, 0, 0, 0, 0, 0, 2, 43, 44};
+	EXPECT_EQ(Encode(block), expected);
+	const auto decoded = Decode(expected);
+	ASSERT_EQ(decoded.error, DecodeError::None);
+	const auto& actions = std::get<CommandBlock>(*decoded.frame).actions;
+	ASSERT_EQ(actions.size(), 2);
+	EXPECT_TRUE(std::holds_alternative<QuickSave>(actions[0]));
+	EXPECT_TRUE(std::holds_alternative<QuickLoad>(actions[1]));
+}
+
+TEST(TurnCodec, AChangeOfTheMusicHasTheCreatureTheTrackAndTheMood)
+{
+	const CommandBlock block {
+	    .sequence = 0,
+	    .turn = 0,
+	    .actions = {MusicMood {.creature = Entity(0x01020304), .track = 0x0A0B0C0D, .mood = 1.0f}},
+	};
+	const std::vector<uint8_t> expected {
+	    k_Version, 1,    0,    0,    0, 0, 0, 0, 1, // frame, sequence, turn, count
+	    45,                                         // tag MusicMood
+	    4,         3,    2,    1,                   // creature
+	    0x0D,      0x0C, 0x0B, 0x0A,                // track
+	    0,         0,    0x80, 0x3F,                // mood 1.0
+	};
+	EXPECT_EQ(Encode(block), expected);
+	const auto decoded = Decode(expected);
+	ASSERT_EQ(decoded.error, DecodeError::None);
+	const auto& mood = std::get<MusicMood>(std::get<CommandBlock>(*decoded.frame).actions[0]);
+	EXPECT_EQ(mood.creature, Entity(0x01020304));
+	EXPECT_EQ(mood.track, 0x0A0B0C0Du);
+	EXPECT_EQ(mood.mood, 1.0f);
+	// A change of the music that stops before its mood is not a whole command
+	auto truncated = expected;
+	truncated.pop_back();
+	EXPECT_EQ(Decode(truncated).error, DecodeError::Truncated);
+}
+
+TEST(TurnCodec, ATauntHasItsNumberAfterItsPlayers)
+{
+	const CommandBlock block {
+	    .sequence = 0,
+	    .turn = 0,
+	    .actions = {ChatTaunt {.recipients = {}, .taunt = 0x01020304}},
+	};
+	const std::vector<uint8_t> expected {k_Version, 1, 0, 0, 0, 0, 0, 0, 1, 42, 0, 4, 3, 2, 1};
+	EXPECT_EQ(Encode(block), expected);
+	const auto decoded = Decode(expected);
+	ASSERT_EQ(decoded.error, DecodeError::None);
+	EXPECT_EQ(std::get<ChatTaunt>(std::get<CommandBlock>(*decoded.frame).actions[0]).taunt, 0x01020304u);
+}
+
+TEST(TurnCodec, ALineOfTheChatKeepsToItsLimits)
+{
+	// The longest line goes, one character more does not
+	ChatSpeech longest {.recipients = {}, .text = std::u16string(k_MostChatCharacters, u'a')};
+	EXPECT_FALSE(Encode(CommandBlock {.sequence = 0, .turn = 0, .actions = {longest}}).empty());
+	longest.text.push_back(u'a');
+	EXPECT_TRUE(Encode(CommandBlock {.sequence = 0, .turn = 0, .actions = {longest}}).empty());
+	// A player past the slots of the game does not go
+	EXPECT_TRUE(Encode(CommandBlock {.sequence = 0,
+	                                 .turn = 0,
+	                                 .actions = {ChatTaunt {.recipients = {static_cast<PlayerNames>(33)}, .taunt = 0}}})
+	                .empty());
+	// The neutral player has no god slot, so it gets no line
+	EXPECT_TRUE(Encode(CommandBlock {
+	                       .sequence = 0, .turn = 0, .actions = {ChatTaunt {.recipients = {PlayerNames::NEUTRAL}, .taunt = 0}}})
+	                .empty());
+
+	// The reader refuses the same: a slot out of range, too many players, and a line that is too long
+	const std::vector<uint8_t> badSlot {k_Version, 1, 0, 0, 0, 0, 0, 0, 1, 42, 1, 32, 0, 0, 0, 0};
+	EXPECT_EQ(Decode(badSlot).error, DecodeError::Value);
+	std::vector<uint8_t> tooMany {k_Version, 1, 0, 0, 0, 0, 0, 0, 1, 42, 33};
+	tooMany.insert(tooMany.end(), 33 + 4, 0);
+	EXPECT_EQ(Decode(tooMany).error, DecodeError::Value);
+	const std::vector<uint8_t> tooLong {k_Version, 1, 0, 0, 0, 0, 0, 0, 1, 41, 0, 0x00, 0x04};
+	EXPECT_EQ(Decode(tooLong).error, DecodeError::Value);
+	// A line that says more characters than it has stops early
+	const std::vector<uint8_t> shortLine {k_Version, 1, 0, 0, 0, 0, 0, 0, 1, 41, 0, 2, 0, 'a', 0};
+	EXPECT_EQ(Decode(shortLine).error, DecodeError::Truncated);
+}
+
+TEST(TurnCodec, AClickOfTheDialogueIsOneByteOfFlags)
+{
+	const CommandBlock block {
+	    .sequence = 0, .turn = 0, .actions = {DialogueClick {.click = true}, DialogueClick {.skipKey = true}}};
+	const std::vector<uint8_t> expected {k_Version, 1, 0, 0, 0, 0, 0, 0, 2, 47, 1, 47, 2};
+	EXPECT_EQ(Encode(block), expected);
+	const auto decoded = Decode(expected);
+	ASSERT_EQ(decoded.error, DecodeError::None);
+	const auto& actions = std::get<CommandBlock>(*decoded.frame).actions;
+	ASSERT_EQ(actions.size(), 2);
+	EXPECT_EQ(std::get<DialogueClick>(actions[0]), (DialogueClick {.click = true}));
+	EXPECT_EQ(std::get<DialogueClick>(actions[1]), (DialogueClick {.skipKey = true}));
+
+	// A flag after the second is refused
+	auto wrong = expected;
+	wrong.back() = 4;
+	EXPECT_EQ(Decode(wrong).error, DecodeError::Value);
+}
+
+TEST(TurnCodec, TheFrameCarriesTheGodSlotOfEachPlayer)
+{
+	// The gods of a land keep their numbers on the wire. The god after them is in slot 7, and the last god in slot 31.
+	const TurnBundle turn {
+	    .turn = 4,
+	    .blocks = {{.sender = PlayerNames::PLAYER_SEVEN,
+	                .sequence = 0,
+	                .actions = {ChatTaunt {.recipients = {static_cast<PlayerNames>(8), static_cast<PlayerNames>(32)},
+	                                       .taunt = 1}}},
+	               {.sender = static_cast<PlayerNames>(8), .sequence = 1, .actions = {}},
+	               {.sender = static_cast<PlayerNames>(32), .sequence = 2, .actions = {}}},
+	};
+	const auto bytes = Encode(turn);
+	ASSERT_FALSE(bytes.empty());
+	// Version, kind, turn (4 bytes), count (2 bytes), then the first sender
+	EXPECT_EQ(bytes[8], 6u);
+	// The sender's sequence (2 bytes), the count of the commands, the tag and the count of the players
+	EXPECT_EQ(bytes[14], 7u);
+	EXPECT_EQ(bytes[15], 31u);
+	const auto decoded = Decode(bytes);
+	ASSERT_EQ(decoded.error, DecodeError::None);
+	const auto& back = std::get<TurnBundle>(*decoded.frame);
+	ASSERT_EQ(back.blocks.size(), 3u);
+	EXPECT_EQ(back.blocks[0].sender, PlayerNames::PLAYER_SEVEN);
+	EXPECT_EQ(back.blocks[1].sender, static_cast<PlayerNames>(8));
+	EXPECT_EQ(back.blocks[2].sender, static_cast<PlayerNames>(32));
+	const auto& taunt = std::get<ChatTaunt>(back.blocks[0].actions[0]);
+	EXPECT_EQ(taunt.recipients, (std::vector<PlayerNames> {static_cast<PlayerNames>(8), static_cast<PlayerNames>(32)}));
+}
+
+TEST(TurnCodec, TheGodsOfALandHaveTheBytesOfTheirNumbers)
+{
+	for (uint8_t number = 0; number < static_cast<uint8_t>(PlayerNames::NEUTRAL); ++number)
+	{
+		const auto bytes = Encode(
+		    TurnBundle {.turn = 1, .blocks = {{.sender = static_cast<PlayerNames>(number), .sequence = 0, .actions = {}}}});
+		ASSERT_FALSE(bytes.empty());
+		EXPECT_EQ(bytes[8], number);
+	}
 }

@@ -26,10 +26,10 @@
 #include "ECS/Components/Transform.h"
 #include "ECS/Registry.h"
 #include "FileSystem/FileSystemInterface.h"
-#include "Graphics/LightBeams.h"
 #include "Graphics/Texture2D.h"
 #include "Locator.h"
 #include "Resources/ResourcesInterface.h"
+#include "Visual/LightBeams.h"
 
 using namespace openblack;
 using namespace openblack::ecs::components;
@@ -69,6 +69,8 @@ constexpr float k_LongestStep = 100.0f;
 constexpr float k_GrowthPerAge = 0.0022222223f;
 constexpr float k_SmallestSize = 1e-4f;
 
+/// A number on the screen's generator. Put two of these in a braced list, not in the arguments of a call: a braced list
+/// draws from left to right, but each compiler can use a different order for the arguments of a call
 float Random(float min, float max)
 {
 	return Locator::rng::value().NextValue(min, max);
@@ -154,7 +156,7 @@ CreatureCaveEffects::CreatureCaveEffects(ecs::Registry& rooms, glm::vec3 fire)
 	auto& registry = _rooms;
 	for (size_t i = 0; i < k_Flames; ++i)
 	{
-		const glm::vec3 place = fire + glm::vec3(Random(-1.0f, 1.0f), Random(1.0f, 2.0f), Random(-1.0f, 1.0f));
+		const glm::vec3 place = fire + glm::vec3 {Random(-1.0f, 1.0f), Random(1.0f, 2.0f), Random(-1.0f, 1.0f)};
 		const auto flame = CreateSprite(registry, "raw/S_Fire", "raw/S_Firea", true, place);
 		const float size = std::max(static_cast<float>(i) * 0.5f + Random(0.8f, 1.2f) + 2.0f, k_SmallestSize);
 		registry.Get<Transform>(flame).scale = glm::vec3(size, size, 1.0f);
@@ -179,7 +181,7 @@ CreatureCaveEffects::CreatureCaveEffects(ecs::Registry& rooms, glm::vec3 fire)
 	for (size_t i = 0; i < k_FireSmokes; ++i)
 	{
 		auto smoke = CreateSmoke(registry);
-		smoke.place = fire + glm::vec3(Random(-1.0f, 1.0f), Random(-1.0f, 1.0f) + 2.0f, Random(-1.0f, 1.0f));
+		smoke.place = fire + glm::vec3 {Random(-1.0f, 1.0f), Random(-1.0f, 1.0f) + 2.0f, Random(-1.0f, 1.0f)};
 		smoke.colour = k_FireSmokeColour;
 		smoke.size = k_FireSmokeSize;
 		_fireSmoke.push_back(std::move(smoke));
@@ -272,7 +274,7 @@ void CreatureCaveEffects::StepSmoke(Smoke& smoke, uint32_t milliseconds)
 		particle.age %= k_SmokeLife;
 		particle.hidden = false;
 		particle.velocity =
-		    smoke.rising ? glm::vec3(Random(-4.0f, 4.0f), Random(3.0f, 4.0f), Random(-4.0f, 4.0f)) : glm::vec3(0.0f);
+		    smoke.rising ? glm::vec3 {Random(-4.0f, 4.0f), Random(3.0f, 4.0f), Random(-4.0f, 4.0f)} : glm::vec3(0.0f);
 		move(particle, static_cast<float>(particle.age) / k_AgePerSecond);
 	}
 }

@@ -27,6 +27,7 @@
 #include "ECS/Components/OneOffSpellSeed.h"
 #include "ECS/Components/Physics.h"
 #include "ECS/Components/Pot.h"
+#include "ECS/Components/Scaffold.h"
 #include "ECS/Components/StoragePit.h"
 #include "ECS/Components/Town.h"
 #include "ECS/Components/TownArtefact.h"
@@ -36,6 +37,7 @@
 #include "ECS/LandFollowers.h"
 #include "ECS/Registry.h"
 #include "ECS/VillagerAge.h"
+#include "ECS/WorkshopRules.h"
 
 using namespace openblack;
 using namespace openblack::ecs::components;
@@ -81,7 +83,8 @@ bool PartOfStoragePit(const ecs::Registry& registry, entt::entity pot)
 	registry.Each<const StoragePit>([pot, &part](const StoragePit& pit) {
 		part = part || pit.foodPile == pot || std::ranges::find(pit.woodPiles, pot) != pit.woodPiles.end();
 	});
-	return part;
+	// A workshop's wood pile is part of its workshop, as a pile of a storage pit is
+	return part || ecs::workshop::IsWoodPile(registry, pot);
 }
 } // namespace
 
@@ -183,6 +186,19 @@ std::optional<Line> ecs::vortex_crossing::LineFor(const Registry& registry, entt
 		                         .row = static_cast<int32_t>(mobile->type),
 		                         .yAngle = YAngleOf(transform->rotation),
 		                         .scale = scale};
+	}
+	if (const auto* scaffold = registry.TryGet<const Scaffold>(thing))
+	{
+		// A scaffold that a workshop counts as its own writes no line, and the next land does not get it
+		if (registry.Valid(scaffold->workshop))
+		{
+			return std::nullopt;
+		}
+		return ScaffoldLine {.town = TownNumber(registry, scaffold->town),
+		                     .offset = offset,
+		                     .row = 0,
+		                     .yAngle = YAngleOf(transform->rotation),
+		                     .scale = scale};
 	}
 	if (const auto* dead = registry.TryGet<const DeadTree>(thing))
 	{

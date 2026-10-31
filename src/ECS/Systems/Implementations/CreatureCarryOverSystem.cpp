@@ -11,8 +11,11 @@
 
 #include "CreatureCarryOverSystem.h"
 
+#include <algorithm>
+#include <array>
 #include <chrono>
 #include <system_error>
+#include <tuple>
 #include <utility>
 #include <vector>
 
@@ -22,15 +25,16 @@
 #include <spdlog/spdlog.h>
 
 #include "3D/LandIslandInterface.h"
-#include "Audio/Sound.h"
 #include "Creature/CreatureMindFileBody.h"
 #include "Creature/CreatureSpells.h"
 #include "ECS/Archetypes/CreatureArchetype.h"
 #include "ECS/Components/Creature.h"
 #include "ECS/Components/CreatureFileSave.h"
 #include "ECS/Components/CreatureNeeds.h"
+#include "ECS/Components/CreatureSkin.h"
 #include "ECS/Components/CreatureSpells.h"
 #include "ECS/CreatureBodyFile.h"
+#include "ECS/CreatureTattooChange.h"
 #include "ECS/Registry.h"
 #include "ECS/SaveFileWriter.h"
 #include "ECS/Systems/CreatureMindSystemInterface.h"
@@ -42,6 +46,7 @@
 #include "ECS/Systems/TimeSystemInterface.h"
 #include "ECS/ThingMapPlace.h"
 #include "Locator.h"
+#include "Sound/SoundId.h"
 
 using namespace openblack;
 using namespace openblack::ecs::systems;
@@ -133,10 +138,16 @@ std::optional<creature_carry_over::KeptFiles> CreatureCarryOverSystem::Files() c
 	return creature_carry_over::KeptFilesIn(*_folder, *file);
 }
 
+bool CreatureCarryOverSystem::NetworkLand()
+{
+	_networkLand = _networkLand || NetworkGame();
+	return _networkLand;
+}
+
 void CreatureCarryOverSystem::KeepPlayersCreature()
 {
 	// In a network game, the player's creature is the creature that the god of this computer brought
-	if (const auto creature = NetworkGame() ? _brought : PlayersCreature(); creature.has_value())
+	if (const auto creature = NetworkLand() ? _brought : PlayersCreature(); creature.has_value())
 	{
 		KeepCreature(*creature);
 	}
@@ -148,7 +159,7 @@ void CreatureCarryOverSystem::KeepCreature(entt::entity creature)
 	const auto* body = registry.Valid(creature) ? registry.TryGet<const Creature>(creature) : nullptr;
 	if (body == nullptr || !Locator::creatureMindSystem::has_value() ||
 	    !creature_carry_over::WritesToPlayersFiles(
-	        {.networkGame = NetworkGame(), .localPlayers = body->owner == OwnPlayer(), .broughtHere = _brought == creature}))
+	        {.networkGame = NetworkLand(), .localPlayers = body->owner == OwnPlayer(), .broughtHere = _brought == creature}))
 	{
 		return;
 	}
@@ -158,6 +169,15 @@ void CreatureCarryOverSystem::KeepCreature(entt::entity creature)
 		SPDLOG_LOGGER_WARN(spdlog::get("game"), "The player's creature {} has no mind yet to keep for the next land",
 		                   entt::to_integral(creature));
 		return;
+	}
+	// The file keeps the tattoos that this computer shows. In a network game, a change from the tattoo editor stays on
+	// this computer, and the creature takes it into the next game.
+	if (const auto* tattoos = registry.TryGet<const CreatureTattoos>(creature))
+	{
+		std::array<uint32_t, creature_tattoo::k_SlotCount> words {};
+		std::ranges::transform(ecs::creature_tattoo_change::ShownSlots(*tattoos), words.begin(), creature_tattoo::ToWord);
+		file->tattooHeader = words;
+		file->tattoo = ecs::creature_tattoo_change::ShownPictures(*tattoos);
 	}
 	// Its physique is saved beside its mind: its body as it is now, but for the alignment, as no spell made it
 	const auto now = ecs::creature_body_file::Capture(registry, creature);
@@ -250,6 +270,12 @@ std::shared_ptr<const creaturemind::MindFileData> CreatureCarryOverSystem::Kept(
 	return _kept;
 }
 
+std::shared_ptr<const creaturemind::MindFileData> CreatureCarryOverSystem::KeptOrRead()
+{
+	ReadIfNoneKept();
+	return _kept;
+}
+
 std::optional<entt::entity> CreatureCarryOverSystem::LoadPlayersCreature(glm::vec2 place)
 {
 	if (PlayersCreature().has_value())
@@ -326,7 +352,7 @@ void CreatureCarryOverSystem::SaveAsTheyLive()
 void CreatureCarryOverSystem::SaveAsItLives(entt::entity entity)
 {
 	auto& registry = Locator::entitiesRegistry::value();
-	if (NetworkGame())
+	if (NetworkLand())
 	{
 		// Each computer writes only the creature of its own god, so the count stays out of the world
 		if (_brought != entity || !registry.Valid(entity) || !registry.AllOf<CreatureNeeds>(entity))
@@ -374,6 +400,8 @@ void CreatureCarryOverSystem::SaveAsItLives(entt::entity entity)
 
 void CreatureCarryOverSystem::ProcessTurn()
 {
+	// Each turn of a network game marks the land as a network game, so that the land clear knows it
+	std::ignore = NetworkLand();
 	if (_landKeepsCreatures)
 	{
 		SaveAsTheyLive();
@@ -419,10 +447,12 @@ void CreatureCarryOverSystem::Reset()
 	_arriving.clear();
 	_brought.reset();
 	_broughtTurnsSeen.reset();
+	_networkLand = false;
 }
 
 void CreatureCarryOverSystem::SetBroughtCreature(entt::entity creature)
 {
+	_networkLand = true;
 	_brought = creature;
 	_broughtTurnsSeen.reset();
 }

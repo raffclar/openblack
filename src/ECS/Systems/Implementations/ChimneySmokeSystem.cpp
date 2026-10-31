@@ -16,6 +16,7 @@
 #include "ECS/Components/Abode.h"
 #include "ECS/Components/ChimneySmoke.h"
 #include "ECS/Components/Transform.h"
+#include "ECS/Components/Workshop.h"
 #include "ECS/Registry.h"
 #include "ECS/Systems/HandSystemInterface.h"
 #include "ECS/Systems/TimeSystemInterface.h"
@@ -26,6 +27,7 @@ using namespace openblack::ecs::systems;
 using openblack::ecs::components::Abode;
 using openblack::ecs::components::ChimneySmoke;
 using openblack::ecs::components::Transform;
+using openblack::ecs::components::Workshop;
 
 namespace
 {
@@ -34,14 +36,15 @@ chimney_smoke::Random GameRandom()
 	return [](float a, float b) { return Locator::gameRandom::value().CrtRandom(a, b); };
 }
 
-/// The player's hand in the world, if it is in it, as the reports of the player put it
+/// The hand of the player at this computer in the world, if it is in it, as the reports of the player put it. Only the
+/// smoke that this computer draws moves in the air of this hand.
 std::optional<glm::vec3> HandPosition()
 {
 	if (!Locator::handSystem::has_value())
 	{
 		return std::nullopt;
 	}
-	return Locator::handSystem::value().GetPlayerHandPositions()[static_cast<size_t>(HandSystemInterface::Side::Left)];
+	return Locator::handSystem::value().GetOwnHandPositions()[static_cast<size_t>(HandSystemInterface::Side::Left)];
 }
 } // namespace
 
@@ -86,14 +89,18 @@ void ChimneySmokeSystem::Update(std::chrono::milliseconds frameRealTime, std::ch
 		_handWind = chimney_smoke::WindOf(*position, _handVelocity);
 	}
 	const auto random = GameRandom();
-	Locator::entitiesRegistry::value().Each<const Abode, ChimneySmoke>([&](const Abode& abode, ChimneySmoke& smoke) {
-		// Lit while someone is home
-		if (!chimney_smoke::UpdateState(smoke, abode.presentAtHome > 0))
-		{
-			return;
-		}
-		chimney_smoke::Advance(smoke, step, chimney_smoke::Drift(smoke.chimney, _handWind, random));
-	});
+	const auto& registry = Locator::entitiesRegistry::value();
+	Locator::entitiesRegistry::value().Each<const Abode, ChimneySmoke>(
+	    [&](entt::entity entity, const Abode& abode, ChimneySmoke& smoke) {
+		    // Lit while someone is home, or while a workshop makes a scaffold
+		    const auto* workshop = registry.TryGet<const Workshop>(entity);
+		    const bool makes = workshop != nullptr && workshop->makingTurns != 0;
+		    if (!chimney_smoke::UpdateState(smoke, chimney_smoke::IsLit(abode.presentAtHome > 0, makes)))
+		    {
+			    return;
+		    }
+		    chimney_smoke::Advance(smoke, step, chimney_smoke::Drift(smoke.chimney, _handWind, random));
+	    });
 	// A smoke that is not on a home (for example, the smoke of a creature fart) continues until something removes it
 	Locator::entitiesRegistry::value().Each<ChimneySmoke>(
 	    [&](ChimneySmoke& smoke) {

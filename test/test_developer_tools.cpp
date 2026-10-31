@@ -14,6 +14,9 @@
 #include <vector>
 
 #include <Common/DeveloperTools.h>
+#include <Debug/SimRun.h>
+#include <ECS/GameEndConditions.h>
+#include <Gui/MultiplayerFrontEndRules.h>
 #include <Story/NewGameChoice.h>
 #include <gtest/gtest.h>
 
@@ -96,6 +99,16 @@ TEST(DeveloperTools, TheFilterKeepsThePlayerAndWindowOptions)
 	EXPECT_TRUE(filtered.ignored.empty());
 }
 
+TEST(DeveloperTools, TheFilterKeepsThePingDisplayOfThePlayer)
+{
+	// The ping display is an option of the player (deviation 143), so a build without the tools keeps it
+	const std::vector<std::string_view> arguments {"openblack", "--show-ping"};
+	const auto filtered = FilterDeveloperOptions(arguments, k_DeveloperOptions);
+	EXPECT_EQ(filtered.kept.size(), arguments.size());
+	EXPECT_TRUE(filtered.ignored.empty());
+	EXPECT_FALSE(IsDeveloperOption("show-ping", k_DeveloperOptions));
+}
+
 TEST(DeveloperTools, TheFilterRemovesAShortDeveloperOptionAndItsValue)
 {
 	const std::vector<std::string_view> arguments {"openblack", "-s", "Land2.txt", "-u", "2"};
@@ -151,6 +164,43 @@ TEST(DeveloperTools, TheServerFilterRemovesTheToolOptions)
 	EXPECT_EQ(Kept(arguments, k_ServerDeveloperOptions), (std::vector<std::string> {"openblack-server"}));
 }
 
+TEST(DeveloperTools, ADeployedServerKeepsTheConditionsAndTheTimeLimitOfTheOperator)
+{
+	const std::vector<std::string_view> arguments {
+	    "openblack-server", "-g", "/game", "--conditions=mpm_2p_1:WC_KILL_NUM_VILLAGERS=20,WC_GROW_TREES=5",
+	    "--time-limit",     "90"};
+	const auto kept = Kept(arguments, k_ServerDeveloperOptions);
+	ASSERT_EQ(kept.size(), arguments.size());
+
+	// The kept value parses, and the checks of the server accept it as the host's controls do
+	constexpr std::string_view k_Template = "FORMAP mpm_2p_1.txt\n"
+	                                        "WC_KILL_NUM_VILLAGERS:\t\t1\t1\t500\t1 \t25\n"
+	                                        "WC_GROW_TREES:\t1\t1\t1000\t1\t100\n";
+	const auto request =
+	    openblack::sim_run::ParseConditions(std::string_view(kept.at(3)).substr(std::string_view("--conditions=").size()));
+	ASSERT_TRUE(request.has_value());
+	EXPECT_EQ(request->limitsLand, "mpm_2p_1");
+	const auto limits = openblack::gui::multiplayer::FindConditions(k_Template, request->limitsLand);
+	EXPECT_FALSE(openblack::gui::multiplayer::ConditionsRefusal(limits, request->picks).has_value());
+	EXPECT_FALSE(openblack::game_end::TimeLimitRefusal(90, false).has_value());
+
+	// A value out of the land's limits and a time limit out of the host's limits stop the server
+	const auto tooMany = openblack::sim_run::ParseConditions("WC_KILL_NUM_VILLAGERS=501");
+	ASSERT_TRUE(tooMany.has_value());
+	EXPECT_TRUE(openblack::gui::multiplayer::ConditionsRefusal(limits, tooMany->picks).has_value());
+	EXPECT_TRUE(openblack::game_end::TimeLimitRefusal(5, false).has_value());
+	EXPECT_TRUE(openblack::game_end::TimeLimitRefusal(1500, false).has_value());
+}
+
+TEST(DeveloperTools, ADeployedServerRemovesTheTestOptions)
+{
+	EXPECT_FALSE(IsDeveloperOption("conditions", k_ServerDeveloperOptions));
+	EXPECT_FALSE(IsDeveloperOption("time-limit", k_ServerDeveloperOptions));
+	const std::vector<std::string_view> arguments {
+	    "openblack-server", "--temple-loss", "1:300", "--test-commands", "-g", "path"};
+	EXPECT_EQ(Kept(arguments, k_ServerDeveloperOptions), (std::vector<std::string> {"openblack-server", "-g", "path"}));
+}
+
 TEST(DeveloperTools, EachDeveloperOptionHasOneName)
 {
 	for (const auto options :
@@ -194,4 +244,35 @@ TEST(DeveloperTools, TheQuestionOfAPlayerHasOnlyTheAnswersOfTheOriginalGame)
 	}
 	EXPECT_TRUE(IsShown(Choice::KeepOldCreature, true, false));
 	EXPECT_FALSE(IsShown(Choice::KeepOldCreature, false, true));
+}
+
+TEST(DeveloperTools, ABuildForPlayersRefusesTheSoakToolsAndADeveloperBuildAllowsThem)
+{
+	const SoakTools none;
+	const SoakTools computers {.allComputerGods = true};
+	const SoakTools seeded {.allComputerGods = false, .aiSeed = 0u};
+	EXPECT_FALSE(none.Any());
+	EXPECT_TRUE(computers.Any());
+	EXPECT_TRUE(seeded.Any());
+	EXPECT_FALSE(SoakRefusalOf(false, none).has_value());
+	EXPECT_TRUE(SoakRefusalOf(false, computers).has_value());
+	EXPECT_TRUE(SoakRefusalOf(false, seeded).has_value());
+	EXPECT_FALSE(SoakRefusalOf(true, computers).has_value());
+	EXPECT_FALSE(SoakRefusalOf(true, seeded).has_value());
+}
+
+TEST(DeveloperTools, ABuildForPlayersRefusesTheScenarioOfAGameServer)
+{
+	EXPECT_TRUE(ScenarioRefusalOf(false).has_value());
+	EXPECT_FALSE(ScenarioRefusalOf(true).has_value());
+}
+
+TEST(DeveloperTools, TheSoakOptionsOfTheGameAndTheServerAreDeveloperOptions)
+{
+	EXPECT_TRUE(IsDeveloperOption("sim-all-computer-gods", k_DeveloperOptions));
+	EXPECT_TRUE(IsDeveloperOption("sim-ai-seed", k_DeveloperOptions));
+	EXPECT_TRUE(IsDeveloperOption("all-computer-gods", k_ServerDeveloperOptions));
+	EXPECT_TRUE(IsDeveloperOption("ai-seed", k_ServerDeveloperOptions));
+	const std::vector<std::string_view> arguments {"openblack-server", "--all-computer-gods", "--ai-seed", "5", "-g", "path"};
+	EXPECT_EQ(Kept(arguments, k_ServerDeveloperOptions), (std::vector<std::string> {"openblack-server", "-g", "path"}));
 }

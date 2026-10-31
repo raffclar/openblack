@@ -44,12 +44,16 @@
 #include <SaveSlots.h>
 #include <SavedObjects.h>
 #include <VanillaSaveFile.h>
+#include <VanillaWorld.h>
 #include <WorldFile.h>
 #include <glm/gtx/euler_angles.hpp>
 #include <spdlog/spdlog.h>
 
 #include "3D/LandIslandInterface.h"
+#include "3D/LandReuse.h"
 #include "3D/MapCoords.h"
+#include "Common/GameRandom.h"
+#include "Common/MachineClock.h"
 #include "Common/PlayerProfiles.h"
 #include "Common/PortableRotations.h"
 #include "Creature/CreatureMindFileBody.h"
@@ -93,12 +97,12 @@
 #include "ECS/ThingMapPlace.h"
 #include "ECS/WorldSave.h"
 #include "FileSystem/FileSystemInterface.h"
-#include "Game.h"
-#include "Graphics/RendererInterface.h"
-#include "Gui/SavingBox.h"
+#include "Gui/SavingBoxRules.h"
 #include "Gui/TextDatabase.h"
 #include "LandChange.h"
 #include "Locator.h"
+#include "MainThreadWork.h"
+#include "Visual/RendererRequestsInterface.h"
 
 #ifdef _WIN32
 #include <windows.h>
@@ -164,41 +168,55 @@ PlayerNames LocalPlayer()
 }
 
 /// The date and the time now, the time first, as the save game room shows them. On Windows the player's own formats of
-/// the time and of the long date give the text, as in the game.
+/// the time and of the long date give the text, as in the game; when the long date is not available, the short date
+/// takes its place. The time is the machine's clock as the game reads it.
 std::u16string DateNow()
 {
+	const auto local = machine_clock::LocalTime();
 #ifdef _WIN32
-	std::array<wchar_t, 128> time {};
-	std::array<wchar_t, 128> date {};
-	const auto timeLength =
-	    GetTimeFormatW(LOCALE_USER_DEFAULT, 0, nullptr, nullptr, time.data(), static_cast<int>(time.size()));
-	const auto dateLength =
-	    GetDateFormatW(LOCALE_USER_DEFAULT, DATE_LONGDATE, nullptr, nullptr, date.data(), static_cast<int>(date.size()));
-	if (timeLength > 0 && dateLength > 0)
+	const SYSTEMTIME now {.wYear = static_cast<WORD>(local.tm_year + 1900),
+	                      .wMonth = static_cast<WORD>(local.tm_mon + 1),
+	                      .wDayOfWeek = static_cast<WORD>(local.tm_wday),
+	                      .wDay = static_cast<WORD>(local.tm_mday),
+	                      .wHour = static_cast<WORD>(local.tm_hour),
+	                      .wMinute = static_cast<WORD>(local.tm_min),
+	                      .wSecond = static_cast<WORD>(local.tm_sec),
+	                      .wMilliseconds = 0};
+	const auto part = [](auto&& format) -> std::optional<std::u16string> {
+		const auto size = format(nullptr, 0);
+		if (size <= 0)
+		{
+			return std::nullopt;
+		}
+		std::vector<wchar_t> text(static_cast<size_t>(size));
+		const auto written = format(text.data(), size);
+		if (written <= 0)
+		{
+			return std::nullopt;
+		}
+		return std::u16string(text.data(), text.data() + written - 1);
+	};
+	const auto dateIn = [&now](DWORD flags) {
+		return [&now, flags](wchar_t* text, int size) {
+			return GetDateFormatW(LOCALE_USER_DEFAULT, flags, &now, nullptr, text, size);
+		};
+	};
+	auto date = part(dateIn(DATE_LONGDATE));
+	if (!date.has_value())
 	{
-		std::u16string text(time.data(), time.data() + timeLength - 1);
-		text += u' ';
-		text.append(date.data(), date.data() + dateLength - 1);
-		return text;
+		date = part(dateIn(DATE_SHORTDATE));
 	}
-#endif
-	const auto now = std::chrono::floor<std::chrono::seconds>(std::chrono::system_clock::now());
-#if defined(__EMSCRIPTEN__) || defined(__APPLE__)
-	// The C++ library of the web build and of Apple has no time zone data. The C library gives the local time.
-	const std::time_t seconds = std::chrono::system_clock::to_time_t(now);
-	std::tm local {};
-	localtime_r(&seconds, &local);
-	return gui::ToUtf16(ecs::save_date::FormatLabel(local));
+	const auto time =
+	    part([&now](wchar_t* text, int size) { return GetTimeFormatW(LOCALE_USER_DEFAULT, 0, &now, nullptr, text, size); });
+	return ecs::save_files::SaveDateLabel(time, date);
 #else
-	try
-	{
-		const std::chrono::zoned_time local {std::chrono::current_zone(), now};
-		return gui::ToUtf16(std::format("{:%H:%M:%S %A, %d %B %Y}", local));
-	}
-	catch (const std::exception&)
-	{
-		return gui::ToUtf16(std::format("{:%H:%M:%S %A, %d %B %Y}", now));
-	}
+	// Away from Windows, fixed formats of the time and of the long date take the place of the player's own
+	const auto format = [&local](const char* pattern) {
+		std::array<char, 128> text {};
+		const auto length = std::strftime(text.data(), text.size(), pattern, &local);
+		return gui::ToUtf16(std::string(text.data(), length));
+	};
+	return ecs::save_files::SaveDateLabel(format("%H:%M:%S"), format("%A, %d %B %Y"));
 #endif
 }
 
@@ -362,6 +380,37 @@ float AlignmentToSave(const Creature& body)
 	return found != variables.end() ? found->value.floatVal : 0.0f;
 }
 
+/// The block of the land altitudes that the game changed, for a saved game or a world state. Nothing when no land is open.
+std::optional<gamesave::Chunk> ChangedAltitudesChunk()
+{
+	if (!Locator::terrainSystem::has_value())
+	{
+		return std::nullopt;
+	}
+	return land_reuse::AltitudesChunk(Locator::terrainSystem::value().ChangedAltitudes());
+}
+
+/// Gives back the altitudes of the land that a saved game or a world state keeps. A file of an older build keeps none.
+void LoadChangedAltitudes(const gamesave::WorldFile& world)
+{
+	if (!Locator::terrainSystem::has_value())
+	{
+		return;
+	}
+	const auto altitudes = land_reuse::KeptAltitudes(world);
+	if (!altitudes.has_value())
+	{
+		SPDLOG_LOGGER_WARN(Log(), "The altitudes of the land in the file do not read");
+		return;
+	}
+	auto& land = Locator::terrainSystem::value();
+	for (const auto& corner : *altitudes)
+	{
+		land.SetCellAltitude({corner.x, corner.z}, corner.altitude);
+	}
+	land.CommitAltitudeChanges();
+}
+
 /// The whole record of the creature as openblack writes it from the creature now, its player's leash on it, and the
 /// values that openblack keeps beside the record
 gamesave::SavedCreature Capture(ecs::Registry& registry, entt::entity entity, uint32_t index)
@@ -380,6 +429,7 @@ gamesave::SavedCreature Capture(ecs::Registry& registry, entt::entity entity, ui
 	object.object.info = save_state::CreatureInfo(body.species).value_or(0);
 	object.object.coords = object.position.position;
 	object.object.scale = body.size;
+	object.object.creationIndex = body.creationIndex;
 	object.move.speed = save_state::k_CreatureSpeedWord;
 
 	auto& record = object.creature;
@@ -506,9 +556,9 @@ gamesave::SavedCreature Capture(ecs::Registry& registry, entt::entity entity, ui
 			kept.tiedTo = save_state::ToRef(worn.tiedTo);
 			kept.length = worn.slackLength;
 			kept.fullLength = worn.maxLength;
-			// The turn that the leash was last tied
-			kept.word34 = worn.tiedTurn;
 		}
+		// The turn that a leash was last tied
+		kept.word34 = leash->lastTiedTurn;
 		saved.leash = gamesave::LeashStatusObject {.thing = {}, .leash = kept};
 	}
 	return saved;
@@ -749,7 +799,7 @@ void Restore(ecs::Registry& registry, entt::entity entity, const gamesave::Saved
 	leashes.SetWorks(entity, kept.works != 0);
 	if (const auto tied = save_state::FromRef(kept.tiedTo); tied.has_value() && registry.Valid(*tied))
 	{
-		leashes.TieTo(entity, *tied);
+		leashes.RestoreTie(entity, *tied, kept.word34);
 	}
 }
 
@@ -877,7 +927,7 @@ std::shared_ptr<const std::atomic<ecs::save_files::SaveWrite>> SaveGameSystem::S
 	                          .landscape = {},
 	                          .knownLeashes = 0,
 	                          .creatureInTemple = 0,
-	                          .lastAutosaveTurn = _lastAutosaveTurn,
+	                          .lastAutosaveTurn = _autosaveTurnToSave,
 	                          .lastQuickSaveTurn = _lastQuickSaveTurn};
 	if (Locator::landSystem::has_value())
 	{
@@ -930,6 +980,8 @@ std::shared_ptr<const std::atomic<ecs::save_files::SaveWrite>> SaveGameSystem::S
 	ecs::world_save::SaveSummary summary;
 	auto whole =
 	    std::make_shared<std::vector<ecs::world_save::PendingChunk>>(ecs::world_save::SaveWorld(Reflection(), summary));
+	// The land as it is now, so that a load gives back the ground that the game changed
+	auto altitudes = ChangedAltitudesChunk();
 	const auto worldBlocksDone = std::chrono::steady_clock::now();
 	// A game that came from a file of the game also goes back into that file's layout: the file as it was, with the
 	// records of its creatures and their leashes as openblack has them now
@@ -961,12 +1013,17 @@ std::shared_ptr<const std::atomic<ecs::save_files::SaveWrite>> SaveGameSystem::S
 	files.world = slotFolder / gamesave::WorldFileName(slot);
 	// The writer makes the last blocks and puts the blocks together into the file on its own thread
 	files.worldFiles = [path = files.world, world = std::make_shared<gamesave::WorldFile>(std::move(world)), whole,
+	                    altitudes = std::make_shared<std::optional<gamesave::Chunk>>(std::move(altitudes)),
 	                    vanilla = std::make_shared<std::vector<ecs::save_files::SaveFile>>(std::move(vanilla)), scriptCopy]() {
 		for (const auto& pending : *whole)
 		{
 			world->chunks.push_back({.tag = pending.tag, .bytes = pending.bytes()});
 		}
 		whole->clear();
+		if (altitudes->has_value())
+		{
+			world->chunks.push_back(**altitudes);
+		}
 		std::vector<ecs::save_files::SaveFile> written {{.path = path, .bytes = gamesave::Write(*world)}};
 		std::ranges::move(*vanilla, std::back_inserter(written));
 		if (scriptCopy.has_value())
@@ -980,6 +1037,7 @@ std::shared_ptr<const std::atomic<ecs::save_files::SaveWrite>> SaveGameSystem::S
 	};
 
 	auto outcome = std::make_shared<std::atomic<ecs::save_files::SaveWrite>>(ecs::save_files::SaveWrite::NotOpened);
+	++_savedGamesChanges;
 	auto* fileSystem = &Locator::filesystem::value();
 	Writer().Queue(std::format("the files of slot {}", slot), [fileSystem,
 	                                                           files = std::make_shared<const ecs::save_files::SlotWrite>(
@@ -1128,8 +1186,15 @@ bool SaveGameSystem::Load(uint32_t slot)
 	const auto bytes = ReadFile(slotFolder / gamesave::WorldFileName(slot));
 	if (!bytes.has_value())
 	{
+		if (!vanillaBytes.has_value())
+		{
+			// The previous land and the next land load from the folder of another land, so the log gives the folder
+			SPDLOG_LOGGER_WARN(Log(), "Slot {} has no world file in {}", slot,
+			                   gamesave::LoadSlotFolder(slot, land).generic_string());
+			return false;
+		}
 		// A slot of the game itself: its world file in the game's layout
-		const bool loaded = vanillaBytes.has_value() && LoadVanilla(slot, slotFolder, mindFolder, *vanillaBytes);
+		const bool loaded = LoadVanilla(slot, slotFolder, mindFolder, *vanillaBytes);
 		if (loaded)
 		{
 			ShowChallengePictures(copiedPictures);
@@ -1244,6 +1309,17 @@ bool SaveGameSystem::Load(uint32_t slot)
 
 std::vector<uint8_t> SaveGameSystem::WorldState()
 {
+	return WorldStateLater()();
+}
+
+void SaveGameSystem::PrepareWorldState()
+{
+	// The first copies of the world make the data that each later copy uses again. The function drops these copies.
+	std::ignore = WorldStateLater();
+}
+
+std::function<std::vector<uint8_t>()> SaveGameSystem::WorldStateLater()
+{
 	auto& registry = Locator::entitiesRegistry::value();
 	gamesave::WorldFile world;
 	gamesave::GameChunk game {.land = LandNumber(),
@@ -1251,7 +1327,7 @@ std::vector<uint8_t> SaveGameSystem::WorldState()
 	                          .landscape = {},
 	                          .knownLeashes = 0,
 	                          .creatureInTemple = 0,
-	                          .lastAutosaveTurn = _lastAutosaveTurn,
+	                          .lastAutosaveTurn = _autosaveTurnToSave,
 	                          .lastQuickSaveTurn = _lastQuickSaveTurn};
 	if (Locator::landSystem::has_value())
 	{
@@ -1266,16 +1342,30 @@ std::vector<uint8_t> SaveGameSystem::WorldState()
 	for (uint32_t index = 0; index < creatures.size(); ++index)
 	{
 		saved.push_back(ToSave(registry, creatures[index], index));
+		// A visit to the temple is a view of this computer only, and the world state is the same on each computer
+		saved.back().creature.creature.savedInTemple = 0;
 	}
 	const auto chunks = gamesave::ToChunks(saved);
 	world.chunks.insert(world.chunks.end(), chunks.begin(), chunks.end());
-	// Then the whole world in openblack's own layout. This computer makes all the blocks now, with no writer thread.
+	// Then the whole world in openblack's own layout. The game thread takes what each block needs now, as for a save. The
+	// function makes the bytes of the blocks and of the file later.
 	ecs::world_save::SaveSummary summary;
-	for (const auto& pending : ecs::world_save::SaveWorld(Reflection(), summary))
-	{
-		world.chunks.push_back({.tag = pending.tag, .bytes = pending.bytes()});
-	}
-	return gamesave::Write(world);
+	auto whole =
+	    std::make_shared<std::vector<ecs::world_save::PendingChunk>>(ecs::world_save::SaveWorld(Reflection(), summary));
+	// The land as it is now, which another computer must have to go on with the same world
+	auto altitudes = std::make_shared<std::optional<gamesave::Chunk>>(ChangedAltitudesChunk());
+	return [world = std::make_shared<gamesave::WorldFile>(std::move(world)), whole, altitudes]() {
+		auto file = *world;
+		for (const auto& pending : *whole)
+		{
+			file.chunks.push_back({.tag = pending.tag, .bytes = pending.bytes()});
+		}
+		if (altitudes->has_value())
+		{
+			file.chunks.push_back(**altitudes);
+		}
+		return gamesave::Write(file);
+	};
 }
 
 bool SaveGameSystem::LoadWorldState(std::span<const uint8_t> bytes)
@@ -1337,7 +1427,11 @@ bool SaveGameSystem::LoadWholeWorld(uint32_t slot, const gamesave::WorldFile& wo
 	}
 	const bool loaded = Locator::landSystem::value().LoadSavedLand(
 	    game.landscape, game.landscapeFile,
-	    [&reflection, &world, kind]() { return ecs::world_save::LoadEntities(reflection, world, kind).has_value(); },
+	    [&reflection, &world, kind]() {
+		    // The land comes back as it was at the save, before the things on it
+		    LoadChangedAltitudes(world);
+		    return ecs::world_save::LoadEntities(reflection, world, kind).has_value();
+	    },
 	    kind == ecs::world_save::LoadKind::WorldState ? LandSystemInterface::SavedLandUse::WorldState
 	                                                  : LandSystemInterface::SavedLandUse::SavedGame);
 	if (!loaded)
@@ -1356,6 +1450,7 @@ bool SaveGameSystem::LoadWholeWorld(uint32_t slot, const gamesave::WorldFile& wo
 	_lastAutosaveTurn = game.turn;
 	_lastLoadTurn = game.turn;
 	_lastQuickSaveTurn = game.lastQuickSaveTurn;
+	_autosaveTurnToSave = game.lastAutosaveTurn;
 	SPDLOG_LOGGER_INFO(Log(), "Loaded the whole world of slot {} at turn {}", slot, game.turn);
 	return true;
 }
@@ -1485,7 +1580,55 @@ bool SaveGameSystem::LoadVanilla(uint32_t slot, const std::filesystem::path& slo
 		                   entt::to_integral(entity));
 	}
 	SPDLOG_LOGGER_INFO(Log(), "Loaded {} creatures from the game's file of slot {}", matched.size(), slot);
-	return !matched.empty();
+	VanillaMade creatures;
+	for (const auto& [creature, entity] : matched)
+	{
+		creatures.emplace(creature->number, entity);
+	}
+	const bool world = ImportVanillaWorld(slot, bytes, creatures);
+	return !matched.empty() || world;
+}
+
+bool SaveGameSystem::ImportVanillaWorld(uint32_t slot, std::span<const uint8_t> bytes, const VanillaMade& creatures)
+{
+	// The game reads its whole world from the file. openblack reads the whole file, but it takes only some parts of
+	// the world from it.
+	const auto read = gamesave::ReadVanillaWorld(bytes);
+	if (!read.world.has_value())
+	{
+		SPDLOG_LOGGER_WARN(Log(), "The game's file of slot {} does not read as a whole world at byte {}: {}", slot,
+		                   read.error->at, read.error->reason);
+		return false;
+	}
+	const auto data = read.world->GameData();
+	SPDLOG_LOGGER_INFO(Log(), "The game's file of slot {} has {} objects at turn {}", slot, read.world->Records().size(),
+	                   data.has_value() ? data->gameTurn : 0);
+	// The towns and the villagers of the file replace the towns and the villagers of the land
+	VanillaMade made = creatures;
+	VanillaWorks works;
+	ImportVanillaTowns(*read.world, made, works);
+	// The forests, the big forests and the trees of the file replace those of the land
+	ImportVanillaForests(*read.world, made);
+	// The fields and the fish farms of the file replace those of the land
+	ImportVanillaFarms(*read.world, made, works);
+	// The still things and the loose things of the file replace those of the land
+	ImportVanillaStatics(*read.world, made);
+	// The animals and their flocks replace those of the land
+	ImportVanillaAnimals(*read.world, made);
+	// The markers, the timers, the highlights and the influences of the scripts replace those of the land
+	ImportVanillaScriptThings(*read.world, made);
+	// The running scripts of the file, with the objects that they hold, replace the scripts of the land. The game loads
+	// them after all the objects of the file.
+	ImportVanillaScripts(*read.world, made);
+	// The clock of day and night, and the count of things made, which continues after all that the import makes
+	ImportVanillaGameValues(*read.world);
+	// The game data of the file has the two seeds of the random draws. After the load, the draws continue from them
+	// as the game's draws do. The creatures and the towns are made first, because the creation of a thing can draw.
+	if (data.has_value() && Locator::gameRandom::has_value())
+	{
+		Locator::gameRandom::value().SetSeeds({.synced = data->randomSeed, .local = data->localSeed});
+	}
+	return true;
 }
 
 std::vector<SaveGameSystem::VanillaCheck> SaveGameSystem::CheckVanillaRecords() const
@@ -1620,6 +1763,7 @@ bool SaveGameSystem::Delete(uint32_t slot)
 		std::filesystem::remove(file, error);
 	}
 	std::filesystem::remove(folder, error);
+	++_savedGamesChanges;
 	SPDLOG_LOGGER_INFO(Log(), "Deleted the saved game in slot {}", slot);
 	return true;
 }
@@ -1640,6 +1784,14 @@ std::optional<std::vector<uint8_t>> SaveGameSystem::ReadPictureFile(std::string_
 		return std::nullopt;
 	}
 	return ReadFile(path);
+}
+
+temple::save_game_room::SavedGamesStamp SaveGameSystem::GetSavedGamesStamp() const
+{
+	const auto player = PlayerFolder();
+	return {.changes = _savedGamesChanges,
+	        .player = player.has_value() ? player->generic_string() : std::string {},
+	        .land = LandNumber()};
 }
 
 namespace
@@ -1781,6 +1933,7 @@ void SaveGameSystem::EndTurn()
 		return;
 	}
 	_lastAutosaveTurn = state.turn;
+	_autosaveTurnToSave = state.turn;
 	// The autosaves of each land go in turn into the three autosave slots
 	const auto count =
 	    Locator::playerProfileSystem::has_value() ? Locator::playerProfileSystem::value().TakeLandAutosave(state.land) : 0u;
@@ -1796,29 +1949,57 @@ void SaveGameSystem::EndTurn()
 	}
 }
 
-bool SaveGameSystem::QuickSave()
+bool SaveGameSystem::PressQuickSave()
 {
+	// The key checks the rules and keeps its turn. The save comes at the turn of the command.
 	const auto turn = TurnNow();
 	if (!gamesave::QuickTurnAllowed(turn, _lastQuickSaveTurn, GameOver(), ScriptCutScene(), NetworkGame()))
 	{
 		return false;
 	}
 	_lastQuickSaveTurn = turn;
-	return InstantSave(gamesave::k_QuickSaveSlot);
+	return true;
 }
 
-bool SaveGameSystem::QuickLoad()
+bool SaveGameSystem::PressQuickLoad()
 {
-	if (!gamesave::QuickTurnAllowed(TurnNow(), _lastLoadTurn, GameOver(), ScriptCutScene(), NetworkGame()))
+	return gamesave::QuickTurnAllowed(TurnNow(), _lastLoadTurn, GameOver(), ScriptCutScene(), NetworkGame());
+}
+
+bool SaveGameSystem::DoQuickSave()
+{
+	// A network game never sends the command. The game of another computer does not write the files of this computer.
+	if (NetworkGame())
 	{
 		return false;
 	}
-	return Load(gamesave::k_QuickSaveSlot);
+	return InstantSave(gamesave::k_QuickSaveSlot);
+}
+
+void SaveGameSystem::DoQuickLoad()
+{
+	if (NetworkGame())
+	{
+		return;
+	}
+	// The rest of the turn and the draw of the frame use the world that the player has now. The game loads the slot
+	// at the end of the frame.
+	_askedLoad = gamesave::k_QuickSaveSlot;
+}
+
+bool SaveGameSystem::LoadAskedSlot()
+{
+	const auto slot = std::exchange(_askedLoad, std::nullopt);
+	return slot.has_value() && Load(*slot);
 }
 
 void SaveGameSystem::NewLand()
 {
 	_lastAutosaveTurn = 0;
+	// The list of the components that a save writes is made while the land loads. Thus the first save of a game, as when
+	// the scripts finish a temple, does not make it in a frame of the game.
+	static_cast<void>(Reflection());
+	_autosaveTurnToSave = 0;
 }
 
 bool SaveGameSystem::AnyPictureWaiting() const
@@ -1828,7 +2009,7 @@ bool SaveGameSystem::AnyPictureWaiting() const
 
 void SaveGameSystem::AskForPicture(std::vector<uint32_t> slots)
 {
-	if (!Locator::rendererInterface::has_value())
+	if (!Locator::rendererRequests::has_value())
 	{
 		for (const auto slot : slots)
 		{
@@ -1836,14 +2017,17 @@ void SaveGameSystem::AskForPicture(std::vector<uint32_t> slots)
 		}
 		return;
 	}
-	auto name = std::format("{}save-picture/{}", graphics::ScreenPictures::k_Prefix, _pictureRequests++);
-	Locator::rendererInterface::value().RequestScreenPicture(name, [](const graphics::ScreenView& screen) {
-		return gamesave::SampleScreen({.width = screen.width,
-		                               .height = screen.height,
-		                               .pitch = screen.pitch,
-		                               .bottomUp = screen.yflip,
-		                               .bgra = screen.bgra})
-		    .value_or(std::vector<uint8_t> {});
+	auto name = std::format("{}save-picture/{}", graphics::k_ScreenPicturePrefix, _pictureRequests++);
+	// The renderer takes the picture at the end of a draw, so the request goes to the main thread
+	PostToMainThread(MainThreadApi::Renderer, [name] {
+		Locator::rendererRequests::value().RequestScreenPicture(name, [](const graphics::ScreenView& screen) {
+			return gamesave::SampleScreen({.width = screen.width,
+			                               .height = screen.height,
+			                               .pitch = screen.pitch,
+			                               .bottomUp = screen.yflip,
+			                               .bgra = screen.bgra})
+			    .value_or(std::vector<uint8_t> {});
+		});
 	});
 	_waitingPictures.push_back({.name = std::move(name), .slots = std::move(slots)});
 }
@@ -1909,6 +2093,7 @@ void SaveGameSystem::PutSlotPicture(uint32_t slot)
 	}
 	// The writer copies the temporary picture into the slot's cells on its own thread, after the files before it
 	auto* files = &Locator::filesystem::value();
+	++_savedGamesChanges;
 	Writer().Queue((*pictures / gamesave::LargePictureFileName(slot)).generic_string(),
 	               [files, step = SlotPictureStep(*pictures, slot)]() { return step(*files); });
 }

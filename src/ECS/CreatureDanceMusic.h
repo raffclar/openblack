@@ -13,7 +13,7 @@
 
 #include <glm/vec3.hpp>
 
-#include "Audio/GameMusic.h"
+#include "Sound/GameMusic.h"
 
 /// The music of a creature's dance with villagers, which the camera hears near the creature
 namespace openblack::ecs::creature_dance_music

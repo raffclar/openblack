@@ -21,15 +21,15 @@
 #include <entt/core/hashed_string.hpp>
 #include <spdlog/spdlog.h>
 
-#include "Audio/GameSoundEffects.h"
-#include "Audio/Sound.h"
 #include "ECS/Reflection/BinaryArchive.h"
+#include "ECS/Systems/EffectRequestSystemInterface.h"
 #include "ECS/Systems/ExplosionSystemInterface.h"
-#include "ECS/Systems/ParticleSystemInterface.h"
 #include "FileSystem/FileSystemInterface.h"
 #include "Locator.h"
 #include "Particles/LightSheet.h"
 #include "Resources/ResourcesInterface.h"
+#include "Sound/GameSoundEffects.h"
+#include "Sound/SoundId.h"
 
 using namespace openblack;
 using namespace openblack::ecs::systems;
@@ -67,10 +67,10 @@ void CameraZoneSystem::PlaceForceField()
 	_forceField->SetPoints(std::move(points));
 	// Without the fence it is neither drawn nor fades
 	_forceField->SetHidden(!_zones.fenceOn);
-	if (!_forceFieldShown && Locator::particleSystem::has_value())
+	// The particles keep the sheet until a new land or a load clears their list, so it is given to them again each time
+	if (Locator::effectRequestSystem::has_value())
 	{
-		Locator::particleSystem::value().AddLightSheet(_forceField);
-		_forceFieldShown = true;
+		Locator::effectRequestSystem::value().AddLightSheet(_forceField);
 	}
 }
 
@@ -117,6 +117,14 @@ camera_zones::Zones CameraZoneSystem::FromFile(const exc::EXCZones& file)
 	return zones;
 }
 
+void CameraZoneSystem::Reset()
+{
+	_zones = {};
+	_fileName.clear();
+	_fenceHits = 0;
+	PlaceForceField();
+}
+
 bool CameraZoneSystem::SetZones(std::string_view fileName)
 {
 	// The zones set before go first, so a file that can't be read leaves none
@@ -128,7 +136,7 @@ bool CameraZoneSystem::SetZones(std::string_view fileName)
 		return false;
 	}
 	const auto name = std::string(fileName);
-	const auto id = entt::hashed_string::value(("camera/zones/" + name).c_str());
+	const auto id = camera_zones::FileId(name);
 	auto& cache = Locator::resources::value().GetCameraZones();
 	if (!cache.Contains(id))
 	{
@@ -143,7 +151,13 @@ bool CameraZoneSystem::SetZones(std::string_view fileName)
 			return false;
 		}
 	}
-	_zones = FromFile(cache.Handle(id)->GetZones());
+	// A file registered at the start that did not read is not in the cache
+	const auto* file = cache.Find(id);
+	if (file == nullptr)
+	{
+		return false;
+	}
+	_zones = FromFile(file->GetZones());
 	_fileName = name;
 	PlaceForceField();
 	return true;
@@ -197,5 +211,6 @@ bool CameraZoneSystem::LoadState(reflection::BinaryReader& in)
 	}
 	_fileName = std::move(fileName);
 	_zones = std::move(zones);
+	PlaceForceField();
 	return true;
 }

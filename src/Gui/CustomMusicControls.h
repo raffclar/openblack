@@ -17,9 +17,9 @@
 
 #include <glm/vec2.hpp>
 
-#include "Audio/MusicMood.h"
 #include "CustomMusicControlsRules.h"
 #include "Dialog.h"
+#include "Sound/MusicMood.h"
 
 namespace openblack::audio
 {

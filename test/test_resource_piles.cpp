@@ -146,6 +146,16 @@ TEST(ResourcePiles, AStoresAmountIsSharedOutAmongItsPilesInTurn)
 	EXPECT_EQ(ShareAmongPiles(500, capped), (std::vector<uint32_t> {100, 100}));
 }
 
+TEST(ResourcePiles, AfterAChangeAPotTakesTheSizeOfWhatItHoldsAndAPileKeepsItsSize)
+{
+	// A pot takes the size of what it holds now
+	EXPECT_EQ(SizeAfterChange(PotType::Pot, 30, 20), std::optional(PotScale(30, 20)));
+	EXPECT_EQ(SizeAfterChange(PotType::Pot, 0, 200), std::optional(0.25f));
+	// A pile rises out of the ground or goes down into it instead
+	EXPECT_FALSE(SizeAfterChange(PotType::PileFood, 30, 20).has_value());
+	EXPECT_FALSE(SizeAfterChange(PotType::PileWood, 30, 20).has_value());
+}
+
 TEST(ResourcePiles, APotIsDrawnAtTheSizeOfWhatItHolds)
 {
 	// A quarter, and one more for every so much its kind says, up to five times

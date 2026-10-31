@@ -9,6 +9,8 @@
 
 #include "ComponentReflection.h"
 
+#include <cstddef>
+
 #include <string>
 #include <string_view>
 #include <utility>
@@ -182,6 +184,12 @@ bool reflection::IsRegistered(const entt::meta_ctx& context, const entt::type_in
 
 void reflection::SaveRegistered(BinaryWriter& out, const entt::meta_any& value)
 {
+	const auto typeHash = value.type().info().hash();
+	// A type that the writer wrote before goes by its plan
+	if (out.SaveByPlan(typeHash, value.base().data()))
+	{
+		return;
+	}
 	const auto type = entt::resolve(out.Context(), value.type().info());
 	if (!type)
 	{
@@ -190,25 +198,47 @@ void reflection::SaveRegistered(BinaryWriter& out, const entt::meta_any& value)
 	}
 	if (const auto* codec = CodecOf(type); codec != nullptr)
 	{
+		out.KeepPlan(typeHash, SavePlan {.codec = codec->save, .steps = {}});
 		codec->save(value.base().data(), out);
 		return;
 	}
+	// The plan is kept only when each field has a writer of its own. A field that goes through the reflection, or that
+	// the list of unsaved values must name, keeps the type on this way.
+	SavePlan plan;
+	bool planned = true;
 	for (const auto& [id, data] : type.data())
 	{
 		const FieldInfo* info = data.custom();
 		if (Kept(info) && info->saveFrom != nullptr)
 		{
 			info->saveFrom(value.base().data(), out);
+			if (info->plainAddress != nullptr)
+			{
+				// The place of a field in the value is the same in each value of the type
+				const auto offset = static_cast<const std::byte*>(info->plainAddress(value.base().data())) -
+				                    static_cast<const std::byte*>(value.base().data());
+				plan.AddBlock(static_cast<size_t>(offset), info->plainSize);
+			}
+			else
+			{
+				plan.AddWriter(info->saveFrom);
+			}
 		}
 		else if (Kept(info))
 		{
 			info->save(data.get(value), out);
+			planned = false;
 		}
 		else if (info != nullptr)
 		{
 			// A value that only a function reads cannot come back: the list of unsaved values names it
 			out.Unsupported(info->name);
+			planned = false;
 		}
+	}
+	if (planned)
+	{
+		out.KeepPlan(typeHash, std::move(plan));
 	}
 }
 

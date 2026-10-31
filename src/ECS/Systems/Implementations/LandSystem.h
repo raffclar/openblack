@@ -37,23 +37,31 @@ public:
 	bool LoadMapWithFreshScripts(const std::filesystem::path& path, land_change::Kind change) override;
 	void LoadTestbed() override;
 	bool LoadGodsRingMap() override;
+	bool LoadGodsRingMapFile(std::span<const uint8_t> file) override;
 	bool LoadSavedLand(const std::filesystem::path& landPath, const std::filesystem::path& landscape,
 	                   const std::function<bool()>& restore, SavedLandUse use) override;
 	void LoadLandscape(const std::filesystem::path& path) override;
 	void SetStartCameraPlace(glm::ivec2 place) override { _startCameraPlace = place; }
+	void ShowLandMessage(const land_message::Message& message) override { View().ShowLandMessage(message); }
 
 	[[nodiscard]] bool IsPlaygroundLand(const std::filesystem::path& path) const override;
+	[[nodiscard]] uint32_t LandLoads() const override { return _landLoads; }
 	[[nodiscard]] const std::filesystem::path& GetLandPath() const override { return _landPath; }
 	[[nodiscard]] const std::filesystem::path& GetLandscapePath() const override { return _landscapePath; }
 	[[nodiscard]] std::filesystem::path ChallengePath() override;
 
 	void SetNewGameStart(std::optional<new_game_choice::NewGameStart> start) override { _newGameStart = start; }
+	[[nodiscard]] const std::optional<new_game_choice::NewGameStart>& GetNewGameStart() const override { return _newGameStart; }
 	void SetHumansFromSession(bool fromSession) override { _humansFromSession = fromSession; }
 	[[nodiscard]] bool RunsNetworkMapScript() const override { return _runsNetworkMapScript; }
+	void SetAllComputerGods(bool allComputer) override { _allComputerGods = allComputer; }
 	bool StartChallengeScripts(bool startStory) override;
 	void StartStoryScripts() override;
 
 	void PlayTurns(simulation::TurnViewInterface& view) override;
+	void PlayTurnSteps(simulation::TurnViewInterface& view) override;
+	void FinishTurns(uint32_t turnBefore, std::chrono::steady_clock::time_point start,
+	                 std::optional<std::chrono::steady_clock::time_point> end) override;
 	[[nodiscard]] std::chrono::steady_clock::duration GetTurnDeltaTime() const override { return _turnDeltaTime; }
 	void KeepAlignmentInProfile() override;
 
@@ -79,6 +87,8 @@ private:
 	bool AskNewGameChoice();
 	/// The turn of the world when it is due, and the temple's own turns
 	void GameLogicLoop(simulation::TurnViewInterface& view);
+	/// The turns that are due, with the queue of the main thread told that this thread does them
+	void PlayDueTurns(simulation::TurnViewInterface& view);
 
 	LandViewInterface* _view {nullptr};
 	NoLandView _noView;
@@ -91,15 +101,24 @@ private:
 	std::optional<new_game_choice::NewGameStart> _newGameStart;
 	/// The humans of a land of a network game come from the network session
 	bool _humansFromSession {false};
+	/// The count of the lands that started to load
+	uint32_t _landLoads {0};
 	/// The map script of a land of a network game runs now
 	bool _runsNetworkMapScript {false};
+	bool _allComputerGods {false};
 	/// The ticks of the machine at the last turn, as the game reads them
 	uint32_t _lastGameLoopTime {0};
 	/// When the scripts last took a turn in the temple, in real time
 	std::optional<uint32_t> _lastTempleTurnTime;
 	std::chrono::steady_clock::duration _turnDeltaTime {0};
 
-	/// After the script of a land of a network game: each slot whose god no human plays gets a computer god. With a
+	/// The steps that lay out a new land after its map script, in their order (land_laid_out::k_Order). The footpaths
+	/// load from the file of the land at the path, when there is a path. The slots of the gods fill last, when there
+	/// are gods.
+	void LayOutLand(const std::optional<std::filesystem::path>& footpathsOf,
+	                std::optional<std::span<const PlayerNames>> slotGods);
+	void LoadFootpathFile(const std::filesystem::path& landPath);
+	/// When a land of a network game is laid out: each slot whose god no human plays gets a computer god. With a
 	/// network session, the land waits for its humans until the start of the game. Without one, the player of this
 	/// computer is the one human.
 	void FillSlotsOfNetworkLand(std::span<const PlayerNames> gods);

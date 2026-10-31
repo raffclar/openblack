@@ -8,6 +8,7 @@
  *******************************************************************************/
 
 #include <cmath>
+#include <cstdint>
 
 #include <algorithm>
 #include <array>
@@ -1787,6 +1788,42 @@ TEST(CreatureTownCompassion, HurtPeopleMakeItThinkOfHealingFirstOnceItHasSeenHea
 	EXPECT_EQ(town_compassion::Actions({}, town.actions, 101u), (std::vector<uint32_t> {101}));
 }
 
+TEST(CreatureTownCompassion, ALeashTiedToADesireFlagHoldsItToTheDesireOfTheFlag)
+{
+	const FakeTown town;
+	const auto desires = town_compassion::DesiresToHelp(town.order, town.felt, town.actions);
+	town_compassion::State state {.desire = 0, .index = 0, .remembered = 0.68f, .lastTurn = 100};
+	town_compassion::TiedToFlag(state, 1, town.actions);
+	EXPECT_EQ(state.desire, std::optional<uint32_t>(1));
+	EXPECT_FALSE(state.choosesFreely);
+	// The place in the list and the remembered desire stay as they were
+	EXPECT_EQ(state.index, 0u);
+	EXPECT_FLOAT_EQ(state.remembered, 0.68f);
+	// Held to the desire, it does not move on as it plans or after it helps
+	EXPECT_FALSE(town_compassion::MovesOnWhilePlanning(state, true, false, 200));
+	town_compassion::FinishedHelping(state, desires, town.felt, 200, Always(0));
+	EXPECT_EQ(state.desire, std::optional<uint32_t>(1));
+	EXPECT_EQ(town_compassion::Actions(state, town.actions, std::nullopt), (std::vector<uint32_t> {32}));
+
+	// The leash key frees it
+	town_compassion::UntiedFromFlag(state);
+	EXPECT_EQ(state.desire, std::nullopt);
+	EXPECT_TRUE(state.choosesFreely);
+}
+
+TEST(CreatureTownCompassion, AFlagOfADesireWithNoActionsLeavesItFreeWithNoDesire)
+{
+	const FakeTown town;
+	town_compassion::State state {.desire = 0, .choosesFreely = false};
+	// Desire 2 has no actions
+	town_compassion::TiedToFlag(state, 2, town.actions);
+	EXPECT_EQ(state.desire, std::nullopt);
+	EXPECT_TRUE(state.choosesFreely);
+	town_compassion::TiedToFlag(state, static_cast<uint32_t>(town_compassion::k_TownDesireCount), town.actions);
+	EXPECT_EQ(state.desire, std::nullopt);
+	EXPECT_TRUE(state.choosesFreely);
+}
+
 TEST(CreatureTownCompassion, WhatACreatureMakesOfATown)
 {
 	EXPECT_EQ(town_compassion::ReligiousBelief(0.19f), 0u);
@@ -1826,9 +1863,37 @@ TEST(CreatureWatching, AScriptTeachesAndTakesAwaySkillsAndMiracles)
 	EXPECT_EQ(knowledge.miraclesSeen[10].count, 12u);
 	EXPECT_FALSE(creature_watching::SetKnown(knowledge, KnownList::Skill, 4, false, 0));
 	EXPECT_FALSE(knowledge.skillsKnown[4]);
-	// Past the lists nothing happens
+}
+
+TEST(CreatureWatching, AScriptTeachesAnIndexPastTheTable)
+{
+	const std::vector<creature_watching::SkillRule> skills(6);
+	const std::vector<creature_watching::MiracleRule> miracles(42);
+	auto knowledge = creature_watching::StartKnowledge(skills, miracles);
+	using creature_watching::KnownList;
+	// The seventh skill has no row, but the creature knows it after the teach, the first time only
+	EXPECT_FALSE(creature_watching::IsKnown(knowledge, KnownList::Skill, 6));
+	EXPECT_TRUE(creature_watching::SetKnown(knowledge, KnownList::Skill, 6, true, 0));
 	EXPECT_FALSE(creature_watching::SetKnown(knowledge, KnownList::Skill, 6, true, 0));
-	EXPECT_FALSE(creature_watching::SetKnown(knowledge, KnownList::Miracle, 42, true, 9));
+	EXPECT_TRUE(creature_watching::IsKnown(knowledge, KnownList::Skill, 6));
+	EXPECT_EQ(knowledge.skillsKnownPastTable, std::vector<uint32_t> {6});
+	// The table rows do not change
+	EXPECT_EQ(knowledge.skillsKnown.size(), 6u);
+	EXPECT_TRUE(std::ranges::none_of(knowledge.skillsKnown, std::identity {}));
+	// A miracle past the table is known, but it gets no sightings
+	EXPECT_TRUE(creature_watching::SetKnown(knowledge, KnownList::Miracle, 42, true, 9));
+	EXPECT_TRUE(creature_watching::IsKnown(knowledge, KnownList::Miracle, 42));
+	EXPECT_EQ(knowledge.miraclesSeen.size(), 42u);
+	EXPECT_TRUE(std::ranges::all_of(knowledge.miraclesSeen, [](const auto& seen) { return seen.count == 0; }));
+	// The ids keep the order of the teach
+	EXPECT_TRUE(creature_watching::SetKnown(knowledge, KnownList::Skill, 100, true, 0));
+	EXPECT_EQ(knowledge.skillsKnownPastTable, (std::vector<uint32_t> {6, 100}));
+	// A teach to forget removes the id, and the next teach makes it newly known
+	EXPECT_FALSE(creature_watching::SetKnown(knowledge, KnownList::Skill, 6, false, 0));
+	EXPECT_FALSE(creature_watching::IsKnown(knowledge, KnownList::Skill, 6));
+	EXPECT_FALSE(creature_watching::SetKnown(knowledge, KnownList::Skill, 6, false, 0));
+	EXPECT_TRUE(creature_watching::SetKnown(knowledge, KnownList::Skill, 6, true, 0));
+	EXPECT_EQ(knowledge.skillsKnownPastTable, (std::vector<uint32_t> {100, 6}));
 }
 
 TEST(CreatureWatching, TaughtSightingsAreTheTimesNeededRoundedDown)

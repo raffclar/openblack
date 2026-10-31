@@ -18,6 +18,7 @@
 #include "ECS/Registry.h"
 #include "Locator.h"
 #include "Resources/ResourceManager.h"
+#include "Utils.h"
 
 using namespace openblack;
 using namespace openblack::ecs::archetypes;
@@ -27,6 +28,8 @@ entt::entity BonfireArchetype::Create(const glm::vec3& position)
 {
 	auto& registry = Locator::entitiesRegistry::value();
 	const auto entity = registry.Create();
+	// It takes its place in the order of the things made
+	TakeThingMadePlace();
 	registry.Assign<Transform>(entity, position, portable_math::EulerAngleY(glm::radians(180.0f)), glm::vec3(1.0f));
 	const auto resourceId = resources::HashIdentifier(MeshId::BuildingCampfire);
 	registry.Assign<Mesh>(entity, resourceId, static_cast<int8_t>(0), static_cast<int8_t>(1));

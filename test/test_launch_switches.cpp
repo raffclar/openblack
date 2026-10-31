@@ -37,6 +37,20 @@ TEST(LaunchSwitches, TheCharacterAfterADashNeverStartsASwitch)
 	EXPECT_FALSE(Scan("game -").newGame);
 }
 
+TEST(LaunchSwitches, TheScanIncludesTheProgramPath)
+{
+	// A "/" or a "-" in the path of the program also starts a switch
+	EXPECT_TRUE(Scan("E:/openblack/builds/skirmish-2/bin/openblack.exe").skirmish);
+	EXPECT_TRUE(Scan(R"("C:\Program Files\Black-Skirmish\runblack.exe" -NEWGAME)").skirmish);
+	EXPECT_TRUE(Scan(R"("C:\My Games\b&w\-newgame\runblack.exe")").newGame);
+	// A "\" does not start a switch
+	EXPECT_FALSE(Scan(R"("C:\Games\Skirmish\runblack.exe")").skirmish);
+	EXPECT_FALSE(Scan(R"("E:\openblack\builds\skirmish-2\openblack.exe" -NEWGAME)").skirmish);
+	// A real switch after a path with spaces and quotes still counts
+	EXPECT_TRUE(Scan(R"("C:\Program Files\Lionhead\runblack.exe" -SKIRMISH)").skirmish);
+	EXPECT_TRUE(Scan(R"("C:\Program Files\Lionhead\runblack.exe" "/skirmish")").skirmish);
+}
+
 TEST(LaunchSwitches, OnlyTheFirstOfNewGameAndMultiplayerCounts)
 {
 	const auto first = Scan("game -NEWGAME -MULTIPLAYER");

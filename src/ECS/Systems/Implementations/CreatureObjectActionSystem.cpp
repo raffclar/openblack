@@ -32,9 +32,6 @@
 #include "3D/L3DMesh.h"
 #include "3D/LandIslandInterface.h"
 #include "3D/MapCoords.h"
-#include "Audio/AudioManagerInterface.h"
-#include "Audio/GameSoundEffects.h"
-#include "Audio/Sound.h"
 #include "Common/GUtilsDistance.h"
 #include "Common/GameRandom.h"
 #include "Common/PortableMath.h"
@@ -60,6 +57,7 @@
 #include "Creature/CreatureRoute.h"
 #include "Creature/CreatureStomp.h"
 #include "Creature/CreatureThrow.h"
+#include "Creature/CreatureWalkPlanner.h"
 #include "ECS/Components/Abode.h"
 #include "ECS/Components/Animal.h"
 #include "ECS/Components/AnimatedStatic.h"
@@ -92,6 +90,9 @@
 #include "ECS/Components/Physics.h"
 #include "ECS/Components/Poisoned.h"
 #include "ECS/Components/Pot.h"
+#include "ECS/Components/PuzzleGame.h"
+#include "ECS/Components/Reward.h"
+#include "ECS/Components/Scaffold.h"
 #include "ECS/Components/ScriptControl.h"
 #include "ECS/Components/SpellDispenser.h"
 #include "ECS/Components/StoragePit.h"
@@ -106,11 +107,14 @@
 #include "ECS/Components/VillagerPose.h"
 #include "ECS/Components/WallHug.h"
 #include "ECS/Components/WorshipSite.h"
+#include "ECS/CreatureCarried.h"
 #include "ECS/CreaturePlacement.h"
+#include "ECS/GameEndConditions.h"
 #include "ECS/Graveyards.h"
 #include "ECS/Map.h"
 #include "ECS/ObjectPhysics.h"
 #include "ECS/PhysicsClasses.h"
+#include "ECS/PlacedTurn.h"
 #include "ECS/Registry.h"
 #include "ECS/Statistics.h"
 #include "ECS/Systems/AnimalSystemInterface.h"
@@ -122,12 +126,15 @@
 #include "ECS/Systems/CreaturePhysiologySystemInterface.h"
 #include "ECS/Systems/DynamicsSystemInterface.h"
 #include "ECS/Systems/FireSystemInterface.h"
+#include "ECS/Systems/GameEndSystemInterface.h"
 #include "ECS/Systems/HandGrabSystemInterface.h"
 #include "ECS/Systems/Implementations/MagicLiving.h"
 #include "ECS/Systems/MagicSystemInterface.h"
 #include "ECS/Systems/PlayerSystemInterface.h"
 #include "ECS/Systems/SoundTagSystemInterface.h"
 #include "ECS/Systems/TimeSystemInterface.h"
+#include "ECS/Systems/WorkshopSystemInterface.h"
+#include "ECS/ThingMapPlace.h"
 #include "ECS/WorldObjects.h"
 #include "InfoConstants.h"
 #include "Locator.h"
@@ -136,6 +143,9 @@
 #include "ObjectMeasures.h"
 #include "Physics/LivingRules.h"
 #include "Resources/ResourcesInterface.h"
+#include "Sound/GameSoundEffects.h"
+#include "Sound/SoundId.h"
+#include "Sound/SoundRequestInterface.h"
 #include "VillagerFire.h"
 #include "VillagerPhysics.h"
 
@@ -448,6 +458,13 @@ void Consume(ecs::Registry& registry, entt::entity creature, entt::entity food)
 			graveyards::TownPersonDied(registry.Get<const Villager>(food).town);
 		}
 	}
+	// In a network game each villager that the creature eats, alive or dead, counts for the winning condition of its
+	// player
+	if (registry.AllOf<Villager>(food) && Locator::gameEndSystem::has_value())
+	{
+		Locator::gameEndSystem::value().AddToCondition(registry.Get<const Creature>(creature).owner,
+		                                               game_end::Condition::VillagersKilledByCreature, 1);
+	}
 	if (const auto* villager = registry.TryGet<const Villager>(food))
 	{
 		if (auto* abode = registry.TryGet<Abode>(villager->abode))
@@ -709,14 +726,14 @@ void PlayKickSound(const ecs::Registry& registry, entt::entity target, glm::vec3
 		}
 		object = k_KickedTree;
 	}
-	if (!object.has_value() || !Locator::audio::has_value())
+	if (!object.has_value() || !Locator::sounds::has_value())
 	{
 		return;
 	}
 	const std::array<int32_t, 5> keys {0, 0, *object, 0, k_BeenKicked};
-	Locator::audio::value().PlayAnimEffect(std::string(k_KickSoundBank), keys, target, foot,
-	                                       openblack::audio::CurrentSoundEffectConditions(),
-	                                       openblack::audio::AnimEffectMeasure::AcrossFirst);
+	Locator::sounds::value().PlayAnimEffect(std::string(k_KickSoundBank), keys, target, foot,
+	                                        openblack::audio::CurrentSoundEffectConditions(),
+	                                        openblack::audio::AnimEffectMeasure::AcrossFirst);
 }
 
 /// The foot meets what the creature kicks. The order of the rules is:
@@ -779,7 +796,7 @@ void KickAway(entt::entity creature, const Creature& body, const Transform& tran
 		const auto blows = creature_stomp::KickBlows(kick, land);
 		SPDLOG_LOGGER_DEBUG(spdlog::get("game"), "Creature {} kicks building {}", entt::to_integral(creature),
 		                    entt::to_integral(target));
-		Locator::buildingDamageSystem::value().CreatureBlows(target, creature, blows);
+		Locator::buildingDamageSystem::value().CreatureBlows(target, creature, blows, true);
 		return;
 	}
 	if (Locator::dynamicsSystem::has_value() && !registry.AllOf<Immovable>(target) &&
@@ -945,6 +962,17 @@ creature_object_actions::HoldStart IntoCreatureHand(ecs::Registry& registry, ent
 	return creature_object_actions::HoldStartFor(villager || animal, registry.AllOf<Creature>(object), accepted);
 }
 
+/// Where a thing is as a creature takes it, which the map keeps while the creature holds it
+std::optional<HeldByCreature::Taken> TakenFrom(const ecs::Registry& registry, entt::entity object)
+{
+	const auto* transform = registry.TryGet<const Transform>(object);
+	if (transform == nullptr)
+	{
+		return std::nullopt;
+	}
+	return HeldByCreature::Taken {.position = transform->position, .place = ecs::thing_map_place::Of(registry, object)};
+}
+
 /// The thing a creature catches is taken into its hand out of the air: it leaves the physics without going back on the
 /// map, and a person or animal is held
 void TakeInHand(ecs::Registry& registry, entt::entity creature, entt::entity object, const CreatureObjectAction& action,
@@ -953,7 +981,8 @@ void TakeInHand(ecs::Registry& registry, entt::entity creature, entt::entity obj
 	registry.AssignOrReplace<CreatureHeldObject>(
 	    creature, CreatureHeldObject {
 	                  .object = object, .mirrored = action.mirrored, .bone = HandBone(points, animation, action.mirrored)});
-	registry.AssignOrReplace<HeldByCreature>(object, HeldByCreature {.creature = creature});
+	registry.AssignOrReplace<HeldByCreature>(object,
+	                                         HeldByCreature {.creature = creature, .takenFrom = TakenFrom(registry, object)});
 	// It leaves the physics with its end, not going back on the map
 	if (Locator::dynamicsSystem::has_value() && Locator::dynamicsSystem::value().Find(object) != nullptr)
 	{
@@ -1037,8 +1066,7 @@ glm::vec2 FacingToReach(const Transform& transform, const creature_reach::Points
 /// Whether a thing lies on the map, where a creature can stomp on it: not held, flying or carried off
 bool OnTheMap(const ecs::Registry& registry, entt::entity thing)
 {
-	return registry.AllOf<MapCellResident>(thing) &&
-	       !registry.AnyOf<InHand, HeldByCreature, InPhysics, CarriedByTornado>(thing);
+	return ecs::InMapCells(registry, thing) && !registry.AnyOf<InHand, HeldByCreature, InPhysics, CarriedByTornado>(thing);
 }
 
 /// One game turn of walking or turning up to what the creature acts on
@@ -1239,6 +1267,12 @@ void Approach(entt::entity creature, CreatureObjectAction& action, const Creatur
 {
 	auto& registry = Locator::entitiesRegistry::value();
 	auto& locomotion = Locator::creatureLocomotionSystem::value();
+	// The turn on the spot to get the thing in reach is a part of the reach, not of the walk: the walk-up waits for it
+	if (locomotion.IsMoving(creature) && creature_object_actions::NextMovingApproachStep(action.turnedToReach) ==
+	                                         creature_object_actions::MovingApproachStep::WaitForTurn)
+	{
+		return;
+	}
 	// On each turn of the walk, a thing that it can no longer pick up stops the pick-up and the walk
 	if (action.kind == Kind::PickUp && action.target.has_value() && registry.Valid(*action.target) &&
 	    Locator::creatureObjectActionSystem::has_value() &&
@@ -1258,10 +1292,14 @@ void Approach(entt::entity creature, CreatureObjectAction& action, const Creatur
 	}
 	// A walk to a thing to pick up or stomp on fails when it does not move the creature for a time. It fails as a walk
 	// to a place where the creature cannot stand fails. Then the mind does not choose the thing again for a time
-	// (deviation 90).
+	// (deviation 90). The turns of one route search that has not found a route yet do not count.
+	const auto* moves = registry.TryGet<const CreatureLocomotion>(creature);
+	const auto searchingFor = moves != nullptr && moves->follower.GetState() == creature_route::Follower::State::Planning
+	                              ? moves->destination
+	                              : std::nullopt;
 	if (newTurn && (action.kind == Kind::PickUp || action.kind == Kind::Destroy) &&
 	    creature_object_actions::StallsOnTurn(action.stall, glm::xz(transform.position),
-	                                          registry.AllOf<ScriptControlled>(creature)))
+	                                          registry.AllOf<ScriptControlled>(creature), searchingFor))
 	{
 		SPDLOG_LOGGER_DEBUG(spdlog::get("game"), "Creature {} gives up its walk to {}: it got nowhere",
 		                    entt::to_integral(creature), action.target.has_value() ? entt::to_integral(*action.target) : 0u);
@@ -1346,7 +1384,9 @@ void Approach(entt::entity creature, CreatureObjectAction& action, const Creatur
 		else
 		{
 			SetPointing(action, transform, body, held, true);
-			action.holdMs = action.pointsUntilTold
+			// A point that ended during its turn does not hold the arm
+			action.holdMs = action.pointEnding ? 0.0f
+			                : action.pointsUntilTold
 			                    ? std::numeric_limits<float>::infinity()
 			                    : action.pointSeconds.value_or(creature_object_actions::k_PointSeconds) * 1000.0f;
 			action.pointMs = points->pointMs;
@@ -1373,16 +1413,20 @@ void Approach(entt::entity creature, CreatureObjectAction& action, const Creatur
 	{
 		const bool pickingUp = action.kind == Kind::PickUp;
 		action.eventMs = pickingUp ? points->pickUpMs : points->destroyMs;
+		// The corners are measured in the model's own size, and take the creature's scale each time the reach uses them
+		auto unscaled = transform;
+		unscaled.scale = glm::vec3(1.0f);
 		action.reach =
-		    MeasureReach(creature, transform, *points, pickingUp ? ReachWith::FingerEnds : ReachWith::Foot,
+		    MeasureReach(creature, unscaled, *points, pickingUp ? ReachWith::FingerEnds : ReachWith::Foot,
 		                 pickingUp ? creature_reach::k_PickUpAnimations : creature_reach::k_DestroyAnimations, action.eventMs);
 		if (!action.reach.has_value())
 		{
 			// Not posed yet: it tries again next turn
 			return;
 		}
-		action.maxReach = creature_reach::MaxReach(*action.reach);
 	}
+	const auto corners = creature_reach::Scaled(*action.reach, transform.scale.x);
+	action.maxReach = creature_reach::MaxReach(corners);
 	// The reach is measured from the way the creature faces now, which the drawn body catches up with only over a turn
 	const auto facing = AsFacing(registry, creature, transform);
 	// A villager or an animal that moves is reached for where it will be when the hand or foot gets there
@@ -1393,7 +1437,7 @@ void Approach(entt::entity creature, CreatureObjectAction& action, const Creatur
 	// After the turn to get the thing in reach, it reaches at once
 	if (std::exchange(action.turnedToReach, false))
 	{
-		BeginReaching(creature, action, animation, ReachFor(*action.reach, ToLocal(facing, reachPoint)));
+		BeginReaching(creature, action, animation, ReachFor(corners, ToLocal(facing, reachPoint)));
 		return;
 	}
 	const bool pickingUp = action.kind == Kind::PickUp;
@@ -1406,7 +1450,7 @@ void Approach(entt::entity creature, CreatureObjectAction& action, const Creatur
 		return;
 	}
 	// The test of the reach takes the place where the thing is now
-	const auto reach = ReachFor(*action.reach, ToLocal(facing, place));
+	const auto reach = ReachFor(corners, ToLocal(facing, place));
 	const float dx = place.x - transform.position.x;
 	const float dz = place.z - transform.position.z;
 	const float flatDistance = std::sqrt((dx * dx) + (dz * dz));
@@ -1426,9 +1470,8 @@ void Approach(entt::entity creature, CreatureObjectAction& action, const Creatur
 		}
 		// A thing outside the corners of its reach makes it turn first, so that the middle of its reach lies on the
 		// place where it reaches for the thing. Then it reaches.
-		const auto aimed = ReachFor(*action.reach, ToLocal(facing, reachPoint));
-		if (!aimed.blend.inRange &&
-		    locomotion.TurnToFace(creature, FacingToReach(facing, *action.reach, reachPoint, aimed.mirrored)))
+		const auto aimed = ReachFor(corners, ToLocal(facing, reachPoint));
+		if (!aimed.blend.inRange && locomotion.TurnToFace(creature, FacingToReach(facing, corners, reachPoint, aimed.mirrored)))
 		{
 			action.turnedToReach = true;
 			return;
@@ -1493,9 +1536,14 @@ bool StartCatch(entt::entity creature, CreatureObjectAction& action, const Creat
 	const auto flight = action.target.has_value() ? FlightOf(*action.target) : std::nullopt;
 	const bool hasAnimations = std::ranges::all_of(creature_catch::k_CatchAnimations,
 	                                               [creature](size_t clip) { return DurationOf(creature, clip) > 0.0f; });
+	if (!hasAnimations || !flight.has_value())
+	{
+		Fail(action, "it can't catch that");
+		return false;
+	}
 	// Its speed is weighed across and up or down, not along the land's other axis, as the game does
-	if (!hasAnimations || !flight.has_value() ||
-	    flight->second.y * flight->second.y + flight->second.x * flight->second.x < creature_catch::k_LeastSpeedSquared)
+	const glm::vec3 velocity = flight->second;
+	if (velocity.y * velocity.y + velocity.x * velocity.x < creature_catch::k_LeastSpeedSquared)
 	{
 		Fail(action, "it can't catch that");
 		return false;
@@ -2142,12 +2190,14 @@ void CreatureObjectActionSystem::EndPoint(entt::entity creature)
 	{
 		return;
 	}
-	if (action->phase != Phase::Playing)
+	if (action->phase != Phase::Playing && !action->pointTurned)
 	{
 		// It has not started to point yet: it stops at once
 		action->status = Status::Done;
 		return;
 	}
+	// The arm plays to the end of its animations with no hold. A turn to the point ends first, and then the arm plays
+	// all of its animations.
 	action->holdMs = 0.0f;
 	action->pointEnding = true;
 }
@@ -2231,7 +2281,7 @@ void CreatureObjectActionSystem::Release(entt::entity creature, const glm::vec3&
 	if (pose.has_value())
 	{
 		pose = creature_throw::ReleaseStart(*pose, FingerEndsOf(held->bone, *animation, TurnPoseOf(*animation, *transform)),
-		                                    from == ReleaseFrom::FingerEnds);
+		                                    from == ReleaseFrom::Thrown);
 	}
 	registry.Remove<CreatureHeldObject>(creature);
 	if (!registry.Valid(object))
@@ -2243,6 +2293,19 @@ void CreatureObjectActionSystem::Release(entt::entity creature, const glm::vec3&
 	{
 		at->position = pose->position;
 		at->rotation = pose->rotation;
+		// A thing that the creature lets go of or throws takes its angles from its turn in the hand. A held creature keeps
+		// the turn of the hand. A thrown villager or animal stands upright with the heading of the hand. It keeps its own
+		// heading and no angles, and its landing gives it a new heading.
+		if (from != ReleaseFrom::Dropped && !registry.AllOf<Creature>(object))
+		{
+			const auto taken = ecs::placed_turn::TurnFromHeld(
+			    pose->rotation, at->scale.x, ecs::placed_turn::CanLean(registry, object), from == ReleaseFrom::Thrown);
+			at->rotation = taken.turn;
+			if (!registry.AnyOf<Villager, Animal>(object))
+			{
+				ecs::placed_turn::KeepAngles(registry, object, taken.angles);
+			}
+		}
 	}
 	LetGo(creature, object, velocity);
 }
@@ -2308,6 +2371,120 @@ bool CreatureObjectActionSystem::IsCatching(entt::entity creature) const
 	       (action->status == Status::Running || action->status == Status::Contact);
 }
 
+namespace
+{
+/// Whether the body turns on the spot for the action before it plays the animations: to get the thing in reach, to
+/// throw or to point
+bool TurnsForIt(const CreatureObjectAction& action)
+{
+	if (action.phase != Phase::Approach)
+	{
+		return false;
+	}
+	switch (action.kind)
+	{
+	case Kind::PickUp:
+	case Kind::Destroy:
+		return action.turnedToReach;
+	case Kind::Throw:
+		return action.attempts > 0;
+	case Kind::Point:
+		return action.pointTurned;
+	default:
+		return false;
+	}
+}
+
+creature_object_actions::PlanStop PlanStopOf(const CreatureObjectAction& action)
+{
+	return creature_object_actions::OnPlanStop(action.kind, action.phase == Phase::Playing, TurnsForIt(action));
+}
+
+bool Runs(const CreatureObjectAction& action)
+{
+	return action.status == Status::Running || action.status == Status::Contact;
+}
+
+/// Whether the thing refuses a creature's hands. A piece of the beach temple puzzle refuses them only when the puzzle is
+/// solved. The other rules of the puzzle (a base, a covered ring, a puzzle that is not calm or that is gone) stop only
+/// the player's hand.
+bool RefusesCreature(const ecs::Registry& registry, entt::entity object)
+{
+	if (const auto* block = registry.TryGet<const HanoiBlock>(object))
+	{
+		return block->fixed;
+	}
+	return registry.AllOf<CannotBePickedUp>(object);
+}
+} // namespace
+
+bool CreatureObjectActionSystem::PlaysOnAlone(entt::entity creature) const
+{
+	const auto& registry = Locator::entitiesRegistry::value();
+	const auto* action = registry.Valid(creature) ? registry.TryGet<const CreatureObjectAction>(creature) : nullptr;
+	if (action == nullptr || !Runs(*action))
+	{
+		return false;
+	}
+	const auto stop = PlanStopOf(*action);
+	return action->planStopped || stop == creature_object_actions::PlanStop::PlaysOn ||
+	       (stop == creature_object_actions::PlanStop::EndsPoint && action->pointEnding);
+}
+
+void CreatureObjectActionSystem::StopForPlan(entt::entity creature, bool stopsBody)
+{
+	auto& registry = Locator::entitiesRegistry::value();
+	auto* action = registry.Valid(creature) ? registry.TryGet<CreatureObjectAction>(creature) : nullptr;
+	if (action == nullptr || !Runs(*action))
+	{
+		Cancel(creature);
+		return;
+	}
+	using creature_object_actions::PlanStop;
+	switch (PlanStopOf(*action))
+	{
+	case PlanStop::Stops:
+		Cancel(creature);
+		return;
+	case PlanStop::EndsPoint:
+		// A stop that leaves the body alone leaves the point to hold on and end by itself
+		if (stopsBody)
+		{
+			EndPoint(creature);
+		}
+		else
+		{
+			action->planStopped = true;
+		}
+		return;
+	case PlanStop::PlaysOn:
+		break;
+	}
+	action->planStopped = true;
+	if (action->kind != Kind::Eat)
+	{
+		return;
+	}
+	const auto held = GetHeld(creature);
+	switch (creature_object_actions::OnEatStop(action->phase == Phase::Playing, action->eaten.has_value(), held.has_value()))
+	{
+	case creature_object_actions::EatStop::Swallows:
+		SwallowStoppedEat(creature);
+		break;
+	case creature_object_actions::EatStop::Deletes:
+		// The hand lets go of the thing, and the thing goes out of the world. The eat animation plays on with an empty
+		// hand.
+		SPDLOG_LOGGER_DEBUG(spdlog::get("game"), "Creature {} loses {} that it was about to eat: its plan stopped",
+		                    entt::to_integral(creature), entt::to_integral(*held));
+		registry.Remove<CreatureHeldObject>(creature);
+		registry.Remove<HeldByCreature>(*held);
+		ecs::world_objects::Remove(*held);
+		break;
+	case creature_object_actions::EatStop::Keeps:
+		break;
+	}
+}
+
 std::optional<float> CreatureObjectActionSystem::GetProgress(entt::entity creature) const
 {
 	const auto& registry = Locator::entitiesRegistry::value();
@@ -2329,6 +2506,34 @@ std::optional<entt::entity> CreatureObjectActionSystem::GetHeld(entt::entity cre
 	const auto& registry = Locator::entitiesRegistry::value();
 	const auto* held = registry.Valid(creature) ? registry.TryGet<const CreatureHeldObject>(creature) : nullptr;
 	return held != nullptr && registry.Valid(held->object) ? std::optional(held->object) : std::nullopt;
+}
+
+std::optional<entt::entity> CreatureObjectActionSystem::GetCarried(entt::entity creature) const
+{
+	return ecs::creature_carried::CarriedBy(Locator::entitiesRegistry::value(), creature);
+}
+
+bool CreatureObjectActionSystem::HandsTouched(entt::entity creature) const
+{
+	const auto& registry = Locator::entitiesRegistry::value();
+	const auto* action = registry.Valid(creature) ? registry.TryGet<const CreatureObjectAction>(creature) : nullptr;
+	return action != nullptr && action->phase == Phase::Playing && action->status == Status::Contact;
+}
+
+bool CreatureObjectActionSystem::CrushUnderFoot(entt::entity creature, entt::entity thing)
+{
+	auto& registry = Locator::entitiesRegistry::value();
+	if (!registry.Valid(creature) || !registry.AllOf<Creature>(creature) || !registry.Valid(thing) ||
+	    !OnTheMap(registry, thing))
+	{
+		return false;
+	}
+	// A living thing takes the crush again on each turn, also when it is dead already
+	if (registry.AnyOf<Villager, Animal, Creature>(thing))
+	{
+		Crush(creature, registry.Get<const Creature>(creature), thing);
+	}
+	return true;
 }
 
 std::optional<float> CreatureObjectActionSystem::FoodValueOf(entt::entity object) const
@@ -2388,6 +2593,20 @@ creature_object_actions::KindFacts CreatureObjectActionSystem::KindFactsOf(entt:
 		if (registry.AllOf<Ball>(object))
 		{
 			return Thing::Ball;
+		}
+		if (registry.AllOf<BuildingPiece>(object))
+		{
+			return Thing::BuildingPiece;
+		}
+		if (registry.AllOf<Reward>(object))
+		{
+			return Thing::Reward;
+		}
+		if (registry.AllOf<Scaffold>(object))
+		{
+			// A creature picks up a scaffold only when a hand could take it
+			facts.handCanTake = Locator::workshopSystem::has_value() && Locator::workshopSystem::value().CanTake(object);
+			return Thing::Scaffold;
 		}
 		if (const auto* pot = registry.TryGet<const Pot>(object))
 		{
@@ -2466,7 +2685,7 @@ creature_object_actions::KindFacts CreatureObjectActionSystem::KindFactsOf(entt:
 	}();
 	facts.thing = thing;
 	facts.rule = creature_object_actions::RuleOf(thing);
-	facts.holdable = creature_object_actions::Holdable(thing);
+	facts.canBePickedUp = creature_object_actions::CanBePickedUp(thing);
 	return facts;
 }
 
@@ -2485,8 +2704,8 @@ creature_object_actions::PickUpFacts CreatureObjectActionSystem::PickUpFactsOf(e
 	// In the map: in its cells, and out of any hand, flight or tornado
 	const auto* holder = registry.TryGet<const HeldByCreature>(object);
 	const bool inMap =
-	    registry.AllOf<MapCellResident>(object) && !registry.AnyOf<InHand, HeldByCreature, InPhysics, CarriedByTornado>(object);
-	const bool heldByThisCreature = holder != nullptr && holder->creature == creature;
+	    ecs::InMapCells(registry, object) && !registry.AnyOf<InHand, HeldByCreature, InPhysics, CarriedByTornado>(object);
+	const bool heldByThisCreature = holder != nullptr && ecs::creature_carried::Carries(registry, creature, object);
 	const auto* leash = registry.Valid(creature) ? registry.TryGet<const CreatureLeash>(creature) : nullptr;
 	const bool leashTied = leash != nullptr && leash->worn.has_value() && leash->worn->tiedTo == object;
 
@@ -2508,7 +2727,7 @@ creature_object_actions::PickUpFacts CreatureObjectActionSystem::PickUpFactsOf(e
 		}
 	}
 	return {
-	    .cannotBePickedUp = registry.AllOf<CannotBePickedUp>(object),
+	    .cannotBePickedUp = RefusesCreature(registry, object),
 	    .villagerAtHome = registry.AllOf<Villager, AtHome>(object),
 	    .worshippingForCreaturesPlayer = worshipping,
 	    .inScript = registry.AllOf<InScript>(object),
@@ -2551,22 +2770,22 @@ bool CreatureObjectActionSystem::CanEat(entt::entity creature, entt::entity obje
 
 bool CreatureObjectActionSystem::CanEatHeld(entt::entity creature) const
 {
-	const auto held = GetHeld(creature);
+	const auto held = GetCarried(creature);
 	return held.has_value() && creature_object_actions::MayEatHeld(KindFactsOf(*held), CanPickUp(creature, *held));
 }
 
 bool CreatureObjectActionSystem::CanTakeFromHand(entt::entity creature, entt::entity object) const
 {
 	const auto kind = KindFactsOf(object);
-	return kind.holdable && creature_object_actions::MayTakeKindFromHand(kind, PickUpFactsOf(creature, object));
+	return creature_object_actions::MayTakeKindFromHand(kind, PickUpFactsOf(creature, object));
 }
 
 bool CreatureObjectActionSystem::CanBeCaught(entt::entity object) const
 {
 	const auto& registry = Locator::entitiesRegistry::value();
-	return creature_object_actions::MayCatchKind(KindFactsOf(object),
-	                                             {.cannotBePickedUp = registry.AllOf<CannotBePickedUp>(object),
-	                                              .villagerAtHome = registry.AllOf<Villager, AtHome>(object)});
+	return creature_object_actions::MayCatchKind(
+	    KindFactsOf(object),
+	    {.cannotBePickedUp = RefusesCreature(registry, object), .villagerAtHome = registry.AllOf<Villager, AtHome>(object)});
 }
 
 bool CreatureObjectActionSystem::CanThrowToImpress(entt::entity creature, entt::entity object) const
@@ -2627,6 +2846,9 @@ bool CreatureObjectActionSystem::CanStompOn(entt::entity creature, entt::entity 
 		case Thing::Bonfire:
 		case Thing::DeadTree:
 		case Thing::Static:
+		case Thing::BuildingPiece:
+		case Thing::Reward:
+		case Thing::Scaffold:
 			return StompRule::Always;
 		case Thing::Vortex:
 		case Thing::TeleportStone:
@@ -2648,7 +2870,7 @@ bool CreatureObjectActionSystem::CanStompOn(entt::entity creature, entt::entity 
 		return StompRule::Short;
 	}();
 	const bool onMap =
-	    registry.AllOf<MapCellResident>(target) && !registry.AnyOf<InHand, HeldByCreature, InPhysics, CarriedByTornado>(target);
+	    ecs::InMapCells(registry, target) && !registry.AnyOf<InHand, HeldByCreature, InPhysics, CarriedByTornado>(target);
 	return creature_stomp::CanBeStompedOn(
 	    {
 	        .rule = rule,
@@ -2809,7 +3031,7 @@ void CreatureObjectActionSystem::CreatureTurn(entt::entity entity)
 	if (auto* needs = registry.TryGet<CreatureNeeds>(entity); needs != nullptr && registry.AllOf<Creature>(entity))
 	{
 		needs->carriedWeight.reset();
-		const auto held = GetHeld(entity);
+		const auto held = GetCarried(entity);
 		if (!held.has_value())
 		{
 			return;
@@ -2823,6 +3045,25 @@ void CreatureObjectActionSystem::CreatureTurn(entt::entity entity)
 	}
 }
 
+namespace
+{
+/// The body plays the animations of the action at its time, with their weights
+void PoseActionSlots(entt::entity creature, const CreatureObjectAction& action, CreatureAnimation& animation)
+{
+	animation.slots.clear();
+	for (size_t i = 0; i < action.animationCount; ++i)
+	{
+		const auto duration = DurationOf(creature, action.animations.at(i));
+		// Each animation holds its last frame
+		const auto time = std::clamp(action.timeMs, 0.0f, std::max(duration - 1.0f, 0.0f));
+		animation.slots.push_back({.animation = action.animations.at(i),
+		                           .timeMs = time,
+		                           .weight = action.weights.at(i),
+		                           .mirrored = action.mirrored});
+	}
+}
+} // namespace
+
 void CreatureObjectActionSystem::ActionTurn(entt::entity creature)
 {
 	auto& registry = Locator::entitiesRegistry::value();
@@ -2834,10 +3075,12 @@ void CreatureObjectActionSystem::ActionTurn(entt::entity creature)
 		{
 			return;
 		}
-		// A hurried action doubles the step of its animations. The time that a point holds is the time of the mind,
-		// and does not change.
-		const float step = creature_layers::HurriedStep(
-		    gameTime.count() * creature_layers::BodyRate(ShownSize(body), animation.realTime), action.hurried);
+		// The animations move on by the whole milliseconds that the creature lives in the turn, at the rate of its
+		// size. A frozen creature lives fewer milliseconds. A hurried action doubles the step. The time that a point
+		// holds is the time of the mind, and does not change.
+		const auto turnMs = creature_walk_planner::TurnMs(animation.playbackScale, static_cast<int32_t>(gameTime.count()));
+		const float step = static_cast<float>(creature_layers::HurriedStep(
+		    creature_layers::TurnStepMs(turnMs, ShownSize(body), animation.realTime), action.hurried));
 		if (action.kind == Kind::Catch)
 		{
 			using Catching = CreatureObjectAction::Catching;
@@ -2851,11 +3094,28 @@ void CreatureObjectActionSystem::ActionTurn(entt::entity creature)
 			}
 			return;
 		}
+		// When the thing got out of reach, the time of the reach decreases by one step each turn, with the last blend.
+		// The action fails when the step of the turn is longer than the time that is left.
+		if (action.withdraws)
+		{
+			const auto back = creature_object_actions::WithdrawStep(action.timeMs, step);
+			if (!back.has_value())
+			{
+				Fail(action, "it got out of reach");
+				animation.slots.clear();
+				return;
+			}
+			action.timeMs = *back;
+			PoseActionSlots(entity, action, animation);
+			return;
+		}
+		const float timeBefore = action.timeMs;
 		action.timeMs = action.kind == Kind::Point
 		                    ? creature_pointing::AdvanceTime(action.timeMs, step, action.pointMs, action.pointEnding)
 		                    : action.timeMs + step;
 
-		// Until it has hold, the reach follows what it reaches for, and fails when it gets out of reach
+		// Until it has hold, the reach follows what it reaches for. When the thing gets out of reach, the time of the
+		// reach starts to decrease.
 		if ((action.kind == Kind::PickUp || action.kind == Kind::Destroy) && !action.eventDone && action.reach.has_value())
 		{
 			const auto* at = action.target.has_value() && registry.Valid(*action.target)
@@ -2868,18 +3128,21 @@ void CreatureObjectActionSystem::ActionTurn(entt::entity creature)
 				return;
 			}
 			// It reaches for where a villager or an animal that moves will be at the moment of the hold. The time
-			// left is in whole milliseconds.
+			// left is in whole milliseconds, from the time of the reach before this turn.
 			const auto living = LivingOf(registry, *action.target);
 			const auto place = living.has_value() ? creature_lead::PlaceOf(*living) : at->position;
-			const auto msLeft = static_cast<int32_t>(action.eventMs) - static_cast<int32_t>(action.timeMs);
+			const auto msLeft = static_cast<int32_t>(action.eventMs) - static_cast<int32_t>(timeBefore);
 			const auto aim = AimAt(living, place, creature_lead::ReachSeconds(ShownSize(body), msLeft));
 			const auto local = ToLocal(AsFacing(registry, entity, transform), aim);
-			const auto reach =
-			    creature_reach::Solve(action.mirrored ? creature_reach::Mirrored(*action.reach) : *action.reach, local);
-			if (!reach.inRange)
+			const auto corners = creature_reach::Scaled(*action.reach, transform.scale.x);
+			const auto reach = creature_reach::Solve(action.mirrored ? creature_reach::Mirrored(corners) : corners, local);
+			// A thing that is no longer on the map, for example in the player's hand, is out of reach too
+			if (!OnTheMap(registry, *action.target) || !reach.inRange)
 			{
-				Fail(action, "it got out of reach");
-				animation.slots.clear();
+				// The reach keeps the weights of the last turn. Its time is one step less than its time before this turn.
+				action.withdraws = true;
+				action.timeMs = creature_object_actions::WithdrawStart(timeBefore, step);
+				PoseActionSlots(entity, action, animation);
 				return;
 			}
 			action.weights = reach.weights;
@@ -2942,17 +3205,7 @@ void CreatureObjectActionSystem::ActionTurn(entt::entity creature)
 			return;
 		}
 
-		animation.slots.clear();
-		for (size_t i = 0; i < action.animationCount; ++i)
-		{
-			const auto duration = DurationOf(entity, action.animations.at(i));
-			// Each animation holds its last frame
-			const auto time = std::clamp(action.timeMs, 0.0f, std::max(duration - 1.0f, 0.0f));
-			animation.slots.push_back({.animation = action.animations.at(i),
-			                           .timeMs = time,
-			                           .weight = action.weights.at(i),
-			                           .mirrored = action.mirrored});
-		}
+		PoseActionSlots(entity, action, animation);
 	};
 	if (registry.Valid(creature) && registry.AllOf<Creature, Transform, CreatureAnimation, CreatureObjectAction>(creature))
 	{
@@ -3078,7 +3331,7 @@ void KnockAbout(ecs::Registry& registry, entt::entity creature, const Creature& 
 				SPDLOG_LOGGER_DEBUG(spdlog::get("game"), "Creature {} knocks building {}", entt::to_integral(creature),
 				                    entt::to_integral(thing));
 				const std::array blows {creature_stomp::TrampleBlow(point, move, sphereRadius)};
-				Locator::buildingDamageSystem::value().CreatureBlows(thing, creature, blows);
+				Locator::buildingDamageSystem::value().CreatureBlows(thing, creature, blows, false);
 			}
 			continue;
 		}
@@ -3208,7 +3461,7 @@ void CreatureObjectActionSystem::AfterPoseTurn(entt::entity creature)
 	std::vector<Moment> moments;
 	if (const auto* action = registry.Valid(creature) ? registry.TryGet<const CreatureObjectAction>(creature) : nullptr;
 	    action != nullptr && action->phase == Phase::Playing && action->status == Status::Running && !action->eventDone &&
-	    action->timeMs >= action->eventMs)
+	    !action->withdraws && action->timeMs >= action->eventMs)
 	{
 		moments.push_back({creature});
 	}
@@ -3240,7 +3493,8 @@ void CreatureObjectActionSystem::AfterPoseTurn(entt::entity creature)
 			    creature, CreatureHeldObject {.object = object,
 			                                  .mirrored = action.mirrored,
 			                                  .bone = HandBone(*points, animation, action.mirrored)});
-			registry.AssignOrReplace<HeldByCreature>(object, HeldByCreature {.creature = creature});
+			registry.AssignOrReplace<HeldByCreature>(
+			    object, HeldByCreature {.creature = creature, .takenFrom = TakenFrom(registry, object)});
 			// A person or an animal stops what it did and is held, from the ground or out of the air. One that cannot go
 			// into its state for the hand is let go where it is, and the pick-up fails.
 			if (IntoCreatureHand(registry, object) == creature_object_actions::HoldStart::Refused)
@@ -3279,14 +3533,9 @@ void CreatureObjectActionSystem::AfterPoseTurn(entt::entity creature)
 			{
 				break;
 			}
-			// A living thing under the foot takes the crush of the stomp, from the creature and its player
-			if (registry.AnyOf<Villager, Animal, Creature>(target))
-			{
-				Crush(creature, body, target);
-			}
-			// A building is broken about where it stands, and a rock is smashed in two; the blow does nothing to anything
-			// else
-			else if (registry.AnyOf<Abode, SpellDispenser>(target))
+			// A building is broken about where it stands, and a rock is smashed in two. The blow does nothing to anything
+			// else. A living thing takes the crush from the plan of the creature on each turn after the blow.
+			if (registry.AnyOf<Abode, SpellDispenser>(target))
 			{
 				if (Locator::buildingDamageSystem::has_value())
 				{
@@ -3300,7 +3549,7 @@ void CreatureObjectActionSystem::AfterPoseTurn(entt::entity creature)
 			break;
 		}
 		case Kind::PutDown:
-			Release(creature, glm::vec3(0.0f));
+			Release(creature, glm::vec3(0.0f), ReleaseFrom::LetGo);
 			break;
 		case Kind::Discard:
 		{
@@ -3309,7 +3558,7 @@ void CreatureObjectActionSystem::AfterPoseTurn(entt::entity creature)
 			// keeps the thing in the hand.
 			if (letGo == creature_throw::LetGo::PutDownStill)
 			{
-				Release(creature, glm::vec3(0.0f));
+				Release(creature, glm::vec3(0.0f), ReleaseFrom::LetGo);
 				break;
 			}
 			if (letGo == creature_throw::LetGo::Keep)
@@ -3322,14 +3571,14 @@ void CreatureObjectActionSystem::AfterPoseTurn(entt::entity creature)
 			                          ? creature_throw::TossVelocity(*hand * transform.scale, action.mirrored,
 			                                                         transform.rotation, creature_throw::k_DiscardSpeedShare)
 			                          : glm::vec3(0.0f);
-			Release(creature, velocity);
+			Release(creature, velocity, ReleaseFrom::LetGo);
 			break;
 		}
 		case Kind::Throw:
 			action.thrown = GetHeld(creature);
 			Release(creature,
 			        creature_throw::ReleaseVelocity(action.point, handPosition, std::max(action.flightSeconds, k_Tiny)),
-			        ReleaseFrom::FingerEnds);
+			        ReleaseFrom::Thrown);
 			break;
 		case Kind::Eat:
 		{

@@ -56,6 +56,18 @@ SKIPPED = {
 RUN_ONLY = {
     # The sounds of a saved game do not come back: a load removes each emitter
     "AudioEmitter": {"sourceId"},
+    # An entity of the audio of the run, and a count that the game starts again when a load makes the tags new
+    "SoundTag": {"emitter", "turns"},
+    # The ring of light is made again after a load
+    "CreatureArena": {"ring"},
+}
+
+# Fields of values that only the frames or the local random numbers of a computer change, and that no turn reads. A
+# save keeps them as presentation values, so the tools that compare the synced state do not look at them.
+PRESENTATION = {
+    # The frame rate of this computer and lines of code from its local random numbers. The loop of the village lights'
+    # flames, which the frames move on, from the C library's numbers of this computer.
+    "openblack::ecs::RegistryContext": {"globalStatistics", "villageLightFlames"},
 }
 
 SOURCES = ROOT / "src"
@@ -283,9 +295,12 @@ class Index:
         self.constants = {}
         self.aliases = {}
         headers = sorted(SOURCES.rglob("*.h")) + [header for folder in LIBRARY_HEADERS for header in sorted(folder.glob("*.h"))]
+        self.constant_aliases = {}
         for header in headers:
             text = strip_preprocessor(strip_comments(header.read_text(encoding="utf-8", errors="replace")))
             self.read_scope(text, [], header, None)
+        # A table for each player number of a network game: the player names name its first places, the numbers the rest
+        self.constants["openblack::player_slots::k_PlayerNumbers"] = ("PlayerNames", ["openblack"])
 
     def read_scope(self, body, scope, header, owner):
         for statement in scope_statements(body):
@@ -316,6 +331,10 @@ class Index:
                                  bare)
             if constant is not None:
                 self.constants["::".join(scope + [constant.group(1)])] = (constant.group(2), scope)
+                continue
+            same = re.search(r"\bconstexpr\b[^=]*\b(k_\w+)\s*=\s*((?:\w+::)*k_\w+)\s*;?$", bare)
+            if same is not None and owner is None:
+                self.constant_aliases["::".join(scope + [same.group(1)])] = (same.group(2), scope)
                 continue
             alias = re.match(r"^using\s+([A-Za-z_]\w*)\s*=\s*(.+?)\s*;?$", bare, flags=re.S)
             if alias is not None:
@@ -377,6 +396,9 @@ class Index:
                     enum_name, enum_scope = self.constants[candidate]
                     found = self.resolve(enum_name, enum_scope)
                     break
+                if candidate in self.constant_aliases:
+                    # A constant that is another constant counts what that one counts
+                    return self.enum_of_size(*self.constant_aliases[candidate])
         else:
             found = None
         if found is None or self.types[found].enumerators is None:
@@ -456,10 +478,12 @@ def names_array(enum_name):
     return "k_" + "".join(word[:1].upper() + word[1:] for word in words) + "Names"
 
 
-def field_line(owner, member, levels, run_only=False):
+def field_line(owner, member, levels, run_only=False, presentation=False):
     """A field's registration, with the names of the enumerations indexing it"""
     if run_only:
         return f'\n\t    .RunField<&{owner}::{member}>("{member}")'
+    if presentation and not levels:
+        return f'\n\t    .PresentationField<&{owner}::{member}>("{member}")'
     if not levels:
         return f'\n\t    .Field<&{owner}::{member}>("{member}")'
     names = ", ".join(names_array(level) if level is not None else "std::span<const std::string_view> {}"
@@ -671,7 +695,7 @@ def main():
         text = f"\tReflect<{name}>(context, ValueOnly {{}})"
         used = set()
         for member, levels in registered_members(definition, [member for member, _ in definition.members]):
-            text += field_line(name, member, levels)
+            text += field_line(name, member, levels, presentation=member in PRESENTATION.get(name, set()))
             used.update(level for level in levels if level is not None)
         text += ";\n"
         header = definition.header

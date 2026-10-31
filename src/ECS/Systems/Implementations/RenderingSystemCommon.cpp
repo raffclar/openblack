@@ -18,6 +18,7 @@
 
 #include "3D/L3DMesh.h"
 #include "Camera/Camera.h"
+#include "Common/MainThreadQueue.h"
 #include "ECS/Components/Fire.h"
 #include "ECS/Components/Hand.h"
 #include "ECS/Components/HandGrab.h"
@@ -122,13 +123,14 @@ RenderingSystemCommon::~RenderingSystemCommon() = default;
 
 void RenderingSystemCommon::SetDirty()
 {
-	_renderContext.dirty = true;
+	// The changes of the drawn parts mark the draw from any thread. The draw reads the marks only after the turn.
+	_renderContext.dirty.store(true, std::memory_order_relaxed);
 }
 
 void RenderingSystemCommon::SetLayoutDirty()
 {
-	_renderContext.dirty = true;
-	_renderContext.layoutDirty = true;
+	_renderContext.dirty.store(true, std::memory_order_relaxed);
+	_renderContext.layoutDirty.store(true, std::memory_order_relaxed);
 }
 
 void RenderingSystemCommon::UploadRootsPiles()
@@ -187,8 +189,9 @@ void RenderingSystemCommon::UploadRootsPiles()
 	             bgfx::copy(instances.data(), static_cast<uint32_t>(count * sizeof(RenderContext::ObjectInstance))));
 }
 
-void RenderingSystemCommon::PrepareDraw(bool drawBoundingBox, bool drawFootpaths, bool drawStreams)
+void RenderingSystemCommon::PrepareDraw(bool drawBoundingBox, bool drawFootpaths, bool drawStreams, DrawUse use)
 {
+	MainThreadQueue::CheckDirect(MainThreadApi::Renderer, "RenderingSystem::PrepareDraw");
 	const auto& registry = Locator::entitiesRegistry::value();
 
 	_renderContext.animatedBoneMatrices.clear();
@@ -310,12 +313,25 @@ void RenderingSystemCommon::PrepareDraw(bool drawBoundingBox, bool drawFootpaths
 		_renderContext.hasBoundingBoxes = drawBoundingBox;
 	}
 
-	KeepHeldLights();
+	KeepHeldLights(use);
 }
 
-void RenderingSystemCommon::KeepHeldLights()
+void RenderingSystemCommon::KeepHeldLights(DrawUse use)
 {
 	auto& registry = Locator::entitiesRegistry::value();
+	const auto* camera = Locator::camera::has_value() ? &Locator::camera::value() : nullptr;
+	if (use == DrawUse::WarmUp)
+	{
+		// The sea mirrors each thing in the light that it kept. The things keep their lights as they are.
+		const auto mirror = [&registry, camera](bool tree) {
+			return [&registry, camera, tree](RenderContext::HighDetailDraw& draw) {
+				draw.heldLight = HeldLightStepOf(registry, draw.entity, glm::vec3(draw.model[3]), tree, camera).mirrored;
+			};
+		};
+		std::ranges::for_each(_renderContext.inHandDraws, mirror(false));
+		std::ranges::for_each(_renderContext.heldTreeDraws, mirror(true));
+		return;
+	}
 	// A thing out of the hand keeps no light
 	std::vector<entt::entity> released;
 	registry.Each<const HeldLight>(
@@ -326,7 +342,6 @@ void RenderingSystemCommon::KeepHeldLights()
 	}
 	// Each draw of a thing in the hand takes the light of this frame, which the thing keeps for the next frame. The sea
 	// mirrors it in the light that it kept the frame before.
-	const auto* camera = Locator::camera::has_value() ? &Locator::camera::value() : nullptr;
 	const auto keep = [&registry, camera](bool tree) {
 		return [&registry, camera, tree](RenderContext::HighDetailDraw& draw) {
 			const auto step = HeldLightStepOf(registry, draw.entity, glm::vec3(draw.model[3]), tree, camera);

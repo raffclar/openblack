@@ -22,7 +22,7 @@
   "query": "ecs.entities"
  },
  {
-  "description": "One entity: its kind, label, place and component names; their fields on request",
+  "description": "One entity: its kind, label, place and component names; their fields on request. A component can be larger than max_bytes (a creature's animation is): the answer then keeps its small fields and lists the others by their bytes under omitted_fields, to ask for by their paths in fields",
   "kind": "object",
   "parameters": [
    {
@@ -85,6 +85,93 @@
    }
   ],
   "query": "ecs.references"
+ },
+ {
+  "description": "Entities by component, kind or label: ids, kinds, labels and places",
+  "kind": "list",
+  "parameters": [
+   {
+    "description": "Only entities with this component (or all of these), by name, e.g. Tree",
+    "name": "component",
+    "type": "string or array"
+   },
+   {
+    "description": "Only entities of this kind, e.g. Villager, Abode, Tree, Animal, Creature",
+    "name": "kind",
+    "type": "string"
+   },
+   {
+    "description": "Only entities whose label holds this text, in any case",
+    "name": "name",
+    "type": "string"
+   }
+  ],
+  "query": "drawn.entities"
+ },
+ {
+  "description": "One entity: its kind, label, place and component names; their fields on request. A component can be larger than max_bytes (a creature's animation is): the answer then keeps its small fields and lists the others by their bytes under omitted_fields, to ask for by their paths in fields",
+  "kind": "object",
+  "parameters": [
+   {
+    "description": "The entity's id",
+    "name": "id",
+    "required": true,
+    "type": "integer"
+   },
+   {
+    "description": "The components to write out with their fields, by name",
+    "name": "components",
+    "type": "array or \"all\""
+   }
+  ],
+  "query": "drawn.entity"
+ },
+ {
+  "description": "The component types there are, how many entities have each, and whether their fields are known",
+  "kind": "list",
+  "parameters": [],
+  "query": "drawn.components"
+ },
+ {
+  "description": "The component types that have entities but no registration with the reflection, so the sync checksum and the saves leave them out. A correct game gives an empty list.",
+  "kind": "list",
+  "parameters": [],
+  "query": "drawn.unregistered"
+ },
+ {
+  "description": "A hash of where every entity is (its id and transform), and of a component's fields when one is named, to tell whether two runs ended the same",
+  "kind": "object",
+  "parameters": [
+   {
+    "description": "Also hash this component's fields on each entity that has it",
+    "name": "component",
+    "type": "string"
+   },
+   {
+    "description": "Leave out the entities with any of these components, e.g. [\"HandGrab\"]: the hand eases towards the pointer every frame drawn, paused or not",
+    "name": "exclude",
+    "type": "array"
+   },
+   {
+    "description": "false: leave out the ids, so that two loads of a land give the same hash although the registry gave the entities other ids (true by default)",
+    "name": "ids",
+    "type": "boolean"
+   }
+  ],
+  "query": "drawn.hash"
+ },
+ {
+  "description": "Every component field that holds an entity (an entity, an optional one or a list of them), gone or not: the holder, its label, the component and the field's path",
+  "kind": "list",
+  "parameters": [
+   {
+    "description": "The entity's id",
+    "name": "id",
+    "required": true,
+    "type": "integer"
+   }
+  ],
+  "query": "drawn.references"
  },
  {
   "description": "Objects within the radius of a point, nearest first, by component, kind or label",
@@ -345,6 +432,24 @@
   "query": "particles.liquid"
  },
  {
+  "description": "The symbols of belief that rose last from things that gained belief, the newest first: place, amount (the belief by ten thousand) and the player's colour. Also the count of all symbols since the land started",
+  "kind": "object",
+  "parameters": [],
+  "query": "particles.belief"
+ },
+ {
+  "description": "The effects that the turns and the scripts asked for: the number that the next one gets (null without the requests) and how many running effects have a number that the simulation gave",
+  "kind": "object",
+  "parameters": [],
+  "query": "particles.requests"
+ },
+ {
+  "description": "What the last frame of the draw of the particle effects drew: sprites, ribbons, models, mists, light maps and effects. Null on a computer that does not draw the effects",
+  "kind": "object",
+  "parameters": [],
+  "query": "particles.drawn"
+ },
+ {
   "description": "How many bodies the physics has: flying, resting and in water",
   "kind": "object",
   "parameters": [],
@@ -430,6 +535,72 @@
   "writes": true
  },
  {
+  "description": "The creature goes to a thing, picks it up and holds it, as a leash order does on a thing that it can lift: the first times it holds a thing of that sort it plays with it, then it holds it facing the player for 40 to 50 seconds. Give it creature.put_down to let go before that. The creature gives up an order on the way when it has not moved for 50 turns (a long route search can cause it): give it for a thing that is near, and read the warning in the answer. It is refused while a cut scene plays",
+  "kind": "object",
+  "parameters": [
+   {
+    "description": "The creature's entity id; may be left out when there is one creature",
+    "name": "id",
+    "type": "integer"
+   },
+   {
+    "description": "The thing to pick up",
+    "name": "object",
+    "required": true,
+    "type": "integer"
+   }
+  ],
+  "query": "creature.pick_up",
+  "writes": true
+ },
+ {
+  "description": "The creature lets go of what it carries. With no point it puts it down where it stands with the game's put-down action. With a point it carries it there and puts it down at rest, as a leash order on the land does while it carries something. Where it cannot stand, or with throw true, it throws it at the point from near enough instead",
+  "kind": "object",
+  "parameters": [
+   {
+    "description": "The creature's entity id; may be left out when there is one creature",
+    "name": "id",
+    "type": "integer"
+   },
+   {
+    "description": "Where it takes the thing, [x, z] or [x, y, z]",
+    "name": "point",
+    "type": "point"
+   },
+   {
+    "description": "It throws the thing at the point (false by default)",
+    "name": "throw",
+    "type": "boolean"
+   }
+  ],
+  "query": "creature.put_down",
+  "writes": true
+ },
+ {
+  "description": "The creature goes to a thing and eats from it as its own plan to eat does: from a storage pit (EatFromStoragePit), a field (EatFromContainer), a tree (EatFromTree) or the thing itself (EatAfterExamining), or with the eat action given. The limits of creature.pick_up hold here too: a thing that is near, and no cut scene",
+  "kind": "object",
+  "parameters": [
+   {
+    "description": "The creature's entity id; may be left out when there is one creature",
+    "name": "id",
+    "type": "integer"
+   },
+   {
+    "description": "The thing to eat from: give a storage pit, not its food pile",
+    "name": "object",
+    "required": true,
+    "type": "integer"
+   },
+   {
+    "description": "An eat action of the game's table, e.g. EatAlive",
+    "name": "action",
+    "type": "string"
+   }
+  ],
+  "query": "creature.eat",
+  "writes": true
+ },
+ {
   "description": "The ordinary skills and miracles a creature knows, and how often it has seen each miracle",
   "kind": "object",
   "parameters": [
@@ -481,6 +652,54 @@
    }
   ],
   "query": "creature.plan"
+ },
+ {
+  "description": "The clips that a creature's body plays now: for each, its layer (body, blend, face, gesture, wobble), the clip's place and name in the creature spec file, the time in it, its speed (clip milliseconds for each millisecond of the turn), whether it loops, its weight and pair blend, and what asked for it (the mind's activity, plan and agenda step, the action with a thing, the fight)",
+  "kind": "object",
+  "parameters": [
+   {
+    "description": "The creature's entity id; may be left out when there is one creature",
+    "name": "id",
+    "type": "integer"
+   }
+  ],
+  "query": "creature.animation"
+ },
+ {
+  "description": "The clips that a creature's body played and that stopped, the newest last: each with the turn that it started, the turn that it stopped, its speed and what asked for it. The log keeps the newest 256.",
+  "kind": "object",
+  "parameters": [
+   {
+    "description": "The creature's entity id; may be left out when there is one creature",
+    "name": "id",
+    "type": "integer"
+   },
+   {
+    "description": "How many of the newest clips (all by default)",
+    "name": "last",
+    "type": "integer"
+   }
+  ],
+  "query": "creature.animation_history"
+ },
+ {
+  "description": "The clips that something asked a creature's body for that did not play: missing (the species has no such clip: the body showed the stand, the action ended at once, or a face, gesture or wobble showed nothing) or refused (the body played another action), with the turn, what asked and how many turns in a row it came again",
+  "kind": "object",
+  "parameters": [
+   {
+    "description": "The creature's entity id; may be left out when there is one creature",
+    "name": "id",
+    "type": "integer"
+   }
+  ],
+  "query": "creature.animation_problems"
+ },
+ {
+  "description": "Removes the logs of the clips of all the creatures. The logs start again.",
+  "kind": "object",
+  "parameters": [],
+  "query": "creature.animation_clear",
+  "writes": true
  },
  {
   "description": "The cells about a point that are not clear for a creature to go to (land it can't walk on, or things in its way), and the middle of the nearest clear area so wide, as its search for a place to cast, sit or get away finds it",
@@ -573,6 +792,12 @@
   "query": "town.homes"
  },
  {
+  "description": "The wonders: town number, tribe, power, whether finished; and the power that each tribe gives each player, with the most it gave",
+  "kind": "object",
+  "parameters": [],
+  "query": "town.wonders"
+ },
+ {
   "description": "A town's owner and its belief in each player",
   "kind": "object",
   "parameters": [
@@ -610,6 +835,12 @@
    }
   ],
   "query": "town.homeless"
+ },
+ {
+  "description": "The puzzle games: kind, their order, solved, started, calm turns, each piece of the beach temple puzzle with the pieces above and below it, and each spot of the tree puzzle with its count of changes, its tree and the size of the tree",
+  "kind": "list",
+  "parameters": [],
+  "query": "puzzle.list"
  },
  {
   "description": "The worship sites: their temple, player, tribe, place round the temple, towns, altar, how far they are built, their worshippers (newest first) and food on its way, and their prayer power: dancers, battery, what can be drawn this turn and what has been, the dance's intensity and the strain",
@@ -772,7 +1003,7 @@
   "writes": true
  },
  {
-  "description": "The debug windows and the game's own (its menu, the start-of-game question skip_box, the tattoo_editor, the custom music controls music_player, the multiplayer front end multiplayer, the end box end_box, the Creature Cave): name, kind, open; the menu's page (or question), the multiplayer box (choose_connection, find_games, login, game_list, room, conditions, or message: its text), the controls of the game's dialogs that can be pressed by name, the skip box's answer picked, and the multiplayer lines (the games of game_list, or the last 10 lines of the room's chat)",
+  "description": "The debug windows and the game's own (its menu, the start-of-game question skip_box, the tattoo_editor, the custom music controls music_player, the multiplayer front end multiplayer, the end box end_box, the skirmish box skirmish_box, the land information box land_info_box, the Creature Cave): name, kind, open; the menu's page (or question), the multiplayer box (choose_connection, find_games, login, game_list, room, conditions, or message: its text), the controls of the game's dialogs that can be pressed by name, the skip box's answer picked, the multiplayer lines (the games of game_list, or the last 10 lines of the room's chat), the skirmish box's lands as lines with the land picked as selected, and the land information box's title as its page and its list as lines",
   "kind": "list",
   "parameters": [],
   "query": "gui.windows"
@@ -806,7 +1037,7 @@
   "writes": true
  },
  {
-  "description": "Presses a button of a window by its label, as a click on it would. The game's menu: any control of the page it shows (buttons, check boxes, sliders in their middle, tabs) or of the question it asks, as gui.windows lists them; path [n] for the n-th of a name. The start-of-game question (skip_box): OK, or an answer's radio button by its answer or by normal, creature, story, old or cow. The tattoo_editor: OK or Cancel. The multiplayer front end (multiplayer): the controls of its box, or of its message, by name. The music_player: its buttons by name (Music, Play, Pause, Stop, Previous, Next, Rewind, Fast Forward, Shuffle, Repeat, Play List) while they show. The end box (end_box): its tabs and arrows by name. The game's dialogs are clicked through the game's input, in order behind any input still to come. A debug window's button inside a table row or another scope its window pushed needs path: the labels and numbers leading to it. The press is made at the window's next frame; read what it changed after. When another dialog takes the clicks, no click is sent and the answer gives the reason",
+  "description": "Presses a button of a window by its label, as a click on it would. The game's menu: any control of the page it shows (buttons, check boxes, sliders in their middle, tabs) or of the question it asks, as gui.windows lists them; path [n] for the n-th of a name. The start-of-game question (skip_box): OK, or an answer's radio button by its answer or by normal, creature, story, old or cow. The tattoo_editor: OK or Cancel. The multiplayer front end (multiplayer): the controls of its box, or of its message, by name. The music_player: its buttons by name (Music, Play, Pause, Stop, Previous, Next, Rewind, Fast Forward, Shuffle, Repeat, Play List) while they show. The end box (end_box): its tabs and arrows by name. The skirmish box (skirmish_box): Back, Start Game while it shows, or a land of its list by its name. The land information box (land_info_box): Back or Go!. The game's dialogs are clicked through the game's input, in order behind any input still to come. A debug window's button inside a table row or another scope its window pushed needs path: the labels and numbers leading to it. The press is made at the window's next frame; read what it changed after. When another dialog takes the clicks, no click is sent and the answer gives the reason",
   "kind": "object",
   "parameters": [
    {
@@ -1123,7 +1354,7 @@
   "query": "land.storm_clouds"
  },
  {
-  "description": "The real-world weather: the weather that the lobby gave, whether it changes the land, its storm and the background weather",
+  "description": "The real-world weather: the weather that the lobby gave, whether it changes the land, its storm, the place of its message and the background weather",
   "kind": "object",
   "parameters": [],
   "query": "land.real_weather"
@@ -1172,7 +1403,7 @@
   "query": "living.animated_statics"
  },
  {
-  "description": "The apple barrel beside the local player's storage pit nearest their temple: the pit, the barrel and its worm, where they stand and the worm's place in its clip; none while no pit carries it",
+  "description": "The apple barrel beside the storage pit of the player at this computer nearest their temple: the pit (an entity of the land), the barrel and its worm (entities of the drawn registry), where they stand and the worm's place in its clip; none while no pit carries it",
   "kind": "object",
   "parameters": [],
   "query": "living.apple_barrel"
@@ -1233,7 +1464,7 @@
   "query": "living.action"
  },
  {
-  "description": "An animal: its kind, state (and the game's number of the state it is in for itself), count of turns, clip, flock and town, its kind's radius, where it moves to, whether a creature fears it, and a grazer's needs",
+  "description": "An animal: its kind, state (and the game's number of the state it is in for itself), count of turns, whether a kill made it start to die, clip, flock and town, its kind's radius, where it moves to, whether a creature fears it, the hunger of a kind that is not a grazer, a grazer's needs, and a spell wolf's prey and target",
   "kind": "object",
   "parameters": [
    {
@@ -1335,7 +1566,7 @@
   "query": "living.flocks"
  },
  {
-  "description": "How many fireflies there are and how many hide, fly out, hover and fly home; whether the next nightfall tops them up; the trees and the things standing over several cells they can hide in; and what the last frame did with those out: in view, near enough to be seen, drawn, and whether their picture was found",
+  "description": "How many fireflies there are and how many hide, fly out, hover and fly home; whether the next nightfall tops them up; the trees and the things standing over several cells they can hide in; and what the last frame did with those out: in view, near enough to be seen, drawn, and whether their picture was found; and the land's reward weights by magic type number, with their total",
   "kind": "object",
   "parameters": [],
   "query": "living.fireflies"
@@ -1345,6 +1576,12 @@
   "kind": "list",
   "parameters": [],
   "query": "living.fish_farms"
+ },
+ {
+  "description": "The workshops: their room for scaffolds, the turns left on a scaffold, and the scaffolds they count",
+  "kind": "list",
+  "parameters": [],
+  "query": "living.workshops"
  },
  {
   "description": "The scenery the scripts open and close (gates, the gate stone plinth, the piper's cave, the phone box): its open word, place in its clip and resting place, whether it is in the land's draw list and was on screen, its gate stones' value and the circles a creature's route goes round",
@@ -1357,6 +1594,12 @@
   "kind": "list",
   "parameters": [],
   "query": "living.chimneys"
+ },
+ {
+  "description": "The count of the things of the world made since the land was loaded: the place in the order of the next thing made",
+  "kind": "object",
+  "parameters": [],
+  "query": "living.things_made"
  },
  {
   "description": "The sounds tagged to things: sound, whether active, its emitter, the object it is attached to, whether it loops",
@@ -1434,10 +1677,41 @@
   "query": "players.custom_music"
  },
  {
-  "description": "The players: their entities, primary creatures, computer minds and alignment",
+  "description": "The players: their entities, primary creatures, computer minds (the nodes wanted now; players.computer_nodes has every node) and alignment",
   "kind": "list",
   "parameters": [],
   "query": "players.list"
+ },
+ {
+  "description": "Every node of the tree of one computer god's mind: its name, personality weight, suppression, how much it was wanted when last looked at, its place in the tree and the node above. Pages with limit and cursor. name keeps only the nodes that the script name finds",
+  "kind": "list",
+  "parameters": [
+   {
+    "description": "The god: its number (0 to 7) or its name, such as PLAYER_TWO",
+    "name": "player",
+    "required": true,
+    "type": "integer|string"
+   },
+   {
+    "description": "Only the nodes that a script finds with this name, such as ExpandInfluence",
+    "name": "name",
+    "type": "string"
+   }
+  ],
+  "query": "players.computer_nodes"
+ },
+ {
+  "description": "What one computer god's mind thinks of each player: the value that a script reads back, and the value the mind keeps (twice as much)",
+  "kind": "object",
+  "parameters": [
+   {
+    "description": "The god: its number (0 to 7) or its name, such as PLAYER_TWO",
+    "name": "player",
+    "required": true,
+    "type": "integer|string"
+   }
+  ],
+  "query": "players.computer_attitudes"
  },
  {
   "description": "The queue of the players' commands: the player of this computer, whose number the commands carry, and the commands that wait for the start of a turn",
@@ -1660,13 +1934,31 @@
   "query": "view.pause_text"
  },
  {
+  "description": "The incoming messages at the bottom left of the screen: the list in order (kind, text, weather picture, the real time it started to show), the real time now, and whether the button shows with its look",
+  "kind": "object",
+  "parameters": [],
+  "query": "view.incoming_messages"
+ },
+ {
+  "description": "The chat of a network game: the names of the gods, the lines that came in (turn, sender, the players that get them, text or taunt, shown in the incoming messages), the speech bubbles over the creatures (lines, time to show, scroll), and the chat controls (shown, open, quick chat, the typed line, the list of players and who gets a line)",
+  "kind": "object",
+  "parameters": [],
+  "query": "view.chat"
+ },
+ {
+  "description": "The tooltip that the hand shows: its index and text name, its mouse button and arrows, its fade, and the numbers or other words that it shows",
+  "kind": "object",
+  "parameters": [],
+  "query": "view.tooltip"
+ },
+ {
   "description": "The video playing: its frame, frame count and rate, its fade, the falling spell, its creature and its effects, whether films are on, and the 16-bit surface of the films",
   "kind": "object",
   "parameters": [],
   "query": "view.video"
  },
  {
-  "description": "Whether a camera path holds the camera, the camera's help, and the knock readout",
+  "description": "Whether a camera path holds the camera, the camera's help, the advisors' cheers as the camera turns, and the knock readout",
   "kind": "object",
   "parameters": [],
   "query": "view.state"
@@ -1768,6 +2060,13 @@
    }
   ],
   "query": "creatures.fight",
+  "writes": true
+ },
+ {
+  "description": "Sends the fight cheat of the player of this computer as a command: at the turn, the player's creature fights the nearest creature, or stops the duel that it is in. A game server takes the command only with its test commands on",
+  "kind": "object",
+  "parameters": [],
+  "query": "creatures.fight_cheat",
   "writes": true
  },
  {
@@ -2006,7 +2305,7 @@
   "query": "help.bubble"
  },
  {
-  "description": "The tutorial's hand demonstration playing: its name, the script task that started it, the record it is at, whether it holds at a mark, and the camera and hints it has",
+  "description": "The tutorial's hand demonstration playing: its name, the script task that started it, the record the turns are at, whether it holds at a mark, the record the frames are at, and the camera and hints it has",
   "kind": "object",
   "parameters": [],
   "query": "help.hand_demo"
@@ -2018,7 +2317,7 @@
   "query": "saves.slots"
  },
  {
-  "description": "Saves the game into a slot: the whole world (every entity and its components, the clock, the random numbers, the camera and the scripts) and every creature with its mind file and its leash",
+  "description": "Saves the game into a slot: the whole world (every entity and its components, the clock, the random numbers, the camera and the scripts) and every creature with its mind file and its leash. The slots 14 to 18 save into a folder of the open land in the folder of the slot. The result gives the folder of the world file in the folder of the player",
   "kind": "object",
   "parameters": [
    {
@@ -2037,7 +2336,7 @@
   "writes": true
  },
  {
-  "description": "Loads a slot. A save of the whole world loads its land and its world in place of the open land. An older save puts the creatures of the land that is open back: the values of each record, the mind of its mind file, the plan that the save kept and its leash",
+  "description": "Loads a slot. A save of the whole world loads its land and its world in place of the open land. An older save puts the creatures of the land that is open back: the values of each record, the mind of its mind file, the plan that the save kept and its leash. Slot 14 (the previous land) loads from the folder of the land before the open land, and slot 18 (the next land) from the folder of the land after it, as the save game room does. The result gives the folder that the load read",
   "kind": "object",
   "parameters": [
    {
@@ -2048,6 +2347,51 @@
    }
   ],
   "query": "saves.load",
+  "writes": true
+ },
+ {
+  "description": "Loads a slot and then saves the game into a second slot in the same call, with no frame and no turn between. A save of a loaded world must have the same bytes as the save that the game loaded (tools/sim/save_diff.py compares the two files)",
+  "kind": "object",
+  "parameters": [
+   {
+    "description": "The slot, 0 to 20",
+    "name": "slot",
+    "required": true,
+    "type": "integer"
+   },
+   {
+    "description": "The slot of the second save, 0 to 20",
+    "name": "into",
+    "required": true,
+    "type": "integer"
+   },
+   {
+    "description": "The name of the second save",
+    "name": "name",
+    "type": "string"
+   }
+  ],
+  "query": "saves.load_and_save",
+  "writes": true
+ },
+ {
+  "description": "Makes the world state that a game server sends, loads it at once and makes it again, with no frame and no turn between. Writes the two states to the files first and again. The two must have the same bytes (tools/sim/save_diff.py compares the two files)",
+  "kind": "object",
+  "parameters": [
+   {
+    "description": "The file of the first state",
+    "name": "first",
+    "required": true,
+    "type": "string"
+   },
+   {
+    "description": "The file of the state after the load",
+    "name": "again",
+    "required": true,
+    "type": "string"
+   }
+  ],
+  "query": "saves.world_state_round_trip",
   "writes": true
  },
  {
@@ -2234,7 +2578,7 @@
   "query": "screenshot.pending"
  },
  {
-  "description": "The pointer, the buttons held, the hand, what the cursor picks (with whether the Action button takes it into the hand, or takes hold of a town's totem under it, and why not), and the input still to come",
+  "description": "The pointer, the buttons held, the actions held and whether a box has the keyboard, the hand, what the cursor picks (with whether the Action button takes it into the hand or scoops a handful out of it, or takes hold of a town's totem under it, and why not), and the input still to come",
   "kind": "object",
   "parameters": [],
   "query": "input.state"
@@ -2406,7 +2750,7 @@
   "writes": true
  },
  {
-  "description": "Draws a gesture through the recogniser as the hand would draw it, in the middle of the screen; first lets go of a creature that sim.feedback holds",
+  "description": "Draws a gesture through the recogniser as the hand would draw it, in the middle of the screen, in about a second, with the same size on the screen at each camera distance; first lets go of a creature that sim.feedback holds. The game forgets a path in the middle of the drawing, as it does for the player, when the camera moves or when the hand of the player takes or lets go of a thing or a leash changes: then no gesture is recognised. Ask players.gestures (last_recognised, circle_seconds_left) after the drawing to see that it was recognised, and draw again if it was not",
   "kind": "object",
   "parameters": [
    {

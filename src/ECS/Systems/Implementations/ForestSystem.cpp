@@ -45,6 +45,7 @@
 #include "ECS/Components/LandForest.h"
 #include "ECS/Components/MagicForest.h"
 #include "ECS/Components/Mobile.h"
+#include "ECS/Components/Player.h"
 #include "ECS/Components/Spell.h"
 #include "ECS/Components/SpellDispenser.h"
 #include "ECS/Components/StoragePit.h"
@@ -53,8 +54,11 @@
 #include "ECS/Components/Town.h"
 #include "ECS/Components/Transform.h"
 #include "ECS/Components/Tree.h"
+#include "ECS/GameEndConditions.h"
+#include "ECS/GamePlayers.h"
 #include "ECS/LandForests.h"
 #include "ECS/Map.h"
+#include "ECS/PlayerTowns.h"
 #include "ECS/Reflection/BinaryArchive.h"
 #include "ECS/Registry.h"
 #include "ECS/ScenicForest.h"
@@ -62,6 +66,7 @@
 #include "ECS/Systems/AlignmentSystemInterface.h"
 #include "ECS/Systems/FireSystemInterface.h"
 #include "ECS/Systems/FixedOutlineSystemInterface.h"
+#include "ECS/Systems/GameEndSystemInterface.h"
 #include "ECS/Systems/InfluenceSystemInterface.h"
 #include "ECS/Systems/ReactionSystemInterface.h"
 #include "ECS/Systems/ResourceStoreSystemInterface.h"
@@ -255,9 +260,8 @@ float LandAlignmentAt(const glm::vec3& position)
 	const auto& influence = Locator::influenceSystem::value();
 	const auto& alignment = Locator::alignmentSystem::value();
 	float sum = 0.0f;
-	for (size_t i = 0; i < static_cast<size_t>(PlayerNames::_COUNT); ++i)
+	for (const auto player : ecs::game_players::All())
 	{
-		const auto player = static_cast<PlayerNames>(i);
 		sum += alignment.GetPlayerAlignment(player) * influence.PlayerInfluence(player, position);
 	}
 	return std::clamp(sum, -1.0f, 1.0f);
@@ -285,6 +289,26 @@ void RemoveTree(entt::entity tree)
 		Locator::reactionSystem::value().RemoveFrom(tree);
 	}
 	EntityRegistry().Destroy(tree);
+}
+
+/// The player of most influence at a place, as the hand finds the player it takes a thing from
+PlayerNames MostInfluentialPlayerAt(const ecs::Registry& registry, glm::vec3 point)
+{
+	std::vector<influence_rules::PlayerInfluenceAt> players;
+	registry.Each<const Player>([&players, point](entt::entity, const Player& player) {
+		// The neutral player is not asked: it is the answer when no player has influence there
+		if (player.name == PlayerNames::NEUTRAL)
+		{
+			return;
+		}
+		const float influence = Locator::influenceSystem::has_value()
+		                            ? Locator::influenceSystem::value().PlayerInfluence(player.name, point)
+		                            : 0.0f;
+		players.push_back({.player = player.name, .influence = influence});
+	});
+	// The players are asked in the order of their numbers
+	std::ranges::sort(players, {}, &influence_rules::PlayerInfluenceAt::player);
+	return influence_rules::MostInfluentialPlayer(players);
 }
 } // namespace
 
@@ -524,6 +548,18 @@ void ForestSystem::JoinForest(entt::entity tree, uint32_t forest)
 	registry.AssignOrReplace<ForestMember>(tree, ForestMember {.forest = forest, .growing = growing, .listed = _treesListed++});
 }
 
+void ForestSystem::ListInForest(entt::entity tree, uint32_t forest, bool growing)
+{
+	EntityRegistry().AssignOrReplace<ForestMember>(
+	    tree, ForestMember {.forest = forest, .growing = growing, .listed = _treesListed++});
+}
+
+void ForestSystem::ResumeCounts(uint32_t lastTreeAddedTurn, uint32_t nextLandForestId)
+{
+	_lastTreeAddedTurn = lastTreeAddedTurn;
+	_nextLandForestId = nextLandForestId;
+}
+
 void ForestSystem::GrowForests()
 {
 	if (!Locator::infoConstants::has_value() || !Locator::entitiesRegistry::has_value() || !Locator::time::has_value() ||
@@ -627,6 +663,16 @@ void ForestSystem::GrowForests()
 		{
 			const auto parent = grown[pick];
 			const auto added = PlantBeside(parent);
+			// In a network game the player of most influence at the new tree counts a tree grown, for the winning
+			// condition. The neutral player counts nothing.
+			if (added.has_value() && Locator::gameEndSystem::has_value())
+			{
+				const auto most = MostInfluentialPlayerAt(registry, registry.Get<const Transform>(*added).position);
+				if (most != PlayerNames::NEUTRAL)
+				{
+					Locator::gameEndSystem::value().AddToCondition(most, game_end::Condition::TreesGrown, 1);
+				}
+			}
 			SPDLOG_LOGGER_DEBUG(spdlog::get("game"), "Forest: forest {} spread from tree #{} on turn {}: {}", turns.id,
 			                    entt::to_integral(parent), turn, added.has_value() ? "planted" : "no room");
 		}
@@ -674,6 +720,8 @@ void ForestSystem::ProcessForests()
 					return true;
 				}
 				Resize(tree, *after);
+				// A tree that withers comes out of the map's cells and goes in again. A tree that grows does not.
+				ecs::thing_map_place::Reinsert(tree);
 				return false;
 			});
 		}
@@ -766,7 +814,6 @@ float ForestSystem::WoodOf(entt::entity forest) const
 	{
 		return 0.0f;
 	}
-	const auto& info = Locator::infoConstants::value();
 	// The big forest's wood, then its growing trees', then its grown trees', none of it truncated
 	float wood = 0.0f;
 	if (record->bigForest != entt::null && registry.Valid(record->bigForest))
@@ -776,19 +823,30 @@ float ForestSystem::WoodOf(entt::entity forest) const
 			wood += big_forest::WoodValue(ecs::world_objects::LifeOf(record->bigForest), big->wood);
 		}
 	}
-	const float balance = registry.Context().mapScriptGlobals.landBalance.at(5);
 	for (const bool growing : {true, false})
 	{
 		for (const auto tree : TreesOf(forest, growing))
 		{
-			const auto& kind = registry.Get<const Tree>(tree);
-			const auto* magic = registry.TryGet<const MagicTree>(tree);
-			wood += ecs::store_rules::TreeWoodValue(
-			    ecs::world_objects::LifeOf(tree), magic != nullptr ? magic->woodMultiplier : 1.0f,
-			    info.tree.at(static_cast<size_t>(kind.type)).woodValue, registry.Get<const Transform>(tree).scale.x, balance);
+			wood += TreeWoodOf(tree);
 		}
 	}
 	return wood;
+}
+
+float ForestSystem::TreeWoodOf(entt::entity tree) const
+{
+	const auto& registry = EntityRegistry();
+	const auto* kind = registry.Valid(tree) ? registry.TryGet<const Tree>(tree) : nullptr;
+	const auto* transform = kind != nullptr ? registry.TryGet<const Transform>(tree) : nullptr;
+	if (transform == nullptr || !Locator::infoConstants::has_value())
+	{
+		return 0.0f;
+	}
+	const auto& info = Locator::infoConstants::value();
+	const auto* magic = registry.TryGet<const MagicTree>(tree);
+	return ecs::store_rules::TreeWoodValue(ecs::world_objects::LifeOf(tree), magic != nullptr ? magic->woodMultiplier : 1.0f,
+	                                       info.tree.at(static_cast<size_t>(kind->type)).woodValue, transform->scale.x,
+	                                       registry.Context().mapScriptGlobals.landBalance.at(5));
 }
 
 glm::vec3 ForestSystem::NearestPointOf(entt::entity forest, glm::vec3 to) const
@@ -854,10 +912,7 @@ uint32_t ForestSystem::TakeBigForestWood(entt::entity bigForest, uint32_t amount
 		transform.scale = glm::vec3(*taken.shrinksTo);
 		const auto [centre, radius] = ecs::archetypes::GetFixedObstacleBoundingCircle(kind.meshId, transform);
 		registry.AssignOrReplace<Fixed>(bigForest, centre, radius);
-		if (Locator::entitiesMap::has_value())
-		{
-			Locator::entitiesMap::value().Refile(bigForest);
-		}
+		ecs::thing_map_place::Reinsert(bigForest);
 		SPDLOG_LOGGER_DEBUG(spdlog::get("game"), "Forest: big forest #{} shrinks to {:.3f} with {:.1f} wood left",
 		                    entt::to_integral(bigForest), *taken.shrinksTo, taken.woodLeft);
 		PlantPineAround(bigForest);
@@ -1070,13 +1125,15 @@ std::optional<entt::entity> ForestSystem::CentreTreeOf(entt::entity forest) cons
 	}
 	const auto grown = TreesOf(forest, false);
 	const auto growing = TreesOf(forest, true);
-	const auto centre = glm::xz(registry.Get<const Transform>(forest).position);
+	// The distances go through the map positions, as the lists of the forest measure them
+	const auto centre = map_coords::FromMetres(glm::xz(registry.Get<const Transform>(forest).position));
 	const auto distanceTo = [&](const std::vector<entt::entity>& trees) -> std::optional<float> {
 		if (trees.empty())
 		{
 			return std::nullopt;
 		}
-		return glm::length(glm::xz(registry.Get<const Transform>(trees.front()).position) - centre);
+		return gutils::GetDistanceInMetres(
+		    map_coords::FromMetres(glm::xz(registry.Get<const Transform>(trees.front()).position)), centre);
 	};
 	const auto pick = ecs::villager_work::CentreTree(distanceTo(grown), distanceTo(growing));
 	if (!pick.has_value())
@@ -1154,7 +1211,11 @@ void ForestSystem::MakeScenicForests()
 			centres[*town.scenicForest] = town.scenicForestCentre;
 		}
 	});
-	registry.Each<Town>([&](entt::entity, Town& town) {
+	// The towns go in the order of the game's list of all the towns, the town made last first. A tree goes to the first
+	// town that takes it.
+	for (const auto townEntity : ecs::player_towns::AllMadeNewestFirst(registry))
+	{
+		auto& town = registry.Get<Town>(townEntity);
 		// The town's centre is the middle of the ground that it keeps as covered by its buildings and fields
 		const auto middle = ecs::town_area::Centre(town.area);
 		const auto centre = map_coords::ToMetres(middle);
@@ -1199,7 +1260,7 @@ void ForestSystem::MakeScenicForests()
 			}
 		}
 		town.scenicForest = forest;
-	});
+	}
 }
 
 void ForestSystem::Reset()

@@ -11,6 +11,7 @@
 
 #include "GestureSystem.h"
 
+#include <algorithm>
 #include <stdexcept>
 #include <utility>
 
@@ -31,13 +32,15 @@
 #include "ECS/Registry.h"
 #include "ECS/Systems/CreatureFightSystemInterface.h"
 #include "ECS/Systems/HandGrabSystemInterface.h"
+#include "ECS/Systems/HandSystemInterface.h"
 #include "ECS/Systems/HelpProfileSystemInterface.h"
 #include "ECS/Systems/LeashSystemInterface.h"
 #include "ECS/Systems/MagicSystemInterface.h"
 #include "ECS/Systems/MiracleFxSystemInterface.h"
-#include "ECS/Systems/ParticleSystemInterface.h"
+#include "ECS/Systems/ParticleRuleSystemInterface.h"
 #include "ECS/Systems/PlayerCommandSystemInterface.h"
 #include "ECS/Systems/SpellIconSystemInterface.h"
+#include "ECS/Systems/WorshipSiteSystemInterface.h"
 #include "FileSystem/FileSystemInterface.h"
 #include "Gestures/GestureTrailBuilder.h"
 #include "Help/HelpProfile.h"
@@ -59,12 +62,12 @@ constexpr auto k_TemplatesId = entt::hashed_string("gestures/templates");
 /// How long a recognised gesture shows in the debug window
 constexpr float k_RecognisedShownSeconds = 10.0f;
 
-/// The help counts an event, if the help is there
+/// The help counts an event of the player's input at the turn of its next report, if the help is there
 void Help(uint32_t event)
 {
 	if (Locator::helpProfileSystem::has_value())
 	{
-		Locator::helpProfileSystem::value().Trigger(event);
+		Locator::helpProfileSystem::value().Report(event);
 	}
 }
 
@@ -99,8 +102,9 @@ void SendRequest(player_commands::Action request)
 	}
 }
 
-/// The shape a gesture's trail takes on the land, from its symbol's file; the circle's for a gesture without one
-std::optional<gesture::TrailSymbol> TrailSymbolOf(GestureType gesture)
+} // namespace
+
+std::optional<gesture::TrailSymbol> GestureSystem::TrailSymbolOf(GestureType gesture) const
 {
 	if (!Locator::resources::has_value())
 	{
@@ -115,17 +119,23 @@ std::optional<gesture::TrailSymbol> TrailSymbolOf(GestureType gesture)
 			continue;
 		}
 		const auto path = paths.Handle(entt::hashed_string(id.c_str()));
+		// The symbol comes only from the points of the path, so a path that made a symbol before gives the same symbol.
+		// The kept handle holds the path, so a new path never has the address of a kept one.
+		const auto kept = std::ranges::find(_symbols, &*path, [](const KeptSymbol& each) { return &*each.path; });
+		if (kept != _symbols.end())
+		{
+			return kept->symbol;
+		}
 		std::vector<glm::vec3> points;
 		points.reserve(path->GetPoints().size());
 		for (const auto& point : path->GetPoints())
 		{
 			points.push_back(point.position);
 		}
-		return gesture::MakeTrailSymbol(points);
+		return _symbols.emplace_back(KeptSymbol {.path = path, .symbol = gesture::MakeTrailSymbol(points)}).symbol;
 	}
 	return std::nullopt;
 }
-} // namespace
 
 GestureSystem::GestureSystem() = default;
 
@@ -161,6 +171,15 @@ void GestureSystem::Reset()
 	// A new land: no hints, and the collars start unturned; the row's fade carries on
 	_hints.hints.clear();
 	_hints.collars = {};
+	// and the seeds pictured go, with their effects
+	for (const auto& [magic, picture] : _hints.seeds)
+	{
+		if (picture.holderEffect.has_value() && Locator::particleRuleSystem::has_value())
+		{
+			Locator::particleRuleSystem::value().Delete(*picture.holderEffect);
+		}
+	}
+	_hints.seeds.clear();
 }
 
 void GestureSystem::ForgetPath()
@@ -244,7 +263,8 @@ gesture::HandContext GestureSystem::ContextOf(const Frame& frame)
 		{
 			const auto& seedInfo = magic::GetSpellSeedInfo(*info, seed->seedType);
 			// Only a seed made at an icon of the player's worship can be powered up
-			context.seed = gesture::HandContext::Seed {.ready = seed->ready,
+			context.seed = gesture::HandContext::Seed {.type = seed->seedType,
+			                                           .ready = seed->ready,
 			                                           .cast = seed->hasCast,
 			                                           .sizingGesture = seedInfo.sizingGesture,
 			                                           .powerUpGestures = seedInfo.powerUpGestures,
@@ -262,6 +282,13 @@ gesture::HandContext GestureSystem::ContextOf(const Frame& frame)
 		{
 			context.inInfluence = hand.IsInInfluenceOf(player);
 		}
+	}
+	// An icon at the sites of the player's temple that charges a miracle for the empty hand, which a scribble stops
+	if (!seedEntity.has_value() && !context.holdingObject && Locator::spellIconSystem::has_value() &&
+	    Locator::worshipSiteSystem::has_value())
+	{
+		const auto temple = Locator::worshipSiteSystem::value().TempleOf(player);
+		context.iconCharging = Locator::spellIconSystem::value().ChargesFor(temple, player);
 	}
 	// A circle is remembered for the seed it was drawn for
 	if (!seedEntity.has_value() || *seedEntity != _circleSeed)
@@ -352,6 +379,8 @@ gesture::HandContext GestureSystem::ContextOf(const Frame& frame)
 void GestureSystem::Update(const Frame& frame)
 {
 	LoadTemplates();
+	const auto lastCursor = _lastCursor.value_or(frame.cursor);
+	_lastCursor = frame.cursor;
 	if (frame.view.screenSize.x > 0.0f && frame.view.screenSize.y > 0.0f)
 	{
 		_screenAspect = frame.view.screenSize.x / frame.view.screenSize.y;
@@ -405,15 +434,18 @@ void GestureSystem::Update(const Frame& frame)
 		return;
 	}
 
-	// Sampled at the game's pace, not the frame's
-	_sinceSample += frame.seconds;
-	if (_sinceSample < gesture::k_SampleSeconds)
+	// Sampled at the steps of the input, not at the frames. A sample between two frames takes the cursor at its place
+	// between them.
+	for (const auto part : gesture::SamplePoints(_sinceSample, frame.steps))
 	{
-		return;
+		SampleCursor(input_steps::Between(lastCursor, frame.cursor, part), frame, context);
 	}
-	_sinceSample = 0.0f;
+}
+
+void GestureSystem::SampleCursor(glm::vec2 cursor, const Frame& frame, const gesture::HandContext& context)
+{
 	const auto toReference = frame.view.screenSize.y > 0.0f ? gesture::k_ReferenceHeight / frame.view.screenSize.y : 1.0f;
-	glm::vec2 point = frame.cursor * toReference;
+	glm::vec2 point = cursor * toReference;
 	if (!_drawing.empty())
 	{
 		point = _drawing.front();
@@ -565,14 +597,14 @@ bool GestureSystem::RepeatMiracleByKey(PlayerNames player)
 	{
 		return false;
 	}
-	// No help and no trail, as for the R gesture
+	// The key gives no help event and lays no trail, unlike the R gesture
 	SendRequest(player_commands::MiracleRepeat {});
 	return true;
 }
 
 void GestureSystem::LayTrail(GestureType gesture, const gesture::Match& match, const Frame& frame) const
 {
-	if (!Locator::particleSystem::has_value() || !frame.view.trailPointUnder)
+	if (!Locator::particleRuleSystem::has_value() || !frame.view.trailPointUnder)
 	{
 		return;
 	}
@@ -591,13 +623,13 @@ void GestureSystem::LayTrail(GestureType gesture, const gesture::Match& match, c
 	                                 {.cameraForward = frame.view.cameraForward, .pointUnder = frame.view.trailPointUnder});
 	if (trail.has_value())
 	{
-		Locator::particleSystem::value().AddGestureTrail(std::make_shared<particles::GestureTrail>(std::move(*trail)));
+		Locator::particleRuleSystem::value().AddGestureTrail(std::make_shared<particles::GestureTrail>(std::move(*trail)));
 	}
 }
 
 void GestureSystem::ShowGestureOnLand(GestureType gesture, glm::vec3 corner, float size)
 {
-	if (gesture == GestureType::None || !Locator::particleSystem::has_value())
+	if (gesture == GestureType::None || !Locator::particleRuleSystem::has_value())
 	{
 		return;
 	}
@@ -609,7 +641,7 @@ void GestureSystem::ShowGestureOnLand(GestureType gesture, glm::vec3 corner, flo
 	const auto landHeight = [](float x, float z) {
 		return Locator::terrainSystem::has_value() ? Locator::terrainSystem::value().GetHeightAt({x, z}) : 0.0f;
 	};
-	Locator::particleSystem::value().AddGestureTrail(
+	Locator::particleRuleSystem::value().AddGestureTrail(
 	    std::make_shared<particles::GestureTrail>(gesture::LandGestureTrail(*symbol, corner, size, landHeight)));
 }
 
@@ -625,13 +657,14 @@ bool GestureSystem::Act(const gesture::Request& request, const gesture::Match& m
 	bool shown = gesture::ShowsRecognition(request.purpose);
 	bool forgets = true;
 	std::optional<player_commands::Action> requested;
+	auto step = gesture::SelectionStep::Nothing;
 	switch (request.purpose)
 	{
 	case Purpose::OpenSelection:
 		// A selection that has nothing to offer stays closed, and the hand keeps its path
 		if (OpenSelection(request.gesture, frame.player))
 		{
-			Help(help::profile::k_GestureOpenSelection);
+			step = gesture::SelectionStep::Opened;
 		}
 		else
 		{
@@ -650,10 +683,10 @@ bool GestureSystem::Act(const gesture::Request& request, const gesture::Match& m
 			_requests = gesture::Requests(ContextOf(frame));
 			return false;
 		}
-		Help(help::profile::k_GestureSelectionStep);
+		step = gesture::SelectionStep::Advanced;
 		if (outcome.kind == gesture::MiracleSelection::Outcome::Kind::Chosen)
 		{
-			Help(help::profile::k_GestureSelectionChosen);
+			step = gesture::SelectionStep::Chosen;
 			requested = player_commands::MiracleRequest {.seed = outcome.seed};
 		}
 		break;
@@ -661,14 +694,18 @@ bool GestureSystem::Act(const gesture::Request& request, const gesture::Match& m
 	case Purpose::CloseSelection:
 		ShakeHand();
 		_selection.Close();
-		Help(help::profile::k_GestureCloseSelection);
+		step = gesture::SelectionStep::Closed;
 		break;
 	case Purpose::RepeatMiracle:
-		Help(help::profile::k_GestureRepeatMiracle);
+		step = gesture::SelectionStep::Repeated;
 		requested = player_commands::MiracleRepeat {};
 		break;
 	default:
 		break;
+	}
+	for (const auto event : gesture::HelpEventsOf(step))
+	{
+		Help(event);
 	}
 
 	// Every gesture but a scribble leaves its trail on the land, heard as it appears, once enough of its path lies on
@@ -732,6 +769,11 @@ bool GestureSystem::Act(const gesture::Request& request, const gesture::Match& m
 		// The hand shakes, and at the turn it lets go of the thing where it is, never planted again
 		ShakeHand();
 		SendRequest(player_commands::HandShakeOff {});
+		break;
+	case Purpose::CancelCharge:
+		// The hand shakes, and at the turn the icon that started its charge for the hand last stops it
+		ShakeHand();
+		SendRequest(player_commands::IconChargeStop {});
 		break;
 	case Purpose::LeashGesture:
 		if (creature.has_value())
@@ -815,11 +857,16 @@ bool GestureSystem::Act(const gesture::Request& request, const gesture::Match& m
 
 void GestureSystem::RefreshHints()
 {
-	if (!gesture_hints::Differs(_hints.hints, gesture_hints::HintsFor(_requests, nullptr)))
+	const auto* info = Locator::infoConstants::has_value() ? &Locator::infoConstants::value() : nullptr;
+	const auto magicOf = [info](SpellSeedType seed, int powerUp) {
+		return info != nullptr ? magic::GetMagicTypeFromPowerUpLevel(magic::GetSpellSeedInfo(*info, seed), powerUp)
+		                       : MagicType::None;
+	};
+	if (!gesture_hints::Differs(_hints.hints, gesture_hints::HintsFor(_requests, nullptr, magicOf)))
 	{
 		return;
 	}
-	const auto shapeOf = [](GestureType gesture) -> std::optional<gesture_hints::Shape> {
+	const auto shapeOf = [this](GestureType gesture) -> std::optional<gesture_hints::Shape> {
 		const auto symbol = TrailSymbolOf(gesture);
 		if (!symbol.has_value())
 		{
@@ -827,10 +874,83 @@ void GestureSystem::RefreshHints()
 		}
 		return gesture_hints::Shape {.points = symbol->points, .length = symbol->length};
 	};
-	_hints.hints = gesture_hints::HintsFor(_requests, shapeOf);
+	_hints.hints = gesture_hints::HintsFor(_requests, shapeOf, magicOf);
 }
 
 void GestureSystem::StepHints(float seconds, bool wordsShowing)
 {
+	const auto* info = Locator::infoConstants::has_value() ? &Locator::infoConstants::value() : nullptr;
+	auto* particles = Locator::particleRuleSystem::has_value() ? &Locator::particleRuleSystem::value() : nullptr;
+	const bool shows = gesture_hints::Fade(_hints.alpha, seconds, wordsShowing) > 0.0f;
+	// The first hint of a miracle makes its seed picture, unturned. The picture is the player's at this computer, and
+	// its holder's effect starts at full size above the world's origin.
+	if (shows && info != nullptr)
+	{
+		for (const auto& hint : _hints.hints)
+		{
+			if (hint.path.empty() || hint.seed == SpellSeedType::None || _hints.seeds.contains(hint.magic))
+			{
+				continue;
+			}
+			const auto& seedInfo = magic::GetSpellSeedInfo(*info, hint.seed);
+			gesture_hints::SeedPicture picture {.seed = hint.seed, .powerUp = hint.powerUp};
+			if (const auto* spell = magic::GetMagicInfoAs<GMagicCreatureSpellInfo>(*info, seedInfo.magicTypes[0]))
+			{
+				picture.phialReceiveType = static_cast<int>(spell->creatureReceiveSpellType);
+			}
+			if (particles != nullptr && seedInfo.holderParticle != ParticleType::None)
+			{
+				const auto effect =
+				    particles->Start(seedInfo.holderParticle, glm::vec3(0.0f, seedInfo.holderHeight, 0.0f), 1.0f);
+				if (effect != ParticleRuleSystemInterface::k_NoEffect)
+				{
+					particles->SetDrawnAlone(effect);
+					particles->SetPlayer(effect, static_cast<int>(Locator::handSystem::has_value()
+					                                                  ? Locator::handSystem::value().GetOwnPlayer()
+					                                                  : PlayerNames::PLAYER_ONE));
+					picture.holderEffect = effect;
+				}
+			}
+			_hints.seeds.emplace(hint.magic, picture);
+		}
+	}
 	gesture_hints::Step(_hints, seconds, wordsShowing);
+	if (!shows || info == nullptr || particles == nullptr)
+	{
+		return;
+	}
+	// Each hint that draws a seed moves the effect of its holder above it, at the seed's size, and steps it by the
+	// frame's game time. The effect shows at the row's alpha.
+	const auto alpha = static_cast<float>(gesture_hints::PictureAlpha(_hints.alpha));
+	for (const auto& hint : _hints.hints)
+	{
+		if (hint.path.empty() || hint.seed == SpellSeedType::None)
+		{
+			continue;
+		}
+		const auto found = _hints.seeds.find(hint.magic);
+		if (found == _hints.seeds.end() || !found->second.holderEffect.has_value())
+		{
+			continue;
+		}
+		const auto effect = *found->second.holderEffect;
+		const auto& seedInfo = magic::GetSpellSeedInfo(*info, found->second.seed);
+		auto* running = particles->Find(effect);
+		if (running == nullptr)
+		{
+			found->second.holderEffect.reset();
+			continue;
+		}
+		running->SetOrigin(gesture_hints::HolderPoint(seedInfo.holderHeight));
+		running->SetMagnitude(gesture_hints::k_SeedScale);
+		if (!particles->ProcessByFrame(effect, seconds))
+		{
+			found->second.holderEffect.reset();
+			continue;
+		}
+		if (auto* stepped = particles->Find(effect))
+		{
+			stepped->SetGlobalAlpha(alpha);
+		}
+	}
 }

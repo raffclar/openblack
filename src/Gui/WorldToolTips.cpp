@@ -19,12 +19,16 @@
 #include "ECS/Components/Town.h"
 #include "ECS/Components/VillageTotem.h"
 #include "ECS/Components/Villager.h"
+#include "ECS/Components/Workshop.h"
 #include "ECS/Components/WorshipChants.h"
 #include "ECS/Components/WorshipSite.h"
 #include "ECS/Registry.h"
 #include "ECS/Systems/HandSystemInterface.h"
 #include "ECS/Systems/ResourceStoreSystemInterface.h"
+#include "ECS/Systems/WorkshopSystemInterface.h"
+#include "ECS/TempleConstruction.h"
 #include "ECS/TownHomes.h"
+#include "ECS/WorkshopRules.h"
 #include "ECS/WorldObjects.h"
 #include "InfoConstants.h"
 #include "Locator.h"
@@ -134,6 +138,18 @@ std::vector<Submission> Over(entt::entity object, bool handInInfluence)
 			submissions.push_back({.numbers = Stored(stores.GetResource(object, ResourceType::Food),
 			                                         stores.GetResource(object, ResourceType::Wood))});
 		}
+		else if (const auto* workshop = registry.TryGet<const Workshop>(object);
+		         workshop != nullptr && ecs::construction::IsBuilt(object) && Shows(Subject::Workshop, handInInfluence))
+		{
+			// A built workshop shows how much of its scaffold it made. With damage, it shows only the words.
+			const auto* info = ecs::world_objects::AbodeInfoOf(object);
+			const bool repaired = ecs::world_objects::LifeOf(object) >= 1.0f;
+			const auto made = ProductionCompleted(repaired && info != nullptr, workshop->makingTurns,
+			                                      info != nullptr ? info->timeEachMobileObjectTakesToProduce : 0.0f);
+			submissions.push_back(
+			    {.numbers = made.value_or(Numbered {.index = k_ProductionCompleted, .first = 0.0, .second = std::nullopt}),
+			     .wordsOnly = !made.has_value()});
+		}
 		return submissions;
 	}
 	// The altar of a worship site shows the prayer power that its site stores
@@ -143,6 +159,30 @@ std::vector<Submission> Over(entt::entity object, bool handInInfluence)
 		if (chants != nullptr && Shows(Subject::Altar, handInInfluence))
 		{
 			submissions.push_back({.numbers = PrayerEnergy(chants->battery)});
+		}
+		return submissions;
+	}
+	// The wood flag of a workshop shows the wood that the workshop requires, wherever the hand is
+	if (const auto* flag = registry.TryGet<const WorkshopFlag>(object))
+	{
+		if (registry.Valid(flag->workshop) && Shows(Subject::NeedsSign, handInInfluence) &&
+		    Locator::workshopSystem::has_value() && Locator::resourceStoreSystem::has_value() &&
+		    Locator::infoConstants::has_value())
+		{
+			const auto required = ecs::workshop::WoodRequired(
+			    Locator::workshopSystem::value().RoomOf(flag->workshop),
+			    Locator::resourceStoreSystem::value().GetResource(flag->workshop, ResourceType::Wood),
+			    Locator::infoConstants::value().scaffold.woodValue);
+			submissions.push_back({.numbers = NeedsSign(NeedsRow::WorkshopWood, 0.0f, required)});
+		}
+		return submissions;
+	}
+	// A need flag of a worship site shows its need as high as the flag stands, wherever the hand is
+	if (const auto* sign = registry.TryGet<const WorshipSiteFlag>(object))
+	{
+		if (Shows(Subject::NeedsSign, handInInfluence))
+		{
+			submissions.push_back({.numbers = NeedsSign(static_cast<NeedsRow>(sign->need), sign->level, 0)});
 		}
 		return submissions;
 	}

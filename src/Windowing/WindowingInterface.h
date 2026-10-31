@@ -13,15 +13,10 @@
 
 #include <glm/vec2.hpp>
 
+#include "Visual/DisplayMode.h"
+
 namespace openblack::windowing
 {
-
-enum class DisplayMode : std::uint8_t
-{
-	Windowed,
-	Fullscreen,
-	Borderless
-};
 
 class WindowingInterface
 {
@@ -35,7 +30,11 @@ public:
 	[[nodiscard]] virtual void* GetHandle() const = 0;
 	[[nodiscard]] virtual NativeHandles GetNativeHandles() const = 0;
 	[[nodiscard]] virtual uint32_t GetID() const = 0;
+	/// The size of the back buffer in pixels. The game draws, lays out its screens and reads the pointer in these pixels.
 	[[nodiscard]] virtual glm::ivec2 GetSize() const = 0;
+	/// The pixels of the back buffer for one unit of the window's mouse events. It is 1 on the desktop. In a web browser
+	/// it is the device pixel ratio of the page.
+	[[nodiscard]] virtual glm::vec2 GetPixelScale() const { return glm::vec2(1.0f); }
 	[[nodiscard]] virtual float GetAspectRatio() const = 0;
 	[[nodiscard]] virtual bool IsMinimised() const = 0;
 	/// Whether the game runs in a window rather than taking the whole screen

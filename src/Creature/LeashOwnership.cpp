@@ -43,6 +43,11 @@ bool creature_leash::CanLead(PlayerNames player)
 	return player != PlayerNames::NEUTRAL && player < PlayerNames::_COUNT;
 }
 
+bool creature_leash::MayTapPost(PlayerNames tapper, PlayerNames postOwner)
+{
+	return CanLead(tapper) && tapper == postOwner;
+}
+
 Refusal creature_leash::WhyNot(PlayerNames player, const Candidate& creature)
 {
 	if (!CanLead(player))
@@ -95,4 +100,9 @@ std::optional<uint32_t> creature_leash::LeashableOf(std::span<const Claim> creat
 bool creature_leash::ClaimsOnArrival(std::span<const Claim> others, PlayerNames owner)
 {
 	return CanLead(owner) && !LeashableOf(others, owner).has_value();
+}
+
+bool creature_leash::ComesOffAtTemple(PlayerNames player, std::optional<PlayerNames> holder)
+{
+	return CanLead(player) && holder == player;
 }

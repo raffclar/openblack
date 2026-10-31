@@ -23,6 +23,7 @@
 #include "Camera/DefaultWorldCameraModel.h"
 #include "Camera/ScriptCameraModel.h"
 #include "Camera/StartCamera.h"
+#include "Commands/PlayerCommands.h"
 #include "Common/MachineClock.h"
 #include "ECS/Components/Animal.h"
 #include "ECS/Components/Creature.h"
@@ -38,6 +39,7 @@
 #include "ECS/Systems/HelpMessageSystemInterface.h"
 #include "ECS/Systems/HelpProfileSystemInterface.h"
 #include "ECS/Systems/PickingSystemInterface.h"
+#include "ECS/Systems/PlayerCommandSystemInterface.h"
 #include "ECS/Systems/SaveGameSystemInterface.h"
 #include "GameActionMapInterface.h"
 #include "Gui/VillagerLabels.h"
@@ -169,16 +171,18 @@ void ShortcutKeys::Update()
 		Locator::helpMessageSystem::value().HelpQuery();
 	}
 
-	// The quick save and the quick load keys
-	if (Locator::saveGameSystem::has_value())
+	// The quick save and the quick load keys check their rules now. Their commands save or load at a later turn.
+	if (Locator::saveGameSystem::has_value() && Locator::playerCommandSystem::has_value())
 	{
-		if (pressed(BindableActionMap::QUICK_SAVE))
+		auto& saves = Locator::saveGameSystem::value();
+		auto& commands = Locator::playerCommandSystem::value();
+		if (pressed(BindableActionMap::QUICK_SAVE) && saves.PressQuickSave())
 		{
-			Locator::saveGameSystem::value().QuickSave();
+			commands.Submit(player_commands::QuickSave {});
 		}
-		if (pressed(BindableActionMap::QUICK_LOAD))
+		if (pressed(BindableActionMap::QUICK_LOAD) && saves.PressQuickLoad())
 		{
-			Locator::saveGameSystem::value().QuickLoad();
+			commands.Submit(player_commands::QuickLoad {});
 		}
 	}
 
@@ -262,7 +266,7 @@ void ShortcutKeys::Update()
 	// The help's profile counts every flight to the temple or over the realm, and back, but not a single tap's view
 	if (flight->toPlace && Locator::helpProfileSystem::has_value())
 	{
-		Locator::helpProfileSystem::value().Trigger(help::profile::k_CameraFlyToTemple);
+		Locator::helpProfileSystem::value().Report(help::profile::k_CameraFlyToTemple);
 	}
 }
 

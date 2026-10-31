@@ -16,7 +16,7 @@
 #include "3D/MapCoords.h"
 #include "AudioManagerInterface.h"
 #include "Common/X87.h"
-#include "ECS/Systems/SkySystemInterface.h"
+#include "ECS/Systems/SkyClockSystemInterface.h"
 #include "FileSystem/FileSystemInterface.h"
 #include "InfoConstants.h"
 #include "Locator.h"
@@ -159,7 +159,8 @@ void AtmosAudio::EndTurn(const TurnInputs& inputs)
 	const SoundMap::Inputs mapInputs {
 	    .receiver = inputs.camera,
 	    .weather = inputs.weather,
-	    .skyType = CalculateSkyType(Locator::skySystem::value().GetTime(), Locator::skySystem::value().GetDayNightTimes()),
+	    .skyType =
+	        CalculateSkyType(Locator::skyClockSystem::value().GetTime(), Locator::skyClockSystem::value().GetDayNightTimes()),
 	};
 	_soundMap.Update(Locator::terrainSystem::value(), Locator::infoConstants::value().sound, mapInputs);
 	if (inputs.paused || inputs.turn < k_FirstAudibleTurn)

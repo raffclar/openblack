@@ -213,12 +213,21 @@ struct Frame
 	bool rebuilt {false};
 	/// Every object in the list is drawn, and which are on screen noted; otherwise only those last on screen
 	bool drawAll {false};
+	/// The frame draws the land. A frame that does not draw the land draws no object of the list.
+	bool landDrawn {true};
 };
-/// Whether an object is drawn on a frame: it has to be in the list, and be on screen when last noted unless the frame
-/// draws them all
+/// The frame of the list when the frame does not draw the land: in the temple, or while a film hides the world. The game
+/// tests the blocks, steps the clock, makes the list and draws its objects as a part of the land's draw, so such a frame
+/// does none of it. The list stays as it is, and no object of it is drawn.
+[[nodiscard]] constexpr Frame FrameWithoutLand()
+{
+	return {.rebuilt = false, .drawAll = false, .landDrawn = false};
+}
+/// Whether an object is drawn on a frame: the frame draws the land, the object is in the list, and it was on screen when
+/// last noted unless the frame draws them all
 [[nodiscard]] constexpr bool Drawn(const Frame& frame, bool listed, bool lastOnScreen)
 {
-	return listed && (frame.drawAll || lastOnScreen);
+	return frame.landDrawn && listed && (frame.drawAll || lastOnScreen);
 }
 /// What a thing is, for whether the game draws it outside the list
 struct OwnDraw
@@ -243,6 +252,112 @@ struct OwnDraw
 {
 	return alwaysDrawn || (onScreen && !fadedOut);
 }
+
+/// The test that the draw of a listed thing does on a full frame, which decides whether the thing stays drawn
+enum class KeptTest : uint8_t
+{
+	/// The sphere of the thing is on the screen and the thing did not fade out completely
+	SphereAndFade,
+	/// Only the sphere of the thing is on the screen. A building that its site draws, or a broken building, has no fade
+	/// test.
+	Sphere,
+	/// The draw does no test, so the thing stays drawn
+	Always,
+};
+
+/// What decides the test of a listed thing
+struct KeptThing
+{
+	/// A villager or a creature
+	bool alwaysDrawn {false};
+	/// A broken building, drawn as its broken model
+	bool broken {false};
+	/// Not a building that its site of building or repair draws only as far up as it stands
+	bool drawnWhole {true};
+	/// A building that its site draws, of which some part shows
+	bool partlyShown {false};
+};
+
+/// The test that the draw of a listed thing does:
+/// - A villager or a creature: no test.
+/// - A broken building: the sphere of its whole model.
+/// - A building with a site that shows a part of it: the sphere of its whole model.
+/// - A building with a site that shows no part of it: no test. Its site draws nothing.
+/// - Another thing: the sphere and the fade.
+[[nodiscard]] constexpr KeptTest KeptTestOf(const KeptThing& thing)
+{
+	if (thing.alwaysDrawn)
+	{
+		return KeptTest::Always;
+	}
+	if (thing.broken || thing.partlyShown)
+	{
+		return KeptTest::Sphere;
+	}
+	return thing.drawnWhole ? KeptTest::SphereAndFade : KeptTest::Always;
+}
+
+/// Whether a listed thing stays drawn on the next frames that do not draw all of the list, by the test of its draw
+[[nodiscard]] constexpr bool StaysDrawn(KeptTest test, bool onScreen, bool fadedOut)
+{
+	switch (test)
+	{
+	case KeptTest::Always:
+		return true;
+	case KeptTest::Sphere:
+		return onScreen;
+	case KeptTest::SphereAndFade:
+		return onScreen && !fadedOut;
+	}
+	return true;
+}
+
+/// A thing that the draw of another thing draws with it. The draw of a village totem draws the icon on its plinth and
+/// its second, see-through plinth and icon.
+struct Part
+{
+	/// The thing whose draw draws this part
+	entt::entity owner {entt::null};
+	/// The test of this part counts for the owner: the owner stays drawn when it or this part stays drawn
+	bool keepsOwner {false};
+};
+
+/// Each part by its entity's index, so that the test whether a thing is a part is fast
+class Parts
+{
+public:
+	/// Forget all the parts
+	void Clear();
+	/// A thing is a part of an owner
+	void Add(entt::entity part, Part of);
+	/// The owner of a thing and whether the thing keeps it, or none for a thing that is not a part
+	[[nodiscard]] std::optional<Part> Of(entt::entity entity) const;
+
+private:
+	struct Entry
+	{
+		entt::entity entity {entt::null};
+		Part of;
+	};
+	std::vector<entt::entity> _parts;
+	std::vector<Entry> _byIndex;
+};
+
+/// The owners that a part keeps drawn on a full frame. The renderer notes the parts and their owners in any order: an
+/// owner noted after its part also stays drawn.
+class KeptParts
+{
+public:
+	/// A new full frame forgets the parts of the last one
+	void Clear() { _owners.clear(); }
+	/// A part of the owner stays drawn
+	void Keep(entt::entity owner);
+	/// Whether a part of the owner stays drawn on this full frame
+	[[nodiscard]] bool Keeps(entt::entity owner) const { return std::ranges::find(_owners, owner) != _owners.end(); }
+
+private:
+	std::vector<entt::entity> _owners;
+};
 
 /// The frames that make the list again because an event asks. The game keeps one count of frames. Each request sets
 /// the count, so a later request replaces an earlier one, also a larger one. Each frame that makes the list again

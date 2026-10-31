@@ -13,7 +13,6 @@
 
 #include "3D/AllMeshes.h"
 #include "3D/L3DMesh.h"
-#include "Audio/Sound.h"
 #include "ECS/Components/Mesh.h"
 #include "ECS/Components/SoundTag.h"
 #include "ECS/Components/StreetLantern.h"
@@ -28,6 +27,8 @@
 #include "Locator.h"
 #include "Resources/ResourceManager.h"
 #include "Resources/ResourcesInterface.h"
+#include "Sound/SoundId.h"
+#include "Utils.h"
 #include "VillageLightArchetype.h"
 
 using namespace openblack;
@@ -57,6 +58,8 @@ entt::entity StreetLanternArchetype::Create(const glm::vec3& position, MobileSta
 		}
 	}
 	const auto entity = registry.Create();
+	// It takes its place in the order of the things made
+	TakeThingMadePlace();
 	// It stands as it was made, unturned
 	registry.Assign<Transform>(entity, position, glm::mat3(1.0f), glm::vec3(1.0f));
 	const bool country = info != MobileStaticInfo::StreetLantern;
@@ -69,8 +72,10 @@ entt::entity StreetLanternArchetype::Create(const glm::vec3& position, MobileSta
 	{
 		height = meshes.Handle(resourceId)->GetBoundingBox().Size().y;
 	}
+	// A computer that does not draw the world has no dark, and its lanterns do not crackle
+	const bool dark = Locator::villageLightSystem::has_value() && Locator::villageLightSystem::value().IsDark();
 	registry.Assign<SoundTag>(entity, static_cast<entt::id_type>(audio::SoundId::G_Lantern_01), glm::vec3(0.0f, height, 0.0f),
-	                          Locator::villageLightSystem::value().IsDark());
+	                          dark);
 	// Its light lights the village around it at night
 	VillageLightArchetype::Create(position, country ? VillageLight::Kind::Country : VillageLight::Kind::Town, entity);
 	return entity;

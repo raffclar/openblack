@@ -486,6 +486,11 @@ bool creature_fight::LearnsFromMove(Move::Kind kind, bool humanPlayers)
 	return kind == Move::Kind::Animation || humanPlayers;
 }
 
+bool creature_fight::LearnsFromPresses(bool networkGame, bool firstPlayer, bool humanGod)
+{
+	return networkGame ? humanGod : firstPlayer;
+}
+
 float creature_fight::TendencyAtStart(uint32_t fightsCompleted, float learnt, float alignment)
 {
 	return fightsCompleted == 0 ? FirstTendency(alignment) : learnt;
@@ -517,12 +522,13 @@ bool creature_fight::LetsChoose(const MindInFight& mind)
 	{
 		return false;
 	}
-	return !mind.fighting || (mind.startedIt && mind.planned && mind.waitsForFight && !mind.won);
+	return !mind.fighting || mind.onlyAsked || mind.mindFree ||
+	       (mind.startedIt && mind.planned && mind.waitsForFight && !mind.won);
 }
 
 bool creature_fight::ObeysInFight(const MindInFight& mind)
 {
-	return mind.fighting && !mind.startedIt && !mind.won;
+	return mind.fighting && !mind.onlyAsked && !mind.startedIt && !mind.won && !mind.mindFree;
 }
 
 bool creature_fight::HealthyEnoughToFight(float life)
@@ -559,13 +565,11 @@ creature_fight::FaintWait creature_fight::LyingTurn(FaintWait wait, const FaintB
 
 float creature_fight::DamageFactor(const Blow& blow)
 {
-	// Strength runs from weak to strong as -1 to 1 here
-	const auto attackerStrength = (2.0f * blow.attackerStrength) - 1.0f;
-	const auto defenderStrength = (2.0f * blow.defenderStrength) - 1.0f;
-	const auto sizes = blow.attackerSize / std::max(blow.defenderSize, 0.01f);
-	const auto strengths = (attackerStrength + 1.5f) / (defenderStrength + 1.5f);
-	const auto factor = std::clamp(sizes * strengths * blow.speed, k_MinDamageFactor, k_MaxDamageFactor);
-	return blow.special ? factor * 2.0f : factor;
+	// The game multiplies in this order: the strengths, then the sizes, then the speed
+	const auto strengths = (blow.attackerStrength + k_StrengthShift) / (blow.defenderStrength + k_StrengthShift);
+	const auto factor =
+	    std::clamp((strengths * (blow.attackerSize / blow.defenderSize)) * blow.speed, k_MinDamageFactor, k_MaxDamageFactor);
+	return blow.special ? factor + factor : factor;
 }
 
 Hit creature_fight::ResolveBlow(const Blow& blow, RecoilDirection direction)
@@ -1042,6 +1046,26 @@ bool creature_fight::PlayerMove(Fighter& fighter, const Move& move, bool replace
 	return fighter.queue.Push(move, replace);
 }
 
+bool creature_fight::CountComputerWait(Fighter& fighter, int32_t turnMs)
+{
+	if (fighter.control != Control::Player)
+	{
+		return false;
+	}
+	const auto state = fighter.state;
+	if (state != State::Stance && state != State::Action && state != State::Block && state != State::BlockRecoil)
+	{
+		return false;
+	}
+	fighter.computerWaitMs -= static_cast<float>(turnMs);
+	if ((state == State::Stance || state == State::Block) && fighter.computerWaitMs < 0.0f)
+	{
+		fighter.control = Control::Computer;
+		return true;
+	}
+	return false;
+}
+
 bool creature_fight::PlayerMove(Fighter& fighter, marks::MarkList& marks, const Move& move, bool replace)
 {
 	// A move made in place of the queue keeps only its own sparkle
@@ -1073,6 +1097,7 @@ std::optional<Order> creature_fight::TakeOrder(Fighter& fighter, bool inRange)
 	// Anything at all ends a block, and is made from the stance after it; another block is used up ending it
 	if (fighter.state == State::Block)
 	{
+		fighter.computerWaitMs = k_ComputerWaitsMs;
 		if (front->move.kind == Move::Kind::Block)
 		{
 			fighter.queue.Pop();
@@ -1083,6 +1108,7 @@ std::optional<Order> creature_fight::TakeOrder(Fighter& fighter, bool inRange)
 	{
 		return std::nullopt;
 	}
+	fighter.computerWaitMs = k_ComputerWaitsMs;
 	const auto& move = front->move;
 	std::optional<Order> order;
 	switch (move.kind)
@@ -1128,9 +1154,10 @@ Opponent creature_fight::OpponentOf(State state, size_t animation)
 		return Opponent::EndingCast;
 	case State::BlockRecoil:
 		return Opponent::BlockRecoil;
+	// The computer strikes at once at an opponent that starts a cast or casts
 	case State::CastStart:
 	case State::Cast:
-		return Opponent::Casting;
+		return Opponent::OtherAction;
 	case State::Action:
 		if (IsAttack(animation))
 		{
@@ -1160,7 +1187,8 @@ Choice creature_fight::ChooseMove(uint32_t tier, Opponent opponent, const Random
 		return Choice {.kind = Choice::Kind::Step, .step = k_Steps.at(random(3))};
 	};
 	const auto block = Choice {.kind = Choice::Kind::Block};
-	const bool counters = tier >= 2 && random(k_CounterLots) != 0;
+	// Only the most aggressive tier draws this lot, and only against the moves that it can strike back at
+	const auto counters = [tier, &random] { return tier >= 2 && random(k_CounterLots) != 0; };
 	switch (opponent)
 	{
 	case Opponent::Stance:
@@ -1170,15 +1198,14 @@ Choice creature_fight::ChooseMove(uint32_t tier, Opponent opponent, const Random
 	case Opponent::OtherAction:
 		return blow();
 	case Opponent::Attacking:
-	case Opponent::Casting:
-		if (counters)
+		if (counters())
 		{
 			return blow();
 		}
 		return random(4) == 0 ? block : step();
 	case Opponent::SteppingForward:
 	{
-		if (counters)
+		if (counters())
 		{
 			return blow();
 		}
@@ -1190,7 +1217,7 @@ Choice creature_fight::ChooseMove(uint32_t tier, Opponent opponent, const Random
 		return pick == 3 ? blow() : step();
 	}
 	case Opponent::Blocking:
-		if (counters)
+		if (counters())
 		{
 			return blow();
 		}
@@ -1331,6 +1358,30 @@ bool creature_fight::FightWonIsSeen(bool byBlow, bool winnerHasPlayer)
 	return byBlow && winnerHasPlayer;
 }
 
+bool creature_fight::WinsByOpponentsLife(float opponentLife, bool scriptControlled)
+{
+	return !(0.0f < opponentLife) && !scriptControlled;
+}
+
+bool creature_fight::LifePaysAtStop(State state)
+{
+	switch (state)
+	{
+	case State::Start:
+	case State::Stance:
+	case State::Action:
+	case State::BlockStart:
+	case State::Block:
+	case State::BlockEnd:
+	case State::CastStart:
+	case State::Cast:
+	case State::CastEnd:
+		return true;
+	default:
+		return false;
+	}
+}
+
 bool creature_fight::WinPlanForced(bool byBlow)
 {
 	return !byBlow;
@@ -1455,4 +1506,76 @@ bool creature_fight::FightMusicHeard(bool directsFight, std::span<const glm::vec
 float creature_fight::HealthAfterLifeLost(float health, float damage)
 {
 	return std::max(health - damage, 0.0f);
+}
+
+namespace
+{
+/// The two creatures of a stop: their duels, the partners of their minds and the gains that they got
+class StopSteps
+{
+public:
+	explicit StopSteps(const StopLinks& links)
+	    : _duels {links.stopperDuels, links.partnerDuels}
+	    , _hasPartner {links.stopperHasPartner, links.partnerHasPartner}
+	{
+	}
+
+	/// The creature gives up its action as a failure
+	void Fail(size_t self)
+	{
+		if (_duels.at(self))
+		{
+			++_gains.at(self);
+		}
+		Finish(self);
+	}
+
+	/// The creature stops, then its mind forgets its partner and makes the partner give up its action
+	void Finish(size_t self)
+	{
+		Stop(self);
+		if (_hasPartner.at(self))
+		{
+			_hasPartner.at(self) = false;
+			Fail(Other(self));
+		}
+	}
+
+	[[nodiscard]] StrengthGains Gains() const { return {.stopper = _gains[0], .partner = _gains[1]}; }
+
+private:
+	[[nodiscard]] static size_t Other(size_t self) { return 1 - self; }
+
+	/// The creature stops what it does. In its duel, it gives the gain to its partner, which leaves its duel and gives up
+	/// its action. The creature leaves its own duel last.
+	void Stop(size_t self)
+	{
+		if (_duels.at(self))
+		{
+			const auto other = Other(self);
+			++_gains.at(other);
+			_duels.at(other) = false;
+			Fail(other);
+		}
+		_duels.at(self) = false;
+	}
+
+	std::array<bool, 2> _duels;
+	std::array<bool, 2> _hasPartner;
+	std::array<uint32_t, 2> _gains {};
+};
+} // namespace
+
+StrengthGains creature_fight::StrengthGainsAtStop(StopEnd end, StopLinks links)
+{
+	StopSteps steps(links);
+	if (end == StopEnd::Failure)
+	{
+		steps.Fail(0);
+	}
+	else
+	{
+		steps.Finish(0);
+	}
+	return steps.Gains();
 }

@@ -187,9 +187,46 @@ struct AnimalHolders
 	bool creature {false};
 	bool physics {false};
 };
-/// Whether an animal takes its own turn: not while a tornado, the player's hand or the physics moves it. In a creature's
-/// hand it takes its turn only while it dies or lies dead, so that it falls and its body goes there.
-[[nodiscard]] bool TakesOwnTurn(const AnimalHolders& holders, bool dyingOrDead);
+/// Whether an animal takes its own turn: not while a tornado or the physics moves it. In the player's hand or in the
+/// hand of a creature it takes its turn as in the land. Its state in the hand does nothing, but its needs grow.
+[[nodiscard]] bool TakesOwnTurn(const AnimalHolders& holders);
+/// Whether an animal in the state of the hand can go into this state of the game's table. The state of the hand lets it
+/// go only into flight, a landing or a state of death
+[[nodiscard]] bool HandStateAllows(uint8_t gameState);
+/// What an animal knows about its target at the start of its turn
+struct TargetFacts
+{
+	/// The target is not in the world now
+	bool gone {false};
+	/// The player's hand holds the target. The hand of a creature does not count
+	bool inPlayersHand {false};
+	/// A hand holds the animal itself
+	bool inHand {false};
+};
+/// What an animal does with its target at the start of its turn
+enum class TargetDrop : uint8_t
+{
+	/// It keeps the target, and its turn continues
+	Keeps,
+	/// It lets go of the target and its count of turns, and its turn stops. In a hand it stays in the state of the hand
+	Drops,
+	/// It lets go of the target and its count of turns, and it decides again. Its turn stops
+	DropsAndDecides,
+};
+/// An animal lets go of a target that is gone or in the player's hand. Every state lets it decide again, but the state of
+/// the hand refuses this change
+[[nodiscard]] TargetDrop DropOfTarget(const TargetFacts& facts);
+/// The state that an animal goes into when it comes down from the hand or the physics
+enum class LandedAs : uint8_t
+{
+	/// It has life, and it plays its landing
+	Landed,
+	/// It has no life left, and it starts to die where it lands
+	Dying,
+	/// It has no life left, and it was dying before, so its body lies dead at once
+	Dead,
+};
+[[nodiscard]] LandedAs LandsAs(bool alive, bool dying);
 /// A body going leaves a grey puff of smoke this big, half its height out along the way it faces from where it lies
 inline constexpr float k_DeadBodySmokeSize = 1.0f;
 [[nodiscard]] glm::vec3 DeadBodySmokePlace(const glm::vec3& position, float heading, float height);

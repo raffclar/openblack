@@ -10,6 +10,9 @@
 #include "HelpProfile.h"
 
 #include <algorithm>
+#include <utility>
+
+#include "Common/X87.h"
 
 namespace openblack::help::profile
 {
@@ -52,7 +55,7 @@ float EventCount::SecondsSince(uint32_t clock)
 {
 	if (_kept == 0)
 	{
-		return 0.0f;
+		return k_SecondsSinceNever;
 	}
 	const auto since = static_cast<int32_t>(clock - _times.at(SlotBack(_head, 1)));
 	if (since < 0)
@@ -60,7 +63,8 @@ float EventCount::SecondsSince(uint32_t clock)
 		PullTimesBackTo(clock);
 		return 0.0f;
 	}
-	return static_cast<float>(since) * 0.001f;
+	// The whole count of milliseconds times the float scale, rounded one time
+	return x87::Mul(static_cast<double>(since), k_SecondsPerMillisecond);
 }
 
 float EventCount::PerSecond(uint32_t clock)
@@ -117,6 +121,32 @@ std::vector<uint32_t> CameraViewEvents(const WorldCameraView& view)
 		return {k_CameraSeesLand, k_CameraNearAndSteep};
 	}
 	return {k_CameraSeesLand};
+}
+
+void ReportedEvents::Add(uint32_t event)
+{
+	if (event < k_EventCount)
+	{
+		_events |= uint64_t {1} << event;
+	}
+}
+
+uint64_t ReportedEvents::Take()
+{
+	return std::exchange(_events, 0);
+}
+
+std::vector<uint32_t> EventsOf(uint64_t events)
+{
+	std::vector<uint32_t> list;
+	for (uint32_t event = 0; event < k_EventCount; ++event)
+	{
+		if ((events & (uint64_t {1} << event)) != 0)
+		{
+			list.push_back(event);
+		}
+	}
+	return list;
 }
 
 void HelpProfile::Trigger(uint32_t event)

@@ -22,7 +22,7 @@ public:
 	[[nodiscard]] std::optional<float> LandHeight(glm::vec2 point) const override;
 	[[nodiscard]] uint32_t Turn() const override;
 	[[nodiscard]] GameRandomInterface* Random() override;
-	[[nodiscard]] std::optional<PlayerNames> LocalPlayer() const override;
+	[[nodiscard]] bool PersonPlays(PlayerNames player) const override;
 	[[nodiscard]] std::optional<PlayerNames> OwnPlayer() const override;
 	[[nodiscard]] float LifeOf(entt::entity object) const override;
 	[[nodiscard]] float HeightOf(entt::entity object) const override;
@@ -48,6 +48,9 @@ public:
 	void StrikeVortex(entt::entity vortex, entt::entity hitter, const components::DrawnIntoVortex::Flight& flight) override;
 	[[nodiscard]] std::optional<entt::entity> PieceAtRest(systems::DynamicsSystemInterface& dynamics, PhysicsEntry* entry,
 	                                                      entt::entity piece, bool insert) override;
+	void ScaffoldLetGo(entt::entity scaffold, bool forced) override;
+	void ScaffoldNotPutDown(entt::entity scaffold) override;
+	void ScaffoldAtRest(entt::entity scaffold, bool fromHand, bool insert) override;
 	[[nodiscard]] systems::ResourceStoreSystemInterface::ObjectResource ResourceOf(entt::entity object) const override;
 	[[nodiscard]] bool HasStores() const override;
 	[[nodiscard]] bool IsStore(entt::entity store, ResourceType type) const override;

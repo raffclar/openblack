@@ -9,11 +9,14 @@
 
 #pragma once
 
+#include <cstdint>
+
 #include <optional>
 #include <span>
 #include <vector>
 
 #include <entt/entity/entity.hpp>
+#include <glm/mat4x4.hpp>
 
 #include "Enums.h"
 #include "Magic/WorshipBattery.h"
@@ -60,12 +63,33 @@ public:
 	virtual bool Tap(entt::entity icon, PlayerNames player) = 0;
 	/// A computer god's hand makes the worshippers of an icon's site chant for its miracle. The icon must not charge,
 	/// no hand may hold its seed, the god must be able to cast the miracle, and the site must have prayer power to give
-	/// or the icon some stored. Whether the charge started.
+	/// or the icon some stored. An icon that is full already then gives its miracle to the hand, as a tap does. Only the
+	/// hand of a human player takes it, so a computer god keeps its miracle in the icon. Whether the charge started.
 	virtual bool StartChargeForGod(entt::entity /*icon*/, PlayerNames /*player*/) { return false; }
 	/// The prayer power that an icon's miracle still needs to be charged full
 	[[nodiscard]] virtual float ChantNeeded(entt::entity /*icon*/) const { return 0.0f; }
 	/// A god cast the miracle of an icon: the icon's store loses the miracle's cost, never more than it holds
 	virtual void TakeCastCharge(entt::entity /*icon*/) {}
+	/// The worship site of an icon: the site of a worship site's icon, or the site of the town of a stone hand. None for a
+	/// thing that is not an icon, and for a stone hand whose town has no site.
+	[[nodiscard]] virtual entt::entity SiteOfIcon(entt::entity icon) const = 0;
+	/// A script sets the prayer power of a site: each icon of the site loses all the prayer power that it stored
+	virtual void EmptyIconStores(entt::entity site) = 0;
+	/// A script stops the charges for the hand of a player at the worship sites of a temple. Each icon that charges for
+	/// that hand stops and gives its store back to its site.
+	virtual void CancelChargesFor(entt::entity temple, PlayerNames charger) = 0;
+	/// Whether an icon at the worship sites of a temple charges a miracle for the hand of a player
+	[[nodiscard]] virtual bool ChargesFor(entt::entity /*temple*/, PlayerNames /*charger*/) const { return false; }
+	/// A scribble of the empty hand stops one charge for the hand of a player at the worship sites of a temple: the
+	/// charge that started last. Of charges that started in the same turn, the first in the order of the places stops.
+	/// It returns whether a charge stopped.
+	virtual bool CancelLatestChargeFor(entt::entity /*temple*/, PlayerNames /*charger*/) { return false; }
+	/// The icon of a seed at the worship sites of a temple. The first site in the order of the places round the temple
+	/// gives it. None when no site of the temple has an icon of the seed.
+	[[nodiscard]] virtual entt::entity IconInTemple(entt::entity temple, SpellSeedType seed) const = 0;
+	/// Whether an icon at the worship sites of a temple has prayer power in its store, as the scripts ask if a miracle
+	/// charges. With a magic type, only an icon whose plain miracle is of that type counts.
+	[[nodiscard]] virtual bool AnyIconStores(entt::entity temple, std::optional<MagicType> type) const = 0;
 	/// Whether a player has an icon for a seed at any of their worship sites
 	[[nodiscard]] virtual bool HasIconFor(PlayerNames player, SpellSeedType seed) const = 0;
 	/// Whether something is an icon or a stone hand
@@ -98,6 +122,21 @@ public:
 
 	/// Once a frame: the seeds above the icons spin
 	virtual void Update(float seconds) = 0;
+
+	/// The pulse model that a charging icon shows in a frame: where it is drawn, and its colour and alpha as 0xAARRGGBB
+	struct ChargePulse
+	{
+		glm::mat4 model {1.0f};
+		uint32_t argb {0};
+	};
+	/// Once a frame, while the frame draws the land: each icon at a worship site that is on the screen shows its charge.
+	/// Its ring of light fills and moves on, its shine changes, and its pulse model shrinks into it while it charges.
+	virtual void UpdateChargeLooks(int32_t /*gameMilliseconds*/, bool /*landDrawn*/) {}
+	/// The colour that an icon adds to its model this frame (0xRRGGBB), 0 for none. The model shows the shine of the
+	/// frame before, because the game draws the model before it changes the shine.
+	[[nodiscard]] virtual uint32_t ShownTint(entt::entity /*icon*/) const { return 0; }
+	/// The pulse models of the charging icons on the screen this frame
+	[[nodiscard]] virtual std::vector<ChargePulse> ChargePulses() const { return {}; }
 	/// A new land
 	virtual void Reset() = 0;
 };

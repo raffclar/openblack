@@ -18,7 +18,7 @@
 #include <variant>
 #include <vector>
 
-#include "Graphics/RenderPass.h"
+#include "Visual/RenderPass.h"
 
 struct SDL_Window;
 struct SDL_Cursor;
@@ -69,7 +69,13 @@ public:
 	/// The player's input is locked out for an agent driving the game: the debug windows take nothing from the mouse, and
 	/// a notice says so. Whether the game's own pointer stands in for the mouse, which keeps the mouse off them anyway
 	virtual void SetInputLock([[maybe_unused]] bool locked, [[maybe_unused]] bool pointerScripted) noexcept {}
+	/// While a tool or a scenario moves the pointer, the debug windows do not take the mouse. Then the real pointer on
+	/// a debug window does not take the presses of the tool.
+	virtual void KeepOffTheMouse([[maybe_unused]] bool off) noexcept {}
 	virtual bool Loop() noexcept = 0;
 	virtual void Draw() noexcept = 0;
+	/// Draws nothing in each way that the debug windows draw, so that the graphics card makes its states before the
+	/// first frame of the game
+	virtual void WarmUp() noexcept {}
 };
 } // namespace openblack::debug::gui

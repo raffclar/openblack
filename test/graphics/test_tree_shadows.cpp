@@ -17,7 +17,7 @@
 #include <gtest/gtest.h>
 
 #include "Graphics/LandShadowBake.h"
-#include "Graphics/TreeShadows.h"
+#include "Visual/TreeShadows.h"
 
 namespace tree_shadows = openblack::graphics::tree_shadows;
 
@@ -206,4 +206,29 @@ TEST(TreeShadows, ALeafTriangleKeepsItsAlphaWhenTheModelGoes)
 	tree_shadows::Fill(expected, corners, SolidMask(0xF0));
 	EXPECT_EQ(kept, expected);
 	EXPECT_GT(RowCount(kept, 0), 0);
+}
+
+TEST(TreeShadows, AtTheLowResolutionEachShadowIsHalfAsDark)
+{
+	EXPECT_EQ(tree_shadows::Shade(0x00, true), 255);
+	EXPECT_EQ(tree_shadows::Shade(0x10, true), 248);
+	EXPECT_EQ(tree_shadows::Shade(0xF0, true), 224);
+	// Seven eighths of 255 is 223, halved twice it is 55
+	EXPECT_EQ(tree_shadows::Shade(0x7F, true), 200);
+	EXPECT_EQ(tree_shadows::Shade(0xFF, true), 192);
+}
+
+TEST(TreeShadows, AtTheLowResolutionABlockHas128TexelsASide)
+{
+	// A foot at the middle of the block falls on texel 64 of 128
+	const auto corner = tree_shadows::Flatten({0.0f, 0.0f, 0.0f}, {80.0f, 80.0f}, {0.0f, 0.0f}, {0.0f, 0.0f}, 128);
+	EXPECT_FLOAT_EQ(corner.texel.x, 64.0f);
+	EXPECT_FLOAT_EQ(corner.texel.y, 64.0f);
+	// A row of the coverage holds 128 texels, and the fill stops at the last of them
+	tree_shadows::Coverage coverage {};
+	tree_shadows::Fill(coverage, {At(2.0f, 120.0f), At(2.0f, 300.0f), At(4.0f, 120.0f)}, SolidMask(0xF0), 128);
+	EXPECT_EQ(coverage[2 * 128 + 127], 0xF0);
+	EXPECT_EQ(coverage[2 * 128 + 128], 0x00);
+	EXPECT_FALSE(tree_shadows::Reaches({At(128.5f, 1.0f), At(130.0f, 1.0f), At(129.0f, 2.0f)}, 128));
+	EXPECT_TRUE(tree_shadows::Reaches({At(128.5f, 1.0f), At(130.0f, 1.0f), At(129.0f, 2.0f)}));
 }

@@ -44,12 +44,13 @@ struct StormCloud
 	uint8_t flashGrey {0};
 };
 
-/// The clouds of the sky (components::Cloud) and the clouds of the storms
+/// The frames of the clouds of the sky (components::Cloud, things of the drawn registry) and the clouds of the storms.
+/// Only a computer that draws the world has this system.
 class CloudSystemInterface
 {
 public:
 	virtual ~CloudSystemInterface() = default;
-	/// Lays out the clouds of a new land in place of the last land's
+	/// Removes the clouds of the storms of the last land. The land start makes the sky's clouds (CloudArchetype).
 	virtual void Reset() = 0;
 	/// Moves the clouds with the wind by the game time that has passed, which stops while the game is paused
 	virtual void Update(std::chrono::duration<float, std::milli> gameTime) = 0;

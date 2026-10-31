@@ -16,6 +16,7 @@
 
 #include "Common/GUtilsAngle.h"
 #include "Common/GUtilsDistance.h"
+#include "Common/X87.h"
 
 using namespace openblack;
 using namespace openblack::computer_mind_rules;
@@ -182,4 +183,216 @@ float computer_mind_rules::OutsidePlacePull(float distanceToEdge, float reach)
 {
 	const float pull = gutils::GetDistanceModifier(distanceToEdge, reach);
 	return static_cast<double>(pull) >= k_LeastPlacePull ? pull * pull : 0.0f;
+}
+
+float computer_mind_rules::FishFarmWish(float distanceFromHand, float placePull)
+{
+	constexpr float k_FishFarmShare = 1.0f;
+	const float near = gutils::GetDistanceModifier(distanceFromHand, k_FieldReach) * k_FishFarmShare;
+	return placePull * near;
+}
+
+float computer_mind_rules::SeenWoodWish(const SeenWood& seen, float influencePower)
+{
+	const float near = gutils::DistanceChangeToBelief(seen.distanceToEdge, influencePower);
+	if (!seen.forest)
+	{
+		return near * static_cast<float>(seen.kindWood);
+	}
+	// The order of the products is the order of the game
+	float wish = seen.treeWood * seen.pull;
+	wish = wish * static_cast<float>(seen.grownTrees);
+	wish = near * wish;
+	return seen.pull * wish;
+}
+
+float computer_mind_rules::ChosenTreeWish(float distanceFromHand, float influencePower)
+{
+	return gutils::DistanceChangeToBelief(distanceFromHand, influencePower);
+}
+
+int32_t computer_mind_rules::FoodShortfall(float wanted, uint32_t held)
+{
+	// The whole number of food held is exact in the subtraction, which rounds one time
+	return map_coords::FtoL(x87::Sub(wanted, static_cast<double>(held)));
+}
+
+float computer_mind_rules::OtherTownAsk(float need)
+{
+	return need * k_AskPerNeed;
+}
+
+std::optional<GivingChoice> computer_mind_rules::ChooseGivingTown(std::span<const GivingTown> towns, float need)
+{
+	const float ask = OtherTownAsk(need);
+	if (!(ask > k_LeastAsk))
+	{
+		return std::nullopt;
+	}
+	const auto least = static_cast<uint32_t>(map_coords::FtoL(ask));
+	std::optional<GivingChoice> best;
+	float most = 0.0f;
+	for (size_t i = 0; i < towns.size(); ++i)
+	{
+		const auto& town = towns[i];
+		if (town.stock <= least)
+		{
+			continue;
+		}
+		const float desire = town.rawDesire < 1.0f ? town.rawDesire : 1.0f;
+		const float keep = town.pull * desire;
+		if (!(keep < need))
+		{
+			continue;
+		}
+		const float give = 1.0f - keep;
+		if (give > most)
+		{
+			most = give;
+			best = GivingChoice {.index = i, .value = give};
+		}
+	}
+	return best;
+}
+
+float computer_mind_rules::KindScore(SpellKind kind, CreatureDesires perceived, float impressiveBalance, float attackValue)
+{
+	switch (kind)
+	{
+	case SpellKind::Aggressive:
+		return perceived == CreatureDesires::Anger ? 1.0f : 0.0f;
+	case SpellKind::Compassionate:
+		return perceived == CreatureDesires::Compassion ? 1.0f : 0.0f;
+	case SpellKind::Impressive:
+		return impressiveBalance;
+	case SpellKind::Attack:
+		return attackValue;
+	}
+	return 0.0f;
+}
+
+float computer_mind_rules::KindWish(float wish, float score)
+{
+	return wish * score;
+}
+
+bool computer_mind_rules::TooNearOwnCreature(float distance, float ownSize, float targetSize)
+{
+	const float own = ownSize * k_CreatureReachPerSize;
+	const float target = targetSize * k_CreatureReachPerSize;
+	const float twice = (target + own) + (target + own);
+	const float clearance = twice <= k_LeastCreatureClearance ? k_LeastCreatureClearance : twice;
+	return distance < clearance;
+}
+
+std::optional<DamagedChoice> computer_mind_rules::MostDamaged(std::span<const float> shares)
+{
+	std::optional<DamagedChoice> choice;
+	float least = 1.0f;
+	for (size_t i = 0; i < shares.size(); ++i)
+	{
+		if (shares[i] < least)
+		{
+			least = shares[i];
+			choice = DamagedChoice {.index = i, .share = least};
+		}
+	}
+	return choice;
+}
+
+float computer_mind_rules::DamageNeed(float share)
+{
+	if (share < k_BadDamage)
+	{
+		return 1.0f;
+	}
+	return 1.0f - share * share;
+}
+
+std::optional<TownThreat> computer_mind_rules::ThreatOf(std::span<const TownAttack> attacks, uint32_t turn)
+{
+	TownThreat threat;
+	float most = 0.0f;
+	for (const auto& attack : attacks)
+	{
+		// The turns since the attack, as a number that is never negative
+		const uint32_t since = turn - attack.turn;
+		float forgotten = x87::Mul(static_cast<double>(since), k_AttackMemoryShare);
+		if (!(forgotten < 1.0f))
+		{
+			forgotten = 1.0f;
+		}
+		const float fear = 1.0f - forgotten * forgotten * forgotten;
+		if (most < fear)
+		{
+			threat.miracleHarm = attack.miracleHarm;
+			threat.thingHarm = attack.thingHarm + attack.otherThingHarm;
+			threat.fear = fear;
+			most = fear;
+		}
+	}
+	if (threat.miracleHarm <= 0.0f && threat.thingHarm <= 0.0f)
+	{
+		return std::nullopt;
+	}
+	return threat;
+}
+
+MagicType computer_mind_rules::ShieldAgainst(const TownThreat& threat)
+{
+	return threat.miracleHarm > threat.thingHarm ? MagicType::Shield : MagicType::PhysicalShield;
+}
+
+MagicType computer_mind_rules::ShieldToCheck(const TownThreat& threat)
+{
+	return threat.thingHarm > threat.miracleHarm ? MagicType::PhysicalShield : MagicType::Shield;
+}
+
+float computer_mind_rules::ImpressPlaceValue(uint32_t villagers, float distanceFromHand)
+{
+	const float nearness = gutils::GetDistanceModifier(distanceFromHand, k_ImpressReach);
+	return x87::Mul(static_cast<double>(villagers), nearness);
+}
+
+std::optional<size_t> computer_mind_rules::BestImpressPlace(std::span<const float> values)
+{
+	if (values.empty())
+	{
+		return std::nullopt;
+	}
+	size_t best = 0;
+	for (size_t i = 1; i < values.size(); ++i)
+	{
+		if (values[best] < values[i])
+		{
+			best = i;
+		}
+	}
+	return best;
+}
+
+int32_t computer_mind_rules::ContainerTake(int32_t wanted, std::optional<uint32_t> inPot, uint32_t inContainer)
+{
+	auto take = wanted;
+	if (inPot.has_value())
+	{
+		take -= static_cast<int32_t>(*inPot);
+	}
+	const auto have = static_cast<int32_t>(inContainer);
+	return take < have ? take : have;
+}
+
+float computer_mind_rules::CarryDistance(float random, float targetRadius, float thingRadius)
+{
+	const float factor = x87::Add(random, k_LeastCarryFactor);
+	return thingRadius + targetRadius * factor;
+}
+
+bool computer_mind_rules::SameCastPlace(const map_coords::MapCoords& a, const map_coords::MapCoords& b)
+{
+	const auto apart = [](int32_t from, int32_t to) {
+		const auto difference = static_cast<int32_t>(static_cast<uint32_t>(from) - static_cast<uint32_t>(to));
+		return difference < 0 ? -difference : difference;
+	};
+	return apart(a.x, b.x) < k_SameCastPlace && apart(a.z, b.z) < k_SameCastPlace;
 }

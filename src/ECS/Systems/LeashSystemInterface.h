@@ -56,6 +56,9 @@ public:
 	virtual void ProcessTurn() = 0;
 	/// Once a game turn, before the creatures' own turns: the posts go up at the temples
 	virtual void BeginTurn() {}
+	/// A new land starts. At the next turn, its temples get their posts. The taps and refusals of the old land are
+	/// forgotten.
+	virtual void Reset() {}
 	/// In the creature's own turn, before its body lives the turn: its leash pulls it and keeps it near
 	virtual void CreatureTurn(entt::entity /*creature*/) {}
 	/// Once a frame, some seconds of game time on: the ropes swing
@@ -96,9 +99,25 @@ public:
 	virtual bool Toggle(entt::entity creature) = 0;
 	/// Swaps the leash worn for another the creature knows, or picks the one to put on next
 	virtual bool ChangeType(entt::entity creature, LeashType type) = 0;
-	/// Ties the worn leash to something, or puts the picked leash on tied to it
+	/// The player picks a leash for their creature with a gesture or a key. The player cannot do this while a nice or
+	/// nasty spell is on the creature.
+	virtual bool PickType(PlayerNames player, LeashType type) = 0;
+	/// Ties the worn leash to something, or puts the picked leash on tied to it. A script and a computer god tie the leash
+	/// in this way. The creature continues with what it does.
 	virtual bool TieTo(entt::entity creature, entt::entity object) = 0;
+	/// The hand of the player ties the leash to something. What the creature does stops as a failure, and the creature
+	/// then acts on the thing, as for an order on the thing.
+	virtual bool HandTie(entt::entity creature, entt::entity object) { return TieTo(creature, object); }
+	/// A loaded game ties the leash again as it was at the turn of the tie. No sound plays and the creature learns
+	/// nothing.
+	virtual bool RestoreTie(entt::entity creature, entt::entity object, [[maybe_unused]] uint32_t tiedTurn)
+	{
+		return TieTo(creature, object);
+	}
 	virtual void UntieToHand(entt::entity creature) = 0;
+	/// Plays the next leash-attach sound when the leash goes back on in the hand. Only the local player hears it, and only
+	/// for their own creature.
+	virtual void PlayHandAttachSound(entt::entity creature) = 0;
 	/// Whether the leash makes the creature do anything, as scripts set
 	virtual void SetWorks(entt::entity creature, bool works) = 0;
 	/// Whether ropes are drawn
@@ -126,6 +145,11 @@ public:
 	/// The player shakes the leash off, drawing a scribble with the empty hand (see GestureSystemInterface): a leash held
 	/// in the hand comes off; one tied to something stays. Returns whether it came off.
 	virtual bool Shake(PlayerNames player) = 0;
+	/// Whether the leash of the player's creature comes off when the player goes into their temple: the player holds it
+	[[nodiscard]] virtual bool ComesOffAtTemple([[maybe_unused]] PlayerNames player) const { return false; }
+	/// The player goes into their temple: the leash of their creature comes off when the player holds it. Every computer
+	/// does this in the same game turn. Returns whether the leash came off.
+	virtual bool TakeOffAtTemple([[maybe_unused]] PlayerNames player) { return false; }
 
 	/// An order given with the leash held in the hand, as a tap of the Action button gives it: to go to a place on the land
 	/// (or what the creature makes of the place: drinking from the sea, working a field, sleeping at home), or to act on a
@@ -175,11 +199,14 @@ public:
 	/// Hangs a player's three leash posts at three points, the aggression, learning and compassion leashes in turn
 	virtual void PlacePosts(PlayerNames owner, const std::array<glm::vec3, 3>& points) = 0;
 	/// A player taps one of their leash posts: it picks that leash, or unpicks it when tapped again, and swaps the worn
-	/// leash for it
-	virtual bool TapPost(entt::entity post) = 0;
+	/// leash for it. The tap of a player on the post of another player does nothing.
+	virtual bool TapPost(PlayerNames player, entt::entity post) = 0;
 	/// The world does an order of a player to their creature on the leash, at the start of a turn: an order on a thing,
 	/// an order at a place, a tie of the leash to a thing, or an untie
 	virtual void DoOrder(PlayerNames /*player*/, const player_commands::LeashOrder& /*order*/) {}
+	/// At the turn: the hand of the player let go of the rope of the tied leash, which becomes this long
+	/// (player_commands::LeashLength)
+	virtual void DoLeashLength(PlayerNames /*player*/, float /*length*/) {}
 };
 
 } // namespace openblack::ecs::systems

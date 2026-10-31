@@ -41,8 +41,23 @@ inline constexpr int32_t k_LastCreateType = static_cast<int32_t>(ObjectType::Ani
 /// - A marker keeps the height.
 /// - A mobile static that can not move in the physics keeps the height: a holder of a singing stone, a lantern and a
 ///   bonfire. Every other mobile static goes down onto the land when the script makes it.
+/// - A mobile static of the rock kind keeps the height. The physics then lets it fall onto the land.
 /// - Everything else stands on the land under that place, whatever height the script gave.
-[[nodiscard]] bool KeepsScriptHeight(ObjectType type, uint32_t subtype = 0);
+/// `rockKind` tells if the info table puts the row in the rock kind.
+[[nodiscard]] bool KeepsScriptHeight(ObjectType type, uint32_t subtype = 0, bool rockKind = false);
+
+/// How a rock that a script makes starts in the physics. The rock starts at rest with no thrower and no player.
+struct ScriptRockStart
+{
+	/// The physics puts the body on the land and turns it to the slope before it lifts the body clear of things.
+	/// Only a rock that the script asks for by the rock type does this.
+	bool settlesOnLand;
+};
+
+/// Whether a thing that a script makes is a rock that starts in the physics, and how it starts. A mobile static or a
+/// rock does this when the info table puts its row in the rock kind. The holder of a singing stone, the lanterns and
+/// the bonfire never do, because the physics can not move them.
+[[nodiscard]] std::optional<ScriptRockStart> RockStartOf(ObjectType type, uint32_t subtype, bool rockKind);
 
 /// Whether a thing a script creates takes no notice of reactions until a script tells it to. Only a creature does: it
 /// does not react to what happens near it, and it does not catch what flies to it.

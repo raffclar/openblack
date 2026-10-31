@@ -28,11 +28,11 @@
 #include "ECS/Components/Player.h"
 #include "ECS/Components/Temple.h"
 #include "ECS/Components/Transform.h"
+#include "ECS/PlayerColour.h"
 #include "ECS/Registry.h"
 #include "ECS/Systems/HeartbeatSystemInterface.h"
 #include "ECS/Systems/TimeSystemInterface.h"
 #include "EngineConfig.h"
-#include "Graphics/DetailLevel.h"
 #include "Graphics/ShaderManager.h"
 #include "Graphics/ShaderProgram.h"
 #include "Graphics/TempleExitGlow.h"
@@ -45,6 +45,7 @@
 #include "Renderer.h"
 #include "Resources/ResourceManager.h"
 #include "Resources/ResourcesInterface.h"
+#include "Visual/DetailLevel.h"
 
 using namespace openblack;
 using namespace openblack::graphics;
@@ -160,7 +161,7 @@ void Renderer::DrawTempleCreedShells(const DrawSceneDesc& desc) const
 		const particles::draw::ShellDraw shell {
 		    .object = entt::null,
 		    .zoom = heart_look::ShellReach(temple.destructionClock) * pulse,
-		    .argb = Player::k_Colours.at(static_cast<size_t>(temple.owner)),
+		    .argb = player_colour::Of(temple.owner),
 		    .texture = texture,
 		    .alphaTexture = alpha,
 		    .uvOffset = volume_glow::UvOffset({heart_look::k_ShellSlideAcross, heart_look::k_ShellSlideUp}, since),

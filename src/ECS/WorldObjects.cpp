@@ -35,6 +35,7 @@
 #include "ECS/Components/Feature.h"
 #include "ECS/Components/Field.h"
 #include "ECS/Components/Fire.h"
+#include "ECS/Components/Firefly.h"
 #include "ECS/Components/FishFarm.h"
 #include "ECS/Components/Flowers.h"
 #include "ECS/Components/Forest.h"
@@ -47,7 +48,9 @@
 #include "ECS/Components/OneOffSpellSeed.h"
 #include "ECS/Components/Physics.h"
 #include "ECS/Components/Pot.h"
+#include "ECS/Components/PuzzleGame.h"
 #include "ECS/Components/ResourcePile.h"
+#include "ECS/Components/Scaffold.h"
 #include "ECS/Components/ScriptControl.h"
 #include "ECS/Components/SpellDispenser.h"
 #include "ECS/Components/SpellIcon.h"
@@ -57,12 +60,16 @@
 #include "ECS/Components/Temple.h"
 #include "ECS/Components/Town.h"
 #include "ECS/Components/TownAggression.h"
+#include "ECS/Components/TownDesireFlag.h"
 #include "ECS/Components/Transform.h"
 #include "ECS/Components/Tree.h"
 #include "ECS/Components/Villager.h"
 #include "ECS/Components/Vortex.h"
+#include "ECS/Components/Weather.h"
+#include "ECS/Components/Workshop.h"
 #include "ECS/Components/WorshipSite.h"
 #include "ECS/Creches.h"
+#include "ECS/GameEndConditions.h"
 #include "ECS/Graveyards.h"
 #include "ECS/Registry.h"
 #include "ECS/Statistics.h"
@@ -73,14 +80,18 @@
 #include "ECS/Systems/ExplosionSystemInterface.h"
 #include "ECS/Systems/FireSystemInterface.h"
 #include "ECS/Systems/FishFarmSystemInterface.h"
+#include "ECS/Systems/GameEndSystemInterface.h"
 #include "ECS/Systems/GuidanceSystemInterface.h"
 #include "ECS/Systems/Implementations/VillagerFire.h"
 #include "ECS/Systems/Implementations/VillagerHome.h"
 #include "ECS/Systems/LivingActionSystemInterface.h"
+#include "ECS/Systems/PuzzleGameSystemInterface.h"
 #include "ECS/Systems/ResourceStoreSystemInterface.h"
 #include "ECS/Systems/TempleDestructionSystemInterface.h"
 #include "ECS/Systems/TimeSystemInterface.h"
 #include "ECS/Systems/TownSystemInterface.h"
+#include "ECS/Systems/WeatherSystemInterface.h"
+#include "ECS/Systems/WonderSystemInterface.h"
 #include "ECS/TempleConstruction.h"
 #include "ECS/ThingModel.h"
 #include "ECS/TownAggression.h"
@@ -169,6 +180,15 @@ void BuildingHurt(entt::entity abode, float before, float after)
 		{
 			Locator::townSystem::value().SetInStateOfEmergency(town->second);
 		}
+	}
+}
+
+/// In a network game a harm to a building may count as a building smashed by the player who did it
+void CountSmashed(std::optional<PlayerNames> by, const game_end::BuildingHarm& harm)
+{
+	if (const auto condition = game_end::SmashedCondition(harm); condition.has_value() && Locator::gameEndSystem::has_value())
+	{
+		Locator::gameEndSystem::value().AddToCondition(by, *condition, 1);
 	}
 }
 } // namespace
@@ -274,6 +294,11 @@ const GObjectInfo* world_objects::InfoOf(entt::entity object)
 	{
 		return &info.ball;
 	}
+	// A scaffold has the one row of the scaffolds
+	if (registry.AllOf<Scaffold>(object))
+	{
+		return &info.scaffold;
+	}
 	return nullptr;
 }
 
@@ -309,7 +334,17 @@ const GObjectInfo* world_objects::EffectInfoOf(entt::entity object)
 	{
 		return nullptr;
 	}
+	// A town's desire flag takes no effect, also no heat from a fire
+	if (registry.AllOf<TownDesireFlag>(object))
+	{
+		return nullptr;
+	}
 	const auto& info = Locator::infoConstants::value();
+	// A firefly takes heat and catches fire by its row of the fixed things' table
+	if (registry.AllOf<Firefly>(object))
+	{
+		return &info.singleMapFixed.at(Firefly::k_InfoRow);
+	}
 	if (const auto* flowers = registry.TryGet<const Flowers>(object))
 	{
 		return Row(info.flowers, flowers->type);
@@ -572,7 +607,7 @@ void world_objects::SetLife(entt::entity object, float life, bool allowed)
 	}
 }
 
-float world_objects::ReduceLife(entt::entity object, float damage, std::optional<PlayerNames> by)
+float world_objects::ReduceLife(entt::entity object, float damage, std::optional<PlayerNames> by, bool byCreature)
 {
 	auto& registry = Locator::entitiesRegistry::value();
 	if (!registry.Valid(object))
@@ -647,15 +682,29 @@ float world_objects::ReduceLife(entt::entity object, float damage, std::optional
 		{
 			player_statistics::CountDestroyed(registry, *by);
 		}
+		CountSmashed(by, {.lifeBefore = before,
+		                  .lifeAfter = life.life,
+		                  .stopsWorkingAt = info.thresholdForStopBeingFunctional,
+		                  .byPlayer = by.has_value(),
+		                  .age = abode->age,
+		                  .byCreature = byCreature});
 	}
 	// A miracle dispenser is a building of its town and counts by the same rule
 	if (const auto* dispenser = registry.TryGet<const SpellDispenser>(object); dispenser != nullptr)
 	{
-		if (const auto* info = AbodeInfoOf(object);
-		    info != nullptr && statistics::StopsWorking(before, life.life, info->thresholdForStopBeingFunctional) &&
-		    statistics::CountsAsDestroyed(by.has_value(), dispenser->age))
+		if (const auto* info = AbodeInfoOf(object); info != nullptr)
 		{
-			player_statistics::CountDestroyed(registry, *by);
+			if (statistics::StopsWorking(before, life.life, info->thresholdForStopBeingFunctional) &&
+			    statistics::CountsAsDestroyed(by.has_value(), dispenser->age))
+			{
+				player_statistics::CountDestroyed(registry, *by);
+			}
+			CountSmashed(by, {.lifeBefore = before,
+			                  .lifeAfter = life.life,
+			                  .stopsWorkingAt = info->thresholdForStopBeingFunctional,
+			                  .byPlayer = by.has_value(),
+			                  .age = dispenser->age,
+			                  .byCreature = byCreature});
 		}
 	}
 	// A built building of a town left under its full life gets a site for its repair, which starts from a little less
@@ -756,17 +805,46 @@ void world_objects::Destroy(entt::entity object)
 void world_objects::LeaveGhost(entt::entity object)
 {
 	auto& registry = Locator::entitiesRegistry::value();
-	const auto* mesh = registry.TryGet<const Mesh>(object);
 	const auto* transform = registry.TryGet<const Transform>(object);
-	if (mesh == nullptr || transform == nullptr)
+	if (transform == nullptr || !Locator::explosionSystem::has_value())
 	{
 		return;
 	}
 	auto model = glm::translate(glm::mat4(1.0f), transform->position) * glm::mat4(transform->rotation);
 	model = glm::scale(model, transform->scale);
-	if (Locator::explosionSystem::has_value())
+	if (const auto* globe = registry.TryGet<const OneOffSpellSeed>(object))
+	{
+		// The ghost of a one-shot globe is its dome, turned as the last frame drew it
+		Locator::explosionSystem::value().AddGhost(
+		    DestructionGhost {.mesh = OneOffSpellSeed::k_MeshId, .model = globe->drawnModel.value_or(model)});
+		return;
+	}
+	if (const auto* mesh = registry.TryGet<const Mesh>(object))
 	{
 		Locator::explosionSystem::value().AddGhost(DestructionGhost {.mesh = mesh->id, .model = model});
+	}
+}
+
+void world_objects::KeepForScript(entt::entity building)
+{
+	const auto& registry = Locator::entitiesRegistry::value();
+	if (construction::BroughtWoodSite(building) == nullptr)
+	{
+		// A building of no town stays as it is, its fire too
+		if (!IsAbodeOfATown(registry, building))
+		{
+			return;
+		}
+		construction::OpenSite(building, 0.0f);
+	}
+	// A building that is not finished gets all of its life again
+	if (!construction::IsBuilt(building))
+	{
+		SetLife(building, 1.0f);
+	}
+	if (Locator::fireSystem::has_value())
+	{
+		Locator::fireSystem::value().Forget(building);
 	}
 }
 
@@ -793,8 +871,13 @@ void world_objects::DestroyedByEffect(entt::entity object, const EffectDeath& de
 	}
 	if (registry.AnyOf<Abode, SpellDispenser>(object))
 	{
-		// A ghost of it flickers out where it stood, and it goes
+		// A ghost of it flickers out where it stood, also when it stays
 		LeaveGhost(object);
+		if (registry.AllOf<InScript>(object))
+		{
+			KeepForScript(object);
+			return;
+		}
 		Remove(object);
 		return;
 	}
@@ -849,6 +932,11 @@ void world_objects::Remove(entt::entity object)
 	{
 		Locator::fireSystem::value().Forget(object);
 	}
+	// A puzzle game that goes leaves its pieces with no puzzle
+	if (registry.AllOf<PuzzleGame>(object) && Locator::puzzleGameSystem::has_value())
+	{
+		Locator::puzzleGameSystem::value().Forget(object);
+	}
 	if (const auto* villager = registry.TryGet<const Villager>(object))
 	{
 		villager_home::LeaveHome(object);
@@ -878,10 +966,26 @@ void world_objects::Remove(entt::entity object)
 			world_objects::Remove(pile);
 		}
 	}
+	// A workshop that goes removes its wood pile
+	if (const auto* workshop = registry.TryGet<const Workshop>(object);
+	    workshop != nullptr && registry.Valid(workshop->woodPile))
+	{
+		world_objects::Remove(workshop->woodPile);
+	}
+	// A weather thing that goes ends its storm at once
+	if (registry.AllOf<WeatherThing>(object) && Locator::weatherSystem::has_value())
+	{
+		Locator::weatherSystem::value().EndWeatherThing(object);
+	}
 	// A graveyard going hands its town's dead over to another of the town's graveyards
 	graveyards::Lost(object);
 	// A crèche going hands its town's children over to another of the town's buildings
 	creches::Lost(object);
+	// A finished wonder that goes removes its power from its player
+	if (Locator::wonderSystem::has_value())
+	{
+		Locator::wonderSystem::value().Lost(object);
+	}
 	// A town's building going is planned again by its town, where it stood, and the things it put round itself go
 	if (registry.AllOf<Abode>(object))
 	{
@@ -903,8 +1007,8 @@ void world_objects::Remove(entt::entity object)
 	registry.SetDirty();
 }
 
-void world_objects::AttackTown(entt::entity object, float damage, PlayerNames aggressor, bool byCreature,
-                               std::optional<guidance::TownAttackVoice> cry)
+void world_objects::AttackTown(entt::entity object, float damage, PlayerNames aggressor, const town_aggression::Harm& harm,
+                               bool byCreature, std::optional<guidance::TownAttackVoice> cry)
 {
 	if (!Locator::infoConstants::has_value())
 	{
@@ -970,7 +1074,8 @@ void world_objects::AttackTown(entt::entity object, float damage, PlayerNames ag
 	}
 	const bool owner = registry.Get<const Town>(town).owner == aggressor;
 	const uint32_t turn = Locator::time::has_value() ? static_cast<uint32_t>(Locator::time::value().GetTurn()) : 0;
-	ecs::town_aggression::Attacked(aggression->record, aggressor, owner, amount, info.town.firstTimeDamageDoneAddition, turn);
+	ecs::town_aggression::Attacked(aggression->record, aggressor, owner, amount, info.town.firstTimeDamageDoneAddition, turn,
+	                               harm);
 	// The advisors of the player at this machine may remark on the player attacking a town
 	if (Locator::guidanceSystem::has_value())
 	{

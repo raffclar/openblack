@@ -19,6 +19,7 @@
 #include <chrono>
 #include <limits>
 #include <optional>
+#include <ranges>
 #include <utility>
 #include <vector>
 
@@ -51,9 +52,12 @@
 #include "ECS/Components/Animal.h"
 #include "ECS/Components/AnimatedStatic.h"
 #include "ECS/Components/Ball.h"
+#include "ECS/Components/BuildingDamage.h"
+#include "ECS/Components/Construction.h"
 #include "ECS/Components/Creature.h"
 #include "ECS/Components/CreatureBody.h"
 #include "ECS/Components/CreatureCasting.h"
+#include "ECS/Components/CreatureLeash.h"
 #include "ECS/Components/CreatureLocomotion.h"
 #include "ECS/Components/CreatureMind.h"
 #include "ECS/Components/CreatureObjectAction.h"
@@ -65,19 +69,26 @@
 #include "ECS/Components/Flock.h"
 #include "ECS/Components/Flowers.h"
 #include "ECS/Components/LandForest.h"
+#include "ECS/Components/MagicFireBall.h"
+#include "ECS/Components/MagicShield.h"
 #include "ECS/Components/Mesh.h"
 #include "ECS/Components/Mist.h"
 #include "ECS/Components/Mobile.h"
 #include "ECS/Components/OneOffSpellSeed.h"
 #include "ECS/Components/Physics.h"
 #include "ECS/Components/Pot.h"
+#include "ECS/Components/Reward.h"
+#include "ECS/Components/Scaffold.h"
 #include "ECS/Components/ScriptControl.h"
+#include "ECS/Components/ScriptHighlight.h"
 #include "ECS/Components/Spell.h"
 #include "ECS/Components/SpellIcon.h"
 #include "ECS/Components/SpellSeed.h"
+#include "ECS/Components/StreetLantern.h"
 #include "ECS/Components/Temple.h"
 #include "ECS/Components/Town.h"
 #include "ECS/Components/TownDesire.h"
+#include "ECS/Components/TownDesireFlag.h"
 #include "ECS/Components/Transform.h"
 #include "ECS/Components/Tree.h"
 #include "ECS/Components/VillageTotem.h"
@@ -86,8 +97,10 @@
 #include "ECS/Components/VillagerPose.h"
 #include "ECS/Components/WorshipSite.h"
 #include "ECS/CreatureExplorationLand.h"
+#include "ECS/GamePlayers.h"
 #include "ECS/Map.h"
 #include "ECS/PhysicsClasses.h"
+#include "ECS/PlayerTowns.h"
 #include "ECS/Registry.h"
 #include "ECS/Systems/CreatureHelpSystemInterface.h"
 #include "ECS/Systems/CreatureObjectActionSystemInterface.h"
@@ -217,9 +230,39 @@ bool IsTownCentre(const Abode& abode)
 	return row < infos.size() && infos.at(row).abodeType == AbodeType::TownCentre;
 }
 
-/// How much a thing catches a creature's eye, by what it is. The temple, fields, features and the other things that
-/// stand on the land are fixed things.
-creature_look::Interest LookInterestOf(const ecs::Registry& registry, entt::entity thing)
+/// The temple nearest a point, of every player's in turn and then the neutral one's; the first of equals
+entt::entity NearestTemple(const ecs::Registry& registry, const map_coords::MapCoords& from)
+{
+	if (!Locator::worshipSiteSystem::has_value())
+	{
+		return entt::null;
+	}
+	entt::entity nearest = entt::null;
+	auto within = std::numeric_limits<float>::max();
+	const auto players = ecs::game_players::All();
+	const auto temples =
+	    Locator::worshipSiteSystem::value().TemplesOfPlayers(static_cast<size_t>(std::ranges::distance(players)));
+	for (const auto player : players)
+	{
+		const auto index = static_cast<size_t>(player);
+		const auto temple = index < temples.size() ? temples[index] : entt::null;
+		const auto* at = temple != entt::null ? registry.TryGet<const Transform>(temple) : nullptr;
+		if (at == nullptr)
+		{
+			continue;
+		}
+		const auto distance = gutils::GetDistanceInMetres(from, map_coords::FromMetres(glm::xz(at->position)));
+		if (distance < within)
+		{
+			nearest = temple;
+			within = distance;
+		}
+	}
+	return nearest;
+}
+} // namespace
+
+creature_look::Interest mind_detail::LookInterestOf(const ecs::Registry& registry, entt::entity thing)
 {
 	using Interest = creature_look::Interest;
 	if (registry.AllOf<Creature>(thing))
@@ -249,40 +292,13 @@ creature_look::Interest LookInterestOf(const ecs::Registry& registry, entt::enti
 		           ? Interest::Toy
 		           : Interest::Static;
 	}
-	if (registry.AllOf<MobileObject>(thing))
+	// A scaffold is a loose object
+	if (registry.AnyOf<MobileObject, Scaffold>(thing))
 	{
 		return Interest::None;
 	}
 	return Interest::Fixed;
 }
-
-/// The temple nearest a point, of every player's in turn and then the neutral one's; the first of equals
-entt::entity NearestTemple(const ecs::Registry& registry, const map_coords::MapCoords& from)
-{
-	if (!Locator::worshipSiteSystem::has_value())
-	{
-		return entt::null;
-	}
-	entt::entity nearest = entt::null;
-	auto within = std::numeric_limits<float>::max();
-	for (uint8_t player = 0; player < static_cast<uint8_t>(PlayerNames::_COUNT); ++player)
-	{
-		const auto temple = Locator::worshipSiteSystem::value().TempleOf(static_cast<PlayerNames>(player));
-		const auto* at = temple != entt::null ? registry.TryGet<const Transform>(temple) : nullptr;
-		if (at == nullptr)
-		{
-			continue;
-		}
-		const auto distance = gutils::GetDistanceInMetres(from, map_coords::FromMetres(glm::xz(at->position)));
-		if (distance < within)
-		{
-			nearest = temple;
-			within = distance;
-		}
-	}
-	return nearest;
-}
-} // namespace
 
 uint16_t mind_detail::LookingAngle(const Transform& transform, const std::optional<glm::vec3>& lookAt)
 {
@@ -380,9 +396,21 @@ std::optional<uint32_t> mind_detail::BeliefKindOf(const ecs::Registry& registry,
 	{
 		return kinds::k_Pot;
 	}
-	if (registry.AllOf<Rock>(thing))
+	// A piece that broke off a building is a rock
+	if (registry.AnyOf<Rock, BuildingPiece>(thing))
 	{
 		return kinds::k_Rock;
+	}
+	// A reward chest and a scaffold are loose things of the kind that their rows give
+	if (const auto* chest = registry.TryGet<const Reward>(thing); chest != nullptr && Locator::infoConstants::has_value())
+	{
+		const auto& rows = Locator::infoConstants::value().reward;
+		const auto row = static_cast<size_t>(chest->type);
+		return row < rows.size() ? KindOfLooseThing(rows.at(row).mobileType) : kinds::k_MobileObject;
+	}
+	if (registry.AllOf<Scaffold>(thing) && Locator::infoConstants::has_value())
+	{
+		return KindOfLooseThing(Locator::infoConstants::value().scaffold.mobileType);
 	}
 	if (registry.AnyOf<MobileStatic, DeadTree>(thing))
 	{
@@ -415,6 +443,14 @@ std::optional<uint32_t> mind_detail::BeliefKindOf(const ecs::Registry& registry,
 	if (registry.AllOf<ecs::components::Spell>(thing))
 	{
 		return kinds::k_Spell;
+	}
+	// These things have no kind of their own, so they keep the kind that the game gives by default: the other kind. They
+	// are the scrolls and signs of the scripts, the shields, the lanterns, the fireflies, the fireballs and the leash posts.
+	// The way into a temple, the flags of a town and the buildings that a town plans are of this kind too.
+	if (registry.AnyOf<ScriptHighlight, MagicShield, StreetLantern, Firefly, MagicFireBall, LeashPost, TempleEntrance,
+	                   TownDesireFlag, PlannedAbode, PlannedTemple>(thing))
+	{
+		return kinds::k_Other;
 	}
 	return std::nullopt;
 }
@@ -583,8 +619,7 @@ bool CreatureMindSystem::CanSteal(entt::entity creature, entt::entity thing)
 	}
 	return creature_steal::IsStealable({
 	    .toy = ecs::physics_classes::IsToy(registry, thing, Locator::infoConstants::value()),
-	    // openblack has no scaffolds yet
-	    .scaffold = false,
+	    .scaffold = registry.AllOf<Scaffold>(thing),
 	    .oneShot = registry.AllOf<OneOffSpellSeed>(thing),
 	    .canPickUp = Locator::creatureObjectActionSystem::value().CanPickUp(creature, thing),
 	    .ownInfluence = Locator::influenceSystem::value().PlayerRawInfluence(body->owner, transform->position),
@@ -678,12 +713,17 @@ void CreatureMindSystem::LookFarAbout(entt::entity creature, CreatureMindState& 
 {
 	const auto& registry = Locator::entitiesRegistry::value();
 	const auto from = map_coords::FromMetres(glm::xz(transform.position));
-	// The nearest town but the one it came across last, and that town's storage pit
+	// The nearest town but the one it came across last, and that town's storage pit. The towns come in the order of each
+	// player's list in turn and the neutral list last, so the first of towns equally near counts.
 	std::vector<creature_object_beliefs::TownCell> towns;
-	registry.Each<const Town, const Transform>([&](entt::entity town, const Town&, const Transform& at) {
-		towns.push_back(
-		    {.id = entt::to_integral(town), .cell = map_coords::Cell(map_coords::FromMetres(glm::xz(at.position)))});
-	});
+	for (const auto town : ecs::player_towns::AllInOrder(registry))
+	{
+		if (const auto* at = registry.TryGet<const Transform>(town))
+		{
+			towns.push_back(
+			    {.id = entt::to_integral(town), .cell = map_coords::Cell(map_coords::FromMetres(glm::xz(at->position)))});
+		}
+	}
 	const auto last = mind.lastTown != entt::null ? std::optional(entt::to_integral(mind.lastTown)) : std::nullopt;
 	if (const auto town = creature_object_beliefs::NearestOtherTown(map_coords::Cell(from), towns, last); town.has_value())
 	{
@@ -752,8 +792,8 @@ void CreatureMindSystem::LookAtLand(entt::entity entity, const Creature& creatur
 	const auto weights = LookWeightsOf(mind);
 	// Each turn that it moves it finds on its map the nearest mountains, then the nearest water, and prefers the regions
 	// that it did not go into yet. Each may take over what it watches.
-	for (const auto [sight, kind] : {std::pair {creature_look::Sight::Mountains, creature_exploration::Kind::Hill},
-	                                 std::pair {creature_look::Sight::Water, creature_exploration::Kind::Sea}})
+	for (const auto& [sight, kind] : {std::pair {creature_look::Sight::Mountains, creature_exploration::Kind::Hill},
+	                                  std::pair {creature_look::Sight::Water, creature_exploration::Kind::Sea}})
 	{
 		const auto place = ecs::creature_exploration_land::FindPlace(entity, kind, from, true);
 		if (!place.has_value())
@@ -823,14 +863,15 @@ void CreatureMindSystem::SweepEyes(entt::entity entity, const Creature& creature
 			const auto watched = WatchedPlace(registry, mind.look);
 			const auto watchedDistance = watched.has_value() ? viewOf(*watched).second : 0.0f;
 			creature_look::Consider(
-			    mind.look, {.id = entt::to_integral(seen), .kind = LookInterestOf(registry, seen), .distance = distance},
+			    mind.look,
+			    {.id = entt::to_integral(seen), .kind = mind_detail::LookInterestOf(registry, seen), .distance = distance},
 			    watchedDistance, range, weights, k_TurnsPerSecond);
 		}
 	}
 	// Each turn it comes across what it carries
 	if (Locator::creatureObjectActionSystem::has_value())
 	{
-		if (const auto held = Locator::creatureObjectActionSystem::value().GetHeld(entity); held.has_value())
+		if (const auto held = Locator::creatureObjectActionSystem::value().GetCarried(entity); held.has_value())
 		{
 			ComeAcross(entity, mind, *held);
 		}

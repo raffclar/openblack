@@ -23,8 +23,6 @@ struct Encoder;
 
 namespace openblack::graphics
 {
-class DescriptorSetTally;
-
 /// The texture stages that have a texture bound on one bgfx encoder now. A stage set by a draw stays set, as bgfx keeps
 /// it, until a submit or a discard drops the bindings, or the frame ends.
 class BoundStages
@@ -57,15 +55,13 @@ private:
 	std::bitset<shader_samplers::k_MaxStages> _set;
 };
 
-/// Where draws go: one bgfx encoder, the texture stages bound on it, and the tally that counts the descriptor sets of
-/// its draws. The game's thread has one for bgfx's own encoder. A thread that encodes draws at the same time uses one
-/// of its own, with an encoder that bgfx gives that thread.
+/// Where draws go: one bgfx encoder and the texture stages bound on it. The game's thread has one for bgfx's own
+/// encoder. A thread that encodes draws at the same time uses one of its own, with an encoder that bgfx gives that
+/// thread.
 struct DrawEncoder
 {
 	bgfx::Encoder* encoder {nullptr};
 	BoundStages stages;
-	/// Null when the renderer does not count descriptor sets
-	DescriptorSetTally* tally {nullptr};
 };
 
 } // namespace openblack::graphics

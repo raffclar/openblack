@@ -11,12 +11,15 @@
 
 #include <map>
 #include <optional>
+#include <string>
+#include <string_view>
 #include <utility>
 #include <vector>
 
 #include <entt/entity/entity.hpp>
 #include <gtest/gtest.h>
 
+#include "ECS/ComputerPlayerPersonality.h"
 #include "ECS/ComputerPlayerStart.h"
 #include "ECS/PlayerMiracles.h"
 
@@ -68,6 +71,19 @@ public:
 		return share;
 	}
 
+	void SetPersonality(PlayerNames player, std::string_view need, float weight) override
+	{
+		personalities.push_back({player, std::string(need), weight});
+	}
+
+	struct PersonalityCall
+	{
+		PlayerNames player;
+		std::string need;
+		float weight;
+	};
+
+	std::vector<PersonalityCall> personalities;
 	std::map<PlayerNames, entt::entity> creatures;
 	std::map<entt::entity, float> sizes;
 	std::map<PlayerNames, bool> temples;
@@ -274,9 +290,14 @@ public:
 	[[nodiscard]] bool IsComputerPlayer(PlayerNames player) const override { return computers.contains(player); }
 	void MakePlayer(PlayerNames player) override { players.push_back(player); }
 	void SwitchOn(PlayerNames player) override { switchedOn.push_back(player); }
-	void MakeSlotCreature(PlayerNames player, CreatureType species, uint32_t nameText, uint32_t stage) override
+	[[nodiscard]] std::string SpeciesDebugName(CreatureType species) const override
 	{
-		made.push_back({.player = player, .species = species, .nameText = nameText, .stage = stage});
+		const auto name = debugNames.find(species);
+		return name != debugNames.end() ? name->second : std::string {};
+	}
+	void MakeSlotCreature(PlayerNames player, CreatureType species, std::string_view name, uint32_t stage) override
+	{
+		made.push_back({.player = player, .species = species, .name = std::string(name), .stage = stage});
 	}
 	uint32_t GameRand(uint32_t range) override
 	{
@@ -293,9 +314,11 @@ public:
 	{
 		PlayerNames player {PlayerNames::NEUTRAL};
 		CreatureType species {CreatureType::GiantApe};
-		uint32_t nameText {0};
+		std::string name;
 		uint32_t stage {0};
 	};
+
+	std::map<CreatureType, std::string> debugNames;
 
 	std::map<PlayerNames, bool> citadels;
 	std::map<PlayerNames, bool> computers;
@@ -326,6 +349,7 @@ TEST(ComputerPlayerStart, EachSlotWithNoPlayerGetsAComputerGodAndAGrownCreature)
 {
 	FakeSlotWorld world;
 	world.citadels = {{PlayerNames::PLAYER_ONE, true}, {PlayerNames::PLAYER_TWO, true}, {PlayerNames::PLAYER_THREE, true}};
+	world.debugNames = {{CreatureType::Horse, "Horse creature"}, {CreatureType::GiantApe, "Ape creature"}};
 	// The name roll comes first, then the species roll
 	world.rolls = {42, 6, 7, 0};
 	const std::vector gods {PlayerNames::PLAYER_ONE, PlayerNames::PLAYER_TWO, PlayerNames::PLAYER_THREE};
@@ -338,11 +362,39 @@ TEST(ComputerPlayerStart, EachSlotWithNoPlayerGetsAComputerGodAndAGrownCreature)
 	ASSERT_EQ(world.made.size(), 2);
 	EXPECT_EQ(world.made[0].player, PlayerNames::PLAYER_TWO);
 	EXPECT_EQ(world.made[0].species, CreatureType::Horse);
-	EXPECT_EQ(world.made[0].nameText, 42);
+	EXPECT_EQ(world.made[0].name, "Horse");
 	EXPECT_EQ(world.made[0].stage, 12);
 	EXPECT_EQ(world.made[1].player, PlayerNames::PLAYER_THREE);
 	EXPECT_EQ(world.made[1].species, CreatureType::GiantApe);
-	EXPECT_EQ(world.made[1].nameText, 7);
+	EXPECT_EQ(world.made[1].name, "Ape");
+}
+
+TEST(ComputerPlayerStart, TheNameRollDoesNotChangeTheName)
+{
+	for (const uint32_t nameRoll : {0u, 1u, 50u, 98u})
+	{
+		FakeSlotWorld world;
+		world.citadels = {{PlayerNames::PLAYER_TWO, true}};
+		world.debugNames = {{CreatureType::Tiger, "Tiger creature"}};
+		world.rolls = {nameRoll, 2};
+		const std::vector gods {PlayerNames::PLAYER_TWO};
+		FillEmptySlots(world, gods, {});
+		EXPECT_EQ(world.rangesAsked, (std::vector<uint32_t> {k_SlotNameChoices, k_SlotSpeciesChoices}));
+		ASSERT_EQ(world.made.size(), 1);
+		EXPECT_EQ(world.made[0].species, CreatureType::Tiger);
+		EXPECT_EQ(world.made[0].name, "Tiger");
+	}
+}
+
+TEST(ComputerPlayerStart, TheSlotCreatureNameIsTheSpeciesDebugNameWithoutItsEnd)
+{
+	EXPECT_EQ(SlotCreatureName("Tiger creature"), "Tiger");
+	EXPECT_EQ(SlotCreatureName("Polar bear creature"), "Polar bear");
+	// Only the end goes: a name that holds the words in its middle keeps them
+	EXPECT_EQ(SlotCreatureName("A creature of the land"), "A creature of the land");
+	EXPECT_EQ(SlotCreatureName("Tortoise"), "Tortoise");
+	EXPECT_EQ(SlotCreatureName(" creature"), "");
+	EXPECT_EQ(SlotCreatureName(""), "");
 }
 
 TEST(ComputerPlayerStart, AComputerGodOrAGodWithNoCitadelTakesNoRoll)
@@ -365,7 +417,7 @@ TEST(ComputerPlayerStart, TheHumansWhoJoinGetTheirPlayersAndTheSlotsOfAWaitingLa
 	                  {PlayerNames::PLAYER_THREE, true},
 	                  {PlayerNames::NEUTRAL, true}};
 	const std::vector humans {PlayerNames::PLAYER_ONE, PlayerNames::PLAYER_THREE};
-	HumansJoin(world, humans, true);
+	HumansJoin(world, k_SlotGods, humans, true);
 
 	EXPECT_EQ(world.players, humans);
 	// Only the god of slot 2 has a citadel and no human; the neutral player is not a god of a slot
@@ -379,12 +431,26 @@ TEST(ComputerPlayerStart, ALandThatDoesNotWaitForItsHumansFillsNoSlotWhenTheyJoi
 	FakeSlotWorld world;
 	world.citadels = {{PlayerNames::PLAYER_ONE, true}, {PlayerNames::PLAYER_TWO, true}};
 	const std::vector humans {PlayerNames::PLAYER_ONE};
-	HumansJoin(world, humans, false);
+	HumansJoin(world, k_SlotGods, humans, false);
 
 	EXPECT_EQ(world.players, humans);
 	EXPECT_TRUE(world.rangesAsked.empty());
 	EXPECT_TRUE(world.switchedOn.empty());
 	EXPECT_TRUE(world.made.empty());
+}
+
+TEST(ComputerPlayerStart, AnEmptySlotAfterTheSeventhGetsAComputerGodAsTheSlotsBeforeIt)
+{
+	FakeSlotWorld world;
+	const auto ninth = static_cast<PlayerNames>(9);
+	world.citadels = {{PlayerNames::PLAYER_ONE, true}, {ninth, true}, {PlayerNames::NEUTRAL, true}};
+	const std::vector gods {PlayerNames::PLAYER_ONE, ninth};
+	const std::vector humans {PlayerNames::PLAYER_ONE};
+	HumansJoin(world, gods, humans, true);
+
+	EXPECT_EQ(world.switchedOn, (std::vector {ninth}));
+	ASSERT_EQ(world.made.size(), 1);
+	EXPECT_EQ(world.made[0].player, ninth);
 }
 
 TEST(ComputerPlayerStart, TheGodsOfTheSlotsAreTheSevenPlayersInOrder)
@@ -394,4 +460,46 @@ TEST(ComputerPlayerStart, TheGodsOfTheSlotsAreTheSevenPlayersInOrder)
 	{
 		EXPECT_EQ(static_cast<size_t>(k_SlotGods.at(i)), i);
 	}
+}
+
+TEST(ComputerPlayerStart, WithNoAiSeedTheMindSetsNoPersonalityWeight)
+{
+	FakeWorld world;
+	auto mind = SwitchedOnLikeThePerson();
+	Start(world, PlayerNames::PLAYER_TWO, mind);
+	EXPECT_TRUE(world.personalities.empty());
+}
+
+TEST(ComputerPlayerStart, WithAnAiSeedTheMindSetsTheWeightOfEachNeedAndDrawsNoGameNumber)
+{
+	FakeWorld world;
+	auto mind = SwitchedOnLikeThePerson();
+	Start(world, PlayerNames::PLAYER_TWO, mind, 7u);
+	ASSERT_EQ(world.personalities.size(), personality::k_Aspects.size());
+	for (size_t i = 0; i < personality::k_Aspects.size(); ++i)
+	{
+		EXPECT_EQ(world.personalities[i].player, PlayerNames::PLAYER_TWO);
+		EXPECT_EQ(world.personalities[i].need, personality::k_Aspects[i].name);
+	}
+	// The creature of this fake world is not there, so the start draws nothing: the seed adds no draw either
+	EXPECT_TRUE(world.rangesAsked.empty());
+	EXPECT_TRUE(world.mostsAsked.empty());
+}
+
+TEST(ComputerPlayerStart, TheAiSeedAddsNoDrawToAStartThatDrawsNumbers)
+{
+	FakeWorld plain;
+	FakeWorld seeded;
+	for (auto* world : {&plain, &seeded})
+	{
+		world->temples = {{PlayerNames::PLAYER_TWO, true}};
+		world->pens = {{PlayerNames::PLAYER_TWO, glm::vec3(1.0f, 2.0f, 3.0f)}};
+	}
+	auto mindA = SwitchedOnLikeThePerson();
+	auto mindB = SwitchedOnLikeThePerson();
+	Start(plain, PlayerNames::PLAYER_TWO, mindA);
+	Start(seeded, PlayerNames::PLAYER_TWO, mindB, 99u);
+	ASSERT_FALSE(plain.rangesAsked.empty());
+	EXPECT_EQ(plain.rangesAsked, seeded.rangesAsked);
+	EXPECT_EQ(plain.mostsAsked, seeded.mostsAsked);
 }

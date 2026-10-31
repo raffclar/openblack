@@ -28,7 +28,6 @@
 #include "ECS/Reflection/BinaryArchive.h"
 #include "ECS/Registry.h"
 #include "FileSystem/FileSystemInterface.h"
-#include "Game.h"
 #include "Locator.h"
 #include "Resources/Resources.h"
 
@@ -230,23 +229,26 @@ void CameraPathSystem::SaveState(reflection::BinaryWriter& out) const
 	reflection::Save(out, static_cast<bool>(_path));
 	reflection::Save(out, _elapsed);
 	reflection::Save(out, _state);
+	// The path of a miracle holds the camera of this computer. The frames move it along and end it, the keys stop it, and
+	// no game turn reads it.
+	out.BeginPresentation();
 	reflection::Save(out, _placed.has_value());
-	if (!_placed.has_value())
+	if (_placed.has_value())
 	{
-		return;
+		// A placed path goes by the name of its file, which the load reads again
+		reflection::Save(out, _placed->path->GetDebugName());
+		reflection::Save(out, _placed->placement);
+		reflection::Save(out, _placed->pauseSeconds);
+		reflection::Save(out, _placed->speedUp);
+		reflection::Save(out, _placed->animationMs);
+		reflection::Save(out, _placed->spell);
+		reflection::Save(out, _placed->seconds);
+		reflection::Save(out, _placed->origin);
+		reflection::Save(out, _placed->focus);
+		reflection::Save(out, _placed->returnOrigin);
+		reflection::Save(out, _placed->returnFocus);
 	}
-	// A placed path goes by the name of its file, which the load reads again
-	reflection::Save(out, _placed->path->GetDebugName());
-	reflection::Save(out, _placed->placement);
-	reflection::Save(out, _placed->pauseSeconds);
-	reflection::Save(out, _placed->speedUp);
-	reflection::Save(out, _placed->animationMs);
-	reflection::Save(out, _placed->spell);
-	reflection::Save(out, _placed->seconds);
-	reflection::Save(out, _placed->origin);
-	reflection::Save(out, _placed->focus);
-	reflection::Save(out, _placed->returnOrigin);
-	reflection::Save(out, _placed->returnFocus);
+	out.EndPresentation();
 }
 
 bool CameraPathSystem::LoadState(reflection::BinaryReader& in)

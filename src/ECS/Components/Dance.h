@@ -12,6 +12,7 @@
 #include <cstddef>
 #include <cstdint>
 
+#include <array>
 #include <memory>
 #include <optional>
 #include <string>
@@ -22,6 +23,7 @@
 
 #include "3D/MapCoords.h"
 #include "Enums.h"
+#include "PlayerSlots.h"
 
 namespace openblack::dance
 {
@@ -109,6 +111,23 @@ struct DanceGroups
 	uint32_t roundLength {0};
 };
 
+/// How one god's hand stayed near a dance, and the camera that the hand asks for. Each god has its own count.
+struct DanceHand
+{
+	/// How many turns in a row the hand of the god was near the dance while it danced with dancers
+	uint32_t nearTurns {0};
+	/// The hand stayed near long enough, so the dance wants its camera for this god. The flag stays on.
+	bool cameraWanted {false};
+	/// A key frame of the dance asked for the camera of this god. The dance asks only one time for each god.
+	bool cameraMade {false};
+	/// A key frame asked for the camera of this god in this turn, and the camera did not start yet
+	bool cameraAsked {false};
+};
+
+/// The gods that a dance counts a hand for: every player, but not the neutral player. The dance keeps a place for each
+/// god slot of a network game with the most gods; the god slots of a land have the numbers of its gods.
+inline constexpr std::size_t k_DanceHandGods = player_slots::k_MaxPlayers;
+
 /// A dance villagers gather to dance about a place: the one at each worship site, a town's, or one a script makes. Its
 /// dancers dance in groups as its dance file sets out, on the dance's clock.
 struct Dance
@@ -151,14 +170,9 @@ struct Dance
 	uint32_t onTheirWay {0};
 	/// The turn its first dancer came, once one has
 	std::optional<uint32_t> firstDancerTurn;
-	/// How many turns in a row the hand was near it while it danced with dancers
-	uint32_t handNearTurns {0};
-	/// The hand stayed near long enough, so the dance wants its camera. The flag stays on.
-	bool cameraWanted {false};
-	/// A key frame of the dance asked for its camera. The dance asks only one time.
-	bool cameraMade {false};
-	/// A key frame asked for the camera in this turn, and the camera did not start yet
-	bool cameraAsked {false};
+	/// The hand count and the camera of each god, by god slot. A game with one player counts only the
+	/// hand of the first player. A network game counts the hand of each god for that god.
+	std::array<DanceHand, k_DanceHandGods> hands {};
 	/// Its groups, their order of choosing and its dancers
 	DanceGroups groups;
 	/// Its choreography; none when its file can't be read

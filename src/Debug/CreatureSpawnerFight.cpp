@@ -41,9 +41,9 @@ constexpr float k_BarWidth = 160.0f;
 
 std::string_view StageName(CreatureFighting::Stage stage)
 {
-	constexpr std::array<std::string_view, 9> k_Names {
+	constexpr std::array<std::string_view, 10> k_Names {
 	    "turning to face", "taunting", "pointing at the arena", "walking to its place", "waiting",
-	    "squaring up",     "duelling", "celebrating",           "responding",
+	    "squaring up",     "duelling", "celebrating",           "responding",           "stopping",
 	};
 	return k_Names.at(static_cast<size_t>(stage));
 }
@@ -189,8 +189,8 @@ void CreatureSpawner::DrawFight(entt::entity entity) noexcept
 			if (ImGui::Button("Start fight"))
 			{
 				using Result = ecs::systems::CreatureFightSystemInterface::StartResult;
-				constexpr std::array<std::string_view, 6> k_Results {"started",  "no opponent", "busy",
-				                                                     "too weak", "no arena",    "refused"};
+				constexpr std::array<std::string_view, 7> k_Results {"started",  "no opponent", "busy",     "too weak",
+				                                                     "no arena", "refused",     "finishing"};
 				const auto result = fights.StartFight(entity, others.at(static_cast<size_t>(_fightOpponent)).second);
 				_lastFight = k_Results.at(static_cast<size_t>(result));
 				if (result == Result::Started && _fightAuto)

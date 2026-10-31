@@ -14,6 +14,7 @@
 #include <cstring>
 
 #include <algorithm>
+#include <iterator>
 #include <limits>
 #include <memory>
 #include <optional>
@@ -79,6 +80,48 @@ struct UnsavedValue
 	auto operator<=>(const UnsavedValue&) const = default;
 };
 
+class BinaryWriter;
+
+/// Whether the save of a value writes the bytes of the value as they are in memory: a number that is not a bool, a glm
+/// vector or matrix of such numbers with no padding, or an enumeration
+template <typename Type>
+[[nodiscard]] constexpr bool SavesAsMemory()
+{
+	return detail::PlainBits<Type>() || std::is_enum_v<Type>;
+}
+
+/// One step of a save plan: a writer of one field, or, with no writer, a block of bytes of the value that the step copies
+/// as they are in memory. A block holds one field or more whose saves write their bytes in memory, and which touch.
+struct SaveStep
+{
+	void (*save)(const void* owner, BinaryWriter& out) {nullptr};
+	uint32_t offset {0};
+	uint32_t size {0};
+};
+
+/// How a writer writes a value of a registered type with no reflection on the way: the codec of the whole type, or the
+/// steps that write its fields in the order of the fields. A writer finds it the first time that it writes a value of
+/// the type.
+struct SavePlan
+{
+	void (*codec)(const void* value, BinaryWriter& out) {nullptr};
+	std::vector<SaveStep> steps;
+
+	/// Adds the writer of the next field
+	void AddWriter(void (*save)(const void* owner, BinaryWriter& out)) { steps.push_back({.save = save}); }
+	/// Adds the next field, whose save writes its bytes in memory. A field that starts where the last block ends goes
+	/// into that block.
+	void AddBlock(size_t offset, size_t size)
+	{
+		if (!steps.empty() && steps.back().save == nullptr && steps.back().offset + steps.back().size == offset)
+		{
+			steps.back().size += static_cast<uint32_t>(size);
+			return;
+		}
+		steps.push_back({.save = nullptr, .offset = static_cast<uint32_t>(offset), .size = static_cast<uint32_t>(size)});
+	}
+};
+
 class BinaryWriter
 {
 public:
@@ -88,42 +131,84 @@ public:
 	}
 
 	[[nodiscard]] const entt::meta_ctx& Context() const { return *_context; }
-	[[nodiscard]] std::vector<uint8_t>& Bytes() { return _bytes; }
-	[[nodiscard]] const std::vector<uint8_t>& Bytes() const { return _bytes; }
+	/// The bytes written. The writer keeps no room past them while the caller holds the list, and writes after the
+	/// end of the list as the caller left it.
+	[[nodiscard]] std::vector<uint8_t>& Bytes()
+	{
+		Settle();
+		return _bytes;
+	}
+	[[nodiscard]] const std::vector<uint8_t>& Bytes() const
+	{
+		Settle();
+		return _bytes;
+	}
+	/// The count of the bytes written
+	[[nodiscard]] size_t Size() const { return _open ? _size : _bytes.size(); }
+	/// The bytes written from a place to the end, with no change to the room that the writer keeps
+	[[nodiscard]] std::span<const uint8_t> Written(size_t from = 0) const
+	{
+		return std::span<const uint8_t>(_bytes.data(), Size()).subspan(from);
+	}
+	/// Removes all the bytes and keeps their memory as room for the next ones
+	void Clear()
+	{
+		_size = 0;
+		_open = true;
+	}
+	/// Removes all the bytes and the ranges of the presentation values. The writer keeps its memory and the plans of the
+	/// types, so that a writer that writes the same types again costs less.
+	void ClearForNextWorld()
+	{
+		Clear();
+		_depth = 0;
+		_valueEnds.clear();
+		_presentationDepth = 0;
+		_presentationStart = 0;
+		_presentation.clear();
+	}
 
-	void Write(std::span<const uint8_t> bytes) { _bytes.insert(_bytes.end(), bytes.begin(), bytes.end()); }
+	void Write(std::span<const uint8_t> bytes)
+	{
+		if (!bytes.empty())
+		{
+			std::memcpy(Grow(bytes.size()), bytes.data(), bytes.size());
+		}
+	}
 
 	template <typename Type>
 	    requires std::is_trivially_copyable_v<Type>
 	void WriteRaw(const Type& value)
 	{
-		const auto at = _bytes.size();
-		_bytes.resize(at + sizeof(Type));
 		if constexpr (std::is_class_v<Type>)
 		{
 			// A value with fields has zero in its gaps, so that the same value always gives the same bytes
 			const auto image = PlainImage(value);
-			std::memcpy(_bytes.data() + at, image.bytes.data(), sizeof(Type));
+			std::memcpy(Grow(sizeof(Type)), image.bytes.data(), sizeof(Type));
 		}
 		else
 		{
-			std::memcpy(_bytes.data() + at, &value, sizeof(Type));
+			std::memcpy(Grow(sizeof(Type)), &value, sizeof(Type));
 		}
 	}
 
 	/// A count or a length, as 32 bits
 	void WriteSize(size_t size) { WriteRaw(static_cast<uint32_t>(size)); }
 
+	/// The place for a count of bytes at the end of the bytes written. The caller writes all of them before the next
+	/// call to the writer.
+	[[nodiscard]] std::span<uint8_t> Extend(size_t count) { return {Grow(count), count}; }
+
 	/// Puts a length of 32 bits that a later call to EndLength fills. Returns where the length is.
 	[[nodiscard]] size_t BeginLength()
 	{
-		const auto at = _bytes.size();
+		const auto at = Size();
 		WriteRaw(uint32_t {0});
 		return at;
 	}
 	void EndLength(size_t at)
 	{
-		const auto length = static_cast<uint32_t>(_bytes.size() - at - sizeof(uint32_t));
+		const auto length = static_cast<uint32_t>(Size() - at - sizeof(uint32_t));
 		std::memcpy(_bytes.data() + at, &length, sizeof(length));
 	}
 
@@ -144,14 +229,195 @@ public:
 	}
 	[[nodiscard]] const std::set<UnsavedValue>& Unsaved() const { return _unsaved; }
 
+	/// For tools: the writer keeps where each value that the caller saves ends, so that a tool can find the values that
+	/// changed between two saves
+	void KeepValueEnds() { _keepValueEnds = true; }
+	[[nodiscard]] const std::vector<size_t>& ValueEnds() const { return _valueEnds; }
+
+	/// A presentation value starts. Only the frames of this computer change a presentation value, and no game turn reads
+	/// it. The save keeps it, but the tools that compare the synced state do not look at it. EndPresentation ends it.
+	void BeginPresentation()
+	{
+		if (_presentationDepth++ == 0)
+		{
+			_presentationStart = Size();
+		}
+	}
+	void EndPresentation()
+	{
+		if (--_presentationDepth == 0 && Size() > _presentationStart)
+		{
+			_presentation.emplace_back(_presentationStart, Size());
+		}
+	}
+	/// The bytes of each presentation value, from its first byte to the byte after its last byte, in the order of the save
+	[[nodiscard]] const std::vector<std::pair<size_t, size_t>>& PresentationRanges() const { return _presentation; }
+	/// Writes all the bytes of another writer. The presentation values of the other writer become presentation values
+	/// of this writer.
+	void Append(const BinaryWriter& other)
+	{
+		const auto at = Size();
+		if (_presentationDepth == 0)
+		{
+			for (const auto& [first, last] : other.PresentationRanges())
+			{
+				_presentation.emplace_back(at + first, at + last);
+			}
+		}
+		Write(other.Written());
+	}
+	/// A value starts and ends. Only the ends of the outer values are kept, and only a writer that keeps them counts the
+	/// depth of the values.
+	void EnterValue()
+	{
+		if (_keepValueEnds)
+		{
+			++_depth;
+		}
+	}
+	void LeaveValue()
+	{
+		if (_keepValueEnds && --_depth == 0)
+		{
+			_valueEnds.push_back(Size());
+		}
+	}
+	/// The plan of a type by the hash of its type, none before the writer kept one. The writer keeps the last plan that
+	/// it found, because the values of a list often have one type.
+	[[nodiscard]] const SavePlan* FindPlan(entt::id_type type) const
+	{
+		if (_lastPlan.plan != nullptr && _lastPlan.type == type)
+		{
+			return _lastPlan.plan;
+		}
+		const auto found = _plans.find(type);
+		if (found == _plans.end())
+		{
+			return nullptr;
+		}
+		_lastPlan.type = type;
+		_lastPlan.plan = &found->second;
+		return _lastPlan.plan;
+	}
+	void KeepPlan(entt::id_type type, SavePlan plan) { _plans.insert_or_assign(type, std::move(plan)); }
+	/// Writes a value by the plan of its type. Returns false, with nothing written, when the writer has no plan of it.
+	bool SaveByPlan(entt::id_type type, const void* value)
+	{
+		const auto* plan = FindPlan(type);
+		if (plan == nullptr)
+		{
+			return false;
+		}
+		if (plan->codec != nullptr)
+		{
+			plan->codec(value, *this);
+			return true;
+		}
+		SaveSteps(plan->steps, value);
+		return true;
+	}
+	/// Writes the fields of a value by steps of a plan
+	void SaveSteps(std::span<const SaveStep> steps, const void* value)
+	{
+		for (const auto& step : steps)
+		{
+			if (step.save != nullptr)
+			{
+				step.save(value, *this);
+			}
+			else
+			{
+				std::memcpy(Grow(step.size), static_cast<const uint8_t*>(value) + step.offset, step.size);
+			}
+		}
+	}
+
 private:
+	/// The most room that the writer adds past the bytes in one step, when the list has that much memory already. The
+	/// room is filled with zeros one time, not for each value.
+	static constexpr size_t k_MostRoom = 512;
+
+	/// The place for the next count of bytes, at the end of the bytes written
+	[[nodiscard]] uint8_t* Grow(size_t count)
+	{
+		const auto needed = _size + count;
+		if (_open && needed <= _bytes.size()) [[likely]]
+		{
+			auto* place = _bytes.data() + _size;
+			_size = needed;
+			return place;
+		}
+		return GrowRoom(count);
+	}
+	/// Opens the writer when it is not open, and adds room when the bytes need more
+	[[nodiscard]] uint8_t* GrowRoom(size_t count)
+	{
+		if (!_open)
+		{
+			_size = _bytes.size();
+			_open = true;
+		}
+		const auto needed = _size + count;
+		if (_bytes.size() < needed)
+		{
+			_bytes.resize(std::max(needed, std::min(_bytes.capacity(), _size + k_MostRoom)));
+		}
+		auto* place = _bytes.data() + _size;
+		_size = needed;
+		return place;
+	}
+	/// Removes the room past the bytes written, so that the list holds only them
+	void Settle() const
+	{
+		if (_open)
+		{
+			_bytes.resize(_size);
+			_open = false;
+		}
+	}
+
 	const entt::meta_ctx* _context;
-	std::vector<uint8_t> _bytes;
+	bool _keepValueEnds {false};
+	uint32_t _depth {0};
+	std::vector<size_t> _valueEnds;
+	uint32_t _presentationDepth {0};
+	size_t _presentationStart {0};
+	std::vector<std::pair<size_t, size_t>> _presentation;
+	/// The bytes written, and while the writer is open, room for more past them
+	mutable std::vector<uint8_t> _bytes;
+	/// While the writer is open: the count of the bytes written, which the list holds with room after them
+	mutable size_t _size {0};
+	mutable bool _open {false};
 	std::string_view _owner;
 	std::string_view _field;
 	std::set<UnsavedValue> _unsaved;
 	/// The places and types in the list, by their names that the caller keeps, so that each one costs little again
 	std::set<std::tuple<std::string_view, std::string_view, std::string_view>> _seen;
+	/// The plans of the registered types that this writer wrote, by the hashes of their types
+	std::unordered_map<entt::id_type, SavePlan> _plans;
+	/// The last plan that FindPlan found, and the hash of its type. A plan in the map stays at its address. A copy or a
+	/// move of the writer starts with no last plan, so that it never points into the map of another writer.
+	struct LastPlan
+	{
+		entt::id_type type {0};
+		const SavePlan* plan {nullptr};
+
+		LastPlan() = default;
+		LastPlan(const LastPlan&) noexcept {}
+		LastPlan(LastPlan&&) noexcept {}
+		LastPlan& operator=(const LastPlan&) noexcept
+		{
+			plan = nullptr;
+			return *this;
+		}
+		LastPlan& operator=(LastPlan&&) noexcept
+		{
+			plan = nullptr;
+			return *this;
+		}
+		~LastPlan() = default;
+	};
+	mutable LastPlan _lastPlan;
 };
 
 class BinaryReader
@@ -236,6 +502,35 @@ template <typename Type>
 void Save(BinaryWriter& out, const Type& value);
 template <typename Type>
 void Load(BinaryReader& in, Type& value);
+namespace detail
+{
+/// Writes a value as Save does, but the writer does not count it as a value of its own: for the values in a value
+template <typename Type>
+void SaveValue(BinaryWriter& out, const Type& value);
+} // namespace detail
+
+/// Writes a presentation value of a system, as Save does (see BinaryWriter::BeginPresentation). Load reads it as usual.
+template <typename Type>
+void SavePresentation(BinaryWriter& out, const Type& value)
+{
+	out.BeginPresentation();
+	Save(out, value);
+	out.EndPresentation();
+}
+
+/// Writes a value as a presentation value or as a synced value
+template <bool Presentation, typename Type>
+void SaveKept(BinaryWriter& out, const Type& value)
+{
+	if constexpr (Presentation)
+	{
+		SavePresentation(out, value);
+	}
+	else
+	{
+		Save(out, value);
+	}
+}
 
 /// A codec that writes the bytes of the whole value, for a value type with private data that is plain and holds no
 /// entity. The archive keeps the size of the value, so that a value of another size fails the reader.
@@ -262,6 +557,26 @@ void LoadBytes(Type& value, BinaryReader& in)
 
 namespace detail
 {
+
+/// An option of a value whose save writes its bytes in memory
+template <typename>
+inline constexpr bool k_IsPlainOption = false;
+template <typename Held>
+inline constexpr bool k_IsPlainOption<std::optional<Held>> = SavesAsMemory<Held>();
+
+/// A vector of vectors of values with plain bits
+template <typename>
+inline constexpr bool k_IsListOfPlainLists = false;
+template <typename Type, typename Allocator, typename OuterAllocator>
+inline constexpr bool k_IsListOfPlainLists<std::vector<std::vector<Type, Allocator>, OuterAllocator>> = PlainBits<Type>();
+
+/// A fixed list or a vector of the values of an enumeration
+template <typename>
+inline constexpr bool k_IsEnumList = false;
+template <typename Type, size_t Size>
+inline constexpr bool k_IsEnumList<std::array<Type, Size>> = std::is_enum_v<Type>;
+template <typename Type, typename Allocator>
+inline constexpr bool k_IsEnumList<std::vector<Type, Allocator>> = std::is_enum_v<Type>;
 
 template <typename Variant, size_t Index = 0>
 void LoadAlternative(BinaryReader& in, Variant& value, size_t index)
@@ -316,6 +631,25 @@ template <typename Container>
 template <typename Type>
 void Save(BinaryWriter& out, const Type& value)
 {
+	// The writer knows where each outer value ends. The values in the value go with no count of the depth.
+	struct Value
+	{
+		BinaryWriter& out;
+		explicit Value(BinaryWriter& writer)
+		    : out(writer)
+		{
+			out.EnterValue();
+		}
+		Value(const Value&) = delete;
+		Value& operator=(const Value&) = delete;
+		~Value() { out.LeaveValue(); }
+	} const valueEnds(out);
+	detail::SaveValue(out, value);
+}
+
+template <typename Type>
+void detail::SaveValue(BinaryWriter& out, const Type& value)
+{
 	static_assert(!detail::k_IsRunHandle<Type>, "A save must not keep a pointer or a graphics handle: keep a stable key");
 	if constexpr (std::is_same_v<Type, bool>)
 	{
@@ -347,15 +681,26 @@ void Save(BinaryWriter& out, const Type& value)
 	{
 		for (glm::length_t i = 0; i < Type::length(); ++i)
 		{
-			Save(out, value[i]);
+			SaveValue(out, value[i]);
+		}
+	}
+	else if constexpr (detail::k_IsPlainOption<Type>)
+	{
+		// The same bytes as the flag and then the value, in one block
+		using Held = typename Type::value_type;
+		auto place = out.Extend(value.has_value() ? 1 + sizeof(Held) : 1);
+		place[0] = static_cast<uint8_t>(value.has_value() ? 1 : 0);
+		if (value.has_value())
+		{
+			std::memcpy(place.data() + 1, std::addressof(*value), sizeof(Held));
 		}
 	}
 	else if constexpr (detail::k_IsOptional<Type>)
 	{
-		Save(out, value.has_value());
+		SaveValue(out, value.has_value());
 		if (value.has_value())
 		{
-			Save(out, *value);
+			SaveValue(out, *value);
 		}
 	}
 	else if constexpr (detail::k_IsPlainList<Type>)
@@ -364,12 +709,58 @@ void Save(BinaryWriter& out, const Type& value)
 		out.WriteSize(value.size());
 		out.Write({reinterpret_cast<const uint8_t*>(value.data()), value.size() * sizeof(typename Type::value_type)});
 	}
+	else if constexpr (detail::k_IsEnumList<Type>)
+	{
+		// Each value of an enumeration goes as its bytes in memory, so the list is the same bytes in one block. A load
+		// reads each value again, so that an entity goes through the map of the entities.
+		out.WriteSize(value.size());
+		out.Write({reinterpret_cast<const uint8_t*>(value.data()), value.size() * sizeof(typename Type::value_type)});
+	}
+	else if constexpr (std::is_same_v<Type, std::vector<bool>>)
+	{
+		// The same bytes as a value of 1 or 0 for each element, in one block. Most flags are false, and the search for the
+		// next true flag is quicker than a look at each flag.
+		out.WriteSize(value.size());
+		auto place = out.Extend(value.size());
+		std::ranges::fill(place, uint8_t {0});
+		for (auto flag = std::find(value.begin(), value.end(), true); flag != value.end();
+		     flag = std::find(std::next(flag), value.end(), true))
+		{
+			place[static_cast<size_t>(flag - value.begin())] = 1;
+		}
+	}
+	else if constexpr (detail::k_IsListOfPlainLists<Type>)
+	{
+		// A list of plain lists: the same bytes as each list after the other, in one block
+		using Element = typename Type::value_type::value_type;
+		size_t count = sizeof(uint32_t);
+		for (const auto& list : value)
+		{
+			count += sizeof(uint32_t) + (list.size() * sizeof(Element));
+		}
+		auto place = out.Extend(count);
+		const auto put = [&place](const void* from, size_t bytes) {
+			if (bytes != 0)
+			{
+				std::memcpy(place.data(), from, bytes);
+			}
+			place = place.subspan(bytes);
+		};
+		const auto size = static_cast<uint32_t>(value.size());
+		put(&size, sizeof(size));
+		for (const auto& list : value)
+		{
+			const auto listSize = static_cast<uint32_t>(list.size());
+			put(&listSize, sizeof(listSize));
+			put(list.data(), list.size() * sizeof(Element));
+		}
+	}
 	else if constexpr (detail::k_IsStdArray<Type>)
 	{
 		out.WriteSize(value.size());
 		for (const auto& element : value)
 		{
-			Save(out, element);
+			SaveValue(out, element);
 		}
 	}
 	else if constexpr (detail::k_IsSequence<Type>)
@@ -377,7 +768,7 @@ void Save(BinaryWriter& out, const Type& value)
 		out.WriteSize(value.size());
 		for (const auto& element : value)
 		{
-			Save(out, static_cast<const typename Type::value_type&>(element));
+			SaveValue(out, static_cast<const typename Type::value_type&>(element));
 		}
 	}
 	else if constexpr (detail::k_IsBitset<Type>)
@@ -398,8 +789,8 @@ void Save(BinaryWriter& out, const Type& value)
 		out.WriteSize(value.size());
 		for (const auto* entry : detail::SortedEntries(value))
 		{
-			Save(out, entry->first);
-			Save(out, entry->second);
+			SaveValue(out, entry->first);
+			SaveValue(out, entry->second);
 		}
 	}
 	else if constexpr (detail::k_IsSet<Type>)
@@ -407,18 +798,18 @@ void Save(BinaryWriter& out, const Type& value)
 		out.WriteSize(value.size());
 		for (const auto* entry : detail::SortedEntries(value))
 		{
-			Save(out, *entry);
+			SaveValue(out, *entry);
 		}
 	}
 	else if constexpr (detail::k_IsPair<Type>)
 	{
-		Save(out, value.first);
-		Save(out, value.second);
+		SaveValue(out, value.first);
+		SaveValue(out, value.second);
 	}
 	else if constexpr (detail::k_IsVariant<Type>)
 	{
 		out.WriteSize(value.index());
-		std::visit([&out](const auto& alternative) { Save(out, alternative); }, value);
+		std::visit([&out](const auto& alternative) { SaveValue(out, alternative); }, value);
 	}
 	else if constexpr (detail::k_IsSharedValue<Type>)
 	{
@@ -429,10 +820,10 @@ void Save(BinaryWriter& out, const Type& value)
 		{
 			out.Unsupported(entt::type_id<Type>().name());
 		}
-		Save(out, kept);
+		SaveValue(out, kept);
 		if (kept)
 		{
-			Save(out, static_cast<const Held&>(*value));
+			SaveValue(out, static_cast<const Held&>(*value));
 		}
 	}
 	else if constexpr (detail::k_IsIndirect<Type>)
@@ -441,15 +832,23 @@ void Save(BinaryWriter& out, const Type& value)
 	}
 	else if constexpr (detail::k_IsDuration<Type>)
 	{
-		Save(out, value.count());
+		SaveValue(out, value.count());
+	}
+	else if constexpr (detail::k_IsSavedPresentation<Type>)
+	{
+		SavePresentation(out, *value.value);
 	}
 	else if constexpr (detail::k_IsVisited<Type>)
 	{
-		Type::VisitSaved(value, [&out](const auto&... fields) { (Save(out, fields), ...); });
+		Type::VisitSaved(value, [&out](const auto&... fields) { (SaveValue(out, fields), ...); });
 	}
 	else if constexpr (std::is_class_v<Type>)
 	{
-		SaveRegistered(out, entt::meta_any {out.Context(), std::in_place_type<const Type&>, value});
+		// The writer writes a type that it wrote before by its plan, with no reflection on the way
+		if (!out.SaveByPlan(entt::type_hash<Type>::value(), std::addressof(value)))
+		{
+			SaveRegistered(out, entt::meta_any {out.Context(), std::in_place_type<const Type&>, value});
+		}
 	}
 	else
 	{
@@ -702,6 +1101,10 @@ void Load(BinaryReader& in, Type& value)
 		typename Type::rep count {};
 		Load(in, count);
 		value = Type(count);
+	}
+	else if constexpr (detail::k_IsSavedPresentation<Type>)
+	{
+		Load(in, *value.value);
 	}
 	else if constexpr (detail::k_IsVisited<Type>)
 	{

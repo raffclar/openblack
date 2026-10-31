@@ -19,6 +19,7 @@
 #include <glm/vec3.hpp>
 
 #include "Enums.h"
+#include "PlayerSlots.h"
 
 namespace openblack::ecs::components
 {
@@ -57,7 +58,7 @@ struct Player
 	std::optional<PlayerNames> handTookFrom;
 	/// The harm each player's miracles did to what is this player's, by player number: their crushing and hitting, and the
 	/// burning they would do. A creature's miracles aren't counted.
-	std::array<float, 8> damageFrom {};
+	std::array<float, player_slots::k_PlayerNumbers> damageFrom {};
 	/// Where, what and the turn the player last cast a miracle
 	struct Cast
 	{

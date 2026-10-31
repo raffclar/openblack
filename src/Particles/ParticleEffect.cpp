@@ -718,6 +718,42 @@ size_t Effect::CollectionCount() const
 	return total;
 }
 
+const Atom& openblack::particles::DrawOffsetHolder(const Atom& atom)
+{
+	const Atom* holder = &atom;
+	while (holder->sharesParentOffset && holder->collection != nullptr && holder->collection->parent != nullptr)
+	{
+		holder = holder->collection->parent;
+	}
+	return *holder;
+}
+
+bool openblack::particles::HasDrawOffset(const Atom& atom)
+{
+	const auto& holder = DrawOffsetHolder(atom);
+	return holder.drawOffset.has_value() || holder.handOffset.has_value();
+}
+
+void openblack::particles::FollowLiveHand(Atom& atom, glm::vec3 reference, float weight)
+{
+	if (atom.drawOffset.has_value() || atom.sharesParentOffset)
+	{
+		return;
+	}
+	atom.handOffset = HandOffset {.reference = reference, .weight = std::clamp(weight, 0.0f, 1.0f)};
+}
+
+bool openblack::particles::ShareParentDrawOffset(Atom& atom)
+{
+	if (HasDrawOffset(atom) || atom.collection == nullptr || atom.collection->parent == nullptr ||
+	    !HasDrawOffset(*atom.collection->parent))
+	{
+		return false;
+	}
+	atom.sharesParentOffset = true;
+	return true;
+}
+
 std::optional<Effect::DrawAtom> Effect::Interpolate(const Atom& atom, float t, bool interpolated) const
 {
 	const float k = interpolated ? std::clamp(t, 0.0f, 1.0f) : 1.0f;
@@ -731,10 +767,12 @@ std::optional<Effect::DrawAtom> Effect::Interpolate(const Atom& atom, float t, b
 	// The drawn time lies between the last two steps; the effect's age is the current step's end
 	const float drawnAt = _age - (_dt * (1.0f - k));
 	const float age = drawnAt - atom.birth;
+	// The draw offset is the atom's own or its parent atom's
+	const auto& holder = DrawOffsetHolder(atom);
 	glm::vec3 shift(0.0f);
-	if (atom.drawOffset.has_value())
+	if (holder.drawOffset.has_value())
 	{
-		shift = *atom.drawOffset * std::clamp(1.0f - (drawnAt - atom.drawOffsetFrom) * k_DrawOffsetFade, 0.0f, 1.0f);
+		shift = *holder.drawOffset * std::clamp(1.0f - (drawnAt - holder.drawOffsetFrom) * k_DrawOffsetFade, 0.0f, 1.0f);
 	}
 	return DrawAtom {
 	    .creator = atom.creator,
@@ -750,6 +788,7 @@ std::optional<Effect::DrawAtom> Effect::Interpolate(const Atom& atom, float t, b
 	    .fraction = k,
 	    .surface = atom.surface.get(),
 	    .offsetWeight = atom.drawWeight,
+	    .handOffset = holder.handOffset,
 	    .fragment = atom.fragment,
 	    .player = atom.player,
 	    .objectGlow = atom.objectGlow,
@@ -963,22 +1002,23 @@ std::optional<glm::vec3> Effect::TakeTargetPosition()
 namespace
 {
 
-/// The kinds of the things in the tables, in the order that the tables go into a save
+/// The things of one kind that this part of the save keeps. With a local start, the part keeps only the things from that
+/// start to the end. The synced part of the save has their numbers before them.
 template <typename Type>
 void SaveItems(EffectWriter& out, const SharedTable<Type>& table, auto&& write)
 {
-	out.Out().WriteSize(table.items.size());
-	for (const auto& item : table.items)
+	const auto first = std::min(table.firstLocal.value_or(0), table.items.size());
+	out.Out().WriteSize(table.items.size() - first);
+	for (size_t i = first; i < table.items.size(); ++i)
 	{
-		write(*item);
+		write(*table.items[i]);
 	}
 }
 
+/// Reads the things of one kind and adds them after the things that the table has
 template <typename Type>
 void LoadItems(EffectReader& in, SharedTable<Type>& table, auto&& read)
 {
-	table.items.clear();
-	table.numbers.clear();
 	const auto size = in.In().ReadSize();
 	if (!size.has_value())
 	{
@@ -988,7 +1028,7 @@ void LoadItems(EffectReader& in, SharedTable<Type>& table, auto&& read)
 	{
 		auto item = std::make_shared<Type>();
 		read(*item);
-		table.Add(item);
+		table.Append(item);
 	}
 }
 
@@ -1120,16 +1160,36 @@ bool EffectReader::ReadBytes(void* bytes, size_t size)
 	return true;
 }
 
+void openblack::particles::AddLinkedBolts(SharedTables& tables)
+{
+	// A bolt links to the bolts it meets: those go in the table too, but a bolt of the other part of the save stays out
+	for (size_t i = tables.bolts.firstLocal.value_or(0); i < tables.bolts.items.size(); ++i)
+	{
+		const auto bolt = tables.bolts.items[i];
+		if (bolt == nullptr)
+		{
+			continue;
+		}
+		for (const auto& linked : {bolt->linkedTo.lock(), bolt->linkedFrom.lock()})
+		{
+			if (linked != nullptr && !tables.boltsOfOtherPart.contains(linked.get()))
+			{
+				tables.bolts.Add(linked);
+			}
+		}
+	}
+}
+
+uint32_t openblack::particles::BoltLinkNumber(SharedTables& tables, const std::weak_ptr<BoltShare>& link)
+{
+	const auto bolt = link.lock();
+	return bolt != nullptr && !tables.boltsOfOtherPart.contains(bolt.get()) ? tables.bolts.Add(bolt) : 0;
+}
+
 void openblack::particles::SaveSharedTables(EffectWriter& out)
 {
 	auto& tables = out.Tables();
-	// A bolt links to the bolts it meets: those go in the table too, before the table is written
-	for (size_t i = 0; i < tables.bolts.items.size(); ++i)
-	{
-		const auto bolt = tables.bolts.items[i];
-		tables.bolts.Add(bolt->linkedTo.lock());
-		tables.bolts.Add(bolt->linkedFrom.lock());
-	}
+	AddLinkedBolts(tables);
 	SaveItems(out, tables.sounds, [&out](const ParticleSoundLink& link) {
 		SaveSound(out, link.sound);
 		out.WriteValue(link.position);
@@ -1141,8 +1201,8 @@ void openblack::particles::SaveSharedTables(EffectWriter& out)
 		out.WriteValue(bolt.centroid);
 		out.WriteValue(bolt.heading);
 		out.WriteValue(bolt.hasTargets);
-		out.Out().WriteRaw(tables.bolts.Add(bolt.linkedTo.lock()));
-		out.Out().WriteRaw(tables.bolts.Add(bolt.linkedFrom.lock()));
+		out.Out().WriteRaw(BoltLinkNumber(tables, bolt.linkedTo));
+		out.Out().WriteRaw(BoltLinkNumber(tables, bolt.linkedFrom));
 		out.WriteValue(bolt.meeting);
 	});
 	SaveItems(out, tables.shields, [&out](const ShieldSphere& shield) {
@@ -1173,6 +1233,7 @@ void openblack::particles::LoadSharedTables(EffectReader& in)
 		in.ReadValue(link.fadeStep);
 	});
 	// The links between the bolts are numbers until every bolt is there
+	const auto firstBolt = tables.bolts.items.size();
 	std::vector<std::pair<uint32_t, uint32_t>> links;
 	LoadItems(in, tables.bolts, [&in, &links](BoltShare& bolt) {
 		in.ReadValue(bolt.order);
@@ -1185,10 +1246,10 @@ void openblack::particles::LoadSharedTables(EffectReader& in)
 		in.ReadPlain(link.second);
 		in.ReadValue(bolt.meeting);
 	});
-	for (size_t i = 0; i < links.size() && i < tables.bolts.items.size(); ++i)
+	for (size_t i = 0; i < links.size() && firstBolt + i < tables.bolts.items.size(); ++i)
 	{
-		tables.bolts.items[i]->linkedTo = tables.bolts.At(links[i].first);
-		tables.bolts.items[i]->linkedFrom = tables.bolts.At(links[i].second);
+		tables.bolts.items[firstBolt + i]->linkedTo = tables.bolts.At(links[i].first);
+		tables.bolts.items[firstBolt + i]->linkedFrom = tables.bolts.At(links[i].second);
 	}
 	LoadItems(in, tables.shields, [&in](ShieldSphere& shield) {
 		in.ReadValue(shield.centre);
@@ -1335,7 +1396,11 @@ void Effect::SaveStructure(const Collection& collection, EffectWriter& out) cons
 	out.WriteValue(collection.hierarchy);
 	out.WriteValue(collection.textureRepeats);
 	out.WriteValue(collection.textureSpeed);
+	// The frames slide the texture of a ribbon, also in a synced effect. Only the draw uses it, so it is a presentation
+	// value.
+	out.Out().BeginPresentation();
 	out.WriteValue(collection.textureScroll);
+	out.Out().EndPresentation();
 	out.Out().WriteSize(collection.modifiers.size());
 	for (const auto& slot : collection.modifiers)
 	{
@@ -1383,7 +1448,11 @@ void Effect::SaveStructure(const Collection& collection, EffectWriter& out) cons
 		out.WriteValue(atom.frameRate);
 		out.WriteValue(atom.playAnim);
 		out.WriteValue(atom.gravity);
+		// Only the frame reads the values of the creator: the shape and the start of a mist come from the numbers of
+		// this computer
+		out.Out().BeginPresentation();
 		out.WriteValue(atom.creatorValue);
+		out.Out().EndPresentation();
 		out.WriteValue(atom.random);
 		out.WriteValue(atom.player);
 		out.WriteValue(atom.deflected);
@@ -1395,6 +1464,10 @@ void Effect::SaveStructure(const Collection& collection, EffectWriter& out) cons
 		out.WriteValue(atom.drawOnFirstUpdate);
 		out.WriteValue(atom.drawOffset);
 		out.WriteValue(atom.drawOffsetFrom);
+		out.WriteValue(atom.handOffset.has_value());
+		out.WriteValue(atom.handOffset.value_or(HandOffset {}).reference);
+		out.WriteValue(atom.handOffset.value_or(HandOffset {}).weight);
+		out.WriteValue(atom.sharesParentOffset);
 		out.Out().WriteSize(atom.sounds.size());
 		for (const auto& sound : atom.sounds)
 		{
@@ -1428,12 +1501,15 @@ void Effect::SaveStructure(const Collection& collection, EffectWriter& out) cons
 		if (atom.shower != nullptr)
 		{
 			out.WriteValue(atom.shower->object);
+			// The frames that draw the shower move its sparks with the random numbers of this computer
+			out.Out().BeginPresentation();
 			out.WriteValue(atom.shower->sparks.has_value());
 			if (atom.shower->sparks.has_value())
 			{
 				out.WritePlain(*atom.shower->sparks);
 			}
 			out.WritePlain(atom.shower->clock);
+			out.Out().EndPresentation();
 		}
 		out.Out().WriteSize(atom.subCollections.size());
 		for (const auto& sub : atom.subCollections)
@@ -1532,6 +1608,16 @@ std::unique_ptr<Collection> Effect::LoadStructure(EffectReader& in, Atom* parent
 		in.ReadValue(atom.drawOnFirstUpdate);
 		in.ReadValue(atom.drawOffset);
 		in.ReadValue(atom.drawOffsetFrom);
+		bool followsHand = false;
+		HandOffset handOffset;
+		in.ReadValue(followsHand);
+		in.ReadValue(handOffset.reference);
+		in.ReadValue(handOffset.weight);
+		if (followsHand)
+		{
+			atom.handOffset = handOffset;
+		}
+		in.ReadValue(atom.sharesParentOffset);
 		const auto sounds = in.In().ReadSize();
 		for (size_t s = 0; sounds.has_value() && s < *sounds && !in.Failed(); ++s)
 		{

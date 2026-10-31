@@ -60,9 +60,9 @@ std::optional<float> NumberOf(std::string_view text)
 	return value;
 }
 
-std::string_view NameOf(PlayerNames player)
+std::string NameOf(PlayerNames player)
 {
-	return k_PlayerNamesStrs.at(static_cast<size_t>(player));
+	return player_slots::ScriptNameOf(player);
 }
 
 /// The commands of a town that give the town's number first
@@ -93,7 +93,7 @@ constexpr std::array<AngleArgument, 6> k_AngleArguments {{
 
 bool IsPlayerName(std::string_view text)
 {
-	return std::ranges::find(k_PlayerNamesStrs, text) != k_PlayerNamesStrs.end();
+	return player_slots::PlayerOfScriptName(text).has_value();
 }
 
 /// The place turned by an angle about a centre, then moved from the centre to a new centre
@@ -108,12 +108,8 @@ glm::vec2 Moved(glm::vec2 place, glm::vec2 from, glm::vec2 to, float turn)
 
 std::optional<PlayerNames> gods_ring_map::GodOfSlot(size_t slot)
 {
-	// Each player of a land is a god, but the last is the neutral player
-	if (slot >= static_cast<size_t>(PlayerNames::NEUTRAL))
-	{
-		return std::nullopt;
-	}
-	return static_cast<PlayerNames>(slot);
+	// Each slot has its god. The script of the map names the gods after the seventh PLAYER_8 to PLAYER_32.
+	return player_slots::PlayerOfSlot(slot);
 }
 
 std::array<Slot, k_Slots> gods_ring_map::LayOutSlots(glm::vec2 middle)

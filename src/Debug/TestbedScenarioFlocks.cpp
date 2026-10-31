@@ -209,6 +209,45 @@ void testbed_scenarios::AddFlockScenarios(std::vector<Scenario>& all)
 	                  .delaySeconds = 1.0f}},
 	});
 
+	// The hand takes the cow that a wolf eats: the wolf lets go of its meal at once and runs on
+	all.push_back({
+	    .id = "animals.wolf_meal_in_hand",
+	    .name = "The hand takes the meal of a wolf",
+	    .facet = Facet::Miracles,
+	    .description = "The ground flock cast at a point south of a cow, so that the wolves run at the cow. When a wolf "
+	                   "eats the cow, the hand takes the cow. Five seconds later the hand lets it go.",
+	    .expected = "A wolf pounces and the cow falls in its dying clip. The wolf goes to the cow and eats. On the turn "
+	                "that the hand takes the cow, the wolf stops its meal and runs on to where the miracle sent it. Let "
+	                "go, the cow gets up and wanders off.",
+	    .environment = {.dispenserGrid = false},
+	    .framing = {.shot = Shot::Placed, .eye = {8.0f, 9.0f, 34.0f}, .look = {0.0f, 2.0f, 50.0f}},
+	    .objects = {{.type = AnimalInfo::Cow, .offset = {0.0f, 50.0f}, .living = true}},
+	    .miracles = {{.type = MagicType::FlockGround,
+	                  .point = k_Spot,
+	                  .handOffset = k_HandBehind,
+	                  .handHeight = 12.0f,
+	                  .delaySeconds = 1.0f}},
+	    .commands = {{.kind = Command::Kind::HandTake, .delaySeconds = 10.0f, .object = 0},
+	                 {.kind = Command::Kind::HandRelease, .delaySeconds = 5.0f}},
+	});
+
+	// A cow that a kill made dying, in the hand for a time and then let go: in the hand it does not die or go
+	all.push_back({
+	    .id = "animals.dying_cow_in_hand",
+	    .name = "The hand holds a dying cow",
+	    .facet = Facet::Miracles,
+	    .description = "A cow with no life falls dying. After a second the hand takes it. Eight seconds later the hand "
+	                   "lets it go.",
+	    .expected = "In the hand the cow plays its clip for the hand. The inspector shows the state of the hand, the mark "
+	                "of a kill, and a hunger that grows each turn. The cow does not fall dead in the hand. Let go, it lies "
+	                "dead at once where it lands, and its body goes after 60 seconds.",
+	    .environment = {.dispenserGrid = false},
+	    .framing = {.shot = Shot::Placed, .eye = {6.0f, 7.0f, 38.0f}, .look = {0.0f, 3.0f, 50.0f}},
+	    .objects = {{.type = AnimalInfo::Cow, .offset = {0.0f, 50.0f}, .life = 0.0f, .living = true}},
+	    .commands = {{.kind = Command::Kind::HandTake, .delaySeconds = 1.0f, .object = 0},
+	                 {.kind = Command::Kind::HandRelease, .delaySeconds = 8.0f}},
+	});
+
 	all.push_back({
 	    .id = "animals.wolves_spare_indestructible_cow",
 	    .name = "Wolves leave alone a cow that nothing can kill",
@@ -289,6 +328,45 @@ void testbed_scenarios::AddFlockScenarios(std::vector<Scenario>& all)
 	                .velocity = {14.0f, 9.0f, 0.0f},
 	                .delaySeconds = 1.0f,
 	                .repeatSeconds = 10.0f}},
+	});
+
+	all.push_back({
+	    .id = "animals.wild_hunters_hunt",
+	    .name = "Wild hunters at noon",
+	    .facet = Facet::Animals,
+	    .description = "At noon a hungry lion and a hungry wolf, each made as a land's script makes one, stand 60 m apart, "
+	                   "30 m south of three cows. A villager stands to the north east of the cows.",
+	    .expected = "The lion finds the nearest prey in the map cells about it and goes after it. From 50 m to 100 m from "
+	                "its prey it creeps in its prowl clip. Nearer than 50 m it runs. Near enough and facing the prey, it "
+	                "leaps, and the prey falls. The lion goes to the prey at its hunting speed, settles down and eats 15 "
+	                "to 24 mouthfuls, then decides again. A lion that does not face its prey, or chases it for more than "
+	                "200 turns, gives up and wanders off. The wolf goes to its lair, lies down and stays there until late "
+	                "at night. The cows and the villager flee from a hunter that comes near.",
+	    .environment = {.dispenserGrid = false},
+	    .framing = {.shot = Shot::Overview, .include = {{-35.0f, 15.0f}, {35.0f, 90.0f}}, .distance = 0.7f},
+	    .objects = {{.type = AnimalInfo::Lion, .offset = {-30.0f, 30.0f}, .living = true, .hungry = true},
+	                {.type = AnimalInfo::Wolf, .offset = {30.0f, 30.0f}, .living = true, .hungry = true},
+	                {.type = AnimalInfo::Cow, .offset = {-8.0f, 60.0f}, .living = true},
+	                {.type = AnimalInfo::Cow, .offset = {8.0f, 62.0f}, .living = true},
+	                {.type = AnimalInfo::Cow, .offset = {0.0f, 70.0f}, .living = true},
+	                {.type = VillagerInfo::CelticFarmerMale, .offset = {22.0f, 75.0f}}},
+	});
+
+	all.push_back({
+	    .id = "animals.wolf_hunts_at_night",
+	    .name = "A wolf leaves its lair late at night",
+	    .facet = Facet::Animals,
+	    .description = "At 23:20 a hungry wolf, made as a land's script makes one, stands 30 m south of three cows. The "
+	                   "clock runs.",
+	    .expected = "The wolf goes to its lair and lies down. When its need to sleep is gone and the hour is past 23:00, it "
+	                "gets up and wanders about its lair. It finds the nearest cow, goes after it and leaps at it. The cow "
+	                "falls, and the wolf eats it. At noon a hungry wolf stays in its lair (animals.wild_hunters_hunt).",
+	    .environment = {.hour = 23.33f, .dispenserGrid = false},
+	    .framing = {.shot = Shot::Overview, .include = {{-35.0f, 15.0f}, {35.0f, 90.0f}}, .distance = 0.7f},
+	    .objects = {{.type = AnimalInfo::Wolf, .offset = {0.0f, 30.0f}, .living = true, .hungry = true},
+	                {.type = AnimalInfo::Cow, .offset = {-8.0f, 60.0f}, .living = true},
+	                {.type = AnimalInfo::Cow, .offset = {8.0f, 62.0f}, .living = true},
+	                {.type = AnimalInfo::Cow, .offset = {0.0f, 70.0f}, .living = true}},
 	});
 
 	all.push_back({

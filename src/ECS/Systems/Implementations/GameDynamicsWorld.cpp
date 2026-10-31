@@ -19,11 +19,13 @@
 #include "3D/L3DMesh.h"
 #include "3D/L3DSubMesh.h"
 #include "3D/LandIslandInterface.h"
+#include "3D/MapCoords.h"
 #include "3D/WaterRings.h"
-#include "Audio/GameSoundEffects.h"
 #include "Camera/Camera.h"
 #include "Common/GameRandom.h"
 #include "ECS/Archetypes/DeadTreeArchetype.h"
+#include "ECS/Components/Animal.h"
+#include "ECS/Components/Transform.h"
 #include "ECS/Map.h"
 #include "ECS/Registry.h"
 #include "ECS/SnowDust.h"
@@ -37,6 +39,7 @@
 #include "Locator.h"
 #include "Resources/ResourceManager.h"
 #include "Resources/ResourcesInterface.h"
+#include "Sound/GameSoundEffects.h"
 
 using namespace openblack;
 using namespace openblack::ecs;
@@ -167,6 +170,14 @@ std::vector<entt::entity> GameDynamicsWorld::AllInCell(glm::ivec2 cell) const
 
 void GameDynamicsWorld::Refile(entt::entity object)
 {
+	// An animal that comes to rest is on the map where it lies, before it goes into the cell there
+	auto& registry = Locator::entitiesRegistry::value();
+	if (auto* animal = registry.TryGet<components::Animal>(object);
+	    animal != nullptr && registry.AllOf<components::Transform>(object))
+	{
+		const auto& at = registry.Get<const components::Transform>(object).position;
+		animal->move.position = {map_coords::ToFixed(at.x), map_coords::ToFixed(at.z)};
+	}
 	if (Locator::entitiesMap::has_value())
 	{
 		Locator::entitiesMap::value().Refile(object);
@@ -185,7 +196,7 @@ GameRandomInterface* GameDynamicsWorld::Random()
 
 void GameDynamicsWorld::PlaySound(audio::SoundId sound)
 {
-	if (Locator::audio::has_value())
+	if (Locator::sounds::has_value())
 	{
 		// A rock rushing past does not start its sound again while the sound plays
 		audio::StartGameSoundEffect(static_cast<entt::id_type>(sound), {.voicePlayType = pack::AudioBankLoop::Once});
@@ -195,11 +206,11 @@ void GameDynamicsWorld::PlaySound(audio::SoundId sound)
 std::optional<audio::AnimEffectPlay> GameDynamicsWorld::PlayCollisionSound(std::span<const int32_t> keys, entt::entity owner,
                                                                            glm::vec3 position, bool follows)
 {
-	if (!Locator::audio::has_value())
+	if (!Locator::sounds::has_value())
 	{
 		return std::nullopt;
 	}
-	auto& audio = Locator::audio::value();
+	auto& audio = Locator::sounds::value();
 	const auto played =
 	    audio.PlayAnimEffect(std::string(k_CollisionBank), keys, owner, position, audio::CurrentSoundEffectConditions());
 	if (follows)

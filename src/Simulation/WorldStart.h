@@ -19,9 +19,10 @@
 
 #include <spdlog/common.h>
 
+#include "Common/DeveloperTools.h"
 #include "Common/PlayerProfiles.h"
 #include "Creature/CreatureTattoo.h"
-#include "Graphics/UploadPacer.h"
+#include "Visual/UploadPacer.h"
 
 namespace openblack
 {
@@ -127,6 +128,10 @@ public:
 /// The start of play after the first land loaded: the things go into the map's cells, the clocks start and, if asked,
 /// every resource loads before the first frame. A game that continued from a save keeps the time of the save.
 void BeginPlay(bool continued, bool loadAllFirst, PlayStartViewInterface& view);
+/// Makes the maps of the land that the creatures use: where they can walk, and where they may go in a fight. The game
+/// makes them at the end of the loading screen. The game server calls this at the end of each load of a land, so that
+/// each computer makes the maps from the same land.
+void PrepareLandMaps();
 /// Loads every resource that waits, as the loading screen does, before the next frame. A thing that waits for its
 /// picture or its model then starts after the same frames on each run and on each computer of a network game.
 void LoadEveryResource();
@@ -134,5 +139,9 @@ void LoadEveryResource();
 /// the land from the same state: the next reset of the registry gives the ids of a new registry, the game's random state
 /// is as in a new program, and every stream starts from the seed
 void PrepareNetworkLand(uint32_t seed);
+/// Tools only: the AI soak modes for the land that loads next. Every computer of a network game calls this with the
+/// same values just before it loads the land, the game server too. A build without the developer tools refuses the
+/// modes: this gives the reason, and sets nothing.
+[[nodiscard]] std::optional<std::string_view> ApplySoakTools(const developer_tools::SoakTools& tools);
 
 } // namespace openblack::simulation

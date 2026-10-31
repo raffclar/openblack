@@ -28,20 +28,20 @@
 #include "3D/LandIslandInterface.h"
 #include "3D/MapCoords.h"
 #include "3D/TempleInteriorInterface.h"
-#include "Audio/AudioManagerInterface.h"
-#include "Audio/GameSoundEffects.h"
 #include "Blast/RootsPile.h"
 #include "Camera/Camera.h"
 #include "Common/GameRandom.h"
 #include "Common/X87Angle.h"
 #include "Common/X87Vector.h"
 #include "Creature/CreatureHelp.h"
+#include "Creature/LeashOwnership.h"
 #include "ECS/AltarOffering.h"
 #include "ECS/Archetypes/PotArchetype.h"
 #include "ECS/Components/Abode.h"
 #include "ECS/Components/Animal.h"
 #include "ECS/Components/BuildingDamage.h"
 #include "ECS/Components/Creature.h"
+#include "ECS/Components/CreatureLeash.h"
 #include "ECS/Components/Field.h"
 #include "ECS/Components/FishFarm.h"
 #include "ECS/Components/Flock.h"
@@ -49,6 +49,7 @@
 #include "ECS/Components/HandGrab.h"
 #include "ECS/Components/Indestructible.h"
 #include "ECS/Components/LivingAction.h"
+#include "ECS/Components/MagicFireBall.h"
 #include "ECS/Components/MapCellResident.h"
 #include "ECS/Components/Mesh.h"
 #include "ECS/Components/Mobile.h"
@@ -58,6 +59,7 @@
 #include "ECS/Components/Pot.h"
 #include "ECS/Components/ReportedHand.h"
 #include "ECS/Components/Reward.h"
+#include "ECS/Components/Scaffold.h"
 #include "ECS/Components/ScriptControl.h"
 #include "ECS/Components/ScriptHighlight.h"
 #include "ECS/Components/SpellDispenser.h"
@@ -67,6 +69,7 @@
 #include "ECS/Components/Transform.h"
 #include "ECS/Components/Tree.h"
 #include "ECS/Components/Villager.h"
+#include "ECS/GamePlayers.h"
 #include "ECS/Map.h"
 #include "ECS/ObjectPhysics.h"
 #include "ECS/PhysicsClasses.h"
@@ -85,6 +88,7 @@
 #include "ECS/Systems/CreatureMindSystemInterface.h"
 #include "ECS/Systems/CreatureObjectActionSystemInterface.h"
 #include "ECS/Systems/DynamicsSystemInterface.h"
+#include "ECS/Systems/EffectRequestSystemInterface.h"
 #include "ECS/Systems/ExplosionSystemInterface.h"
 #include "ECS/Systems/FieldSystemInterface.h"
 #include "ECS/Systems/FireSystemInterface.h"
@@ -99,16 +103,17 @@
 #include "ECS/Systems/LivingActionSystemInterface.h"
 #include "ECS/Systems/MagicSystemInterface.h"
 #include "ECS/Systems/ObjectDrawListSystemInterface.h"
-#include "ECS/Systems/ParticleSystemInterface.h"
 #include "ECS/Systems/PickingSystemInterface.h"
 #include "ECS/Systems/PlayerCommandSystemInterface.h"
 #include "ECS/Systems/PlayerSystemInterface.h"
+#include "ECS/Systems/PuzzleGameSystemInterface.h"
 #include "ECS/Systems/ReactionSystemInterface.h"
 #include "ECS/Systems/ResourceStoreSystemInterface.h"
 #include "ECS/Systems/RewardSystemInterface.h"
 #include "ECS/Systems/ScriptHighlightSystemInterface.h"
 #include "ECS/Systems/SpellIconSystemInterface.h"
 #include "ECS/Systems/TimeSystemInterface.h"
+#include "ECS/Systems/WorkshopSystemInterface.h"
 #include "ECS/VillagerAge.h"
 #include "ECS/VillagerMemory.h"
 #include "ECS/WorldObjects.h"
@@ -126,6 +131,8 @@
 #include "Physics/LivingRules.h"
 #include "Resources/ResourceManager.h"
 #include "Resources/ResourcesInterface.h"
+#include "Sound/GameSoundEffects.h"
+#include "Sound/SoundRequestInterface.h"
 #include "Temple/TempleEntranceTap.h"
 #include "VillagerPhysics.h"
 
@@ -444,6 +451,22 @@ void GameHandGrabWorld::RemoveReactions(entt::entity initiator, Reaction type)
 	}
 }
 
+void GameHandGrabWorld::StopReactionSpreadInHand(entt::entity object)
+{
+	if (Locator::reactionSystem::has_value())
+	{
+		Locator::reactionSystem::value().StopSpreadInHand(object);
+	}
+}
+
+void GameHandGrabWorld::SpreadReactionsAgain(entt::entity object)
+{
+	if (Locator::reactionSystem::has_value())
+	{
+		Locator::reactionSystem::value().SpreadAgain(object);
+	}
+}
+
 void GameHandGrabWorld::FireStartedMoving(entt::entity object, bool inHand)
 {
 	if (Locator::fireSystem::has_value())
@@ -478,6 +501,11 @@ void GameHandGrabWorld::ForgetGesturePath()
 	}
 }
 
+bool GameHandGrabWorld::IsLocalHand() const
+{
+	return !Locator::handSystem::has_value() || HandPlayer() == Locator::handSystem::value().GetOwnPlayer();
+}
+
 void GameHandGrabWorld::HeatHeld(entt::entity object)
 {
 	if (Locator::fireSystem::has_value())
@@ -486,9 +514,17 @@ void GameHandGrabWorld::HeatHeld(entt::entity object)
 	}
 }
 
+void GameHandGrabWorld::HeldTurn(entt::entity object)
+{
+	if (Locator::workshopSystem::has_value())
+	{
+		Locator::workshopSystem::value().ProcessHeld(object);
+	}
+}
+
 void GameHandGrabWorld::PlaySample(uint32_t sample, glm::vec3 position)
 {
-	if (Locator::audio::has_value())
+	if (Locator::sounds::has_value())
 	{
 		// Each of these sounds is a sound of its own to the voice rules. It stays where it started, and it stops when
 		// the camera goes too far.
@@ -601,6 +637,22 @@ void GameHandGrabWorld::GlobeIntoHand(entt::entity globe, PlayerNames player)
 	player_miracles::MarkMagicTypeEverEnabled(data->miracles, type);
 }
 
+void GameHandGrabWorld::ScaffoldIntoHand(entt::entity scaffold, PlayerNames player)
+{
+	if (Locator::workshopSystem::has_value())
+	{
+		Locator::workshopSystem::value().TakenByHand(scaffold, player);
+	}
+}
+
+void GameHandGrabWorld::PuzzlePieceIntoHand(entt::entity piece)
+{
+	if (Locator::puzzleGameSystem::has_value())
+	{
+		Locator::puzzleGameSystem::value().TakenInHand(piece);
+	}
+}
+
 bool GameHandGrabWorld::TapThing(entt::entity object, glm::vec3 handPoint, PlayerNames player)
 {
 	if (const auto logger = spdlog::get("game"))
@@ -689,7 +741,75 @@ bool GameHandGrabWorld::TapThing(entt::entity object, glm::vec3 handPoint, Playe
 		countTap();
 		return Locator::spellIconSystem::value().Tap(object, player);
 	}
+	// A scaffold worth more than one breaks one scaffold off
+	if (Entities().AllOf<Scaffold>(object) && Locator::workshopSystem::has_value())
+	{
+		if (!Locator::workshopSystem::value().ValidToTap(object))
+		{
+			return false;
+		}
+		countTap();
+		return Locator::workshopSystem::value().Tap(object, handPoint);
+	}
 	// Other things' taps are the clicking and activating of the interface
+	return false;
+}
+
+bool GameHandGrabWorld::ValidToTap(entt::entity object) const
+{
+	const auto& registry = Locator::entitiesRegistry::value();
+	if (!registry.Valid(object))
+	{
+		return false;
+	}
+	const auto player = HandPlayer();
+	// A rock tall enough breaks
+	if (object_physics::CanTapRock(object))
+	{
+		return true;
+	}
+	// Each building of a town takes the knock, but the village centre does not. A miracle dispenser is such a building.
+	if (registry.AllOf<SpellDispenser>(object))
+	{
+		return true;
+	}
+	if (registry.AllOf<Abode>(object))
+	{
+		const auto* info = ecs::world_objects::AbodeInfoOf(object);
+		return info == nullptr || info->abodeType != AbodeType::TownCentre;
+	}
+	// The entrance of a temple takes the tap in a network game, or when the scripts let the player go in
+	if (registry.AllOf<TempleEntrance>(object))
+	{
+		return IsNetworkGame() || registry.Context().scriptLetsTempleBeEntered;
+	}
+	if (const auto* highlight = registry.TryGet<const ScriptHighlight>(object); highlight != nullptr)
+	{
+		return script_highlights::ValidToTap(highlight->kind, highlight->scriptId, highlight->active);
+	}
+	// A one-shot miracle's globe and a fireball take every tap
+	if (registry.AnyOf<OneOffSpellSeed, MagicFireBall>(object))
+	{
+		return true;
+	}
+	// A leash post takes the taps of its own player only. This is also true when the leash does not hang on the post.
+	if (const auto* post = registry.TryGet<const LeashPost>(object); post != nullptr)
+	{
+		return creature_leash::MayTapPost(player, post->owner);
+	}
+	// Only the player of a chest opens it, until it is open
+	if (const auto* reward = registry.TryGet<const Reward>(object); reward != nullptr)
+	{
+		return reward->player == player && reward->state != Reward::State::Opened;
+	}
+	if (Locator::spellIconSystem::has_value() && Locator::spellIconSystem::value().IsIcon(object))
+	{
+		return Locator::spellIconSystem::value().ValidToTap(object, player);
+	}
+	if (registry.AllOf<Scaffold>(object))
+	{
+		return Locator::workshopSystem::has_value() && Locator::workshopSystem::value().ValidToTap(object);
+	}
 	return false;
 }
 
@@ -774,6 +894,13 @@ float GameHandGrabWorld::CreatureSizeOf(entt::entity creature) const
 
 void GameHandGrabWorld::CallOffGiving(entt::entity creature)
 {
+	// A creature that took the thing from the hand already keeps it and goes on
+	if (Locator::creatureMindSystem::has_value() && Locator::creatureObjectActionSystem::has_value() &&
+	    Locator::creatureMindSystem::value().IsTakingFromHand(creature) &&
+	    Locator::creatureObjectActionSystem::value().GetHeld(creature).has_value())
+	{
+		return;
+	}
 	// It gives up taking as a failure, and its hand closes on nothing if it was already reaching
 	if (Locator::creatureObjectActionSystem::has_value() &&
 	    Locator::creatureObjectActionSystem::value().GetTakingFromHand(creature).has_value())
@@ -915,6 +1042,16 @@ glm::vec3 GameHandGrabWorld::AsMapPlace(glm::vec3 point) const
 	return map_coords::ToWorld(island, map_coords::FromWorld(island, point));
 }
 
+glm::vec3 GameHandGrabWorld::HeldPlaceAt(glm::vec3 point) const
+{
+	if (!Locator::terrainSystem::has_value())
+	{
+		return point;
+	}
+	const auto& island = Locator::terrainSystem::value();
+	return map_coords::ToWorld(island, map_coords::HeldPlace(island, point));
+}
+
 std::vector<PlayerNames> GameHandGrabWorld::OtherHandPlayers() const
 {
 	std::vector<PlayerNames> players;
@@ -923,11 +1060,12 @@ std::vector<PlayerNames> GameHandGrabWorld::OtherHandPlayers() const
 		return players;
 	}
 	const auto& hands = Locator::handSystem::value();
-	for (size_t i = 1; i < static_cast<size_t>(PlayerNames::_COUNT); ++i)
+	// Every player after the first
+	for (const auto player : ecs::game_players::All() | std::views::drop(1))
 	{
-		if (hands.GetHandsOf(static_cast<PlayerNames>(i)).has_value())
+		if (hands.GetHandsOf(player).has_value())
 		{
-			players.push_back(static_cast<PlayerNames>(i));
+			players.push_back(player);
 		}
 	}
 	return players;
@@ -972,7 +1110,15 @@ void GameHandGrabWorld::DrawPulledPose(entt::entity object, const Pose& pose)
 	{
 		return;
 	}
-	HandPulled pulled {.position = pose.origin, .rotation = glm::mat3(1.0f), .scale = glm::vec3(1.0f)};
+	const auto& stands = registry.Get<const Transform>(object);
+	HandPulled pulled {
+	    .position = pose.origin,
+	    .rotation = glm::mat3(1.0f),
+	    .scale = glm::vec3(1.0f),
+	    .standsAt = stands.position,
+	    .standsRotation = stands.rotation,
+	    .standsScale = stands.scale,
+	};
 	for (glm::length_t column = 0; column < 3; ++column)
 	{
 		const float length = glm::length(pose.axes[column]);
@@ -1001,24 +1147,29 @@ glm::mat3 GameHandGrabWorld::UnstretchedAxes(entt::entity object, const glm::mat
 	return hand_grab::AxesAtSize(axes, scale);
 }
 
-player_commands::ThrowStart GameHandGrabWorld::ThrowStartOf(entt::entity object, bool alignToSlope)
+hand_grab::throw_lead::LedThrow GameHandGrabWorld::ThrowStartOf(entt::entity object, bool alignToSlope, glm::vec3 velocity,
+                                                                int leadTurns)
 {
 	const auto& registry = Locator::entitiesRegistry::value();
-	// A globe starts as it was last drawn, turned to this player's camera. Any other thing starts at its Transform.
+	// The thing starts as this computer last drew it at the drawn hand. A globe is turned to this player's camera.
 	std::optional<std::pair<glm::mat3, glm::vec3>> drawn;
 	if (const auto* globe = registry.TryGet<const OneOffSpellSeed>(object);
 	    globe != nullptr && globe->drawnTurn.has_value() && globe->drawnModel.has_value())
 	{
 		drawn = std::pair {*globe->drawnTurn, glm::vec3((*globe->drawnModel)[3])};
 	}
+	else if (const auto* inHand = registry.TryGet<const InHand>(object); inHand != nullptr && inHand->drawn.has_value())
+	{
+		drawn = std::pair {inHand->drawn->rotation, inHand->drawn->position};
+	}
 	if (Locator::dynamicsSystem::has_value())
 	{
-		if (const auto start = Locator::dynamicsSystem::value().StartOfThrow(object, drawn, alignToSlope))
+		if (auto led = Locator::dynamicsSystem::value().StartOfThrow(object, drawn, alignToSlope, velocity, leadTurns))
 		{
-			return *start;
+			return std::move(*led);
 		}
 	}
-	// A thing with no body starts where it is
+	// A thing with no body starts where it is, at the velocity of the hand
 	const auto* transform = registry.TryGet<const Transform>(object);
 	if (!drawn.has_value() && transform != nullptr)
 	{
@@ -1026,9 +1177,41 @@ player_commands::ThrowStart GameHandGrabWorld::ThrowStartOf(entt::entity object,
 	}
 	if (!drawn.has_value())
 	{
-		return {};
+		return {.velocity = velocity};
 	}
-	return {.origin = drawn->second, .angles = x87::GameTurnMatrixAngles(drawn->first)};
+	return {.start = {.origin = drawn->second, .angles = x87::GameTurnMatrixAngles(drawn->first)}, .velocity = velocity};
+}
+
+uint32_t GameHandGrabWorld::ReportLatencyMs() const
+{
+	return Locator::handSystem::has_value() ? Locator::handSystem::value().GetReportLatencyMs() : 0;
+}
+
+uint32_t GameHandGrabWorld::FrameTurn() const
+{
+	return Locator::time::has_value() ? Locator::time::value().GetTurn() : 0;
+}
+
+float GameHandGrabWorld::FrameTurnFraction() const
+{
+	return Locator::time::has_value() ? Locator::time::value().GetTurnFraction() : 0.0f;
+}
+
+void GameHandGrabWorld::DrawThrownPose(entt::entity object, const physics::Pose& pose)
+{
+	// Only the draw reads this place. The turns keep the thing in the hand until the command.
+	auto& registry = Locator::entitiesRegistry::value();
+	if (auto* inHand = registry.TryGet<InHand>(object))
+	{
+		inHand->drawn = InHand::Drawn {.position = pose.origin, .rotation = pose.axes};
+	}
+	// A globe draws its own model
+	if (auto* globe = registry.TryGet<OneOffSpellSeed>(object))
+	{
+		glm::mat4 model(pose.axes);
+		model[3] = glm::vec4(pose.origin, 1.0f);
+		globe->flightModel = model;
+	}
 }
 
 void GameHandGrabWorld::StartThrowFrom(entt::entity object, const player_commands::ThrowStart& start)
@@ -1056,13 +1239,14 @@ std::optional<uint32_t> GameHandGrabWorld::PourPot(entt::entity pot, PlayerNames
 	// It pours out of the hand where the last report put the hand
 	const auto hand = ReportedHandPlace();
 	std::optional<uint32_t> pour;
-	if (Locator::particleSystem::has_value() && player == HandPlayer())
+	if (Locator::effectRequestSystem::has_value() && player == HandPlayer())
 	{
-		// A poisoned handful pours its own poisoned food
+		// A poisoned handful pours its own poisoned food. Only the computer of the hand shows the pour, so the particles
+		// of this computer give it its number.
 		const auto particles = facts->resource == ResourceType::Wood ? k_PourWood
 		                       : facts->poisoned                     ? k_PourPoisonedFood
 		                                                             : k_PourFood;
-		pour = Locator::particleSystem::value().Start(particles, hand, 1.0f);
+		pour = Locator::effectRequestSystem::value().StartHere({.type = particles, .position = hand, .synced = false});
 	}
 	// The handful is gone from the hand first, so that it can't take back what it pours. What it held goes to the stores
 	// and piles of it about the point, or makes a pile there; in the water it is lost.
@@ -1147,6 +1331,11 @@ void GameHandGrabWorld::NoteTakenAt(glm::vec3 point)
 	auto& registry = Entities();
 	std::vector<influence_rules::PlayerInfluenceAt> players;
 	registry.Each<const Player>([&players, point](entt::entity, const Player& player) {
+		// The neutral player is not asked: it is the answer when no player has influence there
+		if (player.name == PlayerNames::NEUTRAL)
+		{
+			return;
+		}
 		const float influence = Locator::influenceSystem::has_value()
 		                            ? Locator::influenceSystem::value().PlayerInfluence(player.name, point)
 		                            : 0.0f;
@@ -1226,29 +1415,30 @@ void GameHandGrabWorld::ResizePot(entt::entity pot)
 
 std::optional<uint32_t> GameHandGrabWorld::StartScoopStream(ResourceType resource, glm::vec3 source, bool poisoned)
 {
-	if (!Locator::particleSystem::has_value())
+	if (!Locator::effectRequestSystem::has_value())
 	{
 		return std::nullopt;
 	}
 	// Poisoned food streams as its own
 	const auto stream = resource == ResourceType::Wood ? k_ScoopWood : poisoned ? k_ScoopPoisonedFood : k_ScoopFood;
-	return Locator::particleSystem::value().Start(stream, source, 1.0f);
+	return Locator::effectRequestSystem::value().Start({.type = stream, .position = source, .synced = false});
 }
 
 std::optional<uint32_t> GameHandGrabWorld::StartFishScoopStream(glm::vec3 source)
 {
-	if (!Locator::particleSystem::has_value())
+	if (!Locator::effectRequestSystem::has_value())
 	{
 		return std::nullopt;
 	}
-	return Locator::particleSystem::value().Start(ParticleType::FoodPickupFish, source, 1.0f);
+	return Locator::effectRequestSystem::value().Start(
+	    {.type = ParticleType::FoodPickupFish, .position = source, .synced = false});
 }
 
 void GameHandGrabWorld::StopScoopStream(uint32_t stream)
 {
-	if (Locator::particleSystem::has_value())
+	if (Locator::effectRequestSystem::has_value())
 	{
-		Locator::particleSystem::value().CloseDown(stream);
+		Locator::effectRequestSystem::value().Stop(stream);
 	}
 }
 
@@ -1262,19 +1452,19 @@ void GameHandGrabWorld::PinCursor(bool pinned)
 
 void GameHandGrabWorld::MoveScoopStream(uint32_t stream, glm::vec3 hand)
 {
-	if (Locator::particleSystem::has_value())
+	if (Locator::effectRequestSystem::has_value())
 	{
-		Locator::particleSystem::value().SetOrigin(stream, hand);
+		Locator::effectRequestSystem::value().Move(stream, hand);
 	}
 }
 
 entt::entity GameHandGrabWorld::PlayScoopSound(entt::entity playing, ResourceType resource, glm::vec3 hand, float ramp)
 {
-	if (!Locator::audio::has_value())
+	if (!Locator::sounds::has_value())
 	{
 		return entt::null;
 	}
-	auto& audio = Locator::audio::value();
+	auto& audio = Locator::sounds::value();
 	// Its pitch rises as the scoop ramps up
 	const auto pitch = hand_grab::ScoopSoundPitch(ramp);
 	// Already playing, it goes on where it started and only follows the ramp
@@ -1290,11 +1480,11 @@ entt::entity GameHandGrabWorld::PlayScoopSound(entt::entity playing, ResourceTyp
 
 void GameHandGrabWorld::StopScoopSound()
 {
-	if (!Locator::audio::has_value())
+	if (!Locator::sounds::has_value())
 	{
 		return;
 	}
-	auto& audio = Locator::audio::value();
+	auto& audio = Locator::sounds::value();
 	audio.StopSoundEffect(static_cast<entt::id_type>(k_ScoopSound));
 	audio.StopSoundEffect(static_cast<entt::id_type>(k_ScoopWoodSound));
 }
@@ -1327,6 +1517,12 @@ uint32_t GameHandGrabWorld::AddToStore(entt::entity store, ResourceType resource
 
 bool GameHandGrabWorld::TakeIntoStore(entt::entity store, entt::entity object)
 {
+	// A built storage pit takes a scaffold as its wood. No other store takes a scaffold.
+	if (Entities().AllOf<Scaffold>(object))
+	{
+		return Locator::workshopSystem::has_value() &&
+		       Locator::workshopSystem::value().GiveToStore(object, store, HandPlayer());
+	}
 	// An animal, a static such as a fence, or a tree a script made indestructible refuses to be given
 	if (Entities().AllOf<Indestructible>(object) && Entities().AnyOf<Animal, MobileStatic, Tree>(object))
 	{
@@ -1346,6 +1542,10 @@ bool GameHandGrabWorld::TakesWhole(entt::entity target, entt::entity held) const
 	{
 		return true;
 	}
+	if (Locator::entitiesRegistry::value().AllOf<Scaffold>(held))
+	{
+		return Locator::workshopSystem::has_value() && Locator::workshopSystem::value().GoesIntoStore(held, target);
+	}
 	// A store takes what it is worth, but not an animal, a static or a tree that a script made indestructible
 	const auto& registry = Locator::entitiesRegistry::value();
 	if (registry.AllOf<Indestructible>(held) && registry.AnyOf<Animal, MobileStatic, Tree>(held))
@@ -1364,6 +1564,31 @@ bool GameHandGrabWorld::TakesWhole(entt::entity target, entt::entity held) const
 bool GameHandGrabWorld::LayGateStone(entt::entity plinth, entt::entity stone)
 {
 	return Locator::animatedStaticSystem::has_value() && Locator::animatedStaticSystem::value().LayGateStone(plinth, stone);
+}
+
+bool GameHandGrabWorld::JoinsScaffold(entt::entity target, entt::entity held) const
+{
+	return Locator::workshopSystem::has_value() && Locator::workshopSystem::value().CanJoin(held, target);
+}
+
+entt::entity GameHandGrabWorld::RestOfScaffold(entt::entity scaffold)
+{
+	// Only the hand of a player who is not a computer god keeps the rest of a scaffold
+	const auto player = HandPlayer();
+	if (!Locator::workshopSystem::has_value() ||
+	    (Locator::playerSystem::has_value() && Locator::playerSystem::value().IsComputerPlayer(player)))
+	{
+		return entt::null;
+	}
+	return Locator::workshopSystem::value().SplitOffRest(scaffold);
+}
+
+void GameHandGrabWorld::JoinScaffold(entt::entity target, entt::entity held)
+{
+	if (Locator::workshopSystem::has_value())
+	{
+		Locator::workshopSystem::value().Join(held, target, ReportedHandPlace());
+	}
 }
 
 void GameHandGrabWorld::PourAt(ResourceType resource, glm::vec3 point, uint32_t amount, PlayerNames player, bool poisoned)

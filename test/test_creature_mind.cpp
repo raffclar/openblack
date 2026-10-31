@@ -480,6 +480,61 @@ TEST(CreatureIdleMind, NothingStartsWhileTheBodyIsBusy)
 	EXPECT_EQ(creature_mind::Think(mind, senses, Always(0)).playOnce, 60u);
 }
 
+TEST(CreatureIdleMind, AWalkStartsWhileTheBodyOnlyMoves)
+{
+	using creature_mind::Movement;
+	using creature_mind::Step;
+	// The walk back to the leash: the creature still walks its old route, and the new walk takes its place at once
+	creature_mind::IdleMind mind;
+	creature_mind::Plan(mind, creature_mind::Activity::Told,
+	                    {{.kind = Step::Kind::Move, .movement = {.kind = Movement::Kind::ToPoint, .point = {10.0f, 20.0f}}}});
+	auto senses = FakeBody {}.Senses();
+	senses.bodyBusy = true;
+	senses.moving = true;
+	senses.onlyMoves = true;
+	const auto commands = creature_mind::Think(mind, senses, Always(0));
+	ASSERT_TRUE(commands.move.has_value());
+	EXPECT_EQ(commands.move->point, glm::vec2(10.0f, 20.0f));
+	EXPECT_TRUE(mind.stepStarted);
+}
+
+TEST(CreatureIdleMind, AWalkWaitsWhileTheBodyPlaysAnAction)
+{
+	using creature_mind::Movement;
+	using creature_mind::Step;
+	creature_mind::IdleMind mind;
+	creature_mind::Plan(mind, creature_mind::Activity::Told,
+	                    {{.kind = Step::Kind::Move, .movement = {.kind = Movement::Kind::ToPoint, .point = {10.0f, 20.0f}}}});
+	auto senses = FakeBody {}.Senses();
+	senses.bodyBusy = true;
+	senses.moving = true;
+	senses.onlyMoves = false;
+	EXPECT_FALSE(creature_mind::Think(mind, senses, Always(0)).move.has_value());
+	EXPECT_FALSE(mind.stepStarted);
+}
+
+TEST(CreatureIdleMind, OnlyWalksToAPointOrAThingStartOnTheWay)
+{
+	using creature_mind::Movement;
+	using creature_mind::Step;
+	const auto move = [](Movement::Kind kind) { return Step {.kind = Step::Kind::Move, .movement = {.kind = kind}}; };
+	EXPECT_TRUE(creature_mind::StartsOnTheWay(move(Movement::Kind::ToPoint)));
+	EXPECT_TRUE(creature_mind::StartsOnTheWay(move(Movement::Kind::Nearby)));
+	EXPECT_TRUE(creature_mind::StartsOnTheWay(move(Movement::Kind::ToObject)));
+	EXPECT_FALSE(creature_mind::StartsOnTheWay(move(Movement::Kind::Follow)));
+	EXPECT_FALSE(creature_mind::StartsOnTheWay(move(Movement::Kind::TurnToFace)));
+	EXPECT_FALSE(creature_mind::StartsOnTheWay(move(Movement::Kind::GoNearObject)));
+	EXPECT_FALSE(creature_mind::StartsOnTheWay({.kind = Step::Kind::Action}));
+	// Another step still waits while the body moves
+	creature_mind::IdleMind mind;
+	creature_mind::Plan(mind, creature_mind::Activity::Told, {{.kind = Step::Kind::Action, .animation = 60}});
+	auto senses = FakeBody {}.Senses();
+	senses.bodyBusy = true;
+	senses.moving = true;
+	senses.onlyMoves = true;
+	EXPECT_FALSE(creature_mind::Think(mind, senses, Always(0)).playOnce.has_value());
+}
+
 TEST(CreatureIdleMind, StepsThatNeedEmptyHands)
 {
 	using creature_mind::HandsNeed;
@@ -506,8 +561,8 @@ TEST(CreatureIdleMind, StepsThatNeedEmptyHands)
 	EXPECT_EQ(HandsNeededFor(object(ObjectOrder::Kind::PointAt)), HandsNeed::Any);
 	EXPECT_EQ(HandsNeededFor(object(ObjectOrder::Kind::Kick)), HandsNeed::Any);
 	EXPECT_EQ(HandsNeededFor(object(ObjectOrder::Kind::PutDown)), HandsNeed::Any);
-	// A fight needs empty hands
-	EXPECT_EQ(HandsNeededFor({.kind = Step::Kind::Fight}), HandsNeed::Free);
+	// A fight starts with a question, which does not need empty hands. The taunt later needs them.
+	EXPECT_EQ(HandsNeededFor({.kind = Step::Kind::Fight}), HandsNeed::Any);
 }
 
 TEST(CreatureIdleMind, StepsThatNeedAThingInTheHand)

@@ -13,8 +13,11 @@
 #include <cstdint>
 
 #include <algorithm>
+#include <array>
 #include <optional>
 #include <string_view>
+
+#include "Enums.h"
 
 namespace openblack::new_game_choice
 {
@@ -91,6 +94,10 @@ struct NewGameStart
 {
 	bool ask {false};
 	std::optional<Choice> answer;
+	/// Debug only, not in the original game: the species of the creature that a story started directly on a later land
+	/// makes for the player, because no creature came through the vortex. With nothing, the land plays as the game
+	/// plays it.
+	std::optional<CreatureType> directCreature {std::nullopt};
 
 	[[nodiscard]] constexpr bool operator==(const NewGameStart&) const = default;
 };
@@ -113,6 +120,86 @@ struct NewGameStart
 [[nodiscard]] constexpr bool FirstLandStartsStory(bool playground, bool networkGame) noexcept
 {
 	return !playground && !networkGame;
+}
+
+/// The story's top script starts only when the new game opens on the first land of the story. A new game on another
+/// land starts none of the story, and the start-of-game question comes all the same.
+[[nodiscard]] constexpr bool LandStartsStoryScript(int32_t landNumber) noexcept
+{
+	return landNumber == 1;
+}
+
+/// Whether the debug quickstart makes the Cow when a land loads the kept creature. Only the first land makes it. On a
+/// later land the Cow came through the vortex as the kept creature, and the land loads it at the given place.
+[[nodiscard]] constexpr bool MakesDebugCow(const TutorialSkip& skip, int32_t landNumber) noexcept
+{
+	return skip.startWithCow && landNumber == 1;
+}
+
+/// The name a developer gives a species, in lower case without spaces
+struct DirectCreatureName
+{
+	std::string_view name;
+	CreatureType species;
+};
+
+inline constexpr std::array<DirectCreatureName, 17> k_DirectCreatureNames {{
+    {.name = "cow", .species = CreatureType::Cow},
+    {.name = "tiger", .species = CreatureType::Tiger},
+    {.name = "leopard", .species = CreatureType::Leopard},
+    {.name = "wolf", .species = CreatureType::Wolf},
+    {.name = "lion", .species = CreatureType::Lion},
+    {.name = "horse", .species = CreatureType::Horse},
+    {.name = "tortoise", .species = CreatureType::Tortoise},
+    {.name = "zebra", .species = CreatureType::Zebra},
+    {.name = "brownbear", .species = CreatureType::BrownBear},
+    {.name = "polarbear", .species = CreatureType::PolarBear},
+    {.name = "sheep", .species = CreatureType::Sheep},
+    {.name = "chimp", .species = CreatureType::Chimp},
+    {.name = "ogre", .species = CreatureType::Ogre},
+    {.name = "mandrill", .species = CreatureType::Mandrill},
+    {.name = "rhino", .species = CreatureType::Rhino},
+    {.name = "gorilla", .species = CreatureType::Gorilla},
+    {.name = "giantape", .species = CreatureType::GiantApe},
+}};
+
+/// The species that a developer's name stands for; nothing for a name that is none of them
+[[nodiscard]] constexpr std::optional<CreatureType> ParseDirectCreature(std::string_view text) noexcept
+{
+	for (const auto& entry : k_DirectCreatureNames)
+	{
+		if (entry.name == text)
+		{
+			return entry.species;
+		}
+	}
+	return std::nullopt;
+}
+
+/// The land whose control script a developer's direct start runs: a land after the first, when the developer asked for
+/// a creature. The first land has the story's top script, and a land with no such request plays as the game plays it.
+[[nodiscard]] constexpr std::optional<int32_t> DirectStartLand(const std::optional<NewGameStart>& start,
+                                                               int32_t landNumber) noexcept
+{
+	if (!start.has_value() || !start->directCreature.has_value() || LandStartsStoryScript(landNumber))
+	{
+		return std::nullopt;
+	}
+	return landNumber;
+}
+
+/// The species of the creature that a direct start of a later land makes for the player. Nothing when the developer
+/// asked for none, on the first land, when a creature came through the vortex, or when the player has one already: the
+/// land then plays as the game plays it.
+[[nodiscard]] constexpr std::optional<CreatureType> DirectStartCreature(const std::optional<NewGameStart>& start,
+                                                                        int32_t landNumber, bool creatureLoaded,
+                                                                        bool playerHasCreature) noexcept
+{
+	if (!DirectStartLand(start, landNumber).has_value() || creatureLoaded || playerHasCreature)
+	{
+		return std::nullopt;
+	}
+	return start->directCreature;
 }
 
 /// "ask", "normal", "creature" (straight to choosing a creature), "story" (skip all of the creature's tutorial too)

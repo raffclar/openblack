@@ -10,8 +10,10 @@
 #include <cmath>
 
 #include <algorithm>
+#include <map>
 #include <numbers>
 #include <optional>
+#include <utility>
 #include <vector>
 
 #include <glm/geometric.hpp>
@@ -326,6 +328,105 @@ TEST(CreatureRouteSearch, CirclesAreGatheredBlockByBlockAsTheSearchReachesThem)
 	EXPECT_LE(asked.size(), 64u * 4u);
 }
 
+TEST(CreatureRouteSearch, AKeptGatheringOfABlockGivesTheSameCirclesAsTheGathererOfEachCell)
+{
+	// The land has a circle in some cells. Thing 7 stands in two cells of two blocks and its circle reaches over both
+	// blocks, so the second block does not get it again. Thing 5 stands on the way.
+	const auto landAt = [](glm::ivec2 cell) { return cell.x % 3 == 0 && cell.y % 4 == 1; };
+	const auto centreOf = [](glm::ivec2 cell) { return (glm::vec2(cell) * 10.0f) + glm::vec2(5.0f); };
+	const auto thingsAt = [](glm::ivec2 cell) {
+		std::vector<std::pair<uint32_t, std::vector<Circle>>> things;
+		if (cell == glm::ivec2(103, 100) || cell == glm::ivec2(104, 100))
+		{
+			things.push_back({7u, {{.centre = {1040.0f, 1004.0f}, .radius = 9.0f}}});
+		}
+		if (cell == glm::ivec2(105, 100))
+		{
+			things.push_back(
+			    {5u, {{.centre = {1050.0f, 1000.0f}, .radius = 12.0f}, {.centre = {1050.0f, 1010.0f}, .radius = 4.0f}}});
+		}
+		return things;
+	};
+	const auto plan = [](Obstacles& obstacles) {
+		Search search(obstacles, {.point = {1000.0f, 1000.0f}},
+		              {.point = {1100.0f, 1000.0f}, .arriveWithin = 1.0f, .mostCost = 5200.0f});
+		return std::pair {Finish(search, obstacles), search.GetBest().size()};
+	};
+
+	Obstacles byCell;
+	byCell.ResetWithoutWalker(0.0f, [&](glm::ivec2 cell, Obstacles& into) {
+		if (landAt(cell))
+		{
+			into.Add(std::nullopt, centreOf(cell), 3.0f);
+		}
+		for (const auto& [thing, circles] : thingsAt(cell))
+		{
+			if (into.BlockHas(thing, cell))
+			{
+				continue;
+			}
+			for (const auto& circle : circles)
+			{
+				into.Add(thing, circle.centre, circle.radius);
+			}
+		}
+	});
+	const auto expected = plan(byCell);
+	ASSERT_EQ(expected.first, Search::Status::Found);
+
+	// Two plans with the block gatherer: the first keeps what it gathers, and the second gets the kept blocks
+	std::map<std::pair<int32_t, int32_t>, BlockGathering> kept;
+	size_t gathered = 0;
+	const auto byBlock = [&](glm::ivec2 block, Obstacles& into) {
+		const auto key = std::pair {block.x, block.y};
+		if (const auto found = kept.find(key); found != kept.end())
+		{
+			found->second.AddTo(into);
+			return;
+		}
+		++gathered;
+		BlockGathering gathering;
+		for (int32_t cz = 0; cz < Obstacles::k_CellsPerBlock; ++cz)
+		{
+			for (int32_t cx = 0; cx < Obstacles::k_CellsPerBlock; ++cx)
+			{
+				const glm::ivec2 cell {(block.x * Obstacles::k_CellsPerBlock) + cx,
+				                       (block.y * Obstacles::k_CellsPerBlock) + cz};
+				if (landAt(cell))
+				{
+					gathering.Land(centreOf(cell), 3.0f);
+				}
+				for (const auto& [thing, circles] : thingsAt(cell))
+				{
+					gathering.Thing(cell, thing, circles);
+				}
+			}
+		}
+		gathering.AddTo(into);
+		kept.emplace(key, std::move(gathering));
+	};
+	for (int32_t pass = 0; pass < 2; ++pass)
+	{
+		Obstacles byBlockObstacles;
+		byBlockObstacles.ResetWithoutWalker(0.0f);
+		byBlockObstacles.SetBlockGatherer(byBlock);
+		EXPECT_EQ(plan(byBlockObstacles), expected);
+		ASSERT_EQ(byBlockObstacles.All().size(), byCell.All().size());
+		for (size_t i = 0; i < byCell.All().size(); ++i)
+		{
+			const auto& want = byCell.All()[i];
+			const auto& got = byBlockObstacles.All()[i];
+			EXPECT_EQ(got.circle.centre, want.circle.centre);
+			EXPECT_EQ(got.circle.radius, want.circle.radius);
+			EXPECT_EQ(got.thing, want.thing);
+			EXPECT_EQ(got.active, want.active);
+		}
+	}
+	// The second plan gathered no block again
+	EXPECT_EQ(gathered, kept.size());
+	EXPECT_GT(gathered, 1u);
+}
+
 TEST(CreatureRouteSearch, AWalkerFollowsTheRouteFoundAndStandsAtItsEnd)
 {
 	Follower follower;
@@ -548,4 +649,18 @@ TEST(CreatureRouteSearch, AWalkToASmallRockStopsAtTheStraightReachOutsideTheRock
 	Search tooNear(inside, {.point = tiger}, {.point = rock, .stopShort = 0.5f, .arriveWithin = 0.84f, .mostCost = mostCost});
 	ASSERT_EQ(Finish(tooNear, inside), Search::Status::Found);
 	EXPECT_NEAR(glm::distance(tooNear.GetBest().back().to, rock), 1.0984f, 0.01f);
+}
+
+TEST(CreatureRouteSearch, TheSearchingCreaturesShareThirtyTwoStepsATurn)
+{
+	using openblack::creature_route::TurnSearchShare;
+	// With no searching creature at the start of the turn, a creature that starts a search later gets all the steps
+	EXPECT_EQ(TurnSearchShare(0), 32);
+	EXPECT_EQ(TurnSearchShare(1), 32);
+	EXPECT_EQ(TurnSearchShare(2), 16);
+	// The share rounds down
+	EXPECT_EQ(TurnSearchShare(3), 10);
+	EXPECT_EQ(TurnSearchShare(32), 1);
+	// Each creature gets at least one step
+	EXPECT_EQ(TurnSearchShare(100), 1);
 }

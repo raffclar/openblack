@@ -16,7 +16,6 @@
 #include <stdexcept>
 
 #include <L3DFile.h>
-#include <bgfx/bgfx.h>
 #include <glm/gtc/type_ptr.hpp>
 #include <glm/gtx/vec_swizzle.hpp>
 #include <glm/matrix.hpp>
@@ -24,6 +23,7 @@
 
 #include "3D/L3DSubMesh.h"
 #include "FileSystem/FileSystemInterface.h"
+#include "Graphics/GraphicsDeviceInterface.h"
 #include "Graphics/Texture2D.h"
 #include "Graphics/VertexBuffer.h"
 #include "Locator.h"
@@ -36,8 +36,9 @@ namespace
 /// The layout of the skins of a model with these flags, on this device
 l3d_skin::Layout SkinLayoutOf(uint32_t flags)
 {
-	const auto* caps = bgfx::getCaps();
-	const bool has1555 = caps != nullptr && (caps->formats[bgfx::TextureFormat::BGR5A1] & BGFX_CAPS_FORMAT_TEXTURE_2D) != 0;
+	const bool has1555 =
+	    Locator::graphicsDevice::has_value() &&
+	    Locator::graphicsDevice::value().HasTextureFormat(graphics::TextureFormat::BGR5A1, graphics::TextureUse::Texture2D);
 	return l3d_skin::LayoutOf(flags, has1555);
 }
 
@@ -57,10 +58,11 @@ TextureFormat TextureFormatOf(l3d_skin::Layout layout)
 }
 } // namespace
 
-L3DMesh::L3DMesh(std::string debugName, bool dynamic) noexcept
+L3DMesh::L3DMesh(std::string debugName, bool dynamic, UploadMode upload) noexcept
     : _flags(static_cast<l3d::L3DMeshFlags>(0))
     , _debugName(std::move(debugName))
     , _dynamic(dynamic)
+    , _upload(upload)
 {
 }
 
@@ -113,11 +115,17 @@ bool L3DMesh::Load(const l3d::L3DFile& l3d) noexcept
 		const auto texels = std::span(reinterpret_cast<const uint16_t*>(skin.texels.data()), skin.texels.size());
 		KnowSkinMasks(skin.id, texels);
 		_skins[skin.id] = std::make_unique<Texture2D>(_debugName.c_str());
+		if (_upload == UploadMode::DataOnly)
+		{
+			_skins[skin.id]->Describe(l3d::L3DTexture::k_Width, l3d::L3DTexture::k_Height, 1, TextureFormatOf(_skinLayout));
+			continue;
+		}
 		const auto bytes = l3d_skin::TexelsIn(_skinLayout, texels);
 		const auto size = static_cast<uint32_t>(bytes.size());
 		// bgfx only lets a texture created without texels have them changed
 		_skins[skin.id]->Create(l3d::L3DTexture::k_Width, l3d::L3DTexture::k_Height, 1, TextureFormatOf(_skinLayout),
-		                        Wrapping::Repeat, Filter::Linear, _dynamic ? nullptr : bgfx::copy(bytes.data(), size));
+		                        Wrapping::Repeat, Filter::Linear,
+		                        _dynamic ? nullptr : Locator::graphicsDevice::value().Copy(bytes.data(), size));
 		if (_dynamic)
 		{
 			_skins[skin.id]->Update(bytes.data(), size);
@@ -361,7 +369,7 @@ void L3DMesh::UpdateVertices(const l3d::L3DFile& l3d) noexcept
 void L3DMesh::UpdateSkin(SkinId skin, std::span<const uint16_t> texels) noexcept
 {
 	assert(_dynamic);
-	if (const auto found = _skins.find(skin); found != _skins.end())
+	if (const auto found = _skins.find(skin); found != _skins.end() && _upload == UploadMode::Device)
 	{
 		const auto bytes = l3d_skin::TexelsIn(_skinLayout, texels);
 		found->second->Update(bytes.data(), static_cast<uint32_t>(bytes.size()));

@@ -15,6 +15,7 @@
 
 #include <entt/entity/fwd.hpp>
 
+#include "TestbedGameStage.h"
 #include "TestbedScenarioRegistry.h"
 #include "TestbedScenarioRunner.h"
 #include "Window.h"
@@ -42,6 +43,8 @@ protected:
 	void Update() noexcept override {}
 	void UpdateAlways() noexcept override;
 	void ProcessEventOpen([[maybe_unused]] const SDL_Event& event) noexcept override {}
+	/// The scenario that the game server asks for continues while the network game is live
+	void UpdateInNetworkGame() noexcept override;
 	void ProcessEventAlways([[maybe_unused]] const SDL_Event& event) noexcept override {}
 
 private:
@@ -49,14 +52,20 @@ private:
 	void DrawControls() noexcept;
 	/// The crowd of a benchmark as it spawns, and its frames as they are measured
 	void DrawBenchmark() noexcept;
-	/// Runs the scenario the command line asked for, once
+	/// Runs the scenario the command line or the game server asked for, once
 	void RunRequested() noexcept;
+	/// Before each turn: the commands of the scenario of a network game
+	void BeforeTurn() noexcept;
+	/// Gives the game the work that lays out a scenario and the work that a scenario does before each turn
+	void ConnectToGame() noexcept;
 	void DrawTime() noexcept;
 	void DrawCamera() noexcept;
 	void DrawCreatures() noexcept;
 
 	CreatureSpawner& _spawner;
-	testbed_scenarios::Runner _runner;
+	/// The game that the scenarios stage
+	testbed_scenarios::TestbedGameStage _stage;
+	testbed_scenarios::Runner _runner {&_stage};
 	/// The facet the list is narrowed to, or every facet
 	std::optional<testbed_scenarios::Facet> _facet;
 	size_t _picked {0};

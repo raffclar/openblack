@@ -30,14 +30,17 @@
 #include "ECS/Components/TownArtefact.h"
 #include "ECS/Components/Transform.h"
 #include "ECS/Components/Villager.h"
+#include "ECS/Components/WorshipSite.h"
 #include "ECS/Registry.h"
 #include "ECS/RegistryContext.h"
 #include "ECS/Systems/ArtefactSystemInterface.h"
 #include "ECS/Systems/DanceSystemInterface.h"
+#include "ECS/Systems/EffectRequestSystemInterface.h"
 #include "ECS/Systems/MagicSystemInterface.h"
 #include "ECS/Systems/SpellIconSystemInterface.h"
 #include "ECS/Systems/TimeSystemInterface.h"
 #include "ECS/TempleConstruction.h"
+#include "ECS/ThingMapPlace.h"
 #include "ECS/WorldObjects.h"
 #include "ECS/WorshipSites.h"
 #include "FileSystem/FileSystemInterface.h"
@@ -78,6 +81,27 @@ std::optional<glm::vec3> GameWorshipSiteWorld::SitePoint(uint32_t index) const
 		return std::nullopt;
 	}
 	const auto& points = meshes.Handle(k_SiteMesh.value())->GetExtraMetrics();
+	if (index >= points.size())
+	{
+		return std::nullopt;
+	}
+	return glm::vec3(points.at(index)[3]);
+}
+
+std::optional<glm::vec3> GameWorshipSiteWorld::TemplePoint(entt::entity temple, uint32_t index) const
+{
+	const auto& registry = Locator::entitiesRegistry::value();
+	const auto* mesh = registry.Valid(temple) ? registry.TryGet<const Mesh>(temple) : nullptr;
+	if (mesh == nullptr || !Locator::resources::has_value())
+	{
+		return std::nullopt;
+	}
+	auto& meshes = Locator::resources::value().GetMeshes();
+	if (!meshes.Contains(mesh->id))
+	{
+		return std::nullopt;
+	}
+	const auto& points = meshes.Handle(mesh->id)->GetExtraMetrics();
 	if (index >= points.size())
 	{
 		return std::nullopt;
@@ -199,7 +223,15 @@ entt::entity GameWorshipSiteWorld::MakeFoodPot(glm::vec3 position, float yAngle)
 	const auto pot = archetypes::PotArchetype::CreateEmpty(position, yAngle, PotInfo::StoragePitFoodPile);
 	if (pot != entt::null)
 	{
-		Locator::entitiesRegistry::value().Get<Transform>(pot).scale = glm::vec3(worship_site::k_FoodPotScale);
+		// The pot takes its size after it is made. If the size changes, the pot comes out of the map's cells and goes
+		// in again.
+		auto& transform = Locator::entitiesRegistry::value().Get<Transform>(pot);
+		const bool resized = transform.scale.x != worship_site::k_FoodPotScale;
+		transform.scale = glm::vec3(worship_site::k_FoodPotScale);
+		if (resized)
+		{
+			ecs::thing_map_place::Reinsert(pot);
+		}
 	}
 	return pot;
 }
@@ -251,6 +283,55 @@ void GameWorshipSiteWorld::ArtefactsLeaveSite(entt::entity site)
 			artefact.inSite = false;
 		}
 	});
+}
+
+uint32_t GameWorshipSiteWorld::StartMotes()
+{
+	// The mana path's effect, at the middle of the world. The site steps it, not the turn.
+	return Locator::effectRequestSystem::has_value() ? Locator::effectRequestSystem::value().Start({
+	                                                       .type = ParticleType::ManaPath,
+	                                                       .ownerSteps = true,
+	                                                   })
+	                                                 : k_NoEffectHandle;
+}
+
+void GameWorshipSiteWorld::AddMote(uint32_t effect, glm::vec3 from, glm::vec3 to, uint32_t rgb)
+{
+	if (Locator::effectRequestSystem::has_value())
+	{
+		Locator::effectRequestSystem::value().AddManaPathSpark(effect, {.from = from, .to = to, .rgb = rgb & 0xFFFFFFu});
+	}
+}
+
+bool GameWorshipSiteWorld::StepMotes(uint32_t effect)
+{
+	// The site steps it with no hand, at full strength
+	return Locator::effectRequestSystem::has_value() &&
+	       Locator::effectRequestSystem::value().Step(
+	           effect, particles::ProcessInfo {}, std::chrono::duration<float>(TimeSystemInterface::k_TurnDuration).count());
+}
+
+void GameWorshipSiteWorld::RemoveMotes(uint32_t effect)
+{
+	if (Locator::effectRequestSystem::has_value())
+	{
+		Locator::effectRequestSystem::value().Remove(effect);
+	}
+}
+
+entt::entity GameWorshipSiteWorld::MakeNeedFlag(entt::entity site, uint8_t need)
+{
+	if (!Locator::infoConstants::has_value())
+	{
+		return entt::null;
+	}
+	auto& registry = Locator::entitiesRegistry::value();
+	const auto& row = Locator::infoConstants::value().showNeeds.at(need);
+	const auto flag = registry.Create();
+	registry.Assign<WorshipSiteFlag>(flag, WorshipSiteFlag {.site = site, .need = need});
+	registry.Assign<Mesh>(flag, resources::HashIdentifier(row.mesh), static_cast<int8_t>(0), static_cast<int8_t>(0));
+	registry.Assign<Transform>(flag, glm::vec3(0.0f), glm::mat3(1.0f), glm::vec3(1.0f));
+	return flag;
 }
 
 void GameWorshipSiteWorld::Remove(entt::entity object)

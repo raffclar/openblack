@@ -20,6 +20,7 @@
 #include <glm/vec3.hpp>
 
 #include "Creature/CreatureFight.h"
+#include "Creature/CreatureTurnToFace.h"
 
 namespace openblack::ecs::components
 {
@@ -29,11 +30,15 @@ namespace openblack::ecs::components
 /// wants much more. The other creature obeys it and does not think for itself until the fight is over.
 ///
 /// The creature that starts the fight leads the steps before the duel, and tells the other creature when to do each one:
-/// 1. Both stop and turn to face each other.
-/// 2. Both taunt or make the rude gesture.
-/// 3. The arena appears and the first creature points at it.
-/// 4. Both walk to their places, and the first creature waits for the other.
-/// 5. Both turn to face each other again, then the duel starts.
+/// 1. The first creature asks the other creature. On the next turn, it tells the mind of the other creature to stand
+///    still. On the turn after, it tells the other creature to stop and obey it. Until then, the other creature
+///    continues with what it did.
+/// 2. Both turn to face each other.
+/// 3. Both taunt or make the rude gesture.
+/// 4. The arena appears and the first creature points at it.
+/// 5. Both walk to their places, and the first creature waits for the other.
+/// 6. Both turn to face each other again. Then the other creature starts its duel, and the first creature starts its
+///    duel on the next turn.
 struct CreatureFighting
 {
 	enum class Stage : uint8_t
@@ -55,8 +60,23 @@ struct CreatureFighting
 		Celebrate,
 		/// After a fight that ended otherwise: finishing, then happy or sad
 		Respond,
+		/// Its fight stopped with nothing after it: it finishes its move and leaves the fight with no response
+		Stop,
 	};
 	Stage stage {Stage::FaceOff};
+	/// How far the creature takes part in the fight. The first creature takes part from the start.
+	enum class Part : uint8_t
+	{
+		/// The other creature is asked. Its mind continues with what it did, and it can still choose a new plan, which
+		/// stops the fight.
+		Asked,
+		/// The mind of the other creature stands still: its desires do not change and it chooses nothing. It continues
+		/// with what it did.
+		StandsStill,
+		/// The creature stopped what it did, and the steps of the fight move its body
+		Obeys,
+	};
+	Part part {Part::Obeys};
 	entt::entity opponent {entt::null};
 	creature_fight::Arena arena {};
 	/// Whether this creature started the fight, takes the arena and takes its place to the east of the middle; the arena
@@ -80,10 +100,39 @@ struct CreatureFighting
 	/// Whether it has been told what to do in this stage yet, and has taunted its opponent
 	bool played {false};
 	bool taunted {false};
+	/// Its turn to face the opponent in the face-off or in the arena, and the game turns of that stage so far
+	creature_turn_to_face::Turn faceTurn {};
+	uint32_t faceOffTurns {0};
 	/// Whether its taunt before the fight is the rude gesture, chosen as the fight starts
 	bool rude {false};
+	/// Whether it started to let go of the thing that it held before its taunt
+	bool handsChecked {false};
 	/// Whether its life has paid for the fight and its mind learnt from it
 	bool ended {false};
+	/// Whether the hand took hold of it in the fight. Its fight steps wait while the hand holds it. When the hand lets go
+	/// of it, its fight stops.
+	bool held {false};
+	/// Why its opponent left the duel before it, if the opponent did. It then stays in its duel against the opponent until
+	/// the fight of the opponent ends. Then it stops with no response.
+	enum class PartnerLeft : uint8_t
+	{
+		None,
+		/// The opponent won because this creature had no life left
+		Won,
+		/// The hand took hold of the opponent
+		Held,
+	};
+	PartnerLeft partnerLeft {PartnerLeft::None};
+	/// Whether the creature ended its response with no fear, and the game turns after that. The plan of the first
+	/// creature then ends after a set number of turns. The other creature waits until the fight of the first creature
+	/// ends.
+	bool responded {false};
+	uint32_t turnsAfterResponse {0};
+	/// Whether the creature started its response after the duel. A fight that was called off has no response.
+	bool showedResponse {false};
+	/// Whether the first creature, on the turn after its response, freed the mind of the other creature again. The other
+	/// creature then thinks and can choose a new plan, which stops the fight for both.
+	bool mindFree {false};
 };
 /// Whether a fighter is in one of the steps before the duel
 [[nodiscard]] constexpr bool IsLeadIn(CreatureFighting::Stage stage)

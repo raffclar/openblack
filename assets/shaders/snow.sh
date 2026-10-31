@@ -3,8 +3,11 @@
 
 // The snow lying on the island: how deep it is in each 40 unit cell of a 128 by 128 grid, point sampled
 SAMPLER2D(s_snowDepth, 11);
-// x: 1 when snow is drawn on what is drawn
+// x: 1 when snow is drawn on what is drawn. y: 1 when an object's submesh has bones. z: 1 for the faces of a broken
+// shape, which read the snow by where they are in the world.
 uniform vec4 u_snow;
+// The distance from the front face of a broken shape to its back face
+#define BROKEN_FACE_DEPTH 0.45f
 
 // How deep the snow lies at a grid point; none off the grid
 float SnowDepthCell(vec2 cell)
@@ -42,7 +45,8 @@ float SnowWhole(float value)
 
 // Where an object's vertex reads the snow texture: across by how much the surface faces up, down by how much it faces
 // along x, each less a little by where the vertex is in the mesh. The snow's alpha rises across the texture, so the
-// snow lies thickest on what faces up.
+// snow lies thickest on what faces up. The normal is in the world, or for a submesh with bones it is the normal in the
+// file.
 vec2 SnowUv(vec3 meshPosition, vec3 worldNormal)
 {
 	float a = meshPosition.y * 0.3f + meshPosition.z + 20.0f;

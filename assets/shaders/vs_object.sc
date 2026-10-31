@@ -178,6 +178,10 @@ void main()
 	normal = normalize(normal);
 #endif // USE_MORPH
 
+#ifdef USE_HEIGHT_MAP
+	// A vertex of an inner wall rises with the land as its vertex on the outer wall does
+	vec2 landPoint = TO_WORLD(vec4(position, 1.0f)).xz;
+#endif // USE_HEIGHT_MAP
 	// A building's inner walls: every vertex moved in along its normal across the ground, its height kept
 	position.xz -= normal.xz * u_inset.x;
 	v_position = TO_WORLD(vec4(position, 1.0f));
@@ -266,7 +270,12 @@ void main()
 	// lit in a colour of its own that the land's colour doesn't reach (w)
 	vec3 added = HazeColour(hazeT);
 #ifndef USE_LIGHTMAP
-	if (u_landLight.x > 0.0f && u_landLight.w < 0.5f)
+	bool takesLandColour = u_landLight.x > 0.0f && u_landLight.w < 0.5f;
+#ifdef USE_INSTANCING
+	// An instance with a colour of its own below 0 takes no colour of the land
+	takesLandColour = takesLandColour && (heldMirror || i_data4.y >= 0.0f);
+#endif // USE_INSTANCING
+	if (takesLandColour)
 	{
 		added = min(added + LandColourAt(lightOrigin.xz), vec3_splat(255.0f));
 	}
@@ -289,9 +298,21 @@ void main()
 		float snowLevel = SnowShownLevel(i_data4.w);
 		if (snowLevel > 0.0f)
 		{
-			vec3 worldNormal = normalize(TO_WORLD(vec4(normal, 0.0f)).xyz);
-			v_snow = vec4(SnowUv(position, worldNormal), snowLevel / 255.0f, 0.0f);
+			// A submesh with bones reads the snow by the normal in its file. The bones and the place of the thing do
+			// not change it.
+			vec3 snowNormal = u_snow.y > 0.5f ? normal : normalize(TO_WORLD(vec4(normal, 0.0f)).xyz);
+			v_snow = vec4(SnowUv(position, snowNormal), snowLevel / 255.0f, 0.0f);
 			v_snowLight = ModelLightColour(SnowColour(colour), ModelLightFactor(normal, localLight));
+			// The faces of a broken shape read the snow by where the corner is in the world and by the normal of its
+			// face. A back corner reads by its front corner, but from the first column of the snow texture.
+			if (u_snow.z > 0.5f)
+			{
+				bool backCorner = a_indices.z == 1;
+				vec3 frontNormal = backCorner ? -snowNormal : snowNormal;
+				vec3 frontCorner = backCorner ? v_position.xyz + frontNormal * BROKEN_FACE_DEPTH : v_position.xyz;
+				vec2 frontUv = SnowUv(frontCorner, frontNormal);
+				v_snow.xy = backCorner ? vec2(0.0f, frontUv.y) : frontUv;
+			}
 		}
 	}
 #endif // USE_INSTANCING
@@ -323,6 +344,11 @@ void main()
 		v_color0 = vec4(colour / 255.0f, 1.0f);
 	}
 #endif // USE_LIGHTMAP
+	// The snow on the faces of a broken shape takes the light of the faces
+	if (u_snow.z > 0.5f)
+	{
+		v_snowLight = v_color0.rgb;
+	}
 #ifdef USE_LIGHTMAP
 	// The temple's lightmapped walls are drawn unlit, in the temple's light with its colour or a glow added, and fogged
 	// at each vertex
@@ -376,7 +402,7 @@ void main()
 	vec3 modelUp = u_model[modelIndex][1].xyz;
 	float modelScale = length(u_model[modelIndex][0].xyz);
 #endif // USE_INSTANCING
-	float rise = LandAltitude(v_position.xz) - LandAltitude(modelOrigin.xz);
+	float rise = LandAltitude(landPoint) - LandAltitude(modelOrigin.xz);
 	if (modelUp.x == 0.0f && modelUp.z == 0.0f)
 	{
 		v_position.y += rise;

@@ -14,6 +14,9 @@
 
 #include <array>
 #include <optional>
+#include <span>
+
+#include "Enums.h"
 
 /// The guidance: the advisors' running commentary on what happens in the game (towns attacked, buildings wrecked, the
 /// player turning from good or evil, the moon) and the villagers' voices of guidance. Each kind of guidance waits a
@@ -75,6 +78,14 @@ struct KindRule
 	bool onFirstLand;
 };
 [[nodiscard]] const KindRule& Rule(Kind kind);
+
+/// Whether the land is the first land of a story played alone, where the game keeps most remarks quiet. A skirmish
+/// and a network game are never such a land, also when their land number is the first land's.
+[[nodiscard]] constexpr bool QuietFirstLand(int32_t landNumber, bool networkGame, bool skirmish)
+{
+	constexpr int32_t k_FirstLand = 1;
+	return landNumber == k_FirstLand && !networkGame && !skirmish;
+}
 
 /// The random part of the wait: five times the least gap, shrunk by the cube of a draw of 0 to 1 so long waits are
 /// rarer, cut to a whole number of turns. The wait is the least gap plus a local random number below this.
@@ -157,5 +168,19 @@ struct MoonLook
 /// pi full) within 0.15 of full, the full moon remark; otherwise looked at again the cube of the phase's distance from
 /// full times 12000 turns later (at once for a waxing moon, whose distance is negative)
 [[nodiscard]] MoonLook LookAtMoon(float phase, bool clockSaysNight);
+
+/// The advisors look for a town that loses its belief in the player this often, in game turns
+constexpr uint32_t k_LosingBeliefEvery = 10;
+/// The number of players that a town believes in, the neutral player last
+constexpr size_t k_BeliefPlayers = 8;
+using TownBeliefs = std::array<float, k_BeliefPlayers>;
+/// The town that the advisors warn of as losing its belief in the player: the first town, in the order of the player's
+/// list, in which another player (the neutral player too) has more belief than the belief in the player less the
+/// margin. None when no town is so.
+[[nodiscard]] std::optional<size_t> LosingBeliefTown(std::span<const TownBeliefs> towns, size_t player, float margin);
+
+/// The line that the advisors of the player here say when the belief of a town gives it to another player: a bad line
+/// when the player here lost the town, else a good line when the player here took it, else none
+[[nodiscard]] std::optional<Kind> TownChangedHandsLine(PlayerNames loser, PlayerNames taker, PlayerNames own);
 
 } // namespace openblack::guidance

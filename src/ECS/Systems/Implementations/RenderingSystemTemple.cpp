@@ -21,8 +21,9 @@
 #include "3D/L3DMesh.h"
 #include "3D/L3DSubMesh.h"
 #include "3D/TempleInteriorInterface.h"
+#include "3D/TempleSubMeshTexture.h"
 #include "Camera/Camera.h"
-#include "Creature/CreatureRig.h"
+#include "Creature/CaveCreature.h"
 #include "ECS/Components/CreatureCopy.h"
 #include "ECS/Components/Hand.h"
 #include "ECS/Components/Mesh.h"
@@ -34,12 +35,12 @@
 #include "EngineConfig.h"
 #include "Graphics/BonePalette.h"
 #include "Graphics/DebugLines.h"
-#include "Graphics/DetailLevel.h"
 #include "Graphics/GraphicsHandleBgfx.h"
 #include "Graphics/ShaderManager.h"
 #include "Locator.h"
 #include "Resources/ResourcesInterface.h"
 #include "Temple/TemplePeople.h"
+#include "Visual/DetailLevel.h"
 
 using namespace openblack::ecs::systems;
 using namespace openblack::ecs::components;
@@ -197,7 +198,7 @@ void RenderingSystemTemple::PrepareDrawDescs(bool drawBoundingBox)
 	std::map<entt::id_type, uint32_t> creatureCounts;
 	if (_loadedRooms.contains(TempleRoom::CreatureCave))
 	{
-		registry.Each<const CreatureCopy, const CaveCreature, const Transform>(
+		rooms.Each<const CreatureCopy, const CaveCreature, const Transform>(
 		    [&registry, &creatureCounts, &instanceCount](const CreatureCopy& copy, const CaveCreature& /*unused*/,
 		                                                 const Transform& /*unused*/) {
 			    if (const auto mesh = CopiedMesh(registry, copy); mesh.has_value())
@@ -406,7 +407,7 @@ void RenderingSystemTemple::PrepareDrawUploadUniforms(bool drawBoundingBox)
 	_renderContext.creatureCopyDraws.clear();
 	if (_loadedRooms.contains(TempleRoom::CreatureCave))
 	{
-		registry.Each<const CreatureCopy, const CaveCreature, const Transform>(
+		rooms.Each<const CreatureCopy, const CaveCreature, const Transform>(
 		    [this, &registry, &uniformOffsets](const entt::entity entity, const CreatureCopy& copy, const CaveCreature& cave,
 		                                       const Transform& transform) {
 			    const auto mesh = CopiedMesh(registry, copy);
@@ -419,7 +420,7 @@ void RenderingSystemTemple::PrepareDrawUploadUniforms(bool drawBoundingBox)
 			    auto offset = uniformOffsets.insert(std::make_pair(*mesh, 0));
 			    const uint32_t idx = desc->second.offset + offset.first->second;
 			    _renderContext.instanceUniforms[idx] = {
-			        .model = creature::PlacementMatrix(transform.position, transform.rotation, transform.scale)};
+			        .model = cave_creature::Placement(transform.position, transform.rotation, transform.scale)};
 			    _renderContext.creatureCopyDraws.push_back(
 			        {.creature = copy.creature, .copy = entity, .instance = idx, .light = cave.light});
 			    offset.first->second++;

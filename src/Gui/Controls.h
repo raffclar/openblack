@@ -171,7 +171,7 @@ protected:
 	const GameFont& _font;
 	LabelSide _side;
 	Look _look;
-	int _labelSize {DialogPainter::k_MidTextSize};
+	int _labelSize {DialogPainter::MidTextSize()};
 	/// How much further from the button a label beside it is
 	int _labelGap {0};
 	bool _checked {false};
@@ -221,7 +221,7 @@ public:
 	std::function<void(float)> onChange;
 	std::u16string label;
 	/// The size of the label's text along the bar
-	int labelSize {DialogPainter::k_MidTextSize};
+	int labelSize {DialogPainter::MidTextSize()};
 	/// The label goes above a small knob in the lower half of the bar, at a size of half the bar's height and 2 more
 	bool labelAbove {false};
 
@@ -247,6 +247,9 @@ public:
 		/// The colour of the item's text, as the chat of the game room gives each player's lines. With none, the text
 		/// lights up under the pointer and with the focus as usual.
 		std::optional<glm::vec4> colour;
+		/// A bar of this colour fills the item, 2 units in from its edges, under black text. The players of the chat that
+		/// the player selects have it.
+		std::optional<glm::vec4> bar;
 	};
 
 	List(const GameFont& font, DialogRect rect, int size, bool centred, bool scrollBar, bool showSelection);
@@ -279,9 +282,15 @@ public:
 	/// list scrolls to its end.
 	void ScrollToSelection();
 	/// Width of the scroll bar, beside the box
-	[[nodiscard]] static constexpr int GetScrollBarWidth() noexcept { return k_ScrollBarWidth; }
-	/// The scroll bar of every list is 24 units wide, for all sizes of text
+	[[nodiscard]] int GetScrollBarWidth() const noexcept { return scrollBarWidth; }
+	/// The scroll bar of a list is 24 units wide, for all sizes of text, unless the list gives another width
 	static constexpr int k_ScrollBarWidth = 24;
+	int scrollBarWidth {k_ScrollBarWidth};
+	/// Shows the scroll bar, or hides it
+	void SetScrollBar(bool scrollBar) noexcept { _scrollBar = scrollBar; }
+	[[nodiscard]] bool HasScrollBar() const noexcept { return _scrollBar; }
+	/// The height of all the items
+	[[nodiscard]] int GetContentHeight() const;
 	/// Right of the box the items are in, left of the scroll bar
 	[[nodiscard]] int GetBoxRight() const;
 	/// Drawn over each item the list shows, after its text: the item, its top and bottom, the right of the box the
@@ -301,12 +310,11 @@ public:
 	/// The item at a height of the dialog space, as the list is scrolled
 	[[nodiscard]] std::optional<size_t> ItemAt(int y) const;
 
-private:
-	[[nodiscard]] int GetContentHeight() const;
 	void ScrollTo(float scroll);
 	/// The height of each item at the width of the box
 	void MeasureItems();
 
+private:
 	const GameFont& _font;
 	int _size;
 	bool _centred;
@@ -333,7 +341,7 @@ class EditBox final: public Control
 public:
 	/// The font measures the text, drawn size high
 	EditBox(const GameFont& font, DialogRect rect, std::u16string text, size_t maxLength,
-	        int size = DialogPainter::k_MidTextSize);
+	        int size = DialogPainter::MidTextSize());
 	void Draw(const DialogPainter& painter, bool hovered, bool focused, bool pressed) const override;
 	void MouseDown(glm::ivec2 point) override;
 	void Drag(glm::ivec2 point) override;
@@ -453,7 +461,7 @@ public:
 	[[nodiscard]] float GetRingOpening() const noexcept { return std::clamp(_ring.GetValue(), 0.0f, 1.0f); }
 	using Control::Release;
 	/// The mouse button was let go, wherever it was: the ring goes
-	void Release();
+	void CloseRing();
 	std::function<void(int)> onChange;
 
 	/// Where a symbol sits around the picture once the ring is up

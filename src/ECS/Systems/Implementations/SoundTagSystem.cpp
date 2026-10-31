@@ -21,9 +21,6 @@
 
 #include <glm/geometric.hpp>
 
-#include "Audio/AudioManagerInterface.h"
-#include "Audio/GameSoundEffects.h"
-#include "Audio/HearingRange.h"
 #include "Camera/Camera.h"
 #include "ECS/Components/HandGrab.h"
 #include "ECS/Components/SoundTag.h"
@@ -33,6 +30,9 @@
 #include "ECS/Systems/TimeSystemInterface.h"
 #include "Locator.h"
 #include "Resources/ResourcesInterface.h"
+#include "Sound/GameSoundEffects.h"
+#include "Sound/HearingRange.h"
+#include "Sound/SoundRequestInterface.h"
 
 using namespace openblack;
 using namespace openblack::ecs::systems;
@@ -49,9 +49,9 @@ void StopSound(entt::entity& emitter)
 	{
 		return;
 	}
-	if (Locator::audio::has_value())
+	if (Locator::sounds::has_value())
 	{
-		auto& audio = Locator::audio::value();
+		auto& audio = Locator::sounds::value();
 		if (audio.EmitterExists(emitter))
 		{
 			audio.StopEmitter(emitter);
@@ -68,7 +68,7 @@ void StopSound(SoundTag& tag)
 
 bool IsPlaying(entt::entity emitter)
 {
-	auto& audio = Locator::audio::value();
+	auto& audio = Locator::sounds::value();
 	return emitter != entt::null && audio.EmitterExists(emitter) && audio.GetStatus(emitter) != audio::AudioStatus::Stopped;
 }
 
@@ -81,9 +81,9 @@ bool IsPlaying(const SoundTag& tag)
 /// finishes. The audio removes the emitter when the sound stops.
 void LetGo(SoundTag& tag)
 {
-	if (tag.emitter != entt::null && Locator::audio::has_value() && IsPlaying(tag) && tag.loops)
+	if (tag.emitter != entt::null && Locator::sounds::has_value() && IsPlaying(tag) && tag.loops)
 	{
-		Locator::audio::value().ReleaseEmitterLoop(tag.emitter);
+		Locator::sounds::value().ReleaseEmitterLoop(tag.emitter);
 	}
 	tag.emitter = entt::null;
 }
@@ -127,7 +127,7 @@ void SoundTagSystem::StartPointSound(PointSound& point, std::optional<glm::vec3>
 	{
 		return;
 	}
-	auto& audio = Locator::audio::value();
+	auto& audio = Locator::sounds::value();
 	point.emitter = audio.CreateOwnSoundEmitter(point.sound, point.position, audio::PlayType::Once);
 	if (point.emitter != entt::null)
 	{
@@ -171,7 +171,7 @@ bool SoundTagSystem::ProcessPointSound(PointSound& point, const glm::vec3& camer
 
 bool SoundTagSystem::ProcessObjectTag(entt::entity entity, SoundTag& tag, const glm::vec3& camera) const
 {
-	auto& audio = Locator::audio::value();
+	auto& audio = Locator::sounds::value();
 	const auto& registry = Locator::entitiesRegistry::value();
 	const auto& sounds = Locator::resources::value().GetSounds();
 	++tag.turns;
@@ -247,7 +247,7 @@ void SoundTagSystem::FindTags()
 
 void SoundTagSystem::ProcessTurn(const glm::vec3& camera)
 {
-	if (!Locator::audio::has_value())
+	if (!Locator::sounds::has_value())
 	{
 		return;
 	}
@@ -316,27 +316,43 @@ void SoundTagSystem::CreatePointSound(entt::id_type sound, const glm::vec3& posi
 	                  })
 	                  .point.value();
 	// One not delayed sounds at once, where it is made
-	if (!delayed && Locator::audio::has_value() && Locator::resources::has_value())
+	if (!delayed && Locator::sounds::has_value() && Locator::resources::has_value())
 	{
-		StartPointSound(point, Locator::audio::value().GetListener().origin);
+		StartPointSound(point, Locator::sounds::value().GetListener().origin);
 	}
 }
 
 entt::entity SoundTagSystem::AttachObjectSound(entt::entity entity, entt::id_type sound, bool loops)
 {
 	auto& registry = Locator::entitiesRegistry::value();
-	const auto tag = registry.Create();
-	registry.Assign<SoundTag>(tag, SoundTag {
-	                                   .sound = sound,
-	                                   .offset = glm::vec3(0.0f),
-	                                   .active = true,
-	                                   .emitter = entt::null,
-	                                   .point = false,
-	                                   .delayed = false,
-	                                   .turns = 0,
-	                                   .owner = entity,
-	                                   .loops = loops,
-	                               });
+	const SoundTag fresh {
+	    .sound = sound,
+	    .offset = glm::vec3(0.0f),
+	    .active = true,
+	    .emitter = entt::null,
+	    .point = false,
+	    .delayed = false,
+	    .turns = 0,
+	    .owner = entity,
+	    .loops = loops,
+	};
+	// At a load, the sound takes back the tag that it had before the load, so that the loaded world keeps its entities
+	const auto unclaimed = std::ranges::find_if(_unclaimed, [&registry, entity, sound](entt::entity tag) {
+		const auto& kept = registry.Get<const SoundTag>(tag);
+		return kept.owner == entity && kept.sound == sound;
+	});
+	entt::entity tag = entt::null;
+	if (unclaimed != _unclaimed.end())
+	{
+		tag = *unclaimed;
+		_unclaimed.erase(unclaimed);
+		registry.Get<SoundTag>(tag) = fresh;
+	}
+	else
+	{
+		tag = registry.Create();
+		registry.Assign<SoundTag>(tag, fresh);
+	}
 	// A new tag goes at the start of the list
 	_tags.push_front(Entry {.tag = tag, .point = std::nullopt});
 	return tag;
@@ -370,18 +386,34 @@ void SoundTagSystem::ForgetSavedSounds()
 {
 	auto& registry = Locator::entitiesRegistry::value();
 	std::vector<entt::entity> gone;
-	registry.Each<SoundTag>([&gone](entt::entity entity, SoundTag& tag) {
-		if (tag.point || tag.owner != entt::null)
+	_unclaimed.clear();
+	registry.Each<SoundTag>([this, &gone](entt::entity entity, SoundTag& tag) {
+		if (tag.point)
 		{
 			gone.push_back(entity);
 			return;
 		}
 		tag.emitter = entt::null;
-		tag.turns = 0;
+		// A sound attached to an object waits until the load attaches it again or forgets it
+		if (tag.owner != entt::null)
+		{
+			_unclaimed.push_back(entity);
+		}
+		// The count of the turns of an object's own tag stays, because it is a part of the synced world
 	});
 	for (const auto entity : gone)
 	{
 		registry.Destroy(entity);
 	}
 	_tags.clear();
+}
+
+void SoundTagSystem::ForgetUnclaimedSounds()
+{
+	auto& registry = Locator::entitiesRegistry::value();
+	for (const auto entity : _unclaimed)
+	{
+		registry.Destroy(entity);
+	}
+	_unclaimed.clear();
 }

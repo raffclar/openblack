@@ -7,6 +7,7 @@
  * openblack is licensed under the GNU General Public License version 3.
  *******************************************************************************/
 
+#include <cstdint>
 #include <cstdlib>
 
 #include <algorithm>
@@ -409,6 +410,39 @@ TEST(GestureRequests, TheLeash)
 	EXPECT_TRUE(Requests(context).empty());
 }
 
+// A scribble of the empty hand stops the charge of an icon for the hand, unless it shakes off the leash first
+TEST(GestureRequests, AScribbleOfTheEmptyHandStopsTheChargeOfAnIcon)
+{
+	const Request cancel {.gesture = GestureType::Scribble, .purpose = Purpose::CancelCharge};
+	HandContext context;
+	EXPECT_TRUE(Requests(context).empty());
+
+	context.iconCharging = true;
+	auto requests = Requests(context);
+	ASSERT_EQ(requests.size(), 1u);
+	EXPECT_EQ(requests[0], cancel);
+	EXPECT_FALSE(ShowsRecognition(Purpose::CancelCharge));
+	EXPECT_TRUE(RestsAfter(Purpose::CancelCharge));
+	EXPECT_FALSE(HelpEventOf(cancel, context).has_value());
+
+	// The leash in the hand comes off first; a leash tied to something lets the scribble stop the charge
+	context.creature = HandContext::Creature {.leashed = true, .knows = {false, true, false}, .worn = LeashType::Rope};
+	requests = Requests(context);
+	ASSERT_EQ(requests.size(), 1u);
+	EXPECT_EQ(requests[0].purpose, Purpose::ShakeOffLeash);
+	context.creature->tied = true;
+	requests = Requests(context);
+	ASSERT_EQ(requests.size(), 1u);
+	EXPECT_EQ(requests[0], cancel);
+
+	// A thing or a seed in the hand: the scribble does not stop a charge
+	context.holdingObject = true;
+	EXPECT_EQ(std::ranges::count(Requests(context), cancel), 0);
+	context.holdingObject = false;
+	context.seed = HandContext::Seed {};
+	EXPECT_EQ(std::ranges::count(Requests(context), cancel), 0);
+}
+
 TEST(GestureRequests, OnLandOneTheLeashPickerAlsoWaitsForTheSquareWave)
 {
 	HandContext context;
@@ -537,4 +571,70 @@ TEST(GestureRequests, WhileThePlayersCreatureDuelsOnlyItsFightGesturesAreWaitedF
 	EXPECT_TRUE(std::ranges::none_of(requests, [](const Request& request) {
 		return request.purpose == Purpose::FightSpecialMove || request.purpose == Purpose::FightMiracle;
 	}));
+}
+
+TEST(GestureRequests, ThePowerUpsAndTheCancelCarryTheSeedForTheirHints)
+{
+	HandContext context;
+	context.seed = HandContext::Seed {.type = SpellSeedType::Storm,
+	                                  .powerUpGestures = {GestureType::InverseSpiral, GestureType::Spiral, GestureType::None}};
+	auto requests = Requests(context);
+	ASSERT_EQ(requests.size(), 3u);
+	EXPECT_EQ(requests[0],
+	          (Request {.gesture = GestureType::Scribble, .purpose = Purpose::DropSeed, .seed = SpellSeedType::Storm}));
+	EXPECT_EQ(requests[1].seed, SpellSeedType::Storm);
+	EXPECT_EQ(requests[2].seed, SpellSeedType::Storm);
+	// Once a level is asked for, the scribble has that level
+	context.seed->powerUp = 1;
+	requests = Requests(context);
+	ASSERT_EQ(requests.size(), 2u);
+	EXPECT_EQ(requests[0].powerUpLevel, 1);
+}
+
+TEST(GestureRequests, TheSpiralsSayWhoseMiraclesTheyOpen)
+{
+	HandContext context;
+	context.handReady = true;
+	context.ownSelectionOffered = true;
+	context.creatureSelectionOffered = true;
+	const auto requests = Requests(context);
+	ASSERT_EQ(requests.size(), 2u);
+	EXPECT_EQ(requests[0], (Request {.gesture = GestureType::Spiral, .purpose = Purpose::OpenSelection}));
+	EXPECT_EQ(requests[1],
+	          (Request {.gesture = GestureType::InverseSpiral, .purpose = Purpose::OpenSelection, .forCreature = true}));
+}
+
+// The help counts each step of the miracle selection and the R: a choice counts as a step of the chain first. A gesture
+// that does nothing counts nothing.
+TEST(GestureRequests, TheHelpCountsTheStepsOfTheMiracleSelection)
+{
+	namespace profile = help::profile;
+	using Events = std::vector<uint32_t>;
+	EXPECT_EQ(HelpEventsOf(SelectionStep::Opened), Events {profile::k_GestureOpenSelection});
+	EXPECT_EQ(HelpEventsOf(SelectionStep::Advanced), Events {profile::k_GestureSelectionStep});
+	EXPECT_EQ(HelpEventsOf(SelectionStep::Chosen),
+	          (Events {profile::k_GestureSelectionStep, profile::k_GestureSelectionChosen}));
+	EXPECT_EQ(HelpEventsOf(SelectionStep::Closed), Events {profile::k_GestureCloseSelection});
+	EXPECT_EQ(HelpEventsOf(SelectionStep::Repeated), Events {profile::k_GestureRepeatMiracle});
+	EXPECT_TRUE(HelpEventsOf(SelectionStep::Nothing).empty());
+	// The game's numbers for these events
+	EXPECT_EQ(profile::k_GestureRepeatMiracle, 14u);
+	EXPECT_EQ(profile::k_GestureOpenSelection, 15u);
+	EXPECT_EQ(profile::k_GestureSelectionStep, 16u);
+	EXPECT_EQ(profile::k_GestureSelectionChosen, 17u);
+	EXPECT_EQ(profile::k_GestureCloseSelection, 21u);
+}
+
+// Each step of the selection also counts as a gesture and as an action of the player, once a turn
+TEST(GestureRequests, AStepOfTheSelectionAlsoCountsAsAGesture)
+{
+	help::profile::HelpProfile profile;
+	for (const auto event : HelpEventsOf(SelectionStep::Chosen))
+	{
+		profile.Trigger(event);
+	}
+	EXPECT_EQ(profile.Count(help::profile::k_GestureSelectionStep).Total(), 1u);
+	EXPECT_EQ(profile.Count(help::profile::k_GestureSelectionChosen).Total(), 1u);
+	EXPECT_EQ(profile.Count(24).Total(), 1u);
+	EXPECT_EQ(profile.Count(help::profile::k_AnyEvent).Total(), 1u);
 }

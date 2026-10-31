@@ -26,6 +26,7 @@
 #include <sstream>
 #include <string>
 #include <string_view>
+#include <tuple>
 #include <unordered_set>
 #include <utility>
 #include <vector>
@@ -47,22 +48,25 @@
 #include "3D/L3DMesh.h"
 #include "3D/LandIslandInterface.h"
 #include "3D/MapCoords.h"
+#include "3D/Mists.h"
 #include "3D/ScreenPick.h"
 #include "3D/TempleInteriorInterface.h"
-#include "Audio/AudioManagerInterface.h"
-#include "Audio/GameMusic.h"
-#include "Audio/GameSoundEffects.h"
-#include "Audio/ScriptSoundEffect.h"
-#include "Audio/Sound.h"
 #include "Blast/CameraShake.h"
 #include "Camera/Camera.h"
 #include "Camera/ScriptCameraModel.h"
+#include "ECS/GamePlayers.h"
+#include "Sound/GameMusic.h"
+#include "Sound/GameSoundEffects.h"
+#include "Sound/ScriptSoundEffect.h"
+#include "Sound/SoundId.h"
+#include "Sound/SoundRequestInterface.h"
 #if defined(OPENBLACK_DEVELOPER_TOOLS)
 #include "Common/DrawTrace.h"
 #endif
 #include "Common/GUtilsAngle.h"
 #include "Common/GUtilsDistance.h"
 #include "Common/GameRandom.h"
+#include "Common/MachineClock.h"
 #include "Common/PortableRotations.h"
 #include "Creature/CreatureActivity.h"
 #include "Creature/CreatureDesires.h"
@@ -75,10 +79,12 @@
 #include "Creature/LeashRules.h"
 #include "Creature/TemplePen.h"
 #include "ECS/AlignmentHistory.h"
+#include "ECS/AllyInfluence.h"
 #include "ECS/Archetypes/AnimatedStaticArchetype.h"
 #include "ECS/Archetypes/BallArchetype.h"
 #include "ECS/Archetypes/CreatureArchetype.h"
 #include "ECS/Archetypes/FeatureArchetype.h"
+#include "ECS/Archetypes/MistArchetype.h"
 #include "ECS/Archetypes/MobileStaticArchetype.h"
 #include "ECS/Archetypes/ScriptMarkerArchetype.h"
 #include "ECS/Archetypes/SharkArchetype.h"
@@ -118,19 +124,23 @@
 #include "ECS/Components/MapCellResident.h"
 #include "ECS/Components/Mesh.h"
 #include "ECS/Components/MiracleImpression.h"
+#include "ECS/Components/Mist.h"
 #include "ECS/Components/Mobile.h"
 #include "ECS/Components/NeverFades.h"
 #include "ECS/Components/OneOffSpellSeed.h"
 #include "ECS/Components/Physics.h"
 #include "ECS/Components/Player.h"
 #include "ECS/Components/Pot.h"
+#include "ECS/Components/PuzzleGame.h"
 #include "ECS/Components/Reward.h"
+#include "ECS/Components/Scaffold.h"
 #include "ECS/Components/ScriptControl.h"
 #include "ECS/Components/ScriptHighlight.h"
 #include "ECS/Components/ScriptRemind.h"
 #include "ECS/Components/ScriptTimer.h"
 #include "ECS/Components/Shark.h"
 #include "ECS/Components/Sky.h"
+#include "ECS/Components/Spell.h"
 #include "ECS/Components/SpellDispenser.h"
 #include "ECS/Components/SpellSeed.h"
 #include "ECS/Components/Temple.h"
@@ -143,6 +153,8 @@
 #include "ECS/Components/VillagerPose.h"
 #include "ECS/Components/WallHug.h"
 #include "ECS/Components/WorshipChants.h"
+#include "ECS/Components/WorshipSite.h"
+#include "ECS/CreatureCarried.h"
 #include "ECS/CreatureFromFile.h"
 #include "ECS/CreatureNaming.h"
 #include "ECS/CreatureReactionNotice.h"
@@ -154,11 +166,16 @@
 #include "ECS/Map.h"
 #include "ECS/PhysicsEntry.h"
 #include "ECS/PlacedTurn.h"
+#include "ECS/PlayerTowns.h"
 #include "ECS/Reflection/BinaryArchive.h"
 #include "ECS/Registry.h"
 #include "ECS/ReportedCamera.h"
+#include "ECS/ScriptContainerWalk.h"
+#include "ECS/ScriptDelete.h"
 #include "ECS/ScriptFind.h"
 #include "ECS/ScriptFlocks.h"
+#include "ECS/ScriptObject.h"
+#include "ECS/ScriptPoison.h"
 #include "ECS/ScriptPopulate.h"
 #include "ECS/ScriptSpotVisuals.h"
 #include "ECS/ScriptWeatherRules.h"
@@ -184,15 +201,18 @@
 #include "ECS/Systems/CreatureMindSystemInterface.h"
 #include "ECS/Systems/CreatureModeSystemInterface.h"
 #include "ECS/Systems/CreatureObjectActionSystemInterface.h"
+#include "ECS/Systems/CreaturePhysiologySystemInterface.h"
 #include "ECS/Systems/DanceSystemInterface.h"
 #include "ECS/Systems/DialogueControlSystemInterface.h"
 #include "ECS/Systems/DynamicsSystemInterface.h"
+#include "ECS/Systems/EffectRequestSystemInterface.h"
 #include "ECS/Systems/ExplosionSystemInterface.h"
 #include "ECS/Systems/FightTranscriptSystemInterface.h"
 #include "ECS/Systems/FireSystemInterface.h"
 #include "ECS/Systems/HandDemoSystemInterface.h"
 #include "ECS/Systems/HandGrabSystemInterface.h"
 #include "ECS/Systems/HandSystemInterface.h"
+#include "ECS/Systems/HelpMessageSystemInterface.h"
 #include "ECS/Systems/HelpProfileSystemInterface.h"
 #include "ECS/Systems/HelpSpeechSystemInterface.h"
 #include "ECS/Systems/HelpTextSystemInterface.h"
@@ -208,35 +228,41 @@
 #include "ECS/Systems/LivingActionSystemInterface.h"
 #include "ECS/Systems/MagicShieldSystemInterface.h"
 #include "ECS/Systems/MagicSystemInterface.h"
+#include "ECS/Systems/MistSystemInterface.h"
 #include "ECS/Systems/ObjectDrawListSystemInterface.h"
-#include "ECS/Systems/ParticleSystemInterface.h"
+#include "ECS/Systems/ParticleRuleSystemInterface.h"
 #include "ECS/Systems/PlayerProfileSystemInterface.h"
 #include "ECS/Systems/PlayerSystemInterface.h"
+#include "ECS/Systems/PuzzleGameSystemInterface.h"
 #include "ECS/Systems/ReactionSystemInterface.h"
 #include "ECS/Systems/ResourceStoreSystemInterface.h"
 #include "ECS/Systems/RewardSystemInterface.h"
 #include "ECS/Systems/SaveGameSystemInterface.h"
 #include "ECS/Systems/ScriptControlSystemInterface.h"
 #include "ECS/Systems/ScriptHighlightSystemInterface.h"
+#include "ECS/Systems/ScriptMusicSystemInterface.h"
 #include "ECS/Systems/ScriptObjectsSystemInterface.h"
-#include "ECS/Systems/SkySystemInterface.h"
+#include "ECS/Systems/SkyClockSystemInterface.h"
 #include "ECS/Systems/SoundTagSystemInterface.h"
 #include "ECS/Systems/SpellIconSystemInterface.h"
 #include "ECS/Systems/TempleDestructionSystemInterface.h"
 #include "ECS/Systems/TimeSystemInterface.h"
 #include "ECS/Systems/TownDesireSystemInterface.h"
 #include "ECS/Systems/TownSystemInterface.h"
+#include "ECS/Systems/TurnCheerSystemInterface.h"
 #include "ECS/Systems/TutorialSkipSystemInterface.h"
 #include "ECS/Systems/VideoSystemInterface.h"
 #include "ECS/Systems/VillageTotemSystemInterface.h"
 #include "ECS/Systems/VortexSystemInterface.h"
 #include "ECS/Systems/WalkPathSystemInterface.h"
 #include "ECS/Systems/WeatherSystemInterface.h"
+#include "ECS/Systems/WorkshopSystemInterface.h"
 #include "ECS/Systems/WorshipSiteSystemInterface.h"
 #include "ECS/TempleConstruction.h"
 #include "ECS/ThingMapPlace.h"
 #include "ECS/ThingOnScreen.h"
 #include "ECS/TownDesire.h"
+#include "ECS/TownHomes.h"
 #include "ECS/TownPlanning.h"
 #include "ECS/TownPlaythings.h"
 #include "ECS/VillagerAfterDeath.h"
@@ -244,11 +270,11 @@
 #include "ECS/VillagerScriptRules.h"
 #include "ECS/VillagerSkeletons.h"
 #include "ECS/WalkerPlacement.h"
+#include "ECS/WallHugRules.h"
+#include "ECS/WorkshopRules.h"
 #include "ECS/WorldObjects.h"
 #include "Enums.h"
 #include "FileSystem/FileSystemInterface.h"
-#include "Game.h"
-#include "Graphics/RendererInterface.h"
 #include "Gui/ScriptTexts.h"
 #include "Hand/HandClickRules.h"
 #include "Hand/HandGrabRules.h"
@@ -265,12 +291,14 @@
 #include "Magic/MagicTables.h"
 #include "Magic/ScriptCast.h"
 #include "Magic/TownBelief.h"
+#include "MainThreadWork.h"
 #include "Physics/Body.h"
 #include "Resources/ResourcesInterface.h"
 #include "ScriptHeaders/ScriptCameraLookups.h"
 #include "ScriptHeaders/ScriptChallengeSnapshots.h"
 #include "ScriptHeaders/ScriptCreateRules.h"
 #include "ScriptHeaders/ScriptCreatureRules.h"
+#include "ScriptHeaders/ScriptDeadLiving.h"
 #include "ScriptHeaders/ScriptEnums.h"
 #include "ScriptHeaders/ScriptInfluence.h"
 #include "ScriptHeaders/ScriptInterfaceLevels.h"
@@ -281,6 +309,7 @@
 #include "ScriptHeaders/ScriptStart.h"
 #include "ScriptHeaders/ScriptSwitchChanges.h"
 #include "Temple/TempleEntrancePoint.h"
+#include "Visual/RendererRequestsInterface.h"
 #include "Windowing/WindowingInterface.h"
 
 namespace openblack::chlapi
@@ -289,6 +318,13 @@ namespace openblack::chlapi
 using namespace openblack::ecs::archetypes;
 
 PlayerNames ScriptPlayerName(int32_t scriptPlayer);
+
+/// Whether a player that a script names is a player of this game. The players of a land are the 8 of the game. A
+/// network game with more gods has the gods after the seventh too: the script numbers 9 to 33 name them (deviation 165).
+[[nodiscard]] static bool ScriptNamesPlayer(PlayerNames player)
+{
+	return static_cast<size_t>(player) < openblack::ecs::game_players::Count();
+}
 
 using openblack::Locator;
 using openblack::MobileStaticInfo;
@@ -363,10 +399,24 @@ uint32_t WideScreenOwner()
 	return Locator::cinematicDirectorSystem::value().GetWideScreenOwner();
 }
 
+/// A script gives the camera an order: the turns count it, so that a view report from before the order does not tell
+/// that the camera has arrived
+void CountCameraOrder()
+{
+	++Locator::entitiesRegistry::value().Context().scriptCameraOrders;
+}
+
+/// The script's camera, for a command that gives it an order
+ScriptCameraModel* OrderedScriptCamera()
+{
+	CountCameraOrder();
+	return Locator::scriptControlSystem::value().GetScriptCamera(Locator::camera::value());
+}
+
 /// The script's camera the camera commands move: with a warning when the script has none
 ScriptCameraModel* ScriptCamera()
 {
-	auto* camera = Locator::scriptControlSystem::value().GetScriptCamera(Locator::camera::value());
+	auto* camera = OrderedScriptCamera();
 	if (camera == nullptr)
 	{
 		ScriptMessage("We are in the wrong camera mode! - exception happened?");
@@ -489,14 +539,15 @@ help::spirits::AdvisorSpiritController* ScriptAdvisors()
 }
 
 /// The advisor a script's spirit means, 1 the good one or 2 the evil one, by the local player's alignment for those
-/// that go by it
+/// that go by it. A random spirit comes from the random numbers of the help, which no frame draws.
 int32_t ScriptHelpSpirit(int32_t scriptSpirit)
 {
 	const auto alignment = Locator::alignmentSystem::has_value()
 	                           ? Locator::alignmentSystem::value().GetPlayerAlignment(ScriptPlayerName(0))
 	                           : 0.0f;
-	return help::script_spirits::HelpSpiritOf(scriptSpirit, help::script_spirits::DiscreteAlignment(alignment),
-	                                          []() { return Locator::gameRandom::value().LocalRand(100); });
+	return help::script_spirits::HelpSpiritOf(scriptSpirit, help::script_spirits::DiscreteAlignment(alignment), []() {
+		return Locator::helpMessageSystem::has_value() ? Locator::helpMessageSystem::value().HelpRand(100) : 0u;
+	});
 }
 
 /// The last of the advisors' animations a script can play
@@ -540,11 +591,15 @@ std::string PopString()
 }
 
 /// Whether a thing is one of the world's objects, which a miracle can be cast on, rather than something with only a place,
-/// such as a town or a miracle: anything with a model but the hand, a creature, or a field
+/// such as a town or a miracle
 bool IsScriptObject(const ecs::Registry& registry, entt::entity thing)
 {
-	return (registry.AnyOf<ecs::components::Mesh>(thing) && !registry.AnyOf<ecs::components::Hand>(thing)) ||
-	       registry.AnyOf<ecs::components::Creature, ecs::components::Field>(thing);
+	return ecs::script_object::IsObject({.model = registry.AnyOf<ecs::components::Mesh>(thing),
+	                                     .hand = registry.AnyOf<ecs::components::Hand>(thing),
+	                                     .creature = registry.AnyOf<ecs::components::Creature>(thing),
+	                                     .field = registry.AnyOf<ecs::components::Field>(thing),
+	                                     .globe = registry.AnyOf<ecs::components::OneOffSpellSeed>(thing),
+	                                     .seed = registry.AnyOf<ecs::components::SpellSeed>(thing)});
 }
 
 /// A football made by a script goes to the nearest town, however far, for its people to play with; a town that already
@@ -611,6 +666,38 @@ glm::vec3 OnGround(const glm::vec3& position)
 	return {position.x, Locator::terrainSystem::value().GetHeightAt(glm::vec2(position.x, position.z)), position.z};
 }
 
+/// Whether the info table puts a row of the mobile statics in the rock kind
+bool IsRockKindRow(uint32_t subtype)
+{
+	if (!Locator::infoConstants::has_value())
+	{
+		return false;
+	}
+	const auto& rows = Locator::infoConstants::value().mobileStatic;
+	return script::create_rules::IsRow(subtype, rows.size()) && rows.at(subtype).mobileType == MobileStaticInfo::Rock;
+}
+
+/// A rock that a script made starts in the physics at rest. The physics puts it on the land when the start asks for
+/// it, and then lifts it clear of the things under it. A rock above the land falls in the next turns.
+void StartScriptRock(entt::entity rock, const script::create_rules::ScriptRockStart& start)
+{
+	if (rock == entt::null || !Locator::dynamicsSystem::has_value())
+	{
+		return;
+	}
+	auto& dynamics = Locator::dynamicsSystem::value();
+	const auto started = dynamics.InitialisePhysics(rock, {.add = true});
+	if (started.entry == nullptr)
+	{
+		return;
+	}
+	if (start.settlesOnLand)
+	{
+		dynamics.SettleOnLand(*started.entry, false, true);
+	}
+	dynamics.RaiseClearOfWhatIsUnder(*started.entry);
+}
+
 /// A one-shot miracle globe a script puts straight into the local player's hand, charged in full and ready, if the hand
 /// is free to take it: the seed, or none
 entt::entity CreateScriptSeedInHand(uint32_t subtype)
@@ -656,18 +743,24 @@ entt::entity CreateScriptObject(const ObjectType type, uint32_t subtype, const g
 	switch (type)
 	{
 	// Asking for a mobile static or for a rock makes the same thing: whether it is a rock is up to its kind. The thing
-	// goes onto the land under the place asked for. Only a holder of a singing stone, a lantern and a bonfire keep the
-	// height that the script gave, because they can not move in the physics.
+	// goes onto the land under the place asked for. A holder of a singing stone, a lantern and a bonfire keep the
+	// height that the script gave, because they can not move in the physics. A mobile static of the rock kind also
+	// keeps the height, and the physics lets it fall.
 	case ObjectType::MobileStatic:
 	case ObjectType::Rock:
 	{
+		const bool rockKind = IsRockKindRow(subtype);
 		const auto made = MobileStaticArchetype::Create(
-		    script::create_rules::KeepsScriptHeight(type, subtype) ? position : OnGround(position),
+		    script::create_rules::KeepsScriptHeight(type, subtype, rockKind) ? position : OnGround(position),
 		    static_cast<MobileStaticInfo>(subtype), altitude, xAngleRadians, yAngleRadians, zAngleRadians, scale);
 		// The holder of a singing stone shows only as a print of its model on the land
 		if (static_cast<MobileStaticInfo>(subtype) == MobileStaticInfo::SingingStoneBase)
 		{
 			MarkGroundPrint(made);
+		}
+		if (const auto start = script::create_rules::RockStartOf(type, subtype, rockKind))
+		{
+			StartScriptRock(made, *start);
 		}
 		return made;
 	}
@@ -676,6 +769,29 @@ entt::entity CreateScriptObject(const ObjectType type, uint32_t subtype, const g
 		return CreateScriptBall(OnGround(position));
 	case ObjectType::Marker:
 		return ScriptMarkerArchetype::Create(position);
+	case ObjectType::PuzzleGame:
+	{
+		// The system makes a puzzle game of each kind. Only the beach temple puzzle and the tree puzzles have pieces now.
+		const auto kind = static_cast<script::PuzzleGameType>(subtype);
+		if (subtype < static_cast<uint32_t>(script::PuzzleGameType::Last) && Locator::puzzleGameSystem::has_value())
+		{
+			const auto puzzle = Locator::puzzleGameSystem::value().Create(kind, position, yAngleRadians, scale);
+			if (puzzle != entt::null)
+			{
+				return puzzle;
+			}
+		}
+		SPDLOG_LOGGER_DEBUG(spdlog::get("game"), "CreateScriptObject not implemented for puzzle game kind {}", subtype);
+		return entt::null;
+	}
+	// A scaffold of no town and no workshop, worth what its scale gives, on the land under the place asked for
+	case ObjectType::Scaffold:
+		if (!Locator::workshopSystem::has_value())
+		{
+			break;
+		}
+		return Locator::workshopSystem::value().CreateScaffold(OnGround(position), entt::null, entt::null, yAngleRadians,
+		                                                       scale);
 	case ObjectType::Villager:
 	case ObjectType::VillagerChild:
 		// Made standing on the land under the place asked for, whatever height the script gave
@@ -770,7 +886,7 @@ entt::entity CreateScriptObject(const ObjectType type, uint32_t subtype, const g
 		                                                           scale, entt::null);
 	case ObjectType::Animal:
 	case ObjectType::Bird:
-		// Made on its own and held still for the script: the land's birds and grazers (not yet the hunters)
+		// Made on its own and held still for the script: the land's birds, grazers and hunters
 		if (Locator::animalSystem::has_value())
 		{
 			const auto animal = Locator::animalSystem::value().CreateScriptAnimal(static_cast<AnimalInfo>(subtype),
@@ -848,30 +964,35 @@ int SpecialEffectTurns(float seconds)
 uint32_t StartScriptSpotVisual(int32_t effect, glm::vec3 position, int turns, entt::entity owner)
 {
 	constexpr int32_t k_LastSpotVisual = 49;
-	if (effect < 0 || effect > k_LastSpotVisual || !Locator::particleSystem::has_value())
+	if (effect < 0 || effect > k_LastSpotVisual || !Locator::effectRequestSystem::has_value())
 	{
 		SPDLOG_LOGGER_ERROR(spdlog::get("scripting"), "Spell not created");
 		return 0;
 	}
-	auto& particles = Locator::particleSystem::value();
-	const auto id = particles.StartSpotVisual(static_cast<SpotVisualType>(effect), position, turns, owner, 1.0f);
-	if (id == ecs::systems::ParticleSystemInterface::k_NoEffect)
+	auto& effects = Locator::effectRequestSystem::value();
+	// Each computer shows the visual in the colour of its own player
+	const auto handle = effects.Start({
+	    .type = static_cast<SpotVisualType>(effect),
+	    .position = position,
+	    .turns = turns,
+	    .owner = owner,
+	    .player = Locator::playerSystem::has_value()
+	                  ? std::optional(static_cast<int>(Locator::playerSystem::value().GetLocalPlayer()))
+	                  : std::nullopt,
+	});
+	if (!effects.IsRunning(handle))
 	{
 		SPDLOG_LOGGER_ERROR(spdlog::get("scripting"), "Spell not created");
 		return 0;
 	}
-	if (Locator::playerSystem::has_value())
-	{
-		particles.SetPlayer(id, static_cast<int>(Locator::playerSystem::value().GetLocalPlayer()));
-	}
-	return id;
+	return handle;
 }
 
 /// The thing a script holds for a visual it started, taking its place in the scripts' table as made by a script; none
 /// when no visual was started. The script holds the thing, never the visual's own number.
 static entt::entity ScriptSpotVisualThing(uint32_t effect, glm::vec3 position)
 {
-	if (effect == ecs::systems::ParticleSystemInterface::k_NoEffect)
+	if (effect == ecs::systems::k_NoEffectHandle)
 	{
 		return entt::null;
 	}
@@ -944,6 +1065,7 @@ void CHLApi::TaskStopped(uint32_t task)
 	const auto released = Locator::scriptControlSystem::value().TaskStopped(Locator::camera::value(), task);
 	if (released.camera)
 	{
+		CountCameraOrder();
 		ApplySwitchChanges(script::switches::CameraReleased());
 	}
 	if (released.gameSpeed)
@@ -1166,6 +1288,7 @@ void RemakeDrawList()
 /// has this position and focus, nothing changes. The land's draw list is made again on the next frame.
 void PlaceCamera(const glm::vec3& origin, const glm::vec3& focus)
 {
+	CountCameraOrder();
 	Locator::camera::value().Place(origin, focus);
 	RemakeDrawList();
 }
@@ -1176,7 +1299,7 @@ void SetCameraPosition() // 001 SET_CAMERA_POSITION
 {
 	const auto position = PopVec();
 	// Without the script's camera the position is quietly dropped
-	if (auto* camera = Locator::scriptControlSystem::value().GetScriptCamera(Locator::camera::value()); camera != nullptr)
+	if (auto* camera = OrderedScriptCamera(); camera != nullptr)
 	{
 		camera->SetOrigin(position);
 		RemakeDrawList();
@@ -1213,38 +1336,25 @@ void MoveCameraFocus() // 004 MOVE_CAMERA_FOCUS
 	}
 }
 
-/// In a network game the scripts read the camera and the hand of the player from the last report of a turn, so that
-/// every computer gets the same answer; before the first report they read the middle of the world's axes. Alone, the
-/// scripts read the camera and the hand of this computer.
-bool ScriptsReadReports()
+/// The scripts read the camera, the hand and the view of the player from the last reports that a turn did, in a game
+/// alone too, so that every computer and every frame rate gets the same answer. Before the first report they read the
+/// middle of the world's axes.
+std::optional<HandSystemInterface::ReportedView> ScriptView()
 {
-	return Locator::time::has_value() && Locator::time::value().IsNetworkGame();
+	return Locator::handSystem::has_value() ? Locator::handSystem::value().GetReportedView(PlayerNames::PLAYER_ONE)
+	                                        : std::nullopt;
 }
 
 void GetCameraPosition() // 005 GET_CAMERA_POSITION
 {
-	if (ScriptsReadReports())
-	{
-		const auto reported = ecs::ReportedPlayerCamera(PlayerNames::PLAYER_ONE);
-		PushVec(reported.has_value() ? reported->origin : glm::vec3(0.0f));
-		return;
-	}
-	auto& camera = Locator::camera::value();
-	const auto position = camera.GetOrigin();
-	PushVec(position);
+	const auto reported = ecs::ReportedPlayerCamera(PlayerNames::PLAYER_ONE);
+	PushVec(reported.has_value() ? reported->origin : glm::vec3(0.0f));
 }
 
 void GetCameraFocus() // 006 GET_CAMERA_FOCUS
 {
-	if (ScriptsReadReports())
-	{
-		const auto reported = ecs::ReportedPlayerCamera(PlayerNames::PLAYER_ONE);
-		PushVec(reported.has_value() ? reported->focus : glm::vec3(0.0f));
-		return;
-	}
-	auto& camera = Locator::camera::value();
-	const auto focus = camera.GetFocus();
-	PushVec(focus);
+	const auto reported = ecs::ReportedPlayerCamera(PlayerNames::PLAYER_ONE);
+	PushVec(reported.has_value() ? reported->focus : glm::vec3(0.0f));
 }
 
 void SpiritEject() // 007 SPIRIT_EJECT
@@ -1305,14 +1415,14 @@ void GameThingFieldOfView() // 011 GAME_THING_FIELD_OF_VIEW
 	{
 		ObjectNoLongerValid();
 	}
-	const auto view = ecs::thing_on_screen::ScreenView();
+	const auto view = ecs::thing_on_screen::ScreenView(PlayerNames::PLAYER_ONE);
 	Pushb(valid && !PlayerInsideTemple() && view.has_value() && ecs::thing_on_screen::OnScreen(*view, object));
 }
 
 void PosFieldOfView() // 012 POS_FIELD_OF_VIEW
 {
 	const auto position = PopVec();
-	const auto view = ecs::thing_on_screen::ScreenView();
+	const auto view = ecs::thing_on_screen::ScreenView(PlayerNames::PLAYER_ONE);
 	Pushb(!PlayerInsideTemple() && view.has_value() && screen_pick::PointOnScreen(*view, position));
 }
 
@@ -1490,28 +1600,49 @@ void SetScriptUlong() // 020 SET_SCRIPT_ULONG
 	const auto plays = Pop().uintVal;
 	const auto animation = Pop().intVal;
 	const auto object = PopObject();
-	if (!Locator::entitiesRegistry::value().Valid(object))
+	auto& registry = Locator::entitiesRegistry::value();
+	if (!registry.Valid(object))
 	{
 		ObjectNoLongerValid();
 		return;
 	}
-	if (IsDirectableVillager(object))
-	{
-		// The pair serves whichever script state it goes into next: a clip and its plays for playing, the fewest and most
-		// turns to stand at each stop for wandering round a place
+	// The two numbers serve the script state that the villager goes into next. They are a clip and its plays for a
+	// clip, or the fewest and most turns at each stop for a walk round a place.
+	const auto giveVillager = [animation, plays](entt::entity villager) {
 		auto& living = Locator::livingActionSystem::value();
-		living.VillagerSetScriptNumbers(object, static_cast<uint32_t>(animation), plays);
-		living.VillagerSetScriptAnimation(object, static_cast<AnimId>(animation), plays);
+		living.VillagerSetScriptNumbers(villager, static_cast<uint32_t>(animation), plays);
+		living.VillagerSetScriptAnimation(villager, static_cast<AnimId>(animation), plays);
+	};
+	if (IsScriptContainer(registry, object))
+	{
+		// The script takes control of each member. Only a villager gets the two numbers. A creature or an animal in the
+		// group keeps the numbers that it had.
+		for (const auto member : ContainerMembers(registry, object))
+		{
+			if (!registry.Valid(member))
+			{
+				continue;
+			}
+			registry.AssignOrReplace<ecs::components::ScriptControlled>(member);
+			if (IsDirectableVillager(member))
+			{
+				giveVillager(member);
+			}
+		}
 		return;
 	}
-	if (auto* mind = Locator::entitiesRegistry::value().TryGet<ecs::components::CreatureMindState>(object))
+	if (IsDirectableVillager(object))
+	{
+		giveVillager(object);
+		return;
+	}
+	if (auto* mind = registry.TryGet<ecs::components::CreatureMindState>(object))
 	{
 		// Kept for the creature until the script tells it to start
 		mind->scriptPlay = {.animation = animation, .plays = plays};
 		return;
 	}
-	// TODO(opening): groups of things
-	NotImplemented();
+	ScriptMessage("setting the state of something neither a creature nor a villager");
 }
 
 /// Whether something is drowning, as the scripts ask: a villager while it is in its drowning state, anything else
@@ -1560,6 +1691,17 @@ static bool TownCompletelyDestroyed(const ecs::components::Town& town)
 	return script::property_rules::TownCompletelyDestroyed(buildings);
 }
 
+/// A creature has its body from the time that it is made. A script that reads or sets a value of the body before the
+/// first turn of the creature works on the start values of its species, and the value that it sets stays.
+static void StartCreatureBody(entt::entity object)
+{
+	if (Locator::entitiesRegistry::value().AllOf<ecs::components::Creature>(object) &&
+	    Locator::creaturePhysiologySystem::has_value())
+	{
+		Locator::creaturePhysiologySystem::value().StartBody(object);
+	}
+}
+
 /// A creature's body as the scripts read and set it, none for anything else
 static creature_physiology::Needs* CreatureNeedsOf(entt::entity object)
 {
@@ -1568,6 +1710,7 @@ static creature_physiology::Needs* CreatureNeedsOf(entt::entity object)
 	{
 		return nullptr;
 	}
+	StartCreatureBody(object);
 	auto* needs = registry.TryGet<ecs::components::CreatureNeeds>(object);
 	return needs != nullptr ? &needs->needs : nullptr;
 }
@@ -1656,6 +1799,7 @@ static float LivingAngleOf(entt::entity object, const Transform& transform)
 static void TurnLivingThing(entt::entity object, Transform& transform, float angle)
 {
 	auto& registry = Locator::entitiesRegistry::value();
+	const bool turned = angle != LivingAngleOf(object, transform);
 	const auto heading = script::property_rules::LivingAngleToCreatureHeading(angle);
 	if (auto* walk = registry.TryGet<ecs::components::WallHug>(object); walk != nullptr)
 	{
@@ -1676,6 +1820,24 @@ static void TurnLivingThing(entt::entity object, Transform& transform, float ang
 	}
 	transform.rotation = glm::mat3(portable_math::EulerAngleY(heading.Yaw()));
 	registry.SetDirty();
+	// A thing that turns comes out of the map's cells and goes in again, at the front of the list of its cell
+	if (turned)
+	{
+		ecs::thing_map_place::Reinsert(object);
+	}
+}
+
+/// Turns a thing that is not living to the given angles and keeps them. A thing in the map's cells comes out of them and
+/// goes in again: always for a turn of a lean, and for a turn about the upright only when the angle about y changes.
+static void TurnPlacedThing(entt::entity object, const glm::vec3& angles, bool lean)
+{
+	auto& registry = Locator::entitiesRegistry::value();
+	const bool turned = lean || angles.y != ecs::placed_turn::AnglesOf(registry, object).y;
+	ecs::placed_turn::SetAngles(registry, object, angles);
+	if (turned)
+	{
+		ecs::thing_map_place::Reinsert(object);
+	}
 }
 
 /// Whether a thing may lean, so that its angles across and forward are its own; the others always stand upright
@@ -1748,6 +1910,12 @@ void GetProperty() // 021 GET_PROPERTY
 		Pushf(0.0f);
 		return;
 	}
+	// A town, a flock or a dance gives 0 for each property but its player. A script reads its members one by one.
+	if (IsScriptContainer(registry, object) && prop != script::ObjectPropertyType::Player)
+	{
+		Pushf(0.0f);
+		return;
+	}
 	if (const auto need = NeedOf(prop); need.has_value())
 	{
 		auto* needs = CreatureNeedsOf(object);
@@ -1801,6 +1969,21 @@ void GetProperty() // 021 GET_PROPERTY
 		Pushf(0.0f);
 		return;
 	case script::ObjectPropertyType::Speed:
+		// A thing in the physics gives the speed of its flight
+		if (registry.AllOf<ecs::components::InPhysics>(object) && Locator::dynamicsSystem::has_value())
+		{
+			if (const auto* entry = Locator::dynamicsSystem::value().Find(object); entry != nullptr && entry->body != nullptr)
+			{
+				Pushf(glm::length(entry->body->velocity));
+				return;
+			}
+		}
+		// An animal gives its walk speed, metres a turn
+		if (registry.AllOf<ecs::components::Animal>(object))
+		{
+			Pushf(Locator::animalSystem::has_value() ? Locator::animalSystem::value().SpeedForScript(object) : 0.0f);
+			return;
+		}
 		if (const auto* wallHug = Locator::entitiesRegistry::value().TryGet<const ecs::components::WallHug>(object);
 		    wallHug != nullptr)
 		{
@@ -1876,6 +2059,7 @@ void GetProperty() // 021 GET_PROPERTY
 			CannotGetProperty(prop);
 			return;
 		}
+		StartCreatureBody(object);
 		Pushf(ecs::world_objects::LifeOf(object));
 		return;
 	case script::ObjectPropertyType::Moving:
@@ -2034,6 +2218,8 @@ void GetProperty() // 021 GET_PROPERTY
 	}
 }
 
+static void SetPropertyOf(entt::entity object, script::ObjectPropertyType prop, float value);
+
 void SetProperty() // 022 SET_PROPERTY
 {
 	const auto value = Popf();
@@ -2045,6 +2231,27 @@ void SetProperty() // 022 SET_PROPERTY
 		ObjectNoLongerValid();
 		return;
 	}
+	// A town, a flock or a dance gives the property to each of its members. Each member takes it as if the script set it
+	// on that member. The script does not take control of the members. When a script sets a health of 0 on a town, each
+	// villager of the town has no life. Then each villager that no script controls dies at its next check.
+	if (IsScriptContainer(registry, object))
+	{
+		for (const auto member : ContainerMembers(registry, object))
+		{
+			if (registry.Valid(member))
+			{
+				SetPropertyOf(member, prop, value);
+			}
+		}
+		return;
+	}
+	SetPropertyOf(object, prop, value);
+}
+
+/// One property of one thing, as a script sets it on that thing
+static void SetPropertyOf(entt::entity object, script::ObjectPropertyType prop, float value)
+{
+	auto& registry = Locator::entitiesRegistry::value();
 	if (const auto need = NeedOf(prop); need.has_value())
 	{
 		auto* needs = CreatureNeedsOf(object);
@@ -2095,6 +2302,7 @@ void SetProperty() // 022 SET_PROPERTY
 			CannotSetProperty(prop);
 			return;
 		}
+		StartCreatureBody(object);
 		// A thing a script holds in a cutscene, or made indestructible, can't be brought to nearly no life
 		ecs::world_objects::SetLife(
 		    object, value,
@@ -2132,7 +2340,7 @@ void SetProperty() // 022 SET_PROPERTY
 		(prop == script::ObjectPropertyType::Angle    ? angles.y
 		 : prop == script::ObjectPropertyType::XAngle ? angles.x
 		                                              : angles.z) = radians;
-		ecs::placed_turn::SetAngles(registry, object, angles);
+		TurnPlacedThing(object, angles, prop != script::ObjectPropertyType::Angle);
 		return;
 	}
 	case script::ObjectPropertyType::Strength:
@@ -2237,11 +2445,17 @@ void SetProperty() // 022 SET_PROPERTY
 			}
 			return;
 		}
-		// The thing is drawn at this size, the same along every axis
+		// The thing is drawn at this size, the same along every axis. A thing in the map's cells that changes its size
+		// comes out of them and goes in again.
 		if (auto* transform = registry.TryGet<Transform>(object); transform != nullptr)
 		{
+			const bool resized = transform->scale.x != value;
 			transform->scale = glm::vec3(value);
 			registry.SetDirty();
+			if (resized)
+			{
+				ecs::thing_map_place::Reinsert(object);
+			}
 		}
 		return;
 	case script::ObjectPropertyType::Age:
@@ -2271,6 +2485,15 @@ void SetProperty() // 022 SET_PROPERTY
 		// A weather thing's storm travels at it, metres a second
 		if (Locator::weatherSystem::has_value() && Locator::weatherSystem::value().SetWeatherThingSpeed(object, value))
 		{
+			return;
+		}
+		// An animal walks at it, metres a turn
+		if (registry.AllOf<ecs::components::Animal>(object))
+		{
+			if (Locator::animalSystem::has_value())
+			{
+				Locator::animalSystem::value().SetSpeedFromScript(object, value);
+			}
 			return;
 		}
 		// Metres a turn
@@ -2324,11 +2547,12 @@ void GetPosition() // 023 GET_POSITION
 		}
 		else if (const auto* wallHug = registry.TryGet<const ecs::components::WallHug>(object);
 		         wallHug != nullptr && transform != nullptr && !registry.AllOf<ecs::components::Creature>(object) &&
-		         ecs::villager_script_rules::WithinAStepOfGoal(glm::vec2(transform->position.x, transform->position.z),
-		                                                       wallHug->goal, wallHug->speed))
+		         ecs::villager_script_rules::WithinAStepOfGoalPlace(glm::vec2(transform->position.x, transform->position.z),
+		                                                            wallHug->goalPlace, wallHug->speed))
 		{
 			// A walker within a turn's step of where it is walking to is seen there, on the ground
-			position = {wallHug->goal.x, Locator::terrainSystem::value().GetHeightAt(wallHug->goal), wallHug->goal.y};
+			const auto goal = ecs::wall_hug::ToPoint(wallHug->goalPlace);
+			position = {goal.x, Locator::terrainSystem::value().GetHeightAt(goal), goal.y};
 		}
 		else if (transform != nullptr)
 		{
@@ -2364,6 +2588,15 @@ void SetPosition() // 024 SET_POSITION
 		{
 			return;
 		}
+		// A marker is not in the map. It goes to the map position of the point and keeps the height of the point above
+		// the land.
+		if (registry.Valid(object) && registry.AllOf<ecs::components::ScriptMarker>(object))
+		{
+			const auto& island = Locator::terrainSystem::value();
+			registry.Get<Transform>(object).position = map_coords::ToWorld(island, map_coords::FromWorld(island, position));
+			registry.SetDirty();
+			return;
+		}
 		// A thing out of the map's cells stays where it is, as a thing that a creature holds
 		if (registry.Valid(object) && Locator::entitiesMap::has_value() && !Locator::entitiesMap::value().InMap(object))
 		{
@@ -2380,6 +2613,10 @@ void SetPosition() // 024 SET_POSITION
 			// Its walk takes up the new place, and one under the script's control stops there and waits for it
 			ecs::walker_placement::Place(registry, object, position);
 			ecs::thing_map_place::Keep(registry, object, place);
+			if (Locator::entitiesMap::has_value())
+			{
+				Locator::entitiesMap::value().Moved(object);
+			}
 			if (registry.AllOf<ecs::components::ScriptControlled>(object))
 			{
 				ecs::walker_placement::Stop(registry, object);
@@ -2393,6 +2630,10 @@ void SetPosition() // 024 SET_POSITION
 		{
 			Locator::creatureLocomotionSystem::value().PlaceWithoutWalking(object, position);
 			ecs::thing_map_place::Keep(registry, object, place);
+			if (Locator::entitiesMap::has_value())
+			{
+				Locator::entitiesMap::value().Moved(object);
+			}
 			return;
 		}
 		ecs::thing_map_place::Put(registry, object, place, position.y);
@@ -2434,10 +2675,12 @@ static std::optional<uint8_t> FinalGameStateOf(const ecs::Registry& registry, en
 	return std::nullopt;
 }
 
-/// Where a thing is measured from by the scripts' searches
+/// The place from which the scripts' searches measure a thing: the altar of a worship site, else the thing itself
 static map_coords::MapCoords ScriptFindPosition(const ecs::Registry& registry, entt::entity entity)
 {
-	const auto& position = registry.Get<const Transform>(entity).position;
+	const auto measured = ecs::script_find::MeasuredFrom(registry, entity);
+	const auto* transform = registry.TryGet<const Transform>(measured);
+	const auto& position = (transform != nullptr ? transform : &registry.Get<const Transform>(entity))->position;
 	return map_coords::FromMetres({position.x, position.z});
 }
 
@@ -2485,24 +2728,14 @@ static std::vector<ecs::script_find::Candidate> ScriptFindCandidates(const Scrip
 static entt::entity FindScriptTown(const map_coords::MapCoords& at, float reach)
 {
 	const auto& registry = Locator::entitiesRegistry::value();
-	struct Entry
-	{
-		PlayerNames owner;
-		uint32_t id;
-		ecs::script_find::Candidate candidate;
-	};
-	std::vector<Entry> towns;
-	registry.Each<const ecs::components::Town, const Transform>(
-	    [&towns, &registry](entt::entity entity, const ecs::components::Town& town, const Transform&) {
-		    towns.push_back({.owner = town.owner,
-		                     .id = town.id,
-		                     .candidate = {.entity = entity, .at = ScriptFindPosition(registry, entity)}});
-	    });
-	std::ranges::sort(towns,
-	                  [](const Entry& a, const Entry& b) { return a.owner != b.owner ? a.owner < b.owner : a.id < b.id; });
 	std::vector<ecs::script_find::Candidate> ordered;
-	ordered.reserve(towns.size());
-	std::ranges::transform(towns, std::back_inserter(ordered), &Entry::candidate);
+	for (const auto town : ecs::player_towns::AllInOrder(registry))
+	{
+		if (registry.AllOf<Transform>(town))
+		{
+			ordered.push_back({.entity = town, .at = ScriptFindPosition(registry, town)});
+		}
+	}
 	return ecs::script_find::FindNearestTown(at, reach, ordered);
 }
 
@@ -2557,7 +2790,7 @@ static entt::entity FindForScript(int32_t type, uint32_t subtype, const glm::vec
 		// Not finding a thing is no mistake: scripts that wait for one to come (the singing stones put in their places)
 		// ask again and again. Only the closest tracing says which script asks and for what
 		const auto& tasks = Locator::vm::value().GetTasks();
-		const auto task = tasks.find(CurrentTask());
+		[[maybe_unused]] const auto task = tasks.find(CurrentTask());
 		SPDLOG_LOGGER_TRACE(spdlog::get("scripting"), "Thing not found: type {} subtype {} at ({}, {}) radius {} for {}", type,
 		                    subtype, position.x, position.z, radius.value_or(0.0f),
 		                    task != tasks.end() ? task->second.name : std::string("no script"));
@@ -2653,6 +2886,11 @@ void StartCameraControl() // 030 START_CAMERA_CONTROL
 	const bool taken = Locator::scriptControlSystem::value().StartCameraControl(
 	    Locator::camera::value(), {.task = task, .templeScript = templeScript, .insideTemple = insideTemple},
 	    [](float x, float z) { return Locator::terrainSystem::value().GetHeightAt(glm::vec2(x, z)); });
+	// A script that retries a refused take each turn does not stop the arrival of the camera for the other scripts
+	if (script_camera::TakeIsCameraOrder(taken, insideTemple))
+	{
+		CountCameraOrder();
+	}
 	if (taken)
 	{
 		ApplySwitchChanges(script::switches::CameraTaken(insideTemple));
@@ -2662,8 +2900,10 @@ void StartCameraControl() // 030 START_CAMERA_CONTROL
 
 void EndCameraControl() // 031 END_CAMERA_CONTROL
 {
+	// Only the task that has the camera gives it back. For any other task the camera does not change.
 	if (Locator::scriptControlSystem::value().EndCameraControl(Locator::camera::value(), CurrentTask()))
 	{
+		CountCameraOrder();
 		ApplySwitchChanges(script::switches::CameraReleased());
 	}
 }
@@ -2775,7 +3015,7 @@ void MoveGameThing() // 033 MOVE_GAME_THING
 		const auto& registry = Locator::entitiesRegistry::value();
 		const auto& transform = registry.Get<const Transform>(object);
 		const bool inMap =
-		    registry.AllOf<ecs::components::MapCellResident>(object) &&
+		    ecs::InMapCells(registry, object) &&
 		    !registry.AnyOf<ecs::components::InHand, ecs::components::InPhysics, ecs::components::CarriedByTornado>(object);
 		if (inMap && Locator::creatureMindSystem::has_value())
 		{
@@ -2833,7 +3073,7 @@ static void FacePoint(entt::entity object, glm::vec3 point)
 	}
 	auto angles = ecs::placed_turn::AnglesOf(registry, object);
 	angles.y = angle;
-	ecs::placed_turn::SetAngles(registry, object, angles);
+	TurnPlacedThing(object, angles, false);
 }
 
 void SetFocus() // 034 SET_FOCUS
@@ -2867,18 +3107,10 @@ void HasCameraArrived() // 035 HAS_CAMERA_ARRIVED
 	{
 		ScriptMessage("Script camera in citadel");
 	}
-	auto& camera = Locator::camera::value();
-	if (const auto* script = Locator::scriptControlSystem::value().GetScriptCamera(camera); script != nullptr)
-	{
-		Pushb(script->Arrived());
-		return;
-	}
-	// The player's camera has arrived once where it is and what it looks at are where it is going
-	const auto distanceSquared = [](const glm::vec3& a, const glm::vec3& b) { return glm::dot(a - b, a - b); };
-	Pushb(distanceSquared(camera.GetOrigin(Camera::Interpolation::Target), camera.GetOrigin()) <
-	          script_camera::k_ArrivedDistanceSquared &&
-	      distanceSquared(camera.GetFocus(Camera::Interpolation::Target), camera.GetFocus()) <
-	          script_camera::k_ArrivedDistanceSquared);
+	// The view report of the player tells whether the camera has arrived
+	const auto view = ScriptView();
+	Pushb(view.has_value() && script_camera::ArrivedByReport(view->cameraArrived, view->cameraOrders,
+	                                                         Locator::entitiesRegistry::value().Context().scriptCameraOrders));
 }
 
 /// A villager's town: it leaves its old town's homeless, then joins the new town
@@ -2922,88 +3154,39 @@ void FlockCreate() // 036 FLOCK_CREATE
 	Pusho(static_cast<uint32_t>(flock));
 }
 
-/// A living or a flock put in a flock, or two livings made a flock together
-static void FlockAttachToFlock(entt::entity object, entt::entity target, bool asLeader)
+/// Puts a living, or each member of a flock, into a flock
+static void FlockAttachToFlock(entt::entity object, entt::entity flock, bool asLeader)
 {
 	auto& registry = Locator::entitiesRegistry::value();
 	auto& scripts = Locator::scriptObjects::value();
-	const bool objectFlock = ecs::script_flocks::IsFlock(registry, object);
-	const bool targetFlock = ecs::script_flocks::IsFlock(registry, target);
-	if (objectFlock && targetFlock)
+	if (ecs::script_flocks::IsFlock(registry, object))
 	{
 		// The flock takes in every member of the other, which goes once it is empty
 		while (ecs::script_flocks::Size(registry, object) > 0)
 		{
-			ecs::script_flocks::AddLiving(registry, target, registry.Get<const ecs::components::Flock>(object).members.front());
+			ecs::script_flocks::AddLiving(registry, flock, registry.Get<const ecs::components::Flock>(object).members.front());
 		}
-		Pusho(static_cast<uint32_t>(target));
-		return;
-	}
-	if (objectFlock || targetFlock)
-	{
-		const auto flock = targetFlock ? target : object;
-		const auto living = targetFlock ? object : target;
-		if (!IsFlockLiving(registry, living))
-		{
-			ScriptMessage("JONTY-Trying to add non living to flock");
-			ScriptMessage("Thing not added to Flock");
-			Pusho(0);
-			return;
-		}
-		if (asLeader)
-		{
-			ecs::script_flocks::AddLeader(registry, flock, living);
-		}
-		else if (!ecs::script_flocks::AddLiving(registry, flock, living))
-		{
-			ScriptMessage("Living already in Flock");
-		}
-		SetFlockState(living);
 		Pusho(static_cast<uint32_t>(flock));
-		scripts.AddReference(living);
 		return;
 	}
-	if (!IsFlockLiving(registry, object) || !IsFlockLiving(registry, target))
+	if (!IsFlockLiving(registry, object))
 	{
-		ScriptMessage("JONTY- Something is seriously wrong with my code");
+		ScriptMessage("JONTY-Trying to add non living to flock");
 		ScriptMessage("Thing not added to Flock");
 		Pusho(0);
 		return;
 	}
-	// Two livings make a new flock where the second stands
-	const auto flock = ecs::script_flocks::Create(registry, ecs::script_flocks::PositionOf(registry, target));
-	if (!scripts.Register(flock, true))
-	{
-		ScriptMessage("Flock ID failed");
-		ecs::script_flocks::Destroy(registry, flock);
-		ScriptMessage("Thing not added to Flock");
-		Pusho(0);
-		return;
-	}
-	scripts.AddReference(target);
-	Pusho(static_cast<uint32_t>(flock));
-	// The leader keeps what it is doing; the others keep up with the flock
 	if (asLeader)
 	{
 		ecs::script_flocks::AddLeader(registry, flock, object);
-		scripts.AddReference(object);
 	}
-	else if (ecs::script_flocks::AddLiving(registry, flock, object))
-	{
-		SetFlockState(object);
-		scripts.AddReference(object);
-	}
-	else
+	else if (!ecs::script_flocks::AddLiving(registry, flock, object))
 	{
 		ScriptMessage("Living already in Flock");
 	}
-	if (!ecs::script_flocks::AddLiving(registry, flock, target))
-	{
-		ScriptMessage("Living already in Flock");
-		return;
-	}
-	SetFlockState(target);
-	scripts.AddReference(target);
+	SetFlockState(object);
+	Pusho(static_cast<uint32_t>(flock));
+	scripts.AddReference(object);
 }
 
 /// A villager, or each villager of a container, joins a town
@@ -3017,7 +3200,11 @@ static void FlockAttachToTown(entt::entity object, entt::entity town)
 			if (registry.Valid(member) && registry.AllOf<ecs::components::Villager>(member))
 			{
 				MoveVillagerToTown(member, town);
+				continue;
 			}
+			// A member that is not a villager stays where it is. Each one also leaves a 0 on the script's stack.
+			ScriptMessage("JONTY-Trying to add non villager to town");
+			Pusho(0);
 		}
 		Pusho(static_cast<uint32_t>(town));
 		return;
@@ -3101,15 +3288,16 @@ void FlockAttach() // 037 FLOCK_ATTACH
 		Pusho(0);
 		return;
 	}
-	if (ecs::script_flocks::IsFlock(registry, target) || ecs::script_flocks::IsFlock(registry, object))
-	{
-		FlockAttachToFlock(object, target, asLeader);
-		return;
-	}
+	// The type of the target sets the operation: first a dance, then a flock, then a town
 	if (ecs::dances::IsDance(registry, target))
 	{
 		registry.AssignOrReplace<ecs::components::ScriptControlled>(target);
 		FlockAttachToDance(object, target, asLeader);
+		return;
+	}
+	if (ecs::script_flocks::IsFlock(registry, target))
+	{
+		FlockAttachToFlock(object, target, asLeader);
 		return;
 	}
 	if (registry.AllOf<ecs::components::Town>(target))
@@ -3327,17 +3515,8 @@ void GetHandPosition() // 042 GET_HAND_POSITION
 	{
 		ScriptMessage("Hand in citadel");
 	}
-	if (ScriptsReadReports())
-	{
-		const auto reported = Locator::handSystem::value().GetPlayerHandPositions()[0];
-		PushVec(reported.value_or(glm::vec3(0.0f)));
-		return;
-	}
-	// A game on one computer reads the hand of this computer where the frames draw it
-	const auto handEntity = Locator::handSystem::value().GetOwnHands()[static_cast<size_t>(HandSystemInterface::Side::Left)];
-	auto& handTransform = Locator::entitiesRegistry::value().Get<Transform>(handEntity);
-
-	PushVec(handTransform.position);
+	const auto reported = Locator::handSystem::value().GetPlayerHandPositions()[0];
+	PushVec(reported.value_or(glm::vec3(0.0f)));
 }
 
 /// The loaded sound group of a bank's file, whatever the case of the file's name on disk
@@ -3348,7 +3527,7 @@ static std::optional<std::string> LoadedSoundGroup(std::string_view file)
 			return std::tolower(static_cast<unsigned char>(a)) == std::tolower(static_cast<unsigned char>(b));
 		});
 	};
-	for (const auto& name : Locator::audio::value().GetSoundGroups() | std::views::keys)
+	for (const auto& name : Locator::sounds::value().GetSoundGroups() | std::views::keys)
 	{
 		if (sameName(name))
 		{
@@ -3363,7 +3542,7 @@ static std::optional<std::string> LoadedSoundGroup(std::string_view file)
 static std::optional<entt::id_type> BankSound(int32_t bank, int32_t sample)
 {
 	const auto file = audio::ScriptSoundBankFile(bank);
-	if (!file.has_value() || !Locator::audio::has_value() || !Locator::resources::has_value())
+	if (!file.has_value() || !Locator::sounds::has_value() || !Locator::resources::has_value())
 	{
 		return std::nullopt;
 	}
@@ -3396,7 +3575,7 @@ void CHLApi::PlayBankSoundEffect(int32_t bank, int32_t sample, const audio::Soun
 	{
 		return;
 	}
-	Locator::audio::value().StartSoundEffect(id, options);
+	Locator::sounds::value().StartSoundEffect(id, options);
 }
 
 void PlaySoundEffect() // 043 PLAY_SOUND_EFFECT
@@ -3415,14 +3594,20 @@ void PlaySoundEffect() // 043 PLAY_SOUND_EFFECT
 /// The game's music, none before the game has started it
 static audio::GameMusic* ScriptGameMusic()
 {
-	auto* game = Game::Instance();
-	return game != nullptr ? game->GetGameMusic() : nullptr;
+	return Locator::gameMusic::has_value() ? &Locator::gameMusic::value() : nullptr;
 }
 
-/// Without a sound device the scripts that wait on music wait on the help text instead
-static bool AudioInstalled()
+/// The music that the scripts start, as the world sees it
+static ecs::systems::ScriptMusicSystemInterface* WorldScriptMusic()
 {
-	return Locator::audio::has_value() && Locator::audio::value().IsInstalled();
+	return Locator::scriptMusicSystem::has_value() ? &Locator::scriptMusicSystem::value() : nullptr;
+}
+
+/// Without the music the scripts that wait on music wait on the help text instead
+static bool WorldHasMusic()
+{
+	const auto* music = WorldScriptMusic();
+	return music != nullptr && music->HasMusic();
 }
 
 static bool HelpTextRead()
@@ -3438,19 +3623,19 @@ void StartMusic() // 044 START_MUSIC
 		SPDLOG_LOGGER_ERROR(spdlog::get("scripting"), "START_MUSIC: no music type {}", music);
 		return;
 	}
-	if (auto* gameMusic = ScriptGameMusic())
+	if (auto* scriptMusic = WorldScriptMusic())
 	{
 		// The sung lines start again with each piece a script starts
-		gameMusic->ResetMusicLyrics();
-		gameMusic->StartScriptMusic(static_cast<audio::MusicType>(music));
+		scriptMusic->ResetLyrics();
+		scriptMusic->Start(static_cast<audio::MusicType>(music));
 	}
 }
 
 void StopMusic() // 045 STOP_MUSIC
 {
-	if (auto* gameMusic = ScriptGameMusic())
+	if (auto* scriptMusic = WorldScriptMusic())
 	{
-		gameMusic->StartScriptMusic(audio::MusicType::None);
+		scriptMusic->Start(audio::MusicType::None);
 	}
 }
 
@@ -3509,12 +3694,26 @@ static void DeleteNow(entt::entity object)
 	}
 	else
 	{
+		// A shield miracle takes its shield with it at once
+		if (const auto* spell = registry.TryGet<const ecs::components::Spell>(object);
+		    spell != nullptr && spell->spellClass == magic::SpellClass::Shield)
+		{
+			if (Locator::magicShieldSystem::has_value())
+			{
+				Locator::magicShieldSystem::value().RemoveWithSpell(object);
+			}
+			if (Locator::magicSystem::has_value())
+			{
+				Locator::magicSystem::value().CloseDown(object);
+			}
+		}
 		ecs::world_objects::Remove(object);
 	}
 }
 
 void ObjectDelete() // 048 OBJECT_DELETE
 {
+	namespace script_delete = ecs::script_delete;
 	const auto mode = Pop().intVal;
 	const auto object = PopObject();
 	auto& registry = Locator::entitiesRegistry::value();
@@ -3522,48 +3721,51 @@ void ObjectDelete() // 048 OBJECT_DELETE
 	{
 		return;
 	}
-	// TODO(opening): a puzzle game is only let go of by the script
-	switch (mode)
+	const auto* temple = registry.TryGet<const ecs::components::Temple>(object);
+	const auto step = script_delete::Choose(mode, {.puzzleGame = registry.AllOf<ecs::components::PuzzleGame>(object),
+	                                               .object = IsScriptObject(registry, object),
+	                                               .creature = registry.AllOf<ecs::components::Creature>(object),
+	                                               .temple = temple != nullptr,
+	                                               .templeDestroying = temple != nullptr && temple->destroying});
+	const auto* transform = registry.TryGet<const Transform>(object);
+	const auto position = transform != nullptr ? transform->position : glm::vec3(0.0f);
+	switch (step)
 	{
-	case 0:
-		// It goes at once
+	case script_delete::Step::Remove:
 		DeleteNow(object);
 		return;
-	case 1:
-		// Only one of the world's objects goes this way
-		if (!IsScriptObject(registry, object))
-		{
-			return;
-		}
-		if (registry.AllOf<ecs::components::Creature>(object))
-		{
-			// A creature fizzes right out over two seconds and goes for good
-			Locator::creatureFizzSystem::value().SetFizz(object, 1.0f, 2.0f, true);
-			return;
-		}
-		// A ghost of it flickers out where it stood
+	case script_delete::Step::Fizz:
+		Locator::creatureFizzSystem::value().SetFizz(object, 1.0f, 2.0f, true);
+		break;
+	case script_delete::Step::GhostThenRemove:
 		ecs::world_objects::LeaveGhost(object);
 		DeleteNow(object);
 		return;
-	case 2:
-		if (!IsScriptObject(registry, object))
-		{
-			return;
-		}
-		// TODO(opening): its model breaks up where it stood (15 and 3 to the 3D engine's break-up)
+	case script_delete::Step::BreakUpThenRemove:
+		// The pieces fly out from the place where it stood
+		Locator::particleRuleSystem::value().ExplodeObject(object, position, script_delete::k_ExplodeSpeed);
 		DeleteNow(object);
 		return;
-	case 3:
-		// A temple starts its destruction
-		// TODO(opening): a heart already flagged breaks up instead (80 and 3 to the 3D engine's break-up), and is let go
-		if (registry.AllOf<ecs::components::Temple>(object) && Locator::templeDestructionSystem::has_value())
+	case script_delete::Step::StartTempleDestruction:
+		if (Locator::templeDestructionSystem::has_value())
 		{
 			Locator::templeDestructionSystem::value().Start(object);
 		}
-		return;
-	default:
-		// Any other mode only lets it go
-		return;
+		break;
+	case script_delete::Step::BreakUpTemple:
+		// The temple stays until its destruction ends
+		Locator::particleRuleSystem::value().ExplodeObject(object, position, script_delete::k_TempleExplodeSpeed);
+		break;
+	case script_delete::Step::ClearPuzzle:
+		// TODO(puzzle-games): the puzzle game removes its pieces. The stand-in puzzle game has no pieces
+		break;
+	case script_delete::Step::LetGo:
+		break;
+	}
+	// The script lets go of the thing. A flock or a dance that stays loses its members
+	if (registry.Valid(object))
+	{
+		static_cast<void>(Locator::scriptObjects::value().Disband(object));
 	}
 }
 
@@ -3766,7 +3968,7 @@ void KeepChallengeRecord(const script::challenge_snapshots::Snapshot& snapshot, 
 	        },
 	};
 	const auto outcome = ecs::challenge_records::Record(registry, snapshot, call, turn, references);
-	if (outcome.takesPicture && Locator::rendererInterface::has_value())
+	if (outcome.takesPicture && Locator::rendererRequests::has_value())
 	{
 		// The picture is of the screen as the player sees it now
 		auto* picture = registry.TryGet<ecs::components::ChallengePicture>(outcome.record);
@@ -3774,8 +3976,10 @@ void KeepChallengeRecord(const script::challenge_snapshots::Snapshot& snapshot, 
 		{
 			picture = &registry.Assign<ecs::components::ChallengePicture>(outcome.record);
 		}
-		Locator::rendererInterface::value().RequestScreenPicture(ecs::challenge_pictures::Ask(*picture, outcome.record),
-		                                                         &ecs::challenge_pictures::Take);
+		// The renderer takes the picture at the end of a draw, so the request goes to the main thread
+		PostToMainThread(MainThreadApi::Renderer, [name = ecs::challenge_pictures::Ask(*picture, outcome.record)] {
+			Locator::rendererRequests::value().RequestScreenPicture(name, &ecs::challenge_pictures::Take);
+		});
 	}
 	if (!outcome.alignment.has_value() || !Locator::alignmentSystem::has_value() || !Locator::infoConstants::has_value())
 	{
@@ -3818,7 +4022,7 @@ void Snapshot() // 057 SNAPSHOT
 /// The player that these natives name by its place in the game's player list, from 0. None past the last player.
 std::optional<PlayerNames> ScriptPlayerByIndex(uint32_t index)
 {
-	if (index >= static_cast<uint32_t>(PlayerNames::_COUNT))
+	if (index >= ecs::game_players::Count())
 	{
 		return std::nullopt;
 	}
@@ -3860,7 +4064,7 @@ void SetAlignment() // 059 SET_ALIGNMENT
 /// a player there isn't.
 static entt::entity CreateScriptInfluence(uint32_t player, float radius, bool anti, glm::vec3 position, entt::entity follows)
 {
-	if (player >= static_cast<uint32_t>(PlayerNames::_COUNT))
+	if (player >= ecs::game_players::Count())
 	{
 		SPDLOG_LOGGER_ERROR(spdlog::get("scripting"), "Could not make influence ring!");
 		return entt::null;
@@ -3908,14 +4112,19 @@ void GetInfluence() // 062 GET_INFLUENCE
 	const auto player = ScriptPlayerName(static_cast<int32_t>(Popf()));
 	// A player who isn't in the game has no influence anywhere
 	std::optional<float> influence;
-	if (player < PlayerNames::_COUNT && Locator::playerSystem::has_value() && Locator::influenceSystem::has_value() &&
+	if (ScriptNamesPlayer(player) && Locator::playerSystem::has_value() && Locator::influenceSystem::has_value() &&
 	    Locator::entitiesRegistry::value().Valid(Locator::playerSystem::value().FindPlayer(player).value_or(entt::null)))
 	{
-		influence = Locator::influenceSystem::value().PlayerInfluence(player, position);
+		influence =
+		    Locator::influenceSystem::value().PlayerOwnInfluence(player, map_coords::FromMetres({position.x, position.z}));
 	}
-	// TODO(raffclar): the influence of the player's allies who let them use theirs, once players can be allies; until
-	// then no player has any
-	Pushf(script::influence::Answer(influence, raw, {}));
+	// Where the player has none, the allies that lend their influence to the player lend it
+	std::vector<float> lent;
+	if (influence.has_value())
+	{
+		lent = ecs::ally_influence::LentInfluence(player, map_coords::FromMetres({position.x, position.z}));
+	}
+	Pushf(script::influence::Answer(influence, raw, lent));
 }
 
 void SetInterfaceInteraction() // 063 SET_INTERFACE_INTERACTION
@@ -3968,6 +4177,15 @@ void Played() // 064 PLAYED
 		Pushb(played);
 		return;
 	}
+	if (Locator::puzzleGameSystem::has_value())
+	{
+		// A puzzle game has played once the player solves it
+		if (const auto played = Locator::puzzleGameSystem::value().Played(object))
+		{
+			Pushb(*played);
+			return;
+		}
+	}
 	if (const auto* animal = Locator::entitiesRegistry::value().TryGet<const ecs::components::Animal>(object))
 	{
 		// An animal has played once it is back in the script's hands, or on its way somewhere to end up there
@@ -3997,7 +4215,9 @@ void SetGamespeed() // 066 SET_GAMESPEED
 	}
 }
 
-void CallInNear() // 067 CALL_IN_NEAR
+/// The first thing of a type and subtype in a container, inside the radius of a place or outside it. The game uses
+/// the same search for a town or a flock in the two cases, and only the distance test changes.
+static void CallInByDistance(bool near)
 {
 	const auto excludingScripted = Pop().intVal != 0;
 	const auto radius = Popf();
@@ -4039,8 +4259,8 @@ void CallInNear() // 067 CALL_IN_NEAR
 			return;
 		}
 	}
-	// The first of its things of the type and subtype within the radius of the place, passing over those a script holds
-	// when asked to
+	// The first of its things of the type and subtype on the correct side of the radius, passing over those a script
+	// holds when asked to
 	const auto at = map_coords::FromMetres({position.x, position.z});
 	for (const auto member : ContainerMembers(registry, container))
 	{
@@ -4050,8 +4270,12 @@ void CallInNear() // 067 CALL_IN_NEAR
 			continue;
 		}
 		const auto kind = ecs::script_find::KindOf(registry, member);
-		if (!kind.has_value() || !ecs::script_find::Matches(*kind, objectType, subtype) ||
-		    gutils::GetDistanceInMetres(at, ScriptFindPosition(registry, member)) > radius)
+		if (!kind.has_value() || !ecs::script_find::Matches(*kind, objectType, subtype))
+		{
+			continue;
+		}
+		const float distance = gutils::GetDistanceInMetres(at, ScriptFindPosition(registry, member));
+		if (near ? distance > radius : !ecs::script_containers::IsNotNear(distance, radius))
 		{
 			continue;
 		}
@@ -4060,6 +4284,11 @@ void CallInNear() // 067 CALL_IN_NEAR
 		return;
 	}
 	notFound();
+}
+
+void CallInNear() // 067 CALL_IN_NEAR
+{
+	CallInByDistance(true);
 }
 
 void OverrideStateAnimation() // 068 OVERRIDE_STATE_ANIMATION
@@ -4134,16 +4363,9 @@ void CreatureCreateRelativeToCreature() // 069 CREATURE_CREATE_RELATIVE_TO_CREAT
 		PushObject(entt::null);
 		return;
 	}
-	// Only a player that plays can get the copy. On a land with one player who has a creature, the copy belongs to no
-	// player.
+	// Each of the seven players can get the copy, also a player that nobody plays. On a land with one player who has a
+	// creature, the copy belongs to the second player.
 	std::array<script::property_rules::PlayerPlace, 7> places {};
-	registry.Each<const ecs::components::Player>([&places](entt::entity, const ecs::components::Player& player) {
-		const auto place = static_cast<size_t>(player.name);
-		if (place < places.size())
-		{
-			places.at(place).plays = true;
-		}
-	});
 	for (size_t i = 0; i < places.size(); ++i)
 	{
 		places.at(i).hasCreature = Locator::playerSystem::has_value() &&
@@ -4302,10 +4524,11 @@ void InCreatureHand() // 076 IN_CREATURE_HAND
 		Pushb(false);
 		return;
 	}
-	const auto* held = registry.TryGet<const ecs::components::CreatureHeldObject>(creature);
+	// What the creature carries: while it prepares a throw, it carries nothing
+	const auto carried = ecs::creature_carried::CarriedBy(registry, creature);
 	const auto* action = registry.TryGet<const ecs::components::CreatureObjectAction>(creature);
 	const auto eating = action != nullptr && action->kind == creature_object_actions::Kind::Eat ? action->target : std::nullopt;
-	Pushb(script::property_rules::InCreatureHand(thing, held != nullptr ? held->object : entt::null, eating));
+	Pushb(script::property_rules::InCreatureHand(thing, carried.value_or(entt::null), eating));
 }
 
 /// Changes the desires of the creature a script names, telling the script when it names no creature
@@ -4596,7 +4819,7 @@ std::optional<std::pair<entt::entity, entt::entity>> PopDualThings()
 void StartDualCamera() // 093 START_DUAL_CAMERA
 {
 	const auto things = PopDualThings();
-	auto* camera = Locator::scriptControlSystem::value().GetScriptCamera(Locator::camera::value());
+	auto* camera = OrderedScriptCamera();
 	if (things.has_value() && camera != nullptr)
 	{
 		// The camera keeps both things in view, from the side of the line between them, until the script lets it go
@@ -4607,7 +4830,7 @@ void StartDualCamera() // 093 START_DUAL_CAMERA
 void UpdateDualCamera() // 094 UPDATE_DUAL_CAMERA
 {
 	const auto things = PopDualThings();
-	auto* camera = Locator::scriptControlSystem::value().GetScriptCamera(Locator::camera::value());
+	auto* camera = OrderedScriptCamera();
 	if (things.has_value() && camera != nullptr)
 	{
 		camera->UpdateDualView(DualSubjectOf(things->first), DualSubjectOf(things->second));
@@ -4617,7 +4840,7 @@ void UpdateDualCamera() // 094 UPDATE_DUAL_CAMERA
 void ReleaseDualCamera() // 095 RELEASE_DUAL_CAMERA
 {
 	// The script's own camera takes over again, from wherever the two-thing camera left it
-	if (auto* camera = Locator::scriptControlSystem::value().GetScriptCamera(Locator::camera::value()); camera != nullptr)
+	if (auto* camera = OrderedScriptCamera(); camera != nullptr)
 	{
 		camera->ReleaseDualView();
 	}
@@ -4789,7 +5012,7 @@ std::optional<script_camera::View> FaceViewOf(entt::entity object, float distanc
 /// under a two-thing camera
 ScriptCameraModel* ScriptCameraToFace()
 {
-	auto* camera = Locator::scriptControlSystem::value().GetScriptCamera(Locator::camera::value());
+	auto* camera = OrderedScriptCamera();
 	if (camera == nullptr)
 	{
 		ScriptMessage("Script camera has been removed!");
@@ -4842,7 +5065,8 @@ void MoveCameraToFaceObject() // 107 MOVE_CAMERA_TO_FACE_OBJECT
 void GetMoonPercentage() // 108 GET_MOON_PERCENTAGE
 {
 	// How full the moon was the last time it showed: 0 at the full moon, 1 at a new moon
-	const auto* moon = Locator::entitiesRegistry::value().TryGet<ecs::components::Moon>(Locator::skySystem::value().GetMoon());
+	const auto* moon =
+	    Locator::entitiesRegistry::value().TryGet<ecs::components::Moon>(Locator::skyClockSystem::value().GetEntities().moon);
 	Pushf(graphics::moon::ScriptPercentage(moon != nullptr ? moon->phase : 0.0f));
 }
 
@@ -4930,25 +5154,23 @@ void RemoveReference() // 111 REMOVE_REFERENCE
 void SetGameTime() // 112 SET_GAME_TIME
 {
 	const auto time = Popf();
-	Locator::skySystem::value().SetTime(time);
+	Locator::skyClockSystem::value().SetTime(time);
 }
 
 void GetGameTime() // 113 GET_GAME_TIME
 {
-	Pushf(Locator::skySystem::value().GetClock().GetScriptTime());
+	Pushf(Locator::skyClockSystem::value().GetClock().GetScriptTime());
 }
 
-/// The local time of the player's computer now
+/// The local time of the player's computer now. In a game for more than one player, the game tells the script that
+/// this is not safe there, and then gives the value.
 static std::tm RealLocalTime()
 {
-	const auto now = std::time(nullptr);
-	std::tm local {};
-#if defined(_WIN32)
-	localtime_s(&local, &now);
-#else
-	localtime_r(&now, &local);
-#endif
-	return local;
+	if (Locator::time::has_value() && Locator::time::value().IsNetworkGame())
+	{
+		ScriptMessage(script::real_time::k_NotMultiplayerFriendly);
+	}
+	return machine_clock::LocalTime();
 }
 
 void GetRealTime() // 114 GET_REAL_TIME
@@ -4980,7 +5202,7 @@ void GetRealYear() // 118 GET_REAL_YEAR
 void RunCameraPath() // 119 RUN_CAMERA_PATH
 {
 	const auto track = Pop().intVal;
-	auto* camera = Locator::scriptControlSystem::value().GetScriptCamera(Locator::camera::value());
+	auto* camera = OrderedScriptCamera();
 	if (camera == nullptr)
 	{
 		ScriptMessage("Script camera has been removed! - Exception happened?");
@@ -5036,9 +5258,9 @@ void EndDialogue() // 121 END_DIALOGUE
 	ReleaseDialogue(task);
 	ApplySwitchChanges(script::switches::DialogueEnded());
 	// The word of the sung line goes back to none
-	if (auto* gameMusic = ScriptGameMusic())
+	if (auto* scriptMusic = WorldScriptMusic())
 	{
-		gameMusic->ResetMusicWord();
+		scriptMusic->ResetWord();
 	}
 }
 
@@ -5319,15 +5541,8 @@ void PlaySpiritAnim() // 140 PLAY_SPIRIT_ANIM
 
 void CallInNotNear() // 141 CALL_IN_NOT_NEAR
 {
-	// const auto excludingScripted = static_cast<bool>(Pop().intVal);
-	// const auto radius = Popf();
-	// const auto pos = PopVec();
-	// const auto container = Pop().uintVal;
-	// const auto subtype = Pop().intVal;
-	// const auto type = Pop().intVal;
-	// TODO(Daniels118): implement this
-	NotImplemented();
-	Pusho(0);
+	// The first thing of the type and subtype in the container that is farther from the place than the radius
+	CallInByDistance(false);
 }
 
 void SetCameraZone() // 142 SET_CAMERA_ZONE
@@ -5362,7 +5577,15 @@ void GetObjectState() // 143 GET_OBJECT_STATE
 		Pushi(0);
 		return;
 	}
-	// The game also gives the state of a puzzle game. openblack makes no puzzle games, so this is the only other case.
+	// A puzzle game that nobody has started gives whether it has played
+	if (Locator::puzzleGameSystem::has_value())
+	{
+		if (const auto state = Locator::puzzleGameSystem::value().State(object))
+		{
+			Pushi(static_cast<int32_t>(*state));
+			return;
+		}
+	}
 	ScriptMessage("Thing not a known type for function");
 	Pushi(0);
 }
@@ -5408,12 +5631,10 @@ void SetTimerTime() // 145 SET_TIMER_TIME
 	}
 	if (registry.AllOf<ecs::components::SpellDispenser>(object))
 	{
-		// The turns from its bubble being taken to its next, counted as a timer's are; none leaves it as it was, and a
-		// time before now is so many turns it never makes another
-		const auto turns = script::timers::TurnsFor(seconds);
-		if (turns != 0)
+		// The turns from the time that the hand takes its bubble to its next bubble
+		if (const auto turns = script::timers::DispenserTurns(seconds); turns.has_value())
 		{
-			Locator::magicSystem::value().SetDispenserTurns(object, static_cast<uint32_t>(turns));
+			Locator::magicSystem::value().SetDispenserTurns(object, *turns);
 		}
 		return;
 	}
@@ -5470,7 +5691,8 @@ void MoveMusic() // 149 MOVE_MUSIC
 void GetInclusionDistance() // 150 GET_INCLUSION_DISTANCE
 {
 	// The world camera's distance to the fence from its last fence test
-	Pushf(Locator::cameraZoneSystem::has_value() ? Locator::cameraZoneSystem::value().GetInclusionDistance() : 0.0f);
+	const auto view = ScriptView();
+	Pushf(view.has_value() ? view->inclusionDistance : 0.0f);
 }
 
 void GetLandHeight() // 151 GET_LAND_HEIGHT
@@ -5570,40 +5792,97 @@ void GetObjectHandIsOver() // 160 GET_OBJECT_HAND_IS_OVER
 
 void IdPoisonedSize() // 161 ID_POISONED_SIZE
 {
-	// const auto container = Pop().uintVal;
-	// TODO(Daniels118): implement this
-	NotImplemented();
-	Pushf(0.0f);
+	const auto container = PopObject();
+	const auto& registry = Locator::entitiesRegistry::value();
+	if (container == entt::null || !registry.Valid(container))
+	{
+		ScriptMessage("Thing not valid");
+		Pushf(0.0f);
+		return;
+	}
+	if (!IsScriptContainer(registry, container))
+	{
+		ScriptMessage("No Loop funtion for type");
+		Pushf(0.0f);
+		return;
+	}
+	// How many of its members are poisoned
+	const auto members = ContainerMembers(registry, container);
+	Pushf(static_cast<float>(std::ranges::count_if(
+	    members, [&registry](entt::entity member) { return ecs::script_poison::IsPoisoned(registry, member); })));
 }
 
 void IsPoisoned() // 162 IS_POISONED
 {
-	// const auto obj = Pop().uintVal;
-	// TODO(Daniels118): implement this
-	NotImplemented();
-	Pushb(false);
+	const auto object = PopObject();
+	const auto& registry = Locator::entitiesRegistry::value();
+	if (object == entt::null || !registry.Valid(object))
+	{
+		ScriptMessage("Thing not valid");
+		Pushb(false);
+		return;
+	}
+	Pushb(ecs::script_poison::IsPoisoned(registry, object));
+}
+
+/// The first member of a script container that is of the type and subtype, and poisoned or else not poisoned, as the scripts
+/// ask. It is none when there is none, and the script is told of it.
+static void CallPoisonedStateIn(bool poisoned, std::string_view notFound)
+{
+	const auto excludingScripted = Pop().intVal != 0;
+	const auto container = PopObject();
+	const auto subtype = Pop().uintVal;
+	const auto type = Pop().intVal;
+	auto& registry = Locator::entitiesRegistry::value();
+	const auto fail = [&notFound]() {
+		SPDLOG_LOGGER_WARN(spdlog::get("scripting"), "{}", notFound);
+		Pusho(0);
+	};
+	if (container == entt::null || !registry.Valid(container))
+	{
+		fail();
+		return;
+	}
+	if (!IsScriptContainer(registry, container))
+	{
+		ScriptMessage("Cannot look in object");
+		fail();
+		return;
+	}
+	const auto objectType = static_cast<ObjectType>(type);
+	if (registry.AllOf<ecs::components::Town>(container) && objectType != ObjectType::Villager &&
+	    objectType != ObjectType::VillagerChild)
+	{
+		ScriptMessage("Looking for strange type in Town");
+		fail();
+		return;
+	}
+	for (const auto member : ContainerMembers(registry, container))
+	{
+		if (!registry.Valid(member) || (excludingScripted && registry.AllOf<ecs::components::InScript>(member)) ||
+		    ecs::script_poison::IsPoisoned(registry, member) != poisoned)
+		{
+			continue;
+		}
+		const auto kind = ecs::script_find::KindOf(registry, member);
+		if (kind.has_value() && ecs::script_find::Matches(*kind, objectType, subtype))
+		{
+			Locator::scriptObjects::value().Register(member, false);
+			Pusho(static_cast<uint32_t>(member));
+			return;
+		}
+	}
+	fail();
 }
 
 void CallPoisonedIn() // 163 CALL_POISONED_IN
 {
-	// const auto excludingScripted = static_cast<bool>(Pop().intVal);
-	// const auto container = Pop().uintVal;
-	// const auto subtype = Pop().intVal;
-	// const auto type = Pop().intVal;
-	// TODO(Daniels118): implement this
-	NotImplemented();
-	Pusho(0);
+	CallPoisonedStateIn(true, "Cannot find poisoned in");
 }
 
 void CallNotPoisonedIn() // 164 CALL_NOT_POISONED_IN
 {
-	// const auto excludingScripted = static_cast<bool>(Pop().intVal);
-	// const auto container = Pop().uintVal;
-	// const auto subtype = Pop().intVal;
-	// const auto type = Pop().intVal;
-	// TODO(Daniels118): implement this
-	NotImplemented();
-	Pusho(0);
+	CallPoisonedStateIn(false, "Cannot find not poisoned in");
 }
 
 void SpiritPlayed() // 165 SPIRIT_PLAYED
@@ -5704,10 +5983,29 @@ void StopScriptsInFiles() // 172 STOP_SCRIPTS_IN_FILES
 
 void SetPoisoned() // 173 SET_POISONED
 {
-	// const auto obj = Pop().uintVal;
-	// const auto poisoned = static_cast<bool>(Pop().intVal);
-	// TODO(Daniels118): implement this
-	NotImplemented();
+	const auto object = PopObject();
+	const auto value = Pop().uintVal;
+	auto& registry = Locator::entitiesRegistry::value();
+	if (object == entt::null || !registry.Valid(object))
+	{
+		ScriptMessage("Thing not valid");
+		return;
+	}
+	// A group poisons or cures each of its members
+	if (IsScriptContainer(registry, object))
+	{
+		for (const auto member : ContainerMembers(registry, object))
+		{
+			ecs::script_poison::SetPoisoned(registry, member, value);
+		}
+		return;
+	}
+	if (!registry.AllOf<Transform>(object) || registry.AllOf<ecs::components::ScriptMarker>(object))
+	{
+		ScriptMessage("Thing not object");
+		return;
+	}
+	ecs::script_poison::SetPoisoned(registry, object, value);
 }
 
 void SetTemperature() // 174 SET_TEMPERATURE
@@ -5873,7 +6171,7 @@ void CameraProperties() // 180 CAMERA_PROPERTIES
 	const auto angle = Popf() * k_DegreesToRadians;
 	const auto glideScale = Popf();
 	const auto distance = Popf();
-	auto* camera = Locator::scriptControlSystem::value().GetScriptCamera(Locator::camera::value());
+	auto* camera = OrderedScriptCamera();
 	if (camera == nullptr)
 	{
 		ScriptMessage("Script camera has been removed! - Exception happened?");
@@ -5942,15 +6240,21 @@ void AttachObjectLeashToHand() // 186 ATTACH_OBJECT_LEASH_TO_HAND
 	{
 		return;
 	}
+	// The leash goes back to the hand and on again, so its leash becomes the picked leash at the temple again
 	auto& leashes = Locator::leashSystem::value();
 	if (leashes.TiedTo(creature).has_value())
 	{
 		leashes.UntieToHand(creature);
 	}
-	else if (!leashes.IsLeashed(creature))
+	if (leashes.IsLeashed(creature))
+	{
+		leashes.PutOn(creature, leashes.TypeOf(creature));
+	}
+	else
 	{
 		leashes.Toggle(creature);
 	}
+	leashes.PlayHandAttachSound(creature);
 }
 
 void DetachObjectLeash() // 187 DETACH_OBJECT_LEASH
@@ -6266,7 +6570,7 @@ void SetAviSequence() // 203 SET_AVI_SEQUENCE
 	if (sequence == 1)
 	{
 		// The intro is cut short: it fades from 58 s and ends at 60 s. The script's fade is lifted at once under it
-		videos.Play("Data/INTRO.bik");
+		videos.Play(ecs::systems::k_IntroFilm);
 		videos.ScheduleIntro();
 		director.FadeBackToNormal(0);
 	}
@@ -6541,10 +6845,17 @@ void GameTeamSize() // 219 GAME_TEAM_SIZE
 
 void GameType() // 220 GAME_TYPE
 {
-	// const auto object = Pop().uintVal;
-	// TODO(Daniels118): implement this
-	NotImplemented();
-	Pushi(0);
+	// The script type of the thing, as a find or an is-of-type test matches it. A thing that has no script type gives 0.
+	const auto object = PopObject();
+	const auto& registry = Locator::entitiesRegistry::value();
+	if (object == entt::null || !registry.Valid(object))
+	{
+		ObjectNoLongerValid();
+		Pushi(0);
+		return;
+	}
+	const auto kind = ecs::script_find::KindOf(registry, object);
+	Pushi(kind.has_value() ? static_cast<int32_t>(kind->type) : 0);
 }
 
 void GameSubType() // 221 GAME_SUB_TYPE
@@ -6621,14 +6932,36 @@ void GetObjectWhichHit() // 225 GET_OBJECT_WHICH_HIT
 
 void GetNearestTownOfPlayer() // 226 GET_NEAREST_TOWN_OF_PLAYER
 {
-	// const auto unk4 = Pop().intVal;
-	// const auto unk3 = Pop().intVal;
-	// const auto unk2 = Pop().intVal;
-	// const auto unk1 = Pop().intVal;
-	// const auto unk0 = Pop().intVal;
-	// TODO(Daniels118): implement this
-	NotImplemented();
-	Pusho(0);
+	// The player's nearest town to the place within the radius, by the game's map distance. The towns go in the order
+	// of the player's own list, and the last of equals wins.
+	const auto radius = Popf();
+	const auto player = ScriptPlayerName(static_cast<int32_t>(Popf()));
+	const auto position = PopVec();
+	auto& registry = Locator::entitiesRegistry::value();
+	entt::entity found = entt::null;
+	// The game has no player for a number past its players and stops. This search then finds no town.
+	if (ScriptNamesPlayer(player))
+	{
+		const auto from = openblack::map_coords::FromMetres({position.x, position.z});
+		std::vector<openblack::ecs::player_towns::Distance> towns;
+		for (const auto town : openblack::ecs::player_towns::InOrder(registry, player))
+		{
+			if (const auto* transform = registry.TryGet<const Transform>(town))
+			{
+				const auto at = openblack::map_coords::FromMetres({transform->position.x, transform->position.z});
+				towns.push_back({.town = town, .metres = openblack::gutils::GetDistanceInMetres(from, at)});
+			}
+		}
+		found = openblack::ecs::player_towns::NearestOfPlayer(towns, radius);
+	}
+	if (found == entt::null)
+	{
+		SPDLOG_LOGGER_ERROR(spdlog::get("scripting"), "No town of the player near enough");
+		Pusho(0);
+		return;
+	}
+	Locator::scriptObjects::value().Register(found, false);
+	Pusho(static_cast<uint32_t>(found));
 }
 
 void SpellAtPoint() // 227 SPELL_AT_POINT
@@ -6911,13 +7244,8 @@ void HasPlayerMagic() // 245 HAS_PLAYER_MAGIC
 
 void SpiritSpeaks() // 246 SPIRIT_SPEAKS
 {
-	const auto text = Pop().uintVal;
+	const auto text = help::script_spirits::TextToAskSpeakerOf(Pop().uintVal, help::k_HelpTextCount);
 	const auto spirit = ScriptHelpSpirit(Pop().intVal);
-	if (text >= help::k_HelpTextCount)
-	{
-		Pushb(false);
-		return;
-	}
 	const auto narrator = Locator::helpTextSystem::value().GetNarrator(text);
 	Pushb(help::script_spirits::SpiritWhoTalks(narrator) == spirit);
 }
@@ -6945,7 +7273,7 @@ void BeliefForPlayer() // 247 BELIEF_FOR_PLAYER
 	const auto player = ScriptPlayerName(static_cast<int32_t>(Popf()));
 	const auto object = PopObject();
 	auto& registry = Locator::entitiesRegistry::value();
-	if (object == entt::null || !registry.Valid(object) || player >= PlayerNames::_COUNT)
+	if (object == entt::null || !registry.Valid(object) || !ScriptNamesPlayer(player))
 	{
 		SPDLOG_LOGGER_ERROR(spdlog::get("scripting"), "Object or player no longer valid");
 		Pushf(0.0f);
@@ -7045,32 +7373,67 @@ void SetLeashWorks() // 249 SET_LEASH_WORKS
 	Locator::leashSystem::value().SetWorks(*creature, enable);
 }
 
-/// Debug quickstart: the Cow is made where the creature choice makes the chosen creature (its home in the glade), and
-/// becomes the player's exactly as CREATURE_SET_PLAYER makes the one they pick
-void StartWithCow()
+/// Debug quickstart: a creature of the species is made at the place and becomes the player's exactly as
+/// CREATURE_SET_PLAYER makes the one they pick
+void StartWithCreature(CreatureType species, const glm::vec3& position, float yawRadians)
 {
-	constexpr int32_t k_CowSubtype = 1;
-	const glm::vec3 homePosition {1896.5f, 29.48f, 2520.06f};
-	const auto cow = CreateScriptObject(ObjectType::Creature, k_CowSubtype, homePosition, 0.0f, 0.0f, 0.0f, 0.0f, 1.0f);
-	if (cow == entt::null || cow == static_cast<entt::entity>(0) || !Locator::entitiesRegistry::value().Valid(cow))
+	const auto creature =
+	    CreateScriptObject(ObjectType::Creature, static_cast<uint32_t>(species), position, 0.0f, 0.0f, yawRadians, 0.0f, 1.0f);
+	if (creature == entt::null || creature == static_cast<entt::entity>(0) ||
+	    !Locator::entitiesRegistry::value().Valid(creature))
 	{
-		SPDLOG_LOGGER_ERROR(spdlog::get("scripting"), "The debug quickstart could not make the Cow");
+		SPDLOG_LOGGER_ERROR(spdlog::get("scripting"), "The debug quickstart could not make the creature");
 		return;
 	}
-	RegisterCreated(cow);
-	MakePlayersCreature(cow);
+	RegisterCreated(creature);
+	MakePlayersCreature(creature);
+	SPDLOG_LOGGER_INFO(spdlog::get("game"), "The debug quickstart made the player's creature, species {}, at {:.1f}, {:.1f}",
+	                   static_cast<int>(species), position.x, position.z);
+}
+
+/// Debug quickstart of the first land: the Cow is made where the creature choice makes the chosen creature (its home in
+/// the glade)
+void StartWithCow()
+{
+	const glm::vec3 homePosition {1896.5f, 29.48f, 2520.06f};
+	StartWithCreature(CreatureType::Cow, homePosition, 0.0f);
+}
+
+/// Whether the player has a creature of their own now
+bool PlayerHasCreature()
+{
+	if (!Locator::leashSystem::has_value())
+	{
+		return false;
+	}
+	const auto player =
+	    Locator::playerSystem::has_value() ? Locator::playerSystem::value().GetLocalPlayer() : PlayerNames::PLAYER_ONE;
+	return Locator::leashSystem::value().PlayersCreature(player).has_value();
 }
 
 void LoadMyCreature() // 250 LOAD_MY_CREATURE
 {
 	// The player's creature, as kept when a land was last cleared, comes out at the place, unless they have one already
 	const auto position = PopVec();
-	if (Locator::tutorialSkipSystem::value().Get().startWithCow)
+	// The debug quickstart makes the Cow on the first land only. A later land loads the Cow that came through the vortex.
+	if (new_game_choice::MakesDebugCow(Locator::tutorialSkipSystem::value().Get(),
+	                                   Locator::entitiesRegistry::value().Context().mapScriptGlobals.landNumber))
 	{
 		StartWithCow();
 		return;
 	}
-	Locator::creatureCarryOverSystem::value().LoadPlayersCreature({position.x, position.z});
+	const bool loaded = Locator::creatureCarryOverSystem::value().LoadPlayersCreature({position.x, position.z}).has_value();
+	// Not in the original game: a developer's direct start of a later land has no creature that came through the
+	// vortex, so the creature of the species the developer named stands at the place instead
+	const auto& landSystem = Locator::landSystem::value();
+	if (const auto species = new_game_choice::DirectStartCreature(
+	        landSystem.GetNewGameStart(), Locator::entitiesRegistry::value().Context().mapScriptGlobals.landNumber, loaded,
+	        PlayerHasCreature());
+	    species.has_value())
+	{
+		constexpr float k_ArrivalYawDegrees = 180.0f;
+		StartWithCreature(*species, {position.x, position.y, position.z}, glm::radians(k_ArrivalYawDegrees));
+	}
 }
 
 void ObjectRelativeBelief() // 251 OBJECT_RELATIVE_BELIEF
@@ -7079,16 +7442,16 @@ void ObjectRelativeBelief() // 251 OBJECT_RELATIVE_BELIEF
 	const auto amount = Popf();
 	const auto player = ScriptPlayerName(static_cast<int32_t>(Popf()));
 	auto* impression = ScriptTownImpression(PopObject());
-	if (impression == nullptr || player >= PlayerNames::_COUNT)
+	if (impression == nullptr || !ScriptNamesPlayer(player))
 	{
 		return;
 	}
+	// The players that play and the neutral player take part. A player that nobody plays does not.
 	std::vector<PlayerNames> inGame;
-	for (size_t p = 0; p < static_cast<size_t>(PlayerNames::_COUNT); ++p)
+	for (const auto name : ecs::game_players::All())
 	{
-		const auto name = static_cast<PlayerNames>(p);
 		if (name == PlayerNames::NEUTRAL ||
-		    (Locator::playerSystem::has_value() && Locator::playerSystem::value().FindPlayer(name).has_value()))
+		    (Locator::playerSystem::has_value() && Locator::playerSystem::value().PlaysInGame(name)))
 		{
 			inGame.push_back(name);
 		}
@@ -7260,28 +7623,48 @@ void IsWindMagicAtPos() // 262 IS_WIND_MAGIC_AT_POS
 
 void CreateMist() // 263 CREATE_MIST
 {
-	// const auto heightRatio = Popf();
-	// const auto transparency = Popf();
-	// const auto b = Popf();
-	// const auto g = Popf();
-	// const auto r = Popf();
-	// const auto scale = Popf();
-	// const auto pos = PopVec();
-	// TODO(Daniels118): implement this
-	NotImplemented();
-	Pusho(0);
+	// A puff of mist at the point given, in the colour given, one over the height ratio times wider than tall seen level
+	const auto heightRatio = Popf();
+	const auto transparency = Popf();
+	const auto blue = Popf();
+	const auto green = Popf();
+	const auto red = Popf();
+	const auto scale = Popf();
+	const auto position = PopVec();
+	const float ground = Locator::terrainSystem::value().GetHeightAt(glm::vec2(position.x, position.z));
+	const auto mist = ecs::archetypes::MistArchetype::Create(
+	    position, position.y - ground, mists::ScriptColour(red, green, blue, transparency), scale, 1.0f / heightRatio);
+	if (mist == entt::null)
+	{
+		ScriptMessage("Thing not created");
+		PushObject(entt::null);
+		return;
+	}
+	RegisterCreated(mist);
+	PushObject(mist);
 }
 
 void SetMistFade() // 264 SET_MIST_FADE
 {
-	// const auto duration = Popf();
-	// const auto endTransparency = Popf();
-	// const auto startTransparency = Popf();
-	// const auto endScale = Popf();
-	// const auto startScale = Popf();
-	// const auto mist = Pop().uintVal;
-	// TODO(Daniels118): implement this
-	NotImplemented();
+	// The mist's size and alpha (0 to 255) go from their starts to their ends over the seconds given, a step each turn
+	const auto duration = Popf();
+	const auto endTransparency = Popf();
+	const auto startTransparency = Popf();
+	const auto endScale = Popf();
+	const auto startScale = Popf();
+	const auto mist = PopObject();
+	auto& registry = Locator::entitiesRegistry::value();
+	if (mist == entt::null || !registry.Valid(mist))
+	{
+		ScriptMessage("Thing deleted");
+		return;
+	}
+	if (!registry.AllOf<ecs::components::Mist>(mist))
+	{
+		ScriptMessage("Must be mist object!");
+		return;
+	}
+	Locator::mistSystem::value().SetFade(mist, startScale, endScale, startTransparency, endTransparency, duration);
 }
 
 void GetObjectFade() // 265 GET_OBJECT_FADE
@@ -7420,7 +7803,7 @@ void GetObjectHeld273() // 273 GET_OBJECT_HELD
 		return;
 	}
 	const auto held = Locator::creatureObjectActionSystem::has_value()
-	                      ? Locator::creatureObjectActionSystem::value().GetHeld(creature)
+	                      ? Locator::creatureObjectActionSystem::value().GetCarried(creature)
 	                      : std::nullopt;
 	if (!held.has_value())
 	{
@@ -7486,7 +7869,7 @@ void GetObjectLeashType() // 275 GET_OBJECT_LEASH_TYPE
 /// The thing a following command is given, and the script's camera, each complained of when missing
 std::pair<entt::entity, ScriptCameraModel*> FollowCommand(entt::entity thing)
 {
-	auto* camera = Locator::scriptControlSystem::value().GetScriptCamera(Locator::camera::value());
+	auto* camera = OrderedScriptCamera();
 	if (camera == nullptr)
 	{
 		ScriptMessage("Script camera has been removed! - Exception happened?");
@@ -7582,9 +7965,13 @@ void CreatureInDevScript() // 282 CREATURE_IN_DEV_SCRIPT
 
 void StoreCameraDetails() // 283 STORE_CAMERA_DETAILS
 {
-	// The script keeps where the camera is and where it looks, whatever has the camera
-	const auto& camera = Locator::camera::value();
-	Locator::scriptControlSystem::value().StoreCameraDetails({.origin = camera.GetOrigin(), .focus = camera.GetFocus()});
+	// The script keeps where the camera is and where it looks as the frame draws it, whatever has the camera. It reads
+	// the camera from the last view report, as the other camera reads of the scripts do.
+	const auto view = ScriptView();
+	Locator::scriptControlSystem::value().StoreCameraDetails({
+	    .origin = view.has_value() ? view->eye : glm::vec3(0.0f),
+	    .focus = view.has_value() ? view->focus : glm::vec3(0.0f),
+	});
 }
 
 void RestoreCameraDetails() // 284 RESTORE_CAMERA_DETAILS
@@ -7598,19 +7985,18 @@ void RestoreCameraDetails() // 284 RESTORE_CAMERA_DETAILS
 /// still, or stop
 void StartAngleSound(bool enable)
 {
-	if (!Locator::cameraHelpSystem::has_value())
+	// Only a computer that shows the world cheers its player on
+	if (!Locator::turnCheerSystem::has_value())
 	{
 		return;
 	}
-	auto& help = Locator::cameraHelpSystem::value().Get();
 	if (enable)
 	{
-		help.turnSpeed = 0.0f;
-		help::turn_cheer::Start(help.turnCheering);
+		Locator::turnCheerSystem::value().Start();
 	}
 	else
 	{
-		help::turn_cheer::Stop(help.turnCheering);
+		Locator::turnCheerSystem::value().Stop();
 	}
 }
 
@@ -7649,14 +8035,14 @@ void MoveCameraPosFocLens() // 287 MOVE_CAMERA_POS_FOC_LENS
 void GameTimeOnOff() // 288 GAME_TIME_ON_OFF
 {
 	const auto enable = Pop().intVal != 0;
-	Locator::skySystem::value().GetClock().SetRunning(enable);
+	Locator::skyClockSystem::value().GetClock().SetRunning(enable);
 }
 
 void MoveGameTime() // 289 MOVE_GAME_TIME
 {
 	const auto duration = Popf();
 	const auto hourOfTheDay = Popf();
-	Locator::skySystem::value().GetClock().MoveScriptTime(hourOfTheDay, duration);
+	Locator::skyClockSystem::value().GetClock().MoveScriptTime(hourOfTheDay, duration);
 }
 
 void SetHighGraphicsDetail() // 290 SET_HIGH_GRAPHICS_DETAIL
@@ -7745,18 +8131,44 @@ void GetLastSpellCastPos() // 295 GET_LAST_SPELL_CAST_POS
 
 void AddSpotVisualTargetPos() // 296 ADD_SPOT_VISUAL_TARGET_POS
 {
-	// const auto position = PopVec();
-	// const auto object = Pop().uintVal;
-	// TODO(Daniels118): implement this
-	NotImplemented();
+	// The visual's rules also act on the point, such as a beam that ends there
+	const auto position = PopVec();
+	const auto object = PopObject();
+	auto& registry = Locator::entitiesRegistry::value();
+	if (!registry.Valid(object))
+	{
+		SPDLOG_LOGGER_ERROR(spdlog::get("scripting"), "ADD_SPOT_VISUAL_TARGET_POS: thing not valid");
+		return;
+	}
+	// A thing that holds no visual of a script takes no target
+	if (const auto effect = ecs::script_spot_visuals::EffectOf(registry, object);
+	    effect.has_value() && Locator::effectRequestSystem::has_value())
+	{
+		Locator::effectRequestSystem::value().AddTargetPosition(*effect, position);
+	}
 }
 
 void AddSpotVisualTargetObject() // 297 ADD_SPOT_VISUAL_TARGET_OBJECT
 {
-	// const auto target = Pop().uintVal;
-	// const auto object = Pop().uintVal;
-	// TODO(Daniels118): implement this
-	NotImplemented();
+	// The visual's rules also act on the target, such as a beam that follows it while it moves
+	const auto target = PopObject();
+	const auto object = PopObject();
+	auto& registry = Locator::entitiesRegistry::value();
+	if (!registry.Valid(object))
+	{
+		SPDLOG_LOGGER_ERROR(spdlog::get("scripting"), "ADD_SPOT_VISUAL_TARGET_OBJECT: thing not valid");
+		return;
+	}
+	// No target, or a thing that holds no visual of a script, adds nothing
+	if (!registry.Valid(target))
+	{
+		return;
+	}
+	if (const auto effect = ecs::script_spot_visuals::EffectOf(registry, object);
+	    effect.has_value() && Locator::effectRequestSystem::has_value())
+	{
+		Locator::effectRequestSystem::value().AddTarget(*effect, target);
+	}
 }
 
 void SetIndestructable() // 298 SET_INDESTRUCTABLE
@@ -7960,12 +8372,14 @@ void CreatureForceFriends() // 309 CREATURE_FORCE_FRIENDS
 
 void MoveComputerPlayerPosition() // 310 MOVE_COMPUTER_PLAYER_POSITION
 {
-	// const auto withFixedHeight = static_cast<bool>(Pop().intVal);
-	// const auto speed = Popf();
-	// const auto position = PopVec();
-	// const auto player = Popf();
-	// TODO(Daniels118): implement this
-	NotImplemented();
+	const auto withFixedHeight = Pop().intVal != 0;
+	const auto speed = Popf();
+	const auto position = PopVec();
+	const auto player = ScriptPlayerName(static_cast<int32_t>(Popf()));
+	if (Locator::computerPlayerSystem::has_value())
+	{
+		Locator::computerPlayerSystem::value().MoveHand(player, position, speed, withFixedHeight);
+	}
 }
 
 void EnableDisableComputerPlayer311() // 311 ENABLE_DISABLE_COMPUTER_PLAYER
@@ -7980,21 +8394,25 @@ void EnableDisableComputerPlayer311() // 311 ENABLE_DISABLE_COMPUTER_PLAYER
 
 void GetComputerPlayerPosition() // 312 GET_COMPUTER_PLAYER_POSITION
 {
-	// const auto player = Popf();
-	// TODO(Daniels118): implement this
-	NotImplemented();
-	Pushv(0.0f); // x
-	Pushv(0.0f); // y
-	Pushv(0.0f); // z
+	const auto player = ScriptPlayerName(static_cast<int32_t>(Popf()));
+	// A player with no computer mind gives the origin
+	std::optional<glm::vec3> position;
+	if (Locator::computerPlayerSystem::has_value())
+	{
+		position = Locator::computerPlayerSystem::value().HandPosition(player);
+	}
+	PushVec(position.value_or(glm::vec3(0.0f)));
 }
 
 void SetComputerPlayerPosition() // 313 SET_COMPUTER_PLAYER_POSITION
 {
-	// const auto withFixedHeight = static_cast<bool>(Pop().intVal);
-	// const auto position = PopVec();
-	// const auto player = Popf();
-	// TODO(Daniels118): implement this
-	NotImplemented();
+	const auto withFixedHeight = Pop().intVal != 0;
+	const auto position = PopVec();
+	const auto player = ScriptPlayerName(static_cast<int32_t>(Popf()));
+	if (Locator::computerPlayerSystem::has_value())
+	{
+		Locator::computerPlayerSystem::value().SetHand(player, position, withFixedHeight);
+	}
 }
 
 void GetStoredCameraPosition() // 314 GET_STORED_CAMERA_POSITION
@@ -8134,7 +8552,7 @@ void SetPlayerBelief() // 325 SET_PLAYER_BELIEF
 	const auto player = ScriptPlayerName(static_cast<int32_t>(Popf()));
 	const auto object = PopObject();
 	auto* impression = ScriptTownImpression(object);
-	if (impression == nullptr || player >= PlayerNames::_COUNT)
+	if (impression == nullptr || !ScriptNamesPlayer(player))
 	{
 		return;
 	}
@@ -8231,21 +8649,30 @@ void LoadCreature() // 329 LOAD_CREATURE
 	    {.owner = player, .speciesRow = speciesRow, .fileName = fileName, .place = glm::vec2(position.x, position.z)});
 }
 
+/// Whether an icon at the sites of a player's temple has prayer power in its store, for one magic type or for any
+bool PlayersIconStores(PlayerNames player, std::optional<MagicType> type)
+{
+	if (!Locator::worshipSiteSystem::has_value() || !Locator::spellIconSystem::has_value())
+	{
+		return false;
+	}
+	const auto temple = Locator::worshipSiteSystem::value().TempleOf(player);
+	return temple != entt::null && Locator::spellIconSystem::value().AnyIconStores(temple, type);
+}
+
 void IsSpellCharging() // 330 IS_SPELL_CHARGING
 {
-	// const auto unk0 = Pop().intVal;
-	// TODO(Daniels118): implement this
-	NotImplemented();
-	Pushb(false);
+	// A miracle charges when an icon of the player has prayer power in its store, whatever hand asked for it
+	const auto player = ScriptPlayerName(static_cast<int32_t>(Popf()));
+	Pushb(PlayersIconStores(player, std::nullopt));
 }
 
 void IsThatSpellCharging() // 331 IS_THAT_SPELL_CHARGING
 {
-	// const auto unk1 = Pop().intVal;
-	// const auto unk0 = Pop().intVal;
-	// TODO(Daniels118): implement this
-	NotImplemented();
-	Pushb(false);
+	// As IS_SPELL_CHARGING, for the icons whose plain miracle is of the magic type
+	const auto type = static_cast<MagicType>(Pop().intVal);
+	const auto player = ScriptPlayerName(static_cast<int32_t>(Popf()));
+	Pushb(PlayersIconStores(player, type));
 }
 
 void OpposingCreature() // 332 OPPOSING_CREATURE
@@ -8298,14 +8725,12 @@ void LastMusicLine() // 335 LAST_MUSIC_LINE
 {
 	// Whether the script's sung music has reached a line: the sung verses wait for each line before showing it
 	const auto line = static_cast<int32_t>(Popf());
-	if (!AudioInstalled())
+	if (!WorldHasMusic())
 	{
 		Pushb(HelpTextRead());
 		return;
 	}
-	const auto* gameMusic = ScriptGameMusic();
-	const auto lastLine = gameMusic != nullptr ? gameMusic->GetMusicLyrics().line : 0;
-	Pushb(audio::GameMusic::ReachedMusicLine(lastLine, line));
+	Pushb(audio::ReachedMusicLine(WorldScriptMusic()->GetMusic().GetLyrics().line, line));
 }
 
 void HandDemoTrigger() // 336 HAND_DEMO_TRIGGER
@@ -8527,13 +8952,12 @@ void MusicPlayed350() // 350 MUSIC_PLAYED
 {
 	// Whether the script music of a type is over
 	const auto music = Pop().intVal;
-	if (!AudioInstalled())
+	if (!WorldHasMusic())
 	{
 		Pushb(HelpTextRead());
 		return;
 	}
-	const auto* gameMusic = ScriptGameMusic();
-	Pushb(gameMusic == nullptr || gameMusic->IsScriptMusicOver(static_cast<audio::MusicType>(music)));
+	Pushb(WorldScriptMusic()->GetMusic().IsOver(static_cast<audio::MusicType>(music)));
 }
 
 void UpdateSnapshotPicture() // 351 UPDATE_SNAPSHOT_PICTURE
@@ -8584,12 +9008,36 @@ void ToggleLeash() // 354 TOGGLE_LEASH
 	Locator::leashSystem::value().PressKey(player, creature_leash::LeashKey::Leash);
 }
 
+/// Whether a thing is a worship site
+bool IsWorshipSite(entt::entity object)
+{
+	auto& registry = Locator::entitiesRegistry::value();
+	return registry.Valid(object) && registry.AllOf<ecs::components::WorshipSite>(object);
+}
+
 void GameSetMana() // 355 GAME_SET_MANA
 {
-	// const auto mana = Popf();
-	// const auto object = Pop().uintVal;
-	// TODO(Daniels118): implement this
-	NotImplemented();
+	// A worship site, or the site of a spell icon, gets this prayer power in its battery. Its icons lose their stores.
+	const auto mana = Popf();
+	const auto object = PopObject();
+	const bool icon = Locator::spellIconSystem::has_value() && Locator::spellIconSystem::value().IsIcon(object);
+	if (!IsWorshipSite(object) && !icon)
+	{
+		ScriptMessage("Thing not valid!");
+		return;
+	}
+	if (!Locator::spellIconSystem::has_value() || !Locator::worshipSiteSystem::has_value())
+	{
+		return;
+	}
+	auto& icons = Locator::spellIconSystem::value();
+	const auto site = IsWorshipSite(object) ? object : icons.SiteOfIcon(object);
+	if (site == entt::null)
+	{
+		return;
+	}
+	icons.EmptyIconStores(site);
+	Locator::worshipSiteSystem::value().SetStoredChants(site, mana);
 }
 
 void SetMagicProperties() // 356 SET_MAGIC_PROPERTIES
@@ -8628,7 +9076,7 @@ void SetGameSound() // 357 SET_GAME_SOUND
 	const auto enable = Pop().intVal != 0;
 	if (!enable)
 	{
-		Locator::audio::value().StopAllSoundEffects();
+		Locator::sounds::value().StopAllSoundEffects();
 	}
 	Locator::chlapi::value().SetGameSoundOn(enable);
 }
@@ -8685,22 +9133,36 @@ void IsActive() // 361 IS_ACTIVE
 
 void SetBookmarkPosition() // 362 SET_BOOKMARK_POSITION
 {
-	// const auto unk3 = Pop().intVal;
-	// const auto unk2 = Pop().intVal;
-	// const auto unk1 = Pop().intVal;
-	// const auto unk0 = Pop().intVal;
-	// TODO(Daniels118): implement this
-	NotImplemented();
+	// The game takes the four values and does nothing with them. The bookmarks do not change.
+	for (int i = 0; i < 4; ++i)
+	{
+		static_cast<void>(Pop());
+	}
 }
 
 void SetScaffoldProperties() // 363 SET_SCAFFOLD_PROPERTIES
 {
-	// const auto destroy = static_cast<bool>(Pop().intVal);
-	// const auto size = Popf();
-	// const auto type = Pop().intVal;
-	// const auto object = Pop().uintVal;
-	// TODO(Daniels118): implement this
-	NotImplemented();
+	const bool destroys = (Pop().intVal & 1) != 0;
+	const auto size = Popf();
+	const auto building = Pop().intVal;
+	const auto object = PopObject();
+	auto& registry = Locator::entitiesRegistry::value();
+	if (!registry.Valid(object))
+	{
+		ObjectNoLongerValid();
+		return;
+	}
+	auto* scaffold = registry.TryGet<ecs::components::Scaffold>(object);
+	if (scaffold == nullptr)
+	{
+		ScriptMessage("Thing must be scaffold");
+		return;
+	}
+	// The scaffold offers only a building of the abode number, and it becomes worth the size
+	scaffold->scriptBuilding = ecs::workshop::ScriptBuildingOf(building);
+	registry.Get<Transform>(object).scale = glm::vec3(ecs::workshop::ScaleOfScriptSize(size));
+	scaffold->destroysThingsInWay = destroys;
+	registry.SetDirty();
 }
 
 void SetComputerPlayerPersonality() // 364 SET_COMPUTER_PLAYER_PERSONALITY
@@ -8727,22 +9189,26 @@ void SetComputerPlayerSuppression() // 365 SET_COMPUTER_PLAYER_SUPPRESSION
 
 void ForceComputerPlayerAction() // 366 FORCE_COMPUTER_PLAYER_ACTION
 {
-	// const auto obj2 = Pop().uintVal;
-	// const auto obj1 = Pop().uintVal;
-	// const auto action = PopString();
-	// const auto player = Popf();
-	// TODO(Daniels118): implement this
-	NotImplemented();
+	const auto second = PopObject();
+	const auto first = PopObject();
+	const auto action = PopString();
+	const auto player = ScriptPlayerName(static_cast<int32_t>(Popf()));
+	if (Locator::computerPlayerSystem::has_value())
+	{
+		std::ignore = Locator::computerPlayerSystem::value().ForceAction(player, action, first, second);
+	}
 }
 
 void QueueComputerPlayerAction() // 367 QUEUE_COMPUTER_PLAYER_ACTION
 {
-	// const auto obj2 = Pop().uintVal;
-	// const auto obj1 = Pop().uintVal;
-	// const auto action = PopString();
-	// const auto player = Popf();
-	// TODO(Daniels118): implement this
-	NotImplemented();
+	const auto second = PopObject();
+	const auto first = PopObject();
+	const auto action = PopString();
+	const auto player = ScriptPlayerName(static_cast<int32_t>(Popf()));
+	if (Locator::computerPlayerSystem::has_value())
+	{
+		Locator::computerPlayerSystem::value().QueueAction(player, action, first, second);
+	}
 }
 
 void GetTownWithId() // 368 GET_TOWN_WITH_ID
@@ -8788,17 +9254,22 @@ void SetDisciple() // 369 SET_DISCIPLE
 
 void ReleaseComputerPlayer() // 370 RELEASE_COMPUTER_PLAYER
 {
-	// const auto player = Popf();
-	// TODO(Daniels118): implement this
-	NotImplemented();
+	// The mind continues and releases the hand
+	const auto player = ScriptPlayerName(static_cast<int32_t>(Popf()));
+	if (Locator::computerPlayerSystem::has_value())
+	{
+		Locator::computerPlayerSystem::value().SetPaused(player, false);
+	}
 }
 
 void SetComputerPlayerSpeed() // 371 SET_COMPUTER_PLAYER_SPEED
 {
-	// const auto speed = Popf();
-	// const auto player = Popf();
-	// TODO(Daniels118): implement this
-	NotImplemented();
+	const auto speed = Popf();
+	const auto player = ScriptPlayerName(static_cast<int32_t>(Popf()));
+	if (Locator::computerPlayerSystem::has_value())
+	{
+		Locator::computerPlayerSystem::value().SetSpeed(player, speed);
+	}
 }
 
 void SetFocusFollowComputerPlayer() // 372 SET_FOCUS_FOLLOW_COMPUTER_PLAYER
@@ -8817,10 +9288,19 @@ void SetPositionFollowComputerPlayer() // 373 SET_POSITION_FOLLOW_COMPUTER_PLAYE
 
 void CallComputerPlayer() // 374 CALL_COMPUTER_PLAYER
 {
-	// const auto player = Popf();
-	// TODO(Daniels118): implement this
-	NotImplemented();
-	Pusho(0);
+	// Each player has a computer player from its start. The script gets the player's entity, which keeps the state of
+	// the computer player.
+	const auto name = ScriptPlayerName(static_cast<int32_t>(Popf()));
+	const auto player =
+	    Locator::playerSystem::has_value() ? Locator::playerSystem::value().FindPlayer(name) : std::optional<entt::entity> {};
+	if (!player.has_value() || !Locator::entitiesRegistry::value().Valid(*player))
+	{
+		ScriptMessage("Could not get computer player!");
+		Pusho(0);
+		return;
+	}
+	Locator::scriptObjects::value().Register(*player, false);
+	Pusho(static_cast<uint32_t>(*player));
 }
 
 void CallBuildingInTown() // 375 CALL_BUILDING_IN_TOWN
@@ -8847,55 +9327,72 @@ void SetCanBuildWorshipsite() // 376 SET_CAN_BUILD_WORSHIPSITE
 
 void GetFacingCameraPosition() // 377 GET_FACING_CAMERA_POSITION
 {
-	// const auto distance = Popf();
-	// TODO(Daniels118): implement this
-	NotImplemented();
-	Pushv(0.0f); // x
-	Pushv(0.0f); // y
-	Pushv(0.0f); // z
+	const auto distance = Popf();
+	// The point in front of the camera of the player, from the last view report. Before the first report, the eye and
+	// the focus are both the middle of the world's axes.
+	const auto view = ScriptView();
+	const auto eye = view.has_value() ? view->eye : glm::vec3(0.0f);
+	const auto focus = view.has_value() ? view->focus : glm::vec3(0.0f);
+	PushVec(script_camera::FacingPoint(eye, focus, distance));
 }
 
 void SetComputerPlayerAttitude() // 378 SET_COMPUTER_PLAYER_ATTITUDE
 {
-	// const auto attitude = Popf();
-	// const auto player2 = Popf();
-	// const auto player1 = Popf();
-	// TODO(Daniels118): implement this
-	NotImplemented();
+	const auto attitude = Popf();
+	const auto other = ScriptPlayerName(static_cast<int32_t>(Popf()));
+	const auto player = ScriptPlayerName(static_cast<int32_t>(Popf()));
+	// The mind of the first player now thinks this of the second; a number that names no player does nothing
+	if (ScriptNamesPlayer(player) && ScriptNamesPlayer(other) && Locator::computerPlayerSystem::has_value())
+	{
+		Locator::computerPlayerSystem::value().SetAttitude(player, other, attitude);
+	}
 }
 
 void GetComputerPlayerAttitude() // 379 GET_COMPUTER_PLAYER_ATTITUDE
 {
-	// const auto player2 = Popf();
-	// const auto player1 = Popf();
-	// TODO(Daniels118): implement this
-	NotImplemented();
-	Pushf(0.0f);
+	const auto other = ScriptPlayerName(static_cast<int32_t>(Popf()));
+	const auto player = ScriptPlayerName(static_cast<int32_t>(Popf()));
+	// A number that names no player gives 0
+	float attitude = 0.0f;
+	if (ScriptNamesPlayer(player) && ScriptNamesPlayer(other) && Locator::computerPlayerSystem::has_value())
+	{
+		attitude = Locator::computerPlayerSystem::value().Attitude(player, other);
+	}
+	Pushf(attitude);
 }
 
 void LoadComputerPlayerPersonality() // 380 LOAD_COMPUTER_PLAYER_PERSONALITY
 {
-	// const auto unk1 = Pop().intVal;
-	// const auto unk0 = Pop().intVal;
-	// TODO(Daniels118): implement this
-	NotImplemented();
+	const auto file = PopString();
+	const auto player = ScriptPlayerName(static_cast<int32_t>(Popf()));
+	// The mind of the player gets the weights of the file. A missing file or a number that names no player does nothing.
+	if (ScriptNamesPlayer(player) && Locator::computerPlayerSystem::has_value())
+	{
+		Locator::computerPlayerSystem::value().LoadPersonality(player, file);
+	}
 }
 
 void SaveComputerPlayerPersonality() // 381 SAVE_COMPUTER_PLAYER_PERSONALITY
 {
-	// const auto unk1 = Pop().intVal;
-	// const auto unk0 = Pop().intVal;
-	// TODO(Daniels118): implement this
-	NotImplemented();
+	const auto file = PopString();
+	const auto player = ScriptPlayerName(static_cast<int32_t>(Popf()));
+	// The file gets the weights of the mind of the player. A number that names no player does nothing.
+	if (ScriptNamesPlayer(player) && Locator::computerPlayerSystem::has_value())
+	{
+		Locator::computerPlayerSystem::value().SavePersonality(player, file);
+	}
 }
 
 void SetPlayerAlly() // 382 SET_PLAYER_ALLY
 {
-	// const auto percentage = Popf();
-	// const auto player2 = Popf();
-	// const auto player1 = Popf();
-	// TODO(Daniels118): implement this
-	NotImplemented();
+	const auto strength = Popf();
+	const auto other = ScriptPlayerName(static_cast<int32_t>(Popf()));
+	const auto player = ScriptPlayerName(static_cast<int32_t>(Popf()));
+	// The two players are allies of each other with this strength; a number that names no player does nothing
+	if (ScriptNamesPlayer(player) && ScriptNamesPlayer(other) && Locator::playerSystem::has_value())
+	{
+		Locator::playerSystem::value().SetAlly(other, player, strength);
+	}
 }
 
 void CallFlying() // 383 CALL_FLYING
@@ -8973,12 +9470,96 @@ void SetMagicInObject() // 386 SET_MAGIC_IN_OBJECT
 	}
 }
 
+/// Whether a thing is a building of the buildings' table for the adult counts of the scripts: an abode or a miracle
+/// dispenser
+static bool IsAdultHolderBuilding(const ecs::Registry& registry, entt::entity object)
+{
+	return registry.AnyOf<ecs::components::Abode, ecs::components::SpellDispenser>(object);
+}
+
+/// The grown villagers of a town now
+static uint32_t TownAdultsNow(const ecs::Registry& registry, entt::entity town)
+{
+	uint32_t adults = 0;
+	registry.Each<const ecs::components::Villager>([town, &adults](const ecs::components::Villager& villager) {
+		if (villager.town == town && villager.lifeStage != ecs::components::Villager::LifeStage::Child)
+		{
+			++adults;
+		}
+	});
+	return adults;
+}
+
+/// The room for adults in the built buildings of a town now: the adult places of each building of its tribe's table that
+/// has a place for anyone, as the town stats count them
+static int32_t TownAdultRoomNow(const ecs::Registry& registry, entt::entity townEntity, const ecs::components::Town& town)
+{
+	const auto* tribe = registry.TryGet<const Tribe>(townEntity);
+	if (tribe == nullptr || !Locator::infoConstants::has_value())
+	{
+		return 0;
+	}
+	const auto& rows = Locator::infoConstants::value().abode;
+	int32_t room = 0;
+	registry.Each<const ecs::components::Abode>([&](entt::entity entity, const ecs::components::Abode& abode) {
+		if (abode.townId != town.id)
+		{
+			return;
+		}
+		const auto* progress = registry.TryGet<const ecs::components::BuildProgress>(entity);
+		if (progress != nullptr && progress->built < 1.0f)
+		{
+			return;
+		}
+		const auto row = std::ranges::find_if(
+		    rows, [&](const GAbodeInfo& info) { return info.tribeType == *tribe && info.abodeNumber == abode.type; });
+		if (row != rows.end() && row->maxVillagersInAbode + row->maxChildrenInAbode != 0)
+		{
+			room += static_cast<int32_t>(row->maxVillagersInAbode);
+		}
+	});
+	return room;
+}
+
+/// The adults of a town or a building, or the room for them, as ID_ADULT_SIZE and OBJECT_ADULT_CAPACITY give it. Any
+/// other thing gives 0 and a message.
+static void PushAdultCount(bool room)
+{
+	const auto object = PopObject();
+	const auto& registry = Locator::entitiesRegistry::value();
+	if (object == entt::null || !registry.Valid(object))
+	{
+		ScriptMessage("Object should be alive!");
+		Pushf(0.0f);
+		return;
+	}
+	if (const auto* town = registry.TryGet<const ecs::components::Town>(object); town != nullptr)
+	{
+		// The town keeps these counts up to date at all times, so they are counted now and not taken from the turn's
+		// town stats
+		Pushf(room ? ecs::script_containers::TownAdultRoom(TownAdultRoomNow(registry, object, *town))
+		           : ecs::script_containers::TownAdults(TownAdultsNow(registry, object)));
+		return;
+	}
+	if (!IsAdultHolderBuilding(registry, object))
+	{
+		ScriptMessage("Object should be town, or abode");
+		Pushf(0.0f);
+		return;
+	}
+	if (room)
+	{
+		const auto* info = ecs::world_objects::AbodeInfoOf(object);
+		Pushf(ecs::script_containers::AbodeAdultRoom(info != nullptr ? info->maxVillagersInAbode : 0));
+		return;
+	}
+	const bool lived = registry.AllOf<ecs::components::Abode>(object);
+	Pushf(ecs::script_containers::AbodeAdults(lived ? ecs::town_homes::HouseholdOf(registry, object).adults : 0));
+}
+
 void IdAdultSize() // 387 ID_ADULT_SIZE
 {
-	// const auto container = Pop().uintVal;
-	// TODO(Daniels118): implement this
-	NotImplemented();
-	Pushf(0.0f);
+	PushAdultCount(false);
 }
 
 void ObjectCapacity() // 388 OBJECT_CAPACITY
@@ -8991,10 +9572,7 @@ void ObjectCapacity() // 388 OBJECT_CAPACITY
 
 void ObjectAdultCapacity() // 389 OBJECT_ADULT_CAPACITY
 {
-	// const auto container = Pop().uintVal;
-	// TODO(Daniels118): implement this
-	NotImplemented();
-	Pushf(0.0f);
+	PushAdultCount(true);
 }
 
 void SetCreatureAutoFighting() // 390 SET_CREATURE_AUTO_FIGHTING
@@ -9077,11 +9655,15 @@ void SquareRoot() // 397 SQUARE_ROOT
 
 void GetPlayerAlly() // 398 GET_PLAYER_ALLY
 {
-	// const auto player2 = Popf();
-	// const auto player1 = Popf();
-	// TODO(Daniels118): implement this
-	NotImplemented();
-	Pushf(0.0f);
+	const auto other = ScriptPlayerName(static_cast<int32_t>(Popf()));
+	const auto player = ScriptPlayerName(static_cast<int32_t>(Popf()));
+	// The strength that the second player keeps for the first; a number that names no player gives 0
+	float strength = 0.0f;
+	if (ScriptNamesPlayer(player) && ScriptNamesPlayer(other) && Locator::playerSystem::has_value())
+	{
+		strength = Locator::playerSystem::value().AllyStrength(other, player);
+	}
+	Pushf(strength);
 }
 
 /// The player a script names: its 0 is the player at this computer, the others count from 1
@@ -9146,10 +9728,14 @@ void PauseUnpauseStormCreationInClimateSystem() // 402 PAUSE_UNPAUSE_STORM_CREAT
 
 void GetManaForSpell() // 403 GET_MANA_FOR_SPELL
 {
-	// const auto spell = Pop().intVal;
-	// TODO(Daniels118): implement this
-	NotImplemented();
-	Pushf(0.0f);
+	// The prayer power that a miracle of the magic type costs to create
+	const auto spell = Pop().intVal;
+	if (spell < 0 || static_cast<size_t>(spell) >= magic::k_MagicTypeCount || !Locator::infoConstants::has_value())
+	{
+		Pushf(0.0f);
+		return;
+	}
+	Pushf(magic::GetChantsRequiredToCreate(Locator::infoConstants::value(), static_cast<MagicType>(spell)));
 }
 
 void KillStormsInArea() // 404 KILL_STORMS_IN_AREA
@@ -9180,13 +9766,13 @@ void SetGameTimeProperties() // 407 SET_GAME_TIME_PROPERTIES
 	const auto percentageChange = Popf();
 	const auto percentageNight = Popf();
 	const auto duration = Popf();
-	Locator::skySystem::value().GetClock().SetCycle(duration, percentageNight, percentageChange);
+	Locator::skyClockSystem::value().GetClock().SetCycle(duration, percentageNight, percentageChange);
 }
 
 void ResetGameTimeProperties() // 408 RESET_GAME_TIME_PROPERTIES
 {
-	Locator::skySystem::value().GetClock().SetCycle(DayNightClock::k_DefaultDuration, DayNightClock::k_DefaultNight,
-	                                                DayNightClock::k_DefaultChange);
+	Locator::skyClockSystem::value().GetClock().SetCycle(DayNightClock::k_DefaultDuration, DayNightClock::k_DefaultNight,
+	                                                     DayNightClock::k_DefaultChange);
 }
 
 void SoundExists() // 409 SOUND_EXISTS
@@ -9227,13 +9813,11 @@ void GetHandState() // 413 GET_HAND_STATE
 	facts.interfaceActive =
 	    !Locator::cinematicDirectorSystem::has_value() || Locator::cinematicDirectorSystem::value().IsInterfaceActive();
 	facts.inTemple = PlayerInsideTemple();
-	if (Locator::camera::has_value())
+	// The grip of the land and the other button come from the view report of the player
+	if (const auto view = ScriptView(); view.has_value())
 	{
-		facts.gripsLand = Locator::camera::value().GetModel().GetHandCues().dragging;
-	}
-	if (Locator::gameActionSystem::has_value())
-	{
-		facts.otherButton = Locator::gameActionSystem::value().Get(input::UnbindableActionMap::TWO_BUTTON_CLICK);
+		facts.gripsLand = view->gripsLand;
+		facts.otherButton = view->otherButton;
 	}
 	if (Locator::cameraHelpSystem::has_value())
 	{
@@ -9272,10 +9856,10 @@ void WithinRotation() // 416 WITHIN_ROTATION
 
 void GetPlayerTownTotal() // 417 GET_PLAYER_TOWN_TOTAL
 {
-	// const auto player = Popf();
-	// TODO(Daniels118): implement this
-	NotImplemented();
-	Pushf(0.0f);
+	const auto player = ScriptPlayerName(static_cast<int32_t>(Popf()));
+	// The number of towns that the player has now
+	const auto& registry = Locator::entitiesRegistry::value();
+	Pushf(static_cast<float>(ecs::player_towns::Total(registry, player)));
 }
 
 void SpiritScreenPoint() // 418 SPIRIT_SCREEN_POINT
@@ -9327,17 +9911,32 @@ void GetObjectClicked() // 421 GET_OBJECT_CLICKED
 
 void GetMana() // 422 GET_MANA
 {
-	// const auto worshipSite = Pop().uintVal;
-	// TODO(Daniels118): implement this
-	NotImplemented();
-	Pushf(0.0f);
+	// The prayer power in the battery of a worship site. Only a site has it, not a spell icon.
+	const auto object = PopObject();
+	if (!IsWorshipSite(object))
+	{
+		ScriptMessage("Thing not valid!");
+		Pushf(0.0f);
+		return;
+	}
+	Pushf(Locator::worshipSiteSystem::has_value() ? Locator::worshipSiteSystem::value().StoredChants(object) : 0.0f);
 }
 
 void ClearPlayerSpellCharging() // 423 CLEAR_PLAYER_SPELL_CHARGING
 {
-	// const auto player = Popf();
-	// TODO(Daniels118): implement this
-	NotImplemented();
+	// At the sites of the player's temple, each icon that charges for the hand at this computer stops its charge
+	const auto player = ScriptPlayerName(static_cast<int32_t>(Popf()));
+	if (!Locator::playerSystem::has_value() || !Locator::worshipSiteSystem::has_value() ||
+	    !Locator::spellIconSystem::has_value())
+	{
+		return;
+	}
+	const auto temple = Locator::worshipSiteSystem::value().TempleOf(player);
+	if (temple == entt::null)
+	{
+		return;
+	}
+	Locator::spellIconSystem::value().CancelChargesFor(temple, Locator::playerSystem::value().GetLocalPlayer());
 }
 
 void StopSoundEffect() // 424 STOP_SOUND_EFFECT
@@ -9354,16 +9953,33 @@ void StopSoundEffect() // 424 STOP_SOUND_EFFECT
 	}
 	if (const auto sound = BankSound(bank, sample))
 	{
-		Locator::audio::value().StopSoundEffect(*sound);
+		Locator::sounds::value().StopSoundEffect(*sound);
 	}
 }
 
 void GetTotemStatue() // 425 GET_TOTEM_STATUE
 {
-	// const auto town = Pop().uintVal;
-	// TODO(Daniels118): implement this
-	NotImplemented();
-	Pusho(0);
+	// A town centre gives the totem that stands on it. Any other thing, or a centre with no totem, gives nothing.
+	const auto centre = PopObject();
+	const auto& registry = Locator::entitiesRegistry::value();
+	entt::entity found = entt::null;
+	if (centre != entt::null && registry.Valid(centre))
+	{
+		registry.Each<const ecs::components::VillageTotem>(
+		    [centre, &found](entt::entity totem, const ecs::components::VillageTotem& component) {
+			    if (component.townCentre == centre && found == entt::null)
+			    {
+				    found = totem;
+			    }
+		    });
+	}
+	if (found == entt::null)
+	{
+		Pusho(0);
+		return;
+	}
+	Locator::scriptObjects::value().Register(found, false);
+	Pusho(static_cast<uint32_t>(found));
 }
 
 void SetSetOnFire() // 426 SET_SET_ON_FIRE
@@ -9504,10 +10120,19 @@ void SaveGameInSlot() // 439 SAVE_GAME_IN_SLOT
 
 void SetObjectCarrying() // 440 SET_OBJECT_CARRYING
 {
-	// const auto carriedObj = Pop().intVal;
-	// const auto object = Pop().uintVal;
-	// TODO(Daniels118): implement this
-	NotImplemented();
+	// A villager holds the object the script gives. The next change of its state animation can replace it, but not
+	// while the villager is under the script.
+	const auto carried = ecs::script_containers::CarriedObjectFromScript(Pop().uintVal);
+	const auto object = PopObject();
+	auto& registry = Locator::entitiesRegistry::value();
+	auto* villager =
+	    object != entt::null && registry.Valid(object) ? registry.TryGet<ecs::components::Villager>(object) : nullptr;
+	if (villager == nullptr)
+	{
+		ScriptMessage("Villager invalid!");
+		return;
+	}
+	villager->carried = static_cast<CarriedObject>(carried);
 }
 
 void PosValidForCreature() // 441 POS_VALID_FOR_CREATURE
@@ -9570,13 +10195,61 @@ void EnableDisableAlignmentMusic() // 445 ENABLE_DISABLE_ALIGNMENT_MUSIC
 	}
 }
 
+/// What the search for the dead looks at in a thing
+static script::dead_living::LivingFacts DeadLivingFactsOf(const ecs::Registry& registry, entt::entity thing)
+{
+	using script::dead_living::LivingFacts;
+	if (registry.AllOf<ecs::components::Villager>(thing))
+	{
+		const auto* action = registry.TryGet<const ecs::components::LivingAction>(thing);
+		if (action == nullptr || !Locator::livingActionSystem::has_value())
+		{
+			return {};
+		}
+		return {.kind = LivingFacts::Kind::Villager,
+		        .deathMark = registry.AllOf<ecs::components::VillagerDeath>(thing),
+		        .topState = action->states.at(static_cast<size_t>(ecs::components::LivingAction::Index::Top)),
+		        .finalState = static_cast<uint8_t>(Locator::livingActionSystem::value().VillagerGetFinalState(*action))};
+	}
+	if (const auto* animal = registry.TryGet<const ecs::components::Animal>(thing))
+	{
+		// Of the animal states, only the dead state has the game's number of the dead state
+		return {.kind = LivingFacts::Kind::Animal,
+		        .deathMark = animal->dying,
+		        .topState =
+		            animal->state == ecs::components::AnimalState::Dead ? script::dead_living::k_DeadState : uint8_t {0},
+		        .life = animal->life};
+	}
+	return {};
+}
+
 void GetDeadLiving() // 446 GET_DEAD_LIVING
 {
-	// const auto radius = Popf();
-	// const auto position = PopVec();
-	// TODO(Daniels118): implement this
-	NotImplemented();
-	Pusho(0);
+	// The nearest dead villager or animal in the cells within the radius of the point. A thing farther than the radius
+	// in these cells also counts. The script then holds the thing.
+	const auto radius = Popf();
+	const auto position = PopVec();
+	const auto at = map_coords::FromMetres({position.x, position.z});
+	const auto found = ecs::script_find::FindNearest(at, radius, [](glm::ivec2 cell) {
+		const auto& registry = Locator::entitiesRegistry::value();
+		std::vector<ecs::script_find::Candidate> dead;
+		for (const auto thing : Locator::entitiesMap::value().GetAllInCell(cell))
+		{
+			if (registry.Valid(thing) && registry.AllOf<Transform>(thing) &&
+			    script::dead_living::IsDead(DeadLivingFactsOf(registry, thing)))
+			{
+				dead.push_back({.entity = thing, .at = ScriptFindPosition(registry, thing)});
+			}
+		}
+		return dead;
+	});
+	if (found == entt::null)
+	{
+		Pusho(0);
+		return;
+	}
+	Locator::scriptObjects::value().Register(found, false);
+	Pusho(static_cast<uint32_t>(found));
 }
 
 void AttachSoundTag() // 447 ATTACH_SOUND_TAG
@@ -9637,7 +10310,7 @@ void GameSoundPlaying() // 450 GAME_SOUND_PLAYING
 	const auto bank = Pop().intVal;
 	const auto sample = Pop().intVal;
 	const auto sound = BankSound(bank, sample);
-	Pushb(sound.has_value() && Locator::audio::value().IsSoundEffectPlaying(*sound));
+	Pushb(sound.has_value() && Locator::sounds::value().IsSoundEffectPlaying(*sound));
 }
 
 /// A player's temple, the earliest made when there are several, none when the player has none
@@ -9685,35 +10358,121 @@ void CreatureAutoscale() // 452 CREATURE_AUTOSCALE
 
 void GetSpellIconInTemple() // 453 GET_SPELL_ICON_IN_TEMPLE
 {
-	// const auto temple = Pop().uintVal;
-	// const auto spell = Pop().intVal;
-	// TODO(Daniels118): implement this
-	NotImplemented();
-	Pusho(0);
+	// The icon of a magic type's first seed at the worship sites of a temple
+	const auto temple = PopObject();
+	const auto type = static_cast<MagicType>(Pop().intVal);
+	auto& registry = Locator::entitiesRegistry::value();
+	if (!registry.Valid(temple) || !registry.AllOf<ecs::components::Temple>(temple))
+	{
+		ScriptMessage("Invalid Temple");
+		Pusho(0);
+		return;
+	}
+	if (!Locator::spellIconSystem::has_value() || !Locator::infoConstants::has_value())
+	{
+		Pusho(0);
+		return;
+	}
+	const auto seed = magic::FindFirstSpellSeedForMagicType(Locator::infoConstants::value(), type);
+	const auto icon = seed.has_value() ? Locator::spellIconSystem::value().IconInTemple(temple, *seed) : entt::null;
+	if (icon == entt::null)
+	{
+		Pusho(0);
+		return;
+	}
+	// The icon takes a place in the scripts' table, not as a thing that a script made
+	Locator::scriptObjects::value().Register(icon, false);
+	Pusho(static_cast<uint32_t>(icon));
 }
 
 void GameClearComputerPlayerActions() // 454 GAME_CLEAR_COMPUTER_PLAYER_ACTIONS
 {
-	// const auto player = Popf();
-	// TODO(Daniels118): implement this
+	const auto player = ScriptPlayerName(static_cast<int32_t>(Popf()));
+	if (Locator::computerPlayerSystem::has_value())
+	{
+		Locator::computerPlayerSystem::value().ClearActions(player);
+	}
+}
+
+/// The first thing in a town or a flock for a script, or nothing. A dance is a container too, but its order is not
+/// known yet, so it gives nothing and tells of it.
+static entt::entity FirstInContainer(const ecs::Registry& registry, entt::entity container)
+{
+	if (const auto* town = registry.TryGet<const ecs::components::Town>(container); town != nullptr)
+	{
+		const auto* building = !town->abodes.empty() && registry.Valid(town->abodes.front())
+		                           ? registry.TryGet<const ecs::components::Abode>(town->abodes.front())
+		                           : nullptr;
+		return ecs::script_containers::FirstInTown(building != nullptr ? std::span<const entt::entity>(building->inhabitants)
+		                                                               : std::span<const entt::entity> {},
+		                                           town->homelessVillagers);
+	}
+	if (ecs::script_flocks::IsFlock(registry, container))
+	{
+		const auto& members = registry.Get<const ecs::components::Flock>(container).members;
+		return members.empty() ? entt::entity {entt::null} : members.front();
+	}
+	// TODO(lesson-natives): the order in which a script walks through a dance
 	NotImplemented();
+	return entt::null;
+}
+
+/// Pushes a thing that a container gave, or nothing
+static void PushContainerThing(entt::entity thing)
+{
+	if (thing == entt::null)
+	{
+		Pusho(0);
+		return;
+	}
+	Locator::scriptObjects::value().Register(thing, false);
+	Pusho(static_cast<uint32_t>(thing));
+}
+
+/// Takes the container from the stack and pushes its first thing
+static void PushFirstInContainer()
+{
+	const auto container = PopObject();
+	const auto& registry = Locator::entitiesRegistry::value();
+	if (container == entt::null || !IsScriptContainer(registry, container))
+	{
+		ScriptMessage("Invalid container");
+		Pusho(0);
+		return;
+	}
+	PushContainerThing(FirstInContainer(registry, container));
 }
 
 void GetFirstInContainer() // 455 GET_FIRST_IN_CONTAINER
 {
-	// const auto container = Pop().uintVal;
-	// TODO(Daniels118): implement this
-	NotImplemented();
-	Pusho(0);
+	PushFirstInContainer();
 }
 
 void GetNextInContainer() // 456 GET_NEXT_IN_CONTAINER
 {
-	// const auto after = Pop().uintVal;
-	// const auto container = Pop().uintVal;
-	// TODO(Daniels118): implement this
-	NotImplemented();
-	Pusho(0);
+	// With no thing to start after, or one that is gone, the script gets the first thing of the container
+	const auto after = PopObject();
+	const auto& registry = Locator::entitiesRegistry::value();
+	if (after == entt::null || !registry.Valid(after))
+	{
+		PushFirstInContainer();
+		return;
+	}
+	const auto container = PopObject();
+	if (container == entt::null || !IsScriptContainer(registry, container))
+	{
+		ScriptMessage("Invalid container");
+		Pusho(0);
+		return;
+	}
+	if (ecs::dances::IsDance(registry, container))
+	{
+		// TODO(lesson-natives): the order in which a script walks through a dance
+		NotImplemented();
+		Pusho(0);
+		return;
+	}
+	PushContainerThing(ecs::script_containers::NextAfter(ContainerMembers(registry, container), after));
 }
 
 void GetTempleEntrancePosition() // 457 GET_TEMPLE_ENTRANCE_POSITION

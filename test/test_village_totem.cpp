@@ -19,12 +19,14 @@
 #include <gtest/gtest.h>
 
 #include "ECS/Components/Abode.h"
+#include "ECS/Components/DrawnHeight.h"
 #include "ECS/Components/Mesh.h"
 #include "ECS/Components/SeeThrough.h"
 #include "ECS/Components/Town.h"
 #include "ECS/Components/Transform.h"
 #include "ECS/Components/VillageTotem.h"
 #include "ECS/Registry.h"
+#include "ECS/Systems/Implementations/ObjectMeasures.h"
 #include "ECS/Systems/Implementations/VillageTotemSystem.h"
 #include "ECS/VillageTotem.h"
 
@@ -175,6 +177,7 @@ public:
 		reactions.push_back({totem, player, position});
 	}
 	void EmpathiseWithPlayer(PlayerNames player, glm::vec3 position) override { empathies.push_back({player, position}); }
+	void Reinsert(entt::entity totem) override { reinserted.push_back(totem); }
 	void FloatNumber(glm::vec3 position, float value, uint32_t colour) override
 	{
 		numbers.push_back({position, value, colour});
@@ -204,6 +207,7 @@ public:
 	bool heart {true};
 	float life {1.0f};
 	std::vector<bool> moving;
+	std::vector<entt::entity> reinserted;
 	entt::id_type playerOneIcon {k_ApeIcon};
 	int bells {0};
 };
@@ -266,7 +270,11 @@ TEST(VillageTotemSystem, ItEasesEachFrameButRingsTheBellOnlyInAGameTurn)
 	ASSERT_EQ(village.world->bells, 1);
 	system.SetTownShare(village.town, 0.5f);
 	system.Update(100 + 2600);
-	EXPECT_FLOAT_EQ(registry.Get<Transform>(village.totem).position.y, 3.0f + 0.5f * 8.0f);
+	EXPECT_FLOAT_EQ(registry.Get<DrawnHeight>(village.totem).y, 3.0f + 0.5f * 8.0f);
+	EXPECT_FLOAT_EQ(registry.Get<DrawnHeight>(village.icon).y, 3.0f + 0.5f * 8.0f + vt::k_IconAbovePlinth);
+	// The frames do not move it in the synced world: the turns go by where it stands on the land
+	EXPECT_FLOAT_EQ(registry.Get<Transform>(village.totem).position.y, 3.0f);
+	EXPECT_FLOAT_EQ(registry.Get<Transform>(village.icon).position.y, 3.0f + vt::k_IconAbovePlinth);
 	system.Update(100 + 5000);
 	EXPECT_EQ(village.world->bells, 1);
 	// The first turn after the pause rings the bell once
@@ -299,7 +307,8 @@ TEST(VillageTotemSystem, TheHandSlidesItAndLettingGoSetsTheTownsShare)
 	system.Slide(200.0f, 600.0f);
 	EXPECT_FLOAT_EQ(registry.Get<VillageTotem>(village.totem).held, 0.2f);
 	// Held, it stands where the hand holds it, the hand at its icon
-	EXPECT_FLOAT_EQ(registry.Get<Transform>(village.totem).position.y, 3.0f + 0.2f * 8.0f);
+	EXPECT_FLOAT_EQ(registry.Get<DrawnHeight>(village.totem).y, 3.0f + 0.2f * 8.0f);
+	EXPECT_FLOAT_EQ(registry.Get<Transform>(village.totem).position.y, 3.0f);
 	const auto hold = system.GetHandHold();
 	ASSERT_TRUE(hold.has_value());
 	EXPECT_FLOAT_EQ(hold->position.y, 3.0f + 0.2f * 8.0f + vt::k_IconAbovePlinth + 1.4f);
@@ -311,11 +320,11 @@ TEST(VillageTotemSystem, TheHandSlidesItAndLettingGoSetsTheTownsShare)
 	const auto& totem = registry.Get<VillageTotem>(village.totem);
 	EXPECT_FLOAT_EQ(totem.ease.duration, 0.2f * 5200.0f);
 	system.Update(520);
-	EXPECT_NEAR(registry.Get<Transform>(village.totem).position.y, 3.0f + 0.2f * 0.6875f * 8.0f, 1e-3f);
+	EXPECT_NEAR(registry.Get<DrawnHeight>(village.totem).y, 3.0f + 0.2f * 0.6875f * 8.0f, 1e-3f);
 	system.ProcessTurn(520);
 	EXPECT_EQ(village.world->bells, 0);
 	system.Update(1040);
-	EXPECT_FLOAT_EQ(registry.Get<Transform>(village.totem).position.y, 3.0f + 0.2f * 8.0f);
+	EXPECT_FLOAT_EQ(registry.Get<DrawnHeight>(village.totem).y, 3.0f + 0.2f * 8.0f);
 	// The bell rings once, at the first game turn after it arrives
 	EXPECT_EQ(village.world->bells, 0);
 	system.ProcessTurn(1040);
@@ -574,4 +583,102 @@ TEST(VillageTotemRules, TheSymbolsSitOverTheTopOfTheCarvingWhateverItsHeight)
 	// The icon stands on the plinth, so the top is the plinth's place, the icon's rise over it and the carving's height
 	const float plinthY = 26.0f;
 	EXPECT_FLOAT_EQ(vt::TopY(plinthY + vt::k_IconAbovePlinth, 11.5f), plinthY + 2.729f + 11.5f);
+}
+
+TEST(VillageTotemSystem, AComputerGodRaisesItWithNoSlideAndNoNumber)
+{
+	auto village = MakeVillage(true);
+	auto& system = *village.system;
+	system.RaiseByGod(PlayerNames::PLAYER_TWO, village.totem, 1.0f);
+	// The living near it see the hand of the god take it
+	ASSERT_EQ(village.world->reactions.size(), 1u);
+	EXPECT_EQ(village.world->reactions[0].player, PlayerNames::PLAYER_TWO);
+	EXPECT_EQ(village.world->reactions[0].position, glm::vec3(5.0f, 3.0f, 5.0f));
+	// The creature of the town's player feels it, and the town takes the share
+	ASSERT_EQ(village.world->empathies.size(), 1u);
+	EXPECT_EQ(village.world->empathies[0].player, PlayerNames::PLAYER_ONE);
+	EXPECT_FLOAT_EQ(village.world->registry.Get<Town>(village.town).worshipShare, 1.0f);
+	EXPECT_TRUE(village.world->numbers.empty());
+	EXPECT_FALSE(system.GetGripped().has_value());
+	// Raised to none, the creature still feels it
+	system.RaiseByGod(PlayerNames::PLAYER_TWO, village.totem, 0.0f);
+	EXPECT_EQ(village.world->empathies.size(), 2u);
+	EXPECT_FLOAT_EQ(village.world->registry.Get<Town>(village.town).worshipShare, 0.0f);
+}
+
+TEST(VillageTotemSystem, ATotemGoesIntoTheMapCellsAgainWhenItTurnsAndWhenItTakesANewIcon)
+{
+	// A worship site with no place does not turn it: only its new icon puts it into the cells again
+	auto still = MakeVillage(true);
+	EXPECT_EQ(still.world->reinserted, (std::vector {still.totem}));
+	// A worship site to the east turns it to face the site, side on, and then its icon puts it in again
+	auto village = MakeVillage(false);
+	auto& registry = village.world->registry;
+	const auto site = registry.Create();
+	registry.Assign<Transform>(site, glm::vec3(50.0f, 0.0f, 5.0f), glm::mat3(1.0f), glm::vec3(1.0f));
+	registry.Get<Town>(village.town).worshipSite = site;
+	village.world->reinserted.clear();
+	village.system->AddToPlayer(village.totem);
+	EXPECT_EQ(village.world->reinserted, (std::vector {village.totem, village.totem}));
+	// Turned the same way again, it goes in again only for its icon
+	village.world->reinserted.clear();
+	village.system->AddToPlayer(village.totem);
+	EXPECT_EQ(village.world->reinserted, (std::vector {village.totem}));
+	// A new creature of its player gives it a new icon, which puts it in again; that of another player does not
+	village.world->reinserted.clear();
+	village.system->RefreshIcons(PlayerNames::PLAYER_TWO);
+	EXPECT_TRUE(village.world->reinserted.empty());
+	village.system->RefreshIcons(PlayerNames::PLAYER_ONE);
+	EXPECT_EQ(village.world->reinserted, (std::vector {village.totem}));
+}
+
+TEST(VillageTotemSystem, ATotemWithNoTownStaysInTheMapCellsAsItIs)
+{
+	auto village = MakeVillage(true);
+	village.world->reinserted.clear();
+	village.world->registry.Get<VillageTotem>(village.totem).townCentre = entt::null;
+	village.system->AddToPlayer(village.totem);
+	EXPECT_TRUE(village.world->reinserted.empty());
+}
+
+TEST(VillageTotemMeasures, ATotemIsAsWideAndAsHighAsTheIconOnItsPlinth)
+{
+	openblack::ecs::Registry registry;
+	const auto icon = registry.Create();
+	const auto totem = registry.Create();
+	registry.Assign<VillageTotem>(totem, VillageTotem {.icon = icon});
+	const auto other = registry.Create();
+
+	EXPECT_EQ(openblack::ecs::systems::object_measures::MeasuredPart(registry, totem), icon);
+	EXPECT_EQ(openblack::ecs::systems::object_measures::MeasuredPart(registry, other), other);
+	// A totem with no icon measures as itself
+	registry.Destroy(icon);
+	EXPECT_EQ(openblack::ecs::systems::object_measures::MeasuredPart(registry, totem), totem);
+}
+
+TEST(VillageTotemSystem, ANewPrimaryCreatureRefreshesTheTotemsInTheOrderThatThePlayerGainedTheTowns)
+{
+	auto village = MakeVillage(true);
+	auto& registry = village.world->registry;
+	// A second town of the same player, made later but gained first
+	const auto town = registry.Create();
+	registry.Assign<Town>(town, 8u, PlayerNames::PLAYER_ONE);
+	registry.Context().towns[8] = town;
+	const auto centre = registry.Create();
+	registry.Assign<Abode>(centre, AbodeNumber {}, 8u, 0u, 0u);
+	const auto totem = registry.Create();
+	const auto icon = registry.Create();
+	registry.Assign<Transform>(totem, glm::vec3(9.0f, 3.0f, 9.0f), glm::mat3(1.0f), glm::vec3(1.0f));
+	registry.Assign<Mesh>(icon, k_HandIcon, static_cast<int8_t>(0), static_cast<int8_t>(0));
+	registry.Assign<VillageTotem>(totem, VillageTotem {.townCentre = centre, .icon = icon, .restY = 3.0f});
+	registry.Get<Town>(village.town).gained = 5;
+	registry.Get<Town>(town).gained = 2;
+
+	village.world->reinserted.clear();
+	village.system->RefreshIcons(PlayerNames::PLAYER_ONE);
+	EXPECT_EQ(village.world->reinserted, (std::vector {totem, village.totem}));
+	registry.Get<Town>(town).gained = 9;
+	village.world->reinserted.clear();
+	village.system->RefreshIcons(PlayerNames::PLAYER_ONE);
+	EXPECT_EQ(village.world->reinserted, (std::vector {village.totem, totem}));
 }

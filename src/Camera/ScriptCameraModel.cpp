@@ -21,6 +21,7 @@
 #include "Common/X87.h"
 #include "Common/X87Angle.h"
 #include "Common/X87Vector.h"
+#include "Gui/LogoEffect.h"
 
 using namespace openblack;
 using namespace openblack::script_camera;
@@ -53,6 +54,11 @@ glm::vec3 ValueOf(const Zoomers& zoomers)
 glm::vec3 DestinationOf(const Zoomers& zoomers)
 {
 	return {zoomers[0].Destination(), zoomers[1].Destination(), zoomers[2].Destination()};
+}
+
+glm::vec3 SpeedOf(const Zoomers& zoomers)
+{
+	return {zoomers[0].Speed(), zoomers[1].Speed(), zoomers[2].Speed()};
 }
 
 /// The square of the distance, with the squares added in the given order
@@ -114,6 +120,14 @@ glm::vec3 script_camera::PointFromDistanceHeadingAndPitch(const glm::vec3& point
 	const float cosPitch = x87::RoundToFloat(x87::Cos(pitch));
 	return {(x87::Mul(x87::Sin(heading), cosPitch) * distance) + point.x, x87::Mul(x87::Sin(pitch), distance) + point.y,
 	        (x87::Mul(x87::Cos(heading), cosPitch) * distance) + point.z};
+}
+
+glm::vec3 script_camera::FacingPoint(const glm::vec3& eye, const glm::vec3& focus, float distance)
+{
+	const auto forward = logo_effect::LookAt(eye, focus).forward;
+	// Each part is the direction times the distance, then added to the eye
+	return {x87::Add(x87::Mul(forward.x, distance), eye.x), x87::Add(x87::Mul(forward.y, distance), eye.y),
+	        x87::Add(x87::Mul(forward.z, distance), eye.z)};
 }
 
 float script_camera::FollowSeconds(float secondsSinceBegun, float zoomTimeScale)
@@ -582,4 +596,24 @@ glm::vec3 ScriptCameraModel::GetTargetOrigin() const
 glm::vec3 ScriptCameraModel::GetTargetFocus() const
 {
 	return DestinationOf(_focus);
+}
+
+glm::vec3 ScriptCameraModel::GetOrigin() const
+{
+	return ValueOf(_origin);
+}
+
+glm::vec3 ScriptCameraModel::GetFocus() const
+{
+	return ValueOf(_focus);
+}
+
+glm::vec3 ScriptCameraModel::GetOriginSpeed() const
+{
+	return SpeedOf(_origin);
+}
+
+glm::vec3 ScriptCameraModel::GetFocusSpeed() const
+{
+	return SpeedOf(_focus);
 }

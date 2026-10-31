@@ -17,6 +17,7 @@
 #include <array>
 #include <numbers>
 #include <optional>
+#include <utility>
 #include <vector>
 
 #include "3D/FlatLand.h"
@@ -195,6 +196,71 @@ void AddBuildingBreak(std::vector<Scenario>& all)
 	    .objects = objects,
 	    .throws = throws,
 	});
+
+	// The same huts in deep snow, struck once the snow has settled on them
+	auto snowThrows = throws;
+	for (auto& thrown : snowThrows)
+	{
+		thrown.delaySeconds += 6.0f;
+		thrown.repeatSeconds.reset();
+	}
+	all.push_back({
+	    .id = "light.snow_on_broken_huts",
+	    .name = "Snow on huts broken by thrown boulders",
+	    .facet = Facet::Light,
+	    .description = "Deep snow lies over the whole island. Three huts stand in a row. After the snow settles on them, "
+	                   "two boulders hit each hut from the south, one time.",
+	    .expected = "The snow shows on the huts in about four seconds. When a boulder breaks a hut, the broken hut keeps "
+	                "its snow. Each piece that flies off shows the snow that the hut had, and keeps it where it lands.",
+	    .environment = {.dispenserGrid = false, .snowDepth = 200.0f},
+	    .framing = {.shot = Shot::Overview,
+	                .include = {k_Field - glm::vec2 {40.0f}, k_Field + glm::vec2 {40.0f}},
+	                .distance = k_WithinEarshot},
+	    .objects = objects,
+	    .throws = snowThrows,
+	});
+
+	// One hut in snow, seen from close by after two boulders break it: its faces, back faces and broken edges
+	const glm::vec2 hut = objects.at(1).offset;
+	all.push_back({
+	    .id = "light.snow_on_broken_faces",
+	    .name = "Snow on the faces of a broken hut, from close by",
+	    .facet = Facet::Light,
+	    .description = "Snow lies over the whole island. Three huts stand in a row. After the snow settles on them, two "
+	                   "boulders hit each hut from the south, one time. The camera looks at the middle hut from the "
+	                   "south east, from close by.",
+	    .expected = "The broken hut shows white snow on the faces that point up, in the light and colour of the faces. "
+	                "The snow lies in patches that do not move with the camera. The back faces and the broken edges "
+	                "show snow only where the snow is deep. The pieces that fly off keep their snow.",
+	    .environment = {.dispenserGrid = false, .snowDepth = 120.0f},
+	    .framing = {.shot = Shot::Placed,
+	                .eye = glm::vec3(hut.x + 14.0f, 9.0f, hut.y - 14.0f),
+	                .look = glm::vec3(hut.x, 3.0f, hut.y)},
+	    .objects = objects,
+	    .throws = snowThrows,
+	});
+}
+
+// Buildings that follow the land, half built on the steep bank of the lake, seen from the side
+void AddUnbuiltOnBank(std::vector<Scenario>& all)
+{
+	constexpr glm::vec2 k_Lake = flat_land::k_LakeCentre - flat_land::k_MapMiddle;
+	constexpr float k_Bank = k_Lake.y - flat_land::k_LakeHalfExtent.y - 26.0f;
+	all.push_back({
+	    .id = "physics.unbuilt_on_bank",
+	    .name = "Buildings that follow the land, half built on a slope",
+	    .facet = Facet::Physics,
+	    .description = "A Celtic hut, a Celtic storage pit and a Celtic graveyard stand half built on the steep bank of "
+	                   "the lake. The camera looks at them from the side.",
+	    .expected = "Each building shows only its lower half. The flat top of each wall stays at the same height above "
+	                "the land under it, so the top goes down the slope with the land. No wall shows a gap or a spike "
+	                "at its top.",
+	    .environment = {.hour = 12.0f, .clockRuns = false, .dispenserGrid = false},
+	    .framing = {.shot = Shot::Placed, .eye = {k_Lake.x + 20.0f, 30.0f, k_Bank - 60.0f}, .look = {k_Lake.x, 2.0f, k_Bank}},
+	    .objects = {{.type = AbodeInfo::CelticHut, .offset = {k_Lake.x - 40.0f, k_Bank}, .built = 0.5f},
+	                {.type = AbodeInfo::CelticStoragePit, .offset = {k_Lake.x, k_Bank}, .built = 0.5f},
+	                {.type = AbodeInfo::CelticGraveyard, .offset = {k_Lake.x + 40.0f, k_Bank}, .built = 0.5f}},
+	});
 }
 
 void AddRockSplit(std::vector<Scenario>& all)
@@ -285,6 +351,84 @@ void AddCreatureCatch(std::vector<Scenario>& all)
 	                .delaySeconds = 8.0f,
 	                .repeatSeconds = 10.0f}},
 	});
+}
+
+/// Boulders from the south break a creche, and the pieces fly north towards a tiger near the creche
+Scenario CatchBuildingPieceStage()
+{
+	constexpr glm::vec2 k_Creche = k_Field + glm::vec2 {0.0f, 10.0f};
+	std::vector<ObjectSetup> objects {{.type = AbodeInfo::CelticCreche, .offset = k_Creche}};
+	std::vector<ThrowSetup> throws;
+	for (size_t i = 0; i < 2; ++i)
+	{
+		const float x = i == 0 ? -2.0f : 2.0f;
+		// Big boulders, too heavy for the tiger to catch
+		objects.push_back({.type = MobileStaticInfo::Boulder2Chalk, .offset = k_Field + glm::vec2 {x, -20.0f}, .scale = 4.0f});
+		throws.push_back({
+		    .object = objects.size() - 1,
+		    .from = k_Field + glm::vec2 {x, -20.0f},
+		    .height = 4.0f,
+		    .velocity = {0.0f, 4.0f, 20.0f},
+		    .delaySeconds = 2.0f + static_cast<float>(i) * 0.5f,
+		    .repeatSeconds = 6.0f,
+		});
+	}
+	return {
+	    .facet = Facet::Physics,
+	    .environment = {.dispenserGrid = false},
+	    .framing = {.shot = Shot::Placed,
+	                .eye = glm::vec3(k_Field.x + 45.0f, 18.0f, k_Field.y + 20.0f),
+	                .look = glm::vec3(k_Field.x, 6.0f, k_Field.y + 20.0f)},
+	    .creatures = {{.species = CreatureType::Tiger, .offset = k_Field + glm::vec2 {14.0f, 18.0f}, .facingDegrees = 0.0f}},
+	    .objects = objects,
+	    .throws = throws,
+	};
+}
+
+void AddCreatureCatchesBuildingPiece(std::vector<Scenario>& all)
+{
+	auto busy = CatchBuildingPieceStage();
+	busy.id = "physics.creature_catches_building_piece";
+	busy.name = "A busy creature that tries to catch a piece of a building";
+	busy.description = "Big boulders thrown from the south break a creche again and again. A tiger stands north east of "
+	                   "the creche and does what it likes.";
+	busy.expected = "The tiger does not try to catch the boulders, because they are too heavy. Pieces of the creche fly "
+	                "north. The game log shows that the tiger is made to catch a piece. It stops its point or its dance "
+	                "at double speed, but a turn or an action plays to its end. The catch starts only when the body is "
+	                "free, so a piece that lands first is not caught.";
+	all.push_back(std::move(busy));
+
+	// The mind of the tiger starts just after the first boulder breaks the creche, so its body is free for the catch
+	constexpr float k_ThinksAfterTheBreak = 3.5f;
+	auto still = CatchBuildingPieceStage();
+	still.id = "physics.creature_catches_building_piece_still";
+	still.name = "A still creature that catches a piece of a building";
+	still.description = "Big boulders thrown from the south break a creche. A tiger stands still north east of the creche "
+	                    "until the first boulder hits.";
+	still.expected = "The tiger does not try to catch the boulders, because they are too heavy. Pieces of the creche fly "
+	                 "north. The game log shows that the tiger is made to catch a piece. Its body is free, so its catch "
+	                 "starts on the next turn: it steps or turns to the piece and catches it in its hand, or gives up "
+	                 "when the piece has gone past or landed.";
+	still.creatures.front().pauseMind = true;
+	still.creatures.front().thinksAfterSeconds = k_ThinksAfterTheBreak;
+	auto pointing = still;
+	all.push_back(std::move(still));
+
+	// The tiger faces north and points north for five seconds from before the break
+	pointing.creatures.front().facingDegrees = 180.0f;
+	pointing.id = "physics.creature_catches_building_piece_pointing";
+	pointing.name = "A pointing creature that is made to catch a piece of a building";
+	pointing.description = "Big boulders thrown from the south break a creche. A tiger north east of the creche points "
+	                       "north when the first boulder flies.";
+	pointing.expected = "The game log shows that the tiger is made to catch a piece. The tiger stops its point at once: "
+	                    "its arm comes down at double speed. The catch starts when the arm is down, so a piece that "
+	                    "lands first is not caught.";
+	pointing.commands = {{.kind = Command::Kind::PointAt,
+	                      .creature = 0,
+	                      .delaySeconds = 1.0f,
+	                      .waitUntilFree = false,
+	                      .point = k_Field + glm::vec2 {14.0f, 80.0f}}};
+	all.push_back(std::move(pointing));
 }
 
 void AddCreatureCatchWhileWalking(std::vector<Scenario>& all)
@@ -506,10 +650,12 @@ void testbed_scenarios::AddPhysicsScenarios(std::vector<Scenario>& all)
 	AddThrownAngles(all);
 	AddCrowdThrow(all);
 	AddBuildingBreak(all);
+	AddUnbuiltOnBank(all);
 	AddRockSplit(all);
 	AddCreatureHit(all);
 	AddCreatureCatch(all);
 	AddCreatureCatchWhileWalking(all);
+	AddCreatureCatchesBuildingPiece(all);
 	AddCreatureIgnoringReactions(all);
 	AddCreatureWithForcedPlan(all);
 	AddSinking(all);

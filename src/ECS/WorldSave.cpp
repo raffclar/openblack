@@ -34,22 +34,24 @@
 
 #include "3D/CameraEdits.h"
 #include "3D/TempleInteriorInterface.h"
-#include "Audio/AudioManagerInterface.h"
-#include "Audio/GameMusic.h"
 #include "CHLApi.h"
 #include "Camera/Camera.h"
 #include "Common/GameRandom.h"
 #include "Common/RandomNumberManager.h"
 #include "Creature/CreatureHandGlow.h"
 #include "ECS/Archetypes/ArenaArchetype.h"
+#include "ECS/Components/Cloud.h"
+#include "ECS/Components/ComputerPlayer.h"
 #include "ECS/Components/Creature.h"
 #include "ECS/Components/CreatureArena.h"
 #include "ECS/Components/CreatureHandGlows.h"
 #include "ECS/Components/CreatureMind.h"
+#include "ECS/Components/Dance.h"
 #include "ECS/Components/Footpath.h"
 #include "ECS/Components/SoundTag.h"
 #include "ECS/Components/Temple.h"
 #include "ECS/Components/WalkPath.h"
+#include "ECS/ComputerPlayerStart.h"
 #include "ECS/Map.h"
 #include "ECS/Reflection/BinaryArchive.h"
 #include "ECS/Registry.h"
@@ -67,8 +69,10 @@
 #include "ECS/Systems/CreatureLocomotionSystemInterface.h"
 #include "ECS/Systems/CreatureMindSystemInterface.h"
 #include "ECS/Systems/CreaturePhysiologySystemInterface.h"
+#include "ECS/Systems/DanceSystemInterface.h"
 #include "ECS/Systems/DialogueControlSystemInterface.h"
 #include "ECS/Systems/DynamicsSystemInterface.h"
+#include "ECS/Systems/EffectRequestSystemInterface.h"
 #include "ECS/Systems/ExplosionSystemInterface.h"
 #include "ECS/Systems/FireSystemInterface.h"
 #include "ECS/Systems/FireflySystemInterface.h"
@@ -81,11 +85,13 @@
 #include "ECS/Systems/MagicShieldSystemInterface.h"
 #include "ECS/Systems/MagicSystemInterface.h"
 #include "ECS/Systems/MiracleFxSystemInterface.h"
+#include "ECS/Systems/ParticleRuleSystemInterface.h"
 #include "ECS/Systems/ParticleSystemInterface.h"
 #include "ECS/Systems/ReactionSystemInterface.h"
 #include "ECS/Systems/SavedStateInterface.h"
 #include "ECS/Systems/ScriptControlSystemInterface.h"
 #include "ECS/Systems/ScriptHighlightSystemInterface.h"
+#include "ECS/Systems/ScriptMusicSystemInterface.h"
 #include "ECS/Systems/ScriptObjectsSystemInterface.h"
 #include "ECS/Systems/SnowSystemInterface.h"
 #include "ECS/Systems/SoundTagSystemInterface.h"
@@ -95,9 +101,10 @@
 #include "ECS/Systems/VortexSystemInterface.h"
 #include "ECS/Systems/WaterRingSystemInterface.h"
 #include "ECS/Systems/WeatherSystemInterface.h"
-#include "Game.h"
 #include "Locator.h"
 #include "Particles/LightSheet.h"
+#include "Sound/GameMusic.h"
+#include "Sound/SoundRequestInterface.h"
 
 using namespace openblack;
 using namespace openblack::ecs;
@@ -230,9 +237,9 @@ bool LoadCamera(std::span<const uint8_t> bytes)
 /// The sounds of a world state start again on this computer: the emitters are of the computer that made the state
 void ForgetEmitters(Registry& registry)
 {
-	if (Locator::audio::has_value())
+	if (Locator::sounds::has_value())
 	{
-		Locator::audio::value().ForgetSavedEmitters();
+		Locator::sounds::value().ForgetSavedEmitters();
 	}
 	registry.Each<components::SoundTag>([](entt::entity, components::SoundTag& tag) { tag.emitter = entt::null; });
 }
@@ -249,9 +256,9 @@ void ForgetTempleRooms(entt::registry& registry)
 /// gets its creed powers one by one.
 void ForgetSavedSounds(Registry& registry)
 {
-	if (Locator::audio::has_value())
+	if (Locator::sounds::has_value())
 	{
-		Locator::audio::value().ForgetSavedEmitters();
+		Locator::sounds::value().ForgetSavedEmitters();
 	}
 	if (!Locator::soundTagSystem::has_value())
 	{
@@ -260,6 +267,7 @@ void ForgetSavedSounds(Registry& registry)
 	Locator::soundTagSystem::value().ForgetSavedSounds();
 	if (!Locator::creatureAnimationSystem::has_value())
 	{
+		Locator::soundTagSystem::value().ForgetUnclaimedSounds();
 		return;
 	}
 	using creature_hand_glow::k_PlaceCount;
@@ -273,12 +281,14 @@ void ForgetSavedSounds(Registry& registry)
 		    }
 		    // The loaded creature has no glows before it gets its powers
 		    glows.glows = {};
+		    glows.motion = {};
 		    creatures.emplace_back(entity, powers);
 	    });
 	for (const auto& [entity, powers] : creatures)
 	{
 		Locator::creatureAnimationSystem::value().LoadCreedPowers(entity, powers);
 	}
+	Locator::soundTagSystem::value().ForgetUnclaimedSounds();
 }
 
 template <typename Service>
@@ -290,16 +300,44 @@ systems::SavedStateInterface* FindSystem()
 /// The game's music, which the game keeps for as long as it runs
 systems::SavedStateInterface* FindGameMusic()
 {
-	auto* game = Game::Instance();
-	return game != nullptr ? game->GetGameMusic() : nullptr;
+	return Locator::gameMusic::has_value() ? &Locator::gameMusic::value() : nullptr;
 }
+
+/// The part of the save of the particles that keeps the effects of this computer. Only a computer that draws the
+/// effects keeps this part, so a dedicated server does not write or read it.
+systems::SavedStateInterface* FindLocalParticles()
+{
+	if (!Locator::particleSystem::has_value() || !Locator::particleRuleSystem::has_value())
+	{
+		return nullptr;
+	}
+	return Locator::particleRuleSystem::value().LocalEffectsState();
+}
+
+/// The one section of the particles in a save from before the split
+systems::SavedStateInterface* FindOldParticles()
+{
+	return Locator::particleRuleSystem::has_value() ? Locator::particleRuleSystem::value().OldSaveState() : nullptr;
+}
+
+using SystemFinder = systems::SavedStateInterface* (*)();
+/// A section of the running state of a system
+struct SavedSystem
+{
+	std::string_view name;
+	SystemFinder find;
+	/// False for a section that only old saves have: the load reads it, but a save does not write it
+	bool written {true};
+};
 
 /// The systems that keep running state of their own, by the names of their sections. A load gives each system its state
 /// in this order: the map's lists first, then the systems that use them.
-using SystemFinder = systems::SavedStateInterface* (*)();
-constexpr std::array<std::pair<std::string_view, SystemFinder>, 39> k_SavedSystems {{
+constexpr std::array<SavedSystem, 43> k_SavedSystems {{
     {"map", &FindSystem<Locator::entitiesMap>},
-    {"particles", &FindSystem<Locator::particleSystem>},
+    {"particles", &FindOldParticles, false},
+    {"syncedParticles", &FindSystem<Locator::particleRuleSystem>},
+    {"localParticles", &FindLocalParticles},
+    {"effectRequests", &FindSystem<Locator::effectRequestSystem>},
     {"towns", &FindSystem<Locator::townSystem>},
     {"magic", &FindSystem<Locator::magicSystem>},
     {"magicShield", &FindSystem<Locator::magicShieldSystem>},
@@ -317,6 +355,7 @@ constexpr std::array<std::pair<std::string_view, SystemFinder>, 39> k_SavedSyste
     {"scriptControl", &FindSystem<Locator::scriptControlSystem>},
     {"scriptSwitches", &FindSystem<Locator::chlapi>},
     {"creatureAudio", &FindSystem<Locator::creatureAudioSystem>},
+    {"scriptMusic", &FindSystem<Locator::scriptMusicSystem>},
     {"music", &FindGameMusic},
     {"dynamics", &FindSystem<Locator::dynamicsSystem>},
     {"helpText", &FindSystem<Locator::helpTextSystem>},
@@ -353,8 +392,10 @@ bool LoadSystems(const entt::meta_ctx& reflection, std::span<const uint8_t> byte
 	}
 	bool read = true;
 	const reflection::EntityRemap identity;
-	for (const auto& [name, find] : k_SavedSystems)
+	for (const auto& [name, find, written] : k_SavedSystems)
 	{
+		// A load reads also the sections that a save does not write
+		static_cast<void>(written);
 		auto* system = find();
 		const auto section = std::ranges::find(*sections, name, &reflection::NamedSection::name);
 		if (system == nullptr || section == sections->end())
@@ -414,17 +455,24 @@ void LogWorldReport(const reflection::WorldSaveReport& report)
 
 } // namespace
 
-std::vector<reflection::NamedSection> world_save::SavedSystemSections(const entt::meta_ctx& reflection)
+std::vector<reflection::NamedSection> world_save::SavedSystemSections(const entt::meta_ctx& reflection, bool valueEnds)
 {
 	std::vector<reflection::NamedSection> sections;
-	for (const auto& [name, find] : k_SavedSystems)
+	for (const auto& [name, find, written] : k_SavedSystems)
 	{
-		if (const auto* system = find(); system != nullptr)
+		if (const auto* system = written ? find() : nullptr; system != nullptr)
 		{
 			reflection::BinaryWriter out(reflection);
+			if (valueEnds)
+			{
+				out.KeepValueEnds();
+			}
 			out.SetPlace(name, "");
 			system->SaveState(out);
-			sections.push_back({.name = std::string(name), .bytes = std::move(out.Bytes())});
+			sections.push_back({.name = std::string(name),
+			                    .bytes = std::move(out.Bytes()),
+			                    .valueEnds = out.ValueEnds(),
+			                    .presentation = out.PresentationRanges()});
 		}
 	}
 	return sections;
@@ -520,7 +568,8 @@ std::optional<reflection::WorldLoadReport> world_save::LoadEntities(const entt::
 		{
 			// The maps that the game works out from the land are made again when they are next needed
 			loaded.landAvoid.reset();
-			loaded.explorationMap.reset();
+			// The creatures' map of the land comes from the land and its towns at the start of the land, and the towns
+			// changed after. The load keeps the saved map, so that the creatures find the same places as before the save.
 			registry.Context() = std::move(loaded);
 		}
 		else
@@ -528,6 +577,8 @@ std::optional<reflection::WorldLoadReport> world_save::LoadEntities(const entt::
 			SPDLOG_LOGGER_WARN(Log(), "The context of the saved world does not read; the land keeps a new context");
 		}
 	}
+	// An older save keeps the sky's clouds as things of the land. The land laid out its own clouds when it loaded.
+	RemoveSavedSkyClouds(registry.Underlying());
 	// Things the save does not keep go back to their start. A world state keeps them.
 	if (kind == LoadKind::SavedGame)
 	{
@@ -550,6 +601,10 @@ std::optional<reflection::WorldLoadReport> world_save::LoadEntities(const entt::
 		}
 	}
 	registry.Underlying().remove<components::WalkPath>(lost.begin(), lost.end());
+	// A dance takes its file again, which the save does not keep
+	TakeDanceFilesAgain(registry.Underlying(), [](DanceInfo type) {
+		return Locator::danceSystem::has_value() ? Locator::danceSystem::value().FileOf(type) : nullptr;
+	});
 	// An arena makes its ring of light again, shown while a fight is on in it
 	for (auto&& [entity, arena] : registry.Underlying().view<components::CreatureArena>().each())
 	{
@@ -654,6 +709,24 @@ void world_save::ForgetUnsavedState(entt::registry& registry)
 	registry.view<components::FootpathFinder>().each([](components::FootpathFinder& finder) { finder.plan.reset(); });
 	// A save from inside the temple has the rooms of the temple, so the load removes them
 	ForgetTempleRooms(registry);
+	// The mind of each computer god starts again. It keeps only the parts that a saved game keeps.
+	registry.view<components::ComputerPlayer>().each(
+	    [](components::ComputerPlayer& player) { computer_player::StartAgainAfterLoad(player); });
+}
+
+void world_save::RemoveSavedSkyClouds(entt::registry& registry)
+{
+	const auto clouds = registry.view<const components::Cloud>();
+	registry.destroy(clouds.begin(), clouds.end());
+}
+
+void world_save::TakeDanceFilesAgain(entt::registry& registry,
+                                     const std::function<std::shared_ptr<const dance::DanceFile>(DanceInfo)>& fileOf)
+{
+	for (auto&& [entity, dance] : registry.view<components::Dance>().each())
+	{
+		dance.file = fileOf(dance.type);
+	}
 }
 
 bool world_save::LoadRunningState(const entt::meta_ctx& reflection, const gamesave::WorldFile& file, uint32_t turn)
@@ -673,7 +746,17 @@ bool world_save::LoadRunningState(const entt::meta_ctx& reflection, const gamesa
 		try
 		{
 			const std::vector<uint8_t> bytes(script->begin(), script->end());
-			read = Locator::vm::value().RestoreState(bytes) == EXIT_SUCCESS && read;
+			auto& vm = Locator::vm::value();
+			read = vm.RestoreState(bytes) == EXIT_SUCCESS && read;
+			// A save from inside a native function, such as the save of a finished temple, makes the task call that
+			// native again with no arguments, as the game does
+			for (const auto& cut : vm.NativesCutBySave())
+			{
+				const auto task = vm.GetTasks().find(cut.task);
+				SPDLOG_LOGGER_INFO(
+				    Log(), "The save stopped the task {} ({}) inside the native {}: it calls it again with no arguments",
+				    cut.task, task != vm.GetTasks().end() ? task->second.name : "", vm.GetFunctions()->at(cut.native).name);
+			}
 		}
 		catch (const std::exception& error)
 		{

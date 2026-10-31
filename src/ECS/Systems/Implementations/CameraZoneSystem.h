@@ -33,6 +33,7 @@ public:
 	CameraZoneSystem();
 
 	bool SetZones(std::string_view fileName) override;
+	void Reset() override;
 	[[nodiscard]] const camera_zones::Zones& GetZones() const override { return _zones; }
 	[[nodiscard]] const std::string& GetFileName() const override { return _fileName; }
 	/// A save keeps the zones as the scripts last set them: the fence, the height limits, the places the camera is kept
@@ -55,7 +56,6 @@ private:
 	camera_zones::Zones _zones;
 	std::string _fileName;
 	std::shared_ptr<particles::LightSheet> _forceField;
-	bool _forceFieldShown {false};
 	uint32_t _fenceHits {0};
 	float _inclusionDistance {0.0f};
 };

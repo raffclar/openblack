@@ -34,7 +34,6 @@
 #include "3D/CreatureBody.h"
 #include "3D/LandIslandInterface.h"
 #include "3D/MapCoords.h"
-#include "Audio/MusicMood.h"
 #include "Camera/Camera.h"
 #include "Common/GUtilsAngle.h"
 #include "Common/GUtilsDistance.h"
@@ -113,13 +112,16 @@
 #include "ECS/Components/LearningMarker.h"
 #include "ECS/Components/LivingAction.h"
 #include "ECS/Components/LivingReaction.h"
+#include "ECS/Components/MagicFireBall.h"
 #include "ECS/Components/MagicPile.h"
+#include "ECS/Components/MagicShield.h"
 #include "ECS/Components/MiracleImpression.h"
 #include "ECS/Components/Mist.h"
 #include "ECS/Components/Mobile.h"
 #include "ECS/Components/OneOffSpellSeed.h"
 #include "ECS/Components/Physics.h"
 #include "ECS/Components/Pot.h"
+#include "ECS/Components/Scaffold.h"
 #include "ECS/Components/ScriptControl.h"
 #include "ECS/Components/Spell.h"
 #include "ECS/Components/SpellIcon.h"
@@ -127,6 +129,7 @@
 #include "ECS/Components/Temple.h"
 #include "ECS/Components/Town.h"
 #include "ECS/Components/TownDesire.h"
+#include "ECS/Components/TownDesireFlag.h"
 #include "ECS/Components/Transform.h"
 #include "ECS/Components/Tree.h"
 #include "ECS/Components/VillageTotem.h"
@@ -135,10 +138,12 @@
 #include "ECS/Components/WallHug.h"
 #include "ECS/Components/WorshipSite.h"
 #include "ECS/CreatureBodyFile.h"
+#include "ECS/CreatureCarried.h"
 #include "ECS/CreatureExplorationLand.h"
 #include "ECS/CreatureHome.h"
 #include "ECS/CreatureNaming.h"
 #include "ECS/LearningMarker.h"
+#include "ECS/PlayerTowns.h"
 #include "ECS/Registry.h"
 #include "ECS/ReportedCamera.h"
 #include "ECS/Systems/AnimalSystemInterface.h"
@@ -155,13 +160,14 @@
 #include "ECS/Systems/MusicMoodSystemInterface.h"
 #include "ECS/Systems/PlayerProfileSystemInterface.h"
 #include "ECS/Systems/PlayerSystemInterface.h"
-#include "ECS/Systems/SkySystemInterface.h"
+#include "ECS/Systems/SkyClockSystemInterface.h"
 #include "ECS/Systems/TimeSystemInterface.h"
 #include "ECS/Systems/WeatherSystemInterface.h"
 #include "ECS/TempleConstruction.h"
 #include "ECS/TempleHeartOf.h"
 #include "ECS/ThingMapPlace.h"
 #include "ECS/TownDesire.h"
+#include "ECS/WallHugRules.h"
 #include "ECS/WorldObjects.h"
 #include "Graphics/Moon.h"
 #include "Gui/TextDatabase.h"
@@ -171,6 +177,7 @@
 #include "MagicLiving.h"
 #include "ObjectMeasures.h"
 #include "Resources/ResourcesInterface.h"
+#include "Sound/MusicMood.h"
 
 using namespace openblack;
 using namespace openblack::ecs::systems;
@@ -371,7 +378,6 @@ bool Strokeable(const ecs::Registry& registry, entt::entity entity, entt::entity
 	       Locator::creatureObjectActionSystem::value().CanPickUp(self, entity);
 }
 
-creature_activity::Thing KindOfThing(const ecs::Registry& registry, entt::entity thing);
 std::optional<uint32_t> BeliefPlayerOf(const ecs::Registry& registry, entt::entity thing);
 bool DoingSomethingInteresting(const ecs::Registry& registry, const CreatureMindState& mind, entt::entity object);
 
@@ -461,7 +467,7 @@ bool Accepts(const ecs::Registry& registry, Target target, entt::entity entity, 
 	case Target::Examinable:
 	{
 		using creature_activity::Thing;
-		const auto kind = KindOfThing(registry, entity);
+		const auto kind = mind_detail::KindOfThing(registry, entity);
 		return kind != Thing::Creature && kind != Thing::Field && kind != Thing::FishFarm && kind != Thing::Spell &&
 		       kind != Thing::Other;
 	}
@@ -717,7 +723,7 @@ std::optional<creature_plan_actions::Situation::Fishing> FishingFor(const ecs::R
 	if (Locator::creatureObjectActionSystem::has_value())
 	{
 		const auto& hands = Locator::creatureObjectActionSystem::value();
-		if (const auto held = hands.GetHeld(creature))
+		if (const auto held = hands.GetCarried(creature))
 		{
 			holdingFood = hands.FoodValueOf(*held).has_value();
 		}
@@ -809,10 +815,14 @@ std::vector<uint32_t> TownCompassionActions(const ecs::Registry& registry, entt:
 	if (const auto healAction = creature_mind_tables::FindAction(tables, k_HealAction);
 	    data != nullptr && body != nullptr && healAction.has_value())
 	{
-		// TODO(fish): a town desire shown on the leash holds off the healing; the leash can't show one yet
+		// A leash tied to a town's desire flag stops the healing choice
+		const auto* leashes = registry.TryGet<const CreatureLeash>(creature);
+		const bool leashedToTownDesire = leashes != nullptr && leashes->worn.has_value() && leashes->worn->tiedTo.has_value() &&
+		                                 registry.Valid(*leashes->worn->tiedTo) &&
+		                                 registry.AllOf<TownDesireFlag>(*leashes->worn->tiedTo);
 		const auto sightings = MiracleSightings(mind, tables, body->species, MagicType::Heal);
 		if (sightings.has_value() &&
-		    town_compassion::HealFirst(data->injured, false, sightings->first, sightings->second, random))
+		    town_compassion::HealFirst(data->injured, leashedToTownDesire, sightings->first, sightings->second, random))
 		{
 			heal = healAction;
 		}
@@ -896,6 +906,17 @@ std::optional<uint32_t> BeliefPlayerOf(const ecs::Registry& registry, entt::enti
 	if (const auto* pile = registry.TryGet<const MagicPile>(thing))
 	{
 		return PlayerNumberOf(pile->player);
+	}
+	// A shield is of the player of the miracle that keeps it up, and of the neutral player when the miracle let go of it
+	if (const auto* shield = registry.TryGet<const MagicShield>(thing))
+	{
+		return registry.Valid(shield->spell) && shield->spell != thing ? BeliefPlayerOf(registry, shield->spell)
+		                                                               : PlayerNumberOf(PlayerNames::NEUTRAL);
+	}
+	// A fireball is of the player of its miracle, and of the neutral player when its miracle has no player
+	if (const auto* fireball = registry.TryGet<const MagicFireBall>(thing))
+	{
+		return PlayerNumberOf(fireball->hasPlayer ? fireball->player : PlayerNames::NEUTRAL);
 	}
 	if (const auto* icon = registry.TryGet<const TownCentreIcon>(thing))
 	{
@@ -993,12 +1014,12 @@ size_t MiraclesKnownBy(const ecs::Registry& registry, entt::entity creature)
 /// The object type of the thing that another creature carries, none when it carries no thing
 std::optional<uint32_t> CarriedObjectTypeOf(const ecs::Registry& registry, entt::entity creature)
 {
-	const auto* held = registry.TryGet<const CreatureHeldObject>(creature);
-	if (held == nullptr || !registry.Valid(held->object))
+	const auto held = ecs::creature_carried::CarriedBy(registry, creature);
+	if (!held.has_value())
 	{
 		return std::nullopt;
 	}
-	return mind_detail::ObjectSortOf(registry, held->object);
+	return mind_detail::ObjectSortOf(registry, *held);
 }
 
 /// The attributes only the beliefs about villagers, creatures, buildings, towns and forests have
@@ -1177,8 +1198,17 @@ const creature_mind_tables::Tables* CreatureMindSystem::GetTables()
 	if (!_tables.has_value() && Locator::infoConstants::has_value())
 	{
 		_tables = creature_mind_tables::Build(Locator::infoConstants::value());
+		_executors.clear();
+		std::ranges::transform(
+		    _tables->actions, std::back_inserter(_executors),
+		    [](const creature_mind_tables::ActionInfo& action) { return creature_plan_actions::For(action.name); });
 	}
 	return _tables.has_value() ? &*_tables : nullptr;
+}
+
+const creature_plan_actions::Executor* CreatureMindSystem::ExecutorOf(uint32_t action)
+{
+	return GetTables() != nullptr && action < _executors.size() ? _executors[action] : nullptr;
 }
 
 void CreatureMindSystem::StartMind(entt::entity creature)
@@ -1755,10 +1785,9 @@ std::optional<creature_planner::UsedChoice> UsedFor(entt::entity creature, Targe
 		{
 			continue;
 		}
-		const auto* held = registry.TryGet<const HeldByCreature>(thing);
 		candidates.push_back({.id = entt::to_integral(thing),
 		                      .distance = gutils::GetDistanceInMetres(map_coords::ToMetres(belief.place), position),
-		                      .held = held != nullptr && held->creature == creature});
+		                      .held = ecs::creature_carried::Carries(registry, creature, thing)});
 	}
 	return creature_planner::ChooseUsed(candidates, distanceWeight, goal);
 }
@@ -1811,11 +1840,9 @@ bool CreatureMindSystem::Adopt(entt::entity creature, CreatureMindState& mind, c
 			Locator::creatureFightSystem::value().CallOff(creature);
 		}
 		if (Locator::creatureObjectActionSystem::has_value() &&
-		    Locator::creatureObjectActionSystem::value().GetState(creature) ==
-		        CreatureObjectActionSystemInterface::State::Busy &&
-		    !Locator::creatureObjectActionSystem::value().IsCatching(creature))
+		    Locator::creatureObjectActionSystem::value().GetState(creature) == CreatureObjectActionSystemInterface::State::Busy)
 		{
-			Locator::creatureObjectActionSystem::value().Cancel(creature);
+			Locator::creatureObjectActionSystem::value().StopForPlan(creature, true);
 		}
 		Abandon(mind);
 		creature_mind::Plan(mind.idle, creature_mind::Activity::None, {});
@@ -1863,12 +1890,12 @@ bool CreatureMindSystem::Adopt(entt::entity creature, CreatureMindState& mind, c
 	{
 		Locator::creatureFightSystem::value().CallOff(creature);
 	}
-	// Whatever its hands were doing is given up for the plan, but for a catch, which its body carries on with by itself
+	// Whatever its hands were doing stops for the plan. An action that the body started plays on, and a point plays its
+	// end.
 	if (Locator::creatureObjectActionSystem::has_value() &&
-	    Locator::creatureObjectActionSystem::value().GetState(creature) == CreatureObjectActionSystemInterface::State::Busy &&
-	    !Locator::creatureObjectActionSystem::value().IsCatching(creature))
+	    Locator::creatureObjectActionSystem::value().GetState(creature) == CreatureObjectActionSystemInterface::State::Busy)
 	{
-		Locator::creatureObjectActionSystem::value().Cancel(creature);
+		Locator::creatureObjectActionSystem::value().StopForPlan(creature, true);
 	}
 	const bool refused = mind.agendaRefused;
 	if (!Replan(creature, executor->activity, std::move(agenda)))
@@ -1929,7 +1956,7 @@ CreatureMindSystem::PlanAgenda(entt::entity creature, uint32_t action, std::opti
 	{
 		return std::nullopt;
 	}
-	const auto* executor = creature_plan_actions::For(tables->actions[action].name);
+	const auto* executor = ExecutorOf(action);
 	if (executor == nullptr)
 	{
 		return std::nullopt;
@@ -2103,8 +2130,7 @@ float mind_detail::Nearness(const ecs::Registry& registry, entt::entity creature
 			from = tied->position;
 		}
 	}
-	const auto* held = registry.TryGet<const HeldByCreature>(object);
-	return creature_planner::DistancePriority(held != nullptr && held->creature == creature,
+	return creature_planner::DistancePriority(ecs::creature_carried::Carries(registry, creature, object),
 	                                          gutils::GetDistanceInMetres(place, map_coords::FromMetres(glm::xz(from))),
 	                                          distanceWeight);
 }
@@ -2232,9 +2258,11 @@ std::optional<PlayerNames> PlayerOfThing(const ecs::Registry& registry, entt::en
 	return std::nullopt;
 }
 
-/// What a creature knows about a whole thing that it examines a desire about
+/// What a creature knows about a whole thing that it examines a desire about. Whether its player looks at it is the
+/// same for each whole thing, thus the caller finds it one time.
 creature_activity::WholeFacts WholeFactsOf(const ecs::Registry& registry, entt::entity creature, entt::entity whole,
-                                           creature_activity::Whole kind, const creature_mind_tables::Tables& tables)
+                                           creature_activity::Whole kind, const creature_mind_tables::Tables& tables,
+                                           bool lookedAt)
 {
 	const auto& self = registry.Get<const Creature>(creature);
 	creature_activity::WholeFacts facts {.kind = kind};
@@ -2276,12 +2304,7 @@ creature_activity::WholeFacts WholeFactsOf(const ecs::Registry& registry, entt::
 		facts.samePlayer = self.owner == PlayerNames::NEUTRAL;
 		break;
 	}
-	// Only the player of the creature looks at it. In a game with one player, that is the first player.
-	if (const auto camera = openblack::ecs::ReportedCameraOfItsPlayer(creature))
-	{
-		const auto* at = registry.TryGet<const Transform>(creature);
-		facts.lookedAt = at != nullptr && creature_attention::IsLookingAt(camera->origin, camera->focus, at->position);
-	}
+	facts.lookedAt = lookedAt;
 	return facts;
 }
 
@@ -2344,9 +2367,14 @@ const GTotemStatueInfo* TotemStatueInfo(const ecs::Registry& registry, entt::ent
 bool NoWayLately(const ecs::Registry& registry, const CreatureMindState& mind, entt::entity thing)
 {
 	const auto* belief = mind.beliefs.Find(thing);
+	// Only a creature that found no way to the thing asks if the thing is fixed in the land
+	if (belief == nullptr || !belief->blockedTurn.has_value())
+	{
+		return false;
+	}
 	const bool fixed = registry.AnyOf<Abode, Tree, Feature, Field, FishFarm, AnimatedStatic, Flowers, Temple, WorshipSite,
 	                                  WorshipAltar, VillageTotem>(thing);
-	return belief != nullptr && creature_object_beliefs::BlockedRecently(*belief, mind.turn, fixed);
+	return creature_object_beliefs::BlockedRecently(*belief, mind.turn, fixed);
 }
 
 /// A hungry creature does not eat a thing of a town for which it learnt a compassion worth more than this
@@ -2376,11 +2404,16 @@ bool LetsCreatureAct(const ecs::Registry& registry, entt::entity thing)
 	{
 		return false;
 	}
-	// A field has the data of its town's field building, and a village totem the data of its statue
+	// A field has the data of its town's field building, a village totem the data of its statue, and a town's desire
+	// flag the data of the prayer site
 	const GObjectInfo* info = nullptr;
 	if (registry.AllOf<Field>(thing))
 	{
 		info = FieldBuildingInfo(registry, thing);
+	}
+	else if (registry.AllOf<TownDesireFlag>(thing))
+	{
+		info = Locator::infoConstants::has_value() ? &Locator::infoConstants::value().prayerSite : nullptr;
 	}
 	else if (registry.AllOf<VillageTotem>(thing))
 	{
@@ -2414,6 +2447,7 @@ bool Frightens(AnimalInfo type)
 
 /// The data that tells if a creature can act on a thing. A field has the data of its town's field building, a village
 /// totem the data of its statue, the temple the data of its heart, and the altar of a worship site the data of its site.
+/// A town's desire flag has the data of the prayer site.
 const GObjectInfo* ActingInfoOf(const ecs::Registry& registry, entt::entity thing)
 {
 	if (!Locator::infoConstants::has_value())
@@ -2437,6 +2471,10 @@ const GObjectInfo* ActingInfoOf(const ecs::Registry& registry, entt::entity thin
 	{
 		return TotemStatueInfo(registry, thing);
 	}
+	if (registry.AllOf<TownDesireFlag>(thing))
+	{
+		return &info.prayerSite;
+	}
 	if (const auto* animal = registry.TryGet<const Animal>(thing))
 	{
 		const auto row = static_cast<size_t>(animal->type);
@@ -2445,69 +2483,13 @@ const GObjectInfo* ActingInfoOf(const ecs::Registry& registry, entt::entity thin
 	return ecs::world_objects::InfoOf(thing);
 }
 
-/// The kind of a thing, by how the desires examine it
-creature_activity::Thing KindOfThing(const ecs::Registry& registry, entt::entity thing)
-{
-	using creature_activity::Thing;
-	if (registry.AllOf<Villager>(thing))
-	{
-		return Thing::Villager;
-	}
-	if (registry.AllOf<Animal>(thing))
-	{
-		return Thing::Animal;
-	}
-	if (registry.AllOf<Creature>(thing))
-	{
-		return Thing::Creature;
-	}
-	if (registry.AllOf<ecs::components::Spell>(thing))
-	{
-		return Thing::Spell;
-	}
-	if (registry.AllOf<Tree>(thing))
-	{
-		return Thing::Tree;
-	}
-	const auto* still = registry.TryGet<const MobileStatic>(thing);
-	if (registry.AnyOf<Rock, DeadTree>(thing) || (still != nullptr && still->type == MobileStaticInfo::Bonfire))
-	{
-		return Thing::Rock;
-	}
-	if (registry.AnyOf<MobileObject, Pot, Ball>(thing))
-	{
-		return Thing::MobileObject;
-	}
-	if (still != nullptr)
-	{
-		return Thing::MobileStatic;
-	}
-	if (registry.AllOf<Field>(thing))
-	{
-		return Thing::Field;
-	}
-	if (registry.AllOf<FishFarm>(thing))
-	{
-		return Thing::FishFarm;
-	}
-	if (registry.AllOf<VillageTotem>(thing))
-	{
-		return Thing::TotemStatue;
-	}
-	if (registry.AnyOf<Abode, Temple, WorshipSite, WorshipAltar, Feature, AnimatedStatic, Flowers, BigForest>(thing))
-	{
-		return Thing::Building;
-	}
-	return Thing::Other;
-}
-
 /// What a creature knows about a thing when it examines a desire for it. Only the facts that the desire uses cost time
 /// to find: the height for poo, and the pick-up rule for bringing stuff home.
 creature_activity::ThingFacts ThingFactsOf(const ecs::Registry& registry, entt::entity creature, Desire desire,
                                            entt::entity thing, const creature_mind_tables::Tables* tables)
 {
 	using creature_activity::Thing;
-	const auto kind = KindOfThing(registry, thing);
+	const auto kind = mind_detail::KindOfThing(registry, thing);
 	const auto* info = ActingInfoOf(registry, thing);
 	creature_activity::ThingFacts facts {
 	    .kind = kind,
@@ -2536,9 +2518,18 @@ creature_activity::ThingFacts ThingFactsOf(const ecs::Registry& registry, entt::
 	}
 	const auto* feature = registry.TryGet<const Feature>(thing);
 	const auto* mobile = registry.TryGet<const MobileObject>(thing);
-	facts.mushroom =
-	    (feature != nullptr && feature->type == FeatureInfo::MagicMushroom) ||
-	    (mobile != nullptr && (mobile->type == MobileObjectInfo::MagicMushroom || mobile->type == MobileObjectInfo::Toadstool));
+	// A scaffold has the loose kind of the one row of the scaffolds
+	std::optional<MobileObjectInfo> looseKind;
+	if (mobile != nullptr)
+	{
+		looseKind = mobile->type;
+	}
+	else if (registry.AllOf<Scaffold>(thing) && Locator::infoConstants::has_value())
+	{
+		looseKind = Locator::infoConstants::value().scaffold.mobileType;
+	}
+	facts.mushroom = (feature != nullptr && feature->type == FeatureInfo::MagicMushroom) ||
+	                 looseKind == MobileObjectInfo::MagicMushroom || looseKind == MobileObjectInfo::Toadstool;
 	if (desire == Desire::Poo && kind != Thing::Spell && kind != Thing::Other)
 	{
 		facts.height = object_measures::Height(registry, thing);
@@ -2567,6 +2558,11 @@ std::optional<entt::entity> TownOfThing(const ecs::Registry& registry, entt::ent
 	{
 		return town(farm->town);
 	}
+	// A town's desire flag is of its town
+	if (const auto* flag = registry.TryGet<const TownDesireFlag>(thing))
+	{
+		return town(flag->town);
+	}
 	if (registry.AllOf<VillageTotem>(thing))
 	{
 		return TownOfTotem(registry, thing);
@@ -2591,6 +2587,66 @@ std::optional<entt::entity> TownOfThing(const ecs::Registry& registry, entt::ent
 }
 } // namespace
 
+creature_activity::Thing mind_detail::KindOfThing(const ecs::Registry& registry, entt::entity thing)
+{
+	using creature_activity::Thing;
+	if (registry.AllOf<Villager>(thing))
+	{
+		return Thing::Villager;
+	}
+	if (registry.AllOf<Animal>(thing))
+	{
+		return Thing::Animal;
+	}
+	if (registry.AllOf<Creature>(thing))
+	{
+		return Thing::Creature;
+	}
+	if (registry.AllOf<ecs::components::Spell>(thing))
+	{
+		return Thing::Spell;
+	}
+	if (registry.AllOf<Tree>(thing))
+	{
+		return Thing::Tree;
+	}
+	const auto* still = registry.TryGet<const MobileStatic>(thing);
+	if (registry.AnyOf<Rock, DeadTree>(thing) || (still != nullptr && still->type == MobileStaticInfo::Bonfire))
+	{
+		return Thing::Rock;
+	}
+	// A scaffold is a loose object
+	if (registry.AnyOf<MobileObject, Pot, Ball, Scaffold>(thing))
+	{
+		return Thing::MobileObject;
+	}
+	if (still != nullptr)
+	{
+		return Thing::MobileStatic;
+	}
+	if (registry.AllOf<Field>(thing))
+	{
+		return Thing::Field;
+	}
+	if (registry.AllOf<FishFarm>(thing))
+	{
+		return Thing::FishFarm;
+	}
+	if (registry.AllOf<VillageTotem>(thing))
+	{
+		return Thing::TotemStatue;
+	}
+	if (registry.AnyOf<Abode, Temple, WorshipSite, WorshipAltar, Feature, AnimatedStatic, Flowers, BigForest>(thing))
+	{
+		return Thing::Building;
+	}
+	if (registry.AllOf<TownDesireFlag>(thing))
+	{
+		return Thing::PlainObject;
+	}
+	return Thing::Other;
+}
+
 std::optional<CreatureMindSystem::ChosenActivity>
 CreatureMindSystem::ChooseActivity(entt::entity creature, const CreatureMindState& mind, Desire desire)
 {
@@ -2604,6 +2660,7 @@ CreatureMindSystem::ChooseActivity(entt::entity creature, const CreatureMindStat
 	const auto& rules = tables->rules.at(static_cast<size_t>(desire));
 	std::vector<ChosenActivity> found;
 	std::vector<float> worth;
+	const bool lookedAt = LookedAtByItsPlayer(creature);
 	for (const auto* held : mind.beliefs.HeldNewestFirst())
 	{
 		const auto& belief = *held;
@@ -2612,7 +2669,7 @@ CreatureMindSystem::ChooseActivity(entt::entity creature, const CreatureMindStat
 		{
 			continue;
 		}
-		const auto facts = WholeFactsOf(registry, creature, belief.thing, *kind, *tables);
+		const auto facts = WholeFactsOf(registry, creature, belief.thing, *kind, *tables, lookedAt);
 		if (!creature_activity::CanBeAbout(desire, facts, mind.mayAttackOwnPlayer))
 		{
 			continue;
@@ -2815,7 +2872,7 @@ CreatureMindSystem::ShownActivity(entt::entity creature, CreatureMindState& mind
 	{
 		return std::nullopt;
 	}
-	const auto facts = WholeFactsOf(registry, creature, *whole, *kind, *tables);
+	const auto facts = WholeFactsOf(registry, creature, *whole, *kind, *tables, LookedAtByItsPlayer(creature));
 	if (!creature_activity::CanBeAbout(desire, facts, mind.mayAttackOwnPlayer))
 	{
 		return std::nullopt;
@@ -2887,10 +2944,11 @@ CreatureMindSystem::ShownThingsWithoutWhole(entt::entity creature, CreatureMindS
 
 namespace
 {
-/// Whether a fight lets the creature choose a new plan. Only the creature that started the fight by its own plan
-/// chooses, and only while that plan is the fight: a plan that it wants much more ends the fight. The other creature
-/// obeys, a creature made to fight or made to do something after a knock-out does not choose, and a creature that lies
-/// out cold does not choose.
+/// Whether a fight lets the creature choose a new plan. The creature that started the fight by its own plan chooses,
+/// but only while that plan is the fight: a plan that it wants much more ends the fight. The other creature chooses
+/// until the first creature tells it to stand still, and a plan that it chooses ends the fight. Then it obeys. A
+/// creature made to fight or made to do something after a knock-out does not choose, and a creature that lies out cold
+/// does not choose.
 bool FightLetsChoose(const ecs::Registry& registry, entt::entity creature, const CreatureMindState& mind)
 {
 	const auto* fighting = registry.TryGet<const CreatureFighting>(creature);
@@ -2902,6 +2960,8 @@ bool FightLetsChoose(const ecs::Registry& registry, entt::entity creature, const
 	    .waitsForFight = mind.planActive && mind.idle.step < mind.idle.agenda.size() &&
 	                     mind.idle.agenda[mind.idle.step].kind == creature_mind::Step::Kind::Fight,
 	    .won = fighting != nullptr && fighting->stage == CreatureFighting::Stage::Celebrate,
+	    .onlyAsked = fighting != nullptr && fighting->part == CreatureFighting::Part::Asked,
+	    .mindFree = fighting != nullptr && fighting->mindFree,
 	});
 }
 } // namespace
@@ -3007,10 +3067,6 @@ void CreatureMindSystem::PlanCreature(entt::entity creature, CreatureMindState& 
 	const auto& learnt = *mind.learnt;
 
 	creature_plan_actions::Situation situation;
-	if (const auto camera = openblack::ecs::ReportedCreatureCamera(creature))
-	{
-		situation.camera = glm::vec2(camera->origin.x, camera->origin.z);
-	}
 	Situate(creature, situation);
 	const auto random = [this](uint32_t range) { return Random(range); };
 	bool fishingLooked = false;
@@ -3037,8 +3093,8 @@ void CreatureMindSystem::PlanCreature(entt::entity creature, CreatureMindState& 
 		const auto& state = desires.desires.at(d);
 		const auto strength = state.activated && state.suppressedTurns == 0 ? state.value : 0.0f;
 		strengths.at(d) = strength;
-		eligible.at(d) = strength > 0.0f && std::ranges::any_of(tables->desireActions.at(d), [tables](uint32_t action) {
-			                 return creature_plan_actions::For(tables->actions.at(action).name) != nullptr;
+		eligible.at(d) = strength > 0.0f && std::ranges::any_of(tables->desireActions.at(d), [this](uint32_t action) {
+			                 return ExecutorOf(action) != nullptr;
 		                 });
 	}
 	// The desire to explore has a condition of its own: a young creature, or one that is not too exhausted
@@ -3147,13 +3203,12 @@ void CreatureMindSystem::PlanCreature(entt::entity creature, CreatureMindState& 
 			// acts on the first part of the whole thing that suits the desire and is of use.
 			parts = ShownThingsWithoutWhole(creature, mind, desire, *leashTarget);
 		}
-		const auto worth = [&](entt::entity thing) { return GoalWorth(creature, mind, desire, thing, activity); };
 		// The actions of the desire, in the order of its list
 		candidates.clear();
 		executors.clear();
 		for (const auto action : actions)
 		{
-			const auto* executor = creature_plan_actions::For(tables->actions.at(action).name);
+			const auto* executor = ExecutorOf(action);
 			if (executor == nullptr)
 			{
 				continue;
@@ -3185,10 +3240,7 @@ void CreatureMindSystem::PlanCreature(entt::entity creature, CreatureMindState& 
 			const auto at = std::ranges::find(candidates, candidate.action, &creature_planner::ActionCandidate::action);
 			return executors.at(static_cast<size_t>(std::distance(candidates.begin(), at)));
 		};
-		const auto heldByItself = [&](entt::entity thing) {
-			const auto* held = registry.TryGet<const HeldByCreature>(thing);
-			return held != nullptr && held->creature == creature;
-		};
+		const auto heldByItself = [&](entt::entity thing) { return ecs::creature_carried::Carries(registry, creature, thing); };
 		// The thing that an action can act on: the most useful, the first of equals, and only one that is worth more than
 		// nothing. An action that must not act on what the creature holds does not take a thing that it holds.
 		const auto mostUseful = [](const std::vector<creature_planner::ObjectCandidate>& found) {
@@ -3390,8 +3442,13 @@ bool CreatureMindSystem::ForcePlan(entt::entity creature, const ForcedPlan& plan
 	{
 		return false;
 	}
-	// A forced plan first stops the reaction that the creature has
+	// A forced plan first stops the reaction that the creature has. What the creature does stops as a failure. This also
+	// stops a fight that the creature is in, out of its duel.
 	EndReaction(creature);
+	if (!plan.ownFight)
+	{
+		EndFightForPlan(creature);
+	}
 	// A creature told to do something as soon as it is made has a mind ready for it
 	SetUpMind(creature, *body, *mind);
 	const glm::vec2 position {transform->position.x, transform->position.z};
@@ -3416,8 +3473,8 @@ bool CreatureMindSystem::ForcePlan(entt::entity creature, const ForcedPlan& plan
 				}
 			}
 			const bool alreadyHeld = Locator::creatureObjectActionSystem::has_value() &&
-			                         Locator::creatureObjectActionSystem::value().GetHeld(creature) == plan.object;
-			const auto camera = openblack::ecs::ReportedCreatureCamera(creature);
+			                         Locator::creatureObjectActionSystem::value().GetCarried(creature) == plan.object;
+			const auto camera = openblack::ecs::ReportedCameraOfItsPlayer(creature);
 			const auto eye = camera.has_value() ? camera->origin : transform->position;
 			agenda = creature_leash_orders::Hold(
 			    entt::to_integral(*plan.object), alreadyHeld, glm::vec2(eye.x, eye.z), playWith,
@@ -3451,10 +3508,6 @@ bool CreatureMindSystem::ForcePlan(entt::entity creature, const ForcedPlan& plan
 			{
 				situation.fishing = FishingFor(registry, creature, position);
 			}
-			if (const auto camera = openblack::ecs::ReportedCreatureCamera(creature))
-			{
-				situation.camera = glm::vec2(camera->origin.x, camera->origin.z);
-			}
 			Situate(creature, situation);
 			if (plan.instrument.has_value())
 			{
@@ -3463,7 +3516,7 @@ bool CreatureMindSystem::ForcePlan(entt::entity creature, const ForcedPlan& plan
 				situation.instrumentRadius = object_measures::TwoDRadius(registry, *plan.instrument);
 				situation.usedOneShot = OneShotOf(registry, *plan.instrument);
 			}
-			situation.handFull = registry.AllOf<CreatureHeldObject>(creature);
+			situation.handFull = ecs::creature_carried::CarriedBy(registry, creature).has_value();
 			if (plan.activityObject.has_value())
 			{
 				situation.activity = entt::to_integral(*plan.activityObject);
@@ -3559,6 +3612,13 @@ bool CreatureMindSystem::ForcePlan(entt::entity creature, const ForcedPlan& plan
 		                    plan.action);
 	}
 	mind->agendaRefused = refused;
+	// The forced plan stops what the hands do, as each plan stop does. A point ends only when the plan also ends the
+	// action of the body.
+	if (Locator::creatureObjectActionSystem::has_value() &&
+	    Locator::creatureObjectActionSystem::value().GetState(creature) == CreatureObjectActionSystemInterface::State::Busy)
+	{
+		Locator::creatureObjectActionSystem::value().StopForPlan(creature, plan.endsBody);
+	}
 	if (!Replan(creature, activity, std::move(*agenda), plan.stopsWalk, plan.endsBody))
 	{
 		mind->agendaRefused = false;
@@ -3612,7 +3672,10 @@ bool CreatureMindSystem::ForcePlan(entt::entity creature, const ForcedPlan& plan
 		                   .ordered = plan.ordered,
 		               });
 	}
-	creature_learning::SuppressOpposed(*mind->desires, plan.desire, tables->dependencies, k_TurnsPerSecond);
+	if (plan.suppressesOpposed)
+	{
+		creature_learning::SuppressOpposed(*mind->desires, plan.desire, tables->dependencies, k_TurnsPerSecond);
+	}
 	return true;
 }
 
@@ -3691,19 +3754,21 @@ std::optional<glm::vec3> SacrificeAltarOf(const ecs::Registry& registry, PlayerN
 	return altar;
 }
 
-/// The storage pit of the nearest town of a player to a place, by the distance across the land. None when the player
-/// has no town, or when the nearest town has no storage pit.
+/// The storage pit of the nearest town of a player to a place, by the distance across the land. The towns come in the
+/// order of the player's list, so of two towns at the same distance the first in the list is the nearest. None when the
+/// player has no town, or when the nearest town has no storage pit.
 std::optional<uint32_t> OwnTownPitOf(const ecs::Registry& registry, PlayerNames player, glm::vec3 from)
 {
 	std::vector<entt::entity> towns;
 	std::vector<float> metres;
-	registry.Each<const Town, const Transform>([&](entt::entity town, const Town& data, const Transform& at) {
-		if (data.owner == player)
+	for (const auto town : ecs::player_towns::InOrder(registry, player))
+	{
+		if (const auto* at = registry.TryGet<const Transform>(town))
 		{
 			towns.push_back(town);
-			metres.push_back(gutils::GetDistanceInMetres(at.position, from));
+			metres.push_back(gutils::GetDistanceInMetres(at->position, from));
 		}
-	});
+	}
 	const auto nearest = creature_town_theft::NearestTown(metres);
 	const auto pit = nearest.has_value() ? ecs::construction::StoragePitOf(towns.at(*nearest)) : std::nullopt;
 	return pit.has_value() ? std::optional(entt::to_integral(*pit)) : std::nullopt;
@@ -3722,7 +3787,11 @@ void CreatureMindSystem::Situate(entt::entity creature, creature_plan_actions::S
 	if (const auto camera = openblack::ecs::ReportedCreatureCamera(creature))
 	{
 		situation.eye = camera->origin;
-		situation.camera = glm::vec2(situation.eye->x, situation.eye->z);
+	}
+	// The steps that look, turn or walk to the camera need a creature with a player
+	if (const auto camera = openblack::ecs::ReportedCameraOfItsPlayer(creature))
+	{
+		situation.camera = glm::vec2(camera->origin.x, camera->origin.z);
 	}
 	const auto* body = registry.TryGet<const Creature>(creature);
 	situation.hasPlayer = body != nullptr && body->owner != PlayerNames::NEUTRAL;
@@ -3732,7 +3801,7 @@ void CreatureMindSystem::Situate(entt::entity creature, creature_plan_actions::S
 	situation.radius = object_measures::TwoDRadius(registry, creature);
 	situation.height = body != nullptr ? k_HeightOfSizeOne * ShownSize(*body) : 0.0f;
 	const auto held = Locator::creatureObjectActionSystem::has_value()
-	                      ? Locator::creatureObjectActionSystem::value().GetHeld(creature)
+	                      ? Locator::creatureObjectActionSystem::value().GetCarried(creature)
 	                      : std::nullopt;
 	situation.handFull = held.has_value();
 	if (held.has_value())
@@ -3753,17 +3822,9 @@ void CreatureMindSystem::Situate(entt::entity creature, creature_plan_actions::S
 	{
 		situation.position = {at->position.x, at->position.z};
 		// The nearest hand of the creature's own player, which it may throw to
-		if (body != nullptr && Locator::handSystem::has_value())
+		if (body != nullptr)
 		{
-			for (const auto& hand : Locator::handSystem::value().GetHandPositionsOf(body->owner))
-			{
-				if (hand.has_value() &&
-				    (!situation.playerHand.has_value() ||
-				     glm::distance(*hand, at->position) < glm::distance(*situation.playerHand, at->position)))
-				{
-					situation.playerHand = hand;
-				}
-			}
+			situation.playerHand = openblack::ecs::NearestHandOf(body->owner, at->position);
 		}
 	}
 	if (const auto* transform = registry.TryGet<const Transform>(creature); transform != nullptr && situation.eye.has_value())
@@ -3797,9 +3858,11 @@ void CreatureMindSystem::SituatePlayer(entt::entity creature, creature_plan_acti
 	{
 		situation.lookedAt = creature_attention::IsLookingAt(camera->origin, camera->focus, at->position);
 	}
-	if (const auto* mind = registry.TryGet<const CreatureMindState>(creature); mind != nullptr)
+	// The hand moves while the velocity of the hand of its player is more than 0
+	if (const auto* body = registry.TryGet<const Creature>(creature); body != nullptr)
 	{
-		situation.handMoving = situation.playerHand.has_value() && creature_player_attention::IsHandMoving(mind->handSpeed);
+		situation.handMoving = situation.playerHand.has_value() &&
+		                       creature_player_attention::IsHandMoving(openblack::ecs::PlayerHandVelocityOf(body->owner));
 	}
 	if (at != nullptr && situation.playerHand.has_value() && camera.has_value())
 	{
@@ -3811,9 +3874,9 @@ void CreatureMindSystem::SituatePlayer(entt::entity creature, creature_plan_acti
 void CreatureMindSystem::SituateEmotes(entt::entity creature, creature_plan_actions::Situation& situation)
 {
 	const auto& registry = Locator::entitiesRegistry::value();
-	if (Locator::skySystem::has_value())
+	if (Locator::skyClockSystem::has_value())
 	{
-		const auto& clock = Locator::skySystem::value().GetClock();
+		const auto& clock = Locator::skyClockSystem::value().GetClock();
 		situation.night = clock.IsVisualNight();
 		// The creature looks for the moon at the place that the sky draws it at from the camera, taken as a place on
 		// the land
@@ -3834,7 +3897,7 @@ void CreatureMindSystem::SituateEmotes(entt::entity creature, creature_plan_acti
 	}
 	if (Locator::creatureObjectActionSystem::has_value())
 	{
-		if (const auto held = Locator::creatureObjectActionSystem::value().GetHeld(creature))
+		if (const auto held = Locator::creatureObjectActionSystem::value().GetCarried(creature))
 		{
 			const auto life = magic_living::LifeOf(*held);
 			situation.holdingStrokeable =
@@ -4037,8 +4100,9 @@ std::optional<Desire> CreatureMindSystem::DesireForShownThing(entt::entity creat
 		if (rule.aboutSomething)
 		{
 			if (!kind.has_value() ||
-			    !creature_activity::CanBeAbout(desire, WholeFactsOf(registry, creature, *whole, *kind, *tables),
-			                                   mind.mayAttackOwnPlayer))
+			    !creature_activity::CanBeAbout(
+			        desire, WholeFactsOf(registry, creature, *whole, *kind, *tables, LookedAtByItsPlayer(creature)),
+			        mind.mayAttackOwnPlayer))
 			{
 				continue;
 			}
@@ -4231,7 +4295,7 @@ void CreatureMindSystem::LearnFromFeedback(entt::entity creature, CreatureMindSt
 	if (feedback > 0.0f && mind.developmentPhase > 0 && info != nullptr && info->eatWhenStroked &&
 	    Locator::creatureObjectActionSystem::has_value())
 	{
-		if (const auto held = Locator::creatureObjectActionSystem::value().GetHeld(creature);
+		if (const auto held = Locator::creatureObjectActionSystem::value().GetCarried(creature);
 		    held.has_value() && FoodValueOf(*held).has_value())
 		{
 			creature_learning::MakeFullyDominant(desires, Desire::Hunger, mind_detail::DesireFloorOf(creature));
@@ -4676,8 +4740,7 @@ bool CreatureMindSystem::ContinueKeptPlanWith(entt::entity creature, CreatureMin
 		return false;
 	}
 	const auto& registry = Locator::entitiesRegistry::value();
-	const auto* held = registry.TryGet<const HeldByCreature>(gift);
-	const bool holdsGift = held != nullptr && held->creature == creature;
+	const bool holdsGift = ecs::creature_carried::Carries(registry, creature, gift);
 	const auto whole = kept->about.has_value() ? kept->about : kept->activityObject;
 	const bool needsThingToUse = creature_plan_actions::NeedsThingToUse(action.name);
 	const auto use = executor->use != Target::None ? executor->use : Target::Pickable;
@@ -5069,7 +5132,8 @@ void CreatureMindSystem::WatchVillagerSkill(entt::entity creature, CreatureMindS
 	float toGoal = 0.0f;
 	if (const auto* walk = registry.TryGet<const WallHug>(villager); walk != nullptr)
 	{
-		toGoal = gutils::GetDistanceInMetres(glm::vec2(glm::xz(registry.Get<const Transform>(villager).position)), walk->goal);
+		toGoal = gutils::GetDistanceInMetres(glm::vec2(glm::xz(registry.Get<const Transform>(villager).position)),
+		                                     wall_hug::ToPoint(walk->goalPlace));
 	}
 	const auto state = creature_watching::StateToLearnFrom({
 	    .state = action->states.at(static_cast<size_t>(LivingAction::Index::Top)),
@@ -5281,10 +5345,9 @@ void CreatureMindSystem::NoticeDeed(size_t deed, const glm::vec3& point, std::op
 			creature_mind_model::Think(*mind->learnt, fmt::format("I saw you: {}", tables->mimics.at(deed).name));
 			if (Locator::creatureObjectActionSystem::has_value() &&
 			    Locator::creatureObjectActionSystem::value().GetState(entity) ==
-			        CreatureObjectActionSystemInterface::State::Busy &&
-			    !Locator::creatureObjectActionSystem::value().IsCatching(entity))
+			        CreatureObjectActionSystemInterface::State::Busy)
 			{
-				Locator::creatureObjectActionSystem::value().Cancel(entity);
+				Locator::creatureObjectActionSystem::value().StopForPlan(entity, true);
 			}
 			Abandon(*mind);
 			if (Locator::magicSystem::has_value())
@@ -5331,10 +5394,6 @@ void CreatureMindSystem::DoLessonAgain(entt::entity creature, CreatureMindState&
 	}
 	const glm::vec2 position {transform->position.x, transform->position.z};
 	creature_plan_actions::Situation situation;
-	if (const auto camera = openblack::ecs::ReportedCreatureCamera(creature))
-	{
-		situation.camera = glm::vec2(camera->origin.x, camera->origin.z);
-	}
 	Situate(creature, situation);
 	const auto desire = context.desire;
 	// It finds the most useful thing of the same kind as the thing it acted on, as the planner finds a thing for an
@@ -5352,14 +5411,13 @@ void CreatureMindSystem::DoLessonAgain(entt::entity creature, CreatureMindState&
 		const auto kind = known != nullptr ? known->kind : context.belief->type;
 		sameKind = BelievedThingsToActOn(creature, mind, desire, [&](entt::entity candidate) {
 			const auto* belief = mind.beliefs.Find(candidate);
-			const auto* held = registry.TryGet<const HeldByCreature>(candidate);
 			return creature_follow_up::SuitsDoAgain({
 			    .sameKind = belief != nullptr && belief->kind == kind,
 			    .passesTest = executor->target == Target::None
 			                      ? std::nullopt
 			                      : std::optional(Accepts(registry, executor->target, candidate, creature)),
 			    .notWhatItHolds = executor->notWhatItHolds,
-			    .heldByItself = held != nullptr && held->creature == creature,
+			    .heldByItself = ecs::creature_carried::Carries(registry, creature, candidate),
 			});
 		});
 	}

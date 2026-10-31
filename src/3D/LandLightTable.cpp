@@ -18,8 +18,6 @@ namespace
 {
 constexpr size_t k_PaletteSide = LandLightPalette::k_Side;
 constexpr uint32_t k_DarkLevels = 48;
-/// The ramps divide by this rather than 255
-constexpr uint32_t k_RampDivisor = 200;
 
 // The haze's distances as their inverses, exactly as the game's floats: 400 and 900 from the camera, drawn in by dusk
 // to 100 and 800
@@ -53,17 +51,6 @@ uint32_t Lerp(uint32_t a, uint32_t b, uint32_t t)
 	return r | g | bl | (b & 0xFF000000u);
 }
 
-/// Each channel (a (255 - t) + b t) / 200, at most 255; the alpha of a
-uint32_t Ramp(uint32_t a, uint32_t b, uint32_t t)
-{
-	uint32_t result = a & 0xFF000000u;
-	for (const uint32_t shift : {16u, 8u, 0u})
-	{
-		const uint32_t value = (((a >> shift) & 0xFFu) * (255 - t) + ((b >> shift) & 0xFFu) * t) / k_RampDivisor;
-		result |= std::min(255u, value) << shift;
-	}
-	return result;
-}
 } // namespace
 
 LandLightPalette::LandLightPalette(std::span<const uint8_t> bytes)
@@ -79,6 +66,17 @@ LandLightPalette::LandLightPalette(std::span<const uint8_t> bytes)
 		_colours.at(i) = static_cast<uint32_t>(texel[0]) << 16 | static_cast<uint32_t>(texel[1]) << 8 |
 		                 static_cast<uint32_t>(texel[2]) | static_cast<uint32_t>(texel[3]) << 24;
 	}
+}
+
+uint32_t LandLightTable::Ramp(uint32_t a, uint32_t b, uint32_t t, uint32_t divisor) noexcept
+{
+	uint32_t result = a & 0xFF000000u;
+	for (const uint32_t shift : {16u, 8u, 0u})
+	{
+		const uint32_t value = (((a >> shift) & 0xFFu) * (255 - t) + ((b >> shift) & 0xFFu) * t) / divisor;
+		result |= std::min(255u, value) << shift;
+	}
+	return result;
 }
 
 namespace
@@ -135,8 +133,8 @@ uint32_t LandLightTable::GetMoonColour(const LandLightPalette& palette, float sk
 	return PaletteColours(palette, skyType, alignment)[k_Moon] & 0xFFFFFFu;
 }
 
-void LandLightTable::Build(const LandLightPalette& palette, float skyType, float alignment, float overcast,
-                           uint8_t flash) noexcept
+void LandLightTable::Build(const LandLightPalette& palette, float skyType, float alignment, float overcast, uint8_t flash,
+                           uint32_t rampDivisor) noexcept
 {
 	const auto colours = PaletteColours(palette, skyType, alignment);
 	const auto land = Overcast(LandColour(colours, alignment), overcast);
@@ -189,15 +187,15 @@ void LandLightTable::Build(const LandLightPalette& palette, float skyType, float
 	const uint32_t landLevel = (((land >> 8) & 0xFFu) * k_DarkLevels) >> 8;
 	for (uint32_t i = 0; i < landLevel; ++i)
 	{
-		table.at(i) = Ramp(colours[k_Dark], land, (i * 256) / landLevel);
+		table.at(i) = Ramp(colours[k_Dark], land, (i * 256) / landLevel, rampDivisor);
 	}
 	for (uint32_t i = landLevel; i < k_DarkLevels; ++i)
 	{
-		table.at(i) = Ramp(land, colours[k_Warm], ((i - landLevel) * 256) / (k_DarkLevels - landLevel));
+		table.at(i) = Ramp(land, colours[k_Warm], ((i - landLevel) * 256) / (k_DarkLevels - landLevel), rampDivisor);
 	}
 	for (uint32_t i = k_DarkLevels; i < k_Size; ++i)
 	{
-		table.at(i) = Ramp(colours[k_Dark], land, i);
+		table.at(i) = Ramp(colours[k_Dark], land, i, rampDivisor);
 	}
 
 	// A flash of lightning takes every light towards white

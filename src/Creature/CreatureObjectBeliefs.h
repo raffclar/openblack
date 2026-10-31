@@ -112,6 +112,40 @@ struct StoreContents
 	uint64_t made {0};
 };
 
+/// Finds the place of the belief about a thing fast. It is an open table: each thing goes in the first free entry at or
+/// after the entry that its number points to, so that a search reads entries that are side by side in memory. It does
+/// not keep the things in an order. The no-thing value is not kept here.
+class ThingIndex
+{
+public:
+	[[nodiscard]] std::optional<BeliefPlace> Find(entt::entity thing) const;
+	/// Sets the place of a thing, which replaces the place that the thing had. The kind and the place among the places
+	/// of the kind are each less than 65536.
+	void Set(entt::entity thing, BeliefPlace place);
+	/// Removes a thing, if the index has it
+	void Erase(entt::entity thing);
+	void Clear();
+	[[nodiscard]] size_t Size() const { return _count; }
+
+private:
+	/// An entry is small, thus more entries are in the memory cache
+	struct Entry
+	{
+		entt::entity thing {entt::null};
+		uint16_t kind {0};
+		uint16_t slot {0};
+	};
+	/// The entry that the number of a thing points to
+	[[nodiscard]] size_t Home(entt::entity thing) const;
+	/// The entry of the thing, or else the free entry where the thing goes
+	[[nodiscard]] size_t Seek(entt::entity thing) const;
+	/// Makes the table two times larger and puts each thing again
+	void Grow();
+
+	std::vector<Entry> _entries;
+	size_t _count {0};
+};
+
 /// A creature's beliefs about things, a fixed number of places for each kind
 class Store
 {
@@ -138,7 +172,7 @@ public:
 		// The store forgets them in the order of their kinds and places. The order of the index is different on each
 		// C++ library, and the marker of the oldest belief moves on as each belief goes.
 		std::vector<std::pair<BeliefPlace, entt::entity>> forgotten;
-		for (const auto& [thing, at] : _index)
+		for (const auto& [thing, at] : _contents.index)
 		{
 			if (gone(thing))
 			{
@@ -181,29 +215,31 @@ public:
 	[[nodiscard]] std::vector<const Belief*> HeldInListOrder() const;
 	/// How many beliefs it holds of a kind, and in all
 	[[nodiscard]] size_t Count(uint32_t kind) const;
-	[[nodiscard]] size_t Size() const { return _index.size(); }
+	[[nodiscard]] size_t Size() const { return _contents.index.size(); }
 	/// Every belief, kind by kind, each kind in the order of its places
 	[[nodiscard]] std::vector<Belief> All() const;
 
 	/// Everything that the store holds, for a saved world
-	[[nodiscard]] StoreContents Contents() const { return {.pools = _pools, .index = _index, .made = _made}; }
+	[[nodiscard]] const StoreContents& Contents() const { return _contents; }
 	/// Puts back what a saved world holds
 	void SetContents(const StoreContents& contents)
 	{
-		_pools = contents.pools;
-		_index = contents.index;
-		_made = contents.made;
+		_contents = contents;
 		_lookedAt = {};
+		Reindex();
 	}
 
 private:
 	using Place = BeliefPlace;
 	using Pool = BeliefPool;
 
-	std::array<Pool, k_KindCount> _pools {};
-	std::unordered_map<entt::entity, Place> _index;
-	/// How many beliefs the store made
-	uint64_t _made {0};
+	/// The places of each kind, the place of the belief about each thing, and how many beliefs the store made. A saved
+	/// world reads them where they are, with no copy.
+	StoreContents _contents;
+	/// The same places as the index of the contents, for a fast search
+	ThingIndex _places;
+	/// Makes the fast index again from the index of the contents
+	void Reindex();
 	/// The count of the things gone from the world when the store last looked for beliefs about gone things. A copy of a
 	/// store has not looked yet, as it can go to another world.
 	struct LookedAt

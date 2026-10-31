@@ -30,6 +30,8 @@
 #include "3D/PhysicsDrawMatrix.h"
 #include "Camera/Camera.h"
 #include "Creature/CreatureFizzLook.h"
+#include "ECS/BoatFilmBoat.h"
+#include "ECS/BoatLaunchRules.h"
 #include "ECS/BuildingConstruction.h"
 #include "ECS/Components/Abode.h"
 #include "ECS/Components/Animal.h"
@@ -38,6 +40,7 @@
 #include "ECS/Components/AtHome.h"
 #include "ECS/Components/BlendedByMaterial.h"
 #include "ECS/Components/BoatFilm.h"
+#include "ECS/Components/BuildingDamage.h"
 #include "ECS/Components/CarriedByTornado.h"
 #include "ECS/Components/ChangedMaterials.h"
 #include "ECS/Components/Creature.h"
@@ -64,8 +67,10 @@
 #include "ECS/Components/Pot.h"
 #include "ECS/Components/ResourcePile.h"
 #include "ECS/Components/RisingSoul.h"
+#include "ECS/Components/Scaffold.h"
 #include "ECS/Components/ScriptHighlight.h"
 #include "ECS/Components/SeeThrough.h"
+#include "ECS/Components/SpellIcon.h"
 #include "ECS/Components/StoragePit.h"
 #include "ECS/Components/Stream.h"
 #include "ECS/Components/Swayable.h"
@@ -78,9 +83,13 @@
 #include "ECS/Components/VillageTotem.h"
 #include "ECS/Components/Villager.h"
 #include "ECS/Components/VillagerPose.h"
+#include "ECS/Components/Workshop.h"
+#include "ECS/Components/WorshipSite.h"
 #include "ECS/DrawnPlace.h"
+#include "ECS/DrawnRegistry.h"
 #include "ECS/Graveyards.h"
 #include "ECS/ObjectDetail.h"
+#include "ECS/PlayerColour.h"
 #include "ECS/Registry.h"
 #include "ECS/SnowLevels.h"
 #include "ECS/Systems/BuildingDamageSystemInterface.h"
@@ -90,6 +99,7 @@
 #include "ECS/Systems/HandSystemInterface.h"
 #include "ECS/Systems/HeartbeatSystemInterface.h"
 #include "ECS/Systems/ObjectDrawListSystemInterface.h"
+#include "ECS/Systems/SpellIconSystemInterface.h"
 #include "ECS/Systems/TimeSystemInterface.h"
 #include "ECS/Systems/VegetationInterface.h"
 #include "ECS/TreeRoots.h"
@@ -97,7 +107,6 @@
 #include "Game.h"
 #include "Graphics/BonePalette.h"
 #include "Graphics/DebugLines.h"
-#include "Graphics/DetailLevel.h"
 #include "Graphics/DrawnHand.h"
 #include "Graphics/GraphicsHandleBgfx.h"
 #include "Graphics/GroundBlobs.h"
@@ -116,6 +125,7 @@
 #include "Resources/ResourcesInterface.h"
 #include "Scenery/AppleBarrelRules.h"
 #include "Temple/TempleDestruction.h"
+#include "Visual/DetailLevel.h"
 
 using namespace openblack::ecs::systems;
 using namespace openblack::ecs::components;
@@ -125,6 +135,9 @@ using openblack::physics::objects::TreePlace;
 namespace
 {
 static_assert(openblack::graphics::object_tint::k_MostGrainFlow == openblack::magic::piles::k_GrainFlowSpan);
+
+/// An icon at a worship site that shines is lit through this colour: all the light, with a little loss
+constexpr uint32_t k_IconLitColour = 0xFFFFFFu;
 
 /// Whether an object is drawn whole with the others: a building drawn as far up as it stands is drawn by itself
 bool DrawnWhole(entt::entity entity)
@@ -223,16 +236,25 @@ struct SegmentPasses
 	const uint32_t& last;
 };
 
-/// Call `place` for each entity with the components: in the first pass, then again in a pass for each later segment.
-/// `place` places only the things of the segment that the pass places.
-template <typename... Components, typename Place>
+/// Call `place` for each entity with a model and a transform: in the first pass, then again in a pass for each later
+/// segment. `place` places only the things of the segment that the pass places. The phantom building of a scaffold
+/// keeps its model in the copy, not in a Mesh, so `place` gets the model of the copy.
+template <typename Place>
 void EachBySegment(const Place& place, SegmentPasses passes)
 {
 	using namespace openblack::ecs::components;
+	constexpr auto k_NotPlaced = entt::exclude<TempleInteriorPart, Tree, AtHome, HiddenByState, VillageTotemGhostHidden>;
 	do
 	{
-		passes.registry.Each<Components...>(
-		    place, entt::exclude<TempleInteriorPart, Tree, AtHome, HiddenByState, VillageTotemGhostHidden>);
+		passes.registry.Each<const Mesh, const Transform>(place, k_NotPlaced);
+		passes.registry.Each<const ScaffoldGhost, const Transform>(
+		    [&place](entt::entity entity, const ScaffoldGhost& ghost, const Transform& transform) {
+			    if (ghost.model.has_value())
+			    {
+				    place(entity, *ghost.model, transform);
+			    }
+		    },
+		    k_NotPlaced);
 	} while (passes.placed++ < passes.last);
 }
 
@@ -251,6 +273,13 @@ void UploadChanged(bgfx::DynamicVertexBufferHandle buffer, std::span<const Insta
 }
 
 /// The hand that the frame draws: the left hand of the god of this computer
+/// A script highlight that the frame does not draw
+bool HiddenHighlight(const openblack::ecs::Registry& registry, entt::entity entity)
+{
+	const auto* highlight = registry.TryGet<const ScriptHighlight>(entity);
+	return highlight != nullptr && highlight->hidden;
+}
+
 entt::entity DrawnHand()
 {
 	using openblack::ecs::systems::HandSystemInterface;
@@ -295,8 +324,9 @@ void RenderingSystem::PrepareDrawDescs(bool drawBoundingBox)
 	std::unordered_map<entt::id_type, uint32_t> fadingCounts;
 	_meshBoxes.clear();
 
-	auto prepMesh = [&registry, &meshIds, &instanceCount](entt::entity entity, entt::id_type drawnMesh, const Mesh& mesh,
-	                                                      bool morphWithTerrain) {
+	// `from` is the registry of the thing: the land's, or the drawn registry
+	auto prepMesh = [&meshIds, &instanceCount](const Registry& from, entt::entity entity, entt::id_type drawnMesh,
+	                                           const Mesh& mesh, bool morphWithTerrain) {
 		auto count = meshIds.insert(std::make_pair(drawnMesh, MeshInstances {.count = static_cast<uint32_t>(mesh.submeshId),
 		                                                                     .morphWithTerrain = morphWithTerrain,
 		                                                                     .unlit = false,
@@ -311,33 +341,33 @@ void RenderingSystem::PrepareDrawDescs(bool drawBoundingBox)
 		                                                                     .environmentMapped = true,
 		                                                                     .changedMaterials = std::nullopt}));
 		count.first->second.count++;
-		count.first->second.unlit |= registry.AnyOf<Unlit>(entity);
+		count.first->second.unlit |= from.AnyOf<Unlit>(entity);
 		// The creatures and the animals are each posed as they are
-		count.first->second.perEntity |= registry.AnyOf<CreatureMorph, AnimalPose, VillagerPose, AnimatedStaticPose>(entity);
-		count.first->second.villagers &= registry.AllOf<VillagerPose>(entity) && !morphWithTerrain;
-		count.first->second.film &= registry.AllOf<BoatFilmPart>(entity);
+		count.first->second.perEntity |= from.AnyOf<CreatureMorph, AnimalPose, VillagerPose, AnimatedStaticPose>(entity);
+		count.first->second.villagers &= from.AllOf<VillagerPose>(entity) && !morphWithTerrain;
+		count.first->second.film &= from.AllOf<BoatFilmPart>(entity);
 		// The game draws every scroll and sign that a script puts in the world with its first environment map
-		count.first->second.environmentMapped &= registry.AllOf<ScriptHighlight>(entity);
-		if (const auto* translucent = registry.TryGet<const Translucent>(entity))
+		count.first->second.environmentMapped &= from.AllOf<ScriptHighlight>(entity);
+		if (const auto* translucent = from.TryGet<const Translucent>(entity))
 		{
 			count.first->second.translucent = true;
 			count.first->second.additiveShare = translucent->share;
 		}
 		// Its solid parts are drawn as their materials say, and its alpha-textured parts are added over what is behind
-		if (const auto* blended = registry.TryGet<const BlendedByMaterial>(entity))
+		if (const auto* blended = from.TryGet<const BlendedByMaterial>(entity))
 		{
 			count.first->second.translucent = true;
 			count.first->second.alphaTexturedAdditive = true;
 			count.first->second.shineColour = blended->shineColour;
 		}
-		if (registry.AllOf<SeeThrough>(entity))
+		if (from.AllOf<SeeThrough>(entity))
 		{
 			count.first->second.translucent = true;
 			count.first->second.instanceAlpha = true;
 		}
 		// Its model's materials changed while the game ran, which it is drawn by, blended by its alpha after the opaque
 		// things
-		if (const auto* changed = registry.TryGet<const ChangedMaterials>(entity))
+		if (const auto* changed = from.TryGet<const ChangedMaterials>(entity))
 		{
 			count.first->second.translucent = true;
 			count.first->second.instanceAlpha = true;
@@ -351,7 +381,7 @@ void RenderingSystem::PrepareDrawDescs(bool drawBoundingBox)
 		if (detail == nullptr || morphWithTerrain)
 		{
 			const auto drawnMesh = DrawnMeshOf(entity, mesh);
-			prepMesh(entity, drawnMesh, mesh, morphWithTerrain);
+			prepMesh(registry, entity, drawnMesh, mesh, morphWithTerrain);
 			// A thing drawn in less detail further off has room among those fading out too
 			if (detail == nullptr && openblack::ecs::object_detail::Banded(registry, entity))
 			{
@@ -365,7 +395,7 @@ void RenderingSystem::PrepareDrawDescs(bool drawBoundingBox)
 		{
 			if (std::find(detail->meshes.begin(), it, *it) == it)
 			{
-				prepMesh(entity, *it, mesh, morphWithTerrain);
+				prepMesh(registry, entity, *it, mesh, morphWithTerrain);
 			}
 		}
 		++fadingCounts[detail->meshes.back()];
@@ -376,9 +406,19 @@ void RenderingSystem::PrepareDrawDescs(bool drawBoundingBox)
 	const auto drawnHand = DrawnHand();
 	registry.Each<const Mesh, const Transform>(
 	    [&prep, &registry, drawnHand](entt::entity entity, const Mesh& mesh, const Transform& /*unused*/) {
-		    if (graphics::drawn_hand::Drawn(registry.AllOf<Hand>(entity), entity, drawnHand))
+		    if (graphics::drawn_hand::Drawn(registry.AllOf<Hand>(entity), entity, drawnHand) &&
+		        !HiddenHighlight(registry, entity))
 		    {
 			    prep(entity, mesh, false);
+		    }
+	    },
+	    entt::exclude<MorphWithTerrain, Tree, TempleInteriorPart, AtHome, HiddenByState, VillageTotemGhostHidden>);
+	// The phantom building of a scaffold keeps its model in the copy, not in a Mesh
+	registry.Each<const ScaffoldGhost, const Transform>(
+	    [&prep](entt::entity entity, const ScaffoldGhost& ghost, const Transform& /*unused*/) {
+		    if (ghost.model.has_value())
+		    {
+			    prep(entity, *ghost.model, false);
 		    }
 	    },
 	    entt::exclude<MorphWithTerrain, Tree, TempleInteriorPart, AtHome, HiddenByState, VillageTotemGhostHidden>);
@@ -387,6 +427,23 @@ void RenderingSystem::PrepareDrawDescs(bool drawBoundingBox)
 		    prep(entity, mesh, true);
 	    },
 	    entt::exclude<Tree>);
+	// The things that only the frames make, as the stones on a plinth, are drawn as the things of the land of their model
+	// are. Each one that can fade has room among those fading out too.
+	if (Locator::drawnRegistry::has_value())
+	{
+		const auto& drawn = Locator::drawnRegistry::value();
+		drawn.Each<const Mesh, const Transform>(
+		    [&drawn, &prepMesh, &fadingCounts, &instanceCount](entt::entity entity, const Mesh& mesh,
+		                                                       const Transform& /*unused*/) {
+			    prepMesh(drawn, entity, mesh.id, mesh, false);
+			    if (openblack::ecs::object_detail::Banded(drawn, entity))
+			    {
+				    ++fadingCounts[mesh.id];
+				    ++instanceCount;
+			    }
+		    },
+		    entt::exclude<HiddenByState>);
+	}
 	// The marks on the land, which only the frames draw, are drawn as the things of their model are. Each one has room
 	// among those fading out too.
 	if (Locator::explosionSystem::has_value())
@@ -423,10 +480,10 @@ void RenderingSystem::PrepareDrawDescs(bool drawBoundingBox)
 	// A tree out of the land has its roots drawn under it: once, or twice while it moves in the physics
 	const Mesh roots {.id = RootsMesh(), .submeshId = 0, .bbSubmeshId = 0};
 	registry.Each<const Tree, const ShownRoots>(
-	    [&prepMesh, &roots](entt::entity tree, const Tree& /*unused*/, const ShownRoots& shown) {
+	    [&registry, &prepMesh, &roots](entt::entity tree, const Tree& /*unused*/, const ShownRoots& shown) {
 		    for (size_t copy = 0; copy < openblack::physics::objects::ShownRootsScales(shown.place).size(); ++copy)
 		    {
-			    prepMesh(tree, roots.id, roots, false);
+			    prepMesh(registry, tree, roots.id, roots, false);
 		    }
 	    });
 
@@ -625,6 +682,7 @@ bool RenderingSystem::UploadInstances(bool drawBoundingBox)
 
 	// Set transforms for instanced draw at offsets
 	_renderContext.entityDraws.clear();
+	_renderContext.drawnEntityDraws.clear();
 	_renderContext.drawnObjects.clear();
 	_renderContext.animalDraws.clear();
 	_renderContext.highDetailDraws.clear();
@@ -646,16 +704,24 @@ bool RenderingSystem::UploadInstances(bool drawBoundingBox)
 	                                                                      })
 	                               : graphics::fizz_draw_order::Order {};
 	const auto& fizzOrder = _renderContext.fizzOrder;
+	// The things that only the frames make are in the first segment, before the things of the land. The gate stones that
+	// the cursor finds come after the things of the land.
+	std::vector<RenderContext::DrawnObject> drawnPicks;
+	UploadDrawnThings(drawBoundingBox, fits, drawnPicks, lastFilmLevels);
 	// The instances of each mesh go in the order of their segments. Each pass places the things of one segment.
 	uint32_t segmentPlaced = 0;
 	uint32_t lastSegment = 0;
 	const auto drawnHand = DrawnHand();
-	EachBySegment<const Mesh, const Transform>(
-	    [this, &registry, &vegetation, &meshes, &fits, &lastFilmLevels, &fizzOrder, &segmentPlaced, &lastSegment,
-	     drawBoundingBox, camera, &view, modelDetail, drawList,
-	     drawnHand](entt::entity entity, const Mesh& mesh, const Transform& transform) {
+	EachBySegment(
+	    [this, &registry, &vegetation, &meshes, &fits, &fizzOrder, &segmentPlaced, &lastSegment, drawBoundingBox, camera, &view,
+	     modelDetail, drawList, drawnHand](entt::entity entity, const Mesh& mesh, const Transform& transform) {
 		    // The hands of the other gods and the right hands have no model on the screen
 		    if (!graphics::drawn_hand::Drawn(registry.AllOf<Hand>(entity), entity, drawnHand))
+		    {
+			    return;
+		    }
+		    // A script highlight that its draw list did not select in this frame is not drawn
+		    if (HiddenHighlight(registry, entity))
 		    {
 			    return;
 		    }
@@ -675,31 +741,14 @@ bool RenderingSystem::UploadInstances(bool drawBoundingBox)
 		    const auto* highDetail = registry.TryGet<const HighDetail>(entity);
 		    const auto drawnAt =
 		        highDetail != nullptr ? openblack::ecs::high_detail_rules::DrawnAt(highDetail->heldAt, standsAt) : standsAt;
-		    auto modelMatrix = PlacedMatrix(drawnAt, rotation, transform.scale);
-		    // A thing a film moves by a whole matrix is drawn by it
-		    if (const auto* exact = registry.TryGet<const DrawnMatrix>(entity); exact != nullptr)
-		    {
-			    modelMatrix = exact->model;
-		    }
+		    // A scaffold on a building site becomes small as the building grows
+		    const auto* drawnScale = registry.TryGet<const ScaffoldDrawnScale>(entity);
+		    auto modelMatrix =
+		        PlacedMatrix(drawnAt, rotation, drawnScale != nullptr ? glm::vec3(drawnScale->scale) : transform.scale);
 		    // A body moving in the physics is drawn between its last two turns, and not at all once sunk under the sea
 		    const auto* drawn = registry.TryGet<const PhysicsDrawPose>(entity);
 		    const auto placed = physics_draw::ModelMatrix(modelMatrix, drawn);
 		    modelMatrix = placed.value_or(glm::mat4(0.0f));
-
-		    // The sea mirrors the explorers' boat, and no other part of its film, wherever it is and however far off, at the
-		    // detail it was drawn at the frame before
-		    const auto* filmPart = registry.TryGet<const BoatFilmPart>(entity);
-		    const bool mirroredBoat = filmPart != nullptr && filmPart->role == BoatFilmPart::Role::Boat;
-		    if (mirroredBoat)
-		    {
-			    const auto last = lastFilmLevels.find(entity);
-			    const auto lastLevel = last != lastFilmLevels.end()
-			                               ? last->second
-			                               : graphics::mesh_detail::LevelBit(graphics::mesh_detail::Mesh::High);
-			    _filmReflectionLevels[entity] = lastLevel;
-			    _renderContext.filmReflections.push_back(
-			        {.mesh = DrawnMeshOf(entity, mesh), .model = modelMatrix, .detailLevel = lastLevel});
-		    }
 
 		    // A thing on the land is drawn in less detail the further off it is, fades out, then isn't drawn; a villager
 		    // then shows only as a smudge on a blob while it stands above the sea. One flying in the physics or one that
@@ -711,10 +760,12 @@ bool RenderingSystem::UploadInstances(bool drawBoundingBox)
 		    bool gone = false;
 		    const auto* detail = registry.TryGet<const DetailMeshes>(entity);
 		    // On a frame that draws all of the land's draw list, note which listed things stay drawn while the camera
-		    // stands still. A thing of several meshes uses the box of its standard mesh. Another thing uses its own mesh.
-		    const bool noteKept = drawList != nullptr && drawList->GetFrame().drawAll && drawList->Listed(entity);
+		    // stands still. The icon of a village totem is noted too: it keeps its totem drawn. A thing of several meshes
+		    // uses the box of its standard mesh. Another thing uses its own mesh, also a broken building, which shows its
+		    // broken model.
+		    const bool noteKept = drawList != nullptr && drawList->GetFrame().drawAll && drawList->NotesKept(entity);
 		    const auto keptBox =
-		        detail != nullptr ? detail->meshes.at(static_cast<size_t>(graphics::mesh_detail::Mesh::Standard)) : drawnMesh;
+		        detail != nullptr ? detail->meshes.at(static_cast<size_t>(graphics::mesh_detail::Mesh::Standard)) : mesh.id;
 		    bool noted = false;
 		    if (drawList != nullptr && !drawList->Drawn(registry, entity))
 		    {
@@ -726,6 +777,14 @@ bool RenderingSystem::UploadInstances(bool drawBoundingBox)
 			    }
 			    gone = true;
 			    _goneThings.push(entity);
+		    }
+		    else if (const auto* ghost = registry.TryGet<const ScaffoldGhost>(entity); ghost != nullptr)
+		    {
+			    // The phantom building of a scaffold is drawn whole at any distance, blended by its own alpha among the
+			    // things that fade out
+			    slotMap = &_fadingSlots;
+			    fade = ghost->alpha;
+			    _fadingThings.emplace(entity, ghost->alpha);
 		    }
 		    else if (openblack::ecs::high_detail_rules::DrawsHighMeshAtAnyDistance(
 		                 detail != nullptr, registry.AllOf<HighDetail>(entity), registry.AllOf<MorphWithTerrain>(entity)))
@@ -801,11 +860,6 @@ bool RenderingSystem::UploadInstances(bool drawBoundingBox)
 			    NoteKept(*drawList, registry, entity, modelMatrix, transform.scale.x, keptBox, false);
 		    }
 
-		    if (mirroredBoat && !gone)
-		    {
-			    _filmReflectionLevels[entity] = graphics::mesh_detail::LevelBit(level);
-		    }
-
 		    // A thing too far off to be drawn keeps a place at the back of its mesh's instances, only for what it leaves on
 		    // the land
 		    if (gone)
@@ -856,9 +910,9 @@ bool RenderingSystem::UploadInstances(bool drawBoundingBox)
 		    }
 		    // A home with someone in lights its windows at night
 		    const auto* abode = registry.TryGet<const Abode>(entity);
-		    // The w is the snow that the thing shows
+		    // The w is the snow that the thing shows. A broken building shows the snow of its broken model.
 		    glm::vec4 look {abode != nullptr && abode->presentAtHome > 0 ? 1.0f : 0.0f, 0.0f, 0.0f,
-		                    static_cast<float>(openblack::ecs::snow_levels::LevelOf(registry, entity))};
+		                    static_cast<float>(openblack::ecs::snow_levels::ShownLevelOf(registry, entity))};
 		    // A field's crop shows once it has grown a little, in its colour for how ripe it is, sunk into the ground by
 		    // how empty it is, and sways once ripe
 		    if (const auto* field = registry.TryGet<const Field>(entity); field != nullptr)
@@ -966,6 +1020,15 @@ bool RenderingSystem::UploadInstances(bool drawBoundingBox)
 				    }
 			    }
 		    }
+		    // An icon at a worship site that shows its charge is lit through white, and it shines in its player's colour
+		    if (Locator::spellIconSystem::has_value() && registry.AllOf<WorshipIcon>(entity))
+		    {
+			    if (const auto shine = Locator::spellIconSystem::value().ShownTint(entity); shine != 0)
+			    {
+				    look.y = static_cast<float>(k_IconLitColour);
+				    added = graphics::object_tint::SumAdded(added, shine);
+			    }
+		    }
 		    // The heart of a temple is lit through white. In its destruction it glows in its player's colour, then fades
 		    // out, and it is not drawn just before the temple goes.
 		    if (const auto* temple = registry.TryGet<const Temple>(entity); temple != nullptr)
@@ -988,7 +1051,7 @@ bool RenderingSystem::UploadInstances(bool drawBoundingBox)
 				    const float pulse = Locator::heartbeatSystem::has_value()
 				                            ? Locator::heartbeatSystem::value().Pulse(temple->owner, turnFraction)
 				                            : 0.0f;
-				    const auto colour = Player::k_Colours.at(static_cast<size_t>(temple->owner));
+				    const auto colour = player_colour::Of(temple->owner);
 				    glow = heart_look::Glow(colour, heart_look::GlowStrength(temple->destructionClock, pulse));
 			    }
 			    if (registry.AllOf<ChangedMaterials>(entity))
@@ -1008,14 +1071,16 @@ bool RenderingSystem::UploadInstances(bool drawBoundingBox)
 			    look.x = graphics::object_tint::PackAdded(added, grainFlow);
 		    }
 
-		    // A flag over a town's store is not there at all while it does not show
-		    if (const auto* flag = registry.TryGet<const TownDesireFlag>(entity); flag != nullptr)
+		    // A flag over a town's store, the wood flag of a workshop or a need flag of a worship site is not there at all
+		    // while it does not show
+		    const auto* townFlag = registry.TryGet<const TownDesireFlag>(entity);
+		    const auto* woodFlag = registry.TryGet<const WorkshopFlag>(entity);
+		    const auto* needFlag = registry.TryGet<const WorshipSiteFlag>(entity);
+		    if ((townFlag != nullptr && !townFlag->shown) || (woodFlag != nullptr && !woodFlag->shown) ||
+		        (needFlag != nullptr && !needFlag->shown))
 		    {
-			    if (!flag->shown)
-			    {
-				    look.z = 1.0f;
-				    modelMatrix = glm::mat4(0.0f);
-			    }
+			    look.z = 1.0f;
+			    modelMatrix = glm::mat4(0.0f);
 		    }
 
 		    // A lantern on the Norse gate shows only while the gate is in the draw list and on screen. It takes the land's
@@ -1043,16 +1108,6 @@ bool RenderingSystem::UploadInstances(bool drawBoundingBox)
 			    }
 		    }
 
-		    // The worm on the apple barrel takes the land's light of the point where the barrel stands
-		    if (const auto* worm = registry.TryGet<const AppleBarrelWorm>(entity);
-		        worm != nullptr && registry.Valid(worm->barrel))
-		    {
-			    if (const auto* barrelTransform = registry.TryGet<const Transform>(worm->barrel); barrelTransform != nullptr)
-			    {
-				    lightOffset = apple_barrel::WormLightOffset(barrelTransform->position, transform.position);
-			    }
-		    }
-
 		    // A body sunk wholly under the sea isn't drawn in any pass, its shadow included
 		    if (!placed.has_value())
 		    {
@@ -1061,12 +1116,14 @@ bool RenderingSystem::UploadInstances(bool drawBoundingBox)
 		    }
 
 		    // A building going up is drawn only as far up as it stands, with the broken and the unfinished ones, though
-		    // what of it stands can still be pointed at
-		    // (a feature is drawn going up only if it is the ark's dry dock)
+		    // what of it stands can still be pointed at. A building with all of it built is drawn whole, also before it
+		    // is finished.
 		    const auto* progress = registry.TryGet<const BuildProgress>(entity);
 		    const auto* feature = registry.TryGet<const Feature>(entity);
-		    const bool goingUp = progress != nullptr && DrawnMeshOf(entity, mesh) == mesh.id &&
-		                         (feature == nullptr || building_construction::FeatureDrawnGoingUp(feature->type));
+		    const bool goingUp =
+		        DrawnMeshOf(entity, mesh) == mesh.id &&
+		        building_construction::DrawnGoingUp(progress != nullptr ? std::optional(progress->built) : std::nullopt,
+		                                            feature != nullptr ? std::optional(feature->type) : std::nullopt);
 		    if (goingUp)
 		    {
 			    look.z = 1.0f;
@@ -1105,10 +1162,13 @@ bool RenderingSystem::UploadInstances(bool drawBoundingBox)
 			                                         graphics::bone_palette::Append(_renderContext.bonePalette, bones));
 		    }
 		    // What a villager holds is drawn on the bone at the end of its arm, as its clip poses it, with the villager's
-		    // look; not while a hand holds it
-		    if (const auto* person = registry.TryGet<const Villager>(entity); person != nullptr && villagerPose != nullptr &&
-		                                                                      look.z != 1.0f && placed.has_value() &&
-		                                                                      !registry.AllOf<InHand>(entity))
+		    // look; not while a hand or a creature holds it
+		    const auto holder = registry.AllOf<InHand>(entity)           ? openblack::ecs::villager_held::Holder::PlayersHand
+		                        : registry.AllOf<HeldByCreature>(entity) ? openblack::ecs::villager_held::Holder::Creature
+		                                                                 : openblack::ecs::villager_held::Holder::None;
+		    if (const auto* person = registry.TryGet<const Villager>(entity);
+		        person != nullptr && villagerPose != nullptr && look.z != 1.0f && placed.has_value() &&
+		        openblack::ecs::villager_held::DrawsHeldThing(holder))
 		    {
 			    const auto heldMesh = openblack::ecs::villager_held::MeshOf(person->carried);
 			    const auto& rest = meshes.Handle(slots->first)->GetBoneMatrices();
@@ -1143,6 +1203,9 @@ bool RenderingSystem::UploadInstances(bool drawBoundingBox)
 					    {
 						    auto heldLook = look;
 						    heldLook.z = alpha.has_value() ? -(1.0f - (static_cast<float>(*alpha) / 255.0f)) : 0.0f;
+						    // What a villager carries is one model for all the villagers, which the land never gives
+						    // snow
+						    heldLook.w = 0.0f;
 						    _heldThings.push_back({.meshId = heldId,
 						                           .fading = alpha.has_value(),
 						                           .reflected = registry.AllOf<InPhysics>(entity),
@@ -1174,12 +1237,6 @@ bool RenderingSystem::UploadInstances(bool drawBoundingBox)
 			    _renderContext.highDetailDraws.push_back(
 			        {.entity = entity, .mesh = drawnMesh, .model = modelMatrix, .castModel = castModel});
 		    }
-		    if (const auto* film = registry.TryGet<const BoatFilmPart>(entity);
-		        film != nullptr && film->castsShadow && look.z != 1.0f)
-		    {
-			    _renderContext.filmShadowDraws.push_back(
-			        {.entity = entity, .mesh = drawnMesh, .model = modelMatrix, .castModel = modelMatrix});
-		    }
 		    if (registry.AllOf<InHand>(entity) && look.z != 1.0f)
 		    {
 			    // What a hand holds joins the hand's shadow
@@ -1201,6 +1258,7 @@ bool RenderingSystem::UploadInstances(bool drawBoundingBox)
 		    ++slots->second.filled;
 	    },
 	    SegmentPasses {.registry = registry, .placed = segmentPlaced, .last = lastSegment});
+	std::ranges::copy(drawnPicks, std::back_inserter(_renderContext.drawnObjects));
 
 	// The marks on the land, which only the frames draw. They are drawn in less detail the further off they are, and fade
 	// out, as the other things of the land do. A mark that fades by its own alpha is drawn whole until it has gone.
@@ -1344,6 +1402,154 @@ bool RenderingSystem::UploadInstances(bool drawBoundingBox)
 	UploadHeldObjects();
 	UploadSouls();
 	return fits;
+}
+
+void RenderingSystem::UploadDrawnThings(bool drawBoundingBox, bool& fits, std::vector<RenderContext::DrawnObject>& picks,
+                                        const std::unordered_map<entt::entity, uint8_t>& lastFilmLevels)
+{
+	if (!Locator::drawnRegistry::has_value())
+	{
+		return;
+	}
+	namespace object_detail = openblack::ecs::object_detail;
+	const auto& drawn = Locator::drawnRegistry::value();
+	const auto* camera = Locator::camera::has_value() ? &Locator::camera::value() : nullptr;
+	const auto view = camera != nullptr ? std::optional(ViewPoint::Of(*camera)) : std::nullopt;
+	const float modelDetail = Locator::config::value().detail.modelDetail;
+	const auto& meshes = entt::locator<resources::ResourcesInterface>::value().GetMeshes();
+	// The matrix of the explorers' boat that the frame shows, if its film plays. The parts on its deck take the land's
+	// light of its place.
+	const auto filmBoat = openblack::ecs::boat_film::ShownBoatMatrix(drawn);
+	// A thing of the drawn registry has only its model, its place and its look: the systems of the land know nothing of
+	// it, so it takes nothing from them
+	drawn.Each<const Mesh, const Transform>(
+	    [&](entt::entity entity, const Mesh& mesh, const Transform& transform) {
+		    if (!fits)
+		    {
+			    return;
+		    }
+		    // A thing that a film moves by a whole matrix uses that matrix
+		    const auto* exact = drawn.TryGet<const DrawnMatrix>(entity);
+		    const auto modelMatrix =
+		        exact != nullptr ? exact->model : PlacedMatrix(transform.position, transform.rotation, transform.scale);
+		    // The sea mirrors the explorers' boat, and no other part of its film, wherever it is and however far off. It
+		    // mirrors the boat at the detail of the frame before.
+		    const auto* filmPart = drawn.TryGet<const BoatFilmPart>(entity);
+		    const bool mirroredBoat = filmPart != nullptr && filmPart->role == BoatFilmPart::Role::Boat;
+		    if (mirroredBoat)
+		    {
+			    const auto last = lastFilmLevels.find(entity);
+			    const auto lastLevel = last != lastFilmLevels.end()
+			                               ? last->second
+			                               : graphics::mesh_detail::LevelBit(graphics::mesh_detail::Mesh::High);
+			    _filmReflectionLevels[entity] = lastLevel;
+			    _renderContext.filmReflections.push_back({.mesh = mesh.id, .model = modelMatrix, .detailLevel = lastLevel});
+		    }
+		    auto* slotMap = &_instanceSlots;
+		    std::optional<uint8_t> fade;
+		    auto level = graphics::mesh_detail::Mesh::High;
+		    bool gone = false;
+		    // It is drawn in less detail the further off it is, fades out, then is not drawn, as a thing of the land is
+		    if (camera != nullptr && object_detail::Banded(drawn, entity) && object_detail::BandedNow(drawn, entity))
+		    {
+			    if (const auto& box = MeshBox(mesh.id); box.has_value())
+			    {
+				    const auto choice = ChooseDetail(
+				        *box, object_detail::Importance(drawn, entity), modelMatrix, transform.scale.x,
+				        [&drawn, entity] { return object_detail::Disappears(drawn, entity, false); }, *view, modelDetail);
+				    if (!choice.mesh.has_value())
+				    {
+					    gone = true;
+				    }
+				    else
+				    {
+					    level = *choice.mesh;
+					    if (choice.alpha.has_value())
+					    {
+						    slotMap = &_fadingSlots;
+						    fade = choice.alpha;
+					    }
+				    }
+			    }
+		    }
+		    if (mirroredBoat && !gone)
+		    {
+			    _filmReflectionLevels[entity] = graphics::mesh_detail::LevelBit(level);
+		    }
+		    // One too far off to be drawn keeps a place at the back of its model's instances
+		    const auto slots = (gone ? &_instanceSlots : slotMap)->find(mesh.id);
+		    if (slots == (gone ? &_instanceSlots : slotMap)->end() ||
+		        slots->second.filled + slots->second.gone >= slots->second.count)
+		    {
+			    fits = false;
+			    return;
+		    }
+		    if (gone)
+		    {
+			    const uint32_t idx = slots->second.offset + slots->second.count - 1 - slots->second.gone;
+			    _renderContext.instanceUniforms[idx] = {.model = modelMatrix, .look = glm::vec4(0.0f, 0.0f, 1.0f, 0.0f)};
+			    if (drawBoundingBox)
+			    {
+				    _renderContext.instanceUniforms[idx + (_renderContext.instanceUniforms.size() / 2)] = {.model =
+				                                                                                               glm::mat4(0.0f)};
+			    }
+			    ++slots->second.gone;
+			    return;
+		    }
+		    graphics::fizz_draw_order::NoteSegment(slots->second.segmentStarts, slots->second.filled, 0);
+		    // The w is the snow that the thing shows
+		    glm::vec4 look {graphics::object_tint::PackAdded(0, 0.0f), 0.0f, 0.0f,
+		                    static_cast<float>(openblack::ecs::snow_levels::LevelOf(drawn, entity))};
+		    if (fade.has_value())
+		    {
+			    look.z = -(1.0f - (static_cast<float>(*fade) / 255.0f));
+		    }
+		    const uint32_t idx = slots->second.offset + slots->second.filled;
+		    // The worm on the apple barrel takes the land's light of the point where the barrel stands
+		    auto instanceModel = modelMatrix;
+		    if (const auto* worm = drawn.TryGet<const AppleBarrelWorm>(entity); worm != nullptr && drawn.Valid(worm->barrel))
+		    {
+			    if (const auto* barrelTransform = drawn.TryGet<const Transform>(worm->barrel); barrelTransform != nullptr)
+			    {
+				    graphics::instance_light::SetLightOffset(
+				        instanceModel, apple_barrel::WormLightOffset(barrelTransform->position, transform.position));
+			    }
+		    }
+		    // A part on the deck of the explorers' boat takes the land's light of the boat's place, and no colour of the land
+		    if (filmPart != nullptr && filmPart->role == BoatFilmPart::Role::DeckPart && filmBoat.has_value())
+		    {
+			    graphics::instance_light::SetLightOffset(instanceModel,
+			                                             openblack::ecs::boat_launch::DeckLightOffset(*filmBoat, modelMatrix));
+			    look.y = graphics::instance_light::k_NoLandColour;
+		    }
+		    _renderContext.instanceUniforms[idx] = {.model = instanceModel, .look = look};
+		    _renderContext.instanceLevels[idx] = graphics::mesh_detail::LevelBit(level);
+		    // The boat casts its shadow from the far sun while the sailors push it down the beach. It has no entity of the
+		    // land.
+		    if (filmPart != nullptr && filmPart->castsShadow)
+		    {
+			    _renderContext.filmShadowDraws.push_back(
+			        {.entity = entt::null, .mesh = mesh.id, .model = modelMatrix, .castModel = modelMatrix});
+		    }
+		    // One posed by its own clip, as the worm, is drawn by itself
+		    if (slots->second.perEntity)
+		    {
+			    _renderContext.drawnEntityDraws.push_back({.entity = entity, .instance = idx});
+		    }
+		    // A gate stone that the cursor can find is the plinth that holds it to the cursor
+		    if (const auto* stone = drawn.TryGet<const PlinthStone>(entity); stone != nullptr && stone->pickable)
+		    {
+			    picks.push_back({.entity = stone->plinth, .model = modelMatrix, .mesh = mesh.id});
+		    }
+		    if (drawBoundingBox)
+		    {
+			    const auto box = meshes.Handle(mesh.id)->GetBoundingBox();
+			    const auto boxMatrix = modelMatrix * glm::translate(box.Center()) * glm::scale(box.Size());
+			    _renderContext.instanceUniforms[idx + (_renderContext.instanceUniforms.size() / 2)] = {.model = boxMatrix};
+		    }
+		    ++slots->second.filled;
+	    },
+	    entt::exclude<HiddenByState>);
 }
 
 void RenderingSystem::UploadSouls()
@@ -1819,10 +2025,18 @@ bool RenderingSystem::FizzesInList(const Registry& registry, const ObjectDrawLis
 void RenderingSystem::NoteKept(ObjectDrawListSystemInterface& drawList, const Registry& registry, entt::entity entity,
                                const glm::mat4& model, float scale, entt::id_type boxMesh, bool fadedOut)
 {
-	// Villagers and creatures stay drawn wherever they are
-	const bool alwaysDrawn = registry.AnyOf<Villager, Creature>(entity);
+	// Villagers and creatures stay drawn wherever they are. A building that its site draws, or a broken building, has
+	// no fade test.
+	const auto test = object_draw_list::KeptTestOf({
+	    .alwaysDrawn = registry.AnyOf<Villager, Creature>(entity),
+	    .broken = registry.AllOf<BuildingDamage>(entity),
+	    .drawnWhole = DrawnWhole(entity),
+	    .partlyShown = Locator::buildingDamageSystem::has_value() &&
+	                   Locator::buildingDamageSystem::value().PartialShare(entity).has_value(),
+	});
+	const bool fadeCounts = test == object_draw_list::KeptTest::SphereAndFade && fadedOut;
 	bool onScreen = true;
-	if (!alwaysDrawn && !fadedOut && drawList.GetView().has_value())
+	if (test != object_draw_list::KeptTest::Always && !fadeCounts && drawList.GetView().has_value())
 	{
 		if (const auto& box = MeshBox(boxMesh); box.has_value())
 		{
@@ -1831,7 +2045,7 @@ void RenderingSystem::NoteKept(ObjectDrawListSystemInterface& drawList, const Re
 			onScreen = object_draw_list::SphereOnScreen(*drawList.GetView(), glm::vec3(model[3]), centre, radius);
 		}
 	}
-	drawList.NoteFullFrame(entity, object_draw_list::StaysDrawn(alwaysDrawn, onScreen, fadedOut));
+	drawList.NoteFullFrame(entity, object_draw_list::StaysDrawn(test, onScreen, fadedOut));
 }
 
 const std::optional<openblack::AxisAlignedBoundingBox>& RenderingSystem::MeshBox(entt::id_type mesh)

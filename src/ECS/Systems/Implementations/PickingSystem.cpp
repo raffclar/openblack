@@ -31,7 +31,6 @@
 #include "ECS/Components/Abode.h"
 #include "ECS/Components/Animal.h"
 #include "ECS/Components/AnimatedStatic.h"
-#include "ECS/Components/AppleBarrel.h"
 #include "ECS/Components/BoatFilm.h"
 #include "ECS/Components/BuildingDamage.h"
 #include "ECS/Components/Creature.h"
@@ -44,6 +43,7 @@
 #include "ECS/Components/OneOffSpellSeed.h"
 #include "ECS/Components/Physics.h"
 #include "ECS/Components/Reward.h"
+#include "ECS/Components/Scaffold.h"
 #include "ECS/Components/ScriptHighlight.h"
 #include "ECS/Components/SeeThrough.h"
 #include "ECS/Components/Spell.h"
@@ -63,6 +63,7 @@
 #include "ECS/ScriptHighlightRules.h"
 #include "ECS/Systems/AlignmentSystemInterface.h"
 #include "ECS/Systems/MagicSystemInterface.h"
+#include "ECS/Systems/ObjectDrawListSystemInterface.h"
 #include "ECS/Systems/RenderingSystemInterface.h"
 #include "ECS/UndrawnPicks.h"
 #include "ECS/WorldObjects.h"
@@ -384,13 +385,10 @@ void PickingSystem::PickUnderCursor(const Frame& frame)
 			_candidateMeshes.push_back(shape.mesh);
 			continue;
 		}
-		const auto& [entity, model] = drawnObjects[turn.drawnIndex];
-		if (!registry.Valid(entity) || registry.AnyOf<Hand, InHand, SeeThrough>(entity) || heldSeed == entity)
-		{
-			continue;
-		}
-		// The apple barrel and its worm are only drawn: the cursor meets the land behind them
-		if (registry.AnyOf<AppleBarrel, AppleBarrelWorm>(entity))
+		const auto& drawnObject = drawnObjects[turn.drawnIndex];
+		const auto entity = drawnObject.entity;
+		const auto& model = drawnObject.model;
+		if (!registry.Valid(entity) || registry.AnyOf<Hand, InHand, SeeThrough, ScaffoldGhost>(entity) || heldSeed == entity)
 		{
 			continue;
 		}
@@ -400,22 +398,21 @@ void PickingSystem::PickUnderCursor(const Frame& frame)
 		{
 			continue;
 		}
-		// A gate stone on a plinth is found only while the plinth stands closed
-		if (const auto* stone = registry.TryGet<const PlinthStone>(entity); stone != nullptr && !stone->pickable)
-		{
-			continue;
-		}
 		if (const auto* progress = registry.TryGet<const BuildProgress>(entity);
 		    progress != nullptr && registry.AllOf<Abode>(entity) && progress->built == 0.0f)
 		{
 			continue;
 		}
+		// A gate stone on a plinth is found as the plinth, by the model of the stone
 		const auto* meshComponent = registry.TryGet<const Mesh>(entity);
-		if (meshComponent == nullptr || !meshes.Contains(meshComponent->id))
+		const auto meshId = drawnObject.mesh.has_value()
+		                        ? drawnObject.mesh
+		                        : (meshComponent != nullptr ? std::optional(meshComponent->id) : std::nullopt);
+		if (!meshId.has_value() || !meshes.Contains(*meshId))
 		{
 			continue;
 		}
-		const auto mesh = meshes.Handle(meshComponent->id);
+		const auto mesh = meshes.Handle(*meshId);
 		const auto* transform = registry.TryGet<const Transform>(entity);
 		const float scale = transform != nullptr ? transform->scale.x : 1.0f;
 		const auto box = mesh->GetBoundingBox();
@@ -424,7 +421,7 @@ void PickingSystem::PickUnderCursor(const Frame& frame)
 		// It is tested before the building, so it wins a tie
 		if (registry.AllOf<SpellDispenser>(entity) && transform != nullptr)
 		{
-			AddBall(entity, model, meshComponent->id, halfExtents,
+			AddBall(entity, model, *meshId, halfExtents,
 			        ecs::pick_shapes::DispenserBall(transform->position, halfExtents, scale));
 		}
 		_candidates.push_back({
@@ -435,19 +432,19 @@ void PickingSystem::PickUnderCursor(const Frame& frame)
 		});
 		_candidateEntities.push_back(entity);
 		_candidateModels.push_back(model);
-		_candidateMeshes.push_back(meshComponent->id);
+		_candidateMeshes.push_back(*meshId);
 		// A script's scroll is also picked by a ball a little larger than its model, about the model's middle
 		if (const auto* highlight = registry.TryGet<const ScriptHighlight>(entity);
 		    highlight != nullptr && ecs::script_highlights::PickedByBall(highlight->kind))
 		{
-			AddBall(entity, model, meshComponent->id, halfExtents,
+			AddBall(entity, model, *meshId, halfExtents,
 			        {.centre = highlight->centre, .radius = highlight->radius + ecs::script_highlights::k_PickBallMargin});
 		}
 		// A miracle icon is also picked by a ball round the miracle's picture it holds up
 		if (const auto* shown = registry.TryGet<const IconSeed>(entity); shown != nullptr && shown->seed != SpellSeedType::None)
 		{
 			const auto owner = ecs::world_objects::IconPlayer(registry, entity);
-			AddBall(entity, model, meshComponent->id, halfExtents,
+			AddBall(entity, model, *meshId, halfExtents,
 			        ecs::pick_shapes::PictureBall(shown->middle, ecs::pick_shapes::k_IconPictureSize,
 			                                      SeedModelMiddle(shown->seed, AlignmentOf(owner))));
 		}
@@ -457,7 +454,7 @@ void PickingSystem::PickUnderCursor(const Frame& frame)
 		{
 			const auto* chest = registry.TryGet<const Reward>(entity);
 			const auto owner = chest != nullptr ? chest->player.value_or(PlayerNames::NEUTRAL) : PlayerNames::NEUTRAL;
-			AddBall(entity, model, meshComponent->id, halfExtents,
+			AddBall(entity, model, *meshId, halfExtents,
 			        ecs::pick_shapes::PictureBall(shown->middle, ecs::reward::k_TownSeedSize,
 			                                      SeedModelMiddle(shown->seed, AlignmentOf(owner))));
 		}
@@ -562,12 +559,7 @@ void PickingSystem::PickUnderCursor(const Frame& frame)
 	}
 	if (picked.has_value())
 	{
-		auto entity = _candidateEntities[picked->index];
-		// A gate stone on a plinth is the plinth to the cursor
-		if (const auto* stone = registry.TryGet<const PlinthStone>(entity); stone != nullptr && registry.Valid(stone->plinth))
-		{
-			entity = stone->plinth;
-		}
+		const auto entity = _candidateEntities[picked->index];
 		_pick.object = entity;
 		const auto* transform = registry.TryGet<const Transform>(entity);
 		_pick.point = transform != nullptr ? transform->position : _candidates[picked->index].origin;
@@ -631,9 +623,11 @@ void PickingSystem::AddBubbles(glm::vec3 camera)
 	}
 	const auto box = meshes.Handle(bubbleMesh)->GetBoundingBox();
 	const auto halfExtents = box.Size() * 0.5f;
+	// The draw of a globe picks it, so a globe that the land's draw list does not draw is not picked
+	const auto* drawList = Locator::objectDrawListSystem::has_value() ? &Locator::objectDrawListSystem::value() : nullptr;
 	registry.Each<const OneOffSpellSeed, const Transform>(
 	    [&](entt::entity entity, const OneOffSpellSeed& globe, const Transform& transform) {
-		    if (registry.AnyOf<InHand, SeeThrough>(entity))
+		    if (registry.AnyOf<InHand, SeeThrough>(entity) || (drawList != nullptr && !drawList->Drawn(registry, entity)))
 		    {
 			    return;
 		    }
@@ -776,7 +770,10 @@ std::optional<screen_pick::MeshHit> PickingSystem::FeelModel(entt::entity object
 	if (const auto* meshComponent = registry.TryGet<const Mesh>(object); meshComponent != nullptr)
 	{
 		const auto& drawn = Locator::rendereringSystem::value().GetContext().drawnObjects;
-		if (const auto found = std::ranges::find(drawn, object, &RenderContext::DrawnObject::entity); found != drawn.end())
+		// The model of the thing itself, not of a gate stone that stands for its plinth
+		if (const auto found = std::ranges::find_if(
+		        drawn, [object](const auto& thing) { return thing.entity == object && !thing.mesh.has_value(); });
+		    found != drawn.end())
 		{
 			felt = std::pair {meshComponent->id, found->model};
 		}

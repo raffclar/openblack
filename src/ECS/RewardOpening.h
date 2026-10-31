@@ -76,8 +76,8 @@ class OpeningWorld
 public:
 	virtual ~OpeningWorld() = default;
 
-	/// Food or wood poured at the chest
-	virtual void Pour(ResourceType type, uint32_t amount) = 0;
+	/// Food or wood poured at the chest for a player
+	virtual void Pour(ResourceType type, uint32_t amount, PlayerNames player) = 0;
 	/// Whether the chest has a town
 	[[nodiscard]] virtual bool HasTown() const = 0;
 	/// The chest's town is given belief in its player, and the chest sparkles
@@ -113,8 +113,9 @@ public:
 	virtual void ShowGesture(MagicType type) = 0;
 };
 
-/// Opens a chest that holds these contents into the world
-void Open(const Contents& contents, OpeningWorld& world);
+/// Opens a chest that holds these contents into the world. The player who tapped the chest gets the food or wood. Every
+/// computer of a network game finds the same player.
+void Open(const Contents& contents, PlayerNames tapper, OpeningWorld& world);
 
 /// The magic type the game reads for a seed's level as it looks for a power-up the player lacks: the plain miracle at
 /// the base level (-1), and level n the seed's (n + 1)th magic type. Its count of levels takes in the plain miracle, so
@@ -142,6 +143,12 @@ struct ProgressEntry
 /// when no entry is allowed there, which the game would draw for ever
 [[nodiscard]] MagicType RandomMiracle(std::span<const ProgressEntry> list, int32_t land,
                                       const std::function<uint32_t(uint32_t)>& draw);
+
+/// Which town the "next miracle" chest with no town gives its miracle to. Each entry is how many miracles the village
+/// centre of one of the player's towns shows, in the order of the player's town list, or none for a town with no village
+/// centre. The chest takes the first town with a village centre that shows fewer miracles than a centre holds. None when
+/// no town is like this.
+[[nodiscard]] std::optional<size_t> FirstTownForMiracle(std::span<const std::optional<size_t>> centreMiraclesShown);
 
 /// Where an opened chest's clip has got to after a frame of so many milliseconds: round and round when it loops,
 /// otherwise held at its last millisecond

@@ -246,7 +246,7 @@ protected:
 			// and the step in metres; the walk holds it in whole map units
 			const auto& step = _expectedStates[0].step;
 			wallHug.step = {std::lround(step.x * 6553.6), std::lround(step.y * 6553.6)};
-			wallHug.goal = _expectedStates[0].goal;
+			wallHug.goalPlace = openblack::ecs::wall_hug::ToWhole(_expectedStates[0].goal);
 			wallHug.yAngle = _expectedStates[0].y_angle;
 			wallHug.gameAngle = static_cast<uint16_t>(openblack::gutils::ConvertAngle3DToGame(wallHug.yAngle));
 		});
@@ -343,8 +343,7 @@ protected:
 				ASSERT_FLOAT_EQ(step.x, state.step.x) << msg;
 				ASSERT_FLOAT_EQ(step.y, state.step.y) << msg;
 			}
-			ASSERT_FLOAT_EQ(villagerWallhug.goal.x, state.goal.x) << msg;
-			ASSERT_FLOAT_EQ(villagerWallhug.goal.y, state.goal.y) << msg;
+			ASSERT_EQ(villagerWallhug.goalPlace, openblack::ecs::wall_hug::ToWhole(state.goal)) << msg;
 			ASSERT_EQ(villagerHasObstacle, state.circle_hug_info.obj_index.has_value()) << msg;
 			if (state.circle_hug_info.turns_to_obstacle != 0xFF || state.circle_hug_info.obj_index.has_value())
 			{
@@ -385,8 +384,9 @@ protected:
 		s["pos"] = {transform.position.x, transform.position.z};
 		s["step"] = {step.x, step.y};
 		s["y_angle"] = wallHug.yAngle;
-		s["goal"] = {wallHug.goal.x, wallHug.goal.y};
-		s["distance"] = glm::distance(glm::vec2(transform.position.x, transform.position.z), wallHug.goal);
+		const auto goal = openblack::ecs::wall_hug::ToPoint(wallHug.goalPlace);
+		s["goal"] = {goal.x, goal.y};
+		s["distance"] = glm::distance(glm::vec2(transform.position.x, transform.position.z), goal);
 		std::string state;
 		if (registry.AllOf<MoveStateLinearTag>(_villagerEntt))
 		{
@@ -520,7 +520,7 @@ protected:
 		registry.Assign<MoveStateLinearTag>(_walker);
 		wallHug.speed = speed;
 		wallHug.step = {0, 0};
-		wallHug.goal = goal;
+		wallHug.goalPlace = ecs::wall_hug::ToWhole(goal);
 		Walk walk {.turns = mostTurns, .wentRound = false, .leftCircle = false};
 		for (uint32_t turn = 1; turn <= mostTurns; ++turn)
 		{
@@ -634,7 +634,7 @@ TEST_F(WalkerToGoal, AWalkWaitsWhileTheVillagerIsCalledAway)
 	registry.Assign<MoveStateLinearTag>(_walker);
 	wallHug.speed = 2.0f;
 	wallHug.step = {0, 0};
-	wallHug.goal = {2150.0f, 2250.0f};
+	wallHug.goalPlace = ecs::wall_hug::ToWhole({2150.0f, 2250.0f});
 	for (int turn = 0; turn < 10; ++turn)
 	{
 		Locator::pathfindingSystem::value().Update();
@@ -672,7 +672,7 @@ TEST_F(WalkerToGoal, AVillagerWalksInItsOwnTurn)
 	auto& wallHug = registry.Get<WallHug>(_walker);
 	wallHug.speed = 2.0f;
 	wallHug.step = {0, 0};
-	wallHug.goal = {2150.0f, 2250.0f};
+	wallHug.goalPlace = ecs::wall_hug::ToWhole({2150.0f, 2250.0f});
 	const auto before = wallHug.position;
 	Locator::pathfindingSystem::value().WalkInOwnTurn(_walker);
 	EXPECT_EQ(registry.Get<const WallHug>(_walker).position, before);
@@ -750,7 +750,7 @@ protected:
 		registry.Assign<MoveStateLinearTag>(_walker);
 		wallHug.speed = 2.0f;
 		wallHug.step = {0, 0};
-		wallHug.goal = goal;
+		wallHug.goalPlace = ecs::wall_hug::ToWhole(goal);
 		for (int turn = 0; turn < 200 && !registry.AllOf<MoveStateOrbitTag>(_walker); ++turn)
 		{
 			Locator::pathfindingSystem::value().Update();

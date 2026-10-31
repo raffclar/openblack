@@ -21,10 +21,13 @@
 #include "ECS/Components/FishFarm.h"
 #include "ECS/Components/Town.h"
 #include "ECS/Components/Transform.h"
+#include "ECS/PlayerTowns.h"
 #include "ECS/Registry.h"
+#include "ECS/ScriptFind.h"
 #include "ECS/Systems/FishFarmSystemInterface.h"
 #include "ECS/ThingMapPlace.h"
 #include "Locator.h"
+#include "Utils.h"
 
 using namespace openblack;
 using namespace openblack::ecs::archetypes;
@@ -35,21 +38,20 @@ namespace
 /// The middle of a map cell, in 1/65536 of a cell
 constexpr int32_t k_HalfCell = 0x8000;
 
-/// The town nearest a point across the land, of any player or none
-entt::entity NearestTown(glm::vec2 point)
+/// The town nearest a map position by the game's map distance, of any player or none. Each player's town list in turn
+/// and the neutral list last: the first met wins a tie.
+entt::entity NearestTown(const map_coords::MapCoords& from)
 {
-	entt::entity nearest = entt::null;
-	float best = std::numeric_limits<float>::max();
-	Locator::entitiesRegistry::value().Each<const Town, const Transform>(
-	    [&](entt::entity entity, const Town&, const Transform& transform) {
-		    const float distance = glm::distance(glm::xz(transform.position), point);
-		    if (distance < best)
-		    {
-			    best = distance;
-			    nearest = entity;
-		    }
-	    });
-	return nearest;
+	const auto& registry = Locator::entitiesRegistry::value();
+	std::vector<ecs::script_find::Candidate> ordered;
+	for (const auto town : ecs::player_towns::AllInOrder(registry))
+	{
+		if (const auto* transform = registry.TryGet<const Transform>(town))
+		{
+			ordered.push_back({.entity = town, .at = map_coords::FromMetres(glm::xz(transform->position))});
+		}
+	}
+	return ecs::script_find::FindNearestTown(from, std::numeric_limits<float>::max(), ordered);
 }
 
 /// Where the land's own altitude is that of the sea bed, with nothing raised above it
@@ -73,13 +75,15 @@ entt::entity FishFarmArchetype::Create(const glm::vec3& position)
 	const auto centre = map_coords::ToWorld(island, coords);
 
 	const auto entity = registry.Create();
+	// It takes its place in the order of the things made
+	TakeThingMadePlace();
 	registry.Assign<Transform>(entity, centre, glm::mat3(1.0f), glm::vec3(1.0f));
 	ecs::thing_map_place::Keep(registry, entity, {.x = coords.x, .z = coords.z});
 
 	FishFarm farm;
 	farm.place = {coords.x, coords.z};
 	// Whatever town a script names, it is the nearest town's
-	farm.town = NearestTown(glm::xz(centre));
+	farm.town = NearestTown(coords);
 	farm.fish = fish_farm::Full(Locator::fishFarmSystem::value().GetType());
 	if (const auto sea =
 	        fish_shoal::FindCentre(glm::xz(centre), [&island](glm::vec2 point) { return IsOpenSea(island, point); }))
@@ -89,5 +93,14 @@ entt::entity FishFarmArchetype::Create(const glm::vec3& position)
 		                                   [&random](float a, float b) { return random.CrtRandom(a, b); });
 	}
 	registry.Assign<FishFarm>(entity, std::move(farm));
+	return entity;
+}
+
+entt::entity FishFarmArchetype::CreateLoaded(const glm::vec3& position, entt::entity town, float fish)
+{
+	const auto entity = Create(position);
+	auto& farm = Locator::entitiesRegistry::value().Get<FishFarm>(entity);
+	farm.town = town;
+	farm.fish = fish;
 	return entity;
 }

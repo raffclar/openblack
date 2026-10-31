@@ -15,6 +15,7 @@
 
 #include <glm/vec2.hpp>
 
+#include "Creature/CreatureLandTilt.h"
 #include "Creature/CreatureLocomotion.h"
 
 using namespace openblack;
@@ -128,6 +129,12 @@ GameHeading cave_creature::HeadingTowards(const glm::vec3& from, const glm::vec3
 bool cave_creature::MustTurn(GameHeading heading, GameHeading wanted)
 {
 	return std::abs(wanted.Radians() - heading.Radians()) >= k_FacingWithin;
+}
+
+glm::mat4 cave_creature::Placement(const glm::vec3& position, const glm::mat3& rotation, const glm::vec3& scale)
+{
+	// All four heights of the floor are the same, so each slope is zero
+	return creature_land_tilt::Placement(position, rotation, scale, creature_land_tilt::Tilt {});
 }
 
 glm::vec3 cave_creature::PointerPoint(const glm::vec3& eye, const glm::vec3& onNearPlane, float nearDistance)

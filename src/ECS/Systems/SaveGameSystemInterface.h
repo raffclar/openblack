@@ -21,6 +21,8 @@
 
 #include <ChallengePictureFiles.h>
 
+#include "Temple/SaveGameRoomRules.h"
+
 namespace openblack::ecs::systems
 {
 
@@ -82,6 +84,9 @@ public:
 	virtual bool Delete(uint32_t slot) = 0;
 	/// A file of the saved games' pictures, by its name, nothing when there is none
 	[[nodiscard]] virtual std::optional<std::vector<uint8_t>> ReadPictureFile(std::string_view name) const = 0;
+	/// What the save game room's list and small pictures come from now. The stamp changes when the game starts to write a
+	/// save or the picture of a slot, deletes a save, or when the player or the land changes.
+	[[nodiscard]] virtual temple::save_game_room::SavedGamesStamp GetSavedGamesStamp() const = 0;
 	/// After a load of a world file in the game's layout: the creatures of the file, and whether openblack writes their
 	/// records with the same bytes now
 	[[nodiscard]] virtual std::vector<VanillaCheck> CheckVanillaRecords() const = 0;
@@ -89,6 +94,14 @@ public:
 	/// The whole world at the end of the last turn, as the bytes of a world file in openblack's own layout, with no file
 	/// and no picture. The game server sends it to a player who comes back to a network game.
 	[[nodiscard]] virtual std::vector<uint8_t> WorldState() { return {}; }
+	/// The same bytes as WorldState, in two parts. The game thread takes copies of the world now. The function that it
+	/// gives makes the bytes from the copies later, on another thread, while the world turns.
+	/// Makes ready the data that each world state uses, so that the first world state takes no more time than the next
+	virtual void PrepareWorldState() {}
+	[[nodiscard]] virtual std::function<std::vector<uint8_t>()> WorldStateLater()
+	{
+		return [] { return std::vector<uint8_t> {}; };
+	}
 	/// Puts back the whole world from the bytes that WorldState gave. The land of the bytes starts again, and the world
 	/// goes on from the turn of the bytes. Returns whether the world loaded.
 	virtual bool LoadWorldState(std::span<const uint8_t> /*bytes*/) { return false; }
@@ -107,9 +120,21 @@ public:
 	[[nodiscard]] virtual bool HasExitSave() const = 0;
 	/// The end of a game turn: the game autosaves when an autosave is due
 	virtual void EndTurn() = 0;
-	/// The keys of the quick save and the quick load. Returns whether the game saved or loaded.
-	virtual bool QuickSave() = 0;
-	virtual bool QuickLoad() = 0;
+	/// The quick save key. When the rules let the key save, it keeps the turn of the key and returns true. Then the
+	/// key sends the command of the quick save.
+	virtual bool PressQuickSave() = 0;
+	/// The quick load key. Returns true when the rules let the key load. Then the key sends the command of the quick load.
+	virtual bool PressQuickLoad() = 0;
+	/// The command of the quick save, at its turn: the game saves into the quick save slot. Returns whether it wrote
+	/// every file of the world.
+	virtual bool DoQuickSave() = 0;
+	/// The command of the quick load, at its turn: the game loads the quick save slot after the draw of the frame
+	virtual void DoQuickLoad() = 0;
+	/// Whether a command asked for a load that waits for the end of the frame
+	[[nodiscard]] virtual bool LoadAsked() const = 0;
+	/// At the end of the frame, after its draw: the game loads the slot that a command asked for. Returns whether it
+	/// loaded.
+	virtual bool LoadAskedSlot() = 0;
 	/// A new land starts: the turns go from zero again, so the turn of the last autosave does too
 	virtual void NewLand() = 0;
 	/// Whether a picture of the screen that the system asked for is not back yet

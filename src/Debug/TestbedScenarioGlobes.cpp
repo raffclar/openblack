@@ -36,6 +36,20 @@ void AddDispensers(std::vector<Scenario>& all)
 	                   {.type = MagicType::LightningBolt, .offset = {0.0f, 25.0f}},
 	                   {.type = MagicType::Food, .offset = {10.0f, 25.0f}, .charged = false}},
 	});
+
+	all.push_back({
+	    .id = "miracles.dispenser_swirl_frames",
+	    .name = "A dispenser swirl close up, stepped in the drawn frames",
+	    .facet = Facet::Miracles,
+	    .description = "One fire dispenser close up, with the camera still. Its swirl moves on in each frame that draws "
+	                   "the dispenser, no more often than 60 times a second, not once a turn.",
+	    .expected = "The stars of the disk under the dispenser creep round and outwards smoothly, with no jerk ten times a "
+	                "second. They stop when the dispenser is off the screen and the camera does not move. Their random "
+	                "numbers are only this computer's, so the world stays the same.",
+	    .environment = {.dispenserGrid = false},
+	    .framing = {.shot = Shot::Placed, .eye = {0.0f, 9.0f, 14.0f}, .look = {0.0f, 0.0f, 25.0f}},
+	    .dispensers = {{.type = MagicType::Fireball, .offset = {0.0f, 25.0f}}},
+	});
 }
 
 /// The miracles that the challenges of the first land give as dispensers, a row of them this far apart
@@ -226,6 +240,20 @@ void AddGlobes(std::vector<Scenario>& all)
 	    .dispensers = everySeed,
 	});
 
+	all.push_back({
+	    .id = "miracles.globe_effect_frames",
+	    .name = "A fireball globe close up, its effect stepped in the drawn frames",
+	    .facet = Facet::Miracles,
+	    .description = "One fireball globe close up, with the camera still. The fireball inside steps in the frames that "
+	                   "draw the globe, no more often than 60 times a second.",
+	    .expected = "The little fireball in the globe burns as it does at 60 frames a second, also at hundreds of frames "
+	                "a second. It does not burn faster or flicker more at a high frame rate. Its random numbers are only "
+	                "this computer's, so the world stays the same.",
+	    .environment = {.dispenserGrid = false},
+	    .framing = {.shot = Shot::Placed, .eye = {0.0f, 7.0f, 15.0f}, .look = {0.0f, 5.0f, 25.0f}},
+	    .dispensers = GlobeRow({MagicType::Fireball}, 25.0f),
+	});
+
 	auto extreme = GlobeRow({MagicType::Fireball, MagicType::FireballPowerUpOne, MagicType::FireballPowerUpTwo}, 34.0f);
 	for (auto& row :
 	     {GlobeRow({MagicType::LightningBolt, MagicType::LightningBoltPowerUpOne, MagicType::LightningBoltPowerUpTwo}, 27.0f),
@@ -387,6 +415,45 @@ void AddPiles(std::vector<Scenario>& all)
 	                  .holdSeconds = 4.0f}},
 	});
 }
+
+void AddScriptDeletes(std::vector<Scenario>& all)
+{
+	// A script makes two fireball globes, as the second land's fireball challenge does, then deletes them
+	using Kind = Command::Kind;
+	using Argument = ScriptArgument;
+	constexpr int32_t k_OneShotSpell = 30;
+	constexpr int32_t k_FireballSeed = 2;
+	const auto create = [](float delay, glm::vec2 point) {
+		return Command {.kind = Kind::CallNative,
+		                .delaySeconds = delay,
+		                .script = "CREATE",
+		                .scriptArguments = {{.kind = Argument::Kind::Integer, .number = static_cast<float>(k_OneShotSpell)},
+		                                    {.kind = Argument::Kind::Integer, .number = static_cast<float>(k_FireballSeed)},
+		                                    {.kind = Argument::Kind::Position, .point = point}}};
+	};
+	const auto remove = [](float delay, size_t made, float mode) {
+		return Command {.kind = Kind::CallNative,
+		                .delaySeconds = delay,
+		                .script = "OBJECT_DELETE",
+		                .scriptArguments = {{.kind = Argument::Kind::Made, .index = made},
+		                                    {.kind = Argument::Kind::Integer, .number = mode}}};
+	};
+	all.push_back({
+	    .id = "miracles.script_deletes_globes",
+	    .name = "A script deletes fireball globes with fade and with explode",
+	    .facet = Facet::Miracles,
+	    .description = "One second in, a script makes a fireball globe 3 metres west of the point the camera looks at, "
+	                   "and another 3 metres east. Three seconds later it deletes the west globe with fade. Three "
+	                   "seconds after that it deletes the east globe with explode.",
+	    .expected = "The two globes lie on the land, each with its fireball seed spinning inside. At the first delete a "
+	                "ghost of the west globe's dome flickers out where it lay over half a second, and the globe is gone. "
+	                "At the second delete the dome of the east globe breaks into pieces that fly out, and the globe is "
+	                "gone. No globe stays.",
+	    .environment = {.dispenserGrid = false},
+	    .framing = {.shot = Shot::Placed, .eye = {0.0f, 6.0f, 12.0f}, .look = {0.0f, 0.0f, 25.0f}},
+	    .commands = {create(1.0f, {-3.0f, 25.0f}), create(0.1f, {3.0f, 25.0f}), remove(3.0f, 0, 1.0f), remove(3.0f, 1, 2.0f)},
+	});
+}
 } // namespace
 
 void testbed_scenarios::AddGlobeScenarios(std::vector<Scenario>& all)
@@ -397,4 +464,5 @@ void testbed_scenarios::AddGlobeScenarios(std::vector<Scenario>& all)
 	AddGlobes(all);
 	AddHand(all);
 	AddPiles(all);
+	AddScriptDeletes(all);
 }

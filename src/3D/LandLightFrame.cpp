@@ -15,12 +15,12 @@
 #include "3D/LandLightTable.h"
 #include "Camera/Camera.h"
 #include "ECS/Systems/AlignmentSystemInterface.h"
-#include "ECS/Systems/SkySystemInterface.h"
+#include "ECS/Systems/SkyClockSystemInterface.h"
 #include "ECS/Systems/WeatherSystemInterface.h"
 #include "EngineConfig.h"
-#include "Graphics/DetailLevel.h"
 #include "Locator.h"
 #include "Resources/ResourcesInterface.h"
+#include "Visual/DetailLevel.h"
 
 namespace openblack
 {
@@ -28,9 +28,9 @@ namespace openblack
 LandLightInputs FrameLandLightInputs()
 {
 	LandLightInputs inputs;
-	if (Locator::skySystem::has_value())
+	if (Locator::skyClockSystem::has_value())
 	{
-		inputs.skyType = Locator::skySystem::value().GetCurrentSkyType();
+		inputs.skyType = Locator::skyClockSystem::value().GetCurrentSkyType();
 	}
 	if (Locator::alignmentSystem::has_value())
 	{
@@ -45,6 +45,12 @@ LandLightInputs FrameLandLightInputs()
 	return inputs;
 }
 
+uint32_t FrameRampDivisor()
+{
+	return Locator::config::has_value() ? LandLightTable::RampDivisor(Locator::config::value().detail.lightBoost)
+	                                    : LandLightTable::k_RampDivisor;
+}
+
 uint32_t FrameLandLight(uint8_t level)
 {
 	const auto& palettes = Locator::resources::value().GetLandLightPalettes();
@@ -55,7 +61,7 @@ uint32_t FrameLandLight(uint8_t level)
 	const auto inputs = FrameLandLightInputs();
 	LandLightTable table;
 	table.Build(*palettes.Handle(LandLightPalette::k_Id.value()), inputs.skyType, inputs.alignment, inputs.overcast,
-	            inputs.flash);
+	            inputs.flash, FrameRampDivisor());
 	// The texels are red, green, blue and alpha bytes
 	const auto texel = table.GetTexels().at(level);
 	return ((texel & 0xFFu) << 16u) | (texel & 0xFF00u) | ((texel >> 16u) & 0xFFu);
@@ -73,7 +79,7 @@ FrameLightTable FrameLandLightTable()
 	const auto inputs = FrameLandLightInputs();
 	LandLightTable table;
 	table.Build(*palettes.Handle(LandLightPalette::k_Id.value()), inputs.skyType, inputs.alignment, inputs.overcast,
-	            inputs.flash);
+	            inputs.flash, FrameRampDivisor());
 	// The texels are red, green, blue and alpha bytes
 	const auto& texels = table.GetTexels();
 	for (size_t level = 0; level < texels.size(); ++level)

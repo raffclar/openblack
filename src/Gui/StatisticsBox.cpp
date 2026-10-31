@@ -34,7 +34,11 @@ namespace
 {
 using Justify = DialogPainter::Justify;
 
-constexpr int k_Small = DialogPainter::k_SmallTextSize;
+/// The small text size for the language of the install
+[[nodiscard]] int Small()
+{
+	return DialogPainter::SmallTextSize();
+}
 /// How long a graph's bars take to grow to their full size
 constexpr float k_GrowSeconds = 0.5f;
 /// The see-through foot of a vertical bar, and the edges of a row's bar
@@ -72,10 +76,10 @@ void DrawCaption(const DialogPainter& painter, const DialogRect& rect, const std
 	{
 		return;
 	}
-	painter.DrawTextWrapped({.min = {rect.min.x + 1, rect.max.y + 1}, .max = {rect.max.x + 1, rect.max.y + 1 + k_Small}}, true,
-	                        caption, k_Small, k_Shadow);
-	painter.DrawTextWrapped({.min = {rect.min.x, rect.max.y}, .max = {rect.max.x, rect.max.y + k_Small}}, true, caption,
-	                        k_Small, hovered ? DialogPainter::k_HoverColour : k_White);
+	painter.DrawTextWrapped({.min = {rect.min.x + 1, rect.max.y + 1}, .max = {rect.max.x + 1, rect.max.y + 1 + Small()}}, true,
+	                        caption, Small(), k_Shadow);
+	painter.DrawTextWrapped({.min = {rect.min.x, rect.max.y}, .max = {rect.max.x, rect.max.y + Small()}}, true, caption,
+	                        Small(), hovered ? DialogPainter::k_HoverColour : k_White);
 }
 
 /// The value at the pointer's height, written with a shadow by the graph's left edge
@@ -83,8 +87,8 @@ void DrawReadout(const DialogPainter& painter, const DialogRect& rect, int point
 {
 	constexpr int k_Width = 100;
 	const auto words = Widen(text);
-	painter.DrawText({rect.min.x - 1, pointerY - (k_Small / 2) + 1}, k_Width, Justify::Right, words, k_Small, k_Shadow);
-	painter.DrawText({rect.min.x - 2, pointerY - (k_Small / 2)}, k_Width, Justify::Right, words, k_Small, k_White);
+	painter.DrawText({rect.min.x - 1, pointerY - (Small() / 2) + 1}, k_Width, Justify::Right, words, Small(), k_Shadow);
+	painter.DrawText({rect.min.x - 2, pointerY - (Small() / 2)}, k_Width, Justify::Right, words, Small(), k_White);
 }
 
 std::string Printed(const char* format, double value)
@@ -476,7 +480,7 @@ StatisticsBox::StatisticsBox(const TextDatabase& texts, const GameFont& font, st
 	// The box's tabs are labelled in small text
 	for (auto& tab : tabs)
 	{
-		tab.textSize = k_Small;
+		tab.textSize = Small();
 	}
 	_dialog = std::make_unique<Dialog>(std::move(tabs), static_cast<size_t>(Tab::Player), k_Box);
 	auto& dialog = *_dialog;
@@ -491,7 +495,7 @@ StatisticsBox::StatisticsBox(const TextDatabase& texts, const GameFont& font, st
 	};
 	dialog.Add<StaticText>(DialogRect {.min = {40, 60}, .max = {760, 88}},
 	                       std::u16string(texts.Get("HELP_TEXT_DIALOG_ADDITION_61")), StaticText::Layout::Centre,
-	                       DialogPainter::k_MidTextSize);
+	                       DialogPainter::MidTextSize());
 	dialog
 	    .Add<BigButton>(font, glm::ivec2 {20, 530}, 40, std::u16string(texts.Get("HELP_TEXT_DIALOG_TATOOBACK")),
 	                    BigButton::LabelSide::Right, BigButton::Look::LeftArrow)
@@ -506,7 +510,7 @@ StatisticsBox::StatisticsBox(const TextDatabase& texts, const GameFont& font, st
 	                                    std::u16string(texts.Get("HELP_TEXT_PAUSE_STATS_05")), true);
 	_population = &dialog.Add<LineGraph>(DialogRect {.min = {40, 230}, .max = {510, 330}},
 	                                     std::u16string(texts.Get("HELP_TEXT_PAUSE_STATS_06")), false);
-	_list = &dialog.Add<List>(font, DialogRect {.min = {40, 365}, .max = {760, 515}}, DialogPainter::k_SmallTextSize, false,
+	_list = &dialog.Add<List>(font, DialogRect {.min = {40, 365}, .max = {760, 515}}, DialogPainter::SmallTextSize(), false,
 	                          true, true);
 	_list->drawOver = [this](const DialogPainter& painter, const List::ItemPlace& place) { DrawRow(painter, place); };
 	_list->onClick = [this] {
@@ -715,20 +719,20 @@ void StatisticsBox::DrawRow(const DialogPainter& painter, const List::ItemPlace&
 		for (size_t i = 0; i < values; ++i)
 		{
 			painter.DrawText({ColumnCentre(place.right, values, i), y}, width * 5, Justify::Centre,
-			                 Widen(Format(row, row.values[i])), k_Small, PlayerColour(row.players[i], _figures.landNumber));
+			                 Widen(Format(row, row.values[i])), Small(), PlayerColour(row.players[i], _figures.landNumber));
 		}
 	}
 	if (const auto total = Total(row); total.has_value())
 	{
 		painter.DrawText({ColumnCentre(place.right, values, values), y}, width * 5, Justify::Centre, Widen(Format(row, *total)),
-		                 k_Small, k_TotalColour);
+		                 Small(), k_TotalColour);
 	}
 	// The first row of one value that shows writes "Total" over the column of the total, one small line above the list
 	if (values == 1 && !_totalHeadingDrawn)
 	{
 		_totalHeadingDrawn = true;
-		painter.DrawText({ColumnCentre(place.right, values, values), _list->rect.min.y - k_Small}, width * 5, Justify::Centre,
-		                 _totalLabel, k_Small, k_TotalColour);
+		painter.DrawText({ColumnCentre(place.right, values, values), _list->rect.min.y - Small()}, width * 5, Justify::Centre,
+		                 _totalLabel, Small(), k_TotalColour);
 	}
 }
 

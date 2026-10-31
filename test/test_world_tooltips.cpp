@@ -66,6 +66,46 @@ TEST(WorldToolTips, PrayerEnergyIsWhatTheSiteStores)
 	EXPECT_EQ(Compose(energy.index, u"Prayer Energy: %3.0f", PrayerEnergy(0.0f).first, std::nullopt), u"Prayer Energy:   0");
 }
 
+// A built workshop shows the part of its scaffold that it made, cut to a whole percent below 100. The hand shows it only
+// in the influence. A workshop with damage has no number.
+TEST(WorldToolTips, AWorkshopShowsThePartOfItsScaffoldThatItMade)
+{
+	const auto half = ProductionCompleted(true, 100, 200.0f);
+	ASSERT_TRUE(half.has_value());
+	EXPECT_EQ(half->index, k_ProductionCompleted);
+	EXPECT_DOUBLE_EQ(half->first, 50.0);
+	EXPECT_FALSE(half->second.has_value());
+	// The game cuts 99.6 to 99, and 57.14 to 57
+	EXPECT_DOUBLE_EQ(ProductionCompleted(true, 1, 250.0f)->first, 99.0);
+	EXPECT_DOUBLE_EQ(ProductionCompleted(true, 3, 7.0f)->first, 57.0);
+	// A new scaffold shows 0. A workshop that makes no scaffold also shows 0, because 100 becomes 0.
+	EXPECT_DOUBLE_EQ(ProductionCompleted(true, 200, 200.0f)->first, 0.0);
+	EXPECT_DOUBLE_EQ(ProductionCompleted(true, 0, 200.0f)->first, 0.0);
+	EXPECT_FALSE(ProductionCompleted(false, 100, 200.0f).has_value());
+	EXPECT_EQ(Compose(k_ProductionCompleted, u"Production Completed: %3.0f%%", half->first, std::nullopt),
+	          u"Production Completed:  50%");
+	EXPECT_FALSE(Shows(Subject::Workshop, false));
+	EXPECT_TRUE(Shows(Subject::Workshop, true));
+}
+
+// A sign of a need shows the level of the hunger and of the life as a percentage, and the wood that a workshop requires.
+// The sign of the people that hide has no words of its own and shows "Pick Up".
+TEST(WorldToolTips, ASignOfANeedShowsItsLevelOrTheWoodRequired)
+{
+	const auto food = NeedsSign(NeedsRow::Hunger, 0.26f, 7);
+	EXPECT_EQ(food.index, k_FoodDesire);
+	EXPECT_EQ(food.first, static_cast<double>(0.26f * 100.0f));
+	EXPECT_EQ(Compose(food.index, u"Food Desire: %3.0f%%", food.first, std::nullopt), u"Food Desire:  26%");
+	EXPECT_EQ(NeedsSign(NeedsRow::Life, 0.5f, 7).index, k_RestDesire);
+	EXPECT_EQ(NeedsSign(NeedsRow::Life, 0.5f, 7).first, 50.0);
+	const auto wood = NeedsSign(NeedsRow::WorkshopWood, 0.9f, 250);
+	EXPECT_EQ(wood.index, k_WoodRequired);
+	EXPECT_EQ(wood.first, 250.0);
+	EXPECT_EQ(NeedsSign(NeedsRow::WorkshopWood, 0.0f, 0xFFFFFFFFu).first, static_cast<double>(4294967296.0f));
+	EXPECT_EQ(NeedsSign(NeedsRow::Hiding, 0.9f, 250).index, k_PickUp);
+	EXPECT_FALSE(NeedsSign(NeedsRow::Hunger, 0.5f, 0).second.has_value());
+}
+
 TEST(WorldToolTips, PopulationAsPeopleOverPlaces)
 {
 	const auto population = Population(12, 34);
@@ -85,6 +125,12 @@ TEST(WorldToolTips, PilesAndHeldAmounts)
 	EXPECT_EQ(PileAmount(false, 1).index, k_WoodAmount);
 	EXPECT_EQ(HeldAmount(7).index, k_HeldAmount);
 	EXPECT_EQ(Compose(k_HeldAmount, u"Amount: %3.0f", 7.0, std::nullopt), u"Amount:   7");
+}
+
+TEST(WorldToolTips, AScaffoldShowsItsWorthAsAWholeNumber)
+{
+	EXPECT_EQ(Compose(k_ScaffoldValue, u"Scaffold Value %d", 3.0, std::nullopt), u"Scaffold Value 3");
+	EXPECT_EQ(Compose(k_ScaffoldValue, u"Scaffold Value %d", 12.0, std::nullopt), u"Scaffold Value 12");
 }
 
 TEST(WorldToolTips, AScaffoldOverAPlannedGraveyardNamesIt)
@@ -228,7 +274,7 @@ TEST(WorldToolTips, TheOwnDispenserTakesAHeldMiracleThatDidNotCastBefore)
 
 TEST(WorldToolTips, TheTemplesHealthAndTheVillageCentresTipsShowAnywhere)
 {
-	for (const auto subject : {Subject::Temple, Subject::VillageCentre, Subject::OwnCreature})
+	for (const auto subject : {Subject::Temple, Subject::VillageCentre, Subject::OwnCreature, Subject::NeedsSign})
 	{
 		EXPECT_FALSE(NeedsInfluence(subject));
 		EXPECT_TRUE(Shows(subject, true));

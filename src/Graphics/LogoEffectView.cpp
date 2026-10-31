@@ -20,10 +20,10 @@
 #include <glm/mat4x4.hpp>
 
 #include "3D/L3DSkinFormat.h"
-#include "Graphics/RenderPass.h"
 #include "Graphics/RendererInterface.h"
 #include "Graphics/ShaderManager.h"
 #include "Locator.h"
+#include "Visual/RenderPass.h"
 
 namespace openblack::graphics
 {
@@ -197,7 +197,8 @@ void LogoEffectView::Draw(const Scene& scene)
 	bgfx::setViewTransform(pass, &view[0][0], &projection[0][0]);
 	bgfx::touch(pass);
 
-	const auto* program = Locator::rendererInterface::value().GetShaderManager().GetShader("Text3D");
+	const auto* shaders = Locator::rendererInterface::value().GetShaderManager();
+	const auto* program = shaders != nullptr ? shaders->GetShader("Text3D") : nullptr;
 	const auto& layout = Layout();
 	// The sky sphere, unlit, in the sky's colour
 	const auto vertexCount = static_cast<uint32_t>(_skyVertices.size());

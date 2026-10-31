@@ -17,6 +17,7 @@
 #include <gtest/gtest.h>
 
 #include "Audio/AudioManagerInterface.h"
+#include "Audio/GameSoundRequests.h"
 #include "Camera/Camera.h"
 #include "ECS/Components/HandGrab.h"
 #include "ECS/Components/SoundTag.h"
@@ -176,6 +177,7 @@ protected:
 	{
 		Locator::entitiesRegistry::emplace<ecs::Registry>();
 		Locator::audio::emplace<FakeAudio>();
+		Locator::sounds::emplace<audio::GameSoundRequests>();
 		Locator::resources::emplace<resources::Resources>();
 		Locator::camera::emplace(glm::vec3(0.0f));
 		Locator::camera::value().SetOrigin(glm::vec3(0.0f));
@@ -193,6 +195,7 @@ protected:
 	{
 		Locator::camera::reset();
 		Locator::resources::reset();
+		Locator::sounds::reset();
 		Locator::audio::reset();
 		Locator::entitiesRegistry::reset();
 	}
@@ -496,7 +499,7 @@ TEST_F(SoundTags, AMovedSoundKeepsItsOffset)
 }
 
 // A saved game loads: the sounds of points and the sounds attached to objects do not come back, and an object's own
-// sound starts again on the next turn
+// sound starts again on the next turn. The tag keeps its count of the turns.
 TEST_F(SoundTags, AfterALoadOnlyTheObjectsOwnSoundsComeBack)
 {
 	auto& registry = Locator::entitiesRegistry::value();
@@ -512,9 +515,13 @@ TEST_F(SoundTags, AfterALoadOnlyTheObjectsOwnSoundsComeBack)
 	_tags.ProcessTurn(glm::vec3(0.0f));
 	ASSERT_TRUE(registry.Get<ecs::components::SoundTag>(lantern).emitter != entt::null);
 	const auto before = Audio().emitters.size();
+	const auto turns = registry.Get<ecs::components::SoundTag>(lantern).turns;
 
 	_tags.ForgetSavedSounds();
+	_tags.ForgetUnclaimedSounds();
 	EXPECT_FALSE(registry.Valid(attached));
+	// The count of the turns is a part of the synced world, so the load keeps it
+	EXPECT_EQ(registry.Get<ecs::components::SoundTag>(lantern).turns, turns);
 	EXPECT_TRUE(_tags.PointSounds().empty());
 	EXPECT_TRUE(registry.Valid(box));
 	EXPECT_TRUE(registry.Get<ecs::components::SoundTag>(lantern).emitter == entt::null);
@@ -522,6 +529,33 @@ TEST_F(SoundTags, AfterALoadOnlyTheObjectsOwnSoundsComeBack)
 	_tags.ProcessTurn(glm::vec3(0.0f));
 	EXPECT_EQ(Audio().emitters.size(), before + 1);
 	EXPECT_TRUE(registry.Get<ecs::components::SoundTag>(lantern).emitter != entt::null);
+}
+
+// A load attaches a sound to an object again, as a creature's hum: the sound takes back the tag that it had, so that a
+// save after the load keeps the same entities. A sound that the load does not attach again loses its tag.
+TEST_F(SoundTags, ASoundThatALoadAttachesAgainTakesBackItsTag)
+{
+	auto& registry = Locator::entitiesRegistry::value();
+	const auto creature = CreateObjectAt({20.0f, 0.0f, 0.0f});
+	const auto box = CreateObjectAt({30.0f, 0.0f, 0.0f});
+	const auto hum = _tags.AttachObjectSound(creature, k_Sound, true);
+	const auto knock = _tags.AttachObjectSound(box, k_Sound, false);
+	_tags.ProcessTurn(glm::vec3(0.0f));
+	registry.Get<ecs::components::SoundTag>(hum).active = false;
+
+	_tags.ForgetSavedSounds();
+	EXPECT_EQ(_tags.AttachObjectSound(creature, k_Sound, true), hum);
+	_tags.ForgetUnclaimedSounds();
+	EXPECT_TRUE(registry.Valid(hum));
+	EXPECT_FALSE(registry.Valid(knock));
+	// The tag starts again as a new tag does
+	const auto& tag = registry.Get<const ecs::components::SoundTag>(hum);
+	EXPECT_TRUE(tag.active);
+	EXPECT_EQ(tag.owner, creature);
+	EXPECT_TRUE(tag.emitter == entt::null);
+	EXPECT_EQ(_tags.TurnOrder(), (std::vector<entt::entity> {hum}));
+	// Out of a load, each attach makes a new tag
+	EXPECT_NE(_tags.AttachObjectSound(creature, k_Sound, true), hum);
 }
 
 // The tags of objects and the sounds at points are one list: a new tag goes first, and each turn does the newest first

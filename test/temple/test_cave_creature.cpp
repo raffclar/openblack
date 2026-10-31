@@ -9,9 +9,11 @@
 
 #include <map>
 
+#include <glm/gtc/matrix_transform.hpp>
 #include <gtest/gtest.h>
 
 #include "Creature/CaveCreature.h"
+#include "Creature/CreatureLandTilt.h"
 #include "Creature/CreatureLocomotion.h"
 
 using namespace openblack;
@@ -243,4 +245,35 @@ TEST(CaveCreature, TheLeftButtonStartsTheFidgetsAgain)
 	EXPECT_EQ(state.fidgets, 0u);
 	EXPECT_FLOAT_EQ(state.idleMs, 20100.0f);
 	EXPECT_TRUE(body.body.endWanted);
+}
+
+TEST(CaveCreature, TheLevelFloorGivesNoLean)
+{
+	// The floor of the cave is at the seat's height at the four points that a lean reads
+	const float seat = k_Places.seat.y;
+	const creature_land_tilt::Heights level {.plusX = seat, .plusZ = seat, .minusX = seat, .minusZ = seat};
+	for (const float radius : {0.05f, 1.0f, 7.5f})
+	{
+		const auto tilt = creature_land_tilt::FromHeights(level, radius);
+		EXPECT_EQ(tilt.alongX, 0.0f);
+		EXPECT_EQ(tilt.alongZ, 0.0f);
+	}
+}
+
+TEST(CaveCreature, ThePlacementIsTheTurnScaledAtTheExactPosition)
+{
+	const glm::vec3 position {10.3f, -24.1f, -3.7f};
+	const auto rotation = glm::mat3(glm::rotate(glm::mat4(1.0f), 2.3f, glm::vec3(0.0f, 1.0f, 0.0f)));
+	const glm::vec3 scale {1.7f};
+	const auto placement = Placement(position, rotation, scale);
+	// The matrix keeps the position as it is. It does not turn the position and then turn it back.
+	EXPECT_EQ(glm::vec3(placement[3]), position);
+	EXPECT_EQ(placement[3].w, 1.0f);
+	for (int axis = 0; axis < 3; ++axis)
+	{
+		EXPECT_EQ(glm::vec3(placement[axis]), rotation[axis] * scale[axis]);
+		EXPECT_EQ(placement[axis].w, 0.0f);
+	}
+	// It is the placement of a creature on level ground
+	EXPECT_EQ(placement, creature_land_tilt::Placement(position, rotation, scale, {}));
 }

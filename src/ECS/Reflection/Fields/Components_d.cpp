@@ -19,6 +19,7 @@
 #include "ECS/Components/DetailMeshes.h"
 #include "ECS/Components/Disciple.h"
 #include "ECS/Components/DrawImportance.h"
+#include "ECS/Components/DrawnHeight.h"
 #include "ECS/Components/DrinkWaypoint.h"
 #include "ECS/Components/DrinkingWater.h"
 #include "ECS/Reflection/ComponentReflection.h"
@@ -69,6 +70,11 @@ void openblack::ecs::reflection::RegisterFields_Components_d(entt::meta_ctx& con
 	    .Field<&components::DanceGroups::shared>("shared")
 	    .Field<&components::DanceGroups::round>("round")
 	    .Field<&components::DanceGroups::roundLength>("roundLength");
+	Reflect<components::DanceHand>(context)
+	    .Field<&components::DanceHand::nearTurns>("nearTurns")
+	    .Field<&components::DanceHand::cameraWanted>("cameraWanted")
+	    .Field<&components::DanceHand::cameraMade>("cameraMade")
+	    .Field<&components::DanceHand::cameraAsked>("cameraAsked");
 	Reflect<components::Dance>(context)
 	    .Field<&components::Dance::type>("type")
 	    .Field<&components::Dance::place>("place")
@@ -87,10 +93,7 @@ void openblack::ecs::reflection::RegisterFields_Components_d(entt::meta_ctx& con
 	    .Field<&components::Dance::dancers>("dancers")
 	    .Field<&components::Dance::onTheirWay>("onTheirWay")
 	    .Field<&components::Dance::firstDancerTurn>("firstDancerTurn")
-	    .Field<&components::Dance::handNearTurns>("handNearTurns")
-	    .Field<&components::Dance::cameraWanted>("cameraWanted")
-	    .Field<&components::Dance::cameraMade>("cameraMade")
-	    .Field<&components::Dance::cameraAsked>("cameraAsked")
+	    .Field<&components::Dance::hands>("hands")
 	    .Field<&components::Dance::groups>("groups")
 	    .Field<&components::Dance::file>("file");
 	Reflect<components::Dancer>(context).Field<&components::Dancer::dance>("dance").Field<&components::Dancer::group>("group");
@@ -126,6 +129,7 @@ void openblack::ecs::reflection::RegisterFields_Components_d(entt::meta_ctx& con
 	    .Field<&components::DiscipleMark::villager>("villager")
 	    .Field<&components::DiscipleMark::symbol>("symbol");
 	Reflect<components::DrawImportance>(context).Field<&components::DrawImportance::importance>("importance");
+	Reflect<components::DrawnHeight>(context).Field<&components::DrawnHeight::y>("y");
 	Reflect<components::DrinkWaypoint>(context).Field<&components::DrinkWaypoint::number>("number");
 	Reflect<components::DrinkingWater>(context).Field<&components::DrinkingWater::place>("place");
 }

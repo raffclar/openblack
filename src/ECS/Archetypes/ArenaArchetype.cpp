@@ -21,7 +21,7 @@
 #include "ECS/Components/CreatureArena.h"
 #include "ECS/Components/Transform.h"
 #include "ECS/Registry.h"
-#include "ECS/Systems/ParticleSystemInterface.h"
+#include "ECS/Systems/EffectRequestSystemInterface.h"
 #include "ECS/Systems/ReactionSystemInterface.h"
 #include "ECS/ThingMapPlace.h"
 #include "Locator.h"
@@ -43,9 +43,9 @@ std::shared_ptr<particles::LightSheet> ArenaArchetype::MakeRing(const glm::ivec2
 	ring->SetSpread(creature_arena::k_RingSpread);
 	ring->SetStrength(creature_arena::k_RingStrength);
 	ring->SetHidden(true);
-	if (Locator::particleSystem::has_value())
+	if (Locator::effectRequestSystem::has_value())
 	{
-		Locator::particleSystem::value().AddLightSheet(ring);
+		Locator::effectRequestSystem::value().AddLightSheet(ring);
 	}
 	return ring;
 }

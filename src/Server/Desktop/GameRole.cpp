@@ -13,7 +13,9 @@
 #include <chrono>
 #include <fstream>
 #include <iterator>
+#include <memory>
 #include <random>
+#include <set>
 #include <thread>
 #include <utility>
 #include <vector>
@@ -24,8 +26,10 @@
 
 #include "Common/BuildVersion.h"
 #include "Online/Desktop/CurlHttpClient.h"
+#include "Server/Desktop/Sha256SessionHasher.h"
 #include "Server/Desktop/SocketWebSocketServer.h"
 #include "Server/Ed25519.h"
+#include "Server/LobbyBans.h"
 #include "Server/LobbyStatus.h"
 #include "Server/TicketCheck.h"
 
@@ -85,6 +89,40 @@ struct GameRole::Parts
 	std::chrono::steady_clock::time_point nextReport {};
 	bool reporting {false};
 	bool listed {false};
+	/// The bans of the server, which the server reads from the lobby with each status report
+	std::unique_ptr<lobby_bans::Reader> bans;
+	/// The land that the players do not have, which goes to the lobby once (deviation 169)
+	std::optional<lobby_status::CustomMap> customMap;
+	std::string mapAddress;
+	std::chrono::steady_clock::time_point nextMapSend {};
+	bool mapSending {false};
+	bool mapSent {false};
+
+	void SendMap()
+	{
+		if (!lobby || !customMap.has_value() || mapSending || mapSent || std::chrono::steady_clock::now() < nextMapSend)
+		{
+			return;
+		}
+		mapSending = true;
+		online::HttpRequest request {.method = online::HttpMethod::Put,
+		                             .url = mapAddress,
+		                             .headers = {{"Content-Type", "application/octet-stream"}},
+		                             .body = customMap->bytes,
+		                             .large = true};
+		lobby->Send(std::move(request), [this](online::HttpResponse&& response) {
+			mapSending = false;
+			mapSent = response.status == 200 || response.status == 201;
+			if (mapSent)
+			{
+				SPDLOG_LOGGER_INFO(spdlog::get("game"), "The lobby took the map {} of the room", customMap->file);
+				return;
+			}
+			nextMapSend = std::chrono::steady_clock::now() + lobby_status::k_MapAgainAfter;
+			SPDLOG_LOGGER_WARN(spdlog::get("game"), "The lobby did not take the map {} (status {}): {}", customMap->file,
+			                   response.status, response.Text().substr(0, 200));
+		});
+	}
 
 	void Report(lobby_status::Phase phase)
 	{
@@ -99,6 +137,10 @@ struct GameRole::Parts
 		                             .url = statusAddress,
 		                             .headers = {{"Content-Type", "application/json"}},
 		                             .body = std::vector<uint8_t>(text.begin(), text.end())};
+		if (bans && phase != lobby_status::Phase::Exiting)
+		{
+			bans->Fetch();
+		}
 		lobby->Send(std::move(request), [this](online::HttpResponse&& response) {
 			reporting = false;
 			const bool ok = response.status == 200;
@@ -160,7 +202,7 @@ uint16_t GameRole::Port() const
 }
 
 std::optional<std::string> GameRole::Start(const NetworkSettings& settings, game_socket::Start start, uint64_t landChecksum,
-                                           uint8_t godSlots)
+                                           uint8_t godSlots, std::optional<lobby_status::CustomMap> customMap)
 {
 	auto& parts = *_parts;
 	if (settings.serverId.empty())
@@ -245,6 +287,23 @@ std::optional<std::string> GameRole::Start(const NetworkSettings& settings, game
 			base.pop_back();
 		}
 		parts.statusAddress = base + "/servers/" + settings.serverId + "/status";
+		if (customMap.has_value())
+		{
+			parts.mapAddress = lobby_status::MapAddress(base, settings.serverId, *customMap);
+			parts.customMap = std::move(customMap);
+		}
+		parts.bans = std::make_unique<lobby_bans::Reader>(
+		    *parts.lobby, lobby_bans::BansAddress(settings.lobbyApi, settings.serverId), [&parts](std::set<int64_t> banned) {
+			    if (!parts.host)
+			    {
+				    return;
+			    }
+			    if (banned != parts.host->Bans())
+			    {
+				    SPDLOG_LOGGER_INFO(spdlog::get("game"), "The lobby bans {} accounts from the server", banned.size());
+			    }
+			    parts.host->SetBans(std::move(banned));
+		    });
 		parts.room = lobby_status::Room {.hostname = settings.roomName,
 		                                 .land = start.land,
 		                                 .maxGods = godSlots,
@@ -258,7 +317,9 @@ std::optional<std::string> GameRole::Start(const NetworkSettings& settings, game
 	                  .minGods = settings.minGods,
 	                  .godSlots = godSlots,
 	                  .comeBackMicroseconds = static_cast<int64_t>(settings.comeBackSeconds) * 1'000'000,
-	                  .keptTurns = settings.comeBackSeconds * 10 + 200});
+	                  .keptTurns = settings.comeBackSeconds * 10 + 200,
+	                  .testCommands = settings.testCommands,
+	                  .sessionHasher = std::make_shared<Sha256SessionHasher>()});
 	return std::nullopt;
 }
 
@@ -280,6 +341,7 @@ void GameRole::Update()
 		{
 			parts.Report(lobby_status::PhaseOf(parts.host && parts.host->Started(), false));
 		}
+		parts.SendMap();
 		parts.lobby->Poll();
 	}
 }

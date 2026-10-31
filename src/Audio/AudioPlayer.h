@@ -11,6 +11,7 @@
 
 #include <random>
 #include <string>
+#include <string_view>
 #include <unordered_map>
 #include <vector>
 
@@ -51,6 +52,11 @@ public:
 	[[nodiscard]] std::vector<BufferId> UnqueueProcessedBuffers(SourceId id) override;
 	[[nodiscard]] uint32_t GetSampleOffset(SourceId id) const override;
 	[[nodiscard]] bool IsDeviceConnected() const override;
+
+	/// Send a message of the audio library to the "audio" logger. The level is 'E', 'W' or 'I'.
+	/// The library can call this from its own threads at any time, also after the program removed the logger. Thus
+	/// the function does nothing when the logger is not there.
+	static void ForwardLibraryLog(char level, std::string_view message) noexcept;
 
 private:
 	static void SetupLogging();

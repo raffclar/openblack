@@ -16,19 +16,19 @@
 #include <entt/core/hashed_string.hpp>
 #include <spdlog/spdlog.h>
 
-#include "Audio/GameMusic.h"
 #include "ECS/Components/Creature.h"
 #include "ECS/Registry.h"
 #include "ECS/Systems/CinematicDirectorSystemInterface.h"
 #include "ECS/Systems/FilmCreatureSystemInterface.h"
 #include "ECS/Systems/HandSystemInterface.h"
 #include "ECS/Systems/PlayerSystemInterface.h"
+#include "ECS/Systems/ScriptMusicSystemInterface.h"
 #include "ECS/Systems/TimeSystemInterface.h"
 #include "FileSystem/FileSystemInterface.h"
-#include "Game.h"
-#include "Gui/GameInterface.h"
+#include "Gui/ScreenFade.h"
 #include "Locator.h"
 #include "Resources/ResourcesInterface.h"
+#include "Sound/GameMusic.h"
 #include "Video/FallingSpellAudio.h"
 
 using namespace openblack;
@@ -54,16 +54,16 @@ VideoSystem::Hooks GameHooks()
 	    .snapWideScreen = []() { Locator::cinematicDirectorSystem::value().SnapWideScreen(); },
 	    .releaseScriptMusic =
 	        []() {
-		        if (auto* game = Game::Instance(); game != nullptr && game->GetGameMusic() != nullptr)
+		        if (Locator::scriptMusicSystem::has_value())
 		        {
-			        game->GetGameMusic()->StartScriptMusic(audio::MusicType::None);
+			        Locator::scriptMusicSystem::value().Start(audio::MusicType::None);
 		        }
 	        },
 	    .forgetMusic =
 	        []() {
-		        if (auto* game = Game::Instance(); game != nullptr && game->GetGameMusic() != nullptr)
+		        if (Locator::gameMusic::has_value())
 		        {
-			        game->GetGameMusic()->ForgetPlaying();
+			        Locator::gameMusic::value().ForgetPlaying();
 		        }
 	        },
 	    .openFile = [](const std::filesystem::path& path) -> std::shared_ptr<const bink::BinkFile> {
@@ -96,15 +96,10 @@ VideoSystem::Hooks GameHooks()
 		            [&found, local](const ecs::components::Creature& creature) { found = found || creature.owner == local; });
 		        return found;
 	        },
-	    .fallingSpellPath = []() { return std::filesystem::path("Data/Spells/fall/fall.bik"); },
+	    .fallingSpellPath = []() { return std::filesystem::path(k_FallingSpellFilm); },
 	    .fallingSpellCue = [audio =
 	                            std::make_shared<video::FallingSpellAudio>()](video::FallingSpellCue cue) { audio->Play(cue); },
-	    .whiteFadeReached =
-	        []() {
-		        auto* game = Game::Instance();
-		        return game != nullptr && game->GetInterface() != nullptr &&
-		               game->GetInterface()->GetScreenFade().GetTurns() > 0;
-	        },
+	    .whiteFadeReached = []() { return Locator::screenFade::has_value() && Locator::screenFade::value().GetTurns() > 0; },
 	    .fallingSpellStarted = []() { Locator::filmCreatureSystem::value().Start(); },
 	    .fallingSpellFrame =
 	        [](int32_t filmMs, std::chrono::steady_clock::time_point now) {
@@ -124,6 +119,29 @@ VideoSystem::VideoSystem(Hooks hooks, video::DecodeMode mode)
     : _hooks(std::move(hooks))
     , _decodeMode(mode)
 {
+}
+
+void VideoSystem::RegisterScriptFilms()
+{
+	if (!_filmsEnabled || !Locator::resources::has_value() || !Locator::filesystem::has_value())
+	{
+		return;
+	}
+	auto& fileSystem = Locator::filesystem::value();
+	auto& videos = Locator::resources::value().GetVideos();
+	for (const auto film : {k_IntroFilm, k_FallingSpellFilm})
+	{
+		const std::filesystem::path path(film);
+		if (!fileSystem.Exists(path))
+		{
+			continue;
+		}
+		// The size of the file is the most that the load reads
+		std::error_code error;
+		const auto bytes = std::filesystem::file_size(fileSystem.FindPath(path), error);
+		videos.RegisterLoad(VideoId(path), error ? 0 : static_cast<size_t>(bytes), resources::VideoLoader::FromDiskTag {},
+		                    path);
+	}
 }
 
 bool VideoSystem::Play(const std::filesystem::path& path)

@@ -89,6 +89,7 @@
 #include "ECS/Map.h"
 #include "ECS/Reflection/BinaryArchive.h"
 #include "ECS/Registry.h"
+#include "ECS/ShownCreatureFaces.h"
 #include "ECS/Systems/AlignmentSystemInterface.h"
 #include "ECS/Systems/AnimatedStaticSystemInterface.h"
 #include "ECS/Systems/CreatureAnimationSystemInterface.h"
@@ -123,9 +124,8 @@ namespace
 {
 constexpr float k_TurnMs = std::chrono::duration<float, std::milli>(TimeSystemInterface::k_TurnDuration).count();
 constexpr float k_TurnSeconds = k_TurnMs / 1000.0f;
-/// Steps of the route search each turn: more on a new walk's first turn
+/// Steps of the route search on a new walk's first turn. In the other turns, the search gets the turn's share.
 constexpr int32_t k_FirstTurnSearchSteps = 256;
-constexpr int32_t k_TurnSearchSteps = 16;
 /// A route costing more than this much a unit of the straight distance, and this much besides, is given up
 constexpr float k_CostPerUnit = 2.0f;
 constexpr float k_BaseCost = 5000.0f;
@@ -287,7 +287,8 @@ void Measure(CreatureLocomotion& self, const Creature& creature, const Transform
 	// Drawn at another size than its own in a temple's pen, it keeps clear of things by its own size
 	self.shownRadius = bodyRadius * self.scale;
 	const auto shown = ShownSize(creature);
-	self.radius = shown > 0.0f ? self.shownRadius * creature_morph::ClampScale(creature.size) / shown : self.shownRadius;
+	// The game divides the two sizes first, so out of the pen the two radii are the same
+	self.radius = shown > 0.0f ? (creature_morph::ClampScale(creature.size) / shown) * self.shownRadius : self.shownRadius;
 	// While it clears a thing out of its way, it keeps clear of things by its drawn size
 	if (self.clearingWay)
 	{
@@ -1376,7 +1377,9 @@ void CreatureLocomotionSystem::PlaceWithoutWalking(entt::entity creature, glm::v
 	if (auto* animation = registry.TryGet<CreatureAnimation>(creature))
 	{
 		animation->body = {};
-		animation->face = creature_layers::DropFace(animation->face);
+		shown_creature_faces::ChangeFace(registry, creature, animation->face, [](const creature_layers::FaceLayer& face) {
+			return creature_layers::DropFace(face);
+		});
 		animation->lookAt.reset();
 		animation->yaw = {};
 		animation->pitch = {};
@@ -1440,6 +1443,15 @@ void CreatureLocomotionSystem::ResetPace(entt::entity creature)
 	}
 }
 
+void CreatureLocomotionSystem::SetKeptFraction(entt::entity creature, float fraction)
+{
+	auto& registry = Locator::entitiesRegistry::value();
+	if (auto* self = registry.TryGet<CreatureLocomotion>(creature))
+	{
+		self->fraction = fraction > 0.0f ? std::min(fraction, 1.0f) : 0.0f;
+	}
+}
+
 float CreatureLocomotionSystem::KeptFraction(entt::entity creature) const
 {
 	const auto& registry = Locator::entitiesRegistry::value();
@@ -1458,8 +1470,22 @@ bool CreatureLocomotionSystem::IsMoving(entt::entity creature) const
 	return self != nullptr && IsMovingMotion(self->motion);
 }
 
+void CreatureLocomotionSystem::ShareSearchSteps()
+{
+	size_t searching = 0;
+	Locator::entitiesRegistry::value().Each<const CreatureLocomotion>(
+	    [&searching](entt::entity /*entity*/, const CreatureLocomotion& self) {
+		    if (self.follower.IsSearching())
+		    {
+			    ++searching;
+		    }
+	    });
+	_searchShare = route::TurnSearchShare(searching);
+}
+
 void CreatureLocomotionSystem::ProcessTurn()
 {
+	ShareSearchSteps();
 	std::vector<entt::entity> walkers;
 	Locator::entitiesRegistry::value().Each<CreatureLocomotion>(
 	    [&walkers](entt::entity entity, CreatureLocomotion& /*self*/) { walkers.push_back(entity); });
@@ -1540,7 +1566,7 @@ void CreatureLocomotionSystem::CreatureTurn(entt::entity entity)
 		if (self.follower.IsSearching() && !self.searchHeld)
 		{
 			const auto first = std::exchange(self.firstSearchTurn, false);
-			switch (self.follower.Update(first ? k_FirstTurnSearchSteps : k_TurnSearchSteps, first, JoinAhead(self)))
+			switch (self.follower.Update(first ? k_FirstTurnSearchSteps : _searchShare, first, JoinAhead(self)))
 			{
 			case route::Follower::Outcome::Found:
 				if (self.motion == Motion::Planning || self.motion == Motion::Confused || self.motion == Motion::Pointing)
@@ -1611,8 +1637,10 @@ void CreatureLocomotionSystem::CreatureTurn(entt::entity entity)
 				self.fidgeted = wait.fidgeted;
 				if (turn.fidget == locomotion::Fidget::Puzzled)
 				{
-					animation.face =
-					    creature_layers::PullFace(animation.face, k_PuzzledFace, k_PuzzledMs, creature_face::Cue::Lost);
+					shown_creature_faces::ChangeFace(
+					    registry, entity, animation.face, [](const creature_layers::FaceLayer& face) {
+						    return creature_layers::PullFace(face, k_PuzzledFace, k_PuzzledMs, creature_face::Cue::Lost);
+					    });
 				}
 				else if (turn.fidget == locomotion::Fidget::Confused)
 				{

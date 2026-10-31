@@ -23,13 +23,14 @@
 #include "ECS/Components/HighDetail.h"
 #include "ECS/Components/MapCellResident.h"
 #include "ECS/Components/Temple.h"
+#include "ECS/Components/VillageTotem.h"
 #include "ECS/Components/WalkPath.h"
 #include "ECS/Map.h"
 #include "ECS/Registry.h"
 #include "EngineConfig.h"
-#include "Graphics/DetailLevel.h"
-#include "Graphics/LandDetail.h"
 #include "Locator.h"
+#include "Visual/DetailLevel.h"
+#include "Visual/LandDetail.h"
 
 using namespace openblack::ecs::systems;
 using namespace openblack::ecs::components;
@@ -115,14 +116,43 @@ void ObjectDrawListSystem::PrepareLand()
 	LoadBlocks();
 }
 
-void ObjectDrawListSystem::Update(uint32_t turn)
+void ObjectDrawListSystem::FindParts()
 {
+	_parts.Clear();
+	if (_registry == nullptr)
+	{
+		return;
+	}
+	// The draw of a totem draws its icon and its second plinth and icon. Only the test of the icon counts for the totem.
+	_registry->Each<const VillageTotem>([this](entt::entity totem, const VillageTotem& parts) {
+		for (const auto& [part, keeps] :
+		     {std::pair {parts.icon, true}, std::pair {parts.ghost, false}, std::pair {parts.ghostIcon, false}})
+		{
+			if (_registry->Valid(part))
+			{
+				_parts.Add(part, {.owner = totem, .keepsOwner = keeps});
+			}
+		}
+	});
+}
+
+void ObjectDrawListSystem::Update(uint32_t turn, bool landDrawn)
+{
+	FindParts();
 	if (!Locator::camera::has_value() || !Locator::terrainSystem::has_value() || !Locator::entitiesMap::has_value() ||
 	    _registry == nullptr)
 	{
 		// With nothing to see from, the list decides nothing
 		_view.reset();
 		_frame = {.rebuilt = true, .drawAll = true};
+		return;
+	}
+	if (!landDrawn)
+	{
+		// Things made since the last frame go onto their blocks now, also on a frame that does not draw the land. The
+		// blocks, their last showing, the clock's camera, the requests and the list stay as they are.
+		static_cast<void>(Locator::entitiesMap::value().GetOffBlocks());
+		_frame = object_draw_list::FrameWithoutLand();
 		return;
 	}
 	LoadBlocks();
@@ -150,6 +180,10 @@ void ObjectDrawListSystem::Update(uint32_t turn)
 	// Things made since the last frame go onto their blocks now, as the game puts them there when they are made
 	static_cast<void>(Locator::entitiesMap::value().GetOffBlocks());
 	_frame = _clock.Next(turn, _view->eye, camera.GetFocus(), changed || _requests.Pending());
+	if (_frame.drawAll)
+	{
+		_keptParts.Clear();
+	}
 	if (_frame.rebuilt)
 	{
 		_requests.Rebuilt();
@@ -229,29 +263,59 @@ bool ObjectDrawListSystem::Listed(entt::entity entity) const
 	return index < _listedByIndex.size() && _listedByIndex[index] == entity;
 }
 
-bool ObjectDrawListSystem::Drawn(const Registry& registry, entt::entity entity) const
+bool ObjectDrawListSystem::Decides(const Registry& registry, entt::entity entity) const
 {
-	if (!_view.has_value())
+	if (const auto part = _parts.Of(entity))
 	{
-		return true;
+		return Decides(registry, part->owner);
 	}
 	const auto* resident = registry.TryGet<const MapCellResident>(entity);
-	if (resident == nullptr || resident->cells.empty() || DrawnOnTheirOwn(registry, entity))
+	return _view.has_value() && resident != nullptr && !resident->cells.empty() && !DrawnOnTheirOwn(registry, entity);
+}
+
+bool ObjectDrawListSystem::Drawn(const Registry& registry, entt::entity entity) const
+{
+	// A part is drawn when its owner is drawn
+	if (const auto part = _parts.Of(entity))
+	{
+		return Drawn(registry, part->owner);
+	}
+	if (!Decides(registry, entity))
 	{
 		return true;
 	}
-	if (!Listed(entity))
+	if (!_frame.landDrawn || !Listed(entity))
 	{
 		return false;
 	}
 	return _frame.drawAll || _keptByIndex[static_cast<size_t>(entt::to_entity(entity))];
 }
 
+bool ObjectDrawListSystem::NotesKept(entt::entity entity) const
+{
+	const auto part = _parts.Of(entity);
+	return part.has_value() ? part->keepsOwner && Listed(part->owner) : Listed(entity);
+}
+
 void ObjectDrawListSystem::NoteFullFrame(entt::entity entity, bool staysDrawn)
 {
-	if (_frame.drawAll && Listed(entity))
+	if (!_frame.drawAll)
 	{
-		_keptByIndex[static_cast<size_t>(entt::to_entity(entity))] = staysDrawn;
+		return;
+	}
+	// A part that stays drawn keeps its owner drawn, whatever the test of the owner says
+	if (const auto part = _parts.Of(entity))
+	{
+		if (part->keepsOwner && staysDrawn && Listed(part->owner))
+		{
+			_keptParts.Keep(part->owner);
+			_keptByIndex[static_cast<size_t>(entt::to_entity(part->owner))] = true;
+		}
+		return;
+	}
+	if (Listed(entity))
+	{
+		_keptByIndex[static_cast<size_t>(entt::to_entity(entity))] = staysDrawn || _keptParts.Keeps(entity);
 	}
 }
 
@@ -283,4 +347,6 @@ void ObjectDrawListSystem::Reset()
 	_list.clear();
 	_madeAt.reset();
 	_requests.Reset();
+	_parts.Clear();
+	_keptParts.Clear();
 }

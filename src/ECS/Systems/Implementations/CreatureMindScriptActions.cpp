@@ -22,14 +22,12 @@
 #include "ECS/Components/CreatureFight.h"
 #include "ECS/Components/CreatureMind.h"
 #include "ECS/Components/ScriptControl.h"
-#include "ECS/Components/Transform.h"
 #include "ECS/Registry.h"
 #include "ECS/Systems/CreatureAnimationSystemInterface.h"
 #include "ECS/Systems/CreatureFightSystemInterface.h"
 #include "ECS/Systems/CreatureLocomotionSystemInterface.h"
 #include "ECS/Systems/CreatureObjectActionSystemInterface.h"
 #include "ECS/Systems/MagicSystemInterface.h"
-#include "ECS/Systems/ReactionSystemInterface.h"
 #include "Locator.h"
 
 using namespace openblack;
@@ -40,9 +38,39 @@ using creature_desires::Desire;
 namespace
 {
 constexpr std::string_view k_FightAction = "Fight";
-/// The action of lying dead for good
-constexpr std::string_view k_DeadForeverAction = "DeadForever";
 } // namespace
+
+bool CreatureMindSystem::ObeyGodOrder(entt::entity creature, uint32_t action, entt::entity object)
+{
+	auto& registry = Locator::entitiesRegistry::value();
+	auto* mind = registry.Valid(creature) ? registry.TryGet<CreatureMindState>(creature) : nullptr;
+	const auto* tables = GetTables();
+	if (mind == nullptr || tables == nullptr || action >= tables->actions.size())
+	{
+		return false;
+	}
+	const bool known = registry.Valid(object);
+	if (known)
+	{
+		ComeAcrossWithWhole(creature, *mind, object);
+	}
+	EndDominantDesire(creature);
+	const bool planned = ForceActivity(creature, {.desire = Desire::ObeyPlayer,
+	                                              .activityObject = known ? BelongsTo(object) : std::nullopt,
+	                                              .action = tables->actions[action].name,
+	                                              .actionObject = known ? object : entt::null,
+	                                              .ordered = true});
+	// The order is forced and counts at its end, also when the creature could not make a plan for it. A mind that has
+	// not thought yet takes no order.
+	auto& state = registry.Get<CreatureMindState>(creature);
+	if (!planned && (!state.learnt.has_value() || !state.desires.has_value()))
+	{
+		return true;
+	}
+	state.planForced = true;
+	state.forcedPlanCounts = true;
+	return true;
+}
 
 bool CreatureMindSystem::ScriptDoAction(entt::entity creature, uint32_t action, entt::entity target,
                                         std::optional<entt::entity> with)
@@ -86,15 +114,7 @@ bool CreatureMindSystem::ScriptDoAction(entt::entity creature, uint32_t action, 
 	}
 	// The order of a script counts at the end of the plan, as the creature's own plans do
 	mind.forcedPlanCounts = true;
-	// Falling dead, those about it react to the death
-	if (name == k_DeadForeverAction && Locator::reactionSystem::has_value())
-	{
-		if (const auto* transform = registry.TryGet<const Transform>(creature))
-		{
-			Locator::reactionSystem::value().Create(
-			    {.initiator = creature, .type = Reaction::ReactToDeath, .position = transform->position});
-		}
-	}
+	// When it falls dead, the faint step itself makes the reaction to the death. The order makes no other reaction.
 	return true;
 }
 
@@ -105,11 +125,11 @@ void CreatureMindSystem::StopForScript(entt::entity creature)
 		Locator::creatureFightSystem::value().TakeForScript(creature);
 	}
 	// The step that the creature does stops as a failure. Thus a walk to a thing that the hands act on also stops, and
-	// does not start again on the next turn.
+	// does not start again on the next turn. An action that the body started plays on, and a point plays its end.
 	if (Locator::creatureObjectActionSystem::has_value() &&
 	    Locator::creatureObjectActionSystem::value().GetState(creature) == CreatureObjectActionSystemInterface::State::Busy)
 	{
-		Locator::creatureObjectActionSystem::value().Cancel(creature);
+		Locator::creatureObjectActionSystem::value().StopForPlan(creature, true);
 	}
 }
 
@@ -120,7 +140,7 @@ bool CreatureMindSystem::IsLyingDead(entt::entity creature)
 	return tables != nullptr && registry.Valid(creature) && mind_detail::IsDead(registry, creature, *tables);
 }
 
-creature_mind::HandsCheck CreatureMindSystem::CheckHandsBeforeFaint(entt::entity creature)
+creature_mind::HandsCheck CreatureMindSystem::CheckHandsBeforeAction(entt::entity creature)
 {
 	auto& registry = Locator::entitiesRegistry::value();
 	auto* mind = registry.Valid(creature) ? registry.TryGet<CreatureMindState>(creature) : nullptr;
@@ -176,12 +196,12 @@ void CreatureMindSystem::ForceFinish(entt::entity creature)
 	{
 		Locator::creatureAnimationSystem::value().Hurry(creature);
 	}
-	// What it was doing stops as a failure: it stops as the game stops a walk, drops what it does with a thing, and
-	// forgets its agenda
+	// What it was doing stops as a failure: it stops as the game stops a walk, and it forgets its agenda. An action that
+	// the body started plays on, and a point plays its end.
 	if (Locator::creatureObjectActionSystem::has_value() &&
 	    Locator::creatureObjectActionSystem::value().GetState(creature) == CreatureObjectActionSystemInterface::State::Busy)
 	{
-		Locator::creatureObjectActionSystem::value().Cancel(creature);
+		Locator::creatureObjectActionSystem::value().StopForPlan(creature, true);
 	}
 	if (Locator::creatureLocomotionSystem::has_value())
 	{

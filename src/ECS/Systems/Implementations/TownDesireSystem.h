@@ -30,9 +30,11 @@ public:
 	[[nodiscard]] float GetSignificanceToVillager(entt::entity town, TownDesireInfo desire) const override;
 	float RecomputeDesire(entt::entity town, TownDesireInfo desire) override;
 	[[nodiscard]] float FoodShortage(entt::entity town) const override;
+	[[nodiscard]] FoodNeed FoodWantedAndHeld(entt::entity town) const override;
 	[[nodiscard]] TownDesireInfo GetMostWanted(entt::entity town) const override;
 	void SetBoost(entt::entity town, TownDesireInfo desire, float boost, bool resort) override;
 	void UpdateFlags(float seconds) override;
+	void MakeFlags(entt::entity town) override;
 	void ProcessFlags() override;
 	[[nodiscard]] std::optional<FlagToolTip> GetFlagToolTip(entt::entity flag) const override;
 };

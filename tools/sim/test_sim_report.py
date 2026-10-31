@@ -12,6 +12,7 @@
 import json
 import os
 import sys
+import tempfile
 import unittest
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
@@ -197,6 +198,30 @@ class UnregisteredTests(unittest.TestCase):
 
 
 
+class LeashCommands(unittest.TestCase):
+    LINES = [
+        "[game] [info] Leash command: player 1 presses the leash key at turn 300: creature 51 wears leash 2 of player 1, "
+        "held in the hand",
+        "[game] [info] Network game: 300 turns compared with the server, 300 the same",
+        "[game] [info] Leash command: player 1 goes into the temple at turn 420: creature 51 wears no leash",
+        "[game] [info] Leash command: player 0 presses the leash key at turn 500: the player has no creature",
+    ]
+
+    def test_gives_each_command_in_its_order(self):
+        self.assertEqual(sim_report.leash_commands_in_text(self.LINES), [
+            (300, 1, "presses the leash key", "creature 51 wears leash 2 of player 1, held in the hand"),
+            (420, 1, "goes into the temple", "creature 51 wears no leash"),
+            (500, 0, "presses the leash key", "the player has no creature"),
+        ])
+
+    def test_a_command_after_the_last_common_turn_is_not_given(self):
+        self.assertEqual([command[0] for command in sim_report.leash_commands_in_text(self.LINES, 499)], [300, 420])
+
+    def test_an_observer_compares_from_the_turn_of_its_world(self):
+        commands = sim_report.leash_commands_in_text(self.LINES)
+        self.assertEqual([command[0] for command in sim_report.leash_commands_from_turn(commands, 420)], [420, 500])
+
+
 class HandDeeds(unittest.TestCase):
     LINES = [
         "[game] [info] Hand deed: the hand of player 0 scoops from thing 140",
@@ -210,6 +235,45 @@ class HandDeeds(unittest.TestCase):
         self.assertEqual(sim_report.hand_deeds_in_text(self.LINES),
                          {0: {"scoops": 1, "throws": 2}, 1: {"takes": 1}})
 
+    def test_a_gift_to_a_creature_is_a_deed_of_its_own(self):
+        lines = ["[game] [info] Hand deed: the hand of player 0 takes thing 77 at turn 300",
+                 "[game] [info] Hand deed: the hand of player 0 gives thing 77 at turn 320"]
+        self.assertEqual(sim_report.hand_deeds_in_text(lines), {0: {"takes": 1, "gives": 1}})
+
+    def test_a_deed_after_the_last_common_turn_is_not_counted(self):
+        lines = [
+            "[game] [info] Hand deed: the hand of player 1 takes thing 77 at turn 1990",
+            "[game] [info] Hand deed: the hand of player 1 puts down thing 77 at turn 1995",
+            "[game] [info] Hand deed: the hand of player 1 takes thing 78 at turn 2000",
+            "[game] [info] Hand deed: the hand of player 1 takes thing 79",
+        ]
+        self.assertEqual(sim_report.hand_deeds_in_text(lines, 1999), {1: {"takes": 2, "puts_down": 1}})
+        self.assertEqual(sim_report.hand_deeds_in_text(lines, 2000), {1: {"takes": 3, "puts_down": 1}})
+        self.assertEqual(sim_report.hand_deeds_in_text(lines), {1: {"takes": 3, "puts_down": 1}})
+
+    def test_logs_that_part_only_after_the_last_turn_are_the_same(self):
+        # The game plays on one turn after the last compared turn, and gods 2 to 4 put down at turn 101 there
+        game = [
+            "Hand deed: the hand of player 5 puts down thing 451 at turn 100",
+            "Hand deed: the hand of player 2 puts down thing 259 at turn 101",
+            "Hand deed: the hand of player 12 puts down thing 900 at turn 101",
+        ]
+        server = ["Hand deed: the hand of player 5 puts down thing 451 at turn 100"]
+        with tempfile.TemporaryDirectory() as folder:
+            paths = []
+            for name, lines in (("game.log", game), ("server.log", server)):
+                paths.append(os.path.join(folder, name))
+                with open(paths[-1], "w", encoding="utf-8") as file:
+                    file.write(chr(10).join(lines) + chr(10))
+            first, second, same = sim_report.hand_deeds_of_both(paths[0], paths[1], 100)
+            self.assertTrue(same)
+            self.assertEqual(first, {5: {"puts_down": 1}})
+            self.assertEqual(second, first)
+            # Up to the later turn, the logs do part, also for a slot above 9
+            first, second, same = sim_report.hand_deeds_of_both(paths[0], paths[1], 101)
+            self.assertFalse(same)
+            self.assertEqual(first[12], {"puts_down": 1})
+
     def test_a_missing_file_tells_of_no_deed(self):
         self.assertEqual(sim_report.hand_deeds_in_file(os.path.join(os.path.dirname(__file__), "no-such.log")), {})
 
@@ -217,6 +281,39 @@ class HandDeeds(unittest.TestCase):
         deeds = {"scoops": 1, "throws": 2}
         self.assertEqual(sim_report.missing_deeds(deeds, {"scoops": 1, "throws": 1}), {})
         self.assertEqual(sim_report.missing_deeds(deeds, {"takes": 1, "throws": 3}), {"takes": [0, 1], "throws": [2, 3]})
+
+
+
+class DecidedGameTests(unittest.TestCase):
+    def test_the_first_decided_line_gives_the_turn(self):
+        lines = ["[info] Turn 1: the god of player 2 is out of the game",
+                 "[info] [GameEndSystem.cpp:198] Turn 3: the god of player 0 is out of the game, and the game is decided",
+                 "[info] Turn 9: the god of player 1 is out of the game, and the game is decided"]
+        self.assertEqual(sim_report.decided_at_turn_in_text(lines), 3)
+        self.assertIsNone(sim_report.decided_at_turn_in_text(["[info] Turn 4: a villager is born"]))
+
+    def test_a_missing_log_tells_of_no_decision(self):
+        self.assertIsNone(sim_report.decided_at_turn_in_file(os.path.join(tempfile.gettempdir(), "no-such-log.txt")))
+
+    def test_an_input_on_a_game_decided_at_the_start_compares_nothing_of_the_hand(self):
+        self.assertIsNotNone(sim_report.hand_input_on_decided_game(True, 1))
+        self.assertIsNotNone(sim_report.hand_input_on_decided_game(True, 0))
+
+    def test_a_still_hand_or_a_later_decision_is_no_problem(self):
+        self.assertIsNone(sim_report.hand_input_on_decided_game(False, 1))
+        self.assertIsNone(sim_report.hand_input_on_decided_game(True, None))
+        self.assertIsNone(sim_report.hand_input_on_decided_game(True, 2))
+
+    def test_the_end_of_the_game_gives_the_winner_and_the_ranks(self):
+        lines = ["[12:00:01] [game] [info] Turn 600: the god of player 0 won the game\n",
+                 "[12:00:01] [game] [info] Turn 600: the god of player 0 ends the game in with a share of 1 at place 2\r\n",
+                 "[12:00:01] [game] [info] Turn 600: the god of player 1 ends the game out with a share of 0.5 at place 1\n",
+                 "[12:00:02] [game] [info] Turn 5: the god of player 1 is out of the game\n"]
+        self.assertEqual(sim_report.game_end_in_text(lines),
+                         ["Turn 600: the god of player 0 won the game",
+                          "Turn 600: the god of player 0 ends the game in with a share of 1 at place 2",
+                          "Turn 600: the god of player 1 ends the game out with a share of 0.5 at place 1"])
+        self.assertEqual(sim_report.game_end_in_file(os.path.join(tempfile.gettempdir(), "no-such-log.txt")), [])
 
 
 if __name__ == "__main__":

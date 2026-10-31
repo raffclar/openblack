@@ -9,9 +9,9 @@
 
 #include <gtest/gtest.h>
 
-#include "Graphics/RenderModes.h"
 #include "Graphics/TempleHeartLook.h"
 #include "Temple/TempleDestruction.h"
+#include "Visual/RenderModes.h"
 
 using namespace openblack::graphics;
 using namespace openblack::graphics::temple_heart_look;

@@ -13,26 +13,28 @@
 
 #include <algorithm>
 #include <string>
+#include <utility>
 
 #include <PackFile.h>
-#include <bgfx/bgfx.h>
 #include <entt/core/hashed_string.hpp>
 #include <fmt/format.h>
 #include <glm/geometric.hpp>
 
 #include "3D/L3DMesh.h"
 #include "3D/L3DSubMesh.h"
+#include "3D/LowResolutionTextures.h"
 #include "3D/TempleScroll.h"
-#include "Audio/AudioManagerInterface.h"
-#include "Audio/GameSoundEffects.h"
-#include "Audio/Sound.h"
 #include "Common/MachineClock.h"
-#include "Graphics/GraphicsHandleBgfx.h"
+#include "EngineConfig.h"
+#include "Graphics/GraphicsDeviceInterface.h"
 #include "Gui/GameFont.h"
 #include "Gui/TextDatabase.h"
 #include "Input/KeyRebinding.h"
 #include "Locator.h"
 #include "Resources/ResourcesInterface.h"
+#include "Sound/GameSoundEffects.h"
+#include "Sound/SoundId.h"
+#include "Sound/SoundRequestInterface.h"
 
 using namespace openblack;
 
@@ -141,14 +143,60 @@ TempleScrolls::~TempleScrolls()
 	{
 		if (scroll.texture)
 		{
-			bgfx::destroy(graphics::toBgfx(*scroll.texture));
+			Locator::graphicsDevice::value().Destroy(*scroll.texture);
 		}
 	}
 }
 
-void TempleScrolls::Create(const Facts& facts)
+TempleScrolls::KeptTextures::~KeptTextures()
+{
+	for (const auto& entry : _entries)
+	{
+		if (entry.has_value())
+		{
+			Locator::graphicsDevice::value().Destroy(entry->texture);
+		}
+	}
+}
+
+TempleScrolls::KeptTextures::KeptTextures(KeptTextures&& other) noexcept
+    : _entries(std::exchange(other._entries, {}))
+{
+}
+
+TempleScrolls::KeptTextures& TempleScrolls::KeptTextures::operator=(KeptTextures&& other) noexcept
+{
+	if (this != &other)
+	{
+		[[maybe_unused]] const KeptTextures old(std::move(*this));
+		_entries = std::exchange(other._entries, {});
+	}
+	return *this;
+}
+
+TempleScrolls::KeptTextures TempleScrolls::TakeTextures()
+{
+	KeptTextures kept;
+	const uint16_t side = _halfSize ? low_resolution_textures::k_HalfSide : TempleScrollTexture::k_Size;
+	for (auto& scroll : _scrolls)
+	{
+		auto& entry = kept._entries.emplace_back();
+		if (scroll.texture.has_value())
+		{
+			entry = KeptTextures::Entry {
+			    .texture = *scroll.texture, .side = side, .drawn = scroll.drawn, .textHeight = scroll.textHeight};
+			scroll.texture.reset();
+			scroll.drawn.reset();
+		}
+	}
+	return kept;
+}
+
+void TempleScrolls::Create(const Facts& facts, KeptTextures kept)
 {
 	auto& meshes = Locator::resources::value().GetMeshes();
+	_halfSize = Locator::config::has_value() && Locator::config::value().detail.lowResTextures;
+	const uint16_t side = _halfSize ? low_resolution_textures::k_HalfSide : TempleScrollTexture::k_Size;
 	for (const auto& place : k_ScrollPlaces)
 	{
 		Scroll scroll {.room = place.room, .content = place.content, .subMesh = std::nullopt, .texture = std::nullopt};
@@ -169,12 +217,27 @@ void TempleScrolls::Create(const Facts& facts)
 				}
 			}
 		}
-		if (scroll.subMesh.has_value())
+		// The texture of an earlier visit, when it has the size the scroll needs now
+		const auto index = _scrolls.size();
+		if (scroll.subMesh.has_value() && index < kept._entries.size() && kept._entries[index].has_value() &&
+		    kept._entries[index]->side == side)
 		{
-			// A texture in memory, 256 texels square, 16 bits a texel
-			scroll.texture = graphics::fromBgfx(bgfx::createTexture2D(TempleScrollTexture::k_Size, TempleScrollTexture::k_Size,
-			                                                          false, 1, bgfx::TextureFormat::BGRA4, BGFX_TEXTURE_NONE));
-			bgfx::setName(graphics::toBgfx(*scroll.texture), fmt::format("Scroll {}", place.subMesh).c_str());
+			scroll.texture = kept._entries[index]->texture;
+			scroll.drawn = kept._entries[index]->drawn;
+			// The height of the text it shows, as the write of that text gave it
+			if (scroll.drawn.has_value() && scroll.drawn->text.has_value())
+			{
+				scroll.textHeight = kept._entries[index]->textHeight;
+			}
+			kept._entries[index].reset();
+		}
+		else if (scroll.subMesh.has_value())
+		{
+			// A texture in memory, 256 texels square, or 128 at the lowest detail levels, 16 bits a texel
+			const auto& device = Locator::graphicsDevice::value();
+			scroll.texture =
+			    device.CreateTexture2D(side, side, 1, graphics::TextureFormat::BGRA4, graphics::texture_flags::k_None, nullptr);
+			device.SetName(*scroll.texture, fmt::format("Scroll {}", place.subMesh));
 		}
 		_scrolls.push_back(scroll);
 	}
@@ -202,11 +265,21 @@ void TempleScrolls::Redraw(Scroll& scroll, const Facts& facts)
 		return;
 	}
 	const bool textInFront = _focusedText && _focused.has_value() && &_scrolls[*_focused] == &scroll;
-	std::vector<uint16_t> texels(static_cast<size_t>(TempleScrollTexture::k_Size) * TempleScrollTexture::k_Size);
-	if (const auto text = Write(scroll.content, _texts, _font, facts, _historyStart); text.has_value())
+	constexpr uint16_t k_FullSide = TempleScrollTexture::k_Size;
+	// The texture already shows what the scroll is written with now, so the same texels are not made again
+	Drawn drawn {.text = Write(scroll.content, _texts, _font, facts, _historyStart),
+	             .position = scroll.position,
+	             .textInFront = textInFront,
+	             .side = _halfSize ? low_resolution_textures::k_HalfSide : k_FullSide};
+	if (scroll.drawn == drawn)
 	{
-		scroll.textHeight =
-		    TempleScrollTexture::Draw(texels, _parchment, *text, static_cast<uint32_t>(scroll.position), _font, !textInFront);
+		return;
+	}
+	std::vector<uint16_t> texels(static_cast<size_t>(k_FullSide) * k_FullSide);
+	if (const auto& written = drawn.text; written.has_value())
+	{
+		scroll.textHeight = TempleScrollTexture::Draw(texels, _parchment, *written, static_cast<uint32_t>(scroll.position),
+		                                              _font, !textInFront);
 	}
 	else
 	{
@@ -214,9 +287,20 @@ void TempleScrolls::Redraw(Scroll& scroll, const Facts& facts)
 		// game's own memory after the texture's name, read as texels. It is the parchment here.
 		TempleScrollTexture::Draw(texels, _parchment, u"", 0, _font);
 	}
-	bgfx::updateTexture2D(graphics::toBgfx(*scroll.texture), 0, 0, 0, 0, TempleScrollTexture::k_Size,
-	                      TempleScrollTexture::k_Size,
-	                      bgfx::copy(texels.data(), static_cast<uint32_t>(texels.size() * sizeof(texels[0]))));
+	// At the lowest detail levels, each texel of the texture is the mean of a two by two square of the full text
+	uint16_t side = TempleScrollTexture::k_Size;
+	if (_halfSize)
+	{
+		if (auto half = low_resolution_textures::HalveByMean4444(texels, side))
+		{
+			texels = std::move(*half);
+			side = low_resolution_textures::k_HalfSide;
+		}
+	}
+	const auto& device = Locator::graphicsDevice::value();
+	device.UpdateTexture2D(*scroll.texture, 0, glm::u16vec2(0, 0), glm::u16vec2(side, side),
+	                       device.Copy(texels.data(), static_cast<uint32_t>(texels.size() * sizeof(texels[0]))));
+	scroll.drawn = std::move(drawn);
 }
 
 TempleScrolls::Focus TempleScrolls::LookAt(size_t index, const Facts& facts)
@@ -302,7 +386,7 @@ bool TempleScrolls::Hold(bool pressed, float mouseY, const std::optional<TempleC
 	if (scroll.position != previous && !_squeaked)
 	{
 		_squeaked = true;
-		if (Locator::audio::has_value())
+		if (Locator::sounds::has_value())
 		{
 			const auto ticks = machine_clock::Ticks();
 			const auto squeak = k_Squeaks.at(static_cast<size_t>(ticks % static_cast<int64_t>(k_Squeaks.size())));
@@ -397,18 +481,8 @@ std::vector<TempleSubMeshTexture> TempleScrolls::GetTextures(TempleRoom room) co
 	return textures;
 }
 
-void TempleScrolls::AppendFocusedText(std::vector<OrientedTextVertex>& vertices, const Facts& facts) const
+std::optional<TempleScrolls::Layout> TempleScrolls::FocusedLayout(const Scroll& scroll)
 {
-	if (!_focusedText || !_focused.has_value())
-	{
-		return;
-	}
-	const auto& scroll = _scrolls[*_focused];
-	const auto text = Write(scroll.content, _texts, _font, facts, _historyStart);
-	if (!text.has_value())
-	{
-		return;
-	}
 	// The scroll's submesh gives the text's frame: its axes made unit long, its y and z axes turned round, at the
 	// middle of the scroll's box. The texture's 237 texels across fit the box's depth along z and its 255 down its
 	// height along y.
@@ -427,8 +501,78 @@ void TempleScrolls::AppendFocusedText(std::vector<OrientedTextVertex>& vertices,
 	const float down = std::abs(scroll.max.y - scroll.min.y) * lengths[1] / ((256.0f / 255.0f) * 256.0f);
 	if (down <= 0.0f)
 	{
+		return std::nullopt;
+	}
+	return Layout {.frame = frame, .across = across, .down = down};
+}
+
+void TempleScrolls::AppendFocusedPictures(std::vector<temple::scroll_pictures::WorldPicture>& pictures,
+                                          const Facts& facts) const
+{
+	if (!_focusedText || !_focused.has_value())
+	{
 		return;
 	}
+	const auto& scroll = _scrolls[*_focused];
+	const auto layout = FocusedLayout(scroll);
+	if (!layout.has_value())
+	{
+		return;
+	}
+	const auto text = Write(scroll.content, _texts, _font, facts, _historyStart);
+	if (!text.has_value())
+	{
+		return;
+	}
+	const auto& frame = layout->frame;
+	const float across = layout->across;
+	const float down = layout->down;
+	constexpr float k_Middle = static_cast<float>(TempleScrollTexture::k_Size) * 0.5f;
+	constexpr auto k_Line = static_cast<float>(TempleScrollTexture::k_LineHeight);
+	// A point of the texture, in texels from its top left, in the world
+	const auto at = [&frame, across, down](float x, float y) {
+		return frame.origin + (frame.axes[2] * ((x - k_Middle) * across)) + (frame.axes[1] * ((y - k_Middle) * down));
+	};
+	TempleScrollTexture::LayOut(
+	    *text, static_cast<uint32_t>(scroll.position), _font, [](std::u16string_view, float, float) {},
+	    [&](const TempleScrollTexture::PictureLine& line) {
+		    if (line.y < -k_Line || line.y > static_cast<float>(TempleScrollTexture::k_Size))
+		    {
+			    return;
+		    }
+		    using Kind = temple::scroll_pictures::WorldPicture::Kind;
+		    const auto top = at(line.lastX, line.y);
+		    pictures.push_back({
+		        .kind = line.marker == TempleScrollText::k_Gesture ? Kind::Gesture : Kind::Control,
+		        .number = line.number,
+		        .lineTop = top,
+		        .lineBelow = top + (frame.axes[1] * (k_Line * down)),
+		        .textureTopLeft = at(0.0f, 0.0f),
+		        .textureBottomRight = at(2.0f * k_Middle, 2.0f * k_Middle),
+		    });
+	    });
+}
+
+void TempleScrolls::AppendFocusedText(std::vector<OrientedTextVertex>& vertices, const Facts& facts) const
+{
+	if (!_focusedText || !_focused.has_value())
+	{
+		return;
+	}
+	const auto& scroll = _scrolls[*_focused];
+	const auto text = Write(scroll.content, _texts, _font, facts, _historyStart);
+	if (!text.has_value())
+	{
+		return;
+	}
+	const auto layout = FocusedLayout(scroll);
+	if (!layout.has_value())
+	{
+		return;
+	}
+	const auto& frame = layout->frame;
+	const float across = layout->across;
+	const float down = layout->down;
 	const float size = static_cast<float>(TempleScrollTexture::k_LineHeight) * down;
 	const float stretch = TempleScrollTexture::k_Stretch * across / down;
 	constexpr float k_Size = TempleScrollTexture::k_Size;

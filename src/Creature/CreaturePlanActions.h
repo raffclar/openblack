@@ -286,6 +286,8 @@ enum class Build : uint8_t
 	BeFrightened,
 	PutDown,
 	DeadForever,
+	/// Lying dead for good as a script orders, for longer than a dead creature does
+	DiePermanently,
 	/// Pointing out a lesson's highlight to the player
 	PointOutHighlight,
 	/// The creature shows the player that it saw a deed of the player, done to the thing

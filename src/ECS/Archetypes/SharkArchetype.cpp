@@ -22,6 +22,7 @@
 #include "ECS/SharkRules.h"
 #include "Locator.h"
 #include "Resources/ResourceManager.h"
+#include "Utils.h"
 
 using namespace openblack;
 using namespace openblack::ecs::archetypes;
@@ -31,6 +32,8 @@ entt::entity SharkArchetype::Create(const glm::vec3& position, float scale)
 {
 	auto& registry = Locator::entitiesRegistry::value();
 	const auto entity = registry.Create();
+	// It takes its place in the order of the things made
+	TakeThingMadePlace();
 	const glm::vec2 xz(map_coords::Quantise(position.x), map_coords::Quantise(position.z));
 	const float height = Locator::terrainSystem::has_value() ? Locator::terrainSystem::value().GetHeightAt(xz) : 0.0f;
 	const glm::vec3 at(xz.x, height, xz.y);

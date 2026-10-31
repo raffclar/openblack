@@ -24,6 +24,13 @@ else ()
   # The dump of the rows of the synced world is a developer tool
   list(FILTER OPENBLACK_SOURCES EXCLUDE REGEX "/Debug/RowDump[.]cpp$")
   list(FILTER OPENBLACK_HEADERS EXCLUDE REGEX "/Debug/RowDump[.]h$")
+  # The world states that the tools write at a set turn are a developer tool
+  list(FILTER OPENBLACK_SOURCES EXCLUDE REGEX
+       "/Simulation/WorldStateAtTurn[.]cpp$"
+  )
+  list(FILTER OPENBLACK_HEADERS EXCLUDE REGEX
+       "/Simulation/WorldStateAtTurn[.]h$"
+  )
 endif ()
 # The code that connects the game to a browser page is built only for the web
 if (NOT EMSCRIPTEN)
@@ -48,27 +55,88 @@ endif ()
 # The systems are a static library of their own. The Debug objects of all sources together are bigger than the 4 GB that
 # the librarian can hold in one library file, as every object has its own copy of the debug information.
 set(OPENBLACK_ALL_SOURCES ${OPENBLACK_SOURCES})
-set(OPENBLACK_SYSTEM_SOURCES ${OPENBLACK_SOURCES})
-list(FILTER OPENBLACK_SYSTEM_SOURCES INCLUDE REGEX "/ECS/Systems/")
-if (NOT ANDROID)
-  list(REMOVE_ITEM OPENBLACK_SOURCES ${OPENBLACK_SYSTEM_SOURCES})
-endif ()
+
+# The game's library, openblack_lib, is the client: the renderer and the graphics library, the GUI, the audio device, the
+# input, the windows, the videos, the debug windows, the editor and the inspector's game side. The first pattern gives
+# these files, with no extension, so that the headers take the same rule as the sources. The second list gives the
+# files in these folders that the world uses with no device: they are in the simulation. The list also gives the headers
+# with no source that the simulation uses, such as the interfaces that the client makes and the world calls.
+set(OPENBLACK_CLIENT_STEMS
+    "/src/(Graphics|Gui|Windowing|Input|Video|Editor|Audio|Debug|Inspector|Web)/.*|/src/(Game|GameStartup|GameSession|GameSkirmish|LaunchSwitches|LocatorClient)|/src/3D/Implementations/Ocean|/ECS/Systems/Implementations/RenderingSystem[A-Za-z]*"
+)
+set(OPENBLACK_CLIENT_SOURCES ${OPENBLACK_SOURCES})
+list(FILTER OPENBLACK_CLIENT_SOURCES INCLUDE REGEX
+     "(${OPENBLACK_CLIENT_STEMS})[.](cpp|mm)$"
+)
+set(OPENBLACK_SIM_IN_CLIENT_FOLDERS
+    "Audio/(MpegAudioDecoder|WavAudioDecoder|AudioDecoderInterface)"
+    "Debug/(SimRun|SimChecks|TempleVillagersSurvey|RowDump|ComputerGodTimes|ComputerActions|BenchmarkRecorder|FightAutopilotRules|TestbedCrowd|TestbedDispenserGrid|TestbedMultiplayer|TownMiracleRules|TownMiracles|TestbedScenarioRunner|DebugGuiInterface|FightAutopilotInterface|TestbedGameStageInterface|TestbedHandSweep)"
+    "Debug/TestbedScenario[A-Z][A-Za-z]*"
+    "Editor/(EditorMath|EditorEntities|EditorPalette|EditorSelection|EditorOutline)"
+    "Graphics/(HandLight|InterfaceCreatures|MeshDetail|Moon|Sun|ViewFrustum|Texture2D|VertexBuffer|IndexBuffer|Mesh|TextureSize|GraphicsDeviceInterface|GraphicsHandle|FilmSurface|ZSort|FizzDrawOrder|HandReflection|ObjectTint|TempleHeartLook)"
+    "Gui/(ChatControlsRules|CinemaBars|ConditionsBoxRules|CustomMusicControlsRules|DialogKeyRules|EndGameBoxRules|EscapeKeyRules|GameFont|GameTexts|HandToolTipRules|HandToolTips|IncomingMessageStripRules|JoinOnlineEntry|LandThumbnail|LoadingScreenRules|LogoEffect|MenuBackdrop|MenuSettings|MultiplayerFrontEnd|MultiplayerFrontEndRules|OnlineMapTexts|PauseText|PingDisplay|ScreenFade|ScreenFit|ScriptFade|ScriptTexts|SkirmishBoxRules|StartupRules|StatisticsBoxRules|TextDatabase|TextEditRules|TextWrap|ToolTips|VillagerLabels|WorldTextDepth|WorldToolTipRules|WorldToolTips|DialogRect|SavingBoxRules)"
+    "Input/(InjectedInput|InputLock|KeyBindings|KeyRebinding|GameActionMap|CursorFreeze|PointerSpeed|ScriptedMouse|ShortcutKeys|WindowPointer|NoInputDevice|GameActionMapInterface|InputDeviceInterface|BindableActions|LocalPlayer|PointerSettle|BoxKeyboard|MouseMotion|PlatformKeys)"
+    "Windowing/(WindowFit|WindowPixels|WindowingInterface)"
+    "Video/(FilmCreature|FilmEffects|FrameQueue|VideoRules|FallingSpellAudio|StillPicture)"
+    "Inspector/(CameraControl|ComponentReflection|EditProviders|EntityDescription|FightAutopilot|FightProviders|GameControls|GameInput|GameProviders|GameWorldEdit|GuiControl|InputControl|LevelControl|RegistryProviders|RunControl|ScriptControl|ServerProviders|SimRecorder|SystemProviders|WorldProviders|GameSeamInterface)"
+    "Web/(WebPointer|FetchHttpClient|BrowserWebSocketClient|IndexedDbMapStore)"
+)
+list(JOIN OPENBLACK_SIM_IN_CLIENT_FOLDERS "|" OPENBLACK_SIM_IN_CLIENT_FOLDERS)
+list(FILTER OPENBLACK_CLIENT_SOURCES EXCLUDE REGEX
+     "/src/(${OPENBLACK_SIM_IN_CLIENT_FOLDERS})[.](cpp|mm)$"
+)
+# The files in the folders of the simulation that only the game uses: they show a message box of the system or open a
+# page in the browser of the system
+set(OPENBLACK_CLIENT_IN_SIM_FOLDERS "Common/FatalMessage" "Online/OpenPage")
+list(JOIN OPENBLACK_CLIENT_IN_SIM_FOLDERS "|" OPENBLACK_CLIENT_IN_SIM_FOLDERS)
+set(OPENBLACK_CLIENT_IN_SIM_SOURCES ${OPENBLACK_SOURCES})
+list(FILTER OPENBLACK_CLIENT_IN_SIM_SOURCES INCLUDE REGEX
+     "/src/(${OPENBLACK_CLIENT_IN_SIM_FOLDERS})[.](cpp|mm)$"
+)
+list(APPEND OPENBLACK_CLIENT_SOURCES ${OPENBLACK_CLIENT_IN_SIM_SOURCES})
+
+# The library of the devices that use no hardware, openblack_headless: the renderer that draws nothing, the audio that
+# plays nothing, and the sound requests of the world that go to the audio. The game and the dedicated server both link
+# it. The simulation does not use it: the server gives these devices to the simulation when it starts.
+set(OPENBLACK_HEADLESS_FILES "Audio/GameSoundRequests" "LocatorHeadless"
+                             "Server/ServerRun"
+)
+list(JOIN OPENBLACK_HEADLESS_FILES "|" OPENBLACK_HEADLESS_FILES)
+set(OPENBLACK_HEADLESS_SOURCES ${OPENBLACK_SOURCES})
+list(FILTER OPENBLACK_HEADLESS_SOURCES INCLUDE REGEX
+     "/src/(${OPENBLACK_HEADLESS_FILES})[.]cpp$"
+)
+list(REMOVE_ITEM OPENBLACK_CLIENT_SOURCES ${OPENBLACK_HEADLESS_SOURCES})
 
 # The simulation library, openblack_sim, has the world that the game and the dedicated server (apps/openblack-server)
-# share: the ECS and its components, the turn, the script machine, the physics, the creatures' minds, the land's data and
-# the save. The systems library is the systems part of it. The renderer, the GUI, the audio, the input, the windows and
-# the videos stay in the game's library, openblack_lib. Some files of the simulation still use the game's library, so the
-# two libraries use each other's symbols for now.
+# share: the ECS and its components, the turn, the script machine, the physics, the creatures' minds, the land's data,
+# the resources with no device and the save. The systems library is the systems part of it. The simulation does not use
+# the game's library, so the dedicated server links neither the graphics library nor the renderer.
+set(OPENBLACK_SYSTEM_SOURCES ${OPENBLACK_SOURCES})
+list(FILTER OPENBLACK_SYSTEM_SOURCES INCLUDE REGEX "/ECS/Systems/")
+list(REMOVE_ITEM OPENBLACK_SYSTEM_SOURCES ${OPENBLACK_CLIENT_SOURCES})
 set(OPENBLACK_SIM_SOURCES ${OPENBLACK_SOURCES})
-list(
-  FILTER
-  OPENBLACK_SIM_SOURCES
-  INCLUDE
-  REGEX
-  "/src/(Animals|Blast|Commands|Common|Creature|ECS|FileSystem|Fire|Hand|LHScriptX|Magic|Nature|Parsers|Physics|Scenery|ScriptHeaders|Serializer|Simulation|Story)/|/src/(CHLApi|InfoConstants|Level|Profiler)[.]cpp$"
+list(REMOVE_ITEM OPENBLACK_SIM_SOURCES ${OPENBLACK_CLIENT_SOURCES}
+     ${OPENBLACK_SYSTEM_SOURCES} ${OPENBLACK_HEADLESS_SOURCES}
 )
+
+# No file of the simulation includes a header of the client or of the devices with no hardware. The check reads the
+# includes of all the files of the simulation, also the files that this platform does not build. It runs at each
+# configure step, and ctest runs it again as test_sim_includes.
+set(OPENBLACK_SIM_INCLUDES_CONFIG ${CMAKE_BINARY_DIR}/SimIncludesConfig.cmake)
+file(
+  WRITE ${OPENBLACK_SIM_INCLUDES_CONFIG}
+  "set(SOURCE_DIR \"${CMAKE_CURRENT_LIST_DIR}\")
+set(CLIENT_STEMS \"${OPENBLACK_CLIENT_STEMS}\")
+set(SIM_IN_CLIENT \"${OPENBLACK_SIM_IN_CLIENT_FOLDERS}\")
+set(CLIENT_IN_SIM \"${OPENBLACK_CLIENT_IN_SIM_FOLDERS}\")
+set(HEADLESS \"${OPENBLACK_HEADLESS_FILES}\")
+"
+)
+include(${CMAKE_SOURCE_DIR}/CMakeModules/CheckSimIncludes.cmake)
+openblack_check_sim_includes(${OPENBLACK_SIM_INCLUDES_CONFIG})
 if (NOT ANDROID)
-  list(REMOVE_ITEM OPENBLACK_SOURCES ${OPENBLACK_SIM_SOURCES})
+  set(OPENBLACK_SOURCES ${OPENBLACK_CLIENT_SOURCES})
 endif ()
 
 set(OPENBLACK_RC ${CMAKE_SOURCE_DIR}/assets/resource/icon/openblack.rc)
@@ -246,6 +314,8 @@ target_link_libraries(
          lobbyapi
          # The settings file of this computer
          computersettings
+         # The language file of the creature upload tool
+         creatureuploadcfg
          # The mind file's types are part of the creature mind component
          creaturemind
          # The saved game's files are part of the saved game component
@@ -439,53 +509,87 @@ target_compile_options(
   PUBLIC "$<IF:$<CXX_COMPILER_ID:MSVC>,/fp:precise,-ffp-contract=off>"
 )
 
-# The systems library is built with the same options as the game's library: it takes each build property of that
-# library, so a property added above reaches both. The two libraries use each other's symbols, which static libraries
-# may do.
+# The simulation and its systems library are built with the same options as the game's library: they take each build
+# property of that library, so a property added above reaches all three. They link the same libraries as the game's
+# library, but not the graphics library, the window system (SDL), the debug windows (Dear ImGui), the audio device
+# (OpenAL) or the game's library itself. The two simulation libraries use each other's symbols, which static libraries may do; the game's library uses
+# both, and they do not use it.
 if (NOT ANDROID)
+  # The libraries of the client only, and a pattern for the window system, which the game's library links by a
+  # generator expression
+  set(OPENBLACK_CLIENT_ONLY_LIBRARIES bgfx::bgfx imgui::imgui imgui_user
+                                      OpenAL::OpenAL
+  )
+  set(OPENBLACK_CLIENT_ONLY_PATTERN "SDL2::")
   add_library(openblack_systems STATIC ${OPENBLACK_SYSTEM_SOURCES})
-  foreach (
-    property
-    COMPILE_DEFINITIONS
-    COMPILE_OPTIONS
-    INCLUDE_DIRECTORIES
-    LINK_LIBRARIES
-    LINKER_LANGUAGE
-    CXX_CLANG_TIDY
-  )
-    get_target_property(value openblack_lib ${property})
-    if (value)
-      set_property(TARGET openblack_systems PROPERTY ${property} "${value}")
-    endif ()
-  endforeach ()
-  # The simulation library takes the build properties of the game's library in the same way
   add_library(openblack_sim STATIC ${OPENBLACK_SIM_SOURCES})
-  foreach (
-    property
-    COMPILE_DEFINITIONS
-    COMPILE_OPTIONS
-    INCLUDE_DIRECTORIES
-    LINK_LIBRARIES
-    LINKER_LANGUAGE
-    CXX_CLANG_TIDY
-  )
-    get_target_property(value openblack_lib ${property})
-    if (value)
-      set_property(TARGET openblack_sim PROPERTY ${property} "${value}")
+  add_library(openblack_headless STATIC ${OPENBLACK_HEADLESS_SOURCES})
+  # The version of the build is a part of the simulation: the server and the game both write it
+  get_target_property(OPENBLACK_LIB_SOURCES openblack_lib SOURCES)
+  list(REMOVE_ITEM OPENBLACK_LIB_SOURCES ${OPENBLACK_BUILD_VERSION_SOURCE})
+  set_property(TARGET openblack_lib PROPERTY SOURCES ${OPENBLACK_LIB_SOURCES})
+  target_sources(openblack_sim PRIVATE ${OPENBLACK_BUILD_VERSION_SOURCE})
+  add_dependencies(openblack_sim openblack_build_version)
+  foreach (target openblack_systems openblack_sim openblack_headless)
+    foreach (
+      property
+      COMPILE_DEFINITIONS
+      COMPILE_OPTIONS
+      INCLUDE_DIRECTORIES
+      INTERFACE_COMPILE_DEFINITIONS
+      INTERFACE_COMPILE_OPTIONS
+      INTERFACE_INCLUDE_DIRECTORIES
+      LINKER_LANGUAGE
+      CXX_CLANG_TIDY
+    )
+      get_target_property(value openblack_lib ${property})
+      if (value)
+        set_property(TARGET ${target} PROPERTY ${property} "${value}")
+      endif ()
+    endforeach ()
+    get_target_property(libraries openblack_lib LINK_LIBRARIES)
+    list(REMOVE_ITEM libraries ${OPENBLACK_CLIENT_ONLY_LIBRARIES})
+    list(FILTER libraries EXCLUDE REGEX "${OPENBLACK_CLIENT_ONLY_PATTERN}")
+    target_link_libraries(${target} PUBLIC ${libraries})
+  endforeach ()
+  # The simulation uses the types and the key codes of the window system and the types of the audio device in its
+  # headers, but not the libraries: it takes their include folders and definitions, and links none of them. The world
+  # reaches the input of the window system through input::InputDeviceInterface, and the sounds through
+  # audio::SoundRequestInterface.
+  add_library(openblack_client_headers INTERFACE)
+  set(OPENBLACK_SDL_TARGET SDL2::SDL2)
+  if (NOT TARGET SDL2::SDL2)
+    set(OPENBLACK_SDL_TARGET SDL2::SDL2-static)
+  endif ()
+  foreach (part ${OPENBLACK_SDL_TARGET} OpenAL::OpenAL)
+    if (TARGET ${part})
+      target_include_directories(
+        openblack_client_headers
+        INTERFACE $<TARGET_PROPERTY:${part},INTERFACE_INCLUDE_DIRECTORIES>
+      )
+      target_compile_definitions(
+        openblack_client_headers
+        INTERFACE $<TARGET_PROPERTY:${part},INTERFACE_COMPILE_DEFINITIONS>
+      )
     endif ()
   endforeach ()
-  # The headers of the simulation are found from the folder of the sources, as the game's are
-  target_include_directories(
-    openblack_sim PUBLIC ${CMAKE_CURRENT_LIST_DIR} ${CMAKE_BINARY_DIR}/include
-  )
-  target_link_libraries(openblack_lib PUBLIC openblack_systems openblack_sim)
-  target_link_libraries(openblack_systems PUBLIC openblack_lib)
-  target_link_libraries(openblack_sim PUBLIC openblack_systems openblack_lib)
-  # A linker that reads each static library one time (GNU ld) finds the symbols of the three libraries only if the link
-  # line names them again. MSVC's linker and LLVM's lld look through each library again by themselves.
-  set_property(
-    TARGET openblack_lib openblack_systems openblack_sim
-    PROPERTY LINK_INTERFACE_MULTIPLICITY 4
+  target_link_libraries(openblack_systems PUBLIC openblack_client_headers)
+  target_link_libraries(openblack_sim PUBLIC openblack_client_headers)
+  target_link_libraries(openblack_headless PUBLIC openblack_client_headers)
+  if (APPLE)
+    # The folder of the user's data comes from the application support folder of Foundation
+    target_link_libraries(openblack_sim PUBLIC "-framework Foundation")
+  endif ()
+  # The simulation uses no header of the graphics library: it has the include folders of neither the library nor its two
+  # parts. The world reaches the device through graphics::GraphicsDeviceInterface, with its own handles and flags.
+  target_link_libraries(openblack_sim PUBLIC openblack_systems)
+  target_link_libraries(openblack_systems PUBLIC openblack_sim)
+  target_link_libraries(openblack_headless PUBLIC openblack_sim openblack_systems)
+  target_link_libraries(openblack_lib PUBLIC openblack_headless openblack_sim openblack_systems)
+  # A linker that reads each static library one time (GNU ld) finds the symbols of the two simulation libraries only if
+  # the link line names them again. MSVC's linker and LLVM's lld look through each library again by themselves.
+  set_property(TARGET openblack_systems openblack_sim
+               PROPERTY LINK_INTERFACE_MULTIPLICITY 4
   )
 endif ()
 

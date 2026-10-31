@@ -43,6 +43,37 @@ Numbered PrayerEnergy(float stored)
 	return {.index = k_PrayerEnergy, .first = static_cast<double>(stored), .second = std::nullopt};
 }
 
+std::optional<Numbered> ProductionCompleted(bool repaired, int32_t makingTurns, float productionTime)
+{
+	if (!repaired)
+	{
+		return std::nullopt;
+	}
+	constexpr int32_t k_Percent = 100;
+	// The turns that are left go in hundreds, and the share of the time is a float, as the game calculates it. The
+	// whole number is cut toward zero, and then only the part below 100 stays.
+	const float left = static_cast<float>(static_cast<int64_t>(makingTurns) * k_Percent) / productionTime;
+	const auto made = static_cast<int32_t>(k_PercentScale - left);
+	return Numbered {.index = k_ProductionCompleted, .first = static_cast<double>(made % k_Percent), .second = std::nullopt};
+}
+
+Numbered NeedsSign(NeedsRow row, float level, uint32_t woodRequired)
+{
+	switch (row)
+	{
+	case NeedsRow::Hunger:
+		return {.index = k_FoodDesire, .first = static_cast<double>(level * k_PercentScale), .second = std::nullopt};
+	case NeedsRow::Life:
+		return {.index = k_RestDesire, .first = static_cast<double>(level * k_PercentScale), .second = std::nullopt};
+	case NeedsRow::WorkshopWood:
+		return {
+		    .index = k_WoodRequired, .first = static_cast<double>(static_cast<float>(woodRequired)), .second = std::nullopt};
+	case NeedsRow::Hiding:
+		break;
+	}
+	return {.index = k_PickUp, .first = 0.0, .second = std::nullopt};
+}
+
 Numbered Population(uint32_t people, uint32_t places)
 {
 	return {.index = k_Population, .first = static_cast<double>(people), .second = static_cast<double>(places)};
@@ -79,6 +110,21 @@ std::optional<uint32_t> ScaffoldDrop(std::optional<uint32_t> plannedBuildText)
 
 std::u16string Compose(uint32_t index, std::u16string_view words, double first, std::optional<double> second)
 {
+	if (index == k_ScaffoldValue)
+	{
+		// The words write the worth of the scaffold as a whole number
+		std::u16string text(words);
+		if (const auto at = text.find(u"%d"); at != std::u16string::npos)
+		{
+			std::u16string number;
+			for (const char c : std::to_string(static_cast<int64_t>(first)))
+			{
+				number.push_back(static_cast<char16_t>(c));
+			}
+			text.replace(at, 2, number);
+		}
+		return text;
+	}
 	if (!second.has_value())
 	{
 		return fixed_format::WithNumber(words, first);

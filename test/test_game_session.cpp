@@ -31,6 +31,18 @@ TEST(GameSession, EachEndGivesTheStartOfTheNextGame)
 	EXPECT_FALSE(NextStart(End::Quit).has_value());
 }
 
+TEST(GameSession, LeaveGameGoesToTheNetworkFrontEnd)
+{
+	EXPECT_EQ(EndAfterNetworkLeave(NetworkLeave::LeaveGame), End::Online);
+	EXPECT_EQ(NextStart(EndAfterNetworkLeave(NetworkLeave::LeaveGame)), Start::Online);
+}
+
+TEST(GameSession, BackInTheLandInformationBoxLeavesTheNetworkGameForTheSkirmishBox)
+{
+	EXPECT_EQ(EndAfterNetworkLeave(NetworkLeave::LandInfoBoxBack), End::Skirmish);
+	EXPECT_EQ(NextStart(EndAfterNetworkLeave(NetworkLeave::LandInfoBoxBack)), Start::Skirmish);
+}
+
 TEST(GameSession, APlainStartContinuesAndAFirstStartIsANewGame)
 {
 	EXPECT_EQ(FirstStart({.hadProfile = true}), Start::Continue);
@@ -130,4 +142,15 @@ TEST(GameSession, ProfileNamesCompareWithoutTheCaseOfPlainLetters)
 {
 	EXPECT_TRUE(SameProfileName(u"Ann", u"aNN"));
 	EXPECT_FALSE(SameProfileName(u"Ann", u"Anne"));
+}
+
+// Start Skirmish Game in a story ends the story with its save on exit, as any other end of the story does
+TEST(GameSession, AStoryLeftForTheSkirmishBoxSaves)
+{
+	auto facts = PlainQuit();
+	facts.end = End::Skirmish;
+	EXPECT_EQ(ExitSaveFor(facts), ExitSave::Current);
+	// Leaving a skirmish for the box keeps no save
+	facts.skirmish = true;
+	EXPECT_EQ(ExitSaveFor(facts), ExitSave::None);
 }

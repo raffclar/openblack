@@ -26,6 +26,7 @@
 #include "ECS/Components/Transform.h"
 #include "ECS/Components/VillageLight.h"
 #include "ECS/Components/Weather.h"
+#include "ECS/DrawnRegistry.h"
 #include "ECS/Registry.h"
 #include "Graphics/HandLight.h"
 #include "Graphics/Texture2D.h"
@@ -98,6 +99,9 @@ LandShadeSystem::Sources GameSources()
 	    .registry = []() -> ecs::Registry* {
 		    return Locator::entitiesRegistry::has_value() ? &Locator::entitiesRegistry::value() : nullptr;
 	    },
+	    .drawn = []() -> const ecs::Registry* {
+		    return Locator::drawnRegistry::has_value() ? &Locator::drawnRegistry::value() : nullptr;
+	    },
 	};
 }
 } // namespace
@@ -169,7 +173,7 @@ void LandShadeSystem::Shade(const LandShadeFrame& frame)
 		_land.SetInView(blocks[i], object_draw_list::BlockInView(frame.viewProjection, frame.nearPlane, box));
 	}
 
-	CastShadows(frame, *registry);
+	CastShadows(frame, *registry, _sources.drawn ? _sources.drawn() : nullptr);
 	CastLights(frame, *registry);
 
 	if (laidNow)
@@ -184,7 +188,7 @@ void LandShadeSystem::Shade(const LandShadeFrame& frame)
 	UpdateMap(both);
 }
 
-void LandShadeSystem::CastShadows(const LandShadeFrame& frame, Registry& registry)
+void LandShadeSystem::CastShadows(const LandShadeFrame& frame, Registry& registry, const Registry* drawn)
 {
 	_shadows = 0;
 	size_t room = land_shade::k_MostStamps;
@@ -218,7 +222,7 @@ void LandShadeSystem::CastShadows(const LandShadeFrame& frame, Registry& registr
 		return;
 	}
 
-	// The sky's clouds in the order they were made: the registry walks the newest first
+	// The sky's clouds, things of the drawn registry, in the order they were made: the registry walks the newest first
 	const auto cloudImage = _sources.image(k_CloudShadowId.value());
 	struct CloudShade
 	{
@@ -226,12 +230,15 @@ void LandShadeSystem::CastShadows(const LandShadeFrame& frame, Registry& registr
 		uint32_t alpha;
 	};
 	std::vector<CloudShade> clouds;
-	registry.Each<const ecs::components::Cloud, const ecs::components::Mist, const ecs::components::Transform>(
-	    [&clouds, &frame](const ecs::components::Cloud& /*unused*/, const ecs::components::Mist& mist,
-	                      const ecs::components::Transform& transform) {
-		    clouds.push_back({.corner = {transform.position.x, transform.position.z},
-		                      .alpha = ((mist.colour >> 24u) * frame.skyAlpha) / 255u});
-	    });
+	if (drawn != nullptr)
+	{
+		drawn->Each<const ecs::components::Cloud, const ecs::components::Mist, const ecs::components::Transform>(
+		    [&clouds, &frame](const ecs::components::Cloud& /*unused*/, const ecs::components::Mist& mist,
+		                      const ecs::components::Transform& transform) {
+			    clouds.push_back({.corner = {transform.position.x, transform.position.z},
+			                      .alpha = ((mist.colour >> 24u) * frame.skyAlpha) / 255u});
+		    });
+	}
 	std::ranges::reverse(clouds);
 	for (const auto& cloud : clouds)
 	{

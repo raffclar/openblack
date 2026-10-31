@@ -32,6 +32,9 @@ constexpr int32_t k_EvilSpirit = 2;
 /// The advisor who says a help text, by its narrator: 1 good, 2 evil, 0 neither
 [[nodiscard]] int32_t SpiritWhoTalks(int32_t narrator);
 
+/// The help text that a script asks the speaker of. A number past the last help text asks for the first text.
+[[nodiscard]] uint32_t TextToAskSpeakerOf(uint32_t text, uint32_t textCount);
+
 /// A script's fraction across or down the screen, from 0 to 1. Not a number is not one.
 [[nodiscard]] bool IsScreenFraction(float value);
 

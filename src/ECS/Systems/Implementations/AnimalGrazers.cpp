@@ -193,9 +193,10 @@ bool AnimalSystem::GroundMoveTo(entt::entity entity, Animal& animal)
 		auto& turning = registry.Get<TurningWalker>(entity);
 		turning.speed = animal.move.speed;
 		turning.turnAngle = TurnAngleOf(animal);
-		walk.goal = Metres(animal.move.goal);
+		walk.goalPlace = animal.move.goal;
 		walk.position = animal.move.position;
 		walk.placedAt = Metres(animal.move.position);
+		walk.yAngle = animal.heading;
 		auto& transform = registry.Get<Transform>(entity);
 		transform.position.x = walk.placedAt.x;
 		transform.position.z = walk.placedAt.y;
@@ -205,7 +206,9 @@ bool AnimalSystem::GroundMoveTo(entt::entity entity, Animal& animal)
 		animal.move.step = walked.step;
 		animal.move.angle = walked.gameAngle;
 		animal.height = 0.0f;
-		SyncWorld(animal);
+		// It faces as its walk turned it, which took it out of its map cell and put it in again; a turn round of its
+		// walk alone does not turn it
+		SyncWorldFacing(animal, walked.yAngle, true);
 		if (arrived)
 		{
 			EndWalkRound(entity);
@@ -359,7 +362,7 @@ std::optional<glm::ivec2> AnimalSystem::LookForGrazeSpot(entt::entity entity, co
 				}
 				// Its shepherd too, where it stands and where it walks to
 				if (const auto* walker = registry.TryGet<const WallHug>(member);
-				    walker != nullptr && (CellOf(WalkerPosition(member)) == cell || CellOf(Fixed(walker->goal)) == cell))
+				    walker != nullptr && (CellOf(WalkerPosition(member)) == cell || CellOf(walker->goalPlace) == cell))
 				{
 					return false;
 				}
@@ -443,10 +446,14 @@ void AnimalSystem::GrazerMoveInFlock(entt::entity entity, Animal& animal)
 
 void AnimalSystem::GrazerWander(entt::entity entity, Animal& animal, Grazer& grazer)
 {
-	if (ReactToGrazerNeeds(entity, animal, grazer))
+	if (!ReactToGrazerNeeds(entity, animal, grazer))
 	{
-		return;
+		WanderStep(entity, animal);
 	}
+}
+
+void AnimalSystem::WanderStep(entt::entity entity, Animal& animal)
+{
 	// Out of its herd's reach it decides again
 	if (!WithinDomain(animal, animal.move.position))
 	{
@@ -509,14 +516,23 @@ void AnimalSystem::GivesBirth(entt::entity entity, Animal& animal)
 	auto& registry = EntityRegistry();
 	// A young one a year old joins the herd and decides what to do at once; then the mother wanders off
 	const auto mother = animal.move.position;
-	const auto young = CreateGrazer(animal.type, Metres(mother), 1, animal.flock, animal.town);
+	const bool hunter = registry.AllOf<Hunter>(entity);
+	const auto young = hunter ? CreateHunter(animal.type, Metres(mother), 1, animal.flock)
+	                          : CreateGrazer(animal.type, Metres(mother), 1, animal.flock, animal.town);
 	if (registry.Valid(young))
 	{
 		// It is born at the exact map position of its mother
 		auto& born = registry.Get<Animal>(young);
 		born.move.position = mother;
 		born.move.goal = mother;
-		GrazerDecide(young, registry.Get<Animal>(young), registry.Get<Grazer>(young));
+		if (hunter)
+		{
+			HunterDecide(young, born, registry.Get<Hunter>(young));
+		}
+		else
+		{
+			GrazerDecide(young, born, registry.Get<Grazer>(young));
+		}
 	}
 	SetTopState(registry.Get<Animal>(entity), AnimalState::StartWander);
 }
@@ -577,27 +593,47 @@ void AnimalSystem::MergeNearbyHerd(entt::entity entity, Animal& animal)
 	}
 }
 
+void AnimalSystem::NeedsTurn(entt::entity entity, Animal& animal)
+{
+	auto& registry = EntityRegistry();
+	const auto& info = InfoOf(animal.type);
+	// Only some states see to the needs. Then the needs grow, and a young animal grows a quarter of a year at a time
+	if (!SeesToNeedsIn(animal.state))
+	{
+		return;
+	}
+	const auto age = AgeOf(animal);
+	if (auto* grazer = registry.TryGet<Grazer>(entity))
+	{
+		grazers::GrowNeeds(grazer->needs, LimitsOf(info), age, HerdSizeOf(animal));
+	}
+	else if (auto* hunter = registry.TryGet<Hunter>(entity))
+	{
+		// A wild hunter's needs grow as a grazer's do
+		grazers::GrowNeeds(hunter->needs, LimitsOf(info), age, HerdSizeOf(animal));
+	}
+	else if (info.hunger != 0 && animal.hunger < static_cast<int32_t>(info.hunger))
+	{
+		// A spell wolf has no need to sleep, and nothing reads its need to breed
+		++animal.hunger;
+	}
+	// A flock's leader counts the turns of its leg, unless a shepherd leads the flock
+	if (auto* flock = registry.TryGet<Flock>(animal.flock);
+	    flock != nullptr && flock->shepherd == entt::null && LeaderOf(animal.flock) == entity)
+	{
+		++flock->turnsOnLeg;
+	}
+	if (age < info.grownUpAge && GameTurn() % villager_age::k_GrowthTurns == 0)
+	{
+		auto& transform = registry.Get<Transform>(entity);
+		SetScale(entity, grazers::GrownScale(transform.scale.x, age, info.ageToScale.values, Random));
+	}
+}
+
 void AnimalSystem::GrazerTurn(entt::entity entity, Animal& animal, Grazer& grazer)
 {
 	auto& registry = EntityRegistry();
 	const auto& info = InfoOf(animal.type);
-	// Seeing to its needs, and growing a quarter of a year at a time while young
-	if (SeesToNeedsIn(animal.state))
-	{
-		const auto age = AgeOf(animal);
-		grazers::GrowNeeds(grazer.needs, LimitsOf(info), age, HerdSizeOf(animal));
-		// A herd's leader counts the turns of its leg, unless a shepherd leads the herd
-		if (auto* herd = registry.TryGet<Flock>(animal.flock);
-		    herd != nullptr && herd->shepherd == entt::null && LeaderOf(animal.flock) == entity)
-		{
-			++herd->turnsOnLeg;
-		}
-		if (age < info.grownUpAge && GameTurn() % villager_age::k_GrowthTurns == 0)
-		{
-			auto& transform = registry.Get<Transform>(entity);
-			SetScale(entity, grazers::GrownScale(transform.scale.x, age, info.ageToScale.values, Random));
-		}
-	}
 	// Its reaction comes before its own ways
 	if (Flee(entity, animal) || LookOrGoToFood(entity, animal))
 	{
@@ -646,18 +682,8 @@ void AnimalSystem::GrazerTurn(entt::entity entity, Animal& animal, Grazer& graze
 		WaitForClip(animal, AnimalState::DecideWhatToDo);
 		break;
 	case AnimalState::SeekSleep:
-	{
-		if (!grazer.sleepingCell.has_value())
-		{
-			SetTopState(animal, AnimalState::StartWander);
-			break;
-		}
-		const auto* herd = registry.TryGet<const Flock>(animal.flock);
-		const auto spot =
-		    grazers::SleepSpot(*grazer.sleepingCell, herd != nullptr ? static_cast<uint32_t>(herd->members.size()) : 0, Random);
-		SetupMoveTo(animal, Metres(spot), 0.0f, AnimalState::Sleeps);
+		SeekSleep(animal, grazer.sleepingCell);
 		break;
-	}
 	case AnimalState::Sleeps:
 		if (grazers::SleepTurn(grazer.needs))
 		{

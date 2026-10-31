@@ -12,6 +12,8 @@
 #include <cstdint>
 
 #include <chrono>
+#include <functional>
+#include <memory>
 #include <optional>
 #include <span>
 #include <vector>
@@ -24,40 +26,31 @@
 #include "3D/TempleLight.h"
 #include "3D/TempleMap.h"
 #include "3D/TempleMapSpells.h"
+#include "3D/TempleRoom.h"
 #include "ECS/Systems/SavedStateInterface.h"
 #include "Enums.h"
-#include "Graphics/GraphicsHandle.h"
+#include "Temple/ScrollPictureLine.h"
 
 namespace openblack
 {
 namespace ecs
 {
 class Registry;
+namespace systems
+{
+class RenderingSystemInterface;
 }
+} // namespace ecs
 namespace graphics
 {
 class Texture2D;
 }
-namespace gui
-{
-class GameInterface;
-} // namespace gui
+class TempleScreenInterface;
 struct OrientedTextVertex;
+struct TempleSubMeshTexture;
 class TempleDoors;
 class TemplePeople;
 struct TemplePerson;
-
-enum class TempleRoom
-{
-	Challenge,
-	CreatureCave,
-	Credits,
-	Main,
-	Multi,
-	Options,
-	SaveGame,
-	Unknown
-};
 
 /// A belt or medal of the creature's room: its icon's mesh, where it is, and its colour
 struct TempleCaveTrophy
@@ -90,16 +83,6 @@ struct TempleCursorHit
 	/// The room whose mesh the cursor is over, and the submesh of it, when it is over one
 	TempleRoom room {TempleRoom::Unknown};
 	std::optional<uint32_t> subMesh;
-};
-
-/// A texture a room's mesh draws one of its submeshes with, in place of its skin
-struct TempleSubMeshTexture
-{
-	uint32_t subMesh;
-	graphics::TextureHandle texture;
-	/// The submesh is a picture of the challenge room or the save game room. The game draws a picture in one colour,
-	/// fogged once at its first vertex, with no lightmap and no light.
-	bool picture {false};
 };
 
 /// A distance and direction that one of a room's submeshes moves in its mesh, as a held button moves into the wall
@@ -162,7 +145,15 @@ public:
 	[[nodiscard]] virtual std::optional<TempleCursorHit> GetCursorHit() const = 0;
 	/// The game's interface, whose text and font the rooms write their scrolls and signs with, whose options the options
 	/// room opens and over which the future room shows its words, or null without one
-	virtual void SetInterface(gui::GameInterface* interface) = 0;
+	virtual void SetInterface(TempleScreenInterface* interface) = 0;
+	/// The functions that put the draw of the rooms or the draw of the island in the locator. Only the game draws, so
+	/// only the game gives them. With no functions, the temple makes no draw.
+	struct DrawMakers
+	{
+		std::function<void()> temple;
+		std::function<void()> island;
+	};
+	virtual void SetDrawMakers(DrawMakers makers) = 0;
 	/// A press on one of the rooms' controls takes the mouse: on a scroll, dragging the mouse up
 	/// and down turns it, and letting go over a button presses it. True while a control has the press, which the camera
 	/// then leaves alone.
@@ -181,6 +172,9 @@ public:
 	/// The text written in the rooms this frame, the signs' labels and the text of the scroll the camera is close to, in
 	/// triangles of the font's texture, in the temple
 	[[nodiscard]] virtual const std::vector<OrientedTextVertex>& GetText() const = 0;
+	/// The lines of the scroll the camera is close to that hold a gesture's or a control's picture this frame, in the
+	/// world
+	[[nodiscard]] virtual const std::vector<temple::scroll_pictures::WorldPicture>& GetScrollPictures() const = 0;
 	/// The font's texture the text is drawn from, null without the game's interface
 	[[nodiscard]] virtual const graphics::Texture2D* GetTextTexture() const = 0;
 	/// The island over the main room's pool this frame, in triangles in the room, textured with the land seen from above
@@ -246,6 +240,8 @@ public:
 	virtual void ActivateAfterFrame(TempleRoom room) = 0;
 	/// The frame is drawn: the player goes into the temple if they asked to during the frame
 	virtual void FrameDrawn() = 0;
+	/// The player goes into the temple when the frame that is drawn now ends
+	[[nodiscard]] virtual bool GoesInAfterFrame() const = 0;
 	/// Takes the player to a room of the temple, from outside or from another room, and keeps them there, as the game
 	/// does with the save game room once the game is over: going to another room or out of the temple ends the game
 	virtual void EnterLockedRoom(TempleRoom room) = 0;
@@ -265,5 +261,9 @@ public:
 	/// After a load of a saved game: the temple gives back the dialogue that the save kept for it, if nobody has the
 	/// dialogue now. Then, kept or not, the box shows its texts again and the newest starts its reading time again.
 	virtual void ShowHelpAfterLoad() = 0;
+	/// The warm-up of a load calls draw while the temple shows a visit: all the rooms are there and the temple draws all of
+	/// them. After the draw, the rooms go and the island draws again. Nothing that the game keeps or saves changes. When
+	/// the player is in the temple, this does nothing.
+	virtual void WarmUpVisit(const std::function<void()>& draw) = 0;
 };
 } // namespace openblack

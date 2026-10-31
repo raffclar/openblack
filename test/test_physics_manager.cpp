@@ -17,6 +17,7 @@
 #include "ECS/Components/Animal.h"
 #include "ECS/Components/AnimatedStatic.h"
 #include "ECS/Components/Ball.h"
+#include "ECS/Components/BuildingDamage.h"
 #include "ECS/Components/Creature.h"
 #include "ECS/Components/DeadTree.h"
 #include "ECS/Components/Feature.h"
@@ -68,6 +69,9 @@ protected:
 		auto& altar = _info->mobileStatic.at(static_cast<size_t>(MobileStaticInfo::StandaloneAltar));
 		altar.mobileType = MobileStaticInfo::None;
 		altar.meshId = MeshId::Dummy;
+		auto& idol = _info->mobileStatic.at(static_cast<size_t>(MobileStaticInfo::Idol));
+		idol.mobileType = MobileStaticInfo::Idol;
+		idol.meshId = MeshId::Dummy;
 		auto& offering = _info->pot.at(0);
 		offering.meshId = MeshId::I_OfferingFood;
 		offering.canBecomeAPhysicsObject = 1;
@@ -155,6 +159,15 @@ TEST_F(PhysicsClassesTest, LanternsAndTheSingingStonesBaseArePlainObjects)
 	EXPECT_TRUE(base.interacts);
 	EXPECT_EQ(base.row, MaterialRow::DefaultUnmovable);
 	EXPECT_FALSE(base.dynamic);
+}
+
+TEST_F(PhysicsClassesTest, AnImmovableIdolStaysAnObstacleThatIsHit)
+{
+	// The quest idol is held immovable. It does not move, but a body that hits it still records a hit on it
+	const auto idol = Classify(Static(MobileStaticInfo::Idol), {.immovable = true});
+	EXPECT_TRUE(idol.interacts);
+	EXPECT_TRUE(idol.immovable);
+	EXPECT_FALSE(idol.dynamic);
 }
 
 TEST_F(PhysicsClassesTest, AThingHeldImmovableNeverMoves)
@@ -400,6 +413,19 @@ TEST_F(PhysicsClassesTest, FieldsAreNeverInThePhysics)
 	_registry.Assign<Field>(field);
 	EXPECT_EQ(Classify(field).body, BodyKind::None);
 	EXPECT_FALSE(Classify(field).interacts);
+}
+
+// A piece broken off a building takes no info row. Its body comes from its triangles, and its material is the material
+// of building pieces, which also gives the sounds of its hits.
+TEST_F(PhysicsClassesTest, ABuildingPieceHasTheMaterialOfPieces)
+{
+	const auto piece = _registry.Create();
+	_registry.Assign<BuildingPiece>(piece);
+	const auto facts = Classify(piece);
+	EXPECT_EQ(facts.body, BodyKind::BuildingPiece);
+	EXPECT_EQ(facts.row, MaterialRow::Fragment);
+	EXPECT_FALSE(facts.fixedMass.has_value());
+	EXPECT_TRUE(facts.dynamic);
 }
 
 TEST(PhysicsClasses, WeightGrowsWithTheCubeOfTheScaleAndNeverReachesNothing)

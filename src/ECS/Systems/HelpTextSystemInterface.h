@@ -26,16 +26,12 @@ namespace openblack::gui
 class TextDatabase;
 }
 
-namespace openblack::help
-{
-class AdvisorVoices;
-} // namespace openblack::help
-
 namespace openblack::ecs::systems
 {
 
 /// The dialogue the scripts show and have spoken: the help texts at the bottom of the screen, the advisors' and the
-/// narrators' voices saying them, and the player clicking them on
+/// narrators' voices saying them, and the player clicking them on. The turns and the scripts use this system. The
+/// advisors' voices that this computer plays are in AdvisorVoiceSystemInterface.
 class HelpTextSystemInterface: public SavedStateInterface
 {
 public:
@@ -47,10 +43,6 @@ public:
 		uint32_t realMs {0};
 		/// Inside the temple the texts go by real time
 		bool inTemple {false};
-		/// The player clicked this frame. The next turn takes the click.
-		bool click {false};
-		/// The key that cuts a text short is held: the keypad's Enter. The next turn takes it.
-		bool skipKey {false};
 	};
 
 	virtual ~HelpTextSystemInterface() = default;
@@ -76,10 +68,13 @@ public:
 	/// The advisors stop talking; the texts stay
 	virtual void StopVoices() = 0;
 
-	/// Once a frame: the voices start and stop, the newest text slides in, and the player's click waits for the next turn
+	/// Once a frame: the newest text slides in
 	virtual void Update(const Frame& frame) = 0;
+	/// The player clicked the dialogue, or holds the key that cuts a text short (the keypad's Enter). The turn gives
+	/// them from the player's command (player_commands::DialogueClick). The next turn of the dialogue takes them.
+	virtual void TakeClick(bool click, bool skipKey) = 0;
 	/// Before the scripts' turn, in the world or in the temple: the scripts' clock moves on by the turn's time, and the
-	/// dialogue takes the clicks of the frames since the last turn
+	/// dialogue takes the clicks that came since the last turn
 	virtual void ProcessTurn(uint32_t milliseconds) = 0;
 
 	/// A script shows a help text and has it said; false for an invalid text, which shows the first
@@ -116,9 +111,6 @@ public:
 	[[nodiscard]] virtual const help::TextFrame* Layout(glm::ivec2 screen, int barPixels,
 	                                                    const help::WidthFn& widthFn) const = 0;
 
-	/// The advisors' voices
-	[[nodiscard]] virtual help::AdvisorVoices& GetVoices() = 0;
-	[[nodiscard]] virtual const help::AdvisorVoices& GetVoices() const = 0;
 	/// The texts shown, nothing before the start
 	[[nodiscard]] virtual const help::DialogueText* GetDialogue() const = 0;
 	/// The help texts that the scripts showed, newest last, which the library's last scroll shows

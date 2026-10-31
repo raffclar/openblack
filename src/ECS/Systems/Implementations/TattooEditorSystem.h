@@ -35,14 +35,22 @@ public:
 		virtual void Write(entt::entity creature, const creature_tattoo::Slots& slots) = 0;
 		/// The creature keeps the block of pictures that its tattoos use, in place of the block that it had
 		virtual void WritePictures(entt::entity creature, std::vector<uint8_t> pictures) = 0;
-		/// The tattoos that a skin shows in place of its slots, or none to show its slots again
-		virtual void Show(entt::entity shown, std::optional<creature_tattoo::Slots> slots) = 0;
+		/// The tattoos that the skin of the menu's creature shows in place of its slots, or none to show its slots
+		/// again. The menu's creature is a thing of the drawn registry, not of the land.
+		virtual void ShowMenu(entt::entity shown, std::optional<creature_tattoo::Slots> slots) = 0;
+		/// The skin of the menu's creature is painted again
+		virtual void PaintMenu(entt::entity shown) = 0;
 		/// The masks of the creature's player are made again from the creature's tattoos
 		virtual void RemakeMasks(entt::entity creature, creature_tattoo::Sheet sheet) = 0;
 		/// The skin is painted again
 		virtual void Paint(entt::entity creature) = 0;
-		/// The copy of the creature that the Creature Cave shows, with a skin of its own
+		/// The copy of the creature that the Creature Cave shows, with a skin of its own. The copy is a thing of the
+		/// temple's rooms, not of the land, so it has the calls that follow.
 		[[nodiscard]] virtual std::optional<entt::entity> CaveCopy(entt::entity creature) const = 0;
+		/// The tattoos that the skin of the copy shows in place of its slots, or none to show its slots again
+		virtual void ShowCopy(entt::entity copy, std::optional<creature_tattoo::Slots> slots) = 0;
+		/// The skin of the copy is painted again
+		virtual void PaintCopy(entt::entity copy) = 0;
 	};
 
 	/// The creatures' skins in the registry
@@ -78,7 +86,10 @@ private:
 	/// editor shows is painted again.
 	void Remake();
 	/// The creature that the editor shows: the copy in the Creature Cave, or the creature of the main menu
-	[[nodiscard]] std::optional<entt::entity> Shown() const;
+	/// Paints the skin that the editor shows: the creature of the menu, the copy in the cave, or the creature
+	void PaintShown();
+	/// Whether the editor shows the player's creature itself, with no copy and no creature of the menu
+	[[nodiscard]] bool ShowsCreature() const;
 
 	std::unique_ptr<Skin> _skin;
 	bool _open {false};

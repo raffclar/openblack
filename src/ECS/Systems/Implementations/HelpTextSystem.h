@@ -12,12 +12,9 @@
 #include <memory>
 #include <optional>
 
-#include <entt/entity/entity.hpp>
-
-#include "Audio/SilentPlayback.h"
 #include "ECS/Systems/HelpTextSystemInterface.h"
-#include "Help/AdvisorVoices.h"
 #include "Help/DialogueText.h"
+#include "Sound/SilentPlayback.h"
 
 #if !defined(LOCATOR_IMPLEMENTATIONS)
 #error "ECS System implementations should only be included in Locator.cpp"
@@ -29,8 +26,6 @@ namespace openblack::ecs::systems
 class HelpTextSystem final: public HelpTextSystemInterface
 {
 public:
-	HelpTextSystem();
-
 	void Start(const gui::TextDatabase& texts, int screenHeight) override;
 	[[nodiscard]] bool IsStarted() const override { return _dialogue != nullptr; }
 	void SetTextChoices(const TextChoices& choices) override;
@@ -40,6 +35,7 @@ public:
 
 	void StopVoices() override;
 	void Update(const Frame& frame) override;
+	void TakeClick(bool click, bool skipKey) override;
 	void ProcessTurn(uint32_t milliseconds) override;
 	bool RunText(bool singleLine, uint32_t text, int32_t withInteraction) override;
 	bool RunTextWithNumber(bool singleLine, uint32_t text, float number, int32_t withInteraction) override;
@@ -56,8 +52,6 @@ public:
 	[[nodiscard]] int32_t GetNarrator(uint32_t text) const override;
 	[[nodiscard]] std::u16string GetWords(uint32_t text) const override;
 	[[nodiscard]] const help::TextFrame* Layout(glm::ivec2 screen, int barPixels, const help::WidthFn& widthFn) const override;
-	[[nodiscard]] help::AdvisorVoices& GetVoices() override { return _voices; }
-	[[nodiscard]] const help::AdvisorVoices& GetVoices() const override { return _voices; }
 	[[nodiscard]] const help::DialogueText* GetDialogue() const override { return _dialogue.get(); }
 	[[nodiscard]] const help::StoryHistory& GetStoryHistory() const override { return _storyHistory; }
 
@@ -65,12 +59,6 @@ private:
 	/// Keeps a help text that a script showed in the story history, an invalid text as the first text
 	void RecordStoryLine(uint32_t text, int32_t withInteraction, float number);
 
-	/// The voices' sounds and clock, from the game's audio
-	[[nodiscard]] help::AdvisorVoices::Audio VoiceAudio();
-	/// The advisors' line plays: as the sound device tells, or by the length of its sample once the device is lost
-	[[nodiscard]] bool AdvisorLinePlays() const;
-	/// The voices' gestures, given to the advisors' bodies
-	[[nodiscard]] static help::AdvisorVoices::Hooks VoiceHooks();
 	/// What the dialogue reads and has done
 	[[nodiscard]] help::DialogueText::Queries DialogueQueries();
 	[[nodiscard]] help::DialogueText::Hooks DialogueHooks();
@@ -78,19 +66,12 @@ private:
 	void AdvisorSays(int32_t narrator, uint32_t text);
 
 	const gui::TextDatabase* _texts {nullptr};
-	help::AdvisorVoices _voices;
 	std::unique_ptr<help::DialogueText> _dialogue;
 	help::StoryHistory _storyHistory;
 	TextChoices _textChoices;
-	/// The sound saying the advisors' line
-	entt::entity _advisorLine {entt::null};
-	/// When that sound started and its length. Once the machine loses the sound device, the line lasts this long with no
-	/// sound.
-	audio::SilentPlayback _advisorPlayback;
 	/// The advisors' line as the scripts time it on their clock: from its start delay, for the length of its sample
 	std::optional<audio::SilentPlayback> _scriptAdvisorLine;
-	bool _inTemple {false};
-	/// The player's click and key of the frames since the last turn
+	/// The player's click and key that came since the last turn of the dialogue
 	bool _pendingClick {false};
 	bool _pendingSkipKey {false};
 };

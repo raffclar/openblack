@@ -24,9 +24,12 @@
 
 #include "3D/OrientedText.h"
 #include "3D/TempleInteriorInterface.h"
+#include "3D/TempleSubMeshTexture.h"
 #include "Graphics/GraphicsHandle.h"
 #include "Help/StoryHistory.h"
 #include "Input/KeyBindings.h"
+#include "Temple/ScrollFacts.h"
+#include "Temple/ScrollPictureLine.h"
 
 namespace openblack
 {
@@ -44,71 +47,7 @@ class TextDatabase;
 class TempleScrolls
 {
 public:
-	/// What the player's creature's scrolls tell of it
-	struct CreatureFacts
-	{
-		std::u16string name;
-		int32_t age {0};
-		/// Percentages
-		int32_t health {0};
-		int32_t energy {0};
-		int32_t strength {0};
-		int32_t fatness {0};
-		int32_t exhaustion {0};
-		int32_t dehydration {0};
-		int32_t poo {0};
-		/// From -1, evil, to 1, good
-		float alignment {0.0f};
-		/// From -1, cold, to 1, hot
-		float warmth {0.0f};
-		/// From 0, healthy, to 1, ill
-		float illness {0.0f};
-		/// The miracle cast on the creature, of the 16 HELP_TEXT_CREATURE_RECEIVED_SPELL texts
-		std::optional<int32_t> miracleApplied;
-		/// People killed, animals killed, creatures defeated, battles fought, battles won, poos and mushrooms eaten
-		std::array<int32_t, 7> tallies {};
-		/// Taking food from the fields, the totem, the village store, fishing and dancing
-		std::array<bool, 5> actionsKnown {};
-		/// Each desire the creature has, the text of it ("HELP_TEXT_ROOM_PERSONALITY_GREEDY" and so on) and how much,
-		/// of the ten HELP_TEXT_CREATURE_ATTITUDE texts from "extremely"
-		struct Desire
-		{
-			std::string_view text;
-			int32_t attitude;
-		};
-		std::vector<Desire> desires;
-		/// What the creature thinks of its god, from -1 to 1, if anything
-		std::optional<float> opinionOfGod;
-		/// How much attention its god has paid it, of the five HELP_TEXT_HOW_MUCH texts from 0
-		int32_t attention {0};
-		/// Each other creature it knows: its name, what it thinks of it, from -1 to 1, and how much attention that
-		/// creature has paid it, of the five HELP_TEXT_HOW_MUCH texts, if any
-		struct KnownCreature
-		{
-			std::u16string name;
-			float opinion {0.0f};
-			std::optional<int32_t> attention;
-		};
-		std::vector<KnownCreature> creatures;
-		/// Whether it thinks it knows its god's dominant desire
-		bool knowsGodsDesire {false};
-		/// The creatures, temples, flocks and forests it knows about
-		std::array<int32_t, 4> known {};
-		/// How it leans in its fights, from -1 to 1, which the belts on the attack dummies show
-		float fightBalance {0.0f};
-		/// The miracles it knows of, the text of each and how much of it it has learnt
-		struct Miracle
-		{
-			/// The number of the game's help text for having learnt it
-			uint32_t text;
-			int32_t percent;
-			/// Its place in the game's table of miracles, and how far it is learnt, 0 to 100, which the medals and
-			/// seeds by the magic plinths show
-			uint32_t miracle {0};
-			float learnt {0.0f};
-		};
-		std::vector<Miracle> miracles;
-	};
+	using CreatureFacts = temple_scrolls::CreatureFacts;
 
 	/// A saved game in the save game room: its date and name
 	struct SavedGame
@@ -160,8 +99,45 @@ public:
 	TempleScrolls(const TempleScrolls&) = delete;
 	TempleScrolls& operator=(const TempleScrolls&) = delete;
 
-	/// As the rooms are set up: finds each scroll's submesh, makes its texture and writes it
-	void Create(const Facts& facts);
+	/// What a texture of a scroll was last written with. The same gives the same texels.
+	struct Drawn
+	{
+		std::optional<std::u16string> text;
+		int32_t position;
+		bool textInFront;
+		uint16_t side;
+		bool operator==(const Drawn&) const = default;
+	};
+	/// The textures of the scrolls of an earlier visit and what they show, which the next visit uses again. It destroys
+	/// the textures that no visit took back.
+	class KeptTextures
+	{
+	public:
+		KeptTextures() = default;
+		~KeptTextures();
+		KeptTextures(const KeptTextures&) = delete;
+		KeptTextures& operator=(const KeptTextures&) = delete;
+		KeptTextures(KeptTextures&& other) noexcept;
+		KeptTextures& operator=(KeptTextures&& other) noexcept;
+
+	private:
+		friend class TempleScrolls;
+		struct Entry
+		{
+			graphics::TextureHandle texture;
+			uint16_t side;
+			std::optional<Drawn> drawn;
+			uint32_t textHeight;
+		};
+		/// By the scroll's place in the rooms, none for a place with no texture
+		std::vector<std::optional<Entry>> _entries;
+	};
+
+	/// As the rooms are set up: finds each scroll's submesh, makes its texture and writes it. The textures of an earlier
+	/// visit are used again, and a scroll that shows the same as it did then is not written again.
+	void Create(const Facts& facts, KeptTextures kept = {});
+	/// Gives up the textures of the scrolls for the next visit. The scrolls then have none.
+	[[nodiscard]] KeptTextures TakeTextures();
 
 	/// Where the camera looks at a scroll from, and the point it looks at, in the temple
 	struct Focus
@@ -197,25 +173,10 @@ public:
 	[[nodiscard]] std::vector<Control> GetControls(TempleRoom room) const;
 	/// The text of the scroll the camera is close to, drawn in front of it in the temple
 	void AppendFocusedText(std::vector<OrientedTextVertex>& vertices, const Facts& facts) const;
+	/// The lines of the scroll the camera is close to that hold a gesture's or a control's picture, in the world
+	void AppendFocusedPictures(std::vector<temple::scroll_pictures::WorldPicture>& pictures, const Facts& facts) const;
 
-	/// The text of a scroll, written as its room writes it
-	enum class Content
-	{
-		World,
-		CreatureAttributes,
-		CreatureActions,
-		CreatureMind,
-		CreatureMiracles,
-		Challenge,
-		SaveGame,
-		LibraryStaff,
-		LibraryControl,
-		LibraryCreature,
-		LibraryVillageLife,
-		LibraryMiracles,
-		LibraryDidYouKnow,
-		LibraryHistory,
-	};
+	using Content = temple_scrolls::Content;
 	/// Writes the scrolls of a content again, as the save game room writes its scroll after a save, a load or a delete
 	void Rewrite(Content content, const Facts& facts);
 	/// The text for a scroll, or none when the room leaves the scroll unwritten. The story history starts at the line
@@ -246,6 +207,8 @@ private:
 		Content content;
 		std::optional<uint32_t> subMesh;
 		std::optional<graphics::TextureHandle> texture;
+		/// What the texture shows now
+		std::optional<Drawn> drawn;
 		int32_t position {0};
 		uint32_t textHeight {0};
 		/// The scroll's frame and box, from its mesh
@@ -253,6 +216,16 @@ private:
 		glm::vec3 min {0.0f};
 		glm::vec3 max {0.0f};
 	};
+	/// Where the text of a scroll goes in the world while the camera is close to it: the frame at the middle of the
+	/// scroll, and the world's length of one texel across and down the texture
+	struct Layout
+	{
+		TextFrame frame;
+		float across;
+		float down;
+	};
+	/// The layout of a scroll, none when its box has no height
+	[[nodiscard]] static std::optional<Layout> FocusedLayout(const Scroll& scroll);
 	/// The camera looks at a scroll, by its place among all the scrolls
 	Focus LookAt(size_t index, const Facts& facts);
 	/// Writes the scroll's texture, its text left off while the camera is close to it
@@ -263,6 +236,9 @@ private:
 	/// ChallengeScroll.raw, 256 by 256 RGB, which the rooms of pictures read for every scroll
 	std::vector<uint8_t> _parchment;
 	std::vector<Scroll> _scrolls;
+	/// At the lowest detail levels, each scroll's texture has half the texels along each side. The text is written at
+	/// the full size and then made smaller.
+	bool _halfSize {false};
 	/// The scroll being dragged and where the mouse was
 	std::optional<size_t> _held;
 	float _heldMouseY {0.0f};

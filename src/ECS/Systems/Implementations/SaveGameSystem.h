@@ -17,10 +17,13 @@
 #include <span>
 #include <string>
 #include <string_view>
+#include <unordered_map>
+#include <utility>
 #include <vector>
 
 #include <SavedObjects.h>
 #include <VanillaSaveFile.h>
+#include <VanillaWorld.h>
 #include <WorldFile.h>
 #include <entt/entity/fwd.hpp>
 #include <entt/meta/context.hpp>
@@ -29,6 +32,7 @@
 #include "ECS/SaveFileWriter.h"
 #include "ECS/SaveGameFiles.h"
 #include "ECS/Systems/SaveGameSystemInterface.h"
+#include "ECS/VanillaWorldImport.h"
 #include "ECS/WorldSave.h"
 
 #if !defined(LOCATOR_IMPLEMENTATIONS)
@@ -44,9 +48,12 @@ public:
 	bool Save(uint32_t slot, std::u16string_view name) override;
 	bool Load(uint32_t slot) override;
 	[[nodiscard]] std::vector<uint8_t> WorldState() override;
+	void PrepareWorldState() override;
+	[[nodiscard]] std::function<std::vector<uint8_t>()> WorldStateLater() override;
 	bool LoadWorldState(std::span<const uint8_t> bytes) override;
 	bool Delete(uint32_t slot) override;
 	[[nodiscard]] std::optional<std::vector<uint8_t>> ReadPictureFile(std::string_view name) const override;
+	[[nodiscard]] temple::save_game_room::SavedGamesStamp GetSavedGamesStamp() const override;
 	[[nodiscard]] std::vector<Slot> Slots() const override;
 	[[nodiscard]] std::vector<VanillaCheck> CheckVanillaRecords() const override;
 	void TakeTemplePicture() override;
@@ -54,8 +61,12 @@ public:
 	bool SaveOnExit(bool quitting) override;
 	[[nodiscard]] bool HasExitSave() const override;
 	void EndTurn() override;
-	bool QuickSave() override;
-	bool QuickLoad() override;
+	bool PressQuickSave() override;
+	bool PressQuickLoad() override;
+	bool DoQuickSave() override;
+	void DoQuickLoad() override;
+	[[nodiscard]] bool LoadAsked() const override { return _askedLoad.has_value(); }
+	bool LoadAskedSlot() override;
 	void NewLand() override;
 	[[nodiscard]] bool AnyPictureWaiting() const override;
 	void CollectPictures(const Screens& screens) override;
@@ -116,6 +127,37 @@ private:
 
 	bool LoadVanilla(uint32_t slot, const std::filesystem::path& slotFolder, const std::filesystem::path& mindFolder,
 	                 const std::vector<uint8_t>& bytes);
+	/// The entity that each object number of a world file of the game became
+	using VanillaMade = std::unordered_map<uint32_t, entt::entity>;
+	/// Reads the whole world file of the game. Puts its turn, its towns, buildings, villagers, forests, trees, fields, fish
+	/// farms, still things and script things into the world, then the running scripts, then takes the seeds of the
+	/// random draws. The creatures are in the world already. Returns whether the file reads as a whole world.
+	bool ImportVanillaWorld(uint32_t slot, std::span<const uint8_t> bytes, const VanillaMade& creatures);
+	/// Each villager that keeps the work of a state of the file: a field or a fish farm, and a spot in a field
+	using VanillaWorks = std::vector<std::pair<entt::entity, ecs::vanilla_world_import::ImportedWork>>;
+	/// Puts the turn, the towns, the buildings of the towns and the villagers of the world file into the world
+	bool ImportVanillaTowns(const gamesave::VanillaWorld& world, VanillaMade& made, VanillaWorks& works);
+	/// Puts the forests, the big forests and the trees of the world file into the world, in the place of those of the
+	/// land. Each town of the file takes its list of forests.
+	void ImportVanillaForests(const gamesave::VanillaWorld& world, VanillaMade& made);
+	/// Puts the fields and the fish farms of the world file into the world, in the place of those of the land. Each
+	/// villager that keeps its work takes its field or fish farm, and each field and farm takes its workers of the file.
+	void ImportVanillaFarms(const gamesave::VanillaWorld& world, VanillaMade& made, const VanillaWorks& works);
+	/// Puts the still things and the loose things of the world file into the world: the rocks and the other static
+	/// things, the lanterns, the dead trees, the features, the animated things and the loose things. A thing of the land
+	/// that the file has at the same place with the same row stays, the other things of the land go, and the file makes
+	/// the rest.
+	void ImportVanillaStatics(const gamesave::VanillaWorld& world, VanillaMade& made);
+	/// Puts the clock of day and night and the count of things made of the world file into the world
+	void ImportVanillaGameValues(const gamesave::VanillaWorld& world);
+	/// The markers, the timers, the highlights and the influences of the scripts replace those of the land. A heart of
+	/// a temple is the temple of the land.
+	void ImportVanillaScriptThings(const gamesave::VanillaWorld& world, VanillaMade& made);
+	/// The animals and the flocks of the file replace those of the land. The flock of a temple is the flock of the temple
+	/// of the land.
+	void ImportVanillaAnimals(const gamesave::VanillaWorld& world, VanillaMade& made);
+	/// The running scripts of the file replace the scripts of the land, with the table of the objects that they hold
+	void ImportVanillaScripts(const gamesave::VanillaWorld& world, const VanillaMade& made);
 	/// The world file in the game's layout of a save of a game that came from such a file
 	[[nodiscard]] std::vector<ecs::save_files::SaveFile> VanillaFiles(uint32_t slot, const std::filesystem::path& slotFolder,
 	                                                                  std::span<const gamesave::SavedCreature> saved,
@@ -147,11 +189,18 @@ private:
 	std::optional<std::filesystem::path> _challengeFolder;
 	bool _challengePicturesRead {false};
 	uint32_t _pictureRequests {0};
+	/// The count of the saves, the deletes and the slot pictures that the game started to write, for the save game room
+	uint64_t _savedGamesChanges {0};
 	/// The turns of the last autosave, the last quick save and the last load. The turn of the last autosave starts again
 	/// with each land; the other two stay from land to land.
 	uint32_t _lastAutosaveTurn {0};
 	uint32_t _lastQuickSaveTurn {0};
 	uint32_t _lastLoadTurn {0};
+	/// The turn of the last autosave that the game made, which a save keeps. After a load the next autosave waits from
+	/// the turn of the load, but a save still keeps the turn of the last real autosave.
+	uint32_t _autosaveTurnToSave {0};
+	/// The slot that a command of a turn asked to load. The game loads it after the draw of the frame.
+	std::optional<uint32_t> _askedLoad;
 };
 
 } // namespace openblack::ecs::systems

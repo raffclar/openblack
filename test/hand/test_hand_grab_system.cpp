@@ -15,6 +15,7 @@
 #include <map>
 #include <numbers>
 #include <set>
+#include <tuple>
 #include <type_traits>
 #include <utility>
 #include <variant>
@@ -23,6 +24,7 @@
 #include <gtest/gtest.h>
 
 #include "Animals/FishFarmRules.h"
+#include "ECS/Components/Creature.h"
 #include "ECS/Components/Forest.h"
 #include "ECS/Components/HandClicked.h"
 #include "ECS/Components/HandGrab.h"
@@ -31,6 +33,7 @@
 #include "ECS/Components/OneOffSpellSeed.h"
 #include "ECS/Components/Pot.h"
 #include "ECS/Components/Reward.h"
+#include "ECS/Components/Scaffold.h"
 #include "ECS/Components/Transform.h"
 #include "ECS/Components/Tree.h"
 #include "ECS/Components/Villager.h"
@@ -76,6 +79,15 @@ public:
 		return globe;
 	}
 
+	entt::entity AddScaffold(glm::vec3 position)
+	{
+		const auto scaffold = registry.Create();
+		registry.Assign<Transform>(scaffold, position, glm::mat3(1.0f), glm::vec3(0.7f));
+		registry.Assign<Scaffold>(scaffold);
+		sizes[scaffold] = {.radius = 2.0f, .height = 3.0f};
+		return scaffold;
+	}
+
 	entt::entity AddTree(glm::vec3 position, float weight)
 	{
 		const auto tree = registry.Create();
@@ -115,6 +127,7 @@ public:
 		const auto found = reportedPlaces.find(of);
 		return found != reportedPlaces.end() ? found->second : ReportedHandPlace();
 	}
+	[[nodiscard]] glm::vec3 HeldPlaceAt(glm::vec3 point) const override { return point + heldPlaceStep; }
 	void SetActingPlayer(std::optional<PlayerNames> player) override { acting = player; }
 	[[nodiscard]] std::optional<PlayerNames> GetActingPlayer() const override { return acting; }
 	[[nodiscard]] std::optional<PlayerNames> OwnHandPlayer() const override { return ownHandPlayer; }
@@ -160,19 +173,24 @@ public:
 	}
 	void CreateReaction(const ReactionRequest& request) override { reactions.push_back(request); }
 	void RemoveReactions(entt::entity, Reaction) override {}
+	void StopReactionSpreadInHand(entt::entity object) override { spreadStopped.push_back(object); }
+	void SpreadReactionsAgain(entt::entity object) override { spreadAgain.push_back(object); }
 	void FireStartedMoving(entt::entity, bool) override {}
 	void CatchFirefly(entt::entity) override {}
 	void CountHelpEvent(uint32_t event) override { helpEvents.push_back(event); }
 	void ForgetGesturePath() override { ++pathsForgotten; }
+	[[nodiscard]] bool IsLocalHand() const override { return localHand; }
 	void HeatHeld(entt::entity object) override { heated.push_back(object); }
 	void ArtefactTaken(entt::entity object, PlayerNames) override { artefactsTaken.push_back(object); }
 	void GlobeIntoHand(entt::entity globe, PlayerNames player) override { globesTaken.emplace_back(globe, player); }
+	void ScaffoldIntoHand(entt::entity scaffold, PlayerNames player) override { scaffoldsTaken.emplace_back(scaffold, player); }
 	void PlaySample(uint32_t sample, glm::vec3) override { samples.push_back(sample); }
 	bool TapThing(entt::entity object, glm::vec3, PlayerNames) override
 	{
 		tapped.push_back(object);
 		return true;
 	}
+	[[nodiscard]] bool ValidToTap(entt::entity object) const override { return tappable.contains(object); }
 	[[nodiscard]] std::optional<creature_giving::Verdict> GiveVerdict(entt::entity target, entt::entity) const override
 	{
 		const auto found = creatures.find(target);
@@ -289,10 +307,21 @@ public:
 		}
 		return result;
 	}
-	[[nodiscard]] player_commands::ThrowStart ThrowStartOf(entt::entity object, bool alignToSlope) override
+	[[nodiscard]] hand_grab::throw_lead::LedThrow ThrowStartOf(entt::entity object, bool alignToSlope, glm::vec3 velocity,
+	                                                           int leadTurns) override
 	{
 		startsAsked.emplace_back(object, alignToSlope);
-		return throwStart;
+		leadsAsked.push_back(leadTurns);
+		const auto* inHand = registry.TryGet<const InHand>(object);
+		drawnAtStart.push_back(inHand != nullptr && inHand->drawn.has_value());
+		return {.start = throwStart, .velocity = ledVelocity.value_or(velocity), .flight = flight};
+	}
+	[[nodiscard]] uint32_t ReportLatencyMs() const override { return reportLatencyMs; }
+	[[nodiscard]] uint32_t FrameTurn() const override { return frameTurn; }
+	[[nodiscard]] float FrameTurnFraction() const override { return frameTurnFraction; }
+	void DrawThrownPose(entt::entity object, const physics::Pose& pose) override
+	{
+		drawnThrown.emplace_back(object, pose.origin);
 	}
 	void StartThrowFrom(entt::entity object, const player_commands::ThrowStart& start) override
 	{
@@ -410,6 +439,19 @@ public:
 	{
 		return stores.contains(target) || (plinths.contains(target) && gateStones.contains(held));
 	}
+	[[nodiscard]] bool JoinsScaffold(entt::entity target, entt::entity held) const override
+	{
+		return scaffolds.contains(target) && scaffolds.contains(held);
+	}
+	void JoinScaffold(entt::entity target, entt::entity held) override
+	{
+		joined.emplace_back(target, held, registry.AllOf<InHand>(held));
+	}
+	entt::entity RestOfScaffold(entt::entity scaffold) override
+	{
+		restsAsked.push_back(scaffold);
+		return restOfScaffold;
+	}
 	bool LayGateStone(entt::entity plinth, entt::entity stone) override
 	{
 		if (!plinths.contains(plinth) || !gateStones.contains(stone))
@@ -449,6 +491,8 @@ public:
 	/// The hands of the other gods of a network game, and where each last reported its hand
 	std::set<entt::entity> otherHands;
 	std::map<entt::entity, glm::vec3> reportedPlaces;
+	/// What the map position of a held thing adds to the reported point of the hand
+	glm::vec3 heldPlaceStep {0.0f};
 	/// The second player has hands only once a network game gave them
 	bool secondPlayerHasHands {false};
 	std::optional<PlayerNames> acting;
@@ -475,13 +519,18 @@ public:
 	std::set<entt::entity> bodies;
 	std::vector<entt::entity> leftWorld;
 	std::vector<ReactionRequest> reactions;
+	std::vector<entt::entity> spreadStopped;
+	std::vector<entt::entity> spreadAgain;
 	std::vector<entt::entity> heated;
 	std::vector<uint32_t> helpEvents;
 	int pathsForgotten {0};
+	bool localHand {true};
 	std::vector<entt::entity> artefactsTaken;
 	std::vector<std::pair<entt::entity, PlayerNames>> globesTaken;
+	std::vector<std::pair<entt::entity, PlayerNames>> scaffoldsTaken;
 	std::vector<uint32_t> samples;
 	std::vector<entt::entity> tapped;
+	std::set<entt::entity> tappable;
 	std::vector<entt::entity> villagersInHand;
 	std::vector<entt::entity> uprooted;
 	std::vector<std::pair<entt::entity, entt::entity>> treesGiven;
@@ -507,6 +556,17 @@ public:
 	/// The start that the world gives for a throw, and the starts that the hand asked for and used
 	player_commands::ThrowStart throwStart;
 	std::vector<std::pair<entt::entity, bool>> startsAsked;
+	/// For each start asked for, whether the thing had a drawn place in the hand
+	std::vector<bool> drawnAtStart;
+	/// The lead of each throw: the latency of the reports, the turns that the hand asked for, the velocity and the
+	/// flight after the lead, and where the frames drew the thrown thing
+	uint32_t reportLatencyMs {0};
+	std::vector<int> leadsAsked;
+	std::optional<glm::vec3> ledVelocity;
+	std::optional<hand_grab::throw_lead::Flight> flight;
+	uint32_t frameTurn {0};
+	float frameTurnFraction {0.0f};
+	std::vector<std::pair<entt::entity, glm::vec3>> drawnThrown;
 	std::vector<std::pair<entt::entity, player_commands::ThrowStart>> startedFrom;
 	std::vector<std::pair<entt::entity, glm::vec3>> twists;
 	uint32_t streams {0};
@@ -524,6 +584,12 @@ public:
 	std::set<entt::entity> plinths;
 	std::set<entt::entity> gateStones;
 	std::vector<std::pair<entt::entity, entt::entity>> laidStones;
+	/// The scaffolds that the hand can join, and each join: the target, the held scaffold, and whether the hand still
+	/// held it then
+	std::set<entt::entity> scaffolds;
+	std::vector<std::tuple<entt::entity, entt::entity, bool>> joined;
+	std::vector<entt::entity> restsAsked;
+	entt::entity restOfScaffold {entt::null};
 	std::map<entt::entity, uint32_t> stored;
 	std::vector<uint32_t> pouredAmounts;
 	std::vector<entt::entity> usedUp;
@@ -588,7 +654,7 @@ protected:
 			    }
 			    else if constexpr (std::is_same_v<Kind, player_commands::HandGive>)
 			    {
-				    system->DoGive(player, command.creature, command.object);
+				    system->DoGive(player, command.creature, command.object, command.leftHand);
 			    }
 			    else if constexpr (std::is_same_v<Kind, player_commands::HandTwist>)
 			    {
@@ -609,6 +675,10 @@ protected:
 			    else if constexpr (std::is_same_v<Kind, player_commands::HandClick>)
 			    {
 				    system->DoClick(player, command, commandTurn);
+			    }
+			    else if constexpr (std::is_same_v<Kind, player_commands::GiveCallOff>)
+			    {
+				    system->DoGiveCallOff(player, command.creature);
 			    }
 		    },
 		    action);
@@ -673,6 +743,46 @@ TEST_F(HandGrabSystemWithWorld, ARockIsTakenOnceTheHandHasFadedIntoItsPull)
 	ASSERT_FALSE(world->reactions.empty());
 	EXPECT_EQ(world->reactions.front().type, Reaction::ReactToHandPickUp);
 	EXPECT_EQ(world->reactions.front().initiator, world->hand);
+}
+
+// The debug tools let go at once with no command. In a network game, each computer does this let go in its own turn, so
+// the start must not come from the place that one computer drew.
+TEST_F(HandGrabSystemWithWorld, InANetworkGameTheLetGoOfTheToolsDoesNotStartFromTheDrawnPlace)
+{
+	world->networkGame = true;
+	const auto rock = world->AddRock({0.0f, 0.0f, 0.0f});
+	ASSERT_TRUE(system->TakeIntoHand(rock));
+	world->registry.Get<InHand>(rock).drawn = InHand::Drawn {.position = {1.0f, 2.0f, 3.0f}, .rotation = glm::mat3(1.0f)};
+	ASSERT_TRUE(system->LetGoAt(glm::vec3(0.0f)));
+	ASSERT_EQ(world->drawnAtStart.size(), 1u);
+	EXPECT_FALSE(world->drawnAtStart.front());
+}
+
+TEST_F(HandGrabSystemWithWorld, InAGameAloneTheLetGoOfTheToolsStartsFromTheDrawnPlace)
+{
+	const auto rock = world->AddRock({0.0f, 0.0f, 0.0f});
+	ASSERT_TRUE(system->TakeIntoHand(rock));
+	world->registry.Get<InHand>(rock).drawn = InHand::Drawn {.position = {1.0f, 2.0f, 3.0f}, .rotation = glm::mat3(1.0f)};
+	ASSERT_TRUE(system->LetGoAt(glm::vec3(0.0f)));
+	ASSERT_EQ(world->drawnAtStart.size(), 1u);
+	EXPECT_TRUE(world->drawnAtStart.front());
+}
+
+// The hand does not hold a creature as a thing. Because of this, the hand never gives a creature to a creature.
+TEST_F(HandGrabSystemWithWorld, TheHandNeverTakesACreature)
+{
+	const auto creature = world->registry.Create();
+	world->registry.Assign<Transform>(creature, glm::vec3(0.0f), glm::mat3(1.0f), glm::vec3(1.0f));
+	world->registry.Assign<Creature>(creature);
+	world->underCursor = creature;
+	Press();
+	for (int i = 0; i < 20; ++i)
+	{
+		Frame(10);
+	}
+	Release();
+	EXPECT_FALSE(system->GetHeld().has_value());
+	EXPECT_FALSE(world->registry.AllOf<InHand>(creature));
 }
 
 // Pressed with nothing under the cursor, the hand reaches for what stands nearest the land behind it; something under
@@ -772,6 +882,75 @@ TEST_F(HandGrabSystemWithWorld, AHeldPressCarriesAGlobeFromTheSide)
 	EXPECT_FLOAT_EQ(world->registry.Get<HandGrab>(world->hand).lowering, 0.7f * 2.0f);
 }
 
+TEST_F(HandGrabSystemWithWorld, AHeldPressCarriesAScaffoldFromTheSideAndItsWorkshopIsTold)
+{
+	const auto scaffold = world->AddScaffold({0.0f, 0.0f, 0.0f});
+	world->underCursor = scaffold;
+	EXPECT_TRUE(Press());
+	for (int i = 0; i < 40 && !system->GetHeld().has_value(); ++i)
+	{
+		Frame(10);
+	}
+	ASSERT_TRUE(system->GetHeld().has_value());
+	EXPECT_EQ(*system->GetHeld(), scaffold);
+	EXPECT_TRUE(world->tapped.empty());
+	// The hand tells the workshop one time, so that the workshop keeps the scaffold's place in its yard
+	ASSERT_EQ(world->scaffoldsTaken.size(), 1u);
+	EXPECT_EQ(world->scaffoldsTaken.front().first, scaffold);
+	const auto pose = system->GetHeldPose();
+	ASSERT_TRUE(pose.has_value());
+	EXPECT_EQ(pose->hold, HoldType::Side);
+}
+
+// A scaffold put down gently keeps what its building needs: the rest is a new scaffold, and the hand takes it
+TEST_F(HandGrabSystemWithWorld, TheRestOfAScaffoldPutDownStaysInTheHand)
+{
+	const auto scaffold = world->AddScaffold({0.0f, 0.0f, 0.0f});
+	world->underCursor = scaffold;
+	EXPECT_TRUE(Press());
+	for (int i = 0; i < 40 && !system->GetHeld().has_value(); ++i)
+	{
+		Frame(10);
+	}
+	ASSERT_EQ(system->GetHeld(), std::optional(scaffold));
+	world->restOfScaffold = world->AddScaffold({0.0f, 0.0f, 0.0f});
+	system->ForceDrop();
+	ASSERT_EQ(world->restsAsked, std::vector<entt::entity> {scaffold});
+	EXPECT_EQ(system->GetHeld(), std::optional(world->restOfScaffold));
+	EXPECT_TRUE(world->registry.AllOf<InHand>(world->restOfScaffold));
+	EXPECT_FALSE(world->registry.AllOf<InHand>(scaffold));
+	// The workshop system hears of the new scaffold in the hand
+	ASSERT_EQ(world->scaffoldsTaken.size(), 2u);
+	EXPECT_EQ(world->scaffoldsTaken.back().first, world->restOfScaffold);
+}
+
+// With no rest, the hand is empty after it lets go of a scaffold
+TEST_F(HandGrabSystemWithWorld, AScaffoldWithNoRestLeavesTheHandEmpty)
+{
+	const auto scaffold = world->AddScaffold({0.0f, 0.0f, 0.0f});
+	world->underCursor = scaffold;
+	EXPECT_TRUE(Press());
+	for (int i = 0; i < 40 && !system->GetHeld().has_value(); ++i)
+	{
+		Frame(10);
+	}
+	ASSERT_EQ(system->GetHeld(), std::optional(scaffold));
+	system->ForceDrop();
+	ASSERT_EQ(world->restsAsked, std::vector<entt::entity> {scaffold});
+	EXPECT_FALSE(system->GetHeld().has_value());
+}
+
+TEST_F(HandGrabSystemWithWorld, AShortPressOnAScaffoldTakesNothing)
+{
+	const auto scaffold = world->AddScaffold({0.0f, 0.0f, 0.0f});
+	world->underCursor = scaffold;
+	EXPECT_TRUE(Press());
+	Frame(50);
+	Release();
+	EXPECT_FALSE(system->GetHeld().has_value());
+	EXPECT_TRUE(world->scaffoldsTaken.empty());
+}
+
 TEST_F(HandGrabSystemWithWorld, WithTheLeashHeldAShortPressIsAnOrderInsteadOfATap)
 {
 	const auto rock = world->AddRock({0.0f, 0.0f, 0.0f});
@@ -798,6 +977,7 @@ TEST_F(HandGrabSystemWithWorld, ThingsOutOfTheInfluenceOrHeldByAScriptAreLeft)
 	world->registry.Remove<CannotBePickedUp>(rock);
 	// A rock wider than the hand can lift
 	const auto boulder = world->AddRock({5.0f, 0.0f, 0.0f}, 4.0f);
+	world->tappable.insert(boulder);
 	world->underCursor = boulder;
 	EXPECT_FALSE(Press());
 	// Out of the influence or held by a script nothing is tapped; a boulder the hand can't lift is tapped at once
@@ -861,6 +1041,33 @@ TEST_F(HandGrabSystemWithWorld, ATakeAtTheTurnAsksTheInfluenceAtTheReportedPoint
 	world->reportedCollide = glm::vec3(12.0f, 0.0f, 0.0f);
 	system->DoTake(world->HandPlayer(), other);
 	EXPECT_NE(system->GetHeld(), std::optional(other));
+}
+
+// The steps of a computer god take a thing also outside the influence of its player
+TEST_F(HandGrabSystemWithWorld, AComputerGodTakesAThingOutsideItsInfluence)
+{
+	world->borderX = 10.0f;
+	const auto rock = world->AddRock({12.0f, 0.0f, 0.0f});
+	world->pickedPoint = glm::vec3(12.0f, 0.0f, 0.0f);
+	world->reportedCollide = glm::vec3(12.0f, 0.0f, 0.0f);
+	// The take of a player outside the influence leaves the rock
+	system->DoTake(world->HandPlayer(), rock);
+	EXPECT_NE(system->GetHeld(), std::optional(rock));
+	// The take of a computer god takes it
+	system->DoComputerTake(world->HandPlayer(), rock);
+	EXPECT_EQ(system->GetHeld(), std::optional(rock));
+}
+
+// The other rules of a take apply to the steps of a computer god
+TEST_F(HandGrabSystemWithWorld, AComputerGodLeavesAThingThatCannotBePickedUp)
+{
+	world->borderX = 10.0f;
+	const auto rock = world->AddRock({8.0f, 0.0f, 0.0f});
+	world->pickedPoint = glm::vec3(8.0f, 0.0f, 0.0f);
+	world->reportedCollide = glm::vec3(8.0f, 0.0f, 0.0f);
+	world->registry.Assign<CannotBePickedUp>(rock);
+	system->DoComputerTake(world->HandPlayer(), rock);
+	EXPECT_NE(system->GetHeld(), std::optional(rock));
 }
 
 TEST_F(HandGrabSystemWithWorld, AScoopAsksTheInfluenceWhereThePileStands)
@@ -979,7 +1186,57 @@ TEST_F(HandGrabSystemWithWorld, TheGesturePathStartsAgainOnATakeAndALetGo)
 	EXPECT_EQ(world->pathsForgotten, 2);
 }
 
+// The hand of a computer god or of another player takes and lets go of things without wiping the local player's path
+TEST_F(HandGrabSystemWithWorld, TheGesturePathIsLeftAloneByAHandThatIsNotTheLocalOne)
+{
+	world->localHand = false;
+	const auto rock = world->AddRock({0.0f, 0.0f, 0.0f});
+	world->underCursor = rock;
+	Press();
+	for (int i = 0; i < 20 && !system->GetHeld().has_value(); ++i)
+	{
+		Frame(10);
+	}
+	Release();
+	ASSERT_TRUE(system->GetHeld().has_value());
+	EXPECT_EQ(world->pathsForgotten, 0);
+	world->underCursor.reset();
+	world->borderX = 10.0f;
+	world->pickedPoint = glm::vec3(8.0f, 0.0f, 0.0f);
+	Frame(10, {12.0f, 0.0f, 0.0f}, {12.0f, 0.0f, 0.0f});
+	Press();
+	Frame(10, {12.0f, 0.0f, 0.0f}, {12.0f, 0.0f, 0.0f});
+	Release();
+	EXPECT_FALSE(system->GetHeld().has_value());
+	EXPECT_EQ(world->pathsForgotten, 0);
+}
+
 // The hand says why a press on a thing wouldn't take it, as the inspector shows it
+// The hand stops the spread of the reactions of a thing that it takes. They spread again when the hand lets go.
+TEST_F(HandGrabSystemWithWorld, TheReactionsOfAHeldThingSpreadAgainOnALetGo)
+{
+	const auto rock = world->AddRock({0.0f, 0.0f, 0.0f});
+	world->underCursor = rock;
+	Press();
+	for (int i = 0; i < 20 && !system->GetHeld().has_value(); ++i)
+	{
+		Frame(10);
+	}
+	Release();
+	ASSERT_TRUE(system->GetHeld().has_value());
+	EXPECT_EQ(world->spreadStopped, std::vector<entt::entity> {rock});
+	EXPECT_TRUE(world->spreadAgain.empty());
+	world->underCursor.reset();
+	world->borderX = 10.0f;
+	world->pickedPoint = glm::vec3(8.0f, 0.0f, 0.0f);
+	Frame(10, {12.0f, 0.0f, 0.0f}, {12.0f, 0.0f, 0.0f});
+	Press();
+	Frame(10, {12.0f, 0.0f, 0.0f}, {12.0f, 0.0f, 0.0f});
+	Release();
+	EXPECT_FALSE(system->GetHeld().has_value());
+	EXPECT_EQ(world->spreadAgain, std::vector<entt::entity> {rock});
+}
+
 TEST_F(HandGrabSystemWithWorld, ItSaysWhyAThingWouldntBeTaken)
 {
 	const auto rock = world->AddRock({0.0f, 0.0f, 0.0f});
@@ -998,18 +1255,78 @@ TEST_F(HandGrabSystemWithWorld, ItSaysWhyAThingWouldntBeTaken)
 	EXPECT_NE(system->WhyNotTake(rock).find("busy"), std::string::npos);
 }
 
+TEST_F(HandGrabSystemWithWorld, ItSaysThatAPressOnAPileScoopsFromIt)
+{
+	const auto pile = world->registry.Create();
+	world->registry.Assign<Transform>(pile, glm::vec3(0.0f), glm::mat3(1.0f), glm::vec3(1.0f));
+	world->registry.Assign<Pot>(pile, Pot {.amount = 1000, .maxAmount = 2000, .type = PotInfo::FoodPile});
+	world->sizes[pile] = {.radius = 2.0f, .height = 3.0f};
+	EXPECT_TRUE(system->WouldScoop(pile));
+	EXPECT_FALSE(system->WouldScoop(world->AddRock({5.0f, 0.0f, 0.0f})));
+	// Not out of the influence
+	world->influence = false;
+	EXPECT_FALSE(system->WouldScoop(pile));
+	world->influence = true;
+	// Not from an empty pile
+	world->registry.Get<Pot>(pile).amount = 0;
+	EXPECT_FALSE(system->WouldScoop(pile));
+}
+
 TEST_F(HandGrabSystemWithWorld, APressTheHandCantTakeClicksTheThing)
 {
 	const auto rock = world->AddRock({0.0f, 0.0f, 0.0f});
 	world->underCursor = rock;
 	// Even out of the influence, where it isn't tapped
 	world->influence = false;
+	commandTurn = now / 100;
 	EXPECT_FALSE(Press());
 	const auto* clicked = world->registry.TryGet<const HandClicked>(world->hand);
 	ASSERT_NE(clicked, nullptr);
 	EXPECT_EQ(clicked->thing, rock);
 	EXPECT_EQ(clicked->thingTurn, now / 100);
 	EXPECT_TRUE(world->tapped.empty());
+}
+
+TEST_F(HandGrabSystemWithWorld, APressOnAThingAScriptFixedInPlaceIsAPressOnTheLand)
+{
+	const auto stone = world->AddRock({0.0f, 0.0f, 0.0f});
+	world->registry.Assign<CannotBePickedUp>(stone);
+	world->underCursor = stone;
+	commandTurn = now / 100;
+	EXPECT_FALSE(Press());
+	// The press does not click or tap the stone, in the influence or out of it
+	EXPECT_FALSE(world->registry.AllOf<HandClicked>(world->hand) &&
+	             world->registry.Get<HandClicked>(world->hand).thing != entt::null);
+	world->influence = false;
+	EXPECT_FALSE(Press());
+	EXPECT_FALSE(world->registry.AllOf<HandClicked>(world->hand) &&
+	             world->registry.Get<HandClicked>(world->hand).thing != entt::null);
+	EXPECT_TRUE(world->tapped.empty());
+	// Only the release clicks it, so one click of the button clicks it once
+	system->ClickReleased();
+	EXPECT_EQ(world->registry.Get<HandClicked>(world->hand).thing, stone);
+	// A thing that takes taps, or any thing with the leash loose in the hand, is clicked by the press
+	world->registry.Get<HandClicked>(world->hand).thing = entt::null;
+	world->tappable.insert(stone);
+	EXPECT_FALSE(Press());
+	EXPECT_EQ(world->registry.Get<HandClicked>(world->hand).thing, stone);
+	world->tappable.erase(stone);
+	world->registry.Get<HandClicked>(world->hand).thing = entt::null;
+	world->looseLeash = true;
+	EXPECT_FALSE(Press());
+	EXPECT_EQ(world->registry.Get<HandClicked>(world->hand).thing, stone);
+}
+
+TEST(HandGrabRules, APressTapsAThingTheHandCouldHoldOrThatTakesTaps)
+{
+	const hand_grab::Gate holdable {.valid = true};
+	const hand_grab::Gate fixed {.valid = true, .cannotBePickedUp = true};
+	const hand_grab::Gate notHoldable {.valid = false};
+	EXPECT_TRUE(hand_grab::PressTapsThing(holdable, false, false));
+	EXPECT_FALSE(hand_grab::PressTapsThing(fixed, false, false));
+	EXPECT_FALSE(hand_grab::PressTapsThing(notHoldable, false, false));
+	EXPECT_TRUE(hand_grab::PressTapsThing(fixed, true, false));
+	EXPECT_TRUE(hand_grab::PressTapsThing(notHoldable, false, true));
 }
 
 TEST_F(HandGrabSystemWithWorld, ATapClicksWhatIsUnderTheHandAsItIsLetGo)
@@ -1042,11 +1359,13 @@ TEST_F(HandGrabSystemWithWorld, LettingGoOverTheLandClicksThePlace)
 {
 	const auto rock = world->AddRock({0.0f, 0.0f, 0.0f});
 	world->underCursor = rock;
-	system->ClickReleased(7);
+	commandTurn = 7;
+	system->ClickReleased();
 	EXPECT_EQ(world->registry.Get<HandClicked>(world->hand).thing, rock);
 	world->underCursor.reset();
 	Frame(10, {}, {20.0f, 0.0f, 30.0f});
-	system->ClickReleased(8);
+	commandTurn = 8;
+	system->ClickReleased();
 	const auto& clicked = world->registry.Get<HandClicked>(world->hand);
 	EXPECT_TRUE(clicked.thing == entt::null);
 	EXPECT_EQ(clicked.place.x, map_coords::ToFixed(20.0f));
@@ -1054,13 +1373,12 @@ TEST_F(HandGrabSystemWithWorld, LettingGoOverTheLandClicksThePlace)
 	EXPECT_EQ(clicked.placeTurn, 8u);
 }
 
-TEST_F(HandGrabSystemWithWorld, InANetworkGameTheTurnWritesTheClicks)
+TEST_F(HandGrabSystemWithWorld, TheTurnWritesTheClicks)
 {
-	world->networkGame = true;
 	const auto rock = world->AddRock({0.0f, 0.0f, 0.0f});
 	world->underCursor = rock;
 	commandTurn = 12;
-	system->ClickThing(rock, 7);
+	system->ClickThing(rock);
 	ASSERT_EQ(world->sent.size(), 1u);
 	EXPECT_EQ(std::get<player_commands::HandClick>(world->sent[0]).thing, rock);
 	// The click has the number of the turn that wrote it, not of the frame that sent it
@@ -1070,7 +1388,7 @@ TEST_F(HandGrabSystemWithWorld, InANetworkGameTheTurnWritesTheClicks)
 	world->underCursor.reset();
 	Frame(10, {}, {20.0f, 0.0f, 30.0f});
 	commandTurn = 13;
-	system->ClickReleased(8);
+	system->ClickReleased();
 	const auto& clicked = world->registry.Get<HandClicked>(world->hand);
 	EXPECT_TRUE(clicked.thing == entt::null);
 	EXPECT_EQ(clicked.place.x, map_coords::ToFixed(20.0f));
@@ -1080,7 +1398,7 @@ TEST_F(HandGrabSystemWithWorld, InANetworkGameTheTurnWritesTheClicks)
 	world->underCursor = gone;
 	waiting.clear();
 	world->onCommand = [this](const player_commands::Action& action) { waiting.push_back(action); };
-	system->ClickReleased(9);
+	system->ClickReleased();
 	world->registry.Destroy(gone);
 	RunWaiting();
 	EXPECT_TRUE(world->registry.Get<HandClicked>(world->hand).thing == entt::null);
@@ -1093,12 +1411,13 @@ TEST_F(HandGrabSystemWithWorld, ARewardWithTheLeashLooseInTheHandIsTheLand)
 	world->underCursor = chest;
 	world->looseLeash = true;
 	Frame(10, {}, {20.0f, 0.0f, 30.0f});
-	system->ClickReleased(8);
+	commandTurn = 8;
+	system->ClickReleased();
 	const auto& clicked = world->registry.Get<HandClicked>(world->hand);
 	EXPECT_TRUE(clicked.thing == entt::null);
 	EXPECT_EQ(clicked.placeTurn, 8u);
 	world->looseLeash = false;
-	system->ClickReleased(9);
+	system->ClickReleased();
 	EXPECT_EQ(world->registry.Get<HandClicked>(world->hand).thing, chest);
 }
 
@@ -1106,11 +1425,16 @@ TEST_F(HandGrabSystemWithWorld, ClicksAreForgottenAfterFifteenSeconds)
 {
 	const auto rock = world->AddRock({0.0f, 0.0f, 0.0f});
 	world->underCursor = rock;
-	system->ClickReleased(now / 100);
-	// 149 turns of 100 ms is under 15 seconds; 150 is just over, as a thousandth in single precision is a little more
+	commandTurn = now / 100;
+	system->ClickReleased();
+	// 149 turns of 100 ms is under 15 seconds; 150 is just over, as a thousandth in single precision is a little more.
+	// The turn forgets the clicks, not the frames.
 	Frame(14900);
+	system->InterfaceTurn(now, now / 100);
 	EXPECT_EQ(world->registry.Get<HandClicked>(world->hand).thing, rock);
 	Frame(100);
+	EXPECT_EQ(world->registry.Get<HandClicked>(world->hand).thing, rock);
+	system->InterfaceTurn(now, now / 100);
 	EXPECT_TRUE(world->registry.Get<HandClicked>(world->hand).thing == entt::null);
 }
 
@@ -1702,6 +2026,16 @@ TEST_F(HandGrabSystemWithWorld, TheTurnHasAHeldThingAtTheReportedHandAtItsOwnTur
 	EXPECT_EQ(transform.scale, held.scale);
 }
 
+TEST_F(HandGrabSystemWithWorld, TheTurnHasAHeldThingAtTheMapPositionOfTheReportedHand)
+{
+	const auto rock = world->AddRock({5.0f, 0.0f, 5.0f});
+	system->DoTake(world->HandPlayer(), rock);
+	ASSERT_EQ(system->GetHeld(), rock);
+	world->heldPlaceStep = {0.25f, -0.5f, 0.125f};
+	system->PlaceHeldForTurn();
+	EXPECT_EQ(world->registry.Get<const Transform>(rock).position, world->ReportedHandPlace() + world->heldPlaceStep);
+}
+
 TEST_F(HandGrabSystemWithWorld, AVillagerOfTheHandsPlayerAlarmsThoseAboutIt)
 {
 	const auto villager = world->registry.Create();
@@ -1877,6 +2211,31 @@ TEST_F(HandGrabSystemWithWorld, AGateStonePressedOntoThePlinthIsLaidInIt)
 	EXPECT_FALSE(system->GetHeld().has_value());
 }
 
+TEST_F(HandGrabSystemWithWorld, AScaffoldPressedOntoAScaffoldJoinsIt)
+{
+	const auto held = world->AddTree({0.0f, 0.0f, 0.0f}, 10.0f);
+	world->scaffolds.insert(held);
+	world->underCursor = held;
+	Press();
+	for (int i = 0; i < 40 && !system->GetHeld().has_value(); ++i)
+	{
+		Frame(10);
+	}
+	ASSERT_TRUE(system->GetHeld().has_value());
+	Release();
+	const auto target = world->AddTree({20.0f, 0.0f, 0.0f}, 10.0f);
+	world->scaffolds.insert(target);
+	world->underCursor = target;
+	EXPECT_TRUE(Press());
+	// The hand lets go of the held scaffold before the join, and is empty after it
+	ASSERT_EQ(world->joined.size(), 1u);
+	EXPECT_EQ(std::get<0>(world->joined.front()), target);
+	EXPECT_EQ(std::get<1>(world->joined.front()), held);
+	EXPECT_FALSE(std::get<2>(world->joined.front()));
+	EXPECT_TRUE(world->takenWhole.empty());
+	EXPECT_FALSE(system->GetHeld().has_value());
+}
+
 TEST_F(HandGrabSystemWithWorld, AnythingElsePressedOntoThePlinthIsMadeReadyToThrow)
 {
 	const auto tree = world->AddTree({0.0f, 0.0f, 0.0f}, 10.0f);
@@ -1986,6 +2345,8 @@ TEST_F(HandGrabSystemWithWorld, TheHandLocksOntoAFieldOnlyWhenItsCropCanGiveFood
 	const auto field = world->registry.Create();
 	world->registry.Assign<Transform>(field, glm::vec3(0.0f), glm::mat3(1.0f), glm::vec3(1.0f));
 	world->fields[field] = {.food = 1000, .lockable = false};
+	// A field is a building of its town, which takes taps
+	world->tappable.insert(field);
 	world->underCursor = field;
 	EXPECT_FALSE(Press());
 	EXPECT_FALSE(system->GetHeld().has_value());
@@ -2168,6 +2529,26 @@ TEST_F(HandGrabSystemGiving, TheGiveOfThePressIsACommandThatWaitsForItsTurn)
 	EXPECT_EQ(world->given.front().creature, creature);
 }
 
+TEST_F(HandGrabSystemGiving, TheTurnGivesWithTheSideOfTheHandOfTheComputerThatSentTheGive)
+{
+	const auto rock = HoldRock();
+	const auto creature = AddCreature(creature_giving::Verdict::Give);
+	world->underCursor = creature;
+	Frame(16);
+	deferCommands = true;
+	// The giver has a right hand
+	world->rightHanded = true;
+	EXPECT_TRUE(Press());
+	ASSERT_EQ(waiting.size(), 1u);
+	EXPECT_FALSE(std::get<player_commands::HandGive>(waiting.front()).leftHand);
+	// Another computer, with a left hand, does the turn: the creature takes it with the giver's side
+	world->rightHanded = false;
+	RunWaiting();
+	ASSERT_EQ(world->given.size(), 1u);
+	EXPECT_EQ(world->given.front().held, rock);
+	EXPECT_FALSE(world->given.front().leftHand);
+}
+
 TEST_F(HandGrabSystemGiving, WhileTheCreatureReachesTheHandMeetsItsHandAtTheMomentOfTaking)
 {
 	const auto rock = HoldRock();
@@ -2203,6 +2584,33 @@ TEST_F(HandGrabSystemGiving, MovingTheHandFifteenSizesFromTheReachingCreatureCal
 	EXPECT_TRUE(world->calledOff.empty());
 	Frame(16, {40.0f, 0.0f, 0.0f});
 	Frame(16, {40.0f, 0.0f, 0.0f});
+	EXPECT_EQ(world->calledOff, std::vector<entt::entity> {creature});
+	EXPECT_FALSE(system->GetOfferedCreature().has_value());
+}
+
+TEST_F(HandGrabSystemGiving, TheTurnCallsOffTheGiftThatTheHandSentOneTime)
+{
+	HoldRock();
+	const auto creature = AddCreature(creature_giving::Verdict::Give);
+	world->underCursor = creature;
+	Frame(16);
+	Press();
+	Frame(230);
+	world->underCursor.reset();
+	world->takePoint = glm::vec3(0.0f, 0.0f, 0.0f);
+	deferCommands = true;
+	Frame(16, {40.0f, 0.0f, 0.0f});
+	Frame(16, {40.0f, 0.0f, 0.0f});
+	Frame(16, {40.0f, 0.0f, 0.0f});
+	// The frames send the call off one time, and do not call off the creature or forget the gift
+	const auto callOffs = std::ranges::count_if(waiting, [](const player_commands::Action& action) {
+		return std::holds_alternative<player_commands::GiveCallOff>(action);
+	});
+	EXPECT_EQ(callOffs, 1);
+	EXPECT_TRUE(world->calledOff.empty());
+	EXPECT_TRUE(system->GetOfferedCreature().has_value());
+	// The turn calls it off
+	RunWaiting();
 	EXPECT_EQ(world->calledOff, std::vector<entt::entity> {creature});
 	EXPECT_FALSE(system->GetOfferedCreature().has_value());
 }
@@ -2415,6 +2823,53 @@ TEST_F(HandGrabSystemWithWorld, ALetGoTakesTheStartOfTheReleaseToItsTurn)
 	EXPECT_EQ(world->releasedSpins.front().x, 0.5f);
 }
 
+// The release asks for as many turns of lead as the reports come late. The command takes the velocity after the lead.
+// Until the turn of the command, the frames draw the thing along the flight from the turn of the send.
+TEST_F(HandGrabSystemWithWorld, AThrowLeadsByTheLatencyOfTheReports)
+{
+	const auto rock = world->AddRock({0.0f, 0.0f, 0.0f});
+	world->underCursor = rock;
+	Press();
+	for (int i = 0; i < 20 && !system->GetHeld().has_value(); ++i)
+	{
+		Frame(10);
+	}
+	Release();
+	ASSERT_EQ(system->GetHeld(), std::optional(rock));
+	world->reportLatencyMs = 250;
+	world->ledVelocity = glm::vec3(7.0f, -3.0f, 2.0f);
+	world->flight = hand_grab::throw_lead::Flight {
+	    .places = {{.axes = glm::mat3(1.0f), .centre = {0.0f, 5.0f, 0.0f}},
+	               {.axes = glm::mat3(1.0f), .centre = {2.0f, 6.0f, 0.0f}},
+	               {.axes = glm::mat3(1.0f), .centre = {4.0f, 6.0f, 0.0f}}},
+	};
+	world->frameTurn = 30;
+	deferCommands = true;
+	world->sent.clear();
+	Press();
+	Frame(10, {5.0f, 0.0f, 0.0f});
+	Frame(10, {10.0f, 0.0f, 0.0f});
+	Release();
+	ASSERT_EQ(world->leadsAsked.size(), 1U);
+	EXPECT_EQ(world->leadsAsked.front(), 2);
+	ASSERT_EQ(world->sent.size(), 1U);
+	const auto letGo = std::get<player_commands::HandLetGo>(world->sent.front());
+	EXPECT_EQ(letGo.velocity, *world->ledVelocity);
+	// The frames draw the thing on the flight: half of the way through the turn after the send
+	world->frameTurn = 31;
+	world->frameTurnFraction = 0.5f;
+	system->DrawThrownForFrame();
+	ASSERT_EQ(world->drawnThrown.size(), 1U);
+	EXPECT_EQ(world->drawnThrown.front().first, rock);
+	EXPECT_NEAR(world->drawnThrown.front().second.x, 3.0f, 1.0e-4f);
+	EXPECT_NEAR(world->drawnThrown.front().second.y, 6.0f, 1.0e-4f);
+	// The turn of the command lets go, and the frames draw the thing no more
+	RunWaiting();
+	world->drawnThrown.clear();
+	system->DrawThrownForFrame();
+	EXPECT_TRUE(world->drawnThrown.empty());
+}
+
 // A hand that must let go puts the thing down from where it is: it asks for no start and goes to none
 TEST_F(HandGrabSystemWithWorld, AForcedDropHasNoStart)
 {
@@ -2444,8 +2899,14 @@ TEST_F(HandGrabSystemWithWorld, ATapWaitsForTheTurnThatDoesItsCommand)
 	Frame(50);
 	Release();
 	EXPECT_TRUE(world->tapped.empty());
-	ASSERT_EQ(world->sent.size(), 1u);
-	EXPECT_TRUE(std::holds_alternative<player_commands::HandTap>(world->sent.front()));
+	// The tap and the click of the thing under the hand go to the turn
+	ASSERT_EQ(world->sent.size(), 2u);
+	EXPECT_EQ(std::ranges::count_if(
+	              world->sent, [](const auto& action) { return std::holds_alternative<player_commands::HandTap>(action); }),
+	          1);
+	EXPECT_EQ(std::ranges::count_if(
+	              world->sent, [](const auto& action) { return std::holds_alternative<player_commands::HandClick>(action); }),
+	          1);
 	RunWaiting();
 	ASSERT_EQ(world->tapped.size(), 1u);
 	EXPECT_EQ(world->tapped.front(), rock);
@@ -2466,6 +2927,16 @@ TEST_F(HandGrabSystemWithWorld, TheTurnWorkOfTheHandTakesAFlyingThingAfterTheWai
 	EXPECT_TRUE(std::holds_alternative<player_commands::HandTake>(world->sent.front()));
 	RunWaiting();
 	EXPECT_EQ(system->GetHeld(), std::optional(rock));
+}
+
+// A new land clears the hand: what it held is let go
+TEST_F(HandGrabSystemWithWorld, ANewLandLetsGoOfWhatTheHandHeld)
+{
+	const auto rock = world->AddRock({0.0f, 0.0f, 0.0f});
+	system->DoTake(world->HandPlayer(), rock);
+	ASSERT_EQ(system->GetHeld(), std::optional(rock));
+	system->Reset();
+	EXPECT_FALSE(system->GetHeld().has_value());
 }
 
 // A take that the hand no longer waits for does nothing at its turn

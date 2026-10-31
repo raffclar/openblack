@@ -12,6 +12,7 @@
 #include <algorithm>
 #include <numbers>
 #include <sstream>
+#include <tuple>
 #include <vector>
 
 #include <PhysicsConstantsFile.h>
@@ -372,6 +373,52 @@ TEST(PhysicsBody, LookingAheadStopsAFastBodyAtAThinWall)
 		ASSERT_LT(ball.Centre().x, 0.25f) << "through the wall at step " << i;
 	}
 	EXPECT_LT(ball.velocity.x, 0.0f);
+}
+
+TEST(PhysicsBody, ALightWallIsSoftAndAHeavyFastRockGoesThroughIt)
+{
+	// The rock and the physical shield rows of the game's material table
+	constexpr Material k_Rock {.density = 2.0f,
+	                           .springK = 21.5625f,
+	                           .dampK = 1.328125f,
+	                           .friction = 1.3125f,
+	                           .spinKeptPerSecond = 0.709375f,
+	                           .drag = 0.0f};
+	constexpr Material k_Shield {
+	    .density = 0.8f, .springK = 54.0625f, .dampK = 0.4f, .friction = 0.0f, .spinKeptPerSecond = 0.2f, .drag = 0.0f};
+	const FakeLand land(-1000.0f);
+	Shape wallShape;
+	wallShape.points = {{0.0f, -5.0f, -5.0f}, {0.0f, -5.0f, 5.0f}, {0.0f, 5.0f, 5.0f}, {0.0f, 5.0f, -5.0f}};
+	wallShape.faces = {{0, 1, 2}, {0, 2, 3}};
+	wallShape.radius = glm::length(glm::vec2(5.0f));
+	// A contact is as stiff as the softer of the two bodies, and stiffness grows with mass. A small dome is light. Thus a
+	// rock of some tonnes at 31 metres a second pushes into it further than its own size, and goes through.
+	const auto goesThrough = [&](float wallMass) {
+		Body wall({.mass = wallMass, .material = k_Shield, .dynamic = false}, wallShape);
+		wall.SetUpPose({.axes = glm::mat3(1.0f), .origin = {0.0f, 0.0f, 0.0f}});
+		wall.resting = true;
+		auto rock = MakeCube(1.5f, {-6.0f, 0.0f, 0.0f}, k_Rock, 5488.0f);
+		rock.velocity = {31.0f, 0.0f, 0.0f};
+		for (int i = 0; i < 400; ++i)
+		{
+			rock.ClearForces();
+			wall.ClearForces();
+			rock.TouchGround(land);
+			wall.TouchGround(land);
+			rock.TouchFaces(wall);
+			rock.ApplyContacts();
+			wall.ApplyContacts();
+			static_cast<void>(rock.Integrate());
+			if (rock.Centre().x > 1.5f)
+			{
+				return true;
+			}
+		}
+		return false;
+	};
+	// The weight of a dome of radius 15.6, and of a dome of radius 30
+	EXPECT_TRUE(goesThrough(932.6f));
+	EXPECT_FALSE(goesThrough(6632.6f));
 }
 
 TEST(PhysicsBody, OverlapIsMeasuredThroughTheTop)
@@ -745,4 +792,42 @@ TEST(PhysicsShapes, EachBoneBoxHoldsItsVerticesAndItsOrigin)
 	// A bone with no vertices keeps a box at its origin
 	EXPECT_EQ(boxes[1].min, glm::vec3(0.0f));
 	EXPECT_EQ(boxes[1].max, glm::vec3(0.0f));
+}
+
+// A prediction steps the body alone, twenty steps a turn, as the turns do. It keeps the place at the start of each turn
+// and the last place.
+TEST(PhysicsBody, APredictionStepsTheBodyAloneTurnByTurn)
+{
+	const FakeLand land(0.0f);
+	auto predicted = MakeCube(0.5f, {0.0f, 20.0f, 0.0f});
+	predicted.velocity = {3.0f, 4.0f, -2.0f};
+	auto stepped = predicted;
+	const auto places = PredictFlight(predicted, land, 3);
+	ASSERT_EQ(places.size(), 4U);
+	for (size_t turn = 0; turn < 3; ++turn)
+	{
+		EXPECT_EQ(places[turn].centre, stepped.Centre());
+		EXPECT_EQ(places[turn].axes, stepped.Axes());
+		for (int step = 0; step < k_StepsPerTurn; ++step)
+		{
+			std::ignore = Step(stepped, land);
+		}
+	}
+	EXPECT_EQ(places.back().centre, stepped.Centre());
+	EXPECT_EQ(predicted.Centre(), stepped.Centre());
+	EXPECT_EQ(predicted.velocity, stepped.velocity);
+	EXPECT_EQ(predicted.angularMomentum, stepped.angularMomentum);
+}
+
+// No lead leaves the body as it is, and a prediction steps no more than fifteen turns
+TEST(PhysicsBody, APredictionHasAtMostFifteenTurns)
+{
+	const FakeLand land(0.0f);
+	auto body = MakeCube(0.5f, {0.0f, 20.0f, 0.0f});
+	const auto still = PredictFlight(body, land, 0);
+	ASSERT_EQ(still.size(), 1U);
+	EXPECT_EQ(still.front().centre, glm::vec3(0.0f, 20.0f, 0.0f));
+	EXPECT_EQ(body.velocity, glm::vec3(0.0f));
+	EXPECT_EQ(PredictFlight(body, land, 40).size(), static_cast<size_t>(k_MostPredictedTurns) + 1);
+	EXPECT_EQ(PredictFlight(body, land, -3).size(), 1U);
 }

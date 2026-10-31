@@ -72,6 +72,9 @@ public:
 
 	[[nodiscard]] Ground At(int32_t x, int32_t z) const;
 	[[nodiscard]] Ground AtPoint(glm::vec2 point) const;
+	/// Whether a cell on the land, or a cell next to it on the land, is blocked. When water counts, a water cell counts
+	/// too.
+	[[nodiscard]] bool HasBlockedNear(int32_t x, int32_t z, bool countWater) const;
 	/// Whether a creature may stand at a point: its cell is open or water, and no cell next to it that it may not stand
 	/// on has its centre within the radius. The cell is the point times a tenth, truncated. A cell next to it that is off
 	/// the land does not count. The squares of the distance and the radius are compared.
@@ -82,7 +85,12 @@ public:
 	[[nodiscard]] std::optional<glm::vec2> NearestStandable(glm::vec2 point) const;
 
 private:
+	/// Finds, for each cell, the sorts of ground of the cell and of the cells next to it on the land
+	void FindNear();
+
 	std::vector<Ground> _cells;
+	/// For each cell: a bit for a blocked cell and a bit for a water cell, in the cell or next to it on the land
+	std::vector<uint8_t> _near;
 };
 
 /// Something in the way, walked round at its radius, which includes as much of the creature's own as it keeps clear of

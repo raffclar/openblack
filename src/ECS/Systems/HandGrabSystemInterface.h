@@ -19,6 +19,7 @@
 #include <glm/vec3.hpp>
 
 #include "Commands/PlayerCommands.h"
+#include "Common/InputSteps.h"
 #include "Enums.h"
 
 namespace openblack::ecs::systems
@@ -49,6 +50,8 @@ public:
 		/// The frame's time: the clock's for the hand's fades, the game's for the spring
 		float seconds {0.0f};
 		uint32_t gameMs {0};
+		/// The steps of the player's input that the frame takes
+		input_steps::Steps inputSteps {input_steps::Steps::One()};
 		/// The clock now, and the game's turn
 		uint32_t nowMs {0};
 		uint32_t turn {0};
@@ -62,10 +65,10 @@ public:
 	virtual std::optional<entt::entity> Release(uint32_t nowMs, uint32_t turn) = 0;
 	/// The Action button is let go while the hand did nothing with the press: the thing under the hand is clicked, or
 	/// else the place on the land under it, for the scripts to ask about (see hand_click)
-	virtual void ClickReleased(uint32_t turn) = 0;
+	virtual void ClickReleased() = 0;
 	/// A press of the Action button on a thing the hand won't pick up, which something else takes (a creature the hand
 	/// holds to): the thing is clicked
-	virtual void ClickThing(entt::entity thing, uint32_t turn) = 0;
+	virtual void ClickThing(entt::entity thing) = 0;
 	/// Each frame: the hand takes what it waited for, its spring drags it, and the twist of a throw is given. The hand's
 	/// position, risen for what it holds, or dragged by its spring.
 	virtual glm::vec3 UpdateFrame(const Frame& frame) = 0;
@@ -76,8 +79,14 @@ public:
 	/// Each drawn frame of some game milliseconds: what the hands of the other players of a network game hold moves
 	/// toward the place of their last report, upright and at the size that it had as the hand took it
 	virtual void PlaceOthersHeldForFrame([[maybe_unused]] int32_t frameMs) {}
+	/// Each drawn frame, after the hand poses what it holds: a thing that this computer threw and that waits for the
+	/// turn of the command shows on the flight of its lead
+	virtual void DrawThrownForFrame() {}
 	/// The hand is made to let go of what it holds, which is put down where it is and never planted again
 	virtual void ForceDrop() = 0;
+	/// Each hand of a god that holds the thing lets go of it as ForceDrop does: the first player's hand, then the hands of
+	/// the other players. A thing that goes from the game leaves the hand of each player that holds it.
+	virtual void ForceDropFromEveryHand([[maybe_unused]] entt::entity object) {}
 	/// At the turn: a scribble of the player's hand shakes off the thing that the hand holds (see
 	/// player_commands::HandShakeOff)
 	virtual void DoShakeOff(PlayerNames player) = 0;
@@ -93,6 +102,10 @@ public:
 	/// The commands of the hand, which the world does at the start of a turn, for the player that sent them. The hand
 	/// takes the thing that it waited for.
 	virtual void DoTake(PlayerNames /*player*/, entt::entity /*object*/) {}
+	/// At the turn: the hand of a computer god takes a thing for a step of its actions. The hand takes it also outside
+	/// the influence of its player, as when a land's script makes the god carry a villager into the player's land. The
+	/// other rules of a take apply.
+	virtual void DoComputerTake(PlayerNames /*player*/, entt::entity /*object*/) {}
 	/// The hand lets go of the thing that it holds, at the velocity of the throw, from the start in the command
 	virtual void DoLetGo(PlayerNames /*player*/, const player_commands::HandLetGo& /*letGo*/) {}
 	/// The hand taps a thing
@@ -108,8 +121,11 @@ public:
 	virtual void DoUnlock(PlayerNames /*player*/, entt::entity /*object*/) {}
 	/// At the turn: the twist of a thing that the hand let go (player_commands::HandTwist)
 	virtual void DoTwist(PlayerNames /*player*/, entt::entity /*object*/, glm::vec3 /*moved*/) {}
-	/// The hand gives the thing that it holds to a creature
-	virtual void DoGive(PlayerNames /*player*/, entt::entity /*creature*/, entt::entity /*object*/) {}
+	/// At the turn: the hand gives the thing that it holds to a creature, which takes it with the hand that matches the
+	/// side of the hand of the giver (player_commands::HandGive)
+	virtual void DoGive(PlayerNames /*player*/, entt::entity /*creature*/, entt::entity /*object*/, bool /*leftHand*/) {}
+	/// At the turn: the hand of the player called off the gift to the creature (player_commands::GiveCallOff)
+	virtual void DoGiveCallOff(PlayerNames /*player*/, entt::entity /*creature*/) {}
 	/// A creature takes a thing the hand gave it: the hand lets go of it into the creature's hand, without dropping it.
 	/// Whether the hand still held it to give.
 	virtual bool HandOver(entt::entity /*object*/) { return false; }
@@ -159,6 +175,9 @@ public:
 	/// Why a press of the Action button on a thing wouldn't take it (out of the influence, a thing the hand can't hold,
 	/// a script holding it out of reach...); empty when it would
 	[[nodiscard]] virtual std::string WhyNotTake(entt::entity object) const = 0;
+	/// Whether a press of the Action button on a thing would scoop a handful out of it (a pile, a field or a fish farm
+	/// with something to give, inside the influence)
+	[[nodiscard]] virtual bool WouldScoop(entt::entity object) const = 0;
 	/// How far a thing hangs below a hand that holds it: the lowering of its kind times its height. A creature's hand
 	/// uses the same distance.
 	[[nodiscard]] virtual float HangOf(entt::entity object) const = 0;

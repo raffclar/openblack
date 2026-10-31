@@ -106,6 +106,13 @@ struct Duration
 /// The close look's two lines are drawn in the font's 30 pixel size, 10 pixels down from the top of the screen and
 /// centred on it, in black, and again in yellow two pixels right and down
 inline constexpr float k_TextSize = 30.0f;
+/// The languages that need bigger text use a 33 pixel size for the two lines
+inline constexpr float k_BiggerTextSize = 33.0f;
+/// The size of the close look's lines
+[[nodiscard]] constexpr float TextSize(bool biggerText)
+{
+	return biggerText ? k_BiggerTextSize : k_TextSize;
+}
 inline constexpr float k_TextTop = 10.0f;
 inline constexpr float k_ShadowOffset = 2.0f;
 

@@ -14,7 +14,6 @@
 #include "3D/AllMeshes.h"
 #include "3D/L3DMesh.h"
 #include "3D/LandIslandInterface.h"
-#include "Audio/Sound.h"
 #include "ECS/Components/Mesh.h"
 #include "ECS/Components/SoundTag.h"
 #include "ECS/Components/Transform.h"
@@ -25,6 +24,8 @@
 #include "InfoConstants.h"
 #include "Locator.h"
 #include "Resources/ResourcesInterface.h"
+#include "Sound/SoundId.h"
+#include "Utils.h"
 
 using namespace openblack;
 using namespace openblack::ecs::archetypes;
@@ -63,6 +64,8 @@ entt::entity VillageTotemArchetype::Create(entt::entity townCentre, const GAbode
 	}
 
 	const auto totem = registry.Create();
+	// The totem takes its place in the order of the things made. The icon on it is a part of it, not a thing of its own.
+	TakeThingMadePlace();
 	registry.Assign<Transform>(totem, point, centre.rotation, centre.scale);
 	registry.Assign<Mesh>(totem, resources::HashIdentifier(statues.at(tribe).plinth), static_cast<int8_t>(0),
 	                      static_cast<int8_t>(0));

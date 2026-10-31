@@ -52,11 +52,20 @@ public:
 		_byField = byField;
 	}
 	[[nodiscard]] std::optional<TurnChecksum> GetLast() const override { return _last; }
+	[[nodiscard]] const synced_state::Hash* GetHashOfTurn(uint32_t turn, bool byField) const override
+	{
+		return _lastHash.has_value() && _lastHash->turn == turn && _lastHash->byField == byField ? &_lastHash->hash : nullptr;
+	}
 	void SetTurnListener(std::function<void(const TurnChecksum&)> listener) override { _listener = std::move(listener); }
 	[[nodiscard]] std::function<void(const TurnChecksum&)> GetTurnListener() const override { return _listener; }
 #if defined(OPENBLACK_DEVELOPER_TOOLS)
 	bool StartRowDump(const std::filesystem::path& path, row_dump::Settings settings) override;
 	void DumpPart(uint32_t turn, std::string_view reason, uint32_t source) override;
+	void WriteWorldStates(world_state_at_turn::Settings settings) override
+	{
+		_worldStates = std::move(settings);
+		_enabled = true;
+	}
 #endif
 
 private:
@@ -64,19 +73,32 @@ private:
 	std::unique_ptr<entt::meta_ctx> _reflection;
 	/// The threads that share the hash of the components. The first checksum makes them.
 	std::unique_ptr<WorkerPool> _pool;
+	/// The rows of the last checksum, so that the next checksum mixes again only the rows that changed
+	ecs::reflection::HashMemo _memo;
 	bool _enabled {false};
 	bool _keepParts {false};
 	bool _byField {false};
 	std::optional<uint32_t> _dumpTurn;
 	std::vector<std::string> _dumpComponents;
 	std::optional<TurnChecksum> _last;
+	/// The hash of the synced world of the last checksum, for a tool that records the same world
+	struct TurnHash
+	{
+		uint32_t turn {0};
+		bool byField {false};
+		synced_state::Hash hash;
+	};
+	std::optional<TurnHash> _lastHash;
 	/// The unregistered components that the log already told of
 	synced_state::UnregisteredReporter _reported;
 	std::function<void(const TurnChecksum&)> _listener;
 #if defined(OPENBLACK_DEVELOPER_TOOLS)
-	/// Tools: the file of the row dump, and the dump that writes to it
-	std::unique_ptr<std::ofstream> _rowFile;
+	/// Tools: the file of the row dump, or the standard output with a tag on each line, and the dump that writes to it
+	std::unique_ptr<row_dump::TaggedLines> _rowLines;
+	std::unique_ptr<std::ostream> _rowFile;
 	std::unique_ptr<row_dump::RowDump> _rowDump;
+	/// Tools: the turns at which the system writes the world state, and the folder
+	std::optional<world_state_at_turn::Settings> _worldStates;
 #endif
 };
 

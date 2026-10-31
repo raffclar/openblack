@@ -12,14 +12,21 @@
 #include <deque>
 #include <memory>
 #include <optional>
+#include <vector>
 
 #include <entt/entity/entity.hpp>
+#include <entt/resource/resource.hpp>
 
 #include "ECS/Systems/GestureSystemInterface.h"
 
 #if !defined(LOCATOR_IMPLEMENTATIONS)
 #error "ECS System implementations should only be included in Locator.cpp"
 #endif
+
+namespace openblack
+{
+class CameraPath;
+} // namespace openblack
 
 namespace openblack::gestures
 {
@@ -79,10 +86,21 @@ private:
 	bool OpenSelection(GestureType opening, PlayerNames player);
 	/// The miracle selection waits for its gestures this frame, closes when the hand is not ready, and its time passes
 	void StepSelection(gesture::HandContext& context, const Frame& frame);
+	/// One sample of the cursor goes on the path, and the first gesture waited for that the path draws acts
+	void SampleCursor(glm::vec2 cursor, const Frame& frame, const gesture::HandContext& context);
 	/// The recognised gesture's trail on the land, for the particles to show
 	void LayTrail(GestureType gesture, const gesture::Match& match, const Frame& frame) const;
 	/// The hints for what the hand waits for now, replacing those shown when they differ
 	void RefreshHints();
+	/// The shape a gesture's trail takes on the land, from its symbol's file; the circle's for a gesture without one
+	[[nodiscard]] std::optional<gesture::TrailSymbol> TrailSymbolOf(GestureType gesture) const;
+
+	/// A symbol made from the points of a path. A computer god asks for the symbols of its gestures in each turn.
+	struct KeptSymbol
+	{
+		entt::resource<const CameraPath> path;
+		gesture::TrailSymbol symbol;
+	};
 
 	std::vector<GestureEvent> _events;
 	std::shared_ptr<const gestures::GestureFile> _templates;
@@ -92,6 +110,8 @@ private:
 	std::deque<glm::vec2> _drawing;
 	bool _drawingHoldsAction {false};
 	float _sinceSample {0.0f};
+	/// The cursor of the last frame, from which the cursor of this frame moved
+	std::optional<glm::vec2> _lastCursor;
 	/// Where the camera's eye was last frame
 	std::optional<glm::vec3> _lastCameraEye;
 	/// The rest after a gesture, while nothing is recorded
@@ -110,6 +130,8 @@ private:
 	bool _gesturing {false};
 	entt::entity _circleSeed {entt::null};
 	gesture_hints::Row _hints;
+	/// The symbols made so far, one for each path
+	mutable std::vector<KeptSymbol> _symbols;
 };
 
 } // namespace openblack::ecs::systems

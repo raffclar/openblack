@@ -9,6 +9,9 @@
 
 #include "CommandLog.h"
 
+#include <charconv>
+
+#include <system_error>
 #include <variant>
 
 #include "Commands/TurnCodec.h"
@@ -21,6 +24,7 @@ namespace
 constexpr std::string_view k_Digits = "0123456789abcdef";
 constexpr std::string_view k_TurnKey = "\"turn\":";
 constexpr std::string_view k_FrameKey = "\"frame\":\"";
+constexpr std::string_view k_GiveKey = "\"give\":";
 
 std::optional<uint8_t> DigitOf(char c)
 {
@@ -30,6 +34,25 @@ std::optional<uint8_t> DigitOf(char c)
 		return std::nullopt;
 	}
 	return static_cast<uint8_t>(at);
+}
+
+/// The number after a key in a line, none when the line has no such key or no number after it
+template <typename Number>
+std::optional<Number> NumberAfter(std::string_view line, std::string_view key)
+{
+	const auto at = line.find(key);
+	if (at == std::string_view::npos)
+	{
+		return std::nullopt;
+	}
+	const auto* start = line.data() + at + key.size();
+	Number value {};
+	const auto [end, error] = std::from_chars(start, line.data() + line.size(), value);
+	if (error != std::errc() || end == start)
+	{
+		return std::nullopt;
+	}
+	return value;
 }
 } // namespace
 
@@ -143,6 +166,57 @@ std::optional<std::map<uint32_t, std::vector<player_commands::Command>>> ReadFil
 		commands.insert(commands.end(), turn->commands.begin(), turn->commands.end());
 	}
 	return turns;
+}
+
+std::filesystem::path GivesPathOf(const std::filesystem::path& commands)
+{
+	return commands.parent_path() / (commands.stem().string() + ".gives" + commands.extension().string());
+}
+
+std::string GiveLineOf(uint32_t turn, size_t command)
+{
+	return "{" + std::string(k_TurnKey) + std::to_string(turn) + "," + std::string(k_GiveKey) + std::to_string(command) + "}";
+}
+
+std::optional<Give> ReadGiveLine(std::string_view line)
+{
+	const auto turn = NumberAfter<uint32_t>(line, k_TurnKey);
+	const auto command = NumberAfter<size_t>(line, k_GiveKey);
+	if (!turn.has_value() || !command.has_value())
+	{
+		return std::nullopt;
+	}
+	return Give {.turn = *turn, .command = *command};
+}
+
+GivesWriter::GivesWriter(const std::filesystem::path& path)
+    : _file(path, std::ios::out | std::ios::trunc)
+{
+}
+
+void GivesWriter::Write(uint32_t turn, size_t command)
+{
+	if (!_file.is_open())
+	{
+		return;
+	}
+	_file << GiveLineOf(turn, command) << '\n';
+	_file.flush();
+}
+
+std::map<uint32_t, std::vector<size_t>> ReadGivesFile(const std::filesystem::path& path)
+{
+	std::map<uint32_t, std::vector<size_t>> gives;
+	std::ifstream file(path);
+	std::string line;
+	while (file.is_open() && std::getline(file, line))
+	{
+		if (const auto give = ReadGiveLine(line); give.has_value())
+		{
+			gives[give->turn].push_back(give->command);
+		}
+	}
+	return gives;
 }
 
 } // namespace openblack::command_log

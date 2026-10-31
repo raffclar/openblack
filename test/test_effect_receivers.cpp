@@ -13,11 +13,18 @@
 #include <glm/mat3x3.hpp>
 #include <gtest/gtest.h>
 
+#include "ECS/Components/Abode.h"
 #include "ECS/Components/Animal.h"
 #include "ECS/Components/Ball.h"
+#include "ECS/Components/Construction.h"
+#include "ECS/Components/Fire.h"
+#include "ECS/Components/Firefly.h"
 #include "ECS/Components/FishFarm.h"
+#include "ECS/Components/Physics.h"
+#include "ECS/Components/ScriptControl.h"
 #include "ECS/Components/StreetLantern.h"
 #include "ECS/Components/Town.h"
+#include "ECS/Components/TownDesireFlag.h"
 #include "ECS/Components/Transform.h"
 #include "ECS/Components/Vortex.h"
 #include "ECS/Registry.h"
@@ -121,6 +128,37 @@ TEST_F(EffectReceivers, AnAnimalTakesHeatByTheRowOfItsKind)
 	EXPECT_EQ(ecs::world_objects::EffectInfoOf(sheep), &info.animal.at(static_cast<size_t>(AnimalInfo::Sheep)));
 }
 
+TEST_F(EffectReceivers, AFireflyTakesHeatByItsRowOfTheFixedThings)
+{
+	auto& registry = Locator::entitiesRegistry::value();
+	const auto firefly = Made();
+	registry.Assign<Firefly>(firefly);
+	EXPECT_EQ(ecs::world_objects::EffectInfoOf(firefly),
+	          &Locator::infoConstants::value().singleMapFixed.at(Firefly::k_InfoRow));
+	// It has the life of a plain thing, which one burn can take
+	EXPECT_FLOAT_EQ(ecs::world_objects::LifeOf(firefly), 1.0f);
+}
+
+TEST_F(EffectReceivers, OneBurnCanTakeAllTheLifeOfAFirefly)
+{
+	auto& registry = Locator::entitiesRegistry::value();
+	const auto firefly = Made();
+	registry.Assign<Firefly>(firefly);
+	EXPECT_FLOAT_EQ(ecs::world_objects::ReduceLife(firefly, 0.25f), 0.75f);
+	EXPECT_FLOAT_EQ(ecs::world_objects::ReduceLife(firefly, 1.5f), 0.0f);
+	EXPECT_FLOAT_EQ(ecs::world_objects::LifeOf(firefly), 0.0f);
+}
+
+TEST_F(EffectReceivers, ATownsDesireFlagTakesNoEffectEvenWithTheDataOfThePrayerSite)
+{
+	auto& registry = Locator::entitiesRegistry::value();
+	_info->prayerSite.combustionTemperature = 1200.0f;
+	_info->prayerSite.heatCapacity = 50000.0f;
+	const auto flag = Made();
+	registry.Assign<TownDesireFlag>(flag);
+	EXPECT_EQ(ecs::world_objects::EffectInfoOf(flag), nullptr);
+}
+
 TEST(StreetLanternRules, NoLanternWithinHalfAMetreOfAStatic)
 {
 	constexpr glm::vec3 k_At {100.0f, 0.0f, 100.0f};
@@ -152,4 +190,38 @@ TEST_F(EffectReceivers, OnlyTheHelpReadsTheRowOfTheVortex)
 	registry.Assign<Ball>(ball);
 	EXPECT_EQ(ecs::world_objects::HelpInfoOf(ball), &Locator::infoConstants::value().ball);
 	EXPECT_EQ(ecs::world_objects::HelpInfoOf(Made()), nullptr);
+}
+
+TEST_F(EffectReceivers, AScriptsBuildingOfNoTownStaysAsItIsWhenAnEffectDestroysIt)
+{
+	auto& registry = Locator::entitiesRegistry::value();
+	const auto hut = Made();
+	registry.Assign<Abode>(hut, Abode {.type = AbodeNumber::A, .townId = 7});
+	registry.Assign<InScript>(hut);
+	registry.Assign<BuildProgress>(hut, BuildProgress {.built = 0.5f});
+	registry.Assign<ObjectLife>(hut, ObjectLife {.life = 0.0f});
+	ecs::world_objects::DestroyedByEffect(hut, {});
+	ASSERT_TRUE(registry.Valid(hut));
+	EXPECT_FLOAT_EQ(ecs::world_objects::LifeOf(hut), 0.0f);
+	EXPECT_FALSE(registry.AllOf<BuildingSites>(hut));
+}
+
+TEST_F(EffectReceivers, AScriptsUnfinishedBuildingWithASiteGetsAllItsLifeAgain)
+{
+	auto& registry = Locator::entitiesRegistry::value();
+	const auto hut = Made();
+	registry.Assign<Abode>(hut, Abode {.type = AbodeNumber::A, .townId = 7});
+	registry.Assign<InScript>(hut);
+	registry.Assign<BuildProgress>(hut, BuildProgress {.built = 0.5f});
+	registry.Assign<ObjectLife>(hut, ObjectLife {.life = 0.0f});
+	registry.Assign<BuildingSites>(hut, BuildingSites {.sites = {BuildingSite {.takesBroughtWood = true}}});
+	ecs::world_objects::DestroyedByEffect(hut, {});
+	ASSERT_TRUE(registry.Valid(hut));
+	EXPECT_FLOAT_EQ(ecs::world_objects::LifeOf(hut), 1.0f);
+	// A finished one keeps no life
+	registry.Remove<BuildProgress>(hut);
+	registry.AssignOrReplace<ObjectLife>(hut, ObjectLife {.life = 0.0f});
+	ecs::world_objects::DestroyedByEffect(hut, {});
+	ASSERT_TRUE(registry.Valid(hut));
+	EXPECT_FLOAT_EQ(ecs::world_objects::LifeOf(hut), 0.0f);
 }

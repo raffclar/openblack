@@ -9,10 +9,19 @@
 
 #include "ThingModel.h"
 
+#include "3D/AllMeshes.h"
+#include "ECS/Components/Firefly.h"
 #include "ECS/Components/Mesh.h"
+#include "ECS/Components/TeleportStone.h"
+#include "ECS/Components/VillageTotem.h"
+#include "ECS/Components/Vortex.h"
 #include "ECS/Components/WorshipSite.h"
 #include "ECS/Registry.h"
+#include "InfoConstants.h"
+#include "Locator.h"
+#include "Resources/ResourceManager.h"
 
+using namespace openblack;
 using namespace openblack::ecs;
 using namespace openblack::ecs::components;
 
@@ -30,5 +39,39 @@ std::optional<entt::id_type> thing_model::ModelOf(const Registry& registry, entt
 	{
 		return altar->model;
 	}
+	// A firefly shows only a sprite, but in the map it has the plain model of a thing that has no model of its own
+	if (registry.AllOf<Firefly>(thing))
+	{
+		return resources::HashIdentifier(MeshId::Dummy);
+	}
 	return std::nullopt;
+}
+
+std::optional<entt::id_type> thing_model::OutlineModelOf(const Registry& registry, entt::entity thing)
+{
+	if (!registry.Valid(thing))
+	{
+		return std::nullopt;
+	}
+	if (registry.AllOf<Vortex>(thing))
+	{
+		return resources::HashIdentifier(MeshId::SpellVortexCylinder);
+	}
+	// A town centre's totem gets its outline from the icon on its plinth, with the icon that it has now
+	if (const auto* totem = registry.TryGet<const VillageTotem>(thing))
+	{
+		return ModelOf(registry, totem->icon);
+	}
+	// A teleport stone is a standing thing of the teleport's kind: it has that kind's model, which only gives it its
+	// outline
+	if (registry.AllOf<TeleportStone>(thing))
+	{
+		if (!Locator::infoConstants::has_value())
+		{
+			return std::nullopt;
+		}
+		const auto& info = Locator::infoConstants::value().mobileStatic.at(static_cast<size_t>(MobileStaticInfo::Teleport));
+		return resources::HashIdentifier(info.meshId);
+	}
+	return ModelOf(registry, thing);
 }

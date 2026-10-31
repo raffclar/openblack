@@ -34,8 +34,8 @@ struct CitadelWorship
 	float facing {0.0f};
 	/// A script has stopped the temple from having new worship sites made
 	bool cannotMakeSites {false};
-	/// The temple stands: one still to be built has no sites made for it, as their places are laid out from the
-	/// standing temple's
+	/// The temple stands. A temple that is not yet built makes no site for its towns. Only a site that a land script
+	/// makes is made for it.
 	bool standing {false};
 	/// How many sites have been made for it: each new site is numbered by it, and the newest go first when the temple
 	/// loses them
@@ -83,6 +83,27 @@ struct WorshipSite
 	};
 	/// The towns asked to build it, the newest first; none once it is built
 	std::vector<BuildRequest> buildRequests;
+	/// What its three need flags show, 0 to 1, as each of its turns works them out: how much it wants food, how much
+	/// its dancers want rest, and how many hide in it
+	std::array<float, 3> needs {0.0f, 0.0f, 0.0f};
+	/// Its three need flags, in the same order
+	std::array<entt::entity, 3> needFlags {entt::null, entt::null, entt::null};
+	/// The particle effect of the motes of prayer power that fly from its spell icons to the miracles they top up, 0 for
+	/// none. It is made with the first mote, and goes when it ends.
+	uint32_t manaPath {0};
+};
+
+/// A need flag of a worship site (see need_flag). The frames move it, thus only the frames read this.
+struct WorshipSiteFlag
+{
+	entt::entity site {entt::null};
+	/// Which of the site's needs it shows: 0 food, 1 rest, 2 hiding
+	uint8_t need {0};
+	/// How far up it flies, as a share of its full height, and how fast it moves
+	float level {0.0f};
+	float speed {0.0f};
+	/// Whether it showed in the last frame
+	bool shown {false};
 };
 
 /// A villager going to worship, or worshipping, at its town's worship site

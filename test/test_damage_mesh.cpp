@@ -288,3 +288,24 @@ TEST(DamageMesh, ABlowPassedOnLandsOnTheLastPrimitive)
 	             }).has_value());
 	EXPECT_TRUE(limits.empty());
 }
+
+TEST(DamageMesh, AFlameOfABrokenBuildingStartsOnItsBrokenModel)
+{
+	Triangle made;
+	made.corners = {Corner {.position = {10, 0, 20}}, Corner {.position = {14, 0, 20}}, Corner {.position = {10, 4, 20}}};
+	Mesh mesh;
+	mesh.primitives.push_back({.material = 0, .triangles = {made}});
+	// The model stands at (10, 0, 20) at twice its size: its inverse moves the point back and halves it
+	glm::mat4 inverse(0.5f);
+	inverse[3] = glm::vec4(-5.0f, 0.0f, -10.0f, 1.0f);
+	std::vector<float> draws {0.0f, 0.0f, 0.5f, 0.25f};
+	size_t next = 0;
+	const auto point = FlamePointOnModel(mesh, inverse, [&](float /*limit*/) { return draws.at(next++); });
+	ASSERT_TRUE(point.has_value());
+	// Half along the second side and a quarter along the third: (12, 1, 20) in the world
+	EXPECT_FLOAT_EQ(point->x, 1.0f);
+	EXPECT_FLOAT_EQ(point->y, 0.5f);
+	EXPECT_FLOAT_EQ(point->z, 0.0f);
+	// A broken model with nothing left gives no point
+	EXPECT_FALSE(FlamePointOnModel(Mesh {}, inverse, [](float /*limit*/) { return 0.0f; }).has_value());
+}

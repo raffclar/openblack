@@ -13,9 +13,11 @@
 
 #include <filesystem>
 #include <functional>
+#include <memory>
 #include <optional>
 #include <span>
 #include <string>
+#include <string_view>
 
 #include "Camera/Camera.h"
 #include "CameraControl.h"
@@ -26,6 +28,29 @@
 
 namespace openblack::inspector
 {
+
+class GameSeamInterface;
+
+/// The names of the windows of the game, as gui.windows gives them
+namespace game_windows
+{
+constexpr std::string_view k_Menu = "menu";
+constexpr std::string_view k_Cave = "cave";
+constexpr std::string_view k_SkipBox = "skip_box";
+constexpr std::string_view k_EndBox = "end_box";
+constexpr std::string_view k_TattooEditor = "tattoo_editor";
+constexpr std::string_view k_MusicPlayer = "music_player";
+/// The incoming message at the bottom left of the screen; its button is "message"
+constexpr std::string_view k_IncomingMessage = "incoming_message";
+constexpr std::string_view k_Multiplayer = "multiplayer";
+constexpr std::string_view k_SkirmishBox = "skirmish_box";
+constexpr std::string_view k_LandInfoBox = "land_info_box";
+/// The chat of a network game at the top right of the screen
+constexpr std::string_view k_Chat = "chat";
+
+/// A name in lower case, so that names of any case are the same
+[[nodiscard]] std::string Lower(std::string_view text);
+} // namespace game_windows
 
 /// The camera through the game: placed as the scripts place it, flown as the bookmarks fly it
 class GameCamera final: public CameraControlInterface
@@ -50,15 +75,15 @@ private:
 	std::optional<CameraPose> _override;
 };
 
-/// The debug windows, and the game's own: its menu, the start-of-game question, the tattoo editor and the Creature
-/// Cave. The game's dialogs are clicked through the game's input, as the player clicks them.
-class GameGui final: public GuiTargetInterface
+/// The debug windows and the Creature Cave, which the world has with no interface of the game. The game's dialogs are
+/// windows too, which answer as not made yet. The game on the player's computer adds its dialogs (see GameGui).
+class WorldGui: public GuiTargetInterface
 {
 public:
 	/// Makes input for the game's dialogs: in order, behind any input still to come; empty when made, else why not
 	using InputSender = std::function<std::string(std::span<const InputEvent>)>;
 
-	explicit GameGui(InputTargetInterface& input);
+	explicit WorldGui(InputTargetInterface& input);
 
 	[[nodiscard]] std::vector<WindowInfo> Windows() const override;
 	std::string Open(std::string_view window) override;
@@ -71,9 +96,10 @@ public:
 	/// made at once
 	void SetInputSender(InputSender send) { _send = std::move(send); }
 
-private:
+protected:
 	std::string Send(std::span<const InputEvent> events);
 
+private:
 	InputTargetInterface& _input;
 	InputSender _send;
 };
@@ -96,6 +122,12 @@ public:
 class GameLevels final: public LevelTargetInterface
 {
 public:
+	/// With no game, a land does not load and a new game does not start
+	explicit GameLevels(GameSeamInterface* seam)
+	    : _seam(seam)
+	{
+	}
+
 	[[nodiscard]] std::vector<LevelInfo> Levels() const override;
 	std::string Load(std::string_view name, LoadHow how) override;
 	std::string LoadTestbed() override;
@@ -112,6 +144,7 @@ private:
 		size_t levels;
 		std::string name;
 	};
+	GameSeamInterface* _seam;
 	mutable std::optional<FoundName> _found;
 };
 
@@ -119,6 +152,12 @@ private:
 class GameScreenshots final: public ScreenshotTargetInterface
 {
 public:
+	/// With no game, no picture is taken
+	explicit GameScreenshots(GameSeamInterface* seam)
+	    : _seam(seam)
+	{
+	}
+
 	std::string Capture(const std::filesystem::path& path, bool hideDebugGui) override;
 	[[nodiscard]] std::optional<std::string> CaptureFailure(const std::filesystem::path& path) override;
 	void HideDebugGui() override;
@@ -128,6 +167,9 @@ public:
 	[[nodiscard]] bool Exists(const std::filesystem::path& path) const override;
 	std::string Remove(const std::filesystem::path& path) override;
 	std::string AppendLine(const std::filesystem::path& file, std::string_view line) override;
+
+private:
+	GameSeamInterface* _seam;
 };
 
 /// Everything the inspector controls the game through, owned by the inspector's system
@@ -137,19 +179,29 @@ struct GameControls
 	GuiTargetInterface& gui;
 	ScriptTargetInterface& scripts;
 	LevelTargetInterface& levels;
+	/// The parts of the game on the player's computer, or null with none
+	GameSeamInterface* seam;
 };
 
-/// The game's controls, owned together
+/// The game's controls, owned together. With no seam, as on the dedicated server, the controls answer as a game that
+/// has no interface, no land loading and no pictures.
 struct GameControlSet
 {
-	explicit GameControlSet(InputTargetInterface& input)
-	    : gui(input)
-	{
-	}
-	[[nodiscard]] GameControls View() { return {.camera = camera, .gui = gui, .scripts = scripts, .levels = levels}; }
+	GameControlSet(InputTargetInterface& input, GameSeamInterface* seam);
+	GameControlSet(const GameControlSet&) = delete;
+	GameControlSet& operator=(const GameControlSet&) = delete;
+	GameControlSet(GameControlSet&&) = delete;
+	GameControlSet& operator=(GameControlSet&&) = delete;
+	~GameControlSet();
 
+	[[nodiscard]] GameControls View()
+	{
+		return {.camera = camera, .gui = *gui, .scripts = scripts, .levels = levels, .seam = seam};
+	}
+
+	GameSeamInterface* seam;
 	GameCamera camera;
-	GameGui gui;
+	std::unique_ptr<WorldGui> gui;
 	GameScripts scripts;
 	GameLevels levels;
 	GameScreenshots screenshots;

@@ -17,8 +17,8 @@
 
 #include "3D/CreatureCaveTargets.h"
 #include "3D/TempleInteriorInterface.h"
-#include "3D/TempleScrolls.h"
 #include "Help/DialogueText.h"
+#include "Temple/ScrollFacts.h"
 
 /// What the temple asks of the scripts while the player is inside: the help scripts its rooms, scrolls and places
 /// start and stop, and the clock of the turns the temple's scripts get while the world outside stands still. Each help
@@ -44,7 +44,7 @@ public:
 /// the main room's.
 [[nodiscard]] std::optional<std::string_view> RoomHelp(TempleRoom room);
 /// The help script a scroll starts as the camera is sent to look at it, none for a scroll without one
-[[nodiscard]] std::optional<std::string_view> ScrollHelp(TempleScrolls::Content content);
+[[nodiscard]] std::optional<std::string_view> ScrollHelp(temple_scrolls::Content content);
 /// The scroll help scripts a room's camera stops as the player takes it away from a scroll
 [[nodiscard]] std::span<const std::string_view> ScrollHelpsStoppedIn(TempleRoom room);
 /// The help script a place in the creature's room starts as the camera zooms to it, none for the others
@@ -54,7 +54,7 @@ public:
 /// the room's own starts while the help system is on
 void EnterRoom(Scripts& scripts, TempleRoom room, bool helpSystemOn);
 /// The camera is sent to look at a scroll
-void LookAtScroll(Scripts& scripts, TempleScrolls::Content content);
+void LookAtScroll(Scripts& scripts, temple_scrolls::Content content);
 /// The player takes the room's camera away from the scroll it looks at
 void LeaveScroll(Scripts& scripts, TempleRoom room);
 /// The creature's room's camera zooms to one of its places

@@ -25,6 +25,32 @@
 namespace openblack::ecs::systems
 {
 
+/// An animal as a saved game keeps it
+struct LoadedAnimal
+{
+	AnimalInfo type {AnimalInfo::None};
+	/// Its place and its goal in whole map units, and its height in the world
+	glm::ivec2 position {0};
+	float altitude {0.0f};
+	glm::ivec2 goal {0};
+	/// The step of a turn, in whole map units
+	glm::ivec2 step {0};
+	/// The way it faces in game angles, and its whole map units a turn
+	uint16_t angle {0};
+	uint16_t speed {0};
+	/// The state of its move, by its number in the game's table of the move states
+	uint8_t moveState {0};
+	float scale {1.0f};
+	float life {1.0f};
+	uint32_t birthTurn {0};
+	/// Its state and the state that it goes into next, by their numbers in the game's table of the animal states
+	uint8_t state {0};
+	uint8_t finalState {0};
+	/// The flock that it joins at the start of the line, and its town. None for none.
+	entt::entity flock {entt::null};
+	entt::entity town {entt::null};
+};
+
 /// The animals: the land's birds and grazers, the doves or bats about each temple, and the flocks of doves and bats and the
 /// packs of wolves the miracles make. A bird flock's leader flies legs about its home or where it is sent and its followers
 /// keep a formation behind it; a wolf runs where it is sent, hunting what crosses its way. The miracle's animals fade out
@@ -74,12 +100,21 @@ public:
 	/// belonging to a town, none for none. None for a kind that doesn't graze.
 	virtual entt::entity CreateGrazer(AnimalInfo type, glm::vec2 position, uint32_t age, entt::entity flock,
 	                                  entt::entity town) = 0;
+	/// One of the land's wild hunters (lions, tigers, leopards and wolves), as a land script makes it: on the land at a
+	/// point facing along +x, at an age (a random one for none), joining a flock, or one of its own for none. It belongs
+	/// to no town. None for another kind.
+	virtual entt::entity CreateHunter(AnimalInfo type, glm::vec2 position, uint32_t age, entt::entity flock) = 0;
 	/// An animal a challenge script makes: as a land script's animal on its own, at a random age, but in a flock of its own
 	/// that keeps within 2 m of where it was made, and held still for the script. None for a kind openblack can't make yet.
 	virtual entt::entity CreateScriptAnimal(AnimalInfo type, glm::vec2 position) = 0;
 	/// An animal of any kind that stays at its position, with a size and a heading. It is in no flock and does not move.
 	/// It shows the clip and the light of an animal that a script holds still.
 	virtual entt::entity CreateStillAnimal(AnimalInfo type, glm::vec3 position, float heading, float scale) = 0;
+	/// An animal of a saved game, as the save keeps it. It joins its flock last in the line, so that the members of a
+	/// flock made in the order of their line keep that order. None for a kind that is not a land animal.
+	virtual entt::entity CreateLoadedAnimal([[maybe_unused]] const LoadedAnimal& loaded) { return entt::null; }
+	/// The flock of the birds of a temple, made about the temple the first time. None for what is not a temple.
+	virtual entt::entity TempleFlock([[maybe_unused]] entt::entity temple) { return entt::null; }
 	/// An animal leaves its flock, which goes when it is left empty, and joins another as its newest member
 	virtual void JoinFlock(entt::entity animal, entt::entity flock) = 0;
 	/// An animal leaves its flock, which goes once it has no one left
@@ -116,6 +151,11 @@ public:
 	virtual void SendToSlaughter(entt::entity animal, glm::vec2 goal) = 0;
 	/// An animal's speed now, in whole map units a turn
 	[[nodiscard]] virtual uint16_t SpeedOf(entt::entity animal) const = 0;
+	/// A script gives an animal a speed in metres a turn. The animal walks at that speed until its next state gives it a
+	/// speed of its own. A miracle wolf keeps its speed
+	virtual void SetSpeedFromScript([[maybe_unused]] entt::entity animal, [[maybe_unused]] float metresPerTurn) {}
+	/// The speed of an animal that a script reads, in metres a turn: 0 for a dead animal
+	[[nodiscard]] virtual float SpeedForScript([[maybe_unused]] entt::entity animal) const { return 0.0f; }
 	/// The flock's leader, its first animal still there, none for an empty flock
 	[[nodiscard]] virtual entt::entity LeaderOf(entt::entity flock) const = 0;
 	/// The flock's animals, oldest first
@@ -184,6 +224,8 @@ public:
 	}
 	/// An animal that does not react now remembers its state before it takes up a reaction
 	virtual void RememberStateBeforeReaction([[maybe_unused]] entt::entity animal) {}
+	/// The animal goes back to wandering when a reaction ends: its state before a reaction is set to wandering
+	virtual void SetWanderBeforeReaction([[maybe_unused]] entt::entity animal) {}
 	/// An animal's reaction ends, and the animal forgets what it fled. When `resetState` is true, the animal goes into
 	/// the state after the reaction. When it is false, the reaction is gone and the animal stays in its state.
 	virtual void StopReaction([[maybe_unused]] entt::entity animal, [[maybe_unused]] bool resetState) {}

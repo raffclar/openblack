@@ -45,3 +45,78 @@ TEST(PlayerTowns, ThePlayersTownsComeInTheOrderThePlayerGotThem)
 	          (std::vector<entt::entity> {first, second, won}));
 	EXPECT_TRUE(openblack::ecs::player_towns::InOrder(registry, PlayerNames::PLAYER_TWO).empty());
 }
+
+TEST(PlayerTowns, TheTotalCountsOnlyThePlayersOwnTowns)
+{
+	Registry registry;
+	MakeTown(registry, 1, PlayerNames::PLAYER_ONE, 0);
+	MakeTown(registry, 2, PlayerNames::PLAYER_TWO, 0);
+	MakeTown(registry, 3, PlayerNames::PLAYER_ONE, 1);
+	MakeTown(registry, 4, PlayerNames::NEUTRAL, 0);
+	EXPECT_EQ(openblack::ecs::player_towns::Total(registry, PlayerNames::PLAYER_ONE), 2U);
+	EXPECT_EQ(openblack::ecs::player_towns::Total(registry, PlayerNames::PLAYER_TWO), 1U);
+	EXPECT_EQ(openblack::ecs::player_towns::Total(registry, PlayerNames::PLAYER_THREE), 0U);
+}
+
+TEST(PlayerTowns, AllTheTownsComeInTheListOfEachPlayerInTurnAndTheNeutralListLast)
+{
+	Registry registry;
+	const auto neutral = MakeTown(registry, 1, PlayerNames::NEUTRAL, 0);
+	const auto twoWon = MakeTown(registry, 2, PlayerNames::PLAYER_TWO, 5);
+	const auto oneWon = MakeTown(registry, 3, PlayerNames::PLAYER_ONE, 4);
+	const auto twoFirst = MakeTown(registry, 4, PlayerNames::PLAYER_TWO, 1);
+	const auto oneFirst = MakeTown(registry, 5, PlayerNames::PLAYER_ONE, 2);
+	EXPECT_EQ(openblack::ecs::player_towns::AllInOrder(registry),
+	          (std::vector<entt::entity> {oneFirst, oneWon, twoFirst, twoWon, neutral}));
+}
+
+TEST(PlayerTowns, ATownWonLaterComesAfterATownMadeLater)
+{
+	// The list order is the order of gain, not the order the land made the towns
+	Registry registry;
+	const auto won = MakeTown(registry, 1, PlayerNames::PLAYER_ONE, 3);
+	const auto made = MakeTown(registry, 2, PlayerNames::PLAYER_ONE, 1);
+	EXPECT_EQ(openblack::ecs::player_towns::AllInOrder(registry), (std::vector<entt::entity> {made, won}));
+}
+
+TEST(PlayerTowns, TheGamesListOfAllTownsStartsWithTheTownMadeLast)
+{
+	// A town that a new player won keeps its place in the list of all the towns
+	Registry registry;
+	const auto oldest = MakeTown(registry, 7, PlayerNames::PLAYER_ONE, 9);
+	const auto newest = MakeTown(registry, 1, PlayerNames::NEUTRAL, 1);
+	const auto middle = MakeTown(registry, 4, PlayerNames::PLAYER_TWO, 2);
+	registry.Get<Town>(oldest).made = 0;
+	registry.Get<Town>(middle).made = 1;
+	registry.Get<Town>(newest).made = 2;
+	EXPECT_EQ(openblack::ecs::player_towns::AllMadeNewestFirst(registry), (std::vector<entt::entity> {newest, middle, oldest}));
+}
+
+TEST(PlayerTowns, TheNearestOfAllTownsKeepsTheFirstOfEquals)
+{
+	using openblack::ecs::player_towns::Distance;
+	const auto a = static_cast<entt::entity>(1);
+	const auto b = static_cast<entt::entity>(2);
+	const auto c = static_cast<entt::entity>(3);
+	const std::vector<Distance> towns {
+	    {.town = a, .metres = 50.0f}, {.town = b, .metres = 20.0f}, {.town = c, .metres = 20.0f}};
+	EXPECT_EQ(openblack::ecs::player_towns::NearestOf(towns), b);
+	// No limit: a town however far is the nearest when it is the only one
+	const std::vector<Distance> far {{.town = c, .metres = 1.0e9f}};
+	EXPECT_EQ(openblack::ecs::player_towns::NearestOf(far), c);
+	EXPECT_EQ(openblack::ecs::player_towns::NearestOf({}), entt::entity {entt::null});
+}
+
+TEST(PlayerTowns, TheNearestTownOfAPlayerKeepsTheLastOfEqualsWithinTheReach)
+{
+	using openblack::ecs::player_towns::Distance;
+	const auto a = static_cast<entt::entity>(1);
+	const auto b = static_cast<entt::entity>(2);
+	const auto c = static_cast<entt::entity>(3);
+	const std::vector<Distance> towns {
+	    {.town = a, .metres = 20.0f}, {.town = b, .metres = 30.0f}, {.town = c, .metres = 20.0f}};
+	EXPECT_EQ(openblack::ecs::player_towns::NearestOfPlayer(towns, 100.0f), c);
+	// A town exactly at the reach is near enough; a town past it is not
+	EXPECT_EQ(openblack::ecs::player_towns::NearestOfPlayer(towns, 20.0f), c);
+	EXPECT_EQ(openblack::ecs::player_towns::NearestOfPlayer(towns, 19.0f), entt::entity {entt::null});
+}

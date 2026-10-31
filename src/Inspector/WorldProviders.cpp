@@ -14,6 +14,8 @@
 
 #include <algorithm>
 #include <numbers>
+#include <optional>
+#include <span>
 #include <string>
 #include <utility>
 
@@ -187,6 +189,28 @@ Json openblack::inspector::LiquidSummary(std::span<const liquid_particles::Parti
 	};
 }
 
+Json openblack::inspector::BeliefSummary(const ecs::systems::ParticleRuleSystemInterface::BeliefSpritesSeen& seen)
+{
+	Json recent = Json::array();
+	for (const auto& sprite : seen.recent)
+	{
+		recent.push_back({
+		    {"position", Point(sprite.position)},
+		    {"amount", sprite.amount},
+		    {"colour", sprite.colour},
+		});
+	}
+	return {{"count", seen.count}, {"recent", std::move(recent)}};
+}
+
+Json openblack::inspector::RequestSummary(std::optional<ecs::systems::EffectHandle> next,
+                                          std::span<const ParticleEffectInfo> effects)
+{
+	const auto requested = std::ranges::count_if(
+	    effects, [](const ParticleEffectInfo& effect) { return effect.id >= ecs::systems::k_FirstEffectHandle; });
+	return {{"nextNumber", next.has_value() ? Json(*next) : Json(nullptr)}, {"running", requested}};
+}
+
 ParticlesProvider::ParticlesProvider(ParticleSources sources)
     : _sources(std::move(sources))
 {
@@ -222,6 +246,25 @@ std::vector<QueryDescription> ParticlesProvider::Describe() const
 	                     .type = "integer",
 	                     .description = "The other player whose sparkles to count, from 0",
 	                     .required = false}},
+	     .kind = ResultKind::Object,
+	     .needsNear = false},
+	    {.name = "belief",
+	     .description = "The symbols of belief that rose last from things that gained belief, the newest first: place, "
+	                    "amount (the belief by ten thousand) and the player's colour. Also the count of all symbols "
+	                    "since the land started",
+	     .parameters = {},
+	     .kind = ResultKind::Object,
+	     .needsNear = false},
+	    {.name = "requests",
+	     .description = "The effects that the turns and the scripts asked for: the number that the next one gets (null "
+	                    "without the requests) and how many running effects have a number that the simulation gave",
+	     .parameters = {},
+	     .kind = ResultKind::Object,
+	     .needsNear = false},
+	    {.name = "drawn",
+	     .description = "What the last frame of the draw of the particle effects drew: sprites, ribbons, models, mists, "
+	                    "light maps and effects. Null on a computer that does not draw the effects",
+	     .parameters = {},
 	     .kind = ResultKind::Object,
 	     .needsNear = false},
 	};
@@ -265,6 +308,31 @@ QueryResult ParticlesProvider::Run(std::string_view query, const QueryContext& c
 		}
 		const auto liquids = _sources.liquids ? _sources.liquids() : std::span<const liquid_particles::Particle> {};
 		return QueryResult::Value(LiquidSummary(liquids));
+	}
+	if (query == "belief")
+	{
+		return QueryResult::Value(BeliefSummary(
+		    _sources.belief ? _sources.belief() : ecs::systems::ParticleRuleSystemInterface::BeliefSpritesSeen {}));
+	}
+	if (query == "requests")
+	{
+		return QueryResult::Value(RequestSummary(_sources.nextRequest ? _sources.nextRequest() : std::nullopt, effects));
+	}
+	if (query == "drawn")
+	{
+		const auto stats = _sources.drawn ? _sources.drawn() : std::nullopt;
+		if (!stats.has_value())
+		{
+			return QueryResult::Value(Json(nullptr));
+		}
+		return QueryResult::Value(Json {
+		    {"sprites", stats->sprites},
+		    {"ribbons", stats->chains},
+		    {"models", stats->meshes},
+		    {"mists", stats->mists},
+		    {"lightMaps", stats->lightStamps},
+		    {"effects", stats->effects},
+		});
 	}
 	return QueryResult::Error("no query particles." + std::string(query));
 }

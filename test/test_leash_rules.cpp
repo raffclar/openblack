@@ -226,3 +226,130 @@ TEST(LeashRules, OnlyTheLeashOfAnotherPlayersCreatureMakesItsTieSoundAtTheThing)
 	EXPECT_TRUE(TieSoundIsPlaced(PlayerNames::PLAYER_TWO, PlayerNames::PLAYER_ONE));
 	EXPECT_TRUE(TieSoundIsPlaced(PlayerNames::PLAYER_ONE, PlayerNames::PLAYER_TWO));
 }
+
+TEST(LeashRules, OnlyTheHandsTieStopsWhatTheCreatureDoesAndMakesItActOnTheThing)
+{
+	const auto hand = EffectsOf(TieSource::Hand);
+	EXPECT_TRUE(hand.sound);
+	EXPECT_TRUE(hand.lessons);
+	EXPECT_TRUE(hand.failsAction);
+	EXPECT_TRUE(hand.actsOnThing);
+	for (const auto source : {TieSource::Script, TieSource::ComputerGod})
+	{
+		const auto only = EffectsOf(source);
+		EXPECT_TRUE(only.sound);
+		EXPECT_TRUE(only.lessons);
+		EXPECT_FALSE(only.failsAction);
+		EXPECT_FALSE(only.actsOnThing);
+	}
+	// A loaded game puts the tie back with no sound, no lesson and no order
+	const auto loaded = EffectsOf(TieSource::LoadedGame);
+	EXPECT_FALSE(loaded.sound);
+	EXPECT_FALSE(loaded.lessons);
+	EXPECT_FALSE(loaded.failsAction);
+	EXPECT_FALSE(loaded.actsOnThing);
+}
+
+TEST(LeashRules, TheAttachSoundsPlayInTurnFromTheFirst)
+{
+	AttachSoundTurns turns;
+	EXPECT_EQ(turns.Next(), 0);
+	EXPECT_EQ(turns.Next(), 1);
+	EXPECT_EQ(turns.Next(), 0);
+	EXPECT_EQ(turns.Next(), 1);
+}
+
+TEST(LeashRules, TheTieAndTheHandKeepTheirOwnAttachSoundTurns)
+{
+	AttachSoundTurns tie;
+	AttachSoundTurns hand;
+	EXPECT_EQ(tie.Next(), 0);
+	EXPECT_EQ(hand.Next(), 0);
+	EXPECT_EQ(tie.Next(), 1);
+	EXPECT_EQ(hand.Next(), 1);
+}
+
+namespace
+{
+/// A leash on a temple, as the pick rule sees it
+struct FakePost
+{
+	LeashType type;
+	PlayerNames owner;
+	bool picked;
+};
+
+/// The temple leashes of all players after the owner's creature puts on a leash
+std::vector<FakePost> AfterPutOn(std::vector<FakePost> posts, PlayerNames owner, LeashType worn)
+{
+	for (auto& post : posts)
+	{
+		if (const auto picked = PostPickedFor(post.type, worn); post.owner == owner && picked.has_value())
+		{
+			post.picked = *picked;
+		}
+	}
+	return posts;
+}
+
+std::vector<FakePost> TempleOf(PlayerNames owner)
+{
+	return {{.type = LeashType::Evil, .owner = owner, .picked = false},
+	        {.type = LeashType::Rope, .owner = owner, .picked = false},
+	        {.type = LeashType::Good, .owner = owner, .picked = false}};
+}
+} // namespace
+
+TEST(LeashRules, TheLeashThatGoesOnIsPickedAtTheTemple)
+{
+	for (const auto worn : k_Types)
+	{
+		const auto posts = AfterPutOn(TempleOf(PlayerNames::PLAYER_ONE), PlayerNames::PLAYER_ONE, worn);
+		for (const auto& post : posts)
+		{
+			EXPECT_EQ(post.picked, post.type == worn);
+		}
+	}
+}
+
+TEST(LeashRules, TheLeashThatGoesOnReplacesTheOldPick)
+{
+	auto posts = TempleOf(PlayerNames::PLAYER_ONE);
+	posts[2].picked = true;
+	posts = AfterPutOn(posts, PlayerNames::PLAYER_ONE, LeashType::Rope);
+	EXPECT_FALSE(posts[0].picked);
+	EXPECT_TRUE(posts[1].picked);
+	EXPECT_FALSE(posts[2].picked);
+}
+
+TEST(LeashRules, NoLeashKeepsThePick)
+{
+	EXPECT_FALSE(PostPickedFor(LeashType::Rope, LeashType::None).has_value());
+	auto posts = TempleOf(PlayerNames::PLAYER_ONE);
+	posts[0].picked = true;
+	posts = AfterPutOn(posts, PlayerNames::PLAYER_ONE, LeashType::None);
+	EXPECT_TRUE(posts[0].picked);
+	EXPECT_FALSE(posts[1].picked);
+}
+
+TEST(LeashRules, OnlyTheOwnersTemplePicks)
+{
+	auto posts = TempleOf(PlayerNames::PLAYER_ONE);
+	const auto other = TempleOf(PlayerNames::PLAYER_TWO);
+	posts.insert(posts.end(), other.begin(), other.end());
+	posts = AfterPutOn(posts, PlayerNames::PLAYER_TWO, LeashType::Good);
+	for (const auto& post : posts)
+	{
+		EXPECT_EQ(post.picked, post.owner == PlayerNames::PLAYER_TWO && post.type == LeashType::Good);
+	}
+	// A player with no temple has no leashes there to pick
+	EXPECT_TRUE(AfterPutOn({}, PlayerNames::PLAYER_ONE, LeashType::Rope).empty());
+}
+
+TEST(LeashRules, ANiceOrNastySpellStopsThePlayerChangingTheLeash)
+{
+	EXPECT_TRUE(PlayerCanChangeType(false, false));
+	EXPECT_FALSE(PlayerCanChangeType(true, false));
+	EXPECT_FALSE(PlayerCanChangeType(false, true));
+	EXPECT_FALSE(PlayerCanChangeType(true, true));
+}

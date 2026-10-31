@@ -33,7 +33,9 @@ class PlayerSystem final: public PlayerSystemInterface
 public:
 	void RegisterPlayers() override;
 	void AddPlayer(entt::entity playerEntity) override;
+	[[nodiscard]] size_t PlayerNumbersInGame() const override;
 	[[nodiscard]] std::optional<entt::entity> FindPlayer(PlayerNames playerName) const override;
+	entt::entity EnsurePlayer(PlayerNames playerName) override;
 	void AddCreature(entt::entity creature) override;
 	void MakePrimaryCreature(entt::entity creature) override;
 	[[nodiscard]] std::optional<entt::entity> GetPrimaryCreature(PlayerNames name) const override;
@@ -41,16 +43,22 @@ public:
 	void ForgetKept() override;
 	[[nodiscard]] bool KeepAlignmentAt(uint32_t turn) override;
 	void TakeUpKept(entt::entity playerEntity) override;
+	void SetAlly(PlayerNames player, PlayerNames other, float strength) override;
+	[[nodiscard]] float AllyStrength(PlayerNames player, PlayerNames other) const override;
 	[[nodiscard]] bool IsComputerPlayer(PlayerNames name) const override;
+	[[nodiscard]] bool IsHumanPlayer(PlayerNames name) const override;
 
 private:
+	/// What decides who plays a player now. The system looks for the hands of the player only when the kind of the
+	/// player depends on them, else the facts tell no hands.
+	[[nodiscard]] player_kind::Facts FactsOf(PlayerNames name) const;
 	/// Remembers that the owner of the creature got it, after the creatures they got before or before all of them
 	void Acquire(entt::entity creature, bool primary);
 	/// What a player keeps from land to land
 	struct Kept
 	{
 		std::optional<components::Alignment> alignment;
-		std::array<float, 8> damageFrom {};
+		decltype(components::Player::damageFrom) damageFrom {};
 		uint32_t windResistance {0};
 		components::Player::Miracles miracles;
 		/// What their hand keeps of their influence past the border, and whether a script switched it off

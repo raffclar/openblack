@@ -68,7 +68,9 @@ SHAPING = {
     "cursor": {"type": "integer", "description": "Start from the next_cursor of the last page"},
     "count": {"type": "boolean", "description": "Only how many items match"},
     "summary": {"type": "string", "description": "count/min/max/mean of this numeric field instead of items"},
-    "max_bytes": {"type": "integer", "description": "Cap on the result's size (16384 by default)"},
+    "max_bytes": {"type": "integer", "description": "Cap on the result's size (16384 by default). Goes at the top level of the request, not in params. "
+                                                                 "A larger object answer gives only truncated, keys and sizes (the bytes of each member down to a component's fields): "
+                                                                 "choose fields from sizes, or raise max_bytes"},
 }
 NEAR = {
     "near": {"type": "array", "items": {"type": "number"},
@@ -501,7 +503,10 @@ TOOLS = [
     },
     {
         "name": "input_gesture",
-        "description": "Draws a gesture (input_names) through the recogniser as the hand would.",
+        "description": "Draws a gesture (input_names) through the recogniser as the hand would, in about a second. Its "
+                       "size on the screen is the same at each camera distance. The game forgets a path when the camera "
+                       "moves or the player's hand takes or lets go of a thing during the drawing: ask players.gestures "
+                       "(last_recognised, circle_seconds_left) afterwards, and draw again if nothing was recognised.",
         "inputSchema": schema({"name": {"type": "string"}, "hold_action": {"type": "boolean"}}, ["name"]),
         "query": "input.gesture",
         "params": ["name", "hold_action"],
@@ -585,12 +590,76 @@ TOOLS = [
         "query": "creature.set_reactions",
         "params": ["id", "notice"],
     },
+    # Orders to a creature, carried out by its own mind and body as the game's orders are (never a move of the thing)
+    {
+        "name": "creature_pick_up",
+        "description": "The creature walks to a thing, picks it up and holds it (as a leash order on a thing it can "
+                       "lift), facing the player for 40 to 50 s. Refused when it cannot lift the thing or while a cut "
+                       "scene plays. Give it for a thing that is near: the creature gives up when it has not moved for "
+                       "50 turns on its way (a long route search can cause it), and the answer warns of a far thing.",
+        "inputSchema": schema({"id": {"type": "integer"}, "object": {"type": "integer"}}, ["object"]),
+        "query": "creature.pick_up",
+        "params": ["id", "object"],
+    },
+    {
+        "name": "creature_put_down",
+        "description": "The creature lets go of what it carries: puts it down where it stands, or carries it to point "
+                       "[x, z] and puts it down there, or (throw true) throws it at the point.",
+        "inputSchema": schema({"id": {"type": "integer"}, "point": {"type": "array", "items": {"type": "number"}},
+                               "throw": {"type": "boolean"}}),
+        "query": "creature.put_down",
+        "params": ["id", "point", "throw"],
+    },
+    {
+        "name": "creature_eat",
+        "description": "The creature walks to a thing and eats from it: a storage pit (give the pit, not its food "
+                       "pile), a field, a tree or food itself; action names another eat action (e.g. EatAlive). The "
+                       "same limits as creature_pick_up hold: a near thing, and no cut scene.",
+        "inputSchema": schema({"id": {"type": "integer"}, "object": {"type": "integer"},
+                               "action": {"type": "string"}}, ["object"]),
+        "query": "creature.eat",
+        "params": ["id", "object", "action"],
+    },
     {
         "name": "creature_plan",
         "description": "A creature's plan (desire, action, object, priority), activity and next agenda steps.",
         "inputSchema": schema({"id": {"type": "integer"}, **SHAPING}),
         "query": "creature.plan",
         "params": ["id"],
+    },
+    {
+        "name": "creature_animation",
+        "description": "The clips a creature's body plays now (developer log, starts with the inspector): per clip "
+                       "its layer (body, blend, face, gesture, wobble), spec-file index and name, time, speed (clip ms "
+                       "per turn ms), loop, weight and pair blend, and the cause (mind activity, plan action, agenda "
+                       "step, object action, fight stage).",
+        "inputSchema": schema({"id": {"type": "integer"}}),
+        "query": "creature.animation",
+        "params": ["id"],
+    },
+    {
+        "name": "creature_animation_history",
+        "description": "The clips a creature's body played that stopped, newest last (up to 256): start and end turn, "
+                       "turns, speed and cause of each. last limits the count.",
+        "inputSchema": schema({"id": {"type": "integer"}, "last": {"type": "integer"}, **SHAPING}),
+        "query": "creature.animation_history",
+        "params": ["id", "last"],
+    },
+    {
+        "name": "creature_animation_problems",
+        "description": "Clips asked of a creature's body that did not play: missing (the species lacks the clip: "
+                       "the body showed the stand, the action ended at once, or a face, gesture or wobble showed "
+                       "nothing) or refused (the body was playing "
+                       "another action), with turn, asker and repeats.",
+        "inputSchema": schema({"id": {"type": "integer"}, **SHAPING}),
+        "query": "creature.animation_problems",
+        "params": ["id"],
+    },
+    {
+        "name": "creature_animation_clear",
+        "description": "Empties every creature's clip log; logging continues from the next turn.",
+        "inputSchema": schema(),
+        "query": "creature.animation_clear",
     },
     {
         "name": "map_cell",
@@ -608,6 +677,25 @@ TOOLS = [
         "inputSchema": schema({"position": {"type": "array", "items": {"type": "number"}}, **SHAPING}),
         "query": "map.shade",
         "params": ["position"],
+    },
+    {
+        "name": "players_computer_nodes",
+        "description": "Every node of one computer god's mind (its tree of needs): name, personality weight, suppression, "
+                       "how much it was wanted when last looked at, and the node above. player is a number (0 to 7) or a "
+                       "name such as PLAYER_TWO; name keeps only the nodes a script finds with it (ExpandInfluence). "
+                       "Pages with limit and cursor.",
+        "inputSchema": schema({"player": {"type": ["integer", "string"]}, "name": {"type": "string"}, **SHAPING},
+                              ["player"]),
+        "query": "players.computer_nodes",
+        "params": ["player", "name"],
+    },
+    {
+        "name": "players_computer_attitudes",
+        "description": "What one computer god's mind thinks of each player, as a script reads it and as the mind keeps "
+                       "it. player is a number (0 to 7) or a name such as PLAYER_TWO.",
+        "inputSchema": schema({"player": {"type": ["integer", "string"]}}, ["player"]),
+        "query": "players.computer_attitudes",
+        "params": ["player"],
     },
     {
         "name": "town_homes",

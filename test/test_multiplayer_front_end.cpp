@@ -21,20 +21,29 @@
 #include <span>
 #include <string>
 #include <utility>
+#include <variant>
 #include <vector>
 
 #include <LobbyApiJson.h>
 #include <gtest/gtest.h>
 
+#include "ColourDifference.h"
+#include "Commands/TurnCodec.h"
+#include "ECS/PlayerColour.h"
 #include "ECS/Systems/LobbyClientSystemInterface.h"
 #include "ECS/Systems/NetworkGameSystemInterface.h"
+#include "Gui/LandThumbnail.h"
 #include "Gui/MultiplayerBoxes.h"
 #include "Gui/MultiplayerFrontEnd.h"
 #include "Gui/MultiplayerFrontEndRules.h"
+#include "Gui/PingDisplay.h"
 #include "Gui/ScreenFit.h"
 #include "Gui/TextDatabase.h"
 #include "Online/LanDiscoveryInterface.h"
+#include "Online/MapDownload.h"
 #include "Online/NetworkSession.h"
+#include "Online/OnlineMapStoreInterface.h"
+#include "Online/StartRules.h"
 #include "gui/FakeGameFont.h"
 #include "online/FakeWebSocketClient.h"
 
@@ -131,6 +140,13 @@ public:
 	void GetPlayer(int64_t, LobbyCallback<lobby_api::PlayerDetails>) override {}
 	void GetWeather(lobby_api::Date, LobbyCallback<lobby_api::RealWeather>) override {}
 	void UploadCreature(lobby_api::CreatureUpload, LobbyCallback<lobby_api::CreatureUploadReply>) override {}
+	void SendSkirmishPing(LobbyCallback<LobbyDone>) override {}
+	void GetMaps(LobbyCallback<lobby_api::MapList> callback) override { maps = std::move(callback); }
+	void DownloadMap(const lobby_api::OnlineMap& map, LobbyCallback<std::vector<uint8_t>> callback) override
+	{
+		downloads.push_back(map.sha256);
+		download = std::move(callback);
+	}
 	uint32_t AddEventListener(LobbyEventListener listener) override
 	{
 		listeners.push_back(std::move(listener));
@@ -185,8 +201,30 @@ public:
 	std::optional<int64_t> clanAsked;
 	LobbyCallback<lobby_api::ClanDetails> clan;
 	LobbyCallback<std::vector<uint8_t>> logo;
+	LobbyCallback<lobby_api::MapList> maps;
+	LobbyCallback<std::vector<uint8_t>> download;
+	std::vector<std::string> downloads;
 	std::vector<LobbyEventListener> listeners;
 	std::vector<uint32_t> removed;
+};
+
+/// A store of the lands of network games in memory
+class FakeMapStore final: public online::OnlineMapStoreInterface
+{
+public:
+	void Find(std::string file, uint64_t, FoundCallback done) override { done(files.contains(file)); }
+	[[nodiscard]] std::optional<std::vector<uint8_t>> Read(std::string_view file) const override
+	{
+		const auto found = files.find(std::string(file));
+		return found != files.end() ? std::optional(found->second) : std::nullopt;
+	}
+	void Write(std::string file, std::vector<uint8_t> bytes, WrittenCallback done) override
+	{
+		files[std::move(file)] = std::move(bytes);
+		done(true);
+	}
+
+	std::map<std::string, std::vector<uint8_t>> files;
 };
 
 /// A network game for the tests: a real session on the fake socket, with a clock that the test moves
@@ -262,6 +300,11 @@ struct FrontEndTest: public ::testing::Test
 	FakeLan lan;
 	std::vector<std::string> opened;
 	std::unique_ptr<MultiplayerFrontEnd> frontEnd;
+	/// The ping display of the room, as --show-ping turns it on
+	bool showPing {false};
+	FakeMapStore store;
+	/// The store of the lands of network games, none when the test does not give one
+	online::OnlineMapStoreInterface* mapStore {nullptr};
 
 	void Make(bool withLan = false)
 	{
@@ -272,6 +315,7 @@ struct FrontEndTest: public ::testing::Test
 		    .openPage = [this](std::string_view url) { opened.emplace_back(url); },
 		    .owner = {},
 		    .poll = {},
+		    .maps = mapStore,
 		};
 		MultiplayerFrontEnd::Settings settings {
 		    .registerPage = "https://lobby.test/register/",
@@ -282,6 +326,7 @@ struct FrontEndTest: public ::testing::Test
 		    .browser = false,
 		    .localMaps = std::string(k_LocalMaps),
 		    .conditionTemplate = std::string(k_Conditions),
+		    .showPing = showPing,
 		};
 		frontEnd = std::make_unique<MultiplayerFrontEnd>(std::move(services), std::move(settings));
 	}
@@ -312,17 +357,17 @@ struct FrontEndTest: public ::testing::Test
 	}
 
 	/// The game server lets the player in on the last socket
-	void ServerJoins(game_socket::Role role = game_socket::Role::God)
+	void ServerJoins(game_socket::Role role = game_socket::Role::God, std::optional<game_socket::Start> start = std::nullopt)
 	{
 		const std::optional<uint8_t> slot = role == game_socket::Role::God ? std::optional<uint8_t>(1) : std::nullopt;
 		sockets.ServerText(sockets.order.back(),
 		                   game_socket::ToJson(game_socket::Joined {
-		                       .role = role, .slot = slot, .session = "s", .name = "Alice", .start = std::nullopt}));
+		                       .role = role, .slot = slot, .session = "s", .name = "Alice", .start = std::move(start)}));
 		Step();
 	}
 
-	/// The player joins the first game, its socket opens and the server lets the player in
-	void ToRoom()
+	/// The player joins the first game, its socket opens and the server lets the player in with its start
+	void ToRoom(std::optional<game_socket::Start> start = std::nullopt)
 	{
 		ToGameList();
 		frontEnd->SelectGame(0);
@@ -336,7 +381,7 @@ struct FrontEndTest: public ::testing::Test
 		Step();
 		// The room opens only when the server lets the player in
 		ASSERT_EQ(frontEnd->GetBox(), Box::GameList);
-		ServerJoins();
+		ServerJoins(game_socket::Role::God, std::move(start));
 		ASSERT_EQ(frontEnd->GetBox(), Box::Room);
 	}
 };
@@ -378,6 +423,7 @@ TEST(MultiplayerRules, JoinFailuresGiveTheGamesMessages)
 	EXPECT_EQ(TicketFailureMessage(LobbyErrorKind::Refused, "email_required"), Message::EmailRequired);
 	EXPECT_EQ(JoinFailureMessage("already", LobbyKind::Internet), Message::AlreadyInRoom);
 	EXPECT_EQ(JoinFailureMessage("started", LobbyKind::Internet), Message::ConnectionFailed);
+	EXPECT_EQ(JoinFailureMessage("kicked", LobbyKind::Internet), Message::ConnectionFailed);
 	EXPECT_EQ(JoinFailureMessage("", LobbyKind::Internet), Message::ConnectionFailed);
 	EXPECT_EQ(JoinFailureMessage("", LobbyKind::Lan), Message::CouldNotConnect);
 	EXPECT_EQ(ButtonsOf(Message::IncorrectPassword), MessageButtons::Ok);
@@ -395,6 +441,23 @@ TEST(MultiplayerRules, FormatTextFillsTheCodesInOrder)
 	EXPECT_EQ(FormatText(u"%s and %s", std::span<const TextArgument>(arguments).first(1)), u"Alice and %s");
 	EXPECT_EQ(TimeLimitText(90), u"1:30");
 	EXPECT_EQ(TimeLimitText(5), u"0:05");
+	EXPECT_EQ(TimeLimitText(k_DefaultTimeLimitMinutes), u"0:30");
+}
+
+TEST(MultiplayerRules, TheConditionsPageOfAPlayerWhoIsNotTheHost)
+{
+	// With a land: the list of the game's conditions, the time limit and View Chat
+	constexpr auto withLand = ConditionsPageOf(true);
+	EXPECT_FALSE(withLand.selectMap);
+	EXPECT_TRUE(withLand.conditions);
+	EXPECT_TRUE(withLand.timeLimit);
+	EXPECT_TRUE(withLand.viewChat);
+	// With no land: only "Please select a map first."
+	constexpr auto noLand = ConditionsPageOf(false);
+	EXPECT_TRUE(noLand.selectMap);
+	EXPECT_FALSE(noLand.conditions);
+	EXPECT_FALSE(noLand.timeLimit);
+	EXPECT_FALSE(noLand.viewChat);
 }
 
 TEST(MultiplayerRules, GameLinesShowTheStatesOfAGame)
@@ -502,6 +565,51 @@ TEST(MultiplayerRules, LocalMapsAndTheirConditions)
 	EXPECT_EQ(ConditionText(12), "HELP_TEXT_MULTIPLAYER_14");
 }
 
+TEST(MultiplayerRules, TheConditionsOfATestSwitchKeepToTheLimitsOfTheLand)
+{
+	EXPECT_EQ(ConditionIndex("WC_KILL_NUM_VILLAGERS"), 0u);
+	EXPECT_EQ(ConditionIndex("WC_GROW_TREES"), 14u);
+	EXPECT_FALSE(ConditionIndex("WC_NOTHING").has_value());
+	using openblack::game_end::Condition;
+	using openblack::game_end::ConditionPick;
+	const auto limits = FindConditions(k_Conditions, "mpm_2p_1");
+	const std::array inLimits {ConditionPick {.condition = Condition::VillagersKilled, .value = 500},
+	                           ConditionPick {.condition = Condition::TreesGrown, .value = 1}};
+	EXPECT_FALSE(ConditionsRefusal(limits, inLimits).has_value());
+	const std::array tooMany {ConditionPick {.condition = Condition::VillagersKilled, .value = 501}};
+	EXPECT_TRUE(ConditionsRefusal(limits, tooMany).has_value());
+	const std::array tooFew {ConditionPick {.condition = Condition::TreesGrown, .value = 0}};
+	EXPECT_TRUE(ConditionsRefusal(limits, tooFew).has_value());
+	// A land with no block in the template has no limits, so the host can pick nothing there
+	EXPECT_TRUE(ConditionsRefusal(FindConditions(k_Conditions, "Land1"), inLimits).has_value());
+}
+
+TEST(MultiplayerRules, TheConditionsPageListsTheLastConditionFirst)
+{
+	using game_end::Condition;
+	using game_end::ConditionPick;
+	const std::array picks = {
+	    ConditionPick {.condition = Condition::HousesBuilt, .value = 20},
+	    ConditionPick {.condition = Condition::TreesGrown, .value = 100},
+	    ConditionPick {.condition = Condition::FoodInStores, .value = 9000},
+	};
+	// Each condition goes to the top of the list in the order of the game, whatever the order of the picks
+	const auto lines = ConditionLines(picks);
+	EXPECT_EQ(lines, (std::vector<ConditionPick> {
+	                     {.condition = Condition::TreesGrown, .value = 100},
+	                     {.condition = Condition::FoodInStores, .value = 9000},
+	                     {.condition = Condition::HousesBuilt, .value = 20},
+	                 }));
+	// A condition that is in the picks two times shows one time, with the last value
+	const std::array twice = {
+	    ConditionPick {.condition = Condition::WoodInStores, .value = 4000},
+	    ConditionPick {.condition = Condition::WoodInStores, .value = 5000},
+	};
+	EXPECT_EQ(ConditionLines(twice), (std::vector<ConditionPick> {{.condition = Condition::WoodInStores, .value = 5000}}));
+	EXPECT_TRUE(ConditionLines({}).empty());
+	EXPECT_EQ(ConditionLineText(u"Number of trees grown", 100), u"Number of trees grown (100)");
+}
+
 TEST(MultiplayerRules, ClanInfoLines)
 {
 	const lobby_api::ClanDetails clan {.id = 1,
@@ -556,6 +664,12 @@ TEST(MultiplayerRules, ClanLogosKeepSixteenGreys)
 	EXPECT_EQ(logo->at(static_cast<size_t>(k_LogoSize) + 1), 5);
 	// Past the picture the logo has no opacity
 	EXPECT_EQ(logo->at(2), 0);
+	// Each part of a colour goes to the middle of its step of eight before the grey: a blue of 46 gives the grey 17
+	bmp[54 + 12] = 46;
+	bmp[54 + 14] = 0;
+	const auto blue = DecodeClanLogo(bmp);
+	ASSERT_TRUE(blue.has_value());
+	EXPECT_EQ(blue->at(static_cast<size_t>(k_LogoSize) + 1), 1);
 	EXPECT_FALSE(DecodeClanLogo(std::span(bmp).first(20)).has_value());
 }
 
@@ -719,6 +833,9 @@ TEST_F(FrontEndTest, JoinTakesATicketThenOpensTheGameSocket)
 	EXPECT_EQ(frontEnd->GetOwnSeat()->god, 2);
 	EXPECT_EQ(frontEnd->GetServerLand(), 0u);
 	ASSERT_TRUE(frontEnd->GetConditions().has_value());
+	// A server that gives no start has no picks: the game's default of 30 minutes shows, and no condition
+	EXPECT_EQ(frontEnd->GetTimeLimit(), k_DefaultTimeLimitMinutes);
+	EXPECT_TRUE(frontEnd->GetConditionPicks().empty());
 	// Back leaves the room and its channel, and the server gets the leave
 	frontEnd->Back();
 	EXPECT_EQ(frontEnd->GetBox(), Box::GameList);
@@ -727,6 +844,39 @@ TEST_F(FrontEndTest, JoinTakesATicketThenOpensTheGameSocket)
 	EXPECT_EQ(socket.sent.back().Text(), R"({"type":"room.leave"})");
 	Step();
 	EXPECT_EQ(sockets.Count(), 0u);
+}
+
+TEST_F(FrontEndTest, TheRoomShowsTheTimeLimitAndTheConditionsThatTheServerPicked)
+{
+	// The game server is the host: its start gives the time limit and the winning conditions as the player joins
+	ToRoom(game_socket::Start {
+	    .land = "Online Maps/mpm_2p_1.txt",
+	    .testbed = false,
+	    .seed = 1,
+	    .turn = 0,
+	    .opening = {},
+	    .godsRingMap = false,
+	    .allComputerGods = false,
+	    .aiSeed = std::nullopt,
+	    .scenario = std::nullopt,
+	    .timeLimit = 90,
+	    .conditions = {{.condition = 14, .value = 100}, {.condition = 3, .value = 20}},
+	    .names = {},
+	    .gods = {},
+	});
+	EXPECT_EQ(frontEnd->GetTimeLimit(), 90u);
+	EXPECT_EQ(frontEnd->GetConditionPicks().size(), 2u);
+	EXPECT_EQ(ConditionLines(frontEnd->GetConditionPicks()), (std::vector<game_end::ConditionPick> {
+	                                                             {.condition = game_end::Condition::TreesGrown, .value = 100},
+	                                                             {.condition = game_end::Condition::HousesBuilt, .value = 20},
+	                                                         }));
+}
+
+TEST_F(FrontEndTest, AStartWithNoTimeLimitShowsTheDefaultTimeLimit)
+{
+	ToRoom(game_socket::Start {});
+	EXPECT_EQ(frontEnd->GetTimeLimit(), k_DefaultTimeLimitMinutes);
+	EXPECT_TRUE(frontEnd->GetConditionPicks().empty());
 }
 
 TEST_F(FrontEndTest, ARefusedTicketShowsConnectionFailed)
@@ -815,6 +965,24 @@ TEST_F(FrontEndTest, TheServerRefusesAnAccountThatIsInTheRoom)
 	sockets.ServerText(sockets.order.back(), game_socket::ToJson(game_socket::Refused {.reason = "already"}));
 	Step();
 	EXPECT_EQ(frontEnd->GetMessage(), Message::AlreadyInRoom);
+	EXPECT_EQ(frontEnd->GetBox(), Box::GameList);
+	EXPECT_FALSE(frontEnd->IsBusy());
+}
+
+TEST_F(FrontEndTest, AJoinThatTheServerRefusesForABanShowsConnectionFailed)
+{
+	// The game server refuses the join of a banned god with a kick. The player was not in the room, so the game shows
+	// the failed join, as the channel of a host refuses a banned player.
+	ToGameList();
+	frontEnd->SelectGame(0);
+	frontEnd->Join(u"");
+	FakeLobby::Give(lobby.ticket, lobby_api::JoinTicket {
+	                                  .url = "wss://lobby.test/game/w1", .ticket = "v4.public.t", .expires = 0, .role = "god"});
+	sockets.Accept(sockets.order.back());
+	Step();
+	sockets.ServerText(sockets.order.back(), game_socket::ToJson(game_socket::Refused {.reason = "kicked"}));
+	Step();
+	EXPECT_EQ(frontEnd->GetMessage(), Message::ConnectionFailed);
 	EXPECT_EQ(frontEnd->GetBox(), Box::GameList);
 	EXPECT_FALSE(frontEnd->IsBusy());
 }
@@ -995,42 +1163,8 @@ TEST_F(FrontEndTest, TheListenerGoesWithTheFrontEnd)
 	EXPECT_EQ(lobby.removed, (std::vector<uint32_t> {1}));
 }
 
-namespace
-{
-/// The light of one part of a colour, from 0 to 1, as the sRGB curve has it
-double LinearPart(uint32_t part)
-{
-	const auto value = static_cast<double>(part) / 255.0;
-	return value <= 0.04045 ? value / 12.92 : std::pow((value + 0.055) / 1.055, 2.4);
-}
-
-/// The relative luminance of a colour, 0 for black and 1 for white
-double Luminance(uint32_t argb)
-{
-	return (0.2126 * LinearPart((argb >> 16u) & 0xFFu)) + (0.7152 * LinearPart((argb >> 8u) & 0xFFu)) +
-	       (0.0722 * LinearPart(argb & 0xFFu));
-}
-
-/// A colour in the CIE L*a*b* space, where the distance between two colours is near how different they look
-std::array<double, 3> Lab(uint32_t argb)
-{
-	const auto r = LinearPart((argb >> 16u) & 0xFFu);
-	const auto g = LinearPart((argb >> 8u) & 0xFFu);
-	const auto b = LinearPart(argb & 0xFFu);
-	const auto x = ((0.4124 * r) + (0.3576 * g) + (0.1805 * b)) / 0.95047;
-	const auto y = (0.2126 * r) + (0.7152 * g) + (0.0722 * b);
-	const auto z = ((0.0193 * r) + (0.1192 * g) + (0.9505 * b)) / 1.08883;
-	const auto f = [](double t) { return t > 216.0 / 24389.0 ? std::cbrt(t) : ((24389.0 / 27.0 * t) + 16.0) / 116.0; };
-	return {(116.0 * f(y)) - 16.0, 500.0 * (f(x) - f(y)), 200.0 * (f(y) - f(z))};
-}
-
-double Difference(uint32_t first, uint32_t second)
-{
-	const auto a = Lab(first);
-	const auto b = Lab(second);
-	return std::hypot(a[0] - b[0], a[1] - b[1], a[2] - b[2]);
-}
-} // namespace
+using openblack::test_colour::Difference;
+using openblack::test_colour::Luminance;
 
 TEST(MultiplayerRules, The32GodsHaveDistinctReadableChatColours)
 {
@@ -1057,6 +1191,26 @@ TEST(MultiplayerRules, The32GodsHaveDistinctReadableChatColours)
 		const auto contrast = (Luminance(GodColourBits(god)) + 0.05) / 0.05;
 		EXPECT_GE(contrast, 4.5) << "god " << god;
 	}
+}
+
+TEST(MultiplayerRules, TheRoomAndTheLandShowGodsThreeAndFourInOtherColours)
+{
+	// Nobody picks a colour: the god's slot gives it. The room shows a god in the colour of its team, and the land shows
+	// it in the colour of its player. The network lands have the land number 0, so the land takes the colours of the
+	// players as they are. Gods 1 and 2 are red and green in both. God 3 is blue in the room but magenta on the land,
+	// and god 4 is yellow in the room but cyan on the land, as in the game (vanilla-bugs 478).
+	constexpr int32_t k_NetworkLand = 0;
+	const auto onLand = [](int32_t god) {
+		return openblack::player_colour::OnLand(static_cast<openblack::PlayerNames>(god - 1), k_NetworkLand);
+	};
+	EXPECT_EQ(GodColourBits(1), 0xFFFF0000u);
+	EXPECT_EQ(onLand(1), 0xFFFF4646u);
+	EXPECT_EQ(GodColourBits(2), 0xFF00FF00u);
+	EXPECT_EQ(onLand(2), 0xFF47FF54u);
+	EXPECT_EQ(GodColourBits(3), 0xFF0000FFu);
+	EXPECT_EQ(onLand(3), 0xFFE347FFu);
+	EXPECT_EQ(GodColourBits(4), 0xFFFFFF00u);
+	EXPECT_EQ(onLand(4), 0xFF47F9FFu);
 }
 
 namespace
@@ -1338,4 +1492,222 @@ TEST_F(FrontEndTest, NoControlOfTheGameListGoesUnderRefreshList)
 	boxes.GetFrontEnd()->SelectGame(0);
 	boxes.Update(0.0f);
 	check("a game picked");
+}
+
+TEST(MultiplayerRules, PlayerDetailsShowTheLinesOfThePlayerDatabase)
+{
+	const std::array<PlayerDetail, 2> details {{{.label = u"Points", .value = u"12"}, {.label = u"Country", .value = u"gb"}}};
+	EXPECT_EQ(PlayerDetailLines(details), (std::vector<std::u16string> {u"Points:12", u"Country:gb"}));
+	EXPECT_TRUE(PlayerDetailLines({}).empty());
+}
+
+namespace
+{
+/// A BMP file of one white pixel, 24 bits a pixel
+std::vector<uint8_t> WhitePixelBmp()
+{
+	std::vector<uint8_t> bmp(54 + 4, 0);
+	const auto put32 = [&bmp](size_t at, uint32_t value) {
+		for (size_t i = 0; i < 4; ++i)
+		{
+			bmp[at + i] = static_cast<uint8_t>(value >> (i * 8));
+		}
+	};
+	bmp[0] = 'B';
+	bmp[1] = 'M';
+	put32(10, 54);
+	put32(14, 40);
+	put32(18, 1);
+	put32(22, 1);
+	bmp[26] = 1;
+	bmp[28] = 24;
+	bmp[54] = 0xFF;
+	bmp[55] = 0xFF;
+	bmp[56] = 0xFF;
+	return bmp;
+}
+
+bool Inside(const DialogRect& inner, const DialogRect& outer)
+{
+	return inner.min.x >= outer.min.x && inner.min.y >= outer.min.y && inner.max.x <= outer.max.x && inner.max.y <= outer.max.y;
+}
+
+bool Crosses(const DialogRect& a, const DialogRect& b)
+{
+	return a.min.x < b.max.x && b.min.x < a.max.x && a.min.y < b.max.y && b.min.y < a.max.y;
+}
+} // namespace
+
+TEST_F(FrontEndTest, TheRoomsPicturesAreInTheFrameOfTheRoom)
+{
+	const auto texts = ButtonTexts();
+	const auto font = gui::test::LoadFont();
+	MultiplayerBoxes boxes {texts, font};
+	std::vector<std::string> asked;
+	boxes.SetThumbnailSource([&asked](const std::string& file) {
+		asked.push_back(file);
+		return std::make_shared<const land_thumbnail::LandThumbnail>(
+		    land_thumbnail::LandThumbnail {.texture = nullptr, .side = 74, .description = "A land"});
+	});
+	ToRoom();
+	boxes.Open(std::move(frontEnd));
+	auto& room = *boxes.GetFrontEnd();
+	const auto frame = MultiplayerBoxes::FrameOf(Box::Room);
+
+	// The Landscape tab shows the thumbnail of the land picked, between the two lists
+	room.SelectTab(RoomTab::Landscape);
+	room.ShowLand(0);
+	boxes.Update(0.0f);
+	ASSERT_FALSE(asked.empty());
+	EXPECT_EQ(asked.back(), room.GetLocalMaps()[0].file);
+	ASSERT_EQ(boxes.GetPictureRects(), std::vector<DialogRect> {land_thumbnail::k_Place});
+	EXPECT_TRUE(Inside(land_thumbnail::k_Place, frame));
+	const auto rects = boxes.GetVisibleRects();
+	// No control of the tab is at the place of the picture
+	EXPECT_EQ(std::ranges::count_if(rects, [](const DialogRect& rect) { return Crosses(rect, land_thumbnail::k_Place); }), 0);
+
+	// No other tab shows it
+	room.SelectTab(RoomTab::Chat);
+	boxes.Update(0.0f);
+	EXPECT_TRUE(boxes.GetPictureRects().empty());
+
+	// The Clans tab shows the logo of the clan picked, inside the clan's information
+	FakeLobby::Give(lobby.myClans, lobby_api::ClanList {.clans = {{.id = 4, .name = "The Clan", .points = 0.0}}});
+	room.ShowClan(0);
+	FakeLobby::Give(lobby.clan, lobby_api::ClanDetails {.id = 4, .name = "The Clan"});
+	FakeLobby::Give(lobby.logo, WhitePixelBmp());
+	room.SelectTab(RoomTab::Clans);
+	boxes.Update(0.0f);
+	const DialogRect info {.min = {410, 410}, .max = {660, 530}};
+	ASSERT_EQ(boxes.GetPictureRects(), std::vector<DialogRect> {land_thumbnail::LogoPlace(info)});
+	EXPECT_TRUE(Inside(land_thumbnail::LogoPlace(info), info));
+	EXPECT_TRUE(Inside(land_thumbnail::LogoPlace(info), frame));
+	// The conditions page shows no picture
+	room.Next();
+	boxes.Update(0.0f);
+	EXPECT_TRUE(boxes.GetPictureRects().empty());
+}
+
+TEST_F(FrontEndTest, ThePingDisplayIsOffByDefault)
+{
+	ToRoom();
+	EXPECT_FALSE(frontEnd->ShowsPing());
+}
+
+TEST_F(FrontEndTest, TheRoomGivesTheRoundTripOfTheOwnGameSocket)
+{
+	showPing = true;
+	ToRoom();
+	EXPECT_TRUE(frontEnd->ShowsPing());
+	EXPECT_FALSE(frontEnd->GetRoundTrip().has_value());
+	const auto socket = sockets.order.back();
+	sockets.TakeSent(socket);
+	// The session pings the server one second after the join
+	network.now = 1'000'000;
+	Step();
+	std::optional<turn_codec::Ping> ping;
+	for (const auto& sent : sockets.TakeSent(socket))
+	{
+		const auto decoded = sent.text ? turn_codec::DecodeResult {} : turn_codec::Decode(sent.bytes);
+		if (decoded.frame.has_value() && std::holds_alternative<turn_codec::Ping>(*decoded.frame))
+		{
+			ping = std::get<turn_codec::Ping>(*decoded.frame);
+		}
+	}
+	ASSERT_TRUE(ping.has_value());
+	network.now += 48'000;
+	sockets.ServerBinary(socket, turn_codec::Encode(turn_codec::Pong {.id = ping->id, .time = ping->time}));
+	Step();
+	EXPECT_EQ(frontEnd->GetRoundTrip(), 48'000u);
+	EXPECT_EQ(ping_display::Text(frontEnd->GetRoundTrip()), u"ping 48");
+}
+
+namespace
+{
+/// The hash of the land of the room in the tests of the land's download
+constexpr std::string_view k_RoomMapHash = "aa00000000000000000000000000000000000000000000000000000000000000";
+
+lobby_api::OnlineMap RoomMap()
+{
+	return {.number = 1,
+	        .name = "Thirty-two gods",
+	        .file = "obm_32p_1",
+	        .players = 32,
+	        .sha256 = std::string(k_RoomMapHash),
+	        .checksum = online::start_rules::LandChecksum(std::vector<uint8_t> {1, 2, 3}),
+	        .size = 3,
+	        .url = "/api/v1/maps/" + std::string(k_RoomMapHash)};
+}
+} // namespace
+
+TEST_F(FrontEndTest, TheRoomGetsALandThatThePlayerDoesNotHaveFromTheLobby)
+{
+	mapStore = &store;
+	ToRoom();
+	EXPECT_EQ(frontEnd->GetMapDownload(), nullptr);
+	// The game server gives its land to the lobby after the room opened: the game list gets the hash
+	lobby.known[0].map = std::string(k_RoomMapHash);
+	Step();
+	ASSERT_TRUE(lobby.maps);
+	FakeLobby::Give(lobby.maps, lobby_api::MapList {.maps = {RoomMap()}});
+	ASSERT_NE(frontEnd->GetMapDownload(), nullptr);
+	EXPECT_EQ(frontEnd->GetMapDownload()->GetState(), online::MapDownload::State::Downloading);
+	EXPECT_EQ(lobby.downloads, (std::vector<std::string> {std::string(k_RoomMapHash)}));
+	FakeLobby::Give(lobby.download, std::vector<uint8_t> {1, 2, 3});
+	EXPECT_EQ(frontEnd->GetMapDownload()->GetState(), online::MapDownload::State::Ready);
+	EXPECT_EQ(store.files.at("obm_32p_1.map"), (std::vector<uint8_t> {1, 2, 3}));
+	Step();
+	EXPECT_EQ(frontEnd->GetMessage(), Message::None);
+	// The list of the lands has the lobby's land
+	EXPECT_EQ(FindLand(frontEnd->GetLocalMaps(), "Online Maps/obm_32p_1.map").has_value(), true);
+	// The land is asked for one time only
+	Step();
+	EXPECT_EQ(lobby.downloads.size(), 1u);
+}
+
+TEST_F(FrontEndTest, ALandThatTheLobbyDoesNotGiveShowsTheBoxOfTheRoom)
+{
+	mapStore = &store;
+	ToRoom();
+	lobby.known[0].map = std::string(k_RoomMapHash);
+	Step();
+	FakeLobby::Give(lobby.maps, lobby_api::MapList {.maps = {RoomMap()}});
+	// The download asks one more time, as the game asks the map server again
+	FakeLobby::Fail(lobby.download, LobbyErrorKind::Network);
+	EXPECT_EQ(lobby.downloads.size(), 2u);
+	FakeLobby::Fail(lobby.download, LobbyErrorKind::Network);
+	EXPECT_EQ(frontEnd->GetMapDownload()->GetState(), online::MapDownload::State::Failed);
+	Step();
+	EXPECT_EQ(frontEnd->GetMessage(), Message::CouldNotDownloadMap);
+	EXPECT_EQ(ButtonsOf(Message::CouldNotDownloadMap), MessageButtons::Ok);
+	frontEnd->AnswerMessage(MultiplayerFrontEnd::Answer::Ok);
+	Step();
+	// OK closes the box, and the player stays in the room
+	EXPECT_EQ(frontEnd->GetMessage(), Message::None);
+	EXPECT_EQ(frontEnd->GetBox(), Box::Room);
+	EXPECT_TRUE(store.files.empty());
+}
+
+TEST_F(FrontEndTest, ALandThatIsNotInTheLobbysListShowsTheBoxOfTheRoom)
+{
+	mapStore = &store;
+	ToRoom();
+	lobby.known[0].map = std::string(k_RoomMapHash);
+	Step();
+	FakeLobby::Give(lobby.maps, lobby_api::MapList {});
+	Step();
+	EXPECT_EQ(frontEnd->GetMessage(), Message::CouldNotDownloadMap);
+	EXPECT_TRUE(lobby.downloads.empty());
+}
+
+TEST_F(FrontEndTest, ALandInTheStoreDoesNotComeAgain)
+{
+	mapStore = &store;
+	store.files["obm_32p_1.map"] = {9};
+	ToRoom();
+	lobby.known[0].map = std::string(k_RoomMapHash);
+	Step();
+	FakeLobby::Give(lobby.maps, lobby_api::MapList {.maps = {RoomMap()}});
+	EXPECT_EQ(frontEnd->GetMapDownload()->GetState(), online::MapDownload::State::Ready);
+	EXPECT_TRUE(lobby.downloads.empty());
 }

@@ -9,6 +9,8 @@
 
 #pragma once
 
+#include <cmath>
+
 #include <glm/geometric.hpp>
 #include <glm/vec3.hpp>
 
@@ -29,6 +31,29 @@ inline constexpr float k_SmallestGapSquared = 0.001f;
 inline constexpr glm::vec3 k_GapStep {-1.0f, 1.0f, 0.0f};
 /// The eye stays this height above the land below it
 inline constexpr float k_HeightAboveLand = 1.0f;
+
+/// The eye and the focus that the view uses before the camera has a correct eye or focus
+inline constexpr glm::vec3 k_FirstCorrectPoint {1000.0f, 0.0f, 1000.0f};
+
+/// True when one or more of the coordinates of the point is not a number
+[[nodiscard]] inline bool HasNaN(const glm::vec3& point)
+{
+	return std::isnan(point.x) || std::isnan(point.y) || std::isnan(point.z);
+}
+
+/// An eye or a focus with a coordinate that is not a number changes to the last correct one. The other point stays.
+[[nodiscard]] inline Pose WithoutNaN(Pose pose, const Pose& lastCorrect)
+{
+	if (HasNaN(pose.eye))
+	{
+		pose.eye = lastCorrect.eye;
+	}
+	if (HasNaN(pose.focus))
+	{
+		pose.focus = lastCorrect.focus;
+	}
+	return pose;
+}
 
 /// The eye moves away from a focus that is almost at the same point, so that the view has a direction
 [[nodiscard]] inline Pose Separate(Pose pose)

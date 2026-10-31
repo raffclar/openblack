@@ -258,6 +258,22 @@ constexpr void SpiralIncrement(MapCoords& coords, Spiral& spiral, float step)
 
 /// A world point as a map position: x and z by ToFixed, and the altitude above the ground at the truncated position
 [[nodiscard]] MapCoords FromWorld(const LandIslandInterface& island, glm::vec3 point);
+
+/// The map position that a thing in a hand gets at each turn, from the reported point of the hand. x and z are by
+/// ToFixed. The altitude is the height of the point above the ground. The game asks for the ground at x times 65536 times
+/// 0.1. This product is the same float as the product of ToFixed, as 65536 times the float 0.1 is the float 6553.6. The
+/// game then adds the altitude 0 to the difference, which changes a difference of -0 to +0.
+template <typename GroundAt>
+[[nodiscard]] constexpr MapCoords HeldPlace(glm::vec3 point, const GroundAt& groundAt)
+{
+	MapCoords coords {ToFixed(point.x), ToFixed(point.z), 0.0f};
+	const MapCoords ground {FtoL(point.x * 65536.0f * 0.1f), FtoL(point.z * 65536.0f * 0.1f), 0.0f};
+	const float height = point.y - static_cast<float>(groundAt(ground));
+	coords.altitude = height + coords.altitude;
+	return coords;
+}
+/// As HeldPlace, with the ground of the island
+[[nodiscard]] MapCoords HeldPlace(const LandIslandInterface& island, glm::vec3 point);
 /// A map position as a world point: x and z by ToMetres, and y the ground there plus the altitude
 [[nodiscard]] glm::vec3 ToWorld(const LandIslandInterface& island, const MapCoords& coords);
 

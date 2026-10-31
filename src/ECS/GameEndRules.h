@@ -118,6 +118,9 @@ struct Facts
 	std::optional<uint32_t> timeLimitTurn;
 	/// The number of the winning conditions of the network game
 	size_t conditionCount {0};
+	/// A god with no temple is out. A developer tool's run on the testbed sets this to false, as the testbed has no temples
+	/// and the game would be decided at its first turn.
+	bool templesNeeded {true};
 };
 
 /// What the end of the game keeps between turns
@@ -127,6 +130,9 @@ struct State
 	bool decided {false};
 	/// The last place that a god took
 	int32_t lastPlace {0};
+	/// The number of the winning conditions that each god got at the start of a network game. 0: the gods did not get
+	/// conditions yet, or the game has none.
+	uint32_t conditionCount {0};
 };
 
 /// What happened in the turn, which the players see
@@ -155,7 +161,13 @@ struct Event
 /// the god is human or the game is a skirmish.
 void CountOut(World& world, State& state, PlayerNames god, ecs::components::OutReason reason, bool skirmish);
 
+/// Whether a god has a temple, or the game needs none
+[[nodiscard]] bool HasTempleOrNeedsNone(const World& world, const Facts& facts, PlayerNames god);
+
 /// The end of the game for one turn
 [[nodiscard]] std::vector<Event> ProcessTurn(World& world, const Facts& facts, State& state);
+
+/// The number of events of a turn that decide the game. The game tells the lobby one time for each of these events.
+[[nodiscard]] size_t DecidingEvents(std::span<const Event> events);
 
 } // namespace openblack::game_end

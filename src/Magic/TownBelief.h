@@ -14,9 +14,11 @@
 #include <array>
 #include <optional>
 #include <span>
+#include <string_view>
 #include <vector>
 
 #include "Enums.h"
+#include "PlayerSlots.h"
 
 // A town's belief in each player. What its people are impressed by waits as pending belief until the town's next turn,
 // when all of it, times the town's belief scale, is believed at once, no more than the town's cap for the player; a
@@ -28,7 +30,9 @@
 namespace openblack::magic::town_belief
 {
 
-inline constexpr size_t k_PlayerCount = static_cast<size_t>(PlayerNames::_COUNT);
+/// A town keeps its belief in each player number of a network game with the most players. A town of a land uses the
+/// first 8 places.
+inline constexpr size_t k_PlayerCount = player_slots::k_PlayerNumbers;
 /// Belief in a player is capped at this until a script sets another cap
 inline constexpr float k_DefaultCap = 10.0f;
 /// The number of things a town can want
@@ -53,6 +57,8 @@ struct Belief
 	std::array<float, k_PlayerCount> pending {};
 	/// What it has been given lately, fading every turn
 	std::array<float, k_PlayerCount> recent {};
+	/// What it gained at its turns since the hand last told the player at this computer about the belief gained
+	std::array<float, k_PlayerCount> gainedSinceShown {};
 	/// The most it believes in each player
 	std::array<float, k_PlayerCount> cap = [] {
 		std::array<float, k_PlayerCount> caps {};
@@ -89,6 +95,22 @@ struct Gained
 /// player that gained any, in player order.
 [[nodiscard]] std::vector<Gained> Turn(Belief& town, float recentDecay);
 
+/// Each tenth turn the hand tells the player at this computer the belief that the towns gained in them, when the sum is
+/// more than the least amount. It shows the sum times the scale.
+inline constexpr uint32_t k_GainShownEvery = 10;
+inline constexpr float k_LeastGainShown = 0.001f;
+inline constexpr float k_GainShownScale = 1000.0f;
+/// The number of the belief gained also floats up from the point under the hand: yellow, four wide
+inline constexpr uint32_t k_GainShownColour = 0xFFFFFF00;
+inline constexpr int k_GainShownWidth = 4;
+
+/// The number that the hand shows for the belief that the towns gained, none when the sum is too small
+[[nodiscard]] std::optional<float> GainShown(float gained);
+
+/// For each player, the belief that the town gained since the last time that the hand told the player, or nothing when
+/// it is not more than nothing. The tallies go back to nothing.
+[[nodiscard]] std::array<float, k_PlayerCount> TakeGainedSinceShown(Belief& town);
+
 /// The town got belief at its turn: each desire level goes back to the value in the desire table
 void ResetDesireLevels(Belief& town, std::span<const DesireDecay, k_DesireCount> table);
 
@@ -101,9 +123,9 @@ void LoseBeliefToDesires(Belief& town, PlayerNames owner, std::span<const float,
 
 /// Who the town belongs to after its turn. Its belief in the neutral player is set back to what it keeps for them;
 /// then the player it believes in most takes it, starting from its owner and going through every player in player
-/// order, the neutral player last, a later player taking a tie. A new owner's belief is multiplied by the claimed-town
-/// multiplier. None while its owner keeps it.
-[[nodiscard]] std::optional<PlayerNames> Ownership(Belief& town, PlayerNames owner, float claimedMultiplier);
+/// order (the players of the game, `players` of them), a later player taking a tie. A new owner's belief is multiplied
+/// by the claimed-town multiplier. None while its owner keeps it.
+[[nodiscard]] std::optional<PlayerNames> Ownership(Belief& town, PlayerNames owner, float claimedMultiplier, size_t players);
 
 /// A player has lost a town: every town they still hold (the lost one among them) believes in them less, by the
 /// lost-town multiplier and the land's lost-town scale
@@ -120,5 +142,13 @@ void TakeTown(Belief& town, PlayerNames player, float amount, std::span<const Pl
 /// and its desire levels to the desire table, and then it believes in every player what it keeps for the neutral
 /// player, within the cap. Its recent tallies stay.
 void ResetForEmptyTown(Belief& town, std::span<const DesireDecay, k_DesireCount> table);
+
+/// The name of the land of the network map for three gods, as its file name gives it. The case is important.
+inline constexpr std::string_view k_ThreeGodMapName = "mpm_3p_1";
+
+/// The cap of a player in a town from a belief cap line of a land script. Usually the cap is the value of the line. In a
+/// network game on the map for three gods, each god that is not neutral gets a cap of 2 in the town with the number 3.
+[[nodiscard]] float CapFromLandScript(float asked, bool networkGame, std::string_view landName, uint32_t townId,
+                                      PlayerNames player);
 
 } // namespace openblack::magic::town_belief

@@ -30,7 +30,7 @@
 
 #include "3D/HandCrossFade.h"
 #include "3D/HandNavigationPose.h"
-#include "Common/BuildVersionFile.h"
+#include "Common/BuildVersion.h"
 #include "Common/LoadTimer.h"
 #include "Common/PlayerProfiles.h"
 #include "Common/Zoomer.h"
@@ -45,11 +45,12 @@
 #include "GameFrameOrder.h"
 #include "GameSession.h"
 #include "GameTurnOrder.h"
-#include "Graphics/UploadPacer.h"
 #include "Gui/EndGameBoxRules.h"
 #include "Gui/EscapeKeyRules.h"
 #include "Gui/LoadingScreenRules.h"
 #include "Gui/MenuPause.h"
+#include "Gui/SkirmishBox.h"
+#include "Gui/SkirmishBoxRules.h"
 #include "Hand/HandFeel.h"
 #include "Hand/HandKnock.h"
 #include "Input/HandPointer.h"
@@ -62,6 +63,7 @@
 #include "Simulation/TurnBody.h"
 #include "Simulation/WorldStart.h"
 #include "Story/NewGameChoice.h"
+#include "Visual/UploadPacer.h"
 #include "Windowing/SizeFollower.h"
 #include "Windowing/WindowingInterface.h" // For DisplayMode
 
@@ -69,6 +71,7 @@ union SDL_Event;
 
 namespace openblack
 {
+enum class TurnApiCheck : uint8_t;
 
 namespace audio
 {
@@ -107,7 +110,8 @@ struct Start;
 namespace command_log
 {
 class Writer;
-}
+class GivesWriter;
+} // namespace command_log
 namespace checksum_log
 {
 class Writer;
@@ -115,6 +119,10 @@ class Writer;
 namespace frame_write_guard
 {
 class Guard;
+}
+namespace player_commands
+{
+struct ViewReport;
 }
 
 /// The fight autopilot asked for on the command line, as the command line gives it: its policy, the seed, the lesson stage
@@ -169,6 +177,10 @@ struct Arguments
 	uint32_t frameStatsInterval {0};
 	/// With the frame statistics, the GPU time of each render view
 	bool frameStatsViews {false};
+	/// Tools: log the times of the computer gods each time this many turns go by, never when 0
+	uint32_t aiTimesEvery {0};
+	/// With the frame statistics, the file that gets each frame of the run when the game ends; none when empty
+	std::string frameStatsOut;
 	/// Draw the first frame of a land once behind the loading screen, to make the renderer's pipelines there
 	bool warmUpFirstFrame {true};
 	/// Encode some of the draws on worker threads at the same time as the game's thread
@@ -178,6 +190,8 @@ struct Arguments
 	std::optional<std::string> lobbyTestAuthorities;
 	/// The real-world weather changes the weather of a single-player game (on by default)
 	bool useInternetWeather {true};
+	/// A network game shows the player's own ping (off by default)
+	bool showPing {false};
 	bool dynamicTreeShadows {false};
 	/// Tools: open the window but draw nothing on the graphics card (the no-renderer backend), so that a long run driven
 	/// through the inspector does not wait on a busy graphics card
@@ -211,6 +225,12 @@ struct Arguments
 	/// A testbed scenario to run as the game starts, by its id, and how to measure its crowd if it has one
 	std::optional<ScenarioRequest> scenario;
 	std::optional<std::pair</* frame number */ uint32_t, /* output */ std::filesystem::path>> requestScreenshot;
+	/// For developers: what the check does when turn code uses the graphics, the renderer or the audio directly (see
+	/// MainThreadQueue). Off by default.
+	TurnApiCheck turnApiCheck {};
+	/// For developers: the turns of the next frame play on another thread beside the end of the draw of this frame
+	/// (deviation row 153). Off by default.
+	bool turnBesideDraw {false};
 	/// The port of 127.0.0.1 the debug inspector's server listens on, in builds with it; none to not start it
 	std::optional<uint16_t> inspectPort;
 	/// The fight autopilot to start with the inspector, and the folder for the files of the fight transcript
@@ -227,6 +247,9 @@ struct Arguments
 	/// Tools: play the world as a network game does, with no network: the clock never stops for the player, and the
 	/// turns read no part of a frame
 	bool networkGame {false};
+	/// Tools: a fixed latency in milliseconds for the reports of the hand, so that the lead of each throw is the same in
+	/// each run. None measures the latency on the clock.
+	std::optional<uint32_t> throwLeadLatencyMs;
 	/// Join a game server once the land loaded: the world then turns only with the turns of the server
 	std::optional<ecs::systems::NetworkJoin> networkJoin;
 	/// How the player's mouse and keyboard are kept out while the inspector drives the game: while a client is
@@ -247,8 +270,9 @@ class Game:
     public simulation::PlayStartViewInterface
 {
 public:
-	/// Makes the sheet of the players' symbols that the world shows, with the symbol of the player's profile. A
-	/// testbed scenario can give another symbol in place of the profile's.
+	/// Makes the sheet of the players' symbols that the world shows, with the symbol of the player's profile. Each
+	/// computer player shows the picture of its god. A testbed scenario can give another symbol in place of the
+	/// profile's.
 	void MakePlayersSymbols(std::optional<uint32_t> symbol = std::nullopt);
 	static constexpr auto k_TurnDuration = std::chrono::milliseconds(100);
 	/// About how many bytes of files the loading threads read at a time, and how much of what they make may reach the
@@ -288,6 +312,14 @@ public:
 	[[nodiscard]] int32_t FrameRate() const override { return _statisticsFrameRate.Rate(); }
 	/// The audio of a turn of the temple
 	void PlayTempleAudioTurn() override { ProcessTempleAudioTurn(); }
+	/// The tools that act before each turn: the testbed scenario of a network game
+	void BeforeTurn() override
+	{
+		if (_scenarioTurn)
+		{
+			_scenarioTurn();
+		}
+	}
 	/// The parts of the land's loads that the view of the player does
 	void ShowLoadingFrame() override;
 	bool WithdrawSkipBox() override;
@@ -297,10 +329,9 @@ public:
 	void StartCameraAtTemple() override;
 	bool AskStartQuestion(bool hasCreature) override;
 	[[nodiscard]] std::optional<std::filesystem::path> ChallengeFile() override;
+	void ShowLandMessage(const land_message::Message& message) override;
 	/// The parts of the effects of a frame that the view of the player does
 	void UpdateAdvisors() override;
-	[[nodiscard]] bool TakeDialogueClick() override;
-	[[nodiscard]] bool DialogueSkipKeyDown() const override;
 	void UpdateSingAlong(bool inTemple) override;
 	[[nodiscard]] bool DialogueWordsDrawn() const override;
 	void CloseMenuForCinema() override;
@@ -354,10 +385,14 @@ public:
 	/// Exit Online Game of the menu: the question to leave, or a leave at once when the god of the player is out
 	void ExitOnlineGame();
 	/// The player leaves the network game. The game server makes the god of the player a leaver. A join from the command
-	/// line and a run of the tools stop the game; a join from the front end goes back to the multiplayer front end.
-	void LeaveNetworkGame();
+	/// line and a run of the tools stop the game. A join from the front end goes to the box that the control gives: the
+	/// multiplayer front end after Leave Game, the skirmish box after Back in the land information box.
+	void LeaveNetworkGame(game_session::NetworkLeave leave = game_session::NetworkLeave::LeaveGame);
 	/// Tests: the player leaves the network game through the menu and the question to leave, as a player does
 	void LeaveAsAPlayerDoes();
+	/// A run of the tools that stops: an observer leaves the network game at once, so that the server does not wait
+	/// for it to come back
+	void LeaveAsObserverAtTheEndOfTheRun();
 	/// The god of this computer for the end of the game: player seven for a looker-on of a network game
 	[[nodiscard]] PlayerNames LocalGodForGameEnd() const;
 	/// After the player left a network game: the start land loads as a plain start does, and the multiplayer front end
@@ -372,6 +407,17 @@ public:
 	void UpdateHandFrame(std::chrono::microseconds deltaTime);
 	/// Once a turn, before the block of commands goes: reports where the hand and the camera are, when they changed
 	void ReportHand();
+	/// With the report of the hand: reports the view that the scripts and the advisors' remarks read, when it changed
+	void ReportView();
+	/// Once a turn, before the block of commands goes: reports the help events of the player's input and the view of the
+	/// world camera, when they changed
+	void ReportHelp();
+	/// Before the block of commands goes: sends the player's click of the dialogue and the key that cuts a text short
+	void SendDialogueClick();
+	/// Whether the player clicked the dialogue since the last call. The click is then used.
+	[[nodiscard]] bool TakeDialogueClick();
+	/// Whether the player holds the key that cuts a text short
+	[[nodiscard]] bool DialogueSkipKeyDown() const;
 	/// The things in view are made ready for the draw of this frame
 	void UpdateEntitiesFrame(std::chrono::microseconds deltaTime);
 	/// The keys of the camera, after the camera moved. They move the camera in the next frame.
@@ -437,6 +483,11 @@ public:
 	/// Starts the game as a plain start of the program does: the save on exit of the profile loads, and the menu shows
 	/// over it. With no save on exit, a new game starts. Returns whether the save loaded.
 	bool ContinueFromExitSave() noexcept;
+	/// The skirmish box shows over the game, with the lands of the playground folder, as after Start Skirmish Game.
+	/// Returns false when the game has no interface.
+	bool OpenSkirmishBoxOverGame();
+	/// The lands that the skirmish box shows now, in the order of its list
+	[[nodiscard]] const std::vector<gui::skirmish_box::Land>& GetSkirmishLands() const noexcept { return _skirmishLands; }
 	/// The logo effect of the first game of the program, in its own loop with its sound, until it ends, a key or a mouse
 	/// button. Then black frames while a mouse button is held.
 	void PlayLogoEffect();
@@ -456,9 +507,15 @@ public:
 	/// it back
 	void RequestQuit() { _quitRequested = true; }
 	[[nodiscard]] std::optional<ScenarioRequest> TakeScenarioRequest() { return std::exchange(_scenarioRequest, std::nullopt); }
+	/// Tools: a run that writes the commands of each turn also writes each command of the testbed scenario that the game
+	/// gives before a turn, so that a dedicated server gives it before the same turn (command_log::GivesPathOf)
+	void RecordScenarioGive(uint32_t turn, size_t command);
 	/// The scenarios' window sets the work that lays out a scenario asked for. The frame does it as the turns step
 	/// starts, so that only a load or a turn changes the world. None: the window is gone.
 	void SetScenarioStager(std::function<void()> stager) { _scenarioStager = std::move(stager); }
+	/// The scenarios' window sets the work that a scenario does before each turn of a network game. None: the window is
+	/// gone.
+	void SetScenarioTurn(std::function<void()> turn) { _scenarioTurn = std::move(turn); }
 	/// A scenario asked for that the scenarios' window hasn't started yet
 	[[nodiscard]] const std::optional<ScenarioRequest>& PendingScenario() const { return _scenarioRequest; }
 	/// Asks for a scenario while the game runs: the scenarios' window runs it on a fresh testbed next frame. A build
@@ -485,6 +542,9 @@ public:
 	[[nodiscard]] const std::optional<std::filesystem::path>& GetScreenshotRoot() const noexcept { return _screenshotRoot; }
 	/// The game's own interface (its menu), once it is made
 	[[nodiscard]] gui::GameInterface* GetInterface() noexcept { return _interface.get(); }
+	/// For the testbed: the ping line shows this round trip in microseconds, as --show-ping does in a network game.
+	/// None gives the line back to the network game.
+	void SetDemoRoundTrip(std::optional<uint64_t> microseconds) noexcept { _demoRoundTrip = microseconds; }
 	/// The multiplayer front end with the game's own services: the lobby client, the game socket and the search of
 	/// the local network
 	[[nodiscard]] std::unique_ptr<gui::MultiplayerFrontEnd> MakeMultiplayerFrontEnd();
@@ -531,6 +591,7 @@ private:
 	bool RenderLoadingFrame(bool drawNow = false, const std::function<void()>& drawUnder = nullptr);
 	/// The loading is over: its tip goes before the first frame of the game
 	void EndLoadingScreen() override;
+	void EndLoadWithoutScreen() override;
 	/// Waits behind the loading screen until the loading threads have loaded all the prefetched resources. Then it does
 	/// the work of the first frame that the game can do before, and draws one more loading frame.
 	void FinishLoadingBehindScreen();
@@ -555,6 +616,20 @@ private:
 	/// A first start: the new player's box asks for the player's name before the first land loads. False when the
 	/// window was closed meanwhile
 	bool AskForNewPlayer();
+	/// The -SKIRMISH switch: the skirmish box asks for the land before the first land loads. Gives the land picked, or
+	/// nothing when the player went back or closed the window.
+	std::optional<std::filesystem::path> AskForSkirmishLand();
+	/// The lands of the playground folder, in the order of the skirmish box's list
+	[[nodiscard]] static std::vector<gui::skirmish_box::Land> ReadSkirmishLands();
+	/// The answer of the skirmish box over the game: Start Game starts the skirmish, Back continues the story
+	void FollowSkirmishBox();
+	/// The choice in the land information box: Back ends the skirmish or leaves the network game, and the skirmish box
+	/// shows again
+	void FollowLandInfoBox();
+	/// Tests: the player presses Back in the land information box of a network game at the turn of the command line
+	void PressLandInfoBoxBackForTests();
+	/// The menu shows the buttons of the game that plays: a network game, a skirmish or the story
+	void TellMenuTheGame();
 	/// The name of the profile played, for the files that the game keeps for its player. There is no name on a run of a
 	/// developer, which keeps no files for its player.
 	[[nodiscard]] std::optional<std::u16string> PlayerForProfileFiles() const;
@@ -562,6 +637,16 @@ private:
 	void LoadHelpRecord();
 	/// The game writes the help record of the player to their folder in the profile folder
 	void SaveHelpRecord();
+	/// The log gets each place where turn code used the graphics, the renderer or the audio directly, when the check is on
+	void ReportTurnApiCheck() const;
+	/// The turns of the next frame start on another thread, beside the end of the draw of this frame, when nothing that
+	/// the end of the frame does changes what they read. Gives true when they started.
+	bool StartTurnsBesideDraw();
+	/// The main thread waits for the turns that started beside the draw, and does the work that they gave it
+	void FinishTurnsBesideDraw();
+	/// In a run that a tool steps, a frame while the tool holds the game only gives the answers to the tool. Gives true
+	/// when the game skips the rest of the frame.
+	bool ServeHeldRun();
 
 	/// When the game was launched
 	const LoadTimer::Clock::time_point _launchTime {LoadTimer::Clock::now()};
@@ -600,6 +685,7 @@ private:
 	bool _startGodsRingMap {false};
 	std::optional<ScenarioRequest> _scenarioRequest;
 	std::function<void()> _scenarioStager;
+	std::function<void()> _scenarioTurn;
 	/// The port the debug inspector is to listen on, if it is to start
 	std::optional<uint16_t> _inspectPort;
 	std::optional<FightAutopilotRequest> _fightAutopilot;
@@ -607,6 +693,8 @@ private:
 	std::optional<sim_run::Request> _simulation;
 	/// The file that a tool's run writes the commands of each turn to
 	std::unique_ptr<command_log::Writer> _commandLog;
+	/// The file that a tool's run writes the commands of the testbed scenario to, with the turn before which each went
+	std::unique_ptr<command_log::GivesWriter> _scenarioGives;
 	/// The file that a tool's run writes the checksum of each turn to
 	std::unique_ptr<checksum_log::Writer> _checksumLog;
 	/// A tool's run that looks for the frame steps that change the synced world
@@ -620,11 +708,13 @@ private:
 	std::optional<std::filesystem::path> _screenshotRoot;
 	std::optional<uint32_t> _seed;
 	bool _networkGame {false};
+	std::optional<uint32_t> _throwLeadLatencyMs;
 	std::optional<ecs::systems::NetworkJoin> _networkJoin;
 	/// The game joined a game server from the command line, and stops when that network game ends
 	bool _joinedFromCommandLine {false};
 	/// A join from the command line waits for the server's land: the land of the start of the game only stands in for it
 	bool _networkLandPending {false};
+	std::optional<uint64_t> _demoRoundTrip;
 	/// The out-of-sync box was asked; the player answered No to it
 	bool _outOfSyncAsked {false};
 	bool _leaveNetworkGame {false};
@@ -632,8 +722,14 @@ private:
 	end_game_box::State _endGameBoxState;
 	/// Tests: the player left the network game at the turn that the command line gives
 	bool _testLeaveDone {false};
+	/// Tests: the player pressed Back in the land information box at the turn that the command line gives
+	bool _testLandInfoBoxBackDone {false};
 	/// The -MULTIPLAYER switch opens the multiplayer front end before the first frame
 	bool _frontEndOnStart {false};
+	/// The lands that the skirmish box shows, in the order of its list
+	std::vector<gui::skirmish_box::Land> _skirmishLands;
+	/// The answer of the skirmish box over the game, until the screen is black after the box
+	std::optional<gui::SkirmishBox::Answer> _skirmishAnswer;
 	input::LockMode _inspectInputLock {input::LockMode::Auto};
 	/// Whether the testbed opens its window of scenarios
 	bool _testbedWindow {true};
@@ -722,10 +818,18 @@ private:
 	/// The last report of the hand and the camera that this computer sent, its hand and its turn
 	/// The values are as in player_commands::HandReport: the collide point, the hand, the camera and its focus
 	std::array<glm::vec3, 4> _lastHandReport {};
+	/// The point that the interface picked last under the cursor. It stays while the cursor picks nothing.
+	glm::vec3 _handCollidePoint {0.0f};
+	/// The turns that the hand report still waits after its last send
+	uint8_t _handReportWait {0};
 	entt::entity _reportedHand {entt::null};
-	/// The thing under the cursor that the last player_commands::HandPick sent, in a network game
+	/// The thing under the cursor that the last player_commands::HandPick sent
 	entt::entity _lastHandPick {entt::null};
 	std::optional<uint32_t> _handReportTurn;
+	/// The last report of the view that this computer sent (player_commands::ViewReport), none before the first
+	std::unique_ptr<player_commands::ViewReport> _lastViewReport;
+	/// The turn of the last report of the help that this computer sent
+	std::optional<uint32_t> _helpReportTurn;
 	/// The land or sea under the cursor, whatever thing is in front of it
 	std::optional<glm::vec3> _cursorLand;
 	/// Where the hand rests on or before the thing under the cursor, which it hovers at rather than over the land
@@ -752,11 +856,15 @@ private:
 	uint32_t _handInWaterSample {0};
 	/// Plays the sound of the hand grabbing the land or the sea at the grab point, as the game does
 	void PlayHandGrabSound();
-	/// What the hand steps by this frame, in seconds
+	/// What the drawn fades of the hand step by this frame, in seconds
 	[[nodiscard]] float HandStepSeconds() const;
 	/// What the camera and the hand step by this frame: the frame's real time in whole milliseconds, or the game's time
 	/// while a script holds the widescreen
 	[[nodiscard]] std::chrono::milliseconds CameraStepTime() const;
+	/// Whether a script holds the widescreen for a cut scene, when the camera and the hand keep to the game's time
+	[[nodiscard]] bool ScriptHoldsCamera() const;
+	/// The time that the steps of the input go by in this frame (see input_steps), from the real time of the frame
+	[[nodiscard]] std::chrono::microseconds InputStepTime(std::chrono::microseconds frameTime) const;
 	/// The miracles hear where the hand and cursor are, and the held miracle follows the hand
 	void UpdateMagicHand(const glm::vec3& handPosition, float deltaSeconds);
 	/// The hand's debugging trace keeps the frame: where the hand was placed and drawn, where it shows, on the screen
@@ -765,9 +873,9 @@ private:
 	                  const ecs::systems::HandGrabSystemInterface* grab);
 	/// The gestures drawn with the cursor this frame, through the gesture system
 	void UpdateGestures(const Camera& camera, glm::ivec2 screenSize, float deltaSeconds);
-	/// Turns the hand to face along the line of sight through the cursor and stands it on the slope under it
-	void OrientHand(ecs::components::Transform& handTransform, const glm::mat3& facingCamera, glm::vec3 surfaceUp,
-	                float deltaSeconds);
+	/// Turns the hand to face along the line of sight through the cursor and stands it on the slope under it. Its up
+	/// eases at the fixed steps of the input.
+	void OrientHand(ecs::components::Transform& handTransform, const glm::mat3& facingCamera, glm::vec3 surfaceUp);
 	/// Decides how the hand moves this frame, gripping the land, held as it drags by the edge, or hovering, and its pose
 	void UpdateHandNavigation(const ecs::components::Transform& handTransform);
 	/// The camera's helper icons by the hand while a tutorial demonstration plays, from where the hand is drawn; none
@@ -863,8 +971,11 @@ private:
 	/// The view of the player's world camera for the help, none when the world camera does not show the world. The
 	/// camera that watches a creature fight is part of the world camera.
 	[[nodiscard]] static std::optional<help::profile::WorldCameraView> HelpWorldCameraView();
-	/// The near plane for the camera where it is now
-	void FitNearClip();
+	/// The near plane for the camera at the height of `eye` above the land
+	void FitNearClip(const glm::vec3& eye);
+	/// The near plane for a view that the inspector shows, from the eye of that view. When the inspector gives the camera
+	/// back, the camera gets its near plane back.
+	void FitInspectorNearClip(bool shown, const glm::vec3& eyeBefore, const glm::vec3& focusBefore);
 	/// Shows the camera where the inspector wants the frame drawn from (an override, a picture's), or gives the camera
 	/// back its own place: the game's own frame (the hand, picking, the sound) goes by its own camera, only the drawing
 	/// by the shown one
@@ -874,6 +985,8 @@ private:
 	/// Once a game turn outside the temple: the hand's tooltip for what it is over, "Interact" over the player's own
 	/// creature
 	void ProcessHandToolTipTurn();
+	/// Each tenth turn: the hand shows the belief that the towns gained in the player at this computer
+	void ShowBeliefGained();
 	/// The tooltips that the hand submits this turn for what it holds and what is under the pointer
 	void SubmitHandToolTips(gui::ToolTips& toolTips, std::optional<entt::entity> pointed);
 	void ProcessTurnCheering();
@@ -894,8 +1007,16 @@ private:
 	void PlaceScreenLabels();
 
 	std::optional<std::pair</* frame number */ uint32_t, /* output */ std::filesystem::path>> _requestScreenshot;
+	/// What the check of the turn's calls does
+	TurnApiCheck _turnApiCheck {};
+	/// The turns of the next frame play beside the draw of this frame (deviation row 153)
+	bool _turnBesideDraw {false};
+	/// The inspector gave its answers before this frame, while the tool held the game, so the frame does not ask it again
+	bool _inspectorServedEarly {false};
 	/// The requested screenshot leaves the debug windows out
 	bool _screenshotHidesDebugGui {false};
+	/// The near plane of the game's camera while the inspector shows a different view
+	std::optional<float> _nearClipUnderInspector;
 	/// A frame drawn without the debug windows though no picture is taken of it
 	std::optional<uint32_t> _debugGuiHiddenFrame;
 	std::unique_ptr<audio::AtmosAudio> _atmosAudio;

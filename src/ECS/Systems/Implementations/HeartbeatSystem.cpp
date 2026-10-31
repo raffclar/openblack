@@ -19,10 +19,6 @@
 
 #include "3D/LandIslandInterface.h"
 #include "3D/MapCoords.h"
-#include "Audio/AudioManagerInterface.h"
-#include "Audio/GameSoundEffects.h"
-#include "Audio/HeaderOverrides.h"
-#include "Audio/Sound.h"
 #include "ECS/Components/Creature.h"
 #include "ECS/Components/Fire.h"
 #include "ECS/Components/Heartbeat.h"
@@ -32,6 +28,7 @@
 #include "ECS/Components/Town.h"
 #include "ECS/Components/Transform.h"
 #include "ECS/Components/Villager.h"
+#include "ECS/PlayerTowns.h"
 #include "ECS/Registry.h"
 #include "ECS/Systems/HandSystemInterface.h"
 #include "ECS/Systems/InfluenceSystemInterface.h"
@@ -40,6 +37,10 @@
 #include "ECS/Systems/TownDesireSystemInterface.h"
 #include "Help/VillageVoices.h"
 #include "Locator.h"
+#include "Sound/GameSoundEffects.h"
+#include "Sound/HeaderOverrides.h"
+#include "Sound/SoundId.h"
+#include "Sound/SoundRequestInterface.h"
 
 using namespace openblack;
 using namespace openblack::ecs::components;
@@ -65,14 +66,22 @@ std::vector<TownSeen> SeeTowns(const ecs::Registry& registry)
 			++people[villager.town];
 		}
 	});
+	// The town list of each player in turn and the neutral list last, so that the first of two towns as near is the first
+	// met in these lists
 	std::vector<TownSeen> towns;
-	registry.Each<const Town, const Transform>([&](entt::entity entity, const Town& town, const Transform& transform) {
+	for (const auto entity : ecs::player_towns::AllInOrder(registry))
+	{
+		const auto* transform = registry.TryGet<const Transform>(entity);
+		if (transform == nullptr)
+		{
+			continue;
+		}
 		const auto found = people.find(entity);
 		towns.push_back({.entity = entity,
-		                 .owner = town.owner,
-		                 .cell = map_coords::CellOf(transform.position),
+		                 .owner = registry.Get<const Town>(entity).owner,
+		                 .cell = map_coords::CellOf(transform->position),
 		                 .people = found != people.end() ? found->second : 0});
-	});
+	}
 	return towns;
 }
 
@@ -195,11 +204,16 @@ void HeartbeatSystem::ProcessTurn(uint32_t turn)
 	{
 		towns = SeeTowns(registry);
 		registry.Each<const Villager>([&worldPopulation](const Villager& /*unused*/) { ++worldPopulation; });
-		// The neutral player's influence counts towards everyone's
+		// The influence of the players that play and of the neutral player counts towards everyone's. A player that
+		// nobody plays does not count.
 		if (Locator::influenceSystem::has_value())
 		{
 			registry.Each<const Player>([&totalInfluence](const Player& player) {
-				totalInfluence += Locator::influenceSystem::value().InfluencePower(player.name);
+				if (player.name == PlayerNames::NEUTRAL ||
+				    (Locator::playerSystem::has_value() && Locator::playerSystem::value().PlaysInGame(player.name)))
+				{
+					totalInfluence += Locator::influenceSystem::value().InfluencePower(player.name);
+				}
 			});
 		}
 	}
@@ -222,7 +236,7 @@ void HeartbeatSystem::ProcessTurn(uint32_t turn)
 
 void HeartbeatSystem::SoundHeart()
 {
-	if (!Locator::playerSystem::has_value() || !Locator::audio::has_value())
+	if (!Locator::playerSystem::has_value() || !Locator::sounds::has_value())
 	{
 		return;
 	}
@@ -253,7 +267,7 @@ void HeartbeatSystem::SoundHeart()
 	{
 		place->y = Locator::terrainSystem::value().GetHeightAt(glm::xz(*place));
 	}
-	auto& audio = Locator::audio::value();
+	auto& audio = Locator::sounds::value();
 	if (!audio.EmitterExists(_sound))
 	{
 		_sound = audio::StartGameSoundEffect(static_cast<entt::id_type>(audio::SoundId::G_Heartbeat_01),

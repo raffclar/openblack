@@ -11,11 +11,15 @@
 
 #include <algorithm>
 #include <array>
+#include <utility>
 
 #include <SDL_keycode.h>
+#include <bgfx/bgfx.h>
 
 #include "Controls.h"
 #include "DialogKeyRules.h"
+#include "Graphics/Texture2D.h"
+#include "PingDisplay.h"
 #include "TextDatabase.h"
 
 using namespace openblack::gui;
@@ -28,7 +32,11 @@ using Look = BigButton::Look;
 using LabelSide = BigButton::LabelSide;
 using Layout = StaticText::Layout;
 constexpr auto k_Big = DialogPainter::k_BigTextSize;
-constexpr auto k_Mid = DialogPainter::k_MidTextSize;
+/// The middle text size for the language of the install
+[[nodiscard]] int Mid()
+{
+	return DialogPainter::MidTextSize();
+}
 
 constexpr float k_FadeInSeconds = 0.5f;
 /// Behind a message the box dims by three quarters
@@ -105,7 +113,6 @@ constexpr std::string_view k_NoClanText = "HELP_TEXT_DIALOG_ADDITION_49";
 constexpr std::string_view k_PlayerInfoText = "HELP_TEXT_DIALOG_ADDITION_109";
 constexpr std::string_view k_GodText = "HELP_TEXT_DIALOG_ADDITION_63";
 constexpr std::string_view k_ObserversText = "HELP_TEXT_PAUSE_STATS_137";
-constexpr std::string_view k_ConditionValueText = "HELP_TEXT_MULTIPLAYER_CONDITION_VALUE";
 constexpr std::string_view k_TimeLimitText = "HELP_TEXT_MULTIPLAYER_TIMELIMIT";
 constexpr std::string_view k_ViewChatText = "HELP_TEXT_MULTIPLAYER_TOCHAT";
 constexpr std::string_view k_ReadyText = "HELP_TEXT_MULTIPLAYER_READY";
@@ -148,6 +155,8 @@ std::string_view MessageTextName(Message message)
 		return "HELP_TEXT_DIALOG_ADDITION_130";
 	case Message::KickedFromGame:
 		return "HELP_TEXT_MPFER_KICKEDYOUGAME";
+	case Message::CouldNotDownloadMap:
+		return "HELP_TEXT_MPFER_COULDNOTDOWNLOADMAP";
 	case Message::None:
 		return {};
 	}
@@ -260,12 +269,17 @@ void MultiplayerBoxes::Build()
 	_playerInfo = nullptr;
 	_conditions = nullptr;
 	_selectMap = nullptr;
-	_conditionValue = nullptr;
+	_timeLabel = nullptr;
 	_timeLimit = nullptr;
+	_viewChat = nullptr;
 	_ready = nullptr;
 	_chatLines = 0;
 	_shownTab.reset();
 	_shownPick.reset();
+	_thumbnailLand.reset();
+	_thumbnail.reset();
+	_thumbnailShown = false;
+	_logoShown = false;
 	if (_frontEnd == nullptr)
 	{
 		_dialog.reset();
@@ -350,9 +364,9 @@ void MultiplayerBoxes::BuildLogin(Dialog& dialog)
 	dialog.Add<StaticText>(DialogRect {.min = {110, 250}, .max = {310, 295}}, Text(k_UserNameText), Layout::Right, k_Big);
 	dialog.Add<StaticText>(DialogRect {.min = {110, 370}, .max = {310, 415}}, Text(k_PasswordText), Layout::Right, k_Big);
 	_name = &dialog.Add<EditBox>(_font, DialogRect {.min = {325, 250}, .max = {555, 290}}, _frontEnd->GetLoginName(),
-	                             k_MostLoginCharacters, k_Mid);
+	                             k_MostLoginCharacters, Mid());
 	_password = &dialog.Add<EditBox>(_font, DialogRect {.min = {325, 370}, .max = {555, 410}}, std::u16string(),
-	                                 k_MostLoginCharacters, k_Mid);
+	                                 k_MostLoginCharacters, Mid());
 	_password->masked = true;
 	dialog.Add<StaticText>(k_Title, Text(k_LoginTitle), Layout::Centre, k_Big);
 	dialog.SetFocus(_name);
@@ -368,8 +382,8 @@ void MultiplayerBoxes::BuildGameList(Dialog& dialog)
 	dialog.Add<StaticText>(k_Title, Text(lan ? k_LanListTitle : k_InternetListTitle), Layout::Centre, k_Big);
 	_help = &dialog.Add<StaticText>(DialogRect {.min = {420, 175}, .max = {690, 485}}, Text(k_GameListHelp), Layout::Wrapped,
 	                                k_Big);
-	dialog.Add<StaticText>(DialogRect {.min = {110, 130}, .max = {380, 170}}, Text(k_CurrentGamesText), Layout::Left, k_Mid);
-	_list = &dialog.Add<List>(_font, DialogRect {.min = {110, 175}, .max = {380, 485}}, k_Mid, false, true, true);
+	dialog.Add<StaticText>(DialogRect {.min = {110, 130}, .max = {380, 170}}, Text(k_CurrentGamesText), Layout::Left, Mid());
+	_list = &dialog.Add<List>(_font, DialogRect {.min = {110, 175}, .max = {380, 485}}, Mid(), false, true, true);
 	_list->onClick = [this] {
 		const auto line = _list->GetSelection();
 		_frontEnd->SelectGame(line.has_value() && *line < _shownGames.size() ? std::optional(_shownGames[*line])
@@ -385,19 +399,19 @@ void MultiplayerBoxes::BuildGameList(Dialog& dialog)
 		}
 	};
 	_playersLabel = &dialog.Add<StaticText>(DialogRect {.min = {420, 130}, .max = {690, 170}}, Text(k_PlayersInGameText),
-	                                        Layout::Right, k_Mid);
-	_players = &dialog.Add<List>(_font, DialogRect {.min = {420, 175}, .max = {690, 485}}, k_Mid, false, true, false);
+	                                        Layout::Right, Mid());
+	_players = &dialog.Add<List>(_font, DialogRect {.min = {420, 175}, .max = {690, 485}}, Mid(), false, true, false);
 	// The game keeps the name's box and its label hidden. The box only holds the name of the game that the player picks.
 	auto& nameLabel =
-	    dialog.Add<StaticText>(DialogRect {.min = {130, 480}, .max = {330, 510}}, Text(k_GameNameText), Layout::Right, k_Mid);
+	    dialog.Add<StaticText>(DialogRect {.min = {130, 480}, .max = {330, 510}}, Text(k_GameNameText), Layout::Right, Mid());
 	nameLabel.visible = false;
 	_name = &dialog.Add<EditBox>(_font, DialogRect {.min = {350, 480}, .max = {550, 510}}, std::u16string(),
-	                             lobby_api::k_MostNameCharacters, k_Mid);
+	                             lobby_api::k_MostNameCharacters, Mid());
 	_name->visible = false;
 	_passwordLabel = &dialog.Add<StaticText>(DialogRect {.min = {130, 530}, .max = {330, 570}}, Text(k_GamePasswordText),
-	                                         Layout::Right, k_Mid);
+	                                         Layout::Right, Mid());
 	_password = &dialog.Add<EditBox>(_font, DialogRect {.min = {350, 530}, .max = {550, 570}}, std::u16string(),
-	                                 k_MostLoginCharacters, k_Mid);
+	                                 k_MostLoginCharacters, Mid());
 	// With no game picked, the password's box is the filter of the game names
 	_password->onChange = [this](const std::u16string& text) {
 		if (!_frontEnd->GetSelectedGame().has_value())
@@ -406,7 +420,7 @@ void MultiplayerBoxes::BuildGameList(Dialog& dialog)
 		}
 	};
 	// Refresh List shows only on the internet
-	auto& refresh = dialog.Add<Button>(DialogRect {.min = {110, 490}, .max = {250, 530}}, Text(k_RefreshText), k_Mid);
+	auto& refresh = dialog.Add<Button>(DialogRect {.min = {110, 490}, .max = {250, 530}}, Text(k_RefreshText), Mid());
 	refresh.visible = !lan;
 	refresh.onClick = [this] { _frontEnd->RefreshGames(); };
 }
@@ -429,79 +443,76 @@ void MultiplayerBoxes::BuildRoom()
 				                                    _frontEnd->Back();
 			                                    }
 		                                    },
-		                .textSize = k_Mid});
+		                .textSize = Mid()});
 	}
 	_dialog = std::make_unique<Dialog>(std::move(tabs), static_cast<size_t>(_frontEnd->GetTab()), k_RoomBox);
 	auto& dialog = *_dialog;
 
-	_caption = &dialog.Add<StaticText>(DialogRect {.min = {40, 60}, .max = {760, 88}}, std::u16string(), Layout::Centre, k_Mid);
+	_caption = &dialog.Add<StaticText>(DialogRect {.min = {40, 60}, .max = {760, 88}}, std::u16string(), Layout::Centre, Mid());
 	// The gods and the observers of the room, one line each in their colour
-	_roster = &dialog.Add<List>(_font, DialogRect {.min = {40, 95}, .max = {760, 370}}, k_Mid, false, true, true);
+	_roster = &dialog.Add<List>(_font, DialogRect {.min = {40, 95}, .max = {760, 370}}, Mid(), false, true, true);
 	_roster->onClick = [this] { _frontEnd->ShowSeat(_roster->GetSelection()); };
 
 	// The Chat tab
 	_chatControls.push_back(
-	    &dialog.Add<StaticText>(DialogRect {.min = {40, 380}, .max = {760, 408}}, Text(k_IncomingText), Layout::Centre, k_Mid));
-	_chat = &dialog.Add<List>(_font, DialogRect {.min = {140, 410}, .max = {660, 530}}, k_Mid, false, true, false);
+	    &dialog.Add<StaticText>(DialogRect {.min = {40, 380}, .max = {760, 408}}, Text(k_IncomingText), Layout::Centre, Mid()));
+	_chat = &dialog.Add<List>(_font, DialogRect {.min = {140, 410}, .max = {660, 530}}, Mid(), false, true, false);
 	_chatControls.push_back(_chat);
 	_chatEdit = &dialog.Add<EditBox>(_font, DialogRect {.min = {140, 545}, .max = {660, 575}}, Text(k_TypeChatText),
-	                                 k_MostChatCharacters, k_Mid);
+	                                 k_MostChatCharacters, Mid());
 	_chatEdit->onClick = [this] { SendChat(); };
 	_chatControls.push_back(_chatEdit);
 
 	// The Landscape tab: the lands, the server's land marked as the host's choice, and the land's information
 	_landControls.push_back(&dialog.Add<StaticText>(DialogRect {.min = {140, 380}, .max = {330, 408}}, Text(k_LandscapesText),
-	                                                Layout::Centre, k_Mid));
+	                                                Layout::Centre, Mid()));
 	_landControls.push_back(
-	    &dialog.Add<StaticText>(DialogRect {.min = {0, 380}, .max = {800, 408}}, Text(k_ThumbnailText), Layout::Centre, k_Mid));
+	    &dialog.Add<StaticText>(DialogRect {.min = {0, 380}, .max = {800, 408}}, Text(k_ThumbnailText), Layout::Centre, Mid()));
 	_landControls.push_back(&dialog.Add<StaticText>(DialogRect {.min = {470, 380}, .max = {660, 408}}, Text(k_LandInfoTitle),
-	                                                Layout::Centre, k_Mid));
-	_lands = &dialog.Add<List>(_font, DialogRect {.min = {140, 410}, .max = {330, 530}}, k_Mid, false, true, true);
+	                                                Layout::Centre, Mid()));
+	_lands = &dialog.Add<List>(_font, DialogRect {.min = {140, 410}, .max = {330, 530}}, Mid(), false, true, true);
 	_lands->onClick = [this] { _frontEnd->ShowLand(_lands->GetSelection()); };
 	_landControls.push_back(_lands);
-	_landInfo = &dialog.Add<List>(_font, DialogRect {.min = {470, 410}, .max = {660, 530}}, k_Mid, false, true, false);
+	_landInfo = &dialog.Add<List>(_font, DialogRect {.min = {470, 410}, .max = {660, 530}}, Mid(), false, true, false);
 	_landControls.push_back(_landInfo);
 
 	// The Clans tab
 	_clansLabel =
-	    &dialog.Add<StaticText>(DialogRect {.min = {100, 380}, .max = {400, 408}}, std::u16string(), Layout::Centre, k_Mid);
+	    &dialog.Add<StaticText>(DialogRect {.min = {100, 380}, .max = {400, 408}}, std::u16string(), Layout::Centre, Mid());
 	_clanInfoLabel =
-	    &dialog.Add<StaticText>(DialogRect {.min = {400, 380}, .max = {700, 408}}, std::u16string(), Layout::Centre, k_Mid);
-	_clans = &dialog.Add<List>(_font, DialogRect {.min = {140, 410}, .max = {390, 530}}, k_Mid, false, true, true);
+	    &dialog.Add<StaticText>(DialogRect {.min = {400, 380}, .max = {700, 408}}, std::u16string(), Layout::Centre, Mid());
+	_clans = &dialog.Add<List>(_font, DialogRect {.min = {140, 410}, .max = {390, 530}}, Mid(), false, true, true);
 	_clans->onClick = [this] { _frontEnd->ShowClan(_clans->GetSelection()); };
-	_clanInfo = &dialog.Add<List>(_font, DialogRect {.min = {410, 410}, .max = {660, 530}}, k_Mid, false, true, false);
-	_useClan = &dialog.Add<Button>(DialogRect {.min = {250, 540}, .max = {550, 570}}, Text(k_UseClanText), k_Mid);
+	_clanInfo = &dialog.Add<List>(_font, DialogRect {.min = {410, 410}, .max = {660, 530}}, Mid(), false, true, false);
+	_useClan = &dialog.Add<Button>(DialogRect {.min = {250, 540}, .max = {550, 570}}, Text(k_UseClanText), Mid());
 	_useClan->onClick = [this] { _frontEnd->UseShownClan(); };
-	_noClan = &dialog.Add<Button>(DialogRect {.min = {250, 540}, .max = {550, 570}}, Text(k_NoClanText), k_Mid);
+	_noClan = &dialog.Add<Button>(DialogRect {.min = {250, 540}, .max = {550, 570}}, Text(k_NoClanText), Mid());
 	_noClan->onClick = [this] { _frontEnd->UseNoClan(); };
 	_clanControls = {_clansLabel, _clanInfoLabel, _clans, _clanInfo};
 
 	// The Player Details tab
 	_playerLabel =
-	    &dialog.Add<StaticText>(DialogRect {.min = {0, 380}, .max = {800, 408}}, std::u16string(), Layout::Centre, k_Mid);
-	_playerInfo = &dialog.Add<List>(_font, DialogRect {.min = {140, 410}, .max = {660, 530}}, k_Mid, false, true, false);
+	    &dialog.Add<StaticText>(DialogRect {.min = {0, 380}, .max = {800, 408}}, std::u16string(), Layout::Centre, Mid());
+	_playerInfo = &dialog.Add<List>(_font, DialogRect {.min = {140, 410}, .max = {660, 530}}, Mid(), false, true, false);
 	_playerControls = {_playerLabel, _playerInfo};
 
-	// The conditions page
-	_conditions = &dialog.Add<List>(_font, DialogRect {.min = {100, 120}, .max = {700, 320}}, k_Mid, false, true, true);
+	// The conditions page, as the game shows it to a player who is not the host. The game server has the host's part,
+	// so the value of a condition and the arrows do not show.
+	_conditions = &dialog.Add<List>(_font, DialogRect {.min = {100, 120}, .max = {700, 320}}, Mid(), false, true, true);
 	_selectMap = &dialog.Add<StaticText>(DialogRect {.min = {100, 200}, .max = {700, 260}}, Text(k_SelectMapText),
-	                                     Layout::Centre, k_Mid);
-	auto& valueLabel = dialog.Add<StaticText>(DialogRect {.min = {98, 340}, .max = {218, 370}}, Text(k_ConditionValueText),
-	                                          Layout::Left, k_Mid);
-	_conditionValue =
-	    &dialog.Add<StaticText>(DialogRect {.min = {260, 320}, .max = {340, 380}}, std::u16string(), Layout::Centre, k_Mid);
-	auto& timeLabel =
-	    dialog.Add<StaticText>(DialogRect {.min = {400, 340}, .max = {560, 370}}, Text(k_TimeLimitText), Layout::Left, k_Mid);
+	                                     Layout::Centre, Mid());
+	_timeLabel =
+	    &dialog.Add<StaticText>(DialogRect {.min = {400, 340}, .max = {560, 370}}, Text(k_TimeLimitText), Layout::Left, Mid());
 	_timeLimit =
-	    &dialog.Add<StaticText>(DialogRect {.min = {600, 320}, .max = {680, 380}}, std::u16string(), Layout::Centre, k_Mid);
-	auto& viewChat = dialog.Add<Button>(DialogRect {.min = {675, 440}, .max = {775, 472}}, Text(k_ViewChatText), k_Mid);
-	viewChat.onClick = [this] {
+	    &dialog.Add<StaticText>(DialogRect {.min = {600, 320}, .max = {680, 380}}, std::u16string(), Layout::Centre, Mid());
+	_viewChat = &dialog.Add<Button>(DialogRect {.min = {675, 440}, .max = {775, 472}}, Text(k_ViewChatText), Mid());
+	_viewChat->onClick = [this] {
 		_frontEnd->SelectTab(RoomTab::Chat);
 		_frontEnd->Back();
 	};
-	_ready = &dialog.Add<CheckBox>(_font, glm::ivec2 {65, 460}, k_Mid, Text(k_ReadyText), LabelSide::Below, false, false);
+	_ready = &dialog.Add<CheckBox>(_font, glm::ivec2 {65, 460}, Mid(), Text(k_ReadyText), LabelSide::Below, false, false);
 	_ready->onChange = [this](bool checked) { _frontEnd->SetReady(checked); };
-	_conditionControls = {_conditions, &valueLabel, _conditionValue, &timeLabel, _timeLimit, &viewChat, _ready};
+	_conditionControls = {_conditions, _selectMap, _timeLabel, _timeLimit, _viewChat, _ready};
 
 	// Back leaves the room; Next goes to the conditions page. The host's Start is the server's own: it does not show.
 	dialog.Add<BigButton>(_font, k_RoomBackPosition, k_ArrowSize, Text(k_RoomBackText), LabelSide::Right, Look::LeftArrow)
@@ -624,24 +635,17 @@ void MultiplayerBoxes::SyncRoom()
 	// The roster: "God 3: name (CURRENT)" in the god's colour, the observers in grey
 	const auto* own = _frontEnd->GetOwnSeat();
 	std::vector<List::Item> roster;
+	const auto godText = Text(k_GodText);
+	const auto observersText = Text(k_ObserversText);
+	const auto currentText = Text(k_CurrentText);
+	const RosterTexts rosterTexts {.god = godText, .observers = observersText, .current = currentText};
+	// The ping display (deviation 143) is off unless the player turns it on
+	const auto ping = _frontEnd->ShowsPing() ? ping_display::Text(_frontEnd->GetRoundTrip()) : std::nullopt;
 	for (const auto& seat : _frontEnd->GetSeats())
 	{
-		std::u16string line;
-		if (seat.god > 0)
-		{
-			const std::array<TextArgument, 1> god = {int64_t {seat.god}};
-			line = FormatText(Text(k_GodText), god);
-		}
-		else
-		{
-			line = Text(k_ObserversText);
-		}
-		line += u": " + ToUtf16(seat.account.name);
-		if (own != nullptr && own->account.id == seat.account.id && own->account.name == seat.account.name)
-		{
-			line += Text(k_CurrentText);
-		}
-		roster.push_back({.text = std::move(line), .colour = GodColour(seat.god)});
+		const bool isOwn = own != nullptr && own->account.id == seat.account.id && own->account.name == seat.account.name;
+		roster.push_back(
+		    {.text = RosterLine(seat, ToUtf16(seat.account.name), isOwn, rosterTexts, ping), .colour = GodColour(seat.god)});
 	}
 	SetItemsIfChanged(*_roster, std::move(roster));
 
@@ -683,12 +687,25 @@ void MultiplayerBoxes::SyncRoom()
 	{
 		_lands->SetSelection(shownLand);
 	}
+	// The thumbnail of the land picked
+	if (shownLand != _thumbnailLand)
+	{
+		_thumbnailLand = shownLand;
+		_thumbnail = shownLand.has_value() && *shownLand < maps.size() && _thumbnailSource
+		                 ? _thumbnailSource(maps[*shownLand].file)
+		                 : nullptr;
+	}
+	// The first three lands have texts of their own; the other lands show the description of their thumbnail
 	std::vector<std::u16string> info;
 	if (shownLand.has_value())
 	{
 		if (const auto text = LandInfoText(*shownLand); text.has_value())
 		{
 			info.push_back(Text(*text));
+		}
+		else if (_thumbnail != nullptr)
+		{
+			info.emplace_back(_thumbnail->description.begin(), _thumbnail->description.end());
 		}
 	}
 	SetItemsIfChanged(*_landInfo, Items(info));
@@ -733,41 +750,84 @@ void MultiplayerBoxes::SyncRoom()
 	const auto seatName = seat != nullptr ? ToUtf16(seat->account.name) : playerName;
 	const std::array<TextArgument, 1> seatArgument = {std::u16string_view(seatName)};
 	_playerLabel->text = FormatText(Text(k_PlayerInfoText), seatArgument);
-	std::vector<std::u16string> details;
-	if (seat != nullptr)
-	{
-		if (seat->god > 0)
-		{
-			const std::array<TextArgument, 1> god = {int64_t {seat->god}};
-			details.push_back(FormatText(Text(k_GodText), god));
-		}
-		else
-		{
-			details.push_back(Text(k_ObserversText));
-		}
-	}
-	SetItemsIfChanged(*_playerInfo, Items(details));
+	// The game shows only the lines of the lobby's player database under the title. The lobby has no such lines yet.
+	SetItemsIfChanged(*_playerInfo, Items(PlayerDetailLines({})));
 
-	// The conditions page: the conditions of the server's land, or "Please select a map first."
-	const auto& conditions = _frontEnd->GetConditions();
-	_selectMap->visible = conditionsPage && !conditions.has_value();
-	_conditions->visible = conditionsPage && conditions.has_value();
+	// The conditions page: the conditions of the game and its time limit, or "Please select a map first." The game
+	// server is the host, and it gives its picks when the player joins. With no picks, the list is empty.
+	const auto page = ConditionsPageOf(_frontEnd->GetConditions().has_value());
+	_selectMap->visible = conditionsPage && page.selectMap;
+	_conditions->visible = conditionsPage && page.conditions;
+	_timeLabel->visible = conditionsPage && page.timeLimit;
+	_timeLimit->visible = conditionsPage && page.timeLimit;
+	_viewChat->visible = conditionsPage && page.viewChat;
 	std::vector<std::u16string> conditionLines;
-	if (conditions.has_value())
+	for (const auto& line : ConditionLines(_frontEnd->GetConditionPicks()))
 	{
-		for (size_t i = 0; i < k_ConditionCount; ++i)
-		{
-			conditionLines.push_back(Text(ConditionText(i)));
-		}
+		conditionLines.push_back(ConditionLineText(Text(ConditionText(static_cast<size_t>(line.condition))), line.value));
 	}
 	SetItemsIfChanged(*_conditions, Items(conditionLines));
-	const auto pickedCondition = _conditions->GetSelection();
-	_conditionValue->text = conditions.has_value() && pickedCondition.has_value() && *pickedCondition < k_ConditionCount
-	                            ? ToUtf16(std::to_string(conditions->at(*pickedCondition).value))
-	                            : std::u16string();
-	const auto timeLimit = _frontEnd->GetTimeLimit();
-	_timeLimit->text = timeLimit.has_value() ? TimeLimitText(*timeLimit) : std::u16string();
+	_timeLimit->text = TimeLimitText(_frontEnd->GetTimeLimit());
 	_ready->SetChecked(_frontEnd->IsReady());
+
+	SyncPictures(onTab && tab == RoomTab::Landscape, onTab && tab == RoomTab::Clans && !lan);
+}
+
+void MultiplayerBoxes::SyncPictures(bool landShown, bool clanShown)
+{
+	_thumbnailShown = landShown && _thumbnail != nullptr && _thumbnail->side > 0;
+	if (_frontEnd->TakeLogoChanged())
+	{
+		const auto& logo = _frontEnd->GetShownLogo();
+		_logoSheet = logo.has_value() ? land_thumbnail::LogoSheet(*logo) : land_thumbnail::Texels {};
+		_logoChanged = true;
+	}
+	_logoShown = clanShown && !_logoSheet.empty();
+}
+
+std::vector<DialogRect> MultiplayerBoxes::GetPictureRects() const
+{
+	std::vector<DialogRect> rects;
+	if (_thumbnailShown)
+	{
+		rects.push_back(land_thumbnail::k_Place);
+	}
+	if (_logoShown && _clanInfo != nullptr)
+	{
+		rects.push_back(land_thumbnail::LogoPlace(_clanInfo->rect));
+	}
+	return rects;
+}
+
+void MultiplayerBoxes::DrawPictures(const DialogPainter& painter) const
+{
+	if (_logoChanged)
+	{
+		_logoChanged = false;
+		_logoTexture.reset();
+		if (!_logoSheet.empty())
+		{
+			_logoTexture = std::make_unique<graphics::Texture2D>("Clan logo");
+			_logoTexture->Create(land_thumbnail::k_TextureSide, land_thumbnail::k_TextureSide, 1,
+			                     graphics::TextureFormat::BGRA4, graphics::Wrapping::Repeat, graphics::Filter::Linear,
+			                     bgfx::copy(_logoSheet.data(), static_cast<uint32_t>(_logoSheet.size() * sizeof(uint16_t))));
+		}
+	}
+	// The game draws the pictures after the controls, at the box's opacity
+	if (_thumbnailShown && _thumbnail->texture != nullptr)
+	{
+		painter.DrawPicture(land_thumbnail::k_Place, *_thumbnail->texture, glm::vec2(0.0f),
+		                    land_thumbnail::UvMax(_thumbnail->side), glm::vec4(1.0f));
+	}
+	// The logo is a faint mark behind the lines of the clan's information
+	if (_logoShown && _logoTexture != nullptr && _clanInfo != nullptr)
+	{
+		const auto alpha = painter.GetAlpha();
+		painter.SetAlpha(land_thumbnail::LogoAlpha(alpha));
+		const auto [uvMin, uvMax] = land_thumbnail::LogoCellUv();
+		painter.DrawPicture(land_thumbnail::LogoPlace(_clanInfo->rect), *_logoTexture, uvMin, uvMax, glm::vec4(1.0f));
+		painter.SetAlpha(alpha);
+	}
 }
 
 void MultiplayerBoxes::ShowMessage(Message message)
@@ -791,7 +851,7 @@ void MultiplayerBoxes::ShowMessage(Message message)
 	switch (ButtonsOf(message))
 	{
 	case MessageButtons::Ok:
-		shown.answers.Add<Button>(k_MessageOk, Text(k_OkText), k_Mid).onClick = [this] {
+		shown.answers.Add<Button>(k_MessageOk, Text(k_OkText), Mid()).onClick = [this] {
 			_frontEnd->AnswerMessage(MultiplayerFrontEnd::Answer::Ok);
 		};
 		break;
@@ -987,6 +1047,7 @@ void MultiplayerBoxes::Draw(const DialogPainter& painter) const
 		painter.SetAlpha(alpha);
 	}
 	_dialog->Draw(painter, !_message.has_value() && !_frontEnd->IsBusy());
+	DrawPictures(painter);
 	if (_message.has_value())
 	{
 		// The message's text starts as large as it fits in under 125 high
@@ -995,7 +1056,7 @@ void MultiplayerBoxes::Draw(const DialogPainter& painter) const
 		{
 			--size;
 		} while (painter.GetTextHeight(k_MessageWidth, _message->text, size) >= k_MessageTallest &&
-		         size > DialogPainter::k_SmallTextSize);
+		         size > DialogPainter::SmallTextSize());
 		_message->textControl->size = size;
 		painter.SetAlpha(messageAlpha);
 		painter.DrawBackground(k_MessageBox, glm::vec3(1.0f), true, DialogPainter::All);

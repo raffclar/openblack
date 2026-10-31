@@ -23,9 +23,6 @@
 #include "3D/L3DMesh.h"
 #include "3D/TempleDoors.h"
 #include "3D/TempleInteriorInterface.h"
-#include "Audio/AudioManagerInterface.h"
-#include "Audio/GameSoundEffects.h"
-#include "Audio/Sound.h"
 #include "Camera.h"
 #include "CameraLens.h"
 #include "Common/MachineClock.h"
@@ -38,6 +35,9 @@
 #include "Input/GameActionMapInterface.h"
 #include "Locator.h"
 #include "Resources/ResourcesInterface.h"
+#include "Sound/GameSoundEffects.h"
+#include "Sound/SoundId.h"
+#include "Sound/SoundRequestInterface.h"
 #include "Temple/TempleHelpScripts.h"
 #include "Windowing/WindowingInterface.h"
 
@@ -415,6 +415,11 @@ glm::vec3 TempleCameraModel::MapAround(float yaw, float pitch)
 	// The FPU's cosines and sines stay wide for the products
 	return {x87::Mul(x87::Cos(yaw), x87::Cos(pitch)), x87::RoundToFloat(x87::Sin(pitch)),
 	        x87::Mul(x87::Sin(yaw), x87::Cos(pitch))};
+}
+
+float TempleCameraModel::DragLeanStep(float mouseDown, float dt, float across)
+{
+	return ((mouseDown * dt) * 0.06f) * (1.0f - std::abs(across));
 }
 
 float TempleCameraModel::EdgeLeanStep(float dt, float ramp, float speed)
@@ -874,7 +879,7 @@ void TempleCameraModel::UpdateOrbit(float dt, const Input& input)
 		if (_wasPressed)
 		{
 			_yawTarget = _yaw.GetValue() + turn;
-			_leanTarget += (((input.mouse.y - _lastMouse.y) * dt) * 0.06f) * (1.0f - std::abs(input.mouseScreen.x));
+			_leanTarget += DragLeanStep(input.mouse.y - _lastMouse.y, dt, input.mouseScreen.x);
 		}
 		_lastMouse = input.mouse;
 	}
@@ -1457,7 +1462,7 @@ void TempleCameraModel::ChangeState()
 void TempleCameraModel::LookAtSubMesh(glm::vec3 position, glm::vec3 lookAt)
 {
 	// Looking at a scroll wooshes unless the camera is looking at something already
-	if (!_lookingAtSubMesh && Locator::audio::has_value())
+	if (!_lookingAtSubMesh && Locator::sounds::has_value())
 	{
 		constexpr std::array k_Wooshes {audio::SoundId::G_Woosh_01, audio::SoundId::G_Woosh_02, audio::SoundId::G_Woosh_03,
 		                                audio::SoundId::G_Woosh_04};

@@ -23,9 +23,6 @@
 #include <fmt/format.h>
 #include <glm/gtc/constants.hpp>
 
-#include "Audio/AudioManagerInterface.h"
-#include "Audio/GameSoundEffects.h"
-#include "Audio/Sound.h"
 #include "ECS/Archetypes/SpellIconArchetype.h"
 #include "ECS/Components/Abode.h"
 #include "ECS/Components/Player.h"
@@ -39,6 +36,7 @@
 #include "ECS/Systems/HandGrabSystemInterface.h"
 #include "ECS/Systems/HandSystemInterface.h"
 #include "ECS/Systems/MagicSystemInterface.h"
+#include "ECS/Systems/PlayerSystemInterface.h"
 #include "ECS/Systems/TimeSystemInterface.h"
 #include "ECS/Systems/WorshipSiteSystemInterface.h"
 #include "ECS/WorldObjects.h"
@@ -46,8 +44,12 @@
 #include "Locator.h"
 #include "Magic/DispenserRules.h"
 #include "Magic/MiracleVisuals.h"
+#include "Magic/PrayerRules.h"
 #include "Magic/SpellSeedRules.h"
 #include "Magic/WorshipBattery.h"
+#include "Sound/GameSoundEffects.h"
+#include "Sound/SoundId.h"
+#include "Sound/SoundRequestInterface.h"
 
 using namespace openblack;
 using namespace openblack::ecs::components;
@@ -560,9 +562,12 @@ bool SpellIconSystem::HandReady(PlayerNames player) const
 	{
 		return false;
 	}
-	const bool human = Locator::handSystem::has_value() ? Locator::handSystem::value().GetHandsOf(player).has_value()
+	// A computer god has hands too, but its hand never takes a miracle: the god casts from the store of the icon. The hand
+	// of a player that nobody plays does not take one either.
+	const bool person = !Locator::playerSystem::has_value() || Locator::playerSystem::value().IsHumanPlayer(player);
+	const bool hands = Locator::handSystem::has_value() ? Locator::handSystem::value().GetHandsOf(player).has_value()
 	                                                    : player == PlayerNames::PLAYER_ONE;
-	if (!human)
+	if (!person || !hands)
 	{
 		return false;
 	}
@@ -617,7 +622,8 @@ float SpellIconSystem::RequiredNow(const WorshipIcon& icon, entt::entity heldSee
 	{
 		return Required(icon);
 	}
-	return magic::ChantNeeded(Required(icon), Entities().Get<const SpellSeed>(heldSeed).chantStore);
+	const auto& seed = Entities().Get<const SpellSeed>(heldSeed);
+	return magic::ChantNeeded(Required(icon), magic::SeedChantStore(seed.chantStore, seed.storedChants, seed.hasCast));
 }
 
 icons::IconCharge SpellIconSystem::ChargeOf(const WorshipIcon& icon, PlayerNames tapping) const
@@ -673,15 +679,7 @@ icons::TapResult SpellIconSystem::TapSiteIcon(entt::entity icon, PlayerNames pla
 		GiveSeed(icon);
 		break;
 	case icons::TapResult::Cancelled:
-		// Called off, its prayer power goes back to its site
-		component.charging = false;
-		component.powerUp = magic::k_BasePowerUpLevel;
-		component.charger = PlayerNames::NEUTRAL;
-		if (Locator::worshipSiteSystem::has_value() && component.store != 0.0f)
-		{
-			Locator::worshipSiteSystem::value().ReturnChants(component.site, component.store);
-		}
-		component.store = 0.0f;
+		CancelCharge(component);
 		break;
 	case icons::TapResult::StartedCharge:
 		StartCharge(icon, player);
@@ -696,15 +694,9 @@ bool SpellIconSystem::StartChargeForGod(entt::entity icon, PlayerNames player)
 {
 	auto& registry = Entities();
 	auto* component = registry.Valid(icon) ? registry.TryGet<WorshipIcon>(icon) : nullptr;
-	if (component == nullptr || component->charging || HeldSeedOf(*component) != entt::null ||
-	    !Locator::infoConstants::has_value())
-	{
-		return false;
-	}
-	const auto& info = Locator::infoConstants::value();
-	const auto plain =
-	    magic::GetMagicTypeFromPowerUpLevel(magic::GetSpellSeedInfo(info, component->seed), magic::k_BasePowerUpLevel);
-	if (!IsEnabled(player, plain))
+	// Only an icon that charges already refuses the god. A seed of the icon in a hand does not stop the charge, and the
+	// god asked only for a miracle that it may cast.
+	if (component == nullptr || component->charging)
 	{
 		return false;
 	}
@@ -726,6 +718,12 @@ bool SpellIconSystem::StartChargeForGod(entt::entity icon, PlayerNames player)
 	component->powerUp = magic::k_BasePowerUpLevel;
 	component->charger = player;
 	component->chargeStartTurn = Locator::time::has_value() ? Locator::time::value().GetTurn() : 0;
+	// An icon that is full already gives its miracle to the hand of the god. Only the hand of a human player takes it,
+	// so the hand of a computer god never holds the seed: the god casts from the store of the icon.
+	if (icons::ReadyForHand(ChargeOf(*component, player), HandReady(player)))
+	{
+		GiveSeed(icon);
+	}
 	return true;
 }
 
@@ -764,13 +762,17 @@ void SpellIconSystem::StartCharge(entt::entity icon, PlayerNames player)
 
 std::vector<entt::entity> SpellIconSystem::SitesOf(PlayerNames player) const
 {
-	std::vector<entt::entity> sites;
 	if (!Locator::worshipSiteSystem::has_value())
 	{
-		return sites;
+		return {};
 	}
+	return SitesOfTemple(Locator::worshipSiteSystem::value().TempleOf(player));
+}
+
+std::vector<entt::entity> SpellIconSystem::SitesOfTemple(entt::entity temple) const
+{
+	std::vector<entt::entity> sites;
 	const auto& registry = Entities();
-	const auto temple = Locator::worshipSiteSystem::value().TempleOf(player);
 	const auto* worship = registry.Valid(temple) ? registry.TryGet<const CitadelWorship>(temple) : nullptr;
 	if (worship == nullptr)
 	{
@@ -959,7 +961,7 @@ bool SpellIconSystem::Tap(entt::entity icon, PlayerNames player)
 	}
 	const auto result = TapSiteIcon(siteIcon, player);
 	// A tap that did something clicks, faster the further along the centre its hand stands, for the hand at this machine
-	if (result != icons::TapResult::Nothing && player == OwnPlayer() && Locator::audio::has_value())
+	if (result != icons::TapResult::Nothing && player == OwnPlayer() && Locator::sounds::has_value())
 	{
 		audio::StartGameSoundEffect(static_cast<entt::id_type>(audio::SoundId::G_ClickOnSpell_01),
 		                            {.pitchPercent = icons::ClickPitch(hand)});
@@ -976,6 +978,181 @@ bool SpellIconSystem::HasIconFor(PlayerNames player, SpellSeedType seed) const
 		found = found || (icon.seed == seed && site != nullptr && site->player == player);
 	});
 	return found;
+}
+
+void SpellIconSystem::CancelCharge(WorshipIcon& icon) const
+{
+	// The charge stops, and all that the icon stored goes back into the battery of its site
+	icon.charging = false;
+	icon.powerUp = magic::k_BasePowerUpLevel;
+	icon.charger = PlayerNames::NEUTRAL;
+	if (Locator::worshipSiteSystem::has_value() && Entities().Valid(icon.site))
+	{
+		Locator::worshipSiteSystem::value().ReturnChants(icon.site, icon.store);
+	}
+	icon.store = 0.0f;
+}
+
+entt::entity SpellIconSystem::SiteOfIcon(entt::entity icon) const
+{
+	auto& registry = Entities();
+	if (!registry.Valid(icon))
+	{
+		return entt::null;
+	}
+	if (const auto* component = registry.TryGet<const WorshipIcon>(icon); component != nullptr)
+	{
+		return registry.Valid(component->site) ? component->site : entt::null;
+	}
+	if (const auto* hand = registry.TryGet<const TownCentreIcon>(icon); hand != nullptr)
+	{
+		// A stone hand has the site of its town
+		const auto* town = registry.Valid(hand->town) ? registry.TryGet<const Town>(hand->town) : nullptr;
+		if (town != nullptr && registry.Valid(town->worshipSite))
+		{
+			return town->worshipSite;
+		}
+	}
+	return entt::null;
+}
+
+void SpellIconSystem::EmptyIconStores(entt::entity site)
+{
+	auto& registry = Entities();
+	auto* list = registry.Valid(site) ? registry.TryGet<SiteIcons>(site) : nullptr;
+	if (list == nullptr)
+	{
+		return;
+	}
+	// The icons keep their charges, but each charge starts again from an empty store
+	for (const auto icon : list->icons)
+	{
+		if (auto* component = registry.Valid(icon) ? registry.TryGet<WorshipIcon>(icon) : nullptr; component != nullptr)
+		{
+			component->store = 0.0f;
+		}
+	}
+}
+
+void SpellIconSystem::CancelChargesFor(entt::entity temple, PlayerNames charger)
+{
+	auto& registry = Entities();
+	// The sites go in the order of their places, and the icons of each site in the order of the site's list
+	for (const auto site : SitesOfTemple(temple))
+	{
+		const auto* list = registry.TryGet<const SiteIcons>(site);
+		if (list == nullptr)
+		{
+			continue;
+		}
+		for (const auto icon : list->icons)
+		{
+			auto* component = registry.Valid(icon) ? registry.TryGet<WorshipIcon>(icon) : nullptr;
+			if (component != nullptr && component->charging && component->charger == charger)
+			{
+				CancelCharge(*component);
+			}
+		}
+	}
+}
+
+bool SpellIconSystem::ChargesFor(entt::entity temple, PlayerNames charger) const
+{
+	auto& registry = Entities();
+	for (const auto site : SitesOfTemple(temple))
+	{
+		const auto* list = registry.TryGet<const SiteIcons>(site);
+		if (list == nullptr)
+		{
+			continue;
+		}
+		const bool charges = std::ranges::any_of(list->icons, [&registry, charger](entt::entity icon) {
+			const auto* component = registry.Valid(icon) ? registry.TryGet<const WorshipIcon>(icon) : nullptr;
+			return component != nullptr && component->charging && component->charger == charger;
+		});
+		if (charges)
+		{
+			return true;
+		}
+	}
+	return false;
+}
+
+bool SpellIconSystem::CancelLatestChargeFor(entt::entity temple, PlayerNames charger)
+{
+	auto& registry = Entities();
+	// Only a charge that started after the first turn can stop, as the latest start begins at 0
+	WorshipIcon* latest = nullptr;
+	uint32_t latestStart = 0;
+	for (const auto site : SitesOfTemple(temple))
+	{
+		const auto* list = registry.TryGet<const SiteIcons>(site);
+		if (list == nullptr)
+		{
+			continue;
+		}
+		for (const auto icon : list->icons)
+		{
+			auto* component = registry.Valid(icon) ? registry.TryGet<WorshipIcon>(icon) : nullptr;
+			if (component != nullptr && component->charging && component->charger == charger &&
+			    component->chargeStartTurn > latestStart)
+			{
+				latest = component;
+				latestStart = component->chargeStartTurn;
+			}
+		}
+	}
+	if (latest == nullptr)
+	{
+		return false;
+	}
+	CancelCharge(*latest);
+	return true;
+}
+
+entt::entity SpellIconSystem::IconInTemple(entt::entity temple, SpellSeedType seed) const
+{
+	for (const auto site : SitesOfTemple(temple))
+	{
+		if (const auto icon = SiteIconOf(site, seed); icon != entt::null)
+		{
+			return icon;
+		}
+	}
+	return entt::null;
+}
+
+bool SpellIconSystem::AnyIconStores(entt::entity temple, std::optional<MagicType> type) const
+{
+	auto& registry = Entities();
+	if (type.has_value() && !Locator::infoConstants::has_value())
+	{
+		return false;
+	}
+	for (const auto site : SitesOfTemple(temple))
+	{
+		const auto* list = registry.TryGet<const SiteIcons>(site);
+		if (list == nullptr)
+		{
+			continue;
+		}
+		for (const auto icon : list->icons)
+		{
+			const auto* component = registry.Valid(icon) ? registry.TryGet<const WorshipIcon>(icon) : nullptr;
+			if (component == nullptr || !(component->store > 0.0f))
+			{
+				continue;
+			}
+			// The type of an icon is the type of the plain miracle of its seed
+			if (!type.has_value() ||
+			    magic::GetMagicTypeFromPowerUpLevel(magic::GetSpellSeedInfo(Locator::infoConstants::value(), component->seed),
+			                                        magic::k_BasePowerUpLevel) == *type)
+			{
+				return true;
+			}
+		}
+	}
+	return false;
 }
 
 bool SpellIconSystem::IsIcon(entt::entity entity) const
@@ -996,7 +1173,8 @@ std::optional<float> SpellIconSystem::ShownCharge(entt::entity icon) const
 	std::optional<float> heldSeedCharge;
 	if (const auto held = HeldSeedOf(*component); held != entt::null)
 	{
-		heldSeedCharge = registry.Get<const SpellSeed>(held).chantStore;
+		const auto& seed = registry.Get<const SpellSeed>(held);
+		heldSeedCharge = magic::SeedChantStore(seed.chantStore, seed.storedChants, seed.hasCast);
 	}
 	return icons::ShownCharge(component->store, icons::ShownRequired(Required(*component), heldSeedCharge));
 }
@@ -1075,7 +1253,7 @@ void SpellIconSystem::ChargedAt(entt::entity site, std::span<const magic::Worshi
 			{
 				GiveSeed(made.at(i));
 			}
-			if (sitePlayer == OwnPlayer() && Locator::audio::has_value())
+			if (sitePlayer == OwnPlayer() && Locator::sounds::has_value())
 			{
 				const auto voice = icons::FullyChargedVoice(component.seed);
 				audio::StartGameSoundEffect(entt::hashed_string(fmt::format("SpellDialogue.sad/{}", voice).c_str()).value(),
@@ -1112,5 +1290,8 @@ void SpellIconSystem::Update(float seconds)
 
 void SpellIconSystem::Reset()
 {
-	// The icons are entities of the land and go with it
+	// The icons are entities of the land and go with it, and so do their looks. The clock of the shines and the pulses
+	// continues from one land to the next.
+	_looks.clear();
+	_pulses.clear();
 }

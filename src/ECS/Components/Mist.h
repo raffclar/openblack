@@ -36,6 +36,13 @@ struct Mist
 	/// Its animation (see mists)
 	int counter;
 	float counterRemainder;
+	/// A script's fade of its size and alpha, one step each game turn (see mists::Fade), while fading is true
+	bool fading {false};
+	float fadeTurns {0.0f};
+	float fadeElapsed {0.0f};
+	float fadeSizeStep {0.0f};
+	float fadeAlphaStep {0.0f};
+	float fadeAlpha {0.0f};
 };
 
 } // namespace openblack::ecs::components

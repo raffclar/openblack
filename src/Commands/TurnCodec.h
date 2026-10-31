@@ -28,7 +28,7 @@
 /// - Frame: version (u8), kind (u8), then the body of the kind.
 /// - Commands (client to server): sequence (u16), turn (u32), count (u8), then the commands.
 /// - Turn (server to clients): turn (u32), block count (u16), then each block: sender (u8), sequence (u16), count (u8),
-///   then the commands.
+///   then the commands. The sender is the god slot of the player (player_slots::SlotOfPlayer).
 /// - Checksum (both ways): turn (u32), checksum (u64). The server sends its checksum of each turn, and each client sends
 ///   its own.
 /// - Ping and pong: id (u32), time (u64). A pong sends back the id and the time of its ping.
@@ -37,11 +37,13 @@
 /// - Command: tag (u8), then the fields of the command in the order of its structure. A thing is its entity number
 ///   (u32). A place or a velocity is three floats. A let-go has the velocity, then the spin, the origin and the
 ///   angles of the start. A seed or a leash is its number (u8).
+/// - A line of the chat: the count of the players that get it (u8), the god slot of each (u8), then the count of its
+///   characters (u16) and each character as UTF-16 (u16). A taunt has its number (u32) in place of the characters.
 namespace openblack::turn_codec
 {
 
 /// The version of the format. A change of the format gives a new version.
-inline constexpr uint8_t k_Version = 12;
+inline constexpr uint8_t k_Version = 25;
 /// The largest frame that a computer sends or accepts
 inline constexpr size_t k_MostFrameBytes = 64 * 1024;
 /// The most commands in one block, as a client sends them
@@ -92,6 +94,21 @@ enum class CommandTag : uint8_t
 	LeashPick = 30,
 	HandShakeOff = 31,
 	GripDust = 32,
+	HelpReport = 33,
+	HelpQuery = 34,
+	CreatureFightCheat = 35,
+	ViewReport = 36,
+	TempleLeashOff = 37,
+	GiveCallOff = 38,
+	CreatureTattoo = 39,
+	LeashLength = 40,
+	ChatSpeech = 41,
+	ChatTaunt = 42,
+	QuickSave = 43,
+	QuickLoad = 44,
+	MusicMood = 45,
+	IconChargeStop = 46,
+	DialogueClick = 47,
 };
 
 /// The sizes of the parts of the frames, in bytes
@@ -112,18 +129,30 @@ inline constexpr size_t k_Ping = k_Header + 12;
 inline constexpr size_t k_WorldPartHead = k_Header + 8;
 } // namespace sizes
 
+/// The most characters in a line of the chat. The game keeps this many characters of a line that comes in.
+inline constexpr size_t k_MostChatCharacters = 1023;
+
 /// The most bytes of the world state in one world part
 inline constexpr size_t k_WorldPartBytes = 60 * 1024;
 
 /// The commands of one client, as it sends them to the server
 struct CommandBlock
 {
-	/// The number of the block. Each client counts its blocks from 0, and the count wraps.
+	/// The number of the block. Each session of a client counts its blocks from 0 through all its sockets, and the count
+	/// wraps. Thus the server knows a block that a client sends again after it came back.
 	uint16_t sequence {0};
 	/// The last turn that the client did when it made the block
 	uint32_t turn {0};
 	std::vector<player_commands::Action> actions;
 };
+
+/// True when the number of a block comes after the other number. The count wraps, so a number is after the numbers in the
+/// half of the count before it.
+[[nodiscard]] constexpr bool SequenceAfter(uint16_t sequence, uint16_t other) noexcept
+{
+	const auto distance = static_cast<uint16_t>(sequence - other);
+	return distance != 0 && distance < 0x8000;
+}
 
 /// A block in a turn, with the stamp of the server: the player that sent it and the number of the block
 struct StampedBlock

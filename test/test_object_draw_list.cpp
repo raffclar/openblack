@@ -13,6 +13,7 @@
 #include <map>
 #include <vector>
 
+#include <entt/entity/registry.hpp>
 #include <glm/ext/matrix_clip_space.hpp>
 #include <glm/ext/matrix_transform.hpp>
 #include <gtest/gtest.h>
@@ -306,6 +307,24 @@ TEST(ObjectDrawList, AFullFrameKeepsWhatWasOnTheScreen)
 	EXPECT_TRUE(StaysDrawn(true, false, true));
 }
 
+// A building that its site draws, or a broken building, stays drawn while its sphere is on the screen, also when it fades
+// out. A building of which its site draws no part stays drawn in all cases, as a villager does.
+TEST(ObjectDrawList, BuildingsThatTheirSiteDrawsHaveNoFadeTest)
+{
+	EXPECT_EQ(KeptTestOf({}), KeptTest::SphereAndFade);
+	EXPECT_EQ(KeptTestOf({.alwaysDrawn = true}), KeptTest::Always);
+	EXPECT_EQ(KeptTestOf({.broken = true}), KeptTest::Sphere);
+	EXPECT_EQ(KeptTestOf({.broken = true, .drawnWhole = true, .partlyShown = true}), KeptTest::Sphere);
+	EXPECT_EQ(KeptTestOf({.drawnWhole = false, .partlyShown = true}), KeptTest::Sphere);
+	EXPECT_EQ(KeptTestOf({.drawnWhole = false}), KeptTest::Always);
+
+	EXPECT_TRUE(StaysDrawn(KeptTest::Sphere, true, true));
+	EXPECT_FALSE(StaysDrawn(KeptTest::Sphere, false, false));
+	EXPECT_FALSE(StaysDrawn(KeptTest::SphereAndFade, true, true));
+	EXPECT_TRUE(StaysDrawn(KeptTest::SphereAndFade, true, false));
+	EXPECT_TRUE(StaysDrawn(KeptTest::Always, false, true));
+}
+
 // While the camera stands still, only the things that the last full frame kept are drawn. A move of more than one unit
 // draws all of the list again and notes it again.
 TEST(ObjectDrawList, AStillCameraDrawsOnlyWhatTheLastFullFrameKept)
@@ -346,4 +365,65 @@ TEST(ObjectDrawList, SomeThingsAreDrawnOnTheirOwn)
 	EXPECT_TRUE(DrawnOnItsOwn({.temple = true}));
 	EXPECT_TRUE(DrawnOnItsOwn({.highDetail = true}));
 	EXPECT_TRUE(DrawnOnItsOwn({.walkingTrack = true}));
+}
+
+TEST(ObjectDrawList, APartIsKnownByItsEntityAndForgottenWhenCleared)
+{
+	entt::registry registry;
+	const auto totem = registry.create();
+	const auto icon = registry.create();
+	Parts parts;
+	EXPECT_FALSE(parts.Of(icon).has_value());
+	parts.Add(icon, {.owner = totem, .keepsOwner = true});
+	ASSERT_TRUE(parts.Of(icon).has_value());
+	EXPECT_EQ(parts.Of(icon)->owner, totem);
+	EXPECT_TRUE(parts.Of(icon)->keepsOwner);
+	EXPECT_FALSE(parts.Of(totem).has_value());
+	// A new thing that takes the index of a part that is gone is not a part
+	registry.destroy(icon);
+	const auto other = registry.create();
+	ASSERT_EQ(entt::to_entity(other), entt::to_entity(icon));
+	EXPECT_FALSE(parts.Of(other).has_value());
+	parts.Clear();
+	EXPECT_FALSE(parts.Of(icon).has_value());
+}
+
+TEST(ObjectDrawList, APartThatStaysDrawnKeepsItsOwnerUntilTheListIsCleared)
+{
+	entt::registry registry;
+	const auto totem = registry.create();
+	const auto other = registry.create();
+	KeptParts kept;
+	EXPECT_FALSE(kept.Keeps(totem));
+	kept.Keep(totem);
+	kept.Keep(totem);
+	EXPECT_TRUE(kept.Keeps(totem));
+	EXPECT_FALSE(kept.Keeps(other));
+	kept.Clear();
+	EXPECT_FALSE(kept.Keeps(totem));
+}
+
+// A frame that does not draw the land, as in the temple, does not make the list again and draws none of it. The clock
+// does not step on it, so the next frame of the land measures the camera's move from the last frame of the land.
+TEST(ObjectDrawList, AFrameWithoutTheLandKeepsTheListAndTheClock)
+{
+	constexpr auto k_Without = FrameWithoutLand();
+	EXPECT_FALSE(k_Without.rebuilt);
+	EXPECT_FALSE(k_Without.drawAll);
+	EXPECT_FALSE(k_Without.landDrawn);
+	EXPECT_TRUE(Drawn(Frame {}, true, true));
+	EXPECT_FALSE(Drawn(k_Without, true, true));
+	EXPECT_FALSE(Drawn(k_Without, true, false));
+	EXPECT_FALSE(Drawn(k_Without, false, true));
+
+	Clock clock;
+	const glm::vec3 eye {100.0f, 50.0f, 100.0f};
+	const glm::vec3 focus {200.0f, 0.0f, 200.0f};
+	static_cast<void>(clock.Next(0, eye, focus, false));
+	static_cast<void>(clock.Next(0, eye, focus, false));
+	// The temple's frames move the camera far away, but they do not step the clock. Back on the land, the camera is
+	// where it was, so the frame is still.
+	const auto back = clock.Next(0, eye, focus, false);
+	EXPECT_FALSE(back.rebuilt);
+	EXPECT_FALSE(back.drawAll);
 }

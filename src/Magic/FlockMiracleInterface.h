@@ -43,6 +43,8 @@ public:
 	[[nodiscard]] virtual bool AnimalsLeft(const ecs::components::Spell& spell) const = 0;
 	/// Whether it still follows its caster's hand: while it has animals still to make
 	[[nodiscard]] virtual bool FollowsHand(SpellServicesInterface& services, const ecs::components::Spell& spell) const = 0;
+	/// Whether it made fewer animals than its total
+	[[nodiscard]] virtual bool MakesAnimals(SpellServicesInterface& services, const ecs::components::Spell& spell) const = 0;
 };
 
 } // namespace openblack::magic

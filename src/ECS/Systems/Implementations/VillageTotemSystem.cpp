@@ -11,8 +11,12 @@
 
 #include "VillageTotemSystem.h"
 
+#include <cstdint>
+
+#include <algorithm>
 #include <optional>
 #include <string_view>
+#include <utility>
 #include <vector>
 
 #include <glm/gtx/euler_angles.hpp>
@@ -20,6 +24,7 @@
 #include "Common/GUtilsAngle.h"
 #include "Common/PortableRotations.h"
 #include "ECS/Components/Abode.h"
+#include "ECS/Components/DrawnHeight.h"
 #include "ECS/Components/Mesh.h"
 #include "ECS/Components/SeeThrough.h"
 #include "ECS/Components/Town.h"
@@ -126,13 +131,22 @@ void VillageTotemSystem::AddToPlayer(entt::entity totem)
 		const float angle = gutils::Get3DAngleFromXZ(glm::vec2(transform.position.x, transform.position.z),
 		                                             glm::vec2(site->position.x, site->position.z)) +
 		                    gutils::k_ScawenOffset;
-		transform.rotation = glm::mat3(portable_math::EulerAngleY(-angle));
+		const auto turned = glm::mat3(portable_math::EulerAngleY(-angle));
+		const bool changed = turned != transform.rotation;
+		transform.rotation = turned;
 		if (auto* iconTransform = registry.TryGet<Transform>(totemComponent->icon))
 		{
 			iconTransform->rotation = transform.rotation;
 		}
+		// A totem that turns goes out of the map's cells and in again
+		if (changed)
+		{
+			_world->Reinsert(totem);
+		}
 	}
 	ShowIcon(*totemComponent, _world->IconMeshFor(townComponent.owner));
+	// The new icon gives the totem a new outline, so it goes out of the map's cells and in again
+	_world->Reinsert(totem);
 	totemComponent->lastShownRise.reset();
 	totemComponent->quietOnce = true;
 	SetTownShare(town, 0.0f);
@@ -156,14 +170,23 @@ void VillageTotemSystem::RefreshIcons(PlayerNames player)
 {
 	auto& registry = _world->Entities();
 	const auto iconMesh = _world->IconMeshFor(player);
-	registry.Each<const VillageTotem>([&](entt::entity totem, const VillageTotem& totemComponent) {
+	// The totems of the player's towns, in the order that the player gained the towns
+	std::vector<std::pair<uint32_t, entt::entity>> totems;
+	registry.Each<const VillageTotem>([&](entt::entity totem, const VillageTotem& /*unused*/) {
 		const auto town = TownOf(totem);
 		const auto* townComponent = town != entt::null ? registry.TryGet<const Town>(town) : nullptr;
 		if (townComponent != nullptr && townComponent->owner == player)
 		{
-			ShowIcon(totemComponent, iconMesh);
+			totems.emplace_back(townComponent->gained, totem);
 		}
 	});
+	std::ranges::stable_sort(totems, {}, &std::pair<uint32_t, entt::entity>::first);
+	for (const auto& entry : totems)
+	{
+		ShowIcon(registry.Get<const VillageTotem>(entry.second), iconMesh);
+		// The new icon gives the totem a new outline, so it goes out of the map's cells and in again
+		_world->Reinsert(entry.second);
+	}
 }
 
 void VillageTotemSystem::SetTotemShare(entt::entity totem, float share)
@@ -203,13 +226,24 @@ void VillageTotemSystem::Place(entt::entity totem)
 {
 	auto& registry = _world->Entities();
 	const auto& totemComponent = registry.Get<const VillageTotem>(totem);
-	// Held by the hand, it stands where the hand holds it; otherwise where it has eased to
+	// Held by the hand, it stands where the hand holds it; otherwise where it has eased to. It eases by the computer's
+	// clock, so only its drawn height moves: the turns go by where it stands on the land.
 	const float share = totemComponent.gripped ? totemComponent.held : totemComponent.ease.share;
-	auto& transform = registry.Get<Transform>(totem);
-	transform.position.y = totemComponent.restY + village_totem::RiseOf(share);
-	if (auto* icon = registry.TryGet<Transform>(totemComponent.icon))
+	const float y = totemComponent.restY + village_totem::RiseOf(share);
+	const auto setHeight = [&registry](entt::entity thing, float height) {
+		if (auto* drawn = registry.TryGet<DrawnHeight>(thing); drawn != nullptr)
+		{
+			drawn->y = height;
+		}
+		else
+		{
+			registry.Assign<DrawnHeight>(thing, height);
+		}
+	};
+	setHeight(totem, y);
+	if (registry.Valid(totemComponent.icon) && registry.AllOf<Transform>(totemComponent.icon))
 	{
-		icon->position = transform.position + glm::vec3(0.0f, village_totem::k_IconAbovePlinth, 0.0f);
+		setHeight(totemComponent.icon, y + village_totem::k_IconAbovePlinth);
 	}
 }
 
@@ -444,8 +478,16 @@ float VillageTotemSystem::GripY(entt::entity totem) const
 {
 	const auto& registry = _world->Entities();
 	const auto& totemComponent = registry.Get<const VillageTotem>(totem);
-	const auto* icon = registry.TryGet<const Transform>(totemComponent.icon);
-	const float iconY = icon != nullptr ? icon->position.y : registry.Get<const Transform>(totem).position.y;
+	// The hand holds the icon where the frame draws it
+	const auto heightOf = [&registry](entt::entity thing) -> std::optional<float> {
+		if (const auto* drawn = registry.Valid(thing) ? registry.TryGet<const DrawnHeight>(thing) : nullptr)
+		{
+			return drawn->y;
+		}
+		const auto* transform = registry.Valid(thing) ? registry.TryGet<const Transform>(thing) : nullptr;
+		return transform != nullptr ? std::optional(transform->position.y) : std::nullopt;
+	};
+	const float iconY = heightOf(totemComponent.icon).value_or(heightOf(totem).value_or(totemComponent.restY));
 	return village_totem::GripY(iconY, _world->SizeOf(totemComponent.icon).height);
 }
 
@@ -486,6 +528,38 @@ void VillageTotemSystem::LetGo()
 		return;
 	}
 	_world->SendCommand(player_commands::HandUnlock {.object = totem});
+}
+
+void VillageTotemSystem::RaiseByGod(PlayerNames player, entt::entity totem, float share)
+{
+	auto& registry = _world->Entities();
+	if (!registry.Valid(totem) || !registry.AllOf<VillageTotem>(totem))
+	{
+		return;
+	}
+	DoGrip(player, totem);
+	// The creature of the town's player feels the raise also when the share is none
+	if (const auto town = TownOf(totem); town != entt::null)
+	{
+		_world->EmpathiseWithPlayer(registry.Get<const Town>(town).owner, StandingAt(totem));
+		SetTownShare(town, share);
+	}
+	else
+	{
+		SetTotemShare(totem, share);
+	}
+	KeepShareShown(totem);
+}
+
+void VillageTotemSystem::KeepShareShown(entt::entity totem)
+{
+	auto& totemComponent = _world->Entities().Get<VillageTotem>(totem);
+	// The hand of this computer can hold the totem meanwhile: then the totem stays at the share of the hand
+	if (!totemComponent.gripped)
+	{
+		totemComponent.held = totemComponent.ease.target;
+	}
+	Place(totem);
 }
 
 void VillageTotemSystem::DoShare([[maybe_unused]] PlayerNames player, entt::entity totem, float share)

@@ -11,6 +11,7 @@
 
 #include <cstdint>
 
+#include <atomic>
 #include <limits>
 #include <map>
 #include <memory>
@@ -28,7 +29,7 @@
 #include "Graphics/GraphicsHandle.h"
 #include "Graphics/HandReflection.h"
 #include "Graphics/Mesh.h"
-#include "Graphics/RenderModes.h"
+#include "Visual/RenderModes.h"
 
 namespace openblack::graphics
 {
@@ -209,9 +210,13 @@ struct RenderContext
 		uint32_t instance;
 	};
 	std::vector<EntityDraw> entityDraws;
+	/// The things of the drawn registry drawn one by one, and where each one's instance is. Their entities are of the drawn
+	/// registry, not of the land's.
+	std::vector<EntityDraw> drawnEntityDraws;
 	/// Copies of creatures drawn where they stand in a pose of their own (see components::CreatureCopy), as the Creature
 	/// Cave shows the player's creature: each looks as `creature` does, takes its pose and eyes from `copy`, is placed by
-	/// its instance and lit from a light of its own
+	/// its instance and lit from a light of its own. The creature is a thing of the land, and the copy is a thing of the
+	/// temple's rooms.
 	struct CreatureCopyDraw
 	{
 		entt::entity creature;
@@ -225,6 +230,9 @@ struct RenderContext
 	{
 		entt::entity entity;
 		glm::mat4 model;
+		/// The model that the cursor finds, when it is not the model of `entity`: a gate stone of the drawn registry
+		/// stands for its plinth
+		std::optional<entt::id_type> mesh;
 	};
 	std::vector<DrawnObject> drawnObjects;
 	/// The animals drawn this frame, with the model that each one is drawn as and its matrix: each casts blobs from its
@@ -360,12 +368,21 @@ struct RenderContext
 	std::vector<glm::mat4> treeInstanceUniforms;
 	std::vector<glm::vec4> treeSwayParams;
 
-	/// The instances are to be uploaded again
-	bool dirty {true};
-	/// The draw lists are to be made again, then the instances uploaded
-	bool layoutDirty {true};
+	/// The instances are to be uploaded again. A turn on another thread can set it, while the draw does not read it.
+	std::atomic<bool> dirty {true};
+	/// The draw lists are to be made again, then the instances uploaded. A turn on another thread can set it too.
+	std::atomic<bool> layoutDirty {true};
 	bool hasBoundingBoxes {false};
 	uint32_t treeInstanceCount {0};
+};
+
+/// What a draw is for
+enum class DrawUse : uint8_t
+{
+	/// A frame of the game: each thing in a hand keeps the light of the draw for the next frame
+	Frame,
+	/// A draw that only prepares the renderer, as before the first frame of a land. It changes no thing of the world.
+	WarmUp,
 };
 
 class RenderingSystemInterface
@@ -375,7 +392,7 @@ public:
 	virtual void SetDirty() = 0;
 	/// Entities came or went or changed what they are drawn as
 	virtual void SetLayoutDirty() = 0;
-	virtual void PrepareDraw(bool drawBoundingBox, bool drawFootpaths, bool drawStreams) = 0;
+	virtual void PrepareDraw(bool drawBoundingBox, bool drawFootpaths, bool drawStreams, DrawUse use) = 0;
 	virtual const RenderContext& GetContext() = 0;
 	inline ~RenderingSystemInterface() = default;
 };

@@ -91,9 +91,8 @@ public:
 	void NoteLeashOrder(entt::entity creature) override;
 	void ChangeDesireSource(entt::entity creature, uint32_t type, float amount) override;
 	[[nodiscard]] bool CanForceAction(entt::entity creature, size_t animation, bool mirrored,
-	                                  float interruptsAfter) const override;
-	bool ForceAction(entt::entity creature, size_t animation, bool mirrored, std::optional<creature_face::Request> face,
-	                 float interruptsAfter) override;
+	                                  double interruptsAfter) const override;
+	bool ForceAction(entt::entity creature, size_t animation, bool mirrored, double interruptsAfter) override;
 	bool Sleep(entt::entity creature) override;
 	bool Eat(entt::entity creature, std::optional<entt::entity> food) override;
 	bool Drink(entt::entity creature) override;
@@ -103,13 +102,16 @@ public:
 	void Wake(entt::entity creature) override;
 	void FoughtFight(entt::entity creature, bool won) override;
 	void FightStarted(entt::entity creature, entt::entity opponent, bool planned) override;
+	void FightOrdered(entt::entity creature, entt::entity asker) override;
+	void ObeyEnded(entt::entity creature, entt::entity asker) override;
 	void AbandonAction(entt::entity creature) override;
+	void FailAction(entt::entity creature) override;
 	bool ForceDesireOn(entt::entity creature, creature_desires::Desire desire, entt::entity thing) override;
 	void ForceCatch(entt::entity creature, entt::entity object) override;
 	bool TakeFromHand(entt::entity creature, entt::entity object, bool leftHand, glm::vec2 camera) override;
 	[[nodiscard]] bool IsTakingFromHand(entt::entity creature) const override;
 	[[nodiscard]] bool IsLyingDead(entt::entity creature) override;
-	creature_mind::HandsCheck CheckHandsBeforeFaint(entt::entity creature) override;
+	creature_mind::HandsCheck CheckHandsBeforeAction(entt::entity creature) override;
 	[[nodiscard]] bool SeemsFriendly(entt::entity creature, entt::entity other) override;
 	bool ForceActivity(entt::entity creature, const ForcedActivity& plan) override;
 	void ReactToFire(entt::entity creature, entt::entity burning) override;
@@ -123,6 +125,8 @@ public:
 	bool TryMiracle(entt::entity creature, MagicType type, entt::entity target) override;
 	void KnowMiracle(entt::entity creature, size_t miracle) override;
 	void SetKnowsAction(entt::entity creature, CreatureActionLearningType type, uint32_t action, bool knows) override;
+	void LearnAction(entt::entity creature, CreatureActionLearningType type, uint32_t action) override;
+	[[nodiscard]] bool KnowsAction(entt::entity creature, CreatureActionLearningType type, uint32_t action) const override;
 	bool TellCast(entt::entity creature, MagicType type, entt::entity target) override;
 	bool ForcePlan(entt::entity creature, const ForcedPlan& plan) override;
 	void AteMagicMushroom(entt::entity creature) override;
@@ -132,6 +136,7 @@ public:
 	bool CarryOutForScript(entt::entity creature, std::vector<creature_mind::Step> agenda) override;
 	void SetScriptFocus(entt::entity creature, std::optional<creature_mind::Gaze> focus) override;
 	bool ScriptDoAction(entt::entity creature, uint32_t action, entt::entity target, std::optional<entt::entity> with) override;
+	bool ObeyGodOrder(entt::entity creature, uint32_t action, entt::entity object) override;
 	[[nodiscard]] bool HasPlayed(entt::entity creature) const override;
 	void ClearAfterPlayed(entt::entity creature) override;
 	[[nodiscard]] float GetInteractionMagnitude(entt::entity creature) const override;
@@ -157,9 +162,10 @@ public:
 	[[nodiscard]] static bool CanSteal(entt::entity creature, entt::entity thing);
 
 private:
-	/// Whether the body is far enough through what it plays to be stopped by an action forced on it
+	/// Whether a forced action can stop the body action. The body action is an action on an object, or else the action
+	/// of the body layer. A body that plays no action takes the forced action.
 	[[nodiscard]] static bool MayInterrupt(entt::entity creature, const components::CreatureAnimation& body,
-	                                       float interruptsAfter);
+	                                       double interruptsAfter);
 	/// Gives a creature its desires and what it has learnt, if it has none yet: as it is made (StartMind), else the first
 	/// time that its mind thinks, or sooner when it gets an order before then
 	void SetUpMind(entt::entity creature, const components::Creature& body, components::CreatureMindState& mind);
@@ -254,6 +260,9 @@ private:
 	bool LetGoOfHeld(entt::entity creature, components::CreatureMindState& mind, creature_mind::LetGo how);
 	/// GameRand(range): a draw on the synced seed of the game from 0 to range - 1
 	uint32_t Random(uint32_t range);
+	/// The executor of an action of the tables, none when the action has no executor. The names of the actions find their
+	/// executors one time, when the tables are made.
+	[[nodiscard]] const creature_plan_actions::Executor* ExecutorOf(uint32_t action);
 	/// What an agenda needs to know of the creature itself: the camera's position, whether it has a player, whether a
 	/// script controls it, its radius, and a chance for what varies
 	void Situate(entt::entity creature, creature_plan_actions::Situation& situation);
@@ -383,6 +392,11 @@ private:
 	/// of. With no such whole thing, a desire about something is about the nearest town.
 	[[nodiscard]] std::optional<entt::entity> WholeOfForcedPlan(entt::entity creature, components::CreatureMindState& mind,
 	                                                            creature_desires::Desire desire, entt::entity thing);
+	/// Gives the creature a plan for its fight with the other creature, unless a script controls the creature
+	void FightWith(entt::entity creature, entt::entity other, const ForcedPlan& plan);
+	/// A new plan stops the fight of the creature out of its duel. Before the duel the fight stops for both creatures, with
+	/// no winner. After the duel the creature and its partner stop with no response. A fight in its duel continues.
+	static void EndFightForPlan(entt::entity creature);
 	/// The whole thing that a desire is about when the leash shows the creature a thing: the whole thing that the shown
 	/// thing is part of, when the desire can be about it
 	[[nodiscard]] std::optional<ChosenActivity> ShownActivity(entt::entity creature, components::CreatureMindState& mind,
@@ -574,6 +588,8 @@ private:
 	std::optional<entt::entity> _walkContinuesFor;
 	/// The game's tables for the minds, taken once the game's data is loaded
 	std::optional<creature_mind_tables::Tables> _tables;
+	/// The executor of each action of the tables, in the order of the actions
+	std::vector<const creature_plan_actions::Executor*> _executors;
 	/// The creatures whose minds continue to think after the first part of their own turns, until the second part
 	std::vector<entt::entity> _thinking;
 	/// The creatures whose minds do the step of their agendas after the second part, until the last part

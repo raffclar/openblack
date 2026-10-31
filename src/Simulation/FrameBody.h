@@ -24,10 +24,6 @@ public:
 	[[nodiscard]] virtual bool IsHandDrawn() const = 0;
 	/// The advisors move and act on the screen
 	virtual void UpdateAdvisors() = 0;
-	/// Whether the player clicked the dialogue since the last frame. The click is then used.
-	[[nodiscard]] virtual bool TakeDialogueClick() = 0;
-	/// Whether the player holds the key that skips the dialogue
-	[[nodiscard]] virtual bool DialogueSkipKeyDown() const = 0;
 	/// The word of a sung verse that the song has reached gets its glow
 	virtual void UpdateSingAlong(bool inTemple) = 0;
 	/// Whether the words of the advisors showed in the last frame
@@ -44,13 +40,15 @@ class NoFrameView final: public FrameViewInterface
 public:
 	[[nodiscard]] bool IsHandDrawn() const override { return false; }
 	void UpdateAdvisors() override {}
-	[[nodiscard]] bool TakeDialogueClick() override { return false; }
-	[[nodiscard]] bool DialogueSkipKeyDown() const override { return false; }
 	void UpdateSingAlong(bool /*inTemple*/) override {}
 	[[nodiscard]] bool DialogueWordsDrawn() const override { return false; }
 	void UpdateVillagerLabels(float /*milliseconds*/) override {}
 	void CloseMenuForCinema() override {}
 };
+
+/// Whether this frame draws the land. The land is not drawn while the player is in the temple, or while a film covers
+/// the screen or hides the world.
+[[nodiscard]] bool LandDrawn();
 
 /// The draw starts: the creatures get their drawn poses before the hand moves. The frame changes only what the draw
 /// reads: the fights, the walks and the animations of the creatures move on only in the game turns.

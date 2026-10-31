@@ -15,6 +15,8 @@
 #include <algorithm>
 #include <array>
 
+#include "Common/FixedFormat.h"
+
 using namespace openblack::temple;
 
 namespace
@@ -174,4 +176,36 @@ std::optional<save_game_room::PictureToolTip> save_game_room::PictureToolTipOf(c
 		return PictureToolTip {.text = k_ZoomOutText, .name = {}};
 	}
 	return std::nullopt;
+}
+
+std::optional<save_game_room::CloseLookWords> save_game_room::CloseLookWordsOf(uint32_t slot, std::optional<SaveWords> save,
+                                                                               uint32_t landNumber, const HelpTextFn& helpText)
+{
+	if (save.has_value())
+	{
+		return CloseLookWords {.title = std::u16string(save->date), .details = std::u16string(save->name)};
+	}
+	if (slot < k_FirstLabelSlot || slot >= k_Slots)
+	{
+		return std::nullopt;
+	}
+	const auto label = helpText(k_LabelTexts.at(slot - k_FirstLabelSlot));
+	return CloseLookWords {.title = std::nullopt,
+	                       .details = openblack::fixed_format::WithNumber(label, static_cast<double>(landNumber))};
+}
+
+bool save_game_room::ReadsSavedGamesAgain(const std::optional<SavedGamesStamp>& lastRead, const SavedGamesStamp& now)
+{
+	return !lastRead.has_value() || *lastRead != now;
+}
+
+save_game_room::DetailsSpan save_game_room::DetailsSpanOf(int32_t left, int32_t width)
+{
+	const int32_t quarter = width / 4;
+	return {.left = static_cast<float>(left + quarter), .right = static_cast<float>(left + (quarter * 3))};
+}
+
+float save_game_room::DetailsLineLeft(const DetailsSpan& span, float lineWidth)
+{
+	return span.left + (((span.right - span.left) - lineWidth) * 0.5f);
 }

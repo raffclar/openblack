@@ -38,14 +38,13 @@
 #include "3D/LandAvoid.h"
 #include "3D/LandIslandInterface.h"
 #include "3D/MapCoords.h"
-#include "Audio/AudioManagerInterface.h"
-#include "Audio/GameSoundEffects.h"
 #include "Camera/Camera.h"
 #include "Camera/CameraModel.h"
 #include "Camera/CreatureInteractCameraModel.h"
 #include "Camera/DefaultWorldCameraModel.h"
 #include "Camera/FightCameraModel.h"
 #include "Commands/PlayerCommands.h"
+#include "Common/GUtilsDistance.h"
 #include "Common/GameRandom.h"
 #include "Common/X87Vector.h"
 #include "Creature/CreatureArena.h"
@@ -58,6 +57,7 @@
 #include "Creature/CreatureMarks.h"
 #include "Creature/CreatureMindTables.h"
 #include "Creature/CreatureMode.h"
+#include "Creature/CreatureMorph.h"
 #include "Creature/CreatureObstacles.h"
 #include "Creature/CreaturePlanner.h"
 #include "Creature/CreatureRestAndHome.h"
@@ -65,6 +65,7 @@
 #include "Creature/CreatureWalkPlanner.h"
 #include "Creature/FightMarks.h"
 #include "ECS/Archetypes/ArenaArchetype.h"
+#include "ECS/Archetypes/CreatureArchetype.h"
 #include "ECS/Components/Abode.h"
 #include "ECS/Components/Animal.h"
 #include "ECS/Components/Creature.h"
@@ -75,6 +76,7 @@
 #include "ECS/Components/CreatureLocomotion.h"
 #include "ECS/Components/CreatureMind.h"
 #include "ECS/Components/CreatureNeeds.h"
+#include "ECS/Components/CreatureObjectAction.h"
 #include "ECS/Components/CreaturePartner.h"
 #include "ECS/Components/CreatureSkin.h"
 #include "ECS/Components/CreatureSpells.h"
@@ -97,14 +99,17 @@
 #include "ECS/PosedModel.h"
 #include "ECS/Registry.h"
 #include "ECS/RegistryContext.h"
+#include "ECS/ShownCreatureFaces.h"
 #include "ECS/Systems/CreatureAnimationSystemInterface.h"
 #include "ECS/Systems/CreatureFizzSystemInterface.h"
+#include "ECS/Systems/CreatureHandSystemInterface.h"
 #include "ECS/Systems/CreatureLocomotionSystemInterface.h"
 #include "ECS/Systems/CreatureMindSystemInterface.h"
 #include "ECS/Systems/CreatureObjectActionSystemInterface.h"
 #include "ECS/Systems/CreaturePhysiologySystemInterface.h"
 #include "ECS/Systems/CreatureSkinSystemInterface.h"
 #include "ECS/Systems/DynamicsSystemInterface.h"
+#include "ECS/Systems/EffectRequestSystemInterface.h"
 #include "ECS/Systems/FightTranscriptNote.h"
 #include "ECS/Systems/GuidanceSystemInterface.h"
 #include "ECS/Systems/HandSystemInterface.h"
@@ -112,7 +117,6 @@
 #include "ECS/Systems/LeashSystemInterface.h"
 #include "ECS/Systems/LiquidParticleSystemInterface.h"
 #include "ECS/Systems/MagicSystemInterface.h"
-#include "ECS/Systems/ParticleSystemInterface.h"
 #include "ECS/Systems/PickingSystemInterface.h"
 #include "ECS/Systems/PlayerCommandSystemInterface.h"
 #include "ECS/Systems/ReactionSystemInterface.h"
@@ -123,12 +127,16 @@
 #include "ECS/WorldObjects.h"
 #include "InfoConstants.h"
 #include "Input/GameActionMapInterface.h"
+#include "Input/LocalPlayer.h"
 #include "Locator.h"
 #include "Magic/MagicTables.h"
 #include "MagicLiving.h"
 #include "Particles/LightSheet.h"
+#include "Particles/ParticleDrawFrame.h"
 #include "Physics/TurnRules.h"
 #include "Resources/ResourcesInterface.h"
+#include "Sound/GameSoundEffects.h"
+#include "Sound/SoundRequestInterface.h"
 
 using namespace openblack;
 using namespace openblack::ecs::systems;
@@ -143,7 +151,6 @@ using Pace = CreatureLocomotionSystemInterface::Pace;
 namespace
 {
 constexpr float k_TurnSeconds = std::chrono::duration<float>(TimeSystemInterface::k_TurnDuration).count();
-constexpr float k_TurnMs = k_TurnSeconds * 1000.0f;
 constexpr auto k_TurnMilliseconds =
     static_cast<uint32_t>(std::chrono::duration_cast<std::chrono::milliseconds>(TimeSystemInterface::k_TurnDuration).count());
 
@@ -153,6 +160,13 @@ int32_t TurnMsOf(const CreatureAnimation* animation)
 {
 	const float pace = animation != nullptr ? animation->playbackScale : 1.0f;
 	return creature_walk_planner::TurnMs(pace, static_cast<int32_t>(k_TurnMilliseconds));
+}
+
+/// The strength that the creature's body shows, from -1 (weak) to 1 (strong). The blows compare these strengths.
+float ShownStrength(const Creature& creature)
+{
+	return creature_morph::StrengthLook(creature.strength,
+	                                    ecs::archetypes::CreatureArchetype::SpeciesStrength(creature.species));
 }
 
 /// A face is due again once its wait is within this much of over
@@ -198,8 +212,8 @@ float LifeOf(const ecs::Registry& registry, entt::entity creature)
 
 std::string_view Name(CreatureFighting::Stage stage)
 {
-	static constexpr std::array<std::string_view, 9> k_Names {"face_off", "taunt", "point",     "approach", "ready",
-	                                                          "square",   "duel",  "celebrate", "respond"};
+	static constexpr std::array<std::string_view, 10> k_Names {"face_off", "taunt", "point",     "approach", "ready",
+	                                                           "square",   "duel",  "celebrate", "respond",  "stop"};
 	const auto index = static_cast<size_t>(stage);
 	return index < k_Names.size() ? k_Names.at(index) : std::string_view("unknown");
 }
@@ -442,9 +456,35 @@ std::optional<glm::vec3> MarkPosition(const ecs::Registry& registry, entt::entit
 
 /// Whether the hand of the player holds nothing: no thing and no miracle. A hand that only starts to take a thing holds
 /// nothing yet.
+/// The player whose hand this computer moves. The fight view, the sparkles, the presses, the help and the music
+/// follow the creature of this player. The turns use the sender of each command.
+PlayerNames OwnPlayer()
+{
+	return input::LocalPlayer(Locator::handSystem::has_value() ? &Locator::handSystem::value() : nullptr);
+}
+
+/// Whether a human god plays the player: the player has hands. Each computer has the same hands, thus the turns can
+/// read this.
+bool IsHumanGod(PlayerNames player)
+{
+	if (!Locator::handSystem::has_value())
+	{
+		return player == PlayerNames::PLAYER_ONE;
+	}
+	return Locator::handSystem::value().GetHandsOf(player).has_value();
+}
+
+/// Whether the creature of a player learns its lean from the blows and the blocks that the player sends. Each computer
+/// gets the same answer.
+bool LearnsFromPresses(PlayerNames player)
+{
+	const bool networkGame = Locator::time::has_value() && Locator::time::value().IsNetworkGame();
+	return fight::LearnsFromPresses(networkGame, player == PlayerNames::PLAYER_ONE, IsHumanGod(player));
+}
+
 bool HandHoldsNothing(const ecs::Registry& registry)
 {
-	if (Locator::magicSystem::has_value() && Locator::magicSystem::value().GetHeldSeedOf(PlayerNames::PLAYER_ONE).has_value())
+	if (Locator::magicSystem::has_value() && Locator::magicSystem::value().GetHeldSeedOf(OwnPlayer()).has_value())
 	{
 		return false;
 	}
@@ -452,7 +492,7 @@ bool HandHoldsNothing(const ecs::Registry& registry)
 	{
 		return true;
 	}
-	const auto hand = Locator::handSystem::value().GetPlayerHands()[static_cast<size_t>(HandSystemInterface::Side::Left)];
+	const auto hand = Locator::handSystem::value().GetOwnHands()[static_cast<size_t>(HandSystemInterface::Side::Left)];
 	const auto* grab = registry.Valid(hand) ? registry.TryGet<const HandGrab>(hand) : nullptr;
 	return grab == nullptr || grab->state == HandGrab::State::Empty || grab->state == HandGrab::State::Grabbing ||
 	       grab->state == HandGrab::State::Taking;
@@ -478,7 +518,7 @@ constexpr auto k_DirectSound = entt::hashed_string("InGame.sad/1");
 
 void PlayDirectSound()
 {
-	if (Locator::audio::has_value())
+	if (Locator::sounds::has_value())
 	{
 		// Each click is a sound of its own to the voice rules
 		audio::StartGameSoundEffect(k_DirectSound.value(), {.voiceOwner = audio::VoiceOwner::OwnSound});
@@ -518,10 +558,6 @@ void FaceOpponentNow(ecs::Registry& registry, entt::entity creature, entt::entit
 	}
 }
 
-/// Who is in a duel with whom, both of them still at it
-/// The player at this computer
-constexpr PlayerNames k_LocalPlayer = PlayerNames::PLAYER_ONE;
-
 /// A player's creature for every purpose of the game: the first one they got. Creatures are made as they are got, so
 /// it is the earliest made of theirs. This stands in for the game-wide lookup of a player's creature until there is one.
 std::optional<entt::entity> PrimaryCreatureOf(const ecs::Registry& registry, PlayerNames player)
@@ -536,10 +572,87 @@ std::optional<entt::entity> PrimaryCreatureOf(const ecs::Registry& registry, Pla
 	return first;
 }
 
+/// Who is in a duel with whom, both of them still at it
 bool InDuel(const ecs::Registry& registry, entt::entity creature)
 {
 	const auto* fighting = registry.TryGet<const CreatureFighting>(creature);
 	return fighting != nullptr && fighting->stage == CreatureFighting::Stage::Duel;
+}
+
+/// Whether the creature still fights its opponent. The opponent is in the duel, or the opponent left the duel before the
+/// creature and the fight of the opponent has not ended.
+bool FightsOn(const ecs::Registry& registry, entt::entity creature, const CreatureFighting& fighting)
+{
+	if (!registry.Valid(fighting.opponent))
+	{
+		return false;
+	}
+	if (InDuel(registry, fighting.opponent))
+	{
+		return true;
+	}
+	const auto* other = registry.TryGet<const CreatureFighting>(fighting.opponent);
+	return fighting.partnerLeft != CreatureFighting::PartnerLeft::None && other != nullptr && other->opponent == creature;
+}
+
+/// Whether the opponent of the creature has its order to start its duel against the creature, but its body did not let
+/// it start yet. The creature that started the fight starts its duel at least one turn after the other creature.
+bool OpponentStartsDuel(const ecs::Registry& registry, entt::entity creature, const CreatureFighting& fighting)
+{
+	const auto* other =
+	    registry.Valid(fighting.opponent) ? registry.TryGet<const CreatureFighting>(fighting.opponent) : nullptr;
+	return other != nullptr && other->opponent == creature && other->stage == CreatureFighting::Stage::Square && other->played;
+}
+
+/// Whether a creature in its duel has a body to fight: the opponent fights on against it, or the opponent has its order to
+/// start its duel. The blows test the body of an opponent that did not start its duel yet, and can hit it.
+bool HasDuelPartner(const ecs::Registry& registry, entt::entity creature, const CreatureFighting& fighting)
+{
+	return FightsOn(registry, creature, fighting) || OpponentStartsDuel(registry, creature, fighting);
+}
+
+/// Whether a stage comes after the duel and ends with no win plan: the response, or the stop with no response
+constexpr bool IsAfterDuel(CreatureFighting::Stage stage)
+{
+	return stage == CreatureFighting::Stage::Respond || stage == CreatureFighting::Stage::Stop;
+}
+
+/// The partner of the creature, if the partner is after its duel against the creature and has no win plan
+std::optional<entt::entity> PartnerAfterDuel(const ecs::Registry& registry, entt::entity creature,
+                                             const CreatureFighting& fighting)
+{
+	const auto* other =
+	    registry.Valid(fighting.opponent) ? registry.TryGet<const CreatureFighting>(fighting.opponent) : nullptr;
+	if (other == nullptr || other->opponent != creature || !IsAfterDuel(other->stage))
+	{
+		return std::nullopt;
+	}
+	return fighting.opponent;
+}
+
+/// The plan of the creature stopped, so the plan of its partner stops as a failure too. The creature that started the
+/// fight gives up its plan. The other creature gives up its plan to obey.
+void PartnerPlanFails(entt::entity partner, entt::entity creature, bool partnerStarted)
+{
+	if (!Locator::creatureMindSystem::has_value())
+	{
+		return;
+	}
+	auto& minds = Locator::creatureMindSystem::value();
+	if (partnerStarted)
+	{
+		minds.AbandonAction(partner);
+	}
+	else
+	{
+		minds.ObeyEnded(partner, creature);
+	}
+}
+
+/// The result of the fight for a creature that its partner stopped: a creature that had no life left lost
+std::optional<bool> ResultWhenStopped(CreatureFighting::PartnerLeft why)
+{
+	return why == CreatureFighting::PartnerLeft::Won ? std::optional(false) : std::nullopt;
 }
 
 namespace arena = openblack::creature_arena;
@@ -734,7 +847,7 @@ void StartArenaFight(ecs::Registry& registry, entt::entity entity, entt::entity 
 	{
 		taken.ring->SetHidden(false);
 	}
-	if (Locator::audio::has_value())
+	if (Locator::sounds::has_value())
 	{
 		audio::StartGameSoundEffect(k_ArenaDrawnSound.value(),
 		                            {.position = registry.Get<const Transform>(entity).position, .owner = entity});
@@ -923,6 +1036,7 @@ bool KeepInArena(ecs::Registry& registry, entt::entity creature, CreatureFightin
 	}
 	auto& fighter = fighting.fighter;
 	std::optional<fight::Step> step;
+	std::string_view stepName {"none"};
 	if (fighter.state == fight::State::Block)
 	{
 		fight::Enter(fighter, fight::State::BlockEnd);
@@ -941,18 +1055,109 @@ bool KeepInArena(ecs::Registry& registry, entt::entity creature, CreatureFightin
 		if (step.has_value())
 		{
 			fight::Enter(fighter, fight::State::Action, fight::StepAnimation(*step));
+			stepName = fight::Name(*step);
 		}
 	}
 	fight_transcript::Note(creature, "keep_in_arena", [&] {
-		return fight_transcript::Fields {{"creature", fight_transcript::Id(creature)},
-		                                 {"state", fight::Name(fighter.state)},
-		                                 {"step", step.has_value() ? fight::Name(*step) : std::string_view("none")}};
+		return fight_transcript::Fields {
+		    {"creature", fight_transcript::Id(creature)}, {"state", fight::Name(fighter.state)}, {"step", stepName}};
 	});
 	return true;
+}
+
+/// The heading of the creature, as its legs keep it, or from its turn in the world before its legs start
+GameHeading HeadingOf(const ecs::Registry& registry, entt::entity creature)
+{
+	if (const auto* moving = registry.TryGet<const CreatureLocomotion>(creature); moving != nullptr && moving->started)
+	{
+		return moving->heading;
+	}
+	const auto ahead = -(registry.Get<const Transform>(creature).rotation * glm::vec3(0.0f, 0.0f, 1.0f));
+	return GameHeading::Of(ahead.x, ahead.z);
+}
+
+/// Whether the body of the creature is busy: it moves or turns, it plays an action, or it lets go of a thing or catches a
+/// thing
+bool BodyBusy(const ecs::Registry& registry, entt::entity creature, const CreatureLocomotionSystemInterface* locomotion)
+{
+	const auto* animation = registry.TryGet<const CreatureAnimation>(creature);
+	const bool lettingGo =
+	    Locator::creatureObjectActionSystem::has_value() && Locator::creatureObjectActionSystem::value().PlaysOnAlone(creature);
+	return (locomotion != nullptr && locomotion->IsMoving(creature)) || lettingGo ||
+	       (animation != nullptr && creature_layers::IsPlaying(animation->body));
+}
+
+/// Whether the creature can start its duel on this turn. Its body refuses while it is busy, and a body with no clips for
+/// the start, the stance and the finish of a fight refuses always. With no bodies loaded, nothing plays and the duel
+/// starts. A creature that the hand of another creature holds also refuses.
+bool CanStartDuel(const ecs::Registry& registry, entt::entity creature, const CreatureLocomotionSystemInterface* locomotion)
+{
+	if (BodyBusy(registry, creature, locomotion))
+	{
+		return false;
+	}
+	using namespace fight::animations;
+	const bool clips = !Locator::creatureAnimationSystem::has_value() ||
+	                   (Has(creature, k_Start) && Has(creature, k_Stance) && Has(creature, k_Finish));
+	return clips && !registry.AllOf<HeldByCreature>(creature);
+}
+
+/// Does one game turn of the creature's turn to face its opponent in the face-off or in the arena. It turns from its map
+/// position to the map position of the opponent where the opponent is now.
+void FaceOpponentTurn(const ecs::Registry& registry, entt::entity creature, CreatureFighting& fighting,
+                      CreatureLocomotionSystemInterface* locomotion)
+{
+	using Phase = creature_turn_to_face::Turn::Phase;
+	if (fighting.faceTurn.phase == Phase::Idle || fighting.faceTurn.phase == Phase::Done)
+	{
+		return;
+	}
+	// With no legs, nothing turns
+	if (locomotion == nullptr)
+	{
+		fighting.faceTurn.phase = Phase::Done;
+		return;
+	}
+	const auto here = Flat(registry.Get<const Transform>(creature).position);
+	const auto there = Flat(registry.Get<const Transform>(fighting.opponent).position);
+	const creature_turn_to_face::Senses senses {
+	    .onTop = creature_cast_moves::MapPointDistance(there, here) < creature_cast_moves::k_OnTopDistance,
+	    .facing = creature_cast_moves::Facing(here, HeadingOf(registry, creature), there),
+	    .bodyBusy = BodyBusy(registry, creature, locomotion),
+	};
+	const auto hold = creature_turn_to_face::HoldTurns(fight::k_FaceOffHoldSeconds, 1000 / k_TurnMilliseconds);
+	creature_turn_to_face::Step(fighting.faceTurn, senses, hold, [&] {
+		return locomotion->TurnToHeading(creature, creature_cast_moves::HeadingTo(here, there));
+	});
+}
+/// The creature stops what it does, as when its plan stops or when the first creature of its fight gives it an order. A
+/// walk slows to a stand, and a loop of the body continues to its end. An action that the body plays continues. The plan
+/// of its hands stops and also stops the body: each action that the body started plays on to its end, and a point plays
+/// its end. It keeps what it holds.
+void StopWhatItDoes(ecs::Registry& registry, entt::entity creature)
+{
+	if (Locator::creatureLocomotionSystem::has_value())
+	{
+		Locator::creatureLocomotionSystem::value().Stop(creature);
+	}
+	if (Locator::creatureObjectActionSystem::has_value())
+	{
+		constexpr bool k_StopsBody = true;
+		Locator::creatureObjectActionSystem::value().StopForPlan(creature, k_StopsBody);
+	}
+	if (auto* animation = registry.TryGet<CreatureAnimation>(creature))
+	{
+		animation->body = creature_layers::EndLoop(animation->body);
+	}
 }
 } // namespace
 
 CreatureFightSystemInterface::StartResult CreatureFightSystem::StartFight(entt::entity creature, entt::entity opponent)
+{
+	return Start(creature, opponent, true);
+}
+
+CreatureFightSystemInterface::StartResult CreatureFightSystem::Start(entt::entity creature, entt::entity opponent, bool ask)
 {
 	auto& registry = Locator::entitiesRegistry::value();
 	const auto ready = [&registry](entt::entity entity) {
@@ -962,8 +1167,17 @@ CreatureFightSystemInterface::StartResult CreatureFightSystem::StartFight(entt::
 	{
 		return StartResult::NoOpponent;
 	}
-	if (registry.AnyOf<CreatureFighting, CreatureKnockedOut>(creature) ||
-	    registry.AnyOf<CreatureFighting, CreatureKnockedOut>(opponent))
+	// A fight that stopped, and that the hand does not hold, is only a move that finishes. The question to the other
+	// creature does not wait for it.
+	const auto finishesMove = [&registry](entt::entity entity) {
+		const auto* fighting = registry.TryGet<const CreatureFighting>(entity);
+		return fighting != nullptr && fighting->stage == CreatureFighting::Stage::Stop && !fighting->held;
+	};
+	const auto busy = [&registry, &finishesMove](entt::entity entity) {
+		return registry.AllOf<CreatureKnockedOut>(entity) ||
+		       (registry.AllOf<CreatureFighting>(entity) && !finishesMove(entity));
+	};
+	if (busy(creature) || busy(opponent))
 	{
 		return StartResult::Busy;
 	}
@@ -971,33 +1185,40 @@ CreatureFightSystemInterface::StartResult CreatureFightSystem::StartFight(entt::
 	{
 		return StartResult::TooWeak;
 	}
-	// Every fight starts by asking the other creature, which may refuse
-	const bool dead = Locator::creatureMindSystem::has_value() && Locator::creatureMindSystem::value().IsLyingDead(opponent);
-	if (!fight::AgreesToFight(HeightOf(ShownSize(registry.Get<const Creature>(opponent))),
-	                          HeightOf(ShownSize(registry.Get<const Creature>(creature))), dead,
-	                          registry.AllOf<ScriptControlled>(opponent), registry.AllOf<ScriptControlled>(creature)))
+	// Every fight starts by asking the other creature, which may refuse. The other creature is asked one time only: a
+	// fight that waits for a move to finish keeps the answer.
+	if (ask)
 	{
-		return StartResult::Refused;
+		const bool dead =
+		    Locator::creatureMindSystem::has_value() && Locator::creatureMindSystem::value().IsLyingDead(opponent);
+		if (!fight::AgreesToFight(HeightOf(ShownSize(registry.Get<const Creature>(opponent))),
+		                          HeightOf(ShownSize(registry.Get<const Creature>(creature))), dead,
+		                          registry.AllOf<ScriptControlled>(opponent), registry.AllOf<ScriptControlled>(creature)))
+		{
+			return StartResult::Refused;
+		}
+		// A creature that does a joint action with a third creature refuses too
+		if (const auto* link = registry.TryGet<const CreaturePartner>(opponent); link != nullptr && link->partner != creature)
+		{
+			return StartResult::Refused;
+		}
 	}
-	// A creature that does a joint action with a third creature refuses too
-	if (const auto* link = registry.TryGet<const CreaturePartner>(opponent); link != nullptr && link->partner != creature)
+	// The other creature agreed. The face-off starts when both moves have finished.
+	if (finishesMove(creature) || finishesMove(opponent))
 	{
-		return StartResult::Refused;
+		return StartResult::Finishing;
 	}
 	// The arena appears only after the face-off, so a fight with no room for an arena starts and then stops
 	for (const auto& [self, other] : {std::pair(creature, opponent), std::pair(opponent, creature)})
 	{
 		const auto& body = registry.Get<const Creature>(self);
-		if (Locator::creatureLocomotionSystem::has_value())
+		// The first creature stops what it does, as its plan stops. The other creature continues with what it did
+		// until the first creature gives it its first order. The turn to face waits for an action that the body plays.
+		// Each creature lets go of what it holds before its taunt.
+		if (self == creature)
 		{
-			Locator::creatureLocomotionSystem::value().StopAtOnce(self);
+			StopWhatItDoes(registry, self);
 		}
-		if (Locator::creatureObjectActionSystem::has_value())
-		{
-			Locator::creatureObjectActionSystem::value().Cancel(self);
-			Locator::creatureObjectActionSystem::value().Drop(self);
-		}
-		registry.Get<CreatureAnimation>(self).body = {};
 
 		auto& record = registry.AllOf<CreatureFightRecord>(self) ? registry.Get<CreatureFightRecord>(self)
 		                                                         : registry.Assign<CreatureFightRecord>(self);
@@ -1006,14 +1227,15 @@ CreatureFightSystemInterface::StartResult CreatureFightSystem::StartFight(entt::
 
 		CreatureFighting fighting {
 		    .stage = CreatureFighting::Stage::FaceOff,
+		    .part = self == creature ? CreatureFighting::Part::Obeys : CreatureFighting::Part::Asked,
 		    .opponent = other,
 		    .madeArena = self == creature,
 		};
 		auto& fighter = fighting.fighter;
 		fighter.health = fight::FightHealthAtStart(bodyNeeds.life);
 		fighter.stamina = fight::StaminaAtStart(bodyNeeds.energy, bodyNeeds.exhaustion);
-		// The human player directs their own creature; any other fights by itself
-		fighter.control = body.owner == k_LocalPlayer ? fight::Control::Player : fight::Control::Computer;
+		// A human god directs their own creature, in each slot of a network game. The computer fights any other.
+		fighter.control = IsHumanGod(body.owner) ? fight::Control::Player : fight::Control::Computer;
 		fighter.computerWaitMs = fight::k_ComputerWaitsAtStartMs;
 		// The creature that started the fight takes its learnt lean to choose its moves by; the other keeps the lean
 		// of the last fight that it started
@@ -1035,7 +1257,7 @@ CreatureFightSystemInterface::StartResult CreatureFightSystem::StartFight(entt::
 	}
 	const bool planned = _startReason == "plan" || _startReason == "anger";
 	registry.Get<CreatureFighting>(creature).planned = planned;
-	// The fight has the minds of both creatures
+	// The fight has the mind of the first creature. The other creature obeys from its first order.
 	if (Locator::creatureMindSystem::has_value())
 	{
 		Locator::creatureMindSystem::value().FightStarted(creature, opponent, planned);
@@ -1106,9 +1328,9 @@ void CreatureFightSystem::Reset()
 	_flightPlace.reset();
 	_screenCentre.reset();
 	_fightExit = true;
-	if (Locator::particleSystem::has_value())
+	if (Locator::effectRequestSystem::has_value())
 	{
-		Locator::particleSystem::value().SetFightMarks({});
+		Locator::effectRequestSystem::value().SetFightMarks({});
 	}
 }
 
@@ -1118,7 +1340,7 @@ void CreatureFightSystem::DrawMarks(float realMs, const glm::vec3& eye)
 	auto& registry = Locator::entitiesRegistry::value();
 	const bool step = _marksPace.Advance(realMs);
 	// Only the local player's creature shows its sparkles, for as long as it has an opponent
-	const auto self = PrimaryCreatureOf(registry, k_LocalPlayer);
+	const auto self = PrimaryCreatureOf(registry, OwnPlayer());
 	auto* fighting = self.has_value() ? registry.TryGet<CreatureFighting>(*self) : nullptr;
 	if (fighting != nullptr && registry.Valid(fighting->opponent))
 	{
@@ -1148,9 +1370,9 @@ void CreatureFightSystem::DrawMarks(float realMs, const glm::vec3& eye)
 			}
 		}
 	}
-	if (Locator::particleSystem::has_value())
+	if (Locator::effectRequestSystem::has_value())
 	{
-		Locator::particleSystem::value().SetFightMarks(std::move(drawn));
+		Locator::effectRequestSystem::value().SetFightMarks(std::move(drawn));
 	}
 }
 
@@ -1277,7 +1499,7 @@ void CreatureFightSystem::TryStartView(entt::entity first, entt::entity second, 
 {
 	auto& camera = Locator::camera::value();
 	const auto& registry = Locator::entitiesRegistry::value();
-	const auto own = PrimaryCreatureOf(registry, k_LocalPlayer);
+	const auto own = PrimaryCreatureOf(registry, OwnPlayer());
 	const bool involved = own == first || own == second;
 	const bool scripted = registry.AnyOf<ScriptControlled>(first) || registry.AnyOf<ScriptControlled>(second);
 	// The camera is too far when it is far from the arena now, and so is the land in the middle of the screen. A double
@@ -1377,6 +1599,40 @@ void CreatureFightSystem::EndView(std::string_view why)
 	}
 }
 
+namespace
+{
+/// The other creature of a fight that its first creature sets up, while the other creature has no order yet. None when
+/// the creature did not start the fight, or the other creature obeys already.
+std::optional<entt::entity> AskedOnly(const ecs::Registry& registry, entt::entity creature)
+{
+	const auto* fighting = registry.TryGet<const CreatureFighting>(creature);
+	if (fighting == nullptr || !fighting->madeArena || !IsLeadIn(fighting->stage) || !registry.Valid(fighting->opponent))
+	{
+		return std::nullopt;
+	}
+	const auto* other = registry.TryGet<const CreatureFighting>(fighting->opponent);
+	if (other == nullptr || other->opponent != creature || other->part == CreatureFighting::Part::Obeys)
+	{
+		return std::nullopt;
+	}
+	return fighting->opponent;
+}
+
+/// The first creature stopped the fight before its first order: what the other creature does stops as a failure
+void StopAsked(ecs::Registry& registry, std::optional<entt::entity> asked)
+{
+	if (!asked.has_value() || !registry.Valid(*asked))
+	{
+		return;
+	}
+	StopWhatItDoes(registry, *asked);
+	if (Locator::creatureMindSystem::has_value())
+	{
+		Locator::creatureMindSystem::value().AbandonAction(*asked);
+	}
+}
+} // namespace
+
 void CreatureFightSystem::AbortFight(entt::entity creature)
 {
 	auto& registry = Locator::entitiesRegistry::value();
@@ -1386,6 +1642,7 @@ void CreatureFightSystem::AbortFight(entt::entity creature)
 		return;
 	}
 	const auto opponent = fighting->opponent;
+	const auto asked = AskedOnly(registry, creature);
 	for (const auto self : {creature, opponent})
 	{
 		auto* side = registry.Valid(self) ? registry.TryGet<CreatureFighting>(self) : nullptr;
@@ -1408,6 +1665,7 @@ void CreatureFightSystem::AbortFight(entt::entity creature)
 			Leave(self);
 		}
 	}
+	StopAsked(registry, asked);
 }
 
 void CreatureFightSystem::CallOff(entt::entity creature)
@@ -1418,7 +1676,10 @@ void CreatureFightSystem::CallOff(entt::entity creature)
 	{
 		return;
 	}
+	// The creature gives up its action as a failure
+	GainStrengthAtStop(creature, fight::StopEnd::Failure);
 	const auto opponent = fighting->opponent;
+	const auto asked = AskedOnly(registry, creature);
 	for (const auto self : {creature, opponent})
 	{
 		auto* side = registry.Valid(self) ? registry.TryGet<CreatureFighting>(self) : nullptr;
@@ -1428,7 +1689,12 @@ void CreatureFightSystem::CallOff(entt::entity creature)
 		}
 		if (side->stage == CreatureFighting::Stage::Duel)
 		{
-			// Neither wins: each finishes what it is doing and stands, and its fight is over with nothing more to it
+			// Neither wins: each finishes what it is doing and stands, and its fight is over with nothing more to it. The
+			// plan of the partner fails.
+			if (self != creature && side->opponent == creature)
+			{
+				PartnerPlanFails(self, creature, side->madeArena);
+			}
 			NoteFightOver(self, "called_off");
 			EndFightFor(self, std::nullopt);
 			NoteStage(self, side->stage, CreatureFighting::Stage::Respond);
@@ -1440,9 +1706,36 @@ void CreatureFightSystem::CallOff(entt::entity creature)
 		}
 		else if (IsLeadIn(side->stage))
 		{
+			// Both creatures are partners from the request. Thus the plan of the creature that started the fight fails
+			// also before the duel. The departure of the other creature ends its plan.
+			if (self != creature && side->opponent == creature && side->madeArena)
+			{
+				PartnerPlanFails(self, creature, true);
+			}
 			Leave(self);
 		}
+		else if (IsAfterDuel(side->stage) && (self == creature || side->opponent == creature))
+		{
+			// After the duel, the creature stops with no response. Its partner after the duel also stops, and the plan
+			// of the partner fails.
+			if (self == creature)
+			{
+				StopFight(self, std::nullopt, "called_off");
+			}
+			else
+			{
+				StopPartnerAfterDuel(self, creature);
+			}
+		}
 	}
+	StopAsked(registry, asked);
+}
+
+bool CreatureFightSystem::StartedFight(entt::entity creature) const
+{
+	const auto& registry = Locator::entitiesRegistry::value();
+	const auto* fighting = registry.Valid(creature) ? registry.TryGet<const CreatureFighting>(creature) : nullptr;
+	return fighting != nullptr && fighting->madeArena;
 }
 
 bool CreatureFightSystem::IsSettingUpFight(entt::entity creature) const
@@ -1463,14 +1756,15 @@ void CreatureFightSystem::Withdraw(entt::entity creature)
 	const auto opponent = fighting->opponent;
 	const auto arena = fighting->arenaEntity;
 	AbortFight(creature);
-	// It leaves at once, rather than finishing and standing, and lets go of an arena it made
-	Leave(creature);
-	// What it fought and where forget it: the opponent plays out the end of its fight alone
+	// What it fought and where forget it: the opponent plays out the end of its fight alone. The opponent forgets it
+	// first, so that its departure does not stop the opponent.
 	if (auto* other = registry.Valid(opponent) ? registry.TryGet<CreatureFighting>(opponent) : nullptr;
 	    other != nullptr && other->opponent == creature)
 	{
 		other->opponent = entt::null;
 	}
+	// It leaves at once, rather than finishing and standing, and lets go of an arena it made
+	Leave(creature);
 	if (auto* taken = registry.Valid(arena) ? registry.TryGet<CreatureArena>(arena) : nullptr; taken != nullptr)
 	{
 		taken->first = taken->first == creature ? entt::null : taken->first;
@@ -1719,7 +2013,7 @@ CreatureFightSystem::FindOrMakeArena(const glm::vec3& point, entt::entity creatu
 std::optional<entt::entity> CreatureFightSystem::PlayersFighter() const
 {
 	const auto& registry = Locator::entitiesRegistry::value();
-	const auto creature = PrimaryCreatureOf(registry, k_LocalPlayer);
+	const auto creature = PrimaryCreatureOf(registry, OwnPlayer());
 	if (!creature.has_value() || !InDuel(registry, *creature))
 	{
 		return std::nullopt;
@@ -1766,7 +2060,7 @@ bool CreatureFightSystem::Press(const glm::vec3& rayOrigin, const glm::vec3& ray
 		{
 			return;
 		}
-		const auto own = PrimaryCreatureOf(registry, k_LocalPlayer);
+		const auto own = PrimaryCreatureOf(registry, OwnPlayer());
 		if (!own.has_value() || !registry.AllOf<CreatureFighting>(*own))
 		{
 			return;
@@ -1917,16 +2211,16 @@ void CreatureFightSystem::Send(const player_commands::Action& action)
 		    using Kind = std::decay_t<decltype(command)>;
 		    if constexpr (std::is_same_v<Kind, player_commands::FightGround>)
 		    {
-			    DoGroundPress(k_LocalPlayer, command.creature, command.point, command.replace);
+			    DoGroundPress(OwnPlayer(), command.creature, command.point, command.replace);
 		    }
 		    else if constexpr (std::is_same_v<Kind, player_commands::FightMove>)
 		    {
-			    DoMove(k_LocalPlayer, command.target,
+			    DoMove(OwnPlayer(), command.target,
 			           {.kind = static_cast<fight::Move::Kind>(command.kind), .value = command.value}, command.replace);
 		    }
 		    else if constexpr (std::is_same_v<Kind, player_commands::FightCharge>)
 		    {
-			    DoCharge(k_LocalPlayer, static_cast<float>(command.heldMs));
+			    DoCharge(OwnPlayer(), static_cast<float>(command.heldMs));
 		    }
 	    },
 	    action);
@@ -1974,6 +2268,54 @@ void CreatureFightSystem::DoCharge(PlayerNames player, float heldMs)
 	if (const auto self = PrimaryCreatureOf(registry, player); self.has_value())
 	{
 		ReleaseCharge(*self, heldMs);
+	}
+}
+
+void CreatureFightSystem::DoFightCheat(PlayerNames player)
+{
+	auto& registry = Locator::entitiesRegistry::value();
+	const auto self = PrimaryCreatureOf(registry, player);
+	if (!self.has_value())
+	{
+		return;
+	}
+	if (Locator::leashSystem::has_value() && Locator::leashSystem::value().IsLeashed(*self))
+	{
+		Locator::leashSystem::value().TakeOff(*self);
+	}
+	// A creature in a duel stops its fight with no winner
+	if (IsDuelling(*self))
+	{
+		AbortFight(*self);
+		return;
+	}
+	// Any other creature fights the nearest creature by the distance on the map. The first creature found at the least
+	// distance wins.
+	const auto at = registry.Get<const Transform>(*self).position;
+	std::optional<entt::entity> nearest;
+	float least = std::numeric_limits<float>::max();
+	registry.Each<const Creature, const Transform>(
+	    [&nearest, &least, at, own = *self](entt::entity entity, const Creature& /*creature*/, const Transform& transform) {
+		    if (entity == own)
+		    {
+			    return;
+		    }
+		    const auto distance = gutils::GetDistanceInMetres(at, transform.position);
+		    if (distance < least)
+		    {
+			    least = distance;
+			    nearest = entity;
+		    }
+	    });
+	if (nearest.has_value())
+	{
+		const auto result = StartFight(*self, *nearest);
+		fight_transcript::Note(*self, "fight_cheat", [&] {
+			return fight_transcript::Fields {{"creature", fight_transcript::Id(*self)},
+			                                 {"opponent", fight_transcript::Id(*nearest)},
+			                                 {"player", static_cast<int32_t>(player)},
+			                                 {"started", result == StartResult::Started}};
+		});
 	}
 }
 
@@ -2195,7 +2537,8 @@ void CreatureFightSystem::StartFaint(entt::entity creature)
 	    .mirrored = mirrored,
 	    .holdLoop = true,
 	};
-	animation.face = creature_layers::RelaxFace(animation.face);
+	shown_creature_faces::ChangeFace(registry, creature, animation.face,
+	                                 [](const creature_layers::FaceLayer& face) { return creature_layers::RelaxFace(face); });
 	SetEyes(registry, creature, creature_eyes::Mode::Closed);
 	// The people and the creatures near it react to the faint as to a death. The reaction belongs to no player.
 	if (Locator::reactionSystem::has_value())
@@ -2303,7 +2646,6 @@ std::optional<creature_fight_hud::Values> CreatureFightSystem::GetPanel() const
 
 void CreatureFightSystem::ProcessTurn()
 {
-	StartFightsFromMinds();
 	ProcessStages();
 	auto& registry = Locator::entitiesRegistry::value();
 	std::vector<entt::entity> fighters;
@@ -2323,14 +2665,29 @@ void CreatureFightSystem::ProcessTurn()
 
 void CreatureFightSystem::FightTurn(entt::entity creature)
 {
-	StartFightFromMind(creature);
 	StageTurn(creature);
 	KnockedOutTurn(creature);
 }
 
 void CreatureFightSystem::BloodTurn(entt::entity creature)
 {
+	ChargeMarkTurn(creature);
 	DripTurn(creature);
+}
+
+void CreatureFightSystem::ChargeMarkTurn(entt::entity creature)
+{
+	// While a press on a body is held, the sparkle added last charges by the milliseconds of the creature's turn. A
+	// paused game has no turns, thus the charge stops.
+	if (!_markHeld)
+	{
+		return;
+	}
+	auto& registry = Locator::entitiesRegistry::value();
+	if (auto* fighting = registry.TryGet<CreatureFighting>(creature))
+	{
+		fighting->marks.Charge(static_cast<float>(TurnMsOf(registry.TryGet<const CreatureAnimation>(creature))));
+	}
 }
 
 void CreatureFightSystem::MovesTurn(entt::entity creature)
@@ -2377,10 +2734,11 @@ void CreatureFightSystem::StaminaTurn(entt::entity entity)
 	{
 		return;
 	}
-	// At the end of its turn, a fighter in a duel with its opponent gets back a little stamina
+	// At the end of its turn, a fighter in a duel with its opponent gets back a little stamina. It also does so while its
+	// opponent is about to start its duel.
 	const auto opponent = fighting->opponent;
-	if (!registry.Valid(opponent) || !InDuel(registry, opponent) ||
-	    registry.Get<const CreatureFighting>(opponent).opponent != entity)
+	if (!OpponentStartsDuel(registry, entity, *fighting) &&
+	    (!FightsOn(registry, entity, *fighting) || registry.Get<const CreatureFighting>(opponent).opponent != entity))
 	{
 		return;
 	}
@@ -2483,62 +2841,17 @@ void CreatureFightSystem::NoteFightOver(entt::entity creature, std::string_view 
 	transcript.End(creature);
 }
 
-CreatureFightSystemInterface::StartResult CreatureFightSystem::StartPlannedFight(entt::entity creature, entt::entity opponent)
+CreatureFightSystemInterface::StartResult CreatureFightSystem::StartPlannedFight(entt::entity creature, entt::entity opponent,
+                                                                                 bool agreed)
 {
 	const auto& registry = Locator::entitiesRegistry::value();
 	const auto* mind = registry.Valid(creature) ? registry.TryGet<const CreatureMindState>(creature) : nullptr;
 	const bool angry = mind != nullptr && mind->planner.current.has_value() &&
 	                   mind->planner.current->desire == creature_desires::Desire::Anger;
 	_startReason = angry ? "anger" : "plan";
-	const auto result = StartFight(creature, opponent);
+	const auto result = Start(creature, opponent, !agreed);
 	_startReason = "request";
 	return result;
-}
-
-void CreatureFightSystem::StartFightsFromMinds()
-{
-	std::vector<entt::entity> minds;
-	Locator::entitiesRegistry::value().Each<CreatureMindState>(
-	    [&minds](entt::entity entity, CreatureMindState& /*mind*/) { minds.push_back(entity); });
-	for (const auto entity : minds)
-	{
-		StartFightFromMind(entity);
-	}
-}
-
-void CreatureFightSystem::StartFightFromMind(entt::entity entity)
-{
-	auto& registry = Locator::entitiesRegistry::value();
-	auto* mind = registry.Valid(entity) ? registry.TryGet<CreatureMindState>(entity) : nullptr;
-	if (mind == nullptr)
-	{
-		return;
-	}
-	const auto isCreature = [&registry](entt::entity thing) {
-		return registry.Valid(thing) && registry.AllOf<Creature, Transform>(thing);
-	};
-	// Leashed to another creature, the player wants it fought
-	std::vector<entt::entity> wanted;
-	auto& actOn = mind->leash.actOn;
-	for (auto it = actOn.begin(); it != actOn.end();)
-	{
-		const auto target = static_cast<entt::entity>(*it);
-		if (target != entity && isCreature(target))
-		{
-			wanted.push_back(target);
-			it = actOn.erase(it);
-		}
-		else
-		{
-			++it;
-		}
-	}
-	for (const auto opponent : wanted)
-	{
-		_startReason = "leash";
-		StartFight(entity, opponent);
-	}
-	_startReason = "request";
 }
 
 void CreatureFightSystem::ProcessStages()
@@ -2567,9 +2880,21 @@ void CreatureFightSystem::StageTurn(entt::entity entity)
 	{
 		return;
 	}
+	// While the hand holds the creature, its fight steps wait. On the first turn of the hold, a creature in a duel leaves
+	// the duel.
+	if (Locator::creatureHandSystem::has_value() && Locator::creatureHandSystem::value().IsLocked(entity))
+	{
+		if (!fighting->held)
+		{
+			HandTookHold(entity);
+		}
+		return;
+	}
 	fighting->stageSeconds += k_TurnSeconds;
-	// Squaring up to the opponent and fighting it, it shows its anger as it starts and every few seconds after
-	if (fighting->stage <= CreatureFighting::Stage::Duel && Locator::creatureMindSystem::has_value())
+	// Squaring up to the opponent and fighting it, it shows its anger as it starts and every few seconds after. The
+	// other creature starts when it obeys.
+	if (fighting->stage <= CreatureFighting::Stage::Duel && fighting->part == CreatureFighting::Part::Obeys &&
+	    Locator::creatureMindSystem::has_value())
 	{
 		fighting->faceSeconds -= k_TurnSeconds;
 		if (fighting->faceSeconds < k_FaceDue)
@@ -2593,59 +2918,162 @@ void CreatureFightSystem::StageTurn(entt::entity entity)
 	const auto* partner = opponentHere ? registry.TryGet<const CreatureFighting>(opponent) : nullptr;
 	const bool together = partner != nullptr && partner->opponent == entity;
 	const bool starter = fighting->madeArena;
-	const auto order = [this, &registry](entt::entity who, CreatureFighting::Stage stage) {
-		if (auto* side = registry.TryGet<CreatureFighting>(who))
+	// Each order stops what the other creature does, makes the other creature obey and gives it the plan to obey again.
+	// The mind can change the components of the creature, so the fight of the creature is found again after it.
+	const auto obey = [&registry](entt::entity who) -> CreatureFighting* {
+		auto* side = registry.TryGet<CreatureFighting>(who);
+		if (side == nullptr)
 		{
-			NoteStage(who, side->stage, stage);
-			side->stage = stage;
-			side->stageSeconds = 0.0f;
-			side->played = false;
+			return nullptr;
 		}
+		StopWhatItDoes(registry, who);
+		side->part = CreatureFighting::Part::Obeys;
+		if (Locator::creatureMindSystem::has_value())
+		{
+			Locator::creatureMindSystem::value().FightOrdered(who, side->opponent);
+		}
+		return registry.TryGet<CreatureFighting>(who);
+	};
+	const auto order = [this, &obey](entt::entity who, CreatureFighting::Stage stage) {
+		auto* side = obey(who);
+		if (side == nullptr)
+		{
+			return;
+		}
+		NoteStage(who, side->stage, stage);
+		side->stage = stage;
+		side->stageSeconds = 0.0f;
+		side->played = false;
 	};
 	if (IsLeadIn(fighting->stage) && !together)
 	{
 		Leave(entity);
 		return;
 	}
+	// The other creature continues with what it did until its first order
+	if (fighting->part != CreatureFighting::Part::Obeys)
+	{
+		return;
+	}
 
 	switch (fighting->stage)
 	{
 	case CreatureFighting::Stage::FaceOff:
-	case CreatureFighting::Stage::Square:
-		if (!fighting->played)
+	{
+		using Phase = creature_turn_to_face::Turn::Phase;
+		++fighting->faceOffTurns;
+		// The creature that started the fight tells the mind of the other creature to stand still. Then it tells the
+		// other creature to stop and turn to face it, and it turns to face the other creature. It does not wait for the
+		// turn of the other creature. On the turn after its own turn is done, it tells the other creature to taunt. It
+		// tries its own taunt from the next turn.
+		if (starter)
 		{
-			fighting->played = true;
-			if (locomotion != nullptr)
+			auto* other = &registry.Get<CreatureFighting>(opponent);
+			if (fighting->faceOffTurns == fight::k_FaceOffStillTurn && other->part == CreatureFighting::Part::Asked)
 			{
-				locomotion->StopAtOnce(entity);
-				locomotion->TurnToFaceAtOnce(entity, Flat(registry.Get<const Transform>(opponent).position));
+				other->part = CreatureFighting::Part::StandsStill;
 			}
-		}
-		else if (starter && (!moving(entity) || fighting->stageSeconds > k_ApproachSeconds))
-		{
-			if (fighting->stage == CreatureFighting::Stage::FaceOff)
+			if (fighting->faceOffTurns == fight::k_FaceOffOrderTurn && other->stage == CreatureFighting::Stage::FaceOff &&
+			    other->faceTurn.phase == Phase::Idle)
+			{
+				other = obey(opponent);
+				fighting = registry.TryGet<CreatureFighting>(entity);
+				if (other == nullptr || fighting == nullptr)
+				{
+					return;
+				}
+				other->faceTurn.phase = Phase::Start;
+			}
+			if (fighting->faceOffTurns == fight::k_FaceOffOwnTurn)
+			{
+				fighting->faceTurn.phase = Phase::Start;
+			}
+			else if (fighting->faceTurn.phase == Phase::Done)
 			{
 				order(opponent, CreatureFighting::Stage::Taunt);
 				next(CreatureFighting::Stage::Taunt);
-			}
-			else
-			{
-				// Both start together, so neither finds the other not yet duelling
-				BeginDuel(entity);
-				BeginDuel(opponent);
+				break;
 			}
 		}
+		FaceOpponentTurn(registry, entity, *fighting, locomotion);
 		break;
+	}
+	case CreatureFighting::Stage::Square:
+	{
+		using Phase = creature_turn_to_face::Turn::Phase;
+		// The creature that started the fight tells the other creature to stop and turn to face it, then turns to face
+		// the other creature. It does not wait for the turn of the other creature. On the turn after its own turn is
+		// done, it tells the other creature to start its duel. It tries to start its own duel from the next turn. In
+		// this stage, the played flag shows that the creature has its order to start its duel.
+		if (starter)
+		{
+			++fighting->faceOffTurns;
+			if (fighting->faceOffTurns == fight::k_SquareOrderTurn &&
+			    registry.Get<const CreatureFighting>(opponent).stage == CreatureFighting::Stage::Ready)
+			{
+				order(opponent, CreatureFighting::Stage::Square);
+				auto* other = registry.TryGet<CreatureFighting>(opponent);
+				fighting = registry.TryGet<CreatureFighting>(entity);
+				if (other == nullptr || fighting == nullptr)
+				{
+					return;
+				}
+				other->faceTurn = {.phase = Phase::Start};
+			}
+			if (fighting->faceOffTurns == fight::k_SquareOwnTurn)
+			{
+				fighting->faceTurn = {.phase = Phase::Start};
+			}
+			else if (!fighting->played && fighting->faceTurn.phase == Phase::Done)
+			{
+				auto* other = obey(opponent);
+				fighting = registry.TryGet<CreatureFighting>(entity);
+				if (other == nullptr || fighting == nullptr)
+				{
+					return;
+				}
+				other->played = true;
+				fighting->played = true;
+				break;
+			}
+		}
+		// Told to start its duel, it starts it when its body lets it
+		if (fighting->played)
+		{
+			if (CanStartDuel(registry, entity, locomotion))
+			{
+				BeginDuel(entity);
+			}
+			break;
+		}
+		FaceOpponentTurn(registry, entity, *fighting, locomotion);
+		break;
+	}
 	case CreatureFighting::Stage::Taunt:
 		if (!fighting->played)
 		{
+			// The taunt needs empty hands. A creature that holds a thing first starts to let go of it with its let-go
+			// clip, and it tries the taunt from the next turn with no new check. While its body or hands are busy, it
+			// cannot start to let go, and it checks again on the next turn.
+			if (!fighting->handsChecked && Locator::creatureMindSystem::has_value())
+			{
+				const auto check = Locator::creatureMindSystem::value().CheckHandsBeforeAction(entity);
+				fighting->handsChecked = check == creature_mind::HandsCheck::LetGo;
+				if (check != creature_mind::HandsCheck::Free)
+				{
+					break;
+				}
+			}
 			// Each try to start the taunt picks a side from the game's random numbers first. A body that plays an
 			// action or moves, or that does not have the clip, refuses the start, and the creature tries again on
-			// the next turn. With no bodies loaded, nothing plays.
+			// the next turn. The hands that let go keep the body busy. With no bodies loaded, nothing plays.
 			const auto clip = fight::FaceOffAnimation(fighting->rude);
 			const bool mirrored = Locator::gameRandom::has_value() && Locator::gameRandom::value().GameRand(2) == 1;
 			const bool loaded = Locator::creatureAnimationSystem::has_value();
-			if (creature_layers::IsPlaying(animation.body) || moving(entity) || (loaded && !Has(entity, clip)))
+			const bool lettingGo = fighting->handsChecked && Locator::creatureObjectActionSystem::has_value() &&
+			                       Locator::creatureObjectActionSystem::value().GetState(entity) ==
+			                           CreatureObjectActionSystemInterface::State::Busy;
+			if (creature_layers::IsPlaying(animation.body) || moving(entity) || lettingGo || (loaded && !Has(entity, clip)))
 			{
 				break;
 			}
@@ -2733,10 +3161,12 @@ void CreatureFightSystem::StageTurn(entt::entity entity)
 		{
 			break;
 		}
+		// When the other creature is ready, the first creature turns to face it in the arena from the next turn
 		if (partner->stage == CreatureFighting::Stage::Ready)
 		{
-			order(opponent, CreatureFighting::Stage::Square);
 			next(CreatureFighting::Stage::Square);
+			fighting->faceOffTurns = 0;
+			fighting->faceTurn = {};
 		}
 		else if (fighting->stageSeconds > k_ApproachSeconds)
 		{
@@ -2744,9 +3174,21 @@ void CreatureFightSystem::StageTurn(entt::entity entity)
 		}
 		break;
 	case CreatureFighting::Stage::Duel:
+		// An opponent with no life left loses the duel, also when its fight health is not zero
+		if (opponentHere && fight::WinsByOpponentsLife(LifeOf(registry, opponent), registry.AllOf<ScriptControlled>(entity)))
+		{
+			WinByOpponentsLife(entity, opponent);
+		}
 		break;
 	case CreatureFighting::Stage::Celebrate:
 		// Its move finished, it leaves the fight. Its mind then does what the win made it do to the loser.
+		if (fighting->fighter.state == fight::State::Idle)
+		{
+			Leave(entity);
+		}
+		break;
+	case CreatureFighting::Stage::Stop:
+		// Its move finished, it leaves the fight with no response
 		if (fighting->fighter.state == fight::State::Idle)
 		{
 			Leave(entity);
@@ -2760,6 +3202,7 @@ void CreatureFightSystem::StageTurn(entt::entity entity)
 		if (!fighting->played)
 		{
 			fighting->played = true;
+			fighting->showedResponse = true;
 			const auto life = LifeOf(registry, entity);
 			const auto otherLife = opponentHere ? LifeOf(registry, opponent) : 0.0f;
 			// The game's random numbers choose the side of the response, one time in two the left side
@@ -2768,8 +3211,42 @@ void CreatureFightSystem::StageTurn(entt::entity entity)
 		}
 		else if (!creature_layers::IsPlaying(animation.body))
 		{
+			// A creature that ended its response with no fear does not look at the lives again. The plan of the first
+			// creature ends at the start of the second turn after its response. The other creature continues to obey,
+			// and waits until the plan of the first creature ends.
+			if (fighting->responded)
+			{
+				++fighting->turnsAfterResponse;
+				// On the first turn after its response, the first creature frees the mind of the other creature
+				if (fighting->madeArena && fighting->turnsAfterResponse == 1)
+				{
+					if (const auto freed = PartnerAfterDuel(registry, entity, *fighting); freed.has_value())
+					{
+						registry.Get<CreatureFighting>(*freed).mindFree = true;
+					}
+				}
+				const bool ends = fighting->madeArena ? fighting->turnsAfterResponse >= fight::k_PlanEndTurnsAfterResponse
+				                                      : !PartnerAfterDuel(registry, entity, *fighting).has_value();
+				if (ends)
+				{
+					Leave(entity);
+				}
+				break;
+			}
+			// A fight that was called off ends with its move: the plan stopped already, so nothing follows
+			if (!fighting->showedResponse)
+			{
+				Leave(entity);
+				break;
+			}
 			// The creature that has no more life than the other is made to fear the other
 			const bool fears = opponentHere && fight::FearsAfterFight(LifeOf(registry, entity), LifeOf(registry, opponent));
+			if (!fears && (fighting->madeArena || PartnerAfterDuel(registry, entity, *fighting).has_value()))
+			{
+				fighting->responded = true;
+				fighting->turnsAfterResponse = 0;
+				break;
+			}
 			Leave(entity);
 			if (fears && Locator::creatureMindSystem::has_value())
 			{
@@ -2789,6 +3266,7 @@ void CreatureFightSystem::StageTurn(entt::entity entity)
 						return fight_transcript::Fields {{"creature", fight_transcript::Id(opponent)},
 						                                 {"by", fight_transcript::Id(entity)}};
 					});
+					PartnerPlanFails(opponent, entity, other->madeArena);
 					Leave(opponent);
 				}
 			}
@@ -2896,11 +3374,17 @@ void CreatureFightSystem::DuelTurn(entt::entity entity)
 		{
 			return;
 		}
-		// Its opponent gone or out of the fight, it finishes
+		// Its opponent gone or out of the fight, it finishes. An opponent that is about to start its duel is in the fight.
 		const auto opponent = fighting->opponent;
-		if (!registry.Valid(opponent) || !InDuel(registry, opponent) ||
-		    registry.Get<const CreatureFighting>(opponent).opponent != entity)
+		if (!OpponentStartsDuel(registry, entity, *fighting) &&
+		    (!FightsOn(registry, entity, *fighting) || registry.Get<const CreatureFighting>(opponent).opponent != entity))
 		{
+			// The opponent left the duel before it, and the fight of the opponent ended: it stops with no response
+			if (fighting->partnerLeft != CreatureFighting::PartnerLeft::None)
+			{
+				StopFight(entity, ResultWhenStopped(fighting->partnerLeft), "partner_stopped");
+				return;
+			}
 			NoteFightOver(entity, "opponent_left");
 			EndFightFor(entity, true);
 			NoteStage(entity, fighting->stage, CreatureFighting::Stage::Respond);
@@ -2912,21 +3396,16 @@ void CreatureFightSystem::DuelTurn(entt::entity entity)
 		auto& fighter = fighting->fighter;
 		const auto& other = registry.Get<const CreatureFighting>(opponent).fighter;
 
-		if (fighter.state == fight::State::Stance && fighter.control == fight::Control::Player)
+		// Left alone long enough, the computer takes over the player's creature. A frozen creature waits longer.
+		if (fight::CountComputerWait(fighter, TurnMsOf(registry.TryGet<const CreatureAnimation>(entity))))
 		{
-			// Left alone long enough, the computer takes over the player's creature
-			fighter.computerWaitMs -= k_TurnMs;
-			if (fighter.computerWaitMs < 0.0f)
-			{
-				fighter.control = fight::Control::Computer;
-				fight_transcript::Note(entity, "control", [&] {
-					return fight_transcript::Fields {{"creature", fight_transcript::Id(entity)},
-					                                 {"from", "player"},
-					                                 {"to", "computer"},
-					                                 {"why", "player_idle"},
-					                                 {"computer_wait_ms", fighter.computerWaitMs}};
-				});
-			}
+			fight_transcript::Note(entity, "control", [&] {
+				return fight_transcript::Fields {{"creature", fight_transcript::Id(entity)},
+				                                 {"from", "player"},
+				                                 {"to", "computer"},
+				                                 {"why", "player_idle"},
+				                                 {"computer_wait_ms", fighter.computerWaitMs}};
+			});
 		}
 		const bool computer = fighter.control == fight::Control::Computer;
 		const bool stance = fighter.state == fight::State::Stance;
@@ -2946,11 +3425,15 @@ void CreatureFightSystem::DuelTurn(entt::entity entity)
 		{
 			// It keeps inside the arena
 		}
-		else if (!fighter.queue.Empty())
+		else if (!computer)
 		{
-			CheckQueue(entity);
+			// The computer does not look at the queue: it chooses its own moves
+			if (!fighter.queue.Empty())
+			{
+				CheckQueue(entity);
+			}
 		}
-		else if (computer && fighter.state == fight::State::Stance)
+		else if (fighter.state == fight::State::Stance)
 		{
 			const auto tier = fight::TierOf(fighter.tendency);
 			const auto seen = fight::OpponentOf(other.state, other.animation);
@@ -2990,7 +3473,7 @@ void CreatureFightSystem::DuelTurn(entt::entity entity)
 				break;
 			}
 		}
-		else if (computer && fighter.state == fight::State::Block && fight::ComputerEndsBlock(random))
+		else if (fighter.state == fight::State::Block && fight::ComputerEndsBlock(random))
 		{
 			const auto index = fight_transcript::Note(entity, "ai_choice", [&] {
 				return fight_transcript::Fields {{"creature", fight_transcript::Id(entity)}, {"choice", "end_block"}};
@@ -3016,9 +3499,9 @@ void CreatureFightSystem::CheckQueue(entt::entity creature)
 	auto& fighter = fighting.fighter;
 	const auto front = fighter.queue.Front();
 	const bool inRange = fight::WithinRange(fighting.arena, opponentAt);
-	// The help record counts the moves of the player's creature
+	// The help record of this computer counts the moves of the creature of its own player
 	if (fight::CountsHelpEvent(fighter.state, inRange, front.has_value()) &&
-	    registry.Get<const Creature>(creature).owner == k_LocalPlayer && Locator::helpProfileSystem::has_value())
+	    registry.Get<const Creature>(creature).owner == OwnPlayer() && Locator::helpProfileSystem::has_value())
 	{
 		Locator::helpProfileSystem::value().Trigger(fight::HelpEventOf(front->move.kind));
 	}
@@ -3043,7 +3526,7 @@ void CreatureFightSystem::CheckQueue(entt::entity creature)
 	// The creature learns from the moves it makes, whoever asked for them
 	auto* record = registry.TryGet<CreatureFightRecord>(creature);
 	if (order->kind != fight::Order::Kind::EndBlock && front.has_value() && record != nullptr &&
-	    fight::LearnsFromMove(front->move.kind, registry.Get<const Creature>(creature).owner == k_LocalPlayer))
+	    fight::LearnsFromMove(front->move.kind, LearnsFromPresses(registry.Get<const Creature>(creature).owner)))
 	{
 		const auto before = record->tendency;
 		record->tendency = fight::LearnTendency(record->tendency, front->move.kind);
@@ -3211,20 +3694,7 @@ void CreatureFightSystem::AttemptBlow(entt::entity creature, fight::Band band, f
 
 void CreatureFightSystem::Update(std::chrono::duration<float, std::milli> gameTime)
 {
-	auto& registry = Locator::entitiesRegistry::value();
-	const auto milliseconds = gameTime.count();
-	UpdateView(milliseconds / 1000.0f);
-	// A press held on a body charges the sparkle added last
-	if (_markHeld)
-	{
-		if (const auto self = PrimaryCreatureOf(registry, k_LocalPlayer))
-		{
-			if (auto* held = registry.TryGet<CreatureFighting>(*self))
-			{
-				held->marks.Charge(milliseconds);
-			}
-		}
-	}
+	UpdateView(gameTime.count() / 1000.0f);
 	NoteActions();
 }
 
@@ -3240,7 +3710,7 @@ std::optional<CreatureFightSystem::ActionStep> CreatureFightSystem::StepAnimatio
 		return std::nullopt;
 	}
 	const auto& body = registry.Get<const Creature>(entity);
-	const bool hasOpponent = fighting->stage == CreatureFighting::Stage::Duel && InDuel(registry, fighting->opponent);
+	const bool hasOpponent = fighting->stage == CreatureFighting::Stage::Duel && HasDuelPartner(registry, entity, *fighting);
 	// While it turns on the spot in its start, the turn's own animation plays, and the start animation waits. When the
 	// turn ends, the start animation plays from its beginning in the same turn.
 	if (fighting->fighter.state == fight::State::Start && fighting->fighter.turning)
@@ -3430,7 +3900,7 @@ void CreatureFightSystem::BlowTurn(entt::entity entity, std::optional<ActionStep
 	const auto& fighter = fighting.fighter;
 	const bool striking = step.has_value() && fighter.animation == step->animation &&
 	                      fighting.stage == CreatureFighting::Stage::Duel && fighter.state == fight::State::Action &&
-	                      fight::IsAttack(fighter.animation) && InDuel(registry, fighting.opponent);
+	                      fight::IsAttack(fighter.animation) && HasDuelPartner(registry, entity, fighting);
 	if (striking)
 	{
 		// The tests start where the animation was before it moved on in this turn
@@ -3453,7 +3923,8 @@ void CreatureFightSystem::TestBlow(entt::entity creature, int32_t fromMs)
 	const auto& attacker = fighting.fighter;
 	const auto opponent = fighting.opponent;
 	// An earlier blow this turn may have made it reel already
-	if (attacker.state != fight::State::Action || !fight::IsAttack(attacker.animation) || !InDuel(registry, opponent))
+	if (attacker.state != fight::State::Action || !fight::IsAttack(attacker.animation) ||
+	    !HasDuelPartner(registry, creature, fighting))
 	{
 		return;
 	}
@@ -3540,7 +4011,7 @@ void CreatureFightSystem::LandBlow(entt::entity creature, const glm::vec3& point
 	auto& registry = Locator::entitiesRegistry::value();
 	auto& fighting = registry.Get<CreatureFighting>(creature);
 	const auto opponent = fighting.opponent;
-	if (!InDuel(registry, opponent))
+	if (!HasDuelPartner(registry, creature, fighting))
 	{
 		return;
 	}
@@ -3623,12 +4094,15 @@ void CreatureFightSystem::LandBlow(entt::entity creature, const glm::vec3& point
 	const auto heightShare =
 	    fight::HeightShareOf(found->height, HeadHeightOf(registry, opponent).value_or(HeightOf(ShownSize(opponentBody))));
 	const auto direction = fight::RecoilDirectionOf(found->swing);
+	// The blows compare the strengths that the two bodies show
+	const auto bodyLook = ShownStrength(body);
+	const auto opponentLook = ShownStrength(opponentBody);
 	const auto result = fight::ResolveBlow(
 	    {
 	        .attackerSize = ShownSize(body),
 	        .defenderSize = ShownSize(opponentBody),
-	        .attackerStrength = body.strength,
-	        .defenderStrength = opponentBody.strength,
+	        .attackerStrength = bodyLook,
+	        .defenderStrength = opponentLook,
 	        .speed = attacker.speed,
 	        .special = special,
 	        .heightShare = heightShare,
@@ -3654,15 +4128,15 @@ void CreatureFightSystem::LandBlow(entt::entity creature, const glm::vec3& point
 		                                     {"vector_z", vector.z},
 		                                     {"attacker_size", ShownSize(body)},
 		                                     {"defender_size", ShownSize(opponentBody)},
-		                                     {"attacker_strength", body.strength},
-		                                     {"defender_strength", opponentBody.strength},
+		                                     {"attacker_strength", bodyLook},
+		                                     {"defender_strength", opponentLook},
 		                                     {"speed", attacker.speed},
 		                                     {"special", special},
 		                                     {"blocked", blocked},
 		                                     {"damage_factor", fight::DamageFactor({.attackerSize = ShownSize(body),
 		                                                                            .defenderSize = ShownSize(opponentBody),
-		                                                                            .attackerStrength = body.strength,
-		                                                                            .defenderStrength = opponentBody.strength,
+		                                                                            .attackerStrength = bodyLook,
+		                                                                            .defenderStrength = opponentLook,
 		                                                                            .speed = attacker.speed,
 		                                                                            .special = special,
 		                                                                            .heightShare = heightShare,
@@ -3858,6 +4332,39 @@ void CreatureFightSystem::DripTurn(entt::entity creature)
 	}
 }
 
+void CreatureFightSystem::GainStrengthAtStop(entt::entity stopper, fight::StopEnd end)
+{
+	auto& registry = Locator::entitiesRegistry::value();
+	const auto* fighting = registry.Valid(stopper) ? registry.TryGet<const CreatureFighting>(stopper) : nullptr;
+	if (fighting == nullptr || !Locator::creaturePhysiologySystem::has_value())
+	{
+		return;
+	}
+	const auto partner = fighting->opponent;
+	const auto* other = registry.Valid(partner) ? registry.TryGet<const CreatureFighting>(partner) : nullptr;
+	const bool together = other != nullptr && other->opponent == stopper;
+	const auto gains = fight::StrengthGainsAtStop(
+	    end, {.stopperDuels = together && InDuel(registry, stopper), .partnerDuels = together && InDuel(registry, partner)});
+	if (gains.stopper == 0 && gains.partner == 0)
+	{
+		return;
+	}
+	fight_transcript::Note(stopper, "strength_gain", [&] {
+		return fight_transcript::Fields {{"creature", fight_transcript::Id(stopper)},
+		                                 {"partner", fight_transcript::Id(partner)},
+		                                 {"creature_gains", gains.stopper},
+		                                 {"partner_gains", gains.partner}};
+	});
+	auto& physiology = Locator::creaturePhysiologySystem::value();
+	for (const auto& [creature, count] : {std::pair(stopper, gains.stopper), std::pair(partner, gains.partner)})
+	{
+		for (uint32_t gain = 0; gain < count; ++gain)
+		{
+			physiology.GainStrengthOf(creature, "Fight");
+		}
+	}
+}
+
 void CreatureFightSystem::Win(entt::entity winner, entt::entity loser, bool byBlow)
 {
 	auto& registry = Locator::entitiesRegistry::value();
@@ -3868,6 +4375,8 @@ void CreatureFightSystem::Win(entt::entity winner, entt::entity loser, bool byBl
 		                                 {"winner_health", GetFightHealth(winner)},
 		                                 {"loser_health", GetFightHealth(loser)}};
 	});
+	// The plan that the win forces on the winner makes the winner give up its action as a failure
+	GainStrengthAtStop(winner, fight::StopEnd::Failure);
 	// The winner is made to do something to the loser at once: an evil winner has a poo on it, any other shows off. Its
 	// mind does it when the winner has left the fight. This plan counts for the feedback of the player, and it is an
 	// order. After a knock out by a blow the plan is not forced: it has the low priority of the order.
@@ -3906,7 +4415,8 @@ void CreatureFightSystem::Win(entt::entity winner, entt::entity loser, bool byBl
 	}
 	NoteFightOver(winner, "knockout");
 	EndFightFor(winner, true);
-	EndFightFor(loser, false);
+	// A loser that did not start its duel yet is in no fight state, so its life does not pay for the fight
+	EndFightFor(loser, false, InDuel(registry, loser));
 	if (auto* record = registry.TryGet<CreatureFightRecord>(winner))
 	{
 		++record->wins;
@@ -3929,7 +4439,9 @@ void CreatureFightSystem::Win(entt::entity winner, entt::entity loser, bool byBl
 		fighting->played = false;
 		fight::Enter(fighting->fighter, fight::State::Finish);
 		auto& won = registry.Get<CreatureAnimation>(winner);
-		won.face = creature_layers::RelaxFace(won.face);
+		shown_creature_faces::ChangeFace(registry, winner, won.face, [](const creature_layers::FaceLayer& face) {
+			return creature_layers::RelaxFace(face);
+		});
 	}
 	// A fight won by a blow is seen by the living around the winner, if the winner has a player. The reaction runs at
 	// once: the villagers' towns move the player's alignment by what the reaction table says of a fight won.
@@ -3954,7 +4466,59 @@ void CreatureFightSystem::Win(entt::entity winner, entt::entity loser, bool byBl
 	}
 }
 
-void CreatureFightSystem::EndFightFor(entt::entity creature, std::optional<bool> won)
+void CreatureFightSystem::WinByOpponentsLife(entt::entity winner, entt::entity loser)
+{
+	auto& registry = Locator::entitiesRegistry::value();
+	auto& fighting = registry.Get<CreatureFighting>(winner);
+	const auto winRecord = fight_transcript::Note(winner, "win", [&] {
+		return fight_transcript::Fields {{"winner", fight_transcript::Id(winner)},
+		                                 {"loser", fight_transcript::Id(loser)},
+		                                 {"by_blow", false},
+		                                 {"loser_life", LifeOf(registry, loser)},
+		                                 {"winner_health", fighting.fighter.health}};
+	});
+	// The advisors can speak first, for a creature of the player here
+	if (Locator::guidanceSystem::has_value())
+	{
+		Locator::guidanceSystem::value().CreatureWonFight(winner);
+	}
+	// The living around the winner see the fight won, if the winner has a player
+	const auto owner = registry.Get<const Creature>(winner).owner;
+	if (owner != PlayerNames::NEUTRAL && Locator::reactionSystem::has_value())
+	{
+		fight_transcript::Note(
+		    winner, "reaction",
+		    [&] {
+			    return fight_transcript::Fields {{"creature", fight_transcript::Id(winner)},
+			                                     {"reaction", "react_to_fight_won"},
+			                                     {"player", static_cast<int32_t>(owner)}};
+		    },
+		    winRecord);
+		Locator::reactionSystem::value().Create({.initiator = winner,
+		                                         .type = Reaction::ReactToFightWon,
+		                                         .player = owner,
+		                                         .position = registry.Get<const Transform>(winner).position,
+		                                         .onCast = true});
+	}
+	auto& record = registry.AllOf<CreatureFightRecord>(winner) ? registry.Get<CreatureFightRecord>(winner)
+	                                                           : registry.Assign<CreatureFightRecord>(winner);
+	++record.wins;
+	// Only the winner leaves the duel. It finishes the move under way and stands, and then it responds to the fight.
+	// The loser stays in its duel against the winner until the fight of the winner ends.
+	if (auto* lost = registry.TryGet<CreatureFighting>(loser);
+	    lost != nullptr && lost->opponent == winner && lost->stage == CreatureFighting::Stage::Duel)
+	{
+		lost->partnerLeft = CreatureFighting::PartnerLeft::Won;
+	}
+	NoteFightOver(winner, "opponent_out_of_life");
+	EndFightFor(winner, true);
+	NoteStage(winner, fighting.stage, CreatureFighting::Stage::Respond);
+	fighting.stage = CreatureFighting::Stage::Respond;
+	fighting.played = false;
+	fighting.fighter.stopping = true;
+}
+
+void CreatureFightSystem::EndFightFor(entt::entity creature, std::optional<bool> won, bool paysLife)
 {
 	auto& registry = Locator::entitiesRegistry::value();
 	auto* fighting = registry.TryGet<CreatureFighting>(creature);
@@ -3971,7 +4535,7 @@ void CreatureFightSystem::EndFightFor(entt::entity creature, std::optional<bool>
 		                                 {"control", fight::Name(fighting->fighter.control)}};
 	});
 	// A quarter of the fight health it lost comes off its life
-	if (auto* needs = registry.TryGet<CreatureNeeds>(creature))
+	if (auto* needs = paysLife ? registry.TryGet<CreatureNeeds>(creature) : nullptr)
 	{
 		const auto before = needs->needs.life;
 		needs->needs.life = fight::LifeAfterFight(needs->needs.life, fighting->fighter.health);
@@ -4016,7 +4580,9 @@ void CreatureFightSystem::Leave(entt::entity creature)
 		{
 			animation->body = {};
 		}
-		animation->face = creature_layers::RelaxFace(animation->face);
+		shown_creature_faces::ChangeFace(registry, creature, animation->face, [](const creature_layers::FaceLayer& face) {
+			return creature_layers::RelaxFace(face);
+		});
 	}
 	if (_pressed.has_value() && _pressed->creature == creature)
 	{
@@ -4026,7 +4592,143 @@ void CreatureFightSystem::Leave(entt::entity creature)
 	{
 		ReleaseArena(registry, fighting->arenaEntity);
 	}
+	const auto opponent = fighting->opponent;
+	const bool started = fighting->madeArena;
+	const bool obeyed = !started && fighting->part == CreatureFighting::Part::Obeys;
 	registry.Remove<CreatureFighting>(creature);
+	// The other creature obeyed the first creature until its fight ended. Its plan to obey never ends as a success.
+	if (obeyed && Locator::creatureMindSystem::has_value())
+	{
+		Locator::creatureMindSystem::value().ObeyEnded(creature, opponent);
+	}
+	auto* other = registry.Valid(opponent) ? registry.TryGet<CreatureFighting>(opponent) : nullptr;
+	if (other == nullptr || other->opponent != creature)
+	{
+		return;
+	}
+	// An opponent that stayed in the duel against it stops now, with no response
+	if (other->partnerLeft != CreatureFighting::PartnerLeft::None)
+	{
+		StopFight(opponent, ResultWhenStopped(other->partnerLeft), "partner_stopped");
+	}
+	// The plan of the first creature ends with its fight. This also stops the other creature after its duel, with no
+	// response, and its plan to obey fails.
+	else if (started && IsAfterDuel(other->stage))
+	{
+		StopPartnerAfterDuel(opponent, creature);
+	}
+}
+
+void CreatureFightSystem::StopPartnerAfterDuel(entt::entity partner, entt::entity creature)
+{
+	auto& registry = Locator::entitiesRegistry::value();
+	const auto* fighting = registry.TryGet<const CreatureFighting>(partner);
+	if (fighting == nullptr)
+	{
+		return;
+	}
+	const bool started = fighting->madeArena;
+	fight_transcript::Note(partner, "stopped_by_partner", [&] {
+		return fight_transcript::Fields {{"creature", fight_transcript::Id(partner)}, {"by", fight_transcript::Id(creature)}};
+	});
+	StopFight(partner, std::nullopt, "partner_stopped");
+	// The other creature that left its fight gave up its plan to obey as it left
+	if (started || registry.AllOf<CreatureFighting>(partner))
+	{
+		PartnerPlanFails(partner, creature, started);
+	}
+}
+
+void CreatureFightSystem::StopFight(entt::entity creature, std::optional<bool> won, std::string_view why)
+{
+	auto& registry = Locator::entitiesRegistry::value();
+	auto* fighting = registry.Valid(creature) ? registry.TryGet<CreatureFighting>(creature) : nullptr;
+	// A winner of a knock out does what the win made it do. The stop does not change its fight.
+	if (fighting == nullptr || fighting->stage == CreatureFighting::Stage::Celebrate)
+	{
+		return;
+	}
+	if (IsLeadIn(fighting->stage) ||
+	    (fighting->stage == CreatureFighting::Stage::Stop && fighting->fighter.state == fight::State::Idle))
+	{
+		Leave(creature);
+		return;
+	}
+	if (fighting->stage == CreatureFighting::Stage::Stop)
+	{
+		return;
+	}
+	if (!fighting->ended)
+	{
+		NoteFightOver(creature, why);
+		EndFightFor(creature, won, fight::LifePaysAtStop(fighting->fighter.state));
+	}
+	NoteStage(creature, fighting->stage, CreatureFighting::Stage::Stop);
+	fighting->stage = CreatureFighting::Stage::Stop;
+	fighting->stageSeconds = 0.0f;
+	fighting->played = false;
+	fighting->fighter.stopping = true;
+	if (fighting->fighter.state == fight::State::Idle)
+	{
+		Leave(creature);
+	}
+}
+
+void CreatureFightSystem::HandTookHold(entt::entity creature)
+{
+	auto& registry = Locator::entitiesRegistry::value();
+	auto* fighting = registry.Valid(creature) ? registry.TryGet<CreatureFighting>(creature) : nullptr;
+	if (fighting == nullptr)
+	{
+		return;
+	}
+	fighting->held = true;
+	fight_transcript::Note(creature, "held_by_hand", [&] {
+		return fight_transcript::Fields {{"creature", fight_transcript::Id(creature)},
+		                                 {"stage", Name(fighting->stage)},
+		                                 {"state", fight::Name(fighting->fighter.state)}};
+	});
+	if (fighting->stage != CreatureFighting::Stage::Duel)
+	{
+		return;
+	}
+	// It leaves the duel and finishes its move. Its opponent stays in the duel against it.
+	if (auto* other = registry.Valid(fighting->opponent) ? registry.TryGet<CreatureFighting>(fighting->opponent) : nullptr;
+	    other != nullptr && other->opponent == creature && other->stage == CreatureFighting::Stage::Duel)
+	{
+		other->partnerLeft = CreatureFighting::PartnerLeft::Held;
+	}
+	NoteFightOver(creature, "held_by_hand");
+	EndFightFor(creature, std::nullopt, fight::LifePaysAtStop(fighting->fighter.state));
+	NoteStage(creature, fighting->stage, CreatureFighting::Stage::Stop);
+	fighting->stage = CreatureFighting::Stage::Stop;
+	fighting->stageSeconds = 0.0f;
+	fighting->played = false;
+	fighting->fighter.stopping = true;
+}
+
+void CreatureFightSystem::HandLetGo(entt::entity creature)
+{
+	auto& registry = Locator::entitiesRegistry::value();
+	auto* fighting = registry.Valid(creature) ? registry.TryGet<CreatureFighting>(creature) : nullptr;
+	if (fighting == nullptr)
+	{
+		return;
+	}
+	fighting->held = false;
+	const auto opponent = fighting->opponent;
+	// The plan of the creature starts again: it gives up its action as a failure
+	GainStrengthAtStop(creature, fight::StopEnd::Failure);
+	fight_transcript::Note(creature, "let_go_by_hand", [&] {
+		return fight_transcript::Fields {{"creature", fight_transcript::Id(creature)}, {"stage", Name(fighting->stage)}};
+	});
+	// Its plan stops: its fight stops with no response, and it tells its opponent to stop too
+	StopFight(creature, std::nullopt, "let_go_by_hand");
+	if (auto* other = registry.Valid(opponent) ? registry.TryGet<CreatureFighting>(opponent) : nullptr;
+	    other != nullptr && other->opponent == creature)
+	{
+		StopFight(opponent, ResultWhenStopped(other->partnerLeft), "partner_stopped");
+	}
 }
 
 void CreatureFightSystem::ProcessKnockedOut()
@@ -4056,7 +4758,7 @@ void CreatureFightSystem::KnockedOutTurn(entt::entity entity)
 	{
 		const auto check = knockedOut.handsChecked || !Locator::creatureMindSystem::has_value()
 		                       ? creature_mind::HandsCheck::Free
-		                       : Locator::creatureMindSystem::value().CheckHandsBeforeFaint(entity);
+		                       : Locator::creatureMindSystem::value().CheckHandsBeforeAction(entity);
 		knockedOut.handsChecked = check == creature_mind::HandsCheck::LetGo;
 		if (check == creature_mind::HandsCheck::Free)
 		{
@@ -4226,7 +4928,7 @@ void CreatureFightSystem::KnockedOutTurn(entt::entity entity)
 bool CreatureFightSystem::FightMusicHeard(const glm::vec3& camera) const
 {
 	const auto& registry = Locator::entitiesRegistry::value();
-	const auto creature = PrimaryCreatureOf(registry, k_LocalPlayer);
+	const auto creature = PrimaryCreatureOf(registry, OwnPlayer());
 	if (!creature.has_value())
 	{
 		return false;

@@ -196,3 +196,17 @@ TEST(CreatureRoute, AStepKeepsOutOfTheThingsInTheBlock)
 	EXPECT_FALSE(InsideAny({28.5f, 35.0f}, nearby));
 	EXPECT_TRUE(InsideAny({23.0f, 35.0f}, nearby));
 }
+
+TEST(CreatureRoute, EachCornerOfTheLandIsReadOneTime)
+{
+	constexpr int32_t k_Corners = k_CellsPerSide + 1;
+	std::vector<int> reads(static_cast<size_t>(k_Corners * k_Corners), 0);
+	const auto land = WalkableLand::Build(
+	    [&reads](int32_t x, int32_t z) {
+		    ++reads.at(static_cast<size_t>((z * k_Corners) + x));
+		    return 5.0f;
+	    },
+	    Dry);
+	EXPECT_TRUE(std::ranges::all_of(reads, [](int count) { return count == 1; }));
+	EXPECT_EQ(land.At(k_CellsPerSide - 1, k_CellsPerSide - 1), Ground::Open);
+}

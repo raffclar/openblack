@@ -9,6 +9,7 @@
 
 #pragma once
 
+#include <utility>
 #include <vector>
 
 #include <entt/entity/fwd.hpp>
@@ -16,6 +17,7 @@
 #include "3D/SnowCover.h"
 #include "3D/WaterRings.h"
 #include "ECS/Systems/SnowSystemInterface.h"
+#include "Scenery/ObjectDrawList.h"
 
 #if !defined(LOCATOR_IMPLEMENTATIONS)
 #error "ECS System implementations should only be included in Locator.cpp"
@@ -48,8 +50,16 @@ private:
 	uint32_t _revision {0};
 	/// The things show their snow at the same pace as the rings on the water: 60 steps a second at most
 	water_rings::Pace _objectPace;
-	/// The things that the land drew on the last step
+	/// Whether the whole model of a broken building shows on the screen, which its broken model must for its snow to change
+	[[nodiscard]] static bool BrokenModelOnScreen(const Registry& registry, const object_draw_list::View& view,
+	                                              entt::entity building);
+
+	/// The things that the land drew on the last step, the building's own snow of which changes
 	std::vector<entt::entity> _drawn;
+	/// The broken buildings that the land drew on the screen on the last step
+	std::vector<entt::entity> _broken;
+	/// The pieces without snow found this frame, each with the building that it broke off
+	std::vector<std::pair<entt::entity, entt::entity>> _newPieces;
 };
 
 } // namespace openblack::ecs::systems

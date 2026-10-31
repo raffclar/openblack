@@ -11,6 +11,8 @@
 
 #include <array>
 
+#include <glm/geometric.hpp>
+
 namespace openblack::graphics::partial_build_cap
 {
 
@@ -121,6 +123,27 @@ std::vector<CapVertex> Build(std::span<const glm::vec3> positions, std::span<con
 		vertices.push_back(segment.innerA);
 	}
 	return vertices;
+}
+
+std::vector<glm::vec3> RisenWithLand(std::span<const glm::vec3> positions, const glm::mat4& placement,
+                                     const std::function<float(glm::vec2)>& landHeight)
+{
+	const glm::vec3 origin(placement[3]);
+	const glm::vec3 up(placement[1]);
+	// The drawn model moves straight up by the rise when its up is straight up, else along its up by the rise over its scale
+	const float scale = up.x == 0.0f && up.z == 0.0f ? up.y : glm::length(glm::vec3(placement[0]));
+	const float originHeight = landHeight({origin.x, origin.z});
+	std::vector<glm::vec3> risen(positions.begin(), positions.end());
+	if (scale == 0.0f)
+	{
+		return risen;
+	}
+	for (auto& position : risen)
+	{
+		const glm::vec3 world(placement * glm::vec4(position, 1.0f));
+		position.y += (landHeight({world.x, world.z}) - originHeight) / scale;
+	}
+	return risen;
 }
 
 } // namespace openblack::graphics::partial_build_cap

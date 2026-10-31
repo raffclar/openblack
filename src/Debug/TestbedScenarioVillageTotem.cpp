@@ -121,6 +121,33 @@ void openblack::testbed_scenarios::AddVillageTotemScenarios(std::vector<Scenario
 	    .townBeliefInPlayer = 1.0f,
 	});
 	all.push_back({
+	    .id = "objects.map_cells_refile",
+	    .name = "A totem and a pot go into the map cells again when they change",
+	    .facet = Facet::Objects,
+	    .description = "The same Norse town centre with the player's temple and the town's worship site, and the player's "
+	                   "tiger beside a pot of food on the land. The totem turns to face the worship site and takes the "
+	                   "tiger's icon. The tiger is told to eat from the pot.",
+	    .expected = "The totem stands turned to the worship site, side on, with the tiger on its pole, and it stays drawn "
+	                "as the camera moves. The map cells around it hold it at the front of their fixed things, so the tiger "
+	                "and the villager walk round it. The tiger takes a handful from the pot: the pot becomes smaller and "
+	                "the cells that hold it change with it.",
+	    .framing = {.shot = Shot::Overview,
+	                .include = {k_Centre - glm::vec2(25.0f), k_Centre + glm::vec2(25.0f)},
+	                .distance = 0.5f},
+	    .creatures = {{.species = CreatureType::Tiger,
+	                   .offset = k_Centre + glm::vec2(-20.0f, -20.0f),
+	                   .needs = {.energy = 1.0f, .dehydration = 0.0f, .poo = 0.0f}}},
+	    .objects = {{.type = AbodeInfo::NorseTownCentre, .offset = k_Centre},
+	                {.type = VillagerInfo::NorseHousewifeFemale,
+	                 .offset = k_Centre + glm::vec2(10.0f, -10.0f),
+	                 .joinTown = true},
+	                {.type = PotInfo::FoodPot, .offset = k_Centre + glm::vec2(-20.0f, -10.0f), .amount = 400}},
+	    .temples = {{.offset = k_Temple}},
+	    .commands = {{.kind = Command::Kind::DoAction, .delaySeconds = 2.0f, .object = 2, .action = "EatFromFoodPile"}},
+	    .townBeliefInPlayer = k_TownBelief,
+	    .worshipShare = 0.0f,
+	});
+	all.push_back({
 	    .id = "interface.floating_number_pause",
 	    .name = "The share floats up and stops while the game pauses",
 	    .facet = Facet::Interface,
@@ -143,6 +170,42 @@ void openblack::testbed_scenarios::AddVillageTotemScenarios(std::vector<Scenario
 	                 {.kind = Command::Kind::PauseGame, .delaySeconds = 1.0f, .value = 1}},
 	    .townBeliefInPlayer = 1.0f,
 	});
+	// The creature starts away from the totem, so that it walks to it first
+	const glm::vec2 mover = k_Centre + glm::vec2(-30.0f, -30.0f);
+	const auto moveTotem = [&all, mover](std::string_view id, std::string_view name, std::string_view action, float share,
+	                                     std::string_view description, std::string_view expected) {
+		all.push_back({
+		    .id = id,
+		    .name = name,
+		    .facet = Facet::Mind,
+		    .description = description,
+		    .expected = expected,
+		    .framing = {.shot = Shot::Overview,
+		                .include = {mover - glm::vec2(5.0f), k_Centre + glm::vec2(15.0f)},
+		                .distance = 0.5f},
+		    .creatures = {{.species = CreatureType::Tiger, .offset = mover}},
+		    .objects = {{.type = AbodeInfo::NorseTownCentre, .offset = k_Centre},
+		                {.type = VillagerInfo::NorseHousewifeFemale,
+		                 .offset = k_Centre + glm::vec2(10.0f, -10.0f),
+		                 .joinTown = true}},
+		    .temples = {{.offset = k_Temple}},
+		    .commands =
+		        {{.kind = Command::Kind::DoAction, .delaySeconds = 2.0f, .object = 0, .action = action, .onTotem = true}},
+		    .townBeliefInPlayer = k_TownBelief,
+		    .worshipShare = share,
+		});
+	};
+	moveTotem("mind.creature_raises_totem", "The creature raises the totem of its player's town", "RaiseTotemPole", 0.0f,
+	          "The player's Norse town centre with the player's temple and the town's worship site built, no one at "
+	          "worship. The player's tiger stands away to the south west. A script tells it to raise the totem.",
+	          "The tiger walks to within 12 m of the totem, looking at it, turns to face it and plays its summon clip with a "
+	          "playful face. Then the totem rises: each game turn the share of the town at worship goes up by 0.02, so the "
+	          "totem is all the way up after 50 turns.");
+	moveTotem("mind.creature_lowers_totem", "The creature lowers the totem of its player's town", "LowerTotemPole", 1.0f,
+	          "The town of mind.creature_raises_totem with all its people at worship, the totem all the way up. A script "
+	          "tells the tiger to lower the totem.",
+	          "The tiger walks to the totem, faces it and plays its summon clip with a playful face. Then the totem goes "
+	          "down by 0.02 of the town a game turn until no one is at worship.");
 
 	for (const auto& carving : k_Carvings)
 	{
@@ -170,4 +233,23 @@ void openblack::testbed_scenarios::AddVillageTotemScenarios(std::vector<Scenario
 		    .townBeliefInPlayer = k_TownBelief,
 		});
 	}
+	all.push_back({
+	    .id = "town.belief_symbols_frames",
+	    .name = "The symbols of belief of two players over a totem, stepped in the drawn frames",
+	    .facet = Facet::Objects,
+	    .description = "A Norse town centre of the player's town, which believes in the player and in a rival, seen from "
+	                   "the south south west a little above the top of the totem, with the camera still. The symbols "
+	                   "move on by a whole turn's time in each drawn frame, no more often than 60 times a second.",
+	    .expected = "One symbol sits over the totem; the other circles it and now and then rises to fight it, with "
+	                "sparkles. The symbols move at the same speed at 60 frames a second and at hundreds of frames a "
+	                "second, and they continue to move while the game is paused. Their random numbers are only this "
+	                "computer's, so the world stays the same.",
+	    .environment = {.dispenserGrid = false, .players = {PlayerNames::PLAYER_TWO}},
+	    .framing = {.shot = Shot::Placed,
+	                .eye = {k_Centre.x - 12.7f, 24.0f, k_Centre.y - 27.2f},
+	                .look = {k_Centre.x, 21.0f, k_Centre.y}},
+	    .objects = {{.type = AbodeInfo::NorseTownCentre, .offset = k_Centre}},
+	    .townBeliefInPlayer = k_TownBelief,
+	    .townBeliefInRival = k_TownBelief,
+	});
 }

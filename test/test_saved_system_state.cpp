@@ -12,23 +12,29 @@
 
 #define LOCATOR_IMPLEMENTATIONS
 
+#include <cstddef>
 #include <cstdint>
 
+#include <algorithm>
 #include <optional>
 #include <string>
 #include <unordered_map>
+#include <utility>
 #include <vector>
 
+#include <entt/entity/entity.hpp>
 #include <entt/meta/context.hpp>
 #include <glm/vec2.hpp>
+#include <glm/vec3.hpp>
 #include <gtest/gtest.h>
 
 #include "3D/CameraTrack.h"
 #include "3D/WaterRings.h"
-#include "Audio/GameMusic.h"
+#include "Camera/CameraBookmarks.h"
 #include "Camera/ScriptCameraModel.h"
 #include "ECS/Reflection/BinaryArchive.h"
 #include "ECS/Reflection/ComponentReflection.h"
+#include "ECS/Systems/AdvisorVoiceSystemInterface.h"
 #include "ECS/Systems/Implementations/AnimalSystem.h"
 #include "ECS/Systems/Implementations/CameraBookmarkSystem.h"
 #include "ECS/Systems/Implementations/CameraHelpSystem.h"
@@ -52,6 +58,7 @@
 #include "ECS/Systems/Implementations/MagicSystem.h"
 #include "ECS/Systems/Implementations/MiracleFxSystem.h"
 #include "ECS/Systems/Implementations/ScriptControlSystem.h"
+#include "ECS/Systems/Implementations/ScriptMusicSystem.h"
 #include "ECS/Systems/Implementations/SnowSystem.h"
 #include "ECS/Systems/Implementations/TeleportSystem.h"
 #include "ECS/Systems/Implementations/TownSystem.h"
@@ -59,6 +66,8 @@
 #include "ECS/Systems/Implementations/WeatherSystem.h"
 #include "ECS/Systems/SavedStateInterface.h"
 #include "Help/StoryHistory.h"
+#include "Locator.h"
+#include "Sound/GameMusic.h"
 
 using namespace openblack;
 using namespace openblack::ecs::systems;
@@ -97,6 +106,22 @@ void LoadInto(SavedStateInterface& system, const std::vector<uint8_t>& bytes)
 	ASSERT_TRUE(system.LoadState(in));
 	EXPECT_EQ(in.Remaining(), 0u);
 	EXPECT_EQ(StateOf(system), bytes);
+}
+
+/// The bytes from the first byte to the end of the save that no presentation value holds
+size_t SyncedBytesAfter(const SavedStateInterface& system, size_t first)
+{
+	reflection::BinaryWriter out(Context());
+	system.SaveState(out);
+	size_t synced = out.Size() - first;
+	for (const auto& [start, end] : out.PresentationRanges())
+	{
+		if (end > first)
+		{
+			synced -= end - std::max(start, first);
+		}
+	}
+	return synced;
 }
 
 } // namespace
@@ -177,6 +202,20 @@ TEST(SavedSystemState, TheWeathersSwitchesComeBack)
 	EXPECT_FALSE(loaded.IsStormCreationEnabled());
 }
 
+TEST(SavedSystemState, ALoadedGameHasCalmBackgroundWeather)
+{
+	WeatherSystem saved;
+	saved.SetBackgroundWeather({.temperature = 11, .rain = 40, .overcast = 60});
+	WeatherSystem loaded;
+	loaded.SetBackgroundWeather({.temperature = 5, .snow = 20});
+	LoadInto(loaded, StateOf(saved));
+	const auto background = loaded.GetBackgroundWeather();
+	EXPECT_EQ(background.temperature, 0);
+	EXPECT_EQ(background.rain, 0);
+	EXPECT_EQ(background.snow, 0);
+	EXPECT_EQ(background.overcast, 0);
+}
+
 TEST(SavedSystemState, AFireListWithNoFireComesBack)
 {
 	FireSystem saved;
@@ -234,6 +273,36 @@ TEST(SavedSystemState, TheStoryHistoryComesBack)
 	HelpTextSystem texts;
 	HelpTextSystem loadedTexts;
 	LoadInto(loadedTexts, StateOf(texts));
+}
+
+TEST(SavedSystemState, TheHelpOfEachComputerIsAPresentationPart)
+{
+	// Each computer has its own help level, help record and help scripts, so no byte of the help is synced. The owner of
+	// the dialogue is a value of the help too.
+	const auto wholeSection = [](const SavedStateInterface& system) {
+		reflection::BinaryWriter out(Context());
+		system.SaveState(out);
+		using Ranges = std::vector<std::pair<size_t, size_t>>;
+		EXPECT_EQ(out.PresentationRanges(), Ranges({{0, out.Bytes().size()}}));
+	};
+	wholeSection(HelpMessageSystem {});
+	wholeSection(HelpTextSystem {});
+	wholeSection(GuidanceSystem {});
+	wholeSection(CreatureHelpSystem {});
+	DialogueControlSystem dialogue;
+	dialogue.Request(12, 0);
+	wholeSection(dialogue);
+}
+
+TEST(SavedSystemState, TheHelpTextsStopTheAdvisorsWithNoVoicesOnTheComputer)
+{
+	// A computer that shows nothing, such as the dedicated server, has no advisors' voices
+	ASSERT_FALSE(Locator::advisorVoiceSystem::has_value());
+	HelpTextSystem texts;
+	texts.StopVoices();
+	texts.InterruptAdvisors();
+	texts.InterruptAdvisorsByEscape();
+	EXPECT_TRUE(texts.IsTextRead());
 }
 
 TEST(SavedSystemState, TheScriptsCameraComesBackAsItWas)
@@ -346,22 +415,29 @@ TEST(SavedSystemState, TheMusicThatTheScriptsChoseComesBack)
 	audio::GameMusic saved;
 	saved.AttachMusic(7, audio::MusicType::CelticChantVox);
 	saved.AttachMusic(9, audio::MusicType::ScriptPiperTune);
-	saved.StartScriptMusic(audio::MusicType::NorseChant);
 	saved.SetAlignmentMusicEnabled(false);
-	saved.OnScriptMusicCue("L3");
-	saved.OnScriptMusicCue("W");
 	audio::GameMusic loaded;
 	LoadInto(loaded, StateOf(saved));
 	// The most recently attached stays first
 	ASSERT_EQ(loaded.GetAttachedMusic().size(), 2u);
 	EXPECT_EQ(loaded.GetAttachedMusic()[0].thing, 9u);
 	EXPECT_EQ(loaded.GetAttachedMusic()[1].type, audio::MusicType::CelticChantVox);
-	EXPECT_EQ(loaded.GetScriptType(), audio::MusicType::NorseChant);
 	EXPECT_FALSE(loaded.IsAlignmentMusicEnabled());
-	EXPECT_EQ(loaded.GetMusicLyrics().line, 3);
-	EXPECT_EQ(loaded.GetMusicLyrics().word, 2);
 	// No music plays after the load until a game turn picks it
 	EXPECT_EQ(loaded.GetPlaying(), audio::MusicType::None);
+}
+
+TEST(SavedSystemState, TheMusicThatTheScriptsStartedComesBackWithItsLyricsAndNoSound)
+{
+	ecs::systems::ScriptMusicSystem saved;
+	saved.SetBanksLoaded(false);
+	saved.Start(audio::MusicType::NorseChant);
+	ecs::systems::ScriptMusicSystem loaded;
+	LoadInto(loaded, StateOf(saved));
+	EXPECT_EQ(loaded.GetMusic().GetType(), audio::MusicType::NorseChant);
+	EXPECT_FALSE(loaded.GetMusic().IsStarted());
+	EXPECT_FALSE(loaded.GetMusic().GetPlace().has_value());
+	EXPECT_EQ(loaded.GetMusic().GetLyrics().line, 0);
 }
 
 TEST(SavedSystemState, EachVillageCentreKeepsTheEffectOfItsSymbols)
@@ -417,6 +493,37 @@ TEST(SavedSystemState, TheCameraZonesComeBack)
 	EXPECT_EQ(zones.GetZones().exclusions.front().kind, camera_zones::Exclusion::Kind::Cylinder);
 }
 
+TEST(SavedSystemState, ANewLandHasNoCameraZones)
+{
+	reflection::BinaryWriter out(Context());
+	reflection::Save(out, std::string("land1.exc"));
+	reflection::Save(out, false);
+	reflection::Save(out, true);
+	reflection::Save(out, true);
+	reflection::Save(out, false);
+	reflection::Save(out, 700.0f);
+	reflection::Save(out, 200.0f);
+	reflection::Save(out, std::vector<glm::vec3> {{1.0f, 0.0f, 2.0f}, {3.0f, 0.0f, 4.0f}, {5.0f, 0.0f, 1.0f}});
+	reflection::Save(out, size_t {1});
+	reflection::Save(out, glm::vec3 {10.0f, 2.0f, 20.0f});
+	reflection::Save(out, 30.0f);
+	reflection::Save(out, 40.0f);
+	reflection::Save(out, camera_zones::Exclusion::Kind::Cylinder);
+	CameraZoneSystem zones;
+	LoadInto(zones, out.Bytes());
+	ASSERT_TRUE(zones.GetZones().fenceOn);
+	zones.Reset();
+	const camera_zones::Zones fresh;
+	EXPECT_TRUE(zones.GetFileName().empty());
+	EXPECT_EQ(zones.GetZones().exclusionsOn, fresh.exclusionsOn);
+	EXPECT_FALSE(zones.GetZones().fenceOn);
+	EXPECT_FALSE(zones.GetZones().useMaxAltitude);
+	EXPECT_FLOAT_EQ(zones.GetZones().maxAltitude, camera_zones::k_DefaultLimit);
+	EXPECT_FLOAT_EQ(zones.GetZones().heightAboveLand, camera_zones::k_DefaultLimit);
+	EXPECT_TRUE(zones.GetZones().fence.empty());
+	EXPECT_TRUE(zones.GetZones().exclusions.empty());
+}
+
 TEST(SavedSystemState, TheGoBackViewTheFollowAndTheBookmarkSwitchComeBack)
 {
 	reflection::BinaryWriter out(Context());
@@ -428,10 +535,42 @@ TEST(SavedSystemState, TheGoBackViewTheFollowAndTheBookmarkSwitchComeBack)
 	// The place that the town key keeps
 	reflection::Save(out, std::optional(glm::vec3 {300.0f, 8.0f, 400.0f}));
 	reflection::Save(out, std::optional(glm::vec3 {-24.0f, 28.0f, 47.0f}));
+	// The bookmark of each number key: only the key 4 has one
+	for (size_t slot = 0; slot < camera_bookmarks::k_KeySlots; ++slot)
+	{
+		reflection::Save(out, slot == 3);
+		reflection::Save(out, glm::vec3 {static_cast<float>(slot), 1.0f, 2.0f});
+		reflection::Save(out, entt::entity {entt::null});
+		reflection::Save(out, glm::vec3 {0.0f, 50.0f, -80.0f});
+	}
 	CameraBookmarkSystem bookmarks;
 	LoadInto(bookmarks, out.Bytes());
 	EXPECT_EQ(bookmarks.GetFollowed(), std::optional(size_t {3}));
 	EXPECT_FALSE(bookmarks.IsEnabled());
+	EXPECT_TRUE(bookmarks.IsSet(3));
+	EXPECT_FALSE(bookmarks.IsSet(0));
+}
+
+TEST(SavedSystemState, BookmarksSavedWithTheLandHaveNoSlotsInTheSystem)
+{
+	// A world that the land kept the bookmarks of has the slots among its entities, not in the state of the system
+	reflection::BinaryWriter out(Context());
+	reflection::Save(out, std::optional<glm::vec3>());
+	reflection::Save(out, std::optional<glm::vec3>());
+	reflection::Save(out, size_t {0});
+	reflection::Save(out, std::optional<size_t>());
+	reflection::Save(out, true);
+	reflection::Save(out, std::optional<glm::vec3>());
+	reflection::Save(out, std::optional<glm::vec3>());
+	CameraBookmarkSystem bookmarks;
+	const reflection::EntityRemap identity;
+	reflection::BinaryReader in(Context(), out.Bytes(), identity);
+	ASSERT_TRUE(bookmarks.LoadState(in));
+	EXPECT_EQ(in.Remaining(), 0u);
+	for (size_t slot = 0; slot < camera_bookmarks::k_KeySlots; ++slot)
+	{
+		EXPECT_FALSE(bookmarks.IsSet(slot));
+	}
 }
 
 TEST(SavedSystemState, BookmarksSavedBeforeTheTownKeyComeBack)
@@ -457,4 +596,40 @@ TEST(SavedSystemState, BookmarksWithNoGoBackViewAndNoFollowComeBack)
 	LoadInto(bookmarks, StateOf(saved));
 	EXPECT_FALSE(bookmarks.GetFollowed().has_value());
 	EXPECT_TRUE(bookmarks.IsEnabled());
+}
+
+// The names of the tribes that spin in the world are of this computer only: all of the save of the miracle effects is a
+// presentation value
+TEST(SavedSystemState, TheSpinningNamesOfTheTribesAreAPresentationValue)
+{
+	MiracleFxSystem effects;
+	effects.StartTribalPowerRing(Tribe::NORSE);
+	effects.ReleaseTribalPowerRing(Tribe::CELTIC, {1.0f, 2.0f, 3.0f});
+	EXPECT_EQ(SyncedBytesAfter(effects, 0), 0u);
+}
+
+// The path of a miracle that holds the camera of this computer is a presentation value. The script's path stays synced.
+TEST(SavedSystemState, ThePathOfAMiracleIsAPresentationValue)
+{
+	CameraPathSystem paths;
+	paths.Pause();
+	reflection::BinaryWriter out(Context());
+	paths.SaveState(out);
+	ASSERT_EQ(out.PresentationRanges().size(), 1u);
+	// The placed path is the last part of the save: only whether there is one, when there is none
+	EXPECT_EQ(out.PresentationRanges().front().second, out.Size());
+	EXPECT_EQ(out.PresentationRanges().front().first + 1, out.Size());
+	EXPECT_GT(SyncedBytesAfter(paths, 0), 0u);
+}
+
+// The script's camera is the camera of this computer. The owners of the camera and of the game speed stay synced.
+TEST(SavedSystemState, TheCameraOfTheScriptIsAPresentationValue)
+{
+	const ScriptControlSystem control;
+	reflection::BinaryWriter out(Context());
+	control.SaveState(out);
+	ASSERT_EQ(out.PresentationRanges().size(), 1u);
+	EXPECT_EQ(out.PresentationRanges().front().second, out.Size());
+	EXPECT_GT(SyncedBytesAfter(control, 0), 0u);
+	EXPECT_EQ(SyncedBytesAfter(control, out.PresentationRanges().front().first), 0u);
 }

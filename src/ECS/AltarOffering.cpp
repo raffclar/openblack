@@ -13,7 +13,6 @@
 #include <fmt/format.h>
 #include <spdlog/spdlog.h>
 
-#include "Audio/GameSoundEffects.h"
 #include "Common/GameRandom.h"
 #include "Creature/CreatureDeeds.h"
 #include "ECS/AltarSacrifice.h"
@@ -30,13 +29,14 @@
 #include "ECS/Statistics.h"
 #include "ECS/Systems/AlignmentSystemInterface.h"
 #include "ECS/Systems/CreatureMindSystemInterface.h"
+#include "ECS/Systems/EffectRequestSystemInterface.h"
 #include "ECS/Systems/FloatingNumberSystemInterface.h"
 #include "ECS/Systems/Implementations/VillagerFire.h"
-#include "ECS/Systems/ParticleSystemInterface.h"
 #include "ECS/Systems/WorshipSiteSystemInterface.h"
 #include "ECS/WorldObjects.h"
 #include "InfoConstants.h"
 #include "Locator.h"
+#include "Sound/GameSoundEffects.h"
 
 using namespace openblack;
 using namespace openblack::ecs::components;
@@ -122,14 +122,13 @@ void LightAltar(entt::entity altar, PlayerNames sitePlayer)
 {
 	auto& registry = Locator::entitiesRegistry::value();
 	const auto* at = registry.TryGet<const Transform>(altar);
-	if (at == nullptr || !Locator::particleSystem::has_value())
+	if (at == nullptr || !Locator::effectRequestSystem::has_value())
 	{
 		return;
 	}
 	const auto top = at->position + glm::vec3(0.0f, world_objects::SizeOf(altar).height, 0.0f);
-	auto& particles = Locator::particleSystem::value();
-	const auto effect = particles.StartSpotVisual(SpotVisualType::ObjectAppear, top, std::nullopt, entt::null, 1.0f);
-	particles.SetPlayer(effect, static_cast<int>(sitePlayer));
+	Locator::effectRequestSystem::value().Show(
+	    {.type = SpotVisualType::ObjectAppear, .position = top, .player = static_cast<int>(sitePlayer)});
 }
 
 } // namespace

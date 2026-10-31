@@ -17,6 +17,7 @@
 #include <string>
 #include <string_view>
 
+#include "Common/SavedPresentation.h"
 #include "HelpTextDisplay.h"
 
 namespace openblack::help
@@ -58,6 +59,22 @@ struct DialogueVoice
 /// and 8 more, longer or shorter with the player's reading speed. A text that waits for a click is not read until the
 /// player clicks. While a script holds the cinema bars, a click (or the keypad's Enter) cuts the text short and stops
 /// its voice.
+/// Where the player's click of the dialogue goes
+struct ClickPlace
+{
+	bool networkGame {false};
+	/// The player is in the temple
+	bool inTemple {false};
+	/// The player goes into the temple after this frame
+	bool templeGoesIn {false};
+};
+/// In a game alone the world's turns stop in the temple, and the temple's own turns take the click of the dialogue.
+/// Else the click goes to the world's turn as a command of the player.
+[[nodiscard]] constexpr bool TempleTurnsTakeTheClick(const ClickPlace& place)
+{
+	return !place.networkGame && (place.inTemple || place.templeGoesIn);
+}
+
 class DialogueText
 {
 public:
@@ -230,19 +247,17 @@ private:
 	mutable int32_t _endMs {0};
 
 public:
-	/// Gives the values that a saved game keeps to a visitor. The real times stay as the clock had them: see
-	/// ShiftRealTime.
+	/// Gives the values that a saved game keeps to a visitor. The times in milliseconds are on the scripts' clock,
+	/// which the save also keeps. Only the frames move the fade of the "Continue" cue and of the control icons, and no
+	/// turn reads them: they are presentation parts.
 	template <typename Self, typename Visitor>
 	static void VisitSaved(Self& self, Visitor&& visit)
 	{
-		visit(self._display, self._texts, self._waitClick, self._noClick, self._clickCueSeconds, self._keyIconSeconds,
-		      self._actionIconSeconds, self._startTurn, self._endTurn, self._startMs, self._endMs);
-	}
-	/// Moves the real times of the text by an amount, as a load of a saved game puts them on the clock of this run
-	void ShiftRealTime(int32_t milliseconds)
-	{
-		_startMs += milliseconds;
-		_endMs += milliseconds;
+		auto clickCue = PresentationOf(self._clickCueSeconds);
+		auto keyIcon = PresentationOf(self._keyIconSeconds);
+		auto actionIcon = PresentationOf(self._actionIconSeconds);
+		visit(self._display, self._texts, self._waitClick, self._noClick, clickCue, keyIcon, actionIcon, self._startTurn,
+		      self._endTurn, self._startMs, self._endMs);
 	}
 };
 

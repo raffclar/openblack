@@ -11,45 +11,24 @@
 
 #include <entt/entity/entity.hpp>
 
-#include "3D/DayNightClock.h"
-
 namespace openblack::ecs::systems
 {
 
-/// The world's sky: the dome with its clock of day and night (components::SkyDome, components::DayNightCycle), the sun
-/// (components::Sun) and the moon (components::Moon). The clock moves on a turn at a time; the sun, the moon and the
-/// dome's blend are worked out once a frame, before it is drawn.
+/// The sky that this computer shows: the dome (components::SkyDome), the sun (components::Sun) and the moon
+/// (components::Moon). Once a frame, the system finds the sun, the moon and the blend of the dome from the clock of
+/// SkyClockSystemInterface. The turns and the scripts do not read it, and the dedicated server does not make it.
 class SkySystemInterface
 {
 public:
 	virtual ~SkySystemInterface() = default;
 
-	/// Makes the sky's entities, with the sky kept from the last land when there is one
-	virtual void Initialize() = 0;
-	/// Keeps the sky as it is while the last land's entities go, for Initialize to make it again
-	virtual void KeepForNextLand() = 0;
-	/// After the load of a saved world: the system finds the sky's entities among the loaded entities
-	virtual void FindAfterLoad() = 0;
-
-	/// One turn of game time
-	virtual void ProcessTurn() = 0;
 	/// Once a frame, just before it is drawn: the sun and moon for the hour and the date, and the rows of the dome to
 	/// blend again while the sky is drawn
 	virtual void UpdateFrame(bool skyDrawn) = 0;
+	/// Builds the whole dome again at once for the sky of the clock, after the clock jumped to a new hour
+	virtual void JumpToClock() = 0;
 
-	/// Jumps to an hour of script time, the dome built again for it at once
-	virtual void SetTime(float time) = 0;
-	/// The sky of the visual time: 0 at night, 1 at dusk and 2 by day, between them as it turns
-	[[nodiscard]] virtual float GetCurrentSkyType() const = 0;
-	/// The visual time, between 0 and 24 in hours
-	[[nodiscard]] virtual float GetTime() const = 0;
-	/// The hours of the visual time the sky turns at
-	[[nodiscard]] virtual DayNightTimes GetDayNightTimes() const = 0;
-	/// The clock of day and night the sky follows
-	[[nodiscard]] virtual DayNightClock& GetClock() = 0;
-	[[nodiscard]] virtual const DayNightClock& GetClock() const = 0;
-
-	/// The sky's entities: the dome, which holds the clock, the sun and the moon
+	/// The sky's entities that this system shows: the dome, the sun and the moon
 	[[nodiscard]] virtual entt::entity GetDome() const = 0;
 	[[nodiscard]] virtual entt::entity GetSun() const = 0;
 	[[nodiscard]] virtual entt::entity GetMoon() const = 0;

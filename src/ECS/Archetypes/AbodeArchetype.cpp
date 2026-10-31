@@ -31,16 +31,22 @@
 #include "ECS/Components/StoragePit.h"
 #include "ECS/Components/Town.h"
 #include "ECS/Components/Transform.h"
+#include "ECS/Components/Workshop.h"
 #include "ECS/Creches.h"
 #include "ECS/DrinkingWater.h"
 #include "ECS/Graveyards.h"
 #include "ECS/PlacedTurn.h"
+#include "ECS/PlayerTowns.h"
 #include "ECS/Registry.h"
 #include "ECS/ShepherdRules.h"
 #include "ECS/Systems/ChimneySmokeSystemInterface.h"
 #include "ECS/Systems/FootpathSystemInterface.h"
+#include "ECS/Systems/GameEndSystemInterface.h"
+#include "ECS/Systems/ResourceStoreSystemInterface.h"
 #include "ECS/Systems/SpellIconSystemInterface.h"
 #include "ECS/Systems/TownSystemInterface.h"
+#include "ECS/Systems/WonderSystemInterface.h"
+#include "ECS/Systems/WorkshopSystemInterface.h"
 #include "ECS/TownCentreParts.h"
 #include "InfoConstants.h"
 #include "Locator.h"
@@ -68,12 +74,13 @@ void AddStoragePitComponents(entt::entity entity, const Mesh& pitMesh, const GAb
 
 	auto& pit = registry.Assign<StoragePit>(entity);
 
-	// The pit is made with all its piles, empty: five of wood and one of food where its model says
+	// The pit is made with all its piles, empty: one of food, then five of wood, where its model says
 	const auto makePile = [&](size_t place, PotInfo type) {
 		const auto& m = extraMetrics.at(place);
 		const auto translation = static_cast<glm::vec3>(portable_math::EulerAngleY(-yAngleRadians) * m[3]);
 		return PotArchetype::CreateEmpty(position + translation, yAngleRadians, type);
 	};
+	pit.foodPile = makePile(5, info.potForResourceFood);
 	std::array<magic::piles::PileRoom, std::tuple_size_v<decltype(StoragePit::woodPiles)>> woodRoom {};
 	size_t i = 0;
 	for (auto type = info.potForResourceWood; type != PotInfo::_COUNT;
@@ -85,7 +92,6 @@ void AddStoragePitComponents(entt::entity entity, const Mesh& pitMesh, const GAb
 		++i;
 	}
 	assert(i == pit.woodPiles.size());
-	pit.foodPile = makePile(5, info.potForResourceFood);
 
 	// Then it is given its food and wood, which fill its piles in turn: each pile that leads on to another takes no
 	// more than it is drawn full at, the last takes the rest
@@ -104,10 +110,10 @@ entt::entity AbodeArchetype::CreatePlan(uint32_t townId, const glm::vec3& positi
                                         float scale)
 {
 	auto& registry = Locator::entitiesRegistry::value();
-	// Without its town, the town nearest the place plans it
+	// Without its town, the town nearest the place plans it. The search goes over the game's list of all the towns.
 	if (!registry.Context().towns.contains(townId))
 	{
-		const auto town = Locator::townSystem::value().FindClosestTown(position);
+		const auto town = ecs::player_towns::NearestOfAll(registry, {position.x, position.z});
 		if (town == entt::null)
 		{
 			return entt::null;
@@ -131,11 +137,12 @@ entt::entity AbodeArchetype::Create(uint32_t townId, const glm::vec3& position, 
 {
 	auto& registry = Locator::entitiesRegistry::value();
 
-	// If there is no town, assign to closest
+	// Without its town, the building goes to the town nearest the place. The search goes over the game's list of all
+	// the towns.
 	if (registry.Context().towns.find(townId) == registry.Context().towns.end())
 	{
 		SPDLOG_LOGGER_WARN(spdlog::get("scripting"), "Function {} has invalid Town ({}).", __func__, townId);
-		const auto town = Locator::townSystem::value().FindClosestTown(position);
+		const auto town = ecs::player_towns::NearestOfAll(registry, {position.x, position.z});
 		if (town != entt::null)
 		{
 			townId = registry.Get<Town>(town).id;
@@ -148,6 +155,8 @@ entt::entity AbodeArchetype::Create(uint32_t townId, const glm::vec3& position, 
 	}
 
 	const auto entity = registry.Create();
+	// It takes its place in the order of the things made, before the things it makes for itself
+	TakeThingMadePlace();
 
 	const auto& info = Locator::infoConstants::value().abode.at(static_cast<size_t>(type));
 	bool morphsWithTerrain = false;
@@ -170,7 +179,14 @@ entt::entity AbodeArchetype::Create(uint32_t townId, const glm::vec3& position, 
 
 	const auto& transform =
 	    registry.Assign<Transform>(entity, position, glm::mat3(portable_math::EulerAngleY(-yAngleRadians)), glm::vec3(scale));
-	registry.Assign<Abode>(entity, info.abodeNumber, townId, foodAmount, woodAmount).info = type;
+	// A workshop gets its food and wood through its store, after it has its wood pile
+	const bool workshop = info.abodeType == AbodeType::Workshop;
+	registry.Assign<Abode>(entity, info.abodeNumber, townId, workshop ? 0u : foodAmount, workshop ? 0u : woodAmount).info =
+	    type;
+	if (workshop)
+	{
+		registry.Assign<Workshop>(entity);
+	}
 	// Under construction until all of it is built: it doesn't work until then
 	if (built < 1.0f)
 	{
@@ -234,6 +250,23 @@ entt::entity AbodeArchetype::Create(uint32_t townId, const glm::vec3& position, 
 	case AbodeType::StoragePit:
 		AddStoragePitComponents(entity, mesh, info, position, yAngleRadians, foodAmount, woodAmount);
 		break;
+	case AbodeType::Workshop:
+		// A workshop makes its empty wood pile, then takes its food and its wood as a store does: it keeps only the wood
+		if (Locator::workshopSystem::has_value())
+		{
+			Locator::workshopSystem::value().WoodPileOf(entity);
+		}
+		if (Locator::resourceStoreSystem::has_value())
+		{
+			auto& stores = Locator::resourceStoreSystem::value();
+			stores.AddResource(entity, ResourceType::Food, foodAmount, std::nullopt);
+			stores.AddResource(entity, ResourceType::Wood, woodAmount, std::nullopt);
+		}
+		else
+		{
+			registry.Get<Abode>(entity).woodAmount = woodAmount;
+		}
+		break;
 	case AbodeType::TownCentre:
 		// A town centre standing built carries its town's totem, and its stone hands show the miracles its town offers.
 		// A town centre not yet built gets them when its town finishes it.
@@ -254,6 +287,13 @@ entt::entity AbodeArchetype::Create(uint32_t townId, const glm::vec3& position, 
 		// A crèche standing built works at once, its town sending its children there
 		creches::Made(entity);
 		break;
+	case AbodeType::Wonder:
+		// A wonder gets the power of its size. A wonder that stands finished adds its power to its player at once.
+		if (Locator::wonderSystem::has_value())
+		{
+			Locator::wonderSystem::value().Made(entity, scale);
+		}
+		break;
 	default:
 		break;
 	}
@@ -262,6 +302,11 @@ entt::entity AbodeArchetype::Create(uint32_t townId, const glm::vec3& position, 
 	if (built >= 1.0f && Locator::footpathSystem::has_value())
 	{
 		Locator::footpathSystem::value().BuildingWorking(entity);
+	}
+	// A building made standing starts to work at once, and may make its town a new town
+	if (built >= 1.0f && Locator::gameEndSystem::has_value())
+	{
+		Locator::gameEndSystem::value().BuildingWorks(entity);
 	}
 
 	// A building puts up the things it has round itself, built or not

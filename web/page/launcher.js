@@ -427,18 +427,14 @@ async function start(online = false) {
     log('This build has no developer tools: the page ignores the parameters "args" and "tool-file".');
   }
   const list = chosen.map((entry, index) => `${index}\t${entry.file.size}\t${entry.path}`).join('\n');
-  const gameArguments = developer ? (parameters.get('args') || '').split(' ').filter(Boolean) : [];
-  // The Join Online Game button and the page parameter "multiplayer" give the game the -MULTIPLAYER switch, as the
-  // shortcut of the desktop game does: the multiplayer front end opens in place of the menu. With no profile, the game
-  // asks for the new player's name first. Every build takes the switch.
-  const multiplayer = online || parameters.has('multiplayer');
-  if (multiplayer && !gameArguments.some((argument) => argument.toUpperCase() === '-MULTIPLAYER')) {
-    gameArguments.push('-MULTIPLAYER');
-  }
+  // The page takes the arguments of a player from a list (launcher-arguments.js), and "args" in a developer build.
+  // With no profile, the multiplayer front end asks for the new player's name first.
+  const gameArguments = playerArguments(parameters, developer, online);
   const renderer = await chooseRenderer(parameters, gameArguments);
   if (renderer.backend) {
     gameArguments.push('--backend-type', renderer.backend);
   }
+  log(`The game gets the arguments: ${gameArguments.join(' ') || '(none)'}`);
   log(`Renderer: ${renderer.backend === 'OpenGLES' ? 'WebGL 2' : renderer.backend ?? 'from the game arguments'}, ` +
     `because ${renderer.reason}.`);
   const version = await buildVersion;
@@ -568,7 +564,7 @@ async function main() {
 
   element('play').addEventListener('click', () => start(false));
   element('play-online').addEventListener('click', () => start(true));
-  if (new URLSearchParams(location.search).has('multiplayer')) {
+  if (parameterIsOn(new URLSearchParams(location.search), 'multiplayer')) {
     element('play').hidden = true;
   }
 }

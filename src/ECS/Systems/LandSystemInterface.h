@@ -15,12 +15,14 @@
 #include <filesystem>
 #include <functional>
 #include <optional>
+#include <span>
 #include <string_view>
 
 #include <glm/vec2.hpp>
 
 #include "Gui/LoadingScreenRules.h"
 #include "LandChange.h"
+#include "LandMessage.h"
 #include "Simulation/TurnBody.h"
 #include "Story/NewGameChoice.h"
 
@@ -43,6 +45,9 @@ public:
 	virtual void ShowLoadingFrame() = 0;
 	/// The load is complete and the loading screen goes
 	virtual void EndLoadingScreen() = 0;
+	/// A load with no loading screen is complete: the view prepares the work of the first frame, as at the end of a
+	/// loading screen, but draws no frame
+	virtual void EndLoadWithoutScreen() = 0;
 	/// Closes the start-of-game question with no answer. Gives true when the question was open.
 	virtual bool WithdrawSkipBox() = 0;
 	/// Closes the menu before the land changes
@@ -60,15 +65,18 @@ public:
 	virtual bool AskStartQuestion(bool hasCreature) = 0;
 	/// The challenge file of the scripts. None for the file in its usual folder.
 	[[nodiscard]] virtual std::optional<std::filesystem::path> ChallengeFile() = 0;
+	/// The script of the land gives a command for the land information box
+	virtual void ShowLandMessage(const land_message::Message& /*message*/) {}
 };
 
 /// A view that does nothing, for a world with no player in front of it
-class NoLandView final: public LandViewInterface
+class NoLandView: public LandViewInterface
 {
 public:
 	void BeginLoadingScreen(loading::LoadingClock::Mode /*look*/) override {}
 	void ShowLoadingFrame() override {}
 	void EndLoadingScreen() override {}
+	void EndLoadWithoutScreen() override {}
 	bool WithdrawSkipBox() override { return false; }
 	void CloseMenuForNewLand() override {}
 	void MakeSymbolSheet() override {}
@@ -98,7 +106,11 @@ public:
 	virtual void LoadTestbed() = 0;
 	/// Loads the network map for 32 gods on this computer alone, for tests: a round island with a citadel and a village in
 	/// each slot. The village comes from a land of the game for network play. Gives false when that land is not there.
+	/// The game makes the file of the map and loads it as LoadGodsRingMapFile does.
 	virtual bool LoadGodsRingMap() = 0;
+	/// Loads the network map for 32 gods from the bytes of its file (gods_ring_map_file). Gives false when the bytes are
+	/// not a file of the map.
+	virtual bool LoadGodsRingMapFile(std::span<const uint8_t> file) = 0;
 	/// What the load of a saved land is for
 	enum class SavedLandUse : uint8_t
 	{
@@ -116,11 +128,18 @@ public:
 	virtual void LoadLandscape(const std::filesystem::path& path) = 0;
 	/// The map script of the land gives the start place of the camera, in map units
 	virtual void SetStartCameraPlace(glm::ivec2 place) = 0;
+	/// The map script of the land gives a command for the land information box. The view of the player shows it.
+	virtual void ShowLandMessage(const land_message::Message& message) = 0;
 
 	/// Whether the script of a land is one of the playground lands, which the game plays as a skirmish
 	[[nodiscard]] virtual bool IsPlaygroundLand(const std::filesystem::path& path) const = 0;
+	/// The count of the lands that started to load since the start: a map, the testbed, the map for 32 gods, a saved game
+	/// or a world state. A tool can see from a change of the count that a step loaded a land.
+	[[nodiscard]] virtual uint32_t LandLoads() const = 0;
 	/// The map script of the land that loaded last, or the path of the testbed. Empty before a land loads.
 	[[nodiscard]] virtual const std::filesystem::path& GetLandPath() const = 0;
+	/// The land is the testbed. It has no temples, so a developer tool's network game on it asks for none.
+	[[nodiscard]] bool OnTestbed() const { return GetLandPath().string() == k_TestbedLandPath; }
 	/// The landscape file of the land, as the map script of the land gave it
 	[[nodiscard]] virtual const std::filesystem::path& GetLandscapePath() const = 0;
 	/// The challenge file of the scripts
@@ -128,12 +147,18 @@ public:
 
 	/// How a new game on the first land starts: the start-of-game question, or its answer at once
 	virtual void SetNewGameStart(std::optional<new_game_choice::NewGameStart> start) = 0;
+	/// For developers: how the new game was started, which says whether a direct start of a later land makes a creature
+	[[nodiscard]] virtual const std::optional<new_game_choice::NewGameStart>& GetNewGameStart() const = 0;
 	/// The humans of a land of a network game come from the network session at the start of the game. Without a session,
 	/// the player of this computer is the one human when the land loads.
 	virtual void SetHumansFromSession(bool fromSession) = 0;
 	/// The map script of a land of a network game runs now. While it runs, its lines do not switch a computer mind on or
 	/// off: the slots with no human get their computer gods after the script.
 	[[nodiscard]] virtual bool RunsNetworkMapScript() const = 0;
+
+	/// Tools only (the AI soak): every god with a citadel is a computer god when the land loads, also the god of this
+	/// computer. The slots fill then, and no human joins.
+	virtual void SetAllComputerGods(bool allComputer) = 0;
 	/// Starts the scripts of the challenge: the script machine reads the challenge file, and the story starts if asked.
 	/// Gives false when the challenge file is not there.
 	virtual bool StartChallengeScripts(bool startStory) = 0;
@@ -142,6 +167,14 @@ public:
 
 	/// Plays the turn of the world when it is due, and the own turns of the temple while the player is in it
 	virtual void PlayTurns(simulation::TurnViewInterface& view) = 0;
+	/// The turns of PlayTurns without the work after them, on the calling thread. That thread can be another thread than
+	/// the main thread, while the main thread does no turn and does not change the world. Then the main thread calls
+	/// FinishTurns.
+	virtual void PlayTurnSteps(simulation::TurnViewInterface& view) = 0;
+	/// On the main thread after PlayTurnSteps: the main thread does the work that the turns gave it, and the run record
+	/// keeps the time of the turns played since `turnBefore`, from `start` to `end` (with no end, to now)
+	virtual void FinishTurns(uint32_t turnBefore, std::chrono::steady_clock::time_point start,
+	                         std::optional<std::chrono::steady_clock::time_point> end) = 0;
 	/// The real time between the last two turns
 	[[nodiscard]] virtual std::chrono::steady_clock::duration GetTurnDeltaTime() const = 0;
 	/// Every some turns, the profile of the player keeps the alignment of the player, but not on the testbed

@@ -45,6 +45,13 @@ public:
 	virtual float RecomputeDesire(entt::entity town, TownDesireInfo desire) = 0;
 	/// How short of food a town is, from 0 to 1: as its people judge whether to carry food they found to its store
 	[[nodiscard]] virtual float FoodShortage(entt::entity town) const = 0;
+	/// The food that a town wants and the food that it has, as a computer god sees them. Nothing without a town.
+	struct FoodNeed
+	{
+		float wanted {0.0f};
+		uint32_t held {0};
+	};
+	[[nodiscard]] virtual FoodNeed FoodWantedAndHeld(entt::entity town) const = 0;
 	/// The desire a town wants most this turn, None without a town
 	[[nodiscard]] virtual TownDesireInfo GetMostWanted(entt::entity town) const = 0;
 	/// The scripts' boost to a desire; `resort` puts the town's order right at once
@@ -53,6 +60,9 @@ public:
 	/// Once a frame, by the game's time passed in it: each town's store flies a flag for some of its desires, each as
 	/// high as the town wants that thing, turned to the camera, while the store stands built
 	virtual void UpdateFlags(float seconds) = 0;
+	/// The town gets the entities of its flags, as the game makes them with the town. Each flag goes into the map cell
+	/// of its place. Nothing changes for a town that has its flags.
+	virtual void MakeFlags(entt::entity town) = 0;
 	/// Once a turn: each town gets the entities of its flags, and the flags of a town that has gone go too. Only the turn
 	/// makes and removes these entities, so that every computer keeps the same entities in the world.
 	virtual void ProcessFlags() = 0;

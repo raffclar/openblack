@@ -27,9 +27,6 @@
 #include <spdlog/spdlog.h>
 
 #include "3D/LandIslandInterface.h"
-#include "Audio/AudioManagerInterface.h"
-#include "Audio/GameSoundEffects.h"
-#include "Audio/Sound.h"
 #include "Camera.h"
 #include "CameraKeys.h"
 #include "CameraLimits.h"
@@ -45,12 +42,15 @@
 #include "ECS/Systems/CreatureFightSystemInterface.h"
 #include "ECS/Systems/HelpProfileSystemInterface.h"
 #include "ECS/Systems/PickingSystemInterface.h"
+#include "ECS/Systems/TurnCheerSystemInterface.h"
 #include "EngineConfig.h"
 #include "FightView.h"
 #include "Help/HelpProfile.h"
-#include "Help/TurnCheer.h"
 #include "Input/GameActionMapInterface.h"
 #include "Locator.h"
+#include "Sound/GameSoundEffects.h"
+#include "Sound/SoundId.h"
+#include "Sound/SoundRequestInterface.h"
 #include "Windowing/WindowingInterface.h"
 #include "ZoomToPlaces.h"
 
@@ -1117,11 +1117,10 @@ void DefaultWorldCameraModel::HandleActions(std::chrono::microseconds dt)
 	}
 	SendHelpEvents(_helpEvents);
 	// The measure of how fast the player turns the camera, which the advisors' cheering of the turning lesson goes by,
-	// takes in this frame's turn, or slows towards still
-	if (const auto seconds = std::chrono::duration<float>(dt).count(); seconds > 0.0f && Locator::cameraHelpSystem::has_value())
+	// takes in this step's turn, or slows towards still
+	if (const auto seconds = std::chrono::duration<float>(dt).count(); seconds > 0.0f && Locator::turnCheerSystem::has_value())
 	{
-		auto& turnSpeed = Locator::cameraHelpSystem::value().Get().turnSpeed;
-		turnSpeed = help::turn_cheer::SmoothSpeed(turnSpeed, _turnedThisFrame.value_or(0.0f), seconds);
+		Locator::turnCheerSystem::value().MeasureTurn(_turnedThisFrame, seconds);
 	}
 	UpdateIconFrame(onFight);
 }
@@ -1248,7 +1247,7 @@ void DefaultWorldCameraModel::SendHelpEvents(camera_help::events::EventSet event
 		return;
 	}
 	auto& profile = Locator::helpProfileSystem::value();
-	events.ForEach([&profile](uint32_t event) { profile.Trigger(event); });
+	events.ForEach([&profile](uint32_t event) { profile.Report(event); });
 }
 
 DefaultWorldCameraModel::Mode DefaultWorldCameraModel::HandleDrag(bool held)

@@ -24,6 +24,7 @@
 #include "ECS/AltarOffering.h"
 #include "Enums.h"
 #include "HandGrabRules.h"
+#include "ThrowLead.h"
 
 namespace openblack::ecs
 {
@@ -143,6 +144,10 @@ public:
 	};
 	virtual void CreateReaction(const ReactionRequest& request) = 0;
 	virtual void RemoveReactions(entt::entity initiator, Reaction type) = 0;
+	/// The thing goes into the hand: each of its reactions that a hand ends stops its spread
+	virtual void StopReactionSpreadInHand(entt::entity object) = 0;
+	/// The hand uses or lets go of the thing: each of its reactions spreads again
+	virtual void SpreadReactionsAgain(entt::entity object) = 0;
 	/// A burning thing starts moving, into a hand (or it is a villager) or not
 	virtual void FireStartedMoving(entt::entity object, bool inHand) = 0;
 	/// A thing goes into the hand from where it stood: a firefly hiding exactly there is caught, for its reward
@@ -151,12 +156,20 @@ public:
 	virtual void CountHelpEvent(uint32_t event) = 0;
 	/// The hand of the local player takes a thing or lets go of it: the hand forgets the path of the gesture it draws
 	virtual void ForgetGesturePath() {}
+	/// Whether the hand is the one that this computer moves, and so draws gestures: the hand of a computer god or of
+	/// another player is not
+	[[nodiscard]] virtual bool IsLocalHand() const { return true; }
 	/// A held thing catches from the fires in its cell
 	virtual void HeatHeld(entt::entity object) = 0;
+	/// The game turn of a held thing of its own, after the hand moved it: a scaffold looks for the building that it offers
+	virtual void HeldTurn(entt::entity /*object*/) {}
 	/// A sound of the in-game bank where something is
 	virtual void PlaySample(uint32_t sample, glm::vec3 position) = 0;
 	/// The hand taps a thing at a point, for a player, as a rock breaks when tapped; whether the thing took the tap
 	virtual bool TapThing(entt::entity object, glm::vec3 handPoint, PlayerNames player) = 0;
+	/// Whether a thing takes a tap of the hand's player because of its kind: a building, a rock that breaks, a scroll, a
+	/// globe, a chest, an icon, the player's own leash post or the entrance of a temple
+	[[nodiscard]] virtual bool ValidToTap(entt::entity object) const = 0;
 	/// Whether what the hand holds can be given to a thing: none when the thing isn't a creature
 	[[nodiscard]] virtual std::optional<creature_giving::Verdict> GiveVerdict(entt::entity /*target*/,
 	                                                                          entt::entity /*held*/) const
@@ -208,6 +221,10 @@ public:
 	virtual void ArtefactTaken(entt::entity object, PlayerNames player) = 0;
 	/// A one-shot miracle's globe goes into the hand: the player has now had its miracle within reach
 	virtual void GlobeIntoHand(entt::entity /*globe*/, PlayerNames /*player*/) {}
+	/// A scaffold goes into the hand: its workshop keeps its place in the yard free for it
+	virtual void ScaffoldIntoHand(entt::entity /*scaffold*/, PlayerNames /*player*/) {}
+	/// A piece of a puzzle game goes into the hand: it comes off the piece that it rested on
+	virtual void PuzzlePieceIntoHand(entt::entity /*piece*/) {}
 	/// Pulling up a tree moves the player's alignment
 	virtual void TreeUprooted(PlayerNames player, entt::entity tree) = 0;
 	/// A big forest gives a tree for the hand, taking a tree's wood from it (which may shrink it or use it up): a full
@@ -249,17 +266,30 @@ public:
 	/// A point as the game keeps a place on the map: the ground under it, the height above the ground and the place on
 	/// the map's grid of fixed points
 	[[nodiscard]] virtual glm::vec3 AsMapPlace(glm::vec3 point) const { return point; }
+	/// The world place that a thing in a hand gets at each turn from the reported point of the hand: the map position
+	/// of the thing, with the height of the point above the ground
+	[[nodiscard]] virtual glm::vec3 HeldPlaceAt(glm::vec3 point) const { return point; }
 	virtual void SetPose(entt::entity object, const Pose& pose) = 0;
 	/// The pose that the frames draw a thing in while the hand pulls at it. The world keeps the thing as it stood.
 	virtual void DrawPulledPose(entt::entity object, const Pose& pose) { SetPose(object, pose); }
-	/// The frames draw the thing at its own place again, as the pull ends
+	/// The frames draw the thing at its own place again: at the take, at the start of a new pull, and at the let go in a
+	/// network game
 	virtual void ForgetPulledPose([[maybe_unused]] entt::entity object) {}
 	/// A thing's axes at its own size, as they are once it stops being stretched
 	[[nodiscard]] virtual glm::mat3 UnstretchedAxes(entt::entity object, const glm::mat3& axes) const = 0;
 
-	/// Letting go, on the computer of the player that lets go: where the thing starts as it leaves the hand. The thing
-	/// starts as this computer last drew it, comes up out of the land, and lies along the land or not.
-	[[nodiscard]] virtual player_commands::ThrowStart ThrowStartOf(entt::entity object, bool alignToSlope) = 0;
+	/// Letting go, on the computer of the player that lets go: where the thing starts as it leaves the hand, and its
+	/// velocity. The thing starts as this computer last drew it, comes up out of the land, and lies along the land or
+	/// not. Then it flies for the turns of lead.
+	[[nodiscard]] virtual throw_lead::LedThrow ThrowStartOf(entt::entity object, bool alignToSlope, glm::vec3 velocity,
+	                                                        int leadTurns) = 0;
+	/// The latency of the reports of this computer's hand, in milliseconds (see throw_lead::ReportLatency)
+	[[nodiscard]] virtual uint32_t ReportLatencyMs() const { return 0; }
+	/// The turn that the frames of this computer are in, and how far through it they are
+	[[nodiscard]] virtual uint32_t FrameTurn() const { return 0; }
+	[[nodiscard]] virtual float FrameTurnFraction() const { return 0.0f; }
+	/// The frames draw a thing that this computer threw at a place on the flight of its lead. The axes have no size.
+	virtual void DrawThrownPose([[maybe_unused]] entt::entity object, [[maybe_unused]] const physics::Pose& pose) {}
 	/// Letting go, on every computer: the thing goes to the start that the command has, at its own size
 	virtual void StartThrowFrom(entt::entity object, const player_commands::ThrowStart& start) = 0;
 	/// A pot let go slowly is poured out where it is: what it holds goes to what takes it there or into a pile, and the
@@ -330,6 +360,15 @@ public:
 	/// Whether a thing takes a held thing whole when the hand gives it: a worship site's altar that takes its kind, a
 	/// gate stone plinth that takes a gate stone, or a store that takes what it is worth. Nothing changes.
 	[[nodiscard]] virtual bool TakesWhole(entt::entity /*target*/, entt::entity /*held*/) const { return false; }
+	/// Whether the hand can join a held scaffold to a scaffold under it. Nothing changes.
+	[[nodiscard]] virtual bool JoinsScaffold(entt::entity /*target*/, entt::entity /*held*/) const { return false; }
+	/// The hand joins a held scaffold to the scaffold under it, and the held scaffold goes. The caller removes the held
+	/// scaffold from the hand first.
+	virtual void JoinScaffold(entt::entity /*target*/, entt::entity /*held*/) {}
+	/// The hand put a scaffold down gently on a building that needs fewer scaffolds than the scaffold is worth: the
+	/// scaffold keeps what the building needs, and the rest becomes a new scaffold. The new scaffold, which the hand takes,
+	/// or none. The hand of a computer god keeps no rest.
+	virtual entt::entity RestOfScaffold(entt::entity /*scaffold*/) { return entt::null; }
 	/// Lays a gate stone in the gate stone plinth it is given to; false for anything else, which is left as it is
 	virtual bool LayGateStone(entt::entity plinth, entt::entity stone) = 0;
 	/// Some resource poured onto a point: to the stores and piles of it about the point, or a new pile

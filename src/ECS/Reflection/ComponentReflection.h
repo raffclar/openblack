@@ -39,7 +39,7 @@
 #include "ReflectionTraits.h"
 
 #if defined(OPENBLACK_INSPECTOR)
-#include "Inspector/ComponentJsonCodec.h"
+#include "ComponentJsonCodec.h"
 #endif
 
 /// The fields of the components, registered once with the reflection of EnTT. The game writes every registered
@@ -124,6 +124,12 @@ struct FieldInfo
 	/// Writes the value of the field straight from the value that holds it, with no reflection on the way: the same
 	/// bytes as save, at a lower cost. None when only save can write it.
 	void (*saveFrom)(const void* owner, BinaryWriter& out) {nullptr};
+	/// For a synced field whose save writes the bytes of the field as they are in memory: the address of the field in
+	/// the value that holds it. A save plan copies such fields that touch in memory as one block. None for any other
+	/// field.
+	const void* (*plainAddress)(const void* owner) {nullptr};
+	/// The count of the bytes of a field that has plainAddress
+	uint32_t plainSize {0};
 	/// Reads the value of the field of the instance from the binary archive
 	void (*load)(const entt::meta_data& data, entt::meta_any& instance, BinaryReader& in) {nullptr};
 #if defined(OPENBLACK_INSPECTOR)
@@ -367,9 +373,29 @@ struct ComponentInfo
 	/// Copies the rows of a storage, for a writer on another thread to encode; none for a component that cannot be
 	/// copied, or that shares values which the game's thread changes
 	StorageCopy (*copy)(const entt::sparse_set& storage) {nullptr};
+	/// Only this computer has the component, as drawn state: the world save, the world parts that the server sends and
+	/// the hashes of the world leave it out. A component tells this with a constant k_LocalOnly that is true.
+	bool localOnly {false};
 };
 
 /// Registers a component and its fields by name: Reflect<Transform>(context).Field<&Transform::position>("position")
+namespace detail
+{
+/// Whether a component is drawn state that only this computer has: it has a constant k_LocalOnly that is true
+template <typename Type>
+[[nodiscard]] constexpr bool IsLocalOnly()
+{
+	if constexpr (requires { Type::k_LocalOnly; })
+	{
+		return Type::k_LocalOnly;
+	}
+	else
+	{
+		return false;
+	}
+}
+} // namespace detail
+
 template <typename Type>
 class Reflect
 {
@@ -381,6 +407,7 @@ public:
 	          .storage = [](entt::registry& registry) -> entt::sparse_set& { return registry.storage<Type>(); },
 	          .codec = {},
 	          .copy = nullptr,
+	          .localOnly = detail::IsLocalOnly<Type>(),
 	      })
 	{
 		if constexpr (std::is_copy_constructible_v<Type>)
@@ -407,6 +434,21 @@ public:
 	template <auto Member>
 	Reflect& Field(std::string_view name, std::vector<std::span<const std::string_view>> indexNames)
 	{
+		return KeptField<Member, false>(name, std::move(indexNames));
+	}
+
+	/// A field that only the frames or the local random numbers of this computer change, and that no turn reads. The
+	/// binary archive keeps it as a presentation value, so the tools that compare the synced state do not look at it.
+	template <auto Member>
+	Reflect& PresentationField(std::string_view name)
+	{
+		return KeptField<Member, true>(name, {});
+	}
+
+	/// A field that the binary archive keeps, as a presentation value or as a synced value
+	template <auto Member, bool Presentation>
+	Reflect& KeptField(std::string_view name, std::vector<std::span<const std::string_view>> indexNames)
+	{
 		using Value = std::remove_cvref_t<decltype(std::declval<Type&>().*Member)>;
 		// Fields are reached by reference, so that values that can't be copied are read too, and nested values are set
 		// where they are
@@ -418,10 +460,11 @@ public:
 		        [](const entt::meta_any& any, BinaryWriter& out) {
 			        if (const auto* value = any.try_cast<const Value>(); value != nullptr)
 			        {
-				        Save(out, *value);
+				        SaveKept<Presentation>(out, *value);
 			        }
 		        },
-		    .saveFrom = [](const void* owner, BinaryWriter& out) { Save(out, static_cast<const Type*>(owner)->*Member); },
+		    .saveFrom = [](const void* owner,
+		                   BinaryWriter& out) { SaveKept<Presentation>(out, static_cast<const Type*>(owner)->*Member); },
 		    .load =
 		        [](const entt::meta_data& data, entt::meta_any& instance, BinaryReader& in) {
 			        auto field = data.get(instance);
@@ -436,6 +479,13 @@ public:
 		        },
 		    .indexNames = std::move(indexNames),
 		};
+		if constexpr (!Presentation && SavesAsMemory<Value>())
+		{
+			info.plainAddress = [](const void* owner) -> const void* {
+				return std::addressof(static_cast<const Type*>(owner)->*Member);
+			};
+			info.plainSize = static_cast<uint32_t>(sizeof(Value));
+		}
 #if defined(OPENBLACK_INSPECTOR)
 		info.encode = [](const entt::meta_any& any) -> std::optional<Json> {
 			if (const auto* value = any.try_cast<const Value>(); value != nullptr)
@@ -499,7 +549,8 @@ public:
 				}
 			};
 			info.saveFrom = [](const void* owner, BinaryWriter& out) {
-				Save(out, static_cast<Value>(std::invoke(Getter, *static_cast<const Type*>(owner))));
+				// A getter that gives a reference saves the value where it is, with no copy
+				Save(out, static_cast<const Value&>(std::invoke(Getter, *static_cast<const Type*>(owner))));
 			};
 			info.load = [](const entt::meta_data& data, entt::meta_any& instance, BinaryReader& in) {
 				Value value {};

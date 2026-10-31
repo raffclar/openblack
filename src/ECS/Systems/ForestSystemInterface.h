@@ -65,6 +65,9 @@ public:
 	[[nodiscard]] virtual std::vector<entt::entity> TreesOf(entt::entity forest, bool growing) const = 0;
 	/// The wood in a forest: its big forest's and every tree's
 	[[nodiscard]] virtual float WoodOf(entt::entity forest) const = 0;
+	/// The wood of a tree as a forest counts it: its life, the worth of a forest miracle's tree, the wood value of its
+	/// kind, its scale and the land's balance for wood, not truncated. 0 for a thing that is not a tree.
+	[[nodiscard]] virtual float TreeWoodOf(entt::entity tree) const = 0;
 	/// The point of a forest nearest a point: on its big forest's edge towards it, or else the forest's place
 	[[nodiscard]] virtual glm::vec3 NearestPointOf(entt::entity forest, glm::vec3 to) const = 0;
 	/// Wood taken from a big forest: it comes off divided by the forest's life; a forest left with none goes from the
@@ -97,6 +100,12 @@ public:
 	/// A tree joins a forest by its number: among its growing trees when made to grow and still short of its largest
 	/// size, or else among its grown trees
 	virtual void JoinForest(entt::entity tree, uint32_t forest) = 0;
+	/// A tree joins a forest by its number, among its growing trees or among its grown trees as asked. It comes after
+	/// the trees that joined before it. The import of a game's file uses this.
+	virtual void ListInForest(entt::entity tree, uint32_t forest, bool growing) = 0;
+	/// The import of a game's file gives the turn that a forest last got a tree near another tree, and the number of
+	/// the next forest without a number
+	virtual void ResumeCounts(uint32_t lastTreeAddedTurn, uint32_t nextLandForestId) = 0;
 	/// Once a game turn, after the fields and before the living: each forest, the newest first, grows its growing trees
 	/// and may spread, and one long empty goes
 	virtual void GrowForests() = 0;

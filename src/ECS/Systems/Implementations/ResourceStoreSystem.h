@@ -33,6 +33,8 @@ public:
 	uint32_t AddToPile(entt::entity pile, ResourceType type, uint32_t amount, bool poisoned) override;
 	uint32_t TakeFromPile(entt::entity pile, ResourceType type, uint32_t amount, std::optional<PlayerNames> taker) override;
 	bool TakeObject(entt::entity store, entt::entity object, std::optional<PlayerNames> giver) override;
+	bool TakeObjectAs(entt::entity store, entt::entity object, ObjectResource resource,
+	                  std::optional<PlayerNames> giver) override;
 	void ReportGift(entt::entity store, ResourceType type, PlayerNames giver) override;
 	bool PourAt(ResourceType type, glm::vec3 point, uint32_t amount, bool speedUp, PlayerNames player, bool poisoned) override;
 	[[nodiscard]] std::optional<entt::entity> StoreOf(entt::entity pile) const override;
@@ -55,6 +57,10 @@ public:
 private:
 	/// A storage pit takes what it will into its piles, without the giving's count in its town
 	uint32_t FillPit(entt::entity store, ResourceType type, uint32_t amount, bool poisoned);
+	/// A workshop takes wood into its pile: what the pile took
+	uint32_t FillWorkshop(entt::entity store, ResourceType type, uint32_t amount, bool poisoned);
+	/// A workshop gives wood from its pile, else what it counts: what it gave
+	uint32_t TakeFromWorkshop(entt::entity store, ResourceType type, uint32_t amount, std::optional<PlayerNames> taker);
 	/// The store's own count loses what was taken; taking counts against the town's owner, and is remembered of the taker
 	uint32_t RemovedFromStore(entt::entity store, ResourceType type, uint32_t amount, std::optional<PlayerNames> taker);
 	/// What a storage pit's piles give of what is asked, the last wood pile first

@@ -65,6 +65,9 @@ enum class Purpose : uint8_t
 	CloseSelection,
 	/// With the hand ready, the R: the last miracle that came into the hand comes again from its icon
 	RepeatMiracle,
+	/// A scribble with the empty hand, while an icon of a worship site of the player charges a miracle for the hand: the
+	/// icon that started its charge last stops it
+	CancelCharge,
 };
 
 [[nodiscard]] std::string_view Name(Purpose purpose);
@@ -86,14 +89,17 @@ struct Request
 {
 	GestureType gesture {GestureType::None};
 	Purpose purpose {Purpose::DropSeed};
-	/// PowerUp: the level, 0 to 2
+	/// PowerUp: the level, 0 to 2. DropSeed with a seed that can power up: the level that the seed has, -1 for none.
 	int powerUpLevel {-1};
 	/// PickLeash: the leash; LeashGesture: the leash worn, else the one picked to put on next
 	LeashType leash {LeashType::None};
 	/// FightMiracle: the miracle, and the seed of the miracle that its hint shows
 	MagicType magic {MagicType::None};
-	/// SelectMiracle and RepeatMiracle: the miracle that the hint of the gesture shows
+	/// FightMiracle and RepeatMiracle: the seed that the hint of the gesture shows. SelectMiracle: the seed that the
+	/// gesture selects. PowerUp, and DropSeed with a seed that can power up: the seed in the hand.
 	SpellSeedType seed {SpellSeedType::None};
+	/// OpenSelection: the gesture opens the selection for the miracles of the creature
+	bool forCreature {false};
 
 	bool operator==(const Request&) const = default;
 };
@@ -104,6 +110,7 @@ struct HandContext
 	/// The seed held in the hand
 	struct Seed
 	{
+		SpellSeedType type {SpellSeedType::None};
 		/// Held long enough to cast, and not yet cast
 		bool ready {true};
 		bool cast {false};
@@ -126,6 +133,8 @@ struct HandContext
 	bool actionHeld {false};
 	/// The hand holds a thing that isn't a miracle's seed
 	bool holdingObject {false};
+	/// An icon at a worship site of the player charges a miracle for this hand
+	bool iconCharging {false};
 
 	/// The player's creature
 	struct Creature
@@ -200,6 +209,25 @@ inline constexpr std::string_view k_HiddenScript = "HiddenScript";
 /// The event that the help counts when the hand draws the gesture of a request, none for most gestures. A scribble
 /// counts only when it is about a miracle that the hand can power up.
 [[nodiscard]] std::optional<uint32_t> HelpEventOf(const Request& request, const HandContext& context);
+/// What a gesture of the miracle selection, or the R, did
+enum class SelectionStep : uint8_t
+{
+	/// The selection had nothing to offer and stays closed, or no miracle of the open selection has the gesture
+	Nothing,
+	/// A spiral or an inverse spiral opens the selection
+	Opened,
+	/// A miracle of the selection has the gesture, and more gestures follow it in the chain of the miracle
+	Advanced,
+	/// The gesture is the last of the chain of a miracle: the hand asks the icon of the miracle for it
+	Chosen,
+	/// A scribble closes the selection
+	Closed,
+	/// The R asks the icon again for the last miracle that came into the hand
+	Repeated,
+};
+/// The events that the help counts, in their order, for a step of the miracle selection. A choice counts as a step of
+/// the chain first.
+[[nodiscard]] std::vector<uint32_t> HelpEventsOf(SelectionStep step);
 /// Whether the chain follows the hand. It follows the hand while the hand holds a miracle that it can power up or that a
 /// circle sizes. After a miracle did its first turn in the hand on the land, it follows the hand while it holds any
 /// miracle.

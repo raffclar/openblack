@@ -363,6 +363,10 @@ TEST(PrayerRules, ASummonedSeedIsChargedAndGivesBackWhatItHoldsWhenDropped)
 	EXPECT_FLOAT_EQ(SeedRefund(true, charge, -1.0f, true), 0.0f);
 	// A bubble's seed was never the player's
 	EXPECT_FLOAT_EQ(SeedRefund(false, charge, -1.0f, false), 0.0f);
+	// The seed holds the same as it gives back
+	EXPECT_FLOAT_EQ(SeedChantStore(charge, -1.0f, false), charge);
+	EXPECT_FLOAT_EQ(SeedChantStore(charge, 1200.0f, true), 1200.0f);
+	EXPECT_FLOAT_EQ(SeedChantStore(charge, -1.0f, true), 0.0f);
 	EXPECT_TRUE(ReadyAtOnce(SeedOrigin::Bubble));
 	EXPECT_FALSE(ReadyAtOnce(SeedOrigin::Worship));
 }

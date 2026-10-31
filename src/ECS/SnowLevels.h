@@ -36,7 +36,8 @@ struct Hold
 	int32_t cap;
 };
 
-/// The snow that a thing carries. A creature and a bird carry no snow.
+/// The snow that a thing carries. A creature and a bird carry no snow. A tree that the game drew out of the land one time
+/// carries less snow from then on.
 [[nodiscard]] std::optional<Hold> HoldOf(const Registry& registry, entt::entity entity);
 
 /// One step for each of `things` that the land draws: its level moves towards the snow where it stands, by at most
@@ -46,5 +47,27 @@ void Step(Registry& registry, std::span<const entt::entity> things, const std::f
 
 /// The snow that a thing shows, 0 to 255
 [[nodiscard]] int32_t LevelOf(const Registry& registry, entt::entity entity);
+
+/// The snow that the drawn model of a thing shows, 0 to 255. A broken building shows the snow of its broken model, and a
+/// piece that broke off a building shows its own. Each of the two shows no snow below k_BrokenModelLevelShown. A villager
+/// that a script draws in high detail shows no snow.
+[[nodiscard]] int32_t ShownLevelOf(const Registry& registry, entt::entity entity);
+
+/// Keeps the snow of the broken model of a building. When the building breaks, the snow of its broken model starts at
+/// the level of the building. When the building is whole again, it loses the snow of its broken model.
+void FollowBreak(Registry& registry, entt::entity building, bool broken);
+
+/// A piece that broke off `building` takes the snow of the broken model of the building, one time. A piece without a
+/// building takes no snow.
+void TakePieceSnow(Registry& registry, entt::entity piece, entt::entity building);
+
+/// Notes each tree that the game draws out of the land this frame: in a hand or in the physics, out of the cells of the
+/// map, and not sunk under the sea. Each one carries less snow from then on.
+void NoteTreesOutOfLand(Registry& registry);
+
+/// One step for each broken building of `buildings`: the snow of its broken model moves towards the snow where it
+/// stands, by at most `step`
+void StepBroken(Registry& registry, std::span<const entt::entity> buildings, const std::function<float(glm::vec2)>& depthAt,
+                int32_t step);
 
 } // namespace openblack::ecs::snow_levels

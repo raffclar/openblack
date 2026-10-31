@@ -31,6 +31,7 @@
 #include "Common/GUtilsDistance.h"
 #include "Common/GameRandom.h"
 #include "Common/PortableRotations.h"
+#include "ECS/Archetypes/Utils.h"
 #include "ECS/Components/AtHome.h"
 #include "ECS/Components/Creature.h"
 #include "ECS/Components/CreatureObjectAction.h"
@@ -44,11 +45,13 @@
 #include "ECS/Components/TownAggression.h"
 #include "ECS/Components/Transform.h"
 #include "ECS/Components/Villager.h"
+#include "ECS/PlayerTowns.h"
 #include "ECS/Reflection/BinaryArchive.h"
 #include "ECS/Registry.h"
+#include "ECS/Systems/DynamicsSystemInterface.h"
+#include "ECS/Systems/EffectRequestSystemInterface.h"
 #include "ECS/Systems/LivingActionSystemInterface.h"
 #include "ECS/Systems/MagicSystemInterface.h"
-#include "ECS/Systems/ParticleSystemInterface.h"
 #include "ECS/Systems/ReactionSystemInterface.h"
 #include "ECS/Systems/TimeSystemInterface.h"
 #include "ECS/Systems/TownDesireSystemInterface.h"
@@ -94,20 +97,27 @@ uint32_t GameTurn()
 }
 
 /// What a thrown thing weighs, by its kind's table and its size; whether it is a rock, which the game's physics counts as
-/// The town nearest to a point, within the reach a shield protects
+/// The town nearest to a point, strictly within the reach a shield protects, by the game's map distance. Each player's
+/// town list in turn and the neutral list last: the first met wins a tie.
 entt::entity NearestTown(glm::vec3 point)
 {
 	auto& registry = EntityRegistry();
 	entt::entity nearest = entt::null;
 	float best = shield::k_NearestTownDistance;
-	registry.Each<const Town, const Transform>([&](entt::entity entity, const Town&, const Transform& transform) {
-		const float distance = glm::distance(glm::xz(transform.position), glm::xz(point));
+	for (const auto entity : ecs::player_towns::AllInOrder(registry))
+	{
+		const auto* transform = registry.TryGet<const Transform>(entity);
+		if (transform == nullptr)
+		{
+			continue;
+		}
+		const float distance = gutils::GetDistanceInMetres(transform->position, point);
 		if (distance < best)
 		{
 			best = distance;
 			nearest = entity;
 		}
-	});
+	}
 	return nearest;
 }
 
@@ -118,6 +128,8 @@ void MagicShieldSystem::Raise(entt::entity spell, const Spell& miracle)
 	auto& registry = EntityRegistry();
 	const bool physical = miracle.magicType == MagicType::PhysicalShield;
 	const auto object = registry.Create();
+	// It takes its place in the order of the things made
+	openblack::ecs::archetypes::TakeThingMadePlace();
 	auto position = miracle.castPosition;
 	position.y = LandHeight(position);
 	registry.Assign<Transform>(object, position, glm::mat3(1.0f), glm::vec3(1.0f));
@@ -173,15 +185,23 @@ void MagicShieldSystem::Raise(entt::entity spell, const Spell& miracle)
 	transform.scale = glm::vec3(dome.pose.scale);
 	// Its sparkling trail and hum, on the dome. Its random numbers are only this computer's: the trail does not change
 	// the world.
-	if (Locator::particleSystem::has_value())
+	if (Locator::effectRequestSystem::has_value())
 	{
-		auto& particles = Locator::particleSystem::value();
-		dome.effect = particles.Start(ParticleType::PhysicalShieldFx, transform.position, miracle.magnitude);
-		if (dome.effect != ParticleSystemInterface::k_NoEffect)
-		{
-			particles.SetPlayer(dome.effect, static_cast<int>(miracle.caster.player));
-			particles.AddTarget(dome.effect, object);
-		}
+		auto& effects = Locator::effectRequestSystem::value();
+		dome.effect = effects.Start({
+		    .type = ParticleType::PhysicalShieldFx,
+		    .position = transform.position,
+		    .magnitude = miracle.magnitude,
+		    .synced = false,
+		    .player = static_cast<int>(miracle.caster.player),
+		});
+		effects.AddTarget(dome.effect, object);
+	}
+	// The dome goes into the physics at once as a body at rest. It stays there until it goes, so that what flies at it
+	// bounces off.
+	if (Locator::dynamicsSystem::has_value())
+	{
+		static_cast<void>(Locator::dynamicsSystem::value().AddObstacle(object));
 	}
 }
 
@@ -237,9 +257,9 @@ bool MagicShieldSystem::StepDome(entt::entity object)
 	dome.pose = shield::StepDome(dome.shape, dome.state, dome.age, k_TurnSeconds);
 	if (dome.pose.gone)
 	{
-		if (dome.effect != ParticleSystemInterface::k_NoEffect && Locator::particleSystem::has_value())
+		if (Locator::effectRequestSystem::has_value())
 		{
-			Locator::particleSystem::value().Delete(dome.effect);
+			Locator::effectRequestSystem::value().Remove(dome.effect);
 		}
 		return false;
 	}
@@ -258,16 +278,13 @@ bool MagicShieldSystem::StepDome(entt::entity object)
 	transform.position.y = LandHeight(transform.position) + dome.pose.height;
 	transform.rotation = portable_math::EulerAngleY(dome.pose.angle);
 	transform.scale = glm::vec3(dome.pose.scale);
-	if (dome.effect != ParticleSystemInterface::k_NoEffect && Locator::particleSystem::has_value())
+	if (Locator::effectRequestSystem::has_value() && Locator::effectRequestSystem::value().IsRunning(dome.effect))
 	{
-		auto& particles = Locator::particleSystem::value();
-		particles.SetOrigin(dome.effect, transform.position);
-		if (auto* effect = particles.Find(dome.effect))
-		{
-			effect->SetMagnitude(shieldObject.radius);
-			const float alpha = dome.state.dying ? shield::DyingEffectAlpha(dome.alpha, dome.state.dieTime) : dome.alpha;
-			effect->SetGlobalAlpha(alpha);
-		}
+		auto& effects = Locator::effectRequestSystem::value();
+		effects.Move(dome.effect, transform.position);
+		effects.SetMagnitude(dome.effect, shieldObject.radius);
+		const float alpha = dome.state.dying ? shield::DyingEffectAlpha(dome.alpha, dome.state.dieTime) : dome.alpha;
+		effects.SetAlpha(dome.effect, alpha);
 	}
 	return true;
 }
@@ -488,14 +505,45 @@ std::optional<entt::entity> MagicShieldSystem::ShieldAt(glm::vec3 point) const
 		    {
 			    return;
 		    }
+		    // A dome that fades after the end of its miracle is not a shield miracle
+		    if (shield.spell == entt::null)
+		    {
+			    return;
+		    }
 		    const auto* dome = registry.TryGet<const ShieldDome>(entity);
 		    const float scale = dome != nullptr ? dome->solidScale : shield.radius * shield::k_DomeScalePerRadius;
 		    if (gutils::GetDistanceInMetres(transform.position, point) < shield::VolumeOf(halfExtent, scale).radius)
 		    {
-			    found = entity;
+			    found = shield.spell;
 		    }
 	    });
 	return found;
+}
+
+void MagicShieldSystem::RemoveWithSpell(entt::entity spell)
+{
+	const auto known = _objects.find(spell);
+	if (known == _objects.end())
+	{
+		return;
+	}
+	const auto object = known->second;
+	_objects.erase(known);
+	auto& registry = EntityRegistry();
+	if (!registry.Valid(object))
+	{
+		return;
+	}
+	if (const auto* dome = registry.TryGet<const ShieldDome>(object);
+	    dome != nullptr && Locator::effectRequestSystem::has_value())
+	{
+		Locator::effectRequestSystem::value().Remove(dome->effect);
+	}
+	auto& shieldObject = registry.Get<MagicShield>(object);
+	shieldObject.spell = entt::null;
+	Strip(object, shieldObject);
+	registry.Destroy(object);
+	registry.SetDirty();
 }
 
 std::vector<MagicShieldSystemInterface::Avoid> MagicShieldSystem::CreatureAvoids(PlayerNames creaturePlayer,

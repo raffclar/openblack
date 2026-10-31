@@ -151,6 +151,23 @@ bool guidance::ClockSaysNight(int hour, int minute)
 	return !day;
 }
 
+std::optional<size_t> guidance::LosingBeliefTown(std::span<const TownBeliefs> towns, size_t player, float margin)
+{
+	for (size_t town = 0; town < towns.size(); ++town)
+	{
+		const auto& belief = towns[town];
+		const float least = belief.at(player) - margin;
+		for (size_t other = 0; other < k_BeliefPlayers; ++other)
+		{
+			if (other != player && least < belief.at(other))
+			{
+				return town;
+			}
+		}
+	}
+	return std::nullopt;
+}
+
 MoonLook guidance::LookAtMoon(float phase, bool clockSaysNight)
 {
 	const float distance = phase - std::numbers::pi_v<float>;
@@ -160,4 +177,17 @@ MoonLook guidance::LookAtMoon(float phase, bool clockSaysNight)
 	}
 	const double cube = static_cast<double>(distance) * distance * distance;
 	return {.remark = false, .wait = static_cast<int32_t>(cube * k_MoonWaitScale)};
+}
+
+std::optional<guidance::Kind> guidance::TownChangedHandsLine(PlayerNames loser, PlayerNames taker, PlayerNames own)
+{
+	if (loser == own)
+	{
+		return Kind::GeneralBad;
+	}
+	if (taker == own)
+	{
+		return Kind::GeneralGood;
+	}
+	return std::nullopt;
 }

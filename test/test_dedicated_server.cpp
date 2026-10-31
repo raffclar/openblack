@@ -10,19 +10,34 @@
 #include <cstdint>
 #include <cstdlib>
 
+#include <algorithm>
 #include <atomic>
 #include <chrono>
 #include <filesystem>
+#include <optional>
 #include <utility>
 #include <vector>
 
 #include <gtest/gtest.h>
 
+#include "ECS/Components/Cloud.h"
+#include "ECS/Components/Sky.h"
+#include "ECS/DrawnRegistry.h"
+#include "ECS/Registry.h"
+#include "ECS/Systems/SkyClockSystemInterface.h"
+#include "ECS/Systems/TimeSystemInterface.h"
+#include "Graphics/GraphicsLibrary.h"
+#include "Graphics/HeadlessRenderer.h"
+#include "Locator.h"
 #include "Server/DedicatedServer.h"
 #include "TestTempFolder.h"
 
 using openblack::server::ChecksumLine;
+using openblack::server::k_RoomSeed;
 using openblack::server::ParseChecksumLine;
+using openblack::server::RoomStart;
+using openblack::server::RoomStartFor;
+using openblack::server::RoomStartLine;
 using openblack::server::ServerConfig;
 using openblack::server::ServerSettings;
 using openblack::server::SimulationFor;
@@ -53,6 +68,8 @@ TEST(DedicatedServer, TheServerHasNoWindowNoDeviceAndNoAudio)
 	const auto config = ServerConfig(ServerSettings {.gamePath = "data", .seed = 7, .turns = 100});
 	EXPECT_EQ(config.graphicsBackend, openblack::GraphicsBackend::Noop);
 	EXPECT_TRUE(config.dedicatedServer);
+	// The resources keep only their data
+	EXPECT_EQ(config.resourceUploads, openblack::graphics::UploadMode::DataOnly);
 	EXPECT_TRUE(config.background);
 	EXPECT_FALSE(config.vsync);
 	EXPECT_EQ(config.resolution.x, 0);
@@ -78,6 +95,30 @@ TEST(DedicatedServer, AFastRunDoesNotWaitAndARunWithNoTurnsHasNoEnd)
 	EXPECT_TRUE(simulation.settings.fast);
 	EXPECT_FALSE(simulation.settings.paceToWallClock);
 	EXPECT_FALSE(simulation.settings.untilTurn.has_value());
+}
+
+TEST(DedicatedServer, ARoomWithNoSeedOfAToolReadsTheDateFromTheClockOfTheComputer)
+{
+	const auto start = RoomStartFor(ServerSettings {.gamePath = "data"});
+	EXPECT_EQ(start, (RoomStart {.seed = k_RoomSeed, .pinnedDate = std::nullopt}));
+	EXPECT_EQ(RoomStartLine(start), "The seed of the world: 1, date from the clock of the computer");
+}
+
+TEST(DedicatedServer, TheSeedOfAToolAlsoPinsTheDate)
+{
+	const auto start = RoomStartFor(ServerSettings {.gamePath = "data", .seed = 7});
+	EXPECT_EQ(start.seed, 7u);
+	EXPECT_EQ(start.pinnedDate, openblack::ecs::systems::TimeSystemInterface::k_DeterministicDate);
+	EXPECT_EQ(RoomStartLine(start), "The seed of the world: 7 (from a tool), date pinned");
+}
+
+// The commands file of the game has the commands of its testbed scenario. The server drops the same commands of its
+// own scenario, so that each command occurs one time only.
+TEST(DedicatedServer, AServerThatPlaysTheCommandsOfAFileDropsTheCommandsOfItsOwnPlayer)
+{
+	using openblack::server::OwnCommands;
+	EXPECT_EQ(openblack::server::OwnCommandsOf(ServerSettings {}), OwnCommands::Send);
+	EXPECT_EQ(openblack::server::OwnCommandsOf(ServerSettings {.commandsPath = "commands.jsonl"}), OwnCommands::Drop);
 }
 
 TEST(DedicatedServer, TheToolsReadTheTurnAndTheChecksumFromTheLineOfTheLog)
@@ -133,4 +174,106 @@ TEST(DedicatedServer, TheServerWritesNothingInTheProfileFolderItIsGiven)
 		files.push_back(entry.path());
 	}
 	EXPECT_TRUE(files.empty());
+}
+
+TEST(DedicatedServer, TheServerDoesNotStartTheGraphicsLibrary)
+{
+	// A call to the library that did not start stops this test program, so the run also shows that no part calls it
+	ASSERT_FALSE(openblack::graphics::GraphicsLibraryStarted());
+	const openblack::test::TestTempFolder profileFolder;
+	std::vector<bool> started;
+	const std::atomic<bool> stop {false};
+	const auto exitCode =
+	    openblack::server::Run(MockSettings(profileFolder.Path()), stop, [&started](uint32_t /*turn*/, uint64_t /*checksum*/) {
+		    started.push_back(openblack::graphics::GraphicsLibraryStarted());
+	    });
+	EXPECT_EQ(exitCode, EXIT_SUCCESS);
+	ASSERT_FALSE(started.empty());
+	EXPECT_TRUE(std::ranges::none_of(started, [](bool value) { return value; }));
+	EXPECT_FALSE(openblack::graphics::GraphicsLibraryStarted());
+}
+
+TEST(DedicatedServer, TheServerKeepsTheSkysCloudsOutOfTheWorldAndMakesNoSystemThatOnlyShowsTheWorld)
+{
+	const openblack::test::TestTempFolder profileFolder;
+	bool shown = false;
+	bool mists = true;
+	size_t worldClouds = 1;
+	size_t drawnClouds = 0;
+	const std::atomic<bool> stop {false};
+	const auto exitCode =
+	    openblack::server::Run(MockSettings(profileFolder.Path()), stop,
+	                           [&shown, &mists, &worldClouds, &drawnClouds](uint32_t /*turn*/, uint64_t /*checksum*/) {
+		                           using openblack::Locator;
+		                           using openblack::ecs::components::Cloud;
+		                           shown = shown || Locator::oceanSystem::has_value() || Locator::cloudSystem::has_value() ||
+		                                   Locator::villageLightSystem::has_value() ||
+		                                   Locator::advisorVoiceSystem::has_value() || Locator::turnCheerSystem::has_value() ||
+		                                   Locator::rendereringSystem::has_value();
+		                           // The scripts fade the mists, and the turns change their size on every computer
+		                           mists = mists && Locator::mistSystem::has_value();
+		                           // Every computer draws the numbers of the sky's clouds at the start of the land, but
+		                           // the clouds are things of the drawn registry and take no entity numbers of the world
+		                           worldClouds = std::as_const(Locator::entitiesRegistry::value()).Size<const Cloud>();
+		                           drawnClouds = std::as_const(Locator::drawnRegistry::value()).Size<const Cloud>();
+	                           });
+	EXPECT_EQ(exitCode, EXIT_SUCCESS);
+	EXPECT_FALSE(shown);
+	EXPECT_TRUE(mists);
+	EXPECT_EQ(worldClouds, 0u);
+	EXPECT_GT(drawnClouds, 0u);
+}
+
+TEST(DedicatedServer, TheServerStepsTheRulesOfTheParticlesButDoesNotDrawThem)
+{
+	const openblack::test::TestTempFolder profileFolder;
+	bool rules = true;
+	bool drawn = false;
+	const std::atomic<bool> stop {false};
+	const auto exitCode = openblack::server::Run(MockSettings(profileFolder.Path()), stop,
+	                                             [&rules, &drawn](uint32_t /*turn*/, uint64_t /*checksum*/) {
+		                                             using openblack::Locator;
+		                                             rules = rules && Locator::particleRuleSystem::has_value();
+		                                             drawn = drawn || Locator::particleSystem::has_value();
+	                                             });
+	EXPECT_EQ(exitCode, EXIT_SUCCESS);
+	EXPECT_TRUE(rules);
+	EXPECT_FALSE(drawn);
+}
+
+TEST(DedicatedServer, TheServerMovesTheSkysClockButDoesNotShowTheSky)
+{
+	const openblack::test::TestTempFolder profileFolder;
+	bool shown = false;
+	bool clock = true;
+	size_t turns = 0;
+	const std::atomic<bool> stop {false};
+	const auto exitCode = openblack::server::Run(
+	    MockSettings(profileFolder.Path()), stop, [&shown, &clock, &turns](uint32_t /*turn*/, uint64_t /*checksum*/) {
+		    using openblack::Locator;
+		    ++turns;
+		    shown = shown || Locator::skySystem::has_value();
+		    // The clock of day and night, on the dome's entity, is part of the world on every computer
+		    clock = clock && Locator::skyClockSystem::has_value() &&
+		            std::as_const(Locator::entitiesRegistry::value())
+		                .AllOf<openblack::ecs::components::DayNightCycle>(Locator::skyClockSystem::value().GetEntities().dome);
+	    });
+	EXPECT_EQ(exitCode, EXIT_SUCCESS);
+	EXPECT_GT(turns, 0u);
+	EXPECT_FALSE(shown);
+	EXPECT_TRUE(clock);
+}
+
+// The scripts fade the mists and the turns step the fades, thus the server has the mist system too
+TEST(DedicatedServer, TheServerHasTheMistSystemThatTheScriptsAndTheTurnsUse)
+{
+	const openblack::test::TestTempFolder profileFolder;
+	bool mists = true;
+	const std::atomic<bool> stop {false};
+	const auto exitCode =
+	    openblack::server::Run(MockSettings(profileFolder.Path()), stop, [&mists](uint32_t /*turn*/, uint64_t /*checksum*/) {
+		    mists = mists && openblack::Locator::mistSystem::has_value();
+	    });
+	EXPECT_EQ(exitCode, EXIT_SUCCESS);
+	EXPECT_TRUE(mists);
 }

@@ -125,6 +125,8 @@ public:
 	[[nodiscard]] bool Ended() const { return _next >= _records.size(); }
 	/// The next record to play
 	[[nodiscard]] size_t Next() const { return _next; }
+	/// The clock starts where the clock of another play of the same recording is: its records come due at the same times
+	void KeepClockOf(const Playback& other) { _startTime = other._startTime; }
 
 private:
 	void Play(size_t recordsRead, bool& triggerReached, std::vector<Played>& played);
@@ -135,6 +137,51 @@ private:
 	int64_t _firstRecordTime {0};
 	int64_t _startTime {0};
 };
+
+/// A demonstration as the turns and the frames play it. The turns play its records by the time of each turn alone, and
+/// the scripts read only this side: whether the demonstration plays and whether it reached a mark. Thus the scripts get
+/// the same answers at all frame rates. The frames play the same records by the time into the turn, for the cursor, the
+/// buttons and the camera. The frames use the clock of the turns, and with a pause at the marks the frames hold at a
+/// mark until the scripts have read it.
+class SplitPlayback
+{
+public:
+	/// Starts at the time of a turn. The first record plays at once on the two sides, and `played` gets it for the frames.
+	SplitPlayback(std::span<const hnd::HNDRecord> records, uint32_t turnTime, bool pauseOnTrigger, std::vector<Played>& played);
+
+	/// The side of the turns plays every record that the time of the turn has reached. A record with a mark sets
+	/// `triggerReached`, which the scripts read; with the pause, nothing more plays while it is set. False once the side
+	/// of the turns has run out.
+	bool AdvanceTurn(uint32_t turnTime, bool& triggerReached);
+	/// The side of the frames plays every record that the time into the turn has reached; `played` gets them. False once
+	/// the side of the frames has run out.
+	bool AdvanceFrame(uint32_t frameTime, std::vector<Played>& played);
+	/// The scripts read a mark that the side of the turns reached. With the pause, this lets the two sides go on.
+	void MarkRead() { ++_marksRead; }
+
+	[[nodiscard]] bool TurnEnded() const { return _turn.Ended(); }
+	[[nodiscard]] bool FrameEnded() const { return _frame.Ended(); }
+	/// The next record that each side plays
+	[[nodiscard]] size_t TurnNext() const { return _turn.Next(); }
+	[[nodiscard]] size_t FrameNext() const { return _frame.Next(); }
+	/// The side of the frames reached a mark that the scripts have not read yet, and holds there
+	[[nodiscard]] bool FrameHeld() const { return _pauseOnTrigger && _frameMarks > _marksRead; }
+
+private:
+	Playback _turn;
+	Playback _frame;
+	bool _pauseOnTrigger {false};
+	/// How many marks the scripts read, and how many marks the side of the frames reached
+	uint32_t _marksRead {0};
+	uint32_t _frameMarks {0};
+};
+
+/// Whether a demonstration that starts stops the miracles that charge for the player's hand at the worship sites of the
+/// player's temple. It does so unless the demonstration keeps the hand as it is.
+[[nodiscard]] constexpr bool StopsCharges(bool withoutHandModify)
+{
+	return !withoutHandModify;
+}
 
 /// Whether a demonstration that starts takes the leash off the player's creature. It does so unless the demonstration
 /// keeps the hand as it is, and only when the leash is on and not tied to a thing.

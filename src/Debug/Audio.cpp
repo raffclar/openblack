@@ -20,17 +20,18 @@
 
 #include "Audio/AtmosAudio.h"
 #include "Audio/AtmosPlayer.h"
-#include "Audio/GameMusic.h"
 #include "Audio/MusicPlayer.h"
 #include "Camera/Camera.h"
 #include "ECS/Components/Weather.h"
 #include "ECS/Registry.h"
 #include "ECS/Systems/AlignmentSystemInterface.h"
-#include "ECS/Systems/SkySystemInterface.h"
+#include "ECS/Systems/ScriptMusicSystemInterface.h"
+#include "ECS/Systems/SkyClockSystemInterface.h"
 #include "ECS/Systems/WeatherSystemInterface.h"
 #include "Game.h"
 #include "Locator.h"
 #include "Resources/ResourcesInterface.h"
+#include "Sound/GameMusic.h"
 
 using namespace openblack;
 using namespace openblack::audio;
@@ -178,10 +179,18 @@ void Audio::Music() noexcept
 	{
 		ImGui::Text("Playing: %s", std::string(audio::GetMusicTypeName(gameMusic->GetPlaying())).c_str());
 		ImGui::Text("Land music: %s", std::string(audio::GetMusicTypeName(gameMusic->GetLandType())).c_str());
-		ImGui::Text("Script music: %s", std::string(audio::GetMusicTypeName(gameMusic->GetScriptType())).c_str());
 		ImGui::Text("Played out: %s, %u turns ago", std::string(audio::GetMusicTypeName(gameMusic->GetBlockedType())).c_str(),
 		            gameMusic->GetBlockedTurns());
 		ImGui::Text("Alignment music %s", gameMusic->IsAlignmentMusicEnabled() ? "enabled" : "disabled");
+	}
+	if (Locator::scriptMusicSystem::has_value())
+	{
+		const auto& script = Locator::scriptMusicSystem::value().GetMusic();
+		const auto time = script.GetChannelTime();
+		ImGui::Text("Script music: %s, line %d, word %d, %lld ms",
+		            std::string(audio::GetMusicTypeName(script.GetType())).c_str(), script.GetLyrics().line,
+		            script.GetLyrics().word,
+		            static_cast<long long>(time ? std::chrono::duration_cast<std::chrono::milliseconds>(*time).count() : 0));
 	}
 	// Moves the player's alignment to hear the land's music change version, where the player is the most influential
 	if (Locator::alignmentSystem::has_value())
@@ -466,7 +475,7 @@ void Audio::Atmos() noexcept
 	const auto camera = Locator::camera::value().GetOrigin();
 	ImGui::Text("Camera (%.0f, %.0f, %.0f)  above land %.1f  one-shot clock %u", camera.x, camera.y, camera.z,
 	            soundMap.GetHeightAboveLand(), atmos->GetTick());
-	const auto& sky = Locator::skySystem::value();
+	const auto& sky = Locator::skyClockSystem::value();
 	ImGui::Text("Sky type %.2f (0 day, 2 night)  alignment %.2f, group %u (%s)",
 	            audio::AtmosAudio::CalculateSkyType(sky.GetTime(), sky.GetDayNightTimes()), atmosAudio->GetAlignmentValue(),
 	            atmosAudio->GetGroup(), atmosAudio->GetGroup() == 2 ? "evil" : "good");

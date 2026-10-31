@@ -55,6 +55,34 @@ enum class Kind : uint8_t
 /// go, eating, keeping hold, knocking down and pointing do. Throwing, catching, taking from the hand and kicking keep
 /// their pace.
 [[nodiscard]] bool Hurries(Kind kind);
+/// What the stop of the plan that asked for an action does to the action
+enum class PlanStop : uint8_t
+{
+	/// The body did not start the action, so the action stops
+	Stops,
+	/// The body plays the action to its end, and the moment of the action occurs
+	PlaysOn,
+	/// The arm plays the end of its point with no hold. A turn to the point ends first.
+	EndsPoint,
+};
+/// What a plan stop does to an action of the kind. The body starts an action when it plays its animations, or when it
+/// turns on the spot for the action: to get a thing in reach, to throw or to point. Only a dance, a fight, the static
+/// loop and a point stop with the plan. Each other action that the body started plays on.
+[[nodiscard]] PlanStop OnPlanStop(Kind kind, bool playing, bool turnsForIt);
+
+/// What a plan stop does to the thing of an eat
+enum class EatStop : uint8_t
+{
+	/// The thing stays in the hand
+	Keeps,
+	/// The creature swallows the thing at once
+	Swallows,
+	/// The thing in the hand goes out of the world, uneaten. The creature keeps the food that it took in at the start.
+	Deletes,
+};
+/// What a plan stop does to the thing of an eat. After the bite, the creature swallows the thing at once. Before the
+/// bite, while the eat animation plays, the thing in the hand goes out of the world.
+[[nodiscard]] EatStop OnEatStop(bool playing, bool bitten, bool holds);
 
 /// Whether the arm that holds a thing shows the hold pose over the body, while the body plays the animation of an
 /// action, or no action (none). The animations that move the held thing themselves replace the hold pose: picking up,
@@ -95,6 +123,17 @@ enum class Status : uint8_t
 	Failed,
 };
 
+/// Whether the animations of an action make the pose of the body for the turn, in place of the clips of the walk. This
+/// is true only while the action plays its animations and has not ended. While the creature walks or turns to the
+/// thing, the walk makes the pose.
+[[nodiscard]] bool PosesBody(bool playing, Status status);
+
+/// Whether the thing in the hand of a creature counts as what the creature carries, while the hand does an action of
+/// this kind and status (none for no action). As a throw starts, the thing stops being what the creature carries. The
+/// hand keeps the thing until the release, and then lets it go. Until then the mind, the scripts, the towns and the
+/// thing itself see that the creature carries nothing.
+[[nodiscard]] bool CarriesHeld(std::optional<Kind> kind, Status status, bool released);
+
 /// Why an action failed, to the extent that the mind must know
 enum class Failure : uint8_t
 {
@@ -129,6 +168,18 @@ enum class ApproachStep : uint8_t
 /// - straightReach: how far the hand or foot gets in the reaching animations (creature_reach::StraightReach);
 /// - inRange: the thing lies where the reaching animations get to (creature_reach::Blend::inRange).
 [[nodiscard]] ApproachStep NextApproachStep(bool seen, float flatDistance, float straightReach, bool inRange);
+/// What a creature that walks up to a thing to pick it up or stomp on it does on a turn when it moves
+enum class MovingApproachStep : uint8_t
+{
+	/// It turns on the spot to get the thing in reach. This turn is the start of the reach, so the walk-up does nothing:
+	/// no new walk, no count of the turns with no progress, and no new test of the thing.
+	WaitForTurn,
+	/// It is on its way to the thing: it aims at the thing again
+	AimAgain,
+};
+/// The next step while the creature moves. turnsToReach: it turns on the spot because the thing was outside the corners
+/// of its reach.
+[[nodiscard]] MovingApproachStep NextMovingApproachStep(bool turnsToReach);
 /// How far from the thing the walk near to it stops: twice the creature's radius and the thing's radius added
 [[nodiscard]] float NearWalkDistance(float creatureRadius, float thingRadius);
 /// A thing higher than this above the creature, in metres, can be too high to pick up
@@ -143,15 +194,22 @@ constexpr float k_MostPickUpRise = 5.0f;
 /// (creature_cast_moves::CheckStall). It records where the creature is every k_StallTurns turns. On the last turn of
 /// that span, it gives up when the creature moved less than k_StallDistance. A creature under the control of a script
 /// never gives up. The walk then fails as a walk to a place where the creature cannot stand fails (deviation 90).
+/// A turn on which one route search of the walk continues, before the creature has a route, does not count: the search
+/// can take many turns to a far thing, and the game has no limit on it. A search that starts again on each turn, to a
+/// new place of a thing that moves, counts as before.
 struct ApproachStall
 {
 	/// The turns of the walk so far
 	uint32_t turns {0};
 	/// Where the creature was at the last record
 	glm::vec2 note {0.0f};
+	/// Where the route search went to on the last turn, while the creature had no route
+	std::optional<glm::vec2> searchedFor;
 };
-/// Counts one turn of the walk, with the creature here. Gives true when the creature gives up.
-bool StallsOnTurn(ApproachStall& stall, glm::vec2 here, bool scripted);
+/// Counts one turn of the walk, with the creature here. Gives true when the creature gives up. `searchingFor` is the
+/// destination of the route search when the creature has no route yet. A turn on which the search to the same
+/// destination as on the last turn continues does not count and does not give up.
+bool StallsOnTurn(ApproachStall& stall, glm::vec2 here, bool scripted, std::optional<glm::vec2> searchingFor);
 
 /// The kicking animation
 constexpr size_t k_KickAnimation = 117;
@@ -166,6 +224,13 @@ constexpr float k_KickSpeedPerSize = 45.0f;
 
 /// Whether a throw is over: its animation has played out, and, thrown into a store, what it threw has stopped flying
 [[nodiscard]] bool ThrowOver(bool animationOver, bool waitsForLanding, bool thrownFlying);
+
+/// The time of a reach for a pick-up or a stomp in the turn that the thing gets out of reach: one step less than the
+/// time before the turn, and not less than zero
+[[nodiscard]] float WithdrawStart(float timeBeforeMs, float stepMs);
+/// The time of a reach that lost its thing, one turn later: one step less. Nothing when the step is longer than the
+/// time that is left: then the reach is at its start, and the action fails.
+[[nodiscard]] std::optional<float> WithdrawStep(float timeMs, float stepMs);
 
 /// Whether a creature about to swallow what it holds brings it back up instead, uneaten: a thing made indestructible,
 /// or one the scripts hold while they own the widescreen bars, can't be eaten. The creature then lets it fall and is
@@ -226,8 +291,8 @@ struct PickUpFacts
 /// How a creature decides whether it may pick up a kind of thing
 enum class KindRule : uint8_t
 {
-	/// Never: creatures, buildings, fields, features other than magic mushrooms, lanterns, shields, vortices and teleport
-	/// stones
+	/// Never: creatures, buildings, fields, features other than magic mushrooms, lanterns, shields, vortices, teleport
+	/// stones and building pieces
 	Never,
 	/// Always, whatever else holds: the football and a creed
 	Always,
@@ -239,9 +304,11 @@ enum class KindRule : uint8_t
 	Mushroom,
 	/// A pile of food or wood: unless a script said it can't be picked up, and only a kind of pile that may fly about
 	Pile,
-	/// Anything else that can be picked up (villagers, animals, things lying about, pots, rocks, dead trees, trees):
-	/// the whole rule
+	/// Anything else that can be picked up (villagers, animals, things lying about, pots, rocks, dead trees, trees,
+	/// reward chests): the whole rule
 	Whole,
+	/// A scaffold: only when a hand can take it, and then the whole rule
+	Scaffold,
 };
 
 /// The kinds of thing that differ in how a creature picks them up
@@ -280,24 +347,34 @@ enum class Thing : uint8_t
 	/// A thing built or set into the land that stones can knock about: a building, temple, totem or worship site, a
 	/// feature other than a magic mushroom, an animated static or flowers
 	Fixture,
+	/// A piece that broke off a building. It is a rock that a creature never picks up from the land.
+	BuildingPiece,
+	/// A reward chest
+	Reward,
+	/// A scaffold of a workshop
+	Scaffold,
 };
 /// How a creature decides on picking up a kind of thing
 [[nodiscard]] KindRule RuleOf(Thing thing);
-/// Whether a hand may hold a kind of thing at all
-[[nodiscard]] bool Holdable(Thing thing);
+/// Whether the kind of a thing lets something pick it up at all. A creature that catches a thing or takes it from a
+/// hand asks only this, not the kind's rule. Buildings, features, lanterns and shields say no. Creatures say yes.
+[[nodiscard]] bool CanBePickedUp(Thing thing);
 /// Whether a kind of thing is alive: villagers, animals, birds and creatures
 [[nodiscard]] bool IsLiving(Thing thing);
 /// Whether a creature may throw things at a thing to knock it down: a living thing while it lives, and whatever is
-/// built or set into the land (shields too), but no tree, lantern, vortex or teleport stone, nor anything lying about
+/// built or set into the land (shields and building pieces too). Not a tree, lantern, vortex or teleport stone, nor
+/// anything lying about
 [[nodiscard]] bool CanBeStoned(Thing thing, bool dead);
-/// Whether a thing does damage when a creature throws it: the statics, rocks and dead trees, but not the toys
+/// Whether a thing does damage when a creature throws it: the statics, rocks, building pieces and dead trees, but not
+/// the toys
 [[nodiscard]] bool DoesThrowingDamage(Thing thing, bool toy);
 /// Whether a creature may throw a thing to impress: anything but the living, vortices and teleport stones, as long as
 /// the thing's height is less than two thirds (0.64) of the creature's weight. The game sets the thing's height against
 /// the creature's weight, so in practice any such thing a creature can pick up will do.
 [[nodiscard]] bool CanBeThrownToImpress(Thing thing, float thingHeight, float creatureWeight);
 constexpr float k_ThrowToImpressWeightShare = 0.64f;
-/// Whether a creature may throw a thing into the sea in play: what lies about, the statics, rocks, dead trees and trees
+/// Whether a creature may throw a thing into the sea in play: what lies about (reward chests and scaffolds too), the
+/// statics, rocks, building pieces, dead trees and trees
 [[nodiscard]] bool CanBeThrownInTheSea(Thing thing);
 
 /// The toys among the statics, known by their models
@@ -317,15 +394,17 @@ struct KindFacts
 {
 	Thing thing {Thing::Other};
 	KindRule rule {KindRule::Never};
-	/// A hand may hold it at all, so a hand may give it to a creature and a creature may catch it: villagers, animals,
-	/// things lying about, pots and piles, statics and rocks, dead trees and trees
-	bool holdable {false};
+	/// Its kind lets something pick it up at all, so a hand may give it to a creature and a creature may catch it:
+	/// all but buildings, features, lanterns and shields
+	bool canBePickedUp {false};
 	/// One of the toys
 	bool toy {false};
 	/// A bird low enough over the land
 	bool low {false};
 	/// A kind of pile that may fly about
 	bool mayFly {false};
+	/// A scaffold that a hand can take now
+	bool handCanTake {false};
 };
 /// Whether a creature may pick the thing up from where it is, by its kind's own rule
 [[nodiscard]] bool MayPickUpKind(const KindFacts& kind, const PickUpFacts& facts);

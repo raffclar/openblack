@@ -44,9 +44,11 @@ namespace
 {
 
 /// Makes the creature on the ground at the place, and makes it the creature of the owner. The mind file gives its mind,
-/// its body, its alignment and its tattoos. It knows every leash, and it grows up fully at once.
+/// its body, its alignment and its tattoos. It knows every leash, and it grows up fully at once. A new clan creature has
+/// no mind file: it takes each stage before the last one, one after the other, before it gets its leashes.
 entt::entity MakeFromMind(PlayerNames owner, CreatureType species, map_coords::MapCoords coords,
-                          std::shared_ptr<const creaturemind::MindFileData> file, entt::id_type mindId, std::string_view source)
+                          std::shared_ptr<const creaturemind::MindFileData> file, entt::id_type mindId, std::string_view source,
+                          bool clanOrder = false)
 {
 	auto& registry = Locator::entitiesRegistry::value();
 	// The new creature replaces the creature that the owner has as their creature
@@ -79,6 +81,13 @@ entt::entity MakeFromMind(PlayerNames owner, CreatureType species, map_coords::M
 			creature_body_file::Apply(registry, creature, *body);
 		}
 		registry.Get<components::Creature>(creature).mind = mindId;
+	}
+	if (clanOrder && Locator::creatureMindSystem::has_value())
+	{
+		for (uint32_t stage = 0; stage < clan_creature_order::k_StagesBeforeLeashes; ++stage)
+		{
+			Locator::creatureMindSystem::value().MoveToStage(creature, stage);
+		}
 	}
 
 	// It knows every leash, and it grows up fully at once
@@ -174,32 +183,83 @@ Result Make(const Order& order)
 	return result;
 }
 
-Result Bring(PlayerNames owner, std::span<const uint8_t> file)
+namespace
+{
+
+/// The god brings the creature of the mind file to the creature home of its citadel, or gives why it brings none
+Result BringMind(PlayerNames owner, std::shared_ptr<const creaturemind::MindFileData> mind, bool file, bool readable,
+                 std::string_view source)
 {
 	Result result;
 	const auto& registry = Locator::entitiesRegistry::value();
 	const auto home = creature_home::CitadelCreatureHomeOf(registry, owner);
+	const auto species = readable ? script::property_rules::CreatureTypeFromScript(mind->speciesRow) : std::nullopt;
+	const bool hasCreature =
+	    Locator::playerSystem::has_value() && Locator::playerSystem::value().GetPrimaryCreature(owner).has_value();
+	result.refusal = creature_file_load::WhyNotBrought(
+	    {.citadel = home.has_value(),
+	     .file = file,
+	     .readable = readable,
+	     .onMap = home.has_value() && map_coords::InBounds(*home) && Locator::terrainSystem::has_value(),
+	     .species = species,
+	     .hasCreature = hasCreature});
+	if (result.refusal != creature_file_load::Refusal::None)
+	{
+		SPDLOG_LOGGER_INFO(spdlog::get("game"), "The god {} brings no creature from {}: reason {}", static_cast<int>(owner),
+		                   source, static_cast<int>(result.refusal));
+		return result;
+	}
+	result.creature = MakeFromMind(owner, *species, *home, std::move(mind), 0, source);
+	return result;
+}
+
+} // namespace
+
+Result Bring(PlayerNames owner, std::span<const uint8_t> file)
+{
 	// The bytes came from the player before the start, as the game reads the file of a creature
 	auto mind = std::make_shared<creaturemind::MindFileData>();
 	const auto readable = !file.empty() && creaturemind::Read(file, *mind) == creaturemind::MindResult::Success;
-	const auto species = readable ? script::property_rules::CreatureTypeFromScript(mind->speciesRow) : std::nullopt;
+	return BringMind(owner, std::move(mind), !file.empty(), readable,
+	                 fmt::format("the creature file of {} bytes that its player sent", file.size()));
+}
+
+Result BringClanOrder(PlayerNames owner, const clan_creature_order::Order& order)
+{
+	Result result;
+	auto& registry = Locator::entitiesRegistry::value();
+	const auto home = creature_home::CitadelCreatureHomeOf(registry, owner);
+	// The game reads the row of the creature table with no check. openblack makes no creature for a row past the table
+	// (vanilla-bugs row 791).
+	const auto species =
+	    order.row >= 0 ? script::property_rules::CreatureTypeFromScript(static_cast<uint32_t>(order.row)) : std::nullopt;
+	// The game stops when the god has a creature already. openblack makes no second creature (vanilla-bugs row 792).
+	const bool hasCreature =
+	    Locator::playerSystem::has_value() && Locator::playerSystem::value().GetPrimaryCreature(owner).has_value();
 	result.refusal = creature_file_load::WhyNotBrought(
 	    {.citadel = home.has_value(),
-	     .file = !file.empty(),
-	     .readable = readable,
+	     .file = true,
+	     .readable = true,
 	     .onMap = home.has_value() && map_coords::InBounds(*home) && Locator::terrainSystem::has_value(),
-	     .species = species});
+	     .species = species,
+	     .hasCreature = hasCreature});
 	if (result.refusal != creature_file_load::Refusal::None)
 	{
-		SPDLOG_LOGGER_INFO(spdlog::get("game"), "The god {} brings no creature into the network game: reason {}",
-		                   static_cast<int>(owner), static_cast<int>(result.refusal));
+		SPDLOG_LOGGER_INFO(spdlog::get("game"), "The god {} makes no new clan creature of row {}: reason {}",
+		                   static_cast<int>(owner), order.row, static_cast<int>(result.refusal));
 		return result;
 	}
-	result.replaced =
-	    Locator::playerSystem::has_value() && Locator::playerSystem::value().GetPrimaryCreature(owner).has_value();
-	result.creature = MakeFromMind(owner, *species, *home, std::move(mind), 0,
-	                               fmt::format("the creature file of {} bytes that its player sent", file.size()));
+	result.creature = MakeFromMind(owner, *species, *home, nullptr, 0,
+	                               fmt::format("the order to make a new clan creature of row {}", order.row), true);
+	registry.Get<components::Creature>(*result.creature).name = order.name;
 	return result;
+}
+
+Result BringKept(PlayerNames owner, std::shared_ptr<const creaturemind::MindFileData> mind)
+{
+	// The profile keeps the creature in its files, which the game read when it kept none in memory
+	const bool kept = mind != nullptr;
+	return BringMind(owner, std::move(mind), kept, kept, "the creature that the profile keeps");
 }
 
 } // namespace openblack::ecs::creature_from_file

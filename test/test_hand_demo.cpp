@@ -11,6 +11,7 @@
 
 #include <algorithm>
 #include <array>
+#include <utility>
 #include <vector>
 
 #include <HNDFile.h>
@@ -183,6 +184,102 @@ TEST(HandDemo, WithoutPauseAMarkIsOnlyNoted)
 	EXPECT_EQ(played.size(), 3u);
 }
 
+namespace
+{
+/// Where the side of the turns of a demonstration is after each of the turns, with frames at the given hundredths into
+/// each turn
+std::vector<size_t> TurnSideWithFrames(const std::vector<hnd::HNDRecord>& records, std::vector<uint32_t> intoTurn)
+{
+	std::vector<Played> played;
+	SplitPlayback playback(records, 100, true, played);
+	bool trigger = false;
+	std::vector<size_t> at;
+	for (uint32_t turn = 2; turn < 8; ++turn)
+	{
+		// The scripts read the mark as soon as the turn reaches it
+		playback.AdvanceTurn(turn * 100, trigger);
+		if (std::exchange(trigger, false))
+		{
+			playback.MarkRead();
+		}
+		at.push_back(playback.TurnNext());
+		for (const auto into : intoTurn)
+		{
+			played.clear();
+			playback.AdvanceFrame((turn * 100) + into, played);
+		}
+	}
+	return at;
+}
+} // namespace
+
+TEST(HandDemoSplit, TheScriptsSeeTheTurnsAloneAtAnyFrameRate)
+{
+	const auto records = Records(40, 0, {12});
+	const auto fast = TurnSideWithFrames(records, {7, 14, 21, 28, 35, 42, 49, 56, 63, 70, 77, 84, 91, 98});
+	const auto slow = TurnSideWithFrames(records, {50});
+	const auto none = TurnSideWithFrames(records, {});
+	EXPECT_EQ(fast, slow);
+	EXPECT_EQ(fast, none);
+	// A turn plays the records of 10 hundredths each up to its own time; the mark of record 12 holds the next one until
+	// the next turn
+	EXPECT_EQ(fast, (std::vector<size_t> {11, 13, 24, 34, 40, 40}));
+}
+
+TEST(HandDemoSplit, TheFramesPlayByTheClockOfTheTurns)
+{
+	const auto records = Records(12, 5000);
+	std::vector<Played> played;
+	SplitPlayback playback(records, 300, false, played);
+	ASSERT_EQ(played.size(), 1u);
+	played.clear();
+	// 25 hundredths into the turn after the start: the records of 10 and 20
+	EXPECT_TRUE(playback.AdvanceFrame(325, played));
+	EXPECT_EQ(played.size(), 2u);
+	EXPECT_EQ(playback.FrameNext(), 3u);
+	// The turns have not played them yet
+	EXPECT_EQ(playback.TurnNext(), 1u);
+	bool trigger = false;
+	EXPECT_TRUE(playback.AdvanceTurn(400, trigger));
+	EXPECT_EQ(playback.TurnNext(), 11u);
+	EXPECT_FALSE(playback.TurnEnded());
+	EXPECT_FALSE(playback.AdvanceTurn(500, trigger));
+	EXPECT_TRUE(playback.TurnEnded());
+}
+
+TEST(HandDemoSplit, TheFramesHoldAtAMarkUntilTheScriptsReadIt)
+{
+	const auto records = Records(10, 0, {2});
+	std::vector<Played> played;
+	SplitPlayback playback(records, 100, true, played);
+	played.clear();
+	// The frames reach the mark before the turns do, and hold
+	playback.AdvanceFrame(160, played);
+	EXPECT_EQ(playback.FrameNext(), 3u);
+	EXPECT_TRUE(playback.FrameHeld());
+	played.clear();
+	playback.AdvanceFrame(190, played);
+	EXPECT_TRUE(played.empty());
+	// The turn reaches the mark, and holds the record after it at the turn's time
+	bool trigger = false;
+	playback.AdvanceTurn(200, trigger);
+	EXPECT_TRUE(trigger);
+	EXPECT_EQ(playback.TurnNext(), 3u);
+	playback.AdvanceFrame(200, played);
+	EXPECT_TRUE(played.empty());
+	// Read: the frames go on from the clock of the turn, the held record first, then by its pace
+	playback.MarkRead();
+	EXPECT_FALSE(playback.FrameHeld());
+	playback.AdvanceFrame(205, played);
+	ASSERT_EQ(played.size(), 1u);
+	EXPECT_EQ(played[0].record, &records[3]);
+	played.clear();
+	playback.AdvanceFrame(209, played);
+	EXPECT_TRUE(played.empty());
+	playback.AdvanceFrame(210, played);
+	EXPECT_EQ(played.size(), 1u);
+}
+
 TEST(HandDemo, NoHintsNearEitherEnd)
 {
 	const auto records = Records(60, 0);
@@ -322,6 +419,12 @@ TEST(HandDemo, TheClickMovesToAThingOfTheKindWithinThreeMetres)
 	any.objectSubtype = ecs::script_find::k_AnySubtype;
 	EXPECT_TRUE(TakesRecordedClick(any, Store(2), At(1830.0f, 2642.0f)));
 	EXPECT_TRUE(TakesRecordedClick(any, {.type = script::ObjectType::Store}, At(1830.0f, 2642.0f)));
+}
+
+TEST(HandDemo, AStartStopsTheChargesUnlessItKeepsTheHand)
+{
+	EXPECT_TRUE(hand_demo::StopsCharges(false));
+	EXPECT_FALSE(hand_demo::StopsCharges(true));
 }
 
 TEST(HandDemo, AStartTakesOffOnlyALeashOnAndNotTiedToAThing)

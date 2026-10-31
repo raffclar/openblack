@@ -11,6 +11,7 @@
 // and the draw gate, with the game's clock, texts and voices faked by the test.
 
 #include <cmath>
+#include <cstddef>
 #include <cstdint>
 
 #include <algorithm>
@@ -22,8 +23,10 @@
 #include <utility>
 #include <vector>
 
+#include <entt/meta/context.hpp>
 #include <gtest/gtest.h>
 
+#include "ECS/Reflection/BinaryArchive.h"
 #include "Help/DialogueText.h"
 
 using namespace openblack::help;
@@ -47,6 +50,8 @@ struct Fixture
 	bool advisorsTalking {false};
 	bool narrationSounding {false};
 	bool wideScreen {false};
+	/// The height of the screen of the computer, in pixels
+	int screenHeight {480};
 	std::vector<std::pair<int32_t, uint32_t>> advisorSaid;
 	std::vector<uint32_t> narrated;
 	int interrupts {0};
@@ -79,7 +84,7 @@ struct Fixture
 		hooks.narrate = [this](uint32_t number) { narrated.push_back(number); };
 		hooks.interruptAdvisors = [this]() { ++interrupts; };
 		hooks.stopNarration = [this]() { ++narrationStops; };
-		return {480, false, settings, std::move(queries), std::move(hooks)};
+		return {screenHeight, false, settings, std::move(queries), std::move(hooks)};
 	}
 };
 } // namespace
@@ -574,4 +579,151 @@ TEST(DialogueText, ShowingAgainWithNoTextsLeavesTheBoxHidden)
 	dialogue.ShowAgain();
 	EXPECT_TRUE(dialogue.GetDisplay().IsHidden());
 	EXPECT_EQ(dialogue.GetEndTurn(), 0u);
+}
+
+namespace
+{
+std::vector<uint8_t> SavedBytes(const DialogueText& dialogue)
+{
+	const entt::meta_ctx context;
+	openblack::ecs::reflection::BinaryWriter out(context);
+	openblack::ecs::reflection::Save(out, dialogue);
+	return std::move(out.Bytes());
+}
+} // namespace
+
+TEST(DialogueText, TheTextsShownAgainAfterALoadShowAgainTheSameWay)
+{
+	// A save keeps the texts as a load shows them again, so that a save at once after a load has the same bytes
+	Fixture f;
+	f.texts[10] = {.text = u"one two three"};
+	f.texts[11] = {.narrator = 2, .text = u"four five"};
+	auto dialogue = f.Make();
+	ASSERT_TRUE(dialogue.RunText(false, 10, 0));
+	f.turn = 110;
+	f.nowMs = 11000;
+	ASSERT_TRUE(dialogue.RunText(false, 11, 1));
+	f.turn = 130;
+	f.nowMs = 13000;
+
+	auto saved = dialogue;
+	saved.EmptyBox();
+	saved.ShowAgain();
+	auto loaded = saved;
+	loaded.EmptyBox();
+	loaded.ShowAgain();
+	EXPECT_EQ(SavedBytes(loaded), SavedBytes(saved));
+	// The newest text reads from the load
+	EXPECT_EQ(loaded.GetCurrentText(), 11u);
+	EXPECT_EQ(loaded.GetEndTurn(), 130u + 18u);
+}
+
+TEST(DialogueText, AnEmptyBoxShownAgainAfterALoadStaysTheSame)
+{
+	Fixture f;
+	auto dialogue = f.Make();
+	auto saved = dialogue;
+	saved.EmptyBox();
+	saved.ShowAgain();
+	auto loaded = saved;
+	loaded.EmptyBox();
+	loaded.ShowAgain();
+	EXPECT_EQ(SavedBytes(loaded), SavedBytes(saved));
+}
+
+namespace
+{
+/// The bytes of a saved dialogue without its presentation parts, which only the frames change
+std::vector<uint8_t> SyncedBytes(const DialogueText& dialogue)
+{
+	const entt::meta_ctx context;
+	openblack::ecs::reflection::BinaryWriter out(context);
+	openblack::ecs::reflection::Save(out, dialogue);
+	std::vector<uint8_t> synced;
+	size_t next = 0;
+	for (const auto& [start, end] : out.PresentationRanges())
+	{
+		synced.insert(synced.end(), out.Bytes().begin() + static_cast<std::ptrdiff_t>(next),
+		              out.Bytes().begin() + static_cast<std::ptrdiff_t>(start));
+		next = end;
+	}
+	synced.insert(synced.end(), out.Bytes().begin() + static_cast<std::ptrdiff_t>(next), out.Bytes().end());
+	return synced;
+}
+} // namespace
+
+TEST(DialogueText, TheFramesChangeOnlyThePresentationPartsOfTheSave)
+{
+	Fixture f;
+	f.texts[10] = {.text = u"one two three"};
+	auto dialogue = f.Make();
+	ASSERT_TRUE(dialogue.RunText(false, 10, 1));
+	const auto savedBytes = SavedBytes(dialogue);
+	const auto syncedBytes = SyncedBytes(dialogue);
+
+	// The slide of the newest text, the "Continue" cue and the control icons move on in the frames
+	dialogue.Update(100.0f);
+	dialogue.AdvanceClickCue(0.25f);
+	dialogue.AdvanceControlIcons(0.25f);
+	EXPECT_NE(SavedBytes(dialogue), savedBytes);
+	EXPECT_EQ(SyncedBytes(dialogue), syncedBytes);
+
+	// A click at the turn changes the synced part
+	f.turn += 20;
+	dialogue.ProcessClick(true, false);
+	EXPECT_FALSE(dialogue.IsWaitingForClick());
+	EXPECT_NE(SyncedBytes(dialogue), syncedBytes);
+}
+
+TEST(DialogueText, TheScreenOfTheComputerChangesOnlyThePresentationPartsOfTheSave)
+{
+	// A game server has no screen, and each client has its own screen
+	Fixture small;
+	Fixture large;
+	large.screenHeight = 1440;
+	for (auto* f : {&small, &large})
+	{
+		f->texts[10] = {.text = u"one two three"};
+	}
+	auto first = small.Make();
+	auto second = large.Make();
+	ASSERT_TRUE(first.RunText(false, 10, 1));
+	ASSERT_TRUE(second.RunText(false, 10, 1));
+	EXPECT_NE(first.GetDisplay().GetBaseLineHeight(), second.GetDisplay().GetBaseLineHeight());
+	EXPECT_NE(SavedBytes(first), SavedBytes(second));
+	EXPECT_EQ(SyncedBytes(first), SyncedBytes(second));
+}
+
+TEST(DialogueText, ALoadGivesBackThePresentationPartsOfTheSave)
+{
+	Fixture f;
+	f.texts[10] = {.text = u"one two three"};
+	auto dialogue = f.Make();
+	ASSERT_TRUE(dialogue.RunText(false, 10, 1));
+	dialogue.Update(100.0f);
+	dialogue.AdvanceClickCue(0.25f);
+	dialogue.AdvanceControlIcons(0.25f);
+	const auto savedBytes = SavedBytes(dialogue);
+
+	auto loaded = f.Make();
+	const entt::meta_ctx context;
+	const openblack::ecs::reflection::EntityRemap identity;
+	openblack::ecs::reflection::BinaryReader in(context, savedBytes, identity);
+	openblack::ecs::reflection::Load(in, loaded);
+	ASSERT_FALSE(in.Failed());
+	EXPECT_EQ(in.Remaining(), 0u);
+	EXPECT_EQ(SavedBytes(loaded), savedBytes);
+	EXPECT_FLOAT_EQ(loaded.GetDisplay().GetAnimation(), dialogue.GetDisplay().GetAnimation());
+	EXPECT_EQ(loaded.GetClickCueShare(), dialogue.GetClickCueShare());
+}
+
+TEST(DialogueText, TheTempleTurnsTakeTheClickOnlyInTheTempleOfAGameAlone)
+{
+	EXPECT_FALSE(TempleTurnsTakeTheClick({}));
+	EXPECT_TRUE(TempleTurnsTakeTheClick({.inTemple = true}));
+	// The player goes in after this frame: the world's turns stop before the next turn
+	EXPECT_TRUE(TempleTurnsTakeTheClick({.templeGoesIn = true}));
+	// A network game does not stop the world's turns in the temple
+	EXPECT_FALSE(TempleTurnsTakeTheClick({.networkGame = true, .inTemple = true}));
+	EXPECT_FALSE(TempleTurnsTakeTheClick({.networkGame = true, .templeGoesIn = true}));
 }

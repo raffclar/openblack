@@ -31,6 +31,7 @@
 
 #include "3D/AllMeshes.h"
 #include "3D/LandIslandInterface.h"
+#include "ECS/Components/MagicShield.h"
 #include "ECS/Components/MapPlace.h"
 #include "ECS/Components/Mesh.h"
 #include "ECS/Components/Mobile.h"
@@ -105,6 +106,8 @@ public:
 		rock.mobileType = MobileStaticInfo::Rock;
 		rock.meshId = MeshId::Dummy;
 		rock.weight = 500.0f;
+		// The physical shield's dome is as heavy as a rock
+		_info->mapShield.at(1).weight = 500.0f;
 		for (int i = 0; i < 8; ++i)
 		{
 			const float x = ((i & 1) ^ ((i >> 1) & 1)) != 0 ? 0.5f : -0.5f;
@@ -570,6 +573,29 @@ TEST_F(DynamicsSystemTest, ASavedPhysicsCarriesOnAsTheUnsavedOneDoes)
 	EXPECT_EQ(state(), unsavedPhysics);
 }
 
+// A thing that a vortex draws in is in the physics with no body. A load of the physics keeps it in the physics.
+TEST_F(DynamicsSystemTest, AThingInThePhysicsWithNoBodyStaysInThePhysicsAfterALoad)
+{
+	namespace reflection = openblack::ecs::reflection;
+	entt::meta_ctx context;
+	reflection::RegisterComponents(context);
+	auto& registry = _world->Entities();
+	const auto drawnIn = Rock({1000.0f, 1000.0f});
+	ASSERT_TRUE(_dynamics->InitialisePhysics(drawnIn, {.add = false}).started);
+	ASSERT_TRUE(registry.AllOf<InPhysics>(drawnIn));
+	ASSERT_EQ(Entries(), 0u);
+	reflection::BinaryWriter out(context);
+	_dynamics->SaveState(out);
+	const auto saved = std::move(out.Bytes());
+
+	_dynamics->ResetSimulation();
+	const reflection::EntityRemap identity;
+	reflection::BinaryReader in(context, saved, identity);
+	ASSERT_TRUE(_dynamics->LoadState(in));
+	EXPECT_TRUE(registry.AllOf<InPhysics>(drawnIn));
+	EXPECT_EQ(Entries(), 0u);
+}
+
 namespace
 {
 /// A frame as the game plays it: the turn if one is due, then the frame's clock, then the bodies drawn between their
@@ -651,4 +677,66 @@ TEST_F(DynamicsSystemTest, TheTemplesHoldOnTheClockHoldsAThingInFlightAsAPauseDo
 	const auto unheld = FlightByTurn(*this, 20, std::nullopt, none, fail);
 	MakeWorld(FakeWorld::k_LandHeight);
 	EXPECT_EQ(FlightByTurn(*this, 20, 9, hold, fail), unheld);
+}
+
+namespace
+{
+/// A physical shield's dome over the land: a cube four metres across that stands on the land
+entt::entity Dome(Registry& registry, glm::vec3 at)
+{
+	const auto dome = registry.Create();
+	registry.Assign<Transform>(dome, at, glm::mat3(1.0f), glm::vec3(1.0f));
+	registry.Assign<MagicShield>(dome, MagicShield {.kind = MagicShield::Kind::Physical});
+	auto& shape = registry.Assign<ShieldDome>(dome);
+	shape.mesh = resources::HashIdentifier(MeshId::Dummy);
+	shape.hullOrigin = at;
+	shape.hullScale = 4.0f;
+	return dome;
+}
+} // namespace
+
+TEST_F(DynamicsSystemTest, AShieldDomeIsAnObstacleThatAlwaysStaysInThePhysics)
+{
+	const auto dome = Dome(Entities(), {1000.0f, FakeWorld::k_LandHeight, 1000.0f});
+	auto* entry = _dynamics->AddObstacle(dome);
+	ASSERT_NE(entry, nullptr);
+	EXPECT_FALSE(entry->IsFlying());
+	EXPECT_TRUE(entry->Has(PhysicsEntry::k_AlwaysStays));
+	// A second request gives the same body, and does not add one more
+	EXPECT_EQ(_dynamics->AddObstacle(dome), entry);
+	EXPECT_EQ(Entries(), 1u);
+	// Nothing moves, but the dome stays in the physics
+	for (int turn = 0; turn < 50; ++turn)
+	{
+		_dynamics->ProcessTurn();
+	}
+	EXPECT_EQ(_dynamics->Find(dome), entry);
+	EXPECT_FALSE(Entities().AllOf<InPhysics>(dome));
+}
+
+TEST_F(DynamicsSystemTest, ARockThatFallsOnAShieldDomeStopsOnItAndDoesNotGoThrough)
+{
+	const auto dome = Dome(Entities(), {1000.0f, FakeWorld::k_LandHeight, 1000.0f});
+	ASSERT_NE(_dynamics->AddObstacle(dome), nullptr);
+	const auto rock = Rock({1000.0f, 1000.0f});
+	Entities().Get<Transform>(rock).position.y += 8.0f;
+	ASSERT_TRUE(_dynamics->InitialisePhysics(rock, {.velocity = {0.0f, -2.0f, 0.0f}}).started);
+	for (int turn = 0; turn < 100; ++turn)
+	{
+		_dynamics->ProcessTurn();
+	}
+	// The top of the dome is four metres over the land: the rock stays on it
+	EXPECT_GT(Entities().Get<const Transform>(rock).position.y, FakeWorld::k_LandHeight + 3.0f);
+}
+
+TEST_F(DynamicsSystemTest, NoObstacleIsAddedForAThingWithoutAShape)
+{
+	auto& registry = Entities();
+	const auto spiritual = registry.Create();
+	registry.Assign<Transform>(spiritual, glm::vec3(1000.0f, FakeWorld::k_LandHeight, 1000.0f), glm::mat3(1.0f),
+	                           glm::vec3(1.0f));
+	registry.Assign<MagicShield>(spiritual, MagicShield {.kind = MagicShield::Kind::Spiritual});
+	EXPECT_EQ(_dynamics->AddObstacle(spiritual), nullptr);
+	EXPECT_EQ(_dynamics->AddObstacle(entt::null), nullptr);
+	EXPECT_EQ(Entries(), 0u);
 }

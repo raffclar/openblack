@@ -22,8 +22,9 @@
 #include <vector>
 
 #include <Audio/AudioManagerNoOp.h>
-#include <Audio/GameMusic.h>
+#include <Audio/GameSoundRequests.h>
 #include <Audio/MusicPlayer.h>
+#include <Sound/GameMusic.h>
 #include <gtest/gtest.h>
 #include <spdlog/sinks/null_sink.h>
 #include <spdlog/spdlog.h>
@@ -42,7 +43,6 @@ public:
 		std::vector<uint32_t> queued;
 		uint32_t played {0};
 		uint32_t position {0};
-		uint64_t framesPlayed {0};
 		uint32_t firstSkip {0};
 		bool playing {false};
 		float volume {0.0f};
@@ -78,7 +78,6 @@ public:
 		return played;
 	}
 	[[nodiscard]] uint32_t GetPlayPosition(Stream stream) const override { return streams.at(stream).position; }
-	[[nodiscard]] uint64_t GetFramesPlayed(Stream stream) const override { return streams.at(stream).framesPlayed; }
 	void Play(Stream stream) override { streams.at(stream).playing = true; }
 	[[nodiscard]] bool IsPlaying(Stream stream) const override
 	{
@@ -544,71 +543,20 @@ TEST(MusicCues, CuesPassedAreAfterTheLastCheckAndUpToNow)
 	EXPECT_EQ(CuesPassed(cues, {}, {.chunk = 3, .frame = 0}), (std::vector<std::string_view> {"L1"}));
 }
 
-TEST(MusicCues, TheChannelHeardPassesItsCuesOnTheTicksAsItsStreamPlays)
+TEST(Music, AChannelStartsPartWayThroughItsStartChunkWhenAsked)
 {
 	FakeMusicBackend backend;
 	MusicPlayer music(backend);
-	auto bank = MakeBank(8, 1);
-	bank->cues = {
-	    {.chunk = 1, .frame = 0, .text = "L1"},
-	    {.chunk = 1, .frame = 9000, .text = "p"},
-	    {.chunk = 2, .frame = 100, .text = "L2"},
-	};
-	std::vector<std::string> heard;
-	music.Play({.bank = bank, .onCue = [&heard](std::string_view cue) { heard.emplace_back(cue); }});
-	auto& stream = backend.streams.at(music.GetChannels()[0].stream);
-
-	// Cues wait for the next tick of the music thread
-	music.Update(MusicPlayer::k_Tick / 2);
-	EXPECT_TRUE(heard.empty());
-	music.Update(MusicPlayer::k_Tick / 2);
-	EXPECT_EQ(heard, (std::vector<std::string> {"L1"}));
-
-	// The stream's frames heard time them, however long the ticks have taken
-	stream.framesPlayed = 8999;
-	music.Update(MusicPlayer::k_Tick * 5);
-	EXPECT_EQ(heard, (std::vector<std::string> {"L1"}));
-	stream.framesPlayed = k_CueChunkFrames + 100;
-	music.Update(MusicPlayer::k_Tick);
-	EXPECT_EQ(heard, (std::vector<std::string> {"L1", "p", "L2"}));
-	// Each cue is passed once
-	music.Update(MusicPlayer::k_Tick);
-	EXPECT_EQ(heard.size(), 3u);
-}
-
-TEST(MusicCues, OnlyTheChannelHeardPassesCuesAndAnotherCatchesUpWhenHeardAgain)
-{
-	FakeMusicBackend backend;
-	MusicPlayer music(backend);
-	auto verse = MakeBank(8, 1);
-	verse->cues = {{.chunk = 1, .frame = 0, .text = "L1"}, {.chunk = 1, .frame = 5000, .text = "L2"}};
-	auto other = MakeBank(8, 2);
-	std::vector<std::string> heard;
-	music.Play({.bank = verse, .onCue = [&heard](std::string_view cue) { heard.emplace_back(cue); }});
-	music.Update(MusicPlayer::k_Tick);
-	EXPECT_EQ(heard, (std::vector<std::string> {"L1"}));
-
-	// Other music takes over while the verse fades out: the verse's cues wait
-	music.Play({.bank = other, .volume = 127});
-	backend.streams.at(music.GetChannels()[0].stream).framesPlayed = 6000;
-	music.Update(MusicPlayer::k_Tick);
-	EXPECT_EQ(heard, (std::vector<std::string> {"L1"}));
-
-	// Heard again, it passes what it missed
-	music.Play({.bank = verse, .volume = 127});
-	music.Update(MusicPlayer::k_Tick);
-	EXPECT_EQ(heard, (std::vector<std::string> {"L1", "L2"}));
-}
-
-TEST(MusicCues, MusicWithoutAHandlerPassesNone)
-{
-	FakeMusicBackend backend;
-	MusicPlayer music(backend);
-	auto bank = MakeBank(8, 1);
-	bank->cues = {{.chunk = 1, .frame = 0, .text = "L1"}};
-	music.Play({.bank = bank});
-	music.Update(MusicPlayer::k_Tick);
-	EXPECT_EQ(music.GetChannels()[0].cueChecked, MusicCuePosition {});
+	music.Play({.bank = MakeBank(8, 1), .startChunk = 3, .startFrame = 500});
+	const auto& stream = backend.streams.at(music.GetChannels()[0].stream);
+	ASSERT_FALSE(stream.queued.empty());
+	EXPECT_EQ(stream.queued.front(), 2U);
+	EXPECT_EQ(stream.firstSkip, 500U);
+	// A start chunk out of range starts at the very start of the first chunk
+	music.Play({.bank = MakeBank(8, 2), .startChunk = 99, .startFrame = 500});
+	const auto& other = backend.streams.at(music.GetChannels()[1].stream);
+	EXPECT_EQ(other.queued.front(), 0U);
+	EXPECT_EQ(other.firstSkip, 0U);
 }
 
 TEST(GameMusic, FightsOnTheFirstLandsHaveTheirOwnMusicAndLaterOnesTheBigFight)
@@ -640,9 +588,10 @@ namespace
 class MusicCountingAudio final: public AudioManagerNoOp
 {
 public:
-	bool MusicPlay(const std::string& bankPath, const MusicPlayOptions& /*options*/) override
+	bool MusicPlay(const std::string& bankPath, const MusicPlayOptions& options) override
 	{
 		played.push_back(bankPath);
+		starts.push_back({.chunk = options.startChunk, .frame = options.startFrame});
 		return true;
 	}
 	[[nodiscard]] std::optional<MusicBankInfo> GetMusicBankInfo(const std::string& /*bankPath*/) override
@@ -651,6 +600,7 @@ public:
 	}
 
 	std::vector<std::string> played;
+	std::vector<MusicPiecePosition> starts;
 };
 
 /// The game music writes to the audio log, which the tests do not make
@@ -683,11 +633,12 @@ TEST(GameMusic, AFilmLeavesTheMusicAndTheScriptMusicStartsAgainAfterIt)
 {
 	MakeAudioLog();
 	openblack::Locator::audio::emplace<MusicCountingAudio>();
+	openblack::Locator::sounds::emplace<openblack::audio::GameSoundRequests>();
 	auto& audio = static_cast<MusicCountingAudio&>(openblack::Locator::audio::value());
 	{
 		GameMusic music;
-		music.StartScriptMusic(MusicType::ScriptIntro);
 		auto inputs = QuietLandTurn();
+		inputs.script = {.type = MusicType::ScriptIntro, .started = true, .playCount = 1, .place = MusicPiecePosition {}};
 		music.ProcessTurn(inputs);
 		music.ProcessTurn(inputs);
 		ASSERT_EQ(audio.played.size(), 1U);
@@ -696,12 +647,53 @@ TEST(GameMusic, AFilmLeavesTheMusicAndTheScriptMusicStartsAgainAfterIt)
 		music.ProcessTurn(inputs);
 		EXPECT_EQ(audio.played.size(), 1U);
 		EXPECT_EQ(music.GetPlaying(), MusicType::None);
-		// After the film, the script's music plays again from its start
+		// After the film, the script's music plays again from the place of the world's clock
 		inputs.film = false;
 		music.ProcessTurn(inputs);
 		ASSERT_EQ(audio.played.size(), 2U);
 		EXPECT_EQ(audio.played[1], audio.played[0]);
 	}
+	openblack::Locator::sounds::reset();
+	openblack::Locator::audio::reset();
+}
+
+TEST(GameMusic, TheScriptsMusicHeardStartsAtThePlaceOfTheWorldsClock)
+{
+	MakeAudioLog();
+	openblack::Locator::audio::emplace<MusicCountingAudio>();
+	openblack::Locator::sounds::emplace<openblack::audio::GameSoundRequests>();
+	auto& audio = static_cast<MusicCountingAudio&>(openblack::Locator::audio::value());
+	{
+		GameMusic music;
+		auto inputs = QuietLandTurn();
+		inputs.script = {.type = MusicType::ScriptMissionariesVerse1,
+		                 .started = true,
+		                 .playCount = 1,
+		                 .place = MusicPiecePosition {.chunk = 1, .frame = 0}};
+		music.ProcessTurn(inputs);
+		// The same play of the world plays nothing again
+		inputs.script.place = MusicPiecePosition {.chunk = 2, .frame = 40};
+		music.ProcessTurn(inputs);
+		ASSERT_EQ(audio.played.size(), 1U);
+		// The temple's music takes over, and the piece comes back at the place that the world has reached
+		inputs.inCitadel = true;
+		music.ProcessTurn(inputs);
+		inputs.inCitadel = false;
+		inputs.script.place = MusicPiecePosition {.chunk = 5, .frame = 100};
+		music.ProcessTurn(inputs);
+		ASSERT_EQ(audio.starts.size(), 3U);
+		EXPECT_EQ(audio.starts.back(), (MusicPiecePosition {.chunk = 5, .frame = 100}));
+		// A piece that the world started before a load has no place, so no music plays
+		inputs.script = {.type = MusicType::ScriptMissionariesVerse1, .started = true, .playCount = 2, .place = std::nullopt};
+		music.ProcessTurn(inputs);
+		EXPECT_EQ(audio.played.size(), 3U);
+		EXPECT_EQ(music.GetPlaying(), MusicType::ScriptMissionariesVerse1);
+		// The world ends the piece: the music heard fades and the land's music comes back
+		inputs.script = {};
+		music.ProcessTurn(inputs);
+		EXPECT_NE(music.GetPlaying(), MusicType::ScriptMissionariesVerse1);
+	}
+	openblack::Locator::sounds::reset();
 	openblack::Locator::audio::reset();
 }
 
@@ -709,6 +701,7 @@ TEST(GameMusic, AFilmThatStartsMakesTheLandsMusicStartAgain)
 {
 	MakeAudioLog();
 	openblack::Locator::audio::emplace<MusicCountingAudio>();
+	openblack::Locator::sounds::emplace<openblack::audio::GameSoundRequests>();
 	auto& audio = static_cast<MusicCountingAudio&>(openblack::Locator::audio::value());
 	{
 		GameMusic music;
@@ -720,5 +713,6 @@ TEST(GameMusic, AFilmThatStartsMakesTheLandsMusicStartAgain)
 		music.ProcessTurn(inputs);
 		EXPECT_EQ(audio.played.size(), 2U);
 	}
+	openblack::Locator::sounds::reset();
 	openblack::Locator::audio::reset();
 }

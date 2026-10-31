@@ -13,10 +13,19 @@
 #error "Locator interface implementations should only be included in Locator.cpp"
 #endif
 
+#include <memory>
 #include <optional>
+#include <unordered_map>
+#include <vector>
 
 #include "ECS/Systems/SpellIconSystemInterface.h"
+#include "Magic/IconChargeLooks.h"
 #include "Magic/SpellIcons.h"
+
+namespace openblack::particles
+{
+class LightSheet;
+} // namespace openblack::particles
 
 namespace openblack::ecs::components
 {
@@ -45,6 +54,13 @@ public:
 	[[nodiscard]] float ChantNeeded(entt::entity icon) const override;
 	void TakeCastCharge(entt::entity icon) override;
 	bool Tap(entt::entity icon, PlayerNames player) override;
+	[[nodiscard]] entt::entity SiteOfIcon(entt::entity icon) const override;
+	void EmptyIconStores(entt::entity site) override;
+	void CancelChargesFor(entt::entity temple, PlayerNames charger) override;
+	[[nodiscard]] bool ChargesFor(entt::entity temple, PlayerNames charger) const override;
+	bool CancelLatestChargeFor(entt::entity temple, PlayerNames charger) override;
+	[[nodiscard]] entt::entity IconInTemple(entt::entity temple, SpellSeedType seed) const override;
+	[[nodiscard]] bool AnyIconStores(entt::entity temple, std::optional<MagicType> type) const override;
 	[[nodiscard]] bool HasIconFor(PlayerNames player, SpellSeedType seed) const override;
 	[[nodiscard]] bool IsIcon(entt::entity entity) const override;
 	[[nodiscard]] bool IsHandReady(PlayerNames player) const override { return HandReady(player); }
@@ -58,6 +74,9 @@ public:
 	void ChargedAt(entt::entity site, std::span<const magic::WorshipIconCharge> charges) override;
 
 	void Update(float seconds) override;
+	void UpdateChargeLooks(int32_t gameMilliseconds, bool landDrawn) override;
+	[[nodiscard]] uint32_t ShownTint(entt::entity icon) const override;
+	[[nodiscard]] std::vector<ChargePulse> ChargePulses() const override;
 	void Reset() override;
 
 private:
@@ -103,10 +122,33 @@ private:
 	void StartCharge(entt::entity icon, PlayerNames player);
 	/// The worship sites of a player, in the order of their places round the temple
 	[[nodiscard]] std::vector<entt::entity> SitesOf(PlayerNames player) const;
+	/// The worship sites of a temple, in the order of their places round the temple
+	[[nodiscard]] std::vector<entt::entity> SitesOfTemple(entt::entity temple) const;
+	/// An icon stops its charge: its store goes back to its site
+	void CancelCharge(components::WorshipIcon& icon) const;
 	/// Whether a gesture of a player may ask a site's icon for its miracle
 	[[nodiscard]] bool IconValidForRequest(entt::entity icon, PlayerNames player) const;
 	/// Deletes an icon and forgets it, with the seeds out from it; what it was charging and what it stored are lost
 	void Destroy(entt::entity icon);
+
+	/// A worship site's icon that is on the screen shows its charge in this frame
+	void ShowCharge(entt::entity entity, const components::WorshipIcon& icon, int32_t gameMilliseconds);
+
+	/// What the frames keep of an icon's look. A saved game does not keep these.
+	struct IconLook
+	{
+		/// The ring of light round the icon. The first frame that draws the icon makes it.
+		std::shared_ptr<particles::LightSheet> ring;
+		/// The colour that the icon adds to its model, from the last frame that drew it
+		uint32_t tint {0};
+		/// The colour that the model shows in this frame
+		uint32_t shownTint {0};
+	};
+	std::unordered_map<entt::entity, IconLook> _looks;
+	/// The clock of the shines and the pulses of all the icons
+	magic::icon_charge_looks::DecayClock _decayClock;
+	/// The pulse models of this frame
+	std::vector<ChargePulse> _pulses;
 };
 
 } // namespace openblack::ecs::systems

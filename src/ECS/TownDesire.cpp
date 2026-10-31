@@ -706,4 +706,14 @@ void CountBuiltBuilding(DesireInputs& in, AbodeNumber number, AbodeType type)
 	}
 }
 
+float FoodWanted(const DesireContext& c)
+{
+	return DesiredFood(c);
+}
+
+uint32_t FoodHeld(const DesireInputs& in)
+{
+	return FoodAvailable(in);
+}
+
 } // namespace openblack::ecs::town_desire

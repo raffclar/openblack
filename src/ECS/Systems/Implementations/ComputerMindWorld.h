@@ -13,9 +13,14 @@
 
 #include <optional>
 
-#include <entt/entity/entity.hpp>
 #include <glm/vec3.hpp>
 
+#include "ComputerGameHandCasts.h"
+#include "ComputerGameHandCreature.h"
+#include "ComputerGameHandMoves.h"
+#include "ComputerGameHandObjects.h"
+#include "ComputerGameHandTotem.h"
+#include "ComputerMindRuleTable.h"
 #include "ECS/Components/ComputerPlayer.h"
 #include "ECS/ComputerHand.h"
 #include "ECS/ComputerMind.h"
@@ -29,43 +34,17 @@
 namespace openblack::ecs::systems::computer_world
 {
 
-/// The steps of the hand in the game's world
-class GameHandWorld final: public computer_hand::World
-{
-public:
-	GameHandWorld(PlayerNames player, components::ComputerPlayer& state);
-
-	[[nodiscard]] std::optional<map_coords::MapCoords> CoordsOf(entt::entity thing) const override;
-	[[nodiscard]] float HeightOf(entt::entity thing) const override;
-	[[nodiscard]] float LandHeight(const map_coords::MapCoords& coords) const override;
-	[[nodiscard]] bool IconHasSite(entt::entity icon) const override;
-	[[nodiscard]] bool IconCharging(entt::entity icon) const override;
-	bool StartChant(entt::entity icon, MagicType type) override;
-	[[nodiscard]] float ChantNeeded(entt::entity icon) const override;
-	[[nodiscard]] bool Angry(MagicType type) const override;
-	bool Cast(MagicType type, entt::entity target, entt::entity icon, glm::vec3 hand) override;
-	[[nodiscard]] float CastSeconds(MagicType type) const override;
-	[[nodiscard]] uint32_t SeedGesture(MagicType type, int32_t stage) const override;
-	[[nodiscard]] float GestureLength(uint32_t gesture) const override;
-	[[nodiscard]] glm::vec3 GesturePoint(uint32_t gesture, float share) const override;
-	void ShowGesture(uint32_t gesture, glm::vec3 corner, float size) override;
-	[[nodiscard]] bool HandHasRoom() const override;
-	void PutDownHeld(glm::vec3 hand) override;
-	[[nodiscard]] bool CanPickUp(entt::entity thing) const override;
-	void PickUp(entt::entity thing, glm::vec3 hand) override;
-	void UseHeldOn(entt::entity target, glm::vec3 hand) override;
-	void DropHeld(glm::vec3 hand) override;
-
-private:
-	PlayerNames _player;
-	components::ComputerPlayer& _state;
-};
-
-/// The rules of the god's needs in the game's world
+/// The rules of the god's needs in the game's world. Each node finds its rules in the table of rules by its kind.
 class GameMindWorld final: public computer_mind::World
 {
 public:
 	GameMindWorld(PlayerNames player, components::ComputerPlayer& state);
+	/// The parts of the hand refer to the parts of this world. Thus the code does not copy or move this world.
+	GameMindWorld(const GameMindWorld&) = delete;
+	GameMindWorld& operator=(const GameMindWorld&) = delete;
+	GameMindWorld(GameMindWorld&&) = delete;
+	GameMindWorld& operator=(GameMindWorld&&) = delete;
+	~GameMindWorld() override = default;
 
 	float Intensity(computer_mind::Mind& mind, uint16_t node) override;
 	bool Perform(computer_mind::Mind& mind, uint16_t node) override;
@@ -75,47 +54,44 @@ public:
 	void StartAction() override;
 	[[nodiscard]] bool ActionLocked() const override;
 	void UnlockAction() override;
-	bool ForceQueued() override;
+	[[nodiscard]] std::optional<glm::vec3> MarkerPlace(entt::entity thing) const override;
 	[[nodiscard]] bool HeldByHelp() const override;
+	[[nodiscard]] const computer_mind::NodeNames& Names() const override;
+	/// Tools: the world adds the time of each step of the hand, for the developer log of the times of the gods
+	void TimeHand(bool on) { _timeHand = on; }
+	/// The time of the steps of the hand in this turn, in milliseconds
+	[[nodiscard]] double HandMs() const { return _handMs; }
 
 private:
-	/// The town that wants food or wood most is the node's object. How much it wants it.
-	float TownWanting(computer_mind::Mind& mind, uint16_t node, TownDesireInfo desire);
-	/// How much the god wants to cast the miracle on the store of the town above the node, or on the thing above it
-	float ShallCast(computer_mind::Mind& mind, uint16_t node, MagicType type, ResourceType resource);
-	/// The worship site's icon that the god wants to charge most is the node's object. How much it wants it.
-	float ChargeUpSpell(computer_mind::Mind& mind, uint16_t node);
-	/// The field of the god's towns that the god wants to take food from most
-	float FoodFromField(computer_mind::Mind& mind, uint16_t node);
-	/// The worship site of the god that needs dancers most
-	float SiteNeedingVillagers(computer_mind::Mind& mind, uint16_t node);
-	/// The villager that the god carries to the worship site of the node above
-	float VillagerForSite(computer_mind::Mind& mind, uint16_t node);
-	/// The hand carries the villager of the node to the gate of the worship site above and drops it there
-	bool CarryToSite(computer_mind::Mind& mind, uint16_t node);
-	/// The hand takes the thing that the chosen leaf found and drops it on the store of the town
-	bool PickUpForTown(computer_mind::Mind& mind, uint16_t node);
-	/// The god charges the miracle of the node's icon and casts it on the store of the town above
-	bool CastFromIcon(computer_mind::Mind& mind, uint16_t node);
-	/// The god's worshippers chant for the miracle of the node's icon
-	bool PerformCharge(computer_mind::Mind& mind, uint16_t node);
-	/// The hand goes to the icon, or makes the miracle's gesture when it is far, before the worshippers chant
-	void ReachIcon(entt::entity icon, MagicType type);
-	/// The share of the miracle's charge that the god can have, with its icon; the request counts once more
-	float ChargeLevel(MagicType type, entt::entity& icon);
-	/// How much the god wants a place: all inside its influence
-	[[nodiscard]] float PlacePull(const map_coords::MapCoords& place) const;
+	/// Puts the hand of the god, if no person plays the god, where the creatures read it
+	void ReportGodHand(const glm::vec3& hand) const;
 
 	PlayerNames _player;
 	components::ComputerPlayer& _state;
-	GameHandWorld _hand;
+	GameHandMoves _moves;
+	GameHandObjects _objects;
+	GameHandCasts _casts;
+	GameHandCreature _creature;
+	GameHandTotem _totem;
+	computer_hand::World _hand;
+	RuleContext _context;
+	bool _timeHand {false};
+	double _handMs {0.0};
 };
 
-/// Before the mind's turn: the god forgets its miracles that are gone, and stops an action whose things are gone
-void Validate(components::ComputerPlayer& state);
-/// The god reports where its hand and its camera are, as a player of a network game reports them. Only a god that has
-/// hands reports.
-void ReportHand(PlayerNames player, glm::vec3 hand, glm::vec3 camera);
+/// Before the mind's turn: the god forgets its miracles, its seen things and its queued actions whose things are gone,
+/// and stops an action whose things are gone. Then its hand puts down what it holds where the hand is.
+void Validate(PlayerNames player, components::ComputerPlayer& state);
+/// The thing is in the world, and it is not a villager on its way to dying
+[[nodiscard]] bool Available(entt::entity thing);
+/// The cinema bars hold the mind of the god while it has no script action and no queued action
+[[nodiscard]] bool HeldByHelp(const components::ComputerPlayer& state);
+/// The god adds the forests and the seeds of miracles near its hand to its list of seen things
+void SeeNearHand(components::ComputerPlayer& state, uint32_t turn);
+/// The names of the kinds of node that all the gods of the land share
+[[nodiscard]] const computer_mind::NodeNames& SharedNodeNames();
+/// The shared names of the kinds of node, to change them. The first change makes the entity that keeps them.
+[[nodiscard]] computer_mind::NodeNames& SharedNodeNamesToChange();
 /// Where the hand of the god starts on the land: at its temple
 [[nodiscard]] std::optional<glm::vec3> StartingHand(PlayerNames player);
 

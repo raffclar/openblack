@@ -96,8 +96,6 @@ constexpr size_t k_DanceMoveCount = 7;
 /// After the first move, the body chooses the next move from only the first five
 constexpr size_t k_LaterDanceMoveCount = 5;
 constexpr size_t k_Talk = 205;
-/// The kiss
-constexpr size_t k_Kiss = 212;
 
 /// The spec file's name of an animation the minds play, without its type letter, or empty for others
 [[nodiscard]] std::string_view Name(size_t animation);
@@ -107,6 +105,10 @@ constexpr size_t k_Kiss = 212;
 [[nodiscard]] float PlaybackRate(float size);
 /// How fast the body plays its animations: at the rate of its size, or at the usual speed when a script sets real time
 [[nodiscard]] float BodyRate(float size, bool realTime);
+/// How many milliseconds the body's animations move on in a game turn of some whole milliseconds. The turn's
+/// milliseconds are multiplied by the rate of the size, and the result is cut to whole milliseconds. When a script
+/// sets real time, the animations move on by the turn's milliseconds.
+[[nodiscard]] int32_t TurnStepMs(int32_t turnMs, float size, bool realTime);
 
 /// What the body plays
 struct BodyAction
@@ -148,6 +150,9 @@ struct BodyAction
 	/// The body keeps its pace when it is told to hurry. A kiss, a cast and the confused look of a walk that waits for
 	/// its route do this.
 	bool keepsPace {false};
+	/// The body plays the kiss of the creature: the low kiss, alone or blended towards the high kiss. The kiss gets to its
+	/// moment at the kiss time of the species, not at the middle of its animation.
+	bool kiss {false};
 	/// The body plays at the pace of real time, whatever the size of the creature
 	bool realTime {false};
 	/// Each move of a dance lasts this many milliseconds of real time, whatever the size of the creature
@@ -166,6 +171,9 @@ struct BodyAction
 [[nodiscard]] bool IsLooping(const BodyAction& body);
 /// The animation the body plays now
 [[nodiscard]] size_t CurrentAnimation(const BodyAction& body);
+/// The animation that times the body: the animation that it plays now. The kiss times its low and its high kiss on
+/// the length of the high kiss.
+[[nodiscard]] size_t TimingAnimation(const BodyAction& body);
 /// An action that plays once, unless the body already plays one: nothing starts while one plays
 [[nodiscard]] std::optional<BodyAction> PlayOnce(const BodyAction& body, size_t animation, bool mirrored);
 /// A start, loop and end, unless the body already plays an action; the loop can hold its last frame, and the whole can
@@ -206,16 +214,17 @@ struct BodyAction
 /// The body some milliseconds on, given how long the animation it plays now lasts, or nothing when the species has no
 /// such animation. Each animation starts from its beginning, without blending into the last. A body timed by what plays it
 /// stays where it was put.
-/// The moves of a dance and a body that plays in real time count real milliseconds, not the milliseconds of the
-/// creature's playback.
+/// The moves of a dance, the kiss and a body that plays in real time count real milliseconds, not the milliseconds of
+/// the creature's playback.
 [[nodiscard]] BodyAction AdvanceBody(BodyAction body, float milliseconds, std::optional<uint32_t> duration,
                                      std::optional<float> realMilliseconds = std::nullopt);
 /// Whether the body gets to the moment of its action as AdvanceBody moves it on some milliseconds. An action played
-/// once gets to its moment as it passes the middle of its animation (half its length in whole milliseconds). The kiss
-/// gets to its moment as it passes the kiss time of the species. A body timed by what plays it does not get to a moment
-/// here.
+/// once gets to its moment as it passes the middle of its animation (half its length in whole milliseconds). A body
+/// timed by what plays it does not get to a moment here.
+/// The kiss gets to its moment as it passes the kiss time of the species, also when it plays the low kiss alone. The
+/// kiss moves on by the real milliseconds, and it gets to no moment in the step that ends it.
 [[nodiscard]] bool ReachesActionMoment(const BodyAction& body, float milliseconds, std::optional<uint32_t> duration,
-                                       uint32_t kissMs);
+                                       uint32_t kissMs, std::optional<float> realMilliseconds = std::nullopt);
 
 /// The face's expression, played on top of the body. A face is pulled for some time: it plays through once and holds
 /// its last frame, the full expression, until that time is up. Then it relaxes, running back to its start a quarter as
@@ -230,6 +239,7 @@ struct FaceLayer
 	float remainingMs {0.0f};
 	/// Why the wanted face was pulled
 	creature_face::Cue cue {creature_face::Cue::None};
+	[[nodiscard]] bool operator==(const FaceLayer&) const = default;
 };
 /// A face pulled for some milliseconds, or for an hour when none are given
 [[nodiscard]] FaceLayer PullFace(FaceLayer face, size_t animation, float milliseconds,

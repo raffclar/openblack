@@ -31,7 +31,9 @@
 #include "Common/BuildVersion.h"
 #include "Common/CrashHandler.h"
 #include "Common/DeveloperTools.h"
+#include "ECS/GameEndConditions.h"
 #include "Server/DedicatedServer.h"
+#include "Server/MapExport.h"
 
 namespace
 {
@@ -59,22 +61,33 @@ int main(int argc, char* argv[])
 		("testbed", "The flat testbed in place of a land.")
 		("scenario", "Tools: start on the testbed and play the testbed scenario of this id, as the game's --scenario.", cxxopts::value<std::string>())
 		("gods-ring-map", "The network map for 32 gods in place of a land.")
+		("write-gods-ring-map", "Write the file of the network map for 32 gods, which the players get from the lobby, to this file, then stop.", cxxopts::value<std::string>())
 		("skip-opening", "How the new game on the first land starts, as the game's --skip-opening.", cxxopts::value<std::string>()->default_value("cow"))
-		("seed", "The seed of every random number of the world.", cxxopts::value<uint32_t>()->default_value("1"))
+		("seed", "Tools: the seed of every random number of the world, which also pins the date of the world. Without it, the world starts from the seed of a room and reads the date from the clock of the computer.", cxxopts::value<uint32_t>())
 		("n,turns", "Stop when the world gets to this turn. With none, the server runs until a signal stops it.", cxxopts::value<uint32_t>())
 		("frame-ms", "The game time of each frame in milliseconds. A turn is 100 ms.", cxxopts::value<double>()->default_value("100"))
 		("fast", "Tools: play the frames one after the other with no wait for the wall clock.")
 		("profile-folder", "The folder of the server's own profile. With none, the profile of a tool's run in the working folder.", cxxopts::value<std::string>())
+		("log-checksums", "Tools: write the checksum of each turn to the log, which server_check and net_check read.")
 		("record", "Tools: write the run record of each turn to this file, with the hash of each component.", cxxopts::value<std::string>())
 		("record-fields", "Tools: with --record, the hash of each field of each component too.")
+		("inspect-port", "The inspector of the server on this port of 127.0.0.1 (0 for a free port), for the operator and the tools on the same computer. It refuses the queries that change the world of a network game.", cxxopts::value<uint16_t>())
 		("trace-draws", "Tools: write each draw on the synced random seed to this file, as the game's --sim-trace-draws.", cxxopts::value<std::string>())
 		("reload-at", "Tools: at this turn the server takes its whole world into memory as a world state and loads it again, as a client that comes back loads the server's world.", cxxopts::value<uint32_t>())
+		("gods-need-no-temple", "Tests: a god with no temple stays in the game, for a land that makes no temple at its start (a story land). Each client needs the same switch (--sim-gods-need-no-temple).")
 		("temple-loss", "Tests: at a turn, the temple of a player starts its destruction, as PLAYER:TURN (the player from 0). Each client needs the same switch (--sim-temple-loss).", cxxopts::value<std::string>())
+		("time-limit", "The time limit of the network game in minutes, from 10 to 1440 (24 hours) as the host picks it, in place of the default 30. A build with the developer tools also accepts 1 to 9 minutes for tests. The start sends it to every client.", cxxopts::value<uint32_t>())
+		("conditions", "The winning conditions of the network game, as the host picks them: [LAND:]NAME=VALUE,... with the names of Online Maps/ConditionTemplate.txt or their numbers from 0. The values must be in the limits of the land (or of LAND) in that file. The start sends them to every client.", cxxopts::value<std::string>())
+		("all-computer-gods", "Tools: every god with a citadel is a computer god, and the room has no human god. The game starts at once: with --gods N the world turns when N observers joined (for the AI soak).")
+		("ai-seed", "Tools: the seed of the personalities of the computer gods. Each client takes it from the start.", cxxopts::value<uint32_t>())
 		("commands", "Tools: do the commands of each turn that a game wrote with --sim-commands, at the same turns.", cxxopts::value<std::string>())
+		("test-commands", "Tests: the game server lets through the commands of the test tools, such as the fight cheat.")
 #if defined(OPENBLACK_DEVELOPER_TOOLS)
 		("row-dump", "Tools: keep each field of each row of the synced world of the last turns, and write the rows of a turn to this file when the world of a client parts from the server's world (tools/sim/row_dump.py compares two files).", cxxopts::value<std::string>())
 		("row-dump-turn", "Tools: with --row-dump, also write the rows of this turn.", cxxopts::value<uint32_t>())
 		("row-dump-keep", "Tools: with --row-dump, the count of the last turns of which the dump keeps the rows.", cxxopts::value<uint32_t>()->default_value("64"))
+		("world-states", "Tools: write the world state of the server to this folder at the end of each turn of --world-state-turns, with a map of its synced bytes (tools/sim/save_diff.py --synced compares two computers).", cxxopts::value<std::string>())
+		("world-state-turns", "Tools: with --world-states, the turns, such as 250 or 100,250,400.", cxxopts::value<std::string>())
 #endif
 		("listen", "The game role: listen for the clients on this IPv4 address and TCP port, such as 127.0.0.1:0 (0 for a free port).", cxxopts::value<std::string>())
 		("tls-cert", "The PEM file of the certificate chain of the game socket (wss). Without it, the socket speaks plain WebSocket on a loopback address only, behind a proxy that does the TLS.", cxxopts::value<std::string>())
@@ -88,6 +101,10 @@ int main(int argc, char* argv[])
 		("client-key", "The PEM file of the key of --client-cert.", cxxopts::value<std::string>())
 		("room-name", "The name of the room in the list of the lobby.", cxxopts::value<std::string>()->default_value("Game"))
 		("lobby-test-ca", "Tests on this computer only: a PEM file of a certificate authority of a test lobby on a loopback address (127.0.0.1).", cxxopts::value<std::string>())
+		("snapshot-folder", "The folder of the snapshots of the game server: the shared world, on the server's own disk, for a restart after a crash.", cxxopts::value<std::string>()->default_value(std::string(openblack::server::snapshots::k_DefaultFolder)))
+		("snapshot-every", "The turns between two snapshots of the game server (10 turns a second). 0 stops the snapshots.", cxxopts::value<uint32_t>()->default_value(std::to_string(openblack::server::snapshots::k_DefaultEveryTurns)))
+		("snapshot-keep", "The snapshots that the folder keeps, at least 1.", cxxopts::value<uint32_t>()->default_value(std::to_string(openblack::server::snapshots::k_DefaultKeep)))
+		("resume-snapshot", "At its start, the game server continues the game of the newest snapshot that reads. With no snapshot, it starts a new game.")
 		("come-back-seconds", "How long a god's player can be away before the god is defeated.", cxxopts::value<uint32_t>()->default_value("300"))
 		("l,log-file", "The file of the log, or stdout.", cxxopts::value<std::string>()->default_value("stdout"))
 		("version", "Write the version of openblack (the semantic version and the git commit) and exit.")
@@ -141,14 +158,62 @@ int main(int argc, char* argv[])
 		settings.openingName = result["skip-opening"].as<std::string>();
 		settings.opening = openblack::new_game_choice::ParseNewGameStart(settings.openingName);
 		settings.godsRingMap = result.count("gods-ring-map") != 0;
-		settings.seed = result["seed"].as<uint32_t>();
+		if (result.count("write-gods-ring-map") != 0)
+		{
+			const std::filesystem::path out(result["write-gods-ring-map"].as<std::string>());
+			if (const auto error = openblack::server::WriteGodsRingMap(settings.gamePath, out); error.has_value())
+			{
+				std::cerr << "openblack-server: " << *error << '\n';
+				return EXIT_FAILURE;
+			}
+			std::cout << "openblack-server: wrote the map for 32 gods to " << out.generic_string() << '\n';
+			return EXIT_SUCCESS;
+		}
+		settings.soak.allComputerGods = result.count("all-computer-gods") != 0;
+		if (result.count("ai-seed") != 0)
+		{
+			settings.soak.aiSeed = result["ai-seed"].as<uint32_t>();
+		}
+		if (const auto refusal = openblack::developer_tools::SoakRefusalOf(openblack::developer_tools::k_Built, settings.soak);
+		    refusal.has_value())
+		{
+			std::cerr << "This server " << *refusal << "." << std::endl;
+			return EXIT_FAILURE;
+		}
+		if (result.count("seed") != 0)
+		{
+			settings.seed = result["seed"].as<uint32_t>();
+		}
 		if (result.count("turns") != 0)
 		{
 			settings.turns = result["turns"].as<uint32_t>();
 		}
+		settings.godsNeedNoTemple = result.count("gods-need-no-temple") != 0;
 		if (result.count("temple-loss") != 0)
 		{
 			settings.templeLoss = openblack::sim_run::ParseTempleLoss(result["temple-loss"].as<std::string>());
+		}
+		if (result.count("time-limit") != 0)
+		{
+			const auto minutes = result["time-limit"].as<uint32_t>();
+			if (const auto refusal = openblack::game_end::TimeLimitRefusal(minutes, openblack::developer_tools::k_Built);
+			    refusal.has_value())
+			{
+				std::cerr << "The time limit of --time-limit is " << minutes << " minutes, but " << *refusal << "."
+				          << std::endl;
+				return EXIT_FAILURE;
+			}
+			settings.timeLimit = minutes;
+		}
+		if (result.count("conditions") != 0)
+		{
+			settings.conditions = openblack::sim_run::ParseConditions(result["conditions"].as<std::string>());
+			if (!settings.conditions.has_value())
+			{
+				std::cerr << "The winning conditions of --conditions are not NAME=VALUE,... with each condition once."
+				          << std::endl;
+				return EXIT_FAILURE;
+			}
 		}
 		settings.frameMilliseconds = result["frame-ms"].as<double>();
 		settings.fast = result.count("fast") != 0;
@@ -157,10 +222,15 @@ int main(int argc, char* argv[])
 			settings.profileFolder = std::filesystem::path(result["profile-folder"].as<std::string>());
 		}
 		settings.logFile = result["log-file"].as<std::string>();
+		settings.logChecksums = result.count("log-checksums") != 0;
 		if (result.count("record") != 0)
 		{
 			settings.recordPath = std::filesystem::path(result["record"].as<std::string>());
 			settings.recordFields = result.count("record-fields") != 0;
+		}
+		if (result.count("inspect-port") != 0)
+		{
+			settings.inspectPort = result["inspect-port"].as<uint16_t>();
 		}
 		if (result.count("trace-draws") != 0)
 		{
@@ -175,6 +245,19 @@ int main(int argc, char* argv[])
 			{
 				settings.rowDump.atTurn = result["row-dump-turn"].as<uint32_t>();
 			}
+		}
+		if (result.count("world-states") != 0)
+		{
+			const auto turns = result.count("world-state-turns") != 0
+			                       ? openblack::world_state_at_turn::ParseTurns(result["world-state-turns"].as<std::string>())
+			                       : std::nullopt;
+			if (!turns.has_value())
+			{
+				std::cerr << "--world-states needs --world-state-turns with a list such as 100,250" << std::endl;
+				return EXIT_FAILURE;
+			}
+			settings.worldStates = openblack::world_state_at_turn::Settings {
+			    .turns = *turns, .folder = std::filesystem::path(result["world-states"].as<std::string>())};
 		}
 #endif
 		if (result.count("reload-at") != 0)
@@ -216,6 +299,7 @@ int main(int argc, char* argv[])
 			network.minGods = result.count("min-gods") == 0 && result.count("gods") != 0 ? result["gods"].as<uint32_t>()
 			                                                                             : result["min-gods"].as<uint32_t>();
 			network.comeBackSeconds = result["come-back-seconds"].as<uint32_t>();
+			network.testCommands = result.count("test-commands") != 0;
 			if (result.count("lobby-api") != 0)
 			{
 				network.lobbyApi = result["lobby-api"].as<std::string>();
@@ -229,6 +313,12 @@ int main(int argc, char* argv[])
 				network.clientKey = std::filesystem::path(result["client-key"].as<std::string>());
 			}
 			network.roomName = result["room-name"].as<std::string>();
+			network.snapshots = openblack::server::snapshots::Settings {
+			    .folder = std::filesystem::path(result["snapshot-folder"].as<std::string>()),
+			    .everyTurns = result["snapshot-every"].as<uint32_t>(),
+			    .keep = result["snapshot-keep"].as<uint32_t>(),
+			    .resume = result.count("resume-snapshot") != 0,
+			};
 			if (result.count("lobby-test-ca") != 0)
 			{
 				network.lobbyTestAuthorities = std::filesystem::path(result["lobby-test-ca"].as<std::string>());
@@ -248,6 +338,11 @@ int main(int argc, char* argv[])
 	std::signal(SIGTERM, StopOnSignal);
 #if defined(SIGBREAK)
 	std::signal(SIGBREAK, StopOnSignal);
+#endif
+#if defined(SIGPIPE)
+	// The TLS library writes to the socket of a client that can close at any time. A write to a closed socket must give
+	// an error that the server handles, not a signal that stops the server.
+	std::signal(SIGPIPE, SIG_IGN);
 #endif
 
 	try

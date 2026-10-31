@@ -28,9 +28,10 @@
 #include "HandReflection.h"
 #include "InstanceDesc.h"
 #include "InterfaceCreatures.h"
-#include "RenderModes.h"
-#include "RenderPass.h"
 #include "ScreenshotCapture.h"
+#include "Visual/RenderModes.h"
+#include "Visual/RenderPass.h"
+#include "Visual/RendererRequestsInterface.h"
 
 #include "../EngineConfig.h"
 
@@ -56,7 +57,8 @@ class ShaderManager;
 class ShaderProgram;
 struct DrawEncoder;
 
-class RendererInterface
+/// The renderer of the game. The requests of the world to the renderer are in the base class.
+class RendererInterface: public RendererRequestsInterface
 {
 public:
 	struct DrawSceneDesc
@@ -238,6 +240,9 @@ public:
 		/// Where a building's model is cut, in its own space: its inner walls and the cap over them are drawn only for a
 		/// primitive with a whole triangle below it
 		std::optional<float> modelCutHeight;
+		/// Where a cut model that follows the land is placed in the world. Its cut and the cap over it then rise with the
+		/// land under each corner, as its walls rise when it is drawn.
+		std::optional<glm::mat4> landPlacement;
 		/// In place of its triangles, each primitive draws the cap over its walls where they are cut, unlit in three
 		/// quarters of the object's colour
 		bool cap {false};
@@ -295,12 +300,11 @@ public:
 
 	static std::unique_ptr<RendererInterface> Create(GraphicsBackend backend, bool vsync) noexcept;
 
-	virtual ~RendererInterface() noexcept = default;
+	~RendererInterface() noexcept override = default;
 
 	virtual void ConfigureView(graphics::RenderPass viewId, glm::u16vec2 resolution, uint32_t clearColor) const noexcept = 0;
 	virtual void Reset(glm::u16vec2 resolution) const noexcept = 0;
 	virtual void DrawScene(const DrawSceneDesc& drawDesc) const noexcept = 0;
-	virtual void Frame() noexcept = 0;
 	/// Bakes the shadows of the things on the land into the land, as the next scene draw does. Call it behind the
 	/// loading screen, so that the first frame of a land does not do the bake of the whole island.
 	virtual void BakeLandShadows(bool drawVegetation) const noexcept = 0;
@@ -318,25 +322,17 @@ public:
 	virtual void ReleaseGpuWorkMemory() noexcept = 0;
 	/// Asks for the frame being made to be written to a PNG once drawn; the file appears whole once written
 	virtual void RequestScreenshot(const std::filesystem::path& filepath) noexcept = 0;
-	/// Why a picture asked for was given up, once; none while it may still come
-	[[nodiscard]] virtual std::optional<std::string> TakeScreenshotFailure(const std::filesystem::path& filepath) noexcept = 0;
-	/// Asks for a picture of the frame that the game makes now, kept in memory under a name. The name must start with
-	/// graphics::ScreenPictures::k_Prefix. The renderer calls picturer on its own thread when it reads the frame.
-	virtual void RequestScreenPicture(const std::string& name, graphics::ScreenPicturer picturer) noexcept = 0;
-	/// The picture made for a name, one time; none while it is not made
-	[[nodiscard]] virtual std::optional<std::vector<uint8_t>> TakeScreenPicture(const std::string& name) noexcept = 0;
 	/// How many pipelines the renderer made since it started. The renderer makes a pipeline the first time that a draw
 	/// uses a new set of program, state, vertex layouts and target formats, and that frame is slower.
 	[[nodiscard]] virtual uint32_t GetPipelinesMade() const noexcept = 0;
-	[[nodiscard]] virtual bool GetDebug() const noexcept = 0;
 	virtual void SetDebug(bool value) noexcept = 0;
-	[[nodiscard]] virtual bool GetProfile() const noexcept = 0;
 	virtual void SetProfile(bool value) noexcept = 0;
 
 	// TODO: Remove this function. All renderables should be drawn through RenderingSystem with Components
 	virtual void DrawMesh(const L3DMesh& mesh, const L3DMeshSubmitDesc& desc, uint8_t subMeshIndex) const noexcept = 0;
 	// TODO: Should shader manager be available through Locator as a service?
-	[[nodiscard]] virtual graphics::ShaderManager& GetShaderManager() const noexcept = 0;
+	/// Null when the renderer has no shaders, as on the dedicated server
+	[[nodiscard]] virtual graphics::ShaderManager* GetShaderManager() const noexcept = 0;
 
 	/// The creatures that the interface shows over itself. The interface asks for them each frame that it shows them,
 	/// as it draws itself, and the next frame of the scene draws them.

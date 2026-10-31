@@ -41,8 +41,11 @@ public:
 	entt::entity CreateScriptFlock(int32_t id, glm::vec2 position, glm::vec2 home, float reach, float flockDistance) override;
 	[[nodiscard]] entt::entity FindScriptFlock(int32_t id) const override;
 	entt::entity CreateBird(AnimalInfo type, glm::vec2 position, uint32_t age, entt::entity flock) override;
+	entt::entity CreateHunter(AnimalInfo type, glm::vec2 position, uint32_t age, entt::entity flock) override;
 	entt::entity CreateScriptAnimal(AnimalInfo type, glm::vec2 position) override;
 	entt::entity CreateStillAnimal(AnimalInfo type, glm::vec3 position, float heading, float scale) override;
+	entt::entity CreateLoadedAnimal(const LoadedAnimal& loaded) override;
+	entt::entity TempleFlock(entt::entity temple) override;
 	void SetFlockTown(entt::entity flock, entt::entity town) override;
 	entt::entity CreateGrazer(AnimalInfo type, glm::vec2 position, uint32_t age, entt::entity flock,
 	                          entt::entity town) override;
@@ -61,6 +64,8 @@ public:
 	entt::entity SeparateIntoOwnFlock(entt::entity animal) override;
 	void SendToSlaughter(entt::entity animal, glm::vec2 goal) override;
 	[[nodiscard]] uint16_t SpeedOf(entt::entity animal) const override;
+	void SetSpeedFromScript(entt::entity animal, float metresPerTurn) override;
+	[[nodiscard]] float SpeedForScript(entt::entity animal) const override;
 	void KillByEffect(entt::entity animal, glm::vec3 position) override;
 	void SetDying(entt::entity animal) override;
 	void StartDyingWithoutDeath(entt::entity animal) override;
@@ -79,6 +84,7 @@ public:
 	[[nodiscard]] std::optional<uint8_t> TopGameStateOf(entt::entity animal) const override;
 	bool SetupReactToFlyingObject(entt::entity animal, entt::entity object, float speed) override;
 	void RememberStateBeforeReaction(entt::entity animal) override;
+	void SetWanderBeforeReaction(entt::entity animal) override;
 	bool SetupLookAtObject(entt::entity animal, entt::entity object) override;
 	bool SetupGotoFood(entt::entity animal, entt::entity food) override;
 	[[nodiscard]] uint32_t ReactToFoodPriority(entt::entity animal, entt::entity food, uint32_t tablePriority) const override;
@@ -127,6 +133,10 @@ private:
 
 	// The grazers
 	void GrazerTurn(entt::entity entity, components::Animal& animal, components::Grazer& grazer);
+	/// The needs of an animal of each kind grow, and a young animal grows, in the states that see to the needs
+	void NeedsTurn(entt::entity entity, components::Animal& animal);
+	/// An animal lets go of its target when the target is gone or in the player's hand. Whether it let go
+	bool DropTarget(entt::entity entity, components::Animal& animal);
 	void GrazerDecide(entt::entity entity, components::Animal& animal, components::Grazer& grazer);
 	/// Off wandering about its herd's leader, as far as its herd's reach
 	void GrazerStartWander(entt::entity entity, components::Animal& animal);
@@ -134,6 +144,8 @@ private:
 	void GrazerMoveInFlock(entt::entity entity, components::Animal& animal);
 	/// A straight step, steered afresh in each new cell; seeing to its needs first
 	void GrazerWander(entt::entity entity, components::Animal& animal, components::Grazer& grazer);
+	/// A straight step of a wanderer, steered afresh in each new cell
+	void WanderStep(entt::entity entity, components::Animal& animal);
 	/// Its needs: whether it set off to see to one
 	bool ReactToGrazerNeeds(entt::entity entity, components::Animal& animal, components::Grazer& grazer);
 	/// The leader takes the herd somewhere new once out of its reach or there its stay time: whether it did
@@ -175,6 +187,27 @@ private:
 	/// its velocity
 	[[nodiscard]] glm::vec3 FledThingMovement(entt::entity thing) const;
 
+	// The wild hunters
+	void HunterTurn(entt::entity entity, components::Animal& animal, components::Hunter& hunter);
+	/// A big cat or a wolf decides what to do, each kind by its own rules
+	void HunterDecide(entt::entity entity, components::Animal& animal, components::Hunter& hunter);
+	/// Its needs: whether it set off to see to one
+	bool ReactToHunterNeeds(entt::entity entity, components::Animal& animal, components::Hunter& hunter);
+	/// A wolf in its pack's lair: it rests, and late at night, when hungry, it goes out
+	void HideInLair(entt::entity entity, components::Animal& animal, components::Hunter& hunter);
+	/// Off to lie down about its flock's sleeping cell, or off wandering when it has none
+	void SeekSleep(components::Animal& animal, std::optional<glm::ivec2> sleepingCell);
+	/// The home of its flock moves by the rule of its kind, as when it lands or is made on its own
+	void ChooseLair(entt::entity entity, components::Animal& animal);
+	/// The hunt of a spell wolf or of a wild hunter, none for another animal
+	[[nodiscard]] static components::HuntState* HuntOf(entt::entity hunter);
+	/// A hunter that eats is hungry no more
+	static void Fed(entt::entity hunter, components::Animal& animal);
+	[[nodiscard]] bool IsHungry(entt::entity hunter, const components::Animal& animal) const;
+	/// A wild hunter's speed by its place in its kind's speed group, and its clip at that speed. A spell wolf keeps its
+	/// run
+	static void SetHunterSpeed(entt::entity hunter, components::Animal& animal, size_t speed);
+
 	// The wolves
 	void Wolf(entt::entity entity, components::Animal& animal);
 	/// Off to where it was sent, at its run
@@ -182,7 +215,13 @@ private:
 	/// Running where it was sent, hunting when hungry, fading near there
 	void WolfMoveToPos(entt::entity entity, components::Animal& animal);
 	void WolfStartWander(entt::entity entity, components::Animal& animal);
-	void ReactToFoodNeeds(entt::entity entity, components::Animal& animal);
+	/// A hungry hunter chases the prey that it found, or looks for prey. Whether it set off
+	bool ReactToFoodNeeds(entt::entity entity, components::Animal& animal);
+	/// Whether the hunter can still chase the prey that it found. If not, it forgets the prey
+	bool PreyStillValid(entt::entity entity, const components::Animal& animal);
+	/// Whether a script lets the hunter take the prey: a prey under a script's control is only for a hunter that a script
+	/// holds
+	[[nodiscard]] bool ScriptAllowsHunt(entt::entity hunter, entt::entity prey) const;
 	/// The first prey it meets searching the map cells about it, none for nothing
 	[[nodiscard]] entt::entity FindPrey(entt::entity wolf, const components::Animal& animal);
 	/// Whether hunters leave the thing alone: it dies, is dead or is down, or a hunter brought it down before

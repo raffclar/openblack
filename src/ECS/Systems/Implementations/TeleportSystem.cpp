@@ -14,15 +14,16 @@
 #include <algorithm>
 #include <chrono>
 #include <limits>
+#include <vector>
 
 #include <glm/geometric.hpp>
 #include <glm/vec2.hpp>
 #include <spdlog/spdlog.h>
 
 #include "3D/LandIslandInterface.h"
-#include "Audio/Sound.h"
 #include "Creature/CreatureTeleportAgendas.h"
 #include "Creature/LeashRules.h"
+#include "ECS/Archetypes/Utils.h"
 #include "ECS/Components/Abode.h"
 #include "ECS/Components/AnimatedStatic.h"
 #include "ECS/Components/Creature.h"
@@ -47,20 +48,26 @@
 #include "ECS/Components/Transform.h"
 #include "ECS/Components/Villager.h"
 #include "ECS/Components/WallHug.h"
+#include "ECS/Map.h"
 #include "ECS/Reflection/BinaryArchive.h"
 #include "ECS/Registry.h"
 #include "ECS/Systems/CreatureLocomotionSystemInterface.h"
 #include "ECS/Systems/CreatureMindSystemInterface.h"
+#include "ECS/Systems/EffectRequestSystemInterface.h"
 #include "ECS/Systems/LivingActionSystemInterface.h"
 #include "ECS/Systems/MagicSystemInterface.h"
-#include "ECS/Systems/ParticleSystemInterface.h"
+#include "ECS/Systems/ObjectDrawListSystemInterface.h"
+#include "ECS/Systems/ParticleRuleSystemInterface.h"
 #include "ECS/Systems/ReactionSystemInterface.h"
 #include "ECS/Systems/SoundTagSystemInterface.h"
 #include "ECS/Systems/TimeSystemInterface.h"
 #include "ECS/ThingMapPlace.h"
+#include "ECS/WallHugRules.h"
 #include "InfoConstants.h"
 #include "Locator.h"
 #include "Magic/TeleportRules.h"
+#include "Particles/DrawnEffectSteps.h"
+#include "Sound/SoundId.h"
 #include "VillagerReactions.h"
 #include "VillagerTeleport.h"
 
@@ -133,7 +140,7 @@ std::optional<glm::vec3> VillagerWalkingTo(entt::entity villager)
 	{
 		return std::nullopt;
 	}
-	return OnLand(wallHug->goal);
+	return OnLand(ecs::wall_hug::ToPoint(wallHug->goalPlace));
 }
 
 /// A creature walking somewhere, and where
@@ -210,6 +217,8 @@ entt::entity TeleportSystem::CreateStone(glm::vec3 point, PlayerNames player, en
 	auto& registry = EntityRegistry();
 	const auto position = OnLand({point.x, point.z});
 	const auto stone = registry.Create();
+	// It takes its place in the order of the things made
+	openblack::ecs::archetypes::TakeThingMadePlace();
 	registry.Assign<Transform>(stone, position, glm::mat3(1.0f), glm::vec3(1.0f));
 	auto& component = registry.Assign<TeleportStone>(stone);
 	component.player = player;
@@ -221,15 +230,29 @@ entt::entity TeleportSystem::CreateStone(glm::vec3 point, PlayerNames player, en
 		component.reaction = Locator::reactionSystem::value().Create(
 		    {.initiator = stone, .type = Reaction::ReactToTeleport, .player = player, .position = position});
 	}
-	// Its swirling pool, with its hum. Its random numbers are only this computer's: the pool does not change the world.
-	if (Locator::particleSystem::has_value())
+	// It goes into the map's cells at once, at its full size
+	auto* map = Locator::entitiesMap::has_value() ? &Locator::entitiesMap::value() : nullptr;
+	if (map != nullptr)
 	{
-		auto& particles = Locator::particleSystem::value();
-		component.pool = particles.Start(ParticleType::TeleportVortex, position, 1.0f);
-		if (component.pool != ParticleSystemInterface::k_NoEffect)
-		{
-			particles.SetPlayer(component.pool, static_cast<int>(player));
-		}
+		map->Refile(stone);
+	}
+	// Its swirling pool, with its hum. Its random numbers are only this computer's: the pool does not change the world.
+	// The pool moves on in the frames that draw the stone, not in the turns.
+	if (Locator::effectRequestSystem::has_value())
+	{
+		component.pool = Locator::effectRequestSystem::value().Start({
+		    .type = ParticleType::TeleportVortex,
+		    .position = position,
+		    .synced = false,
+		    .step = EffectStep::Frame,
+		    .player = static_cast<int>(player),
+		});
+	}
+	// Then it shrinks to the size it keeps, which takes it out of the map's cells and puts it back in them
+	registry.Get<Transform>(stone).scale = glm::vec3(teleport::k_StoneScale);
+	if (map != nullptr)
+	{
+		map->Refile(stone);
 	}
 	SPDLOG_LOGGER_DEBUG(spdlog::get("game"), "Teleport: stone of player {} at ({}, {})", static_cast<int>(player), position.x,
 	                    position.z);
@@ -250,9 +273,9 @@ void TeleportSystem::RemoveStone(entt::entity stone)
 			Locator::reactionSystem::value().RemoveFrom(stone);
 		}
 		// The pool goes and its hum fades away
-		if (component->pool != ParticleSystemInterface::k_NoEffect && Locator::particleSystem::has_value())
+		if (component->pool != k_NoEffectHandle && Locator::effectRequestSystem::has_value())
 		{
-			Locator::particleSystem::value().Delete(component->pool);
+			Locator::effectRequestSystem::value().Remove(component->pool);
 		}
 	}
 	// Whoever was on the way to it carries on where they were going
@@ -498,11 +521,11 @@ bool TeleportSystem::DoTeleport(entt::entity stone, entt::entity living, bool fo
 		magic.ForcePayForSpell(component.spell, teleport::JumpCost(jump->saving, costPerKilometre));
 	}
 	// A flash and a sound where it leaves and where it comes out
-	if (Locator::particleSystem::has_value())
+	if (Locator::effectRequestSystem::has_value())
 	{
-		auto& particles = Locator::particleSystem::value();
-		particles.StartSpotVisual(SpotVisualType::VillagerTeleport, departure, std::nullopt, entt::null);
-		particles.StartSpotVisual(SpotVisualType::VillagerTeleport, arrival, std::nullopt, entt::null);
+		auto& effects = Locator::effectRequestSystem::value();
+		effects.Show({.type = SpotVisualType::VillagerTeleport, .position = departure});
+		effects.Show({.type = SpotVisualType::VillagerTeleport, .position = arrival});
 	}
 	if (registry.AllOf<Creature>(living))
 	{
@@ -577,7 +600,8 @@ bool TeleportSystem::DropOnStone(entt::entity villager, entt::entity stone, Play
 	const auto& wallHug = registry.Get<const WallHug>(villager);
 	auto& listed = registry.Get<TeleportStone>(stone);
 	std::erase_if(listed.travellers, [villager](const auto& entry) { return entry.living == villager; });
-	listed.travellers.insert(listed.travellers.begin(), {.living = villager, .destination = OnLand(wallHug.goal)});
+	listed.travellers.insert(listed.travellers.begin(),
+	                         {.living = villager, .destination = OnLand(ecs::wall_hug::ToPoint(wallHug.goalPlace))});
 	if (!DoTeleport(stone, villager, true))
 	{
 		return false;
@@ -631,7 +655,7 @@ bool TeleportSystem::RouteWorshipper(entt::entity villager, glm::vec3 site)
 		return false;
 	}
 	// On its way to worship, arriving at the site at the end, it turns aside into the stone
-	wallHug->goal = {site.x, site.z};
+	wallHug->goalPlace = ecs::wall_hug::ToWhole({site.x, site.z});
 	auto& living = Locator::livingActionSystem::value();
 	living.VillagerSetState(*action, LivingAction::Index::Final, VillagerStates::ArrivesAtWorshipSiteForWorship, false);
 	living.VillagerSetState(*action, LivingAction::Index::Top, VillagerStates::GotoWorshipSiteForWorship, false);
@@ -663,8 +687,28 @@ void TeleportSystem::ProcessTurn()
 		return;
 	}
 	RemoveOrphans();
-	PruneTravellers();
 	DropCreatures();
+}
+
+void TeleportSystem::PlayerTurn(PlayerNames player)
+{
+	if (!Locator::entitiesRegistry::has_value())
+	{
+		return;
+	}
+	auto& registry = EntityRegistry();
+	for (const auto stone : GetStones(player))
+	{
+		// The stone of a miracle that closed down is not there for the player, so it drops no one
+		const auto& component = registry.Get<const TeleportStone>(stone);
+		const auto* spell = component.spell != entt::null && registry.Valid(component.spell)
+		                        ? registry.TryGet<const Spell>(component.spell)
+		                        : nullptr;
+		if (spell != nullptr && !spell->closedDown)
+		{
+			PruneTravellers(stone);
+		}
+	}
 }
 
 void TeleportSystem::RemoveOrphans()
@@ -685,30 +729,29 @@ void TeleportSystem::RemoveOrphans()
 	}
 }
 
-void TeleportSystem::PruneTravellers()
+void TeleportSystem::PruneTravellers(entt::entity entity)
 {
 	auto& registry = EntityRegistry();
 	std::vector<entt::entity> dropped;
-	registry.Each<TeleportStone>([&](entt::entity entity, TeleportStone& stone) {
-		std::erase_if(stone.travellers, [&](const TeleportStone::Traveller& traveller) {
-			if (!registry.Valid(traveller.living))
-			{
-				return true;
-			}
-			const auto* heading = registry.TryGet<const TeleportTraveller>(traveller.living);
-			if (heading == nullptr || heading->stone != entity || heading->jumped)
-			{
-				return true;
-			}
-			// One that took up another reaction since is no longer on its way to the stone
-			const auto* reacting = registry.TryGet<const LivingReaction>(traveller.living);
-			if (reacting != nullptr && reacting->reaction != stone.reaction && !heading->transported)
-			{
-				dropped.push_back(traveller.living);
-				return true;
-			}
-			return false;
-		});
+	auto& stone = registry.Get<TeleportStone>(entity);
+	std::erase_if(stone.travellers, [&](const TeleportStone::Traveller& traveller) {
+		if (!registry.Valid(traveller.living))
+		{
+			return true;
+		}
+		const auto* heading = registry.TryGet<const TeleportTraveller>(traveller.living);
+		if (heading == nullptr || heading->stone != entity || heading->jumped)
+		{
+			return true;
+		}
+		// One that took up another reaction since is no longer on its way to the stone
+		const auto* reacting = registry.TryGet<const LivingReaction>(traveller.living);
+		if (reacting != nullptr && reacting->reaction != stone.reaction && !heading->transported)
+		{
+			dropped.push_back(traveller.living);
+			return true;
+		}
+		return false;
 	});
 	for (const auto living : dropped)
 	{
@@ -859,7 +902,49 @@ void TeleportSystem::StopControl(entt::entity creature)
 	}
 }
 
+void TeleportSystem::UpdateFrame(ObjectDrawListSystemInterface& drawList, std::chrono::milliseconds frameRealTime,
+                                 std::chrono::milliseconds frameGameTime, bool landDrawn)
+{
+	const auto seconds = particles::drawn_steps::StepSeconds(_poolPace, frameRealTime, frameGameTime, landDrawn);
+	if (!Locator::particleRuleSystem::has_value())
+	{
+		return;
+	}
+	auto& particles = Locator::particleRuleSystem::value();
+	auto& registry = EntityRegistry();
+	const auto stepPool = [&](entt::entity stone) {
+		const auto* component = registry.TryGet<const TeleportStone>(stone);
+		if (component == nullptr || component->pool == ParticleRuleSystemInterface::k_NoEffect)
+		{
+			return;
+		}
+		// The pool shows and moves on only in the frames that draw its stone
+		const bool drawn = drawList.Drawn(registry, stone);
+		particles.SetShown(component->pool, drawn);
+		if (!drawn)
+		{
+			return;
+		}
+		// The draw of a stone does not test the screen, so the stone stays drawn on the next frames of a still camera
+		if (drawList.GetFrame().drawAll)
+		{
+			drawList.NoteFullFrame(stone, true);
+		}
+		if (seconds.has_value())
+		{
+			particles.ProcessByFrame(component->pool, *seconds);
+		}
+	};
+	std::vector<entt::entity> stones;
+	registry.Each<const TeleportStone>([&stones](entt::entity stone, const TeleportStone&) { stones.push_back(stone); });
+	std::ranges::for_each(particles::drawn_steps::DrawOrder(
+	                          drawList.GetList(), stones, drawList.GetView().has_value(),
+	                          [&registry, &drawList](entt::entity stone) { return drawList.Decides(registry, stone); }),
+	                      stepPool);
+}
+
 void TeleportSystem::Reset()
 {
 	_nextSerial = 0;
+	_poolPace = {};
 }

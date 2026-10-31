@@ -21,9 +21,9 @@
 #include "ECS/Registry.h"
 #include "ECS/Systems/AlignmentSystemInterface.h"
 #include "ECS/Systems/AnimalSystemInterface.h"
+#include "ECS/Systems/EffectRequestSystemInterface.h"
 #include "ECS/Systems/MagicSystemInterface.h"
 #include "ECS/Systems/ObjectDrawListSystemInterface.h"
-#include "ECS/Systems/ParticleSystemInterface.h"
 #include "ECS/Systems/TimeSystemInterface.h"
 #include "FlockMiracleRules.h"
 #include "InfoConstants.h"
@@ -127,8 +127,17 @@ bool FlockMiracle::AnimalsLeft(const Spell& spell) const
 
 bool FlockMiracle::FollowsHand(SpellServicesInterface& services, const Spell& spell) const
 {
+	if (spell.closedDown || !spell.humanCasting || !spell.fromLocalHand)
+	{
+		return false;
+	}
+	return MakesAnimals(services, spell);
+}
+
+bool FlockMiracle::MakesAnimals(SpellServicesInterface& services, const Spell& spell) const
+{
 	const auto* data = DataOf(spell);
-	if (data == nullptr || spell.closedDown || !spell.humanCasting || !spell.fromLocalHand)
+	if (data == nullptr)
 	{
 		return false;
 	}
@@ -166,16 +175,13 @@ void FlockMiracle::ProcessTurn(SpellServicesInterface& services, Spell& spell)
 		}
 	}
 	// The hand's trail follows the hand while the animals are being made, and closes once they all are
-	if (data->castEffect != 0 && Locator::particleSystem::has_value())
+	if (data->castEffect != 0 && Locator::effectRequestSystem::has_value())
 	{
-		auto& particles = Locator::particleSystem::value();
-		if (auto* effect = particles.Find(data->castEffect))
-		{
-			effect->SetProcessInfo(spell.processInfo);
-		}
+		auto& effects = Locator::effectRequestSystem::value();
+		effects.SetProcessInfo(data->castEffect, spell.processInfo);
 		if (!FollowsHand(services, spell))
 		{
-			particles.CloseDown(data->castEffect);
+			effects.Stop(data->castEffect);
 			data->castEffect = 0;
 		}
 	}
@@ -198,17 +204,17 @@ void FlockMiracle::Emit(SpellServicesInterface& services, Spell& spell)
 	const int number = flock::NumberToCreate(tables.numberToCreate, services.TribalPower(spell));
 
 	// This computer's caster's hand leaves a trail of sparkles or smoke while the doves or bats are made
-	if (!data.castEffectStarted && !tables.ground && spell.fromLocalHand && Locator::particleSystem::has_value())
+	if (!data.castEffectStarted && !tables.ground && spell.fromLocalHand && Locator::effectRequestSystem::has_value())
 	{
 		data.castEffectStarted = true;
-		auto& particles = Locator::particleSystem::value();
-		const auto trail = data.evil ? ParticleType::FlockFlyingCastEvil : ParticleType::FlockFlyingCastGood;
-		data.castEffect = particles.Start(trail, spell.processInfo.handPosition, 1.0f);
-		particles.SetPlayer(data.castEffect, static_cast<int>(spell.caster.player));
-		if (auto* effect = particles.Find(data.castEffect))
-		{
-			effect->SetProcessInfo(spell.processInfo);
-		}
+		// Only the computer of the hand shows the trail, so the particles of this computer give it its number
+		data.castEffect = Locator::effectRequestSystem::value().StartHere({
+		    .type = data.evil ? ParticleType::FlockFlyingCastEvil : ParticleType::FlockFlyingCastGood,
+		    .position = spell.processInfo.handPosition,
+		    .synced = false,
+		    .player = static_cast<int>(spell.caster.player),
+		    .processInfo = spell.processInfo,
+		});
 	}
 	if (data.created >= number)
 	{
@@ -272,11 +278,11 @@ void FlockMiracle::Emit(SpellServicesInterface& services, Spell& spell)
 		}
 		animals.SetScale(animal, flock::SpawnScale(wolf, services.GameRandom(maxExtra)));
 		services.AddEffectTarget(spell, animal);
-		if (wolf && Locator::particleSystem::has_value())
+		if (wolf && Locator::effectRequestSystem::has_value())
 		{
 			// Each wolf appears with a puff
 			const glm::vec3 at(created.x, world.LandHeight(created), created.y);
-			Locator::particleSystem::value().StartSpotVisual(SpotVisualType::MagicObjectCreated, at, std::nullopt, entt::null);
+			Locator::effectRequestSystem::value().Show({.type = SpotVisualType::MagicObjectCreated, .position = at});
 		}
 		const auto leader = animals.LeaderOf(data.flock);
 		if (animal == leader)

@@ -710,7 +710,7 @@ TEST_F(LobbyClientTest, CreatureUploadSendsTheThreeFiles)
 	ASSERT_TRUE(type.has_value());
 	EXPECT_TRUE(type->starts_with("multipart/form-data; boundary=openblack-"));
 	const auto body = _http.NextBody();
-	EXPECT_NE(body.find(R"(name="creature"; filename="creature.lhp")"), std::string::npos);
+	EXPECT_NE(body.find(R"(name="lhp"; filename="creature.lhp")"), std::string::npos);
 	EXPECT_NE(body.find(R"(name="mind"; filename="_A_b_c.chl")"), std::string::npos);
 	EXPECT_NE(body.find(R"(name="physique"; filename="_A_b_c.phy")"), std::string::npos);
 	_http.Answer(201, R"({"url":"https://bw.example/creatures/abc"})");
@@ -738,6 +738,32 @@ TEST_F(LobbyClientTest, CallsWithNoSessionFailWithoutACall)
 	Make();
 	std::optional<LobbyErrorKind> kind;
 	_client->GetMe([&](auto&& result) { kind = result.error.kind; });
+	EXPECT_EQ(kind, LobbyErrorKind::NotLoggedIn);
+	EXPECT_TRUE(_http.sent.empty());
+}
+
+TEST_F(LobbyClientTest, TheSkirmishMessageSendsNoDataWithTheAccessToken)
+{
+	Make();
+	LogIn();
+	std::optional<bool> ok;
+	_client->SendSkirmishPing([&](auto&& result) { ok = result.Ok(); });
+	EXPECT_EQ(_http.Next().method, HttpMethod::Post);
+	EXPECT_EQ(_http.Next().url, "https://bw.example/api/v1/me/skirmish-pings");
+	EXPECT_EQ(_http.NextHeader("Authorization"), "Bearer access1");
+	EXPECT_TRUE(_http.Next().body.empty());
+	_http.Answer(204, "");
+	EXPECT_EQ(ok, true);
+}
+
+TEST_F(LobbyClientTest, TheSkirmishMessageNeedsALobbyAndASession)
+{
+	Make(lobby_api::ClientKind::Desktop, false);
+	std::optional<LobbyErrorKind> kind;
+	_client->SendSkirmishPing([&](auto&& result) { kind = result.error.kind; });
+	EXPECT_EQ(kind, LobbyErrorKind::NotConfigured);
+	Make();
+	_client->SendSkirmishPing([&](auto&& result) { kind = result.error.kind; });
 	EXPECT_EQ(kind, LobbyErrorKind::NotLoggedIn);
 	EXPECT_TRUE(_http.sent.empty());
 }

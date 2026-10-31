@@ -9,6 +9,7 @@
 
 #pragma once
 
+#include <chrono>
 #include <vector>
 
 #include <entt/core/fwd.hpp>
@@ -18,10 +19,10 @@
 #include "ECS/Systems/SavedStateInterface.h"
 #include "Enums.h"
 
-namespace openblack::gui
+namespace openblack
 {
-class GameInterface;
-} // namespace openblack::gui
+class TempleScreenInterface;
+} // namespace openblack
 
 namespace openblack::graphics
 {
@@ -30,6 +31,7 @@ class Texture2D;
 
 namespace openblack::ecs::systems
 {
+class ObjectDrawListSystemInterface;
 
 /// How the miracles look outside their own effects, frame by frame: the one-shot globes (their glint, the miracle
 /// spinning inside each with its effect, the rings round the extreme ones), the hand holding a miracle (its bands,
@@ -42,9 +44,16 @@ public:
 
 	/// The hand some seconds on, and the piles of food and wood some seconds of game time on
 	virtual void Update(float seconds, float gameSeconds) = 0;
-	/// The globes some seconds of game time on, once a frame after the hand has placed what it holds: each turns to face
-	/// the camera about its middle, wherever it now is, and its miracle spins inside
-	virtual void UpdateGlobes(float gameSeconds) = 0;
+	/// The globes after a frame of this real and game time, once a frame after the hand has placed what it holds: each
+	/// turns to face the camera about its middle, wherever it now is, and its miracle spins inside. The effect in each
+	/// globe steps no more often than 60 times a second, each step by all the game time since the last, and only in a
+	/// frame that draws the land.
+	virtual void UpdateGlobes(std::chrono::milliseconds frameRealTime, std::chrono::milliseconds frameGameTime,
+	                          bool landDrawn) = 0;
+	/// The globes that the land's draw list draws in this frame, after the list: the glint of each runs on by the game
+	/// time of the frame. On a frame that draws all of the list, each listed globe stays drawn while its sphere shows on
+	/// the screen.
+	virtual void UpdateDrawnGlobes(ObjectDrawListSystemInterface& /*drawList*/, std::chrono::milliseconds /*frameGameTime*/) {}
 	/// At the start of each turn: each miracle's pile stands on the land where it is, as the land is now
 	virtual void PlacePilesOnLand() {}
 	/// Loads the models of the globes and their bands, if they are not loaded. The first update of the globes also
@@ -64,7 +73,7 @@ public:
 	virtual void Reset() = 0;
 
 	/// The interface whose font a tribe's power is written in, none while there is none
-	virtual void SetInterface(const gui::GameInterface* /*interface*/) {}
+	virtual void SetInterface(const TempleScreenInterface* /*interface*/) {}
 	/// A tribe's power is behind the miracle that came to this computer's hand: the tribe's name rings the hand
 	virtual void StartTribalPowerRing(Tribe /*tribe*/) {}
 	/// The miracle left the hand: a ring still round it goes

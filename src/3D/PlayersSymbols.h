@@ -11,15 +11,17 @@
 
 #include <cstdint>
 
+#include <array>
 #include <optional>
 #include <span>
+#include <string_view>
 #include <vector>
 
 /// The sheet of the players' symbols that the world shows: over a town's artefacts, in the miracles and in the
 /// villages' belief. The sheet has a square of 64 by 64 texels for each player, four squares in a row, the first
 /// player's square at the top left. At the start of a land, the square of the player of this computer gets the symbol
-/// that the player's profile has. The player's own picture for that symbol takes the place of the symbol. The other
-/// squares stay as the sheet's file has them.
+/// that the player's profile has. The player's own picture for that symbol takes the place of the symbol. The square
+/// of each computer player gets the picture of its god. The other squares stay as the sheet's file has them.
 namespace openblack::players_symbols
 {
 
@@ -43,9 +45,21 @@ struct Sheet
 /// Copies the square of a design in the sheet of designs to the square of a player
 void CopyDesign(Sheet& players, const Sheet& designs, uint32_t design, uint32_t player);
 
-/// Puts a grey picture of 64 by 64 texels, a row at a time from the top, in the square of a player. Each texel takes
-/// the grey for its colours and for its alpha.
+/// Puts a square grey picture, a row at a time from the top, in the square of a player. Each texel takes the grey for
+/// its colours and for its alpha. The side of the picture is a quarter of the side of the sheet: 64 texels for a sheet
+/// of full size, and 32 texels for a sheet at half size. A picture of a different size puts nothing.
 void PutPicture(Sheet& players, std::span<const uint8_t> greys, uint32_t player);
+
+/// The pictures of the computer gods, by their number: Lethys, Khazar and Nemesis. Each is a file in the textures
+/// folder with the name and the ending ".cps", of 64 by 64 greys.
+constexpr std::array<std::string_view, 3> k_GodPictures {"Lethis", "Kazarr", "nemesis"};
+/// At the low detail levels each god's picture comes from a file of 32 by 32 greys, with this letter after the name
+constexpr std::string_view k_LowDetailLetter = "L";
+
+/// The picture of the god that the computer plays as a player, at the start of a land. The picture is the player's
+/// number less one. On the third land, and on the fifth land, the second player takes Khazar and Nemesis. A number
+/// below the first picture gives the first picture, and a number after the last picture gives the last picture.
+[[nodiscard]] uint32_t GodPictureOf(uint32_t player, int32_t landNumber);
 
 /// Gives the player of this computer the symbol of the profile, or the player's own picture for it when there is one
 void PutProfileSymbol(Sheet& players, const Sheet& designs, uint32_t symbol, uint32_t player,

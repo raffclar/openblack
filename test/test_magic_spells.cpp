@@ -11,6 +11,7 @@
 
 #include <map>
 #include <memory>
+#include <optional>
 #include <vector>
 
 #include <glm/geometric.hpp>
@@ -612,6 +613,36 @@ TEST(SpellBehaviours, FoodLandsOnDryLandAsPilesAndPaysForEveryGrain)
 	EXPECT_TRUE(spells::HasEnoughForRecast(*info, spell));
 }
 
+TEST(SpellBehaviours, TheFirstGrainOfFoodStartsTheNiceReactionEvenInTheWater)
+{
+	auto info = MakeTables();
+	auto& food = info->magicFood.at(0);
+	food.resourceType = ResourceType::Food;
+	food.resourceAmountFirstEvent = 200;
+	food.resourceAmountPerEvent = 18;
+	food.costPerUnit = 7;
+	// The food miracle's row: no reaction when it is cast, the nice reaction on its events
+	auto& effect = Effect(*info, MagicType::Food);
+	effect.initialChants = 5000.0f;
+	effect.createReactionOnCast = 0;
+	effect.createReactionOnEvent = 1;
+	effect.reactionType = Reaction::LookAtNiceSpell;
+	FakeServices services(*info);
+	services.world.wetBelowX = 50.0f;
+	auto spell = MakeSpell(MagicType::Food, 5000.0f);
+	spells::Prepare(services, spell);
+	EXPECT_TRUE(services.reactions.empty());
+	// The grain falls in the water: it puts down no food, but the miracle's reaction starts
+	spells::OnEvent(services, spell, EventAt(SpellEventInfo::Type::Landed, {10.0f, 0.0f, 100.0f}));
+	EXPECT_TRUE(services.world.resources.empty());
+	ASSERT_EQ(services.reactions.size(), 1u);
+	EXPECT_FALSE(services.reactions[0]);
+	// The next grains keep the one reaction
+	spells::OnEvent(services, spell, EventAt(SpellEventInfo::Type::Landed, {100.0f, 0.0f, 100.0f}));
+	EXPECT_EQ(services.world.resources.size(), 1u);
+	EXPECT_EQ(services.reactions.size(), 1u);
+}
+
 TEST(SpellBehaviours, TheHealGivesItsEffectThePeopleRoundIt)
 {
 	auto info = MakeTables();
@@ -939,6 +970,22 @@ TEST(SpellSeedRules, AShownSeedOutOfInfluenceClosesItsMiracleDown)
 	EXPECT_FALSE(ClosesOutOfInfluence(true, true, false));
 	EXPECT_FALSE(ClosesOutOfInfluence(false, false, false));
 	EXPECT_FALSE(ClosesOutOfInfluence(true, false, true));
+}
+
+TEST(SpellSeedRules, TheTurnFindsASeedThatFollowsItsMiracleAtTheMiracle)
+{
+	const glm::vec3 seed {1.0f, 2.0f, 3.0f};
+	const glm::vec3 spell {10.0f, 20.0f, 30.0f};
+	EXPECT_EQ(PlaceForInfluence(seed, true, spell), glm::vec3(10.0f, 2.0f, 30.0f));
+	EXPECT_EQ(PlaceForInfluence(seed, false, spell), seed);
+}
+
+TEST(SpellSeedRules, ASeedLeavesTheHandAtTheReportedPlaceOfTheHandAndNotWhereTheFramesDrewIt)
+{
+	const glm::vec3 drawn {1.0f, 2.0f, 3.0f};
+	const glm::vec3 reported {40.0f, 5.0f, 60.0f};
+	EXPECT_EQ(PlaceOutOfHand(reported, drawn), reported);
+	EXPECT_EQ(PlaceOutOfHand(std::nullopt, drawn), drawn);
 }
 
 TEST(SpellSeedRules, AShownSeedSitsOnTheTallestStillThingWhoseCircleMeetsItsOwn)

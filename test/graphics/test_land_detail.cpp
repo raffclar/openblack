@@ -14,8 +14,8 @@
 #include <set>
 #include <vector>
 
-#include <Graphics/LandDetail.h>
 #include <LNDFile.h>
+#include <Visual/LandDetail.h>
 #include <gtest/gtest.h>
 
 using namespace openblack::graphics::land_detail;
@@ -316,4 +316,20 @@ TEST(LandDetail, CoarsePagesAreReadFromTheirSurfaceDescriptions)
 	auto cut = page;
 	cut.texels.resize(cut.texels.size() - 1);
 	EXPECT_FALSE(lnd::GetTexels(cut).has_value());
+}
+
+TEST(LandDetail, TheLowResolutionCoarseTextureSamplesTheSmallerBlockTexture)
+{
+	const auto& low = CoarseSamplingFor(128);
+	EXPECT_EQ(low.samples, 30);
+	EXPECT_EQ(&CoarseSamplingFor(256), &k_FullCoarseSampling);
+	// 30 samples across 128 texels, a step of 1.0667 in 65536ths, each on a multiple of four
+	EXPECT_EQ(CoarseSourceTexel(1, low), 0);
+	EXPECT_EQ(CoarseSourceTexel(2, low), 4);
+	EXPECT_EQ(CoarseSourceTexel(16, low), 60);
+	EXPECT_EQ(CoarseSourceTexel(30, low), 120);
+	EXPECT_EQ(CoarseSourceTexel(31, low), 120);
+	// The texture is drawn a 255th of its 128 texel page in, 31 texels across the block
+	EXPECT_NEAR(CoarseTexelPosition(0.0f, low), 0.50196f, 1e-5f);
+	EXPECT_NEAR(CoarseTexelPosition(1.0f, low), 31.50196f, 1e-5f);
 }

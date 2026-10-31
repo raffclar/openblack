@@ -19,6 +19,7 @@
 #include <glm/mat3x3.hpp>
 #include <glm/vec3.hpp>
 
+#include "3D/MapCoords.h"
 #include "Creature/CreatureObjectActions.h"
 #include "Creature/CreatureReach.h"
 
@@ -67,8 +68,10 @@ struct CreatureObjectAction
 	/// Pointing: the creature turned to face the point first, which changes how it chooses its arm
 	bool pointTurned {false};
 
-	/// Where the hand gets to in the reaching animations, and how far the creature can reach, measured as it starts
+	/// Where the hand gets to in the reaching animations in the model's own size, measured as it starts. Each use
+	/// multiplies them by the scale that the creature has then.
 	std::optional<creature_reach::Points> reach;
+	/// How far the creature can reach at its scale of the last step
 	float maxReach {0.0f};
 	/// How many times it has walked or turned to get in reach
 	uint32_t attempts {0};
@@ -78,6 +81,9 @@ struct CreatureObjectAction
 	creature_object_actions::ApproachStall stall;
 	/// Whether it turned to get the thing in reach, and reaches when the turn ends
 	bool turnedToReach {false};
+	/// Whether the thing got out of reach before the hold or the blow. Then the time of the reach decreases each turn.
+	/// At the start of the reach, the action fails. Until then, the body and the mind wait.
+	bool withdraws {false};
 	/// Whether it waited one turn after its walk stopped because it was shut in, for the mind to clear the way
 	bool waitedForWay {false};
 	/// Throwing: how long the throw is to take to get there
@@ -113,6 +119,8 @@ struct CreatureObjectAction
 	/// Eating: the energy that the food gave the body as the animation started, which its hunger falls by once it keeps
 	/// the meal down
 	float mealEnergy {0.0f};
+	/// The plan that asked for the action stopped, and the body plays the action on alone
+	bool planStopped {false};
 	/// Why it gave up, when it did
 	std::string failure;
 	/// The cause of the failure that the mind acts on
@@ -182,6 +190,15 @@ struct HeldByCreature
 	};
 	/// Empty: the thing is drawn where its Transform puts it
 	std::optional<Drawn> drawn;
+	/// Where the thing was when the creature took it. The thing is out of the map while the creature holds it, and the
+	/// map keeps it at this place until the creature lets it go.
+	struct Taken
+	{
+		glm::vec3 position;
+		map_coords::MapCoords place;
+	};
+	/// Empty: the creature took it before this record was kept, for example in a loaded game
+	std::optional<Taken> takenFrom;
 };
 
 } // namespace openblack::ecs::components

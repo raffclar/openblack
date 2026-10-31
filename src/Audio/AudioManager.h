@@ -30,10 +30,10 @@
 #include "AudioPlayer.h"
 #include "CustomMusicPlayer.h"
 #include "ECS/Registry.h"
-#include "HeaderOverrides.h"
 #include "MusicPlayer.h"
 #include "MusicStreamBackend.h"
-#include "SoundGroup.h"
+#include "Sound/HeaderOverrides.h"
+#include "Sound/SoundGroup.h"
 #include "VoicePool.h"
 
 #if !defined(LOCATOR_IMPLEMENTATIONS)

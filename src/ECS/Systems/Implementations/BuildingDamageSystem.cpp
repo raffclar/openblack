@@ -14,6 +14,7 @@
 #include <algorithm>
 #include <array>
 #include <functional>
+#include <optional>
 #include <span>
 #include <string>
 #include <utility>
@@ -28,6 +29,7 @@
 #include "ECS/BuildingConstruction.h"
 #include "ECS/Components/Abode.h"
 #include "ECS/Components/BuildingDamage.h"
+#include "ECS/Components/Creature.h"
 #include "ECS/Components/Feature.h"
 #include "ECS/Components/Mesh.h"
 #include "ECS/Components/MorphWithTerrain.h"
@@ -107,8 +109,10 @@ bool IsBuilt(const building_world::World& world, entt::entity building)
 /// Whether something not yet wholly built is drawn going up: any building, but of the features only those drawn as one
 bool DrawnGoingUp(const building_world::World& world, entt::entity building)
 {
+	const auto* progress = world.Entities().TryGet<const BuildProgress>(building);
 	const auto* feature = world.Entities().TryGet<const Feature>(building);
-	return !IsBuilt(world, building) && (feature == nullptr || building_construction::FeatureDrawnGoingUp(feature->type));
+	return building_construction::DrawnGoingUp(progress != nullptr ? std::optional(progress->built) : std::nullopt,
+	                                           feature != nullptr ? std::optional(feature->type) : std::nullopt);
 }
 
 /// How much of a building is drawn standing
@@ -163,9 +167,16 @@ damage::Mesh MakeDamageMesh(const building_world::World& world, entt::entity bui
 	return mesh;
 }
 
+/// How the corners and the face normals of a broken mesh go from the world into the model's own space
+struct ModelSpace
+{
+	std::function<glm::vec3(glm::vec3)> point;
+	std::function<glm::vec3(glm::vec3)> direction;
+};
+
 /// The faces a broken mesh is drawn with: each triangle, its back face behind it and a wall on each open side, every
-/// face lit flat by its own normal. Its corners are taken into the model's own space by a function.
-std::vector<building_world::DrawnPart> DrawnFaces(const damage::Mesh& mesh, const std::function<glm::vec3(glm::vec3)>& toModel)
+/// face lit flat by its own normal
+std::vector<building_world::DrawnPart> DrawnFaces(const damage::Mesh& mesh, const ModelSpace& space)
 {
 	std::vector<building_world::DrawnPart> parts;
 	for (const auto& primitive : mesh.primitives)
@@ -175,8 +186,8 @@ std::vector<building_world::DrawnPart> DrawnFaces(const damage::Mesh& mesh, cons
 			continue;
 		}
 		building_world::DrawnPart made {.material = primitive.material};
-		const auto add = [&made](glm::vec3 position, glm::vec2 uv, glm::vec3 normal) {
-			made.vertices.push_back({.position = position, .uv = uv, .normal = normal});
+		const auto add = [&made](glm::vec3 position, glm::vec2 uv, glm::vec3 normal, bool back = false) {
+			made.vertices.push_back({.position = position, .uv = uv, .normal = normal, .back = back});
 			return static_cast<uint16_t>(made.vertices.size() - 1);
 		};
 		for (const auto& triangle : primitive.triangles)
@@ -189,11 +200,13 @@ std::vector<building_world::DrawnPart> DrawnFaces(const damage::Mesh& mesh, cons
 			std::array<glm::vec3, 3> back {};
 			for (size_t i = 0; i < 3; ++i)
 			{
-				front.at(i) = toModel(c.at(i).position);
-				back.at(i) = toModel(c.at(i).position - normal * k_BackFace);
+				front.at(i) = space.point(c.at(i).position);
+				back.at(i) = space.point(c.at(i).position - normal * k_BackFace);
 			}
-			// The light falls on each face as its own normal turns it, in the model's space
-			auto frontNormal = glm::cross(front[1] - front[0], front[2] - front[0]);
+			// Each face keeps the normal of its triangle in the world. The light and the snow use this normal. On a
+			// building that follows the land, the corners in the model's space give a different normal, because the
+			// land is not level.
+			auto frontNormal = space.direction(normal);
 			const float frontLength = glm::length(frontNormal);
 			frontNormal = frontLength > 0.0f ? frontNormal / frontLength : glm::vec3(0.0f, 1.0f, 0.0f);
 			const auto backNormal = -frontNormal;
@@ -205,7 +218,7 @@ std::vector<building_world::DrawnPart> DrawnFaces(const damage::Mesh& mesh, cons
 			}
 			for (size_t i = 0; i < 3; ++i)
 			{
-				b.at(i) = add(back.at(i), c.at(i).uv, backNormal);
+				b.at(i) = add(back.at(i), c.at(i).uv, backNormal, true);
 			}
 			made.indices.insert(made.indices.end(), {f[0], f[1], f[2], b[0], b[2], b[1]});
 			// A wall joins the front and back faces along each side nothing joins on to
@@ -218,8 +231,8 @@ std::vector<building_world::DrawnPart> DrawnFaces(const damage::Mesh& mesh, cons
 				const auto next = (side + 1) % 3;
 				const auto fa = add(front.at(side), c.at(side).uv, frontNormal);
 				const auto fb = add(front.at(next), c.at(next).uv, frontNormal);
-				const auto ba = add(back.at(side), c.at(side).uv, backNormal);
-				const auto bb = add(back.at(next), c.at(next).uv, backNormal);
+				const auto ba = add(back.at(side), c.at(side).uv, backNormal, true);
+				const auto bb = add(back.at(next), c.at(next).uv, backNormal, true);
 				made.indices.insert(made.indices.end(), {fa, ba, fb, fb, ba, bb});
 			}
 		}
@@ -228,24 +241,42 @@ std::vector<building_world::DrawnPart> DrawnFaces(const damage::Mesh& mesh, cons
 	return parts;
 }
 
+/// Which version a new model of a broken building gets
+enum class ModelVersion
+{
+	/// A new shape of the building: the model gets the next version
+	Next,
+	/// A load: the model gets the version that the save keeps, so that the synced fields of the damage stay the same
+	Kept,
+};
+
 /// Draws the building with what is left of its model
-void RedrawBuilding(building_world::World& world, entt::entity building, BuildingDamage& broken)
+void RedrawBuilding(building_world::World& world, entt::entity building, BuildingDamage& broken,
+                    ModelVersion version = ModelVersion::Next)
 {
 	auto& registry = world.Entities();
 	const auto& transform = registry.Get<const Transform>(building);
 	const auto& meshComponent = registry.Get<const Mesh>(building);
 	const bool followsLand = registry.AllOf<MorphWithTerrain>(building);
 	const float baseHeight = world.LandHeight(glm::vec2(transform.position.x, transform.position.z));
-	// Into the model's own space, undoing the lowering over the land, which its drawing lays on again
-	const auto toModel = [&world, &transform, followsLand, baseHeight](glm::vec3 point) {
-		if (followsLand)
-		{
-			point.y += baseHeight - world.LandHeight(glm::vec2(point.x, point.z));
-		}
-		return (glm::transpose(transform.rotation) * (point - transform.position)) / transform.scale;
-	};
+	// Into the model's own space, undoing the lowering over the land, which its drawing lays on again. A direction
+	// goes in so that the drawing turns it back to the same direction in the world.
+	const ModelSpace toModel {
+	    .point =
+	        [&world, &transform, followsLand, baseHeight](glm::vec3 point) {
+		        if (followsLand)
+		        {
+			        point.y += baseHeight - world.LandHeight(glm::vec2(point.x, point.z));
+		        }
+		        return (glm::transpose(transform.rotation) * (point - transform.position)) / transform.scale;
+	        },
+	    .direction =
+	        [&transform](glm::vec3 direction) { return (glm::transpose(transform.rotation) * direction) / transform.scale; }};
 	world.EraseModel(broken.drawMesh);
-	++broken.version;
+	if (version == ModelVersion::Next)
+	{
+		++broken.version;
+	}
 	broken.drawMesh = world.MakeModel(fmt::format("broken/{}/{}", entt::to_integral(building), broken.version),
 	                                  meshComponent.id, DrawnFaces(broken.mesh, toModel));
 	registry.SetDirty();
@@ -347,8 +378,9 @@ void DrawPiece(building_world::World& world, entt::entity piece)
 	auto& registry = world.Entities();
 	auto& part = registry.Get<BuildingPiece>(piece);
 	world.EraseModel(part.drawMesh);
-	part.drawMesh = world.MakeModel(fmt::format("piece/{}", entt::to_integral(piece)), part.sourceMesh,
-	                                DrawnFaces(part.mesh, [](glm::vec3 p) { return p; }));
+	part.drawMesh = world.MakeModel(
+	    fmt::format("piece/{}", entt::to_integral(piece)), part.sourceMesh,
+	    DrawnFaces(part.mesh, {.point = [](glm::vec3 p) { return p; }, .direction = [](glm::vec3 d) { return d; }}));
 	registry.AssignOrReplace<Mesh>(piece, part.drawMesh, static_cast<int8_t>(0), static_cast<int8_t>(1));
 	registry.SetDirty();
 }
@@ -423,7 +455,7 @@ void Strike(building_world::World& world, entt::entity building, BuildingDamage&
 
 /// What breaking does to a building: it crashes, and loses life down to what is left of its model
 void ApplyBreakage(building_world::World& world, entt::entity building, entt::entity hitter, std::optional<PlayerNames> player,
-                   bool hitterIsCreature)
+                   bool hitterIsCreature, bool creatureSmash)
 {
 	PlaySound(world, building, k_CrashKeys);
 	auto values = world.Crush();
@@ -459,6 +491,7 @@ void ApplyBreakage(building_world::World& world, entt::entity building, entt::en
 	                      .casterCreature = hitterIsCreature ? hitter : entt::null,
 	                      .appliedBy = validHitter ? hitter : entt::null,
 	                      .playerless = !player.has_value(),
+	                      .creatureSmash = creatureSmash,
 	                  });
 }
 
@@ -542,8 +575,6 @@ void BuildingDamageSystem::Blow(DynamicsSystemInterface& dynamics, entt::entity 
 	case damage::Blow::Breaks:
 		break;
 	}
-	// TODO(buildings): while the blow's effects apply, the game marks a building struck by what a creature threw (a flag
-	// whose reader wasn't found); the rock, not the creature, applies them
 	if (IsBuilt(world, building))
 	{
 		auto* broken = registry.TryGet<BuildingDamage>(building);
@@ -592,8 +623,12 @@ void BuildingDamageSystem::Blow(DynamicsSystemInterface& dynamics, entt::entity 
 			return;
 		}
 	}
-	// The harm is put down to the player of the thing that struck, not the building's own
-	ApplyBreakage(world, building, hitter, hitterEntry->player, false);
+	// The harm is put down to the player of the thing that struck, not the building's own. The rock, not the creature,
+	// applies the harm. When a creature threw the rock, the building counts as smashed by a creature. The building's
+	// own partner in the physics goes first, else what threw the rock.
+	const auto thrower = entry.thrower != entt::null ? entry.thrower : hitterEntry->thrower;
+	const bool creatureThrew = thrower != entt::null && registry.Valid(thrower) && registry.AllOf<Creature>(thrower);
+	ApplyBreakage(world, building, hitter, hitterEntry->player, false, creatureThrew);
 }
 
 void BuildingDamageSystem::Smash(entt::entity building, entt::entity creature, float creatureSize)
@@ -617,11 +652,11 @@ void BuildingDamageSystem::Smash(entt::entity building, entt::entity creature, f
 	{
 		return;
 	}
-	ApplyBreakage(world, building, creature, world.PlayerOf(creature), true);
+	ApplyBreakage(world, building, creature, world.PlayerOf(creature), true, false);
 }
 
 void BuildingDamageSystem::CreatureBlows(entt::entity building, entt::entity creature,
-                                         std::span<const creature_stomp::Blow> blows)
+                                         std::span<const creature_stomp::Blow> blows, bool kick)
 {
 	auto& world = *_world;
 	auto& registry = world.Entities();
@@ -641,7 +676,7 @@ void BuildingDamageSystem::CreatureBlows(entt::entity building, entt::entity cre
 	{
 		return;
 	}
-	ApplyBreakage(world, building, creature, world.PlayerOf(creature), true);
+	ApplyBreakage(world, building, creature, world.PlayerOf(creature), true, kick);
 }
 
 entt::entity BuildingDamageSystem::PieceAtRest(DynamicsSystemInterface& dynamics, PhysicsEntry* entry, entt::entity piece,
@@ -740,7 +775,7 @@ void BuildingDamageSystem::RemakeModelsAfterLoad()
 	});
 	for (const auto building : broken)
 	{
-		RedrawBuilding(world, building, registry.Get<BuildingDamage>(building));
+		RedrawBuilding(world, building, registry.Get<BuildingDamage>(building), ModelVersion::Kept);
 	}
 	std::vector<entt::entity> pieces;
 	registry.Each<BuildingPiece>([&pieces](entt::entity piece, const BuildingPiece&) { pieces.push_back(piece); });

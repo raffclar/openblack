@@ -159,10 +159,55 @@ void MagicSystem::KeepSeedInInfluence(entt::entity spellEntity, const Spell& spe
 	{
 		position = ReportedHandOf(*holder).value_or(position);
 	}
+	else
+	{
+		// Out of the hand, only the frames move a seed that follows its miracle
+		position = magic::PlaceForInfluence(position, seed->followsSpell, spell.position);
+	}
 	if (magic::ClosesOutOfInfluence(SeedShownWithSpell(*seed, spell), _world.InInfluence(seed->player, position),
 	                                spell.closedDown))
 	{
 		CloseDown(spellEntity);
+	}
+}
+
+void MagicSystem::ShowSeedsWithSpellsTurn()
+{
+	auto& registry = EntityRegistry();
+	if (!Locator::infoConstants::has_value())
+	{
+		return;
+	}
+	std::vector<entt::entity> seeds;
+	registry.Each<const SpellSeed>([&seeds](entt::entity entity, const SpellSeed& seed) {
+		if (seed.followsSpell)
+		{
+			seeds.push_back(entity);
+		}
+	});
+	// The turn decides whether a seed out of the hand shows over its miracle: it has the seed's model or not
+	for (const auto entity : seeds)
+	{
+		const auto& seed = registry.Get<const SpellSeed>(entity);
+		const auto* spell = FindSpell(seed.spell);
+		if (!registry.AllOf<Transform>(entity) || spell == nullptr)
+		{
+			continue;
+		}
+		if (!SeedShownWithSpell(seed, *spell))
+		{
+			registry.Remove<Mesh>(entity);
+			continue;
+		}
+		if (!registry.AllOf<Mesh>(entity))
+		{
+			const auto& info = magic::GetSpellSeedInfo(Info(), seed.seedType);
+			registry.Assign<Mesh>(entity, resources::HashIdentifier(info.mesh), static_cast<int8_t>(0), static_cast<int8_t>(0));
+		}
+		// Drawn at its model's own size, unturned
+		auto& transform = registry.Get<Transform>(entity);
+		transform.rotation = glm::mat3(1.0f);
+		transform.scale = glm::vec3(1.0f);
 	}
 }
 
@@ -193,19 +238,13 @@ void MagicSystem::ShowSeedsWithSpells()
 		// It stays with its miracle across the land
 		transform->position.x = spell->position.x;
 		transform->position.z = spell->position.z;
-		if (!SeedShownWithSpell(seed, *spell))
+		// Only a seed that the turn shows has its model
+		if (!registry.AllOf<Mesh>(entity))
 		{
-			registry.Remove<Mesh>(entity);
 			continue;
 		}
 		const auto& info = magic::GetSpellSeedInfo(Info(), seed.seedType);
-		if (!registry.AllOf<Mesh>(entity))
-		{
-			registry.Assign<Mesh>(entity, resources::HashIdentifier(info.mesh), static_cast<int8_t>(0), static_cast<int8_t>(0));
-		}
-		// Drawn at its model's own size, unturned; its reach across the land is its model's at the seed's size
-		transform->rotation = glm::mat3(1.0f);
-		transform->scale = glm::vec3(1.0f);
+		// Its reach across the land is its model's at the seed's size
 		const float radius = ecs::world_objects::SizeOf(entity).radius * info.scale;
 		const auto things = ThingsUnder(entity, transform->position, land);
 		float height = magic::TopUnderSeed(radius, things);

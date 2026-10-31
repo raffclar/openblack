@@ -55,6 +55,7 @@ public:
 	void KeepCreature(entt::entity creature) override;
 	void Keep(std::shared_ptr<const creaturemind::MindFileData> file) override;
 	[[nodiscard]] std::shared_ptr<const creaturemind::MindFileData> Kept() const override;
+	[[nodiscard]] std::shared_ptr<const creaturemind::MindFileData> KeptOrRead() override;
 	[[nodiscard]] std::optional<std::filesystem::path> ProfilePhysique() const override;
 	[[nodiscard]] std::optional<std::filesystem::path> ProfileMind() const override;
 	std::optional<entt::entity> LoadPlayersCreature(glm::vec2 place) override;
@@ -87,6 +88,9 @@ private:
 
 	/// The kept creature's two files, when there is a folder and a profile to keep them for
 	[[nodiscard]] std::optional<creature_carry_over::KeptFiles> Files() const;
+	/// Whether this land is a network game. The land stays a network game until it clears, also after this computer
+	/// left the network game: the save at the land clear follows the rules of a network game.
+	[[nodiscard]] bool NetworkLand();
 
 	std::optional<std::filesystem::path> _folder;
 	ProfileFile _profileFile;
@@ -99,6 +103,8 @@ private:
 	/// computer last looked at it. This is not world state: only this computer writes the player's files.
 	std::optional<entt::entity> _brought;
 	std::optional<uint32_t> _broughtTurnsSeen;
+	/// This land was a network game at a time that the system looked
+	bool _networkLand {false};
 	/// The writer starts with the first file to write. It is the last member, so that it stops first.
 	mutable std::unique_ptr<save_files::BackgroundWriter> _writer;
 };

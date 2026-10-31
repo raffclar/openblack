@@ -531,6 +531,17 @@ TEST(CreaturePhysiology, AScriptScalesACreatureHalfwayToItsShareOfThePlayersCrea
 	EXPECT_FLOAT_EQ(AutoScaledSize(1.9f, 2.0f, 1.5f), 2.0f);
 }
 
+TEST(CreaturePhysiology, AScriptScalesACreatureOnlyInAGameAloneAndNotWhileAHandHoldsIt)
+{
+	constexpr AutoScaleFacts k_On {.on = true, .playersCreature = true, .held = false, .networkGame = false};
+	static_assert(AutoScales(k_On));
+	static_assert(!AutoScales({.on = false, .playersCreature = true, .held = false, .networkGame = false}));
+	static_assert(!AutoScales({.on = true, .playersCreature = false, .held = false, .networkGame = false}));
+	static_assert(!AutoScales({.on = true, .playersCreature = true, .held = true, .networkGame = false}));
+	// A network game has no player of its own to scale to
+	static_assert(!AutoScales({.on = true, .playersCreature = true, .held = false, .networkGame = true}));
+}
+
 TEST(CreatureBalance, BalanceRowOverridesTheCreatureRow)
 {
 	auto creature = std::make_unique<GCreatureInfo>();

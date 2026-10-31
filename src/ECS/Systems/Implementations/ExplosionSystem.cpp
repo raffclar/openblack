@@ -101,8 +101,8 @@ ExplosionSystemInterface::GroundMark DroppedRoots(const ecs::Registry& registry,
 
 void ExplosionSystem::SaveState(reflection::BinaryWriter& out) const
 {
-	reflection::Save(out, _shakes);
-	reflection::Save(out, _puffs);
+	reflection::SavePresentation(out, _shakes);
+	reflection::SavePresentation(out, _puffs);
 }
 
 bool ExplosionSystem::LoadState(reflection::BinaryReader& in)

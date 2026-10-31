@@ -154,3 +154,48 @@ TEST(GuidanceRules, MoonLook)
 	// A waxing moon is looked at again at once
 	EXPECT_LT(LookAtMoon(full - 1.0f, true).wait, 1);
 }
+
+// The advisors warn of the first town of the list in which another player comes nearer than the margin
+TEST(GuidanceRules, TheFirstTownOfTheListThatLosesBeliefIsWarnedOf)
+{
+	constexpr float k_Margin = 0.5f;
+	TownBeliefs safe {};
+	safe.at(0) = 2.0f;
+	safe.at(1) = 1.5f;
+	TownBeliefs losing = safe;
+	losing.at(1) = 1.6f;
+	TownBeliefs toNeutral = safe;
+	toNeutral.at(7) = 1.75f;
+
+	// The other player at exactly the margin below: safe
+	EXPECT_EQ(LosingBeliefTown(std::array<TownBeliefs, 1> {safe}, 0, k_Margin), std::nullopt);
+	EXPECT_EQ(LosingBeliefTown(std::array {safe, losing, toNeutral}, 0, k_Margin), std::optional<size_t>(1));
+	// The neutral player counts as another player
+	EXPECT_EQ(LosingBeliefTown(std::array {safe, toNeutral, losing}, 0, k_Margin), std::optional<size_t>(1));
+	// The player's own belief does not count against it
+	TownBeliefs own {};
+	own.at(1) = 2.0f;
+	EXPECT_EQ(LosingBeliefTown(std::array<TownBeliefs, 1> {own}, 1, k_Margin), std::nullopt);
+	EXPECT_EQ(LosingBeliefTown(std::array<TownBeliefs, 1> {losing}, 1, k_Margin), std::optional<size_t>(0));
+	EXPECT_EQ(LosingBeliefTown({}, 0, k_Margin), std::nullopt);
+}
+
+// Only the first land of a story played alone keeps most remarks quiet: a skirmish and a network game never do
+TEST(GuidanceRules, OnlyTheStorysFirstLandIsQuiet)
+{
+	EXPECT_TRUE(QuietFirstLand(1, false, false));
+	EXPECT_FALSE(QuietFirstLand(0, false, false));
+	EXPECT_FALSE(QuietFirstLand(2, false, false));
+	EXPECT_FALSE(QuietFirstLand(1, false, true));
+	EXPECT_FALSE(QuietFirstLand(1, true, false));
+}
+
+TEST(GuidanceRules, ALostTownGivesABadLineAndATakenTownAGoodLine)
+{
+	using openblack::PlayerNames;
+	EXPECT_EQ(TownChangedHandsLine(PlayerNames::PLAYER_ONE, PlayerNames::PLAYER_TWO, PlayerNames::PLAYER_ONE),
+	          Kind::GeneralBad);
+	EXPECT_EQ(TownChangedHandsLine(PlayerNames::NEUTRAL, PlayerNames::PLAYER_ONE, PlayerNames::PLAYER_ONE), Kind::GeneralGood);
+	// A town that changes hands between two other players gives no line
+	EXPECT_FALSE(TownChangedHandsLine(PlayerNames::PLAYER_TWO, PlayerNames::NEUTRAL, PlayerNames::PLAYER_ONE).has_value());
+}

@@ -15,10 +15,11 @@
 
 #include <spdlog/spdlog.h>
 
-#include "Audio/AudioManagerInterface.h"
 #include "ECS/Systems/TimeSystemInterface.h"
 #include "Locator.h"
 #include "Resources/ResourcesInterface.h"
+#include "Sound/SoundDecoder.h"
+#include "Sound/SoundRequestInterface.h"
 
 using namespace openblack;
 using namespace openblack::ecs::systems;
@@ -26,7 +27,7 @@ using namespace openblack::ecs::systems;
 namespace
 {
 /// Whether the length of its sample times a spoken line, not the sound device
-bool TimedByLength(const audio::AudioManagerInterface& audio)
+bool TimedByLength(const audio::SoundRequestInterface& audio)
 {
 	return audio::TimedByLength(audio.IsDeviceLost(), Locator::time::value().GetFixedFrameTime().has_value());
 }
@@ -50,14 +51,15 @@ void HelpSpeechSystem::Say(uint32_t text, audio::SpeechVoice voice, std::optiona
 		return;
 	}
 	// Placed only when the script gives a position, and it stays there. The voice rules know the line by its voice.
-	auto& audio = Locator::audio::value();
+	auto& audio = Locator::sounds::value();
 	const auto emitter = audio.StartSoundEffect(
 	    sample->sound,
 	    {.position = position, .voiceOwner = audio::VoiceOwner::Number, .ownerNumber = audio::OwnerNumberOf(voice)});
 	// The scripts time the line by the length of its sample on their own clock, whatever the sound device does
 	const audio::SilentPlayback playback {
 	    .startMs = _clockMs,
-	    .lengthMs = Locator::resources::value().GetSounds().Handle(sample->sound)->duration * 1000.0f,
+	    .lengthMs = openblack::audio::MeasureSoundParts(Locator::resources::value().GetSounds().Handle(sample->sound)->buffer) *
+	                1000.0f,
 	};
 	_voices.Add(voice, *sample, emitter, playback, TimedByLength(audio));
 	// Each spoken line goes into the log, so that you can examine a run that has no sound
@@ -86,7 +88,7 @@ size_t HelpSpeechSystem::GetSpokenTextCount() const
 
 void HelpSpeechSystem::Stop(audio::SpeechVoice voice, audio::SpeechBank bank)
 {
-	auto& audio = Locator::audio::value();
+	auto& audio = Locator::sounds::value();
 	_voices.Stop(voice, bank, [&audio](entt::entity emitter) {
 		if (audio.EmitterExists(emitter))
 		{

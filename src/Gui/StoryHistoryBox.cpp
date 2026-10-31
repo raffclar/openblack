@@ -43,7 +43,7 @@ StoryHistoryBox::StoryHistoryBox(const TextDatabase& texts, const GameFont& font
 	next.SetLabelSize(DialogPainter::k_BigTextSize);
 	next.onClick = [this]() { _turn = StoryTurn::Next; };
 
-	auto& latest = _dialog.Add<Button>(k_Latest, Text(texts, "HELP_TEXT_DIALOG_ADDITION_81"), DialogPainter::k_MidTextSize);
+	auto& latest = _dialog.Add<Button>(k_Latest, Text(texts, "HELP_TEXT_DIALOG_ADDITION_81"), DialogPainter::MidTextSize());
 	latest.onClick = [this]() { _turn = StoryTurn::Latest; };
 }
 

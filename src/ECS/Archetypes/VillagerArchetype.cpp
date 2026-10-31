@@ -11,6 +11,7 @@
 
 #include <array>
 #include <optional>
+#include <tuple>
 
 #include <glm/gtx/euler_angles.hpp>
 #include <glm/vec3.hpp>
@@ -28,6 +29,7 @@
 #include "ECS/Components/VillagerLabel.h"
 #include "ECS/Components/VillagerPose.h"
 #include "ECS/Components/WallHug.h"
+#include "ECS/LivingBirth.h"
 #include "ECS/Registry.h"
 #include "ECS/SpecialVillagers.h"
 #include "ECS/Systems/TimeSystemInterface.h"
@@ -35,10 +37,12 @@
 #include "ECS/Systems/WorshipSiteSystemInterface.h"
 #include "ECS/VillagerAge.h"
 #include "ECS/VillagerClips.h"
+#include "ECS/VillagerDrawRules.h"
 #include "Graphics/MeshDetail.h"
 #include "InfoConstants.h"
 #include "Locator.h"
 #include "Resources/ResourceManager.h"
+#include "Utils.h"
 
 using namespace openblack;
 using namespace openblack::ecs::archetypes;
@@ -55,10 +59,12 @@ entt::entity VillagerArchetype::Create([[maybe_unused]] const glm::vec3& abodePo
 
 	const uint32_t turn = Locator::time::has_value() ? Locator::time::value().GetTurn() : 0;
 	auto& random = Locator::gameRandom::value();
-	// Two in ten villagers made are tried as named villagers first: a name of their sex not yet given on this land
+	// Two in ten villagers made are tried as named villagers first: a name of their sex not yet given on this land.
+	// A network game makes no named villagers.
 	std::optional<uint8_t> name;
 	const auto& names = Locator::infoConstants::value().specialVillager;
-	if (special_villager::TriesNamed(random.GameRand(special_villager::k_Draw)))
+	const bool networkGame = Locator::time::has_value() && Locator::time::value().IsNetworkGame();
+	if (special_villager::TriesNamed(random.GameRand(special_villager::k_Draw), networkGame))
 	{
 		std::array<special_villager::Row, special_villager::k_NameCount> rows {};
 		for (size_t i = 0; i < rows.size(); ++i)
@@ -68,6 +74,8 @@ entt::entity VillagerArchetype::Create([[maybe_unused]] const glm::vec3& abodePo
 		const auto start = random.GameRand(static_cast<uint32_t>(rows.size()));
 		name = special_villager::PickName(rows, registry.Context().namedVillagersUsed, info.sex, start);
 	}
+	// The first number of each living thing that the game makes, before the numbers of the villager
+	std::ignore = random.GameRand(living_birth::AgeDrawRange(info.startAge));
 	const villager_age::NewbornKind kind {.grownUp = info.grownUpAge,
 	                                      .hungryForFood = info.hungryForFood,
 	                                      .processChecksEvery = info.processChecksEvery,
@@ -104,15 +112,13 @@ entt::entity VillagerArchetype::Create([[maybe_unused]] const glm::vec3& abodePo
 	auto& person =
 	    registry.Assign<Villager>(entity, life, villager_age::BirthTurnFor(turn, born.age), born.food, lifeStage, sex,
 	                              info.tribeType, info.villagerNumber, task, entt::null, entt::null, born.lastCheckTurn);
-	// TODO(villager-ageing): the game counts every thing it makes (trees, buildings, animals and the rest) in one order;
-	// only villagers are counted yet, so each villager's own speed difference is drawn from the same spread but not the
-	// same one as the game gives that villager
-	person.creationIndex = registry.Context().thingsMade++;
+	// The villager's place in the order of all the things made gives it its own small difference in speed
+	person.creationIndex = TakeThingMadePlace();
 	person.kind = type;
 	// It goes to the front of the list of the living
 	registry.Assign<LivingListPlace>(entity, LivingListPlace {.made = registry.Context().livingMade++});
 	registry.Assign<WallHug>(
-	    entity, WallHug {.goal = glm::vec2(), .yAngle = 0.0f, .speed = GetSpeedStateSpeed(info.speedGroup.speedDefault)});
+	    entity, WallHug {.goalPlace = {0, 0}, .yAngle = 0.0f, .speed = GetSpeedStateSpeed(info.speedGroup.speedDefault)});
 	// A child made as a child wears its kind's child model; the rest their job's
 	const auto resourceId = resources::HashIdentifier(born.child ? info.childMeshHigh : info.highDetail);
 	registry.Assign<Mesh>(entity, resourceId, static_cast<int8_t>(0), static_cast<int8_t>(0));
@@ -141,5 +147,50 @@ entt::entity VillagerArchetype::Create([[maybe_unused]] const glm::vec3& abodePo
 		registry.Assign<NamedVillager>(entity, *name);
 	}
 
+	return entity;
+}
+
+entt::entity VillagerArchetype::CreateLoaded(const Loaded& loaded)
+{
+	auto& registry = Locator::entitiesRegistry::value();
+	const auto entity = registry.Create();
+	const auto& info = Locator::infoConstants::value().villager.at(static_cast<size_t>(loaded.type));
+	const uint32_t turn = Locator::time::has_value() ? Locator::time::value().GetTurn() : 0;
+	// A villager younger than the age of growing up is a child, and it wears the models of a child
+	const bool child = villager_age::IsChildAge(villager_age::AgeOf(turn, loaded.birthTurn), info.grownUpAge);
+
+	registry.Assign<Transform>(entity, loaded.position, villager_draw::RotationOf(loaded.heading), glm::vec3(loaded.scale));
+	registry.Assign<Mobile>(entity);
+	const auto lifeStage = child ? Villager::LifeStage::Child : Villager::LifeStage::Adult;
+	const auto sex = info.sex == SexType::Female ? Villager::Sex::FEMALE : Villager::Sex::MALE;
+	auto& person =
+	    registry.Assign<Villager>(entity, loaded.life, loaded.birthTurn, loaded.food, lifeStage, sex, info.tribeType,
+	                              info.villagerNumber, Villager::Task::IDLE, entt::null, entt::null, loaded.lastCheckTurn);
+	person.creationIndex = loaded.made;
+	person.kind = loaded.type;
+	person.foodSpeedUp = loaded.foodSpeedUp;
+	person.foodHeld = loaded.foodHeld;
+	person.woodHeld = loaded.woodHeld;
+	person.pregnancy = loaded.pregnancy;
+	registry.Assign<LivingListPlace>(entity, LivingListPlace {.made = registry.Context().livingMade++});
+	registry.Assign<WallHug>(
+	    entity, WallHug {.goalPlace = {0, 0}, .yAngle = 0.0f, .speed = GetSpeedStateSpeed(info.speedGroup.speedDefault)});
+	const auto resourceId = resources::HashIdentifier(child ? info.childMeshHigh : info.highDetail);
+	registry.Assign<Mesh>(entity, resourceId, static_cast<int8_t>(0), static_cast<int8_t>(0));
+	const auto detailMeshes =
+	    child ? std::array {resourceId, resourceId, resourceId}
+	          : std::array {resourceId, resources::HashIdentifier(info.stdDetail), resources::HashIdentifier(info.lowDetail)};
+	registry.Assign<DetailMeshes>(entity, detailMeshes,
+	                              graphics::mesh_detail::VillagerImportance(villager_age::AgeOf(turn, loaded.birthTurn)));
+	auto& action = registry.Assign<LivingAction>(entity);
+	action.states = loaded.states;
+	action.turnsUntilStateChange = loaded.turnsUntilStateChange;
+	action.turnsSinceStateChange = loaded.turnsSinceStateChange;
+	registry.Assign<VillagerPose>(entity);
+	if (loaded.nameRow.has_value() && *loaded.nameRow < registry.Context().namedVillagersUsed.size())
+	{
+		registry.Context().namedVillagersUsed.at(*loaded.nameRow) = true;
+		registry.Assign<NamedVillager>(entity, *loaded.nameRow);
+	}
 	return entity;
 }

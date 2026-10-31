@@ -133,6 +133,10 @@ constexpr float k_FrightenedSeconds = 3.0f;
 /// else is given
 [[nodiscard]] std::vector<Step> DeadForever();
 constexpr float k_DeadForeverSeconds = 864000.0f;
+/// Dying for good as a script orders: the same fall and lie as lying dead for good, but it lies there for 999999
+/// seconds
+[[nodiscard]] std::vector<Step> DiePermanently();
+constexpr float k_DiePermanentlySeconds = 999999.0f;
 /// Pointing out a lesson's highlight to the player: when the camera is more than 30 away it first looks at the camera
 /// a second, curious, and plays its look-at-me; then it points at the highlight a second, amazed, and looks at the
 /// camera two seconds more

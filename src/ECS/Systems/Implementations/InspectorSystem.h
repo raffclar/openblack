@@ -9,6 +9,7 @@
 
 #pragma once
 
+#include <condition_variable>
 #include <cstdint>
 
 #include <atomic>
@@ -17,6 +18,7 @@
 #include <mutex>
 #include <optional>
 #include <string>
+#include <string_view>
 #include <thread>
 
 #include <Inspector.h>
@@ -37,6 +39,7 @@ class FightAutopilot;
 class GameInput;
 class GameProvider;
 struct GameControlSet;
+class GameSeamInterface;
 class InputProvider;
 class ScreenshotProvider;
 class SimProvider;
@@ -53,7 +56,8 @@ namespace openblack::ecs::systems
 class InspectorSystem final: public InspectorSystemInterface
 {
 public:
-	explicit InspectorSystem(std::unique_ptr<inspector::Server> server);
+	/// The seam is the game on the player's computer, or null on the dedicated server
+	InspectorSystem(std::unique_ptr<inspector::Server> server, std::unique_ptr<inspector::GameSeamInterface> seam);
 	~InspectorSystem() override;
 	InspectorSystem(const InspectorSystem&) = delete;
 	InspectorSystem& operator=(const InspectorSystem&) = delete;
@@ -72,10 +76,15 @@ public:
 	[[nodiscard]] std::optional<std::string> StartSimRecord(const std::filesystem::path& path, uint32_t every,
 	                                                        const std::optional<std::filesystem::path>& limits,
 	                                                        sim_run::HashDetail hashParts) override;
+	void AddProvider(std::unique_ptr<inspector::ProviderInterface> provider) override;
+	void RemoveProvider(std::string_view name) override;
+	void SetHostsNetworkGame(bool hosts) override;
 
 private:
 	/// The helper answering while the game loads: until told to stop
 	void AnswerWhileLoading();
+	/// Tells the helper to stop and waits for it
+	void StopLoadingHelper();
 	/// A scenario asked for while the game loads is kept and loaded once the load is done, rather than refused: a tool
 	/// asking for one straight after launching the game would otherwise get the empty testbed it was starting with
 	[[nodiscard]] std::optional<inspector::QueryResult> QueueWhileLoading(const inspector::Request& request);
@@ -83,6 +92,8 @@ private:
 	void RequestQueuedScenario();
 
 	std::unique_ptr<inspector::Server> _server;
+	/// The game on the player's computer, or null with none
+	std::unique_ptr<inspector::GameSeamInterface> _seam;
 	/// The components' reflection, the inspector's own rather than the library's shared one
 	std::unique_ptr<entt::meta_ctx> _reflection;
 	std::unique_ptr<inspector::RunTargetInterface> _runTarget;
@@ -110,6 +121,9 @@ private:
 	std::optional<std::string> _queuedScenario;
 	std::mutex _loadingMutex;
 	std::atomic<bool> _stopLoadingHelper {false};
+	/// Wakes the helper when it must stop, so that the end of a load does not wait for its next answer
+	std::mutex _stopMutex;
+	std::condition_variable _stopSignal;
 	std::thread _loadingHelper;
 	/// The recorded input that the next land makes from its first frame on
 	std::optional<inspector::Json> _replayOnLoad;
@@ -124,6 +138,8 @@ private:
 	std::optional<uint64_t> _cutsCheckedAt;
 	/// The fight autopilot, which gives its input through the inspector's input
 	std::unique_ptr<inspector::FightAutopilot> _autopilot;
+	/// The game server hosts a network game: the queries that change the shared world are refused
+	bool _hostsNetworkGame {false};
 };
 
 } // namespace openblack::ecs::systems

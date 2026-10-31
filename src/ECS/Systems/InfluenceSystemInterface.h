@@ -9,6 +9,7 @@
 
 #pragma once
 
+#include <algorithm>
 #include <chrono>
 #include <span>
 
@@ -26,6 +27,22 @@ namespace openblack::ecs::systems
 
 namespace influence_rules
 {
+/// A player's influence power: the reach of their citadel, then the reach of each of their towns, then the reach of
+/// each of their other sources, added in this order. A source of anti-influence also adds its reach, as in the game.
+[[nodiscard]] inline float InfluencePowerOf(float citadelReach, std::span<const float> towns, std::span<const float> sources)
+{
+	float power = citadelReach;
+	for (const float town : towns)
+	{
+		power += town;
+	}
+	for (const float source : sources)
+	{
+		power += source;
+	}
+	return power;
+}
+
 /// A player's influence at a place
 struct PlayerInfluenceAt
 {
@@ -47,6 +64,31 @@ struct PlayerInfluenceAt
 		}
 	}
 	return most;
+}
+/// Whether a player is the player of most influence at a place, as MostInfluentialPlayer finds it with the players in
+/// their order. The function asks for the influence of the player first. It asks for the influence of another player
+/// only while the answer can change.
+template <typename InfluenceOf>
+[[nodiscard]] bool IsMostInfluentialPlayer(PlayerNames player, std::span<const PlayerNames> players, InfluenceOf&& influenceOf)
+{
+	if (std::ranges::find(players, player) == players.end())
+	{
+		return false;
+	}
+	const float own = influenceOf(player);
+	if (!(own > 0.0f))
+	{
+		return false;
+	}
+	// An earlier player with the same influence keeps the place. A later player must have more influence to take it.
+	return std::ranges::none_of(players, [player, own, &influenceOf](PlayerNames other) {
+		if (other == player)
+		{
+			return false;
+		}
+		const float influence = influenceOf(other);
+		return other < player ? influence >= own : influence > own;
+	});
 }
 } // namespace influence_rules
 
@@ -74,19 +116,26 @@ public:
 	/// not drawn.
 	virtual void ShowHandInfluence(std::chrono::duration<float, std::milli> gameTime) = 0;
 
-	/// How much a place is in a player's influence, from -1 to 1. Near their hand it is what the hand keeps of their
-	/// influence past the border, while it keeps any (see virtual_influence::Grant): the questions of a game turn measure
-	/// from where the hand was at the turn, those asked between turns from where this computer's hand is now. Elsewhere
-	/// it is their own influence (see PlayerRawInfluence).
+	/// How much a place is in a player's influence, from -1 to 1, as every rule of the game asks it: the player's own
+	/// influence (see PlayerOwnInfluence). Where that is none or less, it is the own influence of the first ally, in the
+	/// order of the player numbers, that lends its influence to the player and has some there, else none.
 	[[nodiscard]] virtual float PlayerInfluence(PlayerNames player, const map_coords::MapCoords& position) const = 0;
+	/// How much a place is in a player's influence without the influence of allies. Near their hand it is what the hand
+	/// keeps of their influence past the border, while it keeps any (see virtual_influence::Grant): the questions of a
+	/// game turn measure from where the hand was at the turn, those asked between turns from where this computer's hand
+	/// is now. Elsewhere it is their own influence (see PlayerRawInfluence).
+	[[nodiscard]] virtual float PlayerOwnInfluence(PlayerNames player, const map_coords::MapCoords& position) const
+	{
+		return PlayerInfluence(player, position);
+	}
 	/// The same at a point, made a map position first
 	[[nodiscard]] float PlayerInfluence(PlayerNames player, const glm::vec3& position) const
 	{
 		return PlayerInfluence(player, map_coords::FromMetres({position.x, position.z}));
 	}
 	/// How much the hand's own place is in its player's influence: while the hand keeps any of their influence past the
-	/// border it counts as inside however far out it is, else it is their own influence there. What the hand may do
-	/// asks this.
+	/// border it counts as inside however far out it is, else it is their own influence there. Where that is none or
+	/// less, an ally lends its influence as for PlayerInfluence. What the hand may do asks this.
 	[[nodiscard]] virtual float HandPointInfluence(PlayerNames player, const map_coords::MapCoords& hand) const = 0;
 	[[nodiscard]] bool IsHandInInfluence(PlayerNames player, const glm::vec3& hand) const
 	{
@@ -104,6 +153,10 @@ public:
 	virtual void HeldThingUsedOnLand(PlayerNames player) = 0;
 	/// Whether the game turn is being played: questions asked then measure from where the hands were at the turn
 	virtual void SetInGameTurn(bool inGameTurn) = 0;
+	/// The land is laid out: each player with a citadel has their influence power worked out once, before the first game
+	/// turn, as a turn works it out. It sets the power and its running average, and puts one sample into the influence
+	/// history.
+	virtual void LandLaidOut() {}
 	/// Fixes the reach of each citadel that has no fixed reach yet, in the order of the players. Only the game turn fixes
 	/// the reaches, so every computer and the dedicated server keep them in the same order. A question does not fix them.
 	virtual void FixCitadelReaches() = 0;
@@ -111,8 +164,11 @@ public:
 	[[nodiscard]] virtual std::span<const influence::Circle> GetCircles() const = 0;
 	/// Whether a player's border shows yet: from the first time their temple stands wholly built on the land
 	[[nodiscard]] virtual bool IsBorderShown(PlayerNames player) const = 0;
-	/// A player's whole power of influence: their citadel's reach, while it stands, with the reach of each of their towns
-	/// and of their other sources of influence
+	/// The turn of a player notes their influence power after their computer mind, as the game does. It sets the power
+	/// and its running average, and puts one sample into the influence history.
+	virtual void NoteInfluencePower(PlayerNames /*player*/) {}
+	/// A player's influence power as their turn last noted it. All questions get this noted value. Thus a question before
+	/// the turn of the player gets the power of the last turn.
 	[[nodiscard]] virtual float InfluencePower(PlayerNames /*player*/) const { return 0.0f; }
 	/// How far a player's citadel reaches with the land's multiplier, 0 when the player has no citadel
 	[[nodiscard]] virtual float CitadelReachOf(PlayerNames /*player*/) const { return 0.0f; }

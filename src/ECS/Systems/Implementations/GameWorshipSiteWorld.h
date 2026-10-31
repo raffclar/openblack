@@ -25,6 +25,7 @@ public:
 	[[nodiscard]] Registry& Entities() override;
 	[[nodiscard]] int32_t LandNumber() const override;
 	[[nodiscard]] std::optional<glm::vec3> SitePoint(uint32_t index) const override;
+	[[nodiscard]] std::optional<glm::vec3> TemplePoint(entt::entity temple, uint32_t index) const override;
 	[[nodiscard]] std::optional<glm::vec3> SiteDoor() const override;
 	[[nodiscard]] entt::id_type SiteMesh(entt::entity temple) override;
 	[[nodiscard]] entt::id_type AltarMesh(Tribe tribe) const override;
@@ -43,6 +44,11 @@ public:
 	void RemoveSpellIcons(entt::entity site) override;
 	void RemoveDance(entt::entity dance) override;
 	void ArtefactsLeaveSite(entt::entity site) override;
+	uint32_t StartMotes() override;
+	void AddMote(uint32_t effect, glm::vec3 from, glm::vec3 to, uint32_t rgb) override;
+	bool StepMotes(uint32_t effect) override;
+	void RemoveMotes(uint32_t effect) override;
+	entt::entity MakeNeedFlag(entt::entity site, uint8_t need) override;
 	void Remove(entt::entity object) override;
 };
 

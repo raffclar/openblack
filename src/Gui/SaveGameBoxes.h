@@ -17,6 +17,7 @@
 
 #include <glm/vec2.hpp>
 
+#include "3D/TempleScreenInterface.h"
 #include "Common/Zoomer.h"
 #include "Dialog.h"
 
@@ -45,16 +46,8 @@ class TextDatabase;
 class SaveGameBoxes
 {
 public:
-	enum class Answer : uint8_t
-	{
-		Yes,
-		No,
-		/// The player gave a name and pressed OK
-		Named,
-		Cancelled,
-		/// The player took a message away
-		Ok,
-	};
+	/// The answers are the answers that the temple reads
+	using Answer = TempleScreenInterface::SaveAnswer;
 
 	static constexpr DialogRect k_HoldingBox {.min = {200, 150}, .max = {600, 450}};
 	static constexpr DialogRect k_QuestionBox {.min = {150, 200}, .max = {650, 400}};

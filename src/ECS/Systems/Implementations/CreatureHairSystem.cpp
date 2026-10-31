@@ -27,6 +27,7 @@
 #include "ECS/Components/CreatureCopy.h"
 #include "ECS/Components/CreatureHair.h"
 #include "ECS/Components/Transform.h"
+#include "ECS/DrawnRegistry.h"
 #include "ECS/Registry.h"
 #include "ECS/Systems/CreatureHairStep.h"
 #include "Locator.h"
@@ -42,9 +43,9 @@ namespace
 /// Where a strand is rooted this frame and which way it grows out, or none where its triangle has no area. The root
 /// is sunk along the triangle's normal as it comes, unnormalised.
 std::optional<creature_hair::Root> RootOf(const CreatureRig::HairStrand& strand, const creature_morph::Morph& morph,
-                                          const std::vector<glm::mat4>& bones, const glm::mat4& model)
+                                          creature::PosedBones& posed)
 {
-	const auto triangle = creature::PosedTriangle(strand.vertices, strand.bones, morph, bones, model,
+	const auto triangle = creature::PosedTriangle(strand.vertices, strand.bones, morph, posed,
 	                                              strand.turned ? creature::k_TurnedHairOrder : creature::k_SkinPointOrder);
 	const auto point = creature_eyes::PointOnTriangle(triangle[0], triangle[1], triangle[2], strand.u, strand.v);
 	if (glm::length(point.normal) <= 0.0f)
@@ -58,7 +59,7 @@ std::optional<creature_hair::Root> RootOf(const CreatureRig::HairStrand& strand,
 		std::array<glm::mat3, 3> frames {};
 		for (size_t i = 0; i < frames.size(); ++i)
 		{
-			frames.at(i) = glm::mat3(creature::PosedBone(strand.bones.at(i), bones, model));
+			frames.at(i) = glm::mat3(posed.At(strand.bones.at(i)));
 		}
 		// Each angle moves with the alignment the body is drawn with
 		const auto angle = [&strand, &morph](glm::length_t axis) {
@@ -87,7 +88,9 @@ void StepBodyHair(const resources::CreatureRigManager& rigs, CreatureType specie
 	const auto scale = creature_hair::HairScale(size);
 	// The hair grows from the body where the frame draws it
 	const auto drawn = DrawnTransform(transform, &animation);
-	const auto model = creature::PlacementMatrix(drawn.position, drawn.rotation, drawn.scale);
+	// The strands of the body share its bones, so each bone is placed in the world one time
+	creature::PosedBones posed(animation.boneMatrices,
+	                           creature::PlacementMatrix(drawn.position, drawn.rotation, drawn.scale));
 	StepHair(
 	    hair, rig.hairGroups.size(),
 	    [&](size_t g) {
@@ -99,17 +102,25 @@ void StepBodyHair(const resources::CreatureRigManager& rigs, CreatureType specie
 		                           .colour = look.colour,
 		                           .textured = source.textured};
 	    },
-	    [&](size_t g, size_t s) { return RootOf(rig.hairGroups[g].strands[s], morph, animation.boneMatrices, model); },
-	    seconds);
+	    [&](size_t g, size_t s) { return RootOf(rig.hairGroups[g].strands[s], morph, posed); }, seconds);
 }
 } // namespace
 
 void CreatureHairSystem::SetShown(bool shown)
 {
 	_shown = shown;
-	if (!shown && Locator::entitiesRegistry::has_value())
+	if (shown)
+	{
+		return;
+	}
+	// The hair of the creatures and of their copies starts again when it shows again
+	if (Locator::entitiesRegistry::has_value())
 	{
 		Locator::entitiesRegistry::value().Each<CreatureHair>([](CreatureHair& hair) { hair = {}; });
+	}
+	if (Locator::drawnRegistry::has_value())
+	{
+		Locator::drawnRegistry::value().Each<CreatureHair>([](CreatureHair& hair) { hair = {}; });
 	}
 }
 
@@ -130,23 +141,23 @@ void CreatureHairSystem::Update(std::chrono::duration<float, std::milli> gameTim
 	    });
 }
 
-void CreatureHairSystem::StepCopy(entt::entity copy, std::chrono::duration<float, std::milli> frameTime)
+void CreatureHairSystem::StepCopy(Registry& copies, entt::entity copy, std::chrono::duration<float, std::milli> frameTime,
+                                  const Registry& bodies)
 {
-	if (!_shown)
+	if (!_shown || !copies.Valid(copy))
 	{
 		return;
 	}
-	auto& registry = Locator::entitiesRegistry::value();
-	const auto* body = registry.TryGet<const CreatureCopy>(copy);
-	const auto* animation = registry.TryGet<const CreatureAnimation>(copy);
-	const auto* transform = registry.TryGet<const Transform>(copy);
-	auto* hair = registry.TryGet<CreatureHair>(copy);
-	if (body == nullptr || animation == nullptr || transform == nullptr || hair == nullptr || !registry.Valid(body->creature))
+	const auto* body = copies.TryGet<const CreatureCopy>(copy);
+	const auto* animation = copies.TryGet<const CreatureAnimation>(copy);
+	const auto* transform = copies.TryGet<const Transform>(copy);
+	auto* hair = copies.TryGet<CreatureHair>(copy);
+	if (body == nullptr || animation == nullptr || transform == nullptr || hair == nullptr || !bodies.Valid(body->creature))
 	{
 		return;
 	}
-	const auto* creature = registry.TryGet<const Creature>(body->creature);
-	const auto* morph = registry.TryGet<const CreatureMorph>(body->creature);
+	const auto* creature = bodies.TryGet<const Creature>(body->creature);
+	const auto* morph = bodies.TryGet<const CreatureMorph>(body->creature);
 	if (creature == nullptr || morph == nullptr)
 	{
 		return;

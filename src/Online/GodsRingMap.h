@@ -58,8 +58,8 @@ inline constexpr std::string_view k_Name = "The ring of gods - 32 players";
 inline constexpr std::string_view k_TemplateMap = "Online Maps/mpm_4p_1.map";
 inline constexpr PlayerNames k_TemplateGod = PlayerNames::PLAYER_ONE;
 
-/// The god of a slot, while the game has fewer gods than slots: the first slots have the gods of a land, in order. A
-/// slot after the last god of a land has no god yet.
+/// The god of a slot (player_slots::PlayerOfSlot): the first 7 slots have the gods of a land, in order, and the later
+/// slots the gods after the neutral player. None after the last slot.
 [[nodiscard]] std::optional<PlayerNames> GodOfSlot(size_t slot);
 
 /// A slot of the map: where its citadel stands and which god has it

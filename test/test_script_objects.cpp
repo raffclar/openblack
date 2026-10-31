@@ -68,6 +68,7 @@ struct FakeWorld final: World
 	std::vector<entt::entity> decideAfterPhysics;
 	std::vector<entt::entity> abandoned;
 	std::vector<entt::entity> releasedAnimals;
+	std::vector<entt::entity> wanderAfterPhysics;
 	std::vector<entt::entity> deleted;
 	/// The members that left a container, waiting for their script
 	std::vector<entt::entity> waiting;
@@ -97,6 +98,7 @@ struct FakeWorld final: World
 	void SetVillagerDecideWhatToDo(entt::entity villager) override { decided.push_back(villager); }
 	void SetVillagerPreviousDecideWhatToDo(entt::entity villager) override { decideAfterPhysics.push_back(villager); }
 	void AbandonCreatureAction(entt::entity creature) override { abandoned.push_back(creature); }
+	void SetAnimalWanderBeforeReaction(entt::entity animal) override { wanderAfterPhysics.push_back(animal); }
 	void ReleaseAnimal(entt::entity animal) override { releasedAnimals.push_back(animal); }
 	void Delete(entt::entity object) override
 	{
@@ -458,6 +460,21 @@ TEST(ScriptObjectsSystem, AVisualsThingGoesWhenItsVisualEnds)
 	EXPECT_TRUE(registry.Valid(lasting));
 }
 
+TEST(ScriptObjectsSystem, OnlyAVisualsThingGivesTheVisualThatTakesATarget)
+{
+	openblack::ecs::Registry registry;
+	constexpr uint32_t k_Effect = 20;
+	const auto beam = openblack::ecs::script_spot_visuals::MakeThing(registry, k_Effect, glm::vec3(0.0f));
+	const auto villager = registry.Create();
+	// The thing of a visual gives its visual, which then takes the target
+	EXPECT_EQ(openblack::ecs::script_spot_visuals::EffectOf(registry, beam), k_Effect);
+	// Another thing, no thing, and a thing that went give no visual
+	EXPECT_EQ(openblack::ecs::script_spot_visuals::EffectOf(registry, villager), std::nullopt);
+	EXPECT_EQ(openblack::ecs::script_spot_visuals::EffectOf(registry, entt::null), std::nullopt);
+	registry.Destroy(beam);
+	EXPECT_EQ(openblack::ecs::script_spot_visuals::EffectOf(registry, beam), std::nullopt);
+}
+
 TEST(ScriptObjectsSystem, AnObjectNoVariableHoldsFreesItsPlaceAfterTheScriptsTurn)
 {
 	auto [world, system] = MakeSystem();
@@ -748,6 +765,16 @@ TEST(ScriptObjectsSystem, AReleasedAnimalGoesBackToItsOwnLife)
 	system->ReleaseFromScript(free);
 	EXPECT_EQ(world->releasedAnimals, std::vector {animal});
 	EXPECT_FALSE(world->IsControlled(animal));
+	EXPECT_TRUE(world->wanderAfterPhysics.empty());
+}
+
+TEST(ScriptObjectsSystem, AReleasedAnimalInThePhysicsWandersAfterAReaction)
+{
+	auto [world, system] = MakeSystem();
+	const auto animal = world->Add(4, {.kind = Kind::Animal, .controlled = true, .inPhysics = true, .inMap = false});
+	system->ReleaseFromScript(animal);
+	EXPECT_EQ(world->wanderAfterPhysics, std::vector {animal});
+	EXPECT_EQ(world->releasedAnimals, std::vector {animal});
 }
 
 TEST(ScriptObjectsSystem, TheSavedTableHasZeroInItsGapsAndKeepsItsLayout)

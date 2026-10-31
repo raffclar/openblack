@@ -31,6 +31,7 @@
 #include "ECS/Components/Transform.h"
 #include "ECS/Components/WallHug.h"
 #include "ECS/FootpathRules.h"
+#include "ECS/PlayerTowns.h"
 #include "ECS/Registry.h"
 #include "ECS/Systems/LivingActionSystemInterface.h"
 #include "ECS/WallHugRules.h"
@@ -99,10 +100,18 @@ entt::entity NearestTown(glm::ivec2 place)
 	const map_coords::MapCoords from {.x = place.x, .z = place.y, .altitude = 0.0f};
 	entt::entity nearest = entt::null;
 	float best = std::numeric_limits<float>::max();
-	Entities().Each<const Town, const Transform>([&](entt::entity town, const Town&, const Transform& transform) {
+	// Each player's town list in turn and the neutral list last: the first met wins a tie
+	const auto& registry = Entities();
+	for (const auto town : player_towns::AllInOrder(registry))
+	{
+		const auto* transform = registry.TryGet<const Transform>(town);
+		if (transform == nullptr)
+		{
+			continue;
+		}
 		const float distance = gutils::GetDistanceInMetres(from, map_coords::MapCoords {
-		                                                             .x = map_coords::ToFixed(transform.position.x),
-		                                                             .z = map_coords::ToFixed(transform.position.z),
+		                                                             .x = map_coords::ToFixed(transform->position.x),
+		                                                             .z = map_coords::ToFixed(transform->position.z),
 		                                                             .altitude = 0.0f,
 		                                                         });
 		if (distance < best)
@@ -110,7 +119,7 @@ entt::entity NearestTown(glm::ivec2 place)
 			best = distance;
 			nearest = town;
 		}
-	});
+	}
 	return nearest;
 }
 
@@ -316,7 +325,7 @@ uint32_t villager_footpath::MoveOnPath(LivingAction& action)
 		return 1;
 	}
 	const auto& wallHug = registry.Get<const WallHug>(villager);
-	if (!villager_home::WalkIsOverAt(villager, wallHug.goal))
+	if (!villager_home::WalkIsOverAt(villager, wallHug.goalPlace))
 	{
 		return 0;
 	}

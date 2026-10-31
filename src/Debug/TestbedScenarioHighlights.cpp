@@ -47,6 +47,20 @@ void testbed_scenarios::AddHighlightScenarios(std::vector<Scenario>& all)
 	                   {.kind = 3, .offset = {-15.0f, 10.0f}, .height = 6.0f},
 	                   {.kind = 3, .offset = k_Hut}},
 	});
+	all.push_back({
+	    .id = "scripts.highlight_effects_frames",
+	    .name = "A gold scroll and a started silver scroll close up, their effects stepped in the drawn frames",
+	    .facet = Facet::Objects,
+	    .description = "A gold scroll and a started silver scroll on bare land, close up, with the camera still. Their "
+	                   "glints and the sparkles of the started scroll step in the frames that draw them, no more often "
+	                   "than 60 times a second.",
+	    .expected = "The gold glints and the silver sparkles move as they do at 60 frames a second, also at hundreds of "
+	                "frames a second. They do not move faster or flicker more at a high frame rate. Their random numbers "
+	                "are only this computer's, so the world stays the same.",
+	    .environment = {.dispenserGrid = false},
+	    .framing = {.shot = Shot::Placed, .eye = {0.0f, 6.0f, 12.0f}, .look = {0.0f, 2.0f, 25.0f}},
+	    .highlights = {{.kind = 3, .offset = {-3.0f, 25.0f}}, {.kind = 2, .offset = {3.0f, 25.0f}, .active = true}},
+	});
 
 	// A lesson's gold scroll, as the creature lessons put it up at the pen, near the camera
 	all.push_back({
@@ -118,5 +132,41 @@ void testbed_scenarios::AddHighlightScenarios(std::vector<Scenario>& all)
 	                   {.kind = 2, .offset = {-1.5f, 0.0f}},
 	                   {.kind = 3, .offset = {1.5f, 0.0f}},
 	                   {.kind = 3, .offset = {4.5f, 0.0f}, .active = true}},
+	});
+	// A script's mist, as the Singing Stones' Twinkle tune makes it: white and a tenth opaque. Then the mist grows to
+	// twice its size and fades out over ten seconds.
+	using Argument = ScriptArgument;
+	all.push_back({
+	    .id = "effects.script_mist_fade",
+	    .name = "A script makes a mist and fades it out",
+	    .facet = Facet::Light,
+	    .description = "On bare land, a script makes a white mist 3 above the land, of size 0.8, a tenth opaque and its "
+	                   "height 0.6 of its width, as the Singing Stones' Twinkle tune on the second land does. Three seconds "
+	                   "later the script fades it: its size from 1 to 2 and its alpha from 50 to 0 over ten seconds.",
+	    .expected = "The faint white puff of mist shows at once, round seen from above and flatter seen level. When the "
+	                "fade starts it jumps to size 1 and a little more opaque, then grows steadily to twice that while it "
+	                "fades away, a step each game turn, gone after ten seconds. The log tells that CREATE_MIST gave back "
+	                "1 value and that SET_MIST_FADE ran.",
+	    .environment = {.dispenserGrid = false},
+	    .framing = {.shot = Shot::Placed, .eye = {0.0f, 16.0f, -40.0f}, .look = {0.0f, 3.0f, 0.0f}},
+	    .commands = {{.kind = Command::Kind::CallNative,
+	                  .delaySeconds = 1.0f,
+	                  .script = "CREATE_MIST",
+	                  .scriptArguments = {{.kind = Argument::Kind::Position, .point = {0.0f, 0.0f}, .height = 3.0f},
+	                                      {.kind = Argument::Kind::Number, .number = 0.8f},
+	                                      {.kind = Argument::Kind::Number, .number = 255.0f},
+	                                      {.kind = Argument::Kind::Number, .number = 255.0f},
+	                                      {.kind = Argument::Kind::Number, .number = 255.0f},
+	                                      {.kind = Argument::Kind::Number, .number = 0.1f},
+	                                      {.kind = Argument::Kind::Number, .number = 0.6f}}},
+	                 {.kind = Command::Kind::CallNative,
+	                  .delaySeconds = 3.0f,
+	                  .script = "SET_MIST_FADE",
+	                  .scriptArguments = {{.kind = Argument::Kind::Result},
+	                                      {.kind = Argument::Kind::Number, .number = 1.0f},
+	                                      {.kind = Argument::Kind::Number, .number = 2.0f},
+	                                      {.kind = Argument::Kind::Number, .number = 50.0f},
+	                                      {.kind = Argument::Kind::Number, .number = 0.0f},
+	                                      {.kind = Argument::Kind::Number, .number = 10.0f}}}},
 	});
 }

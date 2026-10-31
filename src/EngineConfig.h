@@ -17,10 +17,12 @@
 #include <string_view>
 #include <utility>
 
+#include "Common/GameLanguage.h"
 #include "Creature/BonusCreatures.h"
-#include "Graphics/DetailLevel.h"
-#include "Graphics/LandDetail.h"
-#include "Windowing/WindowingInterface.h"
+#include "Visual/DetailLevel.h"
+#include "Visual/DisplayMode.h"
+#include "Visual/LandDetail.h"
+#include "Visual/UploadMode.h"
 
 namespace openblack
 {
@@ -83,6 +85,8 @@ static constexpr auto k_GraphicsBackendNames = std::to_array<std::pair<std::stri
 
 struct EngineConfig
 {
+	/// The language of the install, from Country.txt in the game folder. The game reads it one time as it starts.
+	GameLanguage language {GameLanguage::UkEnglish};
 	bool wireframe {false};
 	/// The debug overlay labelling the villagers with their numbers (the game's own labels come with its keys)
 	bool showVillagerNames {false};
@@ -137,6 +141,9 @@ struct EngineConfig
 	/// The dedicated server: it has no audio device, and all of its sounds go to the audio manager that plays nothing. It
 	/// runs its frames with no window.
 	bool dedicatedServer {false};
+	/// What the resource loaders make: the data and the objects on the graphics device, or the data only for a world with
+	/// no device
+	graphics::UploadMode resourceUploads {graphics::UploadMode::Device};
 
 	float timeOfDay {12.0f};
 	float smallBumpMapStrength {1.0f};
@@ -166,6 +173,10 @@ struct EngineConfig
 	uint32_t frameStatsInterval {0};
 	/// With the frame statistics, the GPU time of each render view
 	bool frameStatsViews {false};
+	/// Tools: log the times of the computer gods each time this many turns go by, never when 0
+	uint32_t aiTimesEvery {0};
+	/// With the frame statistics, the file that gets each frame of the run when the game ends; none when empty
+	std::string frameStatsOut;
 	/// Draw the first frame of a land once behind the loading screen, so that the renderer makes its pipelines and
 	/// render targets there and not in the first frames of the game
 	bool warmUpFirstFrame {true};
@@ -183,5 +194,8 @@ struct EngineConfig
 	/// The real-world weather of the player's place changes the weather of a single-player game. It is on unless the
 	/// player turns it off.
 	bool useInternetWeather {true};
+	/// A network game shows the round trip of this computer's game socket (deviation 143). It is off unless the player
+	/// turns it on.
+	bool showPing {false};
 };
 } // namespace openblack

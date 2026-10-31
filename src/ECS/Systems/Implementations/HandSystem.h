@@ -9,7 +9,6 @@
 
 #pragma once
 
-#include <map>
 #include <optional>
 
 #include <entt/entity/entity.hpp>
@@ -17,6 +16,7 @@
 #include "Commands/PlayerCommands.h"
 #include "ECS/Systems/HandSystemInterface.h"
 #include "Hand/HandTrace.h"
+#include "Hand/ThrowLead.h"
 
 #if !defined(LOCATOR_IMPLEMENTATIONS)
 #error "Locator interface implementations should only be included in Locator.cpp, use interface instead."
@@ -42,6 +42,11 @@ public:
 	[[nodiscard]] std::optional<std::array<entt::entity, static_cast<size_t>(Side::_Count)>>
 	GetHandsOf(PlayerNames player) const noexcept override;
 	std::array<entt::entity, static_cast<size_t>(Side::_Count)> MakeHandsOf(PlayerNames player) override;
+	void LinkHandsOf(entt::entity playerEntity) override;
+	void StartAtCitadel(PlayerNames owner, const glm::vec3& point) override;
+	void ReportSent(const player_commands::HandReport& report) override;
+	[[nodiscard]] uint32_t GetReportLatencyMs() const noexcept override { return _reportLatency.Milliseconds(); }
+	void FixReportLatency(std::optional<uint32_t> latencyMs) override { _reportLatency.Fix(latencyMs); }
 	void SetOwnPlayer(PlayerNames player) override { _ownPlayer = player; }
 	void ClearOwnPlayer() override { _ownPlayer.reset(); }
 	[[nodiscard]] PlayerNames GetOwnPlayer() const noexcept override { return _ownPlayer.value_or(PlayerNames::PLAYER_ONE); }
@@ -49,18 +54,18 @@ public:
 	[[nodiscard]] std::optional<ReportedCamera> GetReportedCamera(PlayerNames player) const noexcept override;
 	void Report(PlayerNames player, const player_commands::HandReport& report) override;
 	void ReportPick(PlayerNames player, entt::entity object) override;
-	[[nodiscard]] entt::entity GetReportedPick() const noexcept override;
+	void ReportView(PlayerNames player, const player_commands::ViewReport& report) override;
+	[[nodiscard]] std::optional<ReportedView> GetReportedView(PlayerNames player) const noexcept override;
+	[[nodiscard]] entt::entity GetReportedPickOf(PlayerNames player) const noexcept override;
 	void ProcessTurn() override;
-	[[nodiscard]] uint32_t GetHandStillTurns() const noexcept override;
-	[[nodiscard]] glm::vec3 GetReportedHandVelocity() const noexcept override;
+	[[nodiscard]] uint32_t GetHandStillTurnsOf(PlayerNames player) const noexcept override;
 	[[nodiscard]] hand_trace::HandTrace* GetTrace() noexcept override { return &_trace; }
 
 private:
-	std::array<entt::entity, 2> _hands {entt::null, entt::null};
-	/// The hands of the gods of the other players of a network game, by player
-	std::map<PlayerNames, std::array<entt::entity, 2>> _godHands;
 	/// None on the game server and on an observer's computer
 	std::optional<PlayerNames> _ownPlayer {PlayerNames::PLAYER_ONE};
+	/// The latency of the reports of this computer's hand. It is not part of the world.
+	hand_grab::throw_lead::ReportLatency _reportLatency;
 	hand_trace::HandTrace _trace;
 };
 } // namespace openblack::ecs::systems

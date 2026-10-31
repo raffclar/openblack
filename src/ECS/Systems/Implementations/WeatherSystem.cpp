@@ -32,10 +32,11 @@
 #include "ECS/Reflection/BinaryArchive.h"
 #include "ECS/Registry.h"
 #include "ECS/ScriptWeatherRules.h"
-#include "ECS/Systems/ParticleSystemInterface.h"
-#include "ECS/Systems/SkySystemInterface.h"
+#include "ECS/Systems/EffectRequestSystemInterface.h"
+#include "ECS/Systems/SkyClockSystemInterface.h"
 #include "ECS/Systems/SnowSystemInterface.h"
 #include "ECS/Systems/SoundTagSystemInterface.h"
+#include "ECS/Systems/TimeSystemInterface.h"
 #include "InfoConstants.h"
 #include "Locator.h"
 
@@ -289,7 +290,15 @@ void WeatherSystem::SaveState(reflection::BinaryWriter& out) const
 	reflection::Save(out, _turn);
 	reflection::Save(out, _day);
 	reflection::Save(out, _season);
-	reflection::Save(out, _activeStorms);
+	// The live storms are copies of the storms of the registry. No reader of these copies uses the last flash. A storm
+	// that strikes round the camera puts its flash near the camera of this computer. Thus the save keeps the copies
+	// without their flashes, and the copies are the same on each computer.
+	auto storms = _activeStorms;
+	for (auto& storm : storms)
+	{
+		storm.flash = {};
+	}
+	reflection::Save(out, storms);
 	reflection::Save(out, _nextStormSerial);
 	reflection::Save(out, _forcedStorm);
 }
@@ -304,6 +313,9 @@ bool WeatherSystem::LoadState(reflection::BinaryReader& in)
 	reflection::Load(in, _activeStorms);
 	reflection::Load(in, _nextStormSerial);
 	reflection::Load(in, _forcedStorm);
+	// A game that the player loads starts with calm background weather. The original game also writes the background weather in
+	// its save, but sets it to calm again after the load reads it.
+	_background = {};
 	// Every cell of the atmosphere is stale
 	for (auto& cell : _grid)
 	{
@@ -325,6 +337,8 @@ void WeatherSystem::Reset()
 	_day.reset();
 	_season = GetSeason(0);
 	_activeStorms.clear();
+	// A new land starts with calm background weather
+	_background = {};
 	++_stamp;
 }
 
@@ -399,7 +413,7 @@ void WeatherSystem::InitialiseClimate(Climate& climate) const
 	climate.rainDesire = RainMax(info, _season);
 
 	// The temperature starts at the time of day's target
-	const auto& sky = Locator::skySystem::value();
+	const auto& sky = Locator::skyClockSystem::value();
 	const auto hour = RelativeHour(static_cast<float>(Ftol(sky.GetTime())), sky.GetDayNightTimes());
 	const auto hourFactor = k_TemperatureByHour.at(std::clamp(Ftol(hour), 0, 23));
 	const auto monthFactor = k_TemperatureByMonth.at(GetMonth(_turn));
@@ -718,7 +732,9 @@ void WeatherSystem::UpdateStorms()
 		{
 			auto& random = Locator::gameRandom::value();
 			auto strikeAt = storm.position;
-			if (storm.strikesNearCamera && Locator::camera::has_value())
+			// Each computer of a network game has its own camera, so there the storm strikes at its middle on each computer
+			const bool networkGame = Locator::time::has_value() && Locator::time::value().IsNetworkGame();
+			if (storm.strikesNearCamera && !networkGame && Locator::camera::has_value())
 			{
 				const auto camera = Locator::camera::value().GetOrigin();
 				auto& local = Locator::rng::value();
@@ -733,10 +749,11 @@ void WeatherSystem::UpdateStorms()
 					storm.boltTimer = random.GameFloatRange(storm.boltWait.x, storm.boltWait.y);
 					storm.flash = lightning::Strike(strikeAt, storm.outerRadius, lightning::k_BoltStrength);
 					// Its forked bolt comes down from under the cloud
-					if (Locator::particleSystem::has_value())
+					if (Locator::effectRequestSystem::has_value())
 					{
 						const auto ground = Locator::terrainSystem::value().GetHeightAt({strikeAt.x, strikeAt.z});
-						Locator::particleSystem::value().AddStormBolt({strikeAt.x, ground + storm.cloudHeight, strikeAt.z});
+						Locator::effectRequestSystem::value().AddStormBolt(
+						    {strikeAt.x, ground + storm.cloudHeight, strikeAt.z});
 					}
 				}
 			}
@@ -840,7 +857,7 @@ void WeatherSystem::ProcessClimate(entt::entity entity, bool newDay)
 void WeatherSystem::ProcessTemperature(Climate& climate) const
 {
 	const auto& info = GetInfo(climate);
-	const auto& sky = Locator::skySystem::value();
+	const auto& sky = Locator::skyClockSystem::value();
 	const auto hour = RelativeHour(static_cast<float>(Ftol(sky.GetTime())), sky.GetDayNightTimes());
 	const auto hourFactor = k_TemperatureByHour.at(std::clamp(Ftol(hour), 0, 23));
 	const auto monthFactor = k_TemperatureByMonth.at(GetMonth(_turn));
@@ -1259,6 +1276,21 @@ bool WeatherSystem::SetWeatherThingSpeed(entt::entity thing, float speed)
 		storm->speed = speed;
 	}
 	return true;
+}
+
+void WeatherSystem::EndWeatherThing(entt::entity thing)
+{
+	auto& registry = Locator::entitiesRegistry::value();
+	const auto* weatherThing = registry.Valid(thing) ? registry.TryGet<const WeatherThing>(thing) : nullptr;
+	if (weatherThing == nullptr)
+	{
+		return;
+	}
+	if (auto* storm = registry.Valid(weatherThing->storm) ? registry.TryGet<Storm>(weatherThing->storm) : nullptr;
+	    storm != nullptr)
+	{
+		script_weather::EndStorm(*storm);
+	}
 }
 
 bool WeatherSystem::SetWeatherThingAffectedByWind(entt::entity thing, bool affected)

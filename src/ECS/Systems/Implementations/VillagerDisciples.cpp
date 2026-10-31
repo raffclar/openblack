@@ -23,8 +23,6 @@
 #include <spdlog/spdlog.h>
 
 #include "3D/MapCoords.h"
-#include "Audio/AudioManagerInterface.h"
-#include "Audio/HelpSpeech.h"
 #include "Camera/Camera.h"
 #include "Common/GUtilsAngle.h"
 #include "Common/GUtilsDistance.h"
@@ -49,8 +47,12 @@
 #include "ECS/Components/Villager.h"
 #include "ECS/Components/VillagerDeath.h"
 #include "ECS/Components/WorshipSite.h"
+#include "ECS/CreatureCarried.h"
 #include "ECS/DiscipleRules.h"
+#include "ECS/DiscipleSymbol.h"
 #include "ECS/DiscipleWorkRules.h"
+#include "ECS/DrawnRegistry.h"
+#include "ECS/GameEndConditions.h"
 #include "ECS/HandPlayer.h"
 #include "ECS/Map.h"
 #include "ECS/Registry.h"
@@ -58,6 +60,7 @@
 #include "ECS/Systems/AlignmentSystemInterface.h"
 #include "ECS/Systems/CreatureMindSystemInterface.h"
 #include "ECS/Systems/FieldSystemInterface.h"
+#include "ECS/Systems/GameEndSystemInterface.h"
 #include "ECS/Systems/HandSystemInterface.h"
 #include "ECS/Systems/HelpSpeechSystemInterface.h"
 #include "ECS/Systems/LivingActionSystemInterface.h"
@@ -76,6 +79,8 @@
 #include "Magic/VillagerReactionRules.h"
 #include "ObjectMeasures.h"
 #include "Resources/ResourcesInterface.h"
+#include "Sound/HelpSpeech.h"
+#include "Sound/SoundRequestInterface.h"
 #include "VillagerAnimate.h"
 #include "VillagerBreeding.h"
 #include "VillagerBuild.h"
@@ -403,7 +408,6 @@ std::vector<entt::entity> ThingsNear(entt::entity villager)
 	}
 	const auto& registry = Entities();
 	const auto position = PositionOf(villager);
-	const float ownRadius = systems::object_measures::TwoDRadius(registry, villager);
 	// The map's cells don't keep the fish farms, which are few: each is looked at with the things of its cell
 	std::vector<std::pair<glm::ivec2, entt::entity>> farms;
 	registry.Each<const FishFarm, const Transform>([&farms](entt::entity farm, const FishFarm&, const Transform& transform) {
@@ -436,8 +440,8 @@ std::vector<entt::entity> ThingsNear(entt::entity villager)
 			{
 				continue;
 			}
-			const float gap = gutils::GetDistanceInMetres(glm::xz(position), glm::xz(transform->position)) -
-			                  (ownRadius + systems::object_measures::TwoDRadius(registry, thing));
+			// The thing measures the gap: a worship site measures from its middle, not from where it stands
+			const float gap = systems::object_measures::DistanceFromObject(registry, thing, villager);
 			found.push_back(thing);
 			interests.push_back(disciple::Interest(gap, *desire));
 		}
@@ -579,15 +583,19 @@ bool SetAboutWork(LivingAction& action, VillagerDisciple type)
 		// It stops being a disciple as it sets about moving into the building nearest it, or failing that the
 		// building's town, then goes to its new home
 		const auto villager = EntityOf(action);
+		const auto before = world_objects::PlayerOf(villager);
 		villager_disciple::SetType(villager, None);
 		auto& towns = Locator::townSystem::value();
 		if (!towns.MoveInByBuilding(towns.NearestBuilding(glm::xz(PositionOf(villager))), villager))
 		{
 			return false;
 		}
-		// TODO(disciples): moved to another player's town, the new player counts a villager converted (a multiplayer
-		// win condition)
 		SetTopState(action, VillagerStates::GoHomeAndChange);
+		// In a network game, a villager that moved to the town of another player counts as converted by the new player
+		if (const auto after = world_objects::PlayerOf(villager); after != before && Locator::gameEndSystem::has_value())
+		{
+			Locator::gameEndSystem::value().AddToCondition(after, game_end::Condition::VillagersConverted, 1);
+		}
 		return true;
 	}
 	case FromVortex:
@@ -671,31 +679,23 @@ bool LandingStateIsThere(VillagerStates state)
 	}
 }
 
-/// The first person in the player's hand, or the one under the hand when it holds no one
+/// The disciple in the hand of the player at this computer, or the disciple under the pointer of this computer (see
+/// disciple_symbol::Shown)
 std::optional<entt::entity> PersonShown()
 {
-	auto& registry = Entities();
-	std::optional<entt::entity> shown;
-	registry.Each<const HandGrab>([&shown, &registry](const HandGrab& grab) {
-		if (grab.object != entt::null && registry.Valid(grab.object) && registry.AllOf<Villager, Disciple>(grab.object))
-		{
-			shown = grab.object;
-		}
-	});
-	if (!shown.has_value() && Locator::pickingSystem::has_value())
+	if (!Locator::handSystem::has_value())
 	{
-		const auto hovered = Locator::pickingSystem::value().GetPick().object;
-		if (hovered.has_value() && registry.Valid(*hovered) && registry.AllOf<Villager, Disciple>(*hovered))
-		{
-			shown = hovered;
-		}
+		return std::nullopt;
 	}
-	return shown;
+	const auto hands = Locator::handSystem::value().GetOwnHands();
+	const auto underPointer =
+	    Locator::pickingSystem::has_value() ? Locator::pickingSystem::value().GetPick().object : std::nullopt;
+	return disciple_symbol::Shown(Entities(), hands, underPointer);
 }
 
-entt::entity MakeMark(entt::entity villager, bool symbol)
+/// A mark is a thing of the drawn registry, over a villager of the land
+entt::entity MakeMark(ecs::Registry& registry, entt::entity villager, bool symbol)
 {
-	auto& registry = Entities();
 	const auto sheet = symbol ? k_SymbolSheet : k_GlowSheet;
 	const auto alpha = symbol ? k_SymbolSheetAlpha : k_GlowSheetAlpha;
 	const auto entity = registry.Create();
@@ -776,7 +776,7 @@ void villager_disciple::PutDown(entt::entity villager, std::optional<PlayerNames
 	{
 		return;
 	}
-	if (!Locator::helpSpeechSystem::has_value() || !Locator::audio::has_value() || !Locator::alignmentSystem::has_value())
+	if (!Locator::helpSpeechSystem::has_value() || !Locator::sounds::has_value() || !Locator::alignmentSystem::has_value())
 	{
 		return;
 	}
@@ -791,7 +791,7 @@ void villager_disciple::PutDown(entt::entity villager, std::optional<PlayerNames
 	                    *sample, sound.has_value() ? "found" : "missing");
 	if (sound.has_value() && Locator::resources::value().GetSounds().Contains(*sound))
 	{
-		Locator::audio::value().StartSoundEffect(
+		Locator::sounds::value().StartSoundEffect(
 		    *sound, {.pitchPercent = k_MadePitch, .volume = k_MadeVolume, .voicePlayType = pack::AudioBankLoop::Once});
 	}
 }
@@ -801,7 +801,7 @@ uint32_t villager_disciple::InHand(LivingAction& action)
 	const auto villager = EntityOf(action);
 	auto& registry = Entities();
 	auto* held = registry.TryGet<DiscipleHeld>(villager);
-	if (held == nullptr || !disciple::LooksForWorkWhileHeld(registry.AllOf<HeldByCreature>(villager)))
+	if (held == nullptr || !disciple::LooksForWorkWhileHeld(ecs::creature_carried::CarrierOf(registry, villager).has_value()))
 	{
 		return 1;
 	}
@@ -1100,11 +1100,12 @@ uint32_t villager_disciple::GlowFrame(uint64_t gameMilliseconds)
 
 void villager_disciple::UpdateMarks()
 {
-	if (!Locator::entitiesRegistry::has_value() || !Locator::resources::has_value())
+	if (!Locator::entitiesRegistry::has_value() || !Locator::drawnRegistry::has_value() || !Locator::resources::has_value())
 	{
 		return;
 	}
 	auto& registry = Entities();
+	auto& marks = Locator::drawnRegistry::value();
 	const auto& textures = Locator::resources::value().GetTextures();
 	if (!textures.Contains(k_GlowSheet.value()) || !textures.Contains(k_GlowSheetAlpha.value()) ||
 	    !textures.Contains(k_SymbolSheet.value()) || !textures.Contains(k_SymbolSheetAlpha.value()))
@@ -1125,7 +1126,7 @@ void villager_disciple::UpdateMarks()
 	// Marks of villagers gone or no longer glowing go
 	std::vector<entt::entity> gone;
 	std::optional<entt::entity> symbolMark;
-	registry.Each<const DiscipleMark>([&](entt::entity mark, const DiscipleMark& of) {
+	marks.Each<const DiscipleMark>([&](entt::entity mark, const DiscipleMark& of) {
 		if (of.symbol)
 		{
 			symbolMark = mark;
@@ -1138,7 +1139,7 @@ void villager_disciple::UpdateMarks()
 	});
 	for (const auto mark : gone)
 	{
-		registry.Destroy(mark);
+		marks.Destroy(mark);
 	}
 	std::vector<entt::entity> glowing;
 	registry.Each<const Disciple>([&glowing](entt::entity villager, const Disciple& disciple) {
@@ -1148,7 +1149,7 @@ void villager_disciple::UpdateMarks()
 		}
 	});
 	std::vector<entt::entity> marked;
-	registry.Each<const DiscipleMark>([&marked](const DiscipleMark& of) {
+	marks.Each<const DiscipleMark>([&marked](const DiscipleMark& of) {
 		if (!of.symbol)
 		{
 			marked.push_back(of.villager);
@@ -1158,13 +1159,13 @@ void villager_disciple::UpdateMarks()
 	{
 		if (std::ranges::find(marked, villager) == marked.end())
 		{
-			MakeMark(villager, false);
+			MakeMark(marks, villager, false);
 		}
 	}
 
 	// Each glow over its villager's head, the size of the villager, its puffs turning; none while the villager is out of
 	// sight
-	registry.Each<const DiscipleMark, Sprite, Transform>(
+	marks.Each<const DiscipleMark, Sprite, Transform>(
 	    [&registry, frame](const DiscipleMark& of, Sprite& sprite, Transform& transform) {
 		    if (of.symbol)
 		    {
@@ -1186,12 +1187,12 @@ void villager_disciple::UpdateMarks()
 	{
 		if (symbolMark.has_value())
 		{
-			registry.Get<Transform>(*symbolMark).scale = glm::vec3(0.0f);
+			marks.Get<Transform>(*symbolMark).scale = glm::vec3(0.0f);
 		}
 		return;
 	}
-	const auto mark = symbolMark.value_or(entt::null) != entt::null ? *symbolMark : MakeMark(*shown, true);
-	auto& transform = registry.Get<Transform>(mark);
+	const auto mark = symbolMark.value_or(entt::null) != entt::null ? *symbolMark : MakeMark(marks, *shown, true);
+	auto& transform = marks.Get<Transform>(mark);
 	const auto& body = registry.Get<const Transform>(*shown);
 	transform.position = body.position + glm::vec3(0.0f, body.scale.x + (body.scale.x * k_SymbolRise), 0.0f);
 	float size = k_LeastSpriteSize;
@@ -1202,6 +1203,6 @@ void villager_disciple::UpdateMarks()
 		size = disciple::SymbolSize(distance, screen.x, screen.y);
 	}
 	transform.scale = glm::vec3(size, size, 1.0f);
-	registry.Get<Sprite>(mark).uvMin = CellUv(*cell);
-	registry.Get<DiscipleMark>(mark).villager = *shown;
+	marks.Get<Sprite>(mark).uvMin = CellUv(*cell);
+	marks.Get<DiscipleMark>(mark).villager = *shown;
 }

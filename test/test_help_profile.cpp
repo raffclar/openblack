@@ -7,6 +7,9 @@
  * openblack is licensed under the GNU General Public License version 3.
  *******************************************************************************/
 
+#include <cstdint>
+
+#include <bit>
 #include <optional>
 #include <vector>
 
@@ -63,6 +66,25 @@ TEST(HelpProfile, TheClockRunsATenthOfASecondATurn)
 	profile.EndTurn();
 	profile.EndTurn();
 	EXPECT_EQ(profile.Clock(), 200u);
+}
+
+TEST(HelpProfile, ANewLandStartsTheClockAgainAndKeepsTheCounts)
+{
+	HelpProfile profile;
+	profile.Trigger(k_TapWithText);
+	for (int turn = 0; turn < 30; ++turn)
+	{
+		profile.EndTurn();
+	}
+	EXPECT_EQ(profile.Clock(), 3000u);
+	profile.ResetClock();
+	EXPECT_EQ(profile.Clock(), 0u);
+	EXPECT_EQ(profile.Count(k_TapWithText).Total(), 1u);
+	// The time of the tap is ahead of the new clock: nothing has passed since it, and it is pulled back
+	EXPECT_FLOAT_EQ(profile.Count(k_TapWithText).SecondsSince(profile.Clock()), 0.0f);
+	profile.EndTurn();
+	EXPECT_EQ(profile.Clock(), 100u);
+	EXPECT_FLOAT_EQ(profile.Count(k_TapWithText).SecondsSince(profile.Clock()), 0.1f);
 }
 
 TEST(HelpProfile, SecondsSinceTheLastTime)
@@ -125,6 +147,22 @@ TEST(HelpProfile, AClockBehindTheTimesReadsNothing)
 	EXPECT_FLOAT_EQ(count.PerSecond(500), 0.0f);
 	EXPECT_FLOAT_EQ(count.SecondsSince(1500), 1.0f);
 	EXPECT_FLOAT_EQ(count.PerSecond(1500), 1.0f);
+}
+
+TEST(HelpProfile, AnEventThatNeverHappenedReadsTheExactZero)
+{
+	EXPECT_EQ(std::bit_cast<uint32_t>(k_SecondsSinceNever), 0x00000000U);
+	EventCount count;
+	EXPECT_EQ(std::bit_cast<uint32_t>(count.SecondsSince(5000)), std::bit_cast<uint32_t>(k_SecondsSinceNever));
+}
+
+TEST(HelpProfile, TheSecondsSinceRoundTheWholeMillisecondsOneTime)
+{
+	EXPECT_EQ(std::bit_cast<uint32_t>(k_SecondsPerMillisecond), 0x3A83126FU);
+	EventCount count;
+	count.Trigger(0);
+	// 2^24 + 1 milliseconds: a float of the count first and then the product gives 0x4683126F
+	EXPECT_EQ(std::bit_cast<uint32_t>(count.SecondsSince(16777217U)), 0x46831270U);
 }
 
 TEST(HelpProfile, TheSmoothedRateFollowsTheTurnsItHappensOn)

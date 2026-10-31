@@ -40,17 +40,18 @@
 #include "ECS/Components/Town.h"
 #include "ECS/Components/Transform.h"
 #include "ECS/Components/WorshipSite.h"
+#include "ECS/PlayerColour.h"
 #include "ECS/Registry.h"
 #include "ECS/RewardOpening.h"
 #include "ECS/Systems/AlignmentSystemInterface.h"
 #include "ECS/Systems/HandSystemInterface.h"
 #include "ECS/Systems/MiracleFxSystemInterface.h"
+#include "ECS/Systems/ObjectDrawListSystemInterface.h"
 #include "ECS/Systems/RenderingSystemInterface.h"
 #include "ECS/WorldObjects.h"
 #include "FileSystem/FileSystemInterface.h"
 #include "Graphics/InstanceDesc.h"
 #include "Graphics/ShaderManager.h"
-#include "Graphics/TexelDepth.h"
 #include "Graphics/Texture2D.h"
 #include "Graphics/ViewFrustum.h"
 #include "Graphics/ZSort.h"
@@ -61,6 +62,7 @@
 #include "Renderer.h"
 #include "Resources/ResourceManager.h"
 #include "Resources/ResourcesInterface.h"
+#include "Visual/TexelDepth.h"
 
 using namespace openblack;
 using namespace openblack::graphics;
@@ -72,7 +74,7 @@ namespace
 uint32_t OwnColour()
 {
 	const auto own = Locator::handSystem::has_value() ? Locator::handSystem::value().GetOwnPlayer() : PlayerNames::PLAYER_ONE;
-	return ecs::components::Player::k_Colours.at(static_cast<size_t>(own));
+	return player_colour::Of(own);
 }
 constexpr float k_ByteMax = 255.0f;
 /// The freeze phial's creature takes its spell in this way
@@ -127,12 +129,14 @@ void Renderer::DrawSeedModel(const DrawSceneDesc& desc, const SeedModelDraw& sho
 			}
 		}
 		const float pulse = visuals::PhialPulse(shown.phialPhase);
-		// Any other seed is drawn once, whole and lit by the land
-		static constexpr std::array<visuals::PhialDraw, 1> k_WholeDraw {{{.size = 1.0f, .alpha = 255, .landLit = true}}};
+		// A seed that is not a phial takes the light of the land, unless it is drawn at once. A seed drawn at once has the
+		// alpha that it is drawn at. A phial is lit and faded in the same way when it is drawn at once.
+		const uint8_t seedAlpha = shown.drawnAtOnce ? shown.phialAlpha : std::numeric_limits<uint8_t>::max();
+		const std::array<visuals::PhialDraw, 1> wholeDraw {{{.size = 1.0f, .alpha = seedAlpha, .landLit = !shown.drawnAtOnce}}};
 		const auto phialDraws = phial ? visuals::PhialDraws(receiveType, shown.phialPhase, pulse, shown.phialAlpha)
 		                              : std::vector<visuals::PhialDraw> {};
 		const auto draws =
-		    phial ? std::span<const visuals::PhialDraw>(phialDraws) : std::span<const visuals::PhialDraw>(k_WholeDraw);
+		    phial ? std::span<const visuals::PhialDraw>(phialDraws) : std::span<const visuals::PhialDraw>(wholeDraw);
 		const auto shape = phial ? visuals::PhialScale(receiveType, shown.phialPhase) : glm::vec3(1.0f);
 		const bool environmentMapped = environment != nullptr && (phial || shown.seed == SpellSeedType::Food);
 		const bool added = shown.seed == k_AddedSeed;
@@ -288,7 +292,13 @@ void Renderer::DrawGlobes(const DrawSceneDesc& desc) const
 	// A globe nobody owns shows its rings in the colour of the player at this computer
 	const auto ringColour = ColourOf(OwnColour());
 
-	desc.entities.Each<const OneOffSpellSeed, const Transform>([&](const OneOffSpellSeed& globe, const Transform& transform) {
+	// Of the globes on the land's blocks only those that the land's draw list draws show
+	const auto* drawList = Locator::objectDrawListSystem::has_value() ? &Locator::objectDrawListSystem::value() : nullptr;
+	const auto drawGlobe = [&](entt::entity entity, const OneOffSpellSeed& globe, const Transform& transform) {
+		if (drawList != nullptr && !drawList->Drawn(desc.entities, entity))
+		{
+			return;
+		}
 		const float scale = transform.scale.x * visuals::k_GlobeSeedScale;
 
 		// The miracle's seed spinning inside, below the middle, for the seeds that show one. Nobody owns a globe, and
@@ -356,7 +366,8 @@ void Renderer::DrawGlobes(const DrawSceneDesc& desc) const
 				DrawMesh(*ring, submitDesc, std::numeric_limits<uint8_t>::max());
 			}
 		}
-	});
+	};
+	desc.entities.Each<const OneOffSpellSeed, const Transform>(drawGlobe);
 }
 
 void Renderer::DrawRewardSeeds(const DrawSceneDesc& desc) const
@@ -470,7 +481,7 @@ void Renderer::DrawIconSeeds(const DrawSceneDesc& desc) const
 		{
 			return;
 		}
-		const auto colour = ColourOf(ecs::components::Player::k_Colours.at(static_cast<size_t>(player)));
+		const auto colour = ColourOf(player_colour::Of(player));
 		const float alpha = static_cast<float>(magic::visuals::RingAlpha(std::numeric_limits<uint8_t>::max())) / k_ByteMax;
 		for (int i = 0; i < rings; ++i)
 		{

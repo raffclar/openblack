@@ -12,7 +12,9 @@
 #include <cstddef>
 #include <cstdint>
 
+#include <bitset>
 #include <optional>
+#include <span>
 #include <vector>
 
 #include <entt/entity/entity.hpp>
@@ -107,18 +109,25 @@ inline constexpr uint32_t k_CameraTurns = k_TurnsPerSecond * 10;
 [[nodiscard]] glm::vec3 HandPoint(const map_coords::MapCoords& place, float ground);
 /// Whether the hand is near the point of a dance. The squares add in the game's order: z, then y, then x.
 [[nodiscard]] bool HandNear(const glm::vec3& point, const glm::vec3& hand);
-/// The hand was near the dance in this turn, or it was not. A count of more than k_CameraTurns turns in a row makes the
-/// dance want its camera. A turn with the hand away sets the count to 0.
-void CountHand(components::Dance& dance, bool near);
+/// The gods whose hand is near a dance in a turn, one bit for each god in the order of the players
+using HandsNear = std::bitset<components::k_DanceHandGods>;
+
+/// The gods whose hand is near the point of a dance. A god with no hand on the land is not near.
+[[nodiscard]] HandsNear GodsNear(const glm::vec3& point,
+                                 std::span<const std::optional<glm::vec3>, components::k_DanceHandGods> hands);
+
+/// The hand of a god was near the dance in this turn, or it was not. A count of more than k_CameraTurns turns in a row
+/// makes the dance want its camera for that god. A turn with the hand away sets the count to 0.
+void CountHand(components::DanceHand& hand, bool near);
 
 /// One game turn of the dance:
 /// - A stopped dance that starts by itself starts again when its dancers have come.
 /// - A dance that lasts a time stops when the time is over.
-/// - While it dances with dancers, it counts the turns that the hand is near.
+/// - While it dances with dancers, it counts the turns that the hand of each god is near.
 /// - While it dances with dancers, it does the key frame due on its clock, and each group's move continues.
 /// - Its clock goes forward, and it starts again at the end of the loop.
 /// The groups that started a move, whose dancers each play their clip again.
-std::vector<std::size_t> ProcessTurn(components::Dance& dance, uint32_t turn, bool handNear = false);
+std::vector<std::size_t> ProcessTurn(components::Dance& dance, uint32_t turn, const HandsNear& handsNear = {});
 
 /// How far east of a dance's place a walk to the dance ends, in the map's fixed units: 5 m
 inline constexpr int32_t k_ArriveEast = 0x8000;

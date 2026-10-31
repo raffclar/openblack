@@ -13,14 +13,20 @@
 
 #include <iterator>
 #include <optional>
+#include <string_view>
 #include <tuple>
 #include <type_traits>
 #include <utility>
 #include <variant>
 #include <vector>
 
-#include "3D/GripLandscapeEffect.h"
+#include <spdlog/spdlog.h>
+
+#include "Creature/ClanCreatureOrder.h"
+#include "Creature/CreatureFileLoad.h"
+#include "Creature/LeashReport.h"
 #include "ECS/Components/Creature.h"
+#include "ECS/Components/CreatureLeash.h"
 #include "ECS/Components/LeftGame.h"
 #include "ECS/Components/MagicFireBall.h"
 #include "ECS/Components/Player.h"
@@ -29,18 +35,28 @@
 #include "ECS/ProfileAlignment.h"
 #include "ECS/Registry.h"
 #include "ECS/Statistics.h"
+#include "ECS/Systems/ChatSystemInterface.h"
 #include "ECS/Systems/ComputerPlayerSystemInterface.h"
 #include "ECS/Systems/CreatureCarryOverSystemInterface.h"
 #include "ECS/Systems/CreatureFightSystemInterface.h"
 #include "ECS/Systems/CreatureHandSystemInterface.h"
 #include "ECS/Systems/CreatureMindSystemInterface.h"
+#include "ECS/Systems/CreatureSkinSystemInterface.h"
+#include "ECS/Systems/EffectRequestSystemInterface.h"
 #include "ECS/Systems/HandGrabSystemInterface.h"
 #include "ECS/Systems/HandSystemInterface.h"
+#include "ECS/Systems/HelpMessageSystemInterface.h"
+#include "ECS/Systems/HelpProfileSystemInterface.h"
+#include "ECS/Systems/HelpTextSystemInterface.h"
 #include "ECS/Systems/LeashSystemInterface.h"
 #include "ECS/Systems/MagicSystemInterface.h"
+#include "ECS/Systems/MusicMoodSystemInterface.h"
+#include "ECS/Systems/SaveGameSystemInterface.h"
 #include "ECS/Systems/SpellIconSystemInterface.h"
 #include "ECS/Systems/TimeSystemInterface.h"
 #include "ECS/Systems/VillageTotemSystemInterface.h"
+#include "ECS/Systems/WorshipSiteSystemInterface.h"
+#include "Input/LocalPlayer.h"
 #include "Locator.h"
 
 using namespace openblack::ecs::systems;
@@ -48,6 +64,105 @@ using namespace openblack::player_commands;
 
 namespace
 {
+/// The help and the saves of this computer are for the god of this computer only. In a network game, this is the god
+/// of the slot of this computer. The game server has no such god.
+bool PlayerOfThisComputer(openblack::PlayerNames player)
+{
+	return openblack::input::IsLocalPlayer(
+	    openblack::Locator::handSystem::has_value() ? &openblack::Locator::handSystem::value() : nullptr, player);
+}
+
+/// The words of the leash report for a command that can change the leash of the player's creature, or none for
+/// another command
+std::optional<std::string_view> LeashCommandWords(const Action& action)
+{
+	return std::visit(
+	    [](const auto& command) -> std::optional<std::string_view> {
+		    using Kind = std::decay_t<decltype(command)>;
+		    if constexpr (std::is_same_v<Kind, LeashKey>)
+		    {
+			    switch (command.key)
+			    {
+			    case openblack::creature_leash::LeashKey::Leash:
+				    return "presses the leash key";
+			    case openblack::creature_leash::LeashKey::PreviousLeash:
+				    return "presses the previous leash key";
+			    case openblack::creature_leash::LeashKey::NextLeash:
+				    return "presses the next leash key";
+			    }
+			    return "presses a leash key";
+		    }
+		    else if constexpr (std::is_same_v<Kind, LeashTap>)
+		    {
+			    return "taps a creature";
+		    }
+		    else if constexpr (std::is_same_v<Kind, LeashOrder>)
+		    {
+			    return "gives a leash order";
+		    }
+		    else if constexpr (std::is_same_v<Kind, LeashPostTap>)
+		    {
+			    return "taps a leash post";
+		    }
+		    else if constexpr (std::is_same_v<Kind, LeashPick>)
+		    {
+			    return "picks a leash";
+		    }
+		    else if constexpr (std::is_same_v<Kind, HandShakeOff>)
+		    {
+			    return "shakes the hand";
+		    }
+		    else if constexpr (std::is_same_v<Kind, IconChargeStop>)
+		    {
+			    return "stops the charge of an icon";
+		    }
+		    else if constexpr (std::is_same_v<Kind, TempleLeashOff>)
+		    {
+			    return "goes into the temple";
+		    }
+		    else if constexpr (std::is_same_v<Kind, LeashLength>)
+		    {
+			    return "lets go of the rope";
+		    }
+		    else
+		    {
+			    return std::nullopt;
+		    }
+	    },
+	    action);
+}
+
+/// Write the leash of the player's creature after a leash command to the log. Each computer writes the same line for
+/// the same command, so that a network check can compare the leash on the server and on each client.
+void LogLeashCommand(openblack::PlayerNames player, std::string_view words, uint32_t turn)
+{
+	const auto logger = spdlog::get("game");
+	if (logger == nullptr || !openblack::Locator::leashSystem::has_value())
+	{
+		return;
+	}
+	openblack::creature_leash::CommandReport report {
+	    .player = static_cast<uint32_t>(player),
+	    .command = words,
+	    .turn = turn,
+	};
+	if (const auto creature = openblack::Locator::leashSystem::value().PlayersCreature(player); creature.has_value())
+	{
+		report.creature = entt::to_integral(*creature);
+		const auto* leashes =
+		    openblack::Locator::entitiesRegistry::value().TryGet<const openblack::ecs::components::CreatureLeash>(*creature);
+		if (leashes != nullptr && leashes->worn.has_value())
+		{
+			const auto& worn = *leashes->worn;
+			report.worn = openblack::creature_leash::WornReport {
+			    .type = worn.type,
+			    .holder = static_cast<uint32_t>(worn.holder),
+			    .tiedTo = worn.tiedTo.has_value() ? std::optional(entt::to_integral(*worn.tiedTo)) : std::nullopt,
+			};
+		}
+	}
+	SPDLOG_LOGGER_INFO(logger, "{}", openblack::creature_leash::ReportLine(report));
+}
 
 /// Do one command for the player that sent it, at a turn
 void Run(const Command& command, uint32_t turn)
@@ -114,7 +229,7 @@ void Run(const Command& command, uint32_t turn)
 			    }
 			    else
 			    {
-				    hand.DoGive(command.player, action.creature, action.object);
+				    hand.DoGive(command.player, action.creature, action.object, action.leftHand);
 			    }
 		    }
 		    else if constexpr (std::is_same_v<Kind, LeashOrder>)
@@ -154,7 +269,21 @@ void Run(const Command& command, uint32_t turn)
 		    }
 		    else if constexpr (std::is_same_v<Kind, GripDust>)
 		    {
-			    openblack::GripLandscapeEffect::Spawn(action.point);
+			    // The puff of dust is the spot visual of a grip of the land. Each computer and the game server make it at the
+			    // same turn, so its random numbers come from the shared seed.
+			    if (openblack::Locator::effectRequestSystem::has_value())
+			    {
+				    openblack::Locator::effectRequestSystem::value().Show(
+				        {.type = openblack::SpotVisualType::GripLandscape, .position = action.point});
+			    }
+		    }
+		    else if constexpr (std::is_same_v<Kind, ChatSpeech> || std::is_same_v<Kind, ChatTaunt>)
+		    {
+			    // A line of the chat changes nothing of the synced world
+			    if (openblack::Locator::chatSystem::has_value())
+			    {
+				    openblack::Locator::chatSystem::value().Receive(command.player, action);
+			    }
 		    }
 		    else if constexpr (std::is_same_v<Kind, HandClick>)
 		    {
@@ -276,6 +405,37 @@ void Run(const Command& command, uint32_t turn)
 				    openblack::Locator::handSystem::value().Report(command.player, action);
 			    }
 		    }
+		    else if constexpr (std::is_same_v<Kind, ViewReport>)
+		    {
+			    if (openblack::Locator::handSystem::has_value())
+			    {
+				    openblack::Locator::handSystem::value().ReportView(command.player, action);
+			    }
+		    }
+		    else if constexpr (std::is_same_v<Kind, HelpReport>)
+		    {
+			    // Only the computer of the player counts what the player did
+			    if (openblack::Locator::helpProfileSystem::has_value() && PlayerOfThisComputer(command.player))
+			    {
+				    openblack::Locator::helpProfileSystem::value().DoReport(action);
+			    }
+		    }
+		    else if constexpr (std::is_same_v<Kind, DialogueClick>)
+		    {
+			    // The dialogue of the help texts is of this computer: only the computer of the player takes the click
+			    if (openblack::Locator::helpTextSystem::has_value() && PlayerOfThisComputer(command.player))
+			    {
+				    openblack::Locator::helpTextSystem::value().TakeClick(action.click, action.skipKey);
+			    }
+		    }
+		    else if constexpr (std::is_same_v<Kind, HelpQuery>)
+		    {
+			    // Only the computer of the player says the help
+			    if (openblack::Locator::helpMessageSystem::has_value() && PlayerOfThisComputer(command.player))
+			    {
+				    openblack::Locator::helpMessageSystem::value().DoHelpQuery(action);
+			    }
+		    }
 		    else if constexpr (std::is_same_v<Kind, PlayerJoined>)
 		    {
 			    // The god of the player gets hands of its own
@@ -332,14 +492,11 @@ void Run(const Command& command, uint32_t turn)
 		    }
 		    else if constexpr (std::is_same_v<Kind, LeashPick>)
 		    {
-			    // The creature of the player changes to the leash that the picker chose, if it knows that leash
+			    // The creature of the player changes to the leash that the picker chose, if it knows that leash and no
+			    // nice or nasty spell is on it
 			    if (openblack::Locator::leashSystem::has_value())
 			    {
-				    auto& leashes = openblack::Locator::leashSystem::value();
-				    if (const auto creature = leashes.PlayersCreature(command.player); creature.has_value())
-				    {
-					    leashes.ChangeType(*creature, action.type);
-				    }
+				    openblack::Locator::leashSystem::value().PickType(command.player, action.type);
 			    }
 		    }
 		    else if constexpr (std::is_same_v<Kind, HandShakeOff>)
@@ -349,15 +506,88 @@ void Run(const Command& command, uint32_t turn)
 				    openblack::Locator::handGrabSystem::value().DoShakeOff(command.player);
 			    }
 		    }
+		    else if constexpr (std::is_same_v<Kind, IconChargeStop>)
+		    {
+			    // The icon at the sites of the player's temple that started its charge for the hand last stops it
+			    if (openblack::Locator::spellIconSystem::has_value() && openblack::Locator::worshipSiteSystem::has_value())
+			    {
+				    const auto temple = openblack::Locator::worshipSiteSystem::value().TempleOf(command.player);
+				    std::ignore = openblack::Locator::spellIconSystem::value().CancelLatestChargeFor(temple, command.player);
+			    }
+		    }
+		    else if constexpr (std::is_same_v<Kind, CreatureFightCheat>)
+		    {
+			    if (openblack::Locator::creatureFightSystem::has_value())
+			    {
+				    openblack::Locator::creatureFightSystem::value().DoFightCheat(command.player);
+			    }
+		    }
+		    else if constexpr (std::is_same_v<Kind, TempleLeashOff>)
+		    {
+			    // The player went into their temple: the turn checks again that the player holds the leash
+			    if (openblack::Locator::leashSystem::has_value())
+			    {
+				    openblack::Locator::leashSystem::value().TakeOffAtTemple(command.player);
+			    }
+		    }
 		    else if constexpr (std::is_same_v<Kind, LeashPostTap>)
 		    {
 			    if (openblack::Locator::leashSystem::has_value() && registry.Valid(action.post))
 			    {
-				    openblack::Locator::leashSystem::value().TapPost(action.post);
+				    openblack::Locator::leashSystem::value().TapPost(command.player, action.post);
+			    }
+		    }
+		    else if constexpr (std::is_same_v<Kind, GiveCallOff>)
+		    {
+			    if (openblack::Locator::handGrabSystem::has_value())
+			    {
+				    openblack::Locator::handGrabSystem::value().DoGiveCallOff(command.player, action.creature);
+			    }
+		    }
+		    else if constexpr (std::is_same_v<Kind, CreatureTattoo>)
+		    {
+			    if (openblack::Locator::creatureSkinSystem::has_value() && registry.Valid(action.creature))
+			    {
+				    openblack::Locator::creatureSkinSystem::value().DoTattoo(command.player, action);
+			    }
+		    }
+		    else if constexpr (std::is_same_v<Kind, LeashLength>)
+		    {
+			    if (openblack::Locator::leashSystem::has_value())
+			    {
+				    openblack::Locator::leashSystem::value().DoLeashLength(command.player, action.length);
+			    }
+		    }
+		    else if constexpr (std::is_same_v<Kind, QuickSave> || std::is_same_v<Kind, QuickLoad>)
+		    {
+			    // Only the player of this computer saves or loads the games of this computer
+			    if (!openblack::Locator::saveGameSystem::has_value() || !PlayerOfThisComputer(command.player))
+			    {
+				    return;
+			    }
+			    auto& saves = openblack::Locator::saveGameSystem::value();
+			    if constexpr (std::is_same_v<Kind, QuickSave>)
+			    {
+				    std::ignore = saves.DoQuickSave();
+			    }
+			    else
+			    {
+				    saves.DoQuickLoad();
+			    }
+		    }
+		    else if constexpr (std::is_same_v<Kind, MusicMood>)
+		    {
+			    if (openblack::Locator::musicMoodSystem::has_value())
+			    {
+				    openblack::Locator::musicMoodSystem::value().DoMusicMood(action);
 			    }
 		    }
 	    },
 	    command.action);
+	if (const auto words = LeashCommandWords(command.action); words.has_value())
+	{
+		LogLeashCommand(command.player, *words, turn);
+	}
 }
 
 } // namespace
@@ -397,23 +627,46 @@ void PlayerCommandSystem::RunSent(uint32_t turn)
 	{
 		_listener(turn, commands);
 	}
+	// The humans of the network session join at the start of the game, before all other work of the turn: each gets its
+	// hands, then the slots with no player fill. The game knows its humans and its computer gods before its first turn,
+	// so each command of the first turn finds them in the game.
 	std::vector<PlayerNames> joined;
 	for (const auto& command : commands)
 	{
-		Run(command, turn);
 		if (std::holds_alternative<PlayerJoined>(command.action))
 		{
+			Run(command, turn);
 			joined.push_back(command.player);
 		}
 	}
-	// The humans of the network session joined at the start of the game: each gets its player, and the slots with no
-	// player fill
 	if (!joined.empty() && openblack::Locator::computerPlayerSystem::has_value())
 	{
 		openblack::Locator::computerPlayerSystem::value().HumansJoined(joined);
 	}
+	for (const auto& command : commands)
+	{
+		if (!std::holds_alternative<PlayerJoined>(command.action))
+		{
+			Run(command, turn);
+		}
+	}
 	StartGodsAtSentAlignments(joined);
 	BringCreatures(joined);
+	// The creature of a skirmish comes after the commands of the turn, before the computer gods start
+	if (std::exchange(_playersCreatureDue, false) && _source == nullptr)
+	{
+		BringPlayersCreature();
+	}
+}
+
+void PlayerCommandSystem::BringPlayersCreature()
+{
+	if (!openblack::Locator::creatureCarryOverSystem::has_value())
+	{
+		return;
+	}
+	auto& carryOver = openblack::Locator::creatureCarryOverSystem::value();
+	openblack::ecs::creature_from_file::BringKept(_sender, carryOver.KeptOrRead());
 }
 
 void PlayerCommandSystem::StartGodsAtSentAlignments(std::span<const PlayerNames> joined)
@@ -436,7 +689,7 @@ void PlayerCommandSystem::BringCreatures(std::span<const PlayerNames> joined)
 		return;
 	}
 	// After the slots with no player filled, the god of each human brings the creature that its player sent before the
-	// start, in the order of the joins
+	// start, in the order of the joins. Start data that holds the order to make a new clan creature makes that creature.
 	for (const auto god : joined)
 	{
 		const auto file = _source->StartCreatureFile(god);
@@ -444,10 +697,15 @@ void PlayerCommandSystem::BringCreatures(std::span<const PlayerNames> joined)
 		{
 			continue;
 		}
-		const auto brought = openblack::ecs::creature_from_file::Bring(god, file);
-		// Only the creature of this computer's own god came from this player's files
-		if (brought.creature.has_value() && _source->OwnGod() == god &&
-		    openblack::Locator::creatureCarryOverSystem::has_value())
+		const auto clanOrder = openblack::clan_creature_order::Read(file);
+		const auto brought = clanOrder.has_value() ? openblack::ecs::creature_from_file::BringClanOrder(god, *clanOrder)
+		                                           : openblack::ecs::creature_from_file::Bring(god, file);
+		// Only the creature of this computer's own god came from this player's files, and only with no clan
+		const auto kept =
+		    openblack::creature_file_load::KeptByThisComputer({.ownGod = _source->OwnGod() == god,
+		                                                       .clanOrder = clanOrder.has_value(),
+		                                                       .ownGodPlaysForClan = _source->OwnGodPlaysForClan()});
+		if (brought.creature.has_value() && kept && openblack::Locator::creatureCarryOverSystem::has_value())
 		{
 			openblack::Locator::creatureCarryOverSystem::value().SetBroughtCreature(*brought.creature);
 		}

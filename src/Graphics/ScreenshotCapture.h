@@ -25,7 +25,8 @@
 #include <glm/vec2.hpp>
 
 #include "GraphicsHandle.h"
-#include "RenderPass.h"
+#include "Visual/RenderPass.h"
+#include "Visual/ScreenView.h"
 
 namespace openblack::graphics
 {
@@ -59,6 +60,8 @@ enum class WindowBuffers : uint8_t
 	DroppedWhenMinimised,
 	/// Only the pixels that no other window covers; the other pixels have no defined value (OpenGL)
 	UncoveredOnly,
+	/// No buffer after the browser shows the frame: the browser gives the canvas a new texture for each frame (WebGPU)
+	ReleasedAfterPresent,
 };
 
 /// How to read a picture of the frame being made: from the screen when the window's buffers hold the whole frame now,
@@ -81,20 +84,6 @@ private:
 	std::unordered_map<std::string, std::string> _failures;
 };
 
-/// A frame as the renderer reads it back: BGRA8 pixels, rows pitch bytes apart, the bottom row first when yflip. The
-/// pixels stay valid only while the function that gets the view runs.
-struct ScreenView
-{
-	uint32_t width {0};
-	uint32_t height {0};
-	uint32_t pitch {0};
-	bool yflip {false};
-	std::span<const uint8_t> bgra;
-};
-
-/// Makes a picture from a frame. The renderer calls it on its own thread, so it must not use the game's data.
-using ScreenPicturer = std::function<std::vector<uint8_t>(const ScreenView& screen)>;
-
 /// The pictures that the game asks for in memory, by the name it asks under (a name that starts with k_Prefix). The
 /// renderer makes each picture from the frame when it reads the frame. Thus it does not copy the full frame, and the
 /// game thread does not read it.
@@ -102,7 +91,7 @@ class ScreenPictures
 {
 public:
 	/// The renderer keeps a picture in memory when it reads the frame for a path that starts with this
-	static constexpr std::string_view k_Prefix = "memory:";
+	static constexpr std::string_view k_Prefix = k_ScreenPicturePrefix;
 	[[nodiscard]] static bool InMemory(std::string_view path) { return path.starts_with(k_Prefix); }
 
 	/// Keeps the function that makes the picture for a name, until the frame for it is read
@@ -143,6 +132,11 @@ public:
 	                                              RenderPass::GestureHintCollar0,
 	                                              RenderPass::GestureHintCollar1,
 	                                              RenderPass::GestureHintCollar2,
+	                                              RenderPass::GestureHintSeed0,
+	                                              RenderPass::GestureHintSeed1,
+	                                              RenderPass::GestureHintSeed2,
+	                                              RenderPass::GestureHintSeed3,
+	                                              RenderPass::GestureHintSeed4,
 	                                              RenderPass::GestureHints,
 	                                              RenderPass::CinemaBars,
 	                                              RenderPass::Advisors,

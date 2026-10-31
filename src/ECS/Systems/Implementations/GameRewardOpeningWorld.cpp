@@ -12,6 +12,9 @@
 #include "GameRewardOpeningWorld.h"
 
 #include <algorithm>
+#include <iterator>
+#include <optional>
+#include <vector>
 
 #include <spdlog/spdlog.h>
 
@@ -22,11 +25,12 @@
 #include "ECS/Components/Town.h"
 #include "ECS/Components/Transform.h"
 #include "ECS/PlayerMiracles.h"
+#include "ECS/PlayerTowns.h"
 #include "ECS/Registry.h"
 #include "ECS/Systems/AlignmentSystemInterface.h"
+#include "ECS/Systems/EffectRequestSystemInterface.h"
 #include "ECS/Systems/GestureSystemInterface.h"
 #include "ECS/Systems/MagicSystemInterface.h"
-#include "ECS/Systems/ParticleSystemInterface.h"
 #include "ECS/Systems/PlayerSystemInterface.h"
 #include "ECS/Systems/ReactionSystemInterface.h"
 #include "ECS/Systems/ResourceStoreSystemInterface.h"
@@ -92,12 +96,11 @@ glm::vec3 GameRewardOpeningWorld::Position() const
 	return transform != nullptr ? transform->position : glm::vec3(0.0f);
 }
 
-void GameRewardOpeningWorld::Pour(ResourceType type, uint32_t amount)
+void GameRewardOpeningWorld::Pour(ResourceType type, uint32_t amount, PlayerNames player)
 {
-	// Poured by the player at this computer, as the game pours it
 	if (Locator::resourceStoreSystem::has_value())
 	{
-		Locator::resourceStoreSystem::value().PourAt(type, Position(), amount, false, LocalPlayer(), false);
+		Locator::resourceStoreSystem::value().PourAt(type, Position(), amount, false, player, false);
 	}
 }
 
@@ -109,10 +112,10 @@ bool GameRewardOpeningWorld::HasTown() const
 void GameRewardOpeningWorld::GiveTownBelief(float belief)
 {
 	// The sparkle of a magic object made, on the chest for its time
-	if (Locator::particleSystem::has_value())
+	if (Locator::effectRequestSystem::has_value())
 	{
-		Locator::particleSystem::value().StartSpotVisual(SpotVisualType::MagicObjectCreated, Position(),
-		                                                 reward::k_BeliefSparkleTurns, entt::null, 1.0f);
+		Locator::effectRequestSystem::value().Show(
+		    {.type = SpotVisualType::MagicObjectCreated, .position = Position(), .turns = reward::k_BeliefSparkleTurns});
 	}
 	// Given with no thing to rise from, so no belief symbol shows
 	if (Locator::reactionSystem::has_value())
@@ -140,26 +143,15 @@ void GameRewardOpeningWorld::FindTownForMiracle()
 		return;
 	}
 	auto& registry = Locator::entitiesRegistry::value();
-	// TODO(reward-chest): the game walks the player's own list of towns; the order of that list is unconfirmed, so the
-	// towns are taken in the order they were made
-	std::vector<std::pair<uint32_t, entt::entity>> towns;
-	const auto player = Player();
-	registry.Each<const ecs::components::Town>([&](entt::entity entity, const ecs::components::Town& town) {
-		if (town.owner == player)
-		{
-			towns.emplace_back(town.id, entity);
-		}
-	});
-	std::ranges::sort(towns);
 	const auto& icons = Locator::spellIconSystem::value();
-	for (const auto& [id, town] : towns)
+	const auto towns = player_towns::InOrder(registry, Player());
+	std::vector<std::optional<size_t>> shown;
+	shown.reserve(towns.size());
+	std::ranges::transform(towns, std::back_inserter(shown),
+	                       [&icons](entt::entity town) { return icons.CentreMiraclesShown(town); });
+	if (const auto first = reward::FirstTownForMiracle(shown))
 	{
-		const auto shown = icons.CentreMiraclesShown(town);
-		if (shown.has_value() && *shown < reward::k_CentreMostMiracles)
-		{
-			registry.Get<Reward>(_chest).town = town;
-			return;
-		}
+		registry.Get<Reward>(_chest).town = towns.at(*first);
 	}
 }
 
@@ -257,7 +249,8 @@ void GameRewardOpeningWorld::ShowTownSeed(SpellSeedType seed)
 	{
 		return;
 	}
-	// It goes with the chest
+	// It goes with the chest. Only the model of the seed shows. The game makes the effect of the seed but never steps it,
+	// so the effect has no particles and shows nothing. Thus no effect starts here.
 	Locator::entitiesRegistry::value().AssignOrReplace<RewardSeed>(
 	    _chest, RewardSeed {.seed = seed, .middle = Position() + glm::vec3(0.0f, reward::k_TownSeedAbove, 0.0f)});
 }

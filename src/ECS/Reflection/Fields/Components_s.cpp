@@ -13,6 +13,7 @@
 #include <span>
 #include <string_view>
 
+#include "ECS/Components/Scaffold.h"
 #include "ECS/Components/ScriptAnimation.h"
 #include "ECS/Components/ScriptControl.h"
 #include "ECS/Components/ScriptHighlight.h"
@@ -22,6 +23,7 @@
 #include "ECS/Components/ScriptTimer.h"
 #include "ECS/Components/SeeThrough.h"
 #include "ECS/Components/Shark.h"
+#include "ECS/Components/ShownCreatureFace.h"
 #include "ECS/Components/Sky.h"
 #include "ECS/Components/SnowLevel.h"
 #include "ECS/Components/SoundTag.h"
@@ -45,6 +47,40 @@ void RegisterFields_Components_s(entt::meta_ctx& context);
 
 void openblack::ecs::reflection::RegisterFields_Components_s(entt::meta_ctx& context)
 {
+	Reflect<components::ScaffoldOffer>(context)
+	    .Field<&components::ScaffoldOffer::info>("info")
+	    .Field<&components::ScaffoldOffer::number>("number")
+	    .Field<&components::ScaffoldOffer::mesh>("mesh")
+	    .Field<&components::ScaffoldOffer::yAngle>("yAngle")
+	    .Field<&components::ScaffoldOffer::scale>("scale");
+	Reflect<components::ScaffoldPhantom>(context)
+	    .Field<&components::ScaffoldPhantom::shown>("shown")
+	    .Field<&components::ScaffoldPhantom::next>("next")
+	    .Field<&components::ScaffoldPhantom::changeMs>("changeMs")
+	    .Field<&components::ScaffoldPhantom::grows>("grows")
+	    .Field<&components::ScaffoldPhantom::yAngle>("yAngle")
+	    .Field<&components::ScaffoldPhantom::scale>("scale")
+	    .Field<&components::ScaffoldPhantom::looked>("looked")
+	    .Field<&components::ScaffoldPhantom::noOfferTurns>("noOfferTurns")
+	    .Field<&components::ScaffoldPhantom::foundsTown>("foundsTown")
+	    .Field<&components::ScaffoldPhantom::fixedAngle>("fixedAngle");
+	Reflect<components::Scaffold>(context)
+	    .Field<&components::Scaffold::town>("town")
+	    .Field<&components::Scaffold::workshop>("workshop")
+	    .Field<&components::Scaffold::place>("place")
+	    .Field<&components::Scaffold::putDownTurn>("putDownTurn")
+	    .Field<&components::Scaffold::scriptBuilding>("scriptBuilding")
+	    .Field<&components::Scaffold::destroysThingsInWay>("destroysThingsInWay")
+	    .Field<&components::Scaffold::gentle>("gentle")
+	    .Field<&components::Scaffold::handPlayer>("handPlayer")
+	    .Field<&components::Scaffold::phantom>("phantom")
+	    .Field<&components::Scaffold::site>("site")
+	    .Field<&components::Scaffold::ghost>("ghost");
+	Reflect<components::ScaffoldGhost>(context)
+	    .Field<&components::ScaffoldGhost::scaffold>("scaffold")
+	    .Field<&components::ScaffoldGhost::alpha>("alpha")
+	    .Field<&components::ScaffoldGhost::model>("model");
+	Reflect<components::ScaffoldDrawnScale>(context).Field<&components::ScaffoldDrawnScale::scale>("scale");
 	Reflect<components::ScriptAnimation>(context)
 	    .Field<&components::ScriptAnimation::clip>("clip")
 	    .Field<&components::ScriptAnimation::playsLeft>("playsLeft");
@@ -66,7 +102,8 @@ void openblack::ecs::reflection::RegisterFields_Components_s(entt::meta_ctx& con
 	    .Field<&components::ScriptHighlight::radius>("radius")
 	    .Field<&components::ScriptHighlight::sparks>("sparks")
 	    .Field<&components::ScriptHighlight::sparkSprites>("sparkSprites")
-	    .Field<&components::ScriptHighlight::onScreen>("onScreen");
+	    .Field<&components::ScriptHighlight::onScreen>("onScreen")
+	    .Field<&components::ScriptHighlight::hidden>("hidden");
 	Reflect<components::ScriptHighlightGlow>(context).Field<&components::ScriptHighlightGlow::highlight>("highlight");
 	Reflect<components::ScriptRemind>(context)
 	    .Field<&components::ScriptRemind::returnTo>("returnTo")
@@ -88,6 +125,11 @@ void openblack::ecs::reflection::RegisterFields_Components_s(entt::meta_ctx& con
 	    .Field<&components::Shark::heading>("heading")
 	    .Field<&components::Shark::clipPlace>("clipPlace")
 	    .Field<&components::Shark::drawn>("drawn");
+	Reflect<components::ShownCreatureFace>(context)
+	    .Field<&components::ShownCreatureFace::face>("face")
+	    .Field<&components::ShownCreatureFace::worldFace>("worldFace")
+	    .Field<&components::ShownCreatureFace::olderTurnPose>("olderTurnPose")
+	    .Field<&components::ShownCreatureFace::newerTurnPose>("newerTurnPose");
 	Reflect<components::SkyDome>(context)
 	    .Field<&components::SkyDome::meshId>("meshId")
 	    .Field<&components::SkyDome::textureId>("textureId")
@@ -115,15 +157,19 @@ void openblack::ecs::reflection::RegisterFields_Components_s(entt::meta_ctx& con
 	    .Field<&components::Moon::placement>("placement")
 	    .Field<&components::Moon::colour>("colour")
 	    .Field<&components::Moon::strength>("strength");
-	Reflect<components::SnowLevel>(context).Field<&components::SnowLevel::level>("level");
+	Reflect<components::SnowLevel>(context)
+	    .Field<&components::SnowLevel::level>("level")
+	    .Field<&components::SnowLevel::broken>("broken")
+	    .Field<&components::SnowLevel::piece>("piece")
+	    .Field<&components::SnowLevel::drawnOutOfLand>("drawnOutOfLand");
 	Reflect<components::SoundTag>(context)
 	    .Field<&components::SoundTag::sound>("sound")
 	    .Field<&components::SoundTag::offset>("offset")
 	    .Field<&components::SoundTag::active>("active")
-	    .Field<&components::SoundTag::emitter>("emitter")
+	    .RunField<&components::SoundTag::emitter>("emitter")
 	    .Field<&components::SoundTag::point>("point")
 	    .Field<&components::SoundTag::delayed>("delayed")
-	    .Field<&components::SoundTag::turns>("turns")
+	    .RunField<&components::SoundTag::turns>("turns")
 	    .Field<&components::SoundTag::owner>("owner")
 	    .Field<&components::SoundTag::loops>("loops");
 	Reflect<components::SpellCaster>(context)
@@ -132,7 +178,8 @@ void openblack::ecs::reflection::RegisterFields_Components_s(entt::meta_ctx& con
 	    .Field<&components::SpellCaster::entity>("entity")
 	    .Field<&components::SpellCaster::withoutIcon>("withoutIcon")
 	    .Field<&components::SpellCaster::worshipSite>("worshipSite")
-	    .Field<&components::SpellCaster::madeBySpellIcon>("madeBySpellIcon");
+	    .Field<&components::SpellCaster::madeBySpellIcon>("madeBySpellIcon")
+	    .Field<&components::SpellCaster::icon>("icon");
 	Reflect<components::Spell>(context)
 	    .Field<&components::Spell::magicType>("magicType")
 	    .Field<&components::Spell::spellClass>("spellClass")
@@ -158,6 +205,8 @@ void openblack::ecs::reflection::RegisterFields_Components_s(entt::meta_ctx& con
 	    .Field<&components::Spell::reaction>("reaction")
 	    .Field<&components::Spell::humanCasting>("humanCasting")
 	    .Field<&components::Spell::maxObjectsToCreate>("maxObjectsToCreate")
+	    .Field<&components::Spell::upkeepMotes>("upkeepMotes")
+	    .Field<&components::Spell::eventMotes>("eventMotes")
 	    .Field<&components::Spell::resourceFirstDone>("resourceFirstDone")
 	    .Field<&components::Spell::lastRipple>("lastRipple")
 	    .Field<&components::Spell::forestPlanted>("forestPlanted")

@@ -13,11 +13,14 @@
 
 #include "3D/TempleInteriorInterface.h"
 #include "Camera/Camera.h"
+#include "ECS/Archetypes/VillageLightArchetype.h"
+#include "ECS/Systems/AdvisorVoiceSystemInterface.h"
 #include "ECS/Systems/AlignmentSystemInterface.h"
 #include "ECS/Systems/AnimalSystemInterface.h"
 #include "ECS/Systems/AppleBarrelSystemInterface.h"
 #include "ECS/Systems/ArtefactSystemInterface.h"
 #include "ECS/Systems/BoatLaunchSystemInterface.h"
+#include "ECS/Systems/ChatSystemInterface.h"
 #include "ECS/Systems/ChimneySmokeSystemInterface.h"
 #include "ECS/Systems/CinematicDirectorSystemInterface.h"
 #include "ECS/Systems/CloudSystemInterface.h"
@@ -37,7 +40,6 @@
 #include "ECS/Systems/FishFarmSystemInterface.h"
 #include "ECS/Systems/FootprintSystemInterface.h"
 #include "ECS/Systems/GestureSystemInterface.h"
-#include "ECS/Systems/HandDemoSystemInterface.h"
 #include "ECS/Systems/HelpTextSystemInterface.h"
 #include "ECS/Systems/Implementations/VillagerDisciples.h"
 #include "ECS/Systems/InfluenceSystemInterface.h"
@@ -45,11 +47,12 @@
 #include "ECS/Systems/LiquidParticleSystemInterface.h"
 #include "ECS/Systems/LivingActionSystemInterface.h"
 #include "ECS/Systems/MistSystemInterface.h"
-#include "ECS/Systems/ParticleSystemInterface.h"
+#include "ECS/Systems/ParticleRuleSystemInterface.h"
 #include "ECS/Systems/RainSystemInterface.h"
 #include "ECS/Systems/RewardSystemInterface.h"
 #include "ECS/Systems/SharkSystemInterface.h"
 #include "ECS/Systems/SnowfallSystemInterface.h"
+#include "ECS/Systems/SpellIconSystemInterface.h"
 #include "ECS/Systems/TimeSystemInterface.h"
 #include "ECS/Systems/TipBubbleSystemInterface.h"
 #include "ECS/Systems/TornadoSystemInterface.h"
@@ -61,12 +64,22 @@
 #include "ECS/Systems/VillageTotemSystemInterface.h"
 #include "ECS/Systems/VortexSystemInterface.h"
 #include "ECS/Systems/WaterRingSystemInterface.h"
+#include "ECS/Systems/WorkshopSystemInterface.h"
+#include "ECS/Systems/WorshipSiteSystemInterface.h"
 #include "Locator.h"
 #include "Particles/LiquidParticles.h"
 #include "Profiler.h"
 
 namespace openblack::simulation
 {
+
+bool LandDrawn()
+{
+	const bool inTemple = Locator::temple::has_value() && Locator::temple::value().Active();
+	const bool landHidden = Locator::videoSystem::has_value() &&
+	                        (Locator::videoSystem::value().CoversScreen() || Locator::videoSystem::value().HidesWorld());
+	return !inTemple && !landHidden;
+}
 
 void PlayCreaturePoses()
 {
@@ -114,19 +127,22 @@ void PlayFrameEffects(FrameViewInterface& view)
 		auto actions = profiler.BeginScoped(Profiler::Stage::VegetationUpdate);
 		Locator::vegetation::value().Update(gameTime);
 	}
-	// The clouds drift with the wind, then every mist and cloud animates
-	Locator::cloudSystem::value().Update(gameTime);
-	// The storms' own clouds gather and wander over them with the frames, at the screen refresh's pace
-	Locator::cloudSystem::value().UpdateStormClouds(clock.GetFrameRealTime());
+	// The clouds drift with the wind, then every mist and cloud animates. Only a computer that draws the world moves them.
+	if (Locator::cloudSystem::has_value())
+	{
+		Locator::cloudSystem::value().Update(gameTime);
+		// The storms' own clouds gather and wander over them with the frames, at the screen refresh's pace
+		Locator::cloudSystem::value().UpdateStormClouds(clock.GetFrameRealTime());
+	}
 	// The rain falls as the storm nearest the camera has it
 	Locator::rainSystem::value().Update(std::chrono::duration<float>(gameTime).count(), clock.GetFrameRealTime(),
 	                                    camera.GetOrigin());
 	// The rings on the water grow and fade
 	Locator::waterRingSystem::value().Update(clock.GetFrameRealTime(), clock.GetFrameGameTime());
 	// The ribbons' textures slide on the frames that draw them
-	if (Locator::particleSystem::has_value())
+	if (Locator::particleRuleSystem::has_value())
 	{
-		Locator::particleSystem::value().ScrollChains(clock.GetFrameRealTime(), clock.GetFrameGameTime());
+		Locator::particleRuleSystem::value().ScrollChains(clock.GetFrameRealTime(), clock.GetFrameGameTime());
 	}
 	{
 		// The flames, steam and smoke of what burns move on
@@ -136,12 +152,13 @@ void PlayFrameEffects(FrameViewInterface& view)
 	// The vortices' swirls and effects step with the frame, and their marks on the ground follow their openness
 	if (Locator::vortexSystem::has_value())
 	{
-		Locator::vortexSystem::value().UpdateFrame(std::chrono::duration<float>(gameTime).count());
+		Locator::vortexSystem::value().UpdateFrame(clock.GetFrameRealTime(), clock.GetFrameGameTime(), LandDrawn());
 	}
-	// The reward chests from the sky fall and thump down, and their dust fades
+	// The frame draws the reward chests from the sky between their turns, and their dust fades
 	if (Locator::rewardSystem::has_value())
 	{
-		Locator::rewardSystem::value().Update(std::chrono::duration<float, std::milli>(gameTime).count());
+		Locator::rewardSystem::value().Update(std::chrono::duration<float, std::milli>(gameTime).count(),
+		                                      clock.GetTurnFraction());
 	}
 	// The fireflies out drift about where they are between their last two turns
 	if (Locator::fireflySystem::has_value())
@@ -222,9 +239,20 @@ void PlayFrameEffects(FrameViewInterface& view)
 	{
 		Locator::influenceSystem::value().ShowHandInfluence(gameTime);
 	}
-	Locator::mistSystem::value().Update(gameTime);
-	Locator::cloudSystem::value().AnimateStormClouds(gameTime);
-	Locator::villageLightSystem::value().Update(gameTime);
+	if (Locator::mistSystem::has_value())
+	{
+		Locator::mistSystem::value().Update(gameTime);
+	}
+	if (Locator::cloudSystem::has_value())
+	{
+		Locator::cloudSystem::value().AnimateStormClouds(gameTime);
+	}
+	// The lights of owners that have gone go on every computer, then the lights flicker where the world is drawn
+	ecs::archetypes::VillageLightArchetype::DestroyOwnerless();
+	if (Locator::villageLightSystem::has_value())
+	{
+		Locator::villageLightSystem::value().Update(gameTime);
+	}
 	// The disciples glow, and the one in or under the hand shows the symbol of its work
 	ecs::villager_disciple::UpdateMarks();
 	// The town totems move to their shares by the real clock, also while the game is paused
@@ -233,8 +261,25 @@ void PlayFrameEffects(FrameViewInterface& view)
 	Locator::artefactSystem::value().UpdateFrame(static_cast<float>(gameTime.count()));
 	// The flags over the towns' stores ease to their desires and turn to the camera
 	Locator::townDesireSystem::value().UpdateFlags(std::chrono::duration<float>(gameTime).count());
+	// The wood flags of the workshops ease to the wood that their workshops need and turn to the camera
+	if (Locator::workshopSystem::has_value())
+	{
+		Locator::workshopSystem::value().UpdateFlagsForFrame(std::chrono::duration<float>(gameTime).count());
+	}
+	// The worship sites' need flags ease to their needs, the rings round their dances show how full they are, and the
+	// straining sites throb
+	if (Locator::worshipSiteSystem::has_value())
+	{
+		Locator::worshipSiteSystem::value().UpdateFrame(clock.GetFrameGameTime(), clock.GetFrameRealTime(), LandDrawn());
+	}
+	// The icons at the worship sites show their charge: a ring of light, a shine and, while they charge, a pulse
+	if (Locator::spellIconSystem::has_value())
+	{
+		Locator::spellIconSystem::value().UpdateChargeLooks(static_cast<int32_t>(clock.GetFrameGameTime().count()),
+		                                                    LandDrawn());
+	}
 	// The players' symbols of belief over the village centres move on
-	Locator::townSystem::value().UpdateFrame(std::chrono::duration<float>(gameTime).count());
+	Locator::townSystem::value().UpdateFrame(clock.GetFrameRealTime(), LandDrawn());
 	Locator::fieldSystem::value().Update(gameTime);
 	// The shoals near the camera swim, and dart from what scared them
 	Locator::fishFarmSystem::value().Update(std::chrono::duration<float>(gameTime).count(),
@@ -248,18 +293,18 @@ void PlayFrameEffects(FrameViewInterface& view)
 	// The advisors move and act once a frame, by the real time inside the temple and the game's otherwise. They act on
 	// the screen, so a world with no view has none.
 	view.UpdateAdvisors();
-	// The scripts' dialogue: the voices, the player's click and the newest text sliding in
+	// The advisors' voices that this computer plays: a line whose delay is over starts
+	if (Locator::advisorVoiceSystem::has_value())
+	{
+		Locator::advisorVoiceSystem::value().Update();
+	}
+	// The scripts' dialogue: the newest text slides in. The player's click goes to the turn as a command.
 	{
 		const bool inTemple = Locator::temple::has_value() && Locator::temple::value().Active();
-		const bool clicked = view.TakeDialogueClick();
-		const bool demoPlaying = Locator::handDemoSystem::has_value() && Locator::handDemoSystem::value().IsPlaying(0);
 		Locator::helpTextSystem::value().Update({
 		    .gameMs = static_cast<uint32_t>(clock.GetFrameGameTime().count()),
 		    .realMs = static_cast<uint32_t>(clock.GetFrameRealTime().count()),
 		    .inTemple = inTemple,
-		    // Nor can the player click or key through the advisors' lines while a hand demonstration plays
-		    .click = clicked && !demoPlaying,
-		    .skipKey = !demoPlaying && view.DialogueSkipKeyDown(),
 		});
 		// While a script plays a sung verse, the newest text's word that the song has reached gets the glow
 		view.UpdateSingAlong(inTemple);
@@ -273,6 +318,11 @@ void PlayFrameEffects(FrameViewInterface& view)
 	}
 	// The tip bubble's time to show runs down by the game's time while it is up
 	Locator::tipBubbleSystem::value().UpdateFrame(static_cast<float>(clock.GetFrameGameTime().count()));
+	// The speech bubbles of the creatures in the chat run down by the game's time
+	if (Locator::chatSystem::has_value())
+	{
+		Locator::chatSystem::value().UpdateFrame(static_cast<float>(clock.GetFrameGameTime().count()));
+	}
 	// The names display grows in and out by the game's time
 	view.UpdateVillagerLabels(static_cast<float>(clock.GetFrameGameTime().count()));
 	// The cinema bars coming in hide the game's dialogs

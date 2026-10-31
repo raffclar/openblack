@@ -43,7 +43,7 @@ public:
 		std::u16string label;
 		std::function<void()> onSelect;
 		/// The size of the label's text
-		int textSize {DialogPainter::k_MidTextSize};
+		int textSize {DialogPainter::MidTextSize()};
 	};
 
 	/// MainMenu and the options' box: 780 by 500 in the middle of the dialog space, 40 deeper for its tabs
@@ -112,10 +112,10 @@ public:
 	[[nodiscard]] Control* GetFocus() const noexcept { return _focused; }
 	/// Gives a control the keyboard's focus, or none; the control losing it and the one taking it are told
 	void SetFocus(Control* control);
-
-private:
+	/// The control that takes the mouse at a point: the control that the mouse button is held on, else the top control
 	[[nodiscard]] Control* HitTest(glm::ivec2 point) const;
 
+private:
 	/// The box behind the controls, none for controls on their own, and its tabs
 	std::optional<DialogRect> _box;
 	size_t _tabCount {0};

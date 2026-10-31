@@ -13,6 +13,7 @@
 #include <vector>
 
 #include "Creature/LeashOrders.h"
+#include "Creature/LeashRules.h"
 #include "ECS/Components/CreatureLeash.h"
 #include "ECS/Components/CreatureLeashRope.h"
 #include "ECS/Systems/LeashSystemInterface.h"
@@ -28,6 +29,7 @@ class LeashSystem final: public LeashSystemInterface
 {
 public:
 	void ProcessTurn() override;
+	void Reset() override;
 	void BeginTurn() override;
 	void CreatureTurn(entt::entity creature) override;
 	void Update(float seconds) override;
@@ -47,7 +49,10 @@ public:
 	bool Toggle(entt::entity creature) override;
 	bool ChangeType(entt::entity creature, LeashType type) override;
 	bool TieTo(entt::entity creature, entt::entity object) override;
+	bool HandTie(entt::entity creature, entt::entity object) override;
+	bool RestoreTie(entt::entity creature, entt::entity object, uint32_t tiedTurn) override;
 	void UntieToHand(entt::entity creature) override;
+	void PlayHandAttachSound(entt::entity creature) override;
 	void SetWorks(entt::entity creature, bool works) override;
 	void SetDrawn(bool drawn) override;
 	void ConfineToHome(entt::entity creature, float radius) override;
@@ -72,18 +77,30 @@ public:
 	void LetGoOfRope(PlayerNames player, std::optional<glm::vec3> place) override;
 	[[nodiscard]] std::optional<uint32_t> ToolTip(PlayerNames player, std::optional<entt::entity> hovered) const override;
 	void PlacePosts(PlayerNames owner, const std::array<glm::vec3, 3>& points) override;
-	bool TapPost(entt::entity post) override;
+	bool TapPost(PlayerNames player, entt::entity post) override;
+	bool PickType(PlayerNames player, LeashType type) override;
 	void DoOrder(PlayerNames player, const player_commands::LeashOrder& order) override;
+	void DoLeashLength(PlayerNames player, float length) override;
 	bool PressKey(PlayerNames player, creature_leash::LeashKey key) override;
 	bool TapCreature(PlayerNames player, entt::entity creature) override;
 	bool Shake(PlayerNames player) override;
+	[[nodiscard]] bool ComesOffAtTemple(PlayerNames player) const override;
+	bool TakeOffAtTemple(PlayerNames player) override;
 
 private:
+	/// Ties the leash to the thing, and does what the source of the tie does in addition
+	bool Tie(entt::entity creature, entt::entity object, creature_leash::TieSource source);
+	/// The hand ties the leash: a fight of the creature stops, and what it does stops as a failure
+	void FailForTie(entt::entity creature);
 	/// Puts the leash on for the player, unless the rules refuse it, which is logged and remembered
 	bool PutOnFor(PlayerNames player, entt::entity creature, LeashType type);
 	/// Carries out what a shortcut does to the player's creature
 	bool Carry(PlayerNames player, entt::entity creature, const creature_leash::KeyCommand& command);
 	void Refuse(PlayerNames player, entt::entity creature, creature_leash::Refusal why);
+	/// The player's leash on their temple that matches the worn leash becomes the picked one
+	void PickPost(PlayerNames owner, LeashType worn);
+	/// Whether the player can change the leash of the creature now: not while a nice or nasty spell is on it
+	[[nodiscard]] bool PlayerCanChangeType(entt::entity creature) const;
 	/// The creatures as the one-each assignment sees them
 	[[nodiscard]] std::vector<creature_leash::Claim> Claims() const;
 	/// The posts of each temple whose heart mesh has the three points to hang them at, once the temples are there
@@ -95,7 +112,8 @@ private:
 	/// What the worn leash does to the creature's desires this turn, and to those of a creature it is tied to
 	void UpdateMoods(entt::entity creature, const components::CreatureLeash::Worn& worn);
 	/// The creature takes an order on the land or on a thing, unless it refuses
-	/// Before an order: a creature on its way to a fight takes none (false), and a duelling one's fight is called off
+	/// Before an order: the creature that started a fight takes none out of its duel (false). Else the order calls off
+	/// the fight that the creature is in.
 	bool TakeOutOfFight(entt::entity creature);
 	bool TakeGroundOrder(entt::entity creature, const glm::vec3& place);
 	bool TakeThingOrder(entt::entity creature, entt::entity object);
@@ -121,8 +139,10 @@ private:
 	bool _postsPlaced {false};
 	/// Whether the hand was out when the posts were last shown
 	bool _handShown {true};
-	/// The two leash-tying sounds play in turn
-	bool _secondAttachSound {false};
+	/// The two leash-attach sounds play in turn for a tie
+	creature_leash::AttachSoundTurns _tieSounds;
+	/// The two leash-attach sounds play in turn, on a different turn, for the leash put back in the hand
+	creature_leash::AttachSoundTurns _handSounds;
 	std::optional<Refused> _lastRefusal;
 	/// Tells the Action button's double taps from single ones
 	creature_leash_orders::DoubleTaps _doubleTaps;

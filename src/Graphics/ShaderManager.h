@@ -17,11 +17,10 @@
 #include <utility>
 #include <vector>
 
-#include "DescriptorSetTally.h"
 #include "DrawEncoder.h"
 #include "DrawWindow.h"
-#include "RenderPass.h"
 #include "ShaderProgram.h"
+#include "Visual/RenderPass.h"
 
 namespace openblack
 {
@@ -32,6 +31,19 @@ namespace graphics
 {
 
 class SamplerDefaults;
+
+/// How a view orders its draws, as bgfx's view modes do
+enum class ViewOrder : uint8_t
+{
+	/// By program, then by depth, ties in the order they came
+	ByProgram,
+	/// In the order they came
+	Sequential,
+	/// The nearest (smallest depth) first
+	DepthAscending,
+	/// The farthest (greatest depth) first
+	DepthDescending,
+};
 
 class ShaderManager
 {
@@ -53,11 +65,11 @@ public:
 
 	/// Drops the textures bound for the next draws, which a run of draws that kept them leaves bound
 	void DiscardBindings() const;
-	/// Where the game's thread draws: bgfx's own encoder, with the tally of the frame's descriptor sets
+	/// Where the game's thread draws: bgfx's own encoder
 	[[nodiscard]] DrawEncoder& GetMainEncoder() const { return *_mainEncoder; }
-	/// bgfx dropped every binding with the frame. Under Vulkan, the descriptor sets the frame's draws took.
-	[[nodiscard]] std::optional<FrameDescriptorSets> FrameEnded() const;
-	/// Sets how a view orders its draws, through bgfx and for the descriptor set tally
+	/// bgfx dropped every binding with the frame
+	void FrameEnded() const;
+	/// Sets how a view orders its draws, through bgfx
 	void SetViewOrder(RenderPass viewId, ViewOrder order) const;
 	void SetViewOrder(uint16_t viewId, ViewOrder order) const;
 
@@ -81,8 +93,6 @@ private:
 	std::unique_ptr<SamplerDefaults> _samplerDefaults;
 	/// The game thread's encoder, which the programs draw with when they are given no other
 	std::unique_ptr<DrawEncoder> _mainEncoder;
-	/// Under Vulkan, which runs out of descriptor sets where the other renderers don't: the sets each frame takes
-	std::unique_ptr<DescriptorSetTally> _descriptorSets;
 	/// Under Vulkan, the window that can divide a frame's draws between some frames
 	std::unique_ptr<DrawWindow> _drawWindow;
 };

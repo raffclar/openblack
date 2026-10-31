@@ -108,8 +108,18 @@ Map land_avoid::Build(int32_t cellsPerSide, const Altitude& altitude, const Wate
 {
 	std::vector<uint8_t> values(static_cast<size_t>(cellsPerSide) * static_cast<size_t>(cellsPerSide), k_Unreachable);
 	const Cells cells {.size = cellsPerSide, .values = values};
-	const auto cornerAltitude = [&](glm::ivec2 corner) -> uint8_t {
-		return cells.Contains(corner) ? altitude(corner) : uint8_t {0};
+	// Each corner is read one time: a corner off the map has no altitude. A cell reads its four corners from here.
+	const auto cornersPerSide = static_cast<size_t>(cellsPerSide) + 1;
+	std::vector<uint8_t> cornerAltitudes(cornersPerSide * cornersPerSide, 0);
+	for (int32_t z = 0; z < cellsPerSide; ++z)
+	{
+		for (int32_t x = 0; x < cellsPerSide; ++x)
+		{
+			cornerAltitudes[(static_cast<size_t>(z) * cornersPerSide) + static_cast<size_t>(x)] = altitude({x, z});
+		}
+	}
+	const auto cornerAltitude = [&cornerAltitudes, cornersPerSide](glm::ivec2 corner) -> uint8_t {
+		return cornerAltitudes[(static_cast<size_t>(corner.y) * cornersPerSide) + static_cast<size_t>(corner.x)];
 	};
 
 	glm::ivec2 seed {0};

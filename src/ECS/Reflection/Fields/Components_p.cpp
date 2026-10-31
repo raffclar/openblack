@@ -16,11 +16,15 @@
 #include "ECS/Components/Physics.h"
 #include "ECS/Components/Player.h"
 #include "ECS/Components/PlayerCreatures.h"
+#include "ECS/Components/PlayerHands.h"
+#include "ECS/Components/PlayerRelations.h"
 #include "ECS/Components/PlayerStatistics.h"
 #include "ECS/Components/Poisoned.h"
 #include "ECS/Components/Pot.h"
 #include "ECS/Components/PrayerPower.h"
+#include "ECS/Components/PuzzleGame.h"
 #include "ECS/Reflection/ComponentReflection.h"
+#include "Enums.h"
 
 namespace components = openblack::ecs::components;
 
@@ -28,6 +32,16 @@ namespace openblack::ecs::reflection
 {
 void RegisterFields_Components_p(entt::meta_ctx& context);
 }
+
+namespace
+{
+
+// The names of the enumerations indexing lists, which the lists' elements are read and set by
+constexpr std::array<std::string_view, 8> k_PlayerNamesNames {"PLAYER_ONE",  "PLAYER_TWO", "PLAYER_THREE", "PLAYER_FOUR",
+                                                              "PLAYER_FIVE", "PLAYER_SIX", "PLAYER_SEVEN", "NEUTRAL"};
+static_assert(static_cast<size_t>(openblack::PlayerNames::_COUNT) == k_PlayerNamesNames.size());
+
+} // namespace
 
 void openblack::ecs::reflection::RegisterFields_Components_p(entt::meta_ctx& context)
 {
@@ -42,12 +56,20 @@ void openblack::ecs::reflection::RegisterFields_Components_p(entt::meta_ctx& con
 	Reflect<components::Player>(context)
 	    .Field<&components::Player::name>("name")
 	    .Field<&components::Player::handTookFrom>("handTookFrom")
-	    .Field<&components::Player::damageFrom>("damageFrom")
+	    .Field<&components::Player::damageFrom>("damageFrom", {k_PlayerNamesNames})
 	    .Field<&components::Player::lastCast>("lastCast")
 	    .Field<&components::Player::lastSeedGained>("lastSeedGained")
 	    .Field<&components::Player::windResistance>("windResistance")
 	    .Field<&components::Player::miracles>("miracles");
 	Reflect<components::PlayerCreatures>(context).Field<&components::PlayerCreatures::acquired>("acquired");
+	Reflect<components::PlayerHands>(context)
+	    .Field<&components::PlayerHands::left>("left")
+	    .Field<&components::PlayerHands::right>("right");
+	Reflect<components::PlayerAllies>(context).Field<&components::PlayerAllies::strength>("strength", {k_PlayerNamesNames});
+	Reflect<components::ComputerAttitudes>(context).Field<&components::ComputerAttitudes::kept>("kept", {k_PlayerNamesNames});
+	Reflect<components::PlayerInfluencePower>(context)
+	    .Field<&components::PlayerInfluencePower::power>("power")
+	    .Field<&components::PlayerInfluencePower::average>("average");
 	Reflect<components::PlayerStatistics>(context)
 	    .Field<&components::PlayerStatistics::births>("births")
 	    .Field<&components::PlayerStatistics::deaths>("deaths")
@@ -85,4 +107,31 @@ void openblack::ecs::reflection::RegisterFields_Components_p(entt::meta_ctx& con
 	Reflect<components::PrayerPower>(context)
 	    .Field<&components::PrayerPower::chants>("chants")
 	    .Field<&components::PrayerPower::infinite>("infinite");
+	Reflect<components::HanoiBlock>(context)
+	    .Field<&components::HanoiBlock::puzzle>("puzzle")
+	    .Field<&components::HanoiBlock::home>("home")
+	    .Field<&components::HanoiBlock::placedAt>("placedAt")
+	    .Field<&components::HanoiBlock::above>("above")
+	    .Field<&components::HanoiBlock::below>("below")
+	    .Field<&components::HanoiBlock::fixed>("fixed");
+	Reflect<components::PuzzleGame>(context)
+	    .Field<&components::PuzzleGame::type>("type")
+	    .Field<&components::PuzzleGame::place>("place")
+	    .Field<&components::PuzzleGame::angle>("angle")
+	    .Field<&components::PuzzleGame::scale>("scale")
+	    .Field<&components::PuzzleGame::cosineStep>("cosineStep")
+	    .Field<&components::PuzzleGame::sineStep>("sineStep")
+	    .Field<&components::PuzzleGame::played>("played")
+	    .Field<&components::PuzzleGame::started>("started")
+	    .Field<&components::PuzzleGame::calmTurns>("calmTurns")
+	    .Field<&components::PuzzleGame::order>("order")
+	    .Field<&components::PuzzleGame::bases>("bases")
+	    .Field<&components::PuzzleGame::rings>("rings")
+	    .Field<&components::PuzzleGame::kept>("kept")
+	    .Field<&components::PuzzleGame::treeCounts>("treeCounts")
+	    .Field<&components::PuzzleGame::trees>("trees")
+	    .Field<&components::PuzzleGame::treesPlacedAt>("treesPlacedAt")
+	    .Field<&components::PuzzleGame::mists>("mists")
+	    .Field<&components::PuzzleGame::bats>("bats")
+	    .Field<&components::PuzzleGame::lanterns>("lanterns");
 }

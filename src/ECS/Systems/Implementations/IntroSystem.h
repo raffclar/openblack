@@ -26,6 +26,7 @@ public:
 	void Play(int32_t special) override;
 	void ReleaseAll() override;
 	[[nodiscard]] bool HasLiftFinished() const override { return _liftFinished; }
+	void ProcessTurn(uint32_t milliseconds) override;
 	void Update(uint32_t milliseconds) override;
 	[[nodiscard]] std::optional<CameraView> GetCameraView() const override;
 	[[nodiscard]] const intro_rules::light::Frame* GetLightFrame() const override;
@@ -41,14 +42,10 @@ private:
 		Lifting = 12,
 	};
 
-	/// The hand's entity with its model, which the turns make, hidden until the frames show it
-	void MakeHiddenHand();
-	/// The hand shown with a clip from its start
-	void ShowHand(std::string_view clipFile);
-	/// The hand's entity, made if there is none, and shown with a clip
+	/// The frames make the hand in the drawn registry if it is not there, and show it with a clip from its start
 	void MakeHand(std::string_view clipFile);
-	/// The hand gone from view, its entity kept until the turns release it
-	void HideHand();
+	/// The frames do the requests of the scripts for the hand
+	void DoHandRequests();
 	void PlaceHand(const glm::vec3& position, float yaw);
 	void FreeHand();
 	/// The hand's clip moved on; true when it came round
@@ -66,11 +63,19 @@ private:
 	bool _lightDrawn {false};
 	bool _cameraChasing {false};
 	glm::vec3 _cameraOrigin {0.0f};
+	/// The hand in the drawn registry, while it shows
 	entt::entity _hand {entt::null};
+	/// The scripts ask for the hand that sets the boy down. The next frame makes it.
+	bool _setDownWanted {false};
+	/// The scripts tell the hand to let the boy go. The next frame moves its clip to the end.
+	bool _letGoWanted {false};
 	bool _handPlaying {false};
 	bool _holdingBoy {false};
 	/// Set once the light has gone, when the lifting clip may play
 	int32_t _liftGo {0};
+	/// The light and the lifting clip as the turns move them on, from the fall of the light until the hand stands ready to
+	/// set the boy down. Once the clip comes round, it stays so.
+	std::optional<intro_rules::LiftClock> _liftClock;
 	bool _liftFinished {false};
 	std::optional<glm::vec3> _grip;
 };

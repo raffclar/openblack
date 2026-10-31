@@ -10,8 +10,12 @@
 #include "ComputerPlayerStart.h"
 
 #include <algorithm>
+#include <string>
+#include <string_view>
+#include <tuple>
 
 #include "Creature/CreatureMindFileBody.h"
+#include "ECS/ComputerPlayerPersonality.h"
 #include "ECS/PlayerMiracles.h"
 
 namespace openblack::computer_player
@@ -24,6 +28,13 @@ void SwitchOn(ecs::components::ComputerPlayer& player, bool on)
 	{
 		player.marked = true;
 	}
+}
+
+void StartAgainAfterLoad(ecs::components::ComputerPlayer& player)
+{
+	player.mind = computer_mind::StartAgain(player.mind);
+	player.creatureLike.reset();
+	player.hand.locked = false;
 }
 
 bool DueToStart(const ecs::components::ComputerPlayer& player)
@@ -94,9 +105,16 @@ StartFacts FactsOf(const World& world, PlayerNames player)
 }
 } // namespace
 
-void Start(World& world, PlayerNames player, ecs::components::ComputerPlayer& state)
+void Start(World& world, PlayerNames player, ecs::components::ComputerPlayer& state, std::optional<uint32_t> aiSeed)
 {
 	state.started = true;
+	if (aiSeed.has_value())
+	{
+		for (const auto& weight : personality::WeightsFor(*aiSeed, player))
+		{
+			world.SetPersonality(player, weight.name, weight.value);
+		}
+	}
 	// A player with a temple but no creature gets a creature of a random species at the pen of the temple
 	if (GetsCreature(FactsOf(world, player)))
 	{
@@ -129,6 +147,15 @@ bool SlotHasNoPlayer(bool human, bool computer, bool citadel)
 	return !human && !computer && citadel;
 }
 
+std::string SlotCreatureName(std::string_view speciesDebugName)
+{
+	if (speciesDebugName.ends_with(k_SpeciesNameEnd))
+	{
+		speciesDebugName.remove_suffix(k_SpeciesNameEnd.size());
+	}
+	return std::string(speciesDebugName);
+}
+
 bool LandScriptSwitchesMind(bool networkMapScript)
 {
 	return !networkMapScript;
@@ -143,15 +170,15 @@ void FillEmptySlots(SlotWorld& world, std::span<const PlayerNames> gods, std::sp
 		{
 			continue;
 		}
-		// The game takes the name before the species
-		const auto nameText = world.GameRand(k_SlotNameChoices);
+		// The game takes the random value for the name before the species. The name does not use the value.
+		std::ignore = world.GameRand(k_SlotNameChoices);
 		const auto species = SpeciesFor(world.GameRand(k_SlotSpeciesChoices));
 		world.SwitchOn(god);
-		world.MakeSlotCreature(god, species, nameText, k_SlotCreatureStage);
+		world.MakeSlotCreature(god, species, SlotCreatureName(world.SpeciesDebugName(species)), k_SlotCreatureStage);
 	}
 }
 
-void HumansJoin(SlotWorld& world, std::span<const PlayerNames> humans, bool landWaits)
+void HumansJoin(SlotWorld& world, std::span<const PlayerNames> gods, std::span<const PlayerNames> humans, bool landWaits)
 {
 	for (const auto human : humans)
 	{
@@ -159,7 +186,7 @@ void HumansJoin(SlotWorld& world, std::span<const PlayerNames> humans, bool land
 	}
 	if (landWaits)
 	{
-		FillEmptySlots(world, k_SlotGods, humans);
+		FillEmptySlots(world, gods, humans);
 	}
 }
 

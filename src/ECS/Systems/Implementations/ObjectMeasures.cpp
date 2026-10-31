@@ -13,22 +13,33 @@
 
 #include <algorithm>
 
+#include <glm/gtx/vec_swizzle.hpp>
+
 #include "3D/CreatureBody.h"
 #include "3D/L3DMesh.h"
+#include "Animals/FishFarmRules.h"
+#include "Common/GUtilsDistance.h"
 #include "Creature/CreatureCastMoves.h"
+#include "Creature/CreatureObstacles.h"
 #include "Creature/CreatureRig.h"
 #include "ECS/Components/Abode.h"
 #include "ECS/Components/Creature.h"
+#include "ECS/Components/CreatureLocomotion.h"
 #include "ECS/Components/Feature.h"
 #include "ECS/Components/Field.h"
+#include "ECS/Components/FishFarm.h"
 #include "ECS/Components/Mesh.h"
 #include "ECS/Components/Mobile.h"
 #include "ECS/Components/OneOffSpellSeed.h"
+#include "ECS/Components/TeleportStone.h"
 #include "ECS/Components/Temple.h"
 #include "ECS/Components/Transform.h"
 #include "ECS/Components/Tree.h"
+#include "ECS/Components/VillageTotem.h"
+#include "ECS/Components/WorshipSite.h"
 #include "ECS/Registry.h"
 #include "ECS/ThingModel.h"
+#include "ECS/WorshipSites.h"
 #include "Locator.h"
 #include "Resources/ResourcesInterface.h"
 
@@ -124,8 +135,46 @@ float object_measures::TwoDRadius(const Registry& registry, entt::entity entity)
 	{
 		return cast_moves::k_FieldRadius;
 	}
-	const auto half = HalfExtentsOf(registry, entity);
+	if (registry.AllOf<FishFarm>(entity))
+	{
+		return fish_farm::k_Radius;
+	}
+	// A teleport stone has the same radius whatever its model and its size
+	if (registry.AllOf<TeleportStone>(entity))
+	{
+		return creature_obstacles::k_TeleportStoneWidth;
+	}
+	const auto half = HalfExtentsOf(registry, MeasuredPart(registry, entity));
 	return half.has_value() ? std::max(half->x, half->z) : 0.0f;
+}
+
+entt::entity object_measures::MeasuredPart(const Registry& registry, entt::entity entity)
+{
+	// A town centre's totem is as wide and as high as the icon on its plinth. The icon has the scale of the totem.
+	if (const auto* totem = registry.TryGet<const VillageTotem>(entity); totem != nullptr && registry.Valid(totem->icon))
+	{
+		return totem->icon;
+	}
+	return entity;
+}
+
+float object_measures::DistanceFromObject(const Registry& registry, entt::entity entity, entt::entity other)
+{
+	const auto& transform = registry.Get<const Transform>(entity);
+	const auto otherPlace = glm::xz(registry.Get<const Transform>(other).position);
+	if (registry.AllOf<WorshipSite>(entity))
+	{
+		const auto centre = worship_site::CentreOnLand(transform.position, transform.rotation, transform.scale.x);
+		return worship_site::EdgeGap(centre, otherPlace, TwoDRadius(registry, other));
+	}
+	return gutils::GetDistanceInMetres(glm::xz(transform.position), otherPlace) -
+	       (TwoDRadius(registry, other) + TwoDRadius(registry, entity));
+}
+
+float object_measures::NavRadius(const Registry& registry, entt::entity creature)
+{
+	const auto* walk = registry.TryGet<const CreatureLocomotion>(creature);
+	return walk != nullptr ? walk->radius : TwoDRadius(registry, creature);
 }
 
 float object_measures::Height(const Registry& registry, entt::entity entity)
@@ -134,14 +183,14 @@ float object_measures::Height(const Registry& registry, entt::entity entity)
 	{
 		return cast_moves::k_HeightOfSizeOne * ShownSize(*creature);
 	}
-	const auto half = HalfExtentsOf(registry, entity);
+	const auto half = HalfExtentsOf(registry, MeasuredPart(registry, entity));
 	return half.has_value() ? 2.0f * half->y : 0.0f;
 }
 
 float object_measures::RoutePlanRadius(const Registry& registry, entt::entity entity, entt::entity creature)
 {
 	return cast_moves::RoutePlanRadius(TwoDRadius(registry, entity), Height(registry, entity), registry.AllOf<Tree>(entity),
-	                                   Height(registry, creature), TwoDRadius(registry, creature));
+	                                   Height(registry, creature), NavRadius(registry, creature));
 }
 
 bool object_measures::WalkedUpToItself(const Registry& registry, entt::entity entity)

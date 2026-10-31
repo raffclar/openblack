@@ -71,6 +71,16 @@ constexpr float k_NoDistance = 0.5f;
 	return (dx * dx) + (dz * dz) < step * step;
 }
 
+/// The same for a goal in whole map units, as the walk keeps it
+[[nodiscard]] constexpr bool WithinAStepOfGoalPlace(glm::vec2 position, glm::ivec2 goal, float walkSpeed)
+{
+	constexpr float k_WholePerWalkUnit = static_cast<float>(0x10000) * 0.01f;
+	const auto dx = static_cast<float>(gutils::ConvertMetersToWholeDistance(position.x) - goal.x);
+	const auto dz = static_cast<float>(gutils::ConvertMetersToWholeDistance(position.y) - goal.y);
+	const auto step = static_cast<float>(static_cast<int32_t>(walkSpeed * k_WholePerWalkUnit));
+	return (dx * dx) + (dz * dz) < step * step;
+}
+
 /// Where a script sees a walker on the ground: at the goal of its walk once it is within a turn's step of it, so a
 /// script waiting for it to reach a place sees it there exactly; otherwise where it is
 [[nodiscard]] constexpr glm::vec2 ScriptSeenPlace(glm::vec2 position, glm::vec2 goal, float walkSpeed)

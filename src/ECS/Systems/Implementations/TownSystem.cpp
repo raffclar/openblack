@@ -13,6 +13,7 @@
 
 #include <algorithm>
 #include <array>
+#include <chrono>
 #include <limits>
 #include <numeric>
 #include <optional>
@@ -26,8 +27,6 @@
 
 #include "3D/LandIslandInterface.h"
 #include "3D/MapCoords.h"
-#include "Audio/GameSoundEffects.h"
-#include "Audio/Sound.h"
 #include "Common/GUtilsAngle.h"
 #include "Common/GUtilsDistance.h"
 #include "Common/GameRandom.h"
@@ -54,25 +53,32 @@
 #include "ECS/Components/Tree.h"
 #include "ECS/Components/VillageTotem.h"
 #include "ECS/Components/Villager.h"
+#include "ECS/Components/Workshop.h"
 #include "ECS/DiscipleWorkRules.h"
+#include "ECS/GameEndConditions.h"
+#include "ECS/GamePlayers.h"
 #include "ECS/Map.h"
 #include "ECS/Reflection/BinaryArchive.h"
 #include "ECS/Registry.h"
 #include "ECS/Statistics.h"
 #include "ECS/Systems/AlignmentSystemInterface.h"
 #include "ECS/Systems/ArtefactSystemInterface.h"
+#include "ECS/Systems/EffectRequestSystemInterface.h"
 #include "ECS/Systems/FireSystemInterface.h"
+#include "ECS/Systems/GameEndSystemInterface.h"
 #include "ECS/Systems/HandSystemInterface.h"
 #include "ECS/Systems/Implementations/VillagerHome.h"
 #include "ECS/Systems/InfluenceSystemInterface.h"
 #include "ECS/Systems/LivingActionSystemInterface.h"
-#include "ECS/Systems/ParticleSystemInterface.h"
+#include "ECS/Systems/ParticleRuleSystemInterface.h"
 #include "ECS/Systems/PlayerSystemInterface.h"
 #include "ECS/Systems/ReactionSystemInterface.h"
 #include "ECS/Systems/SpellIconSystemInterface.h"
 #include "ECS/Systems/TimeSystemInterface.h"
 #include "ECS/Systems/TownDesireSystemInterface.h"
 #include "ECS/Systems/VillageTotemSystemInterface.h"
+#include "ECS/Systems/WonderSystemInterface.h"
+#include "ECS/Systems/WorkshopSystemInterface.h"
 #include "ECS/Systems/WorshipSiteSystemInterface.h"
 #include "ECS/TempleConstruction.h"
 #include "ECS/TemporaryStoreRules.h"
@@ -91,6 +97,9 @@
 #include "Magic/AreaEffect.h"
 #include "Magic/ResourcePiles.h"
 #include "Magic/TownBelief.h"
+#include "Particles/DrawnEffectSteps.h"
+#include "Sound/GameSoundEffects.h"
+#include "Sound/SoundId.h"
 #include "VillagerBreeding.h"
 #include "VillagerCreatureReactions.h"
 #include "VillagerDiscipleWork.h"
@@ -835,9 +844,9 @@ void NeglectAbode(entt::entity town, entt::entity abode)
 
 void TownSystem::ProcessTurn()
 {
-	for (uint8_t player = 0; player < static_cast<uint8_t>(PlayerNames::_COUNT); ++player)
+	for (const auto player : ecs::game_players::All())
 	{
-		for (const auto town : TownsInGainedOrder(static_cast<PlayerNames>(player)))
+		for (const auto town : TownsInGainedOrder(player))
 		{
 			ProcessTownBuildings(town);
 			ProcessTownTurn(town);
@@ -962,6 +971,11 @@ void TownSystem::ProcessTownBuildings(entt::entity townEntity)
 		if (const auto* data = registry.TryGet<const Abode>(abode); data == nullptr || data->type == AbodeNumber::FootballPitch)
 		{
 			continue;
+		}
+		// A workshop makes its scaffolds before it ages as any other building does
+		if (registry.AllOf<Workshop>(abode) && Locator::workshopSystem::has_value())
+		{
+			Locator::workshopSystem::value().ProcessWorkshop(abode);
 		}
 		NeglectAbode(townEntity, abode);
 		// The loss of life can remove the building
@@ -1128,9 +1142,19 @@ void TownSystem::ClaimTown(entt::entity town, PlayerNames player)
 	}
 	// Its people living in its homes give up the work the old player set them to
 	villager_disciple::TownClaimed(town);
+	// Its finished wonders remove their power from the old player
+	if (Locator::wonderSystem::has_value())
+	{
+		Locator::wonderSystem::value().TownLeavesPlayer(town);
+	}
 	// It becomes the player's, gained after the towns they have already
 	component->owner = player;
 	component->gained = registry.Context().nextTownGained++;
+	// Its finished wonders add their power to the new player
+	if (Locator::wonderSystem::has_value())
+	{
+		Locator::wonderSystem::value().TownJoinsPlayer(town);
+	}
 	// Its people count as converted to the player
 	if (const auto* stats = registry.TryGet<const TownStats>(town))
 	{
@@ -1185,21 +1209,22 @@ void TownSystem::ClaimTown(entt::entity town, PlayerNames player)
 		                                         .impressiveValue = info != nullptr ? info->impressiveValue : 0.0f});
 	}
 	// Fireworks and a fountain of the new player's symbols rise from its centre
-	if (player != PlayerNames::NEUTRAL && Locator::particleSystem::has_value())
+	if (player != PlayerNames::NEUTRAL && Locator::effectRequestSystem::has_value())
 	{
-		auto& particles = Locator::particleSystem::value();
-		particles.StartSpotVisual(SpotVisualType::TownFireworks, position, std::nullopt, entt::null);
-		const auto fountain = particles.StartSpotVisual(SpotVisualType::PlayerIconFountain, position, std::nullopt, entt::null);
-		if (fountain != ParticleSystemInterface::k_NoEffect)
-		{
-			particles.SetPlayer(fountain, static_cast<int>(player));
-		}
+		auto& effects = Locator::effectRequestSystem::value();
+		effects.Show({.type = SpotVisualType::TownFireworks, .position = position});
+		effects.Show({.type = SpotVisualType::PlayerIconFountain, .position = position, .player = static_cast<int>(player)});
+	}
+	// In a network game the new player counts a town taken over, for the winning condition
+	if (Locator::gameEndSystem::has_value())
+	{
+		Locator::gameEndSystem::value().AddToCondition(player, game_end::Condition::TownsTakenOver, 1);
 	}
 }
 
 void TownSystem::SaveState(reflection::BinaryWriter& out) const
 {
-	reflection::Save(out, _beliefSymbols);
+	reflection::SavePresentation(out, _beliefSymbols);
 }
 
 bool TownSystem::LoadState(reflection::BinaryReader& in)
@@ -1216,13 +1241,16 @@ bool TownSystem::LoadState(reflection::BinaryReader& in)
 	return true;
 }
 
-void TownSystem::UpdateFrame(float gameSeconds)
+void TownSystem::UpdateFrame(std::chrono::milliseconds frameRealTime, bool landDrawn)
 {
-	if (!Locator::particleSystem::has_value() || _registry == nullptr)
+	// The symbols step by a whole turn's time at the pace of the screen's refresh
+	const auto step =
+	    particles::drawn_steps::TurnStepSeconds(_beliefPace, frameRealTime, TimeSystemInterface::k_TurnDuration, landDrawn);
+	if (!Locator::particleRuleSystem::has_value() || _registry == nullptr)
 	{
 		return;
 	}
-	auto& particles = Locator::particleSystem::value();
+	auto& particles = Locator::particleRuleSystem::value();
 	// A centre gone takes its symbols with it
 	std::erase_if(_beliefSymbols, [this, &particles](const auto& entry) {
 		if (_registry->Valid(entry.first))
@@ -1247,13 +1275,16 @@ void TownSystem::UpdateFrame(float gameSeconds)
 		if (found == _beliefSymbols.end() || !particles.IsRunning(found->second))
 		{
 			const auto effect = particles.Start(ParticleType::TownBelief, glm::vec3(0.0f), 1.0f);
-			if (effect == ParticleSystemInterface::k_NoEffect)
+			if (effect == ParticleRuleSystemInterface::k_NoEffect)
 			{
 				return;
 			}
 			particles.AddTarget(effect, entity);
 			found = _beliefSymbols.insert_or_assign(entity, effect).first;
 		}
-		particles.ProcessByFrame(found->second, gameSeconds);
+		if (step.has_value())
+		{
+			particles.ProcessByFrame(found->second, *step);
+		}
 	});
 }

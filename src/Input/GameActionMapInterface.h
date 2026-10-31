@@ -20,6 +20,7 @@
 #include <glm/vec3.hpp>
 
 #include "BindableActions.h"
+#include "Common/InputSteps.h"
 #include "InputLock.h"
 #include "KeyBindings.h"
 
@@ -160,6 +161,12 @@ public:
 	/// Mouse wheel notches turned this frame, positive away from the user
 	[[nodiscard]] virtual float GetMouseWheelDelta() const = 0;
 	[[nodiscard]] virtual std::array<std::optional<glm::vec3>, 2> GetHandPositions() const = 0;
+	/// Divides the mouse of this frame across the fixed steps of the input that the frame takes (see input_steps). Call it
+	/// one time a frame.
+	virtual void SplitInput([[maybe_unused]] const input_steps::Steps& steps) {}
+	/// While a step is set, the mouse reads as the part of the frame that the step takes: the cursor, its movements and
+	/// the wheel. With no step, the mouse reads as the whole frame again.
+	virtual void UseInputStep([[maybe_unused]] std::optional<uint32_t> step) {}
 
 	/// The options screen's actions and what each is bound to now
 	[[nodiscard]] virtual std::span<const KeyBinding> GetKeyBindings() const { return DefaultKeyBindings(); }
@@ -231,6 +238,11 @@ public:
 	[[nodiscard]] virtual std::optional<glm::ivec2> GetCursorWarp() const { return std::nullopt; }
 	/// Actions the land's scripts don't allow now, which read as not held
 	virtual void SetBlockedActions([[maybe_unused]] BindableActionMap actions) {}
+	/// A key goes down, a repeat of a held key too: whether a box on the screen takes the keyboard now. The answer
+	/// stays until the next key goes down. While a box has the keyboard, every action reads as not held
+	virtual void BoxKeyDown([[maybe_unused]] bool boxWantsKeys) {}
+	/// Whether a box has the keyboard, as the last key that went down found it
+	[[nodiscard]] virtual bool BoxHasKeyboard() const { return false; }
 	/// Whether the camera the player has can be turned with the mouse, which holds the cursor still while it is
 	virtual void AllowCursorFreeze([[maybe_unused]] bool allowed) {}
 	/// The cursor is held still while the mouse turns the camera, and the pointer's position isn't followed

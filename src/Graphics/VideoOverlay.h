@@ -19,8 +19,9 @@
 #include <glm/vec2.hpp>
 
 #include "Graphics/FilmSurface.h"
-#include "Graphics/RenderPass.h"
 #include "Video/VideoRules.h"
+#include "Visual/RenderPass.h"
+#include "Visual/VideoPlanes.h"
 
 namespace openblack::graphics
 {
@@ -32,19 +33,8 @@ class Texture2D;
 class VideoOverlay
 {
 public:
-	/// One picture's planes, Y full size and U, V half size each way, rows `stride` bytes apart; empty spans draw black
-	struct Planes
-	{
-		std::span<const uint8_t> y;
-		std::span<const uint8_t> u;
-		std::span<const uint8_t> v;
-		uint32_t yStride {0};
-		uint32_t chromaStride {0};
-		uint32_t width {0};
-		uint32_t height {0};
-		/// Goes up with each new picture
-		uint32_t serial {0};
-	};
+	/// One picture's planes
+	using Planes = VideoPlanes;
 
 	VideoOverlay();
 	~VideoOverlay();

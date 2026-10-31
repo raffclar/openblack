@@ -30,11 +30,27 @@ vcpkg_download_distfile(
 # - webgpu-occlusion-one-map: the occlusion queries copy their results into the readback buffer only while it is not
 #   mapped, and map it once for each copy. A submit that used the mapped buffer was not valid, the browser dropped it,
 #   and after some minutes of such frames the browser stopped the frames of the page.
+# - webgpu-one-submit-per-frame: all passes of a frame go into one command buffer and one submit. A submit for each
+#   pass cost a trip to the GPU process of the browser for each view, and the GPU waited between the submits.
 # A change to shaderc's ESSL output (the WebGL 2 shaders). It does not change the SPIR-V, WGSL, Metal or Direct3D
 # shaders:
 # - essl-no-inline: the ESSL shaders do not get the passes that inline functions. The inline of a function that
 #   returns early makes a block that runs one time, which SPIRV-Cross writes as a do-while(false) loop. ANGLE on
 #   Direct3D compiled the land shader with these loops for more than a minute, and Chrome then lost the context.
+# A change to the Vulkan renderer:
+# - vulkan-one-pipeline-cache: the renderer reads the application's kept pipeline cache one time, when it starts, and
+#   makes all pipelines in that one cache. It gives the cache back one time, when it stops. Before, each new pipeline
+#   read all of the kept cache, gave all of it back and merged it, which took 10 to 30 ms for each pipeline with a
+#   cache of 30 MB and stopped the frame.
+# A change to the Direct3D 12 renderer only:
+# - d3d12-upload-pages: buffer and texture updates of 1 MB or less copy from mapped 4 MB upload pages that the
+#   command queue keeps. A full page is used again when the queue fence shows that the GPU is done with it.
+#   Without this change, each update makes an upload resource and releases it later. That took 6 to 8 ms of each
+#   frame on Land 1. Larger updates keep the old path. The same bytes are copied, thus the pictures stay the same.
+# - d3d12-screenshot-frame: a screenshot of the window reads the buffer that the frame of the request drew into.
+#   Without this change, the screenshot reads the buffer one place back in the ring. With three buffers, the index
+#   wraps incorrectly from place 0, thus a screenshot showed the frame of the request or the frame before it, by
+#   the number of frames that the window showed before. The wait before each flip had the same wrap.
 # A change to the order of the draws, for all renderers. The game encodes some draws on many threads:
 # - submit-order: an encoder can set the submit order of its next draws. Draws with equal sort keys and the draws of a
 #   sequential view then render in that order, also when many encoders submit at the same time. Without it, that
@@ -43,6 +59,7 @@ vcpkg_extract_source_archive(
   SOURCE_PATH
   ARCHIVE "${ARCHIVE_FILE}"
   PATCHES
+    vulkan-one-pipeline-cache.patch
     webgpu-emscripten-renderer-on.patch
     webgpu-canvas-texture-each-frame.patch
     webgpu-yield-in-read-loops.patch
@@ -51,7 +68,11 @@ vcpkg_extract_source_archive(
     webgpu-vertex-texture-caps.patch
     webgpu-min-max-blend-factors.patch
     webgpu-occlusion-one-map.patch
+    webgpu-one-submit-per-frame.patch
+    webgpu-pipeline-by-content.patch
     essl-no-inline.patch
+    d3d12-upload-pages.patch
+    d3d12-screenshot-frame.patch
     submit-order.patch
 )
 

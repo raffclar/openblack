@@ -20,6 +20,7 @@
 #include "InfoConstants.h"
 #include "Locator.h"
 #include "Resources/ResourceManager.h"
+#include "Utils.h"
 
 using namespace openblack;
 using namespace openblack::ecs::archetypes;
@@ -52,6 +53,8 @@ entt::entity PotArchetype::CreateEmpty(const glm::vec3& position, float yAngleRa
 
 	auto& registry = Locator::entitiesRegistry::value();
 	const auto entity = registry.Create();
+	// It takes its place in the order of the things made
+	TakeThingMadePlace();
 
 	const auto& info = Locator::infoConstants::value().pot.at(static_cast<size_t>(type));
 

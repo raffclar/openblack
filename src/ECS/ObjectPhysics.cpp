@@ -14,15 +14,13 @@
 #include <algorithm>
 #include <array>
 #include <numbers>
+#include <optional>
 
 #include <glm/geometric.hpp>
 #include <glm/gtx/euler_angles.hpp>
 
 #include "3D/LandIslandInterface.h"
 #include "3D/MapCoords.h"
-#include "Audio/AudioManagerInterface.h"
-#include "Audio/GameSoundEffects.h"
-#include "Audio/Sound.h"
 #include "Common/GUtilsAngle.h"
 #include "Common/GUtilsDistance.h"
 #include "Common/GameRandom.h"
@@ -40,7 +38,6 @@
 #include "ECS/Components/HandGrab.h"
 #include "ECS/Components/Indestructible.h"
 #include "ECS/Components/MagicForest.h"
-#include "ECS/Components/MapCellResident.h"
 #include "ECS/Components/Mobile.h"
 #include "ECS/Components/Physics.h"
 #include "ECS/Components/Pot.h"
@@ -50,6 +47,7 @@
 #include "ECS/Components/TempleExterior.h"
 #include "ECS/Components/Town.h"
 #include "ECS/Components/TownArtefact.h"
+#include "ECS/Components/TownDesireFlag.h"
 #include "ECS/Components/Transform.h"
 #include "ECS/Components/Tree.h"
 #include "ECS/Components/WorshipSite.h"
@@ -64,10 +62,10 @@
 #include "ECS/Systems/ArtefactSystemInterface.h"
 #include "ECS/Systems/CreatureMindSystemInterface.h"
 #include "ECS/Systems/DynamicsSystemInterface.h"
+#include "ECS/Systems/EffectRequestSystemInterface.h"
 #include "ECS/Systems/ExplosionSystemInterface.h"
 #include "ECS/Systems/FireSystemInterface.h"
 #include "ECS/Systems/ForestSystemInterface.h"
-#include "ECS/Systems/ParticleSystemInterface.h"
 #include "ECS/Systems/ReactionSystemInterface.h"
 #include "ECS/Systems/ResourceStoreSystemInterface.h"
 #include "ECS/Systems/ScriptObjectsSystemInterface.h"
@@ -77,6 +75,9 @@
 #include "Locator.h"
 #include "Magic/AreaEffect.h"
 #include "Physics/ObjectRules.h"
+#include "Sound/GameSoundEffects.h"
+#include "Sound/SoundId.h"
+#include "Sound/SoundRequestInterface.h"
 
 using namespace openblack;
 using namespace openblack::ecs;
@@ -101,7 +102,7 @@ constexpr std::array<audio::SoundId, 3> k_TreePlantings = {audio::SoundId::G_Pla
 /// A sound at a point, played for what owns it
 void PlaySound(audio::SoundId sound, glm::vec3 point, entt::entity owner)
 {
-	if (Locator::audio::has_value())
+	if (Locator::sounds::has_value())
 	{
 		audio::StartGameSoundEffect(static_cast<entt::id_type>(sound), {.position = point, .owner = owner});
 	}
@@ -116,13 +117,17 @@ audio::SoundId NextInTurn(const std::array<audio::SoundId, N>& sounds, uint8_t& 
 	return sound;
 }
 
-/// Whether a fixed thing belongs to a town or is part of a temple: a building or a field only when it has a town, a
-/// building standing outside any town not counting
+/// Whether a fixed thing belongs to a town or is part of a temple: a building, a field or a flag of a town's wants only
+/// when it has a town, a building standing outside any town not counting
 bool OfTown(const Registry& registry, entt::entity thing)
 {
 	if (registry.AnyOf<Temple, TempleExterior, TempleEntrance>(thing))
 	{
 		return true;
+	}
+	if (const auto* flag = registry.TryGet<const TownDesireFlag>(thing))
+	{
+		return registry.Valid(flag->town) && registry.AllOf<Town>(flag->town);
 	}
 	bool found = false;
 	if (const auto* abode = registry.TryGet<const Abode>(thing))
@@ -142,6 +147,11 @@ bool OfTown(const Registry& registry, entt::entity thing)
 std::optional<uint32_t> TownScenicForest(const Registry& registry, entt::entity thing)
 {
 	std::optional<int64_t> townId;
+	if (const auto* flag = registry.TryGet<const TownDesireFlag>(thing))
+	{
+		const auto* town = registry.Valid(flag->town) ? registry.TryGet<const Town>(flag->town) : nullptr;
+		return town != nullptr ? town->scenicForest : std::nullopt;
+	}
 	if (const auto* abode = registry.TryGet<const Abode>(thing))
 	{
 		townId = abode->townId;
@@ -226,15 +236,16 @@ void Replant(const PhysicsEntry* entry, entt::entity tree)
 		}
 	}
 	// Away from towns, the player sees the forest grow
-	if (!search.NearTown() && Locator::particleSystem::has_value())
+	if (!search.NearTown() && Locator::effectRequestSystem::has_value())
 	{
-		auto& particles = Locator::particleSystem::value();
-		const auto effect = particles.StartSpotVisual(SpotVisualType::ForestCreated, position, objects::k_ReplantVisualTurns,
-		                                              entt::null, objects::k_ReplantVisualMagnitude);
-		if (effect != systems::ParticleSystemInterface::k_NoEffect && entry != nullptr && entry->player.has_value())
-		{
-			particles.SetPlayer(effect, static_cast<int>(*entry->player));
-		}
+		Locator::effectRequestSystem::value().Show({
+		    .type = SpotVisualType::ForestCreated,
+		    .position = position,
+		    .magnitude = objects::k_ReplantVisualMagnitude,
+		    .turns = objects::k_ReplantVisualTurns,
+		    .player =
+		        entry != nullptr && entry->player.has_value() ? std::optional(static_cast<int>(*entry->player)) : std::nullopt,
+		});
 	}
 	// The player who planted it is seen to, by their creature and by the world
 	if (entry == nullptr || !entry->player.has_value())
@@ -704,7 +715,7 @@ bool object_physics::KickBall(systems::DynamicsSystemInterface& dynamics, entt::
 	{
 		dynamics.RemoveObject(ball, true, true);
 	}
-	const bool inMap = registry.AllOf<MapCellResident>(ball) && !registry.AnyOf<InHand, InPhysics, CarriedByTornado>(ball);
+	const bool inMap = ecs::InMapCells(registry, ball) && !registry.AnyOf<InHand, InPhysics, CarriedByTornado>(ball);
 	// A kick at its own place would fly on no number at all; openblack doesn't start that
 	if (!inMap || !std::isfinite(velocity.x) || !std::isfinite(velocity.y) || !std::isfinite(velocity.z))
 	{

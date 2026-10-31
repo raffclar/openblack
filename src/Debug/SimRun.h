@@ -20,8 +20,11 @@
 #include <utility>
 #include <vector>
 
+#include "Common/DeveloperTools.h"
+#include "ECS/GameEndConditions.h"
 #if defined(OPENBLACK_DEVELOPER_TOOLS)
 #include "Debug/RowDump.h"
+#include "Simulation/WorldStateAtTurn.h"
 #endif
 
 /// The fast simulation mode for long tool runs, such as a creature's whole life. Each frame takes a fixed game time, so a
@@ -50,6 +53,15 @@ struct TempleLoss
 	uint32_t turn {0};
 };
 
+/// Tools: the winning conditions that a test switch gives a network game, as the host picks them. The values are checked
+/// against the limits of a land in "Online Maps\ConditionTemplate.txt".
+struct ConditionsRequest
+{
+	/// The land whose limits the values must keep to, such as "mpm_2p_1". Empty: the land of the game.
+	std::string limitsLand;
+	std::vector<game_end::ConditionPick> picks;
+};
+
 /// How the game runs its frames
 struct Settings
 {
@@ -65,16 +77,33 @@ struct Settings
 	/// The hand stays where it starts and does not follow the pointer: the player gives no input with the hand. The
 	/// frames ease the hand to the pointer, so a hand that moves gives other places at other frame rates.
 	bool stillHand {false};
+	/// Tools: the player's computer sends no report of its hand, its view or the thing under its hand. The reports
+	/// carry the camera, and the camera moves at each frame. So two runs give other reports at other turns, and the
+	/// shared worlds of two runs with the same seed and land are different until the camera stops.
+	bool noHandReports {false};
 	/// Tests: the loss of a temple at a turn
 	std::optional<TempleLoss> templeLoss;
+	/// Tests: a god with no temple stays in a network game. For tool runs of a land that makes no temple at its start,
+	/// such as a story land. Each computer of a network game must have the same switch.
+	bool godsNeedNoTemple {false};
+	/// Tests: the time limit of a network game in minutes, in place of the default time limit. The game server sends its
+	/// time limit to the clients at the start.
+	std::optional<uint32_t> timeLimit;
+	/// Tools: the winning conditions of a network game, in place of the host's pick. The game server sends its
+	/// conditions to the clients at the start.
+	std::vector<game_end::ConditionPick> conditions;
 	/// Tests: at this turn the player of a network game leaves it as a player does: Escape, Exit Online Game, Leave Game
 	std::optional<uint32_t> leaveAt;
+	/// Tests: at this turn the player of a network game presses Back in the land information box, as a player clicks it
+	std::optional<uint32_t> landInfoBoxBackAt;
 };
 
 /// What the command line asks of a simulation run
 struct Request
 {
 	Settings settings {};
+	/// Tools: the modes of the AI soak for the first land. A game that joins a game server takes them from the server.
+	developer_tools::SoakTools soak;
 	/// The game time of each frame, none for the wall clock
 	std::optional<std::chrono::microseconds> frameTime;
 	/// The file to write the run record to, as JSON lines
@@ -115,6 +144,8 @@ struct Request
 	/// Tools: the file of the row dump (row_dump::RowDump), and what it keeps and writes
 	std::optional<std::filesystem::path> rowDumpPath;
 	row_dump::Settings rowDump;
+	/// Tools: the turns at which this computer writes its world state, and the folder of the files
+	std::optional<world_state_at_turn::Settings> worldStates;
 #endif
 
 	static constexpr uint32_t k_DefaultRecordEvery = 100;
@@ -131,14 +162,26 @@ constexpr uint32_t k_LongestFrameMs = 1000;
 /// when it is not from 1 to the longest frame time
 [[nodiscard]] std::optional<std::chrono::microseconds> FrameTimeFromMs(double milliseconds);
 
-/// Whether the game draws this frame
-[[nodiscard]] bool DrawsFrame(const Settings& settings, uint64_t frame);
+/// Whether the game draws this frame. In the fast mode, the game also draws a frame when a tool asks for a picture of
+/// it, because a frame that is not drawn gives no picture.
+[[nodiscard]] bool DrawsFrame(const Settings& settings, uint64_t frame, bool pictureWanted = false);
 
 /// Whether the run is at its end at this turn
 [[nodiscard]] bool Finished(const Settings& settings, uint32_t turn);
 
+/// Whether the game skips a frame of a run that a tool steps through the inspector. While the tool holds the run, the
+/// game is paused and the frame only gives the answers to the tool. The wall clock sets the number of these frames.
+/// Thus they must not move the clock, the camera or the hand, because the turns get the camera and the hand from the
+/// reports. A frame with work that the tool waits for still plays, for example a scenario to lay out or a picture.
+[[nodiscard]] bool SkipsHeldFrame(bool steppedByTool, bool paused, bool workWaits);
+
 /// The loss of a temple from the text "player:turn", such as "1:300". None for another text or a player past the seventh.
 [[nodiscard]] std::optional<TempleLoss> ParseTempleLoss(std::string_view text);
+
+/// The winning conditions from the text "[LAND:]NAME=VALUE,...", such as "mpm_2p_1:WC_HOUSES_BUILT=3,WC_GROW_TREES=5".
+/// A name is the name of the condition in the template file, or its number from 0. None for another text, or for a
+/// condition that the text names two times.
+[[nodiscard]] std::optional<ConditionsRequest> ParseConditions(std::string_view text);
 
 /// How long the frame waits at its end so that it takes its fixed game time in real time; no wait in fast mode, without
 /// a fixed frame time, or once the frame took that long or longer
@@ -156,13 +199,23 @@ struct Timings
 	float frameLongestMs {0.0f};
 	/// The time of each stage of the profiler over the frames, by the stage's number
 	std::vector<float> stageTotalMs;
+	/// The times of the steps of the tools that record the run. The time of a turn does not include them.
+	uint32_t records {0};
+	float recordTotalMs {0.0f};
+	float recordLongestMs {0.0f};
+	/// The time of the records since the last turn time, which the next turn time does not include
+	float recordSinceTurnMs {0.0f};
 
+	/// Adds a turn time. The time of the records since the last turn time is not part of the turn.
 	void AddTurn(float ms);
+	/// Adds the time of the step that records the run, which is part of the next turn time
+	void AddRecord(float ms);
 	void AddFrame(float ms);
 	/// Adds the time that each stage took in a frame, by the stage's number
 	void AddStages(std::span<const float> ms);
 	[[nodiscard]] float TurnAverageMs() const;
 	[[nodiscard]] float FrameAverageMs() const;
+	[[nodiscard]] float RecordAverageMs() const;
 };
 
 } // namespace openblack::sim_run

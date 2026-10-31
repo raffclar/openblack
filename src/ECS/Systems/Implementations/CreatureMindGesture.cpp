@@ -32,12 +32,11 @@
 #include "ECS/Components/Transform.h"
 #include "ECS/Registry.h"
 #include "ECS/Systems/CreatureObjectActionSystemInterface.h"
+#include "ECS/Systems/EffectRequestSystemInterface.h"
 #include "ECS/Systems/GestureSystemInterface.h"
-#include "ECS/Systems/ParticleSystemInterface.h"
 #include "ECS/Systems/TimeSystemInterface.h"
 #include "Locator.h"
 #include "ObjectMeasures.h"
-#include "Particles/ParticleEffect.h"
 
 using namespace openblack;
 using namespace openblack::ecs::systems;
@@ -74,53 +73,43 @@ glm::vec3 TargetOf(const ecs::Registry& registry, entt::entity creature, const C
 /// The chain follows the hand while the arm points; else it waits at the creature's feet, and makes nothing
 void FeedChain(const CreatureGestureDrawing& drawing, const std::optional<glm::vec3>& hand, glm::vec3 feet)
 {
-	if (!Locator::particleSystem::has_value() || drawing.chain == ParticleSystemInterface::k_NoEffect)
+	if (Locator::effectRequestSystem::has_value())
 	{
-		return;
-	}
-	if (auto* effect = Locator::particleSystem::value().Find(drawing.chain))
-	{
-		effect->SetProcessInfo({.handPosition = hand.value_or(feet), .enabled = hand.has_value()});
+		Locator::effectRequestSystem::value().SetProcessInfo(
+		    drawing.chain, {.handPosition = hand.value_or(feet), .enabled = hand.has_value()});
 	}
 }
 
 void StopChain(CreatureGestureDrawing& drawing)
 {
-	if (!Locator::particleSystem::has_value() || drawing.chain == ParticleSystemInterface::k_NoEffect)
+	if (!Locator::effectRequestSystem::has_value())
 	{
 		return;
 	}
-	auto& particles = Locator::particleSystem::value();
-	if (auto* effect = particles.Find(drawing.chain))
-	{
-		auto info = effect->GetProcessInfo();
-		info.enabled = false;
-		effect->SetProcessInfo(info);
-	}
-	particles.CloseDown(drawing.chain);
+	auto& effects = Locator::effectRequestSystem::value();
+	effects.SetEnabled(drawing.chain, false);
+	effects.Stop(drawing.chain);
 }
 
 /// The chain starts at the start of the shape as the arm starts to point: as big as the creature is tall, in its
 /// player's colour. A chain that the last drawing left goes first.
 void StartChain(const ecs::Registry& registry, entt::entity creature, CreatureGestureDrawing& drawing, glm::vec3 start)
 {
-	if (!Locator::particleSystem::has_value())
+	if (!Locator::effectRequestSystem::has_value())
 	{
 		return;
 	}
-	auto& particles = Locator::particleSystem::value();
-	if (drawing.chain != ParticleSystemInterface::k_NoEffect)
-	{
-		particles.Delete(drawing.chain);
-	}
+	auto& effects = Locator::effectRequestSystem::value();
+	effects.Remove(drawing.chain);
 	const auto& body = registry.Get<const Creature>(creature);
-	drawing.chain =
-	    particles.Start(ParticleType::CreatureGesture, start, creature_cast_moves::k_HeightOfSizeOne * ShownSize(body), false);
-	particles.SetPlayer(drawing.chain, static_cast<int>(body.owner));
-	if (auto* effect = particles.Find(drawing.chain))
-	{
-		effect->SetProcessInfo({.handPosition = glm::vec3(0.0f), .enabled = false});
-	}
+	drawing.chain = effects.Start({
+	    .type = ParticleType::CreatureGesture,
+	    .position = start,
+	    .magnitude = creature_cast_moves::k_HeightOfSizeOne * ShownSize(body),
+	    .synced = false,
+	    .player = static_cast<int>(body.owner),
+	    .processInfo = particles::ProcessInfo {.handPosition = glm::vec3(0.0f), .enabled = false},
+	});
 }
 } // namespace
 

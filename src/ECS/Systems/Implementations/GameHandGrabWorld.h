@@ -29,6 +29,7 @@ public:
 	[[nodiscard]] bool IsOtherPlayersHand(entt::entity hand) const override;
 	[[nodiscard]] std::optional<PlayerNames> PlayerOfHand(entt::entity hand) const override;
 	[[nodiscard]] glm::vec3 AsMapPlace(glm::vec3 point) const override;
+	[[nodiscard]] glm::vec3 HeldPlaceAt(glm::vec3 point) const override;
 	[[nodiscard]] std::optional<glm::vec3> ReportedCollidePoint() const override;
 	[[nodiscard]] std::optional<PlayerNames> GetActingPlayer() const override { return _acting; }
 	[[nodiscard]] std::optional<PlayerNames> OwnHandPlayer() const override;
@@ -58,14 +59,21 @@ public:
 	void LeavePhysicsAndMap(entt::entity object) override;
 	void CreateReaction(const ReactionRequest& request) override;
 	void RemoveReactions(entt::entity initiator, Reaction type) override;
+	void StopReactionSpreadInHand(entt::entity object) override;
+	void SpreadReactionsAgain(entt::entity object) override;
 	void FireStartedMoving(entt::entity object, bool inHand) override;
 	void CatchFirefly(entt::entity object) override;
 	void CountHelpEvent(uint32_t event) override;
 	void ForgetGesturePath() override;
+	[[nodiscard]] bool IsLocalHand() const override;
 	void HeatHeld(entt::entity object) override;
+	void HeldTurn(entt::entity object) override;
 	void PlaySample(uint32_t sample, glm::vec3 position) override;
 	bool TapThing(entt::entity object, glm::vec3 handPoint, PlayerNames player) override;
+	[[nodiscard]] bool ValidToTap(entt::entity object) const override;
 	void GlobeIntoHand(entt::entity globe, PlayerNames player) override;
+	void ScaffoldIntoHand(entt::entity scaffold, PlayerNames player) override;
+	void PuzzlePieceIntoHand(entt::entity piece) override;
 	[[nodiscard]] std::optional<creature_giving::Verdict> GiveVerdict(entt::entity target, entt::entity held) const override;
 	void SayCantPickUp(entt::entity creature) override;
 	bool GiveTo(entt::entity creature, entt::entity held, bool leftHand) override;
@@ -99,7 +107,12 @@ public:
 	void ForgetPulledPose(entt::entity object) override;
 	[[nodiscard]] glm::mat3 UnstretchedAxes(entt::entity object, const glm::mat3& axes) const override;
 
-	[[nodiscard]] player_commands::ThrowStart ThrowStartOf(entt::entity object, bool alignToSlope) override;
+	[[nodiscard]] hand_grab::throw_lead::LedThrow ThrowStartOf(entt::entity object, bool alignToSlope, glm::vec3 velocity,
+	                                                           int leadTurns) override;
+	[[nodiscard]] uint32_t ReportLatencyMs() const override;
+	[[nodiscard]] uint32_t FrameTurn() const override;
+	[[nodiscard]] float FrameTurnFraction() const override;
+	void DrawThrownPose(entt::entity object, const physics::Pose& pose) override;
 	void StartThrowFrom(entt::entity object, const player_commands::ThrowStart& start) override;
 	std::optional<uint32_t> PourPot(entt::entity pot, PlayerNames player) override;
 	[[nodiscard]] std::optional<PotFacts> PotFactsOf(entt::entity pot) const override;
@@ -126,6 +139,9 @@ public:
 	bool TakeIntoStore(entt::entity store, entt::entity object) override;
 	[[nodiscard]] bool TakesWhole(entt::entity target, entt::entity held) const override;
 	bool LayGateStone(entt::entity plinth, entt::entity stone) override;
+	[[nodiscard]] bool JoinsScaffold(entt::entity target, entt::entity held) const override;
+	void JoinScaffold(entt::entity target, entt::entity held) override;
+	entt::entity RestOfScaffold(entt::entity scaffold) override;
 	void PourAt(ResourceType resource, glm::vec3 point, uint32_t amount, PlayerNames player, bool poisoned) override;
 	void UseUp(entt::entity object) override;
 	altar_offering::Answer OfferAtAltar(entt::entity altar, entt::entity held) override;

@@ -17,6 +17,7 @@
 #include <glm/vec3.hpp>
 
 #include "3D/ModelSurface.h"
+#include "ECS/TownAggression.h"
 #include "Enums.h"
 #include "Help/VillageVoices.h"
 
@@ -70,8 +71,9 @@ struct Size
 void SetLife(entt::entity object, float life, bool allowed = true);
 /// Life taken from an object, as each kind takes it: a building's people come out, and it stops working once low; a
 /// field loses food rather than life; a creature that runs out is knocked out. Its life after. The player who did it,
-/// if any, is counted as destroying a settled building it puts out of action.
-float ReduceLife(entt::entity object, float damage, std::optional<PlayerNames> by = std::nullopt);
+/// if any, is counted as destroying a settled building it puts out of action. In a network game the player also counts a
+/// building smashed, by a creature when the harm comes from a creature.
+float ReduceLife(entt::entity object, float damage, std::optional<PlayerNames> by = std::nullopt, bool byCreature = false);
 
 /// Whether a building, a field, a wonder, a spell dispenser and the like: what a miracle that destroys things leaves
 /// standing at no life
@@ -106,6 +108,9 @@ struct EffectDeath
 };
 /// As above; a villager's death is then remembered as killed by an effect, put down to the effect's player
 void DestroyedByEffect(entt::entity object, const EffectDeath& death);
+/// A building that a script holds stays when an effect destroys it. Its town gets a site there if it has none. A building
+/// of no town stays as it is, with its fire. Else an unfinished building gets all of its life again, and its fire stops.
+void KeepForScript(entt::entity building);
 
 /// The player an object belongs to, whom a fire a script lights on it is put down to: a creature's owner; a villager's,
 /// a building's or a field's town's owner; a magic tree's caster. A villager or field without a town, a tree and a dead
@@ -122,9 +127,9 @@ void DestroyedByEffect(entt::entity object, const EffectDeath& death);
 void CountInjury(entt::entity villager, float before, float after);
 /// Harm done to a town's villager or building is an attack on its town by whoever did it; the player at this machine's
 /// advisors may remark on it. A creature doing the harm is told apart. The people of the town may cry out in the voice
-/// that the harm gives, if it gives one.
-void AttackTown(entt::entity object, float damage, PlayerNames aggressor, bool byCreature = false,
-                std::optional<guidance::TownAttackVoice> cry = std::nullopt);
+/// that the harm gives, if it gives one. The town keeps how much the attack burnt, crushed and hit.
+void AttackTown(entt::entity object, float damage, PlayerNames aggressor, const town_aggression::Harm& harm,
+                bool byCreature = false, std::optional<guidance::TownAttackVoice> cry = std::nullopt);
 
 /// Life given back to an object other than a living thing, as a miracle's heal gives it: never above 1. Its life after.
 float IncreaseLife(entt::entity object, float amount);

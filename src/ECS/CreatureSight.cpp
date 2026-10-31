@@ -94,9 +94,16 @@ void creature_sight::SeePlayerAction(PlayerNames player, creature_desires::Desir
 	{
 		return;
 	}
-	const auto hand = Locator::handSystem::value().GetPlayerHandPositions().at(static_cast<size_t>(Side::Left));
 	const auto creature = Locator::leashSystem::value().PlayersCreature(player);
-	if (!hand.has_value() || !creature.has_value())
+	if (!creature.has_value())
+	{
+		return;
+	}
+	// The creature reads the hand of the same player as the camera: its own player
+	const auto handPlayer = openblack::ecs::ReportedCreaturePlayer(*creature);
+	const auto hand =
+	    handPlayer.has_value() ? openblack::ecs::PlayerHandsOf(*handPlayer).at(static_cast<size_t>(Side::Left)) : std::nullopt;
+	if (!hand.has_value())
 	{
 		return;
 	}
@@ -108,7 +115,7 @@ void creature_sight::SeePlayerAction(PlayerNames player, creature_desires::Desir
 		return;
 	}
 	// The player must look at the creature, and the creature must look towards the hand
-	const auto camera = openblack::ecs::ReportedCreatureCamera(*creature);
+	const auto camera = openblack::ecs::ReportedCameraOfItsPlayer(*creature);
 	if (!camera.has_value() || !creature_attention::IsLookingAt(camera->origin, camera->focus, at->position))
 	{
 		return;

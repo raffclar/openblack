@@ -11,12 +11,14 @@
 
 #include <cstdint>
 
+#include <chrono>
 #include <optional>
 #include <vector>
 
 #include <entt/entity/entity.hpp>
 #include <glm/vec3.hpp>
 
+#include "Common/InputSteps.h"
 #include "ECS/Systems/SavedStateInterface.h"
 #include "Enums.h"
 #include "Magic/CastInput.h"
@@ -39,6 +41,7 @@ struct HandCast;
 
 namespace openblack::ecs::systems
 {
+class ObjectDrawListSystemInterface;
 
 /// The running miracles, the seeds the player holds and the miracle dispensers.
 ///
@@ -246,16 +249,21 @@ public:
 	/// The hand drops the miracle it holds, as a scribble or a shake does: what was started is called off and what the
 	/// seed still holds goes back to the player's worship
 	virtual void DiscardHeldSeed() = 0;
+	/// The hand of the player drops the miracle that it holds, as DiscardHeldSeed does for the player of this computer.
+	/// The result is the same on each computer, so a tool can use it before the same turn on each computer.
+	virtual void DiscardHeldSeedOf(PlayerNames player) = 0;
 	/// A seed goes with the icon that made it: out of the hand if it is held, and a miracle still running from it closes
 	/// down. What it holds is lost.
 	virtual void DeleteSeed(entt::entity seed) = 0;
 
 	// The hand
 
-	/// Once a frame, before any press or release
-	virtual void UpdateHand(const HandFrame& frame, float seconds) = 0;
-	/// A fireball tapped by the empty hand within the player's influence: another player's is caught into the hand, the
-	/// player's own slips through. Whether it was caught.
+	/// Once a frame, before any press or release. The hand's movement and its spin are measured at the steps of the
+	/// input that the frame takes (see input_steps), the hand at its place between the last frame and this frame.
+	virtual void UpdateHand(const HandFrame& frame, const input_steps::Steps& steps) = 0;
+	/// A fireball tapped by the empty hand within the player's influence. The hand sends the tap as a command of the
+	/// player, and every computer catches the ball at the turn: another player's goes into the hand, the player's own
+	/// slips through. Whether the hand sent the tap.
 	virtual bool TapFireBall(entt::entity ball) = 0;
 	/// A one-shot globe tapped by the empty hand: its miracle goes into the hand, charged in full, and the globe pops.
 	/// Whether the hand took the miracle.
@@ -330,6 +338,14 @@ public:
 	virtual void ProcessTurn() = 0;
 	/// Once a frame: the held miracle follows the hand, the bubbles' seeds spin
 	virtual void Update(float seconds) = 0;
+	/// Once a frame, after the frame makes the land's draw list: the swirls of the dispensers that the frame draws show
+	/// and move on, and the other swirls do not show. They step no more often than 60 times a second, by the game time
+	/// since the last step.
+	virtual void UpdateDispenserFrame(const ObjectDrawListSystemInterface& /*drawList*/,
+	                                  std::chrono::milliseconds /*frameRealTime*/, std::chrono::milliseconds /*frameGameTime*/,
+	                                  bool /*landDrawn*/)
+	{
+	}
 	/// A new land: every miracle goes
 	virtual void Reset() = 0;
 
@@ -348,6 +364,8 @@ public:
 	[[nodiscard]] virtual std::optional<HandFrame> GetDrivenHand() const = 0;
 	[[nodiscard]] virtual bool IsIgnoringInfluence() const = 0;
 	[[nodiscard]] virtual std::vector<SpellInfo> GetSpells() const = 0;
+	/// A miracle of the player of this computer follows the hand at each turn, so the hand report goes at each turn
+	[[nodiscard]] virtual bool SpellNeedsHandReportEachTurn() const { return false; }
 	/// The newest miracle of a kind, closing down or not, whose last event was strictly within a radius of a point
 	[[nodiscard]] virtual std::optional<entt::entity> SpellAt(MagicType /*type*/, glm::vec3 /*point*/, float /*radius*/) const
 	{

@@ -26,6 +26,7 @@
 #include "3D/LandIslandInterface.h"
 #include "3D/MapCoords.h"
 #include "Common/GUtilsDistance.h"
+#include "Common/PortableRotations.h"
 #include "ECS/Archetypes/AbodeArchetype.h"
 #include "ECS/BuildingConstruction.h"
 #include "ECS/BuildingSites.h"
@@ -48,6 +49,7 @@
 #include "ECS/Systems/TimeSystemInterface.h"
 #include "ECS/Systems/TownDesireSystemInterface.h"
 #include "ECS/Systems/TownSystemInterface.h"
+#include "ECS/Systems/WonderSystemInterface.h"
 #include "ECS/TempleConstruction.h"
 #include "ECS/WorldObjects.h"
 #include "InfoConstants.h"
@@ -218,6 +220,60 @@ std::vector<planned_building::OtherTown> OtherTowns(entt::entity town)
 }
 
 /// Whether the land at a place is dry: a cell of the land without water
+/// The land cell at a place, none off the map or where the land has no cell
+const lnd::LNDCell* LandCellAt(glm::vec3 position)
+{
+	if (!Locator::terrainSystem::has_value())
+	{
+		return nullptr;
+	}
+	const auto cell = glm::floor(glm::xz(position) / gutils::k_MetresPerCell);
+	if (cell.x < 0.0f || cell.y < 0.0f || cell.x >= static_cast<float>(map_coords::k_MapCells) ||
+	    cell.y >= static_cast<float>(map_coords::k_MapCells))
+	{
+		return nullptr;
+	}
+	return Locator::terrainSystem::value().FindCell(glm::u16vec2(cell));
+}
+
+/// The buildings that stand in each cell of an outline that covers new buildings, with their distances from a place
+std::vector<std::vector<planned_building::BuildingNearby>>
+BuildingsInOutline(const map_cells::Outline& outline, glm::vec3 place, entt::entity ignored = entt::null)
+{
+	auto& registry = Entities();
+	const auto& map = Locator::entitiesMap::value();
+	std::vector<std::vector<planned_building::BuildingNearby>> nearby;
+	for (const auto covered : map_cells::CellsCovered(outline))
+	{
+		auto& buildings = nearby.emplace_back();
+		for (const auto thing : map.GetFixedInGridCell(MapInterface::CellId(covered)))
+		{
+			const auto* resident = registry.TryGet<const MapCellResident>(thing);
+			const auto* placed = registry.TryGet<const Transform>(thing);
+			if (resident == nullptr || !resident->coversOutline || placed == nullptr || thing == ignored)
+			{
+				continue;
+			}
+			buildings.push_back({.distance = gutils::GetDistanceInMetres(place, placed->position),
+			                     .radius = systems::object_measures::TwoDRadius(registry, thing)});
+		}
+	}
+	return nearby;
+}
+
+/// The cells of a footprint, as views on the buildings in each cell
+std::vector<planned_building::FootprintCell>
+FootprintOf(const std::vector<std::vector<planned_building::BuildingNearby>>& nearby)
+{
+	std::vector<planned_building::FootprintCell> footprint;
+	footprint.reserve(nearby.size());
+	for (const auto& buildings : nearby)
+	{
+		footprint.push_back({.buildings = buildings});
+	}
+	return footprint;
+}
+
 bool DryLandAt(glm::vec3 position)
 {
 	if (!Locator::terrainSystem::has_value())
@@ -256,29 +312,8 @@ bool TakesNewHouse(entt::entity town, entt::entity plan)
 	const float scale = transform.scale.x;
 	const float reach = std::max(halfSize.x, halfSize.z) * scale;
 	const auto outline = map_cells::OutlineOfBox(transform.position, transform.rotation, scale, box.Center(), halfSize);
-	const auto& map = Locator::entitiesMap::value();
-	std::vector<std::vector<planned_building::BuildingNearby>> nearby;
-	for (const auto covered : map_cells::CellsCovered(outline))
-	{
-		auto& buildings = nearby.emplace_back();
-		for (const auto thing : map.GetFixedInGridCell(MapInterface::CellId(covered)))
-		{
-			const auto* resident = registry.TryGet<const MapCellResident>(thing);
-			const auto* placed = registry.TryGet<const Transform>(thing);
-			if (resident == nullptr || !resident->coversOutline || placed == nullptr)
-			{
-				continue;
-			}
-			buildings.push_back({.distance = gutils::GetDistanceInMetres(transform.position, placed->position),
-			                     .radius = systems::object_measures::TwoDRadius(registry, thing)});
-		}
-	}
-	std::vector<planned_building::FootprintCell> footprint;
-	footprint.reserve(nearby.size());
-	for (const auto& buildings : nearby)
-	{
-		footprint.push_back({.buildings = buildings});
-	}
+	const auto nearby = BuildingsInOutline(outline, transform.position);
+	const auto footprint = FootprintOf(nearby);
 	return planned_building::IsClearToBuild(footprint, DryLandAt(transform.position), reach);
 }
 
@@ -478,7 +513,7 @@ void town_planning::PlanAgain(entt::entity building)
 	auto& registry = Entities();
 	const auto* abode = registry.TryGet<const Abode>(building);
 	const auto* transform = registry.TryGet<const Transform>(building);
-	if (abode == nullptr || transform == nullptr || abode->info == AbodeInfo::None)
+	if (abode == nullptr || transform == nullptr || abode->info == AbodeInfo::None || abode->notPlannedAgain)
 	{
 		return;
 	}
@@ -498,5 +533,126 @@ void town_planning::PlanAgain(entt::entity building)
 	if (plan != entt::null)
 	{
 		registry.Get<PlannedAbode>(plan).wasBuilt = construction::IsBuilt(building);
+	}
+}
+
+std::vector<scaffold_offer::Candidate> town_planning::ScaffoldCandidates(entt::entity town, Tribe tribe, uint32_t value,
+                                                                         std::optional<AbodeNumber> only, glm::vec3 place,
+                                                                         Tribe wonderTribe)
+{
+	auto& registry = Entities();
+	std::vector<scaffold_offer::Candidate> candidates;
+	if (!registry.Valid(town) || !registry.AllOf<Town>(town))
+	{
+		return candidates;
+	}
+	std::vector<AbodeType> siteTypes;
+	for (const auto building : construction::SitesOfTown(town))
+	{
+		siteTypes.push_back(SiteTypeOf(building));
+	}
+	const auto plans = TownForPlans(town);
+	const auto& rows = Locator::infoConstants::value().abode;
+	for (int32_t index = 0; index < static_cast<int32_t>(AbodeNumber::_COUNT); ++index)
+	{
+		const auto number = static_cast<AbodeNumber>(index);
+		if (only.has_value() && *only != number)
+		{
+			continue;
+		}
+		// The wonder is of the wonder tribe. Its size comes from the power of a wonder of the town at the place.
+		auto rowTribe = tribe;
+		float scale = 1.0f;
+		if (number == AbodeNumber::Wonder)
+		{
+			rowTribe = wonderTribe;
+			if (Locator::wonderSystem::has_value())
+			{
+				scale = Locator::wonderSystem::value().ScaleAt(town, place);
+			}
+		}
+		const auto found = GAbodeInfo::FindFirst(rows, rowTribe, number);
+		if (!found.has_value())
+		{
+			continue;
+		}
+		const auto& info = InfoOf(*found);
+		planned_building::PlannedKind kind {.type = info.abodeType,
+		                                    .number = info.abodeNumber,
+		                                    .desireToBeBuilt = info.desireToBeBuilt,
+		                                    .maxAdults = info.maxVillagersInAbode,
+		                                    .scaffoldsRequired = info.scaffoldsRequired};
+		kind.sitesOfSameType = static_cast<uint32_t>(std::ranges::count(siteTypes, kind.type));
+		candidates.push_back({
+		    .offer = {.info = *found, .number = number, .mesh = info.meshId, .yAngle = 0.0f, .scale = scale},
+		    .scaffoldsRequired = info.scaffoldsRequired,
+		    .desire = planned_building::DesireToBeBuilt(kind, plans, value),
+		});
+	}
+	return candidates;
+}
+
+bool town_planning::FitsForScaffold(glm::vec3 place, MeshId mesh, float yAngle, float scale, entt::entity ignored)
+{
+	const auto meshId = resources::HashIdentifier(mesh);
+	const auto& meshes = Locator::resources::value().GetMeshes();
+	if (!meshes.Contains(meshId) || !Locator::entitiesMap::has_value())
+	{
+		return true;
+	}
+	const auto box = meshes.Handle(meshId)->GetBoundingBox();
+	const auto halfSize = box.Size() * 0.5f;
+	const float reach = std::max(halfSize.x, halfSize.z) * scale;
+	const auto outline =
+	    map_cells::OutlineOfBox(place, glm::mat3(portable_math::EulerAngleY(-yAngle)), scale, box.Center(), halfSize);
+	const auto nearby = BuildingsInOutline(outline, place, ignored);
+	const auto* land = LandCellAt(place);
+	const bool dry = land != nullptr && land->properties.hasWater == 0 && land->properties.coastLine == 0;
+	return planned_building::IsClearToBuild(FootprintOf(nearby), dry, reach);
+}
+
+entt::entity town_planning::StartForScaffold(entt::entity town, AbodeInfo info, glm::vec3 place, float yAngle, float scale)
+{
+	auto& registry = Entities();
+	if (!registry.Valid(town) || !registry.AllOf<Town>(town))
+	{
+		return entt::null;
+	}
+	const auto building =
+	    archetypes::AbodeArchetype::Create(registry.Get<const Town>(town).id, place, info, yAngle, scale, 0, 0, 0.0f);
+	if (building == entt::null)
+	{
+		return entt::null;
+	}
+	if (Locator::townSystem::has_value())
+	{
+		Locator::townSystem::value().BuildingCreated(town, glm::xz(place),
+		                                             systems::object_measures::TwoDRadius(registry, building));
+	}
+	construction::OpenSite(building, 0.0f);
+	return building;
+}
+
+void town_planning::DropPlansUnder(glm::vec3 place, float buildingRadius)
+{
+	// The game looks only at plans whose distance past the building's radius is under this, in metres
+	constexpr float k_NearPlan = 100.0f;
+	auto& registry = Entities();
+	for (const auto town : TownsInOrder())
+	{
+		const auto planned = registry.Get<const Town>(town).planned;
+		for (const auto plan : planned)
+		{
+			if (!registry.Valid(plan) || !registry.AnyOf<PlannedAbode, PlannedTemple>(plan))
+			{
+				continue;
+			}
+			const float gap = gutils::GetDistanceInMetres(place, registry.Get<const Transform>(plan).position) - buildingRadius;
+			if (gap < k_NearPlan && gap - PlanReach(plan) <= 0.0f)
+			{
+				std::erase(registry.Get<Town>(town).planned, plan);
+				registry.Destroy(plan);
+			}
+		}
 	}
 }

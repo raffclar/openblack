@@ -291,3 +291,52 @@ TEST(GameActionMap, QueuedChordPressesOnlyTheChordsAction)
 	EXPECT_TRUE(Pressed(map, BindableActionMap::QUICK_SAVE));
 	EXPECT_FALSE(map.Get(BindableActionMap::SHOW_VILLAGER_DETAILS));
 }
+
+TEST(GameActionMap, HeldKeyReadsAsNotHeldWhileABoxHasTheKeyboard)
+{
+	GameActionMap map;
+	map.Frame();
+	map.ProcessEvent(KeyEvent(SDL_KEYDOWN, SDL_SCANCODE_UP));
+	map.Frame();
+	ASSERT_TRUE(map.Get(BindableActionMap::MOVE_FORWARDS));
+	// A box opens and a key goes down: the box takes the keyboard, and the held key reads as not held
+	map.BoxKeyDown(true);
+	EXPECT_TRUE(map.BoxHasKeyboard());
+	EXPECT_FALSE(map.Get(BindableActionMap::MOVE_FORWARDS));
+	EXPECT_FALSE(map.GetRepeat(BindableActionMap::MOVE_FORWARDS));
+	EXPECT_FALSE(map.GetChanged(BindableActionMap::MOVE_FORWARDS));
+	map.Frame();
+	EXPECT_FALSE(map.Get(BindableActionMap::MOVE_FORWARDS));
+	// The box closed and the next key goes down: the key that is still held reads as held again, but not as a new press
+	map.BoxKeyDown(false);
+	EXPECT_TRUE(map.Get(BindableActionMap::MOVE_FORWARDS));
+	EXPECT_FALSE(map.GetChanged(BindableActionMap::MOVE_FORWARDS));
+}
+
+TEST(GameActionMap, ABoxWithTheKeyboardHidesTheMouseActionsToo)
+{
+	GameActionMap map;
+	map.Frame();
+	SDL_Event press {};
+	press.type = SDL_MOUSEBUTTONDOWN;
+	press.button.button = SDL_BUTTON_MIDDLE;
+	map.ProcessEvent(press);
+	ASSERT_TRUE(map.Get(BindableActionMap::ROTATE_AROUND_MOUSE_ON));
+	map.BoxKeyDown(true);
+	EXPECT_FALSE(map.Get(BindableActionMap::ROTATE_AROUND_MOUSE_ON));
+	EXPECT_FALSE(map.GetAny(BindableActionMap::ROTATE_AROUND_MOUSE_ON, BindableActionMap::MOVE));
+}
+
+TEST(GameActionMap, AKeyThatComesUpUnderTheBoxIsNotHeldAfterIt)
+{
+	GameActionMap map;
+	map.Frame();
+	map.ProcessEvent(KeyEvent(SDL_KEYDOWN, SDL_SCANCODE_UP));
+	map.Frame();
+	map.BoxKeyDown(true);
+	map.ProcessEvent(KeyEvent(SDL_KEYUP, SDL_SCANCODE_UP));
+	map.Frame();
+	map.BoxKeyDown(false);
+	EXPECT_FALSE(map.Get(BindableActionMap::MOVE_FORWARDS));
+	EXPECT_FALSE(map.GetChanged(BindableActionMap::MOVE_FORWARDS));
+}

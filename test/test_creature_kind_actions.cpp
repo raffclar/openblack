@@ -53,13 +53,13 @@ TEST(CreatureKindActions, StonesKnockDownTheLivingAndWhatIsSetIntoTheLand)
 	EXPECT_TRUE(creature_object_actions::CanBeStoned(Thing::Villager, false));
 	EXPECT_FALSE(creature_object_actions::CanBeStoned(Thing::Villager, true));
 	EXPECT_TRUE(creature_object_actions::CanBeStoned(Thing::Creature, false));
-	for (const auto thing :
-	     {Thing::Fixture, Thing::Rock, Thing::Bonfire, Thing::DeadTree, Thing::Static, Thing::MagicMushroom, Thing::Shield})
+	for (const auto thing : {Thing::Fixture, Thing::Rock, Thing::Bonfire, Thing::DeadTree, Thing::Static, Thing::MagicMushroom,
+	                         Thing::Shield, Thing::BuildingPiece})
 	{
 		EXPECT_TRUE(creature_object_actions::CanBeStoned(thing, false));
 	}
 	for (const auto thing : {Thing::Tree, Thing::Lantern, Thing::Vortex, Thing::TeleportStone, Thing::MobileObject, Thing::Pot,
-	                         Thing::Pile, Thing::Ball, Thing::Creed, Thing::Other})
+	                         Thing::Pile, Thing::Ball, Thing::Creed, Thing::Other, Thing::Reward, Thing::Scaffold})
 	{
 		EXPECT_FALSE(creature_object_actions::CanBeStoned(thing, false));
 	}
@@ -67,12 +67,14 @@ TEST(CreatureKindActions, StonesKnockDownTheLivingAndWhatIsSetIntoTheLand)
 
 TEST(CreatureKindActions, OnlyStaticsOtherThanToysDoDamageWhenThrown)
 {
-	for (const auto thing : {Thing::Rock, Thing::Bonfire, Thing::DeadTree, Thing::Static, Thing::Vortex, Thing::TeleportStone})
+	for (const auto thing : {Thing::Rock, Thing::Bonfire, Thing::DeadTree, Thing::Static, Thing::Vortex, Thing::TeleportStone,
+	                         Thing::BuildingPiece})
 	{
 		EXPECT_TRUE(creature_object_actions::DoesThrowingDamage(thing, false));
 		EXPECT_FALSE(creature_object_actions::DoesThrowingDamage(thing, true));
 	}
-	for (const auto thing : {Thing::Villager, Thing::Tree, Thing::MobileObject, Thing::Ball, Thing::Lantern, Thing::Shield})
+	for (const auto thing : {Thing::Villager, Thing::Tree, Thing::MobileObject, Thing::Ball, Thing::Lantern, Thing::Shield,
+	                         Thing::Reward, Thing::Scaffold})
 	{
 		EXPECT_FALSE(creature_object_actions::DoesThrowingDamage(thing, false));
 	}
@@ -81,7 +83,7 @@ TEST(CreatureKindActions, OnlyStaticsOtherThanToysDoDamageWhenThrown)
 TEST(CreatureKindActions, WhatLiesAboutStaticsAndTreesGoIntoTheSea)
 {
 	for (const auto thing : {Thing::MobileObject, Thing::Ball, Thing::Creed, Thing::Pot, Thing::Pile, Thing::Rock,
-	                         Thing::DeadTree, Thing::Static, Thing::Tree})
+	                         Thing::DeadTree, Thing::Static, Thing::Tree, Thing::BuildingPiece, Thing::Reward, Thing::Scaffold})
 	{
 		EXPECT_TRUE(creature_object_actions::CanBeThrownInTheSea(thing));
 	}
@@ -523,6 +525,15 @@ TEST(CreatureKindActions, GivingWoodToABuildingSiteIsGivingWoodToAStore)
 	EXPECT_EQ(site->target, plan_actions::Target::BuildingBeingBuilt);
 	EXPECT_EQ(site->use, plan_actions::Target::PickableTree);
 	EXPECT_EQ(site->build, plan_actions::Build::GiveWoodToStore);
+}
+
+TEST(CreatureKindActions, GivingWoodToAWorkshopIsGivingWoodToAStore)
+{
+	const auto* workshop = plan_actions::For("GiveWoodFromTreeToWorkshop");
+	ASSERT_NE(workshop, nullptr);
+	EXPECT_EQ(workshop->target, plan_actions::Target::Workshop);
+	EXPECT_EQ(workshop->use, plan_actions::Target::PickableTree);
+	EXPECT_EQ(workshop->build, plan_actions::Build::GiveWoodToStore);
 }
 
 TEST(CreatureKindActions, HelpingRepairAHouseBringsATreeAndUsesItUp)

@@ -14,6 +14,7 @@
 
 #include <functional>
 #include <map>
+#include <memory>
 #include <optional>
 #include <set>
 #include <span>
@@ -25,6 +26,8 @@
 
 #include "Commands/TurnCodec.h"
 #include "Commands/TurnCommandSource.h"
+#include "Server/ServerSnapshots.h"
+#include "Server/SessionHash.h"
 #include "Server/TicketCheck.h"
 #include "Server/WebSocketServerInterface.h"
 
@@ -48,7 +51,8 @@ struct HostSettings
 	game_socket::Start start;
 	/// The checksum of the server's land file, which each player's land file must have before the start
 	uint64_t landChecksum {0};
-	/// The fewest gods with a player that start the game. The start comes when each god in the room is ready.
+	/// The fewest gods with a player that start the game. The start comes when each god in the room is ready. In a room
+	/// with no human god (tools), the world turns when this many observers joined.
 	uint32_t minGods {1};
 	/// The god slots of the room: the citadels of the land. A god who joins when all the slots have a player is refused.
 	uint8_t godSlots {k_DefaultGodSlots};
@@ -56,6 +60,12 @@ struct HostSettings
 	int64_t comeBackMicroseconds {5LL * 60 * 1'000'000};
 	/// The turns that the server keeps to send again to a player who comes back: 5 minutes of turns, and some more
 	uint32_t keptTurns {3200};
+	/// Tests: the commands of the test tools (player_commands::CreatureFightCheat) go into the turns. Without this, the
+	/// server leaves them out.
+	bool testCommands {false};
+	/// Makes the salted hashes of the secrets of sessions, which the snapshots keep in place of the secrets. With none, a
+	/// restored room has no sessions, and no player can come back with a secret.
+	std::shared_ptr<const SessionHasherInterface> sessionHasher;
 };
 
 /// The game role of the server in a network game (authoritative lockstep, user decision MP-Q1). It lets in the players
@@ -97,7 +107,10 @@ public:
 	{
 		SeatState state {SeatState::Open};
 		std::optional<ConnectionId> connection;
+		/// The secret of the session. After a restore, it is empty until the player comes back with the secret.
 		std::string session;
+		/// The salted hash of the secret of the session
+		std::optional<SessionHash> sessionHash;
 		std::string account;
 		std::string name;
 		bool ready {false};
@@ -106,6 +119,27 @@ public:
 		uint32_t resumes {0};
 		/// The commands of the god that the server put in its turns, by the tag of the command
 		std::map<uint8_t, uint32_t> commands;
+		/// The number of the session of the player. Each new session of any seat gets the next number.
+		uint32_t sessionNumber {0};
+		/// The number of the last block of commands of the session that the server took. The server leaves out a block
+		/// that the client sends again after it came back (deviation 100).
+		std::optional<uint16_t> lastBlock;
+		/// The number of the last block of commands of the session that a closed turn holds
+		std::optional<uint16_t> lastBlockInTurn;
+		/// The blocks that the client sent again and that the server had, so left out
+		uint32_t blocksAgain {0};
+	};
+
+	/// The session of an observer. An observer has no god, but it can come back with the secret of its session, as the
+	/// player of a god can. Observers are an addition of openblack to the game.
+	struct Watcher
+	{
+		std::string session;
+		std::optional<SessionHash> sessionHash;
+		/// None while the observer is away
+		std::optional<ConnectionId> connection;
+		int64_t awaySince {0};
+		uint32_t resumes {0};
 	};
 
 	LockstepHost(WebSocketServerInterface& sockets, CheckTicket checkTicket, Clock clock, MakeSecret makeSecret,
@@ -122,9 +156,32 @@ public:
 	/// The server's world state at the start of the next turn, which a client whose world parted loads as it comes back
 	using WorldState = std::function<std::vector<uint8_t>()>;
 	void SetWorldState(WorldState worldState) { _worldState = std::move(worldState); }
+	/// Gets the bytes of each turn that the server closes, before the server sends them, and the last block of each god
+	/// that a closed turn holds. The snapshots of the server keep them in a journal (deviation 100).
+	using TurnJournal =
+	    std::function<void(uint32_t turn, std::span<const uint8_t> bytes, const snapshots::BlockSequences& blocks)>;
+	void SetTurnJournal(TurnJournal journal) { _turnJournal = std::move(journal); }
+	/// The room of the game, as a snapshot of the server keeps it
+	[[nodiscard]] snapshots::Room RoomRecord() const;
+	/// The number of the last block of commands of the session of each god slot that a closed turn holds
+	[[nodiscard]] snapshots::BlockSequences BlocksInTurns() const;
+	/// Continues a game from a snapshot, before any client connects. The world of the server is at the start of the turn
+	/// turnsDone. The gods of the room wait for their players, who come back with the secrets of their sessions. The
+	/// world turns the replayed turns first, with no player: these are the turns that the server sent before it stopped.
+	/// The server leaves out the blocks of commands up to the last block of each god that the sent turns hold.
+	void Restore(const snapshots::Room& room, uint32_t turnsDone, std::map<uint32_t, std::vector<uint8_t>> replayed,
+	             const snapshots::BlockSequences& blocks = {});
+	/// True while the world must turn the replayed turns of a restored game. The server reads no socket until then.
+	[[nodiscard]] bool Replaying() const { return !_replayed.empty(); }
+	/// The next turn that the server closes
+	[[nodiscard]] uint32_t TurnsDone() const { return _turnsDone; }
 	/// Tools: gets the god slot and the turn each time that the world of a client starts to differ from the server's world
 	using PartListener = std::function<void(uint8_t seat, uint32_t turn)>;
 	void SetPartListener(PartListener listener) { _partListener = std::move(listener); }
+	/// The account ids that the lobby banned from the server. Before the start, a banned god leaves the room at once with
+	/// "kicked", and the room refuses the join of a banned god. After the start, a ban changes nothing (deviation 146).
+	void SetBans(std::set<int64_t> accounts);
+	[[nodiscard]] const std::set<int64_t>& Bans() const { return _bans; }
 
 	/// The commands of the server itself: it has no player
 	void Send(const player_commands::Action& action) override;
@@ -146,12 +203,15 @@ public:
 	[[nodiscard]] bool Starting() const { return _startStep != StartStep::None; }
 	/// True when the game started and no god's player is connected
 	[[nodiscard]] bool Paused() const;
-	/// True when the game started and every god left or was defeated: no player can come back
+	/// True when the game started and every god left or was defeated: no player can come back. A room with no human god
+	/// is over when no observer is connected and no observer can come back.
 	[[nodiscard]] bool GameOver() const;
 	/// The last turn of the game, after a client asked the server to stop the turns of a decided game. None before.
 	[[nodiscard]] std::optional<uint32_t> StoppedAfter() const { return _stoppedAfter; }
 	[[nodiscard]] const std::vector<Seat>& Seats() const { return _seats; }
 	[[nodiscard]] size_t Observers() const;
+	/// The sessions of the observers that are connected or can come back
+	[[nodiscard]] const std::vector<Watcher>& Watchers() const { return _watchers; }
 	/// The blocks of commands that the server did not accept: from an observer, before the start, or a command that only
 	/// the server sends
 	[[nodiscard]] uint32_t RefusedBlocks() const { return _refusedBlocks; }
@@ -172,6 +232,19 @@ private:
 	void Closed(ConnectionId connection);
 	void Join(ConnectionId connection, Peer& peer, const game_socket::Join& join);
 	void Resume(ConnectionId connection, Peer& peer, const game_socket::Resume& resume);
+	/// An observer comes back with the secret of its session. False when no observer has the secret.
+	bool ResumeObserver(ConnectionId connection, Peer& peer, const game_socket::Resume& resume, bool world);
+	/// Sends the kept turns from a turn, with the server's checksums, and the stop of the turns if they stopped
+	void SendKeptTurns(ConnectionId connection, uint32_t from);
+	/// Gives a new session to an observer on a connection, and returns its secret. With no secrets, the observer cannot
+	/// come back.
+	[[nodiscard]] std::string NewWatcher(ConnectionId connection);
+	/// The salted hash of a secret. None when the secret is empty or the host has no hasher.
+	[[nodiscard]] std::optional<SessionHash> HashOf(std::string_view secret) const;
+	/// True when the secret that a client gives is the secret of a session. A session that a restore gave has only the
+	/// hash of its secret.
+	[[nodiscard]] bool SessionMatches(std::string_view session, const std::optional<SessionHash>& hash,
+	                                  std::string_view given) const;
 	/// A join after the start: the player of a waiting god comes back into it, and any other player is an observer
 	void JoinRunning(ConnectionId connection, Peer& peer, const join_ticket::Claims& claims);
 	/// Sends the server's world at the start of the next turn to a connection. False when the server has no world state.
@@ -187,8 +260,13 @@ private:
 	void StartGame();
 	/// The start stops before the game starts: the frame tells the players why
 	void StopStart(const game_socket::Frame& why);
+	/// The human gods of the seats, with their names, for the start of a player
+	[[nodiscard]] std::vector<game_socket::God> Gods() const;
 	/// The connections of the gods with a player
 	[[nodiscard]] std::set<ConnectionId> GodConnections() const;
+	/// The commands of a replayed turn of a restored game. The server sends the turn again only to the players who come
+	/// back.
+	[[nodiscard]] std::vector<player_commands::Command> TakeReplayedTurn(uint32_t turn);
 	void SendTo(ConnectionId connection, const game_socket::Frame& frame);
 	void Broadcast(const game_socket::Frame& frame);
 	void BroadcastBinary(std::span<const uint8_t> bytes);
@@ -197,6 +275,8 @@ private:
 	/// The end box of a decided game opened on a client: no turn comes after the turns closed so far
 	void StopTurns();
 	[[nodiscard]] bool AnyGodConnected() const;
+	/// Tools: the room has no human god. The game starts at once, and observers watch it.
+	[[nodiscard]] bool AllComputerGods() const { return _settings.start.allComputerGods; }
 
 	WebSocketServerInterface& _sockets;
 	CheckTicket _checkTicket;
@@ -206,6 +286,7 @@ private:
 
 	std::vector<Seat> _seats;
 	std::map<ConnectionId, Peer> _peers;
+	std::vector<Watcher> _watchers;
 	bool _started {false};
 	enum class StartStep : uint8_t
 	{
@@ -224,11 +305,24 @@ private:
 	/// The alignments that the gods sent with their creature files, by god slot
 	std::map<uint8_t, float> _startAlignments;
 	bool _pausedBefore {false};
+	/// Tools, a room with no human god: the world turns from the time that as many observers as the room waits for joined
+	bool _observersJoined {false};
+	/// Tools, a room with no human god: at least one observer joined, so a room with no observer left is over
+	bool _observerSeen {false};
 	uint32_t _turnsDone {0};
 	/// The last turn of the game, once the turns stopped
 	std::optional<uint32_t> _stoppedAfter;
+	/// A block that came since the last turn, with the god slot and the session that sent it
+	struct PendingBlock
+	{
+		turn_codec::StampedBlock block;
+		uint8_t seat {0};
+		uint32_t session {0};
+	};
 	/// The blocks that came since the last turn
-	std::vector<turn_codec::StampedBlock> _pending;
+	std::vector<PendingBlock> _pending;
+	/// The number of the last session that a god's player got
+	uint32_t _sessions {0};
 	/// The slots whose god leaves at the next turn
 	std::vector<uint8_t> _leaving;
 	/// The slots of the gods that get their hands at the first turn
@@ -242,6 +336,13 @@ private:
 	uint32_t _refusedBlocks {0};
 	WorldState _worldState;
 	PartListener _partListener;
+	TurnJournal _turnJournal;
+	/// The game continues from a snapshot of the server
+	bool _restored {false};
+	/// The turns that a restored game turns again, by turn
+	std::map<uint32_t, std::vector<uint8_t>> _replayed;
+	/// The account ids that the lobby banned from the server
+	std::set<int64_t> _bans;
 };
 
 } // namespace openblack::server

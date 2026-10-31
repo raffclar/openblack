@@ -29,6 +29,11 @@ map_coords::MapCoords map_coords::FromWorld(const LandIslandInterface& island, g
 	return coords;
 }
 
+map_coords::MapCoords map_coords::HeldPlace(const LandIslandInterface& island, glm::vec3 point)
+{
+	return HeldPlace(point, [&island](const MapCoords& coords) { return GroundAt(island, coords); });
+}
+
 glm::vec3 map_coords::ToWorld(const LandIslandInterface& island, const MapCoords& coords)
 {
 	return {ToMetres(coords.x), GroundAt(island, coords) + coords.altitude, ToMetres(coords.z)};

@@ -13,6 +13,7 @@
 
 #include <chrono>
 #include <filesystem>
+#include <optional>
 #include <string_view>
 #include <tuple>
 #include <utility>
@@ -32,6 +33,8 @@
 #include "FileSystem/FileSystemInterface.h"
 #include "Locator.h"
 #include "Online/NetworkLand.h"
+#include "Online/OnlineMapStoreInterface.h"
+#include "PlayerSlots.h"
 
 using namespace openblack::ecs::systems;
 
@@ -169,15 +172,10 @@ bool NetworkGameSystem::Join(NetworkJoin join)
 	    .gamePassword = std::move(join.gamePassword),
 	    .name = std::move(join.name),
 	    .readLand = [](std::string_view land) -> std::optional<std::vector<uint8_t>> {
-		    // The land of the start is a file in the Scripts folder of the game on this computer, or a map file in its
-		    // "Online Maps" folder
-		    auto& fileSystem = Locator::filesystem::value();
-		    const auto path = network_land::PathOf(land, fileSystem.GetPath<filesystem::Path::Scripts>());
-		    if (!path.has_value() || !fileSystem.Exists(*path))
-		    {
-			    return std::nullopt;
-		    }
-		    return fileSystem.ReadAll(*path);
+		    // The land of the start is a file in the Scripts folder of the game on this computer, or a map file that the
+		    // player got from the lobby, or a map file in the "Online Maps" folder of the game
+		    const auto* store = Locator::onlineMapStore::has_value() ? &Locator::onlineMapStore::value() : nullptr;
+		    return online::ReadStartLand(land, store, Locator::filesystem::value());
 	    },
 	    .readCreature = std::move(readCreature),
 	    .readAlignment =
@@ -188,6 +186,7 @@ bool NetworkGameSystem::Join(NetworkJoin join)
 		                                 : std::nullopt;
 		        return profile_alignment::Sent(profile.has_value() ? profile->alignment : 0.0);
 	        },
+	    .readPlaysForClan = [this]() { return _playsForClan; },
 #if defined(OPENBLACK_DEVELOPER_TOOLS)
 	    .parts =
 	        [](uint32_t turn) {
@@ -197,6 +196,7 @@ bool NetworkGameSystem::Join(NetworkJoin join)
 #else
 	    .parts = {},
 #endif
+	    .origin = join.origin,
 	});
 	return true;
 }
@@ -219,6 +219,11 @@ void NetworkGameSystem::Attach()
 			    tool(turn);
 		    }
 	    });
+}
+
+void NetworkGameSystem::SetPlaysForClan(bool playsForClan)
+{
+	_playsForClan = playsForClan;
 }
 
 void NetworkGameSystem::SetReady(bool ready)
@@ -281,6 +286,11 @@ void NetworkGameSystem::EndNetworkGame()
 	auto& clock = Locator::time::value();
 	clock.SetNetworkGame(false);
 	clock.SetPaused(false);
+	// In a game alone, the player of this computer is the first player again: the next land and its creature need that
+	if (Locator::handSystem::has_value())
+	{
+		Locator::handSystem::value().SetOwnPlayer(PlayerNames::PLAYER_ONE);
+	}
 	if (Locator::syncChecksumSystem::has_value())
 	{
 		Locator::syncChecksumSystem::value().SetEnabled(false);
@@ -330,13 +340,14 @@ void NetworkGameSystem::Update()
 	if (const auto& joined = _session->GetJoined(); joined.has_value() && Locator::handSystem::has_value())
 	{
 		auto& hands = Locator::handSystem::value();
-		if (!joined->slot.has_value())
+		const auto own = joined->slot.has_value() ? player_slots::PlayerOfSlot(*joined->slot) : std::nullopt;
+		if (!own.has_value())
 		{
 			hands.ClearOwnPlayer();
 		}
-		else if (!hands.IsOwnPlayer(static_cast<PlayerNames>(*joined->slot)))
+		else if (!hands.IsOwnPlayer(*own))
 		{
-			hands.SetOwnPlayer(static_cast<PlayerNames>(*joined->slot));
+			hands.SetOwnPlayer(*own);
 		}
 	}
 
@@ -355,7 +366,8 @@ void NetworkGameSystem::Update()
 	{
 		_stopped = true;
 		Locator::time::value().SetPaused(true);
-		SPDLOG_LOGGER_INFO(spdlog::get("game"), "The turns of the game stopped after turn {}: the clock stops", *last);
+		// The log names the last turn by the number of the world, as the line of the decision does
+		SPDLOG_LOGGER_INFO(spdlog::get("game"), "The turns of the game stopped after turn {}: the clock stops", *last + 1);
 	}
 
 	// A join from the command line: the server's reply to the join gives the land, the seed and the start of its world,
@@ -436,12 +448,17 @@ void NetworkGameSystem::Update()
 
 void NetworkGameSystem::LoadWorld(const online::NetworkSession::WorldState& world)
 {
+	const auto start = std::chrono::steady_clock::now();
 	if (!Locator::saveGameSystem::has_value() || !Locator::saveGameSystem::value().LoadWorldState(world.bytes))
 	{
 		SPDLOG_LOGGER_ERROR(spdlog::get("game"), "The world state of turn {} from the game server did not load", world.turn);
 		_session->Leave();
 		return;
 	}
+	// The log gives the time of the load, so that the tools can see how long a client stops when it comes back in step
+	SPDLOG_LOGGER_INFO(spdlog::get("game"), "The world state of turn {} ({} bytes) loaded in {:.2f} ms", world.turn,
+	                   world.bytes.size(),
+	                   std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - start).count());
 	// The load starts the land again: the world is still the world of a network game, which turns with the server
 	auto& clock = Locator::time::value();
 	clock.SetNetworkGame(true);

@@ -16,6 +16,8 @@
 
 #include <GameSocket.h>
 
+#include "Online/GameOrigin.h"
+
 namespace openblack::online
 {
 class NetworkSession;
@@ -49,6 +51,8 @@ struct NetworkJoin
 	/// Tests: the creature file that the player sends before the start, in place of the creature of the player's
 	/// profile
 	std::optional<std::string> testCreatureFile;
+	/// Where the game came from: the lobby on the internet or the local network
+	online::GameOrigin origin {online::GameOrigin::Lan};
 };
 
 /// The network game of this computer: the session with the game server, which gives the turns of the world. A join
@@ -72,6 +76,9 @@ public:
 	virtual bool Join(NetworkJoin join) = 0;
 	/// The player is ready for the start, or cancels the ready, in the game room
 	virtual void SetReady(bool ready) = 0;
+	/// The god of the player plays for a clan in the game room, or for no clan. The start data of the god tells it to
+	/// the game, so that the creature of a clan god does not go to the files of the player's profile.
+	virtual void SetPlaysForClan(bool /*playsForClan*/) {}
 	/// The player leaves the network game
 	virtual void Leave() = 0;
 	/// The end box of a decided game opened: the game server stops the turns of the game. When the last turn came, the

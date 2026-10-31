@@ -33,7 +33,7 @@
 #include "ECS/ObjectPhysics.h"
 #include "ECS/Registry.h"
 #include "ECS/Systems/MagicSystemInterface.h"
-#include "ECS/Systems/SkySystemInterface.h"
+#include "ECS/Systems/SkyClockSystemInterface.h"
 #include "ECS/Systems/TimeSystemInterface.h"
 #include "ECS/ThingModel.h"
 #include "Graphics/Texture2D.h"
@@ -73,12 +73,12 @@ float GameFireflyWorld::GameFloatRand(float x)
 
 float GameFireflyWorld::VisualHour() const
 {
-	return Locator::skySystem::value().GetClock().GetVisualTime();
+	return Locator::skyClockSystem::value().GetClock().GetVisualTime();
 }
 
 std::array<float, 4> GameFireflyWorld::SkyHours() const
 {
-	return Locator::skySystem::value().GetClock().GetVisualTimes();
+	return Locator::skyClockSystem::value().GetClock().GetVisualTimes();
 }
 
 float GameFireflyWorld::TurnSeconds() const
@@ -103,6 +103,14 @@ std::vector<entt::entity> GameFireflyWorld::ThingsInCell(glm::ivec2 cell) const
 		return {};
 	}
 	return Locator::entitiesMap::value().GetAllInCell(cell);
+}
+
+void GameFireflyWorld::Moved(entt::entity thing)
+{
+	if (Locator::entitiesMap::has_value())
+	{
+		Locator::entitiesMap::value().Moved(thing);
+	}
 }
 
 std::optional<map_coords::MapCoords> GameFireflyWorld::SpotOf(entt::entity thing) const

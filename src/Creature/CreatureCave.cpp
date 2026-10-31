@@ -47,10 +47,10 @@ std::optional<std::string_view> PersonalityText(creature_desires::Desire desire)
 	return found != k_Personality.end() ? std::optional(found->second) : std::nullopt;
 }
 
-TempleScrolls::CreatureFacts FactsOf(const Snapshot& snapshot)
+temple_scrolls::CreatureFacts FactsOf(const Snapshot& snapshot)
 {
 	const auto& needs = snapshot.needs;
-	TempleScrolls::CreatureFacts facts;
+	temple_scrolls::CreatureFacts facts;
 	facts.name = snapshot.name;
 	// The scroll gives the body's age, in hours of game time, as its years
 	facts.age = static_cast<int32_t>(needs.age);
@@ -127,9 +127,9 @@ std::string_view TitleName(Page page)
 	return k_Titles.at(static_cast<size_t>(page));
 }
 
-std::optional<TempleScrolls::Content> ContentOf(Page page)
+std::optional<temple_scrolls::Content> ContentOf(Page page)
 {
-	using Content = TempleScrolls::Content;
+	using Content = temple_scrolls::Content;
 	switch (page)
 	{
 	case Page::Attributes:

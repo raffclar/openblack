@@ -28,6 +28,7 @@
 #include "ECS/Components/OneOffSpellSeed.h"
 #include "ECS/Components/Pot.h"
 #include "ECS/Components/Reward.h"
+#include "ECS/Components/Scaffold.h"
 #include "ECS/Components/ScriptHighlight.h"
 #include "ECS/Components/SpellDispenser.h"
 #include "ECS/Components/SpellSeed.h"
@@ -35,10 +36,13 @@
 #include "ECS/Components/Temple.h"
 #include "ECS/Components/Town.h"
 #include "ECS/Components/Tree.h"
+#include "ECS/Components/VillageTotem.h"
 #include "ECS/Components/Villager.h"
 #include "ECS/Components/Vortex.h"
+#include "ECS/Components/WorshipSite.h"
 #include "ECS/Registry.h"
 #include "InfoConstants.h"
+#include "Locator.h"
 #include "ScriptHeaders/ScriptPropertyRules.h"
 
 using namespace openblack;
@@ -84,6 +88,24 @@ std::optional<ScriptType> AnimalType(AnimalInfo info)
 	default:
 		return ScriptType::Animal;
 	}
+}
+
+/// The tribe of a town's totem, which is the tribe of its town centre: the row of the totems' table. None when the
+/// tables are not loaded or the centre has no tribe.
+std::optional<uint32_t> TotemTribe(const Registry& registry, const VillageTotem& totem)
+{
+	const auto* centre = registry.Valid(totem.townCentre) ? registry.TryGet<const Abode>(totem.townCentre) : nullptr;
+	if (centre == nullptr || centre->info == AbodeInfo::None || !Locator::infoConstants::has_value())
+	{
+		return std::nullopt;
+	}
+	const auto& rows = Locator::infoConstants::value().abode;
+	const auto row = static_cast<size_t>(centre->info);
+	if (row >= rows.size())
+	{
+		return std::nullopt;
+	}
+	return Row(rows.at(row).tribeType);
 }
 
 /// A 16.16 value of a search's edge: the position in metres less or plus the reach, back in 16.16, truncated. Each
@@ -152,6 +174,21 @@ std::optional<script_find::Kind> script_find::KindOf(const Registry& registry, e
 	{
 		return Kind {.type = ScriptType::Citadel};
 	}
+	// A town's totem is a totem statue to the scripts. Its subtype is its tribe.
+	if (const auto* totem = registry.TryGet<const VillageTotem>(entity))
+	{
+		return Kind {.type = ScriptType::TotemStatue, .subtype = TotemTribe(registry, *totem)};
+	}
+	// A worship site's subtype is its tribe, which is the row of the tribes' table
+	if (const auto* site = registry.TryGet<const WorshipSite>(entity))
+	{
+		return Kind {.type = ScriptType::WorshipSite, .subtype = Row(site->tribe)};
+	}
+	// A scaffold has a type but no subtype: it matches only any subtype
+	if (registry.AllOf<Scaffold>(entity))
+	{
+		return Kind {.type = ScriptType::Scaffold};
+	}
 	if (const auto* abode = registry.TryGet<const Abode>(entity))
 	{
 		return Kind {.type = ScriptType::Abode, .subtype = Row(abode->info)};
@@ -196,9 +233,11 @@ std::optional<script_find::Kind> script_find::KindOf(const Registry& registry, e
 	{
 		return Kind {.type = ScriptType::MobileStatic};
 	}
+	// A lump of poo is a thing of its own type to the scripts, with its row of the mobile objects' table as its subtype
 	if (const auto* mobile = registry.TryGet<const MobileObject>(entity))
 	{
-		return Kind {.type = ScriptType::MobileObject, .subtype = Row(mobile->type)};
+		return Kind {.type = mobile->type == MobileObjectInfo::LumpOfPoo ? ScriptType::Poo : ScriptType::MobileObject,
+		             .subtype = Row(mobile->type)};
 	}
 	if (registry.AllOf<OneOffSpellSeed>(entity))
 	{
@@ -223,6 +262,16 @@ std::optional<script_find::Kind> script_find::KindOf(const Registry& registry, e
 		return Kind {.type = ScriptType::Highlight, .subtype = Row(highlight->kind)};
 	}
 	return std::nullopt;
+}
+
+entt::entity script_find::MeasuredFrom(const Registry& registry, entt::entity entity)
+{
+	// The game measures a worship site from the place of its altar, at the head of the site
+	if (const auto* site = registry.TryGet<const WorshipSite>(entity); site != nullptr && registry.Valid(site->altar))
+	{
+		return site->altar;
+	}
+	return entity;
 }
 
 script_find::CellRange script_find::CellsAround(const map_coords::MapCoords& from, float reach)

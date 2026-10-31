@@ -11,17 +11,22 @@
 
 #include "PlayerSystem.h"
 
+#include <algorithm>
+
 #include "Creature/PrimaryCreature.h"
+#include "ECS/Archetypes/PlayerArchetype.h"
 #include "ECS/Components/Alignment.h"
 #include "ECS/Components/ComputerPlayer.h"
 #include "ECS/Components/Creature.h"
 #include "ECS/Components/Influence.h"
 #include "ECS/Components/Player.h"
 #include "ECS/Components/PlayerCreatures.h"
+#include "ECS/Components/PlayerRelations.h"
 #include "ECS/Components/PlayerStatistics.h"
 #include "ECS/PlayerMiracles.h"
 #include "ECS/ProfileAlignment.h"
 #include "ECS/Registry.h"
+#include "ECS/Systems/HandSystemInterface.h"
 #include "ECS/Systems/TimeSystemInterface.h"
 #include "ECS/Systems/VillageTotemSystemInterface.h"
 #include "Locator.h"
@@ -46,16 +51,42 @@ void PlayerSystem::AddPlayer(entt::entity playerEntity)
 	_players.insert_or_assign(player.name, playerEntity);
 }
 
+size_t PlayerSystem::PlayerNumbersInGame() const
+{
+	const auto& registry = Locator::entitiesRegistry::value();
+	size_t count = 0;
+	for (const auto& [name, entity] : _players)
+	{
+		if (registry.Valid(entity))
+		{
+			count = std::max(count, static_cast<size_t>(name) + 1);
+		}
+	}
+	return player_slots::PlayerNumbersOf(count);
+}
+
 std::optional<entt::entity> PlayerSystem::FindPlayer(PlayerNames playerName) const
 {
 	const auto player = _players.find(playerName);
 	return player != _players.end() ? std::optional(player->second) : std::nullopt;
 }
 
-bool PlayerSystem::IsComputerPlayer(PlayerNames name) const
+entt::entity PlayerSystem::EnsurePlayer(PlayerNames playerName)
+{
+	// A player of a land that is gone is not a player of this land
+	if (const auto player = FindPlayer(playerName); player.has_value() && Locator::entitiesRegistry::value().Valid(*player))
+	{
+		return *player;
+	}
+	const auto entity = openblack::ecs::archetypes::PlayerArchetype::Create(playerName);
+	AddPlayer(entity);
+	return entity;
+}
+
+openblack::player_kind::Facts PlayerSystem::FactsOf(PlayerNames name) const
 {
 	const bool networkGame = Locator::time::has_value() && Locator::time::value().IsNetworkGame();
-	// A computer mind that a land script or the start of a network game switched on marks its player
+	// A computer mind that a land script or the start of a game switched on marks its player
 	bool computerMind = false;
 	if (const auto player = FindPlayer(name); player.has_value() && Locator::entitiesRegistry::has_value())
 	{
@@ -63,7 +94,21 @@ bool PlayerSystem::IsComputerPlayer(PlayerNames name) const
 		const auto* mind = registry.Valid(*player) ? registry.TryGet<const ComputerPlayer>(*player) : nullptr;
 		computerMind = mind != nullptr && mind->marked;
 	}
-	return player_kind::IsComputer({.player = name, .networkGame = networkGame, .computerMind = computerMind});
+	// Only a player of a network game with no computer mind is a person by its hands
+	const bool handsDecide = networkGame && !computerMind && name != PlayerNames::NEUTRAL;
+	const bool hands =
+	    handsDecide && Locator::handSystem::has_value() && Locator::handSystem::value().GetHandsOf(name).has_value();
+	return {.player = name, .networkGame = networkGame, .computerMind = computerMind, .hands = hands};
+}
+
+bool PlayerSystem::IsComputerPlayer(PlayerNames name) const
+{
+	return player_kind::IsComputer(FactsOf(name));
+}
+
+bool PlayerSystem::IsHumanPlayer(PlayerNames name) const
+{
+	return player_kind::IsHuman(FactsOf(name));
 }
 
 void PlayerSystem::AddCreature(entt::entity creature)
@@ -193,4 +238,36 @@ void PlayerSystem::TakeUpKept(entt::entity playerEntity)
 		statistics->influenceHistory = kept.influenceHistory;
 		statistics->populationHistory = kept.populationHistory;
 	}
+}
+
+void PlayerSystem::SetAlly(PlayerNames player, PlayerNames other, float strength)
+{
+	const auto playerIndex = static_cast<size_t>(player);
+	const auto otherIndex = static_cast<size_t>(other);
+	if (playerIndex >= k_PlayerRecordSize || otherIndex >= k_PlayerRecordSize)
+	{
+		return;
+	}
+	auto& registry = Locator::entitiesRegistry::value();
+	const auto allies = [this, &registry](PlayerNames name) -> PlayerAllies& {
+		const auto entity = EnsurePlayer(name);
+		auto* found = registry.TryGet<PlayerAllies>(entity);
+		return found != nullptr ? *found : registry.Assign<PlayerAllies>(entity);
+	};
+	// The alliance has the same strength for each of the two players
+	allies(other).strength.at(playerIndex) = strength;
+	allies(player).strength.at(otherIndex) = strength;
+}
+
+float PlayerSystem::AllyStrength(PlayerNames player, PlayerNames other) const
+{
+	const auto otherIndex = static_cast<size_t>(other);
+	const auto entity = FindPlayer(player).value_or(entt::null);
+	const auto& registry = Locator::entitiesRegistry::value();
+	if (otherIndex >= k_PlayerRecordSize || !registry.Valid(entity))
+	{
+		return 0.0f;
+	}
+	const auto* allies = registry.TryGet<const PlayerAllies>(entity);
+	return allies != nullptr ? allies->strength.at(otherIndex) : 0.0f;
 }

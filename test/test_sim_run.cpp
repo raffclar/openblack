@@ -40,6 +40,16 @@ TEST(SimRun, FastModeDrawsOneFrameInSome)
 	EXPECT_TRUE(DrawsFrame(settings, 20));
 }
 
+TEST(SimRun, FastModeDrawsTheFrameOfAPicture)
+{
+	const Settings none {.fast = true};
+	EXPECT_TRUE(DrawsFrame(none, 3, true));
+	EXPECT_FALSE(DrawsFrame(none, 4, false));
+	const Settings some {.fast = true, .drawEvery = 10};
+	EXPECT_TRUE(DrawsFrame(some, 5, true));
+	EXPECT_FALSE(DrawsFrame(some, 6));
+}
+
 TEST(SimRun, TheRunEndsAtItsLastTurn)
 {
 	EXPECT_FALSE(Finished(Settings {}, 1000000));
@@ -47,6 +57,16 @@ TEST(SimRun, TheRunEndsAtItsLastTurn)
 	EXPECT_FALSE(Finished(settings, 49));
 	EXPECT_TRUE(Finished(settings, 50));
 	EXPECT_TRUE(Finished(settings, 51));
+}
+
+TEST(SimRun, AHeldRunThatAToolStepsSkipsItsFrames)
+{
+	EXPECT_TRUE(SkipsHeldFrame(true, true, false));
+	// The game runs, or the tool does not step the run: each frame plays
+	EXPECT_FALSE(SkipsHeldFrame(true, false, false));
+	EXPECT_FALSE(SkipsHeldFrame(false, true, false));
+	// The tool waits for the work of a frame, for example a scenario to lay out
+	EXPECT_FALSE(SkipsHeldFrame(true, true, true));
 }
 
 TEST(SimRun, ThePacedRunWaitsForTheRestOfTheFrame)
@@ -76,6 +96,25 @@ TEST(SimRun, TimingsGiveAveragesAndTheLongest)
 	EXPECT_FLOAT_EQ(timings.FrameAverageMs(), 1.0f);
 }
 
+TEST(SimRun, TheTurnTimeDoesNotIncludeTheRecordTime)
+{
+	Timings timings;
+	// The record step of a turn ends before the time of the turn comes
+	timings.AddRecord(2.0f);
+	timings.AddTurn(5.0f);
+	timings.AddTurn(4.0f);
+	timings.AddRecord(1.0f);
+	timings.AddRecord(0.5f);
+	timings.AddTurn(1.0f);
+	EXPECT_EQ(timings.turns, 3u);
+	EXPECT_FLOAT_EQ(timings.turnLongestMs, 4.0f);
+	EXPECT_FLOAT_EQ(timings.TurnAverageMs(), 7.0f / 3.0f);
+	EXPECT_EQ(timings.records, 3u);
+	EXPECT_FLOAT_EQ(timings.recordLongestMs, 2.0f);
+	EXPECT_FLOAT_EQ(timings.RecordAverageMs(), 3.5f / 3.0f);
+	EXPECT_FLOAT_EQ(timings.recordSinceTurnMs, 0.0f);
+}
+
 TEST(SimRun, TimingsAddTheStagesOfEachFrame)
 {
 	Timings timings;
@@ -95,4 +134,27 @@ TEST(SimRun, AFrameTimeCanHaveAPartOfAMillisecond)
 	EXPECT_EQ(FrameTimeFromMs(20.0), std::optional(std::chrono::microseconds(20000)));
 	EXPECT_FALSE(FrameTimeFromMs(0.5).has_value());
 	EXPECT_FALSE(FrameTimeFromMs(1000.5).has_value());
+}
+
+TEST(SimRun, TheConditionsSwitchReadsNamesNumbersAndALand)
+{
+	const auto named = ParseConditions("WC_HOUSES_BUILT=3,WC_GROW_TREES=5");
+	ASSERT_TRUE(named.has_value());
+	EXPECT_TRUE(named->limitsLand.empty());
+	ASSERT_EQ(named->picks.size(), 2u);
+	EXPECT_EQ(named->picks[0],
+	          (openblack::game_end::ConditionPick {.condition = openblack::game_end::Condition::HousesBuilt, .value = 3}));
+	EXPECT_EQ(named->picks[1].condition, openblack::game_end::Condition::TreesGrown);
+	const auto numbered = ParseConditions("mpm_2p_1:0=1,14=7");
+	ASSERT_TRUE(numbered.has_value());
+	EXPECT_EQ(numbered->limitsLand, "mpm_2p_1");
+	EXPECT_EQ(numbered->picks[0].condition, openblack::game_end::Condition::VillagersKilled);
+	EXPECT_EQ(numbered->picks[1].value, 7);
+	// A text with no value, an unknown name, a number past the last condition or a condition two times does not read
+	EXPECT_FALSE(ParseConditions("").has_value());
+	EXPECT_FALSE(ParseConditions("WC_HOUSES_BUILT").has_value());
+	EXPECT_FALSE(ParseConditions("WC_NOTHING=1").has_value());
+	EXPECT_FALSE(ParseConditions("15=1").has_value());
+	EXPECT_FALSE(ParseConditions("3=x").has_value());
+	EXPECT_FALSE(ParseConditions("3=1,WC_HOUSES_BUILT=2").has_value());
 }

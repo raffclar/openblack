@@ -16,6 +16,7 @@
 #include <optional>
 #include <type_traits>
 #include <unordered_map>
+#include <unordered_set>
 #include <vector>
 
 #include <glm/vec3.hpp>
@@ -44,6 +45,15 @@ struct SharedTable
 {
 	std::vector<std::shared_ptr<Type>> items;
 	std::unordered_map<const Type*, uint32_t> numbers;
+	/// The things from this place in the list to the end belong only to the effects of this computer. The part of the
+	/// save for these effects keeps only these things. The things before this place have their numbers from the synced
+	/// part of the save.
+	std::optional<size_t> firstLocal;
+
+	/// Whether the table has the thing
+	[[nodiscard]] bool Contains(const Type* item) const { return numbers.contains(item); }
+	/// The things after this point belong only to the effects of this computer
+	void StartLocal() { firstLocal = items.size(); }
 
 	/// The number of the thing, which it gets when it is new; 0 for none
 	uint32_t Add(const std::shared_ptr<Type>& item)
@@ -58,6 +68,16 @@ struct SharedTable
 			items.push_back(item);
 		}
 		return found->second;
+	}
+	/// Adds a thing at the end of the list, with the next number. A load uses an empty thing to keep the number of a
+	/// thing that has gone.
+	void Append(const std::shared_ptr<Type>& item)
+	{
+		items.push_back(item);
+		if (item)
+		{
+			numbers.try_emplace(item.get(), static_cast<uint32_t>(items.size()));
+		}
 	}
 	/// The thing with a number, none for 0 or a number that is not in the table
 	[[nodiscard]] std::shared_ptr<Type> At(uint32_t number) const
@@ -75,6 +95,19 @@ struct SharedTables
 	SharedTable<LightSheet> sheets;
 	SharedTable<CarriedObject> carried;
 	SharedTable<GestureTrail> trails;
+	/// The bolts of the other part of the save. A link to one of these bolts is none in this part.
+	std::unordered_set<const BoltShare*> boltsOfOtherPart;
+
+	/// The things after this point, in each table, belong only to the effects of this computer
+	void StartLocal()
+	{
+		sounds.StartLocal();
+		bolts.StartLocal();
+		shields.StartLocal();
+		sheets.StartLocal();
+		carried.StartLocal();
+		trails.StartLocal();
+	}
 
 	template <typename Type>
 	[[nodiscard]] SharedTable<Type>& Of()
@@ -324,7 +357,14 @@ void ReadAtomMap(EffectReader& in, std::unordered_map<const Atom*, Value>& map, 
 	}
 }
 
-/// The parts of the shared things that the tables keep. The holders put back the links to their effects and atoms.
+/// Adds to the tables the bolts that the bolts of the tables link to, from the local start of the bolts
+void AddLinkedBolts(SharedTables& tables);
+/// The number of the bolt of a link, 0 for none or for a bolt of the other part of the save
+[[nodiscard]] uint32_t BoltLinkNumber(SharedTables& tables, const std::weak_ptr<BoltShare>& link);
+
+/// The parts of the shared things that the tables keep. The holders put back the links to their effects and atoms. With
+/// a local start, a table writes only the things from that start. The load adds the things after the things that the
+/// tables have.
 void SaveSharedTables(EffectWriter& out);
 void LoadSharedTables(EffectReader& in);
 

@@ -14,6 +14,7 @@
 #include <cmath>
 
 #include <algorithm>
+#include <chrono>
 #include <numbers>
 #include <vector>
 
@@ -26,9 +27,6 @@
 
 #include "3D/L3DMesh.h"
 #include "3D/LandIslandInterface.h"
-#include "Audio/AudioManagerInterface.h"
-#include "Audio/GameSoundEffects.h"
-#include "Audio/Sound.h"
 #include "Camera/Camera.h"
 #include "Common/PortableRotations.h"
 #include "ECS/Components/Hand.h"
@@ -39,20 +37,25 @@
 #include "ECS/Components/Pot.h"
 #include "ECS/Components/ResourcePile.h"
 #include "ECS/Components/Transform.h"
+#include "ECS/DrawnPlace.h"
 #include "ECS/Reflection/BinaryArchive.h"
 #include "ECS/Registry.h"
 #include "ECS/Systems/HandSystemInterface.h"
 #include "ECS/Systems/MagicSystemInterface.h"
 #include "ECS/Systems/ObjectDrawListSystemInterface.h"
-#include "ECS/Systems/ParticleSystemInterface.h"
+#include "ECS/Systems/ParticleRuleSystemInterface.h"
 #include "FileSystem/FileSystemInterface.h"
 #include "InfoConstants.h"
 #include "Locator.h"
 #include "Magic/DispenserRules.h"
 #include "Magic/MagicTables.h"
 #include "Magic/MiracleVisuals.h"
+#include "Particles/DrawnEffectSteps.h"
 #include "Particles/ParticleEffect.h"
 #include "Resources/ResourcesInterface.h"
+#include "Sound/GameSoundEffects.h"
+#include "Sound/SoundId.h"
+#include "Sound/SoundRequestInterface.h"
 
 using namespace openblack;
 using namespace openblack::ecs::components;
@@ -110,7 +113,7 @@ HandMiracleFx* HandFx()
 
 void PlaySound(entt::id_type id, std::optional<pack::AudioBankLoop> voicePlayType = std::nullopt)
 {
-	if (Locator::audio::has_value())
+	if (Locator::sounds::has_value())
 	{
 		audio::StartGameSoundEffect(id, {.voicePlayType = voicePlayType});
 	}
@@ -206,6 +209,37 @@ void MiracleFxSystem::UpdatePiles(float gameSeconds)
 	    });
 }
 
+void MiracleFxSystem::UpdateDrawnGlobes(ObjectDrawListSystemInterface& drawList, std::chrono::milliseconds frameGameTime)
+{
+	if (!Locator::entitiesRegistry::has_value() || !Locator::resources::has_value())
+	{
+		return;
+	}
+	auto& registry = Locator::entitiesRegistry::value();
+	const auto& meshes = Locator::resources::value().GetMeshes();
+	const auto bubble = OneOffSpellSeed::k_MeshId.value();
+	const bool haveBubble = meshes.Contains(bubble);
+	const auto eye = Locator::camera::has_value() ? Locator::camera::value().GetOrigin() : glm::vec3(0.0f);
+	const float seconds = std::chrono::duration<float>(std::chrono::duration<float, std::milli>(frameGameTime)).count();
+	const bool fullFrame = drawList.GetFrame().drawAll;
+	registry.Each<OneOffSpellSeed, const Transform>(
+	    [&](entt::entity entity, OneOffSpellSeed& globe, const Transform& transform) {
+		    // A globe that the list does not draw does not run its glint on
+		    if (!drawList.Drawn(registry, entity))
+		    {
+			    return;
+		    }
+		    globe.glintFrame = visuals::StepGlint(globe.glintFrame, seconds);
+		    // The draw of a globe tests its sphere, pulled towards the camera by its radius, and no fade
+		    if (fullFrame && drawList.Listed(entity))
+		    {
+			    const auto origin = globe.drawnModel.has_value() ? glm::vec3((*globe.drawnModel)[3]) : transform.position;
+			    drawList.NoteFullFrame(
+			        entity, !haveBubble || GlobeOnScreen(origin, transform.scale.x, globe.middle, *meshes.Handle(bubble), eye));
+		    }
+	    });
+}
+
 void MiracleFxSystem::PlacePilesOnLand()
 {
 	if (!Locator::terrainSystem::has_value())
@@ -219,8 +253,12 @@ void MiracleFxSystem::PlacePilesOnLand()
 	});
 }
 
-void MiracleFxSystem::UpdateGlobes(float seconds)
+void MiracleFxSystem::UpdateGlobes(std::chrono::milliseconds frameRealTime, std::chrono::milliseconds frameGameTime,
+                                   bool landDrawn)
 {
+	const float seconds = std::chrono::duration<float>(std::chrono::duration<float, std::milli>(frameGameTime)).count();
+	// The effects in the globes step at the pace of the screen's refresh
+	const auto holderStep = particles::drawn_steps::StepSeconds(_holderPace, frameRealTime, frameGameTime, landDrawn);
 	if (!Locator::infoConstants::has_value() || !Locator::entitiesRegistry::has_value() || !Locator::resources::has_value())
 	{
 		return;
@@ -232,7 +270,7 @@ void MiracleFxSystem::UpdateGlobes(float seconds)
 	const auto bubble = OneOffSpellSeed::k_MeshId.value();
 	const glm::vec3 centre = meshes.Contains(bubble) ? meshes.Handle(bubble)->GetBoundingBox().Center() : glm::vec3(0.0f);
 	const auto eye = Locator::camera::has_value() ? Locator::camera::value().GetOrigin() : glm::vec3(0.0f);
-	auto* particles = Locator::particleSystem::has_value() ? &Locator::particleSystem::value() : nullptr;
+	auto* particles = Locator::particleRuleSystem::has_value() ? &Locator::particleRuleSystem::value() : nullptr;
 
 	std::vector<entt::entity> globes;
 	registry.Each<OneOffSpellSeed, const Transform>(
@@ -240,13 +278,27 @@ void MiracleFxSystem::UpdateGlobes(float seconds)
 		    globes.push_back(entity);
 		    globe.spin = std::fmod(globe.spin + magic::k_OrbSeedSpin * seconds, k_TwoPi);
 		    globe.ringSpin = std::fmod(globe.ringSpin + visuals::k_RingSpin * seconds, k_TwoPi);
-		    globe.glintFrame = visuals::StepGlint(globe.glintFrame, seconds);
 		    // The dome's top faces the camera, turning about the middle of the globe where it is now, so that a globe thrown
 		    // about turns where it flies. Only the draw turns it: the world keeps the globe where the turns put it, so the
 		    // camera does not change the world.
-		    globe.middle = transform.position + transform.rotation * (centre * transform.scale);
-		    const auto facing = visuals::FacingCamera(globe.middle, eye, visuals::Facing::Globe);
-		    const auto drawnOrigin = globe.middle - facing * (centre * transform.scale);
+		    // A globe that this computer threw keeps the turn of its flight and does not turn to the camera
+		    glm::mat3 facing(1.0f);
+		    glm::vec3 drawnOrigin(0.0f);
+		    if (globe.flightModel.has_value())
+		    {
+			    facing = glm::mat3(*globe.flightModel);
+			    drawnOrigin = glm::vec3((*globe.flightModel)[3]);
+			    globe.middle = drawnOrigin + facing * (centre * transform.scale);
+			    globe.flightModel.reset();
+		    }
+		    else
+		    {
+			    // A globe in a hand is drawn where the frame draws the hand, not where the turn put it
+			    const auto placed = ecs::drawn_place::DrawnTransformOf(registry, entity, transform);
+			    globe.middle = placed.position + placed.rotation * (centre * transform.scale);
+			    facing = visuals::FacingCamera(globe.middle, eye, visuals::Facing::Globe);
+			    drawnOrigin = globe.middle - facing * (centre * transform.scale);
+		    }
 		    glm::mat4 drawnModel(facing * glm::mat3(glm::scale(glm::mat4(1.0f), transform.scale)));
 		    drawnModel[3] = glm::vec4(drawnOrigin, 1.0f);
 		    globe.drawnModel = drawnModel;
@@ -261,13 +313,13 @@ void MiracleFxSystem::UpdateGlobes(float seconds)
 		    }
 		    // The miracle's own effect in the globe steps as the globe is drawn, before the seed's model is placed for this
 		    // frame, so its glints sparkle on where the model was last drawn
-		    // It steps only while the globe shows on the screen
+		    // It steps only while the globe shows on the screen, in the frames where its step is due
 		    if (const auto stepped = _holderEffects.find(entity);
-		        stepped != _holderEffects.end() && particles != nullptr &&
+		        holderStep.has_value() && stepped != _holderEffects.end() && particles != nullptr &&
 		        (!meshes.Contains(bubble) ||
 		         GlobeOnScreen(drawnOrigin, transform.scale.x, globe.middle, *meshes.Handle(bubble), eye)))
 		    {
-			    particles->ProcessByFrame(stepped->second, seconds);
+			    particles->ProcessByFrame(stepped->second, *holderStep);
 		    }
 		    // The seed's model as it is drawn, which glints of its effect sparkle on from the next step: below the middle,
 		    // spun, at the seed's scale and a phial's swell or squash, a big one's growing copy last
@@ -299,7 +351,7 @@ void MiracleFxSystem::UpdateGlobes(float seconds)
 		    if (found == _holderEffects.end())
 		    {
 			    const auto effect = particles->Start(seed.holderParticle, point, scale);
-			    if (effect == ParticleSystemInterface::k_NoEffect)
+			    if (effect == ParticleRuleSystemInterface::k_NoEffect)
 			    {
 				    return;
 			    }
@@ -382,7 +434,7 @@ void MiracleFxSystem::SeedShakenOff()
 void MiracleFxSystem::HandShaken()
 {
 	// The shake sound plays without a position, at its own volume
-	if (Locator::audio::has_value())
+	if (Locator::sounds::has_value())
 	{
 		constexpr uint32_t k_ShakeVolume = 35;
 		audio::StartGameSoundEffect(static_cast<entt::id_type>(audio::SoundId::G_ShakeHand_01), {.volume = k_ShakeVolume});
@@ -394,11 +446,11 @@ void MiracleFxSystem::Reset()
 {
 	_runners.clear();
 	_ring = nullptr;
-	if (Locator::particleSystem::has_value())
+	if (Locator::particleRuleSystem::has_value())
 	{
 		for (const auto& [globe, effect] : _holderEffects)
 		{
-			Locator::particleSystem::value().Delete(effect);
+			Locator::particleRuleSystem::value().Delete(effect);
 		}
 	}
 	_holderEffects.clear();
@@ -413,14 +465,17 @@ void MiracleFxSystem::Reset()
 
 void MiracleFxSystem::SaveState(reflection::BinaryWriter& out) const
 {
-	reflection::Save(out, _holderEffects);
-	// The tribes' names that spin in the world, and which of them rings the hand
+	reflection::SavePresentation(out, _holderEffects);
+	// The tribes' names that spin in the world, and which of them rings the hand. Only the frames move them and only the
+	// draw reads them.
+	out.BeginPresentation();
 	out.WriteSize(_runners.size());
 	for (const auto& runner : _runners)
 	{
 		reflection::Save(out, *runner);
 		reflection::Save(out, runner.get() == _ring);
 	}
+	out.EndPresentation();
 }
 
 bool MiracleFxSystem::LoadState(reflection::BinaryReader& in)

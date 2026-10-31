@@ -22,7 +22,6 @@
 
 #include "3D/L3DMesh.h"
 #include "3D/LandIslandInterface.h"
-#include "Audio/GameMusic.h"
 #include "Common/GUtilsAngle.h"
 #include "Common/GameRandom.h"
 #include "ECS/Archetypes/CitadelArchetype.h"
@@ -47,12 +46,14 @@
 #include "ECS/Components/VillageTotem.h"
 #include "ECS/Components/WorshipSite.h"
 #include "ECS/Creches.h"
+#include "ECS/GameEndConditions.h"
 #include "ECS/Graveyards.h"
 #include "ECS/Registry.h"
 #include "ECS/Statistics.h"
 #include "ECS/Systems/BuildingDamageSystemInterface.h"
 #include "ECS/Systems/CinematicDirectorSystemInterface.h"
 #include "ECS/Systems/FootpathSystemInterface.h"
+#include "ECS/Systems/GameEndSystemInterface.h"
 #include "ECS/Systems/HandSystemInterface.h"
 #include "ECS/Systems/Implementations/VillagerBuild.h"
 #include "ECS/Systems/Implementations/VillagerFootpath.h"
@@ -60,21 +61,24 @@
 #include "ECS/Systems/PlayerSystemInterface.h"
 #include "ECS/Systems/ReactionSystemInterface.h"
 #include "ECS/Systems/SaveGameSystemInterface.h"
+#include "ECS/Systems/ScriptMusicSystemInterface.h"
 #include "ECS/Systems/SpellIconSystemInterface.h"
 #include "ECS/Systems/TimeSystemInterface.h"
 #include "ECS/Systems/TownSystemInterface.h"
+#include "ECS/Systems/WonderSystemInterface.h"
+#include "ECS/Systems/WorkshopSystemInterface.h"
 #include "ECS/Systems/WorshipSiteSystemInterface.h"
 #include "ECS/TempleHeartOf.h"
 #include "ECS/ThingMapPlace.h"
 #include "ECS/TownCentreParts.h"
 #include "ECS/WorldObjects.h"
 #include "ECS/WorshipSiteConstruction.h"
-#include "Game.h"
 #include "Graphics/MeshDetail.h"
 #include "InfoConstants.h"
 #include "Locator.h"
 #include "Magic/VillagerReactionRules.h"
 #include "Resources/ResourcesInterface.h"
+#include "Sound/MusicType.h"
 
 using namespace openblack;
 using namespace openblack::ecs;
@@ -142,7 +146,7 @@ std::optional<int32_t> TownOf(entt::entity building)
 /// A temple finished plays its music and saves the game, as the rules let it
 void TempleFinished(PlayerNames owner)
 {
-	auto* music = Game::Instance() != nullptr ? Game::Instance()->GetGameMusic() : nullptr;
+	auto* music = Locator::scriptMusicSystem::has_value() ? &Locator::scriptMusicSystem::value() : nullptr;
 	// The game server and an observer have no player of their own
 	const bool local =
 	    Locator::handSystem::has_value() ? Locator::handSystem::value().IsOwnPlayer(owner) : owner == PlayerNames::PLAYER_ONE;
@@ -155,14 +159,14 @@ void TempleFinished(PlayerNames owner)
 	const auto temple = building_construction::FinishedTemple {
 	    .localPlayers = local,
 	    .scriptCutScene = cutScene,
-	    .scriptMusic = music != nullptr && music->GetScriptType() != audio::MusicType::None,
+	    .scriptMusic = music != nullptr && music->GetMusic().GetType() != audio::MusicType::None,
 	    .landNumber = Entities().Context().mapScriptGlobals.landNumber,
 	    .skirmish = Entities().Context().skirmish,
 	    .networkGame = Locator::time::has_value() && Locator::time::value().IsNetworkGame(),
 	};
 	if (music != nullptr && building_construction::PlaysFinishedMusic(temple))
 	{
-		music->StartScriptMusic(k_FinishedTempleMusic);
+		music->Start(k_FinishedTempleMusic);
 	}
 	// Then the game saves itself into the slot of the save on exit
 	if (building_construction::SavesOnFinish(temple) && Locator::saveGameSystem::has_value())
@@ -206,6 +210,11 @@ void SiteClosed(entt::entity building, const BuildingSite& site)
 	if (Locator::livingActionSystem::has_value())
 	{
 		villager_build::LetGoOfSite(building, site.workers);
+	}
+	// The scaffolds on the site go
+	if (Locator::workshopSystem::has_value())
+	{
+		Locator::workshopSystem::value().SiteClosed(building);
 	}
 	for (const auto pile : site.piles)
 	{
@@ -377,6 +386,24 @@ void Finish(entt::entity building)
 				const auto& info = Locator::infoConstants::value().abode.at(static_cast<size_t>(abode->info));
 				player_statistics::CountBuilt(registry, *owner, info.abodeType);
 			}
+			// In a network game its player counts a wonder or a house built, for the winning conditions
+			if (const auto owner = world_objects::PlayerOf(building); owner.has_value() && Locator::gameEndSystem::has_value())
+			{
+				const auto* info = world_objects::AbodeInfoOf(building);
+				const bool wonder = info != nullptr && info->abodeType == AbodeType::Wonder;
+				Locator::gameEndSystem::value().AddToCondition(
+				    owner, wonder ? game_end::Condition::WondersBuilt : game_end::Condition::HousesBuilt, 1);
+			}
+			// It starts to work, and may make its town a new town
+			if (Locator::gameEndSystem::has_value())
+			{
+				Locator::gameEndSystem::value().BuildingWorks(building);
+			}
+			// A finished wonder adds its power to the power that its tribe gives its player
+			if (Locator::wonderSystem::has_value())
+			{
+				Locator::wonderSystem::value().Built(building);
+			}
 		}
 		// A finished building of a town gets its footpath from the town's storage pit
 		if (registry.AllOf<Abode>(building) && TownOf(building).has_value() && Locator::footpathSystem::has_value())
@@ -417,6 +444,11 @@ void Repaired(entt::entity building)
 	if (!TownOf(building).has_value())
 	{
 		return;
+	}
+	// A repaired building of a town starts to work again, and may make its town a new town
+	if (Locator::gameEndSystem::has_value())
+	{
+		Locator::gameEndSystem::value().BuildingWorks(building);
 	}
 	// A repaired building of a town gets another footpath from the town's storage pit, as when it was first built
 	if (registry.AllOf<Abode>(building) && Locator::footpathSystem::has_value())
@@ -536,6 +568,16 @@ void construction::SetBuilt(entt::entity building, float built)
 		registry.SetDirty();
 		return;
 	}
+	// A worship site keeps how much of it is built, and at the whole it stands built with its altar
+	if (registry.AllOf<WorshipSite>(building))
+	{
+		if (Locator::worshipSiteSystem::has_value())
+		{
+			Locator::worshipSiteSystem::value().SetBuilt(building, built);
+		}
+		registry.SetDirty();
+		return;
+	}
 	if (!(registry.AllOf<Temple>(building) || world_objects::IsBuilding(building)))
 	{
 		return;
@@ -634,6 +676,15 @@ building_site::Places PlacesRound(entt::entity building)
 	// TODO(temple-builders): football pitches put their places on a circle (building_site::CirclePlaces)
 	return building_site::OutlinePlaces(triangles, matrix, box.Center(), reach);
 }
+
+/// A new site takes the next number of the sites that its town opened
+void NumberSite(BuildingSite& site, entt::entity town)
+{
+	if (auto* opener = town != entt::null && Entities().Valid(town) ? Entities().TryGet<Town>(town) : nullptr)
+	{
+		site.number = ++opener->sitesOpened;
+	}
+}
 } // namespace
 
 void construction::OpenSite(entt::entity building, float desire)
@@ -646,6 +697,7 @@ void construction::OpenSite(entt::entity building, float desire)
 	// The building's own town opens a new site at it
 	const auto town = TownOfSite(building);
 	auto& site = building_site_list::Open(SitesToOpenAt(building), town);
+	NumberSite(site, town);
 	site.desire = desire;
 	site.repair = IsBuilt(building);
 	site.places = PlacesRound(building);
@@ -674,6 +726,7 @@ bool construction::OpenSiteForTown(entt::entity building, entt::entity town)
 	// The town opens a new site at it, wanting it built no more than its other building; its pile of wood is made when
 	// the first wood comes
 	auto& site = building_site_list::Open(SitesToOpenAt(building), town);
+	NumberSite(site, town);
 	site.repair = IsBuilt(building);
 	site.places = PlacesRound(building);
 	// A site added to a town changes what it wants

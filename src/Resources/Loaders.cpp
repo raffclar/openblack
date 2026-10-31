@@ -30,39 +30,58 @@
 #include <HelpDudeFile.h>
 #include <L3DFile.h>
 #include <MorphFile.h>
+#include <OnlineMapThumbnail.h>
 #include <PackFile.h>
 #include <ParticleFile.h>
 #include <PhysicsConstantsFile.h>
 #include <RawImage.h>
 #include <SASFile.h>
 #include <StackedBitmap.h>
-#include <bgfx/bgfx.h>
 #include <entt/core/hashed_string.hpp>
 #include <spdlog/spdlog.h>
 
 #include "3D/L3DMesh.h"
 #include "3D/LandLightTable.h"
 #include "3D/Light.h"
-#include "Audio/AudioManagerInterface.h"
-#include "Audio/ClipSounds.h"
-#include "Audio/SoundDecoder.h"
+#include "3D/LowResolutionTextures.h"
 #include "Common/Bitmap16B.h"
 #include "Common/StringUtils.h"
 #include "Common/Zip.h"
+#include "ECS/Components/Player.h"
 #include "FileSystem/FileSystemInterface.h"
+#include "Graphics/GraphicsDeviceInterface.h"
 #include "Graphics/Texture2D.h"
+#include "Gui/LandThumbnail.h"
 #include "Help/AdvisorModel.h"
 #include "Locator.h"
 #include "Physics/Materials.h"
+#include "Sound/ClipSounds.h"
+#include "Sound/MusicTimingFile.h"
+#include "Sound/SoundDecoder.h"
 
 using namespace openblack;
 using namespace openblack::filesystem;
 using namespace openblack::resources;
 
+namespace
+{
+/// What the loaders make from the data that they read. A world with no configuration makes the objects on the graphics
+/// device.
+[[nodiscard]] graphics::UploadMode Uploads()
+{
+	return graphics::ConfiguredUploads();
+}
+
+[[nodiscard]] bool KeepsDataOnly()
+{
+	return Uploads() == graphics::UploadMode::DataOnly;
+}
+} // namespace
+
 L3DLoader::result_type L3DLoader::operator()(FromBufferTag, const std::string& debugName,
                                              const std::vector<uint8_t>& data) const
 {
-	auto mesh = std::make_shared<graphics::L3DMesh>(debugName);
+	auto mesh = std::make_shared<graphics::L3DMesh>(debugName, false, Uploads());
 	if (!mesh->LoadFromBuffer(data))
 	{
 		throw std::runtime_error("Unable to load mesh");
@@ -87,7 +106,7 @@ std::vector<uint8_t> ReadZipped(const std::filesystem::path& path)
 
 L3DLoader::result_type L3DLoader::operator()(FromDiskTag, const std::filesystem::path& path) const
 {
-	auto mesh = std::make_shared<graphics::L3DMesh>(path.stem().string());
+	auto mesh = std::make_shared<graphics::L3DMesh>(path.stem().string(), false, Uploads());
 	auto pathExt = string_utils::LowerCase(path.extension().string());
 
 	if (pathExt == ".l3d")
@@ -110,7 +129,7 @@ L3DLoader::result_type L3DLoader::operator()(FromDiskTag, const std::filesystem:
 
 L3DLoader::result_type L3DLoader::operator()(FromDynamicFileTag, const std::string& debugName, const l3d::L3DFile& file) const
 {
-	auto mesh = std::make_shared<graphics::L3DMesh>(debugName, true);
+	auto mesh = std::make_shared<graphics::L3DMesh>(debugName, true, Uploads());
 	if (!mesh->Load(file))
 	{
 		throw std::runtime_error("Unable to load mesh");
@@ -121,7 +140,7 @@ L3DLoader::result_type L3DLoader::operator()(FromDynamicFileTag, const std::stri
 L3DLoader::result_type L3DLoader::operator()(FromMadeTag, const std::string& debugName, const graphics::L3DMesh& skinSource,
                                              std::span<const std::vector<graphics::L3DSubMesh::MadePrimitive>> subMeshes) const
 {
-	auto mesh = std::make_shared<graphics::L3DMesh>(debugName);
+	auto mesh = std::make_shared<graphics::L3DMesh>(debugName, false, Uploads());
 	if (!mesh->LoadMade(skinSource, subMeshes))
 	{
 		throw std::runtime_error("Unable to make mesh");
@@ -132,7 +151,7 @@ L3DLoader::result_type L3DLoader::operator()(FromMadeTag, const std::string& deb
 L3DLoader::result_type L3DLoader::operator()(FromFileWithSkinsOfTag, const std::string& debugName, const l3d::L3DFile& file,
                                              const graphics::L3DMesh& skinSource) const
 {
-	auto mesh = std::make_shared<graphics::L3DMesh>(debugName);
+	auto mesh = std::make_shared<graphics::L3DMesh>(debugName, false, Uploads());
 	if (!mesh->LoadWithSkinsOf(file, skinSource))
 	{
 		throw std::runtime_error("Unable to load mesh");
@@ -175,6 +194,19 @@ ClipSoundsLoader::result_type ClipSoundsLoader::operator()(FromDiskTag, const st
 ClipSoundsLoader::result_type ClipSoundsLoader::operator()(EmptyTag) const
 {
 	return std::make_shared<audio::clip_sounds::ClipSoundTable>();
+}
+
+MusicTimingLoader::result_type MusicTimingLoader::operator()(FromDiskTag, const std::filesystem::path& path) const
+{
+	const auto data = Locator::filesystem::value().ReadAll(path);
+	auto timing = audio::ReadMusicTiming(data);
+	return timing.has_value() ? std::make_shared<audio::MusicTiming>(std::move(*timing))
+	                          : std::make_shared<audio::MusicTiming>();
+}
+
+MusicTimingLoader::result_type MusicTimingLoader::operator()(EmptyTag) const
+{
+	return std::make_shared<audio::MusicTiming>();
 }
 
 PhysicsMaterialsLoader::result_type PhysicsMaterialsLoader::operator()(FromDiskTag, const std::filesystem::path& path) const
@@ -220,9 +252,18 @@ Texture2DLoader::result_type Texture2DLoader::operator()(FromPackTag, const std:
 		throw std::runtime_error("Unsupported compressed texture format");
 	}
 
-	texture2D->Create(static_cast<uint16_t>(g3dTexture.ddsHeader.width), static_cast<uint16_t>(g3dTexture.ddsHeader.height), 1,
-	                  internalFormat, graphics::Wrapping::Repeat, graphics::Filter::Linear,
-	                  bgfx::copy(g3dTexture.ddsData.data(), static_cast<uint32_t>(g3dTexture.ddsData.size())));
+	const auto width = static_cast<uint16_t>(g3dTexture.ddsHeader.width);
+	const auto height = static_cast<uint16_t>(g3dTexture.ddsHeader.height);
+	if (KeepsDataOnly())
+	{
+		texture2D->Describe(width, height, 1, internalFormat);
+	}
+	else
+	{
+		texture2D->Create(
+		    width, height, 1, internalFormat, graphics::Wrapping::Repeat, graphics::Filter::Linear,
+		    Locator::graphicsDevice::value().Copy(g3dTexture.ddsData.data(), static_cast<uint32_t>(g3dTexture.ddsData.size())));
+	}
 	// Its alpha as the game reads it into 4 bits a channel, which trees' shadows are cut out by
 	const auto compression =
 	    internalFormat == graphics::TextureFormat::BlockCompression1   ? graphics::tree_shadows::Compression::Dxt1
@@ -258,9 +299,15 @@ Texture2DLoader::result_type Texture2DLoader::operator()(FromBufferTag, const st
 	auto texture = std::make_shared<graphics::Texture2D>(name);
 	if (depth == graphics::texel_depth::Depth::FiveBits)
 	{
+		if (KeepsDataOnly())
+		{
+			texture->Describe(*side, *side, 1, graphics::TextureFormat::BGR5A1);
+			return texture;
+		}
 		const auto packed = graphics::texel_depth::PackRgb555(data, channels);
-		texture->Create(*side, *side, 1, graphics::TextureFormat::BGR5A1, graphics::Wrapping::Repeat, graphics::Filter::Linear,
-		                bgfx::copy(packed.data(), static_cast<uint32_t>(packed.size() * sizeof(packed[0]))));
+		texture->Create(
+		    *side, *side, 1, graphics::TextureFormat::BGR5A1, graphics::Wrapping::Repeat, graphics::Filter::Linear,
+		    Locator::graphicsDevice::value().Copy(packed.data(), static_cast<uint32_t>(packed.size() * sizeof(packed[0]))));
 		return texture;
 	}
 	// The small grey images that the game also reads itself keep their texels as the file has them
@@ -270,23 +317,50 @@ Texture2DLoader::result_type Texture2DLoader::operator()(FromBufferTag, const st
 	{
 		kept.assign(data.begin(), data.end());
 	}
-	graphics::texel_depth::Reduce(data, depth);
 	texture->SetTexels(std::move(kept));
-	texture->Create(*side, *side, 1, channels == 3 ? graphics::TextureFormat::RGB8 : graphics::TextureFormat::R8,
-	                graphics::Wrapping::Repeat, graphics::Filter::Linear,
-	                bgfx::copy(data.data(), static_cast<uint32_t>(data.size())));
+	const auto format = channels == 3 ? graphics::TextureFormat::RGB8 : graphics::TextureFormat::R8;
+	if (KeepsDataOnly())
+	{
+		texture->Describe(*side, *side, 1, format);
+		return texture;
+	}
+	graphics::texel_depth::Reduce(data, depth);
+	texture->Create(*side, *side, 1, format, graphics::Wrapping::Repeat, graphics::Filter::Linear,
+	                Locator::graphicsDevice::value().Copy(data.data(), static_cast<uint32_t>(data.size())));
 	return texture;
 }
 
 Texture2DLoader::result_type Texture2DLoader::operator()(FromDiskWithAlphaTag, const std::filesystem::path& rawTexturePath,
-                                                         const std::filesystem::path& alphaPath, uint16_t side) const
+                                                         const std::filesystem::path& alphaPath, uint16_t side,
+                                                         bool halve) const
 {
 	auto& fileSystem = Locator::filesystem::value();
-	const auto colours = rawimage::DecodeRgb(fileSystem.ReadAll(rawTexturePath), side, side);
-	const auto alpha = rawimage::DecodeGrey(fileSystem.ReadAll(alphaPath), side, side);
+	auto colourBytes = fileSystem.ReadAll(rawTexturePath);
+	auto alphaBytes = fileSystem.ReadAll(alphaPath);
+	// At half its size the picture and its alpha each take every second texel of each second row
+	if (halve)
+	{
+		auto halfColours = low_resolution_textures::Halve(colourBytes, side);
+		auto halfAlpha = low_resolution_textures::Halve(alphaBytes, side);
+		if (!halfColours || !halfAlpha)
+		{
+			throw std::runtime_error("Unexpected size of " + rawTexturePath.string() + " or its alpha");
+		}
+		colourBytes = std::move(*halfColours);
+		alphaBytes = std::move(*halfAlpha);
+		side /= 2;
+	}
+	const auto colours = rawimage::DecodeRgb(colourBytes, side, side);
+	const auto alpha = rawimage::DecodeGrey(alphaBytes, side, side);
 	if (!colours || !alpha)
 	{
 		throw std::runtime_error("Unexpected size of " + rawTexturePath.string() + " or its alpha");
+	}
+	auto texture = std::make_shared<graphics::Texture2D>(("raw" / rawTexturePath.stem()).string() + "+alpha");
+	if (KeepsDataOnly())
+	{
+		texture->Describe(side, side, 1, graphics::TextureFormat::RGBA8);
+		return texture;
 	}
 	std::vector<uint8_t> texels;
 	texels.reserve(colours->pixels.size() * 4);
@@ -296,9 +370,8 @@ Texture2DLoader::result_type Texture2DLoader::operator()(FromDiskWithAlphaTag, c
 		texels.insert(texels.end(), {rgb[0], rgb[1], rgb[2], alpha->pixels.at(i)});
 	}
 	graphics::texel_depth::Reduce(texels, graphics::texel_depth::Depth::FourBits);
-	auto texture = std::make_shared<graphics::Texture2D>(("raw" / rawTexturePath.stem()).string() + "+alpha");
 	texture->Create(side, side, 1, graphics::TextureFormat::RGBA8, graphics::Wrapping::Repeat, graphics::Filter::Linear,
-	                bgfx::copy(texels.data(), static_cast<uint32_t>(texels.size())));
+	                Locator::graphicsDevice::value().Copy(texels.data(), static_cast<uint32_t>(texels.size())));
 	return texture;
 }
 
@@ -318,12 +391,16 @@ Texture2DLoader::result_type Texture2DLoader::operator()(FromBitmapLayersTag, co
 	}
 	auto texture = std::make_shared<graphics::Texture2D>(name);
 	const auto layers = static_cast<uint16_t>(layerPaths.size());
-	const auto* caps = bgfx::getCaps();
-	if (caps == nullptr || (caps->formats[bgfx::TextureFormat::BGR5A1] & BGFX_CAPS_FORMAT_TEXTURE_2D) != 0)
+	if (KeepsDataOnly())
 	{
-		texture->Create(side, side, layers, graphics::TextureFormat::BGR5A1, graphics::Wrapping::ClampEdge,
-		                graphics::Filter::Linear,
-		                bgfx::copy(texels.data(), static_cast<uint32_t>(texels.size() * sizeof(texels[0]))));
+		texture->Describe(side, side, layers, graphics::TextureFormat::BGR5A1);
+		return texture;
+	}
+	if (Locator::graphicsDevice::value().HasTextureFormat(graphics::TextureFormat::BGR5A1, graphics::TextureUse::Texture2D))
+	{
+		texture->Create(
+		    side, side, layers, graphics::TextureFormat::BGR5A1, graphics::Wrapping::ClampEdge, graphics::Filter::Linear,
+		    Locator::graphicsDevice::value().Copy(texels.data(), static_cast<uint32_t>(texels.size() * sizeof(texels[0]))));
 		return texture;
 	}
 	// A device without the 16-bit format (WebGL 2) gets a byte for each channel
@@ -334,7 +411,7 @@ Texture2DLoader::result_type Texture2DLoader::operator()(FromBitmapLayersTag, co
 		std::ranges::copy(Texel1555Bytes(texels[i]), bytes.begin() + static_cast<std::ptrdiff_t>(i * 4));
 	}
 	texture->Create(side, side, layers, graphics::TextureFormat::RGBA8, graphics::Wrapping::ClampEdge, graphics::Filter::Linear,
-	                bgfx::copy(bytes.data(), static_cast<uint32_t>(bytes.size())));
+	                Locator::graphicsDevice::value().Copy(bytes.data(), static_cast<uint32_t>(bytes.size())));
 	return texture;
 }
 
@@ -611,6 +688,10 @@ CreatureRigLoader::result_type CreatureRigLoader::operator()(FromBufferTag, cons
 	for (const auto& set : file.GetAnimationSpecs().animationSets)
 	{
 		animationCount += set.animations.size();
+		for (const auto& line : set.animations)
+		{
+			rig->specLines.push_back({.name = line.name, .type = static_cast<char>(line.type), .set = set.name});
+		}
 	}
 	for (size_t mesh = 0; mesh < CreatureRig::k_AnimatedMeshCount; ++mesh)
 	{
@@ -960,6 +1041,34 @@ HandDemoLoader::result_type HandDemoLoader::operator()(FromDiskTag, const std::f
 		                         std::string(hnd::ResultToStr(result)));
 	}
 	return file;
+}
+
+LandThumbnailLoader::result_type LandThumbnailLoader::operator()(FromDiskTag, const std::filesystem::path& path) const
+{
+	const auto bytes = Locator::filesystem::value().ReadAll(path);
+	const auto file = onlinemap::ParseThumbnail(std::as_bytes(std::span(bytes)));
+	if (!file.has_value())
+	{
+		SPDLOG_LOGGER_ERROR(spdlog::get("game"), "The land thumbnail {} is not a thumbnail file", path.generic_string());
+		return nullptr;
+	}
+	auto picture = gui::land_thumbnail::Paint(*file, ecs::components::Player::k_Colours);
+	auto thumbnail = std::make_shared<gui::land_thumbnail::LandThumbnail>();
+	thumbnail->side = picture.side;
+	thumbnail->description = std::string(file->description);
+	thumbnail->texture = std::make_shared<graphics::Texture2D>("Land thumbnail " + path.stem().string());
+	if (KeepsDataOnly())
+	{
+		thumbnail->texture->Describe(gui::land_thumbnail::k_TextureSide, gui::land_thumbnail::k_TextureSide, 1,
+		                             graphics::TextureFormat::BGRA4);
+		return thumbnail;
+	}
+	// As in the game, the texture repeats at its edges and its texels blend
+	thumbnail->texture->Create(gui::land_thumbnail::k_TextureSide, gui::land_thumbnail::k_TextureSide, 1,
+	                           graphics::TextureFormat::BGRA4, graphics::Wrapping::Repeat, graphics::Filter::Linear,
+	                           Locator::graphicsDevice::value().Copy(
+	                               picture.texels.data(), static_cast<uint32_t>(picture.texels.size() * sizeof(uint16_t))));
+	return thumbnail;
 }
 
 VideoLoader::result_type VideoLoader::operator()(FromDiskTag, const std::filesystem::path& path) const

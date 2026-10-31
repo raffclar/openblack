@@ -67,8 +67,13 @@ public:
 	[[nodiscard]] State GetState(entt::entity creature) const override;
 	[[nodiscard]] creature_object_actions::Failure GetFailure(entt::entity creature) const override;
 	[[nodiscard]] bool IsCatching(entt::entity creature) const override;
+	[[nodiscard]] bool PlaysOnAlone(entt::entity creature) const override;
+	void StopForPlan(entt::entity creature, bool stopsBody) override;
 	[[nodiscard]] std::optional<float> GetProgress(entt::entity creature) const override;
 	[[nodiscard]] std::optional<entt::entity> GetHeld(entt::entity creature) const override;
+	[[nodiscard]] std::optional<entt::entity> GetCarried(entt::entity creature) const override;
+	[[nodiscard]] bool HandsTouched(entt::entity creature) const override;
+	bool CrushUnderFoot(entt::entity creature, entt::entity thing) override;
 	[[nodiscard]] std::optional<float> FoodValueOf(entt::entity object) const override;
 	[[nodiscard]] bool CanPickUp(entt::entity creature, entt::entity object) const override;
 	[[nodiscard]] bool CanEat(entt::entity creature, entt::entity object) const override;
@@ -77,6 +82,11 @@ public:
 	[[nodiscard]] bool CanBeCaught(entt::entity object) const override;
 	[[nodiscard]] bool CanThrowToImpress(entt::entity creature, entt::entity object) const override;
 	[[nodiscard]] creature_object_actions::KindFacts KindOf(entt::entity object) const override { return KindFactsOf(object); }
+	[[nodiscard]] std::optional<creature_object_actions::LiftFacts> LiftFactsOf(entt::entity creature,
+	                                                                            entt::entity object) const override
+	{
+		return PickUpFactsOf(creature, object).lift;
+	}
 	[[nodiscard]] bool CanDestroy(entt::entity target) const override;
 	[[nodiscard]] bool CanStompOn(entt::entity creature, entt::entity target) const override;
 	[[nodiscard]] bool CanKick(entt::entity creature, entt::entity target) const override;
@@ -99,14 +109,18 @@ private:
 	void SwallowStoppedEat(entt::entity creature);
 	/// Starts an action on the creature in place of any it was doing, or records why it can't
 	bool Start(entt::entity creature, components::CreatureObjectAction action);
-	/// Where a released thing starts: where it hangs in the hand, or with its origin at the finger ends as a throw does
+	/// How the creature releases a thing:
+	/// - Dropped: it starts where it hangs in the hand, and keeps the turn of the hand.
+	/// - LetGo: as Dropped, and it keeps the angles of the turn in the hand.
+	/// - Thrown: it starts with its origin at the finger ends, and turns by the angles of the turn in the hand.
 	enum class ReleaseFrom : uint8_t
 	{
-		Hanging,
-		FingerEnds,
+		Dropped,
+		LetGo,
+		Thrown,
 	};
 	/// Lets go of the held object, which flies off with a velocity
-	void Release(entt::entity creature, const glm::vec3& velocity, ReleaseFrom from = ReleaseFrom::Hanging);
+	void Release(entt::entity creature, const glm::vec3& velocity, ReleaseFrom from = ReleaseFrom::Dropped);
 	/// A held thing goes into the physics as the creature lets it go
 	void LetGo(entt::entity creature, entt::entity object, const glm::vec3& velocity);
 };

@@ -66,6 +66,7 @@ public:
 	void Drop(entt::entity) override {}
 	[[nodiscard]] State GetState(entt::entity) const override { return state; }
 	[[nodiscard]] bool IsCatching(entt::entity) const override { return false; }
+	[[nodiscard]] bool PlaysOnAlone(entt::entity) const override { return playsOn; }
 	[[nodiscard]] std::optional<float> GetProgress(entt::entity) const override { return std::nullopt; }
 	[[nodiscard]] std::optional<entt::entity> GetHeld(entt::entity) const override { return std::nullopt; }
 	[[nodiscard]] std::optional<float> FoodValueOf(entt::entity) const override { return std::nullopt; }
@@ -75,6 +76,7 @@ public:
 	[[nodiscard]] bool CanDestroy(entt::entity) const override { return false; }
 
 	State state {State::Busy};
+	bool playsOn {false};
 	std::vector<entt::entity> cancelled;
 };
 
@@ -155,5 +157,28 @@ TEST_F(CreatureScriptControlTest, AScriptLeavesIdleHandsAlone)
 {
 	hands->state = CreatureObjectActionSystemInterface::State::Idle;
 	ASSERT_TRUE(minds.CarryOutForScript(creature, creature_mind::FaceForScript({10.0f, 0.0f, 10.0f})));
+	EXPECT_TRUE(hands->cancelled.empty());
+}
+
+// A let-go that plays its clip continues to its moment when a script takes the creature
+// NOLINTNEXTLINE(cppcoreguidelines-avoid-non-const-global-variables): external macro
+TEST_F(CreatureScriptControlTest, AScriptLeavesALetGoToPlayOn)
+{
+	hands->playsOn = true;
+	ASSERT_TRUE(minds.CarryOutForScript(creature, creature_mind::FaceForScript({10.0f, 0.0f, 10.0f})));
+	EXPECT_TRUE(hands->cancelled.empty());
+	EXPECT_TRUE(Locator::entitiesRegistry::value().AllOf<ScriptControlled>(creature));
+}
+
+// The hand lets go of a stroked or slapped creature. The walk of the hands stops, but a let-go continues to its moment.
+// NOLINTNEXTLINE(cppcoreguidelines-avoid-non-const-global-variables): external macro
+TEST_F(CreatureScriptControlTest, FeedbackStopsTheHandsButNotALetGo)
+{
+	minds.ReceiveFeedback(creature, 0.0f);
+	EXPECT_EQ(hands->cancelled, (std::vector<entt::entity> {creature}));
+	hands->cancelled.clear();
+	hands->state = CreatureObjectActionSystemInterface::State::Busy;
+	hands->playsOn = true;
+	minds.ReceiveFeedback(creature, 0.0f);
 	EXPECT_TRUE(hands->cancelled.empty());
 }

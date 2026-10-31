@@ -22,6 +22,7 @@
 #include <entt/entity/entity.hpp>
 
 #include "Commands/PlayerCommands.h"
+#include "Common/FramePace.h"
 #include "Creature/CreatureSpells.h"
 #include "ECS/Systems/MagicSystemInterface.h"
 #include "Magic/AreaEffect.h"
@@ -32,6 +33,7 @@
 #include "Magic/SpellBehaviours.h"
 #include "Magic/SpellGrid.h"
 #include "Magic/SpellSeedRules.h"
+#include "PlayerSlots.h"
 
 #if !defined(LOCATOR_IMPLEMENTATIONS)
 #error "ECS System implementations should only be included in Locator.cpp"
@@ -117,11 +119,20 @@ private:
 class WorshipSiteSpellCaster final: public magic::SpellCasterInterface
 {
 public:
-	void Bind(entt::entity site) { _site = site; }
+	/// The site, and the miracle it tops up
+	void Bind(entt::entity site, entt::entity spell)
+	{
+		_site = site;
+		_spell = spell;
+	}
 	float MaintainSpell(float amount) override;
+	/// Each hundred of prayer power that the site spends on the miracle, a mote flies from the site's spell icon to it:
+	/// for its upkeep to where it is cast from, for its events to where it is
+	void OnChantsSpent(float chants, magic::ChantCharge charge) override;
 
 private:
 	entt::entity _site {entt::null};
+	entt::entity _spell {entt::null};
 };
 
 class MagicSystem final: public MagicSystemInterface, private magic::SpellServicesInterface
@@ -174,11 +185,12 @@ public:
 	entt::entity SummonSeedAtSite(entt::entity site, SpellSeedType seed, int powerUp) override;
 	entt::entity TakeIconSeed(entt::entity site, SpellSeedType seed, int powerUp, float chants) override;
 	void DiscardHeldSeed() override;
+	void DiscardHeldSeedOf(PlayerNames player) override;
 	void DeleteSeed(entt::entity seed) override;
 	void SetIconSeedPowerUp(entt::entity seed, int powerUp) override;
 	[[nodiscard]] std::optional<uint32_t> TakeHeldMiracleToolTip() override;
 
-	void UpdateHand(const HandFrame& frame, float seconds) override;
+	void UpdateHand(const HandFrame& frame, const input_steps::Steps& steps) override;
 	bool TapFireBall(entt::entity ball) override;
 	bool TapGlobe(entt::entity globe, PlayerNames player) override;
 	bool PressFireBall(uint32_t nowMs, uint32_t turn) override;
@@ -224,6 +236,8 @@ public:
 
 	void ProcessTurn() override;
 	void Update(float seconds) override;
+	void UpdateDispenserFrame(const ObjectDrawListSystemInterface& drawList, std::chrono::milliseconds frameRealTime,
+	                          std::chrono::milliseconds frameGameTime, bool landDrawn) override;
 	void Reset() override;
 	void SaveState(reflection::BinaryWriter& out) const override;
 	bool LoadState(reflection::BinaryReader& in) override;
@@ -236,6 +250,7 @@ public:
 	[[nodiscard]] bool IsIgnoringInfluence() const override { return _ignoreInfluence; }
 	void RainOnFire(const glm::vec3& point) override;
 	[[nodiscard]] std::vector<SpellInfo> GetSpells() const override;
+	[[nodiscard]] bool SpellNeedsHandReportEachTurn() const override;
 	[[nodiscard]] std::optional<entt::entity> SpellAt(MagicType type, glm::vec3 point, float radius) const override;
 	[[nodiscard]] std::vector<DispenserInfo> GetDispensers() const override;
 
@@ -337,6 +352,9 @@ private:
 	[[nodiscard]] bool HandPointValid() const;
 	/// Whether the held seed may be cast at a point: in the player's influence, by its cast rule
 	[[nodiscard]] bool PointValidForHeld(glm::vec3 point) const;
+	/// The worship site's spell icon that made a seed: the icon that has it out, else the site's icon of its kind. None
+	/// for a seed made at no site.
+	[[nodiscard]] entt::entity IconOfSeed(entt::entity seedEntity, const components::SpellSeed& seed) const;
 	/// A miracle held locked in the local hand that the hand moves outside its cast rule is let go, as the button would
 	void LetGoIfOutsideCastRule();
 	/// Carries out what the hand's casting state machine says. The hand of this computer shows its part at once; the
@@ -387,7 +405,10 @@ private:
 	/// The held seed as the hand shows it, after it came to the hand, became ready or was powered up: how the hand holds
 	/// it, its model once it is ready (for the seeds that show one), and its in-hand effect drawn once it is ready
 	void ShowHeldSeed();
-	/// The seeds bound to their miracles shown over them, or hidden (MagicSeedWithSpell.cpp)
+	/// The seeds bound to their miracles shown over them, or hidden (MagicSeedWithSpell.cpp). Each turn: whether each
+	/// seed out of the hand shows over its miracle.
+	void ShowSeedsWithSpellsTurn();
+	/// Each frame: places the seeds out of the hand that show over their miracles
 	void ShowSeedsWithSpells();
 	/// What decides whether a seed bound to its miracle is shown over it
 	[[nodiscard]] magic::SeedWithSpell SeedWithSpellOf(const components::SpellSeed& seed, const components::Spell& spell) const;
@@ -463,7 +484,7 @@ private:
 	std::deque<entt::entity> _spells;
 	std::unordered_map<entt::entity, std::unique_ptr<SpellLink>> _links;
 	std::unique_ptr<HandEffectLink> _handEffectLink;
-	std::array<std::unique_ptr<magic::PlayerSpellCaster>, static_cast<size_t>(PlayerNames::_COUNT)> _players;
+	std::array<std::unique_ptr<magic::PlayerSpellCaster>, player_slots::k_PlayerNumbers> _players;
 	magic::ObjectSpellCaster _objectCaster;
 	magic::GlobeSpellCaster _globeCaster;
 	CreatureSpellCaster _creatureCaster;
@@ -478,12 +499,18 @@ private:
 	/// The hand's speed, smoothed, and where it was last frame
 	glm::vec3 _handVelocity {0.0f};
 	std::optional<glm::vec3> _lastHandPosition;
+	/// The hand's place at the last frame, from which the hand moved in this frame
+	std::optional<glm::vec3> _lastFrameHandPosition;
 	/// The spin the hand gives the miracle it holds, measured from when that miracle came to it
 	magic::HandSpin _handSpin;
 	entt::entity _spinningSeed {entt::null};
 	/// Where the held miracle's in-hand effect sits, in the fingers of the hand's pose, and how large the hand is drawn
 	std::optional<glm::vec3> _handEffectPoint;
 	float _handScale {1.0f};
+	/// When the swirls of the dispensers take their next step
+	frame_pace::Pace _swirlPace;
+	/// When the miracle shown in the hand takes its next step
+	frame_pace::Pace _handEffectPace;
 	/// Where the in-hand effect sat when it last stepped
 	glm::vec3 _handAtStep {0.0f};
 	/// The player of the command that the turn does now. The hand of this player holds the seed that the miracles of

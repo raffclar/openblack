@@ -29,8 +29,10 @@ namespace openblack::ecs::worship_site
 inline constexpr uint32_t k_Places = 6;
 /// How far round each place is from the last: a seventh of a turn, as the game rounds it
 inline constexpr float k_PlaceSpacing = 0.8975979f;
-/// The points of the worship site's model: where a site's place is judged from, and where its altar stands
-inline constexpr uint32_t k_PlacePoint = 9;
+/// The point of the temple's model that the game uses to judge each place around the temple
+inline constexpr uint32_t k_TemplePlacePoint = 9;
+/// The points of the worship site's model: the gate of the site, and the place where its altar stands
+inline constexpr uint32_t k_GatePoint = 9;
 inline constexpr uint32_t k_AltarPoint = 8;
 /// The dance at a site is centred on its altar's point
 inline constexpr uint32_t k_DancePoint = k_AltarPoint;
@@ -42,7 +44,8 @@ inline constexpr float k_FoodPotTurn = 1.5f;
 inline constexpr uint32_t k_RestPoint = 7;
 /// The site's middle, which villagers are judged near or far from, in the model's own space
 inline constexpr glm::vec3 k_CentrePoint {12.55f, 0.0f, -26.1f};
-/// How far round its middle a site takes the effects of miracles and the heat of fires, whatever its size
+/// How far round its middle a site reaches, whatever its size. The site takes the effects of miracles and the heat of
+/// fires in this radius, and the distance to the site is measured from the edge of this radius.
 inline constexpr float k_EffectRadius = 14.0f;
 /// The food pot is made smaller than its kind, until the food in it sets its size
 inline constexpr float k_FoodPotScale = 0.7f;
@@ -64,12 +67,20 @@ inline constexpr int32_t k_LandWithoutSites = 1;
 /// wood poured onto the site are judged near or far from
 [[nodiscard]] glm::vec2 CentreOnLand(glm::vec3 position, const glm::mat3& rotation, float scale);
 
-/// Of the free places around a temple, the one whose site would stand nearest a spot on the land, judged by where the
-/// model's place point would be. The game turns the point only by the place's own share of a turn, not by the way the
-/// temple faces, so a temple set down turned has its places judged as if it faced the first way. None when every place
-/// is taken.
+/// The distance from the edge of a site to the edge of a thing: the distance from the middle of the site, less the reach
+/// of the site and the radius of the thing. A value of 0 or less means that the thing touches the site.
+[[nodiscard]] float EdgeGap(glm::vec2 centre, glm::vec2 thing, float thingRadius);
+
+/// The point on the land that the game uses to judge a place around a temple. The game turns a point of the temple's
+/// model by the share of a turn of the place, then sets the point down with the temple's turn, size and position.
+[[nodiscard]] glm::vec2 PlaceJudgePoint(glm::vec2 temple, float templeFacing, float templeScale, uint32_t place,
+                                        glm::vec3 templePoint);
+
+/// Of the free places around a temple, the place whose judge point is nearest to a spot on the land. When two places
+/// are equally near, the lower place wins. The function gives no place when all the places are taken.
 [[nodiscard]] std::optional<uint32_t> NearestFreePlace(const std::array<bool, k_Places>& taken, glm::vec2 temple,
-                                                       glm::vec3 placePoint, glm::vec2 spot);
+                                                       float templeFacing, float templeScale, glm::vec3 templePoint,
+                                                       glm::vec2 spot);
 
 /// Whether a town may have a worship site made for it: never on the first land, nor once a script has stopped it, nor
 /// while nobody lives in it

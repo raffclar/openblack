@@ -22,7 +22,13 @@
 #include <string_view>
 
 #include "Debug/RowDump.h"
+#include "Simulation/WorldStateAtTurn.h"
 #endif
+
+namespace openblack::synced_state
+{
+struct Hash;
+} // namespace openblack::synced_state
 
 namespace openblack::ecs::systems
 {
@@ -60,6 +66,10 @@ public:
 	virtual void SetDump(uint32_t turn, std::vector<std::string> components) = 0;
 	/// The checksum of the last turn that it made one for
 	[[nodiscard]] virtual std::optional<TurnChecksum> GetLast() const = 0;
+	/// Tools: the hash of the synced world that the system made at a turn, with or without the hash of each field. None
+	/// when the last checksum was for another turn or of the other kind. A tool that records the same world at the same
+	/// turn uses it and does not hash the world again.
+	[[nodiscard]] virtual const synced_state::Hash* GetHashOfTurn(uint32_t turn, bool byField) const = 0;
 	/// A function that gets the checksum of each turn as the system makes it, as the dedicated server logs it. An empty
 	/// function removes it.
 	virtual void SetTurnListener(std::function<void(const TurnChecksum&)> listener) = 0;
@@ -71,6 +81,9 @@ public:
 	/// Tools: the world of this computer parts from the world of the source at this turn: write the kept rows of the turn
 	/// to the file of the row dump, when it started
 	virtual void DumpPart(uint32_t turn, std::string_view reason, uint32_t source) = 0;
+	/// Tools: at the end of each turn of the settings, after its checksum, write the world state of this computer
+	/// (world_state_at_turn). It makes the checksum of each turn, also in a single player game.
+	virtual void WriteWorldStates(world_state_at_turn::Settings settings) = 0;
 #endif
 };
 

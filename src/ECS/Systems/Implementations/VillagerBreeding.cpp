@@ -23,10 +23,6 @@
 #include <glm/gtx/vec_swizzle.hpp>
 
 #include "3D/MapCoords.h"
-#include "Audio/AnimEffectKeys.h"
-#include "Audio/AudioManagerInterface.h"
-#include "Audio/GameSoundEffects.h"
-#include "Audio/Sound.h"
 #include "Common/GUtilsDistance.h"
 #include "Common/GameRandom.h"
 #include "ECS/Archetypes/VillagerArchetype.h"
@@ -49,12 +45,14 @@
 #include "ECS/Components/WallHug.h"
 #include "ECS/CrecheRules.h"
 #include "ECS/Creches.h"
+#include "ECS/GameEndConditions.h"
 #include "ECS/Map.h"
 #include "ECS/Registry.h"
 #include "ECS/Statistics.h"
+#include "ECS/Systems/GameEndSystemInterface.h"
 #include "ECS/Systems/LivingActionSystemInterface.h"
 #include "ECS/Systems/ReactionSystemInterface.h"
-#include "ECS/Systems/SkySystemInterface.h"
+#include "ECS/Systems/SkyClockSystemInterface.h"
 #include "ECS/Systems/TimeSystemInterface.h"
 #include "ECS/Systems/TownDesireSystemInterface.h"
 #include "ECS/Systems/TownSystemInterface.h"
@@ -65,6 +63,10 @@
 #include "ECS/WorldObjects.h"
 #include "InfoConstants.h"
 #include "Locator.h"
+#include "Sound/AnimEffectKeys.h"
+#include "Sound/GameSoundEffects.h"
+#include "Sound/SoundId.h"
+#include "Sound/SoundRequestInterface.h"
 #include "VillagerAnimate.h"
 #include "VillagerBuild.h"
 #include "VillagerFood.h"
@@ -327,11 +329,11 @@ void StrollOn(LivingAction& action, entt::entity creche)
 /// The sound of children at play at the crèche
 void PlayCrecheSound(entt::entity creche)
 {
-	if (Locator::audio::has_value())
+	if (Locator::sounds::has_value())
 	{
-		Locator::audio::value().PlayAnimEffect(std::string(k_CrecheSoundBank), k_CrecheSound.ToArray(), creche,
-		                                       Entities().Get<const Transform>(creche).position,
-		                                       audio::CurrentSoundEffectConditions());
+		Locator::sounds::value().PlayAnimEffect(std::string(k_CrecheSoundBank), k_CrecheSound.ToArray(), creche,
+		                                        Entities().Get<const Transform>(creche).position,
+		                                        audio::CurrentSoundEffectConditions());
 	}
 }
 
@@ -383,8 +385,11 @@ entt::entity ChildBorn(entt::entity mother)
 	{
 		villager_skeleton::Set(child, true);
 	}
-	// TODO(villager-reproduction): in a multiplayer game a player counting births in its town as a win condition counts
-	// this one
+	// In a network game the player of the mother counts the birth, for the winning condition
+	if (Locator::gameEndSystem::has_value())
+	{
+		Locator::gameEndSystem::value().AddToCondition(world_objects::PlayerOf(mother), game_end::Condition::VillagersBorn, 1);
+	}
 	auto& towns = Locator::townSystem::value();
 	if (const auto abode = AbodeOf(mother); abode != entt::null)
 	{
@@ -600,7 +605,8 @@ uint32_t villager_breeding::ChildAtCreche(LivingAction& action)
 	{
 		return 0;
 	}
-	const bool daytime = Locator::skySystem::has_value() && creche::IsDaytime(Locator::skySystem::value().GetCurrentSkyType());
+	const bool daytime =
+	    Locator::skyClockSystem::has_value() && creche::IsDaytime(Locator::skyClockSystem::value().GetCurrentSkyType());
 	const auto abode = AbodeOf(child);
 	const bool firstIn = abode != entt::null && FirstOfHomeIsIn(abode);
 	const bool touching = abode == entt::null && AreTouching(child, creche, k_CrecheTouch);

@@ -14,7 +14,7 @@
 #include <SASFile.h>
 #include <gtest/gtest.h>
 
-#include "Audio/ClipSounds.h"
+#include "Sound/ClipSounds.h"
 
 using namespace openblack;
 using namespace openblack::audio;

@@ -18,6 +18,7 @@
 #include <string>
 #include <string_view>
 #include <system_error>
+#include <vector>
 
 #include <MindFile.h>
 #include <PhysiqueFile.h>
@@ -31,6 +32,7 @@
 #include "Creature/CreatureMindFileBody.h"
 #include "Creature/CreatureMorph.h"
 #include "Creature/CreaturePhysiology.h"
+#include "Creature/CreatureTattoo.h"
 #include "ECS/Components/Creature.h"
 #include "ECS/Components/CreatureBody.h"
 #include "ECS/Components/CreatureFileSave.h"
@@ -109,7 +111,7 @@ public:
 	bool SitDown(entt::entity) override { return false; }
 	void StandUp(entt::entity) override {}
 	void ReceiveFeedback(entt::entity, float) override {}
-	bool ForceAction(entt::entity, size_t, bool, std::optional<creature_face::Request>, float) override { return false; }
+	bool ForceAction(entt::entity, size_t, bool, double) override { return false; }
 	bool Sleep(entt::entity) override { return false; }
 	bool Eat(entt::entity, std::optional<entt::entity>) override { return false; }
 	bool Drink(entt::entity) override { return false; }
@@ -163,8 +165,10 @@ public:
 	void TakeOff(entt::entity /*creature*/) override {}
 	bool Toggle(entt::entity /*creature*/) override { return false; }
 	bool ChangeType(entt::entity /*creature*/, LeashType /*type*/) override { return false; }
+	bool PickType(PlayerNames /*player*/, LeashType /*type*/) override { return false; }
 	bool TieTo(entt::entity /*creature*/, entt::entity /*object*/) override { return false; }
 	void UntieToHand(entt::entity /*creature*/) override {}
+	void PlayHandAttachSound(entt::entity /*creature*/) override {}
 	void SetWorks(entt::entity /*creature*/, bool /*works*/) override {}
 	void SetDrawn(bool /*drawn*/) override {}
 	void ConfineToHome(entt::entity /*creature*/, float /*radius*/) override {}
@@ -190,7 +194,7 @@ public:
 	{
 		return std::nullopt;
 	}
-	bool TapPost(entt::entity /*post*/) override { return false; }
+	bool TapPost(PlayerNames /*player*/, entt::entity /*post*/) override { return false; }
 
 	std::optional<entt::entity> playersCreature;
 };
@@ -635,6 +639,31 @@ TEST_F(CreatureCarryOverSaves, ThePlayersCreatureIsWrittenToItsFilesAsItLives)
 	EXPECT_EQ(Saved(), 2);
 }
 
+TEST_F(CreatureCarryOverSaves, TheKeptFileHasTheTattoosThatThisComputerShows)
+{
+	const TestFolder folder("carry_over_shown_tattoos");
+	ecs::systems::CreatureCarryOverSystem carryOver(folder.Path(), ProfileFile);
+	const auto creature = MakeCreature(PlayerNames::PLAYER_ONE, 1199);
+	auto& tattoos = Locator::entitiesRegistry::value().Assign<ecs::components::CreatureTattoos>(creature);
+	tattoos.pictures = {9};
+	// In a network game a change from the tattoo editor stays on this computer only
+	creature_tattoo::Slots shown {};
+	shown.at(0) = {.design = 3, .site = 2, .colour = {10, 20, 30}};
+	tattoos.shown = shown;
+	tattoos.picturesShown = true;
+	tattoos.shownPictures = {1, 2};
+
+	carryOver.ProcessTurn();
+	Live(creature, 1200);
+	carryOver.ProcessTurn();
+	carryOver.FinishWrites();
+	ASSERT_NE(carryOver.Kept(), nullptr);
+	ASSERT_TRUE(carryOver.Kept()->tattooHeader.has_value());
+	EXPECT_EQ(carryOver.Kept()->tattooHeader->at(0), creature_tattoo::ToWord(shown.at(0)));
+	EXPECT_EQ(carryOver.Kept()->tattooHeader->at(1), creature_tattoo::ToWord(creature_tattoo::Slot {}));
+	EXPECT_EQ(carryOver.Kept()->tattoo, std::optional(std::vector<uint8_t> {1, 2}));
+}
+
 TEST_F(CreatureCarryOverSaves, ALandThatKeepsNoCreaturesWritesNoneAsTheyLiveNorAtTheEnd)
 {
 	const TestFolder folder("carry_over_testbed");
@@ -722,6 +751,55 @@ TEST_F(CreatureCarryOverSaves, ANetworkGameWritesOnlyTheCreatureOfThisComputersG
 	carryOver.EndGame();
 	EXPECT_EQ(Saved(), 2);
 	carryOver.FinishWrites();
+	Locator::leashSystem::reset();
+	Locator::time::reset();
+}
+
+TEST_F(CreatureCarryOverSaves, TheLandClearAfterANetworkGameWritesOnlyTheCreatureThatThisComputerBrought)
+{
+	const TestFolder folder("carry_over_network_left");
+	ecs::systems::CreatureCarryOverSystem carryOver(folder.Path(), ProfileFile);
+	auto& clock = Locator::time::emplace<ecs::systems::TimeSystem>([] { return uint32_t {1000}; });
+	clock.SetNetworkGame(true);
+	auto& leash = static_cast<FakeLeash&>(Locator::leashSystem::emplace<FakeLeash>());
+	const auto firstGods = MakeCreature(PlayerNames::PLAYER_ONE, 10);
+	const auto own = MakeCreature(PlayerNames::PLAYER_TWO, 10);
+	leash.playersCreature = firstGods;
+	carryOver.SetBroughtCreature(own);
+	carryOver.ProcessTurn();
+
+	// The player leaves: the game is a game alone before the land clears, and the land clear keeps the creature
+	clock.SetNetworkGame(false);
+	carryOver.KeepPlayersCreature();
+	EXPECT_EQ(Saved(), 1);
+	// The creature of the first god never goes to the files of this computer's player
+	carryOver.KeepCreature(firstGods);
+	EXPECT_EQ(Saved(), 1);
+
+	// The next land is a game alone again
+	carryOver.Reset();
+	carryOver.KeepPlayersCreature();
+	EXPECT_EQ(Saved(), 2);
+	carryOver.FinishWrites();
+	Locator::leashSystem::reset();
+	Locator::time::reset();
+}
+
+TEST_F(CreatureCarryOverSaves, AnObserverWhoLeavesANetworkGameWritesNoCreature)
+{
+	const TestFolder folder("carry_over_network_observer");
+	ecs::systems::CreatureCarryOverSystem carryOver(folder.Path(), ProfileFile);
+	auto& clock = Locator::time::emplace<ecs::systems::TimeSystem>([] { return uint32_t {1000}; });
+	clock.SetNetworkGame(true);
+	auto& leash = static_cast<FakeLeash&>(Locator::leashSystem::emplace<FakeLeash>());
+	leash.playersCreature = MakeCreature(PlayerNames::PLAYER_ONE, 10);
+	carryOver.ProcessTurn();
+
+	// An observer brought no creature, so the land clear after the leave writes none
+	clock.SetNetworkGame(false);
+	carryOver.KeepPlayersCreature();
+	carryOver.EndGame();
+	EXPECT_EQ(Saved(), 0);
 	Locator::leashSystem::reset();
 	Locator::time::reset();
 }

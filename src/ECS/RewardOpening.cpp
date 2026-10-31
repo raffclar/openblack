@@ -10,6 +10,7 @@
 #include "RewardOpening.h"
 
 #include <algorithm>
+#include <iterator>
 
 using namespace openblack;
 using namespace openblack::ecs;
@@ -69,16 +70,16 @@ void GiveSeed(SpellSeedType seed, reward::OpeningWorld& world)
 }
 } // namespace
 
-void reward::Open(const Contents& contents, OpeningWorld& world)
+void reward::Open(const Contents& contents, PlayerNames tapper, OpeningWorld& world)
 {
 	if (contents.food > 0.0f)
 	{
-		world.Pour(ResourceType::Food, static_cast<uint32_t>(contents.food));
+		world.Pour(ResourceType::Food, static_cast<uint32_t>(contents.food), tapper);
 		return;
 	}
 	if (contents.wood != 0)
 	{
-		world.Pour(ResourceType::Wood, contents.wood);
+		world.Pour(ResourceType::Wood, contents.wood, tapper);
 		return;
 	}
 	if (contents.belief != 0.0f)
@@ -198,6 +199,18 @@ uint32_t reward::StepOpenedClip(uint32_t place, uint32_t milliseconds, uint32_t 
 	}
 	const auto next = place + milliseconds;
 	return looping ? next % playTime : std::min(next, playTime - 1);
+}
+
+std::optional<size_t> reward::FirstTownForMiracle(std::span<const std::optional<size_t>> centreMiraclesShown)
+{
+	const auto town = std::ranges::find_if(centreMiraclesShown, [](const std::optional<size_t>& shown) {
+		return shown.has_value() && *shown < k_CentreMostMiracles;
+	});
+	if (town == centreMiraclesShown.end())
+	{
+		return std::nullopt;
+	}
+	return static_cast<size_t>(std::distance(centreMiraclesShown.begin(), town));
 }
 
 uint8_t reward::TownSeedAlpha(int32_t turnsLeft)

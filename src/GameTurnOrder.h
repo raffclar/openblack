@@ -101,12 +101,13 @@ enum class Step : uint8_t
 	ReactionClock,
 	TurnStartPlaces,
 	InfluenceTurnStart,
-	MapCells,
 	Sharks,
 	Storms,
 	Snow,
 	Players,
 	ComputerPlayers,
+	/// The power that each tribe gives each player
+	TribalPowers,
 	Influence,
 	PlayerStatistics,
 	Heartbeats,
@@ -115,16 +116,20 @@ enum class Step : uint8_t
 	PlayerAlignment,
 	/// The end of a skirmish or a network game
 	GameEnd,
+	/// The gods of a network game get the winning conditions of the game
+	GameConditions,
 	VillageTotems,
-	/// The flags over the towns' stores, and the apple barrel at the player's store. The game draws them and keeps no
-	/// object for them: openblack makes their entities in the turn, so that no frame makes an entity of the world.
+	/// The flags over the towns' stores. The game draws them and keeps no object for them: openblack makes their entities
+	/// in the turn, so that no frame makes an entity of the world.
 	TownFlags,
-	AppleBarrel,
 	ChimneySmoke,
 	Dances,
 	Fields,
 	FishFarms,
 	WalkPaths,
+	/// The mists that a script fades take a step of their fades
+	Mists,
+	PuzzleGames,
 	Footpaths,
 	ForestGrowth,
 	/// The parts of the creatures' turns that are not for one creature, before the turn of the living
@@ -168,7 +173,6 @@ enum class Step : uint8_t
 	CreatureHandMoments,
 	/// The turn of the living: each creature, villager and animal in turn, the newest first (see living_turn::Walk)
 	Living,
-	MapCellsAfterLiving,
 	CreatureWebPage,
 	CreatureCarryOver,
 	Fires,
@@ -183,6 +187,10 @@ enum class Step : uint8_t
 	Fireflies,
 	Physics,
 	Vortices,
+	/// The tutorial's hand demonstration plays on for the scripts by the time of the turn
+	HandDemo,
+	/// The opening's light and the clip of the hand that lifts the boy move on for the scripts by the time of the turn
+	IntroLift,
 	/// The scripts' clock of their spoken lines and texts, and the player's clicks on the dialogue
 	ScriptVoices,
 	Scripts,
@@ -199,6 +207,10 @@ enum class Step : uint8_t
 	CameraBookmarks,
 	ScriptHighlights,
 	Climates,
+	/// Every tenth turn the hand tells the player at this computer the belief that the towns gained in the player
+	BeliefGained,
+	/// Every tenth turn the advisors warn when a town of the player at this computer loses its belief in the player
+	LosingBelief,
 	HeldThing,
 	/// The sparkles at the cameras of the other players of a network game
 	PlayerSparkles,
@@ -210,6 +222,8 @@ enum class Step : uint8_t
 	CreatureAlignment,
 	SoundTags,
 	Ambience,
+	/// The clock of the music that the scripts start: its cues and its end, which the scripts wait on
+	ScriptMusic,
 	Music,
 	Autosave,
 	GameOver,
@@ -254,24 +268,28 @@ inline constexpr std::array k_Turn = std::to_array<Place>({
     // The speed of the hand, which blows the chimneys' smoke, comes from the same part of the player's input
     {.step = Step::ChimneySmoke, .stage = Stage::Input},
     {.step = Step::Clock, .stage = Stage::StartTurn},
+    // The humans of a network game join with the commands of its first turn. Then the gods are known, and each god gets
+    // the winning conditions of the game before a thing in the world can count for them.
+    {.step = Step::GameConditions, .stage = Stage::StartTurn},
     // The living's reactions count their times by the same turn count as the game
     {.step = Step::ReactionClock, .stage = Stage::StartTurn},
-    // The places of the turn's start, which the frames draw from, and the map's cells of what moved
+    // The places of the turn's start, which the frames draw from. Each thing goes into its new map cells as it moves,
+    // so the turn has no step for them.
     {.step = Step::TurnStartPlaces, .stage = Stage::StartTurn},
     {.step = Step::InfluenceTurnStart, .stage = Stage::StartTurn},
-    {.step = Step::MapCells, .stage = Stage::StartTurn},
     {.step = Step::Sharks, .stage = Stage::StartTurn},
     {.step = Step::Storms, .stage = Stage::Atmosphere},
     {.step = Step::Snow, .stage = Stage::Atmosphere},
     {.step = Step::Players, .stage = Stage::Players},
     // A town's totem takes its turn with the buildings of its town
     {.step = Step::VillageTotems, .stage = Stage::Players},
-    // After its towns, each player drops the travellers of its teleport stones that no longer go to them. The stones of
-    // a miracle go in the miracle's own turn, when it closes down.
+    // Each player's stones drop their lost travellers in the turn of the player. Here, the stones of a miracle that is
+    // not there go, as a safety net. The stones of a miracle go in the miracle's own turn, when it closes down.
     {.step = Step::Teleports, .stage = Stage::Players},
     {.step = Step::TownFlags, .stage = std::nullopt},
-    {.step = Step::AppleBarrel, .stage = std::nullopt},
     {.step = Step::ComputerPlayers, .stage = Stage::Players},
+    // After its computer mind, the power that each tribe gives a player becomes the most power that the tribe gave it
+    {.step = Step::TribalPowers, .stage = Stage::Players},
     // The influence of the towns and the temples. The borders that it draws and the influence that the hand keeps are
     // also in this step.
     {.step = Step::Influence, .stage = Stage::Players},
@@ -288,13 +306,16 @@ inline constexpr std::array k_Turn = std::to_array<Place>({
     {.step = Step::Fields, .stage = Stage::Lists},
     {.step = Step::FishFarms, .stage = Stage::Lists},
     {.step = Step::WalkPaths, .stage = Stage::Lists},
+    // The game steps the fades of the mists in its lists of things, after the things that walk along tracks
+    {.step = Step::Mists, .stage = Stage::Lists},
+    // The puzzle games put back their pieces that moved, newest puzzle first
+    {.step = Step::PuzzleGames, .stage = Stage::Lists},
     {.step = Step::Footpaths, .stage = Stage::Lists},
     {.step = Step::ForestGrowth, .stage = Stage::Forests},
     // Each living thing takes its own turn in the order of the game's list of the living. Each creature does the steps
     // of k_CreaturesTurn in its own turn. Each villager takes the step of its walk in its own turn.
     {.step = Step::CreaturesTurnStart, .stage = Stage::Living},
     {.step = Step::Living, .stage = Stage::Living},
-    {.step = Step::MapCellsAfterLiving, .stage = Stage::Living},
     {.step = Step::Fires, .stage = Stage::Fires},
     {.step = Step::Reactions, .stage = Stage::Reactions},
     {.step = Step::WorshipChants, .stage = Stage::Spells},
@@ -306,6 +327,11 @@ inline constexpr std::array k_Turn = std::to_array<Place>({
     {.step = Step::Fireflies, .stage = Stage::Fireflies},
     {.step = Step::Physics, .stage = Stage::Physics},
     {.step = Step::Vortices, .stage = Stage::ParticleEnd},
+    // The scripts see the hand demonstration play by the time of the turn alone. The game plays it in its frames, so
+    // the step has no stage of the game's turn.
+    {.step = Step::HandDemo, .stage = std::nullopt},
+    // The same for the light of the opening and the hand that lifts the boy, which the game also moves in its frames
+    {.step = Step::IntroLift, .stage = std::nullopt},
     // The scripts' clock moves on, and the dialogue takes the player's clicks, just before the scripts look at the world
     {.step = Step::ScriptVoices, .stage = Stage::Scripts},
     {.step = Step::Scripts, .stage = Stage::Scripts},
@@ -322,6 +348,8 @@ inline constexpr std::array k_Turn = std::to_array<Place>({
     {.step = Step::CameraBookmarks, .stage = Stage::WeatherThings},
     {.step = Step::ScriptHighlights, .stage = Stage::Highlights},
     {.step = Step::Climates, .stage = Stage::Climates},
+    {.step = Step::BeliefGained, .stage = Stage::Climates},
+    {.step = Step::LosingBelief, .stage = Stage::Climates},
     {.step = Step::HeldThing, .stage = Stage::Hand},
     {.step = Step::PlayerSparkles, .stage = Stage::Hand},
     {.step = Step::Rewards, .stage = Stage::Rewards},
@@ -333,6 +361,8 @@ inline constexpr std::array k_Turn = std::to_array<Place>({
     {.step = Step::MusicMoods, .stage = Stage::MusicMoods},
     {.step = Step::SoundTags, .stage = Stage::EndTurn},
     {.step = Step::Ambience, .stage = Stage::EndTurn},
+    // The world times the scripts' music before the music heard follows it
+    {.step = Step::ScriptMusic, .stage = Stage::EndTurn},
     {.step = Step::Music, .stage = Stage::EndTurn},
     // The autosave comes before the end of the game, so a save that is due in the last turn is written
     {.step = Step::Autosave, .stage = Stage::EndTurn},

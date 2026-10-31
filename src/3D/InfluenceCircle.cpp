@@ -14,6 +14,7 @@
 #include <algorithm>
 
 #include "Common/PortableMath.h"
+#include "ECS/PlayerColour.h"
 
 namespace openblack::influence
 {
@@ -117,7 +118,7 @@ Ripple MakeRipple(const Circle& circle, const glm::vec3& previous, const glm::ve
 	Ripple ripple;
 	ripple.point = CrossingPoint(circle.centre, circle.radius, wasInside ? previous : current, wasInside ? current : previous);
 	ripple.point.y = std::max(ground(glm::vec2(ripple.point.x, ripple.point.z)), hand.y);
-	ripple.rgb = k_PlayerColours.at(static_cast<size_t>(circle.player) & 7u);
+	ripple.rgb = player_colour::FromTable(k_PlayerColours, circle.player);
 	// Upright along the border: square to the line from the circle's centre
 	float yaw = portable_math::Atan2(ripple.point.z - circle.centre.z, ripple.point.x - circle.centre.x);
 	if (yaw < 0.0f)

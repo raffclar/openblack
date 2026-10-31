@@ -20,7 +20,6 @@
 #include <InspectorQuery.h>
 
 #include "3D/MapCoords.h"
-#include "Audio/Sound.h"
 #include "Creature/CreatureDecisionTree.h"
 #include "Creature/CreatureDesires.h"
 #include "Creature/CreatureIdleMind.h"
@@ -32,17 +31,26 @@
 #include "ECS/Components/AudioEmitter.h"
 #include "ECS/Components/CreatureMind.h"
 #include "ECS/Components/Dance.h"
+#include "ECS/Components/Field.h"
 #include "ECS/Components/FixedOutline.h"
+#include "ECS/Components/HandGrab.h"
 #include "ECS/Components/MiracleImpression.h"
 #include "ECS/Components/Physics.h"
+#include "ECS/Components/Player.h"
+#include "ECS/Components/PuzzleGame.h"
 #include "ECS/Components/SpellIcon.h"
+#include "ECS/Components/StoragePit.h"
 #include "ECS/Components/Town.h"
 #include "ECS/Components/Transform.h"
+#include "ECS/Components/Tree.h"
+#include "ECS/Components/Wonder.h"
 #include "ECS/Components/WorshipChants.h"
 #include "ECS/Components/WorshipSite.h"
 #include "ECS/CreatureReactionNotice.h"
 #include "ECS/Map.h"
 #include "ECS/Registry.h"
+#include "ECS/Systems/TimeSystemInterface.h"
+#include "Sound/SoundId.h"
 
 using namespace openblack;
 using namespace openblack::inspector;
@@ -133,6 +141,134 @@ std::variant<entt::entity, std::string> CreatureParam(const ecs::Registry& regis
 		return creatures.front();
 	}
 	return std::string(creatures.empty() ? "there is no creature" : "there are several creatures: give an id (creature.list)");
+}
+
+/// Gives the order to the creature that the request names, and answers what came of it
+QueryResult GiveOrder(const CreatureSources& sources, const Json& params, const CreatureOrder& order)
+{
+	const auto* registry = Registry(sources.world);
+	if (registry == nullptr)
+	{
+		return QueryResult::Error(std::string(k_NoRegistry));
+	}
+	if (!sources.order)
+	{
+		return QueryResult::Error("this game cannot give orders to a creature");
+	}
+	const auto creature = CreatureParam(*registry, params);
+	if (const auto* problem = std::get_if<std::string>(&creature); problem != nullptr)
+	{
+		return QueryResult::Error(*problem);
+	}
+	const auto entity = std::get<entt::entity>(creature);
+	const auto result = sources.order(entity, order);
+	if (!result.taken)
+	{
+		return QueryResult::Error("the creature did not take the order: " + result.detail);
+	}
+	Json answer {{"id", ToId(entity)}, {"taken", true}, {"doing", result.detail}};
+	if (!result.warning.empty())
+	{
+		answer["warning"] = result.warning;
+	}
+	return QueryResult::Value(std::move(answer));
+}
+
+/// The thing that a request names by its object parameter, if it exists
+std::variant<entt::entity, std::string> ObjectParam(const ecs::Registry& registry, const Json& params)
+{
+	const auto object = EntityParam(registry, params, "object");
+	if (!object.has_value())
+	{
+		return std::string("give object: the entity id of a thing that exists");
+	}
+	return *object;
+}
+
+/// The queries that order a creature to lift a thing, to put it on the land or throw it, and to eat
+void AddCreatureOrders(FunctionProvider& provider, const CreatureSources& sources, const ParameterDescription& id)
+{
+	auto pickUp = Query("pick_up",
+	                    "The creature goes to a thing, picks it up and holds it, as a leash order does on a thing that it "
+	                    "can lift: the first times it holds a thing of that sort it plays with it, then it holds it facing "
+	                    "the player for 40 to 50 seconds. Give it creature.put_down to let go before that. The creature "
+	                    "gives up an order on the way when it has not moved for 50 turns (a long route search can cause "
+	                    "it): give it for a thing that is near, and read the warning in the answer. It is refused while a "
+	                    "cut scene plays",
+	                    {id, Parameter("object", "integer", "The thing to pick up", true)});
+	pickUp.writes = true;
+	provider.Add(std::move(pickUp), [sources](const QueryContext& context) {
+		const auto* registry = Registry(sources.world);
+		if (registry == nullptr)
+		{
+			return QueryResult::Error(std::string(k_NoRegistry));
+		}
+		const auto object = ObjectParam(*registry, context.params);
+		if (const auto* problem = std::get_if<std::string>(&object); problem != nullptr)
+		{
+			return QueryResult::Error(*problem);
+		}
+		return GiveOrder(sources, context.params,
+		                 {.kind = CreatureOrder::Kind::PickUp, .object = std::get<entt::entity>(object)});
+	});
+
+	auto putDown = Query("put_down",
+	                     "The creature lets go of what it carries. With no point it puts it down where it stands with the "
+	                     "game's put-down action. With a point it carries it there and puts it down at rest, as a leash "
+	                     "order on the land does while it carries something. Where it cannot stand, or with throw true, it "
+	                     "throws it at the point from near enough instead",
+	                     {id, Parameter("point", "point", "Where it takes the thing, [x, z] or [x, y, z]", false),
+	                      Parameter("throw", "boolean", "It throws the thing at the point (false by default)", false)});
+	putDown.writes = true;
+	provider.Add(std::move(putDown), [sources](const QueryContext& context) {
+		const auto at = context.params.find("point");
+		const auto point = at == context.params.end() ? std::nullopt : ReadPoint(*at);
+		if (at != context.params.end() && !point.has_value())
+		{
+			return QueryResult::Error("give point as [x, z] or [x, y, z]");
+		}
+		const auto throwParam = context.params.find("throw");
+		const bool throws = throwParam != context.params.end() && throwParam->is_boolean() && throwParam->get<bool>();
+		if (throws && !point.has_value())
+		{
+			return QueryResult::Error("a throw needs a point");
+		}
+		CreatureOrder order {.kind = throws ? CreatureOrder::Kind::Throw : CreatureOrder::Kind::PutDown};
+		if (point.has_value())
+		{
+			order.point = glm::vec2(static_cast<float>((*point)[0]), static_cast<float>((*point)[2]));
+		}
+		return GiveOrder(sources, context.params, order);
+	});
+
+	auto eat = Query("eat",
+	                 "The creature goes to a thing and eats from it as its own plan to eat does: from a storage pit "
+	                 "(EatFromStoragePit), a field (EatFromContainer), a tree (EatFromTree) or the thing itself "
+	                 "(EatAfterExamining), or with the eat action given. The limits of creature.pick_up hold here too: a "
+	                 "thing that is near, and no cut scene",
+	                 {id, Parameter("object", "integer", "The thing to eat from: give a storage pit, not its food pile", true),
+	                  Parameter("action", "string", "An eat action of the game's table, e.g. EatAlive", false)});
+	eat.writes = true;
+	provider.Add(std::move(eat), [sources](const QueryContext& context) {
+		const auto* registry = Registry(sources.world);
+		if (registry == nullptr)
+		{
+			return QueryResult::Error(std::string(k_NoRegistry));
+		}
+		const auto object = ObjectParam(*registry, context.params);
+		if (const auto* problem = std::get_if<std::string>(&object); problem != nullptr)
+		{
+			return QueryResult::Error(*problem);
+		}
+		const auto thing = std::get<entt::entity>(object);
+		const auto action = context.params.find("action");
+		return GiveOrder(sources, context.params,
+		                 {.kind = CreatureOrder::Kind::Eat,
+		                  .object = thing,
+		                  .action = action != context.params.end() && action->is_string()
+		                                ? action->get<std::string>()
+		                                : std::string(EatActionFor(*registry, thing))});
+	});
 }
 
 std::string_view StepKindName(creature_mind::Step::Kind kind)
@@ -471,6 +607,76 @@ Json openblack::inspector::PlanJson(const CreatureMindState& mind, const creatur
 	};
 }
 
+Json openblack::inspector::AnimationClipJson(const creature_animation_log::Clip& clip, const std::optional<ClipLine>& line)
+{
+	return {
+	    {"layer", creature_animation_log::Name(clip.layer)},
+	    {"clip", clip.animation},
+	    {"name", line.has_value() ? Json(line->name) : Json(nullptr)},
+	    {"type", line.has_value() ? Json(std::string(1, line->type)) : Json(nullptr)},
+	    {"set", line.has_value() ? Json(line->set) : Json(nullptr)},
+	    {"time_ms", clip.timeMs},
+	    {"weight", clip.weight},
+	    {"mirrored", clip.mirrored},
+	    {"blended_with", clip.blendedWith.has_value() ? Json(*clip.blendedWith) : Json(nullptr)},
+	    {"blend_weight", clip.blendWeight},
+	    {"found", clip.found},
+	    {"loop", clip.looping},
+	    {"duration_ms", clip.durationMs.has_value() ? Json(*clip.durationMs) : Json(nullptr)},
+	};
+}
+
+Json openblack::inspector::AnimationCauseJson(const creature_animation_log::Cause& cause)
+{
+	const auto text = [](const std::string& value) { return value.empty() ? Json(nullptr) : Json(value); };
+	return {
+	    {"by", text(cause.by)},
+	    {"activity", text(cause.activity)},
+	    {"plan_action", cause.planAction.has_value() ? Json(*cause.planAction) : Json(nullptr)},
+	    {"plan_action_name", text(cause.planActionName)},
+	    {"agenda_step", cause.agendaStep.has_value() ? Json(*cause.agendaStep) : Json(nullptr)},
+	    {"agenda_step_kind", cause.agendaStepKind.has_value()
+	                             ? Json(StepKindName(static_cast<creature_mind::Step::Kind>(*cause.agendaStepKind)))
+	                             : Json(nullptr)},
+	    {"agenda_step_clip", cause.agendaStepClip.has_value() ? Json(*cause.agendaStepClip) : Json(nullptr)},
+	    {"object_action", text(cause.objectAction)},
+	    {"fight", text(cause.fightStage)},
+	    {"body", text(cause.body)},
+	};
+}
+
+Json openblack::inspector::AnimationEntryJson(const creature_animation_log::Entry& entry, const std::optional<ClipLine>& line)
+{
+	constexpr auto k_TurnMs = static_cast<float>(ecs::systems::TimeSystemInterface::k_TurnDuration.count());
+	auto json = AnimationClipJson(entry.last, line);
+	json["start_turn"] = entry.startTurn;
+	json["end_turn"] = entry.endTurn.has_value() ? Json(*entry.endTurn) : Json(nullptr);
+	json["turns"] = entry.turns;
+	json["first_time_ms"] = entry.first.timeMs;
+	// The speed is how far the clip moved on in the last turn, for each millisecond of the turn
+	json["advance_ms"] = entry.lastAdvanceMs;
+	json["speed"] = entry.turns > 1 ? Json(entry.lastAdvanceMs / k_TurnMs) : Json(nullptr);
+	json["cause"] = AnimationCauseJson(entry.cause);
+	return json;
+}
+
+std::string_view openblack::inspector::EatActionFor(const ecs::Registry& registry, entt::entity thing)
+{
+	if (registry.AllOf<StoragePit>(thing))
+	{
+		return "EatFromStoragePit";
+	}
+	if (registry.AllOf<Field>(thing))
+	{
+		return "EatFromContainer";
+	}
+	if (registry.AllOf<Tree>(thing))
+	{
+		return "EatFromTree";
+	}
+	return "EatAfterExamining";
+}
+
 std::unique_ptr<ProviderInterface> openblack::inspector::MakeCreatureProvider(CreatureSources sources)
 {
 	auto provider = std::make_unique<FunctionProvider>("creature");
@@ -577,6 +783,7 @@ std::unique_ptr<ProviderInterface> openblack::inspector::MakeCreatureProvider(Cr
 		return QueryResult::Value(
 		    {{"id", ToId(entity)}, {"notice", ecs::creature_reaction_notice::TakesNotice(*registry, entity)}});
 	});
+	AddCreatureOrders(*provider, sources, id);
 	provider->Add(
 	    Query("known", "The ordinary skills and miracles a creature knows, and how often it has seen each miracle", {id}),
 	    [sources](const QueryContext& context) {
@@ -620,6 +827,15 @@ std::unique_ptr<ProviderInterface> openblack::inspector::MakeCreatureProvider(Cr
 				         {"known", static_cast<bool>(knowledge.miraclesKnown[i])},
 				         {"seen", seen}});
 			    }
+		    }
+		    // A skill or miracle with no row in its table has no name and no sightings
+		    for (const auto skill : knowledge.skillsKnownPastTable)
+		    {
+			    skills.push_back({{"skill", skill}, {"name", std::string()}});
+		    }
+		    for (const auto miracle : knowledge.miraclesKnownPastTable)
+		    {
+			    miracles.push_back({{"miracle", miracle}, {"name", std::string()}, {"known", true}, {"seen", 0u}});
 		    }
 		    return QueryResult::Value({{"id", ToId(entity)},
 		                               {"skills", std::move(skills)},
@@ -802,6 +1018,113 @@ std::unique_ptr<ProviderInterface> openblack::inspector::MakeCreatureProvider(Cr
 		              plan["id"] = ToId(entity);
 		              return QueryResult::Value(std::move(plan));
 	              });
+	// The developer log of the clips. Each query finds the creature, then its log.
+	const auto logOf = [sources](const QueryContext& context)
+	    -> std::variant<std::pair<entt::entity, const creature_animation_log::Log*>, std::string> {
+		const auto* registry = Registry(sources.world);
+		if (registry == nullptr)
+		{
+			return std::string(k_NoRegistry);
+		}
+		const auto creature = CreatureParam(*registry, context.params);
+		if (const auto* problem = std::get_if<std::string>(&creature); problem != nullptr)
+		{
+			return *problem;
+		}
+		const auto entity = std::get<entt::entity>(creature);
+		const auto* log = sources.animationLog ? sources.animationLog(entity) : nullptr;
+		if (log == nullptr)
+		{
+			return std::string("the creature has no log of its clips yet: the log starts with the inspector, and the "
+			                   "body logs its clips each game turn");
+		}
+		return std::make_pair(entity, log);
+	};
+	const auto lineOf = [sources](entt::entity creature, size_t clip) -> std::optional<ClipLine> {
+		return sources.clipLine ? sources.clipLine(creature, clip) : std::nullopt;
+	};
+	provider->Add(Query("animation",
+	                    "The clips that a creature's body plays now: for each, its layer (body, blend, face, gesture, "
+	                    "wobble), the clip's place and name in the creature spec file, the time in it, its speed (clip "
+	                    "milliseconds for each millisecond of the turn), whether it loops, its weight and pair blend, and "
+	                    "what asked for it (the mind's activity, plan and agenda step, the action with a thing, the fight)",
+	                    {id}),
+	              [logOf, lineOf](const QueryContext& context) {
+		              const auto found = logOf(context);
+		              if (const auto* problem = std::get_if<std::string>(&found); problem != nullptr)
+		              {
+			              return QueryResult::Error(*problem);
+		              }
+		              const auto [entity, log] = std::get<0>(found);
+		              Json clips = Json::array();
+		              for (const auto& entry : log->Current())
+		              {
+			              clips.push_back(AnimationEntryJson(entry, lineOf(entity, entry.last.animation)));
+		              }
+		              return QueryResult::Value({{"id", ToId(entity)},
+		                                         {"turn", log->LastTurn().has_value() ? Json(*log->LastTurn()) : Json(nullptr)},
+		                                         {"clips", std::move(clips)},
+		                                         {"problems", log->Problems().size()}});
+	              });
+	provider->Add(Query("animation_history",
+	                    "The clips that a creature's body played and that stopped, the newest last: each with the turn that "
+	                    "it started, the turn that it stopped, its speed and what asked for it. The log keeps the newest 256.",
+	                    {id, Parameter("last", "integer", "How many of the newest clips (all by default)", false)}),
+	              [logOf, lineOf](const QueryContext& context) {
+		              const auto found = logOf(context);
+		              if (const auto* problem = std::get_if<std::string>(&found); problem != nullptr)
+		              {
+			              return QueryResult::Error(*problem);
+		              }
+		              const auto [entity, log] = std::get<0>(found);
+		              const auto& history = log->History();
+		              const auto last = static_cast<size_t>(
+		                  std::max(0.0, NumberMember(context.params, "last").value_or(static_cast<double>(history.size()))));
+		              Json clips = Json::array();
+		              for (size_t i = history.size() - std::min(last, history.size()); i < history.size(); ++i)
+		              {
+			              clips.push_back(AnimationEntryJson(history[i], lineOf(entity, history[i].last.animation)));
+		              }
+		              return QueryResult::Value({{"id", ToId(entity)}, {"clips", std::move(clips)}});
+	              });
+	provider->Add(Query("animation_problems",
+	                    "The clips that something asked a creature's body for that did not play: missing (the species has "
+	                    "no such clip: the body showed the stand, the action ended at once, or a face, gesture or wobble "
+	                    "showed nothing) or refused (the body "
+	                    "played another action), with the turn, what asked and how many turns in a row it came again",
+	                    {id}),
+	              [logOf, lineOf](const QueryContext& context) {
+		              const auto found = logOf(context);
+		              if (const auto* problem = std::get_if<std::string>(&found); problem != nullptr)
+		              {
+			              return QueryResult::Error(*problem);
+		              }
+		              const auto [entity, log] = std::get<0>(found);
+		              Json problems = Json::array();
+		              for (const auto& problem : log->Problems())
+		              {
+			              const auto line = lineOf(entity, problem.animation);
+			              problems.push_back({{"problem", creature_animation_log::Name(problem.problem)},
+			                                  {"layer", creature_animation_log::Name(problem.layer)},
+			                                  {"clip", problem.animation},
+			                                  {"name", line.has_value() ? Json(line->name) : Json(nullptr)},
+			                                  {"turn", problem.turn},
+			                                  {"repeats", problem.repeats},
+			                                  {"by", problem.by},
+			                                  {"detail", problem.detail}});
+		              }
+		              return QueryResult::Value({{"id", ToId(entity)}, {"problems", std::move(problems)}});
+	              });
+	auto clearLogs = Query("animation_clear", "Removes the logs of the clips of all the creatures. The logs start again.");
+	clearLogs.writes = true;
+	provider->Add(std::move(clearLogs), [sources](const QueryContext& /*context*/) {
+		if (!sources.clearAnimationLogs)
+		{
+			return QueryResult::Error("this game has no log of the clips");
+		}
+		sources.clearAnimationLogs();
+		return QueryResult::Value({{"cleared", true}});
+	});
 	provider->Add(
 	    Query("clear_area",
 	          "The cells about a point that are not clear for a creature to go to (land it can't walk on, or things in "
@@ -986,6 +1309,82 @@ std::unique_ptr<ProviderInterface> openblack::inspector::MakeMapProvider(MapSour
 	return provider;
 }
 
+std::unique_ptr<ProviderInterface> openblack::inspector::MakePuzzleProvider(WorldSources sources)
+{
+	auto provider = std::make_unique<FunctionProvider>("puzzle");
+	provider->Add(Query("list",
+	                    "The puzzle games: kind, their order, solved, started, calm turns, each piece of the beach "
+	                    "temple puzzle with the pieces above and below it, and each spot of the tree puzzle with its "
+	                    "count of changes, its tree and the size of the tree",
+	                    {}, ResultKind::List),
+	              [sources](const QueryContext& /*context*/) {
+		              const auto* registry = Registry(sources);
+		              if (registry == nullptr)
+		              {
+			              return QueryResult::Error(std::string(k_NoRegistry));
+		              }
+		              const auto pieceJson = [registry](entt::entity piece) {
+			              Json item = Json::object();
+			              item["id"] = ToId(piece);
+			              const auto* block = piece != entt::null && registry->Valid(piece)
+			                                      ? registry->TryGet<const HanoiBlock>(piece)
+			                                      : nullptr;
+			              if (block != nullptr)
+			              {
+				              item["above"] = ToId(block->above);
+				              item["below"] = ToId(block->below);
+				              item["altitude"] = block->home.altitude;
+				              item["fixed"] = block->fixed;
+				              item["cannotBePickedUp"] = registry->AllOf<CannotBePickedUp>(piece);
+			              }
+			              return item;
+		              };
+		              Json items = Json::array();
+		              registry->Each<const PuzzleGame>([&](entt::entity entity, const PuzzleGame& game) {
+			              auto item = ToListItem(entity, Describe(*registry, entity, Info(sources)));
+			              item["type"] = static_cast<int>(game.type);
+			              item["order"] = game.order;
+			              item["played"] = game.played;
+			              item["started"] = game.started;
+			              item["calmTurns"] = game.calmTurns;
+			              Json bases = Json::array();
+			              for (const auto base : game.bases)
+			              {
+				              bases.push_back(pieceJson(base));
+			              }
+			              Json rings = Json::array();
+			              for (const auto ring : game.rings)
+			              {
+				              rings.push_back(pieceJson(ring));
+			              }
+			              item["bases"] = std::move(bases);
+			              item["rings"] = std::move(rings);
+			              // The tree puzzle: the count of changes of each spot, and its tree with its size
+			              Json spots = Json::array();
+			              for (size_t spot = 0; spot < game.trees.size(); ++spot)
+			              {
+				              Json spotJson = Json::object();
+				              const auto tree = game.trees.at(spot);
+				              spotJson["count"] = game.treeCounts.at(spot);
+				              spotJson["tree"] = ToId(tree);
+				              if (const auto* transform = tree != entt::null && registry->Valid(tree)
+				                                              ? registry->TryGet<const Transform>(tree)
+				                                              : nullptr)
+				              {
+					              spotJson["size"] = transform->scale.y;
+				              }
+				              spotJson["mist"] = ToId(game.mists.at(spot));
+				              spotJson["bat"] = ToId(game.bats.at(spot));
+				              spots.push_back(std::move(spotJson));
+			              }
+			              item["spots"] = std::move(spots);
+			              items.push_back(std::move(item));
+		              });
+		              return QueryResult::Value(std::move(items));
+	              });
+	return provider;
+}
+
 std::unique_ptr<ProviderInterface> openblack::inspector::MakeTownProvider(WorldSources sources)
 {
 	auto provider = std::make_unique<FunctionProvider>("town");
@@ -1042,6 +1441,37 @@ std::unique_ptr<ProviderInterface> openblack::inspector::MakeTownProvider(WorldS
 			              items.push_back(std::move(item));
 		              }
 		              return QueryResult::Value(std::move(items));
+	              });
+	provider->Add(Query("wonders",
+	                    "The wonders: town number, tribe, power, whether finished; and the power that each tribe gives "
+	                    "each player, with the most it gave",
+	                    {}, ResultKind::Object),
+	              [sources](const QueryContext& /*context*/) {
+		              const auto* registry = Registry(sources);
+		              if (registry == nullptr)
+		              {
+			              return QueryResult::Error(std::string(k_NoRegistry));
+		              }
+		              const auto* info = Info(sources);
+		              Json wonders = Json::array();
+		              registry->Each<const ecs::components::Wonder, const Abode>(
+		                  [&](entt::entity entity, const ecs::components::Wonder& wonder, const Abode& abode) {
+			                  auto item = ToListItem(entity, Describe(*registry, entity, info));
+			                  item["town"] = abode.townId;
+			                  item["tribe"] = info != nullptr && abode.info != AbodeInfo::None
+			                                      ? static_cast<int>(info->abode.at(static_cast<size_t>(abode.info)).tribeType)
+			                                      : -1;
+			                  item["power"] = wonder.power;
+			                  item["finished"] = !registry->AllOf<ecs::components::BuildProgress>(entity);
+			                  wonders.push_back(std::move(item));
+		                  });
+		              Json players = Json::array();
+		              registry->Each<const ecs::components::Player>([&](const ecs::components::Player& player) {
+			              players.push_back({{"player", static_cast<int>(player.name)},
+			                                 {"tribalPower", player.miracles.tribalPower},
+			                                 {"mostTribalPower", player.miracles.maxTribalPower}});
+		              });
+		              return QueryResult::Value({{"wonders", std::move(wonders)}, {"players", std::move(players)}});
 	              });
 	provider->Add(Query("belief", "A town's owner and its belief in each player", {id}),
 	              [sources](const QueryContext& context) {
@@ -1309,18 +1739,22 @@ std::unique_ptr<ProviderInterface> openblack::inspector::MakeAudioProvider(Audio
 			              }
 			              channels.push_back(std::move(item));
 		              }
-		              return QueryResult::Value({{"global_volume", state->globalVolume},
-		                                         {"sfx_volume", state->sfxVolume},
-		                                         {"music_volume", state->musicVolume},
-		                                         {"music_active", state->musicActive},
-		                                         {"music_playing", state->musicPlaying},
-		                                         {"land_music", state->landMusic},
-		                                         {"script_music", state->scriptMusic},
-		                                         {"alignment_music", state->alignmentMusic},
-		                                         {"attached_music", std::move(attached)},
-		                                         {"music_channels", std::move(channels)},
-		                                         {"sounds_playing", playing},
-		                                         {"listener", {state->listener.x, state->listener.y, state->listener.z}}});
+		              return QueryResult::Value(
+		                  {{"global_volume", state->globalVolume},
+		                   {"sfx_volume", state->sfxVolume},
+		                   {"music_volume", state->musicVolume},
+		                   {"music_active", state->musicActive},
+		                   {"music_playing", state->musicPlaying},
+		                   {"land_music", state->landMusic},
+		                   {"script_music", state->scriptMusic},
+		                   {"script_music_line", state->scriptMusicLine},
+		                   {"script_music_word", state->scriptMusicWord},
+		                   {"script_music_ms", state->scriptMusicMs.has_value() ? Json(*state->scriptMusicMs) : Json(nullptr)},
+		                   {"alignment_music", state->alignmentMusic},
+		                   {"attached_music", std::move(attached)},
+		                   {"music_channels", std::move(channels)},
+		                   {"sounds_playing", playing},
+		                   {"listener", {state->listener.x, state->listener.y, state->listener.z}}});
 	              });
 	provider->Add(Query("sounds", "The sounds about a point, nearest first (sounds without a place are left out)", {},
 	                    ResultKind::List, true),

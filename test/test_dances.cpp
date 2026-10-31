@@ -9,8 +9,10 @@
 
 #include <cstdint>
 
+#include <array>
 #include <bit>
 #include <memory>
+#include <optional>
 #include <string>
 #include <vector>
 
@@ -29,6 +31,7 @@ using namespace openblack;
 using namespace openblack::ecs;
 using openblack::ecs::components::Dance;
 using openblack::ecs::components::DanceGroup;
+using openblack::ecs::components::DanceHand;
 namespace rules = openblack::ecs::dance_rules;
 namespace moves = openblack::ecs::dance_moves;
 namespace shapes = openblack::ecs::dance_shapes;
@@ -493,19 +496,59 @@ TEST(DanceRules, TheHandIsNearADanceWithinTenMetres)
 
 TEST(DanceRules, TheHandNearForMoreThanAHundredTurnsMakesTheDanceWantItsCamera)
 {
-	Dance dance;
+	DanceHand hand;
 	for (uint32_t i = 0; i < rules::k_CameraTurns; ++i)
 	{
-		rules::CountHand(dance, true);
+		rules::CountHand(hand, true);
 	}
-	EXPECT_EQ(dance.handNearTurns, 100u);
-	EXPECT_FALSE(dance.cameraWanted);
-	rules::CountHand(dance, true);
-	EXPECT_TRUE(dance.cameraWanted);
+	EXPECT_EQ(hand.nearTurns, 100u);
+	EXPECT_FALSE(hand.cameraWanted);
+	rules::CountHand(hand, true);
+	EXPECT_TRUE(hand.cameraWanted);
 	// A turn with the hand away starts the count again, and the dance still wants its camera
-	rules::CountHand(dance, false);
-	EXPECT_EQ(dance.handNearTurns, 0u);
-	EXPECT_TRUE(dance.cameraWanted);
+	rules::CountHand(hand, false);
+	EXPECT_EQ(hand.nearTurns, 0u);
+	EXPECT_TRUE(hand.cameraWanted);
+}
+
+TEST(DanceRules, EachGodIsNearOnlyWithItsOwnHand)
+{
+	const glm::vec3 point {100.0f, 3.5f, 200.0f};
+	std::array<std::optional<glm::vec3>, components::k_DanceHandGods> hands {};
+	hands.at(static_cast<size_t>(PlayerNames::PLAYER_ONE)) = glm::vec3 {150.0f, 3.5f, 200.0f};
+	hands.at(static_cast<size_t>(PlayerNames::PLAYER_TWO)) = glm::vec3 {104.0f, 3.5f, 200.0f};
+	const auto near = rules::GodsNear(point, hands);
+	EXPECT_FALSE(near.test(static_cast<size_t>(PlayerNames::PLAYER_ONE)));
+	EXPECT_TRUE(near.test(static_cast<size_t>(PlayerNames::PLAYER_TWO)));
+	// A god with no hand on the land is not near
+	EXPECT_EQ(near.count(), 1u);
+}
+
+TEST(DanceRules, EachGodHasItsOwnHandCount)
+{
+	Dance dance;
+	dance.state = Dance::State::Dancing;
+	dance.dancers = 1;
+	rules::HandsNear near;
+	near.set(static_cast<size_t>(PlayerNames::PLAYER_TWO));
+	for (uint32_t turn = 1; turn <= rules::k_CameraTurns + 1; ++turn)
+	{
+		rules::ProcessTurn(dance, turn, near);
+	}
+	// Only the god whose hand stayed near counts, and only that god wants the camera
+	const auto& second = dance.hands.at(static_cast<size_t>(PlayerNames::PLAYER_TWO));
+	EXPECT_EQ(second.nearTurns, 101u);
+	EXPECT_TRUE(second.cameraWanted);
+	const auto& first = dance.hands.at(static_cast<size_t>(PlayerNames::PLAYER_ONE));
+	EXPECT_EQ(first.nearTurns, 0u);
+	EXPECT_FALSE(first.cameraWanted);
+	// The hand of the first god comes near. The count of the second god does not change because of it.
+	near.set(static_cast<size_t>(PlayerNames::PLAYER_ONE));
+	near.reset(static_cast<size_t>(PlayerNames::PLAYER_TWO));
+	rules::ProcessTurn(dance, rules::k_CameraTurns + 2, near);
+	EXPECT_EQ(first.nearTurns, 1u);
+	EXPECT_EQ(second.nearTurns, 0u);
+	EXPECT_TRUE(second.cameraWanted);
 }
 
 TEST(Dances, ADanceCountsTheHandOnlyWhileItDancesWithDancers)
@@ -518,13 +561,13 @@ TEST(Dances, ADanceCountsTheHandOnlyWhileItDancesWithDancers)
 	                             .available = [](entt::entity) { return true; },
 	                             .finished = {},
 	                             .playClipAgain = {},
-	                             .handNear = [](const Dance&) { return true; }};
+	                             .handsNear = [](const Dance&) { return rules::HandsNear {}.set(0); }};
 	dances::ProcessTurn(registry, entity, context);
-	EXPECT_EQ(registry.Get<Dance>(entity).handNearTurns, 0u);
+	EXPECT_EQ(registry.Get<Dance>(entity).hands.at(0).nearTurns, 0u);
 	ASSERT_TRUE(dances::AddDancer(registry, entity, registry.Create(), DanceGroup::k_Men));
 	context.turn = 2;
 	dances::ProcessTurn(registry, entity, context);
-	EXPECT_EQ(registry.Get<Dance>(entity).handNearTurns, 1u);
+	EXPECT_EQ(registry.Get<Dance>(entity).hands.at(0).nearTurns, 1u);
 }
 
 TEST(Dances, AKeyFrameAsksForTheCameraOneTimeAfterTheHandStayedNear)
@@ -540,14 +583,14 @@ TEST(Dances, AKeyFrameAsksForTheCameraOneTimeAfterTheHandStayedNear)
 		                             .available = [](entt::entity) { return true; },
 		                             .finished = {},
 		                             .playClipAgain = {},
-		                             .handNear = [near](const Dance&) { return near; },
-		                             .cameraAsked = [&asked](entt::entity) { ++asked; }};
+		                             .handsNear = [near](const Dance&) { return rules::HandsNear {}.set(0, near); },
+		                             .cameraAsked = [&asked](entt::entity, PlayerNames) { ++asked; }};
 		for (uint32_t turn = 1; turn <= 300; ++turn)
 		{
 			context.turn = turn;
 			dances::ProcessTurn(registry, entity, context);
 		}
-		EXPECT_EQ(registry.Get<Dance>(entity).cameraMade, near);
+		EXPECT_EQ(registry.Get<Dance>(entity).hands.at(0).cameraMade, near);
 		return asked;
 	};
 	// The hand stays near: the dance wants its camera at the 101st turn, and the key frame at 150 asks for it. The key
@@ -555,6 +598,36 @@ TEST(Dances, AKeyFrameAsksForTheCameraOneTimeAfterTheHandStayedNear)
 	EXPECT_EQ(run(true), 1u);
 	// With the hand away, no key frame asks for it
 	EXPECT_EQ(run(false), 0u);
+}
+
+TEST(Dances, AKeyFrameAsksForTheCameraOfEachGodWhoseHandStayedNear)
+{
+	Registry registry;
+	auto file = std::make_shared<dance::DanceFile>();
+	ASSERT_EQ(file->Open(CameraDance()), dance::DanceResult::Success);
+	const auto entity = dances::Create(registry, {.type = DanceInfo::DanceAroundPerson, .autostart = true}, file);
+	ASSERT_TRUE(dances::AddDancer(registry, entity, registry.Create(), DanceGroup::k_Men));
+	std::vector<PlayerNames> asked;
+	// The hands of the second and the third god stay near. The hand of the first god stays away.
+	dances::TurnContext context {.turn = 0,
+	                             .available = [](entt::entity) { return true; },
+	                             .finished = {},
+	                             .playClipAgain = {},
+	                             .handsNear =
+	                                 [](const Dance&) {
+		                                 return rules::HandsNear {}
+		                                     .set(static_cast<size_t>(PlayerNames::PLAYER_TWO))
+		                                     .set(static_cast<size_t>(PlayerNames::PLAYER_THREE));
+	                                 },
+	                             .cameraAsked = [&asked](entt::entity, PlayerNames god) { asked.push_back(god); }};
+	for (uint32_t turn = 1; turn <= 300; ++turn)
+	{
+		context.turn = turn;
+		dances::ProcessTurn(registry, entity, context);
+	}
+	// The key frame asks one time for the camera of each of the two gods, in the order of the players
+	EXPECT_EQ(asked, (std::vector {PlayerNames::PLAYER_TWO, PlayerNames::PLAYER_THREE}));
+	EXPECT_FALSE(registry.Get<Dance>(entity).hands.at(static_cast<size_t>(PlayerNames::PLAYER_ONE)).cameraMade);
 }
 
 TEST(DanceArrival, AWalkToTheDanceEndsFiveMetresEastOfItsPlace)

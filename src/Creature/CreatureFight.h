@@ -352,6 +352,10 @@ public:
 /// Whether a move from the queue teaches a creature to lean: a step teaches every creature, the other moves teach only
 /// the human player's creature. The moves that the computer chooses do not go into the queue, thus they teach nothing.
 [[nodiscard]] bool LearnsFromMove(Move::Kind kind, bool humanPlayers);
+/// Whether the moves that a player sends teach the creature of the player to lean. In a game alone, only the creature of
+/// the first player learns. In a network game, the creature of each human god learns on each computer, thus the worlds
+/// stay the same.
+[[nodiscard]] bool LearnsFromPresses(bool networkGame, bool firstPlayer, bool humanGod);
 /// A creature's first fight starts it leaning against its alignment: evil creatures attack, good ones defend
 [[nodiscard]] float FirstTendency(float alignment);
 /// The lean a creature has learnt, as it starts a fight that it asked for. Until it completes a fight (a knock-out or a
@@ -385,14 +389,19 @@ struct MindInFight
 	bool waitsForFight {false};
 	/// It won by a knock-out, and is made to do something to the loser
 	bool won {false};
+	/// It is the other creature, and the first creature only asked it. It did not tell it to stand still yet.
+	bool onlyAsked {false};
+	/// It is the other creature, and the first creature freed its mind again after the response
+	bool mindFree {false};
 };
 /// Whether the creature can choose a new plan. A creature that lies out cold cannot. In a fight, only the creature that
 /// started the fight by a plan of its own can, while its agenda waits for the fight. A plan that it chooses ends the
-/// fight. The other creature obeys, and a creature that the leash, a script or a knock-out makes do something cannot
-/// choose either.
+/// fight. The other creature can choose until the first creature tells it to stand still, and a plan that it chooses
+/// also ends the fight. Then it obeys, until the first creature frees its mind again after the response. A creature
+/// that the leash, a script or a knock-out makes do something cannot choose either.
 [[nodiscard]] bool LetsChoose(const MindInFight& mind);
-/// Whether the creature obeys the creature that started its fight: its desires stand still until the fight is over, or
-/// until it wins by a knock-out
+/// Whether the creature obeys the creature that started its fight: its desires stand still from the order to stand
+/// still until the fight is over, or until it wins by a knock-out
 [[nodiscard]] bool ObeysInFight(const MindInFight& mind);
 /// The priority of the plan of the creature that obeys in a fight, before the planner's scale. The plan is an order, but
 /// it is not forced.
@@ -445,6 +454,8 @@ constexpr float k_HighDamage = 0.05f;
 constexpr float k_LowDamage = 0.03f;
 /// A blocked blow does a tenth of the damage
 constexpr float k_BlockedShare = 0.1f;
+/// The damage compares the strengths of the two bodies after it adds this to each
+constexpr float k_StrengthShift = 3.0f;
 constexpr float k_MinDamageFactor = 0.04f;
 constexpr float k_MaxDamageFactor = 2.0f;
 
@@ -453,9 +464,9 @@ struct Blow
 {
 	float attackerSize {1.0f};
 	float defenderSize {1.0f};
-	/// From 0 (weak) to 1 (strong)
-	float attackerStrength {0.5f};
-	float defenderStrength {0.5f};
+	/// The strength that the body shows, from -1 (weak) to 1 (strong): see creature_morph::StrengthLook
+	float attackerStrength {0.0f};
+	float defenderStrength {0.0f};
 	/// How fast the blow played, by its charge
 	float speed {1.0f};
 	bool special {false};
@@ -463,8 +474,8 @@ struct Blow
 	float heightShare {0.5f};
 	bool blocked {false};
 };
-/// How hard a blow lands: the attacker's size and strength against the defender's, times its speed, kept from 0.04
-/// to 2, and twice that for a special move
+/// How hard a blow lands: the attacker's strength and size against the defender's, times its speed, kept from 0.04
+/// to 2, and two times that for a special move. Each strength adds 3 before the division.
 [[nodiscard]] float DamageFactor(const Blow& blow);
 
 enum class RecoilDirection : uint8_t
@@ -597,8 +608,8 @@ enum class Control : uint8_t
 	Player,
 	Computer,
 };
-/// The computer leaves a player's creature alone for 3 seconds as a fight starts, and for 15 after each of the
-/// player's moves
+/// The computer leaves a player's creature alone for 3 seconds as a fight starts. After each move that the player gives,
+/// and each time the creature looks at a queued move in range in its stance or its block, the wait is 15 seconds again.
 constexpr float k_ComputerWaitsAtStartMs = 3000.0f;
 constexpr float k_ComputerWaitsMs = 15000.0f;
 
@@ -639,6 +650,10 @@ void Enter(Fighter& fighter, State state, std::optional<size_t> animation = std:
 /// The player (or a script) adds a move: a creature the computer was fighting with is given back to the player, and
 /// the computer waits 15 seconds
 bool PlayerMove(Fighter& fighter, const Move& move, bool replace);
+/// One turn of the wait before the computer takes over a player's creature. The wait goes down by the creature's own
+/// milliseconds in its stance, its moves, its block and its reels in the block. It ends only in the stance or the block,
+/// when it is below 0. Returns true when the computer takes over in this turn.
+bool CountComputerWait(Fighter& fighter, int32_t turnMs);
 /// As PlayerMove, with the sparkles that mark the queued moves on the computer of the player: a move in place of the
 /// queue keeps only the newest sparkle
 bool PlayerMove(Fighter& fighter, marks::MarkList& marks, const Move& move, bool replace);
@@ -662,7 +677,8 @@ struct Order
 	float speed {1.0f};
 };
 /// The move at the front of the queue taken off it, if one can be made now: only in range of the opponent, in the
-/// stance or blocking (when anything ends the block), and a blow only once its charge is known
+/// stance or blocking (when anything ends the block), and a blow only once its charge is known. In range, in the stance
+/// or the block, a queued move makes the wait for the computer 15 seconds again, also when the move stays in the queue.
 [[nodiscard]] std::optional<Order> TakeOrder(Fighter& fighter, bool inRange);
 /// As TakeOrder, with the sparkles that mark the queued moves: the sparkle of each move taken off the queue goes
 [[nodiscard]] std::optional<Order> TakeOrder(Fighter& fighter, marks::MarkList& marks, bool inRange);
@@ -676,7 +692,6 @@ enum class Opponent : uint8_t
 	EndingCast,
 	BlockRecoil,
 	Attacking,
-	Casting,
 	SteppingForward,
 	OtherAction,
 	Blocking,
@@ -838,6 +853,13 @@ struct StepLengths
 /// Whether the living around the winner see a fight won: only when a blow knocked the loser out and the winner has a
 /// player. A loser that a miracle or a loss of life knocked out gives no such sight.
 [[nodiscard]] bool FightWonIsSeen(bool byBlow, bool winnerHasPlayer);
+/// Whether a creature in a duel wins it because its opponent has no life left (life at zero or less). A creature that
+/// a script controls does not win this way, and it continues its duel.
+[[nodiscard]] bool WinsByOpponentsLife(float opponentLife, bool scriptControlled);
+/// Whether the life of a creature pays for its fight when its fight stops. Its life pays only when its body is in a
+/// state of the fight: it starts, stands in its stance, makes a move, blocks or casts. It does not pay when it finishes,
+/// recoils in its block, faints or gets up, or when it does not fight.
+[[nodiscard]] bool LifePaysAtStop(State state);
 /// The priority of the winner's plan after a knock out, before the planner's scale
 constexpr float k_WinPlanPriority = 1.0f;
 /// Whether the winner's plan after a knock out is forced. It is not forced when a blow knocked the loser out, and it is
@@ -850,6 +872,24 @@ constexpr float k_WinPlanPriority = 1.0f;
 [[nodiscard]] bool FearsAfterFight(float life, float otherLife);
 /// Before a fight, each creature plays the taunt or the rude gesture, by a random choice
 [[nodiscard]] size_t FaceOffAnimation(bool rude);
+/// The steps of the face-off, in the game turns of the creature that starts the fight:
+/// 1. On the first turn, it asks the other creature.
+/// 2. On the second turn, it tells the other creature not to think for itself.
+/// 3. On the third turn, it tells the other creature to stop and turn to face it.
+/// 4. From the fourth turn, it turns to face the other creature.
+constexpr uint32_t k_FaceOffStillTurn = 2;
+constexpr uint32_t k_FaceOffOrderTurn = 3;
+constexpr uint32_t k_FaceOffOwnTurn = 4;
+/// The steps of the turn to face in the arena, in the game turns of the creature that started the fight after the turn
+/// on which the other creature is ready. On the first turn, it tells the other creature to turn to face it. From the
+/// second turn, it turns to face the other creature.
+constexpr uint32_t k_SquareOrderTurn = 1;
+constexpr uint32_t k_SquareOwnTurn = 2;
+/// The plan of the creature that started the fight ends this many game turns after its response with no fear: one turn
+/// lets the other creature think again, and on the next turn the plan is done
+constexpr uint32_t k_PlanEndTurnsAfterResponse = 2;
+/// Each creature holds its turn to face the other for this long
+constexpr float k_FaceOffHoldSeconds = 0.1f;
 /// The creature that starts the fight points at the arena for this many game turns
 constexpr uint32_t k_PointAtArenaTurns = 20;
 
@@ -881,4 +921,38 @@ constexpr float k_FightMusicDistance = 100.0f;
 constexpr float k_BlowHitEffect = 0.05f;
 /// The fight health of a creature in a duel after it loses damage to its life: the same amount less, never below none
 [[nodiscard]] float HealthAfterLifeLost(float health, float damage);
+
+/// How a creature stops what it does
+enum class StopEnd : uint8_t
+{
+	/// It gives up its action as a failure: an order, a forced plan, a new plan or the hand
+	Failure,
+	/// It completes its action
+	Success,
+};
+/// The two creatures of a fight as one of them stops what it does
+struct StopLinks
+{
+	/// Whether the creature that stops is in its duel against the partner
+	bool stopperDuels {false};
+	/// Whether the partner is in its duel against the creature that stops
+	bool partnerDuels {false};
+	/// Whether the mind of each creature has the other creature as its partner. The creature that asks for the fight and
+	/// the creature that agrees both get the partner.
+	bool stopperHasPartner {true};
+	bool partnerHasPartner {true};
+};
+/// How many times each creature gets the strength gain of the fight action as one of them stops what it does
+struct StrengthGains
+{
+	uint32_t stopper {0};
+	uint32_t partner {0};
+};
+/// The strength gains of a stop. The rules occur in this sequence, and each rule can start the rules again:
+/// 1. A creature in its duel that gives up its action as a failure gets the gain.
+/// 2. A creature in its duel that stops gives the gain to its partner. The partner then leaves its duel and gives up
+///    its action.
+/// 3. A mind that has a partner forgets the partner as it stops, and makes the partner give up its action.
+/// So a creature can get the gain two times.
+[[nodiscard]] StrengthGains StrengthGainsAtStop(StopEnd end, StopLinks links);
 } // namespace openblack::creature_fight

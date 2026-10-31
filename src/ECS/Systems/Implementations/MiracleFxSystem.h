@@ -11,6 +11,7 @@
 
 #include <cstdint>
 
+#include <chrono>
 #include <memory>
 #include <string_view>
 #include <unordered_map>
@@ -18,6 +19,7 @@
 
 #include <entt/entity/entity.hpp>
 
+#include "Common/FramePace.h"
 #include "ECS/Systems/MiracleFxSystemInterface.h"
 #include "Magic/TribalPowerSpin.h"
 
@@ -40,7 +42,7 @@ public:
 	void Reset() override;
 	void SaveState(reflection::BinaryWriter& out) const override;
 	bool LoadState(reflection::BinaryReader& in) override;
-	void SetInterface(const gui::GameInterface* interface) override { _interface = interface; }
+	void SetInterface(const TempleScreenInterface* interface) override { _interface = interface; }
 	void StartTribalPowerRing(Tribe tribe) override;
 	void StopTribalPowerRing() override;
 	void ReleaseTribalPowerRing(Tribe tribe, glm::vec3 handPosition) override;
@@ -50,7 +52,9 @@ public:
 	[[nodiscard]] const graphics::Texture2D* GetTextTexture() const override;
 	[[nodiscard]] entt::id_type BubbleMesh() override;
 	[[nodiscard]] entt::id_type BandMesh() override;
-	void UpdateGlobes(float gameSeconds) override;
+	void UpdateGlobes(std::chrono::milliseconds frameRealTime, std::chrono::milliseconds frameGameTime,
+	                  bool landDrawn) override;
+	void UpdateDrawnGlobes(ObjectDrawListSystemInterface& drawList, std::chrono::milliseconds frameGameTime) override;
 	void PlacePilesOnLand() override;
 
 private:
@@ -66,7 +70,9 @@ private:
 
 	/// The effect playing in each globe
 	std::unordered_map<entt::entity, uint32_t> _holderEffects;
-	const gui::GameInterface* _interface {nullptr};
+	/// When the effects in the globes take their next step
+	frame_pace::Pace _holderPace;
+	const TempleScreenInterface* _interface {nullptr};
 	/// The tribes' names spinning in the world, and the one ringing this computer's hand among them
 	std::vector<std::unique_ptr<magic::tribal_spin::Runner>> _runners;
 	magic::tribal_spin::Runner* _ring {nullptr};

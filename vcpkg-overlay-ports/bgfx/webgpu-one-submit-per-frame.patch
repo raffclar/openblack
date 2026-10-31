@@ -1,0 +1,18 @@
+diff --git a/bgfx/src/renderer_webgpu.cpp b/bgfx/src/renderer_webgpu.cpp
+index ca146c1..2aec3e2 100644
+--- a/bgfx/src/renderer_webgpu.cpp
++++ b/bgfx/src/renderer_webgpu.cpp
+@@ -6367,10 +6367,9 @@ WGPU_IMPORT
+ 
+ 	WGPUCommandEncoder CommandQueueWGPU::alloc()
+ 	{
+-		s_renderWGPU->m_uniformScratchBuffer.flush();
+-
+-		kick();
+-
++		// All passes of a frame go into one command buffer, which the frame submits at its end. The frame writes the
++		// uniform scratch buffer to the queue before that submit, thus the passes get their uniforms. A submit for each
++		// pass costs a trip to the GPU process in the browser, and the GPU waits between the submits.
+ 		return m_commandEncoder;
+ 	}
+ 

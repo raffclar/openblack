@@ -35,14 +35,15 @@
 #include "ECS/Components/Villager.h"
 #include "ECS/Components/WorshipSite.h"
 #include "ECS/Dances.h"
+#include "ECS/PlayerTowns.h"
 #include "ECS/Registry.h"
 #include "ECS/RegistryContext.h"
 #include "ECS/RelaxationRules.h"
 #include "ECS/Systems/CreatureMindSystemInterface.h"
 #include "ECS/Systems/DanceSystemInterface.h"
+#include "ECS/Systems/EffectRequestSystemInterface.h"
 #include "ECS/Systems/FootpathSystemInterface.h"
 #include "ECS/Systems/LivingActionSystemInterface.h"
-#include "ECS/Systems/ParticleSystemInterface.h"
 #include "ECS/Systems/ReactionSystemInterface.h"
 #include "ECS/Systems/TimeSystemInterface.h"
 #include "ECS/Systems/TownDesireSystemInterface.h"
@@ -50,6 +51,7 @@
 #include "ECS/WorldObjects.h"
 #include "InfoConstants.h"
 #include "Locator.h"
+#include "Particles/ParticleDrawFrame.h"
 #include "Physics/ObjectRules.h"
 #include "Resources/ResourcesInterface.h"
 #include "VillagerDance.h"
@@ -269,7 +271,7 @@ void ArtefactSystem::Process(entt::entity object, TownArtefact& artefact)
 {
 	// A glow that has gone out is forgotten
 	if (artefact.effect != 0 &&
-	    (!Locator::particleSystem::has_value() || !Locator::particleSystem::value().IsRunning(artefact.effect)))
+	    (!Locator::effectRequestSystem::has_value() || !Locator::effectRequestSystem::value().IsRunning(artefact.effect)))
 	{
 		artefact.effect = 0;
 	}
@@ -531,15 +533,23 @@ void ArtefactSystem::MakeArtefact(entt::entity object, std::optional<entt::entit
 	}
 	if (!town.has_value() || !IsTown(*town))
 	{
-		// Without a town of its own it joins its nearest town when that town is its player's
+		// Without a town of its own it joins its nearest town when that town is its player's. The search goes over the
+		// game's list of all the towns, by the game's map distance.
 		const auto at = glm::xz(PositionOf(object));
 		std::vector<entt::entity> entities;
 		std::vector<rules::NearbyTown> towns;
-		registry.Each<const Town, const Transform>([&](entt::entity entity, const Town& each, const Transform& transform) {
-			towns.push_back(
-			    {.index = entities.size(), .owner = each.owner, .distance = glm::distance(at, glm::xz(transform.position))});
+		for (const auto entity : ecs::player_towns::AllMadeNewestFirst(registry))
+		{
+			const auto* transform = registry.TryGet<const Transform>(entity);
+			if (transform == nullptr)
+			{
+				continue;
+			}
+			towns.push_back({.index = entities.size(),
+			                 .owner = registry.Get<const Town>(entity).owner,
+			                 .distance = gutils::GetDistanceInMetres(at, glm::xz(transform->position))});
 			entities.push_back(entity);
-		});
+		}
 		const auto chosen = rules::TownForMadeArtefact(towns, player);
 		town = chosen.has_value() ? std::optional(entities.at(*chosen)) : std::nullopt;
 	}
@@ -573,18 +583,18 @@ void ArtefactSystem::SetValue(entt::entity object, TownArtefact& artefact, float
 {
 	artefact.value = value;
 	CreateEffectIfNecessary(object, artefact);
-	if (artefact.effect == 0 || !Locator::particleSystem::has_value())
+	if (artefact.effect == 0 || !Locator::effectRequestSystem::has_value())
 	{
 		return;
 	}
-	auto& particles = Locator::particleSystem::value();
-	if (!particles.IsRunning(artefact.effect))
+	auto& effects = Locator::effectRequestSystem::value();
+	if (!effects.IsRunning(artefact.effect))
 	{
 		artefact.effect = 0;
 		return;
 	}
 	// The glow is as strong as it is worth
-	particles.SetPower(artefact.effect, artefact.value);
+	effects.SetPower(artefact.effect, artefact.value);
 }
 
 void ArtefactSystem::CreateEffectIfNecessary(entt::entity object, TownArtefact& artefact)
@@ -593,22 +603,28 @@ void ArtefactSystem::CreateEffectIfNecessary(entt::entity object, TownArtefact& 
 	{
 		return;
 	}
-	if (Locator::particleSystem::has_value())
+	if (Locator::effectRequestSystem::has_value())
 	{
-		auto& particles = Locator::particleSystem::value();
-		artefact.effect = particles.StartSpotVisual(SpotVisualType::MagicFxOnObject, PositionOf(object), std::nullopt, object);
-		if (artefact.effect != 0)
+		auto& effects = Locator::effectRequestSystem::value();
+		artefact.effect =
+		    effects.Start({.type = SpotVisualType::MagicFxOnObject, .position = PositionOf(object), .owner = object});
+		// A glow that did not start keeps no number
+		if (!effects.IsRunning(artefact.effect))
+		{
+			artefact.effect = 0;
+		}
+		else
 		{
 			// It acts on its object, in its owner's colours
 			const auto& spot =
 			    Locator::infoConstants::value().spotVisual.at(static_cast<size_t>(SpotVisualType::MagicFxOnObject));
 			if (spot.targetOwnerObject != 1)
 			{
-				particles.AddTarget(artefact.effect, object);
+				effects.AddTarget(artefact.effect, object);
 			}
 			if (artefact.player.has_value())
 			{
-				particles.SetPlayer(artefact.effect, static_cast<int>(*artefact.player));
+				effects.SetPlayer(artefact.effect, static_cast<int>(*artefact.player));
 			}
 		}
 	}
@@ -661,7 +677,9 @@ void ArtefactSystem::PowerUpSite(entt::entity site, uint32_t dancers)
 
 void ArtefactSystem::UpdateFrame(float gameMilliseconds)
 {
-	if (!Locator::particleSystem::has_value() || !Locator::entitiesRegistry::has_value())
+	// Only a computer that shows the effects counts the time of the symbols
+	if (!Locator::effectRequestSystem::has_value() || !Locator::effectRequestSystem::value().ShowsEffects() ||
+	    !Locator::entitiesRegistry::has_value())
 	{
 		return;
 	}
@@ -689,7 +707,7 @@ void ArtefactSystem::UpdateFrame(float gameMilliseconds)
 		                   .milliseconds = artefact.symbolMilliseconds,
 		                   .player = static_cast<int>(*artefact.player)});
 	});
-	Locator::particleSystem::value().SetPlayerSymbols(std::move(symbols));
+	Locator::effectRequestSystem::value().SetPlayerSymbols(std::move(symbols));
 }
 
 uint32_t ArtefactSystem::CountFor(PlayerNames player) const

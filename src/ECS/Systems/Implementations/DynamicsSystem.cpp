@@ -28,15 +28,12 @@
 #include "3D/LandBlock.h"
 #include "3D/LandIslandInterface.h"
 #include "3D/MapCoords.h"
-#include "Audio/AudioManagerInterface.h"
-#include "Audio/Sound.h"
 #include "Common/GameRandom.h"
 #include "Common/X87Vector.h"
 #include "Creature/CreatureRig.h"
 #include "ECS/Components/Abode.h"
 #include "ECS/Components/Animal.h"
 #include "ECS/Components/AtHome.h"
-#include "ECS/Components/AudioEmitter.h"
 #include "ECS/Components/BuildingDamage.h"
 #include "ECS/Components/Creature.h"
 #include "ECS/Components/CreatureBody.h"
@@ -52,6 +49,7 @@
 #include "ECS/Components/OneOffSpellSeed.h"
 #include "ECS/Components/Physics.h"
 #include "ECS/Components/Pot.h"
+#include "ECS/Components/Reward.h"
 #include "ECS/Components/StoragePit.h"
 #include "ECS/Components/Transform.h"
 #include "ECS/Components/Tree.h"
@@ -61,10 +59,12 @@
 #include "ECS/PlacedTurn.h"
 #include "ECS/Reflection/BinaryArchive.h"
 #include "ECS/Registry.h"
+#include "ECS/RewardRules.h"
 #include "ECS/SnowDust.h"
 #include "ECS/Systems/LiquidParticleSystemInterface.h"
 #include "ECS/Systems/ReactionSystemInterface.h"
 #include "ECS/Systems/TimeSystemInterface.h"
+#include "ECS/WorkshopRules.h"
 #include "GameDynamicsWorld.h"
 #include "InfoConstants.h"
 #include "Locator.h"
@@ -72,6 +72,7 @@
 #include "Physics/ObjectRules.h"
 #include "Physics/PairRules.h"
 #include "Resources/ResourceManager.h"
+#include "Sound/SoundId.h"
 
 using namespace openblack;
 using namespace openblack::ecs;
@@ -222,7 +223,6 @@ void DynamicsSystem::SaveState(reflection::BinaryWriter& out) const
 
 bool DynamicsSystem::LoadState(reflection::BinaryReader& in)
 {
-	auto& registry = Entities();
 	_entries.clear();
 	reflection::Load(in, _capacity);
 	size_t count = 0;
@@ -301,19 +301,7 @@ bool DynamicsSystem::LoadState(reflection::BinaryReader& in)
 		}
 	}
 	std::erase_if(_entries, [this](const std::unique_ptr<PhysicsEntry>& entry) { return !IsAvailable(entry->entity); });
-	// What a save of an older build had in flight, with no body, stays where it was
-	std::vector<entt::entity> lost;
-	for (const auto object : registry.Underlying().view<InPhysics>())
-	{
-		if (!IndexOf(object).has_value())
-		{
-			lost.push_back(object);
-		}
-	}
-	for (const auto object : lost)
-	{
-		registry.Remove<InPhysics>(object);
-	}
+	// A thing can be in the physics with no body, as a thing that a vortex draws in. It stays so after the load.
 	return complete;
 }
 
@@ -395,6 +383,9 @@ physics_classes::ClassFacts DynamicsSystem::FactsOf(entt::entity object) const
 			}
 		});
 	}
+	// A workshop's wood pile is part of its workshop, as a pile of a storage pit is
+	inputs.partOfStoragePit = inputs.partOfStoragePit || workshop::IsWoodPile(registry, object);
+	inputs.scaffoldInYard = workshop::StandsInYard(registry, object);
 	auto facts = physics_classes::Classify(registry, object, *info, inputs);
 	// Every model moved by bones is drawn from its body turned a quarter about its up axis
 	if (const auto* mesh = registry.TryGet<const Mesh>(object); mesh != nullptr)
@@ -686,7 +677,24 @@ bool DynamicsSystem::IsFlying(entt::entity object) const
 float DynamicsSystem::WeightOf(entt::entity object) const
 {
 	const auto* transform = IsAvailable(object) ? Entities().TryGet<const Transform>(object) : nullptr;
-	return transform != nullptr ? physics_classes::Weight(InfoWeight(object), transform->scale.x) : 0.0f;
+	if (transform == nullptr)
+	{
+		return 0.0f;
+	}
+	// A reward chest has the same weight at all sizes
+	if (Entities().AllOf<Reward>(object))
+	{
+		return reward::k_Weight;
+	}
+	// A piece that broke off a building has the weight of the rock row of the statics
+	if (Entities().AllOf<BuildingPiece>(object))
+	{
+		const auto* tables = _world->Info();
+		const auto row = static_cast<size_t>(MobileStaticInfo::Rock);
+		const float weight = tables != nullptr && row < tables->mobileStatic.size() ? tables->mobileStatic[row].weight : 0.0f;
+		return physics_classes::Weight(weight, transform->scale.x);
+	}
+	return physics_classes::Weight(InfoWeight(object), transform->scale.x);
 }
 
 void DynamicsSystem::RemoveAt(size_t index)
@@ -760,6 +768,19 @@ PhysicsEntry* DynamicsSystem::AddObject(entt::entity object, const PhysicsStart&
 	}
 	_entries.push_back(std::move(entry));
 	return _entries.back().get();
+}
+
+PhysicsEntry* DynamicsSystem::AddObstacle(entt::entity object)
+{
+	if (!IsAvailable(object))
+	{
+		return nullptr;
+	}
+	if (auto* known = Find(object))
+	{
+		return known;
+	}
+	return AddProxy(object);
 }
 
 PhysicsEntry* DynamicsSystem::AddProxy(entt::entity object)
@@ -1223,9 +1244,9 @@ void DynamicsSystem::Step(const physics::Ground& ground)
 		entry->body->ClearForces();
 		entry->body->TouchGround(ground);
 	}
-	// Which bodies' points are tested against which bodies' faces
-	std::vector<physics::PairMember> members;
-	members.reserve(_entries.size());
+	// Which bodies' points are tested against which bodies' faces. The list keeps its memory from step to step.
+	auto& members = _pairMembers;
+	members.clear();
 	for (const auto& entry : _entries)
 	{
 		members.push_back({.centre = entry->body->Centre(),

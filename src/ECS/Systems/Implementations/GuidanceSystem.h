@@ -35,13 +35,18 @@ public:
 	void RemarkIfNow(guidance::Kind kind) override;
 	void TownAttacked(entt::entity town, PlayerNames attacker, bool byCreature) override;
 	void TownAttackCry(entt::entity town, const guidance::TownAttackVoice& voice) override;
+	void BeliefVoice(glm::vec3 at, float share, GuidanceAlignment alignment) override;
 	void BuildingBroken(entt::entity building, std::optional<PlayerNames> player, float remaining) override;
 	void AlignmentTurn(float change) override;
 	void SayOneOff(guidance::OneOff oneOff) override;
+	void SayText(uint32_t text, guidance::Kind kind) override { Say(text, kind); }
 	void KilledVillager(entt::entity villager) override;
+	void CreatureWonFight(entt::entity creature) override;
 	void WorshipperDied() override;
 	void LosingVillager(entt::entity villager) override;
 	void LowOnPeople(entt::entity town) override;
+	void TownChangedHands(entt::entity town, PlayerNames loser, PlayerNames taker) override;
+	void LosingBeliefTurn() override;
 	void EndWaits() override;
 
 	[[nodiscard]] const std::vector<Remark>& GetRemarks() const override { return _remarks; }

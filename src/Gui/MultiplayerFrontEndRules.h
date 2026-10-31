@@ -22,6 +22,7 @@
 #include <LobbyApi.h>
 #include <glm/vec4.hpp>
 
+#include "ECS/GameEndConditions.h"
 #include "ECS/Systems/LobbyClientSystemInterface.h"
 
 /// The rules of the multiplayer front end: the boxes over the temple's future room that find a game and show its room.
@@ -106,6 +107,9 @@ enum class Message : uint8_t
 	/// "%s has kicked you from the game.", with OK, with the name of the room's server: the server removed the player
 	/// from the room. OK goes back to the game list.
 	KickedFromGame,
+	/// "ERROR: Could not download map from Internet. Please check your Internet connection.", with OK: the lobby did not
+	/// give the land of the room
+	CouldNotDownloadMap,
 };
 
 /// The buttons of a message box, as the game's message boxes have them
@@ -200,6 +204,23 @@ struct Seat
 /// The places of the room's players: the gods are numbered in the order of the list, the observers are 0
 [[nodiscard]] std::vector<Seat> Seats(std::span<const lobby_api::RoomPlayer> players);
 
+/// The texts of the lines of the room's player list
+struct RosterTexts
+{
+	/// "God %d"
+	std::u16string_view god;
+	/// "Observers"
+	std::u16string_view observers;
+	/// " (CURRENT)"
+	std::u16string_view current;
+};
+
+/// A line of the room's player list: "God 3: name" for a god, or "Observers: name". The line of the player's own place
+/// has " (CURRENT)" after the name. When the ping display is on, the ping comes last on the own line only.
+/// @param ping The text of the player's own ping, none when the display is off or has no number yet
+[[nodiscard]] std::u16string RosterLine(const Seat& seat, std::u16string_view name, bool own, const RosterTexts& texts,
+                                        const std::optional<std::u16string>& ping);
+
 /// The most gods in a game, each with a chat colour of its own
 inline constexpr int32_t k_MostGods = 32;
 /// The colour of a god's lines in the chat, as 32-bit 0xAARRGGBB: the observers (and any number that is not a god's)
@@ -228,6 +249,29 @@ struct ChatItem
 
 /// The time limit as hours and minutes: "1:30"
 [[nodiscard]] std::u16string TimeLimitText(uint32_t minutes);
+
+/// The time limit of a network game in minutes, when the host does not change it
+inline constexpr uint32_t k_DefaultTimeLimitMinutes = 30;
+
+/// The parts of the conditions page that show to a player who is not the host. The host's controls never show: the
+/// box of each condition, the value of a condition with its arrows, and the arrows of the time limit. Ready always
+/// shows.
+struct ConditionsPage
+{
+	/// "Please select a map first."
+	bool selectMap;
+	/// The list of the conditions of the game, one line for each condition that the host switched on
+	bool conditions;
+	/// "Time Limit (Hours:Minutes):" and the time limit
+	bool timeLimit;
+	bool viewChat;
+};
+
+/// With no land, the page shows only "Please select a map first." and Ready
+[[nodiscard]] constexpr ConditionsPage ConditionsPageOf(bool landKnown) noexcept
+{
+	return {.selectMap = !landKnown, .conditions = landKnown, .timeLimit = landKnown, .viewChat = landKnown};
+}
 
 /// A land of the local maps' file, "Online Maps\localmaps.txt": a line "number:name:file:players:"
 struct LocalMap
@@ -268,10 +312,21 @@ struct ClanInfoTexts
 inline constexpr int32_t k_LogoSize = 64;
 using LogoOpacities = std::array<uint8_t, static_cast<size_t>(k_LogoSize* k_LogoSize)>;
 
-/// The logo from the bytes of a BMP file of 8, 24 or 32 bits a pixel. Each pixel becomes the nearest of the 256
-/// greys, and the top 4 bits of the grey are its opacity. The picture is cut to its top-left 64 by 64 pixels, and a
-/// smaller picture has black (no opacity) around it. None when the bytes are not such a file.
+/// The logo from the bytes of a BMP file of 8, 24 or 32 bits a pixel. Each pixel becomes one of 256 greys, as Windows
+/// changes a colour to a grey, and the top 4 bits of the grey are its opacity. The picture is cut to its top-left 64 by 64
+/// pixels, and a smaller picture has black (no opacity) around it. None when the bytes are not such a file.
 [[nodiscard]] std::optional<LogoOpacities> DecodeClanLogo(std::span<const uint8_t> bmp);
+
+/// A line of the lobby's player database: a label and a value, as the server gives them
+struct PlayerDetail
+{
+	std::u16string label;
+	std::u16string value;
+};
+
+/// The lines of the Player Details tab under its title: "label:value" for each line of the player database, in its
+/// order. The game shows no other lines there.
+[[nodiscard]] std::vector<std::u16string> PlayerDetailLines(std::span<const PlayerDetail> details);
 
 /// The limits of a winning condition for a land: its first value, the least and the most, and the steps of a click
 /// with the left and the right mouse button
@@ -294,6 +349,23 @@ using ConditionTemplate = std::array<ConditionLimits, k_ConditionCount>;
 /// The conditions of a land from "Online Maps\ConditionTemplate.txt": the lines after "FORMAP <file>.txt", by the
 /// names of the conditions. None when the file has no block for the land.
 [[nodiscard]] std::optional<ConditionTemplate> FindConditions(std::string_view text, std::string_view landFile);
+
+/// The number of a winning condition from its name in the template file, such as "WC_HOUSES_BUILT". None for another
+/// name.
+[[nodiscard]] std::optional<size_t> ConditionIndex(std::string_view key) noexcept;
+
+/// Why the picks are not a pick that the host can make on the limits of a land, or none when they are. Each value must
+/// be from the least to the most value of its condition. No limits: the template file has no block for the land.
+[[nodiscard]] std::optional<std::string> ConditionsRefusal(const std::optional<ConditionTemplate>& limits,
+                                                           std::span<const game_end::ConditionPick> picks);
+
+/// The lines of the list on the conditions page, one for each condition that the host switched on. The page adds the
+/// conditions in the order of the game, and each new line goes to the top. Thus the last condition of the game shows
+/// first. When a condition is in the picks two times, the last value is the value of the line.
+[[nodiscard]] std::vector<game_end::ConditionPick> ConditionLines(std::span<const game_end::ConditionPick> picks);
+
+/// The text of a line on the conditions page: the name of the condition and its value, "Number of houses built (20)"
+[[nodiscard]] std::u16string ConditionLineText(std::u16string_view name, int32_t value);
 
 /// The front end's flow from box to box. It knows nothing of the lobby: the controller tells it what happened.
 struct Flow

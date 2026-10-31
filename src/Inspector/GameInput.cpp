@@ -20,9 +20,9 @@
 #include <SDL_events.h>
 #include <SDL_keyboard.h>
 #include <SDL_mouse.h>
-#include <imgui.h>
 
 #include "Camera/Camera.h"
+#include "Debug/DebugGuiInterface.h"
 #include "ECS/Systems/CreatureHandSystemInterface.h"
 #include "ECS/Systems/GestureSystemInterface.h"
 #include "ECS/Systems/HandGrabSystemInterface.h"
@@ -35,6 +35,7 @@
 #include "Gestures/GestureRequests.h"
 #include "Input/GameActionMapInterface.h"
 #include "Input/InjectedInput.h"
+#include "Input/InputDeviceInterface.h"
 #include "Input/KeyBindings.h"
 #include "Input/ScriptedMouse.h"
 #include "Locator.h"
@@ -65,12 +66,10 @@ uint32_t WindowId()
 /// While the inspector moves the pointer, the debug windows don't take the mouse as theirs, as with the testbed's
 void KeepDebugWindowsOffTheMouse(bool off)
 {
-	if (ImGui::GetCurrentContext() == nullptr)
+	if (Locator::debugGui::has_value())
 	{
-		return;
+		Locator::debugGui::value().KeepOffTheMouse(off);
 	}
-	auto& io = ImGui::GetIO();
-	io.ConfigFlags = off ? (io.ConfigFlags | ImGuiConfigFlags_NoMouse) : (io.ConfigFlags & ~ImGuiConfigFlags_NoMouse);
 }
 
 std::optional<GestureType> GestureNamed(std::string_view name)
@@ -158,7 +157,7 @@ std::string GameInput::Apply(const InputEvent& event)
 		// Written as the window would report it, should the scripted mouse be handed back before it is pumped
 		pointer = input::QueuedAhead(*actions.GetScriptedPointer(), ScreenSize());
 		std::ignore = input::Pump(pointer, sent, ScreenSize());
-		SDL_PushEvent(&sent);
+		input::Device().PushEvent(sent);
 	};
 
 	switch (event.kind)
@@ -198,7 +197,7 @@ std::string GameInput::Apply(const InputEvent& event)
 		motion.motion.xrel = moved.x;
 		motion.motion.yrel = moved.y;
 		input::MarkInjected(motion);
-		SDL_PushEvent(&motion);
+		input::Device().PushEvent(motion);
 		return {};
 	}
 	case InputEvent::Kind::ButtonDown:
@@ -221,13 +220,13 @@ std::string GameInput::Apply(const InputEvent& event)
 		button.button.x = pointer.position.x;
 		button.button.y = pointer.position.y;
 		input::MarkInjected(button);
-		SDL_PushEvent(&button);
+		input::Device().PushEvent(button);
 		return {};
 	}
 	case InputEvent::Kind::KeyDown:
 	case InputEvent::Kind::KeyUp:
 	{
-		const auto scancode = SDL_GetScancodeFromName(event.key.c_str());
+		const auto scancode = input::Device().ScancodeFromName(event.key);
 		if (scancode == SDL_SCANCODE_UNKNOWN)
 		{
 			return "no key " + event.key;
@@ -241,16 +240,16 @@ std::string GameInput::Apply(const InputEvent& event)
 		}
 		actions.HoldScriptedKey(code, down);
 		const auto mod = Modifiers(_heldKeys);
-		SDL_SetModState(static_cast<SDL_Keymod>(mod));
+		input::Device().SetModState(static_cast<SDL_Keymod>(mod));
 		SDL_Event key {};
 		key.type = down ? SDL_KEYDOWN : SDL_KEYUP;
 		key.key.windowID = WindowId();
 		key.key.state = down ? SDL_PRESSED : SDL_RELEASED;
 		key.key.keysym.scancode = scancode;
-		key.key.keysym.sym = SDL_GetKeyFromScancode(scancode);
+		key.key.keysym.sym = input::Device().KeyFromScancode(scancode);
 		key.key.keysym.mod = mod;
 		input::MarkInjected(key);
-		SDL_PushEvent(&key);
+		input::Device().PushEvent(key);
 		return {};
 	}
 	case InputEvent::Kind::Wheel:
@@ -262,7 +261,7 @@ std::string GameInput::Apply(const InputEvent& event)
 		wheel.wheel.y = event.notches;
 		wheel.wheel.preciseY = static_cast<float>(event.notches);
 		input::MarkInjected(wheel);
-		SDL_PushEvent(&wheel);
+		input::Device().PushEvent(wheel);
 		return {};
 	}
 	case InputEvent::Kind::Action:
@@ -327,7 +326,7 @@ std::string GameInput::Apply(const InputEvent& event)
 			text.text.windowID = WindowId();
 			std::copy_n(rest.data(), size, text.text.text);
 			input::MarkInjected(text);
-			SDL_PushEvent(&text);
+			input::Device().PushEvent(text);
 			rest.remove_prefix(size);
 		}
 		return {};
@@ -348,11 +347,11 @@ void GameInput::Release()
 		up.key.windowID = WindowId();
 		up.key.state = SDL_RELEASED;
 		up.key.keysym.scancode = static_cast<SDL_Scancode>(key);
-		up.key.keysym.sym = SDL_GetKeyFromScancode(static_cast<SDL_Scancode>(key));
+		up.key.keysym.sym = input::Device().KeyFromScancode(static_cast<SDL_Scancode>(key));
 		input::MarkInjected(up);
-		SDL_PushEvent(&up);
+		input::Device().PushEvent(up);
 	}
-	SDL_SetModState(KMOD_NONE);
+	input::Device().SetModState(KMOD_NONE);
 	// A hold on a creature that a command started has no button to let go, so it lets go here
 	LetGoOfCommandHold();
 	// The buttons held once what was sent is pumped, which the mouse's timing may not have yet
@@ -374,7 +373,7 @@ void GameInput::Release()
 			up.button.x = pointer->position.x;
 			up.button.y = pointer->position.y;
 			input::MarkInjected(up);
-			SDL_PushEvent(&up);
+			input::Device().PushEvent(up);
 		}
 	}
 	actions.SetScriptedPointer(std::nullopt);
@@ -422,7 +421,7 @@ float GameInput::GroundHeight(glm::vec2 point) const
 
 bool GameInput::HasKey(std::string_view name) const
 {
-	return SDL_GetScancodeFromName(std::string(name).c_str()) != SDL_SCANCODE_UNKNOWN;
+	return input::Device().ScancodeFromName(name) != SDL_SCANCODE_UNKNOWN;
 }
 
 bool GameInput::HasAction(std::string_view name) const
@@ -504,11 +503,21 @@ Json GameInput::State() const
 		state["buttons"] = actions.GetPointerButtons();
 		// A double click waits here until the camera takes it
 		state["double_click"] = actions.GetUnbindable(input::UnbindableActionMap::DOUBLE_CLICK);
+		// While a box has the keyboard, no action reads as held
+		state["box_keyboard"] = actions.BoxHasKeyboard();
+		state["actions_held"] = Json::array();
+		for (const auto& binding : actions.GetKeyBindings())
+		{
+			if (actions.Get(binding.action))
+			{
+				state["actions_held"].push_back(binding.name);
+			}
+		}
 	}
 	state["keys_held"] = Json::array();
 	for (const auto key : _heldKeys)
 	{
-		state["keys_held"].push_back(SDL_GetScancodeName(static_cast<SDL_Scancode>(key)));
+		state["keys_held"].push_back(std::string(input::Device().ScancodeName(static_cast<SDL_Scancode>(key))));
 	}
 	if (Locator::handSystem::has_value())
 	{
@@ -535,8 +544,11 @@ Json GameInput::State() const
 		// the land
 		if (pick.object.has_value() && Locator::handGrabSystem::has_value())
 		{
-			const auto why = Locator::handGrabSystem::value().WhyNotTake(*pick.object);
-			state["pick"]["grab"] = {{"takes", why.empty()}, {"button", "right"}};
+			const auto& hand = Locator::handGrabSystem::value();
+			// A press on a pile, a field or a fish farm takes a handful out of it
+			const bool scoops = hand.WouldScoop(*pick.object);
+			const auto why = scoops ? std::string() : hand.WhyNotTake(*pick.object);
+			state["pick"]["grab"] = {{"takes", why.empty()}, {"button", "right"}, {"scoops", scoops}};
 			if (!why.empty())
 			{
 				state["pick"]["grab"]["why_not"] = why;

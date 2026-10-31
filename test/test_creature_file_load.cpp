@@ -93,6 +93,26 @@ TEST(CreatureFileLoad, AGodWithNoCreatureFilePlaysWithNoCreature)
 	EXPECT_EQ(creature_file_load::WhyNotBrought(request), Refusal::NoFile);
 }
 
+TEST(CreatureFileLoad, AGodWithACreatureBringsNoSecondCreature)
+{
+	// A saved skirmish keeps the creature of the god, and the load brings the profile's creature again
+	auto request = GoodBrought();
+	request.hasCreature = true;
+	EXPECT_EQ(creature_file_load::WhyNotBrought(request), Refusal::HasCreature);
+	// The game reads the file and the species before it examines the creature of the god
+	request.species.reset();
+	EXPECT_EQ(creature_file_load::WhyNotBrought(request), Refusal::UnknownSpecies);
+	request = GoodBrought();
+	request.hasCreature = true;
+	request.readable = false;
+	EXPECT_EQ(creature_file_load::WhyNotBrought(request), Refusal::NoFile);
+	// The test of the creature comes before the test of the place
+	request = GoodBrought();
+	request.hasCreature = true;
+	request.onMap = false;
+	EXPECT_EQ(creature_file_load::WhyNotBrought(request), Refusal::HasCreature);
+}
+
 TEST(CreatureFileLoad, AnUnknownSpeciesComesBeforeAPlaceOffTheMap)
 {
 	auto request = GoodBrought();
@@ -102,4 +122,23 @@ TEST(CreatureFileLoad, AnUnknownSpeciesComesBeforeAPlaceOffTheMap)
 	request = GoodBrought();
 	request.onMap = false;
 	EXPECT_EQ(creature_file_load::WhyNotBrought(request), Refusal::OffMap);
+}
+
+TEST(CreatureFileLoad, OnlyTheOwnGodOfAPlayerWithNoClanKeepsItsCreatureInTheProfile)
+{
+	EXPECT_TRUE(creature_file_load::KeptByThisComputer({.ownGod = true, .clanOrder = false, .ownGodPlaysForClan = false}));
+	EXPECT_FALSE(creature_file_load::KeptByThisComputer({.ownGod = false, .clanOrder = false, .ownGodPlaysForClan = false}));
+}
+
+TEST(CreatureFileLoad, TheCreatureOfAClanGodNeverGoesToTheProfile)
+{
+	// The clan has no creature: the god brings the player's own creature, which still belongs to the clan game
+	EXPECT_FALSE(creature_file_load::KeptByThisComputer({.ownGod = true, .clanOrder = false, .ownGodPlaysForClan = true}));
+	EXPECT_FALSE(creature_file_load::KeptByThisComputer({.ownGod = true, .clanOrder = true, .ownGodPlaysForClan = true}));
+}
+
+TEST(CreatureFileLoad, ANewClanCreatureNeverGoesToTheProfile)
+{
+	// Data from any god that starts with the order makes a new creature, also from a god with no clan
+	EXPECT_FALSE(creature_file_load::KeptByThisComputer({.ownGod = true, .clanOrder = true, .ownGodPlaysForClan = false}));
 }

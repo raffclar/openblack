@@ -30,6 +30,7 @@
 #include "ECS/Components/FilmCreature.h"
 #include "ECS/Components/Mesh.h"
 #include "ECS/Components/Transform.h"
+#include "ECS/DrawnRegistry.h"
 #include "ECS/Registry.h"
 #include "ECS/Systems/CreatureAnimationSystemInterface.h"
 #include "ECS/Systems/CreatureHairSystemInterface.h"
@@ -74,22 +75,24 @@ std::shared_ptr<const FilmCameraPath> LoadPath()
 void FilmCreatureSystem::Start()
 {
 	End();
-	if (!Locator::playerSystem::has_value() || !Locator::entitiesRegistry::has_value())
+	if (!Locator::playerSystem::has_value() || !Locator::entitiesRegistry::has_value() || !Locator::drawnRegistry::has_value())
 	{
 		return;
 	}
 	const auto& players = Locator::playerSystem::value();
 	const auto creature = players.GetPrimaryCreature(
 	    (Locator::handSystem::has_value() ? Locator::handSystem::value().GetOwnPlayer() : PlayerNames::PLAYER_ONE));
-	auto& registry = Locator::entitiesRegistry::value();
-	if (!creature.has_value() || !registry.Valid(*creature) || !registry.AllOf<Creature, Mesh, CreatureMorph>(*creature))
+	const auto& land = Locator::entitiesRegistry::value();
+	if (!creature.has_value() || !land.Valid(*creature) || !land.AllOf<Creature, Mesh, CreatureMorph>(*creature))
 	{
 		return;
 	}
-	const auto& body = registry.Get<const Creature>(*creature);
+	const auto& body = land.Get<const Creature>(*creature);
 	const auto size = ShownSize(body);
 
-	// The copy stands at the world's origin, facing as its mesh does, at the creature's size
+	// The copy stands at the world's origin, facing as its mesh does, at the creature's size. It is a thing of the drawn
+	// registry, so that the film takes no entity of the land.
+	auto& registry = Locator::drawnRegistry::value();
 	const auto copy = registry.Create();
 	registry.Assign<Transform>(copy, glm::vec3(0.0f), glm::mat3(1.0f),
 	                           glm::vec3(archetypes::CreatureArchetype::DrawnScale(body.species, size)));
@@ -107,7 +110,8 @@ void FilmCreatureSystem::Start()
 	// nowhere.
 	if (Locator::creatureAnimationSystem::has_value())
 	{
-		Locator::creatureAnimationSystem::value().PoseCopy(copy, static_cast<float>(film_creature::k_FirstPoseMs));
+		Locator::creatureAnimationSystem::value().PoseCopy(registry, copy, static_cast<float>(film_creature::k_FirstPoseMs),
+		                                                   Locator::entitiesRegistry::value());
 	}
 	if (auto action = creature_layers::PlayOnce(animation.body, film_creature::k_Action, false); action.has_value())
 	{
@@ -119,7 +123,7 @@ void FilmCreatureSystem::Start()
 	// It makes its first motes as it is first posed
 	if (Locator::creatureAnimationSystem::has_value())
 	{
-		Locator::creatureAnimationSystem::value().AddAlignmentMotesOf(copy);
+		Locator::creatureAnimationSystem::value().AddAlignmentMotesOf(registry, copy);
 	}
 	// It has a glow on each hand
 	auto& glows = registry.Assign<CreatureHandGlows>(copy);
@@ -153,8 +157,8 @@ void FilmCreatureSystem::Update(int32_t filmMs, std::chrono::steady_clock::time_
 	{
 		return;
 	}
-	auto& registry = Locator::entitiesRegistry::value();
-	auto* film = registry.TryGet<FilmCreature>(*_copy);
+	auto& registry = Locator::drawnRegistry::value();
+	auto* film = registry.Valid(*_copy) ? registry.TryGet<FilmCreature>(*_copy) : nullptr;
 	if (film == nullptr)
 	{
 		return;
@@ -172,13 +176,14 @@ void FilmCreatureSystem::Update(int32_t filmMs, std::chrono::steady_clock::time_
 			auto& animations = Locator::creatureAnimationSystem::value();
 			if (film->shown)
 			{
-				animations.AddAlignmentMotesOf(*_copy);
+				animations.AddAlignmentMotesOf(registry, *_copy);
 			}
-			animations.PoseCopy(*_copy, milliseconds);
+			animations.PoseCopy(registry, *_copy, milliseconds, Locator::entitiesRegistry::value());
 		}
 		if (Locator::creatureHairSystem::has_value())
 		{
-			Locator::creatureHairSystem::value().StepCopy(*_copy, std::chrono::duration<float, std::milli>(milliseconds));
+			Locator::creatureHairSystem::value().StepCopy(
+			    registry, *_copy, std::chrono::duration<float, std::milli>(milliseconds), Locator::entitiesRegistry::value());
 		}
 	}
 
@@ -214,7 +219,7 @@ void FilmCreatureSystem::Update(int32_t filmMs, std::chrono::steady_clock::time_
 	{
 		if (Locator::creatureAnimationSystem::has_value())
 		{
-			Locator::creatureAnimationSystem::value().PlaceHandGlows(*_copy, stepMs, 0);
+			Locator::creatureAnimationSystem::value().PlaceHandGlows(registry, *_copy, stepMs, 0);
 		}
 		for (const auto hand : {creature_hand_glow::Place::LeftHand, creature_hand_glow::Place::RightHand})
 		{
@@ -250,7 +255,7 @@ void FilmCreatureSystem::Update(int32_t filmMs, std::chrono::steady_clock::time_
 	film->fans.clear();
 	if (film->burstOn && Locator::creatureAnimationSystem::has_value() && Locator::camera::has_value())
 	{
-		const auto middle = Locator::creatureAnimationSystem::value().MiddleOfGroinAndLips(*_copy);
+		const auto middle = Locator::creatureAnimationSystem::value().MiddleOfGroinAndLips(registry, *_copy);
 		const auto& camera = Locator::camera::value();
 		const auto projection = film_creature::Projection(camera.GetProjectionMatrix());
 		const auto inCamera = middle.has_value() ? glm::vec3(_view * glm::vec4(*middle, 1.0f)) : glm::vec3(0.0f);
@@ -272,9 +277,9 @@ void FilmCreatureSystem::Update(int32_t filmMs, std::chrono::steady_clock::time_
 
 void FilmCreatureSystem::End()
 {
-	if (_copy.has_value() && Locator::entitiesRegistry::has_value())
+	if (_copy.has_value() && Locator::drawnRegistry::has_value())
 	{
-		auto& registry = Locator::entitiesRegistry::value();
+		auto& registry = Locator::drawnRegistry::value();
 		if (registry.Valid(*_copy))
 		{
 			registry.Destroy(*_copy);
@@ -287,11 +292,12 @@ void FilmCreatureSystem::End()
 
 std::optional<FilmCreatureSystemInterface::Shown> FilmCreatureSystem::GetShown() const
 {
-	if (!_copy.has_value() || !Locator::entitiesRegistry::has_value() || !Locator::camera::has_value())
+	if (!_copy.has_value() || !Locator::drawnRegistry::has_value() || !Locator::camera::has_value())
 	{
 		return std::nullopt;
 	}
-	const auto* film = Locator::entitiesRegistry::value().TryGet<const FilmCreature>(*_copy);
+	const auto& registry = Locator::drawnRegistry::value();
+	const auto* film = registry.Valid(*_copy) ? registry.TryGet<const FilmCreature>(*_copy) : nullptr;
 	if (film == nullptr)
 	{
 		return std::nullopt;

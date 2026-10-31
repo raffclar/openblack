@@ -35,6 +35,7 @@
 #include "ECS/Components/Temple.h"
 #include "ECS/Components/Transform.h"
 #include "ECS/Components/Tree.h"
+#include "ECS/Components/VillageTotem.h"
 #include "ECS/Components/Vortex.h"
 #include "ECS/Components/WorshipSite.h"
 #include "ECS/Map.h"
@@ -90,7 +91,7 @@ Shape ShapeOf(const Registry& registry, entt::entity entity)
 		return Shape::LeaningBox;
 	}
 	if (registry.AnyOf<Abode, Field, Feature, AnimatedStatic, Flowers, SpellDispenser, WorshipAltar, MagicShield, ShieldDome,
-	                   ScriptHighlight>(entity))
+	                   ScriptHighlight, VillageTotem>(entity))
 	{
 		return Shape::UprightBox;
 	}
@@ -98,15 +99,6 @@ Shape ShapeOf(const Registry& registry, entt::entity entity)
 	return Shape::None;
 }
 
-/// The model whose box gives the outline: the thing's own, or a vortex's cylinder, which is never drawn
-std::optional<entt::id_type> OutlineModelOf(const Registry& registry, entt::entity entity)
-{
-	if (registry.AllOf<Vortex>(entity))
-	{
-		return resources::HashIdentifier(MeshId::SpellVortexCylinder);
-	}
-	return thing_model::ModelOf(registry, entity);
-}
 } // namespace
 
 std::optional<fixed_outlines::Outline> FixedOutlineSystem::OutlineOf(const Registry& registry, entt::entity entity)
@@ -124,7 +116,7 @@ std::optional<fixed_outlines::Outline> FixedOutlineSystem::OutlineOf(const Regis
 	{
 		return fixed_outlines::OfTrunk(place);
 	}
-	const auto model = OutlineModelOf(registry, entity);
+	const auto model = thing_model::OutlineModelOf(registry, entity);
 	if (!model.has_value() || !Locator::resources::has_value() || !Locator::resources::value().GetMeshes().Contains(*model))
 	{
 		return std::nullopt;

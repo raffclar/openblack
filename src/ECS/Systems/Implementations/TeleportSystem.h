@@ -11,6 +11,7 @@
 
 #include <cstdint>
 
+#include "Common/FramePace.h"
 #include "ECS/Systems/TeleportSystemInterface.h"
 
 #if !defined(LOCATOR_IMPLEMENTATIONS)
@@ -41,7 +42,10 @@ public:
 	bool StartCarry(entt::entity creature) override;
 	bool CarryTurn(entt::entity creature) override;
 	void StopControl(entt::entity creature) override;
+	void PlayerTurn(PlayerNames player) override;
 	void ProcessTurn() override;
+	void UpdateFrame(ObjectDrawListSystemInterface& drawList, std::chrono::milliseconds frameRealTime,
+	                 std::chrono::milliseconds frameGameTime, bool landDrawn) override;
 	void Reset() override;
 	void SaveState(reflection::BinaryWriter& out) const override;
 	bool LoadState(reflection::BinaryReader& in) override;
@@ -52,11 +56,13 @@ private:
 	/// The stones of miracles that have closed down or gone go
 	void RemoveOrphans();
 	/// Travellers that went or stopped heading for the stone are dropped from it
-	void PruneTravellers();
+	void PruneTravellers(entt::entity stone);
 	/// The stone no longer controls a creature whose plan has no step of the teleport left
 	void DropCreatures();
 
 	uint32_t _nextSerial {0};
+	/// When the pools take their next step
+	frame_pace::Pace _poolPace;
 };
 
 } // namespace openblack::ecs::systems

@@ -55,9 +55,9 @@ std::optional<std::string_view> RoomHelp(TempleRoom room)
 	}
 }
 
-std::optional<std::string_view> ScrollHelp(TempleScrolls::Content content)
+std::optional<std::string_view> ScrollHelp(temple_scrolls::Content content)
 {
-	using Content = TempleScrolls::Content;
+	using Content = temple_scrolls::Content;
 	switch (content)
 	{
 	case Content::World:
@@ -119,7 +119,7 @@ void EnterRoom(Scripts& scripts, TempleRoom room, bool helpSystemOn)
 	}
 }
 
-void LookAtScroll(Scripts& scripts, TempleScrolls::Content content)
+void LookAtScroll(Scripts& scripts, temple_scrolls::Content content)
 {
 	if (const auto help = ScrollHelp(content); help.has_value())
 	{

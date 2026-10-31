@@ -63,6 +63,15 @@ struct Lengths
 /// Whether taking the leash off lets go of the desire made dominant: yes, unless the leash its player has chosen is the
 /// learning leash. The other desires are then free again at once.
 [[nodiscard]] bool TakingOffEndsDominantDesire(LeashType chosen);
+/// What a leash that goes on, or a change of the worn leash, does to one of the player's leashes on the temple:
+/// - The leash on the temple of the same kind becomes the picked one (true).
+/// - The other two leashes on the temple are not picked (false).
+/// - A kind that the temple does not hang (no leash) keeps the picked leash as it is (no value).
+/// The player must have a temple with its leashes. A leash that comes off keeps the picked leash.
+[[nodiscard]] std::optional<bool> PostPickedFor(LeashType post, LeashType worn);
+/// Whether the player can change the leash of their creature. The player cannot do this while a nice or nasty spell
+/// is on the creature. The nice and nasty spells themselves change the leash, and the player cannot change it back.
+[[nodiscard]] bool PlayerCanChangeType(bool niceSpellOn, bool nastySpellOn);
 /// How long the leash's desire holds the creature's other desires (but its bodily needs) down, in seconds
 constexpr float k_ForcedDesireSeconds = 36000.0f;
 /// How long a creature tied to a village it wants to impress holds its other desires down, in seconds
@@ -224,5 +233,65 @@ struct MindHooks
 {
 	return creatureOwner != localPlayer;
 }
+
+/// The thing that ties the leash of a creature to a thing
+enum class TieSource : uint8_t
+{
+	/// The hand of the player
+	Hand,
+	/// A land script
+	Script,
+	/// The hand of a computer god
+	ComputerGod,
+	/// A saved game that loads a leash that was tied
+	LoadedGame,
+};
+
+/// What a tie does in addition to the tie itself
+struct TieEffects
+{
+	/// One of the two tie sounds plays
+	bool sound;
+	/// The creature learns from the leash about the thing, as when the player shows it the thing
+	bool lessons;
+	/// What the creature does stops as a failure, its walk stops and its pose ends
+	bool failsAction;
+	/// The creature acts on the thing at once, as for an order on the thing
+	bool actsOnThing;
+};
+
+/// Only the hand of the player stops what the creature does and makes it act on the thing. A script or a computer god
+/// only ties the leash. A loaded game puts the tie back as it was, with no sound and no lesson.
+[[nodiscard]] constexpr TieEffects EffectsOf(TieSource source)
+{
+	switch (source)
+	{
+	case TieSource::Hand:
+		return {.sound = true, .lessons = true, .failsAction = true, .actsOnThing = true};
+	case TieSource::Script:
+	case TieSource::ComputerGod:
+		return {.sound = true, .lessons = true, .failsAction = false, .actsOnThing = false};
+	case TieSource::LoadedGame:
+		break;
+	}
+	return {.sound = false, .lessons = false, .failsAction = false, .actsOnThing = false};
+}
+
+/// The two leash-attach sounds play in turn, and the first sound plays first. A tie and the leash put back in the hand
+/// each have one of these. Each one keeps its turn for all the creatures until the game stops.
+class AttachSoundTurns
+{
+public:
+	/// Gives 0 for the first sound or 1 for the second sound, and gives the turn to the other sound
+	[[nodiscard]] constexpr int Next()
+	{
+		const int sound = _second ? 1 : 0;
+		_second = !_second;
+		return sound;
+	}
+
+private:
+	bool _second {false};
+};
 
 } // namespace openblack::creature_leash

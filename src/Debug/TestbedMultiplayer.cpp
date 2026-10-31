@@ -9,6 +9,8 @@
 
 #include "TestbedMultiplayer.h"
 
+#include <cstdint>
+
 #include <algorithm>
 #include <array>
 #include <deque>
@@ -25,12 +27,14 @@
 #include <LobbyApi.h>
 #include <LobbyApiJson.h>
 
+#include "Commands/TurnCodec.h"
 #include "Common/BuildVersion.h"
 #include "ECS/Systems/LobbyClientSystemInterface.h"
 #include "ECS/Systems/NetworkGameSystemInterface.h"
 #include "Gui/MultiplayerFrontEnd.h"
 #include "Online/LanDiscoveryInterface.h"
 #include "Online/NetworkSession.h"
+#include "Online/OnlineMapStoreInterface.h"
 #include "Online/WebSocketInterface.h"
 
 using namespace openblack;
@@ -47,6 +51,8 @@ namespace
 constexpr int64_t k_PlayerId = 7;
 /// The other gods in the big room; the player is the last of its 32 gods
 constexpr int64_t k_BigRoomOthers = 31;
+/// The time limit of the game of the demonstration server that picks winning conditions, in minutes
+constexpr uint32_t k_DemoTimeLimitMinutes = 90;
 
 lobby_api::RoomPlayer Player(int64_t id, std::string name, std::string role)
 {
@@ -154,6 +160,8 @@ std::vector<uint8_t> DemoLogo()
 /// The tickets of the demonstration, which say the role
 constexpr std::string_view k_GodTicket = "demo";
 constexpr std::string_view k_ObserverTicket = "demo-observer";
+/// The hash of the land that the demonstration's lobby gives
+constexpr std::string_view k_DemoMapHash = "0000000000000000000000000000000000000000000000000000000000000001";
 
 /// A lobby with no network: each call answers at once with the demonstration's data
 class DemoLobby final: public LobbyClientSystemInterface
@@ -274,12 +282,42 @@ public:
 	void GetPlayer(int64_t, LobbyCallback<lobby_api::PlayerDetails>) override {}
 	void GetWeather(lobby_api::Date, LobbyCallback<lobby_api::RealWeather>) override {}
 	void UploadCreature(lobby_api::CreatureUpload, LobbyCallback<lobby_api::CreatureUploadReply>) override {}
+	void SendSkirmishPing(LobbyCallback<LobbyDone>) override {}
 	uint32_t AddEventListener(LobbyEventListener listener) override
 	{
 		_listeners[++_nextListener] = std::move(listener);
 		return _nextListener;
 	}
 	void RemoveEventListener(uint32_t id) override { _listeners.erase(id); }
+
+	/// The lobby gives a land that the player does not have, and the room of Bob's game plays it. The demonstration has
+	/// no network, so the download of the land fails.
+	void GiveMaps()
+	{
+		_givesMaps = true;
+		_servers.front().map = std::string(k_DemoMapHash);
+	}
+	void GetMaps(LobbyCallback<lobby_api::MapList> callback) override
+	{
+		if (!_givesMaps)
+		{
+			LobbyClientSystemInterface::GetMaps(std::move(callback));
+			return;
+		}
+		const lobby_api::OnlineMap map {.number = 1,
+		                                .name = "Two gods",
+		                                .file = "mpm_2p_1",
+		                                .players = 2,
+		                                .sha256 = std::string(k_DemoMapHash),
+		                                .checksum = 0,
+		                                .size = 0,
+		                                .url = "/api/v1/maps/" + std::string(k_DemoMapHash)};
+		callback({.value = lobby_api::MapList {.maps = {map}}, .error = {}});
+	}
+	void DownloadMap(const lobby_api::OnlineMap&, LobbyCallback<std::vector<uint8_t>> callback) override
+	{
+		callback({.value = std::nullopt, .error = {.kind = LobbyErrorKind::Network}});
+	}
 
 	/// The events wait for the next frame, as they come on the push channel
 	void Poll()
@@ -314,13 +352,31 @@ private:
 	uint32_t _nextListener {0};
 	std::vector<lobby_api::PushEvent> _pending;
 	int64_t _seq {0};
+	bool _givesMaps {false};
+};
+
+/// A store of the lands of network games that has no land and keeps none
+class DemoMapStore final: public online::OnlineMapStoreInterface
+{
+public:
+	void Find(std::string, uint64_t, FoundCallback done) override { done(false); }
+	[[nodiscard]] std::optional<std::vector<uint8_t>> Read(std::string_view) const override { return std::nullopt; }
+	void Write(std::string, std::vector<uint8_t>, WrittenCallback done) override { done(false); }
 };
 
 /// A game socket with no network: each connection opens at the next frame, and the server lets each join in at the
-/// frame after it
+/// frame after it. The clock of the demonstration moves on by the same time at each frame, and the server answers each
+/// ping at the next frame. Thus each ping has the same round trip.
 class DemoSockets final: public online::WebSocketClientInterface
 {
 public:
+	/// The time that the clock of the demonstration moves on at each frame, in microseconds
+	static constexpr int64_t k_FrameMicroseconds = 48'000;
+
+	[[nodiscard]] int64_t Now() const noexcept { return _now; }
+	/// The start that the server gives when it lets a player in: its time limit and its winning conditions
+	void SetJoinStart(std::optional<game_socket::Start> start) { _joinStart = std::move(start); }
+
 	online::WebSocketId Connect(online::WebSocketRequest, online::WebSocketHandlers handlers) override
 	{
 		const auto id = ++_nextId;
@@ -341,12 +397,38 @@ public:
 		}
 		return true;
 	}
-	bool SendBinary(online::WebSocketId id, std::span<const uint8_t>) override { return IsOpen(id); }
+	bool SendBinary(online::WebSocketId id, std::span<const uint8_t> bytes) override
+	{
+		if (!IsOpen(id))
+		{
+			return false;
+		}
+		const auto decoded = turn_codec::Decode(bytes);
+		if (decoded.frame.has_value())
+		{
+			if (const auto* ping = std::get_if<turn_codec::Ping>(&*decoded.frame))
+			{
+				_pongs.emplace_back(id, turn_codec::Encode(turn_codec::Pong {.id = ping->id, .time = ping->time}));
+			}
+		}
+		return true;
+	}
 	void Close(online::WebSocketId id, uint16_t) override { _sockets.erase(id); }
 	/// The server sends a frame to each open socket at the next frame
 	void ServerSends(const game_socket::Frame& frame) { _toClients.push_back(game_socket::ToJson(frame)); }
 	void Poll() override
 	{
+		_now += k_FrameMicroseconds;
+		auto pongs = std::move(_pongs);
+		_pongs.clear();
+		for (const auto& [id, bytes] : pongs)
+		{
+			const auto found = _sockets.find(id);
+			if (found != _sockets.end() && found->second.handlers.binary)
+			{
+				found->second.handlers.binary(bytes);
+			}
+		}
 		auto toClients = std::move(_toClients);
 		_toClients.clear();
 		for (const auto& text : toClients)
@@ -371,7 +453,7 @@ public:
 				                         .slot = observer ? std::nullopt : std::optional<uint8_t>(1),
 				                         .session = "demo",
 				                         .name = "Alice",
-				                         .start = std::nullopt}));
+				                         .start = _joinStart}));
 			}
 		}
 		auto opening = std::move(_opening);
@@ -417,16 +499,20 @@ private:
 	std::vector<online::WebSocketId> _opening;
 	/// The joins to let in, and whether the ticket is an observer's
 	std::vector<std::pair<online::WebSocketId, bool>> _joins;
+	std::optional<game_socket::Start> _joinStart;
 	std::vector<std::string> _toClients;
+	/// The answers to the pings, for the next frame
+	std::vector<std::pair<online::WebSocketId, std::vector<uint8_t>>> _pongs;
 	online::WebSocketId _nextId {0};
+	int64_t _now {0};
 };
 
 /// The network game of the demonstration: a session on the demonstration's sockets. Its server never starts a game.
 class DemoNetworkGame final: public ecs::systems::NetworkGameSystemInterface
 {
 public:
-	explicit DemoNetworkGame(online::WebSocketClientInterface& sockets)
-	    : _session(sockets, [] { return int64_t {0}; })
+	explicit DemoNetworkGame(DemoSockets& sockets)
+	    : _session(sockets, [&sockets] { return sockets.Now(); })
 	{
 	}
 
@@ -437,6 +523,12 @@ public:
 		    .ticket = std::move(join.ticket),
 		    .gamePassword = std::move(join.gamePassword),
 		    .name = std::move(join.name),
+		    .readLand = {},
+		    .readCreature = {},
+		    .readAlignment = {},
+		    .readPlaysForClan = {},
+		    .parts = {},
+		    .origin = join.origin,
 		});
 		return true;
 	}
@@ -479,6 +571,7 @@ struct DemoServices
 	DemoSockets sockets;
 	DemoNetworkGame network {sockets};
 	DemoLan lan;
+	DemoMapStore maps;
 	Stage stage {Stage::ChooseConnection};
 	/// The steps after the join wait for the game socket to open
 	bool staged {false};
@@ -552,6 +645,7 @@ void Finish(MultiplayerFrontEnd& frontEnd, DemoServices& demo)
 		frontEnd.ShowSeat(0);
 		break;
 	case Stage::Conditions:
+	case Stage::ConditionsPicked:
 		frontEnd.Next();
 		break;
 	case Stage::WaitingForStart:
@@ -594,6 +688,30 @@ std::unique_ptr<MultiplayerFrontEnd> testbed_multiplayer::MakeDemoFrontEnd(Stage
 {
 	auto demo = std::make_shared<DemoServices>();
 	demo->stage = stage;
+	const bool mapDownload = stage == Stage::MapDownloadFailed;
+	if (mapDownload)
+	{
+		demo->lobby.GiveMaps();
+	}
+	if (stage == Stage::ConditionsPicked)
+	{
+		// The server picked three winning conditions in the limits of the land, and a time limit of an hour and a half
+		demo->sockets.SetJoinStart(game_socket::Start {
+		    .land = {},
+		    .testbed = true,
+		    .seed = 0,
+		    .turn = 0,
+		    .opening = {},
+		    .godsRingMap = false,
+		    .allComputerGods = false,
+		    .aiSeed = std::nullopt,
+		    .scenario = std::nullopt,
+		    .timeLimit = k_DemoTimeLimitMinutes,
+		    .conditions = {{.condition = 3, .value = 20}, {.condition = 5, .value = 9000}, {.condition = 14, .value = 100}},
+		    .names = {},
+		    .gods = {},
+		});
+	}
 	bool begun = false;
 	MultiplayerFrontEnd::Services services {
 	    .lobby = &demo->lobby,
@@ -616,6 +734,7 @@ std::unique_ptr<MultiplayerFrontEnd> testbed_multiplayer::MakeDemoFrontEnd(Stage
 			        Finish(frontEnd, *state);
 		        }
 	        },
+	    .maps = mapDownload ? &demo->maps : nullptr,
 	};
 	MultiplayerFrontEnd::Settings settings {
 	    .registerPage = {},
@@ -626,6 +745,7 @@ std::unique_ptr<MultiplayerFrontEnd> testbed_multiplayer::MakeDemoFrontEnd(Stage
 	    .browser = false,
 	    .localMaps = std::move(localMaps),
 	    .conditionTemplate = std::move(conditionTemplate),
+	    .showPing = stage == Stage::RoomPing,
 	};
 	return std::make_unique<MultiplayerFrontEnd>(std::move(services), std::move(settings));
 }

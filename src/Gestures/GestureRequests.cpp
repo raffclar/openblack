@@ -10,6 +10,7 @@
 #include "GestureRequests.h"
 
 #include <algorithm>
+#include <tuple>
 #include <utility>
 
 #include "Help/HelpProfile.h"
@@ -31,6 +32,8 @@ std::string_view gesture::Name(Purpose purpose)
 		return "shake the leash off";
 	case Purpose::ShakeOffHeld:
 		return "shake off what is held";
+	case Purpose::CancelCharge:
+		return "stop the charge of an icon";
 	case Purpose::LeashGesture:
 		return "leash";
 	case Purpose::PickLeash:
@@ -62,6 +65,7 @@ bool gesture::ShowsRecognition(Purpose purpose)
 	case Purpose::DropSeed:
 	case Purpose::ShakeOffLeash:
 	case Purpose::ShakeOffHeld:
+	case Purpose::CancelCharge:
 	case Purpose::ClosePicker:
 	case Purpose::HiddenScript:
 	case Purpose::CloseSelection:
@@ -157,13 +161,17 @@ std::vector<Request> gesture::Requests(const HandContext& context)
 	if (poweringUp)
 	{
 		// A scribble calls off the power-up asked for, or drops the seed; each other level's gesture powers it up
-		requests.push_back({.gesture = GestureType::Scribble, .purpose = Purpose::DropSeed});
+		requests.push_back({.gesture = GestureType::Scribble,
+		                    .purpose = Purpose::DropSeed,
+		                    .powerUpLevel = seed->powerUp,
+		                    .seed = seed->type});
 		for (int level = 0; level < static_cast<int>(seed->powerUpGestures.size()); ++level)
 		{
 			const auto gesture = seed->powerUpGestures.at(static_cast<size_t>(level));
 			if (gesture != GestureType::None && level != seed->powerUp)
 			{
-				requests.push_back({.gesture = gesture, .purpose = Purpose::PowerUp, .powerUpLevel = level});
+				requests.push_back(
+				    {.gesture = gesture, .purpose = Purpose::PowerUp, .powerUpLevel = level, .seed = seed->type});
 			}
 		}
 	}
@@ -208,10 +216,15 @@ std::vector<Request> gesture::Requests(const HandContext& context)
 		}
 		else if (!seed.has_value())
 		{
-			// The empty hand shakes off the leash it holds; one tied to something stays
+			// The empty hand shakes off the leash it holds; one tied to something stays. Else the scribble stops the
+			// charge of an icon that charges a miracle for the hand.
 			if (context.creature.has_value() && context.creature->leashed && !context.creature->tied)
 			{
 				requests.push_back({.gesture = GestureType::Scribble, .purpose = Purpose::ShakeOffLeash});
+			}
+			else if (context.iconCharging)
+			{
+				requests.push_back({.gesture = GestureType::Scribble, .purpose = Purpose::CancelCharge});
 			}
 		}
 		else if (context.inInfluence)
@@ -229,12 +242,13 @@ std::vector<Request> gesture::Requests(const HandContext& context)
 	// creature's. The gesture that opened the selection is not waited for again while it is open.
 	if (!fighting && context.handReady)
 	{
-		for (const auto& [gesture, offered] : {std::pair {context.ownSelectionGesture, context.ownSelectionOffered},
-		                                       std::pair {context.creatureSelectionGesture, context.creatureSelectionOffered}})
+		for (const auto& [gesture, offered, forCreature] :
+		     {std::tuple {context.ownSelectionGesture, context.ownSelectionOffered, false},
+		      std::tuple {context.creatureSelectionGesture, context.creatureSelectionOffered, true}})
 		{
 			if (offered && gesture != GestureType::None && (!selectionOpen || context.selection->openedWith != gesture))
 			{
-				requests.push_back({.gesture = gesture, .purpose = Purpose::OpenSelection});
+				requests.push_back({.gesture = gesture, .purpose = Purpose::OpenSelection, .forCreature = forCreature});
 			}
 		}
 	}
@@ -287,6 +301,27 @@ std::optional<uint32_t> gesture::HelpEventOf(const Request& request, const HandC
 	default:
 		return std::nullopt;
 	}
+}
+
+std::vector<uint32_t> gesture::HelpEventsOf(SelectionStep step)
+{
+	namespace profile = help::profile;
+	switch (step)
+	{
+	case SelectionStep::Opened:
+		return {profile::k_GestureOpenSelection};
+	case SelectionStep::Advanced:
+		return {profile::k_GestureSelectionStep};
+	case SelectionStep::Chosen:
+		return {profile::k_GestureSelectionStep, profile::k_GestureSelectionChosen};
+	case SelectionStep::Closed:
+		return {profile::k_GestureCloseSelection};
+	case SelectionStep::Repeated:
+		return {profile::k_GestureRepeatMiracle};
+	case SelectionStep::Nothing:
+		break;
+	}
+	return {};
 }
 
 bool gesture::ChainFollows(const std::optional<HandContext::Seed>& seed, bool seedTurnedOnLand)

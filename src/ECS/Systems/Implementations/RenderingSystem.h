@@ -50,6 +50,11 @@ private:
 	void PrepareTreeDrawDescs(bool drawBoundingBox);
 	/// Each returns false when an instance had no room left in its mesh's draw list, which must then be made again
 	bool UploadInstances(bool drawBoundingBox);
+	/// Places the instances of the things of the drawn registry. `fits` goes false when the draw lists have no room.
+	/// `picks` gets the gate stones that the cursor finds, each as its plinth.
+	/// The things of the drawn registry. lastFilmLevels: the detail that the explorers' boat had in the frame before.
+	void UploadDrawnThings(bool drawBoundingBox, bool& fits, std::vector<RenderContext::DrawnObject>& picks,
+	                       const std::unordered_map<entt::entity, uint8_t>& lastFilmLevels);
 	/// The broken and unfinished buildings drawn as far up as they stand
 	void UploadPartialBuilds();
 	/// What the villagers drawn this frame hold, a draw for each model, from the held things gathered with the instances

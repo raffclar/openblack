@@ -23,6 +23,17 @@ using namespace openblack::testbed_scenarios;
 namespace
 {
 
+/// The lines of a land script that switch the computer mind of player two on and then off: the player stays a computer
+/// player with no mind that plays
+constexpr std::string_view k_StoppedComputerGod = R"(TOGGLE_COMPUTER_PLAYER("PLAYER_TWO", 1)
+TOGGLE_COMPUTER_PLAYER("PLAYER_TWO", 0)
+)";
+
+/// The lines of a land that give player two a temple, and then a computer mind that has nothing to do
+constexpr std::string_view k_ComputerGodAtCitadel = R"(CREATE_CITADEL("0.0,-90.0", 0, "PLAYER_TWO", 5690, 1000)
+TOGGLE_COMPUTER_PLAYER("PLAYER_TWO", 1)
+)";
+
 struct BoxScenario
 {
 	std::string_view id;
@@ -38,7 +49,7 @@ void testbed_scenarios::AddMultiplayerFrontEndScenarios(std::vector<Scenario>& a
 {
 	using Kind = Command::Kind;
 	using Stage = testbed_multiplayer::Stage;
-	const std::array<BoxScenario, 17> boxes = {{
+	const std::array<BoxScenario, 20> boxes = {{
 	    {"multiplayer.choose_connection", "The multiplayer front end: choose a connection", Stage::ChooseConnection,
 	     "The multiplayer front end opens with the demonstration lobby. The player goes straight into the temple's "
 	     "future room.",
@@ -71,23 +82,35 @@ void testbed_scenarios::AddMultiplayerFrontEndScenarios(std::vector<Scenario>& a
 	     "The player joins Bob's game and opens the Landscape tab. Bob's game has Bob and Alice as gods 1 and 2, and Eve as an "
 	     "observer, on Bombardment.",
 	     "The lands of the local maps show, with \"(HOST)\" after Bombardment, which the server plays. Land Info shows "
-	     "\"Bombardment action for 2 players...\". The gods' list does not show on this tab."},
+	     "\"Bombardment action for 2 players...\". The thumbnail of Bombardment shows between the two lists, with the "
+	     "marks of its citadels and towns. The gods' list does not show on this tab."},
 	    {"multiplayer.room_clans", "The multiplayer front end: the game room's clans", Stage::RoomClans,
 	     "The player joins Bob's game, opens the Clans tab and picks The Clan. Bob's game has Bob and Alice as gods 1 and 2, "
 	     "and Eve as an observer, on Bombardment.",
 	     "\"Alice's clans:\" lists The Clan and Other Clan. \"Clan The Clan info:\" shows \"Clan Description: Our "
 	     "motto\", \"Clan Leader: Alice\", \"Clan URL: www.example.com\" and \"Credits 12.50\". \"Use This Clan\" "
-	     "shows; a click on it changes it to \"Don't use any Clan.\"."},
+	     "shows; a click on it changes it to \"Don't use any Clan.\". The clan's logo shows faintly behind the clan's "
+	     "information, in its middle."},
 	    {"multiplayer.room_player_details", "The multiplayer front end: the game room's player details",
 	     Stage::RoomPlayerDetails,
 	     "The player joins Bob's game, opens the Player Details tab and picks Bob. Bob's game has Bob and Alice as gods 1 and "
 	     "2, and Eve as an observer, on Bombardment.",
-	     "\"Player Bob information:\" shows, with \"God 1\" under it."},
+	     "\"Player Bob information:\" shows, with no lines under it: the lobby does not give the lines of the player "
+	     "database yet."},
 	    {"multiplayer.conditions", "The multiplayer front end: the winning conditions", Stage::Conditions,
 	     "The player joins Bob's game and clicks Next. Bob's game has Bob and Alice as gods 1 and 2, and Eve as an observer, "
 	     "on Bombardment.",
-	     "The page lists the 15 winning conditions of Bombardment. \"Condition Value:\" and \"Time Limit "
-	     "(Hours:Minutes):\" show, and \"View Chat\" at the right. The Ready box is at the bottom left."},
+	     "The list of the winning conditions is empty, because the game has no conditions. \"Time Limit "
+	     "(Hours:Minutes):\" shows with 0:30, and \"View Chat\" is at the right. \"Condition Value:\" does not show. The "
+	     "Ready box is at the bottom left."},
+	    {"multiplayer.conditions_picked", "The multiplayer front end: the winning conditions that the server picked",
+	     Stage::ConditionsPicked,
+	     "The player joins Bob's game and clicks Next. The server of Bob's game picked three winning conditions and a "
+	     "time limit of an hour and a half.",
+	     "The list shows three lines, from the top: \"Number of trees grown (100)\", \"Amount of food in storage pit "
+	     "(9000)\" and \"Number of houses built by a player in a town (20)\". The game adds each condition at the top of "
+	     "the list, so the last condition shows first. \"Time Limit (Hours:Minutes):\" shows with 1:30. No check box "
+	     "and no arrows show."},
 	    {"multiplayer.waiting_for_start", "The multiplayer front end: joined and waiting for the start", Stage::WaitingForStart,
 	     "The player joins Bob's game, goes to the conditions and ticks Ready. Bob's game has Bob and Alice as gods 1 and 2, "
 	     "and Eve as an observer, on Bombardment.",
@@ -123,6 +146,17 @@ void testbed_scenarios::AddMultiplayerFrontEndScenarios(std::vector<Scenario>& a
 	     "The player joins Bob's game and ticks Ready. The player's land file is not the server's, so the server removes the "
 	     "player from the room.",
 	     "A white box says \"Bob's game has kicked you from the game.\" with OK. OK goes back to the game list."},
+	    {"multiplayer.room_ping", "The multiplayer front end: the player's own ping in the game room", Stage::RoomPing,
+	     "The player joins Bob's game with the ping display on, as the --show-ping switch does. The game socket of the "
+	     "demonstration answers each ping after 48 ms.",
+	     "The game room's player list shows \"God 2: Alice (CURRENT) ping 48\" in Alice's god colour, in the same letters "
+	     "as the other lines. The lines of Bob and Eve show no ping. The number shows after the first second in the room."},
+	    {"multiplayer.map_download_failed", "The multiplayer front end: a land that the lobby does not give",
+	     Stage::MapDownloadFailed,
+	     "The player joins Bob's game. The room plays a land that the player does not have, and the lobby of the "
+	     "demonstration does not give its file (deviation 169).",
+	     "A white box says \"ERROR: Could not download map from Internet.\" and \"Please check your Internet "
+	     "connection.\" with OK, over the dimmed room. OK closes the box, and the player stays in the room."},
 	}};
 	for (const auto& box : boxes)
 	{
@@ -176,7 +210,7 @@ void testbed_scenarios::AddOtherGodScenarios(std::vector<Scenario>& all)
 	    .expected = "The barrel moves from where it stood to the west and stays in the air 5 m above the land, with no hand "
 	                "about it. High above the barrel, sparkles in the second player's colour come out one after another "
 	                "and fall down slowly. They do not stop while the scenario runs.",
-	    .environment = {.clockRuns = false, .dispenserGrid = false},
+	    .environment = {.clockRuns = false, .dispenserGrid = false, .networkGame = true},
 	    .framing = {.shot = Shot::Placed, .eye = {-10.0f, 22.0f, -40.0f}, .look = {-20.0f, 20.0f, 0.0f}},
 	    .objects = {{.type = MobileObjectInfo::EgyptBarrel, .offset = {20.0f, 0.0f}}},
 	    .commands = {{.kind = Kind::OtherGodHand,
@@ -198,7 +232,7 @@ void testbed_scenarios::AddOtherGodScenarios(std::vector<Scenario>& all)
 	    .expected = "After a short time, the model of the miracle shows 5 m above the land to the west, with no hand about it "
 	                "and no effect round it. High above it, sparkles in the second player's colour come out one after "
 	                "another and fall down slowly.",
-	    .environment = {.clockRuns = false, .dispenserGrid = false},
+	    .environment = {.clockRuns = false, .dispenserGrid = false, .networkGame = true},
 	    .framing = {.shot = Shot::Placed, .eye = {-10.0f, 22.0f, -40.0f}, .look = {-20.0f, 20.0f, 0.0f}},
 	    .commands = {{.kind = Kind::OtherGodHand,
 	                  .player = PlayerNames::PLAYER_TWO,
@@ -206,6 +240,44 @@ void testbed_scenarios::AddOtherGodScenarios(std::vector<Scenario>& all)
 	                  .point = {-20.0f, 0.0f},
 	                  .heldSeed = SpellSeedType::Food,
 	                  .radius = 5.0f}},
+	});
+	// A computer god whose mind stopped keeps its hands and its last camera, but it shows no sparkles
+	all.push_back({
+	    .id = "multiplayer.stopped_god_sparkles",
+	    .name = "No sparkles of a computer god whose mind stopped",
+	    .facet = Facet::Multiplayer,
+	    .description = "The testbed acts as a network game. The land script switches on the computer mind of the second "
+	                   "player and then switches it off again. After a second, the second player's hand takes the barrel "
+	                   "to the west, and the second player reports the hand 5 m above the land and the camera 30 m above "
+	                   "that hand, as in the scenario of another god's sparkles.",
+	    .expected = "The barrel moves from where it stood to the west and stays in the air 5 m above the land, with no hand "
+	                "about it. No sparkles come out above the barrel while the scenario runs: a computer god shows its "
+	                "sparkles only while its mind plays.",
+	    .environment = {.clockRuns = false, .dispenserGrid = false, .players = {PlayerNames::PLAYER_TWO}, .networkGame = true},
+	    .framing = {.shot = Shot::Placed, .eye = {-10.0f, 22.0f, -40.0f}, .look = {-20.0f, 20.0f, 0.0f}},
+	    .objects = {{.type = MobileObjectInfo::EgyptBarrel, .offset = {20.0f, 0.0f}}},
+	    .landScript = k_StoppedComputerGod,
+	    .commands = {{.kind = Kind::OtherGodHand,
+	                  .player = PlayerNames::PLAYER_TWO,
+	                  .delaySeconds = 1.0f,
+	                  .point = {-20.0f, 0.0f},
+	                  .object = 0,
+	                  .radius = 5.0f}},
+	});
+	// The camera of a computer god starts above its temple, so its sparkles come out there before its hand moves
+	all.push_back({
+	    .id = "multiplayer.citadel_start_sparkles",
+	    .name = "The sparkles of a computer god above its new temple",
+	    .facet = Facet::Multiplayer,
+	    .description = "The testbed acts as a network game. The land script makes the temple of the second player 90 m from "
+	                   "the middle of the testbed, and then switches on the computer mind of that player. The mind has no "
+	                   "town and does not move its hand. The camera of a god starts 20 m higher than the base of its temple, "
+	                   "20 m nearer the middle of the testbed.",
+	    .expected = "Sparkles in the second player's colour come out one after another at that point in front of the temple "
+	                "and fall down slowly. They do not stop while the scenario runs.",
+	    .environment = {.clockRuns = false, .dispenserGrid = false, .players = {PlayerNames::PLAYER_TWO}, .networkGame = true},
+	    .framing = {.shot = Shot::Placed, .eye = {40.0f, 35.0f, -20.0f}, .look = {0.0f, 20.0f, -70.0f}},
+	    .landScript = k_ComputerGodAtCitadel,
 	});
 	// The second god brings its player's creature at the start of a network game
 	all.push_back({
@@ -224,5 +296,17 @@ void testbed_scenarios::AddOtherGodScenarios(std::vector<Scenario>& all)
 	                  .player = PlayerNames::PLAYER_TWO,
 	                  .delaySeconds = 1.0f,
 	                  .mindFile = "LethysCreature"}},
+	});
+	// The player's own ping in the top left corner, as --show-ping shows it in a network game (deviation 143)
+	all.push_back({
+	    .id = "multiplayer.ping_line",
+	    .name = "The player's own ping on the game screen",
+	    .facet = Facet::Multiplayer,
+	    .description = "After a second, the game screen shows a made-up ping, as --show-ping does in a network game. The "
+	                   "round trip starts at 40 ms and grows by 8 ms each second to 64 ms, then starts again.",
+	    .expected = "A small white line \"ping 40\" with a black shadow shows in the top left corner of the screen. Each "
+	                "second the number changes: 48, 56, 64, then 40 again. The menu (Escape) hides the line.",
+	    .framing = {.shot = Shot::Overview},
+	    .commands = {{.kind = Kind::ShowDemoPing, .delaySeconds = 1.0f, .value = 1}},
 	});
 }

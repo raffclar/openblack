@@ -9,6 +9,7 @@
 
 #include <array>
 #include <map>
+#include <span>
 #include <tuple>
 #include <vector>
 
@@ -123,6 +124,35 @@ TEST(GameEnd, NothingEndsAStoryGame)
 	EXPECT_FALSE(world.gods[k_Two].standing.out);
 }
 
+TEST(GameEnd, AToolRunOnTheTestbedNeedsNoTemple)
+{
+	auto world = TwoHumans();
+	world.gods[k_One].temple = false;
+	world.gods[k_Two].temple = false;
+	State state;
+	Facts facts = k_Network;
+	facts.templesNeeded = false;
+	EXPECT_TRUE(ProcessTurn(world, facts, state).empty());
+	EXPECT_FALSE(state.decided);
+	EXPECT_FALSE(world.gods[k_One].standing.out);
+	EXPECT_FALSE(world.gods[k_Two].standing.out);
+	EXPECT_TRUE(world.gods[k_One].creature);
+}
+
+TEST(GameEnd, AGodThatLeftIsOutEvenWhenNoTempleIsNeeded)
+{
+	auto world = TwoHumans();
+	world.gods[k_Two].standing.out = true;
+	world.gods[k_Two].standing.reason = OutReason::Left;
+	State state;
+	Facts facts = k_Network;
+	facts.templesNeeded = false;
+	const auto events = ProcessTurn(world, facts, state);
+	ASSERT_EQ(events.size(), 1u);
+	EXPECT_EQ(events[0].kind, Event::Kind::GodOutAndDecided);
+	EXPECT_EQ(events[0].god, k_Two);
+}
+
 TEST(GameEnd, TheLastGodWithATempleDecidesTheGame)
 {
 	auto world = TwoHumans();
@@ -184,6 +214,37 @@ TEST(GameEnd, PlayersFiveToSevenNeverLoseByTheTempleRule)
 	EXPECT_TRUE(world.gods[k_Five].creature);
 }
 
+TEST(GameEnd, TheTempleRuleRunsAtTheFirstTurnWithNoWaitForATemple)
+{
+	// A god that never had a temple is out at the first turn of a network game
+	auto world = TwoHumans();
+	world.gods[k_One].temple = false;
+	world.gods[k_Two].temple = false;
+	State state;
+	const auto events = ProcessTurn(world, {.networkGame = true, .skirmish = false, .turn = 1}, state);
+	ASSERT_EQ(events.size(), 2u);
+	EXPECT_TRUE(state.decided);
+}
+
+TEST(GameEnd, ATestRunWithNoTempleRuleKeepsGodsWithNoTempleIn)
+{
+	auto world = TwoHumans();
+	world.gods[k_One].temple = false;
+	world.gods[k_Two].temple = false;
+	State state;
+	const Facts noTempleRule {.networkGame = true, .skirmish = false, .turn = 1, .templesNeeded = false};
+	EXPECT_TRUE(ProcessTurn(world, noTempleRule, state).empty());
+	EXPECT_FALSE(state.decided);
+	EXPECT_FALSE(world.gods[k_One].standing.out);
+	EXPECT_TRUE(world.gods[k_Two].creature);
+	// A god that left is still counted out
+	world.gods[k_Two].standing.out = true;
+	world.gods[k_Two].standing.reason = OutReason::Left;
+	const auto events = ProcessTurn(world, noTempleRule, state);
+	ASSERT_EQ(events.size(), 1u);
+	EXPECT_EQ(events[0].kind, Event::Kind::GodOutAndDecided);
+}
+
 TEST(GameEnd, AGodThatLeftIsCountedWithItsReason)
 {
 	auto world = TwoHumans();
@@ -239,6 +300,57 @@ TEST(GameEnd, TheTimeLimitDecidesByTheShareAndThenTheInfluence)
 	const auto events = ProcessTurn(world, facts, state);
 	ASSERT_EQ(events.size(), 1u);
 	EXPECT_EQ(events[0].god, k_Two);
+}
+
+// At the time limit, the gods take their places by their share: the worst first, the winner last
+TEST(GameEnd, TheTimeLimitRanksTheGodsByTheirShare)
+{
+	auto world = TwoHumans();
+	world.gods[k_Three] = {.human = true};
+	world.gods[k_One].standing.conditions[0] = WinCondition {.current = 1, .target = 5, .completed = false};
+	world.gods[k_Two].standing.conditions[0] = WinCondition {.current = 3, .target = 5, .completed = false};
+	world.gods[k_Three].standing.conditions[0] = WinCondition {.current = 2, .target = 5, .completed = false};
+	State state;
+	Facts facts = k_Network;
+	facts.conditionCount = 1;
+	facts.timeLimitTurn = facts.turn;
+	const auto events = ProcessTurn(world, facts, state);
+	ASSERT_EQ(events.size(), 1u);
+	EXPECT_EQ(events[0].kind, Event::Kind::Won);
+	EXPECT_EQ(events[0].god, k_Two);
+	EXPECT_TRUE(state.decided);
+	EXPECT_FALSE(world.gods[k_Two].standing.out);
+	EXPECT_TRUE(world.gods[k_One].standing.out);
+	EXPECT_TRUE(world.gods[k_Three].standing.out);
+	// The worst god takes the first place. Each count of a god out when one god is left also gives the winner the next
+	// place, so the winner has the last place.
+	EXPECT_EQ(world.gods[k_One].standing.place, 1);
+	EXPECT_EQ(world.gods[k_Three].standing.place, 3);
+	EXPECT_EQ(world.gods[k_Two].standing.place, 4);
+	// The winner saw the two other gods defeated
+	EXPECT_EQ(world.gods[k_Two].godsDefeated, 2u);
+}
+
+// Two gods with the same share and the same share of the influence: the first god in the order of the players is better
+TEST(GameEnd, AFullTieGoesToTheFirstGod)
+{
+	auto world = TwoHumans();
+	world.gods[k_One].influence = 0.5f;
+	world.gods[k_Two].influence = 0.5f;
+	State state;
+	Facts facts = k_Network;
+	facts.timeLimitTurn = facts.turn;
+	const auto events = ProcessTurn(world, facts, state);
+	ASSERT_EQ(events.size(), 1u);
+	EXPECT_EQ(events[0].god, k_One);
+	// The larger share of the influence wins a tie of the share, also when it is the second god
+	auto again = TwoHumans();
+	again.gods[k_One].influence = 0.5f;
+	again.gods[k_Two].influence = 0.50001f;
+	State second;
+	const auto won = ProcessTurn(again, facts, second);
+	ASSERT_EQ(won.size(), 1u);
+	EXPECT_EQ(won[0].god, k_Two);
 }
 
 TEST(GameEnd, ASkirmishHasNoTimeLimit)
@@ -319,4 +431,58 @@ TEST(GameEnd, AFullScoreHistoryDropsItsOldestValue)
 	EXPECT_EQ(standing.scoreHistory[0], 1.0f);
 	EXPECT_EQ(standing.scoreHistory[499], 500.0f);
 	EXPECT_EQ(ShownScores(standing).size(), 499u);
+}
+
+// A skirmish has no conditions, so each tenth turn each god keeps its share of the influence, the computer gods too
+TEST(GameEnd, ASkirmishKeepsTheShareOfTheInfluenceEachTenTurns)
+{
+	FakeWorld world;
+	world.gods[k_One] = {.human = true, .power = 100.0f};
+	world.gods[k_Two] = {.computer = true, .mind = true, .power = 300.0f};
+	State state;
+	std::ignore = ProcessTurn(world, {.networkGame = false, .skirmish = true, .turn = 20}, state);
+	EXPECT_EQ(world.gods[k_One].standing.scoreHistoryIndex, 1);
+	EXPECT_EQ(world.gods[k_One].standing.scoreHistory[1], 0.25f);
+	EXPECT_EQ(world.gods[k_Two].standing.scoreHistory[1], 0.75f);
+	std::ignore = ProcessTurn(world, {.networkGame = false, .skirmish = true, .turn = 25}, state);
+	EXPECT_EQ(world.gods[k_One].standing.scoreHistoryIndex, 1);
+}
+
+// The lobby hears one time for each event that decides the game: a win by the conditions, or the last god out
+TEST(GameEnd, OnlyTheEventsThatDecideTheGameCount)
+{
+	const std::array events {
+	    Event {.kind = Event::Kind::GodOut, .god = k_Three},
+	    Event {.kind = Event::Kind::GodOutAndDecided, .god = k_Two},
+	    Event {.kind = Event::Kind::Won, .god = k_One},
+	};
+	EXPECT_EQ(DecidingEvents(events), 2u);
+	EXPECT_EQ(DecidingEvents(std::span(events).first(1)), 0u);
+	EXPECT_EQ(DecidingEvents({}), 0u);
+	// A skirmish that the last god out decides counts one time
+	auto world = TwoHumans();
+	world.gods[k_Two].temple = false;
+	State state;
+	EXPECT_EQ(DecidingEvents(ProcessTurn(world, k_Skirmish, state)), 1u);
+	EXPECT_EQ(DecidingEvents(ProcessTurn(world, k_Skirmish, state)), 0u);
+}
+
+// A network game with no conditions ends at the default time limit, and the god with the most influence wins
+TEST(GameEnd, ANetworkGameWithNoConditionsEndsAtItsTimeLimitByTheInfluence)
+{
+	auto world = TwoHumans();
+	world.gods[k_One].influence = 0.75f;
+	world.gods[k_Two].influence = 0.25f;
+	State state;
+	Facts facts = k_Network;
+	facts.timeLimitTurn = 18000;
+	facts.turn = 17999;
+	EXPECT_TRUE(ProcessTurn(world, facts, state).empty());
+	EXPECT_FALSE(state.decided);
+	facts.turn = 18000;
+	const auto events = ProcessTurn(world, facts, state);
+	ASSERT_FALSE(events.empty());
+	EXPECT_EQ(events[0].kind, Event::Kind::Won);
+	EXPECT_EQ(events[0].god, k_One);
+	EXPECT_TRUE(state.decided);
 }

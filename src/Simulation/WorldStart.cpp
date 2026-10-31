@@ -39,18 +39,17 @@
 #endif
 
 #include "3D/AllMeshes.h"
+#include "3D/CameraEdits.h"
 #include "3D/CreatureCaveTrophies.h"
 #include "3D/L3DMesh.h"
 #include "3D/LandLightTable.h"
+#include "3D/LowResolutionTextures.h"
 #include "3D/SeaTexture.h"
 #include "3D/SkyDome.h"
 #include "3D/SnowCover.h"
 #include "3D/TempleRoomMeshes.h"
-#include "Audio/AnimEffectTable.h"
-#include "Audio/AudioManagerInterface.h"
-#include "Audio/ClipSounds.h"
-#include "Audio/HelpSpeech.h"
 #include "CHLApi.h"
+#include "Camera/CameraZones.h"
 #include "Common/BufferedLogSink.h"
 #include "Common/GameRandom.h"
 #include "Common/RandomNumberManager.h"
@@ -64,30 +63,32 @@
 #include "ECS/Components/CreatureLeash.h"
 #include "ECS/Components/CreatureSkin.h"
 #include "ECS/Components/Mist.h"
+#include "ECS/Components/OneOffSpellSeed.h"
 #include "ECS/Components/Vortex.h"
 #include "ECS/Map.h"
 #include "ECS/Registry.h"
 #include "ECS/Systems/AdvisorSystemInterface.h"
+#include "ECS/Systems/ComputerPlayerSystemInterface.h"
+#include "ECS/Systems/CreatureFightSystemInterface.h"
 #include "ECS/Systems/CreatureHelpSystemInterface.h"
+#include "ECS/Systems/CreatureLocomotionSystemInterface.h"
 #include "ECS/Systems/CreatureSkinSystemInterface.h"
 #include "ECS/Systems/DialogueControlSystemInterface.h"
+#include "ECS/Systems/HandSystemInterface.h"
 #include "ECS/Systems/HelpSpeechSystemInterface.h"
 #include "ECS/Systems/HelpTextSystemInterface.h"
 #include "ECS/Systems/LandSystemInterface.h"
-#include "ECS/Systems/MiracleFxSystemInterface.h"
-#include "ECS/Systems/ParticleSystemInterface.h"
+#include "ECS/Systems/ParticleRuleSystemInterface.h"
 #include "ECS/Systems/PlayerProfileSystemInterface.h"
 #include "ECS/Systems/PlayerSystemInterface.h"
 #include "ECS/Systems/ProfileFolderSystemInterface.h"
 #include "ECS/Systems/ReactionSystemInterface.h"
-#include "ECS/Systems/SkySystemInterface.h"
+#include "ECS/Systems/SkyClockSystemInterface.h"
 #include "ECS/Systems/TattooEditorSystemInterface.h"
 #include "ECS/Systems/TimeSystemInterface.h"
+#include "ECS/Systems/VideoSystemInterface.h"
 #include "EngineConfig.h"
 #include "FileSystem/FileSystemInterface.h"
-#include "Graphics/DetailLevel.h"
-#include "Graphics/RendererInterface.h"
-#include "Graphics/TexelDepth.h"
 #include "Gui/TextDatabase.h"
 #include "Level.h"
 #include "Locator.h"
@@ -95,6 +96,13 @@
 #include "Physics/Materials.h"
 #include "Resources/Loaders.h"
 #include "Resources/ResourcesInterface.h"
+#include "Sound/AnimEffectTable.h"
+#include "Sound/ClipSounds.h"
+#include "Sound/HelpSpeech.h"
+#include "Sound/SoundRequestInterface.h"
+#include "Visual/DetailLevel.h"
+#include "Visual/RendererRequestsInterface.h"
+#include "Visual/TexelDepth.h"
 #include "Windowing/WindowingInterface.h"
 
 namespace openblack::simulation
@@ -119,6 +127,30 @@ std::optional<size_t> GameFileBytes(const std::filesystem::path& path)
 		// Not found: there is nothing to load
 	}
 	return std::nullopt;
+}
+
+/// The bytes of a raw picture file at half its size, when the lowest detail levels load it so; none otherwise
+std::optional<std::vector<uint8_t>> HalvedAtThisDetail(const std::filesystem::path& path)
+{
+	if (!Locator::config::value().detail.lowResTextures || !low_resolution_textures::HalvedAtLowDetail(path.stem().string()))
+	{
+		return std::nullopt;
+	}
+	return low_resolution_textures::Halve(Locator::filesystem::value().ReadAll(path));
+}
+
+/// Loads a raw picture file into the texture cache, at half its size when the lowest detail levels load it so
+template <typename Id>
+void LoadRawTexture(resources::TextureManager& textures, Id id, const std::filesystem::path& path,
+                    graphics::texel_depth::Depth depth)
+{
+	if (auto halved = HalvedAtThisDetail(path))
+	{
+		textures.Load(id, resources::Texture2DLoader::FromBufferTag {}, ("raw" / path.stem()).string(), std::move(*halved),
+		              depth);
+		return;
+	}
+	textures.Load(id, resources::Texture2DLoader::FromDiskTag {}, path, depth);
 }
 
 /// Registers a resource read from a game file, to be loaded by its cache's loader with these arguments when it is first
@@ -174,6 +206,9 @@ void StartLogs(const std::string& logFile, const LogLevels& levels)
 	// TODO (#749) use std::views::enumerate
 	for (size_t i = 0; const auto& subsystem : k_LoggingSubsystemStrs)
 	{
+		// A logger of this name that an earlier user left in the registry would make the new one fail. A test program
+		// that runs many tests in one process leaves such loggers.
+		spdlog::drop(subsystem.data());
 		auto logger = createLogger(subsystem.data());
 		logger->set_level(levels.at(i));
 		// An error is written out at once, so it is in the file even if the process is then ended from outside, where no
@@ -273,8 +308,7 @@ bool RegisterWorldData(WorldDataViewInterface& view)
 		    fileSystem.Exists(sheet))
 		{
 			// Loaded with its alpha by the game, so both keep four bits a channel
-			textureManager.Load(fmt::format("raw/{}", name), resources::Texture2DLoader::FromDiskTag {}, sheet,
-			                    graphics::texel_depth::Depth::FourBits);
+			LoadRawTexture(textureManager, fmt::format("raw/{}", name), sheet, graphics::texel_depth::Depth::FourBits);
 		}
 	}
 
@@ -352,14 +386,18 @@ bool RegisterWorldData(WorldDataViewInterface& view)
 	}
 
 	view.StartupStep("mesh pack meshes");
+	// The lowest detail levels draw each texture's own low resolution picture, where the pack has one
+	const bool lowTextures = Locator::config::value().detail.lowResTextures;
 	for (const auto& [name, g3dTexture] : pack->GetTextures())
 	{
+		const auto low = pack->GetLowTextures().find(name);
+		const auto* picture = lowTextures && low != pack->GetLowTextures().end() ? &low->second : &g3dTexture;
 		textureManager.Register(
 		    g3dTexture.header.id,
-		    [pack, name] {
-			    return resources::Texture2DLoader {}(resources::Texture2DLoader::FromPackTag {}, name, pack->GetTexture(name));
+		    [pack, name, picture] {
+			    return resources::Texture2DLoader {}(resources::Texture2DLoader::FromPackTag {}, name, *picture);
 		    },
-		    g3dTexture.ddsData.size());
+		    picture->ddsData.size());
 	}
 
 	view.StartupStep("mesh pack textures");
@@ -462,6 +500,31 @@ bool RegisterWorldData(WorldDataViewInterface& view)
 		}
 	});
 
+	// The scripts' cameras and the camera zone files are read with the other resources, not in the turn of the script
+	// that first asks for them
+	if (const auto edits = fileSystem.GetPath<Path::Data>() / "camera.edt"; fileSystem.Exists(edits))
+	{
+		resources.GetCameraEdits().RegisterLoad(camera_edits::k_FileId.value(), 0, resources::CameraEditLoader::FromDiskTag {},
+		                                        edits);
+	}
+	if (const auto zones = fileSystem.GetPath<Path::Data>() / "Zones"; fileSystem.Exists(zones))
+	{
+		auto& zoneManager = resources.GetCameraZones();
+		fileSystem.Iterate(zones, false, [&zoneManager](const std::filesystem::path& f) {
+			if (string_utils::LowerCase(f.extension().string()) == ".exc")
+			{
+				zoneManager.RegisterLoad(camera_zones::FileId(f.filename().string()), 0,
+				                         resources::CameraZoneLoader::FromDiskTag {}, f);
+			}
+		});
+	}
+
+	// The films that the scripts start are read with the other resources too
+	if (Locator::videoSystem::has_value())
+	{
+		Locator::videoSystem::value().RegisterScriptFilms();
+	}
+
 	view.StartupStep("camera paths");
 	// Load loose one-off assets
 	{
@@ -519,6 +582,11 @@ bool RegisterWorldData(WorldDataViewInterface& view)
 		registerMesh(SkyArchetype::k_SunMeshId.value(), fileSystem.GetPath<Path::WeatherSystem>() / "sun.l3d");
 		registerMesh(SkyArchetype::k_MoonMeshId.value(), fileSystem.GetPath<Path::WeatherSystem>() / "moon.l3d");
 		registerMesh(ecs::components::Mist::k_MeshId, fileSystem.GetPath<Path::Landscape>() / "mist.l3d");
+		// The globe of a one-shot miracle and its band. The world measures the globe from its model, for the paths and the
+		// physics, so each computer reads the models with the world, also a computer that draws no frame.
+		using OneOffSpellSeed = ecs::components::OneOffSpellSeed;
+		registerMesh(OneOffSpellSeed::k_MeshId.value(), fileSystem.GetPath<Path::Data>() / OneOffSpellSeed::k_MeshFile);
+		registerMesh(OneOffSpellSeed::k_RingMeshId.value(), fileSystem.GetPath<Path::Data>() / OneOffSpellSeed::k_RingMeshFile);
 
 		using CFromDiskTag = resources::CameraPathLoader::FromDiskTag;
 		camPathManager.Load("cam", CFromDiskTag {}, fileSystem.GetPath<Path::Data>() / "cam.cam");
@@ -599,7 +667,7 @@ bool RegisterWorldData(WorldDataViewInterface& view)
 
 	view.StartupStep("level list");
 	// Load all sound packs in the Audio directory
-	auto& audioManager = Locator::audio::value();
+	auto& audioManager = Locator::sounds::value();
 	fileSystem.Iterate(
 	    fileSystem.GetPath<Path::Audio>(), true, [&audioManager, &soundManager, &fileSystem](const std::filesystem::path& f) {
 		    if (f.extension() != ".sad")
@@ -773,9 +841,11 @@ bool RegisterWorldData(WorldDataViewInterface& view)
 	// The sea's texture, its colours and alpha together
 	try
 	{
+		// The lowest detail levels load the sea's picture at half its size
 		textureManager.Load(sea_texture::k_Id.value(), resources::Texture2DLoader::FromDiskWithAlphaTag {},
 		                    fileSystem.GetPath<Path::Textures>() / sea_texture::k_ColourFile,
-		                    fileSystem.GetPath<Path::Textures>() / sea_texture::k_AlphaFile, sea_texture::k_Side);
+		                    fileSystem.GetPath<Path::Textures>() / sea_texture::k_AlphaFile, sea_texture::k_Side,
+		                    Locator::config::value().detail.lowResTextures);
 	}
 	catch (std::runtime_error& err)
 	{
@@ -811,8 +881,17 @@ bool RegisterWorldData(WorldDataViewInterface& view)
 		SPDLOG_LOGGER_DEBUG(spdlog::get("game"), "Loading raw texture: {}", f.stem().string());
 		try
 		{
-			textureManager.RegisterLoad(fmt::format("raw/{}", f.stem().string()), *bytes,
-			                            resources::Texture2DLoader::FromDiskTag {}, f, graphics::texel_depth::DepthOf(kind));
+			const auto name = fmt::format("raw/{}", f.stem().string());
+			const auto depth = graphics::texel_depth::DepthOf(kind);
+			if (auto halved = HalvedAtThisDetail(f))
+			{
+				textureManager.RegisterLoad(name, halved->size(), resources::Texture2DLoader::FromBufferTag {}, name,
+				                            std::move(*halved), depth);
+			}
+			else
+			{
+				textureManager.RegisterLoad(name, *bytes, resources::Texture2DLoader::FromDiskTag {}, f, depth);
+			}
 		}
 		catch (std::runtime_error& err)
 		{
@@ -833,7 +912,7 @@ bool RegisterWorldData(WorldDataViewInterface& view)
 		try
 		{
 			// The game loads the hair with its alpha, so both keep four bits a channel
-			textureManager.Load(id, resources::Texture2DLoader::FromDiskTag {}, path, graphics::texel_depth::Depth::FourBits);
+			LoadRawTexture(textureManager, id, path, graphics::texel_depth::Depth::FourBits);
 		}
 		catch (std::runtime_error& err)
 		{
@@ -994,8 +1073,11 @@ std::optional<creature_tattoo::Pictures> ReadTattooPictures()
 	if (Locator::resources::value().GetCreatureSkinArt().Contains(creature_skin::k_ArtId))
 	{
 		LoadCreatureSkinArt();
-		// The masks of the player's creature take the new pictures, and every creature is painted again
-		if (const auto creature = Locator::playerSystem::value().GetPrimaryCreature(PlayerNames::PLAYER_ONE))
+		// The masks of the creature of the player at this computer take the new pictures, and every creature is painted
+		// again
+		const auto own =
+		    Locator::handSystem::has_value() ? Locator::handSystem::value().GetOwnPlayer() : PlayerNames::PLAYER_ONE;
+		if (const auto creature = Locator::playerSystem::value().GetPrimaryCreature(own))
 		{
 			Locator::creatureSkinSystem::value().RemakeTattooMasks(*creature, creature_tattoo::Sheet::OwnPictures);
 		}
@@ -1021,7 +1103,7 @@ ProfileMenu ProfileMenuSettings()
 		settings.symbol = profile->symbol;
 		gui::TakeProfileSettings(settings, profile->settings);
 	}
-	auto& audio = Locator::audio::value();
+	auto& audio = Locator::sounds::value();
 	settings.sfxVolume = audio.GetSfxVolume();
 	settings.musicVolume = audio.GetMusicVolume();
 	const auto& config = Locator::config::value();
@@ -1049,12 +1131,24 @@ void ApplyPlayerSettings(const player_profiles::Settings& settings)
 	}
 }
 
+void PrepareLandMaps()
+{
+	if (Locator::creatureLocomotionSystem::has_value())
+	{
+		[[maybe_unused]] const auto& land = Locator::creatureLocomotionSystem::value().GetWalkableLand();
+	}
+	if (Locator::creatureFightSystem::has_value())
+	{
+		Locator::creatureFightSystem::value().PrepareLand();
+	}
+}
+
 void PrepareNetworkLand(uint32_t seed)
 {
 	Locator::entitiesRegistry::value().SetFreshIdsAtNextReset();
-	if (Locator::particleSystem::has_value())
+	if (Locator::particleRuleSystem::has_value())
 	{
-		Locator::particleSystem::value().SetFreshIdsAtNextReset();
+		Locator::particleRuleSystem::value().SetFreshIdsAtNextReset();
 	}
 	if (Locator::reactionSystem::has_value())
 	{
@@ -1067,6 +1161,23 @@ void PrepareNetworkLand(uint32_t seed)
 	Locator::rng::value().SetRunSeed(seed);
 }
 
+std::optional<std::string_view> ApplySoakTools(const developer_tools::SoakTools& tools)
+{
+	if (const auto refusal = developer_tools::SoakRefusalOf(developer_tools::k_Built, tools); refusal.has_value())
+	{
+		return refusal;
+	}
+	if (Locator::landSystem::has_value())
+	{
+		Locator::landSystem::value().SetAllComputerGods(tools.allComputerGods);
+	}
+	if (Locator::computerPlayerSystem::has_value())
+	{
+		Locator::computerPlayerSystem::value().SetAiSeed(tools.aiSeed);
+	}
+	return std::nullopt;
+}
+
 void LoadEveryResource()
 {
 	auto& loading = Locator::resources::value();
@@ -1075,7 +1186,7 @@ void LoadEveryResource()
 	{
 		loading.UpdateLoading(k_LoadingScreenLoadBudget, k_FrameUploads);
 		// The graphics card takes what the loading made, as on the loading screen
-		Locator::rendererInterface::value().Frame();
+		Locator::rendererRequests::value().Frame();
 	}
 	SPDLOG_LOGGER_INFO(spdlog::get("game"), "Every resource loaded in {:.0f} ms",
 	                   std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - loadStart).count());
@@ -1091,18 +1202,11 @@ void BeginPlay(bool continued, bool loadAllFirst, PlayStartViewInterface& view)
 	// A saved game keeps its own time of day
 	if (!continued)
 	{
-		Locator::skySystem::value().SetTime(Locator::config::value().timeOfDay);
+		Locator::skyClockSystem::value().SetTime(Locator::config::value().timeOfDay);
 	}
 	Locator::time::value().Start();
 
 	view.StartPlayView();
-
-	// The models of the miracles' globes come with the world: the physics of a thrown globe needs them, also on a computer
-	// that draws no frame
-	if (Locator::miracleFxSystem::has_value())
-	{
-		Locator::miracleFxSystem::value().LoadMeshes();
-	}
 
 	// A simulation run with a fixed frame time loads every resource before its first frame. A thing that waits for its
 	// picture or its model then starts after the same frames each run, at any speed.

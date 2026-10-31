@@ -25,6 +25,7 @@
 #include "3D/LandIslandInterface.h"
 #include "3D/MapCoords.h"
 #include "Animals/GrazerRules.h"
+#include "Animals/HunterRules.h"
 #include "Camera/Camera.h"
 #include "Camera/StartCamera.h"
 #include "Camera/ZoomToPlaces.h"
@@ -61,31 +62,34 @@
 #include "ECS/ComputerPlayerStart.h"
 #include "ECS/CreatureFromFile.h"
 #include "ECS/FootpathRules.h"
+#include "ECS/GamePlayers.h"
+#include "ECS/PlayerTowns.h"
 #include "ECS/Registry.h"
-#include "ECS/ScriptFind.h"
 #include "ECS/Systems/AnimalSystemInterface.h"
 #include "ECS/Systems/ArtefactSystemInterface.h"
 #include "ECS/Systems/ComputerPlayerSystemInterface.h"
 #include "ECS/Systems/FireflySystemInterface.h"
 #include "ECS/Systems/FootpathSystemInterface.h"
 #include "ECS/Systems/ForestSystemInterface.h"
+#include "ECS/Systems/HandSystemInterface.h"
 #include "ECS/Systems/LandSystemInterface.h"
 #include "ECS/Systems/MagicSystemInterface.h"
 #include "ECS/Systems/PlayerSystemInterface.h"
 #include "ECS/Systems/ReactionSystemInterface.h"
-#include "ECS/Systems/SkySystemInterface.h"
+#include "ECS/Systems/SkyClockSystemInterface.h"
 #include "ECS/Systems/SpellIconSystemInterface.h"
 #include "ECS/Systems/TownDesireSystemInterface.h"
 #include "ECS/Systems/TownSystemInterface.h"
 #include "ECS/Systems/VillageTotemSystemInterface.h"
 #include "ECS/Systems/WeatherSystemInterface.h"
+#include "ECS/Systems/WorkshopSystemInterface.h"
 #include "ECS/Systems/WorshipSiteSystemInterface.h"
 #include "ECS/TownAreaRules.h"
 #include "ECS/TownDesire.h"
 #include "ECS/VillageTotem.h"
 #include "ECS/WorldObjects.h"
 #include "FileSystem/FileSystemInterface.h"
-#include "Game.h"
+#include "Hand/HandStart.h"
 #include "InfoConstants.h"
 #include "Locator.h"
 #include "Magic/MagicTables.h"
@@ -135,14 +139,38 @@ std::tuple<Tribe, VillagerNumber> GetVillagerTribeAndNumber(const std::string& v
 	}
 }
 
-/// The player a land's script names, in any case; a name that is no player's is the neutral player
+/// The player a land's script names, in any case; a name that is no player's is the neutral player. A god after the
+/// seventh is PLAYER_ and its number.
 PlayerNames GetPlayerName(const std::string& name)
 {
-	if (const auto player = k_PlayerLookup.find(string_utils::UpperCase(name)); player != k_PlayerLookup.end())
+	const auto upper = string_utils::UpperCase(name);
+	if (const auto player = k_PlayerLookup.find(upper); player != k_PlayerLookup.end())
 	{
 		return player->second;
 	}
-	return PlayerNames::NEUTRAL;
+	return player_slots::PlayerOfScriptName(upper).value_or(PlayerNames::NEUTRAL);
+}
+
+/// The hands and the camera of the owner of a citadel start at the citadel when the script makes it. The citadel is at
+/// the exact map position that the script gives, at the height of the land there.
+void StartHandsAtCitadel(const ScriptCommandParameters& parameters)
+{
+	if (parameters.size() < 3 || !Locator::handSystem::has_value() || !Locator::terrainSystem::has_value())
+	{
+		return;
+	}
+	auto place = parameters[0].GetMapPlace();
+	if (!place.has_value())
+	{
+		float x = 0.0f;
+		float y = 0.0f;
+		float z = 0.0f;
+		parameters[0].GetVector(x, y, z);
+		place = map_coords::MapCoords {.x = map_coords::ToFixed(x), .z = map_coords::ToFixed(z), .altitude = 0.0f};
+	}
+	const float ground = Locator::terrainSystem::value().GetAltitude(place->x, place->z);
+	Locator::handSystem::value().StartAtCitadel(GetPlayerName(parameters[2].GetString()),
+	                                            hand_start::AtCitadel(*place, ground));
 }
 
 /// The object the land's script made last
@@ -163,23 +191,11 @@ entt::entity TownWithId(int32_t townId)
 	return town != towns.end() ? town->second : entt::null;
 }
 
-/// The nearest town to a place however far, by the game's measure of distance across the land, the towns taken in the
-/// order they were made and the first met winning a tie
+/// The nearest town to a place however far, by the game's measure of distance across the land. The towns go in the
+/// order of the game's list of all the towns, and the first met wins a tie.
 entt::entity NearestTownAnywhere(const glm::vec3& position)
 {
-	const auto& registry = Locator::entitiesRegistry::value();
-	std::vector<std::pair<uint32_t, ecs::script_find::Candidate>> towns;
-	registry.Each<const Town, const Transform>([&towns](entt::entity entity, const Town& town, const Transform& transform) {
-		towns.emplace_back(
-		    town.id, ecs::script_find::Candidate {.entity = entity,
-		                                          .at = map_coords::FromMetres({transform.position.x, transform.position.z})});
-	});
-	std::ranges::sort(towns, {}, &std::pair<uint32_t, ecs::script_find::Candidate>::first);
-	std::vector<ecs::script_find::Candidate> ordered;
-	ordered.reserve(towns.size());
-	std::ranges::transform(towns, std::back_inserter(ordered), [](const auto& town) { return town.second; });
-	return ecs::script_find::FindNearestTown(map_coords::FromMetres({position.x, position.z}),
-	                                         std::numeric_limits<float>::infinity(), ordered);
+	return ecs::player_towns::NearestOfAll(Locator::entitiesRegistry::value(), {position.x, position.z});
 }
 } // namespace
 
@@ -204,7 +220,12 @@ const std::array<const ScriptCommandSignature, 106> FeatureScriptCommands::k_Sig
     CREATE_COMMAND_BINDING("CREATE_TOWN_VILLAGER", CreateTownVillager),
     CREATE_COMMAND_BINDING("CREATE_SPECIAL_TOWN_VILLAGER", CreateSpecialTownVillager),
     CREATE_COMMAND_BINDING("CREATE_VILLAGER_POS", CreateVillagerPos),
-    CREATE_COMMAND_BINDING("CREATE_CITADEL", CreateCitadel),
+    {{"CREATE_CITADEL"},
+     [](const ScriptCommandParameters& ctx) {
+	     InvokeCallableFromContext(ctx, std::function(CreateCitadel));
+	     StartHandsAtCitadel(ctx);
+     },
+     GetScriptCommandParameters(CreateCitadel)},
     CREATE_COMMAND_BINDING("CREATE_PLANNED_CITADEL", CreatePlannedCitadel),
     CREATE_COMMAND_BINDING("CREATE_CREATURE_PEN", CreateCreaturePen),
     CREATE_COMMAND_BINDING("CREATE_WORSHIP_SITE", CreateWorshipSite),
@@ -358,7 +379,6 @@ void FeatureScriptCommands::SetTownBelief(int32_t townId, const std::string& pla
 
 void FeatureScriptCommands::SetTownBeliefCap(int32_t townId, const std::string& playerOwner, float belief)
 {
-	// TODO(town-ownership): in a multiplayer game the cap of a player in a town of one tribe is raised to 2 on one map
 	auto& registry = Locator::entitiesRegistry::value();
 	// A town the land never made has no cap to set
 	const auto& towns = registry.Context().towns;
@@ -370,11 +390,18 @@ void FeatureScriptCommands::SetTownBeliefCap(int32_t townId, const std::string& 
 	const auto town = found->second;
 	auto& impression =
 	    registry.AnyOf<TownImpression>(town) ? registry.Get<TownImpression>(town) : registry.Assign<TownImpression>(town);
-	const auto player = static_cast<size_t>(GetPlayerName(playerOwner));
-	if (player < impression.belief.cap.size())
+	const auto playerName = GetPlayerName(playerOwner);
+	const auto player = static_cast<size_t>(playerName);
+	if (player >= impression.belief.cap.size())
 	{
-		impression.belief.cap.at(player) = belief;
+		return;
 	}
+	// In a network game, the map for three gods gives a higher cap in its town with the number 3
+	const bool networkGame = Locator::landSystem::has_value() && Locator::landSystem::value().RunsNetworkMapScript();
+	const auto landName =
+	    Locator::landSystem::has_value() ? Locator::landSystem::value().GetLandPath().stem().string() : std::string {};
+	impression.belief.cap.at(player) =
+	    magic::town_belief::CapFromLandScript(belief, networkGame, landName, static_cast<uint32_t>(townId), playerName);
 }
 
 void FeatureScriptCommands::SetTownUninhabitable(int32_t townId)
@@ -610,7 +637,8 @@ void FeatureScriptCommands::CreateNewAnimal(glm::vec3 position, int32_t type, in
 		return;
 	}
 	// The type is the row of the animals' table; the animal joins the latest flock made with the number, or is a flock
-	// of its own when there is none. A grazer belongs to the town with the number, if any; a bird never belongs to one.
+	// of its own when there is none. A grazer belongs to the town with the number, if any; a bird or a hunter never
+	// belongs to one.
 	auto& animals = Locator::animalSystem::value();
 	const auto kind = static_cast<AnimalInfo>(type);
 	const auto xz = glm::vec2(position.x, position.z);
@@ -621,6 +649,14 @@ void FeatureScriptCommands::CreateNewAnimal(glm::vec3 position, int32_t type, in
 		LastObject() = animals.CreateGrazer(kind, xz, years, flock, TownWithId(townId));
 		return;
 	}
+	if (animals::hunters::IsWildHunter(kind))
+	{
+		if (const auto hunter = animals.CreateHunter(kind, xz, years, flock); hunter != entt::null)
+		{
+			LastObject() = hunter;
+		}
+		return;
+	}
 	const auto bird = animals.CreateBird(kind, xz, years, flock);
 	if (bird != entt::null)
 	{
@@ -628,7 +664,6 @@ void FeatureScriptCommands::CreateNewAnimal(glm::vec3 position, int32_t type, in
 	}
 	else
 	{
-		// TODO(land-animals): the hunters (lions, tigers, leopards, wolves), which openblack doesn't make yet
 		SPDLOG_LOGGER_DEBUG(spdlog::get("scripting"), "LHScriptX: animal kind {} isn't made yet", type);
 	}
 }
@@ -776,10 +811,21 @@ void FeatureScriptCommands::CreateMobileUStatic(glm::vec3 position, MobileStatic
 	LastObject() = MobileStaticArchetype::Create(onLand, type, verticalOffset, xRotation, yRotation, zRotation, scale);
 }
 
-void FeatureScriptCommands::CreateScaffold(int32_t, [[maybe_unused]] glm::vec3 position, int32_t, int32_t, int32_t)
+void FeatureScriptCommands::CreateScaffold(int32_t townId, glm::vec3 position, [[maybe_unused]] int32_t type, int32_t rotation,
+                                           int32_t size)
 {
-	// SPDLOG_LOGGER_ERROR(spdlog::get("scripting"), "LHScriptX: {}:{}: Function {} not implemented.", __FILE__, __LINE__,
-	// __func__);
+	// The scaffolds have one row in the info table. A scaffold that a script makes has no workshop.
+	if (!Locator::workshopSystem::has_value())
+	{
+		return;
+	}
+	glm::vec3 onLand = position;
+	if (Locator::terrainSystem::has_value())
+	{
+		onLand.y = Locator::terrainSystem::value().GetHeightAt({position.x, position.z});
+	}
+	LastObject() = Locator::workshopSystem::value().CreateScaffold(
+	    onLand, TownWithId(townId), entt::null, static_cast<float>(rotation) * 0.001f, static_cast<float>(size) * 0.001f);
 }
 
 void FeatureScriptCommands::CountryChange([[maybe_unused]] glm::vec3 position, int32_t)
@@ -803,12 +849,13 @@ void FeatureScriptCommands::CreateCreature(glm::vec3 position, int32_t param2, i
 void FeatureScriptCommands::CreateCreatureFromFile(const std::string& playerName, CreatureType creatureType,
                                                    const std::string& creatureMind, glm::vec3 position)
 {
-	// The name of a player that is not in the game gives the neutral player. The creature then belongs to the neutral
-	// player, as a creature that the challenge scripts load from a file does.
-	auto player = GetPlayerName(playerName);
-	if (!ecs::creature_from_file::PlayerInGame(player))
+	// Every god slot has a player from the start of the game, so the creature belongs to the god that the script names.
+	// This is also true in a network game, where the humans join after the land loads. A name that is no slot's gives
+	// the neutral player.
+	const auto player = GetPlayerName(playerName);
+	if (player != PlayerNames::NEUTRAL && Locator::playerSystem::has_value())
 	{
-		player = PlayerNames::NEUTRAL;
+		Locator::playerSystem::value().EnsurePlayer(player);
 	}
 	ecs::creature_from_file::Make({.owner = player,
 	                               .speciesRow = static_cast<uint32_t>(creatureType),
@@ -888,7 +935,7 @@ void FeatureScriptCommands::CreateInfluenceRing(glm::vec3 position, int32_t play
 {
 	// A ring of influence that stays at the place, for the player of the number, as a script makes one. A last value
 	// other than 0 makes it an anti-influence: the player then has no influence at all within it.
-	if (player < 0 || player >= static_cast<int32_t>(PlayerNames::_COUNT))
+	if (player < 0 || static_cast<size_t>(player) >= ecs::game_players::Count())
 	{
 		return;
 	}
@@ -1278,16 +1325,18 @@ void FeatureScriptCommands::SetTownBalanceBeliefScale([[maybe_unused]] int32_t t
 	// __func__);
 }
 
-void FeatureScriptCommands::StartGameMessage([[maybe_unused]] const std::string& message, [[maybe_unused]] int32_t landNumber)
+void FeatureScriptCommands::StartGameMessage(const std::string& message, int32_t landNumber)
 {
-	// SPDLOG_LOGGER_ERROR(spdlog::get("scripting"), "LHScriptX: {}:{}: Function {} not implemented.", __FILE__, __LINE__,
-	// __func__);
+	// The land information box shows with this title and an empty list
+	Locator::landSystem::value().ShowLandMessage(
+	    {.kind = land_message::Message::Kind::Start, .text = message, .number = landNumber});
 }
 
-void FeatureScriptCommands::AddGameMessageLine([[maybe_unused]] const std::string& message, [[maybe_unused]] int32_t landNumber)
+void FeatureScriptCommands::AddGameMessageLine(const std::string& message, int32_t landNumber)
 {
-	// SPDLOG_LOGGER_ERROR(spdlog::get("scripting"), "LHScriptX: {}:{}: Function {} not implemented.", __FILE__, __LINE__,
-	// __func__);
+	// The list of the land information box gets the line at its end
+	Locator::landSystem::value().ShowLandMessage(
+	    {.kind = land_message::Message::Kind::AddLine, .text = message, .number = landNumber});
 }
 
 void FeatureScriptCommands::EditLevel()
@@ -1298,7 +1347,7 @@ void FeatureScriptCommands::EditLevel()
 
 void FeatureScriptCommands::SetNighttime(float duration, float night, float change)
 {
-	Locator::skySystem::value().GetClock().SetCycleFromLand(duration, night, change);
+	Locator::skyClockSystem::value().GetClock().SetCycleFromLand(duration, night, change);
 }
 
 void FeatureScriptCommands::MakeLastObjectArtifact(int32_t townId, const std::string& player, float worth)

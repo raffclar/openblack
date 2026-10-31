@@ -27,10 +27,9 @@
 #include "3D/LandIslandInterface.h"
 #include "3D/MapCoords.h"
 #include "3D/WaterRings.h"
-#include "Audio/AudioManagerInterface.h"
-#include "Audio/Sound.h"
 #include "Camera/Camera.h"
 #include "Common/GameRandom.h"
+#include "ECS/Archetypes/Utils.h"
 #include "ECS/Components/Creature.h"
 #include "ECS/Components/Field.h"
 #include "ECS/Components/Fire.h"
@@ -44,7 +43,7 @@
 #include "ECS/Registry.h"
 #include "ECS/Systems/ExplosionSystemInterface.h"
 #include "ECS/Systems/FireSystemInterface.h"
-#include "ECS/Systems/ParticleSystemInterface.h"
+#include "ECS/Systems/ParticleRuleSystemInterface.h"
 #include "ECS/Systems/TimeSystemInterface.h"
 #include "ECS/Systems/WaterRingSystemInterface.h"
 #include "ECS/WorldObjects.h"
@@ -53,6 +52,8 @@
 #include "Magic/MagicTables.h"
 #include "Particles/ParticleBlast.h"
 #include "Resources/ResourcesInterface.h"
+#include "Sound/SoundId.h"
+#include "Sound/SoundRequestInterface.h"
 
 using namespace openblack;
 using namespace openblack::ecs::components;
@@ -83,6 +84,8 @@ std::optional<entt::entity> GameObjectEffects::AttachFireBall(glm::vec3 position
 	auto& registry = Entities();
 	const auto row = magic::FireBallInfoRow(powerUpLevel);
 	const auto ball = registry.Create();
+	// It takes its place in the order of the things made
+	openblack::ecs::archetypes::TakeThingMadePlace();
 	registry.Assign<Transform>(ball, position, glm::mat3(1.0f), glm::vec3(1.0f));
 	registry.Assign<MagicFireBall>(ball, MagicFireBall {
 	                                         .strength = strength,
@@ -129,18 +132,18 @@ GameObjectEffects::FireBallState GameObjectEffects::FollowFireBall(entt::entity 
 
 uint32_t GameObjectEffects::StartSpotVisual(SpotVisualType type, glm::vec3 position, float magnitude, int turns)
 {
-	if (!Locator::particleSystem::has_value())
+	if (!Locator::particleRuleSystem::has_value())
 	{
-		return ParticleSystemInterface::k_NoEffect;
+		return ParticleRuleSystemInterface::k_NoEffect;
 	}
-	return Locator::particleSystem::value().StartSpotVisual(type, position, turns, entt::null, magnitude);
+	return Locator::particleRuleSystem::value().StartSpotVisual(type, position, turns, entt::null, magnitude);
 }
 
 void GameObjectEffects::CloseSpotVisual(uint32_t id)
 {
-	if (Locator::particleSystem::has_value())
+	if (Locator::particleRuleSystem::has_value())
 	{
-		Locator::particleSystem::value().CloseDown(id);
+		Locator::particleRuleSystem::value().CloseDown(id);
 	}
 }
 
@@ -216,15 +219,23 @@ bool GameObjectEffects::IsCreature(entt::entity object) const
 void GameObjectEffects::ExplodeObject(entt::entity object, glm::vec3 origin, float speed)
 {
 	const auto& registry = Entities();
-	const auto* mesh = registry.TryGet<const Mesh>(object);
 	const auto* transform = registry.TryGet<const Transform>(object);
-	if (mesh == nullptr || transform == nullptr)
+	if (transform == nullptr)
 	{
 		return;
 	}
 	auto matrix = glm::translate(glm::mat4(1.0f), transform->position) * glm::mat4(transform->rotation);
 	matrix = glm::scale(matrix, transform->scale);
-	ExplodeMesh(mesh->id, matrix, origin, speed);
+	if (const auto* globe = registry.TryGet<const OneOffSpellSeed>(object))
+	{
+		// A one-shot globe breaks up its dome, turned as the last frame drew it
+		ExplodeMesh(OneOffSpellSeed::k_MeshId, globe->drawnModel.value_or(matrix), origin, speed);
+		return;
+	}
+	if (const auto* mesh = registry.TryGet<const Mesh>(object))
+	{
+		ExplodeMesh(mesh->id, matrix, origin, speed);
+	}
 }
 
 void GameObjectEffects::ExplodeMesh(entt::id_type mesh, const glm::mat4& transform, glm::vec3 origin, float speed)

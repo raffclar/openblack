@@ -19,8 +19,8 @@ using namespace openblack::ecs::systems;
 
 void WaterRingSystem::SaveState(reflection::BinaryWriter& out) const
 {
-	reflection::Save(out, _rings);
-	reflection::Save(out, _pace);
+	reflection::SavePresentation(out, _rings);
+	reflection::SavePresentation(out, _pace);
 }
 
 bool WaterRingSystem::LoadState(reflection::BinaryReader& in)

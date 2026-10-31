@@ -12,12 +12,13 @@
 #include <glm/mat3x3.hpp>
 #include <glm/vec3.hpp>
 
-#include "Audio/Sound.h"
 #include "ECS/Components/SoundTag.h"
 #include "ECS/Components/Transform.h"
 #include "ECS/Components/Vortex.h"
 #include "ECS/Registry.h"
 #include "Locator.h"
+#include "Sound/SoundId.h"
+#include "Utils.h"
 
 using namespace openblack;
 using namespace openblack::ecs::archetypes;
@@ -27,6 +28,8 @@ entt::entity VortexArchetype::Create(const glm::vec3& centre, VortexType type, V
 {
 	auto& registry = Locator::entitiesRegistry::value();
 	const auto entity = registry.Create();
+	// It takes its place in the order of the things made
+	TakeThingMadePlace();
 	registry.Assign<Transform>(entity, centre, glm::mat3(1.0f), glm::vec3(1.0f));
 	registry.Assign<Vortex>(entity, Vortex {.type = type, .state = state, .stateStartTurn = turn, .centre = centre});
 	// The volcano's mouth rumbles for as long as it is there

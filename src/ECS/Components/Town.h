@@ -19,6 +19,7 @@
 #include <glm/vec2.hpp>
 
 #include "Enums.h"
+#include "PlayerSlots.h"
 
 namespace openblack::ecs::components
 {
@@ -42,10 +43,14 @@ struct Town
 	std::vector<entt::entity> abodes;
 	/// When its player gained it, against the player's other towns: earlier gained, smaller
 	uint32_t gained {0};
+	/// When the game made it, against the other towns: earlier made, smaller. A new player does not change it.
+	uint32_t made {0};
+	/// It counted once as a new town of its player: it had a storage pit, a town centre and a house, all built
+	bool countedAsNew {false};
 	/// How many of its people are hurt, their life under seven tenths
 	uint32_t injured {0};
 	/// What its people's deaths came to, by the player put down for each (by player number) and what killed them
-	std::array<std::array<float, static_cast<size_t>(DeathReason::_COUNT)>, 8> deathsByKiller {};
+	std::array<std::array<float, static_cast<size_t>(DeathReason::_COUNT)>, player_slots::k_PlayerNumbers> deathsByKiller {};
 	/// The forest of the lone trees about it, made as the land is laid out; a tree replanted near the town joins it
 	std::optional<uint32_t> scenicForest;
 	/// Where its scenic forest was made: the town's centre then
@@ -79,6 +84,8 @@ struct Town
 	bool desiresChangedLastTurn {false};
 	/// The buildings it plans to build later (houses, civic buildings, its player's temple), in the order it planned them
 	std::vector<entt::entity> planned;
+	/// The building sites that it opened so far, which numbers each new one
+	uint32_t sitesOpened {0};
 	/// The game turn one of its villagers last asked it to start a planned building: it is asked at most once a turn
 	std::optional<uint32_t> askedToBuildTurn;
 	/// The turns left before the town becomes empty, counted down from the time its last person left; 0 when no

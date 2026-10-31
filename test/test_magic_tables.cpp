@@ -122,12 +122,15 @@ TEST(MagicTables, effectGetters)
 	auto& storm = info->magicEffect[16];
 	storm.timerWhenPlayerCasting = 40.0f;
 	storm.timerWhenCreatureCasting = 20.0f;
+	storm.timerWhenComputerPlayerCasting = 30.0f;
 	storm.costToCreate = 3500.0f;
 	storm.agressiveRangeMin = 10.0f;
 	storm.agressiveRangeMax = 50.0f;
 	info->magicStormAndTornado[0].isCreatureCastFromAbove = 1;
 	EXPECT_FLOAT_EQ(GetTimerWhenPlayerCasting(*info, MagicType::StormWindRain), 40.0f);
 	EXPECT_FLOAT_EQ(GetTimerWhenCreatureCasting(*info, MagicType::StormWindRain), 20.0f);
+	// A computer god's cast has its own timer, not the person's
+	EXPECT_FLOAT_EQ(GetTimerWhenComputerPlayerCasting(*info, MagicType::StormWindRain), 30.0f);
 	EXPECT_FLOAT_EQ(GetChantsRequiredToCreate(*info, MagicType::StormWindRain), 3500.0f);
 	EXPECT_TRUE(IsCreatureCastFromAbove(*info, MagicType::StormWindRain));
 	EXPECT_FALSE(IsCreatureCastFromAbove(*info, MagicType::Tornado));
@@ -230,4 +233,46 @@ TEST(MagicTables, seedLookups)
 	EXPECT_EQ(GetPowerUpLevel(*info, MagicType::FireballPowerUpOne), 0);
 	EXPECT_EQ(GetPowerUpLevel(*info, MagicType::HealPowerUpOne), 0);
 	EXPECT_EQ(GetPowerUpLevel(*info, MagicType::Tornado), k_BasePowerUpLevel);
+}
+
+TEST(MagicTables, magicRecordsTakeTheirSeedGestureAndPowerUpFromTheSeeds)
+{
+	auto info = MakeTables();
+	// The file keeps no seed, no gesture and no power-up in each magic record
+	for (size_t i = 0; i < k_MagicTypeCount; ++i)
+	{
+		auto& record = detail::SectionRecord(*info, SlotOf(static_cast<MagicType>(i)));
+		record.spellSeedType = SpellSeedType::None;
+		record.gestureType = GestureType::None;
+		record.powerupType = static_cast<PowerUpType>(k_BasePowerUpLevel);
+	}
+	MakeFireSeed(*info);
+	auto& lightning = info->spellSeed.at(static_cast<size_t>(SpellSeedType::LightningBolt));
+	lightning.magicTypes = {MagicType::LightningBolt, MagicType::LightningBoltPowerUpOne, MagicType::LightningBoltPowerUpTwo,
+	                        MagicType::None};
+	lightning.powerUpGestures = {GestureType::InverseSpiral, GestureType::Spiral, GestureType::None};
+	// A seed that does not exist still gives its seed to the magic type
+	auto& hungry = info->spellSeed.at(static_cast<size_t>(SpellSeedType::CreatureSpellHungry));
+	hungry.magicTypes = {MagicType::CreatureSpellHungry, MagicType::None, MagicType::None, MagicType::None};
+	hungry.exists = 0;
+
+	FillMagicRecordsFromSeeds(*info);
+
+	for (const auto type : {MagicType::LightningBolt, MagicType::LightningBoltPowerUpOne, MagicType::LightningBoltPowerUpTwo})
+	{
+		EXPECT_EQ(GetMagicInfo(*info, type).spellSeedType, SpellSeedType::LightningBolt);
+	}
+	EXPECT_EQ(GetMagicInfo(*info, MagicType::Fireball).spellSeedType, SpellSeedType::Fire);
+	EXPECT_EQ(GetMagicInfo(*info, MagicType::CreatureSpellHungry).spellSeedType, SpellSeedType::CreatureSpellHungry);
+	EXPECT_EQ(GetMagicInfo(*info, MagicType::Tornado).spellSeedType, SpellSeedType::None);
+	EXPECT_EQ(GetMagicInfo(*info, MagicType::None).spellSeedType, SpellSeedType::None);
+
+	// A plain miracle keeps no gesture and no power-up
+	EXPECT_EQ(GetMagicInfo(*info, MagicType::LightningBolt).gestureType, GestureType::None);
+	EXPECT_EQ(static_cast<int>(GetMagicInfo(*info, MagicType::LightningBolt).powerupType), k_BasePowerUpLevel);
+	// A power-up takes the gesture that powers up the seed to it, and its level
+	EXPECT_EQ(GetMagicInfo(*info, MagicType::FireballPowerUpOne).gestureType, GestureType::InverseSpiral);
+	EXPECT_EQ(GetMagicInfo(*info, MagicType::FireballPowerUpOne).powerupType, PowerUpType::One);
+	EXPECT_EQ(GetMagicInfo(*info, MagicType::LightningBoltPowerUpTwo).gestureType, GestureType::Spiral);
+	EXPECT_EQ(GetMagicInfo(*info, MagicType::LightningBoltPowerUpTwo).powerupType, PowerUpType::Two);
 }

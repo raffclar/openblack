@@ -32,7 +32,11 @@ using Look = BigButton::Look;
 using LabelSide = BigButton::LabelSide;
 using Layout = StaticText::Layout;
 constexpr auto k_Big = DialogPainter::k_BigTextSize;
-constexpr auto k_Mid = DialogPainter::k_MidTextSize;
+/// The middle text size for the language of the install
+[[nodiscard]] int Mid()
+{
+	return DialogPainter::MidTextSize();
+}
 
 // Dialogs and message boxes: fading in when shown and out when hidden
 constexpr float k_FadeInSeconds = 0.5f;
@@ -178,32 +182,6 @@ std::optional<std::pair<int, bool>> MouseCell(Mouse mouse)
 }
 } // namespace
 
-openblack::player_profiles::Settings openblack::gui::ToProfileSettings(const MenuSettings& settings)
-{
-	return {.toolTips = settings.toolTips,
-	        .storyText = settings.storyText,
-	        .helpLevel = settings.helpLevel,
-	        .creatureHelp = settings.creatureHelp,
-	        .readSpeed = settings.readSpeed,
-	        .textFromBottom = settings.textFromBottom,
-	        .leftHanded = settings.leftHandedHand,
-	        .pushScrolling = settings.pushScrolling,
-	        .autoSave = settings.autoSave};
-}
-
-void openblack::gui::TakeProfileSettings(MenuSettings& settings, const openblack::player_profiles::Settings& kept)
-{
-	settings.toolTips = kept.toolTips;
-	settings.storyText = kept.storyText;
-	settings.helpLevel = kept.helpLevel;
-	settings.creatureHelp = kept.creatureHelp;
-	settings.readSpeed = kept.readSpeed;
-	settings.textFromBottom = kept.textFromBottom;
-	settings.leftHandedHand = kept.leftHanded;
-	settings.pushScrolling = kept.pushScrolling;
-	settings.autoSave = kept.autoSave;
-}
-
 GameMenu::GameMenu(const TextDatabase& texts, const GameFont& font, std::u16string_view playerName, MenuSettings settings)
     : _texts(texts)
     , _font(font)
@@ -221,9 +199,11 @@ GameMenu::GameMenu(const TextDatabase& texts, const GameFont& font, std::u16stri
     , _newGameQuestion(texts.Get("HELP_TEXT_DIALOG_ADDITION_20"))
     , _quitQuestion(texts.Get("HELP_TEXT_DIALOG_QUIT_QUESTION"))
     , _quitGameQuestion(texts.Get("HELP_TEXT_DIALOG_AREYOUSUREQUIT"))
+    , _leaveSkirmishQuestion(texts.Get("HELP_TEXT_DIALOG_ADDITION_167"))
     , _videoChange(texts.Get("HELP_TEXT_DIALOG_VIDEOCHANGE"))
     , _settings(std::move(settings))
     , _exitOnlineLabel(texts.Get("HELP_TEXT_FRONT_END_03"))
+    , _leaveSkirmishLabel(texts.Get("HELP_TEXT_DIALOG_ADDITION_170"))
     , _multiplayerTab(texts.Get("HELP_TEXT_MULTIPLAYER_MAIN_TAB"))
     , _mainMenuTab(texts.Get("HELP_TEXT_DIALOG_ADDITION_88"))
     , _worldRoomTab(texts.Get("HELP_TEXT_ROOM_WORLD_TITLE"))
@@ -310,7 +290,16 @@ void GameMenu::BuildMain(const TextDatabase& texts)
 	// (HELP_TEXT_FRONT_END_03) during a network game (SetNetworkGame).
 	const std::array<std::pair<const char*, std::function<void()>>, k_ButtonCount> buttons = {{
 	    {"HELP_TEXT_DIALOG_CONTINUEGAME", [this] { Settle(Action::Continue); }},
-	    {"HELP_TEXT_DIALOG_ADDITION_169", [this] { Settle(Action::StartSkirmish); }},
+	    {"HELP_TEXT_DIALOG_ADDITION_169",
+	     [this] {
+		     // In a skirmish the menu asks first. Out of a skirmish the game ends at once.
+		     if (_skirmish)
+		     {
+			     Ask(_leaveSkirmishQuestion, Action::LeaveSkirmish);
+			     return;
+		     }
+		     Settle(Action::StartSkirmish);
+	     }},
 	    {"HELP_TEXT_DIALOG_JOINGONLINE", [this] { Settle(_networkGame ? Action::ExitOnlineGame : Action::JoinOnline); }},
 	    {"HELP_TEXT_DIALOG_OPTIONS", [this] { ShowPage(Page::Options); }},
 	    {"HELP_TEXT_DIALOG_QUIT", [this] { Ask(_quitQuestion, Action::Quit); }},
@@ -352,7 +341,7 @@ void GameMenu::BuildOptions(const TextDatabase& texts)
 	// computer keep the choice. The selector steps through as many levels as those settings say.
 	auto& detail = page.Add<Button>(
 	    DialogRect {.min = {k_SelectorLeft, 350}, .max = {k_SelectorLeft + k_SelectorWidth, 350 + k_SelectorHeight}},
-	    _detailLabels.at(static_cast<size_t>(_settings.detail)), k_Mid);
+	    _detailLabels.at(static_cast<size_t>(_settings.detail)), Mid());
 	const auto stepDetail = [this, &detail](int step) {
 		const auto count = _settings.detailLevels;
 		_settings.detail = (_settings.detail + step + count) % count;
@@ -410,7 +399,7 @@ void GameMenu::BuildPlayers(const TextDatabase& texts)
 	                     std::u16string(texts.Get("HELP_TEXT_DIALOG_SELECT_A_PLAYER")), Layout::Wrapped);
 
 	// The profiles, the one played picked; picking another plays as it from now on
-	auto& players = page.Add<List>(_font, DialogRect {.min = {200, 120}, .max = {600, 280}}, k_Mid, true, false, true);
+	auto& players = page.Add<List>(_font, DialogRect {.min = {200, 120}, .max = {600, 280}}, Mid(), true, false, true);
 	players.SetItems({{.text = _playerName, .mouseCell = std::nullopt, .mouseMirrored = false}});
 	players.SetSelection(0);
 	players.onClick = [this, &players] {
@@ -437,9 +426,9 @@ void GameMenu::BuildPlayers(const TextDatabase& texts)
 	};
 
 	page.Add<StaticText>(DialogRect {.min = {0, 370}, .max = {190, 410}},
-	                     std::u16string(texts.Get("HELP_TEXT_DIALOG_CREATURENAME")), Layout::Right, k_Mid);
+	                     std::u16string(texts.Get("HELP_TEXT_DIALOG_CREATURENAME")), Layout::Right, Mid());
 	// The name box takes 29 characters
-	auto& name = page.Add<EditBox>(_font, DialogRect {.min = {200, 370}, .max = {600, 410}}, _settings.creatureName, 29, k_Mid);
+	auto& name = page.Add<EditBox>(_font, DialogRect {.min = {200, 370}, .max = {600, 410}}, _settings.creatureName, 29, Mid());
 	_creatureNameBox = &name;
 	name.onChange = [this](const std::u16string& text) {
 		_settings.creatureName = text;
@@ -694,7 +683,7 @@ void GameMenu::BuildAdvanced(const TextDatabase& texts)
 	const auto addSelector = [this, &page](int top, int& value, auto& labels) {
 		auto& button = page.Add<Button>(
 		    DialogRect {.min = {k_SelectorLeft, top}, .max = {k_SelectorLeft + k_SelectorWidth, top + k_SelectorHeight}},
-		    labels.at(static_cast<size_t>(value)), k_Mid);
+		    labels.at(static_cast<size_t>(value)), Mid());
 		const auto step = [this, &button, &value, &labels](int by) {
 			const auto count = static_cast<int>(labels.size());
 			value = (value + by + count) % count;
@@ -759,11 +748,11 @@ void GameMenu::BuildControls(const TextDatabase& texts)
 
 	// Halfway between the big and the mid text size
 	_controls =
-	    &page.Add<List>(_font, DialogRect {.min = {100, 120}, .max = {700, 440}}, (k_Big + k_Mid) / 2, true, true, false);
+	    &page.Add<List>(_font, DialogRect {.min = {100, 120}, .max = {700, 440}}, (k_Big + Mid()) / 2, true, true, false);
 	RefreshControls();
 
 	// Load Defaults asks first, then puts every binding back
-	page.Add<Button>(DialogRect {.min = {260, 530}, .max = {540, 570}}, _loadDefaults, k_Mid).onClick = [this] {
+	page.Add<Button>(DialogRect {.min = {260, 530}, .max = {540, 570}}, _loadDefaults, Mid()).onClick = [this] {
 		Confirm(_loadDefaults, [this] {
 			_bindings = input::DefaultKeyBindings();
 			RefreshControls();
@@ -941,7 +930,7 @@ void GameMenu::Tell(std::u16string text, Action ok)
 	// A message with an OK button 150 by 32 under it, in the same box as a question
 	auto answers = std::make_unique<Dialog>();
 	auto& words = answers->Add<StaticText>(DialogRect {.min = {200, 220}, .max = {600, 350}}, text, Layout::Wrapped);
-	auto& okButton = answers->Add<Button>(DialogRect {.min = {325, 338}, .max = {475, 370}}, _ok, k_Mid);
+	auto& okButton = answers->Add<Button>(DialogRect {.min = {325, 338}, .max = {475, 370}}, _ok, Mid());
 	okButton.onClick = [this, ok] { Settle(ok); };
 	_question = Question {.text = std::move(text),
 	                      .answers = std::move(answers),
@@ -958,7 +947,7 @@ void GameMenu::TellThen(std::u16string text, std::function<void()> then)
 	// A message with an OK button, as Tell shows it, which does what it is given
 	auto answers = std::make_unique<Dialog>();
 	auto& words = answers->Add<StaticText>(DialogRect {.min = {200, 220}, .max = {600, 350}}, text, Layout::Wrapped);
-	auto& okButton = answers->Add<Button>(DialogRect {.min = {325, 338}, .max = {475, 370}}, _ok, k_Mid);
+	auto& okButton = answers->Add<Button>(DialogRect {.min = {325, 338}, .max = {475, 370}}, _ok, Mid());
 	okButton.onClick = [this, then = std::move(then)] {
 		then();
 		Settle(Action::None);
@@ -1040,12 +1029,26 @@ void GameMenu::SetNetworkGame(bool networkGame)
 	auto& page = *_pages.at(static_cast<size_t>(Page::Main));
 	page.SetTabLabel(2, networkGame ? _multiplayerTab : std::u16string());
 	_mainButtons.at(2)->label = networkGame ? _exitOnlineLabel : _buttonLabels.at(2);
-	// Start Skirmish Game does not show in a network game. The buttons that show are placed from the top, each a step
-	// lower; in a network game they are bigger and further apart.
+	// Start Skirmish Game does not show in a network game
 	_mainButtons.at(1)->visible = !networkGame;
-	const auto height = networkGame ? k_FewerButtonsHeight : k_ButtonHeight;
-	const auto spacing = networkGame ? k_FewerButtonsSpacing : k_ButtonSpacing;
-	auto top = networkGame ? k_FewerButtonsTop : k_FirstButtonTop;
+	LayOutMainButtons();
+}
+
+void GameMenu::SetSkirmish(bool skirmish)
+{
+	_skirmish = skirmish;
+	_mainButtons.at(1)->label = skirmish ? _leaveSkirmishLabel : _buttonLabels.at(1);
+	// Join Online Game does not show in a skirmish
+	_mainButtons.at(2)->visible = !skirmish;
+	LayOutMainButtons();
+}
+
+void GameMenu::LayOutMainButtons()
+{
+	const bool fewer = _networkGame || _skirmish;
+	const auto height = fewer ? k_FewerButtonsHeight : k_ButtonHeight;
+	const auto spacing = fewer ? k_FewerButtonsSpacing : k_ButtonSpacing;
+	auto top = fewer ? k_FewerButtonsTop : k_FirstButtonTop;
 	for (auto* button : _mainButtons)
 	{
 		button->rect = {.min = {k_ButtonLeft, top}, .max = {k_ButtonLeft + k_ButtonWidth, top + height}};

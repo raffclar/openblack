@@ -133,9 +133,31 @@ public:
 	}
 	/// Whether its body is taken up by a catch it has started: readying, stepping, reaching or bringing the hand back
 	[[nodiscard]] virtual bool IsCatching(entt::entity creature) const = 0;
+	/// Whether the body continues its action to the end when the plan stops: each action that the body started, and a
+	/// point that plays its end. A point that holds its arm stops.
+	[[nodiscard]] virtual bool PlaysOnAlone(entt::entity creature) const { return IsCatching(creature); }
+	/// The plan that asked for the action stops. Each action that the body started plays on to its end. A point plays
+	/// its end when the stop also stops the body, and otherwise holds on alone. An eat swallows the thing after the bite,
+	/// or loses the thing before the bite. Other actions stop.
+	virtual void StopForPlan(entt::entity creature, bool /*stopsBody*/)
+	{
+		if (!PlaysOnAlone(creature))
+		{
+			Cancel(creature);
+		}
+	}
 	/// How far through its animations the action is, 0 to 1, while it plays them
 	[[nodiscard]] virtual std::optional<float> GetProgress(entt::entity creature) const = 0;
+	/// The thing in the hand of the creature, as the body shows it and lets it go
 	[[nodiscard]] virtual std::optional<entt::entity> GetHeld(entt::entity creature) const = 0;
+	/// The thing that the creature carries, as its mind, the scripts and the towns see it. This is the thing in the hand,
+	/// except while the creature prepares a throw: then it carries nothing.
+	[[nodiscard]] virtual std::optional<entt::entity> GetCarried(entt::entity creature) const { return GetHeld(creature); }
+	/// Whether the action of the hands took hold of its thing or hit it, and the body still plays the action
+	[[nodiscard]] virtual bool HandsTouched(entt::entity /*creature*/) const { return false; }
+	/// One turn of a stomp after its blow: a living thing on the map under the foot takes the crush of the stomp.
+	/// Returns whether the thing is on the map.
+	virtual bool CrushUnderFoot(entt::entity /*creature*/, entt::entity /*thing*/) { return false; }
 	/// What something is worth to eat, if anything
 	[[nodiscard]] virtual std::optional<float> FoodValueOf(entt::entity object) const = 0;
 	/// Whether a creature can pick something up from where it is: things and villagers, not the land's fixtures nor other
@@ -147,13 +169,20 @@ public:
 	[[nodiscard]] virtual bool CanEat(entt::entity creature, entt::entity object) const = 0;
 	/// Whether a creature can eat the thing that it holds, with no pick-up first
 	[[nodiscard]] virtual bool CanEatHeld(entt::entity creature) const = 0;
-	/// Whether a creature can take something from a hand that gives it: as picking up, but wherever the thing is, and
-	/// without the rules about artefacts, worshippers and what scripts hold
+	/// Whether a creature can take something from a hand that gives it. Only the kind's own say counts, not the kind's
+	/// rule. The test also does not use the rules about artefacts, worshippers, the place of the thing and what scripts
+	/// hold.
 	[[nodiscard]] virtual bool CanTakeFromHand(entt::entity /*creature*/, entt::entity /*object*/) const { return false; }
 	/// Whether a flying thing is of a kind creatures catch and its own state lets them, before its weight is compared
 	[[nodiscard]] virtual bool CanBeCaught(entt::entity /*object*/) const { return false; }
 	/// What kind of thing something is to a creature's hands, and what its kind says of its being picked up
 	[[nodiscard]] virtual creature_object_actions::KindFacts KindOf(entt::entity /*object*/) const { return {}; }
+	/// The sizes and weights that decide whether a creature can lift a thing, if the creature can measure them
+	[[nodiscard]] virtual std::optional<creature_object_actions::LiftFacts> LiftFactsOf(entt::entity /*creature*/,
+	                                                                                    entt::entity /*object*/) const
+	{
+		return std::nullopt;
+	}
 	/// Whether a creature may throw a thing to impress, by its kind, its height and the creature's weight
 	[[nodiscard]] virtual bool CanThrowToImpress(entt::entity /*creature*/, entt::entity /*object*/) const { return false; }
 	/// Whether a creature can knock something down: trees, homes and things, statics and rocks among them

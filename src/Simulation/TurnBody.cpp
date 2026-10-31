@@ -11,37 +11,42 @@
 
 #include <cstdint>
 
+#include <optional>
 #include <span>
 #include <vector>
 
 #include <LHVM.h>
 #include <spdlog/spdlog.h>
 
-#include "3D/GripLandscapeEffect.h"
-#include "Audio/AudioManagerInterface.h"
+#include "3D/MapCoords.h"
 #include "CHLApi.h"
 #include "Camera/Camera.h"
 #include "Camera/ScriptCameraModel.h"
 #include "Common/GameRandom.h"
+#include "ECS/GamePlayers.h"
+#include "Sound/SoundRequestInterface.h"
 #if defined(OPENBLACK_DEVELOPER_TOOLS)
 #include "Common/DrawTrace.h"
 #endif
 #include "Common/MachineClock.h"
+#include "Common/MainThreadQueue.h"
 #include "ECS/Components/Animal.h"
 #include "ECS/Components/Creature.h"
+#include "ECS/Components/CreatureObjectAction.h"
 #include "ECS/Components/LivingListPlace.h"
 #include "ECS/Components/Temple.h"
 #include "ECS/Components/Villager.h"
 #include "ECS/Map.h"
 #include "ECS/RealWeatherLand.h"
 #include "ECS/Registry.h"
+#include "ECS/ScriptSpotVisuals.h"
 #include "ECS/Statistics.h"
 #include "ECS/Systems/AdvisorSystemInterface.h"
 #include "ECS/Systems/AlignmentSystemInterface.h"
 #include "ECS/Systems/AnimalSystemInterface.h"
-#include "ECS/Systems/AppleBarrelSystemInterface.h"
 #include "ECS/Systems/BuildingDamageSystemInterface.h"
 #include "ECS/Systems/CameraBookmarkSystemInterface.h"
+#include "ECS/Systems/ChatSystemInterface.h"
 #include "ECS/Systems/ChimneySmokeSystemInterface.h"
 #include "ECS/Systems/CinematicDirectorSystemInterface.h"
 #include "ECS/Systems/ComputerPlayerSystemInterface.h"
@@ -60,6 +65,7 @@
 #include "ECS/Systems/CreatureWebPageSystemInterface.h"
 #include "ECS/Systems/DanceSystemInterface.h"
 #include "ECS/Systems/DynamicsSystemInterface.h"
+#include "ECS/Systems/EffectRequestSystemInterface.h"
 #include "ECS/Systems/FieldSystemInterface.h"
 #include "ECS/Systems/FireSystemInterface.h"
 #include "ECS/Systems/FireflySystemInterface.h"
@@ -68,31 +74,37 @@
 #include "ECS/Systems/ForestSystemInterface.h"
 #include "ECS/Systems/GameEndSystemInterface.h"
 #include "ECS/Systems/GuidanceSystemInterface.h"
+#include "ECS/Systems/HandDemoSystemInterface.h"
 #include "ECS/Systems/HandGrabSystemInterface.h"
 #include "ECS/Systems/HandSystemInterface.h"
 #include "ECS/Systems/HeartbeatSystemInterface.h"
 #include "ECS/Systems/HelpMessageSystemInterface.h"
+#include "ECS/Systems/HelpProfileSystemInterface.h"
 #include "ECS/Systems/HelpTextSystemInterface.h"
 #include "ECS/Systems/InfluenceSystemInterface.h"
+#include "ECS/Systems/IntroSystemInterface.h"
 #include "ECS/Systems/LeashSystemInterface.h"
 #include "ECS/Systems/LivingActionSystemInterface.h"
 #include "ECS/Systems/MagicShieldSystemInterface.h"
 #include "ECS/Systems/MagicSystemInterface.h"
 #include "ECS/Systems/MiracleFxSystemInterface.h"
+#include "ECS/Systems/MistSystemInterface.h"
 #include "ECS/Systems/MusicMoodSystemInterface.h"
-#include "ECS/Systems/ParticleSystemInterface.h"
+#include "ECS/Systems/ParticleRuleSystemInterface.h"
 #include "ECS/Systems/PathfindingSystemInterface.h"
 #include "ECS/Systems/PlayerCommandSystemInterface.h"
+#include "ECS/Systems/PuzzleGameSystemInterface.h"
 #include "ECS/Systems/ReactionSystemInterface.h"
 #include "ECS/Systems/RealWeatherSystemInterface.h"
 #include "ECS/Systems/RewardSystemInterface.h"
 #include "ECS/Systems/SaveGameSystemInterface.h"
 #include "ECS/Systems/ScriptControlSystemInterface.h"
 #include "ECS/Systems/ScriptHighlightSystemInterface.h"
+#include "ECS/Systems/ScriptMusicSystemInterface.h"
 #include "ECS/Systems/ScriptObjectsSystemInterface.h"
 #include "ECS/Systems/SharkSystemInterface.h"
 #include "ECS/Systems/SimulationSystemInterface.h"
-#include "ECS/Systems/SkySystemInterface.h"
+#include "ECS/Systems/SkyClockSystemInterface.h"
 #include "ECS/Systems/SnowSystemInterface.h"
 #include "ECS/Systems/SoundTagSystemInterface.h"
 #include "ECS/Systems/SyncChecksumSystemInterface.h"
@@ -108,7 +120,9 @@
 #include "ECS/Systems/VortexSystemInterface.h"
 #include "ECS/Systems/WalkPathSystemInterface.h"
 #include "ECS/Systems/WeatherSystemInterface.h"
+#include "ECS/Systems/WonderSystemInterface.h"
 #include "ECS/Systems/WorshipSiteSystemInterface.h"
+#include "ECS/ThingMapPlace.h"
 #include "ECS/VillagerAfterDeath.h"
 #include "LivingTurnOrder.h"
 #include "Locator.h"
@@ -118,6 +132,16 @@ namespace openblack::simulation
 {
 namespace
 {
+
+/// The things made so far go into their map cells, as the game puts each thing in its cells as it makes it. The turn does this
+/// after each step and each living thing's turn, so that a thing made there is in the cells before anything else looks.
+void FileNewInMap()
+{
+	if (Locator::entitiesMap::has_value())
+	{
+		Locator::entitiesMap::value().FileNew();
+	}
+}
 
 void PlayPlayerTurns()
 {
@@ -130,14 +154,33 @@ void PlayPlayerTurns()
 		Locator::templeDestructionSystem::value().StartTurn();
 	}
 	auto& towns = Locator::townSystem::value();
-	for (uint8_t index = 0; index < static_cast<uint8_t>(PlayerNames::_COUNT); ++index)
+	for (const auto player : ecs::game_players::All())
 	{
-		const auto player = static_cast<PlayerNames>(index);
+		// In a network game, the winning conditions that the world measures take their values before the player's turn
+		if (Locator::gameEndSystem::has_value())
+		{
+			Locator::gameEndSystem::value().MeasureConditions(player);
+		}
 		if (Locator::templeDestructionSystem::has_value())
 		{
 			Locator::templeDestructionSystem::value().ProcessPlayerTurn(player);
 		}
 		towns.ProcessPlayerTowns(player);
+		// After its towns, the player's stones drop the travellers that turned to something else
+		if (Locator::teleportSystem::has_value())
+		{
+			Locator::teleportSystem::value().PlayerTurn(player);
+		}
+	}
+}
+
+/// The footpaths go round what came onto the map since the last time, and stop going round what left it. The game does
+/// this as each thing comes onto the map or leaves it, so no walker after it sees the paths as they were.
+void FootpathsCatchUp()
+{
+	if (Locator::footpathSystem::has_value())
+	{
+		Locator::footpathSystem::value().ProcessObstacleChanges();
 	}
 }
 
@@ -162,6 +205,9 @@ void PlayLivingTurn()
 	    [&add](entt::entity entity, const Creature&, const LivingListPlace&) { add(entity, Kind::Creature); });
 	living_turn::NewestFirst(list);
 
+	// A creature that the turn made takes its first pose in its own turn. The blends of that pose are made first, on
+	// the shared threads.
+	Locator::creatureAnimationSystem::value().PrepareFirstPoses();
 	auto& villagers = Locator::livingActionSystem::value();
 	auto& animals = Locator::animalSystem::value();
 	bool animalsTurn = false;
@@ -183,7 +229,10 @@ void PlayLivingTurn()
 				    [[maybe_unused]] const auto place = &living - list.data();
 				    [[maybe_unused]] const auto drawsBefore =
 				        Locator::gameRandom::has_value() ? Locator::gameRandom::value().GetSyncedDraws() : 0;
-				    game_turn::PlayCreaturesTurn([&living](game_turn::Step step) { PlayCreatureTurnStep(step, living.id); });
+				    game_turn::PlayCreaturesTurn([&living](game_turn::Step step) {
+					    PlayCreatureTurnStep(step, living.id);
+					    FileNewInMap();
+				    });
 				    SPDLOG_LOGGER_DEBUG(
 				        spdlog::get("game"),
 				        "Creature {} took its turn at place {} of {} in the list of the living: synced draws {} to {}",
@@ -199,6 +248,9 @@ void PlayLivingTurn()
 				    // The flocks fly and the wolves run and hunt
 				    animals.AnimalTurn(living.id);
 			    }
+			    FileNewInMap();
+			    // What it put down or took away changes the paths before the next one takes its turn
+			    FootpathsCatchUp();
 		    });
 	}
 	if (animalsTurn)
@@ -239,6 +291,14 @@ void PlayCreatureTurnStep(game_turn::Step step, entt::entity creature)
 	}
 	case Step::CreaturePhysiology:
 	{
+		// First it goes into the map cell of where its body stands, after its last turn and the pull of its leash. Not
+		// when another creature carries it, nor when its body is off the map.
+		auto& registry = Locator::entitiesRegistry::value();
+		if (Locator::entitiesMap::has_value() && !registry.AllOf<ecs::components::HeldByCreature>(creature) &&
+		    map_coords::InBounds(ecs::thing_map_place::Of(registry, creature)))
+		{
+			Locator::entitiesMap::value().Moved(creature);
+		}
 		// It ages, grows, gets hungry, tired and thirsty, and heals while it sleeps
 		auto creaturePhysiology = profiler.BeginScoped(Profiler::Stage::CreaturePhysiologyUpdate);
 		Locator::creaturePhysiologySystem::value().CreatureTurn(creature);
@@ -491,10 +551,6 @@ void PlayTurnStep(game_turn::Step step, TurnViewInterface& view)
 		// The turn fixes the reach of each citadel that has no reach yet, on every computer in the same order
 		Locator::influenceSystem::value().FixCitadelReaches();
 		break;
-	case Step::MapCells:
-		// What moved since the last turn goes into its new map cell
-		Locator::entitiesMap::value().Sync();
-		break;
 	case Step::Sharks:
 		// Each shark's turn starts where it is
 		Locator::sharkSystem::value().ProcessTurn();
@@ -529,6 +585,13 @@ void PlayTurnStep(game_turn::Step step, TurnViewInterface& view)
 			Locator::computerPlayerSystem::value().ProcessTurn();
 		}
 		break;
+	case Step::TribalPowers:
+		// Each player's tribes give the player the most power that they gave it, at least 1
+		if (Locator::wonderSystem::has_value())
+		{
+			Locator::wonderSystem::value().ProcessTurn();
+		}
+		break;
 	case Step::Influence:
 		// How far the players' influence reaches, and its border
 		Locator::influenceSystem::value().ProcessTurn(turn);
@@ -555,6 +618,13 @@ void PlayTurnStep(game_turn::Step step, TurnViewInterface& view)
 			Locator::worshipSiteSystem::value().UpdateTurn();
 		}
 		break;
+	case Step::GameConditions:
+		// At the first turn of a network game, each god gets the winning conditions of the game
+		if (Locator::gameEndSystem::has_value())
+		{
+			Locator::gameEndSystem::value().GiveConditions();
+		}
+		break;
 	case Step::GameEnd:
 		// A god with no temple is out of a skirmish or a network game, and the game is decided when one god is left
 		if (Locator::gameEndSystem::has_value())
@@ -569,15 +639,11 @@ void PlayTurnStep(game_turn::Step step, TurnViewInterface& view)
 		break;
 	case Step::VillageTotems:
 		// A town totem goes with its town centre, and a totem that arrives at its share rings the village bell. The totems
-		// ease by the clock of this computer, as the game does. The ease and the bell are only for the look and the sound, so
-		// the synced world does not read them.
+		// ease by the clock of this computer, as the game does. The ease and the bell are only for the look and the sound.
 		Locator::villageTotemSystem::value().ProcessTurn(static_cast<uint32_t>(clock.GetElapsedTime().count()));
 		break;
 	case Step::TownFlags:
 		Locator::townDesireSystem::value().ProcessFlags();
-		break;
-	case Step::AppleBarrel:
-		Locator::appleBarrelSystem::value().ProcessTurn();
 		break;
 	case Step::ChimneySmoke:
 		Locator::chimneySmokeSystem::value().ProcessTurn();
@@ -597,6 +663,20 @@ void PlayTurnStep(game_turn::Step step, TurnViewInterface& view)
 		// The things that the scripts walk along tracks move on
 		Locator::walkPathSystem::value().ProcessTurn();
 		break;
+	case Step::Mists:
+		// The mists that a script fades take a step of their size and their alpha
+		if (Locator::mistSystem::has_value())
+		{
+			Locator::mistSystem::value().ProcessTurn();
+		}
+		break;
+	case Step::PuzzleGames:
+		// Each puzzle game that the player has not solved puts back its pieces that moved and tests for a solution
+		if (Locator::puzzleGameSystem::has_value())
+		{
+			Locator::puzzleGameSystem::value().ProcessTurn();
+		}
+		break;
 	case Step::Footpaths:
 		// The footpaths that the game finds between things take a few more steps, and it lays those that it found
 		if (Locator::footpathSystem::has_value())
@@ -609,9 +689,11 @@ void PlayTurnStep(game_turn::Step step, TurnViewInterface& view)
 		Locator::forestSystem::value().GrowForests();
 		break;
 	case Step::CreaturesTurnStart:
-		// The parts of the creatures' turns that are not for one creature: the turns that the bodies live, the posts of
-		// the leashes, the feedback that reaches the minds, and what creatures that are gone held
+		// The parts of the creatures' turns that are not for one creature: the turns that the bodies live, the share of
+		// the route search steps, the posts of the leashes, the feedback that reaches the minds, and what creatures that
+		// are gone held
 		Locator::creaturePhysiologySystem::value().BeginTurn();
+		Locator::creatureLocomotionSystem::value().ShareSearchSteps();
 		Locator::leashSystem::value().BeginTurn();
 		Locator::creatureMindSystem::value().BeginTurn();
 		Locator::creatureObjectActionSystem::value().BeginTurn();
@@ -648,10 +730,6 @@ void PlayTurnStep(game_turn::Step step, TurnViewInterface& view)
 		break;
 	case Step::Living:
 		PlayLivingTurn();
-		break;
-	case Step::MapCellsAfterLiving:
-		// The living that walked this turn go into their new map cells before anything searches them
-		Locator::entitiesMap::value().Sync();
 		break;
 	case Step::Fires:
 		// The game burns its fires here, after the living and before the miracles and the scripts. A fire that a later
@@ -711,9 +789,15 @@ void PlayTurnStep(game_turn::Step step, TurnViewInterface& view)
 	{
 		// The particle effects that no miracle owns take a step, and the spot visuals count down
 		auto particles = profiler.BeginScoped(Profiler::Stage::ParticlesUpdate);
-		Locator::particleSystem::value().ProcessTurn();
-		// The puffs of dust of the hand's grips count down too
-		GripLandscapeEffect::ProcessTurn();
+		Locator::particleRuleSystem::value().ProcessTurn();
+		// A visual that a script holds as a thing takes its thing with it when it ends. The record of the simulation
+		// tells which visuals still run.
+		if (Locator::effectRequestSystem::has_value() && Locator::entitiesRegistry::has_value())
+		{
+			const auto& effects = Locator::effectRequestSystem::value();
+			ecs::script_spot_visuals::RemoveEnded(Locator::entitiesRegistry::value(),
+			                                      [&effects](uint32_t effect) { return effects.IsRunning(effect); });
+		}
 		break;
 	}
 	case Step::Tornadoes:
@@ -744,6 +828,19 @@ void PlayTurnStep(game_turn::Step step, TurnViewInterface& view)
 		if (Locator::vortexSystem::has_value())
 		{
 			Locator::vortexSystem::value().ProcessTurn();
+		}
+		break;
+	case Step::HandDemo:
+		if (Locator::handDemoSystem::has_value())
+		{
+			Locator::handDemoSystem::value().ProcessTurn();
+		}
+		break;
+	case Step::IntroLift:
+		if (Locator::introSystem::has_value())
+		{
+			Locator::introSystem::value().ProcessTurn(
+			    static_cast<uint32_t>(ecs::systems::TimeSystemInterface::k_TurnDuration.count()));
 		}
 		break;
 	case Step::ScriptVoices:
@@ -783,8 +880,12 @@ void PlayTurnStep(game_turn::Step step, TurnViewInterface& view)
 		}
 		break;
 	case Step::HelpProfile:
-		// The view does this step
-		view.PlayViewStep(step, cameraPosition);
+		// The help's count of what the players did moves on a turn. It reads the view of the camera from the last report,
+		// which is a command, so a game server does it too.
+		if (Locator::helpProfileSystem::has_value())
+		{
+			Locator::helpProfileSystem::value().ProcessTurn();
+		}
 		break;
 	case Step::TipBubble:
 		// The help's tip bubble stays while its sign shows
@@ -795,7 +896,7 @@ void PlayTurnStep(game_turn::Step step, TurnViewInterface& view)
 		break;
 	case Step::TimeOfDay:
 		// The time of day moves on
-		Locator::skySystem::value().ProcessTurn();
+		Locator::skyClockSystem::value().ProcessTurn();
 		break;
 	case Step::WeatherThings:
 		// The weather things follow their storms, which the wind blows along if it can
@@ -822,6 +923,22 @@ void PlayTurnStep(game_turn::Step step, TurnViewInterface& view)
 			Locator::weatherSystem::value().ProcessClimates(turn);
 		}
 		break;
+	case Step::BeliefGained:
+		// The towns add the belief that they gained in each player. The view shows the sum to the player at this computer.
+		if (Locator::reactionSystem::has_value())
+		{
+			Locator::reactionSystem::value().TownGainsTurn(turn);
+		}
+		// The same step checks the belief in each player over all the towns for its highest and lowest
+		player_statistics::CheckBelief(turn);
+		view.PlayViewStep(step, cameraPosition);
+		break;
+	case Step::LosingBelief:
+		if (Locator::guidanceSystem::has_value())
+		{
+			Locator::guidanceSystem::value().LosingBeliefTurn();
+		}
+		break;
 	case Step::HeldThing:
 		// What the hand holds stays where the hand is for the game, and the hand lets go of it once it is gone
 		if (Locator::handGrabSystem::has_value())
@@ -834,7 +951,7 @@ void PlayTurnStep(game_turn::Step step, TurnViewInterface& view)
 		view.PlayViewStep(step, cameraPosition);
 		break;
 	case Step::Rewards:
-		// A reward chest that fell to the ground goes into the map's cells
+		// A reward chest that fell to the ground goes into the map's cells, and the chests from the sky fall
 		if (Locator::rewardSystem::has_value())
 		{
 			Locator::rewardSystem::value().ProcessTurn();
@@ -845,6 +962,11 @@ void PlayTurnStep(game_turn::Step step, TurnViewInterface& view)
 		if (Locator::guidanceSystem::has_value())
 		{
 			Locator::guidanceSystem::value().ProcessTurn();
+		}
+		// What the player sent in the chat since the last turn makes the advisors of this computer speak
+		if (Locator::chatSystem::has_value())
+		{
+			Locator::chatSystem::value().ProcessTurn();
 		}
 		break;
 	case Step::CameraChecks:
@@ -876,11 +998,18 @@ void PlayTurnStep(game_turn::Step step, TurnViewInterface& view)
 		break;
 	case Step::SoundTags:
 		// The objects' looping sounds start again where they stopped, within reach of where the game hears them from
-		Locator::soundTagSystem::value().ProcessTurn(Locator::audio::value().GetListener().origin);
+		Locator::soundTagSystem::value().ProcessTurn(Locator::sounds::value().GetListener().origin);
 		break;
 	case Step::Ambience:
 		// The view does this step
 		view.PlayViewStep(step, cameraPosition);
+		break;
+	case Step::ScriptMusic:
+		// The scripts' music plays for the time of the turn, on every computer and on the server
+		if (Locator::scriptMusicSystem::has_value())
+		{
+			Locator::scriptMusicSystem::value().ProcessTurn();
+		}
 		break;
 	case Step::Music:
 		// The view does this step
@@ -921,16 +1050,19 @@ void PlayTurnStep(game_turn::Step step, TurnViewInterface& view)
 		break;
 	case Step::MapCellsAtTurnEnd:
 		// The things that the turn made go into the map's cells, so that the frames find them there and file nothing
-		Locator::entitiesMap::value().FileMade();
+		Locator::entitiesMap::value().FileNew();
 		break;
 	case Step::InfluenceTurnEnd:
 		// The end of the turn fixes the reach of a citadel that the turn made
 		Locator::influenceSystem::value().FixCitadelReaches();
 		break;
 	case Step::SyncChecksum:
+	{
 		// When a network game asks for it, the checksum of the synced world as this turn left it
+		auto checksum = profiler.BeginScoped(Profiler::Stage::SyncChecksum);
 		Locator::syncChecksumSystem::value().ProcessTurn();
 		break;
+	}
 	case Step::RunRecord:
 		// A tool that records the run reads the world as the turn left it. The turn count moved on at the start of the
 		// turn, so the number is the turn after this one.
@@ -952,7 +1084,24 @@ void PlayTurn(TurnViewInterface& view)
 #endif
 	// After the game is decided, the world does not change: the turn does only the input and the steps after the turn
 	const bool decided = Locator::gameEndSystem::has_value() && Locator::gameEndSystem::value().IsDecided();
-	game_turn::PlayTurn([&view](game_turn::Step step) { PlayTurnStep(step, view); }, decided);
+	// The queue of the main thread knows the step, so that the check of the turn's calls can name it
+	auto* queue = Locator::mainThreadQueue::has_value() ? &Locator::mainThreadQueue::value() : nullptr;
+	game_turn::PlayTurn(
+	    [&view, queue](game_turn::Step step) {
+		    if (queue != nullptr)
+		    {
+			    queue->SetTurnStep(static_cast<uint32_t>(step));
+		    }
+		    PlayTurnStep(step, view);
+		    FileNewInMap();
+		    // What the step put down or took away changes the paths before the next step
+		    FootpathsCatchUp();
+	    },
+	    decided);
+	if (queue != nullptr)
+	{
+		queue->SetTurnStep(std::nullopt);
+	}
 }
 
 } // namespace openblack::simulation

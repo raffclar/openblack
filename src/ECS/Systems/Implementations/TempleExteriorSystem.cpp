@@ -11,6 +11,9 @@
 
 #include "TempleExteriorSystem.h"
 
+#include <algorithm>
+#include <iterator>
+#include <string>
 #include <vector>
 
 #include <L3DFile.h>
@@ -49,14 +52,33 @@ namespace
 {
 /// The mesh the temples' are made from, which the outsides are blended into
 constexpr std::string_view k_FirstTemple = "temple/b_first_temple_l3d";
+
+/// The name of the temple's own mesh in the cache
+std::string OwnMeshName(entt::entity entity)
+{
+	return fmt::format("temple/exterior/{}", static_cast<uint32_t>(entity));
+}
+
+entt::id_type OwnMeshId(entt::entity entity)
+{
+	return entt::hashed_string(OwnMeshName(entity).c_str()).value();
+}
+
+/// What the temple's blend comes from: its look now and the textures of its player
+TempleExteriorMorph::Blend BlendOf(const TempleExterior& exterior, PlayerNames owner)
+{
+	return {.look = {exterior.size, exterior.alignment}, .textureSet = static_cast<uint32_t>(owner) & 3};
+}
 } // namespace
 
 void TempleExteriorSystem::UpdateTurn()
 {
 	auto& registry = Locator::entitiesRegistry::value();
 	const auto& alignment = Locator::alignmentSystem::value();
+	MadeBlends made;
 	registry.Each<const Temple, TempleExterior, Mesh>(
-	    [&registry, &alignment](const entt::entity entity, const Temple& temple, TempleExterior& exterior, Mesh& mesh) {
+	    [this, &registry, &alignment, &made](const entt::entity entity, const Temple& temple, TempleExterior& exterior,
+	                                         Mesh& mesh) {
 		    // Its model shows as much of it built as its heart is. Once it shows all of it, the temple is taken out of the
 		    // map's cells and put back in them.
 		    const auto* progress = registry.TryGet<const BuildProgress>(entity);
@@ -99,7 +121,7 @@ void TempleExteriorSystem::UpdateTurn()
 		    const bool meshLoaded = Locator::resources::value().GetMeshes().Contains(mesh.id);
 		    if (TempleExteriorMorph::NeedsBlend(exterior.morphed, look, meshLoaded))
 		    {
-			    Morph(entity, mesh, exterior, temple.owner);
+			    Morph(entity, mesh, exterior, temple.owner, made);
 			    exterior.morphed = look;
 		    }
 	    });
@@ -117,17 +139,25 @@ void TempleExteriorSystem::FindAfterLoad()
 	// The save keeps the look that each temple's mesh was blended for, but not the blended mesh. The mesh is made again
 	// before the first frame is drawn, with no step toward the targets. A mesh in the cache does not prevent this,
 	// because this computer can have blended it for the world before the load.
+	// The mesh that this computer blended for the same look and textures stays, as a world state of the same world
+	// brings it again.
 	auto& registry = Locator::entitiesRegistry::value();
+	const auto& meshes = Locator::resources::value().GetMeshes();
+	MadeBlends made;
 	registry.Each<const Temple, const TempleExterior, Mesh>(
-	    [](const entt::entity entity, const Temple& temple, const TempleExterior& exterior, Mesh& mesh) {
-		    if (TempleExteriorMorph::BlendsAfterLoad(exterior.morphed))
+	    [this, &meshes, &made](const entt::entity entity, const Temple& temple, const TempleExterior& exterior, Mesh& mesh) {
+		    const auto kept = _blends.find(mesh.id);
+		    const bool inCache = kept != _blends.end() && mesh.id == OwnMeshId(entity) && meshes.Contains(mesh.id);
+		    if (TempleExteriorMorph::BlendsAfterLoad(exterior.morphed, inCache ? std::optional(kept->second) : std::nullopt,
+		                                             BlendOf(exterior, temple.owner)))
 		    {
-			    Morph(entity, mesh, exterior, temple.owner);
+			    Morph(entity, mesh, exterior, temple.owner, made);
 		    }
 	    });
 }
 
-void TempleExteriorSystem::Morph(entt::entity entity, Mesh& mesh, const TempleExterior& exterior, PlayerNames owner)
+void TempleExteriorSystem::Morph(entt::entity entity, Mesh& mesh, const TempleExterior& exterior, PlayerNames owner,
+                                 MadeBlends& made)
 {
 	using namespace TempleExteriorMorph;
 	auto& resources = Locator::resources::value();
@@ -138,50 +168,65 @@ void TempleExteriorSystem::Morph(entt::entity entity, Mesh& mesh, const TempleEx
 		return;
 	}
 
-	// The temple's vertices, each the blend of the four meshes' about its look
-	auto blended = *files.Handle(firstTemple);
-	auto vertices = blended.EditVertices();
-	std::vector<l3d::L3DVertex> sum(vertices.size());
-	for (const auto& corner : Corners(exterior.size, exterior.alignment))
+	// The temple's vertices, each the blend of the four meshes' about its look. A temple with the same look as a temple
+	// before it in the call uses the same blend.
+	const glm::vec2 look {exterior.size, exterior.alignment};
+	auto shape = std::ranges::find_if(made.shapes, [&look](const auto& kept) { return kept.first == look; });
+	if (shape == made.shapes.end())
 	{
-		const auto id = entt::hashed_string(fmt::format("temple/{}", MeshName(corner.size, corner.stage)).c_str()).value();
-		if (corner.weight == 0.0f || !files.Contains(id))
+		auto blended = *files.Handle(firstTemple);
+		auto vertices = blended.EditVertices();
+		std::vector<l3d::L3DVertex> sum(vertices.size());
+		for (const auto& corner : Corners(exterior.size, exterior.alignment))
 		{
-			continue;
+			const auto id = entt::hashed_string(fmt::format("temple/{}", MeshName(corner.size, corner.stage)).c_str()).value();
+			if (corner.weight == 0.0f || !files.Contains(id))
+			{
+				continue;
+			}
+			const auto& source = files.Handle(id)->GetVertices();
+			if (source.size() != sum.size())
+			{
+				SPDLOG_LOGGER_ERROR(spdlog::get("game"), "The temple's mesh {} isn't the shape of the first temple's",
+				                    MeshName(corner.size, corner.stage));
+				return;
+			}
+			const auto add = [&corner](l3d::L3DPoint& to, const l3d::L3DPoint& from) {
+				to.x += from.x * corner.weight;
+				to.y += from.y * corner.weight;
+				to.z += from.z * corner.weight;
+			};
+			for (size_t i = 0; i < sum.size(); ++i)
+			{
+				add(sum[i].position, source[i].position);
+				add(sum[i].normal, source[i].normal);
+				sum[i].texCoord.x += source[i].texCoord.x * corner.weight;
+				sum[i].texCoord.y += source[i].texCoord.y * corner.weight;
+			}
 		}
-		const auto& source = files.Handle(id)->GetVertices();
-		if (source.size() != sum.size())
-		{
-			SPDLOG_LOGGER_ERROR(spdlog::get("game"), "The temple's mesh {} isn't the shape of the first temple's",
-			                    MeshName(corner.size, corner.stage));
-			return;
-		}
-		const auto add = [&corner](l3d::L3DPoint& to, const l3d::L3DPoint& from) {
-			to.x += from.x * corner.weight;
-			to.y += from.y * corner.weight;
-			to.z += from.z * corner.weight;
-		};
-		for (size_t i = 0; i < sum.size(); ++i)
-		{
-			add(sum[i].position, source[i].position);
-			add(sum[i].normal, source[i].normal);
-			sum[i].texCoord.x += source[i].texCoord.x * corner.weight;
-			sum[i].texCoord.y += source[i].texCoord.y * corner.weight;
-		}
+		std::ranges::copy(sum, vertices.begin());
+		made.shapes.emplace_back(look, std::move(blended));
+		shape = std::prev(made.shapes.end());
 	}
-	std::ranges::copy(sum, vertices.begin());
+	const auto& blended = shape->second;
 
-	// The temple's own mesh, made once from the first temple's and changed after
+	// The temple's own mesh, made once from the first temple's and changed after. A mesh made from the blend has the
+	// vertices of the blend already.
 	auto& meshes = resources.GetMeshes();
-	const auto name = fmt::format("temple/exterior/{}", static_cast<uint32_t>(entity));
+	const auto name = OwnMeshName(entity);
 	const auto id = entt::hashed_string(name.c_str()).value();
 	if (!meshes.Contains(id))
 	{
 		meshes.Load(id, resources::L3DLoader::FromDynamicFileTag {}, name, blended);
 		mesh.id = id;
 	}
+	else
+	{
+		meshes.Handle(id)->UpdateVertices(blended);
+	}
 	auto& temple = *meshes.Handle(id);
-	temple.UpdateVertices(blended);
+	// The same look and textures always give the same blend
+	_blends.insert_or_assign(id, BlendOf(exterior, owner));
 	// Its shape is kept too, for what is done at points on its surface
 	if (files.Contains(id))
 	{
@@ -198,7 +243,7 @@ void TempleExteriorSystem::Morph(entt::entity entity, Mesh& mesh, const TempleEx
 	auto& bitmaps = resources.GetBitmaps();
 	const auto from = entt::hashed_string(fmt::format("temple/{}", ImageName(texture.from, set)).c_str()).value();
 	const auto to = entt::hashed_string(fmt::format("temple/{}", ImageName(texture.to, set)).c_str()).value();
-	const auto skins = blended.EditSkins();
+	const auto& skins = blended.GetSkins();
 	if (skins.empty() || !bitmaps.Contains(from) || !bitmaps.Contains(to))
 	{
 		return;
@@ -210,7 +255,17 @@ void TempleExteriorSystem::Morph(entt::entity entity, Mesh& mesh, const TempleEx
 	{
 		return;
 	}
-	std::vector<uint16_t> skin(texels);
-	BlendTexels({fromImage.Data(), texels}, {toImage.Data(), texels}, texture.weight, skin);
-	temple.UpdateSkin(skins.front().id, skin);
+	// A temple with the same texture and set as a temple before it in the call uses the same blend
+	auto skin = std::ranges::find_if(made.skins, [&texture, set](const MadeBlends::Skin& kept) {
+		return kept.texture.from == texture.from && kept.texture.to == texture.to && kept.texture.weight == texture.weight &&
+		       kept.set == set;
+	});
+	if (skin == made.skins.end())
+	{
+		std::vector<uint16_t> blendedTexels(texels);
+		BlendTexels({fromImage.Data(), texels}, {toImage.Data(), texels}, texture.weight, blendedTexels);
+		made.skins.push_back({.texture = texture, .set = set, .texels = std::move(blendedTexels)});
+		skin = std::prev(made.skins.end());
+	}
+	temple.UpdateSkin(skins.front().id, skin->texels);
 }

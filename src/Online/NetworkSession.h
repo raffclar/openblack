@@ -25,7 +25,9 @@
 #include "Commands/TurnCodec.h"
 #include "Commands/TurnCommandSource.h"
 #include "Online/Backoff.h"
+#include "Online/GameOrigin.h"
 #include "Online/ResyncRule.h"
+#include "Online/SentBlocks.h"
 #include "Online/TurnPlayout.h"
 #include "Online/TurnStream.h"
 #include "Online/WebSocketInterface.h"
@@ -53,8 +55,13 @@ struct NetworkSessionSettings
 	/// Reads the alignment of the player's profile, which goes to the other players with the creature file. With no
 	/// reader, the player sends an alignment of 0.
 	std::function<float()> readAlignment;
+	/// Reads whether the god of the player plays for a clan, as the start begins. With no reader, the god plays for no
+	/// clan.
+	std::function<bool()> readPlaysForClan;
 	/// Tools: gets each turn at which the world of this computer differs from the server's world
 	std::function<void(uint32_t turn)> parts;
+	/// Where the game came from: the lobby on the internet or the local network
+	GameOrigin origin {GameOrigin::Lan};
 };
 
 /// A step of the start of the game that the front end shows to the player
@@ -149,8 +156,12 @@ public:
 	[[nodiscard]] std::optional<float> StartAlignment(PlayerNames god) const override;
 	/// The god of the slot that the server gave to this computer. None for an observer.
 	[[nodiscard]] std::optional<PlayerNames> OwnGod() const override;
+	/// Whether the god of this computer played for a clan as the start began
+	[[nodiscard]] bool OwnGodPlaysForClan() const override { return _ownGodPlaysForClan; }
 
 	[[nodiscard]] State GetState() const { return _state; }
+	/// Where the game of the session came from: the lobby on the internet or the local network
+	[[nodiscard]] GameOrigin Origin() const { return _settings.origin; }
 	[[nodiscard]] End GetEnd() const { return _end; }
 	[[nodiscard]] const std::optional<game_socket::Joined>& GetJoined() const { return _joined; }
 	[[nodiscard]] const std::optional<game_socket::Start>& GetStart() const { return _start; }
@@ -176,6 +187,8 @@ public:
 	[[nodiscard]] std::optional<uint32_t> LastTurnReceived() const;
 	/// The number of times that the client came back after a loss or a resync
 	[[nodiscard]] uint32_t Resumes() const { return _resumes; }
+	/// The blocks of commands that went to the server, and that no turn holds yet
+	[[nodiscard]] const SentBlocks& Sent() const { return _sent; }
 
 	/// The server's world state at the start of a turn, once all its parts came
 	struct WorldState
@@ -206,6 +219,10 @@ private:
 	void FinishWith(End end);
 	void DropStream();
 	void SendWaiting();
+	/// Sends a block of commands with the next number of the session. False when the block did not go.
+	bool SendNewBlock(std::span<const player_commands::Action> actions);
+	/// After the client came back: sends again the blocks that no turn holds. The server leaves out the blocks that it had.
+	void SendKeptAgain();
 	/// Closes the socket and starts the attempts to come back
 	void ComeBack(bool resync);
 
@@ -221,6 +238,7 @@ private:
 	std::vector<StartEvent> _startEvents;
 	std::map<uint8_t, std::vector<uint8_t>> _startCreatures;
 	std::map<uint8_t, float> _startAlignments;
+	bool _ownGodPlaysForClan {false};
 	std::string _refusedReason;
 
 	std::map<uint32_t, turn_codec::TurnBundle> _turns;
@@ -228,6 +246,8 @@ private:
 	uint32_t _turnsDone {0};
 	/// The commands of the player that did not go yet, because the socket was not open
 	std::vector<player_commands::Action> _waiting;
+	/// The blocks of the session that went to the server
+	SentBlocks _sent;
 
 	std::map<uint32_t, uint64_t> _localChecksums;
 	std::map<uint32_t, uint64_t> _serverChecksums;

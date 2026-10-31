@@ -49,11 +49,14 @@ public:
 	void Update(std::chrono::duration<float, std::milli> gameTime) override;
 
 	StartResult StartFight(entt::entity creature, entt::entity opponent) override;
-	StartResult StartPlannedFight(entt::entity creature, entt::entity opponent) override;
+	StartResult StartPlannedFight(entt::entity creature, entt::entity opponent, bool agreed) override;
 	void Withdraw(entt::entity creature) override;
 	void AbortFight(entt::entity creature) override;
 	void CallOff(entt::entity creature) override;
+	void HandTookHold(entt::entity creature) override;
+	void HandLetGo(entt::entity creature) override;
 	[[nodiscard]] bool IsSettingUpFight(entt::entity creature) const override;
+	[[nodiscard]] bool StartedFight(entt::entity creature) const override;
 	[[nodiscard]] bool IsFighting(entt::entity creature) const override;
 	[[nodiscard]] bool IsDuelling(entt::entity creature) const override;
 	void TakeForScript(entt::entity creature) override;
@@ -82,6 +85,7 @@ public:
 	void DoCharge(PlayerNames player, float heldMs) override;
 	[[nodiscard]] bool IsPressed() const override { return _pressed.has_value(); }
 	[[nodiscard]] std::optional<creature_fight::Tip> HandTip(std::optional<entt::entity> under) const override;
+	void DoFightCheat(PlayerNames player) override;
 	bool GestureSpecialMove() override;
 	bool GestureSpell(MagicType type) override;
 	void DrawMarks(float realMs, const glm::vec3& eye) override;
@@ -107,10 +111,9 @@ public:
 	void LoseFightHealth(entt::entity creature, float damage) override;
 
 private:
-	/// The turn's parts: fights started by the leash, the stages before and after the
-	/// duel, the duel's moves, and the creatures knocked out
-	void StartFightsFromMinds();
-	void StartFightFromMind(entt::entity creature);
+	/// The start of a fight. When ask is false, the other creature agreed before and is not asked again.
+	StartResult Start(entt::entity creature, entt::entity opponent, bool ask);
+	/// The turn's parts: the stages before and after the duel, the duel's moves, and the creatures knocked out
 	void ProcessStages();
 	void StageTurn(entt::entity creature);
 	/// A fighter's animation, its move in the duel, its blow and its pose for the turn
@@ -152,12 +155,27 @@ private:
 	/// Each game turn the drips of blood run down the skins
 	void ProcessDrips();
 	void DripTurn(entt::entity creature);
+	/// The sparkle of a held press charges in the creature's turn
+	void ChargeMarkTurn(entt::entity creature);
 	/// One creature beat the other, by a blow or otherwise: the loser faints, and the winner is made to have a poo on
 	/// the loser or to show off
 	void Win(entt::entity winner, entt::entity loser, bool byBlow);
+	/// A creature of a fight stops what it does. Each creature in its duel then gets stronger by the strength gain of the
+	/// fight action, one or two times, as the stop makes each of them stop.
+	void GainStrengthAtStop(entt::entity stopper, creature_fight::StopEnd end);
+	/// The opponent of a creature has no life left: the creature wins and leaves the duel. The loser does not faint,
+	/// and nobody forces a plan on the winner.
+	void WinByOpponentsLife(entt::entity winner, entt::entity loser);
 	/// The fight ends for a creature: its life pays for it and it learns from it
 	/// The creature's fight is over: won or lost, or called off with neither (when its mind isn't told it fought)
-	void EndFightFor(entt::entity creature, std::optional<bool> won);
+	/// Its life pays for the fight only when paysLife is true.
+	void EndFightFor(entt::entity creature, std::optional<bool> won, bool paysLife = true);
+	/// The fight of the creature stops with no response, as when its partner tells it to stop. In the steps before the
+	/// duel it leaves the fight at once. Else it finishes its move and then leaves the fight.
+	void StopFight(entt::entity creature, std::optional<bool> won, std::string_view why);
+	/// The plan of the creature stopped, and its partner is after its duel: the partner stops with no response, and the
+	/// plan of the partner fails
+	void StopPartnerAfterDuel(entt::entity partner, entt::entity creature);
 	void BeginDuel(entt::entity creature);
 	void MeasureBlows(entt::entity creature);
 	/// Faints and lies out cold, to be taken home later

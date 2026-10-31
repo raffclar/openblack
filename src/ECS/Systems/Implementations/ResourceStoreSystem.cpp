@@ -32,8 +32,6 @@
 #include "3D/L3DMesh.h"
 #include "3D/LandIslandInterface.h"
 #include "3D/MapCoords.h"
-#include "Audio/AudioManagerInterface.h"
-#include "Audio/GameSoundEffects.h"
 #include "Common/GUtilsDistance.h"
 #include "Common/GameRandom.h"
 #include "Common/MachineClock.h"
@@ -65,6 +63,7 @@
 #include "ECS/Components/Transform.h"
 #include "ECS/Components/Tree.h"
 #include "ECS/Components/Villager.h"
+#include "ECS/Components/Workshop.h"
 #include "ECS/Components/WorshipSite.h"
 #include "ECS/Map.h"
 #include "ECS/ObjectPhysics.h"
@@ -73,13 +72,15 @@
 #include "ECS/StoreRules.h"
 #include "ECS/Systems/AlignmentSystemInterface.h"
 #include "ECS/Systems/CreatureMindSystemInterface.h"
+#include "ECS/Systems/EffectRequestSystemInterface.h"
 #include "ECS/Systems/ForestSystemInterface.h"
-#include "ECS/Systems/ParticleSystemInterface.h"
 #include "ECS/Systems/ReactionSystemInterface.h"
 #include "ECS/Systems/TimeSystemInterface.h"
 #include "ECS/Systems/TownDesireSystemInterface.h"
 #include "ECS/Systems/TownSystemInterface.h"
+#include "ECS/Systems/WorkshopSystemInterface.h"
 #include "ECS/TempleConstruction.h"
+#include "ECS/ThingMapPlace.h"
 #include "ECS/VillagerCarry.h"
 #include "ECS/VillagerWorkRules.h"
 #include "ECS/WorldObjects.h"
@@ -91,6 +92,8 @@
 #include "Magic/ResourcePiles.h"
 #include "Magic/TownBelief.h"
 #include "Resources/ResourcesInterface.h"
+#include "Sound/GameSoundEffects.h"
+#include "Sound/SoundRequestInterface.h"
 
 using namespace openblack;
 using namespace openblack::ecs::components;
@@ -126,7 +129,7 @@ uint32_t TickMs()
 /// A sample of the in-game bank at a place, played for what owns it
 void PlayInGame(uint32_t sample, glm::vec3 position, entt::entity owner)
 {
-	if (Locator::audio::has_value())
+	if (Locator::sounds::has_value())
 	{
 		audio::StartGameSoundEffect(entt::hashed_string(fmt::format("InGame.sad/{}", sample).c_str()).value(),
 		                            {.position = position, .owner = owner});
@@ -147,6 +150,25 @@ void PileEmptied(entt::entity pile, Pot& pot)
 	if (reaction != Reaction::None && Locator::reactionSystem::has_value())
 	{
 		Locator::reactionSystem::value().RemoveFrom(pile, reaction);
+	}
+}
+
+/// A pot takes its size from what it holds each time this changes. A pot on the land that changes its size goes out of the
+/// map's cells and in again. A pile keeps its size: it rises out of the ground instead.
+void ResizeAfterChange(entt::entity pot, const Pot& data)
+{
+	auto& registry = Locator::entitiesRegistry::value();
+	auto* transform = registry.TryGet<Transform>(pot);
+	const auto& info = PotInfoOf(data.type);
+	const auto size = piles::SizeAfterChange(info.potType, data.amount, info.scaleEvery);
+	if (transform == nullptr || !size.has_value() || transform->scale.x == *size)
+	{
+		return;
+	}
+	transform->scale = glm::vec3(*size);
+	if (Locator::entitiesMap::has_value())
+	{
+		Locator::entitiesMap::value().Reinsert(pot);
 	}
 }
 
@@ -443,6 +465,13 @@ std::optional<entt::entity> ResourceStoreSystem::StoreOf(entt::entity pile) cons
 			store = pit;
 		}
 	});
+	// A workshop's wood pile is its store
+	Entities().Each<const Workshop>([pile, &store](entt::entity workshop, const Workshop& data) {
+		if (data.woodPile == pile)
+		{
+			store = workshop;
+		}
+	});
 	// A worship site's food pot is its store
 	Entities().Each<const WorshipSite>([pile, &store](entt::entity site, const WorshipSite& data) {
 		if (data.foodPot == pile)
@@ -474,8 +503,12 @@ bool ResourceStoreSystem::IsStore(entt::entity store, ResourceType type) const
 	{
 		return ecs::store_rules::BuildingSiteStores(type);
 	}
+	// A workshop stores wood
+	if (registry.AllOf<Workshop, Abode>(store))
+	{
+		return type == ResourceType::Wood || type == ResourceType::Any;
+	}
 	// A pile stores only its own resource, and only through the store it is part of
-	// TODO(stores): workshops store wood; openblack has no workshops yet
 	if (const auto* pot = registry.TryGet<const Pot>(store))
 	{
 		const auto own = PotInfoOf(pot->type).resourceType;
@@ -500,6 +533,7 @@ uint32_t ResourceStoreSystem::AddToPile(entt::entity pile, ResourceType type, ui
 	}
 	const auto taken = piles::AmountTaken(pot->amount, amount, pot->maxAmount, piles::IsCapped(info.nextPotForResource));
 	pot->amount += taken;
+	ResizeAfterChange(pile, *pot);
 	// A poisoned gift poisons the pile, which stays poisoned whatever is added after
 	pot->poisoned = pot->poisoned || poisoned;
 	return taken;
@@ -543,6 +577,38 @@ uint32_t ResourceStoreSystem::FillPit(entt::entity store, ResourceType type, uin
 	return amount - left;
 }
 
+uint32_t ResourceStoreSystem::FillWorkshop(entt::entity store, ResourceType type, uint32_t amount, bool poisoned)
+{
+	// A workshop keeps only wood, in its one pile. The workshop makes the pile when it has none.
+	if (type != ResourceType::Wood || amount == 0 || !Locator::workshopSystem::has_value())
+	{
+		return 0;
+	}
+	const auto pile = Locator::workshopSystem::value().WoodPileOf(store);
+	return pile != entt::null ? AddToPile(pile, type, amount, poisoned) : 0u;
+}
+
+uint32_t ResourceStoreSystem::TakeFromWorkshop(entt::entity store, ResourceType type, uint32_t amount,
+                                               std::optional<PlayerNames> taker)
+{
+	auto& registry = Entities();
+	// Wood comes off the workshop's pile first, when it has one, and the workshop counts only that wood less
+	if (const auto* data = registry.TryGet<const Workshop>(store);
+	    type == ResourceType::Wood && data != nullptr && registry.Valid(data->woodPile) && registry.AllOf<Pot>(data->woodPile))
+	{
+		const auto pile = data->woodPile;
+		auto& pot = registry.Get<Pot>(pile);
+		const auto taken = std::min(amount, pot.amount);
+		pot.amount -= taken;
+		if (taken != 0 && pot.amount == 0)
+		{
+			PileEmptied(pile, pot);
+		}
+		amount = taken;
+	}
+	return RemovedFromStore(store, type, amount, taker);
+}
+
 uint32_t ResourceStoreSystem::AddToStore(entt::entity store, ResourceType type, uint32_t amount,
                                          std::optional<PlayerNames> giver, bool poisoned, std::optional<glm::vec3> at)
 {
@@ -562,7 +628,9 @@ uint32_t ResourceStoreSystem::AddToStore(entt::entity store, ResourceType type, 
 		return ecs::store_rules::BuildingSiteStores(type) ? AddResource(store, ResourceType::Wood, amount, at) : 0u;
 	}
 	auto* abode = registry.TryGet<Abode>(store);
-	if (abode == nullptr || !registry.AllOf<StoragePit>(store) || (type != ResourceType::Food && type != ResourceType::Wood))
+	const bool workshop = registry.AllOf<Workshop>(store);
+	if (abode == nullptr || !(workshop || registry.AllOf<StoragePit>(store)) ||
+	    (type != ResourceType::Food && type != ResourceType::Wood))
 	{
 		return 0;
 	}
@@ -572,7 +640,7 @@ uint32_t ResourceStoreSystem::AddToStore(entt::entity store, ResourceType type, 
 	{
 		Locator::townSystem::value().MarkDesiresChanged(town);
 	}
-	const auto added = FillPit(store, type, amount, poisoned);
+	const auto added = workshop ? FillWorkshop(store, type, amount, poisoned) : FillPit(store, type, amount, poisoned);
 	if (!giver.has_value() || town == entt::null)
 	{
 		CountOf(*abode, type) += added;
@@ -692,14 +760,20 @@ uint32_t ResourceStoreSystem::TakeFromPile(entt::entity pile, ResourceType type,
 	const auto store = StoreOf(pile);
 	if (!store.has_value())
 	{
-		// A pile on its own goes once it has nothing left
+		// A pile on its own goes once it has nothing left. A pot first takes its size from what is left.
 		const auto taken = std::min(amount, pot->amount);
 		pot->amount -= taken;
+		ResizeAfterChange(pile, *pot);
 		if (piles::GoesWhenEmptied(pot->amount, false))
 		{
 			ecs::world_objects::Remove(pile);
 		}
 		return taken;
+	}
+	// A workshop's pile gives what it holds, and the workshop counts that much less
+	if (registry.AllOf<Workshop>(*store))
+	{
+		return TakeFromWorkshop(*store, type, amount, taker);
 	}
 	// What is over what the store's piles can hold isn't this pile's to give
 	const auto* abode = registry.TryGet<const Abode>(*store);
@@ -746,6 +820,10 @@ void ResourceStoreSystem::ReportGift(entt::entity store, ResourceType type, Play
 	{
 		receiver = creature_deeds::Receiver::StoragePit;
 	}
+	else if (registry.AllOf<Workshop>(store))
+	{
+		receiver = creature_deeds::Receiver::Workshop;
+	}
 	else if (IsWorshipSite(store))
 	{
 		receiver = creature_deeds::Receiver::WorshipSite;
@@ -776,7 +854,17 @@ bool ResourceStoreSystem::TakeObject(entt::entity store, entt::entity object, st
 	{
 		return false;
 	}
-	const auto resource = ResourceOf(object);
+	return TakeObjectAs(store, object, ResourceOf(object), giver);
+}
+
+bool ResourceStoreSystem::TakeObjectAs(entt::entity store, entt::entity object, ObjectResource resource,
+                                       std::optional<PlayerNames> giver)
+{
+	auto& registry = Entities();
+	if (!registry.Valid(store) || !registry.Valid(object))
+	{
+		return false;
+	}
 	if (resource.type == ResourceType::None || !IsStore(store, resource.type))
 	{
 		return false;
@@ -898,15 +986,15 @@ bool ResourceStoreSystem::PourAt(ResourceType type, glm::vec3 point, uint32_t am
 	if (speedUp && type == ResourceType::Food)
 	{
 		pile.speedUp = true;
-		if (Locator::particleSystem::has_value())
+		if (Locator::effectRequestSystem::has_value())
 		{
-			pile.speedUpVisual =
-			    Locator::particleSystem::value().StartSpotVisual(SpotVisualType::PilefoodSpeedup, point, -1, created, 1.0f);
+			pile.speedUpVisual = Locator::effectRequestSystem::value().Start(
+			    {.type = SpotVisualType::PilefoodSpeedup, .position = point, .turns = -1, .owner = created});
 		}
 	}
-	// The people come to look at it
+	// The people come to look at it: a new free pile always asks for the reaction of its kind
 	const auto reaction = PotInfoOf(potType).associatedReaction;
-	if (reaction != Reaction::None && Locator::reactionSystem::has_value())
+	if (piles::ReactsWhenMade(PotInfoOf(potType).potType, reaction, true) && Locator::reactionSystem::has_value())
 	{
 		Locator::reactionSystem::value().Create({.initiator = created,
 		                                         .type = reaction,
@@ -970,11 +1058,19 @@ float ScaleOf(entt::entity object)
 	return transform != nullptr ? transform->scale.x : 1.0f;
 }
 
+/// A rock or a fallen trunk takes a size. One in the map's cells that changes its size comes out of them and goes in
+/// again.
 void SetScale(entt::entity object, float scale)
 {
 	auto& registry = Entities();
-	registry.Get<Transform>(object).scale = glm::vec3(scale);
+	auto& transform = registry.Get<Transform>(object);
+	const bool resized = transform.scale.x != scale;
+	transform.scale = glm::vec3(scale);
 	registry.SetDirty();
+	if (resized)
+	{
+		ecs::thing_map_place::Reinsert(object);
+	}
 }
 } // namespace
 
@@ -1062,19 +1158,14 @@ uint32_t ResourceStoreSystem::AddResource(entt::entity object, ResourceType type
 	}
 	if (auto* abode = registry.TryGet<Abode>(object))
 	{
-		if (registry.AllOf<StoragePit>(object))
+		// A storage pit and a workshop keep what they get in their piles
+		if (registry.AnyOf<StoragePit, Workshop>(object))
 		{
 			return AddToStore(object, type, amount, std::nullopt, false, at);
 		}
-		// TODO(temple-builders): a workshop keeps its wood in a pile of its own; openblack has no workshop store yet
 		if (type != ResourceType::Food && type != ResourceType::Wood)
 		{
 			return 0;
-		}
-		// A workshop given wood when it had none changes what its town wants
-		if (abode->type == AbodeNumber::Workshop && CountOf(*abode, type) == 0 && Locator::townSystem::has_value())
-		{
-			Locator::townSystem::value().MarkDesiresChanged(TownOf(object));
 		}
 		CountOf(*abode, type) += amount;
 		return amount;
@@ -1144,6 +1235,12 @@ uint32_t ResourceStoreSystem::RemoveResource(entt::entity object, ResourceType t
 			return type == ResourceType::Food || type == ResourceType::Wood ? TakeFromPit(object, type, amount, std::nullopt)
 			                                                                : 0u;
 		}
+		if (registry.AllOf<Workshop>(object))
+		{
+			return type == ResourceType::Food || type == ResourceType::Wood
+			           ? TakeFromWorkshop(object, type, amount, std::nullopt)
+			           : 0u;
+		}
 		if (type != ResourceType::Food && type != ResourceType::Wood)
 		{
 			return 0;
@@ -1187,8 +1284,7 @@ uint32_t ResourceStoreSystem::RemoveResource(entt::entity object, ResourceType t
 			registry.SetLayoutDirty();
 			return take.taken;
 		}
-		registry.Get<Transform>(object).scale = glm::vec3(*take.scale);
-		registry.SetDirty();
+		SetScale(object, *take.scale);
 		return take.taken;
 	}
 	if (registry.AllOf<BigForest>(object))

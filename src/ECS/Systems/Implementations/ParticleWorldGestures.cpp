@@ -24,7 +24,7 @@
 #include "ECS/Registry.h"
 #include "ECS/Systems/HandSystemInterface.h"
 #include "Locator.h"
-#include "ParticleSystem.h"
+#include "ParticleRuleSystem.h"
 #include "Particles/GestureTrail.h"
 #include "Particles/LightSheet.h"
 
@@ -52,14 +52,25 @@ void GameParticleWorld::AddLightSheet(const std::shared_ptr<particles::LightShee
 	_lightSheets.push_back(sheet);
 }
 
+void GameParticleWorld::AddOwnedSheet(const std::shared_ptr<particles::LightSheet>& sheet)
+{
+	const bool listed = std::ranges::any_of(_ownedSheets, [&sheet](const auto& owned) { return owned.lock() == sheet; });
+	if (sheet != nullptr && !listed)
+	{
+		_ownedSheets.push_back(sheet);
+	}
+}
+
 std::vector<std::shared_ptr<particles::LightSheet>> GameParticleWorld::LightSheets() const
 {
-	std::erase_if(_lightSheets, [](const auto& sheet) { return sheet.expired(); });
 	std::vector<std::shared_ptr<particles::LightSheet>> sheets;
-	sheets.reserve(_lightSheets.size());
-	for (const auto& sheet : _lightSheets)
+	for (auto* list : {&_lightSheets, &_ownedSheets})
 	{
-		sheets.push_back(sheet.lock());
+		std::erase_if(*list, [](const auto& sheet) { return sheet.expired(); });
+		for (const auto& sheet : *list)
+		{
+			sheets.push_back(sheet.lock());
+		}
 	}
 	return sheets;
 }
@@ -87,7 +98,7 @@ void GameParticleWorld::SetHandGlow(uint32_t rgb)
 	}
 }
 
-void ParticleSystem::AddGestureTrail(std::shared_ptr<particles::GestureTrail> trail)
+void ParticleRuleSystem::AddGestureTrail(std::shared_ptr<particles::GestureTrail> trail)
 {
 	if (trail != nullptr)
 	{
@@ -95,7 +106,7 @@ void ParticleSystem::AddGestureTrail(std::shared_ptr<particles::GestureTrail> tr
 	}
 }
 
-void ParticleSystem::KeepGestureTrails()
+void ParticleRuleSystem::KeepGestureTrails()
 {
 	if (IsRunning(_gestureTrails))
 	{
@@ -107,7 +118,7 @@ void ParticleSystem::KeepGestureTrails()
 	                                                                            : PlayerNames::PLAYER_ONE));
 }
 
-void ParticleSystem::UpdateFrame(float gameSeconds, const HandFrame& hand)
+void ParticleRuleSystem::UpdateFrame(float gameSeconds, const HandFrame& hand)
 {
 	if (_paused)
 	{
@@ -115,7 +126,8 @@ void ParticleSystem::UpdateFrame(float gameSeconds, const HandFrame& hand)
 	}
 	for (const auto& sheet : _world.LightSheets())
 	{
-		if (!sheet->Hidden())
+		// A sheet with its own clock is moved on by its owner
+		if (!sheet->Hidden() && !sheet->OwnClock())
 		{
 			sheet->Update(gameSeconds);
 		}
@@ -148,12 +160,12 @@ void ParticleSystem::UpdateFrame(float gameSeconds, const HandFrame& hand)
 	it->effect->SetProcessInfo({.handPosition = hand.position, .enabled = hand.gesturing});
 	if (StepEffect(*it->effect, gameSeconds))
 	{
-		_effects.erase(FindRunning(_gestureChain));
+		Forget(FindRunning(_gestureChain));
 	}
 	StepSelectionEffect(gameSeconds, hand);
 }
 
-void ParticleSystem::StepSelectionEffect(float gameSeconds, const HandFrame& hand)
+void ParticleRuleSystem::StepSelectionEffect(float gameSeconds, const HandFrame& hand)
 {
 	// The effect of a selection runs all the time at the hand. It shows while the miracle selection or the leash
 	// picker is open, with the strength of the size of the hand.
@@ -176,11 +188,11 @@ void ParticleSystem::StepSelectionEffect(float gameSeconds, const HandFrame& han
 	it->effect->SetProcessInfo({.handPosition = hand.position, .power = hand.size, .enabled = hand.selecting});
 	if (StepEffect(*it->effect, gameSeconds))
 	{
-		_effects.erase(FindRunning(_selectionEffect));
+		Forget(FindRunning(_selectionEffect));
 	}
 }
 
-void ParticleSystem::ScrollChains(std::chrono::milliseconds frameRealTime, std::chrono::milliseconds frameGameTime)
+void ParticleRuleSystem::ScrollChains(std::chrono::milliseconds frameRealTime, std::chrono::milliseconds frameGameTime)
 {
 	const auto step = water_rings::Step(_chainScrollPace, frameRealTime, frameGameTime);
 	if (_paused || step.count() == 0)
@@ -193,7 +205,7 @@ void ParticleSystem::ScrollChains(std::chrono::milliseconds frameRealTime, std::
 	}
 }
 
-void ParticleSystem::StepShowers(float gameSeconds)
+void ParticleRuleSystem::StepShowers(float gameSeconds)
 {
 	constexpr float k_MillisecondsPerSecond = 1000.0f;
 	const auto localFloat = [](float range) {
@@ -220,22 +232,5 @@ void ParticleSystem::StepShowers(float gameSeconds)
 			particles::rising_sparks::StepSparks(*shower.sparks, shower.clock.Take(gameSeconds * k_MillisecondsPerSecond),
 			                                     localFloat);
 		});
-	}
-}
-
-void ParticleSystem::AddLightSheets(particles::draw::Frame& frame) const
-{
-	std::vector<particles::LightSheet::Vertex> vertices;
-	std::vector<uint32_t> triangles;
-	for (const auto& sheet : _world.LightSheets())
-	{
-		if (sheet->Hidden())
-		{
-			continue;
-		}
-		// It takes its place by where its middle was when it was last drawn
-		const auto sortPoint = sheet->Middle();
-		sheet->Build(vertices, triangles);
-		particles::draw::AddLightSheet(frame, vertices, triangles, sortPoint, sheet->GetLook());
 	}
 }

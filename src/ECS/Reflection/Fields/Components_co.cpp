@@ -33,7 +33,10 @@ void openblack::ecs::reflection::RegisterFields_Components_co(entt::meta_ctx& co
 	    .Field<&components::ComputerPlayer::creatureLike>("creatureLike")
 	    .Field<&components::ComputerPlayer::mind>("mind")
 	    .Field<&components::ComputerPlayer::hand>("hand")
-	    .Field<&components::ComputerPlayer::casts>("casts");
+	    .Field<&components::ComputerPlayer::casts>("casts")
+	    .Field<&components::ComputerPlayer::speed>("speed")
+	    .Field<&components::ComputerPlayer::seen>("seen");
+	Reflect<components::ComputerNodeNames>(context).Field<&components::ComputerNodeNames::names>("names");
 	Reflect<components::PlannedTemple>(context)
 	    .Field<&components::PlannedTemple::townId>("townId")
 	    .Field<&components::PlannedTemple::owner>("owner")
@@ -45,6 +48,7 @@ void openblack::ecs::reflection::RegisterFields_Components_co(entt::meta_ctx& co
 	    .Field<&components::PlannedAbode::wasBuilt>("wasBuilt");
 	Reflect<components::BuildingSite>(context)
 	    .Field<&components::BuildingSite::town>("town")
+	    .Field<&components::BuildingSite::number>("number")
 	    .Field<&components::BuildingSite::desire>("desire")
 	    .Field<&components::BuildingSite::repair>("repair")
 	    .Field<&components::BuildingSite::takesBroughtWood>("takesBroughtWood")

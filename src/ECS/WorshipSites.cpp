@@ -12,9 +12,13 @@
 #include <cmath>
 
 #include <glm/geometric.hpp>
+#include <glm/mat4x4.hpp>
 
 #include "Common/GUtilsDistance.h"
 #include "Common/PortableMath.h"
+#include "Common/X87.h"
+#include "Common/X87Angle.h"
+#include "Common/X87Matrix.h"
 
 namespace openblack::ecs::worship_site
 {
@@ -37,8 +41,29 @@ glm::vec2 CentreOnLand(glm::vec3 position, const glm::mat3& rotation, float scal
 	return {centre.x, centre.z};
 }
 
-std::optional<uint32_t> NearestFreePlace(const std::array<bool, k_Places>& taken, glm::vec2 temple, glm::vec3 placePoint,
-                                         glm::vec2 spot)
+float EdgeGap(glm::vec2 centre, glm::vec2 thing, float thingRadius)
+{
+	return gutils::GetDistanceInMetres(centre, thing) - (k_EffectRadius + thingRadius);
+}
+
+glm::vec2 PlaceJudgePoint(glm::vec2 temple, float templeFacing, float templeScale, uint32_t place, glm::vec3 templePoint)
+{
+	// The place turns the temple's point by the angle between the place and the temple. The sine and cosine are floats.
+	const float turn = PlaceFacing(templeFacing, place) - templeFacing;
+	const float cosine = x87::RoundToFloat(x87::Cos(turn));
+	const float sine = x87::RoundToFloat(x87::Sin(turn));
+	glm::mat4 placeTurn {1.0f};
+	placeTurn[0] = glm::vec4(cosine, 0.0f, sine, 0.0f);
+	placeTurn[2] = glm::vec4(-sine, 0.0f, cosine, 0.0f);
+	// The temple's matrix, with its turn, size and position on the land
+	auto templeMatrix = glm::mat4(x87::GameUprightTurnScaled(templeFacing, templeScale));
+	templeMatrix[3] = glm::vec4(temple.x, 0.0f, temple.y, 1.0f);
+	const auto judged = x87::TransformPoint(x87::Product(placeTurn, templeMatrix), templePoint, x87::k_MeshPointOrder);
+	return {judged.x, judged.z};
+}
+
+std::optional<uint32_t> NearestFreePlace(const std::array<bool, k_Places>& taken, glm::vec2 temple, float templeFacing,
+                                         float templeScale, glm::vec3 templePoint, glm::vec2 spot)
 {
 	// Nearer than this or no place at all, the first of equally near places kept
 	float nearest = 999999.0f;
@@ -49,7 +74,8 @@ std::optional<uint32_t> NearestFreePlace(const std::array<bool, k_Places>& taken
 		{
 			continue;
 		}
-		const float distance = gutils::GetDistanceInMetres(spot, TurnedPoint(temple, PlaceFacing(0.0f, place), placePoint));
+		const auto judged = PlaceJudgePoint(temple, templeFacing, templeScale, place, templePoint);
+		const float distance = gutils::GetDistanceInMetres(spot, judged);
 		if (distance < nearest)
 		{
 			nearest = distance;

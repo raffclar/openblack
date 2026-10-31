@@ -143,6 +143,18 @@ public:
 	/// Asks the lobby for the events of a channel of the push channel ("lobby", "servers" or "server-<id>"), or stops
 	/// them. The client asks again for each channel when the push channel opens again.
 	virtual void WatchChannel(std::string channel, bool watch) = 0;
+	/// The lands of network games that the lobby gives to the players of a room that plays them (deviation 169). A lobby
+	/// with no such list gives an error.
+	virtual void GetMaps(LobbyCallback<lobby_api::MapList> callback)
+	{
+		callback({.value = std::nullopt, .error = {.kind = LobbyErrorKind::NotConfigured}});
+	}
+	/// The bytes of the file of a land of the list. The lobby gives the file only to a player with a ticket for a room
+	/// that plays it. The answer can come compressed; the callback gets the bytes of the file.
+	virtual void DownloadMap(const lobby_api::OnlineMap& /*map*/, LobbyCallback<std::vector<uint8_t>> callback)
+	{
+		callback({.value = std::nullopt, .error = {.kind = LobbyErrorKind::NotConfigured}});
+	}
 	/// A ticket to join a game server, as a god or as an observer. The address of the game socket must be a WSS
 	/// address.
 	virtual void RequestJoinTicket(std::string serverId, game_socket::Role role,
@@ -168,6 +180,9 @@ public:
 	virtual void GetWeather(lobby_api::Date date, LobbyCallback<lobby_api::RealWeather> callback) = 0;
 	/// Sends the files of the player's creature to the lobby, which gives the address of the creature's web page
 	virtual void UploadCreature(lobby_api::CreatureUpload upload, LobbyCallback<lobby_api::CreatureUploadReply> callback) = 0;
+	/// Tells the lobby that a skirmish of the player is decided. The call sends no data: the session tells the lobby
+	/// which account sends it.
+	virtual void SendSkirmishPing(LobbyCallback<LobbyDone> callback) = 0;
 
 	/// A listener gets each event of the push channel, after the client used it. Returns the id of the listener.
 	virtual uint32_t AddEventListener(LobbyEventListener listener) = 0;

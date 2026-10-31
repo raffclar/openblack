@@ -20,6 +20,7 @@
 #include <sstream>
 #include <stdexcept>
 #include <string>
+#include <utility>
 #include <variant>
 
 #include "LHVMFile.h"
@@ -187,6 +188,7 @@ int LHVM::LoadBinary(const LHVMFile& file)
 
 	_tasks.clear();
 	_stoppedWhileRunning.reset();
+	_resumesInsideNative.clear();
 	_heldTasks.clear();
 	_resumeFrom.clear();
 	_breakpoints.clear();
@@ -270,9 +272,22 @@ int LHVM::RestoreState(const LHVMFile& file)
 	_heldTasks.clear();
 	_resumeFrom.clear();
 	_breakpoints.clear();
+	_resumesInsideNative.clear();
 	for (const auto& task : file.GetTasks())
 	{
 		_tasks.emplace(task.id, task);
+		// A save from inside a native function keeps the task at the call, with fewer values on its stack than the
+		// native takes. Between two instructions, a task never stops at a call that does not have its arguments.
+		if (task.instructionAddress < _instructions.size())
+		{
+			const auto& instruction = _instructions.at(task.instructionAddress);
+			const auto id = instruction.data.intVal;
+			if (instruction.code == Opcode::Sys && _functions != nullptr && id > 0 && id < _functions->size() &&
+			    static_cast<int64_t>(_functions->at(id).stackIn) > static_cast<int64_t>(task.stack.count))
+			{
+				_resumesInsideNative.emplace(task.id, task.instructionAddress);
+			}
+		}
 	}
 
 	_ticks = file.GetTicks();
@@ -296,7 +311,12 @@ VMValue LHVM::Pop(DataType& type)
 		return _currentStack->values.at(_currentStack->count);
 	}
 	type = DataType::None;
-	SignalError(ErrorCode::ErrStackEmpty);
+	// The game gives a zero and reports nothing. A native that a save stopped takes its arguments again after the load,
+	// and these pops are expected.
+	if (!_repeatsCutNative)
+	{
+		SignalError(ErrorCode::ErrStackEmpty);
+	}
 	return VMValue(0u);
 }
 
@@ -876,6 +896,17 @@ void LHVM::CpuLoop(VMTask& task)
 {
 	const auto wasExceptionHandler = task.inExceptionHandler;
 	task.iield = false;
+	// A task that a save stopped inside a native function starts again at that call. Its exception handler can run
+	// first, from another place, and the task comes back to the call after it.
+	bool repeatsCutNative = false;
+	if (const auto cut = _resumesInsideNative.find(task.id); cut != _resumesInsideNative.end())
+	{
+		repeatsCutNative = cut->second == task.instructionAddress;
+		if (repeatsCutNative || !task.inExceptionHandler)
+		{
+			_resumesInsideNative.erase(cut);
+		}
+	}
 	while (task.waitingTaskId == 0)
 	{
 		if ((!_breakpoints.empty() || !_heldTasks.empty() || !_resumeFrom.empty()) && DebuggerStops(task))
@@ -888,7 +919,9 @@ void LHVM::CpuLoop(VMTask& task)
 
 		// PrintInstruction(task, instruction); // just for debug purposes
 
+		_repeatsCutNative = std::exchange(repeatsCutNative, false);
 		(this->*_opcodesImpl.at(static_cast<int>(instruction.code)))(task, instruction);
+		_repeatsCutNative = false;
 
 		if (task.stop || task.iield || task.waitingTaskId != 0 || task.inExceptionHandler != wasExceptionHandler)
 		{
@@ -897,6 +930,17 @@ void LHVM::CpuLoop(VMTask& task)
 		task.instructionAddress++;
 	}
 	_currentTask = nullptr;
+}
+
+std::vector<LHVM::CutNative> LHVM::NativesCutBySave() const
+{
+	std::vector<CutNative> cut;
+	cut.reserve(_resumesInsideNative.size());
+	for (const auto& [task, address] : _resumesInsideNative)
+	{
+		cut.push_back({.task = task, .native = _instructions.at(address).data.uintVal});
+	}
+	return cut;
 }
 
 bool LHVM::DebuggerStops(VMTask& task)

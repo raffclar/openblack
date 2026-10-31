@@ -41,6 +41,7 @@
 #include "ECS/Components/Mesh.h"
 #include "ECS/Components/TattooMenuCreature.h"
 #include "ECS/Components/Transform.h"
+#include "ECS/DrawnRegistry.h"
 #include "ECS/Registry.h"
 #include "ECS/Systems/CreatureAnimationSystemInterface.h"
 #include "ECS/Systems/CreatureCarryOverSystemInterface.h"
@@ -80,7 +81,9 @@ bool TattooMenuSystem::IsButtonShown(bool restartPending) const
 void TattooMenuSystem::Open()
 {
 	Close();
-	auto& registry = Locator::entitiesRegistry::value();
+	// The body and its copy are things of the drawn registry. A frame makes them, so they take no entity numbers from
+	// the land, and the synced world stays the same on each computer.
+	auto& registry = Locator::drawnRegistry::value();
 	const auto physique = ProfilePhysique();
 	const auto shown =
 	    tattoo_menu::FromPhysique(physique.has_value() ? creaturemind::ReadPhysiqueFile(*physique) : std::nullopt,
@@ -145,9 +148,9 @@ void TattooMenuSystem::Close()
 			editor.Close();
 		}
 	}
-	if (Locator::entitiesRegistry::has_value())
+	if (Locator::drawnRegistry::has_value())
 	{
-		auto& registry = Locator::entitiesRegistry::value();
+		auto& registry = Locator::drawnRegistry::value();
 		for (const auto entity : {_copy, _body})
 		{
 			if (entity.has_value() && registry.Valid(*entity))
@@ -189,7 +192,7 @@ void TattooMenuSystem::Update(float milliseconds, glm::ivec2 pointer, bool butto
 		Close();
 		return;
 	}
-	auto& registry = Locator::entitiesRegistry::value();
+	auto& registry = Locator::drawnRegistry::value();
 	auto* menu = registry.TryGet<TattooMenuCreature>(*_copy);
 	auto* animation = registry.TryGet<CreatureAnimation>(*_copy);
 	if (menu == nullptr || animation == nullptr)
@@ -220,19 +223,20 @@ void TattooMenuSystem::Update(float milliseconds, glm::ivec2 pointer, bool butto
 	animation->lookAt = body.lookAt;
 	if (Locator::creatureAnimationSystem::has_value())
 	{
-		Locator::creatureAnimationSystem::value().PoseCopy(*_copy, frameMs);
+		Locator::creatureAnimationSystem::value().PoseCopy(registry, *_copy, frameMs, registry);
 	}
 	// Its hair swings from the new pose by the whole time of the frame, as the game is paused under the menu
 	if (Locator::creatureHairSystem::has_value())
 	{
-		Locator::creatureHairSystem::value().StepCopy(*_copy, std::chrono::duration<float, std::milli>(milliseconds));
+		Locator::creatureHairSystem::value().StepCopy(registry, *_copy, std::chrono::duration<float, std::milli>(milliseconds),
+		                                              registry);
 	}
 	HoverSites(pointer);
 }
 
 void TattooMenuSystem::HoverSites(glm::ivec2 pointer)
 {
-	auto& registry = Locator::entitiesRegistry::value();
+	auto& registry = Locator::drawnRegistry::value();
 	auto& editor = Locator::tattooEditorSystem::value();
 	auto* menu = registry.TryGet<TattooMenuCreature>(*_copy);
 	const auto* animation = registry.TryGet<const CreatureAnimation>(*_copy);

@@ -15,6 +15,7 @@
 #include <array>
 #include <functional>
 #include <optional>
+#include <span>
 #include <utility>
 #include <vector>
 
@@ -79,6 +80,9 @@ public:
 
 	/// Called once for each of a block's cells the first time a search reaches the block, to add what stands there
 	using Gatherer = std::function<void(glm::ivec2 cell, Obstacles& obstacles)>;
+	/// Called once for the whole block the first time a search reaches it, in place of the gatherer of each cell. It adds
+	/// what stands in the block's cells, in the order of the cells that the gatherer of each cell gets.
+	using BlockGatherer = std::function<void(glm::ivec2 block, Obstacles& obstacles)>;
 
 	/// Starts afresh for a walk from a point, keeping clear of things by a margin
 	void Reset(glm::vec2 walker, float margin, Gatherer gatherer = {});
@@ -86,11 +90,20 @@ public:
 	void ResetWithoutWalker(float margin, Gatherer gatherer = {});
 	/// Circles that hold either point (the square of the distance is less than the square of the radius) are left out
 	void LeaveOutCirclesHolding(glm::vec2 first, glm::vec2 second);
+	/// The points whose circles the obstacles leave out, for a saved game that keeps the obstacles with them
+	template <typename Self>
+	[[nodiscard]] static auto& LeftOutAround(Self& self)
+	{
+		return self._leftOutAround;
+	}
 	/// Forgets every circle, keeping how blocks are gathered
 	void Clear();
 	/// Sets what fills a block the first time that a search reaches it. A load of a saved game sets it again, because a
 	/// save does not keep it.
 	void SetGatherer(Gatherer gatherer) { _gatherer = std::move(gatherer); }
+	/// Sets what fills the whole of a block the first time that a search reaches it, in place of the gatherer of each
+	/// cell. A save does not keep it.
+	void SetBlockGatherer(BlockGatherer gatherer) { _blockGatherer = std::move(gatherer); }
 	/// Where the creature walking is now: circles added later are kept clear of it
 	void SetWalker(glm::vec2 walker) { _walker = walker; }
 	[[nodiscard]] glm::vec2 GetWalker() const { return _walker.value_or(glm::vec2(0.0f)); }
@@ -128,6 +141,7 @@ private:
 	std::array<std::optional<glm::vec2>, 2> _leftOutAround;
 	float _margin {0.0f};
 	Gatherer _gatherer;
+	BlockGatherer _blockGatherer;
 	std::vector<Obstacle> _obstacles;
 	/// Each block's circles, in the order added; searched newest first
 	std::vector<std::vector<uint32_t>> _blocks;
@@ -141,6 +155,33 @@ public:
 	{
 		visit(self._walker, self._margin, self._obstacles, self._blocks, self._gathered, self._filings);
 	}
+};
+
+/// The circles that a gatherer adds in the cells of a block, kept so that each search that reaches the block adds the
+/// same circles again without the work to find them. The circles of a thing are not added again to a block that has
+/// them already. That check uses the obstacles of each search, so the circles that a search gets are the same as the
+/// circles that the gatherer adds itself.
+class BlockGathering
+{
+public:
+	/// A circle of the land
+	void Land(glm::vec2 centre, float radius);
+	/// The circles of a thing in a cell. A block that has the circles of the thing already does not get them.
+	void Thing(glm::ivec2 cell, uint32_t thing, std::span<const Circle> circles);
+	/// Adds the circles to the obstacles in the order that the gatherer gave them
+	void AddTo(Obstacles& obstacles) const;
+
+private:
+	struct Step
+	{
+		/// None for a circle of the land
+		std::optional<uint32_t> thing;
+		glm::ivec2 cell {0, 0};
+		uint32_t first {0};
+		uint32_t count {0};
+	};
+	std::vector<Step> _steps;
+	std::vector<Circle> _circles;
 };
 
 /// A leg's length: an arc's round the circle the leg before heads for, else straight
@@ -273,4 +314,6 @@ public:
 /// The land's circles round a cell: one at the centre of each of the cell and its eight neighbours that is blocked, and
 /// that has water when the water is to be gone round too (a route that no one walks, such as a footpath's)
 void AddLandCircles(const WalkableLand& land, glm::ivec2 cell, Obstacles& obstacles, bool roundWater = false);
+/// The same circles of the land round a cell, kept in a gathering of a block
+void AddLandCircles(const WalkableLand& land, glm::ivec2 cell, BlockGathering& gathering, bool roundWater = false);
 } // namespace openblack::creature_route

@@ -61,10 +61,11 @@ glm::mat4 TopDown()
 	return m;
 }
 
-/// A land of three blocks along x, the last out of view, with fake images and its own registry
+/// A land of three blocks along x, the last out of view, with fake images, its own registry and its own drawn registry
 struct World
 {
 	ecs::Registry registry;
+	ecs::Registry drawn;
 	std::vector<uint8_t> black = std::vector<uint8_t>(40 * 40, 0);
 	std::vector<uint8_t> bright = std::vector<uint8_t>(14 * 14, 255);
 	LandShadeSystem system {LandShadeSystem::Sources {
@@ -89,14 +90,17 @@ struct World
 		        return land;
 	        },
 	    .registry = [this]() { return &registry; },
+	    .drawn = [this]() -> const ecs::Registry* { return &drawn; },
 	}};
 
-	void AddCloud(glm::vec2 at, uint32_t alpha)
+	/// A cloud of the sky, in the drawn registry or else in the land's registry
+	void AddCloud(glm::vec2 at, uint32_t alpha, bool inDrawn = true)
 	{
-		const auto cloud = registry.Create();
-		registry.Assign<ecs::components::Cloud>(cloud, ecs::components::Cloud {.track = {}, .pinned = false});
-		registry.Assign<ecs::components::Mist>(cloud, ecs::components::Mist {.size = 1.0f, .colour = alpha << 24u});
-		registry.Assign<ecs::components::Transform>(cloud, ecs::components::Transform {.position = {at.x, 0.0f, at.y}});
+		auto& into = inDrawn ? drawn : registry;
+		const auto cloud = into.Create();
+		into.Assign<ecs::components::Cloud>(cloud, ecs::components::Cloud {.track = {}, .pinned = false});
+		into.Assign<ecs::components::Mist>(cloud, ecs::components::Mist {.size = 1.0f, .colour = alpha << 24u});
+		into.Assign<ecs::components::Transform>(cloud, ecs::components::Transform {.position = {at.x, 0.0f, at.y}});
 	}
 
 	void AddVillageLight(glm::vec2 at)
@@ -217,7 +221,7 @@ TEST(LandShadeSystem, TheSkysCloudsShadeTheBlocksInViewForOneFrame)
 	EXPECT_EQ(map.lastChangedRow, map.size.y);
 
 	// The cloud fades out: the next frame shows the land as it was laid, in the rows it changed
-	world.registry.Each<ecs::components::Mist>([](ecs::components::Mist& mist) { mist.colour = 0; });
+	world.drawn.Each<ecs::components::Mist>([](ecs::components::Mist& mist) { mist.colour = 0; });
 	world.system.Shade(World::Day());
 	EXPECT_EQ(world.system.ShadowCount(), 0u);
 	EXPECT_EQ(CellOf(world.system.Land(), {0, 0}, 6, 2), k_Laid);
@@ -225,6 +229,18 @@ TEST(LandShadeSystem, TheSkysCloudsShadeTheBlocksInViewForOneFrame)
 	EXPECT_EQ(map.texels[(2 * map.size.x) + 6], k_Laid);
 	EXPECT_EQ(map.firstChangedRow, 0);
 	EXPECT_EQ(map.lastChangedRow, 17);
+}
+
+TEST(LandShadeSystem, OnlyTheCloudsOfTheDrawnRegistryShadeTheLand)
+{
+	World world;
+	world.AddCloud({50.0f, 10.0f}, 255, false);
+	world.system.Shade(World::Day());
+	EXPECT_EQ(world.system.ShadowCount(), 0u);
+	EXPECT_EQ(CellOf(world.system.Land(), {0, 0}, 6, 2), k_Laid);
+	world.AddCloud({50.0f, 10.0f}, 255);
+	world.system.Shade(World::Day());
+	EXPECT_EQ(world.system.ShadowCount(), 1u);
 }
 
 TEST(LandShadeSystem, NoShadowsWithoutTheDetailOrRoomForThem)

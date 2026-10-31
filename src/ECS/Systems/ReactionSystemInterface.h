@@ -96,12 +96,14 @@ public:
 		/// The dance the villagers taking it up dance round its thing, made as the first of them joins; it goes with
 		/// the reaction
 		entt::entity dance {entt::null};
+		/// Whether it spreads to more living things in its turn. A hand that holds its initiator can stop it.
+		bool spreads {true};
 
 		/// Gives the values that a saved game keeps to a visitor
 		template <typename Self, typename Visitor>
 		static void VisitSaved(Self& self, Visitor&& visit)
 		{
-			visit(self.id, self.source, self.age, self.reach, self.velocity, self.firstTaken, self.dance);
+			visit(self.id, self.source, self.age, self.reach, self.velocity, self.firstTaken, self.dance, self.spreads);
 		}
 	};
 
@@ -120,6 +122,11 @@ public:
 	virtual void RemoveFrom(entt::entity initiator, Reaction type) = 0;
 	/// One reaction goes, as a fire that has cooled stops alarming the living
 	virtual void Remove(uint32_t id) = 0;
+	/// A hand takes the initiator. Each reaction of the initiator whose table row ends it in a hand stops its spread.
+	/// The reaction stays, grows and ends at its time.
+	virtual void StopSpreadInHand(entt::entity /*initiator*/) {}
+	/// The hand uses or lets go of the initiator. Each reaction of the initiator spreads again.
+	virtual void SpreadAgain(entt::entity /*initiator*/) {}
 	/// A reaction now comes from another object, as a fire's alarm follows the fire to what its object became
 	virtual void SetInitiator(uint32_t id, entt::entity initiator) = 0;
 	/// The newest reaction that an initiator made now belongs to another player, as when a creature becomes a player's
@@ -134,6 +141,9 @@ public:
 	/// A villager takes up a reaction straight away, whatever else is more urgent to it and however lately it reacted to
 	/// that kind: a villager watching a creature goes to watch the fight the creature went into
 	virtual void TakeUp(uint32_t /*id*/, entt::entity /*living*/) {}
+	/// A villager or a creature is impressed by a reaction at once, but does not take it up. The people of the towns near
+	/// a new building site are impressed in this way by its scaffold.
+	virtual void Impress(uint32_t /*id*/, entt::entity /*living*/) {}
 	/// Whether an initiator has a reaction going
 	[[nodiscard]] virtual bool HasReaction(entt::entity initiator) const = 0;
 	/// Whether a living thing may take up a kind of reaction now. A creature also catches a flying thing only when it may
@@ -158,6 +168,11 @@ public:
 	/// A town's turn of belief, in its own turn: what its people were impressed by is believed, its wants that go unmet
 	/// cost its player belief, and the player it believes in most takes it at once
 	virtual void BelieveInTown(entt::entity /*town*/) {}
+	/// Each tenth turn, the belief that the towns gained in each player since the last time is added. The tallies of the
+	/// towns go back to nothing.
+	virtual void TownGainsTurn(uint32_t /*turn*/) {}
+	/// The number that the hand shows for the belief that the towns gained in a player at this turn, once
+	[[nodiscard]] virtual std::optional<float> TakeGainShown(PlayerNames /*player*/) { return std::nullopt; }
 	/// A town is given belief in a player by a thing, as by an artefact its people dance round: the symbol of it rises
 	/// from the thing, and the town's awe may be heard there
 	virtual void GiveTownBelief(entt::entity /*town*/, PlayerNames /*player*/, float /*amount*/, entt::entity /*from*/,

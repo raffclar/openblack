@@ -24,6 +24,7 @@
 #include <3D/SkyFrame.h>
 #include <Creature/CreatureDesires.h>
 #include <Creature/CreatureFight.h>
+#include <ECS/Components/CreatureBody.h>
 #include <ECS/Components/CreatureFight.h>
 #include <ECS/Components/CreatureNeeds.h>
 #include <ECS/Components/CreatureObjectAction.h>
@@ -249,6 +250,26 @@ TEST(InspectorSplash, SplashAtAPositionWithinARadius)
 	EXPECT_FALSE(inspector.Answer(std::get<Request>(decoded)).Ok());
 }
 
+// The symbols of belief that rose last show with their place, amount and colour, the newest first
+TEST(InspectorBelief, TheSymbolsOfBeliefThatRoseLast)
+{
+	const ecs::systems::ParticleRuleSystemInterface::BeliefSpritesSeen seen {
+	    .recent = {{.position = {1.0f, 2.0f, 3.0f}, .amount = 25, .colour = 0xFF0000},
+	               {.position = {4.0f, 5.0f, 6.0f}, .amount = 7, .colour = 0x00FF00}},
+	    .count = 40,
+	};
+	Inspector inspector;
+	inspector.Add(std::make_unique<ParticlesProvider>(ParticleSources {.belief = [&seen]() { return seen; }}));
+
+	const auto found = Ask(inspector, R"({"query": "particles.belief"})");
+	EXPECT_EQ(found["count"], 40);
+	ASSERT_EQ(found["recent"].size(), 2u);
+	EXPECT_EQ(found["recent"][0]["amount"], 25);
+	EXPECT_EQ(found["recent"][0]["colour"], 0xFF0000);
+	EXPECT_DOUBLE_EQ(found["recent"][0]["position"][1].get<double>(), 2.0);
+	EXPECT_EQ(found["recent"][1]["amount"], 7);
+}
+
 // The user's example: objects of a type within a radius, nearest first, with only their id, label, place and distance
 TEST_F(InspectorRegistry, ObjectsOfATypeWithinARadiusNearestFirst)
 {
@@ -333,6 +354,35 @@ TEST_F(InspectorRegistry, ComponentsAndFieldsOnRequest)
 	ASSERT_EQ(components["total"], 1);
 	EXPECT_EQ(components["items"][0]["count"], 5);
 	EXPECT_EQ(components["items"][0]["reflected"], true);
+}
+
+// A component too large for the answer (a posed creature's animation) keeps its small fields, lists the large ones by
+// their bytes, and does not take the components beside it
+TEST_F(InspectorRegistry, LargeComponentKeepsItsSmallFieldsAndTheComponentsBesideIt)
+{
+	auto& animation = _registry.Assign<ecs::components::CreatureAnimation>(_villager);
+	animation.breathPeriod = 3.0f;
+	animation.boneMatrices.assign(400, glm::mat4(1.0f));
+	animation.olderTurnPose = animation.boneMatrices;
+	animation.newerTurnPose = animation.boneMatrices;
+	const auto id = std::to_string(ToId(_villager));
+
+	const auto answer = Ask(_inspector, R"({"query": "ecs.entity", "params": {"id": )" + id +
+	                                        R"(, "components": ["CreatureAnimation", "Villager"]}, "max_bytes": 2048})");
+	ASSERT_TRUE(answer.contains("data")) << answer.dump();
+	EXPECT_FALSE(answer.contains("truncated"));
+	EXPECT_TRUE(answer["data"].contains("Villager"));
+	const auto& shown = answer["data"]["CreatureAnimation"];
+	EXPECT_FLOAT_EQ(shown["breathPeriod"].get<float>(), 3.0f);
+	EXPECT_FALSE(shown.contains("boneMatrices"));
+	EXPECT_GT(shown["omitted_fields"]["boneMatrices"].get<size_t>(), 1024u);
+
+	// The large field itself is still there by its path
+	const auto field = Ask(
+	    _inspector,
+	    R"({"query": "ecs.entity", "params": {"id": )" + id +
+	        R"(, "components": ["CreatureAnimation"]}, "fields": ["data.CreatureAnimation.boneMatrices"], "max_bytes": 16384})");
+	EXPECT_FALSE(field["data"]["CreatureAnimation"]["boneMatrices"].empty());
 }
 
 // What still points at an entity, through any component field that holds entities, even after the entity has gone

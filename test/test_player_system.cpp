@@ -7,6 +7,9 @@
  * openblack is licensed under the GNU General Public License version 3.
  *******************************************************************************/
 
+#include <cstddef>
+
+#include <array>
 #include <optional>
 
 #include <gtest/gtest.h>
@@ -105,6 +108,67 @@ TEST_F(PlayerSystemLands, APlayerNotOnTheNewLandIsForgotten)
 	_players.RegisterPlayers();
 
 	EXPECT_EQ(_players.FindPlayer(PlayerNames::PLAYER_THREE), std::nullopt);
+}
+
+TEST_F(PlayerSystemLands, AGodSlotThatNobodyJoinedYetGetsItsPlayerWhenTheLandNamesIt)
+{
+	// A network land has only the first player before the humans join, but a land script can name every god slot
+	_players.AddPlayer(MakePlayer(PlayerNames::PLAYER_ONE));
+	const auto two = _players.EnsurePlayer(PlayerNames::PLAYER_TWO);
+	auto& registry = Locator::entitiesRegistry::value();
+	ASSERT_TRUE(registry.Valid(two));
+	EXPECT_EQ(registry.Get<components::Player>(two).name, PlayerNames::PLAYER_TWO);
+	EXPECT_EQ(_players.FindPlayer(PlayerNames::PLAYER_TWO), two);
+}
+
+TEST_F(PlayerSystemLands, AGodSlotKeepsTheSamePlayerWhenTheLandNamesItAgain)
+{
+	const auto one = MakePlayer(PlayerNames::PLAYER_ONE);
+	_players.AddPlayer(one);
+	EXPECT_EQ(_players.EnsurePlayer(PlayerNames::PLAYER_ONE), one);
+	const auto two = _players.EnsurePlayer(PlayerNames::PLAYER_TWO);
+	EXPECT_EQ(_players.EnsurePlayer(PlayerNames::PLAYER_TWO), two);
+	auto count = 0;
+	Locator::entitiesRegistry::value().Each<const components::Player>(
+	    [&count](const components::Player& player) { count += player.name == PlayerNames::PLAYER_TWO ? 1 : 0; });
+	EXPECT_EQ(count, 1);
+}
+
+TEST_F(PlayerSystemLands, EachLandHasThePlayerOfEverySlotAndTheNeutralPlayerOnce)
+{
+	const auto one = MakePlayer(PlayerNames::PLAYER_ONE);
+	_players.AddPlayer(one);
+	_players.EnsureAllPlayers();
+	_players.EnsureAllPlayers();
+	std::array<int, static_cast<size_t>(PlayerNames::_COUNT)> counts {};
+	Locator::entitiesRegistry::value().Each<const components::Player>(
+	    [&counts](const components::Player& player) { ++counts.at(static_cast<size_t>(player.name)); });
+	for (const auto count : counts)
+	{
+		EXPECT_EQ(count, 1);
+	}
+	EXPECT_EQ(_players.FindPlayer(PlayerNames::PLAYER_ONE), one);
+	EXPECT_TRUE(_players.FindPlayer(PlayerNames::NEUTRAL).has_value());
+}
+
+TEST_F(PlayerSystemLands, AGameAloneHasOnlyTheFirstPlayerAsAPlayerThatPlays)
+{
+	_players.EnsureAllPlayers();
+	EXPECT_TRUE(_players.PlaysInGame(PlayerNames::PLAYER_ONE));
+	EXPECT_FALSE(_players.PlaysInGame(PlayerNames::PLAYER_TWO));
+	EXPECT_FALSE(_players.PlaysInGame(PlayerNames::PLAYER_SEVEN));
+	EXPECT_FALSE(_players.PlaysInGame(PlayerNames::NEUTRAL));
+}
+
+TEST_F(PlayerSystemLands, AGodSlotOfALandThatIsGoneGetsANewPlayerOnTheNextLand)
+{
+	_players.EnsurePlayer(PlayerNames::PLAYER_TWO);
+	ClearLand();
+	const auto now = _players.EnsurePlayer(PlayerNames::PLAYER_TWO);
+	auto& registry = Locator::entitiesRegistry::value();
+	EXPECT_TRUE(registry.Valid(now));
+	EXPECT_EQ(registry.Get<components::Player>(now).name, PlayerNames::PLAYER_TWO);
+	EXPECT_EQ(_players.FindPlayer(PlayerNames::PLAYER_TWO), now);
 }
 
 TEST_F(PlayerSystemLands, APlayerKeepsTheirAlignmentAndWhatIsTheirsOnTheNextLand)

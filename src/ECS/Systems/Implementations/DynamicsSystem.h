@@ -20,6 +20,7 @@
 #include "ECS/PhysicsClasses.h"
 #include "ECS/Systems/DynamicsSystemInterface.h"
 #include "Physics/BodyShapes.h"
+#include "Physics/PairRules.h"
 #include "Physics/TurnRules.h"
 
 #if !defined(LOCATOR_IMPLEMENTATIONS)
@@ -62,6 +63,7 @@ public:
 	PhysicsStarted InitialisePhysics(entt::entity object, const PhysicsStart& start) override;
 	PhysicsStarted StartPhysicsAsObject(entt::entity object, const PhysicsStart& start) override;
 	PhysicsEntry* AddObject(entt::entity object, const PhysicsStart& start) override;
+	PhysicsEntry* AddObstacle(entt::entity object) override;
 	[[nodiscard]] PhysicsEntry* Find(entt::entity object) override;
 	[[nodiscard]] bool CanBecomePhysicsObject(entt::entity object) const override;
 	[[nodiscard]] bool IsFlying(entt::entity object) const override;
@@ -72,8 +74,9 @@ public:
 	void RaiseClearOfWhatIsUnder(PhysicsEntry& entry) override;
 	void SettleOnLand(PhysicsEntry& entry, bool noPullDown, bool alignToSlope) override;
 	FromHandResult LetGoFromHand(entt::entity object, const FromHand& release) override;
-	[[nodiscard]] std::optional<player_commands::ThrowStart>
-	StartOfThrow(entt::entity object, const std::optional<std::pair<glm::mat3, glm::vec3>>& drawn, bool alignToSlope) override;
+	[[nodiscard]] std::optional<hand_grab::throw_lead::LedThrow>
+	StartOfThrow(entt::entity object, const std::optional<std::pair<glm::mat3, glm::vec3>>& drawn, bool alignToSlope,
+	             glm::vec3 velocity, int leadTurns) override;
 	float PushObject(entt::entity object) override;
 	[[nodiscard]] const physics::Ground* GetGround() const override;
 	[[nodiscard]] std::vector<physics::Ellipsoid> CreatureSkeleton(entt::entity creature) override;
@@ -155,6 +158,8 @@ private:
 	/// While the physics runs its turn, bodies aren't taken out of it from outside
 	bool _inTurnUpdate {false};
 	physics::turn::SoundPairs _soundPairs;
+	/// What decides the pairs of bodies in a step, one for each body, kept so that a step does not ask for new memory
+	std::vector<physics::PairMember> _pairMembers;
 	/// Each creature model's bones' boxes, by the model, worked out once
 	std::unordered_map<entt::id_type, std::vector<physics::shapes::BoneBox>> _creatureBoxes;
 	/// The machine's milliseconds as the game reads them, which pick the fly-by whoosh

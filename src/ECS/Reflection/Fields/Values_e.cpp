@@ -34,6 +34,7 @@
 #include "ECS/Components/HandMorph.h"
 #include "ECS/Components/MapScriptGlobals.h"
 #include "ECS/Components/Player.h"
+#include "ECS/Components/Reward.h"
 #include "ECS/Components/Shark.h"
 #include "ECS/Components/TeleportStone.h"
 #include "ECS/Components/TownCreatureAttitude.h"
@@ -78,11 +79,12 @@ void openblack::ecs::reflection::RegisterFields_Values_e(entt::meta_ctx& context
 	    .Field<&openblack::ecs::RegistryContext::footpathObstacles>("footpathObstacles")
 	    .Field<&openblack::ecs::RegistryContext::streams>("streams")
 	    .Field<&openblack::ecs::RegistryContext::towns>("towns")
-	    .Field<&openblack::ecs::RegistryContext::villageLightFlames>("villageLightFlames")
+	    .PresentationField<&openblack::ecs::RegistryContext::villageLightFlames>("villageLightFlames")
 	    .Field<&openblack::ecs::RegistryContext::mapScriptGlobals>("mapScriptGlobals")
 	    .Field<&openblack::ecs::RegistryContext::nextHandRockTap>("nextHandRockTap")
 	    .Field<&openblack::ecs::RegistryContext::nextCreatureRockSmash>("nextCreatureRockSmash")
 	    .Field<&openblack::ecs::RegistryContext::scriptLetsTempleBeEntered>("scriptLetsTempleBeEntered")
+	    .Field<&openblack::ecs::RegistryContext::scriptCameraOrders>("scriptCameraOrders")
 	    .Field<&openblack::ecs::RegistryContext::templeEntrancesTakeCursor>("templeEntrancesTakeCursor", {k_PlayerNamesNames})
 	    .Field<&openblack::ecs::RegistryContext::gameOver>("gameOver")
 	    .Field<&openblack::ecs::RegistryContext::skirmish>("skirmish")
@@ -93,7 +95,8 @@ void openblack::ecs::reflection::RegisterFields_Values_e(entt::meta_ctx& context
 	    .Field<&openblack::ecs::RegistryContext::nextDamageBeamSound>("nextDamageBeamSound")
 	    .Field<&openblack::ecs::RegistryContext::creaturesMade>("creaturesMade")
 	    .Field<&openblack::ecs::RegistryContext::nextTownGained>("nextTownGained")
-	    .Field<&openblack::ecs::RegistryContext::peopleCountedInTurn>("peopleCountedInTurn")
+	    .Field<&openblack::ecs::RegistryContext::nextTownMade>("nextTownMade")
+	    .Field<&openblack::ecs::RegistryContext::peopleCountedInTurn>("peopleCountedInTurn", {k_PlayerNamesNames})
 	    .Field<&openblack::ecs::RegistryContext::landAvoid>("landAvoid")
 	    .Field<&openblack::ecs::RegistryContext::creatureBoneReach>("creatureBoneReach")
 	    .Field<&openblack::ecs::RegistryContext::namedVillagersUsed>("namedVillagersUsed")
@@ -104,7 +107,7 @@ void openblack::ecs::reflection::RegisterFields_Values_e(entt::meta_ctx& context
 	    .Field<&openblack::ecs::RegistryContext::villagerDetailsShown>("villagerDetailsShown")
 	    .Field<&openblack::ecs::RegistryContext::impressiveMiracleCastTurn>("impressiveMiracleCastTurn")
 	    .Field<&openblack::ecs::RegistryContext::explorationMap>("explorationMap")
-	    .Field<&openblack::ecs::RegistryContext::globalStatistics>("globalStatistics");
+	    .PresentationField<&openblack::ecs::RegistryContext::globalStatistics>("globalStatistics");
 	Reflect<openblack::ecs::components::Animal::DrawnPlace>(context, ValueOnly {})
 	    .Field<&openblack::ecs::components::Animal::DrawnPlace::position>("position")
 	    .Field<&openblack::ecs::components::Animal::DrawnPlace::rotation>("rotation");
@@ -178,7 +181,6 @@ void openblack::ecs::reflection::RegisterFields_Values_e(entt::meta_ctx& context
 	    .Field<&openblack::ecs::components::CreatureLeash::Worn::holder>("holder")
 	    .Field<&openblack::ecs::components::CreatureLeash::Worn::works>("works")
 	    .Field<&openblack::ecs::components::CreatureLeash::Worn::tiedTo>("tiedTo")
-	    .Field<&openblack::ecs::components::CreatureLeash::Worn::tiedTurn>("tiedTurn")
 	    .Field<&openblack::ecs::components::CreatureLeash::Worn::slackLength>("slackLength")
 	    .Field<&openblack::ecs::components::CreatureLeash::Worn::maxLength>("maxLength");
 	Reflect<openblack::ecs::components::CreatureLeashRope::HeldRopes>(context, ValueOnly {})
@@ -264,6 +266,9 @@ void openblack::ecs::reflection::RegisterFields_Values_e(entt::meta_ctx& context
 	Reflect<openblack::ecs::components::HeldByCreature::Drawn>(context, ValueOnly {})
 	    .Field<&openblack::ecs::components::HeldByCreature::Drawn::position>("position")
 	    .Field<&openblack::ecs::components::HeldByCreature::Drawn::rotation>("rotation");
+	Reflect<openblack::ecs::components::HeldByCreature::Taken>(context, ValueOnly {})
+	    .Field<&openblack::ecs::components::HeldByCreature::Taken::position>("position")
+	    .Field<&openblack::ecs::components::HeldByCreature::Taken::place>("place");
 	Reflect<openblack::ecs::components::InHand::Drawn>(context, ValueOnly {})
 	    .Field<&openblack::ecs::components::InHand::Drawn::position>("position")
 	    .Field<&openblack::ecs::components::InHand::Drawn::rotation>("rotation");
@@ -284,6 +289,9 @@ void openblack::ecs::reflection::RegisterFields_Values_e(entt::meta_ctx& context
 	    .Field<&openblack::ecs::components::Player::Miracles::allEnabled>("allEnabled")
 	    .Field<&openblack::ecs::components::Player::Miracles::tribalPower>("tribalPower")
 	    .Field<&openblack::ecs::components::Player::Miracles::maxTribalPower>("maxTribalPower");
+	Reflect<openblack::ecs::components::Reward::Drawn>(context, ValueOnly {})
+	    .Field<&openblack::ecs::components::Reward::Drawn::position>("position")
+	    .Field<&openblack::ecs::components::Reward::Drawn::rotation>("rotation");
 	Reflect<openblack::ecs::components::Shark::DrawnPlace>(context, ValueOnly {})
 	    .Field<&openblack::ecs::components::Shark::DrawnPlace::position>("position")
 	    .Field<&openblack::ecs::components::Shark::DrawnPlace::rotation>("rotation");
@@ -345,6 +353,10 @@ void openblack::ecs::reflection::RegisterFields_Values_e(entt::meta_ctx& context
 	    .Field<&openblack::ecs::reward::DustSprite::offset>("offset")
 	    .Field<&openblack::ecs::reward::DustSprite::frame>("frame")
 	    .Field<&openblack::ecs::reward::DustSprite::rgb>("rgb");
+	Reflect<openblack::ecs::town_aggression::Harm>(context, ValueOnly {})
+	    .Field<&openblack::ecs::town_aggression::Harm::burn>("burn")
+	    .Field<&openblack::ecs::town_aggression::Harm::crush>("crush")
+	    .Field<&openblack::ecs::town_aggression::Harm::hit>("hit");
 	Reflect<openblack::ecs::town_aggression::Record>(context, ValueOnly {})
 	    .Field<&openblack::ecs::town_aggression::Record::aggression>("aggression", {k_PlayerNamesNames})
 	    .Field<&openblack::ecs::town_aggression::Record::lastTurns>("lastTurns", {k_PlayerNamesNames})
@@ -353,7 +365,8 @@ void openblack::ecs::reflection::RegisterFields_Values_e(entt::meta_ctx& context
 	    .Field<&openblack::ecs::town_aggression::Record::protectionMultiplier>("protectionMultiplier")
 	    .Field<&openblack::ecs::town_aggression::Record::mercyMultiplier>("mercyMultiplier")
 	    .Field<&openblack::ecs::town_aggression::Record::protection>("protection")
-	    .Field<&openblack::ecs::town_aggression::Record::mercy>("mercy");
+	    .Field<&openblack::ecs::town_aggression::Record::mercy>("mercy")
+	    .Field<&openblack::ecs::town_aggression::Record::lastHarms>("lastHarms", {k_PlayerNamesNames});
 	Reflect<openblack::ecs::village_totem::Ease>(context, ValueOnly {})
 	    .Field<&openblack::ecs::village_totem::Ease::share>("share")
 	    .Field<&openblack::ecs::village_totem::Ease::speed>("speed")

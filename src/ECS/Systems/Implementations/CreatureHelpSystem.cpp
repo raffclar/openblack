@@ -206,9 +206,13 @@ help::Memory& MemoryOf(ecs::Registry& registry, entt::entity creature)
 
 void CreatureHelpSystem::SaveState(reflection::BinaryWriter& out) const
 {
+	// The creature's help is only for the creature of the player at this computer, and the switch is of this player's
+	// options. Thus the whole section is a presentation part.
+	out.BeginPresentation();
 	reflection::Save(out, _helpOn);
 	reflection::Save(out, _toldTurn);
 	reflection::Save(out, _told);
+	out.EndPresentation();
 }
 
 bool CreatureHelpSystem::LoadState(reflection::BinaryReader& in)
@@ -403,7 +407,7 @@ void CreatureHelpSystem::UpdateCreature(entt::entity creature)
 		    .wantsWater = dominant == Desire::Water,
 		    .wantsToPoo = dominant == Desire::Poo,
 		    .carrying = Locator::creatureObjectActionSystem::has_value() &&
-		                Locator::creatureObjectActionSystem::value().GetHeld(creature).has_value(),
+		                Locator::creatureObjectActionSystem::value().GetCarried(creature).has_value(),
 		});
 		const auto seconds = info != nullptr ? info->helpTutorialSeconds : help::BodyThresholds {}.seconds;
 		if (const auto prompt = help::TutorialNow(memory, applies, turn, k_TurnsPerSecond, seconds); prompt.has_value())
@@ -415,13 +419,11 @@ void CreatureHelpSystem::UpdateCreature(entt::entity creature)
 		}
 	}();
 
-	// How steadily the player's hand has been over it. In a network game the turn knows the thing under the cursor
-	// from the player's last pick, so that every computer counts the same. A single game reads the pick of this
-	// computer at once.
-	const bool networkGame = Locator::time::has_value() && Locator::time::value().IsNetworkGame();
-	const bool over = networkGame
-	                      ? Locator::handSystem::has_value() && Locator::handSystem::value().GetReportedPick() == creature
-	                      : Locator::pickingSystem::has_value() && Locator::pickingSystem::value().GetPick().object == creature;
+	// The help counts how steadily the hand of the creature's player stays over it. Only that hand counts. The turn knows
+	// the thing under the cursor from the last pick of that player, so the count is the same on every computer.
+	const auto* body = registry.TryGet<const Creature>(creature);
+	const bool over = Locator::handSystem::has_value() && body != nullptr &&
+	                  Locator::handSystem::value().GetReportedPickOf(body->owner) == creature;
 	auto& memory = MemoryOf(registry, creature);
 	memory.handOver = help::NextHandOver(memory.handOver, over);
 }

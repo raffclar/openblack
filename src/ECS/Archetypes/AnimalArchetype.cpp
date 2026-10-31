@@ -25,6 +25,7 @@
 #include "InfoConstants.h"
 #include "Locator.h"
 #include "Resources/ResourceManager.h"
+#include "Utils.h"
 
 using namespace openblack;
 using namespace openblack::ecs::archetypes;
@@ -35,6 +36,8 @@ entt::entity AnimalArchetype::Create(AnimalInfo type, const glm::vec3& position,
 	auto& registry = Locator::entitiesRegistry::value();
 	const auto& info = Locator::infoConstants::value().animal.at(static_cast<size_t>(type));
 	const auto entity = registry.Create();
+	// It takes its place in the order of the things made
+	TakeThingMadePlace();
 	registry.Assign<Transform>(entity, position, animals::Orientation(heading, 0.0f), glm::vec3(scale));
 	// The rest of the game knows a bird by its kind's middle model and any other animal by its high one
 	const auto mesh = animals::birds::IsBird(type) ? info.std : info.high;

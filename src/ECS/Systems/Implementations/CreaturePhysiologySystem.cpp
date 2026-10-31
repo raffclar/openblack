@@ -54,7 +54,7 @@
 #include "ECS/Systems/LiquidParticleSystemInterface.h"
 #include "ECS/Systems/PlayerSystemInterface.h"
 #include "ECS/Systems/ReactionSystemInterface.h"
-#include "ECS/Systems/SkySystemInterface.h"
+#include "ECS/Systems/SkyClockSystemInterface.h"
 #include "ECS/Systems/TimeSystemInterface.h"
 #include "ECS/Systems/WeatherSystemInterface.h"
 #include "Graphics/Texture2D.h"
@@ -124,7 +124,7 @@ uint32_t PhaseOf(ecs::Registry& registry, entt::entity entity)
 
 bool IsNight()
 {
-	return Locator::skySystem::has_value() && Locator::skySystem::value().GetClock().IsVisualNight();
+	return Locator::skyClockSystem::has_value() && Locator::skyClockSystem::value().GetClock().IsVisualNight();
 }
 
 float TemperatureAt(const glm::vec3& position)
@@ -313,8 +313,12 @@ void CreaturePhysiologySystem::CreatureTurn(entt::entity entity)
 		    .turnsPerSecond = k_TurnsPerSecond,
 		};
 		auto shape = ShapeOf(creature);
-		// Not while a hand holds it
-		const bool autoScaled = creature.autoScale.has_value() && playersSize.has_value() && !registry.AllOf<InHand>(entity);
+		const bool autoScaled = physiology::AutoScales({
+		    .on = creature.autoScale.has_value(),
+		    .playersCreature = playersSize.has_value(),
+		    .held = registry.AllOf<InHand>(entity),
+		    .networkGame = Locator::time::has_value() && Locator::time::value().IsNetworkGame(),
+		});
 		// While the hand of a player holds it to interact with it, its body's turns stand still: it lives no turns and
 		// its body neither grows hungry, tired nor older
 		const bool interacting =
@@ -484,6 +488,17 @@ void CreaturePhysiologySystem::Drink(entt::entity creature)
 	}
 }
 
+void CreaturePhysiologySystem::StartBody(entt::entity creature)
+{
+	auto& registry = Locator::entitiesRegistry::value();
+	const auto* self = registry.TryGet<const Creature>(creature);
+	auto* needs = registry.TryGet<CreatureNeeds>(creature);
+	if (self != nullptr && needs != nullptr)
+	{
+		StartNeeds(*needs, SpeciesOf(self->species));
+	}
+}
+
 void CreaturePhysiologySystem::SitTurn(entt::entity creature)
 {
 	auto& registry = Locator::entitiesRegistry::value();
@@ -589,6 +604,22 @@ void CreaturePhysiologySystem::ModifyStrength(entt::entity creature, float amoun
 		physiology::ModifyStrength(shape, amount);
 		self->strength = shape.strength;
 		ecs::archetypes::CreatureArchetype::ShowStrength(creature);
+	}
+}
+
+void CreaturePhysiologySystem::GainStrengthOf(entt::entity creature, std::string_view action)
+{
+	if (!Locator::infoConstants::has_value())
+	{
+		return;
+	}
+	const auto& actions = Locator::infoConstants::value().creatureAction;
+	const auto found = std::ranges::find_if(actions, [action](const auto& row) {
+		return std::string_view(row.name.data(), strnlen(row.name.data(), row.name.size())) == action;
+	});
+	if (found != actions.end())
+	{
+		ModifyStrength(creature, found->strengthGain);
 	}
 }
 

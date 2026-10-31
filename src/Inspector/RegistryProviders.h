@@ -27,6 +27,8 @@ struct RegistrySources
 {
 	std::function<const ecs::Registry*()> registry;
 	std::function<const InfoConstants*()> info;
+	/// The name of the queries: "ecs" for the land's registry, "drawn" for the things that only the frames make
+	std::string_view name {"ecs"};
 };
 
 /// The entities and their components:
@@ -40,12 +42,12 @@ class RegistryProvider final: public ProviderInterface
 public:
 	RegistryProvider(RegistrySources sources, const entt::meta_ctx& context);
 
-	[[nodiscard]] std::string_view Name() const override { return "ecs"; }
+	[[nodiscard]] std::string_view Name() const override { return _sources.name; }
 	[[nodiscard]] std::vector<QueryDescription> Describe() const override;
 	[[nodiscard]] QueryResult Run(std::string_view query, const QueryContext& context) override;
 
 private:
-	[[nodiscard]] QueryResult Entity(const ecs::Registry& registry, const Json& params) const;
+	[[nodiscard]] QueryResult Entity(const ecs::Registry& registry, const Json& params, const QueryOptions& options) const;
 	[[nodiscard]] QueryResult Components(const ecs::Registry& registry) const;
 	[[nodiscard]] QueryResult Unregistered(const ecs::Registry& registry) const;
 	[[nodiscard]] QueryResult References(const ecs::Registry& registry, const Json& params) const;

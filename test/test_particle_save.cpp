@@ -18,7 +18,9 @@
 #include <map>
 #include <memory>
 #include <optional>
+#include <span>
 #include <string>
+#include <utility>
 #include <vector>
 
 #include <ParticleFile.h>
@@ -565,4 +567,96 @@ TEST_F(ParticleSaveTest, TheSymbolsOfBeliefInASaveThatKeptNoCreatorForThemAreDra
 	Load(bytes, *loaded);
 	EXPECT_EQ(SymbolsDrawn(*loaded), (std::vector<int> {0}));
 	EXPECT_EQ(Drawn(*loaded), Drawn(*saved));
+}
+
+namespace
+{
+
+/// The bytes of the tables of one part of a save
+std::vector<uint8_t> SaveTables(SharedTables& tables)
+{
+	reflection::BinaryWriter bytes(Context());
+	EffectWriter writer(bytes, tables);
+	SaveSharedTables(writer);
+	EXPECT_TRUE(bytes.PresentationRanges().empty());
+	return bytes.Bytes();
+}
+
+/// Reads the tables of one part of a save after the things that the tables have
+void LoadTables(SharedTables& tables, std::span<const uint8_t> bytes)
+{
+	const reflection::EntityRemap identity;
+	reflection::BinaryReader in(Context(), bytes, identity);
+	EffectReader reader(in, tables);
+	LoadSharedTables(reader);
+	EXPECT_EQ(in.Remaining(), 0u);
+}
+
+/// The tables of the two parts of a save with one synced shield and one shield of an effect of this computer
+std::pair<std::vector<uint8_t>, std::vector<uint8_t>> SaveShields(float syncedRadius, float ownRadius)
+{
+	SharedTables tables;
+	tables.shields.Add(std::make_shared<ShieldSphere>(ShieldSphere {.radius = syncedRadius}));
+	auto synced = SaveTables(tables);
+	tables.StartLocal();
+	tables.shields.Add(std::make_shared<ShieldSphere>(ShieldSphere {.radius = ownRadius}));
+	return {std::move(synced), SaveTables(tables)};
+}
+
+} // namespace
+
+TEST(ParticleSaveTables, ThePartOfThisComputerKeepsOnlyItsOwnThings)
+{
+	const auto [synced, own] = SaveShields(2.0f, 3.0f);
+	const auto [syncedSame, ownChanged] = SaveShields(2.0f, 4.0f);
+	// The shield of this computer does not change the synced part
+	EXPECT_EQ(synced, syncedSame);
+	EXPECT_NE(own, ownChanged);
+
+	// The synced part loads alone
+	SharedTables syncedOnly;
+	LoadTables(syncedOnly, synced);
+	ASSERT_EQ(syncedOnly.shields.items.size(), 1u);
+	EXPECT_EQ(syncedOnly.shields.items[0]->radius, 2.0f);
+
+	// The part of this computer adds its shield after the synced shield, with the next number
+	SharedTables tables;
+	LoadTables(tables, synced);
+	tables.StartLocal();
+	LoadTables(tables, own);
+	ASSERT_EQ(tables.shields.items.size(), 2u);
+	EXPECT_EQ(tables.shields.items[0]->radius, 2.0f);
+	EXPECT_EQ(tables.shields.items[1]->radius, 3.0f);
+	EXPECT_EQ(tables.shields.At(2), tables.shields.items[1]);
+}
+
+TEST(ParticleSaveTables, ASyncedBoltKeepsNoLinkToABoltOfThisComputer)
+{
+	const auto syncedBolt = std::make_shared<BoltShare>(BoltShare {.order = 1});
+	const auto ownBolt = std::make_shared<BoltShare>(BoltShare {.order = 2});
+	syncedBolt->linkedTo = ownBolt;
+	ownBolt->linkedFrom = syncedBolt;
+
+	SharedTables tables;
+	tables.bolts.Add(syncedBolt);
+	tables.boltsOfOtherPart.insert(ownBolt.get());
+	const auto synced = SaveTables(tables);
+	// The bolt of this computer stays out of the synced part
+	EXPECT_EQ(tables.bolts.items.size(), 1u);
+
+	tables.boltsOfOtherPart.clear();
+	tables.StartLocal();
+	tables.bolts.Add(ownBolt);
+	const auto own = SaveTables(tables);
+
+	SharedTables loaded;
+	LoadTables(loaded, synced);
+	ASSERT_EQ(loaded.bolts.items.size(), 1u);
+	EXPECT_TRUE(loaded.bolts.items[0]->linkedTo.expired());
+	loaded.StartLocal();
+	LoadTables(loaded, own);
+	ASSERT_EQ(loaded.bolts.items.size(), 2u);
+	// The bolt of this computer links back to the synced bolt by the number of the synced part
+	EXPECT_EQ(loaded.bolts.items[1]->order, 2u);
+	EXPECT_EQ(loaded.bolts.items[1]->linkedFrom.lock(), loaded.bolts.items[0]);
 }

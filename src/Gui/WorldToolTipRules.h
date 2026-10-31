@@ -48,6 +48,10 @@ enum class Subject : uint8_t
 	OthersCreature,
 	/// The altar of a worship site: the prayer power that its site stores
 	Altar,
+	/// A sign that shows what a thing needs, for example the wood flag of a workshop
+	NeedsSign,
+	/// A built workshop: how much of its scaffold it made
+	Workshop,
 };
 
 /// Whether the hand shows its tooltip over a thing only while the hand is within the player's influence. A temple's
@@ -61,6 +65,7 @@ enum class Subject : uint8_t
 	case Subject::Temple:
 	case Subject::VillageCentre:
 	case Subject::OwnCreature:
+	case Subject::NeedsSign:
 		return false;
 	case Subject::TempleEntrance:
 	case Subject::Store:
@@ -68,6 +73,7 @@ enum class Subject : uint8_t
 	case Subject::DesireFlag:
 	case Subject::OthersCreature:
 	case Subject::Altar:
+	case Subject::Workshop:
 		return true;
 	}
 	return true;
@@ -92,12 +98,18 @@ constexpr uint32_t k_BeliefLeft = 89;
 /// "%3.0f Belief Needed": the words the belief tooltip shows instead while another player is ahead in the town, with
 /// how far behind the player is
 constexpr uint32_t k_BeliefNeeded = 109;
+/// "Got %3.0f Belief", forced each tenth turn when the towns of the player gained belief in the player
+constexpr uint32_t k_GotBelief = 110;
 /// "Amount: %3.0f", forced as the hand takes food from a pile, a field or a fish farm
 constexpr uint32_t k_HeldAmount = 119;
+/// "Scaffold Value %d", over a scaffold that the hand can take: how many scaffolds it is worth, as a whole number
+constexpr uint32_t k_ScaffoldValue = 116;
 /// "Temple Health: %3.0f%%"
 constexpr uint32_t k_TempleHealth = 117;
 /// "Prayer Energy: %3.0f", over the altar of a worship site with the hand empty
 constexpr uint32_t k_PrayerEnergy = 118;
+/// "Production Completed: %3.0f%%", over a built workshop with the hand in the influence
+constexpr uint32_t k_ProductionCompleted = 128;
 /// "Stored - Food: %3.0f Wood: %3.0f", over a village store
 constexpr uint32_t k_Stored = 134;
 /// "Population: %3.0f", written as "Population:  12/34": its people over the room of its homes
@@ -116,6 +128,24 @@ constexpr uint32_t k_Graveyard = 147;
 /// The game's text of its first tooltip, and how many there are
 constexpr uint32_t k_FirstToolTipText = 0xE73;
 constexpr uint32_t k_ToolTipCount = 170;
+
+/// "Pick Up", what a sign of the people that hide shows: it has no tooltip of its own
+constexpr uint32_t k_PickUp = 0;
+/// "Food Desire: %3.0f%%", over the sign of the hunger of a worship site
+constexpr uint32_t k_FoodDesire = 91;
+/// "Rest Desire: %3.0f%%", over the sign of the life of a worship site
+constexpr uint32_t k_RestDesire = 140;
+/// "Wood Required: %3.0f", over the wood flag of a workshop
+constexpr uint32_t k_WoodRequired = 136;
+
+/// The rows of the info for the signs that show what a thing needs, in the order of the info
+enum class NeedsRow : uint8_t
+{
+	Hunger,
+	Life,
+	Hiding,
+	WorkshopWood,
+};
 
 /// The tooltip a game text is, none for a text that is not a tooltip (the game shows nothing for it)
 [[nodiscard]] std::optional<uint32_t> ToolTipOfText(uint32_t text);
@@ -158,6 +188,16 @@ struct Wording
 
 /// The prayer power that a worship site stores, as its altar shows it
 [[nodiscard]] Numbered PrayerEnergy(float stored);
+
+/// The part of its scaffold that a built workshop made, as a whole percent. The turns that are left are a share of the
+/// time to make a scaffold, and the percent is what is left of 100. The game cuts the result to a whole number below 100,
+/// so a workshop that makes no scaffold shows 0. A workshop that has damage has no number: the hand shows the words of the
+/// tooltip as they are written.
+[[nodiscard]] std::optional<Numbered> ProductionCompleted(bool repaired, int32_t makingTurns, float productionTime);
+
+/// The tooltip of a sign that shows a need. The hunger and the life show their level as a percentage. The wood flag
+/// shows the wood that its workshop requires. The sign of the people that hide shows "Pick Up".
+[[nodiscard]] Numbered NeedsSign(NeedsRow row, float level, uint32_t woodRequired);
 
 /// A village centre's people, and the places in the homes of its town
 [[nodiscard]] Numbered Population(uint32_t people, uint32_t places);

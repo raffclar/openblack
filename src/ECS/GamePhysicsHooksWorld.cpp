@@ -10,8 +10,6 @@
 #include "GamePhysicsHooksWorld.h"
 
 #include "3D/LandIslandInterface.h"
-#include "Audio/AudioManagerInterface.h"
-#include "Audio/GameSoundEffects.h"
 #include "Common/GameRandom.h"
 #include "Creature/CreatureRig.h"
 #include "ECS/Components/Creature.h"
@@ -29,21 +27,24 @@
 #include "ECS/Systems/CreatureMindSystemInterface.h"
 #include "ECS/Systems/CreatureObjectActionSystemInterface.h"
 #include "ECS/Systems/DynamicsSystemInterface.h"
+#include "ECS/Systems/EffectRequestSystemInterface.h"
 #include "ECS/Systems/HandSystemInterface.h"
 #include "ECS/Systems/HelpProfileSystemInterface.h"
 #include "ECS/Systems/LivingActionSystemInterface.h"
 #include "ECS/Systems/MagicShieldSystemInterface.h"
 #include "ECS/Systems/MagicSystemInterface.h"
-#include "ECS/Systems/ParticleSystemInterface.h"
 #include "ECS/Systems/PlayerSystemInterface.h"
 #include "ECS/Systems/ReactionSystemInterface.h"
 #include "ECS/Systems/TimeSystemInterface.h"
 #include "ECS/Systems/VortexSystemInterface.h"
+#include "ECS/Systems/WorkshopSystemInterface.h"
 #include "ECS/VillagerDroppedLog.h"
 #include "ECS/WorldObjects.h"
 #include "InfoConstants.h"
 #include "Locator.h"
 #include "Resources/ResourcesInterface.h"
+#include "Sound/GameSoundEffects.h"
+#include "Sound/SoundRequestInterface.h"
 
 using namespace openblack;
 using namespace openblack::ecs;
@@ -80,13 +81,10 @@ GameRandomInterface* GamePhysicsHooksWorld::Random()
 	return Locator::gameRandom::has_value() ? &Locator::gameRandom::value() : nullptr;
 }
 
-std::optional<PlayerNames> GamePhysicsHooksWorld::LocalPlayer() const
+bool GamePhysicsHooksWorld::PersonPlays(PlayerNames player) const
 {
-	if (!Locator::playerSystem::has_value())
-	{
-		return std::nullopt;
-	}
-	return Locator::playerSystem::value().GetLocalPlayer();
+	return Locator::playerSystem::has_value() && player != PlayerNames::NEUTRAL &&
+	       Locator::playerSystem::value().IsHumanPlayer(player);
 }
 
 std::optional<PlayerNames> GamePhysicsHooksWorld::OwnPlayer() const
@@ -184,25 +182,30 @@ std::optional<VillagerStates> GamePhysicsHooksWorld::VillagerStateOf(entt::entit
 
 std::optional<uint32_t> GamePhysicsHooksWorld::StartHeartBeamSource(glm::vec3 position, PlayerNames player)
 {
-	if (!Locator::particleSystem::has_value())
+	if (!Locator::effectRequestSystem::has_value())
 	{
 		return std::nullopt;
 	}
-	auto& particles = Locator::particleSystem::value();
-	const auto id = particles.StartSpotVisual(SpotVisualType::MagicBeamOnCitadel, position, -1, entt::null, 1.0f);
-	if (id == ParticleSystemInterface::k_NoEffect)
+	auto& effects = Locator::effectRequestSystem::value();
+	const auto handle = effects.Start({
+	    .type = SpotVisualType::MagicBeamOnCitadel,
+	    .position = position,
+	    .turns = -1,
+	    .player = static_cast<int>(player),
+	});
+	// The heart fires its beams only from a source that started
+	if (!effects.IsRunning(handle))
 	{
 		return std::nullopt;
 	}
-	particles.SetPlayer(id, static_cast<int>(player));
-	return id;
+	return handle;
 }
 
 void GamePhysicsHooksWorld::AddPlasma(uint32_t source, const particles::PlasmaCommand& command)
 {
-	if (Locator::particleSystem::has_value())
+	if (Locator::effectRequestSystem::has_value())
 	{
-		Locator::particleSystem::value().AddPlasma(source, command);
+		Locator::effectRequestSystem::value().AddPlasma(source, command);
 	}
 }
 
@@ -218,7 +221,7 @@ glm::mat4 GamePhysicsHooksWorld::PlacementOf(entt::entity object) const
 
 void GamePhysicsHooksWorld::PlaySound(entt::id_type sound, glm::vec3 position, entt::entity owner)
 {
-	if (Locator::audio::has_value())
+	if (Locator::sounds::has_value())
 	{
 		audio::StartGameSoundEffect(sound, {.position = position, .owner = owner});
 	}
@@ -247,6 +250,30 @@ void GamePhysicsHooksWorld::StrikeVortex(entt::entity vortex, entt::entity hitte
 	if (Locator::vortexSystem::has_value())
 	{
 		Locator::vortexSystem::value().StruckBy(vortex, hitter, flight);
+	}
+}
+
+void GamePhysicsHooksWorld::ScaffoldLetGo(entt::entity scaffold, bool forced)
+{
+	if (Locator::workshopSystem::has_value())
+	{
+		Locator::workshopSystem::value().LetGoByHand(scaffold, forced);
+	}
+}
+
+void GamePhysicsHooksWorld::ScaffoldNotPutDown(entt::entity scaffold)
+{
+	if (Locator::workshopSystem::has_value())
+	{
+		Locator::workshopSystem::value().NotPutDownByHand(scaffold);
+	}
+}
+
+void GamePhysicsHooksWorld::ScaffoldAtRest(entt::entity scaffold, bool fromHand, bool insert)
+{
+	if (Locator::workshopSystem::has_value())
+	{
+		Locator::workshopSystem::value().CameToRest(scaffold, fromHand, insert);
 	}
 }
 

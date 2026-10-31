@@ -19,14 +19,6 @@ namespace
 /// Objects narrower than these get the small and the medium object dances
 constexpr float k_SmallDanceWidth = 7.0f;
 constexpr float k_MediumDanceWidth = 10.0f;
-/// A wonder's planning reaches this far for each unit of the town's desire for one, and at least this far
-constexpr float k_WonderReachPerDesire = 15.0f;
-/// Each thing in reach adds this share of its impressiveness to the wonder's power
-constexpr float k_WonderImpressivenessShare = 0.1f;
-/// A wonder's power is at least this, and its scale is worked from no more than this
-constexpr float k_LeastWonderPower = 0.25f;
-constexpr float k_MostWonderPower = 5.0f;
-constexpr float k_WonderScaleDivisor = 10.0f;
 /// Each turn's belief gift waits a random part of up to this share of its gap
 constexpr uint32_t k_GiftRandomDivisor = 4;
 } // namespace
@@ -158,36 +150,6 @@ float artefact_rules::SitePowerUp(float artefactSpeed, float powerUpMultiplier, 
 {
 	const float share = playerPopulation != 0 ? static_cast<float>(dancers) / static_cast<float>(playerPopulation) : 0.0f;
 	return artefactSpeed * powerUpMultiplier * share;
-}
-
-float artefact_rules::WonderReach(float wonderDesire)
-{
-	const float reach = wonderDesire * k_WonderReachPerDesire;
-	return reach > k_WonderReachPerDesire ? reach : k_WonderReachPerDesire;
-}
-
-float artefact_rules::WonderPower(float wonderDesire, std::span<const WonderNeighbour> inCell, uint32_t passes)
-{
-	const float reach = WonderReach(wonderDesire);
-	float power = wonderDesire;
-	for (uint32_t pass = 0; pass < passes; ++pass)
-	{
-		for (const auto& thing : inCell)
-		{
-			if (thing.distance < reach)
-			{
-				power += thing.artefactWorth;
-				power += thing.impressiveness * k_WonderImpressivenessShare;
-			}
-		}
-	}
-	return k_LeastWonderPower > power ? k_LeastWonderPower : power;
-}
-
-float artefact_rules::WonderScale(float power)
-{
-	const float capped = std::min(power, k_MostWonderPower);
-	return capped * (1.0f - capped / k_WonderScaleDivisor);
 }
 
 uint32_t artefact_rules::GiftRandomLimit(uint32_t gap)

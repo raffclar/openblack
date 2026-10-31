@@ -7,8 +7,9 @@
  * openblack is licensed under the GNU General Public License version 3.
  *******************************************************************************/
 
-// The testbed scenarios for disciples. One shows the symbol of the work. One shows the work that a villager keeps when
-// the hand releases it. One shows the villagers that follow a disciple to its work.
+// The testbed scenarios for disciples. One shows the symbol of the work. One shows that a disciple in the hand of another
+// god shows no symbol. One shows the work that a villager keeps when the hand releases it. One shows the villagers that
+// follow a disciple to its work. One shows the object that a script gives a villager to hold.
 
 #include <vector>
 
@@ -38,6 +39,38 @@ void testbed_scenarios::AddDiscipleScenarios(std::vector<Scenario>& all)
 	});
 
 	using Kind = Command::Kind;
+	all.push_back({
+	    .id = "villagers.disciple_symbol_other_god",
+	    .name = "A disciple in the hand of another god",
+	    .facet = Facet::Hand,
+	    .description = "The testbed acts as a network game in which the second player is another god. Two grown villagers of "
+	                   "the player's town are farming disciples and a script holds them still. One stands in the middle of "
+	                   "the screen with the player's hand over it. After a second, the hand of the second player takes the "
+	                   "other villager and holds it 3 m above the land, 5 m to the side of the first villager. This "
+	                   "computer does not draw the hand of the other god.",
+	    .expected = "Both villagers glow orange, their puffs turning. Only the villager under the player's hand shows the "
+	                "yellow wheat symbol of a farmer over its glow. The villager in the hand of the other god shows no "
+	                "symbol.",
+	    .environment = {.clockRuns = false, .dispenserGrid = false, .cursor = glm::vec2 {0.5f, 0.5f}},
+	    .framing = {.shot = Shot::Placed, .eye = {0.0f, 8.0f, -14.0f}, .look = {0.0f, 1.0f, 0.0f}},
+	    .objects = {{.type = VillagerInfo::CelticFarmerMale,
+	                 .offset = {0.0f, 0.0f},
+	                 .joinTown = true,
+	                 .inScript = true,
+	                 .disciple = VillagerDisciple::Farmer},
+	                {.type = VillagerInfo::CelticFarmerMale,
+	                 .offset = {20.0f, 0.0f},
+	                 .joinTown = true,
+	                 .inScript = true,
+	                 .disciple = VillagerDisciple::Farmer}},
+	    .commands = {{.kind = Kind::OtherGodHand,
+	                  .player = PlayerNames::PLAYER_TWO,
+	                  .delaySeconds = 1.0f,
+	                  .point = {-5.0f, 0.0f},
+	                  .object = 1,
+	                  .radius = 3.0f}},
+	});
+
 	all.push_back({
 	    .id = "villagers.disciple_letgo",
 	    .name = "What a villager keeps of the work the hand showed it",
@@ -97,5 +130,24 @@ void testbed_scenarios::AddDiscipleScenarios(std::vector<Scenario>& all)
 	                {.type = VillagerInfo::CelticHousewifeFemale, .offset = {3.0f, -22.0f}, .joinTown = true},
 	                {.type = VillagerInfo::CelticForesterMale, .offset = {20.0f, -16.0f}, .joinTown = true}},
 	    .townBeliefInPlayer = 1000.0f,
+	});
+
+	// A script gives a villager that it holds an object to hold, as the Land 2 lessons give a builder its heavy mallet
+	all.push_back({
+	    .id = "villagers.script_carried_mallet",
+	    .name = "A villager holds the heavy mallet that a script gives it",
+	    .facet = Facet::Objects,
+	    .description = "A grown villager of the player's town, held still by a script, stands in the middle of the "
+	                   "screen. After a second, the script gives the villager the heavy mallet to hold.",
+	    .expected = "The villager stands with empty hands. After a second, the villager holds the heavy mallet in its "
+	                "hand, and it keeps the mallet while the script holds it.",
+	    .environment = {.dispenserGrid = false},
+	    .framing = {.shot = Shot::Placed, .eye = {0.0f, 4.0f, -7.0f}, .look = {0.0f, 1.0f, 0.0f}},
+	    .objects = {{.type = VillagerInfo::CelticFarmerMale, .offset = {0.0f, 0.0f}, .joinTown = true, .inScript = true}},
+	    .commands = {{.kind = Kind::CallNative,
+	                  .delaySeconds = 1.0f,
+	                  .script = "SET_OBJECT_CARRYING",
+	                  .scriptArguments = {{.kind = ScriptArgument::Kind::Object, .index = 0},
+	                                      {.kind = ScriptArgument::Kind::Integer, .number = 9.0f}}}},
 	});
 }

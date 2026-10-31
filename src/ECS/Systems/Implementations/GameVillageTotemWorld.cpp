@@ -16,11 +16,11 @@
 #include "3D/AllMeshes.h"
 #include "3D/CreatureBody.h"
 #include "3D/LandIslandInterface.h"
-#include "Audio/Sound.h"
 #include "ECS/Components/Creature.h"
 #include "ECS/Components/Physics.h"
 #include "ECS/Components/Temple.h"
 #include "ECS/CreatureSight.h"
+#include "ECS/Map.h"
 #include "ECS/Registry.h"
 #include "ECS/Systems/FloatingNumberSystemInterface.h"
 #include "ECS/Systems/LeashSystemInterface.h"
@@ -33,6 +33,7 @@
 #include "Locator.h"
 #include "Resources/ResourceManager.h"
 #include "Resources/ResourcesInterface.h"
+#include "Sound/SoundId.h"
 #include "VillagerWorship.h"
 
 using namespace openblack;
@@ -171,4 +172,12 @@ bool GameVillageTotemWorld::SendCommand(const player_commands::Action& action)
 void GameVillageTotemWorld::ShareSet(entt::entity town)
 {
 	ecs::villager_worship::ShareSet(town);
+}
+
+void GameVillageTotemWorld::Reinsert(entt::entity totem)
+{
+	if (Locator::entitiesMap::has_value())
+	{
+		Locator::entitiesMap::value().Reinsert(totem);
+	}
 }

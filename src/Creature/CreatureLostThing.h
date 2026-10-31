@@ -51,6 +51,10 @@ struct InUse
 [[nodiscard]] bool Lost(const InUse& inUse, const std::function<bool(uint32_t)>& gone,
                         const std::function<bool(uint32_t)>& notThere);
 
+/// Before the creature throws what it holds into a store, the plan stops the use of its thing to use. The creature
+/// itself becomes the thing to use. Thus the creature does not lose a tree or a cow that the store takes in.
+void StopUseBeforeThrowIntoStore(creature_planner::Plan& plan, const creature_mind::ObjectOrder& order, uint32_t self);
+
 /// Why the creature failed: it lost the thing that it looked for
 constexpr uint32_t k_LostThing = 8;
 

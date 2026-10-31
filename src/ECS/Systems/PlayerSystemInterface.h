@@ -9,6 +9,7 @@
 
 #pragma once
 
+#include <cstddef>
 #include <cstdint>
 
 #include <optional>
@@ -17,6 +18,7 @@
 
 #include "ECS/PlayerKind.h"
 #include "Enums.h"
+#include "PlayerSlots.h"
 
 namespace openblack::ecs::systems
 {
@@ -28,6 +30,22 @@ public:
 	/// The entity of the player, if the player is in the game. In a network game, the player of each human comes in the
 	/// first turn, so the input of this computer can come before its own player.
 	[[nodiscard]] virtual std::optional<entt::entity> FindPlayer(PlayerNames name) const = 0;
+	/// The entity of the player. The game makes the player when the land has none yet. Every god slot and the neutral
+	/// player have a player from the start of the game, also before the humans of a network game join.
+	virtual entt::entity EnsurePlayer(PlayerNames name) = 0;
+	/// The count of the player numbers of this game: one more than the largest number of a player that the game has, and
+	/// at least the player slots of a land. Every land and every game of up to 7 gods has 8. The walks of each player use
+	/// this count, so a table for each player has places for more players than the game has.
+	[[nodiscard]] virtual size_t PlayerNumbersInGame() const { return player_slots::k_LandSlots; }
+	/// Makes the player of each god slot and the neutral player, in the order of their numbers, when the land has none of
+	/// that name. Each land has all eight players from its start, also when nobody plays a slot.
+	void EnsureAllPlayers()
+	{
+		for (uint8_t number = 0; number < static_cast<uint8_t>(PlayerNames::_COUNT); ++number)
+		{
+			EnsurePlayer(static_cast<PlayerNames>(number));
+		}
+	}
 	/// Remembers that the owner of a newly made creature got it, after the creatures they got before
 	virtual void AddCreature(entt::entity creature) = 0;
 	/// Makes the creature the primary creature of its owner, before the creatures that the owner got before
@@ -46,14 +64,29 @@ public:
 	[[nodiscard]] virtual bool KeepAlignmentAt(uint32_t turn) = 0;
 	/// A player made on a land takes up what they kept from the lands before
 	virtual void TakeUpKept(entt::entity playerEntity) = 0;
+	/// A land script sets the strength of the alliance of two players, for each of them. The game makes a player when the
+	/// land has none yet.
+	virtual void SetAlly(PlayerNames /*player*/, PlayerNames /*other*/, float /*strength*/) {}
+	/// How strongly the player is the ally of the other player; 0 when the land has no such player
+	[[nodiscard]] virtual float AllyStrength(PlayerNames /*player*/, PlayerNames /*other*/) const { return 0.0f; }
 	/// The first player: the player that the scripts and the turns take as the player of a game alone. It is the same on
 	/// every computer of a network game. The frames, the input and the sounds of a computer use the player of that
 	/// computer instead (see HandSystemInterface::GetOwnPlayer).
 	[[nodiscard]] virtual PlayerNames GetLocalPlayer() const { return PlayerNames::PLAYER_ONE; }
-	/// Whether the computer plays a player (see player_kind::IsComputer)
+	/// Whether a computer mind plays a player (see player_kind::IsComputer). A player that nobody plays is not a computer
+	/// player.
 	[[nodiscard]] virtual bool IsComputerPlayer(PlayerNames name) const
 	{
 		return player_kind::IsComputer({.player = name, .networkGame = false, .computerMind = false});
 	}
+	/// Whether a person plays a player (see player_kind::IsHuman). A computer god is not a human player, also when it
+	/// has hands.
+	[[nodiscard]] virtual bool IsHumanPlayer(PlayerNames name) const
+	{
+		return player_kind::IsHuman({.player = name, .networkGame = false, .computerMind = false});
+	}
+	/// Whether a person or a computer mind plays the player. Every land has all the players, so many walks of the players
+	/// look only at the players that play. The neutral player and a player that nobody plays do not play.
+	[[nodiscard]] bool PlaysInGame(PlayerNames name) const { return IsHumanPlayer(name) || IsComputerPlayer(name); }
 };
 } // namespace openblack::ecs::systems

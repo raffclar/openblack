@@ -14,6 +14,7 @@
 #include <unordered_map>
 
 #include "Creature/CreatureRoute.h"
+#include "Creature/CreatureRouteFollow.h"
 #include "ECS/Systems/CreatureLocomotionSystemInterface.h"
 #include "Enums.h"
 
@@ -35,6 +36,7 @@ public:
 	void SaveState(reflection::BinaryWriter& out) const override;
 	bool LoadState(reflection::BinaryReader& in) override;
 	void ProcessTurn() override;
+	void ShareSearchSteps() override;
 	void CreatureTurn(entt::entity creature) override;
 	void Update(float turnFraction) override;
 	void ShowTurnEnds() override;
@@ -52,6 +54,7 @@ public:
 	void Stop(entt::entity creature) override;
 	void StopAtOnce(entt::entity creature) override;
 	void ResetPace(entt::entity creature) override;
+	void SetKeptFraction(entt::entity creature, float fraction) override;
 	void Place(entt::entity creature, glm::vec3 position) override;
 	void PlaceWithoutWalking(entt::entity creature, glm::vec3 position) override;
 	[[nodiscard]] bool IsMoving(entt::entity creature) const override;
@@ -78,6 +81,9 @@ private:
 	/// land.
 	std::optional<creature_route::WalkableLand> _land;
 	std::unordered_map<CreatureType, float> _bodyRadii;
+	/// The search steps that each creature's route search gets after the first turn of its walk, shared at the start of
+	/// each turn of the living
+	int32_t _searchShare {creature_route::k_FirstShareSearchSteps};
 };
 
 } // namespace openblack::ecs::systems

@@ -86,6 +86,11 @@ constexpr std::array k_Executors {
               .target = Target::BuildingBeingBuilt,
               .use = Target::PickableTree,
               .build = Build::GiveWoodToStore},
+    // A tree goes to a workshop as a tree goes to a building site
+    Executor {.action = "GiveWoodFromTreeToWorkshop",
+              .target = Target::Workshop,
+              .use = Target::PickableTree,
+              .build = Build::GiveWoodToStore},
     Executor {.action = "HelpRepairHouse",
               .target = Target::NeedsRepair,
               .use = Target::PickableTree,
@@ -376,6 +381,7 @@ constexpr std::array k_Executors {
               .build = Build::PickUpAndCastOneShot,
               .oneShot = OneShotKind::Playful},
     Executor {.action = "DeadForever", .build = Build::DeadForever},
+    Executor {.action = "DiePermanently", .build = Build::DiePermanently},
     Executor {.action = "PointOutHighlight", .target = Target::Anything, .build = Build::PointOutHighlight},
     // The creature shows the player that it saw a deed of the player
     Executor {.action = "NoticeHelpfulAction", .target = Target::Anything, .build = Build::Notice},
@@ -1279,6 +1285,8 @@ std::optional<std::vector<creature_mind::Step>> creature_plan_actions::Agenda(co
 		return creature_mind::PutDown();
 	case Build::DeadForever:
 		return creature_mind::DeadForever();
+	case Build::DiePermanently:
+		return creature_mind::DiePermanently();
 	case Build::PointOutHighlight:
 		return creature_mind::PointOutHighlight(*object, situation.eyeDistance);
 	case Build::Notice:

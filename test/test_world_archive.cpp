@@ -7,6 +7,7 @@
  * openblack is licensed under the GNU General Public License version 3.
  *******************************************************************************/
 
+#include <cstddef>
 #include <cstdint>
 #include <cstring>
 
@@ -18,6 +19,8 @@
 #include <memory>
 #include <optional>
 #include <regex>
+#include <set>
+#include <span>
 #include <string>
 #include <string_view>
 #include <unordered_map>
@@ -37,13 +40,20 @@
 #include <gtest/gtest.h>
 
 #include "Common/GameHeading.h"
+#include "Common/WorkerPool.h"
+#include "Creature/CreatureExplorationMap.h"
 #include "Creature/CreatureRouteFollow.h"
 #include "ECS/Components/AudioEmitter.h"
+#include "ECS/Components/CreatureArena.h"
 #include "ECS/Components/CreatureLocomotion.h"
 #include "ECS/Components/Footpath.h"
 #include "ECS/Components/LivingReaction.h"
+#include "ECS/Components/Mesh.h"
 #include "ECS/Components/PlayerStatistics.h"
+#include "ECS/Components/Scaffold.h"
+#include "ECS/Components/SoundTag.h"
 #include "ECS/Components/Sprite.h"
+#include "ECS/Components/TownAggression.h"
 #include "ECS/Components/WallHug.h"
 #include "ECS/Reflection/BinaryArchive.h"
 #include "ECS/Reflection/ComponentReflection.h"
@@ -51,6 +61,7 @@
 #include "Enums.h"
 #include "Graphics/GraphicsHandle.h"
 #include "Graphics/SpriteTextures.h"
+#include "Particles/LightSheet.h"
 #include "PlayerSlots.h"
 
 using namespace openblack;
@@ -461,6 +472,56 @@ TEST(WorldArchive, ValuesOutsideTheRegistryRoundTrip)
 	EXPECT_EQ(read, walker);
 }
 
+// A presentation field keeps its bytes, and the writer gives the place of the bytes as a presentation value
+TEST(WorldArchive, APresentationFieldKeepsItsBytesAsAPresentationValue)
+{
+	struct Figures
+	{
+		uint32_t synced {0};
+		float local {0.0f};
+		uint32_t after {0};
+		bool operator==(const Figures&) const = default;
+	};
+	entt::meta_ctx context;
+	Register(context);
+	Reflect<Figures>(context, ValueOnly {})
+	    .Field<&Figures::synced>("synced")
+	    .PresentationField<&Figures::local>("local")
+	    .Field<&Figures::after>("after");
+	const Figures figures {.synced = 3, .local = 31.0f, .after = 9};
+	std::vector<std::pair<size_t, size_t>> presentation;
+	const auto bytes = SaveValue(context, figures, nullptr, &presentation);
+	EXPECT_EQ(bytes.size(), 3 * sizeof(uint32_t));
+	EXPECT_EQ(presentation, (std::vector<std::pair<size_t, size_t>> {{sizeof(uint32_t), 2 * sizeof(uint32_t)}}));
+	Figures read;
+	ASSERT_TRUE(LoadValue(context, bytes, read, EntityRemap {}));
+	EXPECT_EQ(read, figures);
+}
+
+TEST(WorldArchive, TheCreaturesMapOfTheLandGoesWithTheWorld)
+{
+	// A computer that takes the world of another computer gets its map of the land, made from the towns at the start
+	entt::meta_ctx context;
+	RegisterComponents(context);
+	openblack::creature_exploration::RegionMap map;
+	map.regions.resize(3);
+	map.regions[1] = {
+	    .highest = 12.5f, .highestCell = {9, 10}, .firstCoast = glm::ivec2 {8, 11}, .firstSea = std::nullopt, .kinds = 0x13};
+	map.highest = 12.5f;
+	std::set<UnsavedValue> unsaved;
+	const auto bytes = SaveValue(context, map, &unsaved);
+	EXPECT_TRUE(unsaved.empty());
+	openblack::creature_exploration::RegionMap read;
+	ASSERT_TRUE(LoadValue(context, bytes, read, EntityRemap {}));
+	ASSERT_EQ(read.regions.size(), 3u);
+	EXPECT_EQ(read.regions[1].highest, 12.5f);
+	EXPECT_EQ(read.regions[1].highestCell, glm::ivec2(9, 10));
+	EXPECT_EQ(read.regions[1].firstCoast, std::optional(glm::ivec2(8, 11)));
+	EXPECT_FALSE(read.regions[1].firstSea.has_value());
+	EXPECT_EQ(read.regions[1].kinds, 0x13);
+	EXPECT_EQ(read.highest, 12.5f);
+}
+
 TEST(WorldArchive, EveryComponentOfTheGameCanBeMadeForALoad)
 {
 	// A load makes each component with no arguments and then reads its fields into it
@@ -599,6 +660,10 @@ TEST(WorldArchive, AWalkCarriesOnFromTheSavedSearch)
 	ASSERT_FALSE(in.Failed());
 	EXPECT_EQ(in.Remaining(), 0u);
 	EXPECT_EQ(FollowerBytes(context, loaded), bytes);
+	// The heading along the route comes back too: the next leg of the walk starts from it
+	ASSERT_NE(walking.GetHeading(), GameHeading {});
+	EXPECT_EQ(loaded.GetHeading(), walking.GetHeading());
+	EXPECT_EQ(loaded.GetPosition(), walking.GetPosition());
 
 	// The loaded walk and the walk that was not saved take the same steps to the same place
 	auto first = Follower::Outcome::None;
@@ -616,7 +681,32 @@ TEST(WorldArchive, AWalkCarriesOnFromTheSavedSearch)
 		const auto a = walking.Advance(3.0f);
 		const auto b = loaded.Advance(3.0f);
 		ASSERT_EQ(a.position, b.position);
+		ASSERT_EQ(a.heading, b.heading);
 	}
+}
+
+// The heading along the route and the circles that the obstacles leave out come back, so that a loaded walk starts
+// its next leg as the walk that was not saved does
+TEST(WorldArchive, AWalkKeepsItsHeadingAndTheCirclesItLeavesOut)
+{
+	using creature_route::Follower;
+	entt::meta_ctx context;
+	RegisterComponents(context);
+	auto walking = WalkSearchingAgain();
+	ASSERT_NE(walking.GetHeading(), GameHeading {});
+	walking.GetObstacles().LeaveOutCirclesHolding({1200.0f, 1200.0f}, {1300.0f, 1300.0f});
+	const auto bytes = FollowerBytes(context, walking);
+
+	Follower loaded;
+	const EntityRemap identity;
+	BinaryReader in(context, bytes, identity);
+	Load(in, loaded);
+	ASSERT_FALSE(in.Failed());
+	EXPECT_EQ(in.Remaining(), 0u);
+	EXPECT_EQ(loaded.GetHeading(), walking.GetHeading());
+	// A circle round a point that the walk leaves out does not go in, and other circles do
+	EXPECT_FALSE(loaded.GetObstacles().Add(7u, {1200.0f, 1205.0f}, 10.0f));
+	EXPECT_TRUE(loaded.GetObstacles().Add(8u, {1250.0f, 1205.0f}, 10.0f));
 }
 
 TEST(WorldArchive, ACreaturesWalkIsKeptWithItsComponent)
@@ -645,6 +735,62 @@ TEST(WorldArchive, ACreaturesWalkIsKeptWithItsComponent)
 	ASSERT_TRUE(read.routeWalker.has_value());
 	EXPECT_EQ(read.routeWalker->height, 30.0f);
 	EXPECT_EQ(SaveWorld(loaded, context), bytes);
+}
+
+TEST(WorldArchive, ATownKeepsTheHarmOfTheLastAttackOfEachPlayer)
+{
+	entt::meta_ctx context;
+	RegisterComponents(context);
+	entt::registry original;
+	const auto town = original.create();
+	auto& record = original.emplace<ecs::components::TownAggression>(town).record;
+	record.aggression.at(1) = 4.0f;
+	record.lastTurns.at(1) = 77u;
+	record.lastAggressor = PlayerNames::PLAYER_TWO;
+	record.lastTurn = 77u;
+	record.mercy = 2.5f;
+	record.lastHarms.at(1) = {.burn = 3.0f, .crush = 1.0f, .hit = 0.5f};
+	record.lastHarms.at(2) = {.burn = 0.0f, .crush = 6.0f, .hit = 0.0f};
+	const auto bytes = SaveWorld(original, context);
+	entt::registry loaded;
+	ASSERT_TRUE(LoadWorld(loaded, context, bytes, WorldLoadMode::Exact).has_value());
+	const auto& read = loaded.get<ecs::components::TownAggression>(town).record;
+	EXPECT_EQ(read.lastHarms.at(1).burn, 3.0f);
+	EXPECT_EQ(read.lastHarms.at(1).crush, 1.0f);
+	EXPECT_EQ(read.lastHarms.at(1).hit, 0.5f);
+	EXPECT_EQ(read.lastHarms.at(2).crush, 6.0f);
+	EXPECT_EQ(read.lastHarms.at(3).burn, 0.0f);
+	EXPECT_EQ(read.lastAggressor, PlayerNames::PLAYER_TWO);
+	EXPECT_EQ(read.mercy, 2.5f);
+	EXPECT_EQ(SaveWorld(loaded, context), bytes);
+}
+
+TEST(WorldArchive, ARecordOfAnOlderBuildWithNoHarmsStillReadsItsOtherFields)
+{
+	entt::meta_ctx context;
+	RegisterComponents(context);
+	ecs::town_aggression::Record record;
+	record.aggression.at(3) = 9.0f;
+	record.lastTurn = 12u;
+	record.protectionMultiplier = 0.5f;
+	record.mercy = 1.5f;
+	record.lastHarms.at(0) = {.burn = 1.0f, .crush = 2.0f, .hit = 3.0f};
+	BinaryWriter whole(context);
+	Save(whole, record);
+	BinaryWriter harms(context);
+	Save(harms, record.lastHarms);
+	ASSERT_GT(whole.Bytes().size(), harms.Bytes().size());
+	// The harms are the last bytes of the record, so an older record is the same bytes without them
+	const auto older = std::span(whole.Bytes()).first(whole.Bytes().size() - harms.Bytes().size());
+	ecs::town_aggression::Record loaded;
+	const EntityRemap identity;
+	BinaryReader in(context, older, identity);
+	Load(in, loaded);
+	EXPECT_EQ(loaded.aggression.at(3), 9.0f);
+	EXPECT_EQ(loaded.lastTurn, 12u);
+	EXPECT_EQ(loaded.protectionMultiplier, 0.5f);
+	EXPECT_EQ(loaded.mercy, 1.5f);
+	EXPECT_EQ(loaded.lastHarms.at(0).burn, 0.0f);
 }
 
 TEST(WorldArchive, SectionsKeepTheirNamesAndBytes)
@@ -773,6 +919,37 @@ TEST(WorldArchive, ASpriteKeepsTheIdsOfItsTextures)
 	const auto& alone = loaded.get<ecs::components::Sprite>(lone);
 	EXPECT_FALSE(alone.alpha.has_value());
 	EXPECT_EQ(graphics::sprite_textures::AlphaId(alone), k_Sheet.value());
+}
+
+// The copy that shows the phantom building of a scaffold keeps its model in itself, so that the frames give it no Mesh
+TEST(WorldArchive, AScaffoldGhostKeepsItsModel)
+{
+	entt::meta_ctx context;
+	RegisterComponents(context);
+	entt::registry original;
+	const auto shown = original.create();
+	const auto empty = original.create();
+	original.emplace<ecs::components::ScaffoldGhost>(
+	    shown, ecs::components::ScaffoldGhost {.scaffold = empty,
+	                                           .alpha = 120,
+	                                           .model = ecs::components::Mesh {.id = 77u, .submeshId = 2, .bbSubmeshId = 1}});
+	original.emplace<ecs::components::ScaffoldGhost>(empty, ecs::components::ScaffoldGhost {.alpha = 255});
+
+	WorldSaveReport report;
+	const auto bytes = SaveWorld(original, context, &report);
+	EXPECT_TRUE(report.unsavedValues.empty());
+	entt::registry loaded;
+	ASSERT_TRUE(LoadWorld(loaded, context, bytes, WorldLoadMode::Exact).has_value());
+	const auto& ghost = loaded.get<ecs::components::ScaffoldGhost>(shown);
+	EXPECT_EQ(ghost.scaffold, empty);
+	EXPECT_EQ(ghost.alpha, 120);
+	ASSERT_TRUE(ghost.model.has_value());
+	EXPECT_EQ(ghost.model->id, 77u);
+	EXPECT_EQ(ghost.model->submeshId, 2);
+	EXPECT_EQ(ghost.model->bbSubmeshId, 1);
+	EXPECT_FALSE(loaded.get<ecs::components::ScaffoldGhost>(empty).model.has_value());
+	// The model of the copy is not a row of the Mesh component
+	EXPECT_EQ(loaded.storage<ecs::components::Mesh>().size(), 0u);
 }
 
 namespace
@@ -1064,6 +1241,122 @@ TEST(WorldArchive, TheHashOfEachFieldShowsWhichFieldChanged)
 	EXPECT_TRUE(HashWorld(registry, context).fields.empty());
 }
 
+// The memo of the last hash never changes a hash: after a change, an addition and a removal of rows, the hash with the
+// memo is the same as the hash without it
+TEST(WorldArchive, TheHashMemoDoesNotChangeTheHash)
+{
+	entt::meta_ctx context;
+	Register(context);
+	entt::registry registry;
+	std::vector<entt::entity> made(4);
+	registry.create(made.begin(), made.end());
+	for (const auto entity : made)
+	{
+		registry.emplace<FakeWalker>(entity, SampleWalker(entity, made[0]));
+	}
+	HashMemo memo;
+	const auto expectSame = [&]() {
+		const auto plain = HashWorld(registry, context);
+		const auto remembered = HashWorld(registry, context, {}, false, {}, nullptr, nullptr, &memo);
+		EXPECT_EQ(plain.entities, remembered.entities);
+		EXPECT_EQ(plain.components, remembered.components);
+	};
+	expectSame();
+	// The same world again: each row comes from the memo
+	expectSame();
+	// A change in a row in the middle
+	registry.get<FakeWalker>(made[2]).name = "Tom";
+	expectSame();
+	// A longer row at the start
+	registry.get<FakeWalker>(made[0]).name = "A much longer name than before";
+	expectSame();
+	// One more row, then one row less
+	const auto added = registry.create();
+	registry.emplace<FakeWalker>(added, SampleWalker(added, added));
+	expectSame();
+	registry.destroy(made[1]);
+	expectSame();
+	registry.destroy(added);
+	expectSame();
+}
+
+TEST(WorldArchive, TheThreadsThatShareTheRowsOfAComponentGiveTheSameHash)
+{
+	entt::meta_ctx context;
+	Register(context);
+	entt::registry registry;
+	// Enough rows for the threads to share the rows of the component in parts
+	std::vector<entt::entity> made(300);
+	registry.create(made.begin(), made.end());
+	for (const auto entity : made)
+	{
+		registry.emplace<FakeWalker>(entity, SampleWalker(entity, made[0]));
+	}
+	WorkerPool pool(3);
+	HashMemo memo;
+	const auto expectSame = [&]() {
+		const auto plain = HashWorld(registry, context);
+		const auto shared = HashWorld(registry, context, {}, false, {}, &pool);
+		const auto remembered = HashWorld(registry, context, {}, false, {}, &pool, nullptr, &memo);
+		EXPECT_EQ(plain.entities, shared.entities);
+		EXPECT_EQ(plain.components, shared.components);
+		EXPECT_EQ(plain.components, remembered.components);
+	};
+	expectSame();
+	expectSame();
+	// A change in a row of the second part, and a longer row in the first part
+	registry.get<FakeWalker>(made[100]).name = "Tom";
+	expectSame();
+	registry.get<FakeWalker>(made[3]).name = "A much longer name than before";
+	expectSame();
+	registry.destroy(made[200]);
+	expectSame();
+}
+
+// A part holds at most 64 rows, and about 16 KB of the rows of the last hash, with one row at least
+TEST(WorldArchive, APartOfTheRowsHoldsAboutTheSameCountOfBytes)
+{
+	EXPECT_EQ(RowsInAPart(0, 0), k_MostRowsInAPart);
+	EXPECT_EQ(RowsInAPart(1000, 0), k_MostRowsInAPart);
+	EXPECT_EQ(RowsInAPart(30 * 10, 30), k_MostRowsInAPart);
+	EXPECT_EQ(RowsInAPart(30 * 1024, 30), 16u);
+	EXPECT_EQ(RowsInAPart(30 * 100 * 1024, 30), 1u);
+}
+
+// A few rows that are large go to the threads one row at a time after the first hash. The hash stays the same.
+TEST(WorldArchive, TheThreadsThatShareLargeRowsGiveTheSameHash)
+{
+	entt::meta_ctx context;
+	Register(context);
+	entt::registry registry;
+	std::vector<entt::entity> made(12);
+	registry.create(made.begin(), made.end());
+	for (const auto entity : made)
+	{
+		auto walker = SampleWalker(entity, made[0]);
+		walker.name = std::string(20000 + entt::to_integral(entity), 'a');
+		registry.emplace<FakeWalker>(entity, std::move(walker));
+	}
+	WorkerPool pool(3);
+	HashMemo memo;
+	const auto expectSame = [&]() {
+		const auto plain = HashWorld(registry, context);
+		const auto remembered = HashWorld(registry, context, {}, false, {}, &pool, nullptr, &memo);
+		EXPECT_EQ(plain.entities, remembered.entities);
+		EXPECT_EQ(plain.components, remembered.components);
+	};
+	expectSame();
+	expectSame();
+	registry.get<FakeWalker>(made[5]).name = "Tom";
+	expectSame();
+	registry.get<FakeWalker>(made[0]).name += "b";
+	expectSame();
+	registry.destroy(made[7]);
+	expectSame();
+	// The memo keeps one writer for each thread
+	EXPECT_EQ(memo.writers.size(), pool.GetLaneCount());
+}
+
 // A footpath that the game still looks for keeps its search in a world state. A loaded search goes on to the same route
 // as the search that was saved.
 TEST(WorldArchive, AFootpathSearchContinuesAfterALoad)
@@ -1124,4 +1417,491 @@ TEST(WorldArchive, AFootpathSearchContinuesAfterALoad)
 		EXPECT_EQ(back->search->GetBest()[i].to, plan.search->GetBest()[i].to);
 		EXPECT_EQ(back->search->GetBest()[i].cost, plan.search->GetBest()[i].cost);
 	}
+}
+
+TEST(WorldArchive, ASoundTagAndAnArenaKeepNoValuesOfTheRun)
+{
+	// The emitter of a sound tag is an entity of the audio of the run, and the game makes the tags new at a load, so
+	// their count of turns starts again. The ring of an arena is made again after a load.
+	entt::meta_ctx context;
+	RegisterComponents(context);
+	constexpr auto k_Sound = entt::hashed_string("G_Rustle");
+	entt::registry original;
+	const auto thing = original.create();
+	original.emplace<ecs::components::SoundTag>(
+	    thing,
+	    ecs::components::SoundTag {
+	        .sound = k_Sound.value(), .offset = {0.0f, 2.0f, 0.0f}, .active = true, .emitter = entt::entity {77}, .turns = 40});
+	const auto arena = original.create();
+	original.emplace<ecs::components::CreatureArena>(arena, ecs::components::CreatureArena {
+	                                                            .place = {10, 20},
+	                                                            .radius = 30.0f,
+	                                                            .ring = std::make_shared<particles::LightSheet>(),
+	                                                        });
+	WorldSaveReport report;
+	const auto bytes = SaveWorld(original, context, &report);
+	EXPECT_TRUE(report.unsavedValues.empty());
+	entt::registry loaded;
+	const auto result = LoadWorld(loaded, context, bytes, WorldLoadMode::Exact);
+	ASSERT_TRUE(result.has_value());
+	const auto& tag = loaded.get<ecs::components::SoundTag>(thing);
+	EXPECT_EQ(tag.emitter, entt::entity {entt::null});
+	EXPECT_EQ(tag.turns, 0u);
+	EXPECT_EQ(tag.sound, k_Sound.value());
+	EXPECT_TRUE(tag.active);
+	EXPECT_EQ(loaded.get<ecs::components::CreatureArena>(arena).ring, nullptr);
+	EXPECT_FLOAT_EQ(loaded.get<ecs::components::CreatureArena>(arena).radius, 30.0f);
+	// A save of the loaded world has the same bytes
+	EXPECT_EQ(SaveWorld(loaded, context), bytes);
+}
+
+TEST(WorldArchive, AWriterGivesTheSameBytesForAValueThatItWroteBefore)
+{
+	entt::meta_ctx context;
+	Register(context);
+	const auto walker = SampleWalker(entt::entity {3}, entt::entity {8});
+	FakeCounted counted;
+	counted.counter.Add(12);
+
+	// A fresh writer finds the plan of each type as it writes the values the first time
+	BinaryWriter first(context);
+	Save(first, walker);
+	Save(first, counted);
+	const auto firstBytes = first.Bytes();
+
+	// The same writer writes them again by the plans that it kept
+	BinaryWriter again(context);
+	Save(again, walker);
+	Save(again, counted);
+	again.Clear();
+	Save(again, walker);
+	Save(again, counted);
+	EXPECT_EQ(again.Bytes(), firstBytes);
+	ASSERT_NE(again.FindPlan(entt::type_hash<FakeSpot>::value()), nullptr);
+	// The three fields of a spot touch in memory and write their bytes in memory: the plan copies them as one block
+	EXPECT_EQ(again.FindPlan(entt::type_hash<FakeSpot>::value())->steps.size(), 1u);
+	ASSERT_NE(again.FindPlan(entt::type_hash<FakeCounted>::value()), nullptr);
+}
+
+TEST(WorldArchive, ACopyOfAWriterUsesItsOwnPlans)
+{
+	entt::meta_ctx context;
+	Register(context);
+	const auto walker = SampleWalker(entt::entity {3}, entt::entity {8});
+	const auto spot = entt::type_hash<FakeSpot>::value();
+
+	auto source = std::make_unique<BinaryWriter>(context);
+	Save(*source, walker);
+	const auto sourceBytes = source->Bytes();
+	ASSERT_NE(source->FindPlan(spot), nullptr);
+
+	// The copy finds the plan in its own map, also after the writer that it copied is gone
+	BinaryWriter copy = *source;
+	const auto* sourcePlan = source->FindPlan(spot);
+	ASSERT_NE(copy.FindPlan(spot), nullptr);
+	EXPECT_NE(copy.FindPlan(spot), sourcePlan);
+	source.reset();
+	copy.Clear();
+	Save(copy, walker);
+	EXPECT_EQ(copy.Bytes(), sourceBytes);
+
+	// The same for a writer that a copy replaces
+	BinaryWriter replaced(context);
+	Save(replaced, walker);
+	replaced = copy;
+	EXPECT_NE(replaced.FindPlan(spot), copy.FindPlan(spot));
+	replaced.Clear();
+	Save(replaced, walker);
+	EXPECT_EQ(replaced.Bytes(), sourceBytes);
+}
+
+TEST(WorldArchive, AWriterNamesAValueThatItCannotKeepAlsoByThePlanOfItsType)
+{
+	entt::meta_ctx context;
+	Register(context);
+	BinaryWriter out(context);
+	out.SetPlace("First", "hidden");
+	Save(out, FakeHidden {.pointer = std::make_shared<int>(1), .kept = 4});
+	ASSERT_NE(out.FindPlan(entt::type_hash<FakeHidden>::value()), nullptr);
+	out.SetPlace("Second", "hidden");
+	Save(out, FakeHidden {.pointer = std::make_shared<int>(2), .kept = 5});
+	EXPECT_EQ(out.Unsaved().size(), 2u);
+}
+
+TEST(WorldArchive, TheBytesOfAWriterAreTheBytesWrittenUpToNow)
+{
+	entt::meta_ctx context;
+	BinaryWriter out(context);
+	out.WriteRaw(uint32_t {7});
+	EXPECT_EQ(out.Size(), 4u);
+	EXPECT_EQ(out.Bytes().size(), 4u);
+	const auto length = out.BeginLength();
+	out.Write(std::vector<uint8_t>(600, 9));
+	out.EndLength(length);
+	EXPECT_EQ(out.Size(), 608u);
+	EXPECT_EQ(out.Written(4).size(), 604u);
+	const auto& bytes = out.Bytes();
+	ASSERT_EQ(bytes.size(), 608u);
+	uint32_t written = 0;
+	std::memcpy(&written, bytes.data() + length, sizeof(written));
+	EXPECT_EQ(written, 600u);
+	EXPECT_EQ(bytes.back(), 9);
+
+	// A change that the caller made to the list stays, and the next bytes go after it
+	out.Bytes().resize(2);
+	out.WriteRaw(uint8_t {5});
+	EXPECT_EQ(out.Bytes(), (std::vector<uint8_t> {7, 0, 5}));
+
+	out.Clear();
+	EXPECT_EQ(out.Size(), 0u);
+	EXPECT_TRUE(out.Written().empty());
+	out.WriteRaw(uint16_t {0x0102});
+	EXPECT_EQ(out.Bytes(), (std::vector<uint8_t> {2, 1}));
+}
+
+TEST(WorldArchive, AListOfEnumerationsIsTheBytesOfEachValueInTurn)
+{
+	entt::meta_ctx context;
+	const std::vector<entt::entity> entities {entt::entity {1}, entt::null, entt::entity {300}};
+	const std::array<PlayerNames, 2> players {PlayerNames::PLAYER_TWO, PlayerNames::NEUTRAL};
+	BinaryWriter lists(context);
+	Save(lists, entities);
+	Save(lists, players);
+
+	BinaryWriter oneByOne(context);
+	oneByOne.WriteSize(entities.size());
+	for (const auto entity : entities)
+	{
+		oneByOne.WriteRaw(entity);
+	}
+	oneByOne.WriteSize(players.size());
+	for (const auto player : players)
+	{
+		oneByOne.WriteRaw(player);
+	}
+	EXPECT_EQ(lists.Bytes(), oneByOne.Bytes());
+}
+
+TEST(WorldArchive, AListOfFlagsAndAListOfListsAreTheBytesOfEachValueInTurn)
+{
+	entt::meta_ctx context;
+	const std::vector<bool> flags {true, false, false, true, true};
+	const std::vector<std::vector<uint32_t>> lists {{}, {7, 8}, {}, {0xFFFFFFFFu}};
+	BinaryWriter blocks(context);
+	Save(blocks, flags);
+	Save(blocks, lists);
+	Save(blocks, std::vector<std::vector<uint32_t>> {});
+
+	BinaryWriter oneByOne(context);
+	oneByOne.WriteSize(flags.size());
+	for (const bool flag : flags)
+	{
+		oneByOne.WriteRaw(static_cast<uint8_t>(flag ? 1 : 0));
+	}
+	oneByOne.WriteSize(lists.size());
+	for (const auto& list : lists)
+	{
+		oneByOne.WriteSize(list.size());
+		for (const auto value : list)
+		{
+			oneByOne.WriteRaw(value);
+		}
+	}
+	oneByOne.WriteSize(0);
+	EXPECT_EQ(blocks.Bytes(), oneByOne.Bytes());
+
+	// The bytes load back to the same lists
+	BinaryReader in(context, blocks.Bytes(), EntityRemap {});
+	std::vector<bool> readFlags;
+	std::vector<std::vector<uint32_t>> readLists;
+	Load(in, readFlags);
+	Load(in, readLists);
+	EXPECT_FALSE(in.Failed());
+	EXPECT_EQ(readFlags, flags);
+	EXPECT_EQ(readLists, lists);
+}
+
+TEST(WorldArchive, TheMixOfBytesIsTheHashOfEachByteInTurn)
+{
+	constexpr uint64_t k_Offset = 14695981039346656037ull;
+	constexpr uint64_t k_Prime = 1099511628211ull;
+	// Runs of zero bytes of each length at each place, with bytes that are not zero between them
+	std::vector<uint8_t> bytes;
+	for (uint8_t run = 0; run < 40; ++run)
+	{
+		bytes.insert(bytes.end(), run, uint8_t {0});
+		bytes.push_back(static_cast<uint8_t>(run + 1));
+	}
+	// Long runs, which take the powers of the prime for many words
+	for (const size_t run : {100U, 1000U, 4096U * 4U, 77777U})
+	{
+		bytes.insert(bytes.end(), run, uint8_t {0});
+		bytes.push_back(uint8_t {9});
+	}
+	bytes.insert(bytes.end(), 300, uint8_t {0});
+	for (size_t from = 0; from < 9; ++from)
+	{
+		const auto part = std::span<const uint8_t>(bytes).subspan(from);
+		uint64_t expected = k_Offset;
+		for (const auto byte : part)
+		{
+			expected = (expected ^ byte) * k_Prime;
+		}
+		uint64_t mixed = k_Offset;
+		MixBytes(mixed, part);
+		EXPECT_EQ(mixed, expected) << "from " << from;
+	}
+}
+
+namespace
+{
+
+/// A value with fields that touch in memory, a gap before a wide number, a flag and an option, and a presentation field
+struct FakePlainRow
+{
+	uint32_t first {0};
+	entt::entity owner {entt::null};
+	glm::vec2 place {0.0f};
+	int16_t small {0};
+	uint64_t order {0};
+	bool flag {false};
+	std::optional<uint32_t> turn;
+	float heat {0.0f};
+	float drawn {0.0f};
+};
+
+void RegisterPlainRow(entt::meta_ctx& context)
+{
+	Reflect<FakePlainRow>(context)
+	    .Field<&FakePlainRow::first>("first")
+	    .Field<&FakePlainRow::owner>("owner")
+	    .Field<&FakePlainRow::place>("place")
+	    .Field<&FakePlainRow::small>("small")
+	    .Field<&FakePlainRow::order>("order")
+	    .Field<&FakePlainRow::flag>("flag")
+	    .Field<&FakePlainRow::turn>("turn")
+	    .Field<&FakePlainRow::heat>("heat")
+	    .PresentationField<&FakePlainRow::drawn>("drawn");
+}
+
+FakePlainRow SamplePlainRow(uint32_t number)
+{
+	return {.first = number,
+	        .owner = static_cast<entt::entity>(number + 1),
+	        .place = {1.5f * static_cast<float>(number), -0.0f},
+	        .small = static_cast<int16_t>(-static_cast<int>(number)),
+	        .order = 0x0102030405060708ull + number,
+	        .flag = number % 2 == 0,
+	        .turn = number % 3 == 0 ? std::nullopt : std::optional<uint32_t>(number * 7),
+	        .heat = std::numeric_limits<float>::denorm_min(),
+	        .drawn = 2.0f};
+}
+
+/// The bytes of a value as each field writes them alone, in the order of the fields
+std::vector<uint8_t> FieldByField(const entt::meta_ctx& context, const entt::meta_type& type, const void* value)
+{
+	BinaryWriter out(context);
+	for (const auto& [id, data] : type.data())
+	{
+		const FieldInfo* info = data.custom();
+		info->saveFrom(value, out);
+	}
+	return out.Bytes();
+}
+
+} // namespace
+
+// A plan copies the fields whose saves write their bytes in memory, and which touch, as one block. The bytes are the same
+// as the bytes of each field alone.
+TEST(WorldArchive, APlanWritesFieldsThatTouchInMemoryAsOneBlock)
+{
+	entt::meta_ctx context;
+	RegisterPlainRow(context);
+	const auto type = entt::resolve<FakePlainRow>(context);
+	BinaryWriter out(context);
+	for (uint32_t number = 0; number < 4; ++number)
+	{
+		const auto value = SamplePlainRow(number);
+		out.Clear();
+		Save(out, value);
+		const auto written = out.Written();
+		EXPECT_EQ(std::vector<uint8_t>(written.begin(), written.end()), FieldByField(context, type, &value)) << number;
+	}
+	const auto* plan = out.FindPlan(entt::type_hash<FakePlainRow>::value());
+	ASSERT_NE(plan, nullptr);
+	// The first, the owner, the place and the small number touch; the order is after a gap; the flag, the option and
+	// the presentation field have writers
+	ASSERT_EQ(plan->steps.size(), 6u);
+	EXPECT_EQ(plan->steps[0].save, nullptr);
+	EXPECT_EQ(plan->steps[0].offset, offsetof(FakePlainRow, first));
+	EXPECT_EQ(plan->steps[0].size, sizeof(uint32_t) + sizeof(entt::entity) + sizeof(glm::vec2) + sizeof(int16_t));
+	EXPECT_EQ(plan->steps[1].save, nullptr);
+	EXPECT_EQ(plan->steps[1].offset, offsetof(FakePlainRow, order));
+	EXPECT_EQ(plan->steps[1].size, sizeof(uint64_t));
+	EXPECT_NE(plan->steps[2].save, nullptr);
+	EXPECT_NE(plan->steps[3].save, nullptr);
+	EXPECT_EQ(plan->steps[4].save, nullptr);
+	EXPECT_EQ(plan->steps[4].offset, offsetof(FakePlainRow, heat));
+	EXPECT_EQ(plan->steps[4].size, sizeof(float));
+	EXPECT_NE(plan->steps[5].save, nullptr);
+	// The presentation field stays a presentation value
+	EXPECT_FALSE(out.PresentationRanges().empty());
+}
+
+TEST(WorldArchive, AnOptionOfAPlainValueGivesTheFlagAndThenTheValue)
+{
+	entt::meta_ctx context;
+	BinaryWriter out(context);
+	Save(out, std::optional<uint32_t>(0x11223344u));
+	Save(out, std::optional<uint32_t> {});
+	Save(out, std::optional<entt::entity>(static_cast<entt::entity>(5)));
+	Save(out, std::optional<float>(-0.0f));
+	BinaryWriter expected(context);
+	Save(expected, true);
+	Save(expected, uint32_t {0x11223344u});
+	Save(expected, false);
+	Save(expected, true);
+	Save(expected, static_cast<entt::entity>(5));
+	Save(expected, true);
+	Save(expected, -0.0f);
+	EXPECT_EQ(out.Bytes(), expected.Bytes());
+	const EntityRemap remap;
+	BinaryReader in(context, out.Bytes(), remap);
+	std::optional<uint32_t> full;
+	std::optional<uint32_t> empty {7u};
+	Load(in, full);
+	Load(in, empty);
+	EXPECT_FALSE(in.Failed());
+	EXPECT_EQ(full, 0x11223344u);
+	EXPECT_FALSE(empty.has_value());
+}
+
+// The writer keeps the end of each outer value only, whatever the values in it
+TEST(WorldArchive, TheValuesInAValueDoNotEndAValue)
+{
+	entt::meta_ctx context;
+	RegisterPlainRow(context);
+	BinaryWriter out(context);
+	out.KeepValueEnds();
+	std::vector<size_t> ends;
+	Save(out, std::vector<std::optional<uint32_t>> {1u, std::nullopt, 3u});
+	ends.push_back(out.Size());
+	Save(out, SamplePlainRow(1));
+	ends.push_back(out.Size());
+	Save(out, SamplePlainRow(2));
+	ends.push_back(out.Size());
+	Save(out, std::array<std::vector<FakePlainRow>, 2> {{{SamplePlainRow(3)}, {}}});
+	ends.push_back(out.Size());
+	EXPECT_EQ(out.ValueEnds(), ends);
+}
+
+// Each field of the game that a plan copies as bytes writes the bytes that it has in memory
+TEST(WorldArchive, EachPlainFieldOfTheGameWritesItsBytesInMemory)
+{
+	entt::meta_ctx context;
+	RegisterComponents(context);
+	std::vector<std::string> wrong;
+	size_t checked = 0;
+	for (auto&& [typeId, type] : entt::resolve(context))
+	{
+		auto instance = type.construct();
+		if (!instance)
+		{
+			continue;
+		}
+		const auto* value = static_cast<const std::byte*>(instance.base().data());
+		for (const auto& [id, data] : type.data())
+		{
+			const FieldInfo* info = data.custom();
+			if (info == nullptr || info->plainAddress == nullptr)
+			{
+				continue;
+			}
+			++checked;
+			const auto* field = static_cast<const std::byte*>(info->plainAddress(value));
+			BinaryWriter out(context);
+			info->saveFrom(value, out);
+			const auto inside = field >= value && field + info->plainSize <= value + type.size_of();
+			if (!inside || out.Size() != info->plainSize || std::memcmp(out.Written().data(), field, info->plainSize) != 0)
+			{
+				wrong.push_back(ShortTypeName(type.info()) + "." + info->name);
+			}
+		}
+	}
+	EXPECT_GT(checked, 100u);
+	EXPECT_TRUE(wrong.empty()) << wrong.front();
+}
+
+// The hash takes the rows by the steps of the layout, and takes them field by field when the hash of each field is asked.
+// The hash of each component is the same both ways, also with a field that only some rows keep, and with a field that no
+// row keeps.
+TEST(WorldArchive, TheHashOfRowsByStepsIsTheHashOfRowsByField)
+{
+	entt::meta_ctx context;
+	Register(context);
+	RegisterPlainRow(context);
+	entt::registry registry;
+	std::vector<entt::entity> made(40);
+	registry.create(made.begin(), made.end());
+	for (const auto entity : made)
+	{
+		registry.emplace<FakePlainRow>(entity, SamplePlainRow(entt::to_integral(entity)));
+	}
+	registry.emplace<FakeTag>(made[3]);
+	const std::array<HashLeaveOut, 1> markedHeat {
+	    HashLeaveOut {.component = "FakePlainRow", .field = "heat", .marker = &registry.storage<FakeTag>()}};
+	const std::array<HashLeaveOut, 1> alwaysOrder {
+	    HashLeaveOut {.component = "FakePlainRow", .field = "order", .marker = nullptr}};
+	WorkerPool pool(3);
+	for (const auto leaveOut : {std::span<const HashLeaveOut> {}, std::span<const HashLeaveOut>(markedHeat),
+	                            std::span<const HashLeaveOut>(alwaysOrder)})
+	{
+		HashMemo memo;
+		const auto byField = HashWorld(registry, context, leaveOut, true);
+		EXPECT_EQ(HashWorld(registry, context, leaveOut).components, byField.components);
+		EXPECT_EQ(HashWorld(registry, context, leaveOut, false, {}, &pool, nullptr, &memo).components, byField.components);
+		registry.get<FakePlainRow>(made[20]).heat = 3.0f;
+		const auto changed = HashWorld(registry, context, leaveOut, true);
+		EXPECT_NE(changed.components, byField.components);
+		EXPECT_EQ(HashWorld(registry, context, leaveOut, false, {}, &pool, nullptr, &memo).components, changed.components);
+		registry.get<FakePlainRow>(made[20]).heat = std::numeric_limits<float>::denorm_min();
+	}
+}
+
+// The memo keeps the layout of each component while the parts that the hash leaves out stay the same. A change of those
+// parts, and a component that has no rows for a time, give the same hash as a hash with no memo.
+TEST(WorldArchive, TheLayoutsInTheMemoFollowThePartsThatTheHashLeavesOut)
+{
+	entt::meta_ctx context;
+	Register(context);
+	RegisterPlainRow(context);
+	entt::registry registry;
+	std::vector<entt::entity> made(40);
+	registry.create(made.begin(), made.end());
+	for (const auto entity : made)
+	{
+		registry.emplace<FakePlainRow>(entity, SamplePlainRow(entt::to_integral(entity)));
+	}
+	registry.emplace<FakeTag>(made[3]);
+	const std::array<HashLeaveOut, 1> markedHeat {
+	    HashLeaveOut {.component = "FakePlainRow", .field = "heat", .marker = &registry.storage<FakeTag>()}};
+	const std::array<HashLeaveOut, 1> alwaysOrder {
+	    HashLeaveOut {.component = "FakePlainRow", .field = "order", .marker = nullptr}};
+	WorkerPool pool(3);
+	HashMemo memo;
+	const auto expectSame = [&](std::span<const HashLeaveOut> leaveOut) {
+		const auto plain = HashWorld(registry, context, leaveOut);
+		EXPECT_EQ(HashWorld(registry, context, leaveOut, false, {}, &pool, nullptr, &memo).components, plain.components);
+		EXPECT_EQ(HashWorld(registry, context, leaveOut, false, {}, nullptr, nullptr, &memo).components, plain.components);
+	};
+	expectSame({});
+	expectSame(markedHeat);
+	expectSame(alwaysOrder);
+	expectSame({});
+	// No row of the component, then rows again
+	registry.clear<FakePlainRow>();
+	expectSame({});
+	registry.emplace<FakePlainRow>(made[5], SamplePlainRow(9));
+	expectSame({});
+	expectSame(alwaysOrder);
 }

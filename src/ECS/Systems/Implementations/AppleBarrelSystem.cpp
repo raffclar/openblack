@@ -30,9 +30,10 @@
 #include "ECS/Components/Temple.h"
 #include "ECS/Components/Town.h"
 #include "ECS/Components/Transform.h"
+#include "ECS/DrawnRegistry.h"
 #include "ECS/Registry.h"
+#include "ECS/Systems/HandSystemInterface.h"
 #include "ECS/Systems/Implementations/ObjectMeasures.h"
-#include "ECS/Systems/PlayerSystemInterface.h"
 #include "Locator.h"
 #include "Resources/ResourceManager.h"
 #include "Resources/ResourcesInterface.h"
@@ -70,8 +71,9 @@ void PoseWorm(const L3DAnim& clip, const graphics::L3DMesh& model, uint32_t plac
 std::optional<entt::entity> AppleBarrelSystem::CarryingStore() const
 {
 	const auto& registry = Locator::entitiesRegistry::value();
+	// The land draws the barrel for the player at this computer
 	const auto player =
-	    Locator::playerSystem::has_value() ? Locator::playerSystem::value().GetLocalPlayer() : PlayerNames::PLAYER_ONE;
+	    Locator::handSystem::has_value() ? Locator::handSystem::value().GetOwnPlayer() : PlayerNames::PLAYER_ONE;
 
 	// The pits are measured from the player's temple
 	std::optional<glm::vec2> temple;
@@ -127,36 +129,44 @@ std::optional<entt::entity> AppleBarrelSystem::CarryingStore() const
 
 void AppleBarrelSystem::Remove()
 {
-	auto& registry = Locator::entitiesRegistry::value();
-	if (_barrel != entt::null && registry.Valid(_barrel))
+	if (!Locator::drawnRegistry::has_value())
 	{
-		if (const auto worm = registry.Get<const AppleBarrel>(_barrel).worm; worm != entt::null && registry.Valid(worm))
+		_barrel = entt::null;
+		return;
+	}
+	auto& drawn = Locator::drawnRegistry::value();
+	if (_barrel != entt::null && drawn.Valid(_barrel) && drawn.AllOf<AppleBarrel>(_barrel))
+	{
+		if (const auto worm = drawn.Get<const AppleBarrel>(_barrel).worm; worm != entt::null && drawn.Valid(worm))
 		{
-			registry.Destroy(worm);
+			drawn.Destroy(worm);
 		}
-		registry.Destroy(_barrel);
-		registry.SetDirty();
+		drawn.Destroy(_barrel);
+		drawn.SetDirty();
 	}
 	_barrel = entt::null;
 }
 
 void AppleBarrelSystem::Update(std::chrono::milliseconds frameGameTime)
 {
-	if (!Locator::resources::has_value() || !Locator::terrainSystem::has_value() || !Locator::terrainSystem::value().IsLoaded())
+	if (!Locator::resources::has_value() || !Locator::drawnRegistry::has_value() || !Locator::terrainSystem::has_value() ||
+	    !Locator::terrainSystem::value().IsLoaded())
 	{
 		return;
 	}
 	const auto elapsed = static_cast<uint32_t>(frameGameTime.count());
 
-	auto& registry = Locator::entitiesRegistry::value();
-	if (_barrel != entt::null && !registry.Valid(_barrel))
+	// The barrel and its worm are things of the drawn registry: only the frames make, place and remove them
+	auto& drawn = Locator::drawnRegistry::value();
+	if (_barrel != entt::null && (!drawn.Valid(_barrel) || !drawn.AllOf<AppleBarrel>(_barrel)))
 	{
 		_barrel = entt::null;
 	}
-	// The turn removes the barrel while no pit carries it
+	// The barrel goes while no pit carries it
 	const auto store = CarryingStore();
 	if (!store.has_value())
 	{
+		Remove();
 		return;
 	}
 
@@ -168,6 +178,7 @@ void AppleBarrelSystem::Update(std::chrono::milliseconds frameGameTime)
 	}
 
 	// The barrel stands at the pit's edge on the land, unturned and at its own size
+	const auto& registry = Locator::entitiesRegistry::value();
 	const auto& storeTransform = registry.Get<const Transform>(*store);
 	const auto ground = apple_barrel::BarrelSpot(glm::xz(storeTransform.position), storeTransform.rotation,
 	                                             object_measures::TwoDRadius(registry, *store));
@@ -175,19 +186,29 @@ void AppleBarrelSystem::Update(std::chrono::milliseconds frameGameTime)
 	const auto barrelModel = meshes.Handle(k_BarrelModel);
 	const auto wormSpot = apple_barrel::WormSpot(barrelSpot, barrelModel->GetChimneyPos().value_or(glm::vec3(0.0f)));
 
-	// The turn makes the barrel
-	if (_barrel == entt::null || !registry.AllOf<AppleBarrel>(_barrel))
+	// The barrel and its worm are made when a pit first carries them
+	if (_barrel == entt::null)
 	{
-		return;
+		_barrel = drawn.Create();
+		drawn.Assign<Transform>(_barrel, barrelSpot, glm::mat3(1.0f), glm::vec3(1.0f));
+		drawn.Assign<Mesh>(_barrel, k_BarrelModel, static_cast<int8_t>(0), static_cast<int8_t>(0));
+		const auto worm = drawn.Create();
+		drawn.Assign<Transform>(worm, wormSpot, glm::mat3(1.0f), glm::vec3(1.0f));
+		drawn.Assign<Mesh>(worm, k_WormModel, static_cast<int8_t>(0), static_cast<int8_t>(0));
+		drawn.Assign<AppleBarrelWorm>(worm, _barrel);
+		// The worm is very small. Thus it stays in view to a larger distance than its size alone gives.
+		drawn.Assign<DrawImportance>(worm, apple_barrel::k_WormImportance);
+		drawn.Assign<AnimatedStaticPose>(worm);
+		drawn.Assign<AppleBarrel>(_barrel, *store, worm);
 	}
-	auto& barrel = registry.Get<AppleBarrel>(_barrel);
+	auto& barrel = drawn.Get<AppleBarrel>(_barrel);
 	barrel.store = *store;
-	registry.Get<Transform>(_barrel).position = barrelSpot;
-	registry.Get<Transform>(barrel.worm).position = wormSpot;
+	drawn.Get<Transform>(_barrel).position = barrelSpot;
+	drawn.Get<Transform>(barrel.worm).position = wormSpot;
 
 	// The worm wriggles on by the game's clock
-	auto& worm = registry.Get<AppleBarrelWorm>(barrel.worm);
-	auto& pose = registry.Get<AnimatedStaticPose>(barrel.worm);
+	auto& worm = drawn.Get<AppleBarrelWorm>(barrel.worm);
+	auto& pose = drawn.Get<AnimatedStaticPose>(barrel.worm);
 	if (animations.Contains(k_WormClip))
 	{
 		const auto clip = animations.Handle(k_WormClip);
@@ -196,56 +217,30 @@ void AppleBarrelSystem::Update(std::chrono::milliseconds frameGameTime)
 		pose.place = worm.place;
 		PoseWorm(*clip, *meshes.Handle(k_WormModel), worm.place, pose.bones);
 	}
-	registry.SetDirty();
-}
-
-void AppleBarrelSystem::ProcessTurn()
-{
-	auto& registry = Locator::entitiesRegistry::value();
-	if (_barrel != entt::null && !registry.Valid(_barrel))
-	{
-		_barrel = entt::null;
-	}
-	const auto store = CarryingStore();
-	if (!store.has_value())
-	{
-		Remove();
-		return;
-	}
-	if (_barrel != entt::null)
-	{
-		return;
-	}
-	// The frames put the barrel and its worm in their places at the pit
-	const auto& at = registry.Get<const Transform>(*store).position;
-	_barrel = registry.Create();
-	registry.Assign<Transform>(_barrel, at, glm::mat3(1.0f), glm::vec3(1.0f));
-	registry.Assign<Mesh>(_barrel, k_BarrelModel, static_cast<int8_t>(0), static_cast<int8_t>(0));
-	const auto worm = registry.Create();
-	registry.Assign<Transform>(worm, at, glm::mat3(1.0f), glm::vec3(1.0f));
-	registry.Assign<Mesh>(worm, k_WormModel, static_cast<int8_t>(0), static_cast<int8_t>(0));
-	registry.Assign<AppleBarrelWorm>(worm, _barrel);
-	// The worm is very small. Thus it stays in view to a larger distance than its size alone gives.
-	registry.Assign<DrawImportance>(worm, apple_barrel::k_WormImportance);
-	registry.Assign<AnimatedStaticPose>(worm);
-	registry.Assign<AppleBarrel>(_barrel, *store, worm);
-	registry.SetDirty();
+	drawn.SetDirty();
 }
 
 void AppleBarrelSystem::Reset()
 {
+	// The drawn registry goes with the land
 	_barrel = entt::null;
 }
 
 void AppleBarrelSystem::FindAfterLoad()
 {
-	auto& registry = Locator::entitiesRegistry::value();
+	// The drawn registry goes with the land. A world saved when the barrel was a thing of the land can still have the
+	// barrel and its worm: they go, and the frames make them again.
 	_barrel = entt::null;
-	registry.Each<const AppleBarrel>([this, &registry](entt::entity entity, const AppleBarrel& barrel) {
-		_barrel = entity;
-		if (const auto* worm = registry.TryGet<const AppleBarrelWorm>(barrel.worm))
-		{
-			_wormPlace = worm->place;
-		}
-	});
+	auto& registry = Locator::entitiesRegistry::value();
+	std::vector<entt::entity> old;
+	registry.Each<const AppleBarrel>([&old](entt::entity entity, const AppleBarrel&) { old.push_back(entity); });
+	registry.Each<const AppleBarrelWorm>([&old](entt::entity entity, const AppleBarrelWorm&) { old.push_back(entity); });
+	for (const auto entity : old)
+	{
+		registry.Destroy(entity);
+	}
+	if (!old.empty())
+	{
+		registry.SetDirty();
+	}
 }

@@ -20,6 +20,8 @@
 #include <numbers>
 #include <optional>
 #include <span>
+#include <string>
+#include <string_view>
 #include <tuple>
 #include <utility>
 #include <vector>
@@ -32,12 +34,13 @@
 #include "3D/L3DMesh.h"
 #include "3D/LandIslandInterface.h"
 #include "3D/LandLightFrame.h"
-#include "Audio/Sound.h"
 #include "Common/FramePace.h"
 #include "Common/GameRandom.h"
 #include "Common/X87.h"
 #include "Creature/CreatureAlignmentMotes.h"
 #include "Creature/CreatureAnimation.h"
+#include "Creature/CreatureAnimationLog.h"
+#include "Creature/CreatureBlendStore.h"
 #include "Creature/CreatureEyes.h"
 #include "Creature/CreatureFight.h"
 #include "Creature/CreatureHandGlow.h"
@@ -45,13 +48,17 @@
 #include "Creature/CreatureLayers.h"
 #include "Creature/CreatureLocomotion.h"
 #include "Creature/CreatureLook.h"
+#include "Creature/CreatureMindTables.h"
 #include "Creature/CreatureMorph.h"
 #include "Creature/CreatureObjectActions.h"
 #include "Creature/CreatureProportions.h"
 #include "Creature/CreaturePuke.h"
+#include "Creature/CreatureReach.h"
 #include "Creature/CreatureRig.h"
+#include "Creature/CreatureShownFace.h"
 #include "Creature/CreatureSway.h"
 #include "Creature/CreatureTurnPose.h"
+#include "Creature/CreatureWalkPlanner.h"
 #include "ECS/Archetypes/CreatureArchetype.h"
 #include "ECS/Components/Creature.h"
 #include "ECS/Components/CreatureBody.h"
@@ -59,12 +66,16 @@
 #include "ECS/Components/CreatureFight.h"
 #include "ECS/Components/CreatureHandGlows.h"
 #include "ECS/Components/CreatureLocomotion.h"
+#include "ECS/Components/CreatureMind.h"
 #include "ECS/Components/CreatureObjectAction.h"
+#include "ECS/Components/ShownCreatureFace.h"
 #include "ECS/Components/Transform.h"
 #include "ECS/CreaturePlacement.h"
 #include "ECS/Registry.h"
+#include "ECS/Systems/CreatureAnimationLogSystemInterface.h"
 #include "ECS/Systems/CreatureHandSystemInterface.h"
 #include "ECS/Systems/CreatureLocomotionSystemInterface.h"
+#include "ECS/Systems/CreatureMindSystemInterface.h"
 #include "ECS/Systems/LiquidParticleSystemInterface.h"
 #include "ECS/Systems/SoundTagSystemInterface.h"
 #include "ECS/Systems/TimeSystemInterface.h"
@@ -73,13 +84,14 @@
 #include "Locator.h"
 #include "Physics/LivingRules.h"
 #include "Resources/ResourcesInterface.h"
+#include "Sound/SoundId.h"
 
 using namespace openblack;
 using namespace openblack::ecs::systems;
 using namespace openblack::ecs::components;
 using openblack::creature::CreatureRig;
 using openblack::skeletal_animation::Animation;
-using AdjustedAnimations = CreatureAnimationSystem::AdjustedAnimations;
+using AnimationStores = creature_blends::Stores;
 
 namespace
 {
@@ -145,91 +157,20 @@ creature_morph::Morph TargetMorph(const Creature& creature, const CreatureMorph&
 	return target;
 }
 
-CreatureRig::Mesh EvilGoodMesh(float value)
-{
-	return value < 0.0f ? CreatureRig::Mesh::Evil : CreatureRig::Mesh::Good;
-}
-
-CreatureRig::Mesh ThinFatMesh(float value)
-{
-	return value < 0.0f ? CreatureRig::Mesh::Thin : CreatureRig::Mesh::Fat;
-}
-
-/// A variant's animation, the base's adjusted to the variant's stand where the variant has none of its own, and the
-/// variant's stand
-struct VariantAnimation
-{
-	const Animation* animation {nullptr};
-	const Animation* stand {nullptr};
-};
-
-VariantAnimation VariantOf(AdjustedAnimations& adjusted, const CreatureRig& rig, CreatureRig::Mesh mesh, size_t index)
-{
-	VariantAnimation variant;
-	const auto slot = static_cast<size_t>(mesh);
-	if (!rig.hasMesh.at(slot) || slot >= rig.animations.size())
-	{
-		return variant;
-	}
-	const auto* base = rig.GetAnimation(CreatureRig::Mesh::Base, index);
-	const auto* baseStand = rig.GetAnimation(CreatureRig::Mesh::Base, creature_animation::k_StandAnimation);
-	variant.stand = rig.GetAnimation(mesh, creature_animation::k_StandAnimation);
-	const auto& own = rig.animations.at(slot);
-	if (index < own.size() && own[index].has_value())
-	{
-		variant.animation = &*own[index];
-	}
-	else if (index == creature_animation::k_StandAnimation)
-	{
-		variant.animation = variant.stand;
-	}
-	else if (base != nullptr && baseStand != nullptr && variant.stand != nullptr)
-	{
-		// The adjustment uses only the species' animations, so every creature of the species has the same one
-		auto& kept = adjusted[{.rig = &rig, .mesh = mesh, .index = index}];
-		if (!kept.has_value() || kept->base != base || kept->baseStand != baseStand || kept->stand != variant.stand)
-		{
-			kept = CreatureAnimationSystem::AdjustedAnimation {
-			    .base = base,
-			    .baseStand = baseStand,
-			    .stand = variant.stand,
-			    .animation = creature_animation::AdjustFromStand(*base, *baseStand, *variant.stand),
-			};
-		}
-		variant.animation = &kept->animation;
-	}
-	return variant;
-}
-
-/// The species' animation blended as the body is drawn
-std::optional<Animation> BlendAnimation(AdjustedAnimations& adjusted, const CreatureRig& rig,
-                                        const creature_morph::Morph& morph, size_t index)
-{
-	const auto* base = rig.GetAnimation(CreatureRig::Mesh::Base, index);
-	if (base == nullptr)
-	{
-		return std::nullopt;
-	}
-	const auto evilGood = VariantOf(adjusted, rig, EvilGoodMesh(morph.evilGood), index);
-	const auto thinFat = VariantOf(adjusted, rig, ThinFatMesh(morph.thinFat), index);
-	return creature_animation::Blend(*base,
-	                                 {.animation = evilGood.animation,
-	                                  .stand = evilGood.stand,
-	                                  .weight = evilGood.animation != nullptr ? std::abs(morph.evilGood) : 0.0f},
-	                                 {.animation = thinFat.animation,
-	                                  .stand = thinFat.stand,
-	                                  .weight = thinFat.animation != nullptr ? std::abs(morph.thinFat) : 0.0f});
-}
+/// The animations of the first pose of a body and of its first plan: its stand and the two turns of its head. A body
+/// that did not measure its reach yet also blends the four animations that measure how far its hand reaches.
+constexpr std::array k_FirstPoseBlends = {creature_animation::k_StandAnimation, creature_layers::animations::k_LookRightLeft,
+                                          creature_layers::animations::k_LookDownUp};
 
 /// An eye's point on the body as drawn: each vertex blended as the body is, placed by its bone, in the world
 std::optional<creature_eyes::SurfacePoint> EyePointOf(const CreatureRig::EyePoint& point, const creature_morph::Morph& morph,
-                                                      const std::vector<glm::mat4>& bones, const glm::mat4& model)
+                                                      creature::PosedBones& posed)
 {
 	if (!point.enabled)
 	{
 		return std::nullopt;
 	}
-	const auto world = creature::PosedTriangle(point.vertices, point.bones, morph, bones, model, creature::k_SkinPointOrder);
+	const auto world = creature::PosedTriangle(point.vertices, point.bones, morph, posed, creature::k_SkinPointOrder);
 	return creature_eyes::PointOnTriangle(world[0], world[1], world[2], point.u, point.v);
 }
 
@@ -238,7 +179,8 @@ void PlaceEyes(CreatureEyes& eyes, const CreatureRig::Eyes& rig, const creature_
                const std::vector<glm::mat4>& bones, const Transform& transform, float size, int32_t milliseconds,
                Random&& random)
 {
-	const auto model = creature::PlacementMatrix(transform.position, transform.rotation, transform.scale);
+	// The points of both eyes share bones, so each bone is placed in the world one time
+	creature::PosedBones posed(bones, creature::PlacementMatrix(transform.position, transform.rotation, transform.scale));
 	const auto eyeSize = creature_eyes::EyeSize(size, rig.scale, morph.evilGood, eyes.mode);
 	// The model's back axis, which is the way the creature faces across the land
 	const auto back = transform.rotation * k_MeshBack;
@@ -255,7 +197,7 @@ void PlaceEyes(CreatureEyes& eyes, const CreatureRig::Eyes& rig, const creature_
 	{
 		auto& drawn = eyes.drawn.at(i);
 		drawn = {};
-		const auto point = EyePointOf(rig.points.at(i), morph, bones, model);
+		const auto point = EyePointOf(rig.points.at(i), morph, posed);
 		if (!point)
 		{
 			continue;
@@ -273,7 +215,7 @@ void PlaceEyes(CreatureEyes& eyes, const CreatureRig::Eyes& rig, const creature_
 			turn.Reset(creature_eyes::LookDestination(*point, look));
 			eyes.lookStarted.at(i) = true;
 		}
-		const auto anchor = EyePointOf(rig.points.at(i + 2), morph, bones, model);
+		const auto anchor = EyePointOf(rig.points.at(i + 2), morph, posed);
 		const auto placed =
 		    creature_eyes::PlaceEye(*point, anchor ? std::optional<glm::vec3>(anchor->position) : std::nullopt,
 		                            rig.points.at(i).depth, i == 1, look, rig.lidAngles, eyeSize, turn, milliseconds);
@@ -288,30 +230,35 @@ void PlaceEyes(CreatureEyes& eyes, const CreatureRig::Eyes& rig, const creature_
 	}
 }
 /// A blended animation of the creature's, blended the first time it is wanted, or nothing when the species has none
-const Animation* AnimationOf(AdjustedAnimations& adjusted, CreatureAnimation& animation, const CreatureRig& rig,
+const Animation* AnimationOf(AnimationStores& stores, CreatureAnimation& animation, const CreatureRig& rig,
                              const creature_morph::Morph& morph, size_t index)
 {
 	auto found = animation.animations.find(index);
 	if (found == animation.animations.end())
 	{
-		// A species without the animation keeps an empty one, so as not to look for it again
-		auto blended = BlendAnimation(adjusted, rig, morph, index).value_or(Animation {});
-		found = animation.animations.emplace(index, std::move(blended)).first;
+		// A species without the animation keeps an empty one, so as not to look for it again. A blend that the system
+		// made before the turn asked for it is the same blend.
+		auto blended = creature_blends::TakePrepared(stores, rig, morph, index);
+		if (!blended.has_value())
+		{
+			blended = creature_blends::Blend(stores, rig, morph, index);
+		}
+		found = animation.animations.emplace(index, std::move(blended).value_or(Animation {})).first;
 	}
 	return found->second.frames.empty() ? nullptr : &found->second;
 }
 
 /// A turn's or step's pair of the creature's animations blended into one, kept while the same pair plays, or nothing
 /// when the species lacks either
-const Animation* PairAnimationOf(AdjustedAnimations& adjusted, CreatureAnimation& animation, const CreatureRig& rig,
+const Animation* PairAnimationOf(AnimationStores& stores, CreatureAnimation& animation, const CreatureRig& rig,
                                  const creature_morph::Morph& morph, size_t from, size_t to, float weight)
 {
 	auto& pair = animation.pair;
 	if (!pair.has_value() || pair->from != from || pair->to != to || pair->weight != weight)
 	{
-		const auto* first = AnimationOf(adjusted, animation, rig, morph, from);
-		const auto* second = AnimationOf(adjusted, animation, rig, morph, to);
-		const auto* stand = AnimationOf(adjusted, animation, rig, morph, creature_layers::animations::k_Stand);
+		const auto* first = AnimationOf(stores, animation, rig, morph, from);
+		const auto* second = AnimationOf(stores, animation, rig, morph, to);
+		const auto* stand = AnimationOf(stores, animation, rig, morph, creature_layers::animations::k_Stand);
 		if (first == nullptr || second == nullptr || stand == nullptr)
 		{
 			return first;
@@ -332,7 +279,7 @@ std::optional<uint32_t> DurationOf(const Animation* animation)
 /// Plays a head turning animation on top of the pose for how far the head is turned. When the head is straight, the
 /// animation plays only if the creature has a point to look at.
 void AddLook(std::vector<skeletal_animation::Pose>& poses, const Animation* look, float angle, float limit,
-             const CreatureAnimation& animation, std::span<const uint32_t> mirror)
+             const CreatureAnimation& animation, std::span<const uint32_t> mirror, skeletal_animation::KeyframeTurns& turns)
 {
 	if (look == nullptr || !creature_head_look::PlaysHeadClip(angle, animation.lookAt.has_value()))
 	{
@@ -340,13 +287,13 @@ void AddLook(std::vector<skeletal_animation::Pose>& poses, const Animation* look
 	}
 	const auto reference = (look->frames.size() - 1) / 2;
 	skeletal_animation::AddLayer(poses, *look, creature_layers::LookTime(angle, limit, look->duration), reference,
-	                             animation.skeleton, mirror);
+	                             animation.skeleton, mirror, &turns);
 }
 
 /// The swaying body leaning on top of the pose: for the lower body then the upper, its offset across the creature's own
 /// axes picks how far through the sideways and the front to back lean to draw, each relative to its middle frame
 void AddSway(std::vector<skeletal_animation::Pose>& poses, const CreatureAnimation& animation, const Transform& transform,
-             const auto& animationOf)
+             const auto& animationOf, skeletal_animation::KeyframeTurns& turns)
 {
 	if (!animation.sway.active)
 	{
@@ -372,7 +319,7 @@ void AddSway(std::vector<skeletal_animation::Pose>& poses, const CreatureAnimati
 		if (const auto* played = animationOf(clip))
 		{
 			skeletal_animation::AddLayer(poses, *played, creature_sway::LeanTime(amount, played->duration),
-			                             (played->frames.size() - 1) / 2, animation.skeleton);
+			                             (played->frames.size() - 1) / 2, animation.skeleton, {}, &turns);
 		}
 	};
 	for (const auto& [offset, sideClip, frontClip] :
@@ -447,20 +394,49 @@ std::optional<HoldingHand> HoldingHandOf(const ecs::Registry& registry, entt::en
 	return HoldingHand {.bone = held->bone, .mirrored = held->mirrored};
 }
 
-/// The body posed for this frame: its action or breathing, or its slots blended, then the arm that holds a thing, the
-/// head turned, the face and any gesture on top
-void PoseBody(AdjustedAnimations& adjusted, CreatureAnimation& animation, const CreatureRig& rig,
-              const creature_morph::Morph& morph, const Transform& transform, float size, float milliseconds, float seconds,
-              const HeadLook& look, const std::function<uint32_t(uint32_t)>& random,
-              std::optional<HoldingHand> holding = std::nullopt)
+/// The clips that a pose used, for the developer log of the clips (see creature_animation_log)
+struct PoseReport
 {
-	const auto* stand = AnimationOf(adjusted, animation, rig, morph, creature_layers::animations::k_Stand);
+	std::vector<creature_animation_log::Clip> clips;
+	/// The clip of the body's own action that the species does not have. The action ended at once.
+	std::optional<size_t> missingBody;
+};
+
+/// A face that only this computer shows, and the bones that the pose gives with it
+struct ShownFacePose
+{
+	creature_layers::FaceLayer& face;
+	std::vector<glm::mat4>& boneMatrices;
+};
+
+/// A clip of the log, from the animation that the pose sampled, or from none when the species does not have it
+creature_animation_log::Clip LogClip(creature_animation_log::Layer layer, size_t index, float timeMs, const Animation* played)
+{
+	return {
+	    .layer = layer,
+	    .animation = index,
+	    .timeMs = timeMs,
+	    .found = played != nullptr,
+	    .looping = played != nullptr && played->looping,
+	    .durationMs = played != nullptr ? std::optional<uint32_t>(played->duration) : std::nullopt,
+	};
+}
+
+/// The body posed for this frame: its action or breathing, or its slots blended, then the arm that holds a thing, the
+/// head turned, the face and any gesture on top. The body's animations move on by bodyStepMs, the face by milliseconds.
+void PoseBody(AnimationStores& stores, skeletal_animation::KeyframeTurns& turns, CreatureAnimation& animation,
+              const CreatureRig& rig, const creature_morph::Morph& morph, const Transform& transform, float size,
+              float milliseconds, float seconds, float bodyStepMs, const HeadLook& look,
+              const std::function<uint32_t(uint32_t)>& random, std::optional<HoldingHand> holding = std::nullopt,
+              PoseReport* report = nullptr, const ShownFacePose* shown = nullptr)
+{
+	const auto* stand = AnimationOf(stores, animation, rig, morph, creature_layers::animations::k_Stand);
 	if (stand == nullptr)
 	{
 		return;
 	}
-	const auto playbackMs = milliseconds * creature_layers::BodyRate(size, animation.realTime);
-	const auto animationOf = [&](size_t index) { return AnimationOf(adjusted, animation, rig, morph, index); };
+	const auto playbackMs = bodyStepMs;
+	const auto animationOf = [&](size_t index) { return AnimationOf(stores, animation, rig, morph, index); };
 
 	// A species without the start, the first move or the finish of the dance does not dance
 	if (animation.body.kind == creature_layers::BodyAction::Kind::Dance &&
@@ -468,12 +444,20 @@ void PoseBody(AdjustedAnimations& adjusted, CreatureAnimation& animation, const 
 	     animationOf(creature_layers::animations::k_FirstDanceMove) == nullptr ||
 	     animationOf(creature_layers::animations::k_DanceFinish) == nullptr))
 	{
+		if (report != nullptr)
+		{
+			report->missingBody = creature_layers::CurrentAnimation(animation.body);
+		}
 		animation.body = {};
 	}
-	const auto bodyDuration = DurationOf(animationOf(creature_layers::CurrentAnimation(animation.body)));
-	animation.actionMoment =
-	    animation.actionMoment || creature_layers::ReachesActionMoment(animation.body, playbackMs, bodyDuration,
-	                                                                   static_cast<uint32_t>(rig.kissMs.value_or(0.0f)));
+	const auto bodyDuration = DurationOf(animationOf(creature_layers::TimingAnimation(animation.body)));
+	if (report != nullptr && creature_layers::IsPlaying(animation.body) && !bodyDuration.has_value())
+	{
+		report->missingBody = creature_layers::TimingAnimation(animation.body);
+	}
+	animation.actionMoment = animation.actionMoment || creature_layers::ReachesActionMoment(
+	                                                       animation.body, playbackMs, bodyDuration,
+	                                                       static_cast<uint32_t>(rig.kissMs.value_or(0.0f)), milliseconds);
 	animation.body = creature_layers::AdvanceBody(animation.body, playbackMs, bodyDuration, milliseconds);
 	// A dance that needs its next move chooses one of the moves that the species has
 	if (animation.body.chooseDanceMove)
@@ -483,9 +467,16 @@ void PoseBody(AdjustedAnimations& adjusted, CreatureAnimation& animation, const 
 		animation.body.animations[1] = move.value_or(creature_layers::animations::k_Stand);
 		animation.body.chooseDanceMove = false;
 	}
-	animation.face = creature_layers::AdvanceFace(
-	    animation.face, milliseconds,
-	    DurationOf(animation.face.current.has_value() ? animationOf(*animation.face.current) : nullptr));
+	const auto advanceFace = [&](const creature_layers::FaceLayer& face) {
+		return creature_layers::AdvanceFace(face, milliseconds,
+		                                    DurationOf(face.current.has_value() ? animationOf(*face.current) : nullptr));
+	};
+	animation.face = advanceFace(animation.face);
+	// The face that only this computer shows moves on as the face of the world does
+	if (shown != nullptr)
+	{
+		shown->face = advanceFace(shown->face);
+	}
 	animation.gesture = creature_layers::AdvanceGesture(
 	    animation.gesture, playbackMs,
 	    DurationOf(animation.gesture.animation.has_value() ? animationOf(*animation.gesture.animation) : nullptr));
@@ -510,32 +501,55 @@ void PoseBody(AdjustedAnimations& adjusted, CreatureAnimation& animation, const 
 		std::vector<float> weights;
 		for (const auto& slot : animation.slots)
 		{
-			const auto* played = slot.blendedWith.has_value() ? PairAnimationOf(adjusted, animation, rig, morph, slot.animation,
+			const auto* played = slot.blendedWith.has_value() ? PairAnimationOf(stores, animation, rig, morph, slot.animation,
 			                                                                    *slot.blendedWith, slot.blendWeight)
 			                                                  : animationOf(slot.animation);
 			sampled.push_back(skeletal_animation::SampleCycle(
 			    played != nullptr ? *played : *stand, *stand, static_cast<uint32_t>(std::max(slot.timeMs, 0.0f)),
-			    animation.skeleton, slot.mirrored ? animation.mirror : std::span<const uint32_t> {}));
+			    animation.skeleton, slot.mirrored ? animation.mirror : std::span<const uint32_t> {}, &turns));
 			weights.push_back(slot.weight);
+			if (report != nullptr)
+			{
+				auto clip = LogClip(creature_animation_log::Layer::Blend, slot.animation, slot.timeMs, played);
+				clip.weight = slot.weight;
+				clip.mirrored = slot.mirrored;
+				clip.blendedWith = slot.blendedWith;
+				clip.blendWeight = slot.blendWeight;
+				report->clips.push_back(clip);
+			}
 		}
 		poses = skeletal_animation::WeightedSumInMeshSpace(sampled, weights, animation.skeleton.parents);
 	}
 	else if (const auto* played =
 	             !creature_layers::IsPlaying(animation.body) ? nullptr
 	             : animation.body.blendedWith.has_value()
-	                 ? PairAnimationOf(adjusted, animation, rig, morph, creature_layers::CurrentAnimation(animation.body),
+	                 ? PairAnimationOf(stores, animation, rig, morph, creature_layers::CurrentAnimation(animation.body),
 	                                   *animation.body.blendedWith, animation.body.blendWeight)
 	                 : animationOf(creature_layers::CurrentAnimation(animation.body));
 	         played != nullptr)
 	{
 		const auto time = creature_layers::DanceMoveTime(animation.body, played->duration);
 		poses = skeletal_animation::SampleCycle(*played, *stand, static_cast<uint32_t>(std::max(time, 0.0f)),
-		                                        animation.skeleton, mirror);
+		                                        animation.skeleton, mirror, &turns);
+		if (report != nullptr)
+		{
+			auto clip =
+			    LogClip(creature_animation_log::Layer::Body, creature_layers::CurrentAnimation(animation.body), time, played);
+			clip.mirrored = animation.body.mirrored;
+			clip.blendedWith = animation.body.blendedWith;
+			clip.blendWeight = animation.body.blendWeight;
+			report->clips.push_back(clip);
+		}
 	}
 	else
 	{
 		const auto time = creature_animation::BreathTime(animation.breathPhase, stand->duration);
-		poses = skeletal_animation::SampleCycle(*stand, *stand, time, animation.skeleton);
+		poses = skeletal_animation::SampleCycle(*stand, *stand, time, animation.skeleton, {}, &turns);
+		if (report != nullptr)
+		{
+			report->clips.push_back(LogClip(creature_animation_log::Layer::Body, creature_layers::animations::k_Stand,
+			                                static_cast<float>(time), stand));
+		}
 	}
 
 	// A small creature has a large head, large hands and feet and large eyes for its size
@@ -544,9 +558,9 @@ void PoseBody(AdjustedAnimations& adjusted, CreatureAnimation& animation, const 
 	// hand that holds the thing gets its size for the size of the creature again.
 	if (const auto* hold = holding.has_value() ? animationOf(creature_layers::animations::k_PickUpHold) : nullptr)
 	{
-		skeletal_animation::SetLayer(poses, *hold, hold->duration > 0 ? hold->duration - 1 : 0, animation.skeleton, nullptr,
-		                             holding->mirrored ? std::span<const uint32_t>(animation.mirror)
-		                                               : std::span<const uint32_t> {});
+		skeletal_animation::SetLayer(
+		    poses, *hold, hold->duration > 0 ? hold->duration - 1 : 0, animation.skeleton, nullptr,
+		    holding->mirrored ? std::span<const uint32_t>(animation.mirror) : std::span<const uint32_t> {}, &turns);
 		const std::array hand {creature_proportions::BoneScale {
 		    .bone = holding->bone, .factor = creature_proportions::Factor(creature_proportions::k_HandsAndFeet, size)}};
 		creature_proportions::Apply(poses, hand);
@@ -557,39 +571,72 @@ void PoseBody(AdjustedAnimations& adjusted, CreatureAnimation& animation, const 
 	const bool sitting = creature_head_look::UsesSittingClips(look.pose);
 	AddLook(poses,
 	        animationOf(sitting ? creature_layers::animations::k_SitLookDownUp : creature_layers::animations::k_LookDownUp),
-	        animation.pitch.angle, creature_layers::k_PitchLimit, animation, mirror);
+	        animation.pitch.angle, creature_layers::k_PitchLimit, animation, mirror, turns);
 	AddLook(
 	    poses,
 	    animationOf(sitting ? creature_layers::animations::k_SitLookRightLeft : creature_layers::animations::k_LookRightLeft),
-	    mirror.empty() ? animation.yaw.angle : -animation.yaw.angle, creature_layers::k_YawLimit, animation, mirror);
+	    mirror.empty() ? animation.yaw.angle : -animation.yaw.angle, creature_layers::k_YawLimit, animation, mirror, turns);
 	// The sway leans the body between the head's turning and the face
-	AddSway(poses, animation, transform, animationOf);
-	// The face and gestures, relative to their first frames
-	if (animation.face.current.has_value())
-	{
-		if (const auto* face = animationOf(*animation.face.current))
+	AddSway(poses, animation, transform, animationOf, turns);
+	// The face, relative to its first frame
+	const auto addFace = [&](std::vector<skeletal_animation::Pose>& to, const creature_layers::FaceLayer& face,
+	                         PoseReport* log) {
+		if (!face.current.has_value())
 		{
-			skeletal_animation::AddLayer(poses, *face, static_cast<uint32_t>(std::max(animation.face.timeMs, 0.0f)), 0,
-			                             animation.skeleton);
+			return;
 		}
-	}
-	if (animation.gesture.animation.has_value())
-	{
-		if (const auto* gesture = animationOf(*animation.gesture.animation))
+		if (log != nullptr)
 		{
-			skeletal_animation::AddLayer(poses, *gesture, static_cast<uint32_t>(std::max(animation.gesture.timeMs, 0.0f)), 0,
-			                             animation.skeleton);
+			log->clips.push_back(
+			    LogClip(creature_animation_log::Layer::Face, *face.current, face.timeMs, animationOf(*face.current)));
 		}
-	}
-	// A blow's wobble, relative to its first frame, the way the body plays
-	if (animation.wobble.animation.has_value())
-	{
-		if (const auto* wobble = animationOf(*animation.wobble.animation))
+		if (const auto* played = animationOf(*face.current))
 		{
-			skeletal_animation::AddLayer(poses, *wobble, static_cast<uint32_t>(std::max(animation.wobble.timeMs, 0.0f)), 0,
-			                             animation.skeleton, mirror);
+			skeletal_animation::AddLayer(to, *played, static_cast<uint32_t>(std::max(face.timeMs, 0.0f)), 0, animation.skeleton,
+			                             {}, &turns);
 		}
+	};
+	// The gestures and a blow's wobble, relative to their first frames, on top of the face
+	const auto addGestures = [&](std::vector<skeletal_animation::Pose>& to, PoseReport* log) {
+		if (animation.gesture.animation.has_value())
+		{
+			if (log != nullptr)
+			{
+				log->clips.push_back(LogClip(creature_animation_log::Layer::Gesture, *animation.gesture.animation,
+				                             animation.gesture.timeMs, animationOf(*animation.gesture.animation)));
+			}
+			if (const auto* gesture = animationOf(*animation.gesture.animation))
+			{
+				skeletal_animation::AddLayer(to, *gesture, static_cast<uint32_t>(std::max(animation.gesture.timeMs, 0.0f)), 0,
+				                             animation.skeleton, {}, &turns);
+			}
+		}
+		// The wobble plays the way the body plays
+		if (animation.wobble.animation.has_value())
+		{
+			if (log != nullptr)
+			{
+				log->clips.push_back(LogClip(creature_animation_log::Layer::Wobble, *animation.wobble.animation,
+				                             animation.wobble.timeMs, animationOf(*animation.wobble.animation)));
+			}
+			if (const auto* wobble = animationOf(*animation.wobble.animation))
+			{
+				skeletal_animation::AddLayer(to, *wobble, static_cast<uint32_t>(std::max(animation.wobble.timeMs, 0.0f)), 0,
+				                             animation.skeleton, mirror, &turns);
+			}
+		}
+	};
+	// The bones with the face that only this computer shows go to their own matrices. The bones of the world do not
+	// change.
+	if (shown != nullptr)
+	{
+		auto drawn = poses;
+		addFace(drawn, shown->face, nullptr);
+		addGestures(drawn, nullptr);
+		skeletal_animation::ComposeBoneMatrices(drawn, animation.skeleton.parents, shown->boneMatrices);
 	}
+	addFace(poses, animation.face, report);
+	addGestures(poses, report);
 	skeletal_animation::ComposeBoneMatrices(poses, animation.skeleton.parents, animation.boneMatrices);
 }
 /// The pose of a body that plays an action, a start, loop and end, or nothing
@@ -656,7 +703,7 @@ float HeadAcceleration(CreatureType species, float size)
 
 /// What the head of a creature in the world turns towards this frame. A fight, a catch or a point, the walk and then
 /// the body decide the pose, in that order.
-HeadLook HeadLookOf(AdjustedAnimations& adjusted, ecs::Registry& registry, entt::entity entity, CreatureAnimation& animation,
+HeadLook HeadLookOf(AnimationStores& stores, ecs::Registry& registry, entt::entity entity, CreatureAnimation& animation,
                     const CreatureRig* rig, const creature_morph::Morph& morph, const Transform& transform,
                     const Creature& creature, int32_t milliseconds)
 {
@@ -676,7 +723,12 @@ HeadLook HeadLookOf(AdjustedAnimations& adjusted, ecs::Registry& registry, entt:
 			opponent = fighting->opponent;
 		}
 	}
+	// An action with a thing that ended stays on the creature until the next one starts
 	const auto* action = registry.TryGet<const CreatureObjectAction>(entity);
+	if (action != nullptr && action->status != creature_object_actions::Status::Running)
+	{
+		action = nullptr;
+	}
 	if (!pose.has_value() && action != nullptr)
 	{
 		using Catching = CreatureObjectAction::Catching;
@@ -695,7 +747,7 @@ HeadLook HeadLookOf(AdjustedAnimations& adjusted, ecs::Registry& registry, entt:
 			const bool pointing = action->kind == creature_object_actions::Kind::Point;
 			pose = pointing ? Pose::Pointing : Pose::Other;
 			const auto* clip = pointing && rig != nullptr
-			                       ? AnimationOf(adjusted, animation, *rig, morph, creature_head_look::k_PointTimingClip)
+			                       ? AnimationOf(stores, animation, *rig, morph, creature_head_look::k_PointTimingClip)
 			                       : nullptr;
 			if (clip != nullptr)
 			{
@@ -971,6 +1023,9 @@ void CreatureAnimationSystem::MorphTurn(entt::entity entity)
 void CreatureAnimationSystem::ShapeBodies()
 {
 	auto& registry = Locator::entitiesRegistry::value();
+	// A blend that no turn took after two shapes goes, so that the store does not grow
+	++_shapings;
+	creature_blends::ForgetOld(_stores, _shapings);
 	std::vector<entt::entity> unposed;
 	registry.Each<const Creature, const CreatureMorph, CreatureAnimation, const Transform>(
 	    [&](entt::entity entity, const Creature& creature, const CreatureMorph& morph, CreatureAnimation& animation,
@@ -985,6 +1040,7 @@ void CreatureAnimationSystem::ShapeBodies()
 			    unposed.push_back(entity);
 		    }
 	    });
+	PrepareFirstBlends(unposed);
 	for (const auto entity : unposed)
 	{
 		auto& animation = registry.Get<CreatureAnimation>(entity);
@@ -993,6 +1049,59 @@ void CreatureAnimationSystem::ShapeBodies()
 		// The first pose stands for the pose of the next turn
 		PoseForTurn(entity, 0.0f);
 	}
+}
+
+void CreatureAnimationSystem::PrepareFirstPoses()
+{
+	std::vector<entt::entity> unposed;
+	Locator::entitiesRegistry::value().Each<const Creature, const CreatureAnimation>(
+	    [&unposed](entt::entity entity, const Creature& /*creature*/, const CreatureAnimation& animation) {
+		    if (animation.newerTurnPose.empty())
+		    {
+			    unposed.push_back(entity);
+		    }
+	    });
+	PrepareFirstBlends(unposed);
+}
+
+void CreatureAnimationSystem::PrepareFirstBlends(std::span<const entt::entity> creatures)
+{
+	auto& registry = Locator::entitiesRegistry::value();
+	const auto& rigs = Locator::resources::value().GetCreatureRigs();
+	std::vector<creature_blends::Wanted> wanted;
+	for (const auto entity : creatures)
+	{
+		const auto* body = registry.TryGet<const Creature>(entity);
+		const auto* morph = registry.TryGet<const CreatureMorph>(entity);
+		const auto* animation = registry.TryGet<const CreatureAnimation>(entity);
+		if (body == nullptr || morph == nullptr || animation == nullptr || !rigs.Contains(creature::GetRigId(body->species)))
+		{
+			continue;
+		}
+		const auto& rig = *rigs.Handle(creature::GetRigId(body->species));
+		// A blend that the creature keeps already is not made again
+		const auto want = [&](size_t index) {
+			if (!animation->animations.contains(index))
+			{
+				wanted.push_back({.rig = &rig, .morph = morph->drawn, .index = index});
+			}
+		};
+		std::ranges::for_each(k_FirstPoseBlends, want);
+		if (!registry.AllOf<PickUpReach>(entity))
+		{
+			std::ranges::for_each(creature_reach::k_PickUpAnimations, want);
+		}
+	}
+	// One blend is made when the turn asks for it, as the threads do not make it sooner
+	if (wanted.size() < 2)
+	{
+		return;
+	}
+	if (_workers == nullptr)
+	{
+		_workers = std::make_unique<WorkerPool>(WorkerPool::DefaultThreadCount());
+	}
+	creature_blends::Prepare(_stores, wanted, *_workers, _shapings);
 }
 
 void CreatureAnimationSystem::Update(std::chrono::duration<float, std::milli> gameTime)
@@ -1021,15 +1130,19 @@ void CreatureAnimationSystem::Update(std::chrono::duration<float, std::milli> ga
 		    // A walking body is drawn between the places of its last two turns
 		    const auto transform = DrawnTransform(turnTransform, &animation);
 
-		    if (!animation.newerTurnPose.empty() && animation.olderTurnPose.size() == animation.newerTurnPose.size() &&
-		        transform.scale.x != 0.0f && transform.scale.y != 0.0f && transform.scale.z != 0.0f)
+		    // A face that only this computer shows is drawn with the bones that its own pose gave
+		    const auto* shown = registry.TryGet<const ShownCreatureFace>(entity);
+		    const bool drawsShown =
+		        shown != nullptr && !shown->newerTurnPose.empty() && shown->olderTurnPose.size() == shown->newerTurnPose.size();
+		    const auto& older = drawsShown ? shown->olderTurnPose : animation.olderTurnPose;
+		    const auto& newer = drawsShown ? shown->newerTurnPose : animation.newerTurnPose;
+		    if (!newer.empty() && older.size() == newer.size() && transform.scale.x != 0.0f && transform.scale.y != 0.0f &&
+		        transform.scale.z != 0.0f)
 		    {
-			    std::vector<glm::mat4> drawn(animation.newerTurnPose.size());
-			    creature_turn_pose::Blend(animation.olderTurnPose, animation.newerTurnPose, weight, drawn);
-			    animation.boneMatrices.resize(drawn.size());
-			    creature_turn_pose::ToMesh(drawn,
-			                               creature::PlacementMatrix(transform.position, transform.rotation, transform.scale),
-			                               animation.boneMatrices);
+			    animation.boneMatrices.resize(newer.size());
+			    creature_turn_pose::BlendToMesh(
+			        older, newer, weight, creature::PlacementMatrix(transform.position, transform.rotation, transform.scale),
+			        animation.boneMatrices);
 		    }
 		    if (animation.boneMatrices.size() != base->GetBoneMatrices().size())
 		    {
@@ -1062,9 +1175,140 @@ void CreatureAnimationSystem::Update(std::chrono::duration<float, std::milli> ga
 		auto& glows = registry.Get<CreatureHandGlows>(entity);
 		const auto slideMs = frame_pace::Step(glows.slidePace, realTime, realTime);
 		const auto turnMs = frame_pace::Step(glows.turnPace, realTime, std::chrono::milliseconds(milliseconds));
-		PlaceHandGlows(entity, static_cast<int32_t>(slideMs.count()), static_cast<int32_t>(turnMs.count()));
+		PlaceHandGlows(registry, entity, static_cast<int32_t>(slideMs.count()), static_cast<int32_t>(turnMs.count()));
 	}
 }
+
+namespace
+{
+std::string_view StageName(CreatureFighting::Stage stage)
+{
+	using Stage = CreatureFighting::Stage;
+	switch (stage)
+	{
+	case Stage::FaceOff:
+		return "face off";
+	case Stage::Taunt:
+		return "taunt";
+	case Stage::Point:
+		return "point";
+	case Stage::Approach:
+		return "approach";
+	case Stage::Ready:
+		return "ready";
+	case Stage::Square:
+		return "square";
+	case Stage::Duel:
+		return "duel";
+	case Stage::Celebrate:
+		return "celebrate";
+	case Stage::Respond:
+		return "respond";
+	case Stage::Stop:
+		return "stop";
+	}
+	return "fight";
+}
+
+std::string_view BodyKindName(creature_layers::BodyAction::Kind kind)
+{
+	using Kind = creature_layers::BodyAction::Kind;
+	switch (kind)
+	{
+	case Kind::Stand:
+		return "stand";
+	case Kind::Once:
+		return "once";
+	case Kind::Sequence:
+		return "sequence";
+	case Kind::Dance:
+		return "dance";
+	}
+	return "stand";
+}
+
+std::string_view PhaseName(creature_layers::BodyAction::Phase phase)
+{
+	using Phase = creature_layers::BodyAction::Phase;
+	switch (phase)
+	{
+	case Phase::Start:
+		return "start";
+	case Phase::Loop:
+		return "loop";
+	case Phase::End:
+		return "end";
+	}
+	return "start";
+}
+
+/// What asked a creature's body for the clips of its pose: its mind, the action with a thing, the fight or the walk
+creature_animation_log::Cause CauseOf(const ecs::Registry& registry, entt::entity entity, const CreatureAnimation& animation)
+{
+	creature_animation_log::Cause cause;
+	// An action with a thing that ended stays on the creature until the next one starts
+	const auto* action = registry.TryGet<const CreatureObjectAction>(entity);
+	if (action != nullptr && action->status != creature_object_actions::Status::Running)
+	{
+		action = nullptr;
+	}
+	const auto* fighting = registry.TryGet<const CreatureFighting>(entity);
+	if (action != nullptr)
+	{
+		cause.objectAction = std::string(creature_object_actions::Name(action->kind));
+		cause.objectAction += action->phase == CreatureObjectAction::Phase::Playing ? " (playing)" : " (approach)";
+	}
+	if (fighting != nullptr)
+	{
+		cause.fightStage =
+		    std::string(StageName(fighting->stage)) + ", " + std::string(creature_fight::Name(fighting->fighter.state));
+	}
+	if (animation.slots.empty())
+	{
+		cause.by = "body";
+	}
+	else if (action != nullptr && action->phase == CreatureObjectAction::Phase::Playing)
+	{
+		cause.by = "object action";
+	}
+	else if (fighting != nullptr)
+	{
+		cause.by = "fight";
+	}
+	else
+	{
+		cause.by = "walk";
+	}
+	cause.body = std::string(BodyKindName(animation.body.kind));
+	if (animation.body.kind == creature_layers::BodyAction::Kind::Sequence ||
+	    animation.body.kind == creature_layers::BodyAction::Kind::Dance)
+	{
+		cause.body += " " + std::string(PhaseName(animation.body.phase));
+	}
+	if (const auto* mind = registry.TryGet<const CreatureMindState>(entity); mind != nullptr)
+	{
+		cause.activity = std::string(creature_mind::Name(mind->idle.activity));
+		if (mind->planner.current.has_value())
+		{
+			cause.planAction = mind->planner.current->action;
+			const auto* tables =
+			    Locator::creatureMindSystem::has_value() ? Locator::creatureMindSystem::value().GetTables() : nullptr;
+			if (tables != nullptr && *cause.planAction < tables->actions.size())
+			{
+				cause.planActionName = tables->actions[*cause.planAction].name;
+			}
+		}
+		if (mind->idle.step < mind->idle.agenda.size())
+		{
+			const auto& step = mind->idle.agenda[mind->idle.step];
+			cause.agendaStep = mind->idle.step;
+			cause.agendaStepKind = static_cast<uint8_t>(step.kind);
+			cause.agendaStepClip = step.animation;
+		}
+	}
+	return cause;
+}
+} // namespace
 
 void CreatureAnimationSystem::PoseForTurn(entt::entity entity, float milliseconds)
 {
@@ -1082,14 +1326,70 @@ void CreatureAnimationSystem::PoseForTurn(entt::entity entity, float millisecond
 	if (rigs.Contains(rigId))
 	{
 		const auto& rig = *rigs.Handle(rigId);
-		// A frozen creature plays slower, down to not at all
-		const float scale = animation->playbackScale;
-		const auto look = HeadLookOf(_adjusted, registry, entity, *animation, &rig, morph->drawn, *transform, *creature,
+		// A frozen creature lives fewer whole milliseconds in the turn, down to none. The body's animations move on by
+		// these milliseconds at the rate of its size, cut to whole milliseconds.
+		const auto turnMs = creature_walk_planner::TurnMs(animation->playbackScale, static_cast<int32_t>(milliseconds));
+		const auto stepMs = creature_layers::TurnStepMs(turnMs, ShownSize(*creature), animation->realTime);
+		const auto look = HeadLookOf(_stores, registry, entity, *animation, &rig, morph->drawn, *transform, *creature,
 		                             static_cast<int32_t>(std::lround(milliseconds)));
+		// The developer log of the clips reads what the pose used, and changes nothing that the pose does
+		std::optional<PoseReport> report;
+		if (Locator::creatureAnimationLog::has_value())
+		{
+			report.emplace();
+		}
+		// The world changes a face that only this computer shows when it changes its own face. If the face of the world
+		// changed in a different way since the last pose, the shown face becomes the face of the world, as the one face
+		// of the creature does.
+		auto* shown = registry.TryGet<ShownCreatureFace>(entity);
+		if (shown != nullptr)
+		{
+			shown->face = creature_shown_face::AfterWorldWrites(shown->face, shown->worldFace, animation->face);
+		}
+		std::vector<glm::mat4> shownMatrices;
+		const auto shownPose =
+		    shown != nullptr ? std::optional<ShownFacePose>(ShownFacePose {.face = shown->face, .boneMatrices = shownMatrices})
+		                     : std::nullopt;
+		// The store of keyframe turns forgets its turns only here, when no pose uses them
+		_keyframeTurns.Trim();
 		PoseBody(
-		    _adjusted, *animation, rig, morph->drawn, *transform, ShownSize(*creature), milliseconds * scale,
-		    milliseconds * scale / 1000.0f, look, [this](uint32_t range) { return _random.GameRand(range); },
-		    HoldingHandOf(registry, entity));
+		    _stores, _keyframeTurns, *animation, rig, morph->drawn, *transform, ShownSize(*creature),
+		    static_cast<float>(turnMs), static_cast<float>(turnMs) / 1000.0f, static_cast<float>(stepMs), look,
+		    [this](uint32_t range) { return _random.GameRand(range); }, HoldingHandOf(registry, entity),
+		    report.has_value() ? &*report : nullptr, shownPose.has_value() ? &*shownPose : nullptr);
+		if (shown != nullptr && !creature_shown_face::StaysAfterPose(shown->face, animation->face))
+		{
+			registry.Remove<ShownCreatureFace>(entity);
+			shown = nullptr;
+		}
+		if (shown != nullptr)
+		{
+			shown->worldFace = animation->face;
+			if (!shownMatrices.empty())
+			{
+				auto drawn = creature_turn_pose::ToWorld(shownMatrices,
+				                                         ecs::creature_placement::PlacementOf(registry, entity, *transform));
+				shown->olderTurnPose =
+				    shown->newerTurnPose.empty() ? animation->newerTurnPose : std::move(shown->newerTurnPose);
+				shown->newerTurnPose = std::move(drawn);
+			}
+		}
+		if (report.has_value())
+		{
+			auto& log = Locator::creatureAnimationLog::value();
+			const auto turn = Locator::time::has_value() ? Locator::time::value().GetTurn() : 0u;
+			const auto cause = CauseOf(registry, entity, *animation);
+			if (report->missingBody.has_value())
+			{
+				log.Note(entity, {.problem = creature_animation_log::Problem::Missing,
+				                  .layer = creature_animation_log::Layer::Body,
+				                  .animation = *report->missingBody,
+				                  .turn = turn,
+				                  .by = "body",
+				                  .detail = "the species has no such clip: the action ended at once and the body stood"});
+			}
+			log.Posed(entity, turn, report->clips, cause);
+		}
 	}
 	if (animation->boneMatrices.empty())
 	{
@@ -1115,10 +1415,19 @@ void CreatureAnimationSystem::PoseTurn(entt::entity creature)
 	{
 		return;
 	}
-	// The body takes its pose where its turn took it
+	// The body takes its pose where its turn took it. The walk puts its clips on the body for the end of the turn. When
+	// the body plays the animations of what it does with a thing, these animations make the pose and not the walk clips.
 	if (Locator::creatureLocomotionSystem::has_value())
 	{
+		const auto* action = registry.TryGet<const CreatureObjectAction>(creature);
+		const bool acting = action != nullptr && creature_object_actions::PosesBody(
+		                                             action->phase == CreatureObjectAction::Phase::Playing, action->status);
+		auto actionSlots = acting ? animation->slots : decltype(animation->slots) {};
 		Locator::creatureLocomotionSystem::value().ShowTurnEnd(creature);
+		if (acting)
+		{
+			animation->slots = std::move(actionSlots);
+		}
 	}
 	constexpr auto k_TurnMs = std::chrono::duration<float, std::milli>(TimeSystemInterface::k_TurnDuration).count();
 	BreatheForTurn(creature, k_TurnMs);
@@ -1188,20 +1497,23 @@ void CreatureAnimationSystem::HoldTurnPose(entt::entity creature)
 	{
 		animation->olderTurnPose = animation->newerTurnPose;
 	}
+	if (auto* shown = registry.TryGet<ShownCreatureFace>(creature); shown != nullptr)
+	{
+		shown->olderTurnPose = shown->newerTurnPose;
+	}
 }
 
-void CreatureAnimationSystem::PoseCopy(entt::entity copy, float milliseconds)
+void CreatureAnimationSystem::PoseCopy(Registry& copies, entt::entity copy, float milliseconds, const Registry& bodies)
 {
-	auto& registry = Locator::entitiesRegistry::value();
-	const auto* self = registry.TryGet<const CreatureCopy>(copy);
-	if (self == nullptr || !registry.Valid(self->creature))
+	const auto* self = copies.Valid(copy) ? copies.TryGet<const CreatureCopy>(copy) : nullptr;
+	if (self == nullptr || !bodies.Valid(self->creature))
 	{
 		return;
 	}
-	const auto* creature = registry.TryGet<const Creature>(self->creature);
-	const auto* morph = registry.TryGet<const CreatureMorph>(self->creature);
-	auto* animation = registry.TryGet<CreatureAnimation>(copy);
-	const auto* transform = registry.TryGet<const Transform>(copy);
+	const auto* creature = bodies.TryGet<const Creature>(self->creature);
+	const auto* morph = bodies.TryGet<const CreatureMorph>(self->creature);
+	auto* animation = copies.TryGet<CreatureAnimation>(copy);
+	const auto* transform = copies.TryGet<const Transform>(copy);
 	if (creature == nullptr || morph == nullptr || animation == nullptr || transform == nullptr)
 	{
 		return;
@@ -1242,7 +1554,9 @@ void CreatureAnimationSystem::PoseCopy(entt::entity copy, float milliseconds)
 	animation->breathPhase = creature_animation::AdvanceBreath(animation->breathPhase, seconds, animation->breathPeriod);
 	if (rig != nullptr)
 	{
-		PoseBody(_adjusted, *animation, *rig, morph->drawn, *transform, self->size, milliseconds, seconds,
+		_keyframeTurns.Trim();
+		PoseBody(_stores, _keyframeTurns, *animation, *rig, morph->drawn, *transform, self->size, milliseconds, seconds,
+		         milliseconds * creature_layers::BodyRate(self->size, animation->realTime),
 		         HeadLookOfCopy(*animation, *transform, creature->species, self->size),
 		         [this](uint32_t range) { return _random.GameRand(range); });
 	}
@@ -1252,12 +1566,12 @@ void CreatureAnimationSystem::PoseCopy(entt::entity copy, float milliseconds)
 	}
 
 	// Its eyes are the creature's, looking where the copy's head looks
-	auto* eyes = registry.TryGet<CreatureEyes>(copy);
+	auto* eyes = copies.TryGet<CreatureEyes>(copy);
 	if (eyes == nullptr)
 	{
 		return;
 	}
-	if (const auto* own = registry.TryGet<const CreatureEyes>(self->creature))
+	if (const auto* own = bodies.TryGet<const CreatureEyes>(self->creature))
 	{
 		eyes->mode = own->mode;
 		eyes->openness = own->openness;
@@ -1278,7 +1592,7 @@ void CreatureAnimationSystem::PoseCopy(entt::entity copy, float milliseconds)
 namespace
 {
 /// A creature's animation blended as its body is drawn, if it has the animation and has been posed
-const Animation* PosedAnimationOf(AdjustedAnimations& adjusted, entt::entity creature, size_t index)
+const Animation* PosedAnimationOf(AnimationStores& stores, entt::entity creature, size_t index)
 {
 	auto& registry = Locator::entitiesRegistry::value();
 	const auto* body = registry.TryGet<const Creature>(creature);
@@ -1294,15 +1608,15 @@ const Animation* PosedAnimationOf(AdjustedAnimations& adjusted, entt::entity cre
 	{
 		return nullptr;
 	}
-	return AnimationOf(adjusted, *animation, *rigs.Handle(rigId), morph->drawn, index);
+	return AnimationOf(stores, *animation, *rigs.Handle(rigId), morph->drawn, index);
 }
 } // namespace
 
 std::optional<glm::vec3> CreatureAnimationSystem::BoneInAnimation(entt::entity creature, size_t animation, float timeMs,
                                                                   uint32_t bone, bool mirrored)
 {
-	const auto* played = PosedAnimationOf(_adjusted, creature, animation);
-	const auto* stand = PosedAnimationOf(_adjusted, creature, creature_layers::animations::k_Stand);
+	const auto* played = PosedAnimationOf(_stores, creature, animation);
+	const auto* stand = PosedAnimationOf(_stores, creature, creature_layers::animations::k_Stand);
 	if (played == nullptr || stand == nullptr)
 	{
 		return std::nullopt;
@@ -1322,8 +1636,8 @@ std::optional<glm::vec3> CreatureAnimationSystem::BoneInAnimation(entt::entity c
 std::optional<glm::vec3> CreatureAnimationSystem::MiddleOfBonesInAnimation(entt::entity creature, size_t animation,
                                                                            float timeMs, std::span<const uint32_t> bones)
 {
-	const auto* played = PosedAnimationOf(_adjusted, creature, animation);
-	const auto* stand = PosedAnimationOf(_adjusted, creature, creature_layers::animations::k_Stand);
+	const auto* played = PosedAnimationOf(_stores, creature, animation);
+	const auto* stand = PosedAnimationOf(_stores, creature, creature_layers::animations::k_Stand);
 	if (played == nullptr || stand == nullptr || bones.empty())
 	{
 		return std::nullopt;
@@ -1346,13 +1660,13 @@ std::optional<glm::vec3> CreatureAnimationSystem::MiddleOfBonesInAnimation(entt:
 
 std::optional<float> CreatureAnimationSystem::AnimationDuration(entt::entity creature, size_t animation)
 {
-	const auto* played = PosedAnimationOf(_adjusted, creature, animation);
+	const auto* played = PosedAnimationOf(_stores, creature, animation);
 	return played != nullptr ? std::optional(static_cast<float>(played->duration)) : std::nullopt;
 }
 
 std::optional<glm::vec3> CreatureAnimationSystem::AnimationTravel(entt::entity creature, size_t animation)
 {
-	const auto* played = PosedAnimationOf(_adjusted, creature, animation);
+	const auto* played = PosedAnimationOf(_stores, creature, animation);
 	return played != nullptr ? std::optional(played->displacement) : std::nullopt;
 }
 
@@ -1368,7 +1682,7 @@ std::optional<creature_kiss::KissPoints> CreatureAnimationSystem::KissPointsOf(e
 		return std::nullopt;
 	}
 	const auto& rig = *rigs.Handle(creature::GetRigId(self->species));
-	const auto* stand = PosedAnimationOf(_adjusted, creature, creature_layers::animations::k_Stand);
+	const auto* stand = PosedAnimationOf(_stores, creature, creature_layers::animations::k_Stand);
 	if (stand == nullptr)
 	{
 		return std::nullopt;
@@ -1377,7 +1691,7 @@ std::optional<creature_kiss::KissPoints> CreatureAnimationSystem::KissPointsOf(e
 	// The lips are the point on the body that kisses, or else the head bone. Without the animation they stay at the
 	// origin of the creature.
 	const auto lipsIn = [&](size_t index) {
-		const auto* played = PosedAnimationOf(_adjusted, creature, index);
+		const auto* played = PosedAnimationOf(_stores, creature, index);
 		if (played == nullptr)
 		{
 			return glm::vec3(0.0f);
@@ -1450,25 +1764,32 @@ struct BodyOf
 	float size;
 };
 
-std::optional<BodyOf> FindBody(const ecs::Registry& registry, entt::entity entity)
+/// The body of a creature, or of the creature of a copy. `things` is the registry of the creature or the copy, and `land`
+/// the registry of the creature of a copy.
+std::optional<BodyOf> FindBody(const ecs::Registry& things, const ecs::Registry& land, entt::entity entity)
 {
-	if (const auto* creature = registry.TryGet<const Creature>(entity); creature != nullptr)
+	if (const auto* creature = things.TryGet<const Creature>(entity); creature != nullptr)
 	{
-		const auto* morph = registry.TryGet<const CreatureMorph>(entity);
+		const auto* morph = things.TryGet<const CreatureMorph>(entity);
 		return morph != nullptr ? std::optional(BodyOf {creature->species, morph, ShownSize(*creature)}) : std::nullopt;
 	}
-	const auto* copy = registry.TryGet<const CreatureCopy>(entity);
-	if (copy == nullptr || !registry.Valid(copy->creature))
+	const auto* copy = things.TryGet<const CreatureCopy>(entity);
+	if (copy == nullptr || !land.Valid(copy->creature))
 	{
 		return std::nullopt;
 	}
-	const auto* creature = registry.TryGet<const Creature>(copy->creature);
-	const auto* morph = registry.TryGet<const CreatureMorph>(copy->creature);
+	const auto* creature = land.TryGet<const Creature>(copy->creature);
+	const auto* morph = land.TryGet<const CreatureMorph>(copy->creature);
 	if (creature == nullptr || morph == nullptr)
 	{
 		return std::nullopt;
 	}
 	return BodyOf {creature->species, morph, copy->size};
+}
+
+std::optional<BodyOf> FindBody(const ecs::Registry& registry, entt::entity entity)
+{
+	return FindBody(registry, registry, entity);
 }
 
 const CreatureRig* RigOf(CreatureType species)
@@ -1556,6 +1877,7 @@ void CreatureAnimationSystem::LoadCreedPowers(
 	                                                          : registry.Assign<CreatureHandGlows>(creature);
 	const auto hum = creature_hand_glow::LoadCreedPowers(glows.glows, powers);
 	glows.placed = {};
+	glows.motion = {};
 	ApplyHum(creature, hum);
 }
 
@@ -1592,14 +1914,13 @@ void CreatureAnimationSystem::PlayCreedEvent(entt::entity creature, int32_t even
 	creature_hand_glow::Set(glows.glows, glow->place, creature_hand_glow::k_CreedEventScale, glow->power);
 }
 
-void CreatureAnimationSystem::PlaceHandGlows(entt::entity creature, int32_t frameMs, int32_t gameMs)
+void CreatureAnimationSystem::PlaceHandGlows(Registry& things, entt::entity creature, int32_t frameMs, int32_t gameMs)
 {
 	using creature_hand_glow::Place;
-	auto& registry = Locator::entitiesRegistry::value();
-	auto* hand = registry.TryGet<CreatureHandGlows>(creature);
-	const auto* animation = registry.TryGet<const CreatureAnimation>(creature);
-	const auto* transform = registry.TryGet<const Transform>(creature);
-	const auto body = FindBody(registry, creature);
+	auto* hand = things.TryGet<CreatureHandGlows>(creature);
+	const auto* animation = things.TryGet<const CreatureAnimation>(creature);
+	const auto* transform = things.TryGet<const Transform>(creature);
+	const auto body = FindBody(things, Locator::entitiesRegistry::value(), creature);
 	if (hand == nullptr || animation == nullptr || transform == nullptr || !body.has_value())
 	{
 		return;
@@ -1614,9 +1935,11 @@ void CreatureAnimationSystem::PlaceHandGlows(entt::entity creature, int32_t fram
 	{
 		auto& glow = hand->glows.at(i);
 		auto& placed = hand->placed.at(i);
+		auto& motion = hand->motion.at(i);
 		placed.reset();
 		if (!glow.has_value())
 		{
+			motion = {};
 			continue;
 		}
 		const auto place = static_cast<Place>(i);
@@ -1625,8 +1948,8 @@ void CreatureAnimationSystem::PlaceHandGlows(entt::entity creature, int32_t fram
 		if (place == Place::Circling)
 		{
 			// It turns about the up axis above the body
-			creature_hand_glow::Turn(*glow, gameMs);
-			axes = creature_hand_glow::CirclingAxes(glow->turn);
+			creature_hand_glow::Turn(motion, gameMs);
+			axes = creature_hand_glow::CirclingAxes(motion.turn);
 			point = creature_hand_glow::CirclingPoint(transform->position, body->size);
 		}
 		else
@@ -1663,21 +1986,20 @@ void CreatureAnimationSystem::PlaceHandGlows(entt::entity creature, int32_t fram
 		}
 		// The shell reaches out by the power it had when it was drawn, and its texture slides on
 		const float zoom = creature_hand_glow::Zoom(*glow);
-		creature_hand_glow::Slide(*glow, frameMs);
+		creature_hand_glow::Slide(motion, frameMs);
 		placed = CreatureHandGlows::Placed {
 		    .model = creature_hand_glow::ModelMatrix(axes, point, transform->scale.x, glow->scale),
 		    .zoom = zoom,
-		    .slide = glow->slide,
+		    .slide = motion.slide,
 		};
 	}
 }
 
-std::optional<glm::vec3> CreatureAnimationSystem::MiddleOfGroinAndLips(entt::entity creature)
+std::optional<glm::vec3> CreatureAnimationSystem::MiddleOfGroinAndLips(const Registry& things, entt::entity creature)
 {
-	auto& registry = Locator::entitiesRegistry::value();
-	const auto* animation = registry.TryGet<const CreatureAnimation>(creature);
-	const auto* transform = registry.TryGet<const Transform>(creature);
-	const auto body = FindBody(registry, creature);
+	const auto* animation = things.TryGet<const CreatureAnimation>(creature);
+	const auto* transform = things.TryGet<const Transform>(creature);
+	const auto body = FindBody(things, Locator::entitiesRegistry::value(), creature);
 	if (animation == nullptr || transform == nullptr || !body.has_value())
 	{
 		return std::nullopt;
@@ -1718,17 +2040,16 @@ std::optional<glm::vec3> CreatureAnimationSystem::MiddleOfGroinAndLips(entt::ent
 	return glm::vec3((lips.x + groin.x) * half, (groin.y + lips.y) * half, (groin.z + lips.z) * half);
 }
 
-void CreatureAnimationSystem::AddAlignmentMotesOf(entt::entity copy)
+void CreatureAnimationSystem::AddAlignmentMotesOf(const Registry& copies, entt::entity copy)
 {
 	if (!Locator::liquidParticleSystem::has_value() || !Locator::gameRandom::has_value())
 	{
 		return;
 	}
-	auto& registry = Locator::entitiesRegistry::value();
-	const auto* animation = registry.TryGet<const CreatureAnimation>(copy);
-	const auto* transform = registry.TryGet<const Transform>(copy);
-	const auto body = FindBody(registry, copy);
-	if (animation == nullptr || transform == nullptr || !body.has_value() || !registry.AllOf<CreatureCopy>(copy) ||
+	const auto* animation = copies.TryGet<const CreatureAnimation>(copy);
+	const auto* transform = copies.TryGet<const Transform>(copy);
+	const auto body = FindBody(copies, Locator::entitiesRegistry::value(), copy);
+	if (animation == nullptr || transform == nullptr || !body.has_value() || !copies.AllOf<CreatureCopy>(copy) ||
 	    !creature_alignment_motes::MakesAny(body->morph->drawn.evilGood))
 	{
 		return;

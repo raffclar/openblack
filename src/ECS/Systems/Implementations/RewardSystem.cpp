@@ -25,10 +25,9 @@
 #include "3D/L3DMesh.h"
 #include "3D/LandIslandInterface.h"
 #include "Animals/AnimalAnimation.h"
-#include "Audio/AudioManagerInterface.h"
-#include "Audio/GameSoundEffects.h"
 #include "Common/GameRandom.h"
 #include "Common/PortableRotations.h"
+#include "ECS/Archetypes/Utils.h"
 #include "ECS/Components/AnimatedStatic.h"
 #include "ECS/Components/BlendedByMaterial.h"
 #include "ECS/Components/Mesh.h"
@@ -50,6 +49,8 @@
 #include "Particles/ParticleBlast.h"
 #include "Particles/ParticleDrawFrame.h"
 #include "Resources/ResourcesInterface.h"
+#include "Sound/GameSoundEffects.h"
+#include "Sound/SoundRequestInterface.h"
 
 using namespace openblack;
 using namespace openblack::ecs::components;
@@ -74,9 +75,10 @@ constexpr entt::hashed_string k_SmokeSheetAlpha = entt::hashed_string("raw/smoke
 /// origin rather than the chest
 constexpr glm::vec3 k_ShakeCentre {0.0f};
 
-float LocalRandom(float a, float b)
+/// The dust is only a picture, so it draws on the random numbers of the C library, as the frames do
+float CrtRandom(float a, float b)
 {
-	return Locator::gameRandom::has_value() ? a + Locator::gameRandom::value().LocalFloatRand(b - a) : (a + b) * 0.5f;
+	return Locator::gameRandom::has_value() ? Locator::gameRandom::value().CrtRandom(a, b) : (a + b) * 0.5f;
 }
 
 float LandHeight(glm::vec3 point)
@@ -179,6 +181,8 @@ entt::entity RewardSystem::Create(glm::vec3 position, RewardObjectInfo type, std
 {
 	auto& registry = Locator::entitiesRegistry::value();
 	const auto entity = registry.Create();
+	// It takes its place in the order of the things made
+	openblack::ecs::archetypes::TakeThingMadePlace();
 	// Given on the land it stands at the height asked for; from the sky it falls to the land itself
 	const glm::vec3 ground {position.x, LandHeight(position), position.z};
 	registry.Assign<Transform>(entity, fromSky ? ground + glm::vec3(0.0f, reward::k_FallFrom, 0.0f) : position, glm::mat3(1.0f),
@@ -191,7 +195,7 @@ entt::entity RewardSystem::Create(glm::vec3 position, RewardObjectInfo type, std
 	chest.landingPoint = ground;
 	chest.madeAt = position;
 	// Its dust is made with it, and only shown once it has fallen
-	chest.dust = reward::MakeDust(LocalRandom);
+	chest.dust = reward::MakeDust(CrtRandom);
 	if (fromSky)
 	{
 		chest.state = Reward::State::Falling;
@@ -220,7 +224,7 @@ bool RewardSystem::Tap(entt::entity chest, PlayerNames player)
 	{
 		return false;
 	}
-	if (player == OwnPlayer() && Locator::audio::has_value())
+	if (player == OwnPlayer() && Locator::sounds::has_value())
 	{
 		audio::PlayGameSoundEffect(k_TapSound.value(), std::nullopt);
 	}
@@ -244,7 +248,7 @@ bool RewardSystem::Tap(entt::entity chest, PlayerNames player)
 	auto& pose = registry.AssignOrReplace<AnimatedStaticPose>(chest);
 	PoseOpened(0, pose.bones);
 	registry.SetDirty();
-	if (Locator::audio::has_value())
+	if (Locator::sounds::has_value())
 	{
 		// The opening sounds do not start again while they play
 		audio::StartGameSoundEffect(k_OpeningSound.value(), {.voicePlayType = pack::AudioBankLoop::Once});
@@ -252,7 +256,7 @@ bool RewardSystem::Tap(entt::entity chest, PlayerNames player)
 	}
 	const auto contents = ContentsOf(reward->type);
 	GameRewardOpeningWorld world(chest);
-	reward::Open(contents, world);
+	reward::Open(contents, player, world);
 	return true;
 }
 
@@ -263,7 +267,7 @@ bool RewardSystem::IsOpened(entt::entity chest) const
 	return reward != nullptr && reward->opened;
 }
 
-void RewardSystem::Update(float milliseconds)
+void RewardSystem::Update(float milliseconds, float turnFraction)
 {
 	if (!Locator::entitiesRegistry::has_value())
 	{
@@ -271,7 +275,7 @@ void RewardSystem::Update(float milliseconds)
 	}
 	auto& registry = Locator::entitiesRegistry::value();
 	bool lidMoved = false;
-	registry.Each<Reward, Transform>([&](entt::entity entity, Reward& chest, Transform& transform) {
+	registry.Each<Reward>([&](entt::entity entity, Reward& chest) {
 		if (chest.state == Reward::State::Opened)
 		{
 			if (auto* seed = registry.TryGet<RewardSeed>(entity))
@@ -304,28 +308,12 @@ void RewardSystem::Update(float milliseconds)
 			chest.dustMilliseconds = std::max(chest.dustMilliseconds - milliseconds, 0.0f);
 			return;
 		}
-		// It is placed by its clock as it stood before this frame, which then runs on
-		const float height = reward::FallHeight(chest.seconds);
-		transform.rotation = glm::mat3(portable_math::EulerAngleY(-reward::FallYaw(chest.seconds)));
-		chest.seconds += milliseconds * 0.001f;
-		if (height > 0.0f)
-		{
-			transform.position = chest.landingPoint + glm::vec3(0.0f, height, 0.0f);
-			return;
-		}
-		// It thumps down on the land, shaking a camera near the world's origin
-		transform.position = chest.landingPoint;
-		chest.state = Reward::State::Landed;
-		chest.goesIntoMap = true;
-		if (Locator::audio::has_value())
-		{
-			audio::PlayGameSoundEffect(k_LandingSound.value(), std::nullopt);
-		}
-		if (Locator::explosionSystem::has_value())
-		{
-			Locator::explosionSystem::value().AddShake(k_ShakeCentre, reward::k_ShakeRadius, reward::k_ShakeStrength,
-			                                           reward::k_ShakeMilliseconds, false);
-		}
+		// The frame draws a chest that falls between the places of its last two turns
+		const float clock = reward::DrawnFallClock(chest.seconds, turnFraction);
+		chest.drawn = Reward::Drawn {
+		    .position = chest.landingPoint + glm::vec3(0.0f, reward::DrawnFallHeight(clock), 0.0f),
+		    .rotation = glm::mat3(portable_math::EulerAngleY(-reward::FallYaw(clock))),
+		};
 	});
 	if (lidMoved)
 	{
@@ -363,6 +351,35 @@ void RewardSystem::ProcessTurn()
 	{
 		registry.Destroy(entity);
 	}
+	// A chest from the sky falls and turns by the turn's game time, and thumps down on the land
+	registry.Each<Reward, Transform>([](entt::entity /*unused*/, Reward& chest, Transform& transform) {
+		if (chest.state != Reward::State::Falling)
+		{
+			return;
+		}
+		const auto step = reward::StepFall(chest.seconds);
+		chest.seconds = step.seconds;
+		transform.rotation = glm::mat3(portable_math::EulerAngleY(-step.yaw));
+		if (!step.lands)
+		{
+			transform.position = chest.landingPoint + glm::vec3(0.0f, step.height, 0.0f);
+			return;
+		}
+		// It thumps down on the land, shaking a camera near the world's origin
+		transform.position = chest.landingPoint;
+		chest.state = Reward::State::Landed;
+		chest.goesIntoMap = true;
+		chest.drawn.reset();
+		if (Locator::sounds::has_value())
+		{
+			audio::PlayGameSoundEffect(k_LandingSound.value(), std::nullopt);
+		}
+		if (Locator::explosionSystem::has_value())
+		{
+			Locator::explosionSystem::value().AddShake(k_ShakeCentre, reward::k_ShakeRadius, reward::k_ShakeStrength,
+			                                           reward::k_ShakeMilliseconds, false);
+		}
+	});
 }
 
 void RewardSystem::CollectDrawFrame(particles::draw::Frame& frame) const

@@ -53,6 +53,7 @@
 #include "ECS/Map.h"
 #include "ECS/Registry.h"
 #include "ECS/ThingCircles.h"
+#include "ECS/ThingMapPlace.h"
 #include "ECS/VillagerAge.h"
 #include "ECS/VillagerNeeds.h"
 #include "ECS/VillagerSpeed.h"
@@ -259,6 +260,11 @@ void MoveWalker(Walker& walker, glm::ivec2 position)
 	                           ? Locator::terrainSystem::value().GetHeightAt(wallHug.placedAt)
 	                           : walker.transform.position.y;
 	walker.transform.position = glm::xzy(glm::vec3(wallHug.placedAt, altitude));
+	// It goes into the map cell that it stepped into at once
+	if (Locator::entitiesMap::has_value())
+	{
+		Locator::entitiesMap::value().Moved(walker.entity);
+	}
 }
 
 /// Faces the walker along a game angle and makes its step that way
@@ -266,8 +272,15 @@ void FaceAngle(Walker& walker, uint16_t angle)
 {
 	auto& wallHug = walker.wallHug;
 	wallHug.gameAngle = static_cast<uint16_t>(angle & gutils::k_GameAngleMask);
-	wallHug.yAngle = gutils::ConvertGameAngleTo3D(wallHug.gameAngle);
+	const float yAngle = gutils::ConvertGameAngleTo3D(wallHug.gameAngle);
+	const bool turned = yAngle != wallHug.yAngle;
+	wallHug.yAngle = yAngle;
 	walker.transform.rotation = portable_math::EulerAngleY(-wallHug.yAngle - glm::radians(90.0f));
+	// A walker that turns comes out of its map cell and goes in again, at the front of the cell's list
+	if (turned)
+	{
+		ecs::thing_map_place::Reinsert(walker.entity);
+	}
 	wallHug.step = wall_hug::StepAlong(wallHug.gameAngle, walker.speed);
 	wallHug.stepAltitude = 0.0f;
 }
@@ -605,7 +618,7 @@ void CollectWalkers(ecs::Registry& registry, std::vector<Walker>& walkers)
 		        .state = S,
 		        .clockwise = tag.clockwise,
 		        .speed = wall_hug::WholeSpeed(wallHug.speed),
-		        .goal = wall_hug::ToWhole(wallHug.goal),
+		        .goal = wallHug.goalPlace,
 		    });
 	    });
 }
@@ -668,7 +681,7 @@ Walker WalkerOf(ecs::Registry& registry, entt::entity entity, WallHug& wallHug, 
 	               .state = MoveState::Arrived,
 	               .clockwise = MoveStateClockwise::Undefined,
 	               .speed = wall_hug::WholeSpeed(wallHug.speed),
-	               .goal = wall_hug::ToWhole(wallHug.goal)};
+	               .goal = wallHug.goalPlace};
 	if (const auto* turning = registry.TryGet<const TurningWalker>(entity))
 	{
 		walker.speed = turning->speed;
@@ -752,7 +765,7 @@ wall_hug::TrialWalk TrialWalk(ecs::Registry& registry, const Walker& walker, boo
 	});
 
 	auto& wallHug = registry.Get<WallHug>(standIn);
-	wallHug.goal = walker.wallHug.goal;
+	wallHug.goalPlace = walker.wallHug.goalPlace;
 	wallHug.step = walker.wallHug.step;
 	wallHug.stepAltitude = walker.wallHug.stepAltitude;
 	wallHug.gameAngle = walker.wallHug.gameAngle;
@@ -909,7 +922,7 @@ void PathfindingSystem::WalkTo(entt::entity walker, glm::ivec2 goal)
 		return;
 	}
 	HeldPosition(registry, walker, *wallHug, *transform);
-	wallHug->goal = wall_hug::ToPoint(goal);
+	wallHug->goalPlace = goal;
 	auto walking = WalkerOf(registry, walker, *wallHug, *transform);
 	walking.goal = goal;
 	walking.state = MoveState::Linear;
@@ -929,7 +942,7 @@ void PathfindingSystem::SetupWalkRound(entt::entity walker, glm::ivec2 goal)
 		return;
 	}
 	HeldPosition(registry, walker, *wallHug, *transform);
-	wallHug->goal = wall_hug::ToPoint(goal);
+	wallHug->goalPlace = goal;
 	auto walking = WalkerOf(registry, walker, *wallHug, *transform);
 	walking.goal = goal;
 	walking.clockwise = MoveStateClockwise::Undefined;

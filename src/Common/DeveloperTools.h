@@ -111,6 +111,7 @@ inline constexpr std::array k_DeveloperOptions {
     DeveloperOption {.name = "screenshot-path", .takesValue = true},
     DeveloperOption {.name = "frame-stats", .takesValue = true},
     DeveloperOption {.name = "frame-stats-views"},
+    DeveloperOption {.name = "ai-times", .takesValue = true},
     DeveloperOption {.name = "no-first-frame-warm-up"},
     DeveloperOption {.name = "unlock-bonus-creatures", .takesValue = true},
     DeveloperOption {.name = "no-draw"},
@@ -118,12 +119,14 @@ inline constexpr std::array k_DeveloperOptions {
     DeveloperOption {.name = "logo-effect"},
     DeveloperOption {.name = "continue"},
     DeveloperOption {.name = "skip-opening", .takesValue = true},
+    DeveloperOption {.name = "direct-start-creature", .takesValue = true},
     DeveloperOption {.name = "play-video", .takesValue = true},
     DeveloperOption {.name = "film-surface", .takesValue = true},
     DeveloperOption {.name = "scenario", .takesValue = true},
     DeveloperOption {.name = "benchmark-warmup", .takesValue = true},
     DeveloperOption {.name = "benchmark-frames", .takesValue = true},
     DeveloperOption {.name = "scenario-hide-window"},
+    DeveloperOption {.name = "list-scenarios"},
     DeveloperOption {.name = "benchmark-out", .takesValue = true},
     DeveloperOption {.name = "profile-folder", .takesValue = true},
     DeveloperOption {.name = "seed", .takesValue = true},
@@ -135,9 +138,15 @@ inline constexpr std::array k_DeveloperOptions {
     DeveloperOption {.name = "join-part-again"},
     DeveloperOption {.name = "join-creature", .takesValue = true},
     DeveloperOption {.name = "sim-network-game"},
+    DeveloperOption {.name = "throw-lead-latency-ms", .takesValue = true},
     DeveloperOption {.name = "sim-still-hand"},
+    DeveloperOption {.name = "sim-no-hand-reports"},
     DeveloperOption {.name = "sim-temple-loss", .takesValue = true},
+    DeveloperOption {.name = "sim-gods-need-no-temple"},
+    DeveloperOption {.name = "sim-time-limit", .takesValue = true},
+    DeveloperOption {.name = "sim-conditions", .takesValue = true},
     DeveloperOption {.name = "sim-leave-at", .takesValue = true},
+    DeveloperOption {.name = "sim-info-box-back-at", .takesValue = true},
     DeveloperOption {.name = "sim-checksums", .takesValue = true},
     DeveloperOption {.name = "sim-checksum-parts"},
     DeveloperOption {.name = "sim-checksum-fields"},
@@ -147,6 +156,10 @@ inline constexpr std::array k_DeveloperOptions {
     DeveloperOption {.name = "sim-row-dump", .takesValue = true},
     DeveloperOption {.name = "sim-row-dump-turn", .takesValue = true},
     DeveloperOption {.name = "sim-row-dump-keep", .takesValue = true},
+    DeveloperOption {.name = "sim-world-states", .takesValue = true},
+    DeveloperOption {.name = "sim-world-state-turns", .takesValue = true},
+    DeveloperOption {.name = "turn-api-check", .takesValue = true},
+    DeveloperOption {.name = "turn-beside-draw"},
     DeveloperOption {.name = "sim-record", .takesValue = true},
     DeveloperOption {.name = "sim-record-every", .takesValue = true},
     DeveloperOption {.name = "sim-start-paused"},
@@ -156,6 +169,8 @@ inline constexpr std::array k_DeveloperOptions {
     DeveloperOption {.name = "sim-input", .takesValue = true},
     DeveloperOption {.name = "sim-commands", .takesValue = true},
     DeveloperOption {.name = "sim-limits", .takesValue = true},
+    DeveloperOption {.name = "sim-all-computer-gods"},
+    DeveloperOption {.name = "sim-ai-seed", .takesValue = true},
     DeveloperOption {.name = "inspect-port", .takesValue = true},
     DeveloperOption {.name = "inspect-lock-input"},
     DeveloperOption {.name = "inspect-allow-player-input"},
@@ -169,7 +184,8 @@ inline constexpr std::array k_DeveloperOptions {
 
 /// The options of the dedicated server that only developers and tools use. A build without the developer tools ignores
 /// them. The server then keeps the options that a deployed game server uses: the game folder, the land, the socket and
-/// its certificate, the lobby, the server id, the ticket keys, the room, the gods, the profile folder and the log.
+/// its certificate, the lobby, the server id, the ticket keys, the room, the gods, the winning conditions, the time
+/// limit, the profile folder and the log.
 inline constexpr std::array k_ServerDeveloperOptions {
     DeveloperOption {.name = "testbed"},
     DeveloperOption {.name = "scenario", .takesValue = true},
@@ -180,13 +196,57 @@ inline constexpr std::array k_ServerDeveloperOptions {
     DeveloperOption {.name = "fast"},
     DeveloperOption {.name = "record", .takesValue = true},
     DeveloperOption {.name = "record-fields"},
+    DeveloperOption {.name = "inspect-port", .takesValue = true},
     DeveloperOption {.name = "trace-draws", .takesValue = true},
     DeveloperOption {.name = "row-dump", .takesValue = true},
     DeveloperOption {.name = "row-dump-turn", .takesValue = true},
     DeveloperOption {.name = "row-dump-keep", .takesValue = true},
+    DeveloperOption {.name = "world-states", .takesValue = true},
+    DeveloperOption {.name = "world-state-turns", .takesValue = true},
     DeveloperOption {.name = "commands", .takesValue = true},
     DeveloperOption {.name = "reload-at", .takesValue = true},
+    DeveloperOption {.name = "test-commands"},
+    DeveloperOption {.name = "log-checksums"},
+    DeveloperOption {.name = "all-computer-gods"},
+    DeveloperOption {.name = "ai-seed", .takesValue = true},
+    DeveloperOption {.name = "gods-need-no-temple"},
+    DeveloperOption {.name = "temple-loss", .takesValue = true},
 };
+
+/// The tool modes of the AI soak: long games in which computer gods play every god. They exist only in builds with the
+/// developer tools, in the game and in the dedicated server. A build that players get refuses a game that asks for them.
+struct SoakTools
+{
+	/// Every god with a citadel is a computer god, also the god of the first slot, and the room has no human god
+	bool allComputerGods {false};
+	/// The seed of the personalities of the computer gods. None: each god keeps its built-in personality.
+	std::optional<uint32_t> aiSeed;
+
+	[[nodiscard]] constexpr bool Any() const noexcept { return allComputerGods || aiSeed.has_value(); }
+	[[nodiscard]] constexpr bool operator==(const SoakTools&) const noexcept = default;
+};
+
+/// Why a build cannot play a game that uses the soak tools, or none when it can. A build without the developer tools
+/// refuses every such game, also a game that a game server asks for.
+[[nodiscard]] constexpr std::optional<std::string_view> SoakRefusalOf(bool built, const SoakTools& tools) noexcept
+{
+	if (!built && tools.Any())
+	{
+		return "the build has no developer tools, so it cannot play a game of computer gods only";
+	}
+	return std::nullopt;
+}
+
+/// Why a build cannot play a network game in which the game server plays a testbed scenario, or none when it can. Only a
+/// build with the developer tools has the testbed scenarios.
+[[nodiscard]] constexpr std::optional<std::string_view> ScenarioRefusalOf(bool built) noexcept
+{
+	if (!built)
+	{
+		return "the build has no developer tools, so it cannot play a testbed scenario";
+	}
+	return std::nullopt;
+}
 
 /// Whether an option of the command line, by its long name, is one of the developer options
 [[nodiscard]] bool IsDeveloperOption(std::string_view name, std::span<const DeveloperOption> options) noexcept;

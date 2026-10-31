@@ -877,7 +877,6 @@ HandsNeed creature_mind::HandsNeededFor(const Step& step)
 	case Step::Kind::HealItself:
 	case Step::Kind::RaiseTotem:
 	case Step::Kind::LowerTotem:
-	case Step::Kind::Fight:
 	case Step::Kind::Apply:
 		return HandsNeed::Free;
 	case Step::Kind::MakeDisciple:
@@ -911,6 +910,9 @@ HandsNeed creature_mind::HandsNeededFor(const Step& step)
 		// Only the start of the dance and the dance itself need free hands
 		return step.dance.kind == DanceOrder::Kind::Start || step.dance.kind == DanceOrder::Kind::Dance ? HandsNeed::Free
 		                                                                                                : HandsNeed::Any;
+	// The fight starts with the question to the other creature, which does not need free hands. Each creature lets go
+	// of what it holds before its taunt.
+	case Step::Kind::Fight:
 	case Step::Kind::StopMoving:
 	case Step::Kind::FollowWatching:
 	case Step::Kind::Kiss:
@@ -1207,6 +1209,23 @@ std::optional<Gaze> creature_mind::LookOf(const Step& step)
 	return std::nullopt;
 }
 
+bool creature_mind::StartsOnTheWay(const Step& step)
+{
+	if (step.kind != Step::Kind::Move)
+	{
+		return false;
+	}
+	switch (step.movement.kind)
+	{
+	case Movement::Kind::ToPoint:
+	case Movement::Kind::Nearby:
+	case Movement::Kind::ToObject:
+		return true;
+	default:
+		return false;
+	}
+}
+
 namespace
 {
 /// Whether the step starts its clip with a try that the body can refuse. A refused try comes again on each turn. A
@@ -1339,12 +1358,15 @@ Commands creature_mind::Think(IdleMind& mind, const Senses& senses, const Random
 			return commands;
 		}
 		// Nothing starts while the body still plays an action. A stop starts while the body moves, to stop it, and a
-		// faint starts at once. The steps of a teleport also start at once. A step that tries to start its clip tries
-		// again on each turn.
+		// faint starts at once. The steps of a teleport also start at once. A walk to a point or to a thing starts
+		// while the body only moves: the new walk takes the place of the old one at once. A step that tries to start its
+		// clip tries again on each turn.
 		const bool teleportStep = step.kind == Step::Kind::Teleport || step.kind == Step::Kind::Transported ||
 		                          step.kind == Step::Kind::StopTeleportControl;
+		const bool walkOnTheWay =
+		    StartsOnTheWay(step) && senses.onlyMoves && !(handsChecked && senses.hands == HandsState::Busy);
 		if (step.kind != Step::Kind::Wait && step.kind != Step::Kind::WatchCamera && step.kind != Step::Kind::StopMoving &&
-		    step.kind != Step::Kind::PracticeDance && !IsFaint(step) && !teleportStep && bodyBusy)
+		    step.kind != Step::Kind::PracticeDance && !IsFaint(step) && !teleportStep && !walkOnTheWay && bodyBusy)
 		{
 			if (TriesToStartClip(step, senses))
 			{
@@ -1757,6 +1779,16 @@ Commands creature_mind::Think(IdleMind& mind, const Senses& senses, const Random
 			mind.step = mind.agenda.size();
 			mind.stepStarted = false;
 			mind.gaveUp = true;
+		}
+		else if (senses.handsTouched && step.order.kind == ObjectOrder::Kind::PickUp)
+		{
+			// After the hold, on each turn that the body still plays the pick-up, the head looks at no point
+			commands.noLookPoint = true;
+		}
+		else if (senses.handsTouched && step.order.kind == ObjectOrder::Kind::Destroy && step.order.object.has_value())
+		{
+			// After the blow, on each turn that the body still plays the stomp, the thing under the foot takes it again
+			commands.stomp = Commands::Stomp {.object = *step.order.object, .lastStep = mind.step + 1 == mind.agenda.size()};
 		}
 		break;
 	case Step::Kind::Cast:

@@ -21,6 +21,7 @@
 #include <glm/vec2.hpp>
 #include <glm/vec3.hpp>
 
+#include "Common/X87.h"
 #include "Common/Zoomer.h"
 #include "Creature/CreatureFace.h"
 
@@ -66,13 +67,6 @@ constexpr float k_RewardFaceMs = 2000.0f;
 /// The part nearest a point the hand touches, given where each part's bone is, in part order
 [[nodiscard]] BodyPart NearestPart(const glm::vec3& touch, std::span<const glm::vec3, k_BodyPartCount> parts);
 
-/// The hand runs its strokes and slaps at most this many times a second, as the game did once a frame at the screen's
-/// refresh; each step takes all the time since the last
-constexpr float k_StepsPerSecond = 60.0f;
-/// The milliseconds the next step runs on after a frame of some milliseconds, the time left over kept in `sinceStep`;
-/// nothing until a step's worth has gone by
-[[nodiscard]] std::optional<float> Pace(float& sinceStep, float frameMs);
-
 /// The clocks a stroke waits on, in milliseconds
 struct StrokeClocks
 {
@@ -97,9 +91,24 @@ constexpr float k_StrokeWaitMs = 1250.0f;
 /// Whether a stroke is due on a part: another part than the last stroked, the clocks run long enough for the reward so far
 [[nodiscard]] bool StrokeDue(const StrokeClocks& clocks, std::optional<BodyPart> last, BodyPart part, float sum);
 
-/// A stroke interrupts nothing that is less than this far through; a slap nothing less than this far
-constexpr float k_StrokeInterruptsAfter = 0.8f;
-constexpr float k_SlapInterruptsAfter = 0.35f;
+/// A stroke interrupts no body action that is this far through or less. The game keeps this limit as a double.
+constexpr double k_StrokeInterruptsAfter = 0.8;
+/// A slap interrupts no body action that is this far through or less. The game keeps this limit as a float.
+constexpr double k_SlapInterruptsAfter = static_cast<double>(0.35f);
+/// Whether the body refuses an action that the hand forces on it. The share is how far the body action is through its
+/// animation. The body refuses the action when the share is equal to the limit or less.
+[[nodiscard]] constexpr bool RefusesInterrupt(float share, double limit)
+{
+	return x87::LessEqual(share, limit);
+}
+/// Whether the body takes an action that the hand forces on it. An action on an object plays in place of the body
+/// layer, so its share comes first. A body that plays no action takes the forced action.
+[[nodiscard]] constexpr bool TakesForcedAction(std::optional<float> objectActionShare, std::optional<float> bodyShare,
+                                               double limit)
+{
+	const auto share = objectActionShare.has_value() ? objectActionShare : bodyShare;
+	return !share.has_value() || !RefusesInterrupt(*share, limit);
+}
 /// A slap needs this long since the hand took hold of the creature. Strokes and slaps do not start this time again.
 constexpr float k_SlapReadyMs = 1000.0f;
 /// Set the clocks after a stroke or a slap that plays. The time since the hand took hold does not change.

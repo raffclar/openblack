@@ -31,6 +31,7 @@
 #include "ECS/Components/CreatureHandGlows.h"
 #include "ECS/Components/Mesh.h"
 #include "ECS/Components/Transform.h"
+#include "ECS/DrawnRegistry.h"
 #include "ECS/Registry.h"
 #include "ECS/Systems/CreatureHairSystemInterface.h"
 #include "ECS/Systems/RenderingSystemInterface.h"
@@ -198,20 +199,23 @@ void Renderer::DrawMenuCreature(const DrawSceneDesc& desc, const InterfaceCreatu
 	// Each request shows for one frame of the scene only
 	const auto shown = *_menuCreature;
 	_menuCreature.reset();
-	if (shown.viewSize.x <= 0.0f || shown.viewSize.y <= 0.0f || !desc.entities.Valid(shown.copy))
+	// The copy and its creature are things of the drawn registry
+	if (shown.viewSize.x <= 0.0f || shown.viewSize.y <= 0.0f || !Locator::drawnRegistry::has_value() ||
+	    !Locator::drawnRegistry::value().Valid(shown.copy))
 	{
 		return;
 	}
-	const auto* copy = desc.entities.TryGet<const ecs::components::CreatureCopy>(shown.copy);
-	const auto* transform = desc.entities.TryGet<const ecs::components::Transform>(shown.copy);
-	const auto* animation = desc.entities.TryGet<const ecs::components::CreatureAnimation>(shown.copy);
-	if (copy == nullptr || transform == nullptr || !desc.entities.Valid(copy->creature))
+	const auto& drawn = Locator::drawnRegistry::value();
+	const auto* copy = drawn.TryGet<const ecs::components::CreatureCopy>(shown.copy);
+	const auto* transform = drawn.TryGet<const ecs::components::Transform>(shown.copy);
+	const auto* animation = drawn.TryGet<const ecs::components::CreatureAnimation>(shown.copy);
+	if (copy == nullptr || transform == nullptr || !drawn.Valid(copy->creature))
 	{
 		return;
 	}
-	const auto* mesh = desc.entities.TryGet<const ecs::components::Mesh>(copy->creature);
-	const auto* creature = desc.entities.TryGet<const ecs::components::Creature>(copy->creature);
-	const auto* morph = desc.entities.TryGet<const ecs::components::CreatureMorph>(copy->creature);
+	const auto* mesh = drawn.TryGet<const ecs::components::Mesh>(copy->creature);
+	const auto* creature = drawn.TryGet<const ecs::components::Creature>(copy->creature);
+	const auto* morph = drawn.TryGet<const ecs::components::CreatureMorph>(copy->creature);
 	const auto& meshes = Locator::resources::value().GetMeshes();
 	if (mesh == nullptr || creature == nullptr || !meshes.Contains(mesh->id))
 	{
@@ -264,13 +268,13 @@ void Renderer::DrawMenuCreature(const DrawSceneDesc& desc, const InterfaceCreatu
 		    .skins = {},
 		    .blendSeams = Locator::config::value().blendCreatureSeams,
 		};
-		if (const auto skins = _creatureSkins.find(copy->creature); skins != _creatureSkins.end())
+		if (const auto skins = _drawnCreatureSkins.find(copy->creature); skins != _drawnCreatureSkins.end())
 		{
 			targets->skins = skins->second.drawn;
 		}
 	}
-	const auto* eyes = desc.entities.TryGet<const ecs::components::CreatureEyes>(shown.copy);
-	const auto* hair = desc.entities.TryGet<const ecs::components::CreatureHair>(shown.copy);
+	const auto* eyes = drawn.TryGet<const ecs::components::CreatureEyes>(shown.copy);
+	const auto* hair = drawn.TryGet<const ecs::components::CreatureHair>(shown.copy);
 	for (const auto layer : tattoo_menu::DrawOrder(hair != nullptr, Locator::creatureHairSystem::value().IsShown()))
 	{
 		switch (layer)
@@ -313,13 +317,15 @@ void Renderer::DrawFilmCreature(const DrawSceneDesc& desc, const interface_creat
 
 void Renderer::DrawFilmCopy(const DrawSceneDesc& desc, const interface_creatures::FilmCreature& shown) const
 {
-	if (!desc.entities.Valid(shown.copy))
+	// The copy is a thing of the drawn registry, and its creature a thing of the land
+	if (!Locator::drawnRegistry::has_value() || !Locator::drawnRegistry::value().Valid(shown.copy))
 	{
 		return;
 	}
-	const auto* copy = desc.entities.TryGet<const ecs::components::CreatureCopy>(shown.copy);
-	const auto* transform = desc.entities.TryGet<const ecs::components::Transform>(shown.copy);
-	const auto* animation = desc.entities.TryGet<const ecs::components::CreatureAnimation>(shown.copy);
+	const auto& copies = Locator::drawnRegistry::value();
+	const auto* copy = copies.TryGet<const ecs::components::CreatureCopy>(shown.copy);
+	const auto* transform = copies.TryGet<const ecs::components::Transform>(shown.copy);
+	const auto* animation = copies.TryGet<const ecs::components::CreatureAnimation>(shown.copy);
 	if (copy == nullptr || transform == nullptr || !desc.entities.Valid(copy->creature))
 	{
 		return;
@@ -395,20 +401,20 @@ void Renderer::DrawFilmCopy(const DrawSceneDesc& desc, const interface_creatures
 	DrawMesh(*body, submitDesc, std::numeric_limits<uint8_t>::max());
 	submitDesc.morphTargets = nullptr;
 
-	if (const auto* eyes = desc.entities.TryGet<const ecs::components::CreatureEyes>(shown.copy); eyes != nullptr)
+	if (const auto* eyes = copies.TryGet<const ecs::components::CreatureEyes>(shown.copy); eyes != nullptr)
 	{
 		DrawCreatureEyes(desc, *eyes, submitDesc, 0.0f, 0.0f, 0);
 	}
 	// Its own hair, which hangs from its own pose, faces the film's camera. The hair takes the colour of its own and the
 	// added colour that the body takes.
-	if (const auto* hair = desc.entities.TryGet<const ecs::components::CreatureHair>(shown.copy);
+	if (const auto* hair = copies.TryGet<const ecs::components::CreatureHair>(shown.copy);
 	    hair != nullptr && Locator::creatureHairSystem::value().IsShown())
 	{
 		DrawCreatureHair(desc, *hair, transform->position, RenderPass::FilmCreature, glm::vec3(glm::inverse(shown.view)[3]),
 		                 shown.colour, glm::round(shown.added * 255.0f));
 	}
 	// The glows on its hands
-	if (const auto* glows = desc.entities.TryGet<const ecs::components::CreatureHandGlows>(shown.copy); glows != nullptr)
+	if (const auto* glows = copies.TryGet<const ecs::components::CreatureHandGlows>(shown.copy); glows != nullptr)
 	{
 		DrawCreatureHandGlows(static_cast<uint16_t>(RenderPass::FilmCreature), *glows, shown.projection, false, 0);
 	}

@@ -31,8 +31,10 @@
 #include "ECS/Components/CreatureNeeds.h"
 #include "ECS/Components/Town.h"
 #include "ECS/Components/Transform.h"
+#include "ECS/PlayerTowns.h"
 #include "ECS/Registry.h"
 #include "ECS/ScriptFind.h"
+#include "ECS/Systems/CreatureFightSystemInterface.h"
 #include "ECS/Systems/FireSystemInterface.h"
 #include "ECS/Systems/LeashSystemInterface.h"
 #include "ECS/Systems/PlayerSystemInterface.h"
@@ -57,23 +59,14 @@ constexpr std::string_view k_PutOutFireAction = "PutOutFireWithMagicWater";
 /// towns last. The first town that it finds wins a tie.
 entt::entity NearestTownWithin(const ecs::Registry& registry, glm::vec3 point, float reach)
 {
-	struct Entry
-	{
-		PlayerNames owner;
-		uint32_t id;
-		ecs::script_find::Candidate candidate;
-	};
-	std::vector<Entry> towns;
-	registry.Each<const Town, const Transform>([&towns](entt::entity town, const Town& data, const Transform& transform) {
-		towns.push_back(
-		    {.owner = data.owner,
-		     .id = data.id,
-		     .candidate = {.entity = town, .at = map_coords::FromMetres({transform.position.x, transform.position.z})}});
-	});
-	std::ranges::sort(towns, [](const Entry& a, const Entry& b) { return std::tie(a.owner, a.id) < std::tie(b.owner, b.id); });
 	std::vector<ecs::script_find::Candidate> ordered;
-	ordered.reserve(towns.size());
-	std::ranges::transform(towns, std::back_inserter(ordered), &Entry::candidate);
+	for (const auto town : ecs::player_towns::AllInOrder(registry))
+	{
+		if (const auto* transform = registry.TryGet<const Transform>(town))
+		{
+			ordered.push_back({.entity = town, .at = map_coords::FromMetres({transform->position.x, transform->position.z})});
+		}
+	}
 	return ecs::script_find::FindNearestTown(map_coords::FromMetres({point.x, point.z}), reach, ordered);
 }
 
@@ -105,11 +98,14 @@ std::optional<entt::entity> BurningBuildingOf(const ecs::Registry& registry, con
 void CreatureMindSystem::StepEmergencies(entt::entity creature, const Creature& body, CreatureMindState& mind, bool scripted)
 {
 	auto& registry = Locator::entitiesRegistry::value();
+	// Only the duel keeps a creature from its emergencies. Before the duel and after it, the creature sees to them.
+	const bool duelling =
+	    Locator::creatureFightSystem::has_value() && Locator::creatureFightSystem::value().IsDuelling(creature);
 	if (!mind.desires.has_value() ||
 	    !creature_emergencies::LooksAtEmergencies({.emergencyRunning = mind.emergencyRunning,
 	                                               .scripted = scripted,
 	                                               .planForced = mind.planForced,
-	                                               .fighting = registry.AllOf<CreatureFighting>(creature),
+	                                               .fighting = duelling,
 	                                               .knockedOut = registry.AllOf<CreatureKnockedOut>(creature)}))
 	{
 		return;

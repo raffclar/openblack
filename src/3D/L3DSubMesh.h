@@ -23,17 +23,12 @@
 #include <glm/vec3.hpp>
 
 #include "AxisAlignedBoundingBox.h"
-
-#include "../Graphics/RenderModes.h"
-#include "../Graphics/RenderPass.h"
-
-namespace bgfx
-{
-struct Memory;
-}
+#include "Visual/RenderModes.h"
+#include "Visual/RenderPass.h"
 
 namespace openblack::graphics
 {
+struct DeviceMemory;
 class L3DMesh;
 class Mesh;
 class ShaderProgram;
@@ -90,6 +85,8 @@ public:
 		glm::vec3 position;
 		glm::vec2 uv;
 		glm::vec3 normal;
+		/// True for a corner of a broken face's back face
+		bool back {false};
 	};
 	/// A primitive of a submesh made while the game runs, drawn with the material of a primitive of another model
 	struct MadePrimitive
@@ -108,7 +105,12 @@ public:
 
 	[[nodiscard]] openblack::l3d::L3DSubmeshHeader::Flags GetFlags() const { return _flags; }
 	[[nodiscard]] bool IsPhysics() const { return _flags.isPhysics; }
+	/// True for a submesh made while the game runs from the faces of a broken shape
+	[[nodiscard]] bool IsMade() const { return _made; }
+	/// The buffers on the graphics device. Only a submesh with a device mesh (HasDeviceMesh) has them.
 	[[nodiscard]] graphics::Mesh& GetMesh() const;
+	/// False for a submesh that keeps only its data (see UploadMode), and for one with no triangles
+	[[nodiscard]] bool HasDeviceMesh() const { return _mesh != nullptr; }
 	[[nodiscard]] const AxisAlignedBoundingBox& GetBoundingBox() const { return _boundingBox; }
 	[[nodiscard]] const std::vector<Primitive>& GetPrimitives() const { return _primitives; }
 	/// The lightmap skin the game multiplies the submesh by, twice over, with the vertices' second texture
@@ -181,12 +183,12 @@ public:
 	[[nodiscard]] const std::vector<SurfacePrimitive>& GetSurfacePrimitives() const { return _surfacePrimitives; }
 
 private:
-	/// The submesh's vertices as they are drawn, in bgfx memory
-	[[nodiscard]] const bgfx::Memory* PackVertices(const l3d::L3DFile& l3d, uint32_t meshIndex) const;
+	/// The submesh's vertices as they are drawn, in device memory
+	[[nodiscard]] const graphics::DeviceMemory* PackVertices(const l3d::L3DFile& l3d, uint32_t meshIndex) const;
 	/// The box about the submesh's vertices, as they are placed by its bones
 	void BoundVertices(const l3d::L3DFile& l3d, uint32_t meshIndex);
 	/// The blend source texture of count packed vertices, where the renderer can read one in the vertex shader
-	void CreateBlendSource(const bgfx::Memory* vertices, uint32_t count);
+	void CreateBlendSource(const graphics::DeviceMemory* vertices, uint32_t count);
 
 	graphics::L3DMesh& _l3dMesh;
 	/// Which of its file's submeshes it is
@@ -198,6 +200,7 @@ private:
 	std::vector<Primitive> _primitives;
 	std::optional<uint32_t> _lightmapSkinID;
 	bool _hasLightmapCoordinates {false};
+	bool _made {false};
 	std::optional<Joint> _joint;
 	std::string _name;
 	Frame _frame {glm::mat4(1.0f), glm::vec3(0.0f), glm::vec3(0.0f)};

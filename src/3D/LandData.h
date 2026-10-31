@@ -9,6 +9,7 @@
 
 #pragma once
 
+#include <cstddef>
 #include <cstdint>
 
 #include <array>
@@ -24,6 +25,8 @@ struct LandData
 {
 	/// The map is 32 by 32 blocks of 16 by 16 cells
 	static constexpr int k_BlocksPerSide = 32;
+	/// The most blocks that the byte table of a landscape file can name
+	static constexpr size_t k_MostBlocksInTable = 255;
 
 	/// For each block of the map at [x * 32 + z], one more than its index in blocks, or 0 where there is no land. A
 	/// landscape file holds a byte for each, so has at most 255 blocks; the whole map takes 1024.
@@ -38,7 +41,13 @@ struct LandData
 	/// square of one of them (see LNDBlock::lowResTexture, fuLrs and fvLrs)
 	std::vector<lnd::LNDLowResolutionTexture> coarsePages;
 
-	/// The land of a landscape file
+	/// The land of a landscape file. The table of the file names each block by a byte, so a land of more than 255 blocks
+	/// takes its table from the place that each block keeps (its block x and z).
 	[[nodiscard]] static LandData FromLnd(const lnd::LNDFile& lnd);
+
+	/// The bytes of a landscape file that holds this land. The file has the layout of the game's landscape files. The
+	/// byte of each block in the table is 0 for a block after the 255th: such a land reads back from the places of the
+	/// blocks.
+	[[nodiscard]] std::vector<uint8_t> LndBytes() const;
 };
 } // namespace openblack

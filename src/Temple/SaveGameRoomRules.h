@@ -11,6 +11,8 @@
 
 #include <cstdint>
 
+#include <array>
+#include <functional>
 #include <optional>
 #include <string>
 #include <string_view>
@@ -31,6 +33,23 @@ inline constexpr uint32_t k_LastPlayerSlot = 13;
 inline constexpr float k_LookDistance = 20.0f;
 /// The longest name that the name box takes
 inline constexpr size_t k_NameLength = 32;
+
+/// What the room's list of saved games and their small pictures come from. Two equal stamps tell that the game did not
+/// save a game, delete a game or write the picture of a slot between them, for the same player on the same land.
+struct SavedGamesStamp
+{
+	/// The count of the saves, the deletes and the slot pictures that the game started to write
+	uint64_t changes {0};
+	/// The player's folder in the profiles' folder, empty for none
+	std::string player;
+	uint32_t land {0};
+
+	[[nodiscard]] bool operator==(const SavedGamesStamp&) const = default;
+};
+
+/// Whether the room reads its list and its small pictures again: at the first read, and when the saved games changed
+/// after the last read
+[[nodiscard]] bool ReadsSavedGamesAgain(const std::optional<SavedGamesStamp>& lastRead, const SavedGamesStamp& now);
 
 /// The parts of the room's mesh that are controls
 enum class Part : uint8_t
@@ -163,5 +182,50 @@ struct PictureToolTip
 [[nodiscard]] std::optional<PictureToolTip> PictureToolTipOf(const PictureToolTipInput& input);
 /// Whether a picture's tooltip, as above, is one of its zooms in
 [[nodiscard]] bool PictureZoomsIn(const PictureToolTipInput& input);
+
+/// The first slot that has a label of its own when it has no save
+inline constexpr uint32_t k_FirstLabelSlot = 14;
+/// The help texts of the labels of the slots from 14 when they have no save: "Previous Land", three times
+/// "Auto Save Land: %3.0f", "Next Land", "Quick Save" and "Auto Save On Exit"
+inline constexpr std::array<uint32_t, k_Slots - k_FirstLabelSlot> k_LabelTexts {6688, 6690, 6690, 6690, 6689, 6661, 6691};
+
+/// The date and the name of the save in a slot
+struct SaveWords
+{
+	std::u16string_view date;
+	std::u16string_view name;
+};
+/// The words that the room writes on the screen while the camera looks closely at the picture in high detail
+struct CloseLookWords
+{
+	/// The line at the top of the screen: the date and the time of the slot's save. A slot with no save has none.
+	std::optional<std::u16string> title;
+	/// The words below the title: the name of the slot's save, or the label of a slot with no save
+	std::u16string details;
+
+	bool operator==(const CloseLookWords&) const = default;
+};
+/// A help text by its number
+using HelpTextFn = std::function<std::u16string(uint32_t number)>;
+/// The words of the close look at a slot's picture. A slot with a save gives its date and its name. A slot from 14
+/// with no save gives its label, with the land's number for "%3.0f". Other slots with no save give no words.
+[[nodiscard]] std::optional<CloseLookWords> CloseLookWordsOf(uint32_t slot, std::optional<SaveWords> save, uint32_t landNumber,
+                                                             const HelpTextFn& helpText);
+
+/// The details are black and two pixels down first, then yellow
+inline constexpr float k_DetailsShadowDrop = 2.0f;
+/// The left and the right of the details' lines on the screen
+struct DetailsSpan
+{
+	float left;
+	float right;
+
+	bool operator==(const DetailsSpan&) const = default;
+};
+/// The middle half of a screen, from its left side and its width in pixels: from a quarter of the width, rounded down,
+/// to three times that quarter
+[[nodiscard]] DetailsSpan DetailsSpanOf(int32_t left, int32_t width);
+/// Where a line of the details starts across the screen, so that the line is centred in the span
+[[nodiscard]] float DetailsLineLeft(const DetailsSpan& span, float lineWidth);
 
 } // namespace openblack::temple::save_game_room

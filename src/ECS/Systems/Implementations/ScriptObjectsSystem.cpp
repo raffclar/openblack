@@ -24,7 +24,6 @@
 #include "ECS/Components/Flock.h"
 #include "ECS/Components/HandGrab.h"
 #include "ECS/Components/LivingAction.h"
-#include "ECS/Components/MapCellResident.h"
 #include "ECS/Components/NeverFades.h"
 #include "ECS/Components/Physics.h"
 #include "ECS/Components/ScriptControl.h"
@@ -34,6 +33,7 @@
 #include "ECS/Components/Villager.h"
 #include "ECS/Components/VillagerLabel.h"
 #include "ECS/Dances.h"
+#include "ECS/Map.h"
 #include "ECS/Reflection/PlainImage.h"
 #include "ECS/Registry.h"
 #include "ECS/ScriptFlocks.h"
@@ -123,7 +123,7 @@ public:
 	[[nodiscard]] bool IsInMap(entt::entity object) const override
 	{
 		const auto& registry = Registry();
-		return registry.AllOf<MapCellResident>(object) && !registry.AnyOf<InHand, InPhysics, CarriedByTornado>(object);
+		return ecs::InMapCells(registry, object) && !registry.AnyOf<InHand, InPhysics, CarriedByTornado>(object);
 	}
 
 	void SetVillagerDecideWhatToDo(entt::entity villager) override
@@ -229,6 +229,14 @@ public:
 		if (Locator::creatureMindSystem::has_value())
 		{
 			Locator::creatureMindSystem::value().AbandonAction(creature);
+		}
+	}
+
+	void SetAnimalWanderBeforeReaction(entt::entity animal) override
+	{
+		if (Locator::animalSystem::has_value())
+		{
+			Locator::animalSystem::value().SetWanderBeforeReaction(animal);
 		}
 	}
 
@@ -493,8 +501,11 @@ void ScriptObjectsSystem::ReleaseIntoGame(entt::entity object)
 		_world->AbandonCreatureAction(object);
 		break;
 	case Kind::Animal:
-		// TODO(physics): an animal in the physics keeps wandering as the state it takes up after it lands; openblack's
-		// animals keep no such state yet
+		// An animal in the physics gets wandering as its state before a reaction. Its own life starts after it lands.
+		if (_world->IsInPhysics(object))
+		{
+			_world->SetAnimalWanderBeforeReaction(object);
+		}
 		_world->ReleaseAnimal(object);
 		break;
 	case Kind::Other:
@@ -659,6 +670,39 @@ bool ScriptObjectsSystem::LoadTable(std::span<const uint8_t> bytes)
 	}
 	std::memcpy(&_table, bytes.data(), sizeof(_table));
 	return true;
+}
+
+void ScriptObjectsSystem::PutSavedTable(const script_objects::Table& table, std::span<const ScriptHold> holds,
+                                        const std::function<bool(entt::entity)>& kept)
+{
+	for (uint16_t index = 1; index < script_objects::k_Places; ++index)
+	{
+		const auto& place = _table.At(index);
+		const auto object = static_cast<entt::entity>(place.object);
+		if (place.object == 0 || !_world->Exists(object) || table.Find(place.object).has_value() || kept(object))
+		{
+			continue;
+		}
+		// The saved game has no such thing: what a script made goes, and anything else is no longer held
+		if (place.createdByScript)
+		{
+			_world->Delete(object);
+			continue;
+		}
+		_world->SetControlled(object, false);
+		_world->SetInScript(object, false);
+	}
+	_table = table;
+	_takesControl = false;
+	_timesFull = 0;
+	for (const auto& hold : holds)
+	{
+		if (_world->Exists(hold.object))
+		{
+			_world->SetInScript(hold.object, hold.inScript);
+			_world->SetControlled(hold.object, hold.controlled);
+		}
+	}
 }
 
 std::vector<ScriptObjectPlace> ScriptObjectsSystem::Places() const

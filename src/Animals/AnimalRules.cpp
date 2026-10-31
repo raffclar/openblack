@@ -197,13 +197,37 @@ bool animals::DeadBodyGoes(int16_t& turnsLeft, bool scriptControlled)
 	return goes;
 }
 
-bool animals::TakesOwnTurn(const AnimalHolders& holders, bool dyingOrDead)
+bool animals::TakesOwnTurn(const AnimalHolders& holders)
 {
-	if (holders.tornado || holders.playersHand || holders.physics)
+	return !holders.tornado && !holders.physics;
+}
+
+bool animals::HandStateAllows(uint8_t gameState)
+{
+	// The game's states: flying 10, landed 11, and the states of death from 13 (it starts to die) to 17 (brought down)
+	constexpr uint8_t k_Flying = 10;
+	constexpr uint8_t k_Landed = 11;
+	constexpr uint8_t k_FirstDeath = 13;
+	constexpr uint8_t k_LastDeath = 17;
+	return gameState == k_Flying || gameState == k_Landed || (gameState >= k_FirstDeath && gameState <= k_LastDeath);
+}
+
+animals::TargetDrop animals::DropOfTarget(const TargetFacts& facts)
+{
+	if (!facts.gone && !facts.inPlayersHand)
 	{
-		return false;
+		return TargetDrop::Keeps;
 	}
-	return !holders.creature || dyingOrDead;
+	return facts.inHand ? TargetDrop::Drops : TargetDrop::DropsAndDecides;
+}
+
+animals::LandedAs animals::LandsAs(bool alive, bool dying)
+{
+	if (alive)
+	{
+		return LandedAs::Landed;
+	}
+	return dying ? LandedAs::Dead : LandedAs::Dying;
 }
 
 glm::vec3 animals::DeadBodySmokePlace(const glm::vec3& position, float heading, float height)

@@ -54,6 +54,7 @@
 #include "3D/LandBlock.h"
 #include "3D/LandColourStamps.h"
 #include "3D/LandIslandInterface.h"
+#include "3D/LandLightFrame.h"
 #include "3D/LandLightTable.h"
 #include "3D/Lightning.h"
 #include "3D/Mists.h"
@@ -69,6 +70,7 @@
 #include "Blast/RootsPile.h"
 #include "Camera/Camera.h"
 #include "Common/CrashHandler.h"
+#include "Common/MainThreadQueue.h"
 #include "Common/Platform.h"
 #include "Common/UserData.h"
 #include "Common/WorkerPool.h"
@@ -120,7 +122,9 @@
 #include "ECS/Components/Vortex.h"
 #include "ECS/Components/Weather.h"
 #include "ECS/DrawnPlace.h"
+#include "ECS/DrawnRegistry.h"
 #include "ECS/MovingShadowCasters.h"
+#include "ECS/PlayerColour.h"
 #include "ECS/PosedModel.h"
 #include "ECS/Registry.h"
 #include "ECS/SwimmerRules.h"
@@ -140,6 +144,7 @@
 #include "ECS/Systems/PlayerSystemInterface.h"
 #include "ECS/Systems/RainSystemInterface.h"
 #include "ECS/Systems/RenderingSystemInterface.h"
+#include "ECS/Systems/SkyClockSystemInterface.h"
 #include "ECS/Systems/SkySystemInterface.h"
 #include "ECS/Systems/SnowSystemInterface.h"
 #include "ECS/Systems/SnowfallSystemInterface.h"
@@ -154,7 +159,6 @@
 #include "Graphics/BoneBudget.h"
 #include "Graphics/CreatureReflection.h"
 #include "Graphics/DebugLines.h"
-#include "Graphics/DetailLevel.h"
 #include "Graphics/DrawOrder.h"
 #include "Graphics/DrawWindow.h"
 #include "Graphics/FizzDrawOrder.h"
@@ -167,9 +171,9 @@
 #include "Graphics/IndexBuffer.h"
 #include "Graphics/LandFootprints.h"
 #include "Graphics/LandShadowBake.h"
-#include "Graphics/LightBeams.h"
 #include "Graphics/LightShine.h"
 #include "Graphics/MaterialStages.h"
+#include "Graphics/Mesh.h"
 #include "Graphics/MeshDetail.h"
 #include "Graphics/ModelLight.h"
 #include "Graphics/Moon.h"
@@ -186,6 +190,7 @@
 #include "Graphics/Sun.h"
 #include "Graphics/TreeBrightness.h"
 #include "Graphics/VertexBuffer.h"
+#include "Graphics/ViewFrustum.h"
 #include "Graphics/WarmUpViews.h"
 #include "Graphics/ZSort.h"
 #include "InfoConstants.h"
@@ -196,6 +201,8 @@
 #include "Resources/ResourceManager.h"
 #include "Resources/ResourcesInterface.h"
 #include "Scenery/ObjectDrawList.h"
+#include "Visual/DetailLevel.h"
+#include "Visual/LightBeams.h"
 #include "Windowing/WindowingInterface.h"
 #if defined(__EMSCRIPTEN__)
 #include "Web/WebPlatform.h"
@@ -277,6 +284,13 @@ constexpr float k_NoShadowSpellLook = 0.2f;
 constexpr uint16_t k_GroundShadowDataWidth = 64;
 /// How many buffers the frames are drawn into in turn
 constexpr uint8_t k_BackBuffers = 3;
+/// How finely the land's block textures are painted, for the terrain shader (see u_landTexels there)
+glm::vec4 LandTexelsUniform(int blockTexels)
+{
+	const auto& sampling = land_detail::CoarseSamplingFor(blockTexels);
+	const auto texels = static_cast<float>(sampling.blockTexels);
+	return {texels, static_cast<float>(sampling.step), sampling.drawnTexels, texels / 255.0f};
+}
 /// How deep the snow lies over the island, as a texture the shaders read point by point, refreshed when the snow
 /// changes; none without snow
 const Texture2D* SnowDepth(std::unique_ptr<Texture2D>& texture, std::optional<uint32_t>& revision)
@@ -310,6 +324,9 @@ constexpr uint64_t SpriteState(bool additive)
 	return BGFX_STATE_DEPTH_TEST_GREATER | BGFX_STATE_WRITE_RGB | BGFX_STATE_WRITE_A | blend |
 	       BGFX_STATE_BLEND_EQUATION(BGFX_STATE_BLEND_EQUATION_ADD);
 }
+
+/// The triangle that a warm-up draws in place of the temple's text or map when they have none: a triangle of no size
+constexpr std::array<OrientedTextVertex, 3> k_WarmUpTriangle {};
 
 } // namespace
 
@@ -346,21 +363,11 @@ struct BgfxCallback: public bgfx::CallbackI
 		          str);
 #endif
 
-		// Vulkan aborts when its pool of descriptor sets runs dry: say so, with what the last frame took
-		std::string message = str;
-		if (std::string_view(str).find("VK_ERROR_OUT_OF_POOL_MEMORY") != std::string_view::npos)
-		{
-			message +=
-			    fmt::format(" (Vulkan ran out of descriptor sets: the last frame counted took {} of the {} a frame "
-			                "has, warned of from {})",
-			                recentDescriptorSets.load(), graphics::k_DescriptorSetsPerFrame, graphics::k_DescriptorSetsNear);
-		}
-
 		// Must terminate, continuing will cause crash anyway. This can come from bgfx's render thread, where nothing
 		// would catch an exception, so it is reported and the game exits from here.
 		if (crash_handler::IsInstalled())
 		{
-			crash_handler::ReportFatal(crash_report::CrashKind::GraphicsFatal, message, filePath, line,
+			crash_handler::ReportFatal(crash_report::CrashKind::GraphicsFatal, str, filePath, line,
 			                           std::string("bgfx ") + codeStr);
 		}
 		throw std::runtime_error(std::string("bgfx: ") + filePath + ":" + std::to_string(line) + ": FATAL (" + codeStr +
@@ -417,8 +424,12 @@ struct BgfxCallback: public bgfx::CallbackI
 	// The driver's compiled pipelines, kept between runs
 	uint32_t cacheReadSize(uint64_t id) override
 	{
-		// The renderer asks for the cache once for each pipeline that it makes
-		++pipelinesMade;
+		// The renderer asks for the cache once for each pipeline that it makes. The Vulkan renderer also asks one time for
+		// all the kept pipelines, as number 0, when it starts.
+		if (id != 0)
+		{
+			++pipelinesMade;
+		}
 		return pipelines.has_value() ? pipelines->ReadSize(id) : 0;
 	}
 	bool cacheRead(uint64_t id, void* data, uint32_t size) override
@@ -491,8 +502,6 @@ struct BgfxCallback: public bgfx::CallbackI
 	graphics::ScreenshotFailures failures;
 	/// The pictures that the game asked for in memory
 	graphics::ScreenPictures pictures;
-	/// The descriptor sets the last frame counted took under Vulkan, for the report if the renderer runs out of them
-	std::atomic<uint32_t> recentDescriptorSets {0};
 	/// The pipelines that the renderer made since it started, counted on its render thread
 	std::atomic<uint32_t> pipelinesMade {0};
 	/// The driver's compiled pipelines on disk. Only the Vulkan and Direct3D 12 renderers keep them, and only when the
@@ -652,6 +661,8 @@ Renderer::~Renderer() noexcept
 {
 	_offscreenShots.reset();
 	_creatureSkins.clear();
+	_roomCreatureSkins.clear();
+	_drawnCreatureSkins.clear();
 	_spareCreatureSkins.clear();
 	_animalBoneTexture.reset();
 	_handSkins.clear();
@@ -809,9 +820,9 @@ void Renderer::Reset(glm::u16vec2 resolution) const noexcept
 	SetSceneViewRects(RenderPass::Reflection, resolution);
 }
 
-graphics::ShaderManager& Renderer::GetShaderManager() const noexcept
+graphics::ShaderManager* Renderer::GetShaderManager() const noexcept
 {
-	return *_shaderManager;
+	return _shaderManager.get();
 }
 
 const Texture2D* GetTexture(uint32_t skinID, const std::unordered_map<SkinId, std::unique_ptr<graphics::Texture2D>>& meshSkins)
@@ -1056,8 +1067,13 @@ constexpr float k_InnerWall = 0.35f;
 constexpr size_t k_MostCaps = 512;
 } // namespace
 
-const Renderer::Cap& Renderer::CapOf(const L3DSubMesh& subMesh, const CapPrimitive& primitive, float height) const
+const Renderer::Cap& Renderer::CapOf(const L3DSubMesh& subMesh, const CapPrimitive& primitive, float height,
+                                     const std::optional<glm::mat4>& landPlacement) const
 {
+	if (landPlacement.has_value())
+	{
+		return LandCapOf(subMesh, primitive, height, *landPlacement);
+	}
 	const auto key = std::make_pair(primitive.key, height);
 	if (const auto found = _caps.find(key); found != _caps.end())
 	{
@@ -1077,6 +1093,29 @@ const Renderer::Cap& Renderer::CapOf(const L3DSubMesh& subMesh, const CapPrimiti
 	                                         InsetOf(primitive.twoSided)),
 	};
 	return _caps.emplace(key, std::move(cap)).first->second;
+}
+
+const Renderer::Cap& Renderer::LandCapOf(const L3DSubMesh& subMesh, const CapPrimitive& primitive, float height,
+                                         const glm::mat4& placement) const
+{
+	// The land under a model can differ from frame to frame, so a cap of a model that follows the land lasts one frame
+	const auto key = std::make_tuple(primitive.key, height, placement[3].x, placement[3].y, placement[3].z);
+	if (const auto found = _landCaps.find(key); found != _landCaps.end())
+	{
+		return found->second;
+	}
+	const auto& surface = subMesh.GetSurface();
+	std::span<const uint16_t> indices(surface.indices);
+	const auto first = std::min<size_t>(primitive.indicesOffset, indices.size());
+	indices = indices.subspan(first, std::min<size_t>(primitive.indicesCount, indices.size() - first));
+	const auto& land = Locator::terrainSystem::value();
+	const auto risen = partial_build_cap::RisenWithLand(surface.positions, placement,
+	                                                    [&land](glm::vec2 point) { return land.GetHeightAt(point); });
+	Cap cap {
+	    .drawsBelow = partial_build_cap::DrawsAnythingBelow(risen, indices, height),
+	    .vertices = partial_build_cap::Build(risen, surface.uvs, surface.normals, indices, height, InsetOf(primitive.twoSided)),
+	};
+	return _landCaps.emplace(key, std::move(cap)).first->second;
 }
 
 bool Renderer::BindCap(bgfx::Encoder& encoder, const std::vector<partial_build_cap::CapVertex>& cap)
@@ -1272,7 +1311,7 @@ void Renderer::DrawSubMesh(const graphics::L3DMesh& mesh, const graphics::L3DSub
 			                          .indicesOffset = prim.indicesOffset,
 			                          .indicesCount = prim.indicesCount,
 			                          .twoSided = prim.twoSided},
-			                         *desc.modelCutHeight);
+			                         *desc.modelCutHeight, desc.landPlacement);
 			if (!made.drawsBelow || (desc.cap && made.vertices.empty()))
 			{
 				lastPreserveState = false;
@@ -1395,7 +1434,12 @@ void Renderer::DrawSubMesh(const graphics::L3DMesh& mesh, const graphics::L3DSub
 				const bool snowed =
 				    depth != nullptr && prim.depthWrite && _snowTexture != nullptr && _snowAlphaTexture != nullptr;
 				bindings.snowed = snowed;
-				const glm::vec4 u_snow {snowed ? 1.0f : 0.0f, 0.0f, 0.0f, 0.0f};
+				// y: 1 when the submesh has bones. Then the snow is read by the normal of each vertex in its file, not by
+				// the normal of the posed vertex.
+				// z: 1 for the faces of a broken shape. Their snow is read by where each corner is in the world and by
+				// the normal of its face, and shows from a different alpha.
+				const glm::vec4 u_snow {snowed ? 1.0f : 0.0f, subMesh.GetFlags().hasBones ? 1.0f : 0.0f,
+				                        subMesh.IsMade() ? 1.0f : 0.0f, 0.0f};
 				setUniform(MeshUniform::Snow, &u_snow);
 				if (snowed)
 				{
@@ -1409,9 +1453,9 @@ void Renderer::DrawSubMesh(const graphics::L3DMesh& mesh, const graphics::L3DSub
 			{
 				// Window submeshes are lit by their houses at night
 				glm::vec4 u_window {subMesh.GetFlags().isWindow ? 1.0f : 0.0f, 0.0f, 0.0f, 0.0f};
-				if (Locator::skySystem::has_value())
+				if (Locator::skyClockSystem::has_value())
 				{
-					const auto& clock = Locator::skySystem::value().GetClock();
+					const auto& clock = Locator::skyClockSystem::value().GetClock();
 					u_window.y = clock.GetVisualTime();
 					u_window.z = clock.IsVisualNight() ? 1.0f : 0.0f;
 				}
@@ -1436,7 +1480,7 @@ void Renderer::DrawSubMesh(const graphics::L3DMesh& mesh, const graphics::L3DSub
 				{
 					const auto diffuse =
 					    desc.useMaterialAddressing && !material_stages::TextureRepeats(prim.materialFlags, false)
-					        ? program->FindUniform("s_diffuse")
+					        ? uniforms[static_cast<size_t>(MeshUniform::Diffuse)]
 					        : std::nullopt;
 					if (diffuse.has_value())
 					{
@@ -1605,7 +1649,7 @@ void Renderer::DrawSubMesh(const graphics::L3DMesh& mesh, const graphics::L3DSub
 			if (!desc.isSky && has(MeshUniform::SkyAlphaThreshold))
 			{
 				const glm::vec4 u_skyAlphaThreshold = {
-				    Locator::skySystem::value().GetCurrentSkyType(),
+				    Locator::skyClockSystem::value().GetCurrentSkyType(),
 				    desc.alphaThreshold.value_or(prim.thresholdAlpha || desc.materialAlphaTest ? prim.alphaCutoutThreshold
 				                                                                               : 0.0f),
 				    0.0f,
@@ -1733,7 +1777,9 @@ void Renderer::DrawTempleText(const DrawSceneDesc& desc) const
 		return;
 	}
 	const auto& temple = Locator::temple::value();
-	const auto& vertices = temple.GetText();
+	// The words come with the rooms' scrolls on a visit. A warm-up draws a triangle of no size in their place.
+	const auto vertices = _warmingUp && temple.GetText().empty() ? std::span<const OrientedTextVertex>(k_WarmUpTriangle)
+	                                                             : std::span<const OrientedTextVertex>(temple.GetText());
 	const auto* texture = temple.GetTextTexture();
 	if (vertices.empty() || texture == nullptr)
 	{
@@ -1850,6 +1896,15 @@ void Renderer::DrawTempleMapPass() const
 	const auto visit = Locator::temple::value().GetVisits();
 	if (_templeMapVisit == visit)
 	{
+		// The map shows the land of this visit already. The warm-up of a new load makes the triangles of the land's
+		// blocks for the next visit.
+		if (_warmingUp)
+		{
+			for (const auto& block : Locator::terrainSystem::value().GetBlocks())
+			{
+				[[maybe_unused]] const auto& triangles = block.GetTriangles(land_detail::Mesh::Full, 0, true);
+			}
+		}
 		return;
 	}
 	_templeMapVisit = visit;
@@ -1900,6 +1955,8 @@ void Renderer::DrawTempleMapPass() const
 	terrainShader->SetUniformValue("u_hazeColour", &noHaze);
 	terrainShader->SetUniformValue("u_skyAndBump", &u_skyAndBump);
 	terrainShader->SetUniformValue("u_islandExtent", &islandExtent);
+	const auto landTexels = LandTexelsUniform(island.GetBlockTextureSide());
+	terrainShader->SetUniformValue("u_landTexels", &landTexels);
 	// The map shows no vortex's hole
 	const glm::vec4 noVortex {0.0f, 0.0f, 0.0f, -1.0f};
 	terrainShader->SetUniformValue("u_vortexGround", &noVortex);
@@ -1977,7 +2034,9 @@ void Renderer::DrawTempleMap(const DrawSceneDesc& desc) const
 		return;
 	}
 	const auto& temple = Locator::temple::value();
-	const auto& vertices = temple.GetMap();
+	// A visit frames the map. A warm-up draws a triangle of no size in its place.
+	const auto vertices = _warmingUp && temple.GetMap().empty() ? std::span<const OrientedTextVertex>(k_WarmUpTriangle)
+	                                                            : std::span<const OrientedTextVertex>(temple.GetMap());
 	if (vertices.empty())
 	{
 		return;
@@ -2015,12 +2074,20 @@ void Renderer::DrawTempleMapMarkers(const DrawSceneDesc& desc) const
 		return;
 	}
 	const auto& temple = Locator::temple::value();
-	const auto& markers = temple.GetMapMarkers();
+	// A visit puts the markers on the map. A warm-up draws one of each kind at no size in their place.
+	const bool warmUp = _warmingUp && temple.GetMapMarkers().empty();
+	const std::vector<TempleMapMarker> warmUpMarkers =
+	    warmUp ? std::vector<TempleMapMarker> {{.kind = TempleMapMarkerKind::Temple},
+	                                           {.kind = TempleMapMarkerKind::Creature},
+	                                           {.kind = TempleMapMarkerKind::Challenge}}
+	           : std::vector<TempleMapMarker> {};
+	const auto& markers = warmUp ? warmUpMarkers : temple.GetMapMarkers();
 	if (markers.empty())
 	{
 		return;
 	}
 	const auto origin = temple.GetPosition();
+	const float size = warmUp ? 0.0f : 1.0f;
 
 	// First a glow under each marker, the room's light glow drawn over everything: 1.3 across, a tenth above the marker
 	const auto& textures = Locator::resources::value().GetTextures();
@@ -2037,7 +2104,7 @@ void Renderer::DrawTempleMapMarkers(const DrawSceneDesc& desc) const
 		for (const auto& marker : markers)
 		{
 			const auto glow = marker.glow.value_or(marker.position + glm::vec3(0.0f, 0.1f, 0.0f));
-			const auto model = glm::scale(glm::translate(glm::mat4(1.0f), origin + glow), glm::vec3(k_GlowSize));
+			const auto model = glm::scale(glm::translate(glm::mat4(1.0f), origin + glow), glm::vec3(k_GlowSize * size));
 			bgfx::setTransform(glm::value_ptr(model));
 			spriteShader->SetUniformValue("u_sampleRect", glm::value_ptr(u_sampleRect));
 			spriteShader->SetUniformValue("u_spriteParams", glm::value_ptr(u_spriteParams));
@@ -2069,7 +2136,7 @@ void Renderer::DrawTempleMapMarkers(const DrawSceneDesc& desc) const
 		}
 		// The game puts the markers in the temple's light
 		const auto model = glm::translate(glm::mat4(1.0f), origin + marker.position) * turn *
-		                   glm::scale(glm::mat4(1.0f), glm::vec3(k_MarkerScale));
+		                   glm::scale(glm::mat4(1.0f), glm::vec3(k_MarkerScale * size));
 		L3DMeshSubmitDesc submitDesc = {};
 		submitDesc.viewId = desc.viewId;
 		submitDesc.program = _shaderManager->GetShader("Object");
@@ -2647,10 +2714,6 @@ void Clean(DrawEncoder& to)
 {
 	to.encoder->discard(BGFX_DISCARD_ALL);
 	to.stages.Clear();
-	if (to.tally != nullptr)
-	{
-		to.tally->DiscardBindings();
-	}
 }
 } // namespace
 
@@ -2694,10 +2757,6 @@ void Renderer::EncodeInOrder(size_t count, const EncodeDraw& draw) const
 	const size_t runs = std::min(count, lanes * k_RunsPerLane);
 	const uint32_t firstOrder = ++_submitOrder;
 	_submitOrder = firstOrder + static_cast<uint32_t>(runs);
-	if (main.tally != nullptr && _runTallies.size() < runs)
-	{
-		_runTallies.resize(runs);
-	}
 	const auto runRange = [count, runs](size_t run) { return std::pair {count * run / runs, count * (run + 1) / runs}; };
 	const auto encodeRun = [&](size_t run, DrawEncoder& to) {
 		to.encoder->setSubmitOrder(firstOrder + static_cast<uint32_t>(run));
@@ -2709,7 +2768,7 @@ void Renderer::EncodeInOrder(size_t count, const EncodeDraw& draw) const
 		}
 	};
 	const auto encodeRunOn = [&](size_t run, bgfx::Encoder* encoder) {
-		DrawEncoder to {.encoder = encoder, .tally = main.tally != nullptr ? &_runTallies[run] : nullptr};
+		DrawEncoder to {.encoder = encoder};
 		encodeRun(run, to);
 	};
 
@@ -2757,13 +2816,6 @@ void Renderer::EncodeInOrder(size_t count, const EncodeDraw& draw) const
 	}
 	main.encoder->setSubmitOrder(_submitOrder);
 	Clean(main);
-	if (main.tally != nullptr)
-	{
-		for (size_t run = 1; run < runs; ++run)
-		{
-			main.tally->Append(_runTallies[run]);
-		}
-	}
 }
 
 void Renderer::PaintLandFootprints(const DrawSceneDesc& drawDesc) const
@@ -3114,20 +3166,20 @@ void Renderer::DrawMists(const DrawSceneDesc& desc) const
 	};
 
 	desc.entities.Each<const Mist, const ecs::components::Transform>(
-	    [&](entt::entity entity, const Mist& mist, const ecs::components::Transform& transform) {
-		    auto colour = mist.colour;
-		    if (desc.entities.AnyOf<ecs::components::Cloud>(entity))
-		    {
-			    if (!cloudsShown)
-			    {
-				    return;
-			    }
-			    // How far the cloud has faded at the track's ends, times the sky's own alpha, in whole numbers
-			    const auto cloudAlpha = ((mist.colour >> 24u) * (cloudColour >> 24u)) / 255u;
-			    colour = (cloudAlpha << 24u) | (cloudColour & 0xFFFFFFu);
-		    }
-		    drawMist(mist, transform.position, colour, nullptr);
+	    [&](const Mist& mist, const ecs::components::Transform& transform) {
+		    drawMist(mist, transform.position, mist.colour, nullptr);
 	    });
+	// The sky's clouds are things of the drawn registry
+	if (cloudsShown && Locator::drawnRegistry::has_value())
+	{
+		std::as_const(Locator::drawnRegistry::value())
+		    .Each<const ecs::components::Cloud, const Mist, const ecs::components::Transform>(
+		        [&](const ecs::components::Cloud& /*unused*/, const Mist& mist, const ecs::components::Transform& transform) {
+			        // How far the cloud has faded at the track's ends, times the sky's own alpha, in whole numbers
+			        const auto cloudAlpha = ((mist.colour >> 24u) * (cloudColour >> 24u)) / 255u;
+			        drawMist(mist, transform.position, (cloudAlpha << 24u) | (cloudColour & 0xFFFFFFu), nullptr);
+		        });
+	}
 	// A storm's cloud takes the land's colour, darkened by the storm's shade
 	if (Locator::cloudSystem::has_value())
 	{
@@ -3516,7 +3568,9 @@ void Renderer::DrawInfluenceBorder(const DrawSceneDesc& desc) const
 	static constexpr auto k_TextureId = entt::hashed_string("raw/burn");
 	static constexpr auto k_AlphaTextureId = entt::hashed_string("raw/burna");
 	const auto& textures = Locator::resources::value().GetTextures();
-	if (!alpha.has_value() || !textures.Contains(k_TextureId.value()) || !textures.Contains(k_AlphaTextureId.value()))
+	// The border shows only from high over the land, or on the temple's map. Thus a warm-up draws it at all heights.
+	if ((!alpha.has_value() && !_warmingUp) || !textures.Contains(k_TextureId.value()) ||
+	    !textures.Contains(k_AlphaTextureId.value()))
 	{
 		return;
 	}
@@ -3535,6 +3589,24 @@ void Renderer::DrawInfluenceBorder(const DrawSceneDesc& desc) const
 	    .add(bgfx::Attrib::Color0, 4, bgfx::AttribType::Uint8, true)
 	    .end();
 	const auto* program = _shaderManager->GetShader("WorldTextured");
+	// A warm-up draws one triangle of no size, with the border's textures and states
+	if (_warmingUp)
+	{
+		constexpr uint32_t k_Corners = 3;
+		if (bgfx::getAvailTransientVertexBuffer(k_Corners, layout) < k_Corners)
+		{
+			return;
+		}
+		bgfx::TransientVertexBuffer vertexBuffer;
+		bgfx::allocTransientVertexBuffer(&vertexBuffer, k_Corners, layout);
+		std::ranges::fill(std::span(reinterpret_cast<Vertex*>(vertexBuffer.data), k_Corners), Vertex {});
+		program->SetTextureSampler("s_diffuse", 0, *textures.Handle(k_TextureId));
+		program->SetTextureSampler("s_alpha", 1, *textures.Handle(k_AlphaTextureId));
+		bgfx::setVertexBuffer(0, &vertexBuffer);
+		bgfx::setState(BGFX_STATE_WRITE_RGB | BGFX_STATE_DEPTH_TEST_GREATER | BGFX_STATE_BLEND_ALPHA);
+		program->Submit(static_cast<bgfx::ViewId>(desc.viewId));
+		return;
+	}
 	for (const auto& circle : influenceSystem.GetCircles())
 	{
 		if (!influenceSystem.IsBorderShown(circle.player))
@@ -3557,7 +3629,7 @@ void Renderer::DrawInfluenceBorder(const DrawSceneDesc& desc) const
 		const auto indices = std::span(reinterpret_cast<uint16_t*>(indexBuffer.data), indexCount);
 		// The player's colour; only the middle row shows, the ground and top fading out to it, and not where the
 		// circle is inside another of the player's. A hidden closing column fades to white, as the game's does.
-		const auto rgb = influence::k_PlayerColours.at(static_cast<size_t>(circle.player) & 7u);
+		const auto rgb = player_colour::FromTable(influence::k_PlayerColours, circle.player);
 		const auto abgr = ((rgb & 0xFFu) << 16u) | (rgb & 0xFF00u) | ((rgb >> 16u) & 0xFFu);
 		const auto lastColumn = circle.Columns() - 1;
 		for (size_t i = 0; i < vertices.size(); ++i)
@@ -4155,7 +4227,12 @@ void Renderer::DrawSunGlare(const Camera& camera) const
 	const auto resolution =
 	    Locator::windowing::has_value() ? static_cast<glm::vec2>(Locator::windowing::value().GetSize()) : glm::vec2(0.0f);
 	const auto toClip = camera.GetViewProjectionMatrix();
-	// A warm-up does not look at the samples: it asks nothing of the drawing, as the next frames read the answers
+	// A warm-up does not look at the samples: it asks nothing of the drawing, as the next frames read the answers. It
+	// draws one square of no size with no query, as a sample draws its square.
+	if (_warmingUp && asksDrawing)
+	{
+		AskGlareSampleDrawn(camera, BGFX_INVALID_HANDLE, glm::vec2(0.0f), glm::vec2(0.0f), sun::GlareHidingDepth(near));
+	}
 	for (size_t i = 0; i < samples.size() && !_warmingUp; ++i)
 	{
 		bool isHidden = Locator::pickingSystem::has_value() &&
@@ -4379,7 +4456,7 @@ void Renderer::DrawLandLuminosityPass(const DrawSceneDesc& drawDesc) const
 	    .fullLightGreen =
 	        _landLightTable ? static_cast<uint8_t>((_landLightTable->GetTexels().back() >> 8u) & 0xFFu) : uint8_t {0xFF},
 	    .hand = std::nullopt,
-	    .scriptHour = Locator::skySystem::value().GetClock().GetScriptTime(),
+	    .scriptHour = Locator::skyClockSystem::value().GetClock().GetScriptTime(),
 	    .particleStamps = {},
 	    .flashes = 0,
 	};
@@ -4469,18 +4546,18 @@ const Texture2D& Renderer::GetLandColour() const
 	return Locator::terrainSystem::value().GetCellColourMap();
 }
 
-void Renderer::UploadCreatureSkins(const DrawSceneDesc& drawDesc) const
+void Renderer::UploadCreatureSkins(const ecs::Registry& entities, std::unordered_map<entt::entity, CreatureSkins>& skins) const
 {
 	std::vector<entt::entity> seen;
-	drawDesc.entities.Each<const ecs::components::CreatureSkin>([&](entt::entity entity,
-	                                                                const ecs::components::CreatureSkin& skin) {
+	entities.Each<const ecs::components::CreatureSkin>([&](entt::entity entity, const ecs::components::CreatureSkin& skin) {
 		if (skin.skins.empty())
 		{
 			return;
 		}
 		seen.push_back(entity);
-		auto& entry = _creatureSkins[entity];
-		if (entry.revision == skin.revision && entry.textures.size() == skin.skins.size())
+		auto& entry = skins[entity];
+		const painted_skin::Stamp stamp {.registryResets = entities.GetResets(), .revision = skin.revision};
+		if (!painted_skin::NeedsUpload(entry.stamp, stamp) && entry.textures.size() == skin.skins.size())
 		{
 			return;
 		}
@@ -4510,11 +4587,11 @@ void Renderer::UploadCreatureSkins(const DrawSceneDesc& drawDesc) const
 			texture->Update(painted.texels.data(), static_cast<uint32_t>(painted.texels.size() * sizeof(painted.texels[0])));
 			entry.drawn.emplace_back(painted.id, texture.get());
 		}
-		entry.revision = skin.revision;
+		entry.stamp = stamp;
 	});
 	// The skins of creatures no longer about go, looked up sorted rather than one by one through every creature's
 	std::ranges::sort(seen);
-	std::erase_if(_creatureSkins, [this, &seen](auto& entry) {
+	std::erase_if(skins, [this, &seen](auto& entry) {
 		if (std::ranges::binary_search(seen, entry.first))
 		{
 			return false;
@@ -4699,7 +4776,9 @@ void Renderer::UploadHandSkins() const
 		_handSkins.clear();
 		return;
 	}
-	if (_handSkinRevision == morph->revision && _handSkins.size() == morph->skins.size())
+	const painted_skin::Stamp stamp {.registryResets = Locator::entitiesRegistry::value().GetResets(),
+	                                 .revision = morph->revision};
+	if (!painted_skin::NeedsUpload(_handSkinStamp, stamp) && _handSkins.size() == morph->skins.size())
 	{
 		return;
 	}
@@ -4718,7 +4797,7 @@ void Renderer::UploadHandSkins() const
 		texture->Update(skin.texels.data(), static_cast<uint32_t>(skin.texels.size() * sizeof(skin.texels[0])));
 		_handSkins.emplace_back(skin.id, texture.get());
 	}
-	_handSkinRevision = morph->revision;
+	_handSkinStamp = stamp;
 }
 
 std::optional<RendererInterface::L3DMeshSubmitDesc::MorphTargets> Renderer::HandMorphTargets() const
@@ -4754,8 +4833,11 @@ void Renderer::DrawSkyDomePass(const DrawSceneDesc& drawDesc) const
 	}
 	const auto* dome =
 	    Locator::entitiesRegistry::value().TryGet<const ecs::components::SkyDome>(Locator::skySystem::value().GetDome());
-	// A warm-up makes the target and draws a band of no rows when the dome has none this frame: it changes no texel
-	if (dome == nullptr || (dome->frameRows.Get().empty() && !_warmingUp))
+	const bool lowResolution = Locator::config::value().detail.lowResTextures;
+	// A warm-up makes the target and draws a band of no rows when the dome has none this frame: it changes no texel. The
+	// low resolution dome is made once and stays.
+	const bool lowDomeMade = lowResolution && _skyDomeFrameBuffer && _skyDomeRows == sky_dome::k_LowRows;
+	if (dome == nullptr || (!lowResolution && dome->frameRows.Get().empty() && !_warmingUp) || (lowDomeMade && !_warmingUp))
 	{
 		return;
 	}
@@ -4765,19 +4847,35 @@ void Renderer::DrawSkyDomePass(const DrawSceneDesc& drawDesc) const
 		return;
 	}
 	constexpr uint16_t k_Alignments = 3;
-	constexpr glm::u16vec2 k_Size {sky_dome::k_Rows, sky_dome::k_Rows * k_Alignments};
-	if (!_skyDomeFrameBuffer)
+	const uint16_t domeRows = lowResolution ? sky_dome::k_LowRows : sky_dome::k_Rows;
+	const glm::u16vec2 size {domeRows, static_cast<uint16_t>(domeRows * k_Alignments)};
+	if (!_skyDomeFrameBuffer || _skyDomeRows != domeRows)
 	{
-		_skyDomeFrameBuffer = std::make_unique<FrameBuffer>("SkyDome", k_Size.x, k_Size.y, graphics::TextureFormat::RGBA8,
+		_skyDomeFrameBuffer = std::make_unique<FrameBuffer>("SkyDome", size.x, size.y, graphics::TextureFormat::RGBA8,
 		                                                    std::nullopt, 1, Wrapping::ClampEdge);
+		_skyDomeRows = domeRows;
 	}
-	const auto viewId = SetUpLandView(RenderPass::SkyDome, *_skyDomeFrameBuffer, k_Size);
+	const auto viewId = SetUpLandView(RenderPass::SkyDome, *_skyDomeFrameBuffer, size);
 	const auto& program = *_shaderManager->GetShader("SkyDome");
-	constexpr auto k_Rows = static_cast<float>(sky_dome::k_Rows);
+	const auto rowsAcross = static_cast<float>(domeRows);
+	if (lowResolution)
+	{
+		// Each alignment's day picture, every second texel, never blended for the time of day
+		for (uint16_t alignment = 0; alignment < k_Alignments; ++alignment)
+		{
+			const glm::vec4 u_skyDome {alignment * 3, sky_dome::k_LowTime, sky_dome::k_LowTime, -1.0f};
+			program.SetTextureSampler("s_diffuse", 0, *pictures);
+			program.SetUniformValue("u_skyDome", &u_skyDome);
+			const auto top = static_cast<float>(alignment) * rowsAcross;
+			SubmitLandQuad(viewId, program, {0.0f, top}, {rowsAcross, top + rowsAcross}, {0.0f, 0.0f}, {1.0f, 1.0f},
+			               BGFX_STATE_WRITE_RGB);
+		}
+		return;
+	}
 	if (dome->frameRows.Get().empty())
 	{
 		program.SetTextureSampler("s_diffuse", 0, *pictures);
-		SubmitLandQuad(viewId, program, {0.0f, 0.0f}, {k_Rows, 0.0f}, {0.0f, 0.0f}, {1.0f, 0.0f}, BGFX_STATE_WRITE_RGB);
+		SubmitLandQuad(viewId, program, {0.0f, 0.0f}, {rowsAcross, 0.0f}, {0.0f, 0.0f}, {1.0f, 0.0f}, BGFX_STATE_WRITE_RGB);
 	}
 	for (const auto& rows : dome->frameRows.Get())
 	{
@@ -4790,9 +4888,9 @@ void Renderer::DrawSkyDomePass(const DrawSceneDesc& drawDesc) const
 			const glm::vec4 u_skyDome {alignment * 3, times.lower, times.upper, times.weight};
 			program.SetTextureSampler("s_diffuse", 0, *pictures);
 			program.SetUniformValue("u_skyDome", &u_skyDome);
-			const auto top = static_cast<float>(alignment) * k_Rows;
-			SubmitLandQuad(viewId, program, {0.0f, top + first}, {k_Rows, top + last}, {0.0f, first / k_Rows},
-			               {1.0f, last / k_Rows}, BGFX_STATE_WRITE_RGB);
+			const auto top = static_cast<float>(alignment) * rowsAcross;
+			SubmitLandQuad(viewId, program, {0.0f, top + first}, {rowsAcross, top + last}, {0.0f, first / rowsAcross},
+			               {1.0f, last / rowsAcross}, BGFX_STATE_WRITE_RGB);
 		}
 	}
 }
@@ -5110,7 +5208,8 @@ TextureHandle Renderer::UpdateLandLight() const
 		// The land's light as the sky worked it out for this frame: the clouds over the camera darken the land, and so
 		// does a flash of lightning
 		const auto [skyType, alignment, overcast, flash] = dome->landLight;
-		_landLightTable->Build(*palettes.Handle(LandLightPalette::k_Id.value()), skyType, alignment, overcast, flash);
+		_landLightTable->Build(*palettes.Handle(LandLightPalette::k_Id.value()), skyType, alignment, overcast, flash,
+		                       FrameRampDivisor());
 		const auto& haze = _landLightTable->GetHaze();
 		const auto& detail = Locator::config::value().detail;
 		// The lower detail levels draw no haze at all
@@ -5135,7 +5234,7 @@ glm::vec4 Renderer::GetModelLight() const
 {
 	// By day, or with no hand to carry it, the sun
 	auto light = model_light::k_Sun;
-	if (Locator::handSystem::has_value() && Locator::skySystem::has_value() && Locator::camera::has_value())
+	if (Locator::handSystem::has_value() && Locator::skyClockSystem::has_value() && Locator::camera::has_value())
 	{
 		const auto handEntity =
 		    Locator::handSystem::value().GetOwnHands()[static_cast<size_t>(ecs::systems::HandSystemInterface::Side::Left)];
@@ -5148,7 +5247,7 @@ glm::vec4 Renderer::GetModelLight() const
 			        : 0.0f;
 			const bool inTemple = Locator::temple::has_value() && Locator::temple::value().Active();
 			light = model_light::FrameLight(transform->position, ground, Locator::camera::value().GetOrigin(),
-			                                Locator::skySystem::value().GetCurrentSkyType(),
+			                                Locator::skyClockSystem::value().GetCurrentSkyType(),
 			                                inTemple ? std::optional(Locator::temple::value().GetPosition()) : std::nullopt);
 		}
 	}
@@ -5221,7 +5320,23 @@ void Renderer::DrawDestructionGhosts(const DrawSceneDesc& desc) const
 	{
 		return;
 	}
-	std::ranges::for_each(Locator::explosionSystem::value().Ghosts(), [&](const ecs::components::DestructionGhost& ghost) {
+	// A warm-up draws a ghost of each building model that is loaded, at no size. Thus the first building that goes makes
+	// no new states of the graphics card, also when the building comes after the load.
+	std::vector<ecs::components::DestructionGhost> warmUpGhosts;
+	if (_warmingUp && Locator::infoConstants::has_value())
+	{
+		for (const auto& info : Locator::infoConstants::value().abode)
+		{
+			const auto id = resources::HashIdentifier(info.meshId);
+			if (meshes.Contains(id) && std::ranges::none_of(warmUpGhosts, [id](const auto& ghost) { return ghost.mesh == id; }))
+			{
+				warmUpGhosts.push_back({.mesh = id, .model = glm::mat4(0.0f)});
+			}
+		}
+	}
+	const auto ghosts = _warmingUp ? std::span<const ecs::components::DestructionGhost>(warmUpGhosts)
+	                               : Locator::explosionSystem::value().Ghosts();
+	std::ranges::for_each(ghosts, [&](const ecs::components::DestructionGhost& ghost) {
 		if (!meshes.Contains(ghost.mesh))
 		{
 			return;
@@ -5456,7 +5571,7 @@ void Renderer::DrawGroundShadowPass(const DrawSceneDesc& drawDesc) const
 	{
 		const auto& land = Locator::terrainSystem::value();
 		// The hand's, cast from the sun and laid on the ground beneath it, with what it holds
-		if (drawDesc.drawHand && Locator::handSystem::has_value() && Locator::skySystem::has_value())
+		if (drawDesc.drawHand && Locator::handSystem::has_value() && Locator::skyClockSystem::has_value())
 		{
 			const auto handEntity =
 			    Locator::handSystem::value().GetOwnHands()[static_cast<size_t>(ecs::systems::HandSystemInterface::Side::Left)];
@@ -5471,7 +5586,7 @@ void Renderer::DrawGroundShadowPass(const DrawSceneDesc& drawDesc) const
 				const auto ground = land.GetHeightAt(glm::vec2(transform->position.x, transform->position.z));
 				const auto radius =
 				    openblack::graphics::mesh_detail::HalfDiagonal(handMesh->GetBoundingBox().Size()) * scaleOf(model);
-				const auto& sky = Locator::skySystem::value();
+				const auto& sky = Locator::skyClockSystem::value();
 				const auto fade =
 				    GroundShadow::Fade(glm::distance(camera, glm::vec3(transform->position.x, ground, transform->position.z)),
 				                       radius) *
@@ -5604,10 +5719,12 @@ void Renderer::DrawGroundShadowPass(const DrawSceneDesc& drawDesc) const
 			{
 				return;
 			}
-			// The body in the pose of the clip it plays
+			// The body in the pose of the clip it plays. A thing with no entity of the land, as the boat of the film, rests.
 			const auto& rest = mesh->GetBoneMatrices();
 			std::span<const glm::mat4> pose = rest;
-			if (const auto* villagerPose = drawDesc.entities.TryGet<const ecs::components::VillagerPose>(draw.entity))
+			if (const auto* villagerPose = draw.entity != entt::null
+			                                   ? drawDesc.entities.TryGet<const ecs::components::VillagerPose>(draw.entity)
+			                                   : nullptr)
 			{
 				if (!rest.empty() && villagerPose->clipBones.size() == rest.size())
 				{
@@ -5994,6 +6111,7 @@ void Renderer::UpdateLandDetail(const DrawSceneDesc& drawDesc) const
 
 bool Renderer::WarmUpScene(const DrawSceneDesc& drawDesc, uint32_t part) const noexcept
 {
+	MainThreadQueue::CheckDirect(MainThreadApi::Renderer, "Renderer::WarmUpScene");
 	// The draws into the window keep to one pixel. The renderer makes a pipeline for each draw that has pixels.
 	for (const auto view : warm_up::k_WindowSceneViews)
 	{
@@ -6032,11 +6150,22 @@ bool Renderer::WarmUpScene(const DrawSceneDesc& drawDesc, uint32_t part) const n
 
 void Renderer::DrawScene(const DrawSceneDesc& drawDesc) const noexcept
 {
+	MainThreadQueue::CheckDirect(MainThreadApi::Renderer, "Renderer::DrawScene");
 	SelectDrawnCreatures(drawDesc);
 	// A warm-up gives no creature a skin texture: each creature gets them in its first frame
 	if (!_warmingUp)
 	{
-		UploadCreatureSkins(drawDesc);
+		UploadCreatureSkins(drawDesc.entities, _creatureSkins);
+		// The copy of the creature in the temple's creature room has a skin of its own
+		if (Locator::temple::has_value())
+		{
+			UploadCreatureSkins(Locator::temple::value().GetRooms(), _roomCreatureSkins);
+		}
+		// The creature of the tattoo menu is a thing of the drawn registry
+		if (Locator::drawnRegistry::has_value())
+		{
+			UploadCreatureSkins(Locator::drawnRegistry::value(), _drawnCreatureSkins);
+		}
 	}
 	UploadHandSkins();
 	UploadAnimalBones(drawDesc);
@@ -6065,8 +6194,7 @@ void Renderer::DrawScene(const DrawSceneDesc& drawDesc) const noexcept
 		const bool showsReflection = drawDesc.drawEntities && std::ranges::any_of(instancedDrawDescs, [](const auto& entry) {
 			                             return entry.second.showsReflection;
 		                             });
-		// Left as it was last drawn while frames come too near Vulkan's descriptor sets
-		if ((drawDesc.drawWater || showsReflection) && _reflectionSkips == 0)
+		if (drawDesc.drawWater || showsReflection)
 		{
 			DrawSceneDesc drawPassDesc = drawDesc;
 
@@ -6131,9 +6259,7 @@ void Renderer::DrawPass(const DrawSceneDesc& desc) const
 	// program, would otherwise land after the hand, whose faded wrist writes depth, and leave a hole in the water
 	// where the wrist should show it through.
 	const bool inTemple = Locator::temple::has_value() && Locator::temple::value().Active();
-	// So is a view whose sorted draws came too near Vulkan's descriptor sets of late
-	const bool inOrder = inTemple || _inOrderViews.at(static_cast<size_t>(desc.viewId)) > 0;
-	_shaderManager->SetViewOrder(desc.viewId, inOrder ? ViewOrder::Sequential : ViewOrder::ByProgram);
+	_shaderManager->SetViewOrder(desc.viewId, inTemple ? ViewOrder::Sequential : ViewOrder::ByProgram);
 	// Outside the temple, what blends in the world is drawn after the rest of the scene in a pass of its own, all of it
 	// together and the farthest first, as the game sorts it
 	const auto translucentViewId = TranslucentView(desc.viewId);
@@ -6218,7 +6344,7 @@ void Renderer::DrawPass(const DrawSceneDesc& desc) const
 	const auto* objectShaderLightmapInstanced = _shaderManager->GetShader("ObjectLightmapInstanced");
 	const auto* objectShaderReflectiveLightmapInstanced = _shaderManager->GetShader("ObjectReflectiveLightmapInstanced");
 
-	const auto skyType = Locator::skySystem::value().GetCurrentSkyType();
+	const auto skyType = Locator::skyClockSystem::value().GetCurrentSkyType();
 
 	{
 		auto section = profiler.BeginScoped(desc.viewId == RenderPass::Reflection ? Profiler::Stage::ReflectionDrawSky
@@ -6228,7 +6354,8 @@ void Renderer::DrawPass(const DrawSceneDesc& desc) const
 			const auto modelMatrix = sky_dome::Placement();
 			// The sky's alignment from 0, evil, to 2, good, mixes two of the alignments' domes
 			const auto alignments = sky_dome::AlignmentPair(Locator::alignmentSystem::value().GetSkyAlignment() + 1.0f);
-			const glm::vec4 u_skyAlignment {alignments.lower, alignments.upper, alignments.weight, 0.0f};
+			const glm::vec4 u_skyAlignment {alignments.lower, alignments.upper, alignments.weight,
+			                                static_cast<float>(_skyDomeRows)};
 
 			skyShader->SetTextureSampler("s_diffuse", 0, _skyDomeFrameBuffer->GetColorAttachment());
 			skyShader->SetUniformValue("u_skyAlignment", &u_skyAlignment);
@@ -6368,6 +6495,7 @@ void Renderer::DrawPass(const DrawSceneDesc& desc) const
 			// in that order in the land's own pass and sorted by their distance in the reflection's. The nearest block
 			// is submitted first with all of these, so they reach every block after it; the textures stay bound from
 			// one block to the next.
+			const auto landTexels = LandTexelsUniform(island.GetBlockTextureSide());
 			const auto setTerrainUniforms = [&]() {
 				terrainShader->SetTextureSampler("s0_blockTextures", 0, island.GetBlockTextures());
 				terrainShader->SetTextureSampler("s9_landLuminosity", 9, GetLandLuminosity());
@@ -6389,6 +6517,7 @@ void Renderer::DrawPass(const DrawSceneDesc& desc) const
 				terrainShader->SetUniformValue("u_hazeColour", &_haze[1]);
 				terrainShader->SetUniformValue("u_skyAndBump", &u_skyAndBump);
 				terrainShader->SetUniformValue("u_islandExtent", &islandExtent);
+				terrainShader->SetUniformValue("u_landTexels", &landTexels);
 				// The moving shadows fall on the land, not on its reflection
 				SetGroundShadowUniforms(*terrainShader, desc.viewId == RenderPass::Main);
 				setTerrainSnow();
@@ -6479,19 +6608,24 @@ void Renderer::DrawPass(const DrawSceneDesc& desc) const
 			};
 			if (!blocks.empty())
 			{
-				// The land's pass keeps the order the blocks come in, so they come the nearest first
-				std::vector<size_t> order(blocks.size());
-				std::iota(order.begin(), order.end(), size_t {0});
-				std::ranges::stable_sort(order, {}, [&](size_t index) { return blockDepth(blocks[index]); });
-				setTerrainUniforms();
 				// Only the blocks in view of the scene's own camera are drawn, also when they are mirrored
 				const bool culled = desc.viewId == RenderPass::Main || desc.viewId == RenderPass::Reflection;
-				for (const auto index : order)
+				// The land's pass keeps the order the blocks come in, so they come the nearest first. Each block's depth is
+				// found one time, and only the blocks that are drawn are put in order.
+				std::vector<std::pair<decltype(blockDepth(blocks.front())), size_t>> order;
+				order.reserve(blocks.size());
+				for (size_t index = 0; index < blocks.size(); ++index)
 				{
 					if (!culled || index >= _landDetail.inView.size() || _landDetail.inView[index])
 					{
-						submitBlock(index);
+						order.emplace_back(blockDepth(blocks[index]), index);
 					}
+				}
+				std::ranges::stable_sort(order, {}, [](const auto& entry) { return entry.first; });
+				setTerrainUniforms();
+				for (const auto& entry : order)
+				{
+					submitBlock(entry.second);
 				}
 			}
 			_shaderManager->DiscardBindings();
@@ -6799,19 +6933,69 @@ void Renderer::DrawPass(const DrawSceneDesc& desc) const
 					                                          inSegment(segment, [&] { withoutHeld(first, count, draw); });
 				                                          });
 			};
-			// A model whose parts differ by detail is drawn one instance at a time, each with the parts of its own
+			// The view of this pass, as the pass sets it. An instance out of it puts no pixel on the screen, so the pass
+			// does not draw it. A warm-up draws all instances, so that each draw makes its pipeline.
+			const auto seenBy = view_frustum::FromViewProjection(desc.camera->GetProjectionMatrix() *
+			                                                     desc.camera->GetViewMatrix(Camera::Interpolation::Current));
+			const auto instanceSeen = [&](const L3DMesh& mesh, const RenderContext::InstancedDrawDesc& placers,
+			                              uint32_t instance) {
+				// The bones of a model can move its parts out of its box, and so can the offsets of its submeshes
+				if (_warmingUp || mesh.IsBoned() || placers.bonePalette || placers.perEntity ||
+				    !placers.subMeshOffsets.empty() || instance >= renderCtx.instanceUniforms.size())
+				{
+					return true;
+				}
+				const auto& model = renderCtx.instanceUniforms[instance].model;
+				const auto& box = mesh.GetBoundingBox();
+				const bool boxSeen = view_frustum::SeesBox(seenBy, model, box.minima, box.maxima);
+				if (!placers.morphWithTerrain || boxSeen)
+				{
+					return boxSeen;
+				}
+				// A model that goes with the land moves its points along its up, by no more than the highest land under
+				// its box. The test reads the land only when the highest land that a cell can have puts the box in view.
+				const auto up = view_frustum::LandRiseSweep(model, 1.0f);
+				if (!up.has_value())
+				{
+					return true;
+				}
+				if (!view_frustum::SeesSweptBox(seenBy, model, box.minima, box.maxima, *up * view_frustum::k_HighestLand))
+				{
+					return false;
+				}
+				const auto& land = Locator::terrainSystem::value();
+				const float highestRise =
+				    view_frustum::HighestLandUnder(model, box.minima, box.maxima, [&land](glm::ivec2 corner) {
+					    return land.GetCell(glm::u16vec2(corner)).altitude;
+				    });
+				return view_frustum::SeesSweptBox(seenBy, model, box.minima, box.maxima, *up * highestRise);
+			};
+			// A model whose parts differ by detail is drawn one instance at a time, each with the parts of its own. A
+			// draw of all the other models' instances starts at the first instance in view and stops after the last.
 			const auto drawPlaced = [&](entt::id_type meshId, const RenderContext::InstancedDrawDesc& placers,
-			                            bool useMaterialBlending, const EntityPose* pose = nullptr) {
+			                            bool useMaterialBlending) {
+				const auto& mesh = *meshManager.Handle(meshId);
 				inSegments(placers, [&](uint32_t first, uint32_t count) {
+					const auto seen = [&](uint32_t instance) { return instanceSeen(mesh, placers, instance); };
 					if (!placers.partsByLevel)
 					{
-						drawInstances(meshId, placers, useMaterialBlending, first, count, pose);
+						const auto instances = std::views::iota(first, first + count);
+						const auto start = std::ranges::find_if(instances, seen);
+						if (start == instances.end())
+						{
+							return;
+						}
+						const auto last = *std::ranges::find_if(instances | std::views::reverse, seen);
+						drawInstances(meshId, placers, useMaterialBlending, *start, last + 1 - *start);
 						return;
 					}
 					for (uint32_t instance = first; instance < first + count; ++instance)
 					{
-						submitDesc.detailLevel = renderCtx.instanceLevels.at(instance);
-						drawInstances(meshId, placers, useMaterialBlending, instance, 1, pose);
+						if (seen(instance))
+						{
+							submitDesc.detailLevel = renderCtx.instanceLevels.at(instance);
+							drawInstances(meshId, placers, useMaterialBlending, instance, 1);
+						}
 					}
 					submitDesc.detailLevel = 1;
 				});
@@ -6837,12 +7021,19 @@ void Renderer::DrawPass(const DrawSceneDesc& desc) const
 				}
 				RenderContext::InstancedDrawDesc placers {0, 1, build.morphWithTerrain};
 				placers.instanceAlpha = build.fading;
+				// A model that follows the land is cut and capped where its corners rise to with the land
+				const auto& instances = renderCtx.partialBuildInstances;
+				const auto landPlacement = build.morphWithTerrain && !hidden.has_value() && build.instance < instances.size()
+				                               ? std::optional(instances.at(build.instance).model)
+				                               : std::nullopt;
 				// A part cut at a height is drawn from both sides; a scaffold standing whole, only sunk into the land, is
 				// drawn as the building's own model is
 				const auto drawPart = [&](uint32_t instance, std::optional<float> cut, std::optional<uint32_t> status,
 				                          bool innerWalls) {
 					submitDesc.cutAbove = cut;
-					submitDesc.modelCutHeight = status.has_value() || build.morphWithTerrain ? std::nullopt : build.capHeight;
+					const bool landCut = build.morphWithTerrain && !landPlacement.has_value();
+					submitDesc.modelCutHeight = status.has_value() || landCut ? std::nullopt : build.capHeight;
+					submitDesc.landPlacement = status.has_value() ? std::nullopt : landPlacement;
 					submitDesc.twoSided = cut.has_value();
 					submitDesc.innerWalls = innerWalls;
 					submitDesc.innerWallInset = build.innerWallInset;
@@ -6851,6 +7042,7 @@ void Renderer::DrawPass(const DrawSceneDesc& desc) const
 					              hidden.value_or(renderCtx.partialBuildInstanceBuffer));
 					submitDesc.cutAbove.reset();
 					submitDesc.modelCutHeight.reset();
+					submitDesc.landPlacement.reset();
 					submitDesc.twoSided = false;
 					submitDesc.innerWalls = false;
 					submitDesc.innerWallInset.reset();
@@ -6860,14 +7052,16 @@ void Renderer::DrawPass(const DrawSceneDesc& desc) const
 				{
 					drawPart(build.instance, build.modelCut, std::nullopt, false);
 					drawPart(build.instance, build.modelCut, std::nullopt, true);
-					// Then the cap over the cut walls, joining the outer to the inner
-					// TODO(physics): the game caps a model that follows the land too, the land under each of its corners
-					// moving its cut; openblack caps only the rest
-					if (!build.morphWithTerrain)
+					// Then the cap over the cut walls, joining the outer to the inner. The cap of a model that follows the
+					// land already rises with the land, thus the renderer draws it as the cap of a model that does not.
+					if (!build.morphWithTerrain || landPlacement.has_value())
 					{
+						const bool followsLand = placers.morphWithTerrain;
+						placers.morphWithTerrain = false;
 						submitDesc.cap = true;
 						drawPart(build.instance, build.modelCut, std::nullopt, false);
 						submitDesc.cap = false;
+						placers.morphWithTerrain = followsLand;
 					}
 				}
 				if (build.scaffoldStatus.has_value())
@@ -6925,11 +7119,14 @@ void Renderer::DrawPass(const DrawSceneDesc& desc) const
 				// A copy drawn elsewhere looks as its creature does, in a pose of its own
 				const bool copy = drawn.posedBy != entt::null;
 				const auto poser = copy ? drawn.posedBy : entity;
+				// The copy is a thing of the temple's rooms
+				const auto& posers = copy && Locator::temple::has_value() ? Locator::temple::value().GetRooms() : desc.entities;
 				const auto* mesh = desc.entities.TryGet<const ecs::components::Mesh>(entity);
 				const auto* creature = desc.entities.TryGet<const ecs::components::Creature>(entity);
 				const auto* morph = desc.entities.TryGet<const ecs::components::CreatureMorph>(entity);
-				const auto* animation = desc.entities.TryGet<const ecs::components::CreatureAnimation>(poser);
-				if (mesh == nullptr || !meshManager.Contains(mesh->id))
+				const auto* animation =
+				    posers.Valid(poser) ? posers.TryGet<const ecs::components::CreatureAnimation>(poser) : nullptr;
+				if (mesh == nullptr || !meshManager.Contains(mesh->id) || !posers.Valid(poser))
 				{
 					continue;
 				}
@@ -6953,12 +7150,12 @@ void Renderer::DrawPass(const DrawSceneDesc& desc) const
 					    .blendSeams = Locator::config::value().blendCreatureSeams,
 					};
 					// A copy with a skin of its own, as the Creature Cave's copy has, shows that skin
-					auto skins = copy ? _creatureSkins.find(poser) : _creatureSkins.end();
-					if (skins == _creatureSkins.end())
+					if (const auto own = copy ? _roomCreatureSkins.find(poser) : _roomCreatureSkins.end();
+					    own != _roomCreatureSkins.end())
 					{
-						skins = _creatureSkins.find(entity);
+						targets->skins = own->second.drawn;
 					}
-					if (skins != _creatureSkins.end())
+					else if (const auto skins = _creatureSkins.find(entity); skins != _creatureSkins.end())
 					{
 						targets->skins = skins->second.drawn;
 					}
@@ -6974,7 +7171,7 @@ void Renderer::DrawPass(const DrawSceneDesc& desc) const
 					continue;
 				}
 				// A copy shows none of its creature's frozen or fizzing look, and is lit by a light of its own
-				const auto* spells = desc.entities.TryGet<const ecs::components::CreatureSpells>(poser);
+				const auto* spells = posers.TryGet<const ecs::components::CreatureSpells>(poser);
 				const float fizz = spells != nullptr ? spells->fizz : 0.0f;
 				submitDesc.modelLight = drawn.light;
 				if (desc.viewId == RenderPass::Reflection)
@@ -7025,15 +7222,15 @@ void Renderer::DrawPass(const DrawSceneDesc& desc) const
 				}
 				submitDesc.posedModelLight = false;
 				const float freeze = spells != nullptr ? spells->freeze : 0.0f;
-				if (const auto* eyes = desc.entities.TryGet<const ecs::components::CreatureEyes>(poser); eyes != nullptr)
+				if (const auto* eyes = posers.TryGet<const ecs::components::CreatureEyes>(poser); eyes != nullptr)
 				{
 					DrawCreatureEyes(desc, *eyes, submitDesc, fizz, freeze, eyesSortDepth);
 				}
 				submitDesc.modelLight.reset();
 				// The hair is drawn as it is until the creature has fizzed or frozen a fifth of the way, then not at all
 				// A copy draws the hair of its own, which hangs from its own pose
-				const auto* hair = desc.entities.TryGet<const ecs::components::CreatureHair>(poser);
-				const auto* transform = desc.entities.TryGet<const ecs::components::Transform>(poser);
+				const auto* hair = posers.TryGet<const ecs::components::CreatureHair>(poser);
+				const auto* transform = posers.TryGet<const ecs::components::Transform>(poser);
 				if (creature_fizz_look::HairShown(fizz, freeze) && hair != nullptr && transform != nullptr &&
 				    Locator::creatureHairSystem::value().IsShown())
 				{
@@ -7044,7 +7241,7 @@ void Renderer::DrawPass(const DrawSceneDesc& desc) const
 					                     .position);
 				}
 				// The glows on its body, where its pose put them
-				if (const auto* glows = desc.entities.TryGet<const ecs::components::CreatureHandGlows>(poser);
+				if (const auto* glows = posers.TryGet<const ecs::components::CreatureHandGlows>(poser);
 				    glows != nullptr && transform != nullptr)
 				{
 					DrawCreatureHandGlows(static_cast<uint16_t>(TranslucentView(desc.viewId)), *glows,
@@ -7299,9 +7496,10 @@ void Renderer::DrawPass(const DrawSceneDesc& desc) const
 				});
 			};
 			// The gates and other scenery the scripts open and close, each posed by its own clip: those fading out in the
-			// distance and those that blend by their materials (an opened reward chest) with the blended things
-			const auto drawPosedStill = [&](entt::entity entity, uint32_t instance, bool blended) {
-				const auto* still = desc.entities.TryGet<const ecs::components::AnimatedStaticPose>(entity);
+			// distance and those that blend by their materials (an opened reward chest) with the blended things. `from`
+			// is the registry of the thing: the land's, or the drawn registry.
+			const auto drawPosedStillOf = [&](const ecs::Registry& from, entt::entity entity, uint32_t instance, bool blended) {
+				const auto* still = from.TryGet<const ecs::components::AnimatedStaticPose>(entity);
 				if (still == nullptr)
 				{
 					return;
@@ -7310,7 +7508,7 @@ void Renderer::DrawPass(const DrawSceneDesc& desc) const
 				// The sea mirrors none of the explorers' boat film this way, even one sharing its model with things it
 				// mirrors
 				const bool reflection = desc.viewId == RenderPass::Reflection;
-				if (reflection && desc.entities.AllOf<ecs::components::BoatFilmPart>(entity))
+				if (reflection && from.AllOf<ecs::components::BoatFilmPart>(entity))
 				{
 					return;
 				}
@@ -7337,6 +7535,30 @@ void Renderer::DrawPass(const DrawSceneDesc& desc) const
 				}
 				drawInstances(meshId, *placers, fading ? false : placers->materialBlending, instance, 1, &entityPose);
 				submitDesc.detailLevel = 1;
+			};
+			const auto drawPosedStill = [&](entt::entity entity, uint32_t instance, bool blended) {
+				drawPosedStillOf(desc.entities, entity, instance, blended);
+			};
+			// The posed things that only the frames make, as the worm on the apple barrel, are in the first segment
+			const auto drawDrawnPosedStills = [&](bool blended) {
+				if (!Locator::drawnRegistry::has_value())
+				{
+					return;
+				}
+				const auto& drawn = Locator::drawnRegistry::value();
+				for (const auto& [entity, instance] : renderCtx.drawnEntityDraws)
+				{
+					if (instance >= renderCtx.instanceUniforms.size() || mirroredWithHand(instance))
+					{
+						continue;
+					}
+					if (blended)
+					{
+						submitDesc.sortDepth =
+						    zsort::Depth(glm::vec3(renderCtx.instanceUniforms.at(instance).model[3]), cameraOrigin);
+					}
+					drawPosedStillOf(drawn, entity, instance, blended);
+				}
 			};
 			// The animals of a model drawn at once, in their light: the brightest of the land's, or white
 			for (const auto& [meshId, group] : _animalBoneGroups)
@@ -7366,6 +7588,7 @@ void Renderer::DrawPass(const DrawSceneDesc& desc) const
 				submitDesc.objectLook.reset();
 				submitDesc.boneTexture = nullptr;
 			}
+			drawDrawnPosedStills(false);
 			for (const auto& [entity, instance] : renderCtx.entityDraws)
 			{
 				if (mirroredWithHand(instance))
@@ -7489,7 +7712,7 @@ void Renderer::DrawPass(const DrawSceneDesc& desc) const
 					}
 					for (uint32_t instance = placers.offset; instance < placers.offset + placers.filled; ++instance)
 					{
-						if (mirroredWithHand(instance))
+						if (mirroredWithHand(instance) || !instanceSeen(*meshManager.Handle(meshId), placers, instance))
 						{
 							continue;
 						}
@@ -7512,6 +7735,7 @@ void Renderer::DrawPass(const DrawSceneDesc& desc) const
 						drawPartialBuild(build);
 					}
 				}
+				drawDrawnPosedStills(true);
 				for (const auto& [entity, instance] : renderCtx.entityDraws)
 				{
 					if (instance < renderCtx.instanceUniforms.size() && !mirroredWithHand(instance))
@@ -7554,7 +7778,7 @@ void Renderer::DrawPass(const DrawSceneDesc& desc) const
 				{
 					for (uint32_t instance = placers.offset; instance < placers.offset + placers.filled; ++instance)
 					{
-						if (mirroredWithHand(instance))
+						if (mirroredWithHand(instance) || !instanceSeen(*meshManager.Handle(meshId), placers, instance))
 						{
 							continue;
 						}
@@ -7633,6 +7857,7 @@ void Renderer::DrawPass(const DrawSceneDesc& desc) const
 			DrawTribalPower(desc);
 			DrawLightColumns(desc);
 			DrawScrollBeams(desc);
+			DrawIconPulses(desc);
 			DrawLeashes(desc);
 			DrawWaterRings(desc);
 			DrawRain(desc);
@@ -7953,11 +8178,14 @@ void Renderer::DrawPass(const DrawSceneDesc& desc) const
 				}
 				// The sprites name their textures by their ids in the cache
 				const auto& textures = Locator::resources::value().GetTextures();
+				// The view of this pass. A sprite out of it puts no pixel on the screen, so the pass does not draw it.
+				const auto seenBy = view_frustum::FromViewProjection(
+				    desc.camera->GetProjectionMatrix() * desc.camera->GetViewMatrix(Camera::Interpolation::Current));
 				const auto drawSprites = [this, &spriteShader, &desc, &textures, translucentViewId, cameraOrigin,
-				                          bookmarksShown, leashMarkersShown](const ecs::Registry& from) {
+				                          bookmarksShown, leashMarkersShown, &seenBy](const ecs::Registry& from) {
 					from.Each<const Sprite, const Transform>(
 					    [this, &spriteShader, &desc, &textures, translucentViewId, cameraOrigin, &from, bookmarksShown,
-					     leashMarkersShown](entt::entity entity, const Sprite& sprite, const Transform& transform) {
+					     leashMarkersShown, &seenBy](entt::entity entity, const Sprite& sprite, const Transform& transform) {
 						    if (!bookmarksShown && from.AllOf<CameraBookmark>(entity))
 						    {
 							    return;
@@ -7995,6 +8223,12 @@ void Renderer::DrawPass(const DrawSceneDesc& desc) const
 						    modelMatrix = glm::translate(modelMatrix, placed.position);
 						    modelMatrix *= glm::mat4(placed.rotation);
 						    modelMatrix = glm::scale(modelMatrix, placed.scale);
+						    if (!_warmingUp && !view_frustum::SeesSphere(seenBy, placed.position,
+						                                                 view_frustum::QuadRadius(glm::mat3(modelMatrix)) +
+						                                                     view_frustum::k_BoxMargin))
+						    {
+							    return;
+						    }
 
 						    glm::vec4 u_sampleRect(sprite.uvExtent, sprite.uvMin);
 
@@ -8027,6 +8261,11 @@ void Renderer::DrawPass(const DrawSceneDesc& desc) const
 					drawSprites(Locator::temple::value().GetRooms());
 				}
 				drawSprites(registry);
+				// The things that only the frames make, as the marks over the disciples, have sprites too
+				if (Locator::drawnRegistry::has_value())
+				{
+					drawSprites(Locator::drawnRegistry::value());
+				}
 				DrawTempleLeashes(desc);
 			}
 		}
@@ -8036,6 +8275,7 @@ void Renderer::DrawPass(const DrawSceneDesc& desc) const
 	{
 		DrawAdvisors(desc);
 		DrawGestureHintCollars(desc);
+		DrawGestureHintSeeds(desc);
 	}
 
 	// The sun's glare over everything else in the view
@@ -8071,6 +8311,7 @@ void Renderer::DrawPass(const DrawSceneDesc& desc) const
 
 void Renderer::BakeLandShadows(bool drawVegetation) const noexcept
 {
+	MainThreadQueue::CheckDirect(MainThreadApi::Renderer, "Renderer::BakeLandShadows");
 	// The game bakes the shadows of the buildings, rocks and other things, and of the trees and big forests, into the
 	// land as it paints it. The trees' shadows that move with them are drawn each frame, not baked.
 	const bool movingTrees = drawVegetation && Locator::config::value().dynamicTreeShadows;
@@ -8087,6 +8328,11 @@ uint32_t Renderer::GetPipelinesMade() const noexcept
 	return _bgfxCallback->pipelinesMade.load();
 }
 
+uint32_t Renderer::GetDrawsOfLastFrame() const noexcept
+{
+	return bgfx::getStats()->numDraw;
+}
+
 void Renderer::ReleaseGpuWorkMemory() noexcept
 {
 	// The read of a texture waits until the GPU did all the work before it, and then the backend releases the memory
@@ -8101,9 +8347,11 @@ void Renderer::ReleaseGpuWorkMemory() noexcept
 
 void Renderer::Frame() noexcept
 {
+	MainThreadQueue::CheckDirect(MainThreadApi::Renderer, "Renderer::Frame");
 	// In a warm-up's frame the loading screen's view first clears all of the window as the main view clears it. This is
 	// set after every draw of the frame, as the loading screen sets its view too.
 	const bool warmUp = std::exchange(_warmUpInFrame, false);
+	_landCaps.clear();
 	if (warmUp)
 	{
 		const auto cover = static_cast<bgfx::ViewId>(warm_up::k_CoverView);
@@ -8121,7 +8369,7 @@ void Renderer::Frame() noexcept
 #if defined(__EMSCRIPTEN__)
 	web::PresentFrame();
 #endif
-	// After it, the views are set back, and the frame is not counted for the descriptor sets of the game's frames
+	// After a warm-up frame, set the views back
 	if (warmUp)
 	{
 		for (const auto view : warm_up::k_WindowSceneViews)
@@ -8130,87 +8378,21 @@ void Renderer::Frame() noexcept
 		}
 		bgfx::setViewClear(static_cast<bgfx::ViewId>(warm_up::k_CoverView), BGFX_CLEAR_NONE);
 	}
-	if (const auto sets = _shaderManager->FrameEnded(); sets.has_value() && !warmUp)
-	{
-		WatchDescriptorSets(*sets);
-	}
-	else if (sets.has_value())
-	{
-		SPDLOG_LOGGER_DEBUG(spdlog::get("graphics"), "A warm-up frame took {} Vulkan descriptor sets ({} draws)", sets->sets,
-		                    sets->draws);
-	}
+	_shaderManager->FrameEnded();
 	_offscreenShots->FrameEnded(frame, _bgfxCallback->failures, _bgfxCallback->pictures);
-}
-
-void Renderer::WatchDescriptorSets(const FrameDescriptorSets& sets) noexcept
-{
-	_bgfxCallback->recentDescriptorSets = sets.sets;
-	const auto budget = JudgeDescriptorSets(sets.sets);
-	// The frames in flight share one pool, so a frame over its share passes, but not several. For a while after one,
-	// the scene's views are drawn in the order their draws come where that takes far fewer sets (a run of draws that
-	// leaves some textures bound part way alternates when sorted), and the sea's reflection, the one pass the scene can
-	// do without, is left as it was last drawn if that isn't enough.
-	constexpr uint32_t k_ReliefFrames = 60;
-	const bool relieved =
-	    _reflectionSkips > 0 || std::ranges::any_of(_inOrderViews, [](uint32_t frames) { return frames > 0; });
-	const auto countDown = [](uint32_t& frames) { frames = frames > 0 ? frames - 1 : 0; };
-	countDown(_reflectionSkips);
-	std::ranges::for_each(_inOrderViews, countDown);
-	std::string relief;
-	if (budget == DescriptorBudget::Over)
-	{
-		constexpr std::array k_Reorderable = {static_cast<uint16_t>(RenderPass::Main),
-		                                      static_cast<uint16_t>(RenderPass::Reflection)};
-		const auto plan = PlanDescriptorSetRelief(sets, k_Reorderable);
-		for (const auto view : plan.inOrder)
-		{
-			_inOrderViews.at(view) = k_ReliefFrames;
-			relief += fmt::format("; the {} is drawn in the order it comes", k_RenderPassNames.at(view));
-		}
-		if (plan.skipOptional)
-		{
-			_reflectionSkips = k_ReliefFrames;
-			relief += "; the sea's reflection is skipped";
-		}
-		// A relief starting is said at once, whatever the last warning
-		if (!relieved)
-		{
-			_descriptorSetWarningPause = 0;
-		}
-	}
-
-	if (_descriptorSetWarningPause > 0)
-	{
-		--_descriptorSetWarningPause;
-	}
-	if (budget == DescriptorBudget::Fine || _descriptorSetWarningPause > 0)
-	{
-		return;
-	}
-	constexpr uint32_t k_WarningPauseFrames = 600;
-	_descriptorSetWarningPause = k_WarningPauseFrames;
-	std::string views;
-	for (const auto& view : sets.views)
-	{
-		const auto name = view.view < k_RenderPassNames.size() ? std::string(k_RenderPassNames.at(view.view))
-		                                                       : "view " + std::to_string(view.view);
-		views += fmt::format("{}{}: {} sets ({} in order), {} draws", views.empty() ? "" : "; ", name, view.sets,
-		                     view.setsInOrder, view.draws);
-	}
-	SPDLOG_LOGGER_WARN(spdlog::get("graphics"),
-	                   "A frame took {} of the {} Vulkan descriptor sets a frame has ({} draws){}. By view: {}", sets.sets,
-	                   k_DescriptorSetsPerFrame, sets.draws, relief.empty() ? "" : relief + " for a while", views);
 }
 
 void Renderer::RequestScreenshot(const std::filesystem::path& filepath) noexcept
 {
+	MainThreadQueue::CheckDirect(MainThreadApi::Renderer, "Renderer::RequestScreenshot");
 	const bool minimised = Locator::windowing::has_value() && Locator::windowing::value().IsMinimised();
 	const auto size = Locator::windowing::has_value() ? glm::u16vec2(Locator::windowing::value().GetSize()) : glm::u16vec2(0);
 	// All the renderers of bgfx can copy and read back textures
 	constexpr bool k_CanReadBack = true;
 	// Vulkan releases the window's buffers while the window is minimised. OpenGL on the desktop reads the window's own
 	// pixels, which have no defined value where other windows cover the window. This often occurs in background runs.
-	// The other renderers keep the whole frame in the window's buffers.
+	// In a browser, WebGPU gets a new canvas texture for each frame and releases it after it shows the frame. The other
+	// renderers keep the whole frame in the window's buffers.
 	auto buffers = graphics::WindowBuffers::Kept;
 	switch (bgfx::getRendererType())
 	{
@@ -8219,6 +8401,9 @@ void Renderer::RequestScreenshot(const std::filesystem::path& filepath) noexcept
 		break;
 	case bgfx::RendererType::OpenGL:
 		buffers = graphics::WindowBuffers::UncoveredOnly;
+		break;
+	case bgfx::RendererType::WebGPU:
+		buffers = graphics::WindowBuffers::ReleasedAfterPresent;
 		break;
 	default:
 		break;
@@ -8254,6 +8439,7 @@ std::optional<std::string> Renderer::TakeScreenshotFailure(const std::filesystem
 
 void Renderer::RequestScreenPicture(const std::string& name, graphics::ScreenPicturer picturer) noexcept
 {
+	MainThreadQueue::CheckDirect(MainThreadApi::Renderer, "Renderer::RequestScreenPicture");
 	_bgfxCallback->pictures.Ask(name, std::move(picturer));
 	RequestScreenshot(name);
 }

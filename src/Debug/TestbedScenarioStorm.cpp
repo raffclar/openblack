@@ -13,6 +13,7 @@
 
 #include <vector>
 
+#include "ScriptHeaders/ScriptEnums.h"
 #include "TestbedScenarioRegistry.h"
 
 using namespace openblack;
@@ -20,6 +21,8 @@ using namespace openblack::testbed_scenarios;
 
 namespace
 {
+using Kind = Command::Kind;
+
 /// The storms are cast here, north of the middle, at a circle this wide, and thrown north from a hand to the south
 constexpr glm::vec2 k_StormCentre {0.0f, 60.0f};
 constexpr float k_StormRadius = 60.0f;
@@ -277,5 +280,63 @@ void testbed_scenarios::AddStormScenarios(std::vector<Scenario>& all)
 	                    .shape = "160.00,176.00,10.00,460.00,1.00,1.10",
 	                    .clouds = "0.12,500.00,0.00,0.00,0.00,0.00",
 	                    .weather = "0,0,8,93,-3,39"}},
+	});
+
+	// The black storm cloud of the death of Khazar on the second land, which the script deletes at the end of its film
+	all.push_back({
+	    .id = "sky.script_deletes_storm",
+	    .name = "A script deletes its storm cloud",
+	    .facet = Facet::Sky,
+	    .description = "After one second, CREATE makes a weather thing 60 metres north of the middle. The script lines of "
+	                   "the death of Khazar give it a life of 6000 seconds, a fade of 10 seconds, rain, 20 dark clouds 80 "
+	                   "metres high, sheet lightning and forks. Twenty seconds later, OBJECT_DELETE deletes the weather "
+	                   "thing at once.",
+	    .expected = "A black storm comes in over ten seconds: rain falls under it, its clouds gather and the lightning "
+	                "flashes. When the script deletes the weather thing, the storm ends at once: the rain, the clouds, "
+	                "the lightning and the shadow of the storm go, and the inspector lists no storm.",
+	    .environment = {.dispenserGrid = false},
+	    .framing = {.shot = Shot::Overview, .include = {{-150.0f, -90.0f}, {150.0f, 210.0f}}, .distance = 1.4f},
+	    .commands = {{.kind = Kind::CallNative,
+	                  .delaySeconds = 1.0f,
+	                  .script = "CREATE",
+	                  .scriptArguments = {{.kind = ScriptArgument::Kind::Integer,
+	                                       .number = static_cast<float>(script::ObjectType::WeatherThing)},
+	                                      {.kind = ScriptArgument::Kind::Integer, .number = 0.0f},
+	                                      {.kind = ScriptArgument::Kind::Position, .point = k_StormCentre}}},
+	                 {.kind = Kind::CallNative,
+	                  .delaySeconds = 0.0f,
+	                  .script = "CHANGE_TIME_FADE_PROPERTIES",
+	                  .scriptArguments = {{.kind = ScriptArgument::Kind::Made, .index = 0},
+	                                      {.kind = ScriptArgument::Kind::Number, .number = 6000.0f},
+	                                      {.kind = ScriptArgument::Kind::Number, .number = 10.0f}}},
+	                 {.kind = Kind::CallNative,
+	                  .delaySeconds = 0.0f,
+	                  .script = "CHANGE_WEATHER_PROPERTIES",
+	                  .scriptArguments = {{.kind = ScriptArgument::Kind::Made, .index = 0},
+	                                      {.kind = ScriptArgument::Kind::Number, .number = 25.0f},
+	                                      {.kind = ScriptArgument::Kind::Number, .number = 0.5f},
+	                                      {.kind = ScriptArgument::Kind::Number, .number = 0.0f},
+	                                      {.kind = ScriptArgument::Kind::Number, .number = 0.8f},
+	                                      {.kind = ScriptArgument::Kind::Number, .number = 0.5f}}},
+	                 {.kind = Kind::CallNative,
+	                  .delaySeconds = 0.0f,
+	                  .script = "CHANGE_CLOUD_PROPERTIES",
+	                  .scriptArguments = {{.kind = ScriptArgument::Kind::Made, .index = 0},
+	                                      {.kind = ScriptArgument::Kind::Number, .number = 20.0f},
+	                                      {.kind = ScriptArgument::Kind::Number, .number = 1.0f},
+	                                      {.kind = ScriptArgument::Kind::Number, .number = 80.0f}}},
+	                 {.kind = Kind::CallNative,
+	                  .delaySeconds = 0.0f,
+	                  .script = "CHANGE_LIGHTNING_PROPERTIES",
+	                  .scriptArguments = {{.kind = ScriptArgument::Kind::Made, .index = 0},
+	                                      {.kind = ScriptArgument::Kind::Number, .number = 5.0f},
+	                                      {.kind = ScriptArgument::Kind::Number, .number = 10.0f},
+	                                      {.kind = ScriptArgument::Kind::Number, .number = 2.0f},
+	                                      {.kind = ScriptArgument::Kind::Number, .number = 3.0f}}},
+	                 {.kind = Kind::CallNative,
+	                  .delaySeconds = 20.0f,
+	                  .script = "OBJECT_DELETE",
+	                  .scriptArguments = {{.kind = ScriptArgument::Kind::Made, .index = 0},
+	                                      {.kind = ScriptArgument::Kind::Integer, .number = 0.0f}}}},
 	});
 }

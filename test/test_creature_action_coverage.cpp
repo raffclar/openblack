@@ -41,7 +41,7 @@ constexpr std::array<std::string_view, 4> k_FishActions {
 };
 
 // The actions that the scripts of the game force a creature to do
-constexpr std::array<std::string_view, 27> k_ScriptActions {
+constexpr std::array<std::string_view, 28> k_ScriptActions {
     "LookAtHand",
     "EatAlive",
     "StompAndEat",
@@ -69,6 +69,7 @@ constexpr std::array<std::string_view, 27> k_ScriptActions {
     "Fart",
     "LookButDontApproach",
     "LookForever",
+    "DiePermanently",
 };
 
 // The actions that nothing in the game starts: no desire list, no copy of a deed, no script and no part of the game

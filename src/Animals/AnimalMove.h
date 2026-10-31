@@ -12,6 +12,7 @@
 #include <cstdint>
 
 #include <functional>
+#include <optional>
 
 #include <glm/vec2.hpp>
 
@@ -47,6 +48,10 @@ struct Move
 	MoveStage stage {MoveStage::AtGoal};
 };
 
+/// The stage of a move from the number of its move state in the game's table of the move states: arrived, the last step
+/// or a step straight through. Nothing for another move state.
+[[nodiscard]] std::optional<MoveStage> MoveStageOfGame(uint8_t moveState);
+
 /// A turn towards an angle: the angle it now faces, and how far and which way it turned (0 when facing it already)
 struct Turn
 {
@@ -65,6 +70,14 @@ struct Turn
 [[nodiscard]] bool WithinStep(glm::ivec2 position, glm::ivec2 goal, uint16_t speed);
 /// Whether a walker at a speed is already at a point it is sent to: strictly nearer than one step
 [[nodiscard]] bool AreWeThere(glm::ivec2 position, glm::ivec2 goal, uint16_t speed);
+
+/// The speed that an animal keeps from a number of map units a turn: a negative number gives 0, and the largest speed is
+/// 65535
+[[nodiscard]] uint16_t KeptSpeed(int32_t whole);
+/// The speed that a script gives an animal in metres a turn, changed to map units a turn and kept as KeptSpeed keeps it
+[[nodiscard]] uint16_t SpeedFromScript(float metresPerTurn);
+/// The speed of an animal that a script reads, in metres a turn. A dead animal gives 0
+[[nodiscard]] float SpeedForScript(uint16_t speed, bool dead);
 
 /// A move set up towards a goal: turned towards it, and arrived already if within a step. The turn made is returned too.
 [[nodiscard]] Turn SetUpMove(Move& move, glm::ivec2 goal, uint16_t turnAngle);

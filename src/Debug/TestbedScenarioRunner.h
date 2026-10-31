@@ -14,6 +14,8 @@
 
 #include <deque>
 #include <filesystem>
+#include <functional>
+#include <map>
 #include <memory>
 #include <optional>
 #include <span>
@@ -28,6 +30,7 @@
 
 #include "BenchmarkRecorder.h"
 #include "ECS/Systems/MagicSystemInterface.h"
+#include "TestbedGameStageInterface.h"
 #include "TestbedScenarioRegistry.h"
 
 namespace openblack::testbed_scenarios
@@ -63,6 +66,13 @@ struct BenchmarkSettings
 class Runner
 {
 public:
+	/// The stage is the game on the player's computer. The dedicated server has no stage, and the commands that stage the
+	/// game fail there.
+	explicit Runner(GameStageInterface* stage = nullptr) noexcept
+	    : _stage(stage)
+	{
+	}
+
 	/// Loads the testbed and starts the scenario on it, in place of any other
 	void Start(const Scenario& scenario);
 	/// Stops giving commands and puts back the settings the scenario changed: the body time, fainting, the footprints'
@@ -70,6 +80,20 @@ public:
 	void Stop();
 	/// Once a frame
 	void Update(float seconds);
+	/// Once a frame of a network game: only the camera follows the scenario. The commands come before the turns.
+	void UpdateView() { UpdateCamera(); }
+	/// Before each turn of a network game: the scenario steps on by the time of one turn and gives the commands that are
+	/// due. The first turn after the layout gives no commands (see TurnStepOf).
+	void BeforeTurn();
+	/// Tools: the turn and the place in the scenario of each command, as the runner gives it
+	using GiveObserver = std::function<void(uint32_t turn, size_t command)>;
+	void ObserveGives(GiveObserver observer) { _giveObserver = std::move(observer); }
+	/// Tools: the runner gives the commands of the scenario before the turns at which the computer of a game gave them,
+	/// and not as its own timeline has them. A server that plays the commands of a game thus gives each command of the
+	/// scenario with the game, also a command that waits for what only the computer of the game knows.
+	void FollowGives(std::map<uint32_t, std::vector<size_t>> gives) { _followedGives = std::move(gives); }
+	/// The turn count at which the last scenario was laid out, or none before the first scenario
+	[[nodiscard]] std::optional<uint32_t> GetLayoutTurn() const { return _layoutTurn; }
 
 	[[nodiscard]] bool IsRunning() const { return _running; }
 	/// The scenario running, or last run
@@ -107,6 +131,8 @@ public:
 
 private:
 	void SetUpEnvironment(const Environment& environment);
+	/// The machine's clock gives the scenario's date, or the date it gave before a scenario set one
+	void SetUpDate(const std::optional<RealDate>& date);
 	void PlaceHighlights(const Scenario& scenario, glm::vec2 middle);
 	void PlaceObjects(const Scenario& scenario, glm::vec2 middle);
 	/// Lays the scenario's footpaths and links them to the objects they lead from
@@ -115,6 +141,10 @@ private:
 	void PlaceBirds(const Scenario& scenario, glm::vec2 middle);
 	/// The scenario's town's worship site is put up built and its totem raised to the share
 	static void SetUpWorship(float share);
+	/// The testbed tool forces each action of the computer gods that the scenario gives, at its turn
+	void UpdateComputerActions();
+	/// The thing that a forced action of a computer god gets, or none when the scenario has no such thing
+	[[nodiscard]] entt::entity ComputerActionThingOf(const ComputerActionThing& thing, PlayerNames player) const;
 	/// The first player's statistics and their creature's tallies, as the scenario gives them
 	static void SetUpStatistics(const Scenario& scenario);
 	void PlaceCreatures(const Scenario& scenario, glm::vec2 middle);
@@ -166,6 +196,8 @@ private:
 	[[nodiscard]] std::string CallNative(const Command& command);
 	/// The value that a script gets for an argument: a number, or an object that the scripts' table knows
 	[[nodiscard]] std::optional<lhvm::VMValue> ScriptValueOf(const ScriptArgument& argument);
+	/// The script flock of the scenario's villagers and animals. The first call makes it. None without an object.
+	[[nodiscard]] std::optional<entt::entity> ScriptFlock();
 	[[nodiscard]] std::string StopScript(const Command& command);
 	/// The hand goes over a fireball in flight to take hold of it; what came of that
 	std::string HandTakeFireBall();
@@ -198,6 +230,8 @@ private:
 	[[nodiscard]] static std::optional<glm::ivec2> CaveCreatureOnScreen(glm::vec2 size);
 	/// Moves the mouse on along a sweep, and lets go of it once the scenario's commands are done
 	void UpdatePointer(float seconds);
+	/// Moves the hand that the scenario holds still to the land under the pointer, at the same height above the land
+	void MoveHeldHand(glm::ivec2 pointer);
 	/// Where the cursor and the hand are on the screen, for the log
 	[[nodiscard]] std::string HandOnScreen() const;
 	/// Sets a desire or the stage of growing up, or rewards what the creature last did by the kind of thing it was to
@@ -212,6 +246,10 @@ private:
 	/// The scenario's objects by their place in it, while they are still about
 	[[nodiscard]] std::optional<entt::entity> ObjectAt(size_t index) const;
 	[[nodiscard]] std::optional<entt::entity> GlobeAt(size_t index) const;
+	/// The totem of a scenario's object, a town centre
+	[[nodiscard]] std::optional<entt::entity> TotemAt(size_t index) const;
+	/// Builds the worship site of the town of a town centre at once
+	void BuildWorshipSiteOf(entt::entity centre) const;
 	void Log(std::string line);
 	/// Every miracle's position and the land's height under it, for a scenario that logs them
 	void LogMiracles();
@@ -219,11 +257,25 @@ private:
 	const Scenario* _scenario {nullptr};
 	bool _running {false};
 	float _seconds {0.0f};
+	/// The first value that the last native call gave back, for a later call that uses it
+	std::optional<lhvm::VMValue> _lastNativeResult;
+	/// The turn count at which the scenario was laid out
+	std::optional<uint32_t> _layoutTurn;
+	/// When the made-up ping of the ping line started, in the scenario's seconds; none while it does not show
+	std::optional<float> _demoPingSince;
+	/// The game that the commands stage, or null on the dedicated server
+	GameStageInterface* _stage {nullptr};
+	/// Gives the made-up ping to the game while it shows
+	void UpdateDemoPing() const;
 	/// The debug option's bonus creatures as they were before the scenario took some as unlocked
 	std::optional<creature_swap::Unlocked> _unlockedBefore;
 	std::optional<int32_t> _landNumberBefore;
+	/// The date that the machine's clock was pinned to (none for the wall clock's) before a scenario set the date
+	std::optional<std::optional<int64_t>> _pinnedDateBefore;
 	/// Whether the game was a skirmish before a scenario made it one
 	std::optional<bool> _skirmishBefore;
+	/// Whether the world played as a network game before a scenario made it one
+	std::optional<bool> _networkGameBefore;
 	/// The players that the scenario put in the game, which go when it stops
 	std::vector<entt::entity> _addedPlayers;
 	/// Frames since the hand went over a fireball to take hold of it, none while it isn't
@@ -233,9 +285,22 @@ private:
 	/// When the miracles' positions are next logged, for a scenario that logs them
 	float _nextMiracleLog {0.0f};
 	Timeline _timeline;
+	GiveObserver _giveObserver;
+	std::optional<std::map<uint32_t, std::vector<size_t>>> _followedGives;
 	glm::vec2 _middle {0.0f};
 	std::vector<entt::entity> _creatures;
+	/// The creatures that the scenario's filled slots got, in the order of their ids
+	std::vector<entt::entity> _slotCreatures;
+	/// The game turn at which the scenario started, and which of its computer actions the tool forced
+	uint32_t _startTurn {0};
+	std::vector<bool> _computerActionsDone;
 	std::vector<entt::entity> _objects;
+	/// The script flock of the scenario's villagers and animals, after a command gave it
+	entt::entity _scriptFlock {entt::null};
+	/// The objects and creatures that the scenario keeps as script variables keep them
+	std::vector<entt::entity> _keptByScript;
+	/// The objects that the native calls of the scenario gave back, in order
+	std::vector<uint32_t> _madeByNatives;
 	/// The globes that the scenario puts down on their own, in the order of its list
 	std::vector<entt::entity> _globes;
 	/// The scenario's temples, in its order
@@ -262,11 +327,13 @@ private:
 		float seconds;
 	};
 	std::vector<RunningParticle> _particles;
-	/// The scenario's vortices: each once made, and whether it has been told to fade out
+	/// The scenario's vortices: each once made, whether it has been told to fade out, and the crowd of its newcomers
 	struct RunningVortex
 	{
 		entt::entity vortex {entt::null};
 		bool fading {false};
+		entt::entity crowd {entt::null};
+		bool crowdBrokenUp {false};
 	};
 	std::vector<RunningVortex> _vortices;
 	/// The scenario's reward chests, each once given
@@ -310,6 +377,11 @@ private:
 		glm::vec2 remainder {0.0f};
 	};
 	std::optional<PointerSweep> _sweep;
+	/// The hand that the scenario holds still over the land, and its height above the land
+	std::optional<ecs::systems::MagicSystemInterface::HandFrame> _heldHand;
+	float _heldHandHeight {0.0f};
+	/// After the held hand gives its thing to a creature, a sweep of the pointer moves the held hand too
+	bool _sweepMovesHeldHand {false};
 	/// The hand's place on the screen is logged every frame for a while after the mouse's buttons change
 	float _handWatchSeconds {0.0f};
 	/// The testbed took the pointer, and gives it back when it is done; a pointer the debug inspector holds it leaves be
@@ -333,6 +405,8 @@ private:
 	benchmark::Results _liveResults;
 	uint32_t _framesSinceSummary {0};
 	bool _saved {false};
+	/// A scenario made another player the god of this computer (see Command::Kind::OwnGod)
+	bool _ownGodChanged {false};
 
 	std::optional<Shot> _shot;
 	size_t _shotCreature {0};

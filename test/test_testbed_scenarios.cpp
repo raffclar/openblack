@@ -11,6 +11,8 @@
 
 #include <algorithm>
 #include <array>
+#include <map>
+#include <optional>
 #include <set>
 #include <string>
 #include <vector>
@@ -50,6 +52,15 @@ TEST(TestbedScenarios, IdsAreUniqueAndFindable)
 		EXPECT_EQ(Find(scenario.id), &scenario);
 	}
 	EXPECT_EQ(Find("no.such.scenario"), nullptr);
+}
+
+TEST(TestbedScenarios, AServerGivesTheCommandsThatTheGameGaveBeforeATurn)
+{
+	const std::map<uint32_t, std::vector<size_t>> gives {{5, {2, 3}}, {9, {0, 12}}};
+	EXPECT_EQ(GivesAt(gives, 5, 4), (std::vector<size_t> {2, 3}));
+	// A place that the scenario does not have is left out
+	EXPECT_EQ(GivesAt(gives, 9, 4), (std::vector<size_t> {0}));
+	EXPECT_TRUE(GivesAt(gives, 6, 4).empty());
 }
 
 TEST(TestbedScenarios, EveryFacetHasScenarios)
@@ -110,6 +121,7 @@ TEST(TestbedScenarios, CoversTheCreatureFeatures)
 	                       "light.reflections",
 	                       "light.rain_splashes",
 	                       "light.rain_splashes_night",
+	                       "light.sky_dawn",
 	                       "light.snow_close",
 	                       "movement.course",
 	                       "movement.route_obstacles",
@@ -454,6 +466,20 @@ TEST(TestbedScenarios, AFoodPileWhoseModelIsFarFromItsPointIsAProblem)
 	EXPECT_TRUE(Problems(piles).empty());
 	piles.objects.push_back({.type = PotInfo::FoodPile});
 	EXPECT_EQ(Problems(piles).size(), 1u);
+}
+
+// In a network game a scenario steps by the turns. It is laid out before its first turn and gives no commands before
+// that turn, as a game that lays it out in the frame of its first turn does. From the next turn it steps on before each
+// turn. The frames do not change when it steps, so each computer gives the commands before the same turn.
+TEST(TestbedScenarios, AScenarioOfANetworkGameStepsByTheTurnsFromTheSecondTurnAfterItsLayout)
+{
+	EXPECT_EQ(TurnStepOf(std::nullopt, 0), TurnStep::None);
+	EXPECT_EQ(TurnStepOf(std::nullopt, 7), TurnStep::None);
+	EXPECT_EQ(TurnStepOf(0u, 0), TurnStep::Wait);
+	EXPECT_EQ(TurnStepOf(0u, 1), TurnStep::Update);
+	EXPECT_EQ(TurnStepOf(40u, 40), TurnStep::Wait);
+	EXPECT_EQ(TurnStepOf(40u, 41), TurnStep::Update);
+	EXPECT_EQ(TurnStepOf(40u, 2000), TurnStep::Update);
 }
 
 TEST(TestbedScenarios, BoundsTakeInEveryPoint)
@@ -825,4 +851,14 @@ TEST(TestbedScenarios, TheMapForThirtyTwoGodsHasScenariosThatLoadIt)
 		EXPECT_FALSE(scenario->environment.dispenserGrid) << id;
 	}
 	EXPECT_EQ(Name(Facet::Multiplayer), "Multiplayer");
+}
+
+TEST(TestbedScenarios, AChallengeTitleIsTheNumberOfTheHelpTextWithItsName)
+{
+	const std::vector<std::string> names {"HELP_TEXT_DIALOG_CONTINUEGAME", "HELP_TEXT_TITLE_01", "HELP_TEXT_TITLE_03"};
+	EXPECT_EQ(HelpTextNumber(names, "HELP_TEXT_TITLE_01"), 1U);
+	EXPECT_EQ(HelpTextNumber(names, "HELP_TEXT_TITLE_03"), 2U);
+	EXPECT_EQ(HelpTextNumber(names, "HELP_TEXT_DIALOG_CONTINUEGAME"), 0U);
+	EXPECT_EQ(HelpTextNumber(names, "HELP_TEXT_TITLE_15"), std::nullopt);
+	EXPECT_EQ(HelpTextNumber({}, "HELP_TEXT_TITLE_01"), std::nullopt);
 }

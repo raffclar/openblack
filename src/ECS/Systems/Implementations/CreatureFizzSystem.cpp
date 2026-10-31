@@ -19,7 +19,6 @@
 #include <glm/geometric.hpp>
 
 #include "3D/L3DMesh.h"
-#include "Audio/Sound.h"
 #include "Creature/CreatureFizzLook.h"
 #include "ECS/Components/CreatureFizz.h"
 #include "ECS/Components/CreatureSpells.h"
@@ -35,6 +34,7 @@
 #include "Resources/ResourceManager.h"
 #include "Resources/ResourcesInterface.h"
 #include "Scenery/ObjectDrawList.h"
+#include "Sound/SoundId.h"
 
 using namespace openblack;
 using namespace openblack::ecs::components;

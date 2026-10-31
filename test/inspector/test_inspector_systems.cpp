@@ -9,6 +9,7 @@
 
 #include <cstdlib>
 
+#include <array>
 #include <fstream>
 #include <memory>
 #include <regex>
@@ -18,6 +19,7 @@
 #include <variant>
 #include <vector>
 
+#include <Creature/CreatureAnimationLog.h>
 #include <Creature/CreatureDesires.h>
 #include <Creature/CreatureIdleMind.h>
 #include <Creature/CreaturePlanner.h>
@@ -28,6 +30,7 @@
 #include <ECS/Components/Mesh.h>
 #include <ECS/Components/Physics.h>
 #include <ECS/Components/SoundTag.h>
+#include <ECS/Components/StoragePit.h>
 #include <ECS/Components/Town.h>
 #include <ECS/Components/Transform.h>
 #include <ECS/Components/Tree.h>
@@ -222,6 +225,74 @@ TEST(InspectorCreature, TopDesiresAndThePlan)
 	registry.Assign<CreatureMindState>(Placed(registry, glm::vec3(5.0f)));
 	EXPECT_FALSE(AskAny(inspector, R"({"query": "creature.desires"})").Ok());
 	EXPECT_FALSE(AskAny(inspector, R"({"query": "creature.desires", "params": {"id": 12345}})").Ok());
+}
+
+TEST(InspectorCreature, TheClipsThatTheBodyPlaysAndPlayed)
+{
+	ecs::Registry registry;
+	const auto creature = Placed(registry, glm::vec3(0.0f));
+	registry.Assign<CreatureMindState>(creature);
+	creature_animation_log::Log log;
+	const auto cause = creature_animation_log::Cause {.by = "object action", .activity = "eat", .objectAction = "eat"};
+	const auto eat = [](float timeMs) {
+		return creature_animation_log::Clip {
+		    .layer = creature_animation_log::Layer::Blend, .animation = 96, .timeMs = timeMs, .durationMs = 2000};
+	};
+	log.Posed(1, std::array {eat(0.0f)}, cause);
+	log.Posed(2, std::array {eat(50.0f)}, cause);
+	log.Posed(3, std::array {creature_animation_log::Clip {.animation = 0, .looping = true}}, {.by = "body"});
+	log.Note({.problem = creature_animation_log::Problem::Refused, .animation = 54, .turn = 3, .by = "mind"});
+	bool cleared = false;
+
+	Inspector inspector;
+	inspector.Add(MakeCreatureProvider({
+	    .world = {.registry = [&registry]() -> const ecs::Registry* { return &registry; },
+	              .info = []() -> const InfoConstants* { return nullptr; }},
+	    .tables = []() -> const creature_mind_tables::Tables* { return nullptr; },
+	    .animationLog = [&log](entt::entity /*creature*/) -> const creature_animation_log::Log* { return &log; },
+	    .clipLine = [](entt::entity /*creature*/, size_t clip) -> std::optional<ClipLine> {
+		    if (clip == 96)
+		    {
+			    return ClipLine {.name = "eat", .type = 'N', .set = "object"};
+		    }
+		    return std::nullopt;
+	    },
+	    .clearAnimationLogs = [&cleared]() { cleared = true; },
+	}));
+
+	const auto now = Ask(inspector, R"({"query": "creature.animation"})");
+	EXPECT_EQ(now["turn"], 3);
+	ASSERT_EQ(now["clips"].size(), 1);
+	EXPECT_EQ(now["clips"][0]["clip"], 0);
+	EXPECT_EQ(now["clips"][0]["layer"], "body");
+	EXPECT_EQ(now["clips"][0]["cause"]["by"], "body");
+
+	const auto history = Ask(inspector, R"({"query": "creature.animation_history"})");
+	ASSERT_EQ(history["clips"].size(), 1);
+	const auto& played = history["clips"][0];
+	EXPECT_EQ(played["name"], "eat");
+	EXPECT_EQ(played["set"], "object");
+	EXPECT_EQ(played["start_turn"], 1);
+	EXPECT_EQ(played["end_turn"], 3);
+	EXPECT_EQ(played["turns"], 2);
+	EXPECT_DOUBLE_EQ(played["speed"].get<double>(), 0.5);
+	EXPECT_EQ(played["cause"]["object_action"], "eat");
+	EXPECT_EQ(Ask(inspector, R"({"query": "creature.animation_history", "params": {"last": 0}})")["clips"].size(), 0);
+
+	const auto problems = Ask(inspector, R"({"query": "creature.animation_problems"})");
+	ASSERT_EQ(problems["problems"].size(), 1);
+	EXPECT_EQ(problems["problems"][0]["problem"], "refused");
+	EXPECT_EQ(problems["problems"][0]["clip"], 54);
+
+	EXPECT_TRUE(AskAny(inspector, R"({"query": "creature.animation_clear"})").Ok());
+	EXPECT_TRUE(cleared);
+
+	// Without a log the queries say why
+	Inspector none;
+	none.Add(MakeCreatureProvider({.world = {.registry = [&registry]() -> const ecs::Registry* { return &registry; },
+	                                         .info = []() -> const InfoConstants* { return nullptr; }}}));
+	EXPECT_FALSE(AskAny(none, R"({"query": "creature.animation"})").Ok());
+	EXPECT_FALSE(AskAny(none, R"({"query": "creature.animation_clear"})").Ok());
 }
 
 TEST(InspectorMap, TheContentsOfACell)
@@ -432,7 +503,7 @@ TEST(InspectorCoverage, EveryLocatorServiceHasAQuery)
 	StillRunTarget run;
 	GameWorldEdit world;
 	GameInput input;
-	GameControlSet controls(input);
+	GameControlSet controls(input, nullptr);
 	Inspector inspector;
 	AddGameProviders(inspector, reflection, run, world, controls.View());
 	// The inspector's system adds the run record's provider itself
@@ -460,7 +531,7 @@ TEST(InspectorCoverage, EveryQueryAnswersWithNoGame)
 	StillRunTarget run;
 	GameWorldEdit world;
 	GameInput input;
-	GameControlSet controls(input);
+	GameControlSet controls(input, nullptr);
 	Inspector inspector;
 	AddGameProviders(inspector, reflection, run, world, controls.View());
 
@@ -496,7 +567,7 @@ TEST(InspectorCoverage, TheAdaptersCatalogueOfQueriesIsUpToDate)
 	StillRunTarget run;
 	GameWorldEdit world;
 	GameInput input;
-	GameControlSet controls(input);
+	GameControlSet controls(input, nullptr);
 	Inspector inspector;
 	// The providers the game's inspector has, as its system adds them
 	AddGameProviders(inspector, reflection, run, world, controls.View());
@@ -592,4 +663,87 @@ TEST(InspectorCreature, ReactionsAreShownAndSetForDebugging)
 	EXPECT_TRUE(registry.AllOf<ecs::components::CreatureReactionsOff>(creature));
 	// Without a notice it sets nothing
 	EXPECT_FALSE(AskAny(inspector, R"({"query": "creature.set_reactions"})").Ok());
+}
+
+// The orders that the inspector gives a creature go to the game as orders, with the thing, the point and the eat action
+// that the request names
+TEST(InspectorCreature, OrdersGoToTheGameWithWhatTheyName)
+{
+	ecs::Registry registry;
+	const auto creature = Placed(registry, glm::vec3(0.0f));
+	registry.Assign<CreatureMindState>(creature);
+	const auto villager = Placed(registry, glm::vec3(5.0f));
+	const auto store = Placed(registry, glm::vec3(9.0f));
+	registry.Assign<StoragePit>(store);
+
+	std::vector<CreatureOrder> given;
+	bool takes = true;
+	Inspector inspector;
+	inspector.Add(MakeCreatureProvider({.world = {.registry = [&registry]() -> const ecs::Registry* { return &registry; },
+	                                              .info = []() -> const InfoConstants* { return nullptr; }},
+	                                    .tables = []() -> const creature_mind_tables::Tables* { return nullptr; },
+	                                    .order =
+	                                        [&given, &takes](entt::entity /*creature*/, const CreatureOrder& order) {
+		                                        given.push_back(order);
+		                                        return CreatureOrderResult {.taken = takes, .detail = takes ? "doing" : "busy"};
+	                                        }}));
+
+	const auto picked = Ask(inspector, R"({"query": "creature.pick_up", "params": {"object": )" + IdOf(villager) + "}}");
+	EXPECT_EQ(picked["taken"], true);
+	ASSERT_EQ(given.size(), 1);
+	EXPECT_EQ(given.back().kind, CreatureOrder::Kind::PickUp);
+	EXPECT_EQ(given.back().object, villager);
+
+	Ask(inspector, R"({"query": "creature.put_down"})");
+	EXPECT_EQ(given.back().kind, CreatureOrder::Kind::PutDown);
+	EXPECT_FALSE(given.back().point.has_value());
+	Ask(inspector, R"({"query": "creature.put_down", "params": {"point": [10, 20], "throw": true}})");
+	EXPECT_EQ(given.back().kind, CreatureOrder::Kind::Throw);
+	EXPECT_EQ(given.back().point, glm::vec2(10.0f, 20.0f));
+
+	Ask(inspector, R"({"query": "creature.eat", "params": {"object": )" + IdOf(store) + "}}");
+	EXPECT_EQ(given.back().kind, CreatureOrder::Kind::Eat);
+	EXPECT_EQ(given.back().action, "EatFromStoragePit");
+	Ask(inspector, R"({"query": "creature.eat", "params": {"object": )" + IdOf(villager) + R"(, "action": "EatAlive"}})");
+	EXPECT_EQ(given.back().action, "EatAlive");
+	EXPECT_EQ(EatActionFor(registry, villager), "EatAfterExamining");
+
+	// A request that names no thing, a throw with no point and an order the creature refuses are errors
+	const auto count = given.size();
+	EXPECT_FALSE(AskAny(inspector, R"({"query": "creature.pick_up"})").Ok());
+	EXPECT_FALSE(AskAny(inspector, R"({"query": "creature.put_down", "params": {"throw": true}})").Ok());
+	EXPECT_EQ(given.size(), count);
+	takes = false;
+	EXPECT_FALSE(AskAny(inspector, R"({"query": "creature.put_down"})").Ok());
+}
+
+TEST(InspectorCreature, AWarningOfTheGameGoesWithATakenOrder)
+{
+	ecs::Registry registry;
+	const auto creature = Placed(registry, glm::vec3(0.0f));
+	registry.Assign<CreatureMindState>(creature);
+	const auto villager = Placed(registry, glm::vec3(500.0f));
+
+	bool refuses = false;
+	Inspector inspector;
+	inspector.Add(MakeCreatureProvider(
+	    {.world = {.registry = [&registry]() -> const ecs::Registry* { return &registry; },
+	               .info = []() -> const InfoConstants* { return nullptr; }},
+	     .tables = []() -> const creature_mind_tables::Tables* { return nullptr; },
+	     .order =
+	         [&refuses](entt::entity /*creature*/, const CreatureOrder& /*order*/) {
+		         return refuses ? CreatureOrderResult {.detail = "a cut scene is playing"}
+		                        : CreatureOrderResult {.taken = true, .detail = "doing", .warning = "the thing is far"};
+	         }}));
+
+	// The warning is in the answer of an order that the creature took
+	const auto taken = Ask(inspector, R"({"query": "creature.pick_up", "params": {"object": )" + IdOf(villager) + "}}");
+	EXPECT_EQ(taken["taken"], true);
+	EXPECT_EQ(taken["warning"], "the thing is far");
+
+	// The reason of a refusal is in the error
+	refuses = true;
+	const auto refused = AskAny(inspector, R"({"query": "creature.eat", "params": {"object": )" + IdOf(villager) + "}}");
+	EXPECT_FALSE(refused.Ok());
+	EXPECT_NE(refused.error.find("a cut scene is playing"), std::string::npos);
 }

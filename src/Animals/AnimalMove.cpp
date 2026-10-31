@@ -17,6 +17,7 @@
 
 #include "3D/MapCoords.h"
 #include "Common/GUtilsAngle.h"
+#include "Common/GUtilsDistance.h"
 
 using namespace openblack;
 
@@ -76,6 +77,21 @@ bool animals::WithinStep(glm::ivec2 position, glm::ivec2 goal, uint16_t speed)
 	return dx * dx + dz * dz <= r * r;
 }
 
+uint16_t animals::KeptSpeed(int32_t whole)
+{
+	return static_cast<uint16_t>(std::clamp<int32_t>(whole, 0, 0xFFFF));
+}
+
+uint16_t animals::SpeedFromScript(float metresPerTurn)
+{
+	return KeptSpeed(gutils::ConvertMetersToWholeDistance(metresPerTurn));
+}
+
+float animals::SpeedForScript(uint16_t speed, bool dead)
+{
+	return dead ? 0.0f : gutils::ConvertWholeDistanceToMeters(speed);
+}
+
 bool animals::AreWeThere(glm::ivec2 position, glm::ivec2 goal, uint16_t speed)
 {
 	const auto dx = static_cast<float>(position.x - goal.x);
@@ -97,6 +113,24 @@ animals::Turn TurnAndStep(animals::Move& move, uint16_t turnAngle)
 	return turn;
 }
 } // namespace
+
+std::optional<animals::MoveStage> animals::MoveStageOfGame(uint8_t moveState)
+{
+	constexpr uint8_t k_Arrived = 0x01;
+	constexpr uint8_t k_FinalStep = 0x04;
+	constexpr uint8_t k_StepThrough = 0x0B;
+	switch (moveState)
+	{
+	case k_Arrived:
+		return MoveStage::AtGoal;
+	case k_FinalStep:
+		return MoveStage::FinalStep;
+	case k_StepThrough:
+		return MoveStage::StepThrough;
+	default:
+		return std::nullopt;
+	}
+}
 
 animals::Turn animals::SetUpMove(Move& move, glm::ivec2 goal, uint16_t turnAngle)
 {

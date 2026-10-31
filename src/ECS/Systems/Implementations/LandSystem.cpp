@@ -36,15 +36,17 @@
 #include "3D/GodsRingLand.h"
 #include "3D/LandData.h"
 #include "3D/LandIslandInterface.h"
+#include "3D/LandReuse.h"
 #include "3D/TempleInteriorInterface.h"
-#include "Audio/AudioManagerInterface.h"
 #include "CHLApi.h"
 #include "Camera/Camera.h"
 #include "Camera/StartCamera.h"
 #include "Common/LoadTimer.h"
 #include "Common/MachineClock.h"
+#include "Common/MainThreadQueue.h"
 #include "Common/StringUtils.h"
 #include "Debug/TestbedDispenserGrid.h"
+#include "ECS/Archetypes/CloudArchetype.h"
 #include "ECS/Archetypes/PlayerArchetype.h"
 #include "ECS/Components/Influence.h"
 #include "ECS/Components/Mesh.h"
@@ -53,6 +55,7 @@
 #include "ECS/Components/Transform.h"
 #include "ECS/ComputerPlayerStart.h"
 #include "ECS/CreatureExplorationLand.h"
+#include "ECS/DrawnRegistry.h"
 #include "ECS/Map.h"
 #include "ECS/ProfileAlignment.h"
 #include "ECS/RealWeatherLand.h"
@@ -67,6 +70,8 @@
 #include "ECS/Systems/CameraBookmarkSystemInterface.h"
 #include "ECS/Systems/CameraHelpSystemInterface.h"
 #include "ECS/Systems/CameraPathSystemInterface.h"
+#include "ECS/Systems/CameraZoneSystemInterface.h"
+#include "ECS/Systems/ChatSystemInterface.h"
 #include "ECS/Systems/CinematicDirectorSystemInterface.h"
 #include "ECS/Systems/CloudSystemInterface.h"
 #include "ECS/Systems/ComputerPlayerSystemInterface.h"
@@ -74,6 +79,7 @@
 #include "ECS/Systems/CreatureFightSystemInterface.h"
 #include "ECS/Systems/DialogueControlSystemInterface.h"
 #include "ECS/Systems/DynamicsSystemInterface.h"
+#include "ECS/Systems/EffectRequestSystemInterface.h"
 #include "ECS/Systems/ExplosionSystemInterface.h"
 #include "ECS/Systems/FireSystemInterface.h"
 #include "ECS/Systems/FireflySystemInterface.h"
@@ -88,17 +94,19 @@
 #include "ECS/Systems/HandSystemInterface.h"
 #include "ECS/Systems/HeartbeatSystemInterface.h"
 #include "ECS/Systems/HelpMessageSystemInterface.h"
+#include "ECS/Systems/HelpProfileSystemInterface.h"
 #include "ECS/Systems/HelpTextSystemInterface.h"
 #include "ECS/Systems/HighDetailSystemInterface.h"
 #include "ECS/Systems/InfluenceSystemInterface.h"
 #include "ECS/Systems/InspectorLoading.h"
 #include "ECS/Systems/IntroSystemInterface.h"
+#include "ECS/Systems/LeashSystemInterface.h"
 #include "ECS/Systems/LiquidParticleSystemInterface.h"
 #include "ECS/Systems/MagicShieldSystemInterface.h"
 #include "ECS/Systems/MagicSystemInterface.h"
 #include "ECS/Systems/MiracleFxSystemInterface.h"
 #include "ECS/Systems/ObjectDrawListSystemInterface.h"
-#include "ECS/Systems/ParticleSystemInterface.h"
+#include "ECS/Systems/ParticleRuleSystemInterface.h"
 #include "ECS/Systems/PlayerCommandSystemInterface.h"
 #include "ECS/Systems/PlayerProfileSystemInterface.h"
 #include "ECS/Systems/PlayerSystemInterface.h"
@@ -107,9 +115,10 @@
 #include "ECS/Systems/SaveGameSystemInterface.h"
 #include "ECS/Systems/ScriptControlSystemInterface.h"
 #include "ECS/Systems/ScriptHighlightSystemInterface.h"
+#include "ECS/Systems/ScriptMusicSystemInterface.h"
 #include "ECS/Systems/ScriptObjectsSystemInterface.h"
 #include "ECS/Systems/SimulationSystemInterface.h"
-#include "ECS/Systems/SkySystemInterface.h"
+#include "ECS/Systems/SkyClockSystemInterface.h"
 #include "ECS/Systems/SnowSystemInterface.h"
 #include "ECS/Systems/TeleportSystemInterface.h"
 #include "ECS/Systems/TempleExteriorSystemInterface.h"
@@ -121,17 +130,22 @@
 #include "ECS/Systems/WorshipSiteSystemInterface.h"
 #include "EngineConfig.h"
 #include "FileSystem/FileSystemInterface.h"
+#include "Help/HelpProfile.h"
 #include "Help/Spirits.h"
 #include "LHScriptX/MapScript.h"
 #include "LHScriptX/Script.h"
+#include "LandLaidOutOrder.h"
 #include "Level.h"
 #include "Locator.h"
+#include "MainThreadWork.h"
 #include "Online/GodsRingMap.h"
+#include "Online/GodsRingMapFile.h"
 #include "Online/OnlineMapLand.h"
 #include "Profiler.h"
 #include "Resources/ResourcesInterface.h"
 #include "ScriptHeaders/ScriptStart.h"
 #include "Serializer/FotFile.h"
+#include "Sound/SoundRequestInterface.h"
 #include "Temple/TempleHelp.h"
 #include "Windowing/WindowingInterface.h"
 
@@ -178,6 +192,12 @@ std::filesystem::path LandSystem::ChallengePath()
 
 bool LandSystem::LoadMap(const std::filesystem::path& path, loading::LoadingClock::Mode look, land_change::Kind change)
 {
+	// A land loads on the main thread. A turn on another thread, such as a script of the story that goes to the next land,
+	// waits while the main thread loads it, and then goes on as it does on the main thread.
+	if (InTurnOnOtherThread())
+	{
+		return CallOnMainThread(MainThreadApi::Renderer, [this, &path, look, change] { return LoadMap(path, look, change); });
+	}
 	const InspectorLoading loading(path.filename().generic_string());
 	auto& fileSystem = Locator::filesystem::value();
 
@@ -233,52 +253,14 @@ bool LandSystem::LoadMap(const std::filesystem::path& path, loading::LoadingCloc
 	}
 	_runsNetworkMapScript = false;
 	_mapLandscape.clear();
-	// Every land of a network game fills its slots with no human after its script. Without a network session, only a
-	// land made for network play does.
-	if (_humansFromSession || online_map_land::IsOnlineMap(path.generic_string()))
-	{
-		FillSlotsOfNetworkLand(computer_player::k_SlotGods);
-	}
 
 	timer.Step("map script");
-	// The game puts each thing on the map as the script makes it, before the footpaths load: the things go into their
-	// map cells now, and no footpath goes round them
-	Locator::entitiesMap::value().Sync();
-	if (Locator::footpathSystem::has_value())
-	{
-		Locator::footpathSystem::value().ProcessObstacleChanges();
-	}
-	// Each released map comes with an optional .fot file which contains the footpath information for the map
-	const auto stem = string_utils::LowerCase(path.stem().generic_string());
-	const auto fotPath = fileSystem.GetPath<filesystem::Path::Landscape>() / fmt::format("{}.fot", stem);
+	// Every land of a network game fills its slots with no human when the land is laid out. Without a network session,
+	// only a land made for network play does.
+	const bool fillsSlots = _humansFromSession || _allComputerGods || online_map_land::IsOnlineMap(path.generic_string());
+	LayOutLand(path, fillsSlots ? std::optional<std::span<const PlayerNames>>(computer_player::k_SlotGods) : std::nullopt);
 
-	if (fileSystem.Exists(fotPath))
-	{
-		FotFile fotFile;
-		fotFile.Load(fotPath);
-	}
-	else
-	{
-		SPDLOG_LOGGER_WARN(spdlog::get("game"), "The map at {} does not come with a footpath file. Expected {}",
-		                   path.generic_string(), fotPath.generic_string());
-	}
-
-	timer.Step("footpaths");
-	// With the land laid out, each town of a player with a temple is given its worship site if it has none
-	if (Locator::worshipSiteSystem::has_value())
-	{
-		Locator::worshipSiteSystem::value().LandLaidOut();
-	}
-
-	// With the land laid out, each town gathers the lone trees about it into its scenic forest
-	if (Locator::forestSystem::has_value())
-	{
-		Locator::forestSystem::value().MakeScenicForests();
-		// Each town finds the forests near it with wood in them
-		Locator::forestSystem::value().AssignForestsToTowns();
-	}
-
-	timer.Step("forests");
+	timer.Step("laid out");
 	// A new game starts the player as good or evil as their profile last kept them, once the land is set up
 	if (land_change::RulesFor(change).alignmentFromProfile)
 	{
@@ -313,6 +295,11 @@ bool LandSystem::IsPlaygroundLand(const std::filesystem::path& path) const
 
 bool LandSystem::LoadMapWithFreshScripts(const std::filesystem::path& path, land_change::Kind change)
 {
+	if (InTurnOnOtherThread())
+	{
+		return CallOnMainThread(MainThreadApi::Renderer,
+		                        [this, &path, change] { return LoadMapWithFreshScripts(path, change); });
+	}
 	// Outside the story, a land is loaded with the challenge's scripts started again from scratch: every task of the
 	// last land stops, the scripts' variables are cleared and the challenge's scripts that start by themselves start
 	// again. None of the last land's scripts go on running on the new land.
@@ -355,6 +342,8 @@ void LandSystem::LoadTestbed()
 	View().BeginLoadingScreen(loading::LoadingClock::Mode::Tips);
 	PrepareNewLand(land_change::Kind::Testbed);
 	_landPath = k_TestbedLandPath;
+	// The game builds the flat land, so it has no landscape file. The name of the last landscape does not stay.
+	_landscapePath.clear();
 	View().ShowLoadingFrame();
 	InitializeLevel(flat_land::Build());
 	SetUpLandscape();
@@ -396,30 +385,19 @@ void LandSystem::LoadTestbed()
 
 bool LandSystem::LoadGodsRingMap()
 {
+	// The village of each slot comes from a land of the game for network play, which the player has. The game makes the
+	// map's file from it, and loads the file as a player loads the file from the lobby.
+	const auto file = gods_ring_map_file::MakeFromGameFolder(Locator::filesystem::value());
+	return file.has_value() && LoadGodsRingMapFile(*file);
+}
+
+bool LandSystem::LoadGodsRingMapFile(std::span<const uint8_t> file)
+{
 	const InspectorLoading loading {std::string(gods_ring_map::k_File)};
-	// The village of each slot comes from a land of the game for network play, which the player has
-	std::optional<gods_ring_map::VillageTemplate> village;
-	try
+	auto parts = gods_ring_map_file::Read(file);
+	if (!parts.has_value())
 	{
-		auto& fileSystem = Locator::filesystem::value();
-		const std::filesystem::path templatePath(gods_ring_map::k_TemplateMap);
-		if (fileSystem.Exists(templatePath))
-		{
-			const auto bytes = fileSystem.ReadAll(templatePath);
-			if (const auto file = onlinemap::Parse(std::as_bytes(std::span(bytes))); file.has_value())
-			{
-				village = gods_ring_map::ReadTemplate(file->script, gods_ring_map::k_TemplateGod, gods_ring_land::k_MapMiddle);
-			}
-		}
-	}
-	catch (const std::exception& e)
-	{
-		SPDLOG_LOGGER_ERROR(spdlog::get("game"), "The land {} does not load: {}", gods_ring_map::k_TemplateMap, e.what());
-	}
-	if (!village.has_value())
-	{
-		SPDLOG_LOGGER_ERROR(spdlog::get("game"), "The map for 32 gods needs the village of the land {}",
-		                    gods_ring_map::k_TemplateMap);
+		SPDLOG_LOGGER_ERROR(spdlog::get("game"), "The file of the map for 32 gods does not read");
 		return false;
 	}
 
@@ -431,16 +409,27 @@ bool LandSystem::LoadGodsRingMap()
 	View().BeginLoadingScreen(loading::LoadingClock::Mode::Tips);
 	PrepareNewLand(land_change::Kind::Testbed);
 	_landPath = gods_ring_map::k_File;
+	// The game builds this land too, so it has no landscape file
+	_landscapePath.clear();
 	View().ShowLoadingFrame();
-	InitializeLevel(gods_ring_land::Build());
+	InitializeLevel(std::move(parts->land));
 	SetUpLandscape();
 	View().ShowLoadingFrame();
 
 	const auto slots = gods_ring_map::LayOutSlots(gods_ring_land::k_MapMiddle);
+	// The map has a god in each of its 32 slots (deviation 166). The land has the 8 players of a land; the gods after the
+	// seventh get their players before the script, in the order of their numbers, as each slot of a land has its player.
+	for (const auto& slot : slots)
+	{
+		if (slot.god.has_value() && !player_slots::IsLandPlayer(*slot.god))
+		{
+			Locator::playerSystem::value().EnsurePlayer(*slot.god);
+		}
+	}
 	try
 	{
 		lhscriptx::Script script;
-		script.Load(gods_ring_map::MapScript(*village, slots), [this]() { View().ShowLoadingFrame(); });
+		script.Load(parts->script, [this]() { View().ShowLoadingFrame(); });
 	}
 	catch (const std::exception& e)
 	{
@@ -454,23 +443,8 @@ bool LandSystem::LoadGodsRingMap()
 			gods.push_back(*slot.god);
 		}
 	}
-	FillSlotsOfNetworkLand(gods);
-	// As on a land, the things go into their map cells before the footpaths, and then the towns find their worship
-	// sites and their forests
-	Locator::entitiesMap::value().Sync();
-	if (Locator::footpathSystem::has_value())
-	{
-		Locator::footpathSystem::value().ProcessObstacleChanges();
-	}
-	if (Locator::worshipSiteSystem::has_value())
-	{
-		Locator::worshipSiteSystem::value().LandLaidOut();
-	}
-	if (Locator::forestSystem::has_value())
-	{
-		Locator::forestSystem::value().MakeScenicForests();
-		Locator::forestSystem::value().AssignForestsToTowns();
-	}
+	// As on a land: the land is laid out, then the slots fill. The map has no footpath file.
+	LayOutLand(std::nullopt, std::span<const PlayerNames>(gods));
 	View().MakeSymbolSheet();
 
 	// The camera looks at the first slot's village from beyond its citadel
@@ -492,6 +466,82 @@ bool LandSystem::LoadGodsRingMap()
 	return true;
 }
 
+void LandSystem::LayOutLand(const std::optional<std::filesystem::path>& footpathsOf,
+                            std::optional<std::span<const PlayerNames>> slotGods)
+{
+	for (const auto step : land_laid_out::k_Order)
+	{
+		switch (step)
+		{
+		case land_laid_out::Step::PlaceThings:
+			// The game puts each thing on the map as the script makes it: the things go into their map cells now
+			Locator::entitiesMap::value().Sync();
+			break;
+		case land_laid_out::Step::FootpathObstacles:
+			// No footpath goes round the things in the map cells
+			if (Locator::footpathSystem::has_value())
+			{
+				Locator::footpathSystem::value().ProcessObstacleChanges();
+			}
+			break;
+		case land_laid_out::Step::ScenicForests:
+			if (Locator::forestSystem::has_value())
+			{
+				Locator::forestSystem::value().MakeScenicForests();
+			}
+			break;
+		case land_laid_out::Step::ForestsToTowns:
+			if (Locator::forestSystem::has_value())
+			{
+				Locator::forestSystem::value().AssignForestsToTowns();
+			}
+			break;
+		case land_laid_out::Step::WorshipSites:
+			if (Locator::worshipSiteSystem::has_value())
+			{
+				Locator::worshipSiteSystem::value().LandLaidOut();
+			}
+			break;
+		case land_laid_out::Step::InfluencePower:
+			if (Locator::influenceSystem::has_value())
+			{
+				Locator::influenceSystem::value().LandLaidOut();
+			}
+			break;
+		case land_laid_out::Step::FootpathFile:
+			if (footpathsOf.has_value())
+			{
+				LoadFootpathFile(*footpathsOf);
+			}
+			break;
+		case land_laid_out::Step::FillSlots:
+			if (slotGods.has_value())
+			{
+				FillSlotsOfNetworkLand(*slotGods);
+			}
+			break;
+		}
+	}
+}
+
+void LandSystem::LoadFootpathFile(const std::filesystem::path& landPath)
+{
+	// Each released map comes with an optional .fot file which contains the footpath information for the map
+	auto& fileSystem = Locator::filesystem::value();
+	const auto stem = string_utils::LowerCase(landPath.stem().generic_string());
+	const auto fotPath = fileSystem.GetPath<filesystem::Path::Landscape>() / fmt::format("{}.fot", stem);
+	if (fileSystem.Exists(fotPath))
+	{
+		FotFile fotFile;
+		fotFile.Load(fotPath);
+	}
+	else
+	{
+		SPDLOG_LOGGER_WARN(spdlog::get("game"), "The map at {} does not come with a footpath file. Expected {}",
+		                   landPath.generic_string(), fotPath.generic_string());
+	}
+}
+
 void LandSystem::FillSlotsOfNetworkLand(std::span<const PlayerNames> gods)
 {
 	if (!Locator::computerPlayerSystem::has_value() || !Locator::playerSystem::has_value())
@@ -499,6 +549,12 @@ void LandSystem::FillSlotsOfNetworkLand(std::span<const PlayerNames> gods)
 		return;
 	}
 	auto& minds = Locator::computerPlayerSystem::value();
+	if (_allComputerGods)
+	{
+		// The AI soak: no human plays, so every god with a citadel gets a computer god as the land loads
+		minds.FillEmptySlots(gods, {});
+		return;
+	}
 	if (_humansFromSession)
 	{
 		minds.WaitForHumans();
@@ -514,20 +570,43 @@ bool LandSystem::LoadSavedLand(const std::filesystem::path& landPath, const std:
 {
 	const InspectorLoading loading(landPath.filename().generic_string());
 	LoadTimer timer(fmt::format("saved land {}", landPath.stem().string()));
-	View().BeginLoadingScreen(loading::LoadingClock::Mode::Tips);
+	// A world state of the land that is open keeps the land: the landscape is the same, so only the altitudes that the
+	// world changed go back. The world loads its own changes after. The load is short and shows no loading screen.
+	const bool builtByGame = landPath == k_TestbedLandPath || gods_ring_map::IsThisMap(landPath.generic_string());
+	const bool keepsLand = land_reuse::KeepsLand({
+	    .worldState = use == SavedLandUse::WorldState,
+	    .landLoaded = Locator::terrainSystem::has_value() && Locator::terrainSystem::value().IsLoaded(),
+	    .openLand = _landPath,
+	    .openLandscape = _landscapePath,
+	    .savedLand = landPath,
+	    .savedLandscape = landscape,
+	    .builtByGame = builtByGame,
+	});
+	if (!keepsLand)
+	{
+		View().BeginLoadingScreen(loading::LoadingClock::Mode::Tips);
+	}
 	PrepareNewLand(land_change::Kind::SavedGame);
 	_landPath = landPath;
+	timer.Step("reset");
 	View().ShowLoadingFrame();
 	try
 	{
-		// The testbed's flat land comes from no file: it is built again
-		if (landPath == k_TestbedLandPath)
+		if (keepsLand)
 		{
+			InitializeLevelOnOpenLand();
+			SetUpLandscape();
+		}
+		// The testbed's flat land comes from no file: it is built again
+		else if (landPath == k_TestbedLandPath)
+		{
+			_landscapePath.clear();
 			InitializeLevel(flat_land::Build());
 			SetUpLandscape();
 		}
 		else if (gods_ring_map::IsThisMap(landPath.generic_string()))
 		{
+			_landscapePath.clear();
 			InitializeLevel(gods_ring_land::Build());
 			SetUpLandscape();
 		}
@@ -563,14 +642,22 @@ bool LandSystem::LoadSavedLand(const std::filesystem::path& landPath, const std:
 	// that go with them are forgotten.
 	auto& registry = Locator::entitiesRegistry::value();
 	registry.Reset();
+	// The things that only the frames make go with the things of the land that they go with. The sky's clouds stay, as
+	// the land laid them out when it loaded: a save does not keep the clouds.
+	if (Locator::drawnRegistry::has_value())
+	{
+		archetypes::CloudArchetype::RemoveAllButTheSky(Locator::drawnRegistry::value());
+	}
 	Locator::playerSystem::value().RegisterPlayers();
 	const bool restored = restore();
 	timer.Step("saved world");
 
-	// The systems find their entities among the loaded ones, and the things go back into the map's cells
+	// The systems find their entities among the loaded ones, and the things go back into the map's cells. A world that
+	// was saved with fewer players gets the players that it did not keep.
 	Locator::playerSystem::value().RegisterPlayers();
+	Locator::playerSystem::value().EnsureAllPlayers();
 	Locator::handSystem::value().FindAfterLoad();
-	Locator::skySystem::value().FindAfterLoad();
+	Locator::skyClockSystem::value().FindAfterLoad();
 	Locator::cameraBookmarkSystem::value().FindAfterLoad();
 	if (Locator::appleBarrelSystem::has_value())
 	{
@@ -590,6 +677,7 @@ bool LandSystem::LoadSavedLand(const std::filesystem::path& landPath, const std:
 	}
 	RemakeModelsAfterLoad();
 	registry.SetDirty();
+	timer.Step("found again");
 	// Each load of a saved game starts a game. The world of a game server continues as the server has it.
 	if (use == SavedLandUse::SavedGame)
 	{
@@ -605,8 +693,34 @@ bool LandSystem::LoadSavedLand(const std::filesystem::path& landPath, const std:
 	// save keeps no symbol.
 	View().MakeSymbolSheet();
 	View().ShowLoadingFrame();
+	// The creatures' map of the land that the saved world brings stays: the start of the land makes the map from the towns
+	// of now, but the saved world made it from the towns at the start. A save with no map gets the map of now.
+	auto exploration = std::move(registry.Context().explorationMap);
 	StartNewLand(land_change::Kind::SavedGame);
-	View().EndLoadingScreen();
+	if (exploration.has_value())
+	{
+		registry.Context().explorationMap = std::move(exploration);
+	}
+	// A loaded skirmish starts as a skirmish starts: in the first turn the god of the player tries to bring the creature
+	// that the profile keeps. When the save kept the creature of the god, the god brings no second creature. The world
+	// of a game server continues and brings no creature.
+	if (use == SavedLandUse::SavedGame &&
+	    land_change::LoadBringsProfileCreature(registry.Context().skirmish, Locator::time::value().IsNetworkGame()))
+	{
+		SPDLOG_LOGGER_INFO(spdlog::get("game"),
+		                   "A saved skirmish loads: the god of the player tries to bring the creature again");
+		Locator::playerCommandSystem::value().SetPlayersCreatureDue(true);
+	}
+	timer.Step("start");
+	if (keepsLand)
+	{
+		View().EndLoadWithoutScreen();
+	}
+	else
+	{
+		View().EndLoadingScreen();
+	}
+	timer.Step("first frames");
 	return restored;
 }
 
@@ -646,6 +760,7 @@ void LandSystem::RemakeModelsAfterLoad()
 
 void LandSystem::PrepareNewLand(land_change::Kind change)
 {
+	++_landLoads;
 	const bool toTestbed = change == land_change::Kind::Testbed;
 	const auto rules = land_change::RulesFor(change);
 	// The start-of-game question is about the land that goes now. Close the question with no answer. Then release the
@@ -700,6 +815,12 @@ void LandSystem::PrepareNewLand(land_change::Kind change)
 		{
 			Locator::playerSystem::value().ForgetKept();
 		}
+	}
+	// The reward table of the fireflies keeps its running totals from land to land. Nothing comes onto the testbed, so
+	// its table starts empty, as on a computer that loaded no land before.
+	if (toTestbed && Locator::fireflySystem::has_value())
+	{
+		Locator::fireflySystem::value().ForgetRewards();
 	}
 	// The players' hearts beat on from land to land; a new game starts them calm
 	if (Locator::heartbeatSystem::has_value())
@@ -782,6 +903,16 @@ void LandSystem::PrepareNewLand(land_change::Kind change)
 	}
 	Locator::guidanceSystem::value().Reset();
 	Locator::cameraHelpSystem::value().Get().ResetForNewLand();
+	// The help's clock, which times what the player did, starts again at 0 with the land. The counts stay.
+	if (Locator::helpProfileSystem::has_value())
+	{
+		Locator::helpProfileSystem::value().Get().ResetClock();
+	}
+	// Nor do the camera's places to keep out of, its fence or its height limits
+	if (Locator::cameraZoneSystem::has_value())
+	{
+		Locator::cameraZoneSystem::value().Reset();
+	}
 	// The turns of a new land start from zero, and so does the turn of the last autosave
 	if (Locator::saveGameSystem::has_value())
 	{
@@ -797,10 +928,20 @@ void LandSystem::PrepareNewLand(land_change::Kind change)
 	// Nor the beat of its scrolls
 	Locator::scriptHighlightSystem::value().Reset();
 	Locator::tipBubbleSystem::value().Reset();
+	if (Locator::chatSystem::has_value())
+	{
+		Locator::chatSystem::value().Reset();
+	}
 	Locator::handDemoSystem::value().Reset();
-	// The commands that the players made on the old land do nothing on the new land
+	// The commands that the players made on the old land do nothing on the new land, and no creature of a skirmish is due
 	Locator::playerCommandSystem::value().Reset();
+	Locator::playerCommandSystem::value().SetPlayersCreatureDue(false);
 	Locator::creatureFightSystem::value().Reset();
+	// The new land's temples get their own leash posts
+	if (Locator::leashSystem::has_value())
+	{
+		Locator::leashSystem::value().Reset();
+	}
 	Locator::explosionSystem::value().Reset();
 	Locator::floatingNumberSystem::value().Reset();
 	Locator::magicSystem::value().SetIgnoreInfluence(false);
@@ -816,7 +957,12 @@ void LandSystem::PrepareNewLand(land_change::Kind change)
 	Locator::reactionSystem::value().Reset();
 	Locator::teleportSystem::value().Reset();
 	Locator::gestureEvents::value().Reset();
-	Locator::particleSystem::value().Reset();
+	Locator::particleRuleSystem::value().Reset();
+	// The effects that the turns and the scripts ask for take numbers from the first again, on every computer
+	if (Locator::effectRequestSystem::has_value())
+	{
+		Locator::effectRequestSystem::value().Reset();
+	}
 	// Nor its bodies in the physics
 	if (Locator::dynamicsSystem::has_value())
 	{
@@ -840,25 +986,29 @@ void LandSystem::PrepareNewLand(land_change::Kind change)
 
 	// Every sound stops as the land goes, however it changes: the music at once, without fading, the atmosphere, and
 	// every sound and voice still playing. They go before their entities do, which would leave them playing on
-	if (Locator::audio::has_value())
+	if (Locator::sounds::has_value())
 	{
-		Locator::audio::value().Stop();
+		Locator::sounds::value().StopAllSounds();
 	}
 
 	// The sky goes on as it was: it is kept while every entity goes, and made again after
-	Locator::skySystem::value().KeepForNextLand();
+	Locator::skyClockSystem::value().KeepForNextLand();
 	// The turns go back to 0 as the land clears, before the script of the next land starts. Thus the buildings that the
 	// script makes are not made in play, and they get no path from their storage pit, as on the first land of a game.
 	Locator::time::value().RestartTurns();
-	// Reset everything. Deletes all entities and their components
+	// Reset everything. Deletes all entities and their components, and the things that only the frames make
 	Locator::entitiesRegistry::value().Reset();
+	if (Locator::drawnRegistry::has_value())
+	{
+		Locator::drawnRegistry::value().Reset();
+	}
 	// The new land makes the draw list again on its first frame only. Thus reset the draw list after the entities go:
 	// a thing that the hand held asks for two frames when it goes.
 	if (Locator::objectDrawListSystem::has_value())
 	{
 		Locator::objectDrawListSystem::value().Reset();
 	}
-	Locator::skySystem::value().Initialize();
+	Locator::skyClockSystem::value().Initialize();
 	// TODO(#661): split entities that are permanent from map entities and move hand and camera to init
 	// We need a hand for the player
 	Locator::handSystem::value().Initialize();
@@ -932,7 +1082,18 @@ void LandSystem::StartNewLand(land_change::Kind change)
 		clock.StartGameClock(false);
 		clock.SetSpeed(1.0f / k_NormalTurnDurationMultiplier);
 	}
+	// A new land starts with no music of the scripts
+	if (Locator::scriptMusicSystem::has_value())
+	{
+		Locator::scriptMusicSystem::value().Reset();
+	}
 	View().StartLandAudio();
+	// A skirmish starts: in the first turn the god of the player brings the creature that the profile keeps. The commands
+	// of that turn come first, and the computer gods start after it.
+	if (land_change::RulesFor(change).profileCreatureBrought && !clock.IsNetworkGame())
+	{
+		Locator::playerCommandSystem::value().SetPlayersCreatureDue(true);
+	}
 }
 
 void LandSystem::LoadLandscape(const std::filesystem::path& path)
@@ -969,13 +1130,21 @@ void LandSystem::LoadLandscape(const std::filesystem::path& path)
 void LandSystem::SetUpLandscape()
 {
 	// A land starts at noon on the game's cycle of day and night, which its script may change, under new clouds
-	auto& sky = Locator::skySystem::value();
+	auto& sky = Locator::skyClockSystem::value();
 	sky.GetClock().Reset();
 	sky.SetTime(sky.GetClock().GetScriptTime());
-	Locator::cloudSystem::value().Reset();
+	archetypes::CloudArchetype::CreateSky();
+	if (Locator::cloudSystem::has_value())
+	{
+		Locator::cloudSystem::value().Reset();
+	}
 
-	// There is always a player active
-	Locator::playerSystem::value().AddPlayer(archetypes::PlayerArchetype::Create(PlayerNames::PLAYER_ONE));
+	// Before the land script runs, the land has the player of each of the seven god slots and the neutral player, in the
+	// order of their numbers. A slot that nobody plays has its player too, so the scripts and the turns find it.
+	for (uint8_t number = 0; number < static_cast<uint8_t>(PlayerNames::_COUNT); ++number)
+	{
+		Locator::playerSystem::value().AddPlayer(archetypes::PlayerArchetype::Create(static_cast<PlayerNames>(number)));
+	}
 
 	Locator::cameraBookmarkSystem::value().Initialize();
 	Locator::playerSystem::value().RegisterPlayers();
@@ -1072,7 +1241,10 @@ bool LandSystem::StartChallengeScripts(bool startStory)
 
 void LandSystem::StartStoryScripts()
 {
-	const bool started = Locator::vm::value().StartScript("LandControlAll", script::start::StartableScripts()) != 0;
+	// Only the first land of the story starts the story. On another land the scripts stay ready, but none runs.
+	const auto landNumber = Locator::entitiesRegistry::value().Context().mapScriptGlobals.landNumber;
+	const bool started = new_game_choice::LandStartsStoryScript(landNumber) &&
+	                     Locator::vm::value().StartScript("LandControlAll", script::start::StartableScripts()) != 0;
 	// The question comes whether or not the story started
 	const bool asked = AskNewGameChoice();
 	// The story opens on a black screen: its first land comes up at noon, and its scripts set the dawn of the opening
@@ -1081,6 +1253,16 @@ void LandSystem::StartStoryScripts()
 	if (started && !asked)
 	{
 		Locator::cinematicDirectorSystem::value().StartStory();
+	}
+	// Not in the original game: a developer's direct start of a later land runs the control script of that land, which
+	// the game runs only after the last land is left
+	if (const auto land = new_game_choice::DirectStartLand(_newGameStart, landNumber); land.has_value())
+	{
+		const auto script = "LandControl" + std::to_string(*land);
+		if (Locator::vm::value().StartScript(script, script::start::StartableScripts()) == 0)
+		{
+			SPDLOG_LOGGER_WARN(spdlog::get("game"), "The direct start could not start the script {}", script);
+		}
 	}
 }
 
@@ -1146,7 +1328,7 @@ void LandSystem::GameLogicLoop(simulation::TurnViewInterface& view)
 	if (clock.IsPaused())
 	{
 		// The ambience is silent while the game is paused
-		Locator::audio::value().AtmosProcess(false);
+		Locator::sounds::value().ProcessAtmosphere(false);
 		return;
 	}
 
@@ -1166,6 +1348,9 @@ void LandSystem::GameLogicLoop(simulation::TurnViewInterface& view)
 		}
 		// The turn's steps go in the game's order, because many systems depend on it (see game_turn::k_Turn). A second
 		// turn in the frame follows the turn before it at once: the frame steps only draw, so none come between them.
+		// The tools that act by the turns act first, so that each computer of a network game does them before the same
+		// turn.
+		view.BeforeTurn();
 		simulation::PlayTurn(view);
 
 		_lastGameLoopTime = currentTime;
@@ -1179,12 +1364,43 @@ void LandSystem::PlayTurns(simulation::TurnViewInterface& view)
 	auto gameLogic = profiler.BeginScoped(Profiler::Stage::GameLogic);
 	const auto turnBefore = Locator::time::value().GetTurn();
 	const auto logicStart = std::chrono::steady_clock::now();
+	PlayDueTurns(view);
+	FinishTurns(turnBefore, logicStart, std::nullopt);
+}
+
+void LandSystem::PlayTurnSteps(simulation::TurnViewInterface& view)
+{
+	auto gameLogic = Locator::profiler::value().BeginScoped(Profiler::Stage::GameLogic);
+	PlayDueTurns(view);
+}
+
+void LandSystem::PlayDueTurns(simulation::TurnViewInterface& view)
+{
+	// The queue knows that this thread does the turns, so that the check can find turn code that uses the services of the
+	// main thread directly
+	auto* queue = Locator::mainThreadQueue::has_value() ? &Locator::mainThreadQueue::value() : nullptr;
+	std::optional<MainThreadQueue::TurnScope> turnScope;
+	if (queue != nullptr)
+	{
+		turnScope.emplace(*queue);
+	}
 	GameLogicLoop(view);
+}
+
+void LandSystem::FinishTurns(uint32_t turnBefore, std::chrono::steady_clock::time_point start,
+                             std::optional<std::chrono::steady_clock::time_point> end)
+{
+	// The main thread does the work that the turns gave it. Turns on the main thread do their work at once, so then no
+	// work waits here.
+	if (Locator::mainThreadQueue::has_value())
+	{
+		Locator::mainThreadQueue::value().RunPending();
+	}
 	// The run record keeps the time of each turn
 	if (Locator::time::value().GetTurn() != turnBefore)
 	{
 		Locator::simulation::value().TurnPlayed(
-		    std::chrono::duration<float, std::milli>(std::chrono::steady_clock::now() - logicStart).count());
+		    std::chrono::duration<float, std::milli>(end.value_or(std::chrono::steady_clock::now()) - start).count());
 	}
 }
 

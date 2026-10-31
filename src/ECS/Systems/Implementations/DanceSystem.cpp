@@ -14,8 +14,10 @@
 #include <cctype>
 
 #include <algorithm>
+#include <array>
 #include <filesystem>
 #include <memory>
+#include <optional>
 #include <stdexcept>
 #include <string>
 #include <string_view>
@@ -38,6 +40,7 @@
 #include "ECS/Components/Villager.h"
 #include "ECS/DanceRules.h"
 #include "ECS/Dances.h"
+#include "ECS/GamePlayers.h"
 #include "ECS/ListOrder.h"
 #include "ECS/Registry.h"
 #include "ECS/Systems/FootpathSystemInterface.h"
@@ -153,24 +156,12 @@ bool Available(entt::entity thing)
 entt::entity DanceSystem::Create(DanceInfo type, const glm::vec3& place, entt::entity owner, uint32_t duration,
                                  bool madeByScript, entt::entity town)
 {
-	if (!Locator::infoConstants::has_value())
-	{
-		return entt::null;
-	}
-	const auto& table = Locator::infoConstants::value().dance;
-	const auto row = static_cast<std::size_t>(type);
-	if (type == DanceInfo::None || row >= table.size())
-	{
-		return entt::null;
-	}
-	const auto& info = table.at(row);
-	const std::string_view field(info.fileName.data(), info.fileName.size());
-	const std::string fileName(field.substr(0, field.find('\0')));
-	auto file = LoadDanceFile(fileName);
+	auto file = FileOf(type);
 	if (file == nullptr)
 	{
 		return entt::null;
 	}
+	const auto& info = Locator::infoConstants::value().dance.at(static_cast<std::size_t>(type));
 	const auto dance = dances::Create(Locator::entitiesRegistry::value(),
 	                                  {.type = type,
 	                                   .autostart = info.startsAutomatically != 0,
@@ -186,6 +177,23 @@ entt::entity DanceSystem::Create(DanceInfo type, const glm::vec3& place, entt::e
 	return dance;
 }
 
+std::shared_ptr<const dance::DanceFile> DanceSystem::FileOf(DanceInfo type)
+{
+	if (!Locator::infoConstants::has_value())
+	{
+		return nullptr;
+	}
+	const auto& table = Locator::infoConstants::value().dance;
+	const auto row = static_cast<std::size_t>(type);
+	if (type == DanceInfo::None || row >= table.size())
+	{
+		return nullptr;
+	}
+	const auto& info = table.at(row);
+	const std::string_view field(info.fileName.data(), info.fileName.size());
+	return LoadDanceFile(std::string(field.substr(0, field.find('\0'))));
+}
+
 void DanceSystem::Destroy(entt::entity dance)
 {
 	dances::Destroy(Locator::entitiesRegistry::value(), dance, &FinishedDancing);
@@ -196,29 +204,38 @@ void DanceSystem::ProcessTurn()
 	auto& registry = Locator::entitiesRegistry::value();
 	// The dances in the order of the game's list, the newest first
 	const auto all = ecs::list_order::Walk<Dance>(registry);
-	// The dances measure the distance to the player's hand, as the interface last put it on the land
+	// The hands that the dances count. A game with one player counts only the hand of the first player. A network game
+	// counts the hand of each god, from the reports that all the computers read.
+	const bool networkGame = Locator::time::value().IsNetworkGame();
+	std::array<std::optional<glm::vec3>, components::k_DanceHandGods> hands {};
 	if (Locator::handSystem::has_value())
 	{
-		const auto hand =
-		    Locator::handSystem::value().GetPlayerHandPositions().at(static_cast<size_t>(HandSystemInterface::Side::Left));
-		if (hand.has_value())
+		const auto& handSystem = Locator::handSystem::value();
+		// Each god of the game by its slot; a game with one player has only the first
+		for (const auto player : ecs::game_players::Gods())
 		{
-			_hand = hand;
+			const auto god = player_slots::SlotOfPlayer(player);
+			if (!god.has_value() || *god >= hands.size() || (!networkGame && *god > 0))
+			{
+				continue;
+			}
+			hands.at(*god) = handSystem.GetHandPositionsOf(player).at(static_cast<size_t>(HandSystemInterface::Side::Left));
 		}
 	}
-	const auto handNear = [this](const Dance& dance) {
-		if (!_hand.has_value() || !Locator::terrainSystem::has_value())
+	const auto handsNear = [&hands](const Dance& dance) {
+		if (!Locator::terrainSystem::has_value() ||
+		    std::ranges::none_of(hands, [](const auto& hand) { return hand.has_value(); }))
 		{
-			return false;
+			return ecs::dance_rules::HandsNear {};
 		}
 		const float ground = Locator::terrainSystem::value().GetAltitude(dance.place.x, dance.place.z);
-		return ecs::dance_rules::HandNear(ecs::dance_rules::HandPoint(dance.place, ground), *_hand);
+		return ecs::dance_rules::GodsNear(ecs::dance_rules::HandPoint(dance.place, ground), hands);
 	};
 	const dances::TurnContext context {.turn = Locator::time::value().GetTurn(),
 	                                   .available = &Available,
 	                                   .finished = &FinishedDancing,
 	                                   .playClipAgain = &ecs::villager_dance::PlayClipAgain,
-	                                   .handNear = handNear,
+	                                   .handsNear = handsNear,
 	                                   .cameraAsked = &StartCamera};
 	for (const auto entity : all)
 	{
@@ -229,9 +246,10 @@ void DanceSystem::ProcessTurn()
 	}
 }
 
-void DanceSystem::StartCamera(entt::entity dance)
+void DanceSystem::StartCamera(entt::entity dance, PlayerNames god)
 {
-	if (!Locator::camera::has_value())
+	// Only the computer of the god whose hand stayed near turns its camera
+	if (!Locator::camera::has_value() || !Locator::handSystem::has_value() || !Locator::handSystem::value().IsOwnPlayer(god))
 	{
 		return;
 	}

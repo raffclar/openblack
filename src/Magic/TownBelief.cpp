@@ -39,10 +39,28 @@ std::vector<Gained> magic::town_belief::Turn(Belief& town, float recentDecay)
 			continue;
 		}
 		gained.push_back({.player = static_cast<PlayerNames>(p), .amount = amount});
+		town.gainedSinceShown.at(p) += amount;
 		// Capped from above only: belief can fall below nothing
 		Set(town, static_cast<PlayerNames>(p), town.belief.at(p) + amount);
 		town.pending.at(p) = 0.0f;
 	}
+	return gained;
+}
+
+std::optional<float> magic::town_belief::GainShown(float gained)
+{
+	if (!(gained > k_LeastGainShown))
+	{
+		return std::nullopt;
+	}
+	return gained * k_GainShownScale;
+}
+
+std::array<float, k_PlayerCount> magic::town_belief::TakeGainedSinceShown(Belief& town)
+{
+	std::array<float, k_PlayerCount> gained {};
+	std::ranges::transform(town.gainedSinceShown, gained.begin(), [](float amount) { return amount > 0.0f ? amount : 0.0f; });
+	town.gainedSinceShown.fill(0.0f);
 	return gained;
 }
 
@@ -100,16 +118,18 @@ void magic::town_belief::SetInPlayer(Belief& town, PlayerNames player, float val
 	Set(town, player, value);
 }
 
-std::optional<PlayerNames> magic::town_belief::Ownership(Belief& town, PlayerNames owner, float claimedMultiplier)
+std::optional<PlayerNames> magic::town_belief::Ownership(Belief& town, PlayerNames owner, float claimedMultiplier,
+                                                         size_t players)
 {
 	Set(town, PlayerNames::NEUTRAL, town.neutral);
-	if (static_cast<size_t>(owner) >= k_PlayerCount)
+	const auto count = std::min(player_slots::PlayerNumbersOf(players), k_PlayerCount);
+	if (static_cast<size_t>(owner) >= count)
 	{
 		return std::nullopt;
 	}
 	auto winner = static_cast<size_t>(owner);
 	float most = town.belief.at(winner);
-	for (size_t p = 0; p < k_PlayerCount; ++p)
+	for (size_t p = 0; p < count; ++p)
 	{
 		if (town.belief.at(p) >= most)
 		{
@@ -185,4 +205,16 @@ void magic::town_belief::ResetForEmptyTown(Belief& town, std::span<const DesireD
 	{
 		Set(town, static_cast<PlayerNames>(p), town.neutral);
 	}
+}
+
+float magic::town_belief::CapFromLandScript(float asked, bool networkGame, std::string_view landName, uint32_t townId,
+                                            PlayerNames player)
+{
+	constexpr uint32_t k_RaisedTown = 3;
+	constexpr float k_RaisedCap = 2.0f;
+	if (networkGame && landName == k_ThreeGodMapName && townId == k_RaisedTown && player != PlayerNames::NEUTRAL)
+	{
+		return k_RaisedCap;
+	}
+	return asked;
 }

@@ -20,15 +20,14 @@
 #include <LNDFile.h>
 #include <entt/core/hashed_string.hpp>
 #include <glm/geometric.hpp>
+#include <glm/gtc/matrix_transform.hpp>
+#include <glm/matrix.hpp>
 #include <spdlog/spdlog.h>
 
 #include "3D/L3DMesh.h"
 #include "3D/L3DSubMesh.h"
 #include "3D/LandIslandInterface.h"
 #include "3D/MapCoords.h"
-#include "Audio/AudioManagerInterface.h"
-#include "Audio/GameSoundEffects.h"
-#include "Audio/Sound.h"
 #include "Camera/Camera.h"
 #include "Common/GUtilsDistance.h"
 #include "Common/GameRandom.h"
@@ -36,6 +35,7 @@
 #include "ECS/Components/Abode.h"
 #include "ECS/Components/AnimatedStatic.h"
 #include "ECS/Components/AtHome.h"
+#include "ECS/Components/BuildingDamage.h"
 #include "ECS/Components/CarriedByTornado.h"
 #include "ECS/Components/Creature.h"
 #include "ECS/Components/CreatureBody.h"
@@ -89,6 +89,9 @@
 #include "Particles/ParticleDrawFrame.h"
 #include "Particles/ParticleMaths.h"
 #include "Resources/ResourcesInterface.h"
+#include "Sound/GameSoundEffects.h"
+#include "Sound/SoundId.h"
+#include "Sound/SoundRequestInterface.h"
 #include "VillagerFire.h"
 
 using namespace openblack;
@@ -311,15 +314,34 @@ const graphics::L3DMesh* MeshOf(entt::entity object)
 
 /// A random point of a random triangle of the model's first detail, in its own frame; a random bone's place, as the
 /// bones are posed now, for a model moved by bones. A tree's flames keep to its middle half. On a creature's body, the
-/// point also keeps its bone: the game draws the body bone by bone, and the point stays at that bone.
+/// point also keeps its bone: the game draws the body bone by bone, and the point stays at that bone. A broken building
+/// takes the point from its broken model when that gives one.
 std::optional<fire::graphic::Anchor> RandomPointOn(entt::entity object)
 {
-	const auto* mesh = MeshOf(object);
-	if (mesh == nullptr || !Locator::gameRandom::has_value())
+	if (!Locator::gameRandom::has_value())
 	{
 		return std::nullopt;
 	}
 	auto& random = Locator::gameRandom::value();
+	const auto& registry = Entities();
+	const auto* broken = registry.TryGet<const BuildingDamage>(object);
+	const auto* transform = registry.TryGet<const Transform>(object);
+	if (broken != nullptr && transform != nullptr && registry.AnyOf<Abode, SpellDispenser>(object))
+	{
+		const auto drawn = ecs::drawn_place::DrawnTransformOf(registry, object, *transform);
+		const auto placement = glm::translate(glm::mat4(1.0f), drawn.position) * glm::mat4(drawn.rotation) *
+		                       glm::scale(glm::mat4(1.0f), drawn.scale);
+		if (const auto point = physics::damage::FlamePointOnModel(
+		        broken->mesh, glm::inverse(placement), [&random](float limit) { return random.LocalFloatRand(limit); }))
+		{
+			return fire::graphic::Anchor {.point = *point};
+		}
+	}
+	const auto* mesh = MeshOf(object);
+	if (mesh == nullptr)
+	{
+		return std::nullopt;
+	}
 	if (mesh->IsBoned() && !mesh->GetBoneMatrices().empty())
 	{
 		const auto bones = ecs::posed_model::BonesOf(Entities(), object, *mesh);
@@ -1127,6 +1149,8 @@ void FireSystem::Process(entt::entity object)
 			// Who lit it, read before the burn: a pile on its own burnt to nothing goes with it
 			const auto& lit = registry.Get<const Fire>(object);
 			const auto litBy = lit.hasPlayer ? std::optional(lit.player) : std::nullopt;
+			// Its heat, read before the burn for the same reason
+			const float temperature = fire.state.temperature;
 			// Its people cry out about the fire while it is hotter than nothing
 			const auto cry =
 			    fire.state.temperature > 0.0f
@@ -1137,7 +1161,9 @@ void FireSystem::Process(entt::entity object)
 			// when no one did
 			if (!field && registry.Valid(object))
 			{
-				world_objects::AttackTown(object, outcome.damage, litBy.value_or(PlayerNames::NEUTRAL), false, cry);
+				// The town keeps the heat of the thing as the burn of the attack
+				world_objects::AttackTown(object, outcome.damage, litBy.value_or(PlayerNames::NEUTRAL),
+				                          ecs::town_aggression::Harm {.burn = temperature}, false, cry);
 			}
 			// Only the burn that takes the last of its life burns it down: one burning on with none left is not burnt down
 			// again
@@ -1638,11 +1664,11 @@ void FireSystem::ConsiderSound(entt::entity object, float fraction)
 
 void FireSystem::PlaySounds()
 {
-	if (!Locator::audio::has_value())
+	if (!Locator::sounds::has_value())
 	{
 		return;
 	}
-	auto& audio = Locator::audio::value();
+	auto& audio = Locator::sounds::value();
 	auto& registry = Entities();
 	for (auto& slot : _soundSlots)
 	{
@@ -1676,9 +1702,9 @@ void FireSystem::StopSound(entt::entity object)
 		{
 			continue;
 		}
-		if (slot.emitter != entt::null && Locator::audio::has_value() && Locator::audio::value().EmitterExists(slot.emitter))
+		if (slot.emitter != entt::null && Locator::sounds::has_value() && Locator::sounds::value().EmitterExists(slot.emitter))
 		{
-			Locator::audio::value().StopEmitter(slot.emitter);
+			Locator::sounds::value().StopEmitter(slot.emitter);
 		}
 		slot = SoundSlot {};
 	}
@@ -1721,7 +1747,7 @@ void FireSystem::Update(std::chrono::milliseconds frameRealTime, std::chrono::mi
 		        .toWorld = [object](const fire::graphic::Anchor& anchor) { return ToWorld(object, anchor); },
 		        .random = [random](float range) { return random != nullptr ? random->LocalFloatRand(range) : 0.0f; },
 		    };
-		    if (fire::graphic::Update(look.graphic, inputs, seconds, sampler) && Locator::audio::has_value())
+		    if (fire::graphic::Update(look.graphic, inputs, seconds, sampler) && Locator::sounds::has_value())
 		    {
 			    // The steam hisses as it starts
 			    SPDLOG_LOGGER_DEBUG(spdlog::get("game"), "Fire: object {} hisses with steam at {:.0f}",
@@ -1902,7 +1928,7 @@ void FireSystem::SaveState(reflection::BinaryWriter& out) const
 	// The sounds are not kept: the next turn gives the nearest fires their sounds again
 	reflection::Save(out, _fires);
 	reflection::Save(out, _burnPointTurn);
-	reflection::Save(out, _pace);
+	reflection::SavePresentation(out, _pace);
 }
 
 bool FireSystem::LoadState(reflection::BinaryReader& in)
@@ -1917,9 +1943,9 @@ void FireSystem::Reset()
 {
 	for (const auto& slot : _soundSlots)
 	{
-		if (slot.emitter != entt::null && Locator::audio::has_value() && Locator::audio::value().EmitterExists(slot.emitter))
+		if (slot.emitter != entt::null && Locator::sounds::has_value() && Locator::sounds::value().EmitterExists(slot.emitter))
 		{
-			Locator::audio::value().StopEmitter(slot.emitter);
+			Locator::sounds::value().StopEmitter(slot.emitter);
 		}
 	}
 	_soundSlots = {};

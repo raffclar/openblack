@@ -14,6 +14,7 @@
 #include <cmath>
 
 #include <algorithm>
+#include <optional>
 #include <string>
 #include <vector>
 
@@ -24,8 +25,6 @@
 
 #include "3D/CreatureBody.h"
 #include "3D/LandIslandInterface.h"
-#include "Audio/AudioManagerInterface.h"
-#include "Audio/GameSoundEffects.h"
 #include "Camera/Camera.h"
 #include "Common/GameRandom.h"
 #include "Creature/CreatureAudio.h"
@@ -33,10 +32,11 @@
 #include "Creature/CreatureLayers.h"
 #include "Creature/CreaturePointing.h"
 #include "Creature/CreatureRig.h"
-#include "ECS/Components/AudioEmitter.h"
+#include "Creature/CreatureShownFace.h"
 #include "ECS/Components/Creature.h"
 #include "ECS/Components/CreatureAudio.h"
 #include "ECS/Components/CreatureBody.h"
+#include "ECS/Components/ShownCreatureFace.h"
 #include "ECS/Components/Transform.h"
 #include "ECS/Reflection/BinaryArchive.h"
 #include "ECS/Registry.h"
@@ -52,6 +52,8 @@
 #include "InfoConstants.h"
 #include "Locator.h"
 #include "Resources/ResourcesInterface.h"
+#include "Sound/GameSoundEffects.h"
+#include "Sound/SoundRequestInterface.h"
 
 using namespace openblack;
 using namespace openblack::ecs::systems;
@@ -105,10 +107,10 @@ void Sound(entt::entity entity, const Creature& creature, const Transform& trans
 			// Stopping a sound or letting its loop run out, which no shipped animation does
 			note.note = "stop and release are not supported";
 		}
-		else if (Locator::audio::has_value())
+		else if (Locator::sounds::has_value())
 		{
 			// The sample has its say in when it is heard, as for every sound effect
-			auto& audio = Locator::audio::value();
+			auto& audio = Locator::sounds::value();
 			const auto result =
 			    audio.PlayAnimEffect(bank, keys.ToArray(), entity, transform.position, audio::CurrentSoundEffectConditions());
 			// The sound stays with the creature while it plays
@@ -130,7 +132,7 @@ void Sound(entt::entity entity, const Creature& creature, const Transform& trans
 				break;
 			case AnimEffectPlay::Outcome::TooFar:
 				note.note = fmt::format("too far ({:.0f})",
-				                        glm::distance(Locator::audio::value().GetListener().origin, transform.position));
+				                        glm::distance(Locator::sounds::value().GetListener().origin, transform.position));
 				break;
 			case AnimEffectPlay::Outcome::AlreadyPlaying:
 				note.note = "already playing";
@@ -169,8 +171,8 @@ void SoundIfAsked(entt::entity entity, const Creature& creature, const Transform
 	}
 }
 
-/// The layers of the body as they are posed this frame
-creature_audio::Layers LayersOf(const CreatureAnimation& animation)
+/// The layers of the body as they are posed this frame, with the face that the body shows
+creature_audio::Layers LayersOf(const CreatureAnimation& animation, const creature_layers::FaceLayer& face)
 {
 	creature_audio::Layers layers;
 	// The animations played by weight stand in for the body's own action
@@ -184,9 +186,9 @@ creature_audio::Layers LayersOf(const CreatureAnimation& animation)
 		layers.gesture = creature_audio::Played {*animation.gesture.animation, animation.gesture.timeMs};
 	}
 	// A face being run back to its start to change makes no sound
-	if (animation.face.current.has_value() && animation.face.wanted == animation.face.current)
+	if (face.current.has_value() && face.wanted == face.current)
 	{
-		layers.face = creature_audio::Played {*animation.face.current, animation.face.timeMs};
+		layers.face = creature_audio::Played {*face.current, face.timeMs};
 	}
 	std::vector<float> weights;
 	std::vector<size_t> animations;
@@ -267,7 +269,10 @@ void CreatureAudioSystem::Update(std::chrono::duration<float, std::milli> gameTi
 		    const auto transform = DrawnTransform(turnTransform, &animation);
 		    heard.clockMs += gameTime.count();
 		    const auto* rig = RigOf(creature);
-		    const auto layers = LayersOf(animation);
+		    // The face that this computer shows can be the face of a stroke of its own hand
+		    const auto* shown = registry.TryGet<const ShownCreatureFace>(entity);
+		    const auto layers =
+		        LayersOf(animation, creature_shown_face::Shown(animation.face, shown != nullptr ? &shown->face : nullptr));
 		    if (rig == nullptr)
 		    {
 			    return;
@@ -314,21 +319,21 @@ void CreatureAudioSystem::Update(std::chrono::duration<float, std::milli> gameTi
 	    });
 
 	// The creatures' sounds follow them about. The sounds' entities are the audio's, apart from the world's.
-	auto* emitters = Locator::audio::has_value() ? Locator::audio::value().Emitters() : nullptr;
-	if (emitters == nullptr)
+	if (!Locator::sounds::has_value())
 	{
 		return;
 	}
-	emitters->Each<AudioEmitter>([&registry](AudioEmitter& emitter) {
-		if (emitter.owner == entt::null || !registry.Valid(emitter.owner))
+	Locator::sounds::value().PlaceOwnedEmitters([&registry](entt::entity owner) -> std::optional<glm::vec3> {
+		if (!registry.Valid(owner))
 		{
-			return;
+			return std::nullopt;
 		}
-		if (const auto* transform = registry.TryGet<const Transform>(emitter.owner);
-		    transform != nullptr && registry.AnyOf<Creature>(emitter.owner))
+		if (const auto* transform = registry.TryGet<const Transform>(owner);
+		    transform != nullptr && registry.AnyOf<Creature>(owner))
 		{
-			emitter.position = DrawnTransform(*transform, registry.TryGet<const CreatureAnimation>(emitter.owner)).position;
+			return DrawnTransform(*transform, registry.TryGet<const CreatureAnimation>(owner)).position;
 		}
+		return std::nullopt;
 	});
 }
 

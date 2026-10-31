@@ -155,16 +155,24 @@ TEST(GameTurnOrder, TheFieldsAndFishFarmsComeBeforeTheTracksAndTheFootpaths)
 	EXPECT_TRUE(recorder.Before(Step::Dances, Step::Fields));
 	EXPECT_TRUE(recorder.Before(Step::Fields, Step::FishFarms));
 	EXPECT_TRUE(recorder.Before(Step::FishFarms, Step::WalkPaths));
-	EXPECT_TRUE(recorder.Before(Step::WalkPaths, Step::Footpaths));
+	EXPECT_TRUE(recorder.Before(Step::WalkPaths, Step::Mists));
+	EXPECT_TRUE(recorder.Before(Step::Mists, Step::Footpaths));
 	EXPECT_TRUE(recorder.Before(Step::Footpaths, Step::ForestGrowth));
+}
+
+// The puzzle games take their turn in the lists, after the tracks and before the footpaths
+TEST(GameTurnOrder, ThePuzzleGamesComeBeforeTheFootpaths)
+{
+	const auto recorder = PlayOneTurn();
+	EXPECT_TRUE(recorder.Before(Step::WalkPaths, Step::PuzzleGames));
+	EXPECT_TRUE(recorder.Before(Step::PuzzleGames, Step::Footpaths));
 }
 
 TEST(GameTurnOrder, TheAnimalsTakeTheirTurnWithTheLivingBeforeTheFires)
 {
 	const auto recorder = PlayOneTurn();
 	EXPECT_TRUE(recorder.Before(Step::ForestGrowth, Step::Living));
-	EXPECT_TRUE(recorder.Before(Step::Living, Step::MapCellsAfterLiving));
-	EXPECT_TRUE(recorder.Before(Step::MapCellsAfterLiving, Step::Fires));
+	EXPECT_TRUE(recorder.Before(Step::Living, Step::Fires));
 	EXPECT_TRUE(recorder.Before(Step::Fires, Step::Reactions));
 	EXPECT_TRUE(recorder.Before(Step::Reactions, Step::Miracles));
 }
@@ -180,6 +188,14 @@ TEST(GameTurnOrder, TheScriptsSeeTheWorldAfterTheMiraclesParticlesAndPhysics)
 	EXPECT_TRUE(recorder.Before(Step::Scripts, Step::ScriptFade));
 }
 
+TEST(GameTurnOrder, TheScriptsSeeTheHandDemonstrationAtTheTimeOfTheTurn)
+{
+	const auto recorder = PlayOneTurn();
+	EXPECT_TRUE(recorder.Before(Step::Clock, Step::HandDemo));
+	EXPECT_TRUE(recorder.Before(Step::HandDemo, Step::Scripts));
+	EXPECT_TRUE(recorder.Before(Step::IntroLift, Step::Scripts));
+}
+
 TEST(GameTurnOrder, TheHelpComesAfterTheScriptsAndBeforeTheTimeOfDay)
 {
 	const auto recorder = PlayOneTurn();
@@ -193,7 +209,9 @@ TEST(GameTurnOrder, TheHelpComesAfterTheScriptsAndBeforeTheTimeOfDay)
 TEST(GameTurnOrder, TheLateStepsOfTheTurnComeInTheGamesOrder)
 {
 	const auto recorder = PlayOneTurn();
-	EXPECT_TRUE(recorder.Before(Step::Climates, Step::HeldThing));
+	EXPECT_TRUE(recorder.Before(Step::Climates, Step::BeliefGained));
+	EXPECT_TRUE(recorder.Before(Step::BeliefGained, Step::LosingBelief));
+	EXPECT_TRUE(recorder.Before(Step::LosingBelief, Step::HeldThing));
 	EXPECT_TRUE(recorder.Before(Step::HeldThing, Step::PlayerSparkles));
 	EXPECT_TRUE(recorder.Before(Step::PlayerSparkles, Step::Rewards));
 	EXPECT_TRUE(recorder.Before(Step::Rewards, Step::Guidance));
@@ -241,6 +259,13 @@ TEST(GameTurnOrder, TheTotemsTakeTheirTurnWithTheirTowns)
 	const auto recorder = PlayOneTurn();
 	EXPECT_TRUE(recorder.Before(Step::Players, Step::VillageTotems));
 	EXPECT_TRUE(recorder.Before(Step::VillageTotems, Step::PlayerAlignment));
+}
+
+TEST(GameTurnOrder, TheTribalPowersSettleAfterTheComputerPlayersAndBeforeTheInfluence)
+{
+	const auto recorder = PlayOneTurn();
+	EXPECT_TRUE(recorder.Before(Step::ComputerPlayers, Step::TribalPowers));
+	EXPECT_TRUE(recorder.Before(Step::TribalPowers, Step::Influence));
 }
 
 TEST(GameTurnOrder, TheTeleportTravellersAreDroppedAfterTheTownsAndBeforeTheComputerPlayers)
@@ -431,4 +456,18 @@ TEST(GameTurnOrder, AStepWithNoStageFollowsTheStepBeforeIt)
 	    static_cast<size_t>(std::distance(k_Turn.begin(), std::ranges::find(k_Turn, Step::TownFlags, &Place::step)));
 	EXPECT_FALSE(PlaysOnceDecided(k_Turn, index));
 	EXPECT_TRUE(PlaysOnceDecided(k_Turn, 0));
+}
+
+TEST(GameTurnOrder, TheGodsGetTheirConditionsAfterTheJoinsAndBeforeTheWorldCounts)
+{
+	const auto recorder = PlayOneTurn();
+	// The humans join with the commands of the first turn. The gods get the conditions before any step can count.
+	EXPECT_TRUE(recorder.Before(Step::PlayerCommands, Step::GameConditions));
+	EXPECT_TRUE(recorder.Before(Step::Clock, Step::GameConditions));
+	EXPECT_TRUE(recorder.Before(Step::GameConditions, Step::Players));
+	EXPECT_TRUE(recorder.Before(Step::GameConditions, Step::Living));
+	// A decided game gives no conditions
+	TurnRecorder decided;
+	PlayTurn([&decided](Step step) { decided(step); }, true);
+	EXPECT_EQ(std::ranges::count(decided.Steps(), Step::GameConditions), 0);
 }

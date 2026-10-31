@@ -22,10 +22,10 @@
 #include "Creature/CreatureCave.h"
 #include "Creature/TattooEditor.h"
 
-namespace openblack::gui
+namespace openblack
 {
-class GameInterface;
-} // namespace openblack::gui
+class TempleScreenInterface;
+} // namespace openblack
 
 namespace openblack::ecs::systems
 {
@@ -44,8 +44,8 @@ public:
 	/// shows the player's creature by the fire for as long as the player is in the temple
 	virtual void Update(std::chrono::duration<float, std::milli> frameTime) = 0;
 	/// The game's texts and font the screen writes with, none while the game has no interface
-	virtual void SetInterface(const gui::GameInterface* interface) = 0;
-	[[nodiscard]] virtual const gui::GameInterface* GetInterface() const = 0;
+	virtual void SetInterface(const TempleScreenInterface* interface) = 0;
+	[[nodiscard]] virtual const TempleScreenInterface* GetInterface() const = 0;
 
 	virtual void Open() = 0;
 	virtual void Close() = 0;
@@ -69,7 +69,8 @@ public:
 	virtual void SetCreatureShown(bool shown) = 0;
 	[[nodiscard]] virtual bool IsCreatureShown() const = 0;
 	/// The copy of the player's creature the temple's creature room shows by its fire (see components::CaveCreature),
-	/// none while the player isn't in the temple or has no creature
+	/// none while the player isn't in the temple or has no creature. The copy is a thing of the temple's rooms (see
+	/// TempleInteriorInterface::GetRooms), not of the land.
 	[[nodiscard]] virtual std::optional<entt::entity> GetCaveCreature() const = 0;
 	/// The camera's view of the copy as it zooms onto it, from in front and above
 	[[nodiscard]] virtual std::optional<creature_tattoo_editor::Orbit> GetCaveCreatureView() const = 0;

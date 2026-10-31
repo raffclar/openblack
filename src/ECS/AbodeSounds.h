@@ -15,8 +15,8 @@
 #include <string_view>
 
 #include "3D/DayNightClock.h"
-#include "Audio/AnimEffectKeys.h"
 #include "Enums.h"
+#include "Sound/AnimEffectKeys.h"
 
 /// The rules of the sounds that the buildings of a town make by themselves. Pure, for the abode sound system and its
 /// tests.

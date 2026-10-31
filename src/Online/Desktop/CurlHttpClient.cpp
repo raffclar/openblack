@@ -92,7 +92,7 @@ struct CurlHttpClient::Transfer
 	{
 		auto& transfer = *static_cast<Transfer*>(user);
 		const auto bytes = size * count;
-		if (transfer.response.body.size() + bytes > tls_settings::k_MostAnswerBytes)
+		if (!transfer.request.large && transfer.response.body.size() + bytes > tls_settings::k_MostAnswerBytes)
 		{
 			transfer.tooLarge = true;
 			// A value other than the number of bytes stops the transfer
@@ -205,7 +205,19 @@ HttpRequestId CurlHttpClient::Send(HttpRequest request, HttpCallback callback)
 		curl_easy_setopt(easy, CURLOPT_SSLKEY, _identity->key.string().c_str());
 	}
 	curl_easy_setopt(easy, CURLOPT_CONNECTTIMEOUT_MS, tls_settings::k_ConnectTimeoutMs);
-	curl_easy_setopt(easy, CURLOPT_TIMEOUT_MS, tls_settings::k_RequestTimeoutMs);
+	if (sent.large)
+	{
+		// A large file has no limit on its full time, only on a stall. An empty text asks for each compression that
+		// libcurl can expand.
+		curl_easy_setopt(easy, CURLOPT_TIMEOUT_MS, 0L);
+		curl_easy_setopt(easy, CURLOPT_LOW_SPEED_LIMIT, tls_settings::k_StallBytesPerSecond);
+		curl_easy_setopt(easy, CURLOPT_LOW_SPEED_TIME, tls_settings::k_StallSeconds);
+		curl_easy_setopt(easy, CURLOPT_ACCEPT_ENCODING, "");
+	}
+	else
+	{
+		curl_easy_setopt(easy, CURLOPT_TIMEOUT_MS, tls_settings::k_RequestTimeoutMs);
+	}
 	curl_easy_setopt(easy, CURLOPT_NOSIGNAL, 1L);
 	curl_easy_setopt(easy, CURLOPT_USERAGENT, "openblack");
 	curl_easy_setopt(easy, CURLOPT_WRITEFUNCTION, &Transfer::Write);
@@ -331,6 +343,21 @@ void CurlHttpClient::Poll()
 size_t CurlHttpClient::Pending() const
 {
 	return _transfers.size();
+}
+
+std::optional<uint64_t> CurlHttpClient::SentBytes(HttpRequestId id) const
+{
+	const auto found = std::ranges::find_if(_transfers, [id](const auto& transfer) { return transfer->id == id; });
+	if (found == _transfers.end() || !(*found)->easy)
+	{
+		return std::nullopt;
+	}
+	curl_off_t sent = 0;
+	if (curl_easy_getinfo((*found)->easy.get(), CURLINFO_SIZE_UPLOAD_T, &sent) != CURLE_OK || sent < 0)
+	{
+		return std::nullopt;
+	}
+	return static_cast<uint64_t>(sent);
 }
 
 void CurlHttpClient::Finish(Transfer& transfer, HttpResponse&& response)

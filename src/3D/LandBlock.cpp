@@ -15,10 +15,11 @@
 #include <ranges>
 
 #include <LNDFile.h>
-#include <bgfx/bgfx.h>
 
+#include "Graphics/GraphicsDeviceInterface.h"
 #include "Graphics/IndexBuffer.h"
 #include "Graphics/VertexBuffer.h"
+#include "Locator.h"
 
 using namespace openblack;
 using namespace openblack::graphics;
@@ -62,7 +63,8 @@ const IndexBuffer& LandBlock::GetTriangles(land_detail::Mesh mesh, uint8_t coars
 		triangles = &_triangleSets->Get(
 		    land_detail::BlockTriangles(mesh, coarserSides, dropOpenSea, flags), [](std::span<const uint16_t> indices) {
 			    // bgfx keeps a copy: the list is gone before it reads it
-			    const auto* memory = bgfx::copy(indices.data(), static_cast<uint32_t>(indices.size() * sizeof(uint16_t)));
+			    const auto* memory = Locator::graphicsDevice::value().Copy(
+			        indices.data(), static_cast<uint32_t>(indices.size() * sizeof(uint16_t)));
 			    // The sets come as the camera moves, so they go in the shared buffer and do not make a buffer each
 			    return std::make_unique<IndexBuffer>("LandBlockTriangles", memory, IndexBuffer::Type::Uint16,
 			                                         IndexBuffer::Storage::Shared);
@@ -81,14 +83,6 @@ void LandBlock::SetTriangleSets(SharedIndexLists<IndexBuffer>& sets)
 {
 	_triangleSets = &sets;
 	_triangles.fill(nullptr);
-}
-
-void LandBlock::BindVertices() const
-{
-	if (_vertices != nullptr)
-	{
-		_vertices->Bind(_firstVertex, k_VertexCount);
-	}
 }
 
 void LandBlock::BuildVertexList(std::span<LandVertex> vertices, LandIslandInterface& island)

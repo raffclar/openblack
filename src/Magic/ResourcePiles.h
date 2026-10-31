@@ -36,6 +36,10 @@ inline constexpr float k_LeastShown = 0.05f;
 /// so much as its kind says, up to five times
 [[nodiscard]] float PotScale(uint32_t amount, uint32_t scaleEvery);
 
+/// The size that a pot takes when what it holds changes, by its pot scale. A pile keeps its size, because it rises out of
+/// the ground instead: none for a pile.
+[[nodiscard]] std::optional<float> SizeAfterChange(PotType type, uint32_t amount, uint32_t scaleEvery);
+
 /// How far under the ground a pile sits for the share of its height it shows
 [[nodiscard]] float SunkOffset(float proportion, float height);
 

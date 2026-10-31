@@ -59,7 +59,6 @@ enum class Step : uint8_t
 	KeyCommands,
 	DebugGui,
 	Interface,
-	GripEffect,
 	Turns,
 	SendCommands,
 	FrameTime,
@@ -91,11 +90,36 @@ enum class Step : uint8_t
 
 /// The names of the steps, in the order of the enumeration, for the logs of the tools
 inline constexpr std::array<std::string_view, static_cast<size_t>(Step::_Count)> k_StepNames {
-    "FrameClock",   "Input",        "KeyCommands",      "DebugGui",    "Interface",         "GripEffect", "Turns",
-    "SendCommands", "FrameTime",    "CameraMouse",      "CameraPaths", "CameraControllers", "Camera",     "CameraShake",
-    "Temple",       "FilmClock",    "DrawClock",        "Video",       "CreaturePoses",     "Hand",       "HighDetail",
-    "Bookmarks",    "FrameEffects", "ScreenMarks",      "Entities",    "ScreenFade",        "PauseText",  "Audio",
-    "Online",       "CameraKeys",   "ProfileAlignment",
+    "FrameClock",
+    "Input",
+    "KeyCommands",
+    "DebugGui",
+    "Interface",
+    "Turns",
+    "SendCommands",
+    "FrameTime",
+    "CameraMouse",
+    "CameraPaths",
+    "CameraControllers",
+    "Camera",
+    "CameraShake",
+    "Temple",
+    "FilmClock",
+    "DrawClock",
+    "Video",
+    "CreaturePoses",
+    "Hand",
+    "HighDetail",
+    "Bookmarks",
+    "FrameEffects",
+    "ScreenMarks",
+    "Entities",
+    "ScreenFade",
+    "PauseText",
+    "Audio",
+    "Online",
+    "CameraKeys",
+    "ProfileAlignment",
 };
 
 /// The name of a step of the frame
@@ -152,8 +176,6 @@ inline constexpr std::array k_Frame = std::to_array<Place>({
     // The villagers that a script drew in high detail are drawn as usual once its cinema bars are gone, as the land is
     // drawn
     {.step = Step::HighDetail, .stage = Stage::Draw},
-    // The dust where the hand grips the land moves on as the draw shows it, as the other spot effects do
-    {.step = Step::GripEffect, .stage = Stage::Draw},
     // The markers of the bookmarks throb by the game time of this frame, as the draw shows them
     {.step = Step::Bookmarks, .stage = Stage::Draw},
     // The effects that the draw moves on: the weather, the fires, the villagers and the animals, the marks and the texts
@@ -202,15 +224,15 @@ struct CameraKeyState
 	bool inTemple;
 	/// The interface takes the player's input, which a script can stop
 	bool interfaceActive;
-	/// A box of the menu or another dialog is on the screen
-	bool boxShows;
+	/// A box has the keyboard, as the last key that went down found it (see box_keyboard::Latch)
+	bool boxHasKeyboard;
 };
 
-/// True when the camera reads its keys after its step. In the temple, without the interface or with a box on the screen,
-/// the camera does not read its keys and does not push. Its next step then gets no key steps.
+/// True when the camera reads its keys after its step. In the temple, without the interface or while a box has the
+/// keyboard, the camera does not read its keys and does not push. Its next step then gets no key steps.
 [[nodiscard]] constexpr bool CameraReadsKeys(const CameraKeyState& state)
 {
-	return !state.inTemple && state.interfaceActive && !state.boxShows;
+	return !state.inTemple && state.interfaceActive && !state.boxHasKeyboard;
 }
 
 /// Whether a step is part of the frame's graphics: it moves the camera, starts the draw, puts the hand under the cursor
@@ -229,10 +251,13 @@ struct CameraKeyState
 	return false;
 }
 
-/// Whether the frame does its graphics: not while the window is minimised, unless a picture of the frame is necessary
-[[nodiscard]] constexpr bool DoesGraphics(bool minimised, bool pictureWanted)
+/// Whether the frame does its graphics: not while the window is minimised, unless a picture of the frame is necessary.
+/// A run with a fixed frame time draws each frame also while the window is minimised. The renderer keeps some of what it
+/// drew before, such as the shadows on the land. Thus a picture of the run is the same whatever the desktop did with the
+/// window.
+[[nodiscard]] constexpr bool DoesGraphics(bool minimised, bool pictureWanted, bool fixedFrameTime)
 {
-	return !minimised || pictureWanted;
+	return !minimised || pictureWanted || fixedFrameTime;
 }
 
 /// The state of the window and the run that decides which steps of the graphics a frame does

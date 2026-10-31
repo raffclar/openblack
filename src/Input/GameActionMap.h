@@ -20,12 +20,14 @@
 #include <SDL_mouse.h>
 #include <glm/vec3.hpp>
 
+#include "BoxKeyboard.h"
 #include "CursorFreeze.h"
 #include "GameActionMapInterface.h"
 #include "Help/MouseMoves.h"
 #include "MouseMotion.h"
 #include "PlatformKeys.h"
 #include "PointerSpeed.h"
+#include "Windowing/WindowPixels.h"
 
 #if !defined(LOCATOR_IMPLEMENTATIONS)
 #error "Locator interface implementations should only be included in Locator.cpp"
@@ -53,6 +55,8 @@ public:
 	[[nodiscard]] uint32_t TakeMouseMoves() final;
 	[[nodiscard]] float GetMouseWheelDelta() const final;
 	[[nodiscard]] std::array<std::optional<glm::vec3>, 2> GetHandPositions() const final;
+	void SplitInput(const input_steps::Steps& steps) final;
+	void UseInputStep(std::optional<uint32_t> step) final;
 
 	[[nodiscard]] std::span<const KeyBinding> GetKeyBindings() const final;
 	void SetKeyBinding(BindableActionMap action, std::optional<KeyChord> key) final;
@@ -83,6 +87,8 @@ public:
 	void WarpCursor(glm::ivec2 position) final;
 	[[nodiscard]] std::optional<glm::ivec2> GetCursorWarp() const final;
 	void SetBlockedActions(BindableActionMap actions) final { _blocked = actions; }
+	void BoxKeyDown(bool boxWantsKeys) final { _boxKeyboard.KeyDown(boxWantsKeys); }
+	[[nodiscard]] bool BoxHasKeyboard() const final { return _boxKeyboard.Taken(); }
 	void AllowCursorFreeze(bool allowed) final;
 	void PinCursor(bool pinned) final;
 	[[nodiscard]] glm::ivec2 GetCursorImagePosition() const final;
@@ -131,6 +137,15 @@ private:
 	/// The places of the pointer that the help compares to count the movements of the mouse
 	help::MouseMoves _helpMouseMoves;
 	float _mouseWheelDelta = 0.0f;
+	/// The actions that the wheel pressed in this frame
+	uint64_t _wheelActions {0};
+	/// Where the cursor was at the end of the last frame, and whether the game put it somewhere in this frame
+	glm::ivec2 _lastFramePosition {0, 0};
+	bool _cursorJumped {false};
+	/// The mouse of this frame divided across the fixed steps of the input, and the step that the mouse reads as now
+	input_steps::MouseSplit _mouseSplit;
+	std::array<input_steps::StepMouse, input_steps::k_MostSteps> _stepMice {};
+	std::optional<uint32_t> _inputStep;
 	/// Holds the cursor while the mouse turns the camera
 	CursorFreeze _cursorFreeze;
 	bool _cursorFreezeAllowed {false};
@@ -143,6 +158,10 @@ private:
 	bool _playerMouseBlocked {false};
 	std::optional<glm::ivec2> _cursorWarp;
 	BindableActionMap _blocked = BindableActionMap::NONE;
+	/// While a box has the keyboard, no action reads as held
+	box_keyboard::Latch _boxKeyboard;
+	/// The actions that read as not held now: the ones that the scripts block, or all while a box has the keyboard
+	[[nodiscard]] uint64_t HiddenActions() const;
 	/// Keeps the player's mouse and keyboard out while an agent drives the game
 	InputLock _lock;
 	/// Logs the lock opening or closing
@@ -176,5 +195,10 @@ private:
 	/// On the web, the first Escape frees the pointer and the game does not see it. Returns true when the event is that
 	/// Escape.
 	[[nodiscard]] bool EscapeFreesPointer(const SDL_Event& event);
+	/// The movements of the player's mouse in pixels of the back buffer. On the web the page gives them in CSS pixels.
+	windowing::MovementToPixels _movementPixels;
+	/// On the web, change the places and the movements of a mouse event of the player from CSS pixels to pixels of the
+	/// back buffer. On the desktop the event does not change.
+	void ToBackBufferPixels(SDL_Event& event);
 };
 } // namespace openblack::input

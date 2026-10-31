@@ -39,7 +39,6 @@
 #include <spdlog/spdlog.h>
 
 #include "Camera/Camera.h"
-#include "DescriptorSetTally.h"
 #include "EmbeddedShaders.h"
 #include "GraphicsHandleBgfx.h"
 #include "SamplerDefaults.h"
@@ -411,7 +410,6 @@ void ShaderManager::LoadShaders()
 	_samplerDefaults = std::make_unique<SamplerDefaults>();
 	if (bgfx::getRendererType() == bgfx::RendererType::Vulkan)
 	{
-		_descriptorSets = std::make_unique<DescriptorSetTally>();
 		_drawWindow = std::make_unique<DrawWindow>();
 	}
 	// On the game's thread bgfx gives its own encoder, the one that bgfx's free functions draw with. The programs keep
@@ -420,7 +418,7 @@ void ShaderManager::LoadShaders()
 	{
 		_mainEncoder = std::make_unique<DrawEncoder>();
 	}
-	*_mainEncoder = {.encoder = bgfx::begin(), .tally = _descriptorSets.get()};
+	*_mainEncoder = {.encoder = bgfx::begin()};
 	std::map<std::string_view, ShaderProgram*> made;
 	for (const auto& shader : k_Shaders)
 	{
@@ -468,20 +466,11 @@ void ShaderManager::DiscardBindings() const
 	auto& main = *_mainEncoder;
 	main.encoder->discard(BGFX_DISCARD_BINDINGS);
 	main.stages.Discarded(BGFX_DISCARD_BINDINGS);
-	if (main.tally != nullptr)
-	{
-		main.tally->DiscardBindings();
-	}
 }
 
-std::optional<FrameDescriptorSets> ShaderManager::FrameEnded() const
+void ShaderManager::FrameEnded() const
 {
 	_mainEncoder->stages.Clear();
-	if (!_descriptorSets)
-	{
-		return std::nullopt;
-	}
-	return _descriptorSets->EndFrame();
 }
 
 bool ShaderManager::OpenDrawWindow(uint32_t first, uint32_t count, std::span<const uint16_t> views) const
@@ -517,10 +506,6 @@ void ShaderManager::SetViewOrder(uint16_t viewId, ViewOrder order) const
 	    bgfx::ViewMode::DepthDescending,
 	};
 	bgfx::setViewMode(static_cast<bgfx::ViewId>(viewId), k_Modes.at(static_cast<size_t>(order)));
-	if (_descriptorSets)
-	{
-		_descriptorSets->SetViewOrder(viewId, order);
-	}
 }
 
 void ShaderManager::SetCamera(graphics::RenderPass viewId, const Camera& camera)

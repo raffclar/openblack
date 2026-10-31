@@ -24,6 +24,7 @@
 #include "ECS/Components/CreatureMind.h"
 #include "ECS/Components/Player.h"
 #include "ECS/Components/Villager.h"
+#include "ECS/GamePlayers.h"
 #include "ECS/Registry.h"
 #include "ECS/Systems/GuidanceSystemInterface.h"
 #include "ECS/Systems/HandSystemInterface.h"
@@ -179,14 +180,13 @@ void AlignmentSystem::UpdatePlayersTurn()
 		reported = hands.GetReportedCamera(hands.GetOwnPlayer());
 	}
 	const auto eye = reported.has_value() ? reported->origin : glm::vec3(0.0f);
-	std::array<alignment::PlayerAtPlace, static_cast<size_t>(PlayerNames::NEUTRAL)> players {};
+	std::array<alignment::PlayerAtPlace, player_slots::k_MaxPlayers> players {};
 	size_t count = 0;
 	if (Locator::influenceSystem::has_value())
 	{
 		const auto& influence = Locator::influenceSystem::value();
-		for (size_t i = 0; i < players.size(); ++i)
+		for (const auto name : ecs::game_players::Gods())
 		{
-			const auto name = static_cast<PlayerNames>(i);
 			if (FindPlayer(name).has_value())
 			{
 				players.at(count++) = {

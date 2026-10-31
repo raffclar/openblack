@@ -286,39 +286,93 @@ void AddLightning(std::vector<Scenario>& all)
 
 void AddReactions(std::vector<Scenario>& all)
 {
-	std::vector<ObjectSetup> town;
+	std::vector<ObjectSetup> believers;
 	constexpr std::array k_Villagers {VillagerInfo::CelticFarmerMale, VillagerInfo::CelticForesterMale,
 	                                  VillagerInfo::CelticHousewifeFemale};
 	for (int i = 0; i < 9; ++i)
 	{
-		town.push_back({.type = k_Villagers.at(static_cast<size_t>(i % 3)),
-		                .offset = {-16.0f + 4.0f * static_cast<float>(i), 30.0f + 3.0f * static_cast<float>(i % 3)}});
+		// The villagers believe through a town: one that the neutral player holds from the start, so that no change of
+		// owner makes them celebrate
+		believers.push_back({.type = k_Villagers.at(static_cast<size_t>(i % 3)),
+		                     .offset = {-16.0f + 4.0f * static_cast<float>(i), 30.0f + 3.0f * static_cast<float>(i % 3)},
+		                     .joinTown = true});
 	}
 	all.push_back({
 	    .id = "miracles.reactions_nice",
 	    .name = "Reactions: villagers impressed by a nice miracle",
 	    .facet = Facet::Miracles,
-	    .description = "The heal's power-up pressed by hand in front of nine villagers and a creature.",
+	    .description = "The heal's power-up pressed by hand every ten seconds in front of nine villagers of a town that the "
+	                   "neutral player holds. A creature stands 55 metres past the miracle, out of the villagers' reach. "
+	                   "The pointer stays on the villagers.",
 	    .expected = "Every villager within 60 metres stops, stands and turns to face the miracle for eight or nine "
 	                "seconds, then goes back to what it was doing. A symbol of belief rises from each in the player's "
 	                "colour, wiggling and pulsing, fading out after a second and a half, with its sound; now and then a good "
 	                "villager voice of awe is heard near the hand. The creature goes to look at it and points at it.",
 	    .environment = {.dispenserGrid = false},
-	    .framing = {.shot = Shot::Overview, .include = {{-20.0f, 20.0f}, {20.0f, 50.0f}}, .distance = 0.7f},
-	    .creatures = {Hurt({15.0f, 20.0f}, "curious", 1.0f)},
-	    .objects = town,
+	    .framing = {.shot = Shot::Overview, .include = {{-20.0f, 20.0f}, {20.0f, 100.0f}}, .distance = 0.7f},
+	    .creatures = {Hurt({0.0f, 100.0f}, "curious", 1.0f)},
+	    .objects = believers,
 	    .miracles = {{.type = MagicType::HealPowerUpOne,
 	                  .point = {0.0f, 45.0f},
 	                  .handOffset = {0.0f, 45.0f},
 	                  .handHeight = 14.0f,
 	                  .delaySeconds = 1.0f,
+	                  .repeatSeconds = 10.0f,
 	                  .byHand = true}},
+	    .commands = {{.kind = Command::Kind::PointerOnObject, .delaySeconds = 0.5f, .object = 4}},
+	    .townOwner = PlayerNames::NEUTRAL,
+	});
+	all.push_back({
+	    .id = "miracles.reactions_food",
+	    .name = "Reactions: villagers react to the food miracle",
+	    .facet = Facet::Miracles,
+	    .description = "The food miracle poured by hand for three seconds, 12 metres beside nine villagers of a town that "
+	                   "the neutral player holds.",
+	    .expected = "The first grain of food that lands starts the miracle's nice reaction: the villagers in reach stop, "
+	                "turn to the falling food and watch it, and a symbol of belief rises from each in the player's "
+	                "colour. The pile of food that the grains make calls the villagers, who walk to it. The inspector "
+	                "query magic.reactions gives the reaction of the miracle and the reaction of the pile.",
+	    .environment = {.dispenserGrid = false},
+	    .framing = {.shot = Shot::Overview, .include = {{-25.0f, 20.0f}, {25.0f, 55.0f}}, .distance = 0.7f},
+	    .objects = believers,
+	    .miracles = {{.type = MagicType::Food,
+	                  .point = {0.0f, 45.0f},
+	                  .handOffset = {0.0f, 45.0f},
+	                  .handHeight = 12.0f,
+	                  .delaySeconds = 1.0f,
+	                  .holdSeconds = 3.0f,
+	                  .byHand = true}},
+	    .townOwner = PlayerNames::NEUTRAL,
+	});
+	all.push_back({
+	    .id = "miracles.belief_symbols",
+	    .name = "Reactions: belief symbols from a miracle that does not touch the villagers",
+	    .facet = Facet::Miracles,
+	    .description = "Lightning held by hand for three seconds every twelve seconds. It strikes the land 24 metres "
+	                   "past nine villagers of a town that the neutral player holds, and touches no villager.",
+	    .expected = "The villagers in reach run from the strike and then turn to watch it. A symbol of belief rises from "
+	                "the top of each impressed villager in the player's colour, wiggling and pulsing, and fades out "
+	                "after a second and a half. No glow of the miracle covers the villagers. The inspector query "
+	                "particles.belief gives the place, amount and colour of each symbol.",
+	    .environment = {.dispenserGrid = false},
+	    .framing = {.shot = Shot::Overview, .include = {{-25.0f, 20.0f}, {25.0f, 65.0f}}, .distance = 0.7f},
+	    .objects = believers,
+	    .miracles = {{.type = MagicType::LightningBolt,
+	                  .point = {0.0f, 60.0f},
+	                  .handOffset = {0.0f, 45.0f},
+	                  .handHeight = 12.0f,
+	                  .delaySeconds = 1.0f,
+	                  .holdSeconds = 3.0f,
+	                  .repeatSeconds = 12.0f,
+	                  .byHand = true}},
+	    .townOwner = PlayerNames::NEUTRAL,
 	});
 	all.push_back({
 	    .id = "miracles.reactions_flee",
 	    .name = "Reactions: villagers flee a frightening miracle",
 	    .facet = Facet::Miracles,
-	    .description = "Lightning held by hand for four seconds over nine villagers and a creature.",
+	    .description = "Lightning held by hand for four seconds over nine villagers of a town that the neutral player "
+	                   "holds, and a creature.",
 	    .expected = "The villagers within 50 metres run ten metres straight away from where the bolt strikes at their "
 	                "fleeing speed, then turn to watch it from fifty metres or more, and go back to what they were doing "
 	                "once their eight seconds are up. An evil voice of awe may be heard. The creature is frightened: it "
@@ -326,7 +380,7 @@ void AddReactions(std::vector<Scenario>& all)
 	    .environment = {.dispenserGrid = false},
 	    .framing = {.shot = Shot::Overview, .include = {{-30.0f, 0.0f}, {30.0f, 70.0f}}, .distance = 0.8f},
 	    .creatures = {Hurt({15.0f, 30.0f}, "frightened", 1.0f)},
-	    .objects = town,
+	    .objects = believers,
 	    .miracles = {{.type = MagicType::LightningBolt,
 	                  .point = {0.0f, 35.0f},
 	                  .handOffset = {0.0f, 15.0f},
@@ -334,6 +388,7 @@ void AddReactions(std::vector<Scenario>& all)
 	                  .delaySeconds = 1.0f,
 	                  .holdSeconds = 4.0f,
 	                  .byHand = true}},
+	    .townOwner = PlayerNames::NEUTRAL,
 	});
 }
 

@@ -12,7 +12,8 @@
 #include "HandDemoSystem.h"
 
 #include <HNDFile.h>
-#include <SDL.h>
+#include <SDL_events.h>
+#include <SDL_mouse.h>
 #include <entt/core/hashed_string.hpp>
 #include <spdlog/spdlog.h>
 
@@ -29,11 +30,14 @@
 #include "ECS/Systems/LivingActionSystemInterface.h"
 #include "ECS/Systems/PickingSystemInterface.h"
 #include "ECS/Systems/PlayerSystemInterface.h"
+#include "ECS/Systems/SpellIconSystemInterface.h"
 #include "ECS/Systems/TimeSystemInterface.h"
+#include "ECS/Systems/WorshipSiteSystemInterface.h"
 #include "ECS/TempleConstruction.h"
 #include "FileSystem/FileSystemInterface.h"
 #include "Input/GameActionMapInterface.h"
 #include "Input/InjectedInput.h"
+#include "Input/InputDeviceInterface.h"
 #include "Locator.h"
 #include "Resources/ResourcesInterface.h"
 #include "Windowing/WindowingInterface.h"
@@ -43,7 +47,7 @@ using namespace openblack::ecs::systems;
 
 namespace
 {
-/// The game's time now, as the recordings count it
+/// The game's time now, as the recordings count it: the time into the turn, which the frames play by
 uint32_t GameTime()
 {
 	if (!Locator::time::has_value())
@@ -52,6 +56,12 @@ uint32_t GameTime()
 	}
 	const auto& time = Locator::time::value();
 	return hand_demo::GameHundredths(time.GetTurn(), time.GetTurnFraction());
+}
+
+/// The time of the turn, as the recordings count it: the turns and the scripts see only this
+uint32_t TurnTime()
+{
+	return Locator::time::has_value() ? hand_demo::GameHundredths(Locator::time::value().GetTurn(), 0.0f) : 0;
 }
 
 /// A demonstration's file, read once
@@ -93,7 +103,7 @@ void PushInjected(SDL_Event& event)
 {
 	event.motion.windowID = Locator::windowing::has_value() ? Locator::windowing::value().GetID() : 0;
 	input::MarkInjected(event);
-	SDL_PushEvent(&event);
+	input::Device().PushEvent(event);
 }
 
 /// The mouse button a recorded button message is: the one that grips the land, or the action button
@@ -199,13 +209,21 @@ void RetargetClick(const hnd::HNDRecord& record)
 void HandDemoSystem::Play(std::string_view name, uint32_t task, bool pauseOnTrigger, bool withoutHandModify)
 {
 	// The hand lets go of what it holds first, unless the demonstration needs it (a miracle to cast)
-	// TODO(miracles-gaps-1): the game also cancels the player's miracles that charge at their worship site icons here.
-	// The first land has no worship site, thus no miracle charges there.
 	// A script starts the demonstration at the turn. It asks about the first player's hand, which ForceDrop empties.
 	if (!withoutHandModify && Locator::handGrabSystem::has_value() &&
 	    Locator::handGrabSystem::value().GetHeldOf(PlayerNames::PLAYER_ONE).has_value())
 	{
 		Locator::handGrabSystem::value().ForceDrop();
+	}
+	// The miracles that charge for the hand of this computer's player at the sites of the player's temple stop too
+	if (hand_demo::StopsCharges(withoutHandModify) && Locator::playerSystem::has_value() &&
+	    Locator::worshipSiteSystem::has_value() && Locator::spellIconSystem::has_value())
+	{
+		const auto local = Locator::playerSystem::value().GetLocalPlayer();
+		if (const auto temple = Locator::worshipSiteSystem::value().TempleOf(local); temple != entt::null)
+		{
+			Locator::spellIconSystem::value().CancelChargesFor(temple, local);
+		}
 	}
 	// A leash on the player's creature that is not tied to a thing comes off too
 	if (Locator::leashSystem::has_value())
@@ -250,8 +268,10 @@ void HandDemoSystem::Play(std::string_view name, uint32_t task, bool pauseOnTrig
 			});
 			actions.SetPlayerMouseBlocked(true);
 		}
+		// The demonstration starts at the time of the turn, and the frames play on from there
 		std::vector<hand_demo::Played> played;
-		_playback = std::make_unique<hand_demo::Playback>(_file->records, GameTime(), played);
+		_playback = std::make_unique<hand_demo::SplitPlayback>(_file->records, TurnTime(), pauseOnTrigger, played);
+		_replaying = true;
 		Apply(played);
 	}
 	// The script's start clears the mark, the first record's too
@@ -264,24 +284,60 @@ bool HandDemoSystem::IsPlaying(uint32_t task) const
 	return _playback != nullptr && (task == 0 || task == _task);
 }
 
+bool HandDemoSystem::IsReplaying() const
+{
+	return _playback != nullptr && _replaying;
+}
+
 bool HandDemoSystem::TakeTrigger()
 {
-	return std::exchange(_triggerReached, false);
+	const bool reached = std::exchange(_triggerReached, false);
+	if (reached && _playback)
+	{
+		_playback->MarkRead();
+	}
+	return reached;
+}
+
+void HandDemoSystem::ProcessTurn()
+{
+	// The scripts see the demonstration play by the time of the turns alone. It ends when the turns have played its last
+	// record, also for the frames.
+	if (_playback && !_playback->AdvanceTurn(TurnTime(), _triggerReached))
+	{
+		Stop();
+	}
 }
 
 void HandDemoSystem::Update()
 {
-	if (!_playback)
+	if (!_playback || !_replaying)
 	{
 		return;
 	}
 	NormalSpeed();
 	std::vector<hand_demo::Played> played;
-	const bool goesOn = _playback->Advance(GameTime(), _pauseOnTrigger, _triggerReached, played);
+	const bool goesOn = _playback->AdvanceFrame(GameTime(), played);
 	Apply(played);
 	if (!goesOn)
 	{
-		Stop();
+		EndReplay();
+	}
+}
+
+void HandDemoSystem::EndReplay()
+{
+	// The player's mouse has the hand again, and the hand shows the camera's own hints
+	_replaying = false;
+	_camera.reset();
+	_hints = 0;
+	_hintAngle = 0.0f;
+	_held = {};
+	if (Locator::gameActionSystem::has_value())
+	{
+		auto& actions = Locator::gameActionSystem::value();
+		actions.SetScriptedPointer(std::nullopt);
+		actions.SetPlayerMouseBlocked(false);
 	}
 }
 
@@ -355,21 +411,15 @@ void HandDemoSystem::Stop()
 	{
 		return;
 	}
+	if (_replaying)
+	{
+		EndReplay();
+	}
 	_playback.reset();
 	_file.reset();
-	_camera.reset();
-	_hints = 0;
-	_hintAngle = 0.0f;
-	_held = {};
 	_pauseOnTrigger = false;
 	_task = 0;
-	// The player's mouse has the hand again; in a script's cut scene the interface is put away again
-	if (Locator::gameActionSystem::has_value())
-	{
-		auto& actions = Locator::gameActionSystem::value();
-		actions.SetScriptedPointer(std::nullopt);
-		actions.SetPlayerMouseBlocked(false);
-	}
+	// In a script's cut scene the interface is put away again
 	if (Locator::cinematicDirectorSystem::has_value())
 	{
 		auto& director = Locator::cinematicDirectorSystem::value();
@@ -409,10 +459,13 @@ std::optional<HandDemoSystemInterface::Status> HandDemoSystem::GetStatus() const
 	return Status {
 	    .name = _name,
 	    .task = _task,
-	    .record = _playback->Next(),
+	    .record = _playback->TurnNext(),
 	    .records = _file->records.size(),
 	    .pauseOnTrigger = _pauseOnTrigger,
 	    .triggerReached = _triggerReached,
 	    .holding = _pauseOnTrigger && _triggerReached,
+	    .replaying = _replaying,
+	    .replayRecord = _playback->FrameNext(),
+	    .replayHolding = _playback->FrameHeld(),
 	};
 }

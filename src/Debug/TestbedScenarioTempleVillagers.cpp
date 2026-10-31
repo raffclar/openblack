@@ -15,7 +15,7 @@
 #include <iterator>
 #include <vector>
 
-#include "TempleVillagers.h"
+#include "TempleVillagersSurvey.h"
 #include "TestbedScenarioRegistry.h"
 
 using namespace openblack;
@@ -50,6 +50,9 @@ constexpr size_t k_DeadTree = 11;
 constexpr glm::vec2 k_Watcher {10.0f, 15.0f};
 /// Where the altar of the town's worship site stands
 constexpr glm::vec2 k_Altar {0.0f, -1.0f};
+/// Where a man of the town stands near the worship site: 10 m from the middle of the site, inside its reach. He stands
+/// between the parts of the site, so the hand puts him down on the land.
+constexpr glm::vec2 k_NearSite {0.0f, 9.0f};
 /// The Action button is the mouse's right button
 constexpr size_t k_ActionButton = 3;
 
@@ -57,6 +60,11 @@ constexpr size_t k_ActionButton = 3;
 constexpr glm::vec2 k_FarCentre {0.0f, 90.0f};
 /// The first of the town's people, by its place in the scenario's objects
 constexpr size_t k_FirstVillager = 3;
+
+/// Three birches west of the storage pit of the leash scenario, by the town centre. The creature can pull them up and
+/// give them to the pit as wood.
+constexpr std::array<glm::vec2, 3> k_WoodBirches {glm::vec2 {-35.0f, 30.0f}, glm::vec2 {-40.0f, 38.0f},
+                                                  glm::vec2 {-33.0f, 46.0f}};
 
 /// A Celtic town centre of the player's, two huts and eight of its people about it
 std::vector<ObjectSetup> Town(glm::vec2 centre = k_Centre)
@@ -100,7 +108,7 @@ void openblack::testbed_scenarios::AddTempleVillagerScenarios(std::vector<Scenar
 	    .temples = {{.offset = k_Temple}},
 	    .townBeliefInPlayer = k_TownBelief,
 	    .worshipShare = 0.5f,
-	    .debugWindow = debug::gui::k_TempleVillagersWindow,
+	    .debugWindow = temple_villagers::k_DebugWindowName,
 	});
 	all.push_back({
 	    .id = "footpaths.town_joins_site",
@@ -143,7 +151,7 @@ void openblack::testbed_scenarios::AddTempleVillagerScenarios(std::vector<Scenar
 	    .commands = {{.kind = Command::Kind::EnterTemple, .delaySeconds = 60.0f, .value = k_MainRoom}},
 	    .townBeliefInPlayer = k_TownBelief,
 	    .worshipShare = 1.0f,
-	    .debugWindow = debug::gui::k_TempleVillagersWindow,
+	    .debugWindow = temple_villagers::k_DebugWindowName,
 	});
 	all.push_back({
 	    .id = "town.worship_site_pour",
@@ -162,6 +170,30 @@ void openblack::testbed_scenarios::AddTempleVillagerScenarios(std::vector<Scenar
 	    .commands = {{.kind = Command::Kind::HandPour, .delaySeconds = 3.0f, .point = k_SiteEdge, .value = k_Handful},
 	                 {.kind = Command::Kind::HandPour, .delaySeconds = 4.0f, .point = k_BeyondTheSite, .value = k_Handful}},
 	    .townBeliefInPlayer = k_TownBelief,
+	});
+	// The hand takes a villager of the town near the worship site and puts it down there
+	auto nearSite = Town();
+	nearSite.push_back({.type = VillagerInfo::CelticFarmerMale, .offset = k_NearSite, .joinTown = true});
+	all.push_back({
+	    .id = "worship.villager_put_down_at_site",
+	    .name = "A villager put down at its worship site",
+	    .facet = Facet::Hand,
+	    .description = "The same town and temple, the town's worship site built, with no share of the town sent to worship. "
+	                   "A man of the town stands 10 m from the middle of the site, between the site and the town. The hand "
+	                   "takes him and puts him down again at the same place.",
+	    .expected = "When the man is on the land, he walks to the gate of the site and starts to dance there. He stays at "
+	                "the site as a worshipper. As in the original game, the site measures his distance from its own middle, "
+	                "not from the temple.",
+	    .environment = {.dispenserGrid = false, .cursor = glm::vec2 {0.5f, 0.5f}},
+	    .framing = {.shot = Shot::Placed, .eye = {0.0f, 24.0f, 26.0f}, .look = {1.0f, 0.0f, 5.0f}},
+	    .objects = nearSite,
+	    .temples = {{.offset = k_Temple}},
+	    .commands = {{.kind = Command::Kind::BuildWorshipSites, .delaySeconds = 0.5f},
+	                 {.kind = Command::Kind::PointerOnObject, .delaySeconds = 1.0f, .object = nearSite.size() - 1},
+	                 {.kind = Command::Kind::HandTake, .delaySeconds = 0.5f, .object = nearSite.size() - 1},
+	                 {.kind = Command::Kind::HandRelease, .delaySeconds = 2.0f}},
+	    .townBeliefInPlayer = k_TownBelief,
+	    .worshipShare = 0.0f,
 	});
 	all.push_back({
 	    .id = "objects.creature_sacrifice",
@@ -635,6 +667,48 @@ void openblack::testbed_scenarios::AddTempleVillagerScenarios(std::vector<Scenar
 		        return objects;
 	        }(),
 	    .commands = {{.kind = Command::Kind::EndGuidanceWaits, .delaySeconds = 0.5f}},
+	    .townBeliefInPlayer = k_TownBelief,
+	});
+	// The leash tied to the wood flag of a town holds the creature's help for towns to wood
+	all.push_back({
+	    .id = "leash.desire_flag",
+	    .name = "The leash tied to a town's wood flag",
+	    .facet = Facet::Leash,
+	    .description = "The Celtic town of the temple scenarios with an empty storage pit north of it. A grown tiger "
+	                   "of the player that only wants to be nice stands south of the town. Its leash is put on and tied "
+	                   "to the town's wood flag over the pit. The town wants food most. Three birches stand west of "
+	                   "the pit, and the town has no field and no cow.",
+	    .expected = "The rope runs from the wood flag. The town wants food most, but the tiger helps it with wood only. "
+	                "In about a minute it pulls up a birch and throws it into the pit, then the next birch, until no "
+	                "birch is left. Each tree goes into the pit with no lost-thing help. It does not move on to the "
+	                "next desire of the town. The inspector shows the creature's town desire as 1 (wood) and "
+	                "choosesFreely as false.",
+	    .environment = {.dispenserGrid = false},
+	    .framing = {.shot = Shot::Overview,
+	                .include = {k_Centre - glm::vec2(25.0f, 60.0f), k_Centre + glm::vec2(25.0f, 50.0f)},
+	                .distance = 0.6f},
+	    .creatures = {{.species = CreatureType::Tiger,
+	                   .offset = k_Centre - glm::vec2(0.0f, 50.0f),
+	                   .phase = 13,
+	                   .desires = {{.desire = creature_desires::Desire::Compassion, .fraction = 1.0f}}}},
+	    .objects =
+	        [] {
+		        auto objects = Town();
+		        objects.push_back({.type = AbodeInfo::CelticStoragePit,
+		                           .offset = k_Centre + glm::vec2(0.0f, 40.0f),
+		                           .storedFood = 0,
+		                           .storedWood = 0});
+		        for (const auto at : k_WoodBirches)
+		        {
+			        objects.push_back({.type = TreeInfo::Birch, .offset = k_Centre + at});
+		        }
+		        return objects;
+	        }(),
+	    .commands = {{.kind = Command::Kind::PutOnLeash, .creature = 0, .delaySeconds = 1.0f, .leash = LeashType::Rope},
+	                 {.kind = Command::Kind::TieLeashToDesireFlag,
+	                  .creature = 0,
+	                  .delaySeconds = 1.0f,
+	                  .value = static_cast<size_t>(TownDesireInfo::ForWood)}},
 	    .townBeliefInPlayer = k_TownBelief,
 	});
 	all.push_back({

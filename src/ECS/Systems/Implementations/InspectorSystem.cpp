@@ -33,7 +33,6 @@
 #include "ECS/Systems/FightTranscriptSystemInterface.h"
 #include "ECS/Systems/ObjectDrawListSystemInterface.h"
 #include "ECS/Systems/TimeSystemInterface.h"
-#include "Game.h"
 #include "Input/GameActionMapInterface.h"
 #include "Inspector/CameraControl.h"
 #include "Inspector/ComponentReflection.h"
@@ -41,6 +40,7 @@
 #include "Inspector/GameControls.h"
 #include "Inspector/GameInput.h"
 #include "Inspector/GameProviders.h"
+#include "Inspector/GameSeamInterface.h"
 #include "Inspector/GameWorldEdit.h"
 #include "Inspector/InputControl.h"
 #include "Inspector/RunControl.h"
@@ -65,6 +65,12 @@ static_assert(inspector::GameProvider::k_SeededDate == TimeSystemInterface::k_De
 class GameRunTarget final: public inspector::RunTargetInterface
 {
 public:
+	/// With no seam, no scenario loads
+	explicit GameRunTarget(inspector::GameSeamInterface* seam)
+	    : _seam(seam)
+	{
+	}
+
 	[[nodiscard]] bool IsPaused() const override { return Locator::time::has_value() && Locator::time::value().IsPaused(); }
 	void SetPaused(bool paused) override
 	{
@@ -135,12 +141,11 @@ public:
 	[[nodiscard]] inspector::Json InputLock() const override { return inspector::InputLockState(); }
 	bool LoadScenario(std::string_view id) override
 	{
-		auto* game = Game::Instance();
-		if (game == nullptr || testbed_scenarios::Find(id) == nullptr)
+		if (_seam == nullptr || testbed_scenarios::Find(id) == nullptr)
 		{
 			return false;
 		}
-		return game->RequestScenario({.id = std::string(id), .benchmark = false});
+		return _seam->RequestScenario(id);
 	}
 	[[nodiscard]] std::vector<inspector::ScenarioSummary> Scenarios() const override
 	{
@@ -156,23 +161,27 @@ public:
 		}
 		return summaries;
 	}
+
+private:
+	inspector::GameSeamInterface* _seam;
 };
 
 } // namespace
 
-InspectorSystem::InspectorSystem(std::unique_ptr<inspector::Server> server)
+InspectorSystem::InspectorSystem(std::unique_ptr<inspector::Server> server, std::unique_ptr<inspector::GameSeamInterface> seam)
     : _server(std::move(server))
+    , _seam(std::move(seam))
     , _reflection(std::make_unique<entt::meta_ctx>())
-    , _runTarget(std::make_unique<GameRunTarget>())
+    , _runTarget(std::make_unique<GameRunTarget>(_seam.get()))
     , _worldEdit(std::make_unique<inspector::GameWorldEdit>())
     , _inputTarget(std::make_unique<inspector::GameInput>())
-    , _controls(std::make_unique<inspector::GameControlSet>(*_inputTarget))
+    , _controls(std::make_unique<inspector::GameControlSet>(*_inputTarget, _seam.get()))
 {
 	// Points of the world are found on the screen through the view drawn, an override's while one is shown
 	_inputTarget->SetCamera(_controls->camera);
 	inspector::reflection::RegisterComponents(*_reflection);
-	// A live network game refuses the queries that change the shared world
-	_inspector.SetNetworkGameLive([]() { return developer_tools::NetworkSessionLive(); });
+	// A live network game refuses the queries that change the shared world, on a client and on the game server
+	_inspector.SetNetworkGameLive([this]() { return _hostsNetworkGame || developer_tools::NetworkSessionLive(); });
 	_inspector.SetWriteLog([](const inspector::Request& request, const inspector::QueryResult& answer) {
 		if (answer.Ok())
 		{
@@ -201,7 +210,7 @@ InspectorSystem::InspectorSystem(std::unique_ptr<inspector::Server> server)
 	_autopilot->SetRecorder(
 	    [input = _input](uint64_t frame, const inspector::InputEvent& event) { input->Record(frame, event); });
 	// The game's dialogs are clicked through the input's queue, behind any input asked for before
-	_controls->gui.SetInputSender(
+	_controls->gui->SetInputSender(
 	    [input = _input](std::span<const inspector::InputEvent> events) { return input->Send(events); });
 
 	SPDLOG_LOGGER_INFO(spdlog::get("game"), "Inspector listening on 127.0.0.1:{}", _server->Port());
@@ -245,11 +254,7 @@ InspectorSystem::InspectorSystem(std::unique_ptr<inspector::Server> server)
 
 InspectorSystem::~InspectorSystem()
 {
-	_stopLoadingHelper = true;
-	if (_loadingHelper.joinable())
-	{
-		_loadingHelper.join();
-	}
+	StopLoadingHelper();
 	WriteRecordedInput();
 }
 
@@ -303,11 +308,7 @@ void InspectorSystem::EndLoading()
 	{
 		return;
 	}
-	_stopLoadingHelper = true;
-	if (_loadingHelper.joinable())
-	{
-		_loadingHelper.join();
-	}
+	StopLoadingHelper();
 	// A scenario asked for meanwhile is loaded next: the game goes on answering as loading until it is laid out
 	RequestQueuedScenario();
 	// The land has started, and none of its frames has run yet
@@ -368,7 +369,21 @@ void InspectorSystem::AnswerWhileLoading()
 			return _inspector.HandleWhileLoading(
 			    line, loading, [this](const inspector::Request& request) { return QueueWhileLoading(request); });
 		});
-		std::this_thread::sleep_for(k_Interval);
+		std::unique_lock lock(_stopMutex);
+		_stopSignal.wait_for(lock, k_Interval, [this] { return _stopLoadingHelper.load(); });
+	}
+}
+
+void InspectorSystem::StopLoadingHelper()
+{
+	{
+		const std::scoped_lock lock(_stopMutex);
+		_stopLoadingHelper = true;
+	}
+	_stopSignal.notify_all();
+	if (_loadingHelper.joinable())
+	{
+		_loadingHelper.join();
 	}
 }
 
@@ -417,10 +432,8 @@ void InspectorSystem::Service()
 	_controls->camera.Unpin();
 	// A scenario asked for is loading from the moment it is asked until its things are laid out: the frames before the
 	// scenarios' window starts it answer as loading too, so that nothing reads the testbed without them
-	const auto* game = Game::Instance();
-	const auto pending = game != nullptr && game->PendingScenario().has_value()
-	                         ? std::optional<std::string_view>(game->PendingScenario()->id)
-	                         : std::nullopt;
+	const auto pendingId = _seam != nullptr ? _seam->GetPendingScenario() : std::nullopt;
+	const auto pending = pendingId.has_value() ? std::optional<std::string_view>(*pendingId) : std::nullopt;
 	if (const auto loading = inspector::ScenarioLoading(pending); loading.has_value())
 	{
 		_server->Poll([this, &loading](std::string_view line) {
@@ -521,6 +534,21 @@ fight_autopilot::AutopilotInterface* InspectorSystem::GetFightAutopilot()
 uint16_t InspectorSystem::GetPort() const
 {
 	return _server->Port();
+}
+
+void InspectorSystem::AddProvider(std::unique_ptr<inspector::ProviderInterface> provider)
+{
+	_inspector.Add(std::move(provider));
+}
+
+void InspectorSystem::RemoveProvider(std::string_view name)
+{
+	_inspector.Remove(name);
+}
+
+void InspectorSystem::SetHostsNetworkGame(bool hosts)
+{
+	_hostsNetworkGame = hosts;
 }
 
 std::optional<std::string> InspectorSystem::StartSimRecord(const std::filesystem::path& path, uint32_t every,

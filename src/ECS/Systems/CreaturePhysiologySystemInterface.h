@@ -33,6 +33,9 @@ public:
 	virtual void BeginTurn() {}
 	/// In the creature's own turn: its body lives the turn
 	virtual void CreatureTurn(entt::entity /*creature*/) {}
+	/// The body takes its start values from its species now, if it did not yet. A new creature has its body from the
+	/// time that it is made, so a value that a script sets before its first turn stays.
+	virtual void StartBody(entt::entity /*creature*/) {}
 
 	/// The creature ate something of a food value. Returns the energy the meal gave it, by its size and species.
 	[[nodiscard]] virtual float Eat(entt::entity creature, float foodValue) = 0;
@@ -49,6 +52,9 @@ public:
 	virtual void FinishAction(entt::entity creature, std::string_view action) = 0;
 	/// Grew stronger, or weaker, by some amount
 	virtual void ModifyStrength(entt::entity creature, float amount) = 0;
+	/// Grew stronger by the strength gain of an action, by its name in the game's creature action table. Energy and
+	/// exhaustion do not change.
+	virtual void GainStrengthOf(entt::entity creature, std::string_view action) = 0;
 
 	/// How many game turns of the body pass each game turn
 	virtual void SetTimeScale(float scale) = 0;

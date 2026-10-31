@@ -28,6 +28,7 @@ public:
 	LandLightPaletteManager& GetLandLightPalettes() override { return _landLightPalettes; }
 	PhysicsMaterialsManager& GetPhysicsMaterials() override { return _physicsMaterials; }
 	ClipSoundsManager& GetClipSounds() override { return _clipSounds; }
+	MusicTimingManager& GetMusicTimings() override { return _musicTimings; }
 	TextureManager& GetTextures() override { return _textures; }
 	AnimationManager& GetAnimations() override { return _animations; }
 	LevelManager& GetLevels() override { return _levels; }
@@ -88,6 +89,7 @@ public:
 
 	void StopLoading() override { _loadQueue.Cancel(); }
 	AdvisorModelManager& GetAdvisorModels() override { return _advisorModels; }
+	LandThumbnailManager& GetLandThumbnails() override { return _landThumbnails; }
 
 private:
 	template <typename Func>
@@ -108,9 +110,10 @@ private:
 	{
 		std::apply([&func](auto&... manager) { (func(manager), ...); },
 		           std::tie(self._meshes, self._l3dFiles, self._bitmaps, self._landLightPalettes, self._physicsMaterials,
-		                    self._clipSounds, self._textures, self._animations, self._levels, self._creatureMinds,
-		                    self._creatureRigs, self._creatureSkinArt, self._sounds, self._glows, self._cameraPaths,
-		                    self._particleFiles, self._particleBitmaps, self._gestureTemplates));
+		                    self._clipSounds, self._musicTimings, self._textures, self._animations, self._levels,
+		                    self._creatureMinds, self._creatureRigs, self._creatureSkinArt, self._sounds, self._glows,
+		                    self._cameraPaths, self._cameraEdits, self._cameraZones, self._particleFiles, self._particleBitmaps,
+		                    self._gestureTemplates, self._videos));
 	}
 
 	MeshManager _meshes;
@@ -119,6 +122,7 @@ private:
 	LandLightPaletteManager _landLightPalettes;
 	PhysicsMaterialsManager _physicsMaterials;
 	ClipSoundsManager _clipSounds;
+	MusicTimingManager _musicTimings;
 	TextureManager _textures;
 	AnimationManager _animations;
 	LevelManager _levels;
@@ -141,5 +145,6 @@ private:
 	// Last, so its threads stop before the caches they load into go
 	LoadQueue _loadQueue {LoadQueue::DefaultThreadCount()};
 	AdvisorModelManager _advisorModels;
+	LandThumbnailManager _landThumbnails;
 };
 } // namespace openblack::resources

@@ -40,6 +40,7 @@
 #include "ECS/Components/Villager.h"
 #include "ECS/Components/WalkPath.h"
 #include "ECS/Components/WallHug.h"
+#include "ECS/LivingFacing.h"
 #include "ECS/Registry.h"
 #include "ECS/Systems/LivingActionSystemInterface.h"
 #include "ECS/ThingMapPlace.h"
@@ -264,7 +265,14 @@ void villager_script::SetAge(entt::entity villager, uint32_t age)
 		    villager_age::GrownScale(setting.age, info.grownUpAge, info.ageToScale.values, start, [](float limit) {
 			    return Locator::gameRandom::has_value() ? Locator::gameRandom::value().GameFloatRand(limit) : 0.0f;
 		    });
+		// The size changes two times: to the start size, then to the grown size. A villager in the map's cells comes out
+		// of them and goes in again when either change is not zero.
+		const bool resized = transform->scale.x != start || grown != start;
 		transform->scale = glm::vec3(grown);
+		if (resized)
+		{
+			ecs::thing_map_place::Reinsert(villager);
+		}
 	}
 	villager_age::SetBirthTurnForAge(*person, setting.age);
 	registry.SetDirty();
@@ -303,7 +311,7 @@ void KeepInMind(entt::entity villager, ScriptRemind& remind)
 	auto& registry = Entities();
 	const auto* wallHug = registry.TryGet<const WallHug>(villager);
 	const auto* transform = registry.TryGet<const Transform>(villager);
-	const auto goal = wallHug != nullptr ? wallHug->goal : glm::vec2(0.0f);
+	const auto goal = wallHug != nullptr ? wall_hug::ToPoint(wallHug->goalPlace) : glm::vec2(0.0f);
 	const auto standing = transform != nullptr ? glm::xz(transform->position) : glm::vec2(0.0f);
 	remind.goal = rules::KeptGoal(goal, standing, remind.returnTo);
 	const auto* arguments = registry.TryGet<const ScriptStateArguments>(villager);
@@ -318,7 +326,7 @@ void BringBackToMind(entt::entity villager, const ScriptRemind& remind)
 	auto& registry = Entities();
 	if (auto* wallHug = registry.TryGet<WallHug>(villager); wallHug != nullptr)
 	{
-		wallHug->goal = remind.goal;
+		wallHug->goalPlace = wall_hug::ToWhole(remind.goal);
 	}
 	registry.AssignOrReplace<ScriptStateArguments>(villager, remind.arguments);
 	if (remind.animation.has_value())
@@ -374,10 +382,7 @@ void villager_script::SetYAngle(entt::entity villager, float angle)
 	{
 		return;
 	}
-	wallHug->yAngle = angle;
-	wallHug->gameAngle = static_cast<uint16_t>(gutils::ConvertAngle3DToGame(angle));
-	transform->rotation = portable_math::EulerAngleY(-angle - glm::radians(90.0f));
-	registry.SetDirty();
+	openblack::ecs::living_facing::FaceAngle(registry, villager, angle);
 }
 
 bool villager_script::StartPathWalk(entt::entity villager, int32_t number, bool forward, float from, float to)
@@ -512,7 +517,7 @@ uint32_t villager_script::ScriptGoAndMoveAlongPath(LivingAction& action)
 		return 1;
 	}
 	// At the point: it walks on along the track from the share of the way it had walked, then waits for the script
-	if (villager_home::AreWeThere(villager, wallHug->goal))
+	if (villager_home::AreWeThere(villager, wallHug->goalPlace))
 	{
 		const auto number = path->number;
 		const auto forward = path->walk.forward;

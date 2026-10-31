@@ -19,10 +19,13 @@
 #include <spdlog/sinks/null_sink.h>
 #include <spdlog/spdlog.h>
 
+#include "3D/MapCoords.h"
 #include "Common/GameRandom.h"
 #include "Creature/CreatureTeleportAgendas.h"
+#include "ECS/Components/Abode.h"
 #include "ECS/Components/Animal.h"
 #include "ECS/Components/Creature.h"
+#include "ECS/Components/CreatureFight.h"
 #include "ECS/Components/CreatureLeash.h"
 #include "ECS/Components/CreatureLocomotion.h"
 #include "ECS/Components/CreatureMind.h"
@@ -36,8 +39,11 @@
 #include "ECS/Components/MagicShield.h"
 #include "ECS/Components/MiracleImpression.h"
 #include "ECS/Components/Mobile.h"
+#include "ECS/Components/ReportedHand.h"
+#include "ECS/Components/Scaffold.h"
 #include "ECS/Components/ScriptControl.h"
 #include "ECS/Components/TeleportStone.h"
+#include "ECS/Components/Town.h"
 #include "ECS/Components/TownDesire.h"
 #include "ECS/Components/Transform.h"
 #include "ECS/Components/Villager.h"
@@ -48,7 +54,9 @@
 #include "ECS/Reflection/BinaryArchive.h"
 #include "ECS/Reflection/ComponentReflection.h"
 #include "ECS/Registry.h"
+#include "ECS/ScriptFlocks.h"
 #include "ECS/Systems/AnimalSystemInterface.h"
+#include "ECS/Systems/CreatureFightSystemInterface.h"
 #include "ECS/Systems/DanceSystemInterface.h"
 #include "ECS/Systems/DynamicsSystemInterface.h"
 #include "ECS/WallHugRules.h"
@@ -149,6 +157,61 @@ public:
 	[[nodiscard]] ParticleRandomStream GetParticleStream() const override { return ParticleRandomStream::None; }
 	void SetParticleStream(ParticleRandomStream) override {}
 };
+/// The fights of the creatures: a creature in the fighting list is in a fight, one in the setting up list is not in its
+/// duel yet, and one in the duelling list is in its duel
+class ListedFights final: public ecs::systems::CreatureFightSystemInterface
+{
+public:
+	void ProcessTurn() override {}
+	void Update(std::chrono::duration<float, std::milli> /*gameTime*/) override {}
+	StartResult StartFight(entt::entity /*creature*/, entt::entity /*opponent*/) override { return StartResult::Busy; }
+	void AbortFight(entt::entity /*creature*/) override {}
+	[[nodiscard]] bool IsFighting(entt::entity creature) const override
+	{
+		return std::ranges::find(fighting, creature) != fighting.end();
+	}
+	[[nodiscard]] bool IsSettingUpFight(entt::entity creature) const override
+	{
+		return std::ranges::find(settingUp, creature) != settingUp.end();
+	}
+	[[nodiscard]] bool IsDuelling(entt::entity creature) const override
+	{
+		return std::ranges::find(duelling, creature) != duelling.end();
+	}
+	[[nodiscard]] std::optional<entt::entity> OpponentOf(entt::entity /*creature*/) const override { return std::nullopt; }
+	bool QueueMove(entt::entity /*creature*/, const creature_fight::Move& /*move*/, bool /*replace*/) override { return false; }
+	void ReleaseCharge(entt::entity /*creature*/, float /*heldMs*/) override {}
+	void SetAutoFighting(entt::entity /*creature*/, bool /*autoFight*/) override {}
+	[[nodiscard]] bool IsAutoFighting(entt::entity /*creature*/) const override { return false; }
+	void Reset() override {}
+	[[nodiscard]] std::optional<entt::entity> PlayersFighter() const override { return std::nullopt; }
+	bool Press(const glm::vec3& /*rayOrigin*/, const glm::vec3& /*rayDirection*/, creature_fight::Button /*button*/,
+	           uint32_t /*milliseconds*/, uint32_t /*turn*/) override
+	{
+		return false;
+	}
+	void Release(uint32_t /*milliseconds*/, uint32_t /*turn*/) override {}
+	[[nodiscard]] bool IsPressed() const override { return false; }
+	[[nodiscard]] std::optional<creature_fight::Tip> HandTip(std::optional<entt::entity> /*under*/) const override
+	{
+		return std::nullopt;
+	}
+	bool GestureSpecialMove() override { return false; }
+	bool GestureSpell(MagicType /*type*/) override { return false; }
+	void KnockOut(entt::entity /*creature*/) override {}
+	void ForceFaint(entt::entity /*creature*/) override {}
+	void KillPermanently(entt::entity /*creature*/) override {}
+	void Resurrect(entt::entity /*creature*/) override {}
+	[[nodiscard]] bool IsKnockedOut(entt::entity /*creature*/) const override { return false; }
+	[[nodiscard]] std::optional<creature_fight_hud::Values> GetPanel() const override { return std::nullopt; }
+	void SetCameraWatches(bool /*enabled*/) override {}
+	[[nodiscard]] bool GetCameraWatches() const override { return false; }
+	[[nodiscard]] bool IsCameraOnFight() const override { return false; }
+
+	std::vector<entt::entity> fighting;
+	std::vector<entt::entity> settingUp;
+	std::vector<entt::entity> duelling;
+};
 /// Records how the reaction system ends the reaction of an animal. It does nothing else.
 class FakeAnimals final: public ecs::systems::AnimalSystemInterface
 {
@@ -170,6 +233,7 @@ public:
 	entt::entity CreateBird(AnimalInfo, glm::vec2, uint32_t, entt::entity) override { return entt::null; }
 	void SetFlockTown(entt::entity, entt::entity) override {}
 	entt::entity CreateGrazer(AnimalInfo, glm::vec2, uint32_t, entt::entity, entt::entity) override { return entt::null; }
+	entt::entity CreateHunter(AnimalInfo, glm::vec2, uint32_t, entt::entity) override { return entt::null; }
 	entt::entity CreateScriptAnimal(AnimalInfo, glm::vec2) override { return entt::null; }
 	entt::entity CreateStillAnimal(AnimalInfo, glm::vec3, float, float) override { return entt::null; }
 	void JoinFlock(entt::entity, entt::entity) override {}
@@ -306,7 +370,7 @@ protected:
 			auto& component = registry.Assign<Villager>(villager);
 			component.town = _town;
 			component.life = 1.0f;
-			registry.Assign<WallHug>(villager, WallHug {.goal = glm::vec2(0.0f), .yAngle = 0.0f, .speed = 1.0f});
+			registry.Assign<WallHug>(villager, WallHug {.goalPlace = {0, 0}, .yAngle = 0.0f, .speed = 1.0f});
 			registry.Assign<LivingAction>(villager, VillagerStates::DecideWhatToDo, static_cast<uint16_t>(0));
 			_villagers.push_back(villager);
 		}
@@ -441,6 +505,73 @@ TEST_F(Reactions, VillagersInReachTakeUpANiceMiracleAndBelieveOnce)
 	EXPECT_FLOAT_EQ(town.belief.at(static_cast<size_t>(PlayerNames::PLAYER_ONE)),
 	                std::min(belief, openblack::magic::town_belief::k_DefaultCap));
 	EXPECT_FLOAT_EQ(town.pending.at(static_cast<size_t>(PlayerNames::PLAYER_ONE)), 0.0f);
+}
+
+// A hand that holds the thing stops the spread of its reactions whose kind a hand ends. The reaction stays. It spreads
+// again when the hand lets go of the thing.
+// NOLINTNEXTLINE(cppcoreguidelines-avoid-non-const-global-variables): external macro
+TEST_F(Reactions, AReactionOfAThingInTheHandDoesNotSpreadUntilTheHandLetsGo)
+{
+	// The reactions read the copy of the table that the locator keeps
+	_info->reaction.at(static_cast<size_t>(Reaction::LookAtNiceSpell)).whetherReactionFinishesIfInitiatorInHand = 1;
+	Locator::infoConstants::emplace(*_info);
+	auto& registry = Locator::entitiesRegistry::value();
+	auto miracle = Miracle();
+	miracle.initiator = registry.Create();
+	const auto id = _reactions.Create(miracle);
+	// The far villager comes into the reach after the reaction spread once
+	const auto late = _villagers[2];
+	registry.Get<Transform>(late).position = k_Here + glm::vec3(3.0f, 0.0f, 0.0f);
+	Locator::entitiesMap::value().Sync();
+	_reactions.StopSpreadInHand(miracle.initiator);
+	ASSERT_TRUE(_reactions.Find(id).has_value());
+	EXPECT_FALSE(_reactions.Find(id)->spreads);
+	// The reactions take their turns one after another: each one has had its turn after a few turns
+	const auto reactsTo = [&registry, late]() {
+		const auto* reaction = registry.TryGet<const LivingReaction>(late);
+		return reaction != nullptr ? reaction->reaction : 0u;
+	};
+	for (int i = 0; i < 4; ++i)
+	{
+		PlayTurn();
+	}
+	EXPECT_NE(reactsTo(), id);
+	// The reaction still ages while it does not spread
+	ASSERT_TRUE(_reactions.IsActive(id));
+	_reactions.SpreadAgain(miracle.initiator);
+	EXPECT_TRUE(_reactions.Find(id)->spreads);
+	for (int i = 0; i < 4 && reactsTo() != id; ++i)
+	{
+		PlayTurn();
+	}
+	EXPECT_EQ(reactsTo(), id);
+}
+
+// A reaction whose kind a hand does not end keeps its spread while the hand holds the thing
+// NOLINTNEXTLINE(cppcoreguidelines-avoid-non-const-global-variables): external macro
+TEST_F(Reactions, AReactionThatAHandDoesNotEndSpreadsFromTheHand)
+{
+	// The reactions read the copy of the table that the locator keeps
+	_info->reaction.at(static_cast<size_t>(Reaction::LookAtNiceSpell)).whetherReactionFinishesIfInitiatorInHand = 0;
+	Locator::infoConstants::emplace(*_info);
+	auto& registry = Locator::entitiesRegistry::value();
+	auto miracle = Miracle();
+	miracle.initiator = registry.Create();
+	const auto id = _reactions.Create(miracle);
+	const auto late = _villagers[2];
+	registry.Get<Transform>(late).position = k_Here + glm::vec3(3.0f, 0.0f, 0.0f);
+	Locator::entitiesMap::value().Sync();
+	_reactions.StopSpreadInHand(miracle.initiator);
+	EXPECT_TRUE(_reactions.Find(id)->spreads);
+	const auto reactsTo = [&registry, late]() {
+		const auto* reaction = registry.TryGet<const LivingReaction>(late);
+		return reaction != nullptr ? reaction->reaction : 0u;
+	};
+	for (int i = 0; i < 4 && reactsTo() != id; ++i)
+	{
+		PlayTurn();
+	}
+	EXPECT_EQ(reactsTo(), id);
 }
 
 TEST_F(Reactions, TheReactionsGoingOnComeBackFromASave)
@@ -658,6 +789,24 @@ TEST_F(Reactions, AVillagerGoingFromAFireToFightItKeepsTheReactionItNeeds)
 	Locator::reactionSystem::reset();
 }
 
+TEST_F(Reactions, ADeadVillagerLeavesItsFlockAlsoWhenAScriptControlsIt)
+{
+	// A script counts the worshippers it lost by the size of their flock: a body that lies dead is no longer a member
+	auto& registry = Locator::entitiesRegistry::value();
+	const auto first = _villagers[0];
+	const auto second = _villagers[1];
+	const auto flock = ecs::script_flocks::Create(registry, ecs::script_flocks::PositionOf(registry, first));
+	ecs::script_flocks::AddLiving(registry, flock, first);
+	ecs::script_flocks::AddLiving(registry, flock, second);
+	registry.AssignOrReplace<ScriptControlled>(first);
+	villager_fire::Dead(registry.Get<LivingAction>(first));
+	EXPECT_EQ(ecs::script_flocks::Size(registry, flock), 1u);
+	EXPECT_FALSE(ecs::script_flocks::IsMember(registry, flock, first));
+	// The flock goes with its last member
+	villager_fire::Dead(registry.Get<LivingAction>(second));
+	EXPECT_FALSE(registry.Valid(flock));
+}
+
 TEST(VillagerFireRules, AFiremanRememberingNothingDecidesWhatToDoRatherThanStandingStill)
 {
 	EXPECT_EQ(villager_fire::StateToGoBackTo(VillagerStates::InvalidState), VillagerStates::DecideWhatToDo);
@@ -854,7 +1003,7 @@ TEST_F(Reactions, AFiremanWalkingAwayFromTheFireIsNoLongerOneOfItsFiremen)
 	EXPECT_EQ(StateOf(villager), VillagerStates::MoveToPos);
 	EXPECT_EQ(static_cast<VillagerStates>(action.states.at(static_cast<size_t>(LivingAction::Index::Final))),
 	          VillagerStates::DecideWhatToDo);
-	EXPECT_EQ(registry.Get<const WallHug>(villager).goal, glm::vec2(600.0f, 600.0f));
+	EXPECT_EQ(registry.Get<const WallHug>(villager).goalPlace, ecs::wall_hug::ToWhole({600.0f, 600.0f}));
 	Locator::fireSystem::reset();
 	Locator::reactionSystem::reset();
 }
@@ -946,6 +1095,51 @@ TEST_F(Reactions, ACreatureToldToTakeNoNoticeOrBusyWithAForcedPlanIsNotImpressed
 	_reactions.Create(Miracle());
 	EXPECT_TRUE(impressed());
 	registry.Remove<CreatureMindState>(_creature);
+}
+
+// A creature that is asked to fight takes up reactions before its duel. The creature that started the fight takes up
+// none in the whole fight.
+TEST_F(Reactions, AnAskedCreatureTakesUpReactionsOutOfItsDuelButTheStarterNever)
+{
+	auto& registry = Locator::entitiesRegistry::value();
+	auto& fights = static_cast<ListedFights&>(Locator::creatureFightSystem::emplace<ListedFights>());
+	const auto impressed = [&]() {
+		const auto* impression = registry.TryGet<const CreatureImpression>(_creature);
+		const bool was = impression != nullptr && impression->byOwnPlayer > 0.0f;
+		registry.Remove<CreatureImpression>(_creature);
+		return was;
+	};
+	registry.Assign<CreatureFighting>(_creature, CreatureFighting {.part = CreatureFighting::Part::Asked});
+	fights.fighting = {_creature};
+	fights.settingUp = {_creature};
+	_reactions.Create(Miracle());
+	EXPECT_TRUE(impressed());
+	// In the duel
+	fights.settingUp.clear();
+	fights.duelling = {_creature};
+	_reactions.Create(Miracle());
+	EXPECT_FALSE(impressed());
+	// The creature that started it, before the duel
+	fights.settingUp = {_creature};
+	registry.Get<CreatureFighting>(_creature).madeArena = true;
+	_reactions.Create(Miracle());
+	EXPECT_FALSE(impressed());
+	registry.Remove<CreatureFighting>(_creature);
+	Locator::creatureFightSystem::reset();
+}
+
+// A creature that is asked to fight takes up reactions again after its duel, while its fight continues
+TEST_F(Reactions, AnAskedCreatureTakesUpReactionsAfterItsDuel)
+{
+	auto& registry = Locator::entitiesRegistry::value();
+	auto& fights = static_cast<ListedFights&>(Locator::creatureFightSystem::emplace<ListedFights>());
+	registry.Assign<CreatureFighting>(_creature, CreatureFighting {.part = CreatureFighting::Part::Obeys});
+	fights.fighting = {_creature};
+	_reactions.Create(Miracle());
+	const auto* impression = registry.TryGet<const CreatureImpression>(_creature);
+	EXPECT_TRUE(impression != nullptr && impression->byOwnPlayer > 0.0f);
+	registry.Remove<CreatureFighting>(_creature);
+	Locator::creatureFightSystem::reset();
 }
 
 TEST_F(Reactions, ACreatureWithNoLifeOrCarriedByATeleportIsNotImpressed)
@@ -1625,6 +1819,26 @@ TEST_F(Reactions, VillagersHeedTheHandPickingUpOrSomethingCrushedWithoutTakingIt
 	}
 }
 
+// The turn finds the hand where the last report of its player put it. The drawn hand follows the pointer of one
+// computer only, so the turn does not use it.
+TEST_F(Reactions, TheTurnFindsTheHandAtItsReportedPlaceAndNotAtItsDrawnPlace)
+{
+	auto& registry = Locator::entitiesRegistry::value();
+	PlayTurn();
+	PlayTurn();
+	const auto hand = registry.Create();
+	registry.Assign<Transform>(hand, k_Here + glm::vec3(1000.0f, 0.0f, 0.0f), glm::mat3(1.0f), glm::vec3(1.0f));
+	registry.Assign<ReportedHand>(hand).handPoint = k_Here;
+	auto source = Miracle(Reaction::ReactToHandPickUp);
+	source.initiator = hand;
+	_reactions.Create(source);
+	const auto* memory = registry.TryGet<const VillagerReactionMemory>(_villagers[0]);
+	ASSERT_NE(memory, nullptr);
+	EXPECT_NE(memory->memory.LastReacted(static_cast<uint32_t>(Reaction::ReactToHandPickUp)), 0u);
+	const auto* far = registry.TryGet<const VillagerReactionMemory>(_villagers[2]);
+	EXPECT_TRUE(far == nullptr || far->memory.LastReacted(static_cast<uint32_t>(Reaction::ReactToHandPickUp)) == 0u);
+}
+
 TEST(ReactionRules, OnlyATownsOwnBuildingsAreReactedToWhenBuilt)
 {
 	using magic::villager_reaction::ReactedToWhenBuilt;
@@ -1953,7 +2167,10 @@ TEST_F(Reactions, AnAnimalLooksAtAThingToLookAt)
 	animals.available = true;
 	const auto cow = registry.Create();
 	registry.Assign<Transform>(cow, k_Here + glm::vec3(10.0f, 0.0f, 0.0f), glm::mat3(1.0f), glm::vec3(1.0f));
-	registry.Assign<Animal>(cow).type = AnimalInfo::Cow;
+	auto& cowAnimal = registry.Assign<Animal>(cow);
+	cowAnimal.type = AnimalInfo::Cow;
+	// The map puts an animal in the cell of its map position, which is where it stands
+	cowAnimal.move.position = {map_coords::ToFixed(k_Here.x + 10.0f), map_coords::ToFixed(k_Here.z)};
 	Locator::entitiesMap::value().Sync();
 	_reactions.Create(Miracle(Reaction::LookAtObject));
 	EXPECT_EQ(animals.lookedAt, std::vector<entt::entity> {static_cast<entt::entity>(1000)});
@@ -1970,7 +2187,10 @@ TEST_F(Reactions, AnAnimalGoesOnlyToFoodThatInterestsIt)
 	animals.available = true;
 	const auto cow = registry.Create();
 	registry.Assign<Transform>(cow, k_Here + glm::vec3(10.0f, 0.0f, 0.0f), glm::mat3(1.0f), glm::vec3(1.0f));
-	registry.Assign<Animal>(cow).type = AnimalInfo::Cow;
+	auto& cowAnimal = registry.Assign<Animal>(cow);
+	cowAnimal.type = AnimalInfo::Cow;
+	// The map puts an animal in the cell of its map position, which is where it stands
+	cowAnimal.move.position = {map_coords::ToFixed(k_Here.x + 10.0f), map_coords::ToFixed(k_Here.z)};
 	Locator::entitiesMap::value().Sync();
 	_reactions.Create(Miracle(Reaction::ReactToFood));
 	EXPECT_TRUE(animals.wentTo.empty());
@@ -1995,4 +2215,89 @@ TEST_F(Reactions, ANetworkLandStartsTheIdsOfTheReactionsAgain)
 	// Only the next reset does it
 	_reactions.Reset();
 	EXPECT_NE(_reactions.Create(Miracle()), first);
+}
+
+namespace
+{
+/// The reaction to a scaffold reaches as far as a miracle's but no villager takes it up
+void ScaffoldReactionTable(InfoConstants& info)
+{
+	auto& reaction = info.reaction.at(static_cast<size_t>(Reaction::ReactToScaffold));
+	reaction.priority = 0;
+	reaction.whetherItImpresses = 1;
+	reaction.maxReactionDistance = 60.0f;
+	reaction.defaultReactionImpressiveMultiplier = 1.0f;
+	static_cast<GObjectInfo&>(info.scaffold).impressiveValue = 2.0f;
+}
+
+/// A scaffold of a scale of 1, which is worth 3 scaffolds, where the miracles are cast
+entt::entity MakeScaffold()
+{
+	auto& registry = Locator::entitiesRegistry::value();
+	const auto scaffold = registry.Create();
+	registry.Assign<Transform>(scaffold, k_Here, glm::mat3(1.0f), glm::vec3(1.0f));
+	registry.Assign<Scaffold>(scaffold);
+	return scaffold;
+}
+} // namespace
+
+TEST_F(Reactions, AScaffoldImpressesAVillagerByItsValueAndTiresTheTownByItsOwnAmount)
+{
+	ScaffoldReactionTable(*_info);
+	Locator::infoConstants::emplace(*_info);
+	const auto scaffold = MakeScaffold();
+	const auto id = _reactions.Create({.initiator = scaffold,
+	                                   .type = Reaction::ReactToScaffold,
+	                                   .player = PlayerNames::PLAYER_ONE,
+	                                   .position = k_Here,
+	                                   .onCast = true});
+	const auto& registry = Locator::entitiesRegistry::value();
+	const auto pending = [&registry, this]() {
+		const auto* impression = registry.TryGet<const TownImpression>(_town);
+		return impression == nullptr ? 0.0f : impression->belief.pending.at(static_cast<size_t>(PlayerNames::PLAYER_ONE));
+	};
+	// No villager takes the reaction up
+	EXPECT_FLOAT_EQ(pending(), 0.0f);
+	EXPECT_EQ(StateOf(_villagers[0]), VillagerStates::DecideWhatToDo);
+	_reactions.Impress(id, _villagers[0]);
+	// Right by the scaffold: 3 scaffolds times 2, shared by the town's three people against thirty
+	const float share = (30.0f + 0.001f) / (3.0f + 0.001f);
+	EXPECT_FLOAT_EQ(pending(), 6.0f * share);
+	// The villager does not take the reaction up
+	EXPECT_EQ(StateOf(_villagers[0]), VillagerStates::DecideWhatToDo);
+	// The scaffold tires the town by 1 times the share, not by the belief table's amount: the town is fully bored
+	EXPECT_FLOAT_EQ(registry.Get<const TownImpression>(_town).boredom.at(Reaction::ReactToScaffold), 0.0f);
+	_reactions.Impress(id, _villagers[1]);
+	EXPECT_FLOAT_EQ(pending(), 6.0f * share);
+	// A reaction that is gone impresses nobody
+	_reactions.Impress(id + 100, _villagers[1]);
+	EXPECT_FLOAT_EQ(pending(), 6.0f * share);
+}
+
+TEST_F(Reactions, AScaffoldOnASiteImpressesAsMuchAsTheTownWantsTheBuilding)
+{
+	ScaffoldReactionTable(*_info);
+	Locator::infoConstants::emplace(*_info);
+	auto& registry = Locator::entitiesRegistry::value();
+	constexpr uint32_t k_TownId = 9;
+	registry.Assign<Town>(_town, k_TownId, PlayerNames::PLAYER_ONE);
+	registry.Context().towns[k_TownId] = _town;
+	auto& wants = registry.Assign<TownDesire>(_town);
+	wants.raw.at(static_cast<size_t>(TownDesireInfo::ForAbodes)) = 0.25f;
+	wants.boost.at(static_cast<size_t>(TownDesireInfo::ForAbodes)) = 0.25f;
+	wants.raw.at(static_cast<size_t>(TownDesireInfo::ForCivicBuilding)) = 2.0f;
+	const auto site = registry.Create();
+	registry.Assign<Abode>(site).townId = k_TownId;
+	const auto scaffold = MakeScaffold();
+	registry.Get<Scaffold>(scaffold).site = site;
+	const auto id = _reactions.Create({.initiator = scaffold,
+	                                   .type = Reaction::ReactToScaffold,
+	                                   .player = PlayerNames::PLAYER_ONE,
+	                                   .position = k_Here,
+	                                   .onCast = true});
+	_reactions.Impress(id, _villagers[0]);
+	// The building is an abode: the town's want for abodes with its boosts, one half, multiplies the 6
+	const float share = (30.0f + 0.001f) / (3.0f + 0.001f);
+	EXPECT_FLOAT_EQ(registry.Get<const TownImpression>(_town).belief.pending.at(static_cast<size_t>(PlayerNames::PLAYER_ONE)),
+	                3.0f * share);
 }

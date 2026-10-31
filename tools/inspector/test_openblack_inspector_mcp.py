@@ -14,6 +14,7 @@ import json
 import os
 import shutil
 import socket
+import subprocess
 import sys
 import tempfile
 import threading
@@ -794,12 +795,132 @@ class ArgumentsTest(SessionBase):
             self.assertEqual(sent, value)
             self.assertEqual(type(sent), type(value))
 
+    def test_creature_orders_go_to_the_game_with_their_parameters(self):
+        self.session.call("creature_pick_up", {"id": 157, "object": 3621, "pid": 1001})
+        self.assertEqual(self.first.asked()[-1]["query"], "creature.pick_up")
+        self.assertEqual(self.first.asked()[-1]["params"], {"id": 157, "object": 3621})
+        self.session.call("creature_put_down", {"point": [2926.0, 3060.0], "throw": True, "pid": 1001})
+        self.assertEqual(self.first.asked()[-1]["query"], "creature.put_down")
+        self.assertEqual(self.first.asked()[-1]["params"], {"point": [2926.0, 3060.0], "throw": True})
+        self.session.call("creature_put_down", {"pid": 1001})
+        self.assertEqual(self.first.asked()[-1]["query"], "creature.put_down")
+        self.assertNotIn("params", self.first.asked()[-1])
+        self.session.call("creature_eat", {"object": 614, "action": "EatAlive", "pid": 1001})
+        self.assertEqual(self.first.asked()[-1]["query"], "creature.eat")
+        self.assertEqual(self.first.asked()[-1]["params"], {"object": 614, "action": "EatAlive"})
+        self.assertEqual(mcp.TOOLS_BY_NAME["creature_pick_up"]["inputSchema"]["required"], ["object"])
+        self.assertEqual(mcp.TOOLS_BY_NAME["creature_eat"]["inputSchema"]["required"], ["object"])
+        self.assertEqual(mcp.TOOLS_BY_NAME["creature_put_down"]["inputSchema"]["required"], [])
+
     def test_a_tool_refuses_arguments_it_doesnt_take(self):
         asked = len(self.first.asked())
         answer = self.session.call("game_moon", {"pid": 1001, "colour": "red"})
         self.assertFalse(answer["ok"])
         self.assertIn("colour", answer["error"])
         self.assertEqual(len(self.first.asked()), asked)
+
+
+class GestureTest(SessionBase):
+    """input.gesture draws the same path at each camera distance: the adapter sends the call as it is, after a camera
+    near the hand and after one far from it, and the tool tells how a drawing can be lost"""
+    OFFSET = (-35.0, 40.0, -35.0)
+    TARGET = (3600.7, 0.0, 3421.8)
+
+    def setUp(self):
+        super().setUp()
+        self.distances = []
+        self.camera = {}
+
+        def set_camera(request):
+            params = request["params"]
+            self.camera = params
+            return {"model": "world", "override": False}
+
+        def draw(request):
+            origin, focus = self.camera["position"], self.camera["focus"]
+            self.distances.append(sum((a - b) ** 2 for a, b in zip(origin, focus)) ** 0.5)
+            return {"gesture": request["params"]["name"], "hold_action": request["params"].get("hold_action", False),
+                    "pending": 0}
+
+        self.first.handlers["camera.set"] = set_camera
+        self.first.handlers["input.gesture"] = draw
+
+    def look_from(self, scale):
+        position = [t + o * scale for t, o in zip(self.TARGET, self.OFFSET)]
+        answer = self.session.call("camera_set", {"position": position, "focus": list(self.TARGET), "port": self.first.port})
+        self.assertTrue(answer["ok"], answer)
+
+    def test_a_circle_is_asked_for_the_same_way_near_and_far(self):
+        for scale in (1.0, 1.2, 1.3, 2.0, 3.0):
+            self.look_from(scale)
+            answer = self.session.call("input_gesture", {"name": "circle", "hold_action": True, "port": self.first.port})
+            self.assertTrue(answer["ok"], answer)
+            self.assertEqual(answer["result"], {"gesture": "circle", "hold_action": True, "pending": 0})
+        asked = [r for r in self.first.asked() if r["query"] == "input.gesture"]
+        self.assertEqual(len(asked), 5)
+        for request in asked:
+            self.assertEqual(request["params"], {"name": "circle", "hold_action": True})
+        near, far = self.distances[0], self.distances[-1]
+        self.assertAlmostEqual(far / near, 3.0, places=3)
+
+    def test_the_order_of_a_camera_and_a_drawing_is_kept(self):
+        self.look_from(1.0)
+        self.session.call("input_gesture", {"name": "circle", "port": self.first.port})
+        self.look_from(3.0)
+        self.session.call("input_gesture", {"name": "circle", "port": self.first.port})
+        queries = [r["query"] for r in self.first.asked()]
+        self.assertEqual(queries, ["camera.set", "input.gesture", "camera.set", "input.gesture"])
+
+    def test_the_tool_tells_how_a_drawing_is_lost_and_how_to_see_it_was_recognised(self):
+        description = mcp.TOOLS_BY_NAME["input_gesture"]["description"]
+        self.assertIn("camera", description)
+        self.assertIn("players.gestures", description)
+        self.assertIn("same at each camera distance", description)
+        entry = mcp.CATALOGUE["input.gesture"]
+        self.assertIn("players.gestures", entry["description"])
+        self.assertIn("camera moves", entry["description"])
+
+
+class ComputerMindTest(SessionBase):
+    """A computer god's whole mind is read by name: every node with its personality weight, and its attitudes"""
+
+    def setUp(self):
+        super().setUp()
+        self.nodes = [{"index": 0, "name": "Root", "weight": 1.0},
+                      {"index": 7, "name": "ExpandInfluence", "weight": 0.2}]
+        self.first.handlers["players.computer_nodes"] = lambda request: [
+            node for node in self.nodes
+            if request["params"].get("name") in (None, node["name"])]
+        self.first.handlers["players.computer_attitudes"] = lambda request: {
+            "player": 1, "attitudes": [{"player": 0, "name": "PLAYER_ONE", "attitude": 0.5, "kept": 1.0}]}
+
+    def test_the_nodes_of_a_god_are_asked_by_its_name_and_the_name_of_a_node(self):
+        answer = self.session.call("players_computer_nodes",
+                                   {"player": "PLAYER_TWO", "name": "ExpandInfluence", "port": self.first.port})
+        self.assertTrue(answer["ok"], answer)
+        self.assertEqual([node["weight"] for node in answer["result"]], [0.2])
+        asked = [r for r in self.first.asked() if r["query"] == "players.computer_nodes"]
+        self.assertEqual(asked[-1]["params"]["player"], "PLAYER_TWO")
+        self.assertEqual(asked[-1]["params"]["name"], "ExpandInfluence")
+
+    def test_every_node_is_given_and_a_list_pages(self):
+        answer = self.session.call("players_computer_nodes", {"player": 1, "limit": 1, "port": self.first.port})
+        self.assertTrue(answer["ok"], answer)
+        asked = [r for r in self.first.asked() if r["query"] == "players.computer_nodes"]
+        self.assertEqual(asked[-1]["params"]["player"], 1)
+        self.assertEqual(asked[-1]["limit"] if "limit" in asked[-1] else asked[-1]["params"].get("limit"), 1)
+
+    def test_the_attitudes_of_a_god_are_asked_by_its_number(self):
+        answer = self.session.call("players_computer_attitudes", {"player": 1, "port": self.first.port})
+        self.assertTrue(answer["ok"], answer)
+        self.assertEqual(answer["result"]["attitudes"][0]["attitude"], 0.5)
+
+    def test_the_tools_need_a_player_and_say_what_they_read(self):
+        for name in ("players_computer_nodes", "players_computer_attitudes"):
+            self.assertEqual(mcp.TOOLS_BY_NAME[name]["inputSchema"]["required"], ["player"])
+        self.assertIn("personality weight", mcp.TOOLS_BY_NAME["players_computer_nodes"]["description"])
+        self.assertIn("players.computer_nodes", mcp.CATALOGUE)
+        self.assertIn("players.computer_attitudes", mcp.CATALOGUE)
 
 
 class SchemaTest(unittest.TestCase):
@@ -859,6 +980,98 @@ class SchemaTest(unittest.TestCase):
 
     def test_a_missing_catalogue_is_empty(self):
         self.assertEqual(mcp.read_catalogue(os.path.join(tempfile.gettempdir(), "no-such-catalogue.json")), {})
+
+
+
+LIVE_GAME = os.environ.get("OPENBLACK_LIVE_GAME")
+
+
+@unittest.skipUnless(LIVE_GAME, "set OPENBLACK_LIVE_GAME to an openblack.exe to run a real game")
+class LiveCreatureOrdersTest(unittest.TestCase):
+    """A creature picks up and eats a villager on the Land 2 start, once the cut scene is over, through the tools. The
+    game runs headless and fast. Needs the game data in OPENBLACK_LIVE_DATA (C:/projects/black by default)."""
+
+    def setUp(self):
+        self.folder = tempfile.mkdtemp(prefix="openblack-inspector-live-")
+        data = os.environ.get("OPENBLACK_LIVE_DATA", "C:/projects/black")
+        arguments = [LIVE_GAME, "-g", data, "-s", "Land2.txt", "--direct-start-creature=tiger", "--seed", "1",
+                     "--background", "--sim-fast", "--no-draw", "--inspect-port", "0", "-n", "20000000",
+                     "--profile-folder", os.path.join(self.folder, "profile")]
+        self.game = subprocess.Popen(arguments, cwd=self.folder, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        port = self.wait_for_port()
+        write_record(self.folder, self.game.pid, port, self.folder)
+        self.session = mcp.Session(port, 60.0, folder=self.folder, alive=lambda pid: self.game.poll() is None)
+
+    def tearDown(self):
+        self.session.close()
+        self.game.kill()
+        self.game.wait()
+        shutil.rmtree(self.folder, ignore_errors=True)
+
+    def wait_for_port(self):
+        log = os.path.join(self.folder, "openblack.log")
+        deadline = time.monotonic() + 120
+        while time.monotonic() < deadline:
+            try:
+                with open(log, encoding="utf-8", errors="replace") as file:
+                    for line in file:
+                        if "Inspector listening on 127.0.0.1:" in line:
+                            return int(line.rsplit(":", 1)[1])
+            except OSError:
+                pass
+            time.sleep(0.5)
+        self.fail("the game did not start its inspector")
+
+    def ask(self, query, params=None):
+        answer = self.session.call("inspector_query", {"query": query, "params": params or {}, "pid": self.game.pid})
+        self.assertTrue(answer["ok"], answer)
+        return answer["result"]
+
+    def call(self, tool, arguments):
+        return self.session.call(tool, {**arguments, "pid": self.game.pid})
+
+    def entity(self, thing):
+        return self.ask("ecs.entity", {"id": thing})
+
+    def run_until(self, condition, seconds):
+        """Clicks the dialogues of the cut scenes until the condition holds"""
+        deadline = time.monotonic() + seconds
+        while not condition():
+            if time.monotonic() > deadline:
+                self.fail("timed out")
+            if self.ask("help.dialogue").get("waiting_for_click"):
+                self.ask("input.button", {"action": "click"})
+            time.sleep(0.3)
+
+    def test_a_creature_picks_up_and_eats_a_villager(self):
+        self.call("game_resume", {})
+        deadline = time.monotonic() + 120
+        while not self.ask("creature.list")["items"]:
+            self.assertLess(time.monotonic(), deadline, "the land did not load")
+            time.sleep(0.5)
+        creature = self.ask("creature.list")["items"][0]["id"]
+        self.run_until(lambda: "ScriptControlled" not in self.entity(creature)["components"] and
+                       not self.ask("camera.state").get("held_by_script"), 280)
+        self.call("game_pause", {})
+        near = self.entity(creature)["position"]
+        villagers = [thing for thing in self.call("game_find_objects", {"near": [near[0], near[2]], "radius": 60})
+                     ["result"]["items"] if thing["kind"] == "Villager"]
+        self.assertGreaterEqual(len(villagers), 2)
+
+        picked = self.call("creature_pick_up", {"id": creature, "object": villagers[0]["id"]})
+        self.assertTrue(picked["ok"], picked)
+        self.assertNotIn("warning", picked["result"])
+        self.call("game_step", {"turns": 150})
+        self.assertIn("HeldByCreature", self.entity(villagers[0]["id"])["components"])
+        self.assertTrue(self.call("creature_put_down", {"id": creature})["ok"])
+        self.call("game_step", {"turns": 100})
+
+        eaten = self.call("creature_eat", {"id": creature, "object": villagers[1]["id"]})
+        self.assertTrue(eaten["ok"], eaten)
+        self.call("game_step", {"turns": 150})
+        # An eaten villager is gone from the game
+        state = self.call("inspector_query", {"query": "ecs.entity", "params": {"id": villagers[1]["id"]}})
+        self.assertTrue(not state["ok"] or "HeldByCreature" in state["result"]["components"], state)
 
 
 if __name__ == "__main__":

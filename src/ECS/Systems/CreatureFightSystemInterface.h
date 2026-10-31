@@ -46,6 +46,9 @@ public:
 		/// The other creature, asked first, won't fight it: it is less than half or more than twice its height, it lies
 		/// dead, or only one of the two is under a script's control
 		Refused,
+		/// The other creature agreed, but one of the two still finishes the move of a fight that stopped. Nothing
+		/// starts: try again on a later turn, with the answer that the other creature gave.
+		Finishing,
 	};
 
 	virtual ~CreatureFightSystemInterface() = default;
@@ -56,7 +59,8 @@ public:
 	/// In the creature's own turn, with its action: a fight that its leash asks for starts, its fight moves to the next
 	/// stage, and a creature that is knocked out comes round
 	virtual void FightTurn(entt::entity /*creature*/) {}
-	/// In the creature's own turn, as its body lives the turn: the blood of its wounds runs down its skin
+	/// In the creature's own turn, as its body lives the turn: the sparkle of a held press charges, and the blood of its
+	/// wounds runs down its skin
 	virtual void BloodTurn(entt::entity /*creature*/) {}
 	/// In the creature's own turn, as its body lives the turn: a fighter moves and strikes, and its body takes its pose
 	virtual void MovesTurn(entt::entity /*creature*/) {}
@@ -76,8 +80,8 @@ public:
 	/// is over.
 	virtual StartResult StartFight(entt::entity creature, entt::entity opponent) = 0;
 	/// A fight that the first creature's own plan starts. That creature can give up the fight for a plan it wants much
-	/// more.
-	virtual StartResult StartPlannedFight(entt::entity creature, entt::entity opponent)
+	/// more. When the other creature agreed on an earlier turn of the same step, it is not asked again: its answer stays.
+	virtual StartResult StartPlannedFight(entt::entity creature, entt::entity opponent, bool /*agreed*/)
 	{
 		return StartFight(creature, opponent);
 	}
@@ -90,8 +94,18 @@ public:
 	/// winner. Both creatures finish the move they are making and stand, without celebrating or sulking, and each loses
 	/// from its life a quarter of the fight health it lost. A fight still being set up is simply left.
 	virtual void CallOff(entt::entity creature) { AbortFight(creature); }
-	/// Whether the creature is in a fight's setup, going to the arena before the duel: it takes no leash orders then
+	/// The hand took hold of the creature. The fights call it on the first turn of the hold. In a duel, the creature
+	/// leaves the duel: its life pays for the fight, and it finishes its move. Its opponent stays in the duel against it.
+	/// The fight steps of the creature wait while the hand holds it.
+	virtual void HandTookHold(entt::entity /*creature*/) {}
+	/// The hand let go of the creature, and the creature starts its plan again. Its fight stops with no response, and the
+	/// fight of its opponent stops too.
+	virtual void HandLetGo(entt::entity /*creature*/) {}
+	/// Whether the creature is in a fight's setup, going to the arena before the duel
 	[[nodiscard]] virtual bool IsSettingUpFight(entt::entity /*creature*/) const { return false; }
+	/// Whether the creature started the fight that it is in. Out of its duel, the creature that started a fight takes no
+	/// leash orders.
+	[[nodiscard]] virtual bool StartedFight(entt::entity /*creature*/) const { return false; }
 	[[nodiscard]] virtual bool IsFighting(entt::entity creature) const = 0;
 	/// Scripts: whether the creature duels now, from the start of its duel until its fight ends. The walk to the arena,
 	/// the taunt and what it does after the fight do not count.
@@ -142,7 +156,8 @@ public:
 		return std::nullopt;
 	}
 
-	/// The player's creature, the first they got, while it duels
+	/// The creature of the player of this computer, the first that the player got, while it duels. In a network game,
+	/// this is the creature of the god of this computer.
 	[[nodiscard]] virtual std::optional<entt::entity> PlayersFighter() const = 0;
 	/// Whether the hand directs the fight of the player's creature now. The creature duels, the camera shows a fight and
 	/// the hand holds nothing. Only then do the presses of the hand go to the fight.
@@ -172,6 +187,9 @@ public:
 	/// The turn of the let go of a press on a body that a player sent: the blow that waits last in the queue of the
 	/// player's creature gets the charge
 	virtual void DoCharge(PlayerNames /*player*/, float /*heldMs*/) {}
+	/// The turn of the fight cheat that a player sent (tools only). The leash of the player's creature comes off. A
+	/// creature in a fight stops the fight with no winner. Any other creature starts a fight with the nearest creature.
+	virtual void DoFightCheat(PlayerNames /*player*/) {}
 	/// Whether a press the fight took is held
 	[[nodiscard]] virtual bool IsPressed() const = 0;
 	/// What the hand offers over a thing, or nothing, while the hand directs the fight

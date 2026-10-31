@@ -13,6 +13,7 @@
 #include <array>
 #include <optional>
 #include <set>
+#include <unordered_map>
 #include <utility>
 #include <vector>
 
@@ -419,6 +420,16 @@ TEST(CreatureObjectBeliefs, AWalkUpToAThingContinuesUntilTheThingIsInReach)
 	EXPECT_EQ(NextApproachStep(true, 9.0f, 2.5f, false), ApproachStep::WalkInReach);
 }
 
+TEST(CreatureObjectBeliefs, TheTurnToGetAThingInReachIsNotAWalk)
+{
+	using openblack::creature_object_actions::MovingApproachStep;
+	using openblack::creature_object_actions::NextMovingApproachStep;
+	// A creature that stopped just inside its straight reach but outside the corners turns first: the walk-up waits
+	EXPECT_EQ(NextMovingApproachStep(true), MovingApproachStep::WaitForTurn);
+	// On its way to the thing, it aims again on each turn
+	EXPECT_EQ(NextMovingApproachStep(false), MovingApproachStep::AimAgain);
+}
+
 TEST(CreatureObjectBeliefs, AWalkNearAThingStopsAtTwiceTheRadii)
 {
 	using openblack::creature_object_actions::NearWalkDistance;
@@ -433,10 +444,10 @@ TEST(CreatureObjectBeliefs, AWalkToAThingThatGetsNowhereForFiftyTurnsGivesUp)
 	// On turns 0 to 48, it records its place on turn 0 only
 	for (uint32_t turn = 0; turn < 49; ++turn)
 	{
-		EXPECT_FALSE(StallsOnTurn(stall, {10.0f, 20.0f}, false)) << turn;
+		EXPECT_FALSE(StallsOnTurn(stall, {10.0f, 20.0f}, false, std::nullopt)) << turn;
 	}
 	// On turn 49, it moved less than 0.01 m since the record
-	EXPECT_TRUE(StallsOnTurn(stall, {10.0f, 20.005f}, false));
+	EXPECT_TRUE(StallsOnTurn(stall, {10.0f, 20.005f}, false, std::nullopt));
 }
 
 TEST(CreatureObjectBeliefs, AWalkToAThingThatGetsSomewhereGoesOn)
@@ -445,17 +456,17 @@ TEST(CreatureObjectBeliefs, AWalkToAThingThatGetsSomewhereGoesOn)
 	ApproachStall stall;
 	for (uint32_t turn = 0; turn < 49; ++turn)
 	{
-		EXPECT_FALSE(StallsOnTurn(stall, {10.0f + (0.1f * static_cast<float>(turn)), 20.0f}, false));
+		EXPECT_FALSE(StallsOnTurn(stall, {10.0f + (0.1f * static_cast<float>(turn)), 20.0f}, false, std::nullopt));
 	}
-	EXPECT_FALSE(StallsOnTurn(stall, {14.9f, 20.0f}, false));
+	EXPECT_FALSE(StallsOnTurn(stall, {14.9f, 20.0f}, false, std::nullopt));
 	// On turn 50, it records the place again. The next span starts from this place.
-	EXPECT_FALSE(StallsOnTurn(stall, {15.0f, 20.0f}, false));
+	EXPECT_FALSE(StallsOnTurn(stall, {15.0f, 20.0f}, false, std::nullopt));
 	EXPECT_EQ(stall.note, glm::vec2(15.0f, 20.0f));
 	for (uint32_t turn = 51; turn < 99; ++turn)
 	{
-		EXPECT_FALSE(StallsOnTurn(stall, {15.0f, 20.0f}, false));
+		EXPECT_FALSE(StallsOnTurn(stall, {15.0f, 20.0f}, false, std::nullopt));
 	}
-	EXPECT_TRUE(StallsOnTurn(stall, {15.0f, 20.0f}, false));
+	EXPECT_TRUE(StallsOnTurn(stall, {15.0f, 20.0f}, false, std::nullopt));
 }
 
 TEST(CreatureObjectBeliefs, AWalkToAThingUnderTheControlOfAScriptNeverGivesUp)
@@ -464,8 +475,55 @@ TEST(CreatureObjectBeliefs, AWalkToAThingUnderTheControlOfAScriptNeverGivesUp)
 	ApproachStall stall;
 	for (uint32_t turn = 0; turn < 200; ++turn)
 	{
-		EXPECT_FALSE(StallsOnTurn(stall, {0.0f, 0.0f}, true));
+		EXPECT_FALSE(StallsOnTurn(stall, {0.0f, 0.0f}, true, std::nullopt));
 	}
+}
+
+TEST(CreatureObjectBeliefs, AWalkToAFarThingWaitsForItsRouteSearch)
+{
+	using namespace openblack::creature_object_actions;
+	ApproachStall stall;
+	const glm::vec2 far {500.0f, 600.0f};
+	// The route search to a far thing takes 120 turns while the creature stands. Only its first turn counts.
+	for (uint32_t turn = 0; turn < 120; ++turn)
+	{
+		EXPECT_FALSE(StallsOnTurn(stall, {10.0f, 20.0f}, false, far)) << turn;
+	}
+	EXPECT_EQ(stall.turns, 1u);
+	// The walk then starts, and the creature moves on each turn
+	for (uint32_t turn = 0; turn < 200; ++turn)
+	{
+		EXPECT_FALSE(StallsOnTurn(stall, {10.0f + (0.5f * static_cast<float>(turn)), 20.0f}, false, std::nullopt)) << turn;
+	}
+}
+
+TEST(CreatureObjectBeliefs, AWalkThatStandsAfterItsSearchStillGivesUp)
+{
+	using namespace openblack::creature_object_actions;
+	ApproachStall stall;
+	for (uint32_t turn = 0; turn < 30; ++turn)
+	{
+		EXPECT_FALSE(StallsOnTurn(stall, {10.0f, 20.0f}, false, glm::vec2(30.0f, 20.0f)));
+	}
+	// The search found a route of no length. The first turn of the search and these turns make the 50 turns.
+	for (uint32_t turn = 1; turn < 49; ++turn)
+	{
+		EXPECT_FALSE(StallsOnTurn(stall, {10.0f, 20.0f}, false, std::nullopt)) << turn;
+	}
+	EXPECT_TRUE(StallsOnTurn(stall, {10.0f, 20.0f}, false, std::nullopt));
+}
+
+TEST(CreatureObjectBeliefs, ASearchThatStartsAgainOnEachTurnCountsItsTurns)
+{
+	using namespace openblack::creature_object_actions;
+	ApproachStall stall;
+	// The thing moves 1 m on each turn, so each turn starts a new search, and the creature never gets a route
+	for (uint32_t turn = 0; turn < 49; ++turn)
+	{
+		const glm::vec2 thing {30.0f + static_cast<float>(turn), 20.0f};
+		EXPECT_FALSE(StallsOnTurn(stall, {10.0f, 20.0f}, false, thing)) << turn;
+	}
+	EXPECT_TRUE(StallsOnTurn(stall, {10.0f, 20.0f}, false, glm::vec2(79.0f, 20.0f)));
 }
 
 TEST(CreatureObjectBeliefs, AThingHighAboveTheCreatureIsNotPickedUp)
@@ -533,4 +591,82 @@ TEST(CreatureObjectBeliefs, ItLooksForGoneThingsOnlyWhenThingsWent)
 	EXPECT_EQ(looks, 3u);
 	store.ForgetIfAnyWent(6, [](entt::entity thing) { return thing == Thing(1); });
 	EXPECT_EQ(store.Size(), 0u);
+}
+
+TEST(CreatureObjectBeliefs, TheFastIndexFindsWhatTheIndexOfTheContentsFinds)
+{
+	// Many things in and out, each change done to the two indexes: they find the same place for each thing
+	ThingIndex index;
+	std::unordered_map<entt::entity, BeliefPlace> reference;
+	uint32_t state = 12345;
+	const auto next = [&state]() {
+		state = state * 1103515245u + 12345u;
+		return (state >> 8) % 3000u;
+	};
+	for (uint32_t step = 0; step < 20000; ++step)
+	{
+		const auto thing = Thing(next());
+		if (next() % 3 == 0)
+		{
+			index.Erase(thing);
+			reference.erase(thing);
+		}
+		else
+		{
+			const BeliefPlace place {.kind = step % k_KindCount, .slot = step};
+			index.Set(thing, place);
+			reference[thing] = place;
+		}
+	}
+	EXPECT_EQ(index.Size(), reference.size());
+	for (uint32_t n = 0; n < 3000; ++n)
+	{
+		const auto found = index.Find(Thing(n));
+		const auto known = reference.find(Thing(n));
+		ASSERT_EQ(found.has_value(), known != reference.end()) << n;
+		if (found.has_value())
+		{
+			EXPECT_EQ(found->kind, known->second.kind);
+			EXPECT_EQ(found->slot, known->second.slot);
+		}
+	}
+}
+
+TEST(CreatureObjectBeliefs, TheFastIndexKeepsNoNoThingValue)
+{
+	ThingIndex index;
+	index.Set(entt::null, {.kind = 1, .slot = 2});
+	EXPECT_EQ(index.Size(), 0u);
+	EXPECT_FALSE(index.Find(entt::null).has_value());
+	index.Set(Thing(7), {.kind = 1, .slot = 2});
+	index.Erase(Thing(8));
+	EXPECT_EQ(index.Size(), 1u);
+	index.Clear();
+	EXPECT_FALSE(index.Find(Thing(7)).has_value());
+}
+
+TEST(CreatureObjectBeliefs, AStoreFindsItsBeliefsAfterItsContentsArePutBack)
+{
+	Store store;
+	for (uint32_t n = 0; n < 60; ++n)
+	{
+		store.Add(Thing(n), k_Forest, {.x = static_cast<int32_t>(n), .z = 0});
+	}
+	store.Forget(Thing(30));
+	Store copy;
+	copy.SetContents(store.Contents());
+	for (uint32_t n = 0; n < 60; ++n)
+	{
+		const auto* mine = store.Find(Thing(n));
+		const auto* theirs = copy.Find(Thing(n));
+		ASSERT_EQ(mine != nullptr, theirs != nullptr) << n;
+		if (mine != nullptr)
+		{
+			EXPECT_EQ(mine->place.x, theirs->place.x);
+		}
+	}
+	// Fifty forests at most: the first ten and the forgotten one are gone
+	EXPECT_EQ(copy.Find(Thing(0)), nullptr);
+	EXPECT_EQ(copy.Find(Thing(30)), nullptr);
+	EXPECT_NE(copy.Find(Thing(59)), nullptr);
 }

@@ -20,6 +20,7 @@
 #include <span>
 #include <string>
 #include <string_view>
+#include <unordered_map>
 #include <utility>
 #include <vector>
 
@@ -153,9 +154,74 @@ struct WorldRows
 	std::vector<uint8_t> bytes;
 };
 
+/// Mixes bytes into a hash with FNV-1a, one byte at a time
+void MixBytes(uint64_t& hash, std::span<const uint8_t> bytes);
+
+/// What the last hash of the world kept of each component: the bytes of its rows, and the hash after each row. A hash
+/// that gets the memo of the hash before it mixes again only the rows from the first row that changed. The memo never
+/// changes a hash. Only a hash with no hash of each field, no visitor and no rows uses it.
+struct HashMemo
+{
+	struct Row
+	{
+		/// The end of the row in the bytes of the component
+		size_t end {0};
+		/// The hash of the component after the row
+		uint64_t hash {0};
+	};
+	/// How the rows of a component save, and what the hash leaves out of them
+	struct Layout;
+	struct Component
+	{
+		std::vector<uint8_t> bytes;
+		std::vector<Row> rows;
+		/// The layout of the component in the last hash, kept while the parts that the hash leaves out stay the same
+		std::shared_ptr<const Layout> layout;
+	};
+	/// A part that the last hash left out, as HashLeaveOut, with names of its own
+	struct LeftOut
+	{
+		std::string component;
+		std::string field;
+		const entt::sparse_set* marker {nullptr};
+	};
+	/// A storage of the registry as the last hash found it: the hash of its type, the name of its component, and the
+	/// component type. A storage that the hash does not keep has no type.
+	struct Storage
+	{
+		uint32_t typeHash {0};
+		std::string name;
+		entt::meta_type type;
+		bool registered {false};
+	};
+	std::unordered_map<std::string, Component> components;
+	/// The parts that the last hash left out
+	std::vector<LeftOut> leaveOut;
+	/// The storages by their ids, found for the reflection context below
+	std::unordered_map<uint32_t, Storage> storages;
+	const entt::meta_ctx* context {nullptr};
+	/// The writers of the threads. Each writer keeps its memory and the plans of the types from one hash to the next.
+	std::vector<BinaryWriter> writers;
+};
+
+/// The count of the rows in each part, when the threads save the rows of a component in parts. A part holds at most
+/// k_MostRowsInAPart rows. When the last hash of the component gives the size of its rows, a part holds about
+/// k_BytesInAPart bytes, and at least one row. The parts change only which thread saves a row, not the hash.
+constexpr size_t k_MostRowsInAPart = 64;
+constexpr size_t k_BytesInAPart = 16 * 1024;
+[[nodiscard]] size_t RowsInAPart(size_t lastBytes, size_t lastRows);
+
 [[nodiscard]] WorldHashes HashWorld(const entt::registry& registry, const entt::meta_ctx& context,
                                     std::span<const HashLeaveOut> leaveOut = {}, bool byField = false,
-                                    const RowVisitor& visit = {}, WorkerPool* pool = nullptr, WorldRows* rows = nullptr);
+                                    const RowVisitor& visit = {}, WorkerPool* pool = nullptr, WorldRows* rows = nullptr,
+                                    HashMemo* memo = nullptr);
+
+/// Tools: the hash of the order of the rows of each registered component that the hash of the world keeps values of, by
+/// the name of the component, in the order of the names. The order includes the rows that the hash leaves out. When one
+/// computer adds a row that the other computers do not have, the next removal moves another row on that computer. A
+/// component with no values is not in the list, because the hash takes its rows in the order of their entities.
+[[nodiscard]] std::vector<std::pair<std::string, uint64_t>>
+RowOrders(const entt::registry& registry, const entt::meta_ctx& context, std::span<const HashLeaveOut> leaveOut = {});
 
 /// The entities and the components of a registry as the game's thread took them, for a writer on another thread to
 /// encode while the game goes on. Each component that can be copied safely is copied; the game's thread encodes the
@@ -196,6 +262,10 @@ struct NamedSection
 {
 	std::string name;
 	std::vector<uint8_t> bytes;
+	/// For tools: where each value that the system saved ends, when the save kept them
+	std::vector<size_t> valueEnds;
+	/// For tools: the bytes of each presentation value of the system (see BinaryWriter::BeginPresentation)
+	std::vector<std::pair<size_t, size_t>> presentation;
 
 	bool operator==(const NamedSection&) const = default;
 };
@@ -206,10 +276,12 @@ struct NamedSection
 /// Reads the sections that SaveSections wrote. Returns nothing when the bytes have damage.
 [[nodiscard]] std::optional<std::vector<NamedSection>> LoadSections(std::span<const uint8_t> bytes);
 
-/// Writes one value with its registered fields, such as the context of a registry
+/// Writes one value with its registered fields, such as the context of a registry. A tool can also get the ranges of
+/// the presentation values in the bytes.
 template <typename Type>
 [[nodiscard]] std::vector<uint8_t> SaveValue(const entt::meta_ctx& context, const Type& value,
-                                             std::set<UnsavedValue>* unsaved = nullptr)
+                                             std::set<UnsavedValue>* unsaved = nullptr,
+                                             std::vector<std::pair<size_t, size_t>>* presentation = nullptr)
 {
 	BinaryWriter out(context);
 	out.SetPlace(entt::type_id<Type>().name(), "");
@@ -217,6 +289,10 @@ template <typename Type>
 	if (unsaved != nullptr)
 	{
 		unsaved->insert(out.Unsaved().begin(), out.Unsaved().end());
+	}
+	if (presentation != nullptr)
+	{
+		*presentation = out.PresentationRanges();
 	}
 	return std::move(out.Bytes());
 }

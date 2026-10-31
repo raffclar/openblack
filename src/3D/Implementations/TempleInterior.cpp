@@ -16,12 +16,12 @@
 #include <ctime>
 
 #include <array>
+#include <chrono>
 #include <unordered_map>
 #include <utility>
 
 #include <InstantSaves.h>
 #include <PackFile.h>
-#include <SDL_keyboard.h>
 #include <SaveSlots.h>
 #include <fmt/format.h>
 #include <glm/gtc/constants.hpp>
@@ -37,11 +37,9 @@
 #include "3D/LandIslandInterface.h"
 #include "3D/TempleChallengeRoom.h"
 #include "3D/TempleSaveGameRoom.h"
+#include "3D/TempleScreenInterface.h"
 #include "3D/TempleScrolls.h"
 #include "3D/TempleSigns.h"
-#include "Audio/AudioManagerInterface.h"
-#include "Audio/GameSoundEffects.h"
-#include "Audio/Sound.h"
 #include "CHLApi.h"
 #include "Camera/Camera.h"
 #include "Camera/DefaultWorldCameraModel.h"
@@ -70,30 +68,38 @@
 #include "ECS/Systems/HandSystemInterface.h"
 #include "ECS/Systems/HelpTextSystemInterface.h"
 #include "ECS/Systems/Implementations/CameraPathSystem.h"
-#include "ECS/Systems/Implementations/RenderingSystem.h"
-#include "ECS/Systems/Implementations/RenderingSystemTemple.h"
-#include "ECS/Systems/ParticleSystemInterface.h"
+#include "ECS/Systems/LeashSystemInterface.h"
+#include "ECS/Systems/ParticleRuleSystemInterface.h"
+#include "ECS/Systems/PlayerCommandSystemInterface.h"
 #include "ECS/Systems/PlayerProfileSystemInterface.h"
 #include "ECS/Systems/PlayerSystemInterface.h"
+#include "ECS/Systems/RenderingSystemInterface.h"
 #include "ECS/Systems/SaveGameSystemInterface.h"
 #include "ECS/Systems/ScriptHighlightSystemInterface.h"
 #include "ECS/Systems/TimeSystemInterface.h"
 #include "EngineConfig.h"
 #include "FileSystem/FileSystemInterface.h"
-#include "Graphics/DetailLevel.h"
-#include "Gui/GameInterface.h"
-#include "Gui/GameMenu.h"
-#include "Gui/SaveGameBoxes.h"
+#include "Gui/GameFont.h"
+#include "Gui/ScreenFade.h"
+#include "Gui/TextDatabase.h"
+#include "Gui/ToolTips.h"
 #include "InfoConstants.h"
 #include "Input/GameActionMapInterface.h"
+#include "Input/InputDeviceInterface.h"
 #include "Locator.h"
 #include "Magic/DispenserRules.h"
 #include "Magic/MagicTables.h"
 #include "Magic/MiracleVisuals.h"
+#include "Particles/DrawnEffectSteps.h"
 #include "Resources/ResourcesInterface.h"
+#include "Sound/GameSoundEffects.h"
+#include "Sound/SoundId.h"
+#include "Sound/SoundRequestInterface.h"
 #include "Temple/TempleControlNames.h"
 #include "Temple/TempleHelpScripts.h"
 #include "Temple/TempleRoomAccess.h"
+#include "Temple/TempleRoomSave.h"
+#include "Visual/DetailLevel.h"
 #include "Windowing/WindowingInterface.h"
 
 using namespace openblack;
@@ -223,7 +229,7 @@ std::optional<glm::vec3> CreatureCaveFire()
 void PlayDoorSound(entt::id_type sound)
 {
 	// The game plays the doors' sounds without a place. A door sound does not start again while it plays.
-	if (Locator::audio::has_value())
+	if (Locator::sounds::has_value())
 	{
 		audio::StartGameSoundEffect(sound, {.voicePlayType = pack::AudioBankLoop::Once});
 	}
@@ -232,7 +238,7 @@ void PlayDoorSound(entt::id_type sound)
 void PlayToggleSound(entt::id_type sound, uint32_t pitchPercent)
 {
 	// The game plays the buttons' sounds without a place
-	if (Locator::audio::has_value())
+	if (Locator::sounds::has_value())
 	{
 		audio::StartGameSoundEffect(sound, {.pitchPercent = pitchPercent});
 	}
@@ -354,13 +360,16 @@ glm::mat4 TempleInterior::GetPlacement() const
 	return glm::translate(glm::mat4(1.0f), _templePosition) * portable_math::EulerAngleY(_templeRotation.y);
 }
 
-void TempleInterior::SetInterface(gui::GameInterface* interface)
+void TempleInterior::SetInterface(TempleScreenInterface* interface)
 {
 	_interface = interface;
 	_scrolls.reset();
+	// The texts and the font of another interface write the scrolls differently
+	_keptScrolls = {};
 	_signs.reset();
 	_challengeRoom.reset();
 	_saveGameRoom.reset();
+	_savedGamesRead.reset();
 	_saveGameQuestion.reset();
 	_text.clear();
 	if (_active)
@@ -375,16 +384,9 @@ void TempleInterior::CreateScrolls()
 	{
 		return;
 	}
-	// The rooms read the parchment every scroll is written on as they are set up
-	auto& fileSystem = Locator::filesystem::value();
-	const auto path = fileSystem.GetPath<filesystem::Path::Textures>() / "ChallengeScroll.raw";
-	std::vector<uint8_t> parchment;
-	if (fileSystem.Exists(path))
-	{
-		parchment = fileSystem.ReadAll(path);
-	}
-	_scrolls = std::make_unique<TempleScrolls>(_interface->GetTexts(), _interface->GetFont(), std::move(parchment));
-	_scrolls->Create(GatherScrollFacts());
+	ReadRoomPictures();
+	_scrolls = std::make_unique<TempleScrolls>(_interface->GetTexts(), _interface->GetFont(), _roomPictures->parchment);
+	_scrolls->Create(GatherScrollFacts(), std::move(_keptScrolls));
 	_signs = std::make_unique<TempleSigns>(_interface->GetTexts(), _interface->GetFont());
 
 	// The main room finds the buttons of what the map shows as it is set up
@@ -425,14 +427,61 @@ void TempleInterior::CreateScrolls()
 		_challengeRoom->Find(*meshes.Handle(challengeMeshId));
 	}
 
-	// The save game room finds its pictures and buttons, makes the empty picture from its colours and alpha, and reads
-	// the small pictures of the saved games
-	_saveGameRoom = std::make_unique<TempleSaveGameRoom>();
-	const entt::id_type saveGameMeshId = entt::hashed_string("temple/interior/savegame_l3d").value();
-	if (meshes.Contains(saveGameMeshId))
+	// The save game room finds its pictures and buttons and makes the empty picture from its colours and alpha once. It
+	// reads the small pictures of the saved games and their list when they changed after the last visit.
+	if (_saveGameRoom == nullptr)
 	{
-		_saveGameRoom->Find(*meshes.Handle(saveGameMeshId));
+		_saveGameRoom = std::make_unique<TempleSaveGameRoom>();
+		_savedGamesRead.reset();
+		const entt::id_type saveGameMeshId = entt::hashed_string("temple/interior/savegame_l3d").value();
+		if (meshes.Contains(saveGameMeshId))
+		{
+			_saveGameRoom->Find(*meshes.Handle(saveGameMeshId));
+		}
+		if (_roomPictures->emptyPicture.has_value())
+		{
+			_saveGameRoom->SetEmptyPicture(*_roomPictures->emptyPicture);
+		}
 	}
+	ReadSavedGamesWhenChanged();
+}
+
+void TempleInterior::ReadSavedGamesWhenChanged()
+{
+	if (_saveGameRoom == nullptr)
+	{
+		return;
+	}
+	// With no save system, the room reads at each visit
+	std::optional<temple::save_game_room::SavedGamesStamp> now;
+	if (Locator::saveGameSystem::has_value())
+	{
+		now = Locator::saveGameSystem::value().GetSavedGamesStamp();
+		if (!temple::save_game_room::ReadsSavedGamesAgain(_savedGamesRead, *now))
+		{
+			return;
+		}
+	}
+	_saveGameRoom->ReadSmallPictures(ReadSavedGamePicture);
+	ListSavedGames();
+	_savedGamesRead = now;
+}
+
+void TempleInterior::ReadRoomPictures()
+{
+	if (_roomPictures.has_value())
+	{
+		return;
+	}
+	auto& pictures = _roomPictures.emplace();
+	// The parchment every scroll is written on
+	auto& fileSystem = Locator::filesystem::value();
+	const auto path = fileSystem.GetPath<filesystem::Path::Textures>() / "ChallengeScroll.raw";
+	if (fileSystem.Exists(path))
+	{
+		pictures.parchment = fileSystem.ReadAll(path);
+	}
+	// The empty picture of the save game room, from its colours and alpha
 	const auto colours = fileSystem.GetPath<filesystem::Path::Textures>() / "PictureTexture.raw";
 	const auto alpha = fileSystem.GetPath<filesystem::Path::Textures>() / "PictureTexturea.raw";
 	if (fileSystem.Exists(colours) && fileSystem.Exists(alpha))
@@ -440,7 +489,7 @@ void TempleInterior::CreateScrolls()
 		const auto rgb = fileSystem.ReadAll(colours);
 		const auto a = fileSystem.ReadAll(alpha);
 		const size_t texels = std::min(rgb.size() / 3, a.size());
-		std::vector<uint8_t> rgba(texels * 4);
+		auto& rgba = pictures.emptyPicture.emplace(texels * 4);
 		for (size_t i = 0; i < texels; ++i)
 		{
 			rgba[(i * 4) + 0] = rgb[(i * 3) + 0];
@@ -448,10 +497,19 @@ void TempleInterior::CreateScrolls()
 			rgba[(i * 4) + 2] = rgb[(i * 3) + 2];
 			rgba[(i * 4) + 3] = a[i];
 		}
-		_saveGameRoom->SetEmptyPicture(rgba);
 	}
-	_saveGameRoom->ReadSmallPictures(ReadSavedGamePicture);
-	ListSavedGames();
+}
+
+void TempleInterior::PrepareScrolls()
+{
+	if (_interface == nullptr || _scrolls != nullptr)
+	{
+		return;
+	}
+	ReadRoomPictures();
+	TempleScrolls scrolls(_interface->GetTexts(), _interface->GetFont(), _roomPictures->parchment);
+	scrolls.Create(GatherScrollFacts(), std::move(_keptScrolls));
+	_keptScrolls = scrolls.TakeTextures();
 }
 
 void TempleInterior::ListSavedGames()
@@ -465,7 +523,7 @@ void TempleInterior::ListSavedGames()
 	{
 		for (const auto& saved : Locator::saveGameSystem::value().Slots())
 		{
-			saves.push_back({.slot = saved.slot % 100, .name = saved.name});
+			saves.push_back({.slot = saved.slot % 100, .name = saved.name, .date = saved.date});
 		}
 	}
 	_saveGameRoom->SetSaves(std::move(saves));
@@ -487,8 +545,7 @@ void TempleInterior::AskAboutSlot(temple::save_game_room::Click click, uint32_t 
 	{
 		return;
 	}
-	auto& boxes = _interface->GetSaveGameBoxes();
-	if (boxes.IsActive())
+	if (_interface->IsSaveBoxActive())
 	{
 		return;
 	}
@@ -497,28 +554,28 @@ void TempleInterior::AskAboutSlot(temple::save_game_room::Click click, uint32_t 
 	switch (click)
 	{
 	case Click::AskLoad:
-		boxes.Ask(std::u16string(texts.Get("HELP_TEXT_ROOM_CITADEL_SAVEGAME_ROOM_LOADREQUEST")));
+		_interface->AskSaveQuestion(std::u16string(texts.Get("HELP_TEXT_ROOM_CITADEL_SAVEGAME_ROOM_LOADREQUEST")));
 		break;
 	case Click::AskOverwrite:
-		boxes.Ask(std::u16string(texts.Get("HELP_TEXT_ROOM_CITADEL_SAVEGAME_ROOM_SAVEREQUEST")));
+		_interface->AskSaveQuestion(std::u16string(texts.Get("HELP_TEXT_ROOM_CITADEL_SAVEGAME_ROOM_SAVEREQUEST")));
 		break;
 	case Click::AskDelete:
-		boxes.Ask(std::u16string(texts.Get("HELP_TEXT_ROOM_CITADEL_SAVEGAME_ROOM_DELETEREQUEST")));
+		_interface->AskSaveQuestion(std::u16string(texts.Get("HELP_TEXT_ROOM_CITADEL_SAVEGAME_ROOM_DELETEREQUEST")));
 		break;
 	case Click::AskName:
 		// A new save's name starts empty
-		boxes.AskName(u"");
+		_interface->AskSaveName(u"");
 		break;
 	default:
 		break;
 	}
-	SDL_StartTextInput();
+	input::Device().StartTextInput();
 }
 
 void TempleInterior::UpdateSaveGameRoom()
 {
 	using Click = temple::save_game_room::Click;
-	using Answer = gui::SaveGameBoxes::Answer;
+	using Answer = TempleScreenInterface::SaveAnswer;
 	if (_saveGameRoom == nullptr || _interface == nullptr)
 	{
 		return;
@@ -530,8 +587,7 @@ void TempleInterior::UpdateSaveGameRoom()
 		    (Locator::handSystem::has_value() ? Locator::handSystem::value().GetOwnPlayer() : PlayerNames::PLAYER_ONE);
 		_saveGameRoom->SetAlignment(Locator::alignmentSystem::value().GetPlayerAlignment(local));
 	}
-	auto& boxes = _interface->GetSaveGameBoxes();
-	const auto answer = boxes.TakeAnswer();
+	const auto answer = _interface->TakeSaveAnswer();
 	if (!answer.has_value() || !_saveGameQuestion.has_value())
 	{
 		return;
@@ -548,10 +604,10 @@ void TempleInterior::UpdateSaveGameRoom()
 	case Click::AskOverwrite:
 		// Yes to saving over a save asks for its name, the box holding the save's name
 		_saveGameQuestion = SaveGameQuestion {.click = Click::AskName, .slot = question.slot};
-		boxes.AskName(_saveGameRoom->SaveName(question.slot).value_or(std::u16string_view()));
+		_interface->AskSaveName(_saveGameRoom->SaveName(question.slot).value_or(std::u16string_view()));
 		return;
 	case Click::AskName:
-		SaveIntoSlot(question.slot, boxes.GetName(), gamesave::RoomSave::Chosen);
+		SaveIntoSlot(question.slot, _interface->GetSaveName(), gamesave::RoomSave::Chosen);
 		return;
 	case Click::AskLoad:
 		// Before a load of the previous land or the next land, the room saves the land that is open into the other of the
@@ -668,7 +724,7 @@ bool TempleInterior::HoldControl(bool pressed, float mouseY)
 		}
 	}
 	// While a question or the name box is up, the save game room's controls take no clicks
-	const bool boxUp = _interface != nullptr && _interface->GetSaveGameBoxes().IsActive();
+	const bool boxUp = _interface != nullptr && _interface->IsSaveBoxActive();
 	if (_saveGameRoom != nullptr && _cameraModel != nullptr && !boxUp)
 	{
 		const auto hoveredSaveSubMesh =
@@ -692,7 +748,7 @@ void TempleInterior::ReplayChallenge(entt::entity record)
 	{
 		_interface->GetScreenFade().FadeThrough(glm::vec3(1.0f));
 	}
-	if (Locator::audio::has_value())
+	if (Locator::sounds::has_value())
 	{
 		constexpr std::array k_Wooshes {audio::SoundId::G_Woosh_01, audio::SoundId::G_Woosh_02, audio::SoundId::G_Woosh_03,
 		                                audio::SoundId::G_Woosh_04};
@@ -811,20 +867,18 @@ void TempleInterior::UpdateOptionsAndFutureRooms(float milliseconds)
 	const bool arrived = _cameraModel != nullptr && _cameraModel->IsInControl() && !_transitionRoom.has_value();
 	if (_interface != nullptr)
 	{
-		auto& menu = _interface->GetMenu();
-		menu.SetInsideTemple(_active);
+		_interface->SetMenuInsideTemple(_active);
 		if (_cameraModel != nullptr)
 		{
-			_cameraModel->SetDialogOpen(menu.IsOpen() || _multiplayerFrontEnd);
+			_cameraModel->SetDialogOpen(_interface->IsMenuOpen() || _multiplayerFrontEnd);
 		}
 		// The options room, while no dialog is up: once the camera has come into the room it opens the game's
 		// options, and once they are closed it goes back to the main room
-		if (_currentRoom == TempleRoom::Options && arrived && !menu.IsOpen())
+		if (_currentRoom == TempleRoom::Options && arrived && !_interface->IsMenuOpen())
 		{
 			if (!_optionsShown)
 			{
-				menu.Open();
-				menu.ShowPage(gui::GameMenu::Page::Options);
+				_interface->OpenOptions();
 				_optionsShown = true;
 			}
 			else
@@ -837,14 +891,14 @@ void TempleInterior::UpdateOptionsAndFutureRooms(float milliseconds)
 		{
 			// The options belong to their room: put elsewhere, as the debug window can, the player leaves them behind
 			_optionsShown = false;
-			menu.Close();
+			_interface->CloseMenu();
 		}
 	}
 
 	// The future room: once the camera has come into the room with no dialog up, "The future is still uncertain..."
 	// fades in to half over two seconds, from the start each time the camera comes in again. While the words show,
 	// the room turns slowly by itself.
-	std::optional<gui::GameInterface::Message> message;
+	std::optional<TempleScreenInterface::Message> message;
 	if (_currentRoom != TempleRoom::Multi || _cameraModel == nullptr)
 	{
 		_futureWords = {};
@@ -852,11 +906,11 @@ void TempleInterior::UpdateOptionsAndFutureRooms(float milliseconds)
 	else
 	{
 		// The boxes of the multiplayer front end are always up, so the room never shows its words under them
-		const bool dialogOpen = (_interface != nullptr && _interface->GetMenu().IsOpen()) || _multiplayerFrontEnd;
+		const bool dialogOpen = (_interface != nullptr && _interface->IsMenuOpen()) || _multiplayerFrontEnd;
 		const auto alpha = temple::future_room::Step(_futureWords, _cameraModel->IsInControl(), dialogOpen, milliseconds);
 		if (alpha.has_value() && _interface != nullptr)
 		{
-			message = gui::GameInterface::Message {
+			message = TempleScreenInterface::Message {
 			    .text = std::u16string(_interface->GetTexts().Get("HELP_TEXT_DIALOG_ADDITION_129")),
 			    .alpha = *alpha / 255.0f,
 			};
@@ -874,7 +928,7 @@ void TempleInterior::UpdateOptionsAndFutureRooms(float milliseconds)
 
 void TempleInterior::UpdateChallengeRoom()
 {
-	std::optional<gui::GameInterface::Caption> caption;
+	std::optional<TempleScreenInterface::Caption> caption;
 	if (_challengeRoom != nullptr && IsRoomDrawn(TempleRoom::Challenge))
 	{
 		const auto& registry = Locator::entitiesRegistry::value();
@@ -896,19 +950,62 @@ void TempleInterior::UpdateChallengeRoom()
 			const auto turn = Locator::time::has_value() ? Locator::time::value().GetTurn() : 0;
 			const auto millisecondsPerTurn = static_cast<uint32_t>(ecs::systems::TimeSystemInterface::k_TurnDuration.count());
 			const auto taken = rules::TimeTaken(challenge.startedTurn, challenge.doneTurn, turn, millisecondsPerTurn);
-			caption = gui::GameInterface::Caption {
+			caption = TempleScreenInterface::Caption {
 			    .lines = {helpText(challenge.title),
 			              rules::DetailsLine(texts.Get("HELP_TEXT_ROOM_CITADEL_CHALLENGE_ROOM_TIME"), taken,
 			                                 texts.Get("HELP_TEXT_ROOM_CITADEL_CHALLENGE_ROOM_PERCENTCOMPLETE"),
 			                                 challenge.success)},
 			    .alpha = rules::TextAlpha(closeness),
+			    .details = {},
 			};
+		}
+	}
+	// While the camera is any way close to the picture in high detail of the save game room, the save's date and name
+	// are written on the screen, showing more the closer the camera is
+	if (const auto words = SaveGameRoomWords(); !caption.has_value() && words.has_value())
+	{
+		caption = TempleScreenInterface::Caption {
+		    .lines = {},
+		    .alpha = temple::challenge_room::TextAlpha(_cameraModel->GetSubMeshZoom()),
+		    .details = words->details,
+		};
+		if (words->title.has_value())
+		{
+			caption->lines.push_back(*words->title);
 		}
 	}
 	if (_interface != nullptr)
 	{
 		_interface->SetCaption(std::move(caption));
 	}
+}
+
+std::optional<temple::save_game_room::CloseLookWords> TempleInterior::SaveGameRoomWords() const
+{
+	if (_saveGameRoom == nullptr || _interface == nullptr || _cameraModel == nullptr || !IsRoomDrawn(TempleRoom::SaveGame) ||
+	    !_saveGameRoom->IsPictureLookedAt() || _cameraModel->GetSubMeshZoom() == 0.0f)
+	{
+		return std::nullopt;
+	}
+	const auto slot = _saveGameRoom->GetHighDetailSlot();
+	if (!slot.has_value())
+	{
+		return std::nullopt;
+	}
+	namespace rules = temple::save_game_room;
+	std::optional<rules::SaveWords> save;
+	if (const auto* found = _saveGameRoom->LastSaveOf(*slot); found != nullptr)
+	{
+		save = rules::SaveWords {.date = found->date, .name = found->name};
+	}
+	const auto& texts = _interface->GetTexts();
+	const rules::HelpTextFn helpText = [&texts](uint32_t number) {
+		const auto names = texts.GetHelpNames();
+		return number < names.size() ? std::u16string(texts.Get(names[number])) : std::u16string();
+	};
+	const auto& registry = Locator::entitiesRegistry::value();
+	const auto land = static_cast<uint32_t>(std::max(registry.Context().mapScriptGlobals.landNumber, 0));
+	return rules::CloseLookWordsOf(*slot, save, land, helpText);
 }
 
 void TempleInterior::UpdateToolTips(float milliseconds)
@@ -962,7 +1059,7 @@ void TempleInterior::UpdateToolTips(float milliseconds)
 	_toolTipTurnTime += milliseconds;
 	for (; _toolTipTurnTime >= k_ToolTipTurnMilliseconds; _toolTipTurnTime -= k_ToolTipTurnMilliseconds)
 	{
-		if (!_interface->GetMenu().IsOpen() && _toolTip.index.has_value())
+		if (!_interface->IsMenuOpen() && _toolTip.index.has_value())
 		{
 			toolTips.Submit(*_toolTip.index, _toolTip.action, _toolTip.arrows);
 		}
@@ -1045,7 +1142,7 @@ void TempleInterior::FadeIntoRoom()
 	}
 }
 
-void TempleInterior::UpdateCaveTrophies(float seconds)
+void TempleInterior::UpdateCaveTrophies(float gameSeconds)
 {
 	using namespace CreatureCaveTrophies;
 	_caveTrophies.clear();
@@ -1110,7 +1207,7 @@ void TempleInterior::UpdateCaveTrophies(float seconds)
 		    miracle.has_value() ? magic::FindFirstSpellSeedForMagicType(info, static_cast<MagicType>(*miracle)) : std::nullopt;
 		seeds.at(i) = seed.value_or(SpellSeedType::None);
 	}
-	auto* particles = Locator::particleSystem::has_value() ? &Locator::particleSystem::value() : nullptr;
+	auto* particles = Locator::particleRuleSystem::has_value() ? &Locator::particleRuleSystem::value() : nullptr;
 	const auto made = SeedsToMake(shown, seeds);
 	for (size_t i = 0; i < k_BestMiracles; ++i)
 	{
@@ -1121,17 +1218,19 @@ void TempleInterior::UpdateCaveTrophies(float seconds)
 		}
 		const auto at = glm::vec3(temple * points[point][3]);
 		CaveSeedPlace place {.seed = {.seed = *made.at(i), .point = at, .spin = 0.0f, .phialPhase = 0.0f, .phialFrame = 0.0f},
-		                     .holderEffect = ecs::systems::ParticleSystemInterface::k_NoEffect};
+		                     .holderEffect = ecs::systems::ParticleRuleSystemInterface::k_NoEffect};
 		// Its holder's effect plays above it at its full size, in the colours of the player at this computer
 		const auto& seedInfo = magic::GetSpellSeedInfo(info, place.seed.seed);
 		if (particles != nullptr && seedInfo.holderParticle != ParticleType::None)
 		{
 			place.holderEffect =
 			    particles->Start(seedInfo.holderParticle, at + glm::vec3(0.0f, seedInfo.holderHeight, 0.0f), 1.0f);
-			if (place.holderEffect != ecs::systems::ParticleSystemInterface::k_NoEffect)
+			if (place.holderEffect != ecs::systems::ParticleRuleSystemInterface::k_NoEffect)
 			{
 				particles->SetInTemple(place.holderEffect);
-				particles->SetPlayer(place.holderEffect, static_cast<int>(PlayerNames::PLAYER_ONE));
+				particles->SetPlayer(place.holderEffect, static_cast<int>(Locator::handSystem::has_value()
+				                                                              ? Locator::handSystem::value().GetOwnPlayer()
+				                                                              : PlayerNames::PLAYER_ONE));
 			}
 		}
 		_caveSeedPlaces.at(i) = place;
@@ -1144,18 +1243,22 @@ void TempleInterior::UpdateCaveTrophies(float seconds)
 			continue;
 		}
 		auto& seed = place->seed;
-		seed.spin = std::fmod(seed.spin + (magic::k_OrbSeedSpin * seconds), glm::two_pi<float>());
+		std::optional<int> receiveType;
 		if (magic::visuals::IsPhialSeed(seed.seed))
 		{
 			const auto* spell =
 			    magic::GetMagicInfoAs<GMagicCreatureSpellInfo>(info, magic::GetSpellSeedInfo(info, seed.seed).magicTypes[0]);
-			const int receiveType = spell != nullptr ? static_cast<int>(spell->creatureReceiveSpellType) : 0;
-			seed.phialFrame = magic::visuals::StepPhialFrame(seed.phialFrame, seconds);
-			seed.phialPhase = std::fmod(seed.phialPhase + (magic::visuals::PhialPulseSpeed(receiveType) * seconds), 1.0f);
+			receiveType = spell != nullptr ? static_cast<int>(spell->creatureReceiveSpellType) : 0;
 		}
-		if (particles != nullptr && place->holderEffect != ecs::systems::ParticleSystemInterface::k_NoEffect)
+		const auto turn = magic::visuals::TurnSeed(
+		    {.spin = seed.spin, .phialFrame = seed.phialFrame, .phialPhase = seed.phialPhase}, receiveType, gameSeconds);
+		seed.spin = turn.spin;
+		seed.phialFrame = turn.phialFrame;
+		seed.phialPhase = turn.phialPhase;
+		if (particles != nullptr && place->holderEffect != ecs::systems::ParticleRuleSystemInterface::k_NoEffect &&
+		    _caveEffectStep.has_value())
 		{
-			particles->ProcessByFrame(place->holderEffect, seconds);
+			particles->ProcessByFrame(place->holderEffect, *_caveEffectStep);
 		}
 		_caveSeeds.push_back(seed);
 	}
@@ -1165,10 +1268,10 @@ void TempleInterior::ClearCaveSeeds()
 {
 	for (auto& place : _caveSeedPlaces)
 	{
-		if (place.has_value() && place->holderEffect != ecs::systems::ParticleSystemInterface::k_NoEffect &&
-		    Locator::particleSystem::has_value())
+		if (place.has_value() && place->holderEffect != ecs::systems::ParticleRuleSystemInterface::k_NoEffect &&
+		    Locator::particleRuleSystem::has_value())
 		{
-			Locator::particleSystem::value().Delete(place->holderEffect);
+			Locator::particleRuleSystem::value().Delete(place->holderEffect);
 		}
 		place.reset();
 	}
@@ -1247,7 +1350,7 @@ namespace
 class MapSpellEffects final: public TempleMapSpells::Effects
 {
 public:
-	explicit MapSpellEffects(ecs::systems::ParticleSystemInterface* particles)
+	explicit MapSpellEffects(ecs::systems::ParticleRuleSystemInterface* particles)
 	    : _particles(particles)
 	{
 	}
@@ -1259,7 +1362,7 @@ public:
 			return std::nullopt;
 		}
 		const auto effect = _particles->Start(type, point, scale);
-		if (effect == ecs::systems::ParticleSystemInterface::k_NoEffect)
+		if (effect == ecs::systems::ParticleRuleSystemInterface::k_NoEffect)
 		{
 			return std::nullopt;
 		}
@@ -1286,12 +1389,12 @@ public:
 	}
 
 private:
-	ecs::systems::ParticleSystemInterface* _particles;
+	ecs::systems::ParticleRuleSystemInterface* _particles;
 };
 
 MapSpellEffects GameMapSpellEffects()
 {
-	return MapSpellEffects(Locator::particleSystem::has_value() ? &Locator::particleSystem::value() : nullptr);
+	return MapSpellEffects(Locator::particleRuleSystem::has_value() ? &Locator::particleRuleSystem::value() : nullptr);
 }
 } // namespace
 
@@ -1336,7 +1439,7 @@ void TempleInterior::UpdateMapSpells()
 	const auto gameTime =
 	    Locator::time::has_value() ? std::chrono::duration<float>(Locator::time::value().GetFrameGameTime()).count() : 0.0f;
 	auto effects = GameMapSpellEffects();
-	_mapSpells.Update(casts, gameTime, effects);
+	_mapSpells.Update(casts, gameTime, _mapEffectStep, effects);
 }
 
 void TempleInterior::ClearMapSpells()
@@ -1385,6 +1488,10 @@ std::optional<float> TempleInterior::GetWayOutSeconds() const
 
 bool TempleInterior::IsRoomDrawn(TempleRoom room) const
 {
+	if (_warmUpVisit)
+	{
+		return true;
+	}
 	if (room == _currentRoom || room == _transitionRoom)
 	{
 		return true;
@@ -1425,13 +1532,12 @@ void TempleInterior::SetCurrentRoom(TempleRoom room)
 		{
 			_challengeRoom->Enter();
 		}
-		// Coming into the save game room, the room reads the saved games and their pictures and writes its scroll again,
-		// and no picture is shown in high detail
+		// Coming into the save game room, the room reads the saved games and their pictures again when they changed, writes
+		// its scroll again, and no picture is shown in high detail
 		if (room == TempleRoom::SaveGame && _saveGameRoom != nullptr)
 		{
 			_saveGameRoom->Enter();
-			_saveGameRoom->ReadSmallPictures(ReadSavedGamePicture);
-			ListSavedGames();
+			ReadSavedGamesWhenChanged();
 			if (_scrolls != nullptr)
 			{
 				_scrolls->Rewrite(TempleScrolls::Content::SaveGame, GatherScrollFacts());
@@ -1582,9 +1688,9 @@ void TempleInterior::Escape()
 
 void TempleInterior::StopCreatureCaveSounds()
 {
-	if (Locator::audio::has_value())
+	if (Locator::sounds::has_value())
 	{
-		auto& audio = Locator::audio::value();
+		auto& audio = Locator::sounds::value();
 		audio.StopSoundEffect(static_cast<entt::id_type>(audio::SoundId::G_WaterCreatureCave_01));
 		audio.StopSoundEffect(static_cast<entt::id_type>(audio::SoundId::G_FireCreatureCave_01));
 	}
@@ -1605,6 +1711,14 @@ void TempleInterior::Update(std::chrono::microseconds dt)
 			_roomsOpened = true;
 		}
 		const float milliseconds = std::chrono::duration_cast<std::chrono::duration<float, std::milli>>(dt).count();
+		// The effects of the seeds step at the pace of the screen's refresh: in the creature's room by the real time, over
+		// the map by the game's time. The seeds themselves turn by the game's time in both.
+		const auto realTime = Locator::time::has_value() ? Locator::time::value().GetFrameRealTime()
+		                                                 : std::chrono::duration_cast<std::chrono::milliseconds>(dt);
+		const auto gameTime =
+		    Locator::time::has_value() ? Locator::time::value().GetFrameGameTime() : std::chrono::milliseconds {0};
+		_caveEffectStep = particles::drawn_steps::StepSeconds(_caveEffectPace, realTime, realTime, true);
+		_mapEffectStep = particles::drawn_steps::StepSeconds(_mapEffectPace, realTime, gameTime, true);
 		_waterfallSlide += milliseconds * k_WaterfallSlidePerMillisecond;
 		_waterfallSlide -= std::floor(_waterfallSlide);
 
@@ -1649,6 +1763,7 @@ void TempleInterior::Update(std::chrono::microseconds dt)
 		// As the rooms are drawn, the scroll the camera is close to has its text drawn in front of it, and the signs
 		// their labels
 		_text.clear();
+		_scrollPictures.clear();
 		if (_scrolls != nullptr && _cameraModel != nullptr)
 		{
 			const auto facts = GatherScrollFacts();
@@ -1656,14 +1771,14 @@ void TempleInterior::Update(std::chrono::microseconds dt)
 			// While the camera is close to the story history, its buttons show, and a press turns its first line
 			if (_interface != nullptr)
 			{
-				auto& historyBox = _interface->GetStoryHistoryBox();
-				historyBox.SetShown(_scrolls->IsHistoryOpen());
-				if (const auto turn = historyBox.TakeTurn(); turn.has_value())
+				_interface->SetStoryHistoryShown(_scrolls->IsHistoryOpen());
+				if (const auto turn = _interface->TakeStoryHistoryTurn(); turn.has_value())
 				{
 					_scrolls->TurnHistory(*turn, facts);
 				}
 			}
 			_scrolls->AppendFocusedText(_text, facts);
+			_scrolls->AppendFocusedPictures(_scrollPictures, facts);
 		}
 		if (_signs != nullptr)
 		{
@@ -1698,10 +1813,11 @@ void TempleInterior::Update(std::chrono::microseconds dt)
 		                         static_cast<uint32_t>(machine_clock::Ticks()));
 		// The room the player is in sets how thick the fog is, and the light its colour
 		_fog = TempleFog::In(_currentRoom == TempleRoom::CreatureCave, _light);
-		// The creature's room chooses the belts and medals every frame
+		// The creature's room chooses the belts and medals every frame. Its seeds turn and pulse by the game's time of the
+		// frame, which stops while the player is in the temple.
 		if (IsRoomDrawn(TempleRoom::CreatureCave))
 		{
-			UpdateCaveTrophies(milliseconds / 1000.0f);
+			UpdateCaveTrophies(static_cast<float>(gameTime.count()) * 0.001f);
 		}
 		else
 		{
@@ -1791,6 +1907,17 @@ void TempleInterior::Activate(TempleRoom room)
 	{
 		return;
 	}
+	// The player of this computer goes into the temple with the leash of their creature held: a command takes the leash
+	// off in a later game turn, on every computer
+	if (Locator::leashSystem::has_value() && Locator::playerCommandSystem::has_value())
+	{
+		const auto player =
+		    Locator::handSystem::has_value() ? Locator::handSystem::value().GetOwnPlayer() : PlayerNames::PLAYER_ONE;
+		if (Locator::leashSystem::value().ComesOffAtTemple(player))
+		{
+			Locator::playerCommandSystem::value().Submit(player_commands::TempleLeashOff {});
+		}
+	}
 	// The help of the world stops. The temple keeps the dialogue of a script until the player leaves.
 	{
 		temple_help::GameScripts scripts;
@@ -1828,7 +1955,7 @@ void TempleInterior::Activate(TempleRoom room)
 		addGlowsToRegistry(*_rooms, roomType);
 	}
 
-	Locator::rendereringSystem::emplace<ecs::systems::RenderingSystemTemple>();
+	DrawTemple();
 
 	// The temple's camera takes over from the island's, coming into the room along its path
 	_active = true;
@@ -1863,6 +1990,36 @@ void TempleInterior::Activate(TempleRoom room)
 	CreateScrolls();
 }
 
+void TempleInterior::WarmUpVisit(const std::function<void()>& draw)
+{
+	if (_active || !Locator::rendereringSystem::has_value())
+	{
+		return;
+	}
+	// The rooms of the warm-up are in a registry of their own, as a visit makes them
+	auto rooms = std::make_unique<ecs::Registry>();
+	const auto rotation = portable_math::EulerAngleY(_templeRotation.y);
+	for (const auto& [roomType, assetName] : k_TempleInteriorParts)
+	{
+		addRoomToRegistry(*rooms, assetName, roomType, _templePosition, rotation, glm::vec3(1.0f));
+	}
+	for (const auto& [roomType, assetName] : k_TempleInteriorGlows)
+	{
+		addGlowsToRegistry(*rooms, roomType);
+	}
+	std::swap(_rooms, rooms);
+	DrawTemple();
+	_active = true;
+	_warmUpVisit = true;
+	draw();
+	_warmUpVisit = false;
+	_active = false;
+	DrawIsland();
+	std::swap(_rooms, rooms);
+	// The first visit uses these textures again
+	PrepareScrolls();
+}
+
 void TempleInterior::EnterLockedRoom(TempleRoom room)
 {
 	_lock.Lock(room);
@@ -1895,7 +2052,7 @@ void TempleInterior::Deactivate()
 	// The story history's buttons go with the temple
 	if (_interface != nullptr)
 	{
-		_interface->GetStoryHistoryBox().SetShown(false);
+		_interface->SetStoryHistoryShown(false);
 	}
 	// Leaving the room the player was kept in ends the game: the screen goes black rather than out to the island
 	if (_lock.GetRoom().has_value())
@@ -1987,11 +2144,12 @@ void TempleInterior::SaveState(ecs::reflection::BinaryWriter& out) const
 		Save(out, _heldDialogue->text.noClick);
 	}
 	// Then whether the rooms are open, and what the map in the main room's pool shows
-	Save(out, _roomsOpened);
-	for (size_t i = 0; i < TempleToggles::k_Count; ++i)
+	temple::RoomSave rooms {.roomsOpened = _roomsOpened};
+	for (size_t i = 0; i < rooms.shown.size(); ++i)
 	{
-		Save(out, _toggles.IsShown(static_cast<TempleToggles::Display>(i)));
+		rooms.shown.at(i) = _toggles.IsShown(static_cast<TempleToggles::Display>(i));
 	}
+	temple::SaveRooms(out, rooms);
 }
 
 bool TempleInterior::LoadState(ecs::reflection::BinaryReader& in)
@@ -2041,6 +2199,41 @@ void TempleInterior::BringBackDialogue()
 	temple_help::BringBackDialogue(dialogue, _heldDialogue);
 }
 
+void TempleInterior::SetDrawMakers(DrawMakers makers)
+{
+	_drawMakers = std::move(makers);
+}
+
+void TempleInterior::DrawTemple()
+{
+	_islandDraw = Locator::rendereringSystem::handle();
+	Locator::rendereringSystem::reset(_templeDraw);
+	if (!Locator::rendereringSystem::has_value() && _drawMakers.temple)
+	{
+		_drawMakers.temple();
+		_templeDraw = Locator::rendereringSystem::handle();
+	}
+	// The rooms of this visit are new things, so the draw lists are made again
+	if (Locator::rendereringSystem::has_value())
+	{
+		Locator::rendereringSystem::value().SetLayoutDirty();
+	}
+}
+
+void TempleInterior::DrawIsland()
+{
+	Locator::rendereringSystem::reset(std::exchange(_islandDraw, {}));
+	if (!Locator::rendereringSystem::has_value() && _drawMakers.island)
+	{
+		_drawMakers.island();
+	}
+	// The island's things can have changed while the temple was drawn, so the draw lists are made again
+	if (Locator::rendereringSystem::has_value())
+	{
+		Locator::rendereringSystem::value().SetLayoutDirty();
+	}
+}
+
 void TempleInterior::Close()
 {
 	if (_soundsOfCreatureCave)
@@ -2051,10 +2244,19 @@ void TempleInterior::Close()
 	// The creature's room's flames, smoke and mist are entities of the land's registry, so they go before the land
 	_creatureCaveEffects.reset();
 	_people.reset();
+	// The next visit uses the scrolls' textures again
+	if (_scrolls != nullptr)
+	{
+		_keptScrolls = _scrolls->TakeTextures();
+	}
 	_scrolls.reset();
 	_signs.reset();
 	_challengeRoom.reset();
-	_saveGameRoom.reset();
+	// The save game room stays for the next visit, as at its start
+	if (_saveGameRoom != nullptr)
+	{
+		_saveGameRoom->Leave();
+	}
 	_saveGameQuestion.reset();
 	_replay.reset();
 	_text.clear();
@@ -2063,11 +2265,11 @@ void TempleInterior::Close()
 		// Nor do the options room's options go out of the temple with the player
 		if (_optionsShown)
 		{
-			_interface->GetMenu().Close();
+			_interface->CloseMenu();
 		}
 		_interface->SetMessage(std::nullopt);
 		_interface->SetCaption(std::nullopt);
-		_interface->GetMenu().SetInsideTemple(false);
+		_interface->SetMenuInsideTemple(false);
 		// The tooltip ends with nothing to keep it
 		_interface->SetHandOnScreen(std::nullopt);
 		_interface->GetToolTips().ProcessTurn();
@@ -2081,7 +2283,7 @@ void TempleInterior::Close()
 	    [this](const entt::entity entity, auto&&...) { _rooms->Destroy(entity); });
 
 	auto& camera = Locator::camera::value();
-	Locator::rendereringSystem::emplace<ecs::systems::RenderingSystem>();
+	DrawIsland();
 	if (_outsideCameraModel != nullptr)
 	{
 		camera.SetModel(std::move(_outsideCameraModel));

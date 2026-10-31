@@ -12,6 +12,7 @@
 #include <array>
 
 #include "ECS/Systems/ReactionSystemInterface.h"
+#include "Magic/TownBelief.h"
 #include "VillagerReactions.h"
 
 #if !defined(LOCATOR_IMPLEMENTATIONS)
@@ -34,9 +35,12 @@ public:
 	[[nodiscard]] std::optional<Active> Find(uint32_t id) const override;
 	void RemoveFrom(entt::entity initiator) override;
 	void RemoveFrom(entt::entity initiator, Reaction type) override;
+	void StopSpreadInHand(entt::entity initiator) override;
+	void SpreadAgain(entt::entity initiator) override;
 	void Remove(uint32_t id) override;
 	void StopReacting(entt::entity living) override;
 	void TakeUp(uint32_t id, entt::entity living) override;
+	void Impress(uint32_t id, entt::entity living) override;
 	void SetInitiator(uint32_t id, entt::entity initiator) override;
 	void SetPlayerOfNewest(entt::entity initiator, PlayerNames player) override;
 	void SetDance(uint32_t id, entt::entity dance) override;
@@ -47,6 +51,8 @@ public:
 	void StartTurn() override;
 	void EndReactionIfOver(entt::entity living) override;
 	void BelieveInTown(entt::entity town) override;
+	void TownGainsTurn(uint32_t turn) override;
+	[[nodiscard]] std::optional<float> TakeGainShown(PlayerNames player) override;
 	[[nodiscard]] uint32_t CurrentTurn() const override { return _turn; }
 	void Reset() override;
 	void SetFreshIdsAtNextReset() override { _freshIdsAtNextReset = true; }
@@ -88,6 +94,10 @@ private:
 	/// weariness. Only the reactions a creature makes count: seeing it, and its win of a fight. None for any other.
 	[[nodiscard]] std::optional<float> CreatureImpressiveValue(const Active& reaction, entt::entity villager, entt::entity town,
 	                                                           float boredom) const;
+	/// How much a scaffold that made the reaction impresses a watcher at a place, at the town's weariness. None when no
+	/// scaffold made the reaction.
+	[[nodiscard]] std::optional<float> ScaffoldImpressiveValue(const Active& reaction, const glm::vec3& at, float boredom,
+	                                                           float reactionMultiplier, float artefact) const;
 	/// Every living thing reacting to it stops, and it goes
 	void ShutDown(uint32_t id);
 
@@ -105,8 +115,8 @@ private:
 	uint32_t _joins {0};
 	/// The things' and the miracles' balances of impressiveness
 	std::array<float, 3> _landBalances {1.0f, 1.0f, 1.0f};
-	/// When the villagers' voices of belief were last heard
-	villager_reactions::BeliefVoice _voice;
+	/// For each player, the number for the belief that the towns gained, which the hand shows at this turn
+	std::array<std::optional<float>, magic::town_belief::k_PlayerCount> _gainShown {};
 };
 
 } // namespace openblack::ecs::systems

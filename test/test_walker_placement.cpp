@@ -38,7 +38,7 @@ entt::entity Walker(ecs::Registry& registry)
 	const auto entity = registry.Create();
 	registry.Assign<Transform>(entity, k_Old, glm::mat3(1.0f), glm::vec3(1.0f));
 	auto& wallHug = registry.Assign<WallHug>(entity);
-	wallHug.goal = k_Goal;
+	wallHug.goalPlace = ecs::wall_hug::ToWhole(k_Goal);
 	wallHug.step = {120, -40};
 	wallHug.position = ecs::wall_hug::ToWhole({k_Old.x, k_Old.z});
 	wallHug.placedAt = {k_Old.x, k_Old.z};
@@ -68,7 +68,7 @@ TEST(WalkerPlacement, AWalkerOnItsWayHeadsForItsGoalFromTheNewPlace)
 	const auto walker = Walker<MoveStateOrbitTag>(registry);
 	ecs::walker_placement::Place(registry, walker, k_New);
 	ExpectHeldAtTheNewPlace(registry, walker);
-	EXPECT_EQ(registry.Get<const WallHug>(walker).goal, k_Goal);
+	EXPECT_EQ(registry.Get<const WallHug>(walker).goalPlace, ecs::wall_hug::ToWhole(k_Goal));
 	EXPECT_FALSE(registry.AllOf<MoveStateOrbitTag>(walker));
 	ASSERT_TRUE(registry.AllOf<MoveStateLinearTag>(walker));
 	EXPECT_EQ(registry.Get<const MoveStateLinearTag>(walker).clockwise, MoveStateClockwise::Undefined);
@@ -92,7 +92,7 @@ TEST(WalkerPlacement, AWalkerThatHadArrivedStaysWhereItIsPut)
 	const auto walker = Walker<MoveStateArrivedTag>(registry);
 	ecs::walker_placement::Place(registry, walker, k_New);
 	ExpectHeldAtTheNewPlace(registry, walker);
-	EXPECT_EQ(registry.Get<const WallHug>(walker).goal, glm::vec2(k_New.x, k_New.z));
+	EXPECT_EQ(registry.Get<const WallHug>(walker).goalPlace, ecs::wall_hug::ToWhole({k_New.x, k_New.z}));
 	EXPECT_TRUE(registry.AllOf<MoveStateArrivedTag>(walker));
 	EXPECT_FALSE(registry.AllOf<MoveStateLinearTag>(walker));
 }
@@ -104,11 +104,11 @@ TEST(WalkerPlacement, AnythingElseOnlyMoves)
 	const auto standing = registry.Create();
 	registry.Assign<Transform>(standing, k_Old, glm::mat3(1.0f), glm::vec3(1.0f));
 	auto& wallHug = registry.Assign<WallHug>(standing);
-	wallHug.goal = k_Goal;
+	wallHug.goalPlace = ecs::wall_hug::ToWhole(k_Goal);
 	ecs::walker_placement::Place(registry, standing, k_New);
 	EXPECT_EQ(registry.Get<const Transform>(standing).position, k_New);
 	EXPECT_EQ(registry.Get<const WallHug>(standing).placedAt, glm::vec2(k_New.x, k_New.z));
-	EXPECT_EQ(registry.Get<const WallHug>(standing).goal, k_Goal);
+	EXPECT_EQ(registry.Get<const WallHug>(standing).goalPlace, ecs::wall_hug::ToWhole(k_Goal));
 	EXPECT_FALSE(registry.AllOf<MoveStateLinearTag>(standing));
 
 	const auto rock = registry.Create();

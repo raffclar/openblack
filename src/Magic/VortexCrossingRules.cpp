@@ -203,6 +203,13 @@ std::string Text(const Line& line)
 		    {
 			    return fmt::sprintf(CommandFormat("CREATE_ONE_SHOT_SPELL_PU", "AL"), place, l.magic);
 		    }
+		    else if constexpr (std::is_same_v<T, ScaffoldLine>)
+		    {
+			    // The angle and the size in thousandths, truncated
+			    constexpr float k_Thousand = 1000.0f;
+			    return fmt::sprintf(CommandFormat("CREATE_SCAFFOLD", "NANNN"), l.town, place, l.row,
+			                        map_coords::FtoL(l.yAngle * k_Thousand), map_coords::FtoL(l.scale * k_Thousand));
+		    }
 		    else
 		    {
 			    static_assert(std::is_same_v<T, DeadTreeLine>);

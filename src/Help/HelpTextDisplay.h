@@ -18,6 +18,7 @@
 #include <string_view>
 #include <vector>
 
+#include "Common/SavedPresentation.h"
 #include "TextSplitter.h"
 
 // The display side of the script dialogue texts: the help system's text display, its ring of six entries, the box
@@ -195,12 +196,16 @@ private:
 	mutable TextFrame _layoutFrame;
 
 public:
-	/// Gives the values that a saved game keeps to a visitor. The layout is worked out again when it is next drawn.
+	/// Gives the values that a saved game keeps to a visitor. The layout is worked out again when it is next drawn. Only
+	/// the frames move the slide-in of the newest text, and no turn reads it: it is a presentation part. The line height
+	/// in pixels comes from the screen of this computer, and no turn reads it: it is a presentation part too.
 	template <typename Self, typename Visitor>
 	static void VisitSaved(Self& self, Visitor&& visit)
 	{
-		visit(self._entries, self._newest, self._baseLineHeight, self._lineHeightFraction, self._anim, self._hidden,
-		      self._singleLine, self._boxShown, self._drawable, self._f1Loaded, self._f3Loaded);
+		auto anim = PresentationOf(self._anim);
+		auto baseLineHeight = PresentationOf(self._baseLineHeight);
+		visit(self._entries, self._newest, baseLineHeight, self._lineHeightFraction, anim, self._hidden, self._singleLine,
+		      self._boxShown, self._drawable, self._f1Loaded, self._f3Loaded);
 	}
 };
 

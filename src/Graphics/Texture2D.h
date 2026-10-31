@@ -21,7 +21,7 @@
 #include <glm/ext/vector_uint2_sized.hpp>
 
 #include "GraphicsHandle.h"
-#include "TreeShadows.h"
+#include "Visual/TreeShadows.h"
 
 namespace openblack::graphics
 {
@@ -169,12 +169,16 @@ public:
 	Texture2D& operator=(const Texture2D&) = delete;
 
 	/// Makes the texture from bgfx memory, on any thread. The texels must be copied or allocated for bgfx, or, when only
-	/// referenced, outlive the texture.
+	/// referenced, outlive the texture. Its size is known at once. From a turn on another thread, the main thread makes
+	/// the texture of the graphics library later, before the next draw (see MainThreadQueue).
 	void Create(uint16_t width, uint16_t height, uint16_t layers, TextureFormat format, Wrapping wrapping, Filter filter,
 	            const void* memory) noexcept;
 	/// As Create, for textures made while a frame is being drawn
 	void CreateWithinFrame(uint16_t width, uint16_t height, uint16_t layers, TextureFormat format, Wrapping wrapping,
 	                       Filter filter, const void* memory) noexcept;
+	/// Gives the texture its size and format, and makes no texture on the graphics device. A resource that keeps only its
+	/// data (see UploadMode) uses this function in place of Create.
+	void Describe(uint16_t width, uint16_t height, uint16_t layers, TextureFormat format) noexcept;
 
 	/// Replaces the first layer's texels of a texture created without any, with size bytes from data
 	void Update(const void* data, uint32_t size) const;
@@ -208,6 +212,9 @@ public:
 	[[nodiscard]] std::span<const uint8_t> GetTexels() const { return _texels; }
 
 protected:
+	/// Gives the update of one layer to the main thread, after a pace of `paced` bytes when it has a value
+	void UpdateLayerFromMemory(uint16_t layer, const void* memory, std::optional<uint32_t> paced) const;
+
 	std::string _name;
 	TextureHandle _handle;
 	glm::u16vec2 _resolution;

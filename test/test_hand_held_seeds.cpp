@@ -9,9 +9,12 @@
 
 #define LOCATOR_IMPLEMENTATIONS
 
+#include <cstdint>
+
 #include <array>
 #include <map>
 #include <optional>
+#include <set>
 
 #include <entt/entity/entity.hpp>
 #include <gtest/gtest.h>
@@ -22,6 +25,7 @@
 #include "ECS/Systems/HandSystemInterface.h"
 #include "ECS/Systems/Implementations/MagicSystem.h"
 #include "ECS/Systems/Implementations/SpellIconSystem.h"
+#include "ECS/Systems/PlayerSystemInterface.h"
 #include "Enums.h"
 #include "Locator.h"
 
@@ -30,6 +34,7 @@ using openblack::ecs::components::HandHeldSeed;
 using openblack::ecs::components::SpellSeed;
 using openblack::ecs::systems::HandSystemInterface;
 using openblack::ecs::systems::MagicSystem;
+using openblack::ecs::systems::PlayerSystemInterface;
 using openblack::ecs::systems::SpellIconSystem;
 
 namespace
@@ -59,6 +64,31 @@ public:
 	PlayerNames own {PlayerNames::PLAYER_ONE};
 };
 
+/// The players of the test: the players that the computer plays
+class FakePlayers final: public PlayerSystemInterface
+{
+public:
+	void RegisterPlayers() override {}
+	void AddPlayer(entt::entity /*playerEntity*/) override {}
+	[[nodiscard]] std::optional<entt::entity> FindPlayer(PlayerNames /*name*/) const override { return std::nullopt; }
+	entt::entity EnsurePlayer(PlayerNames /*name*/) override { return entt::null; }
+	void AddCreature(entt::entity /*creature*/) override {}
+	[[nodiscard]] std::optional<entt::entity> GetPrimaryCreature(PlayerNames /*name*/) const override { return std::nullopt; }
+	void KeepForNextLand() override {}
+	void ForgetKept() override {}
+	[[nodiscard]] bool KeepAlignmentAt(uint32_t /*turn*/) override { return false; }
+	void TakeUpKept(entt::entity /*playerEntity*/) override {}
+	[[nodiscard]] bool IsComputerPlayer(PlayerNames name) const override { return computers.contains(name); }
+	[[nodiscard]] bool IsHumanPlayer(PlayerNames name) const override
+	{
+		return !computers.contains(name) && !nobody.contains(name);
+	}
+
+	std::set<PlayerNames> computers;
+	/// The players that nobody plays
+	std::set<PlayerNames> nobody;
+};
+
 class HandHeldSeeds: public ::testing::Test
 {
 protected:
@@ -74,6 +104,7 @@ protected:
 	}
 	void TearDown() override
 	{
+		Locator::playerSystem::reset();
 		Locator::magicSystem::reset();
 		Locator::handSystem::reset();
 		Locator::entitiesRegistry::reset();
@@ -85,7 +116,7 @@ protected:
 		auto& registry = Locator::entitiesRegistry::value();
 		const auto seed = registry.Create();
 		registry.Assign<SpellSeed>(seed, SpellSeed {.seedType = SpellSeedType::Heal, .player = player});
-		registry.Assign<HandHeldSeed>(_hands->hands.at(player)[k_Left], seed);
+		registry.AssignOrReplace<HandHeldSeed>(_hands->hands.at(player)[k_Left], seed);
 		return seed;
 	}
 
@@ -158,6 +189,28 @@ TEST_F(HandHeldSeeds, TheIconsServeTheEmptyHandOfEveryHuman)
 	EXPECT_FALSE(icons.IsHandReady(PlayerNames::PLAYER_TWO));
 }
 
+// A computer god gets hands to show where it acts, but the icons never give a miracle to its hand. The god casts from
+// the store of the icon.
+TEST_F(HandHeldSeeds, TheIconsServeNoHandOfAComputerGod)
+{
+	auto& players = static_cast<FakePlayers&>(Locator::playerSystem::emplace<FakePlayers>());
+	auto& registry = Locator::entitiesRegistry::value();
+	_hands->hands[PlayerNames::PLAYER_THREE] = {registry.Create(), registry.Create()};
+	players.computers.insert(PlayerNames::PLAYER_THREE);
+	const SpellIconSystem icons;
+	EXPECT_FALSE(icons.IsHandReady(PlayerNames::PLAYER_THREE));
+	EXPECT_TRUE(icons.IsHandReady(PlayerNames::PLAYER_ONE));
+	EXPECT_TRUE(icons.IsHandReady(PlayerNames::PLAYER_TWO));
+
+	// A player that the computer does not play gets the miracle again
+	players.computers.clear();
+	EXPECT_TRUE(icons.IsHandReady(PlayerNames::PLAYER_THREE));
+
+	// The hand of a player that nobody plays gets no miracle
+	players.nobody.insert(PlayerNames::PLAYER_THREE);
+	EXPECT_FALSE(icons.IsHandReady(PlayerNames::PLAYER_THREE));
+}
+
 // A cast or a let go of a player whose hand holds nothing changes nothing, also when another hand holds a seed
 TEST_F(HandHeldSeeds, ACommandOfAPlayerWithAnEmptyHandLeavesTheOtherHand)
 {
@@ -166,4 +219,21 @@ TEST_F(HandHeldSeeds, ACommandOfAPlayerWithAnEmptyHandLeavesTheOtherHand)
 	_magic->DoCast(PlayerNames::PLAYER_TWO, player_commands::HandCast {.point = {1.0f, 2.0f, 3.0f}});
 	EXPECT_EQ(_magic->GetHeldSeedOf(PlayerNames::PLAYER_ONE), seed);
 	EXPECT_FALSE(_magic->IsHandBusyOf(PlayerNames::PLAYER_TWO));
+}
+
+// A tool drops the seed of a named player. The result is the same on the computer of each player, and the other hand
+// keeps its seed.
+TEST_F(HandHeldSeeds, ADropOfANamedPlayersSeedIsTheSameOnEachComputer)
+{
+	for (const auto own : {PlayerNames::PLAYER_ONE, PlayerNames::PLAYER_TWO})
+	{
+		_hands->own = own;
+		HoldSeed(PlayerNames::PLAYER_ONE);
+		const auto other = HoldSeed(PlayerNames::PLAYER_TWO);
+		_magic->DiscardHeldSeedOf(PlayerNames::PLAYER_ONE);
+		EXPECT_FALSE(_magic->IsHandBusyOf(PlayerNames::PLAYER_ONE));
+		EXPECT_EQ(_magic->GetHeldSeedOf(PlayerNames::PLAYER_TWO), other);
+		_magic->DiscardHeldSeedOf(PlayerNames::PLAYER_TWO);
+		EXPECT_FALSE(_magic->IsHandBusyOf(PlayerNames::PLAYER_TWO));
+	}
 }

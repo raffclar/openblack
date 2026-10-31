@@ -641,6 +641,9 @@ struct IdleMind
 	};
 	/// The step that started to let go of the thing in the hand before it starts. Its hands are not checked again.
 	std::optional<StepRef> handsChecked;
+	/// The fight step that the other creature agreed to while a move of a fight that stopped still finished. The step
+	/// tries again on later turns and does not ask again.
+	std::optional<StepRef> fightAgreed;
 	/// The agenda was given up before its end, as a step it needed couldn't be done
 	bool gaveUp {false};
 	/// A script asked if the creature played and so stopped the agenda. The plan stays, with no steps, until the
@@ -749,6 +752,9 @@ enum class HandsCheck : uint8_t
 /// The check of the hands before a step that needs empty hands, until the let-go starts. A faint that does not come
 /// from the mind also does this check before it starts.
 [[nodiscard]] HandsCheck CheckHands(bool holds, bool bodyBusy, bool handsBusy);
+/// Whether the step is a walk to a point, to a point near the creature or to a thing. Such a walk starts while the body
+/// only moves, and its new route takes the place of the route that the creature walks. Other steps wait for the body.
+[[nodiscard]] bool StartsOnTheWay(const Step& step);
 
 /// The turns between when a fainted creature lies still and when its wait starts, plus the turn between the end of
 /// the wait and the start of the next part of the faint
@@ -783,6 +789,8 @@ struct Senses
 	bool bodyDancing {false};
 	/// Whether it is on its way somewhere or turning, and where it stands
 	bool moving {false};
+	/// Whether the body only moves: it is on its way or turns, and plays no action. A new walk can start then.
+	bool onlyMoves {false};
 	/// How going near, getting away from or turning to face an object, or drawing a gesture, is going, by the
 	/// creature's movement
 	SubMove subMove {SubMove::Running};
@@ -794,6 +802,8 @@ struct Senses
 	/// Whether its life is full and it is not tired at all
 	bool better {false};
 	HandsState hands {HandsState::Idle};
+	/// Whether the action of the hands took hold of its thing or hit it, and the body still plays the action
+	bool handsTouched {false};
 	/// The thing that the creature holds, by the number of its entity
 	std::optional<uint32_t> held;
 	/// Whether it holds the thing in its left hand, as it reached for the thing on the left side
@@ -936,6 +946,17 @@ struct Commands
 	bool seesToDesire {false};
 	/// What to do with a thing
 	std::optional<ObjectOrder> object;
+	/// A stomp that hit its thing, on each turn that the body still plays it: the thing under the foot takes the stomp
+	struct Stomp
+	{
+		uint32_t object {0};
+		/// The stomp is the last step of the agenda
+		bool lastStep {false};
+	};
+	std::optional<Stomp> stomp;
+	/// A pick-up that took hold of its thing, on each turn that the body still plays it: the head and the eyes look at
+	/// no point
+	bool noLookPoint {false};
 	/// The creature lets go of the thing that it holds, because the next step needs empty hands
 	std::optional<LetGo> letGo;
 	/// A gesture to draw, by its number. A dance gives it each turn of its move, and the drawing continues only on these

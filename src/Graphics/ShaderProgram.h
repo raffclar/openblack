@@ -133,7 +133,7 @@ private:
 	ProgramHandle _program;
 	UniformTable _uniforms;
 	std::vector<shader_samplers::Sampler> _samplers;
-	/// The uniform of each of the samplers, in the same order
+	/// The uniform of each sampler, in the order of the samplers, found one time when the program is made
 	std::vector<UniformHandle> _samplerUniforms;
 	const SamplerDefaults& _samplerDefaults;
 	DrawEncoder& _main;

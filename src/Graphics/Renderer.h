@@ -21,6 +21,7 @@
 #include <span>
 #include <string>
 #include <string_view>
+#include <tuple>
 #include <unordered_map>
 #include <utility>
 #include <vector>
@@ -35,18 +36,18 @@
 
 #include "3D/SkyDome.h"
 #include "Enums.h"
-#include "Graphics/DescriptorSetTally.h"
 #include "Graphics/DrawEncoder.h"
 #include "Graphics/GroundShadow.h"
 #include "Graphics/HandReflection.h"
 #include "Graphics/HandShadow.h"
-#include "Graphics/LandDetail.h"
+#include "Graphics/PaintedSkinStamp.h"
 #include "Graphics/PartialBuildCap.h"
-#include "Graphics/RenderPass.h"
 #include "Graphics/RendererInterface.h"
 #include "Graphics/SeaRows.h"
 #include "Graphics/VolumeGlowShell.h"
 #include "Particles/ParticleDrawFrame.h"
+#include "Visual/LandDetail.h"
+#include "Visual/RenderPass.h"
 
 #if !defined(LOCATOR_IMPLEMENTATIONS)
 #error "Locator interface implementations should only be included in Locator.cpp, use interface instead."
@@ -98,7 +99,7 @@ public:
 	Renderer(uint32_t bgfxReset, std::unique_ptr<BgfxCallback>&& bgfxCallback) noexcept;
 	~Renderer() noexcept final;
 
-	[[nodiscard]] ShaderManager& GetShaderManager() const noexcept final;
+	[[nodiscard]] ShaderManager* GetShaderManager() const noexcept final;
 
 	void ConfigureView(RenderPass viewId, glm::u16vec2 resolution, uint32_t clearColor) const noexcept final;
 
@@ -119,6 +120,7 @@ public:
 	[[nodiscard]] bool GetDebug() const noexcept final { return _bgfxDebug; }
 	void SetDebug(bool value) noexcept final { _bgfxDebug = value; }
 	[[nodiscard]] uint32_t GetPipelinesMade() const noexcept final;
+	[[nodiscard]] uint32_t GetDrawsOfLastFrame() const noexcept final;
 	[[nodiscard]] bool GetProfile() const noexcept final { return _bgfxProfile; }
 	void SetProfile(bool value) noexcept final { _bgfxProfile = value; }
 
@@ -181,6 +183,10 @@ private:
 	/// The particle effects in the order the camera of the pass draws them, among the other things that blend: runs of
 	/// sprites that share a sheet as one instanced draw, ribbons, models and mists
 	void DrawParticles(const DrawSceneDesc& desc) const;
+	/// Draws what a frame of particles holds, in the order of its commands, seen from a point
+	void SubmitParticleFrame(const DrawSceneDesc& desc, const particles::draw::Frame& frame,
+	                         std::span<const particles::draw::Command> commands, std::span<const uint32_t> spriteOrder,
+	                         std::span<const particles::draw::Command> beforeLand, const glm::vec3& origin) const;
 	/// For a warm-up, a sprite of no size for each way that sprites blend, into the pass's blended view
 	void WarmUpParticles(const DrawSceneDesc& desc) const;
 	/// The opening's light falling from the sky, and its flash where it lands
@@ -215,10 +221,12 @@ private:
 		/// A phial's pulse and its texture's frame
 		float phialPhase;
 		float phialFrame;
-		/// How faint a phial is drawn, of 255
+		/// How faint a phial is drawn, of 255. A seed drawn at once is drawn at this alpha too.
 		uint8_t phialAlpha;
 		/// The alignment of the player it is shown for, which makes the flying flock's seed a bat or a dove
 		float ownerAlignment;
+		/// The seed is drawn at once in white, with no light from the land, as the seeds over the gestures' hints are
+		bool drawnAtOnce {false};
 	};
 	/// With `seenBy`, the function does not send a draw of the model that is out of that view. The draws go into the
 	/// encoder given, or into the game thread's encoder without one.
@@ -430,7 +438,11 @@ private:
 		uint32_t indicesCount;
 		bool twoSided;
 	};
-	[[nodiscard]] const Cap& CapOf(const L3DSubMesh& subMesh, const CapPrimitive& primitive, float height) const;
+	[[nodiscard]] const Cap& CapOf(const L3DSubMesh& subMesh, const CapPrimitive& primitive, float height,
+	                               const std::optional<glm::mat4>& landPlacement) const;
+	/// The same for a model that follows the land, placed in the world: each corner rises with the land under it
+	[[nodiscard]] const Cap& LandCapOf(const L3DSubMesh& subMesh, const CapPrimitive& primitive, float height,
+	                                   const glm::mat4& placement) const;
 	/// Binds a cap's corners as the vertices of the next draw; false when there is no room for them this frame
 	[[nodiscard]] static bool BindCap(bgfx::Encoder& encoder, const std::vector<partial_build_cap::CapVertex>& cap);
 	void DrawPass(const DrawSceneDesc& desc) const;
@@ -491,6 +503,9 @@ private:
 	void DrawLightColumns(const DrawSceneDesc& desc) const;
 	/// The beams of light the started scrolls stand in
 	void DrawScrollBeams(const DrawSceneDesc& desc) const;
+	/// The pulse models that shrink into the charging icons at the worship sites, added over the scene in their players'
+	/// colours
+	void DrawIconPulses(const DrawSceneDesc& desc) const;
 	/// A tall shaft of light standing at a point and turned to face the eye, added over the scene in a colour: the
 	/// columns over villages and temples, and the scrolls' beams
 	void DrawLightShaft(const DrawSceneDesc& desc, const L3DMesh& mesh, const glm::vec3& position, const glm::vec4& tint) const;
@@ -499,11 +514,11 @@ private:
 	/// The collars of the leashes the gestures' hints offer, each over its hint's square, seen through a camera of its
 	/// own
 	void DrawGestureHintCollars(const DrawSceneDesc& desc) const;
+	/// The seeds and the globe that the gestures' hints picture, each over its hint's square, seen through the collars'
+	/// camera: a seed spins with the effect of its holder over it and its rings round it
+	void DrawGestureHintSeeds(const DrawSceneDesc& desc) const;
 	/// The leashes hanging on the temples, and the one carried in the hand, each drawn just after its glow
 	void DrawTempleLeashes(const DrawSceneDesc& desc) const;
-	/// Takes up the creatures' skins where they have been painted again, before their bodies are drawn with them; drops
-	/// those of creatures no longer on the land
-	void UploadCreatureSkins(const DrawSceneDesc& drawDesc) const;
 	/// A texture for a painted skin: a spare one, else a new one. None if bgfx has no more textures.
 	[[nodiscard]] std::unique_ptr<Texture2D> TakeCreatureSkinTexture() const;
 	/// A new texture for a painted skin. None if bgfx has no more textures.
@@ -516,9 +531,6 @@ private:
 	void UploadAnimalBones(const DrawSceneDesc& drawDesc) const;
 	/// What the hand's base mesh is pulled towards for its player's alignment, none while it shows the base
 	[[nodiscard]] std::optional<L3DMeshSubmitDesc::MorphTargets> HandMorphTargets() const;
-	/// Warns when a frame's draws near the descriptor sets Vulkan has for a frame, and skips the sea's reflection for
-	/// a while when they come too near
-	void WatchDescriptorSets(const FrameDescriptorSets& sets) noexcept;
 
 	std::unique_ptr<ShaderManager> _shaderManager;
 	std::unique_ptr<BgfxCallback> _bgfxCallback;
@@ -527,12 +539,6 @@ private:
 	std::unique_ptr<OffscreenScreenshots> _offscreenShots;
 	bool _bgfxDebug = false;
 	bool _bgfxProfile = false;
-	/// Frames left drawing without the sea's reflection, the last frames having come too near Vulkan's descriptor sets
-	uint32_t _reflectionSkips {0};
-	/// Frames left drawing each view in the order its draws come, for the same reason
-	std::array<uint32_t, static_cast<size_t>(RenderPass::_count)> _inOrderViews {};
-	/// Frames left before the next warning about the descriptor sets
-	uint32_t _descriptorSetWarningPause {0};
 	/// While the scene is drawn only to make the renderer's pipelines and targets: nothing that later frames use changes
 	mutable bool _warmingUp {false};
 	/// The next frame holds a warm-up's draws, after which its views are set back
@@ -619,9 +625,6 @@ private:
 	/// The submit order of the game thread's encoder in this frame. Each run of draws on many threads takes the orders
 	/// after it, and the game thread's encoder goes on after those.
 	mutable uint32_t _submitOrder {0};
-	/// The descriptor set tallies of the runs of things that other encoders draw, put after the game thread's tally in
-	/// the order of the runs
-	mutable std::vector<DescriptorSetTally> _runTallies;
 	/// The shadows of the things that the physics moves, as the last frame made them: their data for the land, and
 	/// where they lie. A thing under the sea keeps its shadow from when it went under.
 	struct KeptGroundShadow
@@ -632,6 +635,8 @@ private:
 	mutable std::unordered_map<entt::entity, KeptGroundShadow> _keptGroundShadows;
 	/// The caps over the broken buildings' cut walls, by primitive and cut height; made afresh when a cut moves
 	mutable std::map<std::pair<const void*, float>, Cap> _caps;
+	/// The caps of the models that follow the land, made again each frame
+	mutable std::map<std::tuple<const void*, float, float, float, float>, Cap> _landCaps;
 	/// The land's light this frame, and the 256 by 1 texture the terrain reads it from
 	mutable std::unique_ptr<LandLightTable> _landLightTable;
 	/// The sea's ripple, moving on with the frames the sea's rows are drawn in while the game's time goes on
@@ -647,6 +652,8 @@ private:
 	mutable std::unique_ptr<FrameBuffer> _landColourFrameBuffer;
 	/// The sky's dome for each alignment, one above the other, kept from frame to frame
 	mutable std::unique_ptr<FrameBuffer> _skyDomeFrameBuffer;
+	/// The rows of each alignment's dome in the frame buffer above
+	mutable uint16_t _skyDomeRows {sky_dome::k_Rows};
 	/// The glow lightning stamps on the land, made the first time it is drawn
 	mutable std::optional<TextureHandle> _lightningGlowTexture;
 	/// How strongly the sun glares, 0 to 255, easing towards how much of the sun shows
@@ -677,13 +684,20 @@ private:
 	/// A creature's skins as painted (see components::CreatureSkin), one texture each
 	struct CreatureSkins
 	{
-		/// The painting the textures hold
-		uint32_t revision {0};
+		/// The painting the textures hold, none before the first upload
+		std::optional<painted_skin::Stamp> stamp;
 		std::vector<std::unique_ptr<Texture2D>> textures;
 		/// The painted skins the body is drawn with in place of its base mesh's, by skin id
 		std::vector<std::pair<uint32_t, const Texture2D*>> drawn;
 	};
 	mutable std::unordered_map<entt::entity, CreatureSkins> _creatureSkins;
+	/// Takes up the skins of the things of a registry where they have been painted again, before their bodies are drawn
+	/// with them; drops those of things that are no longer in the registry
+	void UploadCreatureSkins(const ecs::Registry& entities, std::unordered_map<entt::entity, CreatureSkins>& skins) const;
+	/// The painted skins of the copies of creatures in the temple's rooms, as the copy in the creature room has
+	mutable std::unordered_map<entt::entity, CreatureSkins> _roomCreatureSkins;
+	/// The painted skins of the things of the drawn registry, as the creature of the tattoo menu has
+	mutable std::unordered_map<entt::entity, CreatureSkins> _drawnCreatureSkins;
 	/// Textures for painted skins that no creature uses now. The game makes them behind the loading screen, so that the
 	/// first frame of a creature does not make them.
 	mutable std::vector<std::unique_ptr<Texture2D>> _spareCreatureSkins;
@@ -705,7 +719,7 @@ private:
 	/// The hand's skins as blended for its player's alignment, one texture each, and the blending they hold
 	mutable std::vector<std::unique_ptr<Texture2D>> _handSkinTextures;
 	mutable std::vector<std::pair<uint32_t, const Texture2D*>> _handSkins;
-	mutable std::optional<uint32_t> _handSkinRevision;
+	mutable std::optional<painted_skin::Stamp> _handSkinStamp;
 	/// The creatures drawn this frame: all of them, or the nearest the camera when there are more than the backend can
 	/// upload the bones of
 	struct DrawnCreature
@@ -713,7 +727,7 @@ private:
 		entt::entity entity;
 		uint32_t instance;
 		/// A copy of the creature drawn elsewhere in its own pose: the entity it takes its pose and eyes from, and where
-		/// it is lit from
+		/// it is lit from. The copy is a thing of the temple's rooms.
 		entt::entity posedBy {entt::null};
 		std::optional<glm::vec3> light;
 	};
@@ -776,6 +790,12 @@ private:
 	mutable std::vector<particles::draw::LightStamp> _landStamps;
 	mutable std::vector<particles::draw::Command> _particleCommands;
 	mutable std::vector<uint32_t> _particleSpriteOrder;
+	/// What the effect over a seed of the gestures' hints draws, and its order
+	mutable particles::draw::Frame _hintParticleFrame;
+	/// The camera the gestures' hints picture their seeds through, made the first time a hint pictures one
+	mutable std::unique_ptr<Camera> _hintCamera;
+	mutable std::vector<particles::draw::Command> _hintParticleCommands;
+	mutable std::vector<uint32_t> _hintParticleSpriteOrder;
 	mutable std::vector<particles::draw::Command> _particleBeforeLandCommands;
 	mutable std::vector<uint32_t> _particleBeforeLandSprites;
 	/// What the falling spell's film draws of the particles this frame, and their order

@@ -16,17 +16,19 @@
 
 #include <spdlog/spdlog.h>
 
-#include "Audio/AudioManagerInterface.h"
-#include "Audio/CustomMusicPlayerInterface.h"
 #include "Common/MachineClock.h"
 #include "ECS/Components/CreatureMind.h"
 #include "ECS/Registry.h"
 #include "ECS/Systems/CreatureMindSystemInterface.h"
 #include "ECS/Systems/HandSystemInterface.h"
+#include "ECS/Systems/PlayerCommandSystemInterface.h"
 #include "ECS/Systems/PlayerSystemInterface.h"
 #include "ECS/Systems/ProfileFolderSystemInterface.h"
+#include "ECS/Systems/TimeSystemInterface.h"
 #include "FileSystem/FileSystemInterface.h"
 #include "Locator.h"
+#include "Sound/CustomMusicPlayerInterface.h"
+#include "Sound/SoundRequestInterface.h"
 
 using namespace openblack;
 using namespace openblack::ecs::systems;
@@ -38,7 +40,7 @@ constexpr std::string_view k_CustomMusicFolder = "custom_music";
 
 audio::CustomMusicPlayerInterface* Player()
 {
-	return Locator::audio::has_value() ? Locator::audio::value().GetCustomMusic() : nullptr;
+	return Locator::sounds::has_value() ? Locator::sounds::value().GetCustomMusic() : nullptr;
 }
 } // namespace
 
@@ -66,7 +68,7 @@ void MusicMoodSystem::LoadFolder()
 
 void MusicMoodSystem::UpdateOnGameTurn(bool reset)
 {
-	const auto listen = []() -> std::optional<uint32_t> {
+	const auto player = []() -> std::optional<uint32_t> {
 		const auto* player = Player();
 		// The music moods work only while the custom music player has tracks
 		if (player == nullptr || !player->IsRunning())
@@ -80,6 +82,7 @@ void MusicMoodSystem::UpdateOnGameTurn(bool reset)
 		}
 		return music_mood::TrackId(player->GetSongName());
 	};
+	const auto listen = music_mood::ForGame(NetworkGame(), player);
 	if (const auto packet = _controller.Turn(music_mood::k_TurnSeconds, reset, listen, Feelings(), machine_clock::UnixTime());
 	    packet.has_value())
 	{
@@ -101,6 +104,11 @@ std::vector<music_mood::Record> MusicMoodSystem::GetRecords() const
 {
 	const auto& records = _controller.GetRecords();
 	return {records.begin(), records.end()};
+}
+
+bool MusicMoodSystem::NetworkGame()
+{
+	return Locator::time::has_value() && Locator::time::value().IsNetworkGame();
 }
 
 std::optional<entt::entity> MusicMoodSystem::LocalCreature()
@@ -137,8 +145,10 @@ std::optional<music_mood::Emotion> MusicMoodSystem::Feelings()
 
 void MusicMoodSystem::Tell(const music_mood::Packet& packet)
 {
-	// Only a packet of a track that starts makes the creature react; then the player's recent feedback starts again
-	if (packet.id == 0 || !Locator::creatureMindSystem::has_value())
+	// The change goes to the turns as a command of the player, also when no track starts. The creature reacts at the
+	// turn of the command. A network game has no music moods, so the music of this computer does not change the world
+	// of the others.
+	if (NetworkGame() || !Locator::playerCommandSystem::has_value())
 	{
 		return;
 	}
@@ -147,9 +157,22 @@ void MusicMoodSystem::Tell(const music_mood::Packet& packet)
 	{
 		return;
 	}
-	SPDLOG_LOGGER_DEBUG(spdlog::get("game"), "Creature {} hears music track {:08x} with mood {}", entt::to_integral(*creature),
-	                    packet.id, packet.emotion.mood);
+	Locator::playerCommandSystem::value().Submit(
+	    player_commands::MusicMood {.creature = *creature, .track = packet.id, .mood = packet.emotion.mood});
+}
+
+void MusicMoodSystem::DoMusicMood(const player_commands::MusicMood& command)
+{
+	// Only a command of a track that starts makes the creature react. Then the player's recent feedback starts again.
+	// The creature can go from the world before the turn of the command
+	if (command.track == 0 || NetworkGame() || !Locator::creatureMindSystem::has_value() ||
+	    !Locator::entitiesRegistry::value().Valid(command.creature))
+	{
+		return;
+	}
+	SPDLOG_LOGGER_DEBUG(spdlog::get("game"), "Creature {} hears music track {:08x} with mood {}",
+	                    entt::to_integral(command.creature), command.track, command.mood);
 	auto& minds = Locator::creatureMindSystem::value();
-	minds.ReactToMusic(*creature, packet.emotion.mood);
+	minds.ReactToMusic(command.creature, command.mood);
 	minds.ClearAverageFeedback();
 }

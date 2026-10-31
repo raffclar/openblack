@@ -247,6 +247,20 @@ TEST(CreatureHand, TheHandHoldsOnlyItsOwnPlayersCreature)
 	EXPECT_FALSE(MayHold({.owner = PlayerNames::PLAYER_ONE, .species = CreatureType::Tiger, .fainting = true}, k_Hand));
 }
 
+TEST(CreatureHand, TheHandHoldsTheCreatureOfAnAlliedGodAsItsOwn)
+{
+	using creature_hand::MayHold;
+	constexpr auto k_Hand = PlayerNames::PLAYER_ONE;
+	const creature_hand::Holdable lethys {.owner = PlayerNames::PLAYER_TWO, .species = CreatureType::Cow};
+	EXPECT_TRUE(MayHold(lethys, k_Hand, true));
+	EXPECT_FALSE(MayHold(lethys, k_Hand, false));
+	// An ally's creature that does not take hold is not held
+	EXPECT_FALSE(MayHold({.owner = PlayerNames::PLAYER_TWO, .species = CreatureType::Cow, .asleep = true}, k_Hand, true));
+	EXPECT_FALSE(
+	    MayHold({.owner = PlayerNames::PLAYER_TWO, .species = CreatureType::Cow, .scriptControlled = true}, k_Hand, true));
+	EXPECT_FALSE(MayHold({.owner = PlayerNames::PLAYER_TWO, .species = CreatureType::Ogre}, k_Hand, true));
+}
+
 TEST(CreatureHand, TheInteractTipIsForTheOwnCreatureAnywhereAndOthersInTheInfluence)
 {
 	using creature_hand::Holdable;
@@ -332,4 +346,26 @@ TEST(CreatureHand, AQuickPressIsAClickAndALongOneAHold)
 	EXPECT_FALSE(IsClick(150.0f, true));
 	// A click can never last long enough to stroke
 	EXPECT_LE(creature_hand::k_ClickMaxMs, creature_feedback::k_StrokeHoldMs);
+}
+
+TEST(LeashOwnership, TheLeashComesOffAtTheTempleOnlyWhenThePlayerHoldsIt)
+{
+	EXPECT_TRUE(ComesOffAtTemple(PlayerNames::PLAYER_ONE, PlayerNames::PLAYER_ONE));
+	EXPECT_TRUE(ComesOffAtTemple(PlayerNames::PLAYER_TWO, PlayerNames::PLAYER_TWO));
+	// The creature wears no leash
+	EXPECT_FALSE(ComesOffAtTemple(PlayerNames::PLAYER_ONE, std::nullopt));
+	// Another player holds the leash
+	EXPECT_FALSE(ComesOffAtTemple(PlayerNames::PLAYER_ONE, PlayerNames::PLAYER_TWO));
+	// Nobody goes into a temple
+	EXPECT_FALSE(ComesOffAtTemple(PlayerNames::NEUTRAL, PlayerNames::NEUTRAL));
+}
+
+TEST(LeashOwnership, AnotherPlayersTapOnALeashPostDoesNothing)
+{
+	EXPECT_TRUE(MayTapPost(PlayerNames::PLAYER_ONE, PlayerNames::PLAYER_ONE));
+	EXPECT_TRUE(MayTapPost(PlayerNames::PLAYER_TWO, PlayerNames::PLAYER_TWO));
+	// The turn does the tap for the player that sent it, never for the owner of the post alone
+	EXPECT_FALSE(MayTapPost(PlayerNames::PLAYER_TWO, PlayerNames::PLAYER_ONE));
+	EXPECT_FALSE(MayTapPost(PlayerNames::PLAYER_ONE, PlayerNames::PLAYER_THREE));
+	EXPECT_FALSE(MayTapPost(PlayerNames::NEUTRAL, PlayerNames::NEUTRAL));
 }

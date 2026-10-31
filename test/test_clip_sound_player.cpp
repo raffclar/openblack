@@ -19,12 +19,12 @@
 #include <SASFile.h>
 #include <gtest/gtest.h>
 
-#include "Audio/AnimEffectKeys.h"
-#include "Audio/ClipSounds.h"
 #include "ECS/ClipSoundPlayer.h"
 #include "ECS/Components/LivingAction.h"
 #include "ECS/Components/Villager.h"
 #include "ECS/Registry.h"
+#include "Sound/AnimEffectKeys.h"
+#include "Sound/ClipSounds.h"
 
 using namespace openblack;
 using namespace openblack::ecs;
@@ -37,6 +37,9 @@ constexpr AnimId k_Walk = static_cast<AnimId>(7);
 constexpr AnimId k_Thrown = static_cast<AnimId>(clip_sounds::k_ThrownClip);
 constexpr int32_t k_Step = 5;
 constexpr int32_t k_Sigh = 9;
+constexpr AnimId k_Saw = static_cast<AnimId>(8);
+constexpr int32_t k_Forward = 30;
+constexpr int32_t k_Backward = 31;
 constexpr int32_t k_Grass = static_cast<int32_t>(audio::SoundSurface::Grass);
 
 class FakeWorld final: public clip_sound_player::World
@@ -112,6 +115,13 @@ struct Fixture
 		                                  {.time = 300, .action = k_Sigh, .mode = 0}}};
 		world.clips[k_Thrown] = {
 		    .clip = "thrown", .soundType = clip_sounds::k_PeopleSounds, .sounds = {{.time = 10, .action = k_Sigh, .mode = 1}}};
+		// Two strokes. Each stroke first stops the sound of the other stroke. The list is not in time order.
+		world.clips[k_Saw] = {.clip = "saw",
+		                      .soundType = clip_sounds::k_PeopleSounds,
+		                      .sounds = {{.time = 700, .action = k_Forward, .mode = 1},
+		                                 {.time = 710, .action = k_Backward, .mode = 0},
+		                                 {.time = 300, .action = k_Backward, .mode = 1},
+		                                 {.time = 310, .action = k_Forward, .mode = 0}}};
 		villager = world.MakeVillager();
 	}
 
@@ -271,4 +281,23 @@ TEST(ClipSoundPlayer, AnAnimalHasNoHomeToBanterFrom)
 	          (std::vector<int32_t> {static_cast<int32_t>(audio::SoundSize::Medium), 2, 3, k_Grass, k_Step}));
 	EXPECT_EQ(f.world.played[0].owner, animal);
 	EXPECT_EQ(f.world.played[1].keys[4], k_Sigh);
+}
+
+TEST(ClipSoundPlayer, EachSawStrokeStopsTheOtherStrokesSoundAndThenPlaysItsOwn)
+{
+	Fixture f;
+	const clip_sound_player::ClipTiming timing {.duration = 1000, .looping = true};
+	f.Play(k_Saw, 250, 100, timing);
+	ASSERT_EQ(f.world.played.size(), 2U);
+	EXPECT_EQ(f.world.played[0].keys, Keys(audio::SoundSize::Medium, k_Backward));
+	EXPECT_EQ(f.world.played[0].end, audio::AnimEffectEnd::Stop);
+	EXPECT_EQ(f.world.played[1].keys, Keys(audio::SoundSize::Medium, k_Forward));
+	EXPECT_FALSE(f.world.played[1].end.has_value());
+	f.world.played.clear();
+	f.Play(k_Saw, 650, 100, timing);
+	ASSERT_EQ(f.world.played.size(), 2U);
+	EXPECT_EQ(f.world.played[0].keys, Keys(audio::SoundSize::Medium, k_Forward));
+	EXPECT_EQ(f.world.played[0].end, audio::AnimEffectEnd::Stop);
+	EXPECT_EQ(f.world.played[1].keys, Keys(audio::SoundSize::Medium, k_Backward));
+	EXPECT_FALSE(f.world.played[1].end.has_value());
 }

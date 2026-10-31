@@ -27,7 +27,6 @@
 #include <utility>
 #include <vector>
 
-#include <MusicCues.h>
 #include <PackFile.h>
 #include <glm/geometric.hpp>
 #include <glm/gtc/constants.hpp>
@@ -42,14 +41,14 @@
 #include "ECS/Registry.h"
 #include "ECS/SoundPoint.h"
 #include "ECS/Systems/TimeSystemInterface.h"
-#include "EmitterFollow.h"
 #include "FileSystem/FileSystemInterface.h"
-#include "HeaderOverrides.h"
-#include "HearingRange.h"
-#include "ListenerFrame.h"
 #include "Locator.h"
 #include "Resources/Resources.h"
-#include "SoundDecoder.h"
+#include "Sound/EmitterFollow.h"
+#include "Sound/HeaderOverrides.h"
+#include "Sound/HearingRange.h"
+#include "Sound/ListenerFrame.h"
+#include "Sound/SoundDecoder.h"
 
 using namespace openblack::ecs::components;
 
@@ -221,16 +220,6 @@ std::string TooFar(const glm::vec3& position, float range)
 	return fmt::format("{:.1f} m from the listener, beyond its {} m", ListenerDistance(position), range);
 }
 } // namespace
-
-Listener CameraListener()
-{
-	if (!Locator::camera::has_value())
-	{
-		return {};
-	}
-	const auto& camera = Locator::camera::value();
-	return {.origin = camera.GetOrigin(), .forward = camera.GetForward(), .up = camera.GetUp()};
-}
 
 void AudioManager::Stop()
 {
@@ -1089,10 +1078,6 @@ std::shared_ptr<const MusicBank> AudioManager::LoadMusicBank(const std::string& 
 	}
 	bank->musicMaxDistance = first.maxDist;
 	bank->chunkCount = static_cast<uint32_t>(headers.size());
-	for (auto& cue : pack::ReadMusicCues(headers))
-	{
-		bank->cues.push_back({.chunk = cue.chunk, .frame = cue.frame, .text = std::move(cue.text)});
-	}
 	bank->chunkSampleRates.reserve(headers.size());
 	std::vector<std::pair<uint64_t, uint32_t>> spans;
 	spans.reserve(headers.size());

@@ -49,6 +49,8 @@ namespace openblack::lobby_api
 [[nodiscard]] std::optional<Session> ParseSession(std::string_view text);
 [[nodiscard]] std::optional<Me> ParseMe(std::string_view text);
 [[nodiscard]] std::optional<ServerList> ParseServerList(std::string_view text);
+[[nodiscard]] std::optional<MapList> ParseMapList(std::string_view text);
+[[nodiscard]] std::optional<ServerBanList> ParseServerBanList(std::string_view text);
 [[nodiscard]] std::optional<JoinTicket> ParseJoinTicket(std::string_view text);
 [[nodiscard]] std::optional<ClanList> ParseClanList(std::string_view text);
 [[nodiscard]] std::optional<ClanDetails> ParseClanDetails(std::string_view text);

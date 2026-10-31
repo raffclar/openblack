@@ -9,6 +9,7 @@
 
 #include <cstdint>
 
+#include <array>
 #include <functional>
 #include <memory>
 #include <optional>
@@ -19,19 +20,29 @@
 #include <vector>
 
 #include <MindFile.h>
+#include <entt/meta/context.hpp>
 #include <gtest/gtest.h>
 #include <spdlog/sinks/null_sink.h>
 #include <spdlog/spdlog.h>
 
 #include "Commands/PlayerCommands.h"
+#include "Creature/CreatureFace.h"
+#include "Creature/CreatureFeedback.h"
+#include "Creature/CreatureLayers.h"
 #include "ECS/Components/Creature.h"
+#include "ECS/Components/CreatureBody.h"
 #include "ECS/Components/GodHand.h"
 #include "ECS/Components/Hand.h"
 #include "ECS/Components/HandGrab.h"
 #include "ECS/Components/HandLockedCreature.h"
 #include "ECS/Components/HandStillness.h"
+#include "ECS/Components/Player.h"
+#include "ECS/Components/PlayerHands.h"
 #include "ECS/Components/ReportedHand.h"
+#include "ECS/Components/ShownCreatureFace.h"
 #include "ECS/Components/Transform.h"
+#include "ECS/Reflection/ComponentReflection.h"
+#include "ECS/Reflection/WorldArchive.h"
 #include "ECS/Registry.h"
 #include "Locator.h"
 #include "Simulation/CommandLog.h"
@@ -161,16 +172,13 @@ public:
 	bool SitDown(entt::entity) override { return false; }
 	void StandUp(entt::entity) override {}
 	void ReceiveFeedback(entt::entity, float) override {}
-	bool ForceAction(entt::entity creature, size_t animation, bool mirrored, std::optional<creature_face::Request> face,
-	                 float interruptsAfter) override
+	bool ForceAction(entt::entity creature, size_t animation, bool mirrored, double interruptsAfter) override
 	{
-		forced.push_back({.creature = creature,
-		                  .animation = animation,
-		                  .mirrored = mirrored,
-		                  .face = face.has_value() ? std::optional(face->face) : std::nullopt,
-		                  .interruptsAfter = interruptsAfter});
+		forced.push_back(
+		    {.creature = creature, .animation = animation, .mirrored = mirrored, .interruptsAfter = interruptsAfter});
 		return true;
 	}
+	[[nodiscard]] bool CanForceAction(entt::entity, size_t, bool, double) const override { return bodyTakes; }
 	bool Sleep(entt::entity) override { return false; }
 	bool Eat(entt::entity, std::optional<entt::entity>) override { return false; }
 	bool Drink(entt::entity) override { return false; }
@@ -188,10 +196,11 @@ public:
 		entt::entity creature;
 		size_t animation;
 		bool mirrored;
-		std::optional<creature_face::Face> face;
-		float interruptsAfter;
+		double interruptsAfter;
 	};
 	std::vector<Forced> forced;
+	/// Whether the body takes a reaction now
+	bool bodyTakes {true};
 };
 
 class ReportedHands: public ::testing::Test
@@ -243,26 +252,51 @@ TEST_F(ReportedHands, TheTurnCountsTheStillnessOfTheReportedHandNotOfTheDrawnHan
 		DrawHandAt({100.0f * static_cast<float>(turn), 0.0f, 0.0f});
 		_hands.ProcessTurn();
 	}
-	EXPECT_EQ(_hands.GetHandStillTurns(), 3u);
+	EXPECT_EQ(_hands.GetHandStillTurnsOf(PlayerNames::PLAYER_ONE), 3u);
 	// A report far away is a move
 	_hands.Report(PlayerNames::PLAYER_ONE, ReportAt({60.0f, 0.0f, 20.0f}));
 	_hands.ProcessTurn();
-	EXPECT_EQ(_hands.GetHandStillTurns(), 0u);
+	EXPECT_EQ(_hands.GetHandStillTurnsOf(PlayerNames::PLAYER_ONE), 0u);
 }
 
 // In a network game the turn keeps the thing under the cursor from the last pick, whatever the reports of the hand do
 TEST_F(ReportedHands, TheWorldHasTheThingUnderTheCursorFromTheLastPick)
 {
 	auto& registry = Locator::entitiesRegistry::value();
-	EXPECT_EQ(_hands.GetReportedPick(), entt::entity {entt::null});
+	EXPECT_EQ(_hands.GetReportedPickOf(PlayerNames::PLAYER_ONE), entt::entity {entt::null});
 	const auto creature = registry.Create();
 	_hands.ReportPick(PlayerNames::PLAYER_ONE, creature);
-	EXPECT_EQ(_hands.GetReportedPick(), creature);
+	EXPECT_EQ(_hands.GetReportedPickOf(PlayerNames::PLAYER_ONE), creature);
 	_hands.Report(PlayerNames::PLAYER_ONE, ReportAt({20.0f, 1.0f, 30.0f}));
-	EXPECT_EQ(_hands.GetReportedPick(), creature);
+	EXPECT_EQ(_hands.GetReportedPickOf(PlayerNames::PLAYER_ONE), creature);
 	EXPECT_EQ(_hands.GetPlayerHandPositions()[0], glm::vec3(20.0f, 1.0f, 30.0f));
 	_hands.ReportPick(PlayerNames::PLAYER_ONE, entt::null);
-	EXPECT_EQ(_hands.GetReportedPick(), entt::entity {entt::null});
+	EXPECT_EQ(_hands.GetReportedPickOf(PlayerNames::PLAYER_ONE), entt::entity {entt::null});
+}
+
+// Each god of a network game has its own pick and its own still hand. A player with no hands has neither.
+TEST_F(ReportedHands, EachGodHasItsOwnPickAndItsOwnStillHand)
+{
+	auto& registry = Locator::entitiesRegistry::value();
+	const auto creature = registry.Create();
+	EXPECT_EQ(_hands.GetReportedPickOf(PlayerNames::PLAYER_TWO), entt::entity {entt::null});
+	EXPECT_EQ(_hands.GetHandStillTurnsOf(PlayerNames::PLAYER_TWO), 0u);
+	std::ignore = _hands.MakeHandsOf(PlayerNames::PLAYER_TWO);
+	_hands.ReportPick(PlayerNames::PLAYER_TWO, creature);
+	EXPECT_EQ(_hands.GetReportedPickOf(PlayerNames::PLAYER_TWO), creature);
+	EXPECT_EQ(_hands.GetReportedPickOf(PlayerNames::PLAYER_ONE), entt::entity {entt::null});
+
+	// The hand of the second god stays, and the hand of the first god moves each turn
+	_hands.Report(PlayerNames::PLAYER_TWO, ReportAt({20.0f, 0.0f, 20.0f}));
+	_hands.ProcessTurn();
+	for (int turn = 1; turn <= 3; ++turn)
+	{
+		_hands.Report(PlayerNames::PLAYER_ONE, ReportAt({10.0f * static_cast<float>(turn), 0.0f, 0.0f}));
+		_hands.ProcessTurn();
+	}
+	EXPECT_EQ(_hands.GetHandStillTurnsOf(PlayerNames::PLAYER_TWO), 3u);
+	EXPECT_EQ(_hands.GetHandStillTurnsOf(PlayerNames::PLAYER_ONE), 0u);
+	EXPECT_EQ(_hands.GetHandStillTurnsOf(PlayerNames::PLAYER_THREE), 0u);
 }
 
 TEST_F(ReportedHands, TheTurnPlaysTheReactionThatAPlayerSent)
@@ -272,29 +306,60 @@ TEST_F(ReportedHands, TheTurnPlaysTheReactionThatAPlayerSent)
 	Locator::creatureMindSystem::reset(&minds, [](ecs::systems::CreatureMindSystemInterface* /*unowned*/) {});
 	const auto creature = registry.Create();
 	registry.Assign<ecs::components::Creature>(creature, ecs::components::Creature {.owner = PlayerNames::PLAYER_ONE});
+	registry.Assign<ecs::components::CreatureAnimation>(creature);
 	ecs::systems::CreatureHandSystem creatures;
-	creatures.DoReaction(PlayerNames::PLAYER_TWO, CreatureReaction {.creature = creature,
-	                                                                .animation = 166,
-	                                                                .mirrored = true,
-	                                                                .pullsFace = true,
-	                                                                .face = 1,
-	                                                                .faceMs = 2000.0f,
-	                                                                .cue = 15,
-	                                                                .interruptsAfter = 0.35f});
+	creatures.DoReaction(PlayerNames::PLAYER_TWO,
+	                     CreatureReaction {.creature = creature,
+	                                       .animation = 166,
+	                                       .mirrored = true,
+	                                       .interruptsAfter = creature_feedback::k_SlapInterruptsAfter});
 	ASSERT_EQ(minds.forced.size(), 1u);
 	EXPECT_EQ(minds.forced[0].creature, creature);
 	EXPECT_EQ(minds.forced[0].animation, 166u);
 	EXPECT_TRUE(minds.forced[0].mirrored);
-	EXPECT_EQ(minds.forced[0].face, creature_face::Face::Grimace);
-	EXPECT_EQ(minds.forced[0].interruptsAfter, 0.35f);
-	// A slap with no face pulls none
-	creatures.DoReaction(PlayerNames::PLAYER_ONE, CreatureReaction {.creature = creature, .animation = 167});
-	ASSERT_EQ(minds.forced.size(), 2u);
-	EXPECT_FALSE(minds.forced[1].face.has_value());
+	EXPECT_EQ(minds.forced[0].interruptsAfter, creature_feedback::k_SlapInterruptsAfter);
+	// The reaction of another computer's hand shows no face on this computer
+	EXPECT_FALSE(registry.AllOf<ecs::components::ShownCreatureFace>(creature));
+	EXPECT_EQ(registry.Get<const ecs::components::CreatureAnimation>(creature).face, creature_layers::FaceLayer {});
 	// A creature that is gone by the turn plays nothing
 	registry.Destroy(creature);
 	creatures.DoReaction(PlayerNames::PLAYER_ONE, CreatureReaction {.creature = creature, .animation = 165});
-	EXPECT_EQ(minds.forced.size(), 2u);
+	EXPECT_EQ(minds.forced.size(), 1u);
+	Locator::creatureMindSystem::reset();
+}
+
+// The hand of this computer strokes the creature: the face shows at once on this computer only, and the world does not
+// have it. A stroke that the body refuses sends nothing.
+TEST_F(ReportedHands, AStrokeShowsItsFaceOnlyHereAndARefusedStrokeSendsNothing)
+{
+	auto& registry = Locator::entitiesRegistry::value();
+	ReactingMinds minds;
+	Locator::creatureMindSystem::reset(&minds, [](ecs::systems::CreatureMindSystemInterface* /*unowned*/) {});
+	ecs::systems::PlayerCommandSystem commands;
+	Locator::playerCommandSystem::reset(&commands, [](ecs::systems::PlayerCommandSystemInterface* /*unowned*/) {});
+	const auto creature = registry.Create();
+	registry.Assign<ecs::components::Creature>(creature, ecs::components::Creature {.owner = PlayerNames::PLAYER_ONE});
+	registry.Assign<ecs::components::CreatureAnimation>(creature);
+	const creature_face::Request grimace {
+	    .face = creature_face::Face::Grimace, .milliseconds = 2000.0f, .cue = creature_face::Cue::Grimace};
+	ecs::systems::CreatureHandSystem creatures;
+
+	minds.bodyTakes = false;
+	EXPECT_FALSE(creatures.React(creature, 158, false, grimace, creature_feedback::k_StrokeInterruptsAfter));
+	EXPECT_EQ(commands.PendingCount(), 0u);
+	const auto* shown = registry.TryGet<const ecs::components::ShownCreatureFace>(creature);
+	ASSERT_NE(shown, nullptr);
+	EXPECT_EQ(shown->face.wanted, creature_face::AnimationOf(creature_face::Face::Grimace));
+	EXPECT_EQ(shown->face.remainingMs, 2000.0f);
+	EXPECT_EQ(registry.Get<const ecs::components::CreatureAnimation>(creature).face, creature_layers::FaceLayer {});
+
+	// The body takes the next stroke: the command has the body action, and the face stays on this computer
+	minds.bodyTakes = true;
+	EXPECT_TRUE(creatures.React(creature, 158, false, grimace, creature_feedback::k_StrokeInterruptsAfter));
+	EXPECT_EQ(commands.PendingCount(), 1u);
+	EXPECT_EQ(registry.Get<const ecs::components::CreatureAnimation>(creature).face, creature_layers::FaceLayer {});
+	EXPECT_TRUE(minds.forced.empty());
+	Locator::playerCommandSystem::reset();
 	Locator::creatureMindSystem::reset();
 }
 
@@ -408,6 +473,90 @@ TEST_F(ReportedHands, AfterALoadTheHandsOfEachGodAreFoundByTheirPlayer)
 	EXPECT_FALSE(loaded.GetHandsOf(PlayerNames::PLAYER_TWO).has_value());
 }
 
+namespace
+{
+/// A player entity of a name, as the land makes it
+entt::entity MakePlayer(PlayerNames name)
+{
+	auto& registry = Locator::entitiesRegistry::value();
+	const auto entity = registry.Create();
+	registry.Assign<ecs::components::Player>(entity, name);
+	return entity;
+}
+
+/// The hands that the entity of a player links to
+std::array<entt::entity, 2> LinkOf(entt::entity player)
+{
+	const auto& hands = Locator::entitiesRegistry::value().Get<const ecs::components::PlayerHands>(player);
+	return {hands.left, hands.right};
+}
+} // namespace
+
+// The hands of each god are a component of its player entity, whether the player or the hands come first
+TEST_F(ReportedHands, ThePlayerEntityLinksToTheHandsOfItsGod)
+{
+	auto& registry = Locator::entitiesRegistry::value();
+	// The first player comes after its hands, as on a new land
+	const auto first = MakePlayer(PlayerNames::PLAYER_ONE);
+	EXPECT_FALSE(registry.AllOf<ecs::components::PlayerHands>(first));
+	_hands.LinkHandsOf(first);
+	EXPECT_EQ(LinkOf(first), _hands.GetPlayerHands());
+	EXPECT_EQ(LinkOf(first)[0], _hand);
+
+	// The second god gets its hands after its player
+	const auto second = MakePlayer(PlayerNames::PLAYER_TWO);
+	_hands.LinkHandsOf(second);
+	EXPECT_FALSE(registry.AllOf<ecs::components::PlayerHands>(second));
+	const auto made = _hands.MakeHandsOf(PlayerNames::PLAYER_TWO);
+	EXPECT_EQ(LinkOf(second), made);
+	EXPECT_EQ(_hands.GetHandsOf(PlayerNames::PLAYER_TWO), made);
+
+	// The world finds the hands from the link
+	registry.Remove<ecs::components::GodHand>(made[0]);
+	registry.Remove<ecs::components::GodHand>(made[1]);
+	EXPECT_EQ(_hands.GetHandsOf(PlayerNames::PLAYER_TWO), made);
+	EXPECT_EQ(_hands.GetPlayerHands()[0], _hand);
+}
+
+// The link is part of the saved world. A world from an older save gets the links at the load.
+TEST_F(ReportedHands, TheLinkToTheHandsIsSavedAndAnOlderSaveGetsItAtTheLoad)
+{
+	const auto first = MakePlayer(PlayerNames::PLAYER_ONE);
+	const auto second = MakePlayer(PlayerNames::PLAYER_TWO);
+	const auto third = MakePlayer(PlayerNames::PLAYER_THREE);
+	_hands.LinkHandsOf(first);
+	const auto made = _hands.MakeHandsOf(PlayerNames::PLAYER_TWO);
+	const auto firstHands = _hands.GetPlayerHands();
+	entt::meta_ctx context;
+	ecs::reflection::RegisterComponents(context);
+
+	const auto load = [&context](const std::vector<uint8_t>& bytes) {
+		Locator::entitiesRegistry::emplace<ecs::Registry>();
+		auto& loaded = Locator::entitiesRegistry::value().Underlying();
+		ASSERT_TRUE(ecs::reflection::LoadWorld(loaded, context, bytes, ecs::reflection::WorldLoadMode::Exact).has_value());
+		ecs::systems::HandSystem hands;
+		hands.FindAfterLoad();
+	};
+
+	// A save of this build keeps the links
+	const auto saved = ecs::reflection::SaveWorld(Locator::entitiesRegistry::value().Underlying(), context);
+	load(saved);
+	EXPECT_EQ(LinkOf(first), firstHands);
+	EXPECT_EQ(LinkOf(second), made);
+	EXPECT_FALSE(Locator::entitiesRegistry::value().AllOf<ecs::components::PlayerHands>(third));
+	EXPECT_EQ(ecs::reflection::SaveWorld(Locator::entitiesRegistry::value().Underlying(), context), saved);
+
+	// A save of an older build has no links. The load makes them from the hands of each player.
+	auto& older = Locator::entitiesRegistry::value();
+	older.Remove<ecs::components::PlayerHands>(first);
+	older.Remove<ecs::components::PlayerHands>(second);
+	load(ecs::reflection::SaveWorld(older.Underlying(), context));
+	EXPECT_EQ(LinkOf(first), firstHands);
+	EXPECT_EQ(LinkOf(second), made);
+	EXPECT_FALSE(Locator::entitiesRegistry::value().AllOf<ecs::components::PlayerHands>(third));
+	EXPECT_EQ(ecs::reflection::SaveWorld(Locator::entitiesRegistry::value().Underlying(), context), saved);
+}
+
 TEST_F(ReportedHands, TheWorldHasNoCameraBeforeTheFirstReport)
 {
 	EXPECT_FALSE(_hands.GetReportedCamera(PlayerNames::PLAYER_ONE).has_value());
@@ -443,6 +592,57 @@ TEST_F(ReportedHands, EachPlayerHasTheCameraOfItsOwnReports)
 	EXPECT_EQ(one->focus, glm::vec3(25.0f, 0.0f, 35.0f));
 	EXPECT_EQ(two->origin, glm::vec3(7.0f, 80.0f, 9.0f));
 	EXPECT_EQ(two->focus, glm::vec3(45.0f, 0.0f, 55.0f));
+}
+
+TEST_F(ReportedHands, TheWorldHasNoViewBeforeTheFirstViewReport)
+{
+	EXPECT_FALSE(_hands.GetReportedView(PlayerNames::PLAYER_ONE).has_value());
+	// The report of the hand and the camera does not give a view
+	_hands.Report(PlayerNames::PLAYER_ONE, ReportAt({20.0f, 1.0f, 30.0f}));
+	EXPECT_FALSE(_hands.GetReportedView(PlayerNames::PLAYER_ONE).has_value());
+}
+
+TEST_F(ReportedHands, TheWorldHasTheViewOfTheLastViewReport)
+{
+	const ViewReport first {.eye = {1.0f, 2.0f, 3.0f},
+	                        .focus = {4.0f, 5.0f, 6.0f},
+	                        .lens = 1.2f,
+	                        .nearClip = 2.0f,
+	                        .screenWidth = 1920,
+	                        .screenHeight = 1080,
+	                        .aspect = 1.7777778f,
+	                        .inclusionDistance = 50.0f,
+	                        .cameraOrders = 3,
+	                        .cameraArrived = false,
+	                        .gripsLand = true,
+	                        .otherButton = false};
+	auto second = first;
+	second.screenWidth = 1280;
+	second.screenHeight = 1024;
+	second.aspect = 1.25f;
+	second.inclusionDistance = 0.0f;
+	second.cameraOrders = 4;
+	second.cameraArrived = true;
+	second.gripsLand = false;
+	second.otherButton = true;
+	_hands.ReportView(PlayerNames::PLAYER_ONE, first);
+	_hands.ReportView(PlayerNames::PLAYER_ONE, second);
+	const auto view = _hands.GetReportedView(PlayerNames::PLAYER_ONE);
+	ASSERT_TRUE(view.has_value());
+	EXPECT_EQ(view->eye, second.eye);
+	EXPECT_EQ(view->focus, second.focus);
+	EXPECT_EQ(view->lens, second.lens);
+	EXPECT_EQ(view->nearClip, second.nearClip);
+	EXPECT_EQ(view->screen, glm::ivec2(1280, 1024));
+	EXPECT_EQ(view->aspect, 1.25f);
+	EXPECT_EQ(view->inclusionDistance, 0.0f);
+	EXPECT_EQ(view->cameraOrders, 4u);
+	EXPECT_TRUE(view->cameraArrived);
+	EXPECT_FALSE(view->gripsLand);
+	EXPECT_TRUE(view->otherButton);
+	// A player with no hands has no view
+	_hands.ReportView(PlayerNames::PLAYER_TWO, first);
+	EXPECT_FALSE(_hands.GetReportedView(PlayerNames::PLAYER_TWO).has_value());
 }
 
 // The world holds the creature from the turn of the lock to the turn of its end, whatever the hand of the frames does

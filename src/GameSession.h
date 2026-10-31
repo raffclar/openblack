@@ -73,6 +73,30 @@ enum class End
 	return std::nullopt;
 }
 
+/// The controls that let a player leave a network game
+enum class NetworkLeave
+{
+	/// Leave Game in the end box, after the question of the menu or at the end of the game
+	LeaveGame,
+	/// Back in the land information box
+	LandInfoBoxBack,
+};
+
+/// How the game of a player ends when the player leaves a network game. Each control closes the network game of this
+/// computer in the same way, and the other computers see a god that leaves. Leave Game goes to the network front end.
+/// Back in the land information box goes to the skirmish box, also in a network game.
+[[nodiscard]] constexpr End EndAfterNetworkLeave(NetworkLeave leave) noexcept
+{
+	switch (leave)
+	{
+	case NetworkLeave::LeaveGame:
+		break;
+	case NetworkLeave::LandInfoBoxBack:
+		return End::Skirmish;
+	}
+	return End::Online;
+}
+
 /// What the program was told as it started
 struct FirstStartFacts
 {

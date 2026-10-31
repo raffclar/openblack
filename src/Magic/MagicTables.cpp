@@ -12,6 +12,7 @@
 #include <algorithm>
 #include <array>
 #include <numeric>
+#include <utility>
 
 #include "Common/StringUtils.h"
 
@@ -86,6 +87,11 @@ const GMagicInfo& magic::detail::SectionRecord(const InfoConstants& info, MagicI
 		break;
 	}
 	return info.magicCreatureSpell.at(slot.index);
+}
+
+GMagicInfo& magic::detail::SectionRecord(InfoConstants& info, MagicInfoSlot slot)
+{
+	return const_cast<GMagicInfo&>(SectionRecord(std::as_const(info), slot));
 }
 
 const GMagicInfo& magic::GetMagicInfo(const InfoConstants& info, MagicType type)
@@ -286,4 +292,25 @@ int magic::GetPowerUpLevel(const InfoConstants& info, MagicType type)
 {
 	const auto seed = FindFirstSpellSeedForMagicType(info, type);
 	return seed ? GetPowerUpFromMagicType(GetSpellSeedInfo(info, *seed), type) : k_BasePowerUpLevel;
+}
+
+void magic::FillMagicRecordsFromSeeds(InfoConstants& info)
+{
+	for (size_t i = 1; i < k_MagicTypeCount; ++i)
+	{
+		const auto type = static_cast<MagicType>(i);
+		const auto seed = FindFirstSpellSeedForMagicType(info, type);
+		if (!seed.has_value())
+		{
+			continue;
+		}
+		auto& record = detail::SectionRecord(info, SlotOf(type));
+		record.spellSeedType = *seed;
+		const auto step = GetPowerUpGesture(GetSpellSeedInfo(info, *seed), type);
+		if (step.gesture != GestureType::None)
+		{
+			record.gestureType = step.gesture;
+			record.powerupType = static_cast<PowerUpType>(step.level);
+		}
+	}
 }

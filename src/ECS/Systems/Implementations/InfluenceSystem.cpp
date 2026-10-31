@@ -25,9 +25,6 @@
 
 #include "3D/LandIslandInterface.h"
 #include "3D/TempleInteriorInterface.h"
-#include "Audio/AudioManagerInterface.h"
-#include "Audio/GameSoundEffects.h"
-#include "Audio/Sound.h"
 #include "Camera/Camera.h"
 #include "Camera/CameraZones.h"
 #include "Common/GUtilsDistance.h"
@@ -38,22 +35,33 @@
 #include "ECS/Components/Mesh.h"
 #include "ECS/Components/Physics.h"
 #include "ECS/Components/Player.h"
+#include "ECS/Components/PlayerRelations.h"
 #include "ECS/Components/Temple.h"
 #include "ECS/Components/Town.h"
 #include "ECS/Components/Transform.h"
 #include "ECS/Components/Villager.h"
+#include "ECS/GamePlayers.h"
 #include "ECS/InfluenceRules.h"
+#include "ECS/PlayerColour.h"
+#include "ECS/PlayerRelations.h"
+#include "ECS/PlayerTowns.h"
 #include "ECS/Reflection/BinaryArchive.h"
 #include "ECS/Registry.h"
+#include "ECS/Statistics.h"
 #include "ECS/Systems/CameraZoneSystemInterface.h"
+#include "ECS/Systems/EffectRequestSystemInterface.h"
 #include "ECS/Systems/HandSystemInterface.h"
-#include "ECS/Systems/ParticleSystemInterface.h"
+#include "ECS/Systems/LandSystemInterface.h"
 #include "ECS/Systems/PlayerSystemInterface.h"
 #include "ECS/Systems/SoundTagSystemInterface.h"
 #include "ECS/Systems/TimeSystemInterface.h"
 #include "InfoConstants.h"
 #include "Locator.h"
+#include "PlayerSlots.h"
 #include "Resources/ResourcesInterface.h"
+#include "Sound/GameSoundEffects.h"
+#include "Sound/SoundId.h"
+#include "Sound/SoundRequestInterface.h"
 
 using namespace openblack;
 using namespace openblack::ecs::systems;
@@ -132,10 +140,18 @@ float AbodeInfluence(entt::entity entity, const Abode& abode, Tribe tribe)
 	return scale * info->influence * static_cast<float>(people + 1);
 }
 
-/// The first temple of each player, which is their citadel
-std::array<entt::entity, static_cast<size_t>(PlayerNames::_COUNT)> Citadels()
+/// What a town reaches with no buildings, for the land that is played now
+float TownBaseInfluence()
 {
-	std::array<entt::entity, static_cast<size_t>(PlayerNames::_COUNT)> citadels {};
+	const auto& info = Locator::infoConstants::value().town;
+	const auto land = Globals().landNumber;
+	return land != 0 ? ForLand(info.storyInfluence, info.maxForTimeWillWorkUntil, land) : info.influence;
+}
+
+/// The first temple of each player, which is their citadel
+std::array<entt::entity, player_slots::k_PlayerNumbers> Citadels()
+{
+	std::array<entt::entity, player_slots::k_PlayerNumbers> citadels {};
 	citadels.fill(entt::null);
 	Locator::entitiesRegistry::value().Each<const Temple>([&citadels](entt::entity entity, const Temple& temple) {
 		const auto index = static_cast<size_t>(temple.owner);
@@ -145,6 +161,18 @@ std::array<entt::entity, static_cast<size_t>(PlayerNames::_COUNT)> Citadels()
 		}
 	});
 	return citadels;
+}
+
+/// The citadel of one player: the first temple of the player, as Citadels finds it, or none
+entt::entity CitadelOf(PlayerNames player)
+{
+	if (static_cast<size_t>(player) >= player_slots::k_PlayerNumbers)
+	{
+		return entt::null;
+	}
+	return Locator::entitiesRegistry::value()
+	    .FindFirst<const Temple>([player](entt::entity, const Temple& temple) { return temple.owner == player; })
+	    .value_or(entt::null);
 }
 
 /// The reach of a citadel's heart for the land that is played now
@@ -215,6 +243,19 @@ std::optional<entt::entity> PlayerEntityOf(PlayerNames player)
 	return found;
 }
 
+/// The reach of each source of influence of a player that is neither a town nor a citadel, anti-influence too
+std::vector<float> SourceReaches(PlayerNames player)
+{
+	std::vector<float> reaches;
+	Locator::entitiesRegistry::value().Each<const InfluenceSource>([&](const InfluenceSource& source) {
+		if (source.player == player)
+		{
+			reaches.push_back(source.radius);
+		}
+	});
+	return reaches;
+}
+
 influence::Ground LandHeight()
 {
 	return [](glm::vec2 point) {
@@ -238,12 +279,12 @@ void InfluenceSystem::SaveState(reflection::BinaryWriter& out) const
 	}
 	reflection::Save(out, _borderShown);
 	reflection::Save(out, _bordersDirty);
-	reflection::Save(out, _scrollClock);
-	reflection::Save(out, _scrollRemainder);
-	reflection::Save(out, _ripples);
-	reflection::Save(out, _handWasInside);
-	reflection::Save(out, _handSeen);
-	reflection::Save(out, _handBefore);
+	reflection::SavePresentation(out, _scrollClock);
+	reflection::SavePresentation(out, _scrollRemainder);
+	reflection::SavePresentation(out, _ripples);
+	reflection::SavePresentation(out, _handWasInside);
+	reflection::SavePresentation(out, _handSeen);
+	reflection::SavePresentation(out, _handBefore);
 }
 
 bool InfluenceSystem::LoadState(reflection::BinaryReader& in)
@@ -307,9 +348,7 @@ void InfluenceSystem::ProcessTownInfluence(entt::entity entity)
 			buildings += AbodeInfluence(abode, data, tribe);
 		}
 	});
-	const auto& info = Locator::infoConstants::value().town;
-	const auto land = Globals().landNumber;
-	const float base = land != 0 ? ForLand(info.storyInfluence, info.maxForTimeWillWorkUntil, land) : info.influence;
+	const float base = TownBaseInfluence();
 	auto& influence =
 	    registry.AnyOf<TownInfluence>(entity) ? registry.Get<TownInfluence>(entity) : registry.Assign<TownInfluence>(entity);
 	influence.radius = (base + buildings) * Globals().townInfluenceMultiplier;
@@ -336,6 +375,33 @@ void InfluenceSystem::FixCitadelReaches()
 			FixCitadelReach(citadel);
 		}
 	}
+}
+
+void InfluenceSystem::LandLaidOut()
+{
+	auto& registry = Locator::entitiesRegistry::value();
+	const auto citadels = Citadels();
+	registry.Each<const Player, PlayerInfluencePower>([&](const Player& player, PlayerInfluencePower& power) {
+		const auto index = static_cast<size_t>(player.name);
+		if (index >= citadels.size() || citadels.at(index) == entt::null)
+		{
+			return;
+		}
+		// No town has had a turn yet, so each reaches as far as when it was made: with no buildings, and without the
+		// land's multiplier
+		std::vector<float> towns;
+		registry.Each<const Town>([&](const Town& town) {
+			if (town.owner == player.name)
+			{
+				towns.push_back(TownBaseInfluence());
+			}
+		});
+		const float total =
+		    influence_rules::InfluencePowerOf(CitadelReach(citadels.at(index)), towns, SourceReaches(player.name));
+		power.power = total;
+		power.average = player_relations::NextAverageInfluence(power.average, total);
+		player_statistics::CountInfluence(registry, player.name, total);
+	});
 }
 
 void InfluenceSystem::ProcessCitadels()
@@ -368,10 +434,9 @@ void InfluenceSystem::DrawBorders()
 	const auto citadels = Citadels();
 	const auto ground = LandHeight();
 	// Every player's but the neutral one's: a circle about their citadel, then one about each of their towns
-	for (size_t player = 0; player < static_cast<size_t>(PlayerNames::NEUTRAL); ++player)
+	for (const auto name : ecs::game_players::Gods())
 	{
-		const auto name = static_cast<PlayerNames>(player);
-		if (const auto citadel = citadels.at(player); citadel != entt::null)
+		if (const auto citadel = citadels.at(static_cast<size_t>(name)); citadel != entt::null)
 		{
 			auto& fixed = FixCitadelReach(citadel);
 			const float reach = CitadelReach(citadel);
@@ -444,25 +509,41 @@ float InfluenceSystem::CitadelReachOf(PlayerNames player) const
 
 float InfluenceSystem::InfluencePower(PlayerNames player) const
 {
-	auto& registry = Locator::entitiesRegistry::value();
-	float power = 0.0f;
-	if (const auto citadel = Citadels().at(static_cast<size_t>(player)); citadel != entt::null)
+	const auto entity = PlayerEntityOf(player);
+	if (!entity.has_value())
 	{
-		power = CitadelReach(citadel);
+		return 0.0f;
 	}
-	registry.Each<const Town, const TownInfluence>([&](const Town& town, const TownInfluence& influence) {
-		if (town.owner == player)
+	const auto* noted = Locator::entitiesRegistry::value().TryGet<const PlayerInfluencePower>(*entity);
+	return noted != nullptr ? noted->power : 0.0f;
+}
+
+void InfluenceSystem::NoteInfluencePower(PlayerNames player)
+{
+	auto& registry = Locator::entitiesRegistry::value();
+	const auto entity = PlayerEntityOf(player);
+	auto* noted = entity.has_value() ? registry.TryGet<PlayerInfluencePower>(*entity) : nullptr;
+	if (noted == nullptr)
+	{
+		return;
+	}
+	float citadelReach = 0.0f;
+	if (const auto citadel = CitadelOf(player); citadel != entt::null)
+	{
+		citadelReach = CitadelReach(citadel);
+	}
+	// The towns add their reaches in the order of the player's town list
+	std::vector<float> towns;
+	for (const auto town : player_towns::InOrder(registry, player))
+	{
+		if (const auto* influence = registry.TryGet<const TownInfluence>(town))
 		{
-			power += influence.radius;
+			towns.push_back(influence->radius);
 		}
-	});
-	registry.Each<const InfluenceSource>([&](const InfluenceSource& source) {
-		if (source.player == player && !source.anti)
-		{
-			power += source.radius;
-		}
-	});
-	return power;
+	}
+	noted->power = influence_rules::InfluencePowerOf(citadelReach, towns, SourceReaches(player));
+	noted->average = player_relations::NextAverageInfluence(noted->average, noted->power);
+	player_statistics::CountInfluence(registry, player, noted->power);
 }
 
 void InfluenceSystem::ProcessVirtualInfluence(uint32_t turn)
@@ -557,7 +638,7 @@ const virtual_influence::State* InfluenceSystem::VirtualStateOf(PlayerNames play
 
 void InfluenceSystem::ShowHandInfluence(std::chrono::duration<float, std::milli> gameTime)
 {
-	if (!Locator::playerSystem::has_value() || !Locator::audio::has_value())
+	if (!Locator::playerSystem::has_value() || !Locator::sounds::has_value())
 	{
 		return;
 	}
@@ -571,7 +652,7 @@ void InfluenceSystem::ShowHandInfluence(std::chrono::duration<float, std::milli>
 	auto& virtualInfluence = registry.Get<VirtualInfluence>(*entity);
 	const auto& state = virtualInfluence.state;
 	auto& shown = virtualInfluence.shown;
-	auto& audio = Locator::audio::value();
+	auto& audio = Locator::sounds::value();
 	const auto hand = HandPosition();
 	const auto inInfluence = [this, player](const glm::vec3& point) { return PlayerRawInfluence(player, point) > 0.0f; };
 	const bool plays = hand.has_value() && state.anchor.has_value() &&
@@ -607,11 +688,11 @@ void InfluenceSystem::ShowHandInfluence(std::chrono::duration<float, std::milli>
 		    virtual_influence::ManaPathStart(handCoords, map_coords::FromMetres({state.anchor->x, state.anchor->z}));
 	}
 	if (const auto scale = virtual_influence::EmitManaPath(shown, state, gameTime.count());
-	    scale.has_value() && Locator::particleSystem::has_value() && Locator::terrainSystem::has_value())
+	    scale.has_value() && Locator::effectRequestSystem::has_value() && Locator::terrainSystem::has_value())
 	{
 		const auto& land = Locator::terrainSystem::value();
-		const auto colour = Player::k_Colours.at(static_cast<size_t>(player) & (Player::k_Colours.size() - 1));
-		Locator::particleSystem::value().AddHandManaPathSpark({
+		const auto colour = player_colour::Of(player);
+		Locator::effectRequestSystem::value().AddHandManaPathSpark({
 		    .from = map_coords::ToWorld(land, handCoords),
 		    .to = map_coords::ToWorld(land, *shown.manaPathStart),
 		    .rgb = virtual_influence::ScaleColour(colour, *scale) & 0xFFFFFFu,
@@ -703,6 +784,47 @@ bool InfluenceSystem::CrossBorders(const glm::vec3& hand)
 
 float InfluenceSystem::PlayerInfluence(PlayerNames player, const map_coords::MapCoords& position) const
 {
+	return WithAllies(player, position, PlayerOwnInfluence(player, position));
+}
+
+float InfluenceSystem::WithAllies(PlayerNames player, const map_coords::MapCoords& position, float own) const
+{
+	if (own > 0.0f)
+	{
+		return own;
+	}
+	// The first ally, in the order of the numbers, that lends its influence and has some of its own there lends it.
+	// Without one the answer is none, also where the player's own is below none.
+	const auto& registry = Locator::entitiesRegistry::value();
+	const components::PlayerAllies* allies = nullptr;
+	registry.Each<const components::Player, const components::PlayerAllies>(
+	    [player, &allies](const components::Player& owner, const components::PlayerAllies& found) {
+		    if (owner.name == player && allies == nullptr)
+		    {
+			    allies = &found;
+		    }
+	    });
+	if (allies == nullptr)
+	{
+		return 0.0f;
+	}
+	for (const auto ally : game_players::All())
+	{
+		const auto index = static_cast<size_t>(ally);
+		if (index >= allies->strength.size() || !player_relations::LendsInfluence(allies->strength.at(index)))
+		{
+			continue;
+		}
+		if (const float lent = PlayerRawInfluence(ally, position); lent > 0.0f)
+		{
+			return lent;
+		}
+	}
+	return 0.0f;
+}
+
+float InfluenceSystem::PlayerOwnInfluence(PlayerNames player, const map_coords::MapCoords& position) const
+{
 	if (const auto* state = VirtualStateOf(player); state != nullptr)
 	{
 		// The questions of a game turn measure from where the hand was at the turn; between turns this computer's
@@ -734,10 +856,10 @@ float InfluenceSystem::HandPointInfluence(PlayerNames player, const map_coords::
 	{
 		if (const auto granted = virtual_influence::Grant(*state, hand, hand); granted.has_value())
 		{
-			return *granted;
+			return WithAllies(player, hand, *granted);
 		}
 	}
-	return PlayerRawInfluence(player, hand);
+	return WithAllies(player, hand, PlayerRawInfluence(player, hand));
 }
 
 float InfluenceSystem::PlayerRawInfluence(PlayerNames player, const map_coords::MapCoords& position) const
@@ -747,10 +869,13 @@ float InfluenceSystem::PlayerRawInfluence(PlayerNames player, const map_coords::
 	const auto distanceTo = [&position](const glm::vec3& point) {
 		return gutils::GetDistanceInMetres(map_coords::FromMetres({point.x, point.z}), position);
 	};
-	// In a network game a player with no temple has no influence at all
-	const bool hasTemple = Citadels().at(static_cast<size_t>(player)) != entt::null;
-	if (!openblack::influence_rules::CanHaveInfluence(Locator::time::has_value() && Locator::time::value().IsNetworkGame(),
-	                                                  hasTemple))
+	// In a network game a player with no temple has no influence at all. A developer tool's network game on the testbed,
+	// which has no temples, is the exception: its hands could do nothing else.
+	const auto citadel = CitadelOf(player);
+	const bool hasTemple = citadel != entt::null;
+	const bool testbed = Locator::landSystem::has_value() && Locator::landSystem::value().OnTestbed();
+	if (!openblack::influence_rules::CanHaveInfluence(
+	        Locator::time::has_value() && Locator::time::value().IsNetworkGame() && !testbed, hasTemple))
 	{
 		return 0.0f;
 	}
@@ -776,7 +901,7 @@ float InfluenceSystem::PlayerRawInfluence(PlayerNames player, const map_coords::
 	}
 	float sum = 0.0f;
 	// The citadel's reach, where it reaches
-	if (const auto citadel = Citadels().at(static_cast<size_t>(player)); citadel != entt::null)
+	if (hasTemple)
 	{
 		const float reach = CitadelReach(citadel);
 		if (const auto* transform = registry.TryGet<const Transform>(citadel);
@@ -785,14 +910,16 @@ float InfluenceSystem::PlayerRawInfluence(PlayerNames player, const map_coords::
 			sum = reach;
 		}
 	}
-	// And each of the player's towns', where it reaches
-	registry.Each<const Town, const TownInfluence, const Transform>(
-	    [&](const Town& town, const TownInfluence& influence, const Transform& transform) {
-		    if (town.owner == player && distanceTo(transform.position) < influence.radius)
-		    {
-			    sum += influence.radius;
-		    }
-	    });
+	// And each of the player's towns', where it reaches, in the order of the player's town list
+	for (const auto town : player_towns::InOrder(registry, player))
+	{
+		const auto* influence = registry.TryGet<const TownInfluence>(town);
+		const auto* transform = registry.TryGet<const Transform>(town);
+		if (influence != nullptr && transform != nullptr && distanceTo(transform->position) < influence->radius)
+		{
+			sum += influence->radius;
+		}
+	}
 	// And any other source of the player's, where it reaches
 	registry.Each<const InfluenceSource, const Transform>([&](const InfluenceSource& source, const Transform& transform) {
 		if (scriptsCount && source.player == player && !source.anti &&

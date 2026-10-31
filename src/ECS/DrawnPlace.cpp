@@ -13,13 +13,23 @@
 #include "ECS/Components/CarriedByTornado.h"
 #include "ECS/Components/CreatureBody.h"
 #include "ECS/Components/CreatureObjectAction.h"
+#include "ECS/Components/DrawnHeight.h"
 #include "ECS/Components/Firefly.h"
 #include "ECS/Components/HandGrab.h"
+#include "ECS/Components/Reward.h"
 #include "ECS/Components/Shark.h"
+#include "ECS/Components/TownDesireFlag.h"
 #include "ECS/Registry.h"
+#include "Nature/Fireflies.h"
 
 namespace openblack::ecs
 {
+
+bool drawn_place::StandsAsPulled(const components::HandPulled& pulled, const components::Transform& transform)
+{
+	return pulled.standsAt == transform.position && pulled.standsRotation == transform.rotation &&
+	       pulled.standsScale == transform.scale;
+}
 
 components::Transform drawn_place::DrawnTransformOf(const Registry& registry, entt::entity entity,
                                                     const components::Transform& transform)
@@ -38,7 +48,8 @@ components::Transform drawn_place::DrawnTransformOf(const Registry& registry, en
 	{
 		return {.position = carried->drawn->position, .rotation = carried->drawn->rotation, .scale = transform.scale};
 	}
-	if (const auto* pulled = registry.TryGet<const components::HandPulled>(entity); pulled != nullptr)
+	if (const auto* pulled = registry.TryGet<const components::HandPulled>(entity);
+	    pulled != nullptr && drawn_place::StandsAsPulled(*pulled, transform))
 	{
 		return {.position = pulled->position, .rotation = pulled->rotation, .scale = pulled->scale};
 	}
@@ -54,10 +65,29 @@ components::Transform drawn_place::DrawnTransformOf(const Registry& registry, en
 	{
 		return {.position = shark->drawn->position, .rotation = shark->drawn->rotation, .scale = transform.scale};
 	}
-	// A firefly out of hiding drifts about its place, where the frames last drew it
+	// A reward chest that falls from the sky is drawn between the places of its last two turns
+	if (const auto* chest = registry.TryGet<const components::Reward>(entity); chest != nullptr && chest->drawn.has_value())
+	{
+		return {.position = chest->drawn->position, .rotation = chest->drawn->rotation, .scale = transform.scale};
+	}
+	// A town's flag that shows turns to the camera, at the height and size of its level, where the frames last drew it
+	if (const auto* flag = registry.TryGet<const components::TownDesireFlag>(entity); flag != nullptr && flag->shown)
+	{
+		return {.position = flag->drawnPosition, .rotation = flag->drawnRotation, .scale = glm::vec3(flag->drawnScale)};
+	}
+	// A firefly out of hiding drifts about its place, where the frames last drew it, at the size of its sprite
 	if (const auto* firefly = registry.TryGet<const components::Firefly>(entity); firefly != nullptr)
 	{
-		return {.position = firefly->drawn, .rotation = transform.rotation, .scale = transform.scale};
+		return {.position = firefly->drawn,
+		        .rotation = transform.rotation,
+		        .scale = glm::vec3(fireflies::k_SpriteHalfSize, fireflies::k_SpriteHalfSize, 1.0f)};
+	}
+	// A town's totem and its icon rise and sink by the computer's clock, at the height where the frames last put them
+	if (const auto* height = registry.TryGet<const components::DrawnHeight>(entity); height != nullptr)
+	{
+		return {.position = {transform.position.x, height->y, transform.position.z},
+		        .rotation = transform.rotation,
+		        .scale = transform.scale};
 	}
 	return transform;
 }

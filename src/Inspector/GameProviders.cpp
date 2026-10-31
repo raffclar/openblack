@@ -28,10 +28,12 @@
 #include <L3DFile.h>
 #include <LHVM.h>
 #include <LNDFile.h>
+#include <SaveSlots.h>
 #include <fmt/format.h>
 #include <glm/matrix.hpp>
 #include <glm/trigonometric.hpp>
 
+#include "3D/CreatureBody.h"
 #include "3D/DayNightClock.h"
 #include "3D/L3DMesh.h"
 #include "3D/L3DSubMesh.h"
@@ -39,19 +41,25 @@
 #include "3D/LandIslandInterface.h"
 #include "3D/OceanInterface.h"
 #include "3D/TempleInteriorInterface.h"
-#include "Audio/AudioManagerInterface.h"
-#include "Audio/CustomMusicPlayerInterface.h"
-#include "Audio/GameMusic.h"
-#include "Audio/MusicMood.h"
 #include "CHLApi.h"
 #include "Camera/Camera.h"
 #include "Camera/CameraZones.h"
 #include "Common/EventManager.h"
+#include "Common/GUtilsDistance.h"
 #include "Common/GameHeading.h"
 #include "Common/GameRandom.h"
+#include "Common/MainThreadQueue.h"
 #include "Common/RandomNumberManager.h"
 #include "Creature/BonusCreatures.h"
+#include "Creature/CreatureCastMoves.h"
 #include "Creature/CreatureDesires.h"
+#include "Creature/CreatureFriendAgendas.h"
+#include "Creature/CreatureMorph.h"
+#include "Creature/CreaturePlanActions.h"
+#include "Creature/CreatureRig.h"
+#include "Creature/CreatureRoute.h"
+#include "Creature/CreatureScriptAgendas.h"
+#include "Creature/LeashOrders.h"
 #include "Creature/LeashRules.h"
 #include "Debug/DebugGuiInterface.h"
 #include "Debug/TempleVillagersSurvey.h"
@@ -87,6 +95,7 @@
 #include "ECS/Components/LivingAction.h"
 #include "ECS/Components/Mist.h"
 #include "ECS/Components/Player.h"
+#include "ECS/Components/PlayerRelations.h"
 #include "ECS/Components/Reward.h"
 #include "ECS/Components/ScriptControl.h"
 #include "ECS/Components/ScriptHighlight.h"
@@ -105,13 +114,17 @@
 #include "ECS/Components/Vortex.h"
 #include "ECS/Components/WalkPath.h"
 #include "ECS/Components/WallHug.h"
+#include "ECS/Components/Workshop.h"
 #include "ECS/CreatureReactionNotice.h"
+#include "ECS/DrawnRegistry.h"
 #include "ECS/Map.h"
 #include "ECS/PhysicsEntry.h"
+#include "ECS/PlayerRelations.h"
 #include "ECS/Registry.h"
 #include "ECS/Systems/AbodeKnockSystemInterface.h"
 #include "ECS/Systems/AbodeSoundSystemInterface.h"
 #include "ECS/Systems/AdvisorSystemInterface.h"
+#include "ECS/Systems/AdvisorVoiceSystemInterface.h"
 #include "ECS/Systems/AlignmentSystemInterface.h"
 #include "ECS/Systems/AnimalSystemInterface.h"
 #include "ECS/Systems/AnimatedStaticSystemInterface.h"
@@ -123,10 +136,12 @@
 #include "ECS/Systems/CameraHelpSystemInterface.h"
 #include "ECS/Systems/CameraPathSystemInterface.h"
 #include "ECS/Systems/CameraZoneSystemInterface.h"
+#include "ECS/Systems/ChatSystemInterface.h"
 #include "ECS/Systems/ChimneySmokeSystemInterface.h"
 #include "ECS/Systems/CinematicDirectorSystemInterface.h"
 #include "ECS/Systems/CloudSystemInterface.h"
 #include "ECS/Systems/ComputerSettingsSystemInterface.h"
+#include "ECS/Systems/CreatureAnimationLogSystemInterface.h"
 #include "ECS/Systems/CreatureAnimationSystemInterface.h"
 #include "ECS/Systems/CreatureAudioSystemInterface.h"
 #include "ECS/Systems/CreatureCarryOverSystemInterface.h"
@@ -148,6 +163,7 @@
 #include "ECS/Systems/DialogueControlSystemInterface.h"
 #include "ECS/Systems/DynamicsSystemInterface.h"
 #include "ECS/Systems/EditorSystemInterface.h"
+#include "ECS/Systems/EffectRequestSystemInterface.h"
 #include "ECS/Systems/ExplosionSystemInterface.h"
 #include "ECS/Systems/FieldSystemInterface.h"
 #include "ECS/Systems/FilmCreatureSystemInterface.h"
@@ -171,6 +187,7 @@
 #include "ECS/Systems/HelpSpeechSystemInterface.h"
 #include "ECS/Systems/HelpTextSystemInterface.h"
 #include "ECS/Systems/HighDetailSystemInterface.h"
+#include "ECS/Systems/IncomingMessageSystemInterface.h"
 #include "ECS/Systems/InfluenceSystemInterface.h"
 #include "ECS/Systems/InspectorSystemInterface.h"
 #include "ECS/Systems/IntroSystemInterface.h"
@@ -185,6 +202,7 @@
 #include "ECS/Systems/MusicMoodSystemInterface.h"
 #include "ECS/Systems/NetworkGameSystemInterface.h"
 #include "ECS/Systems/ObjectDrawListSystemInterface.h"
+#include "ECS/Systems/ParticleRuleSystemInterface.h"
 #include "ECS/Systems/ParticleSystemInterface.h"
 #include "ECS/Systems/PathfindingSystemInterface.h"
 #include "ECS/Systems/PauseTextSystemInterface.h"
@@ -202,8 +220,10 @@
 #include "ECS/Systems/SaveGameSystemInterface.h"
 #include "ECS/Systems/ScriptControlSystemInterface.h"
 #include "ECS/Systems/ScriptHighlightSystemInterface.h"
+#include "ECS/Systems/ScriptMusicSystemInterface.h"
 #include "ECS/Systems/ScriptObjectsSystemInterface.h"
 #include "ECS/Systems/SharkSystemInterface.h"
+#include "ECS/Systems/SkyClockSystemInterface.h"
 #include "ECS/Systems/SkySystemInterface.h"
 #include "ECS/Systems/SnowSystemInterface.h"
 #include "ECS/Systems/SnowfallSystemInterface.h"
@@ -213,11 +233,13 @@
 #include "ECS/Systems/TeleportSystemInterface.h"
 #include "ECS/Systems/TempleDestructionSystemInterface.h"
 #include "ECS/Systems/TempleExteriorSystemInterface.h"
+#include "ECS/Systems/ThingsMadeSystemInterface.h"
 #include "ECS/Systems/TimeSystemInterface.h"
 #include "ECS/Systems/TipBubbleSystemInterface.h"
 #include "ECS/Systems/TornadoSystemInterface.h"
 #include "ECS/Systems/TownDesireSystemInterface.h"
 #include "ECS/Systems/TownSystemInterface.h"
+#include "ECS/Systems/TurnCheerSystemInterface.h"
 #include "ECS/Systems/TutorialSkipSystemInterface.h"
 #include "ECS/Systems/VegetationInterface.h"
 #include "ECS/Systems/VideoSystemInterface.h"
@@ -227,14 +249,15 @@
 #include "ECS/Systems/WalkPathSystemInterface.h"
 #include "ECS/Systems/WaterRingSystemInterface.h"
 #include "ECS/Systems/WeatherSystemInterface.h"
+#include "ECS/Systems/WorkshopSystemInterface.h"
 #include "EditProviders.h"
 #include "Editor/EditorSelection.h"
 #include "EngineConfig.h"
 #include "FightProviders.h"
 #include "FileSystem/FileSystemInterface.h"
-#include "Game.h"
 #include "GameControls.h"
-#include "Graphics/RendererInterface.h"
+#include "GameSeamInterface.h"
+#include "Gui/ScreenFade.h"
 #include "Gui/ScriptTexts.h"
 #include "Gui/TextDatabase.h"
 #include "Hand/HandTrace.h"
@@ -247,6 +270,7 @@
 #include "Input/GameActionMapInterface.h"
 #include "Locator.h"
 #include "Magic/MagicTables.h"
+#include "Nature/Fireflies.h"
 #include "Online/HttpClientInterface.h"
 #include "Online/NetworkSession.h"
 #include "Online/WebSocketInterface.h"
@@ -255,8 +279,13 @@
 #include "RegistryProviders.h"
 #include "Resources/ResourcesInterface.h"
 #include "RunControl.h"
+#include "Sound/CustomMusicPlayerInterface.h"
+#include "Sound/GameMusic.h"
+#include "Sound/MusicMood.h"
+#include "Sound/SoundRequestInterface.h"
 #include "SystemProviders.h"
 #include "Temple/TemplePeople.h"
+#include "Visual/RendererRequestsInterface.h"
 #include "Windowing/WindowingInterface.h"
 #include "WorldProviders.h"
 
@@ -282,6 +311,7 @@ constexpr std::array k_Coverage {
     LocatorCoverage {"computerSettingsSystem", "engine.computer_settings"},
     LocatorCoverage {"infoConstants", "engine.services"},
     LocatorCoverage {"profiler", "engine.frame"},
+    LocatorCoverage {"mainThreadQueue", "engine.services"},
     LocatorCoverage {"events", "engine.services"},
     LocatorCoverage {"windowing", "engine.frame"},
     LocatorCoverage {"debugGui", "engine.services"},
@@ -291,12 +321,21 @@ constexpr std::array k_Coverage {
     LocatorCoverage {"gameRandom", "engine.services"},
     LocatorCoverage {"terrainSystem", "land.terrain"},
     LocatorCoverage {"oceanSystem", "land.ocean"},
-    LocatorCoverage {"skySystem", "sky.state"},
+    LocatorCoverage {"skyClockSystem", "sky.state"},
+    LocatorCoverage {"skySystem", "sky.moon"},
     LocatorCoverage {"audio", "audio.state"},
+    // The sound requests keep no state of their own. They go to the audio at once, and audio.state shows the audio.
+    LocatorCoverage {"sounds", "audio.state"},
+    LocatorCoverage {"gameMusic", "audio.state"},
     LocatorCoverage {"camera", "camera.state"},
     LocatorCoverage {"gameActionSystem", "players.input"},
+    // The input device keeps no state of the game. The keys and the buttons it gives show in the player input.
+    LocatorCoverage {"inputDevice", "players.input"},
     LocatorCoverage {"rendereringSystem", "engine.frame"},
     LocatorCoverage {"rendererInterface", "engine.frame"},
+    LocatorCoverage {"rendererRequests", "engine.frame"},
+    // The device makes what the renderer draws, which engine.frame shows
+    LocatorCoverage {"graphicsDevice", "engine.frame"},
     LocatorCoverage {"dynamicsSystem", "physics.state"},
     LocatorCoverage {"pickingSystem", "players.pick"},
     LocatorCoverage {"cameraBookmarkSystem", "view.bookmarks"},
@@ -308,10 +347,12 @@ constexpr std::array k_Coverage {
     LocatorCoverage {"weatherSystem", "land.weather"},
     LocatorCoverage {"pathfindingSystem", "living.pathfinding"},
     LocatorCoverage {"entitiesRegistry", "ecs.components"},
+    LocatorCoverage {"drawnRegistry", "drawn.components"},
     LocatorCoverage {"entitiesMap", "map.cell"},
     LocatorCoverage {"playerSystem", "players.list"},
     LocatorCoverage {"alignmentSystem", "players.list"},
     LocatorCoverage {"cameraHelpSystem", "view.state"},
+    LocatorCoverage {"turnCheerSystem", "view.state"},
     LocatorCoverage {"templeExteriorSystem", "temple.state"},
     LocatorCoverage {"templeDestructionSystem", "temple.state"},
     LocatorCoverage {"computerPlayerSystem", "players.list"},
@@ -346,6 +387,7 @@ constexpr std::array k_Coverage {
     LocatorCoverage {"leashSystem", "creatures.status"},
     LocatorCoverage {"creatureFightSystem", "creatures.status"},
     LocatorCoverage {"fightTranscript", "fights.transcripts"},
+    LocatorCoverage {"creatureAnimationLog", "creature.animation"},
     LocatorCoverage {"creatureModeSystem", "creatures.systems"},
     LocatorCoverage {"creatureCaveSystem", "creatures.systems"},
     LocatorCoverage {"cinematicDirectorSystem", "view.cinematic"},
@@ -354,6 +396,8 @@ constexpr std::array k_Coverage {
     LocatorCoverage {"helpSpeechSystem", "view.script_control"},
     LocatorCoverage {"highDetailSystem", "view.script_control"},
     LocatorCoverage {"walkPathSystem", "living.walk_paths"},
+    LocatorCoverage {"puzzleGameSystem", "puzzle.list"},
+    LocatorCoverage {"wonderSystem", "town.wonders"},
     LocatorCoverage {"danceSystem", "living.dances"},
     LocatorCoverage {"sharkSystem", "living.sharks"},
     LocatorCoverage {"introSystem", "living.intro"},
@@ -361,10 +405,13 @@ constexpr std::array k_Coverage {
     LocatorCoverage {"soundTagSystem", "living.sound_tags"},
     LocatorCoverage {"rainSystem", "land.precipitation"},
     LocatorCoverage {"chimneySmokeSystem", "living.chimneys"},
+    LocatorCoverage {"thingsMadeSystem", "living.things_made"},
     LocatorCoverage {"abodeKnockSystem", "view.state"},
     LocatorCoverage {"influenceSystem", "influence.hand"},
     LocatorCoverage {"townDesireSystem", "living.town_desires"},
-    LocatorCoverage {"particleSystem", "particles.effects"},
+    LocatorCoverage {"particleRuleSystem", "particles.effects"},
+    LocatorCoverage {"particleSystem", "particles.drawn"},
+    LocatorCoverage {"effectRequestSystem", "particles.requests"},
     LocatorCoverage {"magicSystem", "magic.state"},
     LocatorCoverage {"gestureEvents", "players.gestures"},
     LocatorCoverage {"reactionSystem", "magic.reactions"},
@@ -380,6 +427,7 @@ constexpr std::array k_Coverage {
     LocatorCoverage {"httpClient", "engine.online"},
     LocatorCoverage {"webSocketClient", "engine.online"},
     LocatorCoverage {"lobbyClient", "engine.online"},
+    LocatorCoverage {"onlineMapStore", "engine.online"},
     LocatorCoverage {"networkGame", "engine.online"},
     LocatorCoverage {"realWeatherSystem", "land.real_weather"},
     LocatorCoverage {"tattooEditorSystem", "creatures.systems"},
@@ -391,12 +439,15 @@ constexpr std::array k_Coverage {
     LocatorCoverage {"forestSystem", "living.forests"},
     LocatorCoverage {"fireflySystem", "living.fireflies"},
     LocatorCoverage {"fishFarmSystem", "living.fish_farms"},
+    LocatorCoverage {"workshopSystem", "living.workshops"},
     LocatorCoverage {"animatedStaticSystem", "living.animated_statics"},
     LocatorCoverage {"objectDrawListSystem", "view.draw_list"},
     LocatorCoverage {"appleBarrelSystem", "living.apple_barrel"},
     LocatorCoverage {"gestureSystem", "players.gestures"},
     LocatorCoverage {"miracleFxSystem", "magic.state"},
     LocatorCoverage {"pauseTextSystem", "view.pause_text"},
+    LocatorCoverage {"incomingMessageSystem", "view.incoming_messages"},
+    LocatorCoverage {"chatSystem", "view.chat"},
     LocatorCoverage {"fireSystem", "magic.fires"},
     LocatorCoverage {"explosionSystem", "magic.state"},
     LocatorCoverage {"floatingNumberSystem", "magic.state"},
@@ -416,11 +467,14 @@ constexpr std::array k_Coverage {
     LocatorCoverage {"syncChecksumSystem", "players.checksum"},
     LocatorCoverage {"landSystem", "level.current"},
     LocatorCoverage {"videoSystem", "view.video"},
+    LocatorCoverage {"screenFade", "view.video"},
     LocatorCoverage {"playerProfileSystem", "players.new_game"},
     LocatorCoverage {"profileFolderSystem", "players.profile_folder"},
     LocatorCoverage {"musicMoodSystem", "players.custom_music"},
+    LocatorCoverage {"scriptMusicSystem", "audio.state"},
     LocatorCoverage {"tutorialSkipSystem", "players.new_game"},
     LocatorCoverage {"advisorSystem", "help.advisors"},
+    LocatorCoverage {"advisorVoiceSystem", "help.advisors"},
     LocatorCoverage {"helpTextSystem", "help.dialogue"},
     LocatorCoverage {"helpProfileSystem", "help.profile"},
     LocatorCoverage {"creatureHelpSystem", "help.creature"},
@@ -474,6 +528,12 @@ Json Optional(const std::optional<Value>& value)
 const ecs::Registry* Registry()
 {
 	return Locator::entitiesRegistry::has_value() ? &Locator::entitiesRegistry::value() : nullptr;
+}
+
+/// The things that only the frames make, out of the synced world
+const ecs::Registry* DrawnRegistry()
+{
+	return Locator::drawnRegistry::has_value() ? &Locator::drawnRegistry::value() : nullptr;
 }
 
 const InfoConstants* Info()
@@ -547,6 +607,54 @@ PlayerNames PlayerParam(const Json& params)
 {
 	const auto number = static_cast<int>(NumberMember(params, "player").value_or(0.0));
 	return static_cast<PlayerNames>(std::clamp(number, 0, static_cast<int>(PlayerNames::NEUTRAL)));
+}
+
+/// The player that a request names, by number (0 to 7) or by name (PLAYER_TWO): none when it names no player
+std::optional<PlayerNames> NamedPlayerParam(const Json& params)
+{
+	const auto it = params.find("player");
+	if (it == params.end())
+	{
+		return std::nullopt;
+	}
+	if (it->is_string())
+	{
+		const auto& text = it->get_ref<const std::string&>();
+		const auto found = std::ranges::find(k_PlayerNamesStrs, std::string_view(text));
+		if (found == k_PlayerNamesStrs.end())
+		{
+			return std::nullopt;
+		}
+		return static_cast<PlayerNames>(found - k_PlayerNamesStrs.begin());
+	}
+	const auto number = NumberMember(params, "player");
+	if (!number.has_value() || *number < 0.0 || *number >= static_cast<double>(PlayerNames::_COUNT))
+	{
+		return std::nullopt;
+	}
+	return static_cast<PlayerNames>(static_cast<int>(*number));
+}
+
+/// The entity of the player, if the land has it
+std::optional<entt::entity> PlayerEntityOf(const ecs::Registry& registry, PlayerNames name)
+{
+	std::optional<entt::entity> found;
+	registry.Each<const Player>([&](entt::entity entity, const Player& player) {
+		if (player.name == name)
+		{
+			found = entity;
+		}
+	});
+	return found;
+}
+
+/// The names that the nodes of every computer mind have in this game: a personality load can change them
+const computer_mind::NodeNames& SharedNodeNames(const ecs::Registry& registry)
+{
+	const computer_mind::NodeNames* names = &computer_mind::FirstNodeNames();
+	registry.Each<const ecs::components::ComputerNodeNames>(
+	    [&names](entt::entity /*entity*/, const ecs::components::ComputerNodeNames& shared) { names = &shared.names; });
+	return *names;
 }
 
 /// A query of one locator service, answered only while the service is there
@@ -664,6 +772,8 @@ std::unique_ptr<ProviderInterface> EngineProvider()
 			        {"round_trip_ms", roundTrip.has_value() ? Json(static_cast<double>(*roundTrip) / 1000.0) : Json(nullptr)},
 			    };
 		    }
+		    // The store of the lands of network games that the lobby gives (deviation 169)
+		    result["online_map_store"] = Locator::onlineMapStore::has_value();
 		    if (!Locator::lobbyClient::has_value())
 		    {
 			    result["lobby"] = nullptr;
@@ -741,10 +851,10 @@ std::unique_ptr<ProviderInterface> EngineProvider()
 			              const auto size = Locator::windowing::value().GetSize();
 			              result["window"] = {size.x, size.y};
 		              }
-		              if (Locator::rendererInterface::has_value())
+		              if (Locator::rendererRequests::has_value())
 		              {
-			              result["renderer_debug"] = Locator::rendererInterface::value().GetDebug();
-			              result["renderer_profile"] = Locator::rendererInterface::value().GetProfile();
+			              result["renderer_debug"] = Locator::rendererRequests::value().GetDebug();
+			              result["renderer_profile"] = Locator::rendererRequests::value().GetProfile();
 		              }
 		              if (Locator::rendereringSystem::has_value())
 		              {
@@ -777,6 +887,11 @@ std::unique_ptr<ProviderInterface> EngineProvider()
 		                  {"events", Locator::events::has_value()},
 		                  {"rng", Locator::rng::has_value()},
 		              };
+		              if (Locator::mainThreadQueue::has_value())
+		              {
+			              // The work that the turn gave to the main thread and that still waits
+			              result["main_thread_work_waits"] = Locator::mainThreadQueue::value().GetPendingCount();
+		              }
 		              if (Locator::gameRandom::has_value())
 		              {
 			              const auto seeds = Locator::gameRandom::value().GetSeeds();
@@ -869,7 +984,7 @@ std::unique_ptr<ProviderInterface> LandProvider()
 		                  return Json {{"count", clouds.GetStormClouds().size()}, {"clouds", std::move(list)}};
 	                  }));
 	provider->Add(Query("real_weather", "The real-world weather: the weather that the lobby gave, whether it changes the land, "
-	                                    "its storm and the background weather"),
+	                                    "its storm, the place of its message and the background weather"),
 	              Serve<Locator::realWeatherSystem>(
 	                  "the real weather", [](const ecs::systems::RealWeatherSystemInterface& real, const QueryContext& /*c*/) {
 		                  Json result {{"applied", real.IsApplied()}, {"storm", real.GetStorm() != entt::null}};
@@ -881,6 +996,7 @@ std::unique_ptr<ProviderInterface> LandProvider()
 			                                            {"city", weather->city},
 			                                            {"area", weather->area},
 			                                            {"country", weather->country}};
+			                  result["place"] = real.GetPlace().value_or("");
 		                  }
 		                  else
 		                  {
@@ -946,9 +1062,11 @@ std::unique_ptr<ProviderInterface> LandProvider()
 	              }));
 	provider->Add(Query("atmosphere", "The mists and clouds over the land"),
 	              ServeRegistry([](const ecs::Registry& registry, const QueryContext& /*c*/) {
+		              // The sky's clouds are things of the drawn registry
+		              const auto* drawn = DrawnRegistry();
 		              return Json {{"mists", CountOf<Mist>(registry)},
 		                           {"mist_system", Locator::mistSystem::has_value()},
-		                           {"clouds", CountOf<Cloud>(registry)},
+		                           {"clouds", drawn != nullptr ? CountOf<Cloud>(*drawn) : size_t {0}},
 		                           {"cloud_system", Locator::cloudSystem::has_value()}};
 	              }));
 	return provider;
@@ -965,19 +1083,19 @@ std::unique_ptr<ProviderInterface> SkyStateProvider(std::unique_ptr<ProviderInte
 		provider->Add(description,
 		              [shared, name = description.name](const QueryContext& context) { return shared->Run(name, context); });
 	}
-	provider->Add(
-	    Query("state", "The sky: its type, its time, the script clock's hour and the day and night's times"),
-	    Serve<Locator::skySystem>("the sky", [](const ecs::systems::SkySystemInterface& sky, const QueryContext& /*c*/) {
-		    const auto times = sky.GetDayNightTimes();
-		    return Json {{"sky_type", sky.GetCurrentSkyType()},
-		                 {"time", sky.GetTime()},
-		                 {"script_hour", sky.GetClock().GetScriptTime()},
-		                 {"visual_hour", sky.GetClock().GetVisualTime()},
-		                 {"night_full", times.nightFull},
-		                 {"dusk_start", times.duskStart},
-		                 {"dusk_end", times.duskEnd},
-		                 {"day_full", times.dayFull}};
-	    }));
+	provider->Add(Query("state", "The sky: its type, its time, the script clock's hour and the day and night's times"),
+	              Serve<Locator::skyClockSystem>(
+	                  "the sky", [](const ecs::systems::SkyClockSystemInterface& sky, const QueryContext& /*c*/) {
+		                  const auto times = sky.GetDayNightTimes();
+		                  return Json {{"sky_type", sky.GetCurrentSkyType()},
+		                               {"time", sky.GetTime()},
+		                               {"script_hour", sky.GetClock().GetScriptTime()},
+		                               {"visual_hour", sky.GetClock().GetVisualTime()},
+		                               {"night_full", times.nightFull},
+		                               {"dusk_start", times.duskStart},
+		                               {"dusk_end", times.duskEnd},
+		                               {"day_full", times.dayFull}};
+	                  }));
 	return provider;
 }
 
@@ -1004,25 +1122,28 @@ std::unique_ptr<ProviderInterface> LivingProvider()
 	    }));
 	provider->Add(
 	    Query("apple_barrel",
-	          "The apple barrel beside the local player's storage pit nearest their temple: the pit, the barrel and its "
-	          "worm, where they stand and the worm's place in its clip; none while no pit carries it",
+	          "The apple barrel beside the storage pit of the player at this computer nearest their temple: the pit (an "
+	          "entity of the land), the barrel and its worm (entities of the drawn registry), where they stand and the "
+	          "worm's place in its clip; none while no pit carries it",
 	          {}),
-	    ServeRegistry([](const ecs::Registry& registry, const QueryContext& /*c*/) {
+	    ServeRegistry([](const ecs::Registry& /*registry*/, const QueryContext& /*c*/) {
+		    const auto* drawn = DrawnRegistry();
 		    const auto barrel =
 		        Locator::appleBarrelSystem::has_value() ? Locator::appleBarrelSystem::value().GetBarrel() : entt::null;
-		    if (barrel == entt::null || !registry.Valid(barrel) || !registry.AllOf<AppleBarrel, Transform>(barrel))
+		    if (drawn == nullptr || barrel == entt::null || !drawn->Valid(barrel) ||
+		        !drawn->AllOf<AppleBarrel, Transform>(barrel))
 		    {
 			    return Json(nullptr);
 		    }
-		    const auto& found = registry.Get<const AppleBarrel>(barrel);
+		    const auto& found = drawn->Get<const AppleBarrel>(barrel);
 		    Json result = {{"barrel", Id(barrel)},
 		                   {"store", Id(found.store)},
 		                   {"worm", Id(found.worm)},
-		                   {"position", Point(registry.Get<const Transform>(barrel).position)}};
-		    if (registry.Valid(found.worm) && registry.AllOf<AppleBarrelWorm, Transform>(found.worm))
+		                   {"position", Point(drawn->Get<const Transform>(barrel).position)}};
+		    if (drawn->Valid(found.worm) && drawn->AllOf<AppleBarrelWorm, Transform>(found.worm))
 		    {
-			    result["worm_position"] = Point(registry.Get<const Transform>(found.worm).position);
-			    result["worm_place"] = registry.Get<const AppleBarrelWorm>(found.worm).place;
+			    result["worm_position"] = Point(drawn->Get<const Transform>(found.worm).position);
+			    result["worm_place"] = drawn->Get<const AppleBarrelWorm>(found.worm).place;
 		    }
 		    return result;
 	    }));
@@ -1159,12 +1280,12 @@ std::unique_ptr<ProviderInterface> LivingProvider()
 		              return QueryResult::Value(std::move(result));
 	              }));
 	provider->Add(
-	    Query(
-	        "animal",
-	        "An animal: its kind, state (and the game's number of the state it is in for itself), count of turns, clip, flock "
-	        "and town, its kind's radius, where it moves to, whether "
-	        "a creature fears it, and a grazer's needs",
-	        {IdParameter("The animal's entity id")}),
+	    Query("animal",
+	          "An animal: its kind, state (and the game's number of the state it is in for itself), count of turns, "
+	          "whether a kill made it start to die, clip, flock and town, its kind's radius, where it moves to, whether "
+	          "a creature fears it, the hunger of a kind that is not a grazer, a grazer's needs, and a spell wolf's prey "
+	          "and target",
+	          {IdParameter("The animal's entity id")}),
 	    Serve<Locator::animalSystem>(
 	        "the animals", [](const ecs::systems::AnimalSystemInterface& animals, const QueryContext& context) {
 		        const auto entity = EntityParam(context.params);
@@ -1180,6 +1301,8 @@ std::unique_ptr<ProviderInterface> LivingProvider()
 		                       {"final_game_state", animals.FinalGameStateOf(*entity).value_or(0)},
 		                       {"turns_in_state", animal.turnsInState},
 		                       {"turns_until_state_change", animal.turnsUntilStateChange},
+		                       {"dying", animal.dying},
+		                       {"hunger", animal.hunger},
 		                       {"birth_turn", animal.birthTurn},
 		                       {"clip", static_cast<int>(animal.animation)},
 		                       {"speed", animal.move.speed},
@@ -1195,6 +1318,23 @@ std::unique_ptr<ProviderInterface> LivingProvider()
 		        {
 			        result["grazer"] = {
 			            {"hunger", grazer->needs.hunger}, {"sleep", grazer->needs.sleep}, {"breed", grazer->needs.breed}};
+		        }
+		        // A spell wolf's prey that it hunts, and its target: the prey that it brought down and eats
+		        if (const auto* run = registry->TryGet<const SpellWolf>(*entity))
+		        {
+			        result["spell_wolf"] = {{"prey", Id(run->hunt.prey)}, {"food", Id(run->hunt.food)}};
+		        }
+		        // A wild hunter's needs, the prey that it hunts, its target and the cell where its flock sleeps
+		        if (const auto* hunter = registry->TryGet<const Hunter>(*entity))
+		        {
+			        result["hunter"] = {{"hunger", hunter->needs.hunger},
+			                            {"sleep", hunter->needs.sleep},
+			                            {"breed", hunter->needs.breed},
+			                            {"prey", Id(hunter->hunt.prey)},
+			                            {"food", Id(hunter->hunt.food)},
+			                            {"sleeping_cell", hunter->sleepingCell.has_value()
+			                                                  ? Json::array({hunter->sleepingCell->x, hunter->sleepingCell->y})
+			                                                  : Json()}};
 		        }
 		        return QueryResult::Value(std::move(result));
 	        }));
@@ -1370,9 +1510,9 @@ std::unique_ptr<ProviderInterface> LivingProvider()
 			        wakes.push_back(phase);
 		        }
 		        Json parts = Json::array();
-		        if (const auto* registry = Registry(); registry != nullptr)
+		        if (const auto* registry = DrawnRegistry(); registry != nullptr)
 		        {
-			        // Only the things of the film that the frames show now
+			        // Only the things of the film that the frames show now, in the drawn registry
 			        registry->Each<const BoatFilmPart, const Transform>(
 			            [&parts, registry](entt::entity entity, const BoatFilmPart& part, const Transform& transform) {
 				            if (registry->AllOf<HiddenByState>(entity))
@@ -1498,7 +1638,8 @@ std::unique_ptr<ProviderInterface> LivingProvider()
 	    Query("fireflies",
 	          "How many fireflies there are and how many hide, fly out, hover and fly home; whether the next nightfall "
 	          "tops them up; the trees and the things standing over several cells they can hide in; and what the last "
-	          "frame did with those out: in view, near enough to be seen, drawn, and whether their picture was found"),
+	          "frame did with those out: in view, near enough to be seen, drawn, and whether their picture was found; and the "
+	          "land's reward weights by magic type number, with their total"),
 	    Serve<Locator::fireflySystem>(
 	        "the fireflies", [](const ecs::systems::FireflySystemInterface& fireflies, const QueryContext& /*c*/) {
 		        std::array<size_t, 4> states {};
@@ -1513,7 +1654,19 @@ std::unique_ptr<ProviderInterface> LivingProvider()
 			        }
 		        }
 		        const auto frame = fireflies.GetLastFrame();
+		        // The land's reward weights that are not nothing, by the number of the magic type
+		        Json weights = Json::object();
+		        const auto& rewards = fireflies.GetRewards();
+		        for (size_t kind = 0; kind < fireflies::k_RewardKinds; ++kind)
+		        {
+			        if (rewards.Weight(kind) != 0.0f)
+			        {
+				        weights[std::to_string(kind)] = rewards.Weight(kind);
+			        }
+		        }
 		        return Json {{"fireflies", fireflies.GetFireflies().size()},
+		                     {"reward_weights", std::move(weights)},
+		                     {"reward_total", rewards.Total()},
 		                     {"resting", states.at(static_cast<size_t>(Firefly::State::Resting))},
 		                     {"flying_out", states.at(static_cast<size_t>(Firefly::State::FlyingOut))},
 		                     {"hovering", states.at(static_cast<size_t>(Firefly::State::Hovering))},
@@ -1544,6 +1697,38 @@ std::unique_ptr<ProviderInterface> LivingProvider()
 			                  item["fish_left"] = farms.FishLeft(entity);
 			                  item["fishermen"] = farm.fishermen.size();
 			                  item["shoal"] = farm.shoal.has_value() ? Point(farm.shoal->centre) : Json(nullptr);
+			                  items.push_back(std::move(item));
+		                  });
+		                  return items;
+	                  }));
+	provider->Add(Query("workshops",
+	                    "The workshops: their room for scaffolds, the turns left on a scaffold, and the scaffolds they count",
+	                    {}, ResultKind::List),
+	              Serve<Locator::workshopSystem>(
+	                  "the workshops", [](const ecs::systems::WorkshopSystemInterface& workshops, const QueryContext& /*c*/) {
+		                  Json items = Json::array();
+		                  const auto* registry = Registry();
+		                  if (registry == nullptr)
+		                  {
+			                  return items;
+		                  }
+		                  registry->Each<const Workshop>([&](entt::entity entity, const Workshop& workshop) {
+			                  auto item = Listed(*registry, entity);
+			                  item["room"] = workshops.RoomOf(entity);
+			                  item["making_turns"] = workshop.makingTurns;
+			                  item["counted"] = workshop.counted;
+			                  Json places = Json::array();
+			                  for (const auto place : workshop.places)
+			                  {
+				                  places.push_back(static_cast<int>(place));
+			                  }
+			                  item["places"] = std::move(places);
+			                  Json scaffolds = Json::array();
+			                  for (const auto scaffold : workshop.scaffolds)
+			                  {
+				                  scaffolds.push_back(ToId(scaffold));
+			                  }
+			                  item["scaffolds"] = std::move(scaffolds);
 			                  items.push_back(std::move(item));
 		                  });
 		                  return items;
@@ -1592,6 +1777,13 @@ std::unique_ptr<ProviderInterface> LivingProvider()
 		              });
 		              return items;
 	              }));
+	provider->Add(Query("things_made",
+	                    "The count of the things of the world made since the land was loaded: the place in the order of "
+	                    "the next thing made",
+	                    {}, ResultKind::Object),
+	              Serve<Locator::thingsMadeSystem>("thingsMadeSystem",
+	                                               [](const ecs::systems::ThingsMadeSystemInterface& count,
+	                                                  const QueryContext& /*c*/) { return Json {{"made", count.Made()}}; }));
 	provider->Add(
 	    Query("sound_tags",
 	          "The sounds tagged to things: sound, whether active, its emitter, the object it is attached to, whether it loops",
@@ -1771,7 +1963,7 @@ std::unique_ptr<ProviderInterface> PlayersProvider()
 	                                    "position) and the music moods: the record of each track and the current feelings"),
 	              [](const QueryContext& /*c*/) {
 		              Json result = Json::object();
-		              auto* player = Locator::audio::has_value() ? Locator::audio::value().GetCustomMusic() : nullptr;
+		              auto* player = Locator::sounds::has_value() ? Locator::sounds::value().GetCustomMusic() : nullptr;
 		              if (player != nullptr)
 		              {
 			              Json tracks = Json::array();
@@ -1808,79 +2000,171 @@ std::unique_ptr<ProviderInterface> PlayersProvider()
 		              }
 		              return QueryResult::Value(std::move(result));
 	              });
+	provider->Add(Query("list",
+	                    "The players: their entities, primary creatures, computer minds (the nodes wanted now; "
+	                    "players.computer_nodes has every node) and alignment",
+	                    {}, ResultKind::List),
+	              Serve<Locator::playerSystem>("the players", [](const ecs::systems::PlayerSystemInterface& players,
+	                                                             const QueryContext& /*c*/) {
+		              Json items = Json::array();
+		              const auto* registry = Registry();
+		              if (registry == nullptr)
+		              {
+			              return items;
+		              }
+		              // The players the land has, by their own components: the system is asked only of those it knows
+		              registry->Each<const Player>([&](entt::entity entity, const Player& player) {
+			              const auto name = player.name;
+			              Json item = {{"player", static_cast<int>(name)},
+			                           {"id", Id(entity)},
+			                           {"local", (Locator::handSystem::has_value() ? Locator::handSystem::value().GetOwnPlayer()
+			                                                                       : PlayerNames::PLAYER_ONE) == name},
+			                           {"computer", players.IsComputerPlayer(name)},
+			                           {"primary_creature", Id(players.GetPrimaryCreature(name))}};
+			              // The computer mind of the player, when a land script switched it on or named a player for it
+			              if (const auto* mind = registry->TryGet<const ecs::components::ComputerPlayer>(entity);
+			                  mind != nullptr)
+			              {
+				              item["computer_mind"] = {{"switched_on", mind->switchedOn},
+				                                       {"marked", mind->marked},
+				                                       {"started", mind->started},
+				                                       {"creature_like", mind->creatureLike.has_value()
+				                                                             ? Json(static_cast<int>(*mind->creatureLike))
+				                                                             : Json(nullptr)}};
+				              // What the god wants and what its hand does: the nodes that were wanted when last looked at
+				              auto& computer = item["computer_mind"];
+				              computer["paused"] = mind->mind.paused;
+				              computer["last_empty_turn"] = mind->mind.lastEmptyTurn;
+				              computer["doing"] = mind->mind.doing;
+				              computer["hand"] = {mind->hand.hand.x, mind->hand.hand.y, mind->hand.hand.z};
+				              Json steps = Json::array();
+				              for (const auto& step : mind->hand.steps)
+				              {
+					              steps.push_back(static_cast<int>(step.kind));
+				              }
+				              computer["steps"] = std::move(steps);
+				              computer["step_part"] = mind->hand.part;
+				              Json wanted = Json::array();
+				              for (const auto& node : mind->mind.nodes)
+				              {
+					              if (node.value != 0.0f)
+					              {
+						              wanted.push_back({{"name", computer_mind::InfoOf(node.kind).name},
+						                                {"value", node.value},
+						                                {"suppression", node.suppression},
+						                                {"object", Id(node.object)}});
+					              }
+				              }
+				              computer["wanted"] = std::move(wanted);
+				              Json requests = Json::object();
+				              for (size_t type = 0; type < mind->mind.castRequested.size(); ++type)
+				              {
+					              if (mind->mind.castRequested.at(type) != 0)
+					              {
+						              requests[std::to_string(type)] = mind->mind.castRequested.at(type);
+					              }
+				              }
+				              computer["cast_requests"] = std::move(requests);
+				              computer["casts"] = mind->casts.size();
+			              }
+			              if (Locator::alignmentSystem::has_value())
+			              {
+				              item["alignment"] = Locator::alignmentSystem::value().GetPlayerAlignment(name);
+				              item["pending_alignment"] = Locator::alignmentSystem::value().GetPendingAlignment(name);
+			              }
+			              items.push_back(std::move(item));
+		              });
+		              return items;
+	              }));
+	// The whole tree of a computer mind, where the list of the players shows only the nodes that are wanted now
 	provider->Add(
-	    Query("list", "The players: their entities, primary creatures, computer minds and alignment", {}, ResultKind::List),
-	    Serve<Locator::playerSystem>(
-	        "the players", [](const ecs::systems::PlayerSystemInterface& players, const QueryContext& /*c*/) {
-		        Json items = Json::array();
-		        const auto* registry = Registry();
-		        if (registry == nullptr)
-		        {
-			        return items;
-		        }
-		        // The players the land has, by their own components: the system is asked only of those it knows
-		        registry->Each<const Player>([&](entt::entity entity, const Player& player) {
-			        const auto name = player.name;
-			        Json item = {{"player", static_cast<int>(name)},
-			                     {"id", Id(entity)},
-			                     {"local", (Locator::handSystem::has_value() ? Locator::handSystem::value().GetOwnPlayer()
-			                                                                 : PlayerNames::PLAYER_ONE) == name},
-			                     {"computer", players.IsComputerPlayer(name)},
-			                     {"primary_creature", Id(players.GetPrimaryCreature(name))}};
-			        // The computer mind of the player, when a land script switched it on or named a player for it
-			        if (const auto* mind = registry->TryGet<const ecs::components::ComputerPlayer>(entity); mind != nullptr)
-			        {
-				        item["computer_mind"] = {{"switched_on", mind->switchedOn},
-				                                 {"marked", mind->marked},
-				                                 {"started", mind->started},
-				                                 {"creature_like", mind->creatureLike.has_value()
-				                                                       ? Json(static_cast<int>(*mind->creatureLike))
-				                                                       : Json(nullptr)}};
-				        // What the god wants and what its hand does: the nodes that were wanted when last looked at
-				        auto& computer = item["computer_mind"];
-				        computer["paused"] = mind->mind.paused;
-				        computer["last_empty_turn"] = mind->mind.lastEmptyTurn;
-				        computer["doing"] = mind->mind.doing;
-				        computer["hand"] = {mind->hand.hand.x, mind->hand.hand.y, mind->hand.hand.z};
-				        Json steps = Json::array();
-				        for (const auto& step : mind->hand.steps)
-				        {
-					        steps.push_back(static_cast<int>(step.kind));
-				        }
-				        computer["steps"] = std::move(steps);
-				        computer["step_part"] = mind->hand.part;
-				        Json wanted = Json::array();
-				        for (const auto& node : mind->mind.nodes)
-				        {
-					        if (node.value != 0.0f)
-					        {
-						        wanted.push_back({{"name", computer_mind::InfoOf(node.kind).name},
-						                          {"value", node.value},
-						                          {"suppression", node.suppression},
-						                          {"object", Id(node.object)}});
-					        }
-				        }
-				        computer["wanted"] = std::move(wanted);
-				        Json requests = Json::object();
-				        for (size_t type = 0; type < mind->mind.castRequested.size(); ++type)
-				        {
-					        if (mind->mind.castRequested.at(type) != 0)
-					        {
-						        requests[std::to_string(type)] = mind->mind.castRequested.at(type);
-					        }
-				        }
-				        computer["cast_requests"] = std::move(requests);
-				        computer["casts"] = mind->casts.size();
-			        }
-			        if (Locator::alignmentSystem::has_value())
-			        {
-				        item["alignment"] = Locator::alignmentSystem::value().GetPlayerAlignment(name);
-				        item["pending_alignment"] = Locator::alignmentSystem::value().GetPendingAlignment(name);
-			        }
-			        items.push_back(std::move(item));
-		        });
-		        return items;
-	        }));
+	    Query("computer_nodes",
+	          "Every node of the tree of one computer god's mind: its name, personality weight, suppression, how much it "
+	          "was wanted when last looked at, its place in the tree and the node above. Pages with limit and cursor. "
+	          "name keeps only the nodes that the script name finds",
+	          {{.name = "player",
+	            .type = "integer|string",
+	            .description = "The god: its number (0 to 7) or its name, such as PLAYER_TWO",
+	            .required = true},
+	           {.name = "name",
+	            .type = "string",
+	            .description = "Only the nodes that a script finds with this name, such as ExpandInfluence",
+	            .required = false}},
+	          ResultKind::List),
+	    ServeRegistry([](const ecs::Registry& registry, const QueryContext& context) -> QueryResult {
+		    const auto player = NamedPlayerParam(context.params);
+		    if (!player.has_value())
+		    {
+			    return QueryResult::Error("player must be a number from 0 to 7 or a name such as PLAYER_TWO");
+		    }
+		    const auto entity = PlayerEntityOf(registry, *player);
+		    const auto* computer =
+		        entity.has_value() ? registry.TryGet<const ecs::components::ComputerPlayer>(*entity) : nullptr;
+		    if (computer == nullptr)
+		    {
+			    return QueryResult::Error("that player has no computer mind");
+		    }
+		    const auto& mind = computer->mind;
+		    const auto& names = SharedNodeNames(registry);
+		    std::vector<uint16_t> shown;
+		    if (const auto filter = StringMember(context.params, "name"); filter.has_value())
+		    {
+			    shown = computer_mind::FindNodes(mind, *filter, names);
+		    }
+		    else
+		    {
+			    shown.resize(mind.nodes.size());
+			    std::ranges::generate(shown, [next = uint16_t {0}]() mutable { return next++; });
+		    }
+		    Json items = Json::array();
+		    for (const auto index : shown)
+		    {
+			    const auto& node = mind.nodes.at(index);
+			    items.push_back({{"index", index},
+			                     {"name", computer_mind::NameOf(names, node.kind)},
+			                     {"layer", static_cast<int>(computer_mind::InfoOf(node.kind).layer)},
+			                     {"weight", node.weight},
+			                     {"suppression", node.suppression},
+			                     {"value", node.value},
+			                     {"parent", node.parent.has_value() ? Json(*node.parent) : Json(nullptr)},
+			                     {"children", node.childCount},
+			                     {"object", Id(node.object)}});
+		    }
+		    return QueryResult::Value(std::move(items));
+	    }));
+	provider->Add(
+	    Query("computer_attitudes",
+	          "What one computer god's mind thinks of each player: the value that a script reads back, and the value the "
+	          "mind keeps (twice as much)",
+	          {{.name = "player",
+	            .type = "integer|string",
+	            .description = "The god: its number (0 to 7) or its name, such as PLAYER_TWO",
+	            .required = true}}),
+	    ServeRegistry([](const ecs::Registry& registry, const QueryContext& context) -> QueryResult {
+		    const auto player = NamedPlayerParam(context.params);
+		    if (!player.has_value())
+		    {
+			    return QueryResult::Error("player must be a number from 0 to 7 or a name such as PLAYER_TWO");
+		    }
+		    const auto entity = PlayerEntityOf(registry, *player);
+		    if (!entity.has_value() || !registry.AllOf<ecs::components::ComputerPlayer>(*entity))
+		    {
+			    return QueryResult::Error("that player has no computer mind");
+		    }
+		    // A mind that no script gave an attitude keeps the first value for every player
+		    const auto* attitudes = registry.TryGet<const ecs::components::ComputerAttitudes>(*entity);
+		    Json about = Json::array();
+		    for (size_t other = 0; other < static_cast<size_t>(PlayerNames::_COUNT); ++other)
+		    {
+			    const auto kept =
+			        attitudes != nullptr ? attitudes->kept.at(other) : ecs::components::ComputerAttitudes::k_StartValue;
+			    about.push_back({{"player", other},
+			                     {"name", k_PlayerNamesStrs.at(other)},
+			                     {"attitude", player_relations::ReadAttitude(kept)},
+			                     {"kept", kept}});
+		    }
+		    return QueryResult::Value({{"player", static_cast<int>(*player)}, {"attitudes", std::move(about)}});
+	    }));
 	provider->Add(
 	    Query("commands", "The queue of the players' commands: the player of this computer, whose number the commands carry, "
 	                      "and the commands that wait for the start of a turn"),
@@ -2593,7 +2877,8 @@ std::unique_ptr<ProviderInterface> TempleProvider()
 
 // The camera's helpers, the editor and the cinematics
 
-std::unique_ptr<ProviderInterface> ViewProvider()
+/// The seam is the game on the player's computer, or null with none
+std::unique_ptr<ProviderInterface> ViewProvider(const GameSeamInterface* seam)
 {
 	auto provider = std::make_unique<FunctionProvider>("view");
 	provider->Add(Query("pause_text", "The words of the pause and the speed: which words show (paused, slower, faster or "
@@ -2616,10 +2901,105 @@ std::unique_ptr<ProviderInterface> ViewProvider()
 		              }
 		              return QueryResult::Value(std::move(result));
 	              });
+	provider->Add(
+	    Query("incoming_messages",
+	          "The incoming messages at the bottom left of the screen: the list in order (kind, text, weather picture, the "
+	          "real time it started to show), the real time now, and whether the button shows with its look"),
+	    [seam](const QueryContext& /*c*/) {
+		    Json result = {{"count", 0}, {"messages", Json::array()}, {"shown", false}};
+		    if (!Locator::incomingMessageSystem::has_value())
+		    {
+			    return QueryResult::Value(std::move(result));
+		    }
+		    const auto& system = Locator::incomingMessageSystem::value();
+		    constexpr std::array<std::string_view, 3> k_Kinds {"chat", "mail", "weather"};
+		    result["now"] = system.GetMilliseconds();
+		    result["count"] = system.GetQueue().Count();
+		    result["shown_text"] = gui::ToUtf8(system.GetQueue().ShownText());
+		    // The list is read from the top message down, by dismissing copies
+		    auto copy = system.GetQueue();
+		    while (const auto* top = copy.Top())
+		    {
+			    result["messages"].push_back({{"kind", k_Kinds.at(static_cast<size_t>(top->kind))},
+			                                  {"text", gui::ToUtf8(top->text)},
+			                                  {"picture", top->picture},
+			                                  {"since", top->since}});
+			    copy.Dismiss(top->since);
+		    }
+		    if (seam != nullptr)
+		    {
+			    seam->AddIncomingMessages(result);
+		    }
+		    return QueryResult::Value(std::move(result));
+	    });
+	provider->Add(Query("chat",
+	                    "The chat of a network game: the names of the gods, the lines that came in (turn, sender, the "
+	                    "players that get them, text or taunt, shown in the incoming messages), the speech bubbles over "
+	                    "the creatures (lines, time to show, scroll), and the chat controls (shown, open, quick chat, "
+	                    "the typed line, the list of players and who gets a line)"),
+	              [seam](const QueryContext& /*c*/) {
+		              Json result = {{"names", Json::object()}, {"received", Json::array()}, {"bubbles", Json::array()}};
+		              if (!Locator::chatSystem::has_value())
+		              {
+			              return QueryResult::Value(std::move(result));
+		              }
+		              auto& chat = Locator::chatSystem::value();
+		              for (const auto& [slot, name] : chat.GetNames())
+		              {
+			              result["names"][std::to_string(static_cast<int>(slot))] = gui::ToUtf8(name);
+		              }
+		              for (const auto& line : chat.GetReceived())
+		              {
+			              Json recipients = Json::array();
+			              for (const auto player : line.recipients)
+			              {
+				              recipients.push_back(static_cast<int>(player));
+			              }
+			              result["received"].push_back({{"turn", line.turn},
+			                                            {"sender", static_cast<int>(line.sender)},
+			                                            {"recipients", std::move(recipients)},
+			                                            {"text", gui::ToUtf8(line.text)},
+			                                            {"taunt", line.taunt.has_value() ? Json(*line.taunt) : Json(nullptr)},
+			                                            {"shown", line.shown}});
+		              }
+		              for (const auto& [creature, bubble] : chat.GetBubbles())
+		              {
+			              Json lines = Json::array();
+			              for (const auto& line : bubble.lines)
+			              {
+				              lines.push_back({{"text", gui::ToUtf8(line.text)}, {"sender", static_cast<int>(line.sender)}});
+			              }
+			              result["bubbles"].push_back({{"creature", entt::to_integral(creature)},
+			                                           {"lines", std::move(lines)},
+			                                           {"display_time", bubble.displayTime},
+			                                           {"scroll", bubble.scroll}});
+		              }
+		              if (seam != nullptr)
+		              {
+			              seam->AddChatControls(result);
+		              }
+		              return QueryResult::Value(std::move(result));
+	              });
+	provider->Add(Query("tooltip", "The tooltip that the hand shows: its index and text name, its mouse button and arrows, "
+	                               "its fade, and the numbers or other words that it shows"),
+	              [seam](const QueryContext& /*c*/) {
+		              Json result = {{"shown", false}};
+		              if (seam != nullptr)
+		              {
+			              seam->AddToolTip(result);
+		              }
+		              return QueryResult::Value(std::move(result));
+	              });
 	provider->Add(Query("video", "The video playing: its frame, frame count and rate, its fade, the falling spell, its "
 	                             "creature and its effects, whether films are on, and the 16-bit surface of the films"),
 	              [](const QueryContext& /*c*/) {
 		              Json result = Json::object();
+		              // The fade of the whole screen, which the video fades to white at its end
+		              if (Locator::screenFade::has_value())
+		              {
+			              const auto& fade = Locator::screenFade::value();
+			              result["screen_fade"] = {{"amount", fade.GetAmount()}, {"turns", fade.GetTurns()}};
+		              }
 		              if (Locator::videoSystem::has_value())
 		              {
 			              const auto& videos = Locator::videoSystem::value();
@@ -2678,7 +3058,8 @@ std::unique_ptr<ProviderInterface> ViewProvider()
 		              }
 		              return QueryResult::Value(std::move(result));
 	              });
-	provider->Add(Query("state", "Whether a camera path holds the camera, the camera's help, and the knock readout"),
+	provider->Add(Query("state", "Whether a camera path holds the camera, the camera's help, the advisors' cheers as the "
+	                             "camera turns, and the knock readout"),
 	              [](const QueryContext& /*c*/) {
 		              Json result = Json::object();
 		              if (Locator::cameraPathSystem::has_value())
@@ -2697,6 +3078,15 @@ std::unique_ptr<ProviderInterface> ViewProvider()
 			                                {"interface_level",
 			                                 help.interfaceLevel.has_value() ? Json(*help.interfaceLevel) : Json(nullptr)}};
 		              }
+		              if (Locator::turnCheerSystem::has_value())
+		              {
+			              const auto& cheer = Locator::turnCheerSystem::value();
+			              const auto& cheering = cheer.GetCheering();
+			              result["turn_cheer"] = {{"turn_speed", cheer.GetTurnSpeed()},
+			                                      {"on", cheering.on},
+			                                      {"last_cheer_turn", cheering.lastCheerTurn},
+			                                      {"last_best_praise_turn", cheering.lastBestPraiseTurn}};
+		              }
 		              if (Locator::abodeKnockSystem::has_value())
 		              {
 			              const auto& knock = Locator::abodeKnockSystem::value();
@@ -2708,7 +3098,8 @@ std::unique_ptr<ProviderInterface> ViewProvider()
 	                    {}, ResultKind::List),
 	              Serve<Locator::cameraBookmarkSystem>(
 	                  "the bookmarks", [](const ecs::systems::CameraBookmarkSystemInterface& bookmarks, const QueryContext&) {
-		                  const auto* registry = Registry();
+		                  // The markers are things that only the frames make
+		                  const auto* registry = DrawnRegistry();
 		                  Json items = Json::array();
 		                  for (size_t i = 0; i < bookmarks.GetBookmarks().size(); ++i)
 		                  {
@@ -3137,9 +3528,12 @@ std::unique_ptr<ProviderInterface> CreaturesProvider()
 			                                {"creature_shown", cave.IsCreatureShown()},
 			                                {"copy", Id(cave.GetCaveCreature())}};
 			              // The copy of the creature by the cave's fire, and what it is doing
-			              const auto& registry = Locator::entitiesRegistry::value();
-			              if (const auto copy = cave.GetCaveCreature(); copy.has_value() && registry.Valid(*copy))
+			              const auto copy = cave.GetCaveCreature();
+			              if (copy.has_value() && Locator::temple::has_value() &&
+			                  Locator::temple::value().GetRooms().Valid(*copy))
 			              {
+				              // The copy is a thing of the temple's rooms
+				              const auto& registry = Locator::temple::value().GetRooms();
 				              const auto* self = registry.TryGet<const ecs::components::CreatureCopy>(*copy);
 				              const auto* state = registry.TryGet<const ecs::components::CaveCreature>(*copy);
 				              const auto* transform = registry.TryGet<const ecs::components::Transform>(*copy);
@@ -3377,8 +3771,8 @@ std::unique_ptr<ProviderInterface> CreaturesProvider()
 		}
 		auto& fights = Locator::creatureFightSystem::value();
 		using Start = ecs::systems::CreatureFightSystemInterface::StartResult;
-		constexpr std::array<std::string_view, 6> k_Results {"started",  "no_opponent", "busy",
-		                                                     "too_weak", "no_arena",    "refused"};
+		constexpr std::array<std::string_view, 7> k_Results {"started",  "no_opponent", "busy",     "too_weak",
+		                                                     "no_arena", "refused",     "finishing"};
 		const auto started = fights.StartFight(*creature, *opponent);
 		const auto index = std::min(static_cast<size_t>(started), k_Results.size() - 1);
 		if (started != Start::Started)
@@ -3390,6 +3784,20 @@ std::unique_ptr<ProviderInterface> CreaturesProvider()
 		    {"fighting", {fights.IsFighting(*creature), fights.IsFighting(*opponent)}},
 		    {"opponent_of_id", Id(fights.OpponentOf(*creature))},
 		});
+	});
+	auto cheat = Query("fight_cheat",
+	                   "Sends the fight cheat of the player of this computer as a command: at the turn, the player's "
+	                   "creature fights the nearest creature, or stops the duel that it is in. A game server takes the "
+	                   "command only with its test commands on",
+	                   {});
+	cheat.writes = true;
+	provider->Add(std::move(cheat), [](const QueryContext& /*context*/) {
+		if (Registry() == nullptr || !Locator::playerCommandSystem::has_value())
+		{
+			return QueryResult::Error("there are no fights without a land");
+		}
+		Locator::playerCommandSystem::value().Submit(player_commands::CreatureFightCheat {});
+		return QueryResult::Value({{"sent", true}});
 	});
 	auto move = Query("move",
 	                  "Sends a creature walking or running to a point by its own legs (turning and stepping off as it "
@@ -3674,7 +4082,7 @@ std::unique_ptr<ProviderInterface> ScriptProvider(ScriptTargetInterface& scripts
 			        item["radius"] = highlight.radius;
 			        item["glints"] = highlight.glints;
 			        item["active_effect"] = highlight.activeEffect;
-			        item["hidden"] = registry->AllOf<HiddenByState>(entity);
+			        item["hidden"] = highlight.hidden;
 			        item["scrolls_drawn"] = scrollsDrawn;
 			        item["pulse"] = pulse.level;
 			        items.push_back(std::move(item));
@@ -3719,6 +4127,16 @@ std::optional<std::vector<BodyInfo>> Bodies()
 
 // The help: the advisors and the scripts' dialogue
 
+/// The number of the open land, which the saved games use for their land folders
+uint32_t OpenLand()
+{
+	if (!Locator::entitiesRegistry::has_value())
+	{
+		return 0;
+	}
+	return static_cast<uint32_t>(std::max(Locator::entitiesRegistry::value().Context().mapScriptGlobals.landNumber, 0));
+}
+
 std::unique_ptr<ProviderInterface> SavesProvider()
 {
 	auto provider = std::make_unique<FunctionProvider>("saves");
@@ -3744,7 +4162,9 @@ std::unique_ptr<ProviderInterface> SavesProvider()
 	auto save =
 	    Query("save",
 	          "Saves the game into a slot: the whole world (every entity and its components, the clock, the random "
-	          "numbers, the camera and the scripts) and every creature with its mind file and its leash",
+	          "numbers, the camera and the scripts) and every creature with its mind file and its leash. The slots 14 to 18 "
+	          "save into a folder of the open land in the folder of the slot. The result gives the folder of the world "
+	          "file in the folder of the player",
 	          {slotParameter, {.name = "name", .type = "string", .description = "The name of the save", .required = false}});
 	save.writes = true;
 	provider->Add(std::move(save), [](const QueryContext& context) {
@@ -3754,13 +4174,17 @@ std::unique_ptr<ProviderInterface> SavesProvider()
 			return QueryResult::Error("saves.save needs a game and a slot from 0 to 20");
 		}
 		const auto name = gui::ToUtf16(StringMember(context.params, "name").value_or(""));
-		const bool saved = Locator::saveGameSystem::value().Save(static_cast<uint32_t>(*slot), name);
-		return QueryResult::Value({{"saved", saved}, {"slot", static_cast<uint32_t>(*slot)}});
+		const auto number = static_cast<uint32_t>(*slot);
+		const bool saved = Locator::saveGameSystem::value().Save(number, name);
+		return QueryResult::Value(
+		    {{"saved", saved}, {"slot", number}, {"folder", gamesave::SlotFolder(number, OpenLand()).generic_string()}});
 	});
 	auto load = Query("load",
 	                  "Loads a slot. A save of the whole world loads its land and its world in place of the open land. An "
 	                  "older save puts the creatures of the land that is open back: the values of each record, the mind of "
-	                  "its mind file, the plan that the save kept and its leash",
+	                  "its mind file, the plan that the save kept and its leash. Slot 14 (the previous land) loads from the "
+	                  "folder of the land before the open land, and slot 18 (the next land) from the folder of the land "
+	                  "after it, as the save game room does. The result gives the folder that the load read",
 	                  {slotParameter});
 	load.writes = true;
 	provider->Add(std::move(load), [](const QueryContext& context) {
@@ -3769,8 +4193,64 @@ std::unique_ptr<ProviderInterface> SavesProvider()
 		{
 			return QueryResult::Error("saves.load needs a game and a slot from 0 to 20");
 		}
-		const bool loaded = Locator::saveGameSystem::value().Load(static_cast<uint32_t>(*slot));
-		return QueryResult::Value({{"loaded", loaded}, {"slot", static_cast<uint32_t>(*slot)}});
+		const auto number = static_cast<uint32_t>(*slot);
+		// Find the folder before the load, because a load can open another land
+		const auto folder = gamesave::LoadSlotFolder(number, OpenLand()).generic_string();
+		const bool loaded = Locator::saveGameSystem::value().Load(number);
+		return QueryResult::Value({{"loaded", loaded}, {"slot", number}, {"folder", folder}});
+	});
+	auto loadAndSave =
+	    Query("load_and_save",
+	          "Loads a slot and then saves the game into a second slot in the same call, with no frame and no turn between. A "
+	          "save of a loaded world must have the same bytes as the save that the game loaded (tools/sim/save_diff.py "
+	          "compares the two files)",
+	          {slotParameter,
+	           {.name = "into", .type = "integer", .description = "The slot of the second save, 0 to 20", .required = true},
+	           {.name = "name", .type = "string", .description = "The name of the second save", .required = false}});
+	loadAndSave.writes = true;
+	provider->Add(std::move(loadAndSave), [](const QueryContext& context) {
+		const auto slot = NumberMember(context.params, "slot");
+		const auto into = NumberMember(context.params, "into");
+		if (!Locator::saveGameSystem::has_value() || !slot.has_value() || *slot < 0.0 || !into.has_value() || *into < 0.0)
+		{
+			return QueryResult::Error("saves.load_and_save needs a game, a slot and an into slot from 0 to 20");
+		}
+		auto& saves = Locator::saveGameSystem::value();
+		const bool loaded = saves.Load(static_cast<uint32_t>(*slot));
+		const auto name = gui::ToUtf16(StringMember(context.params, "name").value_or(""));
+		const bool saved = loaded && saves.Save(static_cast<uint32_t>(*into), name);
+		return QueryResult::Value({{"loaded", loaded},
+		                           {"saved", saved},
+		                           {"slot", static_cast<uint32_t>(*slot)},
+		                           {"into", static_cast<uint32_t>(*into)}});
+	});
+	auto worldStateRoundTrip =
+	    Query("world_state_round_trip",
+	          "Makes the world state that a game server sends, loads it at once and makes it again, with no frame and no turn "
+	          "between. Writes the two states to the files first and again. The two must have the same bytes "
+	          "(tools/sim/save_diff.py compares the two files)",
+	          {{.name = "first", .type = "string", .description = "The file of the first state", .required = true},
+	           {.name = "again", .type = "string", .description = "The file of the state after the load", .required = true}});
+	worldStateRoundTrip.writes = true;
+	provider->Add(std::move(worldStateRoundTrip), [](const QueryContext& context) {
+		const auto firstPath = StringMember(context.params, "first");
+		const auto againPath = StringMember(context.params, "again");
+		if (!Locator::saveGameSystem::has_value() || !Locator::filesystem::has_value() || !firstPath.has_value() ||
+		    !againPath.has_value())
+		{
+			return QueryResult::Error("saves.world_state_round_trip needs a game and the two files");
+		}
+		auto& saves = Locator::saveGameSystem::value();
+		auto& files = Locator::filesystem::value();
+		const auto first = saves.WorldState();
+		const bool loaded = !first.empty() && saves.LoadWorldState(first);
+		const auto again = loaded ? saves.WorldState() : std::vector<uint8_t> {};
+		const bool written = files.WriteAll(std::filesystem::path(*firstPath), first) &&
+		                     (!loaded || files.WriteAll(std::filesystem::path(*againPath), again));
+		return QueryResult::Value({{"loaded", loaded},
+		                           {"written", written},
+		                           {"same", loaded && first == again},
+		                           {"bytes", {first.size(), again.size()}}});
 	});
 	provider->Add(Query("vanilla_check",
 	                    "After a load of a slot of the game itself: each creature of the game's file, and whether the record "
@@ -3812,7 +4292,7 @@ std::unique_ptr<ProviderInterface> HelpProvider()
 		        }
 		        const auto& controller = advisors.GetController();
 		        const auto* voices =
-		            Locator::helpTextSystem::has_value() ? &Locator::helpTextSystem::value().GetVoices() : nullptr;
+		            Locator::advisorVoiceSystem::has_value() ? &Locator::advisorVoiceSystem::value().GetVoices() : nullptr;
 		        Json items = Json::array();
 		        for (int dude = 0; dude < 2; ++dude)
 		        {
@@ -3850,38 +4330,40 @@ std::unique_ptr<ProviderInterface> HelpProvider()
 		        }
 		        return items;
 	        }));
-	provider->Add(Query("dialogue",
-	                    "The scripts' dialogue: the text shown, whether it is read or waits for a click, who holds the "
-	                    "dialogue and the line being said"),
-	              Serve<Locator::helpTextSystem>(
-	                  "the dialogue", [](const ecs::systems::HelpTextSystemInterface& help, const QueryContext& /*c*/) -> Json {
-		                  const auto& voices = help.GetVoices();
-		                  Json result {{"started", help.IsStarted()},
-		                               {"text_read", help.IsTextRead()},
-		                               {"speaker", voices.GetSpeaker()},
-		                               {"sentence", voices.GetSentence()},
-		                               {"owner", Locator::dialogueControlSystem::has_value()
-		                                             ? Json(Locator::dialogueControlSystem::value().GetOwner())
-		                                             : Json(nullptr)},
-		                               {"speech_banks", Locator::helpSpeechSystem::has_value()
-		                                                    ? Json(Locator::helpSpeechSystem::value().GetTable().GetBankCount(
-		                                                          audio::SpeechBank::HelpSprites))
-		                                                    : Json(nullptr)}};
-		                  if (const auto* dialogue = help.GetDialogue(); dialogue != nullptr)
-		                  {
-			                  result["text"] = dialogue->GetCurrentText();
-			                  result["narrator"] = help.GetNarrator(dialogue->GetCurrentText());
-			                  result["waiting_for_click"] = dialogue->IsWaitingForClick();
-			                  result["end_turn"] = dialogue->GetEndTurn();
-			                  result["end_ms"] = dialogue->GetEndMs();
-			                  result["start_turn"] = dialogue->GetStartTurn();
-			                  result["takes_click"] = dialogue->TakesClick();
-			                  result["last_click_turn"] = dialogue->GetLastClickTurn();
-			                  result["drawn"] = dialogue->IsDrawn();
-			                  result["box_shown"] = dialogue->GetDisplay().IsBoxShown();
-		                  }
-		                  return result;
-	                  }));
+	provider->Add(
+	    Query("dialogue", "The scripts' dialogue: the text shown, whether it is read or waits for a click, who holds the "
+	                      "dialogue and the line being said"),
+	    Serve<Locator::helpTextSystem>(
+	        "the dialogue", [](const ecs::systems::HelpTextSystemInterface& help, const QueryContext& /*c*/) -> Json {
+		        // A computer that shows nothing plays no voices: no speaker and no line
+		        const auto* voices =
+		            Locator::advisorVoiceSystem::has_value() ? &Locator::advisorVoiceSystem::value().GetVoices() : nullptr;
+		        Json result {{"started", help.IsStarted()},
+		                     {"text_read", help.IsTextRead()},
+		                     {"speaker", voices != nullptr ? voices->GetSpeaker() : -1},
+		                     {"sentence", voices != nullptr ? voices->GetSentence() : 0u},
+		                     {"owner", Locator::dialogueControlSystem::has_value()
+		                                   ? Json(Locator::dialogueControlSystem::value().GetOwner())
+		                                   : Json(nullptr)},
+		                     {"speech_banks", Locator::helpSpeechSystem::has_value()
+		                                          ? Json(Locator::helpSpeechSystem::value().GetTable().GetBankCount(
+		                                                audio::SpeechBank::HelpSprites))
+		                                          : Json(nullptr)}};
+		        if (const auto* dialogue = help.GetDialogue(); dialogue != nullptr)
+		        {
+			        result["text"] = dialogue->GetCurrentText();
+			        result["narrator"] = help.GetNarrator(dialogue->GetCurrentText());
+			        result["waiting_for_click"] = dialogue->IsWaitingForClick();
+			        result["end_turn"] = dialogue->GetEndTurn();
+			        result["end_ms"] = dialogue->GetEndMs();
+			        result["start_turn"] = dialogue->GetStartTurn();
+			        result["takes_click"] = dialogue->TakesClick();
+			        result["last_click_turn"] = dialogue->GetLastClickTurn();
+			        result["drawn"] = dialogue->IsDrawn();
+			        result["box_shown"] = dialogue->GetDisplay().IsBoxShown();
+		        }
+		        return result;
+	        }));
 	provider->Add(
 	    Query("profile",
 	          "The help's count of what the player has done: its clock, and each event's total, seconds since "
@@ -4029,7 +4511,8 @@ std::unique_ptr<ProviderInterface> HelpProvider()
 	        }));
 	provider->Add(Query("hand_demo",
 	                    "The tutorial's hand demonstration playing: its name, the script task that started it, the record "
-	                    "it is at, whether it holds at a mark, and the camera and hints it has"),
+	                    "the turns are at, whether it holds at a mark, the record the frames are at, and the camera and "
+	                    "hints it has"),
 	              Serve<Locator::handDemoSystem>(
 	                  "the hand demonstrations",
 	                  [](const ecs::systems::HandDemoSystemInterface& demos, const QueryContext& /*c*/) -> Json {
@@ -4046,6 +4529,9 @@ std::unique_ptr<ProviderInterface> HelpProvider()
 		                               {"pause_on_trigger", status->pauseOnTrigger},
 		                               {"trigger_reached", status->triggerReached},
 		                               {"holding", status->holding},
+		                               {"replaying", status->replaying},
+		                               {"replay_record", status->replayRecord},
+		                               {"replay_holding", status->replayHolding},
 		                               {"hints", demos.GetHints()}};
 		                  if (const auto camera = demos.GetCamera(); camera.has_value())
 		                  {
@@ -4055,6 +4541,174 @@ std::unique_ptr<ProviderInterface> HelpProvider()
 		                  return result;
 	                  }));
 	return provider;
+}
+
+/// Why the game ends an order to go to a thing at once, if it does: a cut scene of a script makes a creature that is free
+/// to think for itself look at the camera, again and again, so it drops the order on the next turn
+std::optional<std::string> CutSceneRefusal(const ecs::Registry& registry, entt::entity creature)
+{
+	if (registry.AllOf<ScriptControlled>(creature) || !Locator::cinematicDirectorSystem::has_value())
+	{
+		return std::nullopt;
+	}
+	const auto& director = Locator::cinematicDirectorSystem::value();
+	const bool barsIn = director.IsWideScreenOn();
+	if (!creature_mind::StartsLookAtCameraInCutScene(barsIn, barsIn ? director.GetWideScreenOwner() : 0u, false))
+	{
+		return std::nullopt;
+	}
+	return "a cut scene is playing: the game makes a creature that is free to think for itself look at the camera "
+	       "again on each turn, so it would drop the order at once. Give the order when the cut scene is over";
+}
+
+/// What can end an order to go to a thing after the creature took it. The creature sees a thing that is near; for one
+/// that is farther it walks to where it believes the thing is, and it gives up a walk in which it has not moved for 50
+/// turns, as it does while a long route is still searched.
+std::string FarThingWarning(const ecs::Registry& registry, entt::entity creature, entt::entity object)
+{
+	const auto* from = registry.TryGet<const Transform>(creature);
+	const auto* to = registry.TryGet<const Transform>(object);
+	if (from == nullptr || to == nullptr)
+	{
+		return {};
+	}
+	const auto distance = gutils::GetDistanceInMetres(from->position, to->position);
+	if (distance < creature_mind::k_SeenWithinMetres)
+	{
+		return {};
+	}
+	return fmt::format("the thing is {:.0f} m away: the creature may not see it and then walks to where it believes it is. It "
+	                   "gives up the order when it has not moved for {} turns, which a long route search can cause. Place "
+	                   "the creature near the thing first (edit.move) to be sure",
+	                   distance, creature_cast_moves::k_StallTurns);
+}
+
+/// The inspector's order to a creature, given as the game gives its own orders: a forced plan of the creature's mind,
+/// which its body does
+CreatureOrderResult GiveCreatureOrder(entt::entity creature, const CreatureOrder& order)
+{
+	if (!Locator::creatureMindSystem::has_value() || !Locator::creatureObjectActionSystem::has_value())
+	{
+		return {.detail = "the game has no creature mind or hands"};
+	}
+	auto& registry = Locator::entitiesRegistry::value();
+	const auto* body = registry.TryGet<const Creature>(creature);
+	if (body == nullptr)
+	{
+		return {.detail = "that is not a creature"};
+	}
+	auto& minds = Locator::creatureMindSystem::value();
+	const auto& hands = Locator::creatureObjectActionSystem::value();
+	using ForcedPlan = ecs::systems::CreatureMindSystemInterface::ForcedPlan;
+	using Kind = CreatureOrder::Kind;
+	const auto carried = hands.GetCarried(creature);
+	switch (order.kind)
+	{
+	case Kind::PickUp:
+	{
+		if (!order.object.has_value() || !registry.Valid(*order.object))
+		{
+			return {.detail = "the thing is gone"};
+		}
+		if (carried == order.object)
+		{
+			return {.detail = "it holds that thing already"};
+		}
+		if (const auto refusal = CutSceneRefusal(registry, creature); refusal.has_value())
+		{
+			return {.detail = *refusal};
+		}
+		if (!hands.CanPickUp(creature, *order.object))
+		{
+			// Name the size or the weight when that is what stops it
+			const auto lift = hands.LiftFactsOf(creature, *order.object);
+			if (lift.has_value() && lift->thingRadius + lift->creatureRadius > lift->reach)
+			{
+				return {.detail = fmt::format("it cannot pick that thing up: its radius {:.2f} and the creature's "
+				                              "radius {:.2f} are more than the reach {:.2f}",
+				                              lift->thingRadius, lift->creatureRadius, lift->reach)};
+			}
+			if (lift.has_value() && lift->thingWeight > lift->creatureWeight * creature_object_actions::k_MostLiftedWeightShare)
+			{
+				return {.detail = fmt::format("it cannot pick that thing up: its weight {:.2f} is more than the "
+				                              "creature can lift ({:.2f})",
+				                              lift->thingWeight,
+				                              lift->creatureWeight * creature_object_actions::k_MostLiftedWeightShare)};
+			}
+			return {.detail = "it cannot pick that thing up"};
+		}
+		// As a leash order on a thing it can lift when its desires choose nothing else
+		const bool taken = minds.ForcePlan(creature, ForcedPlan {.desire = creature_desires::Desire::Curiosity,
+		                                                         .action = creature_leash_orders::k_HoldAction,
+		                                                         .object = order.object,
+		                                                         .ordered = true});
+		return {.taken = taken,
+		        .detail = taken ? "picks it up and holds it" : "its mind refused the plan",
+		        .warning = taken ? FarThingWarning(registry, creature, *order.object) : std::string()};
+	}
+	case Kind::PutDown:
+	case Kind::Throw:
+	{
+		if (!carried.has_value())
+		{
+			return {.detail = "it carries nothing"};
+		}
+		if (!order.point.has_value())
+		{
+			const bool taken = minds.ForcePlan(
+			    creature, ForcedPlan {.desire = creature_desires::Desire::ObeyPlayer, .action = "PutDown", .ordered = true});
+			return {.taken = taken, .detail = taken ? "puts it down where it stands" : "its mind refused the plan"};
+		}
+		// As a leash order on the land while it carries something: it throws the thing there when it cannot stand at
+		// the point, or on the aggression leash
+		const auto height = creature_morph::k_HeightAtSizeOne * ShownSize(*body);
+		const bool standable = !Locator::creatureLocomotionSystem::has_value() ||
+		                       Locator::creatureLocomotionSystem::value().GetWalkableLand().IsValid(
+		                           *order.point, creature_route::k_DestinationClearance);
+		const auto leash = Locator::leashSystem::has_value() ? Locator::leashSystem::value().TypeOf(creature) : LeashType::None;
+		const auto ground =
+		    creature_leash_orders::OnGround(*order.point, {.carrying = true,
+		                                                   .placeReachable = standable,
+		                                                   .leash = leash == LeashType::None ? LeashType::Rope : leash,
+		                                                   .height = height});
+		const bool throws = order.kind == Kind::Throw || ground.kind == creature_leash_orders::GroundOrder::Kind::ThrowAt;
+		const bool taken =
+		    minds.ForcePlan(creature, ForcedPlan {.desire = creature_desires::Desire::ObeyPlayer,
+		                                          .action = creature_leash_orders::k_MoveAction,
+		                                          .agenda = throws ? creature_leash_orders::ThrowAt(*order.point, height)
+		                                                           : creature_leash_orders::PutDownAt(*order.point, height),
+		                                          .ordered = true,
+		                                          .walksBack = true});
+		return {.taken = taken,
+		        .detail = !taken   ? "its mind refused the plan"
+		                  : throws ? "carries it near the point and throws it there"
+		                           : "carries it to the point and puts it down"};
+	}
+	case Kind::Eat:
+	{
+		if (!order.object.has_value() || !registry.Valid(*order.object))
+		{
+			return {.detail = "the thing is gone"};
+		}
+		const auto* executor = creature_plan_actions::For(order.action);
+		if (executor == nullptr || executor->activity != creature_mind::Activity::Eat)
+		{
+			return {.detail = "no eat action is called " + order.action};
+		}
+		if (const auto refusal = CutSceneRefusal(registry, creature); refusal.has_value())
+		{
+			return {.detail = *refusal};
+		}
+		const bool taken = minds.ForcePlan(creature, ForcedPlan {.desire = creature_desires::Desire::Hunger,
+		                                                         .action = executor->action,
+		                                                         .object = order.object,
+		                                                         .ordered = true});
+		return {.taken = taken,
+		        .detail = taken ? std::string(executor->action) : "its mind refused the plan",
+		        .warning = taken ? FarThingWarning(registry, creature, *order.object) : std::string()};
+	}
+	}
+	return {.detail = "no such order"};
 }
 
 } // namespace
@@ -4081,6 +4735,9 @@ GameProvider* openblack::inspector::AddGameProviders(Inspector& inspector, const
 {
 	const RegistrySources registrySources {.registry = &Registry, .info = &Info};
 	inspector.Add(std::make_unique<RegistryProvider>(registrySources, reflection));
+	// The same queries over the things that only the frames make: drawn.entities, drawn.entity and the others
+	inspector.Add(std::make_unique<RegistryProvider>(
+	    RegistrySources {.registry = &DrawnRegistry, .info = &Info, .name = "drawn"}, reflection));
 	inspector.Add(std::make_unique<ObjectsProvider>(registrySources));
 	inspector.Add(std::make_unique<EditProvider>(
 	    EditSources {
@@ -4117,11 +4774,11 @@ GameProvider* openblack::inspector::AddGameProviders(Inspector& inspector, const
 		    return Locator::waterRingSystem::value().GetRings();
 	    },
 	    .effects = []() -> std::vector<ParticleEffectInfo> {
-		    if (!Locator::particleSystem::has_value())
+		    if (!Locator::particleRuleSystem::has_value())
 		    {
 			    return {};
 		    }
-		    return Locator::particleSystem::value().GetEffects();
+		    return Locator::particleRuleSystem::value().GetEffects();
 	    },
 	    .liquids = []() -> std::span<const liquid_particles::Particle> {
 		    if (!Locator::liquidParticleSystem::has_value())
@@ -4136,6 +4793,27 @@ GameProvider* openblack::inspector::AddGameProviders(Inspector& inspector, const
 			    return {};
 		    }
 		    return Locator::liquidParticleSystem::value().PlayerParticles(player);
+	    },
+	    .belief = []() -> ecs::systems::ParticleRuleSystemInterface::BeliefSpritesSeen {
+		    if (!Locator::particleRuleSystem::has_value())
+		    {
+			    return {};
+		    }
+		    return Locator::particleRuleSystem::value().GetBeliefSpritesSeen();
+	    },
+	    .nextRequest = []() -> std::optional<ecs::systems::EffectHandle> {
+		    if (!Locator::effectRequestSystem::has_value())
+		    {
+			    return std::nullopt;
+		    }
+		    return Locator::effectRequestSystem::value().NextHandle();
+	    },
+	    .drawn = []() -> std::optional<ecs::systems::ParticleSystemInterface::DrawStats> {
+		    if (!Locator::particleSystem::has_value())
+		    {
+			    return std::nullopt;
+		    }
+		    return Locator::particleSystem::value().GetDrawStats();
 	    },
 	}));
 
@@ -4163,6 +4841,36 @@ GameProvider* openblack::inspector::AddGameProviders(Inspector& inspector, const
 		               ? Locator::creatureMindSystem::value().FindClearAreaFor(creature, point, width, livingBlocks)
 		               : std::nullopt;
 	    },
+	    .animationLog = [](entt::entity creature) -> const creature_animation_log::Log* {
+		    return Locator::creatureAnimationLog::has_value() ? Locator::creatureAnimationLog::value().Find(creature) : nullptr;
+	    },
+	    .clipLine = [](entt::entity creature, size_t clip) -> std::optional<ClipLine> {
+		    const auto* body = Locator::entitiesRegistry::value().TryGet<const Creature>(creature);
+		    if (body == nullptr || !Locator::resources::has_value())
+		    {
+			    return std::nullopt;
+		    }
+		    const auto& rigs = Locator::resources::value().GetCreatureRigs();
+		    const auto rigId = creature::GetRigId(body->species);
+		    if (!rigs.Contains(rigId))
+		    {
+			    return std::nullopt;
+		    }
+		    const auto& lines = rigs.Handle(rigId)->specLines;
+		    if (clip >= lines.size())
+		    {
+			    return std::nullopt;
+		    }
+		    return ClipLine {.name = lines[clip].name, .type = lines[clip].type, .set = lines[clip].set};
+	    },
+	    .clearAnimationLogs =
+	        [] {
+		        if (Locator::creatureAnimationLog::has_value())
+		        {
+			        Locator::creatureAnimationLog::value().Clear();
+		        }
+	        },
+	    .order = &GiveCreatureOrder,
 	}));
 	inspector.Add(MakeMapProvider({
 	    .world = World(),
@@ -4177,6 +4885,7 @@ GameProvider* openblack::inspector::AddGameProviders(Inspector& inspector, const
 	    },
 	}));
 	inspector.Add(MakeTownProvider(World()));
+	inspector.Add(MakePuzzleProvider(World()));
 	inspector.Add(MakeWorshipProvider(World()));
 	inspector.Add(MakeInfluenceProvider({
 	    .hand = [](int player) -> std::optional<glm::vec3> {
@@ -4222,54 +4931,58 @@ GameProvider* openblack::inspector::AddGameProviders(Inspector& inspector, const
 	inspector.Add(MakeAudioProvider({
 	    .world = World(),
 	    .state = []() -> std::optional<AudioState> {
-		    if (!Locator::audio::has_value())
+		    if (!Locator::sounds::has_value() || !Locator::sounds::value().HasAudio())
 		    {
 			    return std::nullopt;
 		    }
-		    auto& audio = Locator::audio::value();
+		    auto& audio = Locator::sounds::value();
 		    AudioState state {.globalVolume = audio.GetGlobalVolume(),
 		                      .sfxVolume = audio.GetSfxVolume(),
 		                      .musicVolume = audio.GetMusicVolume(),
-		                      .musicActive = audio.MusicIsActive(),
+		                      .musicActive = audio.IsMusicActive(),
 		                      .listener = audio.GetListener().origin};
-		    if (const auto* game = Game::Instance(); game != nullptr && game->GetGameMusic() != nullptr)
+		    if (Locator::gameMusic::has_value())
 		    {
-			    const auto& music = *game->GetGameMusic();
+			    const auto& music = Locator::gameMusic::value();
 			    state.musicPlaying = audio::GetMusicTypeName(music.GetPlaying());
 			    state.landMusic = audio::GetMusicTypeName(music.GetLandType());
-			    state.scriptMusic = audio::GetMusicTypeName(music.GetScriptType());
 			    state.alignmentMusic = music.IsAlignmentMusicEnabled();
 			    for (const auto& attached : music.GetAttachedMusic())
 			    {
 				    state.attachedMusic.emplace_back(audio::GetMusicTypeName(attached.type), attached.thing);
 			    }
 		    }
-		    if (const auto* player = audio.GetMusic(); player != nullptr)
+		    if (Locator::scriptMusicSystem::has_value())
 		    {
-			    for (const auto& channel : player->GetChannels())
+			    const auto& script = Locator::scriptMusicSystem::value().GetMusic();
+			    state.scriptMusic = audio::GetMusicTypeName(script.GetType());
+			    state.scriptMusicLine = script.GetLyrics().line;
+			    state.scriptMusicWord = script.GetLyrics().word;
+			    if (const auto time = script.GetChannelTime(); time.has_value())
 			    {
-				    if (channel.active && channel.bank)
-				    {
-					    state.musicChannels.push_back({
-					        .bank = channel.bank->path,
-					        .volume = channel.volume,
-					        .position = channel.placement ? std::optional(channel.placement->position) : std::nullopt,
-					    });
-				    }
+				    state.scriptMusicMs = std::chrono::duration_cast<std::chrono::milliseconds>(*time).count();
 			    }
+		    }
+		    for (auto& channel : audio.GetMusicChannelStates())
+		    {
+			    state.musicChannels.push_back({
+			        .bank = std::move(channel.bank),
+			        .volume = channel.volume,
+			        .position = channel.position,
+			    });
 		    }
 		    return state;
 	    },
 	    .simulateDeviceLoss =
 	        [](bool lost) {
-		        if (Locator::audio::has_value())
+		        if (Locator::sounds::has_value())
 		        {
-			        Locator::audio::value().SimulateDeviceLoss(lost);
+			        Locator::sounds::value().SimulateDeviceLoss(lost);
 		        }
 	        },
-	    .deviceLost = []() { return Locator::audio::has_value() && Locator::audio::value().IsDeviceLost(); },
+	    .deviceLost = []() { return Locator::sounds::has_value() && Locator::sounds::value().IsDeviceLost(); },
 	    .emitters = []() -> const ecs::Registry* {
-		    return Locator::audio::has_value() ? Locator::audio::value().Emitters() : nullptr;
+		    return Locator::sounds::has_value() ? Locator::sounds::value().GetEmitters() : nullptr;
 	    },
 	}));
 
@@ -4279,7 +4992,7 @@ GameProvider* openblack::inspector::AddGameProviders(Inspector& inspector, const
 	inspector.Add(PlayersProvider());
 	inspector.Add(MagicProvider());
 	inspector.Add(TempleProvider());
-	inspector.Add(ViewProvider());
+	inspector.Add(ViewProvider(controls.seam));
 	inspector.Add(AdvisorsProvider());
 	inspector.Add(CreaturesProvider());
 	inspector.Add(ScriptProvider(controls.scripts));

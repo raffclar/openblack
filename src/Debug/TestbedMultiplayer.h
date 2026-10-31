@@ -49,6 +49,12 @@ enum class Stage : uint8_t
 	StartCancelled,
 	/// The start of the game stops: the player's land file is not the server's
 	KickedFromGame,
+	/// The game room's chat, with the ping after the player's own name (deviation 143, as --show-ping does)
+	RoomPing,
+	/// The game room's box "Could not download map from Internet.": the lobby did not give the room's land
+	MapDownloadFailed,
+	/// The conditions page of a game whose server picked winning conditions and a time limit
+	ConditionsPicked,
 	_Count
 };
 

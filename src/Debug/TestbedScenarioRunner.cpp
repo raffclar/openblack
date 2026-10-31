@@ -22,9 +22,11 @@
 #include <numbers>
 #include <ranges>
 #include <string>
+#include <string_view>
 #include <system_error>
 #include <tuple>
 #include <type_traits>
+#include <utility>
 #include <variant>
 #include <vector>
 
@@ -33,12 +35,10 @@
 #include <SDL_events.h>
 #include <SDL_keycode.h>
 #include <SDL_mouse.h>
-#include <bgfx/bgfx.h>
 #include <fmt/format.h>
 #include <glm/geometric.hpp>
 #include <glm/gtx/vec_swizzle.hpp>
 #include <glm/trigonometric.hpp>
-#include <imgui.h>
 #include <spdlog/spdlog.h>
 
 #include "3D/DayNightClock.h"
@@ -50,11 +50,7 @@
 #include "3D/TempleInteriorInterface.h"
 #include "Animals/BirdRules.h"
 #include "Animals/GrazerRules.h"
-#include "Audio/AudioManagerInterface.h"
-#include "Audio/CustomMusicPlayerInterface.h"
-#include "Audio/GameMusic.h"
-#include "Audio/HeaderOverrides.h"
-#include "Audio/MusicMood.h"
+#include "Animals/HunterRules.h"
 #include "CHLApi.h"
 #include "Camera/Camera.h"
 #include "Camera/CameraModel.h"
@@ -63,6 +59,7 @@
 #include "Common/FileDialog.h"
 #include "Common/MachineClock.h"
 #include "Common/PortableMath.h"
+#include "Creature/CaveCreature.h"
 #include "Creature/CreatureActivity.h"
 #include "Creature/CreatureDecisionTree.h"
 #include "Creature/CreatureFeedback.h"
@@ -73,7 +70,9 @@
 #include "Creature/CreatureObjectActions.h"
 #include "Creature/CreatureRig.h"
 #include "Creature/CreatureScriptPlay.h"
+#include "Debug/ComputerActions.h"
 #include "Debug/FightAutopilotInterface.h"
+#include "Debug/TestbedHandSweep.h"
 #include "Debug/TestbedMultiplayer.h"
 #include "Debug/TownMiracles.h"
 #include "DebugGuiInterface.h"
@@ -141,19 +140,24 @@
 #include "ECS/Components/TeleportStone.h"
 #include "ECS/Components/Temple.h"
 #include "ECS/Components/Town.h"
+#include "ECS/Components/TownDesireFlag.h"
 #include "ECS/Components/Transform.h"
 #include "ECS/Components/VillageTotem.h"
 #include "ECS/Components/Villager.h"
 #include "ECS/Components/VillagerLabel.h"
+#include "ECS/Components/Vortex.h"
 #include "ECS/Components/WallHug.h"
 #include "ECS/Components/Weather.h"
+#include "ECS/Components/Workshop.h"
 #include "ECS/Components/WorshipSite.h"
+#include "ECS/ComputerPlayerStart.h"
 #include "ECS/CreatureFromFile.h"
 #include "ECS/CreatureReactionNotice.h"
 #include "ECS/Dances.h"
 #include "ECS/Map.h"
 #include "ECS/ObjectPhysics.h"
 #include "ECS/Registry.h"
+#include "ECS/ScriptFlocks.h"
 #include "ECS/Systems/AbodeKnockSystemInterface.h"
 #include "ECS/Systems/AdvisorSystemInterface.h"
 #include "ECS/Systems/AlignmentSystemInterface.h"
@@ -162,8 +166,11 @@
 #include "ECS/Systems/BoatLaunchSystemInterface.h"
 #include "ECS/Systems/CameraBookmarkSystemInterface.h"
 #include "ECS/Systems/CameraHelpSystemInterface.h"
+#include "ECS/Systems/ChatSystemInterface.h"
 #include "ECS/Systems/CinematicDirectorSystemInterface.h"
+#include "ECS/Systems/ComputerPlayerSystemInterface.h"
 #include "ECS/Systems/CreatureAnimationSystemInterface.h"
+#include "ECS/Systems/CreatureCarryOverSystemInterface.h"
 #include "ECS/Systems/CreatureCaveSystemInterface.h"
 #include "ECS/Systems/CreatureFightSystemInterface.h"
 #include "ECS/Systems/CreatureFizzSystemInterface.h"
@@ -198,6 +205,7 @@
 #include "ECS/Systems/Implementations/VillagerDance.h"
 #include "ECS/Systems/Implementations/VillagerDisciples.h"
 #include "ECS/Systems/Implementations/VillagerHome.h"
+#include "ECS/Systems/IncomingMessageSystemInterface.h"
 #include "ECS/Systems/InspectorLoading.h"
 #include "ECS/Systems/InspectorSystemInterface.h"
 #include "ECS/Systems/LandSystemInterface.h"
@@ -206,7 +214,8 @@
 #include "ECS/Systems/MagicShieldSystemInterface.h"
 #include "ECS/Systems/MagicSystemInterface.h"
 #include "ECS/Systems/MusicMoodSystemInterface.h"
-#include "ECS/Systems/ParticleSystemInterface.h"
+#include "ECS/Systems/ParticleRuleSystemInterface.h"
+#include "ECS/Systems/PlayerCommandSystemInterface.h"
 #include "ECS/Systems/PlayerProfileSystemInterface.h"
 #include "ECS/Systems/PlayerSystemInterface.h"
 #include "ECS/Systems/ProfileFolderSystemInterface.h"
@@ -215,8 +224,9 @@
 #include "ECS/Systems/RewardSystemInterface.h"
 #include "ECS/Systems/SaveGameSystemInterface.h"
 #include "ECS/Systems/ScriptHighlightSystemInterface.h"
+#include "ECS/Systems/ScriptMusicSystemInterface.h"
 #include "ECS/Systems/ScriptObjectsSystemInterface.h"
-#include "ECS/Systems/SkySystemInterface.h"
+#include "ECS/Systems/SkyClockSystemInterface.h"
 #include "ECS/Systems/SnowSystemInterface.h"
 #include "ECS/Systems/SoundTagSystemInterface.h"
 #include "ECS/Systems/SpellIconSystemInterface.h"
@@ -230,13 +240,13 @@
 #include "ECS/Systems/VillageTotemSystemInterface.h"
 #include "ECS/Systems/VortexSystemInterface.h"
 #include "ECS/Systems/WeatherSystemInterface.h"
+#include "ECS/Systems/WorkshopSystemInterface.h"
 #include "ECS/Systems/WorshipSiteSystemInterface.h"
 #include "ECS/TempleConstruction.h"
 #include "ECS/WorldObjects.h"
 #include "FileSystem/FileSystemInterface.h"
-#include "Game.h"
 #include "Gestures/GesturePaths.h"
-#include "Gui/GameInterface.h"
+#include "Gui/GameTexts.h"
 #include "Gui/OnlineMapTexts.h"
 #include "Gui/TextDatabase.h"
 #include "Help/HelpProfileFile.h"
@@ -245,6 +255,7 @@
 #include "InfoConstants.h"
 #include "Input/GameActionMapInterface.h"
 #include "Input/InjectedInput.h"
+#include "Input/InputDeviceInterface.h"
 #include "Input/PointerSettle.h"
 #include "LHScriptX/FeatureScriptCommands.h"
 #include "LHScriptX/Script.h"
@@ -255,7 +266,14 @@
 #include "Resources/ResourceManager.h"
 #include "Resources/ResourcesInterface.h"
 #include "ScriptHeaders/ScriptInterfaceLevels.h"
+#include "Sound/CustomMusicPlayerInterface.h"
+#include "Sound/GameMusic.h"
+#include "Sound/HeaderOverrides.h"
+#include "Sound/MusicMood.h"
+#include "Sound/SoundId.h"
+#include "Sound/SoundRequestInterface.h"
 #include "TestbedDispenserGrid.h"
+#include "Visual/RendererRequestsInterface.h"
 #include "Windowing/WindowingInterface.h"
 
 #include "../Profiler.h"
@@ -365,7 +383,7 @@ std::vector<benchmark::StageInfo> BenchmarkStages()
 	return stages;
 }
 
-double Milliseconds(std::chrono::system_clock::duration duration)
+double Milliseconds(std::chrono::steady_clock::duration duration)
 {
 	return std::chrono::duration<double, std::milli>(duration).count();
 }
@@ -422,12 +440,10 @@ glm::vec2 AheadOf(const Transform& transform)
 /// doesn't take the scenario's presses
 void KeepDebugWindowsOffTheMouse(bool off)
 {
-	if (ImGui::GetCurrentContext() == nullptr)
+	if (Locator::debugGui::has_value())
 	{
-		return;
+		Locator::debugGui::value().KeepOffTheMouse(off);
 	}
-	auto& io = ImGui::GetIO();
-	io.ConfigFlags = off ? (io.ConfigFlags | ImGuiConfigFlags_NoMouse) : (io.ConfigFlags & ~ImGuiConfigFlags_NoMouse);
 }
 /// Whether a command sends its creature somewhere, or has it face, throw or point somewhere
 bool HasPoint(Kind kind)
@@ -522,6 +538,18 @@ entt::entity PlaceAnimal(AnimalInfo type, const ObjectSetup& object, glm::vec3 p
 	else if (object.living && animals::birds::IsLandBird(type))
 	{
 		animal = animalSystem.CreateBird(type, point, 0, entt::null);
+	}
+	else if (object.living && animals::hunters::IsWildHunter(type))
+	{
+		animal = animalSystem.CreateHunter(type, point, 0, entt::null);
+		// A hungry hunter starts with its need to eat full
+		auto& registry = Locator::entitiesRegistry::value();
+		if (auto* hunter = animal != entt::null ? registry.TryGet<ecs::components::Hunter>(animal) : nullptr;
+		    hunter != nullptr && object.hungry)
+		{
+			hunter->needs.hunger =
+			    static_cast<int16_t>(Locator::infoConstants::value().animal.at(static_cast<size_t>(type)).hunger);
+		}
 	}
 	if (animal != entt::null)
 	{
@@ -624,6 +652,11 @@ void SetLifeAndPoison(entt::entity entity, const ObjectSetup& object)
 	{
 		registry.AssignOrReplace<ecs::components::Immovable>(entity);
 	}
+	// A building is held by a script as a script holds a thing that one of its variables names
+	if (object.inScript && registry.AnyOf<ecs::components::Abode, ecs::components::SpellDispenser>(entity))
+	{
+		registry.AssignOrReplace<ecs::components::InScript>(entity);
+	}
 	if (object.inScript && registry.AllOf<ecs::components::Villager>(entity) && Locator::livingActionSystem::has_value())
 	{
 		Locator::livingActionSystem::value().VillagerSetScriptState(entity, VillagerStates::InScript);
@@ -665,101 +698,88 @@ std::string GiveOwnTattooPicture(size_t design)
 	return fmt::format("design {} has the player's own picture", design + 1);
 }
 
-/// The game's menu opens on its Players page, and the tattoo editor over it as the page's Edit Tattoo button opens it
-std::string OpenTattooMenu()
+/// The made-up round trip of the ping line in microseconds: 40 ms, then 8 ms more each second to 64 ms, then 40 ms
+/// again
+[[nodiscard]] uint64_t DemoRoundTrip(float seconds)
 {
-	auto* game = Game::Instance();
-	if (game == nullptr || game->GetInterface() == nullptr || !Locator::tattooMenuSystem::has_value())
-	{
-		return "failed: no menu";
-	}
-	auto& interface = *game->GetInterface();
-	interface.OpenMenu();
-	interface.GetMenu().ShowPage(gui::GameMenu::Page::Players);
-	Locator::tattooMenuSystem::value().Open();
-	return Locator::tattooMenuSystem::value().IsOpen() ? "the tattoo editor shows its creature over the menu"
-	                                                   : "failed: the editor did not open";
+	constexpr uint64_t k_First = 40'000;
+	constexpr uint64_t k_Step = 8'000;
+	constexpr uint64_t k_Steps = 4;
+	return k_First + (k_Step * (static_cast<uint64_t>(seconds) % k_Steps));
 }
 
-/// The game's menu opens on its Controls page, picks a row and double clicks it, as the player does to bind it anew
-std::string OpenControlsBox(size_t row)
+/// A message comes into the list of incoming messages: the message of the real weather with a picture, a chat line or an
+/// e-mail
+std::string AddIncomingMessage(size_t value, std::string_view text)
 {
-	auto* game = Game::Instance();
-	if (game == nullptr || game->GetInterface() == nullptr)
+	if (!Locator::incomingMessageSystem::has_value())
 	{
-		return "failed: no menu";
+		return "failed: no list of incoming messages";
 	}
-	auto& interface = *game->GetInterface();
-	interface.OpenMenu();
-	auto& menu = interface.GetMenu();
-	menu.ShowPage(gui::GameMenu::Page::Controls);
-	const auto& list = menu.GetControls();
-	for (int y = list.rect.min.y; y < list.rect.max.y; ++y)
+	auto& messages = Locator::incomingMessageSystem::value();
+	if (value == k_IncomingChat || value == k_IncomingMail)
 	{
-		if (list.ItemAt(y) == row)
+		const auto kind = value == k_IncomingChat ? incoming_messages::Kind::Chat : incoming_messages::Kind::Mail;
+		messages.Add(kind, gui::ToUtf16(text), 0);
+	}
+	else if (value < incoming_messages::k_WeatherPictures)
+	{
+		messages.AddWeather(gui::ToUtf16(text), static_cast<uint8_t>(value));
+	}
+	else
+	{
+		return fmt::format("failed: no message for the value {}", value);
+	}
+	return fmt::format("{} messages in the list, the top one \"{}\"", messages.GetQueue().Count(),
+	                   gui::ToUtf8(messages.GetQueue().ShownText()));
+}
+
+/// The chat of a network game: a god says a line, or the chat of this computer opens with a line in it
+std::string Chat(GameStageInterface* stage, PlayerNames player, size_t value, std::string_view text)
+{
+	if (!Locator::chatSystem::has_value() || stage == nullptr || !stage->HasInterface())
+	{
+		return "failed: no chat";
+	}
+	auto& chat = Locator::chatSystem::value();
+	// The god of this computer and the god that speaks have the names of the testbed
+	const auto own = Locator::handSystem::has_value() ? Locator::handSystem::value().GetOwnPlayer() : PlayerNames::PLAYER_ONE;
+	auto names = chat.GetNames();
+	for (const auto god : {own, player})
+	{
+		if (static_cast<size_t>(god) < k_ChatNames.size())
 		{
-			const glm::ivec2 point {list.rect.Centre().x, y + 4};
-			menu.MouseDown(point);
-			menu.MouseUp(point);
-			menu.DoubleClick(point);
-			break;
+			names.try_emplace(god, k_ChatNames.at(static_cast<size_t>(god)));
 		}
 	}
-	return menu.IsCapturing() ? fmt::format("the box asks for the new input of row {}", row) : "failed: no box";
-}
-
-/// The multiplayer front end opens over the temple's future room with the demonstration lobby, on its way to a stage
-std::string OpenMultiplayerBox(size_t stage)
-{
-	auto* game = Game::Instance();
-	if (game == nullptr || game->GetInterface() == nullptr || stage >= static_cast<size_t>(testbed_multiplayer::Stage::_Count))
+	chat.SetNames(names);
+	const auto line = gui::ToUtf16(text);
+	if (value == k_ChatTypes)
 	{
-		return "failed: no interface";
+		stage->OpenChat(line);
+		return fmt::format("the chat opens with \"{}\"", text);
 	}
-	auto maps = gui::ReadOnlineMapTexts();
-	auto frontEnd = testbed_multiplayer::MakeDemoFrontEnd(static_cast<testbed_multiplayer::Stage>(stage), u"Alice",
-	                                                      std::move(maps.localMaps), std::move(maps.conditionTemplate));
-	if (!game->OpenMultiplayerFrontEnd(std::move(frontEnd)))
+	if (value != k_ChatSays)
 	{
-		return "failed: no temple";
+		return fmt::format("failed: no chat for the value {}", value);
 	}
-	return fmt::format("the front end goes to stage {}", stage);
-}
-
-/// The game's menu opens on a page. Without sound, the menu shows what a game with no sound shows.
-std::string OpenMenuPage(size_t page, bool noSound)
-{
-	auto* game = Game::Instance();
-	if (game == nullptr || game->GetInterface() == nullptr || page >= static_cast<size_t>(gui::GameMenu::Page::_Count))
+	// The line of this computer goes through the turns, and the line of another god comes in as the turns give it
+	if (player == own)
 	{
-		return "failed: no menu";
+		// The line goes to the other named gods
+		std::vector<PlayerNames> others;
+		for (const auto& [god, name] : names)
+		{
+			if (god != own)
+			{
+				others.push_back(god);
+			}
+		}
+		chat.SendLine(line, others);
+		return fmt::format("this computer says \"{}\"", text);
 	}
-	auto& interface = *game->GetInterface();
-	interface.OpenMenu();
-	auto& menu = interface.GetMenu();
-	if (noSound)
-	{
-		menu.SetSoundInstalled(false);
-	}
-	menu.ShowPage(static_cast<gui::GameMenu::Page>(page));
-	return fmt::format("the menu shows page {}{}", page, noSound ? " as with no sound" : "");
-}
-
-/// A key pressed in the game's menu, as the keyboard gives it
-std::string PressMenuKey(size_t key, bool shift)
-{
-	auto* game = Game::Instance();
-	if (game == nullptr || game->GetInterface() == nullptr || !game->GetInterface()->GetMenu().IsOpen())
-	{
-		return "failed: the menu is not open";
-	}
-	auto& menu = game->GetInterface()->GetMenu();
-	const auto action = static_cast<int>(key) == SDLK_ESCAPE ? menu.Escape() : menu.KeyDown(static_cast<int>(key), shift);
-	if (action == gui::GameMenu::Action::Continue)
-	{
-		menu.Close();
-	}
-	return fmt::format("key {}{} pressed", key, shift ? " with Shift" : "");
+	chat.Receive(player, player_commands::ChatSpeech {.recipients = {}, .text = line});
+	return fmt::format("god {} says \"{}\"", static_cast<int>(player), text);
 }
 
 /// The game writes the help record of the player to their folder in the profile folder, then reads it again
@@ -800,7 +820,7 @@ std::string CheckProfileFolder()
 /// The custom music player plays a track of the custom music folder, or stops; the music moods look at once
 std::string PlayCustomMusic(size_t track)
 {
-	auto* player = Locator::audio::has_value() ? Locator::audio::value().GetCustomMusic() : nullptr;
+	auto* player = Locator::sounds::has_value() ? Locator::sounds::value().GetCustomMusic() : nullptr;
 	if (player == nullptr || !Locator::musicMoodSystem::has_value())
 	{
 		return "failed: no custom music player";
@@ -846,11 +866,16 @@ void Runner::Start(const Scenario& scenario)
 	_scenario = &scenario;
 	_running = true;
 	_seconds = 0.0f;
+	_lastNativeResult.reset();
 	_fireBallTakeFrames.reset();
 	_nextMiracleLog = 0.0f;
 	_timeline = {};
 	_creatures.clear();
+	_slotCreatures.clear();
 	_objects.clear();
+	_scriptFlock = entt::null;
+	_keptByScript.clear();
+	_madeByNatives.clear();
 	_globes.clear();
 	_temples.clear();
 	_throwsDue.clear();
@@ -957,6 +982,15 @@ void Runner::Start(const Scenario& scenario)
 		lhscriptx::Script landScript({_middle.x, 0.0f, _middle.y}, map_coords::FromMetres(_middle));
 		landScript.Load(std::string(scenario.landScript));
 	}
+	// The land's start makes the sheet of the players' symbols after the land's script, which switches on the computer
+	// players
+	if (scenario.environment.symbolsAfterLandScript)
+	{
+		if (_stage != nullptr)
+		{
+			_stage->MakePlayersSymbols(scenario.environment.profileSymbol);
+		}
+	}
 	if (scenario.objectsAfterLandScript)
 	{
 		PlaceObjects(scenario, _middle);
@@ -964,6 +998,29 @@ void Runner::Start(const Scenario& scenario)
 	PlaceBirds(scenario, _middle);
 	PlaceCreatures(scenario, _middle);
 	PlaceDispensers(scenario);
+	// A network game fills its empty slots after the land script. The temples of the scenario must stand first.
+	if (scenario.fillEmptySlots && Locator::computerPlayerSystem::has_value())
+	{
+		constexpr std::array k_Humans {PlayerNames::PLAYER_ONE};
+		Locator::computerPlayerSystem::value().FillEmptySlots(computer_player::k_SlotGods, k_Humans);
+		// The commands can name the creatures of the filled slots after the creatures of the scenario
+		std::vector<entt::entity> filled;
+		Locator::entitiesRegistry::value().Each<const Creature>([this, &filled](entt::entity entity, const Creature&) {
+			if (std::ranges::find(_creatures, entity) == _creatures.end())
+			{
+				filled.push_back(entity);
+			}
+		});
+		std::ranges::sort(filled);
+		_slotCreatures = std::move(filled);
+	}
+	if (Locator::playerSystem::has_value())
+	{
+		for (const auto& ally : scenario.allies)
+		{
+			Locator::playerSystem::value().SetAlly(ally.player, ally.other, ally.strength);
+		}
+	}
 	// With the scenario's things laid out on the land, each town of a player with a temple is given its worship site, as
 	// a land's are once it is laid out
 	if (Locator::worshipSiteSystem::has_value())
@@ -985,6 +1042,9 @@ void Runner::Start(const Scenario& scenario)
 	{
 		SetUpWorship(*scenario.worshipShare);
 	}
+	_startTurn = Locator::time::has_value() ? Locator::time::value().GetTurn() : 0;
+	_computerActionsDone.assign(scenario.computerActions.size(), false);
+	UpdateComputerActions();
 	if (!scenario.debugWindow.empty() && Locator::debugGui::has_value())
 	{
 		Locator::debugGui::value().OpenWindow(scenario.debugWindow);
@@ -1009,13 +1069,31 @@ void Runner::Start(const Scenario& scenario)
 			}
 		}
 	}
+	if (scenario.townBeliefInRival.has_value())
+	{
+		auto& registry = Locator::entitiesRegistry::value();
+		const auto& towns = registry.Context().towns;
+		if (const auto town = towns.find(k_ScenarioTownId); town != towns.end() && registry.Valid(town->second))
+		{
+			if (auto* impression = registry.TryGet<ecs::components::TownImpression>(town->second))
+			{
+				magic::town_belief::SetInPlayer(impression->belief, PlayerNames::PLAYER_TWO, *scenario.townBeliefInRival);
+			}
+		}
+	}
 	if (scenario.townOwner.has_value())
 	{
 		auto& registry = Locator::entitiesRegistry::value();
 		const auto& towns = registry.Context().towns;
 		if (const auto town = towns.find(k_ScenarioTownId); town != towns.end() && registry.Valid(town->second))
 		{
-			registry.Get<ecs::components::Town>(town->second).owner = *scenario.townOwner;
+			auto& owned = registry.Get<ecs::components::Town>(town->second);
+			if (owned.owner != *scenario.townOwner)
+			{
+				// The town goes last in the list of its new player
+				owned.owner = *scenario.townOwner;
+				owned.gained = registry.Context().nextTownGained++;
+			}
 		}
 	}
 	if (scenario.townFeelingAboutCreatures.has_value())
@@ -1042,14 +1120,16 @@ void Runner::Start(const Scenario& scenario)
 		const auto at = MapPoint(_middle, scenario.hand->offset);
 		const glm::vec3 point {at.x, land.GetHeightAt(at), at.y};
 		const glm::vec3 hand = point + glm::vec3(0.0f, scenario.hand->height, 0.0f);
-		Locator::magicSystem::value().DriveHand(ecs::systems::MagicSystemInterface::HandFrame {
+		_heldHand = ecs::systems::MagicSystemInterface::HandFrame {
 		    .handPosition = hand,
 		    .point = point,
 		    .rayOrigin = hand + glm::vec3(0.0f, k_HandEyeHeight, 0.0f),
 		    .rayDirection = glm::vec3(0.0f, -1.0f, 0.0f),
 		    .cameraForward = glm::vec3(0.0f, -1.0f, 0.0f),
 		    .overWorld = true,
-		});
+		};
+		_heldHandHeight = scenario.hand->height;
+		Locator::magicSystem::value().DriveHand(*_heldHand);
 	}
 	for (const auto& miracle : scenario.miracles)
 	{
@@ -1074,6 +1154,12 @@ void Runner::Start(const Scenario& scenario)
 	_vortices.assign(scenario.vortices.size(), {});
 	_rewards.assign(scenario.rewards.size(), entt::null);
 	Frame(scenario.framing.shot, scenario.framing.creature, scenario.framing.distance);
+	// In a network game the commands step by the turns from this turn
+	_layoutTurn = Locator::time::has_value() ? std::optional(Locator::time::value().GetTurn()) : std::nullopt;
+	if (_layoutTurn.has_value())
+	{
+		SPDLOG_LOGGER_INFO(spdlog::get("game"), "The testbed scenario {} is laid out at turn {}", scenario.id, *_layoutTurn);
+	}
 	Log(fmt::format("Started {}", scenario.name));
 }
 
@@ -1084,6 +1170,12 @@ void Runner::Stop()
 		return;
 	}
 	_running = false;
+	// The ping line belongs to the network game again
+	if (_demoPingSince.has_value() && _stage != nullptr)
+	{
+		_stage->SetDemoRoundTrip(std::nullopt);
+	}
+	_demoPingSince.reset();
 	// The debug option's bonus creatures are as they were
 	if (_unlockedBefore.has_value() && Locator::config::has_value())
 	{
@@ -1111,6 +1203,11 @@ void Runner::Stop()
 		}
 	}
 	_skirmishBefore.reset();
+	if (_networkGameBefore.has_value() && Locator::time::has_value())
+	{
+		Locator::time::value().SetNetworkGame(*_networkGameBefore);
+	}
+	_networkGameBefore.reset();
 	// The players that the scenario added go
 	if (Locator::entitiesRegistry::has_value())
 	{
@@ -1130,6 +1227,8 @@ void Runner::Stop()
 	_addedPlayers.clear();
 	// The mouse is the player's again
 	_sweep.reset();
+	_heldHand.reset();
+	_sweepMovesHeldHand = false;
 	if (Locator::gameActionSystem::has_value())
 	{
 		if (_ownsPointer && Locator::gameActionSystem::value().GetScriptedPointer().has_value())
@@ -1140,11 +1239,11 @@ void Runner::Stop()
 		_ownsPointer = false;
 	}
 	// Its particle effects die away
-	if (Locator::particleSystem::has_value())
+	if (Locator::particleRuleSystem::has_value())
 	{
 		for (const auto& particle : _particles)
 		{
-			Locator::particleSystem::value().CloseDown(particle.effect);
+			Locator::particleRuleSystem::value().CloseDown(particle.effect);
 		}
 	}
 	_particles.clear();
@@ -1204,18 +1303,53 @@ void Runner::Stop()
 	{
 		Locator::footprintSystem::value().SetAprilFoolsOverride(std::nullopt);
 	}
-	if (Locator::skySystem::has_value())
+	SetUpDate(std::nullopt);
+	if (Locator::skyClockSystem::has_value())
 	{
-		Locator::skySystem::value().GetClock().SetRunning(true);
+		Locator::skyClockSystem::value().GetClock().SetRunning(true);
 	}
 	Log("Stopped");
 }
 
+void Runner::SetUpDate(const std::optional<RealDate>& date)
+{
+	if (!Locator::time::has_value())
+	{
+		return;
+	}
+	auto& time = Locator::time::value();
+	if (!date.has_value())
+	{
+		if (_pinnedDateBefore.has_value())
+		{
+			time.PinDate(*_pinnedDateBefore);
+			_pinnedDateBefore.reset();
+		}
+		return;
+	}
+	if (!_pinnedDateBefore.has_value())
+	{
+		_pinnedDateBefore = time.GetPinnedDate();
+	}
+	std::tm local {};
+	local.tm_year = date->year - 1900;
+	local.tm_mon = date->month - 1;
+	local.tm_mday = date->day;
+	local.tm_hour = date->hour;
+	local.tm_min = date->minute;
+	// The computer's time zone tells whether summer time applies on that date
+	local.tm_isdst = -1;
+	const auto unixTime = static_cast<int64_t>(std::mktime(&local));
+	time.PinDate(ecs::systems::PinForDateNow(unixTime, time.GetTicks()));
+	Log(fmt::format("Date set to {:04}-{:02}-{:02} {:02}:{:02}", date->year, date->month, date->day, date->hour, date->minute));
+}
+
 void Runner::SetUpEnvironment(const Environment& environment)
 {
-	if (Locator::skySystem::has_value())
+	SetUpDate(environment.realDate);
+	if (Locator::skyClockSystem::has_value())
 	{
-		auto& sky = Locator::skySystem::value();
+		auto& sky = Locator::skyClockSystem::value();
 		sky.SetTime(environment.hour);
 		sky.GetClock().SetRunning(environment.clockRuns);
 	}
@@ -1253,6 +1387,11 @@ void Runner::SetUpEnvironment(const Environment& environment)
 		Locator::alignmentSystem::value().SetPlayerAlignment(PlayerNames::PLAYER_ONE,
 		                                                     environment.playerAlignment.value_or(0.0f));
 	}
+	// A scenario starts with the first player as the god of this computer, after a scenario that changed it
+	if (std::exchange(_ownGodChanged, false) && Locator::handSystem::has_value())
+	{
+		Locator::handSystem::value().SetOwnPlayer(PlayerNames::PLAYER_ONE);
+	}
 	// The player's prayer power: as much as the scenario gives, or plenty
 	if (Locator::entitiesRegistry::has_value())
 	{
@@ -1273,9 +1412,9 @@ void Runner::SetUpEnvironment(const Environment& environment)
 	}
 	if (environment.profileSymbol.has_value())
 	{
-		if (auto* game = Game::Instance(); game != nullptr)
+		if (_stage != nullptr)
 		{
-			game->MakePlayersSymbols(environment.profileSymbol);
+			_stage->MakePlayersSymbols(environment.profileSymbol);
 		}
 	}
 	if (environment.drawFootpaths && Locator::config::has_value())
@@ -1309,6 +1448,15 @@ void Runner::SetUpEnvironment(const Environment& environment)
 		}
 		skirmish = true;
 	}
+	if (environment.networkGame && Locator::time::has_value())
+	{
+		auto& clock = Locator::time::value();
+		if (!_networkGameBefore.has_value())
+		{
+			_networkGameBefore = clock.IsNetworkGame();
+		}
+		clock.SetNetworkGame(true);
+	}
 	// The other players that the scenario puts in the game
 	if (Locator::entitiesRegistry::has_value() && Locator::playerSystem::has_value())
 	{
@@ -1325,7 +1473,7 @@ void Runner::SetUpEnvironment(const Environment& environment)
 	if (environment.cursor && Locator::windowing::has_value())
 	{
 		const auto size = glm::vec2(Locator::windowing::value().GetSize());
-		Game::Instance()->SetMousePosition(glm::ivec2(*environment.cursor * size));
+		_stage->SetMousePosition(glm::ivec2(*environment.cursor * size));
 	}
 }
 
@@ -1529,6 +1677,12 @@ void Runner::PlaceObjects(const Scenario& scenario, glm::vec2 middle)
 			    {
 				    return ecs::archetypes::FlowersArchetype::Create(position, type, yaw, object.scale);
 			    }
+			    else if constexpr (std::is_same_v<T, ScaffoldInfo>)
+			    {
+				    return Locator::workshopSystem::has_value() ? Locator::workshopSystem::value().CreateScaffold(
+				                                                      position, entt::null, entt::null, yaw, object.scale)
+				                                                : entt::null;
+			    }
 			    else
 			    {
 				    return ecs::archetypes::FeatureArchetype::Create(position, type, yaw, object.scale);
@@ -1620,6 +1774,115 @@ void Runner::SetUpWorship(float share)
 	{
 		Locator::villageTotemSystem::value().SetTownShare(town, share);
 	}
+}
+
+void Runner::UpdateComputerActions()
+{
+	if (_scenario == nullptr)
+	{
+		return;
+	}
+	const uint32_t turn = Locator::time::has_value() ? Locator::time::value().GetTurn() : 0;
+	for (size_t i = 0; i < _scenario->computerActions.size() && i < _computerActionsDone.size(); ++i)
+	{
+		const auto& action = _scenario->computerActions[i];
+		if (_computerActionsDone[i] || turn - _startTurn < action.afterTurns)
+		{
+			continue;
+		}
+		_computerActionsDone[i] = true;
+		// The tool makes a marker on the land when it gives the action
+		const auto thingOf = [this, &action](const ComputerActionThing& thing) {
+			if (thing.kind != ComputerActionThing::Kind::Marker)
+			{
+				return ComputerActionThingOf(thing, action.player);
+			}
+			const auto point = MapPoint(_middle, thing.point);
+			return ecs::archetypes::ScriptMarkerArchetype::Create(
+			    {point.x, Locator::terrainSystem::value().GetHeightAt(point), point.y});
+		};
+		const auto first = thingOf(action.first);
+		const auto second = thingOf(action.second);
+		if (action.forceAtOnce)
+		{
+			if (!Locator::computerPlayerSystem::value().ForceAction(action.player, action.node, first, second))
+			{
+				SPDLOG_LOGGER_WARN(spdlog::get("game"), "Testbed: the computer god {} did not start {}",
+				                   static_cast<int>(action.player), action.node);
+			}
+			continue;
+		}
+		if (!debug::computer_actions::Force(action.player, action.node, first, second))
+		{
+			SPDLOG_LOGGER_WARN(spdlog::get("game"), "Testbed: the computer god {} has no node {}",
+			                   static_cast<int>(action.player), action.node);
+		}
+	}
+}
+
+entt::entity Runner::ComputerActionThingOf(const ComputerActionThing& thing, PlayerNames player) const
+{
+	auto& registry = Locator::entitiesRegistry::value();
+	switch (thing.kind)
+	{
+	case ComputerActionThing::Kind::None:
+	case ComputerActionThing::Kind::Marker:
+		break;
+	case ComputerActionThing::Kind::Town:
+	{
+		const auto& towns = registry.Context().towns;
+		const auto found = towns.find(thing.townId);
+		return found != towns.end() ? found->second : entt::null;
+	}
+	case ComputerActionThing::Kind::Icon:
+	{
+		if (!Locator::infoConstants::has_value())
+		{
+			break;
+		}
+		const auto& info = Locator::infoConstants::value();
+		entt::entity found = entt::null;
+		registry.Each<const ecs::components::WorshipIcon>(
+		    [&registry, &info, &found, &thing, player](entt::entity entity, const ecs::components::WorshipIcon& icon) {
+			    const auto* site =
+			        registry.Valid(icon.site) ? registry.TryGet<const ecs::components::WorshipSite>(icon.site) : nullptr;
+			    if (found != entt::null || site == nullptr || site->player != player || icon.seed == SpellSeedType::None)
+			    {
+				    return;
+			    }
+			    const auto plain =
+			        magic::GetMagicTypeFromPowerUpLevel(magic::GetSpellSeedInfo(info, icon.seed), magic::k_BasePowerUpLevel);
+			    if (plain == thing.type)
+			    {
+				    found = entity;
+			    }
+		    });
+		return found;
+	}
+	case ComputerActionThing::Kind::Object:
+		return thing.object < _objects.size() ? _objects[thing.object] : entt::null;
+	case ComputerActionThing::Kind::Creature:
+		return thing.object < _creatures.size() ? _creatures[thing.object] : entt::null;
+	case ComputerActionThing::Kind::Workshop:
+	{
+		const auto& towns = registry.Context().towns;
+		const auto found = towns.find(thing.townId);
+		const auto* town = found != towns.end() ? registry.TryGet<const ecs::components::Town>(found->second) : nullptr;
+		if (town == nullptr)
+		{
+			break;
+		}
+		const auto workshop = std::ranges::find_if(town->abodes, [&registry](entt::entity abode) {
+			return registry.Valid(abode) && registry.AllOf<ecs::components::Workshop>(abode);
+		});
+		return workshop != town->abodes.end() ? *workshop : entt::null;
+	}
+	case ComputerActionThing::Kind::PlayerCreature:
+		return Locator::playerSystem::has_value()
+		           ? Locator::playerSystem::value().GetPrimaryCreature(thing.owner).value_or(entt::null)
+		           : entt::null;
+	}
+	return entt::null;
 }
 
 void Runner::PlaceBirds(const Scenario& scenario, glm::vec2 middle)
@@ -1753,17 +2016,19 @@ void Runner::PointAtBody(entt::entity creature) const
 	glm::vec3 pixel;
 	if (Locator::camera::value().ProjectWorldToScreen(middle, {0.0f, 0.0f, size.x, size.y}, pixel))
 	{
-		Game::Instance()->SetMousePosition(glm::ivec2(glm::round(glm::vec2(pixel))));
+		_stage->SetMousePosition(glm::ivec2(glm::round(glm::vec2(pixel))));
 	}
 }
 
 std::optional<entt::entity> Runner::CreatureAt(size_t index) const
 {
-	if (index >= _creatures.size() || !Locator::entitiesRegistry::has_value())
+	// After the creatures of the scenario come the creatures of the filled slots
+	const auto total = _creatures.size() + _slotCreatures.size();
+	if (index >= total || !Locator::entitiesRegistry::has_value())
 	{
 		return std::nullopt;
 	}
-	const auto entity = _creatures[index];
+	const auto entity = index < _creatures.size() ? _creatures[index] : _slotCreatures[index - _creatures.size()];
 	auto& registry = Locator::entitiesRegistry::value();
 	if (!registry.Valid(entity) || !registry.AllOf<Creature>(entity))
 	{
@@ -1790,6 +2055,10 @@ void Runner::ApplyStates()
 		if (needs == nullptr || mind == nullptr || creature == nullptr || !needs->started || !mind->desires.has_value())
 		{
 			continue;
+		}
+		if (setup.pauseMind && setup.thinksAfterSeconds.has_value() && _seconds >= *setup.thinksAfterSeconds)
+		{
+			mind->paused = false;
 		}
 		if (_started[i] && !setup.hold)
 		{
@@ -1830,6 +2099,40 @@ std::optional<entt::entity> Runner::ObjectAt(size_t index) const
 		return std::nullopt;
 	}
 	return _objects[index];
+}
+
+std::optional<entt::entity> Runner::TotemAt(size_t index) const
+{
+	const auto centre = ObjectAt(index);
+	if (!centre.has_value())
+	{
+		return std::nullopt;
+	}
+	std::optional<entt::entity> totem;
+	Locator::entitiesRegistry::value().Each<const ecs::components::VillageTotem>(
+	    [&totem, &centre](entt::entity entity, const ecs::components::VillageTotem& component) {
+		    if (component.townCentre == *centre)
+		    {
+			    totem = entity;
+		    }
+	    });
+	return totem;
+}
+
+void Runner::BuildWorshipSiteOf(entt::entity centre) const
+{
+	// The scenario does not wait for the villagers to build the worship site: it stands built at once
+	auto& registry = Locator::entitiesRegistry::value();
+	const auto* abode = registry.TryGet<const ecs::components::Abode>(centre);
+	const auto& towns = registry.Context().towns;
+	const auto found = abode != nullptr ? towns.find(abode->townId) : towns.end();
+	const auto* town = found != towns.end() && registry.Valid(found->second)
+	                       ? registry.TryGet<const ecs::components::Town>(found->second)
+	                       : nullptr;
+	if (town != nullptr && registry.Valid(town->worshipSite))
+	{
+		ecs::construction::BuildBy(town->worshipSite, k_BuildWholeSite);
+	}
 }
 
 std::string Runner::GiveObjectCommand(entt::entity creature, const Command& command)
@@ -1935,9 +2238,26 @@ std::string Runner::GiveLeashCommand(entt::entity creature, const Command& comma
 	case Kind::TieLeash:
 		if (const auto object = ObjectAt(command.object))
 		{
-			return leashes.TieTo(creature, *object) ? "tied" : "can't";
+			return leashes.HandTie(creature, *object) ? "tied" : "can't";
 		}
 		return "it is gone";
+	case Kind::TieLeashToDesireFlag:
+	{
+		auto& registry = Locator::entitiesRegistry::value();
+		std::optional<entt::entity> found;
+		registry.Each<const ecs::components::TownDesireFlag>(
+		    [&](entt::entity flag, const ecs::components::TownDesireFlag& shown) {
+			    if (!found.has_value() && static_cast<size_t>(shown.desire) == command.value)
+			    {
+				    found = flag;
+			    }
+		    });
+		if (!found.has_value())
+		{
+			return "no flag";
+		}
+		return leashes.HandTie(creature, *found) ? "tied" : "can't";
+	}
 	case Kind::LeashOrderAt:
 	{
 		const auto point = MapPoint(_middle, command.point);
@@ -1974,7 +2294,7 @@ std::string Runner::GiveLeashCommand(entt::entity creature, const Command& comma
 				    post = entity;
 			    }
 		    });
-		return post.has_value() && leashes.TapPost(*post) ? "tapped" : "no such leash";
+		return post.has_value() && leashes.TapPost(command.player, *post) ? "tapped" : "no such leash";
 	}
 	case Kind::LeashTapBuilding:
 	{
@@ -1995,7 +2315,9 @@ std::string Runner::GiveLeashCommand(entt::entity creature, const Command& comma
 		return Locator::abodeKnockSystem::value().Tap(*object, at, true) ? "knocked" : "not knocked";
 	}
 	case Kind::UntieLeash:
+		// As the hand unties it, the leash goes back to the hand with the attach sound
 		leashes.UntieToHand(creature);
+		leashes.PlayHandAttachSound(creature);
 		return {};
 	case Kind::TakeOffLeash:
 		leashes.TakeOff(creature);
@@ -2019,7 +2341,7 @@ std::string Runner::GivePlayerCommand(const Command& command)
 			return "no miracles";
 		}
 		auto& magic = Locator::magicSystem::value();
-		magic.DiscardHeldSeed();
+		magic.DiscardHeldSeedOf(command.player);
 		const auto seed = static_cast<SpellSeedType>(command.value);
 		const auto given = magic.GiveSeedToHand(command.player, seed, magic::k_BasePowerUpLevel, 1.0f);
 		return given != entt::null ? fmt::format("seed {} in the hand", command.value) : "the hand isn't free";
@@ -2040,7 +2362,7 @@ std::string Runner::GivePlayerCommand(const Command& command)
 			return "no miracles";
 		}
 		auto& magic = Locator::magicSystem::value();
-		magic.DiscardHeldSeed();
+		magic.DiscardHeldSeedOf(command.player);
 		const auto seed = static_cast<SpellSeedType>(command.value);
 		const auto given = magic.SummonSeed(command.player, seed, magic::k_BasePowerUpLevel);
 		return given != entt::null ? fmt::format("seed {} summoned to the hand", command.value) : "the hand isn't free";
@@ -2076,6 +2398,18 @@ std::string Runner::GivePlayerCommand(const Command& command)
 		ecs::construction::SetBuilt(*object, 1.0f);
 		return "finished";
 	}
+	case Kind::FillBuiltAmount:
+	{
+		const auto object = ObjectAt(command.object);
+		auto* progress =
+		    object.has_value() ? Locator::entitiesRegistry::value().TryGet<ecs::components::BuildProgress>(*object) : nullptr;
+		if (progress == nullptr)
+		{
+			return "nothing going up";
+		}
+		progress->built = 1.0f;
+		return "all of it built, not finished";
+	}
 	case Kind::RemoveObject:
 	{
 		const auto object = ObjectAt(command.object);
@@ -2085,6 +2419,18 @@ std::string Runner::GivePlayerCommand(const Command& command)
 		}
 		ecs::world_objects::Remove(*object);
 		return "removed";
+	}
+	case Kind::OwnGod:
+	{
+		if (!Locator::handSystem::has_value())
+		{
+			return "no hands";
+		}
+		auto& hands = Locator::handSystem::value();
+		std::ignore = hands.MakeHandsOf(command.player);
+		hands.SetOwnPlayer(command.player);
+		_ownGodChanged = true;
+		return fmt::format("this computer is the god of player {}", static_cast<int>(command.player));
 	}
 	case Kind::OtherGodHand:
 	{
@@ -2119,6 +2465,17 @@ std::string Runner::GivePlayerCommand(const Command& command)
 		                              .focus = ground});
 		return held;
 	}
+	case Kind::ComputerPersonality:
+		if (!Locator::computerPlayerSystem::has_value())
+		{
+			return "no computer players";
+		}
+		Locator::computerPlayerSystem::value().SetPersonality(command.player, command.action, command.amount);
+		return fmt::format("{} weighs {}", command.action, command.amount);
+	case Kind::ComputerUntaughtSends:
+		return debug::computer_actions::SetUntaughtSends(command.player, command.value, static_cast<uint32_t>(command.amount))
+		           ? fmt::format("{} sends for kind {}", command.amount, command.value)
+		           : "no computer mind";
 	case Kind::BringCreature:
 	{
 		if (!Locator::filesystem::has_value())
@@ -2185,43 +2542,23 @@ std::string Runner::GivePlayerCommand(const Command& command)
 		}
 		if (command.ctrl)
 		{
-			registry.Get<ecs::components::Dance>(dance).cameraWanted = true;
+			// The dance wants the camera of every god, so that every computer of a network game sets the same world and
+			// turns its own camera
+			for (auto& hand : registry.Get<ecs::components::Dance>(dance).hands)
+			{
+				hand.cameraWanted = true;
+			}
 		}
 		return fmt::format("{} dancers{}", dancers, command.ctrl ? ", the dance wants its camera" : "");
 	}
 	case Kind::HandGripTotem:
 	{
-		const auto centre = ObjectAt(command.object);
-		if (!centre.has_value() || !Locator::villageTotemSystem::has_value())
+		const auto totem = TotemAt(command.object);
+		if (!totem.has_value() || !Locator::villageTotemSystem::has_value())
 		{
 			return "no totem";
 		}
-		std::optional<entt::entity> totem;
-		Locator::entitiesRegistry::value().Each<const ecs::components::VillageTotem>(
-		    [&totem, &centre](entt::entity entity, const ecs::components::VillageTotem& component) {
-			    if (component.townCentre == *centre)
-			    {
-				    totem = entity;
-			    }
-		    });
-		if (!totem.has_value())
-		{
-			return "no totem";
-		}
-		// The scenario does not wait for the villagers to build the worship site: it stands built at once
-		{
-			auto& registry = Locator::entitiesRegistry::value();
-			const auto* abode = registry.TryGet<const ecs::components::Abode>(*centre);
-			const auto& towns = registry.Context().towns;
-			const auto found = abode != nullptr ? towns.find(abode->townId) : towns.end();
-			const auto* town = found != towns.end() && registry.Valid(found->second)
-			                       ? registry.TryGet<const ecs::components::Town>(found->second)
-			                       : nullptr;
-			if (town != nullptr && registry.Valid(town->worshipSite))
-			{
-				ecs::construction::BuildBy(town->worshipSite, k_BuildWholeSite);
-			}
-		}
+		BuildWorshipSiteOf(*ObjectAt(command.object));
 		auto& totems = Locator::villageTotemSystem::value();
 		if (!totems.Grip(*totem, command.player))
 		{
@@ -2288,7 +2625,7 @@ std::string Runner::GivePlayerCommand(const Command& command)
 	}
 	case Kind::PlayGuidanceVoice:
 	{
-		if (!Locator::audio::has_value())
+		if (!Locator::sounds::has_value() || !Locator::sounds::value().HasAudio())
 		{
 			return "no audio";
 		}
@@ -2304,7 +2641,7 @@ std::string Runner::GivePlayerCommand(const Command& command)
 			options.maxDistance = command.radius;
 			options.callerWins = audio::k_CallerDistancesWin;
 		}
-		const auto started = Locator::audio::value().StartSoundEffect(resources::HashIdentifier(sample), options);
+		const auto started = Locator::sounds::value().StartSoundEffect(resources::HashIdentifier(sample), options);
 		return fmt::format("{} asked for at volume {} and pitch {}%{}{}", sample, guidance::k_VoiceVolume,
 		                   guidance::k_VoicePitch, command.ctrl ? ", placed" : ", heard everywhere",
 		                   started == entt::null ? ", not started" : "");
@@ -2333,6 +2670,46 @@ std::string Runner::GivePlayerCommand(const Command& command)
 	}
 	case Kind::ChargeIconWithSeedHeld:
 		return ChargeIconWithSeedHeld(command);
+	case Kind::PressPlainKey:
+	{
+		// The key goes down and comes up again, each as an event of the window
+		const auto scancode = static_cast<SDL_Scancode>(command.value);
+		for (const bool down : {true, false})
+		{
+			SDL_Event key {};
+			key.type = down ? SDL_KEYDOWN : SDL_KEYUP;
+			key.key.windowID = Locator::windowing::has_value() ? Locator::windowing::value().GetID() : 0;
+			key.key.state = down ? SDL_PRESSED : SDL_RELEASED;
+			key.key.keysym.scancode = scancode;
+			key.key.keysym.sym = input::Device().KeyFromScancode(scancode);
+			key.key.keysym.mod = KMOD_NONE;
+			input::MarkInjected(key);
+			input::Device().PushEvent(key);
+		}
+		return fmt::format("key {} pressed", input::Device().ScancodeName(scancode));
+	}
+	case Kind::PlainKeyDown:
+	case Kind::PlainKeyRepeat:
+	case Kind::PlainKeyUp:
+	{
+		// The key stays held after its event until the scenario lets go of it, though the keyboard does not hold it
+		const auto scancode = static_cast<SDL_Scancode>(command.value);
+		const bool down = command.kind != Kind::PlainKeyUp;
+		SDL_Event key {};
+		key.type = down ? SDL_KEYDOWN : SDL_KEYUP;
+		key.key.windowID = Locator::windowing::has_value() ? Locator::windowing::value().GetID() : 0;
+		key.key.state = down ? SDL_PRESSED : SDL_RELEASED;
+		key.key.repeat = command.kind == Kind::PlainKeyRepeat ? 1 : 0;
+		key.key.keysym.scancode = scancode;
+		key.key.keysym.sym = input::Device().KeyFromScancode(scancode);
+		key.key.keysym.mod = KMOD_NONE;
+		input::MarkInjected(key);
+		Locator::gameActionSystem::value().HoldScriptedKey(static_cast<int>(scancode), down);
+		input::Device().PushEvent(key);
+		constexpr std::array<std::string_view, 3> k_Done {"down", "repeated", "let go"};
+		return fmt::format("key {} {}", input::Device().ScancodeName(scancode),
+		                   k_Done.at(static_cast<size_t>(command.kind) - static_cast<size_t>(Kind::PlainKeyDown)));
+	}
 	case Kind::BuildWorshipSites:
 	{
 		if (!Locator::worshipSiteSystem::has_value())
@@ -2361,6 +2738,13 @@ std::string Runner::GivePlayerCommand(const Command& command)
 			return "the hand holds nothing";
 		}
 		return command.velocity == glm::vec3(0.0f) ? "put down" : "thrown";
+	case Kind::SetReportLatency:
+		if (!Locator::handSystem::has_value())
+		{
+			return "no hands";
+		}
+		Locator::handSystem::value().FixReportLatency(static_cast<uint32_t>(command.value));
+		return fmt::format("the reports of the hand come {} ms late", command.value);
 	default:
 		return {};
 	}
@@ -2379,6 +2763,36 @@ std::string Runner::StopScript(const Command& command)
 	const auto object = ObjectAt(0);
 	const auto inScript = object.has_value() && Locator::entitiesRegistry::value().AllOf<ecs::components::InScript>(*object);
 	return fmt::format("stopped {} tasks of {}; the object is {}in a script", stopped, command.script, inScript ? "" : "not ");
+}
+
+std::optional<entt::entity> Runner::ScriptFlock()
+{
+	auto& registry = Locator::entitiesRegistry::value();
+	if (registry.Valid(_scriptFlock) && ecs::script_flocks::IsFlock(registry, _scriptFlock))
+	{
+		return _scriptFlock;
+	}
+	const auto first = ObjectAt(0);
+	if (!first.has_value())
+	{
+		return std::nullopt;
+	}
+	// The flock starts where the first object is, as a script makes one at a point
+	const auto& at = registry.Get<const ecs::components::Transform>(*first).position;
+	_scriptFlock = ecs::script_flocks::Create(registry, map_coords::FromMetres({at.x, at.z}));
+	// The scenario keeps the flock as a script variable keeps it. Without the reference, the scripts' turn lets go of the
+	// flock and its members leave it.
+	auto& scripts = Locator::scriptObjects::value();
+	static_cast<void>(scripts.Register(_scriptFlock, true));
+	scripts.AddReference(_scriptFlock);
+	for (const auto object : _objects)
+	{
+		if (registry.Valid(object) && registry.AnyOf<ecs::components::Villager, ecs::components::Animal>(object))
+		{
+			static_cast<void>(ecs::script_flocks::AddLiving(registry, _scriptFlock, object));
+		}
+	}
+	return _scriptFlock;
 }
 
 std::optional<lhvm::VMValue> Runner::ScriptValueOf(const ScriptArgument& argument)
@@ -2406,9 +2820,39 @@ std::optional<lhvm::VMValue> Runner::ScriptValueOf(const ScriptArgument& argumen
 	case ScriptArgument::Kind::Creature:
 		object = CreatureAt(argument.index);
 		break;
+	case ScriptArgument::Kind::Temple:
+		if (argument.index < _temples.size())
+		{
+			object = _temples.at(argument.index);
+		}
+		break;
 	case ScriptArgument::Kind::Position:
 		// A position is three values, which only a native call gives
 		return std::nullopt;
+	case ScriptArgument::Kind::Result:
+		return _lastNativeResult;
+	case ScriptArgument::Kind::LastResult:
+		return _lastNativeResult;
+	case ScriptArgument::Kind::Flock:
+		object = ScriptFlock();
+		break;
+	case ScriptArgument::Kind::Town:
+	{
+		const auto& towns = Locator::entitiesRegistry::value().Context().towns;
+		const auto found = towns.find(ScenarioTown(_middle));
+		if (found == towns.end())
+		{
+			return std::nullopt;
+		}
+		object = found->second;
+		break;
+	}
+	case ScriptArgument::Kind::Made:
+		if (argument.index >= _madeByNatives.size())
+		{
+			return std::nullopt;
+		}
+		return lhvm::VMValue(_madeByNatives.at(argument.index));
 	}
 	if (!object.has_value())
 	{
@@ -2456,12 +2900,29 @@ std::string Runner::CallNative(const Command& command)
 		}
 		const auto type = ScriptDataTypeOf(argument.kind);
 		arguments.emplace_back(std::pair(*given, type));
+		if (const auto kept = static_cast<entt::entity>(given->uintVal);
+		    argument.kept && type == lhvm::DataType::Object && std::ranges::find(_keptByScript, kept) == _keptByScript.end())
+		{
+			// The scenario keeps the thing as a script variable keeps it, so that it stays in the control of the script
+			auto& scripts = Locator::scriptObjects::value();
+			static_cast<void>(scripts.Register(kept, false));
+			scripts.AddReference(kept);
+			_keptByScript.push_back(kept);
+		}
 	}
 	std::vector<std::pair<lhvm::VMValue, lhvm::DataType>> results;
 	const auto id = static_cast<uint32_t>(std::distance(functions->begin(), found));
 	if (!vm.CallNative(id, arguments, results))
 	{
 		return fmt::format("{} could not run now", command.script);
+	}
+	_lastNativeResult = results.empty() ? std::nullopt : std::optional(results.front().first);
+	for (const auto& [value, type] : results)
+	{
+		if (type == lhvm::DataType::Object)
+		{
+			_madeByNatives.push_back(value.uintVal);
+		}
 	}
 	return fmt::format("{} ran and gave back {} values", command.script, results.size());
 }
@@ -2625,7 +3086,7 @@ void Runner::FinishTakingFireBall()
 	}
 	else
 	{
-		result = magic.TapFireBall(_fireBallTaken) ? "caught it" : "it slipped through the hand";
+		result = magic.TapFireBall(_fireBallTaken) ? "the tap went to the turn" : "the hand could not tap it";
 	}
 	magic.DriveHand(std::nullopt);
 	Log(fmt::format("{:.1f}s: hand on the fireball: {}", _seconds, result));
@@ -2822,7 +3283,7 @@ std::string Runner::GiveFightCommand(entt::entity creature, const Command& comma
 	case Kind::TieLeashToCreature:
 		if (const auto other = CreatureAt(command.value); other.has_value() && Locator::leashSystem::has_value())
 		{
-			return Locator::leashSystem::value().TieTo(creature, *other) ? "tied" : "can't";
+			return Locator::leashSystem::value().HandTie(creature, *other) ? "tied" : "can't";
 		}
 		return "it is gone";
 	default:
@@ -2851,13 +3312,16 @@ void Runner::Give(const Command& command)
 	if (command.kind == Kind::HoldSeed || command.kind == Kind::DrawGesture || command.kind == Kind::SummonSeed ||
 	    command.kind == Kind::PressKey || command.kind == Kind::HandTakeFireBall || command.kind == Kind::HandTapObject ||
 	    command.kind == Kind::HandTake || command.kind == Kind::HandPour || command.kind == Kind::HandRelease ||
-	    command.kind == Kind::RemoveObject || command.kind == Kind::HandGripTotem ||
+	    command.kind == Kind::SetReportLatency || command.kind == Kind::RemoveObject || command.kind == Kind::HandGripTotem ||
 	    command.kind == Kind::AttachObjectScriptSound || command.kind == Kind::SayLine ||
 	    command.kind == Kind::PlayGuidanceVoice || command.kind == Kind::ScriptRelease || command.kind == Kind::FillSiteIcons ||
-	    command.kind == Kind::BuildWorshipSites || command.kind == Kind::ChargeIconWithSeedHeld ||
-	    command.kind == Kind::FinishBuilding || command.kind == Kind::PauseGame || command.kind == Kind::SetGameSpeed ||
+	    command.kind == Kind::BuildWorshipSites || command.kind == Kind::PressPlainKey || command.kind == Kind::PlainKeyDown ||
+	    command.kind == Kind::PlainKeyRepeat || command.kind == Kind::PlainKeyUp ||
+	    command.kind == Kind::ChargeIconWithSeedHeld || command.kind == Kind::FinishBuilding ||
+	    command.kind == Kind::FillBuiltAmount || command.kind == Kind::PauseGame || command.kind == Kind::SetGameSpeed ||
 	    command.kind == Kind::RemoveTeleportStone || command.kind == Kind::MakeDance || command.kind == Kind::OtherGodHand ||
-	    command.kind == Kind::BringCreature)
+	    command.kind == Kind::OwnGod || command.kind == Kind::BringCreature || command.kind == Kind::ComputerPersonality ||
+	    command.kind == Kind::ComputerUntaughtSends)
 	{
 		const auto result = GivePlayerCommand(command);
 		Log(fmt::format("{:.1f}s: {}{}{}", _seconds, Name(command.kind), result.empty() ? "" : ": ", result));
@@ -2893,78 +3357,132 @@ void Runner::Give(const Command& command)
 	}
 	if (command.kind == Kind::OpenTattooMenu)
 	{
-		Log(fmt::format("{:.1f}s: {}: {}", _seconds, Name(command.kind), OpenTattooMenu()));
+		Log(fmt::format("{:.1f}s: {}: {}", _seconds, Name(command.kind),
+		                (_stage != nullptr ? _stage->OpenTattooMenu() : "failed: no menu")));
+		return;
+	}
+	if (command.kind == Kind::ShowDemoPing)
+	{
+		_demoPingSince = command.value != 0 ? std::optional(_seconds) : std::nullopt;
+		if (!_demoPingSince.has_value() && _stage != nullptr)
+		{
+			_stage->SetDemoRoundTrip(std::nullopt);
+		}
+		UpdateDemoPing();
+		Log(fmt::format("{:.1f}s: {}: {}", _seconds, Name(command.kind), _demoPingSince.has_value() ? "shown" : "gone"));
+		return;
+	}
+	if (command.kind == Kind::TattooEditorAsNetworkGame)
+	{
+		Log(fmt::format("{:.1f}s: {}: {}", _seconds, Name(command.kind),
+		                (_stage != nullptr ? _stage->TattooEditorAsNetworkGame(command.value != 0) : "failed: no interface")));
 		return;
 	}
 	if (command.kind == Kind::OpenControlsBox)
 	{
-		Log(fmt::format("{:.1f}s: {}: {}", _seconds, Name(command.kind), OpenControlsBox(command.value)));
+		Log(fmt::format("{:.1f}s: {}: {}", _seconds, Name(command.kind),
+		                (_stage != nullptr ? _stage->OpenControlsBox(command.value) : "failed: no menu")));
 		return;
 	}
 	if (command.kind == Kind::JoinOnline)
 	{
-		auto* game = Game::Instance();
-		if (game != nullptr)
-		{
-			game->RequestJoinOnline();
-		}
-		Log(fmt::format("{:.1f}s: {}: {}", _seconds, Name(command.kind), game != nullptr ? "asked" : "failed: no game"));
+		const bool asked = _stage != nullptr && _stage->RequestJoinOnline();
+		Log(fmt::format("{:.1f}s: {}: {}", _seconds, Name(command.kind), asked ? "asked" : "failed: no game"));
+		return;
+	}
+	if (command.kind == Kind::Chat)
+	{
+		Log(fmt::format("{:.1f}s: {}: {}", _seconds, Name(command.kind),
+		                Chat(_stage, command.player, command.value, command.action)));
+		return;
+	}
+	if (command.kind == Kind::AddIncomingMessage)
+	{
+		Log(fmt::format("{:.1f}s: {}: {}", _seconds, Name(command.kind), AddIncomingMessage(command.value, command.action)));
 		return;
 	}
 	if (command.kind == Kind::OpenMultiplayerBox)
 	{
-		Log(fmt::format("{:.1f}s: {}: {}", _seconds, Name(command.kind), OpenMultiplayerBox(command.value)));
+		Log(fmt::format("{:.1f}s: {}: {}", _seconds, Name(command.kind),
+		                (_stage != nullptr ? _stage->OpenMultiplayerBox(command.value) : "failed: no interface")));
 		return;
 	}
-	if (command.kind == Kind::EndBox)
+	if (command.kind == Kind::SkirmishBox)
 	{
-		auto* game = Game::Instance();
-		if (game == nullptr || game->GetInterface() == nullptr)
+		if (command.value == 5 || command.value == 6)
+		{
+			// The game's own mind file takes the place of the creature that the profile keeps. This needs no interface, thus
+			// the dedicated server brings the creature too.
+			const auto path =
+			    Locator::filesystem::value().GetPath<filesystem::Path::CreatureMind>(true) / std::string(command.mindFile);
+			auto mind = std::make_shared<creaturemind::MindFileData>();
+			const bool read = creaturemind::ReadFile(path, *mind) == creaturemind::MindResult::Success;
+			const auto brought = ecs::creature_from_file::BringKept(PlayerNames::PLAYER_ONE, read ? mind : nullptr);
+			// With 6, the profile also keeps the new creature in its file. Thus a load of a saved skirmish brings it again.
+			if (command.value == 6 && brought.creature.has_value() && Locator::creatureCarryOverSystem::has_value())
+			{
+				Locator::creatureCarryOverSystem::value().KeepCreature(*brought.creature);
+			}
+			Log(fmt::format("{:.1f}s: {}: {}", _seconds, Name(command.kind),
+			                brought.creature.has_value()
+			                    ? fmt::format("the player's god brings creature {}", entt::to_integral(*brought.creature))
+			                    : fmt::format("no creature, reason {}", static_cast<int>(brought.refusal))));
+			return;
+		}
+		if (_stage == nullptr || !_stage->HasInterface())
 		{
 			Log(fmt::format("{:.1f}s: {}: failed: no interface", _seconds, Name(command.kind)));
+			return;
+		}
+		if (command.value == 1 || command.value == 4)
+		{
+			Log(fmt::format("{:.1f}s: {}: {}", _seconds, Name(command.kind), _stage->OpenSkirmishMenu(command.value == 4)));
 			return;
 		}
 		if (command.value == 3)
 		{
-			game->GetInterface()->GetMenu().SetNetworkGame(true);
-			game->GetInterface()->OpenMenu();
-			Log(fmt::format("{:.1f}s: {}: the main menu of a network game opens", _seconds, Name(command.kind)));
+			// The two lines of the script of Two Gods
+			auto& lands = Locator::landSystem::value();
+			lands.ShowLandMessage({.kind = land_message::Message::Kind::Start, .text = "Two Gods", .number = 2});
+			lands.ShowLandMessage(
+			    {.kind = land_message::Message::Kind::AddLine, .text = "Battle another god for this realm", .number = 2});
+			Log(fmt::format("{:.1f}s: {}: the land information box shows", _seconds, Name(command.kind)));
 			return;
 		}
-		if (command.value == 0)
-		{
-			game->AskToLeaveNetworkGame();
-			Log(fmt::format("{:.1f}s: {}: the question to leave opens", _seconds, Name(command.kind)));
-			return;
-		}
-		const bool opened = game->GetInterface()->GetEndGameBox().OpenTab(command.value);
-		Log(fmt::format("{:.1f}s: {}: tab {} {}", _seconds, Name(command.kind), command.value,
-		                opened ? "opens its box" : "does not open"));
+		Log(fmt::format("{:.1f}s: {}: {}", _seconds, Name(command.kind), _stage->OpenSkirmishBox(command.value == 2)));
 		return;
 	}
-	if (command.kind == Kind::OpenMenuPage)
+	if (command.kind == Kind::EndBox)
 	{
-		Log(fmt::format("{:.1f}s: {}: {}", _seconds, Name(command.kind), OpenMenuPage(command.value, command.ctrl)));
-		return;
-	}
-	if (command.kind == Kind::PressMenuKey)
-	{
-		Log(fmt::format("{:.1f}s: {}: {}", _seconds, Name(command.kind), PressMenuKey(command.value, command.ctrl)));
-		return;
-	}
-	if (command.kind == Kind::ShowCustomMusicControls)
-	{
-		auto* game = Game::Instance();
-		if (game == nullptr || game->GetInterface() == nullptr)
+		if (_stage == nullptr || !_stage->HasInterface())
 		{
 			Log(fmt::format("{:.1f}s: {}: failed: no interface", _seconds, Name(command.kind)));
 			return;
 		}
-		auto& controls = game->GetInterface()->GetMusicControls();
-		controls.ShowControls(command.value >= 1, command.value >= 2);
-		Log(fmt::format("{:.1f}s: {}: buttons {}, play list {}, the controls {}", _seconds, Name(command.kind),
-		                controls.GetPanel().controlsShown ? "shown" : "hidden",
-		                controls.GetPanel().playListShown ? "shown" : "hidden", controls.IsActive() ? "show" : "hide now"));
+		Log(fmt::format("{:.1f}s: {}: {}", _seconds, Name(command.kind), _stage->OpenEndBox(command.value)));
+		return;
+	}
+	if (command.kind == Kind::OpenMenuPage)
+	{
+		Log(fmt::format("{:.1f}s: {}: {}", _seconds, Name(command.kind),
+		                (_stage != nullptr ? _stage->OpenMenuPage(command.value, command.ctrl) : "failed: no menu")));
+		return;
+	}
+	if (command.kind == Kind::PressMenuKey)
+	{
+		Log(fmt::format(
+		    "{:.1f}s: {}: {}", _seconds, Name(command.kind),
+		    (_stage != nullptr ? _stage->PressMenuKey(command.value, command.ctrl) : "failed: the menu is not open")));
+		return;
+	}
+	if (command.kind == Kind::ShowCustomMusicControls)
+	{
+		if (_stage == nullptr || !_stage->HasInterface())
+		{
+			Log(fmt::format("{:.1f}s: {}: failed: no interface", _seconds, Name(command.kind)));
+			return;
+		}
+		Log(fmt::format("{:.1f}s: {}: {}", _seconds, Name(command.kind), _stage->ShowCustomMusicControls(command.value)));
 		return;
 	}
 	if (command.kind == Kind::StartScriptMusic)
@@ -2975,10 +3493,10 @@ void Runner::Give(const Command& command)
 			return;
 		}
 		const auto type = static_cast<audio::MusicType>(command.value);
-		if (auto* game = Game::Instance(); game != nullptr && game->GetGameMusic() != nullptr)
+		if (Locator::scriptMusicSystem::has_value())
 		{
-			game->GetGameMusic()->ResetMusicLyrics();
-			game->GetGameMusic()->StartScriptMusic(type);
+			Locator::scriptMusicSystem::value().ResetLyrics();
+			Locator::scriptMusicSystem::value().Start(type);
 		}
 		Log(fmt::format("{:.1f}s: {}: {}", _seconds, Name(command.kind), audio::GetMusicTypeName(type)));
 		return;
@@ -3034,9 +3552,9 @@ void Runner::Give(const Command& command)
 	}
 	if (command.kind == Kind::SetHour)
 	{
-		if (Locator::skySystem::has_value())
+		if (Locator::skyClockSystem::has_value())
 		{
-			Locator::skySystem::value().SetTime(command.hour);
+			Locator::skyClockSystem::value().SetTime(command.hour);
 		}
 		Log(fmt::format("{:.1f}s: the hour is {:.1f}", _seconds, command.hour));
 		return;
@@ -3076,25 +3594,44 @@ void Runner::Give(const Command& command)
 	}
 	if (command.kind == Kind::PlayLogoEffect)
 	{
-		if (auto* game = Game::Instance(); game != nullptr)
+		if (_stage != nullptr)
 		{
-			game->PlayLogoEffect();
+			_stage->PlayLogoEffect();
 		}
 		Log(fmt::format("{:.1f}s: the logo effect played", _seconds));
 		return;
 	}
 	if (command.kind == Kind::ContinueGame)
 	{
-		auto* game = Game::Instance();
-		const bool loaded = game != nullptr && game->ContinueFromExitSave();
+		const bool loaded = _stage != nullptr && _stage->ContinueFromExitSave();
 		Log(fmt::format("{:.1f}s: continue from the save on exit: {}", _seconds,
 		                loaded ? "loaded, the menu shows" : "a new game"));
 		return;
 	}
 	if (command.kind == Kind::QuickSave)
 	{
-		const bool done = Locator::saveGameSystem::has_value() && Locator::saveGameSystem::value().QuickSave();
-		Log(fmt::format("{:.1f}s: quick save: {}", _seconds, done ? "done" : "failed"));
+		// As the key: the key checks the rules, and the command saves at the next turn
+		const bool sent = Locator::saveGameSystem::has_value() && Locator::playerCommandSystem::has_value() &&
+		                  Locator::saveGameSystem::value().PressQuickSave();
+		if (sent)
+		{
+			Locator::playerCommandSystem::value().Submit(player_commands::QuickSave {});
+		}
+		Log(fmt::format("{:.1f}s: quick save: {}", _seconds, sent ? "sent" : "refused"));
+		return;
+	}
+	if (command.kind == Kind::SetTownBeliefInRival)
+	{
+		auto& registry = Locator::entitiesRegistry::value();
+		const auto& towns = registry.Context().towns;
+		if (const auto town = towns.find(k_ScenarioTownId); town != towns.end() && registry.Valid(town->second))
+		{
+			if (auto* impression = registry.TryGet<ecs::components::TownImpression>(town->second))
+			{
+				magic::town_belief::SetInPlayer(impression->belief, PlayerNames::PLAYER_TWO, command.amount);
+			}
+		}
+		Log(fmt::format("{:.1f}s: the town believes {:.2f} in the second player", _seconds, command.amount));
 		return;
 	}
 	if (command.kind == Kind::EndGuidanceWaits)
@@ -3300,12 +3837,17 @@ void Runner::Give(const Command& command)
 	}
 	case Kind::DoAction:
 	{
+		// A creature moves a totem only when its town has a worship site built
+		if (const auto centre = ObjectAt(command.object); command.onTotem && centre.has_value())
+		{
+			BuildWorshipSiteOf(*centre);
+		}
 		const auto* tables = minds.GetTables();
 		const auto action = tables != nullptr ? creature_mind_tables::FindAction(*tables, command.action) : std::nullopt;
 		const auto target = command.atCreature.has_value()                 ? CreatureAt(*command.atCreature)
 		                    : command.onTemple && !_temples.empty()        ? std::optional(_temples.front())
 		                    : command.onGlobe && command.globe.has_value() ? GlobeAt(*command.globe)
-		                    : command.atCreature.has_value()               ? CreatureAt(*command.atCreature)
+		                    : command.onTotem                              ? TotemAt(command.object)
 		                                                                   : ObjectAt(command.object);
 		const auto with = command.globe.has_value() && !command.onGlobe ? GlobeAt(*command.globe)
 		                  : command.usesCreature.has_value()            ? CreatureAt(*command.usesCreature)
@@ -3315,6 +3857,17 @@ void Runner::Give(const Command& command)
 		         : !target.has_value()                                   ? "no such object"
 		         : minds.ScriptDoAction(*entity, *action, *target, with) ? fmt::format("doing {}", command.action)
 		                                                                 : "can't";
+		break;
+	}
+	case Kind::GodOrder:
+	{
+		const auto* tables = minds.GetTables();
+		const auto action = tables != nullptr ? creature_mind_tables::FindAction(*tables, command.action) : std::nullopt;
+		const auto target = command.atCreature.has_value() ? CreatureAt(*command.atCreature) : std::nullopt;
+		result = !action.has_value()                             ? "no such action"
+		         : !target.has_value()                           ? "no such creature"
+		         : minds.ObeyGodOrder(*entity, *action, *target) ? fmt::format("ordered {}", command.action)
+		                                                         : "can't";
 		break;
 	}
 	case Kind::MakeFriends:
@@ -3497,6 +4050,7 @@ void Runner::Give(const Command& command)
 		break;
 	case Kind::PutOnLeash:
 	case Kind::TieLeash:
+	case Kind::TieLeashToDesireFlag:
 	case Kind::UntieLeash:
 	case Kind::TakeOffLeash:
 	case Kind::ConfineToHome:
@@ -3547,6 +4101,12 @@ void Runner::Give(const Command& command)
 		{
 			creature_hand_glow::Set(glows.glows, static_cast<creature_hand_glow::Place>(place), 1.0f,
 			                        static_cast<float>(command.value));
+		}
+		// A creature with glows that have power makes the hum of the creed, as after a load of the glows
+		if (command.value > 0 && Locator::soundTagSystem::has_value())
+		{
+			Locator::soundTagSystem::value().AttachObjectSound(*entity, static_cast<entt::id_type>(audio::SoundId::G_Creed_01),
+			                                                   true);
 		}
 		result = fmt::format("four glows of power {}", command.value);
 		break;
@@ -3605,10 +4165,13 @@ void Runner::Give(const Command& command)
 		}
 		break;
 	case Kind::HandGive:
-		result = Locator::handGrabSystem::has_value() && Locator::handGrabSystem::value().GiveHeldTo(*entity)
-		             ? "given"
-		             : "the hand gives nothing";
+	{
+		const bool given = Locator::handGrabSystem::has_value() && Locator::handGrabSystem::value().GiveHeldTo(*entity);
+		// A sweep of the pointer can now move the held hand away, as a player calls off the gift
+		_sweepMovesHeldHand = given && _heldHand.has_value();
+		result = given ? "given" : "the hand gives nothing";
 		break;
+	}
 	case Kind::SetHour:
 	case Kind::HoldSeed:
 	case Kind::DrawGesture:
@@ -3619,24 +4182,36 @@ void Runner::Give(const Command& command)
 	case Kind::HandTake:
 	case Kind::HandPour:
 	case Kind::HandRelease:
+	case Kind::SetReportLatency:
 	case Kind::AttachObjectScriptSound:
 	case Kind::SayLine:
 	case Kind::PlayGuidanceVoice:
 	case Kind::ScriptRelease:
 	case Kind::FillSiteIcons:
 	case Kind::BuildWorshipSites:
+	case Kind::PressPlainKey:
+	case Kind::PlainKeyDown:
+	case Kind::PlainKeyRepeat:
+	case Kind::PlainKeyUp:
 	case Kind::ChargeIconWithSeedHeld:
 	case Kind::RemoveObject:
 	case Kind::FinishBuilding:
+	case Kind::FillBuiltAmount:
 	case Kind::PauseGame:
 	case Kind::SetGameSpeed:
 	case Kind::RemoveTeleportStone:
 	case Kind::MakeDance:
 	case Kind::OpenMultiplayerBox:
 	case Kind::EndBox:
+	case Kind::SkirmishBox:
 	case Kind::OtherGodHand:
+	case Kind::OwnGod:
 	case Kind::JoinOnline:
 	case Kind::BringCreature:
+	case Kind::AddIncomingMessage:
+	case Kind::Chat:
+	case Kind::ComputerPersonality:
+	case Kind::ComputerUntaughtSends:
 	case Kind::HandGripTotem:
 	case Kind::SetAlignment:
 	case Kind::Advisor:
@@ -3651,9 +4226,12 @@ void Runner::Give(const Command& command)
 	case Kind::PlayIntroFilm:
 	case Kind::RunHelpMessage:
 	case Kind::EndGuidanceWaits:
+	case Kind::SetTownBeliefInRival:
 	case Kind::ProfileFolderCheck:
 	case Kind::OwnTattooPicture:
 	case Kind::OpenTattooMenu:
+	case Kind::TattooEditorAsNetworkGame:
+	case Kind::ShowDemoPing:
 	case Kind::OpenControlsBox:
 	case Kind::OpenMenuPage:
 	case Kind::PressMenuKey:
@@ -4052,6 +4630,14 @@ void Runner::UpdateCamera()
 	}
 }
 
+void Runner::UpdateDemoPing() const
+{
+	if (_demoPingSince.has_value() && _stage != nullptr)
+	{
+		_stage->SetDemoRoundTrip(DemoRoundTrip(_seconds - *_demoPingSince));
+	}
+}
+
 void Runner::Update(float seconds)
 {
 	if (_scenario == nullptr)
@@ -4085,11 +4671,13 @@ void Runner::Update(float seconds)
 	UpdateVillagerWalks();
 	UpdateTurnsAsked();
 	UpdateThrows();
+	UpdateComputerActions();
 	WatchGesture();
 	FinishTakingFireBall();
 	ApplyStates();
 	UpdatePointer(seconds);
-	const auto due = Advance(_timeline, _scenario->commands, _scenario->repeatFrom, seconds, [this](const Command& command) {
+	UpdateDemoPing();
+	auto due = Advance(_timeline, _scenario->commands, _scenario->repeatFrom, seconds, [this](const Command& command) {
 		const bool toHand =
 		    command.kind == Kind::HoldSeed || command.kind == Kind::DrawGesture || command.kind == Kind::SummonSeed;
 		if (toHand)
@@ -4098,9 +4686,30 @@ void Runner::Update(float seconds)
 		}
 		return IsFree(command.creature);
 	});
+	const auto turn = Locator::time::has_value() ? std::optional(Locator::time::value().GetTurn()) : std::nullopt;
+	if (_followedGives.has_value() && turn.has_value())
+	{
+		due = GivesAt(*_followedGives, *turn, _scenario->commands.size());
+	}
 	for (const auto index : due)
 	{
+		if (_giveObserver && turn.has_value())
+		{
+			_giveObserver(*turn, index);
+		}
 		Give(_scenario->commands[index]);
+	}
+}
+
+void Runner::BeforeTurn()
+{
+	if (!Locator::time::has_value())
+	{
+		return;
+	}
+	if (TurnStepOf(_layoutTurn, Locator::time::value().GetTurn()) == TurnStep::Update)
+	{
+		Update(std::chrono::duration<float>(ecs::systems::TimeSystemInterface::k_TurnDuration).count());
 	}
 }
 
@@ -4285,10 +4894,16 @@ void Runner::UpdateMiracles(float seconds)
 					{
 						magic.DriveHand(std::nullopt);
 					}
-					// A seed kept in the hand is dropped, for the next go
-					if (magic.IsHandBusy())
+					// The hand drops a seed that it keeps, for the next go. The drop is a shake of the hand, which goes as a
+					// command after the cast. Thus the turn does the cast first, and each computer of a network game
+					// drops the seed at the same turn.
+					if (magic.IsHandBusy() && Locator::gestureEvents::has_value())
 					{
-						magic.DiscardHeldSeed();
+						Locator::gestureEvents::value().Inject({.kind = ecs::systems::GestureEvent::Kind::Shake,
+						                                        .gesture = GestureType::None,
+						                                        .centre = miracle.hand,
+						                                        .radius = 0.0f,
+						                                        .powerUpLevel = -1});
 					}
 				}
 			}
@@ -4532,9 +5147,11 @@ void Runner::StartHandCast(size_t index)
 	auto& miracle = _miracles.at(index);
 	const auto& info = Locator::infoConstants::value();
 	auto& magic = Locator::magicSystem::value();
-	if (magic.IsHandBusy())
+	// The first player's hand gets the seed, so it drops the seed that it holds. Each computer does this before the
+	// same turn.
+	if (magic.IsHandBusyOf(PlayerNames::PLAYER_ONE))
 	{
-		magic.DiscardHeldSeed();
+		magic.DiscardHeldSeedOf(PlayerNames::PLAYER_ONE);
 	}
 	const auto seed = magic::FindFirstSpellSeedForMagicType(info, setup.type);
 	if (!seed.has_value())
@@ -4546,8 +5163,25 @@ void Runner::StartHandCast(size_t index)
 		Locator::alignmentSystem::value().SetPlayerAlignment(PlayerNames::PLAYER_ONE, *setup.casterAlignment);
 	}
 	const auto level = magic::GetPowerUpGesture(magic::GetSpellSeedInfo(info, *seed), setup.type).level;
-	const auto held = setup.fromWorship ? magic.SummonSeed(PlayerNames::PLAYER_ONE, *seed, level)
-	                                    : magic.GiveSeedToHand(PlayerNames::PLAYER_ONE, *seed, level, 1.0f);
+	auto held = entt::entity {entt::null};
+	if (setup.fromWorship && setup.fromSite)
+	{
+		// The first worship site of the player gives the seed
+		auto site = entt::entity {entt::null};
+		Locator::entitiesRegistry::value().Each<const ecs::components::WorshipSite>(
+		    [&site](entt::entity entity, const ecs::components::WorshipSite& data) {
+			    if (site == entt::null && data.player == PlayerNames::PLAYER_ONE)
+			    {
+				    site = entity;
+			    }
+		    });
+		held = magic.SummonSeedAtSite(site, *seed, level);
+	}
+	else
+	{
+		held = setup.fromWorship ? magic.SummonSeed(PlayerNames::PLAYER_ONE, *seed, level)
+		                         : magic.GiveSeedToHand(PlayerNames::PLAYER_ONE, *seed, level, 1.0f);
+	}
 	if (held == entt::null)
 	{
 		Log("The hand couldn't take the seed");
@@ -4576,14 +5210,14 @@ void Runner::StartHandCast(size_t index)
 
 uint32_t Runner::StartParticle(size_t index) const
 {
-	if (!Locator::particleSystem::has_value() || !Locator::terrainSystem::has_value())
+	if (!Locator::particleRuleSystem::has_value() || !Locator::terrainSystem::has_value())
 	{
-		return ecs::systems::ParticleSystemInterface::k_NoEffect;
+		return ecs::systems::ParticleRuleSystemInterface::k_NoEffect;
 	}
 	const auto& particle = _scenario->particles.at(index);
 	const auto point = MapPoint(_middle, particle.offset);
 	const glm::vec3 position {point.x, Locator::terrainSystem::value().GetHeightAt(point) + particle.height, point.y};
-	auto& particles = Locator::particleSystem::value();
+	auto& particles = Locator::particleRuleSystem::value();
 	const auto effect = particle.file.empty() ? particles.Start(particle.type, position, particle.magnitude)
 	                                          : particles.Start(particle.file, position, particle.magnitude);
 	particles.SetPlayer(effect, particle.player);
@@ -4639,16 +5273,39 @@ void Runner::UpdateVortices()
 				WriteCrossingFile(setup.crossingLines);
 			}
 			running.vortex = vortices.Create({point.x, 0.0f, point.y}, setup.type, 0.0f);
-			if (setup.gatheringOffset.has_value())
+			if (!setup.crossingLines.empty() && running.vortex != entt::null)
 			{
-				const auto gathering = MapPoint(_middle, *setup.gatheringOffset);
+				// The scenario also gives its crossing lines to the vortex. Thus a world with no profile, such as the
+				// server, throws out the same things. These lines are the same as the lines that the game read from the
+				// file.
+				auto& lines = Locator::entitiesRegistry::value().Get<ecs::components::Vortex>(running.vortex).throwingOut.lines;
+				lines.assign(setup.crossingLines.begin(), setup.crossingLines.end());
+			}
+			if (setup.crowdForSeconds.has_value() && Locator::scriptObjects::has_value())
+			{
+				// A script makes the crowd at the vortex and keeps it in a variable, as the Land 2 arrival does
+				auto& scripts = Locator::scriptObjects::value();
+				running.crowd = ecs::script_flocks::Create(Locator::entitiesRegistry::value(), map_coords::FromMetres(point));
+				scripts.Register(running.crowd, true);
+				scripts.AddReference(running.crowd);
+			}
+			if (setup.gatheringOffset.has_value() || running.crowd != entt::null)
+			{
+				const auto gathering = MapPoint(_middle, setup.gatheringOffset.value_or(setup.offset));
 				vortices.SetArrival(running.vortex, {.town = entt::null,
 				                                     .gatheringPlace = {gathering.x, 0.0f, gathering.y},
 				                                     .flockDistance = setup.flockDistance,
 				                                     .flockRadius = setup.flockRadius,
-				                                     .flock = entt::null});
+				                                     .flock = running.crowd});
 			}
 			Log(fmt::format("Vortex {} opened at {:.0f}, {:.0f}", i, point.x, point.y));
+		}
+		if (running.crowd != entt::null && !running.crowdBrokenUp && setup.crowdForSeconds.has_value() &&
+		    _seconds >= setup.delaySeconds + *setup.crowdForSeconds && Locator::scriptObjects::has_value())
+		{
+			// The script breaks up the crowd and keeps the empty flock; its newcomers go back to the town's life
+			running.crowdBrokenUp = Locator::scriptObjects::value().Disband(running.crowd);
+			Log(fmt::format("Vortex {} crowd broken up", i));
 		}
 		if (running.vortex != entt::null && !running.fading && setup.fadeOutAfterSeconds.has_value() &&
 		    _seconds >= setup.delaySeconds + *setup.fadeOutAfterSeconds)
@@ -4690,11 +5347,11 @@ void Runner::UpdateRewards()
 
 void Runner::UpdateParticles(float seconds)
 {
-	if (!Locator::particleSystem::has_value())
+	if (!Locator::particleRuleSystem::has_value())
 	{
 		return;
 	}
-	auto& particles = Locator::particleSystem::value();
+	auto& particles = Locator::particleRuleSystem::value();
 	for (size_t i = 0; i < _particles.size(); ++i)
 	{
 		auto& running = _particles.at(i);
@@ -4744,7 +5401,7 @@ void PushMotion(const input::GameActionInterface::ScriptedPointer& pointer, glm:
 	event.motion.xrel = moved.x;
 	event.motion.yrel = moved.y;
 	input::MarkInjected(event);
-	SDL_PushEvent(&event);
+	input::Device().PushEvent(event);
 }
 /// What the player's hand holds, for the log
 std::string HeldByHand()
@@ -4891,13 +5548,19 @@ std::optional<glm::ivec2> Runner::CaveCreatureOnScreen(glm::vec2 size)
 	}
 	const auto& cave = Locator::creatureCaveSystem::value();
 	const auto copy = cave.GetCaveCreature();
-	if (!copy.has_value())
+	if (!copy.has_value() || !Locator::temple::has_value())
 	{
 		return std::nullopt;
 	}
+	// The copy is a thing of the temple's rooms, and its creature is a thing of the land
 	const auto& registry = Locator::entitiesRegistry::value();
-	const auto* transform = registry.TryGet<const ecs::components::Transform>(*copy);
-	const auto* original = registry.TryGet<const ecs::components::CreatureCopy>(*copy);
+	const auto& copies = Locator::temple::value().GetRooms();
+	if (!copies.Valid(*copy))
+	{
+		return std::nullopt;
+	}
+	const auto* transform = copies.TryGet<const ecs::components::Transform>(*copy);
+	const auto* original = copies.TryGet<const ecs::components::CreatureCopy>(*copy);
 	const auto* mesh = original != nullptr && registry.Valid(original->creature)
 	                       ? registry.TryGet<const ecs::components::Mesh>(original->creature)
 	                       : nullptr;
@@ -4909,7 +5572,7 @@ std::optional<glm::ivec2> Runner::CaveCreatureOnScreen(glm::vec2 size)
 	// From the creature's feet up to the middle of its body's bounding box, the first pixel where the cave finds the
 	// creature under the pointer, as it is posed now
 	const auto& camera = Locator::camera::value();
-	const auto model = creature::PlacementMatrix(transform->position, transform->rotation, transform->scale);
+	const auto model = cave_creature::Placement(transform->position, transform->rotation, transform->scale);
 	const auto middle = glm::vec3(model * glm::vec4(meshes.Handle(mesh->id)->GetBoundingBox().Center(), 1.0f));
 	glm::vec3 feet;
 	glm::vec3 top;
@@ -5070,7 +5733,7 @@ std::string Runner::GivePointerCommand(const Command& command)
 		event.button.x = pointer.position.x;
 		event.button.y = pointer.position.y;
 		input::MarkInjected(event);
-		SDL_PushEvent(&event);
+		input::Device().PushEvent(event);
 		_handWatchSeconds = 0.5f;
 		break;
 	}
@@ -5088,7 +5751,7 @@ std::string Runner::GivePointerCommand(const Command& command)
 		event.wheel.y = static_cast<int32_t>(command.value) * (command.ctrl ? -1 : 1);
 		event.wheel.preciseY = static_cast<float>(event.wheel.y);
 		input::MarkInjected(event);
-		SDL_PushEvent(&event);
+		input::Device().PushEvent(event);
 		break;
 	}
 	default:
@@ -5138,15 +5801,45 @@ void Runner::UpdatePointer(float seconds)
 		}
 		actions.SetScriptedPointer(pointer);
 		PushMotion(pointer, moved);
+		if (_sweepMovesHeldHand)
+		{
+			MoveHeldHand(pointer.position);
+		}
 		_sweep->secondsLeft -= step;
 		if (_sweep->secondsLeft <= 0.0f)
 		{
 			_sweep.reset();
-			const auto line = fmt::format("{:.2f}s: moved: {}", _seconds, HandOnScreen());
+			const bool holds = Locator::handGrabSystem::has_value() && Locator::handGrabSystem::value().GetHeld().has_value();
+			const auto line =
+			    fmt::format("{:.2f}s: moved: {}{}", _seconds, HandOnScreen(),
+			                _sweepMovesHeldHand ? (holds ? ", the hand still holds" : ", the hand is empty") : "");
 			SPDLOG_LOGGER_INFO(spdlog::get("game"), "Testbed {}", line);
 			Log(line);
 		}
 	}
+}
+
+void Runner::MoveHeldHand(glm::ivec2 pointer)
+{
+	if (!_heldHand.has_value() || !Locator::camera::has_value() || !Locator::terrainSystem::has_value() ||
+	    !Locator::magicSystem::has_value())
+	{
+		return;
+	}
+	glm::vec3 origin {0.0f};
+	glm::vec3 direction {0.0f};
+	Locator::camera::value().DeprojectScreenToWorld(glm::vec2(pointer) / WindowSize(), origin, direction);
+	const auto at = testbed::hand_sweep::OnPlane(origin, direction, _heldHand->point.value_or(_heldHand->handPosition).y);
+	if (!at.has_value())
+	{
+		return;
+	}
+	const glm::vec3 point {at->x, Locator::terrainSystem::value().GetHeightAt(*at), at->y};
+	const glm::vec3 hand = point + glm::vec3(0.0f, _heldHandHeight, 0.0f);
+	_heldHand->handPosition = hand;
+	_heldHand->point = point;
+	_heldHand->rayOrigin = hand + glm::vec3(0.0f, k_HandEyeHeight, 0.0f);
+	Locator::magicSystem::value().DriveHand(*_heldHand);
 }
 
 std::string Runner::HandOnScreen() const
@@ -5306,10 +5999,9 @@ void Runner::Measure()
 		stages.at(i) = static_cast<float>(Milliseconds(entry.stages.at(i).total));
 	}
 	// What the renderer last drew, the frame before
-	const auto* renderStats = bgfx::getStats();
+	const auto draws = Locator::rendererRequests::has_value() ? Locator::rendererRequests::value().GetDrawsOfLastFrame() : 0u;
 	_recorder->Add(static_cast<float>(Milliseconds(frame)), static_cast<float>(Milliseconds(update)),
-	               static_cast<float>(Milliseconds(frame - update)), stages,
-	               renderStats != nullptr ? static_cast<float>(renderStats->numDraw) : 0.0f);
+	               static_cast<float>(Milliseconds(frame - update)), stages, static_cast<float>(draws));
 	if (++_framesSinceSummary >= k_FramesPerSummary || _recorder->Count() == _recorder->Capacity())
 	{
 		_framesSinceSummary = 0;
@@ -5323,9 +6015,9 @@ void Runner::Measure()
 		SPDLOG_LOGGER_INFO(spdlog::get("game"), "Benchmark {}: frame mean {:.2f} ms p95 {:.2f} max {:.2f}; results {}",
 		                   _scenario->id, _liveResults.frame.average, _liveResults.frame.p95, _liveResults.frame.max,
 		                   written.has_value() ? written->generic_string() : "not written");
-		if (auto* game = Game::Instance(); game != nullptr)
+		if (_stage != nullptr)
 		{
-			game->RequestQuit();
+			_stage->RequestQuit();
 		}
 	}
 }
@@ -5445,14 +6137,14 @@ std::string Runner::RecordChallenge(const Command& command) const
 	snapshot.position = position;
 	snapshot.focus = focus;
 	snapshot.quest = command.ctrl;
-	auto* game = Game::Instance();
-	if (game != nullptr && game->GetInterface() != nullptr)
+	// The title is the number of a help text. The dedicated server has no game interface, so it reads the names from
+	// the same text scripts. Thus the server and the game record the same title.
+	const auto* shown = _stage != nullptr ? _stage->GetTexts() : nullptr;
+	const auto loaded = shown == nullptr ? std::optional(gui::LoadGameTexts()) : std::nullopt;
+	const auto& texts = shown != nullptr ? *shown : *loaded;
+	if (const auto number = HelpTextNumber(texts.GetHelpNames(), command.title); number.has_value())
 	{
-		const auto names = game->GetInterface()->GetTexts().GetHelpNames();
-		if (const auto found = std::ranges::find(names, command.title); found != names.end())
-		{
-			snapshot.title = static_cast<uint32_t>(std::distance(names.begin(), found));
-		}
+		snapshot.title = *number;
 	}
 	chlapi::CHLApi::RecordChallenge(snapshot, script::challenge_snapshots::Call::Start);
 	return fmt::format("challenge {} ({}), {:.0f}% done{}", command.value, command.title, command.amount * 100.0f,

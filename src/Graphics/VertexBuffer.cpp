@@ -15,38 +15,23 @@
 
 #include <spdlog/spdlog.h>
 
-#include "GraphicsHandleBgfx.h"
-#include "UploadPacer.h"
+#include "Common/MainThreadQueue.h"
+#include "GraphicsDeviceInterface.h"
+#include "Locator.h"
+#include "MainThreadWork.h"
+#include "Visual/UploadPacer.h"
 
 using namespace openblack::graphics;
-
-namespace
-{
-
-constexpr std::array<bgfx::AttribType::Enum, 3> k_Types {
-    bgfx::AttribType::Uint8,
-    bgfx::AttribType::Int16,
-    bgfx::AttribType::Float,
-};
-constexpr std::array<bgfx::Attrib::Enum, 18> k_Attributes {
-    bgfx::Attrib::Enum::Position,  bgfx::Attrib::Enum::Normal,    bgfx::Attrib::Enum::Tangent,   bgfx::Attrib::Enum::Bitangent,
-    bgfx::Attrib::Enum::Color0,    bgfx::Attrib::Enum::Color1,    bgfx::Attrib::Enum::Color2,    bgfx::Attrib::Enum::Color3,
-    bgfx::Attrib::Enum::Indices,   bgfx::Attrib::Enum::Weight,    bgfx::Attrib::Enum::TexCoord0, bgfx::Attrib::Enum::TexCoord1,
-    bgfx::Attrib::Enum::TexCoord2, bgfx::Attrib::Enum::TexCoord3, bgfx::Attrib::Enum::TexCoord4, bgfx::Attrib::Enum::TexCoord5,
-    bgfx::Attrib::Enum::TexCoord6, bgfx::Attrib::Enum::TexCoord7,
-};
-
-} // namespace
 
 VertexBuffer::VertexBuffer(std::string name, const void* mem, VertexDecl decl, bool dynamic) noexcept
     : _name(std::move(name))
     , _vertexCount(0)
     , _vertexDecl(std::move(decl))
     , _strideBytes(0)
-    , _handle(BGFX_INVALID_HANDLE)
-    , _dynamicHandle(BGFX_INVALID_HANDLE)
+    , _handle(InvalidHandle<VertexBufferHandle>())
+    , _dynamicHandle(InvalidHandle<DynamicVertexBufferHandle>())
     , _dynamic(dynamic)
-    , _layoutHandle(BGFX_INVALID_HANDLE)
+    , _layoutHandle(InvalidHandle<VertexLayoutHandle>())
 {
 	// assert(vertices != nullptr);
 	assert(!_vertexDecl.empty());
@@ -59,57 +44,58 @@ VertexBuffer::VertexBuffer(std::string name, const void* mem, VertexDecl decl, b
 	    std::array<uint32_t, 4> {4, 8, 12, 16}, // Float
 	};
 
-	bgfx::VertexLayout layout;
-	layout.begin();
 	for (const auto& d : _vertexDecl)
 	{
 		_vertexDeclOffsets.push_back(_strideBytes);
 		_strideBytes += strides.at(static_cast<size_t>(d.type)).at(d.num - 1);
-		layout.add(k_Attributes.at(static_cast<size_t>(d.attribute)), d.num, k_Types.at(static_cast<size_t>(d.type)),
-		           d.normalized, d.asInt);
 	}
-	layout.end();
-	assert(layout.m_stride == _strideBytes);
 
-	const auto* bgfxMem = reinterpret_cast<const bgfx::Memory*>(mem);
+	const auto* bgfxMem = static_cast<const DeviceMemory*>(mem);
+	const auto bytes = static_cast<uint32_t>(Locator::graphicsDevice::value().Bytes(bgfxMem).size());
 
-	_vertexCount = bgfxMem->size / _strideBytes;
-	UploadPacer::Pace(bgfxMem->size);
+	_vertexCount = bytes / _strideBytes;
 
-	if (_dynamic)
-	{
-		_dynamicHandle = fromBgfx(bgfx::createDynamicVertexBuffer(bgfxMem, layout));
-	}
-	else
-	{
-		_handle = fromBgfx(bgfx::createVertexBuffer(bgfxMem, layout));
-	}
-	_layoutHandle = fromBgfx(bgfx::createVertexLayout(layout));
-	if (!IsValid())
-	{
-		// Out of handles, setting a name would write past bgfx's own arrays; the buffer is left empty and isn't drawn
-		SPDLOG_LOGGER_WARN(spdlog::get("graphics"), "{}: out of bgfx buffer handles, not created", _name);
-		return;
-	}
-	if (!_dynamic)
-	{
-		bgfx::setName(toBgfx(_handle), _name.c_str());
-	}
+	// The graphics library makes the buffer on the main thread: a turn on another thread gives that work to the main
+	// thread, which makes the buffer before the next draw
+	PostToMainThread(MainThreadApi::Graphics, [this, bgfxMem, bytes] {
+		UploadPacer::Pace(bytes);
+		const auto& device = Locator::graphicsDevice::value();
+		if (_dynamic)
+		{
+			_dynamicHandle = device.CreateDynamicVertexBuffer(bgfxMem, _vertexDecl);
+		}
+		else
+		{
+			_handle = device.CreateVertexBuffer(bgfxMem, _vertexDecl);
+		}
+		_layoutHandle = device.CreateVertexLayout(_vertexDecl);
+		if (!IsValid())
+		{
+			// Out of handles, setting a name would write past bgfx's own arrays; the buffer is left empty and isn't drawn
+			SPDLOG_LOGGER_WARN(spdlog::get("graphics"), "{}: out of bgfx buffer handles, not created", _name);
+			return;
+		}
+		if (!_dynamic)
+		{
+			device.SetName(_handle, _name);
+		}
+	});
 }
 
 VertexBuffer::~VertexBuffer() noexcept
 {
-	if (bgfx::isValid(toBgfx(_handle)))
+	MainThreadQueue::CheckDirect(MainThreadApi::Graphics, "VertexBuffer::~VertexBuffer");
+	if (IsValidHandle(_handle))
 	{
-		bgfx::destroy(toBgfx(_handle));
+		Locator::graphicsDevice::value().Destroy(_handle);
 	}
-	if (bgfx::isValid(toBgfx(_dynamicHandle)))
+	if (IsValidHandle(_dynamicHandle))
 	{
-		bgfx::destroy(toBgfx(_dynamicHandle));
+		Locator::graphicsDevice::value().Destroy(_dynamicHandle);
 	}
-	if (bgfx::isValid(toBgfx(_layoutHandle)))
+	if (IsValidHandle(_layoutHandle))
 	{
-		bgfx::destroy(toBgfx(_layoutHandle));
+		Locator::graphicsDevice::value().Destroy(_layoutHandle);
 	}
 }
 
@@ -130,83 +116,24 @@ uint32_t VertexBuffer::GetSizeInBytes() const noexcept
 
 bool VertexBuffer::IsValid() const noexcept
 {
-	return _dynamic ? bgfx::isValid(toBgfx(_dynamicHandle)) : bgfx::isValid(toBgfx(_handle));
-}
-
-void VertexBuffer::Bind() const
-{
-	Bind(*bgfx::begin());
-}
-
-void VertexBuffer::Bind(bgfx::Encoder& encoder) const
-{
-	if (!IsValid())
-	{
-		return;
-	}
-	if (_dynamic)
-	{
-		encoder.setVertexBuffer(0, toBgfx(_dynamicHandle), 0, _vertexCount, toBgfx(_layoutHandle));
-	}
-	else
-	{
-		encoder.setVertexBuffer(0, toBgfx(_handle), 0, _vertexCount, toBgfx(_layoutHandle));
-	}
-}
-
-void VertexBuffer::Bind(uint32_t firstVertex, uint32_t count) const
-{
-	if (!IsValid())
-	{
-		return;
-	}
-	if (_dynamic)
-	{
-		bgfx::setVertexBuffer(0, toBgfx(_dynamicHandle), firstVertex, count, toBgfx(_layoutHandle));
-	}
-	else
-	{
-		bgfx::setVertexBuffer(0, toBgfx(_handle), firstVertex, count, toBgfx(_layoutHandle));
-	}
-}
-
-void VertexBuffer::BindStream(uint8_t stream, VertexLayoutHandle layout) const
-{
-	BindStream(*bgfx::begin(), stream, layout);
-}
-
-void VertexBuffer::BindStream(bgfx::Encoder& encoder, uint8_t stream, VertexLayoutHandle layout) const
-{
-	if (!IsValid())
-	{
-		return;
-	}
-	if (_dynamic)
-	{
-		encoder.setVertexBuffer(stream, toBgfx(_dynamicHandle), 0, _vertexCount, toBgfx(layout));
-	}
-	else
-	{
-		encoder.setVertexBuffer(stream, toBgfx(_handle), 0, _vertexCount, toBgfx(layout));
-	}
+	return _dynamic ? IsValidHandle(_dynamicHandle) : IsValidHandle(_handle);
 }
 
 void VertexBuffer::Update(const void* memory) const
 {
-	assert(_dynamic);
-	if (!IsValid())
-	{
-		return;
-	}
-	bgfx::update(toBgfx(_dynamicHandle), 0, reinterpret_cast<const bgfx::Memory*>(memory));
+	Update(0, memory);
 }
 
 void VertexBuffer::Update(uint32_t firstVertex, const void* memory) const
 {
 	assert(_dynamic);
-	if (!IsValid())
-	{
-		return;
-	}
-	bgfx::update(toBgfx(_dynamicHandle), firstVertex, reinterpret_cast<const bgfx::Memory*>(memory));
+	// A turn on another thread gives the update to the main thread. It reads whether the buffer was made only then.
+	const auto* vertices = static_cast<const DeviceMemory*>(memory);
+	PostToMainThread(MainThreadApi::Graphics, [this, firstVertex, vertices] {
+		if (!IsValid())
+		{
+			return;
+		}
+		Locator::graphicsDevice::value().Update(_dynamicHandle, firstVertex, vertices);
+	});
 }

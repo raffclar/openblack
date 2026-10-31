@@ -42,11 +42,13 @@ public:
 	bool ProcessEvents(const SDL_Event& event) noexcept override;
 	void OpenWindow(std::string_view name) noexcept override;
 	void SetInputLock(bool locked, bool pointerScripted) noexcept override;
+	void KeepOffTheMouse(bool off) noexcept override;
 	[[nodiscard]] std::vector<WindowState> ListWindows() const noexcept override;
 	void CloseWindow(std::string_view name) noexcept override;
 	bool PressButton(std::string_view window, std::span<const ButtonPathStep> path) noexcept override;
 	bool Loop() noexcept override;
 	void Draw() noexcept override;
+	void WarmUp() noexcept override;
 
 private:
 	/// Whether the debug windows are kept off the mouse, as while the input is locked or the pointer is driven

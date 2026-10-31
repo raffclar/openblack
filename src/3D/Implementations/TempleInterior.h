@@ -19,6 +19,7 @@
 #include <vector>
 
 #include <SaveSlots.h>
+#include <entt/locator/locator.hpp>
 #include <glm/vec3.hpp>
 
 #include "3D/CreatureCaveTrophies.h"
@@ -27,8 +28,11 @@
 #include "3D/TempleInteriorInterface.h"
 #include "3D/TempleMap.h"
 #include "3D/TempleMapSpells.h"
+#include "3D/TempleScrolls.h"
+#include "3D/TempleSubMeshTexture.h"
 #include "3D/TempleToggles.h"
 #include "3D/TempleToolTips.h"
+#include "Common/FramePace.h"
 #include "Temple/FutureRoomRules.h"
 #include "Temple/SaveGameRoomRules.h"
 #include "Temple/TempleHelp.h"
@@ -39,6 +43,11 @@
 #error "Locator interface implementations should only be included in Locator.cpp, use interface instead."
 #endif
 
+namespace openblack::ecs::systems
+{
+class RenderingSystemInterface;
+}
+
 namespace openblack
 {
 class CameraModel;
@@ -46,7 +55,6 @@ class CreatureCaveEffects;
 class TempleCameraModel;
 class TempleChallengeRoom;
 class TempleSaveGameRoom;
-class TempleScrolls;
 class TempleSigns;
 
 class TempleInterior final: public TempleInteriorInterface
@@ -73,12 +81,17 @@ public:
 	[[nodiscard]] TempleDoors& GetDoors() override { return _doors; }
 	[[nodiscard]] const TempleDoors& GetDoors() const override { return _doors; }
 	[[nodiscard]] std::optional<TempleCursorHit> GetCursorHit() const override;
-	void SetInterface(gui::GameInterface* interface) override;
+	void SetInterface(TempleScreenInterface* interface) override;
+	void SetDrawMakers(DrawMakers makers) override;
 	bool HoldControl(bool pressed, float mouseY) override;
 	[[nodiscard]] std::vector<TempleSubMeshTexture> GetScrollTextures(TempleRoom room) const override;
 	[[nodiscard]] std::vector<uint32_t> GetHiddenSubMeshes(TempleRoom room) const override;
 	[[nodiscard]] std::span<const uint32_t> GetControlSubMeshes(TempleRoom room) const override;
 	[[nodiscard]] const std::vector<OrientedTextVertex>& GetText() const override { return _text; }
+	[[nodiscard]] const std::vector<temple::scroll_pictures::WorldPicture>& GetScrollPictures() const override
+	{
+		return _scrollPictures;
+	}
 	[[nodiscard]] std::vector<TempleSubMeshGlow> GetControlGlows(TempleRoom room) const override;
 	[[nodiscard]] std::vector<TempleSubMeshOffset> GetControlOffsets(TempleRoom room) const override;
 	[[nodiscard]] const graphics::Texture2D* GetTextTexture() const override;
@@ -108,6 +121,7 @@ public:
 	void Activate(TempleRoom room) override;
 	void ActivateAfterFrame(TempleRoom room) override;
 	void FrameDrawn() override;
+	[[nodiscard]] bool GoesInAfterFrame() const override { return _activateAfterFrame.has_value(); }
 	void EnterLockedRoom(TempleRoom room) override;
 	[[nodiscard]] bool TakeGameEnded() override { return _lock.TakeEnded(); }
 	void Deactivate() override;
@@ -116,6 +130,7 @@ public:
 	void LeaveMultiplayerFrontEnd() override;
 	[[nodiscard]] bool IsMultiplayerFrontEnd() const override { return _multiplayerFrontEnd; }
 	void ShowHelpAfterLoad() override { BringBackDialogue(); }
+	void WarmUpVisit(const std::function<void()>& draw) override;
 	/// A save keeps the dialogue that the temple keeps for the world while the player is inside: its owner, its last six
 	/// texts and the click waits of the newest
 	void SaveState(ecs::reflection::BinaryWriter& out) const override;
@@ -127,14 +142,39 @@ public:
 private:
 	/// Takes down what the temple made for the visit and gives the camera and drawing back to the island
 	void Close();
+	/// Reads the parchment of the scrolls and the save game room's empty picture, the first time only
+	void ReadRoomPictures();
+	/// Makes and writes the textures of the scrolls ahead of the first visit, which then uses them again
+	void PrepareScrolls();
+	/// Puts the temple's draw in the place of the island's, and makes the temple's draw at the first time
+	void DrawTemple();
+	/// Puts the island's draw back in the place of the temple's
+	void DrawIsland();
 	/// Looks through the camera model's lens, or the configured one without
 	void ApplyLens() const;
 	/// The temple gives back the dialogue that it kept when the player entered
 	void BringBackDialogue();
 
 	bool _active {false};
+	/// True while a warm-up draws a visit, in which the temple draws all of its rooms
+	bool _warmUpVisit {false};
 	/// The things of the rooms, made as the player goes in and taken down as the player leaves
 	std::unique_ptr<ecs::Registry> _rooms;
+	/// The draw of the island, kept while the player is inside the temple
+	entt::locator<ecs::systems::RenderingSystemInterface>::node_type _islandDraw;
+	/// The draw of the temple's rooms. The first visit or warm-up makes it, and the next visits use it again.
+	entt::locator<ecs::systems::RenderingSystemInterface>::node_type _templeDraw;
+	/// The functions that make the draws, which only the game gives
+	DrawMakers _drawMakers;
+	/// The pictures of the rooms that the game's files give, read once
+	struct RoomPictures
+	{
+		std::vector<uint8_t> parchment;
+		std::optional<std::vector<uint8_t>> emptyPicture;
+	};
+	std::optional<RoomPictures> _roomPictures;
+	/// The textures of the scrolls between visits
+	TempleScrolls::KeptTextures _keptScrolls;
 	/// The room that the player goes into after the frame that is drawn now
 	std::optional<TempleRoom> _activateAfterFrame;
 	/// The room the player last came into on this visit, whose help was asked for then
@@ -178,8 +218,8 @@ private:
 	TempleLight _light;
 	TempleFog _fog;
 	/// The creature's room's belts for how the creature fights, the medals for its miracles and the seeds of its best
-	/// learnt, at the points of the room's mesh, while the room is drawn
-	void UpdateCaveTrophies(float seconds);
+	/// learnt, at the points of the room's mesh, while the room is drawn. The seeds turn and pulse by `gameSeconds`.
+	void UpdateCaveTrophies(float gameSeconds);
 	/// The seeds go, with their effects, as the player leaves the temple
 	void ClearCaveSeeds();
 	/// How the magic scroll last worked out the creature's miracles, which the medals and seeds show; none until the
@@ -196,6 +236,12 @@ private:
 	std::array<std::optional<CaveSeedPlace>, CreatureCaveTrophies::k_BestMiracles> _caveSeedPlaces;
 	/// The seeds drawn this frame
 	std::vector<TempleCaveSeed> _caveSeeds;
+	/// When the effects of the seeds in the creature's room and over the map take their next step, and by how many
+	/// seconds they step in this frame (none in a frame where they do not step)
+	frame_pace::Pace _caveEffectPace;
+	frame_pace::Pace _mapEffectPace;
+	std::optional<float> _caveEffectStep;
+	std::optional<float> _mapEffectStep;
 	float _mapMarkerTurn {0.0f};
 	/// How long the main room's pool has shimmered, in seconds
 	float _poolTime {0.0f};
@@ -219,7 +265,7 @@ private:
 	/// The player's worshippers walking about the temple, who come in with the player and go as the player leaves
 	std::unique_ptr<TemplePeople> _people;
 	/// The game's interface, whose text and font the scrolls and signs are written with
-	gui::GameInterface* _interface {nullptr};
+	TempleScreenInterface* _interface {nullptr};
 	/// The rooms' scrolls, written as the temple opens, and the labels of their signs
 	std::unique_ptr<TempleScrolls> _scrolls;
 	std::unique_ptr<TempleSigns> _signs;
@@ -233,10 +279,14 @@ private:
 	void ReplayChallenge(entt::entity record);
 	/// Leaves the temple, the camera put back where the challenge's picture was taken, and starts its reminder
 	void LeaveToReplayChallenge();
-	/// Moves on the challenge room's pictures and its close look's words
+	/// Moves on the challenge room's pictures and its close look's words, or the close look's words of the save game room
 	void UpdateChallengeRoom();
-	/// The save game room's pictures and buttons
+	/// The words that the save game room writes over the picture in high detail, if any
+	[[nodiscard]] std::optional<temple::save_game_room::CloseLookWords> SaveGameRoomWords() const;
+	/// The save game room's pictures and buttons. The room, its list and its small pictures stay from visit to visit.
 	std::unique_ptr<TempleSaveGameRoom> _saveGameRoom;
+	/// The saved games that the room's list and small pictures were last read from
+	std::optional<temple::save_game_room::SavedGamesStamp> _savedGamesRead;
 	/// The question the save game room asks the player about a slot, until it is answered
 	struct SaveGameQuestion
 	{
@@ -248,6 +298,8 @@ private:
 	[[nodiscard]] temple::save_game_room::View SaveGameRoomView() const;
 	/// Reads the saved games that the save game room lists again
 	void ListSavedGames();
+	/// Reads the list and the small pictures of the save game room again when the saved games changed after the last read
+	void ReadSavedGamesWhenChanged();
 	/// Asks the player about a slot, as a click in the save game room asks
 	void AskAboutSlot(temple::save_game_room::Click click, uint32_t slot);
 	/// Acts on the player's answer to the save game room's question
@@ -256,6 +308,7 @@ private:
 	void SaveIntoSlot(uint32_t slot, std::u16string_view name, gamesave::RoomSave why);
 	/// This frame's text in the rooms
 	std::vector<OrientedTextVertex> _text;
+	std::vector<temple::scroll_pictures::WorldPicture> _scrollPictures;
 	/// Whether the options room has opened the game's options
 	bool _optionsShown {false};
 	/// The multiplayer front end is up over the future room

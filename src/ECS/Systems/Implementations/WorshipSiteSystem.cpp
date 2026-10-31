@@ -27,6 +27,7 @@
 
 #include "Common/GUtilsDistance.h"
 #include "Common/PortableRotations.h"
+#include "ECS/Archetypes/Utils.h"
 #include "ECS/Components/Dance.h"
 #include "ECS/Components/Fixed.h"
 #include "ECS/Components/Footpath.h"
@@ -41,8 +42,12 @@
 #include "ECS/Components/Villager.h"
 #include "ECS/Components/WorshipChants.h"
 #include "ECS/Components/WorshipSite.h"
+#include "ECS/ComputerMindWorshipRules.h"
 #include "ECS/DanceRules.h"
 #include "ECS/Dances.h"
+#include "ECS/GamePlayers.h"
+#include "ECS/PlayerColour.h"
+#include "ECS/PlayerTowns.h"
 #include "ECS/Registry.h"
 #include "ECS/Statistics.h"
 #include "ECS/Systems/FootpathSystemInterface.h"
@@ -50,11 +55,13 @@
 #include "ECS/Systems/PlayerSystemInterface.h"
 #include "ECS/Systems/SpellIconSystemInterface.h"
 #include "ECS/Systems/TimeSystemInterface.h"
+#include "ECS/WorshipSiteLooks.h"
 #include "ECS/WorshipSites.h"
 #include "ECS/WorshipperRules.h"
 #include "GameWorshipSiteWorld.h"
 #include "InfoConstants.h"
 #include "Locator.h"
+#include "Magic/SpellIcons.h"
 #include "Magic/WorshipBattery.h"
 
 using namespace openblack;
@@ -192,8 +199,9 @@ void WorshipSiteSystem::LandLaidOut()
 
 entt::entity WorshipSiteSystem::MakeBuiltSite(PlayerNames player, Tribe tribe)
 {
+	// The land script makes the site also for a temple that is not yet built
 	const auto temple = TempleOf(player);
-	if (temple == entt::null || !_world->Entities().Get<const CitadelWorship>(temple).standing)
+	if (temple == entt::null)
 	{
 		return entt::null;
 	}
@@ -357,6 +365,19 @@ void WorshipSiteSystem::Remove(entt::entity site)
 	}
 	// A site still going up stops being a building site
 	_world->CloseBuildingSite(site);
+	// Its motes, its need flags and its ring of light go with it
+	if (component.manaPath != 0)
+	{
+		_world->RemoveMotes(component.manaPath);
+	}
+	for (const auto flag : component.needFlags)
+	{
+		if (flag != entt::null && registry.Valid(flag))
+		{
+			_world->Remove(flag);
+		}
+	}
+	_looks.erase(site);
 	_world->Remove(site);
 }
 
@@ -366,6 +387,60 @@ void WorshipSiteSystem::UpdateTurn()
 	registry.Each<const WorshipSite, Mesh>(
 	    [this](const WorshipSite& site, Mesh& mesh) { mesh.id = _world->SiteMesh(site.temple); });
 	// The sites' dances go on with every other dance, in the dances' own turn
+	std::vector<entt::entity> sites;
+	registry.Each<const WorshipSite>([&sites](entt::entity site, const WorshipSite&) { sites.push_back(site); });
+	for (const auto site : sites)
+	{
+		UpdateNeeds(site);
+	}
+}
+
+void WorshipSiteSystem::UpdateNeeds(entt::entity site)
+{
+	auto& registry = _world->Entities();
+	// Its motes move on a turn first, and their effect goes once it has ended
+	if (auto& motes = registry.Get<WorshipSite>(site).manaPath; motes != 0 && !_world->StepMotes(motes))
+	{
+		registry.Get<WorshipSite>(site).manaPath = 0;
+	}
+	// Food first, then rest, then hiding
+	const auto* dance = DanceOf(site);
+	const auto worshippers = static_cast<uint32_t>(registry.Get<const WorshipSite>(site).worshippers.size());
+	const std::array<float, worship_site_looks::k_NeedFlags> needs {
+	    DesireForFood(site),
+	    DesireForRest(site),
+	    worship_site_looks::HidingIndicator(dance != nullptr, worshippers, dance != nullptr ? dance->dancers : 0),
+	};
+	auto& component = registry.Get<WorshipSite>(site);
+	component.needs = needs;
+	for (uint8_t need = 0; need < worship_site_looks::k_NeedFlags; ++need)
+	{
+		auto& flag = component.needFlags.at(need);
+		if (flag == entt::null || !registry.Valid(flag))
+		{
+			// Made as the site's world makes it: the reference to the site's component is not kept over it
+			const auto made = _world->MakeNeedFlag(site, need);
+			registry.Get<WorshipSite>(site).needFlags.at(need) = made;
+		}
+	}
+}
+
+float WorshipSiteSystem::DesireForRest(entt::entity site) const
+{
+	auto& registry = _world->Entities();
+	const auto dance = registry.Get<const WorshipSite>(site).dance;
+	if (!ecs::dances::IsDance(registry, dance))
+	{
+		return 0.0f;
+	}
+	// Each dancer wants what it lacks of full life; one that is not a villager wants none, but counts
+	std::vector<float> desires;
+	for (const auto dancer : ecs::dances::Dancers(registry, dance))
+	{
+		const auto* person = registry.TryGet<const Villager>(dancer);
+		desires.push_back(person != nullptr ? computer_mind_rules::LifeDesire(person->life) : 0.0f);
+	}
+	return computer_mind_rules::DancersRestDesire(desires);
 }
 
 void WorshipSiteSystem::RemakeModelsAfterLoad()
@@ -381,9 +456,9 @@ void WorshipSiteSystem::ProcessChants()
 	auto& registry = _world->Entities();
 	const auto here = Locator::handSystem::has_value() ? Locator::handSystem::value().GetOwnPlayer() : PlayerNames::PLAYER_ONE;
 	// Every player in turn, the neutral player last, each site of their temple by its place round it
-	for (size_t player = 0; player < static_cast<size_t>(PlayerNames::_COUNT); ++player)
+	for (const auto player : ecs::game_players::All())
 	{
-		const auto temple = TempleOf(static_cast<PlayerNames>(player));
+		const auto temple = TempleOf(player);
 		if (temple == entt::null)
 		{
 			continue;
@@ -471,10 +546,44 @@ float WorshipSiteSystem::MaintainSpell(entt::entity site, float amount)
 	return _world->Entities().Get<const WorshipChants>(site).freeMaintenance ? amount : UseChants(site, amount);
 }
 
+void WorshipSiteSystem::AddMote(entt::entity site, glm::vec3 from, glm::vec3 to)
+{
+	auto& registry = _world->Entities();
+	if (!registry.Valid(site) || !registry.AllOf<WorshipSite>(site))
+	{
+		return;
+	}
+	// The site's effect of motes is started with its first mote
+	if (registry.Get<const WorshipSite>(site).manaPath == 0)
+	{
+		const auto started = _world->StartMotes();
+		registry.Get<WorshipSite>(site).manaPath = started;
+	}
+	const auto& component = registry.Get<const WorshipSite>(site);
+	const auto rgb = player_colour::Of(component.player);
+	_world->AddMote(component.manaPath, from, to, rgb & 0xFFFFFFu);
+}
+
 void WorshipSiteSystem::ReturnChants(entt::entity site, float amount)
 {
 	// The battery takes it all, however full
 	_world->Entities().Get<WorshipChants>(site).battery += amount;
+}
+
+float WorshipSiteSystem::StoredChants(entt::entity site) const
+{
+	auto& registry = _world->Entities();
+	const auto* chants = registry.Valid(site) ? registry.TryGet<const WorshipChants>(site) : nullptr;
+	return chants != nullptr ? chants->battery : 0.0f;
+}
+
+void WorshipSiteSystem::SetStoredChants(entt::entity site, float chants)
+{
+	auto& registry = _world->Entities();
+	if (auto* battery = registry.Valid(site) ? registry.TryGet<WorshipChants>(site) : nullptr; battery != nullptr)
+	{
+		battery->battery = chants;
+	}
 }
 
 float WorshipSiteSystem::ChantsAvailable(entt::entity site) const
@@ -536,6 +645,23 @@ void WorshipSiteSystem::BuildBy(entt::entity site, float share)
 	}
 }
 
+void WorshipSiteSystem::SetBuilt(entt::entity site, float built)
+{
+	auto& registry = _world->Entities();
+	if (!registry.AllOf<WorshipSite>(site))
+	{
+		return;
+	}
+	const auto value = std::max(built, 0.0f);
+	if (value >= 1.0f)
+	{
+		Built(site);
+		return;
+	}
+	// Under the whole, the site stands part built, also a site that stood built before
+	registry.AssignOrReplace<BuildProgress>(site, value);
+}
+
 bool WorshipSiteSystem::IsBuilt(entt::entity site) const
 {
 	const auto& registry = _world->Entities();
@@ -553,6 +679,21 @@ entt::entity WorshipSiteSystem::TempleOf(PlayerNames player) const
 		    if (temple.owner == player && (found == entt::null || entity < found))
 		    {
 			    found = entity;
+		    }
+	    });
+	return found;
+}
+
+std::vector<entt::entity> WorshipSiteSystem::TemplesOfPlayers(size_t count) const
+{
+	// The first temple made for each player
+	std::vector<entt::entity> found(count, static_cast<entt::entity>(entt::null));
+	_world->Entities().Each<const Temple, const CitadelWorship>(
+	    [&found](entt::entity entity, const Temple& temple, const CitadelWorship& /*unused*/) {
+		    const auto player = static_cast<size_t>(temple.owner);
+		    if (player < found.size() && (found[player] == entt::null || entity < found[player]))
+		    {
+			    found[player] = entity;
 		    }
 	    });
 	return found;
@@ -590,7 +731,9 @@ void WorshipSiteSystem::OpenSites(entt::entity temple, float desireBoost)
 entt::entity WorshipSiteSystem::FindOrMakeForTown(entt::entity temple, entt::entity town)
 {
 	auto& registry = _world->Entities();
-	if (registry.Get<const CitadelWorship>(temple).cannotMakeSites)
+	// A temple that is not yet built makes no site for a town. Its towns get their sites when the temple is built.
+	const auto& worship = registry.Get<const CitadelWorship>(temple);
+	if (worship.cannotMakeSites || !worship.standing)
 	{
 		return entt::null;
 	}
@@ -626,27 +769,20 @@ entt::entity WorshipSiteSystem::FindForTribe(entt::entity temple, Tribe tribe) c
 entt::entity WorshipSiteSystem::Make(entt::entity temple, Tribe tribe)
 {
 	auto& registry = _world->Entities();
-	if (!registry.Get<const CitadelWorship>(temple).standing)
-	{
-		return entt::null;
-	}
 	const auto templePosition = registry.Get<const Transform>(temple).position;
 	const auto templeOwner = registry.Get<const Temple>(temple).owner;
 
-	// The place is judged against the town of the tribe nearest the temple, of any player; without one, the temple
+	// The place is judged against the town of the tribe nearest the temple, of any player; without one, the temple. The
+	// towns come in the order of each player's list in turn and the neutral list last, so the first met wins a tie.
 	auto spot = Across(templePosition);
 	auto nearest = std::numeric_limits<float>::max();
-	std::vector<std::pair<uint32_t, entt::entity>> towns;
-	registry.Each<const Town, const Tribe, const Transform>(
-	    [&towns, tribe](entt::entity entity, const Town& town, const Tribe& townTribe, const Transform& /*unused*/) {
-		    if (townTribe == tribe)
-		    {
-			    towns.emplace_back(town.id, entity);
-		    }
-	    });
-	std::ranges::sort(towns);
-	for (const auto& [id, town] : towns)
+	for (const auto town : ecs::player_towns::AllInOrder(registry))
 	{
+		const auto* townTribe = registry.TryGet<const Tribe>(town);
+		if (townTribe == nullptr || *townTribe != tribe || !registry.AllOf<Transform>(town))
+		{
+			continue;
+		}
 		const auto at = Across(registry.Get<const Transform>(town).position);
 		if (const auto distance = gutils::GetDistanceInMetres(Across(templePosition), at); distance < nearest)
 		{
@@ -655,16 +791,18 @@ entt::entity WorshipSiteSystem::Make(entt::entity temple, Tribe tribe)
 		}
 	}
 
-	const auto placePoint = _world->SitePoint(ws::k_PlacePoint);
-	if (!placePoint.has_value())
+	// Each place is judged by a point of the temple's model, turned to the place and set down with the temple
+	const auto templePoint = _world->TemplePoint(temple, ws::k_TemplePlacePoint);
+	if (!templePoint.has_value())
 	{
-		Log(spdlog::level::err, "game", "The worship site's model has no point to place it by");
+		Log(spdlog::level::err, "game", "The temple's model has no point to place a worship site by");
 		return entt::null;
 	}
 	auto& worship = registry.Get<CitadelWorship>(temple);
 	std::array<bool, ws::k_Places> taken {};
 	std::ranges::transform(worship.sites, taken.begin(), [](entt::entity site) { return site != entt::null; });
-	const auto place = ws::NearestFreePlace(taken, Across(templePosition), *placePoint, spot);
+	const auto templeScale = registry.Get<const Transform>(temple).scale.x;
+	const auto place = ws::NearestFreePlace(taken, Across(templePosition), worship.facing, templeScale, *templePoint, spot);
 	if (!place.has_value())
 	{
 		return entt::null;
@@ -673,6 +811,8 @@ entt::entity WorshipSiteSystem::Make(entt::entity temple, Tribe tribe)
 	// The site stands at the temple's own place, turned to face out from its place around it
 	const auto facing = ws::PlaceFacing(worship.facing, *place);
 	const auto site = registry.Create();
+	// It takes its place in the order of the things made
+	openblack::ecs::archetypes::TakeThingMadePlace();
 	const auto ground = glm::vec3(templePosition.x, _world->LandHeightAt(Across(templePosition)), templePosition.z);
 	registry.Assign<Transform>(site, ground, glm::mat3(portable_math::EulerAngleY(-facing)), glm::vec3(1.0f));
 	registry.Assign<Mesh>(site, _world->SiteMesh(temple), static_cast<int8_t>(0), static_cast<int8_t>(0));
@@ -702,6 +842,8 @@ entt::entity WorshipSiteSystem::Make(entt::entity temple, Tribe tribe)
 	const auto altarAt = ws::TurnedPoint(Across(templePosition), facing, altarPoint);
 	// The altar has its model's size and shape on the map from now on, but the model shows only when the town builds the site
 	const auto altar = registry.Create();
+	// It takes its place in the order of the things made
+	openblack::ecs::archetypes::TakeThingMadePlace();
 	const auto& placed = registry.Assign<Transform>(altar, glm::vec3(altarAt.x, _world->LandHeightAt(altarAt), altarAt.y),
 	                                                glm::mat3(portable_math::EulerAngleY(-facing)), glm::vec3(1.0f));
 	const auto altarModel = _world->AltarMesh(tribe);
@@ -773,7 +915,7 @@ void WorshipSiteSystem::AddTown(entt::entity site, entt::entity town)
 	{
 		const auto gate =
 		    ws::TurnedPoint(Across(registry.Get<const Transform>(site).position), registry.Get<const WorshipSite>(site).facing,
-		                    _world->SitePoint(ws::k_PlacePoint).value_or(glm::vec3(0.0f)));
+		                    _world->SitePoint(ws::k_GatePoint).value_or(glm::vec3(0.0f)));
 		registry.Assign<FootpathLink>(site, glm::vec3(gate.x, _world->LandHeightAt(gate), gate.y),
 		                              std::vector<Footpath::Id> {});
 	}
@@ -844,7 +986,7 @@ std::optional<glm::vec2> WorshipSiteSystem::PlaceAt(entt::entity site, SitePlace
 	switch (place)
 	{
 	case SitePlace::Gate:
-		point = _world->SitePoint(ws::k_PlacePoint);
+		point = _world->SitePoint(ws::k_GatePoint);
 		break;
 	case SitePlace::Rest:
 		point = _world->SitePoint(ws::k_RestPoint);
@@ -858,12 +1000,47 @@ std::optional<glm::vec2> WorshipSiteSystem::PlaceAt(entt::entity site, SitePlace
 	case SitePlace::Centre:
 		point = ws::k_CentrePoint;
 		break;
+	case SitePlace::Standing:
+		point = _world->SitePoint(magic::spell_icons::k_FirstSitePoint);
+		break;
 	}
 	if (!point.has_value())
 	{
 		return std::nullopt;
 	}
 	return ws::TurnedPoint(at, component.facing, *point);
+}
+
+std::optional<glm::vec3> WorshipSiteSystem::DancePosition(entt::entity site) const
+{
+	auto& registry = _world->Entities();
+	if (!registry.Valid(site) || !registry.AllOf<WorshipSite, Transform>(site))
+	{
+		return std::nullopt;
+	}
+	const auto point = _world->SitePoint(ws::k_DancePoint);
+	if (!point.has_value())
+	{
+		return std::nullopt;
+	}
+	const auto at = ws::TurnedPoint(Across(registry.Get<const Transform>(site).position),
+	                                registry.Get<const WorshipSite>(site).facing, *point);
+	return glm::vec3(at.x, _world->LandHeightAt(at) + point->y, at.y);
+}
+
+std::optional<float> WorshipSiteSystem::StandingHeight(entt::entity site) const
+{
+	auto& registry = _world->Entities();
+	if (!registry.Valid(site) || !registry.AllOf<WorshipSite, Transform>(site))
+	{
+		return std::nullopt;
+	}
+	const auto point = _world->SitePoint(magic::spell_icons::k_FirstSitePoint);
+	if (!point.has_value())
+	{
+		return std::nullopt;
+	}
+	return registry.Get<const Transform>(site).position.y + point->y;
 }
 
 void WorshipSiteSystem::AddWorshipper(entt::entity site, entt::entity villager)

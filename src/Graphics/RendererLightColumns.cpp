@@ -21,17 +21,18 @@
 #include "3D/TempleInteriorInterface.h"
 #include "Camera/Camera.h"
 #include "ECS/Components/Abode.h"
-#include "ECS/Components/HiddenByState.h"
 #include "ECS/Components/Mesh.h"
 #include "ECS/Components/Player.h"
 #include "ECS/Components/ScriptHighlight.h"
 #include "ECS/Components/Temple.h"
 #include "ECS/Components/Town.h"
 #include "ECS/Components/Transform.h"
+#include "ECS/PlayerColour.h"
 #include "ECS/Registry.h"
 #include "ECS/Systems/HeartbeatSystemInterface.h"
 #include "ECS/Systems/InfluenceSystemInterface.h"
 #include "ECS/Systems/ScriptHighlightSystemInterface.h"
+#include "ECS/Systems/SpellIconSystemInterface.h"
 #include "ECS/Systems/TimeSystemInterface.h"
 #include "Graphics/LightColumn.h"
 #include "Graphics/ShaderManager.h"
@@ -51,9 +52,14 @@ namespace
 constexpr uint64_t k_AddedState = BGFX_STATE_WRITE_RGB | BGFX_STATE_DEPTH_TEST_GREATER | BGFX_STATE_MSAA |
                                   BGFX_STATE_BLEND_FUNC(BGFX_STATE_BLEND_SRC_ALPHA, BGFX_STATE_BLEND_ONE) | BGFX_STATE_CULL_CCW;
 
+/// Added over what is behind by its texture's alpha times its alpha, tested against the depth but leaving none. The
+/// model's material draws both sides of its faces.
+constexpr uint64_t k_PulseState = BGFX_STATE_WRITE_RGB | BGFX_STATE_DEPTH_TEST_GREATER | BGFX_STATE_MSAA |
+                                  BGFX_STATE_BLEND_FUNC(BGFX_STATE_BLEND_SRC_ALPHA, BGFX_STATE_BLEND_ONE);
+
 uint32_t ColourOf(PlayerNames player)
 {
-	return ecs::components::Player::k_Colours.at(static_cast<size_t>(player)) & 0xFFFFFFu;
+	return player_colour::Of(player) & 0xFFFFFFu;
 }
 } // namespace
 
@@ -160,19 +166,54 @@ void Renderer::DrawScrollBeams(const DrawSceneDesc& desc) const
 
 	// A started scroll stands in a beam the same shape as the temple's column, rising from its model's middle. A
 	// beam with no strength this frame would add nothing, so it isn't sent
-	desc.entities.Each<const ecs::components::ScriptHighlight>(
-	    [&](const ecs::components::ScriptHighlight& highlight) {
-		    if (!ecs::script_highlights::BeamShown(highlight.kind, highlight.active))
-		    {
-			    return;
-		    }
-		    const uint32_t colour = ecs::script_highlights::BeamColour(highlight.kind, pulseShare);
-		    if ((colour >> 24u) == 0)
-		    {
-			    return;
-		    }
-		    DrawLightShaft(desc, beam, highlight.centre,
-		                   light_column::Tint(colour & 0xFFFFFFu, static_cast<uint8_t>(colour >> 24u)));
-	    },
-	    entt::exclude<ecs::components::HiddenByState>);
+	desc.entities.Each<const ecs::components::ScriptHighlight>([&](const ecs::components::ScriptHighlight& highlight) {
+		if (highlight.hidden || !ecs::script_highlights::BeamShown(highlight.kind, highlight.active))
+		{
+			return;
+		}
+		const uint32_t colour = ecs::script_highlights::BeamColour(highlight.kind, pulseShare);
+		if ((colour >> 24u) == 0)
+		{
+			return;
+		}
+		DrawLightShaft(desc, beam, highlight.centre,
+		               light_column::Tint(colour & 0xFFFFFFu, static_cast<uint8_t>(colour >> 24u)));
+	});
+}
+
+void Renderer::DrawIconPulses(const DrawSceneDesc& desc) const
+{
+	if (desc.viewId != RenderPass::Main || !Locator::spellIconSystem::has_value())
+	{
+		return;
+	}
+	const auto pulses = Locator::spellIconSystem::value().ChargePulses();
+	if (pulses.empty())
+	{
+		return;
+	}
+	const auto& meshes = Locator::resources::value().GetMeshes();
+	const auto pulseId = resources::HashIdentifier(MeshId::SpellPulseIn);
+	if (!meshes.Contains(pulseId))
+	{
+		return;
+	}
+	const auto& mesh = *meshes.Handle(pulseId);
+	const auto eye = desc.camera->GetOrigin();
+	for (const auto& pulse : pulses)
+	{
+		L3DMeshSubmitDesc submitDesc = {};
+		submitDesc.viewId = TranslucentPassOf(desc.viewId);
+		submitDesc.program = _shaderManager->GetShader("Object");
+		submitDesc.modelMatrices = &pulse.model;
+		submitDesc.matrixCount = 1;
+		submitDesc.state = k_PulseState;
+		submitDesc.alphaThreshold = 0.0f;
+		submitDesc.tint = light_column::Tint(pulse.argb & 0xFFFFFFu, static_cast<uint8_t>(pulse.argb >> 24u));
+		// The pulse is its colour alone, as the light shafts are: no light, colour or haze of the land, and no shadows
+		submitDesc.landLightAndHaze = false;
+		submitDesc.groundShadows = false;
+		submitDesc.sortDepth = zsort::Depth(glm::vec3(pulse.model[3]), eye);
+		DrawMesh(mesh, submitDesc, std::numeric_limits<uint8_t>::max());
+	}
 }
