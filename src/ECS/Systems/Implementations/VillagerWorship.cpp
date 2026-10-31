@@ -69,17 +69,10 @@ namespace
 /// What ProcessInWorship says when the worshipper has gone off (home, to decide, to eat) or died
 constexpr uint32_t k_LeftWorship = 0x23;
 
-/// The states that share the way to the site, the site's dance and hiding place, its pot and the supplies' errands:
-/// moving between states of one of these keeps the villager as it was
-constexpr std::array k_WayToSiteStates {VillagerStates::GotoWorshipSiteForWorship,
-                                        VillagerStates::ArrivesAtWorshipSiteForWorship};
+/// The states that share the site's dance and hiding place, and its pot: moving between states of one of these keeps the
+/// villager as it was
 constexpr std::array k_AtSiteStates {VillagerStates::WorshippingAtWorshipSite, VillagerStates::HidingAtWorshipSite};
 constexpr std::array k_AtPotStates {VillagerStates::RestartWorshippingAtWorshipSite, VillagerStates::GetFoodAtWorshipSite};
-constexpr std::array k_SupplyStates {
-    VillagerStates::GotoStoragePitForWorshipSupplies, VillagerStates::ArrivesAtStoragePitForWorshipSupplies,
-    VillagerStates::GotoWorshipSiteWithSupplies,      VillagerStates::MoveToWorshipSiteWithSupplies,
-    VillagerStates::ArrivesAtWorshipSiteWithSupplies,
-};
 /// Going through a teleport stone on the way keeps a villager on its way to the site
 constexpr std::array k_TeleportStates {VillagerStates::GoTowardsTeleportReaction, VillagerStates::TeleportReaction,
                                        VillagerStates::GoTowardsTeleportReactionQuickly};
@@ -1093,7 +1086,8 @@ uint32_t villager_worship::ArrivesAtWorshipSiteWithSupplies(LivingAction& action
 
 bool villager_worship::ExitMoveToWorshipSite(LivingAction& action, VillagerStates next)
 {
-	if (!Among(k_WayToSiteStates, next) && !Among(k_TeleportStates, next))
+	const bool sameExit = Locator::livingActionSystem::value().VillagerHasSameExitAsFinal(action, next);
+	if (rules::LeavesTheWayToSite(sameExit, StateInfo(next).isFinalState != 0, Among(k_TeleportStates, next)))
 	{
 		LeaveTheWay(EntityOf(action));
 	}
@@ -1133,7 +1127,8 @@ bool villager_worship::ExitGetFoodAtWorship(LivingAction& action, VillagerStates
 
 bool villager_worship::ExitMoveToWorshipSiteWithSupplies(LivingAction& action, VillagerStates next)
 {
-	if (!Among(k_SupplyStates, next))
+	const bool sameExit = Locator::livingActionSystem::value().VillagerHasSameExitAsFinal(action, next);
+	if (rules::LeavesTheWay(sameExit, StateInfo(next).isFinalState != 0))
 	{
 		const auto villager = EntityOf(action);
 		if (const auto site = SiteOfTown(TownOf(villager)); site != entt::null)

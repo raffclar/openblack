@@ -88,6 +88,16 @@ Arrival OnReachingGate(float distanceToGate, uint32_t dancers, uint32_t maxDance
 	return dancers < maxDancersVisible ? Arrival::Dance : Arrival::Hide;
 }
 
+bool LeavesTheWay(bool nextHasSameExit, bool nextIsFinal)
+{
+	return !nextHasSameExit && nextIsFinal;
+}
+
+bool LeavesTheWayToSite(bool nextHasSameExit, bool nextIsFinal, bool nextIsTeleport)
+{
+	return LeavesTheWay(nextHasSameExit, nextIsFinal) && !nextIsTeleport;
+}
+
 float ChantDamage(float chantsPerDancer, float chantLifeRate)
 {
 	return chantsPerDancer * chantLifeRate;
