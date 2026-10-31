@@ -9272,18 +9272,54 @@ void SetComputerPlayerSpeed() // 371 SET_COMPUTER_PLAYER_SPEED
 	}
 }
 
+/// The script's camera for a command that follows the hand of a computer god: with a warning when the script has none
+ScriptCameraModel* ComputerHandCamera()
+{
+	auto* camera = OrderedScriptCamera();
+	if (camera == nullptr)
+	{
+		ScriptMessage("Script camera has been removed! - Exception happened?");
+		return nullptr;
+	}
+	// While a two-thing camera has taken over, the script's own commands do not reach the camera
+	if (camera->InDualView())
+	{
+		ScriptMessage("We are in the wrong camera mode!");
+		return nullptr;
+	}
+	return camera;
+}
+
+/// The place of the hand of a computer god, as a camera reads it in each frame
+ScriptCameraModel::HandLookup ComputerHandPlace(PlayerNames player)
+{
+	return [player]() -> std::optional<glm::vec3> {
+		if (!Locator::computerPlayerSystem::has_value())
+		{
+			return std::nullopt;
+		}
+		return Locator::computerPlayerSystem::value().HandPositionForView(player);
+	};
+}
+
 void SetFocusFollowComputerPlayer() // 372 SET_FOCUS_FOLLOW_COMPUTER_PLAYER
 {
-	// const auto player = Popf();
-	// TODO(Daniels118): implement this
-	NotImplemented();
+	const auto player = ScriptPlayerName(static_cast<int32_t>(Popf()));
+	if (auto* camera = ComputerHandCamera(); camera != nullptr)
+	{
+		// The script's camera keeps looking at the hand of the god
+		camera->LookAtComputerHand(ComputerHandPlace(player));
+	}
 }
 
 void SetPositionFollowComputerPlayer() // 373 SET_POSITION_FOLLOW_COMPUTER_PLAYER
 {
-	// const auto player = Popf();
-	// TODO(Daniels118): implement this
-	NotImplemented();
+	const auto player = ScriptPlayerName(static_cast<int32_t>(Popf()));
+	if (auto* camera = ComputerHandCamera(); camera != nullptr)
+	{
+		// The script's camera follows the hand of the god
+		camera->FollowComputerHand(ComputerHandPlace(player));
+	}
 }
 
 void CallComputerPlayer() // 374 CALL_COMPUTER_PLAYER

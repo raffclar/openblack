@@ -1881,6 +1881,20 @@ entt::entity Runner::ComputerActionThingOf(const ComputerActionThing& thing, Pla
 		return Locator::playerSystem::has_value()
 		           ? Locator::playerSystem::value().GetPrimaryCreature(thing.owner).value_or(entt::null)
 		           : entt::null;
+	case ComputerActionThing::Kind::TempleHeart:
+	{
+		const auto temple =
+		    Locator::worshipSiteSystem::has_value() ? Locator::worshipSiteSystem::value().TempleOf(player) : entt::null;
+		entt::entity heart = entt::null;
+		registry.Each<const ecs::components::TempleHeart>(
+		    [&heart, temple](entt::entity entity, const ecs::components::TempleHeart& each) {
+			    if (temple != entt::null && each.temple == temple && heart == entt::null)
+			    {
+				    heart = entity;
+			    }
+		    });
+		return heart;
+	}
 	}
 	return entt::null;
 }

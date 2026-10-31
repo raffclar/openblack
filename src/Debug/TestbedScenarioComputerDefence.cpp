@@ -41,6 +41,27 @@ CREATE_VILLAGER_POS("-44.0,62.0", "-40.0,60.0", "CELTIC_HOUSEWIFE", 20)
 CREATE_VILLAGER_POS("-44.0,62.0", "-40.0,60.0", "CELTIC_FORESTER", 20)
 )";
 
+/// The same land, with a town that offers the physical shield miracle in place of the shield miracle
+constexpr std::string_view k_ComputerGodPhysicalShieldScript = R"(TOGGLE_COMPUTER_PLAYER("PLAYER_TWO", 1)
+CREATE_CITADEL("0.0,-90.0", 0, "PLAYER_TWO", 5690, 1000)
+CREATE_TOWN(900, "0.0,40.0", "PLAYER_TWO", 0, "CELTIC")
+SET_TOWN_BELIEF_CAP(900, "PLAYER_TWO", 2.0)
+CREATE_NEW_TOWN_SPELL(900, "PHYSICAL_SHIELD")
+SET_TOWN_BELIEF(900, "PLAYER_TWO", 1.0)
+CREATE_TOWN_CENTRE(900, "-4.0,41.0", "CELTIC_ABODE_TOWN_CENTRE", 0, 1000, 0)
+CREATE_ABODE(900, "10.0,90.0", "CELTIC_ABODE_STORAGE_PIT", 6282, 1000, 3000, 3000)
+CREATE_ABODE(900, "40.0,60.0", "CELTIC_ABODE_F", 4328, 1095, 0, 0)
+CREATE_VILLAGER_POS("36.0,62.0", "40.0,60.0", "CELTIC_HOUSEWIFE", 20)
+CREATE_VILLAGER_POS("36.0,62.0", "40.0,60.0", "CELTIC_FORESTER", 20)
+CREATE_VILLAGER_POS("36.0,62.0", "40.0,60.0", "CELTIC_HOUSEWIFE", 20)
+CREATE_VILLAGER_POS("36.0,62.0", "40.0,60.0", "CELTIC_FORESTER", 20)
+CREATE_ABODE(900, "-40.0,60.0", "CELTIC_ABODE_F", 4328, 1095, 0, 0)
+CREATE_VILLAGER_POS("-44.0,62.0", "-40.0,60.0", "CELTIC_HOUSEWIFE", 20)
+CREATE_VILLAGER_POS("-44.0,62.0", "-40.0,60.0", "CELTIC_FORESTER", 20)
+CREATE_VILLAGER_POS("-44.0,62.0", "-40.0,60.0", "CELTIC_HOUSEWIFE", 20)
+CREATE_VILLAGER_POS("-44.0,62.0", "-40.0,60.0", "CELTIC_FORESTER", 20)
+)";
+
 } // namespace
 
 void testbed_scenarios::AddComputerGodDefenceScenarios(std::vector<Scenario>& all)
@@ -169,6 +190,63 @@ void testbed_scenarios::AddComputerGodDefenceScenarios(std::vector<Scenario>& al
 	    .landScript = k_ComputerGodDefenceScript,
 	    .commands = {{.kind = Command::Kind::SaveGame, .delaySeconds = 33.0f, .value = 0},
 	                 {.kind = Command::Kind::LoadGame, .delaySeconds = 2.0f, .value = 0}},
+	    .worshipShare = 0.5f,
+	    .computerActions = {{.afterTurns = 300,
+	                         .node = "DefendtownWithSpells",
+	                         .first = {.kind = ComputerActionThing::Kind::Town, .townId = 900},
+	                         .second = {.kind = ComputerActionThing::Kind::Icon, .type = MagicType::Shield}}},
+	});
+	all.push_back({
+	    .id = "mind.computer_god_physical_shield_after_throw",
+	    .name = "A computer god that protects its temple with the physical shield after a throw",
+	    .facet = Facet::Mind,
+	    .description = "Lines of a land switch on the computer mind of player two. Player two has a temple to the south "
+	                   "and a Celtic town to the north that offers the physical shield miracle. Half of the people go to "
+	                   "worship at the site. After 30 seconds, a testbed tool puts the action ReactToPlayerThrowingStuff "
+	                   "in the queue of the god, with the heart of its temple, as when a player throws a thing at the "
+	                   "temple. The god has no creature.",
+	    .expected = "The god works out the two choices under the action: the physical shield and the creature as a "
+	                "diversion. With no creature, it chooses the physical shield. The hand moves to the physical shield "
+	                "icon of the site, and the worshippers chant for the miracle. When the charge is full, the hand "
+	                "flies to the temple and casts the physical shield over the heart, a little wider than the heart. "
+	                "The players.computer_nodes query shows CastPhysicalShieldToProtect with the icon as its object.",
+	    .framing = {.shot = Shot::Overview, .include = {glm::vec2(-80.0f, -110.0f), glm::vec2(80.0f, 100.0f)}},
+	    .landScript = k_ComputerGodPhysicalShieldScript,
+	    .worshipShare = 0.5f,
+	    .computerActions = {{.afterTurns = 300,
+	                         .node = "ReactToPlayerThrowingStuff",
+	                         .first = {.kind = ComputerActionThing::Kind::TempleHeart}}},
+	});
+	all.push_back({
+	    .id = "mind.computer_god_camera_follows_hand",
+	    .name = "A script camera that follows the hand of a computer god",
+	    .facet = Facet::Mind,
+	    .description = "The land of the shield defence scenario. After 30 seconds, a testbed tool puts the action "
+	                   "DefendtownWithSpells in the queue of the god. One second later a script takes the camera, tells "
+	                   "it to look at the hand of player two and to follow that hand, and gives the camera a distance of "
+	                   "60 and a heading of 30 degrees.",
+	    .expected = "The camera looks at the hand of the god and moves with it: first to the shield icon of the site, "
+	                "then to the middle of the town. The camera stands 60 back from the hand and looks down on it. "
+	                "When the camera only follows the hand and looks at no thing, it stands back from the point that it "
+	                "looks at, as in the original game.",
+	    .framing = {.shot = Shot::Overview, .include = {glm::vec2(-80.0f, -110.0f), glm::vec2(80.0f, 100.0f)}},
+	    .landScript = k_ComputerGodDefenceScript,
+	    .commands = {{.kind = Command::Kind::CallNative, .delaySeconds = 31.0f, .script = "START_CAMERA_CONTROL"},
+	                 {.kind = Command::Kind::CallNative,
+	                  .delaySeconds = 0.0f,
+	                  .script = "SET_FOCUS_FOLLOW_COMPUTER_PLAYER",
+	                  .scriptArguments = {{.number = 2.0f}}},
+	                 {.kind = Command::Kind::CallNative,
+	                  .delaySeconds = 0.0f,
+	                  .script = "SET_POSITION_FOLLOW_COMPUTER_PLAYER",
+	                  .scriptArguments = {{.number = 2.0f}}},
+	                 {.kind = Command::Kind::CallNative,
+	                  .delaySeconds = 0.0f,
+	                  .script = "CAMERA_PROPERTIES",
+	                  .scriptArguments = {{.number = 60.0f},
+	                                      {.number = 0.2f},
+	                                      {.number = 30.0f},
+	                                      {.kind = ScriptArgument::Kind::Integer, .number = 0.0f}}}},
 	    .worshipShare = 0.5f,
 	    .computerActions = {{.afterTurns = 300,
 	                         .node = "DefendtownWithSpells",

@@ -1300,6 +1300,8 @@ struct ComputerActionThing
 		PlayerCreature,
 		/// A marker that the tool makes on the land at point, as a land script makes a marker
 		Marker,
+		/// The heart of the temple of the god
+		TempleHeart,
 	};
 	Kind kind {Kind::None};
 	uint32_t townId {0};
