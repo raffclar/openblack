@@ -270,6 +270,8 @@ TEST(SavedSystemState, TheHelpOfEachComputerIsAPresentationPart)
 	};
 	wholeSection(HelpMessageSystem {});
 	wholeSection(HelpTextSystem {});
+	wholeSection(GuidanceSystem {});
+	wholeSection(CreatureHelpSystem {});
 	DialogueControlSystem dialogue;
 	dialogue.Request(12, 0);
 	wholeSection(dialogue);

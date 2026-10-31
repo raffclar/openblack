@@ -214,9 +214,13 @@ std::vector<entt::entity> PlayersTowns(const ecs::Registry& registry)
 
 void GuidanceSystem::SaveState(reflection::BinaryWriter& out) const
 {
+	// The guidance is of the player at this computer: it draws from the random numbers of the help and says its remarks
+	// through the help. Thus the whole section is a presentation part.
+	out.BeginPresentation();
 	reflection::Save(out, _stampsDue);
 	reflection::Save(out, _moonWait);
 	reflection::Save(out, _remarks);
+	out.EndPresentation();
 }
 
 bool GuidanceSystem::LoadState(reflection::BinaryReader& in)
