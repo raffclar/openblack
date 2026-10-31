@@ -481,6 +481,32 @@ Json openblack::inspector::InputLockState()
 	return {{"mode", input::Name(actions.GetInputLockMode())}, {"locked", actions.IsPlayerInputBlocked()}};
 }
 
+std::string GameInput::WindowTakingButton(uint8_t button) const
+{
+	if (!Locator::debugGui::has_value())
+	{
+		return {};
+	}
+	// A press where the pointer will be once what was sent before is pumped
+	glm::ivec2 at {0};
+	if (Locator::gameActionSystem::has_value())
+	{
+		const auto& actions = Locator::gameActionSystem::value();
+		at = actions.GetScriptedPointer().has_value() ? input::QueuedAhead(*actions.GetScriptedPointer(), ScreenSize()).position
+		                                              : actions.GetPointerPosition();
+	}
+	SDL_Event press {};
+	press.type = SDL_MOUSEBUTTONDOWN;
+	press.button.windowID = WindowId();
+	press.button.button = button;
+	press.button.state = SDL_PRESSED;
+	press.button.clicks = 1;
+	press.button.x = at.x;
+	press.button.y = at.y;
+	input::MarkInjected(press);
+	return Locator::debugGui::value().WindowTakingEvent(press);
+}
+
 Json GameInput::State() const
 {
 	Json state = Json::object();
@@ -505,6 +531,20 @@ Json GameInput::State() const
 		state["double_click"] = actions.GetUnbindable(input::UnbindableActionMap::DOUBLE_CLICK);
 		// While a box has the keyboard, no action reads as held
 		state["box_keyboard"] = actions.BoxHasKeyboard();
+		// A debug window that takes a press of a button for itself keeps it from the game
+		Json takenBy = Json::object();
+		for (const auto& [name, button] : {std::pair {"left", SDL_BUTTON_LEFT}, std::pair {"middle", SDL_BUTTON_MIDDLE},
+		                                   std::pair {"right", SDL_BUTTON_RIGHT}})
+		{
+			if (auto window = WindowTakingButton(static_cast<uint8_t>(button)); !window.empty())
+			{
+				takenBy[name] = std::move(window);
+			}
+		}
+		if (!takenBy.empty())
+		{
+			state["presses_taken_by_window"] = std::move(takenBy);
+		}
 		state["actions_held"] = Json::array();
 		for (const auto& binding : actions.GetKeyBindings())
 		{
