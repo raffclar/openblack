@@ -102,6 +102,10 @@ public:
 	/// The commands of the hand, which the world does at the start of a turn, for the player that sent them. The hand
 	/// takes the thing that it waited for.
 	virtual void DoTake(PlayerNames /*player*/, entt::entity /*object*/) {}
+	/// At the turn: the hand of a computer god takes a thing for a step of its actions. The hand takes it also outside
+	/// the influence of its player, as when a land's script makes the god carry a villager into the player's land. The
+	/// other rules of a take apply.
+	virtual void DoComputerTake(PlayerNames /*player*/, entt::entity /*object*/) {}
 	/// The hand lets go of the thing that it holds, at the velocity of the throw, from the start in the command
 	virtual void DoLetGo(PlayerNames /*player*/, const player_commands::HandLetGo& /*letGo*/) {}
 	/// The hand taps a thing
