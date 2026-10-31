@@ -38,6 +38,9 @@ public:
 	/// to, its fence and exclusions switched on. Whether the file could be read; when it can't, the land has none.
 	virtual bool SetZones(std::string_view fileName) = 0;
 	[[nodiscard]] virtual const camera_zones::Zones& GetZones() const = 0;
+	/// The zones that a script set go, as before a script sets new zones: the fence is off, the camera is kept out of no
+	/// place, and the height limits are the game's own again. The count of the camera's hits on the fence stays.
+	virtual void ClearZones() = 0;
 	/// A land is cleared: its zones go. The fence is off, the camera is kept out of no place, and the height limits are
 	/// the game's own again, until a script of the next land sets zones.
 	virtual void Reset() = 0;

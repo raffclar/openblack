@@ -183,12 +183,13 @@ void creature_desires::UpdateSources(Desires& desires, const SourceReader& read)
 void creature_desires::UpdateDesires(Desires& desires, float turnsPerSecond)
 {
 	desires.sum = 0.0f;
-	for (auto& desire : desires.desires)
+	for (size_t i = 0; i < k_DesireCount; ++i)
 	{
-		if (!desire.activated)
+		if (!desires.IsActivated(i))
 		{
 			continue;
 		}
+		auto& desire = desires.desires.at(i);
 		float drive = 0.0f;
 		for (auto& source : desire.sources)
 		{
@@ -294,7 +295,7 @@ Desire creature_desires::Dominant(const Desires& desires)
 	for (size_t i = 0; i < k_DesireCount; ++i)
 	{
 		const auto& state = desires.desires.at(i);
-		if (state.activated && state.value > most)
+		if (desires.IsActivated(i) && state.value > most)
 		{
 			most = state.value;
 			dominant = static_cast<Desire>(i);
@@ -320,7 +321,7 @@ std::optional<Desire> creature_desires::StrongestShowable(const Desires& desires
 	for (const auto& emote : k_Emotes)
 	{
 		const auto& state = desires[emote.desire];
-		if (state.activated && state.value > strongestValue)
+		if (desires.IsActivated(emote.desire) && state.value > strongestValue)
 		{
 			strongest = emote.desire;
 			strongestValue = state.value;
@@ -370,12 +371,13 @@ void creature_desires::ClearSourcesAfterSatisfying(DesireState& desire)
 	}
 }
 
-void creature_desires::LessenAfterAction(DesireState& desire, float multiplier, float floor)
+void creature_desires::LessenAfterAction(Desires& desires, Desire which, float multiplier, float floor)
 {
-	if (!desire.activated)
+	if (!desires.IsActivated(which))
 	{
 		return;
 	}
+	auto& desire = desires[which];
 	desire.value *= multiplier;
 	if (desire.value < floor)
 	{

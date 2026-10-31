@@ -2290,7 +2290,7 @@ bool LeashSystem::TakeGroundOrder(entt::entity creature, const glm::vec3& place)
 	const auto field = FieldAt(registry, at);
 	const bool carrying = HeldBy(creature).has_value();
 	const auto interruption = orders::OnGroundInterrupts(carrying, WalksToPointWhenForced(registry, creature));
-	const bool wantsWater = mind != nullptr && mind->desires.has_value() && (*mind->desires)[Desire::Water].activated;
+	const bool wantsWater = mind != nullptr && mind->desires.has_value() && mind->desires->IsActivated(Desire::Water);
 	const auto order = orders::OnGround(
 	    at,
 	    {
@@ -2460,7 +2460,7 @@ bool LeashSystem::TakeThingOrder(entt::entity creature, entt::entity object)
 	const auto fishSkill = static_cast<size_t>(CreatureActionKnownAbout::Fish);
 	const auto attempts = orders::OnThing({
 	    .fishFarm = registry.AllOf<FishFarm>(object),
-	    .hungry = thinking != nullptr && thinking->desires.has_value() && (*thinking->desires)[Desire::Hunger].activated,
+	    .hungry = thinking != nullptr && thinking->desires.has_value() && thinking->desires->IsActivated(Desire::Hunger),
 	    .knowsFishing = thinking != nullptr && thinking->learnt.has_value() &&
 	                    fishSkill < thinking->learnt->knowledge.skillsKnown.size() &&
 	                    thinking->learnt->knowledge.skillsKnown[fishSkill],

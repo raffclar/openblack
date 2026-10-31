@@ -1817,6 +1817,26 @@ static float LivingAngleOf(entt::entity object, const Transform& transform)
 	    GameHeading(script::property_rules::PlacedAngles(transform.rotation).y));
 }
 
+/// The way a creature's head looks: towards the point that it looks at, when it looks at a point that is not where it
+/// stands; else the way its body faces
+static GameHeading CreatureLookHeading(entt::entity creature, const Transform& transform)
+{
+	const auto& registry = Locator::entitiesRegistry::value();
+	const auto* animation = registry.TryGet<const ecs::components::CreatureAnimation>(creature);
+	if (animation != nullptr && animation->lookAt.has_value() && *animation->lookAt != transform.position)
+	{
+		const float dx = animation->lookAt->x - transform.position.x;
+		const float dz = animation->lookAt->z - transform.position.z;
+		return GameHeading::Of(dx, dz);
+	}
+	if (const auto* locomotion = registry.TryGet<const ecs::components::CreatureLocomotion>(creature);
+	    locomotion != nullptr && locomotion->started)
+	{
+		return locomotion->heading;
+	}
+	return GameHeading(script::property_rules::PlacedAngles(transform.rotation).y);
+}
+
 /// Turns a living thing to face a way, given as the scripts take it: its walk, if it has one, faces that way from now
 static void TurnLivingThing(entt::entity object, Transform& transform, float angle)
 {
@@ -8821,17 +8841,19 @@ void GameThingCanViewCamera() // 339 GAME_THING_CAN_VIEW_CAMERA
 		Pushb(false);
 		return;
 	}
+	// The camera is where the player's report put it
+	const auto camera = ecs::ReportedPlayerCamera(PlayerNames::PLAYER_ONE);
+	const auto eye = camera.has_value() ? camera->origin : glm::vec3(0.0f);
 	if (registry.AllOf<ecs::components::Creature>(object))
 	{
 		// A creature looks with its head, not with the way its body faces
-		// TODO(playground-lessons-1): a creature looks towards the camera when its head faces it
-		NotImplemented();
-		Pushb(false);
+		const auto look = CreatureLookHeading(object, *transform);
+		const auto at = map_coords::FromMetres(glm::vec2(transform->position.x, transform->position.z));
+		Pushb(script::lesson_natives::CreatureSeesCamera(at, map_coords::FromMetres(glm::vec2(eye.x, eye.z)), look.GameAngle(),
+		                                                 degrees));
 		return;
 	}
-	// The thing sees from its place on the map in the way it faces. The camera is where the player's report put it.
-	const auto camera = ecs::ReportedPlayerCamera(PlayerNames::PLAYER_ONE);
-	const auto eye = camera.has_value() ? camera->origin : glm::vec3(0.0f);
+	// The thing sees from its place on the map in the way it faces
 	const auto place = glm::vec3(map_coords::Quantise(transform->position.x), transform->position.y,
 	                             map_coords::Quantise(transform->position.z));
 	const float yAngle =

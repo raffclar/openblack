@@ -25,6 +25,7 @@
 #include "ECS/Registry.h"
 #include "ECS/Systems/Implementations/SpellIconSystem.h"
 #include "ECS/Systems/MagicSystemInterface.h"
+#include "ECS/Systems/PlaygroundTripSystemInterface.h"
 #include "InfoConstants.h"
 #include "Locator.h"
 #include "Magic/WorshipBattery.h"
@@ -88,12 +89,13 @@ public:
 		return player == heldBy ? held : std::nullopt;
 	}
 	void SetIconSeedPowerUp(entt::entity seed, int powerUp) override { poweredUp.emplace_back(seed, powerUp); }
-	entt::entity TakeIconSeed(entt::entity site, SpellSeedType seed, int /*powerUp*/, float chants) override
+	entt::entity TakeIconSeed(entt::entity site, PlayerNames holder, SpellSeedType seed, int /*powerUp*/, float chants) override
 	{
 		auto& registry = Locator::entitiesRegistry::value();
 		const auto made = registry.Create();
-		registry.Assign<SpellSeed>(made, SpellSeed {.seedType = seed, .chantStore = chants});
+		registry.Assign<SpellSeed>(made, SpellSeed {.seedType = seed, .player = holder, .chantStore = chants});
 		taken.push_back(site);
+		holders.push_back(holder);
 		return made;
 	}
 	[[nodiscard]] HandResult GetLastHandResult() const override { return {}; }
@@ -116,8 +118,30 @@ public:
 	/// The player whose hand holds the seed
 	PlayerNames heldBy {PlayerNames::PLAYER_ONE};
 	std::vector<std::pair<entt::entity, int>> poweredUp;
-	/// The sites that gave a seed to a hand, in order
+	/// The sites that gave a seed to a hand, in order, and the players whose hands took the seeds
 	std::vector<entt::entity> taken;
+	std::vector<PlayerNames> holders;
+};
+
+/// The trip to the Gods' Playground, with every player's influence on the whole land or not
+class FakePlaygroundTrip final: public PlaygroundTripSystemInterface
+{
+public:
+	explicit FakePlaygroundTrip(bool everywhere)
+	    : _everywhere(everywhere)
+	{
+	}
+	[[nodiscard]] bool InfluenceEverywhere() const override { return _everywhere; }
+	[[nodiscard]] bool IsLessonRunning() const override { return false; }
+	void StartLesson() override {}
+	bool AskLessonEnd() override { return false; }
+	void EndTurn() override {}
+	bool SaveBeforeTrip() override { return false; }
+	bool Travel() override { return false; }
+	bool Leave() override { return false; }
+
+private:
+	bool _everywhere;
 };
 
 class SpellIconSystemTest: public ::testing::Test
@@ -584,4 +608,30 @@ TEST_F(GodChargeTest, AnIconWithAStoreCountsAsAMiracleThatCharges)
 	registry.Get<WorshipIcon>(heal).store = 0.0f;
 	EXPECT_FALSE(_system.AnyIconStores(made.temple, std::nullopt));
 	EXPECT_FALSE(_system.AnyIconStores(entt::null, std::nullopt));
+}
+
+// On the Gods' Playground the hand of a player taps a neutral icon, and the full icon's miracle goes into that hand
+TEST_F(GodChargeTest, OnThePlaygroundAFullNeutralIconGivesItsMiracleToTheHandThatTapsIt)
+{
+	Locator::playgroundTripSystem::emplace<FakePlaygroundTrip>(true);
+	const auto icon = IdleIcon(PlayerNames::NEUTRAL, 100.0f);
+	// The hand that taps may cast the miracle too
+	const auto tapper = Entities().Create();
+	Entities().Assign<Player>(tapper, PlayerNames::PLAYER_ONE);
+	player_miracles::SetMagicTypeEnabled(Entities().Get<Player>(tapper).miracles, MagicType::Heal, true);
+	EXPECT_TRUE(_system.Tap(icon, PlayerNames::PLAYER_ONE));
+	ASSERT_EQ(_magic->holders.size(), 1u);
+	EXPECT_EQ(_magic->holders[0], PlayerNames::PLAYER_ONE);
+	EXPECT_EQ(_magic->taken[0], Entities().Get<const WorshipIcon>(icon).site);
+	Locator::playgroundTripSystem::reset();
+}
+
+// Away from the Playground the neutral icon takes no tap from the hand of a player
+TEST_F(GodChargeTest, AwayFromThePlaygroundANeutralIconTakesNoTap)
+{
+	Locator::playgroundTripSystem::emplace<FakePlaygroundTrip>(false);
+	const auto icon = IdleIcon(PlayerNames::NEUTRAL, 100.0f);
+	EXPECT_FALSE(_system.Tap(icon, PlayerNames::PLAYER_ONE));
+	EXPECT_TRUE(_magic->taken.empty());
+	Locator::playgroundTripSystem::reset();
 }

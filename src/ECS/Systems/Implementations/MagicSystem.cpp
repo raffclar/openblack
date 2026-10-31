@@ -2225,16 +2225,16 @@ entt::entity MagicSystem::SummonSeedAtSite(entt::entity site, SpellSeedType seed
 	return worshipSite != nullptr ? Summon(worshipSite->player, seedType, powerUp, site) : entt::null;
 }
 
-entt::entity MagicSystem::TakeIconSeed(entt::entity site, SpellSeedType seedType, int powerUp, float chants)
+entt::entity MagicSystem::TakeIconSeed(entt::entity site, PlayerNames holder, SpellSeedType seedType, int powerUp, float chants)
 {
 	const auto& registry = EntityRegistry();
-	const auto* worshipSite = registry.Valid(site) ? registry.TryGet<const WorshipSite>(site) : nullptr;
-	if (worshipSite == nullptr)
+	if (!registry.Valid(site) || !registry.AllOf<WorshipSite>(site))
 	{
 		return entt::null;
 	}
-	const ActingAs acting(*this, worshipSite->player);
-	const auto entity = GiveSeedToHand(worshipSite->player, seedType, powerUp, 1.0f);
+	// The seed is of the hand that takes it, also when the site is of another player
+	const ActingAs acting(*this, holder);
+	const auto entity = GiveSeedToHand(holder, seedType, powerUp, 1.0f);
 	if (entity == entt::null)
 	{
 		return entt::null;

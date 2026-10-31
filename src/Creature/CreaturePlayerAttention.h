@@ -97,6 +97,10 @@ constexpr float k_PointAtHandSeconds = 1.0f;
 /// half turn apart, measured straight and not round the circle; or the point is in the creature's own map cell
 [[nodiscard]] bool IsDirectionClose(const map_coords::MapCoords& creature, const map_coords::MapCoords& point,
                                     uint16_t heading);
+/// As IsDirectionClose, with the angle that counts as near given in parts of a half turn: the two game angles are less
+/// than a half turn divided by `parts` apart. `parts` must not be 0.
+[[nodiscard]] bool IsDirectionClose(const map_coords::MapCoords& creature, const map_coords::MapCoords& point, uint16_t heading,
+                                    uint32_t parts);
 
 /// The turns a creature follows the hand for, from the whole turns a second
 [[nodiscard]] uint32_t FollowHandTurns(uint32_t turnsPerSecond);
