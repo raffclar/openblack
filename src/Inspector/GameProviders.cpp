@@ -210,6 +210,7 @@
 #include "ECS/Systems/PlayerCommandSystemInterface.h"
 #include "ECS/Systems/PlayerProfileSystemInterface.h"
 #include "ECS/Systems/PlayerSystemInterface.h"
+#include "ECS/Systems/PlaygroundTripSystemInterface.h"
 #include "ECS/Systems/ProfileFolderSystemInterface.h"
 #include "ECS/Systems/RainSystemInterface.h"
 #include "ECS/Systems/ReactionSystemInterface.h"
@@ -473,6 +474,7 @@ constexpr std::array k_Coverage {
     LocatorCoverage {"musicMoodSystem", "players.custom_music"},
     LocatorCoverage {"scriptMusicSystem", "audio.state"},
     LocatorCoverage {"tutorialSkipSystem", "players.new_game"},
+    LocatorCoverage {"playgroundTripSystem", "players.playground_trip"},
     LocatorCoverage {"advisorSystem", "help.advisors"},
     LocatorCoverage {"advisorVoiceSystem", "help.advisors"},
     LocatorCoverage {"helpTextSystem", "help.dialogue"},
@@ -1935,6 +1937,18 @@ std::unique_ptr<ProviderInterface> PlayersProvider()
 			              const auto& profiles = Locator::playerProfileSystem::value();
 			              result["profiles"] = profiles.GetProfileCount();
 			              result["profile_has_creature"] = profiles.CurrentProfileHasCreature();
+		              }
+		              return QueryResult::Value(std::move(result));
+	              });
+	provider->Add(Query("playground_trip", "The trip to the Gods' Playground: whether every player's influence covers "
+	                                       "the whole land, and whether a lesson runs"),
+	              [](const QueryContext& /*c*/) {
+		              Json result = Json::object();
+		              if (Locator::playgroundTripSystem::has_value())
+		              {
+			              const auto& trip = Locator::playgroundTripSystem::value();
+			              result["influence_everywhere"] = trip.InfluenceEverywhere();
+			              result["lesson_running"] = trip.IsLessonRunning();
 		              }
 		              return QueryResult::Value(std::move(result));
 	              });

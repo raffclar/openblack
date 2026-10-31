@@ -38,6 +38,7 @@
 #include "ECS/Components/TownDesire.h"
 #include "ECS/Components/Transform.h"
 #include "ECS/Components/WorshipSite.h"
+#include "ECS/GamePlayers.h"
 #include "ECS/PlayerTowns.h"
 #include "ECS/Reflection/BinaryArchive.h"
 #include "ECS/Registry.h"
@@ -607,11 +608,6 @@ void GuidanceSystem::LosingBeliefTurn()
 	}
 	// The towns of the player at this computer, in the order of the player's list
 	const auto player = OwnPlayer();
-	// The rule knows the belief of the players of a land only, so a god after the seventh gets no remark
-	if (static_cast<size_t>(player) >= guidance::k_BeliefPlayers)
-	{
-		return;
-	}
 	const auto towns = ecs::player_towns::InOrder(registry, player);
 	std::vector<guidance::TownBeliefs> beliefs;
 	beliefs.reserve(towns.size());
@@ -625,7 +621,8 @@ void GuidanceSystem::LosingBeliefTurn()
 		}
 	}
 	const auto margin = Locator::infoConstants::value().belief.beliefLeftWhenHelpSpritesWarn;
-	const auto found = guidance::LosingBeliefTown(beliefs, static_cast<size_t>(player), margin);
+	// The rule looks at each player of the game, so a god after the seventh also gets the remark (deviation 166)
+	const auto found = guidance::LosingBeliefTown(beliefs, static_cast<size_t>(player), ecs::game_players::Count(), margin);
 	if (!found.has_value() || !RemarkNow(guidance::Kind::LosingBelief))
 	{
 		return;

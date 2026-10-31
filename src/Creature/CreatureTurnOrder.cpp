@@ -99,3 +99,8 @@ bool creature_turn_order::SkipsDecision(const DecisionState& state)
 	}
 	return state.planForced || state.reacting;
 }
+
+bool creature_turn_order::DoesFollowUp(const DecisionState& state, bool forOneDesire, bool scriptControlled)
+{
+	return !state.planRuns && !forOneDesire && !scriptControlled;
+}

@@ -47,6 +47,9 @@ enum class FollowUp : uint8_t
 	/// On the leash, it saw a nasty miracle that it knows. It casts that miracle at the thing that was nearest to the
 	/// hand.
 	CastOnLeash,
+	/// The leash tied it to a need flag of a worship site. It brings food to the site: it casts the food miracle by the
+	/// site, or it puts fish by the site.
+	FeedWorshipSite,
 };
 
 /// The creature eats a magic mushroom: it becomes high only when nothing else waits
@@ -120,5 +123,19 @@ struct DoAgainThing
 /// Whether the creature can do the action again to the thing: a thing of the same kind that the action's test accepts.
 /// An action with no test accepts all things of that kind.
 [[nodiscard]] bool SuitsDoAgain(const DoAgainThing& thing);
+
+/// The skill of fishing in the list of the skills that a creature knows
+inline constexpr uint32_t k_FishingSkill = 4;
+/// The food miracle in the list of the miracles that a creature knows
+inline constexpr uint32_t k_FoodMiracle = 14;
+
+/// The action that a creature does for a worship site after the leash tied it to a need flag of the site. A creature
+/// that knows the food miracle casts it by the site. A creature that knows only how to fish puts fish by the site. A
+/// creature that knows neither does nothing.
+[[nodiscard]] std::optional<std::string_view> FeedWorshipSiteAction(bool knowsFishing, bool knowsFoodMiracle);
+
+/// Whether a turn on the leash at a need flag of a worship site sets the creature to feed the site again: the flag
+/// shows more than six tenths of its full need
+[[nodiscard]] bool SetsFeedAgain(float fill);
 
 } // namespace openblack::creature_follow_up

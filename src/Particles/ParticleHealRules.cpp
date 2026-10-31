@@ -13,6 +13,7 @@
 
 #include <cmath>
 
+#include <memory>
 #include <numbers>
 #include <string>
 #include <vector>
@@ -22,6 +23,7 @@
 
 #include "Common/X87.h"
 #include "Common/X87Vector.h"
+#include "ParticleArchive.h"
 #include "ParticleClassRegistry.h"
 #include "ParticleMaths.h"
 #include "ParticleSounds.h"
@@ -33,6 +35,31 @@ using openblack::psys::ParticleObject;
 namespace
 {
 constexpr float k_TwoPi = 2.0f * std::numbers::pi_v<float>;
+
+/// Held by a chakra for as long as it lives. When the chakra goes for any cause (its burst is over, its target went, or
+/// its effect closed with it), the target is free for another heal and loses the chakra's glow.
+class TargetHold
+{
+public:
+	TargetHold(ParticleWorldInterface& world, entt::entity target)
+	    : _world(world)
+	    , _target(target)
+	{
+	}
+	TargetHold(const TargetHold&) = delete;
+	TargetHold& operator=(const TargetHold&) = delete;
+	TargetHold(TargetHold&&) = delete;
+	TargetHold& operator=(TargetHold&&) = delete;
+	~TargetHold()
+	{
+		_world.ClaimTarget(_target, false);
+		_world.SetTargetGlow(_target, glm::u8vec3(0));
+	}
+
+private:
+	ParticleWorldInterface& _world;
+	entt::entity _target;
+};
 
 /// A chakra over each target the miracle gives the effect that no other effect has, which heals it as it appears. Each
 /// chakra follows its target, scaled to it when asked, and fades with the burst under it: up to full at one age of the
@@ -55,6 +82,16 @@ public:
 	{
 	}
 	[[nodiscard]] bool KeepsAlive() const override { return true; }
+	/// The hold is not written: a load takes it up again for the target the chakra follows, which the world's own record
+	/// keeps claimed
+	void SaveHeld(const AtomRuleData& /*data*/, EffectWriter& /*out*/) const override {}
+	void LoadHeld(AtomRuleData& data, EffectReader& in) const override
+	{
+		if (data.object != entt::null)
+		{
+			data.held = std::make_shared<const TargetHold>(in.CurrentEffect().Services().world, data.object);
+		}
+	}
 
 	bool ModifyCollection(Effect& effect, Collection& collection, Collection::Slot& /*slot*/) const override
 	{
@@ -77,6 +114,7 @@ public:
 			data.object = *target;
 			atom.position = info->position;
 			world.ClaimTarget(*target, true);
+			data.held = std::make_shared<const TargetHold>(world, *target);
 		}
 		// The newest chakra plays the heal once it has lived a step
 		const Atom* newest = collection.atoms.empty() ? nullptr : collection.atoms.back().get();
@@ -90,6 +128,11 @@ public:
 				continue;
 			}
 			auto& data = found->second;
+			// A chakra from a save that did not keep the hold takes it up again
+			if (data.object != entt::null && data.held == nullptr)
+			{
+				data.held = std::make_shared<const TargetHold>(world, data.object);
+			}
 			if (&atom == newest && !data.started && effect.AtomAge(atom) > 0.0f)
 			{
 				data.started = true;
@@ -117,11 +160,7 @@ public:
 			}
 			if (done)
 			{
-				if (data.object != entt::null)
-				{
-					world.SetTargetGlow(data.object, glm::u8vec3(0));
-					world.ClaimTarget(data.object, false);
-				}
+				// The chakra's hold frees its target and puts out its glow as the chakra goes
 				collection.atoms.erase(collection.atoms.begin() + static_cast<std::ptrdiff_t>(i));
 				continue;
 			}

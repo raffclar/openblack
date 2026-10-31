@@ -232,7 +232,7 @@ private:
 	void Chase(entt::entity wolf, components::Animal& animal);
 	void Pounce(entt::entity wolf, components::Animal& animal);
 	/// A wolf brings its prey down
-	static void BringDown(entt::entity wolf, entt::entity prey);
+	void BringDown(entt::entity wolf, entt::entity prey);
 	void FinishPouncing(entt::entity wolf, components::Animal& animal, entt::entity prey);
 	static void WaitForClip(components::Animal& animal, components::AnimalState next);
 	void Eat(entt::entity wolf, components::Animal& animal);
@@ -252,6 +252,9 @@ private:
 	void ProcessFading();
 	/// An animal goes, and leaves its flock
 	void Remove(entt::entity animal);
+	/// An animal that goes into the next state stops its reaction when the change ends the reaction. It keeps the new
+	/// state
+	void EndReactionForState(entt::entity entity, components::AnimalState next);
 	/// A turn of a killed animal: falling dead, then lying dead its time before it goes
 	void ProcessDeath(entt::entity entity, components::Animal& animal);
 	/// The grey puff of smoke a dead body leaves as it goes

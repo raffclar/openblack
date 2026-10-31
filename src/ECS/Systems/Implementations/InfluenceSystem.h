@@ -78,6 +78,8 @@ private:
 	void ProcessVirtualInfluence(entt::entity playerEntity, PlayerNames player, glm::vec3 hand, uint32_t turn);
 	/// The own influence of a player at a place, or where it is none or less, the influence that an ally lends there
 	[[nodiscard]] float WithAllies(PlayerNames player, const map_coords::MapCoords& position, float own) const;
+	/// Whether every player's influence covers the whole land now
+	[[nodiscard]] static bool InfluenceEverywhere();
 	/// What a player's hand keeps of their influence past the border, if they have a hand
 	[[nodiscard]] static const virtual_influence::State* VirtualStateOf(PlayerNames player);
 	/// The game turn last played

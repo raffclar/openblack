@@ -2127,10 +2127,10 @@ void AddSingingStones(std::vector<Scenario>& all)
 	    .facet = Facet::Story,
 	    .description = "A cow 3 east of the ring's centre and a villager 6 west of it are killed. Four seconds in, the "
 	                   "game's BringBackTheDead script runs, as the funeral march on the second land starts it.",
-	    .expected = "A big healing glow covers the ring. The nearest dead thing comes back first: the cow puffs steam and "
-	                "comes back alive at the ring's centre, not where it lay, as in the game. About 3 seconds later the "
-	                "villager puffs steam and comes back where it lay, of the same kind and age, as a skeleton. Each "
-	                "revived thing is let go 3 seconds after it comes back.",
+	    .expected = "A healing glow 13.5 times its usual size covers the ring. The nearest dead thing comes back first: "
+	                "the cow puffs steam and comes back alive at the ring's centre, not where it lay, as in the game. "
+	                "About 3 seconds later the villager puffs steam and comes back where it lay, of the same kind and "
+	                "age, as a skeleton. Each revived thing is let go 3 seconds after it comes back.",
 	    .environment = {.dispenserGrid = false},
 	    .framing = {.shot = Shot::Placed,
 	                .eye = {k_Ring.x + 4.0f, 14.0f, k_Ring.y - 22.0f},
@@ -11475,6 +11475,23 @@ void AddParticles(std::vector<Scenario>& all)
 	                  {.file = "SF_LandscapeVortexLightMap", .offset = {70.0f, 0.0f}}},
 	});
 
+	// The singing stones' heal as the funeral march's raising starts it: the script makes it 13.5 times its size, in the
+	// colour of this computer's player
+	all.push_back({
+	    .id = "particles.singing_stones_heal_rings",
+	    .name = "The rings of light of the singing stones' heal",
+	    .facet = Facet::Particles,
+	    .description = "The singing stones' heal effect at 13.5 times its size, in the first player's colour, at night. "
+	                   "Its rule stands three rings of light on the land round the place where the effect starts, each "
+	                   "about 15 m across from the centre, under the glow that the effect's light map puts on the land.",
+	    .expected = "Three rings of light stand one on the other round the light on the land, 10 high, rising and "
+	                "falling in waves that roll round them, their stars sliding up. They are a dim red: the player's red "
+	                "times the alpha of 30 of the effect's points. They follow the land and stay where they were made.",
+	    .environment = {.hour = 23.0f, .dispenserGrid = false},
+	    .framing = {.shot = Shot::Overview, .include = {{-20.0f, -20.0f}, {20.0f, 20.0f}}, .distance = 0.5f},
+	    .particles = {{.file = "SF_SingingStonesHeal", .offset = {0.0f, 0.0f}, .magnitude = 13.5f, .player = 0}},
+	});
+
 	all.push_back({
 	    .id = "particles.mist_shadows",
 	    .name = "Shadows of a storm's mist",
@@ -12922,6 +12939,70 @@ void AddWorkshopScenarios(std::vector<Scenario>& all)
 	    .townBeliefInPlayer = 1.0f,
 	});
 
+	all.push_back({
+	    .id = "objects.scaffold_site_destroyed_starts_again",
+	    .name = "A scaffold starts a new site when an effect destroys its unfinished building",
+	    .facet = Facet::Objects,
+	    .description = "The town, the scaffold and the camera of objects.scaffold_starts_building. After one second the "
+	                   "scaffold starts the building that the town offers where it lies, as when the hand puts it down. "
+	                   "After four seconds more, an effect destroys the unfinished building of the site, as when a fire "
+	                   "takes the last of its life.",
+	    .expected = "A building site opens at the scaffold, with the phantom of its building. When the effect destroys "
+	                "the building, a ghost of the building flickers out, and at once the scaffold opens a new site where "
+	                "it lies. The new site can show another building or another angle, because the town looks for its "
+	                "offer again. The planting sound plays, and the hand can take the scaffold again for a time.",
+	    .environment = {.dispenserGrid = false},
+	    .framing = {.shot = Shot::Overview, .include = {k_LooseScaffold - glm::vec2 {10.0f}, k_BuildPlace + glm::vec2 {10.0f}}},
+	    .objects = {{.type = AbodeInfo::CelticTownCentre, .offset = {0.0f, 50.0f}},
+	                {.type = ScaffoldInfo::Normal, .offset = k_LooseScaffold, .scale = 0.7f}},
+	    .commands = {{.kind = Kind::ScaffoldStartsSite, .delaySeconds = 1.0f, .object = 1},
+	                 {.kind = Kind::DestroyScaffoldSite, .delaySeconds = 4.0f, .object = 1}},
+	});
+
+	all.push_back({
+	    .id = "objects.workshop_site_wood_on_its_pile",
+	    .name = "The wood for a workshop that goes up lies on the pile of the workshop",
+	    .facet = Facet::Objects,
+	    .description = "A Celtic town of the player's with a village centre, a storage pit that holds 6000 wood 25 m to the "
+	                   "west, four builders of the town, and a workshop that is a tenth built. The workshop holds 1000 "
+	                   "wood. Best watched at game speed 4.",
+	    .expected = "The wood of the workshop lies on the pile of logs at the back of the workshop. No other pile of wood "
+	                "comes for the site. The builders take wood from this pile to build, and they bring wood from the "
+	                "storage pit to the workshop. When the workshop is finished, the wood that is left stays on the pile "
+	                "as the wood of the workshop. The villagers do not take it away.",
+	    .environment = {.dispenserGrid = false},
+	    .framing = {.shot = Shot::Overview, .include = {k_Workshop - glm::vec2 {15.0f}, k_Workshop + glm::vec2 {15.0f}}},
+	    .objects =
+	        {{.type = AbodeInfo::CelticTownCentre, .offset = {0.0f, 50.0f}},
+	         {.type = AbodeInfo::CelticStoragePit, .offset = k_Workshop + glm::vec2 {-25.0f, 0.0f}, .storedWood = 6000},
+	         {.type = AbodeInfo::CelticWorkshop, .offset = k_Workshop, .yawDegrees = 180.0f, .storedWood = 1000, .built = 0.1f},
+	         {.type = VillagerInfo::CelticFarmerMale, .offset = k_Workshop + glm::vec2 {-6.0f, -10.0f}, .joinTown = true},
+	         {.type = VillagerInfo::CelticFarmerMale, .offset = k_Workshop + glm::vec2 {-3.0f, -11.0f}, .joinTown = true},
+	         {.type = VillagerInfo::CelticForesterMale, .offset = k_Workshop + glm::vec2 {3.0f, -11.0f}, .joinTown = true},
+	         {.type = VillagerInfo::CelticFarmerMale, .offset = k_Workshop + glm::vec2 {6.0f, -10.0f}, .joinTown = true}},
+	});
+
+	all.push_back({
+	    .id = "story.reward_chest_scaffold",
+	    .name = "A reward chest gives a town with a workshop a scaffold",
+	    .facet = Facet::Objects,
+	    .description = "A Celtic town of the player's with a village centre and a built workshop with no wood. After one "
+	                   "second a reward chest of a scaffold lies opened in the town, near the workshop.",
+	    .expected = "A small scaffold, worth one scaffold and not turned, appears where the chest is. The workshop counts "
+	                "it as its own (the inspector shows it in the scaffolds of the workshop), but it does not move into "
+	                "the yard.",
+	    .environment = {.dispenserGrid = false},
+	    .framing = {.shot = Shot::Overview, .include = {k_Workshop - glm::vec2 {15.0f}, k_Workshop + glm::vec2 {15.0f}}},
+	    .objects = {{.type = AbodeInfo::CelticTownCentre, .offset = {0.0f, 50.0f}},
+	                {.type = AbodeInfo::CelticWorkshop, .offset = k_Workshop, .yawDegrees = 180.0f, .storedWood = 0}},
+	    .rewards = {{.type = RewardObjectInfo::Scaffold,
+	                 .offset = k_Workshop + glm::vec2 {12.0f, -12.0f},
+	                 .fromSky = false,
+	                 .inTown = true,
+	                 .delaySeconds = 1.0f,
+	                 .opened = true}},
+	});
+
 	// The tiger and a second loose scaffold stand inside the shot of objects.scaffold_starts_building, away from the
 	// hand's way, so that the shot and the hand's input stay the same. The tiger stays still until the input is over.
 	// The second scaffold is far from the village centre: the creature walks round the centre, and a scaffold near its
@@ -13239,14 +13320,15 @@ bool testbed_scenarios::NeedsNoCreature(Command::Kind kind)
 	       kind == Kind::PlayFallingSpellFilm || kind == Kind::PlayIntroFilm || kind == Kind::SayLine ||
 	       kind == Kind::PlayGuidanceVoice || kind == Kind::ScriptRelease || kind == Kind::FillSiteIcons ||
 	       kind == Kind::ChargeIconWithSeedHeld || kind == Kind::FinishBuilding || kind == Kind::FillBuiltAmount ||
-	       kind == Kind::CallNative || kind == Kind::PauseGame || kind == Kind::SetGameSpeed ||
-	       kind == Kind::RemoveTeleportStone || kind == Kind::MakeDance || kind == Kind::OpenMultiplayerBox ||
-	       kind == Kind::BuildWorshipSites || kind == Kind::PressPlainKey || kind == Kind::PlainKeyDown ||
-	       kind == Kind::PlainKeyRepeat || kind == Kind::PlainKeyUp || kind == Kind::OtherGodHand || kind == Kind::OwnGod ||
-	       kind == Kind::JoinOnline || kind == Kind::EndBox || kind == Kind::BringCreature ||
-	       kind == Kind::TattooEditorAsNetworkGame || kind == Kind::ShowDemoPing || kind == Kind::AddIncomingMessage ||
-	       kind == Kind::Chat || kind == Kind::ComputerPersonality || kind == Kind::ComputerUntaughtSends ||
-	       kind == Kind::SkirmishBox || IsPointerCommand(kind);
+	       kind == Kind::ScaffoldStartsSite || kind == Kind::DestroyScaffoldSite || kind == Kind::CallNative ||
+	       kind == Kind::PauseGame || kind == Kind::SetGameSpeed || kind == Kind::RemoveTeleportStone ||
+	       kind == Kind::MakeDance || kind == Kind::OpenMultiplayerBox || kind == Kind::BuildWorshipSites ||
+	       kind == Kind::PressPlainKey || kind == Kind::PlainKeyDown || kind == Kind::PlainKeyRepeat ||
+	       kind == Kind::PlainKeyUp || kind == Kind::OtherGodHand || kind == Kind::OwnGod || kind == Kind::JoinOnline ||
+	       kind == Kind::EndBox || kind == Kind::BringCreature || kind == Kind::TattooEditorAsNetworkGame ||
+	       kind == Kind::ShowDemoPing || kind == Kind::AddIncomingMessage || kind == Kind::Chat ||
+	       kind == Kind::ComputerPersonality || kind == Kind::ComputerUntaughtSends || kind == Kind::SkirmishBox ||
+	       IsPointerCommand(kind);
 }
 
 std::string_view testbed_scenarios::Name(Facet facet)
@@ -13274,7 +13356,7 @@ std::string_view testbed_scenarios::Name(Shot shot)
 
 std::string_view testbed_scenarios::Name(Command::Kind kind)
 {
-	constexpr std::array<std::string_view, 199> k_Names {
+	constexpr std::array<std::string_view, 202> k_Names {
 	    "walk to",
 	    "run to",
 	    "follow",
@@ -13314,6 +13396,7 @@ std::string_view testbed_scenarios::Name(Command::Kind kind)
 	    "put on leash",
 	    "tie leash to",
 	    "tie leash to desire flag",
+	    "tie leash to worship site flag",
 	    "untie leash",
 	    "take off leash",
 	    "keep at home",
@@ -13446,6 +13529,8 @@ std::string_view testbed_scenarios::Name(Command::Kind kind)
 	    "charge an icon with its seed in the hand",
 	    "finish the building",
 	    "fill the built amount",
+	    "start a site with the scaffold",
+	    "destroy the site of the scaffold",
 	    "call a script native",
 	    "animal flees",
 	    "hold the route search",

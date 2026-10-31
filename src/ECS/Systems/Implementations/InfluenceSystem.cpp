@@ -53,8 +53,10 @@
 #include "ECS/Systems/HandSystemInterface.h"
 #include "ECS/Systems/LandSystemInterface.h"
 #include "ECS/Systems/PlayerSystemInterface.h"
+#include "ECS/Systems/PlaygroundTripSystemInterface.h"
 #include "ECS/Systems/SoundTagSystemInterface.h"
 #include "ECS/Systems/TimeSystemInterface.h"
+#include "ECS/Systems/WorshipSiteSystemInterface.h"
 #include "InfoConstants.h"
 #include "Locator.h"
 #include "PlayerSlots.h"
@@ -593,15 +595,19 @@ void InfluenceSystem::ProcessVirtualInfluence(entt::entity entity, PlayerNames p
 	// Only the player's own influence counts here, not what the hand keeps
 	const bool inInfluence = !shielded && PlayerRawInfluence(player, hand) > 0.0f;
 	const auto before = virtualInfluence.state;
-	// TODO(raffclar): the chants waiting at the player's worship sites, which slow the waning and are used up by it, once
-	// worship sites gather chants; until then there are none
+	// Out of its influence, the hand uses the chants of the player's worship sites. They slow the waning. The player has
+	// one hand, so the hand gets all of the chants.
+	const float chants =
+	    virtual_influence::UsesChants(virtualInfluence.state, shielded, inInfluence) && Locator::worshipSiteSystem::has_value()
+	        ? Locator::worshipSiteSystem::value().TakeChantsForVirtualInfluence(player, 1)
+	        : 0.0f;
 	const virtual_influence::TurnInputs inputs {
 	    .hand = hand,
 	    .turn = turn,
 	    .handShielded = shielded,
 	    .handInInfluence = inInfluence,
 	    .influencePower = InfluencePower(player),
-	    .chants = 0.0f,
+	    .chants = chants,
 	};
 	// Back in influence, the next trip out has a new mana path
 	if (virtual_influence::ManaPathEnds(virtualInfluence.state, inputs))
@@ -782,6 +788,12 @@ bool InfluenceSystem::CrossBorders(const glm::vec3& hand)
 	return crossed;
 }
 
+bool InfluenceSystem::InfluenceEverywhere()
+{
+	// On the trip to the Gods' Playground, every player's influence covers the whole land, under a shield too
+	return Locator::playgroundTripSystem::has_value() && Locator::playgroundTripSystem::value().InfluenceEverywhere();
+}
+
 float InfluenceSystem::PlayerInfluence(PlayerNames player, const map_coords::MapCoords& position) const
 {
 	return WithAllies(player, position, PlayerOwnInfluence(player, position));
@@ -825,6 +837,10 @@ float InfluenceSystem::WithAllies(PlayerNames player, const map_coords::MapCoord
 
 float InfluenceSystem::PlayerOwnInfluence(PlayerNames player, const map_coords::MapCoords& position) const
 {
+	if (InfluenceEverywhere())
+	{
+		return 1.0f;
+	}
 	if (const auto* state = VirtualStateOf(player); state != nullptr)
 	{
 		// The questions of a game turn measure from where the hand was at the turn; between turns this computer's
@@ -851,6 +867,10 @@ float InfluenceSystem::PlayerOwnInfluence(PlayerNames player, const map_coords::
 
 float InfluenceSystem::HandPointInfluence(PlayerNames player, const map_coords::MapCoords& hand) const
 {
+	if (InfluenceEverywhere())
+	{
+		return 1.0f;
+	}
 	// The place asked is the hand's own, so the hand is inside while it keeps anything
 	if (const auto* state = VirtualStateOf(player); state != nullptr && !Shielded(player, hand))
 	{

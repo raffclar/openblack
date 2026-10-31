@@ -24,6 +24,7 @@
 #include "3D/L3DAnim.h"
 #include "3D/L3DMesh.h"
 #include "3D/LandIslandInterface.h"
+#include "3D/PlayersSymbols.h"
 #include "Animals/AnimalAnimation.h"
 #include "Common/GameRandom.h"
 #include "Common/PortableRotations.h"
@@ -33,6 +34,7 @@
 #include "ECS/Components/Mesh.h"
 #include "ECS/Components/Reward.h"
 #include "ECS/Components/Transform.h"
+#include "ECS/GamePlayers.h"
 #include "ECS/Registry.h"
 #include "ECS/RewardOpening.h"
 #include "ECS/RewardRules.h"
@@ -395,6 +397,7 @@ void RewardSystem::CollectDrawFrame(particles::draw::Frame& frame) const
 	    },
 	    .playerColour = {},
 	    .random = {},
+	    .symbolsInARow = static_cast<int>(players_symbols::SquaresInARowFor(ecs::game_players::Count())),
 	};
 	particles::Effect::DrawWalk walk;
 	const auto& registry = Locator::entitiesRegistry::value();

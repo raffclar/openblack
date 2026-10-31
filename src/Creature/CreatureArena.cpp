@@ -20,6 +20,7 @@
 #include "Common/GUtilsDistance.h"
 #include "Common/X87.h"
 #include "Common/X87Vector.h"
+#include "Particles/LightSheet.h"
 
 using namespace openblack;
 using namespace openblack::creature_arena;
@@ -182,16 +183,5 @@ bool creature_arena::KeepsArenaOff(const ThingInCell& thing, float creatureSize,
 
 std::vector<glm::vec3> creature_arena::RingPoints(glm::vec2 centre, float radius, const GroundHeight& ground)
 {
-	constexpr float k_FullTurn = 2.0f * std::numbers::pi_v<float>;
-	std::vector<glm::vec3> points;
-	points.reserve(k_RingPoints);
-	for (uint32_t i = 0; i < k_RingPoints; ++i)
-	{
-		const float angle = (static_cast<float>(i) * k_FullTurn) / (static_cast<float>(k_RingPoints) - 1.0f);
-		// The cosine is kept as a float before the multiply; the sine goes wide into it
-		const float cosine = x87::RoundToFloat(x87::Cos(angle));
-		const glm::vec2 at {(cosine * radius) + centre.x, x87::Mul(x87::Sin(angle), radius) + centre.y};
-		points.emplace_back(at.x, ground(at), at.y);
-	}
-	return points;
+	return particles::LightSheet::RingPoints(centre, radius, k_RingPoints, ground);
 }

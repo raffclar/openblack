@@ -88,6 +88,7 @@ public:
 	[[nodiscard]] std::optional<glm::ivec2> GetCursorWarp() const final;
 	void SetBlockedActions(BindableActionMap actions) final { _blocked = actions; }
 	void BoxKeyDown(bool boxWantsKeys) final { _boxKeyboard.KeyDown(boxWantsKeys); }
+	void BoxAnswered() final { _boxKeyboard.Answered(); }
 	[[nodiscard]] bool BoxHasKeyboard() const final { return _boxKeyboard.Taken(); }
 	void AllowCursorFreeze(bool allowed) final;
 	void PinCursor(bool pinned) final;

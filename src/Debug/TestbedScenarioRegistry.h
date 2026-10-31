@@ -671,6 +671,9 @@ struct Command
 		TieLeash,
 		/// The hand of the player ties the leash to the flag of a town's desire (by value), the first such flag found
 		TieLeashToDesireFlag,
+		/// The hand of the player ties the leash to the need flag of a worship site (value: 0 food, 1 rest, 2 hiding), the
+		/// first such flag found
+		TieLeashToWorshipSiteFlag,
 		UntieLeash,
 		TakeOffLeash,
 		ConfineToHome,
@@ -1005,6 +1008,12 @@ struct Command
 		/// The scenario's object, a building going up, gets all of its built amount, but it is not finished. The
 		/// inspector makes the same state when it sets the built amount. Needs no creature.
 		FillBuiltAmount,
+		/// The scenario's object, a scaffold, starts the building that its town offers where it lies. The building does
+		/// not have to fit. Needs no creature.
+		ScaffoldStartsSite,
+		/// An effect destroys the building on whose site the scenario's object, a scaffold, stands, as when a fire takes
+		/// the last of the life of the building. Needs no creature.
+		DestroyScaffoldSite,
 		/// A script native (script, by its name) runs at once with its arguments in order (scriptArguments). A position
 		/// is three numbers. Needs no creature.
 		CallNative,
@@ -1372,6 +1381,8 @@ struct Scenario
 	/// A testbed set-up step: the scenario's town also believes this much in the second player from the start. Put the
 	/// second player in the environment's players.
 	std::optional<float> townBeliefInRival;
+	/// A testbed set-up step: the scenario's town also believes this much in each of these players from the start
+	std::vector<std::pair<PlayerNames, float>> townBeliefInPlayers;
 	/// A testbed set-up step: the debug tool gives the scenario's town these miracles, as a land file line gives them. A
 	/// town without a worship site then gets its site, on the first land too.
 	std::vector<MagicType> townMiracles;

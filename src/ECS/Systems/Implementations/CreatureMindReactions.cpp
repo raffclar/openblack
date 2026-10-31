@@ -46,6 +46,7 @@
 #include "ECS/Components/CreatureNeeds.h"
 #include "ECS/Components/ReportedHand.h"
 #include "ECS/Components/Transform.h"
+#include "ECS/Components/WorshipSite.h"
 #include "ECS/Map.h"
 #include "ECS/NearestSearch.h"
 #include "ECS/Registry.h"
@@ -219,6 +220,38 @@ void CreatureMindSystem::CastOnLeash(entt::entity creature, CreatureMindState& m
 	                                       .action = tables->actions[action].name,
 	                                       .object = cast->thing,
 	                                       .activityObject = whole.value_or(creature)}));
+}
+
+entt::entity CreatureMindSystem::FeedSiteAltar(entt::entity flag)
+{
+	const auto& registry = Locator::entitiesRegistry::value();
+	const auto* sign = registry.Valid(flag) ? registry.TryGet<const WorshipSiteFlag>(flag) : nullptr;
+	const auto* site = sign != nullptr && registry.Valid(sign->site) ? registry.TryGet<const WorshipSite>(sign->site) : nullptr;
+	if (site == nullptr || !registry.Valid(site->altar) || !registry.AllOf<Transform>(site->altar))
+	{
+		return entt::null;
+	}
+	return site->altar;
+}
+
+void CreatureMindSystem::FeedWorshipSite(entt::entity creature, CreatureMindState& mind)
+{
+	const auto altar = FeedSiteAltar(std::exchange(mind.feedSiteFlag, entt::null));
+	if (altar == entt::null)
+	{
+		return;
+	}
+	const auto action = creature_follow_up::FeedWorshipSiteAction(
+	    KnowsAction(creature, CreatureActionLearningType::Normal, creature_follow_up::k_FishingSkill),
+	    KnowsAction(creature, CreatureActionLearningType::Magic, creature_follow_up::k_FoodMiracle));
+	if (!action.has_value())
+	{
+		return;
+	}
+	SPDLOG_LOGGER_DEBUG(spdlog::get("game"), "Creature {} feeds the worship site of altar {} for the leash: {}",
+	                    entt::to_integral(creature), entt::to_integral(altar), *action);
+	// The plan is about the place of the flag, which is the place of the altar of its site
+	static_cast<void>(ForcePlan(creature, {.desire = Desire::ObeyPlayer, .action = *action, .object = altar, .ordered = true}));
 }
 
 void CreatureMindSystem::ReactToNiceMagic(entt::entity creature, const glm::vec3& point, std::optional<size_t> learn)

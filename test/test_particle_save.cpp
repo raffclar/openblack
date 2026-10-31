@@ -660,3 +660,28 @@ TEST(ParticleSaveTables, ASyncedBoltKeepsNoLinkToABoltOfThisComputer)
 	EXPECT_EQ(loaded.bolts.items[1]->order, 2u);
 	EXPECT_EQ(loaded.bolts.items[1]->linkedFrom.lock(), loaded.bolts.items[0]);
 }
+
+TEST_F(ParticleSaveTest, TheRingsOfLightAreMadeAgainAfterALoadInTheColoursOfTheirAtoms)
+{
+	const auto text = Header() + Object("ParticlePointCreator", "Point0", "PROPERTY ColorA INTEGER 30\n") +
+	                  Object("UR_LightSheetOnObject", "Ring0",
+	                         "PROPERTY Group INTEGER 0\nPROPERTY PCreator PERSIS_PNTR Point0\n"
+	                         "PROPERTY NextGroups ARRAY SIZE 0 \nPROPERTY NumAtoms INTEGER 2\n");
+	auto saved = Make(text, {10.0f, 0.0f, 20.0f});
+	for (int i = 0; i < 3; ++i)
+	{
+		saved->Step(k_Step);
+	}
+	const auto bytes = Save(*saved);
+	auto loaded = Make(text);
+	const auto tables = Load(bytes, *loaded);
+	EXPECT_EQ(loaded->AtomCount(), 2u);
+	// The save keeps no ring
+	EXPECT_TRUE(tables.sheets.items.empty());
+	const auto again = Save(*loaded);
+	EXPECT_EQ(again.effects, bytes.effects);
+	EXPECT_EQ(again.tables, bytes.tables);
+	// The loaded effect makes no more atoms, and its next step makes the rings again
+	ExpectSameSteps(*saved, *loaded, 3);
+	EXPECT_EQ(loaded->AtomCount(), 2u);
+}

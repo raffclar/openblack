@@ -19,8 +19,10 @@
 #include <entt/core/hashed_string.hpp>
 #include <fmt/format.h>
 
+#include "3D/PlayersSymbols.h"
 #include "Common/GameRandom.h"
 #include "Common/StringUtils.h"
+#include "ECS/GamePlayers.h"
 #include "FileSystem/FileSystemInterface.h"
 #include "Locator.h"
 #include "Particles/LightSheet.h"
@@ -115,6 +117,7 @@ particles::draw::Sources ParticleSystem::DrawSources(const ParticleRuleSystemInt
 		    return world != nullptr ? world->ObjectPosition(object) : std::nullopt;
 	    },
 	    .gameMilliseconds = world != nullptr ? world->GameMilliseconds() : 0,
+	    .symbolsInARow = static_cast<int>(players_symbols::SquaresInARowFor(ecs::game_players::Count())),
 	};
 }
 

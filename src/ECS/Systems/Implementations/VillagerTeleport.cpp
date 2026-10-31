@@ -11,22 +11,23 @@
 
 #include "VillagerTeleport.h"
 
-#include <glm/geometric.hpp>
+#include <algorithm>
+
 #include <glm/vec2.hpp>
 
 #include "ECS/Components/LivingAction.h"
 #include "ECS/Components/LivingReaction.h"
 #include "ECS/Components/TeleportStone.h"
 #include "ECS/Components/Transform.h"
-#include "ECS/Components/WallHug.h"
 #include "ECS/Registry.h"
 #include "ECS/Systems/LivingActionSystemInterface.h"
 #include "ECS/Systems/TeleportSystemInterface.h"
-#include "ECS/WallHugRules.h"
+#include "ECS/ThingMapPlace.h"
+#include "InfoConstants.h"
 #include "Locator.h"
-#include "Magic/TeleportRules.h"
 #include "VillagerHome.h"
 #include "VillagerReactions.h"
+#include "VillagerWorship.h"
 
 using namespace openblack;
 using namespace openblack::ecs::components;
@@ -41,9 +42,8 @@ uint32_t ecs::villager_teleport::GoTowardsTeleportReaction(LivingAction& action)
 {
 	auto& registry = Locator::entitiesRegistry::value();
 	const auto villager = registry.ToEntity(action);
-	// TODO(teleport): the game takes no step in this state. It starts a plain walk to the stone, which ends in this
-	// state again. openblack keeps the villager in this state, and the villager takes its step here first.
-	ecs::villager_home::TakeWalkStep(villager);
+	// This state does not move the villager. The plain walk that it starts moves the villager, and the walk ends in this
+	// state again.
 	auto* traveller = registry.TryGet<TeleportTraveller>(villager);
 	if (traveller == nullptr)
 	{
@@ -56,20 +56,33 @@ uint32_t ecs::villager_teleport::GoTowardsTeleportReaction(LivingAction& action)
 		StopReacting(action, villager);
 		return 1;
 	}
-	const auto stone = registry.Get<const Transform>(traveller->stone).position;
-	const auto here = registry.Get<const Transform>(villager).position;
-	const auto* wallHug = registry.TryGet<const WallHug>(villager);
-	const float step = wallHug != nullptr ? ecs::wall_hug::StepMetres(wallHug->speed) : 0.0f;
+	const auto stone = ecs::thing_map_place::Of(registry, traveller->stone);
 	auto& living = Locator::livingActionSystem::value();
-	// Within a step of the stone it is there, tested afresh each turn
-	if (magic::teleport::WithinAStep(here, stone, step))
+	// Nearer to the stone than one step of its walk, the villager goes into the jump
+	if (ecs::villager_home::AreWeThere(villager, glm::ivec2 {stone.x, stone.z}))
 	{
 		living.VillagerSetState(action, LivingAction::Index::Top, VillagerStates::TeleportReaction, false);
 		return 1;
 	}
-	// Otherwise its walk to the stone starts afresh, still in this state, to end in what it was to do
-	ecs::villager_home::SetupMobileMoveTo(action, {stone.x, stone.z});
+	// Else it starts a walk round things to the stone. The walk ends in the state that the villager works towards.
+	const auto goal = registry.Get<const Transform>(traveller->stone).position;
+	ecs::villager_home::SetupMoveTo(action, {goal.x, goal.z}, living.VillagerGetFinalState(action));
 	return 1;
+}
+
+bool ecs::villager_teleport::LeavesTheWayToWorship(VillagerStates next, bool nextIsFinal)
+{
+	return nextIsFinal && std::ranges::find(k_TeleportStates, next) == k_TeleportStates.end();
+}
+
+bool ecs::villager_teleport::ExitReactToTeleport(LivingAction& action, VillagerStates next)
+{
+	const auto& table = Locator::infoConstants::value().villagerStateTable;
+	if (LeavesTheWayToWorship(next, table.at(static_cast<size_t>(next)).isFinalState != 0))
+	{
+		ecs::villager_worship::LeaveTheWayToWorshipSite(Locator::entitiesRegistry::value().ToEntity(action));
+	}
+	return ecs::systems::villager_reactions::ExitReaction(action, next);
 }
 
 uint32_t ecs::villager_teleport::TeleportReaction(LivingAction& action)

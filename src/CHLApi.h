@@ -58,6 +58,9 @@ public:
 	[[nodiscard]] static bool HelpScriptHoldsDialogue();
 	/// As the player's Escape does outside a cut scene: the help scripts stop and both advisors are cut short
 	static void StopHelpScriptsByEscape();
+	/// The interface level that a script sets: what the camera and the Action button of the player's hand can do.
+	/// Returns false, and changes only the kept level, for a level that the game does not know.
+	static bool ApplyInterfaceLevel(int32_t level);
 
 	/// The scripts call a native: the one an unwritten native reports itself as
 	void EnterNative(uint32_t native) { _currentNative = native; }

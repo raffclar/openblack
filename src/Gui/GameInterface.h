@@ -229,6 +229,12 @@ public:
 	void AskOutOfSync();
 	/// The player's answer to the out-of-sync box, once: true to play on, false to leave the game
 	[[nodiscard]] std::optional<bool> TakeOutOfSyncAnswer() { return std::exchange(_outOfSyncAnswer, std::nullopt); }
+	/// A question of the trip to the Gods' Playground, by the name of its text, in the box with a Yes and a No
+	void AskTripQuestion(std::string_view textName);
+	/// Whether the question of the trip waits for its answer
+	[[nodiscard]] bool IsTripQuestionUp() const noexcept { return _tripAsked; }
+	/// The player's answer to the question of the trip, once: true for Yes
+	[[nodiscard]] std::optional<bool> TakeTripAnswer() { return std::exchange(_tripAnswer, std::nullopt); }
 	/// The save game room's boxes take the mouse and the keyboard while one is up; true when they took the event
 	bool ProcessSaveGameBoxesEvent(const SDL_Event& event);
 	/// The name of a saved game that the named zoom tooltip shows. The tooltip keeps the last name given.
@@ -522,6 +528,9 @@ private:
 	/// The out-of-sync box is up and waits for its answer
 	bool _outOfSyncAsked {false};
 	std::optional<bool> _outOfSyncAnswer;
+	/// The question of the trip to the Gods' Playground is up and waits for its answer
+	bool _tripAsked {false};
+	std::optional<bool> _tripAnswer;
 	std::unique_ptr<MultiplayerBoxes> _multiplayerBoxes;
 	std::u16string _toolTipName;
 	std::unique_ptr<CustomMusicControls> _musicControls;

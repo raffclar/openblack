@@ -10,6 +10,8 @@
 #include <cstdint>
 
 #include <deque>
+#include <optional>
+#include <string_view>
 #include <vector>
 
 #include <gtest/gtest.h>
@@ -173,4 +175,23 @@ TEST(CreatureFollowUp, AnActionWithNoTestIsDoneAgainToAnyThingOfTheSameKind)
 	EXPECT_FALSE(SuitsDoAgain({.sameKind = true, .notWhatItHolds = true, .heldByItself = true}));
 	EXPECT_TRUE(SuitsDoAgain({.sameKind = true, .notWhatItHolds = true, .heldByItself = false}));
 	EXPECT_TRUE(SuitsDoAgain({.sameKind = true, .notWhatItHolds = false, .heldByItself = true}));
+}
+
+TEST(CreatureFollowUp, AWorshipSiteIsFedWithTheFoodMiracleBeforeFish)
+{
+	EXPECT_EQ(FeedWorshipSiteAction(true, true), std::optional<std::string_view>("CastMagicFoodByWorshipSite"));
+	EXPECT_EQ(FeedWorshipSiteAction(false, true), std::optional<std::string_view>("CastMagicFoodByWorshipSite"));
+	EXPECT_EQ(FeedWorshipSiteAction(true, false), std::optional<std::string_view>("PutFishByWorshipSite"));
+	// A creature that knows neither does nothing for the site
+	EXPECT_FALSE(FeedWorshipSiteAction(false, false).has_value());
+}
+
+TEST(CreatureFollowUp, OnlyANeedFlagMoreThanSixTenthsFullSetsTheFeedAgain)
+{
+	EXPECT_TRUE(SetsFeedAgain(1.0f));
+	EXPECT_TRUE(SetsFeedAgain(0.61f));
+	// The float nearest to six tenths is more than the double six tenths
+	EXPECT_TRUE(SetsFeedAgain(0.6f));
+	EXPECT_FALSE(SetsFeedAgain(0.59999996f));
+	EXPECT_FALSE(SetsFeedAgain(0.0f));
 }

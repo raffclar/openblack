@@ -19,7 +19,9 @@
 #include <entt/core/hashed_string.hpp>
 
 #include "3D/LandIslandInterface.h"
+#include "3D/PlayersSymbols.h"
 #include "Common/GameRandom.h"
+#include "ECS/GamePlayers.h"
 #include "ECS/Reflection/BinaryArchive.h"
 #include "ECS/Systems/TimeSystemInterface.h"
 #include "Locator.h"
@@ -193,6 +195,7 @@ void LiquidParticleSystem::CollectPool(particles::draw::Frame& frame, const std:
 	    },
 	    .playerColour = {},
 	    .random = {},
+	    .symbolsInARow = static_cast<int>(players_symbols::SquaresInARowFor(ecs::game_players::Count())),
 	};
 	particles::Effect::DrawWalk walk;
 	walk.steps.reserve(pool.size());
