@@ -3880,11 +3880,18 @@ void MagicSystem::SaveState(reflection::BinaryWriter& out) const
 	out.WriteRaw(_input);
 	reflection::Save(out, _actionDown);
 	out.EndPresentation();
+	// The press of this computer's hand on a fireball, timed by the clock of the machine: only the frames use it
+	out.BeginPresentation();
 	out.WriteRaw(_fireBallPress);
+	out.EndPresentation();
 	reflection::Save(out, _holdLoop != entt::null);
 	out.WriteRaw(_pour);
 	reflection::Save(out, _rainWatchers);
+	// The circle that this computer's hand drew: the gestures of the frames make it, and only the cast that this hand
+	// sends reads it
+	out.BeginPresentation();
 	out.WriteRaw(_circle);
+	out.EndPresentation();
 	reflection::Save(out, _turn);
 	reflection::Save(out, _lastHandResult);
 	reflection::Save(out, _ignoreInfluence);
