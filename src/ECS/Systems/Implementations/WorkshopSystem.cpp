@@ -40,6 +40,7 @@
 #include "ECS/Components/Physics.h"
 #include "ECS/Components/Pot.h"
 #include "ECS/Components/Scaffold.h"
+#include "ECS/Components/SpellDispenser.h"
 #include "ECS/Components/StoragePit.h"
 #include "ECS/Components/Town.h"
 #include "ECS/Components/TownDesire.h"
@@ -1340,7 +1341,14 @@ bool WorkshopSystem::TryToBuild(entt::entity scaffold, entt::entity town, bool s
 	// A building that no script gave the scaffold is not planned again when it goes
 	if (!data.scriptBuilding.has_value())
 	{
-		registry.Get<Abode>(building).notPlannedAgain = true;
+		if (auto* abode = registry.TryGet<Abode>(building))
+		{
+			abode->notPlannedAgain = true;
+		}
+		else if (auto* dispenser = registry.TryGet<SpellDispenser>(building))
+		{
+			dispenser->notPlannedAgain = true;
+		}
 	}
 	data.site = building;
 	// The phantom on the site has the size of the scaffold

@@ -97,6 +97,7 @@
 #include "ECS/Archetypes/TownArchetype.h"
 #include "ECS/Archetypes/TreeArchetype.h"
 #include "ECS/Archetypes/VillagerArchetype.h"
+#include "ECS/BuildingReplan.h"
 #include "ECS/Components/Abode.h"
 #include "ECS/Components/Animal.h"
 #include "ECS/Components/Construction.h"
@@ -1648,6 +1649,21 @@ void Runner::PlaceObjects(const Scenario& scenario, glm::vec2 middle)
 						    planned->wasBuilt = object.wasBuilt;
 					    }
 					    return plan;
+				    }
+				    // A miracle dispenser of the town, as a script makes it: it holds no miracle and is off
+				    const auto& rows = Locator::infoConstants::value().abode;
+				    if (static_cast<size_t>(type) < rows.size() &&
+				        ecs::building_replan::MadeAsDispenser(rows.at(static_cast<size_t>(type)).abodeType) &&
+				        Locator::magicSystem::has_value())
+				    {
+					    auto& registry = Locator::entitiesRegistry::value();
+					    const auto dispenser = Locator::magicSystem::value().CreateScriptDispenser(
+					        position, type, yaw, object.scale, registry.Context().towns.at(ScenarioTown(middle)));
+					    if (auto* data = registry.TryGet<ecs::components::SpellDispenser>(dispenser))
+					    {
+						    data->notPlannedAgain = object.notPlannedAgain;
+					    }
+					    return dispenser;
 				    }
 				    const auto abode = ecs::archetypes::AbodeArchetype::Create(
 				        ScenarioTown(middle), position, type, yaw, object.scale, object.storedFood.value_or(k_ScenarioTownFood),

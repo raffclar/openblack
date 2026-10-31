@@ -34,6 +34,8 @@ constexpr glm::vec2 k_NearlyBuiltCreche {-5.0f, -20.0f};
 constexpr float k_CrecheBuilt = 0.95f;
 /// Plenty of wood and food in the pit, so that building is never held up for either
 constexpr uint32_t k_PitStock = 5000;
+/// More wood than a dispenser takes to build, which is more than the usual stock
+constexpr uint32_t k_DispenserPitWood = 12000;
 /// The town's grown villagers, too many for its one hut
 constexpr size_t k_Couples = 6;
 constexpr float k_VillagerSpacing = 3.0f;
@@ -934,6 +936,52 @@ void openblack::testbed_scenarios::AddTownGrowthScenarios(std::vector<Scenario>&
 	    .environment = {.dispenserGrid = false},
 	    .framing = {.shot = Shot::Overview, .include = {k_Hut, k_Centre, k_Pit}, .distance = 0.6f},
 	    .objects = {{.type = AbodeInfo::CelticHut, .offset = k_Hut, .yawDegrees = 180.0f}},
+	    .commands = {{.kind = Command::Kind::RemoveObject, .delaySeconds = 3.0f, .object = 0}},
+	    .townBeliefInPlayer = 1.0f,
+	});
+	// A town that plans its lost miracle dispenser again and rebuilds it, as it does a house
+	std::vector<ObjectSetup> dispenserTown {
+	    {.type = AbodeInfo::CelticSpellDispenser, .offset = k_PlannedHuts[1], .yawDegrees = 180.0f},
+	    {.type = AbodeInfo::CelticTownCentre, .offset = k_Centre},
+	    {.type = AbodeInfo::CelticStoragePit, .offset = k_Pit, .storedFood = k_PitStock, .storedWood = k_DispenserPitWood},
+	    {.type = AbodeInfo::CelticHut, .offset = k_Hut, .yawDegrees = 180.0f},
+	};
+	for (size_t i = 0; i < k_MendingCouples; ++i)
+	{
+		const float x = (static_cast<float>(i) - (static_cast<float>(k_MendingCouples) * 0.5f)) * k_VillagerSpacing;
+		dispenserTown.push_back({.type = VillagerInfo::CelticForesterMale, .offset = {x, 20.0f}, .joinTown = true});
+		dispenserTown.push_back({.type = VillagerInfo::CelticHousewifeFemale, .offset = {x, 17.0f}, .joinTown = true});
+	}
+	all.push_back({
+	    .id = "town.dispenser_planned_again",
+	    .name = "A town that rebuilds the miracle dispenser it lost",
+	    .facet = Facet::Objects,
+	    .description = "A Celtic town of the player's with a village centre, a full storage pit, a hut, four couples and "
+	                   "a miracle dispenser that holds no miracle. Three seconds in, the dispenser goes from the world. "
+	                   "Best watched at game speed 4.",
+	    .expected = "The town plans the dispenser again where it stood: the inspector lists the Town with one entry in "
+	                "planned. At a later town turn the town puts it up for mending: a dispenser appears there with "
+	                "nothing built, its swirl and a site. Builders fetch wood from the pit and raise it. The new "
+	                "dispenser holds no miracle and floats no globe.",
+	    .environment = {.dispenserGrid = false},
+	    .framing = {.shot = Shot::Overview, .include = {k_Pit, k_Hut, k_PlannedHuts[1]}, .distance = 0.6f},
+	    .objects = std::move(dispenserTown),
+	    .commands = {{.kind = Command::Kind::RemoveObject, .delaySeconds = 3.0f, .object = 0}},
+	    .townBeliefInPlayer = 1.0f,
+	});
+	// A town whose only building is a dispenser that a scaffold made, so that the town does not plan it again
+	all.push_back({
+	    .id = "town.removed_with_last_dispenser",
+	    .name = "A town that goes with its last dispenser",
+	    .facet = Facet::Objects,
+	    .description = "A Celtic town of the player's, believing 1 in the player, with one miracle dispenser that a "
+	                   "scaffold made, so the town does not plan it again. The town has no other building, no plan and "
+	                   "nobody. Three seconds in, the dispenser goes from the world.",
+	    .expected = "The dispenser goes and the town goes from the game at the same moment: the inspector lists no "
+	                "Town. Compare town.removed_with_last_building.",
+	    .environment = {.dispenserGrid = false},
+	    .framing = {.shot = Shot::Overview, .include = {k_Hut, k_Centre, k_Pit}, .distance = 0.6f},
+	    .objects = {{.type = AbodeInfo::CelticSpellDispenser, .offset = k_Hut, .yawDegrees = 180.0f, .notPlannedAgain = true}},
 	    .commands = {{.kind = Command::Kind::RemoveObject, .delaySeconds = 3.0f, .object = 0}},
 	    .townBeliefInPlayer = 1.0f,
 	});

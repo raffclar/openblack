@@ -207,6 +207,13 @@ public:
 	{
 		return entt::null;
 	}
+	/// A dispenser that a town's plan or a scaffold puts up: as a script's dispenser, with a part of it built. A
+	/// dispenser with less than all of it built goes up with a site that its town opens later.
+	virtual entt::entity CreateTownDispenser(glm::vec3 /*position*/, AbodeInfo /*building*/, float /*yAngleRadians*/,
+	                                         float /*scale*/, entt::entity /*town*/, float /*built*/)
+	{
+		return entt::null;
+	}
 	/// A script gives a dispenser a miracle and the turns between its bubbles; with no turns it is turned off
 	virtual void SetDispenserMagic(entt::entity /*dispenser*/, MagicType /*type*/, uint32_t /*turns*/) {}
 	/// For the testbed: a dispenser that has counted its period, floating its bubble now if it has none
