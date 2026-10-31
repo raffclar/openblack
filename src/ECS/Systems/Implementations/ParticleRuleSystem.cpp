@@ -1041,6 +1041,10 @@ std::shared_ptr<const psys::ParticleFile> ParticleRuleSystem::LoadFile(std::stri
 	const auto id = ParticleFileId(file);
 	if (!files.Contains(id))
 	{
+		if (_missingFiles.contains(id))
+		{
+			return nullptr;
+		}
 		try
 		{
 			files.Load(id, resources::ParticleFileLoader::FromDiskTag {}, ParticleFileDirectory(), std::string(file));
@@ -1048,6 +1052,7 @@ std::shared_ptr<const psys::ParticleFile> ParticleRuleSystem::LoadFile(std::stri
 		catch (const std::exception& error)
 		{
 			SPDLOG_LOGGER_WARN(spdlog::get("game"), "Particles: cannot load {}: {}", file, error.what());
+			_missingFiles.insert(id);
 			return nullptr;
 		}
 	}
