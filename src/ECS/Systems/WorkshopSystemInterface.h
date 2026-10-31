@@ -74,9 +74,10 @@ public:
 	/// offer. The scaffold stays, thus the caller removes the building next. The scaffold, none when no scaffold is on the
 	/// site.
 	virtual entt::entity LeaveDestroyedSite(entt::entity building) = 0;
-	/// The scaffold starts a new building site where it lies, for a player. The building does not have to fit. The time
-	/// that the hand can take the scaffold again starts. Whether the site started.
-	virtual bool ForceBuild(entt::entity scaffold, PlayerNames player) = 0;
+	/// The scaffold starts a new building site where it lies, for a player or for no player. The building does not have to
+	/// fit. The time that the hand can take the scaffold again starts. Whether the site started. A script that sets a
+	/// scaffold active gives no player.
+	virtual bool ForceBuild(entt::entity scaffold, std::optional<PlayerNames> player) = 0;
 	/// The frame shows the phantom buildings of the scaffolds. The phantom of a scaffold in the hand of the local player
 	/// shows at `drawnHand`, where the frame draws that hand. The phantom on a building site fades as the building
 	/// grows, and the scaffold on the site becomes small.

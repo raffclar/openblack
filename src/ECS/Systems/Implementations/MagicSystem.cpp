@@ -103,6 +103,7 @@
 #include "ECS/Systems/CreatureMindSystemInterface.h"
 #include "ECS/Systems/EffectRequestSystemInterface.h"
 #include "ECS/Systems/FireSystemInterface.h"
+#include "ECS/Systems/FootpathSystemInterface.h"
 #include "ECS/Systems/ForestSystemInterface.h"
 #include "ECS/Systems/GameEndSystemInterface.h"
 #include "ECS/Systems/GestureEventsInterface.h"
@@ -1869,6 +1870,11 @@ entt::entity MagicSystem::CreateScriptDispenser(glm::vec3 position, AbodeInfo bu
 		// the frames that draw the dispenser, not in the turns.
 		dispenser.effect = Locator::effectRequestSystem::value().Start(
 		    {.type = ParticleType::SpelldispenserVortex, .position = position, .synced = false, .step = EffectStep::Frame});
+	}
+	// It starts to work at once, built or not. After the first turn, it gets its footpath from its town's storage pit.
+	if (Locator::footpathSystem::has_value())
+	{
+		Locator::footpathSystem::value().BuildingWorking(entity);
 	}
 	return entity;
 }

@@ -32,6 +32,7 @@
 #include "ECS/Components/Dance.h"
 #include "ECS/Components/Footpath.h"
 #include "ECS/Components/LivingAction.h"
+#include "ECS/Components/SpellDispenser.h"
 #include "ECS/Components/Town.h"
 #include "ECS/Components/Transform.h"
 #include "ECS/FootpathPlanning.h"
@@ -350,6 +351,27 @@ TEST_F(FootpathSystemTest, AWorkingBuildingGetsAPathFromThePitRoundWhatCameBefor
 	EXPECT_TRUE(world->registry.Context().footpathObstacleChanges.empty());
 	EXPECT_TRUE(std::ranges::none_of(world->registry.Get<const Footpath>(paths.front()).nodes,
 	                                 [](const Footpath::Node& node) { return node.hidden || node.marker; }));
+}
+
+TEST_F(FootpathSystemTest, AMiracleDispenserOfATownGetsAPathFromThePitAsAnAbodeDoes)
+{
+	const auto dispenser = world->Make(k_HousePosition);
+	world->registry.Assign<SpellDispenser>(dispenser);
+	world->towns[dispenser] = town;
+	system->BuildingWorking(dispenser);
+
+	const auto paths = PathsOf(dispenser);
+	ASSERT_EQ(paths.size(), 1U);
+	EXPECT_EQ(PathsOf(pit), paths);
+	const auto places = PlacesOf(paths.front());
+	EXPECT_EQ(places.front(), world->ArrivePlace(pit));
+	EXPECT_EQ(places.back(), world->ArrivePlace(dispenser));
+
+	// A thing that is neither an abode nor a dispenser gets no path
+	const auto rock = world->Make(k_RockPosition, k_RockRadius);
+	world->towns[rock] = town;
+	system->BuildingWorking(rock);
+	EXPECT_TRUE(PathsOf(rock).empty());
 }
 
 TEST_F(FootpathSystemTest, NoPathAtTheFirstTurnForThePitItselfOrWithoutABuiltPit)

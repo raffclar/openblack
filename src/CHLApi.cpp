@@ -7589,7 +7589,15 @@ void SetActive() // 255 SET_ACTIVE
 		Locator::magicSystem::value().SetDispenserActive(object, active);
 		return;
 	}
-	// TODO(script-natives): a scaffold set active is built at once, for the script's player; openblack has no scaffolds
+	// A scaffold set active starts its building at once where it stands, for no player. Set inactive, it does nothing.
+	if (registry.AllOf<ecs::components::Scaffold>(object))
+	{
+		if (active && Locator::workshopSystem::has_value())
+		{
+			Locator::workshopSystem::value().ForceBuild(object, std::nullopt);
+		}
+		return;
+	}
 	SPDLOG_LOGGER_ERROR(spdlog::get("scripting"), "Invalid object type");
 }
 

@@ -56,6 +56,7 @@
 #include "ECS/Components/Pot.h"
 #include "ECS/Components/ResourceLastTaken.h"
 #include "ECS/Components/ResourcePile.h"
+#include "ECS/Components/Scaffold.h"
 #include "ECS/Components/SpellDispenser.h"
 #include "ECS/Components/StoragePit.h"
 #include "ECS/Components/Temple.h"
@@ -509,6 +510,11 @@ bool ResourceStoreSystem::IsStore(entt::entity store, ResourceType type) const
 	{
 		return type == ResourceType::Wood || type == ResourceType::Any;
 	}
+	// A scaffold on a building site stores wood, for the site. It does not answer for any resource.
+	if (const auto* scaffold = registry.TryGet<const Scaffold>(store))
+	{
+		return ecs::store_rules::ScaffoldStores(type, registry.Valid(scaffold->site));
+	}
 	// A pile stores only its own resource, and only through the store it is part of
 	if (const auto* pot = registry.TryGet<const Pot>(store))
 	{
@@ -622,6 +628,13 @@ uint32_t ResourceStoreSystem::AddToStore(entt::entity store, ResourceType type, 
 	if (IsWorshipSite(store))
 	{
 		return AddToWorshipSite(*this, store, type, amount, poisoned);
+	}
+	// A scaffold on a building site passes the wood to the site, as the builders bring it. Nobody's giving counts.
+	if (const auto* scaffold = registry.TryGet<const Scaffold>(store))
+	{
+		return ecs::store_rules::ScaffoldStores(type, registry.Valid(scaffold->site))
+		           ? AddResource(scaffold->site, ResourceType::Wood, amount, at)
+		           : 0u;
 	}
 	// A building going up takes wood onto its site, where the builders take it from. A workshop takes the wood itself,
 	// and its site uses the wood of the workshop.
@@ -948,8 +961,8 @@ bool ResourceStoreSystem::PourAt(ResourceType type, glm::vec3 point, uint32_t am
 			{
 				continue;
 			}
-			// Anything that stores it (a storage pit, a worship site's food, a building going up's wood), but not a
-			// store's own piles, which take it as piles do
+			// Anything that stores it (a storage pit, a worship site's food, a building going up's wood, a workshop's
+			// wood, a scaffold on a site), but not a store's own piles, which take it as piles do
 			if (!registry.AllOf<Pot>(entity) && IsStore(entity, type))
 			{
 				if (near(entity, piles::k_StoreReachMultiplier))

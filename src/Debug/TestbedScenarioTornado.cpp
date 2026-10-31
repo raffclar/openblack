@@ -135,6 +135,25 @@ void testbed_scenarios::AddTornadoScenarios(std::vector<Scenario>& all)
 	});
 
 	all.push_back({
+	    .id = "miracles.tornado_empties_store_pile",
+	    .name = "Tornado empties the piles of a store",
+	    .facet = Facet::Miracles,
+	    .description = "A tornado cast at a circle of 60 over a Celtic storage pit that holds 50 food and 50 wood.",
+	    .expected = "Once the funnel has faded in, the store's food and wood piles give up pots of food and wood until "
+	                "the store holds no food and no wood. The empty piles stay at the store, and the store fills them "
+	                "again when it gets food or wood.",
+	    .environment = {.dispenserGrid = false},
+	    .framing = {.shot = Shot::Overview, .include = {{-25.0f, 40.0f}, {25.0f, 80.0f}}},
+	    .objects = {{.type = AbodeInfo::CelticStoragePit, .offset = k_Centre, .storedFood = 50, .storedWood = 50}},
+	    .miracles = {{.type = MagicType::Tornado,
+	                  .point = k_Centre,
+	                  .handOffset = {0.0f, 20.0f},
+	                  .delaySeconds = 1.0f,
+	                  .byHand = true,
+	                  .circleRadius = k_CircleRadius}},
+	});
+
+	all.push_back({
 	    .id = "miracles.tornado_animals",
 	    .name = "Tornado over a herd",
 	    .facet = Facet::Miracles,
