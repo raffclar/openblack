@@ -71,6 +71,7 @@ int main(int argc, char* argv[])
 		("log-checksums", "Tools: write the checksum of each turn to the log, which server_check and net_check read.")
 		("record", "Tools: write the run record of each turn to this file, with the hash of each component.", cxxopts::value<std::string>())
 		("record-fields", "Tools: with --record, the hash of each field of each component too.")
+		("inspect-port", "The inspector of the server on this port of 127.0.0.1 (0 for a free port), for the operator and the tools on the same computer. It refuses the queries that change the world of a network game.", cxxopts::value<uint16_t>())
 		("trace-draws", "Tools: write each draw on the synced random seed to this file, as the game's --sim-trace-draws.", cxxopts::value<std::string>())
 		("reload-at", "Tools: at this turn the server takes its whole world into memory as a world state and loads it again, as a client that comes back loads the server's world.", cxxopts::value<uint32_t>())
 		("gods-need-no-temple", "Tests: a god with no temple stays in the game, for a land that makes no temple at its start (a story land). Each client needs the same switch (--sim-gods-need-no-temple).")
@@ -226,6 +227,10 @@ int main(int argc, char* argv[])
 		{
 			settings.recordPath = std::filesystem::path(result["record"].as<std::string>());
 			settings.recordFields = result.count("record-fields") != 0;
+		}
+		if (result.count("inspect-port") != 0)
+		{
+			settings.inspectPort = result["inspect-port"].as<uint16_t>();
 		}
 		if (result.count("trace-draws") != 0)
 		{

@@ -136,6 +136,9 @@ struct ServerSettings
 	std::optional<std::filesystem::path> recordPath;
 	/// Tools: the run record also has the hash of each field of each component
 	bool recordFields {false};
+	/// The inspector of the server on this port of 127.0.0.1, 0 for a free port. It is the door of the operator and of
+	/// the tools on the same computer. The inspector refuses the queries that change the world of a network game.
+	std::optional<uint16_t> inspectPort;
 	/// Tools: the server writes each draw on the synced seed to this file, as the game's --sim-trace-draws does
 	std::optional<std::filesystem::path> traceDrawsPath;
 	/// Tools: the commands of each turn that a game wrote (the game's --sim-commands). The server does them at the same

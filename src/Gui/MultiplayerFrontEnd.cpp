@@ -733,12 +733,12 @@ void MultiplayerFrontEnd::UpdateRoom()
 	_shownSeat.reset();
 	_shownClan.reset();
 	_shownLogo.reset();
-	_usedClan.reset();
+	KeepUsedClan(std::nullopt);
 	_myClans.clear();
 	// The player's own clan in the room, from the server's list
 	if (const auto* own = GetOwnSeat(); own != nullptr)
 	{
-		_usedClan = own->clan;
+		KeepUsedClan(own->clan);
 	}
 	const auto land = GetServerLand();
 	_shownLand = land;
@@ -910,7 +910,7 @@ void MultiplayerFrontEnd::HandleEvent(const lobby_api::PushEvent& event)
 		}
 		if (const auto* own = GetOwnSeat(); own != nullptr && own->account.id == choice->account.id)
 		{
-			_usedClan = own->clan;
+			KeepUsedClan(own->clan);
 		}
 	}
 }
@@ -923,6 +923,16 @@ std::optional<size_t> MultiplayerFrontEnd::GetServerLand() const
 std::optional<int64_t> MultiplayerFrontEnd::GetUsedClan() const
 {
 	return _usedClan;
+}
+
+void MultiplayerFrontEnd::KeepUsedClan(std::optional<int64_t> clan)
+{
+	_usedClan = clan;
+	// At the start, the network game tells whether the god of this computer plays for a clan
+	if (_services.network != nullptr)
+	{
+		_services.network->SetPlaysForClan(clan.has_value());
+	}
 }
 
 void MultiplayerFrontEnd::ShowClan(std::optional<size_t> clan)
@@ -968,7 +978,7 @@ void MultiplayerFrontEnd::UseShownClan()
 	    _room->id, _shownClan->id, [this, generation](ecs::systems::LobbyResult<lobby_api::UsedClan>&& result) {
 		    if (generation == _generation && result.Ok())
 		    {
-			    _usedClan = result.value->clan.has_value() ? std::optional(result.value->clan->id) : std::nullopt;
+			    KeepUsedClan(result.value->clan.has_value() ? std::optional(result.value->clan->id) : std::nullopt);
 		    }
 	    });
 }
@@ -984,7 +994,7 @@ void MultiplayerFrontEnd::UseNoClan()
 	    _room->id, std::nullopt, [this, generation](ecs::systems::LobbyResult<lobby_api::UsedClan>&& result) {
 		    if (generation == _generation && result.Ok())
 		    {
-			    _usedClan = result.value->clan.has_value() ? std::optional(result.value->clan->id) : std::nullopt;
+			    KeepUsedClan(result.value->clan.has_value() ? std::optional(result.value->clan->id) : std::nullopt);
 		    }
 	    });
 }

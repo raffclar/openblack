@@ -228,6 +228,8 @@ public:
 	void ShowBox(multiplayer::Box box, multiplayer::LobbyKind kind);
 
 private:
+	/// Keeps the clan that the player plays for in this room, and tells the network game
+	void KeepUsedClan(std::optional<int64_t> clan);
 	void Show(multiplayer::Message message) noexcept { _message = message; }
 	void EnterGameList();
 	void LeaveRoom();

@@ -13,6 +13,7 @@
 
 #include <algorithm>
 #include <array>
+#include <bit>
 #include <filesystem>
 #include <fstream>
 #include <iostream>
@@ -150,6 +151,7 @@ TEST(VanillaWorldImport, ImportsTheBuildingsOfTheTownOnly)
 	EXPECT_TRUE(world_import::IsImportedBuilding(AbodeInfo::NorseTempleY));
 	EXPECT_TRUE(world_import::IsImportedBuilding(AbodeInfo::NorseStoragePit));
 	EXPECT_TRUE(world_import::IsImportedBuilding(AbodeInfo::NorseCreche));
+	EXPECT_TRUE(world_import::IsImportedBuilding(AbodeInfo::NorseWonder));
 	EXPECT_TRUE(world_import::IsImportedBuilding(AbodeInfo::NorseGraveyard));
 	EXPECT_TRUE(world_import::IsImportedBuilding(AbodeInfo::NorseTownCentre));
 	EXPECT_FALSE(world_import::IsImportedBuilding(AbodeInfo::NorseTotem));
@@ -433,6 +435,8 @@ TEST(VanillaWorldImport, SavedGamesOfLandOneImportWhole)
 			    return home && world_import::IsInsideHome(static_cast<VillagerStates>(villager.states[0]));
 		    });
 		EXPECT_EQ(static_cast<uint32_t>(inside), present) << entry.path();
+		// Each player keeps the power of each tribe
+		EXPECT_EQ(imported.tribalPowers.size(), read.world->OfType(VanillaType::Player).size()) << entry.path();
 	}
 	EXPECT_GT(files, 0U);
 }
@@ -1265,4 +1269,49 @@ TEST(VanillaScriptImport, ReadsTheThingsOfTheScripts)
 	EXPECT_EQ(script_import::HeartPlayer(made, 4), PlayerNames::PLAYER_TWO);
 	EXPECT_FALSE(script_import::HeartPlayer(made, 5).has_value());
 	EXPECT_FALSE(script_import::HeartPlayer(made, 0).has_value());
+}
+
+TEST(VanillaWorldImport, ReadsThePowerOfEachWonderAndTheTribalPowersOfEachPlayer)
+{
+	auto fake = GameAtTurn(100);
+	// 2: a town of the second player, 3: its wonder, 4: a hut
+	fake.Record(VanillaType::Town)
+	    .Position(1000, 1000)
+	    .Value<uint32_t>("id", 0)
+	    .Value<uint32_t>("tribe", static_cast<uint32_t>(Tribe::GREEK))
+	    .Value<uint8_t>("player", 1);
+	fake.Record(VanillaType::Wonder)
+	    .Position(1200, 1000)
+	    .Value<uint32_t>("info", AbodeRowNumber(AbodeInfo::GreekWonder))
+	    .Ref("town", 2)
+	    .Value<float>("wonderPower", 3.75f);
+	fake.Record(VanillaType::Abode)
+	    .Position(1400, 1000)
+	    .Value<uint32_t>("info", AbodeRowNumber(AbodeInfo::GreekHut))
+	    .Ref("town", 2);
+	// 5: the second player. Its Greek power has the wonder's power on top of the usual 1.
+	std::vector<uint32_t> power(9, std::bit_cast<uint32_t>(1.0f));
+	power.at(static_cast<size_t>(Tribe::GREEK)) = std::bit_cast<uint32_t>(4.75f);
+	std::vector<uint32_t> most = power;
+	most.at(static_cast<size_t>(Tribe::CELTIC)) = std::bit_cast<uint32_t>(2.5f);
+	fake.Record(VanillaType::Player)
+	    .Value<uint8_t>("number", 1)
+	    .Words("tribalPower", power)
+	    .Words("maxTribalPower", most)
+	    .Refs("towns", {2});
+	// 6: a player with a list of another length is not taken
+	fake.Record(VanillaType::Player).Value<uint8_t>("number", 2).Words("tribalPower", {1, 2}).Words("maxTribalPower", {1, 2});
+
+	const auto imported = world_import::ReadTowns(fake.Make());
+	ASSERT_EQ(imported.abodes.size(), 2U);
+	ASSERT_TRUE(imported.abodes[0].wonderPower.has_value());
+	EXPECT_EQ(*imported.abodes[0].wonderPower, 3.75f);
+	EXPECT_FALSE(imported.abodes[1].wonderPower.has_value());
+	ASSERT_EQ(imported.tribalPowers.size(), 1U);
+	const auto& player = imported.tribalPowers[0];
+	EXPECT_EQ(player.player, PlayerNames::PLAYER_TWO);
+	EXPECT_EQ(player.power.at(static_cast<size_t>(Tribe::GREEK)), 4.75f);
+	EXPECT_EQ(player.power.at(static_cast<size_t>(Tribe::CELTIC)), 1.0f);
+	EXPECT_EQ(player.most.at(static_cast<size_t>(Tribe::CELTIC)), 2.5f);
+	EXPECT_EQ(player.most.at(static_cast<size_t>(Tribe::TIBETAN)), 1.0f);
 }

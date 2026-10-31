@@ -124,6 +124,12 @@ struct FieldInfo
 	/// Writes the value of the field straight from the value that holds it, with no reflection on the way: the same
 	/// bytes as save, at a lower cost. None when only save can write it.
 	void (*saveFrom)(const void* owner, BinaryWriter& out) {nullptr};
+	/// For a synced field whose save writes the bytes of the field as they are in memory: the address of the field in
+	/// the value that holds it. A save plan copies such fields that touch in memory as one block. None for any other
+	/// field.
+	const void* (*plainAddress)(const void* owner) {nullptr};
+	/// The count of the bytes of a field that has plainAddress
+	uint32_t plainSize {0};
 	/// Reads the value of the field of the instance from the binary archive
 	void (*load)(const entt::meta_data& data, entt::meta_any& instance, BinaryReader& in) {nullptr};
 #if defined(OPENBLACK_INSPECTOR)
@@ -473,6 +479,13 @@ public:
 		        },
 		    .indexNames = std::move(indexNames),
 		};
+		if constexpr (!Presentation && SavesAsMemory<Value>())
+		{
+			info.plainAddress = [](const void* owner) -> const void* {
+				return std::addressof(static_cast<const Type*>(owner)->*Member);
+			};
+			info.plainSize = static_cast<uint32_t>(sizeof(Value));
+		}
 #if defined(OPENBLACK_INSPECTOR)
 		info.encode = [](const entt::meta_any& any) -> std::optional<Json> {
 			if (const auto* value = any.try_cast<const Value>(); value != nullptr)

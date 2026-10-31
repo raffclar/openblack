@@ -33,6 +33,7 @@
 #include "Online/StartRules.h"
 #include "Server/Desktop/Sha256SessionHasher.h"
 #include "Server/LockstepHost.h"
+#include "Server/ServerAdmin.h"
 #include "Server/SessionHash.h"
 
 using namespace openblack;
@@ -1701,4 +1702,34 @@ TEST_F(LockstepTest, AGodWhoseProgramStoppedWithTheServerComesBackWithANewTicket
 	EXPECT_EQ(alice.session.Resumes(), 1u);
 	EXPECT_EQ(alice.session.GetState(), NetworkSession::State::Playing);
 	EXPECT_EQ(host->Seats()[1].state, LockstepHost::SeatState::Taken);
+}
+
+TEST_F(LockstepTest, TheReportOfTheRoomGivesTheGodsAndTheTurnsForTheOperator)
+{
+	MakeHost(2);
+	host->SetBans({7, 3});
+	auto report = server::admin::RoomReportOf(*host);
+	EXPECT_FALSE(report.started);
+	EXPECT_EQ(report.turnsDone, 0u);
+	EXPECT_EQ(report.bans, (std::vector<int64_t> {3, 7}));
+	ASSERT_EQ(report.seats.size(), 7u);
+	EXPECT_TRUE(std::ranges::all_of(report.seats, [](const auto& seat) { return seat.state == "open"; }));
+
+	Computer alice(network, now, "god:alice");
+	Computer bob(network, now, "god:bob");
+	Frames({&alice, &bob}, 12);
+	ASSERT_TRUE(host->Started());
+	report = server::admin::RoomReportOf(*host);
+	EXPECT_TRUE(report.started);
+	EXPECT_FALSE(report.paused);
+	EXPECT_EQ(report.turnsDone, host->TurnsDone());
+	EXPECT_GT(report.turnsDone, 0u);
+	const auto& first = report.seats.at(0);
+	EXPECT_EQ(first.state, "taken");
+	EXPECT_EQ(first.account, "alice");
+	EXPECT_TRUE(first.connected);
+	EXPECT_TRUE(first.ready);
+	EXPECT_EQ(first.checksumsCompared, host->Seats().at(0).compares.compared);
+	EXPECT_EQ(report.seats.at(1).account, "bob");
+	EXPECT_EQ(report.seats.at(2).state, "open");
 }
