@@ -18,57 +18,7 @@ using namespace openblack::testbed_scenarios;
 namespace
 {
 
-/// The lines of a land that give player two a computer mind, a temple and a Celtic town by the lake, with an empty
-/// storage pit and two abodes of people. A fish farm of the town stands on the shore.
-constexpr std::string_view k_FishFarmTownScript = R"(TOGGLE_COMPUTER_PLAYER("PLAYER_TWO", 1)
-CREATE_CITADEL("0.0,-90.0", 0, "PLAYER_TWO", 5690, 1000)
-CREATE_TOWN(900, "0.0,100.0", "PLAYER_TWO", 0, "CELTIC")
-SET_TOWN_BELIEF_CAP(900, "PLAYER_TWO", 2.0)
-SET_TOWN_BELIEF(900, "PLAYER_TWO", 1.0)
-CREATE_TOWN_CENTRE(900, "-4.0,101.0", "CELTIC_ABODE_TOWN_CENTRE", 0, 1000, 0)
-CREATE_ABODE(900, "30.0,115.0", "CELTIC_ABODE_STORAGE_PIT", 6282, 1000, 0, 3000)
-CREATE_ABODE(900, "-30.0,90.0", "CELTIC_ABODE_F", 4328, 1095, 0, 0)
-CREATE_VILLAGER_POS("-34.0,92.0", "-30.0,90.0", "CELTIC_HOUSEWIFE", 20)
-CREATE_VILLAGER_POS("-34.0,92.0", "-30.0,90.0", "CELTIC_FORESTER", 20)
-CREATE_VILLAGER_POS("-34.0,92.0", "-30.0,90.0", "CELTIC_HOUSEWIFE", 20)
-CREATE_VILLAGER_POS("-34.0,92.0", "-30.0,90.0", "CELTIC_FORESTER", 20)
-CREATE_ABODE(900, "-30.0,70.0", "CELTIC_ABODE_F", 4328, 1095, 0, 0)
-CREATE_VILLAGER_POS("-34.0,72.0", "-30.0,70.0", "CELTIC_HOUSEWIFE", 20)
-CREATE_VILLAGER_POS("-34.0,72.0", "-30.0,70.0", "CELTIC_FORESTER", 20)
-CREATE_VILLAGER_POS("-34.0,72.0", "-30.0,70.0", "CELTIC_HOUSEWIFE", 20)
-CREATE_VILLAGER_POS("-34.0,72.0", "-30.0,70.0", "CELTIC_FORESTER", 20)
-)";
-
-/// The lines of a land that give player two a computer mind, a temple and two Celtic towns. The east town has no food
-/// in its storage pit. The west town, 160 metres away, has 5000 food and 5000 wood in its pit.
-constexpr std::string_view k_TwoTownsFoodScript = R"(TOGGLE_COMPUTER_PLAYER("PLAYER_TWO", 1)
-CREATE_CITADEL("0.0,-90.0", 0, "PLAYER_TWO", 5690, 1000)
-CREATE_TOWN(900, "80.0,40.0", "PLAYER_TWO", 0, "CELTIC")
-SET_TOWN_BELIEF_CAP(900, "PLAYER_TWO", 2.0)
-SET_TOWN_BELIEF(900, "PLAYER_TWO", 1.0)
-CREATE_TOWN_CENTRE(900, "76.0,41.0", "CELTIC_ABODE_TOWN_CENTRE", 0, 1000, 0)
-CREATE_ABODE(900, "90.0,90.0", "CELTIC_ABODE_STORAGE_PIT", 6282, 1000, 0, 3000)
-CREATE_ABODE(900, "110.0,60.0", "CELTIC_ABODE_F", 4328, 1095, 0, 0)
-CREATE_VILLAGER_POS("106.0,62.0", "110.0,60.0", "CELTIC_HOUSEWIFE", 20)
-CREATE_VILLAGER_POS("106.0,62.0", "110.0,60.0", "CELTIC_FORESTER", 20)
-CREATE_VILLAGER_POS("106.0,62.0", "110.0,60.0", "CELTIC_HOUSEWIFE", 20)
-CREATE_VILLAGER_POS("106.0,62.0", "110.0,60.0", "CELTIC_FORESTER", 20)
-CREATE_ABODE(900, "110.0,80.0", "CELTIC_ABODE_F", 4328, 1095, 0, 0)
-CREATE_VILLAGER_POS("106.0,82.0", "110.0,80.0", "CELTIC_HOUSEWIFE", 20)
-CREATE_VILLAGER_POS("106.0,82.0", "110.0,80.0", "CELTIC_FORESTER", 20)
-CREATE_VILLAGER_POS("106.0,82.0", "110.0,80.0", "CELTIC_HOUSEWIFE", 20)
-CREATE_VILLAGER_POS("106.0,82.0", "110.0,80.0", "CELTIC_FORESTER", 20)
-CREATE_TOWN(901, "-80.0,40.0", "PLAYER_TWO", 0, "CELTIC")
-SET_TOWN_BELIEF_CAP(901, "PLAYER_TWO", 2.0)
-SET_TOWN_BELIEF(901, "PLAYER_TWO", 1.0)
-CREATE_TOWN_CENTRE(901, "-84.0,41.0", "CELTIC_ABODE_TOWN_CENTRE", 0, 1000, 0)
-CREATE_ABODE(901, "-70.0,90.0", "CELTIC_ABODE_STORAGE_PIT", 6282, 1000, 5000, 5000)
-CREATE_ABODE(901, "-110.0,60.0", "CELTIC_ABODE_F", 4328, 1095, 0, 0)
-CREATE_VILLAGER_POS("-114.0,62.0", "-110.0,60.0", "CELTIC_HOUSEWIFE", 20)
-CREATE_VILLAGER_POS("-114.0,62.0", "-110.0,60.0", "CELTIC_FORESTER", 20)
-)";
-
-/// The same two towns, but the east town has 5000 food and no wood in its storage pit
+/// The two towns of the food scenario, but the east town has 5000 food and no wood in its storage pit
 constexpr std::string_view k_TwoTownsWoodScript = R"(TOGGLE_COMPUTER_PLAYER("PLAYER_TWO", 1)
 CREATE_CITADEL("0.0,-90.0", 0, "PLAYER_TWO", 5690, 1000)
 CREATE_TOWN(900, "80.0,40.0", "PLAYER_TWO", 0, "CELTIC")
@@ -130,6 +80,27 @@ CREATE_NEW_TREE(950, "-44.0,106.0", 3, 1, 5.0, 1.0, 1.0)
 CREATE_NEW_TREE(950, "-38.0,110.0", 3, 1, 6.0, 1.0, 1.0)
 )";
 
+/// The lines of a land that give player two a computer mind, a temple and a Celtic town with no miracle. The storage pit
+/// of the town has food but no wood, and two abodes have people.
+constexpr std::string_view k_WoodShortTownScript = R"(TOGGLE_COMPUTER_PLAYER("PLAYER_TWO", 1)
+CREATE_CITADEL("0.0,-90.0", 0, "PLAYER_TWO", 5690, 1000)
+CREATE_TOWN(900, "0.0,40.0", "PLAYER_TWO", 0, "CELTIC")
+SET_TOWN_BELIEF_CAP(900, "PLAYER_TWO", 2.0)
+SET_TOWN_BELIEF(900, "PLAYER_TWO", 1.0)
+CREATE_TOWN_CENTRE(900, "-4.0,41.0", "CELTIC_ABODE_TOWN_CENTRE", 0, 1000, 0)
+CREATE_ABODE(900, "10.0,90.0", "CELTIC_ABODE_STORAGE_PIT", 6282, 1000, 3000, 0)
+CREATE_ABODE(900, "40.0,60.0", "CELTIC_ABODE_F", 4328, 1095, 0, 0)
+CREATE_VILLAGER_POS("36.0,62.0", "40.0,60.0", "CELTIC_HOUSEWIFE", 20)
+CREATE_VILLAGER_POS("36.0,62.0", "40.0,60.0", "CELTIC_FORESTER", 20)
+CREATE_VILLAGER_POS("36.0,62.0", "40.0,60.0", "CELTIC_HOUSEWIFE", 20)
+CREATE_VILLAGER_POS("36.0,62.0", "40.0,60.0", "CELTIC_FORESTER", 20)
+CREATE_ABODE(900, "-40.0,60.0", "CELTIC_ABODE_F", 4328, 1095, 0, 0)
+CREATE_VILLAGER_POS("-44.0,62.0", "-40.0,60.0", "CELTIC_HOUSEWIFE", 20)
+CREATE_VILLAGER_POS("-44.0,62.0", "-40.0,60.0", "CELTIC_FORESTER", 20)
+CREATE_VILLAGER_POS("-44.0,62.0", "-40.0,60.0", "CELTIC_HOUSEWIFE", 20)
+CREATE_VILLAGER_POS("-44.0,62.0", "-40.0,60.0", "CELTIC_FORESTER", 20)
+)";
+
 } // namespace
 
 void testbed_scenarios::AddComputerGodTownsScenarios(std::vector<Scenario>& all)
@@ -181,7 +152,7 @@ void testbed_scenarios::AddComputerGodTownsScenarios(std::vector<Scenario>& all)
 	                "players.list query shows the need, the hand and its steps.",
 	    .framing = {.shot = Shot::Overview, .include = {glm::vec2(-60.0f, -110.0f), glm::vec2(60.0f, 160.0f)}},
 	    .objects = {{.type = FishFarmInfo::Normal, .offset = {5.0f, 145.0f}}},
-	    .landScript = k_FishFarmTownScript,
+	    .landScript = k_ComputerGodFishFarmTownScript,
 	    .objectsAfterLandScript = true,
 	});
 	all.push_back({
@@ -195,7 +166,7 @@ void testbed_scenarios::AddComputerGodTownsScenarios(std::vector<Scenario>& all)
 	                "takes a pot of food from it, as much as the need of the east town asks. Then the hand carries the "
 	                "pot to the pit of the east town and drops it in.",
 	    .framing = {.shot = Shot::Overview, .include = {glm::vec2(-130.0f, -110.0f), glm::vec2(130.0f, 110.0f)}},
-	    .landScript = k_TwoTownsFoodScript,
+	    .landScript = k_ComputerGodTwoTownsFoodScript,
 	});
 	all.push_back({
 	    .id = "mind.computer_god_wood_from_other_town",
@@ -224,5 +195,43 @@ void testbed_scenarios::AddComputerGodTownsScenarios(std::vector<Scenario>& all)
 	                "GetWoodFromForest with the tree, the hand and its steps.",
 	    .framing = {.shot = Shot::Overview, .include = {glm::vec2(-130.0f, -110.0f), glm::vec2(130.0f, 120.0f)}},
 	    .landScript = k_ForestWoodScript,
+	});
+	all.push_back({
+	    .id = "mind.computer_god_wood_disciple",
+	    .name = "A computer god that makes a disciple for its town that is short of wood",
+	    .facet = Facet::Mind,
+	    .description = "Lines of a land switch on the computer mind of player two. Player two has a temple to the south "
+	                   "and a Celtic town to the north with no miracle. The storage pit of the town has food but no wood. "
+	                   "The god has no creature. At the start, the god gets the weight 0 for the food need of its towns.",
+	    .expected = "The town wants wood most. With no miracle, no forest that the god saw and no other town, the only "
+	                "way is a disciple. The god makes a villager of the town a disciple: a breeder while the town has "
+	                "fewer than two breeders and an adult that the hand cannot reach, else the work that the town wants "
+	                "most. The hand picks the villager up and puts it down where it stood, and the villager glows as a "
+	                "disciple. The players.list query shows the TownWithHighestWoodDesire need with the leaf "
+	                "CreateDiscipleToFulfillTownDesire.",
+	    .framing = {.shot = Shot::Overview, .include = {glm::vec2(-80.0f, -110.0f), glm::vec2(80.0f, 100.0f)}},
+	    .landScript = k_WoodShortTownScript,
+	    .commands = {ComputerWeight("TownWithHighestFoodDesire", 0.0f)},
+	});
+	all.push_back({
+	    .id = "mind.computer_god_wood_creature_help",
+	    .name = "A computer god that sends its creature to help its town that is short of wood",
+	    .facet = Facet::Mind,
+	    .description = "The land of the wood disciple scenario, with the tiger of player two between the temple and the "
+	                   "town. At the start, the god gets the weight 0 for the food need of its towns and for the disciple "
+	                   "of a town.",
+	    .expected = "The town wants wood most, and the god sends its creature to help the town. The tiger walks to the "
+	                "storage pit of the town. The hand puts the compassion leash on the tiger and ties the leash to that "
+	                "storage pit. The players.list query shows the TownWithHighestWoodDesire need with the leaf "
+	                "GetCreaturetoHelp.",
+	    .framing = {.shot = Shot::Overview, .include = {glm::vec2(-80.0f, -110.0f), glm::vec2(80.0f, 100.0f)}},
+	    .creatures = {{.label = "player two's",
+	                   .species = CreatureType::Tiger,
+	                   .offset = {30.0f, -30.0f},
+	                   .owner = PlayerNames::PLAYER_TWO,
+	                   .size = 1.0f}},
+	    .landScript = k_WoodShortTownScript,
+	    .commands = {ComputerWeight("TownWithHighestFoodDesire", 0.0f),
+	                 ComputerWeight("CreateDiscipleToFulfillTownDesire", 0.0f)},
 	});
 }

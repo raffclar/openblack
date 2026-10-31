@@ -484,3 +484,56 @@ TEST(ComputerMindSeen, LongListForgetsOldThingsEveryFiveHundredTurns)
 	SeeNearHand(seen, hand, 9000, world);
 	EXPECT_EQ(seen.size(), 41u);
 }
+
+namespace
+{
+
+/// A world in which the even miracles are gone and the things from 50 up are not available
+class FakeGoneWorld final: public GoneWorld
+{
+public:
+	[[nodiscard]] bool CastStillThere(entt::entity spell) const override { return static_cast<uint32_t>(spell) % 2 != 0; }
+	[[nodiscard]] bool Available(entt::entity thing) const override { return static_cast<uint32_t>(thing) < 50; }
+};
+
+entt::entity Thing(uint32_t value)
+{
+	return static_cast<entt::entity>(value);
+}
+
+} // namespace
+
+TEST(ComputerMindGone, GodForgetsGoneMiraclesSeenThingsAndQueuedActionsInOrder)
+{
+	auto mind = MakeMind();
+	std::vector<entt::entity> casts {Thing(5), Thing(4), Thing(3), Thing(2), Thing(1)};
+	std::vector<SeenThing> seen {
+	    {.thing = Thing(60), .turn = 3}, {.thing = Thing(20), .turn = 2}, {.thing = Thing(10), .turn = 1}};
+	QueueAction(mind, "First", Thing(10), entt::null, 1);
+	QueueAction(mind, "Second", Thing(10), Thing(70), 2);
+	QueueAction(mind, "Third", entt::null, Thing(20), 3);
+	ForgetGone(casts, seen, mind, FakeGoneWorld {});
+	EXPECT_EQ(casts, (std::vector<entt::entity> {Thing(5), Thing(3), Thing(1)}));
+	ASSERT_EQ(seen.size(), 2u);
+	EXPECT_EQ(seen[0].thing, Thing(20));
+	EXPECT_EQ(seen[1].thing, Thing(10));
+	ASSERT_EQ(mind.queue.size(), 2u);
+	EXPECT_EQ(mind.queue[0].name, "First");
+	EXPECT_EQ(mind.queue[1].name, "Third");
+}
+
+TEST(ComputerMind, NodeIsWorkedOutAgainInTheSameTurn)
+{
+	// The game has no check that keeps the value of a node that it already worked out in the turn
+	auto mind = MakeMind();
+	FakeWorld world;
+	world.intensities[NodeKind::ActionTownWithHighestFoodDesire] = 0.5f;
+	world.intensities[NodeKind::ObjectGetFoodFromField] = 0.5f;
+	const auto node = NodeOf(mind, NodeKind::ActionTownWithHighestFoodDesire);
+	EXPECT_FLOAT_EQ(WorkOut(mind, world, node, 9), 0.25f);
+	world.intensities[NodeKind::ObjectGetFoodFromField] = 1.0f;
+	EXPECT_FLOAT_EQ(WorkOut(mind, world, node, 9), 0.5f);
+	EXPECT_EQ(world.asked[NodeKind::ActionTownWithHighestFoodDesire], 2);
+	EXPECT_EQ(world.asked[NodeKind::ObjectGetFoodFromField], 2);
+	EXPECT_EQ(mind.nodes[node].lastWorkedOut, 9u);
+}
