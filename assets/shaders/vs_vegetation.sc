@@ -84,11 +84,12 @@ void main()
         float snowLevel = SnowShownLevel(i_data4.w);
         if (snowLevel > 0.0)
         {
-            vec3 worldNormal = normalize(InstanceMul(model, vec4(a_normal, 0.0)).xyz);
             vec3 localLight = ModelLightLocal(InstanceMul(model, vec4(1.0, 0.0, 0.0, 0.0)).xyz,
                                               InstanceMul(model, vec4(0.0, 1.0, 0.0, 0.0)).xyz,
                                               InstanceMul(model, vec4(0.0, 0.0, 1.0, 0.0)).xyz, origin);
-            v_snow = vec4(SnowUv(a_position.xyz, worldNormal), snowLevel / 255.0, 0.0);
+            // A tree reads the snow by each face: by the texture coordinates of the corner and the up part of the
+            // normal of its face in the file
+            v_snow = vec4(SnowFaceUv(SnowFaceUp(a_indices), a_texcoord0), snowLevel / 255.0, 0.0);
             v_snowLight = ModelLightColour(SnowColour(colour), ModelLightFactor(a_normal, localLight));
         }
     }

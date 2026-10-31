@@ -3416,6 +3416,24 @@ void AddLight(std::vector<Scenario>& all)
 	});
 
 	all.push_back({
+	    .id = "light.snow_by_face",
+	    .name = "Snow on the faces of trees and fences",
+	    .facet = Facet::Light,
+	    .description = "Deep snow lies over the whole island. Two trees and two fences stand on the land near the camera. "
+	                   "A rock stands between them.",
+	    .expected = "In about four seconds the snow shows on the trees and the fences. Each face of a tree or a fence "
+	                "shows its snow as one flat area, with a sharp edge to the next face. The faces that point up show "
+	                "the most snow. The rock shows its snow with soft changes across its faces.",
+	    .environment = {.hour = 12.0f, .clockRuns = false, .dispenserGrid = false, .snowDepth = 200.0f},
+	    .framing = {.shot = Shot::Placed, .eye = {0.0f, 8.0f, -14.0f}, .look = {0.0f, 2.0f, 8.0f}},
+	    .objects = {{.type = TreeInfo::Conifer, .offset = {-6.0f, 12.0f}, .scale = 1.5f},
+	                {.type = TreeInfo::Oak, .offset = {7.0f, 14.0f}},
+	                {.type = MobileStaticInfo::CeltFenceShort, .offset = {-3.0f, 4.0f}},
+	                {.type = MobileStaticInfo::CeltFenceTall, .offset = {3.0f, 5.0f}},
+	                {.type = MobileStaticInfo::Rock, .offset = {0.0f, 8.0f}}},
+	});
+
+	all.push_back({
 	    .id = "light.snow_on_carried_things",
 	    .name = "Snow on villagers, not on what they carry",
 	    .facet = Facet::Light,

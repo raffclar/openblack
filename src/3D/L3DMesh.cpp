@@ -366,6 +366,19 @@ void L3DMesh::UpdateVertices(const l3d::L3DFile& l3d) noexcept
 	}
 }
 
+void L3DMesh::SplitFacesForSnow()
+{
+	if (_facesSplit)
+	{
+		return;
+	}
+	_facesSplit = true;
+	for (const auto& subMesh : _subMeshes)
+	{
+		static_cast<void>(subMesh->SplitFacesForSnow());
+	}
+}
+
 void L3DMesh::UpdateSkin(SkinId skin, std::span<const uint16_t> texels) noexcept
 {
 	assert(_dynamic);

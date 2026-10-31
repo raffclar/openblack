@@ -341,6 +341,12 @@ void VillageTotemSystem::Update(uint32_t realMs)
 		{
 			continue;
 		}
+		// Only the draw of a totem moves it, shows its second totem and its share. A totem that the land's draw list does
+		// not draw stays as it is until the turn moves it or the list draws it again.
+		if (!_world->DrawnThisFrame(totem))
+		{
+			continue;
+		}
 		village_totem::StepTo(totemComponent.ease, realMs);
 		// A totem with no life shows nothing. Its second totem hides, and the totem does not move or show its share.
 		if (!village_totem::Shows(_world->LifeOf(totem)))

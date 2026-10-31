@@ -257,6 +257,9 @@ public:
 		std::optional<ObjectLook> objectLook;
 		/// The snow lying where the mesh stands shows on it
 		bool snow {false};
+		/// The mesh reads the snow by each face, as a fence does (see snow_faces). Its submeshes keep the up part of the
+		/// normal of each face in their corners (L3DSubMesh::SplitFacesForSnow).
+		bool snowByFace {false};
 		/// The creatures' and the hand's moving shadows fall on the mesh, where its program takes them: not on the
 		/// creatures themselves, the hand or the villagers a script draws in high detail
 		bool groundShadows {true};

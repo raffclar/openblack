@@ -39,9 +39,10 @@ public:
 	/// A town's share of its people at worship is set: always none without a worship site; otherwise its totem eases
 	/// there
 	virtual void SetTownShare(entt::entity town, float share) = 0;
-	/// Each frame: the totems move to their shares by the real clock, in whole milliseconds. Each totem stands at its
-	/// share, or at the share that the hand holds it at. The totems also move while the game is paused. The frame shows
-	/// or hides the second totem, and makes or removes no entity.
+	/// Each frame, after the land's draw list: the totems that the list draws move to their shares by the real clock, in
+	/// whole milliseconds. Each totem stands at its share, or at the share that the hand holds it at. The totems also move
+	/// while the game is paused. The frame shows or hides the second totem, and makes or removes no entity. A totem that
+	/// the list does not draw stays as it is.
 	virtual void Update(uint32_t realMs) = 0;
 	/// Each game turn: the totems move by the real clock. A totem that arrives at its share stops the sound of its
 	/// movement and rings the village bell. A totem whose town centre went goes, with its icon and its second totem.
