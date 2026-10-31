@@ -135,3 +135,11 @@ TEST(TeleportRules, ACarriedCreatureComesOutWhereTheStonesPlaceGoesThroughMetres
 	EXPECT_EQ(CreatureArrival({.x = 8090858, .z = 8388870}), (MapCoords {.x = 8090857, .z = 8388871}));
 	EXPECT_EQ(CreatureArrival({.x = 0x01000001, .z = 0x00FC131F}), (MapCoords {.x = 0x01000002, .z = 0x00FC131F}));
 }
+
+TEST(TeleportRules, ACarriedCreatureComesOutOfTheFarStoneOnTheTurnThatItsFadeOutEnds)
+{
+	EXPECT_EQ(NextCarryStep(false, 2), CarryStep::FadeOut);
+	EXPECT_EQ(NextCarryStep(false, 0), CarryStep::Arrive);
+	EXPECT_EQ(NextCarryStep(true, 1), CarryStep::FadeIn);
+	EXPECT_EQ(NextCarryStep(true, 0), CarryStep::BackInSight);
+}

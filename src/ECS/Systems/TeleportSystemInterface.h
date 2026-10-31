@@ -9,6 +9,8 @@
 
 #pragma once
 
+#include <cstdint>
+
 #include <chrono>
 #include <optional>
 #include <vector>
@@ -30,6 +32,17 @@ class ObjectDrawListSystemInterface;
 class TeleportSystemInterface: public SavedStateInterface
 {
 public:
+	/// What one turn of a stone that carries a creature did
+	enum class Carry : uint8_t
+	{
+		/// The creature fades out or in, or it came out of the far stone at an earlier turn
+		Carried,
+		/// The creature came out of the far stone in this turn, at its new place on the land
+		Arrived,
+		/// The creature is back in sight, or the stone does not carry it
+		Done,
+	};
+
 	virtual ~TeleportSystemInterface() = default;
 
 	/// A new stone of a miracle at a point on the land, at the head of its player's stones; none if one may not go there
@@ -57,9 +70,8 @@ public:
 	virtual bool DoTeleport(entt::entity stone, entt::entity living, bool forced) = 0;
 	/// A creature that jumped starts its fade out: the stone carries it from the next turn. Whether the stone carries it.
 	virtual bool StartCarry(entt::entity creature) = 0;
-	/// One turn of a creature that the stone carries: it fades out, comes out of the far stone, then fades back in.
-	/// Whether it is back in sight, or the stone does not carry it.
-	virtual bool CarryTurn(entt::entity creature) = 0;
+	/// One turn of a creature that the stone carries: it fades out, comes out of the far stone, then fades back in
+	virtual Carry CarryTurn(entt::entity creature) = 0;
 	/// The stone no longer controls the creature: the creature is not a traveller of a stone, and does not react to it
 	virtual void StopControl(entt::entity creature) = 0;
 	/// A villager dropped by a player's hand onto a stone of theirs jumps at once, if there is another stone: it decides

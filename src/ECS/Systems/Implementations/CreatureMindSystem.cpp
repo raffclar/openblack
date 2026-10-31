@@ -2606,9 +2606,22 @@ void CreatureMindSystem::AgendaTurn(entt::entity entity)
 		}
 		if (commands.carry != creature_mind::Commands::Carry::None)
 		{
+			using Carry = TeleportSystemInterface::Carry;
 			const bool start = commands.carry == creature_mind::Commands::Carry::Start;
-			if (!Locator::teleportSystem::has_value() || (start ? !Locator::teleportSystem::value().StartCarry(entity)
-			                                                    : Locator::teleportSystem::value().CarryTurn(entity)))
+			auto carried = Carry::Done;
+			if (Locator::teleportSystem::has_value())
+			{
+				auto& teleports = Locator::teleportSystem::value();
+				carried = start ? (teleports.StartCarry(entity) ? Carry::Carried : Carry::Done) : teleports.CarryTurn(entity);
+			}
+			// The creature that comes out of the far stone moves on its map: there it looks at the mountains and the water,
+			// and far about for the towns and the temples
+			if (carried == Carry::Arrived)
+			{
+				LookAtLand(entity, creature, mind, transform);
+				LookFarAbout(entity, mind, transform);
+			}
+			if (carried == Carry::Done)
 			{
 				creature_mind::CarryDone(mind.idle);
 			}

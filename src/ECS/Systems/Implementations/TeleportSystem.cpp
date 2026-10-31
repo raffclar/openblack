@@ -820,27 +820,27 @@ bool TeleportSystem::StartCarry(entt::entity creature)
 	return true;
 }
 
-bool TeleportSystem::CarryTurn(entt::entity creature)
+TeleportSystemInterface::Carry TeleportSystem::CarryTurn(entt::entity creature)
 {
 	auto& registry = EntityRegistry();
 	auto* traveller = registry.TryGet<TeleportTraveller>(creature);
 	if (traveller == nullptr || !traveller->transported)
 	{
-		return true;
+		return Carry::Done;
 	}
 	auto* spells = registry.TryGet<CreatureSpells>(creature);
 	const auto turns = teleport::CreatureFadeTurns(k_TurnMilliseconds);
 	--traveller->transportTurns;
-	if (!traveller->fadingIn)
+	switch (teleport::NextCarryStep(traveller->fadingIn, traveller->transportTurns))
 	{
-		if (traveller->transportTurns > 0)
+	case teleport::CarryStep::FadeOut:
+		if (spells != nullptr)
 		{
-			if (spells != nullptr)
-			{
-				spells->fizz = teleport::CreatureFadeOut(traveller->transportTurns, turns);
-			}
-			return false;
+			spells->fizz = teleport::CreatureFadeOut(traveller->transportTurns, turns);
 		}
+		return Carry::Carried;
+	case teleport::CarryStep::Arrive:
+	{
 		// Faded out, it comes out of the far stone with the sound of arriving, still faded
 		if (Locator::soundTagSystem::has_value())
 		{
@@ -857,15 +857,16 @@ bool TeleportSystem::CarryTurn(entt::entity creature)
 		registry.SetDirty();
 		traveller->fadingIn = true;
 		traveller->transportTurns = turns;
-		return false;
+		return Carry::Arrived;
 	}
-	if (traveller->transportTurns > 0)
-	{
+	case teleport::CarryStep::FadeIn:
 		if (spells != nullptr)
 		{
 			spells->fizz = teleport::CreatureFadeIn(traveller->transportTurns, turns);
 		}
-		return false;
+		return Carry::Carried;
+	case teleport::CarryStep::BackInSight:
+		break;
 	}
 	// Back in sight: its plan takes it on to where it was going
 	if (spells != nullptr)
@@ -875,7 +876,7 @@ bool TeleportSystem::CarryTurn(entt::entity creature)
 	traveller->transported = false;
 	traveller->jumped = true;
 	SPDLOG_LOGGER_DEBUG(spdlog::get("game"), "Teleport: creature {} is back in sight", entt::to_integral(creature));
-	return true;
+	return Carry::Done;
 }
 
 void TeleportSystem::StopControl(entt::entity creature)
