@@ -166,9 +166,10 @@ std::vector<entt::entity> WorkshopsOf(entt::entity town)
 	std::vector<entt::entity> workshops;
 	if (const auto* data = registry.Valid(town) ? registry.TryGet<const Town>(town) : nullptr)
 	{
+		// Only a workshop that is built is on the list of the town
 		for (const auto abode : data->abodes)
 		{
-			if (registry.Valid(abode) && registry.AllOf<Workshop>(abode))
+			if (registry.Valid(abode) && registry.AllOf<Workshop>(abode) && ecs::construction::IsBuilt(abode))
 			{
 				workshops.push_back(abode);
 			}
@@ -465,6 +466,25 @@ entt::entity WorkshopSystem::CreateScaffold(glm::vec3 place, entt::entity town, 
 		return entt::null;
 	}
 	return ecs::archetypes::ScaffoldArchetype::Create(place, town, workshopEntity, yAngle, scale);
+}
+
+entt::entity WorkshopSystem::RewardScaffold(entt::entity town, glm::vec3 place)
+{
+	const auto workshops = WorkshopsOf(town);
+	if (workshops.empty())
+	{
+		return entt::null;
+	}
+	// The scaffold is worth one and is not turned. The first workshop of the town counts it as its own, but gives it no
+	// place in its yard.
+	const auto workshopEntity = workshops.front();
+	const auto scaffold = CreateScaffold(place, town, workshopEntity, 0.0f, workshop::ScaleOfValue(1));
+	if (scaffold != entt::null)
+	{
+		workshop::AddScaffold(Entities().Get<Workshop>(workshopEntity), scaffold);
+		Entities().SetDirty();
+	}
+	return scaffold;
 }
 
 bool WorkshopSystem::CanTake(entt::entity scaffold) const
@@ -1365,6 +1385,39 @@ void WorkshopSystem::SiteClosed(entt::entity building)
 		registry.Get<Scaffold>(scaffold).site = entt::null;
 		ecs::world_objects::Remove(scaffold);
 	}
+}
+
+entt::entity WorkshopSystem::LeaveDestroyedSite(entt::entity building)
+{
+	auto& registry = Entities();
+	entt::entity first = entt::null;
+	registry.Each<const Scaffold>([&first, building](entt::entity scaffold, const Scaffold& data) {
+		if (first == entt::null && data.site == building)
+		{
+			first = scaffold;
+		}
+	});
+	if (first == entt::null)
+	{
+		return entt::null;
+	}
+	// The scaffold leaves the site but the building stays for the caller. The scaffold looks for a new offer.
+	auto& data = registry.Get<Scaffold>(first);
+	data.site = entt::null;
+	data.phantom.shown.reset();
+	data.phantom.next.reset();
+	return first;
+}
+
+bool WorkshopSystem::ForceBuild(entt::entity scaffold, PlayerNames player)
+{
+	auto& registry = Entities();
+	if (!registry.Valid(scaffold) || !registry.AllOf<Scaffold, Transform>(scaffold) || !BuildBuilding(scaffold, player, true))
+	{
+		return false;
+	}
+	registry.Get<Scaffold>(scaffold).putDownTurn = Turn();
+	return true;
 }
 
 void WorkshopSystem::MakeGhost(entt::entity scaffold)

@@ -951,6 +951,24 @@ TEST_F(HandGrabSystemWithWorld, AShortPressOnAScaffoldTakesNothing)
 	EXPECT_TRUE(world->scaffoldsTaken.empty());
 }
 
+// The hand takes a scaffold of the town of another god as any other scaffold, but only in its influence
+TEST_F(HandGrabSystemWithWorld, AScaffoldOfAnotherGodsTownIsTakenOnlyInTheInfluence)
+{
+	const auto scaffold = world->AddScaffold({0.0f, 0.0f, 0.0f});
+	world->registry.Get<Scaffold>(scaffold).town = world->registry.Create();
+	world->underCursor = scaffold;
+	world->influenceOnlyOf = PlayerNames::PLAYER_TWO;
+	EXPECT_FALSE(Press());
+	EXPECT_TRUE(world->scaffoldsTaken.empty());
+	world->influenceOnlyOf.reset();
+	EXPECT_TRUE(Press());
+	for (int i = 0; i < 40 && !system->GetHeld().has_value(); ++i)
+	{
+		Frame(10);
+	}
+	EXPECT_EQ(system->GetHeld(), std::optional(scaffold));
+}
+
 TEST_F(HandGrabSystemWithWorld, WithTheLeashHeldAShortPressIsAnOrderInsteadOfATap)
 {
 	const auto rock = world->AddRock({0.0f, 0.0f, 0.0f});

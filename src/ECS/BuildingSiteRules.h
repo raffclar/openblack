@@ -145,28 +145,33 @@ struct RepairCandidate
 };
 [[nodiscard]] std::optional<size_t> BestRepairSite(std::span<const RepairCandidate> sites);
 
-/// What becomes of one of a temple site's piles when the temple is finished: an empty one goes, one with wood left in it
-/// stays on as a pile of its own and calls the villagers to come for its wood
+/// What becomes of one of a site's piles when the site closes:
+/// - The pile of a workshop stays the pile of the workshop, with all its wood.
+/// - Another empty pile goes.
+/// - Another pile with wood in it stays as a pile of its own and calls the villagers to come for its wood.
 enum class LeftoverPile : uint8_t
 {
 	Remove,
 	CallForWood,
+	Keep,
 };
-[[nodiscard]] LeftoverPile WhenSiteCloses(uint32_t woodInPile);
+[[nodiscard]] LeftoverPile WhenSiteCloses(uint32_t woodInPile, bool workshopPile);
 
 /// The kinds of site, as the wood its town counts at its sites sees them
 enum class SiteWoodKind : uint8_t
 {
 	WorshipSite,
 	Temple,
+	/// A workshop keeps the wood of its site in the workshop, on the wood pile of the workshop
+	Workshop,
 	Other,
 };
 /// The wood a town counts at its building sites, after one of its sites takes in some wood and gives out some. The
-/// wood at a worship site's site is never counted. The temple site's wood is counted when it comes in, but not taken off
-/// when builders take it away, as in the original game.
+/// town never counts the wood at the site of a worship site or a workshop. The temple site's wood is counted when it
+/// comes in, but not taken off when builders take it away, as in the original game.
 [[nodiscard]] constexpr float WoodAtSitesAfter(float counted, SiteWoodKind kind, uint32_t added, uint32_t removed)
 {
-	if (kind == SiteWoodKind::WorshipSite)
+	if (kind == SiteWoodKind::WorshipSite || kind == SiteWoodKind::Workshop)
 	{
 		return counted;
 	}

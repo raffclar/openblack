@@ -52,6 +52,9 @@ public:
 	[[nodiscard]] std::optional<components::ScaffoldOffer> OfferAt(entt::entity town, glm::vec3 place, uint32_t value) override;
 	void ProcessHeld(entt::entity scaffold) override;
 	void SiteClosed(entt::entity building) override;
+	entt::entity RewardScaffold(entt::entity town, glm::vec3 place) override;
+	entt::entity LeaveDestroyedSite(entt::entity building) override;
+	bool ForceBuild(entt::entity scaffold, PlayerNames player) override;
 	void PlaceGhostsForFrame(std::optional<glm::vec3> drawnHand) override;
 	void UpdateFlagsForFrame(float seconds) override;
 

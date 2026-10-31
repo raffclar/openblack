@@ -622,8 +622,9 @@ uint32_t ResourceStoreSystem::AddToStore(entt::entity store, ResourceType type, 
 	{
 		return AddToWorshipSite(*this, store, type, amount, poisoned);
 	}
-	// A building going up takes wood onto its site, where the builders take it from
-	if (IsBuildingSite(store))
+	// A building going up takes wood onto its site, where the builders take it from. A workshop takes the wood itself,
+	// and its site uses the wood of the workshop.
+	if (IsBuildingSite(store) && !registry.AllOf<Workshop>(store))
 	{
 		return ecs::store_rules::BuildingSiteStores(type) ? AddResource(store, ResourceType::Wood, amount, at) : 0u;
 	}
@@ -1029,10 +1030,14 @@ BuildingSite* PiledSite(entt::entity object)
 }
 
 /// Any other building with a site, going up or being mended, keeps its wood in the site's one pile: its site taking
-/// brought wood. A miracle dispenser is such a building.
+/// brought wood. A miracle dispenser is such a building. A workshop is not: it keeps all its wood itself, also while
+/// it has a site.
 BuildingSite* StandardSite(entt::entity object)
 {
-	return Entities().AnyOf<Abode, SpellDispenser>(object) ? ecs::construction::BroughtWoodSite(object) : nullptr;
+	auto& registry = Entities();
+	return registry.AnyOf<Abode, SpellDispenser>(object) && !registry.AllOf<Workshop>(object)
+	           ? ecs::construction::BroughtWoodSite(object)
+	           : nullptr;
 }
 
 TownResourceTally* TallyOf(entt::entity town)
@@ -1321,6 +1326,11 @@ uint32_t ResourceStoreSystem::AddToSite(entt::entity building, BuildingSite& sit
 	{
 		return 0;
 	}
+	// A workshop's site gives the wood to the workshop, which keeps it on its wood pile. The town does not count it.
+	if (registry.AllOf<Workshop>(building))
+	{
+		return AddToStore(building, type, amount, std::nullopt, false, at);
+	}
 	// A worship site's site keeps the wood in its one pile, made for the first wood brought
 	if (IsWorshipSite(building))
 	{
@@ -1389,6 +1399,11 @@ uint32_t ResourceStoreSystem::TakeFromSite(entt::entity building, BuildingSite& 
 	if (type != ResourceType::Wood && type != ResourceType::Any)
 	{
 		return 0;
+	}
+	// A workshop's site takes the wood from the workshop
+	if (registry.AllOf<Workshop>(building))
+	{
+		return type == ResourceType::Wood ? TakeFromWorkshop(building, type, amount, std::nullopt) : 0u;
 	}
 	// A worship site's site gives from its one pile
 	if (IsWorshipSite(building))

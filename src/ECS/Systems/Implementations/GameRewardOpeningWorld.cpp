@@ -32,6 +32,7 @@
 #include "ECS/Systems/ReactionSystemInterface.h"
 #include "ECS/Systems/ResourceStoreSystemInterface.h"
 #include "ECS/Systems/SpellIconSystemInterface.h"
+#include "ECS/Systems/WorkshopSystemInterface.h"
 #include "InfoConstants.h"
 #include "Locator.h"
 #include "Magic/MagicTables.h"
@@ -129,8 +130,11 @@ void GameRewardOpeningWorld::MakeObject(MobileStaticInfo object)
 
 void GameRewardOpeningWorld::MakeScaffold()
 {
-	// TODO(reward-chest): a scaffold for the town's workshop, marked as a full one, once openblack has scaffolds
-	SPDLOG_LOGGER_WARN(spdlog::get("game"), "A reward chest's scaffold isn't made: openblack has no scaffolds yet");
+	// A scaffold worth one at the chest, for the first workshop of the chest's town. Nothing when the town has no workshop.
+	if (Locator::workshopSystem::has_value() && Town() != entt::null)
+	{
+		Locator::workshopSystem::value().RewardScaffold(Town(), Position());
+	}
 }
 
 void GameRewardOpeningWorld::FindTownForMiracle()

@@ -45,6 +45,10 @@ public:
 	virtual entt::entity CreateScaffold(glm::vec3 place, entt::entity town, entt::entity workshop, float yAngle,
 	                                    float scale) = 0;
 
+	/// A reward chest gives a town a scaffold at a place. The scaffold is worth one, and the first built workshop of the
+	/// town counts it as its own. It gets no place in the yard. The scaffold, none when the town has no built workshop.
+	virtual entt::entity RewardScaffold(entt::entity town, glm::vec3 place) = 0;
+
 	/// Whether the hand can take a scaffold. The hand can take a scaffold on a building site only before the building
 	/// starts, and only for a time after the hand put the scaffold down.
 	[[nodiscard]] virtual bool CanTake(entt::entity scaffold) const = 0;
@@ -66,6 +70,13 @@ public:
 	virtual void ProcessHeld(entt::entity scaffold) = 0;
 	/// A building site closes: the scaffolds on it go
 	virtual void SiteClosed(entt::entity building) = 0;
+	/// An effect destroyed the unfinished building of a site. The first scaffold on the site leaves the site, and keeps no
+	/// offer. The scaffold stays, thus the caller removes the building next. The scaffold, none when no scaffold is on the
+	/// site.
+	virtual entt::entity LeaveDestroyedSite(entt::entity building) = 0;
+	/// The scaffold starts a new building site where it lies, for a player. The building does not have to fit. The time
+	/// that the hand can take the scaffold again starts. Whether the site started.
+	virtual bool ForceBuild(entt::entity scaffold, PlayerNames player) = 0;
 	/// The frame shows the phantom buildings of the scaffolds. The phantom of a scaffold in the hand of the local player
 	/// shows at `drawnHand`, where the frame draws that hand. The phantom on a building site fades as the building
 	/// grows, and the scaffold on the site becomes small.
