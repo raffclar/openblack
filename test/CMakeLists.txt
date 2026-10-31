@@ -2237,3 +2237,7 @@ openblack_setup_and_add_test(test_god_hand test_god_hand.cpp)
 openblack_setup_and_add_test(test_temple_room_save temple/test_temple_room_save.cpp)
 openblack_setup_and_add_test(test_magic_save test_magic_save.cpp)
 target_link_libraries(test_magic_save PRIVATE edt psys)
+  openblack_setup_and_add_test(
+    test_inspector_server_room inspector/test_inspector_server_room.cpp
+  )
+  target_link_libraries(test_inspector_server_room PRIVATE inspector)

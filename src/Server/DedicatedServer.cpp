@@ -82,6 +82,10 @@
 #define OPENBLACK_GAME_ROLE 1
 #include "Online/StartRules.h"
 #include "Server/Desktop/GameRole.h"
+#include "Server/ServerAdmin.h"
+#if defined(OPENBLACK_INSPECTOR)
+#include "Inspector/ServerProviders.h"
+#endif
 #endif
 
 namespace openblack::server
@@ -319,8 +323,14 @@ bool ServerWorld::Initialize()
 		                    _simulation.traceDrawsPath->string());
 	}
 #endif
-	// The run record of the tools starts with the inspector
-	if (_simulation.recordPath.has_value() && StartInspector(0))
+	// The inspector starts for the operator or for the run record of the tools, only on 127.0.0.1
+	if (const bool wanted = _settings.inspectPort.has_value() || _simulation.recordPath.has_value();
+	    wanted && StartInspector(_settings.inspectPort.value_or(0)))
+	{
+		// No query of the inspector changes the world of a network game: each client must play the same world as the server
+		Locator::inspector::value().SetHostsNetworkGame(_settings.network.has_value());
+	}
+	if (_simulation.recordPath.has_value() && Locator::inspector::has_value())
 	{
 		if (const auto error = Locator::inspector::value().StartSimRecord(*_simulation.recordPath, _simulation.recordEvery,
 		                                                                  _simulation.limitsPath, _simulation.hashParts);
@@ -937,6 +947,13 @@ bool StartNetwork(const ServerSettings& settings, ServerWorld& world, std::uniqu
 		    // Every client gets the checksum of the server's world
 		    host.TurnChecksum(turn.turn, turn.checksum);
 	    });
+#if defined(OPENBLACK_INSPECTOR)
+	// The operator reads the room through the inspector
+	if (Locator::inspector::has_value())
+	{
+		Locator::inspector::value().AddProvider(inspector::MakeServerProvider([&host] { return admin::RoomReportOf(host); }));
+	}
+#endif
 	return true;
 }
 #else
@@ -1167,6 +1184,13 @@ int RunWithDevices(const ServerSettings& settings, const std::atomic<bool>& stop
 		{
 			SPDLOG_LOGGER_INFO(spdlog::get("game"), "Network game: {}", line);
 		}
+#if defined(OPENBLACK_INSPECTOR)
+		// The queries of the room read the host, so they go before the host
+		if (Locator::inspector::has_value())
+		{
+			Locator::inspector::value().RemoveProvider(inspector::k_ServerProviderName);
+		}
+#endif
 		network->Close();
 		Locator::playerCommandSystem::value().SetSource(nullptr);
 		world->SetNetwork({});

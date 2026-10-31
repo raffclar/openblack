@@ -58,6 +58,8 @@ public:
 
 	/// Adds a provider, replacing one of the same name
 	void Add(std::unique_ptr<ProviderInterface> provider);
+	/// Removes the provider of this name, if there is one
+	void Remove(std::string_view name);
 	[[nodiscard]] ProviderInterface* Find(std::string_view name) const;
 	[[nodiscard]] size_t Count() const { return _providers.size(); }
 
