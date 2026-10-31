@@ -13,6 +13,7 @@
 #include <array>
 #include <optional>
 #include <set>
+#include <unordered_map>
 #include <utility>
 #include <vector>
 
@@ -590,4 +591,82 @@ TEST(CreatureObjectBeliefs, ItLooksForGoneThingsOnlyWhenThingsWent)
 	EXPECT_EQ(looks, 3u);
 	store.ForgetIfAnyWent(6, [](entt::entity thing) { return thing == Thing(1); });
 	EXPECT_EQ(store.Size(), 0u);
+}
+
+TEST(CreatureObjectBeliefs, TheFastIndexFindsWhatTheIndexOfTheContentsFinds)
+{
+	// Many things in and out, each change done to the two indexes: they find the same place for each thing
+	ThingIndex index;
+	std::unordered_map<entt::entity, BeliefPlace> reference;
+	uint32_t state = 12345;
+	const auto next = [&state]() {
+		state = state * 1103515245u + 12345u;
+		return (state >> 8) % 3000u;
+	};
+	for (uint32_t step = 0; step < 20000; ++step)
+	{
+		const auto thing = Thing(next());
+		if (next() % 3 == 0)
+		{
+			index.Erase(thing);
+			reference.erase(thing);
+		}
+		else
+		{
+			const BeliefPlace place {.kind = step % k_KindCount, .slot = step};
+			index.Set(thing, place);
+			reference[thing] = place;
+		}
+	}
+	EXPECT_EQ(index.Size(), reference.size());
+	for (uint32_t n = 0; n < 3000; ++n)
+	{
+		const auto found = index.Find(Thing(n));
+		const auto known = reference.find(Thing(n));
+		ASSERT_EQ(found.has_value(), known != reference.end()) << n;
+		if (found.has_value())
+		{
+			EXPECT_EQ(found->kind, known->second.kind);
+			EXPECT_EQ(found->slot, known->second.slot);
+		}
+	}
+}
+
+TEST(CreatureObjectBeliefs, TheFastIndexKeepsNoNoThingValue)
+{
+	ThingIndex index;
+	index.Set(entt::null, {.kind = 1, .slot = 2});
+	EXPECT_EQ(index.Size(), 0u);
+	EXPECT_FALSE(index.Find(entt::null).has_value());
+	index.Set(Thing(7), {.kind = 1, .slot = 2});
+	index.Erase(Thing(8));
+	EXPECT_EQ(index.Size(), 1u);
+	index.Clear();
+	EXPECT_FALSE(index.Find(Thing(7)).has_value());
+}
+
+TEST(CreatureObjectBeliefs, AStoreFindsItsBeliefsAfterItsContentsArePutBack)
+{
+	Store store;
+	for (uint32_t n = 0; n < 60; ++n)
+	{
+		store.Add(Thing(n), k_Forest, {.x = static_cast<int32_t>(n), .z = 0});
+	}
+	store.Forget(Thing(30));
+	Store copy;
+	copy.SetContents(store.Contents());
+	for (uint32_t n = 0; n < 60; ++n)
+	{
+		const auto* mine = store.Find(Thing(n));
+		const auto* theirs = copy.Find(Thing(n));
+		ASSERT_EQ(mine != nullptr, theirs != nullptr) << n;
+		if (mine != nullptr)
+		{
+			EXPECT_EQ(mine->place.x, theirs->place.x);
+		}
+	}
+	// Fifty forests at most: the first ten and the forgotten one are gone
+	EXPECT_EQ(copy.Find(Thing(0)), nullptr);
+	EXPECT_EQ(copy.Find(Thing(30)), nullptr);
+	EXPECT_NE(copy.Find(Thing(59)), nullptr);
 }

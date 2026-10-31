@@ -48,6 +48,28 @@ CREATE_VILLAGER_POS("4.0,30.0", "-4.0,41.0", "CELTIC_HOUSEWIFE", 20)
 CREATE_VILLAGER_POS("6.0,30.0", "-4.0,41.0", "CELTIC_FORESTER", 20)
 )";
 
+/// The town of the workshop scenarios, but it offers the wood miracle, and its storage pit has no wood
+constexpr std::string_view k_WorkshopWoodMiracleTownScript = R"(TOGGLE_COMPUTER_PLAYER("PLAYER_TWO", 1)
+CREATE_CITADEL("0.0,-90.0", 0, "PLAYER_TWO", 5690, 1000)
+CREATE_TOWN(900, "0.0,40.0", "PLAYER_TWO", 0, "CELTIC")
+SET_TOWN_BELIEF_CAP(900, "PLAYER_TWO", 2.0)
+CREATE_NEW_TOWN_SPELL(900, "WOOD")
+SET_TOWN_BELIEF(900, "PLAYER_TWO", 1.0)
+CREATE_TOWN_CENTRE(900, "-4.0,41.0", "CELTIC_ABODE_TOWN_CENTRE", 0, 1000, 0)
+CREATE_ABODE(900, "10.0,90.0", "CELTIC_ABODE_STORAGE_PIT", 6282, 1000, 3000, 0)
+CREATE_ABODE(900, "-50.0,90.0", "CELTIC_ABODE_WORKSHOP", 0, 1000, 0, 0)
+CREATE_ABODE(900, "40.0,60.0", "CELTIC_ABODE_F", 4328, 1095, 0, 0)
+CREATE_VILLAGER_POS("36.0,62.0", "40.0,60.0", "CELTIC_HOUSEWIFE", 20)
+CREATE_VILLAGER_POS("36.0,62.0", "40.0,60.0", "CELTIC_FORESTER", 20)
+CREATE_VILLAGER_POS("36.0,62.0", "40.0,60.0", "CELTIC_HOUSEWIFE", 20)
+CREATE_VILLAGER_POS("36.0,62.0", "40.0,60.0", "CELTIC_FORESTER", 20)
+CREATE_ABODE(900, "-40.0,60.0", "CELTIC_ABODE_F", 4328, 1095, 0, 0)
+CREATE_VILLAGER_POS("-44.0,62.0", "-40.0,60.0", "CELTIC_HOUSEWIFE", 20)
+CREATE_VILLAGER_POS("-44.0,62.0", "-40.0,60.0", "CELTIC_FORESTER", 20)
+CREATE_VILLAGER_POS("-44.0,62.0", "-40.0,60.0", "CELTIC_HOUSEWIFE", 20)
+CREATE_VILLAGER_POS("-44.0,62.0", "-40.0,60.0", "CELTIC_FORESTER", 20)
+)";
+
 /// The game turns that the scenarios wait before the action, so that the town settles first
 constexpr uint32_t k_Wait = 50;
 /// The share of the town's totem. The tool also builds the worship site at once, so that the god does not take wood to it.
@@ -121,6 +143,28 @@ void testbed_scenarios::AddComputerGodScaffoldScenarios(std::vector<Scenario>& a
 	                "one. The players.list query shows the node and the steps of the hand.",
 	    .framing = ScaffoldFraming(),
 	    .landScript = k_WorkshopTownScript,
+	    .worshipShare = k_WorshipShare,
+	    .computerActions = {{.afterTurns = k_Wait,
+	                         .node = "FillWorkshop",
+	                         .first = {.kind = ComputerActionThing::Kind::Workshop, .townId = 900}}},
+	});
+	all.push_back({
+	    .id = "mind.computer_god_workshop_wood_miracle",
+	    .name = "A computer god that casts the wood miracle on its workshop",
+	    .facet = Facet::Mind,
+	    .description = "The land of the workshop scenarios, but the town offers the wood miracle and its storage pit has "
+	                   "no wood. Half of the people worship at the site, and each icon of the site holds the full charge "
+	                   "of its miracle. At the start, the god gets the weight 0 for the wood need of its towns, so that it "
+	                   "keeps the charge. After five seconds, a testbed tool puts the action FillWorkshop in the queue of "
+	                   "the god, with the workshop.",
+	    .expected = "The god gives its workshop wood with the wood miracle. The hand moves to the wood icon of the site "
+	                "and the worshippers chant for the miracle. Then the hand casts the wood miracle on the workshop and "
+	                "stays over it for eight seconds. The players.list query shows the FillWorkshop node with the leaf "
+	                "CastWoodSpellOn and the steps of the hand.",
+	    .framing = ScaffoldFraming(),
+	    .landScript = k_WorkshopWoodMiracleTownScript,
+	    .commands = {{.kind = Command::Kind::FillSiteIcons, .player = PlayerNames::PLAYER_TWO, .amount = 1.0f},
+	                 ComputerWeight("TownWithHighestWoodDesire", 0.0f)},
 	    .worshipShare = k_WorshipShare,
 	    .computerActions = {{.afterTurns = k_Wait,
 	                         .node = "FillWorkshop",

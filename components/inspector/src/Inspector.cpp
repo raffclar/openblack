@@ -200,6 +200,11 @@ Json Inspector::Catalogue() const
 	return queries;
 }
 
+void Inspector::Remove(std::string_view name)
+{
+	std::erase_if(_providers, [name](const auto& each) { return each->Name() == name; });
+}
+
 ProviderInterface* Inspector::Find(std::string_view name) const
 {
 	const auto found = std::ranges::find_if(_providers, [name](const auto& each) { return each->Name() == name; });

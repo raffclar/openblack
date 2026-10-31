@@ -76,6 +76,9 @@ public:
 	virtual bool Join(NetworkJoin join) = 0;
 	/// The player is ready for the start, or cancels the ready, in the game room
 	virtual void SetReady(bool ready) = 0;
+	/// The god of the player plays for a clan in the game room, or for no clan. The start data of the god tells it to
+	/// the game, so that the creature of a clan god does not go to the files of the player's profile.
+	virtual void SetPlaysForClan(bool /*playsForClan*/) {}
 	/// The player leaves the network game
 	virtual void Leave() = 0;
 	/// The end box of a decided game opened: the game server stops the turns of the game. When the last turn came, the

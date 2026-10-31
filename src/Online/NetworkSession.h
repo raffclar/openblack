@@ -55,6 +55,9 @@ struct NetworkSessionSettings
 	/// Reads the alignment of the player's profile, which goes to the other players with the creature file. With no
 	/// reader, the player sends an alignment of 0.
 	std::function<float()> readAlignment;
+	/// Reads whether the god of the player plays for a clan, as the start begins. With no reader, the god plays for no
+	/// clan.
+	std::function<bool()> readPlaysForClan;
 	/// Tools: gets each turn at which the world of this computer differs from the server's world
 	std::function<void(uint32_t turn)> parts;
 	/// Where the game came from: the lobby on the internet or the local network
@@ -153,6 +156,8 @@ public:
 	[[nodiscard]] std::optional<float> StartAlignment(PlayerNames god) const override;
 	/// The god of the slot that the server gave to this computer. None for an observer.
 	[[nodiscard]] std::optional<PlayerNames> OwnGod() const override;
+	/// Whether the god of this computer played for a clan as the start began
+	[[nodiscard]] bool OwnGodPlaysForClan() const override { return _ownGodPlaysForClan; }
 
 	[[nodiscard]] State GetState() const { return _state; }
 	/// Where the game of the session came from: the lobby on the internet or the local network
@@ -233,6 +238,7 @@ private:
 	std::vector<StartEvent> _startEvents;
 	std::map<uint8_t, std::vector<uint8_t>> _startCreatures;
 	std::map<uint8_t, float> _startAlignments;
+	bool _ownGodPlaysForClan {false};
 	std::string _refusedReason;
 
 	std::map<uint32_t, turn_codec::TurnBundle> _turns;

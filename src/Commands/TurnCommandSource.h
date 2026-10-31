@@ -46,6 +46,8 @@ public:
 	[[nodiscard]] virtual std::optional<float> StartAlignment(PlayerNames /*god*/) const { return std::nullopt; }
 	/// The god that the player of this computer plays. The server plays no god.
 	[[nodiscard]] virtual std::optional<PlayerNames> OwnGod() const { return std::nullopt; }
+	/// Whether the god that the player of this computer plays, plays for a clan. The server plays no god.
+	[[nodiscard]] virtual bool OwnGodPlaysForClan() const { return false; }
 };
 
 } // namespace openblack::player_commands

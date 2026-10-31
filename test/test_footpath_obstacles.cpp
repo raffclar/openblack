@@ -10,6 +10,7 @@
 #include <cmath>
 #include <cstdint>
 
+#include <algorithm>
 #include <array>
 #include <optional>
 #include <tuple>
@@ -292,4 +293,61 @@ TEST(FootpathObstaclesClear, APathClearOfTheThingIsLeftAsItIsWithNoCalls)
 		EXPECT_TRUE(calls.cutOff.empty());
 	}
 	EXPECT_GT(clearCount, 100);
+}
+
+TEST(FootpathObstaclesClear, ANodeOnTheEdgeOfTheReturnSquareIsNotInIt)
+{
+	const obstacle_rules::Obstacle thing {.radius = k_Radius, .place = East(100.0f)};
+	const obstacle_rules::ReturnSquare square(thing);
+	const auto half = gutils::ConvertMetersToWholeDistance(obstacle_rules::ReturnReach(k_Radius));
+	EXPECT_TRUE(square.Holds(thing.place));
+	EXPECT_TRUE(square.Holds({thing.place.x + half - 1, thing.place.y}));
+	EXPECT_FALSE(square.Holds({thing.place.x + half, thing.place.y}));
+	EXPECT_FALSE(square.Holds({thing.place.x, thing.place.y - half}));
+}
+
+TEST(FootpathObstaclesClear, APathWithNoNodeInTheReturnSquareIsLeftAsItIsWithNoCalls)
+{
+	// Many paths of random nodes about things removed at random places: each time no node is in the square, the way
+	// back changes nothing
+	uint32_t seed = 54321;
+	const auto next = [&seed](int32_t range) {
+		seed = seed * 1664525u + 1013904223u;
+		return static_cast<int32_t>((seed >> 8u) % static_cast<uint32_t>(range));
+	};
+	int clearCount = 0;
+	int heldCount = 0;
+	for (int round = 0; round < 3000; ++round)
+	{
+		const obstacle_rules::Obstacle thing {.radius = 1.0f + static_cast<float>(next(20)),
+		                                      .place = East(100.0f + static_cast<float>(next(60)))};
+		std::vector<obstacle_rules::KeyedNode> nodes;
+		const auto count = 2 + next(6);
+		for (int32_t i = 0; i < count; ++i)
+		{
+			nodes.push_back(
+			    {.node = {.place = East(60.0f + static_cast<float>(next(140))) + glm::ivec2 {0, next(80000) - 40000},
+			              .planned = next(3) != 0,
+			              .hidden = next(4) == 0,
+			              .marker = next(4) == 0},
+			     .key = static_cast<uint32_t>(i + 1)});
+		}
+		const obstacle_rules::ReturnSquare square(thing);
+		if (std::ranges::any_of(nodes, [&square](const auto& node) { return square.Holds(node.node.place); }))
+		{
+			++heldCount;
+			continue;
+		}
+		++clearCount;
+		Calls calls;
+		auto changed = nodes;
+		obstacle_rules::StopGoingRound(changed, thing, FakeHooks(calls, std::vector<glm::ivec2> {East(1.0f)}));
+		EXPECT_EQ(changed, nodes);
+		EXPECT_TRUE(calls.plans.empty());
+		EXPECT_TRUE(calls.lookAgain.empty());
+		EXPECT_TRUE(calls.sendOn.empty());
+		EXPECT_TRUE(calls.cutOff.empty());
+	}
+	EXPECT_GT(clearCount, 100);
+	EXPECT_GT(heldCount, 100);
 }

@@ -102,6 +102,22 @@ Command FreeFromTownDesires()
 	        .amount = 0.0f};
 }
 
+/// At the start, each icon of the worship sites of player two holds the full charge of its miracle
+Command FillIcons()
+{
+	return {.kind = Command::Kind::FillSiteIcons, .player = PlayerNames::PLAYER_TWO, .amount = 1.0f};
+}
+
+/// The fish farm of the town by the lake, on the shore
+std::vector<ObjectSetup> FishFarmByTheTown()
+{
+	return {{.type = FishFarmInfo::Normal, .offset = {5.0f, 145.0f}}};
+}
+
+/// The energy of a tiger that is very hungry: high, or almost gone
+constexpr float k_HungryEnergy = 0.6f;
+constexpr float k_StarvingEnergy = 0.05f;
+
 } // namespace
 
 void testbed_scenarios::AddComputerGodCreatureCareScenarios(std::vector<Scenario>& all)
@@ -143,6 +159,98 @@ void testbed_scenarios::AddComputerGodCreatureCareScenarios(std::vector<Scenario
 	    .commands = {FreeFromWorshippers(), FreeFromTownDesires()},
 	    .worshipShare = 0.5f,
 	    .objectsAfterLandScript = true,
+	});
+	all.push_back({
+	    .id = "mind.computer_god_creature_food_miracle",
+	    .name = "A computer god that casts the food miracle on its hungry creature",
+	    .facet = Facet::Mind,
+	    .description = "The land of the food miracle scenario, with no field. The tiger of player two stands between the "
+	                   "temple and the town. It is very hungry, but its energy is not low. Half of the people worship at "
+	                   "the site, and each icon of the site holds the full charge of its miracle. At the start, the god gets "
+	                   "the weight 0 for the need to look after its worshippers and the desires of its towns.",
+	    .expected = "The god wants to give food to its creature, and the food miracle on the creature is the best way. "
+	                "The hand moves to the food icon of the site and the worshippers chant for the miracle. Then the hand "
+	                "casts the food miracle on the tiger and stays over it for eight seconds. The players.list query shows "
+	                "the GiveCreatureFood need with the leaf CastFoodSpellOn.",
+	    .framing = {.shot = Shot::Overview, .include = {glm::vec2(-80.0f, -110.0f), glm::vec2(80.0f, 100.0f)}},
+	    .creatures = {GodCreature({30.0f, -30.0f}, {.energy = k_HungryEnergy}, {{.desire = Desire::Hunger, .fraction = 1.0f}})},
+	    .landScript = k_ComputerGodTownScript,
+	    .commands = {FreeFromWorshippers(), FreeFromTownDesires(), FillIcons()},
+	    .worshipShare = 0.5f,
+	});
+	all.push_back({
+	    .id = "mind.computer_god_creature_fish_farm_food",
+	    .name = "A computer god that feeds its hungry creature from a fish farm",
+	    .facet = Facet::Mind,
+	    .description = "The land of the fish farm scenario: a town by the lake with a fish farm on the shore and no field. "
+	                   "The tiger of player two stands between the temple and the town. It is very hungry, but its energy "
+	                   "is not low. At the start, the god gets the weight 0 for the need to look after the desires of its "
+	                   "towns.",
+	    .expected = "The god wants to give food to its creature. The hand moves to the fish farm, takes a pot of fish food "
+	                "and drops it on the tiger. The farm keeps all its fish. The players.list query shows the "
+	                "GiveCreatureFood need with the leaf GetFoodFromFishFarm.",
+	    .framing = {.shot = Shot::Overview, .include = {glm::vec2(-60.0f, -110.0f), glm::vec2(60.0f, 160.0f)}},
+	    .creatures = {GodCreature({30.0f, -30.0f}, {.energy = k_HungryEnergy}, {{.desire = Desire::Hunger, .fraction = 1.0f}})},
+	    .objects = FishFarmByTheTown(),
+	    .landScript = k_ComputerGodFishFarmTownScript,
+	    .commands = {FreeFromTownDesires()},
+	    .objectsAfterLandScript = true,
+	});
+	all.push_back({
+	    .id = "mind.computer_god_creature_starving_miracle",
+	    .name = "A computer god that casts the food miracle on its starving creature",
+	    .facet = Facet::Mind,
+	    .description = "The land of the food miracle scenario, with no field. The tiger of player two stands between the "
+	                   "temple and the town. It is very hungry and its energy is almost gone. Half of the people worship at "
+	                   "the site, and each icon of the site holds the full charge of its miracle. At the start, the god gets "
+	                   "the weight 0 for the need to look after its worshippers and the desires of its towns.",
+	    .expected = "The god reacts to the emergency of its creature. The hand moves to the food icon of the site and the "
+	                "worshippers chant for the miracle. Then the hand casts the food miracle on the tiger and stays over "
+	                "it for eight seconds. The players.list query shows the ReacttoCreatureStarvingEmergency need with the "
+	                "leaf CastFoodSpellOn.",
+	    .framing = {.shot = Shot::Overview, .include = {glm::vec2(-80.0f, -110.0f), glm::vec2(80.0f, 100.0f)}},
+	    .creatures = {GodCreature({30.0f, -30.0f}, {.energy = k_StarvingEnergy},
+	                              {{.desire = Desire::Hunger, .fraction = 1.0f}})},
+	    .landScript = k_ComputerGodTownScript,
+	    .commands = {FreeFromWorshippers(), FreeFromTownDesires(), FillIcons()},
+	    .worshipShare = 0.5f,
+	});
+	all.push_back({
+	    .id = "mind.computer_god_creature_starving_fish_farm",
+	    .name = "A computer god that throws fish food to its starving creature",
+	    .facet = Facet::Mind,
+	    .description = "The land of the fish farm scenario: a town by the lake with a fish farm on the shore and no field. "
+	                   "The tiger of player two stands between the temple and the town. It is very hungry and its energy is "
+	                   "almost gone. At the start, the god gets the weight 0 for the need to look after the desires of its "
+	                   "towns.",
+	    .expected = "The god reacts to the emergency of its creature. The hand takes a pot of fish food from the fish "
+	                "farm, moves to the tiger and throws the pot to it in an arc. The players.list query shows the "
+	                "ReacttoCreatureStarvingEmergency need with the leaf GetFoodFromFishFarm.",
+	    .framing = {.shot = Shot::Overview, .include = {glm::vec2(-60.0f, -110.0f), glm::vec2(60.0f, 160.0f)}},
+	    .creatures = {GodCreature({30.0f, -30.0f}, {.energy = k_StarvingEnergy},
+	                              {{.desire = Desire::Hunger, .fraction = 1.0f}})},
+	    .objects = FishFarmByTheTown(),
+	    .landScript = k_ComputerGodFishFarmTownScript,
+	    .commands = {FreeFromTownDesires()},
+	    .objectsAfterLandScript = true,
+	});
+	all.push_back({
+	    .id = "mind.computer_god_creature_starving_other_town",
+	    .name = "A computer god that takes food from a town to its starving creature",
+	    .facet = Facet::Mind,
+	    .description = "The land of the scenario of food from another town: the east town has no food in its storage pit, "
+	                   "and the west town has 5000 food. No field is near. The tiger of player two stands south of the "
+	                   "towns. It is very hungry and its energy is almost gone. At the start, the god gets the weight 0 for "
+	                   "the need to look after the desires of its towns.",
+	    .expected = "The god reacts to the emergency of its creature. The hand moves to the food pile of the storage pit "
+	                "of the west town and takes a pot of food from it, as much as the emergency asks. Then the hand drops "
+	                "the pot on the tiger. The players.list query shows the ReacttoCreatureStarvingEmergency need with the "
+	                "leaf GetFoodFromOtherTownForObject and the amount of food that it asks for.",
+	    .framing = {.shot = Shot::Overview, .include = {glm::vec2(-130.0f, -110.0f), glm::vec2(130.0f, 110.0f)}},
+	    .creatures = {GodCreature({0.0f, -30.0f}, {.energy = k_StarvingEnergy},
+	                              {{.desire = Desire::Hunger, .fraction = 1.0f}})},
+	    .landScript = k_ComputerGodTwoTownsFoodScript,
+	    .commands = {FreeFromTownDesires()},
 	});
 	all.push_back({
 	    .id = "mind.computer_god_creature_heal",

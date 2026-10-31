@@ -150,8 +150,12 @@ bool GameMindWorld::Perform(computer_mind::Mind& mind, uint16_t node)
 	const bool started = rule != nullptr && rule(_context, mind, node);
 	// The start of an action can change the world, so the searches ask for the influence again
 	_context.searchCells.clear();
-	SPDLOG_LOGGER_DEBUG(spdlog::get("game"), "Computer god {} action {} ({:.3f}) started {}", static_cast<int>(_player),
-	                    computer_mind::InfoOf(mind.nodes[node].kind).name, mind.nodes[0].value, started);
+	[[maybe_unused]] const auto leaf = mind.nodes[node].bestLeaf.value_or(node);
+	[[maybe_unused]] const auto above = mind.nodes[node].parent.value_or(0);
+	SPDLOG_LOGGER_DEBUG(spdlog::get("game"), "Computer god {} action {} under {} leaf {} ({:.3f}) started {}",
+	                    static_cast<int>(_player), computer_mind::InfoOf(mind.nodes[node].kind).name,
+	                    computer_mind::InfoOf(mind.nodes[above].kind).name, computer_mind::InfoOf(mind.nodes[leaf].kind).name,
+	                    mind.nodes[0].value, started);
 	if (started)
 	{
 		LogNeed(_player, mind, node);
@@ -312,6 +316,15 @@ public:
 	[[nodiscard]] bool Available(entt::entity thing) const override { return computer_world::Available(thing); }
 };
 
+/// The miracles and the things of the god in the game's world, for what the god forgets
+class GameGoneWorld final: public computer_mind::GoneWorld
+{
+public:
+	[[nodiscard]] bool CastStillThere(entt::entity spell) const override { return Entities().Valid(spell); }
+
+	[[nodiscard]] bool Available(entt::entity thing) const override { return computer_world::Available(thing); }
+};
+
 } // namespace
 
 void computer_world::SeeNearHand(ComputerPlayer& state, uint32_t turn)
@@ -327,13 +340,7 @@ void computer_world::SeeNearHand(ComputerPlayer& state, uint32_t turn)
 void computer_world::Validate(PlayerNames player, ComputerPlayer& state)
 {
 	auto& registry = Entities();
-	std::erase_if(state.casts, [&registry](entt::entity spell) { return !registry.Valid(spell); });
-	// The god forgets the seen things that are not available, and the queued actions whose things are not available
-	std::erase_if(state.seen, [](const computer_mind::SeenThing& old) { return !Available(old.thing); });
-	std::erase_if(state.mind.queue, [](const computer_mind::QueuedAction& queued) {
-		return (queued.first != entt::null && !Available(queued.first)) ||
-		       (queued.second != entt::null && !Available(queued.second));
-	});
+	computer_mind::ForgetGone(state.casts, state.seen, state.mind, GameGoneWorld {});
 	// An action whose thing has gone stops
 	const bool gone = std::ranges::any_of(state.hand.steps, [&registry](const computer_hand::Step& step) {
 		return std::ranges::any_of(step.arguments, [&registry](const Argument& argument) {

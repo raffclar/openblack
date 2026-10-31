@@ -2234,3 +2234,14 @@ openblack_setup_and_add_test(test_land_laid_out_order test_land_laid_out_order.c
 openblack_setup_and_add_test(test_creature_body_start test_creature_body_start.cpp)
 openblack_setup_and_add_test(test_computer_player_script test_computer_player_script.cpp)
 openblack_setup_and_add_test(test_god_hand test_god_hand.cpp)
+openblack_setup_and_add_test(test_temple_room_save temple/test_temple_room_save.cpp)
+openblack_setup_and_add_test(test_magic_save test_magic_save.cpp)
+target_link_libraries(test_magic_save PRIVATE edt psys)
+  openblack_setup_and_add_test(
+    test_inspector_server_room inspector/test_inspector_server_room.cpp
+  )
+  target_link_libraries(test_inspector_server_room PRIVATE inspector)
+openblack_setup_and_add_test(test_clan_creature_order test_clan_creature_order.cpp)
+openblack_setup_and_add_test(test_network_game_end online/test_network_game_end.cpp)
+openblack_setup_and_add_test(test_lhvm_save_in_native lhvm/test_lhvm_save_in_native.cpp)
+target_link_libraries(test_lhvm_save_in_native PRIVATE ScriptLibrary)

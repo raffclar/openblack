@@ -1497,7 +1497,7 @@ void ReadWorshipSpellIcon(WorldReader& r)
 void ReadWonder(WorldReader& r)
 {
 	ReadAbode(r);
-	r.Word();
+	r.Word("wonderPower");
 }
 
 // No save file of the tests has this type. This layout comes only from the game's save code.

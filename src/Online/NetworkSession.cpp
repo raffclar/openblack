@@ -77,6 +77,7 @@ void NetworkSession::Join(NetworkSessionSettings settings)
 	_startEvents.clear();
 	_startCreatures.clear();
 	_startAlignments.clear();
+	_ownGodPlaysForClan = false;
 	_turns.clear();
 	_playout.Reset();
 	_turnsDone = 0;
@@ -301,6 +302,7 @@ void NetworkSession::StartFrame(const game_socket::Frame& frame)
 			}
 			// The god starts the game at the alignment of the player's profile
 			const auto alignment = _settings.readAlignment ? _settings.readAlignment() : 0.0f;
+			_ownGodPlaysForClan = _settings.readPlaysForClan && _settings.readPlaysForClan();
 			Log(spdlog::level::info,
 			    fmt::format("This computer sends a creature file of {} bytes and the alignment {}", file.size(), alignment));
 			_stream->SendText(game_socket::ToJson(

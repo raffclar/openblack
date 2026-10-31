@@ -83,6 +83,23 @@ struct Hooks
 /// always counts as a touch.
 [[nodiscard]] bool GoesClearOf(glm::ivec2 low, glm::ivec2 high, const Obstacle& obstacle);
 
+/// The square about a thing that is removed, in which the way back looks at the nodes. When no node of a path is in
+/// the square, StopGoingRound changes no node and asks nothing of the hooks.
+class ReturnSquare
+{
+public:
+	explicit ReturnSquare(const Obstacle& obstacle);
+
+	/// Whether a node at this place is in the square, with the same compare as the way back
+	[[nodiscard]] bool Holds(glm::ivec2 place) const;
+
+private:
+	uint32_t _xMin {0};
+	uint32_t _xMax {0};
+	uint32_t _zMin {0};
+	uint32_t _zMax {0};
+};
+
 /// A thing is put on the map: the path is sent round it. Changes the nodes.
 void GoRound(std::vector<KeyedNode>& nodes, const Obstacle& obstacle, const Hooks& hooks);
 

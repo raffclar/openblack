@@ -526,6 +526,7 @@ public:
 		    .readLand = {},
 		    .readCreature = {},
 		    .readAlignment = {},
+		    .readPlaysForClan = {},
 		    .parts = {},
 		    .origin = join.origin,
 		});

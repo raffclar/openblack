@@ -270,6 +270,7 @@
 #include "Input/GameActionMapInterface.h"
 #include "Locator.h"
 #include "Magic/MagicTables.h"
+#include "Nature/Fireflies.h"
 #include "Online/HttpClientInterface.h"
 #include "Online/NetworkSession.h"
 #include "Online/WebSocketInterface.h"
@@ -1637,7 +1638,8 @@ std::unique_ptr<ProviderInterface> LivingProvider()
 	    Query("fireflies",
 	          "How many fireflies there are and how many hide, fly out, hover and fly home; whether the next nightfall "
 	          "tops them up; the trees and the things standing over several cells they can hide in; and what the last "
-	          "frame did with those out: in view, near enough to be seen, drawn, and whether their picture was found"),
+	          "frame did with those out: in view, near enough to be seen, drawn, and whether their picture was found; and the "
+	          "land's reward weights by magic type number, with their total"),
 	    Serve<Locator::fireflySystem>(
 	        "the fireflies", [](const ecs::systems::FireflySystemInterface& fireflies, const QueryContext& /*c*/) {
 		        std::array<size_t, 4> states {};
@@ -1652,7 +1654,19 @@ std::unique_ptr<ProviderInterface> LivingProvider()
 			        }
 		        }
 		        const auto frame = fireflies.GetLastFrame();
+		        // The land's reward weights that are not nothing, by the number of the magic type
+		        Json weights = Json::object();
+		        const auto& rewards = fireflies.GetRewards();
+		        for (size_t kind = 0; kind < fireflies::k_RewardKinds; ++kind)
+		        {
+			        if (rewards.Weight(kind) != 0.0f)
+			        {
+				        weights[std::to_string(kind)] = rewards.Weight(kind);
+			        }
+		        }
 		        return Json {{"fireflies", fireflies.GetFireflies().size()},
+		                     {"reward_weights", std::move(weights)},
+		                     {"reward_total", rewards.Total()},
 		                     {"resting", states.at(static_cast<size_t>(Firefly::State::Resting))},
 		                     {"flying_out", states.at(static_cast<size_t>(Firefly::State::FlyingOut))},
 		                     {"hovering", states.at(static_cast<size_t>(Firefly::State::Hovering))},
