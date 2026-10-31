@@ -321,3 +321,334 @@ TEST(VanillaWorld, RefusesAFileWithMoreAfterTheWorld)
 	ASSERT_TRUE(result.error.has_value());
 	EXPECT_EQ(result.error->at, bytes.size() - 1);
 }
+
+namespace
+{
+
+// The sizes of the base parts of a record when every value is 0: no physics, no lists, no broken mesh
+constexpr uint32_t k_PositionedSize = 14;
+constexpr uint32_t k_MultiMapFixedSize = 67;
+constexpr uint32_t k_MobileObjectSize = 68;
+constexpr uint32_t k_RockSize = 91;
+constexpr uint32_t k_TownSpellIconSize = 91;
+constexpr uint32_t k_AbodeSize = 104;
+constexpr uint32_t k_LandscapeVortexSize = 111;
+constexpr uint32_t k_SpellSize = 208;
+constexpr uint32_t k_CollectionSize = 8;
+
+/// The record of one new object of the type, whose values the function writes
+std::vector<uint8_t> NewRecord(uint32_t type, void (*values)(Writer&))
+{
+	Writer w({}, 0);
+	// The number of the new object, its type and a word, then the running sum, a word and the flags
+	w.Word(1);
+	w.Word(type);
+	w.Word();
+	w.Word(w.Sum());
+	w.Word();
+	w.Byte();
+	values(w);
+	return w.Take();
+}
+
+/// A count, then the words
+void Counted(Writer& w, int count)
+{
+	w.Word(static_cast<uint32_t>(count));
+	w.Words(count);
+}
+
+struct RareType
+{
+	uint32_t type;
+	void (*values)(Writer&);
+};
+
+// Each type that no save of the tests has, with values that fill each list and each count
+const std::array k_RareTypes = {
+    RareType {0x04,
+              [](Writer& w) {
+	              w.Zeros(12);
+	              w.Word();
+              }},
+    RareType {0x14,
+              [](Writer& w) {
+	              w.Zeros(k_SpellSize);
+	              Counted(w, 2);
+              }},
+    RareType {0x16,
+              [](Writer& w) {
+	              w.Word();
+	              w.Zeros(24);
+	              w.Words(2);
+	              w.Byte();
+              }},
+    RareType {0x1C,
+              [](Writer& w) {
+	              w.Zeros(k_LandscapeVortexSize);
+	              w.Words(2);
+	              w.Zeros(12);
+	              w.Words(3);
+	              Counted(w, 5);
+	              Counted(w, 1);
+	              w.Word();
+              }},
+    RareType {0x2C,
+              [](Writer& w) {
+	              w.Zeros(k_PositionedSize);
+	              w.Words(4);
+	              Counted(w, 6);
+	              Counted(w, 6);
+	              Counted(w, 4);
+	              Counted(w, 4);
+	              w.Words(3 + 4);
+	              for (int i = 0; i < 3 * 3; ++i)
+	              {
+		              w.Byte();
+		              w.Words(3);
+	              }
+	              w.Words(9 * 9 * 2 + 8 * 4);
+	              w.Words(18);
+	              Counted(w, 20);
+	              w.Words(2);
+	              w.Half();
+	              w.Words(6 + 4 + 1);
+	              w.Half();
+	              w.Half();
+              }},
+    RareType {0x43,
+              [](Writer& w) {
+	              w.Zeros(k_PositionedSize);
+	              w.Zeros(80);
+	              w.Word(1);
+	              w.Zeros(12);
+	              w.Zeros(80);
+	              w.Words(2);
+	              w.Zeros(12);
+	              w.Word();
+              }},
+    RareType {0x45,
+              [](Writer& w) {
+	              w.Zeros(k_AbodeSize);
+	              w.Word();
+	              Counted(w, 10);
+	              Counted(w, 20);
+	              w.Word();
+	              w.Zeros(12 * 12);
+	              w.Words(2);
+	              w.Byte();
+	              w.Word();
+	              w.Byte();
+	              w.Word();
+	              w.Byte();
+	              w.Words(6);
+	              w.Byte();
+	              w.Byte();
+	              w.Words(3);
+	              for (int i = 0; i < 4; ++i)
+	              {
+		              Counted(w, 1);
+	              }
+	              Counted(w, 2);
+	              Counted(w, 2);
+	              w.Word();
+	              Counted(w, 40);
+	              w.Zeros(12);
+	              w.Word();
+              }},
+    RareType {0x52,
+              [](Writer& w) {
+	              w.Zeros(k_AbodeSize);
+	              w.Words(4);
+	              w.Word(3);
+	              w.Byte();
+	              w.Byte();
+	              w.Byte();
+	              Counted(w, 1);
+              }},
+    RareType {0x56,
+              [](Writer& w) {
+	              w.Zeros(k_TownSpellIconSize);
+	              w.Word();
+	              Counted(w, 3);
+              }},
+    RareType {0x58,
+              [](Writer& w) {
+	              w.Zeros(k_MobileObjectSize);
+	              w.Words(3);
+	              w.Byte();
+              }},
+    RareType {0xB6,
+              [](Writer& w) {
+	              w.Words(2 + 8);
+	              w.Byte();
+	              w.Word();
+	              w.Word(2);
+	              w.Zeros(2 * 28);
+	              w.Word();
+	              w.Byte();
+              }},
+    RareType {0xB7,
+              [](Writer& w) {
+	              w.Word();
+	              w.Zeros(16);
+              }},
+    RareType {0xB9,
+              [](Writer& w) {
+	              w.Zeros(k_CollectionSize);
+	              w.Word();
+	              w.Word(2);
+	              w.Zeros(2 * 28);
+	              w.Words(2);
+              }},
+    RareType {0xBC,
+              [](Writer& w) {
+	              w.Zeros(k_CollectionSize);
+	              w.Word();
+	              w.Word(1);
+	              w.Zeros(28);
+	              w.Words(2);
+              }},
+    RareType {0xCF,
+              [](Writer& w) {
+	              w.Zeros(k_CollectionSize);
+	              w.Byte();
+	              w.Byte();
+	              w.Zeros(12);
+	              w.Word();
+	              w.Word(2);
+	              w.Words(2 * 2);
+	              w.Words(2);
+	              w.Byte();
+	              w.Byte();
+	              w.Word();
+	              w.Byte();
+              }},
+    RareType {0xD5,
+              [](Writer& w) {
+	              w.Zeros(k_CollectionSize);
+	              w.Words(2);
+              }},
+    RareType {0xD8,
+              [](Writer& w) {
+	              w.Zeros(k_CollectionSize);
+	              w.Words(2);
+	              w.Zeros(3 * 12);
+	              w.Word();
+	              w.Byte();
+	              w.Byte();
+	              w.Byte();
+	              w.Words(4);
+	              w.Word(1);
+	              w.Words(2);
+	              w.Zeros(12);
+	              w.Byte();
+	              w.Byte();
+	              w.Byte();
+	              w.Word();
+	              // Two forks of 3 and 0 words
+	              w.Word(2);
+	              Counted(w, 3);
+	              w.Word();
+	              w.Word();
+	              w.Word(1);
+	              w.Word();
+	              w.Byte();
+	              w.Words(5);
+	              w.Zeros(12);
+              }},
+    RareType {0xF1,
+              [](Writer& w) {
+	              w.Zeros(k_CollectionSize);
+	              w.Byte();
+              }},
+    RareType {0xF3,
+              [](Writer& w) {
+	              w.Zeros(k_CollectionSize);
+	              w.Byte();
+	              w.Word(2);
+	              w.Word(2);
+	              w.Zeros(2 * 64);
+              }},
+    RareType {0xF7,
+              [](Writer& w) {
+	              w.Zeros(k_RockSize);
+	              w.Words(3);
+	              // A broken mesh of one part with one face
+	              w.Word(1);
+	              w.Words(3 + 3);
+	              w.Word(1);
+	              w.Zeros(88);
+              }},
+    RareType {0xF8,
+              [](Writer& w) {
+	              w.Zeros(k_MultiMapFixedSize);
+	              w.Byte();
+	              w.Zeros(12);
+	              w.Words(2);
+	              Counted(w, 1);
+	              w.Zeros(4);
+	              w.Word();
+	              w.Word();
+              }},
+    RareType {0xFB,
+              [](Writer& w) {
+	              w.Words(2);
+	              w.Word(64);
+	              w.Zeros(64);
+	              w.Words(3);
+	              w.Zeros(12);
+              }},
+    RareType {0x10C,
+              [](Writer& w) {
+	              w.Word(260);
+	              w.Zeros(260);
+	              w.Words(3);
+              }},
+};
+
+} // namespace
+
+TEST(VanillaWorld, ReadsEachTypeThatNoTestSaveHas)
+{
+	for (const auto& rare : k_RareTypes)
+	{
+		SCOPED_TRACE(rare.type);
+		EXPECT_TRUE(KnowsVanillaType(rare.type));
+		const auto bytes = NewRecord(rare.type, rare.values);
+		std::string error;
+		const auto world = ReadVanillaRecords(bytes, {}, &error);
+		ASSERT_TRUE(world.has_value()) << error;
+		EXPECT_EQ(world->Game().type, rare.type);
+		EXPECT_EQ(world->Game().end, bytes.size());
+		// One byte less or one byte more does not read
+		auto shorter = bytes;
+		shorter.pop_back();
+		EXPECT_FALSE(ReadVanillaRecords(shorter, {}).has_value());
+		auto longer = bytes;
+		longer.push_back(0);
+		EXPECT_FALSE(ReadVanillaRecords(longer, {}).has_value());
+	}
+}
+
+TEST(VanillaWorld, ReadsNoValuesForACountBelowOne)
+{
+	// A chain with a count of joints of -1
+	const auto bytes = NewRecord(0xB6, [](Writer& w) {
+		w.Words(2 + 8);
+		w.Byte();
+		w.Word();
+		w.Word(0xFFFFFFFF);
+		w.Word();
+		w.Byte();
+	});
+	std::string error;
+	EXPECT_TRUE(ReadVanillaRecords(bytes, {}, &error).has_value()) << error;
+}
+
+TEST(VanillaWorld, KnowsNoLayoutOfTheHandType)
+{
+	// The hand writes its values inside the interface status with no record of its own, thus its type never starts a
+	// record
+	EXPECT_FALSE(KnowsVanillaType(0xFD));
+}
