@@ -16,6 +16,8 @@
 #include <entt/entity/entity.hpp>
 #include <glm/vec3.hpp>
 #include <gtest/gtest.h>
+#include <spdlog/sinks/null_sink.h>
+#include <spdlog/spdlog.h>
 
 #include "3D/MapCoords.h"
 #include "ECS/Systems/HandSystemInterface.h"
@@ -58,6 +60,11 @@ class NetworkGameEnd: public ::testing::Test
 protected:
 	void SetUp() override
 	{
+		// The network game writes its log lines to the game's log
+		if (spdlog::get("game") == nullptr)
+		{
+			spdlog::create<spdlog::sinks::null_sink_st>("game");
+		}
 		Locator::time::emplace<ecs::systems::TimeSystem>([] { return uint32_t {0}; });
 		Locator::handSystem::emplace<FakeHands>();
 	}
