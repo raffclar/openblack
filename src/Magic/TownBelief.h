@@ -14,6 +14,7 @@
 #include <array>
 #include <optional>
 #include <span>
+#include <string_view>
 #include <vector>
 
 #include "Enums.h"
@@ -141,5 +142,13 @@ void TakeTown(Belief& town, PlayerNames player, float amount, std::span<const Pl
 /// and its desire levels to the desire table, and then it believes in every player what it keeps for the neutral
 /// player, within the cap. Its recent tallies stay.
 void ResetForEmptyTown(Belief& town, std::span<const DesireDecay, k_DesireCount> table);
+
+/// The name of the land of the network map for three gods, as its file name gives it. The case is important.
+inline constexpr std::string_view k_ThreeGodMapName = "mpm_3p_1";
+
+/// The cap of a player in a town from a belief cap line of a land script. Usually the cap is the value of the line. In a
+/// network game on the map for three gods, each god that is not neutral gets a cap of 2 in the town with the number 3.
+[[nodiscard]] float CapFromLandScript(float asked, bool networkGame, std::string_view landName, uint32_t townId,
+                                      PlayerNames player);
 
 } // namespace openblack::magic::town_belief
