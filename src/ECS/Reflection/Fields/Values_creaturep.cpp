@@ -16,7 +16,6 @@
 #include "Creature/CreatureDesires.h"
 #include "Creature/CreaturePhysiology.h"
 #include "Creature/CreaturePlanner.h"
-#include "Creature/CreaturePlayerAttention.h"
 #include "Creature/PerceivedDesires.h"
 #include "ECS/Reflection/ComponentReflection.h"
 
@@ -111,6 +110,4 @@ void openblack::ecs::reflection::RegisterFields_Values_creaturep(entt::meta_ctx&
 	    .Field<&openblack::creature_planner::PlannerState::lastObject>("lastObject")
 	    .Field<&openblack::creature_planner::PlannerState::lastAction>("lastAction")
 	    .Field<&openblack::creature_planner::PlannerState::currentHasNoSteps>("currentHasNoSteps");
-	Reflect<openblack::creature_player_attention::HandSpeed>(context, ValueOnly {})
-	    .Field<&openblack::creature_player_attention::HandSpeed::velocity>("velocity");
 }

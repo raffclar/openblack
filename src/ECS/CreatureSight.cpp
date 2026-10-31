@@ -99,11 +99,10 @@ void creature_sight::SeePlayerAction(PlayerNames player, creature_desires::Desir
 	{
 		return;
 	}
-	// The creature reads the hand of the same player as the camera
+	// The creature reads the hand of the same player as the camera: its own player
 	const auto handPlayer = openblack::ecs::ReportedCreaturePlayer(*creature);
-	const auto hand = handPlayer.has_value()
-	                      ? Locator::handSystem::value().GetHandPositionsOf(*handPlayer).at(static_cast<size_t>(Side::Left))
-	                      : std::nullopt;
+	const auto hand =
+	    handPlayer.has_value() ? openblack::ecs::PlayerHandsOf(*handPlayer).at(static_cast<size_t>(Side::Left)) : std::nullopt;
 	if (!hand.has_value())
 	{
 		return;

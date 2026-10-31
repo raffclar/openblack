@@ -9,12 +9,15 @@
 
 #pragma once
 
+#include <cstdint>
+
 #include <optional>
 
 #include <entt/entity/fwd.hpp>
 
 #include "ECS/Systems/HandSystemInterface.h"
 #include "Enums.h"
+#include "Hand/GodHand.h"
 
 /// The cameras of the players as the turns of the world read them. Each player reports where its camera is and what it
 /// looks at once a turn, and all the computers of a network game read the same reports.
@@ -49,9 +52,23 @@ namespace reported_camera
 /// None for a player that the world does not have.
 [[nodiscard]] std::optional<systems::HandSystemInterface::ReportedCamera> PlayerCameraOf(PlayerNames player);
 
-/// The player whose hand a creature reads. In a network game it is the creature's player, and a creature with no player
-/// reads no player. A game with one player has one hand, which every creature reads.
+/// The player whose hand a creature reads: the creature's own player, in a game alone and in a network game. A creature
+/// with no player (the neutral player) reads no hand.
 [[nodiscard]] std::optional<PlayerNames> ReportedCreaturePlayer(entt::entity creature);
+
+/// The hands of a player as the creatures read them (see god_hand::HandsOf). A person's player has its reported hands.
+/// Every other god has one hand, which can be at the origin of the world.
+[[nodiscard]] god_hand::Hands PlayerHandsOf(PlayerNames player);
+
+/// The hand of a player that is nearest to a point (see god_hand::NearestOf). None for a player with no hands.
+[[nodiscard]] std::optional<glm::vec3> NearestHandOf(PlayerNames player, const glm::vec3& point);
+
+/// The game turns since the hand of a player last moved, as the creatures read them (see hand_stillness::Step)
+[[nodiscard]] uint32_t PlayerHandStillTurnsOf(PlayerNames player);
+
+/// The velocity of the hand of a player, as the creatures read it (see hand_stillness::Step). Zero for a player with no
+/// hands.
+[[nodiscard]] glm::vec3 PlayerHandVelocityOf(PlayerNames player);
 
 /// The camera nearest to a creature: the camera of its own player (see PlayerCameraOf). A creature with no player reads
 /// the camera of the player of this computer in a game alone, and no camera in a network game.

@@ -63,6 +63,9 @@ public:
 	[[nodiscard]] double HandMs() const { return _handMs; }
 
 private:
+	/// Puts the hand of the god, if no person plays the god, where the creatures read it
+	void ReportGodHand(const glm::vec3& hand) const;
+
 	PlayerNames _player;
 	components::ComputerPlayer& _state;
 	GameHandMoves _moves;
