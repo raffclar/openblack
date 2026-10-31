@@ -303,6 +303,7 @@
 #include "ScriptHeaders/ScriptEnums.h"
 #include "ScriptHeaders/ScriptInfluence.h"
 #include "ScriptHeaders/ScriptInterfaceLevels.h"
+#include "ScriptHeaders/ScriptLessonNatives.h"
 #include "ScriptHeaders/ScriptNameLists.h"
 #include "ScriptHeaders/ScriptPropertyRules.h"
 #include "ScriptHeaders/ScriptRandom.h"
@@ -319,6 +320,7 @@ namespace openblack::chlapi
 
 using namespace openblack::ecs::archetypes;
 
+ecs::components::Player* ScriptPlayer(float number);
 PlayerNames ScriptPlayerName(int32_t scriptPlayer);
 
 /// Whether a player that a script names is a player of this game. The players of a land are the 8 of the game. A
@@ -6701,9 +6703,9 @@ void DevFunction() // 205 DEV_FUNCTION
 
 void HasMouseWheel() // 206 HAS_MOUSE_WHEEL
 {
-	// TODO(Daniels118): implement this
-	NotImplemented();
-	Pushb(false);
+	// The view report of the player tells whether its mouse has a wheel
+	const auto view = ScriptView();
+	Pushb(view.has_value() && view->mouseWheel);
 }
 
 void NumMouseButtons() // 207 NUM_MOUSE_BUTTONS
@@ -7254,20 +7256,32 @@ void FadeFinished() // 243 FADE_FINISHED
 
 void SetPlayerMagic() // 244 SET_PLAYER_MAGIC
 {
-	// const auto unk2 = Pop().intVal;
-	// const auto unk1 = Pop().intVal;
-	// const auto unk0 = Pop().intVal;
-	// TODO(Daniels118): implement this
-	NotImplemented();
+	const auto player = Popf();
+	const auto magic = Pop().intVal;
+	const bool enable = Pop().intVal != 0;
+	if (!script::lesson_natives::ValidMagic(magic))
+	{
+		ScriptMessage(script::lesson_natives::k_InvalidMagic);
+		return;
+	}
+	// One more thing enables the magic type for the player, or one fewer does. A player that is not there is ignored.
+	if (ScriptPlayer(player) != nullptr && Locator::spellIconSystem::has_value())
+	{
+		Locator::spellIconSystem::value().SetMagicTypeEnabled(ScriptPlayerName(static_cast<int32_t>(player)),
+		                                                      static_cast<MagicType>(magic), enable);
+	}
 }
 
 void HasPlayerMagic() // 245 HAS_PLAYER_MAGIC
 {
-	// const auto player = Popf();
-	// const auto spell = Pop().intVal;
-	// TODO(Daniels118): implement this
-	NotImplemented();
-	Pushb(false);
+	const auto player = Popf();
+	const auto magic = Pop().intVal;
+	if (!script::lesson_natives::ValidMagic(magic))
+	{
+		ScriptMessage(script::lesson_natives::k_InvalidMagic);
+	}
+	const auto* component = script::lesson_natives::ValidMagic(magic) ? ScriptPlayer(player) : nullptr;
+	Pushb(script::lesson_natives::HasPlayerMagic(magic, component != nullptr ? &component->miracles : nullptr));
 }
 
 void SpiritSpeaks() // 246 SPIRIT_SPEAKS
@@ -8805,11 +8819,32 @@ void SetCreatureCreedProperties() // 338 SET_CREATURE_CREED_PROPERTIES
 
 void GameThingCanViewCamera() // 339 GAME_THING_CAN_VIEW_CAMERA
 {
-	// const auto degrees = Popf();
-	// const auto object = Pop().uintVal;
-	// TODO(Daniels118): implement this
-	NotImplemented();
-	Pushb(false);
+	const auto degrees = Popf();
+	const auto object = PopObject();
+	auto& registry = Locator::entitiesRegistry::value();
+	const auto* transform = object != entt::null && registry.Valid(object) ? registry.TryGet<const Transform>(object) : nullptr;
+	if (transform == nullptr || !IsWorldObject(object))
+	{
+		ScriptMessage(script::lesson_natives::k_ThingNotValid);
+		Pushb(false);
+		return;
+	}
+	if (registry.AllOf<ecs::components::Creature>(object))
+	{
+		// A creature looks with its head, not with the way its body faces
+		// TODO(playground-lessons-1): a creature looks towards the camera when its head faces it
+		NotImplemented();
+		Pushb(false);
+		return;
+	}
+	// The thing sees from its place on the map in the way it faces. The camera is where the player's report put it.
+	const auto camera = ecs::ReportedPlayerCamera(PlayerNames::PLAYER_ONE);
+	const auto eye = camera.has_value() ? camera->origin : glm::vec3(0.0f);
+	const auto place = glm::vec3(map_coords::Quantise(transform->position.x), transform->position.y,
+	                             map_coords::Quantise(transform->position.z));
+	const float yAngle =
+	    IsLivingThing(object) ? LivingAngleOf(object, *transform) : ecs::placed_turn::AnglesOf(registry, object).y;
+	Pushb(script::lesson_natives::InViewCone(place, yAngle, script::lesson_natives::HalfViewAngle(degrees), eye));
 }
 
 void GamePlaySaySoundEffect() // 340 GAME_PLAY_SAY_SOUND_EFFECT
@@ -9877,9 +9912,9 @@ void MapScriptFunction() // 415 MAP_SCRIPT_FUNCTION
 
 void WithinRotation() // 416 WITHIN_ROTATION
 {
-	// TODO(Daniels118): implement this
-	NotImplemented();
-	Pushb(false);
+	// The view report of the player tells which camera icons the hand showed or offered
+	const auto view = ScriptView();
+	Pushb(view.has_value() && script::lesson_natives::WithinRotation(view->cameraIcons));
 }
 
 void GetPlayerTownTotal() // 417 GET_PLAYER_TOWN_TOTAL
@@ -9907,10 +9942,10 @@ void SpiritScreenPoint() // 418 SPIRIT_SCREEN_POINT
 
 void KeyDown() // 419 KEY_DOWN
 {
-	// const auto key = Pop().intVal;
-	// TODO(Daniels118): implement this (translate key to physical key code)
-	NotImplemented();
-	Pushb(false);
+	// The key comes by the game's number of the key. The view report of the player tells the keys held.
+	const auto key = Pop().intVal;
+	const auto view = ScriptView();
+	Pushb(view.has_value() && script::lesson_natives::KeyDown(key, view->keysHeld));
 }
 
 void SetFightExit() // 420 SET_FIGHT_EXIT

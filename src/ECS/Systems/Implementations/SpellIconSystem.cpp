@@ -37,6 +37,7 @@
 #include "ECS/Systems/HandSystemInterface.h"
 #include "ECS/Systems/MagicSystemInterface.h"
 #include "ECS/Systems/PlayerSystemInterface.h"
+#include "ECS/Systems/PlaygroundTripSystemInterface.h"
 #include "ECS/Systems/TimeSystemInterface.h"
 #include "ECS/Systems/WorshipSiteSystemInterface.h"
 #include "ECS/WorldObjects.h"
@@ -953,17 +954,19 @@ bool SpellIconSystem::ValidToTap(entt::entity icon, PlayerNames player) const
 	// A stone hand is its town's player's, a worship site's icon its site's player's. The icon must also work: a stone
 	// hand has no building state, so it is always built. A worship site's icon is built when its site is built.
 	const float life = ecs::world_objects::LifeOf(icon);
+	const bool everywhere =
+	    Locator::playgroundTripSystem::has_value() && Locator::playgroundTripSystem::value().InfluenceEverywhere();
 	if (const auto* centreHand = registry.TryGet<const TownCentreIcon>(icon))
 	{
 		const auto* town = registry.Valid(centreHand->town) ? registry.TryGet<const Town>(centreHand->town) : nullptr;
-		return town != nullptr && icons::ValidToTap(town->owner, player, icons::Functional(life, true));
+		return town != nullptr && icons::ValidToTap(town->owner, player, icons::Functional(life, true), everywhere);
 	}
 	if (const auto* worshipIcon = registry.TryGet<const WorshipIcon>(icon))
 	{
 		const auto* site = registry.Valid(worshipIcon->site) ? registry.TryGet<const WorshipSite>(worshipIcon->site) : nullptr;
 		const bool built =
 		    Locator::worshipSiteSystem::has_value() && Locator::worshipSiteSystem::value().IsBuilt(worshipIcon->site);
-		return site != nullptr && icons::ValidToTap(site->player, player, icons::Functional(life, built));
+		return site != nullptr && icons::ValidToTap(site->player, player, icons::Functional(life, built), everywhere);
 	}
 	return false;
 }

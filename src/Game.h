@@ -770,9 +770,14 @@ private:
 	/// The hand grips the land for its tooltips: from the start of a drag of the land until the Move button is let go,
 	/// also while the Action button is held too
 	bool _tipsLandGrip {false};
+	/// Whether the view report says that the hand grips the land: from a drag of the land until the Move button is let go
+	bool _reportLandGrip {false};
 	hand_navigation_pose::Pose _handPose {hand_navigation_pose::Pose::Idle};
 	/// The rotate arrow's turn, kept from frame to frame, which a demonstration's recording sets too
 	float _triconAngle {0.0f};
+	/// The camera icons of the world camera's last frame or of a demonstration's recording, before the draw takes away
+	/// the camera icons that the hand does not show (hand_tricons::icon)
+	uint32_t _cameraIcons {0};
 	/// How far from the camera the hand holds while it drags by the edge of the screen
 	Zoomer _handHoldZoomer;
 	/// The land the hand grips while it drags it, and where the hand was when it gripped

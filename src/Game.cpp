@@ -343,7 +343,9 @@
 #include "Input/GameActionMapInterface.h"
 #include "Input/KeyBindings.h"
 #include "Input/KeyRebinding.h"
+#include "Input/LandGrip.h"
 #include "Input/LocalPlayer.h"
+#include "Input/MouseWheel.h"
 #include "Input/PlatformKeys.h"
 #include "LHScriptX/MapScript.h"
 #include "LHScriptX/Script.h"
@@ -366,6 +368,7 @@
 #include "Resources/Loaders.h"
 #include "Resources/ResourcesInterface.h"
 #include "ScriptHeaders/ScriptInterfaceLevels.h"
+#include "ScriptHeaders/ScriptLessonNatives.h"
 #include "Serializer/FotFile.h"
 #include "Simulation/ChecksumLog.h"
 #include "Simulation/CommandLog.h"
@@ -1997,14 +2000,8 @@ void Game::SubmitHandToolTips(gui::ToolTips& toolTips, std::optional<entt::entit
 	                         Locator::gameActionSystem::value().Get(input::UnbindableActionMap::TWO_BUTTON_CLICK);
 	const bool moveHeld = bothButtons || (Locator::gameActionSystem::has_value() &&
 	                                      Locator::gameActionSystem::value().Get(input::BindableActionMap::MOVE));
-	if (Locator::camera::has_value() && Locator::camera::value().GetModel().GetHandCues().dragging)
-	{
-		_tipsLandGrip = true;
-	}
-	else if (!moveHeld)
-	{
-		_tipsLandGrip = false;
-	}
+	_tipsLandGrip = input::land_grip::GripsLand(
+	    Locator::camera::has_value() && Locator::camera::value().GetModel().GetHandCues().dragging, _tipsLandGrip, moveHeld);
 	if (_tipsLandGrip)
 	{
 		// The Action button counts as held from its press until it is let go, by itself or with the Move button
@@ -3235,6 +3232,13 @@ void Game::ReportView()
 	const auto pixels = [](int size) {
 		return static_cast<uint16_t>(std::clamp(size, 0, static_cast<int>(std::numeric_limits<uint16_t>::max())));
 	};
+	// The grip of the land starts with a drag of the land and continues until the Move button is let go. Both buttons
+	// together stop the drag but not the grip, so the scripts see the zoom with the land gripped.
+	const bool bothButtons = Locator::gameActionSystem::has_value() &&
+	                         Locator::gameActionSystem::value().Get(input::UnbindableActionMap::TWO_BUTTON_CLICK);
+	const bool moveHeld = bothButtons || (Locator::gameActionSystem::has_value() &&
+	                                      Locator::gameActionSystem::value().Get(input::BindableActionMap::MOVE));
+	_reportLandGrip = input::land_grip::GripsLand(camera.GetModel().GetHandCues().dragging, _reportLandGrip, moveHeld);
 	player_commands::ViewReport report {
 	    .eye = pose.eye,
 	    .focus = pose.focus,
@@ -3247,10 +3251,25 @@ void Game::ReportView()
 	        Locator::cameraZoneSystem::has_value() ? Locator::cameraZoneSystem::value().GetInclusionDistance() : 0.0f,
 	    .cameraOrders = Locator::entitiesRegistry::value().Context().scriptCameraOrders,
 	    .cameraArrived = false,
-	    .gripsLand = camera.GetModel().GetHandCues().dragging,
-	    .otherButton = Locator::gameActionSystem::has_value() &&
-	                   Locator::gameActionSystem::value().Get(input::UnbindableActionMap::TWO_BUTTON_CLICK),
+	    .gripsLand = _reportLandGrip,
+	    .otherButton = bothButtons,
+	    .mouseWheel = script::lesson_natives::MouseHasWheel(platform_mouse::SystemSaysWheel(),
+	                                                        Locator::gameActionSystem::has_value() &&
+	                                                            Locator::gameActionSystem::value().WheelTurned()),
+	    // The icons that the last draw kept, or the world camera's own when the draw did not run
+	    .cameraIcons =
+	        static_cast<uint16_t>((_interface ? _interface->GetDrawnCameraIcons() : std::nullopt).value_or(_cameraIcons)),
 	};
+	// The keys held, by the game's number of each key
+	if (Locator::gameActionSystem::has_value())
+	{
+		const auto& actions = Locator::gameActionSystem::value();
+		for (uint32_t code = 0; code < report.keysHeld.size(); ++code)
+		{
+			const auto key = input::rebinding::KeyOfGameCode(code);
+			report.keysHeld.set(code, key.has_value() && actions.IsKeyHeld(static_cast<int>(*key)));
+		}
+	}
 	if (const auto* script = Locator::scriptControlSystem::value().GetScriptCamera(camera); script != nullptr)
 	{
 		report.cameraArrived = script->Arrived();
@@ -7280,8 +7299,27 @@ void Game::UpdateHandTricons(bool handDrawn, float seconds, hand_blend::HandMode
 	const auto& camera = Locator::camera::value();
 	const auto cues = camera.GetModel().GetHandCues();
 	const bool demonstration = Locator::handDemoSystem::has_value() && Locator::handDemoSystem::value().IsReplaying();
-	if (!handDrawn || (!demonstration && !cues.icons.has_value()) || !Locator::windowing::has_value() ||
-	    (Locator::temple::has_value() && Locator::temple::value().Active()))
+	const bool inTemple = Locator::temple::has_value() && Locator::temple::value().Active();
+	// The world camera makes its icons each frame, also while the hand is not drawn. The scripts read them, so they are
+	// kept. A demonstration puts its recorded icons in their place.
+	std::optional<hand_tricons::WorldCameraFrame> worldFrame;
+	std::optional<hand_tricons::WorldCameraIcons> worldIcons;
+	if (demonstration)
+	{
+		_cameraIcons = Locator::handDemoSystem::value().GetHints();
+	}
+	else if (cues.icons.has_value() && !inTemple)
+	{
+		worldFrame = *cues.icons;
+		worldFrame->handInInfluence = HandInInfluence();
+		// A box of the menu on the screen stops the camera input, so no icon shows
+		worldFrame->inputOff = FrontEndBoxShows();
+		worldFrame->tickMs = machine_clock::Ticks();
+		worldIcons = hand_tricons::WorldCamera(*worldFrame, _triconAngle);
+		_triconAngle = worldIcons->rotateAngle;
+		_cameraIcons = worldIcons->icons;
+	}
+	if (!handDrawn || (!demonstration && !worldIcons.has_value()) || !Locator::windowing::has_value() || inTemple)
 	{
 		return;
 	}
@@ -7303,14 +7341,8 @@ void Game::UpdateHandTricons(bool handDrawn, float seconds, hand_blend::HandMode
 	}
 	else
 	{
-		auto frame = *cues.icons;
-		frame.handInInfluence = HandInInfluence();
-		// A box of the menu on the screen stops the camera input, so no icon shows
-		frame.inputOff = FrontEndBoxShows();
-		frame.tickMs = machine_clock::Ticks();
-		const auto icons = hand_tricons::WorldCamera(frame, _triconAngle);
-		_triconAngle = icons.rotateAngle;
-		tricons.icons = icons.icons;
+		const auto& frame = *worldFrame;
+		tricons.icons = worldIcons->icons;
 		tricons.leans = cues.clearView <= hand_tricons::k_ClearViewLeans;
 		tricons.cameraBusy =
 		    frame.gripping || frame.rotatingAroundMouse || frame.turn != 0.0f || frame.tilt != 0.0f || frame.zoom != 0.0f;
