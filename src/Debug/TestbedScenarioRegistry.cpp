@@ -7312,6 +7312,24 @@ void AddHand(std::vector<Scenario>& all)
 	                 {.kind = Kind::PointerTo, .delaySeconds = 1.0f, .point = {0.5f, 0.7f}}},
 	});
 
+	// The camera looks at a ripe wheat field of the player's town from 22 m. The hand scoops from it for three seconds.
+	all.push_back({
+	    .id = "hand.scoop_field_let_go",
+	    .name = "Letting go of a scoop from a field of the player",
+	    .facet = Facet::Hand,
+	    .description = "The hand takes wheat from a ripe field of the player's town and keeps the button down for three "
+	                   "seconds. Then it lets go of the button and moves away with the handful.",
+	    .expected = "While it scoops, the amount that the hand holds shows after each turn. When the button is let go, "
+	                "the amount shows once more, because the field is of the player of this computer.",
+	    .environment = {.dispenserGrid = false},
+	    .framing = {.shot = Shot::Placed, .eye = {-19.0f, 11.0f, 3.0f}, .look = {0.0f, 0.0f, 0.0f}},
+	    .objects = {{.type = FieldTypeInfo::Wheat, .offset = {0.0f, 0.0f}, .ripeCrop = true}},
+	    .commands = {{.kind = Kind::PointerTo, .delaySeconds = 1.0f, .point = {0.5f, 0.5f}},
+	                 {.kind = Kind::PointerPress, .delaySeconds = 1.0f, .value = 3},
+	                 {.kind = Kind::PointerRelease, .delaySeconds = 3.0f, .value = 3},
+	                 {.kind = Kind::PointerTo, .delaySeconds = 1.0f, .point = {0.5f, 0.7f}}},
+	});
+
 	// The camera looks at a rock on flat land from 35 m. The hand does one thing after another, with a pause between them.
 	all.push_back({
 	    .id = "hand.state_blend",
@@ -13463,16 +13481,16 @@ bool testbed_scenarios::NeedsNoCreature(Command::Kind kind)
 	       kind == Kind::LoadGame || kind == Kind::QuickSave || kind == Kind::ContinueGame || kind == Kind::PlayLogoEffect ||
 	       kind == Kind::PlayFallingSpellFilm || kind == Kind::PlayIntroFilm || kind == Kind::SayLine ||
 	       kind == Kind::PlayGuidanceVoice || kind == Kind::ScriptRelease || kind == Kind::FillSiteIcons ||
-	       kind == Kind::ChargeIconWithSeedHeld || kind == Kind::TakeIconSeed || kind == Kind::FinishBuilding ||
-	       kind == Kind::FillBuiltAmount || kind == Kind::ScaffoldStartsSite || kind == Kind::DestroyScaffoldSite ||
-	       kind == Kind::CallNative || kind == Kind::PauseGame || kind == Kind::SetGameSpeed ||
-	       kind == Kind::RemoveTeleportStone || kind == Kind::MakeDance || kind == Kind::OpenMultiplayerBox ||
-	       kind == Kind::BuildWorshipSites || kind == Kind::PressPlainKey || kind == Kind::PlainKeyDown ||
-	       kind == Kind::PlainKeyRepeat || kind == Kind::PlainKeyUp || kind == Kind::OtherGodHand || kind == Kind::OwnGod ||
-	       kind == Kind::JoinOnline || kind == Kind::EndBox || kind == Kind::BringCreature ||
-	       kind == Kind::TattooEditorAsNetworkGame || kind == Kind::ShowDemoPing || kind == Kind::AddIncomingMessage ||
-	       kind == Kind::Chat || kind == Kind::ComputerPersonality || kind == Kind::ComputerUntaughtSends ||
-	       kind == Kind::SkirmishBox || IsPointerCommand(kind);
+	       kind == Kind::ChargeIconWithSeedHeld || kind == Kind::TakeIconSeed || kind == Kind::TapSiteIcon ||
+	       kind == Kind::FinishBuilding || kind == Kind::FillBuiltAmount || kind == Kind::ScaffoldStartsSite ||
+	       kind == Kind::DestroyScaffoldSite || kind == Kind::CallNative || kind == Kind::PauseGame ||
+	       kind == Kind::SetGameSpeed || kind == Kind::RemoveTeleportStone || kind == Kind::MakeDance ||
+	       kind == Kind::OpenMultiplayerBox || kind == Kind::BuildWorshipSites || kind == Kind::PressPlainKey ||
+	       kind == Kind::PlainKeyDown || kind == Kind::PlainKeyRepeat || kind == Kind::PlainKeyUp ||
+	       kind == Kind::OtherGodHand || kind == Kind::OwnGod || kind == Kind::JoinOnline || kind == Kind::EndBox ||
+	       kind == Kind::BringCreature || kind == Kind::TattooEditorAsNetworkGame || kind == Kind::ShowDemoPing ||
+	       kind == Kind::AddIncomingMessage || kind == Kind::Chat || kind == Kind::ComputerPersonality ||
+	       kind == Kind::ComputerUntaughtSends || kind == Kind::SkirmishBox || IsPointerCommand(kind);
 }
 
 std::string_view testbed_scenarios::Name(Facet facet)
@@ -13500,7 +13518,7 @@ std::string_view testbed_scenarios::Name(Shot shot)
 
 std::string_view testbed_scenarios::Name(Command::Kind kind)
 {
-	constexpr std::array<std::string_view, 204> k_Names {
+	constexpr std::array<std::string_view, 205> k_Names {
 	    "walk to",
 	    "run to",
 	    "follow",
@@ -13705,6 +13723,7 @@ std::string_view testbed_scenarios::Name(Command::Kind kind)
 	    "let go of a key",
 	    "a god orders its creature",
 	    "take a seed from its icon",
+	    "tap a worship site icon",
 	};
 	return k_Names.at(static_cast<size_t>(kind));
 }

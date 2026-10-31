@@ -75,6 +75,7 @@
 #include "ECS/Systems/CreatureMindSystemInterface.h"
 #include "ECS/Systems/EffectRequestSystemInterface.h"
 #include "ECS/Systems/ForestSystemInterface.h"
+#include "ECS/Systems/GuidanceSystemInterface.h"
 #include "ECS/Systems/ReactionSystemInterface.h"
 #include "ECS/Systems/TimeSystemInterface.h"
 #include "ECS/Systems/TownDesireSystemInterface.h"
@@ -1014,6 +1015,12 @@ bool ResourceStoreSystem::PourAt(ResourceType type, glm::vec3 point, uint32_t am
 		                                         .power = 1.0f,
 		                                         .magicType = MagicType::None,
 		                                         .casterCreature = entt::null});
+	}
+	// The town near a new pile can answer the gift to the player here
+	if (Locator::guidanceSystem::has_value())
+	{
+		Locator::guidanceSystem::value().ResourceDropped(
+		    player, point, type == ResourceType::Food ? guidance::Gift::Food : guidance::Gift::Wood);
 	}
 	return true;
 }

@@ -36,6 +36,7 @@
 #include "ECS/Components/Physics.h"
 #include "ECS/Components/Player.h"
 #include "ECS/Components/PlayerRelations.h"
+#include "ECS/Components/ReportedHand.h"
 #include "ECS/Components/Temple.h"
 #include "ECS/Components/Town.h"
 #include "ECS/Components/Transform.h"
@@ -214,16 +215,24 @@ std::optional<glm::vec3> HandPosition()
 	return Locator::handSystem::has_value() ? Locator::handSystem::value().GetDrawnHandPosition() : std::nullopt;
 }
 
-/// Where a player's hand is in the world, as the reports of the player put it. The turns measure from here. Each god
-/// with a hand has one: the first player's, and each god of a network game. The computer's gods have no hand in the
-/// world yet, so theirs keep nothing past the border.
-std::optional<glm::vec3> HandOf(PlayerNames player)
+/// The point under the cursor that the last hand report of a player picked, none before the first report or for a
+/// player with no hands
+std::optional<glm::vec3> ReportedPickOf(PlayerNames player)
 {
 	if (!Locator::handSystem::has_value())
 	{
 		return std::nullopt;
 	}
-	return Locator::handSystem::value().GetHandPositionsOf(player)[static_cast<size_t>(HandSystemInterface::Side::Left)];
+	const auto hands = Locator::handSystem::value().GetHandsOf(player);
+	if (!hands.has_value())
+	{
+		return std::nullopt;
+	}
+	const auto& registry = Locator::entitiesRegistry::value();
+	const auto hand = (*hands)[static_cast<size_t>(HandSystemInterface::Side::Left)];
+	const auto* reported = registry.Valid(hand) ? registry.TryGet<const ReportedHand>(hand) : nullptr;
+	return reported != nullptr && reported->collidePoint != glm::vec3(0.0f) ? std::optional(reported->collidePoint)
+	                                                                        : std::nullopt;
 }
 
 /// The player whose hand this computer moves and draws. Only the frames of this computer ask.
@@ -556,16 +565,21 @@ void InfluenceSystem::ProcessVirtualInfluence(uint32_t turn)
 	{
 		return;
 	}
-	// Every player's hand keeps a share of their influence past the border, the computer's gods' too
+	// The hand of every god keeps a share of the god's influence past the border, also the hand of a god that no person
+	// plays. The share measures from the point that the god's hand reports picked. A god that no person plays sends no
+	// reports, so its share measures from the origin of the world.
 	std::vector<std::pair<entt::entity, PlayerNames>> players;
-	Locator::entitiesRegistry::value().Each<const Player>(
-	    [&players](entt::entity entity, const Player& player) { players.emplace_back(entity, player.name); });
+	Locator::entitiesRegistry::value().Each<const Player>([&players](entt::entity entity, const Player& player) {
+		if (player.name != PlayerNames::NEUTRAL)
+		{
+			players.emplace_back(entity, player.name);
+		}
+	});
+	const auto& playerSystem = Locator::playerSystem::value();
 	for (const auto& [entity, player] : players)
 	{
-		if (const auto hand = HandOf(player); hand.has_value())
-		{
-			ProcessVirtualInfluence(entity, player, *hand, turn);
-		}
+		const auto hand = virtual_influence::TurnHandPoint(playerSystem.IsHumanPlayer(player), ReportedPickOf(player));
+		ProcessVirtualInfluence(entity, player, hand, turn);
 	}
 }
 

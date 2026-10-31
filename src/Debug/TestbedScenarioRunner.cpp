@@ -2800,6 +2800,8 @@ std::string Runner::GivePlayerCommand(const Command& command)
 		return ChargeIconWithSeedHeld(command);
 	case Kind::TakeIconSeed:
 		return TakeIconSeed(command);
+	case Kind::TapSiteIcon:
+		return TapSiteIcon(command);
 	case Kind::PressPlainKey:
 	{
 		// The key goes down and comes up again, each as an event of the window
@@ -3223,6 +3225,39 @@ std::string Runner::TakeIconSeed(const Command& command)
 	return fmt::format("the seed is in the hand, and the site gets {:.0f}", topCost * command.amount);
 }
 
+std::string Runner::TapSiteIcon(const Command& command)
+{
+	if (!Locator::infoConstants::has_value() || !Locator::spellIconSystem::has_value() ||
+	    !Locator::worshipSiteSystem::has_value())
+	{
+		return "no miracles";
+	}
+	auto& registry = Locator::entitiesRegistry::value();
+	const auto seedType = static_cast<SpellSeedType>(command.value);
+	std::optional<entt::entity> found;
+	registry.Each<const ecs::components::WorshipIcon>([&](entt::entity entity, const ecs::components::WorshipIcon& icon) {
+		const auto* site = registry.Valid(icon.site) ? registry.TryGet<const ecs::components::WorshipSite>(icon.site) : nullptr;
+		if (!found.has_value() && site != nullptr && site->player == command.player && icon.seed == seedType)
+		{
+			found = entity;
+		}
+	});
+	if (!found.has_value())
+	{
+		return "no such icon";
+	}
+	const auto& icon = registry.Get<const ecs::components::WorshipIcon>(*found);
+	if (command.amount > 0.0f)
+	{
+		const auto& info = Locator::infoConstants::value();
+		const float cost = magic::GetChantsRequiredToCreate(
+		    info, magic::GetMagicTypeFromPowerUpLevel(magic::GetSpellSeedInfo(info, seedType), magic::k_BasePowerUpLevel));
+		Locator::worshipSiteSystem::value().ReturnChants(icon.site, cost * command.amount);
+	}
+	const bool counted = Locator::spellIconSystem::value().Tap(*found, command.player);
+	return fmt::format("tapped the icon in place {}: {}", icon.place, counted ? "it counts" : "it does not count");
+}
+
 std::string Runner::HandTakeFireBall()
 {
 	if (!Locator::magicSystem::has_value())
@@ -3506,7 +3541,7 @@ void Runner::Give(const Command& command)
 	    command.kind == Kind::BuildWorshipSites || command.kind == Kind::PressPlainKey || command.kind == Kind::PlainKeyDown ||
 	    command.kind == Kind::PlainKeyRepeat || command.kind == Kind::PlainKeyUp ||
 	    command.kind == Kind::ChargeIconWithSeedHeld || command.kind == Kind::TakeIconSeed ||
-	    command.kind == Kind::FinishBuilding || command.kind == Kind::ScaffoldStartsSite ||
+	    command.kind == Kind::TapSiteIcon || command.kind == Kind::FinishBuilding || command.kind == Kind::ScaffoldStartsSite ||
 	    command.kind == Kind::DestroyScaffoldSite || command.kind == Kind::FillBuiltAmount || command.kind == Kind::PauseGame ||
 	    command.kind == Kind::SetGameSpeed || command.kind == Kind::RemoveTeleportStone || command.kind == Kind::MakeDance ||
 	    command.kind == Kind::OtherGodHand || command.kind == Kind::OwnGod || command.kind == Kind::BringCreature ||
@@ -4386,6 +4421,7 @@ void Runner::Give(const Command& command)
 	case Kind::PlainKeyUp:
 	case Kind::ChargeIconWithSeedHeld:
 	case Kind::TakeIconSeed:
+	case Kind::TapSiteIcon:
 	case Kind::RemoveObject:
 	case Kind::FinishBuilding:
 	case Kind::FillBuiltAmount:

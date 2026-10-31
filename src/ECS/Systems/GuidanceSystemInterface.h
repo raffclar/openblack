@@ -87,6 +87,12 @@ public:
 	virtual void CreatureWonFight(entt::entity creature) = 0;
 	/// A villager of the player here died of chanting: the advisors warn of the worshippers that die
 	virtual void WorshipperDied() = 0;
+	/// A pour of food or wood by a player made a new pile at a point. When the player is the player here, the town
+	/// nearest the point can answer how much it wanted the gift (see guidance::GiftAnswer).
+	virtual void ResourceDropped([[maybe_unused]] PlayerNames giver, [[maybe_unused]] glm::vec3 at,
+	                             [[maybe_unused]] guidance::Gift gift)
+	{
+	}
 	/// Another player took a villager of the player here: the advisors warn of the loss when the villager died near the
 	/// point under the cursor
 	virtual void LosingVillager(entt::entity villager) = 0;
