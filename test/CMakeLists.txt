@@ -2246,3 +2246,4 @@ openblack_setup_and_add_test(test_network_game_end online/test_network_game_end.
 openblack_setup_and_add_test(test_lhvm_save_in_native lhvm/test_lhvm_save_in_native.cpp)
 target_link_libraries(test_lhvm_save_in_native PRIVATE ScriptLibrary)
 openblack_setup_and_add_test(test_town_removal test_town_removal.cpp)
+openblack_setup_and_add_test(test_building_replan test_building_replan.cpp)

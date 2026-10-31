@@ -374,6 +374,22 @@ void Finish(entt::entity building)
 		creches::StartsWorking(building);
 		// A finished storage pit starts working, and its town lets go of its temporary piles
 		StoragePitStartsWorking(building);
+		// A finished miracle dispenser of a town counts as put up for mending only while it is not whole, as an abode
+		if (auto* dispenser = registry.TryGet<SpellDispenser>(building); dispenser != nullptr && TownOf(building).has_value())
+		{
+			dispenser->putUpForMending = world_objects::LifeOf(building) < 1.0f;
+			// Its town's player counts one more building finished, of its kind. In a network game it counts as a house
+			// built, as each building that is not a wonder does.
+			const auto owner = world_objects::PlayerOf(building);
+			if (const auto* info = world_objects::AbodeInfoOf(building); owner.has_value() && info != nullptr)
+			{
+				player_statistics::CountBuilt(registry, *owner, info->abodeType);
+			}
+			if (owner.has_value() && Locator::gameEndSystem::has_value())
+			{
+				Locator::gameEndSystem::value().AddToCondition(owner, game_end::Condition::HousesBuilt, 1);
+			}
+		}
 		// A finished building of a town counts as put up for mending only while it isn't whole. No one is moved in: the
 		// homeless and the crowded find it when they next look for a better home.
 		if (auto* abode = registry.TryGet<Abode>(building); abode != nullptr && TownOf(building).has_value())

@@ -462,6 +462,22 @@ entt::entity TownOfAbode(const Abode& abode)
 	return town;
 }
 
+/// The town that a building belongs to: the town of an abode or of a miracle dispenser, none for none
+entt::entity TownOfBuilding(entt::entity object)
+{
+	const auto& registry = Locator::entitiesRegistry::value();
+	if (const auto* abode = registry.TryGet<const Abode>(object))
+	{
+		return TownOfAbode(*abode);
+	}
+	if (const auto* dispenser = registry.TryGet<const SpellDispenser>(object);
+	    dispenser != nullptr && registry.Valid(dispenser->town) && registry.AllOf<Town>(dispenser->town))
+	{
+		return dispenser->town;
+	}
+	return entt::null;
+}
+
 /// The town of the storage pit a pile is part of, or of the building whose site keeps its wood in it; none for a pile
 /// of neither. (A worship site's food pile is left out: which town the game gives it was not traced.)
 std::optional<entt::entity> TownOfPile(entt::entity object)
@@ -986,8 +1002,9 @@ void world_objects::Remove(entt::entity object)
 	{
 		Locator::wonderSystem::value().Lost(object);
 	}
-	// A town's building going is planned again by its town, where it stood, and the things it put round itself go
-	if (registry.AllOf<Abode>(object))
+	// A town's building going is planned again by its town, where it stood, and the things it put round itself go. A
+	// miracle dispenser is one of the buildings of its town.
+	if (registry.AnyOf<Abode, SpellDispenser>(object))
 	{
 		town_planning::PlanAgain(object);
 		abode_surroundings::Delete(object);
@@ -1003,8 +1020,7 @@ void world_objects::Remove(entt::entity object)
 	}
 	// A building that goes closes each of its sites first, so that the builders stop their work and step away from it
 	construction::CloseSite(object);
-	const auto* building = registry.TryGet<const Abode>(object);
-	const auto leftTown = building != nullptr ? TownOfAbode(*building) : entt::null;
+	const auto leftTown = TownOfBuilding(object);
 	registry.Destroy(object);
 	registry.SetDirty();
 	// The town that the building left goes from the game when it has nothing left
