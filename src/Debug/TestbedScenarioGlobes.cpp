@@ -283,22 +283,32 @@ void AddHand(std::vector<Scenario>& all)
 	    .id = "miracles.hand_power_up_bands",
 	    .name = "Bands and bracelets on the hand",
 	    .facet = Facet::Miracles,
-	    .description = "A lightning seed is summoned from the player's worship into the hand, powered up twice with its "
-	                   "gestures, then shaken off with a scribble.",
+	    .description = "The worship town of the player, with the lightning bolt and its two power-ups. A tap puts the "
+	                   "lightning from the icon of the worship site into the hand. It is powered up twice with its "
+	                   "gestures, then a scribble calls the power-up off.",
 	    .expected = "As the seed comes, five bands fly from in front of the camera onto the hand with the band's sound, "
 	                "and after a moment a bracelet settles round the wrist; the hand glows in the player's colour, the glow "
 	                "flowing over it. Each power-up sends five bands flying on with the sound and the announcer's voice "
 	                "(power up one, then two), and puts another bracelet on further up the arm. The scribble sends a band "
 	                "flying off the hand to the camera with the hand's shake; the bracelets and the glow go.",
-	    .environment = {.dispenserGrid = false},
+	    .environment = {.dispenserGrid = false, .landNumber = k_WorshipTownLand},
 	    .framing = {.shot = Shot::Overview, .include = {{-3.0f, 27.0f}, {3.0f, 33.0f}}, .distance = 0.2f},
-	    .commands =
-	        {{.kind = Kind::SummonSeed, .delaySeconds = 1.0f, .value = static_cast<size_t>(SpellSeedType::LightningBolt)},
-	         {.kind = Kind::DrawGesture, .delaySeconds = 4.0f, .value = static_cast<size_t>(GestureType::InverseSpiral)},
-	         {.kind = Kind::DrawGesture, .delaySeconds = 4.0f, .value = static_cast<size_t>(GestureType::Spiral)},
-	         {.kind = Kind::DrawGesture, .delaySeconds = 4.0f, .value = static_cast<size_t>(GestureType::Scribble)}},
-	    .repeatFrom = 0,
+	    .objects = WorshipTown(),
+	    .temples = {{.offset = k_WorshipTemple}},
+	    .commands = {{.kind = Kind::BuildWorshipSites, .delaySeconds = 0.5f},
+	                 {.kind = Kind::TakeIconSeed,
+	                  .delaySeconds = 0.5f,
+	                  .value = static_cast<size_t>(SpellSeedType::LightningBolt),
+	                  .amount = 1.0f},
+	                 {.kind = Kind::DrawGesture,
+	                  .delaySeconds = 4.0f,
+	                  .value = static_cast<size_t>(GestureType::InverseSpiral)},
+	                 {.kind = Kind::DrawGesture, .delaySeconds = 4.0f, .value = static_cast<size_t>(GestureType::Spiral)},
+	                 {.kind = Kind::DrawGesture, .delaySeconds = 4.0f, .value = static_cast<size_t>(GestureType::Scribble)}},
+	    .repeatFrom = 1,
 	    .hand = HandHold {.offset = {0.0f, 25.0f}, .height = 6.0f},
+	    .townBeliefInPlayer = k_WorshipTownBelief,
+	    .townMiracles = {MagicType::LightningBolt, MagicType::LightningBoltPowerUpOne, MagicType::LightningBoltPowerUpTwo},
 	});
 
 	all.push_back({

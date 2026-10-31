@@ -1098,6 +1098,10 @@ struct Command
 		/// creature of the scenario (atCreature), as the hand of a computer god orders it. A script does not give the
 		/// order, so the other creature answers a joint action by its own desires.
 		GodOrder,
+		/// The player's worship site icon of a seed (value, a SpellSeedType) is charged full and puts its miracle in the
+		/// hand, as a tap does. The battery of its site gets the cost of the highest power-up level of the seed times an
+		/// amount, for the power-ups to charge from. Needs no creature.
+		TakeIconSeed,
 	};
 	Kind kind {Kind::Stop};
 	/// Which creature, by its place in the scenario's creatures
@@ -1424,6 +1428,15 @@ void AddJoinOnlineScenarios(std::vector<Scenario>& all);
 void AddWorldSoundScenarios(std::vector<Scenario>& all);
 /// A town given miracles by the debug tool, and its worship site going up
 void AddTownMiracleScenarios(std::vector<Scenario>& all);
+/// The town of the player that the scenarios of worship site icons use: a Norse town centre with a hut and three
+/// villagers. With the temple at k_WorshipTemple, its worship site goes up by the temple.
+[[nodiscard]] std::vector<ObjectSetup> WorshipTown();
+/// Where the temple of the worship town stands
+inline constexpr glm::vec2 k_WorshipTemple {0.0f, -60.0f};
+/// The belief of the worship town in the player, so that it stays theirs
+inline constexpr float k_WorshipTownBelief = 1000.0f;
+/// The land of the worship town: the first land, which has no worship sites in a normal game
+inline constexpr int32_t k_WorshipTownLand = 1;
 /// The villagers around the player's temple, with their debug window open
 void AddTempleVillagerScenarios(std::vector<Scenario>& all);
 /// The miracles' scenarios, added to every scenario by the registry

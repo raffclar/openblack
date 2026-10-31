@@ -53,6 +53,11 @@ constexpr size_t k_MainRoom = 3;
 }
 } // namespace
 
+std::vector<ObjectSetup> openblack::testbed_scenarios::WorshipTown()
+{
+	return Town();
+}
+
 void openblack::testbed_scenarios::AddTownMiracleScenarios(std::vector<Scenario>& all)
 {
 	all.push_back({
@@ -305,6 +310,37 @@ void openblack::testbed_scenarios::AddTownMiracleScenarios(std::vector<Scenario>
 	                 {.kind = Kind::DrawGesture, .delaySeconds = 9.0f, .value = static_cast<size_t>(GestureType::RShape)}},
 	    .townBeliefInPlayer = k_TownBelief,
 	    .townMiracles = {MagicType::Heal, MagicType::Water},
+	});
+	all.push_back({
+	    .id = "miracles.power_up_icon_charge",
+	    .name = "A power-up gesture asks the worship site icon of the miracle in the hand to charge it",
+	    .facet = Facet::Miracles,
+	    .description = "The town and temple of town.miracle_debug_given, with the storm, its extreme storm and the tornado. "
+	                   "The site is built, and a tap puts the storm miracle from its icon into the hand. The battery of "
+	                   "the site gets the cost of the tornado. The hand draws the inverse spiral, then a scribble, then "
+	                   "a second scribble.",
+	    .expected = "After the inverse spiral, its hint goes at once and the scribble shows the storm seed with no rings, "
+	                "but the miracle in the hand stays the plain storm until the storm icon has charged the extra prayer "
+	                "power into it. Then the hand shows the name of the extreme storm, a bracelet more and the bands. "
+	                "The first scribble shakes the hand and the storm icon charges the seed back to the plain storm: "
+	                "the name of the storm shows again, and the prayer power past its cost goes back to the site. The "
+	                "second scribble drops the miracle.",
+	    .environment = {.dispenserGrid = false, .landNumber = k_FirstLand},
+	    .framing = {.shot = Shot::Placed, .eye = {9.0f, 14.0f, -40.0f}, .look = {9.0f, 2.0f, -19.0f}},
+	    .objects = Town(),
+	    .temples = {{.offset = k_Temple}},
+	    .commands = {{.kind = Kind::BuildWorshipSites, .delaySeconds = 3.0f},
+	                 {.kind = Kind::TakeIconSeed,
+	                  .delaySeconds = 0.5f,
+	                  .value = static_cast<size_t>(SpellSeedType::Storm),
+	                  .amount = 1.0f},
+	                 {.kind = Kind::DrawGesture,
+	                  .delaySeconds = 4.0f,
+	                  .value = static_cast<size_t>(GestureType::InverseSpiral)},
+	                 {.kind = Kind::DrawGesture, .delaySeconds = 8.0f, .value = static_cast<size_t>(GestureType::Scribble)},
+	                 {.kind = Kind::DrawGesture, .delaySeconds = 7.0f, .value = static_cast<size_t>(GestureType::Scribble)}},
+	    .townBeliefInPlayer = k_TownBelief,
+	    .townMiracles = {MagicType::StormWindRain, MagicType::StormWindRainLightning, MagicType::Tornado},
 	});
 	all.push_back({
 	    .id = "miracles.selection_help_events",
