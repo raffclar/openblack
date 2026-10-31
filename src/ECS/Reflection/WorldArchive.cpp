@@ -381,8 +381,12 @@ struct RowLayout
 	/// Whether the hash keeps a field of a row
 	[[nodiscard]] bool Keeps(size_t index, entt::entity row) const
 	{
-		return !left.whole && !left.fieldAlways[index] && !AnyHas(left.fieldMarkers[index], row) &&
-		       !AnyHas(left.rowMarkers, row);
+		return KeepsField(index, row) && !AnyHas(left.rowMarkers, row);
+	}
+	/// Whether the hash keeps a field of a row that it keeps
+	[[nodiscard]] bool KeepsField(size_t index, entt::entity row) const
+	{
+		return !left.whole && !left.fieldAlways[index] && !AnyHas(left.fieldMarkers[index], row);
 	}
 };
 
@@ -414,6 +418,7 @@ struct RowLayout
 
 /// Writes the bytes of a row that the hash keeps: its entity, then each field that the hash keeps, with the bytes that a
 /// save writes. The function gets each field after its bytes, with the index of the field and where its bytes start.
+/// The caller gives only the rows that the hash keeps, so this function does not look at the marks of the rows again.
 template <typename EachField>
 void SaveRow(const ComponentStorage& component, const RowLayout& layout, entt::entity row, BinaryWriter& out,
              const EachField& eachField)
@@ -422,7 +427,7 @@ void SaveRow(const ComponentStorage& component, const RowLayout& layout, entt::e
 	const void* value = component.storage->value(row);
 	if (layout.codec != nullptr)
 	{
-		if (layout.Keeps(0, row))
+		if (layout.KeepsField(0, row))
 		{
 			const auto start = out.Size();
 			layout.codec->save(value, out);
@@ -433,7 +438,7 @@ void SaveRow(const ComponentStorage& component, const RowLayout& layout, entt::e
 	for (size_t index = 0; index < layout.fields.size(); ++index)
 	{
 		const auto& field = layout.fields.at(index);
-		if (!layout.Keeps(index, row))
+		if (!layout.KeepsField(index, row))
 		{
 			continue;
 		}
