@@ -60,6 +60,8 @@ public:
 	virtual void SetHand(PlayerNames player, glm::vec3 place, bool fixedHeight) = 0;
 	/// Where the hand of the god is, at the height of the land under it. None for a player with no computer mind.
 	[[nodiscard]] virtual std::optional<glm::vec3> HandPosition(PlayerNames player) = 0;
+	/// Where the hand of the god is, as HandPosition gives it, for a view that reads it in a frame. It changes nothing.
+	[[nodiscard]] virtual std::optional<glm::vec3> HandPositionForView(PlayerNames /*player*/) const { return std::nullopt; }
 	/// A land script sets what the mind of the player thinks of another player. The mind keeps two times the value. The
 	/// game makes the player when the land has none yet.
 	virtual void SetAttitude(PlayerNames /*player*/, PlayerNames /*other*/, float /*attitude*/) {}

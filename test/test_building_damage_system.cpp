@@ -33,6 +33,7 @@
 #include "ECS/Components/BuildingDamage.h"
 #include "ECS/Components/Mesh.h"
 #include "ECS/Components/MorphWithTerrain.h"
+#include "ECS/Components/Physics.h"
 #include "ECS/Components/Transform.h"
 #include "ECS/PhysicsEntry.h"
 #include "ECS/Registry.h"
@@ -174,6 +175,7 @@ class FakeWorld final: public building_world::World
 public:
 	/// How many puffs of dust the pieces threw up
 	int puffs {0};
+	float life {1.0f};
 	/// How much the land rises for each metre along z
 	float slope {0.0f};
 	struct Effect
@@ -228,7 +230,7 @@ public:
 		EXPECT_EQ(building, house);
 		sounds.emplace_back(keys.begin(), keys.end());
 	}
-	[[nodiscard]] float LifeOf(entt::entity /*object*/) const override { return 1.0f; }
+	[[nodiscard]] float LifeOf(entt::entity /*object*/) const override { return life; }
 	[[nodiscard]] const GObjectInfo* InfoOf(entt::entity /*object*/) const override { return nullptr; }
 	[[nodiscard]] std::optional<PlayerNames> PlayerOf(entt::entity object) const override
 	{
@@ -416,6 +418,25 @@ TEST(BuildingDamageSystem, ABreakingRockBreaksAHoleWhereItStrikesAsItsThrowersHa
 	EXPECT_EQ(effect.source.appliedBy, std::optional(impact.hitBy));
 	// The house's own resting body came from no hand, so no creature learns from the throw
 	EXPECT_TRUE(f.world->deeds.empty());
+}
+
+TEST(BuildingDamageSystem, ABuildingCountsItsBrokenModelsAndARepairedOneBreaksIntoANewModel)
+{
+	Fixture f;
+	auto& registry = f.world->registry;
+	const auto wall = k_HousePosition + glm::vec3(0.0f, 2.0f, 0.0f);
+	f.RockStrikes(wall, damage::k_BreakingMomentum + 1.0f, PlayerNames::PLAYER_ONE);
+	ASSERT_TRUE(registry.AllOf<BrokenModels>(f.house));
+	EXPECT_EQ(registry.Get<BrokenModels>(f.house).made, 1u);
+	// Another blow on the broken model, not repaired since, breaks more of the same model
+	f.world->life = 0.4f;
+	registry.Assign<RepairSite>(f.house, RepairSite {.startLife = 0.4f});
+	f.RockStrikes(wall, damage::k_BreakingMomentum + 1.0f, PlayerNames::PLAYER_ONE);
+	EXPECT_EQ(registry.Get<BrokenModels>(f.house).made, 1u);
+	// Repaired half of the way, the next blow breaks a new model from the whole one
+	f.world->life = 0.7f;
+	f.RockStrikes(wall, damage::k_BreakingMomentum + 1.0f, PlayerNames::PLAYER_ONE);
+	EXPECT_EQ(registry.Get<BrokenModels>(f.house).made, 2u);
 }
 
 TEST(BuildingDamageSystem, TheBrokenModelMarksTheCornersOfItsBackFacesForTheSnow)

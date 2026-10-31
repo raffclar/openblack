@@ -148,6 +148,43 @@ void openblack::testbed_scenarios::AddVillageTotemScenarios(std::vector<Scenario
 	    .worshipShare = 0.0f,
 	});
 	all.push_back({
+	    .id = "objects.totem_without_life",
+	    .name = "A totem with no life shows nothing",
+	    .facet = Facet::Objects,
+	    .description = "The player's Norse town centre with its totem. After three seconds a script sets the health of "
+	                   "the totem to 0. Five seconds later the script sets it to 1 again. Keep the camera still for a "
+	                   "time, then move it.",
+	    .expected = "When its health becomes 0, the totem, its icon and its see-through second totem go from the "
+	                "screen, and the cursor does not find them. The town centre and its stone hands stay. When the "
+	                "health becomes 1 again, the totem and its icon show again at once, also while the camera is still.",
+	    .framing = {.shot = Shot::Overview,
+	                .include = {k_Centre - glm::vec2(15.0f), k_Centre + glm::vec2(15.0f)},
+	                .distance = 0.5f},
+	    .objects = {{.type = AbodeInfo::NorseTownCentre, .offset = k_Centre}},
+	    .temples = {{.offset = k_Temple}},
+	    .commands = {{.kind = Command::Kind::CallNative,
+	                  .delaySeconds = 3.0f,
+	                  .script = "GET_TOTEM_STATUE",
+	                  .scriptArguments = {{.kind = ScriptArgument::Kind::Object, .index = 0}}},
+	                 {.kind = Command::Kind::CallNative,
+	                  .delaySeconds = 0.1f,
+	                  .script = "SET_PROPERTY",
+	                  .scriptArguments = {{.kind = ScriptArgument::Kind::Integer, .number = 1.0f},
+	                                      {.kind = ScriptArgument::Kind::Result},
+	                                      {.kind = ScriptArgument::Kind::Number, .number = 0.0f}}},
+	                 {.kind = Command::Kind::CallNative,
+	                  .delaySeconds = 5.0f,
+	                  .script = "GET_TOTEM_STATUE",
+	                  .scriptArguments = {{.kind = ScriptArgument::Kind::Object, .index = 0}}},
+	                 {.kind = Command::Kind::CallNative,
+	                  .delaySeconds = 0.1f,
+	                  .script = "SET_PROPERTY",
+	                  .scriptArguments = {{.kind = ScriptArgument::Kind::Integer, .number = 1.0f},
+	                                      {.kind = ScriptArgument::Kind::Result},
+	                                      {.kind = ScriptArgument::Kind::Number, .number = 1.0f}}}},
+	    .townBeliefInPlayer = k_TownBelief,
+	});
+	all.push_back({
 	    .id = "interface.floating_number_pause",
 	    .name = "The share floats up and stops while the game pauses",
 	    .facet = Facet::Interface,

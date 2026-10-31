@@ -11,12 +11,15 @@
 
 #include <gtest/gtest.h>
 
+#include "ECS/Components/Construction.h"
 #include "ECS/Components/Town.h"
 #include "ECS/PlayerTowns.h"
 #include "ECS/Registry.h"
 
 using openblack::PlayerNames;
 using openblack::ecs::Registry;
+using openblack::ecs::components::PlannedAbode;
+using openblack::ecs::components::PlannedTemple;
 using openblack::ecs::components::Town;
 
 namespace
@@ -90,6 +93,57 @@ TEST(PlayerTowns, TheGamesListOfAllTownsStartsWithTheTownMadeLast)
 	registry.Get<Town>(middle).made = 1;
 	registry.Get<Town>(newest).made = 2;
 	EXPECT_EQ(openblack::ecs::player_towns::AllMadeNewestFirst(registry), (std::vector<entt::entity> {newest, middle, oldest}));
+}
+
+TEST(PlayerTowns, ATownListOfASavedGameComesFirstInTheMadeOrder)
+{
+	Registry registry;
+	const auto a = MakeTown(registry, 0, PlayerNames::PLAYER_ONE, 0);
+	const auto b = MakeTown(registry, 1, PlayerNames::PLAYER_ONE, 1);
+	const auto c = MakeTown(registry, 2, PlayerNames::NEUTRAL, 2);
+	registry.Get<Town>(a).made = 0;
+	registry.Get<Town>(b).made = 1;
+	registry.Get<Town>(c).made = 2;
+	registry.Context().nextTownMade = 3;
+	// The file keeps a first and b second; c is not in the list of the file
+	const std::vector<entt::entity> file {a, b};
+	openblack::ecs::player_towns::PutFirstInMadeOrder(registry, file);
+	EXPECT_EQ(openblack::ecs::player_towns::AllMadeNewestFirst(registry), (std::vector<entt::entity> {a, b, c}));
+	EXPECT_EQ(registry.Context().nextTownMade, 5U);
+}
+
+TEST(PlayerTowns, ThePlansOfTheTownMadeLastComeFirstInTheOrderOfEachTown)
+{
+	Registry registry;
+	const auto older = MakeTown(registry, 0, PlayerNames::PLAYER_ONE, 0);
+	const auto newer = MakeTown(registry, 1, PlayerNames::NEUTRAL, 1);
+	registry.Get<Town>(older).made = 0;
+	registry.Get<Town>(newer).made = 1;
+	const auto plan = [&registry](entt::entity town, bool temple) {
+		const auto entity = registry.Create();
+		if (temple)
+		{
+			registry.Assign<PlannedTemple>(entity);
+		}
+		else
+		{
+			registry.Assign<PlannedAbode>(entity);
+		}
+		registry.Get<Town>(town).planned.push_back(entity);
+		return entity;
+	};
+	const auto olderFirst = plan(older, false);
+	const auto olderTemple = plan(older, true);
+	const auto newerFirst = plan(newer, false);
+	const auto newerSecond = plan(newer, false);
+	// A plan that became a building stays in the list of its town, but it is no plan
+	const auto built = plan(newer, false);
+	registry.Remove<PlannedAbode>(built);
+	// A plan that went from the land stays in the list too
+	const auto gone = plan(older, false);
+	registry.Destroy(gone);
+	EXPECT_EQ(openblack::ecs::player_towns::AllPlansInOrder(registry),
+	          (std::vector<entt::entity> {newerFirst, newerSecond, olderFirst, olderTemple}));
 }
 
 TEST(PlayerTowns, TheNearestOfAllTownsKeepsTheFirstOfEquals)

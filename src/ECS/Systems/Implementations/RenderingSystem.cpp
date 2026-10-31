@@ -22,6 +22,7 @@
 #include <tuple>
 #include <unordered_map>
 #include <utility>
+#include <vector>
 
 #include <glm/gtx/transform.hpp>
 
@@ -103,7 +104,9 @@
 #include "ECS/Systems/TimeSystemInterface.h"
 #include "ECS/Systems/VegetationInterface.h"
 #include "ECS/TreeRoots.h"
+#include "ECS/VillageTotem.h"
 #include "ECS/VillagerHeldObject.h"
+#include "ECS/WorldObjects.h"
 #include "Game.h"
 #include "Graphics/BonePalette.h"
 #include "Graphics/DebugLines.h"
@@ -278,6 +281,21 @@ bool HiddenHighlight(const openblack::ecs::Registry& registry, entt::entity enti
 {
 	const auto* highlight = registry.TryGet<const ScriptHighlight>(entity);
 	return highlight != nullptr && highlight->hidden;
+}
+
+/// The plinths and the icons of the village totems that show nothing: the totems with no life
+std::vector<entt::entity> LifelessTotemParts(const openblack::ecs::Registry& registry)
+{
+	using openblack::ecs::components::VillageTotem;
+	std::vector<entt::entity> parts;
+	registry.Each<const VillageTotem>([&parts](entt::entity totem, const VillageTotem& component) {
+		if (!openblack::ecs::village_totem::Shows(openblack::ecs::world_objects::LifeOf(totem)))
+		{
+			parts.push_back(totem);
+			parts.push_back(component.icon);
+		}
+	});
+	return parts;
 }
 
 entt::entity DrawnHand()
@@ -712,9 +730,11 @@ bool RenderingSystem::UploadInstances(bool drawBoundingBox)
 	uint32_t segmentPlaced = 0;
 	uint32_t lastSegment = 0;
 	const auto drawnHand = DrawnHand();
+	const auto lifelessTotemParts = LifelessTotemParts(registry);
 	EachBySegment(
 	    [this, &registry, &vegetation, &meshes, &fits, &fizzOrder, &segmentPlaced, &lastSegment, drawBoundingBox, camera, &view,
-	     modelDetail, drawList, drawnHand](entt::entity entity, const Mesh& mesh, const Transform& transform) {
+	     modelDetail, drawList, drawnHand,
+	     &lifelessTotemParts](entt::entity entity, const Mesh& mesh, const Transform& transform) {
 		    // The hands of the other gods and the right hands have no model on the screen
 		    if (!graphics::drawn_hand::Drawn(registry.AllOf<Hand>(entity), entity, drawnHand))
 		    {
@@ -723,6 +743,15 @@ bool RenderingSystem::UploadInstances(bool drawBoundingBox)
 		    // A script highlight that its draw list did not select in this frame is not drawn
 		    if (HiddenHighlight(registry, entity))
 		    {
+			    return;
+		    }
+		    // A village totem with no life shows nothing. It stays drawn while the camera does not move.
+		    if (std::ranges::find(lifelessTotemParts, entity) != lifelessTotemParts.end())
+		    {
+			    if (drawList != nullptr && drawList->GetFrame().drawAll && drawList->NotesKept(entity))
+			    {
+				    drawList->NoteFullFrame(entity, true);
+			    }
 			    return;
 		    }
 		    const auto segment = fizzOrder.SegmentOf(entity);

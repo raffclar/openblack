@@ -13,6 +13,7 @@
 
 #include <algorithm>
 #include <array>
+#include <limits>
 #include <numbers>
 
 #include <glm/gtc/constants.hpp>
@@ -258,6 +259,19 @@ std::vector<PhialDraw> visuals::PhialDraws(int receiveType, float phase, float p
 	default:
 		return {{.size = 1.0f, .alpha = 255, .landLit = true}};
 	}
+}
+
+float visuals::PhialLastDrawSize(int receiveType, float phase)
+{
+	return PhialDraws(receiveType, phase, PhialPulse(phase), std::numeric_limits<uint8_t>::max()).back().size;
+}
+
+glm::mat4 visuals::SeedModelPlacement(glm::vec3 middle, float meshHeight, float seedScale, float drawnScale, float spin,
+                                      float size, glm::vec3 shape)
+{
+	const auto at = middle + glm::vec3(0.0f, meshHeight * drawnScale, 0.0f);
+	return glm::translate(glm::mat4(1.0f), at) * openblack::portable_math::EulerAngleY(spin) *
+	       glm::scale(glm::mat4(1.0f), seedScale * drawnScale * size * shape);
 }
 
 void visuals::SetBracelets(HandBands& bands, int count, bool delayed)

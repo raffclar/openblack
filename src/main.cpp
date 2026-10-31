@@ -136,6 +136,7 @@ bool parseOptions(int argc, char** argv, openblack::Arguments& args, int& return
 		("ai-times", "Tools: log the mean and longest time of the seen list, the mind and the hand of each computer god each time this many turns go by (0 for never).", cxxopts::value<uint32_t>()->default_value("0"))
 		("frame-stats-out", "With --frame-stats, write each frame of the run (its time, its time on the processor and the game turn) into this CSV file when the game ends.", cxxopts::value<std::string>())
 		("no-first-frame-warm-up", "Do not draw the first frame of a land behind the loading screen. Then the first frames of the game make the renderer's pipelines and render targets.")
+		("parallel-draw-encode", "Developer: let worker threads encode some of the draws at the same time as the game's thread, in the same order and with the same picture. By default the game's thread encodes all draws.")
 		("unlock-bonus-creatures", "Debug: take the Creature Breeder's bonus creatures as unlocked, which the game only had once an unlock from outside it was installed: all, or some of leopard, horse, mandrill, gorilla and rhino joined by commas. None by default, as on a normal install.", cxxopts::value<std::string>())
 		("no-draw", "Tools: open the window but draw nothing on the graphics card, so that a long run that the inspector drives does not wait on a busy graphics card. Screenshots are black.")
 		("skip-logos", "Leave out the logo pictures at start-up.")
@@ -585,6 +586,7 @@ bool parseOptions(int argc, char** argv, openblack::Arguments& args, int& return
 			args.frameStatsOut = result["frame-stats-out"].as<std::string>();
 		}
 		args.warmUpFirstFrame = result.count("no-first-frame-warm-up") == 0;
+		args.parallelDrawEncode = result.count("parallel-draw-encode") != 0;
 		args.lobbyOrigin = result["lobby"].as<std::string>();
 		if (result.count("lobby-test-ca") != 0)
 		{

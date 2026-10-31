@@ -1368,6 +1368,21 @@ VillagerStates LivingActionSystem::VillagerGetFinalState(const LivingAction& act
 	return FinalStateOf(action);
 }
 
+bool LivingActionSystem::VillagerHasSameExitAsFinal(const LivingAction& action, VillagerStates next) const
+{
+	using ExitFunction = bool (*)(LivingAction&, VillagerStates);
+	const auto& finalExit = k_VillagerStateTable.at(static_cast<size_t>(FinalStateOf(action))).exitState;
+	const auto& nextExit = k_VillagerStateTable.at(static_cast<size_t>(next)).exitState;
+	if (!finalExit || !nextExit)
+	{
+		return !finalExit && !nextExit;
+	}
+	// A row that is not a plain function (a row that is not made yet) has the same exit as no other row
+	const auto* finalFunction = finalExit.target<ExitFunction>();
+	const auto* nextFunction = nextExit.target<ExitFunction>();
+	return finalFunction != nullptr && nextFunction != nullptr && *finalFunction == *nextFunction;
+}
+
 void LivingActionSystem::SetStateDirectly(LivingAction& action, LivingAction::Index index, VillagerStates state) const
 {
 	if (index == LivingAction::Index::Top)

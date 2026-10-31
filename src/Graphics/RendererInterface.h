@@ -55,6 +55,7 @@ class Texture2D;
 class FrameBuffer;
 class ShaderManager;
 class ShaderProgram;
+struct DrawEncoder;
 
 /// The renderer of the game. The requests of the world to the renderer are in the base class.
 class RendererInterface: public RendererRequestsInterface
@@ -85,6 +86,9 @@ public:
 	struct L3DMeshSubmitDesc
 	{
 		graphics::RenderPass viewId;
+		/// Where the draws go: the game thread's encoder when null, or the encoder of a thread that encodes at the same
+		/// time
+		graphics::DrawEncoder* encoder {nullptr};
 		/// Every primitive is added over what is behind it by this share, whatever its material says
 		std::optional<float> additiveShare;
 		/// Every primitive is blended over what is behind it by each instance's own alpha, whatever its material says

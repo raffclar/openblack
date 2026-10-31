@@ -55,7 +55,10 @@ void openblack::ecs::reflection::RegisterFields_Components_creaturef(entt::meta_
 	    .Field<&components::CreatureFighting::responded>("responded")
 	    .Field<&components::CreatureFighting::turnsAfterResponse>("turnsAfterResponse")
 	    .Field<&components::CreatureFighting::showedResponse>("showedResponse")
-	    .Field<&components::CreatureFighting::mindFree>("mindFree");
+	    .Field<&components::CreatureFighting::mindFree>("mindFree")
+	    .Field<&components::CreatureFighting::restedAfterDuel>("restedAfterDuel")
+	    .Field<&components::CreatureFighting::released>("released")
+	    .Field<&components::CreatureFighting::partnerInMind>("partnerInMind");
 	Reflect<components::CreatureFightRecord>(context)
 	    .Field<&components::CreatureFightRecord::tendency>("tendency")
 	    .Field<&components::CreatureFightRecord::choosingTendency>("choosingTendency")

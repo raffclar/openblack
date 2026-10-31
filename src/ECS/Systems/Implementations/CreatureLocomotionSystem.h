@@ -51,6 +51,8 @@ public:
 	bool TurnToHeading(entt::entity creature, GameHeading heading) override;
 	bool TurnToFaceAtOnce(entt::entity creature, glm::vec2 point) override;
 	bool TurnToHeadingAtOnce(entt::entity creature, GameHeading heading) override;
+	void TurnToFaceAtRest(entt::entity creature, glm::vec2 point) override;
+	[[nodiscard]] bool TurnWaitsForRest(entt::entity creature) const override;
 	void Stop(entt::entity creature) override;
 	void StopAtOnce(entt::entity creature) override;
 	void ResetPace(entt::entity creature) override;
@@ -69,6 +71,8 @@ private:
 	[[nodiscard]] bool PlaysBodyAction(entt::entity creature) const;
 	/// Its walk stops, and it turns on the spot to the heading
 	bool StartTurnOnTheSpot(entt::entity creature, GameHeading heading);
+	/// The turn that waits until the action of its body ends starts when the body is at rest
+	void StartTurnAtRest(entt::entity creature);
 	/// Starts a move for a fraction of top speed, the creature's state already gathered, to a point or up to a thing
 	MoveResult StartMove(entt::entity creature, components::CreatureLocomotion& locomotion, glm::vec2 point, float fraction,
 	                     float minDistance, float maxDistance, bool ontoDestination);

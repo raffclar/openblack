@@ -217,6 +217,20 @@ std::optional<MeshId> magic::GetSeedModel(const InfoConstants& info, SpellSeedTy
 	return record.mesh;
 }
 
+MeshId magic::GetSeedGraphicModel(const InfoConstants& info, SpellSeedType seed, float ownerAlignment)
+{
+	const auto& record = GetSpellSeedInfo(info, seed);
+	if (seed == SpellSeedType::FlockFlying)
+	{
+		// A flock with no flock record keeps the record's model
+		if (const auto* flock = GetMagicInfoAs<GMagicFlockFlyingInfo>(info, record.magicTypes[0]); flock != nullptr)
+		{
+			return ownerAlignment < flock->alignmentSwitch ? MeshId::AnimalBat1 : MeshId::AnimalSpellDove;
+		}
+	}
+	return record.mesh;
+}
+
 int magic::GetPowerUpFromMagicType(const GSpellSeedInfo& seed, MagicType type)
 {
 	return GetPowerUpGesture(seed, type).level;

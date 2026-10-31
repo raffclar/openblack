@@ -12,6 +12,7 @@
 #include <cstddef>
 #include <cstdint>
 
+#include <bit>
 #include <optional>
 #include <span>
 #include <string_view>
@@ -121,5 +122,15 @@ struct Leg
 /// The position in a list of the script's footpaths, the newest first, of the footpath that the script gives this
 /// number. The script counts from the newest footpath, which is number 0. None when no footpath has the number.
 [[nodiscard]] std::optional<size_t> ScriptFootpathIndex(size_t count, int32_t number);
+
+/// The square of the reach of a link of the land's footpath file, in metres: a building takes the link when its place is
+/// nearer to the place of the link than 0.05 m. The game keeps the reach as a double.
+constexpr double k_FileLinkReachSq = std::bit_cast<double>(uint64_t {0x3F647AE147AE147C});
+
+/// The building that takes a link of the land's footpath file: the first place in the list that is in the reach of the
+/// place of the link. None when no place is near enough.
+/// The list gives the buildings that stand there first. Then it gives the plans of the towns in the order of the game's
+/// list of all towns, and the plans of each town in the order that the town made them.
+[[nodiscard]] std::optional<size_t> FileLinkHolder(glm::ivec2 link, Places places);
 
 } // namespace openblack::ecs::footpath_rules

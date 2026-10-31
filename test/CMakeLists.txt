@@ -198,6 +198,7 @@ openblack_setup_and_add_test(test_moon graphics/test_moon.cpp)
 openblack_setup_and_add_test(test_bone_budget graphics/test_bone_budget.cpp)
 openblack_setup_and_add_test(test_bone_palette graphics/test_bone_palette.cpp)
 openblack_setup_and_add_test(test_draw_order graphics/test_draw_order.cpp)
+openblack_setup_and_add_test(test_draw_encoder graphics/test_draw_encoder.cpp)
 openblack_setup_and_add_test(test_view_frustum graphics/test_view_frustum.cpp)
 openblack_setup_and_add_test(test_mesh_detail graphics/test_mesh_detail.cpp)
 openblack_setup_and_add_test(test_detail_level graphics/test_detail_level.cpp)
@@ -2257,3 +2258,6 @@ add_test(NAME test_recorded_scenario
          COMMAND ${Python3_EXECUTABLE}
                  ${CMAKE_SOURCE_DIR}/tools/sim/test_recorded_scenario.py
 )
+openblack_setup_and_add_test(test_script_playground_lessons test_script_playground_lessons.cpp)
+openblack_setup_and_add_test(test_script_camera_computer_hand test_script_camera_computer_hand.cpp)
+openblack_setup_and_add_test(test_town_attack_time test_town_attack_time.cpp)

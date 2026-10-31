@@ -52,6 +52,17 @@ TEST(ComputerHand, EachKindOfStepHasOneOwnerPart)
 	}
 }
 
+TEST(ComputerHand, EachKindOfStepThatTheGameAddsIsMade)
+{
+	// The game never adds a step to say a text or to lower a totem, so these two kinds are not made
+	for (size_t kind = 0; kind < static_cast<size_t>(StepKind::_Count); ++kind)
+	{
+		const auto step = static_cast<StepKind>(kind);
+		const bool neverAdded = step == StepKind::SayText || step == StepKind::LowerTotem;
+		EXPECT_EQ(steps::Table().at(kind).made, !neverAdded) << kind;
+	}
+}
+
 TEST(ComputerHand, KindsOfThisPartThatAreNotMadeEndTheActionBadly)
 {
 	FakeWorld world;

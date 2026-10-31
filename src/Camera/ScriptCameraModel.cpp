@@ -248,6 +248,8 @@ void ScriptCameraModel::Restore(const Saved& saved, const Lookups& lookups)
 	_lookedAtId = saved.lookedAtId;
 	_followed = saved.followedId.has_value() && lookups.thing ? lookups.thing(*saved.followedId) : ThingLookup {};
 	_lookedAt = saved.lookedAtId.has_value() && lookups.thing ? lookups.thing(*saved.lookedAtId) : ThingLookup {};
+	_handFollowed = nullptr;
+	_handLookedAt = nullptr;
 	_follow = saved.follow;
 	_seconds = saved.seconds;
 	_track = nullptr;
@@ -279,6 +281,7 @@ void ScriptCameraModel::SetOrigin(const glm::vec3& origin)
 {
 	StopTrack();
 	StopFollowing();
+	_handFollowed = nullptr;
 	Place(_origin, origin);
 }
 
@@ -286,6 +289,7 @@ void ScriptCameraModel::SetFocus(const glm::vec3& focus)
 {
 	StopTrack();
 	StopLookingAt();
+	_handLookedAt = nullptr;
 	Place(_focus, focus);
 }
 
@@ -299,6 +303,7 @@ void ScriptCameraModel::MoveOrigin(const glm::vec3& origin, float seconds)
 {
 	StopTrack();
 	StopFollowing();
+	_handFollowed = nullptr;
 	Send(_origin, origin, seconds);
 }
 
@@ -306,6 +311,7 @@ void ScriptCameraModel::MoveFocus(const glm::vec3& focus, float seconds)
 {
 	StopTrack();
 	StopLookingAt();
+	_handLookedAt = nullptr;
 	Send(_focus, focus, seconds);
 }
 
@@ -371,8 +377,23 @@ void ScriptCameraModel::Follow(Subject thing)
 void ScriptCameraModel::LookAt(Subject thing)
 {
 	StopTrack();
+	_handLookedAt = nullptr;
 	_lookedAt = std::move(thing.lookup);
 	_lookedAtId = _lookedAt ? std::optional(thing.id) : std::nullopt;
+}
+
+void ScriptCameraModel::LookAtComputerHand(HandLookup hand)
+{
+	StopTrack();
+	StopLookingAt();
+	_handLookedAt = std::move(hand);
+}
+
+void ScriptCameraModel::FollowComputerHand(HandLookup hand)
+{
+	StopTrack();
+	StopFollowing();
+	_handFollowed = std::move(hand);
 }
 
 void ScriptCameraModel::StopTrack()
@@ -385,6 +406,8 @@ void ScriptCameraModel::RunTrack(std::shared_ptr<const edt::EDTTrack> track, std
 {
 	StopLookingAt();
 	StopTrack();
+	_handFollowed = nullptr;
+	_handLookedAt = nullptr;
 	_trackTime = std::chrono::milliseconds::zero();
 	if (track == nullptr || track->position.points.empty() || track->focus.points.empty())
 	{
@@ -495,11 +518,35 @@ void ScriptCameraModel::SnapToFollowed()
 	{
 		Place(_focus, lookedAt->point);
 	}
+	else if (const auto hand = _handLookedAt ? _handLookedAt() : std::nullopt; hand.has_value())
+	{
+		Place(_focus, *hand);
+	}
 	if (followed.has_value())
 	{
 		Place(_origin, FollowOrigin(*followed, _follow));
 	}
+	else if (const auto hand = _handFollowed ? _handFollowed() : std::nullopt; hand.has_value())
+	{
+		// Here the camera stands back from the hand that it follows
+		Place(_origin, FollowOrigin({.point = *hand}, _follow));
+	}
 	_seconds = k_FollowBlendSeconds;
+}
+
+std::optional<glm::vec3> ScriptCameraModel::FocusPoint(const std::optional<FollowedThing>& lookedAt,
+                                                       const std::optional<FollowedThing>& followed) const
+{
+	if (lookedAt.has_value())
+	{
+		return lookedAt->point;
+	}
+	if (followed.has_value())
+	{
+		return followed->point;
+	}
+	// The hand of a computer god is at the height of the land under it
+	return _handLookedAt ? _handLookedAt() : std::nullopt;
 }
 
 void ScriptCameraModel::UpdateFollowing()
@@ -520,13 +567,24 @@ void ScriptCameraModel::UpdateFollowing()
 	_follow.viewingDistance =
 	    _follow.viewingDistance > k_FollowNearest ? std::min(_follow.viewingDistance, k_FollowFarthest) : k_FollowNearest;
 	const float seconds = FollowSeconds(_seconds, _follow.zoomTimeScale);
-	if (const auto& focus = lookedAt.has_value() ? lookedAt : followed; focus.has_value())
+	const auto focus = FocusPoint(lookedAt, followed);
+	if (focus.has_value())
 	{
-		Send(_focus, focus->point, seconds);
+		Send(_focus, *focus, seconds);
 	}
 	if (followed.has_value())
 	{
 		Send(_origin, FollowOrigin(*followed, _follow), seconds);
+	}
+	else if (_handFollowed)
+	{
+		// The camera that follows the hand of a computer god stands back from the point that it looks at, not from the
+		// hand. With no point to look at, the place of the camera is not known (vanilla-bugs 801): it stays as it is.
+		_follow.pitch = _follow.pitch > k_FollowLowestPitch ? _follow.pitch : k_FollowLowestPitch;
+		if (focus.has_value())
+		{
+			Send(_origin, FollowOrigin({.point = *focus}, _follow), seconds);
+		}
 	}
 }
 

@@ -149,6 +149,8 @@ private:
 	void UpdateComputerActions();
 	/// The thing that a forced action of a computer god gets, or none when the scenario has no such thing
 	[[nodiscard]] entt::entity ComputerActionThingOf(const ComputerActionThing& thing, PlayerNames player) const;
+	/// Marks the temple of the player as hit at the turn, as a thrown thing that harms the heart does
+	void MarkTempleHit(PlayerNames player, uint32_t turn) const;
 	/// The first player's statistics and their creature's tallies, as the scenario gives them
 	static void SetUpStatistics(const Scenario& scenario);
 	void PlaceCreatures(const Scenario& scenario, glm::vec2 middle);

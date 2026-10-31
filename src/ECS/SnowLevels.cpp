@@ -10,6 +10,7 @@
 #include "SnowLevels.h"
 
 #include <algorithm>
+#include <utility>
 #include <vector>
 
 #include "3D/FieldCrop.h"
@@ -24,6 +25,7 @@
 #include "ECS/Components/HighDetail.h"
 #include "ECS/Components/MapCellResident.h"
 #include "ECS/Components/Physics.h"
+#include "ECS/Components/Scaffold.h"
 #include "ECS/Components/SnowLevel.h"
 #include "ECS/Components/TownDesireFlag.h"
 #include "ECS/Components/Transform.h"
@@ -128,7 +130,7 @@ int32_t ShownLevelOf(const Registry& registry, entt::entity entity)
 	return snow->piece ? snow_cover::BrokenModelShownLevel(snow->level) : snow->level;
 }
 
-void FollowBreak(Registry& registry, entt::entity building, bool broken)
+void FollowBreak(Registry& registry, entt::entity building, bool broken, uint32_t model)
 {
 	auto* snow = registry.TryGet<SnowLevel>(building);
 	if (!broken)
@@ -141,11 +143,60 @@ void FollowBreak(Registry& registry, entt::entity building, bool broken)
 	}
 	if (snow == nullptr)
 	{
-		registry.Assign<SnowLevel>(building, SnowLevel {.broken = 0});
+		registry.Assign<SnowLevel>(building, SnowLevel {.broken = 0, .brokenModel = model});
 	}
-	else if (!snow->broken.has_value())
+	else if (!snow->broken.has_value() || snow->brokenModel != model)
 	{
 		snow->broken = snow->level;
+		snow->brokenModel = model;
+	}
+}
+
+void StepScaffoldPhantoms(Registry& registry, const std::function<float(glm::vec2)>& depthAt, int32_t step)
+{
+	std::vector<std::pair<entt::entity, entt::entity>> shown;
+	registry.Each<const components::ScaffoldGhost>([&shown](entt::entity phantom, const components::ScaffoldGhost& ghost) {
+		if (ghost.model.has_value())
+		{
+			shown.emplace_back(phantom, ghost.scaffold);
+		}
+	});
+	for (const auto& [phantom, scaffold] : shown)
+	{
+		auto* snow = registry.TryGet<SnowLevel>(phantom);
+		if (!registry.Valid(scaffold) || !registry.AllOf<InHand>(scaffold))
+		{
+			// The site shows it: no snow from now on
+			if (snow == nullptr)
+			{
+				registry.Assign<SnowLevel>(phantom, SnowLevel {.noSnow = true});
+			}
+			else
+			{
+				snow->level = 0;
+				snow->noSnow = true;
+			}
+			continue;
+		}
+		if ((snow != nullptr && snow->noSnow) || step <= 0)
+		{
+			continue;
+		}
+		const auto* transform = registry.TryGet<const Transform>(phantom);
+		if (transform == nullptr)
+		{
+			continue;
+		}
+		const auto target = snow_cover::ObjectLevel(depthAt({transform->position.x, transform->position.z}),
+		                                            snow_cover::k_ObjectRate, snow_cover::k_ObjectRate);
+		if (snow != nullptr)
+		{
+			snow->level = snow_cover::EaseLevel(snow->level, target, step);
+		}
+		else if (target != 0)
+		{
+			registry.Assign<SnowLevel>(phantom, snow_cover::EaseLevel(0, target, step));
+		}
 	}
 }
 
