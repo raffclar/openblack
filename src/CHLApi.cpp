@@ -772,7 +772,11 @@ entt::entity CreateScriptObject(const ObjectType type, uint32_t subtype, const g
 		// On the land under the place asked for, even when that is the hand up in the air
 		return CreateScriptBall(OnGround(position));
 	case ObjectType::Marker:
-		return ScriptMarkerArchetype::Create(position);
+	{
+		// A marker stands at the map position of the point and keeps the height of the point above the land
+		const auto& island = Locator::terrainSystem::value();
+		return ScriptMarkerArchetype::Create(map_coords::ToWorld(island, map_coords::FromWorld(island, position)));
+	}
 	case ObjectType::PuzzleGame:
 	{
 		// The system makes a puzzle game of each kind. Only the beach temple puzzle and the tree puzzles have pieces now.
@@ -6875,7 +6879,7 @@ void GameTeamSize() // 219 GAME_TEAM_SIZE
 
 void GameType() // 220 GAME_TYPE
 {
-	// The script type of the thing, as a find or an is-of-type test matches it. A thing that has no script type gives 0.
+	// The script type of the thing. A thing that has no script type gives 0.
 	const auto object = PopObject();
 	const auto& registry = Locator::entitiesRegistry::value();
 	if (object == entt::null || !registry.Valid(object))
@@ -6884,8 +6888,7 @@ void GameType() // 220 GAME_TYPE
 		Pushi(0);
 		return;
 	}
-	const auto kind = ecs::script_find::KindOf(registry, object);
-	Pushi(kind.has_value() ? static_cast<int32_t>(kind->type) : 0);
+	Pushi(static_cast<int32_t>(ecs::script_find::GameTypeOf(registry, object)));
 }
 
 void GameSubType() // 221 GAME_SUB_TYPE

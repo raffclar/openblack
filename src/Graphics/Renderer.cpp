@@ -3045,7 +3045,9 @@ void Renderer::DrawMists(const DrawSceneDesc& desc) const
 
 	desc.entities.Each<const Mist, const ecs::components::Transform>(
 	    [&](const Mist& mist, const ecs::components::Transform& transform) {
-		    drawMist(mist, transform.position, mist.colour, nullptr);
+		    // A land mist draws with an alpha that its whole alpha gives, not with the alpha byte of its colour
+		    const auto drawnAlpha = mists::DrawnAlpha(mists::WholeAlphaOf(mist.colour, mist.alphaHighBits));
+		    drawMist(mist, transform.position, (static_cast<uint32_t>(drawnAlpha) << 24u) | (mist.colour & 0xFFFFFFu), nullptr);
 	    });
 	// The sky's clouds are things of the drawn registry
 	if (cloudsShown && Locator::drawnRegistry::has_value())

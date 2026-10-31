@@ -2142,6 +2142,27 @@ void AddSingingStones(std::vector<Scenario>& all)
 	                  .script = "BringBackTheDead",
 	                  .scriptGlobals = {{"SSBringBackToLifeActive", {.number = 0.0f}}}}},
 	});
+
+	// The first tune of the second land's singing stones, Twinkle Twinkle Little Star, as the stones start it when the
+	// player taps the tune. The script makes its mist and its bats at a fixed place of the second land.
+	all.push_back({
+	    .id = "story.singing_stones_twinkle",
+	    .name = "The singing stones play Twinkle Twinkle Little Star",
+	    .facet = Facet::Story,
+	    .description = "Two seconds in, the game's TwinkleSequence script runs, as a tap of the tune on the second "
+	                   "land's stones starts it. It is a cut scene with its own music and camera.",
+	    .expected = "A flock of 10 bats comes about the ring, and a faint white mist shows at the ring's centre. The "
+	                "camera moves in, then up, then back, and the game's time goes to 23:00 over 10 seconds. At the end "
+	                "the mist grows from size 1 to 2 and fades away over 10 seconds, and the music stops.",
+	    .environment = {.dispenserGrid = false, .landNumber = 2},
+	    .framing = {.shot = Shot::Placed,
+	                .eye = {k_Ring.x - 7.0f, 14.0f, k_Ring.y + 3.0f},
+	                .look = {k_Ring.x + 9.0f, 10.0f, k_Ring.y - 1.0f}},
+	    .commands = {{.kind = Kind::RunScript,
+	                  .delaySeconds = 2.0f,
+	                  .script = "TwinkleSequence",
+	                  .scriptGlobals = {{"SSDoneBats", {.number = 0.0f}}}}},
+	});
 }
 
 /// The beach temple puzzle of the second land, as its script makes it: turned a half turn, at its normal size
