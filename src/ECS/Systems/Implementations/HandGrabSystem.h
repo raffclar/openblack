@@ -73,6 +73,7 @@ public:
 	void Reset() override;
 	void InterfaceTurn(uint32_t nowMs, uint32_t turn) override;
 	void DoTake(PlayerNames player, entt::entity object) override;
+	void DoComputerTake(PlayerNames player, entt::entity object) override;
 	void DoLetGo(PlayerNames player, const player_commands::HandLetGo& letGo) override;
 	void DoTap(PlayerNames player, entt::entity object) override;
 	void DoGive(PlayerNames player, entt::entity creature, entt::entity object, bool leftHand) override;
@@ -130,9 +131,12 @@ private:
 	glm::vec3 Pull(components::HandGrab& grab, const Frame& frame);
 	/// The hand takes a thing it waited for or pulled free; or, not from the world, a handful it made as it scoops. With
 	/// sounds, the hand also plays the sounds of the take.
-	/// Without askInfluence, the hand takes the thing outside its player's influence too (the debug tools only)
+	/// Without askInfluence, the hand takes the thing outside its player's influence too (the debug tools and the hands
+	/// of the computer gods)
 	void Take(components::HandGrab& grab, entt::entity object, bool fromTheWorld = true, bool sounds = true,
 	          bool askInfluence = true);
+	/// The take of a command at the turn, by the hand of its player; with askInfluence as for Take
+	void TakeAtTurn(PlayerNames player, entt::entity object, bool askInfluence);
 	/// The hand sends the command that takes a thing that it waited for or pulled free, and plays the sounds of the take
 	void SendTake(components::HandGrab& grab, entt::entity object);
 	/// The pick-up sound of a thing, and the cry of a villager

@@ -43,6 +43,10 @@ struct HttpRequest
 	std::string url;
 	std::vector<HttpHeader> headers;
 	std::vector<uint8_t> body;
+	/// A transfer of a large file, such as a land of a network game. The answer has no size limit and the request has
+	/// no limit on its full time. The request stops when no bytes come for the time of the stall limit. The client also
+	/// asks the server for a compressed answer, and gives the body after it expands it.
+	bool large {false};
 };
 
 /// Why a request got no answer from the server

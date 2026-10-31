@@ -810,6 +810,9 @@ struct Command
 		/// Every kind of the advisors' guidance counts as heard as long ago as can be, so the next remark due is said
 		/// at once rather than after its usual wait. Needs no creature
 		EndGuidanceWaits,
+		/// The scenario's town believes this much (amount) in the second player from now, as a town that the rival
+		/// impressed. Needs no creature
+		SetTownBeliefInRival,
 		/// The scenario's temple (value: its place in the scenario's temples) starts being destroyed, as when its heart
 		/// loses the last of its life. Needs no creature
 		DestroyTemple,
@@ -1218,6 +1221,14 @@ struct TempleSetup
 	std::optional<float> life;
 };
 
+/// Two players that are allies, as a script's SET_PLAYER_ALLY makes them, with the same strength for each of them
+struct AllySetup
+{
+	PlayerNames player {PlayerNames::PLAYER_ONE};
+	PlayerNames other {PlayerNames::PLAYER_TWO};
+	float strength {1.0f};
+};
+
 /// The player's hand held still over the land for the whole scenario, as a player holds it: from the middle of the map,
 /// and how high above the land
 struct HandHold
@@ -1287,6 +1298,8 @@ struct ComputerActionThing
 		Workshop,
 		/// The first creature of the player that owner gives
 		PlayerCreature,
+		/// A marker that the tool makes on the land at point, as a land script makes a marker
+		Marker,
 	};
 	Kind kind {Kind::None};
 	uint32_t townId {0};
@@ -1294,6 +1307,8 @@ struct ComputerActionThing
 	/// The index of the scenario's object or creature
 	size_t object {0};
 	PlayerNames owner {PlayerNames::PLAYER_ONE};
+	/// The point of a marker from the middle of the map, x east and y north
+	glm::vec2 point {0.0f};
 };
 
 /// A testbed tool step: the computer god of a player does the action of a node of its mind with two things. The tool
@@ -1308,6 +1323,9 @@ struct ComputerActionSetup
 	std::string_view node;
 	ComputerActionThing first;
 	ComputerActionThing second;
+	/// The tool forces the action as a land script's force command does: the god stops the action that it does and starts
+	/// this one at once, rather than after the actions before it in the queue
+	bool forceAtOnce {false};
 };
 
 struct Scenario
@@ -1325,6 +1343,8 @@ struct Scenario
 	std::vector<ObjectSetup> objects;
 	std::vector<BirdFlockSetup> birdFlocks;
 	std::vector<TempleSetup> temples;
+	/// The alliances made after the scenario's things and the land's script
+	std::vector<AllySetup> allies;
 	std::vector<ParticleSetup> particles;
 	std::vector<VortexSetup> vortices;
 	std::vector<RewardSetup> rewards;

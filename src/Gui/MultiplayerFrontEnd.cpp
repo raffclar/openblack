@@ -18,7 +18,9 @@
 #include "ECS/Systems/LobbyClientSystemInterface.h"
 #include "ECS/Systems/NetworkGameSystemInterface.h"
 #include "Online/LanDiscoveryInterface.h"
+#include "Online/MapDownload.h"
 #include "Online/NetworkSession.h"
+#include "Online/OnlineMapStoreInterface.h"
 #include "TextDatabase.h"
 
 using namespace openblack::gui;
@@ -93,6 +95,7 @@ void MultiplayerFrontEnd::Update()
 	}
 	FollowSession();
 	FollowStart();
+	FollowMapDownload();
 	if (_flow.box == Box::GameList)
 	{
 		FollowSelectedGame();
@@ -525,6 +528,102 @@ void MultiplayerFrontEnd::RefreshGames()
 		// A list that shrank loses the pick of a game that went
 		FollowSelectedGame();
 	});
+	// The names of the lobby's lands go in the list of the lands, for the lands of the games
+	GetLobbyMaps({});
+}
+
+void MultiplayerFrontEnd::GetLobbyMaps(std::function<void(bool ok)> then)
+{
+	if (_flow.kind != LobbyKind::Internet || _services.lobby == nullptr)
+	{
+		if (then)
+		{
+			then(false);
+		}
+		return;
+	}
+	_services.lobby->GetMaps([this, then = std::move(then)](ecs::systems::LobbyResult<lobby_api::MapList>&& result) {
+		if (result.Ok())
+		{
+			_lobbyMaps = std::move(result.value->maps);
+			for (const auto& map : _lobbyMaps)
+			{
+				if (!FindLand(_maps, map.file).has_value())
+				{
+					_maps.push_back(LocalMap {.name = ToUtf16(map.name), .file = map.file, .players = map.players});
+				}
+			}
+		}
+		if (then)
+		{
+			then(result.Ok());
+		}
+	});
+}
+
+void MultiplayerFrontEnd::FetchRoomMap(std::string sha256)
+{
+	_roomMapHash = sha256;
+	_mapFailed = false;
+	if (_mapDownload != nullptr)
+	{
+		_mapDownload->Stop();
+	}
+	if (_services.maps == nullptr || _services.lobby == nullptr)
+	{
+		return;
+	}
+	GetLobbyMaps([this, sha256 = std::move(sha256)](bool ok) {
+		// The player left the room, or the room has a different land now
+		if (_roomMapHash != sha256)
+		{
+			return;
+		}
+		const auto map = ok ? online::MapDownload::MapOfRoom(_lobbyMaps, sha256) : std::nullopt;
+		if (!map.has_value())
+		{
+			_mapFailed = true;
+			return;
+		}
+		if (_mapDownload == nullptr)
+		{
+			auto* lobby = _services.lobby;
+			_mapDownload = std::make_unique<online::MapDownload>(*_services.maps, [lobby](const lobby_api::OnlineMap& wanted,
+			                                                                              auto done) {
+				lobby->DownloadMap(wanted, [done = std::move(done)](ecs::systems::LobbyResult<std::vector<uint8_t>>&& bytes) {
+					done(std::move(bytes.value));
+				});
+			});
+		}
+		_mapDownload->Start(*map);
+	});
+}
+
+void MultiplayerFrontEnd::FollowMapDownload()
+{
+	if (_flow.kind != LobbyKind::Internet || !_room.has_value() || !_joining || IsStarted())
+	{
+		return;
+	}
+	// The room's game server gives the lobby its land after it opens, so the game list can have a newer hash
+	const auto games = GetGames();
+	const auto current = std::ranges::find(games, _room->id, &lobby_api::ServerEntry::id);
+	const auto& hash = current != games.end() ? current->map : _room->map;
+	if (!hash.empty() && hash != _roomMapHash)
+	{
+		FetchRoomMap(hash);
+	}
+	const bool failed =
+	    _mapFailed || (_mapDownload != nullptr && _mapDownload->GetState() == online::MapDownload::State::Failed);
+	if (failed && _flow.box == Box::Room && _message == Message::None)
+	{
+		_mapFailed = false;
+		if (_mapDownload != nullptr)
+		{
+			_mapDownload->Stop();
+		}
+		Show(Message::CouldNotDownloadMap);
+	}
 }
 
 void MultiplayerFrontEnd::Join(std::u16string password)
@@ -671,6 +770,12 @@ void MultiplayerFrontEnd::LeaveRoom()
 	}
 	_joining = false;
 	_room.reset();
+	_roomMapHash.clear();
+	_mapFailed = false;
+	if (_mapDownload != nullptr)
+	{
+		_mapDownload->Stop();
+	}
 	_joined = false;
 	_observer = false;
 	_ready = false;

@@ -192,6 +192,7 @@
 #include "LHVM.h"
 #include "Online/HttpClientInterface.h"
 #include "Online/NetworkSession.h"
+#include "Online/OnlineMapStoreInterface.h"
 #include "Online/PushChannelInterface.h"
 #include "Online/TokenStoreInterface.h"
 #include "Online/WebSocketInterface.h"
@@ -202,6 +203,7 @@
 #if defined(__EMSCRIPTEN__)
 #include "Web/BrowserWebSocketClient.h"
 #include "Web/FetchHttpClient.h"
+#include "Web/IndexedDbMapStore.h"
 #else
 #include "Online/Desktop/CurlHttpClient.h"
 #include "Online/Desktop/CurlWebSocketClient.h"
@@ -464,6 +466,12 @@ void InitializeOnline(const player_profiles::Store& profiles)
 		    const auto path = *creatureMinds / *file;
 		    return fileSystem.Exists(path) ? fileSystem.ReadAll(path) : std::vector<uint8_t> {};
 	    });
+	// The lands of network games that the player gets from the lobby (deviation 170)
+#if defined(__EMSCRIPTEN__)
+	Locator::onlineMapStore::emplace<web::IndexedDbMapStore>();
+#else
+	Locator::onlineMapStore::emplace<online::FolderMapStore>(Locator::filesystem::value(), profiles.folder);
+#endif
 	Locator::lobbyClient::emplace<LobbyClientSystem>(
 	    LobbyConfig(), Locator::httpClient::value(),
 	    std::make_unique<online::WebSocketPushChannel>(Locator::webSocketClient::value(), k_PushAuth),
@@ -892,6 +900,7 @@ void openblack::ShutDownServices()
 	// The lobby client goes before the web client that it uses, and the real-world weather before the lobby client
 	Locator::realWeatherSystem::reset();
 	Locator::lobbyClient::reset();
+	Locator::onlineMapStore::reset();
 	Locator::networkGame::reset();
 	Locator::webSocketClient::reset();
 	Locator::httpClient::reset();

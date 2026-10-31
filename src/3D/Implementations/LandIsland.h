@@ -55,6 +55,7 @@ public:
 	void SetCellAltitude(glm::u16vec2 coordinates, uint8_t altitude) override;
 	void CommitAltitudeChanges() override;
 	size_t RestoreBuiltAltitudes() override;
+	[[nodiscard]] std::vector<land_reuse::CellAltitude> ChangedAltitudes() const override;
 
 	// Debug
 	void DumpTextures() const override;

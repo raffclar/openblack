@@ -476,6 +476,7 @@ void LobbyClientSystem::Dispatch(Call call)
 	    .url = Address(call.path),
 	    .headers = call.headers,
 	    .body = call.body,
+	    .large = call.large,
 	};
 	request.headers.emplace_back("Authorization", "Bearer " + _accessToken);
 	const auto generation = _generation;
@@ -496,7 +497,7 @@ void LobbyClientSystem::Dispatch(Call call)
 }
 
 template <typename Value, typename Parser>
-void LobbyClientSystem::CallFor(HttpMethod method, std::string path, LobbyCallback<Value> callback, Parser parse)
+void LobbyClientSystem::CallFor(HttpMethod method, std::string path, LobbyCallback<Value> callback, Parser parse, bool large)
 {
 	if (!_config.has_value())
 	{
@@ -506,7 +507,7 @@ void LobbyClientSystem::CallFor(HttpMethod method, std::string path, LobbyCallba
 	Authorized(Call {
 	    .method = method,
 	    .path = std::move(path),
-	    .headers = {{"Accept", std::string(k_JsonType)}},
+	    .headers = {{"Accept", large ? std::string("application/octet-stream") : std::string(k_JsonType)}},
 	    .done =
 	        [callback = std::move(callback), parse = std::move(parse)](HttpResponse&& response) {
 		        if (auto error = LobbyErrorOf(response); error.kind != LobbyErrorKind::None)
@@ -522,6 +523,7 @@ void LobbyClientSystem::CallFor(HttpMethod method, std::string path, LobbyCallba
 		        }
 		        Succeed(callback, std::move(*value));
 	        },
+	    .large = large,
 	});
 }
 
@@ -761,6 +763,20 @@ void LobbyClientSystem::GetClanLogo(int64_t clanId, LobbyCallback<std::vector<ui
 		                              }
 		                              return response.body;
 	                              });
+}
+
+void LobbyClientSystem::GetMaps(LobbyCallback<lobby_api::MapList> callback)
+{
+	CallFor<lobby_api::MapList>(HttpMethod::Get, "/maps", std::move(callback),
+	                            [](const HttpResponse& response) { return lobby_api::ParseMapList(TextOf(response)); });
+}
+
+void LobbyClientSystem::DownloadMap(const lobby_api::OnlineMap& map, LobbyCallback<std::vector<uint8_t>> callback)
+{
+	// The file has its place on the lobby by its hash, which the list checked
+	CallFor<std::vector<uint8_t>>(
+	    HttpMethod::Get, "/maps/" + map.sha256, std::move(callback),
+	    [](const HttpResponse& response) -> std::optional<std::vector<uint8_t>> { return response.body; }, true);
 }
 
 void LobbyClientSystem::GetPlayerRanking(int32_t page, LobbyCallback<lobby_api::RankingPage> callback)

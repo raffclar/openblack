@@ -155,6 +155,8 @@ std::string_view MessageTextName(Message message)
 		return "HELP_TEXT_DIALOG_ADDITION_130";
 	case Message::KickedFromGame:
 		return "HELP_TEXT_MPFER_KICKEDYOUGAME";
+	case Message::CouldNotDownloadMap:
+		return "HELP_TEXT_MPFER_COULDNOTDOWNLOADMAP";
 	case Message::None:
 		return {};
 	}

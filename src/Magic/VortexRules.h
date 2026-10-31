@@ -102,9 +102,9 @@ enum class Step
 	return type != VortexType::Volcano;
 }
 
-/// How far a loaded vortex levels the land again at once, if it levels it. The land comes back from its file at a load,
-/// without the levelling. The vortex keeps the heights that it read first and how far it levelled them, so it can do the
-/// same levelling again.
+/// How far a loaded vortex levels the land again at once, if it levels it. A saved game of the game itself keeps no land,
+/// so its load brings back the land of the file without the levelling. The vortex keeps the heights that it read first
+/// and how far it levelled them, so it can do the same levelling again.
 [[nodiscard]] constexpr std::optional<float> LevelAfterLoad(VortexType type, float levelApplied, size_t heightsKept)
 {
 	if (!LevelsGround(type) || levelApplied < 0.0f || heightsKept != k_LevelCellCount)

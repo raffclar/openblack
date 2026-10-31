@@ -881,6 +881,48 @@ class GestureTest(SessionBase):
         self.assertIn("camera moves", entry["description"])
 
 
+class ComputerMindTest(SessionBase):
+    """A computer god's whole mind is read by name: every node with its personality weight, and its attitudes"""
+
+    def setUp(self):
+        super().setUp()
+        self.nodes = [{"index": 0, "name": "Root", "weight": 1.0},
+                      {"index": 7, "name": "ExpandInfluence", "weight": 0.2}]
+        self.first.handlers["players.computer_nodes"] = lambda request: [
+            node for node in self.nodes
+            if request["params"].get("name") in (None, node["name"])]
+        self.first.handlers["players.computer_attitudes"] = lambda request: {
+            "player": 1, "attitudes": [{"player": 0, "name": "PLAYER_ONE", "attitude": 0.5, "kept": 1.0}]}
+
+    def test_the_nodes_of_a_god_are_asked_by_its_name_and_the_name_of_a_node(self):
+        answer = self.session.call("players_computer_nodes",
+                                   {"player": "PLAYER_TWO", "name": "ExpandInfluence", "port": self.first.port})
+        self.assertTrue(answer["ok"], answer)
+        self.assertEqual([node["weight"] for node in answer["result"]], [0.2])
+        asked = [r for r in self.first.asked() if r["query"] == "players.computer_nodes"]
+        self.assertEqual(asked[-1]["params"]["player"], "PLAYER_TWO")
+        self.assertEqual(asked[-1]["params"]["name"], "ExpandInfluence")
+
+    def test_every_node_is_given_and_a_list_pages(self):
+        answer = self.session.call("players_computer_nodes", {"player": 1, "limit": 1, "port": self.first.port})
+        self.assertTrue(answer["ok"], answer)
+        asked = [r for r in self.first.asked() if r["query"] == "players.computer_nodes"]
+        self.assertEqual(asked[-1]["params"]["player"], 1)
+        self.assertEqual(asked[-1]["limit"] if "limit" in asked[-1] else asked[-1]["params"].get("limit"), 1)
+
+    def test_the_attitudes_of_a_god_are_asked_by_its_number(self):
+        answer = self.session.call("players_computer_attitudes", {"player": 1, "port": self.first.port})
+        self.assertTrue(answer["ok"], answer)
+        self.assertEqual(answer["result"]["attitudes"][0]["attitude"], 0.5)
+
+    def test_the_tools_need_a_player_and_say_what_they_read(self):
+        for name in ("players_computer_nodes", "players_computer_attitudes"):
+            self.assertEqual(mcp.TOOLS_BY_NAME[name]["inputSchema"]["required"], ["player"])
+        self.assertIn("personality weight", mcp.TOOLS_BY_NAME["players_computer_nodes"]["description"])
+        self.assertIn("players.computer_nodes", mcp.CATALOGUE)
+        self.assertIn("players.computer_attitudes", mcp.CATALOGUE)
+
+
 class SchemaTest(unittest.TestCase):
     """Tools' parameters come from the game's own descriptions of its queries"""
     BUILT_IN = {"describe", "writes"}

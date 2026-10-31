@@ -37,6 +37,7 @@ public:
 	bool LoadMapWithFreshScripts(const std::filesystem::path& path, land_change::Kind change) override;
 	void LoadTestbed() override;
 	bool LoadGodsRingMap() override;
+	bool LoadGodsRingMapFile(std::span<const uint8_t> file) override;
 	bool LoadSavedLand(const std::filesystem::path& landPath, const std::filesystem::path& landscape,
 	                   const std::function<bool()>& restore, SavedLandUse use) override;
 	void LoadLandscape(const std::filesystem::path& path) override;

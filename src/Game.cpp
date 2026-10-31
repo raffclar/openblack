@@ -353,6 +353,7 @@
 #include "Online/NetworkLand.h"
 #include "Online/NetworkSession.h"
 #include "Online/OnlineMapLand.h"
+#include "Online/OnlineMapStoreInterface.h"
 #include "Online/OpenPage.h"
 #include "Online/StartRules.h"
 #include "Online/WebSocketInterface.h"
@@ -1383,7 +1384,8 @@ void Game::WarmUpFirstFrame()
 	// The draw lists of the land's things, as the first frame makes them
 	if (config.drawEntities)
 	{
-		rendering.PrepareDraw(config.drawBoundingBoxes, config.drawFootpaths, config.drawStreams);
+		rendering.PrepareDraw(config.drawBoundingBoxes, config.drawFootpaths, config.drawStreams,
+		                      ecs::systems::DrawUse::WarmUp);
 	}
 	const auto start = std::chrono::steady_clock::now();
 	// Some renderers divide the warm-up between some frames, each with a part of the draws
@@ -1421,7 +1423,7 @@ void Game::WarmUpFirstFrame()
 			if (config.drawEntities)
 			{
 				Locator::rendereringSystem::value().PrepareDraw(config.drawBoundingBoxes, config.drawFootpaths,
-				                                                config.drawStreams);
+				                                                config.drawStreams, ecs::systems::DrawUse::WarmUp);
 			}
 			auto desc = SceneDrawDesc(config, 0, IsHandDrawn());
 			desc.drawIsland = false;
@@ -2711,6 +2713,10 @@ void Game::UpdateOnline()
 	if (Locator::webSocketClient::has_value())
 	{
 		Locator::webSocketClient::value().Poll();
+	}
+	if (Locator::onlineMapStore::has_value())
+	{
+		Locator::onlineMapStore::value().Poll();
 	}
 	if (Locator::lobbyClient::has_value())
 	{
@@ -4249,7 +4255,7 @@ void Game::UpdateEntitiesFrame(std::chrono::microseconds deltaTime)
 				// The fast simulation mode makes every frame ready, also the ones it does not draw: the game's things go
 				// by what the frames make ready, so a frame left out would change the run
 				Locator::rendereringSystem::value().PrepareDraw(config.drawBoundingBoxes, config.drawFootpaths,
-				                                                config.drawStreams);
+				                                                config.drawStreams, ecs::systems::DrawUse::Frame);
 				ShowInspectorCamera(false);
 				// The interface picks what is under the cursor as the frame is drawn, for the next frame to go by: through
 				// an inspector's override while one is shown, as the frame is seen
@@ -5791,6 +5797,7 @@ std::unique_ptr<gui::MultiplayerFrontEnd> Game::MakeMultiplayerFrontEnd()
 	        },
 	    .owner = {},
 	    .poll = {},
+	    .maps = Locator::onlineMapStore::has_value() ? &Locator::onlineMapStore::value() : nullptr,
 	};
 	gui::MultiplayerFrontEnd::Settings settings;
 	// The registration page is on the lobby's site: Register on the site, then log in in the game
@@ -6211,7 +6218,16 @@ bool Game::StartNetworkLand(const game_socket::Start& start)
 	}
 	else if (start.godsRingMap)
 	{
-		if (!LoadGodsRingMap())
+		// A network client does not make the map for 32 gods: it loads the file of the server, which it got from the
+		// lobby (deviation 171)
+		const auto* store = Locator::onlineMapStore::has_value() ? &Locator::onlineMapStore::value() : nullptr;
+		const auto file = online::ReadStartLand(start.land, store, Locator::filesystem::value());
+		if (!file.has_value())
+		{
+			SPDLOG_LOGGER_ERROR(spdlog::get("game"), "This computer does not have the map of the game server: {}", start.land);
+			return false;
+		}
+		if (!lands.LoadGodsRingMapFile(*file))
 		{
 			return false;
 		}
