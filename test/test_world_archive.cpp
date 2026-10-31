@@ -1481,6 +1481,38 @@ TEST(WorldArchive, AWriterGivesTheSameBytesForAValueThatItWroteBefore)
 	ASSERT_NE(again.FindPlan(entt::type_hash<FakeCounted>::value()), nullptr);
 }
 
+TEST(WorldArchive, ACopyOfAWriterUsesItsOwnPlans)
+{
+	entt::meta_ctx context;
+	Register(context);
+	const auto walker = SampleWalker(entt::entity {3}, entt::entity {8});
+	const auto spot = entt::type_hash<FakeSpot>::value();
+
+	auto source = std::make_unique<BinaryWriter>(context);
+	Save(*source, walker);
+	const auto sourceBytes = source->Bytes();
+	ASSERT_NE(source->FindPlan(spot), nullptr);
+
+	// The copy finds the plan in its own map, also after the writer that it copied is gone
+	BinaryWriter copy = *source;
+	const auto* sourcePlan = source->FindPlan(spot);
+	ASSERT_NE(copy.FindPlan(spot), nullptr);
+	EXPECT_NE(copy.FindPlan(spot), sourcePlan);
+	source.reset();
+	copy.Clear();
+	Save(copy, walker);
+	EXPECT_EQ(copy.Bytes(), sourceBytes);
+
+	// The same for a writer that a copy replaces
+	BinaryWriter replaced(context);
+	Save(replaced, walker);
+	replaced = copy;
+	EXPECT_NE(replaced.FindPlan(spot), copy.FindPlan(spot));
+	replaced.Clear();
+	Save(replaced, walker);
+	EXPECT_EQ(replaced.Bytes(), sourceBytes);
+}
+
 TEST(WorldArchive, AWriterNamesAValueThatItCannotKeepAlsoByThePlanOfItsType)
 {
 	entt::meta_ctx context;

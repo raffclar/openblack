@@ -488,6 +488,17 @@ void CreaturePhysiologySystem::Drink(entt::entity creature)
 	}
 }
 
+void CreaturePhysiologySystem::StartBody(entt::entity creature)
+{
+	auto& registry = Locator::entitiesRegistry::value();
+	const auto* self = registry.TryGet<const Creature>(creature);
+	auto* needs = registry.TryGet<CreatureNeeds>(creature);
+	if (self != nullptr && needs != nullptr)
+	{
+		StartNeeds(*needs, SpeciesOf(self->species));
+	}
+}
+
 void CreaturePhysiologySystem::SitTurn(entt::entity creature)
 {
 	auto& registry = Locator::entitiesRegistry::value();

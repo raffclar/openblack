@@ -122,12 +122,15 @@ TEST(MagicTables, effectGetters)
 	auto& storm = info->magicEffect[16];
 	storm.timerWhenPlayerCasting = 40.0f;
 	storm.timerWhenCreatureCasting = 20.0f;
+	storm.timerWhenComputerPlayerCasting = 30.0f;
 	storm.costToCreate = 3500.0f;
 	storm.agressiveRangeMin = 10.0f;
 	storm.agressiveRangeMax = 50.0f;
 	info->magicStormAndTornado[0].isCreatureCastFromAbove = 1;
 	EXPECT_FLOAT_EQ(GetTimerWhenPlayerCasting(*info, MagicType::StormWindRain), 40.0f);
 	EXPECT_FLOAT_EQ(GetTimerWhenCreatureCasting(*info, MagicType::StormWindRain), 20.0f);
+	// A computer god's cast has its own timer, not the person's
+	EXPECT_FLOAT_EQ(GetTimerWhenComputerPlayerCasting(*info, MagicType::StormWindRain), 30.0f);
 	EXPECT_FLOAT_EQ(GetChantsRequiredToCreate(*info, MagicType::StormWindRain), 3500.0f);
 	EXPECT_TRUE(IsCreatureCastFromAbove(*info, MagicType::StormWindRain));
 	EXPECT_FALSE(IsCreatureCastFromAbove(*info, MagicType::Tornado));
