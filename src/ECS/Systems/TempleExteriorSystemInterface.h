@@ -26,6 +26,8 @@ public:
 	virtual void UpdateTurn() = 0;
 	/// After a load of a saved game: makes each temple's blended mesh again for the look that the save kept
 	virtual void FindAfterLoad() = 0;
+	/// Before the land goes: lets go of the meshes made for the temples of the land
+	virtual void ForgetLand() = 0;
 };
 
 } // namespace openblack::ecs::systems

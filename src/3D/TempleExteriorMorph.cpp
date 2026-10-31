@@ -14,6 +14,7 @@
 
 #include <algorithm>
 
+#include <entt/core/hashed_string.hpp>
 #include <fmt/format.h>
 
 namespace openblack::TempleExteriorMorph
@@ -76,6 +77,21 @@ std::array<Corner, 4> Corners(float size, float alignment)
 std::string MeshName(uint32_t size, uint32_t stage)
 {
 	return fmt::format("b_temple{}{}_l3d", size, stage);
+}
+
+std::string OwnMeshName(uint32_t temple)
+{
+	return fmt::format("temple/exterior/{}", temple);
+}
+
+std::string SiteMeshName(uint32_t templeMesh)
+{
+	return fmt::format("temple/worship/{}", templeMesh);
+}
+
+std::array<uint32_t, 2> MeshesMadeFor(uint32_t templeMesh)
+{
+	return {templeMesh, entt::hashed_string(SiteMeshName(templeMesh).c_str()).value()};
 }
 
 TextureBlend TextureOf(float alignment)
