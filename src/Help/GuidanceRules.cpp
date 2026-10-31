@@ -178,3 +178,16 @@ MoonLook guidance::LookAtMoon(float phase, bool clockSaysNight)
 	const double cube = static_cast<double>(distance) * distance * distance;
 	return {.remark = false, .wait = static_cast<int32_t>(cube * k_MoonWaitScale)};
 }
+
+std::optional<guidance::Kind> guidance::TownChangedHandsLine(PlayerNames loser, PlayerNames taker, PlayerNames own)
+{
+	if (loser == own)
+	{
+		return Kind::GeneralBad;
+	}
+	if (taker == own)
+	{
+		return Kind::GeneralGood;
+	}
+	return std::nullopt;
+}

@@ -35,6 +35,7 @@
 #include "ECS/Components/Villager.h"
 #include "ECS/Components/WorshipSite.h"
 #include "ECS/Dances.h"
+#include "ECS/PlayerTowns.h"
 #include "ECS/Registry.h"
 #include "ECS/RegistryContext.h"
 #include "ECS/RelaxationRules.h"
@@ -532,15 +533,23 @@ void ArtefactSystem::MakeArtefact(entt::entity object, std::optional<entt::entit
 	}
 	if (!town.has_value() || !IsTown(*town))
 	{
-		// Without a town of its own it joins its nearest town when that town is its player's
+		// Without a town of its own it joins its nearest town when that town is its player's. The search goes over the
+		// game's list of all the towns, by the game's map distance.
 		const auto at = glm::xz(PositionOf(object));
 		std::vector<entt::entity> entities;
 		std::vector<rules::NearbyTown> towns;
-		registry.Each<const Town, const Transform>([&](entt::entity entity, const Town& each, const Transform& transform) {
-			towns.push_back(
-			    {.index = entities.size(), .owner = each.owner, .distance = glm::distance(at, glm::xz(transform.position))});
+		for (const auto entity : ecs::player_towns::AllMadeNewestFirst(registry))
+		{
+			const auto* transform = registry.TryGet<const Transform>(entity);
+			if (transform == nullptr)
+			{
+				continue;
+			}
+			towns.push_back({.index = entities.size(),
+			                 .owner = registry.Get<const Town>(entity).owner,
+			                 .distance = gutils::GetDistanceInMetres(at, glm::xz(transform->position))});
 			entities.push_back(entity);
-		});
+		}
 		const auto chosen = rules::TownForMadeArtefact(towns, player);
 		town = chosen.has_value() ? std::optional(entities.at(*chosen)) : std::nullopt;
 	}

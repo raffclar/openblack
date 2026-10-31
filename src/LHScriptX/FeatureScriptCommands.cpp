@@ -63,8 +63,8 @@
 #include "ECS/CreatureFromFile.h"
 #include "ECS/FootpathRules.h"
 #include "ECS/GamePlayers.h"
+#include "ECS/PlayerTowns.h"
 #include "ECS/Registry.h"
-#include "ECS/ScriptFind.h"
 #include "ECS/Systems/AnimalSystemInterface.h"
 #include "ECS/Systems/ArtefactSystemInterface.h"
 #include "ECS/Systems/ComputerPlayerSystemInterface.h"
@@ -191,23 +191,11 @@ entt::entity TownWithId(int32_t townId)
 	return town != towns.end() ? town->second : entt::null;
 }
 
-/// The nearest town to a place however far, by the game's measure of distance across the land, the towns taken in the
-/// order they were made and the first met winning a tie
+/// The nearest town to a place however far, by the game's measure of distance across the land. The towns go in the
+/// order of the game's list of all the towns, and the first met wins a tie.
 entt::entity NearestTownAnywhere(const glm::vec3& position)
 {
-	const auto& registry = Locator::entitiesRegistry::value();
-	std::vector<std::pair<uint32_t, ecs::script_find::Candidate>> towns;
-	registry.Each<const Town, const Transform>([&towns](entt::entity entity, const Town& town, const Transform& transform) {
-		towns.emplace_back(
-		    town.id, ecs::script_find::Candidate {.entity = entity,
-		                                          .at = map_coords::FromMetres({transform.position.x, transform.position.z})});
-	});
-	std::ranges::sort(towns, {}, &std::pair<uint32_t, ecs::script_find::Candidate>::first);
-	std::vector<ecs::script_find::Candidate> ordered;
-	ordered.reserve(towns.size());
-	std::ranges::transform(towns, std::back_inserter(ordered), [](const auto& town) { return town.second; });
-	return ecs::script_find::FindNearestTown(map_coords::FromMetres({position.x, position.z}),
-	                                         std::numeric_limits<float>::infinity(), ordered);
+	return ecs::player_towns::NearestOfAll(Locator::entitiesRegistry::value(), {position.x, position.z});
 }
 } // namespace
 

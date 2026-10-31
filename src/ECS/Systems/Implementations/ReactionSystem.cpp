@@ -71,6 +71,7 @@
 #include "ECS/ListOrder.h"
 #include "ECS/Map.h"
 #include "ECS/PhysicsEntry.h"
+#include "ECS/PlayerTowns.h"
 #include "ECS/Reflection/BinaryArchive.h"
 #include "ECS/Registry.h"
 #include "ECS/ScaffoldImpressionRules.h"
@@ -82,6 +83,7 @@
 #include "ECS/Systems/CreatureMindSystemInterface.h"
 #include "ECS/Systems/DanceSystemInterface.h"
 #include "ECS/Systems/DynamicsSystemInterface.h"
+#include "ECS/Systems/GuidanceSystemInterface.h"
 #include "ECS/Systems/LivingActionSystemInterface.h"
 #include "ECS/Systems/MagicShieldSystemInterface.h"
 #include "ECS/Systems/PlayerSystemInterface.h"
@@ -1776,6 +1778,11 @@ void ReactionSystem::BelieveInTown(entt::entity entity)
 			}
 		});
 	}
+	// The advisors of the player at this computer say a line about the town lost or won
+	if (Locator::guidanceSystem::has_value())
+	{
+		Locator::guidanceSystem::value().TownChangedHands(entity, loser, *taker);
+	}
 	// The player it believes in most takes it at once, in its own turn
 	if (Locator::townSystem::has_value())
 	{
@@ -2067,16 +2074,23 @@ void ReactionSystem::TownGainsTurn(uint32_t turn)
 	{
 		return;
 	}
-	// Each player adds what each town gained in them, in the order of the towns. Every tally goes back to nothing.
+	// Each player adds what each town gained in them, in the order of the game's list of all the towns. Every tally
+	// goes back to nothing.
 	std::array<float, magic::town_belief::k_PlayerCount> gained {};
-	Locator::entitiesRegistry::value().Each<const Town, TownImpression>(
-	    [&gained](entt::entity, const Town&, TownImpression& impression) {
-		    const auto town = magic::town_belief::TakeGainedSinceShown(impression.belief);
-		    for (size_t p = 0; p < gained.size(); ++p)
-		    {
-			    gained.at(p) += town.at(p);
-		    }
-	    });
+	auto& registry = Locator::entitiesRegistry::value();
+	for (const auto entity : ecs::player_towns::AllMadeNewestFirst(registry))
+	{
+		auto* impression = registry.TryGet<TownImpression>(entity);
+		if (impression == nullptr)
+		{
+			continue;
+		}
+		const auto town = magic::town_belief::TakeGainedSinceShown(impression->belief);
+		for (size_t p = 0; p < gained.size(); ++p)
+		{
+			gained.at(p) += town.at(p);
+		}
+	}
 	for (size_t p = 0; p < gained.size(); ++p)
 	{
 		_gainShown.at(p) = magic::town_belief::GainShown(gained.at(p));

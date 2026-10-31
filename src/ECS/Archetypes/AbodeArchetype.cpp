@@ -36,6 +36,7 @@
 #include "ECS/DrinkingWater.h"
 #include "ECS/Graveyards.h"
 #include "ECS/PlacedTurn.h"
+#include "ECS/PlayerTowns.h"
 #include "ECS/Registry.h"
 #include "ECS/ShepherdRules.h"
 #include "ECS/Systems/ChimneySmokeSystemInterface.h"
@@ -109,10 +110,10 @@ entt::entity AbodeArchetype::CreatePlan(uint32_t townId, const glm::vec3& positi
                                         float scale)
 {
 	auto& registry = Locator::entitiesRegistry::value();
-	// Without its town, the town nearest the place plans it
+	// Without its town, the town nearest the place plans it. The search goes over the game's list of all the towns.
 	if (!registry.Context().towns.contains(townId))
 	{
-		const auto town = Locator::townSystem::value().FindClosestTown(position);
+		const auto town = ecs::player_towns::NearestOfAll(registry, {position.x, position.z});
 		if (town == entt::null)
 		{
 			return entt::null;
@@ -136,11 +137,12 @@ entt::entity AbodeArchetype::Create(uint32_t townId, const glm::vec3& position, 
 {
 	auto& registry = Locator::entitiesRegistry::value();
 
-	// If there is no town, assign to closest
+	// Without its town, the building goes to the town nearest the place. The search goes over the game's list of all
+	// the towns.
 	if (registry.Context().towns.find(townId) == registry.Context().towns.end())
 	{
 		SPDLOG_LOGGER_WARN(spdlog::get("scripting"), "Function {} has invalid Town ({}).", __func__, townId);
-		const auto town = Locator::townSystem::value().FindClosestTown(position);
+		const auto town = ecs::player_towns::NearestOfAll(registry, {position.x, position.z});
 		if (town != entt::null)
 		{
 			townId = registry.Get<Town>(town).id;

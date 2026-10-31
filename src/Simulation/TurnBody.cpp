@@ -921,6 +921,8 @@ void PlayTurnStep(game_turn::Step step, TurnViewInterface& view)
 		{
 			Locator::reactionSystem::value().TownGainsTurn(turn);
 		}
+		// The same step checks the belief in each player over all the towns for its highest and lowest
+		player_statistics::CheckBelief(turn);
 		view.PlayViewStep(step, cameraPosition);
 		break;
 	case Step::LosingBelief:
