@@ -360,6 +360,7 @@
 #include "Parsers/InfoFile.h"
 #include "Particles/LiquidParticles.h"
 #include "Physics/Materials.h"
+#include "PlayerSlots.h"
 #include "Profiler.h"
 #include "Resources/Loaders.h"
 #include "Resources/ResourcesInterface.h"
@@ -6066,10 +6067,12 @@ void Game::TellLeaves()
 		{
 			continue;
 		}
+		// The start gives the names by god slot, not by player number
 		std::string name;
-		if (session->GetStart().has_value() && static_cast<size_t>(*leave.god) < session->GetStart()->names.size())
+		const auto slot = player_slots::SlotOfPlayer(*leave.god);
+		if (session->GetStart().has_value() && slot.has_value() && *slot < session->GetStart()->names.size())
 		{
-			name = session->GetStart()->names.at(static_cast<size_t>(*leave.god));
+			name = session->GetStart()->names.at(*slot);
 		}
 		leaves.emplace_back(leave, std::move(name));
 	}

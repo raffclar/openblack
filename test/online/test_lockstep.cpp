@@ -1255,6 +1255,21 @@ TEST_F(LockstepTest, AnObserverThatJoinedTheRunningGameComesBackAfterItsWorldPar
 	EXPECT_EQ(host->Watchers()[1].resumes, 1u);
 }
 
+TEST_F(LockstepTest, AnObserverThatJoinsTheRunningGameGetsTheNamesOfTheGods)
+{
+	MakeHost(1);
+	GiveWorldState();
+	Computer alice(network, now, "god:alice");
+	Frames({&alice}, 30);
+	ASSERT_TRUE(host->Started());
+	Computer carol(network, now, "observer:carol");
+	Frames({&alice, &carol}, 10);
+	// The observer names the god of a slot as the players do, for example when the player of the god leaves
+	ASSERT_TRUE(carol.session.GetStart().has_value());
+	ASSERT_GE(carol.session.GetStart()->names.size(), 1u);
+	EXPECT_EQ(carol.session.GetStart()->names[0], "alice");
+}
+
 TEST_F(LockstepTest, AnObserverThatLosesTheSocketComesBackAndGetsTheTurnsThatItMissed)
 {
 	MakeHost(1);

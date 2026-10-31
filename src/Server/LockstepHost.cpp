@@ -876,6 +876,8 @@ void LockstepHost::StartGame()
 	{
 		start.names.push_back(seat.state == SeatState::Taken ? seat.name : std::string());
 	}
+	// A player who joins later, such as an observer, gets the same names
+	_settings.start.names = start.names;
 	start.gods = Gods();
 	const auto gods = std::ranges::count(_seats, SeatState::Taken, &Seat::state);
 	Log(spdlog::level::info, fmt::format("The network game starts with {} gods", gods));
