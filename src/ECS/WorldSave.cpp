@@ -746,7 +746,17 @@ bool world_save::LoadRunningState(const entt::meta_ctx& reflection, const gamesa
 		try
 		{
 			const std::vector<uint8_t> bytes(script->begin(), script->end());
-			read = Locator::vm::value().RestoreState(bytes) == EXIT_SUCCESS && read;
+			auto& vm = Locator::vm::value();
+			read = vm.RestoreState(bytes) == EXIT_SUCCESS && read;
+			// A save from inside a native function, such as the save of a finished temple, makes the task call that
+			// native again with no arguments, as the game does
+			for (const auto& cut : vm.NativesCutBySave())
+			{
+				const auto task = vm.GetTasks().find(cut.task);
+				SPDLOG_LOGGER_INFO(
+				    Log(), "The save stopped the task {} ({}) inside the native {}: it calls it again with no arguments",
+				    cut.task, task != vm.GetTasks().end() ? task->second.name : "", vm.GetFunctions()->at(cut.native).name);
+			}
 		}
 		catch (const std::exception& error)
 		{
