@@ -28,7 +28,9 @@ void openblack::ecs::reflection::RegisterFields_Values_creaturew(entt::meta_ctx&
 	    .Field<&openblack::creature_watching::Knowledge::skillsSeen>("skillsSeen")
 	    .Field<&openblack::creature_watching::Knowledge::miraclesSeen>("miraclesSeen")
 	    .Field<&openblack::creature_watching::Knowledge::skillsKnown>("skillsKnown")
-	    .Field<&openblack::creature_watching::Knowledge::miraclesKnown>("miraclesKnown");
+	    .Field<&openblack::creature_watching::Knowledge::miraclesKnown>("miraclesKnown")
+	    .Field<&openblack::creature_watching::Knowledge::skillsKnownPastTable>("skillsKnownPastTable")
+	    .Field<&openblack::creature_watching::Knowledge::miraclesKnownPastTable>("miraclesKnownPastTable");
 	Reflect<openblack::creature_watching::Mimicry>(context, ValueOnly {})
 	    .Field<&openblack::creature_watching::Mimicry::rule>("rule")
 	    .Field<&openblack::creature_watching::Mimicry::stage>("stage")

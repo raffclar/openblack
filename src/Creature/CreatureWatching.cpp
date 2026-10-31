@@ -158,7 +158,23 @@ bool creature_watching::SetKnown(Knowledge& knowledge, KnownList list, size_t in
 	auto& known = list == KnownList::Skill ? knowledge.skillsKnown : knowledge.miraclesKnown;
 	if (index >= known.size())
 	{
-		return false;
+		auto& pastTable = list == KnownList::Skill ? knowledge.skillsKnownPastTable : knowledge.miraclesKnownPastTable;
+		const auto id = static_cast<uint32_t>(index);
+		const auto found = std::ranges::find(pastTable, id);
+		if (!knows)
+		{
+			if (found != pastTable.end())
+			{
+				pastTable.erase(found);
+			}
+			return false;
+		}
+		if (found != pastTable.end())
+		{
+			return false;
+		}
+		pastTable.push_back(id);
+		return true;
 	}
 	const bool newlyKnown = knows && !known[index];
 	known[index] = knows;
@@ -167,6 +183,17 @@ bool creature_watching::SetKnown(Knowledge& knowledge, KnownList list, size_t in
 		knowledge.miraclesSeen[index].count = taughtSightings;
 	}
 	return newlyKnown;
+}
+
+bool creature_watching::IsKnown(const Knowledge& knowledge, KnownList list, size_t index)
+{
+	const auto& known = list == KnownList::Skill ? knowledge.skillsKnown : knowledge.miraclesKnown;
+	if (index < known.size())
+	{
+		return known[index];
+	}
+	const auto& pastTable = list == KnownList::Skill ? knowledge.skillsKnownPastTable : knowledge.miraclesKnownPastTable;
+	return std::ranges::find(pastTable, static_cast<uint32_t>(index)) != pastTable.end();
 }
 
 bool creature_watching::KnowsWhatItNeeds(const Knowledge& knowledge, const ActionNeeds& needs)

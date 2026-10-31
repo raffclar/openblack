@@ -72,25 +72,37 @@ creaturemind::MindFileData Skeleton(size_t skills, size_t miracles)
 	return file;
 }
 
-/// The ids known, keeping the order a file listed them in and adding the newly known after
-std::vector<creaturemind::MindKnownAction> KnownList(const std::vector<bool>& known,
+/// The ids known, keeping the order a file listed them in and adding the newly known after. The ids with no row in the
+/// table come last, in the order that they became known.
+std::vector<creaturemind::MindKnownAction> KnownList(const creature_watching::Knowledge& knowledge,
+                                                     creature_watching::KnownList which,
                                                      const std::vector<creaturemind::MindKnownAction>& before)
 {
+	const auto& known = which == creature_watching::KnownList::Skill ? knowledge.skillsKnown : knowledge.miraclesKnown;
+	const auto& pastTable =
+	    which == creature_watching::KnownList::Skill ? knowledge.skillsKnownPastTable : knowledge.miraclesKnownPastTable;
 	std::vector<creaturemind::MindKnownAction> list;
+	const auto add = [&list](uint32_t id) {
+		if (std::ranges::find(list, id, &creaturemind::MindKnownAction::id) == list.end())
+		{
+			list.push_back({.id = id});
+		}
+	};
 	for (const auto& action : before)
 	{
-		if (action.id < known.size() && known[action.id])
+		if (creature_watching::IsKnown(knowledge, which, action.id))
 		{
-			list.push_back({.id = action.id});
+			add(action.id);
 		}
 	}
 	for (uint32_t id = 0; id < known.size(); ++id)
 	{
-		if (known[id] && std::ranges::find(list, id, &creaturemind::MindKnownAction::id) == list.end())
+		if (known[id])
 		{
-			list.push_back({.id = id});
+			add(id);
 		}
 	}
+	std::ranges::for_each(pastTable, add);
 	return list;
 }
 
@@ -268,19 +280,23 @@ LoadedMind creature_mind_model::FromFile(const creaturemind::MindFileData& file,
 			mind.learnt.opinions[a] = (*file.opinions)[a];
 		}
 	}
+	// Each id of the file becomes known, also one with no row in the table, as the game keeps it
 	auto& knowledge = mind.learnt.knowledge;
-	for (const auto& action : file.known[0])
+	for (const auto which : {creature_watching::KnownList::Skill, creature_watching::KnownList::Miracle})
 	{
-		if (action.id < knowledge.skillsKnown.size())
+		for (const auto& action : file.known.at(static_cast<size_t>(which)))
 		{
-			knowledge.skillsKnown[action.id] = true;
-		}
-	}
-	for (const auto& action : file.known[1])
-	{
-		if (action.id < knowledge.miraclesKnown.size())
-		{
-			knowledge.miraclesKnown[action.id] = true;
+			auto& known = which == creature_watching::KnownList::Skill ? knowledge.skillsKnown : knowledge.miraclesKnown;
+			auto& pastTable = which == creature_watching::KnownList::Skill ? knowledge.skillsKnownPastTable
+			                                                               : knowledge.miraclesKnownPastTable;
+			if (action.id < known.size())
+			{
+				known[action.id] = true;
+			}
+			else if (std::ranges::find(pastTable, action.id) == pastTable.end())
+			{
+				pastTable.push_back(action.id);
+			}
 		}
 	}
 	for (size_t i = 0; i < knowledge.skillsSeen.size() && i < file.actionsSeen.size(); ++i)
@@ -409,8 +425,8 @@ creaturemind::MindFileData creature_mind_model::ToFile(const creature_desires::D
 	Sightings(knowledge.miraclesSeen, file.miraclesSeen);
 	file.attitudeToPlayer = attitudeToPlayer;
 	file.turnsLookedAt = turnsLookedAt;
-	file.known[0] = KnownList(knowledge.skillsKnown, file.known[0]);
-	file.known[1] = KnownList(knowledge.miraclesKnown, file.known[1]);
+	file.known[0] = KnownList(knowledge, creature_watching::KnownList::Skill, file.known[0]);
+	file.known[1] = KnownList(knowledge, creature_watching::KnownList::Miracle, file.known[1]);
 	file.before11.reset();
 	file.alignment = learnt.alignment;
 	file.developmentTimer = learnt.developmentTimer;
