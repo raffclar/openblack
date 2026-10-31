@@ -275,6 +275,8 @@ influence::Ground LandHeight()
 
 void InfluenceSystem::SaveState(reflection::BinaryWriter& out) const
 {
+	// Keep the old place of a removed field, so the saved layout does not change.
+	reflection::Save(out, uint32_t {0});
 	// Each circle of the borders keeps its place, its size and its hidden columns. Its curtain is made again from the land.
 	reflection::Save(out, _circles.size());
 	for (const auto& circle : _circles)
@@ -297,6 +299,9 @@ void InfluenceSystem::SaveState(reflection::BinaryWriter& out) const
 
 bool InfluenceSystem::LoadState(reflection::BinaryReader& in)
 {
+	// Keep the old place of a removed field, so the saved layout does not change.
+	uint32_t removedField = 0;
+	reflection::Load(in, removedField);
 	size_t count = 0;
 	reflection::Load(in, count);
 	_circles.clear();
