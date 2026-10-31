@@ -1102,6 +1102,10 @@ struct Command
 		/// hand, as a tap does. The battery of its site gets the cost of the highest power-up level of the seed times an
 		/// amount, for the power-ups to charge from. Needs no creature.
 		TakeIconSeed,
+		/// The player's hand taps the worship site icon of a seed (value, a SpellSeedType), as the Action button does.
+		/// With an amount, the battery of the site first gets that much of the cost of the plain miracle. Needs no
+		/// creature.
+		TapSiteIcon,
 	};
 	Kind kind {Kind::Stop};
 	/// Which creature, by its place in the scenario's creatures

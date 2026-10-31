@@ -1556,6 +1556,7 @@ std::unique_ptr<ProviderInterface> openblack::inspector::MakeTownProvider(WorldS
 				                  }
 				                  siteIcons.push_back(Json {{"id", ToId(icon)},
 				                                            {"seed", static_cast<int>(worship.seed)},
+				                                            {"place", worship.place},
 				                                            {"charging", worship.charging},
 				                                            {"store", worship.store},
 				                                            {"seeds_out", std::move(seedsOut)}});

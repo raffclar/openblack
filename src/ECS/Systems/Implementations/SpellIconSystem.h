@@ -52,6 +52,8 @@ public:
 	[[nodiscard]] bool ValidToTap(entt::entity icon, PlayerNames player) const override;
 	bool StartChargeForGod(entt::entity icon, PlayerNames player) override;
 	[[nodiscard]] entt::entity IconOfSeed(entt::entity seed) const override;
+	[[nodiscard]] entt::entity BestIconFor(PlayerNames player, SpellSeedType seed) const override;
+	void SeedMadeAt(entt::entity icon, entt::entity seed) override;
 	[[nodiscard]] bool ValidForPowerUp(entt::entity icon, PlayerNames player, int powerUp) const override;
 	bool StartPowerUpCharge(entt::entity icon, PlayerNames player, int powerUp) override;
 	[[nodiscard]] float ChantNeeded(entt::entity icon) const override;

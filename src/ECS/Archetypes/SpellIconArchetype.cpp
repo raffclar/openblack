@@ -149,6 +149,7 @@ entt::entity SpellIconArchetype::CreateSiteIcon(entt::entity site, SpellSeedType
 	// The first of its places with no icon on it; while they are all taken, each pushed further out from the site, and
 	// past the furthest the last place tried
 	std::optional<glm::vec2> place;
+	std::optional<uint32_t> placePoint;
 	glm::vec2 tried = at;
 	float placeHeight = 0.0f;
 	for (float push = 0.0f; !place.has_value() && push <= k_MostPush; push += icons::k_SitePushStep)
@@ -164,6 +165,7 @@ entt::entity SpellIconArchetype::CreateSiteIcon(entt::entity site, SpellSeedType
 			if (!taken(tried))
 			{
 				place = tried;
+				placePoint = index;
 				placeHeight = points.at(index)[3].y;
 			}
 		}
@@ -173,6 +175,6 @@ entt::entity SpellIconArchetype::CreateSiteIcon(entt::entity site, SpellSeedType
 	const glm::vec3 position {spot.x, LandHeightAt(spot) + placeHeight, spot.y};
 	// Turned and scaled as its site is
 	const auto entity = MakeIcon(position, placed.rotation, placed.scale.x, SpellIconInfo::Basic, seed);
-	registry.Assign<WorshipIcon>(entity, WorshipIcon {.site = site, .seed = seed});
+	registry.Assign<WorshipIcon>(entity, WorshipIcon {.site = site, .seed = seed, .place = icons::SitePlace(placePoint)});
 	return entity;
 }

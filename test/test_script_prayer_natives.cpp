@@ -25,6 +25,7 @@
 
 #include "CHLApi.h"
 #include "ECS/Components/Temple.h"
+#include "ECS/Components/Town.h"
 #include "ECS/Components/WorshipSite.h"
 #include "ECS/Registry.h"
 #include "ECS/Systems/ScriptObjectsSystemInterface.h"
@@ -66,8 +67,16 @@ public:
 class FakeIcons final: public ecs::systems::SpellIconSystemInterface
 {
 public:
-	bool TownHolds(entt::entity, MagicType) override { return false; }
-	bool TownReleases(entt::entity, MagicType) override { return false; }
+	bool TownHolds(entt::entity town, MagicType type) override
+	{
+		held.emplace_back(town, type);
+		return true;
+	}
+	bool TownReleases(entt::entity town, MagicType type) override
+	{
+		released.emplace_back(town, type);
+		return true;
+	}
 	[[nodiscard]] std::optional<size_t> CentreMiraclesShown(entt::entity) const override { return std::nullopt; }
 	void CentreWorking(entt::entity) override {}
 	void TownChangedHands(entt::entity, PlayerNames) override {}
@@ -109,6 +118,8 @@ public:
 	SpellSeedType iconSeed {SpellSeedType::Wood};
 	std::vector<entt::entity> emptied;
 	std::vector<std::pair<entt::entity, PlayerNames>> cancelled;
+	std::vector<std::pair<entt::entity, MagicType>> held;
+	std::vector<std::pair<entt::entity, MagicType>> released;
 	mutable std::vector<std::pair<entt::entity, SpellSeedType>> asked;
 	mutable std::vector<std::pair<entt::entity, std::optional<MagicType>>> storesAsked;
 };
@@ -178,6 +189,7 @@ using Results = std::vector<std::pair<lhvm::VMValue, lhvm::DataType>>;
 constexpr uint32_t k_IsSpellCharging = 330;
 constexpr uint32_t k_IsThatSpellCharging = 331;
 constexpr uint32_t k_GameSetMana = 355;
+constexpr uint32_t k_SetMagicInObject = 386;
 constexpr uint32_t k_GetManaForSpell = 403;
 constexpr uint32_t k_GetMana = 422;
 constexpr uint32_t k_ClearPlayerSpellCharging = 423;
@@ -257,6 +269,7 @@ TEST_F(ScriptPrayerNatives, TakeAndGiveWhatTheGameDoes)
 	    {k_IsSpellCharging, "IS_SPELL_CHARGING", 1, 1},
 	    {k_IsThatSpellCharging, "IS_THAT_SPELL_CHARGING", 2, 1},
 	    {k_GameSetMana, "GAME_SET_MANA", 2, 0},
+	    {k_SetMagicInObject, "SET_MAGIC_IN_OBJECT", 3, 0},
 	    {k_GetManaForSpell, "GET_MANA_FOR_SPELL", 1, 1},
 	    {k_GetMana, "GET_MANA", 1, 1},
 	    {k_ClearPlayerSpellCharging, "CLEAR_PLAYER_SPELL_CHARGING", 1, 0},
@@ -380,5 +393,26 @@ TEST_F(ScriptPrayerNatives, SpellChargingAsksTheIconsOfThePlayersTemple)
 	ASSERT_EQ(results.size(), 1u);
 	EXPECT_EQ(results.front().first.intVal, 0);
 	EXPECT_EQ(_icons->storesAsked.size(), 2u);
+	EXPECT_EQ(_api.GetStubCalls().Total(), 0u);
+}
+
+// A script gives a miracle to a town or takes it away. Only a town takes it: a dispenser or any other object does not.
+// NOLINTNEXTLINE(cppcoreguidelines-avoid-non-const-global-variables): external macro
+TEST_F(ScriptPrayerNatives, SetMagicInObjectChangesTheMiraclesOfATownOnly)
+{
+	auto& registry = Locator::entitiesRegistry::value();
+	const auto town = registry.Create();
+	registry.Assign<ecs::components::Town>(town);
+	const auto dispenser = registry.Create();
+	EXPECT_TRUE(Call(k_SetMagicInObject, {Int(1), Int(static_cast<int32_t>(MagicType::Fireball)), Object(town)}).empty());
+	EXPECT_TRUE(Call(k_SetMagicInObject, {Int(0), Int(static_cast<int32_t>(MagicType::Heal)), Object(town)}).empty());
+	EXPECT_EQ(_icons->held, (std::vector<std::pair<entt::entity, MagicType>> {{town, MagicType::Fireball}}));
+	EXPECT_EQ(_icons->released, (std::vector<std::pair<entt::entity, MagicType>> {{town, MagicType::Heal}}));
+	// An object that is not a town, and no object, change nothing
+	EXPECT_TRUE(Call(k_SetMagicInObject, {Int(1), Int(static_cast<int32_t>(MagicType::Fireball)), Object(dispenser)}).empty());
+	EXPECT_TRUE(Call(k_SetMagicInObject, {Int(0), Int(static_cast<int32_t>(MagicType::Fireball)), Object(_site)}).empty());
+	EXPECT_TRUE(Call(k_SetMagicInObject, {Int(1), Int(static_cast<int32_t>(MagicType::Fireball)), Object(entt::null)}).empty());
+	EXPECT_EQ(_icons->held.size(), 1u);
+	EXPECT_EQ(_icons->released.size(), 1u);
 	EXPECT_EQ(_api.GetStubCalls().Total(), 0u);
 }
