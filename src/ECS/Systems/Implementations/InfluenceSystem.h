@@ -11,6 +11,7 @@
 
 #include <array>
 #include <chrono>
+#include <optional>
 #include <vector>
 
 #include <entt/entity/fwd.hpp>
@@ -55,6 +56,7 @@ public:
 	[[nodiscard]] bool IsBorderShown(PlayerNames player) const override;
 	void NoteInfluencePower(PlayerNames player) override;
 	[[nodiscard]] float InfluencePower(PlayerNames player) const override;
+	[[nodiscard]] std::optional<float> RelativeInfluencePower(PlayerNames player) const override;
 	[[nodiscard]] float CitadelReachOf(PlayerNames player) const override;
 	[[nodiscard]] glm::vec2 GetScrollOffset() const override { return influence::ScrollOffset(_scrollClock); }
 	[[nodiscard]] std::span<const influence::Ripple> GetRipples() const override { return _ripples; }

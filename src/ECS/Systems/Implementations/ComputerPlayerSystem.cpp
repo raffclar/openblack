@@ -52,6 +52,7 @@
 #include "ECS/Systems/InfluenceSystemInterface.h"
 #include "ECS/Systems/PlayerSystemInterface.h"
 #include "ECS/Systems/ProfileFolderSystemInterface.h"
+#include "ECS/Systems/TempleExteriorSystemInterface.h"
 #include "ECS/Systems/TimeSystemInterface.h"
 #include "FileSystem/FileSystemInterface.h"
 #include "Gui/TextDatabase.h"
@@ -636,10 +637,18 @@ void ComputerPlayerSystem::ProcessTurn()
 				}
 			}
 		}
-		// After its mind, the player notes its influence power, its running average and a sample of its history
 		if (Locator::influenceSystem::has_value())
 		{
-			Locator::influenceSystem::value().NoteInfluencePower(name);
+			auto& influence = Locator::influenceSystem::value();
+			// The temples of the player grow toward twice the share of the influence that the player had as its turn
+			// started. The share has the power of the players before it in this turn, and the power of the others in the
+			// last turn.
+			if (Locator::templeExteriorSystem::has_value())
+			{
+				Locator::templeExteriorSystem::value().NoteSizeTarget(name, influence.RelativeInfluencePower(name));
+			}
+			// After its mind, the player notes its influence power, its running average and a sample of its history
+			influence.NoteInfluencePower(name);
 		}
 	}
 	if (_timesEvery != 0 && turn % _timesEvery == 0 && !_times.Gods().empty())

@@ -110,10 +110,9 @@ void TempleExteriorSystem::UpdateTurn()
 		    {
 			    Locator::entitiesMap::value().Refile(entity);
 		    }
-		    // Each turn the temple grows toward its player's goodness, and twice their share of the influence
-		    // TODO(raffclar): the player's share of the influence on the lands after the first
+		    // Each turn the temple grows toward its player's goodness, and toward the size that the turn of its player
+		    // gave it
 		    exterior.alignmentTarget = (alignment.GetPlayerAlignment(temple.owner) + 1.0f) * 0.5f;
-		    exterior.sizeTarget = TempleExteriorMorph::SizeTarget(registry.Context().mapScriptGlobals.landNumber, std::nullopt);
 		    exterior.alignment = TempleExteriorMorph::Step(exterior.alignment, exterior.alignmentTarget);
 		    exterior.size = TempleExteriorMorph::Step(exterior.size, exterior.sizeTarget);
 		    const glm::vec2 look {exterior.size, exterior.alignment};
@@ -132,6 +131,18 @@ void TempleExteriorSystem::UpdateTurn()
 		    pick.takesCursor =
 		        temple != nullptr && registry.Context().templeEntrancesTakeCursor[static_cast<size_t>(temple->owner)];
 	    });
+}
+
+void TempleExteriorSystem::NoteSizeTarget(PlayerNames player, std::optional<float> share)
+{
+	auto& registry = Locator::entitiesRegistry::value();
+	const auto target = TempleExteriorMorph::SizeTarget(registry.Context().mapScriptGlobals.landNumber, share);
+	registry.Each<const Temple, TempleExterior>([player, target](const Temple& temple, TempleExterior& exterior) {
+		if (temple.owner == player)
+		{
+			exterior.sizeTarget = target;
+		}
+	});
 }
 
 void TempleExteriorSystem::FindAfterLoad()

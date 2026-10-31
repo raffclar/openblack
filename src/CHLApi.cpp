@@ -7734,10 +7734,24 @@ void SetMistFade() // 264 SET_MIST_FADE
 
 void GetObjectFade() // 265 GET_OBJECT_FADE
 {
-	// const auto object = Pop().uintVal;
-	// TODO(Daniels118): implement this
-	NotImplemented();
-	Pushf(0.0f);
+	// How much of its script fade a mist did, from 0 to 1. Any other object gives 1.
+	const auto object = PopObject();
+	auto& registry = Locator::entitiesRegistry::value();
+	if (object == entt::null || !registry.Valid(object))
+	{
+		ScriptMessage("Thing deleted");
+		Pushf(1.0f);
+		return;
+	}
+	const auto* mist = registry.TryGet<const ecs::components::Mist>(object);
+	if (mist == nullptr)
+	{
+		ScriptMessage("Must be mist object!");
+		Pushf(1.0f);
+		return;
+	}
+	// A mist that no script faded has no fade turns, so it gives 0 / 0 as a fade of 0 seconds does
+	Pushf(mists::FadeDone(mist->fadeElapsed, mist->fadeTurns));
 }
 
 void PlayHandDemo() // 266 PLAY_HAND_DEMO

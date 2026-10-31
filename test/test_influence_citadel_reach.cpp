@@ -19,6 +19,7 @@
 #include "ECS/Components/PlayerRelations.h"
 #include "ECS/Components/PlayerStatistics.h"
 #include "ECS/Components/Temple.h"
+#include "ECS/Components/TempleExterior.h"
 #include "ECS/Components/Town.h"
 #include "ECS/Components/Transform.h"
 #include "ECS/Registry.h"
@@ -28,6 +29,7 @@
 // Enable this define because we use a custom locator
 #define LOCATOR_IMPLEMENTATIONS
 #include "ECS/Systems/Implementations/InfluenceSystem.h"
+#include "ECS/Systems/Implementations/TempleExteriorSystem.h"
 
 using namespace openblack;
 using namespace openblack::ecs;
@@ -338,4 +340,65 @@ TEST(InfluencePowerOf, AddsTheCitadelThenEachTownThenEachSourceInTurn)
 	const std::array towns {1.0f, 1.0f};
 	EXPECT_EQ(systems::influence_rules::InfluencePowerOf(k_Large, towns, {}), k_Large);
 	EXPECT_EQ(systems::influence_rules::InfluencePowerOf(0.0f, towns, towns), 4.0f);
+}
+
+TEST_F(StoredPower, NobodyHasAShareOfTheInfluenceWhileNobodyHasPower)
+{
+	EXPECT_FALSE(_influence.RelativeInfluencePower(PlayerNames::PLAYER_FOUR).has_value());
+}
+
+TEST_F(StoredPower, TheShareIsTheNotedPowerOverTheNotedPowerOfAllThePlayers)
+{
+	_influence.NoteInfluencePower(PlayerNames::PLAYER_FOUR);
+	EXPECT_EQ(_influence.RelativeInfluencePower(PlayerNames::PLAYER_FOUR), 1.0f);
+	// The first player noted three times as much power
+	auto& registry = Locator::entitiesRegistry::value();
+	registry.Get<components::PlayerInfluencePower>(_players.at(0)).power = 3.0f * k_GrownTownReach;
+	EXPECT_EQ(_influence.RelativeInfluencePower(PlayerNames::PLAYER_FOUR), 0.25f);
+	EXPECT_EQ(_influence.RelativeInfluencePower(PlayerNames::PLAYER_ONE), 0.75f);
+	EXPECT_EQ(_influence.RelativeInfluencePower(PlayerNames::PLAYER_TWO), 0.0f);
+	// A change of the town that the player did not note yet does not change the share
+	registry.Get<components::TownInfluence>(_town).radius = 2.0f * k_GrownTownReach;
+	EXPECT_EQ(_influence.RelativeInfluencePower(PlayerNames::PLAYER_FOUR), 0.25f);
+}
+
+TEST(RelativeInfluencePower, AddsThePowersInTheOrderOfThePlayersAsFloats)
+{
+	// Each sum is a float, so a small power after a large one is lost, as in the game
+	constexpr float k_Large = 16777216.0f;
+	const std::array largeFirst {k_Large, 1.0f, 1.0f};
+	const std::array largeLast {1.0f, 1.0f, k_Large};
+	EXPECT_EQ(systems::influence_rules::RelativeInfluencePower(k_Large, largeFirst), 1.0f);
+	EXPECT_EQ(systems::influence_rules::RelativeInfluencePower(k_Large, largeLast), k_Large / (k_Large + 2.0f));
+	EXPECT_LT(systems::influence_rules::RelativeInfluencePower(k_Large, largeLast), 1.0f);
+}
+
+TEST(RelativeInfluencePower, GivesNothingWhenTheSumIsNothing)
+{
+	const std::array none {0.0f, 0.0f};
+	EXPECT_FALSE(systems::influence_rules::RelativeInfluencePower(0.0f, none).has_value());
+	EXPECT_FALSE(systems::influence_rules::RelativeInfluencePower(0.0f, {}).has_value());
+}
+
+TEST_F(CitadelReach, TheTurnOfAPlayerGivesItsTemplesTwiceItsShareOfTheInfluenceAfterTheFirstLand)
+{
+	auto& registry = Locator::entitiesRegistry::value();
+	for (const auto temple : _temples)
+	{
+		registry.Assign<components::TempleExterior>(temple);
+	}
+	registry.Context().mapScriptGlobals.landNumber = 2;
+	systems::TempleExteriorSystem exterior;
+	exterior.NoteSizeTarget(PlayerNames::PLAYER_TWO, 0.3f);
+	EXPECT_FLOAT_EQ(registry.Get<const components::TempleExterior>(_temples.at(1)).sizeTarget, 0.6f);
+	// The temples of the other players keep their sizes
+	EXPECT_FLOAT_EQ(registry.Get<const components::TempleExterior>(_temples.at(0)).sizeTarget, 0.0f);
+	EXPECT_FLOAT_EQ(registry.Get<const components::TempleExterior>(_temples.at(2)).sizeTarget, 0.0f);
+	// Nobody has influence: the share of no influence
+	exterior.NoteSizeTarget(PlayerNames::PLAYER_THREE, std::nullopt);
+	EXPECT_FLOAT_EQ(registry.Get<const components::TempleExterior>(_temples.at(2)).sizeTarget, 0.02f);
+	// On the first land every player has the share of no influence
+	registry.Context().mapScriptGlobals.landNumber = 1;
+	exterior.NoteSizeTarget(PlayerNames::PLAYER_TWO, 0.3f);
+	EXPECT_FLOAT_EQ(registry.Get<const components::TempleExterior>(_temples.at(1)).sizeTarget, 0.02f);
 }

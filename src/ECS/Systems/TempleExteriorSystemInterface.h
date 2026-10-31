@@ -9,6 +9,8 @@
 
 #pragma once
 
+#include <optional>
+
 #include "Enums.h"
 
 namespace openblack::ecs::systems
@@ -24,6 +26,10 @@ public:
 	/// Each turn also lets a player's temple entrances take the cursor from the first turn a temple of theirs stands fully
 	/// built
 	virtual void UpdateTurn() = 0;
+	/// At the start of a player's turn, each temple of the player takes the size that it grows toward: twice the share
+	/// of the influence that the player has at that time
+	/// @param share The player's share of the influence, nothing when nobody has any
+	virtual void NoteSizeTarget(PlayerNames player, std::optional<float> share) = 0;
 	/// After a load of a saved game: makes each temple's blended mesh again for the look that the save kept
 	virtual void FindAfterLoad() = 0;
 };

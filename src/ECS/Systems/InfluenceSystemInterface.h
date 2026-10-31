@@ -11,6 +11,7 @@
 
 #include <algorithm>
 #include <chrono>
+#include <optional>
 #include <span>
 
 #include <entt/entity/fwd.hpp>
@@ -41,6 +42,23 @@ namespace influence_rules
 		power += source;
 	}
 	return power;
+}
+
+/// A player's share of the influence power of all the players: their noted power over the sum of the noted powers.
+/// The sum adds the powers of all the players in the order of their numbers, the neutral player last. Nothing when
+/// the sum is 0.
+[[nodiscard]] inline std::optional<float> RelativeInfluencePower(float own, std::span<const float> allPlayers)
+{
+	float total = 0.0f;
+	for (const float power : allPlayers)
+	{
+		total += power;
+	}
+	if (total == 0.0f)
+	{
+		return std::nullopt;
+	}
+	return own / total;
 }
 
 /// A player's influence at a place
@@ -170,6 +188,9 @@ public:
 	/// A player's influence power as their turn last noted it. All questions get this noted value. Thus a question before
 	/// the turn of the player gets the power of the last turn.
 	[[nodiscard]] virtual float InfluencePower(PlayerNames /*player*/) const { return 0.0f; }
+	/// A player's share of the noted influence power of all the players, nothing when nobody has any power. In the
+	/// turn of a player before the player notes the power, the share has the player's power of the last turn.
+	[[nodiscard]] virtual std::optional<float> RelativeInfluencePower(PlayerNames /*player*/) const { return std::nullopt; }
 	/// How far a player's citadel reaches with the land's multiplier, 0 when the player has no citadel
 	[[nodiscard]] virtual float CitadelReachOf(PlayerNames /*player*/) const { return 0.0f; }
 	[[nodiscard]] virtual glm::vec2 GetScrollOffset() const = 0;

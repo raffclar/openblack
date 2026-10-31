@@ -107,4 +107,7 @@ struct Fade
 /// to 255 and gives true. When no turn is left, it changes nothing and gives false: the fade is done.
 [[nodiscard]] bool StepFade(Fade& fade, float& size) noexcept;
 
+/// How much of a fade has gone: its turns that have gone over all its turns. A fade with no turns gives 0 / 0.
+[[nodiscard]] float FadeDone(float elapsed, float turns) noexcept;
+
 } // namespace openblack::mists
