@@ -14,9 +14,11 @@
 
 #include <array>
 #include <optional>
+#include <span>
 
 #include <entt/entity/entity.hpp>
 #include <glm/mat4x4.hpp>
+#include <glm/vec2.hpp>
 #include <glm/vec3.hpp>
 
 #include "3D/MapCoords.h"
@@ -210,5 +212,33 @@ struct JoinedTownFacts
 /// worth more. When the two are worth the same, the town of the held scaffold only when the player who holds it has
 /// that town.
 [[nodiscard]] JoinedTown TownOfJoined(const JoinedTownFacts& facts);
+
+/// The id that the game gives to each town that a scaffold founds
+inline constexpr uint32_t k_FoundedTownId = 703058;
+
+/// The id of a new town that a scaffold founds: the id of the game, or the first free id after it. The game gives all
+/// these towns the same id. openblack finds the buildings of a town by its id, thus each town must have its own id.
+[[nodiscard]] uint32_t FoundedTownId(std::span<const uint32_t> usedIds);
+
+/// The cells that a scaffold which clears its ground looks at, in a spiral from its own cell
+inline constexpr int32_t k_ClearingCells = 36;
+
+/// A thing is in the reach of a scaffold that clears its ground when its distance, less its own 2D radius, is not more
+/// than the reach
+[[nodiscard]] bool InClearingReach(float distance, float thingRadius, float reach);
+
+/// How a scaffold that clears its ground pushes a thing out of its way
+struct ClearingPush
+{
+	/// The speed of the thing at the start of its flight
+	glm::vec3 velocity {0.0f};
+	/// Where the thing goes from the middle of the scaffold, in metres
+	glm::vec2 offset {0.0f};
+};
+
+/// The push of a thing from the middle of the scaffold `centre`, by the edge point `edge` towards the thing (both in
+/// metres). The thing goes twice as far as the edge point. Its speed divides each part by the larger part, with the
+/// sign. Thus a thing at low x and low z can get a very high speed, as in the game.
+[[nodiscard]] ClearingPush PushOutOfWay(glm::vec2 centre, glm::vec2 edge);
 
 } // namespace openblack::ecs::workshop

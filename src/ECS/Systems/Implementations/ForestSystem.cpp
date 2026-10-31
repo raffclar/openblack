@@ -990,48 +990,56 @@ std::optional<entt::entity> ForestSystem::TreeFromBigForest(entt::entity bigFore
 
 void ForestSystem::AssignForestsToTowns()
 {
-	if (!Locator::infoConstants::has_value())
+	auto& registry = EntityRegistry();
+	std::vector<entt::entity> towns;
+	registry.Each<const Town>([&towns](entt::entity town, const Town&) { towns.push_back(town); });
+	for (const auto town : towns)
+	{
+		AssignForestsToTown(town);
+	}
+}
+
+void ForestSystem::AssignForestsToTown(entt::entity townEntity)
+{
+	auto& registry = EntityRegistry();
+	if (!Locator::infoConstants::has_value() || !registry.Valid(townEntity) || !registry.AllOf<Town>(townEntity))
 	{
 		return;
 	}
-	auto& registry = EntityRegistry();
 	const float reach = Locator::infoConstants::value().town.maxDistanceForTownForest;
-	const auto forests = LandForests();
-	registry.Each<const Town>([&](entt::entity townEntity, const Town& town) {
-		// Measured from the town's storage pit; a town without one is given its temporary pile for wood beside its
-		// gathering place, and measures from that pile's edge nearest the town
-		std::optional<glm::vec3> from;
-		registry.Each<const StoragePit, const Abode, const Transform>(
-		    [&](entt::entity, const StoragePit&, const Abode& abode, const Transform& at) {
-			    if (!from.has_value() && abode.townId == town.id)
-			    {
-				    from = at.position;
-			    }
-		    });
-		if (!from.has_value() && Locator::townSystem::has_value())
+	const auto& town = registry.Get<const Town>(townEntity);
+	// The distance starts at the storage pit of the town. A town with no storage pit gets its temporary pile for wood
+	// beside its gathering place, and the distance starts at the edge of that pile nearest the town.
+	std::optional<glm::vec3> from;
+	registry.Each<const StoragePit, const Abode, const Transform>(
+	    [&](entt::entity, const StoragePit&, const Abode& abode, const Transform& at) {
+		    if (!from.has_value() && abode.townId == town.id)
+		    {
+			    from = at.position;
+		    }
+	    });
+	if (!from.has_value() && Locator::townSystem::has_value())
+	{
+		const auto& centre = registry.Get<const Transform>(townEntity).position;
+		if (const auto store = Locator::townSystem::value().TemporaryStorePile(townEntity, glm::xz(centre), ResourceType::Wood);
+		    store.has_value())
 		{
-			const auto& centre = registry.Get<const Transform>(townEntity).position;
-			if (const auto store =
-			        Locator::townSystem::value().TemporaryStorePile(townEntity, glm::xz(centre), ResourceType::Wood);
-			    store.has_value())
-			{
-				from = glm::vec3(store->edge.x, 0.0f, store->edge.y);
-			}
+			from = glm::vec3(store->edge.x, 0.0f, store->edge.y);
 		}
-		auto& listed = registry.AssignOrReplace<TownForests>(townEntity);
-		if (!from.has_value())
+	}
+	auto& listed = registry.AssignOrReplace<TownForests>(townEntity);
+	if (!from.has_value())
+	{
+		return;
+	}
+	for (const auto forest : LandForests())
+	{
+		const float distance = glm::length(glm::xz(NearestPointOf(forest, *from)) - glm::xz(*from));
+		if (ecs::land_forests::NearTown(distance, reach, WoodOf(forest)))
 		{
-			return;
+			listed.forests.push_back(forest);
 		}
-		for (const auto forest : forests)
-		{
-			const float distance = glm::length(glm::xz(NearestPointOf(forest, *from)) - glm::xz(*from));
-			if (ecs::land_forests::NearTown(distance, reach, WoodOf(forest)))
-			{
-				listed.forests.push_back(forest);
-			}
-		}
-	});
+	}
 }
 
 std::optional<entt::entity> ForestSystem::NearestTownForest(entt::entity town, glm::vec3 point) const

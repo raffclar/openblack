@@ -79,6 +79,8 @@ public:
 	virtual std::optional<entt::entity> TreeFromBigForest(entt::entity bigForest) = 0;
 	/// Each town lists the forests near enough its storage pit with wood in them
 	virtual void AssignForestsToTowns() = 0;
+	/// One town lists the forests near enough its storage pit with wood in them, in place of the forests it listed before
+	virtual void AssignForestsToTown(entt::entity town) = 0;
 	/// The forest of its own a town sends a villager at a point to: the nearest of the forests it lists, by the edge of
 	/// its big forest (none when the point is inside it) or the forest's place, within the town's reach for forests; an
 	/// ordinary forest before the town's forest of lone trees. None when it lists none near enough.
