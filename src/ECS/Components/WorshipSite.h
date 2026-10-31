@@ -34,8 +34,8 @@ struct CitadelWorship
 	float facing {0.0f};
 	/// A script has stopped the temple from having new worship sites made
 	bool cannotMakeSites {false};
-	/// The temple stands: one still to be built has no sites made for it, as their places are laid out from the
-	/// standing temple's
+	/// The temple stands. A temple that is not yet built makes no site for its towns. Only a site that a land script
+	/// makes is made for it.
 	bool standing {false};
 	/// How many sites have been made for it: each new site is numbered by it, and the newest go first when the temple
 	/// loses them

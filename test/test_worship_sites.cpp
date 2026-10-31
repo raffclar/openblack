@@ -533,6 +533,26 @@ TEST(WorshipSiteSystem, TheLandScriptsBuiltSiteIsBuiltOnlyWhenItsTownWasAskedToB
 	EXPECT_TRUE(f.system->MakeBuiltSite(PlayerNames::PLAYER_THREE, Tribe::NORSE) == entt::null);
 }
 
+TEST(WorshipSiteSystem, TheLandScriptsBuiltSiteIsMadeAlsoForATempleThatIsNotYetBuilt)
+{
+	Fixture f;
+	const auto town = f.Town(0, PlayerNames::PLAYER_TWO, Tribe::NORSE, {0.0f, 0.0f, -50.0f});
+	const auto temple = f.Temple(PlayerNames::PLAYER_TWO);
+	f.system->AddTemple(temple, 0.0f, false);
+	// The town gets no site from a temple that is not yet built
+	f.system->LandLaidOut();
+	EXPECT_TRUE(f.registry.Get<const components::Town>(town).worshipSite == entt::null);
+	// The land script makes the site, joins the town to it and builds it
+	const auto site = f.system->MakeBuiltSite(PlayerNames::PLAYER_TWO, Tribe::NORSE);
+	ASSERT_TRUE(site != entt::null);
+	EXPECT_EQ(site, f.registry.Get<const components::Town>(town).worshipSite);
+	EXPECT_TRUE(f.system->IsBuilt(site));
+	// When the temple is built, the town keeps the same site
+	f.system->TempleBuilt(temple);
+	EXPECT_EQ(site, f.registry.Get<const components::Town>(town).worshipSite);
+	EXPECT_TRUE(f.system->IsBuilt(site));
+}
+
 TEST(WorshipSiteSystem, ScriptsStopAndAllowSitesForATempleOrATown)
 {
 	Fixture f;

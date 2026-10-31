@@ -15,6 +15,7 @@
 #include <array>
 #include <optional>
 #include <span>
+#include <utility>
 #include <vector>
 
 #include <L3DFile.h>
@@ -43,6 +44,7 @@
 #include "ECS/Systems/InfluenceSystemInterface.h"
 #include "ECS/Systems/PlayerSystemInterface.h"
 #include "ECS/Systems/TimeSystemInterface.h"
+#include "Hand/GodHand.h"
 #include "Hand/HandStart.h"
 #include "Hand/HandStillness.h"
 #include "Hand/OtherHeldDraw.h"
@@ -246,6 +248,9 @@ void HandSystem::StartAtCitadel(PlayerNames owner, const glm::vec3& point)
 	if (found != entt::null)
 	{
 		registry.AssignOrReplace<HandStart>(found, HandStart {.point = point});
+		// The hand of a god that no person plays starts at the citadel too
+		auto* godHand = registry.TryGet<HandStillness>(found);
+		god_hand::MindReport(godHand != nullptr ? *godHand : registry.Assign<HandStillness>(found), point);
 		// The camera of a computer mind also looks at the citadel until the mind moves its hand
 		if (auto* mind = registry.TryGet<ComputerPlayer>(found))
 		{
@@ -303,6 +308,30 @@ void HandSystem::ProcessTurn()
 		{
 			step((*hands)[static_cast<size_t>(Side::Left)]);
 		}
+	}
+	// No person reports the hand of each other god, so its input goes to the origin of the world. The gods take this
+	// step in the order of their player numbers.
+	if (!Locator::playerSystem::has_value())
+	{
+		return;
+	}
+	const auto& players = Locator::playerSystem::value();
+	std::vector<std::pair<PlayerNames, entt::entity>> gods;
+	registry.Each<const Player>([&gods](entt::entity entity, const Player& player) {
+		if (player.name != PlayerNames::NEUTRAL)
+		{
+			gods.emplace_back(player.name, entity);
+		}
+	});
+	std::ranges::sort(gods, {}, &std::pair<PlayerNames, entt::entity>::first);
+	for (const auto& [name, entity] : gods)
+	{
+		if (players.IsHumanPlayer(name))
+		{
+			continue;
+		}
+		auto* hand = registry.TryGet<HandStillness>(entity);
+		god_hand::InputTurn(hand != nullptr ? *hand : registry.Assign<HandStillness>(entity));
 	}
 }
 

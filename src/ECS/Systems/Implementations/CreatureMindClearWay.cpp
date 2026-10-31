@@ -34,9 +34,9 @@
 #include "ECS/Components/Temple.h"
 #include "ECS/Components/Transform.h"
 #include "ECS/Registry.h"
+#include "ECS/ReportedCamera.h"
 #include "ECS/Systems/CreatureAudioSystemInterface.h"
 #include "ECS/Systems/CreatureObjectActionSystemInterface.h"
-#include "ECS/Systems/HandSystemInterface.h"
 #include "ECS/Systems/PlayerSystemInterface.h"
 #include "InfoConstants.h"
 #include "Locator.h"
@@ -206,21 +206,9 @@ void CreatureMindSystem::EndRunAway(entt::entity creature, CreatureMindState& mi
 			from = belief->place;
 		}
 	}
-	else if (Locator::handSystem::has_value())
+	else if (const auto nearest = openblack::ecs::NearestHandOf(body->owner, at->position); nearest.has_value())
 	{
-		std::optional<glm::vec3> nearest;
-		for (const auto& hand : Locator::handSystem::value().GetHandPositionsOf(body->owner))
-		{
-			if (hand.has_value() &&
-			    (!nearest.has_value() || glm::distance(*hand, at->position) < glm::distance(*nearest, at->position)))
-			{
-				nearest = hand;
-			}
-		}
-		if (nearest.has_value())
-		{
-			from = map_coords::FromMetres(glm::xz(*nearest));
-		}
+		from = map_coords::FromMetres(glm::xz(*nearest));
 	}
 	if (from.has_value() &&
 	    creature_emote::RanFarEnough(gutils::GetDistanceInMetres(map_coords::FromMetres(glm::xz(at->position)), *from),

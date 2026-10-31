@@ -224,4 +224,18 @@ void testbed_scenarios::AddComputerGodCreatureCareScenarios(std::vector<Scenario
 	    .creatures = {GodCreature({0.0f, -130.0f}, {}, {})},
 	    .landScript = k_TempleOnlyScript,
 	});
+	all.push_back({
+	    .id = "mind.god_hand_read_by_creature",
+	    .name = "The creature of another god reads the hand of that god",
+	    .facet = Facet::Mind,
+	    .description = "A game alone. Lines of a land give player two a temple to the south and no computer mind. No person "
+	                   "plays player two, so the input of each turn puts the hand of that god at the origin of the world. "
+	                   "The tiger of player two stands 40 m to the south of the temple.",
+	    .expected = "From the first turn, the hand that the tiger reads (playerInterest.lastHand of its mind in the "
+	                "inspector) is at (0, 0, 0), the hand of its own god. Before this change, the tiger read the hand of "
+	                "the first player, because every creature read that hand in a game alone.",
+	    .framing = {.shot = Shot::Overview, .include = {glm::vec2(-40.0f, -150.0f), glm::vec2(40.0f, -40.0f)}},
+	    .creatures = {GodCreature({0.0f, -130.0f}, {}, {})},
+	    .landScript = k_TempleOnlyScript,
+	});
 }

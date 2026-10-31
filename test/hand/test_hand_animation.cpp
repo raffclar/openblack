@@ -27,12 +27,15 @@
 #include <gtest/gtest.h>
 
 #include "3D/HandAnimation.h"
+#include "Hand/HandBlend.h"
+#include "Magic/HandHoldPose.h"
 
 using namespace openblack;
 
 namespace
 {
 constexpr auto k_Frame = std::chrono::microseconds(16'667);
+constexpr float k_FrameSeconds = 0.016667f;
 
 class HandAnimationTest: public ::testing::Test
 {
@@ -83,9 +86,25 @@ protected:
 		return distance;
 	}
 
+	/// Draws a frame of the hand as the game does: the changes of the hand mode start a blend, and the blend draws the
+	/// bones of the animation in the world. The hand stays at the origin.
+	std::vector<glm::mat4> DrawFrame(const hand_blend::Frame& frame)
+	{
+		const auto changes = _tracker.Step(frame);
+		for (uint8_t change = 0; change < changes.count; ++change)
+		{
+			_fade.Change();
+		}
+		auto bones = _animation.GetBoneMatrices();
+		_fade.Apply(k_FrameSeconds, glm::mat4(1.0f), bones, changes.poseIntoKept);
+		return bones;
+	}
+
 	std::vector<uint32_t> _parents;
 	std::vector<glm::mat4> _rest;
 	HandAnimation _animation;
+	hand_blend::ChangeTracker _tracker;
+	magic::hand_hold::WorldPoseFade _fade;
 };
 } // namespace
 
@@ -211,18 +230,25 @@ TEST_F(HandAnimationTest, GrippingCrossFadesToTheGripCycle)
 {
 	using Cycle = HandAnimation::Cycle;
 	using State = HandAnimation::State;
+	using hand_blend::HandMode;
+	std::vector<glm::mat4> idle;
 	for (int i = 0; i < 30; ++i)
 	{
 		_animation.Update(k_Frame, State::Normal, Cycle::Wiggle, {320, 240});
+		idle = DrawFrame({.mode = HandMode::Normal, .cycle = Cycle::Wiggle});
 	}
-	const auto idle = _animation.GetBoneMatrices();
+	EXPECT_FALSE(_fade.Fading());
+	// The hand takes hold of the land: the change of hand mode starts the blend from the last drawn pose
 	_animation.Update(k_Frame, State::Camera, Cycle::Grip, {320, 240});
-	const auto fading = _animation.GetBoneMatrices();
+	const auto fading = DrawFrame({.mode = HandMode::Camera, .cycle = Cycle::Grip});
+	EXPECT_TRUE(_fade.Fading());
+	std::vector<glm::mat4> gripping;
 	for (int i = 0; i < 30; ++i)
 	{
 		_animation.Update(k_Frame, State::Camera, Cycle::Grip, {320, 240});
+		gripping = DrawFrame({.mode = HandMode::Camera, .cycle = Cycle::Grip});
 	}
-	const auto gripping = _animation.GetBoneMatrices();
+	EXPECT_FALSE(_fade.Fading());
 
 	float fadeStep = 0.0f;
 	float gripChange = 0.0f;
@@ -250,23 +276,30 @@ TEST(HandSize, FollowsCHandSetDistanceFromView)
 TEST_F(HandAnimationTest, HoldingASeedTakesAStillFrameAndFadesInAndOut)
 {
 	using Cycle = HandAnimation::Cycle;
+	using hand_blend::HandMode;
+	const hand_blend::Frame normalFrame {.mode = HandMode::Normal, .cycle = Cycle::Wiggle};
+	const hand_blend::Frame seedFrame {.mode = HandMode::Seed, .held = entt::entity {1}};
 	_animation.Update(k_Frame, HandAnimation::State::Normal, Cycle::Wiggle, {320, 240});
-	const auto normal = _animation.GetBoneMatrices();
+	const auto normal = DrawFrame(normalFrame);
 	// Taking hold cross-fades to the side hold's frame, which then stays still however long it is held
 	_animation.UpdateHeld(k_Frame, Cycle::HoldSide, 66, {320, 240});
-	const auto fading = _animation.GetBoneMatrices();
+	const auto fading = DrawFrame(seedFrame);
+	EXPECT_TRUE(_fade.Fading());
 	for (int frame = 0; frame < 20; ++frame)
 	{
 		_animation.UpdateHeld(k_Frame, Cycle::HoldSide, 66, {320, 240});
+		DrawFrame(seedFrame);
 	}
-	const auto held = _animation.GetBoneMatrices();
+	EXPECT_FALSE(_fade.Fading());
 	_animation.UpdateHeld(k_Frame, Cycle::HoldSide, 66, {320, 240});
+	const auto held = _animation.GetBoneMatrices();
+	const auto drawn = DrawFrame(seedFrame);
 	float still = 0.0f;
 	float faded = 0.0f;
 	float moved = 0.0f;
 	for (size_t i = 0; i < held.size(); ++i)
 	{
-		still = std::max(still, Distance(held[i], _animation.GetBoneMatrices()[i]));
+		still = std::max(still, Distance(held[i], drawn[i]));
 		faded = std::max(faded, Distance(fading[i], held[i]));
 		moved = std::max(moved, Distance(normal[i], held[i]));
 	}
@@ -279,6 +312,10 @@ TEST_F(HandAnimationTest, HoldingASeedTakesAStillFrameAndFadesInAndOut)
 	EXPECT_NE(_animation.GetCursorLag(), glm::vec2(0.0f));
 	// The fingertips' middle is somewhere in the hand
 	EXPECT_GT(glm::length(_animation.LeafBoneCentre()), 0.0f);
+	// Letting go of the seed fades back to the normal hand
+	_animation.Update(k_Frame, HandAnimation::State::Normal, Cycle::Wiggle, {320, 240});
+	DrawFrame(normalFrame);
+	EXPECT_TRUE(_fade.Fading());
 }
 
 TEST_F(HandAnimationTest, StandardSizeSpansThreeUnitsTwo)

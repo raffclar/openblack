@@ -23,6 +23,7 @@
 #include "Common/GUtilsDistance.h"
 #include "ComputerMindCommon.h"
 #include "ECS/Components/ForestMember.h"
+#include "ECS/Components/HandStillness.h"
 #include "ECS/Components/LivingAction.h"
 #include "ECS/Components/OneOffSpellSeed.h"
 #include "ECS/Components/ScriptControl.h"
@@ -34,7 +35,9 @@
 #include "ECS/Systems/CinematicDirectorSystemInterface.h"
 #include "ECS/Systems/ForestSystemInterface.h"
 #include "ECS/Systems/LivingActionSystemInterface.h"
+#include "ECS/Systems/PlayerSystemInterface.h"
 #include "ECS/Systems/WorshipSiteSystemInterface.h"
+#include "Hand/GodHand.h"
 #include "Locator.h"
 
 using namespace openblack;
@@ -166,6 +169,7 @@ bool GameMindWorld::StepAction()
 	// The god reports the place of its hand before the step, and its camera after it
 	const auto start = _timeHand ? std::chrono::steady_clock::now() : std::chrono::steady_clock::time_point {};
 	const auto hand = _state.hand.hand;
+	ReportGodHand(hand);
 	const bool ended = computer_hand::Process(_state.hand, _hand);
 	// The step can change the world, so the searches ask for the influence again
 	_context.searchCells.clear();
@@ -175,6 +179,23 @@ bool GameMindWorld::StepAction()
 		_handMs += std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - start).count();
 	}
 	return ended;
+}
+
+void GameMindWorld::ReportGodHand(const glm::vec3& hand) const
+{
+	// The creatures read the hand of a god that no person plays where it was before the step
+	if (!Locator::playerSystem::has_value() || Locator::playerSystem::value().IsHumanPlayer(_player))
+	{
+		return;
+	}
+	auto& registry = Entities();
+	const auto entity = Locator::playerSystem::value().FindPlayer(_player);
+	if (!entity.has_value() || !registry.Valid(*entity))
+	{
+		return;
+	}
+	auto* godHand = registry.TryGet<HandStillness>(*entity);
+	god_hand::MindReport(godHand != nullptr ? *godHand : registry.Assign<HandStillness>(*entity), hand);
 }
 
 void GameMindWorld::ClearAction()
