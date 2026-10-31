@@ -70,6 +70,7 @@ enum class VanillaType : uint32_t
 	ScriptMarker = 0x7C,
 	ScriptTimer = 0x7D,
 	Flock = 0x7E,
+	Wonder = 0x80,
 	BaseOnly = 0xF6,
 	Climate = 0xFC,
 	StreetLantern = 0xFE,

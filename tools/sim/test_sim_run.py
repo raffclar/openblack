@@ -65,6 +65,13 @@ class RepeatTests(unittest.TestCase):
         self.assertEqual(result["draws_last"], [9, 10])
 
 
+class LoadReplayTests(unittest.TestCase):
+    def test_the_first_run_writes_the_commands_and_the_others_play_them(self):
+        self.assertEqual(sim_run.replay_arguments(1, "c.jsonl"), ["--sim-commands", "c.jsonl"])
+        self.assertEqual(sim_run.replay_arguments(2, "c.jsonl"), ["--sim-play-commands", "c.jsonl"])
+        self.assertEqual(sim_run.replay_arguments(5, "c.jsonl"), ["--sim-play-commands", "c.jsonl"])
+
+
 class FramesTests(unittest.TestCase):
     def test_each_item_gives_the_frame_time_and_the_draw_every(self):
         self.assertEqual(sim_run.parse_frames("10, 17,20:1"), [(10, 0), (17, 0), (20, 1)])
