@@ -186,6 +186,7 @@ bool NetworkGameSystem::Join(NetworkJoin join)
 		                                 : std::nullopt;
 		        return profile_alignment::Sent(profile.has_value() ? profile->alignment : 0.0);
 	        },
+	    .readPlaysForClan = [this]() { return _playsForClan; },
 #if defined(OPENBLACK_DEVELOPER_TOOLS)
 	    .parts =
 	        [](uint32_t turn) {
@@ -218,6 +219,11 @@ void NetworkGameSystem::Attach()
 			    tool(turn);
 		    }
 	    });
+}
+
+void NetworkGameSystem::SetPlaysForClan(bool playsForClan)
+{
+	_playsForClan = playsForClan;
 }
 
 void NetworkGameSystem::SetReady(bool ready)
@@ -280,6 +286,11 @@ void NetworkGameSystem::EndNetworkGame()
 	auto& clock = Locator::time::value();
 	clock.SetNetworkGame(false);
 	clock.SetPaused(false);
+	// In a game alone, the player of this computer is the first player again: the next land and its creature need that
+	if (Locator::handSystem::has_value())
+	{
+		Locator::handSystem::value().SetOwnPlayer(PlayerNames::PLAYER_ONE);
+	}
 	if (Locator::syncChecksumSystem::has_value())
 	{
 		Locator::syncChecksumSystem::value().SetEnabled(false);

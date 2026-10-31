@@ -11,8 +11,12 @@
 
 #include "VillageTotemSystem.h"
 
+#include <cstdint>
+
+#include <algorithm>
 #include <optional>
 #include <string_view>
+#include <utility>
 #include <vector>
 
 #include <glm/gtx/euler_angles.hpp>
@@ -166,16 +170,23 @@ void VillageTotemSystem::RefreshIcons(PlayerNames player)
 {
 	auto& registry = _world->Entities();
 	const auto iconMesh = _world->IconMeshFor(player);
-	registry.Each<const VillageTotem>([&](entt::entity totem, const VillageTotem& totemComponent) {
+	// The totems of the player's towns, in the order that the player gained the towns
+	std::vector<std::pair<uint32_t, entt::entity>> totems;
+	registry.Each<const VillageTotem>([&](entt::entity totem, const VillageTotem& /*unused*/) {
 		const auto town = TownOf(totem);
 		const auto* townComponent = town != entt::null ? registry.TryGet<const Town>(town) : nullptr;
 		if (townComponent != nullptr && townComponent->owner == player)
 		{
-			ShowIcon(totemComponent, iconMesh);
-			// The new icon gives the totem a new outline, so it goes out of the map's cells and in again
-			_world->Reinsert(totem);
+			totems.emplace_back(townComponent->gained, totem);
 		}
 	});
+	std::ranges::stable_sort(totems, {}, &std::pair<uint32_t, entt::entity>::first);
+	for (const auto& entry : totems)
+	{
+		ShowIcon(registry.Get<const VillageTotem>(entry.second), iconMesh);
+		// The new icon gives the totem a new outline, so it goes out of the map's cells and in again
+		_world->Reinsert(entry.second);
+	}
 }
 
 void VillageTotemSystem::SetTotemShare(entt::entity totem, float share)

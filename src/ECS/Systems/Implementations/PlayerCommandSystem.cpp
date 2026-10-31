@@ -22,6 +22,8 @@
 
 #include <spdlog/spdlog.h>
 
+#include "Creature/ClanCreatureOrder.h"
+#include "Creature/CreatureFileLoad.h"
 #include "Creature/LeashReport.h"
 #include "ECS/Components/Creature.h"
 #include "ECS/Components/CreatureLeash.h"
@@ -687,7 +689,7 @@ void PlayerCommandSystem::BringCreatures(std::span<const PlayerNames> joined)
 		return;
 	}
 	// After the slots with no player filled, the god of each human brings the creature that its player sent before the
-	// start, in the order of the joins
+	// start, in the order of the joins. Start data that holds the order to make a new clan creature makes that creature.
 	for (const auto god : joined)
 	{
 		const auto file = _source->StartCreatureFile(god);
@@ -695,10 +697,15 @@ void PlayerCommandSystem::BringCreatures(std::span<const PlayerNames> joined)
 		{
 			continue;
 		}
-		const auto brought = openblack::ecs::creature_from_file::Bring(god, file);
-		// Only the creature of this computer's own god came from this player's files
-		if (brought.creature.has_value() && _source->OwnGod() == god &&
-		    openblack::Locator::creatureCarryOverSystem::has_value())
+		const auto clanOrder = openblack::clan_creature_order::Read(file);
+		const auto brought = clanOrder.has_value() ? openblack::ecs::creature_from_file::BringClanOrder(god, *clanOrder)
+		                                           : openblack::ecs::creature_from_file::Bring(god, file);
+		// Only the creature of this computer's own god came from this player's files, and only with no clan
+		const auto kept =
+		    openblack::creature_file_load::KeptByThisComputer({.ownGod = _source->OwnGod() == god,
+		                                                       .clanOrder = clanOrder.has_value(),
+		                                                       .ownGodPlaysForClan = _source->OwnGodPlaysForClan()});
+		if (brought.creature.has_value() && kept && openblack::Locator::creatureCarryOverSystem::has_value())
 		{
 			openblack::Locator::creatureCarryOverSystem::value().SetBroughtCreature(*brought.creature);
 		}

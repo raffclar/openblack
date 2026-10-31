@@ -98,6 +98,7 @@
 #include "Temple/TempleControlNames.h"
 #include "Temple/TempleHelpScripts.h"
 #include "Temple/TempleRoomAccess.h"
+#include "Temple/TempleRoomSave.h"
 #include "Visual/DetailLevel.h"
 #include "Windowing/WindowingInterface.h"
 
@@ -2143,11 +2144,12 @@ void TempleInterior::SaveState(ecs::reflection::BinaryWriter& out) const
 		Save(out, _heldDialogue->text.noClick);
 	}
 	// Then whether the rooms are open, and what the map in the main room's pool shows
-	Save(out, _roomsOpened);
-	for (size_t i = 0; i < TempleToggles::k_Count; ++i)
+	temple::RoomSave rooms {.roomsOpened = _roomsOpened};
+	for (size_t i = 0; i < rooms.shown.size(); ++i)
 	{
-		Save(out, _toggles.IsShown(static_cast<TempleToggles::Display>(i)));
+		rooms.shown.at(i) = _toggles.IsShown(static_cast<TempleToggles::Display>(i));
 	}
+	temple::SaveRooms(out, rooms);
 }
 
 bool TempleInterior::LoadState(ecs::reflection::BinaryReader& in)

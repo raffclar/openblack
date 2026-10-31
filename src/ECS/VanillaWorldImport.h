@@ -44,7 +44,7 @@ constexpr uint32_t k_FirstVillagerRowNumber = k_FirstAbodeRowNumber - static_cas
 [[nodiscard]] std::optional<VillagerInfo> VillagerRowOf(uint32_t number);
 
 /// True when the import makes buildings of the row from the file: the abodes, the storage pit, the creche, the
-/// graveyard and the town centre of each tribe. The import removes the buildings of these rows that the land made.
+/// wonder, the graveyard and the town centre of each tribe. The import removes the buildings of these rows that the land made.
 [[nodiscard]] bool IsImportedBuilding(AbodeInfo row);
 
 /// True when a villager in the state is in its abode: the game does not show it, and its abode counts it as present
@@ -218,6 +218,17 @@ struct ImportedAbode
 	std::vector<uint32_t> villagers;
 	/// The number of its villagers that are in it
 	uint8_t present {0};
+	/// The power of a wonder, nothing for another building
+	std::optional<float> wonderPower;
+};
+
+/// The power that each tribe gives a player, by tribe number
+struct ImportedTribalPower
+{
+	PlayerNames player {PlayerNames::PLAYER_ONE};
+	std::array<float, static_cast<size_t>(Tribe::_COUNT)> power {};
+	/// The most power that each tribe gave the player
+	std::array<float, static_cast<size_t>(Tribe::_COUNT)> most {};
 };
 
 struct ImportedVillager
@@ -299,6 +310,8 @@ struct ImportedTowns
 	/// The numbers of the objects of the towns in the order of the town lists of the players: the list of each player of
 	/// the file in turn, each list in the order that its player got the towns
 	std::vector<uint32_t> townLists;
+	/// The tribal powers of each player of the file that keeps a value for each tribe
+	std::vector<ImportedTribalPower> tribalPowers;
 	/// Each record that the import does not take, and why
 	std::vector<std::string> skipped;
 };

@@ -466,13 +466,16 @@ void MiracleFxSystem::Reset()
 void MiracleFxSystem::SaveState(reflection::BinaryWriter& out) const
 {
 	reflection::SavePresentation(out, _holderEffects);
-	// The tribes' names that spin in the world, and which of them rings the hand
+	// The tribes' names that spin in the world, and which of them rings the hand. Only the frames move them and only the
+	// draw reads them.
+	out.BeginPresentation();
 	out.WriteSize(_runners.size());
 	for (const auto& runner : _runners)
 	{
 		reflection::Save(out, *runner);
 		reflection::Save(out, runner.get() == _ring);
 	}
+	out.EndPresentation();
 }
 
 bool MiracleFxSystem::LoadState(reflection::BinaryReader& in)

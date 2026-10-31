@@ -261,6 +261,9 @@ private:
 	bool LetGoOfHeld(entt::entity creature, components::CreatureMindState& mind, creature_mind::LetGo how);
 	/// GameRand(range): a draw on the synced seed of the game from 0 to range - 1
 	uint32_t Random(uint32_t range);
+	/// The executor of an action of the tables, none when the action has no executor. The names of the actions find their
+	/// executors one time, when the tables are made.
+	[[nodiscard]] const creature_plan_actions::Executor* ExecutorOf(uint32_t action);
 	/// What an agenda needs to know of the creature itself: the camera's position, whether it has a player, whether a
 	/// script controls it, its radius, and a chance for what varies
 	void Situate(entt::entity creature, creature_plan_actions::Situation& situation);
@@ -586,6 +589,8 @@ private:
 	std::optional<entt::entity> _walkContinuesFor;
 	/// The game's tables for the minds, taken once the game's data is loaded
 	std::optional<creature_mind_tables::Tables> _tables;
+	/// The executor of each action of the tables, in the order of the actions
+	std::vector<const creature_plan_actions::Executor*> _executors;
 	/// The creatures whose minds continue to think after the first part of their own turns, until the second part
 	std::vector<entt::entity> _thinking;
 	/// The creatures whose minds do the step of their agendas after the second part, until the last part
