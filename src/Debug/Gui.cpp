@@ -367,6 +367,19 @@ void Gui::CloseWindow(std::string_view name) noexcept
 	}
 }
 
+std::string Gui::WindowTakingEvent(const SDL_Event& event) const noexcept
+{
+	// While a network game is live, no debug window takes an event
+	if (_networkDormant || _imgui == nullptr)
+	{
+		return {};
+	}
+	ImGui::SetCurrentContext(_imgui);
+	const auto taking =
+	    std::ranges::find_if(_debugWindows, [&event](const auto& window) { return window->WouldTakeEvent(event); });
+	return taking == _debugWindows.end() ? std::string {} : (*taking)->GetName();
+}
+
 bool Gui::PressButton(std::string_view window, std::span<const ButtonPathStep> path) noexcept
 {
 	if (ImGui::GetCurrentContext() == nullptr)

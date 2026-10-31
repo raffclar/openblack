@@ -57,6 +57,9 @@ public:
 	};
 	[[nodiscard]] virtual std::vector<WindowState> ListWindows() const noexcept { return {}; }
 	virtual void CloseWindow([[maybe_unused]] std::string_view name) noexcept {}
+	/// The name of the open debug window that would take the event for itself, such as the editor taking a press of the
+	/// left button on the land; empty when the game gets it
+	[[nodiscard]] virtual std::string WindowTakingEvent([[maybe_unused]] const SDL_Event& event) const noexcept { return {}; }
 	/// A step of the way to a button in a window: a label or a number the window pushed, as its scopes are named
 	using ButtonPathStep = std::variant<std::string, int32_t>;
 	/// Presses a button of an open window by the labels and numbers leading to it, the button's label last, as a click

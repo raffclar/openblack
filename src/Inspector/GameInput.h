@@ -35,6 +35,7 @@ public:
 	[[nodiscard]] std::vector<std::string> ActionNames() const override;
 	[[nodiscard]] std::vector<std::string> GestureNames() const override;
 	[[nodiscard]] Json State() const override;
+	[[nodiscard]] std::string WindowTakingButton(uint8_t button) const override;
 	void SetLockMode(std::string_view mode) override;
 	[[nodiscard]] Json LockState() const override;
 
