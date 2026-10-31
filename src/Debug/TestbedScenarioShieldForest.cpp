@@ -312,6 +312,34 @@ void AddForests(std::vector<Scenario>& all)
 	    .commands = {{.kind = Command::Kind::PauseGame, .delaySeconds = 6.0f, .value = 1}},
 	});
 
+	all.push_back({
+	    .id = "miracles.seed_out_of_influence",
+	    .name = "Forest: its miracle closes when its seed is outside the influence",
+	    .facet = Facet::Miracles,
+	    .description = "A forest seed summoned from the player's worship and cast by hand on grass north of the middle, "
+	                   "as in the forest seed scenario. Twelve seconds in, a script puts an anti-influence of the player "
+	                   "over the forest. Thus the seed over the forest is outside the player's influence.",
+	    .expected = "Before the anti-influence, the seed sits over the forest. At the next turn after the anti-influence, "
+	                "the forest miracle closes and its seed goes. Its trees then wither away within about two seconds, as "
+	                "when the miracle ends. The inspector (magic.spells) shows no forest miracle after it.",
+	    .environment = {.dispenserGrid = false},
+	    .framing = {.shot = Shot::Overview, .include = {{-20.0f, 20.0f}, {20.0f, 60.0f}}},
+	    .miracles = {{.type = MagicType::Forest,
+	                  .point = {0.0f, 40.0f},
+	                  .handOffset = {0.0f, 40.0f},
+	                  .delaySeconds = 0.5f,
+	                  .byHand = true,
+	                  .fromWorship = true,
+	                  .holdBeforePress = 2.0f}},
+	    .commands = {{.kind = Command::Kind::CallNative,
+	                  .delaySeconds = 12.0f,
+	                  .script = "INFLUENCE_POSITION",
+	                  .scriptArguments = {{.kind = ScriptArgument::Kind::Position, .point = {0.0f, 40.0f}},
+	                                      {.kind = ScriptArgument::Kind::Number, .number = 30.0f},
+	                                      {.kind = ScriptArgument::Kind::Integer, .number = 0.0f},
+	                                      {.kind = ScriptArgument::Kind::Integer, .number = 1.0f}}}},
+	});
+
 	// The forest's outermost tree on its east, and where the hand puts it down, south east of the forest
 	constexpr glm::vec2 k_EastTree {10.75f, 40.0f};
 	constexpr size_t k_Action = 3;
