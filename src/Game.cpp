@@ -795,6 +795,7 @@ Game::Game(Arguments&& args) noexcept
 	config.aiTimesEvery = args.aiTimesEvery;
 	config.frameStatsOut = args.frameStatsOut;
 	config.warmUpFirstFrame = args.warmUpFirstFrame;
+	config.parallelDrawEncode = args.parallelDrawEncode;
 	config.lobbyOrigin = args.lobbyOrigin;
 	config.lobbyTestAuthorities = args.lobbyTestAuthorities;
 	config.useInternetWeather = args.useInternetWeather;

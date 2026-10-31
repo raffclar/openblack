@@ -628,6 +628,8 @@ Renderer::Renderer(uint32_t bgfxReset, std::unique_ptr<BgfxCallback>&& bgfxCallb
     , _workers(std::make_unique<WorkerPool>(WorkerPool::DefaultThreadCount()))
 {
 	_shaderManager->LoadShaders();
+	// Each program's mesh uniforms are found now, so that the threads that encode draws only read them
+	_shaderManager->ForEachProgram([this](const ShaderProgram& program) { static_cast<void>(MeshUniformsOf(program)); });
 	_groundShadowScratch.resize(_workers->GetLaneCount());
 	_plane = Primitive::CreatePlane();
 	_morphStreamLayouts = std::make_unique<MorphStreamLayouts>();
@@ -914,7 +916,7 @@ bool CreatureMirrored(entt::entity entity, glm::vec3 position, float fizz)
 
 /// Binds the submeshes of a creature's variant meshes that match one of its base mesh as the second to fourth vertex
 /// streams; the base's own where a variant's doesn't match
-void BindMorphTargets(const L3DMesh& mesh, const L3DSubMesh& subMesh,
+void BindMorphTargets(bgfx::Encoder& encoder, const L3DMesh& mesh, const L3DSubMesh& subMesh,
                       const RendererInterface::L3DMeshSubmitDesc::MorphTargets& targets, const MorphStreamLayouts& layouts)
 {
 	const auto& subMeshes = mesh.GetSubMeshes();
@@ -933,21 +935,21 @@ void BindMorphTargets(const L3DMesh& mesh, const L3DSubMesh& subMesh,
 				buffer = &candidate;
 			}
 		}
-		buffer->BindStream(static_cast<uint8_t>(axis + 1), layouts.Get(axis));
+		buffer->BindStream(encoder, static_cast<uint8_t>(axis + 1), layouts.Get(axis));
 	}
 }
 
 /// Binds every vertex's position and bone in the submesh and in its matches of the creature's variant meshes, for the
 /// vertex shader to blend the seams with; the base's own where a variant's doesn't match. Off where the submesh has no
 /// blends, or where the blends are turned off.
-void BindBlendSources(const L3DMesh& mesh, const L3DSubMesh& subMesh,
+void BindBlendSources(DrawEncoder& to, const L3DMesh& mesh, const L3DSubMesh& subMesh,
                       const RendererInterface::L3DMeshSubmitDesc::MorphTargets& targets, const ShaderProgram& program)
 {
 	const auto* base = subMesh.GetBlendSource();
 	const bool blended = targets.blendSeams && subMesh.HasBlends() && base != nullptr;
 	const auto width = base != nullptr ? static_cast<float>(base->GetResolution().x) : 1.0f;
 	const glm::vec4 u_vertexBlend {blended ? 1.0f : 0.0f, width, 0.0f, 0.0f};
-	program.SetUniformValue("u_vertexBlend", &u_vertexBlend);
+	program.SetUniformValue(to, "u_vertexBlend", &u_vertexBlend);
 	if (!blended)
 	{
 		return;
@@ -960,7 +962,7 @@ void BindBlendSources(const L3DMesh& mesh, const L3DSubMesh& subMesh,
 	    {"s_blendThinFat", 4},
 	    {"s_blendWeakStrong", 9},
 	}};
-	program.SetTextureSampler("s_blendBase", 2, *base);
+	program.SetTextureSampler(to, "s_blendBase", 2, *base);
 	for (size_t axis = 0; axis < targets.meshes.size(); ++axis)
 	{
 		const auto* target = targets.meshes.at(axis);
@@ -973,13 +975,13 @@ void BindBlendSources(const L3DMesh& mesh, const L3DSubMesh& subMesh,
 				source = candidate;
 			}
 		}
-		program.SetTextureSampler(k_Samplers.at(axis).first, k_Samplers.at(axis).second, *source);
+		program.SetTextureSampler(to, k_Samplers.at(axis).first, k_Samplers.at(axis).second, *source);
 	}
 }
 
 /// The textures of the looks the creature spells give a creature: the ice sheen of a frozen one, and the static one
 /// fizzing out of sight is drawn through
-void BindCreatureSpellLooks(const ShaderProgram& program)
+void BindCreatureSpellLooks(DrawEncoder& to, const ShaderProgram& program)
 {
 	const auto& textures = Locator::resources::value().GetTextures();
 	constexpr std::array<std::pair<const char*, std::pair<uint8_t, entt::hashed_string>>, 3> k_Looks {{
@@ -991,7 +993,7 @@ void BindCreatureSpellLooks(const ShaderProgram& program)
 	{
 		if (textures.Contains(binding.second.value()))
 		{
-			program.SetTextureSampler(sampler, binding.first, *textures.Handle(binding.second));
+			program.SetTextureSampler(to, sampler, binding.first, *textures.Handle(binding.second));
 		}
 	}
 }
@@ -1037,13 +1039,15 @@ glm::vec3 HandGlowColour()
 
 const Renderer::MeshUniforms& Renderer::MeshUniformsOf(const ShaderProgram& program) const
 {
-	const auto [found, inserted] = _meshUniforms.try_emplace(&program);
-	if (inserted)
+	// Only a look-up for the programs loaded with the renderer, which the threads that encode draws can do together
+	if (const auto known = std::as_const(_meshUniforms).find(&program); known != _meshUniforms.cend())
 	{
-		for (size_t i = 0; i < k_MeshUniformNames.size(); ++i)
-		{
-			found->second.at(i) = program.FindUniform(k_MeshUniformNames.at(i));
-		}
+		return known->second;
+	}
+	const auto [found, inserted] = _meshUniforms.try_emplace(&program);
+	for (size_t i = 0; i < k_MeshUniformNames.size(); ++i)
+	{
+		found->second.at(i) = program.FindUniform(k_MeshUniformNames.at(i));
 	}
 	return found->second;
 }
@@ -1115,7 +1119,7 @@ const Renderer::Cap& Renderer::LandCapOf(const L3DSubMesh& subMesh, const CapPri
 	return _landCaps.emplace(key, std::move(cap)).first->second;
 }
 
-bool Renderer::BindCap(const std::vector<partial_build_cap::CapVertex>& cap)
+bool Renderer::BindCap(bgfx::Encoder& encoder, const std::vector<partial_build_cap::CapVertex>& cap)
 {
 	// Laid out as a model's own vertices, each moved by the model's matrix alone
 	struct Vertex
@@ -1146,7 +1150,7 @@ bool Renderer::BindCap(const std::vector<partial_build_cap::CapVertex>& cap)
 		// The first matrix, no partner to blend with
 		vertices[i] = {.position = cap[i].position, .uv = cap[i].uv, .normal = cap[i].normal, .indices = {0, -1, 0, 0}};
 	}
-	bgfx::setVertexBuffer(0, &buffer);
+	encoder.setVertexBuffer(0, &buffer);
 	return true;
 }
 
@@ -1235,28 +1239,30 @@ void Renderer::DrawSubMesh(const graphics::L3DMesh& mesh, const graphics::L3DSub
 		}
 		return GetTexture(skinID, skins);
 	};
+	// The encoder that the draws go into
+	auto& to = desc.encoder != nullptr ? *desc.encoder : _shaderManager->GetMainEncoder();
 	// The program's uniforms by handle: a draw sets them for every primitive
 	const auto& uniforms = MeshUniformsOf(*program);
 	const auto has = [&uniforms](MeshUniform uniform) { return uniforms[static_cast<size_t>(uniform)].has_value(); };
 	// Set by handle where the program has the uniform, or by name for its warning where it hasn't
-	const auto setUniform = [&uniforms, program](MeshUniform uniform, const void* value) {
+	const auto setUniform = [&uniforms, &to, program](MeshUniform uniform, const void* value) {
 		if (const auto& handle = uniforms[static_cast<size_t>(uniform)])
 		{
-			program->SetUniformValue(*handle, value);
+			program->SetUniformValue(to, *handle, value);
 		}
 		else
 		{
-			program->SetUniformValue(k_MeshUniformNames[static_cast<size_t>(uniform)].data(), value);
+			program->SetUniformValue(to, k_MeshUniformNames[static_cast<size_t>(uniform)].data(), value);
 		}
 	};
-	const auto setSampler = [&uniforms, program](MeshUniform sampler, uint8_t stage, const auto& texture) {
+	const auto setSampler = [&uniforms, &to, program](MeshUniform sampler, uint8_t stage, const auto& texture) {
 		if (const auto& handle = uniforms[static_cast<size_t>(sampler)])
 		{
-			program->SetTextureSampler(*handle, stage, texture);
+			program->SetTextureSampler(to, *handle, stage, texture);
 		}
 		else
 		{
-			program->SetTextureSampler(k_MeshUniformNames[static_cast<size_t>(sampler)].data(), stage, texture);
+			program->SetTextureSampler(to, k_MeshUniformNames[static_cast<size_t>(sampler)].data(), stage, texture);
 		}
 	};
 
@@ -1320,12 +1326,12 @@ void Renderer::DrawSubMesh(const graphics::L3DMesh& mesh, const graphics::L3DSub
 		{
 			if (modelMatrices != nullptr && desc.matrixCount > 0)
 			{
-				bgfx::setTransform(modelMatrices, desc.matrixCount);
+				to.encoder->setTransform(modelMatrices, desc.matrixCount);
 			}
 			if (desc.boneTexture != nullptr)
 			{
-				program->SetUniformValue("u_bones", &desc.bones);
-				program->SetTextureSampler("s_bones", 2, *desc.boneTexture);
+				program->SetUniformValue(to, "u_bones", &desc.bones);
+				program->SetTextureSampler(to, "s_bones", 2, *desc.boneTexture);
 			}
 			if (has(MeshUniform::DepthBias))
 			{
@@ -1355,12 +1361,12 @@ void Renderer::DrawSubMesh(const graphics::L3DMesh& mesh, const graphics::L3DSub
 			}
 			if (desc.morphTargets != nullptr && has(MeshUniform::VertexBlend))
 			{
-				BindBlendSources(mesh, subMesh, *desc.morphTargets, *program);
-				BindCreatureSpellLooks(*program);
+				BindBlendSources(to, mesh, subMesh, *desc.morphTargets, *program);
+				BindCreatureSpellLooks(to, *program);
 			}
 			else if (desc.fizz.has_value() || desc.freeze > 0.0f)
 			{
-				BindCreatureSpellLooks(*program);
+				BindCreatureSpellLooks(to, *program);
 			}
 			// Set for every mesh, so that none is drawn with another's fizz
 			if (has(MeshUniform::CreatureSpellLook))
@@ -1479,7 +1485,7 @@ void Renderer::DrawSubMesh(const graphics::L3DMesh& mesh, const graphics::L3DSub
 					        : std::nullopt;
 					if (diffuse.has_value())
 					{
-						program->SetTextureSampler(*diffuse, 0, *texture, BGFX_SAMPLER_U_CLAMP | BGFX_SAMPLER_V_CLAMP);
+						program->SetTextureSampler(to, *diffuse, 0, *texture, BGFX_SAMPLER_U_CLAMP | BGFX_SAMPLER_V_CLAMP);
 					}
 					else
 					{
@@ -1601,9 +1607,9 @@ void Renderer::DrawSubMesh(const graphics::L3DMesh& mesh, const graphics::L3DSub
 				// the reflection
 				const bool mainView = desc.viewId == RenderPass::Main || desc.viewId == RenderPass::Translucent;
 				const bool inTemple = Locator::temple::has_value() && Locator::temple::value().Active();
-				SetObjectGroundShadowUniforms(*program, desc.groundShadows && Locator::config::value().detail.objectShadows &&
-				                                            mainView && !inTemple && !desc.isSky && !desc.drawAll &&
-				                                            desc.morphTargets == nullptr);
+				SetObjectGroundShadowUniforms(to, *program,
+				                              desc.groundShadows && Locator::config::value().detail.objectShadows && mainView &&
+				                                  !inTemple && !desc.isSky && !desc.drawAll && desc.morphTargets == nullptr);
 			}
 			if (has(MeshUniform::LightRule))
 			{
@@ -1662,12 +1668,12 @@ void Renderer::DrawSubMesh(const graphics::L3DMesh& mesh, const graphics::L3DSub
 		{
 			if (desc.instanceDesc != nullptr && (skip & Mesh::SkipState::SkipInstanceBuffer) == 0)
 			{
-				bgfx::setInstanceDataBuffer(toBgfx(desc.instanceDesc->GetRawHandle()), desc.instanceDesc->GetStart(),
-				                            desc.instanceDesc->GetCount());
+				to.encoder->setInstanceDataBuffer(toBgfx(desc.instanceDesc->GetRawHandle()), desc.instanceDesc->GetStart(),
+				                                  desc.instanceDesc->GetCount());
 			}
 			if (cap != nullptr)
 			{
-				if (!BindCap(*cap))
+				if (!BindCap(*to.encoder, *cap))
 				{
 					lastPreserveState = false;
 					continue;
@@ -1675,14 +1681,14 @@ void Renderer::DrawSubMesh(const graphics::L3DMesh& mesh, const graphics::L3DSub
 			}
 			else if (subMesh.GetMesh().IsIndexed() && (skip & Mesh::SkipState::SkipIndexBuffer) == 0)
 			{
-				subMesh.GetMesh().GetIndexBuffer().Bind(prim.indicesCount, prim.indicesOffset);
+				subMesh.GetMesh().GetIndexBuffer().Bind(*to.encoder, prim.indicesCount, prim.indicesOffset);
 			}
 			if (cap == nullptr && (skip & Mesh::SkipState::SkipVertexBuffer) == 0)
 			{
-				subMesh.GetMesh().GetVertexBuffer().Bind();
+				subMesh.GetMesh().GetVertexBuffer().Bind(*to.encoder);
 				if (desc.morphTargets != nullptr && _morphStreamLayouts)
 				{
-					BindMorphTargets(mesh, subMesh, *desc.morphTargets, *_morphStreamLayouts);
+					BindMorphTargets(*to.encoder, mesh, subMesh, *desc.morphTargets, *_morphStreamLayouts);
 				}
 			}
 			if ((skip & Mesh::SkipState::SkipRenderState) == 0)
@@ -1751,14 +1757,14 @@ void Renderer::DrawSubMesh(const graphics::L3DMesh& mesh, const graphics::L3DSub
 					const auto byte = static_cast<uint32_t>(std::clamp(*desc.additiveShare, 0.0f, 1.0f) * 255.0f);
 					rgba = (byte << 24) | (byte << 16) | (byte << 8) | byte;
 				}
-				bgfx::setState(state, rgba);
+				to.encoder->setState(state, rgba);
 				drawState = state;
 			}
 
 			// Opaque draws whose order doesn't show are gathered by the textures they bind
 			const auto sortDepth =
 			    draw_order::Reorderable(viewId, drawState, desc.sortDepth) ? draw_order::GroupKey(bindings) : desc.sortDepth;
-			program->Submit(static_cast<bgfx::ViewId>(viewId), sortDepth,
+			program->Submit(to, static_cast<bgfx::ViewId>(viewId), sortDepth,
 			                primitivePreserveState ? BGFX_DISCARD_NONE : BGFX_DISCARD_ALL);
 		}
 		lastPreserveState = primitivePreserveState;
@@ -2773,6 +2779,122 @@ void Renderer::DrawMesh(const graphics::L3DMesh& mesh, const L3DMeshSubmitDesc& 
 		            offset != desc.subMeshOffsets.end() ? offset->second : glm::vec3(0.0f), picture,
 		            std::ranges::find(desc.controlSubMeshes, index) != desc.controlSubMeshes.end());
 	}
+}
+
+namespace
+{
+/// The runs of things that each lane encodes about, so that a lane that is done early takes another run
+constexpr size_t k_RunsPerLane = 4;
+/// Fewer things than this the game's thread draws alone: waking the threads would take longer
+constexpr size_t k_LeastThingsOnThreads = 16;
+
+/// Drops everything set on the encoder for the next draw, as a draw that drops all its state does
+void Clean(DrawEncoder& to)
+{
+	to.encoder->discard(BGFX_DISCARD_ALL);
+	to.stages.Clear();
+}
+} // namespace
+
+size_t Renderer::EncodeLanes() const
+{
+#if defined(__EMSCRIPTEN__)
+	// The web build encodes on one thread
+	return 1;
+#else
+	// A warm-up's draw window counts the draws of the game's thread alone
+	if (!Locator::config::has_value() || !Locator::config::value().parallelDrawEncode || _warmingUp ||
+	    _shaderManager->IsDrawWindowOpen())
+	{
+		return 1;
+	}
+	// Each lane but the game's thread takes an encoder of its own from bgfx
+	const auto encoders = static_cast<size_t>(bgfx::getCaps()->limits.maxEncoders);
+	return std::min(_workers->GetLaneCount(), encoders);
+#endif
+}
+
+void Renderer::EncodeInOrder(size_t count, const EncodeDraw& draw) const
+{
+	auto& main = _shaderManager->GetMainEncoder();
+	const size_t lanes = count >= k_LeastThingsOnThreads ? EncodeLanes() : 1;
+	if (lanes <= 1)
+	{
+		for (size_t index = 0; index < count; ++index)
+		{
+			Clean(main);
+			draw(index, main);
+		}
+		Clean(main);
+		return;
+	}
+
+	// Run r has the things from count * r / runs on, and the submit order after run r - 1. Run 0 goes on in the game
+	// thread's encoder, so that what the game's thread set before is set for its first draw, as when that thread draws
+	// all. The snow's depth changes a texture: that is done here first, so that the draws only read it.
+	static_cast<void>(SnowDepth(_snowDepth, _snowRevision));
+	const size_t runs = std::min(count, lanes * k_RunsPerLane);
+	const uint32_t firstOrder = ++_submitOrder;
+	_submitOrder = firstOrder + static_cast<uint32_t>(runs);
+	const auto runRange = [count, runs](size_t run) { return std::pair {count * run / runs, count * (run + 1) / runs}; };
+	const auto encodeRun = [&](size_t run, DrawEncoder& to) {
+		to.encoder->setSubmitOrder(firstOrder + static_cast<uint32_t>(run));
+		const auto [first, last] = runRange(run);
+		for (size_t index = first; index < last; ++index)
+		{
+			Clean(to);
+			draw(index, to);
+		}
+	};
+	const auto encodeRunOn = [&](size_t run, bgfx::Encoder* encoder) {
+		DrawEncoder to {.encoder = encoder};
+		encodeRun(run, to);
+	};
+
+	std::vector<bgfx::Encoder*> encoders(lanes, nullptr);
+	std::atomic<bool> firstRunTaken {false};
+	std::atomic<size_t> nextRun {1};
+	_workers->ForEach(lanes, [&](size_t /*index*/, size_t lane) {
+		if (lane == 0)
+		{
+			if (!firstRunTaken.exchange(true))
+			{
+				encodeRun(0, main);
+			}
+		}
+		else if (lane < encoders.size() && encoders[lane] == nullptr)
+		{
+			encoders[lane] = bgfx::begin(true);
+		}
+		auto* encoder = lane == 0 ? main.encoder : (lane < encoders.size() ? encoders[lane] : nullptr);
+		if (encoder == nullptr)
+		{
+			// bgfx had no encoder left for this thread: the others draw its runs
+			return;
+		}
+		for (auto run = nextRun.fetch_add(1); run < runs; run = nextRun.fetch_add(1))
+		{
+			encodeRunOn(run, encoder);
+		}
+	});
+	// The game's thread draws what no thread took
+	if (!firstRunTaken.exchange(true))
+	{
+		encodeRun(0, main);
+	}
+	for (auto run = nextRun.fetch_add(1); run < runs; run = nextRun.fetch_add(1))
+	{
+		encodeRunOn(run, main.encoder);
+	}
+	for (auto* encoder : encoders)
+	{
+		if (encoder != nullptr)
+		{
+			bgfx::end(encoder);
+		}
+	}
+	main.encoder->setSubmitOrder(_submitOrder);
+	Clean(main);
 }
 
 void Renderer::PaintLandFootprints(const DrawSceneDesc& drawDesc) const
@@ -5909,7 +6031,7 @@ void Renderer::SetGroundShadowUniforms(const ShaderProgram& program, bool receiv
 	program.SetTextureSampler("s4_groundShadowData", 4, *_groundShadowData);
 }
 
-void Renderer::SetObjectGroundShadowUniforms(const ShaderProgram& program, bool receives) const
+void Renderer::SetObjectGroundShadowUniforms(DrawEncoder& to, const ShaderProgram& program, bool receives) const
 {
 	const glm::vec4 info {static_cast<float>(receives ? _groundShadowsOnObjects : 0U), 0.0f, 0.0f, 0.0f};
 	// By the handles the program's draws of meshes keep, as this is set for every primitive of them
@@ -5917,11 +6039,11 @@ void Renderer::SetObjectGroundShadowUniforms(const ShaderProgram& program, bool 
 	const auto handle = [&uniforms](MeshUniform uniform) { return uniforms[static_cast<size_t>(uniform)]; };
 	if (const auto uniform = handle(MeshUniform::GroundShadowInfo))
 	{
-		program.SetUniformValue(*uniform, &info);
+		program.SetUniformValue(to, *uniform, &info);
 	}
 	if (const auto uniform = handle(MeshUniform::GroundShadowData))
 	{
-		program.SetTextureSampler(*uniform, 14, *_groundShadowData);
+		program.SetTextureSampler(to, *uniform, 14, *_groundShadowData);
 	}
 }
 
@@ -8323,6 +8445,8 @@ void Renderer::Frame() noexcept
 #endif
 	// Advance to next frame. Process submitted rendering primitives.
 	const auto frame = bgfx::frame();
+	// The game thread's encoder starts each frame at submit order 0
+	_submitOrder = 0;
 #if defined(__EMSCRIPTEN__)
 	web::PresentFrame();
 #endif

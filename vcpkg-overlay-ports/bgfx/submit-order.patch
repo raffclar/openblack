@@ -1,0 +1,211 @@
+diff --git a/bgfx/include/bgfx/bgfx.h b/bgfx/include/bgfx/bgfx.h
+index 3f9df6e..ff66119 100644
+--- a/bgfx/include/bgfx/bgfx.h
++++ b/bgfx/include/bgfx/bgfx.h
+@@ -1819,6 +1819,15 @@ namespace bgfx
+ 		///
+ 		void touch(ViewId _id);
+ 
++		/// Sets the submit order of the next draw and compute calls of this encoder. Draws with equal sort keys
++		/// are rendered in submit order, and sequential views render their draws in submit order. Each later
++		/// submit takes the next order after it. With this, draws submitted from many encoders at the same time
++		/// are rendered in a fixed order. When no encoder sets an order in a frame, the frame sorts as before.
++		///
++		/// @param[in] _order Major order. The submits of the encoder then count up from it.
++		///
++		void setSubmitOrder(uint32_t _order);
++
+ 		/// Submit primitive for rendering.
+ 		///
+ 		/// @param[in] _id View id.
+@@ -5022,6 +5031,13 @@ namespace bgfx
+ 	///
+ 	void touch(ViewId _id);
+ 
++	/// Sets the submit order of the next draw and compute calls of the API thread's encoder.
++	/// See `Encoder::setSubmitOrder`.
++	///
++	/// @param[in] _order Major order. The submits of the encoder then count up from it.
++	///
++	void setSubmitOrder(uint32_t _order);
++
+ 	/// Submit primitive for rendering.
+ 	///
+ 	/// @param[in] _id View id.
+diff --git a/bgfx/src/bgfx.cpp b/bgfx/src/bgfx.cpp
+index b87f31b..acfb6fe 100644
+--- a/bgfx/src/bgfx.cpp
++++ b/bgfx/src/bgfx.cpp
+@@ -1629,6 +1629,7 @@ namespace bgfx
+ 		uint64_t key = m_key.encodeDraw(type);
+ 
+ 		m_frame->m_submitKeys[renderItemIdx] = key;
++		m_frame->m_submitOrders[renderItemIdx] = m_submitOrder++;
+ 
+ 		m_draw.m_uniformIdx   = m_uniformIdx;
+ 		m_draw.m_uniformBegin = m_uniformBegin;
+@@ -1731,6 +1732,7 @@ namespace bgfx
+ 
+ 		uint64_t key = m_key.encodeCompute();
+ 		m_frame->m_submitKeys[renderItemIdx] = key;
++		m_frame->m_submitOrders[renderItemIdx] = m_submitOrder++;
+ 
+ 		m_compute.m_uniformIdx   = m_uniformIdx;
+ 		m_compute.m_uniformBegin = m_uniformBegin;
+@@ -1828,7 +1830,41 @@ namespace bgfx
+ 			, m_uniformCacheFrame.m_numItems
+ 			) );
+ 
+-		bx::radixSort(m_sortKeys, s_ctx->m_tempKeys, m_sortValues, s_ctx->m_tempValues, m_numRenderItems);
++		if (0 != m_submitOrdered)
++		{
++			// First the items in submit order. The sort by key that follows keeps that order among equal keys.
++			for (uint32_t ii = 0, num = m_numRenderItems; ii < num; ++ii)
++			{
++				m_sortKeys[ii] = m_submitOrders[ii];
++			}
++
++			bx::radixSort(m_sortKeys, s_ctx->m_tempKeys, m_sortValues, s_ctx->m_tempValues, m_numRenderItems);
++
++			// The sequence of a sequential view and of a compute is the index of its render item, which has no
++			// fixed order with many encoders. Those keys sort by their view alone, thus in submit order.
++			for (uint32_t ii = 0, num = m_numRenderItems; ii < num; ++ii)
++			{
++				const uint64_t key = SortKey::remapView(submitKeys[m_sortValues[ii] ], m_viewOrder);
++				const bool isDraw = 0 != (key & kSortKeyDrawBit);
++				const bool isSequence = isDraw && kSortKeyDrawTypeSequence == (key & kSortKeyDrawTypeMask);
++				m_sortKeys[ii] = !isDraw ? key & (kSortKeyViewMask | kSortKeyDrawBit)
++					: isSequence ? key & (kSortKeyViewMask | kSortKeyDrawBit | kSortKeyDrawTypeMask)
++					: key
++					;
++			}
++
++			bx::radixSort(m_sortKeys, s_ctx->m_tempKeys, m_sortValues, s_ctx->m_tempValues, m_numRenderItems);
++
++			// The renderers read the whole keys
++			for (uint32_t ii = 0, num = m_numRenderItems; ii < num; ++ii)
++			{
++				m_sortKeys[ii] = SortKey::remapView(submitKeys[m_sortValues[ii] ], m_viewOrder);
++			}
++		}
++		else
++		{
++			bx::radixSort(m_sortKeys, s_ctx->m_tempKeys, m_sortValues, s_ctx->m_tempValues, m_numRenderItems);
++		}
+ 
+ 		reserveBlitKeys(m_numBlitItems);
+ 
+@@ -5221,6 +5257,11 @@ namespace bgfx
+ 		BGFX_ENCODER(discard(_flags) );
+ 	}
+ 
++	void Encoder::setSubmitOrder(uint32_t _order)
++	{
++		BGFX_ENCODER(setSubmitOrder(_order) );
++	}
++
+ 	static void getTextureRegionDims(uint32_t& _width, uint32_t& _height, uint32_t& _depth, const TextureRef& _ref, uint8_t _mip)
+ 	{
+ 		_width  = bx::max<uint32_t>(1, _ref.m_width  >> _mip);
+@@ -7616,6 +7657,12 @@ namespace bgfx
+ 		s_ctx->m_encoder0->discard(_flags);
+ 	}
+ 
++	void setSubmitOrder(uint32_t _order)
++	{
++		BGFX_CHECK_ENCODER0();
++		s_ctx->m_encoder0->setSubmitOrder(_order);
++	}
++
+ 	void blit(ViewId _id, const TextureRegion& _dst, const TextureRegion& _src)
+ 	{
+ 		BGFX_CHECK_ENCODER0();
+diff --git a/bgfx/src/bgfx_p.h b/bgfx/src/bgfx_p.h
+index 863ff13..316b49d 100644
+--- a/bgfx/src/bgfx_p.h
++++ b/bgfx/src/bgfx_p.h
+@@ -4137,6 +4137,7 @@ namespace bgfx
+ 		{
+ 			m_numRenderItems = 0;
+ 			m_numRenderBinds = 0;
++			m_submitOrdered  = 0;
+ 			bx::memSet(m_occlusion, 0xff, sizeof(m_occlusion) );
+ 			bx::memSet(m_viewUsed, 0, sizeof(m_viewUsed) );
+ 			bx::memSet(m_viewUsedOffset, 0, sizeof(m_viewUsedOffset) );
+@@ -4161,6 +4162,7 @@ namespace bgfx
+ 			const uint32_t num      = m_maxDrawCalls + 1;
+ 
+ 			m_submitKeys.create(reserved, num);
++			m_submitOrders.create(reserved, num);
+ 			m_renderItem.create(reserved, num);
+ 			m_renderBind.create(reserved, num);
+ 			m_view.create(kViewBlock, BGFX_CONFIG_MAX_VIEWS);
+@@ -4244,6 +4246,7 @@ namespace bgfx
+ 			reserveViewStats(false, 0);
+ 
+ 			m_submitKeys.destroy();
++			m_submitOrders.destroy();
+ 			m_view.destroy();
+ 			m_renderItem.destroy();
+ 			m_renderBind.destroy();
+@@ -4268,6 +4271,7 @@ namespace bgfx
+ 				const uint32_t keep = bx::min<uint32_t>(m_maxDrawCalls + 1, m_peak + 1 + kDrawCallBlock);
+ 
+ 				m_submitKeys.shrink(keep);
++				m_submitOrders.shrink(keep);
+ 				m_renderItem.shrink(keep);
+ 				m_renderBind.shrink(keep);
+ 				shrinkSortKeys(keep);
+@@ -4364,6 +4368,7 @@ namespace bgfx
+ 			m_numRenderItems = 0;
+ 			m_numRenderBinds = 0;
+ 			m_numBlitItems   = 0;
++			m_submitOrdered  = 0;
+ 			m_numBlitRepack  = 0;
+ 			m_iboffset = 0;
+ 			m_vboffset = 0;
+@@ -4501,6 +4506,7 @@ namespace bgfx
+ 		int32_t m_occlusion[BGFX_CONFIG_MAX_OCCLUSION_QUERIES];
+ 
+ 		FrameArenaT<uint64_t,   kDrawCallBlock> m_submitKeys;
++		FrameArenaT<uint64_t,   kDrawCallBlock> m_submitOrders;
+ 		FrameArenaT<RenderItem, kDrawCallBlock> m_renderItem;
+ 		FrameArenaT<RenderBind, kDrawCallBlock> m_renderBind;
+ 		FrameArenaT<BlitItem,   kBlitBlock>     m_blitItem;
+@@ -4527,6 +4533,7 @@ namespace bgfx
+ 		uint32_t m_numRenderItems;
+ 		uint32_t m_numRenderBinds;
+ 		uint32_t m_numBlitItems;
++		uint32_t m_submitOrdered;
+ 		uint32_t m_numBlitRepack;
+ 
+ 		uint32_t m_iboffset;
+@@ -4637,6 +4644,7 @@ namespace bgfx
+ 
+ 			m_numSubmitted = 0;
+ 			m_numDropped   = 0;
++			m_submitOrder  = 0;
+ 
+ 			m_bindHashMap.clear();
+ 			m_bindLlastIdx  = 0;
+@@ -5160,6 +5168,12 @@ namespace bgfx
+ 			m_dynamicMask &= ~mask;
+ 		}
+ 
++		void setSubmitOrder(uint32_t _order)
++		{
++			m_submitOrder = uint64_t(_order) << 32;
++			bx::atomicExchange<uint32_t>(&m_frame->m_submitOrdered, 1);
++		}
++
+ 		void discard(uint8_t _flags)
+ 		{
+ 			if (BX_ENABLED(BGFX_CONFIG_DEBUG_UNIFORM) )
+@@ -5221,6 +5235,7 @@ namespace bgfx
+ 
+ 		uint32_t m_numSubmitted;
+ 		uint32_t m_numDropped;
++		uint64_t m_submitOrder;
+ 
+ 		uint32_t m_uniformBegin;
+ 		uint32_t m_uniformEnd;

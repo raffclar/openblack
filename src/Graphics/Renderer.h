@@ -36,6 +36,7 @@
 
 #include "3D/SkyDome.h"
 #include "Enums.h"
+#include "Graphics/DrawEncoder.h"
 #include "Graphics/GroundShadow.h"
 #include "Graphics/HandReflection.h"
 #include "Graphics/HandShadow.h"
@@ -54,8 +55,9 @@
 
 namespace bgfx
 {
+struct Encoder;
 struct OcclusionQueryHandle;
-}
+} // namespace bgfx
 
 namespace openblack
 {
@@ -226,9 +228,10 @@ private:
 		/// The seed is drawn at once in white, with no light from the land, as the seeds over the gestures' hints are
 		bool drawnAtOnce {false};
 	};
-	/// With `seenBy`, the function does not send a draw of the model that is out of that view
-	void DrawSeedModel(const DrawSceneDesc& desc, const SeedModelDraw& shown,
-	                   const view_frustum::Frustum* seenBy = nullptr) const;
+	/// With `seenBy`, the function does not send a draw of the model that is out of that view. The draws go into the
+	/// encoder given, or into the game thread's encoder without one.
+	void DrawSeedModel(const DrawSceneDesc& desc, const SeedModelDraw& shown, const view_frustum::Frustum* seenBy = nullptr,
+	                   DrawEncoder* encoder = nullptr) const;
 	/// The pass what blends in a scene goes to: its own pass after the scene's, but in the temple the scene's own
 	[[nodiscard]] static RenderPass TranslucentView(RenderPass scene);
 	/// The seeds of the creature's best-learnt miracles hovering by the plinths in the creature's room
@@ -329,7 +332,7 @@ private:
 	/// The objects' shadows on the land: those drawn each frame and the trees' baked ones
 	void SetObjectShadowUniforms(const ShaderProgram& program) const;
 	/// Hands the moving shadows that fall on objects to an object's program, or none where it isn't to receive them
-	void SetObjectGroundShadowUniforms(const ShaderProgram& program, bool receives) const;
+	void SetObjectGroundShadowUniforms(DrawEncoder& to, const ShaderProgram& program, bool receives) const;
 	/// The uniforms the draws of meshes set, in the order of their names in the renderer
 	enum class MeshUniform : uint8_t
 	{
@@ -441,8 +444,18 @@ private:
 	[[nodiscard]] const Cap& LandCapOf(const L3DSubMesh& subMesh, const CapPrimitive& primitive, float height,
 	                                   const glm::mat4& placement) const;
 	/// Binds a cap's corners as the vertices of the next draw; false when there is no room for them this frame
-	[[nodiscard]] static bool BindCap(const std::vector<partial_build_cap::CapVertex>& cap);
+	[[nodiscard]] static bool BindCap(bgfx::Encoder& encoder, const std::vector<partial_build_cap::CapVertex>& cap);
 	void DrawPass(const DrawSceneDesc& desc) const;
+	/// Draws `count` things that do not depend on each other, `draw(index, encoder)` drawing the thing at the index into
+	/// the encoder. Each thing starts from an encoder with nothing bound and no state, also when the game's thread draws
+	/// them all, and the encoder is clean again after the last. When the switch to encode on many threads is on, the
+	/// worker threads draw some of the things at the same time, each run of things into an encoder of its thread. Their
+	/// draws then still come in the order that one thread gives them, so the picture is the same. `draw` must only read
+	/// the frame's state, and only the resources that are loaded.
+	using EncodeDraw = std::function<void(size_t index, DrawEncoder& encoder)>;
+	void EncodeInOrder(size_t count, const EncodeDraw& draw) const;
+	/// How many threads encode draws together now: 1 when only the game's thread does
+	[[nodiscard]] size_t EncodeLanes() const;
 	/// The beams of the temple's spot lights and the light its windows shed, which the game draws in its
 	/// rooms but not in the reflection of the main room
 	void DrawLightBeams(const DrawSceneDesc& desc) const;
@@ -612,8 +625,11 @@ private:
 		std::array<uint8_t, GroundShadow::k_Texels * GroundShadow::k_Texels> levels;
 	};
 	mutable std::vector<GroundShadowMade> _groundShadowMade;
-	/// The threads that make the shadows of a frame side by side
+	/// The threads that make the shadows of a frame side by side, and that encode draws with the game's thread
 	std::unique_ptr<WorkerPool> _workers;
+	/// The submit order of the game thread's encoder in this frame. Each run of draws on many threads takes the orders
+	/// after it, and the game thread's encoder goes on after those.
+	mutable uint32_t _submitOrder {0};
 	/// The shadows of the things that the physics moves, as the last frame made them: their data for the land, and
 	/// where they lie. A thing under the sea keeps its shadow from when it went under.
 	struct KeptGroundShadow
