@@ -379,3 +379,25 @@ TEST(ScriptFind, ATownTotemIsATotemStatueOfItsCentresTribe)
 	EXPECT_FALSE(loneKind->subtype.has_value());
 	Locator::infoConstants::reset();
 }
+
+// The search for a creature takes the first creature that is near enough, the newest first, not the nearest. A plain
+// search takes any creature within a metre. A search with a radius takes only a creature of the subtype.
+// NOLINTNEXTLINE(cppcoreguidelines-avoid-non-const-global-variables): external macro
+TEST(ScriptFind, ACreatureSearchTakesTheNewestNearEnoughCreature)
+{
+	using script_find::CreatureCandidate;
+	const auto at = [](float x, float z) { return map_coords::FromMetres({x, z}); };
+	const auto from = at(100.0f, 100.0f);
+	const std::vector<CreatureCandidate> newestFirst {
+	    {.entity = static_cast<entt::entity>(1), .at = at(100.9f, 100.0f), .subtype = 3},
+	    {.entity = static_cast<entt::entity>(2), .at = at(100.1f, 100.0f), .subtype = 5},
+	    {.entity = static_cast<entt::entity>(3), .at = at(130.0f, 100.0f), .subtype = 7},
+	};
+	EXPECT_EQ(script_find::FindCreature(from, std::nullopt, 7, newestFirst), static_cast<entt::entity>(1));
+	EXPECT_EQ(script_find::FindCreature(at(102.0f, 100.0f), std::nullopt, 7, newestFirst), entt::entity {entt::null});
+	EXPECT_EQ(script_find::FindCreature(from, 50.0f, 5, newestFirst), static_cast<entt::entity>(2));
+	EXPECT_EQ(script_find::FindCreature(from, 50.0f, 7, newestFirst), static_cast<entt::entity>(3));
+	EXPECT_EQ(script_find::FindCreature(from, 10.0f, 7, newestFirst), entt::entity {entt::null});
+	// "Any subtype" does not match a creature in a search with a radius
+	EXPECT_EQ(script_find::FindCreature(from, 50.0f, script_find::k_AnySubtype, newestFirst), entt::entity {entt::null});
+}

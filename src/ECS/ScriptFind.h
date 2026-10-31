@@ -13,6 +13,7 @@
 
 #include <functional>
 #include <optional>
+#include <span>
 #include <vector>
 
 #include <entt/entity/entity.hpp>
@@ -92,5 +93,24 @@ using CellCandidates = std::function<std::vector<Candidate>(glm::ivec2 cell)>;
 /// The nearest town strictly within the reach, the towns taken in the order given (each player's, then the neutral
 /// ones), the first met winning a tie
 [[nodiscard]] entt::entity FindNearestTown(const map_coords::MapCoords& from, float reach, const std::vector<Candidate>& towns);
+
+/// How near a creature must be for a plain "get creature at", in metres
+inline constexpr float k_CreatureAtReach = 1.0f;
+
+/// A creature that a script search looks at: where it is, and its subtype (the row of its kind)
+struct CreatureCandidate
+{
+	entt::entity entity {entt::null};
+	map_coords::MapCoords at;
+	std::optional<uint32_t> subtype;
+};
+
+/// The scripts' search for a creature. It looks through the creatures, the newest first, and takes the first that is
+/// near enough:
+/// - A plain "get creature at" takes any creature within a metre, of any subtype.
+/// - A search with a radius takes only a creature of the subtype. "Any subtype" does not match a creature there.
+/// No search passes over a creature that a script holds.
+[[nodiscard]] entt::entity FindCreature(const map_coords::MapCoords& from, std::optional<float> radius, uint32_t subtype,
+                                        std::span<const CreatureCandidate> newestFirst);
 
 } // namespace openblack::ecs::script_find

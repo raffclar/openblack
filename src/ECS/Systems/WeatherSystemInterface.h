@@ -12,6 +12,7 @@
 #include <cstdint>
 
 #include <functional>
+#include <optional>
 #include <span>
 
 #include <entt/entity/fwd.hpp>
@@ -142,6 +143,9 @@ public:
 	/// How fast a weather thing's storm travels to where it is going, metres a second; false for a thing that is no
 	/// weather thing. A storm that has ended takes no notice.
 	virtual bool SetWeatherThingSpeed(entt::entity thing, float speed) = 0;
+	/// The speed that a script reads of a weather thing, metres a second: the speed of its storm, or 0 once the thing has
+	/// lost its storm. None for a thing that is no weather thing.
+	[[nodiscard]] virtual std::optional<float> WeatherThingSpeed(entt::entity thing) const = 0;
 	/// A weather thing goes: its storm ends at once. A thing that is no weather thing does not change.
 	virtual void EndWeatherThing(entt::entity thing) = 0;
 

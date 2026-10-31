@@ -234,6 +234,22 @@ TEST(CreatureLayers, AFaintKeepsItsPaceWhenHurried)
 	EXPECT_FALSE(Hurry(faint).hurried);
 }
 
+TEST(CreatureLayers, AFaintStaysAtTheLastFrameFromTheTurnThatItsFallEnds)
+{
+	// The fall ends in this turn: the held loop shows the last frame at once, never the first frame of the clip
+	auto faint = *PlaySequence({}, animations::k_Faint, animations::k_Faint, animations::k_GetUp);
+	faint.holdLoop = true;
+	faint.timeMs = 1450.0f;
+	const auto held = AdvanceBody(faint, 100.0f, 1500);
+	EXPECT_EQ(held.phase, BodyAction::Phase::Loop);
+	EXPECT_FLOAT_EQ(held.timeMs, 1499.0f);
+	EXPECT_FLOAT_EQ(AdvanceBody(held, 100.0f, 1500).timeMs, 1499.0f);
+	// A loop that is not held starts its clip again
+	auto loop = *PlaySequence({}, animations::k_Faint, animations::k_Faint, animations::k_GetUp);
+	loop.timeMs = 1450.0f;
+	EXPECT_FLOAT_EQ(AdvanceBody(loop, 100.0f, 1500).timeMs, 0.0f);
+}
+
 TEST(CreatureLayers, ABodyTimedByWhatPlaysItStaysWherePut)
 {
 	// A fight sets its fighter's move at the move's own time each frame; the frame mustn't move it on as well, or the

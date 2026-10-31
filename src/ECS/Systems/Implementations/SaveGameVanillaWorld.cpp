@@ -11,11 +11,13 @@
 
 #include <algorithm>
 #include <iterator>
+#include <optional>
 #include <ranges>
 #include <unordered_map>
 #include <vector>
 
 #include <VanillaWorld.h>
+#include <glm/geometric.hpp>
 #include <spdlog/spdlog.h>
 
 #include "3D/LandIslandInterface.h"
@@ -46,6 +48,7 @@
 #include "ECS/Systems/TownSystemInterface.h"
 #include "ECS/Systems/WonderSystemInterface.h"
 #include "ECS/TempleConstruction.h"
+#include "ECS/ThingCircles.h"
 #include "ECS/VanillaScriptImport.h"
 #include "ECS/VanillaWorldImport.h"
 #include "ECS/WallHugRules.h"
@@ -340,6 +343,18 @@ void PutMoveTag(ecs::Registry& registry, entt::entity entity, uint8_t moveState,
 	case 0x0E:
 		registry.Assign<MoveStateLinearTag>(entity, MoveStateClockwise::CounterClockwise, at);
 		break;
+	case 0x0F:
+		registry.Assign<MoveStateOrbitTag>(entity, MoveStateClockwise::Clockwise, at);
+		break;
+	case 0x10:
+		registry.Assign<MoveStateOrbitTag>(entity, MoveStateClockwise::CounterClockwise, at);
+		break;
+	case 0x11:
+		registry.Assign<MoveStateExitCircleTag>(entity, MoveStateClockwise::CounterClockwise, at);
+		break;
+	case 0x12:
+		registry.Assign<MoveStateExitCircleTag>(entity, MoveStateClockwise::Clockwise, at);
+		break;
 	default:
 		break;
 	}
@@ -409,7 +424,8 @@ void RaiseFileTemples(ecs::Registry& registry, const gamesave::VanillaWorld& wor
 }
 } // namespace
 
-bool SaveGameSystem::ImportVanillaTowns(const gamesave::VanillaWorld& world, VanillaMade& made, VanillaWorks& works)
+bool SaveGameSystem::ImportVanillaTowns(const gamesave::VanillaWorld& world, VanillaMade& made, VanillaWorks& works,
+                                        VanillaCircles& circles)
 {
 	const auto imported = world_import::ReadTowns(world);
 	for (const auto& why : imported.skipped)
@@ -487,7 +503,7 @@ bool SaveGameSystem::ImportVanillaTowns(const gamesave::VanillaWorld& world, Van
 	uint32_t present = 0;
 	for (const auto& villager : imported.villagers)
 	{
-		const auto states = world_import::StartStates(villager.states, villager.moveState, villager.walk.hugsCircle);
+		const auto states = world_import::StartStates(villager.states, villager.moveState);
 		const auto entity =
 		    ecs::archetypes::VillagerArchetype::CreateLoaded({.position = GroundPosition(villager.position),
 		                                                      .heading = villager.heading,
@@ -510,6 +526,10 @@ bool SaveGameSystem::ImportVanillaTowns(const gamesave::VanillaWorld& world, Van
 		if (states == villager.states)
 		{
 			PutWalk(registry, entity, villager, {villager.walk.goal.x, villager.walk.goal.z});
+			if (villager.walk.circle.has_value())
+			{
+				circles.emplace_back(entity, *villager.walk.circle);
+			}
 			if (auto work = world_import::WorkOf(states[0], villager.topValues); work.has_value())
 			{
 				works.emplace_back(entity, *work);
@@ -597,4 +617,66 @@ bool SaveGameSystem::ImportVanillaTowns(const gamesave::VanillaWorld& world, Van
 	                   imported.towns.size(), imported.abodes.size(), imported.plans.size(), imported.sites.size(),
 	                   imported.villagers.size(), imported.turn);
 	return true;
+}
+
+void SaveGameSystem::ImportVanillaCircles(const VanillaCircles& circles, const VanillaMade& made)
+{
+	auto& registry = Locator::entitiesRegistry::value();
+	uint32_t onThings = 0;
+	uint32_t onLandscape = 0;
+	uint32_t lost = 0;
+	for (const auto& [walker, file] : circles)
+	{
+		std::optional<ecs::wall_hug::BlockingCircle> circle;
+		entt::entity thing = entt::null;
+		switch (world_import::KindOf(file))
+		{
+		case world_import::CircleKind::None:
+			break;
+		case world_import::CircleKind::Landscape:
+			circle = world_import::LandscapeCircleOf(file.coords);
+			++onLandscape;
+			break;
+		case world_import::CircleKind::Thing:
+		{
+			thing = EntityOf(made, file.object);
+			if (thing == entt::null || !registry.Valid(thing))
+			{
+				// The walker goes on with no circle, as when the thing of its circle goes
+				SPDLOG_LOGGER_WARN(ImportLog(), "The thing {} of the circle of a walk of the file is not made", file.object);
+				++lost;
+				break;
+			}
+			// After a load the game gives the walker the last circle of the thing, whichever circle the save gave
+			const auto shape = ecs::thing_circles::CirclesOf(registry, thing);
+			const auto index = world_import::CircleAfterLoad(shape.size());
+			if (!index.has_value())
+			{
+				break;
+			}
+			circle = shape.at(*index);
+			++onThings;
+			SPDLOG_LOGGER_INFO(ImportLog(),
+			                   "A walker takes the circle {} of {} of the thing {} (the save gave {}), {:.2f} m from its "
+			                   "middle with a radius of {:.2f} m",
+			                   *index, shape.size(), file.object, file.index,
+			                   glm::distance(ecs::wall_hug::ToPoint(registry.Get<WallHug>(walker).position), circle->centre),
+			                   circle->radius);
+			break;
+		}
+		}
+		if (!circle.has_value())
+		{
+			continue;
+		}
+		registry.AssignOrReplace<WallHugObjectReference>(walker, WallHugObjectReference {.stepsAway = file.turnsToObject,
+		                                                                                 .entity = thing,
+		                                                                                 .centre = circle->centre,
+		                                                                                 .radius = circle->radius,
+		                                                                                 .entryDistance = file.entryDistance});
+	}
+	SPDLOG_LOGGER_INFO(ImportLog(),
+	                   "{} walkers of the file have circles: {} take circles of things, {} take circles of the landscape "
+	                   "and {} have things that are not made",
+	                   circles.size(), onThings, onLandscape, lost);
 }

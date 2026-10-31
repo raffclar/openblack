@@ -144,6 +144,22 @@ public:
 	/// A count, then a reference for each object
 	void Refs(std::string_view name = {}) { References(Count(), name); }
 
+	/// A count that the game keeps as a signed number. The game writes no values for a count below 1.
+	uint32_t SignedCount(std::string_view name = {})
+	{
+		const auto count = std::bit_cast<int32_t>(Word(name));
+		if (count <= 0)
+		{
+			return 0;
+		}
+		if (static_cast<uint32_t>(count) > k_MaxCount)
+		{
+			Fail("The count " + std::to_string(count) + " is too large");
+			return 0;
+		}
+		return static_cast<uint32_t>(count);
+	}
+
 	/// References with a count that the layout gives
 	void References(uint32_t count, std::string_view name)
 	{
@@ -261,6 +277,27 @@ void ReadCamera(WorldReader& r);
 void ReadCreatureStep(WorldReader& r);
 void ReadCreature(WorldReader& r);
 void ReadVortexSave(WorldReader& r);
+
+// The types that no save of the tests has, whose layout changes with the values
+void ReadFootpathLinkSave(WorldReader& r);
+void ReadParticleSound(WorldReader& r);
+void ReadLandscapeVortexOut(WorldReader& r);
+void ReadPuzzleGame(WorldReader& r);
+void ReadWeatherThing(WorldReader& r);
+void ReadFootball(WorldReader& r);
+void ReadWorkshop(WorldReader& r);
+void ReadTownCentreSpellIcon(WorldReader& r);
+void ReadChain(WorldReader& r);
+void ReadDefensiveSphere(WorldReader& r);
+void ReadBeamSubCollection(WorldReader& r);
+void ReadExplosionCollection(WorldReader& r);
+void ReadDebrisCollection(WorldReader& r);
+void ReadLightningCollection(WorldReader& r);
+void ReadFollowTargetsCollection(WorldReader& r);
+void ReadTrailCollection(WorldReader& r);
+void ReadFragment(WorldReader& r);
+void ReadPlayerSubActionArgument(WorldReader& r);
+void ReadComputerPlayerQueue(WorldReader& r);
 
 struct ClassReader
 {
@@ -1212,6 +1249,342 @@ void ReadVortexSave(WorldReader& r)
 	r.Word();
 	r.Array(1);
 	r.Array(1, "file");
+}
+
+// No save of the tests has the types below. Their layouts come only from the save code of the game.
+
+void ReadFootpathLinkSave(WorldReader& r)
+{
+	r.Bytes(12);
+	r.Ref();
+}
+
+void ReadParticleSound(WorldReader& r)
+{
+	r.Word();
+	// The sound action
+	r.Bytes(24);
+	r.Word();
+	r.Ref();
+	r.Byte();
+}
+
+void ReadLandscapeVortexOut(WorldReader& r)
+{
+	ReadLandscapeVortex(r);
+	r.Ref();
+	r.Ref();
+	r.Bytes(12);
+	r.Word();
+	r.Word();
+	r.Ref();
+	r.Array(4);
+	r.Refs();
+	r.Ref();
+}
+
+void ReadPuzzleGame(WorldReader& r)
+{
+	ReadPositioned(r);
+	for (int i = 0; i < 4; ++i)
+	{
+		r.Word();
+	}
+	r.Array(4);
+	r.Refs();
+	r.Refs();
+	r.Refs();
+	for (int i = 0; i < 3 + 4; ++i)
+	{
+		r.Ref();
+	}
+	// A grid of 3 by 3 cells: a byte and three objects for each cell
+	for (int i = 0; i < 3 * 3 && !r.Failed(); ++i)
+	{
+		r.Byte();
+		r.Ref();
+		r.Ref();
+		r.Ref();
+	}
+	// A grid of 9 by 9 places. The game writes the object of each place two times. Each row but the last also has two
+	// objects and two words.
+	for (int row = 0; row < 9 && !r.Failed(); ++row)
+	{
+		for (int column = 0; column < 9; ++column)
+		{
+			r.Ref();
+			r.Ref();
+		}
+		if (row < 8)
+		{
+			r.Ref();
+			r.Ref();
+			r.Word();
+			r.Word();
+		}
+	}
+	for (int i = 0; i < 18; ++i)
+	{
+		r.Ref();
+	}
+	r.Refs();
+	r.Word();
+	r.Word();
+	r.Half();
+	for (int i = 0; i < 6; ++i)
+	{
+		r.Word();
+	}
+	for (int i = 0; i < 4; ++i)
+	{
+		r.Ref();
+	}
+	r.Word();
+	r.Half();
+	r.Half();
+}
+
+void ReadWeatherThing(WorldReader& r)
+{
+	ReadPositioned(r);
+	r.Bytes(80);
+	// The weather system of the thing follows only when the thing has one
+	if (r.Word() != 0)
+	{
+		r.Bytes(12);
+		r.Bytes(80);
+		r.Word();
+		r.Word();
+		r.Bytes(12);
+	}
+	r.Word();
+}
+
+void ReadFootball(WorldReader& r)
+{
+	ReadAbode(r);
+	r.Ref();
+	r.Refs();
+	r.Refs();
+	r.Ref();
+	for (int i = 0; i < 12; ++i)
+	{
+		r.Bytes(12);
+	}
+	r.Word();
+	r.Word();
+	r.Byte();
+	r.Word();
+	r.Byte();
+	r.Word();
+	r.Byte();
+	for (int i = 0; i < 6; ++i)
+	{
+		r.Word();
+	}
+	r.Byte();
+	r.Byte();
+	r.Word();
+	r.Word();
+	r.Ref();
+	for (int i = 0; i < 4; ++i)
+	{
+		r.Refs();
+	}
+	r.Refs();
+	r.Refs();
+	r.Ref();
+	r.Refs();
+	r.Point();
+	r.Ref();
+}
+
+void ReadWorkshop(WorldReader& r)
+{
+	ReadAbode(r);
+	r.Ref();
+	r.Ref();
+	r.Word();
+	r.Word();
+	r.Array(1);
+	r.Refs();
+}
+
+void ReadTownCentreSpellIcon(WorldReader& r)
+{
+	ReadTownSpellIcon(r);
+	r.Ref();
+	r.Array(4);
+}
+
+void ReadChain(WorldReader& r)
+{
+	r.Persistent();
+	for (int i = 0; i < 8; ++i)
+	{
+		r.Word();
+	}
+	r.Byte();
+	r.Word();
+	// The joints of the chain
+	const auto joints = r.SignedCount();
+	for (uint32_t i = 0; i < joints && !r.Failed(); ++i)
+	{
+		r.Bytes(28);
+	}
+	r.Word();
+	r.Byte();
+}
+
+void ReadDefensiveSphere(WorldReader& r)
+{
+	r.Ref();
+	// The sphere: a centre and a radius
+	r.Bytes(16);
+}
+
+void ReadBeamSubCollection(WorldReader& r)
+{
+	ReadBaseCollectionModifierData(r);
+	r.Word();
+	const auto points = r.SignedCount();
+	for (uint32_t i = 0; i < points && !r.Failed(); ++i)
+	{
+		r.Word();
+		r.Bytes(12);
+		r.Bytes(12);
+	}
+	r.Word();
+	r.Word();
+}
+
+void ReadExplosionCollection(WorldReader& r)
+{
+	ReadBaseCollectionModifierData(r);
+	r.Byte();
+	r.Byte();
+	r.Bytes(12);
+	r.Word();
+	const auto parts = r.SignedCount();
+	for (uint32_t i = 0; i < parts && !r.Failed(); ++i)
+	{
+		r.Word();
+		r.Ref();
+	}
+	r.Word();
+	r.Word();
+	r.Byte();
+	r.Byte();
+	r.Ref();
+	r.Byte();
+}
+
+void ReadDebrisCollection(WorldReader& r)
+{
+	ReadBaseCollectionModifierData(r);
+	r.Word();
+	r.Word();
+}
+
+void ReadLightningCollection(WorldReader& r)
+{
+	ReadBaseCollectionModifierData(r);
+	r.Ref();
+	r.Ref();
+	r.Point();
+	r.Point();
+	r.Point();
+	r.Word();
+	r.Byte();
+	r.Byte();
+	r.Byte();
+	for (int i = 0; i < 4; ++i)
+	{
+		r.Word();
+	}
+	// The objects that the lightning strikes
+	const auto struck = r.SignedCount();
+	for (uint32_t i = 0; i < struck && !r.Failed(); ++i)
+	{
+		r.Word();
+		r.Ref();
+		r.Bytes(12);
+		r.Byte();
+		r.Byte();
+		r.Byte();
+		r.Word();
+	}
+	// The forks: each fork has a count, then its words
+	const auto forks = r.SignedCount();
+	for (uint32_t i = 0; i < forks && !r.Failed(); ++i)
+	{
+		const auto words = r.SignedCount();
+		for (uint32_t j = 0; j < words && !r.Failed(); ++j)
+		{
+			r.Word();
+		}
+	}
+	r.Word();
+	// The collections that the lightning holds, each with a byte that tells whether the lightning owns it
+	const auto held = r.SignedCount();
+	for (uint32_t i = 0; i < held && !r.Failed(); ++i)
+	{
+		r.Ref();
+		r.Byte();
+	}
+	r.Word();
+	r.Ref();
+	r.Ref();
+	r.Word();
+	r.Word();
+	r.Bytes(12);
+}
+
+void ReadFollowTargetsCollection(WorldReader& r)
+{
+	ReadBaseCollectionModifierData(r);
+	r.Byte();
+}
+
+void ReadTrailCollection(WorldReader& r)
+{
+	ReadBaseCollectionModifierData(r);
+	r.Byte();
+	// The game writes the count of the trail points two times
+	const auto points = r.SignedCount();
+	r.Word();
+	for (uint32_t i = 0; i < points && !r.Failed(); ++i)
+	{
+		r.Bytes(64);
+	}
+}
+
+void ReadFragment(WorldReader& r)
+{
+	ReadRock(r);
+	r.Word();
+	r.Word();
+	r.Ref();
+	ReadFragMesh(r);
+}
+
+void ReadPlayerSubActionArgument(WorldReader& r)
+{
+	r.Word();
+	r.Ref();
+	r.Array(1);
+	r.Word();
+	r.Ref();
+	r.Word();
+	r.Bytes(12);
+}
+
+void ReadComputerPlayerQueue(WorldReader& r)
+{
+	r.Array(1);
+	r.Ref();
+	r.Ref();
+	r.Word();
 }
 
 } // namespace

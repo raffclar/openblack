@@ -80,9 +80,12 @@ void CreatureMindSystem::ReactToMusic(entt::entity creature, float mood)
 	}
 	SPDLOG_LOGGER_DEBUG(spdlog::get("game"), "Creature {} reacts to music with mood {}: {} steps", entt::to_integral(creature),
 	                    mood, agenda.size());
-	static_cast<void>(ForcePlan(
-	    creature,
-	    {.desire = plan.desire, .action = plan.action, .object = creature, .agenda = std::move(agenda), .ordered = true}));
+	static_cast<void>(ForcePlan(creature, {.desire = plan.desire,
+	                                       .action = plan.action,
+	                                       .object = creature,
+	                                       .agenda = std::move(agenda),
+	                                       .ordered = true,
+	                                       .fightBodyEndsAgain = true}));
 	// When the steps are done, it does what waits: it scratches, shows it is happy, dances or shows how it feels
 	mind->followUp = followUp;
 	mind->followUpValue = creature_music::FollowUpValue(mood);

@@ -239,3 +239,8 @@ script_weather::ThingAfterTurn script_weather::AfterTurn(bool stormLives, bool h
 	}
 	return heldByScript ? ThingAfterTurn::StaysWithoutStorm : ThingAfterTurn::Goes;
 }
+
+float script_weather::ThingSpeed(const components::Storm* storm)
+{
+	return storm != nullptr ? storm->speed : 0.0f;
+}

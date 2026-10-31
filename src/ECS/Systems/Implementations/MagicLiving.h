@@ -36,8 +36,10 @@ namespace openblack::ecs::systems::magic_living
 
 /// The table row of a villager, animal or creature, none for anything else
 [[nodiscard]] const GObjectInfo* InfoOf(entt::entity entity);
-/// Its life, 0 to 1, none for what doesn't live
+/// Its life, 0 to 1, none for what doesn't live. The life of a creature can be below 0 after a fight.
 [[nodiscard]] std::optional<float> LifeOf(entt::entity entity);
+/// Sets its life. A villager and an animal keep a life of 0 to 1. A creature takes the value as it is, unless a script
+/// holds it in a cutscene or it is indestructible and the value is nearly no life.
 void SetLife(entt::entity entity, float life);
 /// A villager or animal with no life left; creatures faint rather than die of a miracle
 [[nodiscard]] bool IsDead(entt::entity entity);

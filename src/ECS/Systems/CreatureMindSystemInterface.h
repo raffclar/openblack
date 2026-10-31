@@ -255,6 +255,9 @@ public:
 		/// emergency, and the plan does not count for its desire at its end. The plans of reactions, of copying the
 		/// player and of watching a villager are not marked, but they also have the highest priority.
 		bool forced {true};
+		/// After a fight that is over, the stop for the plan ends the fight of the body again while the body still plays
+		/// a move of the fight, and the life pays again. Reactions, emergencies and teleport stones do this.
+		bool fightBodyEndsAgain {false};
 	};
 	/// What the creature was doing stops as a failure and it carries out the plan instead: whether it could. A plan
 	/// carried out is remembered for the player's feedback (unless nothing says why it wants it), and the desires the
@@ -364,8 +367,8 @@ public:
 		bool stopsWalk {true};
 		bool endsBody {true};
 		/// After a fight that is over, the stop for the plan ends the fight of the body again while the body still plays
-		/// a move of the fight, and the life pays again. The plans that the feedback of the player forces do this. The
-		/// other forced plans have a stop of their own, or keep the body.
+		/// a move of the fight, and the life pays again. The plans that the feedback of the player forces, the follow-ups
+		/// and the teleport stones do this. The other forced plans have a stop of their own, or keep the body.
 		bool fightBodyEndsAgain {false};
 		/// The plan is the part of the creature in its own fight, so the plan keeps the fight. Each other forced plan
 		/// stops a fight that the creature sets up, for both creatures.

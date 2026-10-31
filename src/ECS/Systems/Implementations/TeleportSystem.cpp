@@ -429,7 +429,8 @@ void TeleportSystem::ReactTo(entt::entity stone, entt::entity living, glm::vec3 
 		    Locator::creatureMindSystem::value().ForceActivity(living, {.desire = creature_desires::Desire::Curiosity,
 		                                                                .action = creature_mind::k_GoToTeleportAction,
 		                                                                .actionObject = stone,
-		                                                                .comeAcross = true});
+		                                                                .comeAcross = true,
+		                                                                .fightBodyEndsAgain = true});
 		if (!planned)
 		{
 			std::erase_if(component.travellers, [living](const auto& entry) { return entry.living == living; });
@@ -550,7 +551,8 @@ bool TeleportSystem::DoTeleport(entt::entity stone, entt::entity living, bool fo
 				                                                            .object = living,
 				                                                            .agenda = creature_mind::AfterTeleport(walk),
 				                                                            .activity = creature_mind::Activity::Told,
-				                                                            .ordered = true}));
+				                                                            .ordered = true,
+				                                                            .fightBodyEndsAgain = true}));
 			}
 		}
 		SPDLOG_LOGGER_DEBUG(spdlog::get("game"), "Teleport: carrying creature {} m closer from ({}, {}) to ({}, {})",
