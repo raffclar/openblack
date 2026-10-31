@@ -2258,6 +2258,23 @@ std::string Runner::GiveLeashCommand(entt::entity creature, const Command& comma
 		}
 		return leashes.HandTie(creature, *found) ? "tied" : "can't";
 	}
+	case Kind::TieLeashToWorshipSiteFlag:
+	{
+		auto& registry = Locator::entitiesRegistry::value();
+		std::optional<entt::entity> found;
+		registry.Each<const ecs::components::WorshipSiteFlag>(
+		    [&](entt::entity flag, const ecs::components::WorshipSiteFlag& shown) {
+			    if (!found.has_value() && static_cast<size_t>(shown.need) == command.value)
+			    {
+				    found = flag;
+			    }
+		    });
+		if (!found.has_value())
+		{
+			return "no flag";
+		}
+		return leashes.HandTie(creature, *found) ? "tied" : "can't";
+	}
 	case Kind::LeashOrderAt:
 	{
 		const auto point = MapPoint(_middle, command.point);
@@ -4051,6 +4068,7 @@ void Runner::Give(const Command& command)
 	case Kind::PutOnLeash:
 	case Kind::TieLeash:
 	case Kind::TieLeashToDesireFlag:
+	case Kind::TieLeashToWorshipSiteFlag:
 	case Kind::UntieLeash:
 	case Kind::TakeOffLeash:
 	case Kind::ConfineToHome:

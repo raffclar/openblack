@@ -82,6 +82,8 @@
 #include "ECS/Components/Transform.h"
 #include "ECS/Components/VillageTotem.h"
 #include "ECS/Components/Villager.h"
+#include "ECS/Components/WorshipSite.h"
+#include "ECS/NeedFlagRules.h"
 #include "ECS/Registry.h"
 #include "ECS/Systems/CameraBookmarkSystemInterface.h"
 #include "ECS/Systems/CreatureAnimationSystemInterface.h"
@@ -105,6 +107,7 @@
 #include "ECS/WorldObjects.h"
 #include "Graphics/Texture2D.h"
 #include "Help/HelpProfile.h"
+#include "InfoConstants.h"
 #include "Input/GameActionMapInterface.h"
 #include "Locator.h"
 #include "Resources/ResourcesInterface.h"
@@ -344,6 +347,30 @@ void PlaySound(audio::SoundId sound, std::optional<glm::vec3> position)
 CreatureMindState* MindOf(Registry& registry, entt::entity creature)
 {
 	return registry.TryGet<CreatureMindState>(creature);
+}
+
+/// How full a need flag of a worship site is, as a share of the need that flies it at its full height. None for a thing
+/// that is not the need flag of a worship site that is still there.
+std::optional<float> SiteFlagFill(const Registry& registry, entt::entity thing)
+{
+	const auto* flag = registry.TryGet<const WorshipSiteFlag>(thing);
+	const auto* site = flag != nullptr && registry.Valid(flag->site) ? registry.TryGet<const WorshipSite>(flag->site) : nullptr;
+	if (site == nullptr || !registry.Valid(site->altar) || !Locator::infoConstants::has_value())
+	{
+		return std::nullopt;
+	}
+	const auto& info = Locator::infoConstants::value().showNeeds.at(flag->need);
+	const ecs::need_flag::Row row {
+	    .maxNeed = info.maxNeedValue, .showsAfter = info.showNeedGreater, .maxHeight = info.maxHieght};
+	return ecs::need_flag::Fill(site->needs.at(flag->need), row);
+}
+
+/// The creature feeds the worship site of the need flag when it completes its current work, in place of the other
+/// thing that waits
+void WaitToFeedSite(CreatureMindState& mind, entt::entity flag)
+{
+	mind.followUp = creature_follow_up::FollowUp::FeedWorshipSite;
+	mind.feedSiteFlag = flag;
 }
 
 /// What the leash shortcuts need to know about a creature
@@ -1033,6 +1060,11 @@ bool LeashSystem::Tie(entt::entity creature, entt::entity object, leash::TieSour
 			creature_town_compassion::TiedToFlag(mind->townCompassion, static_cast<uint32_t>(flag->desire),
 			                                     tables->townActions);
 		}
+		// Tied to a need flag of a worship site, the creature feeds the site when it completes its current work
+		if (SiteFlagFill(registry, object).has_value())
+		{
+			WaitToFeedSite(*mind, object);
+		}
 	}
 	// The hand of the player stops what the creature does as a failure, even when the creature then takes no order
 	if (effects.failsAction)
@@ -1434,6 +1466,18 @@ void LeashSystem::UpdateMoods(entt::entity creature, const CreatureLeash::Worn& 
 	if (body == nullptr)
 	{
 		return;
+	}
+	// Tied to a need flag of a worship site that shows a large need, the creature feeds the site again when it completes
+	// its current work. A feed that waits already keeps its flag.
+	if (worn.tiedTo.has_value())
+	{
+		auto* mind = MindOf(registry, creature);
+		const auto fill = SiteFlagFill(registry, *worn.tiedTo);
+		if (mind != nullptr && fill.has_value() && creature_follow_up::SetsFeedAgain(*fill) &&
+		    mind->followUp != creature_follow_up::FollowUp::FeedWorshipSite)
+		{
+			WaitToFeedSite(*mind, *worn.tiedTo);
+		}
 	}
 	// Tied to a village, it is made to want to impress it. On the compassion leash its own desire takes over at once.
 	if (worn.tiedTo.has_value())

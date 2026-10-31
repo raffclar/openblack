@@ -671,6 +671,9 @@ struct Command
 		TieLeash,
 		/// The hand of the player ties the leash to the flag of a town's desire (by value), the first such flag found
 		TieLeashToDesireFlag,
+		/// The hand of the player ties the leash to the need flag of a worship site (value: 0 food, 1 rest, 2 hiding), the
+		/// first such flag found
+		TieLeashToWorshipSiteFlag,
 		UntieLeash,
 		TakeOffLeash,
 		ConfineToHome,

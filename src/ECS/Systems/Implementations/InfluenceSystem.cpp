@@ -55,6 +55,7 @@
 #include "ECS/Systems/PlayerSystemInterface.h"
 #include "ECS/Systems/SoundTagSystemInterface.h"
 #include "ECS/Systems/TimeSystemInterface.h"
+#include "ECS/Systems/WorshipSiteSystemInterface.h"
 #include "InfoConstants.h"
 #include "Locator.h"
 #include "PlayerSlots.h"
@@ -593,15 +594,19 @@ void InfluenceSystem::ProcessVirtualInfluence(entt::entity entity, PlayerNames p
 	// Only the player's own influence counts here, not what the hand keeps
 	const bool inInfluence = !shielded && PlayerRawInfluence(player, hand) > 0.0f;
 	const auto before = virtualInfluence.state;
-	// TODO(raffclar): the chants waiting at the player's worship sites, which slow the waning and are used up by it, once
-	// worship sites gather chants; until then there are none
+	// Out of its influence, the hand uses the chants of the player's worship sites. They slow the waning. The player has
+	// one hand, so the hand gets all of the chants.
+	const float chants =
+	    virtual_influence::UsesChants(virtualInfluence.state, shielded, inInfluence) && Locator::worshipSiteSystem::has_value()
+	        ? Locator::worshipSiteSystem::value().TakeChantsForVirtualInfluence(player, 1)
+	        : 0.0f;
 	const virtual_influence::TurnInputs inputs {
 	    .hand = hand,
 	    .turn = turn,
 	    .handShielded = shielded,
 	    .handInInfluence = inInfluence,
 	    .influencePower = InfluencePower(player),
-	    .chants = 0.0f,
+	    .chants = chants,
 	};
 	// Back in influence, the next trip out has a new mana path
 	if (virtual_influence::ManaPathEnds(virtualInfluence.state, inputs))

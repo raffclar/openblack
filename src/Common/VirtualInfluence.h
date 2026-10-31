@@ -96,6 +96,10 @@ struct TurnInputs
 /// shield it has none.
 void ProcessTurn(State& state, const TurnInputs& inputs, const Settings& settings);
 
+/// Whether the turn uses the chants of the player's worship sites: only when the hand keeps its strength switched on, is
+/// not under a shield and is out of its player's own influence. Each such turn uses up the chants that it reads.
+[[nodiscard]] bool UsesChants(const State& state, bool handShielded, bool handInInfluence);
+
 /// True when the turn puts the hand back in influence, so the next trip out works out a new mana path
 [[nodiscard]] bool ManaPathEnds(const State& state, const TurnInputs& inputs);
 

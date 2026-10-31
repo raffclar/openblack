@@ -524,6 +524,11 @@ private:
 	void WalkOn(entt::entity creature, const components::CreatureMindState& mind);
 	/// What waited after the reaction on the leash: the creature casts the miracle at the thing it found
 	void CastOnLeash(entt::entity creature, components::CreatureMindState& mind);
+	/// The leash tied the creature to a need flag of a worship site: it feeds the site, forced, as an order
+	void FeedWorshipSite(entt::entity creature, components::CreatureMindState& mind);
+	/// The altar of the site of a need flag, or none when the flag or its site is gone. The game keeps a need flag at the
+	/// place of its altar.
+	[[nodiscard]] static entt::entity FeedSiteAltar(entt::entity flag);
 	/// Each turn: the mark of a creature that clears its way stays while the plan that clears it runs. The movement of
 	/// the creature gets the mark.
 	void StepClearingWay(entt::entity creature, components::CreatureMindState& mind);

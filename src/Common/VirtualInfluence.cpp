@@ -79,6 +79,11 @@ void virtual_influence::ProcessTurn(State& state, const TurnInputs& inputs, cons
 	}
 }
 
+bool virtual_influence::UsesChants(const State& state, bool handShielded, bool handInInfluence)
+{
+	return !state.disabled && !handShielded && !handInInfluence;
+}
+
 float virtual_influence::MaximumDistance(float influencePower, const Settings& settings)
 {
 	return influencePower * k_PowerShare + settings.maxDistance;

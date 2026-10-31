@@ -3045,10 +3045,16 @@ void CreatureMindSystem::PlanCreature(entt::entity creature, CreatureMindState& 
 		mind.followUp.reset();
 		mind.leashCast.reset();
 	}
+	// The feed of a worship site waits only for a flag of a site that is still there
+	if (mind.followUp == creature_follow_up::FollowUp::FeedWorshipSite && FeedSiteAltar(mind.feedSiteFlag) == entt::null)
+	{
+		mind.followUp.reset();
+		mind.feedSiteFlag = entt::null;
+	}
 	// When it completes its work, the thing that waits replaces its next decision: it becomes high after a magic
 	// mushroom, or it reacts to a stroke or a slap
-	if (adopt && mind.followUp.has_value() && mind.idle.step >= mind.idle.agenda.size() &&
-	    !registry.AllOf<ScriptControlled>(creature))
+	if (adopt && mind.followUp.has_value() &&
+	    creature_turn_order::DoesFollowUp(decisionState(), only.has_value(), registry.AllOf<ScriptControlled>(creature)))
 	{
 		const auto followUp = *mind.followUp;
 		mind.followUp.reset();
@@ -3390,6 +3396,9 @@ void CreatureMindSystem::DoFollowUp(entt::entity creature, CreatureMindState& mi
 	case FollowUp::CastOnLeash:
 		CastOnLeash(creature, mind);
 		return;
+	case FollowUp::FeedWorshipSite:
+		FeedWorshipSite(creature, mind);
+		return;
 	case FollowUp::ShowSlapFeeling:
 	{
 		const creature_follow_up::Feelings feelings {
@@ -3500,8 +3509,10 @@ bool CreatureMindSystem::ForcePlan(entt::entity creature, const ForcedPlan& plan
 			{
 				situation.drink = DrinkPlaceOf(creature);
 			}
-			// Told to fish, it fishes at the fish farm nearest to itself, as when it chooses to fish
-			if (executor->build == creature_plan_actions::Build::FishAndEat)
+			// Told to fish, or to put fish by a worship site, it fishes at the fish farm nearest to itself, as when it chooses
+			// to fish
+			if (executor->build == creature_plan_actions::Build::FishAndEat ||
+			    executor->build == creature_plan_actions::Build::PutFishBySite)
 			{
 				situation.fishing = FishingFor(registry, creature, position);
 			}

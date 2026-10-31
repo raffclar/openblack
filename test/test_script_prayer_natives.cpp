@@ -25,6 +25,7 @@
 
 #include "CHLApi.h"
 #include "ECS/Components/Temple.h"
+#include "ECS/Components/WorshipChants.h"
 #include "ECS/Components/WorshipSite.h"
 #include "ECS/Registry.h"
 #include "ECS/Systems/ScriptObjectsSystemInterface.h"
@@ -181,6 +182,7 @@ constexpr uint32_t k_GameSetMana = 355;
 constexpr uint32_t k_GetManaForSpell = 403;
 constexpr uint32_t k_GetMana = 422;
 constexpr uint32_t k_ClearPlayerSpellCharging = 423;
+constexpr uint32_t k_GetSacrificeTotal = 449;
 constexpr uint32_t k_GetSpellIconInTemple = 453;
 
 class ScriptPrayerNatives: public ::testing::Test
@@ -260,6 +262,7 @@ TEST_F(ScriptPrayerNatives, TakeAndGiveWhatTheGameDoes)
 	    {k_GetManaForSpell, "GET_MANA_FOR_SPELL", 1, 1},
 	    {k_GetMana, "GET_MANA", 1, 1},
 	    {k_ClearPlayerSpellCharging, "CLEAR_PLAYER_SPELL_CHARGING", 1, 0},
+	    {k_GetSacrificeTotal, "GET_SACRIFICE_TOTAL", 1, 1},
 	    {k_GetSpellIconInTemple, "GET_SPELL_ICON_IN_TEMPLE", 2, 1},
 	});
 	const auto& table = _api.GetFunctionsTable();
@@ -305,6 +308,24 @@ TEST_F(ScriptPrayerNatives, GetManaGivesTheBatteryOfASiteOnly)
 	results = Call(k_GetMana, {Object(entt::null)});
 	ASSERT_EQ(results.size(), 1u);
 	EXPECT_EQ(results.front().first.floatVal, 0.0f);
+	EXPECT_EQ(_api.GetStubCalls().Total(), 0u);
+}
+
+// Only a site gives the prayer power that sacrifices at its altar stored; a temple, an icon and nothing give 0
+// NOLINTNEXTLINE(cppcoreguidelines-avoid-non-const-global-variables): external macro
+TEST_F(ScriptPrayerNatives, GetSacrificeTotalGivesTheSacrificesOfOneSiteOnly)
+{
+	Locator::entitiesRegistry::value().Assign<ecs::components::WorshipChants>(_site).sacrificed = 412.5f;
+	auto results = Call(k_GetSacrificeTotal, {Object(_site)});
+	ASSERT_EQ(results.size(), 1u);
+	EXPECT_EQ(results.front().second, lhvm::DataType::Float);
+	EXPECT_EQ(results.front().first.floatVal, 412.5f);
+	for (const auto thing : std::to_array<entt::entity>({_temple, _icons->icon, entt::null}))
+	{
+		results = Call(k_GetSacrificeTotal, {Object(thing)});
+		ASSERT_EQ(results.size(), 1u);
+		EXPECT_EQ(results.front().first.floatVal, 0.0f);
+	}
 	EXPECT_EQ(_api.GetStubCalls().Total(), 0u);
 }
 
