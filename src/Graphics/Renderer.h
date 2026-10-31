@@ -456,6 +456,8 @@ private:
 	void DrawTempleText(const DrawSceneDesc& desc) const;
 	/// The temple's map: the land seen from above, unlit, once a visit to the temple
 	void DrawTempleMapPass() const;
+	/// Makes the temple's map at half size from the map: each texel is the texel at twice its column and twice its row
+	void HalveTempleMap() const;
 	/// The main room's pool: its water twice, turned an eighth apart, each shimmering as the other fades
 	void DrawTemplePool(const DrawSceneDesc& desc) const;
 	/// The temple's map: the island in relief over the main room's pool
@@ -551,6 +553,9 @@ private:
 	/// The land seen from above for the temple's map, and the visit to the temple it was drawn for
 	mutable std::unique_ptr<FrameBuffer> _templeMapFrameBuffer;
 	mutable std::optional<uint32_t> _templeMapVisit;
+	/// The temple's map at half size, which the room shows at the low detail levels in place of the map
+	mutable std::unique_ptr<FrameBuffer> _templeMapHalfFrameBuffer;
+	mutable bool _templeMapHalved {false};
 	/// What the land and the objects read the shadows by, GroundShadow::k_DataTexels texels a shadow (see
 	/// ground_shadow.sh), then each land block's list of the shadows reaching it; grown by rows as needed
 	mutable std::unique_ptr<Texture2D> _groundShadowData;

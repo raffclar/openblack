@@ -63,6 +63,7 @@
 #include "ECS/Components/TownDesireFlag.h"
 #include "ECS/Components/Transform.h"
 #include "ECS/Components/Tree.h"
+#include "ECS/Components/VillageTotem.h"
 #include "ECS/Components/Villager.h"
 #include "ECS/Components/Vortex.h"
 #include "ECS/Components/Weather.h"
@@ -614,6 +615,11 @@ float world_objects::ReduceLife(entt::entity object, float damage, std::optional
 	{
 		return 0.0f;
 	}
+	// A village totem gives the harm to its town centre, and keeps its own life
+	if (const auto* totem = registry.TryGet<const VillageTotem>(object); totem != nullptr && registry.Valid(totem->townCentre))
+	{
+		return ReduceLife(totem->townCentre, damage, by, byCreature);
+	}
 	// A field burns its food and keeps its life
 	if (auto* field = registry.TryGet<Field>(object))
 	{
@@ -1113,6 +1119,11 @@ float world_objects::IncreaseLife(entt::entity object, float amount)
 	if (!registry.Valid(object))
 	{
 		return 0.0f;
+	}
+	// A village totem gives the life to its town centre, and keeps its own life
+	if (const auto* totem = registry.TryGet<const VillageTotem>(object); totem != nullptr && registry.Valid(totem->townCentre))
+	{
+		return IncreaseLife(totem->townCentre, amount);
 	}
 	const float before = LifeOf(object);
 	if (auto* villager = registry.TryGet<Villager>(object))

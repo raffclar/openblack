@@ -44,6 +44,7 @@ void openblack::ecs::reflection::RegisterFields_Components_b(entt::meta_ctx& con
 	    .Field<&components::BuildingDamage::lastHitter>("lastHitter")
 	    .Field<&components::BuildingDamage::drawMesh>("drawMesh")
 	    .Field<&components::BuildingDamage::version>("version");
+	Reflect<components::BrokenModels>(context).Field<&components::BrokenModels::made>("made");
 	Reflect<components::BuildingPiece>(context)
 	    .Field<&components::BuildingPiece::mesh>("mesh")
 	    .Field<&components::BuildingPiece::parent>("parent")

@@ -676,6 +676,7 @@ Renderer::~Renderer() noexcept
 	_landShadowBake.reset();
 	_landFootprints.reset();
 	_templeMapFrameBuffer.reset();
+	_templeMapHalfFrameBuffer.reset();
 	if (_landLightTexture)
 	{
 		bgfx::destroy(toBgfx(*_landLightTexture));
@@ -1971,6 +1972,82 @@ void Renderer::DrawTempleMapPass() const
 		                          BGFX_DISCARD_VERTEX_STREAMS | BGFX_DISCARD_STATE);
 	}
 	_shaderManager->DiscardBindings();
+	// At the low detail levels the map has half the texels a side: 4 a block, each the texel of the full map at twice its
+	// column and twice its row
+	_templeMapHalved = Locator::config::has_value() && Locator::config::value().detail.lowResTextures;
+	if (_templeMapHalved)
+	{
+		HalveTempleMap();
+	}
+}
+
+void Renderer::HalveTempleMap() const
+{
+	constexpr uint16_t k_FullSize = 256;
+	constexpr uint16_t k_HalfSize = k_FullSize / 2;
+	if (!_templeMapHalfFrameBuffer)
+	{
+		_templeMapHalfFrameBuffer =
+		    std::make_unique<FrameBuffer>("Temple Map Half", k_HalfSize, k_HalfSize, TextureFormat::RGBA8, std::nullopt,
+		                                  static_cast<uint8_t>(1), Wrapping::ClampEdge);
+	}
+	const auto viewId = static_cast<bgfx::ViewId>(RenderPass::TempleMapHalf);
+	_templeMapHalfFrameBuffer->Bind(RenderPass::TempleMapHalf);
+	bgfx::setViewRect(viewId, 0, 0, k_HalfSize, k_HalfSize);
+	constexpr auto k_Side = static_cast<float>(k_HalfSize);
+	const auto projection =
+	    bgfx::getCaps()->originBottomLeft ? glm::ortho(0.0f, k_Side, 0.0f, k_Side) : glm::ortho(0.0f, k_Side, k_Side, 0.0f);
+	const glm::mat4 identity(1.0f);
+	bgfx::setViewTransform(viewId, glm::value_ptr(identity), glm::value_ptr(projection));
+	bgfx::touch(viewId);
+
+	struct Vertex
+	{
+		glm::vec3 position;
+		glm::vec2 uv;
+		uint32_t colour;
+	};
+	static const auto k_Layout = [] {
+		bgfx::VertexLayout layout;
+		layout.begin()
+		    .add(bgfx::Attrib::Position, 3, bgfx::AttribType::Float)
+		    .add(bgfx::Attrib::TexCoord0, 2, bgfx::AttribType::Float)
+		    .add(bgfx::Attrib::Color0, 4, bgfx::AttribType::Uint8, true)
+		    .end();
+		return layout;
+	}();
+	if (bgfx::getAvailTransientVertexBuffer(6, k_Layout) < 6)
+	{
+		return;
+	}
+	bgfx::TransientVertexBuffer buffer;
+	bgfx::allocTransientVertexBuffer(&buffer, 6, k_Layout);
+	// The centre of each texel of the half map reads the centre of the full map's texel at twice its column and row: the
+	// texture coordinates move back by half a texel of the full map
+	constexpr float k_Back = 0.5f / static_cast<float>(k_FullSize);
+	constexpr uint32_t k_White = 0xFFFFFFFF;
+	const std::array<Vertex, 4> corners {{
+	    {{0.0f, 0.0f, 0.0f}, {-k_Back, -k_Back}, k_White},
+	    {{k_Side, 0.0f, 0.0f}, {1.0f - k_Back, -k_Back}, k_White},
+	    {{k_Side, k_Side, 0.0f}, {1.0f - k_Back, 1.0f - k_Back}, k_White},
+	    {{0.0f, k_Side, 0.0f}, {-k_Back, 1.0f - k_Back}, k_White},
+	}};
+	constexpr std::array<size_t, 6> k_Indices {0, 1, 2, 2, 3, 0};
+	const auto vertices = std::span(reinterpret_cast<Vertex*>(buffer.data), 6);
+	for (size_t i = 0; i < vertices.size(); ++i)
+	{
+		vertices[i] = corners.at(k_Indices.at(i));
+	}
+	const auto* shader = _shaderManager->GetShader("Interface");
+	if (const auto sampler = shader->FindUniform("s_texture"); sampler.has_value())
+	{
+		shader->SetTextureSampler(*sampler, 0, _templeMapFrameBuffer->GetColorAttachment(),
+		                          BGFX_SAMPLER_U_CLAMP | BGFX_SAMPLER_V_CLAMP | BGFX_SAMPLER_POINT);
+	}
+	bgfx::setVertexBuffer(0, &buffer);
+	bgfx::setState(BGFX_STATE_WRITE_RGB | BGFX_STATE_WRITE_A);
+	shader->Submit(viewId);
+	_shaderManager->DiscardBindings();
 }
 
 void Renderer::DrawTempleUnderside(const DrawSceneDesc& desc) const
@@ -2055,7 +2132,9 @@ void Renderer::DrawTempleMap(const DrawSceneDesc& desc) const
 	const auto model = glm::translate(glm::mat4(1.0f), temple.GetPosition());
 	bgfx::setTransform(glm::value_ptr(model));
 	bgfx::setVertexBuffer(0, &buffer);
-	shader->SetTextureSampler("s_texture", 0, _templeMapFrameBuffer->GetColorAttachment());
+	// At the low detail levels the room shows the map at half size
+	const auto& map = _templeMapHalved && _templeMapHalfFrameBuffer ? *_templeMapHalfFrameBuffer : *_templeMapFrameBuffer;
+	shader->SetTextureSampler("s_texture", 0, map.GetColorAttachment());
 	bgfx::setState(BGFX_STATE_WRITE_RGB | BGFX_STATE_WRITE_A | BGFX_STATE_WRITE_Z | BGFX_STATE_DEPTH_TEST_GREATER |
 	               BGFX_STATE_MSAA | BGFX_STATE_BLEND_ALPHA);
 	shader->Submit(static_cast<bgfx::ViewId>(desc.viewId));

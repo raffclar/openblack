@@ -26,6 +26,7 @@
 #include "ECS/Components/Town.h"
 #include "ECS/Components/TownDesireFlag.h"
 #include "ECS/Components/Transform.h"
+#include "ECS/Components/VillageTotem.h"
 #include "ECS/Components/Vortex.h"
 #include "ECS/Registry.h"
 #include "ECS/StreetLanternRules.h"
@@ -224,4 +225,21 @@ TEST_F(EffectReceivers, AScriptsUnfinishedBuildingWithASiteGetsAllItsLifeAgain)
 	ecs::world_objects::DestroyedByEffect(hut, {});
 	ASSERT_TRUE(registry.Valid(hut));
 	EXPECT_FLOAT_EQ(ecs::world_objects::LifeOf(hut), 0.0f);
+}
+
+TEST_F(EffectReceivers, AVillageTotemGivesHarmAndLifeToItsTownCentreAndKeepsItsOwnLife)
+{
+	auto& registry = Locator::entitiesRegistry::value();
+	const auto centre = Made();
+	const auto totem = Made();
+	registry.Assign<VillageTotem>(totem, VillageTotem {.townCentre = centre});
+	EXPECT_FLOAT_EQ(ecs::world_objects::ReduceLife(totem, 0.25f), 0.75f);
+	EXPECT_FLOAT_EQ(ecs::world_objects::LifeOf(centre), 0.75f);
+	EXPECT_FLOAT_EQ(ecs::world_objects::IncreaseLife(totem, 0.125f), 0.875f);
+	EXPECT_FLOAT_EQ(ecs::world_objects::LifeOf(centre), 0.875f);
+	EXPECT_FLOAT_EQ(ecs::world_objects::LifeOf(totem), 1.0f);
+	// A script can still set the life of the totem itself
+	ecs::world_objects::SetLife(totem, 0.0f);
+	EXPECT_FLOAT_EQ(ecs::world_objects::LifeOf(totem), 0.0f);
+	EXPECT_FLOAT_EQ(ecs::world_objects::LifeOf(centre), 0.875f);
 }
