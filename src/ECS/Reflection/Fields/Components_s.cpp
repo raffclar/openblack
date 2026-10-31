@@ -160,8 +160,10 @@ void openblack::ecs::reflection::RegisterFields_Components_s(entt::meta_ctx& con
 	Reflect<components::SnowLevel>(context)
 	    .Field<&components::SnowLevel::level>("level")
 	    .Field<&components::SnowLevel::broken>("broken")
+	    .Field<&components::SnowLevel::brokenModel>("brokenModel")
 	    .Field<&components::SnowLevel::piece>("piece")
-	    .Field<&components::SnowLevel::drawnOutOfLand>("drawnOutOfLand");
+	    .Field<&components::SnowLevel::drawnOutOfLand>("drawnOutOfLand")
+	    .Field<&components::SnowLevel::noSnow>("noSnow");
 	Reflect<components::SoundTag>(context)
 	    .Field<&components::SoundTag::sound>("sound")
 	    .Field<&components::SoundTag::offset>("offset")

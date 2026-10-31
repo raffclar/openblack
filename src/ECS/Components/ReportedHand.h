@@ -11,6 +11,8 @@
 
 #include <cstdint>
 
+#include <bitset>
+
 #include <entt/entity/entity.hpp>
 #include <glm/vec3.hpp>
 
@@ -54,6 +56,12 @@ struct ReportedHand
 	/// The hand grips the land with the select button, and the other button is held too
 	bool gripsLand {false};
 	bool otherButton {false};
+	/// The mouse has a wheel
+	bool mouseWheel {false};
+	/// The camera icons by the hand of the world camera's last frame, with their offered bits (hand_tricons::icon)
+	uint16_t cameraIcons {0};
+	/// The keys held, by the game's key number
+	std::bitset<255> keysHeld;
 };
 
 } // namespace openblack::ecs::components

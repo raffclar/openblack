@@ -91,6 +91,11 @@ public:
 	/// Stops at once where it is, then turns on the spot to a heading. An action that its body plays does not stop the
 	/// turn.
 	virtual bool TurnToHeadingAtOnce(entt::entity creature, GameHeading heading) = 0;
+	/// Stops at once where it is, then turns on the spot to face a point. While its body plays an action, the turn waits
+	/// until the action ends, and it then starts.
+	virtual void TurnToFaceAtRest(entt::entity creature, glm::vec2 point) { TurnToFaceAtOnce(creature, point); }
+	/// Whether a turn on the spot waits until the action of its body ends
+	[[nodiscard]] virtual bool TurnWaitsForRest(entt::entity /*creature*/) const { return false; }
 	/// Stops as the game stops a walk. A creature on its way walks on and slows to a stand a short distance ahead. While
 	/// it waits for its route, it stands. A turn on the spot to face a point continues.
 	virtual void Stop(entt::entity creature) = 0;

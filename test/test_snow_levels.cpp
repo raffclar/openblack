@@ -23,6 +23,7 @@
 #include "ECS/Components/HandGrab.h"
 #include "ECS/Components/HighDetail.h"
 #include "ECS/Components/MapCellResident.h"
+#include "ECS/Components/Scaffold.h"
 #include "ECS/Components/SnowLevel.h"
 #include "ECS/Components/TownDesireFlag.h"
 #include "ECS/Components/Transform.h"
@@ -285,6 +286,28 @@ TEST(SnowLevels, ABrokenBuildingKeepsItsSnowAndItsBrokenModelEasesFromIt)
 	EXPECT_EQ(snow_levels::ShownLevelOf(registry, bare), 0);
 }
 
+TEST(SnowLevels, ABuildingThatBreaksAgainAfterARepairStartsItsNewBrokenModelWithItsOwnSnow)
+{
+	ecs::Registry registry;
+	const auto building = Thing(registry);
+	registry.Assign<SnowLevel>(building, SnowLevel {.level = 40});
+	snow_levels::FollowBreak(registry, building, true, 1);
+	const std::vector buildings {building};
+	for (int step = 0; step < 100; ++step)
+	{
+		snow_levels::StepBroken(registry, buildings, DeepSnow, 1);
+	}
+	EXPECT_EQ(registry.Get<SnowLevel>(building).broken, std::optional<int32_t>(100));
+	// The same broken model keeps its snow
+	snow_levels::FollowBreak(registry, building, true, 1);
+	EXPECT_EQ(registry.Get<SnowLevel>(building).broken, std::optional<int32_t>(100));
+	// Repaired part of the way and broken again, the building has a new broken model before any frame saw it whole. The
+	// new broken model starts with the snow of the building.
+	snow_levels::FollowBreak(registry, building, true, 2);
+	EXPECT_EQ(registry.Get<SnowLevel>(building).broken, std::optional<int32_t>(40));
+	EXPECT_EQ(registry.Get<SnowLevel>(building).brokenModel, 2u);
+}
+
 TEST(SnowLevels, AVillagerInHighDetailShowsNoSnowAndKeepsItsLevel)
 {
 	ecs::Registry registry;
@@ -355,4 +378,36 @@ TEST(SnowSystem, ABrokenBuildingInTheListEasesOnlyItsBrokenModel)
 	snow.StepObjects(registry, list, milliseconds {17}, milliseconds {16});
 	EXPECT_FALSE(registry.Get<SnowLevel>(building).broken.has_value());
 	EXPECT_EQ(snow_levels::LevelOf(registry, building), 4);
+}
+
+TEST(SnowLevels, APhantomBuildingCarriesSnowInAHandUntilASiteShowsItAndNoneFromThen)
+{
+	ecs::Registry registry;
+	const auto scaffold = Thing(registry);
+	registry.Assign<InHand>(scaffold);
+	const auto phantom = Thing(registry);
+	registry.Assign<ScaffoldGhost>(phantom, ScaffoldGhost {.scaffold = scaffold});
+	// A phantom that shows nothing gets no snow
+	snow_levels::StepScaffoldPhantoms(registry, DeepSnow, 1);
+	EXPECT_FALSE(registry.AllOf<SnowLevel>(phantom));
+	// Shown in the hand it moves towards all of the snow under it, with no cap
+	registry.Get<ScaffoldGhost>(phantom).model = Mesh {};
+	for (int step = 0; step < 30; ++step)
+	{
+		snow_levels::StepScaffoldPhantoms(registry, DeepSnow, 1);
+	}
+	EXPECT_EQ(snow_levels::ShownLevelOf(registry, phantom), 30);
+	for (int step = 0; step < 100; ++step)
+	{
+		snow_levels::StepScaffoldPhantoms(registry, DeepSnow, 1);
+	}
+	EXPECT_EQ(snow_levels::ShownLevelOf(registry, phantom), 99);
+	// A site shows it: it loses its snow, even in a frame with no time
+	registry.Remove<InHand>(scaffold);
+	snow_levels::StepScaffoldPhantoms(registry, DeepSnow, 0);
+	EXPECT_EQ(snow_levels::ShownLevelOf(registry, phantom), 0);
+	// From then on it carries none, also in a hand
+	registry.Assign<InHand>(scaffold);
+	snow_levels::StepScaffoldPhantoms(registry, DeepSnow, 1);
+	EXPECT_EQ(snow_levels::ShownLevelOf(registry, phantom), 0);
 }

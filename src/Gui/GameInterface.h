@@ -362,7 +362,14 @@ public:
 		/// The frame's time
 		float seconds {0.0f};
 	};
-	void SetHandTricons(std::optional<HandTricons> tricons) { _handTricons = tricons; }
+	void SetHandTricons(std::optional<HandTricons> tricons)
+	{
+		_handTricons = tricons;
+		_drawnCameraIcons.reset();
+	}
+	/// The camera icons that the last draw of the icons kept, after it took away the camera icons that the tooltips or the
+	/// hand's state do not show; none when the icons were not drawn since they were last set
+	[[nodiscard]] std::optional<uint32_t> GetDrawnCameraIcons() const { return _drawnCameraIcons; }
 	/// The word of the newest dialogue text that a sung verse has reached, none while no verse plays, and the frame step
 	/// of the glow's glide in milliseconds
 	void SetSingAlong(std::optional<int32_t> word, int32_t stepMs)
@@ -565,6 +572,7 @@ private:
 	std::vector<FloatingNumber> _floatingNumbers;
 	std::vector<LearningText> _learningTexts;
 	std::optional<HandTricons> _handTricons;
+	std::optional<uint32_t> _drawnCameraIcons;
 	/// The helper icons' strengths, and whether the demonstration's mouse is left of them
 	hand_tricons::Fades _tricons {};
 	bool _demoMouseOnLeft {false};

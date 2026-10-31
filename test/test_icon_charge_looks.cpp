@@ -147,3 +147,12 @@ TEST(IconChargeLooks, ThePulseModelShrinksIntoTheIconAndBecomesOpaque)
 	EXPECT_EQ(PulseAlpha(0.5f), 127);
 	EXPECT_EQ(PulseAlpha(1.0f), 255);
 }
+
+TEST(IconChargeLooks, TheEffectOfTheHolderTakesTheAlphaOfTheModelOfTheIcon)
+{
+	// The light of the land has the full alpha. A model that adds a colour multiplies it by 255 in 256ths.
+	static_assert(HolderAlpha(0) == 255);
+	EXPECT_EQ(HolderAlpha(0), 255);
+	EXPECT_EQ(HolderAlpha(0x00FF0000u), 254);
+	EXPECT_EQ(HolderAlpha(0x00000001u), 254);
+}

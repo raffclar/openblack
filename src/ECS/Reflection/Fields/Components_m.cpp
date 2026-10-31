@@ -116,6 +116,7 @@ void openblack::ecs::reflection::RegisterFields_Components_m(entt::meta_ctx& con
 	Reflect<components::Mist>(context)
 	    .Field<&components::Mist::size>("size")
 	    .Field<&components::Mist::colour>("colour")
+	    .Field<&components::Mist::alphaHighBits>("alphaHighBits")
 	    .Field<&components::Mist::shrinksEdgeOn>("shrinksEdgeOn")
 	    .Field<&components::Mist::edgeShrink>("edgeShrink")
 	    .Field<&components::Mist::counter>("counter")

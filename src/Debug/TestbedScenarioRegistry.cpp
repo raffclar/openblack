@@ -2142,6 +2142,27 @@ void AddSingingStones(std::vector<Scenario>& all)
 	                  .script = "BringBackTheDead",
 	                  .scriptGlobals = {{"SSBringBackToLifeActive", {.number = 0.0f}}}}},
 	});
+
+	// The first tune of the second land's singing stones, Twinkle Twinkle Little Star, as the stones start it when the
+	// player taps the tune. The script makes its mist and its bats at a fixed place of the second land.
+	all.push_back({
+	    .id = "story.singing_stones_twinkle",
+	    .name = "The singing stones play Twinkle Twinkle Little Star",
+	    .facet = Facet::Story,
+	    .description = "Two seconds in, the game's TwinkleSequence script runs, as a tap of the tune on the second "
+	                   "land's stones starts it. It is a cut scene with its own music and camera.",
+	    .expected = "A flock of 10 bats comes about the ring, and a faint white mist shows at the ring's centre. The "
+	                "camera moves in, then up, then back, and the game's time goes to 23:00 over 10 seconds. At the end "
+	                "the mist grows from size 1 to 2 and fades away over 10 seconds, and the music stops.",
+	    .environment = {.dispenserGrid = false, .landNumber = 2},
+	    .framing = {.shot = Shot::Placed,
+	                .eye = {k_Ring.x - 7.0f, 14.0f, k_Ring.y + 3.0f},
+	                .look = {k_Ring.x + 9.0f, 10.0f, k_Ring.y - 1.0f}},
+	    .commands = {{.kind = Kind::RunScript,
+	                  .delaySeconds = 2.0f,
+	                  .script = "TwinkleSequence",
+	                  .scriptGlobals = {{"SSDoneBats", {.number = 0.0f}}}}},
+	});
 }
 
 /// The beach temple puzzle of the second land, as its script makes it: turned a half turn, at its normal size
@@ -8579,6 +8600,23 @@ void AddCombat(std::vector<Scenario>& all)
 	    .commands = {Fight(Kind::StartFight, 0, 1, 1.0f), Fight(Kind::FightAuto, 0, 1, 0.2f)},
 	});
 
+	all.push_back({
+	    .id = "combat.life_pays_at_each_stop",
+	    .name = "A leash order in the duel costs life at each stop",
+	    .facet = Facet::Combat,
+	    .description = "The red tiger asks the blue tiger to fight, and both fight by themselves. In the duel the red "
+	                   "tiger gets the rope leash, and a second later the player tells it with the leash to go to a point "
+	                   "to the south.",
+	    .expected = "The order calls the fight off with no winner. The fight transcript has a record fight_end for each "
+	                "tiger: when its body is in its stance, a move, a block or a cast, the life of the red tiger pays two "
+	                "times (life_payments 2) and the life of the blue tiger three times. A tiger that finishes pays "
+	                "nothing.",
+	    .framing = ringside,
+	    .creatures = {red(PlayerNames::PLAYER_ONE, 0.6f, -0.45f), blue(PlayerNames::PLAYER_TWO, 0.6f, -0.45f)},
+	    .commands = {Fight(Kind::StartFight, 0, 1, 1.0f), Fight(Kind::FightAuto, 0, 1, 0.2f), Leash(0, LeashType::Rope, 18.0f),
+	                 Go(Kind::LeashOrderAt, 0, {-25.0f, 0.0f}, 1.0f, false)},
+	});
+
 	{
 		// Each tiger holds a rock as the fight starts. It lets go of the rock before its taunt.
 		auto start = Fight(Kind::StartFight, 0, 1, 1.0f);
@@ -9559,11 +9597,12 @@ void AddCombat(std::vector<Scenario>& all)
 		    .facet = Facet::Combat,
 		    .description = "The red tiger of the player and a blue tiger fight by themselves, and the creatures do not faint. "
 		                   "When the duel is on, a script sets the life of the blue tiger to zero. Its fight health stays.",
-		    .expected = "On its next turn, the red tiger wins. It finishes its move, stands and plays the happy response. "
-		                "An advisor says one of the lines for good news, because the place of the red tiger is on screen. "
-		                "The blue tiger does not faint. It stays in its stance and faces the red tiger. When the red tiger "
-		                "finishes its response, the blue tiger stops with no response. The fight view ends a few seconds "
-		                "after the win. The fight transcript shows a win with by_blow false.",
+		    .expected = "On its next turn, the red tiger wins. It finishes its move and stands. An advisor says one of the "
+		                "lines for good news, because the place of the red tiger is on screen. The blue tiger does not "
+		                "faint. It stays in its stance and faces the red tiger. Two turns after the red tiger stands, the "
+		                "red tiger orders the blue tiger to respond and plays no response. The blue tiger finishes its "
+		                "move, plays the sad response and fears the red tiger. The fight view ends a few seconds after the "
+		                "win. The fight transcript shows a win with by_blow false and order_respond.",
 		    .environment = {.fainting = false},
 		    .framing = ringside,
 		    .creatures = {red(PlayerNames::PLAYER_ONE, 0.6f, -0.2f), loser},
@@ -9585,19 +9624,19 @@ void AddCombat(std::vector<Scenario>& all)
 	    .name = "The hand holds a creature in its duel",
 	    .facet = Facet::Combat,
 	    .description = "The red tiger of the player and a blue tiger fight by themselves. When the duel is on, the hand "
-	                   "holds the red tiger and strokes its head. Two seconds later the hand lets go.",
-	    .expected = "When the hand takes hold, the red tiger leaves the duel. It finishes its move and stands. The blue tiger "
-	                "stays in its stance and faces the red tiger. When the hand lets go, both tigers stop with no "
-	                "response. The fight transcript shows held_by_hand, let_go_by_hand and partner_stopped.",
+	                   "holds the red tiger and strokes its head. Four seconds later the hand lets go.",
+	    .expected = "When the hand takes hold, the red tiger leaves the duel. It finishes its move while the hand holds "
+	                "it. Then it turns to the camera and shows what it wants. The blue tiger stays in its stance and "
+	                "faces the red tiger. When the hand lets go, both tigers stop with no response. The fight transcript "
+	                "shows held_by_hand, let_go_by_hand and partner_stopped.",
 	    .framing = ringside,
 	    .creatures = {red(PlayerNames::PLAYER_ONE, 0.6f, -0.2f), blue(PlayerNames::PLAYER_TWO, 0.5f, -0.2f)},
 	    .commands = {{.kind = Kind::EndGuidanceWaits, .delaySeconds = 0.5f},
 	                 Fight(Kind::StartFight, 0, 1, 0.5f),
 	                 Fight(Kind::FightAuto, 0, 1, 0.2f),
-	                 {.kind = Kind::HandStroke,
-	                  .delaySeconds = 12.0f,
-	                  .bodyPart = static_cast<size_t>(creature_feedback::BodyPart::Head)},
-	                 Act(Kind::HandLetGo, 0, 2.0f)},
+	                 Act(Kind::HandLock, 0, 18.0f),
+	                 {.kind = Kind::HandStroke, .bodyPart = static_cast<size_t>(creature_feedback::BodyPart::Head)},
+	                 Act(Kind::HandLetGo, 0, 4.0f)},
 	});
 
 	{
@@ -12124,6 +12163,22 @@ void AddScriptTaskRelease(std::vector<Scenario>& all)
 	});
 
 	all.push_back({
+	    .id = "temple.low_detail_map",
+	    .name = "At the lowest detail levels the temple's map has a texture of half the size",
+	    .facet = Facet::Appearance,
+	    .description = "Start the game with --detail-level 1 (Low) or 0 (Minimum). The player has a temple and is put in "
+	                   "its main room. Look at the map of the island over the pool, then start again with "
+	                   "--detail-level 4 to compare.",
+	    .expected = "At Low and Minimum the land on the map has half the texels along each side: 4 for each block of the "
+	                "land, not 8. Each texel has the colour of one texel of the full map, not a mean of four. The "
+	                "shape of the map, its markers and its fade at the coast do not change.",
+	    .environment = {.dispenserGrid = false},
+	    .framing = {.shot = Shot::Overview},
+	    .temples = {{.offset = {-300.0f, 100.0f}, .angle = 36.0f}},
+	    .commands = {{.kind = Kind::EnterTemple, .delaySeconds = 2.0f, .value = 3}},
+	});
+
+	all.push_back({
 	    .id = "temple.way_out_glow",
 	    .name = "A white light grows at the temple's way out as the player leaves",
 	    .facet = Facet::Story,
@@ -12910,6 +12965,23 @@ void AddWorkshopScenarios(std::vector<Scenario>& all)
 	                {.type = ScaffoldInfo::Normal, .offset = k_LooseScaffold, .scale = 0.7f}},
 	});
 
+	all.push_back({
+	    .id = "light.snow_on_scaffold_phantom",
+	    .name = "The phantom of a scaffold carries snow in the hand and none on its site",
+	    .facet = Facet::Light,
+	    .description = "The town, the scaffold and the camera of objects.scaffold_starts_building, in deep snow over the "
+	                   "whole island. The input tools/sim/hand_inputs/scaffold_build.json moves the hand: it takes the "
+	                   "scaffold, holds it still near the village centre, and puts it down.",
+	    .expected = "While the hand holds the scaffold still, the phantom of the building grows below the scaffold, and "
+	                "snow comes onto it in about four seconds. When the hand puts the scaffold down, the phantom on the "
+	                "building site shows no snow, and it never shows snow again. The scaffold itself shows snow as "
+	                "other things do.",
+	    .environment = {.dispenserGrid = false, .snowDepth = 200.0f},
+	    .framing = {.shot = Shot::Overview, .include = {k_LooseScaffold - glm::vec2 {10.0f}, k_BuildPlace + glm::vec2 {10.0f}}},
+	    .objects = {{.type = AbodeInfo::CelticTownCentre, .offset = {0.0f, 50.0f}},
+	                {.type = ScaffoldInfo::Normal, .offset = k_LooseScaffold, .scale = 0.7f}},
+	});
+
 	constexpr glm::vec2 k_ImpressedHut {-25.0f, 47.0f};
 	all.push_back({
 	    .id = "objects.scaffold_impresses_town",
@@ -13382,7 +13454,7 @@ std::string_view testbed_scenarios::Name(Shot shot)
 
 std::string_view testbed_scenarios::Name(Command::Kind kind)
 {
-	constexpr std::array<std::string_view, 203> k_Names {
+	constexpr std::array<std::string_view, 204> k_Names {
 	    "walk to",
 	    "run to",
 	    "follow",
@@ -13419,6 +13491,7 @@ std::string_view testbed_scenarios::Name(Command::Kind kind)
 	    "hand strokes",
 	    "hand slaps",
 	    "hand lets go",
+	    "hand takes hold",
 	    "put on leash",
 	    "tie leash to",
 	    "tie leash to desire flag",

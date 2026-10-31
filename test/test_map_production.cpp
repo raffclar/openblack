@@ -24,6 +24,7 @@
 #include "ECS/Components/Mobile.h"
 #include "ECS/Components/Pot.h"
 #include "ECS/Components/ScriptHighlight.h"
+#include "ECS/Components/Shark.h"
 #include "ECS/Components/SpellIcon.h"
 #include "ECS/Components/TeleportStone.h"
 #include "ECS/Components/Town.h"
@@ -620,4 +621,19 @@ TEST_F(MapProductionFiling, AScrollThatAScriptPutsInAnotherCellGoesIntoThatCellA
 	thing_map_place::Put(registry, scroll, map_coords::FromMetres({there.x, there.z}), 0.0f);
 	EXPECT_EQ(std::vector(map.GetFixedInGridCell(here).begin(), map.GetFixedInGridCell(here).end()), std::vector {other});
 	EXPECT_EQ(std::vector(map.GetFixedInGridCell(there).begin(), map.GetFixedInGridCell(there).end()), std::vector {scroll});
+}
+
+TEST_F(MapProductionFiling, AWhaleIsNeverPutOnTheMap)
+{
+	// A whale is not in the cells of the land, so the land's draw list does not decide its draw: the whale draws itself on
+	// each frame, also while the camera does not move
+	auto& registry = Locator::entitiesRegistry::value();
+	auto& map = Locator::entitiesMap::value();
+	const auto whale = registry.Create();
+	registry.Assign<Transform>(whale, glm::vec3(500.0f, 0.0f, 500.0f), glm::mat3(1.0f), glm::vec3(2.0f));
+	registry.Assign<Shark>(whale);
+	EXPECT_FALSE(MapProduction::KindOf(registry, whale).has_value());
+	map.Sync();
+	map.Refile(whale);
+	EXPECT_FALSE(registry.AllOf<MapCellResident>(whale));
 }

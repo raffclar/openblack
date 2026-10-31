@@ -1335,6 +1335,25 @@ TEST_F(HandGrabSystemWithWorld, APressOnAThingAScriptFixedInPlaceIsAPressOnTheLa
 	EXPECT_EQ(world->registry.Get<HandClicked>(world->hand).thing, stone);
 }
 
+// A tap on a stone that a script fixed in place is only a click, which the script reads. The creature gets no deed,
+// no reaction and no help event from it, so it can not learn from the taps of the singing stones.
+TEST_F(HandGrabSystemWithWorld, ATapOnAFixedStoneGivesTheCreatureNothingToSee)
+{
+	const auto stone = world->AddRock({0.0f, 0.0f, 0.0f});
+	world->registry.Assign<CannotBePickedUp>(stone);
+	world->underCursor = stone;
+	commandTurn = now / 100;
+	EXPECT_FALSE(Press());
+	Frame(50);
+	EXPECT_FALSE(Release().has_value());
+	system->ClickReleased();
+	EXPECT_EQ(world->registry.Get<HandClicked>(world->hand).thing, stone);
+	EXPECT_TRUE(world->tapped.empty());
+	EXPECT_TRUE(world->reactions.empty());
+	EXPECT_TRUE(world->potReactionsSetUp.empty());
+	EXPECT_TRUE(world->helpEvents.empty());
+}
+
 TEST(HandGrabRules, APressTapsAThingTheHandCouldHoldOrThatTakesTaps)
 {
 	const hand_grab::Gate holdable {.valid = true};

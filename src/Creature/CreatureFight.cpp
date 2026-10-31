@@ -1520,20 +1520,26 @@ public:
 	{
 	}
 
-	/// The creature gives up its action as a failure
-	void Fail(size_t self)
+	explicit StopSteps(const StopSides& sides)
+	    : _duels {sides.duels}
+	    , _hasPartner {sides.partners}
+	{
+	}
+
+	/// The creature gives up its action as a failure. Only a first call can keep the body of its creature as it is.
+	void Fail(size_t self, bool endsBody = true)
 	{
 		if (_duels.at(self))
 		{
 			++_gains.at(self);
 		}
-		Finish(self);
+		Finish(self, endsBody);
 	}
 
 	/// The creature stops, then its mind forgets its partner and makes the partner give up its action
-	void Finish(size_t self)
+	void Finish(size_t self, bool endsBody = true)
 	{
-		Stop(self);
+		Stop(self, endsBody);
 		if (_hasPartner.at(self))
 		{
 			_hasPartner.at(self) = false;
@@ -1542,13 +1548,15 @@ public:
 	}
 
 	[[nodiscard]] StrengthGains Gains() const { return {.stopper = _gains[0], .partner = _gains[1]}; }
-
-private:
-	[[nodiscard]] static size_t Other(size_t self) { return 1 - self; }
+	[[nodiscard]] uint32_t Leaves(size_t self) const { return _leaves.at(self); }
+	[[nodiscard]] StopChainResult Result() const
+	{
+		return {.gains = _gains, .bodyEnds = _leaves, .after = {.duels = _duels, .partners = _hasPartner}};
+	}
 
 	/// The creature stops what it does. In its duel, it gives the gain to its partner, which leaves its duel and gives up
-	/// its action. The creature leaves its own duel last.
-	void Stop(size_t self)
+	/// its action. The body of the creature ends its own fight last.
+	void Stop(size_t self, bool endsBody = true)
 	{
 		if (_duels.at(self))
 		{
@@ -1557,25 +1565,101 @@ private:
 			_duels.at(other) = false;
 			Fail(other);
 		}
-		_duels.at(self) = false;
+		if (endsBody)
+		{
+			EndBody(self);
+		}
 	}
+
+	/// The body of the creature ends its fight, which ends its duel
+	void EndBody(size_t self)
+	{
+		_duels.at(self) = false;
+		++_leaves.at(self);
+	}
+
+private:
+	[[nodiscard]] static size_t Other(size_t self) { return 1 - self; }
 
 	std::array<bool, 2> _duels;
 	std::array<bool, 2> _hasPartner;
 	std::array<uint32_t, 2> _gains {};
+	std::array<uint32_t, 2> _leaves {};
 };
 } // namespace
 
 StrengthGains creature_fight::StrengthGainsAtStop(StopEnd end, StopLinks links)
 {
+	return CountsAtStop(end, links).gains;
+}
+
+StopCounts creature_fight::CountsAtStop(StopEnd end, StopLinks links)
+{
 	StopSteps steps(links);
-	if (end == StopEnd::Failure)
+	switch (end)
 	{
+	case StopEnd::Failure:
 		steps.Fail(0);
-	}
-	else
-	{
+		break;
+	case StopEnd::Success:
 		steps.Finish(0);
+		break;
+	case StopEnd::Stopped:
+		steps.Stop(0);
+		break;
 	}
-	return steps.Gains();
+	return {.gains = steps.Gains(), .stopperLeaves = steps.Leaves(0), .partnerLeaves = steps.Leaves(1)};
+}
+
+StopChainResult creature_fight::RunStopChain(StopSides sides, std::span<const StopStep> steps)
+{
+	StopSteps chain(sides);
+	for (const auto& step : steps)
+	{
+		const auto self = std::min<size_t>(step.creature, 1);
+		switch (step.call)
+		{
+		case StopCall::Fail:
+			chain.Fail(self);
+			break;
+		case StopCall::FailKeepingBody:
+			chain.Fail(self, false);
+			break;
+		case StopCall::EndBody:
+			chain.EndBody(self);
+			break;
+		}
+	}
+	return chain.Result();
+}
+
+std::span<const StopStep> creature_fight::StepsOf(CallOffStart start)
+{
+	static constexpr std::array k_Failure {StopStep {.creature = 0, .call = StopCall::Fail}};
+	static constexpr std::array k_BodyFirst {StopStep {.creature = 0, .call = StopCall::EndBody},
+	                                         StopStep {.creature = 0, .call = StopCall::FailKeepingBody}};
+	switch (start)
+	{
+	case CallOffStart::BodyFirst:
+		return k_BodyFirst;
+	case CallOffStart::Failure:
+		break;
+	}
+	return k_Failure;
+}
+
+std::span<const StopStep> creature_fight::KnockOutSteps()
+{
+	static constexpr std::array k_KnockOut {StopStep {.creature = 0, .call = StopCall::Fail},
+	                                        StopStep {.creature = 1, .call = StopCall::Fail}};
+	return k_KnockOut;
+}
+
+float creature_fight::LifeAfterPayments(float life, float fightHealth, uint32_t payments)
+{
+	for (uint32_t payment = 0; payment < payments; ++payment)
+	{
+		life = LifeAfterFight(life, fightHealth);
+	}
+	return life;
 }

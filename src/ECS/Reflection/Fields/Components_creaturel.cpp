@@ -79,6 +79,7 @@ void openblack::ecs::reflection::RegisterFields_Components_creaturel(entt::meta_
 	    .Field<&components::CreatureLocomotion::gaveUp>("gaveUp")
 	    .Field<&components::CreatureLocomotion::clearingWay>("clearingWay")
 	    .Field<&components::CreatureLocomotion::facingOnly>("facingOnly")
+	    .Field<&components::CreatureLocomotion::turnAtRest>("turnAtRest")
 	    .Field<&components::CreatureLocomotion::following>("following")
 	    .Field<&components::CreatureLocomotion::followDistance>("followDistance")
 	    .Field<&components::CreatureLocomotion::move>("move")

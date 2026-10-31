@@ -232,6 +232,10 @@ public:
 	/// A key held by a script or the debug inspector rather than on the keyboard, by its SDL scancode: it stays held until
 	/// its own key-up comes, though the keyboard says it is up
 	virtual void HoldScriptedKey([[maybe_unused]] int scancode, [[maybe_unused]] bool held) {}
+	/// Whether a key is held, by its SDL scancode: it went down and its key-up has not come
+	[[nodiscard]] virtual bool IsKeyHeld([[maybe_unused]] int scancode) const { return false; }
+	/// Whether the mouse's wheel has turned since the game started
+	[[nodiscard]] virtual bool WheelTurned() const { return false; }
 	/// Puts the cursor, and the pointer, somewhere in the window, as the camera does dragging round the screen's edge
 	virtual void WarpCursor([[maybe_unused]] glm::ivec2 position) {}
 	/// Where the cursor was put this frame, if it was

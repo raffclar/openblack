@@ -54,6 +54,10 @@ struct Kind
 /// What a thing in the world is to the scripts; none for what they don't see as a thing
 [[nodiscard]] std::optional<Kind> KindOf(const Registry& registry, entt::entity entity);
 
+/// The type that GAME_TYPE gives for a thing. It is the type of its kind. A script marker, flock, dance, influence ring,
+/// weather thing, timer and mist are not in a search, but they have a type too. Any other thing gives none.
+[[nodiscard]] script::ObjectType GameTypeOf(const Registry& registry, entt::entity entity);
+
 /// The thing whose place a search measures for a thing. A search measures a worship site from its altar, and any
 /// other thing from the thing itself
 [[nodiscard]] entt::entity MeasuredFrom(const Registry& registry, entt::entity entity);

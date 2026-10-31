@@ -186,4 +186,8 @@ struct RunAwayLand
 /// 6. Where the creature may not stand at the point, the nearest place to stand is used if it is near enough.
 [[nodiscard]] glm::vec3 RunAwayPoint(const map_coords::MapCoords& creature, glm::vec2 threat, uint32_t draw,
                                      float runAwayDistance, const RunAwayLand& land);
+
+/// The heading of the turn on the spot that starts now, if a turn waits until the body is at rest. The turn starts on
+/// the first turn that the body plays no action. Until then it waits.
+[[nodiscard]] std::optional<GameHeading> TurnThatStartsAtRest(std::optional<GameHeading> waiting, bool bodyPlaysAction);
 } // namespace openblack::creature_locomotion

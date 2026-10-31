@@ -77,6 +77,11 @@ uint8_t mists::AlphaByte(float alpha) noexcept
 	return static_cast<uint8_t>(LowByte(alpha));
 }
 
+int32_t mists::WholeAlpha(float alpha) noexcept
+{
+	return WholePart(alpha);
+}
+
 uint32_t mists::ScriptColour(float red, float green, float blue, float transparency) noexcept
 {
 	constexpr float k_ByteMax = 255.0f;
