@@ -602,6 +602,14 @@ std::optional<entt::entity> HandGrabSystem::Release(uint32_t nowMs, uint32_t tur
 		// Letting go of the button sends the end of the lock, which ends the scoop at the turn
 		if (grab->scoopSource != entt::null)
 		{
+			// First, on this computer only, a field of the local player shows the amount that the hand holds
+			if (const auto* handful = _world->Entities().TryGet<const Pot>(grab->object);
+			    handful != nullptr && Exists(grab->scoopSource) &&
+			    hand_grab::FieldShowsHeldAtLetGo(_world->FieldFactsOf(grab->scoopSource).has_value(),
+			                                     _world->PlayerOf(grab->scoopSource), _world->HandPlayer()))
+			{
+				_amountToolTip = handful->amount;
+			}
 			_world->SendCommand(player_commands::HandUnlock {.object = grab->scoopSource});
 		}
 		break;
@@ -704,7 +712,7 @@ void HandGrabSystem::DoUnlock(PlayerNames player, entt::entity object)
 		return;
 	}
 	// The scoop ends; the hand holds its handful. After a pile or a fish farm, but not a field, the hand shows the amount it
-	// holds.
+	// holds. A field of the local player showed it as the hand let go.
 	if (const auto* handful = _world->Entities().TryGet<const Pot>(grab->object);
 	    handful != nullptr && Exists(object) && !_world->FieldFactsOf(object).has_value())
 	{
@@ -1293,12 +1301,12 @@ void HandGrabSystem::Take(HandGrab& grab, entt::entity object, bool fromTheWorld
 	_world->FireStartedMoving(object, !registry.AllOf<Villager>(object));
 	// A firefly hiding exactly where the thing stood is caught, for a miracle there
 	_world->CatchFirefly(object);
-	// The help counts each thing that the hand takes. A thing that the hand catches as it flies counts the same.
-	_world->CountHelpEvent(help::profile::k_PickUp);
-	// The hand starts the path of its gesture again. Only the local hand draws a gesture: the hand of a computer god or of
-	// another player leaves the path of the local player as it is.
+	// The help counts each thing that the local hand takes. A thing that the hand catches as it flies counts the same.
+	// The hand starts the path of its gesture again. Only the local hand counts for the help and draws a gesture: the hand
+	// of a computer god or of another player leaves the help and the path of the local player as they are.
 	if (_world->IsLocalHand())
 	{
+		_world->CountHelpEvent(help::profile::k_PickUp);
 		_world->ForgetGesturePath();
 	}
 
@@ -1386,8 +1394,11 @@ void HandGrabSystem::LetGo(HandGrab& grab, glm::vec3 velocity, const std::option
 	registry.Remove<HeldLight>(object);
 	// Its reactions spread again
 	_world->SpreadReactionsAgain(object);
-	// The help counts each thing that the hand lets go of, also a pour or a drop that the hand must do
-	_world->CountHelpEvent(help::profile::k_Throw);
+	// The help counts each thing that the local hand lets go of, also a pour or a drop that the hand must do
+	if (_world->IsLocalHand())
+	{
+		_world->CountHelpEvent(help::profile::k_Throw);
+	}
 	// The hand starts the path of its gesture again. A thing that is gone when the hand lets go does not do this, and the
 	// hand of a computer god or of another player never does.
 	if (_world->IsLocalHand())
@@ -1751,8 +1762,11 @@ void HandGrabSystem::DoGive(PlayerNames player, entt::entity creature, entt::ent
 	{
 		return;
 	}
-	// The help counts the gift as the creature may take it, before the creature starts to take it
-	_world->CountHelpEvent(help::profile::k_Give);
+	// The help counts the gift of the local hand as the creature may take it, before the creature starts to take it
+	if (_world->IsLocalHand())
+	{
+		_world->CountHelpEvent(help::profile::k_Give);
+	}
 	if (!_world->GiveTo(creature, object, leftHand))
 	{
 		return;
