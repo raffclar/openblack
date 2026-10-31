@@ -983,6 +983,11 @@ void LandSystem::PrepareNewLand(land_change::Kind change)
 	{
 		Locator::handGrabSystem::value().Reset();
 	}
+	// Nor the meshes made for its temples. A saved game keeps them, because the save can bring the same temples again.
+	if (change != land_change::Kind::SavedGame && Locator::templeExteriorSystem::has_value())
+	{
+		Locator::templeExteriorSystem::value().ForgetLand();
+	}
 
 	// Every sound stops as the land goes, however it changes: the music at once, without fading, the atmosphere, and
 	// every sound and voice still playing. They go before their entities do, which would leave them playing on

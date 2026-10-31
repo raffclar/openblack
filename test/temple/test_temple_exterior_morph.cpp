@@ -7,10 +7,14 @@
  * openblack is licensed under the GNU General Public License version 3.
  *******************************************************************************/
 
+#include <array>
 #include <numeric>
 #include <optional>
+#include <string>
 #include <vector>
 
+#include <entt/core/hashed_string.hpp>
+#include <fmt/format.h>
 #include <glm/vec2.hpp>
 #include <gtest/gtest.h>
 
@@ -144,4 +148,18 @@ TEST(TempleExteriorMorph, AMeshInTheCacheOfTheSameBlendStaysAfterALoad)
 	EXPECT_TRUE(BlendsAfterLoad(glm::vec2 {0.2f, 0.5f}, Blend {.look = {0.2f, 0.6f}, .textureSet = 1}, wanted));
 	EXPECT_TRUE(BlendsAfterLoad(glm::vec2 {0.2f, 0.5f}, Blend {.look = {0.3f, 0.5f}, .textureSet = 1}, wanted));
 	EXPECT_TRUE(BlendsAfterLoad(glm::vec2 {0.2f, 0.5f}, Blend {.look = {0.2f, 0.5f}, .textureSet = 2}, wanted));
+}
+
+// The meshes made for a temple are its own mesh and the mesh of its worship sites in its skin. A land change lets go of
+// both, by the names that the cache keeps them under.
+TEST(TempleExteriorMorph, TheMeshesMadeForATempleAreItsOwnAndItsSitesMesh)
+{
+	EXPECT_EQ(OwnMeshName(42), "temple/exterior/42");
+	const auto templeMesh = entt::hashed_string(OwnMeshName(42).c_str()).value();
+	EXPECT_EQ(SiteMeshName(templeMesh), fmt::format("temple/worship/{}", templeMesh));
+	const auto made = MeshesMadeFor(templeMesh);
+	EXPECT_EQ(made.at(0), templeMesh);
+	EXPECT_EQ(made.at(1), entt::hashed_string(SiteMeshName(templeMesh).c_str()).value());
+	EXPECT_NE(made.at(0), made.at(1));
+	EXPECT_NE(MeshesMadeFor(templeMesh + 1).at(1), made.at(1));
 }
