@@ -115,6 +115,8 @@ TEST(ComputerMind, TreeHasTheShapeOfTheGame)
 	EXPECT_NE(town.children[2], town.children[4]);
 	EXPECT_FLOAT_EQ(town.weight, 0.7f);
 	EXPECT_EQ(InfoOf(NodeKind::TopReactToPlayer).timer, 50u);
+	// The game keeps a timer on the creature impress action too, which only the top layer would read
+	EXPECT_EQ(InfoOf(NodeKind::ObjectUseCreatureToImpressTown).timer, 3300u);
 }
 
 TEST(ComputerMind, SuppressionRecoversAtTheRateOfTheGame)

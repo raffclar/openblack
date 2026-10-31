@@ -33,6 +33,9 @@ public:
 	virtual void BeginTurn() {}
 	/// In the creature's own turn: its body lives the turn
 	virtual void CreatureTurn(entt::entity /*creature*/) {}
+	/// The body takes its start values from its species now, if it did not yet. A new creature has its body from the
+	/// time that it is made, so a value that a script sets before its first turn stays.
+	virtual void StartBody(entt::entity /*creature*/) {}
 
 	/// The creature ate something of a food value. Returns the energy the meal gave it, by its size and species.
 	[[nodiscard]] virtual float Eat(entt::entity creature, float foodValue) = 0;

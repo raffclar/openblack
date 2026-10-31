@@ -201,6 +201,7 @@
 #include "ECS/Systems/CreatureMindSystemInterface.h"
 #include "ECS/Systems/CreatureModeSystemInterface.h"
 #include "ECS/Systems/CreatureObjectActionSystemInterface.h"
+#include "ECS/Systems/CreaturePhysiologySystemInterface.h"
 #include "ECS/Systems/DanceSystemInterface.h"
 #include "ECS/Systems/DialogueControlSystemInterface.h"
 #include "ECS/Systems/DynamicsSystemInterface.h"
@@ -1691,6 +1692,17 @@ static bool TownCompletelyDestroyed(const ecs::components::Town& town)
 	return script::property_rules::TownCompletelyDestroyed(buildings);
 }
 
+/// A creature has its body from the time that it is made. A script that reads or sets a value of the body before the
+/// first turn of the creature works on the start values of its species, and the value that it sets stays.
+static void StartCreatureBody(entt::entity object)
+{
+	if (Locator::entitiesRegistry::value().AllOf<ecs::components::Creature>(object) &&
+	    Locator::creaturePhysiologySystem::has_value())
+	{
+		Locator::creaturePhysiologySystem::value().StartBody(object);
+	}
+}
+
 /// A creature's body as the scripts read and set it, none for anything else
 static creature_physiology::Needs* CreatureNeedsOf(entt::entity object)
 {
@@ -1699,6 +1711,7 @@ static creature_physiology::Needs* CreatureNeedsOf(entt::entity object)
 	{
 		return nullptr;
 	}
+	StartCreatureBody(object);
 	auto* needs = registry.TryGet<ecs::components::CreatureNeeds>(object);
 	return needs != nullptr ? &needs->needs : nullptr;
 }
@@ -2047,6 +2060,7 @@ void GetProperty() // 021 GET_PROPERTY
 			CannotGetProperty(prop);
 			return;
 		}
+		StartCreatureBody(object);
 		Pushf(ecs::world_objects::LifeOf(object));
 		return;
 	case script::ObjectPropertyType::Moving:
@@ -2289,6 +2303,7 @@ static void SetPropertyOf(entt::entity object, script::ObjectPropertyType prop, 
 			CannotSetProperty(prop);
 			return;
 		}
+		StartCreatureBody(object);
 		// A thing a script holds in a cutscene, or made indestructible, can't be brought to nearly no life
 		ecs::world_objects::SetLife(
 		    object, value,

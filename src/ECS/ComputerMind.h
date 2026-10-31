@@ -193,7 +193,8 @@ struct NodeInfo
 	float afterPerform {1.0f};
 	/// The rate at which the suppression of the node comes back to 1
 	float recovery {1.0f};
-	/// A top node is looked at again during an action only on turns that this number divides; 0 is every turn
+	/// A top node is looked at again during an action only on turns that this number divides; 0 is every turn. The
+	/// game keeps a number for some nodes of other layers too, but it does not read it.
 	uint32_t timer {0};
 	/// The node finds how much it is wanted itself
 	bool intensity {false};
