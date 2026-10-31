@@ -1198,8 +1198,17 @@ const creature_mind_tables::Tables* CreatureMindSystem::GetTables()
 	if (!_tables.has_value() && Locator::infoConstants::has_value())
 	{
 		_tables = creature_mind_tables::Build(Locator::infoConstants::value());
+		_executors.clear();
+		std::ranges::transform(
+		    _tables->actions, std::back_inserter(_executors),
+		    [](const creature_mind_tables::ActionInfo& action) { return creature_plan_actions::For(action.name); });
 	}
 	return _tables.has_value() ? &*_tables : nullptr;
+}
+
+const creature_plan_actions::Executor* CreatureMindSystem::ExecutorOf(uint32_t action)
+{
+	return GetTables() != nullptr && action < _executors.size() ? _executors[action] : nullptr;
 }
 
 void CreatureMindSystem::StartMind(entt::entity creature)
@@ -1947,7 +1956,7 @@ CreatureMindSystem::PlanAgenda(entt::entity creature, uint32_t action, std::opti
 	{
 		return std::nullopt;
 	}
-	const auto* executor = creature_plan_actions::For(tables->actions[action].name);
+	const auto* executor = ExecutorOf(action);
 	if (executor == nullptr)
 	{
 		return std::nullopt;
@@ -2249,9 +2258,11 @@ std::optional<PlayerNames> PlayerOfThing(const ecs::Registry& registry, entt::en
 	return std::nullopt;
 }
 
-/// What a creature knows about a whole thing that it examines a desire about
+/// What a creature knows about a whole thing that it examines a desire about. Whether its player looks at it is the
+/// same for each whole thing, thus the caller finds it one time.
 creature_activity::WholeFacts WholeFactsOf(const ecs::Registry& registry, entt::entity creature, entt::entity whole,
-                                           creature_activity::Whole kind, const creature_mind_tables::Tables& tables)
+                                           creature_activity::Whole kind, const creature_mind_tables::Tables& tables,
+                                           bool lookedAt)
 {
 	const auto& self = registry.Get<const Creature>(creature);
 	creature_activity::WholeFacts facts {.kind = kind};
@@ -2293,12 +2304,7 @@ creature_activity::WholeFacts WholeFactsOf(const ecs::Registry& registry, entt::
 		facts.samePlayer = self.owner == PlayerNames::NEUTRAL;
 		break;
 	}
-	// Only the player of the creature looks at it. In a game with one player, that is the first player.
-	if (const auto camera = openblack::ecs::ReportedCameraOfItsPlayer(creature))
-	{
-		const auto* at = registry.TryGet<const Transform>(creature);
-		facts.lookedAt = at != nullptr && creature_attention::IsLookingAt(camera->origin, camera->focus, at->position);
-	}
+	facts.lookedAt = lookedAt;
 	return facts;
 }
 
@@ -2654,6 +2660,7 @@ CreatureMindSystem::ChooseActivity(entt::entity creature, const CreatureMindStat
 	const auto& rules = tables->rules.at(static_cast<size_t>(desire));
 	std::vector<ChosenActivity> found;
 	std::vector<float> worth;
+	const bool lookedAt = LookedAtByItsPlayer(creature);
 	for (const auto* held : mind.beliefs.HeldNewestFirst())
 	{
 		const auto& belief = *held;
@@ -2662,7 +2669,7 @@ CreatureMindSystem::ChooseActivity(entt::entity creature, const CreatureMindStat
 		{
 			continue;
 		}
-		const auto facts = WholeFactsOf(registry, creature, belief.thing, *kind, *tables);
+		const auto facts = WholeFactsOf(registry, creature, belief.thing, *kind, *tables, lookedAt);
 		if (!creature_activity::CanBeAbout(desire, facts, mind.mayAttackOwnPlayer))
 		{
 			continue;
@@ -2865,7 +2872,7 @@ CreatureMindSystem::ShownActivity(entt::entity creature, CreatureMindState& mind
 	{
 		return std::nullopt;
 	}
-	const auto facts = WholeFactsOf(registry, creature, *whole, *kind, *tables);
+	const auto facts = WholeFactsOf(registry, creature, *whole, *kind, *tables, LookedAtByItsPlayer(creature));
 	if (!creature_activity::CanBeAbout(desire, facts, mind.mayAttackOwnPlayer))
 	{
 		return std::nullopt;
@@ -3086,8 +3093,8 @@ void CreatureMindSystem::PlanCreature(entt::entity creature, CreatureMindState& 
 		const auto& state = desires.desires.at(d);
 		const auto strength = state.activated && state.suppressedTurns == 0 ? state.value : 0.0f;
 		strengths.at(d) = strength;
-		eligible.at(d) = strength > 0.0f && std::ranges::any_of(tables->desireActions.at(d), [tables](uint32_t action) {
-			                 return creature_plan_actions::For(tables->actions.at(action).name) != nullptr;
+		eligible.at(d) = strength > 0.0f && std::ranges::any_of(tables->desireActions.at(d), [this](uint32_t action) {
+			                 return ExecutorOf(action) != nullptr;
 		                 });
 	}
 	// The desire to explore has a condition of its own: a young creature, or one that is not too exhausted
@@ -3201,7 +3208,7 @@ void CreatureMindSystem::PlanCreature(entt::entity creature, CreatureMindState& 
 		executors.clear();
 		for (const auto action : actions)
 		{
-			const auto* executor = creature_plan_actions::For(tables->actions.at(action).name);
+			const auto* executor = ExecutorOf(action);
 			if (executor == nullptr)
 			{
 				continue;
@@ -4093,8 +4100,9 @@ std::optional<Desire> CreatureMindSystem::DesireForShownThing(entt::entity creat
 		if (rule.aboutSomething)
 		{
 			if (!kind.has_value() ||
-			    !creature_activity::CanBeAbout(desire, WholeFactsOf(registry, creature, *whole, *kind, *tables),
-			                                   mind.mayAttackOwnPlayer))
+			    !creature_activity::CanBeAbout(
+			        desire, WholeFactsOf(registry, creature, *whole, *kind, *tables, LookedAtByItsPlayer(creature)),
+			        mind.mayAttackOwnPlayer))
 			{
 				continue;
 			}

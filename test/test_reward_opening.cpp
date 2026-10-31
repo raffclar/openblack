@@ -7,6 +7,8 @@
  * openblack is licensed under the GNU General Public License version 3.
  *******************************************************************************/
 
+#include <array>
+#include <optional>
 #include <set>
 #include <string>
 #include <vector>
@@ -314,4 +316,18 @@ TEST(RewardOpening, AGestureShownOnTheLandIsLaidFromTheChestEastAndSouth)
 	EXPECT_FLOAT_EQ(points.back().x, 130.0f);
 	EXPECT_FLOAT_EQ(points.back().z, 230.0f);
 	EXPECT_EQ(trail.drawn.Points(), points);
+}
+
+TEST(RewardOpening, TheNextMiracleGoesToTheFirstTownWhoseCentreHasAFreeHand)
+{
+	// A town with no village centre is passed, and so is a centre that shows all its six miracles
+	const std::array<std::optional<size_t>, 4> shown {std::nullopt, 6, 5, 0};
+	EXPECT_EQ(reward::FirstTownForMiracle(shown), 2);
+}
+
+TEST(RewardOpening, TheNextMiracleFindsNoTownWhenEveryCentreIsFull)
+{
+	const std::array<std::optional<size_t>, 2> shown {6, std::nullopt};
+	EXPECT_FALSE(reward::FirstTownForMiracle(shown).has_value());
+	EXPECT_FALSE(reward::FirstTownForMiracle({}).has_value());
 }
