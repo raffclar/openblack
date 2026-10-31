@@ -189,9 +189,14 @@ bool Functional(float life, bool built)
 	return built && life > k_FunctionalLife;
 }
 
-bool ValidToTap(PlayerNames iconPlayer, PlayerNames tapper, bool functional)
+bool TapsFor(PlayerNames iconPlayer, PlayerNames tapper, bool influenceEverywhere)
 {
-	return functional && iconPlayer == tapper;
+	return (influenceEverywhere && iconPlayer == PlayerNames::NEUTRAL) || iconPlayer == tapper;
+}
+
+bool ValidToTap(PlayerNames iconPlayer, PlayerNames tapper, bool functional, bool influenceEverywhere)
+{
+	return functional && TapsFor(iconPlayer, tapper, influenceEverywhere);
 }
 
 TapResult Tap(const IconCharge& icon, bool handReady, bool magicEnabled, bool onSite)

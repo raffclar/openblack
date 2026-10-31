@@ -398,7 +398,7 @@ void CreatureHelpSystem::UpdateCreature(entt::entity creature)
 		for (size_t i = 0; i < creature_desires::k_DesireCount; ++i)
 		{
 			values.at(i) = desires.desires.at(i).value;
-			active.at(i) = desires.desires.at(i).activated;
+			active.at(i) = desires.IsActivated(i);
 		}
 		const auto dominant = static_cast<Desire>(help::DominantDesire(values, active));
 		const auto applies = help::TutorialApplies({

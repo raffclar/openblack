@@ -37,6 +37,7 @@
 #include "ECS/Components/Villager.h"
 #include "ECS/Components/VillagerWork.h"
 #include "ECS/Components/WallHug.h"
+#include "ECS/PlayerTowns.h"
 #include "ECS/Registry.h"
 #include "ECS/Systems/PlayerSystemInterface.h"
 #include "ECS/Systems/TimeSystemInterface.h"
@@ -386,6 +387,17 @@ bool SaveGameSystem::ImportVanillaTowns(const gamesave::VanillaWorld& world, Van
 			registry.Get<Town>(town->second).gained = registry.Context().nextTownGained++;
 		}
 	}
+	// The towns take their places in the game's list of all the towns as the file keeps it. A town that the list of the
+	// file does not hold comes after the towns of the list.
+	std::vector<entt::entity> madeOrder;
+	for (const auto number : imported.gameTownList)
+	{
+		if (const auto town = made.find(number); town != made.end() && townIds.contains(number))
+		{
+			madeOrder.push_back(town->second);
+		}
+	}
+	ecs::player_towns::PutFirstInMadeOrder(registry, madeOrder);
 
 	for (const auto& abode : imported.abodes)
 	{

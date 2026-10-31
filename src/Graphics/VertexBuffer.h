@@ -16,6 +16,11 @@
 
 #include "GraphicsHandle.h"
 
+namespace bgfx
+{
+struct Encoder;
+}
+
 namespace openblack::graphics
 {
 
@@ -90,6 +95,9 @@ public:
 	/// Binds the buffer to another stream, its vertices read by a layout of its own: a creature's variant meshes, whose
 	/// positions and normals come in as other attributes than the base mesh's
 	void BindStream(uint8_t stream, VertexLayoutHandle layout) const;
+	/// The same into the encoder given
+	void Bind(bgfx::Encoder& encoder) const;
+	void BindStream(bgfx::Encoder& encoder, uint8_t stream, VertexLayoutHandle layout) const;
 	/// Replaces a dynamic buffer's vertices, from the start, with bgfx memory of as many or fewer
 	void Update(const void* memory) const;
 	/// Replaces a dynamic buffer's vertices from one on, with bgfx memory

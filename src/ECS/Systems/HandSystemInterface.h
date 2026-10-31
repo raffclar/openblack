@@ -12,6 +12,7 @@
 #include <cstdint>
 
 #include <array>
+#include <bitset>
 #include <optional>
 
 #include <entt/entity/entity.hpp>
@@ -103,6 +104,11 @@ public:
 		/// The hand grips the land with the select button, and the other button is held too
 		bool gripsLand;
 		bool otherButton;
+		/// The mouse has a wheel, the camera icons by the hand of the world camera's last frame, and the keys held by
+		/// the game's key number
+		bool mouseWheel;
+		uint16_t cameraIcons;
+		std::bitset<255> keysHeld;
 	};
 	/// The view of a player: from the last view report of the player that a turn did, none before the first view
 	/// report or for a player with no hands. The world never reads the camera or the input of the frames.

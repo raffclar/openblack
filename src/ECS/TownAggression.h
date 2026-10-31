@@ -80,4 +80,8 @@ void ProcessTurn(Record& record, PlayerNames owner);
 	return damage * aggressorValue;
 }
 
+/// The seconds since a player last attacked the town, for a script. The answer is the largest float when the player
+/// number is not valid or the town holds 0.15 or less against the player.
+[[nodiscard]] float SecondsSinceAttacked(const Record& record, PlayerNames player, uint32_t turn, uint32_t millisecondsPerTurn);
+
 } // namespace openblack::ecs::town_aggression

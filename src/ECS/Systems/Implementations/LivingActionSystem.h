@@ -37,6 +37,7 @@ public:
 	[[nodiscard]] VillagerStates VillagerGetState(const components::LivingAction& action,
 	                                              components::LivingAction::Index index) const override;
 	[[nodiscard]] VillagerStates VillagerGetFinalState(const components::LivingAction& action) const override;
+	[[nodiscard]] bool VillagerHasSameExitAsFinal(const components::LivingAction& action, VillagerStates next) const override;
 	void VillagerSetState(components::LivingAction& action, components::LivingAction::Index index, VillagerStates state,
 	                      bool skipTransition) const override;
 	uint32_t VillagerCallState(components::LivingAction& action, components::LivingAction::Index index) const override;

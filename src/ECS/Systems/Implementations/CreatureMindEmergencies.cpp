@@ -177,7 +177,7 @@ void CreatureMindSystem::StepEmergencies(entt::entity creature, const Creature& 
 	    .seen = sightings->first,
 	    .needed = sightings->second,
 	    .canPay = mind_detail::CanPayForMiracle(creature, MagicType::Water),
-	    .compassionActivated = desires[Desire::Compassion].activated,
+	    .compassionActivated = desires.IsActivated(Desire::Compassion),
 	    .compassionSuppressed = desires[Desire::Compassion].suppressedTurns > 0,
 	    .compassion = desires[Desire::Compassion].value,
 	    .anger = desires[Desire::Anger].value,

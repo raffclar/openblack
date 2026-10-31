@@ -28,6 +28,10 @@ struct Mist
 	float size;
 	/// 0xAARRGGBB
 	uint32_t colour;
+	/// A land mist keeps a whole alpha that a script's fade can move past 0 to 255. These are the bits of that whole alpha
+	/// above its low byte, and the alpha byte of the colour is the low byte (see mists::WholeAlphaOf). The sky's clouds
+	/// do not use it.
+	int32_t alphaHighBits {0};
 	/// A mist that shrinks edge on is round seen from straight above or below and edgeShrink times wider than tall
 	/// seen level. It is lit from straight above rather than by the land. The others keep their size and take the
 	/// land's light where they stand.

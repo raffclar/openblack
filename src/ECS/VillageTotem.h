@@ -114,6 +114,13 @@ void StepTo(Ease& ease, uint32_t realMs);
 /// Whether a totem works, so that the hand can take it: it stands built and has more than three quarters of its life
 [[nodiscard]] bool Functional(bool built, float life);
 
+/// Whether the draw of a totem shows the totem. A totem with no life shows no plinth, no icon and no second totem. It
+/// does not move, it shows no share, and it stays drawn while the camera does not move.
+[[nodiscard]] constexpr bool Shows(float life)
+{
+	return life > 0.0f;
+}
+
 /// The moment of the hand's side hold it takes on the icon, in milliseconds into the hold, which lasts some milliseconds:
 /// at most a quarter of the way in, for an icon as wide as the hand or wider; cut to whole milliseconds
 [[nodiscard]] uint32_t GripTimeMs(float closure, uint32_t durationMs);

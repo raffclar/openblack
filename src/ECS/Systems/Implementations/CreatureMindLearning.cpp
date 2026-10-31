@@ -777,8 +777,14 @@ TownFeelings TownFeelingsOf(const ecs::Registry& registry, entt::entity town)
 bool CompassionMostWanted(const creature_desires::Desires& desires)
 {
 	const auto compassion = desires[Desire::Compassion].value;
-	return std::ranges::none_of(desires.desires,
-	                            [compassion](const auto& state) { return state.activated && state.value > compassion; });
+	for (size_t d = 0; d < creature_desires::k_DesireCount; ++d)
+	{
+		if (desires.IsActivated(d) && desires.desires.at(d).value > compassion)
+		{
+			return false;
+		}
+	}
+	return true;
 }
 
 /// The action that heals, which hurt people in a town may make a creature think of first
@@ -3099,7 +3105,7 @@ void CreatureMindSystem::PlanCreature(entt::entity creature, CreatureMindState& 
 	for (size_t d = 0; d < creature_desires::k_DesireCount; ++d)
 	{
 		const auto& state = desires.desires.at(d);
-		const auto strength = state.activated && state.suppressedTurns == 0 ? state.value : 0.0f;
+		const auto strength = desires.IsActivated(d) && state.suppressedTurns == 0 ? state.value : 0.0f;
 		strengths.at(d) = strength;
 		eligible.at(d) = strength > 0.0f && std::ranges::any_of(tables->desireActions.at(d), [this](uint32_t action) {
 			                 return ExecutorOf(action) != nullptr;
@@ -4114,7 +4120,7 @@ std::optional<Desire> CreatureMindSystem::DesireForShownThing(entt::entity creat
 	{
 		const auto desire = static_cast<Desire>(d);
 		const auto& state = mind.desires->desires.at(d);
-		if (!state.activated || state.suppressedTurns != 0 || std::ranges::find(tried, desire) != tried.end())
+		if (!mind.desires->IsActivated(d) || state.suppressedTurns != 0 || std::ranges::find(tried, desire) != tried.end())
 		{
 			continue;
 		}

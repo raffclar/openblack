@@ -112,6 +112,26 @@ void openblack::testbed_scenarios::AddTownMiracleScenarios(std::vector<Scenario>
 	    .townMiracles = {MagicType::Heal, MagicType::Water},
 	});
 	all.push_back({
+	    .id = "town.stone_hand_holder_effects",
+	    .name = "The effects of the seeds over a village centre's stone hands",
+	    .facet = Facet::Miracles,
+	    .description = "The same town and temple on the first land, given six miracles by the debug tool: heal, "
+	                   "fireball, lightning, water, teleport and storm. The camera looks at the village centre from near.",
+	    .expected = "Each stone hand shows the effect of its seed's holder above its palm, in the player's colours. The "
+	                "fireball, lightning, water, teleport and storm seeds have no model: only their effects show. The "
+	                "heal seed spins with its effect above it. The effects move only while the hands are on the screen, "
+	                "and they stop while the game is paused.",
+	    .environment = {.dispenserGrid = false, .landNumber = k_FirstLand},
+	    .framing = {.shot = Shot::Placed,
+	                .eye = {k_Centre.x + 6.0f, 14.0f, k_Centre.y - 30.0f},
+	                .look = {k_Centre.x, 5.0f, k_Centre.y}},
+	    .objects = Town(),
+	    .temples = {{.offset = k_Temple}},
+	    .townBeliefInPlayer = k_TownBelief,
+	    .townMiracles = {MagicType::Heal, MagicType::Fireball, MagicType::LightningBolt, MagicType::Water, MagicType::Teleport,
+	                     MagicType::StormWindRain},
+	});
+	all.push_back({
 	    .id = "town.miracle_spares_stone_hands",
 	    .name = "A fireball on a village centre with stone hands",
 	    .facet = Facet::Miracles,

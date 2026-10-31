@@ -81,6 +81,28 @@ struct Fade
 /// The alpha byte of a fade's alpha: its whole part
 [[nodiscard]] uint8_t AlphaByte(float alpha) noexcept;
 
+/// The whole alpha that a fade gives to the object of a land mist: the whole part of the alpha, not cut to a byte
+[[nodiscard]] int32_t WholeAlpha(float alpha) noexcept;
+
+/// The bits of a whole alpha above its low byte
+[[nodiscard]] constexpr int32_t AlphaHighBits(int32_t wholeAlpha) noexcept
+{
+	return wholeAlpha >> 8;
+}
+
+/// The whole alpha of a land mist from its colour, whose alpha byte is the low byte, and the bits above that byte
+[[nodiscard]] constexpr int32_t WholeAlphaOf(uint32_t colour, int32_t alphaHighBits) noexcept
+{
+	return static_cast<int32_t>((static_cast<uint32_t>(alphaHighBits) << 8u) | (colour >> 24u));
+}
+
+/// The alpha that a land mist draws with. It is 255 times the whole alpha of its object, divided by 256 and cut to the
+/// low byte. Thus a whole alpha from 1 to 255 draws 1 less, and 256 draws 255.
+[[nodiscard]] constexpr uint8_t DrawnAlpha(int32_t wholeAlpha) noexcept
+{
+	return static_cast<uint8_t>(((static_cast<uint32_t>(wholeAlpha) * 255u) >> 8u) & 0xFFu);
+}
+
 /// One game turn of a fade: when a turn of it is left, it adds a step to the size and to the alpha, keeps the alpha in 0
 /// to 255 and gives true. When no turn is left, it changes nothing and gives false: the fade is done.
 [[nodiscard]] bool StepFade(Fade& fade, float& size) noexcept;

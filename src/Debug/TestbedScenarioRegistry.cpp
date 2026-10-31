@@ -2142,6 +2142,27 @@ void AddSingingStones(std::vector<Scenario>& all)
 	                  .script = "BringBackTheDead",
 	                  .scriptGlobals = {{"SSBringBackToLifeActive", {.number = 0.0f}}}}},
 	});
+
+	// The first tune of the second land's singing stones, Twinkle Twinkle Little Star, as the stones start it when the
+	// player taps the tune. The script makes its mist and its bats at a fixed place of the second land.
+	all.push_back({
+	    .id = "story.singing_stones_twinkle",
+	    .name = "The singing stones play Twinkle Twinkle Little Star",
+	    .facet = Facet::Story,
+	    .description = "Two seconds in, the game's TwinkleSequence script runs, as a tap of the tune on the second "
+	                   "land's stones starts it. It is a cut scene with its own music and camera.",
+	    .expected = "A flock of 10 bats comes about the ring, and a faint white mist shows at the ring's centre. The "
+	                "camera moves in, then up, then back, and the game's time goes to 23:00 over 10 seconds. At the end "
+	                "the mist grows from size 1 to 2 and fades away over 10 seconds, and the music stops.",
+	    .environment = {.dispenserGrid = false, .landNumber = 2},
+	    .framing = {.shot = Shot::Placed,
+	                .eye = {k_Ring.x - 7.0f, 14.0f, k_Ring.y + 3.0f},
+	                .look = {k_Ring.x + 9.0f, 10.0f, k_Ring.y - 1.0f}},
+	    .commands = {{.kind = Kind::RunScript,
+	                  .delaySeconds = 2.0f,
+	                  .script = "TwinkleSequence",
+	                  .scriptGlobals = {{"SSDoneBats", {.number = 0.0f}}}}},
+	});
 }
 
 /// The beach temple puzzle of the second land, as its script makes it: turned a half turn, at its normal size
@@ -12133,6 +12154,22 @@ void AddScriptTaskRelease(std::vector<Scenario>& all)
 	});
 
 	all.push_back({
+	    .id = "temple.low_detail_map",
+	    .name = "At the lowest detail levels the temple's map has a texture of half the size",
+	    .facet = Facet::Appearance,
+	    .description = "Start the game with --detail-level 1 (Low) or 0 (Minimum). The player has a temple and is put in "
+	                   "its main room. Look at the map of the island over the pool, then start again with "
+	                   "--detail-level 4 to compare.",
+	    .expected = "At Low and Minimum the land on the map has half the texels along each side: 4 for each block of the "
+	                "land, not 8. Each texel has the colour of one texel of the full map, not a mean of four. The "
+	                "shape of the map, its markers and its fade at the coast do not change.",
+	    .environment = {.dispenserGrid = false},
+	    .framing = {.shot = Shot::Overview},
+	    .temples = {{.offset = {-300.0f, 100.0f}, .angle = 36.0f}},
+	    .commands = {{.kind = Kind::EnterTemple, .delaySeconds = 2.0f, .value = 3}},
+	});
+
+	all.push_back({
 	    .id = "temple.way_out_glow",
 	    .name = "A white light grows at the temple's way out as the player leaves",
 	    .facet = Facet::Story,
@@ -12914,6 +12951,23 @@ void AddWorkshopScenarios(std::vector<Scenario>& all)
 	                "scaffold stays on the site. While nothing of the building is built, the hand can take the scaffold "
 	                "again, and the site then goes.",
 	    .environment = {.dispenserGrid = false},
+	    .framing = {.shot = Shot::Overview, .include = {k_LooseScaffold - glm::vec2 {10.0f}, k_BuildPlace + glm::vec2 {10.0f}}},
+	    .objects = {{.type = AbodeInfo::CelticTownCentre, .offset = {0.0f, 50.0f}},
+	                {.type = ScaffoldInfo::Normal, .offset = k_LooseScaffold, .scale = 0.7f}},
+	});
+
+	all.push_back({
+	    .id = "light.snow_on_scaffold_phantom",
+	    .name = "The phantom of a scaffold carries snow in the hand and none on its site",
+	    .facet = Facet::Light,
+	    .description = "The town, the scaffold and the camera of objects.scaffold_starts_building, in deep snow over the "
+	                   "whole island. The input tools/sim/hand_inputs/scaffold_build.json moves the hand: it takes the "
+	                   "scaffold, holds it still near the village centre, and puts it down.",
+	    .expected = "While the hand holds the scaffold still, the phantom of the building grows below the scaffold, and "
+	                "snow comes onto it in about four seconds. When the hand puts the scaffold down, the phantom on the "
+	                "building site shows no snow, and it never shows snow again. The scaffold itself shows snow as "
+	                "other things do.",
+	    .environment = {.dispenserGrid = false, .snowDepth = 200.0f},
 	    .framing = {.shot = Shot::Overview, .include = {k_LooseScaffold - glm::vec2 {10.0f}, k_BuildPlace + glm::vec2 {10.0f}}},
 	    .objects = {{.type = AbodeInfo::CelticTownCentre, .offset = {0.0f, 50.0f}},
 	                {.type = ScaffoldInfo::Normal, .offset = k_LooseScaffold, .scale = 0.7f}},

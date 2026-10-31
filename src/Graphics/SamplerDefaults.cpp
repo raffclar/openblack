@@ -70,30 +70,4 @@ TextureHandle SamplerDefaults::Texture(DefaultTexture texture) const
 	return bgfx::isValid(toBgfx(handle)) ? handle : _textures[static_cast<size_t>(DefaultTexture::White2D)];
 }
 
-void SamplerDefaults::Set(uint8_t stage)
-{
-	if (stage < _set.size())
-	{
-		_set.set(stage);
-	}
-}
-
-bool SamplerDefaults::IsSet(uint8_t stage) const
-{
-	return stage < _set.size() && _set.test(stage);
-}
-
-void SamplerDefaults::Discarded(uint8_t flags)
-{
-	if ((flags & BGFX_DISCARD_BINDINGS) != 0)
-	{
-		_set.reset();
-	}
-}
-
-void SamplerDefaults::FrameEnded()
-{
-	_set.reset();
-}
-
 } // namespace openblack::graphics

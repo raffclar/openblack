@@ -9,6 +9,8 @@
 
 #include "TownAggression.h"
 
+#include <limits>
+
 using namespace openblack;
 using namespace openblack::ecs;
 
@@ -21,6 +23,11 @@ constexpr float k_AggressionFade = 0.999f;
 /// A multiplier recovers by a thousandth a turn while its want is under this
 constexpr float k_SmallWant = 0.1f;
 constexpr float k_MultiplierRecovery = 1.001f;
+/// A town that holds this much or less against a player gives no time since the attack. The game compares with a
+/// double.
+constexpr double k_StillHeld = 0.15;
+/// The game changes milliseconds to seconds with this float
+constexpr float k_SecondsPerMillisecond = 0.001f;
 
 /// The game recovers a multiplier through a min that works its product out twice: under 1 it recovers twice over
 float Recover(float multiplier)
@@ -87,4 +94,18 @@ void town_aggression::ProcessTurn(Record& record, PlayerNames owner)
 	{
 		record.mercyMultiplier = Recover(record.mercyMultiplier);
 	}
+}
+
+float town_aggression::SecondsSinceAttacked(const Record& record, PlayerNames player, uint32_t turn,
+                                            uint32_t millisecondsPerTurn)
+{
+	const auto index = static_cast<size_t>(player);
+	if (index >= record.aggression.size() || !(static_cast<double>(record.aggression.at(index)) > k_StillHeld))
+	{
+		return std::numeric_limits<float>::max();
+	}
+	// The game multiplies the whole turns by the turn length and rounds the product to a float once
+	const auto turns = static_cast<int32_t>(turn - record.lastTurns.at(index));
+	const auto milliseconds = static_cast<int64_t>(turns) * static_cast<int64_t>(millisecondsPerTurn);
+	return static_cast<float>(milliseconds) * k_SecondsPerMillisecond;
 }

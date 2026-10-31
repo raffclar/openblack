@@ -303,6 +303,7 @@
 #include "ScriptHeaders/ScriptEnums.h"
 #include "ScriptHeaders/ScriptInfluence.h"
 #include "ScriptHeaders/ScriptInterfaceLevels.h"
+#include "ScriptHeaders/ScriptLessonNatives.h"
 #include "ScriptHeaders/ScriptNameLists.h"
 #include "ScriptHeaders/ScriptPropertyRules.h"
 #include "ScriptHeaders/ScriptRandom.h"
@@ -319,6 +320,7 @@ namespace openblack::chlapi
 
 using namespace openblack::ecs::archetypes;
 
+ecs::components::Player* ScriptPlayer(float number);
 PlayerNames ScriptPlayerName(int32_t scriptPlayer);
 
 /// Whether a player that a script names is a player of this game. The players of a land are the 8 of the game. A
@@ -770,7 +772,11 @@ entt::entity CreateScriptObject(const ObjectType type, uint32_t subtype, const g
 		// On the land under the place asked for, even when that is the hand up in the air
 		return CreateScriptBall(OnGround(position));
 	case ObjectType::Marker:
-		return ScriptMarkerArchetype::Create(position);
+	{
+		// A marker stands at the map position of the point and keeps the height of the point above the land
+		const auto& island = Locator::terrainSystem::value();
+		return ScriptMarkerArchetype::Create(map_coords::ToWorld(island, map_coords::FromWorld(island, position)));
+	}
 	case ObjectType::PuzzleGame:
 	{
 		// The system makes a puzzle game of each kind. Only the beach temple puzzle and the tree puzzles have pieces now.
@@ -1812,6 +1818,26 @@ static float LivingAngleOf(entt::entity object, const Transform& transform)
 	// Standing still, a living thing is turned as it is drawn: its model faces the other way round, a quarter turn on
 	return script::property_rules::CreatureHeadingToLivingAngle(
 	    GameHeading(script::property_rules::PlacedAngles(transform.rotation).y));
+}
+
+/// The way a creature's head looks: towards the point that it looks at, when it looks at a point that is not where it
+/// stands; else the way its body faces
+static GameHeading CreatureLookHeading(entt::entity creature, const Transform& transform)
+{
+	const auto& registry = Locator::entitiesRegistry::value();
+	const auto* animation = registry.TryGet<const ecs::components::CreatureAnimation>(creature);
+	if (animation != nullptr && animation->lookAt.has_value() && *animation->lookAt != transform.position)
+	{
+		const float dx = animation->lookAt->x - transform.position.x;
+		const float dz = animation->lookAt->z - transform.position.z;
+		return GameHeading::Of(dx, dz);
+	}
+	if (const auto* locomotion = registry.TryGet<const ecs::components::CreatureLocomotion>(creature);
+	    locomotion != nullptr && locomotion->started)
+	{
+		return locomotion->heading;
+	}
+	return GameHeading(script::property_rules::PlacedAngles(transform.rotation).y);
 }
 
 /// Turns a living thing to face a way, given as the scripts take it: its walk, if it has one, faces that way from now
@@ -6701,9 +6727,9 @@ void DevFunction() // 205 DEV_FUNCTION
 
 void HasMouseWheel() // 206 HAS_MOUSE_WHEEL
 {
-	// TODO(Daniels118): implement this
-	NotImplemented();
-	Pushb(false);
+	// The view report of the player tells whether its mouse has a wheel
+	const auto view = ScriptView();
+	Pushb(view.has_value() && view->mouseWheel);
 }
 
 void NumMouseButtons() // 207 NUM_MOUSE_BUTTONS
@@ -6873,7 +6899,7 @@ void GameTeamSize() // 219 GAME_TEAM_SIZE
 
 void GameType() // 220 GAME_TYPE
 {
-	// The script type of the thing, as a find or an is-of-type test matches it. A thing that has no script type gives 0.
+	// The script type of the thing. A thing that has no script type gives 0.
 	const auto object = PopObject();
 	const auto& registry = Locator::entitiesRegistry::value();
 	if (object == entt::null || !registry.Valid(object))
@@ -6882,8 +6908,7 @@ void GameType() // 220 GAME_TYPE
 		Pushi(0);
 		return;
 	}
-	const auto kind = ecs::script_find::KindOf(registry, object);
-	Pushi(kind.has_value() ? static_cast<int32_t>(kind->type) : 0);
+	Pushi(static_cast<int32_t>(ecs::script_find::GameTypeOf(registry, object)));
 }
 
 void GameSubType() // 221 GAME_SUB_TYPE
@@ -7254,20 +7279,32 @@ void FadeFinished() // 243 FADE_FINISHED
 
 void SetPlayerMagic() // 244 SET_PLAYER_MAGIC
 {
-	// const auto unk2 = Pop().intVal;
-	// const auto unk1 = Pop().intVal;
-	// const auto unk0 = Pop().intVal;
-	// TODO(Daniels118): implement this
-	NotImplemented();
+	const auto player = Popf();
+	const auto magic = Pop().intVal;
+	const bool enable = Pop().intVal != 0;
+	if (!script::lesson_natives::ValidMagic(magic))
+	{
+		ScriptMessage(script::lesson_natives::k_InvalidMagic);
+		return;
+	}
+	// One more thing enables the magic type for the player, or one fewer does. A player that is not there is ignored.
+	if (ScriptPlayer(player) != nullptr && Locator::spellIconSystem::has_value())
+	{
+		Locator::spellIconSystem::value().SetMagicTypeEnabled(ScriptPlayerName(static_cast<int32_t>(player)),
+		                                                      static_cast<MagicType>(magic), enable);
+	}
 }
 
 void HasPlayerMagic() // 245 HAS_PLAYER_MAGIC
 {
-	// const auto player = Popf();
-	// const auto spell = Pop().intVal;
-	// TODO(Daniels118): implement this
-	NotImplemented();
-	Pushb(false);
+	const auto player = Popf();
+	const auto magic = Pop().intVal;
+	if (!script::lesson_natives::ValidMagic(magic))
+	{
+		ScriptMessage(script::lesson_natives::k_InvalidMagic);
+	}
+	const auto* component = script::lesson_natives::ValidMagic(magic) ? ScriptPlayer(player) : nullptr;
+	Pushb(script::lesson_natives::HasPlayerMagic(magic, component != nullptr ? &component->miracles : nullptr));
 }
 
 void SpiritSpeaks() // 246 SPIRIT_SPEAKS
@@ -8805,11 +8842,34 @@ void SetCreatureCreedProperties() // 338 SET_CREATURE_CREED_PROPERTIES
 
 void GameThingCanViewCamera() // 339 GAME_THING_CAN_VIEW_CAMERA
 {
-	// const auto degrees = Popf();
-	// const auto object = Pop().uintVal;
-	// TODO(Daniels118): implement this
-	NotImplemented();
-	Pushb(false);
+	const auto degrees = Popf();
+	const auto object = PopObject();
+	auto& registry = Locator::entitiesRegistry::value();
+	const auto* transform = object != entt::null && registry.Valid(object) ? registry.TryGet<const Transform>(object) : nullptr;
+	if (transform == nullptr || !IsWorldObject(object))
+	{
+		ScriptMessage(script::lesson_natives::k_ThingNotValid);
+		Pushb(false);
+		return;
+	}
+	// The camera is where the player's report put it
+	const auto camera = ecs::ReportedPlayerCamera(PlayerNames::PLAYER_ONE);
+	const auto eye = camera.has_value() ? camera->origin : glm::vec3(0.0f);
+	if (registry.AllOf<ecs::components::Creature>(object))
+	{
+		// A creature looks with its head, not with the way its body faces
+		const auto look = CreatureLookHeading(object, *transform);
+		const auto at = map_coords::FromMetres(glm::vec2(transform->position.x, transform->position.z));
+		Pushb(script::lesson_natives::CreatureSeesCamera(at, map_coords::FromMetres(glm::vec2(eye.x, eye.z)), look.GameAngle(),
+		                                                 degrees));
+		return;
+	}
+	// The thing sees from its place on the map in the way it faces
+	const auto place = glm::vec3(map_coords::Quantise(transform->position.x), transform->position.y,
+	                             map_coords::Quantise(transform->position.z));
+	const float yAngle =
+	    IsLivingThing(object) ? LivingAngleOf(object, *transform) : ecs::placed_turn::AnglesOf(registry, object).y;
+	Pushb(script::lesson_natives::InViewCone(place, yAngle, script::lesson_natives::HalfViewAngle(degrees), eye));
 }
 
 void GamePlaySaySoundEffect() // 340 GAME_PLAY_SAY_SOUND_EFFECT
@@ -9300,18 +9360,54 @@ void SetComputerPlayerSpeed() // 371 SET_COMPUTER_PLAYER_SPEED
 	}
 }
 
+/// The script's camera for a command that follows the hand of a computer god: with a warning when the script has none
+ScriptCameraModel* ComputerHandCamera()
+{
+	auto* camera = OrderedScriptCamera();
+	if (camera == nullptr)
+	{
+		ScriptMessage("Script camera has been removed! - Exception happened?");
+		return nullptr;
+	}
+	// While a two-thing camera has taken over, the script's own commands do not reach the camera
+	if (camera->InDualView())
+	{
+		ScriptMessage("We are in the wrong camera mode!");
+		return nullptr;
+	}
+	return camera;
+}
+
+/// The place of the hand of a computer god, as a camera reads it in each frame
+ScriptCameraModel::HandLookup ComputerHandPlace(PlayerNames player)
+{
+	return [player]() -> std::optional<glm::vec3> {
+		if (!Locator::computerPlayerSystem::has_value())
+		{
+			return std::nullopt;
+		}
+		return Locator::computerPlayerSystem::value().HandPositionForView(player);
+	};
+}
+
 void SetFocusFollowComputerPlayer() // 372 SET_FOCUS_FOLLOW_COMPUTER_PLAYER
 {
-	// const auto player = Popf();
-	// TODO(Daniels118): implement this
-	NotImplemented();
+	const auto player = ScriptPlayerName(static_cast<int32_t>(Popf()));
+	if (auto* camera = ComputerHandCamera(); camera != nullptr)
+	{
+		// The script's camera keeps looking at the hand of the god
+		camera->LookAtComputerHand(ComputerHandPlace(player));
+	}
 }
 
 void SetPositionFollowComputerPlayer() // 373 SET_POSITION_FOLLOW_COMPUTER_PLAYER
 {
-	// const auto player = Popf();
-	// TODO(Daniels118): implement this
-	NotImplemented();
+	const auto player = ScriptPlayerName(static_cast<int32_t>(Popf()));
+	if (auto* camera = ComputerHandCamera(); camera != nullptr)
+	{
+		// The script's camera follows the hand of the god
+		camera->FollowComputerHand(ComputerHandPlace(player));
+	}
 }
 
 void CallComputerPlayer() // 374 CALL_COMPUTER_PLAYER
@@ -9877,9 +9973,9 @@ void MapScriptFunction() // 415 MAP_SCRIPT_FUNCTION
 
 void WithinRotation() // 416 WITHIN_ROTATION
 {
-	// TODO(Daniels118): implement this
-	NotImplemented();
-	Pushb(false);
+	// The view report of the player tells which camera icons the hand showed or offered
+	const auto view = ScriptView();
+	Pushb(view.has_value() && script::lesson_natives::WithinRotation(view->cameraIcons));
 }
 
 void GetPlayerTownTotal() // 417 GET_PLAYER_TOWN_TOTAL
@@ -9907,10 +10003,10 @@ void SpiritScreenPoint() // 418 SPIRIT_SCREEN_POINT
 
 void KeyDown() // 419 KEY_DOWN
 {
-	// const auto key = Pop().intVal;
-	// TODO(Daniels118): implement this (translate key to physical key code)
-	NotImplemented();
-	Pushb(false);
+	// The key comes by the game's number of the key. The view report of the player tells the keys held.
+	const auto key = Pop().intVal;
+	const auto view = ScriptView();
+	Pushb(view.has_value() && script::lesson_natives::KeyDown(key, view->keysHeld));
 }
 
 void SetFightExit() // 420 SET_FIGHT_EXIT
@@ -10181,20 +10277,17 @@ void GetTimeSinceObjectAttacked() // 442 GET_TIME_SINCE_OBJECT_ATTACKED
 	const auto town = PopObject();
 	const auto player = ScriptPlayerName(static_cast<int32_t>(Popf()));
 	auto& registry = Locator::entitiesRegistry::value();
+	// Only a town keeps a record of attacks. Any other thing gives the largest float.
 	const auto* aggression = registry.Valid(town) ? registry.TryGet<const ecs::components::TownAggression>(town) : nullptr;
-	const auto index = static_cast<size_t>(player);
-	// The seconds since the player last attacked the town, while the town still holds more than a little against them
-	constexpr double k_StillHeld = 0.15;
-	if (aggression == nullptr || index >= aggression->record.aggression.size() ||
-	    !(aggression->record.aggression.at(index) > k_StillHeld) || !Locator::time::has_value())
+	if (aggression == nullptr || !Locator::time::has_value())
 	{
 		Pushf(std::numeric_limits<float>::max());
 		return;
 	}
-	const auto turns = static_cast<int32_t>(Locator::time::value().GetTurn() - aggression->record.lastTurns.at(index));
 	const auto msPerTurn =
 	    std::chrono::duration_cast<std::chrono::milliseconds>(ecs::systems::TimeSystemInterface::k_TurnDuration);
-	Pushf(static_cast<float>(turns * msPerTurn.count()) * 0.001f);
+	Pushf(ecs::town_aggression::SecondsSinceAttacked(aggression->record, player, Locator::time::value().GetTurn(),
+	                                                 static_cast<uint32_t>(msPerTurn.count())));
 }
 
 void GetTownAndVillagerHealthTotal() // 443 GET_TOWN_AND_VILLAGER_HEALTH_TOTAL

@@ -282,6 +282,28 @@ void RedrawBuilding(building_world::World& world, entt::entity building, Buildin
 	registry.SetDirty();
 }
 
+/// Makes a new broken model of a building from its whole model, which no blow has struck yet. The building counts its
+/// broken models.
+BuildingDamage& NewBrokenModel(building_world::World& world, entt::entity building)
+{
+	auto& registry = world.Entities();
+	if (const auto* old = registry.TryGet<const BuildingDamage>(building); old != nullptr)
+	{
+		world.EraseModel(old->drawMesh);
+	}
+	auto& made = registry.AssignOrReplace<BuildingDamage>(building);
+	made.mesh = MakeDamageMesh(world, building);
+	if (auto* models = registry.TryGet<BrokenModels>(building); models != nullptr)
+	{
+		++models->made;
+	}
+	else
+	{
+		registry.Assign<BrokenModels>(building, BrokenModels {.made = 1});
+	}
+	return made;
+}
+
 void RemoveDamage(building_world::World& world, entt::entity building)
 {
 	auto& registry = world.Entities();
@@ -581,13 +603,7 @@ void BuildingDamageSystem::Blow(DynamicsSystemInterface& dynamics, entt::entity 
 		if (broken == nullptr || damage::RebuildsOnBlow(DrawShare(world, building)))
 		{
 			// A fresh broken model from the whole one, which no rock has struck yet
-			if (broken != nullptr)
-			{
-				world.EraseModel(broken->drawMesh);
-			}
-			auto& made = registry.AssignOrReplace<BuildingDamage>(building);
-			made.mesh = MakeDamageMesh(world, building);
-			broken = &made;
+			broken = &NewBrokenModel(world, building);
 		}
 		else if (broken->lastHitter == hitter)
 		{
@@ -641,7 +657,7 @@ void BuildingDamageSystem::Smash(entt::entity building, entt::entity creature, f
 	}
 	if (!registry.AllOf<BuildingDamage>(building))
 	{
-		registry.Assign<BuildingDamage>(building).mesh = MakeDamageMesh(world, building);
+		NewBrokenModel(world, building);
 	}
 	PlaySound(world, building, k_SmashKeys);
 	// Struck straight down where the building stands
@@ -666,7 +682,7 @@ void BuildingDamageSystem::CreatureBlows(entt::entity building, entt::entity cre
 	}
 	if (!registry.AllOf<BuildingDamage>(building))
 	{
-		registry.Assign<BuildingDamage>(building).mesh = MakeDamageMesh(world, building);
+		NewBrokenModel(world, building);
 	}
 	for (const auto& blow : blows)
 	{

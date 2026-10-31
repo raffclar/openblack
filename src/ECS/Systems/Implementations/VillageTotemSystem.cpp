@@ -226,6 +226,11 @@ void VillageTotemSystem::Place(entt::entity totem)
 {
 	auto& registry = _world->Entities();
 	const auto& totemComponent = registry.Get<const VillageTotem>(totem);
+	// A totem with no life does not move
+	if (!village_totem::Shows(_world->LifeOf(totem)))
+	{
+		return;
+	}
 	// Held by the hand, it stands where the hand holds it; otherwise where it has eased to. It eases by the computer's
 	// clock, so only its drawn height moves: the turns go by where it stands on the land.
 	const float share = totemComponent.gripped ? totemComponent.held : totemComponent.ease.share;
@@ -337,6 +342,12 @@ void VillageTotemSystem::Update(uint32_t realMs)
 			continue;
 		}
 		village_totem::StepTo(totemComponent.ease, realMs);
+		// A totem with no life shows nothing. Its second totem hides, and the totem does not move or show its share.
+		if (!village_totem::Shows(_world->LifeOf(totem)))
+		{
+			PlaceGhost(totem, std::nullopt);
+			continue;
+		}
 		Place(totem);
 		// The second totem shows the other share, and the player sees the share as it moves
 		const auto shown = village_totem::ShownShares(totemComponent.ease.share, totemComponent.held, totemComponent.gripped);
