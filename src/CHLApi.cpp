@@ -719,14 +719,13 @@ entt::entity CreateScriptSeedInHand(uint32_t subtype)
 	{
 		return entt::null;
 	}
-	const auto seed = Locator::magicSystem::value().GiveSeedToHand(player, seedType, magic::k_BasePowerUpLevel, 1.0f);
+	const auto seed = Locator::magicSystem::value().GiveOneShotSeedToHand(player, seedType, magic::k_BasePowerUpLevel, 1.0f);
 	if (seed == entt::null)
 	{
 		return entt::null;
 	}
-	// It counts as a one-shot miracle, and the player has now had the miracle it casts
+	// The player has now had the miracle that it casts
 	auto& registry = Locator::entitiesRegistry::value();
-	registry.Get<ecs::components::SpellSeed>(seed).fromGlobe = true;
 	const auto type = magic::GetMagicTypeFromPowerUpLevel(magic::GetSpellSeedInfo(Locator::infoConstants::value(), seedType),
 	                                                      magic::k_BasePowerUpLevel);
 	if (const auto playerEntity = Locator::playerSystem::value().FindPlayer(player).value_or(entt::null);

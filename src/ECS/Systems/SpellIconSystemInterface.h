@@ -77,6 +77,12 @@ public:
 	virtual bool StartChargeForGod(entt::entity /*icon*/, PlayerNames /*player*/) { return false; }
 	/// The worship site icon that made a seed, none for a seed that no icon made or whose icon is gone
 	[[nodiscard]] virtual entt::entity IconOfSeed(entt::entity /*seed*/) const { return entt::null; }
+	/// The icon that makes the seed of a one-shot miracle for a player. It is the icon of the seed that can give the
+	/// miracle now, at the player's site with the most prayer power left this turn. The first site wins a tie. None
+	/// when no icon can give it.
+	[[nodiscard]] virtual entt::entity BestIconFor(PlayerNames /*player*/, SpellSeedType /*seed*/) const { return entt::null; }
+	/// A seed that an icon made is now out from the icon
+	virtual void SeedMadeAt(entt::entity /*icon*/, entt::entity /*seed*/) {}
 	/// Whether an icon can charge the seed of it in a hand to a power-up level for a player: the hand of the icon's
 	/// player holds a seed of the icon, and the player may cast the miracle of that level. Level -1 is the plain miracle.
 	[[nodiscard]] virtual bool ValidForPowerUp(entt::entity /*icon*/, PlayerNames /*player*/, int /*powerUp*/) const

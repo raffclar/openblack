@@ -231,6 +231,17 @@ TEST(SpellIcons, TheClickRisesWithTheHandAndStopsAtTheSixth)
 	EXPECT_EQ(ClickPitch(4), 155u);
 	EXPECT_EQ(ClickPitch(5), 175u);
 	EXPECT_EQ(ClickPitch(9), 175u);
+	// A site icon that stands further out has no place and clicks as the first place
+	EXPECT_EQ(ClickPitch(-1), 100u);
+}
+
+TEST(SpellIcons, ASiteIconTakesThePlaceOfItsPointAmongTheSix)
+{
+	EXPECT_EQ(SitePlace(10u), 0);
+	EXPECT_EQ(SitePlace(12u), 2);
+	EXPECT_EQ(SitePlace(15u), 5);
+	EXPECT_EQ(SitePlace(std::nullopt), -1);
+	EXPECT_EQ(ClickPitch(SitePlace(13u)), 145u);
 }
 
 TEST(SpellIcons, TheAnnouncerNamesTheChargedMiracle)

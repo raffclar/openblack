@@ -186,7 +186,7 @@ TEST_F(SpellIconSystemTest, AGoneSiteTakesItsIconsAndTheSeedsOutFromThemButNotTh
 	const auto site = registry.Create();
 	registry.Assign<SiteIcons>(site);
 	const auto seed = registry.Create();
-	registry.Assign<SpellSeed>(seed, SpellSeed {.seedType = SpellSeedType::Heal});
+	registry.Assign<SpellSeed>(seed, SpellSeed {.seedType = SpellSeedType::Heal, .hasIcon = true, .worshipSite = site});
 	const auto heal = Icon(site, SpellSeedType::Heal, seed);
 	const auto water = Icon(site, SpellSeedType::Water, entt::null);
 	// A hand on the village centre showing the same miracle belongs to the town
@@ -266,7 +266,7 @@ TEST_F(SpellIconSystemTest, ASeedOutOfTheHandIsOutButNotHeld)
 	registry.Assign<SiteIcons>(site);
 	registry.Assign<WorshipSite>(site, WorshipSite {.player = PlayerNames::PLAYER_ONE});
 	const auto seed = registry.Create();
-	registry.Assign<SpellSeed>(seed, SpellSeed {.seedType = SpellSeedType::Heal});
+	registry.Assign<SpellSeed>(seed, SpellSeed {.seedType = SpellSeedType::Heal, .hasIcon = true, .worshipSite = site});
 	Icon(site, SpellSeedType::Heal, seed);
 
 	const auto charges = _system.ChargesAt(site);
@@ -758,4 +758,26 @@ TEST_F(PowerUpChargeTest, CallingThePowerUpOffAsksForThePlainMiracle)
 	EXPECT_FALSE(registry.Get<const WorshipIcon>(_icon).charging);
 	EXPECT_EQ(registry.Get<const SpellSeed>(_seed).chantStore, 100.0f);
 	EXPECT_EQ(_magic->poweredUp, (std::vector<std::pair<entt::entity, int>> {{_seed, -1}}));
+}
+
+// A seed that an icon made, as the seed of a one-shot miracle, counts once as out from the icon. Seeds that are gone no
+// longer count.
+// NOLINTNEXTLINE(cppcoreguidelines-avoid-non-const-global-variables): external macro
+TEST_F(SpellIconSystemTest, ASeedMadeAtAnIconCountsOnceAsOut)
+{
+	auto& registry = Entities();
+	const auto site = registry.Create();
+	registry.Assign<SiteIcons>(site);
+	const auto gone = registry.Create();
+	const auto icon = Icon(site, SpellSeedType::Heal, gone);
+	registry.Destroy(gone);
+	const auto seed = registry.Create();
+	registry.Assign<SpellSeed>(seed, SpellSeed {.seedType = SpellSeedType::Heal, .hasIcon = true, .worshipSite = site});
+	_system.SeedMadeAt(icon, seed);
+	_system.SeedMadeAt(icon, seed);
+	EXPECT_EQ(registry.Get<WorshipIcon>(icon).seedsOut, std::vector<entt::entity> {seed});
+	EXPECT_EQ(_system.IconOfSeed(seed), icon);
+	// Something that is not an icon keeps no seed
+	_system.SeedMadeAt(site, seed);
+	EXPECT_FALSE(registry.AllOf<WorshipIcon>(site));
 }
