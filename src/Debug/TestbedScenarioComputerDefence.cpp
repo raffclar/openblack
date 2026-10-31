@@ -202,20 +202,19 @@ void testbed_scenarios::AddComputerGodDefenceScenarios(std::vector<Scenario>& al
 	    .facet = Facet::Mind,
 	    .description = "Lines of a land switch on the computer mind of player two. Player two has a temple to the south "
 	                   "and a Celtic town to the north that offers the physical shield miracle. Half of the people go to "
-	                   "worship at the site. After 30 seconds, a testbed tool puts the action ReactToPlayerThrowingStuff "
-	                   "in the queue of the god, with the heart of its temple, as when a player throws a thing at the "
-	                   "temple. The god has no creature.",
-	    .expected = "The god works out the two choices under the action: the physical shield and the creature as a "
-	                "diversion. With no creature, it chooses the physical shield. The hand moves to the physical shield "
+	                   "worship at the site. After 30 seconds, a testbed tool marks the temple as hit, as a thrown thing "
+	                   "does when it harms the heart. The god has no creature.",
+	    .expected = "After 20 turns the god starts to react: its need ReactToPlayer wants the action "
+	                "ReactToPlayerThrowingStuff, with the heart of the temple as its object. The god works out the two "
+	                "choices under the action: the physical shield and the creature as a diversion. With no creature, "
+	                "it chooses the physical shield. The hand moves to the physical shield "
 	                "icon of the site, and the worshippers chant for the miracle. When the charge is full, the hand "
 	                "flies to the temple and casts the physical shield over the heart, a little wider than the heart. "
 	                "The players.computer_nodes query shows CastPhysicalShieldToProtect with the icon as its object.",
 	    .framing = {.shot = Shot::Overview, .include = {glm::vec2(-80.0f, -110.0f), glm::vec2(80.0f, 100.0f)}},
 	    .landScript = k_ComputerGodPhysicalShieldScript,
 	    .worshipShare = 0.5f,
-	    .computerActions = {{.afterTurns = 300,
-	                         .node = "ReactToPlayerThrowingStuff",
-	                         .first = {.kind = ComputerActionThing::Kind::TempleHeart}}},
+	    .computerActions = {{.afterTurns = 300, .templeHit = true}},
 	});
 	all.push_back({
 	    .id = "mind.computer_god_camera_follows_hand",

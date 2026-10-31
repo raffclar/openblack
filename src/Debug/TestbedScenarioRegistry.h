@@ -1300,8 +1300,6 @@ struct ComputerActionThing
 		PlayerCreature,
 		/// A marker that the tool makes on the land at point, as a land script makes a marker
 		Marker,
-		/// The heart of the temple of the god
-		TempleHeart,
 	};
 	Kind kind {Kind::None};
 	uint32_t townId {0};
@@ -1328,6 +1326,9 @@ struct ComputerActionSetup
 	/// The tool forces the action as a land script's force command does: the god stops the action that it does and starts
 	/// this one at once, rather than after the actions before it in the queue
 	bool forceAtOnce {false};
+	/// The tool gives no action. It marks the temple of the player as hit, as a thrown thing does when it harms the
+	/// heart, and the god chooses what to do by itself.
+	bool templeHit {false};
 };
 
 struct Scenario
