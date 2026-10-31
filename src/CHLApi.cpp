@@ -10153,20 +10153,17 @@ void GetTimeSinceObjectAttacked() // 442 GET_TIME_SINCE_OBJECT_ATTACKED
 	const auto town = PopObject();
 	const auto player = ScriptPlayerName(static_cast<int32_t>(Popf()));
 	auto& registry = Locator::entitiesRegistry::value();
+	// Only a town keeps a record of attacks. Any other thing gives the largest float.
 	const auto* aggression = registry.Valid(town) ? registry.TryGet<const ecs::components::TownAggression>(town) : nullptr;
-	const auto index = static_cast<size_t>(player);
-	// The seconds since the player last attacked the town, while the town still holds more than a little against them
-	constexpr double k_StillHeld = 0.15;
-	if (aggression == nullptr || index >= aggression->record.aggression.size() ||
-	    !(aggression->record.aggression.at(index) > k_StillHeld) || !Locator::time::has_value())
+	if (aggression == nullptr || !Locator::time::has_value())
 	{
 		Pushf(std::numeric_limits<float>::max());
 		return;
 	}
-	const auto turns = static_cast<int32_t>(Locator::time::value().GetTurn() - aggression->record.lastTurns.at(index));
 	const auto msPerTurn =
 	    std::chrono::duration_cast<std::chrono::milliseconds>(ecs::systems::TimeSystemInterface::k_TurnDuration);
-	Pushf(static_cast<float>(turns * msPerTurn.count()) * 0.001f);
+	Pushf(ecs::town_aggression::SecondsSinceAttacked(aggression->record, player, Locator::time::value().GetTurn(),
+	                                                 static_cast<uint32_t>(msPerTurn.count())));
 }
 
 void GetTownAndVillagerHealthTotal() // 443 GET_TOWN_AND_VILLAGER_HEALTH_TOTAL
