@@ -395,8 +395,8 @@ bool ServerWorld::StartLand()
 			return false;
 		}
 	}
-	// The winning conditions of the tools keep to the limits that the host has on the land, or on the land that the
-	// switch names
+	// The winning conditions of the operator keep to the limits that the host has on the land, or on the land that the
+	// option names
 	if (_settings.conditions.has_value())
 	{
 		const auto& request = *_settings.conditions;
