@@ -180,8 +180,8 @@ InspectorSystem::InspectorSystem(std::unique_ptr<inspector::Server> server, std:
 	// Points of the world are found on the screen through the view drawn, an override's while one is shown
 	_inputTarget->SetCamera(_controls->camera);
 	inspector::reflection::RegisterComponents(*_reflection);
-	// A live network game refuses the queries that change the shared world
-	_inspector.SetNetworkGameLive([]() { return developer_tools::NetworkSessionLive(); });
+	// A live network game refuses the queries that change the shared world, on a client and on the game server
+	_inspector.SetNetworkGameLive([this]() { return _hostsNetworkGame || developer_tools::NetworkSessionLive(); });
 	_inspector.SetWriteLog([](const inspector::Request& request, const inspector::QueryResult& answer) {
 		if (answer.Ok())
 		{
@@ -534,6 +534,21 @@ fight_autopilot::AutopilotInterface* InspectorSystem::GetFightAutopilot()
 uint16_t InspectorSystem::GetPort() const
 {
 	return _server->Port();
+}
+
+void InspectorSystem::AddProvider(std::unique_ptr<inspector::ProviderInterface> provider)
+{
+	_inspector.Add(std::move(provider));
+}
+
+void InspectorSystem::RemoveProvider(std::string_view name)
+{
+	_inspector.Remove(name);
+}
+
+void InspectorSystem::SetHostsNetworkGame(bool hosts)
+{
+	_hostsNetworkGame = hosts;
 }
 
 std::optional<std::string> InspectorSystem::StartSimRecord(const std::filesystem::path& path, uint32_t every,

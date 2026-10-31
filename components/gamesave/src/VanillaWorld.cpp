@@ -599,8 +599,9 @@ void ReadPlayer(WorldReader& r)
 	r.Byte("number");
 	r.Bytes(16);
 	r.Word("info");
-	r.Array(4);
-	r.Array(4);
+	// The power that each tribe gives the player, then the most power that the tribe gave the player
+	r.Array(4, "tribalPower");
+	r.Array(4, "maxTribalPower");
 	r.Word("type");
 	r.Array(2, "name");
 	for (int i = 0; i < 6; ++i)

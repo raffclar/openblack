@@ -26,6 +26,7 @@
 #include "ECS/Components/Transform.h"
 #include "ECS/Components/VillageTotem.h"
 #include "ECS/Registry.h"
+#include "ECS/Systems/Implementations/ObjectMeasures.h"
 #include "ECS/Systems/Implementations/VillageTotemSystem.h"
 #include "ECS/VillageTotem.h"
 
@@ -638,4 +639,46 @@ TEST(VillageTotemSystem, ATotemWithNoTownStaysInTheMapCellsAsItIs)
 	village.world->registry.Get<VillageTotem>(village.totem).townCentre = entt::null;
 	village.system->AddToPlayer(village.totem);
 	EXPECT_TRUE(village.world->reinserted.empty());
+}
+
+TEST(VillageTotemMeasures, ATotemIsAsWideAndAsHighAsTheIconOnItsPlinth)
+{
+	openblack::ecs::Registry registry;
+	const auto icon = registry.Create();
+	const auto totem = registry.Create();
+	registry.Assign<VillageTotem>(totem, VillageTotem {.icon = icon});
+	const auto other = registry.Create();
+
+	EXPECT_EQ(openblack::ecs::systems::object_measures::MeasuredPart(registry, totem), icon);
+	EXPECT_EQ(openblack::ecs::systems::object_measures::MeasuredPart(registry, other), other);
+	// A totem with no icon measures as itself
+	registry.Destroy(icon);
+	EXPECT_EQ(openblack::ecs::systems::object_measures::MeasuredPart(registry, totem), totem);
+}
+
+TEST(VillageTotemSystem, ANewPrimaryCreatureRefreshesTheTotemsInTheOrderThatThePlayerGainedTheTowns)
+{
+	auto village = MakeVillage(true);
+	auto& registry = village.world->registry;
+	// A second town of the same player, made later but gained first
+	const auto town = registry.Create();
+	registry.Assign<Town>(town, 8u, PlayerNames::PLAYER_ONE);
+	registry.Context().towns[8] = town;
+	const auto centre = registry.Create();
+	registry.Assign<Abode>(centre, AbodeNumber {}, 8u, 0u, 0u);
+	const auto totem = registry.Create();
+	const auto icon = registry.Create();
+	registry.Assign<Transform>(totem, glm::vec3(9.0f, 3.0f, 9.0f), glm::mat3(1.0f), glm::vec3(1.0f));
+	registry.Assign<Mesh>(icon, k_HandIcon, static_cast<int8_t>(0), static_cast<int8_t>(0));
+	registry.Assign<VillageTotem>(totem, VillageTotem {.townCentre = centre, .icon = icon, .restY = 3.0f});
+	registry.Get<Town>(village.town).gained = 5;
+	registry.Get<Town>(town).gained = 2;
+
+	village.world->reinserted.clear();
+	village.system->RefreshIcons(PlayerNames::PLAYER_ONE);
+	EXPECT_EQ(village.world->reinserted, (std::vector {totem, village.totem}));
+	registry.Get<Town>(town).gained = 9;
+	village.world->reinserted.clear();
+	village.system->RefreshIcons(PlayerNames::PLAYER_ONE);
+	EXPECT_EQ(village.world->reinserted, (std::vector {village.totem, totem}));
 }

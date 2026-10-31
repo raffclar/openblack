@@ -30,6 +30,7 @@
 #include "ECS/Components/Construction.h"
 #include "ECS/Components/Field.h"
 #include "ECS/Components/MiracleImpression.h"
+#include "ECS/Components/Player.h"
 #include "ECS/Components/Town.h"
 #include "ECS/Components/TownDesire.h"
 #include "ECS/Components/Transform.h"
@@ -37,8 +38,10 @@
 #include "ECS/Components/VillagerWork.h"
 #include "ECS/Components/WallHug.h"
 #include "ECS/Registry.h"
+#include "ECS/Systems/PlayerSystemInterface.h"
 #include "ECS/Systems/TimeSystemInterface.h"
 #include "ECS/Systems/TownSystemInterface.h"
+#include "ECS/Systems/WonderSystemInterface.h"
 #include "ECS/TempleConstruction.h"
 #include "ECS/VanillaWorldImport.h"
 #include "ECS/WallHugRules.h"
@@ -56,6 +59,27 @@ using openblack::ecs::systems::vanilla_import::GroundPosition;
 
 namespace
 {
+
+/// Each player of the file gets the power of each tribe and the most power that the tribe gave it, as the file keeps
+/// them
+void PutTribalPowers(ecs::Registry& registry, const std::vector<world_import::ImportedTribalPower>& powers)
+{
+	if (!Locator::playerSystem::has_value())
+	{
+		return;
+	}
+	for (const auto& imported : powers)
+	{
+		const auto player = Locator::playerSystem::value().FindPlayer(imported.player);
+		if (!player.has_value() || !registry.Valid(*player))
+		{
+			continue;
+		}
+		auto& miracles = registry.Get<Player>(*player).miracles;
+		miracles.tribalPower = imported.power;
+		miracles.maxTribalPower = imported.most;
+	}
+}
 std::shared_ptr<spdlog::logger> ImportLog()
 {
 	return spdlog::get("game");
@@ -380,8 +404,15 @@ bool SaveGameSystem::ImportVanillaTowns(const gamesave::VanillaWorld& world, Van
 			continue;
 		}
 		ecs::world_objects::SetLife(entity, abode.life);
+		// A wonder keeps the power of the file. The game reads the power and the tribal powers of the players from the
+		// file and adds no power again, so the tribal powers below replace what the new wonder added.
+		if (abode.wonderPower.has_value() && Locator::wonderSystem::has_value())
+		{
+			Locator::wonderSystem::value().SetPower(entity, *abode.wonderPower);
+		}
 		made.emplace(abode.number, entity);
 	}
+	PutTribalPowers(registry, imported.tribalPowers);
 
 	uint32_t present = 0;
 	for (const auto& villager : imported.villagers)

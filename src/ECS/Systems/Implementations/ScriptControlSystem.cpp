@@ -178,10 +178,11 @@ void ScriptControlSystem::SaveState(reflection::BinaryWriter& out) const
 	reflection::Save(out, _cameraOwner);
 	reflection::Save(out, _gameSpeedOwner);
 	reflection::Save(out, _cameraDetails);
-	// The script's camera, with what it follows, looks at and runs
+	// The script's camera, with what it follows, looks at and runs. It is the camera of this computer: the frames move it,
+	// and the turns read only the camera that the view report of each player tells.
 	const auto* model =
 	    Locator::camera::has_value() ? dynamic_cast<const ScriptCameraModel*>(&Locator::camera::value().GetModel()) : nullptr;
-	reflection::Save(out, model != nullptr ? std::optional(model->GetSaved()) : std::nullopt);
+	reflection::SavePresentation(out, model != nullptr ? std::optional(model->GetSaved()) : std::nullopt);
 }
 
 bool ScriptControlSystem::LoadState(reflection::BinaryReader& in)

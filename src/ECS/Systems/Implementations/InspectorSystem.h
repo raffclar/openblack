@@ -18,6 +18,7 @@
 #include <mutex>
 #include <optional>
 #include <string>
+#include <string_view>
 #include <thread>
 
 #include <Inspector.h>
@@ -75,6 +76,9 @@ public:
 	[[nodiscard]] std::optional<std::string> StartSimRecord(const std::filesystem::path& path, uint32_t every,
 	                                                        const std::optional<std::filesystem::path>& limits,
 	                                                        sim_run::HashDetail hashParts) override;
+	void AddProvider(std::unique_ptr<inspector::ProviderInterface> provider) override;
+	void RemoveProvider(std::string_view name) override;
+	void SetHostsNetworkGame(bool hosts) override;
 
 private:
 	/// The helper answering while the game loads: until told to stop
@@ -134,6 +138,8 @@ private:
 	std::optional<uint64_t> _cutsCheckedAt;
 	/// The fight autopilot, which gives its input through the inspector's input
 	std::unique_ptr<inspector::FightAutopilot> _autopilot;
+	/// The game server hosts a network game: the queries that change the shared world are refused
+	bool _hostsNetworkGame {false};
 };
 
 } // namespace openblack::ecs::systems

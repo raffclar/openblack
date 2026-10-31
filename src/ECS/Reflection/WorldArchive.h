@@ -169,10 +169,21 @@ struct HashMemo
 		/// The hash of the component after the row
 		uint64_t hash {0};
 	};
+	/// How the rows of a component save, and what the hash leaves out of them
+	struct Layout;
 	struct Component
 	{
 		std::vector<uint8_t> bytes;
 		std::vector<Row> rows;
+		/// The layout of the component in the last hash, kept while the parts that the hash leaves out stay the same
+		std::shared_ptr<const Layout> layout;
+	};
+	/// A part that the last hash left out, as HashLeaveOut, with names of its own
+	struct LeftOut
+	{
+		std::string component;
+		std::string field;
+		const entt::sparse_set* marker {nullptr};
 	};
 	/// A storage of the registry as the last hash found it: the hash of its type, the name of its component, and the
 	/// component type. A storage that the hash does not keep has no type.
@@ -184,6 +195,8 @@ struct HashMemo
 		bool registered {false};
 	};
 	std::unordered_map<std::string, Component> components;
+	/// The parts that the last hash left out
+	std::vector<LeftOut> leaveOut;
 	/// The storages by their ids, found for the reflection context below
 	std::unordered_map<uint32_t, Storage> storages;
 	const entt::meta_ctx* context {nullptr};
