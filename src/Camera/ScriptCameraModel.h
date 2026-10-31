@@ -286,6 +286,14 @@ public:
 	void Follow(Subject thing);
 	/// The camera looks at a thing and keeps looking at it
 	void LookAt(Subject thing);
+	/// Finds the place of the hand of a computer god now; nothing when the god has no hand
+	using HandLookup = std::function<std::optional<glm::vec3>()>;
+	/// The camera keeps looking at the hand of a computer god. It stops looking at a thing and stops its track. A thing
+	/// that it follows stays first: the camera looks at the hand only while it follows no thing and looks at no thing.
+	void LookAtComputerHand(HandLookup hand);
+	/// The camera follows the hand of a computer god. It stops following a thing and stops its track. It stands at its
+	/// distance, heading and pitch from the point that it looks at, not from the hand.
+	void FollowComputerHand(HandLookup hand);
 	/// The thing the camera is about: the one it looks at, else the one it follows; nothing while a two-thing camera has
 	/// taken over
 	[[nodiscard]] std::optional<uint32_t> GetFocusedThing() const;
@@ -391,6 +399,10 @@ private:
 	void SnapToFollowed();
 	/// Sends the camera after the things it follows and looks at
 	void UpdateFollowing();
+	/// The point that the camera looks at now: the thing that it looks at, else the thing that it follows, else the hand
+	/// of a computer god. Nothing when it looks at none of them.
+	[[nodiscard]] std::optional<glm::vec3> FocusPoint(const std::optional<script_camera::FollowedThing>& lookedAt,
+	                                                  const std::optional<script_camera::FollowedThing>& followed) const;
 	void StopFollowing();
 	void StopLookingAt();
 	void StopTrack();
@@ -404,6 +416,9 @@ private:
 	GroundHeight _groundAt;
 	ThingLookup _followed;
 	ThingLookup _lookedAt;
+	/// The hands of the computer gods that it follows and looks at. A saved game does not keep them.
+	HandLookup _handFollowed;
+	HandLookup _handLookedAt;
 	/// Which things they are
 	std::optional<uint32_t> _followedId;
 	std::optional<uint32_t> _lookedAtId;

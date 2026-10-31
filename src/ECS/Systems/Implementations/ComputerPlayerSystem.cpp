@@ -490,7 +490,23 @@ void ComputerPlayerSystem::SetHand(PlayerNames player, glm::vec3 place, bool fix
 
 std::optional<glm::vec3> ComputerPlayerSystem::HandPosition(PlayerNames player)
 {
-	const auto* mind = FindMind(player);
+	if (FindMind(player) == nullptr)
+	{
+		return std::nullopt;
+	}
+	return HandPositionForView(player);
+}
+
+std::optional<glm::vec3> ComputerPlayerSystem::HandPositionForView(PlayerNames player) const
+{
+	const auto& registry = Locator::entitiesRegistry::value();
+	const ComputerPlayer* mind = nullptr;
+	registry.Each<const Player>([&registry, &mind, player](entt::entity each, const Player& name) {
+		if (name.name == player && mind == nullptr)
+		{
+			mind = registry.TryGet<const ComputerPlayer>(each);
+		}
+	});
 	if (mind == nullptr)
 	{
 		return std::nullopt;

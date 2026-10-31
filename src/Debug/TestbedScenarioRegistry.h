@@ -1342,6 +1342,9 @@ struct ComputerActionSetup
 	/// The tool forces the action as a land script's force command does: the god stops the action that it does and starts
 	/// this one at once, rather than after the actions before it in the queue
 	bool forceAtOnce {false};
+	/// The tool gives no action. It marks the temple of the player as hit, as a thrown thing does when it harms the
+	/// heart, and the god chooses what to do by itself.
+	bool templeHit {false};
 };
 
 struct Scenario
