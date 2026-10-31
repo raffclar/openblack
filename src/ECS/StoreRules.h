@@ -62,4 +62,7 @@ struct RockWoodTake
 
 /// A building going up stores only wood on its site, which the builders build with
 [[nodiscard]] bool BuildingSiteStores(ResourceType type);
+/// A scaffold stores wood for its building site while it is on a site. It stores no other resource, and it does not
+/// answer for any resource.
+[[nodiscard]] bool ScaffoldStores(ResourceType type, bool onSite);
 } // namespace openblack::ecs::store_rules

@@ -70,6 +70,7 @@
 #include "ECS/Systems/HandSystemInterface.h"
 #include "ECS/Systems/Implementations/ObjectMeasures.h"
 #include "ECS/Systems/Implementations/VillagerHome.h"
+#include "ECS/Systems/Implementations/VillagerPhysics.h"
 #include "ECS/Systems/ReactionSystemInterface.h"
 #include "ECS/Systems/ResourceStoreSystemInterface.h"
 #include "ECS/Systems/SoundTagSystemInterface.h"
@@ -1388,12 +1389,13 @@ bool WorkshopSystem::BuildBuilding(entt::entity scaffold, std::optional<PlayerNa
 	}
 	const auto building = registry.Get<const Scaffold>(scaffold).site;
 	ecs::town_planning::DropPlansUnder(place, ecs::systems::object_measures::TwoDRadius(registry, building));
-	// The player who put the scaffold down hears the sound where the camera is. The other players hear it at the
-	// scaffold.
+	// The player whose hand let the scaffold go last hears the sound where the camera is. The other players hear it at
+	// the scaffold. This is also true when a script or a fire starts the site.
 	const auto sound = entt::hashed_string("InGame.sad/174").value();
+	const auto dropper = villager_physics::DropperOf(registry, scaffold);
 	const bool local =
-	    player.has_value() &&
-	    input::IsLocalPlayer(Locator::handSystem::has_value() ? &Locator::handSystem::value() : nullptr, *player);
+	    dropper.has_value() &&
+	    input::IsLocalPlayer(Locator::handSystem::has_value() ? &Locator::handSystem::value() : nullptr, *dropper);
 	if (local)
 	{
 		audio::PlayGameSoundEffect(sound, std::nullopt);
@@ -1632,7 +1634,7 @@ entt::entity WorkshopSystem::LeaveDestroyedSite(entt::entity building)
 	return first;
 }
 
-bool WorkshopSystem::ForceBuild(entt::entity scaffold, PlayerNames player)
+bool WorkshopSystem::ForceBuild(entt::entity scaffold, std::optional<PlayerNames> player)
 {
 	auto& registry = Entities();
 	if (!registry.Valid(scaffold) || !registry.AllOf<Scaffold, Transform>(scaffold) || !BuildBuilding(scaffold, player, true))

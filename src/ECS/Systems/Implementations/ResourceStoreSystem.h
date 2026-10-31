@@ -36,6 +36,7 @@ public:
 	bool TakeObjectAs(entt::entity store, entt::entity object, ObjectResource resource,
 	                  std::optional<PlayerNames> giver) override;
 	void ReportGift(entt::entity store, ResourceType type, PlayerNames giver) override;
+	void AnswerDrop(entt::entity store, PlayerNames giver) override;
 	bool PourAt(ResourceType type, glm::vec3 point, uint32_t amount, bool speedUp, PlayerNames player, bool poisoned) override;
 	[[nodiscard]] std::optional<entt::entity> StoreOf(entt::entity pile) const override;
 	[[nodiscard]] uint32_t GetResource(entt::entity object, ResourceType type) const override;

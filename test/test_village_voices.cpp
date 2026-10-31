@@ -108,6 +108,15 @@ TEST(VillageVoices, ATownAnswersAGiftByItsDesire)
 	EXPECT_FALSE(GiftAnswer(Gift::Wood, 0.25f, 0).has_value());
 }
 
+TEST(VillageVoices, OnlyAPileOfFoodOrWoodGivesAGiftForADrop)
+{
+	EXPECT_EQ(DropGift(ResourceType::Food), std::optional(Gift::Food));
+	EXPECT_EQ(DropGift(ResourceType::Wood), std::optional(Gift::Wood));
+	// A store that is not a pile, such as a storage pit or a worship site, gets no answer
+	EXPECT_FALSE(DropGift(std::nullopt).has_value());
+	EXPECT_FALSE(DropGift(ResourceType::None).has_value());
+}
+
 TEST(VillageVoices, ATownAnswersOnlyAMuchOrALittleWantedGift)
 {
 	EXPECT_TRUE(GiftAnswered(0.5f));

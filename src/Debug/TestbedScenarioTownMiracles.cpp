@@ -63,6 +63,12 @@ constexpr float k_HealSeed = static_cast<float>(SpellSeedType::Heal);
 constexpr float k_Fireball = static_cast<float>(MagicType::Fireball);
 /// Where a food miracle falls on the land away from every store, west of the town centre
 constexpr glm::vec2 k_FoodDrop {-40.0f, 40.0f};
+/// Between the temple and the town, in the reach of the temple and near the town
+constexpr glm::vec2 k_PotDrop {-10.0f, -20.0f};
+/// The food pile of a Celtic storage pit at that place
+constexpr glm::vec2 k_StorePile = k_PotDrop + glm::vec2(3.4f, 4.8f);
+/// The camera looks at that pile from the side away from the pit, so that the pile is nearer than the pit
+constexpr glm::vec2 k_StorePileEye = k_StorePile + glm::vec2(11.5f, 16.3f);
 /// A point between the altar and the food pot of the worship site that the town builds by the temple
 constexpr glm::vec2 k_SiteMiddle {-23.0f, -36.0f};
 
@@ -148,6 +154,36 @@ void AddSecondLandIconScenarios(std::vector<Scenario>& all)
 	                  .delaySeconds = 2.0f,
 	                  .holdSeconds = 3.0f}},
 	    .commands = {{.kind = Kind::EndGuidanceWaits, .delaySeconds = 0.5f}},
+	    .townBeliefInPlayer = k_TownBelief,
+	});
+	all.push_back({
+	    .id = "advisors.food_pot_dropped_on_pile_answer",
+	    .name = "The town near a store's pile answers a pot of food that the hand drops onto the pile",
+	    .facet = Facet::Advisors,
+	    .description = "The town of town.miracle_debug on the second land, with a Celtic storage pit that holds 300 food "
+	                   "between the temple and the town, and a pot of food beside the food pile of the pit. Every kind of "
+	                   "the advisors' guidance is taken as heard long ago. After one second the hand over the food pile "
+	                   "takes the pot. After a fifth of a second, the hand drops the pot onto the pile.",
+	    .expected = "The pit takes the food of the pot, and the pot goes. The people of the town call out how much they "
+	                "wanted the food, heard at the pile: a pleased answer when the town wants food much, a displeased "
+	                "answer when it wants it little, and no answer between. A pot dropped onto a pile that no store "
+	                "keeps, or onto the pit building, gets no answer. On the first land no answer comes.",
+	    .environment = {.dispenserGrid = false, .cursor = glm::vec2(0.5f, 0.5f), .landNumber = k_SecondLand},
+	    .framing = {.shot = Shot::Placed,
+	                .eye = {k_StorePileEye.x, 20.0f, k_StorePileEye.y},
+	                .look = {k_StorePile.x, 0.0f, k_StorePile.y}},
+	    .objects =
+	        [] {
+		        auto objects = Town();
+		        objects.push_back(
+		            {.type = AbodeInfo::CelticStoragePit, .offset = k_PotDrop, .storedFood = 300, .storedWood = 0});
+		        objects.push_back({.type = PotInfo::FoodPot, .offset = k_PotDrop + glm::vec2(9.0f, 5.0f)});
+		        return objects;
+	        }(),
+	    .temples = {{.offset = k_Temple}},
+	    .commands = {{.kind = Kind::EndGuidanceWaits, .delaySeconds = 0.5f},
+	                 {.kind = Kind::HandTake, .delaySeconds = 0.5f, .object = 6},
+	                 {.kind = Kind::HandRelease, .delaySeconds = 0.2f}},
 	    .townBeliefInPlayer = k_TownBelief,
 	});
 	all.push_back({
