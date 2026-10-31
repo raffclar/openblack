@@ -280,6 +280,11 @@ void NetworkGameSystem::EndNetworkGame()
 	auto& clock = Locator::time::value();
 	clock.SetNetworkGame(false);
 	clock.SetPaused(false);
+	// In a game alone, the player of this computer is the first player again: the next land and its creature need that
+	if (Locator::handSystem::has_value())
+	{
+		Locator::handSystem::value().SetOwnPlayer(PlayerNames::PLAYER_ONE);
+	}
 	if (Locator::syncChecksumSystem::has_value())
 	{
 		Locator::syncChecksumSystem::value().SetEnabled(false);
