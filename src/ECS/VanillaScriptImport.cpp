@@ -11,6 +11,7 @@
 
 #include <cstring>
 
+#include <algorithm>
 #include <span>
 #include <string_view>
 
@@ -205,6 +206,24 @@ std::optional<PlayerNames> vanilla_script_import::HeartPlayer(const gamesave::Va
 		}
 	}
 	return std::nullopt;
+}
+
+std::vector<PlayerNames> vanilla_script_import::WholeTemplePlayers(const gamesave::VanillaWorld& world)
+{
+	std::vector<PlayerNames> players;
+	if (!world.OfType(gamesave::VanillaType::CitadelBuildingSite).empty())
+	{
+		return players;
+	}
+	for (const auto* citadel : world.OfType(gamesave::VanillaType::Citadel))
+	{
+		const auto player = PlayerOfRecord(world, world.Ref(*citadel, "owner").value_or(0));
+		if (player.has_value() && std::ranges::find(players, *player) == players.end())
+		{
+			players.push_back(*player);
+		}
+	}
+	return players;
 }
 
 std::optional<FileTable> vanilla_script_import::ReadScriptTable(const gamesave::VanillaWorld& world)

@@ -8591,6 +8591,23 @@ void AddCombat(std::vector<Scenario>& all)
 	                 Go(Kind::LeashOrderAt, 0, {-25.0f, 0.0f}, 1.0f, false)},
 	});
 
+	all.push_back({
+	    .id = "combat.life_pays_after_the_fight",
+	    .name = "A stroke just after a call-off costs life again",
+	    .facet = Facet::Combat,
+	    .description = "The red tiger asks the blue tiger to fight, and both fight by themselves. In the duel the red "
+	                   "tiger gets the rope leash, and a second later the player tells it with the leash to go to a point "
+	                   "to the south. At once after the order, the player strokes the blue tiger.",
+	    .expected = "The order calls the fight off with no winner. The stroke stops the blue tiger again. While its body "
+	                "still plays its stance, a move, a block or a cast, its life pays one time more: the fight transcript "
+	                "has a level record for its life with why stopped_again and life_payments 1. A body that finishes "
+	                "pays nothing.",
+	    .framing = ringside,
+	    .creatures = {red(PlayerNames::PLAYER_ONE, 0.6f, -0.45f), blue(PlayerNames::PLAYER_TWO, 0.6f, -0.45f)},
+	    .commands = {Fight(Kind::StartFight, 0, 1, 1.0f), Fight(Kind::FightAuto, 0, 1, 0.2f), Leash(0, LeashType::Rope, 18.0f),
+	                 Go(Kind::LeashOrderAt, 0, {-25.0f, 0.0f}, 1.0f, false), Act(Kind::Stroke, 1, 0.0f)},
+	});
+
 	{
 		// Each tiger holds a rock as the fight starts. It lets go of the rock before its taunt.
 		auto start = Fight(Kind::StartFight, 0, 1, 1.0f);
@@ -12921,6 +12938,7 @@ void AddWorkshopScenarios(std::vector<Scenario>& all)
 
 	constexpr glm::vec2 k_LooseScaffold {-25.0f, 30.0f};
 	constexpr glm::vec2 k_BuildPlace {-5.0f, 25.0f};
+	constexpr glm::vec2 k_FoundingScaffold {-60.0f, 80.0f};
 	all.push_back({
 	    .id = "objects.scaffold_starts_building",
 	    .name = "A scaffold put down near a town starts the building that it offers",
@@ -13029,6 +13047,59 @@ void AddWorkshopScenarios(std::vector<Scenario>& all)
 	                {.type = ScaffoldInfo::Normal, .offset = k_LooseScaffold, .scale = 0.7f}},
 	    .commands = {{.kind = Kind::ScaffoldStartsSite, .delaySeconds = 1.0f, .object = 1},
 	                 {.kind = Kind::DestroyScaffoldSite, .delaySeconds = 4.0f, .object = 1}},
+	});
+
+	all.push_back({
+	    .id = "objects.scaffold_founds_town",
+	    .name = "A scaffold put down away from every town founds a new town",
+	    .facet = Facet::Objects,
+	    .description = "A Celtic town of the player's in the middle of the map, with no buildings, and a scaffold of the "
+	                   "town with the value of five scaffolds, 100 m away from the town. After one second the scaffold "
+	                   "starts the building that it offers where it lies, as when the hand puts it down.",
+	    .expected = "A building site of a Celtic village centre opens at the scaffold, with the phantom of the village "
+	                "centre. The inspector query town.list shows a new Celtic town of the player's with the id 703058. "
+	                "The new town believes in the player with the starting belief of a new town, and has no reach of "
+	                "its own until it has buildings.",
+	    .environment = {.dispenserGrid = false},
+	    .framing = {.shot = Shot::Overview,
+	                .include = {k_FoundingScaffold - glm::vec2 {20.0f}, k_FoundingScaffold + glm::vec2 {20.0f}}},
+	    .objects = {{.type = ScaffoldInfo::Normal, .offset = k_FoundingScaffold, .scale = 1.5f, .joinTown = true}},
+	    .commands = {{.kind = Kind::ScaffoldStartsSite, .delaySeconds = 1.0f, .object = 0}},
+	});
+
+	all.push_back({
+	    .id = "objects.burning_scaffold_tap",
+	    .name = "A tap on a burning scaffold breaks off a burning piece, and the fire burns the scaffolds away",
+	    .facet = Facet::Objects,
+	    .description = "A loose scaffold that is worth three scaffolds and that no workshop counts, alight as at the start "
+	                   "of a fire, with no town near. After one second the hand of the player taps the scaffold.",
+	    .expected = "The tap breaks one small scaffold off. The two parts move apart and one of four sounds plays. The "
+	                "piece burns as the old scaffold burns: the inspector shows a Fire on the two scaffolds. The fire "
+	                "takes the life of each scaffold. When a scaffold has no life, it goes and leaves nothing.",
+	    .environment = {.dispenserGrid = false},
+	    .framing = {.shot = Shot::Overview,
+	                .include = {k_FoundingScaffold - glm::vec2 {12.0f}, k_FoundingScaffold + glm::vec2 {12.0f}}},
+	    .objects = {{.type = ScaffoldInfo::Normal, .offset = k_FoundingScaffold, .scale = 1.1f, .alight = true}},
+	    .commands = {{.kind = Kind::HandTapObject, .delaySeconds = 1.0f, .object = 0}},
+	});
+
+	all.push_back({
+	    .id = "objects.scaffold_clears_ground",
+	    .name = "A scaffold that a script marked clears its ground when the hand lets it go",
+	    .facet = Facet::Objects,
+	    .description = "The town, the scaffold and the camera of objects.scaffold_starts_building. A script marked the "
+	                   "scaffold to destroy the things in its way. A bush and a ball stand where the hand puts the "
+	                   "scaffold down. The input tools/sim/hand_inputs/scaffold_build.json moves the hand: it takes the "
+	                   "scaffold, holds it still near the village centre, and puts it down.",
+	    .expected = "When the hand lets the scaffold go, the bush and the ball jump out of the way. Each starts from the "
+	                "height of the scaffold above the land and flies a short distance. A building site then opens where "
+	                "the scaffold is.",
+	    .environment = {.dispenserGrid = false},
+	    .framing = {.shot = Shot::Overview, .include = {k_LooseScaffold - glm::vec2 {10.0f}, k_BuildPlace + glm::vec2 {10.0f}}},
+	    .objects = {{.type = AbodeInfo::CelticTownCentre, .offset = {0.0f, 50.0f}},
+	                {.type = ScaffoldInfo::Normal, .offset = k_LooseScaffold, .scale = 0.7f, .clearsGround = true},
+	                {.type = TreeInfo::Bush, .offset = k_BuildPlace},
+	                {.type = MobileObjectInfo::Ball, .offset = k_BuildPlace + glm::vec2 {0.0f, -1.5f}}},
 	});
 
 	all.push_back({
@@ -13230,6 +13301,7 @@ std::vector<Scenario> Build()
 	AddPoisonScenarios(all);
 	AddWorkshopScenarios(all);
 	AddGodsRingMapScenarios(all);
+	AddSelfCheckScenarios(all);
 	AddWorshipSiteScenarios(all);
 	return all;
 }

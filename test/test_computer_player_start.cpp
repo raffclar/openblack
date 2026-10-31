@@ -503,3 +503,16 @@ TEST(ComputerPlayerStart, TheAiSeedAddsNoDrawToAStartThatDrawsNumbers)
 	EXPECT_EQ(plain.rangesAsked, seeded.rangesAsked);
 	EXPECT_EQ(plain.mostsAsked, seeded.mostsAsked);
 }
+
+TEST(ComputerPlayerStart, TheHandStartsAtTheTemple)
+{
+	const glm::vec3 temple {1774.0f, 31.0f, 3190.0f};
+	EXPECT_EQ(StartingHand(temple), temple);
+}
+
+TEST(ComputerPlayerStart, WithNoTempleTheHandStartsAtTheFixedPlace)
+{
+	const auto hand = StartingHand(std::nullopt);
+	EXPECT_EQ(hand, glm::vec3(2150.0f, 0.0f, 2620.0f));
+	EXPECT_EQ(hand, k_HandWithoutTemple);
+}

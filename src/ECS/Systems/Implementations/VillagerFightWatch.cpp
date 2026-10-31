@@ -138,7 +138,7 @@ uint32_t ecs::villager_fight_watch::InitialiseFightReaction(LivingAction& action
 	}
 	const auto& taken = registry.Get<const CreatureArena>(*arena);
 	const auto place = fight_watch::PlaceOnRing(taken.place, taken.radius, fight_watch::PlaceAngle(*index));
-	villager_home::SetupMoveTo(action, {map_coords::ToMetres(place.x), map_coords::ToMetres(place.y)},
+	villager_home::SetupMoveTo(action, glm::vec2 {map_coords::ToMetres(place.x), map_coords::ToMetres(place.y)},
 	                           VillagerStates::PerformFightReaction);
 	return 1;
 }

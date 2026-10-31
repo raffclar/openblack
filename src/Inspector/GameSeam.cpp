@@ -104,6 +104,12 @@ public:
 		                                                              : std::nullopt;
 	}
 
+	[[nodiscard]] std::optional<testbed_scenarios::checks::Report> GetScenarioChecks() const override
+	{
+		const auto* game = Game::Instance();
+		return game != nullptr ? game->GetScenarioChecks() : std::nullopt;
+	}
+
 	void AddIncomingMessages(Json& result) const override
 	{
 		auto* game = Game::Instance();

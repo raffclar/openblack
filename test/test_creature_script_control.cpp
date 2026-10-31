@@ -125,6 +125,7 @@ public:
 	StartResult StartFight(entt::entity /*creature*/, entt::entity /*opponent*/) override { return StartResult::Busy; }
 	void AbortFight(entt::entity /*creature*/) override {}
 	void CallOff(entt::entity creature) override { calledOff.push_back(creature); }
+	void CallOffForPlan(entt::entity creature) override { calledOffForPlan.push_back(creature); }
 	[[nodiscard]] bool IsFighting(entt::entity /*creature*/) const override { return true; }
 	[[nodiscard]] std::optional<entt::entity> OpponentOf(entt::entity /*creature*/) const override { return std::nullopt; }
 	bool QueueMove(entt::entity /*creature*/, const creature_fight::Move& /*move*/, bool /*replace*/) override { return false; }
@@ -155,6 +156,7 @@ public:
 	[[nodiscard]] bool IsCameraOnFight() const override { return false; }
 
 	std::vector<entt::entity> calledOff;
+	std::vector<entt::entity> calledOffForPlan;
 };
 
 class CreatureScriptControlTest: public ::testing::Test
@@ -238,12 +240,28 @@ TEST_F(CreatureScriptControlTest, AGiveUpOfTheActionCallsOffTheFightOfTheCreatur
 	mind.idle.agenda.resize(2);
 	// With no fight, only the action stops
 	minds.GiveUpAction(creature);
-	EXPECT_TRUE(fights.calledOff.empty());
+	EXPECT_TRUE(fights.calledOffForPlan.empty());
 	EXPECT_EQ(mind.idle.step, mind.idle.agenda.size());
 	registry.Assign<CreatureFighting>(creature);
 	mind.idle.step = 0;
 	minds.GiveUpAction(creature);
-	EXPECT_EQ(fights.calledOff, (std::vector<entt::entity> {creature}));
+	// The give-up also ends the fight of the body again after a fight that is over
+	EXPECT_EQ(fights.calledOffForPlan, (std::vector<entt::entity> {creature}));
+	EXPECT_TRUE(fights.calledOff.empty());
 	EXPECT_EQ(registry.Get<const CreatureMindState>(creature).idle.step, 2u);
+	Locator::creatureFightSystem::reset();
+}
+
+// The feedback of the player stops the fight of the creature, and its body ends the fight again after a fight that is
+// over
+// NOLINTNEXTLINE(cppcoreguidelines-avoid-non-const-global-variables): external macro
+TEST_F(CreatureScriptControlTest, FeedbackEndsTheFightOfTheBodyAgain)
+{
+	auto& fights = static_cast<CalledOffFights&>(Locator::creatureFightSystem::emplace<CalledOffFights>());
+	auto& registry = Locator::entitiesRegistry::value();
+	registry.Assign<CreatureFighting>(creature);
+	minds.ReceiveFeedback(creature, 0.0f);
+	EXPECT_EQ(fights.calledOffForPlan, (std::vector<entt::entity> {creature}));
+	EXPECT_TRUE(fights.calledOff.empty());
 	Locator::creatureFightSystem::reset();
 }

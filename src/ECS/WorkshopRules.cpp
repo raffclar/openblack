@@ -239,4 +239,33 @@ workshop::JoinedTown workshop::TownOfJoined(const JoinedTownFacts& facts)
 	return facts.heldValue > facts.targetValue ? JoinedTown::Held : JoinedTown::Target;
 }
 
+bool workshop::InClearingReach(float distance, float thingRadius, float reach)
+{
+	return distance - thingRadius <= reach;
+}
+
+workshop::ClearingPush workshop::PushOutOfWay(glm::vec2 centre, glm::vec2 edge)
+{
+	constexpr float k_UpSpeed = 0.2f;
+	const float dx = edge.x - centre.x;
+	const float dz = edge.y - centre.y;
+	const float x = dx + dx;
+	const float z = dz + dz;
+	// The larger part, with its sign
+	const float larger = x > z ? x : z;
+	const float xShare = x / larger;
+	const float zShare = z / larger;
+	return {.velocity = {xShare + xShare, k_UpSpeed, zShare + zShare}, .offset = {x, z}};
+}
+
+uint32_t workshop::FoundedTownId(std::span<const uint32_t> usedIds)
+{
+	auto id = k_FoundedTownId;
+	while (std::ranges::find(usedIds, id) != usedIds.end())
+	{
+		++id;
+	}
+	return id;
+}
+
 } // namespace openblack::ecs

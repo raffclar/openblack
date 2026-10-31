@@ -143,6 +143,10 @@ struct ImportedScriptThings
 /// not a heart of a temple of a player.
 [[nodiscard]] std::optional<PlayerNames> HeartPlayer(const gamesave::VanillaWorld& world, uint32_t number);
 
+/// The players whose temple stands whole in the file. A file with a site of a temple has a temple that is not whole, so
+/// this gives no player for such a file.
+[[nodiscard]] std::vector<PlayerNames> WholeTemplePlayers(const gamesave::VanillaWorld& world);
+
 /// The running scripts with the values that hold objects changed from places of the table into entities
 struct ImportedScripts
 {

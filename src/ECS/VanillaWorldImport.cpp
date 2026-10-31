@@ -44,7 +44,7 @@ constexpr uint8_t k_NoCircleInReach = 0xFF;
 constexpr std::array k_FishermanStates = {VillagerStates::FishermanArrivesAtFishing, VillagerStates::Fishing};
 constexpr std::array k_FarmerStates = {VillagerStates::FarmerArrivesAtFarm, VillagerStates::FarmerPlantsCrop,
                                        VillagerStates::FarmerDigsUpCrop};
-/// The number of floats on each side of a value that MetresOfWhole tries
+/// The number of floats on each side of a speed that WalkSpeedOf tries
 constexpr int k_MetreTries = 4;
 
 bool IsOneOf(uint8_t state, std::span<const VillagerStates> states)
@@ -459,31 +459,6 @@ std::optional<ImportedWork> WorkOf(uint8_t state, const std::vector<ImportedStat
 	return std::nullopt;
 }
 
-std::optional<float> MetresOfWhole(int32_t whole)
-{
-	const float near = map_coords::ToMetres(whole);
-	if (map_coords::ToFixed(near) == whole)
-	{
-		return near;
-	}
-	float up = near;
-	float down = near;
-	for (int i = 0; i < k_MetreTries; ++i)
-	{
-		up = std::nextafter(up, std::numeric_limits<float>::infinity());
-		if (map_coords::ToFixed(up) == whole)
-		{
-			return up;
-		}
-		down = std::nextafter(down, -std::numeric_limits<float>::infinity());
-		if (map_coords::ToFixed(down) == whole)
-		{
-			return down;
-		}
-	}
-	return std::nullopt;
-}
-
 float WalkSpeedOf(uint16_t wholeSpeed)
 {
 	float speed = static_cast<float>(wholeSpeed) * wall_hug::k_TurnsPerSecond / wall_hug::k_WholePerMetre;
@@ -609,6 +584,18 @@ ImportedTowns ReadTowns(const VanillaWorld& world)
 				imported.villagers.push_back(*villager);
 				continue;
 			}
+		}
+		else if (record.Is(VanillaType::TownDesireFlags))
+		{
+			const auto town = world.Ref(record, "flagTown");
+			const auto desire = world.Word(record, "flagType");
+			const auto level = world.Float(record, "flagLevel");
+			if (town.has_value() && desire.has_value() && level.has_value() && *desire < k_ImportedDesires)
+			{
+				imported.desireFlags.push_back({.town = *town, .desire = *desire, .level = *level});
+				continue;
+			}
+			why = "the flag of a desire has no town, no desire of the table or no level";
 		}
 		else if (record.Is(VanillaType::Player))
 		{

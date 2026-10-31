@@ -423,23 +423,24 @@ void ReadFlock(WorldReader& r)
 	r.Word();
 	r.Word();
 	r.Ref("shepherd");
-	r.Ref();
+	r.Ref("flockTown");
 	r.Ref("heart");
 	r.Refs("members");
-	r.Word();
-	r.Word();
+	r.Word("mostMembers");
+	r.Word("turnsOnLeg");
 	r.Half("domainRadius");
 	r.Half("flockDistance");
-	r.Word();
-	r.Word();
-	r.Word();
+	r.Float("flockHeight");
+	r.Word("keepsTogether");
+	r.Word("calm");
 	r.Bytes(12, "domainCentre");
-	r.Bytes(12);
+	r.Bytes(12, "madePlace");
+	// Three words and a reference that openblack does not use yet
 	r.Word();
 	r.Word();
 	r.Word();
 	r.Ref();
-	r.Word();
+	r.Word("flockScriptId");
 }
 
 void ReadMagicWood(WorldReader& r)
@@ -512,11 +513,11 @@ void ReadTree(WorldReader& r)
 void ReadTownDesireFlags(WorldReader& r)
 {
 	ReadObject(r);
-	r.Ref();
+	r.Ref("flagTown");
 	r.Word();
-	r.Word();
-	r.Word();
-	r.Word();
+	r.Float("flagDesire");
+	r.Word("flagType");
+	r.Float("flagLevel");
 }
 
 void ReadStandardBuildingSite(WorldReader& r)

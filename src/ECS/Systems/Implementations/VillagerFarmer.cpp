@@ -86,6 +86,11 @@ void MoveTo(LivingAction& action, glm::vec2 goal, VillagerStates final)
 	villager_home::SetupMoveTo(action, goal, final);
 }
 
+void MoveTo(LivingAction& action, glm::ivec2 goal, VillagerStates final)
+{
+	villager_home::SetupMoveTo(action, goal, final);
+}
+
 /// Walks to the field along its footpaths where they lead its way
 void MoveOnPathsTo(LivingAction& action, entt::entity field, glm::vec2 goal, VillagerStates final)
 {
@@ -101,7 +106,7 @@ entt::entity FieldOf(entt::entity villager)
 }
 
 /// A fresh random spot in the field to work at next
-glm::vec2 RandomSpot(entt::entity field)
+glm::ivec2 RandomSpot(entt::entity field)
 {
 	auto& random = Locator::gameRandom::value();
 	const float drawX = random.GameFloatRand(2.0f * work::k_FieldSpotReach);
@@ -111,13 +116,13 @@ glm::vec2 RandomSpot(entt::entity field)
 
 void PickNewSpot(entt::entity villager, entt::entity field)
 {
-	Entities().AssignOrReplace<FieldWorkSpot>(villager, FieldWorkSpot {.position = RandomSpot(field)});
+	Entities().AssignOrReplace<FieldWorkSpot>(villager, FieldWorkSpot {.place = RandomSpot(field)});
 }
 
-glm::vec2 SpotOf(entt::entity villager)
+glm::ivec2 SpotOf(entt::entity villager)
 {
 	const auto* spot = Entities().TryGet<const FieldWorkSpot>(villager);
-	return spot != nullptr ? spot->position : GroundOf(villager);
+	return spot != nullptr ? spot->place : wall_hug::ToWhole(GroundOf(villager));
 }
 
 /// Whether the villager stands at its spot: nearer than it walks in a step
@@ -125,7 +130,9 @@ bool AtSpot(entt::entity villager)
 {
 	const auto* wallHug = Entities().TryGet<const WallHug>(villager);
 	const auto speed = static_cast<float>(wall_hug::WholeSpeed(wallHug != nullptr ? wallHug->speed : 0.0f));
-	return work::AreWeThere(map_coords::FromMetres(GroundOf(villager)), map_coords::FromMetres(SpotOf(villager)), speed, 0.0f);
+	const auto spot = SpotOf(villager);
+	return work::AreWeThere(map_coords::FromMetres(GroundOf(villager)), {.x = spot.x, .z = spot.y, .altitude = 0.0f}, speed,
+	                        0.0f);
 }
 
 bool IsFarmingState(VillagerStates state)

@@ -11,10 +11,15 @@
 
 #include <cstdint>
 
+#include <array>
 #include <optional>
+#include <span>
 #include <string>
 #include <vector>
 
+#include <glm/vec2.hpp>
+
+#include "Animals/Zoomer.h"
 #include "CreatureRecord.h"
 #include "Enums.h"
 
@@ -241,6 +246,14 @@ struct ImportedAnimal
 	/// The numbers of its flock and of the town that it belongs to in the file, 0 for none
 	uint32_t flock {0};
 	uint32_t town {0};
+	/// Its needs to eat, to sleep and to breed
+	int16_t hunger {0};
+	int16_t sleep {0};
+	int16_t breed {0};
+	/// The cell (x, z) where it sleeps, nothing for no cell
+	std::optional<glm::ivec2> sleepCell;
+	/// Its tilt into a turn
+	animals::Zoomer::State bank {};
 };
 
 /// A flock of the file
@@ -259,6 +272,18 @@ struct ImportedFlock
 	uint32_t town {0};
 	/// The numbers of its members in the order of its line. The last is its leader.
 	std::vector<uint32_t> members;
+	/// The most members that it had
+	uint32_t mostMembers {0};
+	/// The turns that its leader kept to its present leg
+	uint32_t turnsOnLeg {0};
+	/// The height above the land that its leader picks its legs about, 0 for the height of its kind
+	float height {0.0f};
+	/// Its animals only keep together and wander, as when a villager leads them to the store
+	bool keepsTogether {false};
+	/// How calm it is, as a script set it
+	int32_t calm {0};
+	/// The number that a script made it with, nothing for 0. The game gives 0 to a flock that it makes for one animal.
+	std::optional<int32_t> scriptId;
 };
 
 struct ImportedAnimals
@@ -272,6 +297,16 @@ struct ImportedAnimals
 /// The animals and the flocks of the world. An animal without a row of the table of the animals goes into the skipped
 /// list.
 [[nodiscard]] ImportedAnimals ReadAnimals(const gamesave::VanillaWorld& world);
+
+/// The number of bytes of a glide in the file
+inline constexpr size_t k_GlideBytes = 48;
+
+/// A glide of the file: its value, its target, the target's speed, its speed, a value that nothing reads, the time that
+/// went by, the time of the glide, its start and the speed at the start, then the three factors of its curve
+[[nodiscard]] animals::Zoomer::State GlideOf(std::span<const uint8_t, k_GlideBytes> bytes);
+
+/// A cell (x, z) of the file, nothing when both halves are 0
+[[nodiscard]] std::optional<glm::ivec2> CellOf(std::span<const uint8_t, 4> bytes);
 
 /// The clock of day and night of a file
 struct ImportedDayCycle

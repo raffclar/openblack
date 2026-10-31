@@ -259,4 +259,24 @@ void TestbedGameStage::RequestQuit()
 	}
 }
 
+void TestbedGameStage::ReportChecks(checks::Report report, bool quit)
+{
+	auto* game = Game::Instance();
+	if (game == nullptr)
+	{
+		return;
+	}
+	if (quit)
+	{
+		// The lines go to the console too, where a tool that runs the game reads them
+		for (const auto& line : report.lines)
+		{
+			fmt::print("{}\n", line);
+		}
+		game->SetExitCode(checks::ExitCodeOf(report.verdict));
+		game->RequestQuit();
+	}
+	game->SetScenarioChecks(std::move(report));
+}
+
 } // namespace openblack::testbed_scenarios

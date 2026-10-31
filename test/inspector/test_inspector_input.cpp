@@ -9,6 +9,7 @@
 
 #include <cstdint>
 
+#include <algorithm>
 #include <memory>
 #include <optional>
 #include <string>
@@ -67,6 +68,10 @@ public:
 	[[nodiscard]] std::vector<std::string> ActionNames() const override { return {"Zoom In"}; }
 	[[nodiscard]] std::vector<std::string> GestureNames() const override { return {"Spiral"}; }
 	[[nodiscard]] Json State() const override { return {{"pointer", {pointer.x, pointer.y}}, {"buttons", buttons}}; }
+	[[nodiscard]] std::string WindowTakingButton(uint8_t button) const override
+	{
+		return button == 1 ? windowTakingLeft : std::string {};
+	}
 	void SetLockMode(std::string_view mode) override { lockMode = mode; }
 	[[nodiscard]] Json LockState() const override { return {{"mode", lockMode}}; }
 
@@ -83,6 +88,8 @@ public:
 	uint32_t buttons {0};
 	uint64_t clicks {0};
 	std::string lockMode {"auto"};
+	/// The debug window, if one is open, that takes the presses of the left button for itself
+	std::string windowTakingLeft;
 };
 
 /// The inspector with the input provider, run frame by frame as the game serves it: requests, then the frame's input
@@ -186,6 +193,48 @@ TEST(InspectorInput, ADoubleClickPressesASecondTimeCountingTwoClicks)
 	EXPECT_EQ(rig.target.buttons, 0u);
 	EXPECT_NE(rig.Refused(R"({"query": "input.button", "params": {"action": "triple_click"}})").find("double_click"),
 	          std::string::npos);
+}
+
+// A debug window that takes the left button's presses (the editor with its select tool) keeps them from the game, which
+// a click answering a question box or a double click would then never be. The inspector says so instead of sending
+// them, and sends them when they are meant for the window.
+TEST(InspectorInput, APressADebugWindowWouldTakeIsRefusedByName)
+{
+	Rig rig;
+	rig.target.windowTakingLeft = "Editor";
+	for (const auto* action : {"press", "click", "double_click"})
+	{
+		const auto why = rig.Refused(std::string(R"({"query": "input.button", "params": {"action": ")") + action + R"("}})");
+		EXPECT_NE(why.find("Editor"), std::string::npos) << action;
+		EXPECT_NE(why.find("gui.close"), std::string::npos) << action;
+	}
+	EXPECT_NE(rig.Refused(R"({"query": "input.drag", "params": {"to": {"screen": [40, 0]}}})").find("Editor"),
+	          std::string::npos);
+	EXPECT_NE(
+	    rig.Refused(R"({"query": "input.path", "params": {"points": [[1, 1], [2, 2]], "button": "left"}})").find("Editor"),
+	    std::string::npos);
+	rig.Frame();
+	EXPECT_TRUE(rig.target.made.empty());
+
+	// Letting go, other buttons and a path with no button never go to the window's press
+	rig.Ask(R"({"query": "input.button", "params": {"action": "release"}})");
+	rig.Ask(R"({"query": "input.button", "params": {"button": "right"}})");
+	rig.Ask(R"({"query": "input.path", "params": {"points": [[1, 1], [2, 2]]}})");
+
+	// Meant for the window
+	const auto meant = rig.Ask(R"({"query": "input.button", "params": {"action": "press", "to_window": true}})");
+	EXPECT_EQ(meant["action"], "press");
+
+	// With no window taking the press, the click reaches the game
+	Rig free;
+	free.Ask(R"({"query": "input.pointer", "params": {"screen": [10, 10]}})");
+	free.Ask(R"({"query": "input.button", "params": {"action": "click"}})");
+	for (int i = 0; i < 6; ++i)
+	{
+		free.Frame();
+	}
+	EXPECT_TRUE(std::ranges::any_of(free.target.made,
+	                                [](const auto& made) { return made.event.kind == InputEvent::Kind::ButtonDown; }));
 }
 
 // The left button never picks things up, which the answer says; the right (Action) button does, with no note

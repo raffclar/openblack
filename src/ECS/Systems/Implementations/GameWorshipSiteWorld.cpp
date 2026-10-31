@@ -23,6 +23,7 @@
 
 #include "3D/L3DMesh.h"
 #include "3D/LandIslandInterface.h"
+#include "3D/TempleExteriorMorph.h"
 #include "ECS/Archetypes/PotArchetype.h"
 #include "ECS/Archetypes/Utils.h"
 #include "ECS/Components/Mesh.h"
@@ -146,7 +147,7 @@ entt::id_type GameWorshipSiteWorld::SiteMesh(entt::entity temple)
 	{
 		return k_SiteMesh.value();
 	}
-	const auto name = fmt::format("temple/worship/{}", templeMesh->id);
+	const auto name = TempleExteriorMorph::SiteMeshName(templeMesh->id);
 	const auto id = entt::hashed_string(name.c_str()).value();
 	if (!meshes.Contains(id))
 	{

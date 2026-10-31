@@ -74,4 +74,17 @@ Set each look's `status` to `approved` or `rejected` and `answer` to the user's 
 - rejected: send the user's words to the lane (or queue a fix lane) and keep the look `rejected` until a new capture
   replaces it (then back to `waiting`).
 
+## Scenarios that check themselves
+
+A testbed scenario can state its own outcome as `checks` (see `src/Debug/TestbedScenarioChecks.h`). Use them when a
+scenario shows a thing that you can also measure, such as a creature that gets to a point. They do not replace the look.
+
+- Command line: `openblack --scenario ID --scenario-check --background -n 4000` writes one line for each check and the
+  verdict, then ends. The exit code is 0 when all checks pass, 1 when one fails, and 2 when the scenario has no checks.
+- Inspector: `game.scenario_checks` (tool `game_scenario_checks`) gives the verdict of the last scenario while the game
+  runs: `passed`, `failed` or `waiting`.
+- The merge train and the lanes can run the scenarios that have checks, and fail the car on exit code 1.
+- A scenario can load a story land (`Land::Story` with the land's script), and `tools/sim/recorded_scenario.py` records
+  a play-through and checks it again later by its hashes.
+
 Related: openblack-deviations skill (deviation sign-off), test-triage (motion check tier).

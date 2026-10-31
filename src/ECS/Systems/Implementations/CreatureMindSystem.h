@@ -192,9 +192,11 @@ private:
 	void StepSwap(entt::entity creature, const creature_mind::Commands& commands);
 	/// Remembers what the idle mind has started, for feedback to be credited to, and finishes plans that are done
 	void FollowAgenda(entt::entity creature, components::CreatureMindState& mind);
-	/// Carries out a plan in place of what the creature was doing; returns whether it could
+	/// Carries out a plan in place of what the creature was doing; returns whether it could. When fightBodyEndsAgain is
+	/// true, the stop for the plan ends the fight of the body again after a fight that is over (see
+	/// CreatureFightSystemInterface::CallOffForPlan). The best plan that the creature chooses and a copied deed do this.
 	bool Adopt(entt::entity creature, components::CreatureMindState& mind, const creature_planner::Plan& plan,
-	           const creature_plan_actions::Situation& situation);
+	           const creature_plan_actions::Situation& situation, bool fightBodyEndsAgain);
 	/// Gives up the plan carried out, if any
 	static void Abandon(components::CreatureMindState& mind);
 	/// A joint action: the asker asks another creature to be its partner, and the two become partners when it agrees;
@@ -396,8 +398,12 @@ private:
 	/// Gives the creature a plan for its fight with the other creature, unless a script controls the creature
 	void FightWith(entt::entity creature, entt::entity other, const ForcedPlan& plan);
 	/// A new plan stops the fight of the creature out of its duel. Before the duel the fight stops for both creatures, with
-	/// no winner. After the duel the creature and its partner stop with no response. A fight in its duel continues.
-	static void EndFightForPlan(entt::entity creature);
+	/// no winner. After the duel the creature and its partner stop with no response. A fight in its duel continues. When
+	/// fightBodyEndsAgain is true, the stop ends the fight of the body again after a fight that is over.
+	static void EndFightForPlan(entt::entity creature, bool fightBodyEndsAgain = false);
+	/// The plan stops the fight of the creature: a call-off. When fightBodyEndsAgain is true, the stop also ends the fight
+	/// of the body again after a fight that is over. The fights must be in the locator.
+	static void StopFightForPlan(entt::entity creature, bool fightBodyEndsAgain);
 	/// The whole thing that a desire is about when the leash shows the creature a thing: the whole thing that the shown
 	/// thing is part of, when the desire can be about it
 	[[nodiscard]] std::optional<ChosenActivity> ShownActivity(entt::entity creature, components::CreatureMindState& mind,

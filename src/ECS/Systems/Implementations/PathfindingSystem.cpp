@@ -18,6 +18,7 @@
 #include <array>
 #include <limits>
 #include <optional>
+#include <unordered_map>
 #include <vector>
 
 #include <LNDFile.h>
@@ -76,10 +77,40 @@ namespace
 constexpr int8_t k_TurnsToReaimAfterHugging = 16;
 constexpr int8_t k_TurnsToReaimStepping = 127;
 
+/// The circles that may block a walker, looked for in the cell of a map position as the game comes across them: the
+/// circles of the things in it, newest first, then a circle in the middle of each of that cell and the eight round it
+/// that is water or off the land
+struct Blockers
+{
+	std::vector<wall_hug::BlockingCircle> circles;
+	std::vector<entt::entity> entities;
+};
+
+/// What a trial walk finds at each of its turns. Only the stand-in moves while it walks, so the things on the map, their
+/// circles and the water do not change. Thus the trial keeps what it finds, and the next turn uses it again.
+struct TrialFinds
+{
+	/// The blockers of each map cell, by its two numbers
+	std::unordered_map<uint64_t, Blockers> cells;
+	/// The circles of each thing
+	std::unordered_map<entt::entity, std::vector<wall_hug::BlockingCircle>> things;
+};
+
+/// The circles of a thing, which the trial keeps
+const std::vector<wall_hug::BlockingCircle>& KeptCircles(const ecs::Registry& registry, entt::entity thing, TrialFinds& finds)
+{
+	const auto [kept, added] = finds.things.try_emplace(thing);
+	if (added)
+	{
+		kept->second = thing_circles::CirclesOf(registry, thing);
+	}
+	return kept->second;
+}
+
 /// Whether the circle a walker heads for or hugs is still there: water and the land's edge always are; a thing's is
 /// while the thing stands on the map where it stood, with that circle (a thing that is picked up or moved has a new
 /// shape when it is put down)
-bool CircleStillThere(const ecs::Registry& registry, const WallHugObjectReference& reference)
+bool CircleStillThere(const ecs::Registry& registry, const WallHugObjectReference& reference, TrialFinds* finds)
 {
 	if (reference.entity == entt::null)
 	{
@@ -94,10 +125,14 @@ bool CircleStillThere(const ecs::Registry& registry, const WallHugObjectReferenc
 	{
 		return false;
 	}
-	const auto circles = thing_circles::CirclesOf(registry, reference.entity);
-	return std::ranges::any_of(circles, [&reference](const wall_hug::BlockingCircle& circle) {
+	const auto isHugged = [&reference](const wall_hug::BlockingCircle& circle) {
 		return circle.centre == reference.centre && circle.radius == reference.radius;
-	});
+	};
+	if (finds == nullptr)
+	{
+		return std::ranges::any_of(thing_circles::CirclesOf(registry, reference.entity), isHugged);
+	}
+	return std::ranges::any_of(KeptCircles(registry, reference.entity, *finds), isHugged);
 }
 
 /// Whether a walker may go into a map cell: on the map, on land and not in water
@@ -115,15 +150,6 @@ bool ValidForTravel(int32_t x, int32_t z)
 	const auto* cell = Locator::terrainSystem::value().FindCell({static_cast<uint16_t>(x), static_cast<uint16_t>(z)});
 	return cell != nullptr && cell->properties.hasWater == 0;
 }
-
-/// The circles that may block a walker, looked for in the cell of a map position as the game comes across them: the
-/// circles of the things in it, newest first, then a circle in the middle of each of that cell and the eight round it
-/// that is water or off the land
-struct Blockers
-{
-	std::vector<wall_hug::BlockingCircle> circles;
-	std::vector<entt::entity> entities;
-};
 
 Blockers BlockersAround(const ecs::Registry& registry, glm::ivec2 coords)
 {
@@ -156,6 +182,24 @@ Blockers BlockersAround(const ecs::Registry& registry, glm::ivec2 coords)
 		}
 	}
 	return blockers;
+}
+
+/// The blockers round a map position. A trial keeps those of each cell. With no trial, they go into `found`.
+const Blockers& BlockersAround(const ecs::Registry& registry, glm::ivec2 coords, TrialFinds* finds, Blockers& found)
+{
+	if (finds == nullptr)
+	{
+		found = BlockersAround(registry, coords);
+		return found;
+	}
+	const glm::ivec2 cell {map_coords::CellOf(coords.x), map_coords::CellOf(coords.y)};
+	const auto key = (static_cast<uint64_t>(static_cast<uint32_t>(cell.x)) << 32U) | static_cast<uint32_t>(cell.y);
+	const auto [kept, added] = finds->cells.try_emplace(key);
+	if (added)
+	{
+		kept->second = BlockersAround(registry, coords);
+	}
+	return kept->second;
 }
 
 /// Every circle that may stand round a map position: those of the things in its cell and the eight round it, and the
@@ -197,10 +241,12 @@ std::vector<wall_hug::BlockingCircle> CirclesNear(const ecs::Registry& registry,
 
 /// A walker heading straight on looks along its step for the nearest circle in the cell of a map position (see
 /// WallHugRules.h), and heads for it, or for nothing in reach
-void ScanLine(ecs::Registry& registry, entt::entity entity, glm::ivec2 position, glm::ivec2 step, glm::ivec2 coords)
+void ScanLine(ecs::Registry& registry, entt::entity entity, glm::ivec2 position, glm::ivec2 step, glm::ivec2 coords,
+              TrialFinds* finds)
 {
 	registry.Remove<WallHugObjectReference>(entity);
-	const auto blockers = BlockersAround(registry, coords);
+	Blockers found;
+	const auto& blockers = BlockersAround(registry, coords, finds, found);
 	const auto scan = wall_hug::ScanLine(position, step, blockers.circles);
 	if (!scan.circle.has_value())
 	{
@@ -229,6 +275,8 @@ struct Walker
 	bool needsLookahead {false};
 	/// A stand-in on a trial walk, never seen: it isn't put on the ground
 	bool standIn {false};
+	/// What the stand-in's trial walk found, which it uses again
+	TrialFinds* finds {nullptr};
 	/// For a walker that turns as an animal does: the most it turns towards its goal in one aim
 	std::optional<uint16_t> turnAngle;
 };
@@ -319,7 +367,8 @@ void StartFinalStep(Walker& walker)
 /// it stands, unless it is about to step into another cell
 void ScanAhead(ecs::Registry& registry, Walker& walker, std::optional<glm::ivec2> coords = std::nullopt)
 {
-	ScanLine(registry, walker.entity, walker.wallHug.position, walker.wallHug.step, coords.value_or(walker.wallHug.position));
+	ScanLine(registry, walker.entity, walker.wallHug.position, walker.wallHug.step, coords.value_or(walker.wallHug.position),
+	         walker.finds);
 }
 
 /// A walker going round its circle looks along it for what blocks it, from the cell of a map position (see
@@ -327,7 +376,8 @@ void ScanAhead(ecs::Registry& registry, Walker& walker, std::optional<glm::ivec2
 /// or stop hugging and face its goal to step straight to it
 void SweepAroundCircle(ecs::Registry& registry, Walker& walker, WallHugObjectReference& reference, glm::ivec2 coords)
 {
-	const auto blockers = BlockersAround(registry, coords);
+	Blockers found;
+	const auto& blockers = BlockersAround(registry, coords, walker.finds, found);
 	const auto sweep = wall_hug::SweepCircle({
 	    .position = walker.wallHug.position,
 	    .goal = walker.goal,
@@ -376,10 +426,10 @@ void SweepAroundCircle(ecs::Registry& registry, Walker& walker, WallHugObjectRef
 }
 
 /// The circle a walker hugs, if it is still there
-WallHugObjectReference* HuggedCircle(ecs::Registry& registry, entt::entity entity)
+WallHugObjectReference* HuggedCircle(ecs::Registry& registry, entt::entity entity, TrialFinds* finds)
 {
 	auto* reference = registry.TryGet<WallHugObjectReference>(entity);
-	return reference != nullptr && CircleStillThere(registry, *reference) ? reference : nullptr;
+	return reference != nullptr && CircleStillThere(registry, *reference, finds) ? reference : nullptr;
 }
 
 /// A walker whose circle has gone heads for its goal again, round the same way, and stands still this turn
@@ -409,7 +459,7 @@ void WalkStraight(ecs::Registry& registry, Walker& walker)
 	}
 	else if (auto* reference = registry.TryGet<WallHugObjectReference>(walker.entity);
 	         reference != nullptr && reference->stepsAway != wall_hug::k_NoObstacleInReach &&
-	         !CircleStillThere(registry, *reference))
+	         !CircleStillThere(registry, *reference, walker.finds))
 	{
 		// The circle it was heading for went away
 		ScanAhead(registry, walker);
@@ -458,7 +508,7 @@ void WalkStraight(ecs::Registry& registry, Walker& walker)
 /// starting round it, with the goal ahead, facing straight out from the circle's middle
 void WalkRound(ecs::Registry& registry, Walker& walker)
 {
-	auto* reference = HuggedCircle(registry, walker.entity);
+	auto* reference = HuggedCircle(registry, walker.entity, walker.finds);
 	if (reference == nullptr)
 	{
 		LoseCircle(registry, walker);
@@ -505,7 +555,7 @@ void WalkRound(ecs::Registry& registry, Walker& walker)
 /// Leaving a circle: it walks straight out until outside it, then heads for its goal again
 void WalkOut(ecs::Registry& registry, Walker& walker)
 {
-	const auto* reference = HuggedCircle(registry, walker.entity);
+	const auto* reference = HuggedCircle(registry, walker.entity, walker.finds);
 	if (reference == nullptr)
 	{
 		LoseCircle(registry, walker);
@@ -735,7 +785,7 @@ void TurnRound(ecs::Registry& registry, Walker& walker)
 	wallHug.gameAngle = turned.gameAngle;
 	if (walker.state == MoveState::Orbit)
 	{
-		if (auto* reference = HuggedCircle(registry, walker.entity); reference != nullptr)
+		if (auto* reference = HuggedCircle(registry, walker.entity, walker.finds); reference != nullptr)
 		{
 			SweepAroundCircle(registry, walker, *reference, wallHug.position);
 		}
@@ -765,6 +815,7 @@ wall_hug::TrialWalk TrialWalk(ecs::Registry& registry, const Walker& walker, boo
 	});
 
 	auto& wallHug = registry.Get<WallHug>(standIn);
+	TrialFinds finds;
 	wallHug.goalPlace = walker.wallHug.goalPlace;
 	wallHug.step = walker.wallHug.step;
 	wallHug.stepAltitude = walker.wallHug.stepAltitude;
@@ -783,7 +834,8 @@ wall_hug::TrialWalk TrialWalk(ecs::Registry& registry, const Walker& walker, boo
 	              .clockwise = walker.clockwise,
 	              .speed = villager_speed::FinalSpeed(walker.speed * wall_hug::k_TrialSpeedUp, pace),
 	              .goal = walker.goal,
-	              .standIn = true};
+	              .standIn = true,
+	              .finds = &finds};
 
 	wall_hug::TrialWalk result {.turnsToSpare = 0, .distanceSq = std::numeric_limits<float>::max()};
 	if (turnedRound)
