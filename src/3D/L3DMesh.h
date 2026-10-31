@@ -120,6 +120,10 @@ public:
 	bool LoadWithSkinsOf(const l3d::L3DFile& l3d, const L3DMesh& skinSource) noexcept;
 	/// A dynamic mesh takes its vertices afresh from a file of the same shape
 	void UpdateVertices(const l3d::L3DFile& l3d) noexcept;
+	/// Each submesh gets three corners of its own for each face, for the snow of a tree or a fence
+	/// (L3DSubMesh::SplitFacesForSnow). Only the first call changes the mesh. Call it from the main thread before the frame
+	/// is drawn.
+	void SplitFacesForSnow();
 	/// A dynamic mesh's skin takes its texels afresh
 	void UpdateSkin(SkinId skin, std::span<const uint16_t> texels) noexcept;
 	[[nodiscard]] bool IsDynamic() const { return _dynamic; }
@@ -227,6 +231,7 @@ private:
 	l3d::L3DMeshFlags _flags;
 	std::string _debugName;
 	bool _dynamic;
+	bool _facesSplit {false};
 	UploadMode _upload;
 
 	std::unordered_map<SkinId, std::unique_ptr<graphics::Texture2D>> _skins;

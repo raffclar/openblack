@@ -1439,8 +1439,9 @@ void Renderer::DrawSubMesh(const graphics::L3DMesh& mesh, const graphics::L3DSub
 				// the normal of the posed vertex.
 				// z: 1 for the faces of a broken shape. Their snow is read by where each corner is in the world and by
 				// the normal of its face, and shows from a different alpha.
+				// w: 1 for a fence, which reads the snow by each face
 				const glm::vec4 u_snow {snowed ? 1.0f : 0.0f, subMesh.GetFlags().hasBones ? 1.0f : 0.0f,
-				                        subMesh.IsMade() ? 1.0f : 0.0f, 0.0f};
+				                        subMesh.IsMade() ? 1.0f : 0.0f, desc.snowByFace ? 1.0f : 0.0f};
 				setUniform(MeshUniform::Snow, &u_snow);
 				if (snowed)
 				{
@@ -6811,6 +6812,7 @@ void Renderer::DrawPass(const DrawSceneDesc& desc) const
 				}
 				submitDesc.landLightScale = meshId == ecs::components::Hand::k_MeshId ? 1.5f : 1.0f;
 				submitDesc.snow = !inTemple && meshId != ecs::components::Hand::k_MeshId;
+				submitDesc.snowByFace = placers.snowByFace;
 				// The villagers a script draws in high detail take no moving shadows, nor does the hand
 				const bool highDetail =
 				    std::ranges::any_of(renderCtx.highDetailDraws, [meshId](const auto& draw) { return draw.mesh == meshId; });

@@ -302,6 +302,13 @@ void main()
 			// not change it.
 			vec3 snowNormal = u_snow.y > 0.5f ? normal : normalize(TO_WORLD(vec4(normal, 0.0f)).xyz);
 			v_snow = vec4(SnowUv(position, snowNormal), snowLevel / 255.0f, 0.0f);
+			// A fence reads the snow by each face: by the texture coordinates of the corner and the up part of the
+			// normal of its face in the file. A submesh with bones that reads the snow so shows none.
+			if (u_snow.w > 0.5f)
+			{
+				v_snow.xy = SnowFaceUv(SnowFaceUp(a_indices), a_texcoord0);
+				v_snow.z = u_snow.y > 0.5f ? 0.0f : v_snow.z;
+			}
 			v_snowLight = ModelLightColour(SnowColour(colour), ModelLightFactor(normal, localLight));
 			// The faces of a broken shape read the snow by where the corner is in the world and by the normal of its
 			// face. A back corner reads by its front corner, but from the first column of the snow texture.
