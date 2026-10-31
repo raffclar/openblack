@@ -131,6 +131,7 @@
 #include "ECS/Components/Poisoned.h"
 #include "ECS/Components/Pot.h"
 #include "ECS/Components/PrayerPower.h"
+#include "ECS/Components/Scaffold.h"
 #include "ECS/Components/ScriptControl.h"
 #include "ECS/Components/Spell.h"
 #include "ECS/Components/SpellDispenser.h"
@@ -2425,6 +2426,28 @@ std::string Runner::GivePlayerCommand(const Command& command)
 		progress->built = 1.0f;
 		return "all of it built, not finished";
 	}
+	case Kind::ScaffoldStartsSite:
+	{
+		const auto object = ObjectAt(command.object);
+		if (!object.has_value() || !Locator::workshopSystem::has_value())
+		{
+			return "no scaffold";
+		}
+		return Locator::workshopSystem::value().ForceBuild(*object, PlayerNames::PLAYER_ONE) ? "the site starts"
+		                                                                                     : "no building on offer";
+	}
+	case Kind::DestroyScaffoldSite:
+	{
+		const auto object = ObjectAt(command.object);
+		const auto* scaffold =
+		    object.has_value() ? Locator::entitiesRegistry::value().TryGet<const ecs::components::Scaffold>(*object) : nullptr;
+		if (scaffold == nullptr || !Locator::entitiesRegistry::value().Valid(scaffold->site))
+		{
+			return "the scaffold is on no site";
+		}
+		ecs::world_objects::DestroyedByEffect(scaffold->site, {.killer = std::nullopt, .weight = 0.0f});
+		return "the building of the site is destroyed";
+	}
 	case Kind::RemoveObject:
 	{
 		const auto object = ObjectAt(command.object);
@@ -3333,6 +3356,7 @@ void Runner::Give(const Command& command)
 	    command.kind == Kind::BuildWorshipSites || command.kind == Kind::PressPlainKey || command.kind == Kind::PlainKeyDown ||
 	    command.kind == Kind::PlainKeyRepeat || command.kind == Kind::PlainKeyUp ||
 	    command.kind == Kind::ChargeIconWithSeedHeld || command.kind == Kind::FinishBuilding ||
+	    command.kind == Kind::ScaffoldStartsSite || command.kind == Kind::DestroyScaffoldSite ||
 	    command.kind == Kind::FillBuiltAmount || command.kind == Kind::PauseGame || command.kind == Kind::SetGameSpeed ||
 	    command.kind == Kind::RemoveTeleportStone || command.kind == Kind::MakeDance || command.kind == Kind::OtherGodHand ||
 	    command.kind == Kind::OwnGod || command.kind == Kind::BringCreature || command.kind == Kind::ComputerPersonality ||
@@ -4212,6 +4236,8 @@ void Runner::Give(const Command& command)
 	case Kind::RemoveObject:
 	case Kind::FinishBuilding:
 	case Kind::FillBuiltAmount:
+	case Kind::ScaffoldStartsSite:
+	case Kind::DestroyScaffoldSite:
 	case Kind::PauseGame:
 	case Kind::SetGameSpeed:
 	case Kind::RemoveTeleportStone:

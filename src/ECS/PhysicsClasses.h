@@ -106,6 +106,8 @@ struct ClassInputs
 	bool immovable {false};
 	/// A scaffold that stands in its place of a workshop's yard: it never becomes a physics object
 	bool scaffoldInYard {false};
+	/// A scaffold that stands on a building site: it never becomes a physics object
+	bool scaffoldOnSite {false};
 };
 
 /// The kind of an object, from its components and its table row

@@ -26,6 +26,7 @@
 #include "ECS/Components/Mesh.h"
 #include "ECS/Components/Mobile.h"
 #include "ECS/Components/Pot.h"
+#include "ECS/Components/Scaffold.h"
 #include "ECS/Components/Temple.h"
 #include "ECS/Components/Tree.h"
 #include "ECS/Components/Villager.h"
@@ -426,6 +427,18 @@ TEST_F(PhysicsClassesTest, ABuildingPieceHasTheMaterialOfPieces)
 	EXPECT_EQ(facts.row, MaterialRow::Fragment);
 	EXPECT_FALSE(facts.fixedMass.has_value());
 	EXPECT_TRUE(facts.dynamic);
+}
+
+TEST_F(PhysicsClassesTest, AScaffoldInAYardOrOnASiteNeverFlies)
+{
+	const auto scaffold = _registry.Create();
+	_registry.Assign<Scaffold>(scaffold);
+	const auto loose = Classify(scaffold);
+	EXPECT_EQ(loose.row, MaterialRow::MovableScaffold);
+	EXPECT_TRUE(loose.canBecomePhysicsObject);
+	EXPECT_TRUE(loose.interacts);
+	EXPECT_FALSE(Classify(scaffold, {.scaffoldInYard = true}).canBecomePhysicsObject);
+	EXPECT_FALSE(Classify(scaffold, {.scaffoldOnSite = true}).canBecomePhysicsObject);
 }
 
 TEST(PhysicsClasses, WeightGrowsWithTheCubeOfTheScaleAndNeverReachesNothing)

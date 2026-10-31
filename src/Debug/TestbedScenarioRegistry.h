@@ -1005,6 +1005,12 @@ struct Command
 		/// The scenario's object, a building going up, gets all of its built amount, but it is not finished. The
 		/// inspector makes the same state when it sets the built amount. Needs no creature.
 		FillBuiltAmount,
+		/// The scenario's object, a scaffold, starts the building that its town offers where it lies. The building does
+		/// not have to fit. Needs no creature.
+		ScaffoldStartsSite,
+		/// An effect destroys the building on whose site the scenario's object, a scaffold, stands, as when a fire takes
+		/// the last of the life of the building. Needs no creature.
+		DestroyScaffoldSite,
 		/// A script native (script, by its name) runs at once with its arguments in order (scriptArguments). A position
 		/// is three numbers. Needs no creature.
 		CallNative,

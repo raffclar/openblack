@@ -92,6 +92,7 @@
 #include "ECS/Systems/TownSystemInterface.h"
 #include "ECS/Systems/WeatherSystemInterface.h"
 #include "ECS/Systems/WonderSystemInterface.h"
+#include "ECS/Systems/WorkshopSystemInterface.h"
 #include "ECS/TempleConstruction.h"
 #include "ECS/ThingModel.h"
 #include "ECS/TownAggression.h"
@@ -878,7 +879,15 @@ void world_objects::DestroyedByEffect(entt::entity object, const EffectDeath& de
 			KeepForScript(object);
 			return;
 		}
+		// The scaffold of an unfinished building starts a new site there at once, after the building goes
+		const auto scaffold =
+		    Locator::workshopSystem::has_value() ? Locator::workshopSystem::value().LeaveDestroyedSite(object) : entt::null;
+		const auto player = PlayerOf(object).value_or(PlayerNames::NEUTRAL);
 		Remove(object);
+		if (scaffold != entt::null)
+		{
+			Locator::workshopSystem::value().ForceBuild(scaffold, player);
+		}
 		return;
 	}
 	if (registry.AllOf<Villager>(object))

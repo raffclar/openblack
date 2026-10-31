@@ -59,8 +59,8 @@ bool OpenSiteForTown(entt::entity building, entt::entity town);
 /// desire
 void OpenWorshipSite(entt::entity site, entt::entity town, float desire);
 
-/// A temple's site makes again those of its six piles of wood that have gone; any other site makes its one pile if it has
-/// none
+/// A temple's site makes again those of its six piles of wood that have gone; a workshop's site uses the wood pile of the
+/// workshop; any other site makes its one pile if it has none
 void MakeSitePiles(entt::entity building, components::BuildingSite& site);
 
 /// Every site at a building goes, the one taking brought wood first: its builders are let go of it, and of its piles of
