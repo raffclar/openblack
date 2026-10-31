@@ -16,6 +16,8 @@
 #include <glm/mat3x3.hpp>
 #include <glm/vec3.hpp>
 #include <gtest/gtest.h>
+#include <spdlog/sinks/null_sink.h>
+#include <spdlog/spdlog.h>
 
 #include "Creature/CreatureDeeds.h"
 #include "Creature/CreatureFace.h"
@@ -87,6 +89,10 @@ class WorkshopGiftDeedTest: public ::testing::Test
 protected:
 	void SetUp() override
 	{
+		if (spdlog::get("game") == nullptr)
+		{
+			spdlog::create<spdlog::sinks::null_sink_st>("game");
+		}
 		Locator::entitiesRegistry::emplace<Registry>();
 		minds = &static_cast<SeeingMinds&>(Locator::creatureMindSystem::emplace<SeeingMinds>());
 		auto& registry = Locator::entitiesRegistry::value();
