@@ -178,9 +178,14 @@ constexpr float k_FunctionalLife = 0.75f;
 /// to charge the miracle if it may. A request never calls off a charge.
 [[nodiscard]] TapResult Request(const IconCharge& icon, bool handReady, bool magicEnabled, std::optional<float> siteChants);
 
-/// The click a counted tap on a village centre's hand makes is played faster the further along the hand stands: its
-/// playback rate in percent, the sixth hand's for any after it
-[[nodiscard]] uint32_t ClickPitch(size_t hand);
+/// The place of a worship site's icon among the site's six places: the first place is 0. An icon set further out because
+/// all six places had an icon has no place (-1).
+[[nodiscard]] int32_t SitePlace(std::optional<uint32_t> point);
+
+/// A counted tap clicks faster when the tapped icon stands further along. The place is the stone hand on its village
+/// centre, or the place of the icon at its worship site. The result is the playback rate in percent. A place before the
+/// first gives the first rate, and a place after the sixth gives the sixth rate.
+[[nodiscard]] uint32_t ClickPitch(int32_t place);
 
 /// The announcer's sample naming the miracle that has just been charged full at an icon
 [[nodiscard]] int FullyChargedVoice(SpellSeedType seed);

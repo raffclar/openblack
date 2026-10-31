@@ -108,6 +108,17 @@ TEST(VillageVoices, ATownAnswersAGiftByItsDesire)
 	EXPECT_FALSE(GiftAnswer(Gift::Wood, 0.25f, 0).has_value());
 }
 
+TEST(VillageVoices, ATownAnswersOnlyAMuchOrALittleWantedGift)
+{
+	EXPECT_TRUE(GiftAnswered(0.5f));
+	EXPECT_TRUE(GiftAnswered(0.249f));
+	EXPECT_FALSE(GiftAnswered(0.25f));
+	EXPECT_FALSE(GiftAnswered(0.499f));
+	// The game draws one of three answers
+	EXPECT_EQ(k_GiftAnswers, 3u);
+	EXPECT_FALSE(GiftAnswer(Gift::Food, 0.9f, k_GiftAnswers).has_value());
+}
+
 TEST(VillageVoices, ATownDesirePicksItsVoiceByItsValue)
 {
 	// Food: the first voice from 0.85, the second from 0.65, the third from 0.45
