@@ -2482,6 +2482,55 @@ const GObjectInfo* ActingInfoOf(const ecs::Registry& registry, entt::entity thin
 	return ecs::world_objects::InfoOf(thing);
 }
 
+/// The data that tells if a creature can act on a thing (ActingInfoOf), and whether it can act on it at all
+/// (LetsCreatureAct)
+struct ActingOf
+{
+	const GObjectInfo* info {nullptr};
+	bool canActOn {false};
+};
+
+/// The same answers as ActingInfoOf and LetsCreatureAct, for a thing that is not a villager, an animal, a creature or
+/// a miracle, with one look at each component
+ActingOf ActingOfUnliving(const ecs::Registry& registry, entt::entity thing)
+{
+	if (!Locator::infoConstants::has_value())
+	{
+		return {.info = nullptr, .canActOn = LetsCreatureActOnUnliving(registry, thing)};
+	}
+	const auto& constants = Locator::infoConstants::value();
+	const auto acts = [](const GObjectInfo* info) { return info != nullptr && info->canCreatureInteractWithMe != 0; };
+	if (registry.AllOf<Temple>(thing))
+	{
+		return {.info = &constants.citadelHeart, .canActOn = acts(&constants.citadelHeart)};
+	}
+	if (registry.AllOf<WorshipAltar>(thing))
+	{
+		const auto* info = mind_detail::AltarInfoOf(registry, thing);
+		return {.info = info, .canActOn = acts(info)};
+	}
+	// A creature cannot act on a whole thing, but the data of the thing stays
+	const bool whole = registry.AnyOf<WorshipSite, Town, Flock, ForestTurns>(thing);
+	if (registry.AllOf<Field>(thing))
+	{
+		const auto* info = FieldBuildingInfo(registry, thing);
+		return {.info = info, .canActOn = !whole && acts(info)};
+	}
+	if (registry.AllOf<VillageTotem>(thing))
+	{
+		// A village totem that is also a town's desire flag lets a creature act on it as the flag does
+		const auto* info = TotemStatueInfo(registry, thing);
+		const auto* actsAs = registry.AllOf<TownDesireFlag>(thing) ? &constants.prayerSite : info;
+		return {.info = info, .canActOn = !whole && acts(actsAs)};
+	}
+	if (registry.AllOf<TownDesireFlag>(thing))
+	{
+		return {.info = &constants.prayerSite, .canActOn = !whole && acts(&constants.prayerSite)};
+	}
+	const auto* info = ecs::world_objects::InfoOf(thing);
+	return {.info = info, .canActOn = !whole && acts(info)};
+}
+
 /// What a creature knows about a thing when it examines a desire for it. Only the facts that the desire uses cost time
 /// to find: the height for poo, and the pick-up rule for bringing stuff home.
 creature_activity::ThingFacts ThingFactsOf(const ecs::Registry& registry, entt::entity creature, Desire desire,
@@ -2489,13 +2538,15 @@ creature_activity::ThingFacts ThingFactsOf(const ecs::Registry& registry, entt::
 {
 	using creature_activity::Thing;
 	const auto kind = mind_detail::KindOfThing(registry, thing);
-	const auto* info = ActingInfoOf(registry, thing);
 	// The kind comes from the first of these components that the thing has: a villager, an animal, a creature, a
 	// miracle. Thus the kind tells which of them the thing has, with no search of the registry.
 	const bool living = kind == Thing::Villager || kind == Thing::Animal || kind == Thing::Creature || kind == Thing::Spell;
+	const auto acting =
+	    living ? ActingOf {.info = ActingInfoOf(registry, thing), .canActOn = true} : ActingOfUnliving(registry, thing);
+	const auto* info = acting.info;
 	creature_activity::ThingFacts facts {
 	    .kind = kind,
-	    .canActOn = living || LetsCreatureActOnUnliving(registry, thing),
+	    .canActOn = acting.canActOn,
 	    .attackable = info != nullptr && info->canCreatureAttackMe != 0,
 	    .playable = info != nullptr && info->canCreaturePlayWithMe != 0,
 	    .inspectable = info != nullptr && info->canCreatureInspectMe != 0,
