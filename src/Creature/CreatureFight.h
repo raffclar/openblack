@@ -929,6 +929,8 @@ enum class StopEnd : uint8_t
 	Failure,
 	/// It completes its action
 	Success,
+	/// Something else stops what it does, as an order to it does. It does not give up its action itself.
+	Stopped,
 };
 /// The two creatures of a fight as one of them stops what it does
 struct StopLinks
@@ -955,4 +957,17 @@ struct StrengthGains
 /// 3. A mind that has a partner forgets the partner as it stops, and makes the partner give up its action.
 /// So a creature can get the gain two times.
 [[nodiscard]] StrengthGains StrengthGainsAtStop(StopEnd end, StopLinks links);
+/// The results of a stop: the strength gains, and how many times each creature leaves its duel. Each time that a
+/// creature leaves its duel, its life pays for the fight again if its body is in a state of the fight. The body does not
+/// change its state during the stop.
+struct StopCounts
+{
+	StrengthGains gains {};
+	uint32_t stopperLeaves {0};
+	uint32_t partnerLeaves {0};
+};
+/// The strength gains of a stop and how many times each creature leaves its duel, by the rules of StrengthGainsAtStop
+[[nodiscard]] StopCounts CountsAtStop(StopEnd end, StopLinks links);
+/// The life of a creature after its life pays for the fight a number of times, one payment after the other
+[[nodiscard]] float LifeAfterPayments(float life, float fightHealth, uint32_t payments);
 } // namespace openblack::creature_fight

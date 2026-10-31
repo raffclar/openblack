@@ -99,6 +99,9 @@ struct CreatureLocomotion
 	bool clearingWay {false};
 	/// Turning to face a point without going anywhere
 	bool facingOnly {false};
+	/// The heading of a turn on the spot that waits until the action of its body ends. When the hand takes hold of a
+	/// creature whose body plays an action, the turn to face the player waits until the body is at rest.
+	std::optional<GameHeading> turnAtRest;
 	/// Following something, keeping within a distance of it
 	std::optional<entt::entity> following;
 	float followDistance {0.0f};

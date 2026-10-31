@@ -664,6 +664,9 @@ struct Command
 		HandStroke,
 		HandSlap,
 		HandLetGo,
+		/// The player's hand takes hold of it as the hand does when the player grabs it: it stops, ends what its body
+		/// plays and turns to the player
+		HandLock,
 		/// Putting a leash on it, which it is first taught; tying the leash to the scenario's object, untying it to the
 		/// hand, taking it off; keeping it within a radius of where it stands
 		PutOnLeash,

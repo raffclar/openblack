@@ -37,6 +37,10 @@ enum class HeldTurn : uint8_t
 };
 [[nodiscard]] HeldTurn WhileHeld(bool held, bool showDesireOnHold);
 
+/// A held creature shows what it wants when its body is at rest: no action plays, it does not turn, and no turn waits
+/// for the end of an action.
+[[nodiscard]] bool ShowsDesireOnHold(bool bodyPlaysAction, bool turns, bool turnWaits);
+
 /// After the hand let go of it, the first turn that finds a plan with steps to do starts the agenda of that plan again
 /// from its first step. The mark that the hand held it stays until then.
 [[nodiscard]] bool RestartsAfterHold(bool heldSinceRestart, bool planHasSteps);

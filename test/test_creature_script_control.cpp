@@ -17,9 +17,11 @@
 #include "Creature/CreatureRoute.h"
 #include "Creature/CreatureScriptAgendas.h"
 #include "ECS/Components/CreatureBody.h"
+#include "ECS/Components/CreatureFight.h"
 #include "ECS/Components/CreatureMind.h"
 #include "ECS/Components/ScriptControl.h"
 #include "ECS/Registry.h"
+#include "ECS/Systems/CreatureFightSystemInterface.h"
 #include "ECS/Systems/CreatureLocomotionSystemInterface.h"
 #include "ECS/Systems/CreatureObjectActionSystemInterface.h"
 #include "Locator.h"
@@ -113,6 +115,48 @@ public:
 };
 
 /// A creature that walks to a thing to pick it up when a script takes control of it
+/// Records each creature whose fight is called off, and does nothing else
+class CalledOffFights final: public CreatureFightSystemInterface
+{
+public:
+	void ProcessTurn() override {}
+	void Reset() override {}
+	void Update(std::chrono::duration<float, std::milli> /*gameTime*/) override {}
+	StartResult StartFight(entt::entity /*creature*/, entt::entity /*opponent*/) override { return StartResult::Busy; }
+	void AbortFight(entt::entity /*creature*/) override {}
+	void CallOff(entt::entity creature) override { calledOff.push_back(creature); }
+	[[nodiscard]] bool IsFighting(entt::entity /*creature*/) const override { return true; }
+	[[nodiscard]] std::optional<entt::entity> OpponentOf(entt::entity /*creature*/) const override { return std::nullopt; }
+	bool QueueMove(entt::entity /*creature*/, const creature_fight::Move& /*move*/, bool /*replace*/) override { return false; }
+	void ReleaseCharge(entt::entity /*creature*/, float /*heldMs*/) override {}
+	void SetAutoFighting(entt::entity /*creature*/, bool /*autoFight*/) override {}
+	[[nodiscard]] bool IsAutoFighting(entt::entity /*creature*/) const override { return false; }
+	[[nodiscard]] std::optional<entt::entity> PlayersFighter() const override { return std::nullopt; }
+	bool Press(const glm::vec3& /*rayOrigin*/, const glm::vec3& /*rayDirection*/, creature_fight::Button /*button*/,
+	           uint32_t /*milliseconds*/, uint32_t /*turn*/) override
+	{
+		return false;
+	}
+	void Release(uint32_t /*milliseconds*/, uint32_t /*turn*/) override {}
+	[[nodiscard]] bool IsPressed() const override { return false; }
+	[[nodiscard]] std::optional<creature_fight::Tip> HandTip(std::optional<entt::entity> /*under*/) const override
+	{
+		return std::nullopt;
+	}
+	bool GestureSpecialMove() override { return false; }
+	bool GestureSpell(MagicType /*type*/) override { return false; }
+	void KnockOut(entt::entity /*creature*/) override {}
+	void KillPermanently(entt::entity /*creature*/) override {}
+	void Resurrect(entt::entity /*creature*/) override {}
+	[[nodiscard]] bool IsKnockedOut(entt::entity /*creature*/) const override { return false; }
+	[[nodiscard]] std::optional<creature_fight_hud::Values> GetPanel() const override { return std::nullopt; }
+	void SetCameraWatches(bool /*enabled*/) override {}
+	[[nodiscard]] bool GetCameraWatches() const override { return false; }
+	[[nodiscard]] bool IsCameraOnFight() const override { return false; }
+
+	std::vector<entt::entity> calledOff;
+};
+
 class CreatureScriptControlTest: public ::testing::Test
 {
 protected:
@@ -181,4 +225,25 @@ TEST_F(CreatureScriptControlTest, FeedbackStopsTheHandsButNotALetGo)
 	hands->playsOn = true;
 	minds.ReceiveFeedback(creature, 0.0f);
 	EXPECT_TRUE(hands->cancelled.empty());
+}
+
+// A script that lets go of the creature, the order of a computer god and a gift that the hand calls off make the
+// creature give up its action. A fight that it is in ends for both creatures, as a fight called off does.
+// NOLINTNEXTLINE(cppcoreguidelines-avoid-non-const-global-variables): external macro
+TEST_F(CreatureScriptControlTest, AGiveUpOfTheActionCallsOffTheFightOfTheCreature)
+{
+	auto& fights = static_cast<CalledOffFights&>(Locator::creatureFightSystem::emplace<CalledOffFights>());
+	auto& registry = Locator::entitiesRegistry::value();
+	auto& mind = registry.Get<CreatureMindState>(creature);
+	mind.idle.agenda.resize(2);
+	// With no fight, only the action stops
+	minds.GiveUpAction(creature);
+	EXPECT_TRUE(fights.calledOff.empty());
+	EXPECT_EQ(mind.idle.step, mind.idle.agenda.size());
+	registry.Assign<CreatureFighting>(creature);
+	mind.idle.step = 0;
+	minds.GiveUpAction(creature);
+	EXPECT_EQ(fights.calledOff, (std::vector<entt::entity> {creature}));
+	EXPECT_EQ(registry.Get<const CreatureMindState>(creature).idle.step, 2u);
+	Locator::creatureFightSystem::reset();
 }

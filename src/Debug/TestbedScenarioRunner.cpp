@@ -2199,6 +2199,13 @@ std::string Runner::GiveHandCommand(entt::entity creature, const Command& comman
 		return hand.Stroke(creature, static_cast<creature_feedback::BodyPart>(command.bodyPart)) ? "stroked" : "busy";
 	case Kind::HandSlap:
 		return hand.Slap(creature, command.slapHeight, command.gentle, command.sweepsRight) ? "slapped" : "busy";
+	case Kind::HandLock:
+	{
+		const auto own =
+		    Locator::handSystem::has_value() ? Locator::handSystem::value().GetOwnPlayer() : PlayerNames::PLAYER_ONE;
+		hand.DoLock(own, creature);
+		return hand.IsLocked(creature) ? "held" : "busy";
+	}
 	case Kind::HandLetGo:
 		if (hand.GetCreature() == creature)
 		{
@@ -4150,6 +4157,7 @@ void Runner::Give(const Command& command)
 	case Kind::HandStroke:
 	case Kind::HandSlap:
 	case Kind::HandLetGo:
+	case Kind::HandLock:
 		result = GiveHandCommand(*entity, command);
 		break;
 	case Kind::PutOnLeash:

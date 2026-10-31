@@ -80,7 +80,7 @@ void GameHandCreature::ForceDominantDesire(entt::entity creature, int32_t desire
 		return;
 	}
 	auto& minds = Locator::creatureMindSystem::value();
-	minds.AbandonAction(creature);
+	minds.GiveUpAction(creature);
 	minds.MakeDesireDominant(creature, static_cast<creature_desires::Desire>(desire), seconds, false);
 }
 

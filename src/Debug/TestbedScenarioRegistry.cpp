@@ -9533,11 +9533,12 @@ void AddCombat(std::vector<Scenario>& all)
 		    .facet = Facet::Combat,
 		    .description = "The red tiger of the player and a blue tiger fight by themselves, and the creatures do not faint. "
 		                   "When the duel is on, a script sets the life of the blue tiger to zero. Its fight health stays.",
-		    .expected = "On its next turn, the red tiger wins. It finishes its move, stands and plays the happy response. "
-		                "An advisor says one of the lines for good news, because the place of the red tiger is on screen. "
-		                "The blue tiger does not faint. It stays in its stance and faces the red tiger. When the red tiger "
-		                "finishes its response, the blue tiger stops with no response. The fight view ends a few seconds "
-		                "after the win. The fight transcript shows a win with by_blow false.",
+		    .expected = "On its next turn, the red tiger wins. It finishes its move and stands. An advisor says one of the "
+		                "lines for good news, because the place of the red tiger is on screen. The blue tiger does not "
+		                "faint. It stays in its stance and faces the red tiger. Two turns after the red tiger stands, the "
+		                "red tiger orders the blue tiger to respond and plays no response. The blue tiger finishes its "
+		                "move, plays the sad response and fears the red tiger. The fight view ends a few seconds after the "
+		                "win. The fight transcript shows a win with by_blow false and order_respond.",
 		    .environment = {.fainting = false},
 		    .framing = ringside,
 		    .creatures = {red(PlayerNames::PLAYER_ONE, 0.6f, -0.2f), loser},
@@ -9559,19 +9560,19 @@ void AddCombat(std::vector<Scenario>& all)
 	    .name = "The hand holds a creature in its duel",
 	    .facet = Facet::Combat,
 	    .description = "The red tiger of the player and a blue tiger fight by themselves. When the duel is on, the hand "
-	                   "holds the red tiger and strokes its head. Two seconds later the hand lets go.",
-	    .expected = "When the hand takes hold, the red tiger leaves the duel. It finishes its move and stands. The blue tiger "
-	                "stays in its stance and faces the red tiger. When the hand lets go, both tigers stop with no "
-	                "response. The fight transcript shows held_by_hand, let_go_by_hand and partner_stopped.",
+	                   "holds the red tiger and strokes its head. Four seconds later the hand lets go.",
+	    .expected = "When the hand takes hold, the red tiger leaves the duel. It finishes its move while the hand holds "
+	                "it. Then it turns to the camera and shows what it wants. The blue tiger stays in its stance and "
+	                "faces the red tiger. When the hand lets go, both tigers stop with no response. The fight transcript "
+	                "shows held_by_hand, let_go_by_hand and partner_stopped.",
 	    .framing = ringside,
 	    .creatures = {red(PlayerNames::PLAYER_ONE, 0.6f, -0.2f), blue(PlayerNames::PLAYER_TWO, 0.5f, -0.2f)},
 	    .commands = {{.kind = Kind::EndGuidanceWaits, .delaySeconds = 0.5f},
 	                 Fight(Kind::StartFight, 0, 1, 0.5f),
 	                 Fight(Kind::FightAuto, 0, 1, 0.2f),
-	                 {.kind = Kind::HandStroke,
-	                  .delaySeconds = 12.0f,
-	                  .bodyPart = static_cast<size_t>(creature_feedback::BodyPart::Head)},
-	                 Act(Kind::HandLetGo, 0, 2.0f)},
+	                 Act(Kind::HandLock, 0, 18.0f),
+	                 {.kind = Kind::HandStroke, .bodyPart = static_cast<size_t>(creature_feedback::BodyPart::Head)},
+	                 Act(Kind::HandLetGo, 0, 4.0f)},
 	});
 
 	{
@@ -13356,7 +13357,7 @@ std::string_view testbed_scenarios::Name(Shot shot)
 
 std::string_view testbed_scenarios::Name(Command::Kind kind)
 {
-	constexpr std::array<std::string_view, 203> k_Names {
+	constexpr std::array<std::string_view, 204> k_Names {
 	    "walk to",
 	    "run to",
 	    "follow",
@@ -13393,6 +13394,7 @@ std::string_view testbed_scenarios::Name(Command::Kind kind)
 	    "hand strokes",
 	    "hand slaps",
 	    "hand lets go",
+	    "hand takes hold",
 	    "put on leash",
 	    "tie leash to",
 	    "tie leash to desire flag",
