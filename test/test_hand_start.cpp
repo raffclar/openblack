@@ -10,6 +10,7 @@
 #include <cstdint>
 
 #include <bit>
+#include <optional>
 
 #include <gtest/gtest.h>
 
@@ -55,6 +56,28 @@ TEST(HandStart, AFarMapPositionRoundsOnceToMetres)
 TEST(HandStart, TheCameraIsTwentyMetresAboveTheStartAndTwentyMetresAlongZ)
 {
 	EXPECT_EQ(hand_start::CameraOf({100.0f, 30.0f, 200.0f}), glm::vec3(100.0f, 50.0f, 220.0f));
+}
+
+TEST(HandStart, AGodWithNoCitadelHasNoCamera)
+{
+	EXPECT_FALSE(hand_start::GodCameraOf(std::nullopt, std::nullopt).has_value());
+	EXPECT_FALSE(hand_start::GodCameraOf(glm::vec3(1.0f, 2.0f, 3.0f), std::nullopt).has_value());
+}
+
+TEST(HandStart, TheCameraOfAGodWithNoMindLooksAtItsCitadelFromAbove)
+{
+	const auto camera = hand_start::GodCameraOf(std::nullopt, glm::vec3(100.0f, 30.0f, 200.0f));
+	ASSERT_TRUE(camera.has_value());
+	EXPECT_EQ(camera->origin, glm::vec3(100.0f, 50.0f, 220.0f));
+	EXPECT_EQ(camera->focus, glm::vec3(100.0f, 30.0f, 200.0f));
+}
+
+TEST(HandStart, TheMindMovesTheCameraAndTheFocusStaysAtTheCitadel)
+{
+	const auto camera = hand_start::GodCameraOf(glm::vec3(400.0f, 12.0f, 500.0f), glm::vec3(100.0f, 30.0f, 200.0f));
+	ASSERT_TRUE(camera.has_value());
+	EXPECT_EQ(camera->origin, glm::vec3(400.0f, 12.0f, 500.0f));
+	EXPECT_EQ(camera->focus, glm::vec3(100.0f, 30.0f, 200.0f));
 }
 
 class HandsAtTheCitadel: public ::testing::Test

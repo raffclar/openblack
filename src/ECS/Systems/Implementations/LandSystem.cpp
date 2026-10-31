@@ -134,6 +134,7 @@
 #include "Help/Spirits.h"
 #include "LHScriptX/MapScript.h"
 #include "LHScriptX/Script.h"
+#include "LandLaidOutOrder.h"
 #include "Level.h"
 #include "Locator.h"
 #include "MainThreadWork.h"
@@ -251,58 +252,14 @@ bool LandSystem::LoadMap(const std::filesystem::path& path, loading::LoadingCloc
 	}
 	_runsNetworkMapScript = false;
 	_mapLandscape.clear();
-	// Every land of a network game fills its slots with no human after its script. Without a network session, only a
-	// land made for network play does.
-	if (_humansFromSession || _allComputerGods || online_map_land::IsOnlineMap(path.generic_string()))
-	{
-		FillSlotsOfNetworkLand(computer_player::k_SlotGods);
-	}
 
 	timer.Step("map script");
-	// The game puts each thing on the map as the script makes it, before the footpaths load: the things go into their
-	// map cells now, and no footpath goes round them
-	Locator::entitiesMap::value().Sync();
-	if (Locator::footpathSystem::has_value())
-	{
-		Locator::footpathSystem::value().ProcessObstacleChanges();
-	}
-	// Each released map comes with an optional .fot file which contains the footpath information for the map
-	const auto stem = string_utils::LowerCase(path.stem().generic_string());
-	const auto fotPath = fileSystem.GetPath<filesystem::Path::Landscape>() / fmt::format("{}.fot", stem);
+	// Every land of a network game fills its slots with no human when the land is laid out. Without a network session,
+	// only a land made for network play does.
+	const bool fillsSlots = _humansFromSession || _allComputerGods || online_map_land::IsOnlineMap(path.generic_string());
+	LayOutLand(path, fillsSlots ? std::optional<std::span<const PlayerNames>>(computer_player::k_SlotGods) : std::nullopt);
 
-	if (fileSystem.Exists(fotPath))
-	{
-		FotFile fotFile;
-		fotFile.Load(fotPath);
-	}
-	else
-	{
-		SPDLOG_LOGGER_WARN(spdlog::get("game"), "The map at {} does not come with a footpath file. Expected {}",
-		                   path.generic_string(), fotPath.generic_string());
-	}
-
-	timer.Step("footpaths");
-	// With the land laid out, each town of a player with a temple is given its worship site if it has none
-	if (Locator::worshipSiteSystem::has_value())
-	{
-		Locator::worshipSiteSystem::value().LandLaidOut();
-	}
-
-	// With the land laid out, each town gathers the lone trees about it into its scenic forest
-	if (Locator::forestSystem::has_value())
-	{
-		Locator::forestSystem::value().MakeScenicForests();
-		// Each town finds the forests near it with wood in them
-		Locator::forestSystem::value().AssignForestsToTowns();
-	}
-
-	// Each player with a citadel has their influence power worked out once, as the game does after the land is laid out
-	if (Locator::influenceSystem::has_value())
-	{
-		Locator::influenceSystem::value().LandLaidOut();
-	}
-
-	timer.Step("forests");
+	timer.Step("laid out");
 	// A new game starts the player as good or evil as their profile last kept them, once the land is set up
 	if (land_change::RulesFor(change).alignmentFromProfile)
 	{
@@ -492,27 +449,8 @@ bool LandSystem::LoadGodsRingMap()
 			gods.push_back(*slot.god);
 		}
 	}
-	FillSlotsOfNetworkLand(gods);
-	// As on a land, the things go into their map cells before the footpaths, and then the towns find their worship
-	// sites and their forests
-	Locator::entitiesMap::value().Sync();
-	if (Locator::footpathSystem::has_value())
-	{
-		Locator::footpathSystem::value().ProcessObstacleChanges();
-	}
-	if (Locator::worshipSiteSystem::has_value())
-	{
-		Locator::worshipSiteSystem::value().LandLaidOut();
-	}
-	if (Locator::forestSystem::has_value())
-	{
-		Locator::forestSystem::value().MakeScenicForests();
-		Locator::forestSystem::value().AssignForestsToTowns();
-	}
-	if (Locator::influenceSystem::has_value())
-	{
-		Locator::influenceSystem::value().LandLaidOut();
-	}
+	// As on a land: the land is laid out, then the slots fill. The map has no footpath file.
+	LayOutLand(std::nullopt, std::span<const PlayerNames>(gods));
 	View().MakeSymbolSheet();
 
 	// The camera looks at the first slot's village from beyond its citadel
@@ -532,6 +470,82 @@ bool LandSystem::LoadGodsRingMap()
 	View().EndLoadingScreen();
 	StartNewLand(land_change::Kind::Testbed);
 	return true;
+}
+
+void LandSystem::LayOutLand(const std::optional<std::filesystem::path>& footpathsOf,
+                            std::optional<std::span<const PlayerNames>> slotGods)
+{
+	for (const auto step : land_laid_out::k_Order)
+	{
+		switch (step)
+		{
+		case land_laid_out::Step::PlaceThings:
+			// The game puts each thing on the map as the script makes it: the things go into their map cells now
+			Locator::entitiesMap::value().Sync();
+			break;
+		case land_laid_out::Step::FootpathObstacles:
+			// No footpath goes round the things in the map cells
+			if (Locator::footpathSystem::has_value())
+			{
+				Locator::footpathSystem::value().ProcessObstacleChanges();
+			}
+			break;
+		case land_laid_out::Step::ScenicForests:
+			if (Locator::forestSystem::has_value())
+			{
+				Locator::forestSystem::value().MakeScenicForests();
+			}
+			break;
+		case land_laid_out::Step::ForestsToTowns:
+			if (Locator::forestSystem::has_value())
+			{
+				Locator::forestSystem::value().AssignForestsToTowns();
+			}
+			break;
+		case land_laid_out::Step::WorshipSites:
+			if (Locator::worshipSiteSystem::has_value())
+			{
+				Locator::worshipSiteSystem::value().LandLaidOut();
+			}
+			break;
+		case land_laid_out::Step::InfluencePower:
+			if (Locator::influenceSystem::has_value())
+			{
+				Locator::influenceSystem::value().LandLaidOut();
+			}
+			break;
+		case land_laid_out::Step::FootpathFile:
+			if (footpathsOf.has_value())
+			{
+				LoadFootpathFile(*footpathsOf);
+			}
+			break;
+		case land_laid_out::Step::FillSlots:
+			if (slotGods.has_value())
+			{
+				FillSlotsOfNetworkLand(*slotGods);
+			}
+			break;
+		}
+	}
+}
+
+void LandSystem::LoadFootpathFile(const std::filesystem::path& landPath)
+{
+	// Each released map comes with an optional .fot file which contains the footpath information for the map
+	auto& fileSystem = Locator::filesystem::value();
+	const auto stem = string_utils::LowerCase(landPath.stem().generic_string());
+	const auto fotPath = fileSystem.GetPath<filesystem::Path::Landscape>() / fmt::format("{}.fot", stem);
+	if (fileSystem.Exists(fotPath))
+	{
+		FotFile fotFile;
+		fotFile.Load(fotPath);
+	}
+	else
+	{
+		SPDLOG_LOGGER_WARN(spdlog::get("game"), "The map at {} does not come with a footpath file. Expected {}",
+		                   landPath.generic_string(), fotPath.generic_string());
+	}
 }
 
 void LandSystem::FillSlotsOfNetworkLand(std::span<const PlayerNames> gods)

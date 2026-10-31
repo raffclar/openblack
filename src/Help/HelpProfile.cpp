@@ -12,6 +12,8 @@
 #include <algorithm>
 #include <utility>
 
+#include "Common/X87.h"
+
 namespace openblack::help::profile
 {
 
@@ -53,7 +55,7 @@ float EventCount::SecondsSince(uint32_t clock)
 {
 	if (_kept == 0)
 	{
-		return 0.0f;
+		return k_SecondsSinceNever;
 	}
 	const auto since = static_cast<int32_t>(clock - _times.at(SlotBack(_head, 1)));
 	if (since < 0)
@@ -61,7 +63,8 @@ float EventCount::SecondsSince(uint32_t clock)
 		PullTimesBackTo(clock);
 		return 0.0f;
 	}
-	return static_cast<float>(since) * 0.001f;
+	// The whole count of milliseconds times the float scale, rounded one time
+	return x87::Mul(static_cast<double>(since), k_SecondsPerMillisecond);
 }
 
 float EventCount::PerSecond(uint32_t clock)

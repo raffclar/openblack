@@ -111,7 +111,13 @@ private:
 	std::optional<uint32_t> _lastTempleTurnTime;
 	std::chrono::steady_clock::duration _turnDeltaTime {0};
 
-	/// After the script of a land of a network game: each slot whose god no human plays gets a computer god. With a
+	/// The steps that lay out a new land after its map script, in their order (land_laid_out::k_Order). The footpaths
+	/// load from the file of the land at the path, when there is a path. The slots of the gods fill last, when there
+	/// are gods.
+	void LayOutLand(const std::optional<std::filesystem::path>& footpathsOf,
+	                std::optional<std::span<const PlayerNames>> slotGods);
+	void LoadFootpathFile(const std::filesystem::path& landPath);
+	/// When a land of a network game is laid out: each slot whose god no human plays gets a computer god. With a
 	/// network session, the land waits for its humans until the start of the game. Without one, the player of this
 	/// computer is the one human.
 	void FillSlotsOfNetworkLand(std::span<const PlayerNames> gods);

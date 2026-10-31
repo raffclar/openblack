@@ -59,6 +59,10 @@ constexpr std::string_view k_TempleScript = R"(TOGGLE_COMPUTER_PLAYER("PLAYER_TW
 CREATE_CITADEL("0.0,-90.0", 0, "PLAYER_TWO", 5690, 1000)
 )";
 
+/// The lines of a land that give player two only a temple and no computer mind
+constexpr std::string_view k_TempleOnlyScript = R"(CREATE_CITADEL("0.0,-90.0", 0, "PLAYER_TWO", 5690, 1000)
+)";
+
 /// The creature of player two, a grown up tiger, at a place
 CreatureSetup GodCreature(glm::vec2 offset, NeedOverrides needs, std::vector<DesireOverride> desires)
 {
@@ -205,5 +209,19 @@ void testbed_scenarios::AddComputerGodCreatureCareScenarios(std::vector<Scenario
 	                  .delaySeconds = 0.5f,
 	                  .action = "MakeCreatureDrink",
 	                  .amount = 1.0f}},
+	});
+	all.push_back({
+	    .id = "mind.god_camera_looks_at_creature",
+	    .name = "The camera of another god looks at the creature of that god",
+	    .facet = Facet::Mind,
+	    .description = "A game alone. Lines of a land give player two a temple to the south and no computer mind. The "
+	                   "camera of that god starts 20 m above the temple and 20 m to the north of it, and looks at the "
+	                   "temple. The tiger of player two stands 40 m to the south of the temple, in the view of that camera.",
+	    .expected = "Each turn that the tiger stays in the view of the camera of its god, the count of the turns that its "
+	                "player looked at it (turnsLookedAt of its mind in the inspector) goes up by one. Before this change, "
+	                "the count stayed at 0, because only the first player looked at creatures in a game alone.",
+	    .framing = {.shot = Shot::Overview, .include = {glm::vec2(-40.0f, -150.0f), glm::vec2(40.0f, -40.0f)}},
+	    .creatures = {GodCreature({0.0f, -130.0f}, {}, {})},
+	    .landScript = k_TempleOnlyScript,
 	});
 }

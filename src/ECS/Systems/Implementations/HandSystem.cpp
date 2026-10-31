@@ -41,6 +41,7 @@
 #include "ECS/Registry.h"
 #include "ECS/Systems/AlignmentSystemInterface.h"
 #include "ECS/Systems/InfluenceSystemInterface.h"
+#include "ECS/Systems/PlayerSystemInterface.h"
 #include "ECS/Systems/TimeSystemInterface.h"
 #include "Hand/HandStart.h"
 #include "Hand/HandStillness.h"
@@ -226,14 +227,22 @@ std::array<entt::entity, static_cast<size_t>(HandSystemInterface::Side::_Count)>
 void HandSystem::StartAtCitadel(PlayerNames owner, const glm::vec3& point)
 {
 	auto& registry = Locator::entitiesRegistry::value();
-	// The player keeps the start for the hands and the computer mind that the game makes later
+	// The player keeps the start for the hands and the computer mind that the game makes later. Every god has its
+	// player from the start of the land, so the game makes the player when the land has none yet.
 	entt::entity found = entt::null;
-	registry.Each<const Player>([&found, owner](entt::entity entity, const Player& player) {
-		if (player.name == owner && found == entt::null)
-		{
-			found = entity;
-		}
-	});
+	if (Locator::playerSystem::has_value() && owner != PlayerNames::NEUTRAL)
+	{
+		found = Locator::playerSystem::value().EnsurePlayer(owner);
+	}
+	else
+	{
+		registry.Each<const Player>([&found, owner](entt::entity entity, const Player& player) {
+			if (player.name == owner && found == entt::null)
+			{
+				found = entity;
+			}
+		});
+	}
 	if (found != entt::null)
 	{
 		registry.AssignOrReplace<HandStart>(found, HandStart {.point = point});
