@@ -3815,17 +3815,9 @@ void CreatureMindSystem::Situate(entt::entity creature, creature_plan_actions::S
 	{
 		situation.position = {at->position.x, at->position.z};
 		// The nearest hand of the creature's own player, which it may throw to
-		if (body != nullptr && Locator::handSystem::has_value())
+		if (body != nullptr)
 		{
-			for (const auto& hand : Locator::handSystem::value().GetHandPositionsOf(body->owner))
-			{
-				if (hand.has_value() &&
-				    (!situation.playerHand.has_value() ||
-				     glm::distance(*hand, at->position) < glm::distance(*situation.playerHand, at->position)))
-				{
-					situation.playerHand = hand;
-				}
-			}
+			situation.playerHand = openblack::ecs::NearestHandOf(body->owner, at->position);
 		}
 	}
 	if (const auto* transform = registry.TryGet<const Transform>(creature); transform != nullptr && situation.eye.has_value())
@@ -3859,9 +3851,11 @@ void CreatureMindSystem::SituatePlayer(entt::entity creature, creature_plan_acti
 	{
 		situation.lookedAt = creature_attention::IsLookingAt(camera->origin, camera->focus, at->position);
 	}
-	if (const auto* mind = registry.TryGet<const CreatureMindState>(creature); mind != nullptr)
+	// The hand moves while the velocity of the hand of its player is more than 0
+	if (const auto* body = registry.TryGet<const Creature>(creature); body != nullptr)
 	{
-		situation.handMoving = situation.playerHand.has_value() && creature_player_attention::IsHandMoving(mind->handSpeed);
+		situation.handMoving = situation.playerHand.has_value() &&
+		                       creature_player_attention::IsHandMoving(openblack::ecs::PlayerHandVelocityOf(body->owner));
 	}
 	if (at != nullptr && situation.playerHand.has_value() && camera.has_value())
 	{
