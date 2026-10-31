@@ -135,8 +135,14 @@ private:
 	bool ImportVanillaWorld(uint32_t slot, std::span<const uint8_t> bytes, const VanillaMade& creatures);
 	/// Each villager that keeps the work of a state of the file: a field or a fish farm, and a spot in a field
 	using VanillaWorks = std::vector<std::pair<entt::entity, ecs::vanilla_world_import::ImportedWork>>;
+	/// Each villager that keeps a walk with a circle in the file, and the circle
+	using VanillaCircles = std::vector<std::pair<entt::entity, ecs::vanilla_world_import::ImportedCircle>>;
 	/// Puts the turn, the towns, the buildings of the towns and the villagers of the world file into the world
-	bool ImportVanillaTowns(const gamesave::VanillaWorld& world, VanillaMade& made, VanillaWorks& works);
+	bool ImportVanillaTowns(const gamesave::VanillaWorld& world, VanillaMade& made, VanillaWorks& works,
+	                        VanillaCircles& circles);
+	/// Each villager that keeps a walk with a circle takes its circle: the last circle of the thing of the file, or a
+	/// circle of water or of the edge of the land. The import makes all the things of the file first.
+	void ImportVanillaCircles(const VanillaCircles& circles, const VanillaMade& made);
 	/// Puts the forests, the big forests and the trees of the world file into the world, in the place of those of the
 	/// land. Each town of the file takes its list of forests.
 	void ImportVanillaForests(const gamesave::VanillaWorld& world, VanillaMade& made);

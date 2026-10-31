@@ -176,9 +176,14 @@ TEST(VanillaWorldImport, KeepsTheStatesOnlyWhenTheFileHasAllTheyNeed)
 	EXPECT_EQ(world_import::StartStates({1, k_ToField, 0}, 0x0B), (std::array<uint8_t, 3> {1, k_ToField, 0}));
 	EXPECT_EQ(world_import::StartStates({1, k_Chillout, 0}, 0x0C), (std::array<uint8_t, 3> {1, k_Chillout, 0}));
 	EXPECT_EQ(world_import::StartStates({1, k_Chillout, 0}, 0x0E), (std::array<uint8_t, 3> {1, k_Chillout, 0}));
-	// A villager that heads for a circle or goes round one decides again
-	EXPECT_EQ(world_import::StartStates({1, k_Chillout, 0}, 0x0C, true), world_import::DecideAgain());
-	EXPECT_EQ(world_import::StartStates({1, k_Chillout, 0}, 0x0F), world_import::DecideAgain());
+	// A villager that goes round a circle or goes out of a circle keeps its walk and its states
+	for (const uint8_t moveState : {0x0F, 0x10, 0x11, 0x12})
+	{
+		EXPECT_EQ(world_import::StartStates({1, k_Chillout, 0}, moveState), (std::array<uint8_t, 3> {1, k_Chillout, 0}));
+	}
+	// A move state that the import does not keep makes the villager decide again
+	EXPECT_EQ(world_import::StartStates({1, k_Chillout, 0}, 0x05), world_import::DecideAgain());
+	EXPECT_EQ(world_import::StartStates({1, k_Chillout, 0}, 0x13), world_import::DecideAgain());
 	EXPECT_EQ(world_import::DecideAgain(), (std::array<uint8_t, 3> {k_Decide, k_Invalid, k_Invalid}));
 	// A state with values that openblack does not keep, at the top or at the end, makes the villager decide again
 	EXPECT_EQ(world_import::StartStates({k_OnPath, 0, 0}, 0x01), (std::array<uint8_t, 3> {k_Decide, k_Invalid, k_Invalid}));
@@ -186,6 +191,33 @@ TEST(VanillaWorldImport, KeepsTheStatesOnlyWhenTheFileHasAllTheyNeed)
 	EXPECT_TRUE(world_import::CanKeepStateValues(static_cast<uint8_t>(VillagerStates::Fishing)));
 	EXPECT_TRUE(world_import::CanKeepStateValues(static_cast<uint8_t>(VillagerStates::FarmerPlantsCrop)));
 	EXPECT_FALSE(world_import::CanKeepStateValues(static_cast<uint8_t>(VillagerStates::InScript)));
+}
+
+TEST(VanillaWorldImport, TheCircleOfAWalkIsOnAThingOnTheLandscapeOrOnNothing)
+{
+	using world_import::CircleKind;
+	EXPECT_EQ(world_import::KindOf({.object = 12, .index = -1}), CircleKind::Thing);
+	EXPECT_EQ(world_import::KindOf({.object = 12, .index = 1}), CircleKind::Thing);
+	EXPECT_EQ(world_import::KindOf({.object = 0, .index = 1}), CircleKind::Landscape);
+	EXPECT_EQ(world_import::KindOf({.object = 0, .index = 0}), CircleKind::None);
+}
+
+TEST(VanillaWorldImport, AWalkerTakesTheLastCircleOfItsThingAfterALoad)
+{
+	EXPECT_EQ(world_import::CircleAfterLoad(0), std::nullopt);
+	EXPECT_EQ(world_import::CircleAfterLoad(1), 0U);
+	// The thing of a temple has 33 circles
+	EXPECT_EQ(world_import::CircleAfterLoad(33), 32U);
+}
+
+TEST(VanillaWorldImport, TheCircleOfTheLandscapeIsAtTheMiddleOfTheCell)
+{
+	// A map position in the cell 3, 7, near its far corner
+	const auto circle = world_import::LandscapeCircleOf({.x = 3 * 65536 + 65000, .z = 7 * 65536 + 10, .altitude = 4.0f});
+	EXPECT_EQ(circle.centre, glm::vec2(35.0f, 75.0f));
+	EXPECT_EQ(circle.radius, 7.2f);
+	EXPECT_TRUE(circle.landscape);
+	EXPECT_TRUE(circle.landscapeOrFence);
 }
 
 TEST(VanillaWorldImport, TheValuesOfAStateGiveTheWorkOfAFarmerOrAFisherman)
@@ -829,12 +861,12 @@ TEST(VanillaWorldImport, SavedGamesOfLandOneKeepWalksAndWork)
 		const auto imported = world_import::ReadTowns(world);
 		for (const auto& villager : imported.villagers)
 		{
-			if (world_import::StartStates(villager.states, villager.moveState, villager.walk.hugsCircle) != villager.states)
+			if (world_import::StartStates(villager.states, villager.moveState) != villager.states)
 			{
 				continue;
 			}
 			++kept;
-			walking += villager.moveState == 0x0B || villager.moveState == 0x0C ? 1 : 0;
+			walking += villager.moveState >= 0x0B && villager.moveState <= 0x12 ? 1 : 0;
 			auto work = world_import::WorkOf(villager.states[0], villager.topValues);
 			if (!work.has_value())
 			{
@@ -858,6 +890,37 @@ TEST(VanillaWorldImport, SavedGamesOfLandOneKeepWalksAndWork)
 	EXPECT_GT(walking, 0U);
 	EXPECT_GT(working, 0U);
 	std::cout << "Kept " << kept << " villagers, " << walking << " walking and " << working << " working" << std::endl;
+}
+
+/// Each walk of a villager of a saved game of Land 1 that goes straight, goes round a circle or goes out of a circle has
+/// its circle, and the thing of a circle is an object of the file
+TEST(VanillaWorldImport, SavedGamesOfLandOneKeepTheCirclesOfTheWalks)
+{
+	size_t onThings = 0;
+	size_t round = 0;
+	const auto files = ForEachLandOneSave([&](const std::filesystem::path& path, const VanillaWorld& world) {
+		for (const auto& villager : world_import::ReadTowns(world).villagers)
+		{
+			const bool keepsCircle = villager.moveState >= 0x0C && villager.moveState <= 0x12;
+			ASSERT_EQ(villager.walk.circle.has_value(), keepsCircle) << path << " " << villager.number;
+			if (!keepsCircle)
+			{
+				continue;
+			}
+			round += villager.moveState >= 0x0F ? 1 : 0;
+			if (world_import::KindOf(*villager.walk.circle) == world_import::CircleKind::Thing)
+			{
+				++onThings;
+				EXPECT_NE(world.Record(villager.walk.circle->object), nullptr) << path << " " << villager.number;
+			}
+		}
+	});
+	if (!files.has_value())
+	{
+		GTEST_SKIP() << "Set OPENBLACK_VANILLA_SAVES to a copy of a Profiles folder of the game to check its saved games";
+	}
+	EXPECT_GT(onThings, 0U);
+	EXPECT_GT(round, 0U);
 }
 
 /// Each town of a saved game of Land 1 has its belief, its desires and its running counts. The food and the wood that
