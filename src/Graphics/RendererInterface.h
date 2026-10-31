@@ -275,13 +275,15 @@ public:
 		};
 		const MorphTargets* morphTargets {nullptr};
 		/// A creature fizzing out of sight, drawn twice through the static scrolling over its skin (creature_fizz_look):
-		/// first its depth alone where the static is strong enough, then its body blended over that depth
+		/// first its depth alone where the static is strong enough, then its body blended over that depth. Frozen, the
+		/// ice is then added over all of its mesh.
 		struct Fizz
 		{
 			enum class Pass : uint8_t
 			{
 				Depth,
 				Body,
+				Ice,
 			};
 			Pass pass;
 			/// How far it has fizzed, as a byte

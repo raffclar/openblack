@@ -2810,6 +2810,26 @@ void AddAppearance(std::vector<Scenario>& all)
 	                  .creature = 0,
 	                  .delaySeconds = 1.0f}},
 	});
+	// A frozen creature that fizzes: the ice goes over all of its body after the fizz, also where the body is gone
+	all.push_back({
+	    .id = "appearance.frozen_creature_fizzing",
+	    .name = "Frozen creature fizzing out of sight",
+	    .facet = Facet::Appearance,
+	    .description = "At noon, the clock stopped, a tiger stands on open land, seen from close by. After a second the "
+	                   "freeze spell is cast on it. When it is wholly frozen, a script fade fizzes it six tenths of the "
+	                   "way out of sight over three seconds.",
+	    .expected = "The tiger freezes to an icy blue with a sheen of ice. Then it fizzes through static. The sheen of ice "
+	                "stays over all of its body, also where the static has taken the body away: there the land behind "
+	                "shows through with the ice added over it.",
+	    .environment = {.hour = 12.0f, .clockRuns = false, .dispenserGrid = false},
+	    .framing = {.shot = Shot::Follow, .distance = 0.4f},
+	    .creatures = {Posed(CreatureType::Tiger, {0.0f, -90.0f}, 180.0f, "frozen tiger")},
+	    .miracles = {{.type = MagicType::CreatureSpellFreeze,
+	                  .target = MiracleCast::Target::Creature,
+	                  .creature = 0,
+	                  .delaySeconds = 1.0f}},
+	    .commands = {{.kind = Kind::SetFizz, .creature = 0, .delaySeconds = 5.5f, .value = 3000, .amount = 0.6f}},
+	});
 	// The land, a hut, trees and the sky as the lowest detail levels draw them, with textures of half the size
 	all.push_back({
 	    .id = "appearance.low_resolution_textures",

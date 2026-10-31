@@ -502,6 +502,29 @@ void openblack::testbed_scenarios::AddTownMiracleScenarios(std::vector<Scenario>
 	    .townMiracles = {MagicType::Heal, MagicType::Water},
 	});
 	all.push_back({
+	    .id = "miracles.selection_creature_spell",
+	    .name = "A creature spell asked for by the inverse spiral and its gesture on the second land",
+	    .facet = Facet::Miracles,
+	    .description = "The town and temple of town.miracle_debug_given on the second land, with the freeze spell and the "
+	                   "water miracle. The site is built and each icon holds the full charge of its miracle. The hand "
+	                   "draws an inverse spiral, then a star.",
+	    .expected = "The inverse spiral opens the selection for the creature's miracles: white sparks come out of the "
+	                "hand, and the hints show the star of the freeze spell but not the W of the water miracle. The star "
+	                "closes the selection, and at the next turn the freeze spell comes into the hand.",
+	    .environment = {.dispenserGrid = false, .landNumber = k_SecondLand},
+	    .framing = {.shot = Shot::Placed, .eye = {9.0f, 14.0f, -40.0f}, .look = {9.0f, 2.0f, -19.0f}},
+	    .objects = Town(),
+	    .temples = {{.offset = k_Temple}},
+	    .commands = {{.kind = Kind::BuildWorshipSites, .delaySeconds = 3.0f},
+	                 {.kind = Kind::FillSiteIcons, .delaySeconds = 0.5f, .amount = 1.0f},
+	                 {.kind = Kind::DrawGesture,
+	                  .delaySeconds = 3.0f,
+	                  .value = static_cast<size_t>(GestureType::InverseSpiral)},
+	                 {.kind = Kind::DrawGesture, .delaySeconds = 4.0f, .value = static_cast<size_t>(GestureType::Star)}},
+	    .townBeliefInPlayer = k_TownBelief,
+	    .townMiracles = {MagicType::CreatureSpellFreeze, MagicType::Water},
+	});
+	all.push_back({
 	    .id = "miracles.power_up_icon_charge",
 	    .name = "A power-up gesture asks the worship site icon of the miracle in the hand to charge it",
 	    .facet = Facet::Miracles,

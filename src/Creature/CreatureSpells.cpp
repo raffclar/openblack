@@ -351,18 +351,29 @@ float creature_spells::Ease(float before, float target, float ratio)
 	return before + (target - before) * ratio;
 }
 
+uint8_t creature_spells::FreezeLevel(float freeze)
+{
+	return static_cast<uint8_t>(std::lrint(std::clamp(freeze, 0.0f, 1.0f) * 255.0f) & 0xFF);
+}
+
 uint32_t creature_spells::FrozenTint(float freeze)
 {
-	// From white towards the icy colour by the freeze, in 256ths, as the game blends it
-	const auto amount = static_cast<uint32_t>(std::clamp(freeze, 0.0f, 1.0f) * 255.0f);
+	// From white towards the icy colour by the freeze level. Each channel goes down by the gap to the icy colour times
+	// the level over 256, rounded up, so that a wholly frozen creature takes the icy colour itself.
+	const uint32_t level = FreezeLevel(freeze);
 	uint32_t tint = 0;
 	for (const int shift : {16, 8, 0})
 	{
 		const uint32_t icy = (k_FrozenColour >> shift) & 0xFFu;
-		const uint32_t channel = 255u - ((255u - icy) * amount) / 256u;
+		const uint32_t channel = 255u - ((255u - icy) * level + 255u) / 256u;
 		tint |= channel << shift;
 	}
 	return tint;
+}
+
+uint8_t creature_spells::IceAlpha(float freeze)
+{
+	return static_cast<uint8_t>((static_cast<uint32_t>(FreezeLevel(freeze)) * 255u) >> 8);
 }
 
 void creature_spells::FinishEarly(Slot& slot)
