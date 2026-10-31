@@ -274,3 +274,20 @@ TEST(TownBelief, TheLossToADesireRoundsTheDifferenceAndTheProductToAFloat)
 	// The difference rounded to a float before the product gives one bit less than a wider difference does
 	EXPECT_EQ(std::bit_cast<uint32_t>(town.belief.at(0)), 0x3FAE353Fu);
 }
+
+TEST(TownBelief, LandScriptCapIsTheAskedCapOutsideTheThreeGodNetworkMap)
+{
+	EXPECT_EQ(CapFromLandScript(0.75f, false, "Land2", 3, PlayerNames::PLAYER_TWO), 0.75f);
+	EXPECT_EQ(CapFromLandScript(1.0f, false, k_ThreeGodMapName, 3, PlayerNames::PLAYER_ONE), 1.0f);
+	EXPECT_EQ(CapFromLandScript(1.0f, true, "mpm_4p_1", 3, PlayerNames::PLAYER_ONE), 1.0f);
+}
+
+TEST(TownBelief, ThreeGodNetworkMapRaisesEachGodsCapInTownThreeToTwo)
+{
+	EXPECT_EQ(CapFromLandScript(1.0f, true, k_ThreeGodMapName, 3, PlayerNames::PLAYER_ONE), 2.0f);
+	EXPECT_EQ(CapFromLandScript(1.0f, true, k_ThreeGodMapName, 3, PlayerNames::PLAYER_THREE), 2.0f);
+	// Other towns, the neutral player and a name in another case keep the asked cap
+	EXPECT_EQ(CapFromLandScript(1.0f, true, k_ThreeGodMapName, 4, PlayerNames::PLAYER_ONE), 1.0f);
+	EXPECT_EQ(CapFromLandScript(1.0f, true, k_ThreeGodMapName, 3, PlayerNames::NEUTRAL), 1.0f);
+	EXPECT_EQ(CapFromLandScript(1.0f, true, "MPM_3P_1", 3, PlayerNames::PLAYER_ONE), 1.0f);
+}

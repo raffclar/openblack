@@ -206,3 +206,15 @@ void magic::town_belief::ResetForEmptyTown(Belief& town, std::span<const DesireD
 		Set(town, static_cast<PlayerNames>(p), town.neutral);
 	}
 }
+
+float magic::town_belief::CapFromLandScript(float asked, bool networkGame, std::string_view landName, uint32_t townId,
+                                            PlayerNames player)
+{
+	constexpr uint32_t k_RaisedTown = 3;
+	constexpr float k_RaisedCap = 2.0f;
+	if (networkGame && landName == k_ThreeGodMapName && townId == k_RaisedTown && player != PlayerNames::NEUTRAL)
+	{
+		return k_RaisedCap;
+	}
+	return asked;
+}

@@ -32,8 +32,9 @@ namespace openblack::ecs
 /// The reported camera that a creature reads: the camera of the player that ReportedCreaturePlayer gives
 [[nodiscard]] std::optional<systems::HandSystemInterface::ReportedCamera> ReportedCreatureCamera(entt::entity creature);
 
-/// The reported camera of the creature's own player, which looks at the creature. In a network game it is the camera of
-/// the creature's player. In a game with one player, only a creature of the first player has it.
+/// The camera of the creature's own player, which looks at the creature. A person's player has its reported camera. Each
+/// other god has the camera of its citadel and its computer mind (see hand_start::GodCameraOf), in a game alone and in a
+/// network game. A creature of the neutral player has none.
 [[nodiscard]] std::optional<systems::HandSystemInterface::ReportedCamera> ReportedCameraOfItsPlayer(entt::entity creature);
 
 } // namespace openblack::ecs

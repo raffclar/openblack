@@ -362,7 +362,15 @@ bool LHVMFile::Write(const std::filesystem::path& filepath) const
 
 void LHVMFile::Write(std::ostream& stream) const
 {
+	[[maybe_unused]] const auto layout = WriteWithLayout(stream);
+}
+
+LHVMFile::RunningStateLayout LHVMFile::WriteWithLayout(std::ostream& stream) const
+{
 	assert(_isLoaded);
+
+	const auto start = stream.tellp();
+	const auto here = [&stream, start]() { return static_cast<size_t>(stream.tellp() - start); };
 
 	stream.write(k_Magic.data(), k_Magic.size());
 	WriteU32(stream, static_cast<uint32_t>(_version));
@@ -400,14 +408,17 @@ void LHVMFile::Write(std::ostream& stream) const
 	WriteU32(stream, static_cast<uint32_t>(_data.size()));
 	stream.write(_data.data(), static_cast<std::streamsize>(_data.size()));
 
+	RunningStateLayout layout {.stack = here(), .variables = here(), .tasks = here(), .end = here()};
 	if (!_hasStatus)
 	{
-		return;
+		return layout;
 	}
 
 	// The running state, in the layout of the game's own script saves
 	WriteStack(stream, _stack);
+	layout.variables = here();
 	WriteVariableValues(stream, _variableValues);
+	layout.tasks = here();
 	WriteU32(stream, static_cast<uint32_t>(_tasks.size()));
 	for (const auto& task : _tasks)
 	{
@@ -437,6 +448,8 @@ void LHVMFile::Write(std::ostream& stream) const
 	WriteU32(stream, _highestTaskId);
 	WriteU32(stream, _highestScriptId);
 	WriteU32(stream, _executedInstructions);
+	layout.end = here();
+	return layout;
 }
 
 int LHVMFile::LoadVariablesNames(std::istream& stream, std::vector<std::string>& variables)

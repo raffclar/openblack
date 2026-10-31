@@ -379,7 +379,6 @@ void FeatureScriptCommands::SetTownBelief(int32_t townId, const std::string& pla
 
 void FeatureScriptCommands::SetTownBeliefCap(int32_t townId, const std::string& playerOwner, float belief)
 {
-	// TODO(town-ownership): in a multiplayer game the cap of a player in a town of one tribe is raised to 2 on one map
 	auto& registry = Locator::entitiesRegistry::value();
 	// A town the land never made has no cap to set
 	const auto& towns = registry.Context().towns;
@@ -391,11 +390,18 @@ void FeatureScriptCommands::SetTownBeliefCap(int32_t townId, const std::string& 
 	const auto town = found->second;
 	auto& impression =
 	    registry.AnyOf<TownImpression>(town) ? registry.Get<TownImpression>(town) : registry.Assign<TownImpression>(town);
-	const auto player = static_cast<size_t>(GetPlayerName(playerOwner));
-	if (player < impression.belief.cap.size())
+	const auto playerName = GetPlayerName(playerOwner);
+	const auto player = static_cast<size_t>(playerName);
+	if (player >= impression.belief.cap.size())
 	{
-		impression.belief.cap.at(player) = belief;
+		return;
 	}
+	// In a network game, the map for three gods gives a higher cap in its town with the number 3
+	const bool networkGame = Locator::landSystem::has_value() && Locator::landSystem::value().RunsNetworkMapScript();
+	const auto landName =
+	    Locator::landSystem::has_value() ? Locator::landSystem::value().GetLandPath().stem().string() : std::string {};
+	impression.belief.cap.at(player) =
+	    magic::town_belief::CapFromLandScript(belief, networkGame, landName, static_cast<uint32_t>(townId), playerName);
 }
 
 void FeatureScriptCommands::SetTownUninhabitable(int32_t townId)

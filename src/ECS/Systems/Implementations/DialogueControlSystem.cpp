@@ -17,7 +17,9 @@ using namespace openblack::ecs::systems;
 
 void DialogueControlSystem::SaveState(reflection::BinaryWriter& out) const
 {
-	reflection::Save(out, _owner);
+	// The owner of the dialogue is a value of this computer's help. In a network game only the help scripts of each
+	// computer take the dialogue, so the owner is a presentation part.
+	reflection::SavePresentation(out, _owner);
 }
 
 bool DialogueControlSystem::LoadState(reflection::BinaryReader& in)

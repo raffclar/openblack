@@ -9,11 +9,13 @@
 
 #if defined(OPENBLACK_DEVELOPER_TOOLS)
 
+#include <cstddef>
 #include <cstdint>
 
 #include <array>
 #include <filesystem>
 #include <string>
+#include <utility>
 #include <vector>
 
 #include <gtest/gtest.h>
@@ -57,6 +59,7 @@ TEST(WorldStateAtTurn, TheMapGivesThePresentationPartsAndTheBytesOfEachSection)
 	                 {.name = "localParticles", .size = 40, .presentation = {{0, 40}}},
 	                 {.name = "magic", .size = 30, .presentation = {{4, 8}, {20, 24}}}},
 	    .contextPresentation = {{10, 26}},
+	    .scriptPresentation = {{100, 140}, {300, 512}},
 	    .syncedSeed = 99,
 	    .syncedDraws = 1234567890123,
 	    .waitingSounds = 2,
@@ -67,7 +70,8 @@ TEST(WorldStateAtTurn, TheMapGivesThePresentationPartsAndTheBytesOfEachSection)
 	          R"({"component": "*", "field": "", "marker": "Say \"hi\"\\"}], )"
 	          R"("sections": [{"name": "map", "size": 12, "presentation": []}, )"
 	          R"({"name": "localParticles", "size": 40, "presentation": [[0, 40]]}, )"
-	          R"({"name": "magic", "size": 30, "presentation": [[4, 8], [20, 24]]}], "contextPresentation": [[10, 26]]})"
+	          R"({"name": "magic", "size": 30, "presentation": [[4, 8], [20, 24]]}], "contextPresentation": [[10, 26]], )"
+	          R"("scriptPresentation": [[100, 140], [300, 512]]})"
 	          "\n");
 }
 
@@ -76,8 +80,22 @@ TEST(WorldStateAtTurn, AMapWithNoPartsAndNoSectionsHasEmptyLists)
 	const world_state_at_turn::Map map {.turn = 1};
 	EXPECT_EQ(world_state_at_turn::MapText(map),
 	          R"({"turn": 1, "syncedSeed": 0, "syncedDraws": 0, "waitingSounds": 0, "presentationParts": [], "sections": [], )"
-	          R"("contextPresentation": []})"
+	          R"("contextPresentation": [], "scriptPresentation": []})"
 	          "\n");
+}
+
+TEST(WorldStateAtTurn, InANetworkGameTheStackAndTheTasksOfTheScriptsAreLocal)
+{
+	const lhvm::LHVMFile::RunningStateLayout layout {.stack = 100, .variables = 140, .tasks = 300, .end = 512};
+	using Ranges = std::vector<std::pair<size_t, size_t>>;
+	// The values of the global variables, between the stack and the tasks, stay synced
+	EXPECT_EQ(world_state_at_turn::ScriptPresentation(layout, true), Ranges({{100, 140}, {300, 512}}));
+}
+
+TEST(WorldStateAtTurn, InAGameForOnePlayerNoByteOfTheScriptsIsLocal)
+{
+	const lhvm::LHVMFile::RunningStateLayout layout {.stack = 100, .variables = 140, .tasks = 300, .end = 512};
+	EXPECT_TRUE(world_state_at_turn::ScriptPresentation(layout, false).empty());
 }
 
 #endif

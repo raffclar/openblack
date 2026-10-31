@@ -12,11 +12,13 @@
 
 #define LOCATOR_IMPLEMENTATIONS
 
+#include <cstddef>
 #include <cstdint>
 
 #include <optional>
 #include <string>
 #include <unordered_map>
+#include <utility>
 #include <vector>
 
 #include <entt/entity/entity.hpp>
@@ -254,6 +256,25 @@ TEST(SavedSystemState, TheStoryHistoryComesBack)
 	HelpTextSystem texts;
 	HelpTextSystem loadedTexts;
 	LoadInto(loadedTexts, StateOf(texts));
+}
+
+TEST(SavedSystemState, TheHelpOfEachComputerIsAPresentationPart)
+{
+	// Each computer has its own help level, help record and help scripts, so no byte of the help is synced. The owner of
+	// the dialogue is a value of the help too.
+	const auto wholeSection = [](const SavedStateInterface& system) {
+		reflection::BinaryWriter out(Context());
+		system.SaveState(out);
+		using Ranges = std::vector<std::pair<size_t, size_t>>;
+		EXPECT_EQ(out.PresentationRanges(), Ranges({{0, out.Bytes().size()}}));
+	};
+	wholeSection(HelpMessageSystem {});
+	wholeSection(HelpTextSystem {});
+	wholeSection(GuidanceSystem {});
+	wholeSection(CreatureHelpSystem {});
+	DialogueControlSystem dialogue;
+	dialogue.Request(12, 0);
+	wholeSection(dialogue);
 }
 
 TEST(SavedSystemState, TheHelpTextsStopTheAdvisorsWithNoVoicesOnTheComputer)

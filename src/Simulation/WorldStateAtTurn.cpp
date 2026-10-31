@@ -13,8 +13,10 @@
 
 #include <algorithm>
 #include <fstream>
+#include <sstream>
 #include <system_error>
 
+#include <LHVM.h>
 #include <fmt/format.h>
 #include <spdlog/spdlog.h>
 
@@ -24,6 +26,7 @@
 #include "ECS/RegistryContext.h"
 #include "ECS/Systems/ParticleRuleSystemInterface.h"
 #include "ECS/Systems/SaveGameSystemInterface.h"
+#include "ECS/Systems/TimeSystemInterface.h"
 #include "ECS/WorldSave.h"
 #include "Locator.h"
 
@@ -129,7 +132,22 @@ std::string MapText(const Map& map)
 		const auto& [first, last] = map.contextPresentation[range];
 		text += fmt::format("{}[{}, {}]", range == 0 ? "" : ", ", first, last);
 	}
+	text += "], \"scriptPresentation\": [";
+	for (size_t range = 0; range < map.scriptPresentation.size(); ++range)
+	{
+		const auto& [first, last] = map.scriptPresentation[range];
+		text += fmt::format("{}[{}, {}]", range == 0 ? "" : ", ", first, last);
+	}
 	return text + "]}\n";
+}
+
+std::vector<std::pair<size_t, size_t>> ScriptPresentation(const lhvm::LHVMFile::RunningStateLayout& layout, bool networkGame)
+{
+	if (!networkGame)
+	{
+		return {};
+	}
+	return {{layout.stack, layout.variables}, {layout.tasks, layout.end}};
 }
 
 bool WriteIfDue(const Settings& settings, uint32_t turn, const entt::meta_ctx& reflection)
@@ -148,6 +166,14 @@ bool WriteIfDue(const Settings& settings, uint32_t turn, const entt::meta_ctx& r
 	{
 		[[maybe_unused]] const auto context = ecs::reflection::SaveValue(
 		    reflection, Locator::entitiesRegistry::value().Context(), nullptr, &map.contextPresentation);
+	}
+	if (Locator::vm::has_value())
+	{
+		// The same file as the scripts' block of the world state, written again only to find its parts
+		std::ostringstream script(std::ios::binary);
+		const auto layout = Locator::vm::value().StateFile().WriteWithLayout(script);
+		map.scriptPresentation =
+		    ScriptPresentation(layout, Locator::time::has_value() && Locator::time::value().IsNetworkGame());
 	}
 	if (Locator::gameRandom::has_value())
 	{

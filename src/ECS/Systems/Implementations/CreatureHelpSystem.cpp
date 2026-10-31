@@ -206,9 +206,13 @@ help::Memory& MemoryOf(ecs::Registry& registry, entt::entity creature)
 
 void CreatureHelpSystem::SaveState(reflection::BinaryWriter& out) const
 {
+	// The creature's help is only for the creature of the player at this computer, and the switch is of this player's
+	// options. Thus the whole section is a presentation part.
+	out.BeginPresentation();
 	reflection::Save(out, _helpOn);
 	reflection::Save(out, _toldTurn);
 	reflection::Save(out, _told);
+	out.EndPresentation();
 }
 
 bool CreatureHelpSystem::LoadState(reflection::BinaryReader& in)
