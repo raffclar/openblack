@@ -1812,7 +1812,7 @@ void DrawAgendaLengths(const creature_plan_actions::Executor& executor, creature
 } // namespace
 
 bool CreatureMindSystem::Adopt(entt::entity creature, CreatureMindState& mind, const creature_planner::Plan& plan,
-                               const creature_plan_actions::Situation& situation)
+                               const creature_plan_actions::Situation& situation, bool fightBodyEndsAgain)
 {
 	const auto* tables = GetTables();
 	if (tables == nullptr || plan.action >= tables->actions.size() || !mind.learnt.has_value() || !mind.desires.has_value())
@@ -1834,7 +1834,7 @@ bool CreatureMindSystem::Adopt(entt::entity creature, CreatureMindState& mind, c
 		auto& registry = Locator::entitiesRegistry::value();
 		if (registry.AllOf<CreatureFighting>(creature) && Locator::creatureFightSystem::has_value())
 		{
-			Locator::creatureFightSystem::value().CallOff(creature);
+			StopFightForPlan(creature, fightBodyEndsAgain);
 		}
 		if (Locator::creatureObjectActionSystem::has_value() &&
 		    Locator::creatureObjectActionSystem::value().GetState(creature) == CreatureObjectActionSystemInterface::State::Busy)
@@ -1885,7 +1885,7 @@ bool CreatureMindSystem::Adopt(entt::entity creature, CreatureMindState& mind, c
 	// A new plan ends the fight that the creature started by its own plan, for both creatures
 	if (registry.AllOf<CreatureFighting>(creature) && Locator::creatureFightSystem::has_value())
 	{
-		Locator::creatureFightSystem::value().CallOff(creature);
+		StopFightForPlan(creature, fightBodyEndsAgain);
 	}
 	// Whatever its hands were doing stops for the plan. An action that the body started plays on, and a point plays its
 	// end.
@@ -3325,7 +3325,7 @@ void CreatureMindSystem::PlanCreature(entt::entity creature, CreatureMindState& 
 	{
 		if (const auto plan = mind.planner.best.at(static_cast<size_t>(*only)); adopt && plan.has_value())
 		{
-			Adopt(creature, mind, *plan, situation);
+			Adopt(creature, mind, *plan, situation, false);
 		}
 		return;
 	}
@@ -3337,7 +3337,7 @@ void CreatureMindSystem::PlanCreature(entt::entity creature, CreatureMindState& 
 	mind.planner.currentHasNoSteps = mind.planActive && mind.idle.stoppedByScript && mind.idle.serial == mind.planSerial &&
 	                                 mind.idle.step >= mind.idle.agenda.size();
 	const auto choice = creature_planner::Choose(mind.planner);
-	if (choice.has_value() && !Adopt(creature, mind, *choice, situation))
+	if (choice.has_value() && !Adopt(creature, mind, *choice, situation, true))
 	{
 		mind.planner.best.at(static_cast<size_t>(choice->desire)).reset();
 	}
@@ -3453,7 +3453,7 @@ bool CreatureMindSystem::ForcePlan(entt::entity creature, const ForcedPlan& plan
 	EndReaction(creature);
 	if (!plan.ownFight)
 	{
-		EndFightForPlan(creature);
+		EndFightForPlan(creature, plan.fightBodyEndsAgain);
 	}
 	// A creature told to do something as soon as it is made has a mind ready for it
 	SetUpMind(creature, *body, *mind);
@@ -4319,7 +4319,8 @@ void CreatureMindSystem::LearnFromFeedback(entt::entity creature, CreatureMindSt
 			                                       .object = *held,
 			                                       .agenda = creature_mind::EatHeld(),
 			                                       .activity = creature_mind::Activity::Eat,
-			                                       .forced = false}));
+			                                       .forced = false,
+			                                       .fightBodyEndsAgain = true}));
 			// When the meal is done, it does again what it was stroked for. This replaces a thing that waits.
 			mind.followUp = creature_follow_up::FollowUp::DoLessonAgain;
 			return;
@@ -4715,7 +4716,7 @@ void CreatureMindSystem::CopyPlayersDeed(entt::entity creature, CreatureMindStat
 			            .priority = creature_planner::Priority(1.0f, std::nullopt,
 			                                                   creature_planner::ActionPriority(learnt.opinions.at(action)),
 			                                                   creature_planner::k_DefaultUsefulness, std::nullopt)},
-			           situation))
+			           situation, true))
 			{
 				continue;
 			}
@@ -5461,7 +5462,8 @@ void CreatureMindSystem::DoLessonAgain(entt::entity creature, CreatureMindState&
 	                                       .object = object,
 	                                       .instrument = instrument,
 	                                       .activityObject = whole,
-	                                       .ordered = true}));
+	                                       .ordered = true,
+	                                       .fightBodyEndsAgain = true}));
 }
 
 void CreatureMindSystem::DanceAfterMusic(entt::entity creature, CreatureMindState& mind)

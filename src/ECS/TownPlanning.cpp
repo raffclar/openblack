@@ -27,8 +27,10 @@
 #include "3D/MapCoords.h"
 #include "Common/GUtilsDistance.h"
 #include "Common/PortableRotations.h"
+#include "ECS/AbodeSurroundings.h"
 #include "ECS/Archetypes/AbodeArchetype.h"
 #include "ECS/BuildingConstruction.h"
+#include "ECS/BuildingReplan.h"
 #include "ECS/BuildingSites.h"
 #include "ECS/Components/Abode.h"
 #include "ECS/Components/Construction.h"
@@ -46,6 +48,7 @@
 #include "ECS/Registry.h"
 #include "ECS/Systems/Implementations/ObjectMeasures.h"
 #include "ECS/Systems/Implementations/VillagerFootpath.h"
+#include "ECS/Systems/MagicSystemInterface.h"
 #include "ECS/Systems/TimeSystemInterface.h"
 #include "ECS/Systems/TownDesireSystemInterface.h"
 #include "ECS/Systems/TownSystemInterface.h"
@@ -76,13 +79,20 @@ const GAbodeInfo& InfoOf(AbodeInfo info)
 	return Locator::infoConstants::value().abode.at(static_cast<size_t>(info));
 }
 
-/// What a building going up counts as among its town's sites: an abode its kind, a temple or worship site a citadel
+/// What a building going up counts as among its town's sites: an abode or a dispenser its kind, a temple or worship site
+/// a citadel
 AbodeType SiteTypeOf(entt::entity building)
 {
 	auto& registry = Entities();
 	if (const auto* abode = registry.TryGet<const Abode>(building); abode != nullptr && abode->info != AbodeInfo::None)
 	{
 		return InfoOf(abode->info).abodeType;
+	}
+	// A miracle dispenser going up counts as its kind, as an abode does
+	if (const auto* dispenser = registry.TryGet<const SpellDispenser>(building);
+	    dispenser != nullptr && dispenser->building != AbodeInfo::None)
+	{
+		return InfoOf(dispenser->building).abodeType;
 	}
 	if (registry.AnyOf<Temple, WorshipSite>(building))
 	{
@@ -317,6 +327,30 @@ bool TakesNewHouse(entt::entity town, entt::entity plan)
 	return planned_building::IsClearToBuild(footprint, DryLandAt(transform.position), reach);
 }
 
+/// A building of a town goes up at a place, turned, scaled and with a part of it built. A miracle dispenser goes up as a
+/// dispenser that holds no miracle and is off, and puts up the things round itself as any building does. Any other
+/// building goes up as an abode. The building, none when it did not go up.
+entt::entity MakeBuilding(uint32_t townId, AbodeInfo info, glm::vec3 position, float yAngle, float scale, float built)
+{
+	if (!building_replan::MadeAsDispenser(InfoOf(info).abodeType))
+	{
+		return archetypes::AbodeArchetype::Create(townId, position, info, yAngle, scale, 0, 0, built);
+	}
+	if (!Locator::magicSystem::has_value())
+	{
+		return entt::null;
+	}
+	const auto& towns = Entities().Context().towns;
+	const auto town = towns.find(townId);
+	const auto dispenser = Locator::magicSystem::value().CreateTownDispenser(
+	    position, info, yAngle, scale, town != towns.end() ? town->second : entt::null, built);
+	if (dispenser != entt::null)
+	{
+		abode_surroundings::Create(dispenser);
+	}
+	return dispenser;
+}
+
 /// A planned building goes up where it was planned, with nothing of it built and a site for its builders wanting them
 /// by a desire. The town's people gather elsewhere if it stands on their gathering place. The building, if it went up.
 entt::entity Start(entt::entity town, entt::entity plan, float siteDesire)
@@ -329,8 +363,8 @@ entt::entity Start(entt::entity town, entt::entity plan, float siteDesire)
 	const auto planned = registry.Get<const PlannedAbode>(plan);
 	const auto transform = registry.Get<const Transform>(plan);
 	std::erase(registry.Get<Town>(town).planned, plan);
-	const auto building = archetypes::AbodeArchetype::Create(planned.townId, transform.position, planned.info, planned.yAngle,
-	                                                         transform.scale.x, 0, 0, 0.0f);
+	const auto building =
+	    MakeBuilding(planned.townId, planned.info, transform.position, planned.yAngle, transform.scale.x, 0.0f);
 	// The footpaths laid to the plan lead to the building that goes up in its place
 	if (building != entt::null)
 	{
@@ -344,7 +378,14 @@ entt::entity Start(entt::entity town, entt::entity plan, float siteDesire)
 	// A finished building put up again from its plan counts as put up for mending until it is whole
 	if (planned.wasBuilt)
 	{
-		registry.Get<Abode>(building).putUpForMending = true;
+		if (auto* abode = registry.TryGet<Abode>(building))
+		{
+			abode->putUpForMending = true;
+		}
+		else if (auto* dispenser = registry.TryGet<SpellDispenser>(building))
+		{
+			dispenser->putUpForMending = true;
+		}
 	}
 	if (Locator::townSystem::has_value())
 	{
@@ -511,29 +552,26 @@ void town_planning::MendBest(entt::entity town)
 void town_planning::PlanAgain(entt::entity building)
 {
 	auto& registry = Entities();
-	const auto* abode = registry.TryGet<const Abode>(building);
-	const auto* transform = registry.TryGet<const Transform>(building);
-	if (abode == nullptr || transform == nullptr || abode->info == AbodeInfo::None || abode->notPlannedAgain)
-	{
-		return;
-	}
-	const auto town = registry.Context().towns.find(abode->townId);
-	if (town == registry.Context().towns.end() || !registry.Valid(town->second))
+	const auto replan = building_replan::Of(registry, building);
+	if (!replan.has_value())
 	{
 		return;
 	}
 	// On the land where it stood, as the land's script places a plan
-	auto position = transform->position;
+	auto position = replan->position;
 	if (Locator::terrainSystem::has_value() && Locator::terrainSystem::value().IsLoaded())
 	{
 		position.y = Locator::terrainSystem::value().GetHeightAt(glm::xz(position));
 	}
-	const auto plan = archetypes::AbodeArchetype::CreatePlan(
-	    abode->townId, position, abode->info, planned_building::YAngleOf(transform->rotation), transform->scale.x);
-	if (plan != entt::null)
+	const auto plan =
+	    archetypes::AbodeArchetype::CreatePlan(replan->townId, position, replan->info, replan->yAngle, replan->scale);
+	if (plan == entt::null)
 	{
-		registry.Get<PlannedAbode>(plan).wasBuilt = construction::IsBuilt(building);
+		return;
 	}
+	registry.Get<PlannedAbode>(plan).wasBuilt = replan->wasBuilt;
+	// The plan keeps the footpaths of the building, and gives them to the building that goes up in its place
+	villager_footpath::HandOverFootpaths(building, plan);
 }
 
 std::vector<scaffold_offer::Candidate> town_planning::ScaffoldCandidates(entt::entity town, Tribe tribe, uint32_t value,
@@ -618,8 +656,7 @@ entt::entity town_planning::StartForScaffold(entt::entity town, AbodeInfo info, 
 	{
 		return entt::null;
 	}
-	const auto building =
-	    archetypes::AbodeArchetype::Create(registry.Get<const Town>(town).id, place, info, yAngle, scale, 0, 0, 0.0f);
+	const auto building = MakeBuilding(registry.Get<const Town>(town).id, info, place, yAngle, scale, 0.0f);
 	if (building == entt::null)
 	{
 		return entt::null;

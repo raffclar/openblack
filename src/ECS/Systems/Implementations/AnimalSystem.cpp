@@ -324,6 +324,7 @@ entt::entity AnimalSystem::CreateLoadedAnimal(const LoadedAnimal& loaded)
 	animal.move.angle = loaded.angle;
 	animal.move.speed = loaded.speed;
 	animal.move.step = loaded.step;
+	animal.bank = animals::Zoomer::Resume(loaded.bank);
 	// A move that goes round a thing is not kept yet: the animal steps straight through to its goal
 	animal.move.stage = animals::MoveStageOfGame(loaded.moveState).value_or(animals::MoveStage::StepThrough);
 	// A state that openblack does not have yet becomes a new decision
@@ -343,12 +344,9 @@ entt::entity AnimalSystem::CreateLoadedAnimal(const LoadedAnimal& loaded)
 	}
 	if (grazer)
 	{
-		// It sleeps where its herd's home is
-		auto& needs = registry.Assign<Grazer>(entity);
-		if (flockData != nullptr)
-		{
-			needs.sleepingCell = map_coords::Cell(flockData->place);
-		}
+		registry.Assign<Grazer>(entity,
+		                        Grazer {.needs = {.hunger = loaded.hunger, .sleep = loaded.sleep, .breed = loaded.breed},
+		                                .sleepingCell = loaded.sleepCell});
 	}
 	return entity;
 }

@@ -66,7 +66,7 @@ uint32_t ecs::villager_teleport::GoTowardsTeleportReaction(LivingAction& action)
 	}
 	// Else it starts a walk round things to the stone. The walk ends in the state that the villager works towards.
 	const auto goal = registry.Get<const Transform>(traveller->stone).position;
-	ecs::villager_home::SetupMoveTo(action, {goal.x, goal.z}, living.VillagerGetFinalState(action));
+	ecs::villager_home::SetupMoveTo(action, glm::vec2 {goal.x, goal.z}, living.VillagerGetFinalState(action));
 	return 1;
 }
 

@@ -13,6 +13,7 @@
 
 #include <algorithm>
 #include <iterator>
+#include <ranges>
 #include <string>
 #include <vector>
 
@@ -54,14 +55,14 @@ namespace
 constexpr std::string_view k_FirstTemple = "temple/b_first_temple_l3d";
 
 /// The name of the temple's own mesh in the cache
-std::string OwnMeshName(entt::entity entity)
+std::string MeshNameOf(entt::entity entity)
 {
-	return fmt::format("temple/exterior/{}", static_cast<uint32_t>(entity));
+	return TempleExteriorMorph::OwnMeshName(static_cast<uint32_t>(entity));
 }
 
 entt::id_type OwnMeshId(entt::entity entity)
 {
-	return entt::hashed_string(OwnMeshName(entity).c_str()).value();
+	return entt::hashed_string(MeshNameOf(entity).c_str()).value();
 }
 
 /// What the temple's blend comes from: its look now and the textures of its player
@@ -156,6 +157,26 @@ void TempleExteriorSystem::FindAfterLoad()
 	    });
 }
 
+void TempleExteriorSystem::ForgetLand()
+{
+	// The meshes made for the temples of the land go with the temples. The next land's temples get new meshes.
+	if (Locator::resources::has_value())
+	{
+		auto& resources = Locator::resources::value();
+		auto& meshes = resources.GetMeshes();
+		auto& files = resources.GetL3DFiles();
+		for (const auto templeMesh : _blends | std::views::keys)
+		{
+			for (const auto made : TempleExteriorMorph::MeshesMadeFor(templeMesh))
+			{
+				meshes.Erase(made);
+			}
+			files.Erase(templeMesh);
+		}
+	}
+	_blends.clear();
+}
+
 void TempleExteriorSystem::Morph(entt::entity entity, Mesh& mesh, const TempleExterior& exterior, PlayerNames owner,
                                  MadeBlends& made)
 {
@@ -213,17 +234,17 @@ void TempleExteriorSystem::Morph(entt::entity entity, Mesh& mesh, const TempleEx
 	// The temple's own mesh, made once from the first temple's and changed after. A mesh made from the blend has the
 	// vertices of the blend already.
 	auto& meshes = resources.GetMeshes();
-	const auto name = OwnMeshName(entity);
+	const auto name = MeshNameOf(entity);
 	const auto id = entt::hashed_string(name.c_str()).value();
 	if (!meshes.Contains(id))
 	{
 		meshes.Load(id, resources::L3DLoader::FromDynamicFileTag {}, name, blended);
-		mesh.id = id;
 	}
 	else
 	{
 		meshes.Handle(id)->UpdateVertices(blended);
 	}
+	mesh.id = id;
 	auto& temple = *meshes.Handle(id);
 	// The same look and textures always give the same blend
 	_blends.insert_or_assign(id, BlendOf(exterior, owner));

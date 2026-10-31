@@ -131,6 +131,11 @@ void SaveGameSystem::ImportVanillaAnimals(const gamesave::VanillaWorld& world, V
 		flock.domainRadius = file.domainRadius;
 		flock.flockDistance = file.flockDistance;
 		flock.shepherd = EntityOf(made, file.shepherd);
+		flock.turnsOnLeg = file.turnsOnLeg;
+		flock.keepsTogether = file.keepsTogether;
+		flock.calm = file.calm;
+		flock.scriptId = file.scriptId;
+		flock.height = file.height;
 		flock.members.clear();
 		made.emplace(file.number, entity);
 		++flocks;
@@ -177,13 +182,26 @@ void SaveGameSystem::ImportVanillaAnimals(const gamesave::VanillaWorld& world, V
 		                                               .state = animal->state,
 		                                               .finalState = animal->finalState,
 		                                               .flock = EntityOf(made, animal->flock),
-		                                               .town = EntityOf(made, animal->town)});
+		                                               .town = EntityOf(made, animal->town),
+		                                               .hunger = animal->hunger,
+		                                               .sleep = animal->sleep,
+		                                               .breed = animal->breed,
+		                                               .sleepCell = animal->sleepCell,
+		                                               .bank = animal->bank});
 		if (entity == entt::null)
 		{
 			++lost;
 			continue;
 		}
 		made.emplace(animal->number, entity);
+	}
+	// Each flock keeps the most members that it had in the file
+	for (const auto& file : imported.flocks)
+	{
+		if (const auto entity = EntityOf(made, file.number); entity != entt::null && registry.AllOf<Flock>(entity))
+		{
+			registry.Get<Flock>(entity).most = file.mostMembers;
+		}
 	}
 	SPDLOG_LOGGER_INFO(ImportLog(), "Made {} animals ({} not made) and {} flocks ({} of temples)", order.size() - lost, lost,
 	                   flocks, templeFlocks);

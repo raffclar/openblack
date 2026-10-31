@@ -43,6 +43,7 @@ public:
 	void KilledVillager(entt::entity villager) override;
 	void CreatureWonFight(entt::entity creature) override;
 	void WorshipperDied() override;
+	void ResourceDropped(PlayerNames giver, glm::vec3 at, guidance::Gift gift) override;
 	void LosingVillager(entt::entity villager) override;
 	void LowOnPeople(entt::entity town) override;
 	void TownChangedHands(entt::entity town, PlayerNames loser, PlayerNames taker) override;

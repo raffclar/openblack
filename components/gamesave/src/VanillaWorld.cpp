@@ -922,18 +922,24 @@ void ReadAnimal(WorldReader& r)
 {
 	// No state of an animal keeps more values
 	ReadLiving(r);
-	r.Ref();
-	r.Half();
-	r.Half();
-	r.Half();
-	r.Half();
-	r.Bytes(8);
-	r.Ref();
+	r.Ref("animalTown");
+	// The needs. Each grows by one a turn up to the limit of the kind.
+	r.Half("hunger");
+	r.Half("sleep");
+	r.Half("breed");
+	// The kind of land under the animal, for a kind that needs one kind of land
+	r.Half("environment");
+	// The food that the animal found, in whole map units (x, z). Both 0 for no food.
+	r.Bytes(8, "foodPlace");
+	r.Ref("animalTarget");
+	// Two halves that only the constructor sets
 	r.Word();
-	r.Word();
-	r.Word();
-	r.Byte();
-	r.Bytes(48);
+	// The cells (x, z) where the animal sleeps and where it finds its kind of land. Both 0 for no cell.
+	r.Bytes(4, "sleepCell");
+	r.Bytes(4, "environmentCell");
+	r.Byte("deathReason");
+	// The tilt into a turn: a value that moves smoothly to its target
+	r.Bytes(48, "bank");
 }
 
 void ReadInterfaceStatus(WorldReader& r)

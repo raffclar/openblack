@@ -83,6 +83,7 @@
 #include "ECS/Components/DeadTree.h"
 #include "ECS/Components/Field.h"
 #include "ECS/Components/HandGrab.h"
+#include "ECS/Components/Indestructible.h"
 #include "ECS/Components/Mesh.h"
 #include "ECS/Components/Mobile.h"
 #include "ECS/Components/ScriptControl.h"
@@ -584,6 +585,13 @@ bool BodyInDuel(const ecs::Registry& registry, entt::entity creature)
 {
 	const auto* fighting = registry.TryGet<const CreatureFighting>(creature);
 	return fighting != nullptr && fighting->stage == CreatureFighting::Stage::Duel && !fighting->ended;
+}
+
+/// Whether nothing can bring the life of the creature to nearly none: a script holds it in a cutscene, or it is
+/// indestructible
+bool LifeProtected(const ecs::Registry& registry, entt::entity creature)
+{
+	return ecs::world_objects::HeldDuringCutscene(creature) || registry.AllOf<Indestructible>(creature);
 }
 
 /// How many times the life of the creature pays for its fight when its body ends its fight a number of times. Its life
@@ -1693,7 +1701,12 @@ void CreatureFightSystem::CallOffForWalkBack(entt::entity creature)
 	CallOffWith(creature, fight::CallOffStart::BodyFirst);
 }
 
-void CreatureFightSystem::CallOffWith(entt::entity creature, fight::CallOffStart start)
+void CreatureFightSystem::CallOffForPlan(entt::entity creature)
+{
+	CallOffWith(creature, fight::CallOffStart::Failure, true);
+}
+
+void CreatureFightSystem::CallOffWith(entt::entity creature, fight::CallOffStart start, bool endedFightPays)
 {
 	auto& registry = Locator::entitiesRegistry::value();
 	auto* fighting = registry.TryGet<CreatureFighting>(creature);
@@ -1715,6 +1728,12 @@ void CreatureFightSystem::CallOffWith(entt::entity creature, fight::CallOffStart
 		if (side == nullptr)
 		{
 			continue;
+		}
+		// The fight is over, but a stop for a new plan ends the fight of the body again. The life pays again while the
+		// body plays a move of the fight.
+		if (endedFightPays && side->ended)
+		{
+			PayLifeForFight(self, payments.at(index), "stopped_again");
 		}
 		if (side->stage == CreatureFighting::Stage::Duel)
 		{
@@ -4155,7 +4174,7 @@ void CreatureFightSystem::LandBlow(entt::entity creature, const glm::vec3& point
 	    },
 	    direction);
 	const auto healthBefore = victim.health;
-	victim.health = std::max(victim.health - result.damage, 0.0f);
+	victim.health = fight::HealthAfterBlow(victim.health, result.damage);
 	const auto blowIndex = fight_transcript::Note(
 	    creature, "blow",
 	    [&] {
@@ -4423,7 +4442,7 @@ void CreatureFightSystem::PayLifeForFight(entt::entity creature, uint32_t paymen
 		return;
 	}
 	const auto before = needs->needs.life;
-	needs->needs.life = fight::LifeAfterPayments(before, fighting->fighter.health, payments);
+	needs->needs.life = fight::LifeAfterPayments(before, fighting->fighter.health, payments, LifeProtected(registry, creature));
 	fight_transcript::Note(creature, "level", [&] {
 		auto fields = LevelChange(creature, "life", before, needs->needs.life, why);
 		fields.emplace_back("life_payments", payments);
@@ -4678,7 +4697,8 @@ void CreatureFightSystem::EndFightFor(entt::entity creature, std::optional<bool>
 	if (auto* needs = lifePayments > 0 ? registry.TryGet<CreatureNeeds>(creature) : nullptr)
 	{
 		const auto before = needs->needs.life;
-		needs->needs.life = fight::LifeAfterPayments(needs->needs.life, fighting->fighter.health, lifePayments);
+		needs->needs.life = fight::LifeAfterPayments(needs->needs.life, fighting->fighter.health, lifePayments,
+		                                             LifeProtected(registry, creature));
 		fight_transcript::Note(
 		    creature, "level",
 		    [&] {

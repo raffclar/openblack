@@ -242,6 +242,12 @@ enum class SelectionStep : uint8_t
 /// cast and from an icon, and the hand must have asked for a power-up. A miracle that a gesture sizes must have that
 /// gesture as the last gesture drawn.
 [[nodiscard]] bool CountsPoweredUpCast(const HandContext::Seed& seed, GestureType lastGesture);
+/// Whether the cast of a miracle passes the check of the gesture that sizes it. A miracle that no gesture sizes always
+/// passes. Another miracle passes when the gesture kept for the cast is its sizing gesture.
+[[nodiscard]] constexpr bool PassesSizingCheck(GestureType sizingGesture, GestureType keptGesture)
+{
+	return sizingGesture == GestureType::None || keptGesture == sizingGesture;
+}
 /// The power-up gestures that the hand offers for the seed in it when it starts its power-ups: the gesture of each level
 /// that the seed has and that is offered. A level is offered when the player may cast its miracle and the icon of the
 /// seed can charge it.

@@ -341,6 +341,39 @@ void SpellIconSystem::TownChangedHands(entt::entity town, PlayerNames previous)
 	}
 }
 
+void SpellIconSystem::TownRemoved(entt::entity town)
+{
+	auto& registry = Entities();
+	if (!registry.Valid(town) || !registry.AllOf<Town>(town))
+	{
+		return;
+	}
+	// Its player counts one town less that offers each miracle that it offers
+	if (const auto* magicHeld = registry.TryGet<const TownMagic>(town))
+	{
+		const auto owner = registry.Get<const Town>(town).owner;
+		for (size_t i = 0; i < magicHeld->held.size(); ++i)
+		{
+			if (magicHeld->held.at(i))
+			{
+				SetEnabled(owner, static_cast<MagicType>(i), false);
+			}
+		}
+	}
+	// Its stone hands go
+	std::vector<entt::entity> hands;
+	registry.Each<const TownCentreIcon>([town, &hands](entt::entity hand, const TownCentreIcon& icon) {
+		if (icon.town == town)
+		{
+			hands.push_back(hand);
+		}
+	});
+	for (const auto hand : hands)
+	{
+		Destroy(hand);
+	}
+}
+
 void SpellIconSystem::PlayerMade(PlayerNames player)
 {
 	// The towns of the player gave their miracles to no one while the player had no entity
@@ -643,6 +676,45 @@ icons::IconCharge SpellIconSystem::ChargeOf(const WorshipIcon& icon, PlayerNames
 	        .required = RequiredNow(icon, held)};
 }
 
+entt::entity SpellIconSystem::BestIconFor(PlayerNames player, SpellSeedType seed) const
+{
+	if (seed == SpellSeedType::None || !Locator::worshipSiteSystem::has_value())
+	{
+		return entt::null;
+	}
+	// Only a site with more prayer power left than the best so far takes its place, so the first site wins a tie
+	entt::entity best = entt::null;
+	float bestChants = -1.0f;
+	for (const auto site : SitesOf(player))
+	{
+		const float chants = Locator::worshipSiteSystem::value().ChantsAvailable(site);
+		const auto icon = SiteIconOf(site, seed);
+		if (IconValidForRequest(icon, player) && chants > bestChants)
+		{
+			bestChants = chants;
+			best = icon;
+		}
+	}
+	return best;
+}
+
+void SpellIconSystem::SeedMadeAt(entt::entity icon, entt::entity seed)
+{
+	auto& registry = Entities();
+	auto* component = registry.Valid(icon) ? registry.TryGet<WorshipIcon>(icon) : nullptr;
+	if (component == nullptr)
+	{
+		return;
+	}
+	// Seeds made before that are gone no longer count as out
+	std::erase_if(component->seedsOut,
+	              [&registry](entt::entity out) { return !registry.Valid(out) || !registry.AllOf<SpellSeed>(out); });
+	if (std::ranges::find(component->seedsOut, seed) == component->seedsOut.end())
+	{
+		component->seedsOut.push_back(seed);
+	}
+}
+
 bool SpellIconSystem::GiveSeed(entt::entity icon, PlayerNames holder)
 {
 	auto& registry = Entities();
@@ -660,10 +732,7 @@ bool SpellIconSystem::GiveSeed(entt::entity icon, PlayerNames holder)
 		return false;
 	}
 	component.store -= carried;
-	// Seeds made before that are gone no longer count as out
-	std::erase_if(component.seedsOut,
-	              [&registry](entt::entity out) { return !registry.Valid(out) || !registry.AllOf<SpellSeed>(out); });
-	component.seedsOut.push_back(seed);
+	SeedMadeAt(icon, seed);
 	return true;
 }
 
@@ -916,19 +985,8 @@ bool SpellIconSystem::RequestSeed(PlayerNames player, SpellSeedType seed)
 	{
 		return false;
 	}
-	// The icon at the site with the most prayer power left this turn gives the miracle; the first site wins a tie
-	entt::entity best = entt::null;
-	float bestChants = -1.0f;
-	for (const auto site : SitesOf(player))
-	{
-		const float chants = Locator::worshipSiteSystem::value().ChantsAvailable(site);
-		const auto icon = SiteIconOf(site, seed);
-		if (IconValidForRequest(icon, player) && chants > bestChants)
-		{
-			bestChants = chants;
-			best = icon;
-		}
-	}
+	// The icon at the site with the most prayer power left this turn gives the miracle
+	const auto best = BestIconFor(player, seed);
 	if (best == entt::null)
 	{
 		return false;
@@ -989,7 +1047,7 @@ bool SpellIconSystem::Tap(entt::entity icon, PlayerNames player)
 	// may tap a neutral icon, and its miracle goes into the hand that tapped it.
 	const bool everywhere = InfluenceEverywhere();
 	entt::entity siteIcon = icon;
-	size_t hand = 0;
+	int32_t place = 0;
 	if (const auto* centreHand = registry.TryGet<const TownCentreIcon>(icon))
 	{
 		const auto* town = registry.Valid(centreHand->town) ? registry.TryGet<const Town>(centreHand->town) : nullptr;
@@ -998,7 +1056,7 @@ bool SpellIconSystem::Tap(entt::entity icon, PlayerNames player)
 			return false;
 		}
 		siteIcon = SiteIconOf(town->worshipSite, centreHand->seed);
-		hand = centreHand->hand;
+		place = centreHand->hand;
 	}
 	else if (const auto* worshipIcon = registry.TryGet<const WorshipIcon>(icon))
 	{
@@ -1007,6 +1065,7 @@ bool SpellIconSystem::Tap(entt::entity icon, PlayerNames player)
 		{
 			return false;
 		}
+		place = worshipIcon->place;
 	}
 	else
 	{
@@ -1017,11 +1076,12 @@ bool SpellIconSystem::Tap(entt::entity icon, PlayerNames player)
 		return false;
 	}
 	const auto result = TapSiteIcon(siteIcon, player);
-	// A tap that did something clicks, faster the further along the centre its hand stands, for the hand at this machine
+	// A tap that did something clicks for the hand at this machine. The click is faster when the tapped stone hand stands
+	// further along its centre, or the tapped site icon further along its site.
 	if (result != icons::TapResult::Nothing && player == OwnPlayer() && Locator::sounds::has_value())
 	{
 		audio::StartGameSoundEffect(static_cast<entt::id_type>(audio::SoundId::G_ClickOnSpell_01),
-		                            {.pitchPercent = icons::ClickPitch(hand)});
+		                            {.pitchPercent = icons::ClickPitch(place)});
 	}
 	return true;
 }

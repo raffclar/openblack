@@ -172,6 +172,8 @@ public:
 	entt::entity CreateDispenser(glm::vec3 position, MagicType type, float yAngleRadians) override;
 	entt::entity CreateScriptDispenser(glm::vec3 position, AbodeInfo building, float yAngleRadians, float scale,
 	                                   entt::entity town) override;
+	entt::entity CreateTownDispenser(glm::vec3 position, AbodeInfo building, float yAngleRadians, float scale,
+	                                 entt::entity town, float built) override;
 	void SetDispenserMagic(entt::entity dispenser, MagicType type, uint32_t turns) override;
 	void SetDispenserPeriod(entt::entity dispenser, float seconds) override;
 	void ChargeDispenser(entt::entity dispenser) override;
@@ -181,6 +183,7 @@ public:
 	entt::entity CreateOneOffSeed(glm::vec3 position, SpellSeedType seed, int powerUp, float multiplier) override;
 	entt::entity CreateOneOffSeedFor(glm::vec3 position, MagicType type) override;
 	entt::entity GiveSeedToHand(PlayerNames player, SpellSeedType seed, int powerUp, float multiplier) override;
+	entt::entity GiveOneShotSeedToHand(PlayerNames player, SpellSeedType seed, int powerUp, float multiplier) override;
 	entt::entity SummonSeed(PlayerNames player, SpellSeedType seed, int powerUp) override;
 	entt::entity SummonSeedAtSite(entt::entity site, SpellSeedType seed, int powerUp) override;
 	entt::entity TakeIconSeed(entt::entity site, PlayerNames holder, SpellSeedType seed, int powerUp, float chants) override;

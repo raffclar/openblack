@@ -35,6 +35,8 @@ public:
 	void DrawContents() noexcept { Draw(); }
 	/// Hands the event to the window, and whether the window takes it for itself, keeping it from the game
 	bool WindowProcessEvent(const SDL_Event& event) noexcept;
+	/// Whether the window, when it is open, would take the event for itself and keep it from the game
+	[[nodiscard]] bool WouldTakeEvent(const SDL_Event& event) const noexcept { return _open && TakesEvent(event); }
 	[[nodiscard]] bool IsOpen() const noexcept { return _open; }
 	[[nodiscard]] const std::string& GetName() const noexcept { return _name; }
 	virtual void Open() noexcept;

@@ -2214,7 +2214,7 @@ void CreatureMindSystem::DesiresTurn(entt::entity entity)
 	{
 		TellFainting(entity);
 		needs->faint.reset();
-		Locator::creatureFightSystem::value().CallOff(entity);
+		Locator::creatureFightSystem::value().CallOffForPlan(entity);
 		Locator::creatureFightSystem::value().KnockOut(entity);
 		return;
 	}
@@ -3150,7 +3150,7 @@ void CreatureMindSystem::ReceiveFeedback(entt::entity creature, float feedback)
 	// A fight that its plan started again after the hold stops for both creatures, with no winner.
 	if (registry.AllOf<CreatureFighting>(creature) && Locator::creatureFightSystem::has_value())
 	{
-		Locator::creatureFightSystem::value().CallOff(creature);
+		Locator::creatureFightSystem::value().CallOffForPlan(creature);
 	}
 	if (Locator::creatureObjectActionSystem::has_value())
 	{
@@ -3515,14 +3515,27 @@ void CreatureMindSystem::ObeyEnded(entt::entity creature, entt::entity asker)
 	AbandonAction(creature);
 }
 
-void CreatureMindSystem::EndFightForPlan(entt::entity creature)
+void CreatureMindSystem::EndFightForPlan(entt::entity creature, bool fightBodyEndsAgain)
 {
 	if (!Locator::creatureFightSystem::has_value())
 	{
 		return;
 	}
-	auto& fights = Locator::creatureFightSystem::value();
+	const auto& fights = Locator::creatureFightSystem::value();
 	if (fights.IsFighting(creature) && !fights.IsDuelling(creature))
+	{
+		StopFightForPlan(creature, fightBodyEndsAgain);
+	}
+}
+
+void CreatureMindSystem::StopFightForPlan(entt::entity creature, bool fightBodyEndsAgain)
+{
+	auto& fights = Locator::creatureFightSystem::value();
+	if (fightBodyEndsAgain)
+	{
+		fights.CallOffForPlan(creature);
+	}
+	else
 	{
 		fights.CallOff(creature);
 	}
@@ -3870,7 +3883,7 @@ void CreatureMindSystem::GiveUpAction(entt::entity creature)
 	// The failure stops a fight that the creature is in, for both creatures, with the strength gains of the stop
 	if (registry.Valid(creature) && registry.AllOf<CreatureFighting>(creature) && Locator::creatureFightSystem::has_value())
 	{
-		Locator::creatureFightSystem::value().CallOff(creature);
+		Locator::creatureFightSystem::value().CallOffForPlan(creature);
 	}
 	AbandonAction(creature);
 }

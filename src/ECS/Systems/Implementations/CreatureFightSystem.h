@@ -55,6 +55,7 @@ public:
 	void AbortFight(entt::entity creature) override;
 	void CallOff(entt::entity creature) override;
 	void CallOffForWalkBack(entt::entity creature) override;
+	void CallOffForPlan(entt::entity creature) override;
 	void HandTookHold(entt::entity creature) override;
 	void HandLetGo(entt::entity creature) override;
 	void EndBodyFightAgain(entt::entity creature) override;
@@ -170,7 +171,7 @@ private:
 	/// The life of the creature pays for its fight a number of times
 	void PayLifeForFight(entt::entity creature, uint32_t payments, std::string_view why);
 	/// The fight is called off by the calls of the start of the stop
-	void CallOffWith(entt::entity creature, creature_fight::CallOffStart start);
+	void CallOffWith(entt::entity creature, creature_fight::CallOffStart start, bool endedFightPays = false);
 	/// The creature gets the strength gain of the fight action a number of times
 	static void GainStrength(entt::entity creature, uint32_t times);
 	/// The first creature won by the life of the other creature, which stays in its duel. Its order to respond stops the

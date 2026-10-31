@@ -363,6 +363,10 @@ public:
 		/// Some orders of the leash keep one or both.
 		bool stopsWalk {true};
 		bool endsBody {true};
+		/// After a fight that is over, the stop for the plan ends the fight of the body again while the body still plays
+		/// a move of the fight, and the life pays again. The plans that the feedback of the player forces do this. The
+		/// other forced plans have a stop of their own, or keep the body.
+		bool fightBodyEndsAgain {false};
 		/// The plan is the part of the creature in its own fight, so the plan keeps the fight. Each other forced plan
 		/// stops a fight that the creature sets up, for both creatures.
 		bool ownFight {false};

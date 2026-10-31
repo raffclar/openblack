@@ -113,6 +113,7 @@ void openblack::ecs::reflection::RegisterFields_Components_t(entt::meta_ctx& con
 	    .Field<&components::Town::abodes>("abodes")
 	    .Field<&components::Town::gained>("gained")
 	    .Field<&components::Town::made>("made")
+	    .RunField<&components::Town::zeroBaseInfluence>("zeroBaseInfluence")
 	    .Field<&components::Town::countedAsNew>("countedAsNew")
 	    .Field<&components::Town::injured>("injured")
 	    .Field<&components::Town::deathsByKiller>("deathsByKiller", {k_PlayerNamesNames, k_DeathReasonNames})

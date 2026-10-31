@@ -126,6 +126,12 @@ void WorshipSiteSystem::PersonJoinedTown(entt::entity town)
 
 void WorshipSiteSystem::TownChangedHands(entt::entity town)
 {
+	TownRemoved(town);
+	CheckAddSite(town);
+}
+
+void WorshipSiteSystem::TownRemoved(entt::entity town)
+{
 	auto& registry = _world->Entities();
 	auto& component = registry.Get<Town>(town);
 	if (registry.Valid(component.worshipSite))
@@ -147,7 +153,6 @@ void WorshipSiteSystem::TownChangedHands(entt::entity town)
 		}
 	}
 	component.worshipSite = entt::null;
-	CheckAddSite(town);
 }
 
 void WorshipSiteSystem::CheckAddSite(entt::entity town)

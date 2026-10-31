@@ -86,6 +86,8 @@ enum class Gift : uint8_t
 /// - less than 0.25: a displeased answer for food, and a pleased answer for wood and rain (as in the game).
 /// - else: no answer.
 [[nodiscard]] std::optional<uint32_t> GiftAnswer(Gift gift, float rawDesire, uint32_t draw);
+/// Whether a town with this raw desire for a gift answers it. The game draws the answer only when the town answers.
+[[nodiscard]] bool GiftAnswered(float rawDesire);
 
 /// The town desire voices: every tenth turn, the people of the town near the camera call out what their town wants most.
 /// The people at a worship site near the camera call out for food or for more worshippers.
@@ -177,6 +179,8 @@ constexpr uint32_t k_VoicePitch = 100;
 constexpr float k_VoiceNearShare = 0.333f;
 /// A town answers a gift that falls this near to it, and the player hears the answer this far
 constexpr float k_GiftTownReach = 100.0f;
+/// A town has three answers of each kind to a gift
+constexpr uint32_t k_GiftAnswers = 3;
 constexpr float k_GiftAnswerReach = 200.0f;
 
 } // namespace openblack::guidance

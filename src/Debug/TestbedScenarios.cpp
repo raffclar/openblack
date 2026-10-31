@@ -232,6 +232,7 @@ void TestbedScenarios::RunRequested() noexcept
 	    .autoSave = scenario->crowd.has_value() && request->benchmark
 	                    ? std::optional(request->results.value_or(std::filesystem::path("benchmarks") / scenario->id))
 	                    : std::nullopt,
+	    .reportChecks = request->checks,
 	});
 	_focus = 0;
 	_runner.Start(*scenario);

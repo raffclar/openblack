@@ -30,7 +30,7 @@ namespace
 
 /// The click's playback rate by hand; the last is never reached, as the hands after the sixth play the sixth's
 constexpr std::array<uint32_t, 7> k_ClickPitches {100, 115, 130, 145, 155, 175, 190};
-constexpr size_t k_LastClickHand = 5;
+constexpr int32_t k_LastClickPlace = 5;
 
 /// The announcer's sample for each seed, by seed; the lightning's, and the seeds with none of their own, are 8
 constexpr int k_DefaultVoice = 8;
@@ -250,9 +250,18 @@ TapResult Request(const IconCharge& icon, bool handReady, bool magicEnabled, std
 	return TapResult::Nothing;
 }
 
-uint32_t ClickPitch(size_t hand)
+int32_t SitePlace(std::optional<uint32_t> point)
 {
-	return k_ClickPitches.at(std::min(hand, k_LastClickHand));
+	if (!point.has_value() || *point < k_FirstSitePoint)
+	{
+		return -1;
+	}
+	return static_cast<int32_t>(*point - k_FirstSitePoint);
+}
+
+uint32_t ClickPitch(int32_t place)
+{
+	return k_ClickPitches.at(static_cast<size_t>(std::clamp(place, 0, k_LastClickPlace)));
 }
 
 int FullyChargedVoice(SpellSeedType seed)

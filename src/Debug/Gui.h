@@ -45,6 +45,7 @@ public:
 	void KeepOffTheMouse(bool off) noexcept override;
 	[[nodiscard]] std::vector<WindowState> ListWindows() const noexcept override;
 	void CloseWindow(std::string_view name) noexcept override;
+	[[nodiscard]] std::string WindowTakingEvent(const SDL_Event& event) const noexcept override;
 	bool PressButton(std::string_view window, std::span<const ButtonPathStep> path) noexcept override;
 	bool Loop() noexcept override;
 	void Draw() noexcept override;
