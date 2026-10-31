@@ -1677,10 +1677,41 @@
   "query": "players.custom_music"
  },
  {
-  "description": "The players: their entities, primary creatures, computer minds and alignment",
+  "description": "The players: their entities, primary creatures, computer minds (the nodes wanted now; players.computer_nodes has every node) and alignment",
   "kind": "list",
   "parameters": [],
   "query": "players.list"
+ },
+ {
+  "description": "Every node of the tree of one computer god's mind: its name, personality weight, suppression, how much it was wanted when last looked at, its place in the tree and the node above. Pages with limit and cursor. name keeps only the nodes that the script name finds",
+  "kind": "list",
+  "parameters": [
+   {
+    "description": "The god: its number (0 to 7) or its name, such as PLAYER_TWO",
+    "name": "player",
+    "required": true,
+    "type": "integer|string"
+   },
+   {
+    "description": "Only the nodes that a script finds with this name, such as ExpandInfluence",
+    "name": "name",
+    "type": "string"
+   }
+  ],
+  "query": "players.computer_nodes"
+ },
+ {
+  "description": "What one computer god's mind thinks of each player: the value that a script reads back, and the value the mind keeps (twice as much)",
+  "kind": "object",
+  "parameters": [
+   {
+    "description": "The god: its number (0 to 7) or its name, such as PLAYER_TWO",
+    "name": "player",
+    "required": true,
+    "type": "integer|string"
+   }
+  ],
+  "query": "players.computer_attitudes"
  },
  {
   "description": "The queue of the players' commands: the player of this computer, whose number the commands carry, and the commands that wait for the start of a turn",
