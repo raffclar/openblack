@@ -621,10 +621,10 @@ TEST(CreatureObjectBeliefs, TheFastIndexFindsWhatTheIndexOfTheContentsFinds)
 	EXPECT_EQ(index.Size(), reference.size());
 	for (uint32_t n = 0; n < 3000; ++n)
 	{
-		const auto* found = index.Find(Thing(n));
+		const auto found = index.Find(Thing(n));
 		const auto known = reference.find(Thing(n));
-		ASSERT_EQ(found != nullptr, known != reference.end()) << n;
-		if (found != nullptr)
+		ASSERT_EQ(found.has_value(), known != reference.end()) << n;
+		if (found.has_value())
 		{
 			EXPECT_EQ(found->kind, known->second.kind);
 			EXPECT_EQ(found->slot, known->second.slot);
@@ -637,12 +637,12 @@ TEST(CreatureObjectBeliefs, TheFastIndexKeepsNoNoThingValue)
 	ThingIndex index;
 	index.Set(entt::null, {.kind = 1, .slot = 2});
 	EXPECT_EQ(index.Size(), 0u);
-	EXPECT_EQ(index.Find(entt::null), nullptr);
+	EXPECT_FALSE(index.Find(entt::null).has_value());
 	index.Set(Thing(7), {.kind = 1, .slot = 2});
 	index.Erase(Thing(8));
 	EXPECT_EQ(index.Size(), 1u);
 	index.Clear();
-	EXPECT_EQ(index.Find(Thing(7)), nullptr);
+	EXPECT_FALSE(index.Find(Thing(7)).has_value());
 }
 
 TEST(CreatureObjectBeliefs, AStoreFindsItsBeliefsAfterItsContentsArePutBack)

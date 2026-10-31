@@ -112,8 +112,8 @@ const Belief* Store::Find(entt::entity thing) const
 		const auto known = _contents.index.find(thing);
 		return known != _contents.index.end() ? &*_contents.pools.at(known->second.kind).slots.at(known->second.slot) : nullptr;
 	}
-	const auto* known = _places.Find(thing);
-	return known != nullptr ? &*_contents.pools.at(known->kind).slots.at(known->slot) : nullptr;
+	const auto known = _places.Find(thing);
+	return known.has_value() ? &*_contents.pools.at(known->kind).slots.at(known->slot) : nullptr;
 }
 
 Belief* Store::Find(entt::entity thing)
@@ -137,6 +137,8 @@ namespace
 constexpr size_t k_LeastEntries = 16;
 /// The multiplier of the golden ratio spreads the numbers of things that come one after another over the table
 constexpr uint32_t k_Spread = 0x9E3779B1u;
+static_assert(k_KindCount <= UINT16_MAX && std::ranges::max(k_Capacity) <= UINT16_MAX,
+              "a kind and a place among the places of the kind fit in an entry of the fast index");
 } // namespace
 
 size_t ThingIndex::Home(entt::entity thing) const
@@ -156,14 +158,14 @@ size_t ThingIndex::Seek(entt::entity thing) const
 	return at;
 }
 
-const BeliefPlace* ThingIndex::Find(entt::entity thing) const
+std::optional<BeliefPlace> ThingIndex::Find(entt::entity thing) const
 {
 	if (_count == 0 || thing == entt::null)
 	{
-		return nullptr;
+		return std::nullopt;
 	}
 	const auto& entry = _entries[Seek(thing)];
-	return entry.thing == thing ? &entry.place : nullptr;
+	return entry.thing == thing ? std::optional(BeliefPlace {.kind = entry.kind, .slot = entry.slot}) : std::nullopt;
 }
 
 void ThingIndex::Set(entt::entity thing, BeliefPlace place)
@@ -182,7 +184,8 @@ void ThingIndex::Set(entt::entity thing, BeliefPlace place)
 		entry.thing = thing;
 		++_count;
 	}
-	entry.place = place;
+	entry.kind = static_cast<uint16_t>(place.kind);
+	entry.slot = static_cast<uint16_t>(place.slot);
 }
 
 void ThingIndex::Erase(entt::entity thing)

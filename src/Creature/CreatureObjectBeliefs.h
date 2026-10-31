@@ -118,8 +118,9 @@ struct StoreContents
 class ThingIndex
 {
 public:
-	[[nodiscard]] const BeliefPlace* Find(entt::entity thing) const;
-	/// Sets the place of a thing, which replaces the place that the thing had
+	[[nodiscard]] std::optional<BeliefPlace> Find(entt::entity thing) const;
+	/// Sets the place of a thing, which replaces the place that the thing had. The kind and the place among the places
+	/// of the kind are each less than 65536.
 	void Set(entt::entity thing, BeliefPlace place);
 	/// Removes a thing, if the index has it
 	void Erase(entt::entity thing);
@@ -127,10 +128,12 @@ public:
 	[[nodiscard]] size_t Size() const { return _count; }
 
 private:
+	/// An entry is small, thus more entries are in the memory cache
 	struct Entry
 	{
 		entt::entity thing {entt::null};
-		BeliefPlace place;
+		uint16_t kind {0};
+		uint16_t slot {0};
 	};
 	/// The entry that the number of a thing points to
 	[[nodiscard]] size_t Home(entt::entity thing) const;
