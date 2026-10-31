@@ -91,6 +91,8 @@ inline constexpr float k_FireballClearRadii = 5.0f;
 inline constexpr std::array<size_t, 3> k_ScatterPose {46, 47, 48};
 /// The creature casts food from this distance from the thing
 inline constexpr float k_FoodCastDistance = 2.0f;
+/// The creature casts food from this distance from a need flag of a worship site
+inline constexpr float k_FoodCastNeedFlagDistance = 20.0f;
 /// To stop its own fire, the creature goes to a clear area. The area is this many times as wide as the creature is
 /// tall.
 inline constexpr float k_WaterOnItselfClearHeights = 1.7f;
@@ -108,8 +110,9 @@ inline constexpr std::array<uint32_t, 4> k_ImpressiveMiracles {10, 16, 11, 24};
 inline constexpr std::array<uint32_t, 5> k_ImpressMiraclesItMayKnow {14, 10, 16, 11, 24};
 
 /// The creature casts food at a thing from near it. It does not show how it feels first, and it does not get away
-/// from the thing. It turns, draws the gesture (0 for none) and casts in the scatter pose.
-[[nodiscard]] std::vector<Step> CastFoodAt(uint32_t magicType, uint32_t gesture, uint32_t object);
+/// from the thing. It turns, draws the gesture (0 for none) and casts in the scatter pose. It stays further from a need
+/// flag of a worship site.
+[[nodiscard]] std::vector<Step> CastFoodAt(uint32_t magicType, uint32_t gesture, uint32_t object, bool needFlag = false);
 
 /// The creature casts a shield at a thing from where it stands. It turns to face the thing and casts.
 [[nodiscard]] std::vector<Step> CastShieldAt(uint32_t magicType, uint32_t object);

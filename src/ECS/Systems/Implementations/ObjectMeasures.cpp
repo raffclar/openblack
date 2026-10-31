@@ -94,6 +94,19 @@ float BoneReachOf(const ecs::Registry& registry, CreatureType species)
 	return kept.at(row).value_or(0.0f);
 }
 
+/// The altar of the worship site that a need flag shows a need of. The game keeps a need flag at the place of the altar,
+/// and only the draw moves the flag. None for a thing that is not a need flag, or for a site with no altar.
+std::optional<entt::entity> FlagAltarOf(const ecs::Registry& registry, entt::entity entity)
+{
+	const auto* flag = registry.TryGet<const WorshipSiteFlag>(entity);
+	const auto* site = flag != nullptr && registry.Valid(flag->site) ? registry.TryGet<const WorshipSite>(flag->site) : nullptr;
+	if (site == nullptr || !registry.Valid(site->altar) || !registry.AllOf<Transform>(site->altar))
+	{
+		return std::nullopt;
+	}
+	return site->altar;
+}
+
 /// A model's half width, height and length, times the thing's scale
 std::optional<glm::vec3> HalfExtentsOf(const ecs::Registry& registry, entt::entity entity)
 {
@@ -119,7 +132,9 @@ std::optional<glm::vec3> HalfExtentsOf(const ecs::Registry& registry, entt::enti
 		return std::nullopt;
 	}
 	const auto& box = meshes.Handle(*id)->GetBoundingBox();
-	return (box.maxima - box.minima) * 0.5f * transform->scale.x;
+	// The game measures a need flag of a worship site at its first size. Only the draw changes the size of the flag.
+	const float scale = registry.AllOf<WorshipSiteFlag>(entity) ? 1.0f : transform->scale.x;
+	return (box.maxima - box.minima) * 0.5f * scale;
 }
 } // namespace
 
@@ -167,6 +182,16 @@ float object_measures::DistanceFromObject(const Registry& registry, entt::entity
 	       (TwoDRadius(registry, other) + TwoDRadius(registry, entity));
 }
 
+glm::vec2 object_measures::InspectPoint(const Registry& registry, entt::entity entity)
+{
+	const auto& transform = registry.Get<const Transform>(entity);
+	if (registry.AllOf<WorshipSite>(entity))
+	{
+		return worship_site::CentreOnLand(transform.position, transform.rotation, transform.scale.x);
+	}
+	return glm::xz(transform.position);
+}
+
 float object_measures::NavRadius(const Registry& registry, entt::entity creature)
 {
 	const auto* walk = registry.TryGet<const CreatureLocomotion>(creature);
@@ -199,6 +224,12 @@ std::optional<glm::vec3> object_measures::PositionOf(const Registry& registry, e
 	if (!registry.Valid(entity))
 	{
 		return std::nullopt;
+	}
+	// A need flag of a worship site stands at the place of the altar of its site, wherever the draw shows it
+	if (registry.AllOf<WorshipSiteFlag>(entity))
+	{
+		const auto altar = FlagAltarOf(registry, entity);
+		return altar.has_value() ? std::optional(registry.Get<const Transform>(*altar).position) : std::nullopt;
 	}
 	const auto* transform = registry.TryGet<const Transform>(entity);
 	return transform != nullptr ? std::optional(transform->position) : std::nullopt;
