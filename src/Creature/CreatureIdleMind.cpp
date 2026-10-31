@@ -25,6 +25,7 @@
 #include "Creature/CreatureFight.h"
 #include "Creature/CreatureLayers.h"
 #include "Creature/CreatureObjectActions.h"
+#include "Creature/CreatureThrow.h"
 #include "Creature/CreatureTownHelp.h"
 
 using namespace openblack;
@@ -407,7 +408,8 @@ std::vector<Step> creature_mind::TakeFishTo(const std::optional<FishingTrip>& tr
 	walk.movement = {.kind = Movement::Kind::ToPoint, .point = place, .maxDistance = height, .giveUpIfUnreachable = true};
 	walk.gaze = GoingLook();
 	agenda.push_back(walk);
-	agenda.push_back(Object({.kind = ObjectOrder::Kind::PutDown}));
+	// It lets go of the food as it lets go of a thing that it brings home, with the animation that puts a thing down
+	agenda.push_back(Object({.kind = ObjectOrder::Kind::Discard, .animation = creature_throw::k_PutDown}));
 	return agenda;
 }
 

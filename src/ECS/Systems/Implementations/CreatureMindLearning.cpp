@@ -3075,11 +3075,7 @@ void CreatureMindSystem::PlanCreature(entt::entity creature, CreatureMindState& 
 	const auto random = [this](uint32_t range) { return Random(range); };
 	bool fishingLooked = false;
 	const auto prepare = [&](const creature_plan_actions::Executor& executor) {
-		const bool fishing = executor.build == creature_plan_actions::Build::FishAndEat ||
-		                     executor.build == creature_plan_actions::Build::GiveFishToStore ||
-		                     executor.build == creature_plan_actions::Build::TakeFishHome ||
-		                     executor.build == creature_plan_actions::Build::PutFishBySite;
-		if (fishing && !fishingLooked)
+		if (creature_plan_actions::FishesFirst(executor) && !fishingLooked)
 		{
 			fishingLooked = true;
 			situation.fishing = FishingFor(registry, creature, position);
@@ -3510,10 +3506,9 @@ bool CreatureMindSystem::ForcePlan(entt::entity creature, const ForcedPlan& plan
 			{
 				situation.drink = DrinkPlaceOf(creature);
 			}
-			// Told to fish, or to put fish by a worship site, it fishes at the fish farm nearest to itself, as when it chooses
-			// to fish
-			if (executor->build == creature_plan_actions::Build::FishAndEat ||
-			    executor->build == creature_plan_actions::Build::PutFishBySite)
+			// Told to fish, to give fish to a store, to take fish home or to put fish by a worship site, it fishes at the fish
+			// farm nearest to itself, as when it chooses to fish
+			if (creature_plan_actions::FishesFirst(*executor))
 			{
 				situation.fishing = FishingFor(registry, creature, position);
 			}

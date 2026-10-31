@@ -432,4 +432,42 @@ void testbed_scenarios::AddFishScenarios(std::vector<Scenario>& all)
 	    }},
 	    .objects = PondFarmAndPit(),
 	});
+
+	// A grown tiger by the pond that knows how to fish, with its needs full, so that only the told action shows
+	const CreatureSetup fisher {
+	    .label = "actor",
+	    .species = CreatureType::Tiger,
+	    .offset = k_PondCreature,
+	    .facingDegrees = 0.0f,
+	    .needs = {.energy = 1.0f, .exhaustion = 0.0f, .dehydration = 0.0f, .poo = 0.0f, .life = 1.0f},
+	    .skills = {CreatureActionKnownAbout::Fish},
+	};
+	all.push_back({
+	    .id = "actions.give_fish_to_store",
+	    .name = "Gives fish to the store",
+	    .facet = Facet::Objects,
+	    .description = "The pond, fish farm and empty storage pit of needs.fish_for_town. A grown tiger that knows how to "
+	                   "fish stands by the pond. A script tells it to give fish to the storage pit.",
+	    .expected = "It walks into the pond's shallows near the shoal, a bundle of food comes out of the water at its feet "
+	                "and it picks it up. It walks out of the pond to throwing distance of the pit, faces it and throws the "
+	                "food in. The pit's food goes up.",
+	    .framing = {.shot = Shot::Follow},
+	    .creatures = {fisher},
+	    .objects = PondFarmAndPit(),
+	    .commands = {{.kind = Kind::DoAction, .delaySeconds = 1.0f, .object = 1, .action = "GiveFishToStoragePit"}},
+	});
+	all.push_back({
+	    .id = "actions.take_fish_home",
+	    .name = "Takes fish home",
+	    .facet = Facet::Objects,
+	    .description = "The pond and fish farm of needs.fish_for_town, and the player's temple on the plain beyond. A grown "
+	                   "tiger that knows how to fish stands by the pond. A script tells it to take fish home.",
+	    .expected = "It walks into the pond's shallows near the shoal, a bundle of food comes out of the water at its feet "
+	                "and it picks it up. It carries the food to its temple.",
+	    .framing = {.shot = Shot::Follow},
+	    .creatures = {fisher},
+	    .objects = PondFarmAndPit(),
+	    .temples = {{.offset = k_PondPit + glm::vec2(60.0f, -60.0f)}},
+	    .commands = {{.kind = Kind::DoAction, .delaySeconds = 1.0f, .object = 0, .action = "TakeFishHome"}},
+	});
 }
