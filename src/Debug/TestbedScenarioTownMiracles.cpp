@@ -29,6 +29,10 @@ constexpr glm::vec2 k_Temple {0.0f, -60.0f};
 constexpr float k_TownBelief = 1000.0f;
 /// The first land, which has no worship sites in a normal game
 constexpr int32_t k_FirstLand = 1;
+/// The second land, where a temple grows by the share of the influence of its player
+constexpr int32_t k_SecondLand = 2;
+/// Where the temple of player two stands, east of the town centre
+constexpr glm::vec2 k_RivalTemple {120.0f, 20.0f};
 /// The part of its miracle's charge that each worship site icon holds
 constexpr float k_IconCharge = 0.45f;
 /// Where the storage pit stands from the town centre
@@ -647,6 +651,25 @@ void openblack::testbed_scenarios::AddTownMiracleScenarios(std::vector<Scenario>
 	                  .value = static_cast<size_t>(input::BindableActionMap::HELP)}},
 	    .townBeliefInPlayer = k_TownBelief,
 	    .townMiracles = {MagicType::Heal, MagicType::Water},
+	});
+	all.push_back({
+	    .id = "temple.size_follows_influence",
+	    .name = "The temples grow by their players' shares of the influence on the second land",
+	    .facet = Facet::Story,
+	    .description = "The town and temple of town.miracle_debug on the second land, and a temple of player two to the "
+	                   "east with no town. Both temples start at the smallest size.",
+	    .expected = "Each temple grows a step each turn, 0.016 of the way from the smallest size to the largest. The "
+	                "temple of player two stops after about four seconds at about 0.63 of the way: twice its share of "
+	                "the influence, 450 of 1430. The player's temple, with its town, has a share of 980 of 1430, so it "
+	                "grows on and reaches the largest size after about six seconds. On the first land both temples stay "
+	                "at the smallest size.",
+	    .environment = {.dispenserGrid = false, .landNumber = k_SecondLand, .players = {PlayerNames::PLAYER_TWO}},
+	    .framing = {.shot = Shot::Overview,
+	                .include = {k_Temple - glm::vec2(50.0f, 45.0f), k_RivalTemple + glm::vec2(50.0f, 45.0f)},
+	                .distance = 1.0f},
+	    .objects = Town(),
+	    .temples = {{.offset = k_Temple}, {.offset = k_RivalTemple, .owner = PlayerNames::PLAYER_TWO}},
+	    .townBeliefInPlayer = k_TownBelief,
 	});
 	AddSecondLandIconScenarios(all);
 }

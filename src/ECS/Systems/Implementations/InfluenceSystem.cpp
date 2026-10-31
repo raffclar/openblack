@@ -15,6 +15,7 @@
 
 #include <algorithm>
 #include <chrono>
+#include <iterator>
 #include <optional>
 #include <unordered_map>
 #include <utility>
@@ -530,6 +531,19 @@ float InfluenceSystem::InfluencePower(PlayerNames player) const
 	}
 	const auto* noted = Locator::entitiesRegistry::value().TryGet<const PlayerInfluencePower>(*entity);
 	return noted != nullptr ? noted->power : 0.0f;
+}
+
+std::optional<float> InfluenceSystem::RelativeInfluencePower(PlayerNames player) const
+{
+	// All the players add their noted powers in the order of their numbers
+	std::vector<std::pair<PlayerNames, float>> players;
+	Locator::entitiesRegistry::value().Each<const Player, const PlayerInfluencePower>(
+	    [&players](const Player& each, const PlayerInfluencePower& noted) { players.emplace_back(each.name, noted.power); });
+	std::ranges::sort(players, {}, &std::pair<PlayerNames, float>::first);
+	std::vector<float> powers;
+	powers.reserve(players.size());
+	std::ranges::transform(players, std::back_inserter(powers), &std::pair<PlayerNames, float>::second);
+	return influence_rules::RelativeInfluencePower(InfluencePower(player), powers);
 }
 
 void InfluenceSystem::NoteInfluencePower(PlayerNames player)
