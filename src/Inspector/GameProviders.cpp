@@ -28,6 +28,7 @@
 #include <L3DFile.h>
 #include <LHVM.h>
 #include <LNDFile.h>
+#include <SaveSlots.h>
 #include <fmt/format.h>
 #include <glm/matrix.hpp>
 #include <glm/trigonometric.hpp>
@@ -94,6 +95,7 @@
 #include "ECS/Components/LivingAction.h"
 #include "ECS/Components/Mist.h"
 #include "ECS/Components/Player.h"
+#include "ECS/Components/PlayerRelations.h"
 #include "ECS/Components/Reward.h"
 #include "ECS/Components/ScriptControl.h"
 #include "ECS/Components/ScriptHighlight.h"
@@ -117,6 +119,7 @@
 #include "ECS/DrawnRegistry.h"
 #include "ECS/Map.h"
 #include "ECS/PhysicsEntry.h"
+#include "ECS/PlayerRelations.h"
 #include "ECS/Registry.h"
 #include "ECS/Systems/AbodeKnockSystemInterface.h"
 #include "ECS/Systems/AbodeSoundSystemInterface.h"
@@ -423,6 +426,7 @@ constexpr std::array k_Coverage {
     LocatorCoverage {"httpClient", "engine.online"},
     LocatorCoverage {"webSocketClient", "engine.online"},
     LocatorCoverage {"lobbyClient", "engine.online"},
+    LocatorCoverage {"onlineMapStore", "engine.online"},
     LocatorCoverage {"networkGame", "engine.online"},
     LocatorCoverage {"realWeatherSystem", "land.real_weather"},
     LocatorCoverage {"tattooEditorSystem", "creatures.systems"},
@@ -604,6 +608,54 @@ PlayerNames PlayerParam(const Json& params)
 	return static_cast<PlayerNames>(std::clamp(number, 0, static_cast<int>(PlayerNames::NEUTRAL)));
 }
 
+/// The player that a request names, by number (0 to 7) or by name (PLAYER_TWO): none when it names no player
+std::optional<PlayerNames> NamedPlayerParam(const Json& params)
+{
+	const auto it = params.find("player");
+	if (it == params.end())
+	{
+		return std::nullopt;
+	}
+	if (it->is_string())
+	{
+		const auto& text = it->get_ref<const std::string&>();
+		const auto found = std::ranges::find(k_PlayerNamesStrs, std::string_view(text));
+		if (found == k_PlayerNamesStrs.end())
+		{
+			return std::nullopt;
+		}
+		return static_cast<PlayerNames>(found - k_PlayerNamesStrs.begin());
+	}
+	const auto number = NumberMember(params, "player");
+	if (!number.has_value() || *number < 0.0 || *number >= static_cast<double>(PlayerNames::_COUNT))
+	{
+		return std::nullopt;
+	}
+	return static_cast<PlayerNames>(static_cast<int>(*number));
+}
+
+/// The entity of the player, if the land has it
+std::optional<entt::entity> PlayerEntityOf(const ecs::Registry& registry, PlayerNames name)
+{
+	std::optional<entt::entity> found;
+	registry.Each<const Player>([&](entt::entity entity, const Player& player) {
+		if (player.name == name)
+		{
+			found = entity;
+		}
+	});
+	return found;
+}
+
+/// The names that the nodes of every computer mind have in this game: a personality load can change them
+const computer_mind::NodeNames& SharedNodeNames(const ecs::Registry& registry)
+{
+	const computer_mind::NodeNames* names = &computer_mind::FirstNodeNames();
+	registry.Each<const ecs::components::ComputerNodeNames>(
+	    [&names](entt::entity /*entity*/, const ecs::components::ComputerNodeNames& shared) { names = &shared.names; });
+	return *names;
+}
+
 /// A query of one locator service, answered only while the service is there
 template <typename Service, typename Read>
 FunctionProvider::Function Serve(std::string_view name, Read read)
@@ -719,6 +771,8 @@ std::unique_ptr<ProviderInterface> EngineProvider()
 			        {"round_trip_ms", roundTrip.has_value() ? Json(static_cast<double>(*roundTrip) / 1000.0) : Json(nullptr)},
 			    };
 		    }
+		    // The store of the lands of network games that the lobby gives (deviation 169)
+		    result["online_map_store"] = Locator::onlineMapStore::has_value();
 		    if (!Locator::lobbyClient::has_value())
 		    {
 			    result["lobby"] = nullptr;
@@ -1932,79 +1986,171 @@ std::unique_ptr<ProviderInterface> PlayersProvider()
 		              }
 		              return QueryResult::Value(std::move(result));
 	              });
+	provider->Add(Query("list",
+	                    "The players: their entities, primary creatures, computer minds (the nodes wanted now; "
+	                    "players.computer_nodes has every node) and alignment",
+	                    {}, ResultKind::List),
+	              Serve<Locator::playerSystem>("the players", [](const ecs::systems::PlayerSystemInterface& players,
+	                                                             const QueryContext& /*c*/) {
+		              Json items = Json::array();
+		              const auto* registry = Registry();
+		              if (registry == nullptr)
+		              {
+			              return items;
+		              }
+		              // The players the land has, by their own components: the system is asked only of those it knows
+		              registry->Each<const Player>([&](entt::entity entity, const Player& player) {
+			              const auto name = player.name;
+			              Json item = {{"player", static_cast<int>(name)},
+			                           {"id", Id(entity)},
+			                           {"local", (Locator::handSystem::has_value() ? Locator::handSystem::value().GetOwnPlayer()
+			                                                                       : PlayerNames::PLAYER_ONE) == name},
+			                           {"computer", players.IsComputerPlayer(name)},
+			                           {"primary_creature", Id(players.GetPrimaryCreature(name))}};
+			              // The computer mind of the player, when a land script switched it on or named a player for it
+			              if (const auto* mind = registry->TryGet<const ecs::components::ComputerPlayer>(entity);
+			                  mind != nullptr)
+			              {
+				              item["computer_mind"] = {{"switched_on", mind->switchedOn},
+				                                       {"marked", mind->marked},
+				                                       {"started", mind->started},
+				                                       {"creature_like", mind->creatureLike.has_value()
+				                                                             ? Json(static_cast<int>(*mind->creatureLike))
+				                                                             : Json(nullptr)}};
+				              // What the god wants and what its hand does: the nodes that were wanted when last looked at
+				              auto& computer = item["computer_mind"];
+				              computer["paused"] = mind->mind.paused;
+				              computer["last_empty_turn"] = mind->mind.lastEmptyTurn;
+				              computer["doing"] = mind->mind.doing;
+				              computer["hand"] = {mind->hand.hand.x, mind->hand.hand.y, mind->hand.hand.z};
+				              Json steps = Json::array();
+				              for (const auto& step : mind->hand.steps)
+				              {
+					              steps.push_back(static_cast<int>(step.kind));
+				              }
+				              computer["steps"] = std::move(steps);
+				              computer["step_part"] = mind->hand.part;
+				              Json wanted = Json::array();
+				              for (const auto& node : mind->mind.nodes)
+				              {
+					              if (node.value != 0.0f)
+					              {
+						              wanted.push_back({{"name", computer_mind::InfoOf(node.kind).name},
+						                                {"value", node.value},
+						                                {"suppression", node.suppression},
+						                                {"object", Id(node.object)}});
+					              }
+				              }
+				              computer["wanted"] = std::move(wanted);
+				              Json requests = Json::object();
+				              for (size_t type = 0; type < mind->mind.castRequested.size(); ++type)
+				              {
+					              if (mind->mind.castRequested.at(type) != 0)
+					              {
+						              requests[std::to_string(type)] = mind->mind.castRequested.at(type);
+					              }
+				              }
+				              computer["cast_requests"] = std::move(requests);
+				              computer["casts"] = mind->casts.size();
+			              }
+			              if (Locator::alignmentSystem::has_value())
+			              {
+				              item["alignment"] = Locator::alignmentSystem::value().GetPlayerAlignment(name);
+				              item["pending_alignment"] = Locator::alignmentSystem::value().GetPendingAlignment(name);
+			              }
+			              items.push_back(std::move(item));
+		              });
+		              return items;
+	              }));
+	// The whole tree of a computer mind, where the list of the players shows only the nodes that are wanted now
 	provider->Add(
-	    Query("list", "The players: their entities, primary creatures, computer minds and alignment", {}, ResultKind::List),
-	    Serve<Locator::playerSystem>(
-	        "the players", [](const ecs::systems::PlayerSystemInterface& players, const QueryContext& /*c*/) {
-		        Json items = Json::array();
-		        const auto* registry = Registry();
-		        if (registry == nullptr)
-		        {
-			        return items;
-		        }
-		        // The players the land has, by their own components: the system is asked only of those it knows
-		        registry->Each<const Player>([&](entt::entity entity, const Player& player) {
-			        const auto name = player.name;
-			        Json item = {{"player", static_cast<int>(name)},
-			                     {"id", Id(entity)},
-			                     {"local", (Locator::handSystem::has_value() ? Locator::handSystem::value().GetOwnPlayer()
-			                                                                 : PlayerNames::PLAYER_ONE) == name},
-			                     {"computer", players.IsComputerPlayer(name)},
-			                     {"primary_creature", Id(players.GetPrimaryCreature(name))}};
-			        // The computer mind of the player, when a land script switched it on or named a player for it
-			        if (const auto* mind = registry->TryGet<const ecs::components::ComputerPlayer>(entity); mind != nullptr)
-			        {
-				        item["computer_mind"] = {{"switched_on", mind->switchedOn},
-				                                 {"marked", mind->marked},
-				                                 {"started", mind->started},
-				                                 {"creature_like", mind->creatureLike.has_value()
-				                                                       ? Json(static_cast<int>(*mind->creatureLike))
-				                                                       : Json(nullptr)}};
-				        // What the god wants and what its hand does: the nodes that were wanted when last looked at
-				        auto& computer = item["computer_mind"];
-				        computer["paused"] = mind->mind.paused;
-				        computer["last_empty_turn"] = mind->mind.lastEmptyTurn;
-				        computer["doing"] = mind->mind.doing;
-				        computer["hand"] = {mind->hand.hand.x, mind->hand.hand.y, mind->hand.hand.z};
-				        Json steps = Json::array();
-				        for (const auto& step : mind->hand.steps)
-				        {
-					        steps.push_back(static_cast<int>(step.kind));
-				        }
-				        computer["steps"] = std::move(steps);
-				        computer["step_part"] = mind->hand.part;
-				        Json wanted = Json::array();
-				        for (const auto& node : mind->mind.nodes)
-				        {
-					        if (node.value != 0.0f)
-					        {
-						        wanted.push_back({{"name", computer_mind::InfoOf(node.kind).name},
-						                          {"value", node.value},
-						                          {"suppression", node.suppression},
-						                          {"object", Id(node.object)}});
-					        }
-				        }
-				        computer["wanted"] = std::move(wanted);
-				        Json requests = Json::object();
-				        for (size_t type = 0; type < mind->mind.castRequested.size(); ++type)
-				        {
-					        if (mind->mind.castRequested.at(type) != 0)
-					        {
-						        requests[std::to_string(type)] = mind->mind.castRequested.at(type);
-					        }
-				        }
-				        computer["cast_requests"] = std::move(requests);
-				        computer["casts"] = mind->casts.size();
-			        }
-			        if (Locator::alignmentSystem::has_value())
-			        {
-				        item["alignment"] = Locator::alignmentSystem::value().GetPlayerAlignment(name);
-				        item["pending_alignment"] = Locator::alignmentSystem::value().GetPendingAlignment(name);
-			        }
-			        items.push_back(std::move(item));
-		        });
-		        return items;
-	        }));
+	    Query("computer_nodes",
+	          "Every node of the tree of one computer god's mind: its name, personality weight, suppression, how much it "
+	          "was wanted when last looked at, its place in the tree and the node above. Pages with limit and cursor. "
+	          "name keeps only the nodes that the script name finds",
+	          {{.name = "player",
+	            .type = "integer|string",
+	            .description = "The god: its number (0 to 7) or its name, such as PLAYER_TWO",
+	            .required = true},
+	           {.name = "name",
+	            .type = "string",
+	            .description = "Only the nodes that a script finds with this name, such as ExpandInfluence",
+	            .required = false}},
+	          ResultKind::List),
+	    ServeRegistry([](const ecs::Registry& registry, const QueryContext& context) -> QueryResult {
+		    const auto player = NamedPlayerParam(context.params);
+		    if (!player.has_value())
+		    {
+			    return QueryResult::Error("player must be a number from 0 to 7 or a name such as PLAYER_TWO");
+		    }
+		    const auto entity = PlayerEntityOf(registry, *player);
+		    const auto* computer =
+		        entity.has_value() ? registry.TryGet<const ecs::components::ComputerPlayer>(*entity) : nullptr;
+		    if (computer == nullptr)
+		    {
+			    return QueryResult::Error("that player has no computer mind");
+		    }
+		    const auto& mind = computer->mind;
+		    const auto& names = SharedNodeNames(registry);
+		    std::vector<uint16_t> shown;
+		    if (const auto filter = StringMember(context.params, "name"); filter.has_value())
+		    {
+			    shown = computer_mind::FindNodes(mind, *filter, names);
+		    }
+		    else
+		    {
+			    shown.resize(mind.nodes.size());
+			    std::ranges::generate(shown, [next = uint16_t {0}]() mutable { return next++; });
+		    }
+		    Json items = Json::array();
+		    for (const auto index : shown)
+		    {
+			    const auto& node = mind.nodes.at(index);
+			    items.push_back({{"index", index},
+			                     {"name", computer_mind::NameOf(names, node.kind)},
+			                     {"layer", static_cast<int>(computer_mind::InfoOf(node.kind).layer)},
+			                     {"weight", node.weight},
+			                     {"suppression", node.suppression},
+			                     {"value", node.value},
+			                     {"parent", node.parent.has_value() ? Json(*node.parent) : Json(nullptr)},
+			                     {"children", node.childCount},
+			                     {"object", Id(node.object)}});
+		    }
+		    return QueryResult::Value(std::move(items));
+	    }));
+	provider->Add(
+	    Query("computer_attitudes",
+	          "What one computer god's mind thinks of each player: the value that a script reads back, and the value the "
+	          "mind keeps (twice as much)",
+	          {{.name = "player",
+	            .type = "integer|string",
+	            .description = "The god: its number (0 to 7) or its name, such as PLAYER_TWO",
+	            .required = true}}),
+	    ServeRegistry([](const ecs::Registry& registry, const QueryContext& context) -> QueryResult {
+		    const auto player = NamedPlayerParam(context.params);
+		    if (!player.has_value())
+		    {
+			    return QueryResult::Error("player must be a number from 0 to 7 or a name such as PLAYER_TWO");
+		    }
+		    const auto entity = PlayerEntityOf(registry, *player);
+		    if (!entity.has_value() || !registry.AllOf<ecs::components::ComputerPlayer>(*entity))
+		    {
+			    return QueryResult::Error("that player has no computer mind");
+		    }
+		    // A mind that no script gave an attitude keeps the first value for every player
+		    const auto* attitudes = registry.TryGet<const ecs::components::ComputerAttitudes>(*entity);
+		    Json about = Json::array();
+		    for (size_t other = 0; other < static_cast<size_t>(PlayerNames::_COUNT); ++other)
+		    {
+			    const auto kept =
+			        attitudes != nullptr ? attitudes->kept.at(other) : ecs::components::ComputerAttitudes::k_StartValue;
+			    about.push_back({{"player", other},
+			                     {"name", k_PlayerNamesStrs.at(other)},
+			                     {"attitude", player_relations::ReadAttitude(kept)},
+			                     {"kept", kept}});
+		    }
+		    return QueryResult::Value({{"player", static_cast<int>(*player)}, {"attitudes", std::move(about)}});
+	    }));
 	provider->Add(
 	    Query("commands", "The queue of the players' commands: the player of this computer, whose number the commands carry, "
 	                      "and the commands that wait for the start of a turn"),
@@ -2817,6 +2963,16 @@ std::unique_ptr<ProviderInterface> ViewProvider(const GameSeamInterface* seam)
 		              if (seam != nullptr)
 		              {
 			              seam->AddChatControls(result);
+		              }
+		              return QueryResult::Value(std::move(result));
+	              });
+	provider->Add(Query("tooltip", "The tooltip that the hand shows: its index and text name, its mouse button and arrows, "
+	                               "its fade, and the numbers or other words that it shows"),
+	              [seam](const QueryContext& /*c*/) {
+		              Json result = {{"shown", false}};
+		              if (seam != nullptr)
+		              {
+			              seam->AddToolTip(result);
 		              }
 		              return QueryResult::Value(std::move(result));
 	              });
@@ -3957,6 +4113,16 @@ std::optional<std::vector<BodyInfo>> Bodies()
 
 // The help: the advisors and the scripts' dialogue
 
+/// The number of the open land, which the saved games use for their land folders
+uint32_t OpenLand()
+{
+	if (!Locator::entitiesRegistry::has_value())
+	{
+		return 0;
+	}
+	return static_cast<uint32_t>(std::max(Locator::entitiesRegistry::value().Context().mapScriptGlobals.landNumber, 0));
+}
+
 std::unique_ptr<ProviderInterface> SavesProvider()
 {
 	auto provider = std::make_unique<FunctionProvider>("saves");
@@ -3982,7 +4148,9 @@ std::unique_ptr<ProviderInterface> SavesProvider()
 	auto save =
 	    Query("save",
 	          "Saves the game into a slot: the whole world (every entity and its components, the clock, the random "
-	          "numbers, the camera and the scripts) and every creature with its mind file and its leash",
+	          "numbers, the camera and the scripts) and every creature with its mind file and its leash. The slots 14 to 18 "
+	          "save into a folder of the open land in the folder of the slot. The result gives the folder of the world "
+	          "file in the folder of the player",
 	          {slotParameter, {.name = "name", .type = "string", .description = "The name of the save", .required = false}});
 	save.writes = true;
 	provider->Add(std::move(save), [](const QueryContext& context) {
@@ -3992,13 +4160,17 @@ std::unique_ptr<ProviderInterface> SavesProvider()
 			return QueryResult::Error("saves.save needs a game and a slot from 0 to 20");
 		}
 		const auto name = gui::ToUtf16(StringMember(context.params, "name").value_or(""));
-		const bool saved = Locator::saveGameSystem::value().Save(static_cast<uint32_t>(*slot), name);
-		return QueryResult::Value({{"saved", saved}, {"slot", static_cast<uint32_t>(*slot)}});
+		const auto number = static_cast<uint32_t>(*slot);
+		const bool saved = Locator::saveGameSystem::value().Save(number, name);
+		return QueryResult::Value(
+		    {{"saved", saved}, {"slot", number}, {"folder", gamesave::SlotFolder(number, OpenLand()).generic_string()}});
 	});
 	auto load = Query("load",
 	                  "Loads a slot. A save of the whole world loads its land and its world in place of the open land. An "
 	                  "older save puts the creatures of the land that is open back: the values of each record, the mind of "
-	                  "its mind file, the plan that the save kept and its leash",
+	                  "its mind file, the plan that the save kept and its leash. Slot 14 (the previous land) loads from the "
+	                  "folder of the land before the open land, and slot 18 (the next land) from the folder of the land "
+	                  "after it, as the save game room does. The result gives the folder that the load read",
 	                  {slotParameter});
 	load.writes = true;
 	provider->Add(std::move(load), [](const QueryContext& context) {
@@ -4007,8 +4179,11 @@ std::unique_ptr<ProviderInterface> SavesProvider()
 		{
 			return QueryResult::Error("saves.load needs a game and a slot from 0 to 20");
 		}
-		const bool loaded = Locator::saveGameSystem::value().Load(static_cast<uint32_t>(*slot));
-		return QueryResult::Value({{"loaded", loaded}, {"slot", static_cast<uint32_t>(*slot)}});
+		const auto number = static_cast<uint32_t>(*slot);
+		// Find the folder before the load, because a load can open another land
+		const auto folder = gamesave::LoadSlotFolder(number, OpenLand()).generic_string();
+		const bool loaded = Locator::saveGameSystem::value().Load(number);
+		return QueryResult::Value({{"loaded", loaded}, {"slot", number}, {"folder", folder}});
 	});
 	auto loadAndSave =
 	    Query("load_and_save",
@@ -4034,6 +4209,34 @@ std::unique_ptr<ProviderInterface> SavesProvider()
 		                           {"saved", saved},
 		                           {"slot", static_cast<uint32_t>(*slot)},
 		                           {"into", static_cast<uint32_t>(*into)}});
+	});
+	auto worldStateRoundTrip =
+	    Query("world_state_round_trip",
+	          "Makes the world state that a game server sends, loads it at once and makes it again, with no frame and no turn "
+	          "between. Writes the two states to the files first and again. The two must have the same bytes "
+	          "(tools/sim/save_diff.py compares the two files)",
+	          {{.name = "first", .type = "string", .description = "The file of the first state", .required = true},
+	           {.name = "again", .type = "string", .description = "The file of the state after the load", .required = true}});
+	worldStateRoundTrip.writes = true;
+	provider->Add(std::move(worldStateRoundTrip), [](const QueryContext& context) {
+		const auto firstPath = StringMember(context.params, "first");
+		const auto againPath = StringMember(context.params, "again");
+		if (!Locator::saveGameSystem::has_value() || !Locator::filesystem::has_value() || !firstPath.has_value() ||
+		    !againPath.has_value())
+		{
+			return QueryResult::Error("saves.world_state_round_trip needs a game and the two files");
+		}
+		auto& saves = Locator::saveGameSystem::value();
+		auto& files = Locator::filesystem::value();
+		const auto first = saves.WorldState();
+		const bool loaded = !first.empty() && saves.LoadWorldState(first);
+		const auto again = loaded ? saves.WorldState() : std::vector<uint8_t> {};
+		const bool written = files.WriteAll(std::filesystem::path(*firstPath), first) &&
+		                     (!loaded || files.WriteAll(std::filesystem::path(*againPath), again));
+		return QueryResult::Value({{"loaded", loaded},
+		                           {"written", written},
+		                           {"same", loaded && first == again},
+		                           {"bytes", {first.size(), again.size()}}});
 	});
 	provider->Add(Query("vanilla_check",
 	                    "After a load of a slot of the game itself: each creature of the game's file, and whether the record "

@@ -180,8 +180,16 @@ bool creature_object_actions::TooHighToPickUp(float rise, float distance)
 	return distance < rise && rise > k_MostPickUpRise;
 }
 
-bool creature_object_actions::StallsOnTurn(ApproachStall& stall, glm::vec2 here, bool scripted)
+bool creature_object_actions::StallsOnTurn(ApproachStall& stall, glm::vec2 here, bool scripted,
+                                           std::optional<glm::vec2> searchingFor)
 {
+	const bool searchGoesOn = searchingFor.has_value() && stall.searchedFor.has_value() &&
+	                          creature_cast_moves::SameDestination(*stall.searchedFor, *searchingFor);
+	stall.searchedFor = searchingFor;
+	if (searchGoesOn)
+	{
+		return false;
+	}
 	const float moved = gutils::GetDistanceInMetres(here, stall.note);
 	const auto check = creature_cast_moves::CheckStall(stall.turns, moved, scripted);
 	++stall.turns;

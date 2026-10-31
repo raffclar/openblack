@@ -22,6 +22,7 @@
 #include <string_view>
 
 #include "Debug/RowDump.h"
+#include "Simulation/WorldStateAtTurn.h"
 #endif
 
 namespace openblack::synced_state
@@ -80,6 +81,9 @@ public:
 	/// Tools: the world of this computer parts from the world of the source at this turn: write the kept rows of the turn
 	/// to the file of the row dump, when it started
 	virtual void DumpPart(uint32_t turn, std::string_view reason, uint32_t source) = 0;
+	/// Tools: at the end of each turn of the settings, after its checksum, write the world state of this computer
+	/// (world_state_at_turn). It makes the checksum of each turn, also in a single player game.
+	virtual void WriteWorldStates(world_state_at_turn::Settings settings) = 0;
 #endif
 };
 

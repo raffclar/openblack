@@ -24,6 +24,13 @@ else ()
   # The dump of the rows of the synced world is a developer tool
   list(FILTER OPENBLACK_SOURCES EXCLUDE REGEX "/Debug/RowDump[.]cpp$")
   list(FILTER OPENBLACK_HEADERS EXCLUDE REGEX "/Debug/RowDump[.]h$")
+  # The world states that the tools write at a set turn are a developer tool
+  list(FILTER OPENBLACK_SOURCES EXCLUDE REGEX
+       "/Simulation/WorldStateAtTurn[.]cpp$"
+  )
+  list(FILTER OPENBLACK_HEADERS EXCLUDE REGEX
+       "/Simulation/WorldStateAtTurn[.]h$"
+  )
 endif ()
 # The code that connects the game to a browser page is built only for the web
 if (NOT EMSCRIPTEN)
@@ -72,7 +79,7 @@ set(OPENBLACK_SIM_IN_CLIENT_FOLDERS
     "Windowing/(WindowFit|WindowPixels|WindowingInterface)"
     "Video/(FilmCreature|FilmEffects|FrameQueue|VideoRules|FallingSpellAudio|StillPicture)"
     "Inspector/(CameraControl|ComponentReflection|EditProviders|EntityDescription|FightAutopilot|FightProviders|GameControls|GameInput|GameProviders|GameWorldEdit|GuiControl|InputControl|LevelControl|RegistryProviders|RunControl|ScriptControl|SimRecorder|SystemProviders|WorldProviders|GameSeamInterface)"
-    "Web/(WebPointer|FetchHttpClient|BrowserWebSocketClient)"
+    "Web/(WebPointer|FetchHttpClient|BrowserWebSocketClient|IndexedDbMapStore)"
 )
 list(JOIN OPENBLACK_SIM_IN_CLIENT_FOLDERS "|" OPENBLACK_SIM_IN_CLIENT_FOLDERS)
 list(FILTER OPENBLACK_CLIENT_SOURCES EXCLUDE REGEX

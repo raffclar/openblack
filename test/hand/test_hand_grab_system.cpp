@@ -447,6 +447,11 @@ public:
 	{
 		joined.emplace_back(target, held, registry.AllOf<InHand>(held));
 	}
+	entt::entity RestOfScaffold(entt::entity scaffold) override
+	{
+		restsAsked.push_back(scaffold);
+		return restOfScaffold;
+	}
 	bool LayGateStone(entt::entity plinth, entt::entity stone) override
 	{
 		if (!plinths.contains(plinth) || !gateStones.contains(stone))
@@ -583,6 +588,8 @@ public:
 	/// held it then
 	std::set<entt::entity> scaffolds;
 	std::vector<std::tuple<entt::entity, entt::entity, bool>> joined;
+	std::vector<entt::entity> restsAsked;
+	entt::entity restOfScaffold {entt::null};
 	std::map<entt::entity, uint32_t> stored;
 	std::vector<uint32_t> pouredAmounts;
 	std::vector<entt::entity> usedUp;
@@ -895,6 +902,44 @@ TEST_F(HandGrabSystemWithWorld, AHeldPressCarriesAScaffoldFromTheSideAndItsWorks
 	EXPECT_EQ(pose->hold, HoldType::Side);
 }
 
+// A scaffold put down gently keeps what its building needs: the rest is a new scaffold, and the hand takes it
+TEST_F(HandGrabSystemWithWorld, TheRestOfAScaffoldPutDownStaysInTheHand)
+{
+	const auto scaffold = world->AddScaffold({0.0f, 0.0f, 0.0f});
+	world->underCursor = scaffold;
+	EXPECT_TRUE(Press());
+	for (int i = 0; i < 40 && !system->GetHeld().has_value(); ++i)
+	{
+		Frame(10);
+	}
+	ASSERT_EQ(system->GetHeld(), std::optional(scaffold));
+	world->restOfScaffold = world->AddScaffold({0.0f, 0.0f, 0.0f});
+	system->ForceDrop();
+	ASSERT_EQ(world->restsAsked, std::vector<entt::entity> {scaffold});
+	EXPECT_EQ(system->GetHeld(), std::optional(world->restOfScaffold));
+	EXPECT_TRUE(world->registry.AllOf<InHand>(world->restOfScaffold));
+	EXPECT_FALSE(world->registry.AllOf<InHand>(scaffold));
+	// The workshop system hears of the new scaffold in the hand
+	ASSERT_EQ(world->scaffoldsTaken.size(), 2u);
+	EXPECT_EQ(world->scaffoldsTaken.back().first, world->restOfScaffold);
+}
+
+// With no rest, the hand is empty after it lets go of a scaffold
+TEST_F(HandGrabSystemWithWorld, AScaffoldWithNoRestLeavesTheHandEmpty)
+{
+	const auto scaffold = world->AddScaffold({0.0f, 0.0f, 0.0f});
+	world->underCursor = scaffold;
+	EXPECT_TRUE(Press());
+	for (int i = 0; i < 40 && !system->GetHeld().has_value(); ++i)
+	{
+		Frame(10);
+	}
+	ASSERT_EQ(system->GetHeld(), std::optional(scaffold));
+	system->ForceDrop();
+	ASSERT_EQ(world->restsAsked, std::vector<entt::entity> {scaffold});
+	EXPECT_FALSE(system->GetHeld().has_value());
+}
+
 TEST_F(HandGrabSystemWithWorld, AShortPressOnAScaffoldTakesNothing)
 {
 	const auto scaffold = world->AddScaffold({0.0f, 0.0f, 0.0f});
@@ -996,6 +1041,33 @@ TEST_F(HandGrabSystemWithWorld, ATakeAtTheTurnAsksTheInfluenceAtTheReportedPoint
 	world->reportedCollide = glm::vec3(12.0f, 0.0f, 0.0f);
 	system->DoTake(world->HandPlayer(), other);
 	EXPECT_NE(system->GetHeld(), std::optional(other));
+}
+
+// The steps of a computer god take a thing also outside the influence of its player
+TEST_F(HandGrabSystemWithWorld, AComputerGodTakesAThingOutsideItsInfluence)
+{
+	world->borderX = 10.0f;
+	const auto rock = world->AddRock({12.0f, 0.0f, 0.0f});
+	world->pickedPoint = glm::vec3(12.0f, 0.0f, 0.0f);
+	world->reportedCollide = glm::vec3(12.0f, 0.0f, 0.0f);
+	// The take of a player outside the influence leaves the rock
+	system->DoTake(world->HandPlayer(), rock);
+	EXPECT_NE(system->GetHeld(), std::optional(rock));
+	// The take of a computer god takes it
+	system->DoComputerTake(world->HandPlayer(), rock);
+	EXPECT_EQ(system->GetHeld(), std::optional(rock));
+}
+
+// The other rules of a take apply to the steps of a computer god
+TEST_F(HandGrabSystemWithWorld, AComputerGodLeavesAThingThatCannotBePickedUp)
+{
+	world->borderX = 10.0f;
+	const auto rock = world->AddRock({8.0f, 0.0f, 0.0f});
+	world->pickedPoint = glm::vec3(8.0f, 0.0f, 0.0f);
+	world->reportedCollide = glm::vec3(8.0f, 0.0f, 0.0f);
+	world->registry.Assign<CannotBePickedUp>(rock);
+	system->DoComputerTake(world->HandPlayer(), rock);
+	EXPECT_NE(system->GetHeld(), std::optional(rock));
 }
 
 TEST_F(HandGrabSystemWithWorld, AScoopAsksTheInfluenceWhereThePileStands)

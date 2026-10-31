@@ -40,7 +40,10 @@
 #include "Gui/ScreenFit.h"
 #include "Gui/TextDatabase.h"
 #include "Online/LanDiscoveryInterface.h"
+#include "Online/MapDownload.h"
 #include "Online/NetworkSession.h"
+#include "Online/OnlineMapStoreInterface.h"
+#include "Online/StartRules.h"
 #include "gui/FakeGameFont.h"
 #include "online/FakeWebSocketClient.h"
 
@@ -138,6 +141,12 @@ public:
 	void GetWeather(lobby_api::Date, LobbyCallback<lobby_api::RealWeather>) override {}
 	void UploadCreature(lobby_api::CreatureUpload, LobbyCallback<lobby_api::CreatureUploadReply>) override {}
 	void SendSkirmishPing(LobbyCallback<LobbyDone>) override {}
+	void GetMaps(LobbyCallback<lobby_api::MapList> callback) override { maps = std::move(callback); }
+	void DownloadMap(const lobby_api::OnlineMap& map, LobbyCallback<std::vector<uint8_t>> callback) override
+	{
+		downloads.push_back(map.sha256);
+		download = std::move(callback);
+	}
 	uint32_t AddEventListener(LobbyEventListener listener) override
 	{
 		listeners.push_back(std::move(listener));
@@ -192,8 +201,30 @@ public:
 	std::optional<int64_t> clanAsked;
 	LobbyCallback<lobby_api::ClanDetails> clan;
 	LobbyCallback<std::vector<uint8_t>> logo;
+	LobbyCallback<lobby_api::MapList> maps;
+	LobbyCallback<std::vector<uint8_t>> download;
+	std::vector<std::string> downloads;
 	std::vector<LobbyEventListener> listeners;
 	std::vector<uint32_t> removed;
+};
+
+/// A store of the lands of network games in memory
+class FakeMapStore final: public online::OnlineMapStoreInterface
+{
+public:
+	void Find(std::string file, uint64_t, FoundCallback done) override { done(files.contains(file)); }
+	[[nodiscard]] std::optional<std::vector<uint8_t>> Read(std::string_view file) const override
+	{
+		const auto found = files.find(std::string(file));
+		return found != files.end() ? std::optional(found->second) : std::nullopt;
+	}
+	void Write(std::string file, std::vector<uint8_t> bytes, WrittenCallback done) override
+	{
+		files[std::move(file)] = std::move(bytes);
+		done(true);
+	}
+
+	std::map<std::string, std::vector<uint8_t>> files;
 };
 
 /// A network game for the tests: a real session on the fake socket, with a clock that the test moves
@@ -271,6 +302,9 @@ struct FrontEndTest: public ::testing::Test
 	std::unique_ptr<MultiplayerFrontEnd> frontEnd;
 	/// The ping display of the room, as --show-ping turns it on
 	bool showPing {false};
+	FakeMapStore store;
+	/// The store of the lands of network games, none when the test does not give one
+	online::OnlineMapStoreInterface* mapStore {nullptr};
 
 	void Make(bool withLan = false)
 	{
@@ -281,6 +315,7 @@ struct FrontEndTest: public ::testing::Test
 		    .openPage = [this](std::string_view url) { opened.emplace_back(url); },
 		    .owner = {},
 		    .poll = {},
+		    .maps = mapStore,
 		};
 		MultiplayerFrontEnd::Settings settings {
 		    .registerPage = "https://lobby.test/register/",
@@ -322,17 +357,17 @@ struct FrontEndTest: public ::testing::Test
 	}
 
 	/// The game server lets the player in on the last socket
-	void ServerJoins(game_socket::Role role = game_socket::Role::God)
+	void ServerJoins(game_socket::Role role = game_socket::Role::God, std::optional<game_socket::Start> start = std::nullopt)
 	{
 		const std::optional<uint8_t> slot = role == game_socket::Role::God ? std::optional<uint8_t>(1) : std::nullopt;
 		sockets.ServerText(sockets.order.back(),
 		                   game_socket::ToJson(game_socket::Joined {
-		                       .role = role, .slot = slot, .session = "s", .name = "Alice", .start = std::nullopt}));
+		                       .role = role, .slot = slot, .session = "s", .name = "Alice", .start = std::move(start)}));
 		Step();
 	}
 
-	/// The player joins the first game, its socket opens and the server lets the player in
-	void ToRoom()
+	/// The player joins the first game, its socket opens and the server lets the player in with its start
+	void ToRoom(std::optional<game_socket::Start> start = std::nullopt)
 	{
 		ToGameList();
 		frontEnd->SelectGame(0);
@@ -346,7 +381,7 @@ struct FrontEndTest: public ::testing::Test
 		Step();
 		// The room opens only when the server lets the player in
 		ASSERT_EQ(frontEnd->GetBox(), Box::GameList);
-		ServerJoins();
+		ServerJoins(game_socket::Role::God, std::move(start));
 		ASSERT_EQ(frontEnd->GetBox(), Box::Room);
 	}
 };
@@ -547,6 +582,32 @@ TEST(MultiplayerRules, TheConditionsOfATestSwitchKeepToTheLimitsOfTheLand)
 	EXPECT_TRUE(ConditionsRefusal(limits, tooFew).has_value());
 	// A land with no block in the template has no limits, so the host can pick nothing there
 	EXPECT_TRUE(ConditionsRefusal(FindConditions(k_Conditions, "Land1"), inLimits).has_value());
+}
+
+TEST(MultiplayerRules, TheConditionsPageListsTheLastConditionFirst)
+{
+	using game_end::Condition;
+	using game_end::ConditionPick;
+	const std::array picks = {
+	    ConditionPick {.condition = Condition::HousesBuilt, .value = 20},
+	    ConditionPick {.condition = Condition::TreesGrown, .value = 100},
+	    ConditionPick {.condition = Condition::FoodInStores, .value = 9000},
+	};
+	// Each condition goes to the top of the list in the order of the game, whatever the order of the picks
+	const auto lines = ConditionLines(picks);
+	EXPECT_EQ(lines, (std::vector<ConditionPick> {
+	                     {.condition = Condition::TreesGrown, .value = 100},
+	                     {.condition = Condition::FoodInStores, .value = 9000},
+	                     {.condition = Condition::HousesBuilt, .value = 20},
+	                 }));
+	// A condition that is in the picks two times shows one time, with the last value
+	const std::array twice = {
+	    ConditionPick {.condition = Condition::WoodInStores, .value = 4000},
+	    ConditionPick {.condition = Condition::WoodInStores, .value = 5000},
+	};
+	EXPECT_EQ(ConditionLines(twice), (std::vector<ConditionPick> {{.condition = Condition::WoodInStores, .value = 5000}}));
+	EXPECT_TRUE(ConditionLines({}).empty());
+	EXPECT_EQ(ConditionLineText(u"Number of trees grown", 100), u"Number of trees grown (100)");
 }
 
 TEST(MultiplayerRules, ClanInfoLines)
@@ -772,8 +833,9 @@ TEST_F(FrontEndTest, JoinTakesATicketThenOpensTheGameSocket)
 	EXPECT_EQ(frontEnd->GetOwnSeat()->god, 2);
 	EXPECT_EQ(frontEnd->GetServerLand(), 0u);
 	ASSERT_TRUE(frontEnd->GetConditions().has_value());
-	// The game server sends no time limit, so the game's default of 30 minutes shows
+	// A server that gives no start has no picks: the game's default of 30 minutes shows, and no condition
 	EXPECT_EQ(frontEnd->GetTimeLimit(), k_DefaultTimeLimitMinutes);
+	EXPECT_TRUE(frontEnd->GetConditionPicks().empty());
 	// Back leaves the room and its channel, and the server gets the leave
 	frontEnd->Back();
 	EXPECT_EQ(frontEnd->GetBox(), Box::GameList);
@@ -782,6 +844,39 @@ TEST_F(FrontEndTest, JoinTakesATicketThenOpensTheGameSocket)
 	EXPECT_EQ(socket.sent.back().Text(), R"({"type":"room.leave"})");
 	Step();
 	EXPECT_EQ(sockets.Count(), 0u);
+}
+
+TEST_F(FrontEndTest, TheRoomShowsTheTimeLimitAndTheConditionsThatTheServerPicked)
+{
+	// The game server is the host: its start gives the time limit and the winning conditions as the player joins
+	ToRoom(game_socket::Start {
+	    .land = "Online Maps/mpm_2p_1.txt",
+	    .testbed = false,
+	    .seed = 1,
+	    .turn = 0,
+	    .opening = {},
+	    .godsRingMap = false,
+	    .allComputerGods = false,
+	    .aiSeed = std::nullopt,
+	    .scenario = std::nullopt,
+	    .timeLimit = 90,
+	    .conditions = {{.condition = 14, .value = 100}, {.condition = 3, .value = 20}},
+	    .names = {},
+	    .gods = {},
+	});
+	EXPECT_EQ(frontEnd->GetTimeLimit(), 90u);
+	EXPECT_EQ(frontEnd->GetConditionPicks().size(), 2u);
+	EXPECT_EQ(ConditionLines(frontEnd->GetConditionPicks()), (std::vector<game_end::ConditionPick> {
+	                                                             {.condition = game_end::Condition::TreesGrown, .value = 100},
+	                                                             {.condition = game_end::Condition::HousesBuilt, .value = 20},
+	                                                         }));
+}
+
+TEST_F(FrontEndTest, AStartWithNoTimeLimitShowsTheDefaultTimeLimit)
+{
+	ToRoom(game_socket::Start {});
+	EXPECT_EQ(frontEnd->GetTimeLimit(), k_DefaultTimeLimitMinutes);
+	EXPECT_TRUE(frontEnd->GetConditionPicks().empty());
 }
 
 TEST_F(FrontEndTest, ARefusedTicketShowsConnectionFailed)
@@ -1525,4 +1620,94 @@ TEST_F(FrontEndTest, TheRoomGivesTheRoundTripOfTheOwnGameSocket)
 	Step();
 	EXPECT_EQ(frontEnd->GetRoundTrip(), 48'000u);
 	EXPECT_EQ(ping_display::Text(frontEnd->GetRoundTrip()), u"ping 48");
+}
+
+namespace
+{
+/// The hash of the land of the room in the tests of the land's download
+constexpr std::string_view k_RoomMapHash = "aa00000000000000000000000000000000000000000000000000000000000000";
+
+lobby_api::OnlineMap RoomMap()
+{
+	return {.number = 1,
+	        .name = "Thirty-two gods",
+	        .file = "obm_32p_1",
+	        .players = 32,
+	        .sha256 = std::string(k_RoomMapHash),
+	        .checksum = online::start_rules::LandChecksum(std::vector<uint8_t> {1, 2, 3}),
+	        .size = 3,
+	        .url = "/api/v1/maps/" + std::string(k_RoomMapHash)};
+}
+} // namespace
+
+TEST_F(FrontEndTest, TheRoomGetsALandThatThePlayerDoesNotHaveFromTheLobby)
+{
+	mapStore = &store;
+	ToRoom();
+	EXPECT_EQ(frontEnd->GetMapDownload(), nullptr);
+	// The game server gives its land to the lobby after the room opened: the game list gets the hash
+	lobby.known[0].map = std::string(k_RoomMapHash);
+	Step();
+	ASSERT_TRUE(lobby.maps);
+	FakeLobby::Give(lobby.maps, lobby_api::MapList {.maps = {RoomMap()}});
+	ASSERT_NE(frontEnd->GetMapDownload(), nullptr);
+	EXPECT_EQ(frontEnd->GetMapDownload()->GetState(), online::MapDownload::State::Downloading);
+	EXPECT_EQ(lobby.downloads, (std::vector<std::string> {std::string(k_RoomMapHash)}));
+	FakeLobby::Give(lobby.download, std::vector<uint8_t> {1, 2, 3});
+	EXPECT_EQ(frontEnd->GetMapDownload()->GetState(), online::MapDownload::State::Ready);
+	EXPECT_EQ(store.files.at("obm_32p_1.map"), (std::vector<uint8_t> {1, 2, 3}));
+	Step();
+	EXPECT_EQ(frontEnd->GetMessage(), Message::None);
+	// The list of the lands has the lobby's land
+	EXPECT_EQ(FindLand(frontEnd->GetLocalMaps(), "Online Maps/obm_32p_1.map").has_value(), true);
+	// The land is asked for one time only
+	Step();
+	EXPECT_EQ(lobby.downloads.size(), 1u);
+}
+
+TEST_F(FrontEndTest, ALandThatTheLobbyDoesNotGiveShowsTheBoxOfTheRoom)
+{
+	mapStore = &store;
+	ToRoom();
+	lobby.known[0].map = std::string(k_RoomMapHash);
+	Step();
+	FakeLobby::Give(lobby.maps, lobby_api::MapList {.maps = {RoomMap()}});
+	// The download asks one more time, as the game asks the map server again
+	FakeLobby::Fail(lobby.download, LobbyErrorKind::Network);
+	EXPECT_EQ(lobby.downloads.size(), 2u);
+	FakeLobby::Fail(lobby.download, LobbyErrorKind::Network);
+	EXPECT_EQ(frontEnd->GetMapDownload()->GetState(), online::MapDownload::State::Failed);
+	Step();
+	EXPECT_EQ(frontEnd->GetMessage(), Message::CouldNotDownloadMap);
+	EXPECT_EQ(ButtonsOf(Message::CouldNotDownloadMap), MessageButtons::Ok);
+	frontEnd->AnswerMessage(MultiplayerFrontEnd::Answer::Ok);
+	Step();
+	// OK closes the box, and the player stays in the room
+	EXPECT_EQ(frontEnd->GetMessage(), Message::None);
+	EXPECT_EQ(frontEnd->GetBox(), Box::Room);
+	EXPECT_TRUE(store.files.empty());
+}
+
+TEST_F(FrontEndTest, ALandThatIsNotInTheLobbysListShowsTheBoxOfTheRoom)
+{
+	mapStore = &store;
+	ToRoom();
+	lobby.known[0].map = std::string(k_RoomMapHash);
+	Step();
+	FakeLobby::Give(lobby.maps, lobby_api::MapList {});
+	Step();
+	EXPECT_EQ(frontEnd->GetMessage(), Message::CouldNotDownloadMap);
+	EXPECT_TRUE(lobby.downloads.empty());
+}
+
+TEST_F(FrontEndTest, ALandInTheStoreDoesNotComeAgain)
+{
+	mapStore = &store;
+	store.files["obm_32p_1.map"] = {9};
+	ToRoom();
+	lobby.known[0].map = std::string(k_RoomMapHash);
+	Step();
+	FakeLobby::Give(lobby.maps, lobby_api::MapList {.maps = {RoomMap()}});
+	EXPECT_EQ(frontEnd->GetMapDownload()->GetState(), online::MapDownload::State::Ready);
+	EXPECT_TRUE(lobby.downloads.empty());
 }

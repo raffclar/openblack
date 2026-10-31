@@ -9,6 +9,8 @@
 
 #include <cstdint>
 
+#include <algorithm>
+#include <iterator>
 #include <optional>
 #include <vector>
 
@@ -85,6 +87,33 @@ TEST(ComputerHand, FullHandPutsDownFirstAndAMissingThingEndsBadly)
 	Add(action, StepKind::PickUpObject, {Argument {.object = static_cast<entt::entity>(99)}});
 	Process(action, world.view);
 	EXPECT_FALSE(Process(action, world.view));
+}
+
+TEST(ComputerHand, AStopOfTheActionPutsDownWhatTheHandHolds)
+{
+	constexpr auto k_Other = static_cast<entt::entity>(8);
+	FakeWorld world;
+	world.held = k_Other;
+	HandAction action;
+	action.hand = {100.0f, 0.0f, 100.0f};
+	Add(action, StepKind::Wait, {Argument {.value = 1.0f}});
+	ClearAndPutDown(action, world.view);
+	EXPECT_FALSE(Busy(action));
+	EXPECT_EQ(world.putDown, 1);
+	EXPECT_TRUE(world.held == entt::null);
+	// An empty hand puts down nothing
+	ClearAndPutDown(action, world.view);
+	EXPECT_EQ(world.putDown, 1);
+	// A step that ends badly stops the action, and the hand puts down what it holds
+	const auto notMade = std::ranges::find_if(steps::Table(), [](const auto& row) { return !row.made; });
+	ASSERT_NE(notMade, steps::Table().end());
+	world.held = k_Other;
+	action.moveFirst = false;
+	Add(action, static_cast<StepKind>(std::distance(steps::Table().begin(), notMade)), {});
+	EXPECT_FALSE(Process(action, world.view));
+	EXPECT_FALSE(Busy(action));
+	EXPECT_EQ(world.putDown, 2);
+	EXPECT_TRUE(world.held == entt::null);
 }
 
 TEST(ComputerHand, VillagerGoesToThePlaceWaitsAndIsDropped)

@@ -12,7 +12,6 @@
 #include <cstddef>
 
 #include <algorithm>
-#include <utility>
 
 #include <entt/meta/context.hpp>
 #include <gtest/gtest.h>
@@ -20,24 +19,21 @@
 #include "ECS/Reflection/BinaryArchive.h"
 #include "ECS/Systems/Implementations/MagicSystem.h"
 
+using openblack::ecs::reflection::BinaryWriter;
 using openblack::ecs::systems::MagicSystem;
 
 namespace
 {
-/// The number of the saved value that holds the press and the button of this computer's hand
+/// The numbers of the saved values of the magic system that the tests look at
 constexpr size_t k_HandInputValue = 12;
-/// The numbers of the saved values that start with the bytes of the fireball press and of the drawn circle
 constexpr size_t k_HoldLoopValue = 13;
 constexpr size_t k_TurnValue = 15;
 
-/// A presentation value starts where the value before the given value ends, and ends inside the given value
-bool StartsPresentation(const openblack::ecs::reflection::BinaryWriter& out, size_t value)
+/// Whether a presentation value holds all the bytes from first to the byte before last
+bool IsPresentation(const BinaryWriter& out, size_t first, size_t last)
 {
-	const auto& ends = out.ValueEnds();
-	const auto start = ends.at(value - 1);
-	return std::ranges::any_of(out.PresentationRanges(), [start, end = ends.at(value)](const auto& range) {
-		return range.first == start && range.second > start && range.second < end;
-	});
+	return std::ranges::any_of(out.PresentationRanges(),
+	                           [first, last](const auto& range) { return range.first <= first && last <= range.second; });
 }
 } // namespace
 
@@ -45,30 +41,29 @@ bool StartsPresentation(const openblack::ecs::reflection::BinaryWriter& out, siz
 TEST(MagicSave, TheInputOfTheHandOfThisComputerIsAPresentationValue)
 {
 	const entt::meta_ctx context;
-	openblack::ecs::reflection::BinaryWriter out(context);
-	out.KeepValueEnds();
 	const MagicSystem magic;
+	BinaryWriter out(context);
+	out.KeepValueEnds();
 	magic.SaveState(out);
 	const auto& ends = out.ValueEnds();
-	ASSERT_GT(ends.size(), k_HandInputValue);
-	const std::pair<size_t, size_t> input {ends.at(k_HandInputValue - 1), ends.at(k_HandInputValue)};
-	EXPECT_LT(input.first, input.second);
-	EXPECT_NE(std::ranges::find(out.PresentationRanges(), input), out.PresentationRanges().end());
-	// The miracles and the turn of the system stay synced
-	EXPECT_EQ(std::ranges::find_if(out.PresentationRanges(), [](const auto& range) { return range.first == 0; }),
-	          out.PresentationRanges().end());
+	ASSERT_GT(ends.size(), k_TurnValue);
+	EXPECT_TRUE(IsPresentation(out, ends.at(k_HandInputValue - 1), ends.at(k_HandInputValue)));
+	// The miracles of the system stay synced
+	EXPECT_FALSE(IsPresentation(out, 0, 1));
 }
 
-// The press of the hand on a fireball and the circle that the hand drew are of this computer only. The bytes of the values
-// that come after them stay synced.
+// The press of the hand on a fireball and the circle that the hand drew are of this computer only. The turn of the
+// system after the circle stays synced.
 TEST(MagicSave, TheFireBallPressAndTheDrawnCircleArePresentationValues)
 {
 	const entt::meta_ctx context;
-	openblack::ecs::reflection::BinaryWriter out(context);
-	out.KeepValueEnds();
 	const MagicSystem magic;
+	BinaryWriter out(context);
+	out.KeepValueEnds();
 	magic.SaveState(out);
-	ASSERT_GT(out.ValueEnds().size(), k_TurnValue);
-	EXPECT_TRUE(StartsPresentation(out, k_HoldLoopValue));
-	EXPECT_TRUE(StartsPresentation(out, k_TurnValue));
+	const auto& ends = out.ValueEnds();
+	ASSERT_GT(ends.size(), k_TurnValue);
+	EXPECT_TRUE(IsPresentation(out, ends.at(k_HoldLoopValue - 1), ends.at(k_HoldLoopValue - 1) + 1));
+	EXPECT_TRUE(IsPresentation(out, ends.at(k_TurnValue - 1), ends.at(k_TurnValue - 1) + 1));
+	EXPECT_FALSE(IsPresentation(out, ends.at(k_TurnValue) - 1, ends.at(k_TurnValue)));
 }

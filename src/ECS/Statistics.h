@@ -63,6 +63,10 @@ void CountInfluence(ecs::Registry& registry, PlayerNames player, float power);
 /// turns each town with a player samples how satisfied its people are
 void ProcessTurn(uint32_t turn);
 
+/// Every tenth game turn, after the towns gained their belief, each player checks the belief in them over all the towns
+/// for its highest and lowest
+void CheckBelief(uint32_t turn);
+
 /// Every so many game turns the figures kept once for everyone change: the invented lines of code and the frame rate's
 /// highest and lowest
 void ProcessGlobalTurn(uint32_t turn, int32_t frameRate);

@@ -437,9 +437,9 @@ struct LeashLength
 };
 
 /// The report of the view of the player that the scripts and the advisors' remarks read: the view of the camera, the
-/// arrival of the camera and the grip of the hand on the land. The computer of the player sends it once a turn when
-/// something in it changes, and the turns read it, in a game alone too. Thus the scripts get the same answers at all
-/// frame rates.
+/// arrival of the camera and the grip of the hand on the land. The computer of the player sends it once a turn when the
+/// eye or the focus moved by more than 0.01 on an axis, or when a different field changed. The turns read it, in a game
+/// alone too. Thus the scripts get the same answers at all frame rates.
 struct ViewReport
 {
 	/// The eye and the point that the camera looks at, as the frame draws them

@@ -15,6 +15,7 @@
 #include <filesystem>
 #include <functional>
 #include <optional>
+#include <span>
 #include <string_view>
 
 #include <glm/vec2.hpp>
@@ -69,7 +70,7 @@ public:
 };
 
 /// A view that does nothing, for a world with no player in front of it
-class NoLandView final: public LandViewInterface
+class NoLandView: public LandViewInterface
 {
 public:
 	void BeginLoadingScreen(loading::LoadingClock::Mode /*look*/) override {}
@@ -105,7 +106,11 @@ public:
 	virtual void LoadTestbed() = 0;
 	/// Loads the network map for 32 gods on this computer alone, for tests: a round island with a citadel and a village in
 	/// each slot. The village comes from a land of the game for network play. Gives false when that land is not there.
+	/// The game makes the file of the map and loads it as LoadGodsRingMapFile does.
 	virtual bool LoadGodsRingMap() = 0;
+	/// Loads the network map for 32 gods from the bytes of its file (gods_ring_map_file). Gives false when the bytes are
+	/// not a file of the map.
+	virtual bool LoadGodsRingMapFile(std::span<const uint8_t> file) = 0;
 	/// What the load of a saved land is for
 	enum class SavedLandUse : uint8_t
 	{

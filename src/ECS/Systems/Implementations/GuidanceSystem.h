@@ -45,6 +45,7 @@ public:
 	void WorshipperDied() override;
 	void LosingVillager(entt::entity villager) override;
 	void LowOnPeople(entt::entity town) override;
+	void TownChangedHands(entt::entity town, PlayerNames loser, PlayerNames taker) override;
 	void LosingBeliefTurn() override;
 	void EndWaits() override;
 

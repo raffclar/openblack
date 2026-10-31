@@ -13,6 +13,7 @@
 
 #include <optional>
 #include <span>
+#include <string_view>
 
 #include "ECS/Components/GameStanding.h"
 #include "ECS/GameEndRules.h"
@@ -33,6 +34,29 @@ namespace openblack::game_end
 inline constexpr uint32_t k_DefaultTimeLimitMinutes = 30;
 /// The game turns in one minute of a time limit
 inline constexpr uint32_t k_TurnsPerMinute = 600;
+/// The shortest time limit in minutes that the host can give a network game
+inline constexpr uint32_t k_ShortestTimeLimitMinutes = 10;
+/// The longest time limit in minutes that the host can give a network game: 24 hours
+inline constexpr uint32_t k_LongestTimeLimitMinutes = 1440;
+/// The shortest time limit in minutes that a build with the developer tools accepts, for short test games
+inline constexpr uint32_t k_ShortestTestTimeLimitMinutes = 1;
+
+/// Why the operator of a game server cannot give a network game this time limit in minutes, or none when the operator
+/// can. The limits are the limits of the host's controls. A build with the developer tools also accepts a shorter limit,
+/// for short test games.
+[[nodiscard]] constexpr std::optional<std::string_view> TimeLimitRefusal(uint32_t minutes, bool developerTools) noexcept
+{
+	if (minutes > k_LongestTimeLimitMinutes)
+	{
+		return "the time limit must be 1440 minutes (24 hours) or less";
+	}
+	const auto shortest = developerTools ? k_ShortestTestTimeLimitMinutes : k_ShortestTimeLimitMinutes;
+	if (minutes < shortest)
+	{
+		return developerTools ? "the time limit must be 1 minute or more" : "the time limit must be 10 minutes or more";
+	}
+	return std::nullopt;
+}
 
 /// The turn at which the time limit of a network game ends the game. The start multiplies the minutes with no test.
 [[nodiscard]] constexpr uint32_t TimeLimitTurn(uint32_t minutes)

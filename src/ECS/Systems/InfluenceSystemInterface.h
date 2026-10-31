@@ -116,19 +116,26 @@ public:
 	/// not drawn.
 	virtual void ShowHandInfluence(std::chrono::duration<float, std::milli> gameTime) = 0;
 
-	/// How much a place is in a player's influence, from -1 to 1. Near their hand it is what the hand keeps of their
-	/// influence past the border, while it keeps any (see virtual_influence::Grant): the questions of a game turn measure
-	/// from where the hand was at the turn, those asked between turns from where this computer's hand is now. Elsewhere
-	/// it is their own influence (see PlayerRawInfluence).
+	/// How much a place is in a player's influence, from -1 to 1, as every rule of the game asks it: the player's own
+	/// influence (see PlayerOwnInfluence). Where that is none or less, it is the own influence of the first ally, in the
+	/// order of the player numbers, that lends its influence to the player and has some there, else none.
 	[[nodiscard]] virtual float PlayerInfluence(PlayerNames player, const map_coords::MapCoords& position) const = 0;
+	/// How much a place is in a player's influence without the influence of allies. Near their hand it is what the hand
+	/// keeps of their influence past the border, while it keeps any (see virtual_influence::Grant): the questions of a
+	/// game turn measure from where the hand was at the turn, those asked between turns from where this computer's hand
+	/// is now. Elsewhere it is their own influence (see PlayerRawInfluence).
+	[[nodiscard]] virtual float PlayerOwnInfluence(PlayerNames player, const map_coords::MapCoords& position) const
+	{
+		return PlayerInfluence(player, position);
+	}
 	/// The same at a point, made a map position first
 	[[nodiscard]] float PlayerInfluence(PlayerNames player, const glm::vec3& position) const
 	{
 		return PlayerInfluence(player, map_coords::FromMetres({position.x, position.z}));
 	}
 	/// How much the hand's own place is in its player's influence: while the hand keeps any of their influence past the
-	/// border it counts as inside however far out it is, else it is their own influence there. What the hand may do
-	/// asks this.
+	/// border it counts as inside however far out it is, else it is their own influence there. Where that is none or
+	/// less, an ally lends its influence as for PlayerInfluence. What the hand may do asks this.
 	[[nodiscard]] virtual float HandPointInfluence(PlayerNames player, const map_coords::MapCoords& hand) const = 0;
 	[[nodiscard]] bool IsHandInInfluence(PlayerNames player, const glm::vec3& hand) const
 	{

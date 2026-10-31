@@ -29,6 +29,7 @@
 #include "ECS/Components/TownDesire.h"
 #include "ECS/Components/Villager.h"
 #include "ECS/Components/VillagerDeath.h"
+#include "ECS/PlayerTowns.h"
 #include "ECS/Registry.h"
 #include "ECS/RegistryContext.h"
 #include "ECS/Systems/HelpProfileSystemInterface.h"
@@ -125,17 +126,20 @@ void SampleSatisfaction()
 	});
 }
 
-/// The belief in the player summed over every town
+/// The belief in the player summed over every town, in the order of the game's list of all the towns
 float BeliefIn(PlayerNames name)
 {
 	float total = 0.0f;
 	const auto index = static_cast<size_t>(name);
-	Entities().Each<const Town, const TownImpression>([index, &total](const Town&, const TownImpression& impression) {
-		if (index < impression.belief.belief.size())
+	const auto& registry = Entities();
+	for (const auto town : ecs::player_towns::AllMadeNewestFirst(registry))
+	{
+		const auto* impression = registry.TryGet<const TownImpression>(town);
+		if (impression != nullptr && index < impression->belief.belief.size())
 		{
-			total += impression.belief.belief.at(index);
+			total += impression->belief.belief.at(index);
 		}
-	});
+	}
 	return total;
 }
 
@@ -228,6 +232,16 @@ void player_statistics::CountInfluence(ecs::Registry& registry, PlayerNames play
 	Update(registry, player, [power](PlayerStatistics& statistics) { statistics.influenceHistory.Add(power); });
 }
 
+void player_statistics::CheckBelief(uint32_t turn)
+{
+	if (turn % statistics::k_BeliefCheckEvery != 0)
+	{
+		return;
+	}
+	Entities().Each<const Player, PlayerStatistics>(
+	    [](const Player& player, PlayerStatistics& statistics) { statistics.belief.Check(BeliefIn(player.name)); });
+}
+
 void player_statistics::ProcessTurn(uint32_t turn)
 {
 	auto& registry = Entities();
@@ -246,10 +260,6 @@ void player_statistics::ProcessTurn(uint32_t turn)
 		statistics.men.Check(men);
 		statistics.women.Check(women);
 		statistics.populationHistory.Add(static_cast<float>(men + women));
-		if (turn % statistics::k_BeliefCheckEvery == 0)
-		{
-			statistics.belief.Check(BeliefIn(player.name));
-		}
 		// The player's creature's size is noted the first time it is seen on the land
 		if (statistics.startCreatureSize == 0.0f)
 		{

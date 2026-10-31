@@ -249,6 +249,9 @@ public:
 	/// The hand drops the miracle it holds, as a scribble or a shake does: what was started is called off and what the
 	/// seed still holds goes back to the player's worship
 	virtual void DiscardHeldSeed() = 0;
+	/// The hand of the player drops the miracle that it holds, as DiscardHeldSeed does for the player of this computer.
+	/// The result is the same on each computer, so a tool can use it before the same turn on each computer.
+	virtual void DiscardHeldSeedOf(PlayerNames player) = 0;
 	/// A seed goes with the icon that made it: out of the hand if it is held, and a miracle still running from it closes
 	/// down. What it holds is lost.
 	virtual void DeleteSeed(entt::entity seed) = 0;
@@ -361,6 +364,8 @@ public:
 	[[nodiscard]] virtual std::optional<HandFrame> GetDrivenHand() const = 0;
 	[[nodiscard]] virtual bool IsIgnoringInfluence() const = 0;
 	[[nodiscard]] virtual std::vector<SpellInfo> GetSpells() const = 0;
+	/// A miracle of the player of this computer follows the hand at each turn, so the hand report goes at each turn
+	[[nodiscard]] virtual bool SpellNeedsHandReportEachTurn() const { return false; }
 	/// The newest miracle of a kind, closing down or not, whose last event was strictly within a radius of a point
 	[[nodiscard]] virtual std::optional<entt::entity> SpellAt(MagicType /*type*/, glm::vec3 /*point*/, float /*radius*/) const
 	{

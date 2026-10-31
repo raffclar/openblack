@@ -854,7 +854,17 @@ bool ResourceStoreSystem::TakeObject(entt::entity store, entt::entity object, st
 	{
 		return false;
 	}
-	const auto resource = ResourceOf(object);
+	return TakeObjectAs(store, object, ResourceOf(object), giver);
+}
+
+bool ResourceStoreSystem::TakeObjectAs(entt::entity store, entt::entity object, ObjectResource resource,
+                                       std::optional<PlayerNames> giver)
+{
+	auto& registry = Entities();
+	if (!registry.Valid(store) || !registry.Valid(object))
+	{
+		return false;
+	}
 	if (resource.type == ResourceType::None || !IsStore(store, resource.type))
 	{
 		return false;

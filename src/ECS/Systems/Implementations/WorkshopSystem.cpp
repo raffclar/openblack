@@ -26,6 +26,7 @@
 #include "3D/LandIslandInterface.h"
 #include "3D/MapCoords.h"
 #include "Camera/Camera.h"
+#include "Common/GUtilsAngle.h"
 #include "Common/GUtilsDistance.h"
 #include "Common/GameRandom.h"
 #include "Common/PortableRotations.h"
@@ -39,6 +40,7 @@
 #include "ECS/Components/Physics.h"
 #include "ECS/Components/Pot.h"
 #include "ECS/Components/Scaffold.h"
+#include "ECS/Components/StoragePit.h"
 #include "ECS/Components/Town.h"
 #include "ECS/Components/TownDesire.h"
 #include "ECS/Components/Transform.h"
@@ -55,6 +57,7 @@
 #include "ECS/ScaffoldImpressionRules.h"
 #include "ECS/ScaffoldOfferRules.h"
 #include "ECS/ScriptFind.h"
+#include "ECS/Systems/DynamicsSystemInterface.h"
 #include "ECS/Systems/EffectRequestSystemInterface.h"
 #include "ECS/Systems/FireSystemInterface.h"
 #include "ECS/Systems/HandSystemInterface.h"
@@ -67,6 +70,7 @@
 #include "ECS/Systems/TownSystemInterface.h"
 #include "ECS/Systems/WonderSystemInterface.h"
 #include "ECS/TempleConstruction.h"
+#include "ECS/ThingMapPlace.h"
 #include "ECS/TownDesireFlags.h"
 #include "ECS/TownHomes.h"
 #include "ECS/TownPlanning.h"
@@ -190,6 +194,9 @@ constexpr float k_TouchGap = 0.001f;
 /// The sounds of a join of scaffolds: four samples, one after the other
 constexpr uint32_t k_FirstJoinSound = 201;
 constexpr uint32_t k_JoinSounds = 4;
+/// The first of the four sounds of a tap that breaks a scaffold, in turn
+constexpr uint32_t k_FirstTapSound = 151;
+constexpr uint32_t k_TapSounds = 4;
 
 /// A puff at a scaffold shows that it starts no building
 void Puff(glm::vec3 position)
@@ -934,6 +941,161 @@ void WorkshopSystem::Join(entt::entity held, entt::entity target, std::optional<
 		audio::StartGameSoundEffect(entt::hashed_string(name.c_str()).value(), {.position = *hand});
 	}
 	_joinSound = (_joinSound + 1) % k_JoinSounds;
+}
+
+bool WorkshopSystem::GoesIntoStore(entt::entity scaffold, entt::entity store) const
+{
+	const auto& registry = Entities();
+	if (!registry.Valid(scaffold) || !registry.Valid(store) || !registry.AllOf<Scaffold>(scaffold))
+	{
+		return false;
+	}
+	// Only a storage pit that is built takes a scaffold. It takes wood.
+	return registry.AllOf<StoragePit, Abode>(store) && construction::IsBuilt(store) &&
+	       Locator::resourceStoreSystem::has_value() &&
+	       Locator::resourceStoreSystem::value().IsStore(store, ResourceType::Wood);
+}
+
+bool WorkshopSystem::GiveToStore(entt::entity scaffold, entt::entity store, PlayerNames player)
+{
+	if (!GoesIntoStore(scaffold, store) || !Locator::infoConstants::has_value())
+	{
+		return false;
+	}
+	const auto value = workshop::ValueOfScale(Entities().Get<const Transform>(scaffold).scale.x);
+	const auto wood = workshop::WoodOfScaffold(value, Locator::infoConstants::value().scaffold.woodValue);
+	return Locator::resourceStoreSystem::value().TakeObjectAs(
+	    store, scaffold, {.type = ResourceType::Wood, .amount = wood, .poisoned = false}, player);
+}
+
+entt::entity WorkshopSystem::SplitOffRest(entt::entity scaffold)
+{
+	auto& registry = Entities();
+	if (!registry.Valid(scaffold) || !registry.AllOf<Scaffold, Transform>(scaffold) || !Locator::infoConstants::has_value())
+	{
+		return entt::null;
+	}
+	const auto data = registry.Get<const Scaffold>(scaffold);
+	// Only a scaffold that comes down gently, with a building on offer, keeps less than its worth
+	if (!data.gentle || !data.phantom.shown.has_value())
+	{
+		return entt::null;
+	}
+	const auto& info = Locator::infoConstants::value();
+	const auto value = workshop::ValueOfScale(registry.Get<const Transform>(scaffold).scale.x);
+	const auto required = info.abode.at(static_cast<size_t>(data.phantom.shown->info)).scaffoldsRequired;
+	const auto rest = workshop::RestInHand(value, required);
+	if (!rest.has_value())
+	{
+		return entt::null;
+	}
+	const auto place = registry.Get<const Transform>(scaffold).position;
+	const auto split = CreateScaffold(place, data.town, entt::null, 0.0f, workshop::ScaleOfValue(*rest));
+	if (split == entt::null)
+	{
+		return entt::null;
+	}
+	registry.Get<Transform>(scaffold).scale = glm::vec3(workshop::ScaleOfValue(value - *rest));
+	registry.SetDirty();
+	if (const auto logger = spdlog::get("game"))
+	{
+		SPDLOG_LOGGER_INFO(logger, "Scaffold: scaffold {} keeps {} and leaves {} in the hand as scaffold {} at turn {}",
+		                   entt::to_integral(scaffold), value - *rest, *rest, entt::to_integral(split), Turn());
+	}
+	return split;
+}
+
+bool WorkshopSystem::ValidToTap(entt::entity scaffold) const
+{
+	const auto& registry = Entities();
+	if (!registry.Valid(scaffold) || !registry.AllOf<Scaffold, Transform>(scaffold) || !Locator::infoConstants::has_value())
+	{
+		return false;
+	}
+	const auto& data = registry.Get<const Scaffold>(scaffold);
+	const auto& info = Locator::infoConstants::value().scaffold;
+	return workshop::CanTapToBreak({
+	    .value = workshop::ValueOfScale(registry.Get<const Transform>(scaffold).scale.x),
+	    .inPhysics = registry.AllOf<InPhysics>(scaffold),
+	    .onSite = registry.Valid(data.site),
+	    .kept = workshop::KeepsScaffold(data.putDownTurn, Turn(), info.gameTurnsAfterPlacingCanStillPickUp,
+	                                    data.scriptBuilding.has_value()),
+	    .scriptBuilding = data.scriptBuilding.has_value(),
+	});
+}
+
+bool WorkshopSystem::Tap(entt::entity scaffold, glm::vec3 hand)
+{
+	if (!ValidToTap(scaffold) || !Locator::gameRandom::has_value() || !Locator::terrainSystem::has_value())
+	{
+		return false;
+	}
+	auto& registry = Entities();
+	// The building that the scaffold started goes
+	LeaveSite(scaffold);
+	const auto& land = Locator::terrainSystem::value();
+	const auto data = registry.Get<const Scaffold>(scaffold);
+	const auto transform = registry.Get<const Transform>(scaffold);
+	const auto angles = ecs::placed_turn::AnglesOf(registry, scaffold);
+	const auto value = workshop::ValueOfScale(transform.scale.x);
+	// The part that breaks off is worth one scaffold, for the same town, with no workshop
+	const auto piece = CreateScaffold(transform.position, data.town, entt::null, 0.0f, workshop::ScaleOfValue(1));
+	if (piece == entt::null)
+	{
+		return false;
+	}
+	// The two parts move apart along a random quarter turn from the angle of the scaffold, each by the scaffold's radius
+	const auto quarterTurns = Locator::gameRandom::value().GameRand(4);
+	const float angle = workshop::BreakAngle(quarterTurns, angles.y);
+	const auto offset = gutils::GetPosFromAngle(angle, ecs::systems::object_measures::TwoDRadius(registry, scaffold));
+	auto at = ecs::thing_map_place::Of(registry, scaffold);
+	at.altitude = map_coords::FromWorld(land, transform.position).altitude;
+	// The part that broke off has the angles of the scaffold
+	const auto pieceAt = at + offset;
+	ecs::thing_map_place::Put(registry, piece, pieceAt, map_coords::ToWorld(land, pieceAt).y);
+	ecs::placed_turn::SetAngles(registry, piece, angles);
+	// The workshop of the scaffold counts the part as its own when it has room, and keeps a place in its yard for it
+	if (registry.Valid(data.workshop) && registry.AllOf<Workshop>(data.workshop) && RoomOf(data.workshop) != 0)
+	{
+		auto& owner = registry.Get<Workshop>(data.workshop);
+		const auto place = workshop::FirstFreePlace(owner.places);
+		workshop::AddScaffold(owner, piece);
+		owner.places.at(place) = Workshop::Place::Away;
+		auto& pieceData = registry.Get<Scaffold>(piece);
+		pieceData.place = place;
+		pieceData.workshop = data.workshop;
+	}
+	auto* dynamics = Locator::dynamicsSystem::has_value() ? &Locator::dynamicsSystem::value() : nullptr;
+	if (dynamics != nullptr)
+	{
+		dynamics->InitialisePhysics(piece, {.add = true});
+	}
+	// A burning scaffold passes its fire to the part that broke off
+	if (Locator::fireSystem::has_value())
+	{
+		Locator::fireSystem::value().CopyFire(scaffold, piece);
+	}
+	// The scaffold is worth one scaffold less, and moves the other way
+	registry.Get<Transform>(scaffold).scale = glm::vec3(workshop::ScaleOfValue(value - 1));
+	const auto scaffoldAt = at - offset;
+	ecs::thing_map_place::Put(registry, scaffold, scaffoldAt, map_coords::ToWorld(land, scaffoldAt).y);
+	if (dynamics != nullptr && dynamics->CanBecomePhysicsObject(scaffold))
+	{
+		// The scaffold starts to move upright, with no turn
+		registry.Get<Transform>(scaffold).rotation = glm::mat3(1.0f);
+		dynamics->InitialisePhysics(scaffold, {.add = true});
+	}
+	registry.SetDirty();
+	if (const auto logger = spdlog::get("game"))
+	{
+		SPDLOG_LOGGER_INFO(logger, "Scaffold: a tap breaks scaffold {} off scaffold {}, worth {} now, at turn {}",
+		                   entt::to_integral(piece), entt::to_integral(scaffold), value - 1, Turn());
+	}
+	// One of four sounds plays where the hand is
+	const auto name = fmt::format("InGame.sad/{}", k_FirstTapSound + _tapSound);
+	audio::StartGameSoundEffect(entt::hashed_string(name.c_str()).value(), {.position = hand, .owner = scaffold});
+	_tapSound = (_tapSound + 1) % k_TapSounds;
+	return true;
 }
 
 bool WorkshopSystem::SearchAndTakeOffer(entt::entity scaffold, entt::entity town)

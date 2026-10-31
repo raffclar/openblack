@@ -571,6 +571,22 @@ void GuidanceSystem::LowOnPeople(entt::entity town)
 	}
 }
 
+void GuidanceSystem::TownChangedHands(entt::entity town, PlayerNames loser, PlayerNames taker)
+{
+	const auto own = OwnPlayer();
+	const auto kind = guidance::TownChangedHandsLine(loser, taker, own);
+	if (!kind.has_value() || !RemarkNow(*kind) || !Locator::entitiesRegistry::value().Valid(town))
+	{
+		return;
+	}
+	// Only when the place of the town is on screen
+	const auto view = ecs::thing_on_screen::ScreenView(own);
+	if (view.has_value() && ecs::thing_on_screen::PlaceOnScreen(*view, town))
+	{
+		SayRemark(*kind);
+	}
+}
+
 void GuidanceSystem::LosingBeliefTurn()
 {
 	if (!Locator::entitiesRegistry::has_value() || !Locator::infoConstants::has_value() ||

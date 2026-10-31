@@ -107,6 +107,9 @@ enum class Message : uint8_t
 	/// "%s has kicked you from the game.", with OK, with the name of the room's server: the server removed the player
 	/// from the room. OK goes back to the game list.
 	KickedFromGame,
+	/// "ERROR: Could not download map from Internet. Please check your Internet connection.", with OK: the lobby did not
+	/// give the land of the room
+	CouldNotDownloadMap,
 };
 
 /// The buttons of a message box, as the game's message boxes have them
@@ -355,6 +358,14 @@ using ConditionTemplate = std::array<ConditionLimits, k_ConditionCount>;
 /// be from the least to the most value of its condition. No limits: the template file has no block for the land.
 [[nodiscard]] std::optional<std::string> ConditionsRefusal(const std::optional<ConditionTemplate>& limits,
                                                            std::span<const game_end::ConditionPick> picks);
+
+/// The lines of the list on the conditions page, one for each condition that the host switched on. The page adds the
+/// conditions in the order of the game, and each new line goes to the top. Thus the last condition of the game shows
+/// first. When a condition is in the picks two times, the last value is the value of the line.
+[[nodiscard]] std::vector<game_end::ConditionPick> ConditionLines(std::span<const game_end::ConditionPick> picks);
+
+/// The text of a line on the conditions page: the name of the condition and its value, "Number of houses built (20)"
+[[nodiscard]] std::u16string ConditionLineText(std::u16string_view name, int32_t value);
 
 /// The front end's flow from box to box. It knows nothing of the lobby: the controller tells it what happened.
 struct Flow

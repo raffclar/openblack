@@ -421,6 +421,12 @@ TEST(HandDemo, TheClickMovesToAThingOfTheKindWithinThreeMetres)
 	EXPECT_TRUE(TakesRecordedClick(any, {.type = script::ObjectType::Store}, At(1830.0f, 2642.0f)));
 }
 
+TEST(HandDemo, AStartStopsTheChargesUnlessItKeepsTheHand)
+{
+	EXPECT_TRUE(hand_demo::StopsCharges(false));
+	EXPECT_FALSE(hand_demo::StopsCharges(true));
+}
+
 TEST(HandDemo, AStartTakesOffOnlyALeashOnAndNotTiedToAThing)
 {
 	EXPECT_TRUE(hand_demo::TakesOffLeash(false, true, false));

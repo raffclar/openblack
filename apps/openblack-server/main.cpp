@@ -31,7 +31,9 @@
 #include "Common/BuildVersion.h"
 #include "Common/CrashHandler.h"
 #include "Common/DeveloperTools.h"
+#include "ECS/GameEndConditions.h"
 #include "Server/DedicatedServer.h"
+#include "Server/MapExport.h"
 
 namespace
 {
@@ -59,6 +61,7 @@ int main(int argc, char* argv[])
 		("testbed", "The flat testbed in place of a land.")
 		("scenario", "Tools: start on the testbed and play the testbed scenario of this id, as the game's --scenario.", cxxopts::value<std::string>())
 		("gods-ring-map", "The network map for 32 gods in place of a land.")
+		("write-gods-ring-map", "Write the file of the network map for 32 gods, which the players get from the lobby, to this file, then stop.", cxxopts::value<std::string>())
 		("skip-opening", "How the new game on the first land starts, as the game's --skip-opening.", cxxopts::value<std::string>()->default_value("cow"))
 		("seed", "Tools: the seed of every random number of the world, which also pins the date of the world. Without it, the world starts from the seed of a room and reads the date from the clock of the computer.", cxxopts::value<uint32_t>())
 		("n,turns", "Stop when the world gets to this turn. With none, the server runs until a signal stops it.", cxxopts::value<uint32_t>())
@@ -72,8 +75,8 @@ int main(int argc, char* argv[])
 		("reload-at", "Tools: at this turn the server takes its whole world into memory as a world state and loads it again, as a client that comes back loads the server's world.", cxxopts::value<uint32_t>())
 		("gods-need-no-temple", "Tests: a god with no temple stays in the game, for a land that makes no temple at its start (a story land). Each client needs the same switch (--sim-gods-need-no-temple).")
 		("temple-loss", "Tests: at a turn, the temple of a player starts its destruction, as PLAYER:TURN (the player from 0). Each client needs the same switch (--sim-temple-loss).", cxxopts::value<std::string>())
-		("time-limit", "Tests: the time limit of the network game in minutes, in place of the default 30. The start sends it to every client.", cxxopts::value<uint32_t>())
-		("conditions", "Tools: the winning conditions of the network game, as the host picks them: [LAND:]NAME=VALUE,... with the names of Online Maps/ConditionTemplate.txt or their numbers from 0. The values must be in the limits of the land (or of LAND) in that file. The start sends them to every client.", cxxopts::value<std::string>())
+		("time-limit", "The time limit of the network game in minutes, from 10 to 1440 (24 hours) as the host picks it, in place of the default 30. A build with the developer tools also accepts 1 to 9 minutes for tests. The start sends it to every client.", cxxopts::value<uint32_t>())
+		("conditions", "The winning conditions of the network game, as the host picks them: [LAND:]NAME=VALUE,... with the names of Online Maps/ConditionTemplate.txt or their numbers from 0. The values must be in the limits of the land (or of LAND) in that file. The start sends them to every client.", cxxopts::value<std::string>())
 		("all-computer-gods", "Tools: every god with a citadel is a computer god, and the room has no human god. The game starts at once: with --gods N the world turns when N observers joined (for the AI soak).")
 		("ai-seed", "Tools: the seed of the personalities of the computer gods. Each client takes it from the start.", cxxopts::value<uint32_t>())
 		("commands", "Tools: do the commands of each turn that a game wrote with --sim-commands, at the same turns.", cxxopts::value<std::string>())
@@ -82,6 +85,8 @@ int main(int argc, char* argv[])
 		("row-dump", "Tools: keep each field of each row of the synced world of the last turns, and write the rows of a turn to this file when the world of a client parts from the server's world (tools/sim/row_dump.py compares two files).", cxxopts::value<std::string>())
 		("row-dump-turn", "Tools: with --row-dump, also write the rows of this turn.", cxxopts::value<uint32_t>())
 		("row-dump-keep", "Tools: with --row-dump, the count of the last turns of which the dump keeps the rows.", cxxopts::value<uint32_t>()->default_value("64"))
+		("world-states", "Tools: write the world state of the server to this folder at the end of each turn of --world-state-turns, with a map of its synced bytes (tools/sim/save_diff.py --synced compares two computers).", cxxopts::value<std::string>())
+		("world-state-turns", "Tools: with --world-states, the turns, such as 250 or 100,250,400.", cxxopts::value<std::string>())
 #endif
 		("listen", "The game role: listen for the clients on this IPv4 address and TCP port, such as 127.0.0.1:0 (0 for a free port).", cxxopts::value<std::string>())
 		("tls-cert", "The PEM file of the certificate chain of the game socket (wss). Without it, the socket speaks plain WebSocket on a loopback address only, behind a proxy that does the TLS.", cxxopts::value<std::string>())
@@ -152,6 +157,17 @@ int main(int argc, char* argv[])
 		settings.openingName = result["skip-opening"].as<std::string>();
 		settings.opening = openblack::new_game_choice::ParseNewGameStart(settings.openingName);
 		settings.godsRingMap = result.count("gods-ring-map") != 0;
+		if (result.count("write-gods-ring-map") != 0)
+		{
+			const std::filesystem::path out(result["write-gods-ring-map"].as<std::string>());
+			if (const auto error = openblack::server::WriteGodsRingMap(settings.gamePath, out); error.has_value())
+			{
+				std::cerr << "openblack-server: " << *error << '\n';
+				return EXIT_FAILURE;
+			}
+			std::cout << "openblack-server: wrote the map for 32 gods to " << out.generic_string() << '\n';
+			return EXIT_SUCCESS;
+		}
 		settings.soak.allComputerGods = result.count("all-computer-gods") != 0;
 		if (result.count("ai-seed") != 0)
 		{
@@ -178,7 +194,15 @@ int main(int argc, char* argv[])
 		}
 		if (result.count("time-limit") != 0)
 		{
-			settings.timeLimit = result["time-limit"].as<uint32_t>();
+			const auto minutes = result["time-limit"].as<uint32_t>();
+			if (const auto refusal = openblack::game_end::TimeLimitRefusal(minutes, openblack::developer_tools::k_Built);
+			    refusal.has_value())
+			{
+				std::cerr << "The time limit of --time-limit is " << minutes << " minutes, but " << *refusal << "."
+				          << std::endl;
+				return EXIT_FAILURE;
+			}
+			settings.timeLimit = minutes;
 		}
 		if (result.count("conditions") != 0)
 		{
@@ -216,6 +240,19 @@ int main(int argc, char* argv[])
 			{
 				settings.rowDump.atTurn = result["row-dump-turn"].as<uint32_t>();
 			}
+		}
+		if (result.count("world-states") != 0)
+		{
+			const auto turns = result.count("world-state-turns") != 0
+			                       ? openblack::world_state_at_turn::ParseTurns(result["world-state-turns"].as<std::string>())
+			                       : std::nullopt;
+			if (!turns.has_value())
+			{
+				std::cerr << "--world-states needs --world-state-turns with a list such as 100,250" << std::endl;
+				return EXIT_FAILURE;
+			}
+			settings.worldStates = openblack::world_state_at_turn::Settings {
+			    .turns = *turns, .folder = std::filesystem::path(result["world-states"].as<std::string>())};
 		}
 #endif
 		if (result.count("reload-at") != 0)

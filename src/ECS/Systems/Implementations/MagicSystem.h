@@ -185,6 +185,7 @@ public:
 	entt::entity SummonSeedAtSite(entt::entity site, SpellSeedType seed, int powerUp) override;
 	entt::entity TakeIconSeed(entt::entity site, SpellSeedType seed, int powerUp, float chants) override;
 	void DiscardHeldSeed() override;
+	void DiscardHeldSeedOf(PlayerNames player) override;
 	void DeleteSeed(entt::entity seed) override;
 	void SetIconSeedPowerUp(entt::entity seed, int powerUp) override;
 	[[nodiscard]] std::optional<uint32_t> TakeHeldMiracleToolTip() override;
@@ -249,6 +250,7 @@ public:
 	[[nodiscard]] bool IsIgnoringInfluence() const override { return _ignoreInfluence; }
 	void RainOnFire(const glm::vec3& point) override;
 	[[nodiscard]] std::vector<SpellInfo> GetSpells() const override;
+	[[nodiscard]] bool SpellNeedsHandReportEachTurn() const override;
 	[[nodiscard]] std::optional<entt::entity> SpellAt(MagicType type, glm::vec3 point, float radius) const override;
 	[[nodiscard]] std::vector<DispenserInfo> GetDispensers() const override;
 

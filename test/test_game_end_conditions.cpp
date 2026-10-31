@@ -45,6 +45,21 @@ TEST(GameEndConditions, TheTimeLimitIsSixHundredTurnsAMinute)
 	EXPECT_EQ(TimeLimitTurn(1440), 864000u);
 }
 
+TEST(GameEndConditions, TheOperatorTimeLimitKeepsToTheLimitsOfTheHost)
+{
+	// A build for players accepts the limits of the host's controls only: 10 minutes to 24 hours
+	EXPECT_EQ(TimeLimitRefusal(9, false), "the time limit must be 10 minutes or more");
+	EXPECT_FALSE(TimeLimitRefusal(k_ShortestTimeLimitMinutes, false).has_value());
+	EXPECT_FALSE(TimeLimitRefusal(k_DefaultTimeLimitMinutes, false).has_value());
+	EXPECT_FALSE(TimeLimitRefusal(k_LongestTimeLimitMinutes, false).has_value());
+	EXPECT_EQ(TimeLimitRefusal(1441, false), "the time limit must be 1440 minutes (24 hours) or less");
+	EXPECT_TRUE(TimeLimitRefusal(0, false).has_value());
+	// A build with the developer tools also accepts a short limit for tests, but never 0 and never more than 24 hours
+	EXPECT_FALSE(TimeLimitRefusal(1, true).has_value());
+	EXPECT_EQ(TimeLimitRefusal(0, true), "the time limit must be 1 minute or more");
+	EXPECT_TRUE(TimeLimitRefusal(1441, true).has_value());
+}
+
 TEST(GameEndConditions, OnlyAConditionThatThePlayerHasCounts)
 {
 	auto standing = StandingWith(Condition::VillagersBorn, 3);

@@ -49,7 +49,7 @@ void testbed_scenarios::AddMultiplayerFrontEndScenarios(std::vector<Scenario>& a
 {
 	using Kind = Command::Kind;
 	using Stage = testbed_multiplayer::Stage;
-	const std::array<BoxScenario, 18> boxes = {{
+	const std::array<BoxScenario, 20> boxes = {{
 	    {"multiplayer.choose_connection", "The multiplayer front end: choose a connection", Stage::ChooseConnection,
 	     "The multiplayer front end opens with the demonstration lobby. The player goes straight into the temple's "
 	     "future room.",
@@ -103,6 +103,14 @@ void testbed_scenarios::AddMultiplayerFrontEndScenarios(std::vector<Scenario>& a
 	     "The list of the winning conditions is empty, because the game has no conditions. \"Time Limit "
 	     "(Hours:Minutes):\" shows with 0:30, and \"View Chat\" is at the right. \"Condition Value:\" does not show. The "
 	     "Ready box is at the bottom left."},
+	    {"multiplayer.conditions_picked", "The multiplayer front end: the winning conditions that the server picked",
+	     Stage::ConditionsPicked,
+	     "The player joins Bob's game and clicks Next. The server of Bob's game picked three winning conditions and a "
+	     "time limit of an hour and a half.",
+	     "The list shows three lines, from the top: \"Number of trees grown (100)\", \"Amount of food in storage pit "
+	     "(9000)\" and \"Number of houses built by a player in a town (20)\". The game adds each condition at the top of "
+	     "the list, so the last condition shows first. \"Time Limit (Hours:Minutes):\" shows with 1:30. No check box "
+	     "and no arrows show."},
 	    {"multiplayer.waiting_for_start", "The multiplayer front end: joined and waiting for the start", Stage::WaitingForStart,
 	     "The player joins Bob's game, goes to the conditions and ticks Ready. Bob's game has Bob and Alice as gods 1 and 2, "
 	     "and Eve as an observer, on Bombardment.",
@@ -143,6 +151,12 @@ void testbed_scenarios::AddMultiplayerFrontEndScenarios(std::vector<Scenario>& a
 	     "demonstration answers each ping after 48 ms.",
 	     "The game room's player list shows \"God 2: Alice (CURRENT) ping 48\" in Alice's god colour, in the same letters "
 	     "as the other lines. The lines of Bob and Eve show no ping. The number shows after the first second in the room."},
+	    {"multiplayer.map_download_failed", "The multiplayer front end: a land that the lobby does not give",
+	     Stage::MapDownloadFailed,
+	     "The player joins Bob's game. The room plays a land that the player does not have, and the lobby of the "
+	     "demonstration does not give its file (deviation 169).",
+	     "A white box says \"ERROR: Could not download map from Internet.\" and \"Please check your Internet "
+	     "connection.\" with OK, over the dimmed room. OK closes the box, and the player stays in the room."},
 	}};
 	for (const auto& box : boxes)
 	{

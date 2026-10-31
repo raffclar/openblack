@@ -270,6 +270,7 @@
 #include "Sound/GameMusic.h"
 #include "Sound/HeaderOverrides.h"
 #include "Sound/MusicMood.h"
+#include "Sound/SoundId.h"
 #include "Sound/SoundRequestInterface.h"
 #include "TestbedDispenserGrid.h"
 #include "Visual/RendererRequestsInterface.h"
@@ -1012,6 +1013,13 @@ void Runner::Start(const Scenario& scenario)
 		});
 		std::ranges::sort(filled);
 		_slotCreatures = std::move(filled);
+	}
+	if (Locator::playerSystem::has_value())
+	{
+		for (const auto& ally : scenario.allies)
+		{
+			Locator::playerSystem::value().SetAlly(ally.player, ally.other, ally.strength);
+		}
 	}
 	// With the scenario's things laid out on the land, each town of a player with a temple is given its worship site, as
 	// a land's are once it is laid out
@@ -1783,8 +1791,27 @@ void Runner::UpdateComputerActions()
 			continue;
 		}
 		_computerActionsDone[i] = true;
-		const auto first = ComputerActionThingOf(action.first, action.player);
-		const auto second = ComputerActionThingOf(action.second, action.player);
+		// The tool makes a marker on the land when it gives the action
+		const auto thingOf = [this, &action](const ComputerActionThing& thing) {
+			if (thing.kind != ComputerActionThing::Kind::Marker)
+			{
+				return ComputerActionThingOf(thing, action.player);
+			}
+			const auto point = MapPoint(_middle, thing.point);
+			return ecs::archetypes::ScriptMarkerArchetype::Create(
+			    {point.x, Locator::terrainSystem::value().GetHeightAt(point), point.y});
+		};
+		const auto first = thingOf(action.first);
+		const auto second = thingOf(action.second);
+		if (action.forceAtOnce)
+		{
+			if (!Locator::computerPlayerSystem::value().ForceAction(action.player, action.node, first, second))
+			{
+				SPDLOG_LOGGER_WARN(spdlog::get("game"), "Testbed: the computer god {} did not start {}",
+				                   static_cast<int>(action.player), action.node);
+			}
+			continue;
+		}
 		if (!debug::computer_actions::Force(action.player, action.node, first, second))
 		{
 			SPDLOG_LOGGER_WARN(spdlog::get("game"), "Testbed: the computer god {} has no node {}",
@@ -1799,6 +1826,7 @@ entt::entity Runner::ComputerActionThingOf(const ComputerActionThing& thing, Pla
 	switch (thing.kind)
 	{
 	case ComputerActionThing::Kind::None:
+	case ComputerActionThing::Kind::Marker:
 		break;
 	case ComputerActionThing::Kind::Town:
 	{
@@ -2313,7 +2341,7 @@ std::string Runner::GivePlayerCommand(const Command& command)
 			return "no miracles";
 		}
 		auto& magic = Locator::magicSystem::value();
-		magic.DiscardHeldSeed();
+		magic.DiscardHeldSeedOf(command.player);
 		const auto seed = static_cast<SpellSeedType>(command.value);
 		const auto given = magic.GiveSeedToHand(command.player, seed, magic::k_BasePowerUpLevel, 1.0f);
 		return given != entt::null ? fmt::format("seed {} in the hand", command.value) : "the hand isn't free";
@@ -2334,7 +2362,7 @@ std::string Runner::GivePlayerCommand(const Command& command)
 			return "no miracles";
 		}
 		auto& magic = Locator::magicSystem::value();
-		magic.DiscardHeldSeed();
+		magic.DiscardHeldSeedOf(command.player);
 		const auto seed = static_cast<SpellSeedType>(command.value);
 		const auto given = magic.SummonSeed(command.player, seed, magic::k_BasePowerUpLevel);
 		return given != entt::null ? fmt::format("seed {} summoned to the hand", command.value) : "the hand isn't free";
@@ -3592,6 +3620,20 @@ void Runner::Give(const Command& command)
 		Log(fmt::format("{:.1f}s: quick save: {}", _seconds, sent ? "sent" : "refused"));
 		return;
 	}
+	if (command.kind == Kind::SetTownBeliefInRival)
+	{
+		auto& registry = Locator::entitiesRegistry::value();
+		const auto& towns = registry.Context().towns;
+		if (const auto town = towns.find(k_ScenarioTownId); town != towns.end() && registry.Valid(town->second))
+		{
+			if (auto* impression = registry.TryGet<ecs::components::TownImpression>(town->second))
+			{
+				magic::town_belief::SetInPlayer(impression->belief, PlayerNames::PLAYER_TWO, command.amount);
+			}
+		}
+		Log(fmt::format("{:.1f}s: the town believes {:.2f} in the second player", _seconds, command.amount));
+		return;
+	}
 	if (command.kind == Kind::EndGuidanceWaits)
 	{
 		if (Locator::guidanceSystem::has_value())
@@ -4060,6 +4102,12 @@ void Runner::Give(const Command& command)
 			creature_hand_glow::Set(glows.glows, static_cast<creature_hand_glow::Place>(place), 1.0f,
 			                        static_cast<float>(command.value));
 		}
+		// A creature with glows that have power makes the hum of the creed, as after a load of the glows
+		if (command.value > 0 && Locator::soundTagSystem::has_value())
+		{
+			Locator::soundTagSystem::value().AttachObjectSound(*entity, static_cast<entt::id_type>(audio::SoundId::G_Creed_01),
+			                                                   true);
+		}
 		result = fmt::format("four glows of power {}", command.value);
 		break;
 	}
@@ -4178,6 +4226,7 @@ void Runner::Give(const Command& command)
 	case Kind::PlayIntroFilm:
 	case Kind::RunHelpMessage:
 	case Kind::EndGuidanceWaits:
+	case Kind::SetTownBeliefInRival:
 	case Kind::ProfileFolderCheck:
 	case Kind::OwnTattooPicture:
 	case Kind::OpenTattooMenu:
@@ -4845,10 +4894,16 @@ void Runner::UpdateMiracles(float seconds)
 					{
 						magic.DriveHand(std::nullopt);
 					}
-					// A seed kept in the hand is dropped, for the next go
-					if (magic.IsHandBusy())
+					// The hand drops a seed that it keeps, for the next go. The drop is a shake of the hand, which goes as a
+					// command after the cast. Thus the turn does the cast first, and each computer of a network game
+					// drops the seed at the same turn.
+					if (magic.IsHandBusy() && Locator::gestureEvents::has_value())
 					{
-						magic.DiscardHeldSeed();
+						Locator::gestureEvents::value().Inject({.kind = ecs::systems::GestureEvent::Kind::Shake,
+						                                        .gesture = GestureType::None,
+						                                        .centre = miracle.hand,
+						                                        .radius = 0.0f,
+						                                        .powerUpLevel = -1});
 					}
 				}
 			}
@@ -5092,9 +5147,11 @@ void Runner::StartHandCast(size_t index)
 	auto& miracle = _miracles.at(index);
 	const auto& info = Locator::infoConstants::value();
 	auto& magic = Locator::magicSystem::value();
-	if (magic.IsHandBusy())
+	// The first player's hand gets the seed, so it drops the seed that it holds. Each computer does this before the
+	// same turn.
+	if (magic.IsHandBusyOf(PlayerNames::PLAYER_ONE))
 	{
-		magic.DiscardHeldSeed();
+		magic.DiscardHeldSeedOf(PlayerNames::PLAYER_ONE);
 	}
 	const auto seed = magic::FindFirstSpellSeedForMagicType(info, setup.type);
 	if (!seed.has_value())

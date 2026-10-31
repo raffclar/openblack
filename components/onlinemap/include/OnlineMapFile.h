@@ -15,6 +15,7 @@
 #include <optional>
 #include <span>
 #include <string_view>
+#include <vector>
 
 /// A land of a network game, as the game keeps it in its "Online Maps" folder: a ".map" file. The file has two parts:
 /// the land's script and the landscape (an ".lnd" file).
@@ -36,5 +37,8 @@ struct OnlineMapFile
 
 /// The two parts of the bytes of a ".map" file. Nothing when the lengths do not agree with the size of the bytes.
 [[nodiscard]] std::optional<OnlineMapFile> Parse(std::span<const std::byte> bytes);
+
+/// The bytes of a ".map" file with the two parts. Nothing when a part is too long for its 32-bit length.
+[[nodiscard]] std::optional<std::vector<uint8_t>> Write(std::string_view script, std::span<const uint8_t> landscape);
 
 } // namespace openblack::onlinemap

@@ -33,6 +33,8 @@ public:
 	uint32_t AddToPile(entt::entity pile, ResourceType type, uint32_t amount, bool poisoned) override;
 	uint32_t TakeFromPile(entt::entity pile, ResourceType type, uint32_t amount, std::optional<PlayerNames> taker) override;
 	bool TakeObject(entt::entity store, entt::entity object, std::optional<PlayerNames> giver) override;
+	bool TakeObjectAs(entt::entity store, entt::entity object, ObjectResource resource,
+	                  std::optional<PlayerNames> giver) override;
 	void ReportGift(entt::entity store, ResourceType type, PlayerNames giver) override;
 	bool PourAt(ResourceType type, glm::vec3 point, uint32_t amount, bool speedUp, PlayerNames player, bool poisoned) override;
 	[[nodiscard]] std::optional<entt::entity> StoreOf(entt::entity pile) const override;

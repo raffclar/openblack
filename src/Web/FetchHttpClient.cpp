@@ -156,7 +156,8 @@ online::HttpRequestId FetchHttpClient::Send(online::HttpRequest request, online:
 		attributes.requestData = reinterpret_cast<const char*>(transfer->request.body.data());
 		attributes.requestDataSize = transfer->request.body.size();
 	}
-	attributes.timeoutMSecs = 30'000;
+	// The browser expands a compressed answer. A large file has no limit on its time.
+	attributes.timeoutMSecs = transfer->request.large ? 0 : 30'000;
 	auto* raw = transfer.get();
 	_transfers.push_back(std::move(transfer));
 	raw->fetch = emscripten_fetch(&attributes, raw->request.url.c_str());

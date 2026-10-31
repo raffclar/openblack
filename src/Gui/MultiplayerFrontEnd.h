@@ -32,7 +32,9 @@ class NetworkGameSystemInterface;
 namespace openblack::online
 {
 class LanDiscoveryInterface;
+class MapDownload;
 class NetworkSession;
+class OnlineMapStoreInterface;
 } // namespace openblack::online
 
 namespace openblack::gui
@@ -65,6 +67,8 @@ public:
 		std::shared_ptr<void> owner;
 		/// Once a frame, for services of its own that the game does not move on
 		std::function<void(MultiplayerFrontEnd& frontEnd)> poll;
+		/// Keeps the lands of network games that the lobby gives (deviation 169). With no store, the room gets no land.
+		online::OnlineMapStoreInterface* maps {nullptr};
 	};
 
 	struct Settings
@@ -206,7 +210,10 @@ public:
 	// The conditions page
 	/// The winning conditions of the server's land, from the template; none before a land is known
 	[[nodiscard]] const std::optional<multiplayer::ConditionTemplate>& GetConditions() const noexcept { return _conditions; }
+	/// The time limit of the game in minutes, which the server gives when the player joins
 	[[nodiscard]] uint32_t GetTimeLimit() const noexcept { return _timeLimit; }
+	/// The winning conditions of the game, which the server gives when the player joins
+	[[nodiscard]] std::span<const game_end::ConditionPick> GetConditionPicks() const noexcept { return _conditionPicks; }
 	[[nodiscard]] bool IsReady() const noexcept { return _ready; }
 	/// The Ready box: the player is ready for the start, which the server makes
 	void SetReady(bool ready);
@@ -215,6 +222,8 @@ public:
 	/// The name in the message box of a message with a name: the room's server for KickedFromGame
 	[[nodiscard]] const std::u16string& GetMessageName() const noexcept { return _messageName; }
 
+	/// The download of the room's land from the lobby, none when the room has no such land
+	[[nodiscard]] const online::MapDownload* GetMapDownload() const noexcept { return _mapDownload.get(); }
 	/// Puts the front end on a box, as if the player had come to it
 	void ShowBox(multiplayer::Box box, multiplayer::LobbyKind kind);
 
@@ -225,6 +234,12 @@ private:
 	void HandleEvent(const lobby_api::PushEvent& event);
 	void RequestTicket(const lobby_api::ServerEntry& server, game_socket::Role role, std::u16string password);
 	void RoomOpened(std::string ticket, std::u16string password);
+	/// Gets the lobby's list of the lands of network games. The function then gets true when the list is current.
+	void GetLobbyMaps(std::function<void(bool ok)> then);
+	/// Starts the download of the room's land, by the hash of its file, when the store does not have it
+	void FetchRoomMap(std::string sha256);
+	/// Starts the download when the room gets a land of the lobby, and shows the box of a download that failed
+	void FollowMapDownload();
 	/// Follows the session of the network game: the join, a refusal, a loss
 	void FollowSession();
 	/// Shows the steps of the start that the server makes
@@ -232,6 +247,8 @@ private:
 	/// The server removed the player from the room: the box names the server
 	void ShowKicked();
 	void UpdateRoom();
+	/// The time limit and the winning conditions of the server's start, or the defaults with no start
+	void TakeHostPicks(const std::optional<game_socket::Start>& start);
 	/// Puts the pick on the place of its game in a list that changed, or takes it away when its game went
 	void FollowSelectedGame();
 	[[nodiscard]] const online::NetworkSession* Session() const;
@@ -266,6 +283,13 @@ private:
 	bool _loggedIn {false};
 
 	std::vector<multiplayer::LocalMap> _maps;
+	/// The lands of network games that the lobby gives, with the hash of each file
+	std::vector<lobby_api::OnlineMap> _lobbyMaps;
+	std::unique_ptr<online::MapDownload> _mapDownload;
+	/// The hash of the room's land that the front end asked for
+	std::string _roomMapHash;
+	/// The lobby's list did not have the room's land, or the list did not come
+	bool _mapFailed {false};
 	std::optional<size_t> _shownLand;
 
 	std::vector<lobby_api::ClanSummary> _myClans;
@@ -276,8 +300,10 @@ private:
 	std::optional<size_t> _shownSeat;
 
 	std::optional<multiplayer::ConditionTemplate> _conditions;
-	/// The game server sends no time limit, so the game's default stays
+	/// The time limit and the winning conditions of the game. The game server is the host: it gives its picks when the
+	/// player joins. With no picks, the game has no conditions and the default time limit.
 	uint32_t _timeLimit {multiplayer::k_DefaultTimeLimitMinutes};
+	std::vector<game_end::ConditionPick> _conditionPicks;
 	bool _ready {false};
 };
 

@@ -11,6 +11,7 @@
 
 #include <cstdint>
 
+#include <algorithm>
 #include <chrono>
 #include <deque>
 #include <functional>
@@ -144,6 +145,11 @@ public:
 	/// Once a game turn: the glows nothing lights any more go
 	void ProcessGlows();
 	[[nodiscard]] size_t SoundCount() const { return _sounds.size(); }
+	/// The sounds that travel to the listener and do not play yet
+	[[nodiscard]] size_t WaitingSoundCount() const
+	{
+		return static_cast<size_t>(std::ranges::count_if(_sounds, [](const PlayingSound& sound) { return sound.wait > 0.0f; }));
+	}
 	void Reset();
 	/// The sounds of the particles of effects that a save does not keep, which the save leaves out too
 	using LeftOutSounds = std::set<const particles::ParticleSoundLink*>;
@@ -270,6 +276,10 @@ private:
 class ParticleRuleSystem final: public ParticleRuleSystemInterface
 {
 public:
+	/// The first number of an effect of this computer only. The synced effects take the numbers below it, and the
+	/// simulation's numbers start above it, so the three sets of numbers never meet.
+	static constexpr EffectId k_FirstLocalEffect = 0x4000'0001u;
+
 	ParticleRuleSystem();
 	~ParticleRuleSystem() override;
 	ParticleRuleSystem(const ParticleRuleSystem&) = delete;
@@ -315,6 +325,7 @@ public:
 	void SetDrawnAlone(EffectId id) override;
 	[[nodiscard]] std::shared_ptr<particles::ShieldSphere> FindShield(glm::vec3 point, float margin) const override;
 	[[nodiscard]] size_t GetSoundCount() const override { return _world.SoundCount(); }
+	[[nodiscard]] size_t GetWaitingSoundCount() const override { return _world.WaitingSoundCount(); }
 	void AddTarget(EffectId id, entt::entity target) override;
 	void AddTargetPosition(EffectId id, glm::vec3 position) override;
 	void AddPlasma(EffectId id, const particles::PlasmaCommand& command) override;
@@ -499,7 +510,11 @@ private:
 	particles::maths::ValueNoise _noise;
 	/// Newest first, as they are stepped and drawn
 	std::deque<Running> _effects;
+	/// The number of the next synced effect. Only the synced effects take these numbers, so each computer of a network game
+	/// gives the same numbers to the same effects.
 	EffectId _nextId {1};
+	/// The number of the next effect of this computer only. These numbers start at k_FirstLocalEffect.
+	EffectId _nextLocalId {k_FirstLocalEffect};
 	/// The record of the simulation that hears of each start and end of an effect
 	EffectLifeListener* _lifeListener {nullptr};
 	/// The number that the simulation gave the next effect to start, none when the particles give their own

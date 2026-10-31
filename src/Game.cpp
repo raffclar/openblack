@@ -322,6 +322,7 @@
 #include "Gui/ScreenFit.h"
 #include "Gui/StartupRules.h"
 #include "Gui/StatisticsBoxRules.h"
+#include "Gui/WorldToolTipRules.h"
 #include "Gui/WorldToolTips.h"
 #include "Hand/HandBlend.h"
 #include "Hand/HandFeel.h"
@@ -331,6 +332,7 @@
 #include "Hand/HandTrace.h"
 #include "Hand/HandVisibility.h"
 #include "Hand/ScriptHandState.h"
+#include "Hand/ViewReportRules.h"
 #include "Help/DialogueText.h"
 #include "Help/HelpProfile.h"
 #include "Help/SingAlong.h"
@@ -351,6 +353,7 @@
 #include "Online/NetworkLand.h"
 #include "Online/NetworkSession.h"
 #include "Online/OnlineMapLand.h"
+#include "Online/OnlineMapStoreInterface.h"
 #include "Online/OpenPage.h"
 #include "Online/StartRules.h"
 #include "Online/WebSocketInterface.h"
@@ -1381,7 +1384,8 @@ void Game::WarmUpFirstFrame()
 	// The draw lists of the land's things, as the first frame makes them
 	if (config.drawEntities)
 	{
-		rendering.PrepareDraw(config.drawBoundingBoxes, config.drawFootpaths, config.drawStreams);
+		rendering.PrepareDraw(config.drawBoundingBoxes, config.drawFootpaths, config.drawStreams,
+		                      ecs::systems::DrawUse::WarmUp);
 	}
 	const auto start = std::chrono::steady_clock::now();
 	// Some renderers divide the warm-up between some frames, each with a part of the draws
@@ -1419,7 +1423,7 @@ void Game::WarmUpFirstFrame()
 			if (config.drawEntities)
 			{
 				Locator::rendereringSystem::value().PrepareDraw(config.drawBoundingBoxes, config.drawFootpaths,
-				                                                config.drawStreams);
+				                                                config.drawStreams, ecs::systems::DrawUse::WarmUp);
 			}
 			auto desc = SceneDrawDesc(config, 0, IsHandDrawn());
 			desc.drawIsland = false;
@@ -2058,8 +2062,8 @@ void Game::SubmitHandToolTips(gui::ToolTips& toolTips, std::optional<entt::entit
 			{
 				return;
 			}
-			const bool tree = Locator::entitiesRegistry::value().AllOf<ecs::components::Tree>(*thing);
-			if (const auto offers = tips::Holding(HandInInfluence(), tips::UseAt(*thing, pointed), tree); offers.has_value())
+			if (const auto offers = tips::Holding(HandInInfluence(), tips::UseAt(*thing, pointed), tips::DropOf(*thing));
+			    offers.has_value())
 			{
 				submitAll(*offers);
 				return;
@@ -2184,10 +2188,18 @@ void Game::SubmitHandToolTips(gui::ToolTips& toolTips, std::optional<entt::entit
 		}
 		return;
 	}
-	// Over a thing that the hand can take: "Catch" while it moves, else "Pick Up" and what a tap does to it
+	// Over a thing that the hand can take: "Catch" while it moves, else "Pick Up" and what a tap does to it. Over a
+	// scaffold, the hand shows how many scaffolds it is worth in place of "Pick Up".
 	if (Locator::handGrabSystem::has_value() && Locator::handGrabSystem::value().WhyNotTake(*pointed).empty())
 	{
-		submitAll(tips::OverTakeable(tips::IsMoving(*pointed), tips::TakeableTapOf(*pointed)));
+		const bool moving = tips::IsMoving(*pointed);
+		auto offers = tips::OverTakeable(moving, tips::TakeableTapOf(*pointed));
+		if (const auto value = tips::ScaffoldValueOf(*pointed); value.has_value() && !moving)
+		{
+			toolTips.SubmitNumbered(gui::world_tooltip::k_ScaffoldValue, gui::ToolTipAction::Apply, *value, std::nullopt);
+			offers.erase(offers.begin());
+		}
+		submitAll(offers);
 		return;
 	}
 	if (const auto tap = tips::TapOf(*pointed); tap.has_value())
@@ -2233,13 +2245,6 @@ void Game::PlayViewStep(game_turn::Step step, glm::vec3 cameraPosition)
 		break;
 	case Step::BeliefGained:
 		ShowBeliefGained();
-		break;
-	case Step::HelpProfile:
-		// The help's count of what the player did moves on a turn. It reads the view of the camera from the last report.
-		if (Locator::helpProfileSystem::has_value())
-		{
-			Locator::helpProfileSystem::value().ProcessTurn();
-		}
 		break;
 	case Step::Ambience:
 		// The ambience follows the weather at the camera
@@ -2709,6 +2714,10 @@ void Game::UpdateOnline()
 	{
 		Locator::webSocketClient::value().Poll();
 	}
+	if (Locator::onlineMapStore::has_value())
+	{
+		Locator::onlineMapStore::value().Poll();
+	}
 	if (Locator::lobbyClient::has_value())
 	{
 		Locator::lobbyClient::value().Update();
@@ -3174,6 +3183,16 @@ void Game::ReportHand()
 	{
 		_handCollidePoint = Locator::pickingSystem::value().GetPick().point.value_or(_handCollidePoint);
 	}
+	// After a send the report waits for some turns. A miracle of this player that follows the hand stops the wait.
+	const auto* session = Locator::networkGame::has_value() ? Locator::networkGame::value().Session() : nullptr;
+	const auto origin = session != nullptr ? std::optional(session->Origin()) : std::nullopt;
+	const bool spellNeedsReport = _handReportWait != 0 && Locator::magicSystem::has_value() &&
+	                              Locator::magicSystem::value().SpellNeedsHandReportEachTurn();
+	if (hand_report::WaitsThisTurn(_handReportWait, spellNeedsReport))
+	{
+		_handReportWait = hand_report::TurnsToWaitAfter(_handReportWait, true, false, origin);
+		return;
+	}
 	// The camera is the view that the last frame drew
 	const auto& camera = Locator::camera::value();
 	const player_commands::HandReport now {
@@ -3191,6 +3210,7 @@ void Game::ReportHand()
 	};
 	// Only a part that moved enough goes. The other part keeps the values that the player last sent.
 	const auto toSend = hand_report::ToSend(last, now);
+	_handReportWait = hand_report::TurnsToWaitAfter(_handReportWait, false, toSend.has_value(), origin);
 	if (!toSend.has_value())
 	{
 		return;
@@ -3238,7 +3258,8 @@ void Game::ReportView()
 		    script_camera::PlayerCameraArrived(camera.GetOrigin(), camera.GetOrigin(Camera::Interpolation::Target),
 		                                       camera.GetFocus(), camera.GetFocus(Camera::Interpolation::Target));
 	}
-	if (_lastViewReport != nullptr && *_lastViewReport == report)
+	// The report goes only when the view changed enough since the last report that went
+	if (_lastViewReport != nullptr && !view_report::ChangedEnough(*_lastViewReport, report))
 	{
 		return;
 	}
@@ -4234,7 +4255,7 @@ void Game::UpdateEntitiesFrame(std::chrono::microseconds deltaTime)
 				// The fast simulation mode makes every frame ready, also the ones it does not draw: the game's things go
 				// by what the frames make ready, so a frame left out would change the run
 				Locator::rendereringSystem::value().PrepareDraw(config.drawBoundingBoxes, config.drawFootpaths,
-				                                                config.drawStreams);
+				                                                config.drawStreams, ecs::systems::DrawUse::Frame);
 				ShowInspectorCamera(false);
 				// The interface picks what is under the cursor as the frame is drawn, for the next frame to go by: through
 				// an inspector's override while one is shown, as the frame is seen
@@ -4717,6 +4738,10 @@ void Game::StartSimulationLogs()
 			SPDLOG_LOGGER_ERROR(spdlog::get("game"), "The file of the row dump cannot open: {}",
 			                    _simulation->rowDumpPath->string());
 		}
+	}
+	if (_simulation->worldStates.has_value())
+	{
+		Locator::syncChecksumSystem::value().WriteWorldStates(*_simulation->worldStates);
 	}
 #endif
 	if (_simulation->playCommandsPath.has_value())
@@ -5772,6 +5797,7 @@ std::unique_ptr<gui::MultiplayerFrontEnd> Game::MakeMultiplayerFrontEnd()
 	        },
 	    .owner = {},
 	    .poll = {},
+	    .maps = Locator::onlineMapStore::has_value() ? &Locator::onlineMapStore::value() : nullptr,
 	};
 	gui::MultiplayerFrontEnd::Settings settings;
 	// The registration page is on the lobby's site: Register on the site, then log in in the game
@@ -6192,7 +6218,16 @@ bool Game::StartNetworkLand(const game_socket::Start& start)
 	}
 	else if (start.godsRingMap)
 	{
-		if (!LoadGodsRingMap())
+		// A network client does not make the map for 32 gods: it loads the file of the server, which it got from the
+		// lobby (deviation 171)
+		const auto* store = Locator::onlineMapStore::has_value() ? &Locator::onlineMapStore::value() : nullptr;
+		const auto file = online::ReadStartLand(start.land, store, Locator::filesystem::value());
+		if (!file.has_value())
+		{
+			SPDLOG_LOGGER_ERROR(spdlog::get("game"), "This computer does not have the map of the game server: {}", start.land);
+			return false;
+		}
+		if (!lands.LoadGodsRingMapFile(*file))
 		{
 			return false;
 		}

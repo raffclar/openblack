@@ -502,6 +502,12 @@ bool spells::FollowsHand(SpellServicesInterface& services, const Spell& spell)
 	return flocks != nullptr && flocks->FollowsHand(services, spell);
 }
 
+bool spells::MakesAnimals(SpellServicesInterface& services, const Spell& spell)
+{
+	const auto* flocks = IsFlock(spell.spellClass) ? services.Flocks() : nullptr;
+	return flocks != nullptr && flocks->MakesAnimals(services, spell);
+}
+
 EffectSource spells::SourceOf(const Spell& spell)
 {
 	return {.player = spell.caster.player,

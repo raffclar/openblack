@@ -118,11 +118,11 @@ struct ServerSettings
 	std::optional<sim_run::TempleLoss> templeLoss;
 	/// Tests: a god with no temple stays in the game, which every client of the network game must also have
 	bool godsNeedNoTemple {false};
-	/// Tests: the time limit of the network game in minutes, which the start sends to every client. None: the default
-	/// time limit.
+	/// The time limit of the network game in minutes, which the operator picks as a host does. The start sends it to
+	/// every client. None: the default time limit.
 	std::optional<uint32_t> timeLimit;
-	/// Tools: the winning conditions of the network game, which the start sends to every client. None: the game has no
-	/// winning conditions.
+	/// The winning conditions of the network game, which the operator picks as a host does. The start sends them to
+	/// every client. None: the game has no winning conditions.
 	std::optional<sim_run::ConditionsRequest> conditions;
 	/// The game time of each frame in milliseconds
 	double frameMilliseconds {k_DefaultFrameMilliseconds};
@@ -148,6 +148,8 @@ struct ServerSettings
 	/// client parts from the server's world, and at the turn of the settings.
 	std::optional<std::filesystem::path> rowDumpPath;
 	row_dump::Settings rowDump;
+	/// Tools: the turns at which the server writes its world state, and the folder of the files
+	std::optional<world_state_at_turn::Settings> worldStates;
 #endif
 	/// The file of the log, or "stdout"
 	/// The game role. With none, the server plays the world alone, as the tools use it.

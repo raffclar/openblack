@@ -3269,6 +3269,12 @@ void MagicSystem::UnlockHeldMiracle()
 	}
 }
 
+void MagicSystem::DiscardHeldSeedOf(PlayerNames player)
+{
+	const ActingAs acting(*this, player);
+	DiscardHeldSeed();
+}
+
 void MagicSystem::DiscardHeldSeed()
 {
 	if (!Held().has_value())
@@ -3874,26 +3880,22 @@ void MagicSystem::SaveState(reflection::BinaryWriter& out) const
 	out.EndPresentation();
 	// The hands keep their seeds (HandHeldSeed). An older save kept the seed of the first player here.
 	reflection::Save(out, std::optional<entt::entity> {});
-	// The press and the button of this computer's hand: the input of the frames changes them, and only the casts that this
-	// hand sends read them
+	// The press of this computer's hand, its sound and its pour: the hand sends its casts as commands, which the turn does
 	out.BeginPresentation();
 	out.WriteRaw(_input);
 	reflection::Save(out, _actionDown);
-	out.EndPresentation();
-	// The press of this computer's hand on a fireball, timed by the clock of the machine: only the frames use it
-	out.BeginPresentation();
 	out.WriteRaw(_fireBallPress);
-	out.EndPresentation();
 	reflection::Save(out, _holdLoop != entt::null);
 	out.WriteRaw(_pour);
+	out.EndPresentation();
 	reflection::Save(out, _rainWatchers);
-	// The circle that this computer's hand drew: the gestures of the frames make it, and only the cast that this hand
-	// sends reads it
+	// The last circle that this computer's hand drew. The cast sends its place in the command.
 	out.BeginPresentation();
 	out.WriteRaw(_circle);
 	out.EndPresentation();
 	reflection::Save(out, _turn);
-	reflection::Save(out, _lastHandResult);
+	// Only the tools read the result of the last action of the hand
+	reflection::SavePresentation(out, _lastHandResult);
 	reflection::Save(out, _ignoreInfluence);
 }
 
