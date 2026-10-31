@@ -74,6 +74,9 @@ struct EffectReceiver
 	AlignmentType alignmentType {AlignmentType::Unimportant};
 	/// Whether crushing it makes the people nearby react
 	bool crushable {false};
+	/// A creature: its life can be below 0, and a heal and a harm change it as the life of a creature (see
+	/// CreatureLifeAfterEffect)
+	bool creature {false};
 };
 
 /// Whether an effect at a point reaches an object: its edge within the radius across the land from its middle, and its
@@ -107,6 +110,11 @@ struct EffectOutcome
 /// An effect's values for one event: its table's, times the strength the event paid for, times the caster's tribal power
 /// once more (the strength already carries it), times the event's own strength
 [[nodiscard]] EffectValues EventEffectValues(EffectValues values, float paidStrength, float tribalPower, float eventStrength);
+
+/// The life of a creature out of a fight after the heal and the harm of an effect. A heal adds to the life up to 1 and
+/// keeps a life below 0 below 0 when it is small. A harm takes from the life. A harm that is more than the life, as at
+/// a life below 0, makes the life 0.
+[[nodiscard]] float CreatureLifeAfterEffect(float before, float healed, float damaged);
 
 /// The effect on one object it reaches: the healing, then the harm, by its defence. The caster's alignment moves for the
 /// change of life, from a row of the alignment table per kind of effect, by the object's alignment kind.

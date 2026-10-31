@@ -3781,7 +3781,7 @@ bool CreatureMindSystem::ForceActivity(entt::entity creature, const ForcedActivi
 	EndReaction(creature);
 	// The current action stops as a failure. This occurs also when the creature finds no new plan. It also stops a fight
 	// that the creature is in, out of its duel.
-	EndFightForPlan(creature);
+	EndFightForPlan(creature, forced.fightBodyEndsAgain);
 	// An action that the body started plays on, and a point plays its end
 	if (Locator::creatureObjectActionSystem::has_value() &&
 	    Locator::creatureObjectActionSystem::value().GetState(creature) == CreatureObjectActionSystemInterface::State::Busy)

@@ -454,7 +454,7 @@ void Layout(Stream& stream, MindFileData& data)
 			stream.Optional(version > 30, count.c);
 		}
 	});
-	stream.Optional(version > 29, data.drawnScale);
+	stream.Optional(version > 29, data.fightHealth);
 	stream.Optional(version > 31, data.unknown4);
 	stream.Optional(version > 32, data.unknown5, [&stream](std::array<int32_t, 2>& values) {
 		stream.Value(values[0]);
