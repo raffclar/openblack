@@ -18,6 +18,7 @@
 #include <span>
 #include <string>
 #include <string_view>
+#include <utility>
 #include <vector>
 
 #include <GameSocket.h>
@@ -162,6 +163,8 @@ public:
 	[[nodiscard]] const std::optional<game_socket::Start>& GetStart() const { return _start; }
 	/// The next step of the start since the last call, one time each
 	[[nodiscard]] std::optional<StartEvent> TakeStartEvent();
+	/// The names of the observers that left the game since the last call, in the order that the server told them
+	[[nodiscard]] std::vector<std::string> TakeObserversLeft() { return std::exchange(_observersLeft, {}); }
 	/// The creature files of the gods that the server sent before the start, by god slot. An empty file is a god with no
 	/// creature.
 	[[nodiscard]] const std::map<uint8_t, std::vector<uint8_t>>& StartCreatures() const { return _startCreatures; }
@@ -231,6 +234,7 @@ private:
 	std::optional<game_socket::Joined> _joined;
 	std::optional<game_socket::Start> _start;
 	std::vector<StartEvent> _startEvents;
+	std::vector<std::string> _observersLeft;
 	std::map<uint8_t, std::vector<uint8_t>> _startCreatures;
 	std::map<uint8_t, float> _startAlignments;
 	std::string _refusedReason;

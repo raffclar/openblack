@@ -58,6 +58,10 @@ public:
 	{
 		return _session ? _session->TakeStartEvent() : std::nullopt;
 	}
+	[[nodiscard]] std::vector<std::string> TakeObserversLeft() override
+	{
+		return _session ? _session->TakeObserversLeft() : std::vector<std::string>();
+	}
 
 private:
 	void Detach();

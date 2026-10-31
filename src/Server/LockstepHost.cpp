@@ -131,9 +131,19 @@ void LockstepHost::Refuse(ConnectionId connection, std::string_view reason)
 	Log(spdlog::level::info, fmt::format("The server refuses connection {}: {}", connection, reason));
 	SendTo(connection, game_socket::Refused {.reason = std::string(reason)});
 	_sockets.Close(connection, server_close::k_Refused);
+	std::optional<std::string> observer;
+	if (const auto found = _peers.find(connection);
+	    found != _peers.end() && found->second.joined && found->second.role == game_socket::Role::Observer)
+	{
+		observer = found->second.name;
+	}
 	_peers.erase(connection);
 	// A refused observer cannot come back with its session
 	std::erase_if(_watchers, [connection](const Watcher& watcher) { return watcher.connection == connection; });
+	if (observer.has_value())
+	{
+		ObserverLeft(*observer);
+	}
 }
 
 void LockstepHost::Text(ConnectionId connection, std::string_view text)
@@ -186,8 +196,14 @@ void LockstepHost::Text(ConnectionId connection, std::string_view text)
 		{
 			Log(spdlog::level::info, "An observer leaves the game");
 		}
+		const bool observer = peer.joined && peer.role == game_socket::Role::Observer;
+		const auto name = peer.name;
 		_sockets.Close(connection, server_close::k_Normal);
 		_peers.erase(connection);
+		if (observer)
+		{
+			ObserverLeft(name);
+		}
 	}
 	else if (std::holds_alternative<game_socket::StopRequest>(*frame))
 	{
@@ -284,11 +300,12 @@ void LockstepHost::Join(ConnectionId connection, Peer& peer, const game_socket::
 	}
 	else
 	{
-		joined.session = NewWatcher(connection);
+		joined.session = NewWatcher(connection, claims.name);
 		Log(spdlog::level::info, fmt::format("{} joins as an observer", claims.name));
 	}
 	peer.joined = true;
 	peer.role = claims.role;
+	peer.name = claims.name;
 	SendTo(connection, joined);
 }
 
@@ -377,6 +394,7 @@ bool LockstepHost::ResumeObserver(ConnectionId connection, Peer& peer, const gam
 	++found->resumes;
 	peer.joined = true;
 	peer.role = game_socket::Role::Observer;
+	peer.name = found->name;
 	peer.seat.reset();
 	// An observer comes back as a god does: the world of the server when its world parted, else the turns that it missed.
 	// An observer has no god, so the other players get no message.
@@ -410,16 +428,30 @@ void LockstepHost::SendKeptTurns(ConnectionId connection, uint32_t from)
 	}
 }
 
-std::string LockstepHost::NewWatcher(ConnectionId connection)
+std::string LockstepHost::NewWatcher(ConnectionId connection, std::string_view name)
 {
 	if (!_makeSecret)
 	{
 		return {};
 	}
 	auto session = _makeSecret();
-	_watchers.push_back(
-	    Watcher {.session = session, .sessionHash = HashOf(session), .connection = connection, .awaySince = 0, .resumes = 0});
+	_watchers.push_back(Watcher {.session = session,
+	                             .sessionHash = HashOf(session),
+	                             .connection = connection,
+	                             .awaySince = 0,
+	                             .resumes = 0,
+	                             .name = std::string(name)});
 	return session;
+}
+
+void LockstepHost::ObserverLeft(std::string_view name)
+{
+	// Before the start, the room shows who is in it. A session that a restore gave has no name, so no player can be told.
+	if (!_started || name.empty())
+	{
+		return;
+	}
+	Broadcast(game_socket::ObserverLeft {.name = std::string(name)});
 }
 
 std::optional<SessionHash> LockstepHost::HashOf(std::string_view secret) const
@@ -524,10 +556,11 @@ void LockstepHost::JoinRunning(ConnectionId connection, Peer& peer, const join_t
 	{
 		// Any other player who joins after the start is an observer (MP-Q12)
 		peer.role = game_socket::Role::Observer;
-		joined.session = NewWatcher(connection);
+		joined.session = NewWatcher(connection, claims.name);
 		Log(spdlog::level::info, fmt::format("{} joins the game at turn {} as an observer", claims.name, _turnsDone));
 	}
 	peer.joined = true;
+	peer.name = claims.name;
 	SendTo(connection, joined);
 	SendTo(connection, start);
 	SendWorld(connection);
@@ -610,6 +643,8 @@ void LockstepHost::Closed(ConnectionId connection)
 		return;
 	}
 	const auto seat = found->second.seat;
+	const bool observer = found->second.joined && found->second.role == game_socket::Role::Observer;
+	const auto name = found->second.name;
 	_peers.erase(found);
 	if (const auto watcher = std::ranges::find(_watchers, std::optional(connection), &Watcher::connection);
 	    watcher != _watchers.end())
@@ -625,6 +660,12 @@ void LockstepHost::Closed(ConnectionId connection)
 			watcher->awaySince = _clock();
 			Log(spdlog::level::info, "An observer lost the connection; it can come back");
 		}
+		return;
+	}
+	// An observer with no session cannot come back: it left the game
+	if (observer)
+	{
+		ObserverLeft(name);
 		return;
 	}
 	if (!seat.has_value() || _seats[*seat].connection != connection)
@@ -673,12 +714,22 @@ void LockstepHost::CloseSeat(uint8_t seat)
 void LockstepHost::Update()
 {
 	const auto now = _clock();
-	// An observer that does not come back in the time to come back loses its session
-	if (std::erase_if(_watchers, [this, now](const Watcher& watcher) {
-		    return !watcher.connection.has_value() && now - watcher.awaySince > _settings.comeBackMicroseconds;
+	// An observer that does not come back in the time to come back loses its session, and so leaves the game
+	std::vector<std::string> gone;
+	if (std::erase_if(_watchers, [this, now, &gone](const Watcher& watcher) {
+		    const bool ends = !watcher.connection.has_value() && now - watcher.awaySince > _settings.comeBackMicroseconds;
+		    if (ends)
+		    {
+			    gone.push_back(watcher.name);
+		    }
+		    return ends;
 	    }) > 0)
 	{
 		Log(spdlog::level::info, "An observer did not come back: its session ends");
+	}
+	for (const auto& name : gone)
+	{
+		ObserverLeft(name);
 	}
 	if (AllComputerGods())
 	{
@@ -1154,8 +1205,8 @@ void LockstepHost::Restore(const snapshots::Room& room, uint32_t turnsDone, std:
 	// hashes
 	for (const auto& hash : room.watchers)
 	{
-		_watchers.push_back(
-		    Watcher {.session = {}, .sessionHash = hash, .connection = std::nullopt, .awaySince = now, .resumes = 0});
+		_watchers.push_back(Watcher {
+		    .session = {}, .sessionHash = hash, .connection = std::nullopt, .awaySince = now, .resumes = 0, .name = {}});
 	}
 	// A room with no human god turned before the restart, so it turns again when an observer comes back
 	_observersJoined = true;

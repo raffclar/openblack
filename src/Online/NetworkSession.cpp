@@ -253,6 +253,11 @@ void NetworkSession::Text(std::string_view text)
 		_stoppedAfter = stop->turn;
 		Log(spdlog::level::info, fmt::format("The game server stopped the turns of the game after turn {}", stop->turn));
 	}
+	else if (const auto* left = std::get_if<game_socket::ObserverLeft>(&*frame))
+	{
+		_observersLeft.push_back(left->name);
+		Log(spdlog::level::info, fmt::format("The observer {} left the game", left->name));
+	}
 	else if (const auto* refused = std::get_if<game_socket::Refused>(&*frame))
 	{
 		_refusedReason = refused->reason;

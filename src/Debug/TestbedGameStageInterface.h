@@ -62,7 +62,8 @@ public:
 	[[nodiscard]] virtual std::string OpenSkirmishMenu(bool askLeave) = 0;
 	/// The skirmish box opens over the game. With selectSecond, the box selects its second land.
 	[[nodiscard]] virtual std::string OpenSkirmishBox(bool selectSecond) = 0;
-	/// The main menu of a network game, the question to leave, or a tab of the end box (see the EndBox command)
+	/// The main menu of a network game, the question to leave, a tab of the end box, or the box that tells that a player
+	/// left (see the EndBox command)
 	[[nodiscard]] virtual std::string OpenEndBox(size_t value) = 0;
 	/// The controls of the custom music: the buttons from 1, the play list from 2
 	[[nodiscard]] virtual std::string ShowCustomMusicControls(size_t value) = 0;

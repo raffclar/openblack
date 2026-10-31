@@ -2690,6 +2690,7 @@ bool Game::PlayFrameStep(game_frame::Step step, FrameState& frame)
 	case Step::Online:
 		UpdateOnline();
 		FollowGameEnd();
+		TellLeaves();
 		break;
 	case Step::CameraKeys:
 		UpdateCameraKeys(frame.deltaTime);
@@ -6038,6 +6039,59 @@ void Game::LeaveAsAPlayerDoes()
 	{
 		endBox.MouseDown(*leave);
 		std::ignore = endBox.MouseUp(*leave);
+	}
+}
+
+void Game::TellLeaves()
+{
+	if (!_interface || !Locator::networkGame::has_value())
+	{
+		return;
+	}
+	auto& network = Locator::networkGame::value();
+	const auto* session = network.Session();
+	auto gods = Locator::gameEndSystem::has_value() ? Locator::gameEndSystem::value().TakeLeavesToShow()
+	                                                : std::vector<game_end::Leave>();
+	auto observers = network.TakeObserversLeft();
+	if (session == nullptr)
+	{
+		return;
+	}
+	const auto own = session->OwnGod();
+	std::vector<std::pair<game_end::Leave, std::string>> leaves;
+	for (const auto& leave : gods)
+	{
+		// The player of this computer does not see its own leave
+		if (!leave.god.has_value() || leave.god == own)
+		{
+			continue;
+		}
+		std::string name;
+		if (session->GetStart().has_value() && static_cast<size_t>(*leave.god) < session->GetStart()->names.size())
+		{
+			name = session->GetStart()->names.at(static_cast<size_t>(*leave.god));
+		}
+		leaves.emplace_back(leave, std::move(name));
+	}
+	// An observer has no god, and its god is never out. Its leave comes at once, not at a turn.
+	const bool decided = Locator::gameEndSystem::has_value() && Locator::gameEndSystem::value().IsDecided();
+	for (auto& name : observers)
+	{
+		leaves.emplace_back(game_end::Leave {.god = std::nullopt, .godOut = false, .decided = decided}, std::move(name));
+	}
+	for (const auto& [leave, name] : leaves)
+	{
+		const auto notice = game_end::NoticeOf(leave);
+		if (notice.remark && Locator::guidanceSystem::has_value())
+		{
+			Locator::guidanceSystem::value().SayOneOff(guidance::OneOff::EnemyLeaving);
+		}
+		if (notice.box)
+		{
+			_interface->ShowPlayerLeft(gui::ToUtf16(name));
+		}
+		SPDLOG_LOGGER_INFO(spdlog::get("game"), "{} left the network game{}", name,
+		                   notice.box ? ": the box tells the players" : "");
 	}
 }
 

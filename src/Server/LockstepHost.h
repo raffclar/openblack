@@ -140,6 +140,8 @@ public:
 		std::optional<ConnectionId> connection;
 		int64_t awaySince {0};
 		uint32_t resumes {0};
+		/// The name of the observer's account. Empty for a session that a restore gave, until the observer is back.
+		std::string name;
 	};
 
 	LockstepHost(WebSocketServerInterface& sockets, CheckTicket checkTicket, Clock clock, MakeSecret makeSecret,
@@ -224,6 +226,8 @@ private:
 		bool joined {false};
 		game_socket::Role role {game_socket::Role::God};
 		std::optional<uint8_t> seat;
+		/// The name of the player's account
+		std::string name;
 	};
 
 	void Opened(ConnectionId connection);
@@ -238,7 +242,9 @@ private:
 	void SendKeptTurns(ConnectionId connection, uint32_t from);
 	/// Gives a new session to an observer on a connection, and returns its secret. With no secrets, the observer cannot
 	/// come back.
-	[[nodiscard]] std::string NewWatcher(ConnectionId connection);
+	[[nodiscard]] std::string NewWatcher(ConnectionId connection, std::string_view name);
+	/// The session of an observer ended after the start: the other players see that the observer left the game
+	void ObserverLeft(std::string_view name);
 	/// The salted hash of a secret. None when the secret is empty or the host has no hasher.
 	[[nodiscard]] std::optional<SessionHash> HashOf(std::string_view secret) const;
 	/// True when the secret that a client gives is the secret of a session. A session that a restore gave has only the

@@ -100,6 +100,8 @@ public:
 	[[nodiscard]] virtual const online::NetworkSession* Session() const = 0;
 	/// The next step of the start of the game, for the front end to show, one time each
 	[[nodiscard]] virtual std::optional<online::StartEvent> TakeStartEvent() = 0;
+	/// The names of the observers that left the game since the last call
+	[[nodiscard]] virtual std::vector<std::string> TakeObserversLeft() { return {}; }
 };
 
 } // namespace openblack::ecs::systems

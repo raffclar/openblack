@@ -110,6 +110,8 @@ constexpr std::string_view k_SaveProblemText = "HELP_TEXT_DIALOG_ERRORHASOCCURED
 constexpr std::string_view k_OutOfSyncText = "HELP_TEXT_SINGING_STONE_CURSE_03";
 // "%s is out of the game."
 constexpr std::string_view k_GodOutText = "HELP_TEXT_WIN_GAME_03";
+// "%s has left game."
+constexpr std::string_view k_PlayerLeftText = "HELP_TEXT_DIALOG_ADDITION_09";
 /// The words of a resynchronisation (user decision MI-4). The game has no text for them.
 constexpr std::u16string_view k_ResyncText = u"Resynchronising...";
 /// The words stand in the middle of the top of the dialog space, in the dialogs' middle text size
@@ -649,6 +651,12 @@ void GameInterface::ShowGodOut(std::u16string_view name)
 {
 	const std::array words {name};
 	_saveGameBoxes->Tell(end_game_box::Format(_texts.Get(k_GodOutText), words));
+}
+
+void GameInterface::ShowPlayerLeft(std::u16string_view name)
+{
+	const std::array words {name};
+	_saveGameBoxes->Tell(end_game_box::Format(_texts.Get(k_PlayerLeftText), words));
 }
 
 bool GameInterface::ProcessEndGameBoxEvent(const SDL_Event& event)

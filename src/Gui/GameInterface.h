@@ -219,6 +219,8 @@ public:
 	[[nodiscard]] const EndGameBox& GetEndGameBox() const noexcept { return *_endGameBox; }
 	/// Another god is out of the game: the box tells the player "<name> is out of the game." with an OK
 	void ShowGodOut(std::u16string_view name);
+	/// The box with OK that tells that a player left the network game
+	void ShowPlayerLeft(std::u16string_view name);
 	/// The end box takes the mouse while it is open; true when it took the event
 	bool ProcessEndGameBoxEvent(const SDL_Event& event);
 	/// A network game resynchronises this computer's world with the server's: the words "Resynchronising..." show at the

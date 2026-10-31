@@ -193,6 +193,11 @@ std::string TestbedGameStage::OpenEndBox(size_t value)
 		game->AskToLeaveNetworkGame();
 		return "the question to leave opens";
 	}
+	if (value == 4)
+	{
+		game->GetInterface()->ShowPlayerLeft(u"Carol");
+		return "the box that tells that Carol left opens";
+	}
 	const bool opened = game->GetInterface()->GetEndGameBox().OpenTab(value);
 	return fmt::format("tab {} {}", value, opened ? "opens its box" : "does not open");
 }

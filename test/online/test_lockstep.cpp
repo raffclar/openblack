@@ -1304,6 +1304,49 @@ TEST_F(LockstepTest, AnObserverThatDoesNotComeBackInTimeLosesItsSession)
 	EXPECT_TRUE(host->Watchers().empty());
 }
 
+// The other players see that an observer left the game, by its name, as they see any player who leaves
+TEST_F(LockstepTest, ThePlayersSeeTheNameOfAnObserverThatLeavesTheGame)
+{
+	MakeHost(1);
+	Computer alice(network, now, "god:alice");
+	Computer carol(network, now, "observer:carol");
+	Frames({&alice, &carol}, 30);
+	ASSERT_TRUE(host->Started());
+	carol.session.Leave();
+	Frames({&alice, &carol}, 10);
+	EXPECT_EQ(alice.session.TakeObserversLeft(), (std::vector<std::string> {"carol"}));
+	EXPECT_TRUE(alice.session.TakeObserversLeft().empty());
+}
+
+// An observer that loses its socket can come back, so the others see its leave only when its session ends
+TEST_F(LockstepTest, ThePlayersSeeTheLeaveOfAnObserverThatDoesNotComeBackWhenItsSessionEnds)
+{
+	MakeHost(1, 3 * 1'000'000);
+	Computer alice(network, now, "god:alice");
+	auto watcher = std::make_unique<Computer>(network, now, "observer:carol");
+	Frames({&alice, watcher.get()}, 10);
+	ASSERT_TRUE(host->Started());
+	network.Cut(watcher->sockets->Ids().back());
+	watcher.reset();
+	Frames({&alice}, 20);
+	EXPECT_TRUE(alice.session.TakeObserversLeft().empty());
+	Frames({&alice}, 30);
+	EXPECT_EQ(alice.session.TakeObserversLeft(), (std::vector<std::string> {"carol"}));
+}
+
+// Before the start, the room shows who is in it, so no player is told of an observer that leaves
+TEST_F(LockstepTest, NoPlayerIsToldOfAnObserverThatLeavesBeforeTheStart)
+{
+	MakeHost(2);
+	Computer alice(network, now, "god:alice");
+	Computer leaver(network, now, "observer:leaver");
+	Frames({&alice, &leaver}, 5);
+	ASSERT_FALSE(host->Started());
+	leaver.session.Leave();
+	Frames({&alice, &leaver}, 10);
+	EXPECT_TRUE(alice.session.TakeObserversLeft().empty());
+}
+
 TEST_F(LockstepTest, AnObserverThatLeavesOrPartsBeforeTheStartCannotComeBack)
 {
 	MakeHost(2);
