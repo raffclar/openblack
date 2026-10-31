@@ -2520,7 +2520,8 @@ ActingOf ActingOfUnliving(const ecs::Registry& registry, entt::entity thing)
 	{
 		// A village totem that is also a town's desire flag lets a creature act on it as the flag does
 		const auto* info = TotemStatueInfo(registry, thing);
-		const auto* actsAs = registry.AllOf<TownDesireFlag>(thing) ? &constants.prayerSite : info;
+		const GObjectInfo* actsAs =
+		    registry.AllOf<TownDesireFlag>(thing) ? static_cast<const GObjectInfo*>(&constants.prayerSite) : info;
 		return {.info = info, .canActOn = !whole && acts(actsAs)};
 	}
 	if (registry.AllOf<TownDesireFlag>(thing))
