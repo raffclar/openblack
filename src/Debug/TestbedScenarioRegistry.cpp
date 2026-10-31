@@ -2205,6 +2205,32 @@ void AddTreePuzzle(std::vector<Scenario>& all)
 	                                      {.kind = ScriptArgument::Kind::Integer, .number = k_TreeKind},
 	                                      {.kind = ScriptArgument::Kind::Position, .point = k_Puzzle}}}},
 	});
+	all.push_back({
+	    .id = "story.tree_puzzle_deleted",
+	    .name = "A script deletes the second land's tree puzzle",
+	    .facet = Facet::Story,
+	    .description = "A script makes the second land's tree puzzle south of the middle. Four seconds later the script "
+	                   "deletes the puzzle game.",
+	    .expected = "The nine trees grow to full size and a lantern stands at each corner. At the delete, the nine trees "
+	                "and the four lanterns go at once. The mist over the spots and the bats over the middle stay.",
+	    .environment = {.dispenserGrid = false},
+	    .framing = {.shot = Shot::Placed,
+	                .eye = {k_Puzzle.x + 45.0f, 30.0f, k_Puzzle.y - 25.0f},
+	                .look = {k_Puzzle.x + 10.0f, 3.0f, k_Puzzle.y + 10.0f}},
+	    .commands = {{.kind = Kind::CallNative,
+	                  .delaySeconds = 0.5f,
+	                  .script = "CREATE_WITH_ANGLE_AND_SCALE",
+	                  .scriptArguments = {{.number = 0.0f},
+	                                      {.number = 1.0f},
+	                                      {.kind = ScriptArgument::Kind::Integer, .number = k_PuzzleObjectType},
+	                                      {.kind = ScriptArgument::Kind::Integer, .number = k_TreeKind},
+	                                      {.kind = ScriptArgument::Kind::Position, .point = k_Puzzle}}},
+	                 {.kind = Kind::CallNative,
+	                  .delaySeconds = 4.0f,
+	                  .script = "OBJECT_DELETE",
+	                  .scriptArguments = {{.kind = ScriptArgument::Kind::LastResult},
+	                                      {.kind = ScriptArgument::Kind::Integer, .number = 0.0f}}}},
+	});
 }
 
 void AddStory(std::vector<Scenario>& all)

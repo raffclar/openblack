@@ -91,6 +91,9 @@ std::optional<std::size_t> AddDancer(components::Dance& dance, entt::entity danc
 void RemoveDancer(components::Dance& dance, std::size_t group, entt::entity dancer);
 /// The first dancer of the first group that has one other than `exclude`
 [[nodiscard]] entt::entity FirstDancer(const components::DanceGroups& groups, entt::entity exclude);
+/// The first thing that a script gets in a dance: the first dancer of the first group. None when the first group has no
+/// dancer, also when a later group has one. None for a dance with no groups.
+[[nodiscard]] entt::entity FirstForScript(const components::DanceGroups& groups);
 
 /// Whether a key frame is the one for a time on the clock: the same half second
 [[nodiscard]] bool KeyFrameDue(float keyFrameTime, float clock);

@@ -120,6 +120,7 @@
 #include "ECS/Components/Indestructible.h"
 #include "ECS/Components/Influence.h"
 #include "ECS/Components/LivingAction.h"
+#include "ECS/Components/LivingListPlace.h"
 #include "ECS/Components/LivingReaction.h"
 #include "ECS/Components/MapCellResident.h"
 #include "ECS/Components/Mesh.h"
@@ -1500,6 +1501,16 @@ void GameThingClicked() // 016 GAME_THING_CLICKED
 static bool IsScriptContainer(const ecs::Registry& registry, entt::entity thing);
 static std::vector<entt::entity> ContainerMembers(const ecs::Registry& registry, entt::entity container);
 
+/// A native that takes control gives each member of a container that it goes through to the script, before it does
+/// its work on the member. The member stays under the script's control until a script releases it.
+static void TakeControlInLoop(ecs::Registry& registry, entt::entity member)
+{
+	if (registry.Valid(member))
+	{
+		registry.AssignOrReplace<ecs::components::ScriptControlled>(member);
+	}
+}
+
 /// A creature given a state plays what the script last gave it to play
 void CreatureCarriesOutScriptPlay(entt::entity creature)
 {
@@ -1520,11 +1531,13 @@ void SetScriptState() // 017 SET_SCRIPT_STATE
 		ObjectNoLongerValid();
 		return;
 	}
-	// A group's living members each take the state as one would on its own, with no word of those that can't
+	// The script takes control of each member of a group. Each living member takes the state as one would on its own,
+	// with no word of those that can't.
 	if (IsScriptContainer(registry, object))
 	{
 		for (const auto member : ContainerMembers(registry, object))
 		{
+			TakeControlInLoop(registry, member);
 			if (IsDirectableVillager(member))
 			{
 				auto& living = Locator::livingActionSystem::value();
@@ -1638,11 +1651,7 @@ void SetScriptUlong() // 020 SET_SCRIPT_ULONG
 		// group keeps the numbers that it had.
 		for (const auto member : ContainerMembers(registry, object))
 		{
-			if (!registry.Valid(member))
-			{
-				continue;
-			}
-			registry.AssignOrReplace<ecs::components::ScriptControlled>(member);
+			TakeControlInLoop(registry, member);
 			if (IsDirectableVillager(member))
 			{
 				giveVillager(member);
@@ -1994,6 +2003,15 @@ void GetProperty() // 021 GET_PROPERTY
 			if (const auto* entry = Locator::dynamicsSystem::value().Find(object); entry != nullptr && entry->body != nullptr)
 			{
 				Pushf(glm::length(entry->body->velocity));
+				return;
+			}
+		}
+		// A weather thing gives the speed of its storm
+		if (Locator::weatherSystem::has_value())
+		{
+			if (const auto stormSpeed = Locator::weatherSystem::value().WeatherThingSpeed(object))
+			{
+				Pushf(*stormSpeed);
 				return;
 			}
 		}
@@ -2767,8 +2785,37 @@ static entt::entity FindScriptTown(const map_coords::MapCoords& at, float reach)
 	return ecs::script_find::FindNearestTown(at, reach, ordered);
 }
 
+/// The creature a script's search finds, taken into the scripts' table, or none. The search looks at the creatures, the
+/// newest first.
+static entt::entity FindCreatureForScript(uint32_t subtype, const glm::vec3& position, std::optional<float> radius)
+{
+	const auto& registry = Locator::entitiesRegistry::value();
+	std::vector<std::pair<uint64_t, ecs::script_find::CreatureCandidate>> made;
+	registry.Each<const ecs::components::Creature, const ecs::components::LivingListPlace, const Transform>(
+	    [&registry, &made](entt::entity entity, const ecs::components::Creature& /*creature*/,
+	                       const ecs::components::LivingListPlace& place, const Transform& transform) {
+		    const auto kind = ecs::script_find::KindOf(registry, entity);
+		    made.emplace_back(place.made, ecs::script_find::CreatureCandidate {
+		                                      .entity = entity,
+		                                      .at = map_coords::FromMetres({transform.position.x, transform.position.z}),
+		                                      .subtype = kind.has_value() ? kind->subtype : std::nullopt,
+		                                  });
+	    });
+	std::ranges::sort(made, std::ranges::greater {}, &decltype(made)::value_type::first);
+	std::vector<ecs::script_find::CreatureCandidate> newestFirst;
+	newestFirst.reserve(made.size());
+	std::ranges::transform(made, std::back_inserter(newestFirst), &decltype(made)::value_type::second);
+	const auto found =
+	    ecs::script_find::FindCreature(map_coords::FromMetres({position.x, position.z}), radius, subtype, newestFirst);
+	if (found != entt::null)
+	{
+		Locator::scriptObjects::value().Register(found, false);
+	}
+	return found;
+}
+
 /// The thing a script's search finds, taken into the scripts' table, or none. Types with no search (markers, dances,
-/// flocks and two unused ones) and types out of range are an error; a creature's search isn't written yet. A search for
+/// flocks and two unused ones) and types out of range are an error. A creature has a search of its own. A search for
 /// livings in a state looks through the cells within the radius but doesn't measure the distance of what it finds there.
 static entt::entity FindForScript(int32_t type, uint32_t subtype, const glm::vec3& position, std::optional<float> radius,
                                   bool excludingScripted, std::optional<uint32_t> inState = std::nullopt)
@@ -2790,9 +2837,13 @@ static entt::entity FindForScript(int32_t type, uint32_t subtype, const glm::vec
 		SPDLOG_LOGGER_ERROR(spdlog::get("scripting"), "No search for script object type {}", type);
 		return entt::null;
 	case ObjectType::Creature:
-		// TODO(script-natives): the creatures' own searches (see docs scripts/calls.md)
-		NotImplemented(type);
-		return entt::null;
+		if (inState.has_value())
+		{
+			// TODO(script-natives): the search for a creature in a state
+			NotImplemented(type);
+			return entt::null;
+		}
+		return FindCreatureForScript(subtype, position, radius);
 	default:
 		break;
 	}
@@ -3223,8 +3274,10 @@ static void FlockAttachToTown(entt::entity object, entt::entity town)
 	auto& registry = Locator::entitiesRegistry::value();
 	if (IsScriptContainer(registry, object))
 	{
+		// The script takes control of each member
 		for (const auto member : ContainerMembers(registry, object))
 		{
+			TakeControlInLoop(registry, member);
 			if (registry.Valid(member) && registry.AllOf<ecs::components::Villager>(member))
 			{
 				MoveVillagerToTown(member, town);
@@ -3275,11 +3328,12 @@ static void FlockAttachToDance(entt::entity object, entt::entity dance, bool asC
 	auto& scripts = Locator::scriptObjects::value();
 	if (IsScriptContainer(registry, object))
 	{
+		// The script takes control of each member
 		for (const auto member : ContainerMembers(registry, object))
 		{
+			TakeControlInLoop(registry, member);
 			if (IsFlockLiving(registry, member))
 			{
-				registry.AssignOrReplace<ecs::components::ScriptControlled>(member);
 				JoinDance(member, dance, asCentre);
 				scripts.AddReference(member);
 			}
@@ -3785,7 +3839,11 @@ void ObjectDelete() // 048 OBJECT_DELETE
 		Locator::particleRuleSystem::value().ExplodeObject(object, position, script_delete::k_TempleExplodeSpeed);
 		break;
 	case script_delete::Step::ClearPuzzle:
-		// TODO(puzzle-games): the puzzle game removes its pieces. The stand-in puzzle game has no pieces
+		// The puzzle game stays, but its pieces go
+		if (Locator::puzzleGameSystem::has_value())
+		{
+			static_cast<void>(Locator::puzzleGameSystem::value().DeletePieces(object));
+		}
 		break;
 	case script_delete::Step::LetGo:
 		break;
@@ -10422,8 +10480,7 @@ void GameClearComputerPlayerActions() // 454 GAME_CLEAR_COMPUTER_PLAYER_ACTIONS
 	}
 }
 
-/// The first thing in a town or a flock for a script, or nothing. A dance is a container too, but its order is not
-/// known yet, so it gives nothing and tells of it.
+/// The first thing in a town, a flock or a dance for a script, or nothing
 static entt::entity FirstInContainer(const ecs::Registry& registry, entt::entity container)
 {
 	if (const auto* town = registry.TryGet<const ecs::components::Town>(container); town != nullptr)
@@ -10440,8 +10497,10 @@ static entt::entity FirstInContainer(const ecs::Registry& registry, entt::entity
 		const auto& members = registry.Get<const ecs::components::Flock>(container).members;
 		return members.empty() ? entt::entity {entt::null} : members.front();
 	}
-	// TODO(lesson-natives): the order in which a script walks through a dance
-	NotImplemented();
+	if (ecs::dances::IsDance(registry, container))
+	{
+		return ecs::dance_rules::FirstForScript(registry.Get<const ecs::components::Dance>(container).groups);
+	}
 	return entt::null;
 }
 
@@ -10495,8 +10554,8 @@ void GetNextInContainer() // 456 GET_NEXT_IN_CONTAINER
 	}
 	if (ecs::dances::IsDance(registry, container))
 	{
-		// TODO(lesson-natives): the order in which a script walks through a dance
-		NotImplemented();
+		// The game walks a list of the dance's things that nothing fills while the game runs, so a script never gets
+		// a next thing in a dance
 		Pusho(0);
 		return;
 	}

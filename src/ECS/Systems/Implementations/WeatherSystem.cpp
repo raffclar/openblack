@@ -1278,6 +1278,18 @@ bool WeatherSystem::SetWeatherThingSpeed(entt::entity thing, float speed)
 	return true;
 }
 
+std::optional<float> WeatherSystem::WeatherThingSpeed(entt::entity thing) const
+{
+	const auto& registry = Locator::entitiesRegistry::value();
+	const auto* weatherThing = registry.Valid(thing) ? registry.TryGet<const WeatherThing>(thing) : nullptr;
+	if (weatherThing == nullptr)
+	{
+		return std::nullopt;
+	}
+	const auto* storm = registry.Valid(weatherThing->storm) ? registry.TryGet<const Storm>(weatherThing->storm) : nullptr;
+	return script_weather::ThingSpeed(storm);
+}
+
 void WeatherSystem::EndWeatherThing(entt::entity thing)
 {
 	auto& registry = Locator::entitiesRegistry::value();

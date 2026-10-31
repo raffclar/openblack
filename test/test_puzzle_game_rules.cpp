@@ -7,6 +7,10 @@
  * openblack is licensed under the GNU General Public License version 3.
  *******************************************************************************/
 
+#include <cstdint>
+
+#include <vector>
+
 #include <gtest/gtest.h>
 
 #include "ECS/PuzzleGameRules.h"
@@ -59,4 +63,34 @@ TEST(PuzzleGameRules, AllKindsButTheBeachTempleLetGoOfThingsThatWent)
 	EXPECT_TRUE(LetsGoOfThingsThatWent(PuzzleGameType::Tree2));
 	EXPECT_TRUE(LetsGoOfThingsThatWent(PuzzleGameType::Immersion));
 	EXPECT_FALSE(LetsGoOfThingsThatWent(PuzzleGameType::Hanoi));
+}
+
+// A deleted puzzle game lets go of its lanterns that are still there, its trees, its bases and its rings, in this order.
+// Its mists and bats stay, and the puzzle counts as played.
+// NOLINTNEXTLINE(cppcoreguidelines-avoid-non-const-global-variables): external macro
+TEST(PuzzleGameRules, ADeletedPuzzleLetsGoOfItsPiecesButNotItsMistsAndBats)
+{
+	using openblack::ecs::components::PuzzleGame;
+	const auto thing = [](uint32_t id) { return static_cast<entt::entity>(id); };
+	PuzzleGame game;
+	game.lanterns = {thing(1), thing(2), entt::null, thing(3)};
+	game.trees.at(0) = thing(10);
+	game.trees.at(8) = thing(18);
+	game.bases = {thing(20), thing(21), entt::null};
+	game.rings = {thing(30), entt::null, entt::null, thing(33)};
+	game.mists.at(4) = thing(40);
+	game.bats.at(4) = thing(50);
+	// The second lantern went, so the puzzle keeps no hold of it to let go of
+	const auto pieces =
+	    openblack::ecs::puzzle_game::TakePiecesForDelete(game, [&thing](entt::entity piece) { return piece != thing(2); });
+	const std::vector<entt::entity> expected {thing(1),  thing(3),  thing(10), thing(18),
+	                                          thing(20), thing(21), thing(30), thing(33)};
+	EXPECT_EQ(pieces, expected);
+	EXPECT_TRUE(game.played);
+	EXPECT_EQ(game.lanterns.at(0), entt::entity {entt::null});
+	EXPECT_EQ(game.lanterns.at(1), thing(2));
+	EXPECT_EQ(game.trees.at(0), entt::entity {entt::null});
+	EXPECT_EQ(game.rings.at(3), entt::entity {entt::null});
+	EXPECT_EQ(game.mists.at(4), thing(40));
+	EXPECT_EQ(game.bats.at(4), thing(50));
 }

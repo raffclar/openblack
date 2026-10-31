@@ -21,6 +21,7 @@
 #include "CHLApi.h"
 #include "ECS/Components/Abode.h"
 #include "ECS/Components/CreatureMind.h"
+#include "ECS/Components/Dance.h"
 #include "ECS/Components/ScriptControl.h"
 #include "ECS/Components/Town.h"
 #include "ECS/Components/Villager.h"
@@ -55,7 +56,10 @@ public:
 
 using Results = std::vector<std::pair<lhvm::VMValue, lhvm::DataType>>;
 
+constexpr uint32_t k_SetScriptState = 17;
 constexpr uint32_t k_SetScriptUlong = 20;
+constexpr uint32_t k_GetFirstInContainer = 455;
+constexpr uint32_t k_GetNextInContainer = 456;
 constexpr uint32_t k_GetProperty = 21;
 constexpr uint32_t k_SetProperty = 22;
 
@@ -222,5 +226,53 @@ TEST_F(ScriptContainerProperties, OnlyALivingThingTakesAClip)
 {
 	const auto rock = Locator::entitiesRegistry::value().Create();
 	EXPECT_TRUE(Call(k_SetScriptUlong, {Object(rock), Int(343), Int(1)}).empty());
+	EXPECT_EQ(_api.GetStubCalls().Total(), 0u);
+}
+
+// A state given to a group gives each member to the script, also a member that takes no state
+// NOLINTNEXTLINE(cppcoreguidelines-avoid-non-const-global-variables): external macro
+TEST_F(ScriptContainerProperties, AStateGivenToAFlockTakesControlOfEachMember)
+{
+	auto& registry = Locator::entitiesRegistry::value();
+	const auto flock = ecs::script_flocks::Create(registry, map_coords::MapCoords {});
+	const auto first = CreateVillager();
+	const auto second = CreateVillager();
+	ASSERT_TRUE(ecs::script_flocks::AddLiving(registry, flock, first));
+	ASSERT_TRUE(ecs::script_flocks::AddLiving(registry, flock, second));
+	Call(k_SetScriptState, {Object(flock), Int(5)});
+	EXPECT_TRUE(registry.AllOf<ecs::components::ScriptControlled>(first));
+	EXPECT_TRUE(registry.AllOf<ecs::components::ScriptControlled>(second));
+	EXPECT_FALSE(registry.AllOf<ecs::components::ScriptControlled>(flock));
+}
+
+// A script gets the first dancer of the first group of a dance, and never a next thing in a dance
+// NOLINTNEXTLINE(cppcoreguidelines-avoid-non-const-global-variables): external macro
+TEST_F(ScriptContainerProperties, AScriptGetsOnlyTheFirstDancerOfTheFirstGroup)
+{
+	auto& registry = Locator::entitiesRegistry::value();
+	const auto dance = registry.Create();
+	auto& made = registry.Assign<ecs::components::Dance>(dance);
+	const auto first = CreateVillager();
+	const auto second = CreateVillager();
+	const auto other = CreateVillager();
+	made.groups.all.resize(2);
+	made.groups.all[0].dancers = {first, second};
+	made.groups.all[1].dancers = {other};
+	auto results = Call(k_GetFirstInContainer, {Object(dance)});
+	ASSERT_EQ(results.size(), 1u);
+	EXPECT_EQ(results.front().first.uintVal, static_cast<uint32_t>(first));
+	results = Call(k_GetNextInContainer, {Object(dance), Object(first)});
+	ASSERT_EQ(results.size(), 1u);
+	EXPECT_EQ(results.front().first.uintVal, 0u);
+	// The first group has no dancer: the script gets nothing, also with a dancer in a later group
+	made.groups.all[0].dancers.clear();
+	results = Call(k_GetFirstInContainer, {Object(dance)});
+	ASSERT_EQ(results.size(), 1u);
+	EXPECT_EQ(results.front().first.uintVal, 0u);
+	// A dance with no groups gives nothing
+	made.groups.all.clear();
+	results = Call(k_GetFirstInContainer, {Object(dance)});
+	ASSERT_EQ(results.size(), 1u);
+	EXPECT_EQ(results.front().first.uintVal, 0u);
 	EXPECT_EQ(_api.GetStubCalls().Total(), 0u);
 }

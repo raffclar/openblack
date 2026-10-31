@@ -41,6 +41,9 @@ public:
 	virtual void TakenInHand(entt::entity piece) = 0;
 	/// A puzzle game goes from the world: its rings keep their links but belong to no puzzle
 	virtual void Forget(entt::entity puzzle) = 0;
+	/// A script deletes a puzzle game, or the scripts stop: the puzzle game stays, but its pieces go from the world.
+	/// False for a thing that is not a puzzle game.
+	virtual bool DeletePieces(entt::entity puzzle) = 0;
 };
 
 } // namespace openblack::ecs::systems

@@ -11,6 +11,11 @@
 
 #include <cstdint>
 
+#include <vector>
+
+#include <entt/entity/entity.hpp>
+
+#include "ECS/Components/PuzzleGame.h"
 #include "ScriptHeaders/ScriptEnums.h"
 
 /// What the scripts read from a puzzle game before the player solves it
@@ -71,4 +76,38 @@ namespace openblack::ecs::puzzle_game
 	return played ? script::PuzzleGameStatus::Won : script::PuzzleGameStatus::GameNotYetBegun;
 }
 
+/// A script deletes a puzzle game. The puzzle game stays, but it lets go of these things, in this order:
+/// - each lantern that is still there,
+/// - its trees,
+/// - the bases and the rings of the beach temple puzzle.
+/// Its mists and its bats stay. The puzzle counts as played from then on, so its turn does nothing more.
+/// The result is the list of the things to remove from the world.
+template <typename IsThere>
+[[nodiscard]] std::vector<entt::entity> TakePiecesForDelete(components::PuzzleGame& game, IsThere&& isThere)
+{
+	std::vector<entt::entity> pieces;
+	for (auto& lantern : game.lanterns)
+	{
+		if (lantern != entt::null && isThere(lantern))
+		{
+			pieces.push_back(lantern);
+			lantern = entt::null;
+		}
+	}
+	const auto takeAll = [&pieces](auto& slots) {
+		for (auto& slot : slots)
+		{
+			if (slot != entt::null)
+			{
+				pieces.push_back(slot);
+				slot = entt::null;
+			}
+		}
+	};
+	takeAll(game.trees);
+	takeAll(game.bases);
+	takeAll(game.rings);
+	game.played = true;
+	return pieces;
+}
 } // namespace openblack::ecs::puzzle_game
