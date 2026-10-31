@@ -12,6 +12,7 @@
 #include <cstdint>
 
 #include <filesystem>
+#include <memory>
 #include <optional>
 #include <string>
 #include <string_view>
@@ -22,6 +23,11 @@ namespace openblack::fight_autopilot
 {
 class AutopilotInterface;
 } // namespace openblack::fight_autopilot
+
+namespace openblack::inspector
+{
+class ProviderInterface;
+} // namespace openblack::inspector
 
 namespace openblack::ecs::systems
 {
@@ -77,6 +83,13 @@ public:
 	{
 		return "this inspector writes no run record";
 	}
+	/// Adds the queries of a provider, which replaces a provider of the same name. The game server adds its own queries.
+	virtual void AddProvider(std::unique_ptr<inspector::ProviderInterface> provider) = 0;
+	/// Removes the provider of this name, before the state that its queries read stops
+	virtual void RemoveProvider(std::string_view name) = 0;
+	/// The game server hosts a network game. Then the inspector refuses the queries that change the shared world, as it
+	/// does in the game of a player in a network game. Each client must play the same world as the server.
+	virtual void SetHostsNetworkGame(bool hosts) = 0;
 };
 
 } // namespace openblack::ecs::systems

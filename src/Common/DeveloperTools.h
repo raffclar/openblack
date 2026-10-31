@@ -196,6 +196,7 @@ inline constexpr std::array k_ServerDeveloperOptions {
     DeveloperOption {.name = "fast"},
     DeveloperOption {.name = "record", .takesValue = true},
     DeveloperOption {.name = "record-fields"},
+    DeveloperOption {.name = "inspect-port", .takesValue = true},
     DeveloperOption {.name = "trace-draws", .takesValue = true},
     DeveloperOption {.name = "row-dump", .takesValue = true},
     DeveloperOption {.name = "row-dump-turn", .takesValue = true},

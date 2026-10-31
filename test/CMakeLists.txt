@@ -2232,3 +2232,10 @@ openblack_setup_and_add_test(test_online_maps online/test_online_maps.cpp)
 target_link_libraries(test_online_maps PRIVATE lnd onlinemap)
 openblack_setup_and_add_test(test_land_laid_out_order test_land_laid_out_order.cpp)
 openblack_setup_and_add_test(test_creature_body_start test_creature_body_start.cpp)
+# The room of the game server, which its inspector gives the operator
+if (OPENBLACK_INSPECTOR)
+  openblack_setup_and_add_test(
+    test_inspector_server_room inspector/test_inspector_server_room.cpp
+  )
+  target_link_libraries(test_inspector_server_room PRIVATE inspector)
+endif ()
