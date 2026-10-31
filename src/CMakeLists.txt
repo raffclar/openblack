@@ -79,7 +79,7 @@ set(OPENBLACK_SIM_IN_CLIENT_FOLDERS
     "Windowing/(WindowFit|WindowPixels|WindowingInterface)"
     "Video/(FilmCreature|FilmEffects|FrameQueue|VideoRules|FallingSpellAudio|StillPicture)"
     "Inspector/(CameraControl|ComponentReflection|EditProviders|EntityDescription|FightAutopilot|FightProviders|GameControls|GameInput|GameProviders|GameWorldEdit|GuiControl|InputControl|LevelControl|RegistryProviders|RunControl|ScriptControl|SimRecorder|SystemProviders|WorldProviders|GameSeamInterface)"
-    "Web/(WebPointer|FetchHttpClient|BrowserWebSocketClient)"
+    "Web/(WebPointer|FetchHttpClient|BrowserWebSocketClient|IndexedDbMapStore)"
 )
 list(JOIN OPENBLACK_SIM_IN_CLIENT_FOLDERS "|" OPENBLACK_SIM_IN_CLIENT_FOLDERS)
 list(FILTER OPENBLACK_CLIENT_SOURCES EXCLUDE REGEX

@@ -424,6 +424,7 @@ constexpr std::array k_Coverage {
     LocatorCoverage {"httpClient", "engine.online"},
     LocatorCoverage {"webSocketClient", "engine.online"},
     LocatorCoverage {"lobbyClient", "engine.online"},
+    LocatorCoverage {"onlineMapStore", "engine.online"},
     LocatorCoverage {"networkGame", "engine.online"},
     LocatorCoverage {"realWeatherSystem", "land.real_weather"},
     LocatorCoverage {"tattooEditorSystem", "creatures.systems"},
@@ -720,6 +721,8 @@ std::unique_ptr<ProviderInterface> EngineProvider()
 			        {"round_trip_ms", roundTrip.has_value() ? Json(static_cast<double>(*roundTrip) / 1000.0) : Json(nullptr)},
 			    };
 		    }
+		    // The store of the lands of network games that the lobby gives (deviation 169)
+		    result["online_map_store"] = Locator::onlineMapStore::has_value();
 		    if (!Locator::lobbyClient::has_value())
 		    {
 			    result["lobby"] = nullptr;

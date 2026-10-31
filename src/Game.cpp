@@ -353,6 +353,7 @@
 #include "Online/NetworkLand.h"
 #include "Online/NetworkSession.h"
 #include "Online/OnlineMapLand.h"
+#include "Online/OnlineMapStoreInterface.h"
 #include "Online/OpenPage.h"
 #include "Online/StartRules.h"
 #include "Online/WebSocketInterface.h"
@@ -2712,6 +2713,10 @@ void Game::UpdateOnline()
 	if (Locator::webSocketClient::has_value())
 	{
 		Locator::webSocketClient::value().Poll();
+	}
+	if (Locator::onlineMapStore::has_value())
+	{
+		Locator::onlineMapStore::value().Poll();
 	}
 	if (Locator::lobbyClient::has_value())
 	{
@@ -5792,6 +5797,7 @@ std::unique_ptr<gui::MultiplayerFrontEnd> Game::MakeMultiplayerFrontEnd()
 	        },
 	    .owner = {},
 	    .poll = {},
+	    .maps = Locator::onlineMapStore::has_value() ? &Locator::onlineMapStore::value() : nullptr,
 	};
 	gui::MultiplayerFrontEnd::Settings settings;
 	// The registration page is on the lobby's site: Register on the site, then log in in the game
@@ -6212,7 +6218,16 @@ bool Game::StartNetworkLand(const game_socket::Start& start)
 	}
 	else if (start.godsRingMap)
 	{
-		if (!LoadGodsRingMap())
+		// A network client does not make the map for 32 gods: it loads the file of the server, which it got from the
+		// lobby (deviation 171)
+		const auto* store = Locator::onlineMapStore::has_value() ? &Locator::onlineMapStore::value() : nullptr;
+		const auto file = online::ReadStartLand(start.land, store, Locator::filesystem::value());
+		if (!file.has_value())
+		{
+			SPDLOG_LOGGER_ERROR(spdlog::get("game"), "This computer does not have the map of the game server: {}", start.land);
+			return false;
+		}
+		if (!lands.LoadGodsRingMapFile(*file))
 		{
 			return false;
 		}

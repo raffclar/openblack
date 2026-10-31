@@ -2000,9 +2000,25 @@ def main():
                 print(f"the server did not read the bans of the fake lobby; see {server_log}")
                 return 1
         clients = [None] * desktop_clients
+        gods_ring_file = os.path.join(out, "obm_32p_1.map")
+        if options.gods_ring_map:
+            # The lobby gives the map for 32 gods to each player before the start. The run has no lobby, so each client
+            # gets the server's file in its profile folder before it starts.
+            if subprocess.run([server_exe, "-g", options.game_path, "--write-gods-ring-map", gods_ring_file],
+                              stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL).returncode != 0:
+                print(f"the server did not write the map for 32 gods to {gods_ring_file}")
+                return 1
         for index in join_order(options.clients, desktop_clients, bool(options.scenario)):
             client_dir = client_dirs[index]
             os.makedirs(client_dir, exist_ok=True)
+            if options.gods_ring_map:
+                kept_alignment = any(int(value.split(":", 1)[0]) - 1 == index for value in options.alignment)
+                # A run of a tool keeps its profile in the developer folder of the profile folder, unless the run gives one
+                profile = os.path.join(client_dir, "profile") if kept_alignment else os.path.join(client_dir, "Profiles",
+                                                                                                    "developer")
+                maps_dir = os.path.join(profile, "Online Maps")
+                os.makedirs(maps_dir, exist_ok=True)
+                shutil.copyfile(gods_ring_file, os.path.join(maps_dir, "obm_32p_1.map"))
             for value in options.profile_creature:
                 client, folder = value.split(":", 1)
                 if int(client) == index + 1:

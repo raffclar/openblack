@@ -349,3 +349,16 @@ TEST(LobbyApi, MultipartBoundaryIsNotInTheFiles)
 	const auto boundary = MultipartBoundary(parts, 7);
 	EXPECT_NE(boundary, taken);
 }
+
+TEST(LobbyApiJson, AServerEntryCanNameTheLandThatTheLobbyGives)
+{
+	// A server that plays a land of the game has no map
+	auto list = ParseServerList(R"({"servers":[)" + ServerJson() + "]}");
+	ASSERT_TRUE(list.has_value());
+	EXPECT_TRUE(list->servers.at(0).map.empty());
+	auto withMap = ServerJson();
+	withMap.insert(1, R"("map":"0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",)");
+	list = ParseServerList(R"({"servers":[)" + withMap + "]}");
+	ASSERT_TRUE(list.has_value());
+	EXPECT_EQ(list->servers.at(0).map, "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef");
+}
