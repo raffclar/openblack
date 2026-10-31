@@ -14,10 +14,12 @@
 
 #include <algorithm>
 #include <array>
+#include <atomic>
 #include <iterator>
 #include <map>
 #include <memory>
 #include <numeric>
+#include <optional>
 #include <span>
 #include <string>
 #include <string_view>
@@ -533,11 +535,67 @@ struct SavedRows
 	return saved;
 }
 
+/// A part of the rows of a component that the threads share: the first thread that takes the part saves it
+struct SharedPart
+{
+	static constexpr uint8_t k_Free = 0;
+	static constexpr uint8_t k_Taken = 1;
+	static constexpr uint8_t k_Saved = 2;
+
+	/// The rows of the part, from the first to the row before the last
+	size_t first {0};
+	size_t last {0};
+	SavedRows rows;
+	std::atomic<uint8_t> state {k_Free};
+
+	/// Saves the part when no thread took it before. Returns whether this thread saved it.
+	bool Claim(const ComponentStorage& component, const RowLayout& layout, BinaryWriter& out)
+	{
+		auto expected = k_Free;
+		if (!state.compare_exchange_strong(expected, k_Taken, std::memory_order_acquire))
+		{
+			return false;
+		}
+		rows = SaveRows(component, layout, first, last, out);
+		state.store(k_Saved, std::memory_order_release);
+		state.notify_all();
+		return true;
+	}
+	/// The rows, after the thread that took the part saved them
+	[[nodiscard]] const SavedRows& Wait() const
+	{
+		for (auto now = state.load(std::memory_order_acquire); now != k_Saved; now = state.load(std::memory_order_acquire))
+		{
+			state.wait(now, std::memory_order_acquire);
+		}
+		return rows;
+	}
+};
+
+/// The parts of the rows of one component, as the thread that mixes them gets them. The thread saves a part that no
+/// thread took, or waits for the thread that took it. A thread that saves a part never waits, so the wait always ends.
+struct SharedParts
+{
+	std::span<SharedPart> parts;
+	const ComponentStorage* component {nullptr};
+	const RowLayout* layout {nullptr};
+	BinaryWriter* out {nullptr};
+
+	[[nodiscard]] size_t size() const { return parts.size(); }
+	[[nodiscard]] bool empty() const { return parts.empty(); }
+	[[nodiscard]] const SavedRows& operator[](size_t index) const
+	{
+		auto& part = parts[index];
+		static_cast<void>(part.Claim(*component, *layout, *out));
+		return part.Wait();
+	}
+};
+
 /// Hashes the rows of one component. The writer is the scratch memory of the caller. The parts, when there are some,
-/// hold the bytes of all the rows, saved before, for a hash with no hash of each field, no visitor and no rows.
+/// hold the bytes of all the rows, for a hash with no hash of each field, no visitor and no rows.
 [[nodiscard]] ComponentHash HashComponent(const ComponentStorage& component, const RowLayout& layout, bool byField,
                                           const RowVisitor& visit, BinaryWriter& out, bool keepRows, HashMemo::Component* memo,
-                                          std::span<const SavedRows> parts)
+                                          const SharedParts& parts)
 {
 	ComponentHash result;
 	const auto& left = layout.left;
@@ -603,10 +661,11 @@ struct SavedRows
 	};
 	if (!parts.empty())
 	{
-		// The rows saved before: the place of each row counts the bytes of the parts before it
+		// The place of each row counts the bytes of the parts before it
 		size_t partStart = 0;
-		for (const auto& part : parts)
+		for (size_t index = 0; index < parts.size(); ++index)
 		{
+			const auto& part = parts[index];
 			size_t rowStart = 0;
 			for (const auto end : part.ends)
 			{
@@ -618,8 +677,9 @@ struct SavedRows
 		if (remembers)
 		{
 			memo->bytes.clear();
-			for (const auto& part : parts)
+			for (size_t index = 0; index < parts.size(); ++index)
 			{
+				const auto& part = parts[index];
 				memo->bytes.insert(memo->bytes.end(), part.bytes.begin(), part.bytes.end());
 			}
 			memo->rows = std::move(remembered);
@@ -819,53 +879,83 @@ openblack::ecs::reflection::WorldHashes openblack::ecs::reflection::HashWorld(co
 				lastBytes[index] = memos[index]->bytes.size();
 			}
 		}
-		// A component with many rows, or with large rows, saves its rows in parts on all the threads first. Then one
-		// thread mixes the parts in order. This is only for a hash with no hash of each field and no rows.
-		std::vector<std::vector<SavedRows>> parts(components.size());
+		// A component with many rows, or with large rows, saves its rows in parts on all the threads. One thread mixes the
+		// parts in order while the other threads save the next parts. This is only for a hash with no hash of each field
+		// and no rows.
+		std::vector<std::span<SharedPart>> parts(components.size());
+		std::vector<SharedPart> allParts;
+		struct Job
+		{
+			/// The component that the job hashes, or the component of the part that the job saves
+			size_t component;
+			/// The part that the job saves, none for a job that hashes the component
+			std::optional<size_t> part;
+			size_t bytes;
+		};
+		std::vector<Job> mixers;
+		std::vector<Job> jobs;
 		if (!byField && rows == nullptr)
 		{
-			struct Part
-			{
-				size_t component;
-				size_t part;
-				size_t first;
-				size_t last;
-				size_t bytes;
-			};
-			std::vector<Part> jobs;
+			std::vector<size_t> inAPart(components.size(), 0);
+			std::vector<size_t> partCounts(components.size(), 0);
 			for (size_t index = 0; index < components.size(); ++index)
 			{
 				const auto count = layouts[index].rows.size();
 				const auto lastRows = memos[index] != nullptr ? memos[index]->rows.size() : 0;
-				const auto inAPart = RowsInAPart(lastBytes[index], lastRows);
-				if (layouts[index].left.whole || count < 2 * inAPart)
+				inAPart[index] = RowsInAPart(lastBytes[index], lastRows);
+				if (!layouts[index].left.whole && count >= 2 * inAPart[index])
+				{
+					partCounts[index] = (count + inAPart[index] - 1) / inAPart[index];
+				}
+			}
+			allParts = std::vector<SharedPart>(std::reduce(partCounts.begin(), partCounts.end()));
+			size_t next = 0;
+			for (size_t index = 0; index < components.size(); ++index)
+			{
+				if (partCounts[index] == 0)
 				{
 					continue;
 				}
+				const auto count = layouts[index].rows.size();
+				const auto lastRows = memos[index] != nullptr ? memos[index]->rows.size() : 0;
 				const auto rowBytes = lastRows > 0 ? lastBytes[index] / lastRows : 0;
-				parts[index].resize((count + inAPart - 1) / inAPart);
-				for (size_t part = 0; part < parts[index].size(); ++part)
+				parts[index] = std::span<SharedPart>(allParts).subspan(next, partCounts[index]);
+				next += partCounts[index];
+				for (size_t part = 0; part < partCounts[index]; ++part)
 				{
-					const auto first = part * inAPart;
-					const auto last = std::min(first + inAPart, count);
-					jobs.push_back(
-					    {.component = index, .part = part, .first = first, .last = last, .bytes = (last - first) * rowBytes});
+					auto& shared = parts[index][part];
+					shared.first = part * inAPart[index];
+					shared.last = std::min(shared.first + inAPart[index], count);
+					jobs.push_back({.component = index, .part = part, .bytes = (shared.last - shared.first) * rowBytes});
 				}
+				mixers.push_back({.component = index, .part = std::nullopt, .bytes = lastBytes[index]});
 			}
-			std::ranges::stable_sort(jobs, std::ranges::greater {}, &Part::bytes);
-			pool->ForEach(jobs.size(), [&](size_t job, size_t lane) {
-				const auto& found = jobs[job];
-				parts[found.component][found.part] =
-				    SaveRows(components[found.component], layouts[found.component], found.first, found.last, writers[lane]);
-			});
 		}
-		std::vector<size_t> order(components.size());
-		std::iota(order.begin(), order.end(), size_t {0});
-		std::ranges::stable_sort(order, std::ranges::greater {}, [&lastBytes](size_t index) { return lastBytes[index]; });
-		pool->ForEach(components.size(), [&](size_t job, size_t lane) {
-			const auto index = order[job];
+		for (size_t index = 0; index < components.size(); ++index)
+		{
+			if (parts[index].empty())
+			{
+				jobs.push_back({.component = index, .part = std::nullopt, .bytes = lastBytes[index]});
+			}
+		}
+		// The mixers of the components in parts start first. A mixer saves a part itself when no thread took the part
+		// before it. Then the threads take the largest work first, so that no thread starts a large job when the others
+		// are near the end. The parts of a component stay in their order.
+		std::ranges::stable_sort(mixers, std::ranges::greater {}, &Job::bytes);
+		std::ranges::stable_sort(jobs, std::ranges::greater {}, &Job::bytes);
+		jobs.insert(jobs.begin(), mixers.begin(), mixers.end());
+		pool->ForEach(jobs.size(), [&](size_t job, size_t lane) {
+			const auto& found = jobs[job];
+			const auto index = found.component;
+			if (found.part.has_value())
+			{
+				static_cast<void>(parts[index][*found.part].Claim(components[index], layouts[index], writers[lane]));
+				return;
+			}
+			const SharedParts shared {
+			    .parts = parts[index], .component = &components[index], .layout = &layouts[index], .out = &writers[lane]};
 			results[index] = HashComponent(components[index], layouts[index], byField, visit, writers[lane], rows != nullptr,
-			                               memos[index], parts[index]);
+			                               memos[index], shared);
 		});
 	}
 	else
@@ -874,8 +964,8 @@ openblack::ecs::reflection::WorldHashes openblack::ecs::reflection::HashWorld(co
 		for (size_t index = 0; index < components.size(); ++index)
 		{
 			layouts[index] = LayoutOf(components[index], leaveOut);
-			results[index] =
-			    HashComponent(components[index], layouts[index], byField, visit, out, rows != nullptr, memos[index], {});
+			results[index] = HashComponent(components[index], layouts[index], byField, visit, out, rows != nullptr,
+			                               memos[index], SharedParts {});
 		}
 	}
 	for (size_t index = 0; index < components.size(); ++index)
