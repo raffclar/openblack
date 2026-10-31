@@ -682,3 +682,39 @@ TEST(VillageTotemSystem, ANewPrimaryCreatureRefreshesTheTotemsInTheOrderThatTheP
 	village.system->RefreshIcons(PlayerNames::PLAYER_ONE);
 	EXPECT_EQ(village.world->reinserted, (std::vector {village.totem, totem}));
 }
+
+TEST(VillageTotemRules, ATotemShowsOnlyWithSomeLife)
+{
+	EXPECT_TRUE(vt::Shows(1.0f));
+	EXPECT_TRUE(vt::Shows(std::nextafter(0.0f, 1.0f)));
+	EXPECT_FALSE(vt::Shows(0.0f));
+	EXPECT_FALSE(vt::Shows(-0.5f));
+}
+
+TEST(VillageTotemSystem, ATotemWithNoLifeShowsNothingAndDoesNotMoveOrShowItsShare)
+{
+	auto village = MakeVillage(true);
+	auto& registry = village.world->registry;
+	auto& system = *village.system;
+	const auto& totem = registry.Get<VillageTotem>(village.totem);
+	// The first frame with its icon shows no share
+	system.Update(10);
+	ASSERT_TRUE(system.Grip(village.totem, PlayerNames::PLAYER_ONE));
+	const float totemY = registry.Get<DrawnHeight>(village.totem).y;
+	const float iconY = registry.Get<DrawnHeight>(village.icon).y;
+	// With no life its second totem hides, and it does not move or show the share it is held at
+	village.world->life = 0.0f;
+	system.Slide(300.0f, 600.0f);
+	system.Update(20);
+	EXPECT_TRUE(registry.AllOf<VillageTotemGhostHidden>(totem.ghost));
+	EXPECT_TRUE(registry.AllOf<VillageTotemGhostHidden>(totem.ghostIcon));
+	EXPECT_FLOAT_EQ(registry.Get<DrawnHeight>(village.totem).y, totemY);
+	EXPECT_FLOAT_EQ(registry.Get<DrawnHeight>(village.icon).y, iconY);
+	EXPECT_FALSE(system.TakeShareToolTip(PlayerNames::PLAYER_ONE).has_value());
+	// With life again it shows all of it
+	village.world->life = 1.0f;
+	system.Update(30);
+	EXPECT_FALSE(registry.AllOf<VillageTotemGhostHidden>(totem.ghost));
+	EXPECT_FLOAT_EQ(registry.Get<DrawnHeight>(village.totem).y, 3.0f + 0.3f * 8.0f);
+	EXPECT_TRUE(system.TakeShareToolTip(PlayerNames::PLAYER_ONE).has_value());
+}

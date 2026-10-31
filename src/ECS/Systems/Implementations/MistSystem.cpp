@@ -62,6 +62,7 @@ void MistSystem::SetFade(entt::entity mist, float startSize, float endSize, floa
 	shown->fadeAlpha = fade.alpha;
 	shown->size = startSize;
 	shown->colour = WithAlpha(shown->colour, mists::AlphaByte(fade.alpha));
+	shown->alphaHighBits = mists::AlphaHighBits(mists::WholeAlpha(fade.alpha));
 	// The mist's object takes the same size
 	if (auto* transform = registry.TryGet<Transform>(mist))
 	{
@@ -92,6 +93,7 @@ void MistSystem::ProcessTurn()
 		mist.fadeElapsed = fade.elapsed;
 		mist.fadeAlpha = fade.alpha;
 		mist.colour = WithAlpha(mist.colour, mists::AlphaByte(fade.alpha));
+		mist.alphaHighBits = mists::AlphaHighBits(mists::WholeAlpha(fade.alpha));
 		// The mist's object takes the same size
 		if (auto* transform = registry.TryGet<Transform>(entity))
 		{

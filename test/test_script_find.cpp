@@ -17,17 +17,24 @@
 #include "ECS/Components/Abode.h"
 #include "ECS/Components/Animal.h"
 #include "ECS/Components/Ball.h"
+#include "ECS/Components/Dance.h"
 #include "ECS/Components/Feature.h"
+#include "ECS/Components/Flock.h"
 #include "ECS/Components/Flowers.h"
+#include "ECS/Components/Influence.h"
+#include "ECS/Components/Mist.h"
 #include "ECS/Components/Mobile.h"
 #include "ECS/Components/OneOffSpellSeed.h"
 #include "ECS/Components/Pot.h"
 #include "ECS/Components/Scaffold.h"
+#include "ECS/Components/ScriptControl.h"
 #include "ECS/Components/ScriptHighlight.h"
+#include "ECS/Components/ScriptTimer.h"
 #include "ECS/Components/SpellSeed.h"
 #include "ECS/Components/Temple.h"
 #include "ECS/Components/Tree.h"
 #include "ECS/Components/VillageTotem.h"
+#include "ECS/Components/Weather.h"
 #include "ECS/Components/WorshipSite.h"
 #include "ECS/Registry.h"
 #include "ECS/ScriptFind.h"
@@ -205,6 +212,50 @@ TEST(ScriptFind, KindsOfThings)
 	EXPECT_EQ(static_cast<int>(ScriptType::Highlight), 37);
 	expect(sign, ScriptType::Highlight, 1u);
 	EXPECT_FALSE(script_find::KindOf(registry, nothing).has_value());
+}
+
+// GAME_TYPE gives the type of a thing's kind, and also a type for things that a search does not find
+TEST(ScriptFind, GameTypesOfThings)
+{
+	Registry registry;
+	const auto cow = registry.Create();
+	registry.Assign<components::Animal>(cow).type = AnimalInfo::Cow;
+	const auto marker = registry.Create();
+	registry.Assign<components::ScriptMarker>(marker);
+	const auto flock = registry.Create();
+	registry.Assign<components::Flock>(flock);
+	const auto dance = registry.Create();
+	registry.Assign<components::Dance>(dance);
+	const auto ring = registry.Create();
+	registry.Assign<components::InfluenceSource>(ring);
+	const auto weather = registry.Create();
+	registry.Assign<components::WeatherThing>(weather);
+	const auto timer = registry.Create();
+	registry.Assign<components::ScriptTimer>(timer);
+	const auto mist = registry.Create();
+	registry.Assign<components::Mist>(mist);
+	const auto nothing = registry.Create();
+	const auto gone = registry.Create();
+	registry.Destroy(gone);
+
+	EXPECT_EQ(script_find::GameTypeOf(registry, cow), ScriptType::Animal);
+	EXPECT_EQ(script_find::GameTypeOf(registry, marker), ScriptType::Marker);
+	EXPECT_EQ(script_find::GameTypeOf(registry, flock), ScriptType::Flock);
+	EXPECT_EQ(script_find::GameTypeOf(registry, dance), ScriptType::Dance);
+	EXPECT_EQ(script_find::GameTypeOf(registry, ring), ScriptType::InfluenceRing);
+	EXPECT_EQ(script_find::GameTypeOf(registry, weather), ScriptType::WeatherThing);
+	EXPECT_EQ(script_find::GameTypeOf(registry, timer), ScriptType::Timer);
+	EXPECT_EQ(script_find::GameTypeOf(registry, mist), ScriptType::Mist);
+	EXPECT_EQ(script_find::GameTypeOf(registry, nothing), ScriptType::None);
+	EXPECT_EQ(script_find::GameTypeOf(registry, gone), ScriptType::None);
+	// The game's numbers of these types
+	EXPECT_EQ(static_cast<int>(ScriptType::Marker), 1);
+	EXPECT_EQ(static_cast<int>(ScriptType::Dance), 10);
+	EXPECT_EQ(static_cast<int>(ScriptType::Flock), 11);
+	EXPECT_EQ(static_cast<int>(ScriptType::InfluenceRing), 14);
+	EXPECT_EQ(static_cast<int>(ScriptType::WeatherThing), 15);
+	EXPECT_EQ(static_cast<int>(ScriptType::Timer), 17);
+	EXPECT_EQ(static_cast<int>(ScriptType::Mist), 29);
 }
 
 // The scripts find a worship site by its tribe, a scaffold of any subtype and a lump of poo as a thing of its own type

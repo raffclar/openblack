@@ -12,6 +12,7 @@
 #include <cstddef>
 #include <cstdint>
 
+#include <bitset>
 #include <optional>
 #include <string>
 #include <variant>
@@ -465,6 +466,13 @@ struct ViewReport
 	bool gripsLand {false};
 	/// The other button is held too
 	bool otherButton {false};
+	/// The mouse has a wheel: the computer's system says so, or the wheel has turned
+	bool mouseWheel {false};
+	/// The camera icons by the hand of the world camera's last frame, with their offered bits (hand_tricons::icon). The
+	/// lessons of the Gods' Playground read them as the turn of the camera at the edge of the screen.
+	uint16_t cameraIcons {0};
+	/// The keys held, by the game's key number (the keyboard's scan code, with 0x80 added for the extended keys)
+	std::bitset<255> keysHeld;
 
 	bool operator==(const ViewReport& other) const = default;
 };

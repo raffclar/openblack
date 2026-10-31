@@ -1374,3 +1374,71 @@ TEST(CreatureFight, AStopInTheDuelGivesTheStrengthOfTheFightToBothCreatures)
 	                {.stopperDuels = true, .partnerDuels = true, .stopperHasPartner = true, .partnerHasPartner = false}),
 	          std::pair(1u, 1u));
 }
+
+TEST(CreatureFight, AnOrderThatStopsACreatureInItsDuelCountsTheGainsAndEachLeaveOfTheDuel)
+{
+	using creature_fight::StopEnd;
+	// The order stops the loser that is still in its duel. The winner left its duel at its win.
+	const auto ordered = creature_fight::CountsAtStop(StopEnd::Stopped, {.stopperDuels = true, .partnerDuels = false});
+	EXPECT_EQ(ordered.gains.stopper, 1u);
+	EXPECT_EQ(ordered.gains.partner, 2u);
+	// The stopped creature leaves its duel two times, the winner three times
+	EXPECT_EQ(ordered.stopperLeaves, 2u);
+	EXPECT_EQ(ordered.partnerLeaves, 3u);
+	// A failure in the duel of both: the creature that fails leaves two times, its partner three times
+	const auto failed = creature_fight::CountsAtStop(StopEnd::Failure, {.stopperDuels = true, .partnerDuels = true});
+	EXPECT_EQ(failed.gains.stopper, 2u);
+	EXPECT_EQ(failed.gains.partner, 2u);
+	EXPECT_EQ(failed.stopperLeaves, 2u);
+	EXPECT_EQ(failed.partnerLeaves, 3u);
+	// The release after a hold: only the partner is in its duel
+	const auto released = creature_fight::CountsAtStop(StopEnd::Failure, {.stopperDuels = false, .partnerDuels = true});
+	EXPECT_EQ(released.gains.stopper, 1u);
+	EXPECT_EQ(released.gains.partner, 1u);
+}
+
+TEST(CreatureFight, TheCallsOfAStopChainEndTheBodyOfEachCreatureAgainAtEachStop)
+{
+	using creature_fight::StopCall;
+	using creature_fight::StopStep;
+	const creature_fight::StopSides both {.duels = {true, true}, .partners = {true, true}};
+	// A call-off: two gains each, the creature that stops ends its fight two times, its partner three times
+	const auto calledOff = creature_fight::RunStopChain(both, creature_fight::StepsOf(creature_fight::CallOffStart::Failure));
+	EXPECT_EQ(calledOff.gains, (std::array<uint32_t, 2> {2, 2}));
+	EXPECT_EQ(calledOff.bodyEnds, (std::array<uint32_t, 2> {2, 3}));
+	EXPECT_EQ(calledOff.after.duels, (std::array<bool, 2> {false, false}));
+	EXPECT_EQ(calledOff.after.partners, (std::array<bool, 2> {false, false}));
+	// A walk back: the body ends its fight first, so each creature gets one gain
+	const auto walkedBack =
+	    creature_fight::RunStopChain(both, creature_fight::StepsOf(creature_fight::CallOffStart::BodyFirst));
+	EXPECT_EQ(walkedBack.gains, (std::array<uint32_t, 2> {1, 1}));
+	EXPECT_EQ(walkedBack.bodyEnds, (std::array<uint32_t, 2> {3, 1}));
+	// A knock out: the winner stops both, then the faint stops the loser again
+	const auto knockedOut = creature_fight::RunStopChain(both, creature_fight::KnockOutSteps());
+	EXPECT_EQ(knockedOut.gains, (std::array<uint32_t, 2> {2, 2}));
+	EXPECT_EQ(knockedOut.bodyEnds, (std::array<uint32_t, 2> {2, 4}));
+	// A loser that did not start its duel yet ends its body the same number of times
+	const auto early =
+	    creature_fight::RunStopChain({.duels = {true, false}, .partners = {true, true}}, creature_fight::KnockOutSteps());
+	EXPECT_EQ(early.bodyEnds, (std::array<uint32_t, 2> {2, 4}));
+	// The release after a hold: only the partner is in its duel
+	const auto released = creature_fight::RunStopChain({.duels = {false, true}, .partners = {true, true}},
+	                                                   creature_fight::StepsOf(creature_fight::CallOffStart::Failure));
+	EXPECT_EQ(released.gains, (std::array<uint32_t, 2> {1, 1}));
+	EXPECT_EQ(released.bodyEnds, (std::array<uint32_t, 2> {3, 1}));
+	// A creature with no duel and no partner ends only its own body
+	const std::array again {StopStep {.creature = 0, .call = StopCall::Fail}};
+	const auto alone = creature_fight::RunStopChain({}, again);
+	EXPECT_EQ(alone.bodyEnds, (std::array<uint32_t, 2> {1, 0}));
+	// A failure that keeps the body of a creature alone ends nothing
+	const std::array kept {StopStep {.creature = 0, .call = StopCall::FailKeepingBody}};
+	EXPECT_EQ(creature_fight::RunStopChain({}, kept).bodyEnds, (std::array<uint32_t, 2> {0, 0}));
+}
+
+TEST(CreatureFight, EachPaymentTakesAQuarterOfTheLostFightHealthFromTheLife)
+{
+	EXPECT_FLOAT_EQ(creature_fight::LifeAfterPayments(0.5f, 0.6f, 0), 0.5f);
+	EXPECT_FLOAT_EQ(creature_fight::LifeAfterPayments(0.5f, 0.6f, 1), creature_fight::LifeAfterFight(0.5f, 0.6f));
+	EXPECT_FLOAT_EQ(creature_fight::LifeAfterPayments(0.5f, 0.6f, 2),
+	                creature_fight::LifeAfterFight(creature_fight::LifeAfterFight(0.5f, 0.6f), 0.6f));
+}

@@ -26,17 +26,22 @@ using namespace openblack::graphics;
 void VertexBuffer::Bind() const
 {
 	MainThreadQueue::CheckDirect(MainThreadApi::Graphics, "VertexBuffer::Bind");
+	Bind(*bgfx::begin());
+}
+
+void VertexBuffer::Bind(bgfx::Encoder& encoder) const
+{
 	if (!IsValid())
 	{
 		return;
 	}
 	if (_dynamic)
 	{
-		bgfx::setVertexBuffer(0, toBgfx(_dynamicHandle), 0, _vertexCount, toBgfx(_layoutHandle));
+		encoder.setVertexBuffer(0, toBgfx(_dynamicHandle), 0, _vertexCount, toBgfx(_layoutHandle));
 	}
 	else
 	{
-		bgfx::setVertexBuffer(0, toBgfx(_handle), 0, _vertexCount, toBgfx(_layoutHandle));
+		encoder.setVertexBuffer(0, toBgfx(_handle), 0, _vertexCount, toBgfx(_layoutHandle));
 	}
 }
 
@@ -60,33 +65,43 @@ void VertexBuffer::Bind(uint32_t firstVertex, uint32_t count) const
 void VertexBuffer::BindStream(uint8_t stream, VertexLayoutHandle layout) const
 {
 	MainThreadQueue::CheckDirect(MainThreadApi::Graphics, "VertexBuffer::BindStream");
+	BindStream(*bgfx::begin(), stream, layout);
+}
+
+void VertexBuffer::BindStream(bgfx::Encoder& encoder, uint8_t stream, VertexLayoutHandle layout) const
+{
 	if (!IsValid())
 	{
 		return;
 	}
 	if (_dynamic)
 	{
-		bgfx::setVertexBuffer(stream, toBgfx(_dynamicHandle), 0, _vertexCount, toBgfx(layout));
+		encoder.setVertexBuffer(stream, toBgfx(_dynamicHandle), 0, _vertexCount, toBgfx(layout));
 	}
 	else
 	{
-		bgfx::setVertexBuffer(stream, toBgfx(_handle), 0, _vertexCount, toBgfx(layout));
+		encoder.setVertexBuffer(stream, toBgfx(_handle), 0, _vertexCount, toBgfx(layout));
 	}
 }
 
 void IndexBuffer::Bind(uint32_t count, uint32_t startIndex) const
 {
 	MainThreadQueue::CheckDirect(MainThreadApi::Graphics, "IndexBuffer::Bind");
+	Bind(*bgfx::begin(), count, startIndex);
+}
+
+void IndexBuffer::Bind(bgfx::Encoder& encoder, uint32_t count, uint32_t startIndex) const
+{
 	if (!IsValid())
 	{
 		return;
 	}
 	if (_storage == Storage::Shared)
 	{
-		bgfx::setIndexBuffer(toBgfx(_sharedHandle), startIndex, count);
+		encoder.setIndexBuffer(toBgfx(_sharedHandle), startIndex, count);
 		return;
 	}
-	bgfx::setIndexBuffer(toBgfx(_handle), startIndex, count);
+	encoder.setIndexBuffer(toBgfx(_handle), startIndex, count);
 }
 
 void Mesh::Draw(const DrawDesc& desc) const

@@ -2023,8 +2023,9 @@ void GameInterface::DrawHandTricons(glm::u16vec2 resolution)
 	}
 	const auto& in = *_handTricons;
 	const bool toolTipsOn = _menu->GetSettings().toolTips != 0;
+	_drawnCameraIcons = tricons::Shown(in.icons, toolTipsOn, in.handStateShowsIcons);
 	tricons::Fade(_tricons, {
-	                            .icons = tricons::Shown(in.icons, toolTipsOn, in.handStateShowsIcons),
+	                            .icons = *_drawnCameraIcons,
 	                            .seconds = in.seconds,
 	                            .demonstration = in.demonstration,
 	                            .cameraBusy = in.cameraBusy,

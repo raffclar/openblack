@@ -917,6 +917,11 @@ void GameActionMap::Frame()
 	ApplyQueuedPresses();
 }
 
+bool GameActionMap::IsKeyHeld(int scancode) const
+{
+	return scancode >= 0 && static_cast<size_t>(scancode) < _heldKeys.size() && _heldKeys.test(static_cast<size_t>(scancode));
+}
+
 void GameActionMap::ProcessEvent(const SDL_Event& event)
 {
 	if (event.type == SDL_KEYDOWN)
@@ -1000,6 +1005,8 @@ void GameActionMap::ProcessEvent(const SDL_Event& event)
 	else if (event.type == SDL_MOUSEWHEEL)
 	{
 		_mouseWheelDelta += event.wheel.direction == SDL_MOUSEWHEEL_FLIPPED ? -event.wheel.preciseY : event.wheel.preciseY;
+		// A turn of the wheel shows that the mouse has one
+		_wheelTurned = _wheelTurned || event.wheel.preciseY != 0.0f;
 		const auto wheelAction = event.wheel.y > 0   ? _mouseWheelBinding[0].value_or(BindableActionMap::NONE)
 		                         : event.wheel.y < 0 ? _mouseWheelBinding[1].value_or(BindableActionMap::NONE)
 		                                             : BindableActionMap::NONE;

@@ -224,6 +224,10 @@ public:
 	}
 	/// Something stops what the creature is doing, which it gives up as a failure, as a spell freezing it does
 	virtual void AbandonAction(entt::entity /*creature*/) {}
+	/// The creature gives up what it does as a failure, as for AbandonAction. A fight that it is in also ends for both
+	/// creatures, as a fight called off does. A script that lets go of the creature, the order of a computer god and a
+	/// gift that the hand calls off do this.
+	virtual void GiveUpAction(entt::entity creature) { AbandonAction(creature); }
 	/// What the creature does stops as a failure, as for AbandonAction. Also its walk stops, the pose of its body ends,
 	/// and a joint action stops for its partner too.
 	virtual void FailAction(entt::entity creature) { AbandonAction(creature); }

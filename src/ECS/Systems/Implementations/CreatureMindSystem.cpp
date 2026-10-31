@@ -3055,20 +3055,31 @@ void CreatureMindSystem::HandTookHold(entt::entity creature)
 	{
 		return;
 	}
-	// It stops and turns to face the player's eye
+	// The hold stops a dance, a pose that loops and a point. A fight ends on the first turn of the hold.
+	if (auto* body = registry.TryGet<CreatureAnimation>(creature); body != nullptr)
+	{
+		body->body = creature_layers::EndDance(creature_layers::EndLoop(body->body));
+	}
+	if (Locator::creatureObjectActionSystem::has_value())
+	{
+		Locator::creatureObjectActionSystem::value().EndPoint(creature);
+	}
+	// It stops and turns to face the player's eye. While its body plays an action, the turn waits until the action ends.
 	if (const auto camera = openblack::ecs::ReportedCameraOfItsPlayer(creature);
 	    Locator::creatureLocomotionSystem::has_value() && camera.has_value())
 	{
-		Locator::creatureLocomotionSystem::value().TurnToFaceAtOnce(creature, glm::vec2(camera->origin.x, camera->origin.z));
+		Locator::creatureLocomotionSystem::value().TurnToFaceAtRest(creature, glm::vec2(camera->origin.x, camera->origin.z));
 	}
 	mind->showDesireOnHold = true;
 }
 
 void CreatureMindSystem::ShowDesireOnHold(entt::entity creature, CreatureMindState& mind, CreatureAnimation& animation)
 {
-	const bool turning =
-	    Locator::creatureLocomotionSystem::has_value() && Locator::creatureLocomotionSystem::value().IsMoving(creature);
-	if (turning || creature_layers::IsPlaying(animation.body))
+	const auto* locomotion =
+	    Locator::creatureLocomotionSystem::has_value() ? &Locator::creatureLocomotionSystem::value() : nullptr;
+	if (!creature_turn_order::ShowsDesireOnHold(creature_layers::IsPlaying(animation.body),
+	                                            locomotion != nullptr && locomotion->IsMoving(creature),
+	                                            locomotion != nullptr && locomotion->TurnWaitsForRest(creature)))
 	{
 		return;
 	}
@@ -3848,6 +3859,17 @@ void CreatureMindSystem::AbandonAction(entt::entity creature)
 		mind->idle.stepStarted = false;
 	}
 	ReleaseCast(creature);
+}
+
+void CreatureMindSystem::GiveUpAction(entt::entity creature)
+{
+	auto& registry = Locator::entitiesRegistry::value();
+	// The failure stops a fight that the creature is in, for both creatures, with the strength gains of the stop
+	if (registry.Valid(creature) && registry.AllOf<CreatureFighting>(creature) && Locator::creatureFightSystem::has_value())
+	{
+		Locator::creatureFightSystem::value().CallOff(creature);
+	}
+	AbandonAction(creature);
 }
 
 void CreatureMindSystem::FailAction(entt::entity creature)

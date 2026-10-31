@@ -534,6 +534,14 @@ ImportedTowns ReadTowns(const VanillaWorld& world)
 	{
 		imported.turn = data->gameTurn;
 	}
+	if (!world.Records().empty() && world.Game().Is(VanillaType::Game))
+	{
+		if (const auto lists = world.Fields(world.Game(), "lists"); lists.size() == k_GameObjectLists)
+		{
+			const auto towns = world.Refs(*lists.at(k_GameTownList));
+			imported.gameTownList.assign(towns.begin(), towns.end());
+		}
+	}
 	for (const auto& record : world.Records())
 	{
 		std::string why;

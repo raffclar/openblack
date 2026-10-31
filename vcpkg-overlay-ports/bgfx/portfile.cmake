@@ -51,6 +51,10 @@ vcpkg_download_distfile(
 #   Without this change, the screenshot reads the buffer one place back in the ring. With three buffers, the index
 #   wraps incorrectly from place 0, thus a screenshot showed the frame of the request or the frame before it, by
 #   the number of frames that the window showed before. The wait before each flip had the same wrap.
+# A change to the order of the draws, for all renderers. The game encodes some draws on many threads:
+# - submit-order: an encoder can set the submit order of its next draws. Draws with equal sort keys and the draws of a
+#   sequential view then render in that order, also when many encoders submit at the same time. Without it, that
+#   order follows the thread that submits first. A frame in which no encoder sets an order sorts as before.
 vcpkg_extract_source_archive(
   SOURCE_PATH
   ARCHIVE "${ARCHIVE_FILE}"
@@ -69,6 +73,7 @@ vcpkg_extract_source_archive(
     essl-no-inline.patch
     d3d12-upload-pages.patch
     d3d12-screenshot-frame.patch
+    submit-order.patch
 )
 
 # Replaces text in a file of the bgfx source. The build stops when the text is not there, so that a new bgfx

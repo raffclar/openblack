@@ -407,6 +407,7 @@ TEST(VanillaWorldImport, SavedGamesOfLandOneImportWhole)
 		for (const auto& town : imported.towns)
 		{
 			EXPECT_EQ(std::ranges::count(imported.townLists, town.number), 1) << entry.path() << " town " << town.id;
+			EXPECT_EQ(std::ranges::count(imported.gameTownList, town.number), 1) << entry.path() << " town " << town.id;
 		}
 		EXPECT_EQ(imported.villagers.size(),
 		          read.world->OfType(VanillaType::Villager).size() + read.world->OfType(VanillaType::SpecialVillager).size())
@@ -428,6 +429,38 @@ TEST(VanillaWorldImport, SavedGamesOfLandOneImportWhole)
 		EXPECT_EQ(imported.tribalPowers.size(), read.world->OfType(VanillaType::Player).size()) << entry.path();
 	}
 	EXPECT_GT(files, 0U);
+}
+
+TEST(VanillaWorldImport, ReadsTheGamesListOfAllTowns)
+{
+	auto fake = GameAtTurn(100);
+	// The game object keeps its lists of objects; the list of all the towns holds the town made last first
+	for (size_t list = 0; list < world_import::k_GameObjectLists; ++list)
+	{
+		fake.Refs("lists", list == world_import::k_GameTownList ? std::vector<uint32_t> {4, 2, 3} : std::vector<uint32_t> {});
+	}
+	for (const uint32_t id : {0U, 1U, 2U})
+	{
+		fake.Record(VanillaType::Town)
+		    .Position(1000 * (id + 1), 1000)
+		    .Value<uint32_t>("id", id)
+		    .Value<uint32_t>("tribe", static_cast<uint32_t>(Tribe::NORSE))
+		    .Value<uint8_t>("player", 0);
+	}
+	const auto imported = world_import::ReadTowns(fake.Make());
+	EXPECT_EQ(imported.gameTownList, (std::vector<uint32_t> {4, 2, 3}));
+}
+
+TEST(VanillaWorldImport, AWorldWithoutTheGamesListsHasNoListOfAllTowns)
+{
+	auto fake = GameAtTurn(100);
+	fake.Refs("lists", {2});
+	fake.Record(VanillaType::Town)
+	    .Position(1000, 1000)
+	    .Value<uint32_t>("id", 0)
+	    .Value<uint32_t>("tribe", static_cast<uint32_t>(Tribe::NORSE))
+	    .Value<uint8_t>("player", 0);
+	EXPECT_TRUE(world_import::ReadTowns(fake.Make()).gameTownList.empty());
 }
 
 TEST(VanillaWorldImport, ReadsTheOrderOfThePlayersTownLists)

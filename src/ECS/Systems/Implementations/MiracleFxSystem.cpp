@@ -330,15 +330,11 @@ void MiracleFxSystem::UpdateGlobes(std::chrono::milliseconds frameRealTime, std:
 			    if (visuals::IsPhialSeed(globe.seedType))
 			    {
 				    const int receiveType = ReceiveTypeOf(info, globe.seedType);
-				    size = visuals::PhialDraws(receiveType, globe.phialPhase, visuals::PhialPulse(globe.phialPhase),
-				                               visuals::k_GlobeAlpha)
-				               .back()
-				               .size;
+				    size = visuals::PhialLastDrawSize(receiveType, globe.phialPhase);
 				    shape = visuals::PhialScale(receiveType, globe.phialPhase);
 			    }
-			    const auto at = globe.middle + glm::vec3(0.0f, seed.meshHeight * drawn, 0.0f);
-			    globe.seedPlacement = glm::translate(glm::mat4(1.0f), at) * portable_math::EulerAngleY(globe.spin) *
-			                          glm::scale(glm::mat4(1.0f), seed.scale * drawn * size * shape);
+			    globe.seedPlacement =
+			        visuals::SeedModelPlacement(globe.middle, seed.meshHeight, seed.scale, drawn, globe.spin, size, shape);
 		    }
 		    // The miracle's own effect plays in the globe, faint as the globe is
 		    if (particles == nullptr || seed.holderParticle == ParticleType::None)

@@ -1807,6 +1807,11 @@ void Runner::UpdateComputerActions()
 			continue;
 		}
 		_computerActionsDone[i] = true;
+		if (action.templeHit)
+		{
+			MarkTempleHit(action.player, turn);
+			continue;
+		}
 		// The tool makes a marker on the land when it gives the action
 		const auto thingOf = [this, &action](const ComputerActionThing& thing) {
 			if (thing.kind != ComputerActionThing::Kind::Marker)
@@ -1834,6 +1839,21 @@ void Runner::UpdateComputerActions()
 			                   static_cast<int>(action.player), action.node);
 		}
 	}
+}
+
+void Runner::MarkTempleHit(PlayerNames player, uint32_t turn) const
+{
+	const auto temple =
+	    Locator::worshipSiteSystem::has_value() ? Locator::worshipSiteSystem::value().TempleOf(player) : entt::null;
+	auto* record = temple != entt::null ? Locator::entitiesRegistry::value().TryGet<ecs::components::Temple>(temple) : nullptr;
+	if (record == nullptr)
+	{
+		SPDLOG_LOGGER_WARN(spdlog::get("game"), "Testbed: the computer god {} has no temple to hit", static_cast<int>(player));
+		return;
+	}
+	record->lastHitTurn = turn;
+	SPDLOG_LOGGER_INFO(spdlog::get("game"), "Testbed: the temple of the computer god {} is hit at turn {}",
+	                   static_cast<int>(player), turn);
 }
 
 entt::entity Runner::ComputerActionThingOf(const ComputerActionThing& thing, PlayerNames player) const
@@ -2199,6 +2219,13 @@ std::string Runner::GiveHandCommand(entt::entity creature, const Command& comman
 		return hand.Stroke(creature, static_cast<creature_feedback::BodyPart>(command.bodyPart)) ? "stroked" : "busy";
 	case Kind::HandSlap:
 		return hand.Slap(creature, command.slapHeight, command.gentle, command.sweepsRight) ? "slapped" : "busy";
+	case Kind::HandLock:
+	{
+		const auto own =
+		    Locator::handSystem::has_value() ? Locator::handSystem::value().GetOwnPlayer() : PlayerNames::PLAYER_ONE;
+		hand.DoLock(own, creature);
+		return hand.IsLocked(creature) ? "held" : "busy";
+	}
 	case Kind::HandLetGo:
 		if (hand.GetCreature() == creature)
 		{
@@ -4150,6 +4177,7 @@ void Runner::Give(const Command& command)
 	case Kind::HandStroke:
 	case Kind::HandSlap:
 	case Kind::HandLetGo:
+	case Kind::HandLock:
 		result = GiveHandCommand(*entity, command);
 		break;
 	case Kind::PutOnLeash:

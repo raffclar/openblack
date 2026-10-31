@@ -909,7 +909,7 @@ void GameHandGrabWorld::CallOffGiving(entt::entity creature)
 	}
 	if (Locator::creatureMindSystem::has_value())
 	{
-		Locator::creatureMindSystem::value().AbandonAction(creature);
+		Locator::creatureMindSystem::value().GiveUpAction(creature);
 	}
 }
 

@@ -277,6 +277,10 @@ struct ImportedPlan
 
 /// The number of places round a building where its builders stand
 inline constexpr size_t k_ImportedSitePlaces = 128;
+/// The game object of a file keeps this many lists of objects
+inline constexpr size_t k_GameObjectLists = 44;
+/// The place of the game's list of all the towns among the lists of the game object
+inline constexpr size_t k_GameTownList = 31;
 
 /// The site of a town at a building that goes up or that its builders mend
 struct ImportedSite
@@ -317,6 +321,9 @@ struct ImportedTowns
 	/// The numbers of the objects of the towns in the order of the town lists of the players: the list of each player of
 	/// the file in turn, each list in the order that its player got the towns
 	std::vector<uint32_t> townLists;
+	/// The numbers of the objects of the towns in the game's list of all the towns, as the game object of the file keeps
+	/// it: the town that the game made last comes first
+	std::vector<uint32_t> gameTownList;
 	/// The tribal powers of each player of the file that keeps a value for each tribe
 	std::vector<ImportedTribalPower> tribalPowers;
 	/// The flags of the desires of the towns

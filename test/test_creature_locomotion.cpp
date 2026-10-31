@@ -274,3 +274,14 @@ TEST(CreatureLocomotion, AStopAfterATurnShowsTheNewHeadingAtOnce)
 	EXPECT_EQ(kept.from, GameHeading(0.2f));
 	EXPECT_EQ(kept.to, GameHeading(0.3f));
 }
+
+TEST(CreatureLocomotion, ATurnThatWaitsForTheBodyStartsOnlyWhenTheBodyIsAtRest)
+{
+	// The hand takes hold of a creature at rest: the turn starts now
+	EXPECT_EQ(TurnThatStartsAtRest(GameHeading(0.5f), false), GameHeading(0.5f));
+	// The body plays an action, such as the finish of a fight: the turn waits
+	EXPECT_FALSE(TurnThatStartsAtRest(GameHeading(0.5f), true).has_value());
+	// No turn waits
+	EXPECT_FALSE(TurnThatStartsAtRest(std::nullopt, false).has_value());
+	EXPECT_FALSE(TurnThatStartsAtRest(std::nullopt, true).has_value());
+}

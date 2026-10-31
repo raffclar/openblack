@@ -277,6 +277,8 @@ void PlayFrameEffects(FrameViewInterface& view)
 	{
 		Locator::spellIconSystem::value().UpdateChargeLooks(static_cast<int32_t>(clock.GetFrameGameTime().count()),
 		                                                    LandDrawn());
+		// The seeds over the stone hands of the village centres show the effects of their holders
+		Locator::spellIconSystem::value().UpdateHolderEffects(clock.GetFrameRealTime(), clock.GetFrameGameTime(), LandDrawn());
 	}
 	// The players' symbols of belief over the village centres move on
 	Locator::townSystem::value().UpdateFrame(clock.GetFrameRealTime(), LandDrawn());

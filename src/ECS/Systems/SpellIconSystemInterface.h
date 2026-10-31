@@ -11,10 +11,12 @@
 
 #include <cstdint>
 
+#include <chrono>
 #include <optional>
 #include <span>
 #include <vector>
 
+#include <entt/core/fwd.hpp>
 #include <entt/entity/entity.hpp>
 #include <glm/mat4x4.hpp>
 
@@ -56,6 +58,10 @@ public:
 	/// A worship site goes (its temple destroyed): every icon of it goes with what it was charging, and the seed out from
 	/// each, in a hand or cast, goes too. The village centres' hands stay with their towns.
 	virtual void SiteRemoved(entt::entity site) = 0;
+
+	/// One more thing enables a magic type for a player, or one fewer does. The icons of the player's worship sites then
+	/// show the power-up levels that the player can cast.
+	virtual void SetMagicTypeEnabled(PlayerNames /*player*/, MagicType /*type*/, bool /*enable*/) {}
 
 	/// Whether a player's hand may tap an icon or a stone hand: the tap counts for the help, whatever it then does
 	[[nodiscard]] virtual bool ValidToTap(entt::entity icon, PlayerNames player) const = 0;
@@ -145,6 +151,21 @@ public:
 	/// Once a frame, while the frame draws the land: each icon at a worship site that is on the screen shows its charge.
 	/// Its ring of light fills and moves on, its shine changes, and its pulse model shrinks into it while it charges.
 	virtual void UpdateChargeLooks(int32_t /*gameMilliseconds*/, bool /*landDrawn*/) {}
+	/// Once a frame: the stone hands of the village centres and the icons at the worship sites show the effect of the
+	/// holder of their seeds. The effect of an icon shows and moves on, by the game time of the frame, only in a frame that
+	/// draws the icon on the screen.
+	virtual void UpdateHolderEffects(std::chrono::milliseconds /*frameRealTime*/, std::chrono::milliseconds /*frameGameTime*/,
+	                                 bool /*landDrawn*/)
+	{
+	}
+	/// The seed's model that the effect of the holder over an icon acts on: the model and where it was last drawn
+	struct HolderTarget
+	{
+		entt::id_type model {0};
+		glm::mat4 placement {1.0f};
+	};
+	/// The target of the effect of the holder over an icon, none for an icon with no such effect
+	[[nodiscard]] virtual std::optional<HolderTarget> FindHolderTarget(entt::entity /*icon*/) const { return std::nullopt; }
 	/// The colour that an icon adds to its model this frame (0xRRGGBB), 0 for none. The model shows the shine of the
 	/// frame before, because the game draws the model before it changes the shine.
 	[[nodiscard]] virtual uint32_t ShownTint(entt::entity /*icon*/) const { return 0; }

@@ -245,14 +245,23 @@ TEST(SpellIcons, TheAnnouncerNamesTheChargedMiracle)
 
 TEST(SpellIcons, OnlyTheOwnersHandTapsAnIcon)
 {
-	EXPECT_TRUE(ValidToTap(PlayerNames::PLAYER_ONE, PlayerNames::PLAYER_ONE, true));
-	EXPECT_FALSE(ValidToTap(PlayerNames::PLAYER_TWO, PlayerNames::PLAYER_ONE, true));
-	EXPECT_FALSE(ValidToTap(PlayerNames::NEUTRAL, PlayerNames::PLAYER_ONE, true));
+	EXPECT_TRUE(ValidToTap(PlayerNames::PLAYER_ONE, PlayerNames::PLAYER_ONE, true, false));
+	EXPECT_FALSE(ValidToTap(PlayerNames::PLAYER_TWO, PlayerNames::PLAYER_ONE, true, false));
+	EXPECT_FALSE(ValidToTap(PlayerNames::NEUTRAL, PlayerNames::PLAYER_ONE, true, false));
+}
+
+TEST(SpellIcons, AnyHandTapsANeutralIconWhileInfluenceCoversTheLand)
+{
+	EXPECT_TRUE(ValidToTap(PlayerNames::NEUTRAL, PlayerNames::PLAYER_ONE, true, true));
+	EXPECT_TRUE(ValidToTap(PlayerNames::NEUTRAL, PlayerNames::PLAYER_TWO, true, true));
+	// The icon of another player stays its own, and an icon that does not work takes no tap
+	EXPECT_FALSE(ValidToTap(PlayerNames::PLAYER_TWO, PlayerNames::PLAYER_ONE, true, true));
+	EXPECT_FALSE(ValidToTap(PlayerNames::NEUTRAL, PlayerNames::PLAYER_ONE, false, true));
 }
 
 TEST(SpellIcons, AnIconThatDoesNotWorkTakesNoTap)
 {
-	EXPECT_FALSE(ValidToTap(PlayerNames::PLAYER_ONE, PlayerNames::PLAYER_ONE, false));
+	EXPECT_FALSE(ValidToTap(PlayerNames::PLAYER_ONE, PlayerNames::PLAYER_ONE, false, false));
 }
 
 TEST(SpellIcons, AnIconWorksWhenBuiltWithMoreThanThreeQuartersOfItsLife)
