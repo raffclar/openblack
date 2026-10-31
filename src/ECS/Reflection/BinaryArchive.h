@@ -234,21 +234,38 @@ public:
 		}
 		Write(other.Written());
 	}
-	/// A value starts and ends. Only the ends of the outer values are kept.
-	void EnterValue() { ++_depth; }
+	/// A value starts and ends. Only the ends of the outer values are kept, and only a writer that keeps them counts the
+	/// depth of the values.
+	void EnterValue()
+	{
+		if (_keepValueEnds)
+		{
+			++_depth;
+		}
+	}
 	void LeaveValue()
 	{
-		--_depth;
-		if (_depth == 0 && _keepValueEnds)
+		if (_keepValueEnds && --_depth == 0)
 		{
 			_valueEnds.push_back(Size());
 		}
 	}
-	/// The plan of a type by the hash of its type, none before the writer kept one
+	/// The plan of a type by the hash of its type, none before the writer kept one. The writer keeps the last plan that
+	/// it found, because the values of a list often have one type.
 	[[nodiscard]] const SavePlan* FindPlan(entt::id_type type) const
 	{
+		if (_lastPlan.plan != nullptr && _lastPlan.type == type)
+		{
+			return _lastPlan.plan;
+		}
 		const auto found = _plans.find(type);
-		return found != _plans.end() ? &found->second : nullptr;
+		if (found == _plans.end())
+		{
+			return nullptr;
+		}
+		_lastPlan.type = type;
+		_lastPlan.plan = &found->second;
+		return _lastPlan.plan;
 	}
 	void KeepPlan(entt::id_type type, SavePlan plan) { _plans.insert_or_assign(type, std::move(plan)); }
 	/// Writes a value by the plan of its type. Returns false, with nothing written, when the writer has no plan of it.
@@ -278,6 +295,18 @@ private:
 
 	/// The place for the next count of bytes, at the end of the bytes written
 	[[nodiscard]] uint8_t* Grow(size_t count)
+	{
+		const auto needed = _size + count;
+		if (_open && needed <= _bytes.size()) [[likely]]
+		{
+			auto* place = _bytes.data() + _size;
+			_size = needed;
+			return place;
+		}
+		return GrowRoom(count);
+	}
+	/// Opens the writer when it is not open, and adds room when the bytes need more
+	[[nodiscard]] uint8_t* GrowRoom(size_t count)
 	{
 		if (!_open)
 		{
@@ -322,6 +351,29 @@ private:
 	std::set<std::tuple<std::string_view, std::string_view, std::string_view>> _seen;
 	/// The plans of the registered types that this writer wrote, by the hashes of their types
 	std::unordered_map<entt::id_type, SavePlan> _plans;
+	/// The last plan that FindPlan found, and the hash of its type. A plan in the map stays at its address. A copy or a
+	/// move of the writer starts with no last plan, so that it never points into the map of another writer.
+	struct LastPlan
+	{
+		entt::id_type type {0};
+		const SavePlan* plan {nullptr};
+
+		LastPlan() = default;
+		LastPlan(const LastPlan&) noexcept {}
+		LastPlan(LastPlan&&) noexcept {}
+		LastPlan& operator=(const LastPlan&) noexcept
+		{
+			plan = nullptr;
+			return *this;
+		}
+		LastPlan& operator=(LastPlan&&) noexcept
+		{
+			plan = nullptr;
+			return *this;
+		}
+		~LastPlan() = default;
+	};
+	mutable LastPlan _lastPlan;
 };
 
 class BinaryReader

@@ -1217,7 +1217,7 @@ constexpr std::array<NodeInfo, static_cast<size_t>(NodeKind::_Count)> k_Infos {{
      .weight = Bits(0x3F800000u),
      .afterPerform = Bits(0x3F800000u),
      .recovery = Bits(0x3F8020C5u),
-     .timer = 0,
+     .timer = 3300,
      .intensity = true,
      .object = true,
      .perform = true,

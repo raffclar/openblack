@@ -24,6 +24,7 @@
 #include "ECS/Components/ReportedHand.h"
 #include "ECS/Components/Transform.h"
 #include "ECS/Registry.h"
+#include "ECS/ReportedCamera.h"
 #include "Hand/HandStart.h"
 #include "Locator.h"
 
@@ -58,26 +59,42 @@ TEST(HandStart, TheCameraIsTwentyMetresAboveTheStartAndTwentyMetresAlongZ)
 	EXPECT_EQ(hand_start::CameraOf({100.0f, 30.0f, 200.0f}), glm::vec3(100.0f, 50.0f, 220.0f));
 }
 
-TEST(HandStart, AGodWithNoCitadelHasNoCamera)
+TEST(HandStart, AGodWithNoCitadelLooksAtTheOriginOfTheWorld)
 {
-	EXPECT_FALSE(hand_start::GodCameraOf(std::nullopt, std::nullopt).has_value());
-	EXPECT_FALSE(hand_start::GodCameraOf(glm::vec3(1.0f, 2.0f, 3.0f), std::nullopt).has_value());
+	const auto still = hand_start::GodCameraOf(std::nullopt, std::nullopt);
+	EXPECT_EQ(still.origin, glm::vec3(0.0f));
+	EXPECT_EQ(still.focus, glm::vec3(0.0f));
+	const auto moved = hand_start::GodCameraOf(glm::vec3(1.0f, 2.0f, 3.0f), std::nullopt);
+	EXPECT_EQ(moved.origin, glm::vec3(1.0f, 2.0f, 3.0f));
+	EXPECT_EQ(moved.focus, glm::vec3(0.0f));
 }
 
 TEST(HandStart, TheCameraOfAGodWithNoMindLooksAtItsCitadelFromAbove)
 {
 	const auto camera = hand_start::GodCameraOf(std::nullopt, glm::vec3(100.0f, 30.0f, 200.0f));
-	ASSERT_TRUE(camera.has_value());
-	EXPECT_EQ(camera->origin, glm::vec3(100.0f, 50.0f, 220.0f));
-	EXPECT_EQ(camera->focus, glm::vec3(100.0f, 30.0f, 200.0f));
+	EXPECT_EQ(camera.origin, glm::vec3(100.0f, 50.0f, 220.0f));
+	EXPECT_EQ(camera.focus, glm::vec3(100.0f, 30.0f, 200.0f));
 }
 
 TEST(HandStart, TheMindMovesTheCameraAndTheFocusStaysAtTheCitadel)
 {
 	const auto camera = hand_start::GodCameraOf(glm::vec3(400.0f, 12.0f, 500.0f), glm::vec3(100.0f, 30.0f, 200.0f));
-	ASSERT_TRUE(camera.has_value());
-	EXPECT_EQ(camera->origin, glm::vec3(400.0f, 12.0f, 500.0f));
-	EXPECT_EQ(camera->focus, glm::vec3(100.0f, 30.0f, 200.0f));
+	EXPECT_EQ(camera.origin, glm::vec3(400.0f, 12.0f, 500.0f));
+	EXPECT_EQ(camera.focus, glm::vec3(100.0f, 30.0f, 200.0f));
+}
+
+TEST(ReportedCameraRules, ACreatureReadsTheCameraOfItsOwnPlayer)
+{
+	using ecs::reported_camera::NearestCameraPlayer;
+	EXPECT_EQ(NearestCameraPlayer(PlayerNames::PLAYER_THREE, false, PlayerNames::PLAYER_ONE), PlayerNames::PLAYER_THREE);
+	EXPECT_EQ(NearestCameraPlayer(PlayerNames::PLAYER_THREE, true, PlayerNames::PLAYER_ONE), PlayerNames::PLAYER_THREE);
+}
+
+TEST(ReportedCameraRules, ACreatureWithNoPlayerReadsTheLocalCameraOnlyInAGameAlone)
+{
+	using ecs::reported_camera::NearestCameraPlayer;
+	EXPECT_EQ(NearestCameraPlayer(std::nullopt, false, PlayerNames::PLAYER_TWO), PlayerNames::PLAYER_TWO);
+	EXPECT_FALSE(NearestCameraPlayer(std::nullopt, true, PlayerNames::PLAYER_TWO).has_value());
 }
 
 class HandsAtTheCitadel: public ::testing::Test
