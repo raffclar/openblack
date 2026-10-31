@@ -1383,7 +1383,8 @@ void Game::WarmUpFirstFrame()
 	// The draw lists of the land's things, as the first frame makes them
 	if (config.drawEntities)
 	{
-		rendering.PrepareDraw(config.drawBoundingBoxes, config.drawFootpaths, config.drawStreams);
+		rendering.PrepareDraw(config.drawBoundingBoxes, config.drawFootpaths, config.drawStreams,
+		                      ecs::systems::DrawUse::WarmUp);
 	}
 	const auto start = std::chrono::steady_clock::now();
 	// Some renderers divide the warm-up between some frames, each with a part of the draws
@@ -1421,7 +1422,7 @@ void Game::WarmUpFirstFrame()
 			if (config.drawEntities)
 			{
 				Locator::rendereringSystem::value().PrepareDraw(config.drawBoundingBoxes, config.drawFootpaths,
-				                                                config.drawStreams);
+				                                                config.drawStreams, ecs::systems::DrawUse::WarmUp);
 			}
 			auto desc = SceneDrawDesc(config, 0, IsHandDrawn());
 			desc.drawIsland = false;
@@ -4249,7 +4250,7 @@ void Game::UpdateEntitiesFrame(std::chrono::microseconds deltaTime)
 				// The fast simulation mode makes every frame ready, also the ones it does not draw: the game's things go
 				// by what the frames make ready, so a frame left out would change the run
 				Locator::rendereringSystem::value().PrepareDraw(config.drawBoundingBoxes, config.drawFootpaths,
-				                                                config.drawStreams);
+				                                                config.drawStreams, ecs::systems::DrawUse::Frame);
 				ShowInspectorCamera(false);
 				// The interface picks what is under the cursor as the frame is drawn, for the next frame to go by: through
 				// an inspector's override while one is shown, as the frame is seen

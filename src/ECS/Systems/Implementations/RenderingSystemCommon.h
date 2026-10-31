@@ -32,7 +32,7 @@ public:
 	~RenderingSystemCommon();
 	void SetDirty() override;
 	void SetLayoutDirty() override;
-	void PrepareDraw(bool drawBoundingBox, bool drawFootpaths, bool drawStreams) override;
+	void PrepareDraw(bool drawBoundingBox, bool drawFootpaths, bool drawStreams, DrawUse use) override;
 	const RenderContext& GetContext() override
 	{
 		MainThreadQueue::CheckDirect(MainThreadApi::Renderer, "RenderingSystem::GetContext");
@@ -49,8 +49,9 @@ private:
 protected:
 	/// The bones of the villagers placed with the instances, for the vertex shader to read
 	void UploadBonePalette();
-	/// Each thing in a hand keeps the light at its point, which the sea mirrors it in on the next frame
-	void KeepHeldLights();
+	/// Each thing in a hand keeps the light at its point, which the sea mirrors it in on the next frame. A warm-up draw
+	/// uses the kept light and keeps no light.
+	void KeepHeldLights(DrawUse use);
 	/// The piles of roots of this frame into their instances, every frame: there are few, and they fade every frame
 	void UploadRootsPiles();
 

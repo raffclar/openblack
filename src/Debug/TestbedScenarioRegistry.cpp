@@ -10781,6 +10781,29 @@ void AddMind(std::vector<Scenario>& all)
 	                 Command {.kind = Kind::LoadGame, .delaySeconds = 4.0f, .value = 0}},
 	});
 
+	// A vortex levels the pond and then goes. The saved game keeps the levelled land, and the load gives it back.
+	all.push_back({
+	    .id = "saves.levelled_land_back",
+	    .name = "Save and load: the land that a vortex levelled",
+	    .facet = Facet::Story,
+	    .description = "A vortex that leads away from the land opens over the pond north-west of the middle. It levels "
+	                   "the pond and its banks. 4 seconds later it starts to fade out, and 7 seconds after that it is "
+	                   "gone. 14 seconds after the start the game saves into slot 0. 4 seconds after the save the game "
+	                   "loads slot 0.",
+	    .expected = "When the vortex has gone, a level square of land is where the pond and its banks were. After the "
+	                "load the square is level, as it was at the save: the pond and its banks do not come back.",
+	    .environment = {.dispenserGrid = false},
+	    .framing = {.shot = Shot::Overview,
+	                .include = {flat_land::k_PondCentre - flat_land::k_MapMiddle - glm::vec2(70.0f),
+	                            flat_land::k_PondCentre - flat_land::k_MapMiddle + glm::vec2(70.0f)}},
+	    .vortices = {{.type = VortexType::Out,
+	                  .offset = flat_land::k_PondCentre - flat_land::k_MapMiddle,
+	                  .delaySeconds = 0.5f,
+	                  .fadeOutAfterSeconds = 4.0f}},
+	    .commands = {Command {.kind = Kind::SaveGame, .delaySeconds = 14.0f, .value = 0},
+	                 Command {.kind = Kind::LoadGame, .delaySeconds = 4.0f, .value = 0}},
+	});
+
 	all.push_back({
 	    .id = "frontend.continue_with_menu",
 	    .name = "Start-up: continue from the save on exit",

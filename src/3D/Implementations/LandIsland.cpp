@@ -550,6 +550,21 @@ size_t LandIsland::RestoreBuiltAltitudes()
 	return restored;
 }
 
+std::vector<land_reuse::CellAltitude> LandIsland::ChangedAltitudes() const
+{
+	std::vector<land_reuse::CellAltitude> changed;
+	for (size_t block = 0; block < _landBlocks.size(); ++block)
+	{
+		const auto& cells = _landBlocks[block].GetLndBlock()->cells;
+		const auto corner = _landBlocks[block].GetBlockPosition() * static_cast<int>(k_CellCount);
+		const auto indices = land_reuse::ChangedCells(cells, _builtAltitudes.at(block));
+		const auto corners =
+		    land_reuse::CornersOfBlock(static_cast<uint16_t>(corner.x), static_cast<uint16_t>(corner.y), indices, cells);
+		changed.insert(changed.end(), corners.begin(), corners.end());
+	}
+	return changed;
+}
+
 void LandIsland::CommitAltitudeChanges()
 {
 	MainThreadQueue::CheckDirect(MainThreadApi::Graphics, "LandIsland::CommitAltitudeChanges");
