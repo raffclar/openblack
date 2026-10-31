@@ -5459,6 +5459,26 @@ void AddObjects(std::vector<Scenario>& all)
 	                {.type = PotInfo::WoodPot, .offset = {46.0f, 40.0f}}},
 	});
 
+	// The hand holds a small pile of food over another on the land, and uses it on that pile
+	constexpr glm::vec2 k_PotOnLand {0.0f, 40.0f};
+	all.push_back({
+	    .id = "hand.pot_onto_pot",
+	    .name = "The hand puts a pot of food onto a pot of food",
+	    .facet = Facet::Hand,
+	    .description = "Two small piles of food such as the hand drops, 300 food each. The hand takes the west pile and "
+	                   "holds it over the east pile. Then the hand uses the pile that it holds on the east pile, as the "
+	                   "Action button pressed over it does.",
+	    .expected = "The pile in the hand goes. The east pile takes all of its food and becomes larger. No new pile "
+	                "comes on the land.",
+	    .environment = {.dispenserGrid = false},
+	    .framing = {.shot = Shot::Overview, .include = {{-20.0f, 30.0f}, {10.0f, 50.0f}}},
+	    .objects = {{.type = PotInfo::HandFood, .offset = k_PotOnLand + glm::vec2(-15.0f, 0.0f), .amount = 300},
+	                {.type = PotInfo::HandFood, .offset = k_PotOnLand, .amount = 300}},
+	    .commands = {{.kind = Kind::HandTake, .delaySeconds = 2.0f, .object = 0},
+	                 {.kind = Kind::HandApply, .delaySeconds = 3.0f, .object = 1}},
+	    .hand = HandHold {.offset = k_PotOnLand, .height = 6.0f},
+	});
+
 	all.push_back({
 	    .id = "objects.give_wood",
 	    .name = "Giving a tree to a store as wood",
@@ -13246,8 +13266,8 @@ bool testbed_scenarios::NeedsNoCreature(Command::Kind kind)
 	       kind == Kind::SetOpenClose || kind == Kind::LayGateStone || kind == Kind::HandTapObject || kind == Kind::Advisor ||
 	       kind == Kind::RunText || kind == Kind::PlayHandDemo || kind == Kind::Reframe || kind == Kind::DestroyTemple ||
 	       kind == Kind::RunHelpMessage || kind == Kind::EndGuidanceWaits || kind == Kind::SetTownBeliefInRival ||
-	       kind == Kind::RecordChallenge || kind == Kind::EnterTemple || kind == Kind::HandTake || kind == Kind::RunScript ||
-	       kind == Kind::PlayBoatFilm || kind == Kind::HandPour || kind == Kind::HandRelease ||
+	       kind == Kind::RecordChallenge || kind == Kind::EnterTemple || kind == Kind::HandTake || kind == Kind::HandApply ||
+	       kind == Kind::RunScript || kind == Kind::PlayBoatFilm || kind == Kind::HandPour || kind == Kind::HandRelease ||
 	       kind == Kind::SetReportLatency || kind == Kind::RemoveObject || kind == Kind::ReadTip ||
 	       kind == Kind::LookAtTempleScroll || kind == Kind::HandGripTotem || kind == Kind::ProfileFolderCheck ||
 	       kind == Kind::PlayCustomMusic || kind == Kind::ShowCustomMusicControls || kind == Kind::OwnTattooPicture ||
@@ -13292,7 +13312,7 @@ std::string_view testbed_scenarios::Name(Shot shot)
 
 std::string_view testbed_scenarios::Name(Command::Kind kind)
 {
-	constexpr std::array<std::string_view, 199> k_Names {
+	constexpr std::array<std::string_view, 200> k_Names {
 	    "walk to",
 	    "run to",
 	    "follow",
@@ -13408,6 +13428,7 @@ std::string_view testbed_scenarios::Name(Command::Kind kind)
 	    "reframe",
 	    "hand take",
 	    "hand give",
+	    "hand apply",
 	    "swap minds",
 	    "record challenge",
 	    "enter temple",

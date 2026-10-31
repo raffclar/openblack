@@ -75,6 +75,15 @@ float teleport::CreatureFadeIn(int32_t turnsLeft, int32_t turns)
 	return turns > 0 ? static_cast<float>(turnsLeft) / static_cast<float>(turns) : 0.0f;
 }
 
+teleport::CarryStep teleport::NextCarryStep(bool fadingIn, int32_t turnsLeft)
+{
+	if (!fadingIn)
+	{
+		return turnsLeft > 0 ? CarryStep::FadeOut : CarryStep::Arrive;
+	}
+	return turnsLeft > 0 ? CarryStep::FadeIn : CarryStep::BackInSight;
+}
+
 bool teleport::IsWorthTheDetour(glm::vec3 traveller, glm::vec3 destination, glm::vec3 stone, glm::vec3 other)
 {
 	const auto walk = static_cast<float>(static_cast<uint32_t>(FastDistance(traveller, destination)));

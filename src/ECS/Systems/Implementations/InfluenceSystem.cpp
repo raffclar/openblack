@@ -552,28 +552,23 @@ void InfluenceSystem::NoteInfluencePower(PlayerNames player)
 	player_statistics::CountInfluence(registry, player, noted->power);
 }
 
-void InfluenceSystem::ProcessVirtualInfluence(uint32_t turn)
+void InfluenceSystem::ProcessVirtualInfluence(PlayerNames player, uint32_t turn)
 {
-	if (!Locator::playerSystem::has_value() || !Locator::infoConstants::has_value())
+	if (player == PlayerNames::NEUTRAL || !Locator::playerSystem::has_value() || !Locator::infoConstants::has_value())
+	{
+		return;
+	}
+	const auto entity = PlayerEntityOf(player);
+	if (!entity.has_value())
 	{
 		return;
 	}
 	// The hand of every god keeps a share of the god's influence past the border, also the hand of a god that no person
 	// plays. The share measures from the point that the god's hand reports picked. A god that no person plays sends no
 	// reports, so its share measures from the origin of the world.
-	std::vector<std::pair<entt::entity, PlayerNames>> players;
-	Locator::entitiesRegistry::value().Each<const Player>([&players](entt::entity entity, const Player& player) {
-		if (player.name != PlayerNames::NEUTRAL)
-		{
-			players.emplace_back(entity, player.name);
-		}
-	});
-	const auto& playerSystem = Locator::playerSystem::value();
-	for (const auto& [entity, player] : players)
-	{
-		const auto hand = virtual_influence::TurnHandPoint(playerSystem.IsHumanPlayer(player), ReportedPickOf(player));
-		ProcessVirtualInfluence(entity, player, hand, turn);
-	}
+	const auto hand =
+	    virtual_influence::TurnHandPoint(Locator::playerSystem::value().IsHumanPlayer(player), ReportedPickOf(player));
+	ProcessVirtualInfluence(*entity, player, hand, turn);
 }
 
 void InfluenceSystem::HeldThingUsedOnLand(PlayerNames player)

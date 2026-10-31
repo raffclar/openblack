@@ -2578,6 +2578,18 @@ std::string Runner::GivePlayerCommand(const Command& command)
 		const auto why = hand.WhyNotTake(*object);
 		return hand.TakeIntoHand(*object) ? std::string("taken into the hand") : fmt::format("the hand can't take it: {}", why);
 	}
+	case Kind::HandApply:
+	{
+		const auto object = ObjectAt(command.object);
+		if (!object.has_value() || !Locator::handGrabSystem::has_value())
+		{
+			return "nothing to use the held thing on";
+		}
+		const auto player =
+		    Locator::playerSystem::has_value() ? Locator::playerSystem::value().GetLocalPlayer() : PlayerNames::PLAYER_ONE;
+		Locator::handGrabSystem::value().DoApply(player, *object);
+		return "the hand uses what it holds on the object";
+	}
 	case Kind::AttachObjectScriptSound:
 	{
 		const auto object = ObjectAt(command.object);
@@ -3311,9 +3323,9 @@ void Runner::Give(const Command& command)
 {
 	if (command.kind == Kind::HoldSeed || command.kind == Kind::DrawGesture || command.kind == Kind::SummonSeed ||
 	    command.kind == Kind::PressKey || command.kind == Kind::HandTakeFireBall || command.kind == Kind::HandTapObject ||
-	    command.kind == Kind::HandTake || command.kind == Kind::HandPour || command.kind == Kind::HandRelease ||
-	    command.kind == Kind::SetReportLatency || command.kind == Kind::RemoveObject || command.kind == Kind::HandGripTotem ||
-	    command.kind == Kind::AttachObjectScriptSound || command.kind == Kind::SayLine ||
+	    command.kind == Kind::HandTake || command.kind == Kind::HandApply || command.kind == Kind::HandPour ||
+	    command.kind == Kind::HandRelease || command.kind == Kind::SetReportLatency || command.kind == Kind::RemoveObject ||
+	    command.kind == Kind::HandGripTotem || command.kind == Kind::AttachObjectScriptSound || command.kind == Kind::SayLine ||
 	    command.kind == Kind::PlayGuidanceVoice || command.kind == Kind::ScriptRelease || command.kind == Kind::FillSiteIcons ||
 	    command.kind == Kind::BuildWorshipSites || command.kind == Kind::PressPlainKey || command.kind == Kind::PlainKeyDown ||
 	    command.kind == Kind::PlainKeyRepeat || command.kind == Kind::PlainKeyUp ||
@@ -4180,6 +4192,7 @@ void Runner::Give(const Command& command)
 	case Kind::HandTakeFireBall:
 	case Kind::HandTapObject:
 	case Kind::HandTake:
+	case Kind::HandApply:
 	case Kind::HandPour:
 	case Kind::HandRelease:
 	case Kind::SetReportLatency:
