@@ -1600,32 +1600,59 @@ void SetScriptStatePos() // 018 SET_SCRIPT_STATE_POS
 {
 	const auto position = PopVec();
 	const auto object = PopObject();
-	if (!Locator::entitiesRegistry::value().Valid(object))
+	auto& registry = Locator::entitiesRegistry::value();
+	if (!registry.Valid(object))
 	{
 		ObjectNoLongerValid();
 		return;
 	}
+	const auto place = glm::vec2(position.x, position.z);
+	if (IsScriptContainer(registry, object))
+	{
+		// The script takes control of each member. Only a villager gets the place.
+		for (const auto member : ContainerMembers(registry, object))
+		{
+			TakeControlInLoop(registry, member);
+			if (IsDirectableVillager(member))
+			{
+				Locator::livingActionSystem::value().VillagerSetScriptPlace(member, place);
+			}
+		}
+		return;
+	}
 	if (!IsDirectableVillager(object))
 	{
-		// TODO(opening): groups of things
 		ScriptMessage("Object not villager for state data");
 		return;
 	}
-	Locator::livingActionSystem::value().VillagerSetScriptPlace(object, {position.x, position.z});
+	Locator::livingActionSystem::value().VillagerSetScriptPlace(object, place);
 }
 
 void SetScriptFloat() // 019 SET_SCRIPT_FLOAT
 {
 	const auto value = Popf();
 	const auto object = PopObject();
-	if (!Locator::entitiesRegistry::value().Valid(object))
+	auto& registry = Locator::entitiesRegistry::value();
+	if (!registry.Valid(object))
 	{
 		ObjectNoLongerValid();
 		return;
 	}
+	if (IsScriptContainer(registry, object))
+	{
+		// The script takes control of each member. Only a villager gets the number.
+		for (const auto member : ContainerMembers(registry, object))
+		{
+			TakeControlInLoop(registry, member);
+			if (IsDirectableVillager(member))
+			{
+				Locator::livingActionSystem::value().VillagerSetScriptNumber(member, value);
+			}
+		}
+		return;
+	}
 	if (!IsDirectableVillager(object))
 	{
-		// TODO(opening): groups of things
 		ScriptMessage("Object not villager for state data");
 		return;
 	}
@@ -2863,12 +2890,8 @@ static entt::entity FindForScript(int32_t type, uint32_t subtype, const glm::vec
 		SPDLOG_LOGGER_ERROR(spdlog::get("scripting"), "No search for script object type {}", type);
 		return entt::null;
 	case ObjectType::Creature:
-		if (inState.has_value())
-		{
-			// TODO(script-natives): the search for a creature in a state
-			NotImplemented(type);
-			return entt::null;
-		}
+		// The search for a creature does not look at the state or at script control: a search for a creature in a
+		// state finds the same creature as the search near the place
 		return FindCreatureForScript(subtype, position, radius);
 	default:
 		break;
