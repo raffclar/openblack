@@ -93,6 +93,8 @@ enum class Step : uint8_t
 	DrawnPlaces,
 	PlayerCommands,
 	HandStillness,
+	/// The influence that each god's hand keeps past the border of the god's influence
+	VirtualInfluence,
 	/// The hand's own work of the turn: it can send commands, which a later turn does
 	HandInterface,
 	TurnCheering,
@@ -264,6 +266,9 @@ inline constexpr std::array k_Turn = std::to_array<Place>({
     {.step = Step::PlayerCommands, .stage = Stage::Input},
     // The hand's count of the turns that it stays still is part of the player's input
     {.step = Step::HandStillness, .stage = Stage::Input},
+    // After the stillness of each hand, the influence that the hand keeps past the border, before the hand's own work
+    // and before the players and the computer minds act
+    {.step = Step::VirtualInfluence, .stage = Stage::Input},
     // Then the hand does the work that it also does each frame: it takes a thing that it waited for, or gives what it
     // holds after a long press. The commands that it sends go to a later turn.
     {.step = Step::HandInterface, .stage = Stage::Input},
@@ -292,8 +297,7 @@ inline constexpr std::array k_Turn = std::to_array<Place>({
     {.step = Step::ComputerPlayers, .stage = Stage::Players},
     // After its computer mind, the power that each tribe gives a player becomes the most power that the tribe gave it
     {.step = Step::TribalPowers, .stage = Stage::Players},
-    // The influence of the towns and the temples. The borders that it draws and the influence that the hand keeps are
-    // also in this step.
+    // The influence of the towns and the temples, and the borders that it draws
     {.step = Step::Influence, .stage = Stage::Players},
     {.step = Step::PlayerStatistics, .stage = Stage::Players},
     {.step = Step::Heartbeats, .stage = Stage::Players},

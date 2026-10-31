@@ -517,6 +517,10 @@ void PlayTurnStep(game_turn::Step step, TurnViewInterface& view)
 		// The player's input comes first in the turn: the game counts the turns that the hand stays in one place
 		Locator::handSystem::value().ProcessTurn();
 		break;
+	case Step::VirtualInfluence:
+		// Each god's hand keeps a share of the god's influence past the border, from where the hand was at the turn
+		Locator::influenceSystem::value().ProcessVirtualInfluence(turn);
+		break;
 	case Step::HandInterface:
 		// The hand's own work of the turn, as of each frame. The commands that it sends go to a later turn.
 		if (Locator::handGrabSystem::has_value())

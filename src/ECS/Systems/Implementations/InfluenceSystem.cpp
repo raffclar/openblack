@@ -277,8 +277,9 @@ influence::Ground LandHeight()
 
 void InfluenceSystem::SaveState(reflection::BinaryWriter& out) const
 {
+	// Keep the old place of a removed field, so the saved layout does not change.
+	reflection::Save(out, uint32_t {0});
 	// Each circle of the borders keeps its place, its size and its hidden columns. Its curtain is made again from the land.
-	reflection::Save(out, _turn);
 	reflection::Save(out, _circles.size());
 	for (const auto& circle : _circles)
 	{
@@ -300,7 +301,9 @@ void InfluenceSystem::SaveState(reflection::BinaryWriter& out) const
 
 bool InfluenceSystem::LoadState(reflection::BinaryReader& in)
 {
-	reflection::Load(in, _turn);
+	// Keep the old place of a removed field, so the saved layout does not change.
+	uint32_t removedField = 0;
+	reflection::Load(in, removedField);
 	size_t count = 0;
 	reflection::Load(in, count);
 	_circles.clear();
@@ -487,7 +490,6 @@ void InfluenceSystem::ProcessTurn(uint32_t turn)
 	{
 		DrawBorders();
 	}
-	ProcessVirtualInfluence(turn);
 }
 
 bool InfluenceSystem::Shielded(PlayerNames player, const glm::vec3& point)
@@ -560,7 +562,6 @@ void InfluenceSystem::NoteInfluencePower(PlayerNames player)
 
 void InfluenceSystem::ProcessVirtualInfluence(uint32_t turn)
 {
-	_turn = turn;
 	if (!Locator::playerSystem::has_value() || !Locator::infoConstants::has_value())
 	{
 		return;
@@ -585,11 +586,11 @@ void InfluenceSystem::ProcessVirtualInfluence(uint32_t turn)
 
 void InfluenceSystem::HeldThingUsedOnLand(PlayerNames player)
 {
-	if (!Locator::infoConstants::has_value())
+	if (!Locator::infoConstants::has_value() || !Locator::time::has_value())
 	{
 		return;
 	}
-	// Measured from where the hand was at the last turn
+	// Measured from where the hand was at the last turn, at the game turn now
 	const auto* state = VirtualStateOf(player);
 	const auto entity = PlayerEntityOf(player);
 	if (state == nullptr || !state->turnHand.has_value() || !entity.has_value())
@@ -597,7 +598,7 @@ void InfluenceSystem::HeldThingUsedOnLand(PlayerNames player)
 		return;
 	}
 	const auto hand = *state->turnHand;
-	ProcessVirtualInfluence(*entity, player, hand, _turn);
+	ProcessVirtualInfluence(*entity, player, hand, Locator::time::value().GetTurn());
 }
 
 void InfluenceSystem::ProcessVirtualInfluence(entt::entity entity, PlayerNames player, glm::vec3 hand, uint32_t turn)
