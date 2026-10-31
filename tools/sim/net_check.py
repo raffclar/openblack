@@ -2013,7 +2013,10 @@ def main():
             os.makedirs(client_dir, exist_ok=True)
             if options.gods_ring_map:
                 kept_alignment = any(int(value.split(":", 1)[0]) - 1 == index for value in options.alignment)
-                maps_dir = os.path.join(client_dir, "profile" if kept_alignment else "Profiles", "Online Maps")
+                # A run of a tool keeps its profile in the developer folder of the profile folder, unless the run gives one
+                profile = os.path.join(client_dir, "profile") if kept_alignment else os.path.join(client_dir, "Profiles",
+                                                                                                    "developer")
+                maps_dir = os.path.join(profile, "Online Maps")
                 os.makedirs(maps_dir, exist_ok=True)
                 shutil.copyfile(gods_ring_file, os.path.join(maps_dir, "obm_32p_1.map"))
             for value in options.profile_creature:
