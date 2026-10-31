@@ -9,9 +9,11 @@
 
 #define LOCATOR_IMPLEMENTATIONS
 
+#include <optional>
 #include <vector>
 
 #include "3D/L3DMesh.h"
+#include "ECS/Components/Fire.h"
 #include "ECS/Components/Mesh.h"
 #include "ECS/Components/Player.h"
 #include "ECS/Components/SpellIcon.h"
@@ -20,10 +22,15 @@
 #include "ECS/DrawnOnScreen.h"
 #include "ECS/PlayerColour.h"
 #include "ECS/Registry.h"
+#include "ECS/Systems/ObjectDrawListSystemInterface.h"
 #include "ECS/Systems/ParticleRuleSystemInterface.h"
 #include "ECS/Systems/TimeSystemInterface.h"
+#include "ECS/WorldObjects.h"
+#include "InfoConstants.h"
 #include "Locator.h"
 #include "Magic/IconChargeLooks.h"
+#include "Magic/MagicTables.h"
+#include "Particles/DrawnEffectSteps.h"
 #include "Particles/LightSheet.h"
 #include "Resources/ResourceManager.h"
 #include "Resources/ResourcesInterface.h"
@@ -39,6 +46,8 @@ namespace
 constexpr float k_SecondsPerMillisecond = 0.001f;
 constexpr uint32_t k_RgbMask = 0xFFFFFFu;
 constexpr uint32_t k_AlphaShift = 24;
+/// The seed over a village centre's stone hand has its full size
+constexpr float k_HandSeedScale = 1.0f;
 
 /// The height of the box of a thing's model, none without the model
 [[nodiscard]] float ModelHeight(const Mesh& mesh)
@@ -168,4 +177,82 @@ uint32_t SpellIconSystem::ShownTint(entt::entity icon) const
 std::vector<SpellIconSystemInterface::ChargePulse> SpellIconSystem::ChargePulses() const
 {
 	return _pulses;
+}
+
+void SpellIconSystem::UpdateHolderEffects(std::chrono::milliseconds frameRealTime, std::chrono::milliseconds frameGameTime,
+                                          bool landDrawn)
+{
+	const auto step = particles::drawn_steps::StepSeconds(_holderPace, frameRealTime, frameGameTime, landDrawn);
+	if (!Locator::particleRuleSystem::has_value() || !Locator::infoConstants::has_value())
+	{
+		return;
+	}
+	auto& registry = Locator::entitiesRegistry::value();
+	auto& particles = Locator::particleRuleSystem::value();
+	// A hand that went, or that shows another seed, loses the effect of its old seed
+	std::erase_if(_holderEffects, [&registry, &particles](const auto& entry) {
+		const auto* shown = registry.Valid(entry.first) ? registry.TryGet<const IconSeed>(entry.first) : nullptr;
+		if (shown != nullptr && shown->seed == entry.second.seed)
+		{
+			return false;
+		}
+		particles.Delete(entry.second.effect);
+		return true;
+	});
+	// The frame draws the village centres in the order of the land's draw list, and each centre draws its hands in turn
+	std::vector<entt::entity> centres;
+	registry.Each<const CentreHands>([&centres](entt::entity entity, const CentreHands&) { centres.push_back(entity); });
+	const auto* drawList = Locator::objectDrawListSystem::has_value() ? &Locator::objectDrawListSystem::value() : nullptr;
+	const auto order = drawList != nullptr
+	                       ? particles::drawn_steps::DrawOrder(
+	                             drawList->GetList(), centres, drawList->GetView().has_value(),
+	                             [&registry, drawList](entt::entity entity) { return drawList->Decides(registry, entity); })
+	                       : centres;
+	for (const auto centre : order)
+	{
+		// A centre draws its hands only while the list draws it and while it has life
+		const auto* life = registry.TryGet<const ObjectLife>(centre);
+		const bool centreDrawn =
+		    landDrawn && (drawList == nullptr || drawList->Drawn(registry, centre)) && (life == nullptr || life->life > 0.0f);
+		for (const auto hand : registry.Get<const CentreHands>(centre).hands)
+		{
+			if (registry.Valid(hand) && registry.AllOf<IconSeed>(hand))
+			{
+				StepHolderEffect(hand, centreDrawn && ecs::DrawnOnScreen(registry, hand), step);
+			}
+		}
+	}
+}
+
+void SpellIconSystem::StepHolderEffect(entt::entity hand, bool drawn, std::optional<float> step)
+{
+	auto& registry = Locator::entitiesRegistry::value();
+	auto& particles = Locator::particleRuleSystem::value();
+	const auto& shown = registry.Get<const IconSeed>(hand);
+	const auto& seed = magic::GetSpellSeedInfo(Locator::infoConstants::value(), shown.seed);
+	if (seed.holderParticle == ParticleType::None)
+	{
+		return;
+	}
+	auto found = _holderEffects.find(hand);
+	// A load does not keep the effect, so the hand makes it again
+	if (found == _holderEffects.end() || !particles.IsRunning(found->second.effect))
+	{
+		// The seed of a stone hand has its full size, so the effect is at the holder's height above the seed's middle
+		const auto effect = particles.StartByFrame(
+		    seed.holderParticle, shown.middle + glm::vec3(0.0f, seed.holderHeight * k_HandSeedScale, 0.0f), k_HandSeedScale);
+		if (effect == ParticleRuleSystemInterface::k_NoEffect)
+		{
+			return;
+		}
+		particles.KeepOutOfSaves(effect);
+		found = _holderEffects.insert_or_assign(hand, HolderEffect {.effect = effect, .seed = shown.seed}).first;
+	}
+	// It takes the colours of the hand's player, who can change when another player takes the town
+	particles.SetPlayer(found->second.effect, static_cast<int>(world_objects::IconPlayer(registry, hand)));
+	particles.SetShown(found->second.effect, drawn);
+	if (drawn && step.has_value())
+	{
+		particles.ProcessByFrame(found->second.effect, *step);
+	}
 }

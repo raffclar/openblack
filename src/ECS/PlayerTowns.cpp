@@ -13,10 +13,12 @@
 
 #include <algorithm>
 #include <iterator>
+#include <ranges>
 #include <tuple>
 #include <utility>
 
 #include "Common/GUtilsDistance.h"
+#include "ECS/Components/Construction.h"
 #include "ECS/Components/Town.h"
 #include "ECS/Components/Transform.h"
 #include "ECS/Registry.h"
@@ -84,6 +86,32 @@ std::vector<entt::entity> player_towns::AllMadeNewestFirst(const Registry& regis
 	result.reserve(towns.size());
 	std::ranges::transform(towns, std::back_inserter(result), &std::pair<uint32_t, entt::entity>::second);
 	return result;
+}
+
+void player_towns::PutFirstInMadeOrder(Registry& registry, std::span<const entt::entity> newestFirst)
+{
+	// The town made last has the highest stamp, so the last town of the list takes the stamp first
+	for (const auto town : newestFirst | std::views::reverse)
+	{
+		if (auto* component = registry.TryGet<components::Town>(town))
+		{
+			component->made = registry.Context().nextTownMade++;
+		}
+	}
+}
+
+std::vector<entt::entity> player_towns::AllPlansInOrder(const Registry& registry)
+{
+	std::vector<entt::entity> plans;
+	for (const auto town : AllMadeNewestFirst(registry))
+	{
+		// The list of a town can keep a plan that has gone or became a building
+		std::ranges::copy_if(
+		    registry.Get<const components::Town>(town).planned, std::back_inserter(plans), [&registry](entt::entity plan) {
+			    return registry.Valid(plan) && registry.AnyOf<components::PlannedAbode, components::PlannedTemple>(plan);
+		    });
+	}
+	return plans;
 }
 
 entt::entity player_towns::NearestOf(std::span<const Distance> towns)

@@ -36,6 +36,7 @@
 #include "ECS/Systems/HandGrabSystemInterface.h"
 #include "ECS/Systems/HandSystemInterface.h"
 #include "ECS/Systems/MagicSystemInterface.h"
+#include "ECS/Systems/ParticleRuleSystemInterface.h"
 #include "ECS/Systems/PlayerSystemInterface.h"
 #include "ECS/Systems/PlaygroundTripSystemInterface.h"
 #include "ECS/Systems/TimeSystemInterface.h"
@@ -1343,4 +1344,13 @@ void SpellIconSystem::Reset()
 	// continues from one land to the next.
 	_looks.clear();
 	_pulses.clear();
+	if (Locator::particleRuleSystem::has_value())
+	{
+		for (const auto& [hand, holder] : _holderEffects)
+		{
+			Locator::particleRuleSystem::value().Delete(holder.effect);
+		}
+	}
+	_holderEffects.clear();
+	_holderPace = {};
 }
