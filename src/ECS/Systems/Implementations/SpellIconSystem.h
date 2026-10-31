@@ -87,6 +87,7 @@ public:
 	[[nodiscard]] std::vector<ChargePulse> ChargePulses() const override;
 	void UpdateHolderEffects(std::chrono::milliseconds frameRealTime, std::chrono::milliseconds frameGameTime,
 	                         bool landDrawn) override;
+	[[nodiscard]] std::optional<HolderTarget> FindHolderTarget(entt::entity icon) const override;
 	void Reset() override;
 
 private:
@@ -141,15 +142,17 @@ private:
 	/// Deletes an icon and forgets it, with the seeds out from it; what it was charging and what it stored are lost
 	void Destroy(entt::entity icon);
 
-	/// The effect of the holder of a stone hand's seed, made for the seed that the hand shows
+	/// The effect of the holder of an icon's seed, made for the seed that the icon shows. The effect acts on the seed's
+	/// model, which keeps the place of the last frame that drew it.
 	struct HolderEffect
 	{
 		uint32_t effect {0};
 		SpellSeedType seed {SpellSeedType::None};
+		HolderTarget target {};
 	};
-	/// The effect of the holder of a stone hand's seed: made once for its seed, and shown and moved on when the frame
-	/// draws the hand
-	void StepHolderEffect(entt::entity hand, bool drawn, std::optional<float> step);
+	/// The effect of the holder of an icon's seed: made once for its seed, and shown and moved on when the frame draws
+	/// the icon, at the alpha of the icon's model
+	void StepHolderEffect(entt::entity icon, bool drawn, std::optional<float> step, uint8_t alpha);
 
 	/// A worship site's icon that is on the screen shows its charge in this frame
 	void ShowCharge(entt::entity entity, const components::WorshipIcon& icon, int32_t gameMilliseconds);
@@ -169,7 +172,8 @@ private:
 	magic::icon_charge_looks::DecayClock _decayClock;
 	/// The pulse models of this frame
 	std::vector<ChargePulse> _pulses;
-	/// The effects of the holders of the seeds of the stone hands. A saved game does not keep these.
+	/// The effects of the holders of the seeds of the stone hands and the worship sites' icons. A saved game does not
+	/// keep these.
 	std::unordered_map<entt::entity, HolderEffect> _holderEffects;
 	/// When the effects of the holders take a step
 	frame_pace::Pace _holderPace;

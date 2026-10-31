@@ -100,4 +100,13 @@ inline constexpr float k_PulseMark = 0.1f;
 /// How opaque the pulse model is, 0 to 255: transparent at the start of a pulse and opaque at its end
 [[nodiscard]] uint8_t PulseAlpha(float share);
 
+/// The alpha of the effect of the seed's holder over an icon, 0 to 255: the alpha of the icon's model as the frame draws it.
+/// The model has the full alpha of the land's light. A model that adds a colour multiplies that alpha by 255 in 256ths.
+[[nodiscard]] constexpr uint8_t HolderAlpha(uint32_t shownTint)
+{
+	constexpr uint32_t k_LightAlpha = 0xFFu;
+	constexpr uint32_t k_TintedAlpha = (k_LightAlpha * 0xFFu) >> 8u;
+	return static_cast<uint8_t>(shownTint != 0 ? k_TintedAlpha : k_LightAlpha);
+}
+
 } // namespace openblack::magic::icon_charge_looks
