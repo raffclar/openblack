@@ -2248,3 +2248,12 @@ target_link_libraries(test_lhvm_save_in_native PRIVATE ScriptLibrary)
 openblack_setup_and_add_test(test_object_light_sheet test_object_light_sheet.cpp)
 target_link_libraries(test_object_light_sheet PRIVATE psys)
 openblack_setup_and_add_test(test_playground_trip story/test_playground_trip.cpp)
+openblack_setup_and_add_test(
+  test_testbed_scenario_checks test_testbed_scenario_checks.cpp
+)
+target_link_libraries(test_testbed_scenario_checks PRIVATE lnd)
+openblack_setup_and_add_test(test_state_hash_watch test_state_hash_watch.cpp)
+add_test(NAME test_recorded_scenario
+         COMMAND ${Python3_EXECUTABLE}
+                 ${CMAKE_SOURCE_DIR}/tools/sim/test_recorded_scenario.py
+)

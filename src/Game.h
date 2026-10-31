@@ -37,6 +37,7 @@
 #include "Creature/BonusCreatures.h"
 #include "Creature/CreatureFight.h"
 #include "Debug/SimRun.h"
+#include "Debug/TestbedScenarioChecks.h"
 #include "ECS/StatisticsRules.h"
 #include "ECS/Systems/CreatureHandSystemInterface.h"
 #include "ECS/Systems/LandSystemInterface.h"
@@ -149,6 +150,9 @@ struct ScenarioRequest
 	/// A benchmark's crowd is measured, its results written and the game quit, as the command line asks; a scenario
 	/// asked for while the game runs (from the debug inspector) only runs
 	bool benchmark {true};
+	/// The command line asked for the scenario's checks: the game reports their verdict, then quits with an exit code
+	/// that tells it (0 passed, 1 failed, 2 the scenario states no checks)
+	bool checks {false};
 };
 
 struct Arguments
@@ -505,6 +509,12 @@ public:
 	/// The game ends after this frame. Unlike the window's events, which say each time whether to go on, nothing takes
 	/// it back
 	void RequestQuit() { _quitRequested = true; }
+	/// The code that the program ends with. A run of a scenario's checks sets it from the verdict.
+	void SetExitCode(int code) { _exitCode = code; }
+	[[nodiscard]] int GetExitCode() const { return _exitCode; }
+	/// The verdict of the scenario that ran last, as the inspector tells it. None until a scenario has a verdict.
+	void SetScenarioChecks(testbed_scenarios::checks::Report report) { _scenarioChecks = std::move(report); }
+	[[nodiscard]] const std::optional<testbed_scenarios::checks::Report>& GetScenarioChecks() const { return _scenarioChecks; }
 	[[nodiscard]] std::optional<ScenarioRequest> TakeScenarioRequest() { return std::exchange(_scenarioRequest, std::nullopt); }
 	/// Tools: a run that writes the commands of each turn also writes each command of the testbed scenario that the game
 	/// gives before a turn, so that a dedicated server gives it before the same turn (command_log::GivesPathOf)
@@ -683,6 +693,8 @@ private:
 	bool _startTestbed {false};
 	bool _startGodsRingMap {false};
 	std::optional<ScenarioRequest> _scenarioRequest;
+	std::optional<testbed_scenarios::checks::Report> _scenarioChecks;
+	int _exitCode {0};
 	std::function<void()> _scenarioStager;
 	std::function<void()> _scenarioTurn;
 	/// The port the debug inspector is to listen on, if it is to start

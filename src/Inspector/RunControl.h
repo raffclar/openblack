@@ -83,6 +83,9 @@ public:
 	/// The machine's milliseconds as the game reads them
 	[[nodiscard]] virtual uint32_t GetTicks() const = 0;
 	[[nodiscard]] virtual std::vector<ScenarioSummary> Scenarios() const = 0;
+	/// The verdict of the testbed scenario's checks that ran last: null before any, or the scenario, the verdict and a
+	/// line for each check
+	[[nodiscard]] virtual Json ScenarioChecks() const { return nullptr; }
 };
 
 ///   game.state                       paused, turn, frame, speed and any stepping
@@ -92,6 +95,7 @@ public:
 ///   game.frame_time {ms}             each frame takes this long (0 for the wall clock's time), for deterministic runs
 ///   game.scenario {id}               loads a testbed scenario on a fresh testbed
 ///   game.scenarios                   the testbed scenarios there are
+///   game.scenario_checks             the verdict of the last scenario's own checks (passed, failed, waiting)
 ///   game.seed {seed?, date?, wall_clock?}   the run's seed; with seed, every random number starts again from it and
 ///                                    the date is pinned, for two runs to go the same way
 class GameProvider final: public ProviderInterface

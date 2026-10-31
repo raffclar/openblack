@@ -82,6 +82,7 @@
 #include "PointerSpeedSlider.h"
 #include "Profiler.h"
 #include "Resources/ResourcesInterface.h"
+#include "StateHash.h"
 #include "Temple.h"
 #include "TempleVillagers.h"
 #include "TestbedScenarios.h"
@@ -149,6 +150,7 @@ std::unique_ptr<DebugGuiInterface> DebugGuiInterface::Create(graphics::RenderPas
 	debugWindows.emplace_back(new gui::Camera);
 	debugWindows.emplace_back(new Weather);
 	debugWindows.emplace_back(new Moon);
+	debugWindows.emplace_back(std::make_unique<StateHash>());
 	debugWindows.emplace_back(std::make_unique<AlignmentHistory>());
 	debugWindows.emplace_back(new Advisors);
 	debugWindows.emplace_back(new Magic);

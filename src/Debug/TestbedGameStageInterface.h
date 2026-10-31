@@ -18,6 +18,8 @@
 
 #include <glm/vec2.hpp>
 
+#include "TestbedScenarioChecks.h"
+
 namespace openblack::gui
 {
 class TextDatabase;
@@ -79,6 +81,9 @@ public:
 	/// Continues from the save that the game made at its exit. False when it starts a new game.
 	[[nodiscard]] virtual bool ContinueFromExitSave() = 0;
 	virtual void RequestQuit() = 0;
+	/// Keeps the verdict of the scenario for the inspector. With quit, the game also ends, with an exit code that tells the
+	/// verdict (0 passed, 1 failed, 2 no checks).
+	virtual void ReportChecks(checks::Report report, bool quit) = 0;
 };
 
 } // namespace openblack::testbed_scenarios

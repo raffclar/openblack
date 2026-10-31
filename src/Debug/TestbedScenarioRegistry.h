@@ -36,6 +36,7 @@
 #include "Enums.h"
 #include "Particles/ParticleDrawPath.h"
 #include "TestbedCrowd.h"
+#include "TestbedScenarioChecks.h"
 
 namespace openblack::ecs::components
 {
@@ -137,6 +138,9 @@ enum class Land : uint8_t
 	/// The network map for 32 gods, with a citadel and a village in each slot. Its land and its things come from the
 	/// map, so the scenario puts nothing of the testbed on it.
 	GodsRingMap,
+	/// A land of the story, from its script in the Scripts folder (the environment's storyLand). The land keeps its own
+	/// scripts, weather, people and sky, so the scenario adds its things to a land that plays as the story plays it.
+	Story,
 };
 
 /// A date and time on the player's computer, by its own time zone
@@ -154,6 +158,8 @@ struct RealDate
 struct Environment
 {
 	Land land {Land::Testbed};
+	/// With Land::Story, the land's script, such as Land2.txt
+	std::string_view storyLand;
 	/// The hour of the day, as scripts give it, and whether the clock then runs on or stands still
 	float hour {12.0f};
 	bool clockRuns {true};
@@ -1425,8 +1431,12 @@ struct Scenario
 	/// Sharks that a script makes as the game's whales, each at a point from the middle of the map. A shark that swims
 	/// on no path shows only its body under the sea.
 	std::vector<glm::vec2> sharks;
+	/// What the scenario states about its own outcome. A run reports pass or fail from them (see TestbedScenarioChecks.h).
+	std::vector<checks::Check> checks;
 };
 
+/// Scenarios that state their own outcome, with checks that a run reports as pass or fail
+void AddSelfCheckScenarios(std::vector<Scenario>& all);
 /// A town centre's totem
 void AddVillageTotemScenarios(std::vector<Scenario>& all);
 /// The boxes of the multiplayer front end over the temple's future room, with the demonstration lobby

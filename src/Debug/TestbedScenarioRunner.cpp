@@ -260,6 +260,7 @@
 #include "Input/PointerSettle.h"
 #include "LHScriptX/FeatureScriptCommands.h"
 #include "LHScriptX/Script.h"
+#include "LandChange.h"
 #include "Locator.h"
 #include "Magic/MagicTables.h"
 #include "Magic/ScriptCast.h"
@@ -890,6 +891,8 @@ void Runner::Start(const Scenario& scenario)
 	_miracles.clear();
 	_started.clear();
 	_log.clear();
+	_checks.Start(scenario.checks);
+	_checksReported = false;
 	_shot.reset();
 	_crowdCreatures.clear();
 	_village = {};
@@ -926,6 +929,18 @@ void Runner::Start(const Scenario& scenario)
 		{
 			if (!land.LoadGodsRingMap())
 			{
+				_running = false;
+				return;
+			}
+		}
+		else if (scenario.environment.land == Land::Story)
+		{
+			// The land plays as the story plays it, with its scripts from a fresh start
+			const auto path =
+			    Locator::filesystem::value().GetPath<filesystem::Path::Scripts>() / std::string(scenario.environment.storyLand);
+			if (!land.LoadMapWithFreshScripts(path, land_change::Kind::NewGame))
+			{
+				Log(fmt::format("The story land {} did not load", scenario.environment.storyLand));
 				_running = false;
 				return;
 			}
@@ -1363,13 +1378,15 @@ void Runner::SetUpDate(const std::optional<RealDate>& date)
 void Runner::SetUpEnvironment(const Environment& environment)
 {
 	SetUpDate(environment.realDate);
-	if (Locator::skyClockSystem::has_value())
+	// A land of the story keeps its own sky, weather, alignment and prayer power
+	const bool storyLand = environment.land == Land::Story;
+	if (!storyLand && Locator::skyClockSystem::has_value())
 	{
 		auto& sky = Locator::skyClockSystem::value();
 		sky.SetTime(environment.hour);
 		sky.GetClock().SetRunning(environment.clockRuns);
 	}
-	if (Locator::weatherSystem::has_value())
+	if (!storyLand && Locator::weatherSystem::has_value())
 	{
 		// Only the scenario's weather: the climates breed no storms of their own
 		auto& weather = Locator::weatherSystem::value();
@@ -1398,7 +1415,7 @@ void Runner::SetUpEnvironment(const Environment& environment)
 		Locator::footprintSystem::value().Reset();
 		Locator::footprintSystem::value().SetAprilFoolsOverride(environment.aprilFools);
 	}
-	if (Locator::alignmentSystem::has_value())
+	if (!storyLand && Locator::alignmentSystem::has_value())
 	{
 		Locator::alignmentSystem::value().SetPlayerAlignment(PlayerNames::PLAYER_ONE,
 		                                                     environment.playerAlignment.value_or(0.0f));
@@ -1409,7 +1426,7 @@ void Runner::SetUpEnvironment(const Environment& environment)
 		Locator::handSystem::value().SetOwnPlayer(PlayerNames::PLAYER_ONE);
 	}
 	// The player's prayer power: as much as the scenario gives, or plenty
-	if (Locator::entitiesRegistry::has_value())
+	if (!storyLand && Locator::entitiesRegistry::has_value())
 	{
 		auto& registry = Locator::entitiesRegistry::value();
 		registry.Each<const ecs::components::Player, ecs::components::PrayerPower>(
@@ -4757,6 +4774,7 @@ void Runner::Update(float seconds)
 	{
 		return;
 	}
+	UpdateChecks();
 	// Another land was loaded over the testbed
 	const auto gone = [](entt::entity entity) { return !Locator::entitiesRegistry::value().Valid(entity); };
 	if ((!_creatures.empty() && std::ranges::none_of(std::views::iota(size_t {0}, _creatures.size()),
@@ -4818,6 +4836,125 @@ void Runner::BeforeTurn()
 	if (TurnStepOf(_layoutTurn, Locator::time::value().GetTurn()) == TurnStep::Update)
 	{
 		Update(std::chrono::duration<float>(ecs::systems::TimeSystemInterface::k_TurnDuration).count());
+	}
+}
+
+std::optional<double> Runner::ReadCheck(const checks::Check& check) const
+{
+	if (!Locator::entitiesRegistry::has_value())
+	{
+		return std::nullopt;
+	}
+	auto& registry = Locator::entitiesRegistry::value();
+	const auto creatureIndex = [&check]() { return check.index; };
+	switch (check.quantity)
+	{
+	case checks::Quantity::CreaturesAlive:
+	{
+		size_t alive = 0;
+		for (size_t i = 0; i < _creatures.size() + _slotCreatures.size(); ++i)
+		{
+			alive += CreatureAt(i).has_value() ? 1 : 0;
+		}
+		return static_cast<double>(alive);
+	}
+	case checks::Quantity::ObjectsAlive:
+	{
+		size_t alive = 0;
+		for (size_t i = 0; i < _objects.size(); ++i)
+		{
+			alive += ObjectAt(i).has_value() ? 1 : 0;
+		}
+		return static_cast<double>(alive);
+	}
+	case checks::Quantity::Entities:
+		for (const auto& [name, count] : EntityCounts())
+		{
+			if (name == check.kind)
+			{
+				return static_cast<double>(count);
+			}
+		}
+		return std::nullopt;
+	case checks::Quantity::CreatureEnergy:
+	case checks::Quantity::CreatureThirst:
+	case checks::Quantity::CreatureExhaustion:
+	case checks::Quantity::CreaturePoo:
+	case checks::Quantity::CreatureWarmth:
+	{
+		const auto creature = CreatureAt(creatureIndex());
+		const auto* needs = creature.has_value() ? registry.TryGet<const ecs::components::CreatureNeeds>(*creature) : nullptr;
+		if (needs == nullptr)
+		{
+			return std::nullopt;
+		}
+		const auto& body = needs->needs;
+		switch (check.quantity)
+		{
+		case checks::Quantity::CreatureEnergy:
+			return static_cast<double>(body.energy);
+		case checks::Quantity::CreatureThirst:
+			return static_cast<double>(body.dehydration);
+		case checks::Quantity::CreatureExhaustion:
+			return static_cast<double>(body.exhaustion);
+		case checks::Quantity::CreaturePoo:
+			return static_cast<double>(body.poo);
+		default:
+			return static_cast<double>(body.warmth);
+		}
+	}
+	case checks::Quantity::CreatureSize:
+	{
+		const auto creature = CreatureAt(creatureIndex());
+		const auto* body = creature.has_value() ? registry.TryGet<const Creature>(*creature) : nullptr;
+		return body != nullptr ? std::optional(static_cast<double>(body->size)) : std::nullopt;
+	}
+	case checks::Quantity::CreatureDistance:
+	{
+		const auto creature = CreatureAt(creatureIndex());
+		const auto* transform = creature.has_value() ? registry.TryGet<const Transform>(*creature) : nullptr;
+		if (transform == nullptr)
+		{
+			return std::nullopt;
+		}
+		const auto goal = MapPoint(_middle, check.point);
+		return static_cast<double>(glm::distance(glm::vec2(transform->position.x, transform->position.z), goal));
+	}
+	}
+	return std::nullopt;
+}
+
+void Runner::UpdateChecks()
+{
+	if (_scenario == nullptr || _checksReported || !Locator::time::has_value())
+	{
+		return;
+	}
+	// A scenario with no checks says nothing, unless the command line asked for its verdict
+	if (_scenario->checks.empty() && !_benchmark.reportChecks)
+	{
+		return;
+	}
+	if (!_checks.Done())
+	{
+		const auto turns = Locator::time::value().GetTurn() - _startTurn;
+		_checks.Update(turns, [this](const checks::Check& check) { return ReadCheck(check); });
+	}
+	const auto verdict = _checks.GetVerdict();
+	if (verdict == checks::Verdict::Waiting)
+	{
+		return;
+	}
+	_checksReported = true;
+	auto lines = _checks.Report(_scenario->id);
+	for (const auto& line : lines)
+	{
+		SPDLOG_LOGGER_INFO(spdlog::get("game"), "Scenario check: {}", line);
+	}
+	if (_stage != nullptr)
+	{
+		_stage->ReportChecks({.scenario = std::string(_scenario->id), .verdict = verdict, .lines = std::move(lines)},
+		                     _benchmark.reportChecks);
 	}
 }
 

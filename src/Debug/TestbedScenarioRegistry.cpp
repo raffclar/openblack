@@ -13158,6 +13158,7 @@ std::vector<Scenario> Build()
 	AddPoisonScenarios(all);
 	AddWorkshopScenarios(all);
 	AddGodsRingMapScenarios(all);
+	AddSelfCheckScenarios(all);
 	AddWorshipSiteScenarios(all);
 	return all;
 }
