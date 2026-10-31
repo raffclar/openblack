@@ -11,6 +11,7 @@
 
 #include <array>
 #include <bit>
+#include <bitset>
 #include <limits>
 #include <random>
 #include <string>
@@ -107,7 +108,10 @@ std::vector<Action> EachCommand()
 	                .cameraOrders = 7,
 	                .cameraArrived = true,
 	                .gripsLand = false,
-	                .otherButton = true},
+	                .otherButton = true,
+	                .mouseWheel = true,
+	                .cameraIcons = 0x202,
+	                .keysHeld = std::bitset<255>().set(0x39)},
 	    TempleLeashOff {},
 	    GiveCallOff {.creature = Entity(27)},
 	    CreatureTattoo {.creature = Entity(28),
@@ -262,7 +266,10 @@ Action RandomAction(std::mt19937& random)
 		                   .cameraOrders = bits(random),
 		                   .cameraArrived = bits(random) % 2 == 0,
 		                   .gripsLand = bits(random) % 2 == 0,
-		                   .otherButton = bits(random) % 2 == 0};
+		                   .otherButton = bits(random) % 2 == 0,
+		                   .mouseWheel = bits(random) % 2 == 0,
+		                   .cameraIcons = static_cast<uint16_t>(bits(random)),
+		                   .keysHeld = std::bitset<255>().set(bits(random) % 255).set(bits(random) % 255)};
 	case 34:
 		return GiveCallOff {.creature = entity()};
 	case 35:
@@ -379,7 +386,7 @@ std::vector<Action> BusyCommands()
 TEST(TurnCodec, EachCommandHasItsSize)
 {
 	const std::vector<size_t> sizes {2, 5, 9, 5,  53, 5, 10, 18, 5,  49, 17, 5,  5, 5, 9,  12, 1,  18, 11, 5, 18, 15, 3, 5,
-	                                 1, 2, 1, 61, 5,  2, 1,  13, 10, 18, 1,  50, 1, 5, 51, 5,  16, 7,  1,  1, 13, 1,  2};
+	                                 1, 2, 1, 61, 5,  2, 1,  13, 10, 18, 1,  54, 1, 5, 51, 5,  16, 7,  1,  1, 13, 1,  2};
 	const auto commands = EachCommand();
 	ASSERT_EQ(commands.size(), sizes.size());
 	for (size_t i = 0; i < commands.size(); ++i)
@@ -849,7 +856,7 @@ TEST(TurnCodec, AHelpReportKeepsItsEventsAndRefusesUnknownFlags)
 	EXPECT_EQ(Decode(wrong).error, DecodeError::Value);
 }
 
-TEST(TurnCodec, AViewReportKeepsItsFieldsAndRefusesUnknownFlags)
+TEST(TurnCodec, AViewReportKeepsItsFieldsAndRefusesUnknownFlagsAndKeys)
 {
 	const ViewReport report {.eye = {10.0f, 20.0f, 30.0f},
 	                         .focus = {-1.0f, 0.0f, 1.0f},
@@ -862,17 +869,27 @@ TEST(TurnCodec, AViewReportKeepsItsFieldsAndRefusesUnknownFlags)
 	                         .cameraOrders = 0x01020304,
 	                         .cameraArrived = false,
 	                         .gripsLand = true,
-	                         .otherButton = true};
+	                         .otherButton = true,
+	                         .mouseWheel = true,
+	                         .cameraIcons = 0x0606,
+	                         .keysHeld = std::bitset<255>().set(0x1C).set(0x39)};
 	const auto bytes = Encode(CommandBlock {.sequence = 0, .turn = 0, .actions = {report}});
 	const auto decoded = Decode(bytes);
 	ASSERT_EQ(decoded.error, DecodeError::None);
 	ASSERT_TRUE(decoded.frame.has_value());
 	EXPECT_EQ(std::get<ViewReport>(std::get<CommandBlock>(*decoded.frame).actions.at(0)), report);
 
-	// The byte of the flags comes last. A flag after the third is refused.
-	auto wrong = bytes;
-	wrong.back() = 8;
-	EXPECT_EQ(Decode(wrong).error, DecodeError::Value);
+	// The flags, the camera icons, then the count of the keys held and each key's number, in order
+	const std::vector<uint8_t> tail(bytes.end() - 6, bytes.end());
+	EXPECT_EQ(tail, (std::vector<uint8_t> {0x0E, 0x06, 0x06, 2, 0x1C, 0x39}));
+	// A flag after the fourth is refused
+	auto wrongFlags = bytes;
+	*(wrongFlags.end() - 6) = 16;
+	EXPECT_EQ(Decode(wrongFlags).error, DecodeError::Value);
+	// A key number past the game's keys is refused
+	auto wrongKey = bytes;
+	wrongKey.back() = 255;
+	EXPECT_EQ(Decode(wrongKey).error, DecodeError::Value);
 }
 
 TEST(TurnCodec, ALineOfTheChatHasItsPlayersThenItsCharacters)

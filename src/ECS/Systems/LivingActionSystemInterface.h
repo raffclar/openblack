@@ -47,6 +47,10 @@ public:
 	                                                      components::LivingAction::Index index) const = 0;
 	/// The state the villager works towards: its top state when that is a final one, else its final state
 	[[nodiscard]] virtual VillagerStates VillagerGetFinalState(const components::LivingAction& action) const = 0;
+	/// Whether the next state has the same exit as the state that the villager works towards. Two states with no exit
+	/// have the same exit.
+	[[nodiscard]] virtual bool VillagerHasSameExitAsFinal(const components::LivingAction& action,
+	                                                      VillagerStates next) const = 0;
 	virtual void VillagerSetState(components::LivingAction& action, components::LivingAction::Index index, VillagerStates state,
 	                              bool skipTransition) const = 0;
 	virtual uint32_t VillagerCallState(components::LivingAction& action, components::LivingAction::Index index) const = 0;

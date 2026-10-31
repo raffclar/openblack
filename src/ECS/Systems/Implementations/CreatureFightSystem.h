@@ -14,6 +14,7 @@
 
 #include <optional>
 #include <random>
+#include <span>
 #include <string_view>
 #include <unordered_map>
 #include <utility>
@@ -53,8 +54,10 @@ public:
 	void Withdraw(entt::entity creature) override;
 	void AbortFight(entt::entity creature) override;
 	void CallOff(entt::entity creature) override;
+	void CallOffForWalkBack(entt::entity creature) override;
 	void HandTookHold(entt::entity creature) override;
 	void HandLetGo(entt::entity creature) override;
+	void EndBodyFightAgain(entt::entity creature) override;
 	[[nodiscard]] bool IsSettingUpFight(entt::entity creature) const override;
 	[[nodiscard]] bool StartedFight(entt::entity creature) const override;
 	[[nodiscard]] bool IsFighting(entt::entity creature) const override;
@@ -160,19 +163,29 @@ private:
 	/// One creature beat the other, by a blow or otherwise: the loser faints, and the winner is made to have a poo on
 	/// the loser or to show off
 	void Win(entt::entity winner, entt::entity loser, bool byBlow);
-	/// A creature of a fight stops what it does. Each creature in its duel then gets stronger by the strength gain of the
-	/// fight action, one or two times, as the stop makes each of them stop.
-	void GainStrengthAtStop(entt::entity stopper, creature_fight::StopEnd end);
+	/// The calls of a stop chain on a creature of a fight and its partner. Each creature in its duel gets stronger by the
+	/// strength gain of the fight action, one or more times, and the minds forget their partners. The result tells how
+	/// many times the body of each creature ends its fight.
+	creature_fight::StopChainResult RunStops(entt::entity stopper, std::span<const creature_fight::StopStep> steps);
+	/// The life of the creature pays for its fight a number of times
+	void PayLifeForFight(entt::entity creature, uint32_t payments, std::string_view why);
+	/// The fight is called off by the calls of the start of the stop
+	void CallOffWith(entt::entity creature, creature_fight::CallOffStart start);
+	/// The creature gets the strength gain of the fight action a number of times
+	static void GainStrength(entt::entity creature, uint32_t times);
+	/// The first creature won by the life of the other creature, which stays in its duel. Its order to respond stops the
+	/// other creature, which then responds alone. The plan of the first creature fails.
+	void OrderLoserToRespond(entt::entity creature, entt::entity loser);
 	/// The opponent of a creature has no life left: the creature wins and leaves the duel. The loser does not faint,
 	/// and nobody forces a plan on the winner.
 	void WinByOpponentsLife(entt::entity winner, entt::entity loser);
 	/// The fight ends for a creature: its life pays for it and it learns from it
 	/// The creature's fight is over: won or lost, or called off with neither (when its mind isn't told it fought)
 	/// Its life pays for the fight only when paysLife is true.
-	void EndFightFor(entt::entity creature, std::optional<bool> won, bool paysLife = true);
+	void EndFightFor(entt::entity creature, std::optional<bool> won, uint32_t lifePayments = 1);
 	/// The fight of the creature stops with no response, as when its partner tells it to stop. In the steps before the
 	/// duel it leaves the fight at once. Else it finishes its move and then leaves the fight.
-	void StopFight(entt::entity creature, std::optional<bool> won, std::string_view why);
+	void StopFight(entt::entity creature, std::optional<bool> won, std::string_view why, uint32_t bodyEnds = 1);
 	/// The plan of the creature stopped, and its partner is after its duel: the partner stops with no response, and the
 	/// plan of the partner fails
 	void StopPartnerAfterDuel(entt::entity partner, entt::entity creature);

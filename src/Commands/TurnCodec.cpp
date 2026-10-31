@@ -282,7 +282,17 @@ void WriteAction(Writer& out, const Action& action)
 		               out.Float(command.inclusionDistance);
 		               out.Number(command.cameraOrders);
 		               out.Byte(static_cast<uint8_t>((command.cameraArrived ? 1u : 0u) | (command.gripsLand ? 2u : 0u) |
-		                                             (command.otherButton ? 4u : 0u)));
+		                                             (command.otherButton ? 4u : 0u) | (command.mouseWheel ? 8u : 0u)));
+		               out.Number(command.cameraIcons);
+		               // The keys held, as their count and then each key's number
+		               out.Byte(static_cast<uint8_t>(command.keysHeld.count()));
+		               for (size_t key = 0; key < command.keysHeld.size(); ++key)
+		               {
+			               if (command.keysHeld.test(key))
+			               {
+				               out.Byte(static_cast<uint8_t>(key));
+			               }
+		               }
 	               },
 	               [&out](const GiveCallOff& command) { out.Entity(command.creature); },
 	               [&out](const CreatureTattoo& command) {
@@ -624,13 +634,25 @@ DecodeError ReadAction(Reader& in, Action& action)
 		report.inclusionDistance = in.Float();
 		report.cameraOrders = in.Number<uint32_t>();
 		const auto flags = in.Byte();
-		if (flags > 7)
+		if (flags > 15)
 		{
 			return DecodeError::Value;
 		}
 		report.cameraArrived = (flags & 1u) != 0;
 		report.gripsLand = (flags & 2u) != 0;
 		report.otherButton = (flags & 4u) != 0;
+		report.mouseWheel = (flags & 8u) != 0;
+		report.cameraIcons = in.Number<uint16_t>();
+		const auto keys = in.Byte();
+		for (uint8_t i = 0; i < keys; ++i)
+		{
+			const auto key = in.Byte();
+			if (key >= report.keysHeld.size())
+			{
+				return DecodeError::Value;
+			}
+			report.keysHeld.set(key);
+		}
 		action = report;
 		return DecodeError::None;
 	}
@@ -934,7 +956,10 @@ size_t SizeOf(const Action& action) noexcept
 	                   [](const GripDust& /*command*/) { return k_Vector; },
 	                   [](const HelpReport& /*command*/) { return size_t {8 + 1}; },
 	                   [](const HelpQuery& /*command*/) { return k_Entity + 1 + k_Vector; },
-	                   [](const ViewReport& /*command*/) { return 2 * k_Vector + 6 * 4 + 1; },
+	                   [](const ViewReport& command) {
+		                   // The camera icons, the count of keys held and each key held follow the flags
+		                   return 2 * k_Vector + 6 * 4 + 1 + 2 + 1 + command.keysHeld.count();
+	                   },
 	                   [](const GiveCallOff& /*command*/) { return k_Entity; },
 	                   [](const CreatureTattoo& command) {
 		                   return k_Entity + 5 * creature_tattoo::k_SlotCount + 1 + 2 + command.pictures.size();

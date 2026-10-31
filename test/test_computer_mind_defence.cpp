@@ -42,6 +42,20 @@ TEST(ComputerMindDefence, OwnsItsKindsOfNodes)
 	EXPECT_EQ(DomainOf(NodeKind::NeedCheckTownsForBeliefAttack), MindDomain::Defence);
 }
 
+// After a throw at its temple, the god chooses between a physical shield over the heart and its creature as a
+// diversion. The shield wants its miracle and a place with no physical shield of the god near it.
+TEST(ComputerMindDefence, AThrowAtTheTempleChoosesAShieldOrTheCreature)
+{
+	const auto& info = InfoOf(NodeKind::ActionReactToPlayerThrowingStuff);
+	ASSERT_EQ(info.childCount, 2u);
+	EXPECT_EQ(info.children.at(0), NodeKind::ObjectCastPhysicalShieldToProtect);
+	EXPECT_EQ(info.children.at(1), NodeKind::ObjectUseCreatureAsDiverseionAgainstPlayer);
+	EXPECT_TRUE(InfoOf(NodeKind::ObjectCastPhysicalShieldToProtect).intensity);
+	EXPECT_TRUE(InfoOf(NodeKind::ObjectCastPhysicalShieldToProtect).perform);
+	// The shield is a little wider than the thing that it protects
+	EXPECT_EQ(k_PhysicalShieldScale, 1.2f);
+}
+
 TEST(ComputerMindDefenceRules, TempleHitIsIgnoredWhenNewThenForgotten)
 {
 	EXPECT_FALSE(HitReaction(1000, 0).has_value());

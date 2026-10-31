@@ -97,6 +97,8 @@ public:
 
 	void Frame() final;
 	void ProcessEvent(const SDL_Event& event) final;
+	[[nodiscard]] bool IsKeyHeld(int scancode) const final;
+	[[nodiscard]] bool WheelTurned() const final { return _wheelTurned; }
 
 private:
 	BindableActionMap _bindableMap = BindableActionMap::NONE;
@@ -138,6 +140,8 @@ private:
 	/// The places of the pointer that the help compares to count the movements of the mouse
 	help::MouseMoves _helpMouseMoves;
 	float _mouseWheelDelta = 0.0f;
+	/// The mouse's wheel has turned since the game started
+	bool _wheelTurned {false};
 	/// The actions that the wheel pressed in this frame
 	uint64_t _wheelActions {0};
 	/// Where the cursor was at the end of the last frame, and whether the game put it somewhere in this frame

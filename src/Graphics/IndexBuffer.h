@@ -16,6 +16,11 @@
 
 #include "GraphicsHandle.h"
 
+namespace bgfx
+{
+struct Encoder;
+}
+
 namespace openblack::graphics
 {
 class IndexBuffer
@@ -55,6 +60,8 @@ public:
 	/// Whether bgfx made the buffer; one it couldn't make isn't drawn
 	[[nodiscard]] bool IsValid() const noexcept;
 	void Bind(uint32_t count, uint32_t startIndex = 0) const;
+	/// The same into the encoder given
+	void Bind(bgfx::Encoder& encoder, uint32_t count, uint32_t startIndex = 0) const;
 
 private:
 	/// Makes the buffer of the graphics library from bgfx memory, on the main thread

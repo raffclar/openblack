@@ -108,6 +108,15 @@ struct PhialDraw
 	bool landLit;
 };
 [[nodiscard]] std::vector<PhialDraw> PhialDraws(int receiveType, float phase, float pulse, uint8_t globeAlpha);
+/// The size of a phial in its last draw, of its own size: the growing copy of the one kind that draws two phials, else the
+/// full phial
+[[nodiscard]] float PhialLastDrawSize(int receiveType, float phase);
+
+/// Where a seed's model is drawn above a globe or an icon: its middle raised by the seed's model height at the drawn
+/// scale, turned about the vertical by its spin, at the seed's scale times the drawn scale, a phial's size and its shape.
+/// The glints of the seed's effect sparkle on the points of the model in this place.
+[[nodiscard]] glm::mat4 SeedModelPlacement(glm::vec3 middle, float meshHeight, float seedScale, float drawnScale, float spin,
+                                           float size, glm::vec3 shape);
 
 // A seed's picture in the temple
 

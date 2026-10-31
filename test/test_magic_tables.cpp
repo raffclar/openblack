@@ -10,6 +10,7 @@
 #include <cstring>
 
 #include <memory>
+#include <optional>
 
 #include <gtest/gtest.h>
 
@@ -275,4 +276,29 @@ TEST(MagicTables, magicRecordsTakeTheirSeedGestureAndPowerUpFromTheSeeds)
 	EXPECT_EQ(GetMagicInfo(*info, MagicType::FireballPowerUpOne).powerupType, PowerUpType::One);
 	EXPECT_EQ(GetMagicInfo(*info, MagicType::LightningBoltPowerUpTwo).gestureType, GestureType::Spiral);
 	EXPECT_EQ(GetMagicInfo(*info, MagicType::LightningBoltPowerUpTwo).powerupType, PowerUpType::Two);
+}
+
+TEST(MagicTables, theGraphicOfASeedKeepsTheModelOfItsRecordAlsoWhenTheSeedShowsNone)
+{
+	auto info = MakeTables();
+	auto& storm = info->spellSeed.at(static_cast<size_t>(SpellSeedType::Storm));
+	storm.mesh = MeshId::AnimalSpellDove;
+	storm.useMesh = 0;
+	EXPECT_EQ(GetSeedModel(*info, SpellSeedType::Storm, 0.0f), std::nullopt);
+	EXPECT_EQ(GetSeedGraphicModel(*info, SpellSeedType::Storm, 0.0f), MeshId::AnimalSpellDove);
+}
+
+TEST(MagicTables, theGraphicOfTheFlyingFlockTakesTheBatOrTheDoveOfItsOwner)
+{
+	auto info = MakeTables();
+	auto& flock = info->spellSeed.at(static_cast<size_t>(SpellSeedType::FlockFlying));
+	flock.mesh = MeshId::AnimalBat1;
+	info->magicFlockFlying.at(0).alignmentSwitch = 0.25f;
+	// With no flock record for its first miracle, the graphic keeps the model of the record
+	flock.magicTypes = {MagicType::None, MagicType::None, MagicType::None, MagicType::None};
+	EXPECT_EQ(GetSeedGraphicModel(*info, SpellSeedType::FlockFlying, 1.0f), MeshId::AnimalBat1);
+	flock.magicTypes = {MagicType::FlockFlying, MagicType::None, MagicType::None, MagicType::None};
+	EXPECT_EQ(GetSeedGraphicModel(*info, SpellSeedType::FlockFlying, 0.0f), MeshId::AnimalBat1);
+	EXPECT_EQ(GetSeedGraphicModel(*info, SpellSeedType::FlockFlying, 0.25f), MeshId::AnimalSpellDove);
+	EXPECT_EQ(GetSeedGraphicModel(*info, SpellSeedType::FlockFlying, 1.0f), MeshId::AnimalSpellDove);
 }

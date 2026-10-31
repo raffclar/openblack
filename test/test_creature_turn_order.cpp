@@ -79,6 +79,17 @@ TEST(CreatureTurnOrder, HeldByTheHandTheMindStandsStill)
 	EXPECT_EQ(turn::WhileHeld(true, true), turn::HeldTurn::ShowDesire);
 }
 
+TEST(CreatureTurnOrder, AHeldCreatureShowsWhatItWantsOnlyWhenItsBodyIsAtRest)
+{
+	EXPECT_TRUE(turn::ShowsDesireOnHold(false, false, false));
+	// The finish of a fight plays during the hold
+	EXPECT_FALSE(turn::ShowsDesireOnHold(true, false, false));
+	// The turn to the player plays
+	EXPECT_FALSE(turn::ShowsDesireOnHold(false, true, false));
+	// The finish ended on the last turn, and the turn to the player starts on this turn
+	EXPECT_FALSE(turn::ShowsDesireOnHold(false, false, true));
+}
+
 TEST(CreatureTurnOrder, FollowingThePlayerIsNotAPlanOfItsOwn)
 {
 	EXPECT_TRUE(turn::OwnPlanRuns(true, Desire::Hunger));

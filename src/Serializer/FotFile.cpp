@@ -9,11 +9,14 @@
 
 #include "FotFile.h"
 
+#include <algorithm>
+#include <vector>
+
+#include <glm/vec2.hpp>
 #include <spdlog/spdlog.h>
 
 #include "3D/LandIslandInterface.h"
 #include "3D/MapCoords.h"
-#include "Common/GUtilsDistance.h"
 #include "ECS/Components/Abode.h"
 #include "ECS/Components/Construction.h"
 #include "ECS/Components/Field.h"
@@ -23,6 +26,8 @@
 #include "ECS/Components/Temple.h"
 #include "ECS/Components/Transform.h"
 #include "ECS/Components/WorshipSite.h"
+#include "ECS/FootpathRules.h"
+#include "ECS/PlayerTowns.h"
 #include "ECS/Registry.h"
 #include "FileSystem/FileSystemInterface.h"
 #include "GameThingSerializer.h"
@@ -36,9 +41,6 @@ namespace
 
 /// The bit of a node's flags that says a plan laid it
 constexpr uint8_t k_PlannedNode = 0x2;
-
-/// A link holds the paths of the building standing within this of it (the square of 0.05 m)
-constexpr float k_LinkReachSq = 0.0025f;
 
 map_coords::MapCoords ToMapCoords(const serializer::MapCoords& coords)
 {
@@ -56,28 +58,39 @@ map_coords::MapCoords PlaceOf(const ecs::Registry& registry, entt::entity entity
 	return {.x = map_coords::ToFixed(position.x), .z = map_coords::ToFixed(position.z), .altitude = 0.0f};
 }
 
-/// The building a link of the land's footpath file belongs to: one standing at its place, else one a town plans to
-/// build there; none when nothing is there, and the link is then dropped
-entt::entity BuildingAt(const ecs::Registry& registry, const map_coords::MapCoords& place)
+/// The things that can take a link of the land's footpath file, with their places. The buildings that stand come first,
+/// then the plans of the towns, as the game looks for them.
+struct LinkHolders
+{
+	std::vector<entt::entity> things;
+	std::vector<glm::ivec2> places;
+
+	void Add(const ecs::Registry& registry, entt::entity entity)
+	{
+		if (!registry.AllOf<ecs::components::Transform>(entity))
+		{
+			return;
+		}
+		const auto place = PlaceOf(registry, entity);
+		things.push_back(entity);
+		places.emplace_back(place.x, place.z);
+	}
+};
+
+LinkHolders HoldersOf(const ecs::Registry& registry)
 {
 	using namespace ecs::components;
-	entt::entity found = entt::null;
-	const auto consider = [&](entt::entity entity) {
-		if (found == entt::null && registry.AllOf<Transform>(entity) &&
-		    gutils::GetMetresDistanceSq(PlaceOf(registry, entity), place) < k_LinkReachSq)
-		{
-			found = entity;
-		}
-	};
-	registry.Each<const Abode>([&](entt::entity entity, const Abode&) { consider(entity); });
-	registry.Each<const Field>([&](entt::entity entity, const Field&) { consider(entity); });
-	registry.Each<const FishFarm>([&](entt::entity entity, const FishFarm&) { consider(entity); });
-	registry.Each<const WorshipSite>([&](entt::entity entity, const WorshipSite&) { consider(entity); });
-	registry.Each<const BigForest>([&](entt::entity entity, const BigForest&) { consider(entity); });
-	registry.Each<const Temple>([&](entt::entity entity, const Temple&) { consider(entity); });
-	registry.Each<const PlannedAbode>([&](entt::entity entity, const PlannedAbode&) { consider(entity); });
-	registry.Each<const PlannedTemple>([&](entt::entity entity, const PlannedTemple&) { consider(entity); });
-	return found;
+	LinkHolders holders;
+	const auto add = [&](entt::entity entity) { holders.Add(registry, entity); };
+	registry.Each<const Abode>([&](entt::entity entity, const Abode&) { add(entity); });
+	registry.Each<const Field>([&](entt::entity entity, const Field&) { add(entity); });
+	registry.Each<const FishFarm>([&](entt::entity entity, const FishFarm&) { add(entity); });
+	registry.Each<const WorshipSite>([&](entt::entity entity, const WorshipSite&) { add(entity); });
+	registry.Each<const BigForest>([&](entt::entity entity, const BigForest&) { add(entity); });
+	registry.Each<const Temple>([&](entt::entity entity, const Temple&) { add(entity); });
+	// A plan takes a link only when no building that stands takes it: the plans of the town made last first
+	std::ranges::for_each(ecs::player_towns::AllPlansInOrder(registry), add);
+	return holders;
 }
 
 } // namespace
@@ -113,6 +126,8 @@ void FotFile::Load(const std::filesystem::path& path)
 		footpathEntities.push_back(static_cast<ecs::components::Footpath::Id>(entity));
 	}
 
+	// The buildings and the plans are the same for each link: the links only change their paths
+	const auto holders = HoldersOf(registry);
 	uint32_t linked = 0;
 	uint32_t dropped = 0;
 	for (const auto& save : footpathLinkSaves)
@@ -128,12 +143,13 @@ void FotFile::Load(const std::filesystem::path& path)
 		}
 		// The link goes to the building standing at its place, replacing any it had
 		const auto coords = ToMapCoords(save.coords);
-		const auto building = BuildingAt(registry, coords);
-		if (building == entt::null)
+		const auto holder = ecs::footpath_rules::FileLinkHolder({coords.x, coords.z}, holders.places);
+		if (!holder.has_value())
 		{
 			++dropped;
 			continue;
 		}
+		const auto building = holders.things[*holder];
 		const auto ground = map_coords::ToMetres(coords);
 		const glm::vec3 position {ground.x, coords.altitude + island.GetHeightAt(ground), ground.y};
 		registry.AssignOrReplace<ecs::components::FootpathLink>(building, position, std::move(linkFootpathEntities));

@@ -109,3 +109,30 @@ TEST(Mists, AFadeKeepsItsAlphaInAByte)
 	auto none = mists::StartFade(1.0f, 2.0f, 0.0f, 255.0f, 0.0f);
 	EXPECT_FALSE(mists::StepFade(none, size));
 }
+
+TEST(Mists, ALandMistDrawsWithTheAlphaThatItsWholeAlphaGives)
+{
+	// 255 times the whole alpha, divided by 256, in the low byte
+	EXPECT_EQ(mists::DrawnAlpha(0), 0);
+	EXPECT_EQ(mists::DrawnAlpha(1), 0);
+	EXPECT_EQ(mists::DrawnAlpha(25), 24);
+	EXPECT_EQ(mists::DrawnAlpha(50), 49);
+	EXPECT_EQ(mists::DrawnAlpha(128), 127);
+	EXPECT_EQ(mists::DrawnAlpha(255), 254);
+	EXPECT_EQ(mists::DrawnAlpha(256), 255);
+	EXPECT_EQ(mists::DrawnAlpha(300), 42);
+	EXPECT_EQ(mists::DrawnAlpha(-1), 255);
+}
+
+TEST(Mists, AStartAlphaPastAByteKeepsItsWholePart)
+{
+	// The start alpha of a fade is not kept in 0 to 255
+	const auto fade = mists::StartFade(1.0f, 1.0f, 300.0f, 0.0f, 1.0f);
+	const auto whole = mists::WholeAlpha(fade.alpha);
+	EXPECT_EQ(whole, 300);
+	const uint32_t colour = (static_cast<uint32_t>(mists::AlphaByte(fade.alpha)) << 24u) | 0xFFFFFFu;
+	EXPECT_EQ(mists::WholeAlphaOf(colour, mists::AlphaHighBits(whole)), 300);
+	EXPECT_EQ(mists::WholeAlphaOf(colour, 0), 44);
+	EXPECT_EQ(mists::WholeAlphaOf(0xFFFFFFFFu, mists::AlphaHighBits(-1)), -1);
+	EXPECT_EQ(mists::WholeAlpha(-0.5f), 0);
+}

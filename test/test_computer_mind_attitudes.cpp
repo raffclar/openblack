@@ -45,6 +45,19 @@ TEST(ComputerMindAttitudes, OwnsItsKindsOfNodes)
 	EXPECT_EQ(DomainOf(NodeKind::NeedPlayerWithMoreWorshippers), MindDomain::Attitudes);
 }
 
+// The game has the actions to give things to other players and to talk to them, but no rules for them: they find no
+// value and have no action of their own
+TEST(ComputerMindAttitudes, TheGiveAndTalkActionsHaveNoRules)
+{
+	for (const auto kind :
+	     {NodeKind::ActionSendNiceTextToPlayer, NodeKind::ActionSendNastyTextToPlayer, NodeKind::ActionTauntPlayer,
+	      NodeKind::ActionScarePlayer, NodeKind::ActionGiveCreatureThingToPlayer, NodeKind::ActionGiveToPlayer})
+	{
+		EXPECT_FALSE(InfoOf(kind).intensity) << static_cast<int>(kind);
+		EXPECT_FALSE(InfoOf(kind).perform) << static_cast<int>(kind);
+	}
+}
+
 // A script gives an attitude, the mind keeps two times it, and a script reads half of what the mind keeps
 TEST(ComputerMindAttitudes, KeepsTwiceTheAttitudeAndReadsHalf)
 {

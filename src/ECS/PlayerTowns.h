@@ -42,6 +42,15 @@ namespace openblack::ecs::player_towns
 /// player does not change this order.
 [[nodiscard]] std::vector<entt::entity> AllMadeNewestFirst(const Registry& registry);
 
+/// Puts the towns at the start of the game's list of all the towns, in the given order: the first town comes first.
+/// The towns that the list held before come after them, in the same order. A load of a saved game uses it, because the
+/// file keeps the list.
+void PutFirstInMadeOrder(Registry& registry, std::span<const entt::entity> newestFirst);
+
+/// The buildings that the towns plan to build, over the game's list of all the towns: the plans of the town that the game
+/// made last come first, and the plans of each town come in the order that the town made them
+[[nodiscard]] std::vector<entt::entity> AllPlansInOrder(const Registry& registry);
+
 /// A town and how far it is from a place
 struct Distance
 {

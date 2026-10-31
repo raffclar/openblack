@@ -28,6 +28,7 @@
 #include <entt/core/hashed_string.hpp>
 #include <fmt/format.h>
 #include <glm/gtx/euler_angles.hpp>
+#include <spdlog/spdlog.h>
 
 #include "3D/L3DMesh.h"
 #include "3D/LandIslandInterface.h"
@@ -842,6 +843,8 @@ void ResourceStoreSystem::ReportGift(entt::entity store, ResourceType type, Play
 	    [](uint32_t range) { return Locator::gameRandom::has_value() ? Locator::gameRandom::value().GameRand(range) : 0u; });
 	if (deed.has_value())
 	{
+		SPDLOG_LOGGER_DEBUG(spdlog::get("game"), "Stores: a gift to #{} by player {} shows deed {}", entt::to_integral(store),
+		                    static_cast<int>(giver), *deed);
 		const auto* transform = registry.TryGet<const Transform>(store);
 		Locator::creatureMindSystem::value().PlayerDid(*deed, transform != nullptr ? transform->position : glm::vec3(0.0f),
 		                                               store, giver);
@@ -952,6 +955,12 @@ bool ResourceStoreSystem::PourAt(ResourceType type, glm::vec3 point, uint32_t am
 				if (near(entity, piles::k_StoreReachMultiplier))
 				{
 					left -= AddToStore(entity, type, left, giver, poisoned, point);
+					// The creature of the giver can see each gift to a store, also when the store takes none of it. A gift
+					// to a storage pit thus shows again after the report of the store itself.
+					if (giver.has_value())
+					{
+						ReportGift(entity, type, *giver);
+					}
 				}
 			}
 			else if (const auto* pot = registry.TryGet<const Pot>(entity);

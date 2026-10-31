@@ -152,8 +152,9 @@ constexpr float k_FunctionalLife = 0.75f;
 [[nodiscard]] bool Functional(float life, bool built);
 
 /// Whether a tap on an icon or a stone hand is a valid tap of the hand: the icon works, and only the hand of the player
-/// that owns it taps it
-[[nodiscard]] bool ValidToTap(PlayerNames iconPlayer, PlayerNames tapper, bool functional);
+/// that owns it taps it. While every player's influence covers the whole land (the Gods' Playground), the hand of any
+/// player also taps a neutral icon.
+[[nodiscard]] bool ValidToTap(PlayerNames iconPlayer, PlayerNames tapper, bool functional, bool influenceEverywhere);
 
 /// A tap on it: its charged miracle into the hand if it can go; else its charging called off if the tapping hand charges
 /// it; else, with the hand ready, its charging started
