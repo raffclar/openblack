@@ -45,6 +45,7 @@ public:
 
 	bool Join(NetworkJoin join) override;
 	void SetReady(bool ready) override;
+	void SetPlaysForClan(bool playsForClan) override;
 	void PlayAlone() override;
 	void EndNetworkGame() override;
 	void Leave() override;
@@ -69,6 +70,7 @@ private:
 	online::WebSocketClientInterface& _sockets;
 	MakeTestClient _makeTestClient;
 	ReadCreature _readCreature;
+	bool _playsForClan {false};
 	/// The WSS client of a test join, which only the session uses
 	std::unique_ptr<online::WebSocketClientInterface> _testClient;
 	std::unique_ptr<online::NetworkSession> _session;

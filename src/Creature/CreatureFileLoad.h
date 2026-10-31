@@ -82,4 +82,20 @@ struct BroughtRequest
 /// no creature file plays the game with no creature: the game gives it no other creature.
 [[nodiscard]] Refusal WhyNotBrought(const BroughtRequest& request);
 
+/// What a computer knows about a creature that a god brings into a network game
+struct BroughtCreature
+{
+	/// The god is the god of this computer's player
+	bool ownGod {false};
+	/// The start data of the god was the order to make a new clan creature
+	bool clanOrder {false};
+	/// The god of this computer's player plays for a clan
+	bool ownGodPlaysForClan {false};
+};
+
+/// Whether this computer keeps the creature in the files of its player's profile, while it lives and at the end of the
+/// game. Only the creature of this computer's own god can go there, and only when that god plays for no clan: the
+/// creature of a clan god belongs to the clan. A new clan creature never goes to the files.
+[[nodiscard]] bool KeptByThisComputer(const BroughtCreature& creature);
+
 } // namespace openblack::creature_file_load
