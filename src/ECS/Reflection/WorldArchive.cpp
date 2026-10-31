@@ -9,6 +9,7 @@
 
 #include "WorldArchive.h"
 
+#include <cstddef>
 #include <cstring>
 
 #include <algorithm>
@@ -377,6 +378,10 @@ struct RowLayout
 	std::vector<KeptField> fields;
 	ComponentLeaveOut left;
 	std::vector<entt::entity> rows;
+	/// When each row keeps the same fields: the steps that write them, with the fields whose bytes touch in memory as one
+	/// block
+	SavePlan plan;
+	bool bySteps {false};
 
 	/// Whether the hash keeps a field of a row
 	[[nodiscard]] bool Keeps(size_t index, entt::entity row) const
@@ -407,6 +412,36 @@ struct RowLayout
 		                       [](const KeptField& field) { return std::string_view(field.info->name); });
 	}
 	layout.left = FindLeaveOut(leaveOut, component.name, names);
+	// The steps need a row to find where each field is in the value. A field that only the reflection can write needs
+	// the way of each field.
+	const auto sameForEachRow =
+	    std::ranges::all_of(layout.left.fieldMarkers, [](const auto& markers) { return markers.empty(); });
+	if (layout.codec == nullptr && !layout.left.whole && sameForEachRow && !layout.rows.empty())
+	{
+		const auto* first = static_cast<const std::byte*>(component.storage->value(layout.rows.front()));
+		layout.bySteps = true;
+		for (size_t index = 0; index < layout.fields.size() && layout.bySteps; ++index)
+		{
+			const auto* info = layout.fields[index].info;
+			if (layout.left.fieldAlways[index])
+			{
+				continue;
+			}
+			if (info->saveFrom == nullptr)
+			{
+				layout.bySteps = false;
+			}
+			else if (info->plainAddress != nullptr)
+			{
+				const auto* field = static_cast<const std::byte*>(info->plainAddress(first));
+				layout.plan.AddBlock(static_cast<size_t>(field - first), info->plainSize);
+			}
+			else
+			{
+				layout.plan.AddWriter(info->saveFrom);
+			}
+		}
+	}
 	// A component with no values only marks its entities. The game never reads the order of such a mark, so the hash
 	// takes its entities in the order of their numbers.
 	if (layout.codec == nullptr && layout.fields.empty())
@@ -456,6 +491,13 @@ void SaveRow(const ComponentStorage& component, const RowLayout& layout, entt::e
 	}
 }
 
+/// Writes the bytes of a row that the hash keeps, as SaveRow does, by the steps of the layout
+void SaveRowBySteps(const ComponentStorage& component, const RowLayout& layout, entt::entity row, BinaryWriter& out)
+{
+	out.WriteRaw(row);
+	out.SaveSteps(layout.plan.steps, component.storage->value(row));
+}
+
 /// The bytes of some rows of a component, saved before the hash mixes them: the bytes of each row that the hash keeps,
 /// one row after the other, and the end of each row
 struct SavedRows
@@ -476,7 +518,14 @@ struct SavedRows
 		{
 			continue;
 		}
-		SaveRow(component, layout, row, out, [](size_t, size_t) {});
+		if (layout.bySteps)
+		{
+			SaveRowBySteps(component, layout, row, out);
+		}
+		else
+		{
+			SaveRow(component, layout, row, out, [](size_t, size_t) {});
+		}
 		saved.ends.push_back(out.Size());
 	}
 	const auto written = out.Written();
@@ -593,6 +642,12 @@ struct SavedRows
 			out.Clear();
 		}
 		const auto rowStart = out.Size();
+		if (layout.bySteps && !byField && !visit && !keepRows)
+		{
+			SaveRowBySteps(component, layout, row, out);
+			mixRow(out.Written(rowStart), rowStart);
+			continue;
+		}
 		SaveRow(component, layout, row, out, [&](size_t index, size_t start) {
 			const auto bytes = out.Written(start);
 			if (byField)
@@ -620,8 +675,8 @@ struct SavedRows
 	}
 	if (remembers)
 	{
-		const auto written = out.Written();
-		memo->bytes.assign(written.begin(), written.end());
+		// The memo takes the bytes, and the writer keeps the memory of the last bytes of the memo as its room
+		memo->bytes.swap(out.Bytes());
 		memo->rows = std::move(remembered);
 	}
 	return result;

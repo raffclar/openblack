@@ -82,12 +82,44 @@ struct UnsavedValue
 
 class BinaryWriter;
 
+/// Whether the save of a value writes the bytes of the value as they are in memory: a number that is not a bool, a glm
+/// vector or matrix of such numbers with no padding, or an enumeration
+template <typename Type>
+[[nodiscard]] constexpr bool SavesAsMemory()
+{
+	return detail::PlainBits<Type>() || std::is_enum_v<Type>;
+}
+
+/// One step of a save plan: a writer of one field, or, with no writer, a block of bytes of the value that the step copies
+/// as they are in memory. A block holds one field or more whose saves write their bytes in memory, and which touch.
+struct SaveStep
+{
+	void (*save)(const void* owner, BinaryWriter& out) {nullptr};
+	uint32_t offset {0};
+	uint32_t size {0};
+};
+
 /// How a writer writes a value of a registered type with no reflection on the way: the codec of the whole type, or the
-/// writer of each field in the order of the fields. A writer finds it the first time that it writes a value of the type.
+/// steps that write its fields in the order of the fields. A writer finds it the first time that it writes a value of
+/// the type.
 struct SavePlan
 {
 	void (*codec)(const void* value, BinaryWriter& out) {nullptr};
-	std::vector<void (*)(const void* owner, BinaryWriter& out)> fields;
+	std::vector<SaveStep> steps;
+
+	/// Adds the writer of the next field
+	void AddWriter(void (*save)(const void* owner, BinaryWriter& out)) { steps.push_back({.save = save}); }
+	/// Adds the next field, whose save writes its bytes in memory. A field that starts where the last block ends goes
+	/// into that block.
+	void AddBlock(size_t offset, size_t size)
+	{
+		if (!steps.empty() && steps.back().save == nullptr && steps.back().offset + steps.back().size == offset)
+		{
+			steps.back().size += static_cast<uint32_t>(size);
+			return;
+		}
+		steps.push_back({.save = nullptr, .offset = static_cast<uint32_t>(offset), .size = static_cast<uint32_t>(size)});
+	}
 };
 
 class BinaryWriter
@@ -281,11 +313,23 @@ public:
 			plan->codec(value, *this);
 			return true;
 		}
-		for (const auto saveFrom : plan->fields)
-		{
-			saveFrom(value, *this);
-		}
+		SaveSteps(plan->steps, value);
 		return true;
+	}
+	/// Writes the fields of a value by steps of a plan
+	void SaveSteps(std::span<const SaveStep> steps, const void* value)
+	{
+		for (const auto& step : steps)
+		{
+			if (step.save != nullptr)
+			{
+				step.save(value, *this);
+			}
+			else
+			{
+				std::memcpy(Grow(step.size), static_cast<const uint8_t*>(value) + step.offset, step.size);
+			}
+		}
 	}
 
 private:
@@ -458,6 +502,12 @@ template <typename Type>
 void Save(BinaryWriter& out, const Type& value);
 template <typename Type>
 void Load(BinaryReader& in, Type& value);
+namespace detail
+{
+/// Writes a value as Save does, but the writer does not count it as a value of its own: for the values in a value
+template <typename Type>
+void SaveValue(BinaryWriter& out, const Type& value);
+} // namespace detail
 
 /// Writes a presentation value of a system, as Save does (see BinaryWriter::BeginPresentation). Load reads it as usual.
 template <typename Type>
@@ -507,6 +557,12 @@ void LoadBytes(Type& value, BinaryReader& in)
 
 namespace detail
 {
+
+/// An option of a value whose save writes its bytes in memory
+template <typename>
+inline constexpr bool k_IsPlainOption = false;
+template <typename Held>
+inline constexpr bool k_IsPlainOption<std::optional<Held>> = SavesAsMemory<Held>();
 
 /// A vector of vectors of values with plain bits
 template <typename>
@@ -575,8 +631,7 @@ template <typename Container>
 template <typename Type>
 void Save(BinaryWriter& out, const Type& value)
 {
-	static_assert(!detail::k_IsRunHandle<Type>, "A save must not keep a pointer or a graphics handle: keep a stable key");
-	// The writer knows where each outer value ends
+	// The writer knows where each outer value ends. The values in the value go with no count of the depth.
 	struct Value
 	{
 		BinaryWriter& out;
@@ -589,6 +644,13 @@ void Save(BinaryWriter& out, const Type& value)
 		Value& operator=(const Value&) = delete;
 		~Value() { out.LeaveValue(); }
 	} const valueEnds(out);
+	detail::SaveValue(out, value);
+}
+
+template <typename Type>
+void detail::SaveValue(BinaryWriter& out, const Type& value)
+{
+	static_assert(!detail::k_IsRunHandle<Type>, "A save must not keep a pointer or a graphics handle: keep a stable key");
 	if constexpr (std::is_same_v<Type, bool>)
 	{
 		out.WriteRaw(static_cast<uint8_t>(value ? 1 : 0));
@@ -619,15 +681,26 @@ void Save(BinaryWriter& out, const Type& value)
 	{
 		for (glm::length_t i = 0; i < Type::length(); ++i)
 		{
-			Save(out, value[i]);
+			SaveValue(out, value[i]);
+		}
+	}
+	else if constexpr (detail::k_IsPlainOption<Type>)
+	{
+		// The same bytes as the flag and then the value, in one block
+		using Held = typename Type::value_type;
+		auto place = out.Extend(value.has_value() ? 1 + sizeof(Held) : 1);
+		place[0] = value.has_value() ? 1 : 0;
+		if (value.has_value())
+		{
+			std::memcpy(place.data() + 1, std::addressof(*value), sizeof(Held));
 		}
 	}
 	else if constexpr (detail::k_IsOptional<Type>)
 	{
-		Save(out, value.has_value());
+		SaveValue(out, value.has_value());
 		if (value.has_value())
 		{
-			Save(out, *value);
+			SaveValue(out, *value);
 		}
 	}
 	else if constexpr (detail::k_IsPlainList<Type>)
@@ -687,7 +760,7 @@ void Save(BinaryWriter& out, const Type& value)
 		out.WriteSize(value.size());
 		for (const auto& element : value)
 		{
-			Save(out, element);
+			SaveValue(out, element);
 		}
 	}
 	else if constexpr (detail::k_IsSequence<Type>)
@@ -695,7 +768,7 @@ void Save(BinaryWriter& out, const Type& value)
 		out.WriteSize(value.size());
 		for (const auto& element : value)
 		{
-			Save(out, static_cast<const typename Type::value_type&>(element));
+			SaveValue(out, static_cast<const typename Type::value_type&>(element));
 		}
 	}
 	else if constexpr (detail::k_IsBitset<Type>)
@@ -716,8 +789,8 @@ void Save(BinaryWriter& out, const Type& value)
 		out.WriteSize(value.size());
 		for (const auto* entry : detail::SortedEntries(value))
 		{
-			Save(out, entry->first);
-			Save(out, entry->second);
+			SaveValue(out, entry->first);
+			SaveValue(out, entry->second);
 		}
 	}
 	else if constexpr (detail::k_IsSet<Type>)
@@ -725,18 +798,18 @@ void Save(BinaryWriter& out, const Type& value)
 		out.WriteSize(value.size());
 		for (const auto* entry : detail::SortedEntries(value))
 		{
-			Save(out, *entry);
+			SaveValue(out, *entry);
 		}
 	}
 	else if constexpr (detail::k_IsPair<Type>)
 	{
-		Save(out, value.first);
-		Save(out, value.second);
+		SaveValue(out, value.first);
+		SaveValue(out, value.second);
 	}
 	else if constexpr (detail::k_IsVariant<Type>)
 	{
 		out.WriteSize(value.index());
-		std::visit([&out](const auto& alternative) { Save(out, alternative); }, value);
+		std::visit([&out](const auto& alternative) { SaveValue(out, alternative); }, value);
 	}
 	else if constexpr (detail::k_IsSharedValue<Type>)
 	{
@@ -747,10 +820,10 @@ void Save(BinaryWriter& out, const Type& value)
 		{
 			out.Unsupported(entt::type_id<Type>().name());
 		}
-		Save(out, kept);
+		SaveValue(out, kept);
 		if (kept)
 		{
-			Save(out, static_cast<const Held&>(*value));
+			SaveValue(out, static_cast<const Held&>(*value));
 		}
 	}
 	else if constexpr (detail::k_IsIndirect<Type>)
@@ -759,7 +832,7 @@ void Save(BinaryWriter& out, const Type& value)
 	}
 	else if constexpr (detail::k_IsDuration<Type>)
 	{
-		Save(out, value.count());
+		SaveValue(out, value.count());
 	}
 	else if constexpr (detail::k_IsSavedPresentation<Type>)
 	{
@@ -767,7 +840,7 @@ void Save(BinaryWriter& out, const Type& value)
 	}
 	else if constexpr (detail::k_IsVisited<Type>)
 	{
-		Type::VisitSaved(value, [&out](const auto&... fields) { (Save(out, fields), ...); });
+		Type::VisitSaved(value, [&out](const auto&... fields) { (SaveValue(out, fields), ...); });
 	}
 	else if constexpr (std::is_class_v<Type>)
 	{
