@@ -17,6 +17,7 @@
 
 #include <glm/vec3.hpp>
 
+#include "3D/MapCoords.h"
 #include "ECS/Components/Player.h"
 
 /// The script natives that the lessons of the Gods' Playground ask: the miracles a player has had, the keys held, the
@@ -91,5 +92,18 @@ using KeysHeld = std::bitset<k_KeyCount>;
 /// `halfAngle` to each side. The point is in the cone when it is between the two edges of the cone, or on an edge. The
 /// game does the test in float, in its own order.
 [[nodiscard]] bool InViewCone(glm::vec3 position, float yAngle, float halfAngle, glm::vec3 point);
+
+/// The parts of a half turn that a creature's look can be off the camera by, from the full angle in degrees that a
+/// script gives: 360 divided by the angle as a float, cut towards 0 as the game changes it to a whole number. An angle
+/// more than 360 gives 0, and an angle of 0 or a number that is not a number gives the game's value for out of range.
+[[nodiscard]] int32_t CreatureLookParts(float degrees);
+
+/// Whether a creature sees the camera. The creature is at the map position `creature` and looks in the direction of the
+/// game angle `lookAngle`; the camera is at the map position `camera`. The creature sees the camera when the direction
+/// to it is near the look, measured as a creature measures the direction to a point, with the parts of CreatureLookParts.
+/// A negative number of parts is a very large number to the game, so then only the creature's own map cell counts. With
+/// 0 parts the game divides by 0 and stops; then the creature sees nothing.
+[[nodiscard]] bool CreatureSeesCamera(const map_coords::MapCoords& creature, const map_coords::MapCoords& camera,
+                                      uint16_t lookAngle, float degrees);
 
 } // namespace openblack::script::lesson_natives
