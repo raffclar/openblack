@@ -12,6 +12,7 @@
 #include <cstddef>
 #include <cstdint>
 
+#include <fstream>
 #include <functional>
 #include <map>
 #include <optional>
@@ -219,7 +220,8 @@ TEST(OnlineMapStore, TheLandOfTheStartComesFromTheStoreFirst)
 	std::filesystem::create_directories(folder.Path() / "game" / "Online Maps");
 	std::filesystem::create_directories(folder.Path() / "game" / "Scripts");
 	files.SetGamePath(folder.Path() / "game");
-	ASSERT_TRUE(files.WriteAll(folder.Path() / "game" / "Online Maps" / "mpm_2p_1.map", Bytes("game")));
+	// The game folder is read only for the game, so the test writes the land of the game itself
+	std::ofstream(folder.Path() / "game" / "Online Maps" / "mpm_2p_1.map", std::ios::binary) << "game";
 	FakeStore store;
 	store.files["obm_32p_1.map"] = Bytes("sent");
 
