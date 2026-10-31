@@ -166,6 +166,15 @@ void openblack::computer_hand::Clear(HandAction& action)
 	action.castTarget = entt::null;
 }
 
+void openblack::computer_hand::ClearAndPutDown(HandAction& action, const World& world)
+{
+	Clear(action);
+	if (!world.objects.HandHasRoom())
+	{
+		world.objects.PutDownHeld(action.hand);
+	}
+}
+
 bool openblack::computer_hand::Process(HandAction& action, const World& world)
 {
 	action.coords = {.x = map_coords::ToFixed(action.hand.x), .z = map_coords::ToFixed(action.hand.z), .altitude = 0.0f};
@@ -202,7 +211,7 @@ bool openblack::computer_hand::Process(HandAction& action, const World& world)
 		NextPart(action);
 		return true;
 	case Result::Abort:
-		Clear(action);
+		ClearAndPutDown(action, world);
 		return false;
 	case Result::Continue:
 		return true;

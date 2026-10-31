@@ -296,6 +296,54 @@ void testbed_scenarios::AddAdvisorScenarios(std::vector<Scenario>& all)
 	    .townBeliefInPlayer = 5.0f,
 	    .townBeliefInRival = 4.99f,
 	});
+	// A town of the player on the second land that believes in a rival much more, and the same town the other way round
+	const std::vector<ObjectSetup> changingTown {
+	    {.type = AbodeInfo::CelticHut, .offset = k_DoubtingHut},
+	    {.type = VillagerInfo::CelticFarmerMale, .offset = k_DoubtingHut + glm::vec2(-12.0f, 2.0f), .joinTown = true},
+	    {.type = VillagerInfo::CelticHousewifeFemale, .offset = k_DoubtingHut + glm::vec2(-12.0f, -2.0f), .joinTown = true}};
+	all.push_back({
+	    .id = "advisors.town_lost",
+	    .name = "The advisors say that a town was lost",
+	    .facet = Facet::Advisors,
+	    .description = "On the second land, a Celtic hut and two villagers of the player's town in front of the camera. "
+	                   "The town believes 1 in the player. Every kind of the advisors' guidance is taken as heard long "
+	                   "ago, then a second later the town comes to believe 5 in the second player.",
+	    .expected = "Then, at the town's next turn, the second player takes the town. An advisor flies in and says "
+	                "one of the "
+	                "general bad remarks, with its text in the dialogue box. On the first land no remark comes.",
+	    .environment = {.dispenserGrid = false, .landNumber = 2, .players = {PlayerNames::PLAYER_TWO}},
+	    .framing = {.shot = Shot::Overview,
+	                .include = {k_DoubtingHut - glm::vec2 {30.0f}, k_DoubtingHut + glm::vec2 {30.0f}},
+	                .distance = 0.75f},
+	    .objects = changingTown,
+	    .commands = {{.kind = Kind::EndGuidanceWaits, .delaySeconds = 0.5f},
+	                 {.kind = Kind::SetTownBeliefInRival, .delaySeconds = 1.0f, .amount = 5.0f}},
+	    .townBeliefInPlayer = 1.0f,
+	    .townBeliefInRival = 0.0f,
+	});
+	all.push_back({
+	    .id = "advisors.town_won",
+	    .name = "The advisors say that a town was won",
+	    .facet = Facet::Advisors,
+	    .description = "On the second land, a Celtic hut and two villagers of the second player's town in front of the "
+	                   "camera. The town believes 1 in the player and 2 in the second player. Every kind of the "
+	                   "advisors' guidance is taken as heard long ago, then a second later the town stops its belief in "
+	                   "the second player.",
+	    .expected = "Then, at the town's next turn, the player takes the town and hears the take-over sound. An "
+	                "advisor flies "
+	                "in and says one of the general good remarks, with its text in the dialogue box. On the first land "
+	                "no remark comes.",
+	    .environment = {.dispenserGrid = false, .landNumber = 2, .players = {PlayerNames::PLAYER_TWO}},
+	    .framing = {.shot = Shot::Overview,
+	                .include = {k_DoubtingHut - glm::vec2 {30.0f}, k_DoubtingHut + glm::vec2 {30.0f}},
+	                .distance = 0.75f},
+	    .objects = changingTown,
+	    .commands = {{.kind = Kind::EndGuidanceWaits, .delaySeconds = 0.5f},
+	                 {.kind = Kind::SetTownBeliefInRival, .delaySeconds = 1.0f, .amount = 0.0f}},
+	    .townBeliefInPlayer = 1.0f,
+	    .townBeliefInRival = 2.0f,
+	    .townOwner = PlayerNames::PLAYER_TWO,
+	});
 	// One thing of each kind in a row in front of the camera, for the Help key
 	all.push_back({
 	    .id = "advisors.help_key",

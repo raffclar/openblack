@@ -18,7 +18,8 @@
 namespace openblack::ecs::ally_influence
 {
 
-/// The influence at the place of each ally that lends its influence to the player, in the order of the players
+/// The own influence at the place of each ally that lends its influence to the player, in the order of the players. It
+/// is the influence of the ally's towns, citadel and other sources, without what the ally's hand keeps past the border.
 [[nodiscard]] std::vector<float> LentInfluence(PlayerNames player, const map_coords::MapCoords& place);
 
 /// The influence of the player at the place. Where the player has none, it is the influence of the first ally that

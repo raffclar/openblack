@@ -191,6 +191,9 @@ struct World
 void Add(HandAction& action, StepKind kind, std::vector<Argument> arguments);
 /// Stops the action: the steps go and the counts start again
 void Clear(HandAction& action);
+/// Stops the action as Clear does. Then a hand that holds a thing puts it down where the hand is, as each new action, a
+/// failed step, a gone thing and a script's clear of the actions make the god do.
+void ClearAndPutDown(HandAction& action, const World& world);
 /// The hand does a turn of its action. False when the action ended badly, which clears it.
 bool Process(HandAction& action, const World& world);
 

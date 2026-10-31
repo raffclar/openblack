@@ -1214,6 +1214,7 @@ public:
 	void WorshipperDied() override {}
 	void LosingVillager(entt::entity) override {}
 	void LowOnPeople(entt::entity) override {}
+	void TownChangedHands(entt::entity, PlayerNames, PlayerNames) override {}
 	void LosingBeliefTurn() override {}
 	void EndWaits() override {}
 	[[nodiscard]] const std::vector<Remark>& GetRemarks() const override { return remarks; }

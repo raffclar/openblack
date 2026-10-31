@@ -4101,7 +4101,8 @@ void GetInfluence() // 062 GET_INFLUENCE
 	if (ScriptNamesPlayer(player) && Locator::playerSystem::has_value() && Locator::influenceSystem::has_value() &&
 	    Locator::entitiesRegistry::value().Valid(Locator::playerSystem::value().FindPlayer(player).value_or(entt::null)))
 	{
-		influence = Locator::influenceSystem::value().PlayerInfluence(player, position);
+		influence =
+		    Locator::influenceSystem::value().PlayerOwnInfluence(player, map_coords::FromMetres({position.x, position.z}));
 	}
 	// Where the player has none, the allies that lend their influence to the player lend it
 	std::vector<float> lent;
@@ -6917,14 +6918,36 @@ void GetObjectWhichHit() // 225 GET_OBJECT_WHICH_HIT
 
 void GetNearestTownOfPlayer() // 226 GET_NEAREST_TOWN_OF_PLAYER
 {
-	// const auto unk4 = Pop().intVal;
-	// const auto unk3 = Pop().intVal;
-	// const auto unk2 = Pop().intVal;
-	// const auto unk1 = Pop().intVal;
-	// const auto unk0 = Pop().intVal;
-	// TODO(Daniels118): implement this
-	NotImplemented();
-	Pusho(0);
+	// The player's nearest town to the place within the radius, by the game's map distance. The towns go in the order
+	// of the player's own list, and the last of equals wins.
+	const auto radius = Popf();
+	const auto player = ScriptPlayerName(static_cast<int32_t>(Popf()));
+	const auto position = PopVec();
+	auto& registry = Locator::entitiesRegistry::value();
+	entt::entity found = entt::null;
+	// The game has no player for a number past its players and stops. This search then finds no town.
+	if (ScriptNamesPlayer(player))
+	{
+		const auto from = openblack::map_coords::FromMetres({position.x, position.z});
+		std::vector<openblack::ecs::player_towns::Distance> towns;
+		for (const auto town : openblack::ecs::player_towns::InOrder(registry, player))
+		{
+			if (const auto* transform = registry.TryGet<const Transform>(town))
+			{
+				const auto at = openblack::map_coords::FromMetres({transform->position.x, transform->position.z});
+				towns.push_back({.town = town, .metres = openblack::gutils::GetDistanceInMetres(from, at)});
+			}
+		}
+		found = openblack::ecs::player_towns::NearestOfPlayer(towns, radius);
+	}
+	if (found == entt::null)
+	{
+		SPDLOG_LOGGER_ERROR(spdlog::get("scripting"), "No town of the player near enough");
+		Pusho(0);
+		return;
+	}
+	Locator::scriptObjects::value().Register(found, false);
+	Pusho(static_cast<uint32_t>(found));
 }
 
 void SpellAtPoint() // 227 SPELL_AT_POINT

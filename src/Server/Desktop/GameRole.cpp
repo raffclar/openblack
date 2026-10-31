@@ -91,6 +91,38 @@ struct GameRole::Parts
 	bool listed {false};
 	/// The bans of the server, which the server reads from the lobby with each status report
 	std::unique_ptr<lobby_bans::Reader> bans;
+	/// The land that the players do not have, which goes to the lobby once (deviation 169)
+	std::optional<lobby_status::CustomMap> customMap;
+	std::string mapAddress;
+	std::chrono::steady_clock::time_point nextMapSend {};
+	bool mapSending {false};
+	bool mapSent {false};
+
+	void SendMap()
+	{
+		if (!lobby || !customMap.has_value() || mapSending || mapSent || std::chrono::steady_clock::now() < nextMapSend)
+		{
+			return;
+		}
+		mapSending = true;
+		online::HttpRequest request {.method = online::HttpMethod::Put,
+		                             .url = mapAddress,
+		                             .headers = {{"Content-Type", "application/octet-stream"}},
+		                             .body = customMap->bytes,
+		                             .large = true};
+		lobby->Send(std::move(request), [this](online::HttpResponse&& response) {
+			mapSending = false;
+			mapSent = response.status == 200 || response.status == 201;
+			if (mapSent)
+			{
+				SPDLOG_LOGGER_INFO(spdlog::get("game"), "The lobby took the map {} of the room", customMap->file);
+				return;
+			}
+			nextMapSend = std::chrono::steady_clock::now() + lobby_status::k_MapAgainAfter;
+			SPDLOG_LOGGER_WARN(spdlog::get("game"), "The lobby did not take the map {} (status {}): {}", customMap->file,
+			                   response.status, response.Text().substr(0, 200));
+		});
+	}
 
 	void Report(lobby_status::Phase phase)
 	{
@@ -170,7 +202,7 @@ uint16_t GameRole::Port() const
 }
 
 std::optional<std::string> GameRole::Start(const NetworkSettings& settings, game_socket::Start start, uint64_t landChecksum,
-                                           uint8_t godSlots)
+                                           uint8_t godSlots, std::optional<lobby_status::CustomMap> customMap)
 {
 	auto& parts = *_parts;
 	if (settings.serverId.empty())
@@ -255,6 +287,11 @@ std::optional<std::string> GameRole::Start(const NetworkSettings& settings, game
 			base.pop_back();
 		}
 		parts.statusAddress = base + "/servers/" + settings.serverId + "/status";
+		if (customMap.has_value())
+		{
+			parts.mapAddress = lobby_status::MapAddress(base, settings.serverId, *customMap);
+			parts.customMap = std::move(customMap);
+		}
 		parts.bans = std::make_unique<lobby_bans::Reader>(
 		    *parts.lobby, lobby_bans::BansAddress(settings.lobbyApi, settings.serverId), [&parts](std::set<int64_t> banned) {
 			    if (!parts.host)
@@ -304,6 +341,7 @@ void GameRole::Update()
 		{
 			parts.Report(lobby_status::PhaseOf(parts.host && parts.host->Started(), false));
 		}
+		parts.SendMap();
 		parts.lobby->Poll();
 	}
 }

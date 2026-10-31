@@ -376,6 +376,15 @@ struct RenderContext
 	uint32_t treeInstanceCount {0};
 };
 
+/// What a draw is for
+enum class DrawUse : uint8_t
+{
+	/// A frame of the game: each thing in a hand keeps the light of the draw for the next frame
+	Frame,
+	/// A draw that only prepares the renderer, as before the first frame of a land. It changes no thing of the world.
+	WarmUp,
+};
+
 class RenderingSystemInterface
 {
 public:
@@ -383,7 +392,7 @@ public:
 	virtual void SetDirty() = 0;
 	/// Entities came or went or changed what they are drawn as
 	virtual void SetLayoutDirty() = 0;
-	virtual void PrepareDraw(bool drawBoundingBox, bool drawFootpaths, bool drawStreams) = 0;
+	virtual void PrepareDraw(bool drawBoundingBox, bool drawFootpaths, bool drawStreams, DrawUse use) = 0;
 	virtual const RenderContext& GetContext() = 0;
 	inline ~RenderingSystemInterface() = default;
 };

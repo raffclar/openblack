@@ -60,6 +60,7 @@ class CHLApi;
 namespace online
 {
 class HttpClientInterface;
+class OnlineMapStoreInterface;
 class WebSocketClientInterface;
 } // namespace online
 
@@ -479,6 +480,8 @@ struct Locator
 	using httpClient = entt::locator<online::HttpClientInterface>;
 	/// The WSS client of the push channel of the lobby and of the sockets of the game servers
 	using webSocketClient = entt::locator<online::WebSocketClientInterface>;
+	/// The store of the lands of network games that the player got from the lobby
+	using onlineMapStore = entt::locator<online::OnlineMapStoreInterface>;
 	/// The client of the lobby (bwgame-service)
 	using lobbyClient = entt::locator<ecs::systems::LobbyClientSystemInterface>;
 	/// The network game of this computer: the session with a game server, which gives the turns of the world

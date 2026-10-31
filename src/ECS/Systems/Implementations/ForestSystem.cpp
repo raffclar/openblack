@@ -58,6 +58,7 @@
 #include "ECS/GamePlayers.h"
 #include "ECS/LandForests.h"
 #include "ECS/Map.h"
+#include "ECS/PlayerTowns.h"
 #include "ECS/Reflection/BinaryArchive.h"
 #include "ECS/Registry.h"
 #include "ECS/ScenicForest.h"
@@ -1210,7 +1211,11 @@ void ForestSystem::MakeScenicForests()
 			centres[*town.scenicForest] = town.scenicForestCentre;
 		}
 	});
-	registry.Each<Town>([&](entt::entity, Town& town) {
+	// The towns go in the order of the game's list of all the towns, the town made last first. A tree goes to the first
+	// town that takes it.
+	for (const auto townEntity : ecs::player_towns::AllMadeNewestFirst(registry))
+	{
+		auto& town = registry.Get<Town>(townEntity);
 		// The town's centre is the middle of the ground that it keeps as covered by its buildings and fields
 		const auto middle = ecs::town_area::Centre(town.area);
 		const auto centre = map_coords::ToMetres(middle);
@@ -1255,7 +1260,7 @@ void ForestSystem::MakeScenicForests()
 			}
 		}
 		town.scenicForest = forest;
-	});
+	}
 }
 
 void ForestSystem::Reset()

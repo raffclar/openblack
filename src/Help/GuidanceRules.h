@@ -16,6 +16,8 @@
 #include <optional>
 #include <span>
 
+#include "Enums.h"
+
 /// The guidance: the advisors' running commentary on what happens in the game (towns attacked, buildings wrecked, the
 /// player turning from good or evil, the moon) and the villagers' voices of guidance. Each kind of guidance waits a
 /// while after it was last heard before it is heard again, longer for most at random, needs a help level, and many are
@@ -176,5 +178,9 @@ using TownBeliefs = std::array<float, k_BeliefPlayers>;
 /// list, in which another player (the neutral player too) has more belief than the belief in the player less the
 /// margin. None when no town is so.
 [[nodiscard]] std::optional<size_t> LosingBeliefTown(std::span<const TownBeliefs> towns, size_t player, float margin);
+
+/// The line that the advisors of the player here say when the belief of a town gives it to another player: a bad line
+/// when the player here lost the town, else a good line when the player here took it, else none
+[[nodiscard]] std::optional<Kind> TownChangedHandsLine(PlayerNames loser, PlayerNames taker, PlayerNames own);
 
 } // namespace openblack::guidance

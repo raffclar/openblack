@@ -62,6 +62,7 @@ public:
 	entt::entity AttachObjectSound(entt::entity entity, entt::id_type sound, bool loops) override;
 	void DetachObjectSound(entt::entity entity, entt::id_type sound) override;
 	void ForgetSavedSounds() override;
+	void ForgetUnclaimedSounds() override;
 
 	/// The sounds at points that wait or play, the newest first
 	[[nodiscard]] std::vector<PointSound> PointSounds() const;
@@ -97,6 +98,9 @@ private:
 	/// The one list of the tags of objects and the sounds at points. A new tag goes at the start, and each turn does the
 	/// tags from the start of the list, the newest first.
 	std::list<Entry> _tags;
+	/// The tags of the sounds attached to objects at a load of a saved game, until the load attaches each sound again or
+	/// forgets it
+	std::vector<entt::entity> _unclaimed;
 };
 
 } // namespace openblack::ecs::systems

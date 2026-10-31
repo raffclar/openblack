@@ -78,3 +78,45 @@ TEST(PlayerTowns, ATownWonLaterComesAfterATownMadeLater)
 	const auto made = MakeTown(registry, 2, PlayerNames::PLAYER_ONE, 1);
 	EXPECT_EQ(openblack::ecs::player_towns::AllInOrder(registry), (std::vector<entt::entity> {made, won}));
 }
+
+TEST(PlayerTowns, TheGamesListOfAllTownsStartsWithTheTownMadeLast)
+{
+	// A town that a new player won keeps its place in the list of all the towns
+	Registry registry;
+	const auto oldest = MakeTown(registry, 7, PlayerNames::PLAYER_ONE, 9);
+	const auto newest = MakeTown(registry, 1, PlayerNames::NEUTRAL, 1);
+	const auto middle = MakeTown(registry, 4, PlayerNames::PLAYER_TWO, 2);
+	registry.Get<Town>(oldest).made = 0;
+	registry.Get<Town>(middle).made = 1;
+	registry.Get<Town>(newest).made = 2;
+	EXPECT_EQ(openblack::ecs::player_towns::AllMadeNewestFirst(registry), (std::vector<entt::entity> {newest, middle, oldest}));
+}
+
+TEST(PlayerTowns, TheNearestOfAllTownsKeepsTheFirstOfEquals)
+{
+	using openblack::ecs::player_towns::Distance;
+	const auto a = static_cast<entt::entity>(1);
+	const auto b = static_cast<entt::entity>(2);
+	const auto c = static_cast<entt::entity>(3);
+	const std::vector<Distance> towns {
+	    {.town = a, .metres = 50.0f}, {.town = b, .metres = 20.0f}, {.town = c, .metres = 20.0f}};
+	EXPECT_EQ(openblack::ecs::player_towns::NearestOf(towns), b);
+	// No limit: a town however far is the nearest when it is the only one
+	const std::vector<Distance> far {{.town = c, .metres = 1.0e9f}};
+	EXPECT_EQ(openblack::ecs::player_towns::NearestOf(far), c);
+	EXPECT_EQ(openblack::ecs::player_towns::NearestOf({}), entt::entity {entt::null});
+}
+
+TEST(PlayerTowns, TheNearestTownOfAPlayerKeepsTheLastOfEqualsWithinTheReach)
+{
+	using openblack::ecs::player_towns::Distance;
+	const auto a = static_cast<entt::entity>(1);
+	const auto b = static_cast<entt::entity>(2);
+	const auto c = static_cast<entt::entity>(3);
+	const std::vector<Distance> towns {
+	    {.town = a, .metres = 20.0f}, {.town = b, .metres = 30.0f}, {.town = c, .metres = 20.0f}};
+	EXPECT_EQ(openblack::ecs::player_towns::NearestOfPlayer(towns, 100.0f), c);
+	// A town exactly at the reach is near enough; a town past it is not
+	EXPECT_EQ(openblack::ecs::player_towns::NearestOfPlayer(towns, 20.0f), c);
+	EXPECT_EQ(openblack::ecs::player_towns::NearestOfPlayer(towns, 19.0f), entt::entity {entt::null});
+}

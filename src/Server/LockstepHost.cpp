@@ -744,9 +744,9 @@ void LockstepHost::QueryLands()
 	_awaited = GodConnections();
 	Log(spdlog::level::info, fmt::format("The gods are ready: the server asks {} gods if they have the land", _awaited.size()));
 	const auto& start = _settings.start;
-	// The testbed and the map for 32 gods have no land file, so the players need nothing to compare
-	Broadcast(game_socket::StartQuery {
-	    .land = start.land, .testbed = start.testbed || start.godsRingMap, .checksum = _settings.landChecksum});
+	// The testbed has no land file, so the players need nothing to compare. The map for 32 gods is a file that the
+	// players got from the lobby: they compare it as a land of the game.
+	Broadcast(game_socket::StartQuery {.land = start.land, .testbed = start.testbed, .checksum = _settings.landChecksum});
 }
 
 void LockstepHost::StartReply(ConnectionId connection, const Peer& peer, const game_socket::StartReply& reply)

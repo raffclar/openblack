@@ -93,6 +93,9 @@ public:
 	/// A town of the player here has few adults left: the advisors warn of it when the town has people and is near the
 	/// point under the cursor
 	virtual void LowOnPeople(entt::entity town) = 0;
+	/// The belief of a town gave it to another player. When the player here lost it, the advisors say a bad line. When
+	/// the player here took it, they say a good line. Either line needs the place of the town on screen.
+	virtual void TownChangedHands(entt::entity town, PlayerNames loser, PlayerNames taker) = 0;
 	/// Once a game turn, before the hand's turn: every tenth turn, away from the first land, the advisors warn when
 	/// another player comes near the belief of a town of the player at this computer
 	virtual void LosingBeliefTurn() = 0;

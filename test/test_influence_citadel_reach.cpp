@@ -13,6 +13,7 @@
 
 #include <gtest/gtest.h>
 
+#include "3D/MapCoords.h"
 #include "ECS/Components/Influence.h"
 #include "ECS/Components/Player.h"
 #include "ECS/Components/PlayerRelations.h"
@@ -101,6 +102,38 @@ TEST_F(CitadelReach, TheAnswerIsTheSameBeforeAndAfterTheTurnFixesIt)
 	const float before = _influence.CitadelReachOf(PlayerNames::PLAYER_TWO);
 	_influence.FixCitadelReaches();
 	EXPECT_FLOAT_EQ(_influence.CitadelReachOf(PlayerNames::PLAYER_TWO), before);
+}
+
+TEST_F(CitadelReach, AnAllyLendsItsOwnInfluenceWhereThePlayerHasNone)
+{
+	auto& registry = Locator::entitiesRegistry::value();
+	const auto one = registry.Create();
+	registry.Assign<components::Player>(one, components::Player {.name = PlayerNames::PLAYER_ONE});
+	auto& allies = registry.Assign<components::PlayerAllies>(one);
+	const auto two = registry.Create();
+	registry.Assign<components::Player>(two, components::Player {.name = PlayerNames::PLAYER_TWO});
+	// At the temple of the second player, which the first player's citadel does not reach
+	const auto atTwo = map_coords::FromMetres({1500.0f, 1000.0f});
+	const auto atOne = map_coords::FromMetres({1000.0f, 1000.0f});
+	const auto nowhere = map_coords::FromMetres({4000.0f, 4000.0f});
+	EXPECT_FLOAT_EQ(_influence.PlayerOwnInfluence(PlayerNames::PLAYER_ONE, atTwo), 0.0f);
+	EXPECT_FLOAT_EQ(_influence.PlayerInfluence(PlayerNames::PLAYER_ONE, atTwo), 0.0f);
+	// A weak alliance makes an ally that does not lend its influence
+	allies.strength.at(static_cast<size_t>(PlayerNames::PLAYER_TWO)) = 0.05f;
+	EXPECT_FLOAT_EQ(_influence.PlayerInfluence(PlayerNames::PLAYER_ONE, atTwo), 0.0f);
+	allies.strength.at(static_cast<size_t>(PlayerNames::PLAYER_TWO)) = 1.0f;
+	EXPECT_FLOAT_EQ(_influence.PlayerInfluence(PlayerNames::PLAYER_ONE, atTwo),
+	                _influence.PlayerRawInfluence(PlayerNames::PLAYER_TWO, atTwo));
+	EXPECT_GT(_influence.PlayerInfluence(PlayerNames::PLAYER_ONE, atTwo), 0.0f);
+	EXPECT_FLOAT_EQ(_influence.PlayerOwnInfluence(PlayerNames::PLAYER_ONE, atTwo), 0.0f);
+	// The hand's own place counts as inside there too
+	EXPECT_GT(_influence.HandPointInfluence(PlayerNames::PLAYER_ONE, atTwo), 0.0f);
+	// Where the player has influence of their own, that is the answer; where no one has any, none
+	EXPECT_FLOAT_EQ(_influence.PlayerInfluence(PlayerNames::PLAYER_ONE, atOne),
+	                _influence.PlayerOwnInfluence(PlayerNames::PLAYER_ONE, atOne));
+	EXPECT_FLOAT_EQ(_influence.PlayerInfluence(PlayerNames::PLAYER_ONE, nowhere), 0.0f);
+	// The alliance is the first player's: the second player gets nothing from the first
+	EXPECT_FLOAT_EQ(_influence.PlayerInfluence(PlayerNames::PLAYER_TWO, atOne), 0.0f);
 }
 
 namespace
