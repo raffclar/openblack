@@ -136,6 +136,74 @@ CREATE_VILLAGER_POS("-44.0,62.0", "-40.0,60.0", "CELTIC_HOUSEWIFE", 20)
 CREATE_VILLAGER_POS("-44.0,62.0", "-40.0,60.0", "CELTIC_FORESTER", 20)
 )";
 
+/// The lines of a land that give player two a computer mind, a temple and two Celtic towns with no miracle. The east
+/// town has food but no wood in its storage pit. The west town, 160 metres away, has 5000 food and 5000 wood in its pit.
+constexpr std::string_view k_TwoTownsSiteWoodScript = R"(TOGGLE_COMPUTER_PLAYER("PLAYER_TWO", 1)
+CREATE_CITADEL("0.0,-90.0", 0, "PLAYER_TWO", 5690, 1000)
+CREATE_TOWN(900, "80.0,40.0", "PLAYER_TWO", 0, "CELTIC")
+SET_TOWN_BELIEF_CAP(900, "PLAYER_TWO", 2.0)
+SET_TOWN_BELIEF(900, "PLAYER_TWO", 1.0)
+CREATE_TOWN_CENTRE(900, "76.0,41.0", "CELTIC_ABODE_TOWN_CENTRE", 0, 1000, 0)
+CREATE_ABODE(900, "90.0,90.0", "CELTIC_ABODE_STORAGE_PIT", 6282, 1000, 3000, 0)
+CREATE_ABODE(900, "110.0,60.0", "CELTIC_ABODE_F", 4328, 1095, 0, 0)
+CREATE_VILLAGER_POS("106.0,62.0", "110.0,60.0", "CELTIC_HOUSEWIFE", 20)
+CREATE_VILLAGER_POS("106.0,62.0", "110.0,60.0", "CELTIC_FORESTER", 20)
+CREATE_VILLAGER_POS("106.0,62.0", "110.0,60.0", "CELTIC_HOUSEWIFE", 20)
+CREATE_VILLAGER_POS("106.0,62.0", "110.0,60.0", "CELTIC_FORESTER", 20)
+CREATE_TOWN(901, "-80.0,40.0", "PLAYER_TWO", 0, "CELTIC")
+SET_TOWN_BELIEF_CAP(901, "PLAYER_TWO", 2.0)
+SET_TOWN_BELIEF(901, "PLAYER_TWO", 1.0)
+CREATE_TOWN_CENTRE(901, "-84.0,41.0", "CELTIC_ABODE_TOWN_CENTRE", 0, 1000, 0)
+CREATE_ABODE(901, "-70.0,90.0", "CELTIC_ABODE_STORAGE_PIT", 6282, 1000, 5000, 5000)
+CREATE_ABODE(901, "-110.0,60.0", "CELTIC_ABODE_F", 4328, 1095, 0, 0)
+CREATE_VILLAGER_POS("-114.0,62.0", "-110.0,60.0", "CELTIC_HOUSEWIFE", 20)
+CREATE_VILLAGER_POS("-114.0,62.0", "-110.0,60.0", "CELTIC_FORESTER", 20)
+)";
+
+/// The two towns of the site wood scenario, but with no wood in either storage pit and no foresters in the west town.
+/// A small forest of six grown pines stands beside the storage pit of the west town.
+constexpr std::string_view k_TwoTownsSiteForestScript = R"(TOGGLE_COMPUTER_PLAYER("PLAYER_TWO", 1)
+CREATE_CITADEL("0.0,-90.0", 0, "PLAYER_TWO", 5690, 1000)
+CREATE_TOWN(900, "80.0,40.0", "PLAYER_TWO", 0, "CELTIC")
+SET_TOWN_BELIEF_CAP(900, "PLAYER_TWO", 2.0)
+SET_TOWN_BELIEF(900, "PLAYER_TWO", 1.0)
+CREATE_TOWN_CENTRE(900, "76.0,41.0", "CELTIC_ABODE_TOWN_CENTRE", 0, 1000, 0)
+CREATE_ABODE(900, "90.0,90.0", "CELTIC_ABODE_STORAGE_PIT", 6282, 1000, 0, 0)
+CREATE_ABODE(900, "110.0,60.0", "CELTIC_ABODE_F", 4328, 1095, 0, 0)
+CREATE_VILLAGER_POS("106.0,62.0", "110.0,60.0", "CELTIC_HOUSEWIFE", 20)
+CREATE_VILLAGER_POS("106.0,62.0", "110.0,60.0", "CELTIC_FORESTER", 20)
+CREATE_VILLAGER_POS("106.0,62.0", "110.0,60.0", "CELTIC_HOUSEWIFE", 20)
+CREATE_VILLAGER_POS("106.0,62.0", "110.0,60.0", "CELTIC_FORESTER", 20)
+CREATE_TOWN(901, "-80.0,40.0", "PLAYER_TWO", 0, "CELTIC")
+SET_TOWN_BELIEF_CAP(901, "PLAYER_TWO", 2.0)
+SET_TOWN_BELIEF(901, "PLAYER_TWO", 1.0)
+CREATE_TOWN_CENTRE(901, "-84.0,41.0", "CELTIC_ABODE_TOWN_CENTRE", 0, 1000, 0)
+CREATE_ABODE(901, "-70.0,90.0", "CELTIC_ABODE_STORAGE_PIT", 6282, 1000, 5000, 0)
+CREATE_ABODE(901, "-110.0,60.0", "CELTIC_ABODE_F", 4328, 1095, 0, 0)
+CREATE_VILLAGER_POS("-114.0,62.0", "-110.0,60.0", "CELTIC_HOUSEWIFE", 20)
+CREATE_VILLAGER_POS("-114.0,62.0", "-110.0,60.0", "CELTIC_HOUSEWIFE", 20)
+CREATE_FOREST(950, "-45.0,105.0")
+CREATE_NEW_TREE(950, "-51.0,101.0", 3, 1, 1.0, 1.0, 1.0)
+CREATE_NEW_TREE(950, "-45.0,99.0", 3, 1, 2.0, 1.0, 1.0)
+CREATE_NEW_TREE(950, "-39.0,102.0", 3, 1, 3.0, 1.0, 1.0)
+CREATE_NEW_TREE(950, "-50.0,109.0", 3, 1, 4.0, 1.0, 1.0)
+CREATE_NEW_TREE(950, "-44.0,106.0", 3, 1, 5.0, 1.0, 1.0)
+CREATE_NEW_TREE(950, "-38.0,110.0", 3, 1, 6.0, 1.0, 1.0)
+)";
+
+/// A hut of the east town of the two towns scenarios that stands a fifth built north of the town
+std::vector<ObjectSetup> HutOfTheEastTown()
+{
+	return {{.type = AbodeInfo::CelticHut, .offset = {80.0f, 115.0f}, .built = 0.2f}};
+}
+
+/// The god gives the hut wood only: the needs of the towns for food and wood and of the hut for workers get the weight 0
+std::vector<Command> OnlySiteWood()
+{
+	return {ComputerWeight("TownWithHighestFoodDesire", 0.0f), ComputerWeight("TownWithHighestWoodDesire", 0.0f),
+	        ComputerWeight("GiveBuildingSiteWorkers", 0.0f)};
+}
+
 } // namespace
 
 void testbed_scenarios::AddComputerGodWorshipScenarios(std::vector<Scenario>& all)
@@ -278,6 +346,77 @@ void testbed_scenarios::AddComputerGodWorshipScenarios(std::vector<Scenario>& al
 	    .framing = {.shot = Shot::Overview, .include = {glm::vec2(-80.0f, -110.0f), glm::vec2(80.0f, 130.0f)}},
 	    .objects = {{.type = AbodeInfo::CelticHut, .offset = {0.0f, 115.0f}, .built = 0.2f}},
 	    .landScript = k_UnbuiltSiteTownScript,
+	    .objectsAfterLandScript = true,
+	});
+	all.push_back({
+	    .id = "mind.computer_god_worshippers_fish_farm",
+	    .name = "A computer god that takes fish food to its hungry worshippers",
+	    .facet = Facet::Mind,
+	    .description = "The land of the fish farm scenario: a town by the lake with a fish farm on the shore and no field. "
+	                   "Half of its people worship at the site, which stands built. At the start, the god gets the weight 0 "
+	                   "for the food need of its towns.",
+	    .expected = "When the worshippers get hungry and the pot of the site has less food than they need, the hand takes "
+	                "a pot of fish food from the fish farm and drops it on the worship site. The farm keeps all its fish. "
+	                "The players.list query shows the GiveWorshippersFood need with the leaf GetFoodFromFishFarm.",
+	    .framing = {.shot = Shot::Overview, .include = {glm::vec2(-60.0f, -110.0f), glm::vec2(60.0f, 160.0f)}},
+	    .objects = {{.type = FishFarmInfo::Normal, .offset = {5.0f, 145.0f}}},
+	    .landScript = k_ComputerGodFishFarmTownScript,
+	    .commands = {ComputerWeight("TownWithHighestFoodDesire", 0.0f)},
+	    .worshipShare = 0.5f,
+	    .objectsAfterLandScript = true,
+	});
+	all.push_back({
+	    .id = "mind.computer_god_worshippers_food_from_other_town",
+	    .name = "A computer god that takes food from a town to its hungry worshippers",
+	    .facet = Facet::Mind,
+	    .description = "The land of the scenario of food from another town: the east town has no food in its storage pit, "
+	                   "and the west town has 5000 food. No field is near. Half of the people of each town worship at its "
+	                   "site, which stands built. At the start, the god gets the weight 0 for the food and wood needs of its "
+	                   "towns.",
+	    .expected = "When the worshippers of a site get hungry and the pot of the site has less food than they need, the "
+	                "hand moves to the food pile of a storage pit that has food, takes a pot of food from it, as much as "
+	                "the site needs from its towns, and drops the pot on the worship site. The players.list query shows "
+	                "the GiveWorshippersFood need with the leaf GetFoodFromOtherTownForObject.",
+	    .framing = {.shot = Shot::Overview, .include = {glm::vec2(-130.0f, -110.0f), glm::vec2(130.0f, 110.0f)}},
+	    .landScript = k_ComputerGodTwoTownsFoodScript,
+	    .commands = {ComputerWeight("TownWithHighestFoodDesire", 0.0f), ComputerWeight("TownWithHighestWoodDesire", 0.0f)},
+	    .worshipShare = 0.5f,
+	});
+	all.push_back({
+	    .id = "mind.computer_god_site_wood_from_other_town",
+	    .name = "A computer god that takes the wood of one town to a building site of another",
+	    .facet = Facet::Mind,
+	    .description = "Lines of a land switch on the computer mind of player two, with two Celtic towns and no miracle. "
+	                   "The east town has no wood in its storage pit, and the west town has 5000 wood. A hut of the east "
+	                   "town stands a fifth built north of the town, with a site for its builders. At the start, the god "
+	                   "gets the weight 0 for the food and wood needs of its towns and for the workers of a site.",
+	    .expected = "The god wants wood for the hut. The hand takes all the wood of the storage pit of the west town in a "
+	                "pot, moves to the hut and drops the pot on it. The players.list query shows the GiveBuildingSiteWood "
+	                "need with the leaf GetWoodFromOtherTown.",
+	    .framing = {.shot = Shot::Overview, .include = {glm::vec2(-130.0f, -110.0f), glm::vec2(130.0f, 130.0f)}},
+	    .objects = HutOfTheEastTown(),
+	    .landScript = k_TwoTownsSiteWoodScript,
+	    .commands = OnlySiteWood(),
+	    .objectsAfterLandScript = true,
+	});
+	all.push_back({
+	    .id = "mind.computer_god_site_wood_from_forest",
+	    .name = "A computer god that takes a tree from a forest that it saw to a building site",
+	    .facet = Facet::Mind,
+	    .description = "Lines of a land switch on the computer mind of player two, with two Celtic towns and no miracle. "
+	                   "Neither storage pit has wood. The west town has 5000 food, and a small forest of six grown pines "
+	                   "stands beside its storage pit. A hut of the east town stands a fifth built north of the town, with "
+	                   "a site for its builders. The god sees only the things near its hand. At the start, the god gets the "
+	                   "weight 0 for the wood need of its towns and for the workers of a site.",
+	    .expected = "The god wants wood for the hut, but at first it knows no wood. The hand first takes food from the "
+	                "storage pit of the west town to the pit of the east town, and beside the west pit the god sees the "
+	                "forest. Then the hand moves to the centre tree of the forest, pulls it out, carries "
+	                "it to the door of the hut and drops it there. The players.list query shows the GiveBuildingSiteWood "
+	                "need with the leaf GetWoodFromForest.",
+	    .framing = {.shot = Shot::Overview, .include = {glm::vec2(-130.0f, -110.0f), glm::vec2(130.0f, 130.0f)}},
+	    .objects = HutOfTheEastTown(),
+	    .landScript = k_TwoTownsSiteForestScript,
+	    .commands = {ComputerWeight("TownWithHighestWoodDesire", 0.0f), ComputerWeight("GiveBuildingSiteWorkers", 0.0f)},
 	    .objectsAfterLandScript = true,
 	});
 }

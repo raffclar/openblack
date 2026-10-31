@@ -487,6 +487,17 @@ void openblack::computer_mind::SeeNearHand(std::vector<SeenThing>& seen, const m
 	}
 }
 
+void openblack::computer_mind::ForgetGone(std::vector<entt::entity>& casts, std::vector<SeenThing>& seen, Mind& mind,
+                                          const GoneWorld& world)
+{
+	std::erase_if(casts, [&world](entt::entity spell) { return !world.CastStillThere(spell); });
+	std::erase_if(seen, [&world](const SeenThing& old) { return !world.Available(old.thing); });
+	std::erase_if(mind.queue, [&world](const QueuedAction& queued) {
+		return (queued.first != entt::null && !world.Available(queued.first)) ||
+		       (queued.second != entt::null && !world.Available(queued.second));
+	});
+}
+
 std::string openblack::computer_mind::PersonalityName(NodeKind kind)
 {
 	const auto& info = InfoOf(kind);
