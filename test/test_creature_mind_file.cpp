@@ -97,7 +97,7 @@ MindFileData SampleMind()
 	mind.tattooHeader = std::array<uint32_t, 8> {};
 	mind.tattoo = std::vector<uint8_t> {9, 8, 7};
 	mind.learningCounts = std::vector<MindLearningCount>(45, {.a = 1, .b = 2, .c = 3});
-	mind.drawnScale = 1.25f;
+	mind.fightHealth = 1.25f;
 	mind.unknown4 = 0.5f;
 	mind.unknown5 = std::array<int32_t, 2> {7, -7};
 	return mind;
@@ -623,7 +623,7 @@ MindFileData AsTheGameSavesItAfterALoad(MindFileData file)
 		{
 			count.c = count.c.value_or(0);
 		}
-		file.drawnScale = file.drawnScale.value_or(1.0f);
+		file.fightHealth = file.fightHealth.value_or(1.0f);
 		file.unknown4 = file.unknown4.value_or(0.0f);
 		file.unknown5 = file.unknown5.value_or(std::array<int32_t, 2> {0, -1});
 	}
@@ -888,7 +888,7 @@ TEST(CreatureMindFile, AnOldMindIsWrittenWithTheValuesOfANewCreature)
 	old.tattooHeader.reset();
 	old.tattoo.reset();
 	old.learningCounts.reset();
-	old.drawnScale.reset();
+	old.fightHealth.reset();
 	old.unknown4.reset();
 	old.unknown5.reset();
 	MindFileData read;
@@ -905,7 +905,7 @@ TEST(CreatureMindFile, AnOldMindIsWrittenWithTheValuesOfANewCreature)
 	EXPECT_EQ(now.opinions->back(), k_FreshOpinion);
 	EXPECT_EQ(now.tattooHeader, k_EmptyTattoos);
 	EXPECT_EQ(now.unknown5, (std::array<int32_t, 2> {0, -1}));
-	EXPECT_EQ(now.drawnScale, std::optional<float>(1.0f));
+	EXPECT_EQ(now.fightHealth, std::optional<float>(1.0f));
 }
 
 TEST(CreatureMindFile, AVersion30MindKeepsItsOwnFieldsAndGetsTheRest)
@@ -914,7 +914,7 @@ TEST(CreatureMindFile, AVersion30MindKeepsItsOwnFieldsAndGetsTheRest)
 	auto old = FullSampleMind();
 	old.version = 30;
 	old.learningCounts = std::vector<MindLearningCount>(45, {.a = 4, .b = 5});
-	old.drawnScale = -2.0f;
+	old.fightHealth = -2.0f;
 	old.unknown4.reset();
 	old.unknown5.reset();
 	MindFileData read;
@@ -927,7 +927,7 @@ TEST(CreatureMindFile, AVersion30MindKeepsItsOwnFieldsAndGetsTheRest)
 	ASSERT_TRUE(now.learningCounts.has_value());
 	EXPECT_EQ((*now.learningCounts)[0].a, 4u);
 	EXPECT_EQ((*now.learningCounts)[0].c, std::optional<uint32_t>(0));
-	EXPECT_EQ(now.drawnScale, std::optional<float>(-2.0f));
+	EXPECT_EQ(now.fightHealth, std::optional<float>(-2.0f));
 	EXPECT_EQ(now.unknown4, std::optional<float>(0.0f));
 }
 

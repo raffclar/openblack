@@ -1359,6 +1359,16 @@ void CreatureMindSystem::ApplyLoaded(entt::entity creature, CreatureMindState& m
 			leashes->known.set(i, mind.learnt->leashWords.at(LeashWordOf(creature_leash::k_Types.at(i))) != 0);
 		}
 	}
+	// A file of version 30 or later gives the fight health of the creature. An older file keeps the fight health that the
+	// creature has.
+	if (file.fightHealth.has_value() && Locator::creatureFightSystem::has_value())
+	{
+		auto& fights = Locator::creatureFightSystem::value();
+		if (fights.GetFightHealth(creature) != *file.fightHealth)
+		{
+			fights.SetFightHealth(creature, *file.fightHealth);
+		}
+	}
 	SPDLOG_LOGGER_INFO(spdlog::get("game"), "Creature {} took up a mind file: version {}, stage {}",
 	                   entt::to_integral(creature), file.version, mind.developmentPhase);
 	// A creature that a script made from a mind file knows every leash and is fully grown
@@ -3367,13 +3377,15 @@ void CreatureMindSystem::DoFollowUp(entt::entity creature, CreatureMindState& mi
 		                                       .action = "CommunicateState",
 		                                       .object = creature,
 		                                       .agenda = creature_follow_up::ShowHappy(),
-		                                       .ordered = true}));
+		                                       .ordered = true,
+		                                       .fightBodyEndsAgain = true}));
 		return;
 	case FollowUp::FrightenedOfPlayer:
 		static_cast<void>(ForcePlan(creature, {.desire = Desire::Fear,
 		                                       .action = creature_follow_up::FrightenedAction(Random(3)),
 		                                       .object = creature,
-		                                       .ordered = true}));
+		                                       .ordered = true,
+		                                       .fightBodyEndsAgain = true}));
 		return;
 	case FollowUp::DoLessonAgain:
 		DoLessonAgain(creature, mind);
@@ -3382,8 +3394,11 @@ void CreatureMindSystem::DoFollowUp(entt::entity creature, CreatureMindState& mi
 		WalkOn(creature, mind);
 		return;
 	case FollowUp::ScratchAfterNewMusic:
-		static_cast<void>(
-		    ForcePlan(creature, {.desire = Desire::Curiosity, .action = "Scratch", .object = creature, .ordered = true}));
+		static_cast<void>(ForcePlan(creature, {.desire = Desire::Curiosity,
+		                                       .action = "Scratch",
+		                                       .object = creature,
+		                                       .ordered = true,
+		                                       .fightBodyEndsAgain = true}));
 		return;
 	case FollowUp::DanceAfterLikedMusic:
 		DanceAfterMusic(creature, mind);
@@ -3407,7 +3422,8 @@ void CreatureMindSystem::DoFollowUp(entt::entity creature, CreatureMindState& mi
 		                                       .action = "CommunicateState",
 		                                       .object = creature,
 		                                       .agenda = std::move(agenda),
-		                                       .ordered = true}));
+		                                       .ordered = true,
+		                                       .fightBodyEndsAgain = true}));
 		return;
 	}
 	}
@@ -3428,8 +3444,11 @@ void CreatureMindSystem::BecomeHigh(entt::entity creature)
 		return place.has_value() ? std::optional(creature_mind::HighSeat {.place = *place, .radius = radius}) : std::nullopt;
 	};
 	auto agenda = creature_mind::BecomeHigh(findSeat, [this](uint32_t range) { return Random(range); }, _random.GameFloat());
-	static_cast<void>(
-	    ForcePlan(creature, {.desire = Desire::GetHigh, .action = "GetHigh", .object = creature, .agenda = std::move(agenda)}));
+	static_cast<void>(ForcePlan(creature, {.desire = Desire::GetHigh,
+	                                       .action = "GetHigh",
+	                                       .object = creature,
+	                                       .agenda = std::move(agenda),
+	                                       .fightBodyEndsAgain = true}));
 }
 
 bool CreatureMindSystem::ForcePlan(entt::entity creature, const ForcedPlan& plan)
@@ -4824,7 +4843,8 @@ void CreatureMindSystem::ProcessMimicry(entt::entity creature, CreatureMindState
 			                         .action = tables->actions.at(rule.noticeAction).name,
 			                         .actionObject = object,
 			                         .ordered = true,
-			                         .forced = false});
+			                         .forced = false,
+			                         .fightBodyEndsAgain = true});
 		}
 		break;
 	}
@@ -4905,6 +4925,11 @@ std::optional<creaturemind::MindFileData> CreatureMindSystem::SaveMind(entt::ent
 	{
 		const auto records = Locator::musicMoodSystem::value().WriteRecords();
 		file.database = music_mood::ToMindFile(records);
+	}
+	// The file keeps the fight health that the creature has now: as its last fight left it, or full before any
+	if (Locator::creatureFightSystem::has_value())
+	{
+		file.fightHealth = Locator::creatureFightSystem::value().GetFightHealth(creature);
 	}
 	// It is saved as itself: as it was before any spell on it changed it
 	const creature_spells::SavedBody now {.size = body->size, .strength = body->strength, .alignment = body->alignment};
@@ -5347,6 +5372,12 @@ void CreatureMindSystem::NoticeDeed(size_t deed, const glm::vec3& point, std::op
 		// What it was doing stops as a failure. With no plan, it then notices the deed (see ProcessMimicry).
 		{
 			creature_mind_model::Think(*mind->learnt, fmt::format("I saw you: {}", tables->mimics.at(deed).name));
+			// The failure stops a fight that the creature is in, for both creatures. After a fight that is over, the body
+			// ends its fight again and the life pays again.
+			if (registry.AllOf<CreatureFighting>(entity) && Locator::creatureFightSystem::has_value())
+			{
+				Locator::creatureFightSystem::value().CallOffForPlan(entity);
+			}
 			if (Locator::creatureObjectActionSystem::has_value() &&
 			    Locator::creatureObjectActionSystem::value().GetState(entity) ==
 			        CreatureObjectActionSystemInterface::State::Busy)
@@ -5494,13 +5525,17 @@ void CreatureMindSystem::DanceAfterMusic(entt::entity creature, CreatureMindStat
 				                         .action = k_DanceWithVillagers,
 				                         .object = object,
 				                         .activityObject = WholeOfForcedPlan(creature, mind, Desire::Impress, object),
-				                         .ordered = true}));
+				                         .ordered = true,
+				                         .fightBodyEndsAgain = true}));
 				return;
 			}
 		}
 	}
-	static_cast<void>(ForcePlan(
-	    creature, {.desire = Desire::IdleWithPlayer, .action = "PracticeDance", .object = creature, .ordered = true}));
+	static_cast<void>(ForcePlan(creature, {.desire = Desire::IdleWithPlayer,
+	                                       .action = "PracticeDance",
+	                                       .object = creature,
+	                                       .ordered = true,
+	                                       .fightBodyEndsAgain = true}));
 }
 
 void CreatureMindSystem::LearnFromDeedSeen(entt::entity creature, CreatureMindState& mind, size_t deed, entt::entity thing,

@@ -284,6 +284,7 @@ std::optional<magic::EffectReceiver> ReceiverOf(entt::entity entity)
 		receiver.defence = magic_living::DefenceOf(entity);
 		receiver.alignmentType = info->alignmentType;
 		receiver.crushable = true;
+		receiver.creature = registry.AllOf<Creature>(entity);
 	}
 	else if (registry.AllOf<Temple>(entity))
 	{

@@ -219,7 +219,8 @@ void CreatureMindSystem::CastOnLeash(entt::entity creature, CreatureMindState& m
 	static_cast<void>(ForcePlan(creature, {.desire = static_cast<Desire>(tables->actions[action].desire),
 	                                       .action = tables->actions[action].name,
 	                                       .object = cast->thing,
-	                                       .activityObject = whole.value_or(creature)}));
+	                                       .activityObject = whole.value_or(creature),
+	                                       .fightBodyEndsAgain = true}));
 }
 
 entt::entity CreatureMindSystem::FeedSiteAltar(entt::entity flag)
@@ -252,7 +253,9 @@ void CreatureMindSystem::FeedWorshipSite(entt::entity creature, CreatureMindStat
 	SPDLOG_LOGGER_DEBUG(spdlog::get("game"), "Creature {} feeds the worship site of altar {} for the leash: {}",
 	                    entt::to_integral(creature), entt::to_integral(altar), *action);
 	// The plan is about the flag, which stands at the place of the altar of its site
-	static_cast<void>(ForcePlan(creature, {.desire = Desire::ObeyPlayer, .action = *action, .object = flag, .ordered = true}));
+	static_cast<void>(ForcePlan(
+	    creature,
+	    {.desire = Desire::ObeyPlayer, .action = *action, .object = flag, .ordered = true, .fightBodyEndsAgain = true}));
 }
 
 void CreatureMindSystem::ReactToNiceMagic(entt::entity creature, const glm::vec3& point, std::optional<size_t> learn)
@@ -317,7 +320,8 @@ void CreatureMindSystem::TakeUpReaction(entt::entity creature, entt::entity thin
 		ForceActivity(creature, {.desire = setup.plan->desire,
 		                         .action = setup.plan->action,
 		                         .actionObject = setup.plan->onSelf ? creature : thing,
-		                         .forced = false});
+		                         .forced = false,
+		                         .fightBodyEndsAgain = true});
 	}
 	// The hand's pick-up sets the watch it was just given to a minute and up to another
 	if (setup.longHandWatch)

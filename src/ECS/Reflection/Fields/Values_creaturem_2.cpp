@@ -84,7 +84,7 @@ void openblack::ecs::reflection::RegisterFields_Values_creaturem_2(entt::meta_ct
 	    .Field<&openblack::creaturemind::MindFileData::tattooHeader>("tattooHeader")
 	    .Field<&openblack::creaturemind::MindFileData::tattoo>("tattoo")
 	    .Field<&openblack::creaturemind::MindFileData::learningCounts>("learningCounts")
-	    .Field<&openblack::creaturemind::MindFileData::drawnScale>("drawnScale")
+	    .Field<&openblack::creaturemind::MindFileData::fightHealth>("fightHealth")
 	    .Field<&openblack::creaturemind::MindFileData::unknown4>("unknown4")
 	    .Field<&openblack::creaturemind::MindFileData::unknown5>("unknown5")
 	    .Field<&openblack::creaturemind::MindFileData::trailing>("trailing");

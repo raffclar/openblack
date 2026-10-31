@@ -349,7 +349,8 @@ BodyAction creature_layers::AdvanceBody(BodyAction body, float milliseconds, std
 			}
 			// Told to end while still starting, it goes from its start straight into its end
 			body.phase = body.endWanted ? BodyAction::Phase::End : BodyAction::Phase::Loop;
-			body.timeMs = 0.0f;
+			// A held loop, such as a faint, stays at the last frame of its clip from the turn that its start ends
+			body.timeMs = body.phase == BodyAction::Phase::Loop && body.holdLoop ? std::max(length - 1.0f, 0.0f) : 0.0f;
 		}
 		break;
 	case BodyAction::Phase::Loop:
