@@ -1867,3 +1867,41 @@ TEST(WorldArchive, TheHashOfRowsByStepsIsTheHashOfRowsByField)
 		registry.get<FakePlainRow>(made[20]).heat = std::numeric_limits<float>::denorm_min();
 	}
 }
+
+// The memo keeps the layout of each component while the parts that the hash leaves out stay the same. A change of those
+// parts, and a component that has no rows for a time, give the same hash as a hash with no memo.
+TEST(WorldArchive, TheLayoutsInTheMemoFollowThePartsThatTheHashLeavesOut)
+{
+	entt::meta_ctx context;
+	Register(context);
+	RegisterPlainRow(context);
+	entt::registry registry;
+	std::vector<entt::entity> made(40);
+	registry.create(made.begin(), made.end());
+	for (const auto entity : made)
+	{
+		registry.emplace<FakePlainRow>(entity, SamplePlainRow(entt::to_integral(entity)));
+	}
+	registry.emplace<FakeTag>(made[3]);
+	const std::array<HashLeaveOut, 1> markedHeat {
+	    HashLeaveOut {.component = "FakePlainRow", .field = "heat", .marker = &registry.storage<FakeTag>()}};
+	const std::array<HashLeaveOut, 1> alwaysOrder {
+	    HashLeaveOut {.component = "FakePlainRow", .field = "order", .marker = nullptr}};
+	WorkerPool pool(3);
+	HashMemo memo;
+	const auto expectSame = [&](std::span<const HashLeaveOut> leaveOut) {
+		const auto plain = HashWorld(registry, context, leaveOut);
+		EXPECT_EQ(HashWorld(registry, context, leaveOut, false, {}, &pool, nullptr, &memo).components, plain.components);
+		EXPECT_EQ(HashWorld(registry, context, leaveOut, false, {}, nullptr, nullptr, &memo).components, plain.components);
+	};
+	expectSame({});
+	expectSame(markedHeat);
+	expectSame(alwaysOrder);
+	expectSame({});
+	// No row of the component, then rows again
+	registry.clear<FakePlainRow>();
+	expectSame({});
+	registry.emplace<FakePlainRow>(made[5], SamplePlainRow(9));
+	expectSame({});
+	expectSame(alwaysOrder);
+}
