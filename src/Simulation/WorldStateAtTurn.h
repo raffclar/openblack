@@ -65,6 +65,8 @@ struct Map
 	std::span<const synced_state::PresentationPart> parts;
 	/// The sections of the systems, in the order of the file
 	std::vector<SectionMap> sections;
+	/// The presentation values in the block of the registry's context
+	std::vector<std::pair<size_t, size_t>> contextPresentation;
 	/// The synced seed and the count of its draws, which the checksum of the turn has
 	uint32_t syncedSeed {0};
 	uint64_t syncedDraws {0};

@@ -79,6 +79,7 @@
 #include "ECS/Systems/HandSystemInterface.h"
 #include "ECS/Systems/HeartbeatSystemInterface.h"
 #include "ECS/Systems/HelpMessageSystemInterface.h"
+#include "ECS/Systems/HelpProfileSystemInterface.h"
 #include "ECS/Systems/HelpTextSystemInterface.h"
 #include "ECS/Systems/InfluenceSystemInterface.h"
 #include "ECS/Systems/IntroSystemInterface.h"
@@ -876,8 +877,12 @@ void PlayTurnStep(game_turn::Step step, TurnViewInterface& view)
 		}
 		break;
 	case Step::HelpProfile:
-		// The view does this step
-		view.PlayViewStep(step, cameraPosition);
+		// The help's count of what the players did moves on a turn. It reads the view of the camera from the last report,
+		// which is a command, so a game server does it too.
+		if (Locator::helpProfileSystem::has_value())
+		{
+			Locator::helpProfileSystem::value().ProcessTurn();
+		}
 		break;
 	case Step::TipBubble:
 		// The help's tip bubble stays while its sign shows

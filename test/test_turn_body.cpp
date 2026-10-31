@@ -33,11 +33,11 @@ std::vector<Step> TurnSteps()
 
 } // namespace
 
-TEST(TurnBody, TheViewDoesTheSoundsTheMusicTheToolTipsAndTheHelpOfTheScreen)
+TEST(TurnBody, TheViewDoesTheSoundsTheMusicAndTheToolTips)
 {
 	std::vector<Step> viewSteps;
 	std::ranges::copy_if(TurnSteps(), std::back_inserter(viewSteps), IsViewStep);
-	const std::vector<Step> expected {Step::TurnCheering, Step::HandToolTips, Step::HelpProfile, Step::Ambience, Step::Music};
+	const std::vector<Step> expected {Step::TurnCheering, Step::HandToolTips, Step::Ambience, Step::Music};
 	std::ranges::sort(viewSteps);
 	auto sorted = expected;
 	std::ranges::sort(sorted);
@@ -53,6 +53,9 @@ TEST(TurnBody, TheWorldDoesTheCommandsTheScriptsAndTheChecksum)
 	EXPECT_FALSE(IsViewStep(Step::GlobalStatistics));
 	EXPECT_FALSE(IsViewStep(Step::SyncChecksum));
 	EXPECT_FALSE(IsViewStep(Step::RunRecord));
+	// The help's count of what the players did reads only their reports, and the banter of the turn reads the count.
+	// Thus a game server does it too.
+	EXPECT_FALSE(IsViewStep(Step::HelpProfile));
 }
 
 TEST(TurnBody, AWorldWithNoViewGivesTheStatisticsItsFixedFrameRate)

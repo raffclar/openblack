@@ -116,7 +116,7 @@ protected:
 		auto& registry = Locator::entitiesRegistry::value();
 		const auto seed = registry.Create();
 		registry.Assign<SpellSeed>(seed, SpellSeed {.seedType = SpellSeedType::Heal, .player = player});
-		registry.Assign<HandHeldSeed>(_hands->hands.at(player)[k_Left], seed);
+		registry.AssignOrReplace<HandHeldSeed>(_hands->hands.at(player)[k_Left], seed);
 		return seed;
 	}
 
@@ -219,4 +219,21 @@ TEST_F(HandHeldSeeds, ACommandOfAPlayerWithAnEmptyHandLeavesTheOtherHand)
 	_magic->DoCast(PlayerNames::PLAYER_TWO, player_commands::HandCast {.point = {1.0f, 2.0f, 3.0f}});
 	EXPECT_EQ(_magic->GetHeldSeedOf(PlayerNames::PLAYER_ONE), seed);
 	EXPECT_FALSE(_magic->IsHandBusyOf(PlayerNames::PLAYER_TWO));
+}
+
+// A tool drops the seed of a named player. The result is the same on the computer of each player, and the other hand
+// keeps its seed.
+TEST_F(HandHeldSeeds, ADropOfANamedPlayersSeedIsTheSameOnEachComputer)
+{
+	for (const auto own : {PlayerNames::PLAYER_ONE, PlayerNames::PLAYER_TWO})
+	{
+		_hands->own = own;
+		HoldSeed(PlayerNames::PLAYER_ONE);
+		const auto other = HoldSeed(PlayerNames::PLAYER_TWO);
+		_magic->DiscardHeldSeedOf(PlayerNames::PLAYER_ONE);
+		EXPECT_FALSE(_magic->IsHandBusyOf(PlayerNames::PLAYER_ONE));
+		EXPECT_EQ(_magic->GetHeldSeedOf(PlayerNames::PLAYER_TWO), other);
+		_magic->DiscardHeldSeedOf(PlayerNames::PLAYER_TWO);
+		EXPECT_FALSE(_magic->IsHandBusyOf(PlayerNames::PLAYER_TWO));
+	}
 }

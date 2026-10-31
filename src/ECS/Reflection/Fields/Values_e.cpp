@@ -79,7 +79,7 @@ void openblack::ecs::reflection::RegisterFields_Values_e(entt::meta_ctx& context
 	    .Field<&openblack::ecs::RegistryContext::footpathObstacles>("footpathObstacles")
 	    .Field<&openblack::ecs::RegistryContext::streams>("streams")
 	    .Field<&openblack::ecs::RegistryContext::towns>("towns")
-	    .Field<&openblack::ecs::RegistryContext::villageLightFlames>("villageLightFlames")
+	    .PresentationField<&openblack::ecs::RegistryContext::villageLightFlames>("villageLightFlames")
 	    .Field<&openblack::ecs::RegistryContext::mapScriptGlobals>("mapScriptGlobals")
 	    .Field<&openblack::ecs::RegistryContext::nextHandRockTap>("nextHandRockTap")
 	    .Field<&openblack::ecs::RegistryContext::nextCreatureRockSmash>("nextCreatureRockSmash")
@@ -107,7 +107,7 @@ void openblack::ecs::reflection::RegisterFields_Values_e(entt::meta_ctx& context
 	    .Field<&openblack::ecs::RegistryContext::villagerDetailsShown>("villagerDetailsShown")
 	    .Field<&openblack::ecs::RegistryContext::impressiveMiracleCastTurn>("impressiveMiracleCastTurn")
 	    .Field<&openblack::ecs::RegistryContext::explorationMap>("explorationMap")
-	    .Field<&openblack::ecs::RegistryContext::globalStatistics>("globalStatistics");
+	    .PresentationField<&openblack::ecs::RegistryContext::globalStatistics>("globalStatistics");
 	Reflect<openblack::ecs::components::Animal::DrawnPlace>(context, ValueOnly {})
 	    .Field<&openblack::ecs::components::Animal::DrawnPlace::position>("position")
 	    .Field<&openblack::ecs::components::Animal::DrawnPlace::rotation>("rotation");
