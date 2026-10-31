@@ -148,4 +148,32 @@ void testbed_scenarios::AddWorshipSiteScenarios(std::vector<Scenario>& all)
 	    .landScript = k_PlayerOneTownScript,
 	    .worshipShare = 1.0f,
 	});
+	all.push_back({
+	    .id = "worship.site_food_seen",
+	    .name = "A creature on the learning leash sees the food miracle poured on a worship site",
+	    .facet = Facet::Mind,
+	    .description = "The land of the ring scenario. All of the people go to worship at the site, which stands built. "
+	                   "A grown-up tiger with no needs stands east of the site, looks at it and gets the learning leash. "
+	                   "After 20 seconds the hand pours the food miracle on the food pot of the site for 5 seconds.",
+	    .expected = "Each grain that falls into the site shows the player's deed of putting food in a worship site: the "
+	                "log shows \"shows deed 0\" for the site. The tiger notices the deed: it points at the site, amazed, "
+	                "and watches the camera. The inspector shows deed 0 as the deed that the tiger saw.",
+	    .framing = SiteFraming(),
+	    .creatures = {CreatureSetup {
+	        .species = CreatureType::Tiger,
+	        .offset = {40.0f, -50.0f},
+	        .facingDegrees = 270.0f,
+	        .needs =
+	            NeedOverrides {
+	                .energy = 1.0f, .exhaustion = 0.0f, .dehydration = 0.0f, .poo = 0.0f, .life = 1.0f, .warmth = 0.0f}}},
+	    .miracles = {{.type = MagicType::Food,
+	                  .point = {-4.0f, -51.0f},
+	                  .handOffset = {-4.0f, -51.0f},
+	                  .delaySeconds = 20.0f,
+	                  .holdSeconds = 5.0f,
+	                  .byHand = true}},
+	    .landScript = k_PlayerOneTownScript,
+	    .commands = {{.kind = Command::Kind::PutOnLeash, .creature = 0, .delaySeconds = 21.0f, .leash = LeashType::Rope}},
+	    .worshipShare = 1.0f,
+	});
 }
