@@ -133,6 +133,13 @@ struct CreatureFighting
 	/// Whether the first creature, on the turn after its response, freed the mind of the other creature again. The other
 	/// creature then thinks and can choose a new plan, which stops the fight for both.
 	bool mindFree {false};
+	/// Whether the body of the first creature came to rest after a duel that it won by the life of the other creature,
+	/// while the other creature stays in its duel. On the next turn, the first creature orders the other creature to
+	/// respond.
+	bool restedAfterDuel {false};
+	/// Whether the first creature ended its plan with its order to respond, so that it does not stop this creature when
+	/// it leaves. After its response, this creature waits until its mind chooses a new plan.
+	bool released {false};
 };
 /// Whether a fighter is in one of the steps before the duel
 [[nodiscard]] constexpr bool IsLeadIn(CreatureFighting::Stage stage)

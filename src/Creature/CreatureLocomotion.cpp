@@ -230,3 +230,8 @@ creature_locomotion::FidgetTurn creature_locomotion::WaitTurn(FidgetWait& wait, 
 		return {.fidget = Fidget::Confused, .mirrored = gameRandom(2) == 1};
 	}
 }
+
+std::optional<GameHeading> creature_locomotion::TurnThatStartsAtRest(std::optional<GameHeading> waiting, bool bodyPlaysAction)
+{
+	return bodyPlaysAction ? std::nullopt : waiting;
+}

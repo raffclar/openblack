@@ -1542,9 +1542,7 @@ public:
 	}
 
 	[[nodiscard]] StrengthGains Gains() const { return {.stopper = _gains[0], .partner = _gains[1]}; }
-
-private:
-	[[nodiscard]] static size_t Other(size_t self) { return 1 - self; }
+	[[nodiscard]] uint32_t Leaves(size_t self) const { return _leaves.at(self); }
 
 	/// The creature stops what it does. In its duel, it gives the gain to its partner, which leaves its duel and gives up
 	/// its action. The creature leaves its own duel last.
@@ -1558,24 +1556,47 @@ private:
 			Fail(other);
 		}
 		_duels.at(self) = false;
+		++_leaves.at(self);
 	}
+
+private:
+	[[nodiscard]] static size_t Other(size_t self) { return 1 - self; }
 
 	std::array<bool, 2> _duels;
 	std::array<bool, 2> _hasPartner;
 	std::array<uint32_t, 2> _gains {};
+	std::array<uint32_t, 2> _leaves {};
 };
 } // namespace
 
 StrengthGains creature_fight::StrengthGainsAtStop(StopEnd end, StopLinks links)
 {
+	return CountsAtStop(end, links).gains;
+}
+
+StopCounts creature_fight::CountsAtStop(StopEnd end, StopLinks links)
+{
 	StopSteps steps(links);
-	if (end == StopEnd::Failure)
+	switch (end)
 	{
+	case StopEnd::Failure:
 		steps.Fail(0);
-	}
-	else
-	{
+		break;
+	case StopEnd::Success:
 		steps.Finish(0);
+		break;
+	case StopEnd::Stopped:
+		steps.Stop(0);
+		break;
 	}
-	return steps.Gains();
+	return {.gains = steps.Gains(), .stopperLeaves = steps.Leaves(0), .partnerLeaves = steps.Leaves(1)};
+}
+
+float creature_fight::LifeAfterPayments(float life, float fightHealth, uint32_t payments)
+{
+	for (uint32_t payment = 0; payment < payments; ++payment)
+	{
+		life = LifeAfterFight(life, fightHealth);
+	}
+	return life;
 }

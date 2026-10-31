@@ -1261,6 +1261,46 @@ bool CreatureLocomotionSystem::TurnToFaceAtOnce(entt::entity creature, glm::vec2
 	return heading.has_value() && TurnToHeadingAtOnce(creature, *heading);
 }
 
+void CreatureLocomotionSystem::TurnToFaceAtRest(entt::entity creature, glm::vec2 point)
+{
+	auto& registry = Locator::entitiesRegistry::value();
+	auto* self = registry.TryGet<CreatureLocomotion>(creature);
+	if (self == nullptr)
+	{
+		return;
+	}
+	if (self->started)
+	{
+		Halt(*self);
+	}
+	const auto heading = HeadingToFace(creature, point);
+	if (!heading.has_value())
+	{
+		return;
+	}
+	// The body is at rest: the turn starts now. Else it waits until the action of the body ends.
+	self->turnAtRest = heading;
+	StartTurnAtRest(creature);
+}
+
+bool CreatureLocomotionSystem::TurnWaitsForRest(entt::entity creature) const
+{
+	const auto* self = Locator::entitiesRegistry::value().TryGet<const CreatureLocomotion>(creature);
+	return self != nullptr && self->turnAtRest.has_value();
+}
+
+void CreatureLocomotionSystem::StartTurnAtRest(entt::entity creature)
+{
+	auto& self = Locator::entitiesRegistry::value().Get<CreatureLocomotion>(creature);
+	const auto heading = creature_locomotion::TurnThatStartsAtRest(self.turnAtRest, PlaysBodyAction(creature));
+	if (!heading.has_value() || !self.started)
+	{
+		return;
+	}
+	self.turnAtRest.reset();
+	TurnToHeadingAtOnce(creature, *heading);
+}
+
 std::optional<GameHeading> CreatureLocomotionSystem::HeadingToFace(entt::entity creature, glm::vec2 point)
 {
 	const auto* self = Locator::entitiesRegistry::value().TryGet<const CreatureLocomotion>(creature);
@@ -1535,6 +1575,8 @@ void CreatureLocomotionSystem::CreatureTurn(entt::entity entity)
 	{
 		return;
 	}
+	// A turn that waited for the body starts on the first turn that the body is at rest
+	StartTurnAtRest(entity);
 	bool stopped = false;
 	{
 		const auto& creature = registry.Get<const Creature>(entity);

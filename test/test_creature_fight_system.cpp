@@ -1287,8 +1287,10 @@ TEST_F(CreatureFightSystemTest, AnOpponentWithNoLifeLeftLosesTheDuelToTheCreatur
 	Locator::guidanceSystem::reset();
 }
 
-TEST_F(CreatureFightSystemTest, TheLoserOfADuelWonByItsLackOfLifeFightsOnUntilTheFightOfTheWinnerEnds)
+TEST_F(CreatureFightSystemTest, TheOrderToRespondAfterAWinByLifeStopsTheLoserWhichRespondsAlone)
 {
+	auto& body = static_cast<CountedGains&>(Locator::creaturePhysiologySystem::emplace<CountedGains>());
+	auto& minds = static_cast<ForcedMinds&>(Locator::creatureMindSystem::emplace<ForcedMinds>());
 	auto& registry = Locator::entitiesRegistry::value();
 	for (const auto self : {first, second})
 	{
@@ -1304,29 +1306,76 @@ TEST_F(CreatureFightSystemTest, TheLoserOfADuelWonByItsLackOfLifeFightsOnUntilTh
 	fights.FightTurn(second);
 	EXPECT_EQ(registry.Get<const CreatureFighting>(second).stage, CreatureFighting::Stage::Duel);
 	EXPECT_FALSE(registry.Get<const CreatureFighting>(second).ended);
-	EXPECT_EQ(registry.Get<const CreatureNeeds>(second).needs.life, 0.0f);
-	// The winner stands, plays its response, and leaves the fight
+	// Some life comes back to the loser, so that each payment of its life shows
+	registry.Get<CreatureNeeds>(second).needs.life = 0.5f;
+	// The body of the winner comes to rest: its duel step ends, and it plays no response
 	fight::Enter(registry.Get<CreatureFighting>(first).fighter, fight::State::Idle);
 	fights.FightTurn(first);
-	registry.Get<CreatureAnimation>(first).body = {};
+	EXPECT_TRUE(registry.Get<const CreatureFighting>(first).restedAfterDuel);
+	EXPECT_FALSE(registry.Get<const CreatureFighting>(first).played);
+	EXPECT_TRUE(body.gains.empty());
+	// On the next turn, its order to respond stops the loser. The plan of the winner fails, and it leaves the fight.
 	fights.FightTurn(first);
-	// Its plan ends on the second turn after its response
-	for (uint32_t turn = 0; turn < fight::k_PlanEndTurnsAfterResponse; ++turn)
-	{
-		EXPECT_TRUE(registry.AllOf<CreatureFighting>(first));
-		fights.FightTurn(first);
-	}
 	EXPECT_FALSE(registry.AllOf<CreatureFighting>(first));
-	// The loser stops at once with no response. Its life pays, because it stands in its stance.
-	const auto& stopped = registry.Get<const CreatureFighting>(second);
-	EXPECT_EQ(stopped.stage, CreatureFighting::Stage::Stop);
-	EXPECT_TRUE(stopped.ended);
-	EXPECT_TRUE(stopped.fighter.stopping);
-	EXPECT_FLOAT_EQ(registry.Get<const CreatureNeeds>(second).needs.life, fight::LifeAfterFight(0.0f, 0.6f));
-	// Its move finished, it leaves the fight
+	EXPECT_EQ(body.gains[second], 1u);
+	EXPECT_EQ(body.gains[first], 2u);
+	EXPECT_EQ(minds.abandoned, std::vector {first});
+	ASSERT_EQ(minds.ordered.size(), 1u);
+	EXPECT_EQ(minds.ordered.front(), std::pair(second, first));
+	// The loser leaves its duel two times in the stop. It stands in its stance, so its life pays two times.
+	const auto& ordered = registry.Get<const CreatureFighting>(second);
+	EXPECT_EQ(ordered.stage, CreatureFighting::Stage::Respond);
+	EXPECT_TRUE(ordered.ended);
+	EXPECT_TRUE(ordered.fighter.stopping);
+	EXPECT_TRUE(ordered.released);
+	EXPECT_TRUE(ordered.mindFree);
+	EXPECT_FLOAT_EQ(registry.Get<const CreatureNeeds>(second).needs.life, fight::LifeAfterPayments(0.5f, 0.6f, 2));
+	// It finishes its move and plays its response. With less life than the winner, it fears the winner.
 	fight::Enter(registry.Get<CreatureFighting>(second).fighter, fight::State::Idle);
 	fights.FightTurn(second);
+	EXPECT_TRUE(registry.Get<const CreatureFighting>(second).played);
+	registry.Get<CreatureAnimation>(second).body = {};
+	fights.FightTurn(second);
 	EXPECT_FALSE(registry.AllOf<CreatureFighting>(second));
+	ASSERT_EQ(minds.desired.size(), 1u);
+	EXPECT_EQ(minds.desired.front(), std::pair(second, creature_desires::Desire::Fear));
+	Locator::creatureMindSystem::reset();
+	Locator::creaturePhysiologySystem::reset();
+}
+
+TEST_F(CreatureFightSystemTest, ALoserWithMoreLifeThanTheWinnerWaitsAfterItsResponseUntilItsMindChoosesAPlan)
+{
+	auto& minds = static_cast<ForcedMinds&>(Locator::creatureMindSystem::emplace<ForcedMinds>());
+	auto& registry = Locator::entitiesRegistry::value();
+	for (const auto self : {first, second})
+	{
+		fight::Enter(registry.Get<CreatureFighting>(self).fighter, fight::State::Stance);
+		registry.Get<CreatureFighting>(self).fighter.health = 1.0f;
+	}
+	registry.Assign<CreatureNeeds>(first).needs.life = 0.2f;
+	registry.Assign<CreatureNeeds>(second).needs.life = 0.0f;
+	fights.FightTurn(first);
+	registry.Get<CreatureNeeds>(second).needs.life = 0.8f;
+	fight::Enter(registry.Get<CreatureFighting>(first).fighter, fight::State::Idle);
+	fights.FightTurn(first);
+	fights.FightTurn(first);
+	ASSERT_FALSE(registry.AllOf<CreatureFighting>(first));
+	fight::Enter(registry.Get<CreatureFighting>(second).fighter, fight::State::Idle);
+	fights.FightTurn(second);
+	registry.Get<CreatureAnimation>(second).body = {};
+	// No fear: it waits with its free mind, and nothing ends its plan to obey
+	for (uint32_t turn = 0; turn < 10; ++turn)
+	{
+		fights.FightTurn(second);
+	}
+	ASSERT_TRUE(registry.AllOf<CreatureFighting>(second));
+	EXPECT_TRUE(registry.Get<const CreatureFighting>(second).responded);
+	EXPECT_TRUE(minds.desired.empty());
+	EXPECT_TRUE(minds.obeyEnded.empty());
+	// A plan that its mind chooses ends the fight. Its body is at rest, so it leaves at once.
+	fights.CallOff(second);
+	EXPECT_FALSE(registry.AllOf<CreatureFighting>(second));
+	Locator::creatureMindSystem::reset();
 }
 
 TEST_F(CreatureFightSystemTest, TheFightStepsWaitWhileTheHandHoldsTheCreatureAndTheFightStopsWhenTheHandLetsGo)

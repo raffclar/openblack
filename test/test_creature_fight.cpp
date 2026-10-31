@@ -1374,3 +1374,33 @@ TEST(CreatureFight, AStopInTheDuelGivesTheStrengthOfTheFightToBothCreatures)
 	                {.stopperDuels = true, .partnerDuels = true, .stopperHasPartner = true, .partnerHasPartner = false}),
 	          std::pair(1u, 1u));
 }
+
+TEST(CreatureFight, AnOrderThatStopsACreatureInItsDuelCountsTheGainsAndEachLeaveOfTheDuel)
+{
+	using creature_fight::StopEnd;
+	// The order stops the loser that is still in its duel. The winner left its duel at its win.
+	const auto ordered = creature_fight::CountsAtStop(StopEnd::Stopped, {.stopperDuels = true, .partnerDuels = false});
+	EXPECT_EQ(ordered.gains.stopper, 1u);
+	EXPECT_EQ(ordered.gains.partner, 2u);
+	// The stopped creature leaves its duel two times, the winner three times
+	EXPECT_EQ(ordered.stopperLeaves, 2u);
+	EXPECT_EQ(ordered.partnerLeaves, 3u);
+	// A failure in the duel of both: the creature that fails leaves two times, its partner three times
+	const auto failed = creature_fight::CountsAtStop(StopEnd::Failure, {.stopperDuels = true, .partnerDuels = true});
+	EXPECT_EQ(failed.gains.stopper, 2u);
+	EXPECT_EQ(failed.gains.partner, 2u);
+	EXPECT_EQ(failed.stopperLeaves, 2u);
+	EXPECT_EQ(failed.partnerLeaves, 3u);
+	// The release after a hold: only the partner is in its duel
+	const auto released = creature_fight::CountsAtStop(StopEnd::Failure, {.stopperDuels = false, .partnerDuels = true});
+	EXPECT_EQ(released.gains.stopper, 1u);
+	EXPECT_EQ(released.gains.partner, 1u);
+}
+
+TEST(CreatureFight, EachPaymentTakesAQuarterOfTheLostFightHealthFromTheLife)
+{
+	EXPECT_FLOAT_EQ(creature_fight::LifeAfterPayments(0.5f, 0.6f, 0), 0.5f);
+	EXPECT_FLOAT_EQ(creature_fight::LifeAfterPayments(0.5f, 0.6f, 1), creature_fight::LifeAfterFight(0.5f, 0.6f));
+	EXPECT_FLOAT_EQ(creature_fight::LifeAfterPayments(0.5f, 0.6f, 2),
+	                creature_fight::LifeAfterFight(creature_fight::LifeAfterFight(0.5f, 0.6f), 0.6f));
+}

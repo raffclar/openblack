@@ -38,6 +38,11 @@ creature_turn_order::HeldTurn creature_turn_order::WhileHeld(bool held, bool sho
 	return showDesireOnHold ? HeldTurn::ShowDesire : HeldTurn::StandStill;
 }
 
+bool creature_turn_order::ShowsDesireOnHold(bool bodyPlaysAction, bool turns, bool turnWaits)
+{
+	return !bodyPlaysAction && !turns && !turnWaits;
+}
+
 bool creature_turn_order::RestartsAfterHold(bool heldSinceRestart, bool planHasSteps)
 {
 	return heldSinceRestart && planHasSteps;
