@@ -371,6 +371,9 @@ constexpr float k_StaminaPerTurn = 1.0f / 600.0f;
 [[nodiscard]] float RegainStamina(float stamina);
 /// A quarter of the fight health lost comes off the real life at the end
 constexpr float k_LifeLostShare = 0.25f;
+/// The life of a creature after one payment for its fight. The life loses a quarter of the fight health that the
+/// creature does not have. Nothing keeps the fight health or the life between 0 and 1, so after a knock out a payment
+/// can take more than a quarter, and the life can go below 0.
 [[nodiscard]] float LifeAfterFight(float life, float fightHealth);
 /// A creature this healthy or less won't start a fight
 constexpr float k_MinLifeToFight = 0.1f;
@@ -921,6 +924,9 @@ constexpr float k_FightMusicDistance = 100.0f;
 constexpr float k_BlowHitEffect = 0.05f;
 /// The fight health of a creature in a duel after it loses damage to its life: the same amount less, never below none
 [[nodiscard]] float HealthAfterLifeLost(float health, float damage);
+/// The fight health of the victim after a blow that lands: the damage of the blow less, with no lower limit. A knock out
+/// can thus leave the fight health below 0.
+[[nodiscard]] float HealthAfterBlow(float health, float damage);
 
 /// How a creature stops what it does
 enum class StopEnd : uint8_t
@@ -1018,6 +1024,8 @@ enum class CallOffStart : uint8_t
 /// The calls of a knock out: the winner gives up its action for the plan that the win forces on it, then the loser
 /// faints and gives up its action for its faint
 [[nodiscard]] std::span<const StopStep> KnockOutSteps();
-/// The life of a creature after its life pays for the fight a number of times, one payment after the other
-[[nodiscard]] float LifeAfterPayments(float life, float fightHealth, uint32_t payments);
+/// The life of a creature after its life pays for the fight a number of times, one payment after the other. The life of
+/// a protected creature (a creature that a script holds in a cutscene, or an indestructible creature) does not change at
+/// a payment that would bring it to 0.01 or less.
+[[nodiscard]] float LifeAfterPayments(float life, float fightHealth, uint32_t payments, bool protectedLife = false);
 } // namespace openblack::creature_fight

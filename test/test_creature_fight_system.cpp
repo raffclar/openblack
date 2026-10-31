@@ -38,6 +38,7 @@
 #include "ECS/Components/CreatureNeeds.h"
 #include "ECS/Components/CreatureObjectAction.h"
 #include "ECS/Components/CreaturePartner.h"
+#include "ECS/Components/Indestructible.h"
 #include "ECS/Components/ScriptControl.h"
 #include "ECS/Components/Transform.h"
 #include "ECS/Registry.h"
@@ -2374,6 +2375,80 @@ TEST_F(CreatureFightSystemTest, ACallOffInTheDuelMakesTheLifeOfEachCreaturePayAt
 	fight::Enter(registry.Get<CreatureFighting>(second).fighter, fight::State::Finish);
 	fights.EndBodyFightAgain(second);
 	EXPECT_FLOAT_EQ(registry.Get<const CreatureNeeds>(second).needs.life, fight::LifeAfterPayments(1.0f, 0.6f, 3));
+}
+
+TEST_F(CreatureFightSystemTest, AStopForANewPlanAfterTheFightMakesTheLifePayAgainWhileTheBodyPlaysAMove)
+{
+	auto& registry = Locator::entitiesRegistry::value();
+	for (const auto self : {first, second})
+	{
+		fight::Enter(registry.Get<CreatureFighting>(self).fighter, fight::State::Stance);
+		registry.Get<CreatureFighting>(self).fighter.health = 0.6f;
+		registry.AssignOrReplace<CreatureNeeds>(self).needs.life = 1.0f;
+	}
+	fights.CallOff(first);
+	ASSERT_TRUE(registry.Get<const CreatureFighting>(first).ended);
+	// A plain call-off of the fight that is over pays nothing
+	fights.CallOff(first);
+	EXPECT_FLOAT_EQ(registry.Get<const CreatureNeeds>(first).needs.life, fight::LifeAfterPayments(1.0f, 0.6f, 2));
+	// A new plan ends the fight of the body again: the life pays one time more, and the other creature does not pay
+	fights.CallOffForPlan(first);
+	EXPECT_FLOAT_EQ(registry.Get<const CreatureNeeds>(first).needs.life, fight::LifeAfterPayments(1.0f, 0.6f, 3));
+	EXPECT_FLOAT_EQ(registry.Get<const CreatureNeeds>(second).needs.life, fight::LifeAfterPayments(1.0f, 0.6f, 3));
+	// The other creature pays again for its own new plan while its body makes a move
+	fight::Enter(registry.Get<CreatureFighting>(second).fighter, fight::State::Action);
+	fights.CallOffForPlan(second);
+	EXPECT_FLOAT_EQ(registry.Get<const CreatureNeeds>(second).needs.life, fight::LifeAfterPayments(1.0f, 0.6f, 4));
+	// A body that finishes its fight does not pay
+	fight::Enter(registry.Get<CreatureFighting>(first).fighter, fight::State::Finish);
+	fights.CallOffForPlan(first);
+	EXPECT_FLOAT_EQ(registry.Get<const CreatureNeeds>(first).needs.life, fight::LifeAfterPayments(1.0f, 0.6f, 3));
+}
+
+TEST_F(CreatureFightSystemTest, AStopForANewPlanInTheDuelPaysAsACallOffDoes)
+{
+	auto& registry = Locator::entitiesRegistry::value();
+	for (const auto self : {first, second})
+	{
+		fight::Enter(registry.Get<CreatureFighting>(self).fighter, fight::State::Stance);
+		registry.Get<CreatureFighting>(self).fighter.health = 0.6f;
+		registry.AssignOrReplace<CreatureNeeds>(self).needs.life = 1.0f;
+	}
+	fights.CallOffForPlan(first);
+	EXPECT_FLOAT_EQ(registry.Get<const CreatureNeeds>(first).needs.life, fight::LifeAfterPayments(1.0f, 0.6f, 2));
+	EXPECT_FLOAT_EQ(registry.Get<const CreatureNeeds>(second).needs.life, fight::LifeAfterPayments(1.0f, 0.6f, 3));
+}
+
+TEST_F(CreatureFightSystemTest, AKnockOutBelowNoFightHealthTakesMoreThanAQuarterAtEachPayment)
+{
+	auto& registry = Locator::entitiesRegistry::value();
+	for (const auto self : {first, second})
+	{
+		fight::Enter(registry.Get<CreatureFighting>(self).fighter, fight::State::Stance);
+		registry.AssignOrReplace<CreatureNeeds>(self).needs.life = 1.0f;
+	}
+	registry.Get<CreatureFighting>(first).fighter.health = 0.9f;
+	registry.Get<CreatureFighting>(second).fighter.health = -0.2f;
+	fights.KnockOut(second);
+	EXPECT_FLOAT_EQ(registry.Get<const CreatureNeeds>(second).needs.life, fight::LifeAfterPayments(1.0f, -0.2f, 4));
+	EXPECT_LT(registry.Get<const CreatureNeeds>(second).needs.life, 0.0f);
+	EXPECT_FLOAT_EQ(fights.GetFightHealth(second), -0.2f);
+}
+
+TEST_F(CreatureFightSystemTest, AnIndestructibleLoserKeepsALittleLifeAfterAKnockOut)
+{
+	auto& registry = Locator::entitiesRegistry::value();
+	for (const auto self : {first, second})
+	{
+		fight::Enter(registry.Get<CreatureFighting>(self).fighter, fight::State::Stance);
+		registry.AssignOrReplace<CreatureNeeds>(self).needs.life = 1.0f;
+	}
+	registry.Get<CreatureFighting>(first).fighter.health = 0.9f;
+	registry.Get<CreatureFighting>(second).fighter.health = -0.2f;
+	registry.Assign<Indestructible>(second);
+	fights.KnockOut(second);
+	EXPECT_FLOAT_EQ(registry.Get<const CreatureNeeds>(second).needs.life, fight::LifeAfterPayments(1.0f, -0.2f, 4, true));
+	EXPECT_GT(registry.Get<const CreatureNeeds>(second).needs.life, 0.0f);
 }
 
 TEST_F(CreatureFightSystemTest, AKnockOutMakesTheLifeOfTheWinnerPayTwoTimesAndTheLifeOfTheLoserFourTimes)

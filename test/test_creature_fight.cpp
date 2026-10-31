@@ -344,7 +344,10 @@ TEST(CreatureFight, HealthStaminaAndLife)
 	// A knock out costs a quarter of the bar
 	EXPECT_FLOAT_EQ(LifeAfterFight(1.0f, 0.0f), 0.75f);
 	EXPECT_FLOAT_EQ(LifeAfterFight(0.8f, 0.6f), 0.7f);
-	EXPECT_FLOAT_EQ(LifeAfterFight(0.1f, 0.0f), 0.0f);
+	// Nothing keeps the life at 0 or more
+	EXPECT_FLOAT_EQ(LifeAfterFight(0.1f, 0.0f), 0.1f - 0.25f);
+	// A fight health below 0 makes a payment take more than a quarter
+	EXPECT_FLOAT_EQ(LifeAfterFight(1.0f, -0.2f), 1.0f - (1.2f * 0.25f));
 	EXPECT_TRUE(HealthyEnoughToFight(0.11f));
 	EXPECT_FALSE(HealthyEnoughToFight(0.1f));
 	EXPECT_FLOAT_EQ(FaintSeconds(1.0f), 12.0f);
@@ -880,6 +883,8 @@ TEST(CreatureFightHud, BarColours)
 	EXPECT_EQ(creature_fight_hud::HealthColour(0.75f), glm::u8vec3(127, 255, 0));
 	EXPECT_EQ(creature_fight_hud::HealthColour(1.0f), glm::u8vec3(0, 255, 0));
 	EXPECT_EQ(creature_fight_hud::HealthColour(2.0f), glm::u8vec3(0, 255, 0));
+	// A fight health below 0 after a knock out shows as no fight health
+	EXPECT_EQ(creature_fight_hud::HealthColour(-0.3f), creature_fight_hud::HealthColour(0.0f));
 	EXPECT_EQ(creature_fight_hud::StaminaColour(0.0f), glm::u8vec3(32, 128, 255));
 	EXPECT_EQ(creature_fight_hud::StaminaColour(1.0f), glm::u8vec3(127, 128, 255));
 	EXPECT_EQ(creature_fight_hud::StaminaColour(0.5f), glm::u8vec3(79, 128, 255));
@@ -1214,6 +1219,10 @@ TEST(CreatureFight, LifeLostInADuelComesOffTheFightHealth)
 	EXPECT_FLOAT_EQ(HealthAfterLifeLost(0.6f, 0.25f), 0.35f);
 	EXPECT_FLOAT_EQ(HealthAfterLifeLost(0.2f, 0.5f), 0.0f);
 	EXPECT_FLOAT_EQ(HealthAfterLifeLost(0.2f, 0.0f), 0.2f);
+	// A blow that lands has no lower limit
+	EXPECT_FLOAT_EQ(HealthAfterBlow(0.6f, 0.25f), 0.35f);
+	EXPECT_FLOAT_EQ(HealthAfterBlow(0.1f, 0.3f), 0.1f - 0.3f);
+	EXPECT_LT(HealthAfterBlow(0.1f, 0.3f), 0.0f);
 }
 
 TEST(CreatureFight, OnlyTheStartAfterItsTurnTheStanceTheBlockAndStepsFaceTheOpponentEachTurn)
@@ -1441,4 +1450,10 @@ TEST(CreatureFight, EachPaymentTakesAQuarterOfTheLostFightHealthFromTheLife)
 	EXPECT_FLOAT_EQ(creature_fight::LifeAfterPayments(0.5f, 0.6f, 1), creature_fight::LifeAfterFight(0.5f, 0.6f));
 	EXPECT_FLOAT_EQ(creature_fight::LifeAfterPayments(0.5f, 0.6f, 2),
 	                creature_fight::LifeAfterFight(creature_fight::LifeAfterFight(0.5f, 0.6f), 0.6f));
+	// After a knock out, each payment takes more than a quarter, and the life goes below 0
+	EXPECT_FLOAT_EQ(creature_fight::LifeAfterPayments(1.0f, -0.2f, 4), 1.0f - 0.3f - 0.3f - 0.3f - 0.3f);
+	// A protected life does not change at a payment that brings it to 0.01 or less, and it changes at the others
+	EXPECT_FLOAT_EQ(creature_fight::LifeAfterPayments(1.0f, -0.2f, 4, true), 1.0f - 0.3f - 0.3f - 0.3f);
+	EXPECT_FLOAT_EQ(creature_fight::LifeAfterPayments(0.2f, 0.0f, 1, true), 0.2f);
+	EXPECT_FLOAT_EQ(creature_fight::LifeAfterPayments(1.0f, 0.0f, 2, true), 0.5f);
 }

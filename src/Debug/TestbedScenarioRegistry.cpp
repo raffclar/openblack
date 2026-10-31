@@ -8591,6 +8591,23 @@ void AddCombat(std::vector<Scenario>& all)
 	                 Go(Kind::LeashOrderAt, 0, {-25.0f, 0.0f}, 1.0f, false)},
 	});
 
+	all.push_back({
+	    .id = "combat.life_pays_after_the_fight",
+	    .name = "A stroke just after a call-off costs life again",
+	    .facet = Facet::Combat,
+	    .description = "The red tiger asks the blue tiger to fight, and both fight by themselves. In the duel the red "
+	                   "tiger gets the rope leash, and a second later the player tells it with the leash to go to a point "
+	                   "to the south. At once after the order, the player strokes the blue tiger.",
+	    .expected = "The order calls the fight off with no winner. The stroke stops the blue tiger again. While its body "
+	                "still plays its stance, a move, a block or a cast, its life pays one time more: the fight transcript "
+	                "has a level record for its life with why stopped_again and life_payments 1. A body that finishes "
+	                "pays nothing.",
+	    .framing = ringside,
+	    .creatures = {red(PlayerNames::PLAYER_ONE, 0.6f, -0.45f), blue(PlayerNames::PLAYER_TWO, 0.6f, -0.45f)},
+	    .commands = {Fight(Kind::StartFight, 0, 1, 1.0f), Fight(Kind::FightAuto, 0, 1, 0.2f), Leash(0, LeashType::Rope, 18.0f),
+	                 Go(Kind::LeashOrderAt, 0, {-25.0f, 0.0f}, 1.0f, false), Act(Kind::Stroke, 1, 0.0f)},
+	});
+
 	{
 		// Each tiger holds a rock as the fight starts. It lets go of the rock before its taunt.
 		auto start = Fight(Kind::StartFight, 0, 1, 1.0f);
