@@ -3620,6 +3620,20 @@ void Runner::Give(const Command& command)
 		Log(fmt::format("{:.1f}s: quick save: {}", _seconds, sent ? "sent" : "refused"));
 		return;
 	}
+	if (command.kind == Kind::SetTownBeliefInRival)
+	{
+		auto& registry = Locator::entitiesRegistry::value();
+		const auto& towns = registry.Context().towns;
+		if (const auto town = towns.find(k_ScenarioTownId); town != towns.end() && registry.Valid(town->second))
+		{
+			if (auto* impression = registry.TryGet<ecs::components::TownImpression>(town->second))
+			{
+				magic::town_belief::SetInPlayer(impression->belief, PlayerNames::PLAYER_TWO, command.amount);
+			}
+		}
+		Log(fmt::format("{:.1f}s: the town believes {:.2f} in the second player", _seconds, command.amount));
+		return;
+	}
 	if (command.kind == Kind::EndGuidanceWaits)
 	{
 		if (Locator::guidanceSystem::has_value())
@@ -4212,6 +4226,7 @@ void Runner::Give(const Command& command)
 	case Kind::PlayIntroFilm:
 	case Kind::RunHelpMessage:
 	case Kind::EndGuidanceWaits:
+	case Kind::SetTownBeliefInRival:
 	case Kind::ProfileFolderCheck:
 	case Kind::OwnTattooPicture:
 	case Kind::OpenTattooMenu:

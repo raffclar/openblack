@@ -350,8 +350,24 @@ void AnimalSystem::HideInLair(entt::entity entity, Animal& animal, Hunter& hunte
 	}
 	else
 	{
-		// Else it goes to the nearest town
-		const auto town = NearestTown(Metres(animal.move.position), std::numeric_limits<float>::max());
+		// Else it goes to the nearest town of all, by the map distance in whole map units. The towns go in the order of
+		// the game's list of all the towns, and the first of equals stays.
+		entt::entity town = entt::null;
+		int32_t nearest = 0;
+		for (const auto each : ecs::player_towns::AllMadeNewestFirst(registry))
+		{
+			const auto* at = registry.TryGet<const Transform>(each);
+			if (at == nullptr)
+			{
+				continue;
+			}
+			const auto distance = gutils::GetDistance(here, map_coords::FromMetres({at->position.x, at->position.z}));
+			if (town == entt::null || distance < nearest)
+			{
+				town = each;
+				nearest = distance;
+			}
+		}
 		const auto* transform = registry.Valid(town) ? registry.TryGet<const Transform>(town) : nullptr;
 		if (transform == nullptr)
 		{
