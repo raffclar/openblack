@@ -109,6 +109,28 @@ void testbed_scenarios::AddComputerGodDefenceScenarios(std::vector<Scenario>& al
 	                         .second = {.kind = ComputerActionThing::Kind::Icon, .type = MagicType::Shield}}},
 	});
 	all.push_back({
+	    .id = "mind.computer_god_creature_repair",
+	    .name = "A computer god that does not send its creature to a damaged building of its town",
+	    .facet = Facet::Mind,
+	    .description = "Lines of a land switch on the computer mind of player two. Player two has a temple to the south, "
+	                   "a Celtic town to the north and a tiger between them. A hut at the middle of the town has half of "
+	                   "its life and does not burn. No testbed tool tells the god what to do.",
+	    .expected = "The god finds the hut as the most damaged building of its town: the players.computer_nodes query "
+	                "shows the hut as the object of CheckTownForDamage and FindDamagedAbode. As in the original game, the "
+	                "god never sends the tiger to the hut: GetCreaturetoHelp looks for a town above it and finds the "
+	                "hut, so all three nodes stay at 0 (vanilla-bugs 789). The god does its other work.",
+	    .framing = {.shot = Shot::Overview, .include = {glm::vec2(-80.0f, -110.0f), glm::vec2(80.0f, 100.0f)}},
+	    .creatures = {{.label = "player two's",
+	                   .species = CreatureType::Tiger,
+	                   .offset = {30.0f, -30.0f},
+	                   .owner = PlayerNames::PLAYER_TWO,
+	                   .size = 1.0f}},
+	    .objects = {{.type = AbodeInfo::CelticHut, .offset = {0.0f, 70.0f}, .life = 0.5f}},
+	    .landScript = k_ComputerGodDefenceScript,
+	    .worshipShare = 0.5f,
+	    .objectsAfterLandScript = true,
+	});
+	all.push_back({
 	    .id = "saves.computer_god_mind",
 	    .name = "A computer god whose mind starts again after the load of a saved game",
 	    .facet = Facet::Mind,
