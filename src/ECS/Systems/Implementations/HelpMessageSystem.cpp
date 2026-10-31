@@ -88,6 +88,11 @@ bool InScriptCutScene()
 
 void HelpMessageSystem::SaveState(reflection::BinaryWriter& out) const
 {
+	// Each computer has its own help: the help level of its player's options, the help record of its profile folder and
+	// the events of its own player. Thus in a network game each computer starts its help at its own turns, and the help
+	// starts only the help scripts, which write only this computer's text, spirits and voices. The whole section is a
+	// presentation part.
+	out.BeginPresentation();
 	reflection::Save(out, _sent);
 	reflection::Save(out, _sentTurn);
 	reflection::Save(out, _categoryTurn);
@@ -96,6 +101,7 @@ void HelpMessageSystem::SaveState(reflection::BinaryWriter& out) const
 	reflection::Save(out, _messageTurn);
 	reflection::Save(out, _started);
 	reflection::Save(out, _randomSeed);
+	out.EndPresentation();
 }
 
 bool HelpMessageSystem::LoadState(reflection::BinaryReader& in)

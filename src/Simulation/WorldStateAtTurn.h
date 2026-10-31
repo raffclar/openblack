@@ -24,6 +24,7 @@
 #include <utility>
 #include <vector>
 
+#include <LHVMFile.h>
 #include <entt/meta/fwd.hpp>
 
 #include "ECS/SyncedState.h"
@@ -67,12 +68,22 @@ struct Map
 	std::vector<SectionMap> sections;
 	/// The presentation values in the block of the registry's context
 	std::vector<std::pair<size_t, size_t>> contextPresentation;
+	/// The bytes of the scripts' block that only one computer has (see ScriptPresentation)
+	std::vector<std::pair<size_t, size_t>> scriptPresentation;
 	/// The synced seed and the count of its draws, which the checksum of the turn has
 	uint32_t syncedSeed {0};
 	uint64_t syncedDraws {0};
 	/// The particle sounds that travel to the listener of this computer and do not play yet
 	size_t waitingSounds {0};
 };
+
+/// The bytes of the scripts' block that only one computer has, from the parts of the block's running state. In a network
+/// game only the help of each computer starts scripts, and after the first turn no other script runs. Each computer
+/// starts its help at its own turns, so the main stack, the tasks and the counts of the script machine are of this
+/// computer only. No script of the help writes a global variable, so the values of the global variables stay synced. In
+/// a game for one player the world's scripts run in the same machine, so no byte is local.
+[[nodiscard]] std::vector<std::pair<size_t, size_t>> ScriptPresentation(const lhvm::LHVMFile::RunningStateLayout& layout,
+                                                                        bool networkGame);
 
 /// The map as JSON text
 [[nodiscard]] std::string MapText(const Map& map);

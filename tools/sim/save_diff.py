@@ -294,7 +294,9 @@ def text_report(result):
 #   local seed and the streams of this computer (see LOCAL_CLOCK_VALUES);
 # - in the entities block, the presentation parts of the map (synced_state::PresentationParts);
 # - in the systems block, the presentation bytes of each section of the map. A section that a computer does not write
-#   has no synced bytes.
+#   has no synced bytes;
+# - in the scripts block (LHVM), the bytes of the map's scriptPresentation: in a network game each computer runs only its
+#   own help scripts, so the main stack, the tasks and the counts of the script machine are of that computer.
 LOCAL_BLOCKS = {"CAMR"}
 # The values of the clock block that each computer keeps for itself
 LOCAL_CLOCK_VALUES = {"speed", "paused", "remainderMs", "localSeed", "particleStream", "crtSeed", "runSeed", "streams",
@@ -450,6 +452,9 @@ def compare_synced(data_a, map_a, data_b, map_b):
                       if name not in LOCAL_CLOCK_VALUES and clock_a[name] != clock_b[name]}
         elif tag == "ECSW":
             detail = synced_entities(one, other, parts)
+        elif tag == "LHVM":
+            detail = compare_bytes(synced_bytes(one, map_a.get("scriptPresentation", [])),
+                                   synced_bytes(other, map_b.get("scriptPresentation", []))) or {}
         elif tag == "RCTX":
             # The context keeps some presentation values, as the sections of the systems do
             detail = compare_bytes(synced_bytes(one, map_a.get("contextPresentation", [])),

@@ -129,6 +129,9 @@ constexpr int k_DroppedScreenHeight = 480;
 
 void HelpTextSystem::SaveState(reflection::BinaryWriter& out) const
 {
+	// The help texts are of this computer only: in a network game each computer's own help scripts say them. Thus the
+	// whole section is a presentation part.
+	out.BeginPresentation();
 	// The voices that speak the texts are sounds, which a save does not keep. The scripts' clock goes first.
 	const auto now =
 	    Locator::helpSpeechSystem::has_value() ? static_cast<int32_t>(Locator::helpSpeechSystem::value().GetClockMs()) : 0;
@@ -145,6 +148,7 @@ void HelpTextSystem::SaveState(reflection::BinaryWriter& out) const
 		reflection::Save(out, saved);
 	}
 	reflection::Save(out, _storyHistory);
+	out.EndPresentation();
 }
 
 bool HelpTextSystem::LoadState(reflection::BinaryReader& in)
