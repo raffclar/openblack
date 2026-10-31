@@ -205,6 +205,9 @@ void PlayLivingTurn()
 	    [&add](entt::entity entity, const Creature&, const LivingListPlace&) { add(entity, Kind::Creature); });
 	living_turn::NewestFirst(list);
 
+	// A creature that the turn made takes its first pose in its own turn. The blends of that pose are made first, on
+	// the shared threads.
+	Locator::creatureAnimationSystem::value().PrepareFirstPoses();
 	auto& villagers = Locator::livingActionSystem::value();
 	auto& animals = Locator::animalSystem::value();
 	bool animalsTurn = false;
