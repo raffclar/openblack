@@ -579,6 +579,42 @@ TEST_F(ParticleEffectTest, AHealChakraFollowsEachTargetAndLightsIt)
 	}
 }
 
+TEST_F(ParticleEffectTest, AHealChakraLetsItsTargetGoWhenItsEffectGoes)
+{
+	constexpr auto k_Villager = static_cast<entt::entity>(5);
+	world.targets = {{k_Villager, {10.0f, 0.0f, 20.0f}}};
+	FakeSpell spell;
+	auto effect =
+	    Make(Header() + Object("ParticlePointCreator", "Point0", "") + Object("ParticleSpriteCreator", "Sprite0", k_Sprite) +
+	         Object("UR_HealSpellChakra", "Heal0",
+	                "PROPERTY Group INTEGER 0\nPROPERTY PCreator PERSIS_PNTR Point0\nPROPERTY NextGroups ARRAY SIZE 1 1\n"
+	                "PROPERTY MaxAlpha FLOAT 200\nPROPERTY AtomAgeMaxAlpha FLOAT 0.5\nPROPERTY AtomAgeZeroAlpha FLOAT 1.5\n"
+	                "PROPERTY SpecularColorR INTEGER 100\n") +
+	         Object("CreateRuleSphere", "Burst0",
+	                "PROPERTY Group INTEGER 1\nPROPERTY PCreator PERSIS_PNTR Sprite0\nPROPERTY NumAtoms INTEGER 4\n"));
+	effect->SetSink(&spell);
+	effect->AddTarget(k_Villager);
+	for (int i = 0; i < 6; ++i)
+	{
+		effect->Step(k_Step);
+	}
+	ASSERT_TRUE(world.claimed.contains(k_Villager));
+	ASSERT_GT(world.glows[k_Villager].r, 0);
+	// The miracle ends while the chakra still lights its target: the target is free for the next heal, and dark
+	effect.reset();
+	EXPECT_FALSE(world.claimed.contains(k_Villager));
+	EXPECT_EQ(world.glows[k_Villager], glm::u8vec3(0));
+	// So the next heal takes it again
+	auto next = Make(Header() + Object("ParticlePointCreator", "Point0", "") +
+	                 Object("UR_HealSpellChakra", "Heal0", "PROPERTY Group INTEGER 0\nPROPERTY PCreator PERSIS_PNTR Point0\n"));
+	FakeSpell nextSpell;
+	next->SetSink(&nextSpell);
+	next->AddTarget(k_Villager);
+	next->Step(k_Step);
+	ASSERT_EQ(nextSpell.events.size(), 2u);
+	EXPECT_EQ(nextSpell.events[1].target, k_Villager);
+}
+
 TEST_F(ParticleEffectTest, DrawnCreatorsMakeTheirAtoms)
 {
 	auto effect =
