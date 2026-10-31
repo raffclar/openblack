@@ -689,7 +689,7 @@ void detail::SaveValue(BinaryWriter& out, const Type& value)
 		// The same bytes as the flag and then the value, in one block
 		using Held = typename Type::value_type;
 		auto place = out.Extend(value.has_value() ? 1 + sizeof(Held) : 1);
-		place[0] = value.has_value() ? 1 : 0;
+		place[0] = static_cast<uint8_t>(value.has_value() ? 1 : 0);
 		if (value.has_value())
 		{
 			std::memcpy(place.data() + 1, std::addressof(*value), sizeof(Held));
