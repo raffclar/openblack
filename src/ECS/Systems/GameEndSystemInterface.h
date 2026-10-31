@@ -12,6 +12,7 @@
 #include <cstdint>
 
 #include <optional>
+#include <tuple>
 #include <vector>
 
 #include <entt/entity/entity.hpp>
@@ -37,6 +38,8 @@ public:
 	[[nodiscard]] virtual bool IsDecided() const = 0;
 	/// What happened in the turns since the last call, which the view shows. A frame can do more than one turn.
 	[[nodiscard]] virtual std::vector<game_end::Event> TakeEventsToShow() = 0;
+	/// The human of a god left the network game in this turn. The view of each computer tells it.
+	virtual void HumanLeft(PlayerNames god) { std::ignore = god; }
 	/// The humans of the gods who left the network game in the turns since the last call, which the view tells
 	[[nodiscard]] virtual std::vector<game_end::Leave> TakeLeavesToShow() { return {}; }
 	/// The one god among the first four players that is still in, when every other god is out

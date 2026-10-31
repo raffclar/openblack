@@ -30,6 +30,7 @@ public:
 	[[nodiscard]] const std::vector<game_end::Event>& LastEvents() const override { return _events; }
 	[[nodiscard]] bool IsDecided() const override;
 	[[nodiscard]] std::vector<game_end::Event> TakeEventsToShow() override { return std::exchange(_eventsToShow, {}); }
+	void HumanLeft(PlayerNames god) override;
 	[[nodiscard]] std::vector<game_end::Leave> TakeLeavesToShow() override { return std::exchange(_leavesToShow, {}); }
 	[[nodiscard]] std::optional<PlayerNames> LastGodIn() const override;
 	[[nodiscard]] std::vector<GodStanding> Standings() const override;

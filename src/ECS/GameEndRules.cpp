@@ -315,19 +315,6 @@ std::vector<Event> ProcessTurn(World& world, const Facts& facts, State& state)
 	return events;
 }
 
-std::vector<Leave> LeavesAt(std::span<const LeftGod> gods, uint32_t turn, bool decided)
-{
-	std::vector<Leave> leaves;
-	for (const auto& god : gods)
-	{
-		if (god.turn == turn)
-		{
-			leaves.push_back({.god = god.god, .godOut = god.out, .decided = decided});
-		}
-	}
-	return leaves;
-}
-
 size_t DecidingEvents(std::span<const Event> events)
 {
 	return static_cast<size_t>(std::ranges::count_if(events, [](const Event& event) {

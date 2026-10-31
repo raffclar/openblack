@@ -41,6 +41,7 @@
 #include "ECS/Systems/CreatureMindSystemInterface.h"
 #include "ECS/Systems/CreatureSkinSystemInterface.h"
 #include "ECS/Systems/EffectRequestSystemInterface.h"
+#include "ECS/Systems/GameEndSystemInterface.h"
 #include "ECS/Systems/HandGrabSystemInterface.h"
 #include "ECS/Systems/HandSystemInterface.h"
 #include "ECS/Systems/HelpMessageSystemInterface.h"
@@ -455,6 +456,11 @@ void Run(const Command& command, uint32_t turn)
 			        });
 			    if (god.has_value() && !registry.AllOf<openblack::ecs::components::LeftGame>(*god))
 			    {
+				    // The view of each computer tells the players, with the standing of the god before the leave
+				    if (openblack::Locator::gameEndSystem::has_value())
+				    {
+					    openblack::Locator::gameEndSystem::value().HumanLeft(command.player);
+				    }
 				    registry.Assign<openblack::ecs::components::LeftGame>(*god, turn);
 			    }
 		    }

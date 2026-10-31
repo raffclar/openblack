@@ -173,6 +173,21 @@ private:
 };
 } // namespace
 
+void GameEndSystem::HumanLeft(PlayerNames god)
+{
+	// What was true before the leave: the god was out, and the game was decided. The turn counts the god out after this.
+	auto& registry = Locator::entitiesRegistry::value();
+	bool out = false;
+	registry.Each<const components::Player>([&registry, &out, god](entt::entity entity, const components::Player& player) {
+		if (player.name == god)
+		{
+			const auto* standing = registry.TryGet<const GameStanding>(entity);
+			out = out || (standing != nullptr && standing->out);
+		}
+	});
+	_leavesToShow.push_back({.god = god, .godOut = out, .decided = registry.Context().gameEnd.decided});
+}
+
 void GameEndSystem::ProcessTurn(uint32_t turn)
 {
 	_events.clear();
@@ -188,19 +203,6 @@ void GameEndSystem::ProcessTurn(uint32_t turn)
 	    .templesNeeded = !(networkGame && Locator::landSystem::has_value() && Locator::landSystem::value().OnTestbed()) &&
 	                     !(Locator::simulation::has_value() && Locator::simulation::value().GetSettings().godsNeedNoTemple),
 	};
-	// The humans who leave at this turn, before the turn counts their gods out. The view of each computer tells them.
-	if (facts.networkGame)
-	{
-		std::vector<game_end::LeftGod> left;
-		registry.Each<const components::Player, const components::LeftGame>(
-		    [&registry, &left](entt::entity entity, const components::Player& player, const components::LeftGame& leftGame) {
-			    const auto* standing = registry.TryGet<const components::GameStanding>(entity);
-			    left.push_back({.god = player.name, .turn = leftGame.turn, .out = standing != nullptr && standing->out});
-		    });
-		std::ranges::sort(left, {}, &game_end::LeftGod::god);
-		const auto leaves = game_end::LeavesAt(left, turn, context.gameEnd.decided);
-		_leavesToShow.insert(_leavesToShow.end(), leaves.begin(), leaves.end());
-	}
 	if ((!facts.networkGame && !facts.skirmish) || context.gameEnd.decided)
 	{
 		return;

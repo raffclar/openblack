@@ -170,16 +170,6 @@ void CountOut(World& world, State& state, PlayerNames god, ecs::components::OutR
 /// The number of events of a turn that decide the game. The game tells the lobby one time for each of these events.
 [[nodiscard]] size_t DecidingEvents(std::span<const Event> events);
 
-/// The human of a god left the network game at a turn
-struct LeftGod
-{
-	PlayerNames god;
-	/// The turn at which the human left
-	uint32_t turn {0};
-	/// The god was out of the game before its human left
-	bool out {false};
-};
-
 /// A human who left the network game, as the other computers tell their players
 struct Leave
 {
@@ -190,9 +180,6 @@ struct Leave
 	/// The game was decided before the human left
 	bool decided {false};
 };
-
-/// The humans who left at this turn, in the order of the gods
-[[nodiscard]] std::vector<Leave> LeavesAt(std::span<const LeftGod> gods, uint32_t turn, bool decided);
 
 /// What a computer shows when a human of another computer leaves the network game
 struct LeaveNotice

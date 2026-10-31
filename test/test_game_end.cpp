@@ -488,22 +488,6 @@ TEST(GameEnd, ANetworkGameWithNoConditionsEndsAtItsTimeLimitByTheInfluence)
 	EXPECT_TRUE(state.decided);
 }
 
-// Only the gods whose humans left at this turn give a leave, with what was true before the leave
-TEST(GameEnd, TheLeavesOfATurnAreTheGodsThatLeftAtThatTurn)
-{
-	const std::array gods {LeftGod {.god = PlayerNames::PLAYER_ONE, .turn = 40, .out = false},
-	                       LeftGod {.god = PlayerNames::PLAYER_TWO, .turn = 41, .out = true},
-	                       LeftGod {.god = PlayerNames::PLAYER_THREE, .turn = 41, .out = false}};
-	const auto leaves = LeavesAt(gods, 41, true);
-	ASSERT_EQ(leaves.size(), 2u);
-	EXPECT_EQ(leaves[0].god, PlayerNames::PLAYER_TWO);
-	EXPECT_TRUE(leaves[0].godOut);
-	EXPECT_TRUE(leaves[0].decided);
-	EXPECT_EQ(leaves[1].god, PlayerNames::PLAYER_THREE);
-	EXPECT_FALSE(leaves[1].godOut);
-	EXPECT_TRUE(LeavesAt(gods, 42, false).empty());
-}
-
 // A human whose god is still in gives the remark and the box; once the game is decided, only the remark. A human whose
 // god was out gives neither. An observer's god is never out.
 TEST(GameEnd, ALeaveGivesTheRemarkAndTheBoxOnlyWhileTheGodIsIn)
