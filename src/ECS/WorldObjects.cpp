@@ -436,6 +436,21 @@ world_objects::Size world_objects::SizeOf(entt::entity object)
 	return size;
 }
 
+std::optional<world_objects::Size> world_objects::SizeOfModel(entt::id_type model, float scale)
+{
+	if (!Locator::resources::has_value())
+	{
+		return std::nullopt;
+	}
+	auto& meshes = Locator::resources::value().GetMeshes();
+	if (!meshes.Contains(model))
+	{
+		return std::nullopt;
+	}
+	const auto box = meshes.Handle(model)->GetBoundingBox().Size() * scale;
+	return Size {.radius = std::max(box.x, box.z) * 0.5f, .height = box.y};
+}
+
 namespace
 {
 /// The pot of a pile of food or wood, whose life is what it holds; none for anything else
