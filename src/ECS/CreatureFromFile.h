@@ -19,6 +19,7 @@
 #include <entt/entity/entity.hpp>
 #include <glm/vec2.hpp>
 
+#include "Creature/ClanCreatureOrder.h"
 #include "Creature/CreatureFileLoad.h"
 #include "Enums.h"
 
@@ -64,6 +65,12 @@ Result Make(const Order& order);
 /// start. The creature comes at the creature home of the god's citadel, as a creature that a script makes from a mind
 /// file: the file gives its species too. A god with no citadel, no file or a creature already brings no creature.
 Result Bring(PlayerNames owner, std::span<const uint8_t> file);
+
+/// At the start of a network game, the god of a human brings a new clan creature, as the order in the start data of its
+/// player asks. The creature comes at the creature home of the god's citadel, with the species and the name of the
+/// order. It has no mind file. It takes each stage up to the last, it knows every leash, and it grows up fully at once.
+/// A god with no citadel or a creature already, or an order for a row past the creature table, brings no creature.
+Result BringClanOrder(PlayerNames owner, const clan_creature_order::Order& order);
 
 /// At the start of a skirmish, the god of the player brings the creature that the player's profile keeps. The creature
 /// comes at the creature home of the god's citadel, as Bring makes it. A god with no citadel, no creature kept or a

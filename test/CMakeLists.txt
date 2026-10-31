@@ -2241,3 +2241,4 @@ target_link_libraries(test_magic_save PRIVATE edt psys)
     test_inspector_server_room inspector/test_inspector_server_room.cpp
   )
   target_link_libraries(test_inspector_server_room PRIVATE inspector)
+openblack_setup_and_add_test(test_clan_creature_order test_clan_creature_order.cpp)
