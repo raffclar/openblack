@@ -146,7 +146,8 @@ public:
 			Cancel(creature);
 		}
 	}
-	/// How far through its animations the action is, 0 to 1, while it plays them
+	/// How far through its animations the action is, while it plays them. An action that keeps the animation of the stand
+	/// divides its time by the length of the stand, as the game does.
 	[[nodiscard]] virtual std::optional<float> GetProgress(entt::entity creature) const = 0;
 	/// The thing in the hand of the creature, as the body shows it and lets it go
 	[[nodiscard]] virtual std::optional<entt::entity> GetHeld(entt::entity creature) const = 0;

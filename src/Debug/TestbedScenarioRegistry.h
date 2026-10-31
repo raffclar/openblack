@@ -1167,6 +1167,8 @@ struct Command
 	bool onTemple {false};
 	/// A script's action is done to the totem of the object, a town centre, in place of the object
 	bool onTotem {false};
+	/// A script's action is done to the piece of a building nearest to the creature, in place of the object
+	bool onPiece {false};
 	/// The leash put on
 	LeashType leash {LeashType::Rope};
 	/// The part of the body stroked, by its place in the hand's parts (the head first)

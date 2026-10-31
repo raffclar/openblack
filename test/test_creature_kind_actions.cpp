@@ -48,6 +48,31 @@ TEST(CreatureKindActions, LivingThingsAreVillagersAnimalsBirdsAndCreatures)
 	}
 }
 
+TEST(CreatureKindActions, APieceThatBrokeOffABuildingIsARockForTheWorkWithRocks)
+{
+	for (const auto thing : {Thing::Rock, Thing::Bonfire, Thing::BuildingPiece})
+	{
+		EXPECT_TRUE(creature_object_actions::IsRock(thing));
+	}
+	for (const auto thing : {Thing::DeadTree, Thing::Static, Thing::MobileObject, Thing::Reward, Thing::Scaffold, Thing::Other})
+	{
+		EXPECT_FALSE(creature_object_actions::IsRock(thing));
+	}
+}
+
+TEST(CreatureKindActions, TheHandMeasuresSomeActionsOnObjectsByTheStand)
+{
+	using creature_object_actions::Kind;
+	for (const auto kind : {Kind::PickUp, Kind::Destroy, Kind::Throw, Kind::Point, Kind::TakeFromHand, Kind::Kick})
+	{
+		EXPECT_TRUE(creature_object_actions::SharesByStand(kind));
+	}
+	for (const auto kind : {Kind::PutDown, Kind::Discard, Kind::Keep})
+	{
+		EXPECT_FALSE(creature_object_actions::SharesByStand(kind));
+	}
+}
+
 TEST(CreatureKindActions, StonesKnockDownTheLivingAndWhatIsSetIntoTheLand)
 {
 	EXPECT_TRUE(creature_object_actions::CanBeStoned(Thing::Villager, false));

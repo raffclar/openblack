@@ -29,6 +29,7 @@
 #include "ECS/ArtefactRules.h"
 #include "ECS/Components/Abode.h"
 #include "ECS/Components/Ball.h"
+#include "ECS/Components/BuildingDamage.h"
 #include "ECS/Components/CarriedByTornado.h"
 #include "ECS/Components/DeadTree.h"
 #include "ECS/Components/FallingRoots.h"
@@ -60,6 +61,7 @@
 #include "ECS/Registry.h"
 #include "ECS/Systems/AlignmentSystemInterface.h"
 #include "ECS/Systems/ArtefactSystemInterface.h"
+#include "ECS/Systems/BuildingDamageSystemInterface.h"
 #include "ECS/Systems/CreatureMindSystemInterface.h"
 #include "ECS/Systems/DynamicsSystemInterface.h"
 #include "ECS/Systems/EffectRequestSystemInterface.h"
@@ -75,6 +77,7 @@
 #include "Locator.h"
 #include "Magic/AreaEffect.h"
 #include "Physics/ObjectRules.h"
+#include "Resources/ResourceManager.h"
 #include "Sound/GameSoundEffects.h"
 #include "Sound/SoundId.h"
 #include "Sound/SoundRequestInterface.h"
@@ -467,11 +470,31 @@ void object_physics::SplitRock(systems::DynamicsSystemInterface& dynamics, entt:
 	}
 	const auto& land = Locator::terrainSystem::value();
 	const auto transform = registry.Get<const Transform>(rock);
-	const auto type = registry.Get<const MobileStatic>(rock).type;
+	// A piece that broke off a building is a rock of the statics' rock row at its first size. Its halves are two rocks
+	// of that row, and its radius is the radius of the rock model at that size.
+	const bool piece = registry.AllOf<BuildingPiece>(rock);
+	const auto type = piece ? MobileStaticInfo::Rock : registry.Get<const MobileStatic>(rock).type;
+	const float size = piece ? objects::k_BuildingPieceScale : transform.scale.x;
+	float radius = world_objects::SizeOf(rock).radius;
+	if (piece)
+	{
+		if (!Locator::infoConstants::has_value())
+		{
+			return;
+		}
+		const auto model = resources::HashIdentifier(
+		    Locator::infoConstants::value().mobileStatic.at(static_cast<size_t>(MobileStaticInfo::Rock)).meshId);
+		const auto measured = world_objects::SizeOfModel(model, size);
+		if (!measured.has_value())
+		{
+			return;
+		}
+		radius = measured->radius;
+	}
 	// The halves lie either side of it, across a line at a random angle
 	const float angle = Locator::gameRandom::value().GameFloatRand(2.0f * std::numbers::pi_v<float>);
-	const float scale = transform.scale.x * objects::k_RockHalfScale;
-	const auto offset = gutils::GetPosFromAngle(angle, world_objects::SizeOf(rock).radius * objects::k_RockHalfSpread);
+	const float scale = size * objects::k_RockHalfScale;
+	const auto offset = gutils::GetPosFromAngle(angle, radius * objects::k_RockHalfSpread);
 	// A flying rock's halves fly on as it flew, with half its spin; a resting rock's start still. One the physics has lost
 	// track of doesn't break.
 	glm::vec3 velocity(0.0f);
@@ -508,7 +531,18 @@ void object_physics::SplitRock(systems::DynamicsSystemInterface& dynamics, entt:
 			Locator::fireSystem::value().CopyFire(rock, half);
 		}
 	}
+	// A piece also takes its own model with it
+	if (piece && Locator::buildingDamageSystem::has_value())
+	{
+		Locator::buildingDamageSystem::value().RemovePiece(rock);
+		return;
+	}
 	world_objects::Remove(rock);
+}
+
+bool object_physics::IsRockOrPiece(entt::entity object)
+{
+	return IsRock(object) || Entities().AllOf<BuildingPiece>(object);
 }
 
 bool object_physics::CanTapRock(entt::entity rock)

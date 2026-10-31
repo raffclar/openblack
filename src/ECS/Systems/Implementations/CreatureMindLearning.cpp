@@ -557,9 +557,8 @@ bool Accepts(const ecs::Registry& registry, Target target, entt::entity entity, 
 		{
 			return false;
 		}
-		const auto thing = hands->KindOf(entity).thing;
-		const bool rock = thing == creature_object_actions::Thing::Rock || thing == creature_object_actions::Thing::Bonfire;
-		return rock && (target == Target::Rock || hands->CanPickUp(self, entity));
+		return creature_object_actions::IsRock(hands->KindOf(entity).thing) &&
+		       (target == Target::Rock || hands->CanPickUp(self, entity));
 	}
 	case Target::BuildingBeingBuilt:
 	{
@@ -3840,8 +3839,7 @@ void CreatureMindSystem::Situate(entt::entity creature, creature_plan_actions::S
 		const auto* mobile = registry.TryGet<const MobileObject>(*held);
 		situation.holdingTree = thing == creature_object_actions::Thing::Tree;
 		situation.holdingLiving = creature_object_actions::IsLiving(thing);
-		situation.holdingRock =
-		    thing == creature_object_actions::Thing::Rock || thing == creature_object_actions::Thing::Bonfire;
+		situation.holdingRock = creature_object_actions::IsRock(thing);
 		situation.holdingMushroom = thing == creature_object_actions::Thing::MagicMushroom ||
 		                            (mobile != nullptr && (mobile->type == MobileObjectInfo::MagicMushroom ||
 		                                                   mobile->type == MobileObjectInfo::Toadstool));

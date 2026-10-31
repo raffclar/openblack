@@ -161,6 +161,23 @@ size_t creature_layers::TimingAnimation(const BodyAction& body)
 	return body.kind == BodyAction::Kind::Once && body.kiss ? creature_kiss::k_HighKiss : CurrentAnimation(body);
 }
 
+size_t creature_layers::ShareAnimation(const BodyAction& body)
+{
+	switch (body.kind)
+	{
+	case BodyAction::Kind::Once:
+		return body.kiss ? animations::k_Stand : body.animations[0];
+	case BodyAction::Kind::Sequence:
+		return body.animations[static_cast<size_t>(BodyAction::Phase::Loop)];
+	case BodyAction::Kind::Dance:
+		return body.phase == BodyAction::Phase::Start ? animations::k_Stand
+		                                              : body.animations[static_cast<size_t>(BodyAction::Phase::Loop)];
+	case BodyAction::Kind::Stand:
+	default:
+		return animations::k_Stand;
+	}
+}
+
 std::optional<BodyAction> creature_layers::PlayOnce(const BodyAction& body, size_t animation, bool mirrored)
 {
 	if (IsPlaying(body))

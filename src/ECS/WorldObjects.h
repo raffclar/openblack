@@ -56,6 +56,8 @@ struct Size
 	float height;
 };
 [[nodiscard]] Size SizeOf(entt::entity object);
+/// How big a model stands at a scale; none when the model is not loaded
+[[nodiscard]] std::optional<Size> SizeOfModel(entt::id_type model, float scale);
 
 /// The triangles of the parts of an object's model drawn at the finest detail when it is whole, in its model's space;
 /// none without a model

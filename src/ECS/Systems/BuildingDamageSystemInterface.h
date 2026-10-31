@@ -58,6 +58,8 @@ public:
 	virtual void ForgetHitter(entt::entity rock) = 0;
 	/// Every game turn: pieces whose building has gone forget it, and pieces whose time has run out go
 	virtual void ProcessTurn() = 0;
+	/// A piece goes at once with its model, for example when a creature breaks it in two
+	virtual void RemovePiece(entt::entity piece) = 0;
 	/// After a load: the models that the game made for these things while it played are made again. A save keeps the
 	/// names of these models but not the models, and the game that loads it may not have them.
 	virtual void RemakeModelsAfterLoad() {}
