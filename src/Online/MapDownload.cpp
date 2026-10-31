@@ -13,6 +13,7 @@
 
 #include "OnlineMapLand.h"
 #include "OnlineMapStoreInterface.h"
+#include "StartRules.h"
 
 namespace openblack::online
 {
@@ -104,7 +105,8 @@ void MapDownload::Download(int tries)
 		{
 			return;
 		}
-		if (!bytes.has_value())
+		// A file that is not the room's map counts as a failure of the lobby: the start check would refuse it
+		if (!bytes.has_value() || start_rules::LandChecksum(*bytes) != _map->checksum)
 		{
 			if (tries > 1)
 			{

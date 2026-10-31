@@ -29,8 +29,8 @@ class OnlineMapStoreInterface;
 /// its room from the map server of its lobby:
 /// 1. When the player comes into the room, the download looks for the room's map in the store, by its file name and
 ///    its start checksum.
-/// 2. A map that the store does not have comes from the lobby. When the lobby does not give it, the download asks one
-///    more time, as the original game does.
+/// 2. A map that the store does not have comes from the lobby. When the lobby does not give it, or gives a file with a
+///    different start checksum, the download asks one more time, as the original game does.
 /// 3. The store keeps the file. The download is then ready.
 /// A second failure of the lobby, or a store that cannot keep the file, ends the download with a failure. The room then
 /// shows the box "Could not download map from Internet.".

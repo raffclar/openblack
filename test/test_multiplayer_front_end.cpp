@@ -43,6 +43,7 @@
 #include "Online/MapDownload.h"
 #include "Online/NetworkSession.h"
 #include "Online/OnlineMapStoreInterface.h"
+#include "Online/StartRules.h"
 #include "gui/FakeGameFont.h"
 #include "online/FakeWebSocketClient.h"
 
@@ -1573,7 +1574,7 @@ lobby_api::OnlineMap RoomMap()
 	        .file = "obm_32p_1",
 	        .players = 32,
 	        .sha256 = std::string(k_RoomMapHash),
-	        .checksum = 5,
+	        .checksum = online::start_rules::LandChecksum(std::vector<uint8_t> {1, 2, 3}),
 	        .size = 3,
 	        .url = "/api/v1/maps/" + std::string(k_RoomMapHash)};
 }

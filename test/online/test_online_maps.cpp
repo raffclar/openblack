@@ -279,9 +279,22 @@ TEST(MapDownload, AStoreThatCannotKeepTheFileFails)
 	store.refuses = true;
 	FakeFetch fetch;
 	online::MapDownload download(store, fetch.Function());
-	download.Start(Map());
+	download.Start(Map(online::start_rules::LandChecksum(Bytes("x"))));
 	fetch.Answer(Bytes("x"));
 	EXPECT_EQ(download.GetState(), online::MapDownload::State::Failed);
+}
+
+TEST(MapDownload, AFileWithADifferentChecksumIsNotKept)
+{
+	FakeStore store;
+	FakeFetch fetch;
+	online::MapDownload download(store, fetch.Function());
+	download.Start(Map(online::start_rules::LandChecksum(Bytes("right"))));
+	fetch.Answer(Bytes("wrong"));
+	EXPECT_EQ(download.GetState(), online::MapDownload::State::Downloading);
+	fetch.Answer(Bytes("wrong"));
+	EXPECT_EQ(download.GetState(), online::MapDownload::State::Failed);
+	EXPECT_TRUE(store.files.empty());
 }
 
 TEST(MapDownload, AnAnswerAfterTheStopDoesNothing)
