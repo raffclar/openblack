@@ -34,6 +34,7 @@ public:
 	bool LoadState(reflection::BinaryReader& in) override;
 
 	void ProcessTurn(uint32_t turn) override;
+	void ProcessVirtualInfluence(uint32_t turn) override;
 	void ProcessTownInfluence(entt::entity town) override;
 	void MarkTownInfluence(entt::entity town) override;
 	void BordersChanged() override { _bordersDirty = true; }
@@ -72,16 +73,12 @@ private:
 	/// Whether another player's shield keeps a player out of a place
 	[[nodiscard]] static bool Shielded(PlayerNames player, const glm::vec3& point);
 	[[nodiscard]] static bool Shielded(PlayerNames player, const map_coords::MapCoords& position);
-	/// What each player's hand keeps of their influence past the border, once a turn
-	void ProcessVirtualInfluence(uint32_t turn);
 	/// One turn of what a player's hand keeps past the border, with the hand where it is
 	void ProcessVirtualInfluence(entt::entity playerEntity, PlayerNames player, glm::vec3 hand, uint32_t turn);
 	/// The own influence of a player at a place, or where it is none or less, the influence that an ally lends there
 	[[nodiscard]] float WithAllies(PlayerNames player, const map_coords::MapCoords& position, float own) const;
 	/// What a player's hand keeps of their influence past the border, if they have a hand
 	[[nodiscard]] static const virtual_influence::State* VirtualStateOf(PlayerNames player);
-	/// The game turn last played
-	uint32_t _turn {0};
 
 	std::vector<influence::Circle> _circles;
 	std::array<bool, k_Players> _borderShown {};

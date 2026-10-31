@@ -102,6 +102,9 @@ public:
 	virtual void Reset() = 0;
 	/// Once a game turn: the towns' and citadels' reach, and the border drawn again every ten turns once one has moved
 	virtual void ProcessTurn(uint32_t turn) = 0;
+	/// Once a game turn, in the input of the players: the hand of each god but the neutral one keeps a share of the god's
+	/// influence past the border. It comes before the players and the computer minds act.
+	virtual void ProcessVirtualInfluence(uint32_t /*turn*/) {}
 	/// A town's turn starts: its influence is its base influence and its buildings', times the land's multiplier
 	virtual void ProcessTownInfluence(entt::entity /*town*/) {}
 	/// A town's turn ends: a change of the influence of a player's town marks the borders to be drawn again

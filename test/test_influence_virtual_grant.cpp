@@ -8,9 +8,12 @@
  *******************************************************************************/
 
 #include <array>
+#include <memory>
 #include <optional>
 
 #include <gtest/gtest.h>
+#include <spdlog/sinks/null_sink.h>
+#include <spdlog/spdlog.h>
 
 #include "ECS/Components/Influence.h"
 #include "ECS/Components/MagicShield.h"
@@ -18,12 +21,14 @@
 #include "ECS/Components/Transform.h"
 #include "ECS/Registry.h"
 #include "ECS/Systems/HandSystemInterface.h"
+#include "InfoConstants.h"
 #include "Locator.h"
 
 // Enable this define because we use a custom locator
 #define LOCATOR_IMPLEMENTATIONS
 #include "ECS/Systems/Implementations/InfluenceSystem.h"
 #include "ECS/Systems/Implementations/PlayerSystem.h"
+#include "ECS/Systems/Implementations/TimeSystem.h"
 
 using namespace openblack;
 using namespace openblack::ecs;
@@ -64,6 +69,11 @@ class VirtualGrant: public ::testing::Test
 protected:
 	void SetUp() override
 	{
+		// The influence system logs the changes of the share
+		if (spdlog::get("game") == nullptr)
+		{
+			spdlog::create<spdlog::sinks::null_sink_st>("game");
+		}
 		Locator::entitiesRegistry::emplace<Registry>();
 		auto& registry = Locator::entitiesRegistry::value();
 		_hands = &static_cast<FakeHands&>(Locator::handSystem::emplace<FakeHands>());
@@ -78,6 +88,8 @@ protected:
 	}
 	void TearDown() override
 	{
+		Locator::time::reset();
+		Locator::infoConstants::reset();
 		Locator::playerSystem::reset();
 		Locator::handSystem::reset();
 		Locator::entitiesRegistry::reset();
@@ -188,4 +200,38 @@ TEST_F(VirtualGrant, AScriptsInfluenceGoesAboutWithItsObject)
 	// Once its object has gone it stays where it was put
 	registry.Destroy(object);
 	EXPECT_EQ(_influence.PlayerRawInfluence(PlayerNames::PLAYER_TWO, k_Middle), 1.0f);
+}
+
+TEST_F(VirtualGrant, AHeldThingUsedOnTheLandCountsAtTheGameTurnNow)
+{
+	// The tables are large: made on the heap
+	auto info = std::make_unique<InfoConstants>();
+	info->citadel.virtualInfluenceMaxDistance = 200.0f;
+	info->citadel.virtualInfluenceMaxGameTicks = 200;
+	info->citadel.virtualInfluenceChantsToDouble = 50.0f;
+	Locator::infoConstants::emplace(*info);
+	auto& clock = Locator::time::emplace<systems::TimeSystem>([] { return uint32_t {0}; });
+	// The hand is just past the border, a little way from where it was last inside, at turn 1
+	const glm::vec3 out {1105.0f, 0.0f, 1000.0f};
+	auto& state = HandOut(1.0f, out);
+	state.anchor = glm::vec3(1095.0f, 0.0f, 1000.0f);
+	state.lastInsideTurn = 1;
+	const virtual_influence::Settings settings {.maxDistance = 200.0f, .maxTurns = 200, .chantsToDouble = 50.0f};
+	const auto expect = [&state, &out, &settings](uint32_t turn) {
+		auto copy = state;
+		virtual_influence::ProcessTurn(copy, {.hand = out, .turn = turn}, settings);
+		return copy.fraction;
+	};
+	// The waning moves in steps of some turns. The let-go comes at the first turn that is one step on from the turn
+	// before it.
+	uint32_t now = 2;
+	while (now < 200 && expect(now) == expect(now - 1))
+	{
+		++now;
+	}
+	ASSERT_LT(now, 200u);
+	clock.ResumeAtTurn(now, 0);
+	const float atTurnNow = expect(now);
+	_influence.HeldThingUsedOnLand(PlayerNames::PLAYER_ONE);
+	EXPECT_EQ(state.fraction, atTurnNow);
 }
