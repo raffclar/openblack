@@ -46,6 +46,7 @@ public:
 	void TempleBuilt(entt::entity temple) override;
 	void PersonJoinedTown(entt::entity town) override;
 	void TownChangedHands(entt::entity town) override;
+	void TownRemoved(entt::entity town) override;
 	void LandLaidOut() override;
 	entt::entity MakeBuiltSite(PlayerNames player, Tribe tribe) override;
 	void SetCanHaveSites(entt::entity townOrTemple, bool can) override;

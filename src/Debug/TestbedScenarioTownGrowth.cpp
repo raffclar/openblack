@@ -906,6 +906,37 @@ void openblack::testbed_scenarios::AddTownGrowthScenarios(std::vector<Scenario>&
 	                  .delaySeconds = 3.0f}},
 	    .townBeliefInPlayer = 1.0f,
 	});
+	// A town whose only building goes, with no plan to build it again
+	all.push_back({
+	    .id = "town.removed_with_last_building",
+	    .name = "A town that goes with its last building",
+	    .facet = Facet::Objects,
+	    .description = "A Celtic town of the player's, believing 1 in the player, with one hut that a scaffold made, so "
+	                   "the town does not plan it again. The town has no other building, no plan and nobody. Three "
+	                   "seconds in, the hut goes from the world.",
+	    .expected = "The hut goes and the town goes from the game at the same moment: the inspector lists no Town, and "
+	                "the player's influence ring round the town goes. Compare town.stays_with_planned_building.",
+	    .environment = {.dispenserGrid = false},
+	    .framing = {.shot = Shot::Overview, .include = {k_Hut, k_Centre, k_Pit}, .distance = 0.6f},
+	    .objects = {{.type = AbodeInfo::CelticHut, .offset = k_Hut, .yawDegrees = 180.0f, .notPlannedAgain = true}},
+	    .commands = {{.kind = Command::Kind::RemoveObject, .delaySeconds = 3.0f, .object = 0}},
+	    .townBeliefInPlayer = 1.0f,
+	});
+	// The same town, whose hut its town plans again
+	all.push_back({
+	    .id = "town.stays_with_planned_building",
+	    .name = "A town that plans its last building again",
+	    .facet = Facet::Objects,
+	    .description = "A Celtic town of the player's, believing 1 in the player, with one hut and nothing else: no "
+	                   "other building, no plan and nobody. Three seconds in, the hut goes from the world.",
+	    .expected = "The hut goes and the town plans it again where it stood, so the town stays: the inspector lists "
+	                "the Town with one entry in planned, and the player's influence ring round the town stays.",
+	    .environment = {.dispenserGrid = false},
+	    .framing = {.shot = Shot::Overview, .include = {k_Hut, k_Centre, k_Pit}, .distance = 0.6f},
+	    .objects = {{.type = AbodeInfo::CelticHut, .offset = k_Hut, .yawDegrees = 180.0f}},
+	    .commands = {{.kind = Command::Kind::RemoveObject, .delaySeconds = 3.0f, .object = 0}},
+	    .townBeliefInPlayer = 1.0f,
+	});
 	// A child of the town about to grow up
 	all.push_back({
 	    .id = "villagers.grow_up_dust",

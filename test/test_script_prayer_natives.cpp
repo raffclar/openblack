@@ -72,6 +72,7 @@ public:
 	[[nodiscard]] std::optional<size_t> CentreMiraclesShown(entt::entity) const override { return std::nullopt; }
 	void CentreWorking(entt::entity) override {}
 	void TownChangedHands(entt::entity, PlayerNames) override {}
+	void TownRemoved(entt::entity) override {}
 	void TownJoinedSite(entt::entity, entt::entity) override {}
 	void TownLeftSite(entt::entity, entt::entity) override {}
 	void SiteRemoved(entt::entity) override {}
@@ -122,6 +123,7 @@ public:
 	void TempleBuilt(entt::entity) override {}
 	void PersonJoinedTown(entt::entity) override {}
 	void TownChangedHands(entt::entity) override {}
+	void TownRemoved(entt::entity) override {}
 	void LandLaidOut() override {}
 	entt::entity MakeBuiltSite(PlayerNames, Tribe) override { return entt::null; }
 	void SetCanHaveSites(entt::entity, bool) override {}

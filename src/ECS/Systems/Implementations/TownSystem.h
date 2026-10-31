@@ -71,6 +71,7 @@ public:
 	void MarkDesiresChanged(entt::entity town) override;
 	[[nodiscard]] bool DesiresChanged(entt::entity town) const override;
 	void ClaimTown(entt::entity town, PlayerNames player) override;
+	void BuildingLeft(entt::entity town) override;
 	std::optional<TemporaryStore> TemporaryStorePile(entt::entity town, glm::vec2 from, ResourceType type) override;
 	void SetStoragePit(entt::entity town) override;
 	void UpdateFrame(std::chrono::milliseconds frameRealTime, bool landDrawn) override;
@@ -90,6 +91,8 @@ private:
 	static void StartEmptyTownTimerIfEmpty(entt::entity town);
 	/// The town stayed empty: its belief starts over and it goes back to the neutral player
 	void SetTownEmpty(entt::entity town);
+	/// The town goes from the game, and the things that keep it let it go
+	static void RemoveTown(entt::entity town);
 	/// At the town's turn it forgets its temporary piles that have gone, and removes the empty ones once it has a
 	/// storage pit that works
 	static void TemporaryStoresTurn(entt::entity town);
