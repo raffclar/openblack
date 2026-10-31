@@ -235,6 +235,12 @@ enum class SelectionStep : uint8_t
 /// Whether the help counts a cast of the miracle in the hand as a cast with a power-up. The miracle must be ready, not
 /// cast, from an icon and powered up. A miracle that a gesture sizes must have that gesture as the last gesture drawn.
 [[nodiscard]] bool CountsPoweredUpCast(const HandContext::Seed& seed, GestureType lastGesture);
+/// Whether the cast of a miracle passes the check of the gesture that sizes it. A miracle that no gesture sizes always
+/// passes. Another miracle passes when the gesture kept for the cast is its sizing gesture.
+[[nodiscard]] constexpr bool PassesSizingCheck(GestureType sizingGesture, GestureType keptGesture)
+{
+	return sizingGesture == GestureType::None || keptGesture == sizingGesture;
+}
 
 /// The leash picker: open after the leash gesture while the creature knows more than one leash, offering each other
 /// leash it knows as a gesture to draw. It closes when a leash is picked, on a scribble, when the leash comes off, or

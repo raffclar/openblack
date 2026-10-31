@@ -304,6 +304,18 @@ TEST(GestureRequests, TheHelpCountsACastWithAPowerUp)
 	EXPECT_TRUE(CountsPoweredUpCast(seed, GestureType::Circle));
 }
 
+// A cast passes the check of its sizing gesture when no gesture sizes the miracle, or when the gesture kept for the cast
+// is the sizing gesture. Only a cast that passes starts the path of the gesture again.
+TEST(GestureRequests, ACastPassesTheSizingCheckWithTheGestureThatSizesIt)
+{
+	static_assert(PassesSizingCheck(GestureType::None, GestureType::None));
+	static_assert(PassesSizingCheck(GestureType::None, GestureType::Spiral));
+	static_assert(PassesSizingCheck(GestureType::Circle, GestureType::Circle));
+	static_assert(!PassesSizingCheck(GestureType::Circle, GestureType::None));
+	static_assert(!PassesSizingCheck(GestureType::Circle, GestureType::Spiral));
+	EXPECT_TRUE(PassesSizingCheck(GestureType::Circle, GestureType::Circle));
+}
+
 TEST(GestureRequests, OutOfInfluenceOnlyASeedBeingPoweredUpIsScribbledAway)
 {
 	HandContext context;

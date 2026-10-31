@@ -164,7 +164,11 @@ public:
 	[[nodiscard]] bool IsLoosePot(PotInfo type) const override { return type == PotInfo::FoodPot; }
 	[[nodiscard]] bool IsOfRockMaterial(entt::entity object) const override { return registry.AllOf<MobileStatic>(object); }
 	[[nodiscard]] bool IsSexuallyActive(entt::entity) const override { return true; }
-	[[nodiscard]] std::optional<PlayerNames> PlayerOf(entt::entity) const override { return PlayerNames::PLAYER_ONE; }
+	[[nodiscard]] std::optional<PlayerNames> PlayerOf(entt::entity object) const override
+	{
+		const auto found = owners.find(object);
+		return found != owners.end() ? found->second : std::optional(PlayerNames::PLAYER_ONE);
+	}
 
 	void LeavePhysicsAndMap(entt::entity object) override
 	{
@@ -498,6 +502,8 @@ public:
 	std::optional<PlayerNames> acting;
 	/// The player whose hands this computer moves, when it is not the first player
 	std::optional<PlayerNames> ownHandPlayer;
+	/// The players of things that are not the first player's; a missing optional is a thing of nobody's
+	std::map<entt::entity, std::optional<PlayerNames>> owners;
 	std::optional<entt::entity> underCursor;
 	std::optional<entt::entity> nearHand;
 	bool influence {true};
@@ -1209,6 +1215,31 @@ TEST_F(HandGrabSystemWithWorld, TheGesturePathIsLeftAloneByAHandThatIsNotTheLoca
 	Release();
 	EXPECT_FALSE(system->GetHeld().has_value());
 	EXPECT_EQ(world->pathsForgotten, 0);
+}
+
+// The help counts only the events of the local hand: the hand of a computer god or of another player takes and lets go
+// of things with no count
+TEST_F(HandGrabSystemWithWorld, TheHelpCountsNothingForAHandThatIsNotTheLocalOne)
+{
+	world->localHand = false;
+	const auto rock = world->AddRock({0.0f, 0.0f, 0.0f});
+	world->underCursor = rock;
+	Press();
+	for (int i = 0; i < 20 && !system->GetHeld().has_value(); ++i)
+	{
+		Frame(10);
+	}
+	Release();
+	ASSERT_TRUE(system->GetHeld().has_value());
+	world->underCursor.reset();
+	world->borderX = 10.0f;
+	world->pickedPoint = glm::vec3(8.0f, 0.0f, 0.0f);
+	Frame(10, {12.0f, 0.0f, 0.0f}, {12.0f, 0.0f, 0.0f});
+	Press();
+	Frame(10, {12.0f, 0.0f, 0.0f}, {12.0f, 0.0f, 0.0f});
+	Release();
+	EXPECT_FALSE(system->GetHeld().has_value());
+	EXPECT_TRUE(world->helpEvents.empty());
 }
 
 // The hand says why a press on a thing wouldn't take it, as the inspector shows it
@@ -2507,6 +2538,21 @@ TEST_F(HandGrabSystemGiving, ThePressWhileOfferingGivesItToTheCreatureWithTheMat
 	EXPECT_FALSE(system->HandOver(rock));
 }
 
+// The gift of a hand that is not the local one gives the thing with no count for the help
+TEST_F(HandGrabSystemGiving, TheGiftOfAHandThatIsNotTheLocalOneCountsNothing)
+{
+	const auto rock = HoldRock();
+	const auto creature = AddCreature(creature_giving::Verdict::Give);
+	world->underCursor = creature;
+	Frame(16);
+	world->helpEvents.clear();
+	world->localHand = false;
+	EXPECT_TRUE(Press());
+	ASSERT_EQ(world->given.size(), 1u);
+	EXPECT_EQ(world->given.front().held, rock);
+	EXPECT_TRUE(world->helpEvents.empty());
+}
+
 TEST_F(HandGrabSystemGiving, TheGiveOfThePressIsACommandThatWaitsForItsTurn)
 {
 	const auto rock = HoldRock();
@@ -2672,9 +2718,11 @@ TEST_F(HandGrabSystemWithWorld, TheHandShowsWhatItHoldsAfterEachTurnOfAScoopAndA
 
 TEST_F(HandGrabSystemWithWorld, AFieldAndAFishFarmShowWhatTheHandHoldsEachTurnButOnlyAFishFarmAtTheLetGo)
 {
+	// The field of another player
 	const auto field = world->registry.Create();
 	world->registry.Assign<Transform>(field, glm::vec3(0.0f), glm::mat3(1.0f), glm::vec3(1.0f));
 	world->fields[field] = {.food = 1000, .ripe = false};
+	world->owners[field] = PlayerNames::PLAYER_TWO;
 	world->underCursor = field;
 	EXPECT_TRUE(Press());
 	EXPECT_FALSE(system->TakeAmountToolTip().has_value());
@@ -2698,6 +2746,41 @@ TEST_F(HandGrabSystemWithWorld, AFieldAndAFishFarmShowWhatTheHandHoldsEachTurnBu
 	EXPECT_EQ(system->TakeAmountToolTip(), std::optional(world->registry.Get<const Pot>(*fromFarm).amount));
 	Release();
 	EXPECT_EQ(system->TakeAmountToolTip(), std::optional(world->registry.Get<const Pot>(*fromFarm).amount));
+}
+
+// The let-go of a scoop from a field of the local player shows what the hand holds, as the hand lets go. A field of no
+// town does not.
+TEST_F(HandGrabSystemWithWorld, AFieldOfTheLocalPlayerShowsWhatTheHandHoldsAtTheLetGo)
+{
+	static_assert(hand_grab::FieldShowsHeldAtLetGo(true, PlayerNames::PLAYER_ONE, PlayerNames::PLAYER_ONE));
+	static_assert(!hand_grab::FieldShowsHeldAtLetGo(true, PlayerNames::PLAYER_TWO, PlayerNames::PLAYER_ONE));
+	static_assert(!hand_grab::FieldShowsHeldAtLetGo(true, std::nullopt, PlayerNames::PLAYER_ONE));
+	static_assert(!hand_grab::FieldShowsHeldAtLetGo(false, PlayerNames::PLAYER_ONE, PlayerNames::PLAYER_ONE));
+	const auto field = world->registry.Create();
+	world->registry.Assign<Transform>(field, glm::vec3(0.0f), glm::mat3(1.0f), glm::vec3(1.0f));
+	world->fields[field] = {.food = 1000, .ripe = false};
+	world->underCursor = field;
+	EXPECT_TRUE(Press());
+	const auto fromField = system->GetHeld();
+	ASSERT_TRUE(fromField.has_value());
+	system->ProcessTurn();
+	EXPECT_TRUE(system->TakeAmountToolTip().has_value());
+	Release();
+	EXPECT_EQ(system->TakeAmountToolTip(), std::optional(world->registry.Get<const Pot>(*fromField).amount));
+	EXPECT_FALSE(system->TakeAmountToolTip().has_value());
+	system->HandOver(*fromField);
+
+	const auto noTown = world->registry.Create();
+	world->registry.Assign<Transform>(noTown, glm::vec3(0.0f), glm::mat3(1.0f), glm::vec3(1.0f));
+	world->fields[noTown] = {.food = 1000, .ripe = false};
+	world->owners[noTown] = std::nullopt;
+	world->underCursor = noTown;
+	EXPECT_TRUE(Press());
+	ASSERT_TRUE(system->GetHeld().has_value());
+	system->ProcessTurn();
+	EXPECT_TRUE(system->TakeAmountToolTip().has_value());
+	Release();
+	EXPECT_FALSE(system->TakeAmountToolTip().has_value());
 }
 
 TEST_F(HandGrabSystemWithWorld, AHeldThingThatIsDestroyedLeavesTheHandAtTheNextTurn)

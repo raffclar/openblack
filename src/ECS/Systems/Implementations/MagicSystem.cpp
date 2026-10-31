@@ -2635,17 +2635,25 @@ void MagicSystem::SendCast(magic::CastTarget target)
 	const auto& seedInfo = magic::GetSpellSeedInfo(Info(), seed.seedType);
 	if (!HeldSpellRunsInHand())
 	{
+		// The gesture kept for the cast: at the land it is the circle remembered, at a thing the last gesture drawn
+		const auto last =
+		    Locator::gestureSystem::has_value() ? Locator::gestureSystem::value().GetLastRecognised() : std::nullopt;
+		const auto kept = target != magic::CastTarget::Object ? (_circle.has_value() ? GestureType::Circle : GestureType::None)
+		                                                      : (last.has_value() ? last->request.gesture : GestureType::None);
+		// A cast that passes the check of its sizing gesture starts the path of the gesture again, as the hand sends it
+		if (gesture::PassesSizingCheck(seedInfo.sizingGesture, kept) && Locator::gestureSystem::has_value())
+		{
+			Locator::gestureSystem::value().ForgetPath();
+		}
 		// The help counts a cast of a miracle with a power-up, as the hand sends it. The count waits for the next report.
 		if (Locator::helpProfileSystem::has_value())
 		{
-			const auto last =
-			    Locator::gestureSystem::has_value() ? Locator::gestureSystem::value().GetLastRecognised() : std::nullopt;
 			const gesture::HandContext::Seed facts {.ready = seed.ready,
 			                                        .cast = seed.hasCast,
 			                                        .sizingGesture = seedInfo.sizingGesture,
 			                                        .powerUp = seed.powerUp,
 			                                        .canPowerUp = seed.hasIcon};
-			if (gesture::CountsPoweredUpCast(facts, last.has_value() ? last->request.gesture : GestureType::None))
+			if (gesture::CountsPoweredUpCast(facts, kept))
 			{
 				Locator::helpProfileSystem::value().Report(help::profile::k_GestureCastPoweredUp);
 			}

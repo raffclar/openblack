@@ -339,7 +339,7 @@ bool gesture::CountsPoweredUpCast(const HandContext::Seed& seed, GestureType las
 	{
 		return false;
 	}
-	return seed.sizingGesture == GestureType::None || lastGesture == seed.sizingGesture;
+	return PassesSizingCheck(seed.sizingGesture, lastGesture);
 }
 
 void LeashPicker::Open()
