@@ -11426,6 +11426,23 @@ void AddParticles(std::vector<Scenario>& all)
 	                  {.file = "SF_LandscapeVortexLightMap", .offset = {70.0f, 0.0f}}},
 	});
 
+	// The singing stones' heal as the funeral march's raising starts it: the script makes it 13.5 times its size, in the
+	// colour of this computer's player
+	all.push_back({
+	    .id = "particles.singing_stones_heal_rings",
+	    .name = "The rings of light of the singing stones' heal",
+	    .facet = Facet::Particles,
+	    .description = "The singing stones' heal effect at 13.5 times its size, in the first player's colour, at night. "
+	                   "Its rule stands three rings of light on the land round the place where the effect starts, each "
+	                   "about 15 m across from the centre, under the glow that the effect's light map puts on the land.",
+	    .expected = "Three rings of light stand one on the other round the light on the land, 10 high, rising and "
+	                "falling in waves that roll round them, their stars sliding up. They are a dim red: the player's red "
+	                "times the alpha of 30 of the effect's points. They follow the land and stay where they were made.",
+	    .environment = {.hour = 23.0f, .dispenserGrid = false},
+	    .framing = {.shot = Shot::Overview, .include = {{-20.0f, -20.0f}, {20.0f, 20.0f}}, .distance = 0.5f},
+	    .particles = {{.file = "SF_SingingStonesHeal", .offset = {0.0f, 0.0f}, .magnitude = 13.5f, .player = 0}},
+	});
+
 	all.push_back({
 	    .id = "particles.mist_shadows",
 	    .name = "Shadows of a storm's mist",

@@ -12,6 +12,7 @@
 #include <cmath>
 
 #include <algorithm>
+#include <numbers>
 #include <span>
 #include <utility>
 
@@ -37,6 +38,22 @@ uint32_t Lit(uint32_t argb, uint32_t light)
 	return (red | green | blue) >> 8u;
 }
 } // namespace
+
+std::vector<glm::vec3> LightSheet::RingPoints(glm::vec2 centre, float radius, uint32_t count, const GroundHeight& ground)
+{
+	constexpr float k_FullTurn = 2.0f * std::numbers::pi_v<float>;
+	std::vector<glm::vec3> points;
+	points.reserve(count);
+	for (uint32_t i = 0; i < count; ++i)
+	{
+		const float angle = (static_cast<float>(i) * k_FullTurn) / (static_cast<float>(count) - 1.0f);
+		// The cosine is kept as a float before the multiply; the sine goes wide into it
+		const float cosine = x87::RoundToFloat(x87::Cos(angle));
+		const glm::vec2 at {(cosine * radius) + centre.x, x87::Mul(x87::Sin(angle), radius) + centre.y};
+		points.emplace_back(at.x, ground(at), at.y);
+	}
+	return points;
+}
 
 void LightSheet::Start(std::vector<glm::vec3> points, uint32_t rgb, float height, float shiftSeconds)
 {

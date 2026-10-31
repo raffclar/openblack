@@ -12,6 +12,7 @@
 #include <cstddef>
 #include <cstdint>
 
+#include <functional>
 #include <numbers>
 #include <vector>
 
@@ -31,6 +32,10 @@ class LightSheet
 public:
 	/// The top of the sheet is spread out from the middle of its points by this, unless it is given another spread
 	static constexpr float k_Spread = 1.1f;
+	/// By default its strength moves one point along this often, in seconds
+	static constexpr float k_ShiftSeconds = 0.03f;
+	/// A ring of light stands on this many points by default
+	static constexpr uint32_t k_RingPoints = 32;
 	/// How far up the sheet its brightest line is
 	static constexpr float k_BrightLine = 0.25f;
 	/// The stars slide up the sheet this many times a second
@@ -77,6 +82,13 @@ public:
 		uint32_t specularArgb;
 	};
 
+	/// The height of the land at a point across the ground
+	using GroundHeight = std::function<float(glm::vec2)>;
+	/// The points of a ring round a centre across the ground, each on the land's height there. The first point is due
+	/// along x from the centre, and the last point is on the first, so that the ring closes.
+	[[nodiscard]] static std::vector<glm::vec3> RingPoints(glm::vec2 centre, float radius, uint32_t count,
+	                                                       const GroundHeight& ground);
+
 	/// Stands it on its points, its light of a colour (0xRRGGBB), its height and how often its strength moves one point
 	/// along
 	void Start(std::vector<glm::vec3> points, uint32_t rgb, float height, float shiftSeconds);
@@ -102,6 +114,7 @@ public:
 	void SetStrength(float strength) { _strength = strength; }
 	/// The colour of its light from now on (0xRRGGBB)
 	void SetRgb(uint32_t rgb) { _rgb = rgb & 0xFFFFFFu; }
+	[[nodiscard]] uint32_t Rgb() const { return _rgb; }
 	/// How many times a second the stars slide up the sheet from now on. A negative speed slides them down.
 	void SetSlideSpeed(float speed) { _slideSpeed = speed; }
 	/// A sheet with its own clock is moved on by time only by its owner, which sets its values first. The particles

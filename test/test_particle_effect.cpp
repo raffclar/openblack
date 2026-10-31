@@ -776,8 +776,9 @@ TEST_F(ParticleEffectTest, RunsEveryFileOfTheGame)
 			EXPECT_TRUE(effect->UnportedClasses().empty()) << name;
 			EXPECT_GT(sprites, 10u) << name;
 		}
-		// The player icon fountain's symbols and the heal chakra's sparks are run in full now
-		if (name == "SF_PlayerIconFountain_txt.zzz" || name == "SF_HealChakra_txt.zzz")
+		// The player icon fountain's symbols, the heal chakra's sparks and the singing stones' heal are run in full now
+		if (name == "SF_PlayerIconFountain_txt.zzz" || name == "SF_HealChakra_txt.zzz" ||
+		    name == "SF_SingingStonesHeal_txt.zzz")
 		{
 			EXPECT_TRUE(effect->UnportedClasses().empty()) << name;
 		}
