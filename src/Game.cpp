@@ -157,6 +157,7 @@
 #include "ECS/DrawnPlace.h"
 #include "ECS/FloatingNumber.h"
 #include "ECS/GameEndConditions.h"
+#include "ECS/GamePlayers.h"
 #include "ECS/LearningMarker.h"
 #include "ECS/Map.h"
 #include "ECS/OtherPlayerSparkles.h"
@@ -256,6 +257,7 @@
 #include "ECS/Systems/PlayerCommandSystemInterface.h"
 #include "ECS/Systems/PlayerProfileSystemInterface.h"
 #include "ECS/Systems/PlayerSystemInterface.h"
+#include "ECS/Systems/PlaygroundTripSystemInterface.h"
 #include "ECS/Systems/ProfileFolderSystemInterface.h"
 #include "ECS/Systems/RainSystemInterface.h"
 #include "ECS/Systems/ReactionSystemInterface.h"
@@ -3105,6 +3107,7 @@ void Game::UpdateInterfaceFrame(std::chrono::microseconds deltaTime)
 		_interface->SetPingLine(gui::ping_display::Text(roundTrip));
 		_interface->Update(std::chrono::duration_cast<std::chrono::duration<float>>(deltaTime).count());
 		HandleInterfaceAction();
+		FollowPlaygroundTrip();
 		UpdateTattooMenu(std::chrono::duration<float, std::milli>(deltaTime).count());
 #if defined(__EMSCRIPTEN__)
 		if (web::TakeJoinOnlineRequest())
@@ -4439,9 +4442,16 @@ bool Game::Initialize() noexcept
 			{
 				return;
 			}
-			// Escape in play, with no dialog open
+			// F2 in play asks the question of the trip to the Gods' Playground. The game takes the key, also when it asks
+			// nothing.
+			if (event.type == SDL_KEYDOWN && event.key.keysym.sym == SDLK_F2 && event.key.repeat == 0 && _interface)
+			{
+				HandleTripKey();
+				return;
+			}
+			// Escape in play, with no dialog open. The box of a question of the trip takes Escape itself.
 			if (event.type == SDL_KEYDOWN && event.key.keysym.sym == SDLK_ESCAPE && _interface && !_interface->IsDialogOpen() &&
-			    !_interface->GetTattooEditor().IsOpen())
+			    !_interface->GetTattooEditor().IsOpen() && !_interface->IsTripQuestionUp())
 			{
 				HandleEscapeInPlay(event.key.keysym.mod);
 				return;
@@ -5557,8 +5567,8 @@ escape_key::Situation Game::EscapeSituation(uint16_t keyModifiers) const
 	    .inGodsPlayground =
 	        Locator::entitiesRegistry::value().Context().mapScriptGlobals.landNumber == escape_key::k_GodsPlaygroundLand,
 	    .screenClear = director.IsFadeFinished() && (fade >> 24u) == 0,
-	    // The lessons run only after going to the Playground from another land, which openblack can't do yet
-	    .playgroundLessonRunning = false,
+	    .playgroundLessonRunning =
+	        Locator::playgroundTripSystem::has_value() && Locator::playgroundTripSystem::value().IsLessonRunning(),
 	    .sinceMenuClosed = std::nullopt,
 	};
 	if (_menuClosedAt.has_value())
@@ -5595,11 +5605,89 @@ void Game::HandleEscapeInPlay(uint16_t keyModifiers)
 		HandleInterfaceAction();
 		break;
 	case escape_key::Outcome::AskLeavePlayground:
-	case escape_key::Outcome::EndPlaygroundLesson:
-		// Both need the player to have come from another land, the game saved as they left it, which openblack can't do
-		// yet
-		SPDLOG_LOGGER_WARN(spdlog::get("game"), "Escape on the Gods' Playground is not available yet");
+		// The game pauses while the question is on the screen
+		Locator::time::value().SetPlayerPause(true);
+		_interface->AskTripQuestion(playground_trip::k_LeaveQuestion);
+		_tripQuestion = playground_trip::Question::Leave;
 		break;
+	case escape_key::Outcome::EndPlaygroundLesson:
+		// The lesson ends at the end of the game turn
+		Locator::playgroundTripSystem::value().AskLessonEnd();
+		break;
+	}
+}
+
+void Game::HandleTripKey()
+{
+	if (_tripQuestion.has_value())
+	{
+		return;
+	}
+	const auto& context = Locator::entitiesRegistry::value().Context();
+	const auto& director = Locator::cinematicDirectorSystem::value();
+	const playground_trip::GoSituation situation {
+	    .skirmish = context.skirmish,
+	    .networkGame = InNetworkGame(),
+	    .inTemple = Locator::temple::has_value() && Locator::temple::value().Active(),
+	    .land = context.mapScriptGlobals.landNumber,
+	    .boxUp = _interface->IsDialogOpen() || _interface->IsBoxWithBackgroundActive() || _interface->BoxTakesKeyboard() ||
+	             _interface->GetTattooEditor().IsOpen(),
+	    .scriptHoldsCinemaBars = director.IsWideScreenOn() && director.GetWideScreenOwner() != 0,
+	};
+	if (!playground_trip::MayAskToGo(situation))
+	{
+		SPDLOG_LOGGER_DEBUG(spdlog::get("game"), "F2 does nothing here");
+		return;
+	}
+	// The game pauses while the question is on the screen
+	Locator::time::value().SetPlayerPause(true);
+	_interface->AskTripQuestion(playground_trip::k_GoQuestion);
+	_tripQuestion = playground_trip::Question::Go;
+}
+
+void Game::FollowPlaygroundTrip()
+{
+	if (!_tripQuestion.has_value() || !_interface)
+	{
+		return;
+	}
+	auto answer = _interface->TakeTripAnswer();
+	if (!answer.has_value())
+	{
+		if (_interface->IsTripQuestionUp())
+		{
+			return;
+		}
+		// The box went with no answer: this is the same as No
+		answer = false;
+	}
+	const auto question = *std::exchange(_tripQuestion, std::nullopt);
+	// The answer gives the keyboard back to the game at once
+	Locator::gameActionSystem::value().BoxAnswered();
+	auto& trip = Locator::playgroundTripSystem::value();
+	if (!*answer)
+	{
+		Locator::time::value().SetPlayerPause(false);
+		return;
+	}
+	if (question == playground_trip::Question::Go)
+	{
+		// The saved game does not pause. The land of the Playground then loads.
+		Locator::time::value().SetPlayerPause(false);
+		if (!trip.SaveBeforeTrip())
+		{
+			SPDLOG_LOGGER_WARN(spdlog::get("game"), "The save before the trip to the Gods' Playground did not write");
+		}
+		if (!trip.Travel())
+		{
+			SPDLOG_LOGGER_ERROR(spdlog::get("game"), "The trip to the Gods' Playground did not load the land");
+		}
+		return;
+	}
+	// The saved game loads with its own pause. With no saved game, the game stays paused.
+	if (!trip.Leave())
+	{
+		SPDLOG_LOGGER_WARN(spdlog::get("game"), "No saved game loaded as the player left the Gods' Playground");
 	}
 }
 
@@ -6449,7 +6537,9 @@ void Game::MakePlayersSymbols(std::optional<uint32_t> symbolInPlace)
 	}
 	const auto localPlayer =
 	    Locator::handSystem::has_value() ? Locator::handSystem::value().GetOwnPlayer() : PlayerNames::PLAYER_ONE;
-	auto players = players_symbols::MakeSheet(std::move(file), designs, symbol, static_cast<uint32_t>(localPlayer), ownPicture);
+	// A game with more player numbers than the squares of the file has a square for each player number
+	auto wide = players_symbols::Widen(std::move(file), players_symbols::SquaresInARowFor(ecs::game_players::Count()));
+	auto players = players_symbols::MakeSheet(std::move(wide), designs, symbol, static_cast<uint32_t>(localPlayer), ownPicture);
 	// The lowest detail levels keep the sheet at half its size: each symbol takes every second texel of its full one
 	const bool halve = Locator::config::value().detail.lowResTextures;
 	if (halve)

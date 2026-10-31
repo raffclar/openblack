@@ -219,6 +219,8 @@ enum class Step : uint8_t
 	CameraChecks,
 	BuildingPieces,
 	MusicMoods,
+	/// A lesson of the Gods' Playground that Escape asked to end ends, last in the game's turn
+	PlaygroundLesson,
 	CreatureAlignment,
 	SoundTags,
 	Ambience,
@@ -359,6 +361,7 @@ inline constexpr std::array k_Turn = std::to_array<Place>({
     {.step = Step::CameraChecks, .stage = Stage::CameraChecks},
     {.step = Step::BuildingPieces, .stage = Stage::Fragments},
     {.step = Step::MusicMoods, .stage = Stage::MusicMoods},
+    {.step = Step::PlaygroundLesson, .stage = std::nullopt},
     {.step = Step::SoundTags, .stage = Stage::EndTurn},
     {.step = Step::Ambience, .stage = Stage::EndTurn},
     // The world times the scripts' music before the music heard follows it

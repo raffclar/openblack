@@ -47,11 +47,6 @@ float magic::SeedPower(float store, float costToCreate)
 	return costToCreate > 0.0f ? std::min(store / costToCreate, 1.0f) : 1.0f;
 }
 
-magic::ScribbleResult magic::ScribbleOn(bool hasIcon, bool ready, bool cast, int powerUp)
-{
-	return hasIcon && ready && !cast && powerUp >= 0 ? ScribbleResult::StopPowerUp : ScribbleResult::Drop;
-}
-
 bool magic::SeedReadyAfter(uint32_t turnsInHand, float turnSeconds, float delaySeconds)
 {
 	return static_cast<float>(turnsInHand) * turnSeconds > delaySeconds;

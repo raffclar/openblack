@@ -254,6 +254,9 @@ struct CreatureMindState
 		uint32_t miracle {0};
 	};
 	std::optional<LeashCast> leashCast;
+	/// The need flag of a worship site that the leash tied the creature to, for the feed of the site that waits for the
+	/// end of its work. None when no feed waits.
+	entt::entity feedSiteFlag {entt::null};
 };
 
 } // namespace openblack::ecs::components

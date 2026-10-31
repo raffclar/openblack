@@ -44,6 +44,7 @@
 #include "ECS/Components/Town.h"
 #include "ECS/Components/Transform.h"
 #include "ECS/Components/VillageTotem.h"
+#include "ECS/Components/Workshop.h"
 #include "ECS/Components/WorshipSite.h"
 #include "ECS/Creches.h"
 #include "ECS/GameEndConditions.h"
@@ -202,8 +203,15 @@ void CallForLeftoverWood(entt::entity pile)
 
 namespace
 {
+/// Whether the pile is the wood pile of the workshop at the building
+bool IsWorkshopPile(entt::entity building, entt::entity pile)
+{
+	const auto* workshop = Entities().TryGet<const Workshop>(building);
+	return workshop != nullptr && workshop->woodPile == pile;
+}
+
 /// A town's site at the building has closed: its workers are let go, each told to find something else to do, and of its
-/// piles of wood, those with wood in them stay on as piles of their own and the empty ones go
+/// piles of wood, those with wood in them stay on as piles of their own and the empty ones go. A workshop keeps its pile.
 void SiteClosed(entt::entity building, const BuildingSite& site)
 {
 	auto& registry = Entities();
@@ -222,13 +230,15 @@ void SiteClosed(entt::entity building, const BuildingSite& site)
 		{
 			continue;
 		}
-		switch (building_site::WhenSiteCloses(registry.Get<const Pot>(pile).amount))
+		switch (building_site::WhenSiteCloses(registry.Get<const Pot>(pile).amount, IsWorkshopPile(building, pile)))
 		{
 		case building_site::LeftoverPile::Remove:
 			world_objects::Remove(pile);
 			break;
 		case building_site::LeftoverPile::CallForWood:
 			CallForLeftoverWood(pile);
+			break;
+		case building_site::LeftoverPile::Keep:
 			break;
 		}
 	}
@@ -706,7 +716,7 @@ void construction::OpenSite(entt::entity building, float desire)
 	{
 		Locator::townSystem::value().MarkDesiresChanged(town);
 	}
-	if (registry.AllOf<Temple>(building))
+	if (registry.AnyOf<Temple, Workshop>(building))
 	{
 		MakeSitePiles(building, site);
 	}
@@ -724,11 +734,15 @@ bool construction::OpenSiteForTown(entt::entity building, entt::entity town)
 		return true;
 	}
 	// The town opens a new site at it, wanting it built no more than its other building; its pile of wood is made when
-	// the first wood comes
+	// the first wood comes. A workshop's site uses the wood pile of the workshop at once.
 	auto& site = building_site_list::Open(SitesToOpenAt(building), town);
 	NumberSite(site, town);
 	site.repair = IsBuilt(building);
 	site.places = PlacesRound(building);
+	if (registry.AllOf<Workshop>(building))
+	{
+		MakeSitePiles(building, site);
+	}
 	// A site added to a town changes what it wants
 	if (Locator::townSystem::has_value())
 	{
@@ -749,6 +763,15 @@ void construction::OpenWorshipSite(entt::entity site, entt::entity town, float d
 void construction::MakeSitePiles(entt::entity building, BuildingSite& site)
 {
 	auto& registry = Entities();
+	// A workshop's site keeps its wood on the wood pile of the workshop. Thus the wood is the workshop's wood.
+	if (registry.AllOf<Workshop>(building))
+	{
+		if (Locator::workshopSystem::has_value())
+		{
+			site.piles.front() = Locator::workshopSystem::value().WoodPileOf(building);
+		}
+		return;
+	}
 	// A worship site's one pile stands at a point of its model, turned as the site is
 	if (const auto* worship = registry.TryGet<const WorshipSite>(building))
 	{

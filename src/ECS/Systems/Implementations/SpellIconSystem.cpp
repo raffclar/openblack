@@ -727,6 +727,52 @@ bool SpellIconSystem::StartChargeForGod(entt::entity icon, PlayerNames player)
 	return true;
 }
 
+entt::entity SpellIconSystem::IconOfSeed(entt::entity seed) const
+{
+	auto& registry = Entities();
+	const auto* component = registry.Valid(seed) ? registry.TryGet<const SpellSeed>(seed) : nullptr;
+	if (component == nullptr || !component->hasIcon)
+	{
+		return entt::null;
+	}
+	// The icon of its seed at the site that made it, while the icon keeps the seed as one of its seeds out
+	const auto icon = SiteIconOf(component->worshipSite, component->seedType);
+	if (icon == entt::null)
+	{
+		return entt::null;
+	}
+	const auto& out = registry.Get<const WorshipIcon>(icon).seedsOut;
+	return std::ranges::find(out, seed) != out.end() ? icon : entt::null;
+}
+
+bool SpellIconSystem::ValidForPowerUp(entt::entity icon, PlayerNames player, int powerUp) const
+{
+	auto& registry = Entities();
+	const auto* component = registry.Valid(icon) ? registry.TryGet<const WorshipIcon>(icon) : nullptr;
+	if (component == nullptr || HeldSeedOf(*component) == entt::null || !Locator::infoConstants::has_value() ||
+	    powerUp < magic::k_BasePowerUpLevel || powerUp >= static_cast<int>(icons::k_PowerUpLevels))
+	{
+		return false;
+	}
+	const auto& info = Locator::infoConstants::value();
+	const auto type = magic::GetMagicTypeFromPowerUpLevel(magic::GetSpellSeedInfo(info, component->seed), powerUp);
+	return IsEnabled(player, type);
+}
+
+bool SpellIconSystem::StartPowerUpCharge(entt::entity icon, PlayerNames player, int powerUp)
+{
+	if (!ValidForPowerUp(icon, player, powerUp))
+	{
+		return false;
+	}
+	auto& component = Entities().Get<WorshipIcon>(icon);
+	component.charging = true;
+	component.powerUp = powerUp;
+	component.charger = player;
+	component.chargeStartTurn = Locator::time::has_value() ? Locator::time::value().GetTurn() : 0;
+	return true;
+}
+
 float SpellIconSystem::ChantNeeded(entt::entity icon) const
 {
 	const auto& registry = Entities();

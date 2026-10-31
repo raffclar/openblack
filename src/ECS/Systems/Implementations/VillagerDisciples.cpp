@@ -511,7 +511,8 @@ void SetupInspectObject(LivingAction& action, entt::entity thing)
 	const auto villager = EntityOf(action);
 	auto& registry = Entities();
 	registry.AssignOrReplace<DiscipleInspect>(villager, DiscipleInspect {.thing = thing});
-	const auto there = glm::xz(PositionOf(thing));
+	// A worship site is looked at from its middle, but with the radius of its model
+	const auto there = systems::object_measures::InspectPoint(registry, thing);
 	const auto here = glm::xz(PositionOf(villager));
 	const float radius = systems::object_measures::TwoDRadius(registry, thing);
 	if (gutils::GetDistanceInMetres(here, there) - radius > disciple::k_InspectReach)

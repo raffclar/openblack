@@ -210,6 +210,7 @@
 #include "ECS/Systems/PlayerCommandSystemInterface.h"
 #include "ECS/Systems/PlayerProfileSystemInterface.h"
 #include "ECS/Systems/PlayerSystemInterface.h"
+#include "ECS/Systems/PlaygroundTripSystemInterface.h"
 #include "ECS/Systems/ProfileFolderSystemInterface.h"
 #include "ECS/Systems/RainSystemInterface.h"
 #include "ECS/Systems/ReactionSystemInterface.h"
@@ -473,6 +474,7 @@ constexpr std::array k_Coverage {
     LocatorCoverage {"musicMoodSystem", "players.custom_music"},
     LocatorCoverage {"scriptMusicSystem", "audio.state"},
     LocatorCoverage {"tutorialSkipSystem", "players.new_game"},
+    LocatorCoverage {"playgroundTripSystem", "players.playground_trip"},
     LocatorCoverage {"advisorSystem", "help.advisors"},
     LocatorCoverage {"advisorVoiceSystem", "help.advisors"},
     LocatorCoverage {"helpTextSystem", "help.dialogue"},
@@ -1938,6 +1940,18 @@ std::unique_ptr<ProviderInterface> PlayersProvider()
 		              }
 		              return QueryResult::Value(std::move(result));
 	              });
+	provider->Add(Query("playground_trip", "The trip to the Gods' Playground: whether every player's influence covers "
+	                                       "the whole land, and whether a lesson runs"),
+	              [](const QueryContext& /*c*/) {
+		              Json result = Json::object();
+		              if (Locator::playgroundTripSystem::has_value())
+		              {
+			              const auto& trip = Locator::playgroundTripSystem::value();
+			              result["influence_everywhere"] = trip.InfluenceEverywhere();
+			              result["lesson_running"] = trip.IsLessonRunning();
+		              }
+		              return QueryResult::Value(std::move(result));
+	              });
 	provider->Add(Query("profile_folder", "The profile folder, the folder of the player played in it, and whether that "
 	                                      "folder holds the help record (helpstats.dat)"),
 	              [](const QueryContext& /*c*/) {
@@ -2419,6 +2433,7 @@ std::unique_ptr<ProviderInterface> PlayersProvider()
 		                                 {"templates", gestures.GetTemplates().size()},
 		                                 {"leash_picker_open", gestures.IsLeashPickerOpen()},
 		                                 {"circle_seconds_left", gestures.GetCircleSecondsLeft()},
+		                                 {"asked_power_up", static_cast<uint32_t>(gestures.GetAskedPowerUp())},
 		                                 {"events_queue", Locator::gestureEvents::has_value()}};
 		                  // The row of hints at the bottom right: each hinted gesture and its leash, and the row's fade
 		                  Json hints = Json::array();

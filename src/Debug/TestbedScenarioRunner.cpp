@@ -131,6 +131,7 @@
 #include "ECS/Components/Poisoned.h"
 #include "ECS/Components/Pot.h"
 #include "ECS/Components/PrayerPower.h"
+#include "ECS/Components/Scaffold.h"
 #include "ECS/Components/ScriptControl.h"
 #include "ECS/Components/Spell.h"
 #include "ECS/Components/SpellDispenser.h"
@@ -1078,6 +1079,21 @@ void Runner::Start(const Scenario& scenario)
 			if (auto* impression = registry.TryGet<ecs::components::TownImpression>(town->second))
 			{
 				magic::town_belief::SetInPlayer(impression->belief, PlayerNames::PLAYER_TWO, *scenario.townBeliefInRival);
+			}
+		}
+	}
+	if (!scenario.townBeliefInPlayers.empty())
+	{
+		auto& registry = Locator::entitiesRegistry::value();
+		const auto& towns = registry.Context().towns;
+		if (const auto town = towns.find(k_ScenarioTownId); town != towns.end() && registry.Valid(town->second))
+		{
+			if (auto* impression = registry.TryGet<ecs::components::TownImpression>(town->second))
+			{
+				for (const auto& [player, belief] : scenario.townBeliefInPlayers)
+				{
+					magic::town_belief::SetInPlayer(impression->belief, player, belief);
+				}
 			}
 		}
 	}
@@ -2265,6 +2281,23 @@ std::string Runner::GiveLeashCommand(entt::entity creature, const Command& comma
 		}
 		return leashes.HandTie(creature, *found) ? "tied" : "can't";
 	}
+	case Kind::TieLeashToWorshipSiteFlag:
+	{
+		auto& registry = Locator::entitiesRegistry::value();
+		std::optional<entt::entity> found;
+		registry.Each<const ecs::components::WorshipSiteFlag>(
+		    [&](entt::entity flag, const ecs::components::WorshipSiteFlag& shown) {
+			    if (!found.has_value() && static_cast<size_t>(shown.need) == command.value)
+			    {
+				    found = flag;
+			    }
+		    });
+		if (!found.has_value())
+		{
+			return "no flag";
+		}
+		return leashes.HandTie(creature, *found) ? "tied" : "can't";
+	}
 	case Kind::LeashOrderAt:
 	{
 		const auto point = MapPoint(_middle, command.point);
@@ -2416,6 +2449,28 @@ std::string Runner::GivePlayerCommand(const Command& command)
 		}
 		progress->built = 1.0f;
 		return "all of it built, not finished";
+	}
+	case Kind::ScaffoldStartsSite:
+	{
+		const auto object = ObjectAt(command.object);
+		if (!object.has_value() || !Locator::workshopSystem::has_value())
+		{
+			return "no scaffold";
+		}
+		return Locator::workshopSystem::value().ForceBuild(*object, PlayerNames::PLAYER_ONE) ? "the site starts"
+		                                                                                     : "no building on offer";
+	}
+	case Kind::DestroyScaffoldSite:
+	{
+		const auto object = ObjectAt(command.object);
+		const auto* scaffold =
+		    object.has_value() ? Locator::entitiesRegistry::value().TryGet<const ecs::components::Scaffold>(*object) : nullptr;
+		if (scaffold == nullptr || !Locator::entitiesRegistry::value().Valid(scaffold->site))
+		{
+			return "the scaffold is on no site";
+		}
+		ecs::world_objects::DestroyedByEffect(scaffold->site, {.killer = std::nullopt, .weight = 0.0f});
+		return "the building of the site is destroyed";
 	}
 	case Kind::RemoveObject:
 	{
@@ -2677,6 +2732,8 @@ std::string Runner::GivePlayerCommand(const Command& command)
 	}
 	case Kind::ChargeIconWithSeedHeld:
 		return ChargeIconWithSeedHeld(command);
+	case Kind::TakeIconSeed:
+		return TakeIconSeed(command);
 	case Kind::PressPlainKey:
 	{
 		// The key goes down and comes up again, each as an event of the window
@@ -3042,6 +3099,52 @@ std::string Runner::ChargeIconWithSeedHeld(const Command& command)
 	return fmt::format("the seed in the hand holds {:.0f} of {:.0f}, and its icon charges", seed.chantStore, cost);
 }
 
+std::string Runner::TakeIconSeed(const Command& command)
+{
+	if (!Locator::infoConstants::has_value() || !Locator::spellIconSystem::has_value() || !Locator::magicSystem::has_value() ||
+	    !Locator::worshipSiteSystem::has_value())
+	{
+		return "no miracles";
+	}
+	const auto& info = Locator::infoConstants::value();
+	auto& registry = Locator::entitiesRegistry::value();
+	const auto seedType = static_cast<SpellSeedType>(command.value);
+	std::optional<entt::entity> found;
+	registry.Each<const ecs::components::WorshipIcon>([&](entt::entity entity, const ecs::components::WorshipIcon& icon) {
+		const auto* site = registry.Valid(icon.site) ? registry.TryGet<const ecs::components::WorshipSite>(icon.site) : nullptr;
+		if (!found.has_value() && site != nullptr && site->player == command.player && icon.seed == seedType)
+		{
+			found = entity;
+		}
+	});
+	if (!found.has_value())
+	{
+		return "no such icon";
+	}
+	auto& icon = registry.Get<ecs::components::WorshipIcon>(*found);
+	const auto& seedInfo = magic::GetSpellSeedInfo(info, icon.seed);
+	const float cost =
+	    magic::GetChantsRequiredToCreate(info, magic::GetMagicTypeFromPowerUpLevel(seedInfo, magic::k_BasePowerUpLevel));
+	// A seed that the hand holds goes first. Then the icon is charged full and a tap puts its miracle in the hand.
+	if (Locator::magicSystem::value().GetHeldSeedOf(command.player).has_value())
+	{
+		Locator::magicSystem::value().DiscardHeldSeedOf(command.player);
+	}
+	icon.charging = false;
+	icon.store = cost;
+	Locator::spellIconSystem::value().Tap(*found, command.player);
+	const auto held = Locator::magicSystem::value().GetHeldSeed();
+	if (!held.has_value() || std::ranges::find(icon.seedsOut, *held) == icon.seedsOut.end())
+	{
+		return "the hand did not take the seed";
+	}
+	// The site gets prayer power for the power-ups, from the cost of the highest level that the seed has
+	const int top = magic::GetNumPowerUpLevels(seedInfo) - 2;
+	const float topCost = magic::GetChantsRequiredToCreate(info, magic::GetMagicTypeFromPowerUpLevel(seedInfo, top));
+	Locator::worshipSiteSystem::value().ReturnChants(icon.site, topCost * command.amount);
+	return fmt::format("the seed is in the hand, and the site gets {:.0f}", topCost * command.amount);
+}
+
 std::string Runner::HandTakeFireBall()
 {
 	if (!Locator::magicSystem::has_value())
@@ -3324,11 +3427,12 @@ void Runner::Give(const Command& command)
 	    command.kind == Kind::PlayGuidanceVoice || command.kind == Kind::ScriptRelease || command.kind == Kind::FillSiteIcons ||
 	    command.kind == Kind::BuildWorshipSites || command.kind == Kind::PressPlainKey || command.kind == Kind::PlainKeyDown ||
 	    command.kind == Kind::PlainKeyRepeat || command.kind == Kind::PlainKeyUp ||
-	    command.kind == Kind::ChargeIconWithSeedHeld || command.kind == Kind::FinishBuilding ||
-	    command.kind == Kind::FillBuiltAmount || command.kind == Kind::PauseGame || command.kind == Kind::SetGameSpeed ||
-	    command.kind == Kind::RemoveTeleportStone || command.kind == Kind::MakeDance || command.kind == Kind::OtherGodHand ||
-	    command.kind == Kind::OwnGod || command.kind == Kind::BringCreature || command.kind == Kind::ComputerPersonality ||
-	    command.kind == Kind::ComputerUntaughtSends)
+	    command.kind == Kind::ChargeIconWithSeedHeld || command.kind == Kind::TakeIconSeed ||
+	    command.kind == Kind::FinishBuilding || command.kind == Kind::ScaffoldStartsSite ||
+	    command.kind == Kind::DestroyScaffoldSite || command.kind == Kind::FillBuiltAmount || command.kind == Kind::PauseGame ||
+	    command.kind == Kind::SetGameSpeed || command.kind == Kind::RemoveTeleportStone || command.kind == Kind::MakeDance ||
+	    command.kind == Kind::OtherGodHand || command.kind == Kind::OwnGod || command.kind == Kind::BringCreature ||
+	    command.kind == Kind::ComputerPersonality || command.kind == Kind::ComputerUntaughtSends)
 	{
 		const auto result = GivePlayerCommand(command);
 		Log(fmt::format("{:.1f}s: {}{}{}", _seconds, Name(command.kind), result.empty() ? "" : ": ", result));
@@ -4059,6 +4163,7 @@ void Runner::Give(const Command& command)
 	case Kind::PutOnLeash:
 	case Kind::TieLeash:
 	case Kind::TieLeashToDesireFlag:
+	case Kind::TieLeashToWorshipSiteFlag:
 	case Kind::UntieLeash:
 	case Kind::TakeOffLeash:
 	case Kind::ConfineToHome:
@@ -4202,9 +4307,12 @@ void Runner::Give(const Command& command)
 	case Kind::PlainKeyRepeat:
 	case Kind::PlainKeyUp:
 	case Kind::ChargeIconWithSeedHeld:
+	case Kind::TakeIconSeed:
 	case Kind::RemoveObject:
 	case Kind::FinishBuilding:
 	case Kind::FillBuiltAmount:
+	case Kind::ScaffoldStartsSite:
+	case Kind::DestroyScaffoldSite:
 	case Kind::PauseGame:
 	case Kind::SetGameSpeed:
 	case Kind::RemoveTeleportStone:

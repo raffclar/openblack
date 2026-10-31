@@ -114,8 +114,9 @@ public:
 	[[nodiscard]] virtual std::optional<glm::vec2> GetDrawingPoint() const = 0;
 	/// Forgets the hand's path
 	virtual void ForgetPath() = 0;
-	/// A miracle seed in the hand does its first turn there: the hand forgets its path. From then on this land, the chain
-	/// follows the hand while it holds any miracle.
+	/// A miracle seed in the hand does its first turn there: the hand forgets its path and starts its power-ups for the
+	/// seed, with the power-up level of the seed as the one asked for. From then on this land, the chain follows the hand
+	/// while it holds any miracle.
 	virtual void SeedFirstTurnInHand() { ForgetPath(); }
 
 	/// The templates the paths are matched against, empty until the game's file is loaded
@@ -141,6 +142,11 @@ public:
 	[[nodiscard]] virtual bool IsSelecting() const { return false; }
 	/// Whether a circle drawn for the storm or shield in the hand is remembered, and for how much longer
 	[[nodiscard]] virtual float GetCircleSecondsLeft() const = 0;
+	/// The gesture of the power-up that the hand asked for the seed in it, none when it asked for none
+	[[nodiscard]] virtual GestureType GetAskedPowerUp() const { return GestureType::None; }
+	/// The hand casts the seed in it with a power-up asked for: the hand starts its power-ups again, so it forgets the
+	/// power-up asked for and the circle remembered
+	virtual void PoweredUpCast() {}
 	/// Whether the hand is drawing a gesture that the chain behind it shows: while it holds a miracle that it can power up
 	/// or a miracle that a circle sizes, or while it draws a gesture of the open miracle selection. Once a miracle did its
 	/// first turn in the hand on this land, or the selection opened once on this land, the chain follows every miracle in

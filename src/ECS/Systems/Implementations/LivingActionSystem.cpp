@@ -968,13 +968,13 @@ const static std::array<VillagerStateTableEntry, static_cast<size_t>(VillagerSta
     /* GO_TOWARDS_TELEPORT_REACTION */
     VillagerStateTableEntry {
         .state = &villager_teleport::GoTowardsTeleportReaction,
-        .exitState = &villager_reactions::ExitReaction,
+        .exitState = &villager_teleport::ExitReactToTeleport,
         .validate = &villager_reactions::ReactionValidate,
     },
     /* TELEPORT_REACTION */
     VillagerStateTableEntry {
         .state = &villager_teleport::TeleportReaction,
-        .exitState = &villager_reactions::ExitReaction,
+        .exitState = &villager_teleport::ExitReactToTeleport,
         .validate = &villager_reactions::ReactionValidate,
     },
     /* DANCE_WHILE_REACTING */
@@ -1211,7 +1211,7 @@ const static std::array<VillagerStateTableEntry, static_cast<size_t>(VillagerSta
     /* GO_TOWARDS_TELEPORT_REACTION_QUICKLY: running to a teleport stone is walking to it, faster */
     VillagerStateTableEntry {
         .state = &villager_teleport::GoTowardsTeleportReaction,
-        .exitState = &villager_reactions::ExitReaction,
+        .exitState = &villager_teleport::ExitReactToTeleport,
         .validate = &villager_reactions::ReactionValidate,
     },
     /* GO_AND_CHILLOUT_IN_TOWN */

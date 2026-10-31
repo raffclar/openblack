@@ -338,8 +338,12 @@ std::optional<size_t> building_site::BestRepairSite(std::span<const RepairCandid
 	return best;
 }
 
-LeftoverPile building_site::WhenSiteCloses(uint32_t woodInPile)
+LeftoverPile building_site::WhenSiteCloses(uint32_t woodInPile, bool workshopPile)
 {
+	if (workshopPile)
+	{
+		return LeftoverPile::Keep;
+	}
 	return woodInPile == 0 ? LeftoverPile::Remove : LeftoverPile::CallForWood;
 }
 

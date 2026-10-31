@@ -308,6 +308,15 @@ TEST(CreatureCastAgenda, FoodIsScatteredFromTwoAwayWithItsGesture)
 	EXPECT_EQ(CastFoodAt(14, 0, 7).size(), 3u);
 }
 
+TEST(CreatureCastAgenda, FoodIsCastAtANeedFlagOfAWorshipSiteFromTwentyAway)
+{
+	const auto agenda = CastFoodAt(14, 3, 7, true);
+	ASSERT_EQ(agenda.size(), 4u);
+	EXPECT_EQ(agenda[0].movement.kind, Movement::Kind::GoNearObject);
+	EXPECT_FLOAT_EQ(agenda[0].movement.maxDistance, 20.0f);
+	EXPECT_EQ(*agenda[3].cast.object, 7u);
+}
+
 TEST(CreatureCastAgenda, AShieldIsCastFromWhereItStands)
 {
 	const auto agenda = CastShieldAt(19, 7);

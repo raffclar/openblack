@@ -158,3 +158,13 @@ TEST(CreatureTurnOrder, AForcedPlanOrAReactionKeepsTheCreatureFromDeciding)
 	// With no agenda that runs, the mark and the reaction are gone and the creature decides
 	EXPECT_FALSE(turn::SkipsDecision({.planRuns = false, .planForced = true, .reacting = true}));
 }
+
+TEST(CreatureTurnOrder, OnlyAFreeDecisionDoesTheThingThatWaits)
+{
+	EXPECT_TRUE(turn::DoesFollowUp({}, false, false));
+	// An agenda still runs
+	EXPECT_FALSE(turn::DoesFollowUp({.planRuns = true}, false, false));
+	// An order on a thing plans for one desire, and the thing waits until the order is done
+	EXPECT_FALSE(turn::DoesFollowUp({}, true, false));
+	EXPECT_FALSE(turn::DoesFollowUp({}, false, true));
+}

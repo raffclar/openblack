@@ -87,6 +87,7 @@
 #include "ECS/Systems/MiracleFxSystemInterface.h"
 #include "ECS/Systems/ParticleRuleSystemInterface.h"
 #include "ECS/Systems/ParticleSystemInterface.h"
+#include "ECS/Systems/PlaygroundTripSystemInterface.h"
 #include "ECS/Systems/ReactionSystemInterface.h"
 #include "ECS/Systems/SavedStateInterface.h"
 #include "ECS/Systems/ScriptControlSystemInterface.h"
@@ -332,7 +333,7 @@ struct SavedSystem
 
 /// The systems that keep running state of their own, by the names of their sections. A load gives each system its state
 /// in this order: the map's lists first, then the systems that use them.
-constexpr std::array<SavedSystem, 43> k_SavedSystems {{
+constexpr std::array<SavedSystem, 44> k_SavedSystems {{
     {"map", &FindSystem<Locator::entitiesMap>},
     {"particles", &FindOldParticles, false},
     {"syncedParticles", &FindSystem<Locator::particleRuleSystem>},
@@ -376,6 +377,7 @@ constexpr std::array<SavedSystem, 43> k_SavedSystems {{
     {"cameraHelp", &FindSystem<Locator::cameraHelpSystem>},
     {"scriptHighlights", &FindSystem<Locator::scriptHighlightSystem>},
     {"cameraBookmarks", &FindSystem<Locator::cameraBookmarkSystem>},
+    {"playgroundTrip", &FindSystem<Locator::playgroundTripSystem>},
 }};
 
 gamesave::Chunk SystemsChunk(const entt::meta_ctx& reflection)

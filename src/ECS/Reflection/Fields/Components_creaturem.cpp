@@ -161,5 +161,6 @@ void openblack::ecs::reflection::RegisterFields_Components_creaturem(entt::meta_
 	    .Field<&components::CreatureMindState::observedDeed>("observedDeed")
 	    .Field<&components::CreatureMindState::clearingWaySerial>("clearingWaySerial")
 	    .Field<&components::CreatureMindState::walkOnTo>("walkOnTo")
-	    .Field<&components::CreatureMindState::leashCast>("leashCast");
+	    .Field<&components::CreatureMindState::leashCast>("leashCast")
+	    .Field<&components::CreatureMindState::feedSiteFlag>("feedSiteFlag");
 }

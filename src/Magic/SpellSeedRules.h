@@ -52,16 +52,6 @@ enum class CastStyle : uint8_t
 /// Whether a seed held for some turns is ready to cast: a seed from a worship site waits a delay, one that is ready at
 /// once (from a dispenser) is always ready
 [[nodiscard]] bool SeedReadyAfter(uint32_t turnsInHand, float turnSeconds, float delaySeconds);
-/// What a scribble does to the seed in the hand
-enum class ScribbleResult : uint8_t
-{
-	/// The seed goes back to its plain miracle and stays in the hand
-	StopPowerUp,
-	/// The seed leaves the hand
-	Drop,
-};
-/// A scribble stops the power-up of a seed from an icon that is ready, not cast and powered up. Any other seed drops.
-[[nodiscard]] ScribbleResult ScribbleOn(bool hasIcon, bool ready, bool cast, int powerUp);
 
 /// A seed out of the hand that stays with the miracle it cast (the storms', the shields' and the forest's)
 struct SeedWithSpell

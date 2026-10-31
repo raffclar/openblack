@@ -223,7 +223,8 @@ TEST(GameTurnOrder, TheLateStepsOfTheTurnComeInTheGamesOrder)
 TEST(GameTurnOrder, TheEndOfTheTurnSoundsThenSavesThenEndsTheGame)
 {
 	const auto recorder = PlayOneTurn();
-	EXPECT_TRUE(recorder.Before(Step::MusicMoods, Step::SoundTags));
+	EXPECT_TRUE(recorder.Before(Step::MusicMoods, Step::PlaygroundLesson));
+	EXPECT_TRUE(recorder.Before(Step::PlaygroundLesson, Step::SoundTags));
 	EXPECT_TRUE(recorder.Before(Step::SoundTags, Step::Ambience));
 	EXPECT_TRUE(recorder.Before(Step::Ambience, Step::Autosave));
 	EXPECT_TRUE(recorder.Before(Step::Autosave, Step::GameOver));

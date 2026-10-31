@@ -88,4 +88,8 @@ struct DecisionState
 /// The creature does not decide, and does not do what waits for the end of its work, while it has a forced plan or a
 /// reaction. The check of the copy of the player comes before this and still occurs.
 [[nodiscard]] bool SkipsDecision(const DecisionState& state);
+/// When it completes its work, the creature does the thing that waits in place of its own decision. A plan for one
+/// desire only, such as an order on a thing, does not do the thing that waits. A creature that a script controls does
+/// not do it.
+[[nodiscard]] bool DoesFollowUp(const DecisionState& state, bool forOneDesire, bool scriptControlled);
 } // namespace openblack::creature_turn_order

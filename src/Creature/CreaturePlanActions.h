@@ -687,6 +687,8 @@ struct CastInfo
 	float height {0.0f};
 	/// Whether what it is cast at is living
 	bool targetLiving {false};
+	/// Whether what it is cast at is a need flag of a worship site
+	bool targetNeedFlag {false};
 	/// For a fireball, and for water on itself: the middle of the clear area near the creature that it goes to first,
 	/// none when there is none
 	std::optional<glm::vec2> clearArea;

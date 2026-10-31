@@ -11,6 +11,7 @@
 
 #include <algorithm>
 #include <bit>
+#include <memory>
 #include <optional>
 #include <string_view>
 #include <utility>
@@ -31,14 +32,18 @@
 #include "ECS/Components/Transform.h"
 #include "ECS/Components/Vortex.h"
 #include "ECS/Registry.h"
+#include "ECS/ScriptSpotVisuals.h"
 #include "ECS/Systems/DynamicsSystemInterface.h"
+#include "ECS/Systems/EffectRequestSystemInterface.h"
 #include "ECS/Systems/ScriptObjectsSystemInterface.h"
 #include "Locator.h"
+#include "Particles/ParticleDrawFrame.h"
 #include "ScriptHeaders/ScriptEnums.h"
 #include "ScriptHeaders/ScriptPropertyRules.h"
 
 // Enable this define because we use a custom locator
 #define LOCATOR_IMPLEMENTATIONS
+#include "ECS/Systems/Implementations/EffectRequestSystem.h"
 #include "ECS/Systems/Implementations/VortexSystem.h"
 
 using namespace openblack;
@@ -81,6 +86,54 @@ public:
 	void SetParticleStream(ParticleRandomStream) override {}
 
 	int draws {0};
+};
+
+/// Shows each effect it is asked for and keeps the last magnitude given to each
+class FakeEffectServer final: public ecs::systems::EffectServerInterface
+{
+public:
+	void SetLifeListener(ecs::systems::EffectLifeListener* lifeListener) override { listener = lifeListener; }
+	ecs::systems::EffectHandle Serve(const ecs::systems::EffectRequest& /*request*/, ecs::systems::EffectHandle handle) override
+	{
+		if (listener != nullptr)
+		{
+			listener->EffectStarted(handle);
+		}
+		return handle;
+	}
+	void Move(ecs::systems::EffectHandle, glm::vec3) override {}
+	void Stop(ecs::systems::EffectHandle) override {}
+	void Remove(ecs::systems::EffectHandle) override {}
+	void SetPlayer(ecs::systems::EffectHandle, int) override {}
+	void SetPower(ecs::systems::EffectHandle, float) override {}
+	void SetMagnitude(ecs::systems::EffectHandle handle, float magnitude) override
+	{
+		magnitudes.emplace_back(handle, magnitude);
+	}
+	void SetAlpha(ecs::systems::EffectHandle, float) override {}
+	void SetProcessInfo(ecs::systems::EffectHandle, const particles::ProcessInfo&) override {}
+	void SetEnabled(ecs::systems::EffectHandle, bool) override {}
+	void AddTarget(ecs::systems::EffectHandle, entt::entity) override {}
+	void AddTargetPosition(ecs::systems::EffectHandle, glm::vec3) override {}
+	void AddPlasma(ecs::systems::EffectHandle, const particles::PlasmaCommand&) override {}
+	void AddManaPathSpark(ecs::systems::EffectHandle, const particles::mana_path::Spark&) override {}
+	bool ProcessForSpell(ecs::systems::EffectHandle, const particles::ProcessInfo&, float) override { return true; }
+	void RestoreSink(ecs::systems::EffectHandle, particles::SpellSink*) override {}
+	void SetHidden(ecs::systems::EffectHandle, bool) override {}
+	void SetDrawOffset(ecs::systems::EffectHandle, glm::vec3) override {}
+	void SetLiveHand(ecs::systems::EffectHandle, glm::vec3) override {}
+	[[nodiscard]] std::shared_ptr<particles::ShieldSphere> FindShield(glm::vec3, float) const override { return nullptr; }
+	void AddBeliefSprite(const particles::BeliefSprite&) override {}
+	void AddHandManaPathSpark(const particles::mana_path::Spark&) override {}
+	void AddStormBolt(glm::vec3) override {}
+	void SetFightMarks(std::vector<particles::draw::FightMark>) override {}
+	void AddLightSheet(const std::shared_ptr<particles::LightSheet>&) override {}
+	void SetPlayerSymbols(std::vector<particles::draw::PlayerSymbol>) override {}
+	void SetShown(ecs::systems::EffectHandle, bool) override {}
+	bool Renumber(ecs::systems::EffectHandle, ecs::systems::EffectHandle) override { return false; }
+
+	ecs::systems::EffectLifeListener* listener {nullptr};
+	std::vector<std::pair<ecs::systems::EffectHandle, float>> magnitudes;
 };
 
 /// Every object a script names is itself, as the scripts' table gives back what it holds
@@ -395,4 +448,22 @@ TEST_F(ScriptVortexNatives, ACreatureAndAnUnknownThingHaveNoState)
 		ASSERT_EQ(results.size(), 1u);
 		EXPECT_EQ(results.front().first.intVal, 0);
 	}
+}
+
+TEST_F(ScriptVortexNatives, AScriptsVisualTakesTheSizeAndItsThingKeepsItsOwn)
+{
+	FakeEffectServer server;
+	Locator::effectRequestSystem::emplace<ecs::systems::EffectRequestSystem>(
+	    [&server]() -> ecs::systems::EffectServerInterface* { return &server; });
+	auto& registry = Locator::entitiesRegistry::value();
+	const auto effect = Locator::effectRequestSystem::value().Start({.type = SpotVisualType::SingingStonesHeal});
+	const auto thing = ecs::script_spot_visuals::MakeThing(registry, effect, glm::vec3(0.0f));
+	const auto scaleBefore = registry.Get<ecs::components::Transform>(thing).scale;
+	SetProperty(script::ObjectPropertyType::Scale, thing, 13.5f);
+	// The visual is made 13.5 times its size, and the thing that holds it is not changed
+	ASSERT_EQ(server.magnitudes.size(), 1u);
+	EXPECT_EQ(server.magnitudes.front().first, effect);
+	EXPECT_EQ(server.magnitudes.front().second, 13.5f);
+	EXPECT_EQ(registry.Get<ecs::components::Transform>(thing).scale, scaleBefore);
+	Locator::effectRequestSystem::reset();
 }

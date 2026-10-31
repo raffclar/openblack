@@ -66,6 +66,19 @@ public:
 	/// or the icon some stored. An icon that is full already then gives its miracle to the hand, as a tap does. Only the
 	/// hand of a human player takes it, so a computer god keeps its miracle in the icon. Whether the charge started.
 	virtual bool StartChargeForGod(entt::entity /*icon*/, PlayerNames /*player*/) { return false; }
+	/// The worship site icon that made a seed, none for a seed that no icon made or whose icon is gone
+	[[nodiscard]] virtual entt::entity IconOfSeed(entt::entity /*seed*/) const { return entt::null; }
+	/// Whether an icon can charge the seed of it in a hand to a power-up level for a player: the hand of the icon's
+	/// player holds a seed of the icon, and the player may cast the miracle of that level. Level -1 is the plain miracle.
+	[[nodiscard]] virtual bool ValidForPowerUp(entt::entity /*icon*/, PlayerNames /*player*/, int /*powerUp*/) const
+	{
+		return false;
+	}
+	/// A power-up gesture asks an icon to charge the seed of it in a hand to a power-up level, for the hand of a player.
+	/// The icon charges from then on, also when it charged something before. When the seed holds what the level costs,
+	/// it takes the level and gives what it holds past the cost back to the site. Level -1 calls a power-up off. Whether
+	/// the charge started.
+	virtual bool StartPowerUpCharge(entt::entity /*icon*/, PlayerNames /*player*/, int /*powerUp*/) { return false; }
 	/// The prayer power that an icon's miracle still needs to be charged full
 	[[nodiscard]] virtual float ChantNeeded(entt::entity /*icon*/) const { return 0.0f; }
 	/// A god cast the miracle of an icon: the icon's store loses the miracle's cost, never more than it holds
