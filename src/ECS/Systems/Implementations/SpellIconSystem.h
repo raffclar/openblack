@@ -49,6 +49,7 @@ public:
 	void TownLeftSite(entt::entity site, entt::entity town) override;
 	void SiteRemoved(entt::entity site) override;
 
+	void SetMagicTypeEnabled(PlayerNames player, MagicType type, bool enable) override { SetEnabled(player, type, enable); }
 	[[nodiscard]] bool ValidToTap(entt::entity icon, PlayerNames player) const override;
 	bool StartChargeForGod(entt::entity icon, PlayerNames player) override;
 	[[nodiscard]] float ChantNeeded(entt::entity icon) const override;

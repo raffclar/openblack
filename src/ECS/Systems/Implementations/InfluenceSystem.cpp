@@ -894,6 +894,11 @@ float InfluenceSystem::PlayerRawInfluence(PlayerNames player, const map_coords::
 	{
 		return 0.0f;
 	}
+	// On the trip to the Gods' Playground the player has full influence at each point
+	if (InfluenceEverywhere())
+	{
+		return 1.0f;
+	}
 	// Under another player's shield a player has no influence at all, nor within an anti-influence a script made for them
 	if (Shielded(player, position))
 	{
