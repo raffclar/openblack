@@ -147,6 +147,7 @@ bool parseOptions(int argc, char** argv, openblack::Arguments& args, int& return
 		("play-video", "Play a full-screen video once the land is loaded: intro, fall (the falling spell, which needs the player's creature) or a path such as Data/logo.bik.", cxxopts::value<std::string>()->default_value(""))
 		("film-surface", "Debug: the 16-bit surface that each film picture goes through: 555 (the default, as the game on the display cards of today), 565 (as on cards with no 555) or none (the full colour of the decoder).", cxxopts::value<std::string>()->default_value(""))
 		("scenario", "Start on the testbed and run the testbed scenario of this id, such as benchmark.creatures_100.", cxxopts::value<std::string>())
+		("scenario-check", "With --scenario, run the scenario's checks of its own outcome, write their report to the console, and quit with the exit code 0 when they pass, 1 when one fails, 2 when the scenario states none. Tools and the merge train use this.")
 		("benchmark-warmup", "With --scenario, the frames a benchmark's crowd settles for once spawned, before it is measured.", cxxopts::value<uint32_t>()->default_value("120"))
 		("benchmark-frames", "With --scenario, the frames of a benchmark measured.", cxxopts::value<uint32_t>()->default_value("600"))
 		("scenario-hide-window", "With --scenario, keep the testbed's window of scenarios closed, so the view is clear.")
@@ -728,6 +729,7 @@ bool parseOptions(int argc, char** argv, openblack::Arguments& args, int& return
 			    .frames = std::max<uint32_t>(result["benchmark-frames"].as<uint32_t>(), 1),
 			};
 			args.scenario->hideWindow = result.count("scenario-hide-window") != 0;
+			args.scenario->checks = result.count("scenario-check") != 0;
 			if (result.count("benchmark-out") != 0)
 			{
 				args.scenario->results = std::filesystem::path(result["benchmark-out"].as<std::string>());
@@ -812,6 +814,8 @@ int main(int argc, char* argv[]) noexcept
 		{
 			return EXIT_FAILURE;
 		}
+		// A run of a scenario's checks ends with the verdict as its code
+		return game->GetExitCode();
 #endif
 	}
 	catch (std::exception& e)

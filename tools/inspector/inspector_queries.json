@@ -2492,6 +2492,12 @@
   "query": "game.scenarios"
  },
  {
+  "description": "The verdict of the checks that the last testbed scenario states about its own outcome: the scenario, passed or failed or waiting, and a line for each check. Null before a scenario has a verdict. A scenario with no checks has none.",
+  "kind": "object",
+  "parameters": [],
+  "query": "game.scenario_checks"
+ },
+ {
   "description": "The run's seed, the date pinned (null for the wall clock's) and the machine's milliseconds as the game reads them. With seed: every random number the game draws starts again from it, and the clock counts from 0 at a pinned date; each land or scenario loaded afterwards starts them again the same way. For two runs to go the same way: game.pause, game.frame_time, game.seed, load the land or scenario, then step; compare ecs.hash",
   "kind": "object",
   "parameters": [
