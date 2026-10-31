@@ -9,6 +9,8 @@
 
 #include "ComponentReflection.h"
 
+#include <cstddef>
+
 #include <string>
 #include <string_view>
 #include <utility>
@@ -196,7 +198,7 @@ void reflection::SaveRegistered(BinaryWriter& out, const entt::meta_any& value)
 	}
 	if (const auto* codec = CodecOf(type); codec != nullptr)
 	{
-		out.KeepPlan(typeHash, SavePlan {.codec = codec->save, .fields = {}});
+		out.KeepPlan(typeHash, SavePlan {.codec = codec->save, .steps = {}});
 		codec->save(value.base().data(), out);
 		return;
 	}
@@ -210,7 +212,17 @@ void reflection::SaveRegistered(BinaryWriter& out, const entt::meta_any& value)
 		if (Kept(info) && info->saveFrom != nullptr)
 		{
 			info->saveFrom(value.base().data(), out);
-			plan.fields.push_back(info->saveFrom);
+			if (info->plainAddress != nullptr)
+			{
+				// The place of a field in the value is the same in each value of the type
+				const auto offset = static_cast<const std::byte*>(info->plainAddress(value.base().data())) -
+				                    static_cast<const std::byte*>(value.base().data());
+				plan.AddBlock(static_cast<size_t>(offset), info->plainSize);
+			}
+			else
+			{
+				plan.AddWriter(info->saveFrom);
+			}
 		}
 		else if (Kept(info))
 		{
