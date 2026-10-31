@@ -25,6 +25,38 @@ public:
 	{
 	}
 
+	/// All the values of a glide, as a saved game keeps them
+	struct State
+	{
+		float value {0.0f};
+		float speed {0.0f};
+		float target {0.0f};
+		float targetSpeed {0.0f};
+		float elapsed {0.0f};
+		float duration {0.0f};
+		float start {0.0f};
+		float startSpeed {0.0f};
+		float c2 {0.0f};
+		float c3 {0.0f};
+		float c4 {0.0f};
+	};
+	/// A glide that continues from the values of a saved game
+	[[nodiscard]] static Zoomer Resume(const State& state)
+	{
+		Zoomer zoomer(state.value);
+		zoomer._speed = state.speed;
+		zoomer._target = state.target;
+		zoomer._targetSpeed = state.targetSpeed;
+		zoomer._elapsed = state.elapsed;
+		zoomer._duration = state.duration;
+		zoomer._start = state.start;
+		zoomer._startSpeed = state.startSpeed;
+		zoomer._c2 = state.c2;
+		zoomer._c3 = state.c3;
+		zoomer._c4 = state.c4;
+		return zoomer;
+	}
+
 	/// Sets off towards a target, arriving at a speed (per second) after so many seconds; under a thousandth of a second
 	/// it is there at once, at rest
 	void SetTarget(float target, float targetSpeed, float seconds);

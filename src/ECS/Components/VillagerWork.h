@@ -26,10 +26,10 @@ struct WorkTarget
 	entt::entity thing {entt::null};
 };
 
-/// The spot in its field a farmer walks to and sows or digs at next, in metres
+/// The spot in its field a farmer walks to and sows or digs at next, in whole map units (x, z)
 struct FieldWorkSpot
 {
-	glm::vec2 position {0.0f, 0.0f};
+	glm::ivec2 place {0, 0};
 };
 
 /// The wood a villager reacted to and is going for, kept while it waits beside wood that still moves
