@@ -107,6 +107,9 @@ enum class Message : uint8_t
 	/// "%s has kicked you from the game.", with OK, with the name of the room's server: the server removed the player
 	/// from the room. OK goes back to the game list.
 	KickedFromGame,
+	/// "ERROR: Could not download map from Internet. Please check your Internet connection.", with OK: the lobby did not
+	/// give the land of the room
+	CouldNotDownloadMap,
 };
 
 /// The buttons of a message box, as the game's message boxes have them

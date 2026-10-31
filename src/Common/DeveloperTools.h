@@ -184,7 +184,8 @@ inline constexpr std::array k_DeveloperOptions {
 
 /// The options of the dedicated server that only developers and tools use. A build without the developer tools ignores
 /// them. The server then keeps the options that a deployed game server uses: the game folder, the land, the socket and
-/// its certificate, the lobby, the server id, the ticket keys, the room, the gods, the profile folder and the log.
+/// its certificate, the lobby, the server id, the ticket keys, the room, the gods, the winning conditions, the time
+/// limit, the profile folder and the log.
 inline constexpr std::array k_ServerDeveloperOptions {
     DeveloperOption {.name = "testbed"},
     DeveloperOption {.name = "scenario", .takesValue = true},
@@ -208,7 +209,7 @@ inline constexpr std::array k_ServerDeveloperOptions {
     DeveloperOption {.name = "all-computer-gods"},
     DeveloperOption {.name = "ai-seed", .takesValue = true},
     DeveloperOption {.name = "gods-need-no-temple"},
-    DeveloperOption {.name = "conditions", .takesValue = true},
+    DeveloperOption {.name = "temple-loss", .takesValue = true},
 };
 
 /// The tool modes of the AI soak: long games in which computer gods play every god. They exist only in builds with the

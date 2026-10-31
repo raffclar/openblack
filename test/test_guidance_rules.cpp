@@ -189,3 +189,13 @@ TEST(GuidanceRules, OnlyTheStorysFirstLandIsQuiet)
 	EXPECT_FALSE(QuietFirstLand(1, false, true));
 	EXPECT_FALSE(QuietFirstLand(1, true, false));
 }
+
+TEST(GuidanceRules, ALostTownGivesABadLineAndATakenTownAGoodLine)
+{
+	using openblack::PlayerNames;
+	EXPECT_EQ(TownChangedHandsLine(PlayerNames::PLAYER_ONE, PlayerNames::PLAYER_TWO, PlayerNames::PLAYER_ONE),
+	          Kind::GeneralBad);
+	EXPECT_EQ(TownChangedHandsLine(PlayerNames::NEUTRAL, PlayerNames::PLAYER_ONE, PlayerNames::PLAYER_ONE), Kind::GeneralGood);
+	// A town that changes hands between two other players gives no line
+	EXPECT_FALSE(TownChangedHandsLine(PlayerNames::PLAYER_TWO, PlayerNames::NEUTRAL, PlayerNames::PLAYER_ONE).has_value());
+}

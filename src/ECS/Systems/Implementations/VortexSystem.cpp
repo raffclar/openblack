@@ -274,10 +274,9 @@ void VortexSystem::UpdateFrame(std::chrono::milliseconds frameRealTime, std::chr
 			const auto ground = Locator::terrainSystem::value().GetHeightAt({vortex.centre.x, vortex.centre.z});
 			const auto depth = vortex::SwirlDepth(vortex::LevelAmount(vortex.state, seconds));
 			effects->Move(vortex.beforeLandEffect, {vortex.centre.x, ground - depth, vortex.centre.z});
-			if (!effects->Step(vortex.beforeLandEffect, info, *effectStep))
-			{
-				vortex.beforeLandEffect = k_NoEffectHandle;
-			}
+			// A swirl that ended keeps its number. The load starts it again with that number, so the numbers of the
+			// next effects do not change.
+			effects->Step(vortex.beforeLandEffect, info, *effectStep);
 		}
 	});
 }
@@ -316,10 +315,10 @@ void VortexSystem::UpdateDrawnFrame(ObjectDrawListSystemInterface& drawList, std
 		const auto openness = vortex::Openness(vortex->state, seconds);
 		// The effect over the land grows with the openness, stepped by the game time since its last step
 		const particles::ProcessInfo info {.power = openness, .enabled = true};
-		if (effectStep.has_value() && openness != 0.0f && vortex->afterLandEffect != k_NoEffectHandle &&
-		    !effects.Step(vortex->afterLandEffect, info, *effectStep))
+		// An effect that ended keeps its number, as the swirl does
+		if (effectStep.has_value() && openness != 0.0f && vortex->afterLandEffect != k_NoEffectHandle)
 		{
-			vortex->afterLandEffect = k_NoEffectHandle;
+			effects.Step(vortex->afterLandEffect, info, *effectStep);
 		}
 		// The glow on the ground is as bright as the vortex's state has it
 		if (vortex->lightMapEffect != k_NoEffectHandle)

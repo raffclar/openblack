@@ -7048,6 +7048,29 @@ void AddHand(std::vector<Scenario>& all)
 	         // And comes back in
 	         {.kind = Kind::PointerTo, .delaySeconds = 2.0f, .point = {0.3f, 0.97f}}},
 	});
+	// The camera looks down on a temple of player two, 700 m north of the middle and far past the player's influence.
+	// The two players are allies.
+	all.push_back({
+	    .id = "hand.ally_influence",
+	    .name = "The hand acting in the influence of an ally",
+	    .facet = Facet::Hand,
+	    .description = "Player two is an ally of the player, and a temple of player two stands far past the player's own "
+	                   "influence. The hand goes over a ball near that temple, takes it, carries it a short distance and "
+	                   "lets it go.",
+	    .expected = "In the influence of the ally the hand has its inside look. It takes the ball and lets it go as it "
+	                "does in the player's own influence. The game log gives no message that the hand is outside.",
+	    .environment = {.dispenserGrid = false},
+	    .framing = {.shot = Shot::Placed, .eye = {0.0f, 40.0f, 620.0f}, .look = {0.0f, 0.0f, 680.0f}},
+	    .objects = {{.type = MobileObjectInfo::Ball, .offset = {0.0f, 670.0f}}},
+	    .temples = {{.offset = {0.0f, 700.0f}, .owner = PlayerNames::PLAYER_TWO}},
+	    .allies = {{.player = PlayerNames::PLAYER_ONE, .other = PlayerNames::PLAYER_TWO, .strength = 1.0f}},
+	    .commands = {{.kind = Kind::PointerOnObject, .delaySeconds = 1.0f, .object = 0, .amount = 1.0f},
+	                 {.kind = Kind::PointerPress, .delaySeconds = 1.0f, .value = 3},
+	                 {.kind = Kind::PointerRelease, .delaySeconds = 1.0f, .value = 3},
+	                 {.kind = Kind::PointerSweep, .delaySeconds = 0.5f, .point = {0.1f, 0.0f}, .amount = 1.0f},
+	                 {.kind = Kind::PointerPress, .delaySeconds = 1.5f, .value = 3},
+	                 {.kind = Kind::PointerRelease, .delaySeconds = 0.3f, .value = 3}},
+	});
 	// The camera looks down on the north edge of the player's influence, 400 m from the middle: a wood pile and another
 	// player's tiger just inside, a wood pile, another player's tiger and the player's own tiger just outside, all clear
 	// of the testbed's window. The hand rests on the land between visits, so that each tooltip is submitted afresh. A
@@ -10758,6 +10781,29 @@ void AddMind(std::vector<Scenario>& all)
 	                 Command {.kind = Kind::LoadGame, .delaySeconds = 4.0f, .value = 0}},
 	});
 
+	// A vortex levels the pond and then goes. The saved game keeps the levelled land, and the load gives it back.
+	all.push_back({
+	    .id = "saves.levelled_land_back",
+	    .name = "Save and load: the land that a vortex levelled",
+	    .facet = Facet::Story,
+	    .description = "A vortex that leads away from the land opens over the pond north-west of the middle. It levels "
+	                   "the pond and its banks. 4 seconds later it starts to fade out, and 7 seconds after that it is "
+	                   "gone. 14 seconds after the start the game saves into slot 0. 4 seconds after the save the game "
+	                   "loads slot 0.",
+	    .expected = "When the vortex has gone, a level square of land is where the pond and its banks were. After the "
+	                "load the square is level, as it was at the save: the pond and its banks do not come back.",
+	    .environment = {.dispenserGrid = false},
+	    .framing = {.shot = Shot::Overview,
+	                .include = {flat_land::k_PondCentre - flat_land::k_MapMiddle - glm::vec2(70.0f),
+	                            flat_land::k_PondCentre - flat_land::k_MapMiddle + glm::vec2(70.0f)}},
+	    .vortices = {{.type = VortexType::Out,
+	                  .offset = flat_land::k_PondCentre - flat_land::k_MapMiddle,
+	                  .delaySeconds = 0.5f,
+	                  .fadeOutAfterSeconds = 4.0f}},
+	    .commands = {Command {.kind = Kind::SaveGame, .delaySeconds = 14.0f, .value = 0},
+	                 Command {.kind = Kind::LoadGame, .delaySeconds = 4.0f, .value = 0}},
+	});
+
 	all.push_back({
 	    .id = "frontend.continue_with_menu",
 	    .name = "Start-up: continue from the save on exit",
@@ -13178,15 +13224,15 @@ bool testbed_scenarios::NeedsNoCreature(Command::Kind kind)
 	       kind == Kind::SetInterfaceLevel || kind == Kind::FlyToBookmark || kind == Kind::TabToTown ||
 	       kind == Kind::SetOpenClose || kind == Kind::LayGateStone || kind == Kind::HandTapObject || kind == Kind::Advisor ||
 	       kind == Kind::RunText || kind == Kind::PlayHandDemo || kind == Kind::Reframe || kind == Kind::DestroyTemple ||
-	       kind == Kind::RunHelpMessage || kind == Kind::EndGuidanceWaits || kind == Kind::RecordChallenge ||
-	       kind == Kind::EnterTemple || kind == Kind::HandTake || kind == Kind::RunScript || kind == Kind::PlayBoatFilm ||
-	       kind == Kind::HandPour || kind == Kind::HandRelease || kind == Kind::SetReportLatency ||
-	       kind == Kind::RemoveObject || kind == Kind::ReadTip || kind == Kind::LookAtTempleScroll ||
-	       kind == Kind::HandGripTotem || kind == Kind::ProfileFolderCheck || kind == Kind::PlayCustomMusic ||
-	       kind == Kind::ShowCustomMusicControls || kind == Kind::OwnTattooPicture || kind == Kind::OpenTattooMenu ||
-	       kind == Kind::OpenControlsBox || kind == Kind::OpenMenuPage || kind == Kind::PressMenuKey ||
-	       kind == Kind::StopScript || kind == Kind::StartScriptMusic || kind == Kind::SaveGame || kind == Kind::LoadGame ||
-	       kind == Kind::QuickSave || kind == Kind::ContinueGame || kind == Kind::PlayLogoEffect ||
+	       kind == Kind::RunHelpMessage || kind == Kind::EndGuidanceWaits || kind == Kind::SetTownBeliefInRival ||
+	       kind == Kind::RecordChallenge || kind == Kind::EnterTemple || kind == Kind::HandTake || kind == Kind::RunScript ||
+	       kind == Kind::PlayBoatFilm || kind == Kind::HandPour || kind == Kind::HandRelease ||
+	       kind == Kind::SetReportLatency || kind == Kind::RemoveObject || kind == Kind::ReadTip ||
+	       kind == Kind::LookAtTempleScroll || kind == Kind::HandGripTotem || kind == Kind::ProfileFolderCheck ||
+	       kind == Kind::PlayCustomMusic || kind == Kind::ShowCustomMusicControls || kind == Kind::OwnTattooPicture ||
+	       kind == Kind::OpenTattooMenu || kind == Kind::OpenControlsBox || kind == Kind::OpenMenuPage ||
+	       kind == Kind::PressMenuKey || kind == Kind::StopScript || kind == Kind::StartScriptMusic || kind == Kind::SaveGame ||
+	       kind == Kind::LoadGame || kind == Kind::QuickSave || kind == Kind::ContinueGame || kind == Kind::PlayLogoEffect ||
 	       kind == Kind::PlayFallingSpellFilm || kind == Kind::PlayIntroFilm || kind == Kind::SayLine ||
 	       kind == Kind::PlayGuidanceVoice || kind == Kind::ScriptRelease || kind == Kind::FillSiteIcons ||
 	       kind == Kind::ChargeIconWithSeedHeld || kind == Kind::FinishBuilding || kind == Kind::FillBuiltAmount ||
@@ -13225,7 +13271,7 @@ std::string_view testbed_scenarios::Name(Shot shot)
 
 std::string_view testbed_scenarios::Name(Command::Kind kind)
 {
-	constexpr std::array<std::string_view, 198> k_Names {
+	constexpr std::array<std::string_view, 199> k_Names {
 	    "walk to",
 	    "run to",
 	    "follow",
@@ -13333,6 +13379,7 @@ std::string_view testbed_scenarios::Name(Command::Kind kind)
 	    "walk home",
 	    "run a help message",
 	    "end the guidance's waits",
+	    "set town belief in rival",
 	    "destroy temple",
 	    "script play",
 	    "run text",

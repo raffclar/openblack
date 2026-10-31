@@ -92,7 +92,8 @@ struct Vortex
 	std::vector<uint8_t> groundHeights;
 	float groundAverage {0.0f};
 	/// Its particle effects (0 for none): the swirl drawn before the land, the effect drawn after it, what carries
-	/// things in, and the glow it lays on the ground
+	/// things in, and the glow it lays on the ground. The swirl and the effect after the land keep their numbers when
+	/// they end.
 	uint32_t beforeLandEffect {0};
 	uint32_t afterLandEffect {0};
 	uint32_t objectMoverEffect {0};

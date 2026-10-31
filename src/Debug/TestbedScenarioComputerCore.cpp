@@ -26,6 +26,12 @@ CREATE_CREATURE_FROM_FILE("PLAYER_TWO", 3, "ComputerControlledCreature", "25.0,0
 SET_COMPUTER_PLAYER_CREATURE_LIKE("PLAYER_TWO", "PLAYER_ONE")
 )";
 
+/// The lines of a land that give player two a computer mind and a temple 90 metres to the south, as the second land
+/// gives Khazar a temple far from the player's village
+constexpr std::string_view k_ComputerGodFarTempleScript = R"(TOGGLE_COMPUTER_PLAYER("PLAYER_TWO", 1)
+CREATE_CITADEL("0.0,-90.0", 0, "PLAYER_TWO", 5690, 1000)
+)";
+
 } // namespace
 
 void testbed_scenarios::AddComputerGodCoreScenarios(std::vector<Scenario>& all)
@@ -58,5 +64,51 @@ void testbed_scenarios::AddComputerGodCoreScenarios(std::vector<Scenario>& all)
 	    .commands = {{.kind = Command::Kind::WideScreen, .delaySeconds = 0.5f, .value = 1},
 	                 {.kind = Command::Kind::WideScreen, .delaySeconds = 30.0f, .value = 0}},
 	    .worshipShare = 0.5f,
+	});
+	all.push_back({
+	    .id = "mind.computer_god_carries_outside_influence",
+	    .name = "A computer god that carries a villager where it has no influence",
+	    .facet = Facet::Mind,
+	    .description = "Lines of a land switch on the computer mind of player two and give it a temple 90 metres to the "
+	                   "south. A man stands 120 metres to the north, far outside the influence of player two. After 3 "
+	                   "seconds, a testbed tool gives the god the action DIRECTPickupAndDropObject, with the man and a "
+	                   "marker 20 metres to the east of him, as the second land's script makes Khazar carry the builder "
+	                   "to the plot of the worship site.",
+	    .expected = "The hand of player two flies to the man, picks him up and carries him to the marker. There it puts "
+	                "him down. The players.list query shows the steps of the hand.",
+	    .framing = {.shot = Shot::Overview, .include = {glm::vec2(-40.0f, -100.0f), glm::vec2(40.0f, 130.0f)}},
+	    .objects = {{.type = VillagerInfo::CelticFarmerMale, .offset = {0.0f, 120.0f}}},
+	    .landScript = k_ComputerGodFarTempleScript,
+	    .computerActions = {{.afterTurns = 30,
+	                         .node = "DIRECTPickupAndDropObject",
+	                         .first = {.kind = ComputerActionThing::Kind::Object, .object = 0},
+	                         .second = {.kind = ComputerActionThing::Kind::Marker, .point = {20.0f, 120.0f}}}},
+	});
+	all.push_back({
+	    .id = "mind.computer_god_carry_puts_down_held_thing",
+	    .name = "A computer god that must carry a villager while its hand holds a pot",
+	    .facet = Facet::Mind,
+	    .description =
+	        "As the scenario of the far carry, but a pot of wood lies 10 metres north of the temple of player "
+	        "two. After 3 seconds, a testbed tool gives the god the action DIRECTPickupAndDropObject with the "
+	        "pot and a marker far to the west. When the hand holds the pot, the tool forces the same action "
+	        "at once with the man and a marker 20 metres to the east of him, as the second land's film forces Khazar "
+	        "to carry the builder while his hand can hold a thing.",
+	    .expected = "The hand takes the pot and flies west. At the second action it lets go of the pot at once where the "
+	                "hand is, then flies to the man, picks him up and carries him to the marker. The game log shows "
+	                "each deed of the hand.",
+	    .framing = {.shot = Shot::Overview, .include = {glm::vec2(-200.0f, -100.0f), glm::vec2(40.0f, 130.0f)}},
+	    .objects = {{.type = VillagerInfo::CelticFarmerMale, .offset = {0.0f, 120.0f}},
+	                {.type = PotInfo::HandWood, .offset = {0.0f, -80.0f}, .amount = 300}},
+	    .landScript = k_ComputerGodFarTempleScript,
+	    .computerActions = {{.afterTurns = 30,
+	                         .node = "DIRECTPickupAndDropObject",
+	                         .first = {.kind = ComputerActionThing::Kind::Object, .object = 1},
+	                         .second = {.kind = ComputerActionThing::Kind::Marker, .point = {-400.0f, -80.0f}}},
+	                        {.afterTurns = 60,
+	                         .node = "DIRECTPickupAndDropObject",
+	                         .first = {.kind = ComputerActionThing::Kind::Object, .object = 0},
+	                         .second = {.kind = ComputerActionThing::Kind::Marker, .point = {20.0f, 120.0f}},
+	                         .forceAtOnce = true}},
 	});
 }

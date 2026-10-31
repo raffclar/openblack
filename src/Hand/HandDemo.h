@@ -176,6 +176,13 @@ private:
 	uint32_t _frameMarks {0};
 };
 
+/// Whether a demonstration that starts stops the miracles that charge for the player's hand at the worship sites of the
+/// player's temple. It does so unless the demonstration keeps the hand as it is.
+[[nodiscard]] constexpr bool StopsCharges(bool withoutHandModify)
+{
+	return !withoutHandModify;
+}
+
 /// Whether a demonstration that starts takes the leash off the player's creature. It does so unless the demonstration
 /// keeps the hand as it is, and only when the leash is on and not tied to a thing.
 [[nodiscard]] constexpr bool TakesOffLeash(bool withoutHandModify, bool leashOn, bool tiedToAThing)

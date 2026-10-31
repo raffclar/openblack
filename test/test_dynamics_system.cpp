@@ -573,6 +573,29 @@ TEST_F(DynamicsSystemTest, ASavedPhysicsCarriesOnAsTheUnsavedOneDoes)
 	EXPECT_EQ(state(), unsavedPhysics);
 }
 
+// A thing that a vortex draws in is in the physics with no body. A load of the physics keeps it in the physics.
+TEST_F(DynamicsSystemTest, AThingInThePhysicsWithNoBodyStaysInThePhysicsAfterALoad)
+{
+	namespace reflection = openblack::ecs::reflection;
+	entt::meta_ctx context;
+	reflection::RegisterComponents(context);
+	auto& registry = _world->Entities();
+	const auto drawnIn = Rock({1000.0f, 1000.0f});
+	ASSERT_TRUE(_dynamics->InitialisePhysics(drawnIn, {.add = false}).started);
+	ASSERT_TRUE(registry.AllOf<InPhysics>(drawnIn));
+	ASSERT_EQ(Entries(), 0u);
+	reflection::BinaryWriter out(context);
+	_dynamics->SaveState(out);
+	const auto saved = std::move(out.Bytes());
+
+	_dynamics->ResetSimulation();
+	const reflection::EntityRemap identity;
+	reflection::BinaryReader in(context, saved, identity);
+	ASSERT_TRUE(_dynamics->LoadState(in));
+	EXPECT_TRUE(registry.AllOf<InPhysics>(drawnIn));
+	EXPECT_EQ(Entries(), 0u);
+}
+
 namespace
 {
 /// A frame as the game plays it: the turn if one is due, then the frame's clock, then the bodies drawn between their

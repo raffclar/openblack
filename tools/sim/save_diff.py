@@ -247,6 +247,106 @@ def compare_files(data_a, data_b):
     return result
 
 
+def differing_parts(result):
+    """The parts of a result in short: each block that differs as its tag, or each component and section in it as
+    the tag, a colon and its name"""
+    parts = []
+    for key, value in result.items():
+        detail = value.get("detail") if isinstance(value, dict) else None
+        names = []
+        if isinstance(detail, dict):
+            names += [f"{key}:{name}" for name in detail.get("components", {})]
+            names += [f"{key}:{name}" for name in detail if name != "components"]
+        parts += names or [key]
+    return parts
+
+
+# Each load of a saved game starts a game, as the game does, so a save after the load can differ from the save that
+# loaded in these values only:
+# - the player takes the alignment that the profile keeps;
+# - the statistics note the alignments and the towns at the start again (the towns are the last value of the RCTX block);
+# - the creatures' minds forget what a saved game does not keep;
+# - the sounds do not come back, and a creature's creed powers come back one by one with no glow placed yet;
+# - the mind of each computer god starts again, with no player for the size of its creature and a free hand;
+# - a search for a footpath starts again from its two ends.
+GAME_START_VALUES = {
+    "Alignment": {"value"},
+    "PlayerStatistics": {"startAlignment", "startCreatureAlignment"},
+    "CreatureMindState": {"leftAreaActions", "agendaRefused"},
+    "CreatureHandGlows": {"placed", "motion"},
+    "ComputerPlayer": {"mind", "creatureLike", "hand"},
+    "FootpathFinder": {"plan"},
+}
+# The components whose rows a load of a saved game can add or remove
+GAME_START_ROWS = {"PlayerStatistics": "only_b", "SoundTag": "only_a"}
+# The bytes at the end of the RCTX block that the start of a game sets: the count of the towns at the start
+GAME_START_CONTEXT_BYTES = 4
+
+
+def changed_altitudes(data):
+    """The count of the land's corners whose altitude the world changed, as a saved game or a world state keeps them
+    (LALT block)"""
+    _, blocks = read_world(data)
+    for tag, block in blocks:
+        if tag == "LALT" and len(block) >= 4:
+            return struct.unpack_from("<I", block)[0]
+    return 0
+
+
+def not_game_start(result):
+    """The parts of a comparison of a save with the save after its load that the start of a game does not explain. A
+    saved game keeps the altitudes that the world changed (deviation 168), so the land does not explain a difference."""
+    left = []
+    for key, value in result.items():
+        if key == "RCTX":
+            size = value["bytes"]
+            if size["sizes"][0] == size["sizes"][1] and size["first"] >= size["sizes"][0] - GAME_START_CONTEXT_BYTES:
+                continue
+            left.append(key)
+            continue
+        if key != "ECSW":
+            left.append(key)
+            continue
+        detail = value.get("detail") or {}
+        sounds_forgotten = "SoundTag" in detail.get("components", {}) or \
+            "SoundTag" in detail.get("component_order", {}).get("only_a", [])
+        for part, info in detail.items():
+            if part == "entities":
+                # The tags of the sounds that went leave their places in the list of the entities
+                if not (sounds_forgotten and info["counts"][0] == info["counts"][1]):
+                    left.append(f"{key}:{part}")
+                continue
+            if part == "component_order":
+                if info["only_b"] or not set(info["only_a"]) <= {"SoundTag"}:
+                    left.append(f"{key}:{part}")
+                continue
+            if part != "components":
+                left.append(f"{key}:{part}")
+                continue
+            for component, entry in info.items():
+                fields = set(entry.get("values", {}))
+                rows = entry.get("rows")
+                explained = "fields" not in entry and fields <= GAME_START_VALUES.get(component, set())
+                if rows is not None:
+                    kind = GAME_START_ROWS.get(component)
+                    other = "only_a" if kind == "only_b" else "only_b"
+                    explained = explained and kind is not None and not rows[other]
+                if not explained:
+                    left.append(f"{key}:{component}")
+    return left
+
+
+# A load of a world state ends the visit of this computer's player to the temple: the temple, its help text and its
+# dialogue close. These sections differ only when the player was in the temple at the save.
+TEMPLE_VISIT_SECTIONS = {"temple", "helpText", "dialogueControl"}
+
+
+def not_temple_visit(result):
+    """The parts of a world state round trip that the end of a visit to the temple does not explain"""
+    return [part for part in differing_parts(result)
+            if not (part.startswith("SYST:") and part[len("SYST:"):] in TEMPLE_VISIT_SECTIONS)]
+
+
 def text_report(result):
     """The result as lines of text"""
     if not result:

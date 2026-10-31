@@ -42,6 +42,7 @@ public:
 
 	using InfluenceSystemInterface::PlayerInfluence;
 	[[nodiscard]] float PlayerInfluence(PlayerNames player, const map_coords::MapCoords& position) const override;
+	[[nodiscard]] float PlayerOwnInfluence(PlayerNames player, const map_coords::MapCoords& position) const override;
 	[[nodiscard]] float HandPointInfluence(PlayerNames player, const map_coords::MapCoords& hand) const override;
 	using InfluenceSystemInterface::PlayerRawInfluence;
 	[[nodiscard]] float PlayerRawInfluence(PlayerNames player, const map_coords::MapCoords& position) const override;
@@ -75,6 +76,8 @@ private:
 	void ProcessVirtualInfluence(uint32_t turn);
 	/// One turn of what a player's hand keeps past the border, with the hand where it is
 	void ProcessVirtualInfluence(entt::entity playerEntity, PlayerNames player, glm::vec3 hand, uint32_t turn);
+	/// The own influence of a player at a place, or where it is none or less, the influence that an ally lends there
+	[[nodiscard]] float WithAllies(PlayerNames player, const map_coords::MapCoords& position, float own) const;
 	/// What a player's hand keeps of their influence past the border, if they have a hand
 	[[nodiscard]] static const virtual_influence::State* VirtualStateOf(PlayerNames player);
 	/// The game turn last played

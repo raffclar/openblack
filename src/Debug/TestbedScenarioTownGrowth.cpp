@@ -875,6 +875,37 @@ void openblack::testbed_scenarios::AddTownGrowthScenarios(std::vector<Scenario>&
 	                  .delaySeconds = 3.0f}},
 	    .townBeliefInPlayer = 1.0f,
 	});
+	// A town whose last person dies, with an empty hut and a house site
+	all.push_back({
+	    .id = "town.empty_houses_and_site",
+	    .name = "The houses and the house site of a town that dies out",
+	    .facet = Facet::Objects,
+	    .description = "A Celtic town of the player's, believing 1 in the player, with a village centre, a storage "
+	                   "pit, a built hut with its neglect time nearly gone, a hut site three tenths built and one "
+	                   "villager of the town, nearly dead. Three seconds in, a fireball hits the villager. Best watched "
+	                   "at game speed 4.",
+	    .expected = "The villager dies and the town becomes empty 50 town turns later. Its buildings stay. The empty hut "
+	                "loses the small life of an empty building after a few turns, gets a site for repair and then loses "
+	                "that life again each 1001 turns. The hut site stays as it is, because no builder comes and nothing "
+	                "makes it lose life.",
+	    .environment = {.dispenserGrid = false},
+	    .framing = {.shot = Shot::Overview, .include = {k_Pit, k_Centre, k_Hut, k_PlannedHuts[0]}, .distance = 0.6f},
+	    .objects = {{.type = AbodeInfo::CelticTownCentre, .offset = k_Centre},
+	                {.type = AbodeInfo::CelticStoragePit, .offset = k_Pit},
+	                {.type = AbodeInfo::CelticHut, .offset = k_Hut, .yawDegrees = 180.0f, .neglect = k_NearlyNeglected},
+	                {.type = AbodeInfo::CelticHut, .offset = k_PlannedHuts[0], .yawDegrees = 180.0f, .built = 0.3f},
+	                {.type = VillagerInfo::CelticForesterMale,
+	                 .offset = k_Hut - glm::vec2(0.0f, 10.0f),
+	                 .joinTown = true,
+	                 .life = 0.02f}},
+	    .miracles = {{.type = MagicType::Fireball,
+	                  .point = k_Hut - glm::vec2(0.0f, 10.0f),
+	                  .handOffset = k_Hut - glm::vec2(0.0f, 20.0f),
+	                  .handHeight = 6.0f,
+	                  .throwVelocity = {0.0f, 0.0f, 8.0f},
+	                  .delaySeconds = 3.0f}},
+	    .townBeliefInPlayer = 1.0f,
+	});
 	// A child of the town about to grow up
 	all.push_back({
 	    .id = "villagers.grow_up_dust",
