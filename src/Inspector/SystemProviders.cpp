@@ -828,6 +828,15 @@ std::unique_ptr<ProviderInterface> openblack::inspector::MakeCreatureProvider(Cr
 				         {"seen", seen}});
 			    }
 		    }
+		    // A skill or miracle with no row in its table has no name and no sightings
+		    for (const auto skill : knowledge.skillsKnownPastTable)
+		    {
+			    skills.push_back({{"skill", skill}, {"name", std::string()}});
+		    }
+		    for (const auto miracle : knowledge.miraclesKnownPastTable)
+		    {
+			    miracles.push_back({{"miracle", miracle}, {"name", std::string()}, {"known", true}, {"seen", 0u}});
+		    }
 		    return QueryResult::Value({{"id", ToId(entity)},
 		                               {"skills", std::move(skills)},
 		                               {"miracles", std::move(miracles)},

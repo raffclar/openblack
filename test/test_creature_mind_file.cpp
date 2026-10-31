@@ -321,6 +321,36 @@ TEST(CreatureMindFile, ASwappedMindKeepsItsOwnExamplesAndAddsTheFileExamples)
 	EXPECT_TRUE(loaded.learnt.knowledge.skillsKnown[1]);
 }
 
+TEST(CreatureMindFile, KnownIdsPastTheTableStayInTheFile)
+{
+	// A creature with two skill rows knows skill 1 and, from a teach, skill 6 that has no row
+	creature_desires::Desires desires;
+	auto learnt = creature_mind_model::Fresh(desires, std::vector<float>(3, 0.0f), {});
+	learnt.knowledge.skillsKnown.assign(2, false);
+	learnt.knowledge.skillsKnown[1] = true;
+	learnt.knowledge.skillsKnownPastTable = {6};
+	learnt.knowledge.miraclesKnown.assign(2, false);
+	learnt.knowledge.miraclesKnownPastTable = {50};
+	// The file lists the ids with no row after the ids of the table
+	const auto file = creature_mind_model::ToFile(desires, learnt, 2, 0.0f, 0, 3);
+	ASSERT_EQ(file.known[0].size(), 2u);
+	EXPECT_EQ(file.known[0][0].id, 1u);
+	EXPECT_EQ(file.known[0][1].id, 6u);
+	ASSERT_EQ(file.known[1].size(), 1u);
+	EXPECT_EQ(file.known[1][0].id, 50u);
+
+	// A load into a creature that knows no skill keeps each id of the file, once
+	auto other = file;
+	other.known[0].push_back({.id = 6});
+	auto fresh = creature_mind_model::Fresh(desires, std::vector<float>(3, 0.0f), {});
+	fresh.knowledge.skillsKnown.assign(2, false);
+	fresh.knowledge.miraclesKnown.assign(2, false);
+	const auto loaded = creature_mind_model::FromFile(other, desires, fresh);
+	EXPECT_TRUE(loaded.learnt.knowledge.skillsKnown[1]);
+	EXPECT_EQ(loaded.learnt.knowledge.skillsKnownPastTable, std::vector<uint32_t> {6});
+	EXPECT_EQ(loaded.learnt.knowledge.miraclesKnownPastTable, std::vector<uint32_t> {50});
+}
+
 TEST(CreatureMindFile, FreshMindWritesACurrentFile)
 {
 	creature_desires::Desires desires;

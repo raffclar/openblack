@@ -1308,9 +1308,9 @@ bool CreatureMindSystem::KnowsAction(entt::entity creature, CreatureActionLearni
 	{
 		return false;
 	}
-	const auto& known =
-	    type == CreatureActionLearningType::Magic ? mind->learnt->knowledge.miraclesKnown : mind->learnt->knowledge.skillsKnown;
-	return action < known.size() && known[action];
+	const auto list =
+	    type == CreatureActionLearningType::Magic ? creature_watching::KnownList::Miracle : creature_watching::KnownList::Skill;
+	return creature_watching::IsKnown(mind->learnt->knowledge, list, action);
 }
 
 bool CreatureMindSystem::TellCast(entt::entity creature, MagicType type, entt::entity target)

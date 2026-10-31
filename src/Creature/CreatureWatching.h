@@ -64,6 +64,11 @@ struct Knowledge
 	std::vector<Sighting> miraclesSeen;
 	std::vector<bool> skillsKnown;
 	std::vector<bool> miraclesKnown;
+	/// The skills that a script or a mind file made known with no row in the table of skills, in the order that they
+	/// became known. No rule asks about them, but the mind file keeps them.
+	std::vector<uint32_t> skillsKnownPastTable;
+	/// The miracles that a script or a mind file made known with no row in the table of miracles, in the same order
+	std::vector<uint32_t> miraclesKnownPastTable;
 };
 /// Nothing seen or known
 [[nodiscard]] Knowledge StartKnowledge(std::span<const SkillRule> skills, std::span<const MiracleRule> miracles);
@@ -174,7 +179,11 @@ enum class KnownList : uint8_t
 /// A script makes the creature know a skill or miracle, or forget it. Taught a miracle, it also counts as having seen
 /// it the times given, whether or not it knew it already; forgetting leaves the sightings alone. Returns whether the
 /// thing is newly known, which is when the player is shown the lesson.
+/// The game does not check the index against the table. The creature can know or forget an index past the table, which
+/// goes in its own list. That index gets no sightings, because the game would write them past its list of sightings.
 bool SetKnown(Knowledge& knowledge, KnownList list, size_t index, bool knows, uint32_t taughtSightings);
+/// Whether the creature knows the skill or miracle, also one with no row in its table
+[[nodiscard]] bool IsKnown(const Knowledge& knowledge, KnownList list, size_t index);
 
 /// What a creature must know to carry out an action, from the game's table of actions: up to two ordinary skills and a
 /// miracle
