@@ -254,6 +254,15 @@ void dance_rules::RemoveDancer(Dance& dance, std::size_t index, entt::entity dan
 	std::erase(group.dancers, dancer);
 }
 
+entt::entity dance_rules::FirstForScript(const DanceGroups& groups)
+{
+	if (groups.all.empty() || groups.all.front().dancers.empty())
+	{
+		return entt::null;
+	}
+	return groups.all.front().dancers.front();
+}
+
 entt::entity dance_rules::FirstDancer(const DanceGroups& groups, entt::entity exclude)
 {
 	for (const auto& group : groups.all)

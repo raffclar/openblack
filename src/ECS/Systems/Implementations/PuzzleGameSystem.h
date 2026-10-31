@@ -27,6 +27,7 @@ public:
 	[[nodiscard]] std::optional<script::PuzzleGameStatus> State(entt::entity puzzle) override;
 	void TakenInHand(entt::entity piece) override;
 	void Forget(entt::entity puzzle) override;
+	bool DeletePieces(entt::entity puzzle) override;
 };
 
 } // namespace openblack::ecs::systems

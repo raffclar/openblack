@@ -11,6 +11,7 @@
 
 #include <cmath>
 
+#include <algorithm>
 #include <limits>
 
 #include "Common/GUtilsDistance.h"
@@ -382,4 +383,17 @@ entt::entity script_find::FindNearestTown(const map_coords::MapCoords& from, flo
 		}
 	}
 	return nearest;
+}
+
+entt::entity script_find::FindCreature(const map_coords::MapCoords& from, std::optional<float> radius, uint32_t subtype,
+                                       std::span<const CreatureCandidate> newestFirst)
+{
+	const auto found = std::ranges::find_if(newestFirst, [&](const CreatureCandidate& creature) {
+		if (radius.has_value() && creature.subtype != subtype)
+		{
+			return false;
+		}
+		return gutils::GetDistanceInMetres(from, creature.at) <= radius.value_or(k_CreatureAtReach);
+	});
+	return found != newestFirst.end() ? found->entity : entt::entity {entt::null};
 }
