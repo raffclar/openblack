@@ -178,6 +178,7 @@ public:
 	}
 	void EmpathiseWithPlayer(PlayerNames player, glm::vec3 position) override { empathies.push_back({player, position}); }
 	void Reinsert(entt::entity totem) override { reinserted.push_back(totem); }
+	[[nodiscard]] bool DrawnThisFrame(entt::entity /*unused*/) const override { return drawn; }
 	void FloatNumber(glm::vec3 position, float value, uint32_t colour) override
 	{
 		numbers.push_back({position, value, colour});
@@ -205,6 +206,7 @@ public:
 	std::vector<Empathy> empathies;
 	std::vector<Number> numbers;
 	bool heart {true};
+	bool drawn {true};
 	float life {1.0f};
 	std::vector<bool> moving;
 	std::vector<entt::entity> reinserted;
@@ -716,5 +718,31 @@ TEST(VillageTotemSystem, ATotemWithNoLifeShowsNothingAndDoesNotMoveOrShowItsShar
 	system.Update(30);
 	EXPECT_FALSE(registry.AllOf<VillageTotemGhostHidden>(totem.ghost));
 	EXPECT_FLOAT_EQ(registry.Get<DrawnHeight>(village.totem).y, 3.0f + 0.3f * 8.0f);
+	EXPECT_TRUE(system.TakeShareToolTip(PlayerNames::PLAYER_ONE).has_value());
+}
+
+TEST(VillageTotemSystem, ATotemThatTheListDoesNotDrawStaysAsItIsButTheTurnStillMovesItOn)
+{
+	auto village = MakeVillage(true);
+	auto& registry = village.world->registry;
+	auto& system = *village.system;
+	system.ProcessTurn(10);
+	ASSERT_EQ(village.world->bells, 1);
+	system.Update(10);
+	static_cast<void>(system.TakeShareToolTip(PlayerNames::PLAYER_ONE));
+	ASSERT_FLOAT_EQ(registry.Get<DrawnHeight>(village.totem).y, 3.0f);
+	// Off the list, the frames do not move it or show its share
+	system.SetTownShare(village.town, 0.5f);
+	village.world->drawn = false;
+	system.Update(10 + 2600);
+	EXPECT_FLOAT_EQ(registry.Get<DrawnHeight>(village.totem).y, 3.0f);
+	EXPECT_FALSE(system.TakeShareToolTip(PlayerNames::PLAYER_ONE).has_value());
+	// The turn moves it on by the real clock and rings the bell when it arrives
+	system.ProcessTurn(10 + 5200);
+	EXPECT_EQ(village.world->bells, 2);
+	// Drawn again, it stands at its share and its player sees the share
+	village.world->drawn = true;
+	system.Update(10 + 5300);
+	EXPECT_FLOAT_EQ(registry.Get<DrawnHeight>(village.totem).y, 3.0f + 0.5f * 8.0f);
 	EXPECT_TRUE(system.TakeShareToolTip(PlayerNames::PLAYER_ONE).has_value());
 }

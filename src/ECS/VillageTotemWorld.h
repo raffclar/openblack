@@ -70,6 +70,8 @@ public:
 	/// Sends a command of the player, which the world does at the start of a later turn. False where the world has no
 	/// commands: then the system does it at once.
 	virtual bool SendCommand(const player_commands::Action& /*action*/) { return false; }
+	/// Whether the land's draw list draws the totem on this frame. True where the world has no draw list.
+	[[nodiscard]] virtual bool DrawnThisFrame(entt::entity /*totem*/) const { return true; }
 };
 
 } // namespace openblack::ecs::village_totem
