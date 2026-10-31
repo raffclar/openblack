@@ -40,7 +40,7 @@ public:
 	                                                        float maxDistance) const override;
 	bool RouteWorshipper(entt::entity villager, glm::vec3 site) override;
 	bool StartCarry(entt::entity creature) override;
-	bool CarryTurn(entt::entity creature) override;
+	Carry CarryTurn(entt::entity creature) override;
 	void StopControl(entt::entity creature) override;
 	void PlayerTurn(PlayerNames player) override;
 	void ProcessTurn() override;

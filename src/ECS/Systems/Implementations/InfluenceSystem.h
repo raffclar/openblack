@@ -34,7 +34,7 @@ public:
 	bool LoadState(reflection::BinaryReader& in) override;
 
 	void ProcessTurn(uint32_t turn) override;
-	void ProcessVirtualInfluence(uint32_t turn) override;
+	void ProcessVirtualInfluence(PlayerNames player, uint32_t turn) override;
 	void ProcessTownInfluence(entt::entity town) override;
 	void MarkTownInfluence(entt::entity town) override;
 	void BordersChanged() override { _bordersDirty = true; }

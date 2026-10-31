@@ -58,6 +58,21 @@ inline constexpr float k_FixedUnitsPerMetre = 6553.6f;
 [[nodiscard]] float CreatureFadeOut(int32_t turnsLeft, int32_t turns);
 [[nodiscard]] float CreatureFadeIn(int32_t turnsLeft, int32_t turns);
 
+/// What a turn of a stone that carries a creature does
+enum class CarryStep : uint8_t
+{
+	/// The creature fades out more
+	FadeOut,
+	/// The creature comes out of the far stone at its new place, still faded, and starts to fade in
+	Arrive,
+	/// The creature fades in more
+	FadeIn,
+	/// The creature is in full sight again
+	BackInSight,
+};
+/// The step of a carried creature from the turns left after the count of this turn, and whether it fades in
+[[nodiscard]] CarryStep NextCarryStep(bool fadingIn, int32_t turnsLeft);
+
 /// A cheap distance between two points across the land, in the land's fixed point units: the longer of the two sides
 /// plus half the shorter, as the game measures whether a detour is worth taking
 [[nodiscard]] int32_t FastDistance(glm::vec3 a, glm::vec3 b);

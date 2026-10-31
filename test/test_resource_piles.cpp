@@ -250,3 +250,26 @@ TEST(ResourcePiles, AStorePileWithSomethingInItCallsPeopleWhenTheStoreStopsWorki
 	EXPECT_FALSE(CallsWhenStoreStops(0, openblack::Reaction::ReactToFood));
 	EXPECT_FALSE(CallsWhenStoreStops(100, openblack::Reaction::None));
 }
+
+TEST(ResourcePiles, APourGoesIntoAStoreOrIntoAnyPotOfTheSameResource)
+{
+	using openblack::ResourceType;
+	using openblack::magic::piles::PourTaker;
+	using openblack::magic::piles::TakerOfPour;
+	// A pot that is not a pile takes the pour as a pile does
+	EXPECT_EQ(TakerOfPour(ResourceType::Food, ResourceType::Food, false), PourTaker::Pot);
+	EXPECT_EQ(TakerOfPour(ResourceType::Food, ResourceType::Wood, false), PourTaker::None);
+	// A pot is never a store here, also the pile of a store
+	EXPECT_EQ(TakerOfPour(ResourceType::Wood, ResourceType::Wood, true), PourTaker::Pot);
+	EXPECT_EQ(TakerOfPour(ResourceType::Wood, std::nullopt, true), PourTaker::Store);
+	EXPECT_EQ(TakerOfPour(ResourceType::Wood, std::nullopt, false), PourTaker::None);
+}
+
+TEST(ResourcePiles, OnlyAPileOfFoodReachesAsFarAsItIsRaised)
+{
+	using openblack::ResourceType;
+	using openblack::magic::piles::ReachFollowsRise;
+	EXPECT_TRUE(ReachFollowsRise(ResourceType::Food, true));
+	EXPECT_FALSE(ReachFollowsRise(ResourceType::Food, false));
+	EXPECT_FALSE(ReachFollowsRise(ResourceType::Wood, true));
+}

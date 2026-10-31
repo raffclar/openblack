@@ -518,8 +518,16 @@ void PlayTurnStep(game_turn::Step step, TurnViewInterface& view)
 		Locator::handSystem::value().ProcessTurn();
 		break;
 	case Step::VirtualInfluence:
-		// Each god's hand keeps a share of the god's influence past the border, from where the hand was at the turn
-		Locator::influenceSystem::value().ProcessVirtualInfluence(turn);
+		// Each god in the order of the players. The god's hand keeps a share of the god's influence past the border, from
+		// where the hand was at the turn. Then the scoop of the hand continues with that share, or stops.
+		for (const auto god : ecs::game_players::Gods())
+		{
+			Locator::influenceSystem::value().ProcessVirtualInfluence(god, turn);
+			if (Locator::handGrabSystem::has_value())
+			{
+				Locator::handGrabSystem::value().LockTurn(god);
+			}
+		}
 		break;
 	case Step::HandInterface:
 		// The hand's own work of the turn, as of each frame. The commands that it sends go to a later turn.

@@ -848,6 +848,9 @@ struct Command
 		/// creature); the hand gives what it holds to the creature, as the Action button pressed over it does
 		HandTake,
 		HandGive,
+		/// The player's hand uses what it holds on the scenario's object, as the Action button pressed over the object does.
+		/// The world does it at the turn. No creature is necessary.
+		HandApply,
 		/// A script swaps the minds of the creature and another (value, by its place in the scenario's creatures), as
 		/// "swap creature from A to B" does
 		SwapMinds,
