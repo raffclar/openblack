@@ -1725,12 +1725,13 @@ void LeashSystem::CreatureTurn(entt::entity entity)
 		{
 			return;
 		}
-		// The walk back ends the current action of the creature, also a fight. The fight ends with no winner, as when
-		// the player gives an order with the leash.
+		// The walk back ends the current action of the creature, also a fight. The fight ends with no winner. The body of
+		// the creature ends its fight first, and then the creature gives up its action.
 		if (registry.AllOf<CreatureFighting>(entity) && Locator::creatureFightSystem::has_value())
 		{
 			SPDLOG_LOGGER_INFO(spdlog::get("game"), "Creature {} leaves its fight to walk back", entt::to_integral(entity));
-			Locator::creatureFightSystem::value().CallOff(entity);
+			Locator::creatureFightSystem::value().EndBodyFightAgain(entity);
+			Locator::creatureFightSystem::value().CallOffForWalkBack(entity);
 		}
 		WalkBack(entity);
 	}
@@ -2252,6 +2253,8 @@ bool LeashSystem::TakeOutOfFight(entt::entity creature)
 	}
 	if (fights.IsFighting(creature))
 	{
+		// After a stop that ended the fight, the order stops the creature again
+		fights.EndBodyFightAgain(creature);
 		fights.CallOff(creature);
 	}
 	return true;

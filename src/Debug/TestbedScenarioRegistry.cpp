@@ -8553,6 +8553,23 @@ void AddCombat(std::vector<Scenario>& all)
 	    .commands = {Fight(Kind::StartFight, 0, 1, 1.0f), Fight(Kind::FightAuto, 0, 1, 0.2f)},
 	});
 
+	all.push_back({
+	    .id = "combat.life_pays_at_each_stop",
+	    .name = "A leash order in the duel costs life at each stop",
+	    .facet = Facet::Combat,
+	    .description = "The red tiger asks the blue tiger to fight, and both fight by themselves. In the duel the red "
+	                   "tiger gets the rope leash, and a second later the player tells it with the leash to go to a point "
+	                   "to the south.",
+	    .expected = "The order calls the fight off with no winner. The fight transcript has a record fight_end for each "
+	                "tiger: when its body is in its stance, a move, a block or a cast, the life of the red tiger pays two "
+	                "times (life_payments 2) and the life of the blue tiger three times. A tiger that finishes pays "
+	                "nothing.",
+	    .framing = ringside,
+	    .creatures = {red(PlayerNames::PLAYER_ONE, 0.6f, -0.45f), blue(PlayerNames::PLAYER_TWO, 0.6f, -0.45f)},
+	    .commands = {Fight(Kind::StartFight, 0, 1, 1.0f), Fight(Kind::FightAuto, 0, 1, 0.2f), Leash(0, LeashType::Rope, 18.0f),
+	                 Go(Kind::LeashOrderAt, 0, {-25.0f, 0.0f}, 1.0f, false)},
+	});
+
 	{
 		// Each tiger holds a rock as the fight starts. It lets go of the rock before its taunt.
 		auto start = Fight(Kind::StartFight, 0, 1, 1.0f);
