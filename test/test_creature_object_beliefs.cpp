@@ -443,10 +443,10 @@ TEST(CreatureObjectBeliefs, AWalkToAThingThatGetsNowhereForFiftyTurnsGivesUp)
 	// On turns 0 to 48, it records its place on turn 0 only
 	for (uint32_t turn = 0; turn < 49; ++turn)
 	{
-		EXPECT_FALSE(StallsOnTurn(stall, {10.0f, 20.0f}, false)) << turn;
+		EXPECT_FALSE(StallsOnTurn(stall, {10.0f, 20.0f}, false, std::nullopt)) << turn;
 	}
 	// On turn 49, it moved less than 0.01 m since the record
-	EXPECT_TRUE(StallsOnTurn(stall, {10.0f, 20.005f}, false));
+	EXPECT_TRUE(StallsOnTurn(stall, {10.0f, 20.005f}, false, std::nullopt));
 }
 
 TEST(CreatureObjectBeliefs, AWalkToAThingThatGetsSomewhereGoesOn)
@@ -455,17 +455,17 @@ TEST(CreatureObjectBeliefs, AWalkToAThingThatGetsSomewhereGoesOn)
 	ApproachStall stall;
 	for (uint32_t turn = 0; turn < 49; ++turn)
 	{
-		EXPECT_FALSE(StallsOnTurn(stall, {10.0f + (0.1f * static_cast<float>(turn)), 20.0f}, false));
+		EXPECT_FALSE(StallsOnTurn(stall, {10.0f + (0.1f * static_cast<float>(turn)), 20.0f}, false, std::nullopt));
 	}
-	EXPECT_FALSE(StallsOnTurn(stall, {14.9f, 20.0f}, false));
+	EXPECT_FALSE(StallsOnTurn(stall, {14.9f, 20.0f}, false, std::nullopt));
 	// On turn 50, it records the place again. The next span starts from this place.
-	EXPECT_FALSE(StallsOnTurn(stall, {15.0f, 20.0f}, false));
+	EXPECT_FALSE(StallsOnTurn(stall, {15.0f, 20.0f}, false, std::nullopt));
 	EXPECT_EQ(stall.note, glm::vec2(15.0f, 20.0f));
 	for (uint32_t turn = 51; turn < 99; ++turn)
 	{
-		EXPECT_FALSE(StallsOnTurn(stall, {15.0f, 20.0f}, false));
+		EXPECT_FALSE(StallsOnTurn(stall, {15.0f, 20.0f}, false, std::nullopt));
 	}
-	EXPECT_TRUE(StallsOnTurn(stall, {15.0f, 20.0f}, false));
+	EXPECT_TRUE(StallsOnTurn(stall, {15.0f, 20.0f}, false, std::nullopt));
 }
 
 TEST(CreatureObjectBeliefs, AWalkToAThingUnderTheControlOfAScriptNeverGivesUp)
@@ -474,8 +474,55 @@ TEST(CreatureObjectBeliefs, AWalkToAThingUnderTheControlOfAScriptNeverGivesUp)
 	ApproachStall stall;
 	for (uint32_t turn = 0; turn < 200; ++turn)
 	{
-		EXPECT_FALSE(StallsOnTurn(stall, {0.0f, 0.0f}, true));
+		EXPECT_FALSE(StallsOnTurn(stall, {0.0f, 0.0f}, true, std::nullopt));
 	}
+}
+
+TEST(CreatureObjectBeliefs, AWalkToAFarThingWaitsForItsRouteSearch)
+{
+	using namespace openblack::creature_object_actions;
+	ApproachStall stall;
+	const glm::vec2 far {500.0f, 600.0f};
+	// The route search to a far thing takes 120 turns while the creature stands. Only its first turn counts.
+	for (uint32_t turn = 0; turn < 120; ++turn)
+	{
+		EXPECT_FALSE(StallsOnTurn(stall, {10.0f, 20.0f}, false, far)) << turn;
+	}
+	EXPECT_EQ(stall.turns, 1u);
+	// The walk then starts, and the creature moves on each turn
+	for (uint32_t turn = 0; turn < 200; ++turn)
+	{
+		EXPECT_FALSE(StallsOnTurn(stall, {10.0f + (0.5f * static_cast<float>(turn)), 20.0f}, false, std::nullopt)) << turn;
+	}
+}
+
+TEST(CreatureObjectBeliefs, AWalkThatStandsAfterItsSearchStillGivesUp)
+{
+	using namespace openblack::creature_object_actions;
+	ApproachStall stall;
+	for (uint32_t turn = 0; turn < 30; ++turn)
+	{
+		EXPECT_FALSE(StallsOnTurn(stall, {10.0f, 20.0f}, false, glm::vec2(30.0f, 20.0f)));
+	}
+	// The search found a route of no length. The first turn of the search and these turns make the 50 turns.
+	for (uint32_t turn = 1; turn < 49; ++turn)
+	{
+		EXPECT_FALSE(StallsOnTurn(stall, {10.0f, 20.0f}, false, std::nullopt)) << turn;
+	}
+	EXPECT_TRUE(StallsOnTurn(stall, {10.0f, 20.0f}, false, std::nullopt));
+}
+
+TEST(CreatureObjectBeliefs, ASearchThatStartsAgainOnEachTurnCountsItsTurns)
+{
+	using namespace openblack::creature_object_actions;
+	ApproachStall stall;
+	// The thing moves 1 m on each turn, so each turn starts a new search, and the creature never gets a route
+	for (uint32_t turn = 0; turn < 49; ++turn)
+	{
+		const glm::vec2 thing {30.0f + static_cast<float>(turn), 20.0f};
+		EXPECT_FALSE(StallsOnTurn(stall, {10.0f, 20.0f}, false, thing)) << turn;
+	}
+	EXPECT_TRUE(StallsOnTurn(stall, {10.0f, 20.0f}, false, glm::vec2(79.0f, 20.0f)));
 }
 
 TEST(CreatureObjectBeliefs, AThingHighAboveTheCreatureIsNotPickedUp)

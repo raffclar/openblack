@@ -322,6 +322,7 @@
 #include "Gui/ScreenFit.h"
 #include "Gui/StartupRules.h"
 #include "Gui/StatisticsBoxRules.h"
+#include "Gui/WorldToolTipRules.h"
 #include "Gui/WorldToolTips.h"
 #include "Hand/HandBlend.h"
 #include "Hand/HandFeel.h"
@@ -331,6 +332,7 @@
 #include "Hand/HandTrace.h"
 #include "Hand/HandVisibility.h"
 #include "Hand/ScriptHandState.h"
+#include "Hand/ViewReportRules.h"
 #include "Help/DialogueText.h"
 #include "Help/HelpProfile.h"
 #include "Help/SingAlong.h"
@@ -2058,8 +2060,8 @@ void Game::SubmitHandToolTips(gui::ToolTips& toolTips, std::optional<entt::entit
 			{
 				return;
 			}
-			const bool tree = Locator::entitiesRegistry::value().AllOf<ecs::components::Tree>(*thing);
-			if (const auto offers = tips::Holding(HandInInfluence(), tips::UseAt(*thing, pointed), tree); offers.has_value())
+			if (const auto offers = tips::Holding(HandInInfluence(), tips::UseAt(*thing, pointed), tips::DropOf(*thing));
+			    offers.has_value())
 			{
 				submitAll(*offers);
 				return;
@@ -2184,10 +2186,18 @@ void Game::SubmitHandToolTips(gui::ToolTips& toolTips, std::optional<entt::entit
 		}
 		return;
 	}
-	// Over a thing that the hand can take: "Catch" while it moves, else "Pick Up" and what a tap does to it
+	// Over a thing that the hand can take: "Catch" while it moves, else "Pick Up" and what a tap does to it. Over a
+	// scaffold, the hand shows how many scaffolds it is worth in place of "Pick Up".
 	if (Locator::handGrabSystem::has_value() && Locator::handGrabSystem::value().WhyNotTake(*pointed).empty())
 	{
-		submitAll(tips::OverTakeable(tips::IsMoving(*pointed), tips::TakeableTapOf(*pointed)));
+		const bool moving = tips::IsMoving(*pointed);
+		auto offers = tips::OverTakeable(moving, tips::TakeableTapOf(*pointed));
+		if (const auto value = tips::ScaffoldValueOf(*pointed); value.has_value() && !moving)
+		{
+			toolTips.SubmitNumbered(gui::world_tooltip::k_ScaffoldValue, gui::ToolTipAction::Apply, *value, std::nullopt);
+			offers.erase(offers.begin());
+		}
+		submitAll(offers);
 		return;
 	}
 	if (const auto tap = tips::TapOf(*pointed); tap.has_value())
@@ -3174,6 +3184,16 @@ void Game::ReportHand()
 	{
 		_handCollidePoint = Locator::pickingSystem::value().GetPick().point.value_or(_handCollidePoint);
 	}
+	// After a send the report waits for some turns. A miracle of this player that follows the hand stops the wait.
+	const auto* session = Locator::networkGame::has_value() ? Locator::networkGame::value().Session() : nullptr;
+	const auto origin = session != nullptr ? std::optional(session->Origin()) : std::nullopt;
+	const bool spellNeedsReport = _handReportWait != 0 && Locator::magicSystem::has_value() &&
+	                              Locator::magicSystem::value().SpellNeedsHandReportEachTurn();
+	if (hand_report::WaitsThisTurn(_handReportWait, spellNeedsReport))
+	{
+		_handReportWait = hand_report::TurnsToWaitAfter(_handReportWait, true, false, origin);
+		return;
+	}
 	// The camera is the view that the last frame drew
 	const auto& camera = Locator::camera::value();
 	const player_commands::HandReport now {
@@ -3191,6 +3211,7 @@ void Game::ReportHand()
 	};
 	// Only a part that moved enough goes. The other part keeps the values that the player last sent.
 	const auto toSend = hand_report::ToSend(last, now);
+	_handReportWait = hand_report::TurnsToWaitAfter(_handReportWait, false, toSend.has_value(), origin);
 	if (!toSend.has_value())
 	{
 		return;
@@ -3238,7 +3259,8 @@ void Game::ReportView()
 		    script_camera::PlayerCameraArrived(camera.GetOrigin(), camera.GetOrigin(Camera::Interpolation::Target),
 		                                       camera.GetFocus(), camera.GetFocus(Camera::Interpolation::Target));
 	}
-	if (_lastViewReport != nullptr && *_lastViewReport == report)
+	// The report goes only when the view changed enough since the last report that went
+	if (_lastViewReport != nullptr && !view_report::ChangedEnough(*_lastViewReport, report))
 	{
 		return;
 	}

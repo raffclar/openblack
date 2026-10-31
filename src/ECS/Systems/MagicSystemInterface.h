@@ -361,6 +361,8 @@ public:
 	[[nodiscard]] virtual std::optional<HandFrame> GetDrivenHand() const = 0;
 	[[nodiscard]] virtual bool IsIgnoringInfluence() const = 0;
 	[[nodiscard]] virtual std::vector<SpellInfo> GetSpells() const = 0;
+	/// A miracle of the player of this computer follows the hand at each turn, so the hand report goes at each turn
+	[[nodiscard]] virtual bool SpellNeedsHandReportEachTurn() const { return false; }
 	/// The newest miracle of a kind, closing down or not, whose last event was strictly within a radius of a point
 	[[nodiscard]] virtual std::optional<entt::entity> SpellAt(MagicType /*type*/, glm::vec3 /*point*/, float /*radius*/) const
 	{

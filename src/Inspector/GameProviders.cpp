@@ -2820,6 +2820,16 @@ std::unique_ptr<ProviderInterface> ViewProvider(const GameSeamInterface* seam)
 		              }
 		              return QueryResult::Value(std::move(result));
 	              });
+	provider->Add(Query("tooltip", "The tooltip that the hand shows: its index and text name, its mouse button and arrows, "
+	                               "its fade, and the numbers or other words that it shows"),
+	              [seam](const QueryContext& /*c*/) {
+		              Json result = {{"shown", false}};
+		              if (seam != nullptr)
+		              {
+			              seam->AddToolTip(result);
+		              }
+		              return QueryResult::Value(std::move(result));
+	              });
 	provider->Add(Query("video", "The video playing: its frame, frame count and rate, its fade, the falling spell, its "
 	                             "creature and its effects, whether films are on, and the 16-bit surface of the films"),
 	              [](const QueryContext& /*c*/) {

@@ -199,6 +199,7 @@ bool NetworkGameSystem::Join(NetworkJoin join)
 #else
 	    .parts = {},
 #endif
+	    .origin = join.origin,
 	});
 	return true;
 }

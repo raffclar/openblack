@@ -26,6 +26,7 @@
 #include "ECS/Components/Physics.h"
 #include "ECS/Components/Pot.h"
 #include "ECS/Components/Reward.h"
+#include "ECS/Components/Scaffold.h"
 #include "ECS/Components/ScriptHighlight.h"
 #include "ECS/Components/SpellDispenser.h"
 #include "ECS/Components/SpellIcon.h"
@@ -40,9 +41,12 @@
 #include "ECS/Systems/HandGrabSystemInterface.h"
 #include "ECS/Systems/HandSystemInterface.h"
 #include "ECS/Systems/ResourceStoreSystemInterface.h"
+#include "ECS/Systems/WorkshopSystemInterface.h"
 #include "ECS/TempleConstruction.h"
 #include "ECS/TownHomes.h"
+#include "ECS/WorkshopRules.h"
 #include "ECS/WorldObjects.h"
+#include "Gui/WorldToolTipRules.h"
 #include "InfoConstants.h"
 #include "Locator.h"
 #include "Magic/MagicTables.h"
@@ -195,8 +199,58 @@ std::optional<Offer> TapOf(entt::entity object)
 
 std::optional<uint32_t> TakeableTapOf(entt::entity object)
 {
-	// Of the things that the hand can take, only a big rock does something when tapped
-	return ecs::object_physics::CanTapRock(object) ? std::optional(k_TapToBreak) : std::nullopt;
+	// Of the things that the hand can take, a big rock breaks when tapped. A tap also breaks one scaffold off a
+	// scaffold, and the hand then shows "Tap".
+	if (ecs::object_physics::CanTapRock(object))
+	{
+		return k_TapToBreak;
+	}
+	const auto& registry = Locator::entitiesRegistry::value();
+	if (registry.Valid(object) && registry.AllOf<Scaffold>(object) && Locator::workshopSystem::has_value() &&
+	    Locator::workshopSystem::value().ValidToTap(object))
+	{
+		return k_Tap;
+	}
+	return std::nullopt;
+}
+
+std::optional<uint32_t> ScaffoldValueOf(entt::entity object)
+{
+	const auto& registry = Locator::entitiesRegistry::value();
+	if (!registry.Valid(object) || !registry.AllOf<Scaffold, Transform>(object))
+	{
+		return std::nullopt;
+	}
+	return ecs::workshop::ValueOfScale(registry.Get<const Transform>(object).scale.x);
+}
+
+std::optional<uint32_t> DropOf(entt::entity held)
+{
+	const auto& registry = Locator::entitiesRegistry::value();
+	if (!registry.Valid(held))
+	{
+		return k_Drop;
+	}
+	if (registry.AllOf<Tree>(held))
+	{
+		return k_Plant;
+	}
+	const auto* scaffold = registry.TryGet<const Scaffold>(held);
+	if (scaffold == nullptr)
+	{
+		return k_Drop;
+	}
+	std::optional<uint32_t> buildText;
+	if (scaffold->phantom.shown.has_value() && Locator::infoConstants::has_value())
+	{
+		const auto& abodes = Locator::infoConstants::value().abode;
+		const auto row = static_cast<size_t>(scaffold->phantom.shown->info);
+		if (row < abodes.size())
+		{
+			buildText = static_cast<uint32_t>(abodes.at(row).toolTipsForBuild);
+		}
+	}
+	return world_tooltip::ScaffoldDrop(buildText);
 }
 
 std::optional<Offer> ScrollOf(entt::entity object)
@@ -262,6 +316,11 @@ HeldUse UseAt(entt::entity held, std::optional<entt::entity> target)
 	{
 		return HeldUse::None;
 	}
+	// A held scaffold joins the scaffold under it
+	if (Locator::workshopSystem::has_value() && Locator::workshopSystem::value().CanJoin(held, *target))
+	{
+		return HeldUse::Combine;
+	}
 	if (Locator::handGrabSystem::has_value() && Locator::handGrabSystem::value().CreatureTakesHeld(*target))
 	{
 		return HeldUse::Give;
@@ -276,6 +335,13 @@ HeldUse UseAt(entt::entity held, std::optional<entt::entity> target)
 		return HeldUse::None;
 	}
 	// A store of its resource takes it. A pot also goes onto a pot or pile of the same resource.
+	// Only a built storage pit takes a scaffold, as wood
+	if (registry.AllOf<Scaffold>(held))
+	{
+		const bool store =
+		    Locator::workshopSystem::has_value() && Locator::workshopSystem::value().GoesIntoStore(held, *target);
+		return store ? HeldUse::Supply : HeldUse::None;
+	}
 	const auto& stores = Locator::resourceStoreSystem::value();
 	const auto resource = stores.ResourceOf(held).type;
 	if (resource == ResourceType::None)

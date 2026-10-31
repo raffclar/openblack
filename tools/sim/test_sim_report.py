@@ -304,6 +304,17 @@ class DecidedGameTests(unittest.TestCase):
         self.assertIsNone(sim_report.hand_input_on_decided_game(True, None))
         self.assertIsNone(sim_report.hand_input_on_decided_game(True, 2))
 
+    def test_the_end_of_the_game_gives_the_winner_and_the_ranks(self):
+        lines = ["[12:00:01] [game] [info] Turn 600: the god of player 0 won the game\n",
+                 "[12:00:01] [game] [info] Turn 600: the god of player 0 ends the game in with a share of 1 at place 2\r\n",
+                 "[12:00:01] [game] [info] Turn 600: the god of player 1 ends the game out with a share of 0.5 at place 1\n",
+                 "[12:00:02] [game] [info] Turn 5: the god of player 1 is out of the game\n"]
+        self.assertEqual(sim_report.game_end_in_text(lines),
+                         ["Turn 600: the god of player 0 won the game",
+                          "Turn 600: the god of player 0 ends the game in with a share of 1 at place 2",
+                          "Turn 600: the god of player 1 ends the game out with a share of 0.5 at place 1"])
+        self.assertEqual(sim_report.game_end_in_file(os.path.join(tempfile.gettempdir(), "no-such-log.txt")), [])
+
 
 if __name__ == "__main__":
     unittest.main()

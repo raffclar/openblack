@@ -52,6 +52,14 @@ TEST(ChimneySmoke, LitWhileSomeoneIsHome)
 	EXPECT_TRUE(chimney_smoke::UpdateState(smoke, true));
 }
 
+// A workshop has no people at home: its smoke is lit while it makes a scaffold
+TEST(ChimneySmoke, LitWhileAWorkshopMakesAScaffold)
+{
+	EXPECT_TRUE(chimney_smoke::IsLit(true, false));
+	EXPECT_TRUE(chimney_smoke::IsLit(false, true));
+	EXPECT_FALSE(chimney_smoke::IsLit(false, false));
+}
+
 TEST(ChimneySmoke, PuffsRiseAndStartAgainAtTheChimney)
 {
 	auto smoke = chimney_smoke::Create({0.0f, 100.0f, 0.0f}, chimney_smoke::k_HomeSmoke, Fixed(0.0f));

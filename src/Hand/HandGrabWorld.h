@@ -365,6 +365,10 @@ public:
 	/// The hand joins a held scaffold to the scaffold under it, and the held scaffold goes. The caller removes the held
 	/// scaffold from the hand first.
 	virtual void JoinScaffold(entt::entity /*target*/, entt::entity /*held*/) {}
+	/// The hand put a scaffold down gently on a building that needs fewer scaffolds than the scaffold is worth: the
+	/// scaffold keeps what the building needs, and the rest becomes a new scaffold. The new scaffold, which the hand takes,
+	/// or none. The hand of a computer god keeps no rest.
+	virtual entt::entity RestOfScaffold(entt::entity /*scaffold*/) { return entt::null; }
 	/// Lays a gate stone in the gate stone plinth it is given to; false for anything else, which is left as it is
 	virtual bool LayGateStone(entt::entity plinth, entt::entity stone) = 0;
 	/// Some resource poured onto a point: to the stores and piles of it about the point, or a new pile

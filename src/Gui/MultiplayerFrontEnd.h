@@ -206,7 +206,10 @@ public:
 	// The conditions page
 	/// The winning conditions of the server's land, from the template; none before a land is known
 	[[nodiscard]] const std::optional<multiplayer::ConditionTemplate>& GetConditions() const noexcept { return _conditions; }
+	/// The time limit of the game in minutes, which the server gives when the player joins
 	[[nodiscard]] uint32_t GetTimeLimit() const noexcept { return _timeLimit; }
+	/// The winning conditions of the game, which the server gives when the player joins
+	[[nodiscard]] std::span<const game_end::ConditionPick> GetConditionPicks() const noexcept { return _conditionPicks; }
 	[[nodiscard]] bool IsReady() const noexcept { return _ready; }
 	/// The Ready box: the player is ready for the start, which the server makes
 	void SetReady(bool ready);
@@ -232,6 +235,8 @@ private:
 	/// The server removed the player from the room: the box names the server
 	void ShowKicked();
 	void UpdateRoom();
+	/// The time limit and the winning conditions of the server's start, or the defaults with no start
+	void TakeHostPicks(const std::optional<game_socket::Start>& start);
 	/// Puts the pick on the place of its game in a list that changed, or takes it away when its game went
 	void FollowSelectedGame();
 	[[nodiscard]] const online::NetworkSession* Session() const;
@@ -276,8 +281,10 @@ private:
 	std::optional<size_t> _shownSeat;
 
 	std::optional<multiplayer::ConditionTemplate> _conditions;
-	/// The game server sends no time limit, so the game's default stays
+	/// The time limit and the winning conditions of the game. The game server is the host: it gives its picks when the
+	/// player joins. With no picks, the game has no conditions and the default time limit.
 	uint32_t _timeLimit {multiplayer::k_DefaultTimeLimitMinutes};
+	std::vector<game_end::ConditionPick> _conditionPicks;
 	bool _ready {false};
 };
 

@@ -237,6 +237,26 @@ def decided_at_turn_in_text(lines):
     return None
 
 
+# The end of a game that its winning conditions or its time limit decide: the winner, and the rank of each god
+#   Turn <n>: the god of player <p> won the game
+#   Turn <n>: the god of player <p> ends the game in|out with a share of <s> at place <k>
+GAME_END_LINE = re.compile(r"Turn \d+: the god of player \d+ (?:won the game|ends the game .*)$")
+
+
+def game_end_in_text(lines):
+    """The lines of the log that tell the winner and the rank of each god, without the time and the logger"""
+    return [match.group(0).strip() for line in lines if (match := GAME_END_LINE.search(line.rstrip())) is not None]
+
+
+def game_end_in_file(path):
+    """As game_end_in_text, for a log file; a missing file tells of none"""
+    try:
+        with open(path, encoding="utf-8", errors="replace") as file:
+            return game_end_in_text(file)
+    except OSError:
+        return []
+
+
 def decided_at_turn_in_file(path):
     """As decided_at_turn_in_text, for a log file; a missing file tells of none"""
     try:

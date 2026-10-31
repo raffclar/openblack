@@ -249,6 +249,7 @@ public:
 	[[nodiscard]] bool IsIgnoringInfluence() const override { return _ignoreInfluence; }
 	void RainOnFire(const glm::vec3& point) override;
 	[[nodiscard]] std::vector<SpellInfo> GetSpells() const override;
+	[[nodiscard]] bool SpellNeedsHandReportEachTurn() const override;
 	[[nodiscard]] std::optional<entt::entity> SpellAt(MagicType type, glm::vec3 point, float radius) const override;
 	[[nodiscard]] std::vector<DispenserInfo> GetDispensers() const override;
 

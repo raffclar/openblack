@@ -395,7 +395,10 @@ bool parseOptions(int argc, char** argv, openblack::Arguments& args, int& return
 			    .testCreatureFile = result.count("join-creature") != 0
 			                            ? std::optional(result["join-creature"].as<std::string>())
 			                            : std::nullopt,
+			    .origin = openblack::online::GameOrigin::Lan,
 			};
+			// A ticket of the lobby makes the game a game of the internet lobby
+			args.networkJoin->origin = openblack::online::OriginOfJoin(args.networkJoin->ticket);
 		}
 		if (result.count("sim-fast") != 0 || result.count("sim-frame-ms") != 0 || result.count("sim-until-turn") != 0)
 		{
