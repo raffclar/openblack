@@ -9,8 +9,10 @@
 
 #pragma once
 
+#include <cstddef>
 #include <cstdint>
 
+#include <algorithm>
 #include <any>
 #include <array>
 #include <functional>
@@ -158,11 +160,24 @@ struct BeliefSprite
 };
 
 /// A village centre as its symbols of belief see it: the top of its totem and how much the village believes in each
-/// player, by number
+/// player, by number. Only the first `players` places are players of the game: the 8 players of a land, or more in a
+/// network game with more gods.
 struct TownCentreBelief
 {
 	glm::vec3 totemTop {0.0f};
-	std::array<float, 8> beliefs {};
+	/// The player numbers of a network game with the most players: 32 gods and the neutral player
+	static constexpr size_t k_MostPlayerNumbers = 33;
+	/// The player numbers of a land: 7 gods and the neutral player
+	static constexpr size_t k_LandPlayerNumbers = 8;
+
+	std::array<float, k_MostPlayerNumbers> beliefs {};
+	size_t players {k_LandPlayerNumbers};
+
+	/// The beliefs of the players of the game
+	[[nodiscard]] std::span<const float> OfPlayers() const
+	{
+		return std::span<const float>(beliefs).first(std::min(players, beliefs.size()));
+	}
 };
 
 /// A creature's body as the creature spells' particles see it: where it stands, how big it is, where each of its bones

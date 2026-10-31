@@ -14,6 +14,7 @@
 
 #include <array>
 #include <functional>
+#include <span>
 
 #include <glm/vec3.hpp>
 
@@ -24,6 +25,7 @@
 namespace openblack::particles::town_belief
 {
 
+/// The players of a land: the 7 gods and the neutral player
 inline constexpr size_t k_PlayerCount = 8;
 /// A symbol's way round is kept in step with the camera's distance by this much at the most
 inline constexpr float k_MaximumDistanceScale = 10.0f;
@@ -84,8 +86,9 @@ struct Look
 /// A belief as the symbols show it: between none and all
 [[nodiscard]] float Shown(float belief);
 
-/// How many players a village believes in more than this one: those believed in more, or as much with a later number
-[[nodiscard]] int Rank(const std::array<float, k_PlayerCount>& beliefs, size_t player);
+/// How many players a village believes in more than this one: those believed in more, or as much with a later number.
+/// The beliefs hold a place for each player of the game, and for no other player number.
+[[nodiscard]] int Rank(std::span<const float> beliefs, size_t player);
 
 /// How much the symbols' way round grows at this distance from the camera
 [[nodiscard]] float DistanceScale(const Params& params, float distance);

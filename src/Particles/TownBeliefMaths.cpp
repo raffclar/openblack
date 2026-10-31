@@ -49,9 +49,14 @@ float Shown(float belief)
 	return std::clamp(belief, 0.0f, 1.0f);
 }
 
-int Rank(const std::array<float, k_PlayerCount>& beliefs, size_t player)
+int Rank(std::span<const float> beliefs, size_t player)
 {
-	const float mine = Shown(beliefs.at(player));
+	// A player that the game does not have has no place among the players
+	if (player >= beliefs.size())
+	{
+		return 0;
+	}
+	const float mine = Shown(beliefs[player]);
 	int rank = 0;
 	for (size_t other = 0; other < beliefs.size(); ++other)
 	{
@@ -59,7 +64,7 @@ int Rank(const std::array<float, k_PlayerCount>& beliefs, size_t player)
 		{
 			continue;
 		}
-		const float theirs = Shown(beliefs.at(other));
+		const float theirs = Shown(beliefs[other]);
 		if (mine < theirs || (mine == theirs && player < other))
 		{
 			++rank;

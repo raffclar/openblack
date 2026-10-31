@@ -411,6 +411,32 @@ TEST(ParticleDraw, PlayersSymbolsGlowInTheirColour)
 	EXPECT_FLOAT_EQ(symbol.instances[1].uv.x, 1.0f / 8.0f);
 }
 
+// In a game with more player numbers than the squares of a land's sheet, the symbol takes its cell of eight to a row
+TEST(ParticleDraw, ALaterGodsSymbolTakesItsCellOfTheWiderSheet)
+{
+	Creator creator;
+	Effect::DrawAtom atom {.creator = &creator,
+	                       .position = {1.0f, 2.0f, 3.0f},
+	                       .rotation = glm::mat3(1.0f),
+	                       .scale = 2.0f,
+	                       .stretch = 1.0f,
+	                       .alpha = 255.0f,
+	                       .frame = 0.0f,
+	                       .rgb = {255, 255, 255},
+	                       .age = 0.0f};
+	constexpr int k_Wide = 8;
+	const auto symbol = SymbolOf(atom, 0xFF4646u, 20, k_Wide);
+	// Player 20: the fifth cell of the third row
+	EXPECT_FLOAT_EQ(symbol.instances[2].uv.x, 4.0f / 8.0f);
+	EXPECT_FLOAT_EQ(symbol.instances[2].uv.y, 2.0f / 8.0f);
+	EXPECT_FLOAT_EQ(symbol.instances[2].uv.z, 1.0f / 8.0f);
+	// A land keeps four to a row, as before
+	const auto land = SymbolOf(atom, 0xFF4646u, 2, k_LandSymbolsInARow);
+	EXPECT_FLOAT_EQ(land.instances[2].uv.x, 0.5f);
+	EXPECT_FLOAT_EQ(land.instances[2].uv.z, 0.25f);
+	EXPECT_EQ(Sources {}.symbolsInARow, k_LandSymbolsInARow);
+}
+
 TEST(ParticleDraw, AnimatedTexturesMoveOnByCellsOrSlide)
 {
 	MeshCreator creator;

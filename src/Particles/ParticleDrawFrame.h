@@ -240,6 +240,9 @@ struct Frame
 	uint32_t MaterialIndex(const Material& material);
 };
 
+/// The squares in a row of the players' symbols sheet of a land
+constexpr int k_LandSymbolsInARow = 4;
+
 /// What building a frame needs from the game
 struct Sources
 {
@@ -255,6 +258,8 @@ struct Sources
 	std::function<std::optional<glm::vec3>(entt::entity)> objectPosition;
 	/// The game's milliseconds now, by which the glowing shells' textures slide
 	uint64_t gameMilliseconds {0};
+	/// The squares in a row of the players' symbols sheet: 4 on a land, more in a network game with more gods
+	int symbolsInARow {k_LandSymbolsInARow};
 };
 
 /// The player whose symbol and colour an effect without one shows
@@ -305,7 +310,8 @@ struct SymbolSprites
 {
 	std::array<sprites::SpriteInstance, 3> instances;
 };
-[[nodiscard]] SymbolSprites SymbolOf(const Effect::DrawAtom& atom, uint32_t playerRgb, int player);
+[[nodiscard]] SymbolSprites SymbolOf(const Effect::DrawAtom& atom, uint32_t playerRgb, int player,
+                                     int symbolsInARow = k_LandSymbolsInARow);
 
 /// A player's symbol drawn by itself, between its two glows, as over a worthy artefact
 struct PlayerSymbol

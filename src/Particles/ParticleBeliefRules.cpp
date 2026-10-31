@@ -224,13 +224,9 @@ public:
 				return true;
 			}
 			slot.data = *centre;
+			// Each god of the game has a symbol, a god after the seventh too (deviation 166)
 			for (const auto player : world.PlayersInGame())
 			{
-				// A god after the seventh has no symbol: the village keeps the belief of the players of a land only
-				if (static_cast<size_t>(player) >= town_belief::k_PlayerCount)
-				{
-					continue;
-				}
 				auto& atom = effect.NewAtom(collection, &symbol, nextGroups);
 				atom.baseScale = k_SymbolBaseScale;
 				atom.player = player;
@@ -252,7 +248,8 @@ public:
 		for (auto& atom : collection.atoms)
 		{
 			const auto found = atom->data.find(this);
-			if (found == atom->data.end() || atom->player < 0 || static_cast<size_t>(atom->player) >= belief->beliefs.size())
+			const auto beliefs = belief->OfPlayers();
+			if (found == atom->data.end() || atom->player < 0 || static_cast<size_t>(atom->player) >= beliefs.size())
 			{
 				continue;
 			}
@@ -264,9 +261,8 @@ public:
 			                           .intoFight = data.b.y,
 			                           .fightLength = data.b.z};
 			const auto player = static_cast<size_t>(atom->player);
-			const auto look =
-			    town_belief::Step(state, params, belief->beliefs.at(player), town_belief::Rank(belief->beliefs, player),
-			                      effect.GetDt(), distanceScale, random);
+			const auto look = town_belief::Step(state, params, beliefs[player], town_belief::Rank(beliefs, player),
+			                                    effect.GetDt(), distanceScale, random);
 			data.a = {state.around, state.tilt, state.sway, 0.0f};
 			data.b = {state.untilFight, state.intoFight, state.fightLength, 0.0f};
 			atom->position = base + look.offset;

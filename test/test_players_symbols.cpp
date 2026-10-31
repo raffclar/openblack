@@ -17,6 +17,7 @@
 #include <gtest/gtest.h>
 
 #include "3D/PlayersSymbols.h"
+#include "PlayerSlots.h"
 
 using namespace openblack::players_symbols;
 
@@ -183,4 +184,79 @@ TEST(PlayersSymbols, AGodsPictureOfHalfSizeGoesToTheSquareOfASheetAtHalfSize)
 	const std::vector<uint8_t> full(static_cast<size_t>(k_SquareSide) * k_SquareSide, 0x22);
 	PutPicture(half, full, 0);
 	EXPECT_EQ(half.alpha[texel(0, 0, 0)], 9);
+}
+
+// A land and each game with up to 16 player numbers keep the sheet of the file; a game of 32 gods has the wider sheet
+TEST(PlayersSymbols, AGameWithMorePlayerNumbersThanSquaresHasTheWiderSheet)
+{
+	EXPECT_EQ(SquaresInARowFor(0), k_SquaresInARow);
+	EXPECT_EQ(SquaresInARowFor(8), k_SquaresInARow);
+	EXPECT_EQ(SquaresInARowFor(16), k_SquaresInARow);
+	EXPECT_EQ(SquaresInARowFor(17), k_WideSquaresInARow);
+	EXPECT_EQ(SquaresInARowFor(33), k_WideSquaresInARow);
+	// The wider sheet has a square for each player number of a game with the most players
+	EXPECT_GE(static_cast<size_t>(k_WideSquaresInARow) * k_WideSquaresInARow, openblack::player_slots::k_PlayerNumbers);
+}
+
+// The wider sheet keeps each square of the file at the number of its player, and the new squares are clear
+TEST(PlayersSymbols, TheWiderSheetKeepsTheSquareOfEachPlayer)
+{
+	const auto file = NumberedSheet(100);
+	// The same squares in a row give the same sheet
+	const auto same = Widen(file, k_SquaresInARow);
+	EXPECT_EQ(same.colours, file.colours);
+	EXPECT_EQ(same.alpha, file.alpha);
+	EXPECT_EQ(same.squaresInARow, k_SquaresInARow);
+
+	const auto wide = Widen(file, k_WideSquaresInARow);
+	ASSERT_TRUE(wide.Whole());
+	constexpr uint32_t k_WideSide = k_WideSquaresInARow * k_SquareSide;
+	EXPECT_EQ(wide.alpha.size(), static_cast<size_t>(k_WideSide) * k_WideSide);
+	const auto texel = [](uint32_t square, uint32_t x, uint32_t y) {
+		return static_cast<size_t>((square / k_WideSquaresInARow) * k_SquareSide + y) * k_WideSide +
+		       (square % k_WideSquaresInARow) * k_SquareSide + x;
+	};
+	for (uint32_t square = 0; square < k_SquaresInARow * k_SquaresInARow; ++square)
+	{
+		EXPECT_EQ(wide.alpha[texel(square, 0, 0)], static_cast<uint8_t>(100 + square));
+		EXPECT_EQ(wide.alpha[texel(square, 63, 63)], static_cast<uint8_t>(100 + square));
+		EXPECT_EQ(wide.colours[texel(square, 10, 20) * 3 + 1], static_cast<uint8_t>(100 + square));
+	}
+	EXPECT_EQ(wide.alpha[texel(16, 0, 0)], 0);
+	EXPECT_EQ(wide.alpha[texel(63, 63, 63)], 0);
+	// A sheet that is not whole comes back as it is
+	const Sheet small {.colours = std::vector<uint8_t>(12), .alpha = std::vector<uint8_t>(4)};
+	EXPECT_EQ(Widen(small, k_WideSquaresInARow).alpha.size(), 4u);
+}
+
+// A god after the seventh at this computer gets the symbol of its profile in its own square of the wider sheet
+TEST(PlayersSymbols, ALaterGodGetsItsProfileSymbolInTheWiderSheet)
+{
+	const auto designs = NumberedSheet(0);
+	constexpr uint32_t k_TwentiethGod = 20;
+	constexpr uint32_t k_WideSide = k_WideSquaresInARow * k_SquareSide;
+	const auto texel = [](uint32_t square, uint32_t x, uint32_t y) {
+		return static_cast<size_t>((square / k_WideSquaresInARow) * k_SquareSide + y) * k_WideSide +
+		       (square % k_WideSquaresInARow) * k_SquareSide + x;
+	};
+	const auto sheet = MakeSheet(Widen(NumberedSheet(100), k_WideSquaresInARow), designs, ChosenSymbol(5, std::nullopt),
+	                             k_TwentiethGod, std::nullopt);
+	EXPECT_EQ(sheet.alpha[texel(k_TwentiethGod, 0, 0)], 5);
+	EXPECT_EQ(sheet.alpha[texel(k_TwentiethGod, 63, 63)], 5);
+	EXPECT_EQ(sheet.alpha[texel(1, 0, 0)], 101);
+	// The own picture of the profile also goes to the square, and to the square of a sheet at half size
+	std::vector<uint8_t> picture(static_cast<size_t>(k_SquareSide) * k_SquareSide, 0x44);
+	auto withPicture = Widen(NumberedSheet(100), k_WideSquaresInARow);
+	PutPicture(withPicture, picture, k_TwentiethGod);
+	EXPECT_EQ(withPicture.alpha[texel(k_TwentiethGod, 31, 31)], 0x44);
+	constexpr uint32_t k_HalfSide = k_WideSide / 2;
+	Sheet half {.colours = std::vector<uint8_t>(static_cast<size_t>(k_HalfSide) * k_HalfSide * 3, 9),
+	            .alpha = std::vector<uint8_t>(static_cast<size_t>(k_HalfSide) * k_HalfSide, 9),
+	            .squaresInARow = k_WideSquaresInARow};
+	std::vector<uint8_t> halfPicture(static_cast<size_t>(k_SquareSide / 2) * (k_SquareSide / 2), 0x55);
+	PutPicture(half, halfPicture, k_TwentiethGod);
+	const auto halfTexel = static_cast<size_t>((k_TwentiethGod / k_WideSquaresInARow) * (k_SquareSide / 2)) * k_HalfSide +
+	                       (k_TwentiethGod % k_WideSquaresInARow) * (k_SquareSide / 2);
+	EXPECT_EQ(half.alpha[halfTexel], 0x55);
+	EXPECT_EQ(half.alpha[halfTexel - 1], 9);
 }
