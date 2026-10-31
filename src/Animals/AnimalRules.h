@@ -112,6 +112,14 @@ struct ReactionFacts
 	return (gameState >= 6 && gameState <= 9) || (gameState >= 19 && gameState <= 22) || gameState == 25 || gameState == 26 ||
 	       gameState == 30 || gameState == 49;
 }
+/// Whether a change of state ends the reaction of an animal, by the numbers of the states in the game's animal state
+/// table. The animal leaves the state that it is to end up in. When that state is a reaction state and the next state is
+/// not, the animal stops the reaction. The animal keeps the new state and does not return to its state before the
+/// reaction. Thus an animal that dies, or that a hunter brings down, while it reacts stays in that state.
+[[nodiscard]] constexpr bool StateChangeEndsReaction(uint8_t finalGameState, uint8_t nextGameState)
+{
+	return IsReactionState(finalGameState) && !IsReactionState(nextGameState);
+}
 /// Whether a state, by its number in the game's animal state table, has a start of its own: wandering (32), sleep (35),
 /// hiding in a lair (51) and looking for food (52)
 [[nodiscard]] constexpr bool StateHasOwnStart(size_t gameState)
