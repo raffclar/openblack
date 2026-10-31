@@ -12,12 +12,15 @@
 #include <algorithm>
 #include <array>
 #include <bit>
+#include <iterator>
 
 #include "Common/GUtilsDistance.h"
+#include "Common/X87.h"
 
 namespace footpath_rules = openblack::ecs::footpath_rules;
 namespace gutils = openblack::gutils;
 namespace map_coords = openblack::map_coords;
+namespace x87 = openblack::x87;
 
 namespace
 {
@@ -255,4 +258,12 @@ std::optional<size_t> footpath_rules::ScriptFootpathIndex(size_t count, int32_t 
 		return std::nullopt;
 	}
 	return static_cast<size_t>(number);
+}
+
+std::optional<size_t> footpath_rules::FileLinkHolder(glm::ivec2 link, Places places)
+{
+	// The place of the building first, then the place of the link
+	const auto found = std::ranges::find_if(
+	    places, [link](glm::ivec2 place) { return x87::Less(DistanceSq(place, link), k_FileLinkReachSq); });
+	return found != places.end() ? std::optional(static_cast<size_t>(std::distance(places.begin(), found))) : std::nullopt;
 }
