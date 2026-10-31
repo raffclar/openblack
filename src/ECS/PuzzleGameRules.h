@@ -11,8 +11,6 @@
 
 #include <cstdint>
 
-#include <optional>
-
 #include "ScriptHeaders/ScriptEnums.h"
 
 /// What the scripts read from a puzzle game before the player solves it
@@ -20,8 +18,8 @@ namespace openblack::ecs::puzzle_game
 {
 
 /// What PLAYED gives for a puzzle game that the player has not solved. Some kinds always give the same answer, and the
-/// others give no. Nothing comes for the two kinds whose answer before a solution depends on how the game starts.
-[[nodiscard]] constexpr std::optional<bool> PlayedBeforeSolved(script::PuzzleGameType type) noexcept
+/// others give no.
+[[nodiscard]] constexpr bool PlayedBeforeSolved(script::PuzzleGameType type) noexcept
 {
 	using script::PuzzleGameType;
 	switch (type)
@@ -32,10 +30,11 @@ namespace openblack::ecs::puzzle_game
 	case PuzzleGameType::Maze2:
 	case PuzzleGameType::Fishes2:
 		return true;
-	// The answer of these kinds is not known before the game starts
-	case PuzzleGameType::Immersion:
+	// The lions and sheep game starts with no side to move. The test then gives yes at once, so nobody can play it.
 	case PuzzleGameType::Lionsheep:
-		return std::nullopt;
+		return true;
+	// The mushroom game starts in progress and gives no until the player drops a mushroom in the cauldron
+	case PuzzleGameType::Immersion:
 	// Chess always gives no. Each other kind gives yes only when its pieces show a solution.
 	case PuzzleGameType::Tree1:
 	case PuzzleGameType::Tree2:
@@ -56,6 +55,13 @@ namespace openblack::ecs::puzzle_game
 		// A number past the last kind also always gives yes
 		return true;
 	}
+}
+
+/// Whether a puzzle game lets go of its things that went at the start of each turn, also after the solution. All kinds
+/// but the beach temple puzzle do this. The beach temple puzzle makes its pieces again.
+[[nodiscard]] constexpr bool LetsGoOfThingsThatWent(script::PuzzleGameType type) noexcept
+{
+	return type != script::PuzzleGameType::Hanoi;
 }
 
 /// What GET_OBJECT_STATE gives for a puzzle game that nobody has started: won once it gives yes to PLAYED, else not

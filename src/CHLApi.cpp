@@ -771,8 +771,7 @@ entt::entity CreateScriptObject(const ObjectType type, uint32_t subtype, const g
 		return ScriptMarkerArchetype::Create(position);
 	case ObjectType::PuzzleGame:
 	{
-		// The system makes a puzzle game only for the kinds whose answer before a solution is known. Only the beach
-		// temple puzzle has pieces now.
+		// The system makes a puzzle game of each kind. Only the beach temple puzzle and the tree puzzles have pieces now.
 		const auto kind = static_cast<script::PuzzleGameType>(subtype);
 		if (subtype < static_cast<uint32_t>(script::PuzzleGameType::Last) && Locator::puzzleGameSystem::has_value())
 		{

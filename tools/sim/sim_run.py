@@ -31,7 +31,8 @@ the story's lessons do, up to the last; the run then continues as the creature g
     python tools/sim/sim_run.py repeat --turns 3000 --every 1      (two fast runs with the same seed)
     python tools/sim/sim_run.py repeat --turns 2000 --every 1 --runs 20   (twenty runs, each against the first)
     python tools/sim/sim_run.py repeat --turns 2000 --every 1 --runs 5 --frames 10,17,20:1,33,10:1
-                                                   (five runs at other frame rates, drawn and not: the synced worlds)
+                                                   (five runs at other frame rates, drawn and not: the synced worlds;
+                                                   runs 2 to 5 do the commands that the first run wrote)
     python tools/sim/sim_run.py repeat --turns 2000 --every 1 --runs 5 --load-at 700
                                                    (runs 2 to 5 save at turn 700 and load that save at once; each
                                                    must go on as the first run, which does not load; they do the
@@ -514,9 +515,24 @@ def repeat_result(records_first, records_other, synced=False):
 
 
 def replay_arguments(index, commands):
-    """The game arguments of run index of a load check: the first run writes the commands of each turn to the file, and
-    each later run does the commands of the file and none of its own player"""
+    """The game arguments of run index of a load check or a frame-rate repeat: the first run writes the commands of each
+    turn to the file, and each later run does the commands of the file and none of its own player"""
     return ["--sim-commands", commands] if index == 1 else ["--sim-play-commands", commands]
+
+
+def repeat_extra(index, extra, commands, frame_rates, load_at):
+    """The extra game arguments of run index of a repeat. A load check and a frame-rate repeat play the input of the
+    first run again in the other runs: the first run writes the commands of each turn, and each later run does those
+    commands and none of its own player (as a network client does).
+    - A load check: the hand and the camera move in the frames that the load takes, and their reports are input, not
+      the save.
+    - A frame-rate repeat: the reports of the view and the hand carry the camera as a frame draws it. The camera moves
+      in steps of a sixtieth of a second, and the turn falls between other frames at each frame rate. So each frame
+      rate reports a camera of another step, and the commands are not the same. The check is that the same commands
+      give the same synced world at each frame rate, drawn or not."""
+    if frame_rates or load_at is not None:
+        return list(extra) + replay_arguments(index, commands)
+    return list(extra)
 
 
 def command_repeat(options):
@@ -530,20 +546,16 @@ def command_repeat(options):
     # camera on: then only the synced worlds must agree
     synced = bool(frames) or options.load_at is not None
 
-    # A load check plays the input of the first run again in the runs that load: the hand and the camera move in the
-    # frames that the load takes, and their reports are input, not the save. The first run writes the commands of each
-    # turn, and each run that loads does those commands and none of its own player (as a network client does).
     commands = os.path.join(options.out, "repeat-1.commands.jsonl")
 
     def run_options(index):
-        if options.load_at is not None and not frames:
-            extra = list(options.extra) + replay_arguments(index, commands)
-            return argparse.Namespace(**{**vars(options), "extra": extra})
+        extra = repeat_extra(index, options.extra, commands, bool(frames), options.load_at)
         if not frames:
-            return options
+            return argparse.Namespace(**{**vars(options), "extra": extra})
         # The hand gives no input in a frame-rate repeat: a hand that follows the pointer eases to it by the frames
         ms, draw = frames[(index - 1) % len(frames)]
-        return argparse.Namespace(**{**vars(options), "frame_ms": ms, "draw_every": draw, "still_hand": True})
+        return argparse.Namespace(**{**vars(options), "frame_ms": ms, "draw_every": draw, "still_hand": True,
+                                     "extra": extra})
 
     # With --load-at the first run stops at the same turn as the others but does not load
     first = run_once(run_options(1), "repeat-1", True, options.turns, options.load_at, False)
