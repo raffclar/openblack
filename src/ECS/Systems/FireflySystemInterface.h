@@ -53,6 +53,8 @@ public:
 	[[nodiscard]] virtual std::span<const entt::entity> GetFireflies() const = 0;
 	/// As a land closes: no fireflies, the reward weights cleared, and the next nightfall tops them up
 	virtual void Reset() = 0;
+	/// The reward table starts empty, with no weights and no running totals, as in a new program
+	virtual void ForgetRewards() = 0;
 
 	/// What the last frame did with the fireflies out of hiding: how many were in view, how many of those near enough
 	/// to be seen, how many were drawn, and whether their picture could be found

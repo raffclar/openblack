@@ -428,6 +428,21 @@ public:
 	template <auto Member>
 	Reflect& Field(std::string_view name, std::vector<std::span<const std::string_view>> indexNames)
 	{
+		return KeptField<Member, false>(name, std::move(indexNames));
+	}
+
+	/// A field that only the frames or the local random numbers of this computer change, and that no turn reads. The
+	/// binary archive keeps it as a presentation value, so the tools that compare the synced state do not look at it.
+	template <auto Member>
+	Reflect& PresentationField(std::string_view name)
+	{
+		return KeptField<Member, true>(name, {});
+	}
+
+	/// A field that the binary archive keeps, as a presentation value or as a synced value
+	template <auto Member, bool Presentation>
+	Reflect& KeptField(std::string_view name, std::vector<std::span<const std::string_view>> indexNames)
+	{
 		using Value = std::remove_cvref_t<decltype(std::declval<Type&>().*Member)>;
 		// Fields are reached by reference, so that values that can't be copied are read too, and nested values are set
 		// where they are
@@ -439,10 +454,11 @@ public:
 		        [](const entt::meta_any& any, BinaryWriter& out) {
 			        if (const auto* value = any.try_cast<const Value>(); value != nullptr)
 			        {
-				        Save(out, *value);
+				        SaveKept<Presentation>(out, *value);
 			        }
 		        },
-		    .saveFrom = [](const void* owner, BinaryWriter& out) { Save(out, static_cast<const Type*>(owner)->*Member); },
+		    .saveFrom = [](const void* owner,
+		                   BinaryWriter& out) { SaveKept<Presentation>(out, static_cast<const Type*>(owner)->*Member); },
 		    .load =
 		        [](const entt::meta_data& data, entt::meta_any& instance, BinaryReader& in) {
 			        auto field = data.get(instance);

@@ -56,6 +56,7 @@ TEST(WorldStateAtTurn, TheMapGivesThePresentationPartsAndTheBytesOfEachSection)
 	    .sections = {{.name = "map", .size = 12, .presentation = {}},
 	                 {.name = "localParticles", .size = 40, .presentation = {{0, 40}}},
 	                 {.name = "magic", .size = 30, .presentation = {{4, 8}, {20, 24}}}},
+	    .contextPresentation = {{10, 26}},
 	    .syncedSeed = 99,
 	    .syncedDraws = 1234567890123,
 	    .waitingSounds = 2,
@@ -66,7 +67,7 @@ TEST(WorldStateAtTurn, TheMapGivesThePresentationPartsAndTheBytesOfEachSection)
 	          R"({"component": "*", "field": "", "marker": "Say \"hi\"\\"}], )"
 	          R"("sections": [{"name": "map", "size": 12, "presentation": []}, )"
 	          R"({"name": "localParticles", "size": 40, "presentation": [[0, 40]]}, )"
-	          R"({"name": "magic", "size": 30, "presentation": [[4, 8], [20, 24]]}]})"
+	          R"({"name": "magic", "size": 30, "presentation": [[4, 8], [20, 24]]}], "contextPresentation": [[10, 26]]})"
 	          "\n");
 }
 
@@ -74,7 +75,8 @@ TEST(WorldStateAtTurn, AMapWithNoPartsAndNoSectionsHasEmptyLists)
 {
 	const world_state_at_turn::Map map {.turn = 1};
 	EXPECT_EQ(world_state_at_turn::MapText(map),
-	          R"({"turn": 1, "syncedSeed": 0, "syncedDraws": 0, "waitingSounds": 0, "presentationParts": [], "sections": []})"
+	          R"({"turn": 1, "syncedSeed": 0, "syncedDraws": 0, "waitingSounds": 0, "presentationParts": [], "sections": [], )"
+	          R"("contextPresentation": []})"
 	          "\n");
 }
 

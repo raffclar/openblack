@@ -263,10 +263,12 @@ struct NamedSection
 /// Reads the sections that SaveSections wrote. Returns nothing when the bytes have damage.
 [[nodiscard]] std::optional<std::vector<NamedSection>> LoadSections(std::span<const uint8_t> bytes);
 
-/// Writes one value with its registered fields, such as the context of a registry
+/// Writes one value with its registered fields, such as the context of a registry. A tool can also get the ranges of
+/// the presentation values in the bytes.
 template <typename Type>
 [[nodiscard]] std::vector<uint8_t> SaveValue(const entt::meta_ctx& context, const Type& value,
-                                             std::set<UnsavedValue>* unsaved = nullptr)
+                                             std::set<UnsavedValue>* unsaved = nullptr,
+                                             std::vector<std::pair<size_t, size_t>>* presentation = nullptr)
 {
 	BinaryWriter out(context);
 	out.SetPlace(entt::type_id<Type>().name(), "");
@@ -274,6 +276,10 @@ template <typename Type>
 	if (unsaved != nullptr)
 	{
 		unsaved->insert(out.Unsaved().begin(), out.Unsaved().end());
+	}
+	if (presentation != nullptr)
+	{
+		*presentation = out.PresentationRanges();
 	}
 	return std::move(out.Bytes());
 }

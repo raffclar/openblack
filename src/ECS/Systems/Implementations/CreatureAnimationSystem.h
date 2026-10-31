@@ -9,7 +9,10 @@
 
 #pragma once
 
+#include <cstdint>
+
 #include <functional>
+#include <memory>
 #include <optional>
 #include <random>
 #include <span>
@@ -18,6 +21,8 @@
 #include "3D/SkeletalAnimation.h"
 #include "Common/FramePace.h"
 #include "Common/GameRandom.h"
+#include "Common/WorkerPool.h"
+#include "Creature/CreatureBlendStore.h"
 #include "Creature/CreatureRig.h"
 #include "ECS/Systems/CreatureAnimationSystemInterface.h"
 
@@ -40,6 +45,7 @@ public:
 	void Update(std::chrono::duration<float, std::milli> gameTime) override;
 	void MorphTurn(entt::entity creature) override;
 	void ShapeBodies() override;
+	void PrepareFirstPoses() override;
 	void PoseTurn(entt::entity creature) override;
 	void PoseTurns() override;
 	void HoldTurnPose(entt::entity creature) override;
@@ -61,33 +67,6 @@ public:
 	[[nodiscard]] std::optional<glm::vec3> MiddleOfGroinAndLips(const Registry& things, entt::entity creature) override;
 	void AddAlignmentMotesOf(const Registry& copies, entt::entity copy) override;
 
-	/// A species' animation adjusted to the stand of a variant mesh that has no animation of its own, and the
-	/// animations that it comes from
-	struct AdjustedAnimation
-	{
-		const skeletal_animation::Animation* base;
-		const skeletal_animation::Animation* baseStand;
-		const skeletal_animation::Animation* stand;
-		skeletal_animation::Animation animation;
-	};
-	/// Which species, variant mesh and animation an adjusted animation is of
-	struct AdjustedKey
-	{
-		const creature::CreatureRig* rig;
-		creature::CreatureRig::Mesh mesh;
-		size_t index;
-		[[nodiscard]] bool operator==(const AdjustedKey&) const = default;
-	};
-	struct AdjustedKeyHash
-	{
-		[[nodiscard]] size_t operator()(const AdjustedKey& key) const noexcept
-		{
-			return std::hash<const void*> {}(key.rig) ^ (std::hash<size_t> {}(key.index) * 31u) ^
-			       (static_cast<size_t>(key.mesh) << 20u);
-		}
-	};
-	using AdjustedAnimations = std::unordered_map<AdjustedKey, std::optional<AdjustedAnimation>, AdjustedKeyHash>;
-
 private:
 	/// The creature's animations move on by some milliseconds, and the body takes a new pose where the creature is. The
 	/// pose of the last turn becomes the older pose.
@@ -98,11 +77,21 @@ private:
 	static void ApplyHum(entt::entity creature, creature_hand_glow::Hum hum);
 	/// While the body of a creature plays the loop of the puke animation, twelve drops of sick come out of its lips
 	static void AddPukeDrops(entt::entity creature);
+	/// Makes the blends of the first pose and the first plan of each body, on the shared threads. The turn then takes
+	/// each blend from the store when it asks for it. A blend comes only from the species and the drawn body, so it is
+	/// the same blend that the turn makes.
+	void PrepareFirstBlends(std::span<const entt::entity> creatures);
+
+	/// The threads that make the blends, made the first time that the system has many blends to make
+	std::unique_ptr<WorkerPool> _workers;
+	/// The count of the shapes of the bodies. A prepared blend that no turn took after two shapes goes from the store.
+	uint32_t _shapings {0};
 
 	/// The game's random numbers: the blinks and the eye movements draw on the local seed, the dance moves on the synced seed
 	GameRandomSource _random;
-	/// The animations adjusted to the variants' stands, made the first time that a creature of the species wants them
-	AdjustedAnimations _adjusted;
+	/// The animations adjusted to the variants' stands, made the first time that a creature of the species wants them,
+	/// and the blends made for the first poses
+	creature_blends::Stores _stores;
 	/// The turns of the keyframes that the poses use, each turn made one time. Only the time that a pose takes changes.
 	skeletal_animation::KeyframeTurns _keyframeTurns;
 };
