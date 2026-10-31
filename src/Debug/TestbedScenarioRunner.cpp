@@ -1013,6 +1013,13 @@ void Runner::Start(const Scenario& scenario)
 		std::ranges::sort(filled);
 		_slotCreatures = std::move(filled);
 	}
+	if (Locator::playerSystem::has_value())
+	{
+		for (const auto& ally : scenario.allies)
+		{
+			Locator::playerSystem::value().SetAlly(ally.player, ally.other, ally.strength);
+		}
+	}
 	// With the scenario's things laid out on the land, each town of a player with a temple is given its worship site, as
 	// a land's are once it is laid out
 	if (Locator::worshipSiteSystem::has_value())
@@ -1795,6 +1802,15 @@ void Runner::UpdateComputerActions()
 		};
 		const auto first = thingOf(action.first);
 		const auto second = thingOf(action.second);
+		if (action.forceAtOnce)
+		{
+			if (!Locator::computerPlayerSystem::value().ForceAction(action.player, action.node, first, second))
+			{
+				SPDLOG_LOGGER_WARN(spdlog::get("game"), "Testbed: the computer god {} did not start {}",
+				                   static_cast<int>(action.player), action.node);
+			}
+			continue;
+		}
 		if (!debug::computer_actions::Force(action.player, action.node, first, second))
 		{
 			SPDLOG_LOGGER_WARN(spdlog::get("game"), "Testbed: the computer god {} has no node {}",

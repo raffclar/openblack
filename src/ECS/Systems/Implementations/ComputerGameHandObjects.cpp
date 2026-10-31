@@ -199,7 +199,8 @@ bool GameHandObjects::TakeFromContainer(entt::entity container, ResourceType typ
 	const auto pot = archetypes::PotArchetype::Create(at != nullptr ? at->position : hand, 0.0f, potType,
 	                                                  static_cast<int32_t>(amount), town);
 	computer_world::ReportHand(_player, hand, _state.hand.camera);
-	Locator::handGrabSystem::value().DoTake(_player, pot);
+	// The god's hand takes the new pot also where the god has no influence
+	Locator::handGrabSystem::value().DoComputerTake(_player, pot);
 	return HeldBy(_player) == std::optional<entt::entity> {pot};
 }
 

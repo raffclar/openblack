@@ -36,7 +36,7 @@ std::vector<float> LentInfluence(PlayerNames player, const map_coords::MapCoords
 	{
 		if (player_relations::LendsInfluence(players.AllyStrength(player, ally)))
 		{
-			lent.push_back(influence.PlayerInfluence(ally, place));
+			lent.push_back(influence.PlayerRawInfluence(ally, place));
 		}
 	}
 	return lent;
@@ -48,7 +48,7 @@ float InfluenceWithAllies(PlayerNames player, const map_coords::MapCoords& place
 	{
 		return 0.0f;
 	}
-	const float own = Locator::influenceSystem::value().PlayerInfluence(player, place);
+	const float own = Locator::influenceSystem::value().PlayerOwnInfluence(player, place);
 	return script::influence::Answer(own, false, LentInfluence(player, place));
 }
 

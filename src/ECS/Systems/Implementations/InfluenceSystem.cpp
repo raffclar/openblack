@@ -784,6 +784,47 @@ bool InfluenceSystem::CrossBorders(const glm::vec3& hand)
 
 float InfluenceSystem::PlayerInfluence(PlayerNames player, const map_coords::MapCoords& position) const
 {
+	return WithAllies(player, position, PlayerOwnInfluence(player, position));
+}
+
+float InfluenceSystem::WithAllies(PlayerNames player, const map_coords::MapCoords& position, float own) const
+{
+	if (own > 0.0f)
+	{
+		return own;
+	}
+	// The first ally, in the order of the numbers, that lends its influence and has some of its own there lends it.
+	// Without one the answer is none, also where the player's own is below none.
+	const auto& registry = Locator::entitiesRegistry::value();
+	const components::PlayerAllies* allies = nullptr;
+	registry.Each<const components::Player, const components::PlayerAllies>(
+	    [player, &allies](const components::Player& owner, const components::PlayerAllies& found) {
+		    if (owner.name == player && allies == nullptr)
+		    {
+			    allies = &found;
+		    }
+	    });
+	if (allies == nullptr)
+	{
+		return 0.0f;
+	}
+	for (const auto ally : game_players::All())
+	{
+		const auto index = static_cast<size_t>(ally);
+		if (index >= allies->strength.size() || !player_relations::LendsInfluence(allies->strength.at(index)))
+		{
+			continue;
+		}
+		if (const float lent = PlayerRawInfluence(ally, position); lent > 0.0f)
+		{
+			return lent;
+		}
+	}
+	return 0.0f;
+}
+
+float InfluenceSystem::PlayerOwnInfluence(PlayerNames player, const map_coords::MapCoords& position) const
+{
 	if (const auto* state = VirtualStateOf(player); state != nullptr)
 	{
 		// The questions of a game turn measure from where the hand was at the turn; between turns this computer's
@@ -815,10 +856,10 @@ float InfluenceSystem::HandPointInfluence(PlayerNames player, const map_coords::
 	{
 		if (const auto granted = virtual_influence::Grant(*state, hand, hand); granted.has_value())
 		{
-			return *granted;
+			return WithAllies(player, hand, *granted);
 		}
 	}
-	return PlayerRawInfluence(player, hand);
+	return WithAllies(player, hand, PlayerRawInfluence(player, hand));
 }
 
 float InfluenceSystem::PlayerRawInfluence(PlayerNames player, const map_coords::MapCoords& position) const

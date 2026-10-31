@@ -1218,6 +1218,14 @@ struct TempleSetup
 	std::optional<float> life;
 };
 
+/// Two players that are allies, as a script's SET_PLAYER_ALLY makes them, with the same strength for each of them
+struct AllySetup
+{
+	PlayerNames player {PlayerNames::PLAYER_ONE};
+	PlayerNames other {PlayerNames::PLAYER_TWO};
+	float strength {1.0f};
+};
+
 /// The player's hand held still over the land for the whole scenario, as a player holds it: from the middle of the map,
 /// and how high above the land
 struct HandHold
@@ -1312,6 +1320,9 @@ struct ComputerActionSetup
 	std::string_view node;
 	ComputerActionThing first;
 	ComputerActionThing second;
+	/// The tool forces the action as a land script's force command does: the god stops the action that it does and starts
+	/// this one at once, rather than after the actions before it in the queue
+	bool forceAtOnce {false};
 };
 
 struct Scenario
@@ -1329,6 +1340,8 @@ struct Scenario
 	std::vector<ObjectSetup> objects;
 	std::vector<BirdFlockSetup> birdFlocks;
 	std::vector<TempleSetup> temples;
+	/// The alliances made after the scenario's things and the land's script
+	std::vector<AllySetup> allies;
 	std::vector<ParticleSetup> particles;
 	std::vector<VortexSetup> vortices;
 	std::vector<RewardSetup> rewards;

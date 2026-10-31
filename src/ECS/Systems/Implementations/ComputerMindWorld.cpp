@@ -179,7 +179,7 @@ bool GameMindWorld::StepAction()
 
 void GameMindWorld::ClearAction()
 {
-	computer_hand::Clear(_state.hand);
+	computer_hand::ClearAndPutDown(_state.hand, _hand);
 }
 
 void GameMindWorld::StartAction() {}
@@ -303,7 +303,7 @@ void computer_world::SeeNearHand(ComputerPlayer& state, uint32_t turn)
 	computer_mind::SeeNearHand(state.seen, state.hand.coords, turn, world);
 }
 
-void computer_world::Validate(ComputerPlayer& state)
+void computer_world::Validate(PlayerNames player, ComputerPlayer& state)
 {
 	auto& registry = Entities();
 	std::erase_if(state.casts, [&registry](entt::entity spell) { return !registry.Valid(spell); });
@@ -322,6 +322,11 @@ void computer_world::Validate(ComputerPlayer& state)
 	if (gone)
 	{
 		computer_hand::Clear(state.hand);
+		GameHandObjects objects(player, state);
+		if (!objects.HandHasRoom())
+		{
+			objects.PutDownHeld(state.hand.hand);
+		}
 	}
 }
 

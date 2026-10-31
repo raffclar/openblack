@@ -7048,6 +7048,29 @@ void AddHand(std::vector<Scenario>& all)
 	         // And comes back in
 	         {.kind = Kind::PointerTo, .delaySeconds = 2.0f, .point = {0.3f, 0.97f}}},
 	});
+	// The camera looks down on a temple of player two, 700 m north of the middle and far past the player's influence.
+	// The two players are allies.
+	all.push_back({
+	    .id = "hand.ally_influence",
+	    .name = "The hand acting in the influence of an ally",
+	    .facet = Facet::Hand,
+	    .description = "Player two is an ally of the player, and a temple of player two stands far past the player's own "
+	                   "influence. The hand goes over a ball near that temple, takes it, carries it a short distance and "
+	                   "lets it go.",
+	    .expected = "In the influence of the ally the hand has its inside look. It takes the ball and lets it go as it "
+	                "does in the player's own influence. The game log gives no message that the hand is outside.",
+	    .environment = {.dispenserGrid = false},
+	    .framing = {.shot = Shot::Placed, .eye = {0.0f, 40.0f, 620.0f}, .look = {0.0f, 0.0f, 680.0f}},
+	    .objects = {{.type = MobileObjectInfo::Ball, .offset = {0.0f, 670.0f}}},
+	    .temples = {{.offset = {0.0f, 700.0f}, .owner = PlayerNames::PLAYER_TWO}},
+	    .allies = {{.player = PlayerNames::PLAYER_ONE, .other = PlayerNames::PLAYER_TWO, .strength = 1.0f}},
+	    .commands = {{.kind = Kind::PointerOnObject, .delaySeconds = 1.0f, .object = 0, .amount = 1.0f},
+	                 {.kind = Kind::PointerPress, .delaySeconds = 1.0f, .value = 3},
+	                 {.kind = Kind::PointerRelease, .delaySeconds = 1.0f, .value = 3},
+	                 {.kind = Kind::PointerSweep, .delaySeconds = 0.5f, .point = {0.1f, 0.0f}, .amount = 1.0f},
+	                 {.kind = Kind::PointerPress, .delaySeconds = 1.5f, .value = 3},
+	                 {.kind = Kind::PointerRelease, .delaySeconds = 0.3f, .value = 3}},
+	});
 	// The camera looks down on the north edge of the player's influence, 400 m from the middle: a wood pile and another
 	// player's tiger just inside, a wood pile, another player's tiger and the player's own tiger just outside, all clear
 	// of the testbed's window. The hand rests on the land between visits, so that each tooltip is submitted afresh. A
