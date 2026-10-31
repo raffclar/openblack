@@ -86,7 +86,6 @@ void openblack::ecs::reflection::RegisterFields_Components_creaturem(entt::meta_
 	    .Field<&components::CreatureMindState::innate>("innate")
 	    .Field<&components::CreatureMindState::attention>("attention")
 	    .Field<&components::CreatureMindState::playerInterest>("playerInterest")
-	    .Field<&components::CreatureMindState::handSpeed>("handSpeed")
 	    .Field<&components::CreatureMindState::impressFromSeeing>("impressFromSeeing")
 	    .Field<&components::CreatureMindState::turnsLookedAt>("turnsLookedAt")
 	    .Field<&components::CreatureMindState::beliefs>("beliefs")

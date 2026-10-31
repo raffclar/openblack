@@ -52,15 +52,9 @@ float creature_player_attention::ViewWidthAtFocus(glm::vec3 cameraOrigin, glm::v
 	return x87::Mul(x87::Tan(k_ViewHalfAngle), focusDistance);
 }
 
-void creature_player_attention::UpdateHandSpeed(HandSpeed& speed, glm::vec3 movement, float turnsPerSecond)
+bool creature_player_attention::IsHandMoving(const glm::vec3& velocity)
 {
-	const auto now = movement * turnsPerSecond;
-	speed.velocity += (now - speed.velocity) * k_HandSpeedFollow;
-}
-
-bool creature_player_attention::IsHandMoving(const HandSpeed& speed)
-{
-	return glm::length(speed.velocity) > 0.0f;
+	return glm::length(velocity) > 0.0f;
 }
 
 bool creature_player_attention::IsDirectionClose(const map_coords::MapCoords& creature, const map_coords::MapCoords& point,

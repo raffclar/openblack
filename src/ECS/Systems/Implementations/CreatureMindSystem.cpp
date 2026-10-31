@@ -419,17 +419,18 @@ std::vector<creature_desires::PhaseDesires> Phases()
 /// reports of that player put it. A creature of a player with no hand, or of no player, finds nothing of interest here.
 float PlayerInterestNow(const Creature& creature, CreatureMindState& mind)
 {
-	const auto hands =
-	    Locator::handSystem::has_value() ? Locator::handSystem::value().GetHandsOf(creature.owner) : std::nullopt;
-	if (!hands.has_value())
+	// A creature with no player has no hand to read. Every god has a hand (see ecs::PlayerHandsOf).
+	if (creature.owner == PlayerNames::NEUTRAL)
 	{
 		return creature_desire_sources::InterestNow(mind.playerInterest, std::nullopt, std::nullopt);
 	}
 	const auto& registry = Locator::entitiesRegistry::value();
 	constexpr auto k_Hand = static_cast<size_t>(HandSystemInterface::Side::Left);
-	const auto handEntity = hands->at(k_Hand);
-	// Off the land the hand has no place: it counts as where it last was
-	auto hand = Locator::handSystem::value().GetHandPositionsOf(creature.owner).at(k_Hand);
+	const auto hands =
+	    Locator::handSystem::has_value() ? Locator::handSystem::value().GetHandsOf(creature.owner) : std::nullopt;
+	const auto handEntity = hands.has_value() ? hands->at(k_Hand) : entt::null;
+	// Off the land the reported hand has no place: it counts as where it last was
+	auto hand = openblack::ecs::PlayerHandsOf(creature.owner).at(k_Hand);
 	if (!hand.has_value())
 	{
 		hand = mind.playerInterest.lastHand;
@@ -791,21 +792,11 @@ std::optional<glm::vec3> NearestHand(const ecs::Registry& registry, entt::entity
 	const auto* body = registry.TryGet<const Creature>(creature);
 	const auto* transform = registry.TryGet<const Transform>(creature);
 	const auto player = openblack::ecs::ReportedCreaturePlayer(creature);
-	if (body == nullptr || body->owner == PlayerNames::NEUTRAL || transform == nullptr || !player.has_value() ||
-	    !Locator::handSystem::has_value())
+	if (body == nullptr || body->owner == PlayerNames::NEUTRAL || transform == nullptr || !player.has_value())
 	{
 		return std::nullopt;
 	}
-	std::optional<glm::vec3> nearest;
-	for (const auto& hand : Locator::handSystem::value().GetHandPositionsOf(*player))
-	{
-		if (hand.has_value() &&
-		    (!nearest.has_value() || glm::distance(*hand, transform->position) < glm::distance(*nearest, transform->position)))
-		{
-			nearest = hand;
-		}
-	}
-	return nearest;
+	return openblack::ecs::NearestHandOf(*player, transform->position);
 }
 
 /// Running away, the seconds that a creature of a species looks back at what it runs from, and the seconds that it then
@@ -1123,7 +1114,7 @@ bool WatchedIsInTheAir(const ecs::Registry& registry, const creature_mind::IdleM
 /// The game turns that the hand stays in one place, of the player whose camera the creature reads: its own player
 uint32_t HandStillTurnsOf(PlayerNames player)
 {
-	return Locator::handSystem::has_value() ? Locator::handSystem::value().GetHandStillTurnsOf(player) : 0;
+	return openblack::ecs::PlayerHandStillTurnsOf(player);
 }
 
 /// Its player's camera as a creature watching it sees it, only while its step watches the camera; none for a creature
@@ -2101,14 +2092,8 @@ void CreatureMindSystem::MindTurn(entt::entity entity)
 	++mind.turn;
 	// What scripts set its sources to since the last turn lasts: what each source follows takes the value
 	TakeWrittenSources(entity, mind);
-	// How interesting it finds its player follows the hand, also while the hand holds it. The speed of the hand
-	// follows the movement of the hand in the turn.
-	const auto handBefore = mind.playerInterest.lastHand;
+	// How interesting it finds its player follows the hand, also while the hand holds it
 	creature_desire_sources::UpdateInterest(mind.playerInterest, PlayerInterestNow(creature, mind));
-	const auto handMovement = handBefore.has_value() && mind.playerInterest.lastHand.has_value()
-	                              ? *mind.playerInterest.lastHand - *handBefore
-	                              : glm::vec3(0.0f);
-	creature_player_attention::UpdateHandSpeed(mind.handSpeed, handMovement, k_TurnsPerSecond);
 	// What it thinks its player wants fades
 	creature_perceived_desires::Fade(mind.perceivedDesires);
 	if (mind.learnt.has_value())
