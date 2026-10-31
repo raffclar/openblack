@@ -114,6 +114,13 @@ class SyncedCompareTests(unittest.TestCase):
         result = self.compare([("SYST", first)], [("SYST", second)], synced, synced)
         self.assertEqual(list(result["SYST"]), ["magic"])
 
+    def test_the_presentation_bytes_of_the_context_do_not_count(self):
+        first, second = b"\x01\x02\x03", b"\x01\x09\x03"
+        same = dict(state_map([]), contextPresentation=[[1, 2]])
+        self.assertEqual(self.compare([("RCTX", first)], [("RCTX", second)], same, same), {})
+        result = self.compare([("RCTX", first)], [("RCTX", second)])
+        self.assertEqual(list(result), ["RCTX"])
+
     def test_a_section_of_presentation_only_that_the_server_does_not_write_is_the_same(self):
         server = sections_block([("magic", b"\x01")])
         client = sections_block([("magic", b"\x01"), ("localParticles", b"\x05\x06")])

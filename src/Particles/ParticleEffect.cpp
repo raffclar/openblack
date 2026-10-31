@@ -1448,7 +1448,11 @@ void Effect::SaveStructure(const Collection& collection, EffectWriter& out) cons
 		out.WriteValue(atom.frameRate);
 		out.WriteValue(atom.playAnim);
 		out.WriteValue(atom.gravity);
+		// Only the frame reads the values of the creator: the shape and the start of a mist come from the numbers of
+		// this computer
+		out.Out().BeginPresentation();
 		out.WriteValue(atom.creatorValue);
+		out.Out().EndPresentation();
 		out.WriteValue(atom.random);
 		out.WriteValue(atom.player);
 		out.WriteValue(atom.deflected);

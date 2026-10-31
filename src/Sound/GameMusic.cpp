@@ -217,6 +217,9 @@ void GameMusic::Reset()
 void GameMusic::SaveState(ecs::reflection::BinaryWriter& out) const
 {
 	using ecs::reflection::Save;
+	// The game's music is the sound of this computer: a game server has none, and the town of the music follows the
+	// camera of this computer. Thus the whole section is a presentation part.
+	out.BeginPresentation();
 	out.WriteSize(_attached.size());
 	for (const auto& music : _attached)
 	{
@@ -225,6 +228,7 @@ void GameMusic::SaveState(ecs::reflection::BinaryWriter& out) const
 	}
 	Save(out, _rememberedTown);
 	Save(out, _alignmentMusicEnabled);
+	out.EndPresentation();
 }
 
 bool GameMusic::LoadState(ecs::reflection::BinaryReader& in)

@@ -471,6 +471,32 @@ TEST(WorldArchive, ValuesOutsideTheRegistryRoundTrip)
 	EXPECT_EQ(read, walker);
 }
 
+// A presentation field keeps its bytes, and the writer gives the place of the bytes as a presentation value
+TEST(WorldArchive, APresentationFieldKeepsItsBytesAsAPresentationValue)
+{
+	struct Figures
+	{
+		uint32_t synced {0};
+		float local {0.0f};
+		uint32_t after {0};
+		bool operator==(const Figures&) const = default;
+	};
+	entt::meta_ctx context;
+	Register(context);
+	Reflect<Figures>(context, ValueOnly {})
+	    .Field<&Figures::synced>("synced")
+	    .PresentationField<&Figures::local>("local")
+	    .Field<&Figures::after>("after");
+	const Figures figures {.synced = 3, .local = 31.0f, .after = 9};
+	std::vector<std::pair<size_t, size_t>> presentation;
+	const auto bytes = SaveValue(context, figures, nullptr, &presentation);
+	EXPECT_EQ(bytes.size(), 3 * sizeof(uint32_t));
+	EXPECT_EQ(presentation, (std::vector<std::pair<size_t, size_t>> {{sizeof(uint32_t), 2 * sizeof(uint32_t)}}));
+	Figures read;
+	ASSERT_TRUE(LoadValue(context, bytes, read, EntityRemap {}));
+	EXPECT_EQ(read, figures);
+}
+
 TEST(WorldArchive, TheCreaturesMapOfTheLandGoesWithTheWorld)
 {
 	// A computer that takes the world of another computer gets its map of the land, made from the towns at the start

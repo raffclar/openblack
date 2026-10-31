@@ -13,8 +13,10 @@
 #define LOCATOR_IMPLEMENTATIONS
 
 #include <cstdint>
+#include <cstring>
 
 #include <algorithm>
+#include <array>
 #include <filesystem>
 #include <functional>
 #include <map>
@@ -345,15 +347,15 @@ TEST_F(ParticleSaveParts, ASaveFromBeforeTheSplitLoads)
 	const auto synced = rules.Start("Synced", {1.0f, 0.0f, 0.0f}, 1.0f, true);
 	const auto parts = Save(rules);
 
-	// The synced part starts with its form and the values of the rules. The tables, the effects and the world follow,
-	// as in the one part of an old save.
+	// The synced part starts with its form, the next synced number and the values of the rules. The tables, the effects
+	// and the world follow, as in the one part of an old save.
 	reflection::BinaryWriter head(Context());
-	reflection::Save(head, uint32_t {2});
+	reflection::Save(head, uint32_t {3});
+	reflection::Save(head, ParticleRuleSystemInterface::EffectId {synced + 1});
 	reflection::Save(head, false);
 	reflection::Save(head, ParticleRuleSystemInterface::k_NoEffect);
 	reflection::Save(head, ParticleRuleSystemInterface::k_NoEffect);
 	reflection::Save(head, std::vector<glm::vec3> {});
-	reflection::Save(head, ParticleRuleSystemInterface::k_NoEffect);
 	reflection::Save(head, false);
 	const auto& headBytes = head.Bytes();
 	ASSERT_GE(parts.synced.size(), headBytes.size());
@@ -468,10 +470,14 @@ TEST_F(ParticleSaveParts, TwoPartsOfTheFormBeforeTheWaitsMovedLoad)
 	rules.Start("Local", {2.0f, 0.0f, 0.0f}, 1.0f, false);
 	const auto parts = Save(rules);
 
-	// Each part starts with its form. The older form has the same bytes after it when no sound waits, but the part of
-	// this computer has no list of waits. With no sound, that list is one of the counts of 0 at the end of the part.
+	// Each part starts with its form. The older form has the same bytes after it when no sound waits, but:
+	// - the synced part has no next synced number after its form
+	// - the synced part keeps the effect of the gesture trails after the waiting storm bolts
+	// - the part of this computer keeps the one number of all effects after its form
+	// - the part of this computer has no effect of the gesture trails
+	// - the part of this computer has no list of waits. With no sound, that list is one of the counts of 0 at its end.
 	reflection::BinaryWriter now(Context());
-	reflection::Save(now, uint32_t {2});
+	reflection::Save(now, uint32_t {3});
 	reflection::BinaryWriter before(Context());
 	reflection::Save(before, uint32_t {1});
 	const auto& nowBytes = now.Bytes();
@@ -482,8 +488,19 @@ TEST_F(ParticleSaveParts, TwoPartsOfTheFormBeforeTheWaitsMovedLoad)
 		std::copy(beforeBytes.begin(), beforeBytes.end(), bytes.begin());
 		return bytes;
 	};
-	const auto synced = older(parts.synced);
+	auto synced = older(parts.synced);
+	const auto afterForm = static_cast<std::ptrdiff_t>(nowBytes.size());
+	synced.erase(synced.begin() + afterForm, synced.begin() + afterForm + static_cast<std::ptrdiff_t>(sizeof(uint32_t)));
+	// The pause, the two effects and the count of the waiting storm bolts come before the effect of the gesture trails
+	constexpr std::ptrdiff_t k_TrailsAt = 1 + 4 + 4 + 4;
+	const std::array<uint8_t, sizeof(uint32_t)> noEffect {};
+	synced.insert(synced.begin() + afterForm + k_TrailsAt, noEffect.begin(), noEffect.end());
 	auto local = older(parts.local);
+	local.erase(local.begin() + afterForm + static_cast<std::ptrdiff_t>(sizeof(uint32_t)),
+	            local.begin() + afterForm + static_cast<std::ptrdiff_t>(2 * sizeof(uint32_t)));
+	// The one number of all effects was after the synced effect
+	constexpr uint32_t k_OldNext = 2;
+	std::memcpy(local.data() + afterForm, &k_OldNext, sizeof(k_OldNext));
 	constexpr size_t k_ZeroCounts = 4;
 	ASSERT_GE(local.size(), k_ZeroCounts * sizeof(uint32_t));
 	ASSERT_TRUE(std::all_of(local.end() - static_cast<std::ptrdiff_t>(k_ZeroCounts * sizeof(uint32_t)), local.end(),
@@ -498,4 +515,35 @@ TEST_F(ParticleSaveParts, TwoPartsOfTheFormBeforeTheWaitsMovedLoad)
 	const auto again = Save(loaded);
 	EXPECT_EQ(again.synced, parts.synced);
 	EXPECT_EQ(again.local, parts.local);
+}
+
+TEST_F(ParticleSaveParts, TheEffectsOfThisComputerTakeNoNumberOfASyncedEffect)
+{
+	// A game server starts the synced effects only. A client also starts effects of its own between them.
+	ParticleRuleSystem server;
+	const auto serverFirst = server.Start("Synced", {1.0f, 0.0f, 0.0f}, 1.0f, true);
+	const auto serverSecond = server.Start("Other", {3.0f, 0.0f, 0.0f}, 1.0f, true);
+	ParticleRuleSystem client;
+	const auto clientFirst = client.Start("Synced", {1.0f, 0.0f, 0.0f}, 1.0f, true);
+	const auto local = client.Start("Local", {2.0f, 0.0f, 0.0f}, 1.0f, false);
+	const auto clientSecond = client.Start("Other", {3.0f, 0.0f, 0.0f}, 1.0f, true);
+	EXPECT_EQ(clientFirst, serverFirst);
+	EXPECT_EQ(clientSecond, serverSecond);
+	EXPECT_GE(local, ParticleRuleSystem::k_FirstLocalEffect);
+	EXPECT_LT(local, k_FirstEffectHandle);
+	EXPECT_EQ(Save(client).synced, Save(server).synced);
+}
+
+TEST_F(ParticleSaveParts, AJoinerGivesTheNextSyncedEffectTheNumberOfTheServer)
+{
+	// The newest synced effect ends before the save, so no loaded effect has the highest number
+	ParticleRuleSystem server;
+	server.Start("Synced", {1.0f, 0.0f, 0.0f}, 1.0f, true);
+	const auto ended = server.Start("Other", {3.0f, 0.0f, 0.0f}, 1.0f, true);
+	server.Delete(ended);
+	const auto parts = Save(server);
+
+	ParticleRuleSystem joiner;
+	ASSERT_TRUE(Read(joiner, parts.synced));
+	EXPECT_EQ(joiner.Start("Local", {2.0f, 0.0f, 0.0f}, 1.0f, true), server.Start("Local", {2.0f, 0.0f, 0.0f}, 1.0f, true));
 }

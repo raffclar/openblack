@@ -63,6 +63,7 @@ public:
 	entt::entity SummonSeed(PlayerNames, SpellSeedType, int) override { return entt::null; }
 	entt::entity SummonSeedAtSite(entt::entity, SpellSeedType, int) override { return entt::null; }
 	void DiscardHeldSeed() override {}
+	void DiscardHeldSeedOf(PlayerNames) override {}
 	void DeleteSeed(entt::entity seed) override
 	{
 		deleted.push_back(seed);
