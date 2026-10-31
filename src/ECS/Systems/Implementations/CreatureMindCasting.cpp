@@ -523,7 +523,8 @@ std::optional<creature_plan_actions::CastInfo> CreatureMindSystem::CastInfoFor(e
 	    .gesture = static_cast<uint32_t>(gesture),
 	    .height = cast_moves::k_HeightOfSizeOne * ShownSize(*body),
 	    .targetLiving = target.has_value() && registry.Valid(*target) && Locator::creatureObjectActionSystem::has_value() &&
-	                    creature_object_actions::IsLiving(Locator::creatureObjectActionSystem::value().KindOf(*target).thing)};
+	                    creature_object_actions::IsLiving(Locator::creatureObjectActionSystem::value().KindOf(*target).thing),
+	    .targetNeedFlag = target.has_value() && registry.Valid(*target) && registry.AllOf<WorshipSiteFlag>(*target)};
 	// The creature stops its own fire from a clear area near it. The area is 1.7 times as wide as the creature is
 	// tall. Living things in the area do not block it.
 	if (executor != nullptr && executor->build == creature_plan_actions::Build::CastWaterOnItself)

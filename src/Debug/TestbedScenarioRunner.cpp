@@ -2725,6 +2725,8 @@ std::string Runner::GivePlayerCommand(const Command& command)
 	}
 	case Kind::ChargeIconWithSeedHeld:
 		return ChargeIconWithSeedHeld(command);
+	case Kind::TakeIconSeed:
+		return TakeIconSeed(command);
 	case Kind::PressPlainKey:
 	{
 		// The key goes down and comes up again, each as an event of the window
@@ -3090,6 +3092,52 @@ std::string Runner::ChargeIconWithSeedHeld(const Command& command)
 	return fmt::format("the seed in the hand holds {:.0f} of {:.0f}, and its icon charges", seed.chantStore, cost);
 }
 
+std::string Runner::TakeIconSeed(const Command& command)
+{
+	if (!Locator::infoConstants::has_value() || !Locator::spellIconSystem::has_value() || !Locator::magicSystem::has_value() ||
+	    !Locator::worshipSiteSystem::has_value())
+	{
+		return "no miracles";
+	}
+	const auto& info = Locator::infoConstants::value();
+	auto& registry = Locator::entitiesRegistry::value();
+	const auto seedType = static_cast<SpellSeedType>(command.value);
+	std::optional<entt::entity> found;
+	registry.Each<const ecs::components::WorshipIcon>([&](entt::entity entity, const ecs::components::WorshipIcon& icon) {
+		const auto* site = registry.Valid(icon.site) ? registry.TryGet<const ecs::components::WorshipSite>(icon.site) : nullptr;
+		if (!found.has_value() && site != nullptr && site->player == command.player && icon.seed == seedType)
+		{
+			found = entity;
+		}
+	});
+	if (!found.has_value())
+	{
+		return "no such icon";
+	}
+	auto& icon = registry.Get<ecs::components::WorshipIcon>(*found);
+	const auto& seedInfo = magic::GetSpellSeedInfo(info, icon.seed);
+	const float cost =
+	    magic::GetChantsRequiredToCreate(info, magic::GetMagicTypeFromPowerUpLevel(seedInfo, magic::k_BasePowerUpLevel));
+	// A seed that the hand holds goes first. Then the icon is charged full and a tap puts its miracle in the hand.
+	if (Locator::magicSystem::value().GetHeldSeedOf(command.player).has_value())
+	{
+		Locator::magicSystem::value().DiscardHeldSeedOf(command.player);
+	}
+	icon.charging = false;
+	icon.store = cost;
+	Locator::spellIconSystem::value().Tap(*found, command.player);
+	const auto held = Locator::magicSystem::value().GetHeldSeed();
+	if (!held.has_value() || std::ranges::find(icon.seedsOut, *held) == icon.seedsOut.end())
+	{
+		return "the hand did not take the seed";
+	}
+	// The site gets prayer power for the power-ups, from the cost of the highest level that the seed has
+	const int top = magic::GetNumPowerUpLevels(seedInfo) - 2;
+	const float topCost = magic::GetChantsRequiredToCreate(info, magic::GetMagicTypeFromPowerUpLevel(seedInfo, top));
+	Locator::worshipSiteSystem::value().ReturnChants(icon.site, topCost * command.amount);
+	return fmt::format("the seed is in the hand, and the site gets {:.0f}", topCost * command.amount);
+}
+
 std::string Runner::HandTakeFireBall()
 {
 	if (!Locator::magicSystem::has_value())
@@ -3372,12 +3420,12 @@ void Runner::Give(const Command& command)
 	    command.kind == Kind::PlayGuidanceVoice || command.kind == Kind::ScriptRelease || command.kind == Kind::FillSiteIcons ||
 	    command.kind == Kind::BuildWorshipSites || command.kind == Kind::PressPlainKey || command.kind == Kind::PlainKeyDown ||
 	    command.kind == Kind::PlainKeyRepeat || command.kind == Kind::PlainKeyUp ||
-	    command.kind == Kind::ChargeIconWithSeedHeld || command.kind == Kind::FinishBuilding ||
-	    command.kind == Kind::ScaffoldStartsSite || command.kind == Kind::DestroyScaffoldSite ||
-	    command.kind == Kind::FillBuiltAmount || command.kind == Kind::PauseGame || command.kind == Kind::SetGameSpeed ||
-	    command.kind == Kind::RemoveTeleportStone || command.kind == Kind::MakeDance || command.kind == Kind::OtherGodHand ||
-	    command.kind == Kind::OwnGod || command.kind == Kind::BringCreature || command.kind == Kind::ComputerPersonality ||
-	    command.kind == Kind::ComputerUntaughtSends)
+	    command.kind == Kind::ChargeIconWithSeedHeld || command.kind == Kind::TakeIconSeed ||
+	    command.kind == Kind::FinishBuilding || command.kind == Kind::ScaffoldStartsSite ||
+	    command.kind == Kind::DestroyScaffoldSite || command.kind == Kind::FillBuiltAmount || command.kind == Kind::PauseGame ||
+	    command.kind == Kind::SetGameSpeed || command.kind == Kind::RemoveTeleportStone || command.kind == Kind::MakeDance ||
+	    command.kind == Kind::OtherGodHand || command.kind == Kind::OwnGod || command.kind == Kind::BringCreature ||
+	    command.kind == Kind::ComputerPersonality || command.kind == Kind::ComputerUntaughtSends)
 	{
 		const auto result = GivePlayerCommand(command);
 		Log(fmt::format("{:.1f}s: {}{}{}", _seconds, Name(command.kind), result.empty() ? "" : ": ", result));
@@ -4251,6 +4299,7 @@ void Runner::Give(const Command& command)
 	case Kind::PlainKeyRepeat:
 	case Kind::PlainKeyUp:
 	case Kind::ChargeIconWithSeedHeld:
+	case Kind::TakeIconSeed:
 	case Kind::RemoveObject:
 	case Kind::FinishBuilding:
 	case Kind::FillBuiltAmount:

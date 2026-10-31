@@ -81,55 +81,77 @@ void testbed_scenarios::AddGestureScenarios(std::vector<Scenario>& all)
 	    .id = "miracles.gesture_power_up_storm",
 	    .name = "Power up a storm",
 	    .facet = Facet::Miracles,
-	    .description = "A storm seed is summoned from the player's worship into the hand (only such a seed can be powered "
-	                   "up) and its first power-up gesture, the inverse spiral, is drawn, then its second, the spiral.",
+	    .description = "The worship town of the player, with the storm, the extreme storm and the tornado. A tap puts the "
+	                   "storm from the icon of the worship site into the hand (only a seed from an icon can be powered "
+	                   "up), and its first power-up gesture, the inverse spiral, is drawn, then its second, the spiral.",
 	    .expected =
-	        "Each spiral is recognised as a power-up, level 0 then level 1, for the miracles to raise the seed "
-	        "to (the band and the announcer's voice). A circle drawn with the Action button held would size the storm instead.",
-	    .environment = {.dispenserGrid = false},
+	        "Each spiral is recognised as a power-up, level 0 then level 1, and the storm icon charges the seed to it "
+	        "(the band and the announcer's voice). A circle drawn with the Action button held would size the storm instead.",
+	    .environment = {.dispenserGrid = false, .landNumber = k_WorshipTownLand},
 	    .framing = {.shot = Shot::Testbed},
-	    .commands = {{.kind = Kind::SummonSeed,
+	    .objects = WorshipTown(),
+	    .temples = {{.offset = k_WorshipTemple}},
+	    .commands = {{.kind = Kind::BuildWorshipSites, .delaySeconds = 1.0f},
+	                 {.kind = Kind::TakeIconSeed,
 	                  .delaySeconds = k_DrawSeconds,
-	                  .value = static_cast<size_t>(SpellSeedType::Storm)},
+	                  .value = static_cast<size_t>(SpellSeedType::Storm),
+	                  .amount = 1.0f},
 	                 Draw(GestureType::InverseSpiral, 1.0f),
 	                 Draw(GestureType::Spiral)},
-	    .repeatFrom = 0,
+	    .repeatFrom = 1,
+	    .townBeliefInPlayer = k_WorshipTownBelief,
+	    .townMiracles = {MagicType::StormWindRain, MagicType::StormWindRainLightning, MagicType::Tornado},
 	});
 
 	all.push_back({
 	    .id = "interface.hint_power_up_rings",
 	    .name = "The seeds and rings over the hints of the power-ups",
 	    .facet = Facet::Interface,
-	    .description = "A storm seed is summoned from the player's worship into the hand, and the hand waits. Then the "
-	                   "hand draws the inverse spiral, the first power-up.",
+	    .description = "The worship town of the player, with the storm, the extreme storm and the tornado. A tap puts the "
+	                   "storm from the icon of the worship site into the hand, and the hand waits. Then the hand draws "
+	                   "the inverse spiral, the first power-up.",
 	    .expected = "While the seed is in the hand, the hints show the inverse spiral and the spiral. Over each, the "
 	                "storm's seed turns slowly with the effect of its holder, and rings in the player's colour turn "
 	                "round it: one ring over the inverse spiral, two over the spiral. After the inverse spiral, its hint "
 	                "goes, and the scribble shows the storm's seed without rings.",
-	    .environment = {.dispenserGrid = false},
+	    .environment = {.dispenserGrid = false, .landNumber = k_WorshipTownLand},
 	    .framing = {.shot = Shot::Testbed},
-	    .commands = {{.kind = Kind::SummonSeed,
+	    .objects = WorshipTown(),
+	    .temples = {{.offset = k_WorshipTemple}},
+	    .commands = {{.kind = Kind::BuildWorshipSites, .delaySeconds = 1.0f},
+	                 {.kind = Kind::TakeIconSeed,
 	                  .delaySeconds = k_DrawSeconds,
-	                  .value = static_cast<size_t>(SpellSeedType::Storm)},
+	                  .value = static_cast<size_t>(SpellSeedType::Storm),
+	                  .amount = 1.0f},
 	                 Draw(GestureType::InverseSpiral, 6.0f)},
+	    .townBeliefInPlayer = k_WorshipTownBelief,
+	    .townMiracles = {MagicType::StormWindRain, MagicType::StormWindRainLightning, MagicType::Tornado},
 	});
 
 	all.push_back({
 	    .id = "hand.tooltips_held_miracle",
 	    .name = "The name of the miracle in the hand",
 	    .facet = Facet::Hand,
-	    .description = "A storm seed comes from the player's worship into the hand. The hand draws the inverse spiral, "
-	                   "then the spiral.",
-	    .expected = "When the seed comes into the hand, the tooltip \"Storm Miracle\" shows at once. The inverse spiral "
-	                "gives \"Storm Miracle Increase\" and the spiral gives \"Storm Miracle Extreme\". Each name shows with "
-	                "no mouse button, before the other tooltips of the hand come back.",
-	    .environment = {.dispenserGrid = false},
+	    .description = "The worship town of the player, with the storm, the extreme storm and the tornado. A tap puts the "
+	                   "storm from the icon of the worship site into the hand. The hand draws the inverse spiral, then the "
+	                   "spiral.",
+	    .expected = "When the seed comes into the hand, the tooltip \"Storm Miracle\" shows at once. When the storm icon has "
+	                "charged the seed after the inverse spiral, \"Storm Miracle Increase\" shows, and after the spiral "
+	                "\"Storm Miracle Extreme\". Each name shows with no mouse button, before the other tooltips of the hand "
+	                "come back.",
+	    .environment = {.dispenserGrid = false, .landNumber = k_WorshipTownLand},
 	    .framing = {.shot = Shot::Testbed},
-	    .commands = {{.kind = Kind::SummonSeed,
+	    .objects = WorshipTown(),
+	    .temples = {{.offset = k_WorshipTemple}},
+	    .commands = {{.kind = Kind::BuildWorshipSites, .delaySeconds = 1.0f},
+	                 {.kind = Kind::TakeIconSeed,
 	                  .delaySeconds = k_DrawSeconds,
-	                  .value = static_cast<size_t>(SpellSeedType::Storm)},
+	                  .value = static_cast<size_t>(SpellSeedType::Storm),
+	                  .amount = 1.0f},
 	                 Draw(GestureType::InverseSpiral, 1.0f),
 	                 Draw(GestureType::Spiral)},
+	    .townBeliefInPlayer = k_WorshipTownBelief,
+	    .townMiracles = {MagicType::StormWindRain, MagicType::StormWindRainLightning, MagicType::Tornado},
 	});
 
 	all.push_back({
@@ -150,22 +172,29 @@ void testbed_scenarios::AddGestureScenarios(std::vector<Scenario>& all)
 	    .id = "statistics.help_gestures",
 	    .name = "The help record counts the gestures and the hand",
 	    .facet = Facet::Miracles,
-	    .description = "A storm seed comes from the player's worship into the hand. The hand draws the inverse spiral, "
-	                   "then a scribble, then a second scribble. Then pick up a thing with the hand and throw it. Read "
-	                   "the counts with the inspector (help.profile), or open the Tech Stats tab of the Game Statistics "
-	                   "box.",
-	    .expected = "The spiral powers the storm up and counts one power-up (event 18). The first scribble takes the "
-	                "seed back to its plain storm, keeps it in the hand and counts event 20. The second scribble drops "
+	    .description = "The worship town of the player, with the storm, the extreme storm and the tornado. A tap puts the "
+	                   "storm from the icon of the worship site into the hand. The hand draws the inverse spiral, then a "
+	                   "scribble, then a second scribble. Then pick up a thing with the hand and throw it. Read the counts "
+	                   "with the inspector (help.profile), or open the Tech Stats tab of the Game Statistics box.",
+	    .expected = "The spiral asks the storm icon for the power-up and counts one power-up (event 18). The first "
+	                "scribble calls the power-up off: the icon takes the seed back to its plain storm, the seed stays in "
+	                "the hand, and the scribble counts event 20. The second scribble drops "
 	                "the seed and counts event 22. Each gesture also counts in Gestures Done (event 24). Each pick-up "
 	                "counts one in Total Things Picked Up, and each throw or drop one in Total Objects Thrown.",
-	    .environment = {.dispenserGrid = false},
+	    .environment = {.dispenserGrid = false, .landNumber = k_WorshipTownLand},
 	    .framing = {.shot = Shot::Testbed},
-	    .commands = {{.kind = Kind::SummonSeed,
+	    .objects = WorshipTown(),
+	    .temples = {{.offset = k_WorshipTemple}},
+	    .commands = {{.kind = Kind::BuildWorshipSites, .delaySeconds = 1.0f},
+	                 {.kind = Kind::TakeIconSeed,
 	                  .delaySeconds = k_DrawSeconds,
-	                  .value = static_cast<size_t>(SpellSeedType::Storm)},
+	                  .value = static_cast<size_t>(SpellSeedType::Storm),
+	                  .amount = 1.0f},
 	                 Draw(GestureType::InverseSpiral, 1.0f),
 	                 Draw(GestureType::Scribble),
 	                 Draw(GestureType::Scribble)},
+	    .townBeliefInPlayer = k_WorshipTownBelief,
+	    .townMiracles = {MagicType::StormWindRain, MagicType::StormWindRainLightning, MagicType::Tornado},
 	});
 
 	all.push_back({
@@ -173,26 +202,36 @@ void testbed_scenarios::AddGestureScenarios(std::vector<Scenario>& all)
 	    .name = "The sounds of drawing gestures",
 	    .facet = Facet::Miracles,
 	    .description = "A shield seed is put in the hand and a circle is drawn round the middle of the screen with the "
-	                   "Action button held; then a storm seed is summoned from the player's worship, its two power-up "
-	                   "gestures are drawn (the inverse spiral, then the spiral) and a scribble shakes it off. The "
-	                   "failure on letting go of a storm with no circle is in miracles.hand_circle_casts, the leash "
+	                   "Action button held; then a tap puts the storm from the icon of the worship site of the player's "
+	                   "worship town into the hand, its two power-up gestures are drawn (the inverse spiral, then the "
+	                   "spiral) and a scribble calls the power-up off. The failure on letting go of a storm with no circle is "
+	                   "in miracles.hand_circle_casts, the leash "
 	                   "gesture's in leash.gesture_picker.",
 	    .expected = "While the circle is drawn with the Action button held, the hand hums (the gesture loop, heard from "
 	                "the hand) until it lets go and the shield is cast. Each recognised gesture but the scribble "
 	                "plays the recognition chime, heard without position, as its trail appears. Each power-up adds "
 	                "the band's sound and the announcer's power-up voice (first, then second). The scribble has no "
-	                "chime: the hand shakes the storm off with the shake sound. Drawing without the Action button "
-	                "makes no sound of its own.",
-	    .environment = {.dispenserGrid = false},
+	                "chime: the hand shakes with the shake sound. Drawing without the Action button makes no sound of "
+	                "its own.",
+	    .environment = {.dispenserGrid = false, .landNumber = k_WorshipTownLand},
 	    .framing = {.shot = Shot::Testbed},
-	    .commands = {AfterDrawing(HoldSeed(SpellSeedType::Shield, 1.0f)), Draw(GestureType::Circle, 1.0f),
-	                 AfterDrawing({.kind = Kind::SummonSeed,
+	    .objects = WorshipTown(),
+	    .temples = {{.offset = k_WorshipTemple}},
+	    .commands = {{.kind = Kind::BuildWorshipSites, .delaySeconds = 1.0f},
+	                 AfterDrawing(HoldSeed(SpellSeedType::Shield, 1.0f)),
+	                 Draw(GestureType::Circle, 1.0f),
+	                 AfterDrawing({.kind = Kind::TakeIconSeed,
 	                               .delaySeconds = k_DrawSeconds,
-	                               .value = static_cast<size_t>(SpellSeedType::Storm)}),
-	                 Draw(GestureType::InverseSpiral, 1.0f), Draw(GestureType::Spiral), Draw(GestureType::Scribble)},
-	    .repeatFrom = 0,
+	                               .value = static_cast<size_t>(SpellSeedType::Storm),
+	                               .amount = 1.0f}),
+	                 Draw(GestureType::InverseSpiral, 1.0f),
+	                 Draw(GestureType::Spiral),
+	                 Draw(GestureType::Scribble)},
+	    .repeatFrom = 1,
 	    // The hand held over the middle of the land, inside the player's influence, where the circle is drawn
 	    .hand = HandHold {.offset = {0.0f, 0.0f}, .height = 6.0f},
+	    .townBeliefInPlayer = k_WorshipTownBelief,
+	    .townMiracles = {MagicType::StormWindRain, MagicType::StormWindRainLightning, MagicType::Tornado},
 	});
 
 	all.push_back({

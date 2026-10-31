@@ -236,7 +236,8 @@ entt::entity CreatureMindSystem::FeedSiteAltar(entt::entity flag)
 
 void CreatureMindSystem::FeedWorshipSite(entt::entity creature, CreatureMindState& mind)
 {
-	const auto altar = FeedSiteAltar(std::exchange(mind.feedSiteFlag, entt::null));
+	const auto flag = std::exchange(mind.feedSiteFlag, entt::null);
+	const auto altar = FeedSiteAltar(flag);
 	if (altar == entt::null)
 	{
 		return;
@@ -250,8 +251,8 @@ void CreatureMindSystem::FeedWorshipSite(entt::entity creature, CreatureMindStat
 	}
 	SPDLOG_LOGGER_DEBUG(spdlog::get("game"), "Creature {} feeds the worship site of altar {} for the leash: {}",
 	                    entt::to_integral(creature), entt::to_integral(altar), *action);
-	// The plan is about the place of the flag, which is the place of the altar of its site
-	static_cast<void>(ForcePlan(creature, {.desire = Desire::ObeyPlayer, .action = *action, .object = altar, .ordered = true}));
+	// The plan is about the flag, which stands at the place of the altar of its site
+	static_cast<void>(ForcePlan(creature, {.desire = Desire::ObeyPlayer, .action = *action, .object = flag, .ordered = true}));
 }
 
 void CreatureMindSystem::ReactToNiceMagic(entt::entity creature, const glm::vec3& point, std::optional<size_t> learn)

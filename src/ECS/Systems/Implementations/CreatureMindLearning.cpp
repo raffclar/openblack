@@ -286,16 +286,8 @@ float ReactionPriorityOf(const ecs::Registry& registry, entt::entity creature)
 
 std::optional<glm::vec2> PointOf(const ecs::Registry& registry, entt::entity entity)
 {
-	if (!registry.Valid(entity))
-	{
-		return std::nullopt;
-	}
-	const auto* transform = registry.TryGet<const Transform>(entity);
-	if (transform == nullptr)
-	{
-		return std::nullopt;
-	}
-	return glm::vec2(transform->position.x, transform->position.z);
+	const auto position = object_measures::PositionOf(registry, entity);
+	return position.has_value() ? std::optional(glm::vec2(position->x, position->z)) : std::nullopt;
 }
 
 uint32_t PlayerNumberOf(PlayerNames owner)

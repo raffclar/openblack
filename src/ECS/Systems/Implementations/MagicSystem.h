@@ -383,7 +383,9 @@ private:
 	void UnlockHeldMiracle();
 	/// The gesture events since the last frame: the circle remembered, a power-up, the seed dropped
 	void TakeGestures();
-	void PowerUpHeldSeed(int level);
+	/// A power-up gesture on the seed in the hand: the icon of the seed charges it to the level. Level -1 calls the
+	/// power-up off.
+	void AskPowerUpOfHeldSeed(int level);
 	void ShowHeldSeedPowerUp(int level, int previous);
 	/// Keep the tooltip text of the held seed's miracle at its power-up level, for the hand to show next
 	void AnnounceHeldMiracle(const components::SpellSeed& seed);
