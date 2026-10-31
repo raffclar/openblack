@@ -56,8 +56,6 @@ constexpr size_t k_MainRoom = 3;
 	        .distance = 0.6f};
 }
 
-/// The second land, the first land with worship sites in a normal game
-constexpr int32_t k_SecondLand = 2;
 /// The object type and the seed with which a script puts a one-shot heal miracle into the hand
 constexpr float k_OneShotSpellInHand = 31.0f;
 constexpr float k_HealSeed = static_cast<float>(SpellSeedType::Heal);
