@@ -129,7 +129,7 @@ struct Storm
 	/// Its last flash
 	lightning::Flash flash;
 	/// A storm forced over the whole island strikes around the camera, where its thunder can be heard, rather than at its
-	/// middle
+	/// middle. In a network game it strikes at its middle.
 	bool strikesNearCamera {false};
 
 	/// Creation order: later storms are applied on top of earlier ones

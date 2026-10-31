@@ -58,6 +58,9 @@ public:
 	/// At the end of each game turn: a creature with no skeleton for its shape gets one, and a creature with no pose yet
 	/// takes its first pose
 	virtual void ShapeBodies() {}
+	/// Before the turn of the living: the system makes the blends of the first pose and the first plan of each creature
+	/// with no pose yet, so that the creature's own turn finds them. It changes nothing in the world.
+	virtual void PrepareFirstPoses() {}
 	/// A creature in the world takes its pose for this game turn now, at the end of its turn: its animations move on by
 	/// one turn, at the place and heading where its turn took it. A creature that has its pose for this turn keeps it.
 	virtual void PoseTurn(entt::entity creature) = 0;

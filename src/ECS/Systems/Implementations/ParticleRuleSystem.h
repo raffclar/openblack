@@ -276,6 +276,10 @@ private:
 class ParticleRuleSystem final: public ParticleRuleSystemInterface
 {
 public:
+	/// The first number of an effect of this computer only. The synced effects take the numbers below it, and the
+	/// simulation's numbers start above it, so the three sets of numbers never meet.
+	static constexpr EffectId k_FirstLocalEffect = 0x4000'0001u;
+
 	ParticleRuleSystem();
 	~ParticleRuleSystem() override;
 	ParticleRuleSystem(const ParticleRuleSystem&) = delete;
@@ -506,7 +510,11 @@ private:
 	particles::maths::ValueNoise _noise;
 	/// Newest first, as they are stepped and drawn
 	std::deque<Running> _effects;
+	/// The number of the next synced effect. Only the synced effects take these numbers, so each computer of a network game
+	/// gives the same numbers to the same effects.
 	EffectId _nextId {1};
+	/// The number of the next effect of this computer only. These numbers start at k_FirstLocalEffect.
+	EffectId _nextLocalId {k_FirstLocalEffect};
 	/// The record of the simulation that hears of each start and end of an effect
 	EffectLifeListener* _lifeListener {nullptr};
 	/// The number that the simulation gave the next effect to start, none when the particles give their own

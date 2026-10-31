@@ -36,6 +36,7 @@
 #include "ECS/Systems/SkyClockSystemInterface.h"
 #include "ECS/Systems/SnowSystemInterface.h"
 #include "ECS/Systems/SoundTagSystemInterface.h"
+#include "ECS/Systems/TimeSystemInterface.h"
 #include "InfoConstants.h"
 #include "Locator.h"
 
@@ -289,7 +290,15 @@ void WeatherSystem::SaveState(reflection::BinaryWriter& out) const
 	reflection::Save(out, _turn);
 	reflection::Save(out, _day);
 	reflection::Save(out, _season);
-	reflection::Save(out, _activeStorms);
+	// The live storms are copies of the storms of the registry. No reader of these copies uses the last flash. A storm
+	// that strikes round the camera puts its flash near the camera of this computer. Thus the save keeps the copies
+	// without their flashes, and the copies are the same on each computer.
+	auto storms = _activeStorms;
+	for (auto& storm : storms)
+	{
+		storm.flash = {};
+	}
+	reflection::Save(out, storms);
 	reflection::Save(out, _nextStormSerial);
 	reflection::Save(out, _forcedStorm);
 }
@@ -723,7 +732,9 @@ void WeatherSystem::UpdateStorms()
 		{
 			auto& random = Locator::gameRandom::value();
 			auto strikeAt = storm.position;
-			if (storm.strikesNearCamera && Locator::camera::has_value())
+			// Each computer of a network game has its own camera, so there the storm strikes at its middle on each computer
+			const bool networkGame = Locator::time::has_value() && Locator::time::value().IsNetworkGame();
+			if (storm.strikesNearCamera && !networkGame && Locator::camera::has_value())
 			{
 				const auto camera = Locator::camera::value().GetOrigin();
 				auto& local = Locator::rng::value();

@@ -1147,8 +1147,15 @@ bool SaveGameSystem::Load(uint32_t slot)
 	const auto bytes = ReadFile(slotFolder / gamesave::WorldFileName(slot));
 	if (!bytes.has_value())
 	{
+		if (!vanillaBytes.has_value())
+		{
+			// The previous land and the next land load from the folder of another land, so the log gives the folder
+			SPDLOG_LOGGER_WARN(Log(), "Slot {} has no world file in {}", slot,
+			                   gamesave::LoadSlotFolder(slot, land).generic_string());
+			return false;
+		}
 		// A slot of the game itself: its world file in the game's layout
-		const bool loaded = vanillaBytes.has_value() && LoadVanilla(slot, slotFolder, mindFolder, *vanillaBytes);
+		const bool loaded = LoadVanilla(slot, slotFolder, mindFolder, *vanillaBytes);
 		if (loaded)
 		{
 			ShowChallengePictures(copiedPictures);
