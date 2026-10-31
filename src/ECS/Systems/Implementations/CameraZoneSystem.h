@@ -34,6 +34,7 @@ public:
 
 	bool SetZones(std::string_view fileName) override;
 	void Reset() override;
+	void ClearZones() override;
 	[[nodiscard]] const camera_zones::Zones& GetZones() const override { return _zones; }
 	[[nodiscard]] const std::string& GetFileName() const override { return _fileName; }
 	/// A save keeps the zones as the scripts last set them: the fence, the height limits, the places the camera is kept

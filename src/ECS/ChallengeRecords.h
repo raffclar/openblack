@@ -56,6 +56,10 @@ struct Outcome
 Outcome Record(Registry& registry, const script::challenge_snapshots::Snapshot& snapshot,
                script::challenge_snapshots::Call call, uint32_t turn, const References& references);
 
+/// Every record goes, as when the scripts start again: the things that the records held as arguments are no longer
+/// kept alive by them
+void Clear(Registry& registry, const References& references);
+
 /// The record of a challenge, none before it has started
 [[nodiscard]] std::optional<entt::entity> Find(const Registry& registry, uint32_t challenge);
 
