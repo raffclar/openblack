@@ -144,14 +144,18 @@ float object_measures::TwoDRadius(const Registry& registry, entt::entity entity)
 	{
 		return creature_obstacles::k_TeleportStoneWidth;
 	}
-	// A town centre's totem is as wide as the icon on its plinth
+	const auto half = HalfExtentsOf(registry, MeasuredPart(registry, entity));
+	return half.has_value() ? std::max(half->x, half->z) : 0.0f;
+}
+
+entt::entity object_measures::MeasuredPart(const Registry& registry, entt::entity entity)
+{
+	// A town centre's totem is as wide and as high as the icon on its plinth. The icon has the scale of the totem.
 	if (const auto* totem = registry.TryGet<const VillageTotem>(entity); totem != nullptr && registry.Valid(totem->icon))
 	{
-		const auto icon = HalfExtentsOf(registry, totem->icon);
-		return icon.has_value() ? std::max(icon->x, icon->z) : 0.0f;
+		return totem->icon;
 	}
-	const auto half = HalfExtentsOf(registry, entity);
-	return half.has_value() ? std::max(half->x, half->z) : 0.0f;
+	return entity;
 }
 
 float object_measures::DistanceFromObject(const Registry& registry, entt::entity entity, entt::entity other)
@@ -179,7 +183,7 @@ float object_measures::Height(const Registry& registry, entt::entity entity)
 	{
 		return cast_moves::k_HeightOfSizeOne * ShownSize(*creature);
 	}
-	const auto half = HalfExtentsOf(registry, entity);
+	const auto half = HalfExtentsOf(registry, MeasuredPart(registry, entity));
 	return half.has_value() ? 2.0f * half->y : 0.0f;
 }
 

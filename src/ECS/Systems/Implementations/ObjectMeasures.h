@@ -25,6 +25,9 @@ class Registry;
 namespace openblack::ecs::systems::object_measures
 {
 
+/// The part of a thing whose model gives its radius on the ground and its height. A town centre's totem measures as the
+/// icon on its plinth; every other thing measures as itself.
+[[nodiscard]] entt::entity MeasuredPart(const Registry& registry, entt::entity entity);
 /// A thing's radius on the ground, 0 for one without a model. Fields and teleport stones have fixed radii.
 [[nodiscard]] float TwoDRadius(const Registry& registry, entt::entity entity);
 /// The radius that a creature keeps clear of things by on its walks. In a temple's pen it is the radius of the creature's
