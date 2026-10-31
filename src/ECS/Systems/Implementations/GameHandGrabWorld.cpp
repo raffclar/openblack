@@ -1511,6 +1511,7 @@ uint32_t GameHandGrabWorld::AddToStore(entt::entity store, ResourceType resource
 	if (added != 0)
 	{
 		stores.ReportGift(store, resource, HandPlayer());
+		stores.AnswerDrop(store, HandPlayer());
 	}
 	return added;
 }

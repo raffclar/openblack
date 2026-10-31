@@ -820,6 +820,19 @@ uint32_t ResourceStoreSystem::TakeFromPile(entt::entity pile, ResourceType type,
 	return taken;
 }
 
+void ResourceStoreSystem::AnswerDrop(entt::entity store, PlayerNames giver)
+{
+	auto& registry = Entities();
+	const auto* pot = registry.Valid(store) ? registry.TryGet<const Pot>(store) : nullptr;
+	const auto* transform = registry.Valid(store) ? registry.TryGet<const Transform>(store) : nullptr;
+	const auto gift = guidance::DropGift(pot != nullptr ? std::optional(PotInfoOf(pot->type).resourceType) : std::nullopt);
+	if (!gift.has_value() || transform == nullptr || !Locator::guidanceSystem::has_value())
+	{
+		return;
+	}
+	Locator::guidanceSystem::value().ResourceDropped(giver, transform->position, *gift);
+}
+
 void ResourceStoreSystem::ReportGift(entt::entity store, ResourceType type, PlayerNames giver)
 {
 	auto& registry = Entities();
@@ -895,7 +908,11 @@ bool ResourceStoreSystem::TakeObjectAs(entt::entity store, entt::entity object, 
 	{
 		ReportGift(store, resource.type, *giver);
 	}
-	// TODO(stores): the advisor's resource-drop sound for the local player; openblack has no advisor yet
+	// The town near a pile that takes the drop can answer the gift to the player here
+	if (added != 0 && giver.has_value())
+	{
+		AnswerDrop(store, *giver);
+	}
 	// Wood that isn't a pot mulches as it goes in
 	if (resource.type == ResourceType::Wood && !registry.AllOf<Pot>(object))
 	{
