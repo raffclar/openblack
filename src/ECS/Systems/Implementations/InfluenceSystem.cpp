@@ -53,6 +53,7 @@
 #include "ECS/Systems/HandSystemInterface.h"
 #include "ECS/Systems/LandSystemInterface.h"
 #include "ECS/Systems/PlayerSystemInterface.h"
+#include "ECS/Systems/PlaygroundTripSystemInterface.h"
 #include "ECS/Systems/SoundTagSystemInterface.h"
 #include "ECS/Systems/TimeSystemInterface.h"
 #include "InfoConstants.h"
@@ -782,6 +783,12 @@ bool InfluenceSystem::CrossBorders(const glm::vec3& hand)
 	return crossed;
 }
 
+bool InfluenceSystem::InfluenceEverywhere()
+{
+	// On the trip to the Gods' Playground, every player's influence covers the whole land, under a shield too
+	return Locator::playgroundTripSystem::has_value() && Locator::playgroundTripSystem::value().InfluenceEverywhere();
+}
+
 float InfluenceSystem::PlayerInfluence(PlayerNames player, const map_coords::MapCoords& position) const
 {
 	return WithAllies(player, position, PlayerOwnInfluence(player, position));
@@ -825,6 +832,10 @@ float InfluenceSystem::WithAllies(PlayerNames player, const map_coords::MapCoord
 
 float InfluenceSystem::PlayerOwnInfluence(PlayerNames player, const map_coords::MapCoords& position) const
 {
+	if (InfluenceEverywhere())
+	{
+		return 1.0f;
+	}
 	if (const auto* state = VirtualStateOf(player); state != nullptr)
 	{
 		// The questions of a game turn measure from where the hand was at the turn; between turns this computer's
@@ -851,6 +862,10 @@ float InfluenceSystem::PlayerOwnInfluence(PlayerNames player, const map_coords::
 
 float InfluenceSystem::HandPointInfluence(PlayerNames player, const map_coords::MapCoords& hand) const
 {
+	if (InfluenceEverywhere())
+	{
+		return 1.0f;
+	}
 	// The place asked is the hand's own, so the hand is inside while it keeps anything
 	if (const auto* state = VirtualStateOf(player); state != nullptr && !Shielded(player, hand))
 	{

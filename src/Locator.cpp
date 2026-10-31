@@ -105,6 +105,7 @@
 #include "ECS/Systems/Implementations/NetworkGameSystem.h"
 #include "ECS/Systems/Implementations/ObjectDrawListSystem.h"
 #include "ECS/Systems/Implementations/PlayerCommandSystem.h"
+#include "ECS/Systems/Implementations/PlaygroundTripSystem.h"
 #include "ECS/Systems/Implementations/RealWeatherSystem.h"
 #include "ECS/Systems/Implementations/SaveGameSystem.h"
 #include "ECS/Systems/Implementations/ScriptHighlightSystem.h"
@@ -311,6 +312,7 @@ using openblack::ecs::systems::PickingSystem;
 using openblack::ecs::systems::PlayerCommandSystem;
 using openblack::ecs::systems::PlayerProfileSystem;
 using openblack::ecs::systems::PlayerSystem;
+using openblack::ecs::systems::PlaygroundTripSystem;
 using openblack::ecs::systems::ProfileFolderSystem;
 using openblack::ecs::systems::PuzzleGameSystem;
 using openblack::ecs::systems::RainSystem;
@@ -638,6 +640,7 @@ bool openblack::InitializeSimulation(const player_profiles::Store& profiles) noe
 	Locator::alignmentSystem::emplace<AlignmentSystem>();
 	Locator::cameraHelpSystem::emplace<CameraHelpSystem>();
 	Locator::tutorialSkipSystem::emplace<TutorialSkipSystem>();
+	Locator::playgroundTripSystem::emplace<PlaygroundTripSystem>();
 	Locator::playerProfileSystem::emplace<PlayerProfileSystem>(profiles);
 	Locator::profileFolderSystem::emplace<ProfileFolderSystem>(Locator::filesystem::value(), profiles.folder);
 	Locator::musicMoodSystem::emplace<MusicMoodSystem>();
@@ -1037,6 +1040,7 @@ void openblack::ShutDownServices()
 	Locator::mistSystem::reset();
 	Locator::villageLightSystem::reset();
 	Locator::tutorialSkipSystem::reset();
+	Locator::playgroundTripSystem::reset();
 	Locator::templeExteriorSystem::reset();
 	Locator::temple::reset();
 	Locator::vegetation::reset();

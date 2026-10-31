@@ -1665,6 +1665,12 @@
   "query": "players.new_game"
  },
  {
+  "description": "The trip to the Gods' Playground: whether every player's influence covers the whole land, and whether a lesson runs",
+  "kind": "object",
+  "parameters": [],
+  "query": "players.playground_trip"
+ },
+ {
   "description": "The profile folder, the folder of the player played in it, and whether that folder holds the help record (helpstats.dat)",
   "kind": "object",
   "parameters": [],

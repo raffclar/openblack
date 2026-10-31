@@ -755,8 +755,13 @@ bool Game::RenderLoadingFrame(bool drawNow, const std::function<void()>& drawUnd
 	{
 		return false;
 	}
-	auto& clock = _loadingScreen->GetClock();
 	const auto look = *_loadingLook;
+	// A load that shows nothing keeps the last frame of the game on the screen
+	if (look == loading::LoadingClock::Mode::None)
+	{
+		return false;
+	}
+	auto& clock = _loadingScreen->GetClock();
 	if (!clock.Tick(Milliseconds(), look) && !drawNow)
 	{
 		return false;

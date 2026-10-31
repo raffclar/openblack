@@ -63,6 +63,7 @@
 #include "Simulation/TurnBody.h"
 #include "Simulation/WorldStart.h"
 #include "Story/NewGameChoice.h"
+#include "Story/PlaygroundTrip.h"
 #include "Visual/UploadPacer.h"
 #include "Windowing/SizeFollower.h"
 #include "Windowing/WindowingInterface.h" // For DisplayMode
@@ -949,6 +950,10 @@ private:
 	/// Escape in play with no dialog open: the menu opens, unless a script's cut scene is on, and a help script holding
 	/// the dialogue stops
 	void HandleEscapeInPlay(uint16_t keyModifiers);
+	/// F2 in play asks whether the player wants to go to the Gods' Playground, when the game may ask it
+	void HandleTripKey();
+	/// Once a frame: the answer to a question of the trip to the Gods' Playground, and what the answer starts
+	void FollowPlaygroundTrip();
 	/// Once a frame outside the temple: where the hand's tooltip is drawn, and the status panel of the creature the hand
 	/// is held to, or over
 	void UpdateHandInterface();
@@ -1041,5 +1046,7 @@ private:
 	std::optional<std::u16string> _profileAfterSave;
 	/// When the menu last closed, on the computer's clock
 	std::optional<std::chrono::steady_clock::time_point> _menuClosedAt;
+	/// The question of the trip to the Gods' Playground that is on the screen
+	std::optional<playground_trip::Question> _tripQuestion;
 };
 } // namespace openblack

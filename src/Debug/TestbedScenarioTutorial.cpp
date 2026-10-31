@@ -8,9 +8,12 @@
  *******************************************************************************/
 
 // The testbed's scenarios of the tutorial's lessons: the help texts of a lesson stacking up in the dialogue box, and a
-// hand demonstration's click landing on the thing of its kind nearest where it was recorded, a wood pile or a totem
+// hand demonstration's click landing on the thing of its kind nearest where it was recorded, a wood pile or a totem, and
+// the trip to the Gods' Playground
 
 #include <vector>
+
+#include <SDL_scancode.h>
 
 #include "3D/FlatLand.h"
 #include "TestbedScenarioRegistry.h"
@@ -102,5 +105,22 @@ void testbed_scenarios::AddTutorialScenarios(std::vector<Scenario>& all)
 	    .commands = {{.kind = Kind::PlayHandDemo, .delaySeconds = 1.0f, .handDemo = "totem"}},
 	    .townBeliefInPlayer = k_TotemTownBelief,
 	    .worshipShare = 0.0f,
+	});
+
+	all.push_back({
+	    .id = "tutorial.playground_trip",
+	    .name = "F2 and the trip to the Gods' Playground",
+	    .facet = Facet::Tutorial,
+	    .description = "After a second the scenario presses F2 on the keyboard, as the player does. Click Yes to go to the "
+	                   "Gods' Playground, or No to stay.",
+	    .expected = "The game pauses, and a white box of 500 by 200 asks \"Are you sure you want to go to the Gods' "
+	                "Playground?\" with a Yes arrow and a No arrow. No closes the box and the game continues. Yes saves "
+	                "the game into the slot of the save on exit, and the Playground's land loads with no loading screen: "
+	                "the last frame of the testbed stays until the land shows. The Island Keeper starts the first lesson, "
+	                "and every player's influence covers the whole land. Escape ends the lesson and the scrolls show. The "
+	                "next Escape asks \"Are you sure you want to leave the Gods' Playground?\". Yes loads the saved game.",
+	    .environment = {.dispenserGrid = false},
+	    .framing = {.shot = Shot::Testbed},
+	    .commands = {{.kind = Kind::PressPlainKey, .delaySeconds = 1.0f, .value = static_cast<size_t>(SDL_SCANCODE_F2)}},
 	});
 }
