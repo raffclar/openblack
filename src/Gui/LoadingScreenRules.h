@@ -156,6 +156,8 @@ public:
 		Tips,
 		/// The "please wait" banner, for a script loading a map
 		PleaseWait,
+		/// Nothing: the last frame of the game stays on the screen, as on the trip to the Gods' Playground
+		None,
 	};
 
 	/// Back to no time at all, as a new game's setting up and a script's map do

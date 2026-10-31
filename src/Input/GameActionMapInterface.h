@@ -241,6 +241,8 @@ public:
 	/// A key goes down, a repeat of a held key too: whether a box on the screen takes the keyboard now. The answer
 	/// stays until the next key goes down. While a box has the keyboard, every action reads as not held
 	virtual void BoxKeyDown([[maybe_unused]] bool boxWantsKeys) {}
+	/// The player answers a message box of the game, which gives the keyboard back at once
+	virtual void BoxAnswered() {}
 	/// Whether a box has the keyboard, as the last key that went down found it
 	[[nodiscard]] virtual bool BoxHasKeyboard() const { return false; }
 	/// Whether the camera the player has can be turned with the mouse, which holds the cursor still while it is

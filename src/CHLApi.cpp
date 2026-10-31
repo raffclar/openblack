@@ -233,6 +233,7 @@
 #include "ECS/Systems/ParticleRuleSystemInterface.h"
 #include "ECS/Systems/PlayerProfileSystemInterface.h"
 #include "ECS/Systems/PlayerSystemInterface.h"
+#include "ECS/Systems/PlaygroundTripSystemInterface.h"
 #include "ECS/Systems/PuzzleGameSystemInterface.h"
 #include "ECS/Systems/ReactionSystemInterface.h"
 #include "ECS/Systems/ResourceStoreSystemInterface.h"
@@ -308,6 +309,7 @@
 #include "ScriptHeaders/ScriptRealTime.h"
 #include "ScriptHeaders/ScriptStart.h"
 #include "ScriptHeaders/ScriptSwitchChanges.h"
+#include "Story/PlaygroundTrip.h"
 #include "Temple/TempleEntrancePoint.h"
 #include "Visual/RendererRequestsInterface.h"
 #include "Windowing/WindowingInterface.h"
@@ -1087,6 +1089,23 @@ void CHLApi::StopHelpScriptsByEscape()
 	{
 		Locator::helpTextSystem::value().InterruptAdvisorsByEscape();
 	}
+}
+
+bool CHLApi::ApplyInterfaceLevel(int32_t level)
+{
+	// What the camera lets the player do at this level of the interface, as the tutorials step through them
+	if (!Locator::cameraHelpSystem::value().Get().SetInterfaceLevel(level))
+	{
+		return false;
+	}
+	// The level also limits what the Action button of the player's hand can do
+	if (Locator::playerSystem::has_value())
+	{
+		script::interface_levels::Apply(Locator::entitiesRegistry::value(),
+		                                Locator::playerSystem::value().FindPlayer(PlayerNames::PLAYER_ONE).value_or(entt::null),
+		                                level);
+	}
+	return true;
 }
 
 bool CHLApi::StartHelpScript(std::string_view name)
@@ -4139,18 +4158,9 @@ void GetInfluence() // 062 GET_INFLUENCE
 void SetInterfaceInteraction() // 063 SET_INTERFACE_INTERACTION
 {
 	const auto level = Pop().intVal;
-	// What the camera lets the player do at this level of the interface, as the tutorials step through them
-	if (!Locator::cameraHelpSystem::value().Get().SetInterfaceLevel(level))
+	if (!CHLApi::ApplyInterfaceLevel(level))
 	{
 		SPDLOG_LOGGER_ERROR(spdlog::get("scripting"), "Unexpected interaction : {}", level);
-		return;
-	}
-	// The level also limits what the Action button of the player's hand can do
-	if (Locator::playerSystem::has_value())
-	{
-		script::interface_levels::Apply(Locator::entitiesRegistry::value(),
-		                                Locator::playerSystem::value().FindPlayer(PlayerNames::PLAYER_ONE).value_or(entt::null),
-		                                level);
 	}
 }
 
@@ -6622,6 +6632,15 @@ void DevFunction() // 205 DEV_FUNCTION
 		if (Locator::temple::has_value())
 		{
 			Locator::temple::value().EnterLockedRoom(TempleRoom::SaveGame);
+		}
+		return;
+	}
+	// Each lesson of the Gods' Playground tells the game that it runs, so that Escape ends it
+	if (func == playground_trip::k_LessonStartsFunction)
+	{
+		if (Locator::playgroundTripSystem::has_value())
+		{
+			Locator::playgroundTripSystem::value().StartLesson();
 		}
 		return;
 	}

@@ -93,6 +93,7 @@
 #include "ECS/Systems/ParticleRuleSystemInterface.h"
 #include "ECS/Systems/PathfindingSystemInterface.h"
 #include "ECS/Systems/PlayerCommandSystemInterface.h"
+#include "ECS/Systems/PlaygroundTripSystemInterface.h"
 #include "ECS/Systems/PuzzleGameSystemInterface.h"
 #include "ECS/Systems/ReactionSystemInterface.h"
 #include "ECS/Systems/RealWeatherSystemInterface.h"
@@ -994,6 +995,12 @@ void PlayTurnStep(game_turn::Step step, TurnViewInterface& view)
 		if (Locator::musicMoodSystem::has_value())
 		{
 			Locator::musicMoodSystem::value().UpdateOnGameTurn(false);
+		}
+		break;
+	case Step::PlaygroundLesson:
+		if (Locator::playgroundTripSystem::has_value())
+		{
+			Locator::playgroundTripSystem::value().EndTurn();
 		}
 		break;
 	case Step::SoundTags:

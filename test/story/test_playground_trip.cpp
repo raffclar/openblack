@@ -1,0 +1,101 @@
+/******************************************************************************
+ * Copyright (c) 2018-2026 openblack developers
+ *
+ * For a complete list of all authors, please refer to contributors.md
+ * Interested in contributing? Visit https://github.com/openblack/openblack
+ *
+ * openblack is licensed under the GNU General Public License version 3.
+ *******************************************************************************/
+
+#include <gtest/gtest.h>
+
+#include "Gui/EscapeKeyRules.h"
+#include "Story/PlaygroundTrip.h"
+
+using namespace openblack::playground_trip;
+
+TEST(PlaygroundTrip, F2AsksOnAStoryLand)
+{
+	EXPECT_TRUE(MayAskToGo({.land = 1}));
+	EXPECT_TRUE(MayAskToGo({.land = 5}));
+}
+
+TEST(PlaygroundTrip, F2DoesNothingInASkirmish)
+{
+	EXPECT_FALSE(MayAskToGo({.skirmish = true, .land = 1}));
+}
+
+TEST(PlaygroundTrip, F2DoesNothingInANetworkGame)
+{
+	EXPECT_FALSE(MayAskToGo({.networkGame = true, .land = 1}));
+}
+
+TEST(PlaygroundTrip, F2DoesNothingInTheTemple)
+{
+	EXPECT_FALSE(MayAskToGo({.inTemple = true, .land = 1}));
+}
+
+TEST(PlaygroundTrip, F2DoesNothingOnThePlayground)
+{
+	EXPECT_FALSE(MayAskToGo({.land = k_PlaygroundLand}));
+}
+
+TEST(PlaygroundTrip, F2DoesNothingWhileABoxIsUp)
+{
+	EXPECT_FALSE(MayAskToGo({.land = 1, .boxUp = true}));
+}
+
+TEST(PlaygroundTrip, F2DoesNothingInAScriptsCutScene)
+{
+	EXPECT_FALSE(MayAskToGo({.land = 1, .scriptHoldsCinemaBars = true}));
+}
+
+TEST(PlaygroundTrip, ThePlaygroundIsTheLandOfEscape)
+{
+	EXPECT_EQ(k_PlaygroundLand, openblack::escape_key::k_GodsPlaygroundLand);
+}
+
+TEST(PlaygroundTrip, NoLessonRunsAtFirst)
+{
+	Lessons lessons;
+	EXPECT_FALSE(lessons.running);
+	EXPECT_FALSE(AskEnd(lessons));
+	EXPECT_FALSE(lessons.endAsked);
+	EXPECT_FALSE(TakeEnd(lessons));
+}
+
+TEST(PlaygroundTrip, EscapeEndsTheLessonAtTheEndOfTheTurn)
+{
+	Lessons lessons;
+	StartLesson(lessons);
+	EXPECT_TRUE(lessons.running);
+	EXPECT_TRUE(AskEnd(lessons));
+	// The lesson runs until the end of the turn
+	EXPECT_TRUE(lessons.running);
+	EXPECT_TRUE(TakeEnd(lessons));
+	EXPECT_FALSE(lessons.running);
+	EXPECT_FALSE(lessons.endAsked);
+	// The end comes once
+	EXPECT_FALSE(TakeEnd(lessons));
+}
+
+TEST(PlaygroundTrip, TheNextLessonRunsAgain)
+{
+	Lessons lessons;
+	StartLesson(lessons);
+	ASSERT_TRUE(AskEnd(lessons));
+	ASSERT_TRUE(TakeEnd(lessons));
+	StartLesson(lessons);
+	EXPECT_TRUE(lessons.running);
+	EXPECT_FALSE(lessons.endAsked);
+}
+
+TEST(PlaygroundTrip, LeavingStopsTheLessonAndItsEnd)
+{
+	Lessons lessons;
+	StartLesson(lessons);
+	ASSERT_TRUE(AskEnd(lessons));
+	Leave(lessons);
+	EXPECT_FALSE(lessons.running);
+	EXPECT_FALSE(TakeEnd(lessons));
+}

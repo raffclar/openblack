@@ -200,6 +200,7 @@ class PathfindingSystemInterface;
 class AlignmentSystemInterface;
 class CameraHelpSystemInterface;
 class TutorialSkipSystemInterface;
+class PlaygroundTripSystemInterface;
 class PlayerProfileSystemInterface;
 class ProfileFolderSystemInterface;
 class MusicMoodSystemInterface;
@@ -372,6 +373,8 @@ struct Locator
 	/// The advisors' cheers as this computer's camera turns. The dedicated server does not make them.
 	using turnCheerSystem = entt::locator<ecs::systems::TurnCheerSystemInterface>;
 	using tutorialSkipSystem = entt::locator<ecs::systems::TutorialSkipSystemInterface>;
+	/// The trip to the Gods' Playground and back, and whether a lesson of the Playground runs
+	using playgroundTripSystem = entt::locator<ecs::systems::PlaygroundTripSystemInterface>;
 	using playerProfileSystem = entt::locator<ecs::systems::PlayerProfileSystemInterface>;
 	using profileFolderSystem = entt::locator<ecs::systems::ProfileFolderSystemInterface>;
 	using musicMoodSystem = entt::locator<ecs::systems::MusicMoodSystemInterface>;

@@ -340,3 +340,17 @@ TEST(GameActionMap, AKeyThatComesUpUnderTheBoxIsNotHeldAfterIt)
 	EXPECT_FALSE(map.Get(BindableActionMap::MOVE_FORWARDS));
 	EXPECT_FALSE(map.GetChanged(BindableActionMap::MOVE_FORWARDS));
 }
+
+TEST(GameActionMap, AnAnsweredMessageBoxGivesTheKeyboardBackAtOnce)
+{
+	GameActionMap map;
+	map.Frame();
+	map.ProcessEvent(KeyEvent(SDL_KEYDOWN, SDL_SCANCODE_UP));
+	map.Frame();
+	map.BoxKeyDown(true);
+	ASSERT_TRUE(map.BoxHasKeyboard());
+	// The player answers the box with the mouse: no key goes down, and the held key reads as held again
+	map.BoxAnswered();
+	EXPECT_FALSE(map.BoxHasKeyboard());
+	EXPECT_TRUE(map.Get(BindableActionMap::MOVE_FORWARDS));
+}
