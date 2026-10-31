@@ -9,6 +9,8 @@
 
 #pragma once
 
+#include <optional>
+
 #include <glm/vec3.hpp>
 
 #include "3D/MapCoords.h"
@@ -35,6 +37,26 @@ constexpr float k_CameraBack = 20.0f;
 [[nodiscard]] inline glm::vec3 CameraOf(const glm::vec3& point) noexcept
 {
 	return {point.x, point.y + k_CameraRise, point.z + k_CameraBack};
+}
+
+/// The camera of a god that no person plays, as the turns read it: where it is and the point that it looks at
+struct GodCamera
+{
+	glm::vec3 origin {0.0f};
+	glm::vec3 focus {0.0f};
+};
+
+/// The camera of a god that no person plays. The citadel of the god gives the point that the camera looks at, and the
+/// camera starts above the citadel (see CameraOf). A computer mind of the god moves the camera to its hand, and the
+/// point stays at the citadel. A god with no citadel has no such camera.
+[[nodiscard]] inline std::optional<GodCamera> GodCameraOf(const std::optional<glm::vec3>& mindCamera,
+                                                          const std::optional<glm::vec3>& citadel) noexcept
+{
+	if (!citadel.has_value())
+	{
+		return std::nullopt;
+	}
+	return GodCamera {.origin = mindCamera.value_or(CameraOf(*citadel)), .focus = *citadel};
 }
 
 } // namespace openblack::hand_start

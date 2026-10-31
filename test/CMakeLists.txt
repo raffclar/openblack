@@ -2230,3 +2230,4 @@ openblack_setup_and_add_test(test_world_state_at_turn test_world_state_at_turn.c
 openblack_setup_and_add_test(test_creature_blend_store test_creature_blend_store.cpp)
 openblack_setup_and_add_test(test_online_maps online/test_online_maps.cpp)
 target_link_libraries(test_online_maps PRIVATE lnd onlinemap)
+openblack_setup_and_add_test(test_land_laid_out_order test_land_laid_out_order.cpp)

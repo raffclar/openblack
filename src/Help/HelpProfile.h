@@ -12,6 +12,7 @@
 #include <cstdint>
 
 #include <array>
+#include <bit>
 #include <optional>
 #include <utility>
 #include <vector>
@@ -101,6 +102,10 @@ constexpr uint32_t k_MillisecondsPerTurn = 100;
 constexpr uint32_t k_TimesKept = 64;
 /// How quickly the smoothed rate follows the turns the event happens on
 constexpr float k_RateFollow = 0.005f;
+/// The seconds since an event that never happened: 0, the bits 0x00000000
+constexpr float k_SecondsSinceNever = std::bit_cast<float>(0x00000000U);
+/// The float scale from milliseconds to seconds: 0.001, the bits 0x3A83126F
+constexpr float k_SecondsPerMillisecond = std::bit_cast<float>(0x3A83126FU);
 
 /// One event's count: its total, the times it last happened, and a smoothed share of the turns it happens on. It
 /// counts at most once a turn.
