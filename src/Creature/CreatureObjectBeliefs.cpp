@@ -16,6 +16,8 @@
 #include <functional>
 #include <iterator>
 #include <span>
+#include <utility>
+#include <vector>
 
 #include "CreatureDecisionTree.h"
 
@@ -62,11 +64,10 @@ void Store::MarkBlocked(entt::entity thing, uint32_t turn)
 
 Store::Added Store::Add(entt::entity thing, uint32_t kind, map_coords::MapCoords place)
 {
-	if (const auto known = _contents.index.find(thing); known != _contents.index.end())
+	if (auto* known = Find(thing))
 	{
-		auto& belief = *_contents.pools.at(known->second.kind).slots.at(known->second.slot);
-		belief.place = place;
-		return {.belief = &belief, .isNew = false};
+		known->place = place;
+		return {.belief = known, .isNew = false};
 	}
 	if (kind >= k_KindCount)
 	{
@@ -93,23 +94,141 @@ Store::Added Store::Add(entt::entity thing, uint32_t kind, map_coords::MapCoords
 	{
 		// Every place is taken: the belief at the oldest-kept marker gives way, and the marker stays where it is
 		slot = pool.oldest.value_or(0);
-		_contents.index.erase(pool.slots.at(slot)->thing);
+		const auto replaced = pool.slots.at(slot)->thing;
+		_contents.index.erase(replaced);
+		_places.Erase(replaced);
 	}
 	pool.slots.at(slot) = Belief {.thing = thing, .kind = kind, .place = place, .order = ++_contents.made};
 	_contents.index[thing] = Place {.kind = kind, .slot = slot};
+	_places.Set(thing, Place {.kind = kind, .slot = slot});
 	return {.belief = &*pool.slots.at(slot), .isNew = true};
 }
 
 const Belief* Store::Find(entt::entity thing) const
 {
-	const auto known = _contents.index.find(thing);
-	return known != _contents.index.end() ? &*_contents.pools.at(known->second.kind).slots.at(known->second.slot) : nullptr;
+	// The fast index does not keep the no-thing value
+	if (thing == entt::null)
+	{
+		const auto known = _contents.index.find(thing);
+		return known != _contents.index.end() ? &*_contents.pools.at(known->second.kind).slots.at(known->second.slot) : nullptr;
+	}
+	const auto* known = _places.Find(thing);
+	return known != nullptr ? &*_contents.pools.at(known->kind).slots.at(known->slot) : nullptr;
 }
 
 Belief* Store::Find(entt::entity thing)
 {
-	const auto known = _contents.index.find(thing);
-	return known != _contents.index.end() ? &*_contents.pools.at(known->second.kind).slots.at(known->second.slot) : nullptr;
+	return const_cast<Belief*>(std::as_const(*this).Find(thing));
+}
+
+void Store::Reindex()
+{
+	_places.Clear();
+	for (const auto& [thing, at] : _contents.index)
+	{
+		_places.Set(thing, at);
+	}
+}
+
+namespace
+{
+/// The number of entries in the smallest table. A table holds at most half as many things as it has entries, thus a
+/// search stops soon at a free entry.
+constexpr size_t k_LeastEntries = 16;
+/// The multiplier of the golden ratio spreads the numbers of things that come one after another over the table
+constexpr uint32_t k_Spread = 0x9E3779B1u;
+} // namespace
+
+size_t ThingIndex::Home(entt::entity thing) const
+{
+	const auto mixed = static_cast<uint32_t>(entt::to_integral(thing)) * k_Spread;
+	return static_cast<size_t>(mixed) & (_entries.size() - 1);
+}
+
+size_t ThingIndex::Seek(entt::entity thing) const
+{
+	const auto mask = _entries.size() - 1;
+	auto at = Home(thing);
+	while (_entries[at].thing != entt::null && _entries[at].thing != thing)
+	{
+		at = (at + 1) & mask;
+	}
+	return at;
+}
+
+const BeliefPlace* ThingIndex::Find(entt::entity thing) const
+{
+	if (_count == 0 || thing == entt::null)
+	{
+		return nullptr;
+	}
+	const auto& entry = _entries[Seek(thing)];
+	return entry.thing == thing ? &entry.place : nullptr;
+}
+
+void ThingIndex::Set(entt::entity thing, BeliefPlace place)
+{
+	if (thing == entt::null)
+	{
+		return;
+	}
+	if ((_count + 1) * 2 > _entries.size())
+	{
+		Grow();
+	}
+	auto& entry = _entries[Seek(thing)];
+	if (entry.thing == entt::null)
+	{
+		entry.thing = thing;
+		++_count;
+	}
+	entry.place = place;
+}
+
+void ThingIndex::Erase(entt::entity thing)
+{
+	if (_count == 0 || thing == entt::null)
+	{
+		return;
+	}
+	const auto mask = _entries.size() - 1;
+	auto gap = Seek(thing);
+	if (_entries[gap].thing != thing)
+	{
+		return;
+	}
+	// The things after the gap move back into it when their own entry is not between the gap and where they are, so
+	// that a search for each of them still finds it before a free entry
+	for (auto next = (gap + 1) & mask; _entries[next].thing != entt::null; next = (next + 1) & mask)
+	{
+		const auto home = Home(_entries[next].thing);
+		const bool staysPut = gap <= next ? (gap < home && home <= next) : (gap < home || home <= next);
+		if (!staysPut)
+		{
+			_entries[gap] = _entries[next];
+			gap = next;
+		}
+	}
+	_entries[gap] = {};
+	--_count;
+}
+
+void ThingIndex::Clear()
+{
+	_entries.clear();
+	_count = 0;
+}
+
+void ThingIndex::Grow()
+{
+	auto old = std::exchange(_entries, std::vector<Entry>(std::max(k_LeastEntries, _entries.size() * 2)));
+	for (const auto& entry : old)
+	{
+		if (entry.thing != entt::null)
+		{
+			_entries[Seek(entry.thing)] = entry;
+		}
+	}
 }
 
 bool Store::Forget(entt::entity thing)
@@ -121,6 +240,7 @@ bool Store::Forget(entt::entity thing)
 	}
 	const auto [kind, slot] = known->second;
 	_contents.index.erase(known);
+	_places.Erase(thing);
 	auto& pool = _contents.pools.at(kind);
 	pool.slots.at(slot).reset();
 	// The marker moves on to the next place, round to the first after the last

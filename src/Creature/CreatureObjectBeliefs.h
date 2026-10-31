@@ -112,6 +112,37 @@ struct StoreContents
 	uint64_t made {0};
 };
 
+/// Finds the place of the belief about a thing fast. It is an open table: each thing goes in the first free entry at or
+/// after the entry that its number points to, so that a search reads entries that are side by side in memory. It does
+/// not keep the things in an order. The no-thing value is not kept here.
+class ThingIndex
+{
+public:
+	[[nodiscard]] const BeliefPlace* Find(entt::entity thing) const;
+	/// Sets the place of a thing, which replaces the place that the thing had
+	void Set(entt::entity thing, BeliefPlace place);
+	/// Removes a thing, if the index has it
+	void Erase(entt::entity thing);
+	void Clear();
+	[[nodiscard]] size_t Size() const { return _count; }
+
+private:
+	struct Entry
+	{
+		entt::entity thing {entt::null};
+		BeliefPlace place;
+	};
+	/// The entry that the number of a thing points to
+	[[nodiscard]] size_t Home(entt::entity thing) const;
+	/// The entry of the thing, or else the free entry where the thing goes
+	[[nodiscard]] size_t Seek(entt::entity thing) const;
+	/// Makes the table two times larger and puts each thing again
+	void Grow();
+
+	std::vector<Entry> _entries;
+	size_t _count {0};
+};
+
 /// A creature's beliefs about things, a fixed number of places for each kind
 class Store
 {
@@ -192,6 +223,7 @@ public:
 	{
 		_contents = contents;
 		_lookedAt = {};
+		Reindex();
 	}
 
 private:
@@ -201,6 +233,10 @@ private:
 	/// The places of each kind, the place of the belief about each thing, and how many beliefs the store made. A saved
 	/// world reads them where they are, with no copy.
 	StoreContents _contents;
+	/// The same places as the index of the contents, for a fast search
+	ThingIndex _places;
+	/// Makes the fast index again from the index of the contents
+	void Reindex();
 	/// The count of the things gone from the world when the store last looked for beliefs about gone things. A copy of a
 	/// store has not looked yet, as it can go to another world.
 	struct LookedAt
