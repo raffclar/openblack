@@ -679,6 +679,25 @@ TOOLS = [
         "params": ["position"],
     },
     {
+        "name": "players_computer_nodes",
+        "description": "Every node of one computer god's mind (its tree of needs): name, personality weight, suppression, "
+                       "how much it was wanted when last looked at, and the node above. player is a number (0 to 7) or a "
+                       "name such as PLAYER_TWO; name keeps only the nodes a script finds with it (ExpandInfluence). "
+                       "Pages with limit and cursor.",
+        "inputSchema": schema({"player": {"type": ["integer", "string"]}, "name": {"type": "string"}, **SHAPING},
+                              ["player"]),
+        "query": "players.computer_nodes",
+        "params": ["player", "name"],
+    },
+    {
+        "name": "players_computer_attitudes",
+        "description": "What one computer god's mind thinks of each player, as a script reads it and as the mind keeps "
+                       "it. player is a number (0 to 7) or a name such as PLAYER_TWO.",
+        "inputSchema": schema({"player": {"type": ["integer", "string"]}}, ["player"]),
+        "query": "players.computer_attitudes",
+        "params": ["player"],
+    },
+    {
         "name": "town_homes",
         "description": "A town's buildings with who lives in each (town ids from town.list).",
         "inputSchema": schema({"id": {"type": "integer"}, **SHAPING}, ["id"]),
