@@ -1888,6 +1888,29 @@ TEST_F(CreatureFightSystemTest, TheStartEndsByTheSpanAndTheStanceMovesOnInTheSam
 	Locator::creatureAnimationSystem::reset();
 }
 
+// A fighter that wins as it turns on the spot in its start ends the turn, plays the start to its end and finishes. Its
+// fight stage is not the duel any more.
+// NOLINTNEXTLINE(cppcoreguidelines-avoid-non-const-global-variables): external macro
+TEST_F(CreatureFightSystemTest, AWinnerThatTurnsInItsStartPlaysTheStartAndFinishes)
+{
+	Locator::creatureAnimationSystem::emplace<SecondLongAnimations>();
+	auto& registry = Locator::entitiesRegistry::value();
+	PutInStates(registry, first, fight::State::Start, second);
+	auto& fighting = registry.Get<CreatureFighting>(first);
+	fighting.stage = CreatureFighting::Stage::Respond;
+	fighting.fighter.turning = true;
+	fighting.fighter.stopping = true;
+	fights.ProcessTurn();
+	// The turn ended: the start plays from its beginning
+	EXPECT_FALSE(fighting.fighter.turning);
+	EXPECT_EQ(fighting.fighter.state, fight::State::Start);
+	EXPECT_GT(fighting.fighter.timeMs, 0.0f);
+	fighting.fighter.timeMs = 1000.0f;
+	fights.ProcessTurn();
+	EXPECT_EQ(fighting.fighter.state, fight::State::Finish);
+	Locator::creatureAnimationSystem::reset();
+}
+
 // The casting pose ends at the start of the turn after it began. The end of the cast moves on in the same turn.
 // NOLINTNEXTLINE(cppcoreguidelines-avoid-non-const-global-variables): external macro
 TEST_F(CreatureFightSystemTest, TheEndOfACastMovesOnInTheTurnThatThePoseEnds)

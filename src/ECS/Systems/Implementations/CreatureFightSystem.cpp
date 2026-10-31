@@ -3728,11 +3728,11 @@ std::optional<CreatureFightSystem::ActionStep> CreatureFightSystem::StepAnimatio
 	const auto& body = registry.Get<const Creature>(entity);
 	const bool hasOpponent = fighting->stage == CreatureFighting::Stage::Duel && HasDuelPartner(registry, entity, *fighting);
 	// While it turns on the spot in its start, the turn's own animation plays, and the start animation waits. When the
-	// turn ends, the start animation plays from its beginning in the same turn.
+	// turn ends, the start animation plays from its beginning in the same turn. This also occurs when the fight ended
+	// during the turn: then the start plays to its end, and the finish follows.
 	if (fighting->fighter.state == fight::State::Start && fighting->fighter.turning)
 	{
-		if (fighting->stage != CreatureFighting::Stage::Duel ||
-		    (Locator::creatureLocomotionSystem::has_value() && Locator::creatureLocomotionSystem::value().IsMoving(entity)))
+		if (Locator::creatureLocomotionSystem::has_value() && Locator::creatureLocomotionSystem::value().IsMoving(entity))
 		{
 			return std::nullopt;
 		}
