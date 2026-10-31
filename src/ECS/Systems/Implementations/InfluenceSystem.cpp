@@ -350,7 +350,8 @@ void InfluenceSystem::ProcessTownInfluence(entt::entity entity)
 			buildings += AbodeInfluence(abode, data, tribe);
 		}
 	});
-	const float base = TownBaseInfluence();
+	// A town that a scaffold founded reaches nothing with no buildings
+	const float base = town.zeroBaseInfluence ? 0.0f : TownBaseInfluence();
 	auto& influence =
 	    registry.AnyOf<TownInfluence>(entity) ? registry.Get<TownInfluence>(entity) : registry.Assign<TownInfluence>(entity);
 	influence.radius = (base + buildings) * Globals().townInfluenceMultiplier;

@@ -14,7 +14,9 @@
 #include <vector>
 
 #include <entt/signal/sigh.hpp>
+#include <glm/vec2.hpp>
 
+#include "3D/MapCoords.h"
 #include "ECS/ScaffoldGhostRules.h"
 #include "ECS/ScaffoldOfferRules.h"
 #include "ECS/Systems/WorkshopSystemInterface.h"
@@ -82,6 +84,19 @@ private:
 	/// The scaffold makes its reaction for the player who put it down. The first people of the near towns are impressed
 	/// by the reaction at once.
 	void ImpressNearTowns(entt::entity scaffold, PlayerNames player);
+	/// A scaffold founds a new town of the tribe of its town `home` at its place: the new town lists its forests, holds
+	/// the miracles of `home` and gives the player the starting belief of a new town. The new town.
+	entt::entity FoundTown(entt::entity scaffold, entt::entity home, std::optional<PlayerNames> player);
+	/// The town holds every miracle that the other town holds, with the plain miracle of each seed
+	void GiveMiraclesOfTown(entt::entity town, entt::entity other);
+	/// A scaffold that a script marked clears its ground as a hand lets it go. It pushes the things that can fly out of
+	/// its way, and removes the other things in its reach.
+	void DestroyThingsInWay(entt::entity scaffold);
+	/// The scaffold at `scaffoldAt` (its middle `centre` in metres) clears one thing from its way. The edge point towards
+	/// the thing is `edgeDistance` from the scaffold. Whether the thing left the map: a pushed thing that does not start
+	/// to fly stays in it.
+	bool ClearThing(entt::entity thing, const map_coords::MapCoords& scaffoldAt, glm::vec2 centre, float edgeDistance,
+	                bool building);
 	/// Makes the wood flag of a workshop
 	entt::entity MakeFlag(entt::entity workshop);
 	/// The town starts the building that the scaffold offers, at the place of the scaffold. Whether it started it. With

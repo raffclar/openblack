@@ -325,8 +325,10 @@ struct ObjectSetup
 	/// What a walking villager is to do once there: deciding afresh unless given. A villager walking to decide afresh takes
 	/// up no reaction on its way, as in the game
 	VillagerStates walkFinal {VillagerStates::DecideWhatToDo};
-	/// A villager belongs to the scenario's town of the player, rather than to none
+	/// A villager or a scaffold belongs to the scenario's town of the player, rather than to none
 	bool joinTown {false};
+	/// A scaffold clears its ground when a hand lets it go, as when a script marks it to destroy the things in its way
+	bool clearsGround {false};
 	/// A villager is made at this age, rather than as a grown up of 30
 	std::optional<uint32_t> villagerAge;
 	/// A villager of the town lives in the scenario's object of this index, a building of the town

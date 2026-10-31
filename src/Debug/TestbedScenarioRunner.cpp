@@ -1695,9 +1695,20 @@ void Runner::PlaceObjects(const Scenario& scenario, glm::vec2 middle)
 			    }
 			    else if constexpr (std::is_same_v<T, ScaffoldInfo>)
 			    {
-				    return Locator::workshopSystem::has_value() ? Locator::workshopSystem::value().CreateScaffold(
-				                                                      position, entt::null, entt::null, yaw, object.scale)
-				                                                : entt::null;
+				    if (!Locator::workshopSystem::has_value())
+				    {
+					    return static_cast<entt::entity>(entt::null);
+				    }
+				    const auto town = object.joinTown
+				                          ? Locator::entitiesRegistry::value().Context().towns.at(ScenarioTown(middle))
+				                          : entt::null;
+				    const auto scaffold =
+				        Locator::workshopSystem::value().CreateScaffold(position, town, entt::null, yaw, object.scale);
+				    if (auto* data = Locator::entitiesRegistry::value().TryGet<ecs::components::Scaffold>(scaffold))
+				    {
+					    data->destroysThingsInWay = object.clearsGround;
+				    }
+				    return scaffold;
 			    }
 			    else
 			    {
@@ -3039,6 +3050,18 @@ std::string Runner::HandTapObject(size_t index)
 		ecs::object_physics::TapRock(Locator::dynamicsSystem::value(), *object,
 		                             transform != nullptr ? transform->position : glm::vec3(0.0f), player);
 		return "broke the rock";
+	}
+	// A tap breaks one scaffold off a scaffold
+	if (registry.AllOf<ecs::components::Scaffold>(*object) && Locator::workshopSystem::has_value())
+	{
+		auto& workshops = Locator::workshopSystem::value();
+		if (!workshops.ValidToTap(*object))
+		{
+			return "the scaffold takes no tap";
+		}
+		return workshops.Tap(*object, transform != nullptr ? transform->position : glm::vec3(0.0f))
+		           ? "broke the scaffold"
+		           : "the scaffold did not break";
 	}
 	const bool took =
 	    Locator::abodeKnockSystem::value().Tap(*object, transform != nullptr ? transform->position : glm::vec3(0.0f), true);

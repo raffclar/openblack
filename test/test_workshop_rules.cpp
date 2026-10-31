@@ -303,3 +303,36 @@ TEST(WorkshopRules, AJoinedScaffoldBuildsForTheTownOfTheScaffoldWorthMore)
 	EXPECT_EQ(workshop::TownOfJoined({.heldHasTown = true, .targetHasTown = true, .heldValue = 2, .targetValue = 2}),
 	          JoinedTown::Target);
 }
+
+TEST(WorkshopRules, AFoundedTownTakesTheGameIdOrTheFirstFreeIdAfterIt)
+{
+	EXPECT_EQ(workshop::FoundedTownId({}), workshop::k_FoundedTownId);
+	const std::array<uint32_t, 3> land {0, 1, 2};
+	EXPECT_EQ(workshop::FoundedTownId(land), 703058u);
+	// A second founded town takes the next free id
+	const std::array<uint32_t, 4> oneFounded {0, 1, 703058, 2};
+	EXPECT_EQ(workshop::FoundedTownId(oneFounded), 703059u);
+	const std::array<uint32_t, 3> twoFounded {703059, 703058, 4};
+	EXPECT_EQ(workshop::FoundedTownId(twoFounded), 703060u);
+}
+
+TEST(WorkshopRules, AThingIsInTheClearingReachWhenItsEdgeIsWithinTheReach)
+{
+	EXPECT_TRUE(workshop::InClearingReach(3.0f, 1.0f, 2.0f));
+	EXPECT_TRUE(workshop::InClearingReach(2.5f, 1.0f, 2.0f));
+	EXPECT_FALSE(workshop::InClearingReach(3.5f, 1.0f, 2.0f));
+}
+
+TEST(WorkshopRules, AClearingScaffoldPushesAThingTwiceAsFarAsItsEdge)
+{
+	const auto push = workshop::PushOutOfWay({10.0f, 20.0f}, {11.0f, 20.5f});
+	EXPECT_EQ(push.offset, glm::vec2(2.0f, 1.0f));
+	EXPECT_EQ(push.velocity, glm::vec3(2.0f, 0.2f, 1.0f));
+	// The larger part keeps its sign: a thing at low x and low z flies the other way
+	const auto low = workshop::PushOutOfWay({0.0f, 0.0f}, {-1.0f, -2.0f});
+	EXPECT_EQ(low.offset, glm::vec2(-2.0f, -4.0f));
+	EXPECT_EQ(low.velocity, glm::vec3(2.0f, 0.2f, 4.0f));
+	// A small larger part with its sign gives a very high speed
+	const auto fast = workshop::PushOutOfWay({0.0f, 0.0f}, {-0.0005f, -2.0f});
+	EXPECT_NEAR(fast.velocity.z, 8000.0f, 1.0f);
+}
