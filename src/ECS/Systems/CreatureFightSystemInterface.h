@@ -94,6 +94,9 @@ public:
 	/// winner. Both creatures finish the move they are making and stand, without celebrating or sulking, and each loses
 	/// from its life a quarter of the fight health it lost. A fight still being set up is simply left.
 	virtual void CallOff(entt::entity creature) { AbortFight(creature); }
+	/// The creature walks back into its area, which takes it out of its fight: its body ends its fight first, and then it
+	/// gives up its action as a call-off does
+	virtual void CallOffForWalkBack(entt::entity creature) { CallOff(creature); }
 	/// The hand took hold of the creature. The fights call it on the first turn of the hold. In a duel, the creature
 	/// leaves the duel: its life pays for the fight, and it finishes its move. Its opponent stays in the duel against it.
 	/// The fight steps of the creature wait while the hand holds it.
@@ -114,6 +117,9 @@ public:
 	/// called off does. A creature that is knocked out gets up at once, and is not taken home. A creature that a script
 	/// killed for good stays dead.
 	virtual void TakeForScript(entt::entity /*creature*/) {}
+	/// Something stops a creature again after a stop ended its fight, when its mind has no partner any more: its body
+	/// ends its fight again, and its life pays again while its body is still in a state of the fight
+	virtual void EndBodyFightAgain(entt::entity /*creature*/) {}
 	[[nodiscard]] virtual std::optional<entt::entity> OpponentOf(entt::entity creature) const = 0;
 
 	/// A move added to a fighter's queue as the player makes it, in place of the rest or after them; a blow waits for its

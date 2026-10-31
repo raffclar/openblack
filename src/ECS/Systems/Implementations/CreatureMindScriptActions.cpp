@@ -89,6 +89,11 @@ bool CreatureMindSystem::ScriptDoAction(entt::entity creature, uint32_t action, 
 	// takes it from a fight, from lying knocked out and from what its hands do too.
 	registry.AssignOrReplace<ScriptControlled>(creature);
 	StopForScript(creature);
+	// The forced action of the script then stops the creature again
+	if (Locator::creatureFightSystem::has_value())
+	{
+		Locator::creatureFightSystem::value().EndBodyFightAgain(creature);
+	}
 	// It comes across the thing to act on, and the thing to use
 	auto& mind = registry.Get<CreatureMindState>(creature);
 	ComeAcross(creature, mind, target);

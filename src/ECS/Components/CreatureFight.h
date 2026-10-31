@@ -140,6 +140,9 @@ struct CreatureFighting
 	/// Whether the first creature ended its plan with its order to respond, so that it does not stop this creature when
 	/// it leaves. After its response, this creature waits until its mind chooses a new plan.
 	bool released {false};
+	/// Whether the mind of the creature still has its opponent as its partner from the request for the fight. A stop of
+	/// either creature makes the mind forget the partner.
+	bool partnerInMind {true};
 };
 /// Whether a fighter is in one of the steps before the duel
 [[nodiscard]] constexpr bool IsLeadIn(CreatureFighting::Stage stage)
