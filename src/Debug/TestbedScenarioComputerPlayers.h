@@ -122,6 +122,63 @@ CREATE_VILLAGER_POS("196.0,82.0", "200.0,80.0", "CELTIC_HOUSEWIFE", 20)
 CREATE_VILLAGER_POS("196.0,82.0", "200.0,80.0", "CELTIC_FORESTER", 20)
 )";
 
+/// The lines of a land that give player two a computer mind, a temple and a Celtic town by the lake, with an empty
+/// storage pit and two abodes of people. A fish farm of the town stands on the shore.
+inline constexpr std::string_view k_ComputerGodFishFarmTownScript = R"(TOGGLE_COMPUTER_PLAYER("PLAYER_TWO", 1)
+CREATE_CITADEL("0.0,-90.0", 0, "PLAYER_TWO", 5690, 1000)
+CREATE_TOWN(900, "0.0,100.0", "PLAYER_TWO", 0, "CELTIC")
+SET_TOWN_BELIEF_CAP(900, "PLAYER_TWO", 2.0)
+SET_TOWN_BELIEF(900, "PLAYER_TWO", 1.0)
+CREATE_TOWN_CENTRE(900, "-4.0,101.0", "CELTIC_ABODE_TOWN_CENTRE", 0, 1000, 0)
+CREATE_ABODE(900, "30.0,115.0", "CELTIC_ABODE_STORAGE_PIT", 6282, 1000, 0, 3000)
+CREATE_ABODE(900, "-30.0,90.0", "CELTIC_ABODE_F", 4328, 1095, 0, 0)
+CREATE_VILLAGER_POS("-34.0,92.0", "-30.0,90.0", "CELTIC_HOUSEWIFE", 20)
+CREATE_VILLAGER_POS("-34.0,92.0", "-30.0,90.0", "CELTIC_FORESTER", 20)
+CREATE_VILLAGER_POS("-34.0,92.0", "-30.0,90.0", "CELTIC_HOUSEWIFE", 20)
+CREATE_VILLAGER_POS("-34.0,92.0", "-30.0,90.0", "CELTIC_FORESTER", 20)
+CREATE_ABODE(900, "-30.0,70.0", "CELTIC_ABODE_F", 4328, 1095, 0, 0)
+CREATE_VILLAGER_POS("-34.0,72.0", "-30.0,70.0", "CELTIC_HOUSEWIFE", 20)
+CREATE_VILLAGER_POS("-34.0,72.0", "-30.0,70.0", "CELTIC_FORESTER", 20)
+CREATE_VILLAGER_POS("-34.0,72.0", "-30.0,70.0", "CELTIC_HOUSEWIFE", 20)
+CREATE_VILLAGER_POS("-34.0,72.0", "-30.0,70.0", "CELTIC_FORESTER", 20)
+)";
+
+/// The lines of a land that give player two a computer mind, a temple and two Celtic towns. The east town has no food
+/// in its storage pit. The west town, 160 metres away, has 5000 food and 5000 wood in its pit.
+inline constexpr std::string_view k_ComputerGodTwoTownsFoodScript = R"(TOGGLE_COMPUTER_PLAYER("PLAYER_TWO", 1)
+CREATE_CITADEL("0.0,-90.0", 0, "PLAYER_TWO", 5690, 1000)
+CREATE_TOWN(900, "80.0,40.0", "PLAYER_TWO", 0, "CELTIC")
+SET_TOWN_BELIEF_CAP(900, "PLAYER_TWO", 2.0)
+SET_TOWN_BELIEF(900, "PLAYER_TWO", 1.0)
+CREATE_TOWN_CENTRE(900, "76.0,41.0", "CELTIC_ABODE_TOWN_CENTRE", 0, 1000, 0)
+CREATE_ABODE(900, "90.0,90.0", "CELTIC_ABODE_STORAGE_PIT", 6282, 1000, 0, 3000)
+CREATE_ABODE(900, "110.0,60.0", "CELTIC_ABODE_F", 4328, 1095, 0, 0)
+CREATE_VILLAGER_POS("106.0,62.0", "110.0,60.0", "CELTIC_HOUSEWIFE", 20)
+CREATE_VILLAGER_POS("106.0,62.0", "110.0,60.0", "CELTIC_FORESTER", 20)
+CREATE_VILLAGER_POS("106.0,62.0", "110.0,60.0", "CELTIC_HOUSEWIFE", 20)
+CREATE_VILLAGER_POS("106.0,62.0", "110.0,60.0", "CELTIC_FORESTER", 20)
+CREATE_ABODE(900, "110.0,80.0", "CELTIC_ABODE_F", 4328, 1095, 0, 0)
+CREATE_VILLAGER_POS("106.0,82.0", "110.0,80.0", "CELTIC_HOUSEWIFE", 20)
+CREATE_VILLAGER_POS("106.0,82.0", "110.0,80.0", "CELTIC_FORESTER", 20)
+CREATE_VILLAGER_POS("106.0,82.0", "110.0,80.0", "CELTIC_HOUSEWIFE", 20)
+CREATE_VILLAGER_POS("106.0,82.0", "110.0,80.0", "CELTIC_FORESTER", 20)
+CREATE_TOWN(901, "-80.0,40.0", "PLAYER_TWO", 0, "CELTIC")
+SET_TOWN_BELIEF_CAP(901, "PLAYER_TWO", 2.0)
+SET_TOWN_BELIEF(901, "PLAYER_TWO", 1.0)
+CREATE_TOWN_CENTRE(901, "-84.0,41.0", "CELTIC_ABODE_TOWN_CENTRE", 0, 1000, 0)
+CREATE_ABODE(901, "-70.0,90.0", "CELTIC_ABODE_STORAGE_PIT", 6282, 1000, 5000, 5000)
+CREATE_ABODE(901, "-110.0,60.0", "CELTIC_ABODE_F", 4328, 1095, 0, 0)
+CREATE_VILLAGER_POS("-114.0,62.0", "-110.0,60.0", "CELTIC_HOUSEWIFE", 20)
+CREATE_VILLAGER_POS("-114.0,62.0", "-110.0,60.0", "CELTIC_FORESTER", 20)
+)";
+
+/// At the start, the god of player two gets a weight for each node that has the name, as a personality of the god
+/// gives it
+inline Command ComputerWeight(std::string_view node, float weight)
+{
+	return {.kind = Command::Kind::ComputerPersonality, .player = PlayerNames::PLAYER_TWO, .action = node, .amount = weight};
+}
+
 /// The scenarios of the start of a computer god and the hand's own actions
 void AddComputerGodCoreScenarios(std::vector<Scenario>& all);
 /// The scenarios of the food and the wood of the towns
