@@ -384,6 +384,22 @@ public:
 /// things that the god saw long ago.
 void SeeNearHand(std::vector<SeenThing>& seen, const map_coords::MapCoords& hand, uint32_t turn, const SeenWorld& world);
 
+/// What the god asks the world when it forgets the things that are gone
+class GoneWorld
+{
+public:
+	virtual ~GoneWorld() = default;
+	/// The miracle that the god cast is still in the world
+	[[nodiscard]] virtual bool CastStillThere(entt::entity spell) const = 0;
+	/// The thing is in the world, and it is not a villager on its way to dying
+	[[nodiscard]] virtual bool Available(entt::entity thing) const = 0;
+};
+
+/// At the start of each turn, the god forgets the miracles that it cast and that are gone. Then it forgets the seen
+/// things that are not available, and the queued actions that have a thing that is not available. Each list keeps its
+/// order.
+void ForgetGone(std::vector<entt::entity>& casts, std::vector<SeenThing>& seen, Mind& mind, const GoneWorld& world);
+
 /// A land script makes the god do the action of the first node that the name finds, with two things and a value.
 /// False when no node has the name or the action cannot start.
 bool ForceAction(Mind& mind, World& world, std::string_view name, entt::entity first, entt::entity second, float value,
