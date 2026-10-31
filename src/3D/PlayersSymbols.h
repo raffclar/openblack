@@ -9,6 +9,7 @@
 
 #pragma once
 
+#include <cstddef>
 #include <cstdint>
 
 #include <array>
@@ -21,7 +22,9 @@
 /// villages' belief. The sheet has a square of 64 by 64 texels for each player, four squares in a row, the first
 /// player's square at the top left. At the start of a land, the square of the player of this computer gets the symbol
 /// that the player's profile has. The player's own picture for that symbol takes the place of the symbol. The square
-/// of each computer player gets the picture of its god. The other squares stay as the sheet's file has them.
+/// of each computer player gets the picture of its god. The other squares stay as the sheet's file has them. A network game
+/// with more player numbers than the squares of the file has a wider sheet: eight squares in a row, with the square of each
+/// player number.
 namespace openblack::players_symbols
 {
 
@@ -31,16 +34,28 @@ constexpr uint32_t k_SheetSide = 256;
 constexpr uint32_t k_SquareSide = 64;
 /// The squares in a row of a sheet
 constexpr uint32_t k_SquaresInARow = k_SheetSide / k_SquareSide;
+/// The squares in a row of the wider sheet of a network game with more player numbers than the squares of the file
+constexpr uint32_t k_WideSquaresInARow = 2 * k_SquaresInARow;
+
+/// The squares in a row of the sheet for a game with this count of player numbers. A land and each game with up to 16
+/// player numbers keep the sheet of the file. A game with more player numbers has the wider sheet.
+[[nodiscard]] uint32_t SquaresInARowFor(size_t playerNumbers);
 
 /// A sheet of red, green and blue a texel at a time, a row at a time from the top, and its alpha beside it
 struct Sheet
 {
 	std::vector<uint8_t> colours;
 	std::vector<uint8_t> alpha;
+	/// The squares in a row, and also the rows of squares
+	uint32_t squaresInARow {k_SquaresInARow};
 
-	/// True when the colours and the alpha are each the size of a sheet
+	/// True when the colours and the alpha are each the size of a sheet of full size
 	[[nodiscard]] bool Whole() const;
 };
+
+/// A sheet with the given squares in a row, and with each square of the sheet in the place of the same number. The new
+/// squares are clear. A sheet that is not whole, or that has the same squares in a row, comes back as it is.
+[[nodiscard]] Sheet Widen(Sheet sheet, uint32_t squaresInARow);
 
 /// Copies the square of a design in the sheet of designs to the square of a player
 void CopyDesign(Sheet& players, const Sheet& designs, uint32_t design, uint32_t player);

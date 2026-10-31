@@ -15,6 +15,7 @@
 
 #include "3D/L3DMesh.h"
 #include "3D/LandIslandInterface.h"
+#include "3D/PlayersSymbols.h"
 #include "Camera/Camera.h"
 #include "Common/GameRandom.h"
 #include "ECS/Components/DeadTree.h"
@@ -22,6 +23,7 @@
 #include "ECS/Components/FallingRoots.h"
 #include "ECS/Components/Mesh.h"
 #include "ECS/Components/Transform.h"
+#include "ECS/GamePlayers.h"
 #include "ECS/Reflection/BinaryArchive.h"
 #include "ECS/Registry.h"
 #include "ECS/Systems/TimeSystemInterface.h"
@@ -231,6 +233,7 @@ void ExplosionSystem::CollectDrawFrame(particles::draw::Frame& frame) const
 	    },
 	    .playerColour = {},
 	    .random = {},
+	    .symbolsInARow = static_cast<int>(players_symbols::SquaresInARowFor(ecs::game_players::Count())),
 	};
 	particles::Effect::DrawWalk walk;
 	for (const auto& puff : _puffs)

@@ -151,13 +151,20 @@ bool guidance::ClockSaysNight(int hour, int minute)
 	return !day;
 }
 
-std::optional<size_t> guidance::LosingBeliefTown(std::span<const TownBeliefs> towns, size_t player, float margin)
+std::optional<size_t> guidance::LosingBeliefTown(std::span<const TownBeliefs> towns, size_t player, size_t players,
+                                                 float margin)
 {
+	// A land has the 8 players of a land. A network game with more gods also has the numbers of the later gods.
+	const auto count = player_slots::PlayerNumbersOf(players);
+	if (player >= count)
+	{
+		return std::nullopt;
+	}
 	for (size_t town = 0; town < towns.size(); ++town)
 	{
 		const auto& belief = towns[town];
 		const float least = belief.at(player) - margin;
-		for (size_t other = 0; other < k_BeliefPlayers; ++other)
+		for (size_t other = 0; other < count; ++other)
 		{
 			if (other != player && least < belief.at(other))
 			{

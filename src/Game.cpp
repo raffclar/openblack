@@ -157,6 +157,7 @@
 #include "ECS/DrawnPlace.h"
 #include "ECS/FloatingNumber.h"
 #include "ECS/GameEndConditions.h"
+#include "ECS/GamePlayers.h"
 #include "ECS/LearningMarker.h"
 #include "ECS/Map.h"
 #include "ECS/OtherPlayerSparkles.h"
@@ -6440,7 +6441,9 @@ void Game::MakePlayersSymbols(std::optional<uint32_t> symbolInPlace)
 	}
 	const auto localPlayer =
 	    Locator::handSystem::has_value() ? Locator::handSystem::value().GetOwnPlayer() : PlayerNames::PLAYER_ONE;
-	auto players = players_symbols::MakeSheet(std::move(file), designs, symbol, static_cast<uint32_t>(localPlayer), ownPicture);
+	// A game with more player numbers than the squares of the file has a square for each player number
+	auto wide = players_symbols::Widen(std::move(file), players_symbols::SquaresInARowFor(ecs::game_players::Count()));
+	auto players = players_symbols::MakeSheet(std::move(wide), designs, symbol, static_cast<uint32_t>(localPlayer), ownPicture);
 	// The lowest detail levels keep the sheet at half its size: each symbol takes every second texel of its full one
 	const bool halve = Locator::config::value().detail.lowResTextures;
 	if (halve)

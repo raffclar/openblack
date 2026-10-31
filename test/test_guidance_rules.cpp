@@ -159,6 +159,7 @@ TEST(GuidanceRules, MoonLook)
 TEST(GuidanceRules, TheFirstTownOfTheListThatLosesBeliefIsWarnedOf)
 {
 	constexpr float k_Margin = 0.5f;
+	constexpr size_t k_LandPlayers = 8;
 	TownBeliefs safe {};
 	safe.at(0) = 2.0f;
 	safe.at(1) = 1.5f;
@@ -168,16 +169,45 @@ TEST(GuidanceRules, TheFirstTownOfTheListThatLosesBeliefIsWarnedOf)
 	toNeutral.at(7) = 1.75f;
 
 	// The other player at exactly the margin below: safe
-	EXPECT_EQ(LosingBeliefTown(std::array<TownBeliefs, 1> {safe}, 0, k_Margin), std::nullopt);
-	EXPECT_EQ(LosingBeliefTown(std::array {safe, losing, toNeutral}, 0, k_Margin), std::optional<size_t>(1));
+	EXPECT_EQ(LosingBeliefTown(std::array<TownBeliefs, 1> {safe}, 0, k_LandPlayers, k_Margin), std::nullopt);
+	EXPECT_EQ(LosingBeliefTown(std::array {safe, losing, toNeutral}, 0, k_LandPlayers, k_Margin), std::optional<size_t>(1));
 	// The neutral player counts as another player
-	EXPECT_EQ(LosingBeliefTown(std::array {safe, toNeutral, losing}, 0, k_Margin), std::optional<size_t>(1));
+	EXPECT_EQ(LosingBeliefTown(std::array {safe, toNeutral, losing}, 0, k_LandPlayers, k_Margin), std::optional<size_t>(1));
 	// The player's own belief does not count against it
 	TownBeliefs own {};
 	own.at(1) = 2.0f;
-	EXPECT_EQ(LosingBeliefTown(std::array<TownBeliefs, 1> {own}, 1, k_Margin), std::nullopt);
-	EXPECT_EQ(LosingBeliefTown(std::array<TownBeliefs, 1> {losing}, 1, k_Margin), std::optional<size_t>(0));
-	EXPECT_EQ(LosingBeliefTown({}, 0, k_Margin), std::nullopt);
+	EXPECT_EQ(LosingBeliefTown(std::array<TownBeliefs, 1> {own}, 1, k_LandPlayers, k_Margin), std::nullopt);
+	EXPECT_EQ(LosingBeliefTown(std::array<TownBeliefs, 1> {losing}, 1, k_LandPlayers, k_Margin), std::optional<size_t>(0));
+	EXPECT_EQ(LosingBeliefTown({}, 0, k_LandPlayers, k_Margin), std::nullopt);
+}
+
+// On a land the rule looks at the 8 players of a land only. In a game of 32 gods it looks at each player of the game.
+TEST(GuidanceRules, TheLaterGodsCountOnlyInAGameThatHasThem)
+{
+	constexpr float k_Margin = 0.5f;
+	constexpr size_t k_LandPlayers = 8;
+	constexpr size_t k_GameOf32Gods = 33;
+	constexpr size_t k_TwentiethGod = 20;
+	TownBeliefs safe {};
+	safe.at(0) = 2.0f;
+	TownBeliefs toLaterGod = safe;
+	toLaterGod.at(k_TwentiethGod) = 1.75f;
+
+	// The place of a later god holds no player on a land, so the result is the same as with 8 places
+	EXPECT_EQ(LosingBeliefTown(std::array<TownBeliefs, 1> {toLaterGod}, 0, k_LandPlayers, k_Margin), std::nullopt);
+	EXPECT_EQ(LosingBeliefTown(std::array<TownBeliefs, 1> {toLaterGod}, 0, k_GameOf32Gods, k_Margin), std::optional<size_t>(0));
+
+	// A later god gets the remark for its own town in a game that has it, and never on a land
+	TownBeliefs laterGodsTown {};
+	laterGodsTown.at(k_TwentiethGod) = 2.0f;
+	laterGodsTown.at(3) = 1.6f;
+	EXPECT_EQ(LosingBeliefTown(std::array<TownBeliefs, 1> {laterGodsTown}, k_TwentiethGod, k_GameOf32Gods, k_Margin),
+	          std::optional<size_t>(0));
+	laterGodsTown.at(3) = 1.5f;
+	EXPECT_EQ(LosingBeliefTown(std::array<TownBeliefs, 1> {laterGodsTown}, k_TwentiethGod, k_GameOf32Gods, k_Margin),
+	          std::nullopt);
+	EXPECT_EQ(LosingBeliefTown(std::array<TownBeliefs, 1> {laterGodsTown}, k_TwentiethGod, k_LandPlayers, k_Margin),
+	          std::nullopt);
 }
 
 // Only the first land of a story played alone keeps most remarks quiet: a skirmish and a network game never do

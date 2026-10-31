@@ -13,66 +13,103 @@
 
 #include <algorithm>
 
+#include "PlayerSlots.h"
+
 using namespace openblack::players_symbols;
 
 namespace
 {
 
-constexpr size_t k_Texels = static_cast<size_t>(k_SheetSide) * k_SheetSide;
-
-/// The texel at the top left of a square
-[[nodiscard]] size_t SquareStart(uint32_t square)
+/// The texels on a side of a sheet of full size
+[[nodiscard]] uint32_t SideOf(const Sheet& sheet)
 {
-	const auto column = square % k_SquaresInARow;
-	const auto row = square / k_SquaresInARow;
-	return static_cast<size_t>(row) * k_SquareSide * k_SheetSide + static_cast<size_t>(column) * k_SquareSide;
+	return sheet.squaresInARow * k_SquareSide;
+}
+
+/// The texel at the top left of a square of a sheet of full size
+[[nodiscard]] size_t SquareStart(const Sheet& sheet, uint32_t square)
+{
+	const auto column = square % sheet.squaresInARow;
+	const auto row = square / sheet.squaresInARow;
+	return static_cast<size_t>(row) * k_SquareSide * SideOf(sheet) + static_cast<size_t>(column) * k_SquareSide;
 }
 
 /// A square that is in the sheet
-[[nodiscard]] bool InSheet(uint32_t square)
+[[nodiscard]] bool InSheet(const Sheet& sheet, uint32_t square)
 {
-	return square < k_SquaresInARow * k_SquaresInARow;
+	return square < sheet.squaresInARow * sheet.squaresInARow;
+}
+
+/// Copies a square of one sheet of full size to a square of another
+void CopySquare(Sheet& to, uint32_t toSquare, const Sheet& from, uint32_t fromSquare)
+{
+	const auto source = SquareStart(from, fromSquare);
+	const auto target = SquareStart(to, toSquare);
+	for (uint32_t row = 0; row < k_SquareSide; ++row)
+	{
+		const auto sourceRow = source + static_cast<size_t>(row) * SideOf(from);
+		const auto targetRow = target + static_cast<size_t>(row) * SideOf(to);
+		std::copy_n(from.colours.begin() + static_cast<std::ptrdiff_t>(sourceRow * 3), k_SquareSide * 3,
+		            to.colours.begin() + static_cast<std::ptrdiff_t>(targetRow * 3));
+		std::copy_n(from.alpha.begin() + static_cast<std::ptrdiff_t>(sourceRow), k_SquareSide,
+		            to.alpha.begin() + static_cast<std::ptrdiff_t>(targetRow));
+	}
 }
 
 } // namespace
 
+uint32_t openblack::players_symbols::SquaresInARowFor(size_t playerNumbers)
+{
+	constexpr auto k_FileSquares = static_cast<size_t>(k_SquaresInARow) * k_SquaresInARow;
+	return player_slots::PlayerNumbersOf(playerNumbers) <= k_FileSquares ? k_SquaresInARow : k_WideSquaresInARow;
+}
+
 bool Sheet::Whole() const
 {
-	return colours.size() == k_Texels * 3 && alpha.size() == k_Texels;
+	const auto texels = static_cast<size_t>(SideOf(*this)) * SideOf(*this);
+	return squaresInARow != 0 && colours.size() == texels * 3 && alpha.size() == texels;
+}
+
+Sheet openblack::players_symbols::Widen(Sheet sheet, uint32_t squaresInARow)
+{
+	if (!sheet.Whole() || squaresInARow == 0 || squaresInARow == sheet.squaresInARow)
+	{
+		return sheet;
+	}
+	const auto side = static_cast<size_t>(squaresInARow) * k_SquareSide;
+	Sheet wide {.colours = std::vector<uint8_t>(side * side * 3),
+	            .alpha = std::vector<uint8_t>(side * side),
+	            .squaresInARow = squaresInARow};
+	const auto squares = std::min(sheet.squaresInARow * sheet.squaresInARow, squaresInARow * squaresInARow);
+	for (uint32_t square = 0; square < squares; ++square)
+	{
+		CopySquare(wide, square, sheet, square);
+	}
+	return wide;
 }
 
 void openblack::players_symbols::CopyDesign(Sheet& players, const Sheet& designs, uint32_t design, uint32_t player)
 {
-	if (!players.Whole() || !designs.Whole() || !InSheet(design) || !InSheet(player))
+	if (!players.Whole() || !designs.Whole() || !InSheet(designs, design) || !InSheet(players, player))
 	{
 		return;
 	}
-	const auto from = SquareStart(design);
-	const auto to = SquareStart(player);
-	for (uint32_t row = 0; row < k_SquareSide; ++row)
-	{
-		const auto source = from + static_cast<size_t>(row) * k_SheetSide;
-		const auto target = to + static_cast<size_t>(row) * k_SheetSide;
-		std::copy_n(designs.colours.begin() + static_cast<std::ptrdiff_t>(source * 3), k_SquareSide * 3,
-		            players.colours.begin() + static_cast<std::ptrdiff_t>(target * 3));
-		std::copy_n(designs.alpha.begin() + static_cast<std::ptrdiff_t>(source), k_SquareSide,
-		            players.alpha.begin() + static_cast<std::ptrdiff_t>(target));
-	}
+	CopySquare(players, player, designs, design);
 }
 
 void openblack::players_symbols::PutPicture(Sheet& players, std::span<const uint8_t> greys, uint32_t player)
 {
 	// The side of the square picture gives the side of the sheet: a sheet of full size, or a sheet at half size
 	const auto side = static_cast<uint32_t>(std::sqrt(static_cast<double>(greys.size())));
-	const auto sheetSide = side * k_SquaresInARow;
+	const auto sheetSide = side * players.squaresInARow;
 	const auto texels = static_cast<size_t>(sheetSide) * sheetSide;
 	if (side == 0 || static_cast<size_t>(side) * side != greys.size() || players.colours.size() != texels * 3 ||
-	    players.alpha.size() != texels || !InSheet(player))
+	    players.alpha.size() != texels || !InSheet(players, player))
 	{
 		return;
 	}
-	const auto to =
-	    static_cast<size_t>(player / k_SquaresInARow) * side * sheetSide + static_cast<size_t>(player % k_SquaresInARow) * side;
+	const auto to = static_cast<size_t>(player / players.squaresInARow) * side * sheetSide +
+	                static_cast<size_t>(player % players.squaresInARow) * side;
 	for (uint32_t row = 0; row < side; ++row)
 	{
 		for (uint32_t column = 0; column < side; ++column)

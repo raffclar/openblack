@@ -16,6 +16,8 @@
 #include <optional>
 #include <span>
 
+#include "PlayerSlots.h"
+
 /// The guidance: the advisors' running commentary on what happens in the game (towns attacked, buildings wrecked, the
 /// player turning from good or evil, the moon) and the villagers' voices of guidance. Each kind of guidance waits a
 /// while after it was last heard before it is heard again, longer for most at random, needs a help level, and many are
@@ -169,12 +171,14 @@ struct MoonLook
 
 /// The advisors look for a town that loses its belief in the player this often, in game turns
 constexpr uint32_t k_LosingBeliefEvery = 10;
-/// The number of players that a town believes in, the neutral player last
-constexpr size_t k_BeliefPlayers = 8;
-using TownBeliefs = std::array<float, k_BeliefPlayers>;
+/// The number of players that a town of a land believes in, the neutral player last
+constexpr size_t k_BeliefPlayers = player_slots::k_LandSlots;
+/// The belief of a town in each player number of a network game with the most players
+using TownBeliefs = std::array<float, player_slots::k_PlayerNumbers>;
 /// The town that the advisors warn of as losing its belief in the player: the first town, in the order of the player's
 /// list, in which another player (the neutral player too) has more belief than the belief in the player less the
-/// margin. None when no town is so.
-[[nodiscard]] std::optional<size_t> LosingBeliefTown(std::span<const TownBeliefs> towns, size_t player, float margin);
+/// margin. The rule looks only at the first `players` player numbers: the players of the game. None when no town is so.
+[[nodiscard]] std::optional<size_t> LosingBeliefTown(std::span<const TownBeliefs> towns, size_t player, size_t players,
+                                                     float margin);
 
 } // namespace openblack::guidance

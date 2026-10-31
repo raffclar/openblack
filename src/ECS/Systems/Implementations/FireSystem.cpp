@@ -28,6 +28,7 @@
 #include "3D/L3DSubMesh.h"
 #include "3D/LandIslandInterface.h"
 #include "3D/MapCoords.h"
+#include "3D/PlayersSymbols.h"
 #include "Camera/Camera.h"
 #include "Common/GUtilsDistance.h"
 #include "Common/GameRandom.h"
@@ -67,6 +68,7 @@
 #include "ECS/CreatureScars.h"
 #include "ECS/DrawnPlace.h"
 #include "ECS/GamePhysicsHooksWorld.h"
+#include "ECS/GamePlayers.h"
 #include "ECS/HandPlayer.h"
 #include "ECS/Map.h"
 #include "ECS/PosedModel.h"
@@ -1775,6 +1777,7 @@ void FireSystem::CollectDrawFrame(float turnFraction, particles::draw::Frame& fr
 	    },
 	    .playerColour = {},
 	    .random = {},
+	    .symbolsInARow = static_cast<int>(players_symbols::SquaresInARowFor(ecs::game_players::Count())),
 	};
 	const auto& creators = Creators();
 	const auto lightMap = FireLightMap();

@@ -47,7 +47,6 @@ constexpr uint32_t k_GlowAlpha = 100;
 constexpr std::string_view k_GlowTexture = "S_SpriteSheet3";
 constexpr std::string_view k_SymbolTexture = "PlayersSymbols";
 constexpr int k_GlowCellsPerRow = 8;
-constexpr int k_SymbolCellsPerRow = 4;
 /// A mist's animation counts so many a millisecond up to 900, then starts again
 constexpr float k_MistCountRate = 0.255f;
 constexpr int k_MistCountWrap = 900;
@@ -296,7 +295,7 @@ void AddAtom(Frame& frame, GroupBuilder& builder, const Effect::DrawAtom& atom, 
 		// An atom may show a player of its own, as each of a village's symbols of belief does
 		const int shown = atom.player >= 0 ? atom.player : player;
 		const uint32_t rgb = sources.playerColour ? sources.playerColour(shown) : 0xFFFFFFu;
-		const auto symbol = SymbolOf(atom, rgb, shown);
+		const auto symbol = SymbolOf(atom, rgb, shown, sources.symbolsInARow);
 		// Added to what is behind, writing no depth
 		const auto additive = Mode::AlphaTexturedAlphaAdditiveNz;
 		builder.Sprite(symbol.instances[0], k_GlowTexture, additive);
@@ -458,7 +457,7 @@ uint32_t Frame::MaterialIndex(const Material& material)
 	return static_cast<uint32_t>(materials.size() - 1);
 }
 
-SymbolSprites draw::SymbolOf(const Effect::DrawAtom& atom, uint32_t playerRgb, int player)
+SymbolSprites draw::SymbolOf(const Effect::DrawAtom& atom, uint32_t playerRgb, int player, int symbolsInARow)
 {
 	// The symbol takes the player's colour times the atom's; the glows are a faint copy, the second white
 	const auto channel = [&](int shift, uint8_t value) {
@@ -477,7 +476,7 @@ SymbolSprites draw::SymbolOf(const Effect::DrawAtom& atom, uint32_t playerRgb, i
 	                 glm::vec4(rgb, glow)),
 	    FacingSprite(atom.position, scale * k_GlowScale, spin, GlowCell(milliseconds, k_GlowFrameRates[1]), k_GlowCellsPerRow,
 	                 glm::vec4(1.0f, 1.0f, 1.0f, glow)),
-	    FacingSprite(atom.position, scale, 0.0f, std::max(player, 0), k_SymbolCellsPerRow,
+	    FacingSprite(atom.position, scale, 0.0f, std::max(player, 0), symbolsInARow,
 	                 glm::vec4(rgb, static_cast<float>(symbolAlpha) / k_ByteMax)),
 	}};
 }
@@ -601,7 +600,7 @@ void draw::AddPlayerSymbol(Frame& frame, const PlayerSymbol& symbol, const Sourc
 	atom.rgb = {0xFF, 0xFF, 0xFF};
 	atom.age = symbol.milliseconds / k_MillisecondsPerSecond;
 	const uint32_t rgb = sources.playerColour ? sources.playerColour(symbol.player) : 0xFFFFFFu;
-	const auto sprites = SymbolOf(atom, rgb, symbol.player);
+	const auto sprites = SymbolOf(atom, rgb, symbol.player, sources.symbolsInARow);
 	GroupBuilder builder(frame, sources);
 	// Added to what is behind, writing no depth, all three at once where the symbol stands
 	const auto additive = Mode::AlphaTexturedAlphaAdditiveNz;

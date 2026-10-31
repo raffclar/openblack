@@ -21,6 +21,7 @@
 #include "3D/L3DAnim.h"
 #include "3D/L3DMesh.h"
 #include "3D/LandIslandInterface.h"
+#include "3D/PlayersSymbols.h"
 #include "Animals/AnimalAnimation.h"
 #include "Blast/DustPuff.h"
 #include "CHLApi.h"
@@ -32,6 +33,7 @@
 #include "ECS/Components/Mesh.h"
 #include "ECS/Components/Transform.h"
 #include "ECS/DrawnRegistry.h"
+#include "ECS/GamePlayers.h"
 #include "ECS/Registry.h"
 #include "ECS/Systems/ExplosionSystemInterface.h"
 #include "FileSystem/FileSystemInterface.h"
@@ -472,6 +474,7 @@ void BoatLaunchSystem::CollectDrawFrame(particles::draw::Frame& frame) const
 	    },
 	    .playerColour = {},
 	    .random = {},
+	    .symbolsInARow = static_cast<int>(players_symbols::SquaresInARowFor(ecs::game_players::Count())),
 	};
 	particles::Effect::DrawWalk walk;
 	for (const auto phase : _clocks.wakes)
