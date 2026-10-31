@@ -144,6 +144,12 @@ struct ProgressEntry
 [[nodiscard]] MagicType RandomMiracle(std::span<const ProgressEntry> list, int32_t land,
                                       const std::function<uint32_t(uint32_t)>& draw);
 
+/// Which town the "next miracle" chest with no town gives its miracle to. Each entry is how many miracles the village
+/// centre of one of the player's towns shows, in the order of the player's town list, or none for a town with no village
+/// centre. The chest takes the first town with a village centre that shows fewer miracles than a centre holds. None when
+/// no town is like this.
+[[nodiscard]] std::optional<size_t> FirstTownForMiracle(std::span<const std::optional<size_t>> centreMiraclesShown);
+
 /// Where an opened chest's clip has got to after a frame of so many milliseconds: round and round when it loops,
 /// otherwise held at its last millisecond
 [[nodiscard]] uint32_t StepOpenedClip(uint32_t place, uint32_t milliseconds, uint32_t playTime, bool looping);
