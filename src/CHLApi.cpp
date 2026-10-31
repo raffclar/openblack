@@ -2445,6 +2445,15 @@ static void SetPropertyOf(entt::entity object, script::ObjectPropertyType prop, 
 			}
 			return;
 		}
+		// A thing that holds a visual of a script gives the size to its visual and keeps its own size
+		if (const auto effect = ecs::script_spot_visuals::EffectOf(registry, object); effect.has_value())
+		{
+			if (Locator::effectRequestSystem::has_value())
+			{
+				Locator::effectRequestSystem::value().SetMagnitude(*effect, value);
+			}
+			return;
+		}
 		// The thing is drawn at this size, the same along every axis. A thing in the map's cells that changes its size
 		// comes out of them and goes in again.
 		if (auto* transform = registry.TryGet<Transform>(object); transform != nullptr)
