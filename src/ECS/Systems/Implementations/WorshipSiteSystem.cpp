@@ -199,8 +199,9 @@ void WorshipSiteSystem::LandLaidOut()
 
 entt::entity WorshipSiteSystem::MakeBuiltSite(PlayerNames player, Tribe tribe)
 {
+	// The land script makes the site also for a temple that is not yet built
 	const auto temple = TempleOf(player);
-	if (temple == entt::null || !_world->Entities().Get<const CitadelWorship>(temple).standing)
+	if (temple == entt::null)
 	{
 		return entt::null;
 	}
@@ -730,7 +731,9 @@ void WorshipSiteSystem::OpenSites(entt::entity temple, float desireBoost)
 entt::entity WorshipSiteSystem::FindOrMakeForTown(entt::entity temple, entt::entity town)
 {
 	auto& registry = _world->Entities();
-	if (registry.Get<const CitadelWorship>(temple).cannotMakeSites)
+	// A temple that is not yet built makes no site for a town. Its towns get their sites when the temple is built.
+	const auto& worship = registry.Get<const CitadelWorship>(temple);
+	if (worship.cannotMakeSites || !worship.standing)
 	{
 		return entt::null;
 	}
@@ -766,10 +769,6 @@ entt::entity WorshipSiteSystem::FindForTribe(entt::entity temple, Tribe tribe) c
 entt::entity WorshipSiteSystem::Make(entt::entity temple, Tribe tribe)
 {
 	auto& registry = _world->Entities();
-	if (!registry.Get<const CitadelWorship>(temple).standing)
-	{
-		return entt::null;
-	}
 	const auto templePosition = registry.Get<const Transform>(temple).position;
 	const auto templeOwner = registry.Get<const Temple>(temple).owner;
 
