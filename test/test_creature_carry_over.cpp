@@ -754,3 +754,52 @@ TEST_F(CreatureCarryOverSaves, ANetworkGameWritesOnlyTheCreatureOfThisComputersG
 	Locator::leashSystem::reset();
 	Locator::time::reset();
 }
+
+TEST_F(CreatureCarryOverSaves, TheLandClearAfterANetworkGameWritesOnlyTheCreatureThatThisComputerBrought)
+{
+	const TestFolder folder("carry_over_network_left");
+	ecs::systems::CreatureCarryOverSystem carryOver(folder.Path(), ProfileFile);
+	auto& clock = Locator::time::emplace<ecs::systems::TimeSystem>([] { return uint32_t {1000}; });
+	clock.SetNetworkGame(true);
+	auto& leash = static_cast<FakeLeash&>(Locator::leashSystem::emplace<FakeLeash>());
+	const auto firstGods = MakeCreature(PlayerNames::PLAYER_ONE, 10);
+	const auto own = MakeCreature(PlayerNames::PLAYER_TWO, 10);
+	leash.playersCreature = firstGods;
+	carryOver.SetBroughtCreature(own);
+	carryOver.ProcessTurn();
+
+	// The player leaves: the game is a game alone before the land clears, and the land clear keeps the creature
+	clock.SetNetworkGame(false);
+	carryOver.KeepPlayersCreature();
+	EXPECT_EQ(Saved(), 1);
+	// The creature of the first god never goes to the files of this computer's player
+	carryOver.KeepCreature(firstGods);
+	EXPECT_EQ(Saved(), 1);
+
+	// The next land is a game alone again
+	carryOver.Reset();
+	carryOver.KeepPlayersCreature();
+	EXPECT_EQ(Saved(), 2);
+	carryOver.FinishWrites();
+	Locator::leashSystem::reset();
+	Locator::time::reset();
+}
+
+TEST_F(CreatureCarryOverSaves, AnObserverWhoLeavesANetworkGameWritesNoCreature)
+{
+	const TestFolder folder("carry_over_network_observer");
+	ecs::systems::CreatureCarryOverSystem carryOver(folder.Path(), ProfileFile);
+	auto& clock = Locator::time::emplace<ecs::systems::TimeSystem>([] { return uint32_t {1000}; });
+	clock.SetNetworkGame(true);
+	auto& leash = static_cast<FakeLeash&>(Locator::leashSystem::emplace<FakeLeash>());
+	leash.playersCreature = MakeCreature(PlayerNames::PLAYER_ONE, 10);
+	carryOver.ProcessTurn();
+
+	// An observer brought no creature, so the land clear after the leave writes none
+	clock.SetNetworkGame(false);
+	carryOver.KeepPlayersCreature();
+	carryOver.EndGame();
+	EXPECT_EQ(Saved(), 0);
+	Locator::leashSystem::reset();
+	Locator::time::reset();
+}
