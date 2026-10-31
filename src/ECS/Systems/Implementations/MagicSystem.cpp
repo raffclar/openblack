@@ -118,6 +118,7 @@
 #include "ECS/Systems/PlayerCommandSystemInterface.h"
 #include "ECS/Systems/PlayerSystemInterface.h"
 #include "ECS/Systems/ReactionSystemInterface.h"
+#include "ECS/Systems/SpellIconSystemInterface.h"
 #include "ECS/Systems/TeleportSystemInterface.h"
 #include "ECS/Systems/TimeSystemInterface.h"
 #include "ECS/Systems/TownSystemInterface.h"
@@ -2640,13 +2641,18 @@ void MagicSystem::SendCast(magic::CastTarget target)
 		{
 			const auto last =
 			    Locator::gestureSystem::has_value() ? Locator::gestureSystem::value().GetLastRecognised() : std::nullopt;
+			auto* gestures = Locator::gestureSystem::has_value() ? &Locator::gestureSystem::value() : nullptr;
 			const gesture::HandContext::Seed facts {.ready = seed.ready,
 			                                        .cast = seed.hasCast,
 			                                        .sizingGesture = seedInfo.sizingGesture,
 			                                        .powerUp = seed.powerUp,
+			                                        .askedPowerUp =
+			                                            gestures != nullptr ? gestures->GetAskedPowerUp() : GestureType::None,
 			                                        .canPowerUp = seed.hasIcon};
 			if (gesture::CountsPoweredUpCast(facts, last.has_value() ? last->request.gesture : GestureType::None))
 			{
+				// The hand starts its power-ups again, and the help counts the cast
+				gestures->PoweredUpCast();
 				Locator::helpProfileSystem::value().Report(help::profile::k_GestureCastPoweredUp);
 			}
 		}
@@ -3336,43 +3342,17 @@ void MagicSystem::DeleteSeed(entt::entity entity)
 	registry.Destroy(entity);
 }
 
-void MagicSystem::PowerUpHeldSeed(int level)
+void MagicSystem::AskPowerUpOfHeldSeed(int level)
 {
-	auto& registry = EntityRegistry();
-	if (!Held().has_value() || !registry.Valid(*Held()))
+	const auto& registry = EntityRegistry();
+	if (!Held().has_value() || !registry.Valid(*Held()) || !Locator::spellIconSystem::has_value())
 	{
 		return;
 	}
-	auto& seed = registry.Get<SpellSeed>(*Held());
-	const auto& seedInfo = magic::GetSpellSeedInfo(Info(), seed.seedType);
-	// Only a seed made at an icon, not yet cast, can be powered up, and only to a level it has. Level -1 takes the seed
-	// back to its plain miracle.
-	const auto slot = static_cast<size_t>(level + 1);
-	if (!seed.hasIcon || seed.hasCast || level < -1 || slot >= seedInfo.magicTypes.size() ||
-	    seedInfo.magicTypes.at(slot) == MagicType::None)
-	{
-		return;
-	}
-	const auto type = seedInfo.magicTypes.at(slot);
-	const float cost = magic::GetChantsRequiredToCreate(Info(), type);
-	// The worship charges what more it needs, or takes back what it no longer does
-	if (cost > seed.chantStore)
-	{
-		seed.chantStore += DrawForSeed(seed, cost - seed.chantStore);
-	}
-	else
-	{
-		ReturnFromSeed(seed, seed.chantStore - cost);
-		seed.chantStore = cost;
-	}
-	const int previous = seed.powerUp;
-	seed.powerUp = level;
-	seed.power = magic::SeedPower(seed.chantStore, cost);
-	ShowHeldSeedPowerUp(level, previous);
-	if (ActsOnOwnHand())
-	{
-		_lastHandResult = HandResult::PoweredUp;
-	}
+	// The icon that made the seed charges it to the level from the prayer power of its site, in the turns of the site.
+	// The seed keeps its level until the icon has charged it.
+	auto& icons = Locator::spellIconSystem::value();
+	icons.StartPowerUpCharge(icons.IconOfSeed(*Held()), ActingPlayer(), level);
 }
 
 void MagicSystem::ShowHeldSeedPowerUp(int level, int previous)
@@ -3430,6 +3410,10 @@ void MagicSystem::SetIconSeedPowerUp(entt::entity entity, int powerUp)
 	{
 		const ActingAs acting(*this, *holder);
 		ShowHeldSeedPowerUp(powerUp, previous);
+		if (ActsOnOwnHand())
+		{
+			_lastHandResult = HandResult::PoweredUp;
+		}
 	}
 }
 
@@ -3482,29 +3466,18 @@ void MagicSystem::DoSeedGesture(PlayerNames player, const player_commands::SeedG
 	switch (gesture.kind)
 	{
 	case player_commands::SeedGesture::Kind::PowerUp:
-		PowerUpHeldSeed(gesture.level);
+		// The scribble that calls off the power-up asked for asks for the plain miracle. The hand shakes as it does when
+		// the scribble drops the miracle.
+		if (gesture.level < 0 && ActsOnOwnHand() && Locator::miracleFxSystem::has_value())
+		{
+			Locator::miracleFxSystem::value().HandShaken();
+		}
+		AskPowerUpOfHeldSeed(gesture.level);
 		break;
 	case player_commands::SeedGesture::Kind::Scribble:
-	{
-		// A scribble first stops the power-up and keeps the seed in the hand; a second scribble drops it
-		const auto* seed =
-		    Held().has_value() && EntityRegistry().Valid(*Held()) ? EntityRegistry().TryGet<const SpellSeed>(*Held()) : nullptr;
-		if (seed != nullptr &&
-		    magic::ScribbleOn(seed->hasIcon, seed->ready, seed->hasCast, seed->powerUp) == magic::ScribbleResult::StopPowerUp)
-		{
-			// The hand shakes as it does when the scribble drops the miracle
-			if (ActsOnOwnHand() && Locator::miracleFxSystem::has_value())
-			{
-				Locator::miracleFxSystem::value().HandShaken();
-			}
-			PowerUpHeldSeed(-1);
-		}
-		else
-		{
-			DiscardHeldSeed();
-		}
+		// The hand asked for no power-up, so the scribble drops the seed
+		DiscardHeldSeed();
 		break;
-	}
 	case player_commands::SeedGesture::Kind::Shake:
 		DiscardHeldSeed();
 		break;

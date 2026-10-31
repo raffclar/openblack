@@ -9,6 +9,7 @@
 
 #pragma once
 
+#include <array>
 #include <deque>
 #include <memory>
 #include <optional>
@@ -70,6 +71,8 @@ public:
 	bool RepeatMiracleByKey(PlayerNames player) override;
 	[[nodiscard]] bool IsSelecting() const override { return _selection.IsOpen() || _picker.open; }
 	[[nodiscard]] float GetCircleSecondsLeft() const override { return _circleSeconds; }
+	[[nodiscard]] GestureType GetAskedPowerUp() const override { return _askedPowerUp; }
+	void PoweredUpCast() override { StartPowerUps(); }
 	[[nodiscard]] bool IsGesturing() const override { return _gesturing; }
 	[[nodiscard]] const gesture_hints::Row& GetHints() const override { return _hints; }
 	void StepHints(float seconds, bool wordsShowing) override;
@@ -90,6 +93,9 @@ private:
 	void SampleCursor(glm::vec2 cursor, const Frame& frame, const gesture::HandContext& context);
 	/// The recognised gesture's trail on the land, for the particles to show
 	void LayTrail(GestureType gesture, const gesture::Match& match, const Frame& frame) const;
+	/// The hand starts its power-ups for the seed in it: it forgets the circle remembered and the power-up asked for, and
+	/// finds the power-up gestures that it offers for the seed
+	void StartPowerUps();
 	/// The hints for what the hand waits for now, replacing those shown when they differ
 	void RefreshHints();
 	/// The shape a gesture's trail takes on the land, from its symbol's file; the circle's for a gesture without one
@@ -128,7 +134,10 @@ private:
 	/// The circle drawn for the seed in the hand, while it is remembered
 	float _circleSeconds {0.0f};
 	bool _gesturing {false};
-	entt::entity _circleSeed {entt::null};
+	/// The power-up gestures that the hand offers for the seed in it, found when the hand last started its power-ups
+	std::array<GestureType, 3> _powerUpGestures {GestureType::None, GestureType::None, GestureType::None};
+	/// The gesture of the power-up that the hand asked for, none when it asked for none
+	GestureType _askedPowerUp {GestureType::None};
 	gesture_hints::Row _hints;
 	/// The symbols made so far, one for each path
 	mutable std::vector<KeptSymbol> _symbols;

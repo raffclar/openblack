@@ -341,7 +341,7 @@ TEST(GestureHints, ThePowerUpsShowTheSeedWithItsLevelAndTheCancelOnlyOnceAsked)
 	const std::vector<gesture::Request> asked {
 	    {.gesture = GestureType::Scribble,
 	     .purpose = gesture::Purpose::DropSeed,
-	     .powerUpLevel = 0,
+	     .callsOff = true,
 	     .seed = SpellSeedType::Storm},
 	    {.gesture = GestureType::Spiral, .purpose = gesture::Purpose::PowerUp, .powerUpLevel = 1, .seed = SpellSeedType::Storm},
 	};
