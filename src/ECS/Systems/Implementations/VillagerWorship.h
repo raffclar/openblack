@@ -47,6 +47,9 @@ void Forget(entt::entity villager);
 /// counted at worship leaves the site and its dance
 void LeaveTown(entt::entity villager);
 
+/// The villager stops on its way to its town's worship site, and its town no longer counts it on the way
+void LeaveTheWayToWorshipSite(entt::entity villager);
+
 /// Whether a villager is worshipping or on its way to
 [[nodiscard]] bool IsAtOrOnTheWayToWorshipSite(entt::entity villager);
 /// Whether a villager is free to go to worship: free for a new task, not already at or on its way to worship, and a

@@ -1148,3 +1148,8 @@ bool villager_worship::IsAvailableForWorshipSite(entt::entity villager, bool dis
 {
 	return AvailableForWorshipSite(villager, disciplesToo);
 }
+
+void villager_worship::LeaveTheWayToWorshipSite(entt::entity villager)
+{
+	LeaveTheWay(villager);
+}
