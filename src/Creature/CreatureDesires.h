@@ -161,9 +161,15 @@ struct Desires
 	/// The kinds of source set to a value since the mind last took them, in order. The mind changes what each kind
 	/// follows to agree, so that the value lasts.
 	std::vector<std::pair<uint32_t, float>> written;
+	/// Every desire counts as activated, whatever its own setting, while the rules of the Gods' Playground apply. The
+	/// mind sets it at the start of each of its turns.
+	bool everyDesireActivated {false};
 
 	[[nodiscard]] DesireState& operator[](Desire desire) { return desires.at(static_cast<size_t>(desire)); }
 	[[nodiscard]] const DesireState& operator[](Desire desire) const { return desires.at(static_cast<size_t>(desire)); }
+	/// Whether a desire is activated: its own setting, or every desire on the Gods' Playground
+	[[nodiscard]] bool IsActivated(size_t desire) const { return everyDesireActivated || desires.at(desire).activated; }
+	[[nodiscard]] bool IsActivated(Desire desire) const { return IsActivated(static_cast<size_t>(desire)); }
 };
 
 /// How a species' desires start, from the game's creature tables
@@ -217,9 +223,9 @@ void Suppress(Desires& desires, Desire desire, float seconds, float turnsPerSeco
 [[nodiscard]] bool CountTowardsUrge(DesireState& desire);
 /// The desire's urge is satisfied: the sources whose kind is cleared then have no value left
 void ClearSourcesAfterSatisfying(DesireState& desire);
-/// The desire is lessened after an action that lessens it: an active desire is multiplied by the action's multiplier,
-/// and kept from the creature's floor for desires to its maximum
-void LessenAfterAction(DesireState& desire, float multiplier, float floor);
+/// The desire is lessened after an action that lessens it: an activated desire is multiplied by the action's
+/// multiplier, and kept from the creature's floor for desires to its maximum
+void LessenAfterAction(Desires& desires, Desire desire, float multiplier, float floor);
 
 /// Every source of a type, in all the desires, goes up or down by an amount, staying from 0 to 1, as events push them
 void ChangeSource(Desires& desires, uint32_t type, float amount);

@@ -151,9 +151,13 @@ constexpr float k_FunctionalLife = 0.75f;
 /// icon is built when its site is built.
 [[nodiscard]] bool Functional(float life, bool built);
 
-/// Whether a tap on an icon or a stone hand is a valid tap of the hand: the icon works, and only the hand of the player
-/// that owns it taps it. While every player's influence covers the whole land (the Gods' Playground), the hand of any
-/// player also taps a neutral icon.
+/// Whether the hand of a player may tap an icon or a stone hand of a player: only the hand of the player that owns it.
+/// While every player's influence covers the whole land (the Gods' Playground), the hand of any player also taps a
+/// neutral icon.
+[[nodiscard]] bool TapsFor(PlayerNames iconPlayer, PlayerNames tapper, bool influenceEverywhere);
+
+/// Whether a tap on an icon or a stone hand is a valid tap of the hand: the icon works, and the hand may tap it
+/// (TapsFor)
 [[nodiscard]] bool ValidToTap(PlayerNames iconPlayer, PlayerNames tapper, bool functional, bool influenceEverywhere);
 
 /// A tap on it: its charged miracle into the hand if it can go; else its charging called off if the tapping hand charges

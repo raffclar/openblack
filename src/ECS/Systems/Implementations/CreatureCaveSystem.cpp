@@ -248,10 +248,10 @@ std::optional<creature_cave::Snapshot> CreatureCaveSystem::Snapshot() const
 	// TODO(raffclar): the game forgets what it found each time it writes the scroll's text; this is looked at every frame,
 	// so it only looks
 	auto perceived = mind->perceivedDesires;
-	snapshot.knowsGodsDesire = creature_perceived_desires::TakeDominant(perceived, [mind](size_t desire) {
-		                           return mind->desires.has_value() && desire < mind->desires->desires.size() &&
-		                                  mind->desires->desires.at(desire).activated;
-	                           }).has_value();
+	snapshot.knowsGodsDesire =
+	    creature_perceived_desires::TakeDominant(perceived, [mind](size_t desire) {
+		    return mind->desires.has_value() && desire < mind->desires->desires.size() && mind->desires->IsActivated(desire);
+	    }).has_value();
 	snapshot.turnsLookedAt = mind->turnsLookedAt;
 	// The temples, flocks and forests it believes in
 	snapshot.templesKnown = static_cast<uint32_t>(mind->beliefs.Count(creature_tree::belief_types::k_Citadel));
@@ -274,9 +274,9 @@ std::optional<creature_cave::Snapshot> CreatureCaveSystem::Snapshot() const
 			snapshot.compassion = desires.at(static_cast<size_t>(creature_desires::Desire::Compassion)).value;
 			for (size_t d = 0; d < creature_desires::k_DesireCount; ++d)
 			{
-				const auto& state = mind->desires->desires.at(d);
-				if (state.activated)
+				if (mind->desires->IsActivated(d))
 				{
+					const auto& state = desires.at(d);
 					const auto desire = static_cast<creature_desires::Desire>(d);
 					snapshot.likes.push_back(
 					    {.desire = desire,

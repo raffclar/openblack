@@ -245,7 +245,7 @@ void creature_learning::SuppressOpposed(creature_desires::Desires& desires, Desi
 void creature_learning::AfterAction(creature_desires::Desires& desires, Desire desire, float multiplier)
 {
 	auto& state = desires[desire];
-	if (state.activated)
+	if (desires.IsActivated(desire))
 	{
 		state.value = std::clamp(state.value * multiplier, 0.0f, std::max(state.max, 0.0f));
 	}
@@ -260,7 +260,7 @@ void creature_learning::MakeLeastDominant(creature_desires::Desires& desires, De
 	for (size_t i = 0; i < k_DesireCount; ++i)
 	{
 		const auto& other = desires.desires.at(i);
-		if (other.activated && other.value < weakestValue)
+		if (desires.IsActivated(i) && other.value < weakestValue)
 		{
 			weakest = i;
 			weakestValue = other.value;
@@ -280,7 +280,7 @@ void creature_learning::MakeLeastDominant(creature_desires::Desires& desires, De
 
 void creature_learning::MakeFullyDominant(creature_desires::Desires& desires, Desire desire, float floor)
 {
-	if (!desires[desire].activated)
+	if (!desires.IsActivated(desire))
 	{
 		return;
 	}

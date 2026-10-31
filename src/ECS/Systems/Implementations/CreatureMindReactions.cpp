@@ -454,7 +454,7 @@ std::optional<Desire> CreatureMindSystem::DesireAboutCreature(entt::entity creat
 	{
 		const auto desire = static_cast<Desire>(d);
 		const auto& state = mind.desires->desires.at(d);
-		if (!state.activated || state.suppressedTurns != 0 || !tables->rules.at(d).aboutSomething ||
+		if (!mind.desires->IsActivated(d) || state.suppressedTurns != 0 || !tables->rules.at(d).aboutSomething ||
 		    !AppliesToCreature(registry, desire, other, creature, *tables) ||
 		    std::ranges::find(leftOut, desire) != leftOut.end())
 		{
