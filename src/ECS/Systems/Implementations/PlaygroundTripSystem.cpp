@@ -24,14 +24,19 @@
 #include "CHLApi.h"
 #include "Camera/CameraDrag.h"
 #include "Camera/CameraHelp.h"
+#include "ECS/ChallengeRecords.h"
 #include "ECS/Reflection/BinaryArchive.h"
 #include "ECS/Systems/CameraHelpSystemInterface.h"
+#include "ECS/Systems/CameraZoneSystemInterface.h"
+#include "ECS/Systems/CinematicDirectorSystemInterface.h"
 #include "ECS/Systems/DialogueControlSystemInterface.h"
 #include "ECS/Systems/HandDemoSystemInterface.h"
+#include "ECS/Systems/HighDetailSystemInterface.h"
 #include "ECS/Systems/IntroSystemInterface.h"
 #include "ECS/Systems/LandSystemInterface.h"
 #include "ECS/Systems/SaveGameSystemInterface.h"
 #include "ECS/Systems/ScriptObjectsSystemInterface.h"
+#include "ECS/Systems/TurnCheerSystemInterface.h"
 #include "FileSystem/FileSystemInterface.h"
 #include "LHVM.h"
 #include "LandChange.h"
@@ -62,12 +67,39 @@ void StopEveryScript()
 	}
 }
 
+/// The player's records of challenges go, and the things that they held are no longer kept alive by them
+void ClearChallengeRecords()
+{
+	using openblack::Locator;
+	const openblack::ecs::challenge_records::References references {
+	    .add = {},
+	    .remove =
+	        [](entt::entity thing) {
+		        if (Locator::scriptObjects::has_value())
+		        {
+			        Locator::scriptObjects::value().RemoveReference(thing);
+		        }
+	        },
+	};
+	openblack::ecs::challenge_records::Clear(Locator::entitiesRegistry::value(), references);
+}
+
 /// The scripts let go of what they held of the game when their lesson ends. The tasks that stopped gave back the camera,
 /// the dialogue and the game's speed already.
 void LetScriptsGo()
 {
 	using openblack::Locator;
+	// The villagers that a script drew in high detail are drawn as usual again, and the camera draws nothing close to it
+	if (Locator::highDetailSystem::has_value())
+	{
+		std::ignore = Locator::highDetailSystem::value().ReleaseAll();
+	}
+	if (Locator::cinematicDirectorSystem::has_value())
+	{
+		Locator::cinematicDirectorSystem::value().SetCloseClipping(false);
+	}
 	Locator::introSystem::value().ReleaseAll();
+	ClearChallengeRecords();
 	Locator::dialogueControlSystem::value().Reset();
 	auto& help = Locator::cameraHelpSystem::value().Get();
 	help.Enable(openblack::camera_drag::k_DefaultFeatures, ~0u);
@@ -75,7 +107,17 @@ void LetScriptsGo()
 	help.cameraKeys = true;
 	help.placeKeys = true;
 	Locator::handDemoSystem::value().Reset();
+	// The camera zones that a script set go
+	if (Locator::cameraZoneSystem::has_value())
+	{
+		Locator::cameraZoneSystem::value().ClearZones();
+	}
 	std::ignore = openblack::chlapi::CHLApi::ApplyInterfaceLevel(k_NormalInterface);
+	// The advisors stop the cheer of the camera's turn
+	if (Locator::turnCheerSystem::has_value())
+	{
+		Locator::turnCheerSystem::value().Stop();
+	}
 }
 
 } // namespace

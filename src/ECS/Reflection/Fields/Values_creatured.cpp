@@ -103,7 +103,8 @@ void openblack::ecs::reflection::RegisterFields_Values_creatured(entt::meta_ctx&
 	Reflect<openblack::creature_desires::Desires>(context, ValueOnly {})
 	    .Field<&openblack::creature_desires::Desires::desires>("desires", {k_CreatureDesiresDesireNames})
 	    .Field<&openblack::creature_desires::Desires::sum>("sum")
-	    .Field<&openblack::creature_desires::Desires::written>("written");
+	    .Field<&openblack::creature_desires::Desires::written>("written")
+	    .Field<&openblack::creature_desires::Desires::everyDesireActivated>("everyDesireActivated");
 	Reflect<openblack::creature_desires::Source>(context, ValueOnly {})
 	    .Field<&openblack::creature_desires::Source::type>("type")
 	    .Field<&openblack::creature_desires::Source::value>("value")

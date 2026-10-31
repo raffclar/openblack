@@ -116,6 +116,8 @@ private:
 	[[nodiscard]] bool IsEnabled(PlayerNames player, MagicType type) const;
 	/// The hand of a player can take a miracle now: only the hand at this machine, holding nothing
 	[[nodiscard]] bool HandReady(PlayerNames player) const;
+	/// Whether every player's influence covers the whole land, as on the Gods' Playground
+	[[nodiscard]] static bool InfluenceEverywhere();
 	/// What an icon's miracle needs to be charged full, at the level it charges
 	[[nodiscard]] float Required(const components::WorshipIcon& icon) const;
 	/// What the miracle of a seed costs to create, at the power-up level of the seed
@@ -128,7 +130,7 @@ private:
 	/// A site icon is tapped by a hand: what the tap did
 	magic::spell_icons::TapResult TapSiteIcon(entt::entity icon, PlayerNames player);
 	/// An icon's charged miracle goes into its player's hand, carrying what the icon stored
-	bool GiveSeed(entt::entity icon);
+	bool GiveSeed(entt::entity icon, PlayerNames holder);
 	/// The icon starts to charge its miracle for the hand of a player. A charge that is full already goes into the hand.
 	void StartCharge(entt::entity icon, PlayerNames player);
 	/// The worship sites of a player, in the order of their places round the temple

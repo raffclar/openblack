@@ -130,6 +130,7 @@
 #include "ECS/Systems/LivingActionSystemInterface.h"
 #include "ECS/Systems/MagicSystemInterface.h"
 #include "ECS/Systems/PlayerSystemInterface.h"
+#include "ECS/Systems/PlaygroundTripSystemInterface.h"
 #include "ECS/Systems/ReactionSystemInterface.h"
 #include "ECS/Systems/ResourceStoreSystemInterface.h"
 #include "ECS/Systems/SkyClockSystemInterface.h"
@@ -1496,8 +1497,7 @@ bool IsNight()
 
 float DesireValue(const creature_desires::Desires& desires, Desire desire)
 {
-	const auto& state = desires[desire];
-	return state.activated ? state.value : 0.0f;
+	return desires.IsActivated(desire) ? desires[desire].value : 0.0f;
 }
 
 /// What something is worth to eat, if anything
@@ -1556,7 +1556,7 @@ void Lessen(entt::entity creature, creature_desires::Desires& desires, std::stri
 	});
 	if (found != actions.end() && found->desire < creature_desires::k_DesireCount)
 	{
-		creature_desires::LessenAfterAction(desires[static_cast<Desire>(found->desire)], found->desireMultiplier,
+		creature_desires::LessenAfterAction(desires, static_cast<Desire>(found->desire), found->desireMultiplier,
 		                                    DesireFloorOf(creature));
 	}
 }
@@ -2105,6 +2105,9 @@ void CreatureMindSystem::MindTurn(entt::entity entity)
 		creature_desires::ActivateForPhase(*mind.desires, Phases(), mind.developmentPhase);
 		mind.desiresPhase = mind.developmentPhase;
 	}
+	// On the Gods' Playground every desire counts as activated
+	mind.desires->everyDesireActivated =
+	    Locator::playgroundTripSystem::has_value() && Locator::playgroundTripSystem::value().InfluenceEverywhere();
 	// What it believed about things now gone is forgotten
 	ForgetGoneThings(entity, mind);
 	const bool held = HeldByHand(entity);

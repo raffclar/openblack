@@ -306,18 +306,26 @@ TEST(CreatureDesires, SatisfyingAnUrgeClearsOnlyTheClearableSources)
 
 TEST(CreatureDesires, AnActionLessensItsDesireNoLowerThanTheFloorNorHigherThanItsMaximum)
 {
-	creature_desires::DesireState desire {.value = 0.8f, .max = 1.0f};
-	creature_desires::LessenAfterAction(desire, 0.5f, 0.1f);
+	creature_desires::Desires desires;
+	constexpr auto k_Which = creature_desires::Desire::Hunger;
+	auto& desire = desires[k_Which];
+	desire.value = 0.8f;
+	desire.max = 1.0f;
+	creature_desires::LessenAfterAction(desires, k_Which, 0.5f, 0.1f);
 	EXPECT_FLOAT_EQ(desire.value, 0.4f);
-	creature_desires::LessenAfterAction(desire, 0.1f, 0.1f);
+	creature_desires::LessenAfterAction(desires, k_Which, 0.1f, 0.1f);
 	EXPECT_FLOAT_EQ(desire.value, 0.1f);
 	// A multiplier over one raises it, to its maximum at most
-	creature_desires::LessenAfterAction(desire, 20.0f, 0.1f);
+	creature_desires::LessenAfterAction(desires, k_Which, 20.0f, 0.1f);
 	EXPECT_FLOAT_EQ(desire.value, 1.0f);
 	// An inactive desire is left as it is
 	desire.activated = false;
-	creature_desires::LessenAfterAction(desire, 0.5f, 0.1f);
+	creature_desires::LessenAfterAction(desires, k_Which, 0.5f, 0.1f);
 	EXPECT_FLOAT_EQ(desire.value, 1.0f);
+	// On the Gods' Playground every desire is activated
+	desires.everyDesireActivated = true;
+	creature_desires::LessenAfterAction(desires, k_Which, 0.5f, 0.1f);
+	EXPECT_FLOAT_EQ(desire.value, 0.5f);
 }
 
 TEST(CreatureIdleMind, BeingIdleIsWaitingThenYawningTwice)
@@ -1625,4 +1633,17 @@ TEST(CreatureMind, AgendasMarkTheStepThatDoesWhatTheActionIsFor)
 	const auto reflection = creature_leash_orders::LookAtReflection({0.0f, 0.0f}, {5.0f, 0.0f}, 2.0f, k_TurnsPerSecond);
 	ASSERT_EQ(reflection.size(), 10u);
 	EXPECT_EQ(creature_mind::MainStep(reflection), 6u);
+}
+
+TEST(CreatureDesires, OnThePlaygroundEveryDesireIsActivated)
+{
+	creature_desires::Desires desires;
+	auto& hunger = desires[creature_desires::Desire::Hunger];
+	hunger.activated = false;
+	hunger.value = 0.9f;
+	EXPECT_FALSE(desires.IsActivated(creature_desires::Desire::Hunger));
+	EXPECT_NE(creature_desires::Dominant(desires), creature_desires::Desire::Hunger);
+	desires.everyDesireActivated = true;
+	EXPECT_TRUE(desires.IsActivated(creature_desires::Desire::Hunger));
+	EXPECT_EQ(creature_desires::Dominant(desires), creature_desires::Desire::Hunger);
 }

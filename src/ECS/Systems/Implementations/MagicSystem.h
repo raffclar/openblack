@@ -183,7 +183,7 @@ public:
 	entt::entity GiveSeedToHand(PlayerNames player, SpellSeedType seed, int powerUp, float multiplier) override;
 	entt::entity SummonSeed(PlayerNames player, SpellSeedType seed, int powerUp) override;
 	entt::entity SummonSeedAtSite(entt::entity site, SpellSeedType seed, int powerUp) override;
-	entt::entity TakeIconSeed(entt::entity site, SpellSeedType seed, int powerUp, float chants) override;
+	entt::entity TakeIconSeed(entt::entity site, PlayerNames holder, SpellSeedType seed, int powerUp, float chants) override;
 	void DiscardHeldSeed() override;
 	void DiscardHeldSeedOf(PlayerNames player) override;
 	void DeleteSeed(entt::entity seed) override;

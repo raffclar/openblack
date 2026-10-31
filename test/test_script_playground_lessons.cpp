@@ -15,6 +15,8 @@
 #include <glm/vec3.hpp>
 #include <gtest/gtest.h>
 
+#include "3D/MapCoords.h"
+#include "Common/GUtilsAngle.h"
 #include "Input/LandGrip.h"
 #include "ScriptHeaders/ScriptLessonNatives.h"
 
@@ -150,4 +152,54 @@ TEST(PlaygroundLessonNatives, TheGripOfTheLandStartsWithADragAndEndsWhenTheMoveB
 	EXPECT_FALSE(GripsLand(false, true, false));
 	// The Move button held with no drag before does not start a grip
 	EXPECT_FALSE(GripsLand(false, false, true));
+}
+
+TEST(PlaygroundLessonNatives, ACreaturesLookIsMeasuredInPartsOfAHalfTurn)
+{
+	// 360 divided by the angle, cut towards 0
+	EXPECT_EQ(CreatureLookParts(60.0f), 6);
+	EXPECT_EQ(CreatureLookParts(7.0f), 51);
+	EXPECT_EQ(CreatureLookParts(360.0f), 1);
+	EXPECT_EQ(CreatureLookParts(-60.0f), -6);
+	// More than a full turn gives no parts
+	EXPECT_EQ(CreatureLookParts(400.0f), 0);
+	// No angle, or not a number: the value for out of range
+	EXPECT_EQ(CreatureLookParts(0.0f), std::numeric_limits<int32_t>::min());
+	EXPECT_EQ(CreatureLookParts(std::numeric_limits<float>::quiet_NaN()), std::numeric_limits<int32_t>::min());
+}
+
+TEST(PlaygroundLessonNatives, ACreatureSeesTheCameraWhenItLooksNearTheDirectionToIt)
+{
+	using namespace openblack;
+	const auto creature = map_coords::FromMetres({100.0f, 100.0f});
+	const auto camera = map_coords::FromMetres({160.0f, 140.0f});
+	const auto towards = gutils::GetAngleFromXZ(creature, camera);
+	// 60 degrees: 6 parts, so near is less than 0x800 / 6 = 341 game angle units apart
+	EXPECT_TRUE(CreatureSeesCamera(creature, camera, towards, 60.0f));
+	EXPECT_TRUE(CreatureSeesCamera(creature, camera, static_cast<uint16_t>(towards + 340), 60.0f));
+	EXPECT_FALSE(CreatureSeesCamera(creature, camera, static_cast<uint16_t>(towards + 341), 60.0f));
+	EXPECT_FALSE(CreatureSeesCamera(creature, camera, static_cast<uint16_t>(towards - 341), 60.0f));
+	// A full turn of look sees the camera in all directions
+	EXPECT_TRUE(CreatureSeesCamera(creature, camera, static_cast<uint16_t>(towards + 1000), 360.0f));
+}
+
+TEST(PlaygroundLessonNatives, ACreatureSeesTheCameraInItsOwnMapCell)
+{
+	using namespace openblack;
+	const auto creature = map_coords::FromMetres({100.0f, 100.0f});
+	const auto camera = map_coords::FromMetres({101.0f, 101.0f});
+	const auto away = static_cast<uint16_t>(gutils::GetAngleFromXZ(creature, camera) + 1000);
+	EXPECT_TRUE(CreatureSeesCamera(creature, camera, away, 60.0f));
+	// A negative angle is a very large number of parts: only the own cell counts
+	EXPECT_TRUE(CreatureSeesCamera(creature, camera, away, -60.0f));
+	const auto far = map_coords::FromMetres({160.0f, 140.0f});
+	EXPECT_FALSE(CreatureSeesCamera(creature, far, gutils::GetAngleFromXZ(creature, far), -60.0f));
+}
+
+TEST(PlaygroundLessonNatives, ACreatureWithNoPartsOfLookSeesNothing)
+{
+	using namespace openblack;
+	// The game divides by 0 here; openblack sees nothing
+	const auto creature = map_coords::FromMetres({100.0f, 100.0f});
+	EXPECT_FALSE(CreatureSeesCamera(creature, creature, 0, 400.0f));
 }

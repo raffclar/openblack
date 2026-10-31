@@ -186,3 +186,25 @@ TEST(ChallengeRecords, TheScrollListsThemInTheOrderTheyStarted)
 	ASSERT_EQ(ordered.size(), 3u);
 	EXPECT_EQ(registry.Get<ChallengeRecord>(ordered[2]).challenge, 8u);
 }
+
+TEST(ChallengeRecords, AClearTakesEveryRecordAndLetsGoOfTheThingsTheyHeld)
+{
+	openblack::ecs::Registry registry;
+	std::vector<entt::entity> removed;
+	const records::References references {.add = [](entt::entity) {},
+	                                      .remove = [&removed](entt::entity e) { removed.push_back(e); }};
+	auto snapshot = LostBrotherSnapshot(0.0f, 0.0f, 4255);
+	snapshots::Value thing;
+	thing.value.uintVal = 42;
+	thing.type = openblack::lhvm::DataType::Object;
+	snapshot.arguments.push_back(thing);
+	records::Record(registry, snapshot, snapshots::Call::Start, 1, references);
+	auto other = LostBrotherSnapshot(0.0f, 0.0f, 4256);
+	other.challenge = k_LostBrother + 1;
+	records::Record(registry, other, snapshots::Call::Start, 2, references);
+	ASSERT_EQ(records::InOrder(registry).size(), 2u);
+	records::Clear(registry, references);
+	EXPECT_TRUE(records::InOrder(registry).empty());
+	ASSERT_EQ(removed.size(), 1u);
+	EXPECT_EQ(removed[0], static_cast<entt::entity>(42));
+}
