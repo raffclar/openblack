@@ -93,14 +93,14 @@ ImportedWalk WalkOf(const VanillaWorld& world, const VanillaRecord& record)
 }
 
 /// The record types of the buildings of a town that the import takes
-constexpr std::array k_AbodeTypes = {VanillaType::Abode, VanillaType::Creche, VanillaType::Graveyard, VanillaType::StoragePit,
-                                     VanillaType::TownCentre};
+constexpr std::array k_AbodeTypes = {VanillaType::Abode,      VanillaType::Creche, VanillaType::Graveyard,
+                                     VanillaType::StoragePit, VanillaType::Wonder, VanillaType::TownCentre};
 
 /// Each tribe has 16 rows of buildings in the same order. The import takes the six abodes, the storage pit, the creche,
-/// the graveyard and the town centre.
+/// the wonder, the graveyard and the town centre.
 constexpr int32_t k_TribeRows = 16;
 constexpr int32_t k_Tribes = 9;
-constexpr std::array<int32_t, 10> k_ImportedPlaces = {0, 1, 2, 3, 4, 5, 7, 8, 11, 12};
+constexpr std::array<int32_t, 11> k_ImportedPlaces = {0, 1, 2, 3, 4, 5, 7, 8, 10, 11, 12};
 
 /// The record types of the villagers
 constexpr std::array k_VillagerTypes = {VanillaType::Villager, VanillaType::SpecialVillager};
@@ -276,6 +276,32 @@ std::optional<ImportedTown> ReadTown(const VanillaWorld& world, const VanillaRec
 	return town;
 }
 
+/// The tribal powers of a player record. The file keeps a count before each list, and the import takes only lists of a
+/// value for each tribe.
+std::optional<ImportedTribalPower> ReadTribalPower(const VanillaWorld& world, const VanillaRecord& record)
+{
+	const auto player = world.Byte(record, "number");
+	const auto* power = world.Field(record, "tribalPower");
+	const auto* most = world.Field(record, "maxTribalPower");
+	ImportedTribalPower imported;
+	if (!player.has_value() || *player >= static_cast<uint8_t>(PlayerNames::_COUNT) || power == nullptr || most == nullptr ||
+	    power->size != sizeof(float) || most->size != sizeof(float) || power->count != imported.power.size() ||
+	    most->count != imported.most.size())
+	{
+		return std::nullopt;
+	}
+	imported.player = static_cast<PlayerNames>(*player);
+	const auto powerBytes = world.Raw(record, "tribalPower");
+	const auto mostBytes = world.Raw(record, "maxTribalPower");
+	if (powerBytes.size() != sizeof(imported.power) || mostBytes.size() != sizeof(imported.most))
+	{
+		return std::nullopt;
+	}
+	std::memcpy(imported.power.data(), powerBytes.data(), sizeof(imported.power));
+	std::memcpy(imported.most.data(), mostBytes.data(), sizeof(imported.most));
+	return imported;
+}
+
 std::optional<ImportedAbode> ReadAbode(const VanillaWorld& world, const VanillaRecord& record, std::string& why)
 {
 	const auto position = PositionOf(world, record);
@@ -313,6 +339,10 @@ std::optional<ImportedAbode> ReadAbode(const VanillaWorld& world, const VanillaR
 	}
 	const auto villagers = world.Refs(record, "villagers");
 	abode.villagers.assign(villagers.begin(), villagers.end());
+	if (record.Is(VanillaType::Wonder))
+	{
+		abode.wonderPower = world.Float(record, "wonderPower");
+	}
 	return abode;
 }
 
@@ -577,6 +607,10 @@ ImportedTowns ReadTowns(const VanillaWorld& world)
 			// The player's list of towns, in the order that the player got them
 			const auto towns = world.Refs(record, "towns");
 			imported.townLists.insert(imported.townLists.end(), towns.begin(), towns.end());
+			if (auto powers = ReadTribalPower(world, record); powers.has_value())
+			{
+				imported.tribalPowers.push_back(*powers);
+			}
 			continue;
 		}
 		else
