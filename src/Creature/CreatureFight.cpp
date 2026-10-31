@@ -21,6 +21,7 @@
 #include "Common/X87.h"
 #include "Common/X87Vector.h"
 #include "Help/HelpProfile.h"
+#include "ScriptHeaders/ScriptPropertyRules.h"
 
 using namespace openblack;
 using namespace openblack::creature_fight;
@@ -513,7 +514,7 @@ float creature_fight::RegainStamina(float stamina)
 
 float creature_fight::LifeAfterFight(float life, float fightHealth)
 {
-	return std::clamp(life - ((1.0f - std::clamp(fightHealth, 0.0f, 1.0f)) * k_LifeLostShare), 0.0f, 1.0f);
+	return life - ((1.0f - fightHealth) * k_LifeLostShare);
 }
 
 bool creature_fight::LetsChoose(const MindInFight& mind)
@@ -1508,6 +1509,11 @@ float creature_fight::HealthAfterLifeLost(float health, float damage)
 	return std::max(health - damage, 0.0f);
 }
 
+float creature_fight::HealthAfterBlow(float health, float damage)
+{
+	return health - damage;
+}
+
 namespace
 {
 /// The two creatures of a stop: their duels, the partners of their minds and the gains that they got
@@ -1655,11 +1661,15 @@ std::span<const StopStep> creature_fight::KnockOutSteps()
 	return k_KnockOut;
 }
 
-float creature_fight::LifeAfterPayments(float life, float fightHealth, uint32_t payments)
+float creature_fight::LifeAfterPayments(float life, float fightHealth, uint32_t payments, bool protectedLife)
 {
 	for (uint32_t payment = 0; payment < payments; ++payment)
 	{
-		life = LifeAfterFight(life, fightHealth);
+		const auto after = LifeAfterFight(life, fightHealth);
+		if (script::property_rules::CanSetLife(after, protectedLife, false))
+		{
+			life = after;
+		}
 	}
 	return life;
 }

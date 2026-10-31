@@ -67,6 +67,7 @@
 #include "ECS/Components/Mesh.h"
 #include "ECS/Components/Mobile.h"
 #include "ECS/Components/OneOffSpellSeed.h"
+#include "ECS/Components/Physics.h"
 #include "ECS/Components/Player.h"
 #include "ECS/Components/Pot.h"
 #include "ECS/Components/PrayerPower.h"
@@ -1868,6 +1869,18 @@ entt::entity MagicSystem::CreateScriptDispenser(glm::vec3 position, AbodeInfo bu
 		// the frames that draw the dispenser, not in the turns.
 		dispenser.effect = Locator::effectRequestSystem::value().Start(
 		    {.type = ParticleType::SpelldispenserVortex, .position = position, .synced = false, .step = EffectStep::Frame});
+	}
+	return entity;
+}
+
+entt::entity MagicSystem::CreateTownDispenser(glm::vec3 position, AbodeInfo building, float yAngleRadians, float scale,
+                                              entt::entity town, float built)
+{
+	const auto entity = CreateScriptDispenser(position, building, yAngleRadians, scale, town);
+	// It does not work until all of it is built
+	if (entity != entt::null && built < 1.0f)
+	{
+		EntityRegistry().Assign<BuildProgress>(entity, built < 0.0f ? 0.0f : built);
 	}
 	return entity;
 }

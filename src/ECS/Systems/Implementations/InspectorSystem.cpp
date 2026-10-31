@@ -147,6 +147,17 @@ public:
 		}
 		return _seam->RequestScenario(id);
 	}
+	[[nodiscard]] inspector::Json ScenarioChecks() const override
+	{
+		const auto report = _seam != nullptr ? _seam->GetScenarioChecks() : std::nullopt;
+		if (!report.has_value())
+		{
+			return nullptr;
+		}
+		return {{"scenario", report->scenario},
+		        {"verdict", std::string(testbed_scenarios::checks::Name(report->verdict))},
+		        {"lines", report->lines}};
+	}
 	[[nodiscard]] std::vector<inspector::ScenarioSummary> Scenarios() const override
 	{
 		std::vector<inspector::ScenarioSummary> summaries;

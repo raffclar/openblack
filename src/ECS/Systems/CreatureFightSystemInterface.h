@@ -97,6 +97,10 @@ public:
 	/// The creature walks back into its area, which takes it out of its fight: its body ends its fight first, and then it
 	/// gives up its action as a call-off does
 	virtual void CallOffForWalkBack(entt::entity creature) { CallOff(creature); }
+	/// The mind of the creature stops what the creature does, which also ends the fight of its body. A new plan, the
+	/// feedback of the player and a give-up of the action do this. This is a call-off. When the fight is already over and
+	/// the body still plays a move of the fight, the body ends its fight again, and the life pays for the fight again.
+	virtual void CallOffForPlan(entt::entity creature) { CallOff(creature); }
 	/// The hand took hold of the creature. The fights call it on the first turn of the hold. In a duel, the creature
 	/// leaves the duel: its life pays for the fight, and it finishes its move. Its opponent stays in the duel against it.
 	/// The fight steps of the creature wait while the hand holds it.

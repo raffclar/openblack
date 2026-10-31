@@ -17,6 +17,7 @@
 
 #include <InspectorJson.h>
 
+#include "Debug/TestbedScenarioChecks.h"
 #include "Story/NewGameChoice.h"
 
 namespace openblack::inspector
@@ -59,6 +60,8 @@ public:
 	virtual bool RequestScenario(std::string_view id) = 0;
 	/// The scenario that the game loads now, if any
 	[[nodiscard]] virtual std::optional<std::string> GetPendingScenario() const = 0;
+	/// The verdict of the scenario's checks that ran last, if it has one
+	[[nodiscard]] virtual std::optional<testbed_scenarios::checks::Report> GetScenarioChecks() const = 0;
 
 	/// Adds the state of the incoming message strip to the answer of a query
 	virtual void AddIncomingMessages(Json& result) const = 0;

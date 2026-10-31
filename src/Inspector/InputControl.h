@@ -118,6 +118,9 @@ public:
 	[[nodiscard]] virtual std::vector<std::string> GestureNames() const = 0;
 	/// The pointer, the buttons held, the hand and what the cursor picks, as the game sees them now
 	[[nodiscard]] virtual Json State() const = 0;
+	/// The name of the open debug window that takes a press of the mouse button (1 left, 2 middle, 3 right) for itself,
+	/// such as the editor, so that the game never gets it; empty when the game does
+	[[nodiscard]] virtual std::string WindowTakingButton([[maybe_unused]] uint8_t button) const { return {}; }
 	/// The lock on the player's own mouse and keyboard: "locked", "auto" (while a client is connected) or "unlocked"
 	virtual void SetLockMode(std::string_view mode) = 0;
 	/// Its mode and whether it keeps the player's input out now
