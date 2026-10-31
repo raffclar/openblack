@@ -11,6 +11,7 @@
 
 #include "ECS/PuzzleGameRules.h"
 
+using openblack::ecs::puzzle_game::LetsGoOfThingsThatWent;
 using openblack::ecs::puzzle_game::PlayedBeforeSolved;
 using openblack::ecs::puzzle_game::StateBeforeStart;
 using openblack::script::PuzzleGameStatus;
@@ -35,11 +36,13 @@ TEST(PuzzleGameRules, SomeKindsAlwaysGiveTheSameAnswer)
 	EXPECT_EQ(PlayedBeforeSolved(PuzzleGameType::Chess), false);
 }
 
-// The answer of two kinds depends on how the game starts
-TEST(PuzzleGameRules, TwoKindsHaveNoKnownAnswer)
+// The mushroom game starts in progress and gives no. The lions and sheep game starts with no side to move and gives yes.
+TEST(PuzzleGameRules, TheMushroomAndLionsAndSheepGamesGiveTheAnswerOfTheirStart)
 {
-	EXPECT_FALSE(PlayedBeforeSolved(PuzzleGameType::Immersion).has_value());
-	EXPECT_FALSE(PlayedBeforeSolved(PuzzleGameType::Lionsheep).has_value());
+	EXPECT_EQ(PlayedBeforeSolved(PuzzleGameType::Immersion), false);
+	EXPECT_EQ(PlayedBeforeSolved(PuzzleGameType::Lionsheep), true);
+	EXPECT_EQ(StateBeforeStart(PlayedBeforeSolved(PuzzleGameType::Immersion)), PuzzleGameStatus::GameNotYetBegun);
+	EXPECT_EQ(StateBeforeStart(PlayedBeforeSolved(PuzzleGameType::Lionsheep)), PuzzleGameStatus::Won);
 }
 
 // A puzzle game that nobody started is not yet begun, or won when it always gives yes
@@ -47,4 +50,13 @@ TEST(PuzzleGameRules, TheStateBeforeTheStart)
 {
 	EXPECT_EQ(StateBeforeStart(false), PuzzleGameStatus::GameNotYetBegun);
 	EXPECT_EQ(StateBeforeStart(true), PuzzleGameStatus::Won);
+}
+
+// Each kind but the beach temple puzzle lets go of its things that went. The beach temple puzzle makes its pieces again.
+TEST(PuzzleGameRules, AllKindsButTheBeachTempleLetGoOfThingsThatWent)
+{
+	EXPECT_TRUE(LetsGoOfThingsThatWent(PuzzleGameType::Tree1));
+	EXPECT_TRUE(LetsGoOfThingsThatWent(PuzzleGameType::Tree2));
+	EXPECT_TRUE(LetsGoOfThingsThatWent(PuzzleGameType::Immersion));
+	EXPECT_FALSE(LetsGoOfThingsThatWent(PuzzleGameType::Hanoi));
 }
