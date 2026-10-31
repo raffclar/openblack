@@ -316,6 +316,38 @@ TEST(WorshipSitePlaces, TheDistanceFromASiteIsFromItsMiddleNotFromWhereItStands)
 	            0.05f);
 }
 
+TEST(WorshipSitePlaces, ANeedFlagStandsAtTheAltarOfItsSiteWhereverItIsDrawn)
+{
+	Registry registry;
+	const auto altar = registry.Create();
+	registry.Assign<Transform>(altar, glm::vec3(500.0f, 10.0f, 700.0f), glm::mat3(1.0f), glm::vec3(1.0f));
+	const auto site = registry.Create();
+	registry.Assign<Transform>(site, glm::vec3(400.0f, 0.0f, 600.0f), glm::mat3(1.0f), glm::vec3(1.0f));
+	registry.Assign<WorshipSite>(site).altar = altar;
+	// The draw puts the flag up in the air at a point of the site's model, and makes it smaller
+	const auto flag = registry.Create();
+	registry.Assign<Transform>(flag, glm::vec3(420.0f, 30.0f, 610.0f), glm::mat3(1.0f), glm::vec3(0.3f));
+	registry.Assign<WorshipSiteFlag>(flag, WorshipSiteFlag {.site = site, .need = 0});
+	EXPECT_EQ(object_measures::PositionOf(registry, flag), glm::vec3(500.0f, 10.0f, 700.0f));
+	// A flag of a site with no altar has no place
+	registry.Get<WorshipSite>(site).altar = entt::null;
+	EXPECT_FALSE(object_measures::PositionOf(registry, flag).has_value());
+	// Every other thing stands where its Transform puts it
+	EXPECT_EQ(object_measures::PositionOf(registry, site), glm::vec3(400.0f, 0.0f, 600.0f));
+}
+
+TEST(WorshipSitePlaces, AVillagerInspectsASiteFromItsMiddle)
+{
+	Registry registry;
+	const auto site = registry.Create();
+	registry.Assign<Transform>(site, glm::vec3(1000.0f, 0.0f, 1000.0f), glm::mat3(1.0f), glm::vec3(1.0f));
+	registry.Assign<WorshipSite>(site);
+	EXPECT_EQ(object_measures::InspectPoint(registry, site), ws::CentreOnLand({1000.0f, 0.0f, 1000.0f}, glm::mat3(1.0f), 1.0f));
+	const auto other = registry.Create();
+	registry.Assign<Transform>(other, glm::vec3(30.0f, 5.0f, 40.0f), glm::mat3(1.0f), glm::vec3(1.0f));
+	EXPECT_EQ(object_measures::InspectPoint(registry, other), glm::vec2(30.0f, 40.0f));
+}
+
 TEST(WorshipSitePlaces, AFishFarmMeasuresWithItsFixedRadiusWhateverItsModel)
 {
 	Registry registry;

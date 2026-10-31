@@ -114,11 +114,11 @@ void testbed_scenarios::AddWorshipSiteScenarios(std::vector<Scenario>& all)
 	    .description = "The land of the ring scenario. All of the people go to worship at the site, which stands built. "
 	                   "A tiger that knows the food miracle stands east of the temple. The tiger gets the rope leash, "
 	                   "then the hand ties the leash to the food flag of the site.",
-	    .expected = "First the tiger does the order on the flag, as for a tie to any thing: it walks to the flag and "
-	                "looks at it. When that is done, it walks to the altar of the site to cast the food miracle there. "
-	                "While the tie stays and the food flag is more than six tenths of its full height, the tiger "
-	                "tries to feed the site again each time it completes its work. The inspector shows the plan "
-	                "CastMagicFoodByWorshipSite on the altar.",
+	    .expected = "First the tiger does the order on the flag, as for a tie to any thing: it walks straight toward the "
+	                "altar, where the game keeps the flag, and looks at it. When that is done, it walks to about 20 from "
+	                "the altar and casts the food miracle there. While the tie stays and the food flag is more than six "
+	                "tenths of its full height, the tiger tries to feed the site again each time it completes its work. "
+	                "The inspector shows the plan CastMagicFoodByWorshipSite on the flag.",
 	    .framing = SiteFraming(),
 	    .creatures = {CreatureSetup {.species = CreatureType::Tiger, .offset = {40.0f, -90.0f}, .facingDegrees = 270.0f}},
 	    .landScript = k_PlayerOneTownScript,

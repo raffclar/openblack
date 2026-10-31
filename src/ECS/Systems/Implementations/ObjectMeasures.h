@@ -12,6 +12,7 @@
 #include <optional>
 
 #include <entt/entity/entity.hpp>
+#include <glm/vec2.hpp>
 #include <glm/vec3.hpp>
 
 namespace openblack::ecs
@@ -28,7 +29,8 @@ namespace openblack::ecs::systems::object_measures
 /// The part of a thing whose model gives its radius on the ground and its height. A town centre's totem measures as the
 /// icon on its plinth; every other thing measures as itself.
 [[nodiscard]] entt::entity MeasuredPart(const Registry& registry, entt::entity entity);
-/// A thing's radius on the ground, 0 for one without a model. Fields and teleport stones have fixed radii.
+/// A thing's radius on the ground, 0 for one without a model. Fields and teleport stones have fixed radii. A need flag
+/// of a worship site has the radius of its model at its first size.
 [[nodiscard]] float TwoDRadius(const Registry& registry, entt::entity entity);
 /// The radius that a creature keeps clear of things by on its walks. In a temple's pen it is the radius of the creature's
 /// own size, not of its shown size. While the creature clears its way, it is the radius of its shown size.
@@ -44,7 +46,10 @@ namespace openblack::ecs::systems::object_measures
 /// The distance from the edge of a thing to the edge of another thing, across the land. A worship site measures from
 /// its middle with its fixed reach. Every other thing measures from where it stands with its radius on the ground.
 [[nodiscard]] float DistanceFromObject(const Registry& registry, entt::entity entity, entt::entity other);
-/// Where a thing stands, none once it has gone
+/// The point across the land that a villager looks at when it inspects a thing: the middle of a worship site, and the
+/// place of every other thing
+[[nodiscard]] glm::vec2 InspectPoint(const Registry& registry, entt::entity entity);
+/// Where a thing stands, none once it has gone. A need flag of a worship site stands at the altar of its site.
 [[nodiscard]] std::optional<glm::vec3> PositionOf(const Registry& registry, entt::entity entity);
 
 } // namespace openblack::ecs::systems::object_measures

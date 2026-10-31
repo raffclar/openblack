@@ -308,8 +308,9 @@ leash::Lengths LengthsOf(const Registry& registry, entt::entity creature, const 
 	{
 		return leash::TiedToMobile(CreatureHeight(body));
 	}
+	// A need flag of a worship site holds the leash at the place of the altar of its site, not where the draw shows it
 	const auto& from = registry.Get<const Transform>(creature).position;
-	const auto& to = registry.Get<const Transform>(*worn.tiedTo).position;
+	const auto to = object_measures::PositionOf(registry, *worn.tiedTo).value_or(from);
 	return leash::TiedToStatic(gutils::GetDistanceInMetres(from, to));
 }
 
@@ -1740,7 +1741,8 @@ void LeashSystem::CreatureTurn(entt::entity entity)
 			const auto hand = HandPoint(worn.holder);
 			if (worn.tiedTo.has_value())
 			{
-				leashes.confinementCentre = registry.Get<const Transform>(*worn.tiedTo).position;
+				leashes.confinementCentre =
+				    object_measures::PositionOf(registry, *worn.tiedTo).value_or(leashes.confinementCentre);
 			}
 			else if (hand.has_value())
 			{
@@ -1976,7 +1978,12 @@ void LeashSystem::LetGoOfRope(PlayerNames player, std::optional<glm::vec3> place
 	// The leash is as long as the hand is from what it is tied to: from the map position of the thing, on the land
 	const auto& registry = Locator::entitiesRegistry::value();
 	const auto tied = *worn->tiedTo;
-	const auto tiedAt = map_coords::FromMetres(glm::xz(registry.Get<const Transform>(tied).position));
+	const auto tiedPosition = object_measures::PositionOf(registry, tied);
+	if (!tiedPosition.has_value())
+	{
+		return;
+	}
+	const auto tiedAt = map_coords::FromMetres(glm::xz(*tiedPosition));
 	const auto tiedPoint = Locator::terrainSystem::has_value()
 	                           ? map_coords::ToWorld(Locator::terrainSystem::value(), tiedAt)
 	                           : glm::vec3(map_coords::ToMetres(tiedAt.x), 0.0f, map_coords::ToMetres(tiedAt.z));
