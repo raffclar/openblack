@@ -601,3 +601,15 @@ TEST(SavedSystemState, ThePathOfAMiracleIsAPresentationValue)
 	EXPECT_EQ(out.PresentationRanges().front().first + 1, out.Size());
 	EXPECT_GT(SyncedBytesAfter(paths, 0), 0u);
 }
+
+// The script's camera is the camera of this computer. The owners of the camera and of the game speed stay synced.
+TEST(SavedSystemState, TheCameraOfTheScriptIsAPresentationValue)
+{
+	const ScriptControlSystem control;
+	reflection::BinaryWriter out(Context());
+	control.SaveState(out);
+	ASSERT_EQ(out.PresentationRanges().size(), 1u);
+	EXPECT_EQ(out.PresentationRanges().front().second, out.Size());
+	EXPECT_GT(SyncedBytesAfter(control, 0), 0u);
+	EXPECT_EQ(SyncedBytesAfter(control, out.PresentationRanges().front().first), 0u);
+}
