@@ -53,6 +53,13 @@ void StartAgainAfterLoad(ecs::components::ComputerPlayer& player);
 /// The mind starts at its first turn while it is switched on, one time on each land
 [[nodiscard]] bool DueToStart(const ecs::components::ComputerPlayer& player);
 
+/// The place where the hand of a god with no temple starts, in metres
+inline constexpr glm::vec3 k_HandWithoutTemple {2150.0f, 0.0f, 2620.0f};
+
+/// The place where the hand of the god starts when its mind starts: the place of its temple, or a fixed place when the
+/// god has no temple
+[[nodiscard]] glm::vec3 StartingHand(const std::optional<glm::vec3>& temple);
+
 /// What the start of the mind looks at
 struct StartFacts
 {
