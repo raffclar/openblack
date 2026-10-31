@@ -46,17 +46,14 @@ struct GodCamera
 	glm::vec3 focus {0.0f};
 };
 
-/// The camera of a god that no person plays. The citadel of the god gives the point that the camera looks at, and the
-/// camera starts above the citadel (see CameraOf). A computer mind of the god moves the camera to its hand, and the
-/// point stays at the citadel. A god with no citadel has no such camera.
-[[nodiscard]] inline std::optional<GodCamera> GodCameraOf(const std::optional<glm::vec3>& mindCamera,
-                                                          const std::optional<glm::vec3>& citadel) noexcept
+/// The camera of a god that no person plays. The camera and its focus start at the origin of the world. The citadel of
+/// the god moves the focus to the citadel and the camera above it (see CameraOf). A computer mind of the god moves the
+/// camera to its hand, and the focus stays where it is. Thus a god with no citadel looks at the origin of the world.
+[[nodiscard]] inline GodCamera GodCameraOf(const std::optional<glm::vec3>& mindCamera,
+                                           const std::optional<glm::vec3>& citadel) noexcept
 {
-	if (!citadel.has_value())
-	{
-		return std::nullopt;
-	}
-	return GodCamera {.origin = mindCamera.value_or(CameraOf(*citadel)), .focus = *citadel};
+	const auto start = citadel.has_value() ? CameraOf(*citadel) : glm::vec3(0.0f);
+	return GodCamera {.origin = mindCamera.value_or(start), .focus = citadel.value_or(glm::vec3(0.0f))};
 }
 
 } // namespace openblack::hand_start

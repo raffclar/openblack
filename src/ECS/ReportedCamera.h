@@ -21,20 +21,45 @@
 namespace openblack::ecs
 {
 
+/// Rules for the camera that a creature reads, free of the world so that tests can use them
+namespace reported_camera
+{
+
+/// The player whose camera a creature reads when it asks for the camera nearest to it. It is the creature's own player.
+/// A creature with no player reads no camera in a network game. In a game alone it reads the camera of the player of
+/// this computer.
+[[nodiscard]] constexpr std::optional<PlayerNames> NearestCameraPlayer(std::optional<PlayerNames> creaturePlayer,
+                                                                       bool networkGame, PlayerNames localPlayer) noexcept
+{
+	if (creaturePlayer.has_value())
+	{
+		return creaturePlayer;
+	}
+	return networkGame ? std::nullopt : std::optional(localPlayer);
+}
+
+} // namespace reported_camera
+
 /// Where the world has the camera of a player, from the last report of the player that a turn did. None before the
 /// first report, or for a player with no hands.
 [[nodiscard]] std::optional<systems::HandSystemInterface::ReportedCamera> ReportedPlayerCamera(PlayerNames player);
 
-/// The player whose camera and hand a creature reads. In a network game it is the creature's player, and a creature with
-/// no player reads no player. A game with one player has one camera and one hand, which every creature reads.
+/// The camera of a player as the creatures read it. A person's player has its reported camera. Each other god has the
+/// camera of its citadel and its computer mind (see hand_start::GodCameraOf), in a game alone and in a network game.
+/// None for a player that the world does not have.
+[[nodiscard]] std::optional<systems::HandSystemInterface::ReportedCamera> PlayerCameraOf(PlayerNames player);
+
+/// The player whose hand a creature reads. In a network game it is the creature's player, and a creature with no player
+/// reads no player. A game with one player has one hand, which every creature reads.
 [[nodiscard]] std::optional<PlayerNames> ReportedCreaturePlayer(entt::entity creature);
 
-/// The reported camera that a creature reads: the camera of the player that ReportedCreaturePlayer gives
+/// The camera nearest to a creature: the camera of its own player (see PlayerCameraOf). A creature with no player reads
+/// the camera of the player of this computer in a game alone, and no camera in a network game.
 [[nodiscard]] std::optional<systems::HandSystemInterface::ReportedCamera> ReportedCreatureCamera(entt::entity creature);
 
-/// The camera of the creature's own player, which looks at the creature. A person's player has its reported camera. Each
-/// other god has the camera of its citadel and its computer mind (see hand_start::GodCameraOf), in a game alone and in a
-/// network game. A creature of the neutral player has none.
+/// The camera of the creature's own player (see PlayerCameraOf). A creature with no player (the neutral player) has
+/// none, in a game alone too. The creature looks, turns and walks to this camera, and the test whether the player looks
+/// at the creature uses it.
 [[nodiscard]] std::optional<systems::HandSystemInterface::ReportedCamera> ReportedCameraOfItsPlayer(entt::entity creature);
 
 } // namespace openblack::ecs
