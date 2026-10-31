@@ -239,3 +239,15 @@ TEST(VirtualInfluence, BackInInfluenceTheManaPathIsWorkedOutAfresh)
 	state.disabled = true;
 	EXPECT_FALSE(ManaPathEnds(state, Inside({30.0f, 0.0f, 40.0f}, 7)));
 }
+
+TEST(VirtualInfluence, OnlyATurnOutOfInfluenceUsesTheChantsOfTheWorshipSites)
+{
+	State state;
+	EXPECT_TRUE(UsesChants(state, false, false));
+	// In its own influence or under a shield, the hand uses no chants
+	EXPECT_FALSE(UsesChants(state, false, true));
+	EXPECT_FALSE(UsesChants(state, true, false));
+	// Switched off, the turn does nothing at all
+	state.disabled = true;
+	EXPECT_FALSE(UsesChants(state, false, false));
+}

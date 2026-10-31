@@ -9,6 +9,8 @@
 
 #include "CreatureFollowUp.h"
 
+#include "Common/X87.h"
+
 using namespace openblack;
 using namespace openblack::creature_follow_up;
 using creature_mind::Step;
@@ -104,4 +106,24 @@ std::optional<uint32_t> creature_follow_up::ThingToDoAgainTo(bool actsOnThing, u
 bool creature_follow_up::SuitsDoAgain(const DoAgainThing& thing)
 {
 	return thing.sameKind && thing.passesTest.value_or(true) && !(thing.notWhatItHolds && thing.heldByItself);
+}
+
+std::optional<std::string_view> creature_follow_up::FeedWorshipSiteAction(bool knowsFishing, bool knowsFoodMiracle)
+{
+	if (knowsFoodMiracle)
+	{
+		return "CastMagicFoodByWorshipSite";
+	}
+	if (knowsFishing)
+	{
+		return "PutFishByWorshipSite";
+	}
+	return std::nullopt;
+}
+
+bool creature_follow_up::SetsFeedAgain(float fill)
+{
+	// The fill compares with a double constant
+	constexpr double k_FeedAgainFill = 0.6;
+	return x87::Greater(fill, k_FeedAgainFill);
 }
