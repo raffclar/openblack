@@ -273,6 +273,25 @@ void AddFire(std::vector<Scenario>& all)
 	                  .delaySeconds = 2.0f}},
 	});
 
+	// One cow alone. A fireball rolls into it, so that it flees the fire while it burns to death.
+	all.push_back({
+	    .id = "animals.burnt_cow_stays_dead",
+	    .name = "A cow that burns to death while it flees stays dead",
+	    .facet = Facet::Animals,
+	    .description = "A fireball thrown low into one cow. The cow catches fire and runs from the fire while it burns.",
+	    .expected = "The cow burns until it has no life left. It falls, plays its dying clip and lies dead. It does not "
+	                "get up again or walk when its fright ends. After a time its body goes in a puff of grey smoke.",
+	    .environment = {.dispenserGrid = false},
+	    .framing = {.shot = Shot::Overview, .include = {{-15.0f, 25.0f}, {15.0f, 55.0f}}},
+	    .objects = {{.type = AnimalInfo::Cow, .offset = {0.0f, 40.0f}}},
+	    .miracles = {{.type = MagicType::Fireball,
+	                  .point = {0.0f, 40.0f},
+	                  .handOffset = {0.0f, 32.0f},
+	                  .handHeight = 6.0f,
+	                  .throwVelocity = {0.0f, 0.0f, 8.0f},
+	                  .delaySeconds = 2.0f}},
+	});
+
 	all.push_back({
 	    .id = "miracles.fireball_building",
 	    .name = "Fireball at a hut",

@@ -460,15 +460,7 @@ bool AnimalSystem::SetScriptState(entt::entity entity, LivingStates state)
 	// It remembers the state that it ends in, as before a reaction. An animal that reacts and goes into a state that is
 	// not a reaction stops the reaction, and keeps the new state
 	RememberStateBeforeReaction(entity);
-	if (animals::IsReactionState(static_cast<uint8_t>(GameStateOf(animal->state))) &&
-	    !animals::IsReactionState(static_cast<uint8_t>(gameState)))
-	{
-		if (Locator::reactionSystem::has_value())
-		{
-			Locator::reactionSystem::value().StopReacting(entity);
-		}
-		StopReaction(entity, false);
-	}
+	EndReactionForState(entity, *next);
 	// The state starts afresh, a land bird choosing its flying clip again, and its count of turns starts at none
 	SetTopState(*animal, *next);
 	animal->turnsUntilStateChange = 0;
@@ -1562,7 +1554,9 @@ void AnimalSystem::BringDown([[maybe_unused]] entt::entity wolf, entt::entity pr
 	}
 	if (auto* other = registry.TryGet<Animal>(prey))
 	{
-		// The animal falls, then the wolf eats it. Its states count the turns, but only while it stays in these states
+		// The animal falls, then the wolf eats it. Its states count the turns, but only while it stays in these states.
+		// A fall stops the reaction of the animal
+		EndReactionForState(prey, AnimalState::Downed);
 		SetTopState(*other, AnimalState::Downed);
 	}
 }
@@ -1828,7 +1822,8 @@ void AnimalSystem::StartDyingWithoutDeath(entt::entity entity)
 	}
 	SPDLOG_LOGGER_DEBUG(spdlog::get("game"), "Animals: #{} starts to die without a death", static_cast<uint32_t>(entity));
 	// Only its state changes. It plays its fall again even when it was dying or dead already. Its count of turns stays,
-	// so that its body lies dead for the turns that its earlier states left.
+	// so that its body lies dead for the turns that its earlier states left. The fall stops its reaction.
+	EndReactionForState(entity, AnimalState::Dying);
 	animal->state = AnimalState::Dying;
 	animal->turnsInState = 0;
 	if (const auto clip = animals::DyingClip(animal->type))
@@ -1855,6 +1850,8 @@ void AnimalSystem::SetDying(entt::entity entity)
 	{
 		return;
 	}
+	// The fall stops its reaction. Thus the end of the reaction does not make the dead animal walk again
+	EndReactionForState(entity, AnimalState::Dying);
 	animal->dying = true;
 	animal->life = 0.0f;
 	// It lies dead on its left side, unless a landing after this shows how it lies
@@ -1880,6 +1877,20 @@ void AnimalSystem::FallDying(entt::entity entity, const Animal& animal)
 	const float speed = glm::length(step) * k_TurnsPerSecond;
 	const glm::vec3 forward(portable_math::Cos(animal.heading), 0.0f, portable_math::Sin(animal.heading));
 	Locator::dynamicsSystem::value().InitialisePhysics(entity, {.velocity = forward * speed, .spin = k_DyingTumble});
+}
+
+void AnimalSystem::EndReactionForState(entt::entity entity, AnimalState next)
+{
+	const auto finalState = FinalGameStateOf(entity);
+	if (!finalState.has_value() || !animals::StateChangeEndsReaction(*finalState, static_cast<uint8_t>(GameStateOf(next))))
+	{
+		return;
+	}
+	if (Locator::reactionSystem::has_value())
+	{
+		Locator::reactionSystem::value().StopReacting(entity);
+	}
+	StopReaction(entity, false);
 }
 
 void AnimalSystem::ProcessDeath(entt::entity entity, Animal& animal)
