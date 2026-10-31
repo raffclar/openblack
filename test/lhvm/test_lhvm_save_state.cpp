@@ -258,3 +258,31 @@ TEST(LHVMSaveState, ATaskWithoutItsScriptLoadsAsNotCompiled)
 	EXPECT_EQ(reopened.GetStack().types.at(1), DataType::Object);
 	EXPECT_EQ(reopened.GetStack().values.at(1).uintVal, 8u);
 }
+
+TEST(LHVMSaveState, TheLayoutGivesWhereEachPartOfTheRunningStateStarts)
+{
+	const auto file = StateWithoutScripts();
+	std::ostringstream stream(std::ios::binary);
+	const auto layout = file.WriteWithLayout(stream);
+	const auto bytes = stream.str();
+	EXPECT_EQ(bytes, Bytes(file));
+	// The program's lists, then a stack of two places, no global values, then one task and the counts
+	EXPECT_EQ(layout.stack, 28u);
+	EXPECT_EQ(layout.variables, 28u + 28u);
+	EXPECT_EQ(layout.tasks, 28u + 28u + 4u);
+	EXPECT_EQ(layout.end, bytes.size());
+}
+
+TEST(LHVMSaveState, TheLayoutOfAProgramWithoutRunningStateIsItsEnd)
+{
+	const auto running = RunningProgram();
+	const LHVMFile program(running.GetVersion(), running.GetVariablesNames(), running.GetInstructions(), running.GetAutostart(),
+	                       running.GetScripts(), running.GetData());
+	std::ostringstream stream(std::ios::binary);
+	const auto layout = program.WriteWithLayout(stream);
+	const auto size = stream.str().size();
+	EXPECT_EQ(layout.stack, size);
+	EXPECT_EQ(layout.variables, size);
+	EXPECT_EQ(layout.tasks, size);
+	EXPECT_EQ(layout.end, size);
+}

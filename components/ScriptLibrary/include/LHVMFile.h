@@ -9,6 +9,7 @@
 
 #pragma once
 
+#include <cstddef>
 #include <cstdint>
 
 #include <array>
@@ -88,6 +89,22 @@ public:
 	/// written.
 	bool Write(const std::filesystem::path& filepath) const;
 	void Write(std::ostream& stream) const;
+
+	/// Where each part of the running state starts in the bytes that Write gives, counted from the start of the file
+	struct RunningStateLayout
+	{
+		/// The main stack, with its counts of pushes and pops
+		size_t stack {0};
+		/// The values of the global variables
+		size_t variables {0};
+		/// The tasks, then the clocks and the counts of the machine
+		size_t tasks {0};
+		/// The end of the file
+		size_t end {0};
+	};
+	/// Writes as Write does and gives where the parts of the running state are. A file with no running state gives the
+	/// end of its program for each part.
+	[[nodiscard]] RunningStateLayout WriteWithLayout(std::ostream& stream) const;
 
 	[[nodiscard]] bool IsLoaded() const { return _isLoaded; }
 	[[nodiscard]] LHVMVersion GetVersion() const { return _version; }

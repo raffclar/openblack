@@ -121,6 +121,20 @@ class SyncedCompareTests(unittest.TestCase):
         result = self.compare([("RCTX", first)], [("RCTX", second)])
         self.assertEqual(list(result), ["RCTX"])
 
+    def test_the_local_help_bytes_of_the_scripts_do_not_count(self):
+        # The client's help task makes its stack and its tasks longer than the server's; the global values are synced
+        server = b"P" + b"S" + b"G" + b"T"
+        client = b"P" + b"SSS" + b"G" + b"TTTT"
+        server_map = dict(state_map([]), scriptPresentation=[[1, 2], [3, 4]])
+        client_map = dict(state_map([]), scriptPresentation=[[1, 4], [5, 9]])
+        self.assertEqual(self.compare([("LHVM", server)], [("LHVM", client)], server_map, client_map), {})
+        changed = b"P" + b"SSS" + b"H" + b"TTTT"
+        result = self.compare([("LHVM", server)], [("LHVM", changed)], server_map, client_map)
+        self.assertEqual(list(result), ["LHVM"])
+        # With no ranges (a game for one player) the whole block counts
+        result = self.compare([("LHVM", server)], [("LHVM", client)])
+        self.assertEqual(list(result), ["LHVM"])
+
     def test_a_section_of_presentation_only_that_the_server_does_not_write_is_the_same(self):
         server = sections_block([("magic", b"\x01")])
         client = sections_block([("magic", b"\x01"), ("localParticles", b"\x05\x06")])
