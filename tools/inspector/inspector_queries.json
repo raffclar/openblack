@@ -2286,7 +2286,7 @@
   "query": "saves.slots"
  },
  {
-  "description": "Saves the game into a slot: the whole world (every entity and its components, the clock, the random numbers, the camera and the scripts) and every creature with its mind file and its leash",
+  "description": "Saves the game into a slot: the whole world (every entity and its components, the clock, the random numbers, the camera and the scripts) and every creature with its mind file and its leash. The slots 14 to 18 save into a folder of the open land in the folder of the slot. The result gives the folder of the world file in the folder of the player",
   "kind": "object",
   "parameters": [
    {
@@ -2305,7 +2305,7 @@
   "writes": true
  },
  {
-  "description": "Loads a slot. A save of the whole world loads its land and its world in place of the open land. An older save puts the creatures of the land that is open back: the values of each record, the mind of its mind file, the plan that the save kept and its leash",
+  "description": "Loads a slot. A save of the whole world loads its land and its world in place of the open land. An older save puts the creatures of the land that is open back: the values of each record, the mind of its mind file, the plan that the save kept and its leash. Slot 14 (the previous land) loads from the folder of the land before the open land, and slot 18 (the next land) from the folder of the land after it, as the save game room does. The result gives the folder that the load read",
   "kind": "object",
   "parameters": [
    {

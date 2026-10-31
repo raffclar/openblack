@@ -20,6 +20,7 @@
 #include <memory>
 #include <set>
 #include <span>
+#include <string>
 #include <vector>
 
 #include <SaveSlots.h>
@@ -224,6 +225,46 @@ TEST(SafeSaveFiles, ThePreviousAndNextLandsLoadFromTheirOwnLandsFolders)
 	EXPECT_EQ(gamesave::SaveBeforeRoomLoad(gamesave::k_NextLandSlot), gamesave::k_PreviousLandSlot);
 	EXPECT_FALSE(gamesave::SaveBeforeRoomLoad(15).has_value());
 	EXPECT_FALSE(gamesave::SaveBeforeRoomLoad(19).has_value());
+}
+
+TEST(SafeSaveFiles, EverySlotSavesAndLoadsInItsOwnFolder)
+{
+	using gamesave::LoadSlotFolder;
+	using gamesave::MindFolder;
+	using gamesave::SlotFolder;
+	const std::filesystem::path savedGames(gamesave::k_SavedGamesFolder);
+	for (uint32_t land = 1; land <= 5; ++land)
+	{
+		for (uint32_t slot = 0; slot < gamesave::k_SlotCount; ++slot)
+		{
+			const auto own = savedGames / std::to_string(slot);
+			const auto folder = SlotFolder(slot, land);
+			// All the files of a save go in the folder of its slot, or in a land folder in it
+			EXPECT_EQ(folder.parent_path() == own, gamesave::HasLandFolder(slot)) << slot << " " << land;
+			EXPECT_EQ(folder == own, !gamesave::HasLandFolder(slot)) << slot << " " << land;
+			const auto minds = MindFolder(slot, land);
+			EXPECT_TRUE(minds == folder || minds == own) << slot << " " << land;
+			if (slot != gamesave::k_PreviousLandSlot && slot != gamesave::k_NextLandSlot)
+			{
+				// A slot loads from the folder that a save on the same land writes
+				EXPECT_EQ(LoadSlotFolder(slot, land), folder) << slot << " " << land;
+			}
+		}
+	}
+	// Slot 14 on land 2 saves into the folder of land 2, and loads the previous land from the folder of land 1. Only
+	// land 3 loads the save of land 2.
+	EXPECT_EQ(SlotFolder(gamesave::k_PreviousLandSlot, 2), savedGames / "14" / "2");
+	EXPECT_EQ(LoadSlotFolder(gamesave::k_PreviousLandSlot, 2), savedGames / "14" / "1");
+	EXPECT_EQ(LoadSlotFolder(gamesave::k_PreviousLandSlot, 3), savedGames / "14" / "2");
+	// The game also asks for the land before land 1 and the land after land 5, which have no saves
+	EXPECT_EQ(LoadSlotFolder(gamesave::k_PreviousLandSlot, 1), savedGames / "14" / "0");
+	EXPECT_EQ(LoadSlotFolder(gamesave::k_NextLandSlot, 5), savedGames / "18" / "6");
+	// The minds of slots 14 and 18 stay in the folder of the slot, for every land
+	EXPECT_EQ(MindFolder(gamesave::k_PreviousLandSlot, 2), savedGames / "14");
+	EXPECT_EQ(MindFolder(gamesave::k_NextLandSlot, 2), savedGames / "18");
+	// An autosave of land 2 saves and loads in the folder of land 2
+	EXPECT_EQ(SlotFolder(15, 2), savedGames / "15" / "2");
+	EXPECT_EQ(MindFolder(15, 2), savedGames / "15" / "2");
 }
 
 TEST(SafeSaveFiles, ASaveBeforeALoadAlwaysStartsTheHelpOnLoading)
