@@ -463,8 +463,8 @@ void AddCreatureCatchesBuildingPiece(std::vector<Scenario>& all)
 	cells.objects.resize(2);
 	cells.throws.resize(1);
 	cells.throws.front().repeatSeconds = 600.0f;
+	// The mind stays paused, so that only the command moves the tiger
 	cells.creatures.front().pauseMind = true;
-	cells.creatures.front().thinksAfterSeconds = k_StompAfterTheBreak - 0.5f;
 	cells.commands = {{.kind = Command::Kind::WalkTo,
 	                   .creature = 0,
 	                   .delaySeconds = k_StompAfterTheBreak,
