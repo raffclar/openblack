@@ -1783,7 +1783,10 @@ void AddRivalCreatureLoads(std::vector<Scenario>& all)
 	                   "runs it.",
 	    .expected = "A Wolf of player two appears on the ground at the place, fully grown. It takes the body, the "
 	                "alignment and the tattoos of the LethysCreature mind file. It knows every leash, and it is the "
-	                "creature of player two.",
+	                "creature of player two. The script sets its strength, warmth, fatness, energy, itchiness, poo, "
+	                "exhaustion, thirst and fight health to 0.2 in the turn that it loads, and these values stay: the "
+	                "Creature and CreatureNeeds components of the wolf show them after its first turns. Only the "
+	                "warmth then moves to the temperature of the land.",
 	    .environment = {.dispenserGrid = false, .players = {PlayerNames::PLAYER_TWO}},
 	    .framing = {.shot = Shot::Placed, .eye = {0.0f, 25.0f, -55.0f}, .look = {10.0f, 8.0f, 0.0f}},
 	    .creatures = {cow},

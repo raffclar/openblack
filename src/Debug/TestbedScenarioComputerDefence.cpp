@@ -109,6 +109,30 @@ void testbed_scenarios::AddComputerGodDefenceScenarios(std::vector<Scenario>& al
 	                         .second = {.kind = ComputerActionThing::Kind::Icon, .type = MagicType::Shield}}},
 	});
 	all.push_back({
+	    .id = "mind.computer_god_defend_town_with_creature",
+	    .name = "A computer god that sends its creature to defend its town",
+	    .facet = Facet::Mind,
+	    .description = "The land of the shield defence scenario, with the tiger of player two to the east of the temple. "
+	                   "After three seconds, a testbed tool puts the action DefendTown in the queue of the god, with the "
+	                   "town and no second thing, as the land script of the big fight does. The town has no record of "
+	                   "an attack, so the shield is not wanted.",
+	    .expected = "The god chooses the creature defence. The tiger walks to the storage pit of the town, at the speed "
+	                "for a long or a short journey. The hand puts the leash on the tiger and ties the leash to that "
+	                "storage pit, as when the god sends its creature to help a town. The game log shows the action "
+	                "DefendTownWithCreature, and the leash of the tiger goes to the storage pit.",
+	    .framing = {.shot = Shot::Overview, .include = {glm::vec2(-80.0f, -110.0f), glm::vec2(120.0f, 100.0f)}},
+	    .creatures = {{.label = "player two's",
+	                   .species = CreatureType::Tiger,
+	                   .offset = {90.0f, -60.0f},
+	                   .owner = PlayerNames::PLAYER_TWO,
+	                   .size = 1.0f}},
+	    .landScript = k_ComputerGodDefenceScript,
+	    .worshipShare = 0.5f,
+	    .computerActions = {{.afterTurns = 30,
+	                         .node = "DefendTown",
+	                         .first = {.kind = ComputerActionThing::Kind::Town, .townId = 900}}},
+	});
+	all.push_back({
 	    .id = "saves.computer_god_mind",
 	    .name = "A computer god whose mind starts again after the load of a saved game",
 	    .facet = Facet::Mind,
