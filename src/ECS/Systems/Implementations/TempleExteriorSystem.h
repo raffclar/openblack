@@ -42,6 +42,7 @@ class TempleExteriorSystem final: public TempleExteriorSystemInterface
 public:
 	void UpdateTurn() override;
 	void FindAfterLoad() override;
+	void ForgetLand() override;
 
 private:
 	/// The blends made in one call, which the temples with the same look or the same texture use again. Each blend

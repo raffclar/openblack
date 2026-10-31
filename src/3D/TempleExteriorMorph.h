@@ -70,6 +70,14 @@ struct Corner
 /// The name of a size's and stage's mesh
 [[nodiscard]] std::string MeshName(uint32_t size, uint32_t stage);
 
+/// The name in the cache of the own mesh of the temple with this entity number
+[[nodiscard]] std::string OwnMeshName(uint32_t temple);
+/// The name in the cache of the worship site mesh that wears the skin of the temple's own mesh with this id
+[[nodiscard]] std::string SiteMeshName(uint32_t templeMesh);
+/// The ids in the cache of the meshes that are made for the temple's own mesh with this id: that mesh and the mesh of
+/// its worship sites
+[[nodiscard]] std::array<uint32_t, 2> MeshesMadeFor(uint32_t templeMesh);
+
 /// The two images of a temple's texture blended from evil to neutral, or neutral to good, and how far, from 0 to 255
 enum class Look : uint8_t
 {

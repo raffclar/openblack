@@ -123,6 +123,13 @@ std::vector<QueryDescription> GameProvider::Describe() const
 	                      .parameters = {},
 	                      .kind = ResultKind::List,
 	                      .needsNear = false},
+	    QueryDescription {.name = "scenario_checks",
+	                      .description = "The verdict of the checks that the last testbed scenario states about its own "
+	                                     "outcome: the scenario, passed or failed or waiting, and a line for each check. Null "
+	                                     "before a scenario has a verdict. A scenario with no checks has none.",
+	                      .parameters = {},
+	                      .kind = ResultKind::Object,
+	                      .needsNear = false},
 	    QueryDescription {
 	        .name = "seed",
 	        .description =
@@ -351,6 +358,10 @@ QueryResult GameProvider::Run(std::string_view query, const QueryContext& contex
 		    {"fixed_ms", _target.GetFixedFrameTime().has_value() ? Json(*_target.GetFixedFrameTime()) : Json(nullptr)},
 		    {"pause_on_load", _pauseOnLoad},
 		});
+	}
+	if (query == "scenario_checks")
+	{
+		return QueryResult::Value(_target.ScenarioChecks());
 	}
 	if (query == "scenarios")
 	{

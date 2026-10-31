@@ -384,6 +384,22 @@ void Finish(entt::entity building)
 		creches::StartsWorking(building);
 		// A finished storage pit starts working, and its town lets go of its temporary piles
 		StoragePitStartsWorking(building);
+		// A finished miracle dispenser of a town counts as put up for mending only while it is not whole, as an abode
+		if (auto* dispenser = registry.TryGet<SpellDispenser>(building); dispenser != nullptr && TownOf(building).has_value())
+		{
+			dispenser->putUpForMending = world_objects::LifeOf(building) < 1.0f;
+			// Its town's player counts one more building finished, of its kind. In a network game it counts as a house
+			// built, as each building that is not a wonder does.
+			const auto owner = world_objects::PlayerOf(building);
+			if (const auto* info = world_objects::AbodeInfoOf(building); owner.has_value() && info != nullptr)
+			{
+				player_statistics::CountBuilt(registry, *owner, info->abodeType);
+			}
+			if (owner.has_value() && Locator::gameEndSystem::has_value())
+			{
+				Locator::gameEndSystem::value().AddToCondition(owner, game_end::Condition::HousesBuilt, 1);
+			}
+		}
 		// A finished building of a town counts as put up for mending only while it isn't whole. No one is moved in: the
 		// homeless and the crowded find it when they next look for a better home.
 		if (auto* abode = registry.TryGet<Abode>(building); abode != nullptr && TownOf(building).has_value())
@@ -511,7 +527,11 @@ float construction::PlannedTempleReach(entt::entity plan)
 	return PlannedReach(Entities().Get<const Transform>(plan));
 }
 
-entt::entity construction::StartPlannedTemple(entt::entity plan, float siteDesire)
+namespace
+{
+/// A planned temple goes up where it was planned, with as much of it built as given. It is no longer among its town's
+/// plans, and the plan goes. The temple.
+entt::entity PlaceTemple(entt::entity plan, float built)
 {
 	auto& registry = Entities();
 	const auto planned = registry.Get<const PlannedTemple>(plan);
@@ -522,9 +542,9 @@ entt::entity construction::StartPlannedTemple(entt::entity plan, float siteDesir
 	{
 		std::erase(registry.Get<Town>(town->second).planned, plan);
 	}
-	// The temple's heart goes up where it was planned, with nothing of it built, and a site for its builders
+	// The temple's heart goes up where it was planned
 	const auto temple =
-	    archetypes::CitadelArchetype::Create(transform.position, OwnerOf(planned), planned.yAngle, transform.scale, 0.0f);
+	    archetypes::CitadelArchetype::Create(transform.position, OwnerOf(planned), planned.yAngle, transform.scale, built);
 	registry.Get<Temple>(temple).town = planned.townId;
 	// The temple and its heart take the exact map position of the plan
 	const auto place = thing_map_place::Of(registry, plan);
@@ -536,8 +556,21 @@ entt::entity construction::StartPlannedTemple(entt::entity plan, float siteDesir
 	// Move the footpaths of the plan to the heart. Then remove the plan.
 	villager_footpath::HandOverFootpaths(plan, temple);
 	registry.Destroy(plan);
+	return temple;
+}
+} // namespace
+
+entt::entity construction::StartPlannedTemple(entt::entity plan, float siteDesire)
+{
+	// Nothing of the temple is built, and a site wants builders for it
+	const auto temple = PlaceTemple(plan, 0.0f);
 	OpenSite(temple, siteDesire);
 	return temple;
+}
+
+entt::entity construction::RaisePlannedTemple(entt::entity plan)
+{
+	return PlaceTemple(plan, 1.0f);
 }
 
 float construction::BuiltOf(entt::entity object)

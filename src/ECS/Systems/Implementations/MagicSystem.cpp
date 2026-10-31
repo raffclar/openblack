@@ -67,6 +67,7 @@
 #include "ECS/Components/Mesh.h"
 #include "ECS/Components/Mobile.h"
 #include "ECS/Components/OneOffSpellSeed.h"
+#include "ECS/Components/Physics.h"
 #include "ECS/Components/Player.h"
 #include "ECS/Components/Pot.h"
 #include "ECS/Components/PrayerPower.h"
@@ -1872,6 +1873,18 @@ entt::entity MagicSystem::CreateScriptDispenser(glm::vec3 position, AbodeInfo bu
 	return entity;
 }
 
+entt::entity MagicSystem::CreateTownDispenser(glm::vec3 position, AbodeInfo building, float yAngleRadians, float scale,
+                                              entt::entity town, float built)
+{
+	const auto entity = CreateScriptDispenser(position, building, yAngleRadians, scale, town);
+	// It does not work until all of it is built
+	if (entity != entt::null && built < 1.0f)
+	{
+		EntityRegistry().Assign<BuildProgress>(entity, built < 0.0f ? 0.0f : built);
+	}
+	return entity;
+}
+
 void MagicSystem::SetDispenserMagic(entt::entity dispenser, MagicType type, uint32_t turns)
 {
 	auto* component = EntityRegistry().TryGet<SpellDispenser>(dispenser);
@@ -2254,6 +2267,28 @@ entt::entity MagicSystem::TakeIconSeed(entt::entity site, PlayerNames holder, Sp
 	return entity;
 }
 
+entt::entity MagicSystem::GiveOneShotSeedToHand(PlayerNames player, SpellSeedType seedType, int powerUp, float multiplier)
+{
+	// Find the icon before the seed goes into the hand: the icon gives a seed only to a free hand
+	const auto icon =
+	    Locator::spellIconSystem::has_value() ? Locator::spellIconSystem::value().BestIconFor(player, seedType) : entt::null;
+	const auto entity = GiveSeedToHand(player, seedType, powerUp, multiplier);
+	if (entity == entt::null)
+	{
+		return entt::null;
+	}
+	auto& seed = EntityRegistry().Get<SpellSeed>(entity);
+	seed.fromGlobe = true;
+	seed.hasIcon = icon != entt::null;
+	if (seed.hasIcon)
+	{
+		auto& icons = Locator::spellIconSystem::value();
+		seed.worshipSite = icons.SiteOfIcon(icon);
+		icons.SeedMadeAt(icon, entity);
+	}
+	return entity;
+}
+
 entt::entity MagicSystem::Summon(PlayerNames player, SpellSeedType seedType, int powerUp, entt::entity site)
 {
 	const ActingAs acting(*this, player);
@@ -2287,12 +2322,11 @@ bool MagicSystem::TapGlobe(entt::entity orb, PlayerNames player)
 		return false;
 	}
 	const auto component = registry.Get<const OneOffSpellSeed>(orb);
-	const auto seed = GiveSeedToHand(player, component.seedType, component.powerUp, component.multiplier);
+	const auto seed = GiveOneShotSeedToHand(player, component.seedType, component.powerUp, component.multiplier);
 	if (seed == entt::null)
 	{
 		return false;
 	}
-	registry.Get<SpellSeed>(seed).fromGlobe = true;
 	if (ActsOnOwnHand())
 	{
 		// The hand takes the globe itself, and a globe does not show the name of its miracle
@@ -2636,11 +2670,19 @@ void MagicSystem::SendCast(magic::CastTarget target)
 	const auto& seedInfo = magic::GetSpellSeedInfo(Info(), seed.seedType);
 	if (!HeldSpellRunsInHand())
 	{
+		// The gesture kept for the cast: at the land it is the circle remembered, at a thing the last gesture drawn
+		const auto last =
+		    Locator::gestureSystem::has_value() ? Locator::gestureSystem::value().GetLastRecognised() : std::nullopt;
+		const auto kept = target != magic::CastTarget::Object ? (_circle.has_value() ? GestureType::Circle : GestureType::None)
+		                                                      : (last.has_value() ? last->request.gesture : GestureType::None);
+		// A cast that passes the check of its sizing gesture starts the path of the gesture again, as the hand sends it
+		if (gesture::PassesSizingCheck(seedInfo.sizingGesture, kept) && Locator::gestureSystem::has_value())
+		{
+			Locator::gestureSystem::value().ForgetPath();
+		}
 		// The help counts a cast of a miracle with a power-up, as the hand sends it. The count waits for the next report.
 		if (Locator::helpProfileSystem::has_value())
 		{
-			const auto last =
-			    Locator::gestureSystem::has_value() ? Locator::gestureSystem::value().GetLastRecognised() : std::nullopt;
 			auto* gestures = Locator::gestureSystem::has_value() ? &Locator::gestureSystem::value() : nullptr;
 			const gesture::HandContext::Seed facts {.ready = seed.ready,
 			                                        .cast = seed.hasCast,
@@ -2649,7 +2691,7 @@ void MagicSystem::SendCast(magic::CastTarget target)
 			                                        .askedPowerUp =
 			                                            gestures != nullptr ? gestures->GetAskedPowerUp() : GestureType::None,
 			                                        .canPowerUp = seed.hasIcon};
-			if (gesture::CountsPoweredUpCast(facts, last.has_value() ? last->request.gesture : GestureType::None))
+			if (gesture::CountsPoweredUpCast(facts, kept))
 			{
 				// The hand starts its power-ups again, and the help counts the cast
 				gestures->PoweredUpCast();

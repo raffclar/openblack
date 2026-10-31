@@ -108,10 +108,6 @@ struct ImportedWalk
 /// The walk of a record of a walker of the file: a villager or an animal
 [[nodiscard]] ImportedWalk ReadWalk(const gamesave::VanillaWorld& world, const gamesave::VanillaRecord& record);
 
-/// A metre value that gives the whole map units again, as openblack changes metres to whole units. Nothing when no
-/// float near the value does.
-[[nodiscard]] std::optional<float> MetresOfWhole(int32_t whole);
-
 /// A speed in metres a second that gives the whole map units a turn of the file again
 [[nodiscard]] float WalkSpeedOf(uint16_t wholeSpeed);
 
@@ -301,6 +297,17 @@ struct ImportedSite
 	std::array<glm::vec3, k_ImportedSitePlaces> places {};
 };
 
+/// The flag of a desire of a town: it flies as high as the town wants the thing
+struct ImportedDesireFlag
+{
+	/// The number of the object of its town in the file
+	uint32_t town {0};
+	/// The desire, by its row of the table of the desires of a town
+	uint32_t desire {0};
+	/// How high it flies, from 0 to 1
+	float level {0.0f};
+};
+
 /// The towns, buildings and villagers of a world file, in the order of the file
 struct ImportedTowns
 {
@@ -319,6 +326,8 @@ struct ImportedTowns
 	std::vector<uint32_t> gameTownList;
 	/// The tribal powers of each player of the file that keeps a value for each tribe
 	std::vector<ImportedTribalPower> tribalPowers;
+	/// The flags of the desires of the towns
+	std::vector<ImportedDesireFlag> desireFlags;
 	/// Each record that the import does not take, and why
 	std::vector<std::string> skipped;
 };

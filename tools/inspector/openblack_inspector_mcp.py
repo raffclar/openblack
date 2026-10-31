@@ -270,6 +270,13 @@ TOOLS = [
         "query": "game.scenarios",
     },
     {
+        "name": "game_scenario_checks",
+        "description": "The verdict of the checks that the last testbed scenario states about its own outcome (passed, "
+                       "failed or waiting) with a line for each check; null before it has one.",
+        "inputSchema": schema(SHAPING),
+        "query": "game.scenario_checks",
+    },
+    {
         "name": "game_load_scenario",
         "description": "Loads a testbed scenario on a fresh testbed by its id (see game_scenarios).",
         "inputSchema": schema({"id": {"type": "string"}}, ["id"]),

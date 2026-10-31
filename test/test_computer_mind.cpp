@@ -9,7 +9,9 @@
 
 #include <cstdint>
 
+#include <algorithm>
 #include <bit>
+#include <iterator>
 #include <map>
 #include <optional>
 #include <string>
@@ -314,6 +316,84 @@ TEST(ComputerMind, NamesSetEveryNodeThatStartsTheSame)
 	EXPECT_FALSE(SetSuppression(mind, "chargeupspell", 0.5f));
 	EXPECT_TRUE(SetSuppression(mind, "ChargeUpSpell", 0.5f));
 	EXPECT_FLOAT_EQ(mind.nodes[NodeOf(mind, NodeKind::ActionChargeUpSpell)].suppression, 0.5f);
+}
+
+TEST(ComputerMind, NameSearchFindsANodeBeforeItsChildrenAndTheFirstChildFirst)
+{
+	const auto mind = MakeMind();
+	const auto kindsOf = [&mind](const std::vector<uint16_t>& found) {
+		std::vector<NodeKind> kinds;
+		std::ranges::transform(found, std::back_inserter(kinds), [&mind](uint16_t node) { return mind.nodes[node].kind; });
+		return kinds;
+	};
+	// The need above the action has a shorter name that starts the name of the action, so the search finds the need first
+	const auto found = FindNodes(mind, "ReactToPlayerThrowingStuff");
+	const std::vector<NodeKind> expected {NodeKind::NeedReactToPlayer, NodeKind::ActionReactToPlayerThrowingStuff,
+	                                      NodeKind::TopReactToPlayer, NodeKind::NeedReactToPlayer,
+	                                      NodeKind::ActionReactToPlayerThrowingStuff};
+	EXPECT_EQ(kindsOf(found), expected);
+	// The search goes in the order of the tree: the root first, then each child and all of its branch in turn
+	EXPECT_TRUE(std::ranges::is_sorted(found));
+	// A script that forces the creature defence of a town starts the first node found: the town defence above it
+	const auto defence = FindNodes(mind, "DefendTownWithCreature");
+	ASSERT_FALSE(defence.empty());
+	EXPECT_EQ(defence.front(), NodeOf(mind, NodeKind::ActionDefendTown));
+	// A name that is shorter than the name of a node does not find the node
+	EXPECT_TRUE(FindNodes(mind, "ReactToPlay").empty());
+	// A weight for the miracle attack on a creature also goes to the creature attack above it, but not to its other child
+	auto weights = MakeMind();
+	EXPECT_EQ(FindNodes(weights, "AttackCreatureWithSpells").size(), 4u);
+	EXPECT_TRUE(SetPersonality(weights, "AttackCreatureWithSpells", 0.5f));
+	EXPECT_FLOAT_EQ(weights.nodes[NodeOf(weights, NodeKind::ActionAttackCreature)].weight, 0.5f);
+	EXPECT_FLOAT_EQ(weights.nodes[NodeOf(weights, NodeKind::ObjectAttackCreatureWithSpells)].weight, 0.5f);
+	EXPECT_NE(weights.nodes[NodeOf(weights, NodeKind::ObjectAttackCreatureWithCreature)].weight, 0.5f);
+}
+
+TEST(ComputerMind, KindsThatTheirOwnNameDoesNotFindFirst)
+{
+	const auto mind = MakeMind();
+	const auto shortName = [](NodeKind kind) {
+		const auto name = NameOf(FirstNodeNames(), kind);
+		return name.substr(0, name.rfind(':'));
+	};
+	std::vector<NodeKind> hidden;
+	for (size_t i = 0; i < static_cast<size_t>(NodeKind::_Count); ++i)
+	{
+		const auto kind = static_cast<NodeKind>(i);
+		// Some rows of the table are under no node of the tree
+		if (std::ranges::none_of(mind.nodes, [kind](const Node& node) { return node.kind == kind; }))
+		{
+			continue;
+		}
+		const auto name = shortName(kind);
+		const auto found = FindNodes(mind, name);
+		ASSERT_FALSE(found.empty());
+		// Some kinds have the same name as other kinds: a node of the same name found first does not hide the kind
+		if (shortName(mind.nodes[found.front()].kind) != name)
+		{
+			hidden.push_back(kind);
+		}
+	}
+	// A node whose name starts with the name of a node that comes before it in the tree is never the first node found
+	std::vector<NodeKind> expected {NodeKind::ActionGiveToPlayer,
+	                                NodeKind::ActionTeachCreatureNormalAction,
+	                                NodeKind::ActionTeachCreatureAggressiveMagic,
+	                                NodeKind::ActionTeachCreatureCompassionateMagic,
+	                                NodeKind::ActionTeachCreatureImpressiveMagic,
+	                                NodeKind::ObjectTeachCreatureAggressiveMagic,
+	                                NodeKind::ObjectTeachCreatureCompassionateMagic,
+	                                NodeKind::ObjectTeachCreatureImpressiveMagic,
+	                                NodeKind::ObjectGetCreaturetoHelpBuild,
+	                                NodeKind::ObjectCastFoodSpellOnWorshipSite,
+	                                NodeKind::ObjectAttackCreatureWithSpells,
+	                                NodeKind::ObjectAttackCreatureWithCreature,
+	                                NodeKind::ActionReactToPlayerCastingSpells,
+	                                NodeKind::ActionReactToPlayerThrowingStuff,
+	                                NodeKind::ObjectDefendTownWithCreature,
+	                                NodeKind::ActionDefendTownAgainstBeliefAttack};
+	std::ranges::sort(hidden);
+	std::ranges::sort(expected);
+	EXPECT_EQ(hidden, expected);
 }
 
 TEST(ComputerMindScript, DirectActionUsesBothThingsAndHoldsTheHelp)

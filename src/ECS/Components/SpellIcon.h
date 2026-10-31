@@ -64,6 +64,8 @@ struct WorshipIcon
 {
 	entt::entity site {entt::null};
 	SpellSeedType seed {SpellSeedType::None};
+	/// Its place among the six places of the site, from 0, or -1 when it stands further out (see icons::SitePlace)
+	int32_t place {-1};
 	/// It is charging its miracle, at a power-up level, for its player's hand, since a turn
 	bool charging {false};
 	int powerUp {magic::k_BasePowerUpLevel};

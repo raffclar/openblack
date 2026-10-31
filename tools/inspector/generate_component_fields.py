@@ -60,6 +60,8 @@ RUN_ONLY = {
     "SoundTag": {"emitter", "turns"},
     # The ring of light is made again after a load
     "CreatureArena": {"ring"},
+    # The game does not save the mark of a town that a scaffold founded: a load gives the town its base reach again
+    "Town": {"zeroBaseInfluence"},
 }
 
 # Fields of values that only the frames or the local random numbers of a computer change, and that no turn reads. A

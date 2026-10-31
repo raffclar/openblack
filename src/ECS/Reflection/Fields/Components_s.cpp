@@ -222,6 +222,7 @@ void openblack::ecs::reflection::RegisterFields_Components_s(entt::meta_ctx& con
 	    .Field<&components::SpellDispenser::building>("building")
 	    .Field<&components::SpellDispenser::town>("town")
 	    .Field<&components::SpellDispenser::putUpForMending>("putUpForMending")
+	    .Field<&components::SpellDispenser::notPlannedAgain>("notPlannedAgain")
 	    .Field<&components::SpellDispenser::age>("age");
 	Reflect<components::TestbedDispenser> {context};
 	Reflect<components::TownMagic>(context).Field<&components::TownMagic::held>("held");
@@ -236,6 +237,7 @@ void openblack::ecs::reflection::RegisterFields_Components_s(entt::meta_ctx& con
 	Reflect<components::WorshipIcon>(context)
 	    .Field<&components::WorshipIcon::site>("site")
 	    .Field<&components::WorshipIcon::seed>("seed")
+	    .Field<&components::WorshipIcon::place>("place")
 	    .Field<&components::WorshipIcon::charging>("charging")
 	    .Field<&components::WorshipIcon::powerUp>("powerUp")
 	    .Field<&components::WorshipIcon::charger>("charger")

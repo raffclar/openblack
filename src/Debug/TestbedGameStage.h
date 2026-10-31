@@ -41,6 +41,7 @@ public:
 	void PlayLogoEffect() override;
 	[[nodiscard]] bool ContinueFromExitSave() override;
 	void RequestQuit() override;
+	void ReportChecks(checks::Report report, bool quit) override;
 };
 
 } // namespace openblack::testbed_scenarios

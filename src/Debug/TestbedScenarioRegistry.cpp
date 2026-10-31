@@ -7330,6 +7330,24 @@ void AddHand(std::vector<Scenario>& all)
 	                 {.kind = Kind::PointerTo, .delaySeconds = 1.0f, .point = {0.5f, 0.7f}}},
 	});
 
+	// The camera looks at a ripe wheat field of the player's town from 22 m. The hand scoops from it for three seconds.
+	all.push_back({
+	    .id = "hand.scoop_field_let_go",
+	    .name = "Letting go of a scoop from a field of the player",
+	    .facet = Facet::Hand,
+	    .description = "The hand takes wheat from a ripe field of the player's town and keeps the button down for three "
+	                   "seconds. Then it lets go of the button and moves away with the handful.",
+	    .expected = "While it scoops, the amount that the hand holds shows after each turn. When the button is let go, "
+	                "the amount shows once more, because the field is of the player of this computer.",
+	    .environment = {.dispenserGrid = false},
+	    .framing = {.shot = Shot::Placed, .eye = {-19.0f, 11.0f, 3.0f}, .look = {0.0f, 0.0f, 0.0f}},
+	    .objects = {{.type = FieldTypeInfo::Wheat, .offset = {0.0f, 0.0f}, .ripeCrop = true}},
+	    .commands = {{.kind = Kind::PointerTo, .delaySeconds = 1.0f, .point = {0.5f, 0.5f}},
+	                 {.kind = Kind::PointerPress, .delaySeconds = 1.0f, .value = 3},
+	                 {.kind = Kind::PointerRelease, .delaySeconds = 3.0f, .value = 3},
+	                 {.kind = Kind::PointerTo, .delaySeconds = 1.0f, .point = {0.5f, 0.7f}}},
+	});
+
 	// The camera looks at a rock on flat land from 35 m. The hand does one thing after another, with a pause between them.
 	all.push_back({
 	    .id = "hand.state_blend",
@@ -8607,6 +8625,23 @@ void AddCombat(std::vector<Scenario>& all)
 	    .creatures = {red(PlayerNames::PLAYER_ONE, 0.6f, -0.45f), blue(PlayerNames::PLAYER_TWO, 0.6f, -0.45f)},
 	    .commands = {Fight(Kind::StartFight, 0, 1, 1.0f), Fight(Kind::FightAuto, 0, 1, 0.2f), Leash(0, LeashType::Rope, 18.0f),
 	                 Go(Kind::LeashOrderAt, 0, {-25.0f, 0.0f}, 1.0f, false)},
+	});
+
+	all.push_back({
+	    .id = "combat.life_pays_after_the_fight",
+	    .name = "A stroke just after a call-off costs life again",
+	    .facet = Facet::Combat,
+	    .description = "The red tiger asks the blue tiger to fight, and both fight by themselves. In the duel the red "
+	                   "tiger gets the rope leash, and a second later the player tells it with the leash to go to a point "
+	                   "to the south. At once after the order, the player strokes the blue tiger.",
+	    .expected = "The order calls the fight off with no winner. The stroke stops the blue tiger again. While its body "
+	                "still plays its stance, a move, a block or a cast, its life pays one time more: the fight transcript "
+	                "has a level record for its life with why stopped_again and life_payments 1. A body that finishes "
+	                "pays nothing.",
+	    .framing = ringside,
+	    .creatures = {red(PlayerNames::PLAYER_ONE, 0.6f, -0.45f), blue(PlayerNames::PLAYER_TWO, 0.6f, -0.45f)},
+	    .commands = {Fight(Kind::StartFight, 0, 1, 1.0f), Fight(Kind::FightAuto, 0, 1, 0.2f), Leash(0, LeashType::Rope, 18.0f),
+	                 Go(Kind::LeashOrderAt, 0, {-25.0f, 0.0f}, 1.0f, false), Act(Kind::Stroke, 1, 0.0f)},
 	});
 
 	{
@@ -12939,6 +12974,7 @@ void AddWorkshopScenarios(std::vector<Scenario>& all)
 
 	constexpr glm::vec2 k_LooseScaffold {-25.0f, 30.0f};
 	constexpr glm::vec2 k_BuildPlace {-5.0f, 25.0f};
+	constexpr glm::vec2 k_FoundingScaffold {-60.0f, 80.0f};
 	all.push_back({
 	    .id = "objects.scaffold_starts_building",
 	    .name = "A scaffold put down near a town starts the building that it offers",
@@ -13047,6 +13083,59 @@ void AddWorkshopScenarios(std::vector<Scenario>& all)
 	                {.type = ScaffoldInfo::Normal, .offset = k_LooseScaffold, .scale = 0.7f}},
 	    .commands = {{.kind = Kind::ScaffoldStartsSite, .delaySeconds = 1.0f, .object = 1},
 	                 {.kind = Kind::DestroyScaffoldSite, .delaySeconds = 4.0f, .object = 1}},
+	});
+
+	all.push_back({
+	    .id = "objects.scaffold_founds_town",
+	    .name = "A scaffold put down away from every town founds a new town",
+	    .facet = Facet::Objects,
+	    .description = "A Celtic town of the player's in the middle of the map, with no buildings, and a scaffold of the "
+	                   "town with the value of five scaffolds, 100 m away from the town. After one second the scaffold "
+	                   "starts the building that it offers where it lies, as when the hand puts it down.",
+	    .expected = "A building site of a Celtic village centre opens at the scaffold, with the phantom of the village "
+	                "centre. The inspector query town.list shows a new Celtic town of the player's with the id 703058. "
+	                "The new town believes in the player with the starting belief of a new town, and has no reach of "
+	                "its own until it has buildings.",
+	    .environment = {.dispenserGrid = false},
+	    .framing = {.shot = Shot::Overview,
+	                .include = {k_FoundingScaffold - glm::vec2 {20.0f}, k_FoundingScaffold + glm::vec2 {20.0f}}},
+	    .objects = {{.type = ScaffoldInfo::Normal, .offset = k_FoundingScaffold, .scale = 1.5f, .joinTown = true}},
+	    .commands = {{.kind = Kind::ScaffoldStartsSite, .delaySeconds = 1.0f, .object = 0}},
+	});
+
+	all.push_back({
+	    .id = "objects.burning_scaffold_tap",
+	    .name = "A tap on a burning scaffold breaks off a burning piece, and the fire burns the scaffolds away",
+	    .facet = Facet::Objects,
+	    .description = "A loose scaffold that is worth three scaffolds and that no workshop counts, alight as at the start "
+	                   "of a fire, with no town near. After one second the hand of the player taps the scaffold.",
+	    .expected = "The tap breaks one small scaffold off. The two parts move apart and one of four sounds plays. The "
+	                "piece burns as the old scaffold burns: the inspector shows a Fire on the two scaffolds. The fire "
+	                "takes the life of each scaffold. When a scaffold has no life, it goes and leaves nothing.",
+	    .environment = {.dispenserGrid = false},
+	    .framing = {.shot = Shot::Overview,
+	                .include = {k_FoundingScaffold - glm::vec2 {12.0f}, k_FoundingScaffold + glm::vec2 {12.0f}}},
+	    .objects = {{.type = ScaffoldInfo::Normal, .offset = k_FoundingScaffold, .scale = 1.1f, .alight = true}},
+	    .commands = {{.kind = Kind::HandTapObject, .delaySeconds = 1.0f, .object = 0}},
+	});
+
+	all.push_back({
+	    .id = "objects.scaffold_clears_ground",
+	    .name = "A scaffold that a script marked clears its ground when the hand lets it go",
+	    .facet = Facet::Objects,
+	    .description = "The town, the scaffold and the camera of objects.scaffold_starts_building. A script marked the "
+	                   "scaffold to destroy the things in its way. A bush and a ball stand where the hand puts the "
+	                   "scaffold down. The input tools/sim/hand_inputs/scaffold_build.json moves the hand: it takes the "
+	                   "scaffold, holds it still near the village centre, and puts it down.",
+	    .expected = "When the hand lets the scaffold go, the bush and the ball jump out of the way. Each starts from the "
+	                "height of the scaffold above the land and flies a short distance. A building site then opens where "
+	                "the scaffold is.",
+	    .environment = {.dispenserGrid = false},
+	    .framing = {.shot = Shot::Overview, .include = {k_LooseScaffold - glm::vec2 {10.0f}, k_BuildPlace + glm::vec2 {10.0f}}},
+	    .objects = {{.type = AbodeInfo::CelticTownCentre, .offset = {0.0f, 50.0f}},
+	                {.type = ScaffoldInfo::Normal, .offset = k_LooseScaffold, .scale = 0.7f, .clearsGround = true},
+	                {.type = TreeInfo::Bush, .offset = k_BuildPlace},
+	                {.type = MobileObjectInfo::Ball, .offset = k_BuildPlace + glm::vec2 {0.0f, -1.5f}}},
 	});
 
 	all.push_back({
@@ -13248,6 +13337,7 @@ std::vector<Scenario> Build()
 	AddPoisonScenarios(all);
 	AddWorkshopScenarios(all);
 	AddGodsRingMapScenarios(all);
+	AddSelfCheckScenarios(all);
 	AddWorshipSiteScenarios(all);
 	return all;
 }
@@ -13409,16 +13499,16 @@ bool testbed_scenarios::NeedsNoCreature(Command::Kind kind)
 	       kind == Kind::LoadGame || kind == Kind::QuickSave || kind == Kind::ContinueGame || kind == Kind::PlayLogoEffect ||
 	       kind == Kind::PlayFallingSpellFilm || kind == Kind::PlayIntroFilm || kind == Kind::SayLine ||
 	       kind == Kind::PlayGuidanceVoice || kind == Kind::ScriptRelease || kind == Kind::FillSiteIcons ||
-	       kind == Kind::ChargeIconWithSeedHeld || kind == Kind::TakeIconSeed || kind == Kind::FinishBuilding ||
-	       kind == Kind::FillBuiltAmount || kind == Kind::ScaffoldStartsSite || kind == Kind::DestroyScaffoldSite ||
-	       kind == Kind::CallNative || kind == Kind::PauseGame || kind == Kind::SetGameSpeed ||
-	       kind == Kind::RemoveTeleportStone || kind == Kind::MakeDance || kind == Kind::OpenMultiplayerBox ||
-	       kind == Kind::BuildWorshipSites || kind == Kind::PressPlainKey || kind == Kind::PlainKeyDown ||
-	       kind == Kind::PlainKeyRepeat || kind == Kind::PlainKeyUp || kind == Kind::OtherGodHand || kind == Kind::OwnGod ||
-	       kind == Kind::JoinOnline || kind == Kind::EndBox || kind == Kind::BringCreature ||
-	       kind == Kind::TattooEditorAsNetworkGame || kind == Kind::ShowDemoPing || kind == Kind::AddIncomingMessage ||
-	       kind == Kind::Chat || kind == Kind::ComputerPersonality || kind == Kind::ComputerUntaughtSends ||
-	       kind == Kind::SkirmishBox || IsPointerCommand(kind);
+	       kind == Kind::ChargeIconWithSeedHeld || kind == Kind::TakeIconSeed || kind == Kind::TapSiteIcon ||
+	       kind == Kind::FinishBuilding || kind == Kind::FillBuiltAmount || kind == Kind::ScaffoldStartsSite ||
+	       kind == Kind::DestroyScaffoldSite || kind == Kind::CallNative || kind == Kind::PauseGame ||
+	       kind == Kind::SetGameSpeed || kind == Kind::RemoveTeleportStone || kind == Kind::MakeDance ||
+	       kind == Kind::OpenMultiplayerBox || kind == Kind::BuildWorshipSites || kind == Kind::PressPlainKey ||
+	       kind == Kind::PlainKeyDown || kind == Kind::PlainKeyRepeat || kind == Kind::PlainKeyUp ||
+	       kind == Kind::OtherGodHand || kind == Kind::OwnGod || kind == Kind::JoinOnline || kind == Kind::EndBox ||
+	       kind == Kind::BringCreature || kind == Kind::TattooEditorAsNetworkGame || kind == Kind::ShowDemoPing ||
+	       kind == Kind::AddIncomingMessage || kind == Kind::Chat || kind == Kind::ComputerPersonality ||
+	       kind == Kind::ComputerUntaughtSends || kind == Kind::SkirmishBox || IsPointerCommand(kind);
 }
 
 std::string_view testbed_scenarios::Name(Facet facet)
@@ -13446,7 +13536,7 @@ std::string_view testbed_scenarios::Name(Shot shot)
 
 std::string_view testbed_scenarios::Name(Command::Kind kind)
 {
-	constexpr std::array<std::string_view, 204> k_Names {
+	constexpr std::array<std::string_view, 205> k_Names {
 	    "walk to",
 	    "run to",
 	    "follow",
@@ -13651,6 +13741,7 @@ std::string_view testbed_scenarios::Name(Command::Kind kind)
 	    "let go of a key",
 	    "a god orders its creature",
 	    "take a seed from its icon",
+	    "tap a worship site icon",
 	};
 	return k_Names.at(static_cast<size_t>(kind));
 }

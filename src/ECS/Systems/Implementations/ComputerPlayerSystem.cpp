@@ -67,9 +67,6 @@ using namespace openblack::ecs::components;
 namespace
 {
 
-/// Where the hand of a god with no temple starts, in metres
-constexpr glm::vec3 k_HandWithoutTemple {2150.0f, 0.0f, 2620.0f};
-
 /// The entity of the player, none when the land has no such player
 entt::entity FoundPlayer(PlayerNames player)
 {
@@ -668,7 +665,7 @@ bool ComputerPlayerSystem::MindTurn(PlayerNames name, entt::entity entity, uint3
 	if (computer_player::DueToStart(*mind))
 	{
 		// The hand starts at the temple, or at a fixed place when the god has none
-		mind->hand.hand = computer_world::StartingHand(name).value_or(k_HandWithoutTemple);
+		mind->hand.hand = computer_player::StartingHand(computer_world::StartingHand(name));
 		// A start can make a creature, so the mind is found again after it
 		if (_aiSeed.has_value())
 		{

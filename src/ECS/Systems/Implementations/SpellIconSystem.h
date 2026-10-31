@@ -48,6 +48,7 @@ public:
 	[[nodiscard]] std::optional<size_t> CentreMiraclesShown(entt::entity town) const override;
 	void CentreWorking(entt::entity centre) override;
 	void TownChangedHands(entt::entity town, PlayerNames previous) override;
+	void TownRemoved(entt::entity town) override;
 	void PlayerMade(PlayerNames player) override;
 	void TownJoinedSite(entt::entity site, entt::entity town) override;
 	void TownLeftSite(entt::entity site, entt::entity town) override;
@@ -57,6 +58,8 @@ public:
 	[[nodiscard]] bool ValidToTap(entt::entity icon, PlayerNames player) const override;
 	bool StartChargeForGod(entt::entity icon, PlayerNames player) override;
 	[[nodiscard]] entt::entity IconOfSeed(entt::entity seed) const override;
+	[[nodiscard]] entt::entity BestIconFor(PlayerNames player, SpellSeedType seed) const override;
+	void SeedMadeAt(entt::entity icon, entt::entity seed) override;
 	[[nodiscard]] bool ValidForPowerUp(entt::entity icon, PlayerNames player, int powerUp) const override;
 	bool StartPowerUpCharge(entt::entity icon, PlayerNames player, int powerUp) override;
 	[[nodiscard]] float ChantNeeded(entt::entity icon) const override;

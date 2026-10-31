@@ -344,15 +344,9 @@ void SaveGameSystem::ImportVanillaFarms(const gamesave::VanillaWorld& world, Van
 	for (const auto& [villager, work] : works)
 	{
 		registry.AssignOrReplace<WorkTarget>(villager, WorkTarget {.thing = EntityOf(made, work.target)});
-		if (!work.spot.has_value())
+		if (work.spot.has_value())
 		{
-			continue;
-		}
-		const auto x = world_import::MetresOfWhole(work.spot->x);
-		const auto z = world_import::MetresOfWhole(work.spot->z);
-		if (x.has_value() && z.has_value())
-		{
-			registry.AssignOrReplace<FieldWorkSpot>(villager, FieldWorkSpot {.position = {*x, *z}});
+			registry.AssignOrReplace<FieldWorkSpot>(villager, FieldWorkSpot {.place = {work.spot->x, work.spot->z}});
 		}
 	}
 	// A field or a fish farm keeps the workers of its list in the file that work at it

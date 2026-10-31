@@ -207,6 +207,13 @@ public:
 	{
 		return entt::null;
 	}
+	/// A dispenser that a town's plan or a scaffold puts up: as a script's dispenser, with a part of it built. A
+	/// dispenser with less than all of it built goes up with a site that its town opens later.
+	virtual entt::entity CreateTownDispenser(glm::vec3 /*position*/, AbodeInfo /*building*/, float /*yAngleRadians*/,
+	                                         float /*scale*/, entt::entity /*town*/, float /*built*/)
+	{
+		return entt::null;
+	}
 	/// A script gives a dispenser a miracle and the turns between its bubbles; with no turns it is turned off
 	virtual void SetDispenserMagic(entt::entity /*dispenser*/, MagicType /*type*/, uint32_t /*turns*/) {}
 	/// For the testbed: a dispenser that has counted its period, floating its bubble now if it has none
@@ -228,6 +235,13 @@ public:
 	/// A seed straight into the player's hand, fully charged and ready, as from a bubble, if the hand is free: the seed,
 	/// or none
 	virtual entt::entity GiveSeedToHand(PlayerNames player, SpellSeedType seed, int powerUp, float multiplier) = 0;
+	/// The seed of a one-shot miracle (a globe, or a miracle that a script puts into the hand) goes into the player's
+	/// hand, as GiveSeedToHand does. The best icon of the player for the seed makes it. Thus the seed can power up, and
+	/// it gives its prayer power back to the site of the icon. With no such icon, the seed has no icon. The seed, or none.
+	virtual entt::entity GiveOneShotSeedToHand(PlayerNames player, SpellSeedType seed, int powerUp, float multiplier)
+	{
+		return GiveSeedToHand(player, seed, powerUp, multiplier);
+	}
 	/// A seed summoned from the player's worship into their hand, if it is free: its cost to create is charged from the
 	/// player's prayer power, as much as they have, and it is ready after the usual delay. The seed, or none.
 	virtual entt::entity SummonSeed(PlayerNames player, SpellSeedType seed, int powerUp) = 0;
