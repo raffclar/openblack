@@ -151,7 +151,7 @@ public:
 	void ChangeDesires(entt::entity creature, const std::function<void(creature_desires::Desires&)>& change) override;
 	void SetAgendaPriority(entt::entity creature, float priority) override;
 	void MoveToStage(entt::entity creature, uint32_t stage) override;
-	void GrowUpAfterFile(entt::entity creature) override;
+	void LearnEveryLeash(entt::entity creature) override;
 	void ForceFinish(entt::entity creature) override;
 	bool PointOutHighlight(entt::entity creature) override;
 
