@@ -311,4 +311,21 @@ namespace detail
 	return static_cast<double>(value) >= constant;
 }
 
+/// The game's conversion of a number to a 32-bit integer, with the same result on each target.
+///
+/// The conversion removes the fraction (it goes towards zero) and makes a 64-bit integer. The result is the low 32
+/// bits of that integer. Thus a value out of the 32-bit range wraps, and 8388608 x 6553.6 gives 0xCCCCD000. A NaN, an
+/// infinity and a value out of the 64-bit range give 0. The code does not use the conversion of the processor for a
+/// value out of range, because that result is different on each processor.
+[[nodiscard]] constexpr int32_t ToInteger(double value)
+{
+	constexpr double k_Int64Limit = 9223372036854775808.0; // 2 to the power 63
+	if (!(value > -k_Int64Limit && value < k_Int64Limit))
+	{
+		return 0;
+	}
+	const auto wide = static_cast<int64_t>(value);
+	return static_cast<int32_t>(static_cast<uint32_t>(static_cast<uint64_t>(wide)));
+}
+
 } // namespace openblack::x87

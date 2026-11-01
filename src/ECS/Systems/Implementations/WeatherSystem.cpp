@@ -113,15 +113,6 @@ constexpr uint8_t k_DeadStormTurns = 2;
 /// A miracle's storm lives until its miracle takes it away
 constexpr float k_MiracleStormLife = 1e9f;
 
-int32_t Ftol(double value)
-{
-	if (value <= -2147483649.0 || value >= 2147483648.0)
-	{
-		return INT32_MIN;
-	}
-	return static_cast<int32_t>(value);
-}
-
 int8_t ClampByte(int32_t value)
 {
 	return static_cast<int8_t>(std::clamp(value, -128, 127));
@@ -235,7 +226,7 @@ void ApplyStorm(const Storm& storm, const glm::vec3& point, WeatherInfo& info)
 	const auto inner = storm.currentInnerRadius;
 	const auto falloff =
 	    distanceSquared <= inner * inner ? 1.0f : 1.0f - ((std::sqrt(distanceSquared) - inner) / (outer - inner));
-	const auto weight = Ftol(falloff * storm.currentStrength * k_EffectScale);
+	const auto weight = x87::ToInteger(falloff * storm.currentStrength * k_EffectScale);
 	if (weight == 0)
 	{
 		return;
@@ -409,13 +400,13 @@ void WeatherSystem::InitialiseClimate(Climate& climate) const
 	const auto& info = GetInfo(climate);
 
 	// The rain budget and desire start from the season's values
-	climate.rainingDays = Ftol(RainMin(info, _season) * 100.0f);
+	climate.rainingDays = x87::ToInteger(RainMin(info, _season) * 100.0f);
 	climate.rainDesire = RainMax(info, _season);
 
 	// The temperature starts at the time of day's target
 	const auto& sky = Locator::skyClockSystem::value();
-	const auto hour = RelativeHour(static_cast<float>(Ftol(sky.GetTime())), sky.GetDayNightTimes());
-	const auto hourFactor = k_TemperatureByHour.at(std::clamp(Ftol(hour), 0, 23));
+	const auto hour = RelativeHour(static_cast<float>(x87::ToInteger(sky.GetTime())), sky.GetDayNightTimes());
+	const auto hourFactor = k_TemperatureByHour.at(std::clamp(x87::ToInteger(hour), 0, 23));
 	const auto monthFactor = k_TemperatureByMonth.at(GetMonth(_turn));
 	const auto minimum = TempMin(info, _season);
 	climate.targetTemperature = ((TempMax(info, _season) - minimum) * hourFactor * monthFactor) + minimum;
@@ -485,11 +476,11 @@ void WeatherSystem::CreateClimate(int32_t index, uint32_t info, glm::vec2 positi
 	climate.index = index;
 	climate.global = false;
 	climate.info = info;
-	climate.cellX = static_cast<uint16_t>(Ftol(position.x * 0.1));
-	climate.cellZ = static_cast<uint16_t>(Ftol(position.y * 0.1));
+	climate.cellX = static_cast<uint16_t>(x87::ToInteger(position.x * 0.1));
+	climate.cellZ = static_cast<uint16_t>(x87::ToInteger(position.y * 0.1));
 	climate.innerRadius = std::min(radius1, radius2);
 	climate.outerRadius = std::max(radius1, radius2);
-	climate.maxStorms = static_cast<uint32_t>(Ftol((climate.outerRadius * k_MaxStormsPerUnit) + 1.0f));
+	climate.maxStorms = static_cast<uint32_t>(x87::ToInteger((climate.outerRadius * k_MaxStormsPerUnit) + 1.0f));
 	InitialiseClimate(climate);
 }
 
@@ -599,7 +590,7 @@ void WeatherSystem::ProcessClimates(uint32_t turn)
 	_turn = turn;
 	// Every climate, with the season changing on a new day
 	GetGlobalClimate();
-	const auto day = Ftol(GetDayOfMonth(turn));
+	const auto day = x87::ToInteger(GetDayOfMonth(turn));
 	const auto newDay = !_day.has_value() || *_day != day;
 	if (newDay)
 	{
@@ -858,8 +849,8 @@ void WeatherSystem::ProcessTemperature(Climate& climate) const
 {
 	const auto& info = GetInfo(climate);
 	const auto& sky = Locator::skyClockSystem::value();
-	const auto hour = RelativeHour(static_cast<float>(Ftol(sky.GetTime())), sky.GetDayNightTimes());
-	const auto hourFactor = k_TemperatureByHour.at(std::clamp(Ftol(hour), 0, 23));
+	const auto hour = RelativeHour(static_cast<float>(x87::ToInteger(sky.GetTime())), sky.GetDayNightTimes());
+	const auto hourFactor = k_TemperatureByHour.at(std::clamp(x87::ToInteger(hour), 0, 23));
 	const auto monthFactor = k_TemperatureByMonth.at(GetMonth(_turn));
 	const auto minimum = TempMin(info, _season);
 	const auto target = ((TempMax(info, _season) - minimum) * hourFactor * monthFactor) + minimum;
@@ -868,7 +859,7 @@ void WeatherSystem::ProcessTemperature(Climate& climate) const
 	// The original game always moves by the full step and does not stop at the target. Thus the temperature goes
 	// back and forth across the target ten times a second. That is a bug of the original game (see the list of its
 	// bugs), so here the temperature stops at the target when the target is one step or less away.
-	const auto step = static_cast<float>(std::abs(Ftol(target))) * k_TemperatureStep;
+	const auto step = static_cast<float>(std::abs(x87::ToInteger(target))) * k_TemperatureStep;
 	if (std::abs(target - climate.temperature) <= step)
 	{
 		climate.temperature = target;
@@ -907,7 +898,7 @@ void WeatherSystem::ProcessWind(Climate& climate) const
 	const auto maximum = WindMax(info, _season);
 	const auto spread = (climate.rainDesire - 0.5) * k_WindSpread;
 	// Only exactly halfway to rain does this reach 1: the wind is otherwise the sum of the season's extremes
-	const auto weight = static_cast<float>(Ftol(portable_math::Exp(-(spread * spread))));
+	const auto weight = static_cast<float>(x87::ToInteger(portable_math::Exp(-(spread * spread))));
 
 	const auto blend = [weight](float low, float high) { return high - ((high - low) * weight) + low; };
 	climate.windX = blend(minimum * portable_math::Cos(climate.windAngle), maximum * portable_math::Cos(climate.windAngle));
@@ -926,8 +917,8 @@ glm::ivec2 WeatherSystem::FindWhereToCreateStorm(const Climate& climate)
 			const auto angle = RandomFloat(2.0f * std::numbers::pi_v<float>);
 			const auto random = RandomFloat(1.0f);
 			const auto distance = random * random * climate.innerRadius * 0.1f;
-			cell.x = static_cast<int16_t>(Ftol((portable_math::Cos(angle) * distance) + climate.cellX));
-			cell.y = static_cast<int16_t>(Ftol((portable_math::Sin(angle) * distance) + climate.cellZ));
+			cell.x = static_cast<int16_t>(x87::ToInteger((portable_math::Cos(angle) * distance) + climate.cellX));
+			cell.y = static_cast<int16_t>(x87::ToInteger((portable_math::Sin(angle) * distance) + climate.cellZ));
 		}
 		else
 		{
@@ -981,7 +972,7 @@ void WeatherSystem::CreateStorm(entt::entity climateEntity)
 		const glm::vec3 centre {climate.cellX * 10.0f, 0.0f, climate.cellZ * 10.0f};
 		const auto distance = Distance({point.x, groundHeight(point.x, point.z), point.z},
 		                               {centre.x, groundHeight(centre.x, centre.z) + climate.height, centre.z});
-		radius = static_cast<uint32_t>(Ftol(distance));
+		radius = static_cast<uint32_t>(x87::ToInteger(distance));
 	}
 	else
 	{
@@ -996,7 +987,7 @@ void WeatherSystem::CreateStorm(entt::entity climateEntity)
 	}
 	lastsFor = std::max(lastsFor, k_MinStormLife);
 
-	const auto temperature = static_cast<int8_t>(Ftol(climate.temperature));
+	const auto temperature = static_cast<int8_t>(x87::ToInteger(climate.temperature));
 	const auto heat = (static_cast<double>(temperature) - 30.0) * (1.0 / 15.0);
 	auto cloud = static_cast<float>(portable_math::Exp(-(heat * heat)));
 	// Hot or overcast storms bring lightning
@@ -1011,7 +1002,7 @@ void WeatherSystem::CreateStorm(entt::entity climateEntity)
 
 	WeatherInfo effect;
 	effect.temperature = temperature;
-	effect.overcast = static_cast<int8_t>(Ftol(cloud * 100.0));
+	effect.overcast = static_cast<int8_t>(x87::ToInteger(cloud * 100.0));
 	if (temperature < 0)
 	{
 		effect.snow = 100;
@@ -1021,11 +1012,11 @@ void WeatherSystem::CreateStorm(entt::entity climateEntity)
 	{
 		// Cold storms snow: the snow share falls away above freezing
 		const auto cold = static_cast<double>(temperature) * 0.2;
-		effect.snow = static_cast<int8_t>(Ftol(portable_math::Exp(-(cold * cold)) * 100.0));
+		effect.snow = static_cast<int8_t>(x87::ToInteger(portable_math::Exp(-(cold * cold)) * 100.0));
 		effect.rain = static_cast<int8_t>(100 - effect.snow);
 	}
-	effect.windX = static_cast<int8_t>(Ftol(climate.windX));
-	effect.windZ = static_cast<int8_t>(Ftol(climate.windZ));
+	effect.windX = static_cast<int8_t>(x87::ToInteger(climate.windX));
+	effect.windZ = static_cast<int8_t>(x87::ToInteger(climate.windZ));
 
 	if (lastsFor > 0.0f)
 	{
@@ -1043,7 +1034,7 @@ void WeatherSystem::CreateStorm(entt::entity climateEntity)
 		storm.speed = 1.0f;
 		storm.arrived = true;
 		storm.innerRadius = static_cast<float>(radius);
-		storm.outerRadius = static_cast<float>(Ftol(static_cast<double>(radius) * k_StormOuterRadius));
+		storm.outerRadius = static_cast<float>(x87::ToInteger(static_cast<double>(radius) * k_StormOuterRadius));
 		storm.fadeTime = k_StormFadeTime;
 		storm.lastsFor = lastsFor;
 		storm.strength = 1.0f;
@@ -1448,13 +1439,13 @@ const WeatherInfo& WeatherSystem::GetCell(int x, int z)
 // The weather of the atmosphere's cell at a point
 WeatherInfo WeatherSystem::GetWeather(const glm::vec3& position)
 {
-	auto info = GetCell(Ftol(position.x * 0.025f), Ftol(position.z * 0.025f));
+	auto info = GetCell(x87::ToInteger(position.x * 0.025f), x87::ToInteger(position.z * 0.025f));
 	if (position.y > k_LowAltitude)
 	{
 		info.temperature =
 		    position.y > k_HighAltitude
 		        ? static_cast<int8_t>(info.temperature - k_HighAltitudeCooling)
-		        : static_cast<int8_t>(info.temperature + Ftol((position.y - k_LowAltitude) * k_TemperatureLapse));
+		        : static_cast<int8_t>(info.temperature + x87::ToInteger((position.y - k_LowAltitude) * k_TemperatureLapse));
 	}
 	return info;
 }
@@ -1502,22 +1493,22 @@ WeatherInfo WeatherSystem::GetWeatherSmooth(const glm::vec3& position)
 {
 	const auto fx = position.x * 0.025f;
 	const auto fz = position.z * 0.025f;
-	const auto x = Ftol(fx);
-	const auto z = Ftol(fz);
+	const auto x = x87::ToInteger(fx);
+	const auto z = x87::ToInteger(fz);
 	const auto& c00 = GetCell(x, z);
 	const auto& c10 = GetCell(x + 1, z);
 	const auto& c01 = GetCell(x, z + 1);
 	const auto& c11 = GetCell(x + 1, z + 1);
 
-	const auto wx = Ftol((fx - static_cast<float>(x)) * k_EffectScale);
-	const auto wz = Ftol((fz - static_cast<float>(z)) * k_EffectScale);
+	const auto wx = x87::ToInteger((fx - static_cast<float>(x)) * k_EffectScale);
+	const auto wz = x87::ToInteger((fz - static_cast<float>(z)) * k_EffectScale);
 	auto info = Lerp(Lerp(c00, c10, wx), Lerp(c01, c11, wx), wz);
 	info.stamp = c00.stamp;
 
 	// High above the ground the weather gives way to the background weather
 	if (position.y > k_HighAltitude)
 	{
-		const auto weight = std::min(Ftol((position.y - k_HighAltitude) * k_HighAltitudeBlend), 256);
+		const auto weight = std::min(x87::ToInteger((position.y - k_HighAltitude) * k_HighAltitudeBlend), 256);
 		const auto temperature = info.temperature;
 		info = Lerp(info, _background, weight);
 		info.stamp = c00.stamp;
@@ -1525,7 +1516,8 @@ WeatherInfo WeatherSystem::GetWeatherSmooth(const glm::vec3& position)
 	}
 	else if (position.y > k_LowAltitude)
 	{
-		info.temperature = static_cast<int8_t>(info.temperature + Ftol((position.y - k_LowAltitude) * k_TemperatureLapse));
+		info.temperature =
+		    static_cast<int8_t>(info.temperature + x87::ToInteger((position.y - k_LowAltitude) * k_TemperatureLapse));
 	}
 	return info;
 }

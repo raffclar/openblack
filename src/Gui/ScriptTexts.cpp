@@ -12,22 +12,10 @@
 #include <cmath>
 
 #include <algorithm>
-#include <limits>
+
+#include "Common/X87.h"
 
 using namespace openblack::gui;
-
-namespace
-{
-/// A float cut to a whole number as the game's conversion does, out of range giving the lowest int
-int32_t Truncate(float value)
-{
-	if (!std::isfinite(value) || value >= 2147483648.0f || value < -2147483648.0f)
-	{
-		return std::numeric_limits<int32_t>::min();
-	}
-	return static_cast<int32_t>(value);
-}
-} // namespace
 
 script_text::ScreenText script_text::Write(std::u16string_view words, glm::vec2 corner, glm::vec2 extent, float size,
                                            float fadeSeconds, glm::u8vec3 colour)
@@ -95,12 +83,14 @@ bool script_text::Step(ScreenText& text, int32_t milliseconds)
 
 uint8_t script_text::AlphaByte(float alpha)
 {
-	return static_cast<uint8_t>(std::clamp(Truncate(alpha * 255.0f), 0, 255));
+	return static_cast<uint8_t>(std::clamp(openblack::x87::ToInteger(alpha * 255.0f), 0, 255));
 }
 
 glm::u8vec3 script_text::ColourFromScript(float red, float green, float blue)
 {
-	const auto byte = [](float value) { return static_cast<uint8_t>(static_cast<uint32_t>(Truncate(value)) & 0xFFu); };
+	const auto byte = [](float value) {
+		return static_cast<uint8_t>(static_cast<uint32_t>(openblack::x87::ToInteger(value)) & 0xFFu);
+	};
 	return {byte(red), byte(green), byte(blue)};
 }
 

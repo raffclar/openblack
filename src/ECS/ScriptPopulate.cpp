@@ -22,8 +22,6 @@ constexpr int32_t k_FirstType = 1;
 constexpr int32_t k_LastType = 41;
 constexpr double k_SpreadPerThing = 0.1;
 constexpr double k_SpreadBase = 4.0;
-/// The game's conversion of a quantity to a whole number gives up past 2 to the 63
-constexpr float k_WholeLimit = 9.223372e18f;
 } // namespace
 
 bool IsValidType(int32_t type)
@@ -33,12 +31,7 @@ bool IsValidType(int32_t type)
 
 uint32_t CountOf(float quantity)
 {
-	if (!(std::fabs(quantity) < k_WholeLimit))
-	{
-		return 0;
-	}
-	// The low 32 bits of the whole number, its fraction dropped towards zero
-	return static_cast<uint32_t>(static_cast<uint64_t>(static_cast<int64_t>(quantity)));
+	return static_cast<uint32_t>(x87::ToInteger(quantity));
 }
 
 float SpreadOf(uint32_t count)

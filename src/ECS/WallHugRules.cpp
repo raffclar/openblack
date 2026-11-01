@@ -22,6 +22,7 @@
 #include "3D/MapCoords.h"
 #include "Common/GUtilsAngle.h"
 #include "Common/PortableMath.h"
+#include "Common/X87.h"
 #include "Common/X87Angle.h"
 #include "Creature/CreatureCastMoves.h"
 #include "ECS/MapCells.h"
@@ -652,7 +653,7 @@ LineScan ScanLine(glm::ivec2 position, glm::ivec2 step, std::span<const Blocking
 		return k_Nothing;
 	}
 	// Truncated towards nothing; a line with no length right inside a circle meets it at once
-	const auto whole = turns < static_cast<float>(std::numeric_limits<int32_t>::min()) ? 0 : static_cast<int32_t>(turns);
+	const auto whole = x87::ToInteger(turns);
 	const auto turnsToObstacle = static_cast<uint8_t>(whole & 0xff);
 	if (turnsToObstacle == k_NoObstacleInReach)
 	{

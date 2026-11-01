@@ -347,8 +347,8 @@ TEST(ScriptFind, ATownNumberIsCutTowardsNought)
 	// A negative number below one is nought; below that it wraps round to a number no town has
 	EXPECT_EQ(script_find::TownIdFromScript(-0.5f), 0u);
 	EXPECT_EQ(script_find::TownIdFromScript(-1.0f), 0xFFFFFFFFu);
-	// Out of range, as the game's conversion gives it
-	EXPECT_EQ(script_find::TownIdFromScript(3.0e9f), 0x80000000u);
+	// Out of range, the low 32 bits of the whole number, as the game's conversion gives it
+	EXPECT_EQ(script_find::TownIdFromScript(3.0e9f), 0xB2D05E00u);
 }
 
 TEST(ScriptFind, AWorshipSiteIsMeasuredFromItsAltar)
