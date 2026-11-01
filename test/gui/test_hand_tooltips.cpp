@@ -181,6 +181,24 @@ TEST(HandToolTips, DropAndThrowTakeTurnsForEachDisplayTime)
 	EXPECT_EQ(turn(), k_Throw);
 }
 
+TEST(HandToolTips, OverAScaffoldItsValueKeepsTheTapFromShowing)
+{
+	// The hand gives the value of the scaffold first and its tap second, in each turn. The value is an important
+	// tooltip, so the tap with a lower priority never shows while the hand is over the scaffold.
+	constexpr uint32_t k_ScaffoldValue = 116;
+	auto info = SameInfo();
+	info.at(k_ScaffoldValue).priority = ToolTips::k_ImportantPriority;
+	ToolTips toolTips(info);
+	toolTips.SetLevel(ToolTipLevel::All);
+	for (int i = 0; i < 100; ++i)
+	{
+		toolTips.SubmitNumbered(k_ScaffoldValue, ToolTipAction::Apply, 3.0, std::nullopt);
+		toolTips.Submit(k_Tap, ToolTipAction::Apply, ToolTipArrows::k_None);
+		toolTips.ProcessTurn();
+		ASSERT_EQ(toolTips.GetShown()->index, k_ScaffoldValue) << i;
+	}
+}
+
 TEST(HandToolTips, BuildingToolTipsShowOverAnOwnBuildingThatIsNotWhole)
 {
 	EXPECT_TRUE(OffersBuildingToolTips(false, true, k_PitchFeature));
