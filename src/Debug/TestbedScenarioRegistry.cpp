@@ -13858,8 +13858,8 @@ void AddWorkshopScenarios(std::vector<Scenario>& all)
 	                   "scaffold to destroy the things in its way. A bush and a ball stand where the hand puts the "
 	                   "scaffold down. The input tools/sim/hand_inputs/scaffold_build.json moves the hand: it takes the "
 	                   "scaffold, holds it still near the village centre, and puts it down.",
-	    .expected = "When the hand lets the scaffold go, the bush and the ball jump out of the way. Each starts half a "
-	                "metre above the land at its new place and flies a short distance. A building site then opens where "
+	    .expected = "When the hand lets the scaffold go, the bush and the ball jump out of the way. Each starts from the "
+	                "height of the scaffold above the land and flies a short distance. A building site then opens where "
 	                "the scaffold is.",
 	    .environment = {.dispenserGrid = false},
 	    .framing = {.shot = Shot::Overview, .include = {k_LooseScaffold - glm::vec2 {10.0f}, k_BuildPlace + glm::vec2 {10.0f}}},
@@ -13892,14 +13892,14 @@ void AddWorkshopScenarios(std::vector<Scenario>& all)
 
 	all.push_back({
 	    .id = "objects.scaffold_push_on_high_land",
-	    .name = "A thing that a clearing scaffold pushes starts above high land",
+	    .name = "A thing that a clearing scaffold pushes starts under high land",
 	    .facet = Facet::Objects,
 	    .description = "A loose scaffold that a script marked to destroy the things in its way lies on the land, which is "
 	                   "about 21 m high here. A bush stands 1.5 m east of it and a ball 1.5 m north of it. After one second "
 	                   "the scaffold clears its ground, as when the hand lets it go.",
-	    .expected = "The bush and the ball start half a metre above the land, twice as far from the scaffold as the edge "
-	                "of the scaffold. Each flies a short distance and lands near its start. Neither starts under the land "
-	                "or flies far across the map.",
+	    .expected = "As in the game, the bush and the ball start at the height of the scaffold above the land plus half a "
+	                "metre, twice as far from the scaffold as the edge of the scaffold. That is a height of the world, so "
+	                "each starts under the land here. The land throws each one far across the map.",
 	    .environment = {.dispenserGrid = false},
 	    .framing = {.shot = Shot::Overview,
 	                .include = {k_FoundingScaffold - glm::vec2 {15.0f}, k_FoundingScaffold + glm::vec2 {15.0f}}},
@@ -13916,9 +13916,9 @@ void AddWorkshopScenarios(std::vector<Scenario>& all)
 	    .description = "A loose scaffold that a script marked to destroy the things in its way. A bush stands 1.5 m "
 	                   "straight west of it and a ball 1.5 m straight south of it. After one second the scaffold clears "
 	                   "its ground, as when the hand lets it go.",
-	    .expected = "As in the game, the push of each thing divides by 0 and its speed is not a number. The bush and "
-	                "the ball go from their places. The inspector shows each at x 0 and z 0, the corner of the map, with "
-	                "a height that is not a number. Each stays in flight and does not land. The game does not stop.",
+	    .expected = "The bush starts west and the ball starts south of the scaffold, under the land, as in the game. The "
+	                "land throws each one far, and the bush becomes a dead tree. The game divides the push by 0 here and "
+	                "the things go from the map. openblack divides by the larger size, so both things stay on the map.",
 	    .environment = {.dispenserGrid = false},
 	    .framing = {.shot = Shot::Overview,
 	                .include = {k_FoundingScaffold - glm::vec2 {15.0f}, k_FoundingScaffold + glm::vec2 {15.0f}}},
@@ -13926,10 +13926,16 @@ void AddWorkshopScenarios(std::vector<Scenario>& all)
 	                {.type = TreeInfo::Bush, .offset = k_FoundingScaffold + glm::vec2 {-1.5f, 0.0f}},
 	                {.type = MobileObjectInfo::Ball, .offset = k_FoundingScaffold + glm::vec2 {0.0f, -1.5f}}},
 	    .commands = {{.kind = Kind::ScaffoldClearsGround, .delaySeconds = 1.0f, .object = 0}},
-	    .checks = {{.label = "the scaffold, the bush and the ball stay in the game",
+	    .checks = {{.label = "the scaffold and the ball stay in the game",
 	                .quantity = checks::Quantity::ObjectsAlive,
 	                .afterTurns = 100,
-	                .atLeast = 3}},
+	                .atLeast = 2},
+	               {.label = "the ball lands near the scaffold, not at the corner of the map",
+	                .quantity = checks::Quantity::ObjectDistance,
+	                .index = 2,
+	                .point = k_FoundingScaffold,
+	                .afterTurns = 100,
+	                .atMost = 100.0}},
 	});
 
 	all.push_back({
