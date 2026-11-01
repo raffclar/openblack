@@ -33,8 +33,10 @@
 #include "ECS/Systems/Implementations/AdvisorVoiceSystem.h"
 #include "ECS/Systems/Implementations/CloudSystem.h"
 #include "ECS/Systems/Implementations/CreatureHairSystem.h"
+#include "ECS/Systems/Implementations/FloatingNumberSystem.h"
 #include "ECS/Systems/Implementations/IncomingMessageSystem.h"
 #include "ECS/Systems/Implementations/LandShadeSystem.h"
+#include "ECS/Systems/Implementations/LiquidParticleSystem.h"
 #include "ECS/Systems/Implementations/ParticleSystem.h"
 #include "ECS/Systems/Implementations/PauseTextSystem.h"
 #include "ECS/Systems/Implementations/RainSystem.h"
@@ -44,6 +46,7 @@
 #include "ECS/Systems/Implementations/SnowfallSystem.h"
 #include "ECS/Systems/Implementations/TurnCheerSystem.h"
 #include "ECS/Systems/Implementations/VillageLightSystem.h"
+#include "ECS/Systems/Implementations/WaterRingSystem.h"
 #include "ECS/Systems/ParticleRuleSystemInterface.h"
 #include "EngineConfig.h"
 #include "Graphics/BgfxGraphicsDevice.h"
@@ -59,8 +62,10 @@ using openblack::ecs::systems::AbodeSoundSystem;
 using openblack::ecs::systems::AdvisorVoiceSystem;
 using openblack::ecs::systems::CloudSystem;
 using openblack::ecs::systems::CreatureHairSystem;
+using openblack::ecs::systems::FloatingNumberSystem;
 using openblack::ecs::systems::IncomingMessageSystem;
 using openblack::ecs::systems::LandShadeSystem;
+using openblack::ecs::systems::LiquidParticleSystem;
 using openblack::ecs::systems::ParticleSystem;
 using openblack::ecs::systems::PauseTextSystem;
 using openblack::ecs::systems::RainSystem;
@@ -69,6 +74,7 @@ using openblack::ecs::systems::RenderingSystemTemple;
 using openblack::ecs::systems::SnowfallSystem;
 using openblack::ecs::systems::TurnCheerSystem;
 using openblack::ecs::systems::VillageLightSystem;
+using openblack::ecs::systems::WaterRingSystem;
 using openblack::graphics::RendererInterface;
 using openblack::windowing::DisplayMode;
 using openblack::windowing::Sdl2WindowingSystem;
@@ -147,6 +153,11 @@ void openblack::InitializePresentation()
 		    return Locator::particleRuleSystem::has_value() ? &Locator::particleRuleSystem::value() : nullptr;
 	    },
 	    &ParticleSystem::TextureStemsOnDisk);
+	// The rings on the water, the drops and the dust, and the numbers that float up. The turns ask for them, but they
+	// keep only what this computer shows, so the turns make no change when they are not there.
+	Locator::waterRingSystem::emplace<WaterRingSystem>();
+	Locator::liquidParticleSystem::emplace<LiquidParticleSystem>();
+	Locator::floatingNumberSystem::emplace<FloatingNumberSystem>();
 }
 
 void openblack::InitializeClient(const player_profiles::Store& profiles)

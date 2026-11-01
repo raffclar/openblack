@@ -7666,8 +7666,11 @@ void Game::PlayHandGrabSound()
 		if (!Locator::time::value().IsPaused())
 		{
 			const auto angle = Locator::gameRandom::value().CrtRandom(0.0f, glm::two_pi<float>());
-			Locator::waterRingSystem::value().Add(
-			    water_rings::HandSplash(glm::vec2(position.x, position.z), angle, FrameLandLight(255)));
+			if (Locator::waterRingSystem::has_value())
+			{
+				Locator::waterRingSystem::value().Add(
+				    water_rings::HandSplash(glm::vec2(position.x, position.z), angle, FrameLandLight(255)));
+			}
 			// The fish near where the hand went in dart away
 			Locator::fishFarmSystem::value().Scare({position.x, k_HandSplashHeight, position.z});
 		}

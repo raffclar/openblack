@@ -81,7 +81,6 @@
 #include "ECS/Systems/Implementations/FireSystem.h"
 #include "ECS/Systems/Implementations/FireflySystem.h"
 #include "ECS/Systems/Implementations/FishFarmSystem.h"
-#include "ECS/Systems/Implementations/FloatingNumberSystem.h"
 #include "ECS/Systems/Implementations/FootpathSystem.h"
 #include "ECS/Systems/Implementations/FootprintSystem.h"
 #include "ECS/Systems/Implementations/ForestSystem.h"
@@ -97,7 +96,6 @@
 #include "ECS/Systems/Implementations/HighDetailSystem.h"
 #include "ECS/Systems/Implementations/InfluenceSystem.h"
 #include "ECS/Systems/Implementations/IntroSystem.h"
-#include "ECS/Systems/Implementations/LiquidParticleSystem.h"
 #include "ECS/Systems/Implementations/LobbyClientSystem.h"
 #include "ECS/Systems/Implementations/NetworkGameSystem.h"
 #include "ECS/Systems/Implementations/ObjectDrawListSystem.h"
@@ -167,7 +165,6 @@
 #include "ECS/Systems/Implementations/VillageTotemSystem.h"
 #include "ECS/Systems/Implementations/VortexSystem.h"
 #include "ECS/Systems/Implementations/WalkPathSystem.h"
-#include "ECS/Systems/Implementations/WaterRingSystem.h"
 #include "ECS/Systems/Implementations/WeatherSystem.h"
 #include "ECS/Systems/Implementations/WonderSystem.h"
 #include "ECS/Systems/Implementations/WorshipSiteSystem.h"
@@ -283,7 +280,6 @@ using openblack::ecs::systems::InfluenceSystem;
 using openblack::ecs::systems::IntroSystem;
 using openblack::ecs::systems::LandSystem;
 using openblack::ecs::systems::LeashSystem;
-using openblack::ecs::systems::LiquidParticleSystem;
 using openblack::ecs::systems::LivingActionSystem;
 using openblack::ecs::systems::LobbyClientConfig;
 using openblack::ecs::systems::LobbyClientSystem;
@@ -331,7 +327,6 @@ using openblack::ecs::systems::VideoSystem;
 using openblack::ecs::systems::VillageTotemSystem;
 using openblack::ecs::systems::VortexSystem;
 using openblack::ecs::systems::WalkPathSystem;
-using openblack::ecs::systems::WaterRingSystem;
 using openblack::ecs::systems::WeatherSystem;
 using openblack::ecs::systems::WonderSystem;
 using openblack::ecs::systems::WorkshopSystem;
@@ -648,7 +643,6 @@ bool openblack::InitializeSimulation(const player_profiles::Store& profiles) noe
 	Locator::workshopSystem::emplace<WorkshopSystem>();
 	Locator::animalSystem::emplace<AnimalSystem>();
 	Locator::snowSystem::emplace<SnowSystem>();
-	Locator::waterRingSystem::emplace<WaterRingSystem>();
 	Locator::creatureAnimationSystem::emplace<CreatureAnimationSystem>();
 	Locator::creatureMindSystem::emplace<CreatureMindSystem>();
 	Locator::creaturePhysiologySystem::emplace<CreaturePhysiologySystem>();
@@ -707,7 +701,6 @@ bool openblack::InitializeSimulation(const player_profiles::Store& profiles) noe
 	Locator::vortexSystem::emplace<VortexSystem>();
 	Locator::fixedOutlineSystem::emplace<FixedOutlineSystem>();
 	Locator::creatureFizzSystem::emplace<CreatureFizzSystem>();
-	Locator::liquidParticleSystem::emplace<LiquidParticleSystem>();
 	// The player's creature is kept under their profile's file
 	Locator::creatureCarryOverSystem::emplace<CreatureCarryOverSystem>(
 	    profiles.creatureMinds, []() { return Locator::playerProfileSystem::value().CreatureFile(); });
@@ -734,7 +727,6 @@ bool openblack::InitializeSimulation(const player_profiles::Store& profiles) noe
 	EmplaceChat(profiles.developer);
 	Locator::fireSystem::emplace<ecs::systems::FireSystem>();
 	Locator::explosionSystem::emplace<ecs::systems::ExplosionSystem>();
-	Locator::floatingNumberSystem::emplace<ecs::systems::FloatingNumberSystem>();
 	Locator::rewardSystem::emplace<ecs::systems::RewardSystem>();
 	Locator::scriptObjects::emplace<ecs::systems::ScriptObjectsSystem>();
 	Locator::buildingDamageSystem::emplace<ecs::systems::BuildingDamageSystem>();

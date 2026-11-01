@@ -771,12 +771,18 @@ void GameMagicWorld::Water(const magic::WaterDrop& drop)
 			offset += glm::ivec2(next.x, next.z);
 		}
 	}
-	if (drop.ringGrowth.has_value() && Locator::waterRingSystem::has_value() && Locator::gameRandom::has_value())
+	if (drop.ringGrowth.has_value() && Locator::gameRandom::has_value())
 	{
+		// The colour and the angle of the ring come from the synced numbers. Every computer draws them, also a computer
+		// that does not show the rings.
 		auto& random = Locator::gameRandom::value();
 		const auto colour = k_RippleColours.at(random.GameRand(static_cast<uint32_t>(k_RippleColours.size())));
-		Locator::waterRingSystem::value().Add(
-		    {.position = drop.position, .growth = *drop.ringGrowth, .angle = random.GameFloatRand(k_TwoPi), .argb = colour});
+		const auto angle = random.GameFloatRand(k_TwoPi);
+		if (Locator::waterRingSystem::has_value())
+		{
+			Locator::waterRingSystem::value().Add(
+			    {.position = drop.position, .growth = *drop.ringGrowth, .angle = angle, .argb = colour});
+		}
 	}
 }
 
