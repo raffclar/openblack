@@ -3567,8 +3567,9 @@ void AddLight(std::vector<Scenario>& all)
 	    .id = "appearance.villager_made_on_water",
 	    .name = "A villager made on the water drowns from the start",
 	    .facet = Facet::Appearance,
-	    .description = "At noon, the clock stopped, the camera looks across the lake of the testbed to its far shallows. "
-	                   "One farmer is made in the shallows, and one farmer is made on the dry land behind them.",
+	    .description = "At noon, the clock stopped, the camera looks from the far shore of the lake of the testbed to "
+	                   "its shallows. One farmer is made in the shallows, and one farmer is made on the dry land in "
+	                   "front of the camera. Only the head of the farmer in the shallows is above the water.",
 	    .expected = "The farmer in the shallows plays the drowning clip from the start, until his time in the water "
 	                "ends. Then he dies and lies drowned. The farmer on the dry land plays the clip of a new villager "
 	                "until he first decides what to do. No farmer stands still in the pose of a model with no clip.",
