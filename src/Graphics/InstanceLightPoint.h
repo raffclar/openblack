@@ -23,6 +23,17 @@ namespace openblack::graphics::instance_light
 /// parts on the deck of the explorers' boat take only the land's light of the boat.
 inline constexpr float k_NoLandColour = -1.0f;
 
+/// The z of an instance's look above 0 and at most a half (in place of a fade, below 0, or hidden, above a half): the
+/// instance takes the land's light and colour but no distance haze, as a villager that a script draws in high detail
+inline constexpr float k_NoHaze = 0.25f;
+
+/// The z of an instance's look for an instance that takes no distance haze: k_NoHaze in place of 0, a fade or a hidden
+/// instance as it is
+[[nodiscard]] constexpr float WithoutHaze(float lookZ) noexcept
+{
+	return lookZ == 0.0f ? k_NoHaze : lookZ;
+}
+
 void SetLightOffset(glm::mat4& model, glm::vec2 offset) noexcept;
 [[nodiscard]] glm::vec2 LightOffset(const glm::mat4& model) noexcept;
 

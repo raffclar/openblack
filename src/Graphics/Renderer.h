@@ -521,10 +521,10 @@ private:
 	void DrawGestureHintSeeds(const DrawSceneDesc& desc) const;
 	/// The leashes hanging on the temples, and the one carried in the hand, each drawn just after its glow
 	void DrawTempleLeashes(const DrawSceneDesc& desc) const;
-	/// A texture for a painted skin: a spare one, else a new one. None if bgfx has no more textures.
-	[[nodiscard]] std::unique_ptr<Texture2D> TakeCreatureSkinTexture() const;
-	/// A new texture for a painted skin. None if bgfx has no more textures.
-	[[nodiscard]] static std::unique_ptr<Texture2D> MakeCreatureSkinTexture();
+	/// A texture of side by side texels for a painted skin: a spare one, else a new one. None if bgfx has no more textures.
+	[[nodiscard]] std::unique_ptr<Texture2D> TakeCreatureSkinTexture(uint16_t side) const;
+	/// A new texture of side by side texels for a painted skin. None if bgfx has no more textures.
+	[[nodiscard]] static std::unique_ptr<Texture2D> MakeCreatureSkinTexture(uint16_t side);
 	/// The hand's skins as blended for its player's alignment (see components::HandMorph), taken up when they change
 	void UploadHandSkins() const;
 	/// Every animal's bones as posed this frame, in one texture, so that all the animals of a model, a flock's birds, are

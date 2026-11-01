@@ -10,6 +10,7 @@
 #include "ThingModel.h"
 
 #include "3D/AllMeshes.h"
+#include "ECS/Components/BuildingDamage.h"
 #include "ECS/Components/Firefly.h"
 #include "ECS/Components/Mesh.h"
 #include "ECS/Components/TeleportStone.h"
@@ -30,6 +31,17 @@ std::optional<entt::id_type> thing_model::ModelOf(const Registry& registry, entt
 	if (!registry.Valid(thing))
 	{
 		return std::nullopt;
+	}
+	// A piece that broke off a building is a rock of the statics' rock row at its first size. The game shows the piece
+	// as its broken triangles, but the rock model gives it its size and shape on the map.
+	if (registry.AllOf<BuildingPiece>(thing))
+	{
+		if (!Locator::infoConstants::has_value())
+		{
+			return std::nullopt;
+		}
+		const auto& info = Locator::infoConstants::value().mobileStatic.at(static_cast<size_t>(MobileStaticInfo::Rock));
+		return resources::HashIdentifier(info.meshId);
 	}
 	if (const auto* mesh = registry.TryGet<const Mesh>(thing))
 	{

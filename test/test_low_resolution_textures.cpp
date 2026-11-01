@@ -14,6 +14,7 @@
 
 #include <gtest/gtest.h>
 
+#include "3D/L3DSkinTexels.h"
 #include "3D/LowResolutionTextures.h"
 
 using namespace openblack;
@@ -85,4 +86,36 @@ TEST(LowResolutionTextures, APictureMadeInMemoryTakesTheMeanOfEachSquareRoundedD
 
 	// A picture of another size is not halved
 	EXPECT_FALSE(low_resolution_textures::HalveByMean4444(std::vector<uint16_t>(1000)).has_value());
+}
+
+TEST(LowResolutionTextures, AnOpaquePictureTakesTheMeanOfItsFiveBitColoursAndStaysOpaque)
+{
+	std::vector<uint16_t> picture(static_cast<size_t>(256) * 256, 0x0000);
+	// Red 1, 2, 3, 9 makes 15 / 4 = 3; green 31 four times stays 31; blue 0, 0, 0, 3 makes 0
+	picture[0] = static_cast<uint16_t>((1u << 10u) | (31u << 5u));
+	picture[1] = static_cast<uint16_t>((2u << 10u) | (31u << 5u));
+	picture[256] = static_cast<uint16_t>((3u << 10u) | (31u << 5u));
+	picture[257] = static_cast<uint16_t>((9u << 10u) | (31u << 5u) | 3u);
+	const auto half = low_resolution_textures::HalveByMean555Opaque(picture);
+	ASSERT_TRUE(half.has_value());
+	EXPECT_EQ((*half)[0], static_cast<uint16_t>(0x8000u | (3u << 10u) | (31u << 5u)));
+	EXPECT_EQ((*half)[1], 0x8000);
+}
+
+TEST(LowResolutionTextures, TheSkinsOfAModelLoadAtHalfSizeAtTheLowestDetailLevels)
+{
+	std::vector<uint16_t> skin(static_cast<size_t>(256) * 256, 0xF000);
+	skin[1] = 0xF444;
+	// Full size at the other detail levels
+	EXPECT_EQ(l3d_skin::LoadedTexels(skin, 0, false), skin);
+	EXPECT_EQ(l3d_skin::LoadedSide(false), 256);
+	// Half size, each texel the mean of four, at the lowest detail levels
+	const auto half = l3d_skin::LoadedTexels(skin, 0, true);
+	ASSERT_EQ(half.size(), static_cast<size_t>(128) * 128);
+	EXPECT_EQ(half[0], 0xF111);
+	EXPECT_EQ(l3d_skin::LoadedSide(true), 128);
+	EXPECT_EQ(l3d_skin::SideOf(half.size()), 128);
+	// An opaque skin takes the five-bit mean and stays opaque: red (28 + 28 + 28 + 29) / 4 = 28, green (0 + 0 + 0 + 2) / 4
+	// = 0, blue (0 + 0 + 0 + 4) / 4 = 1
+	EXPECT_EQ(l3d_skin::LoadedTexels(skin, l3d_skin::k_OpaqueSkinsFlag, true)[0], 0xF001);
 }

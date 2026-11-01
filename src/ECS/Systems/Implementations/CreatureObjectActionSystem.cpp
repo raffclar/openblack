@@ -1064,12 +1064,10 @@ glm::vec2 FacingToReach(const Transform& transform, const creature_reach::Points
 }
 
 /// Whether a thing lies on the map, where a creature can stomp on it: not held, flying or carried off.
-/// A piece that broke off a building lies on the map when it is at rest, as a rock does. The pieces are not in the
-/// cells of the map yet, so this function examines the piece directly.
+/// A piece that broke off a building goes into the cells of the map when it comes to rest, as a rock does.
 bool OnTheMap(const ecs::Registry& registry, entt::entity thing)
 {
-	const bool placed = ecs::InMapCells(registry, thing) || registry.AllOf<BuildingPiece>(thing);
-	return placed && !registry.AnyOf<InHand, HeldByCreature, InPhysics, CarriedByTornado>(thing);
+	return ecs::InMapCells(registry, thing) && !registry.AnyOf<InHand, HeldByCreature, InPhysics, CarriedByTornado>(thing);
 }
 
 /// One game turn of walking or turning up to what the creature acts on
