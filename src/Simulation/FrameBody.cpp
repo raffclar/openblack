@@ -142,7 +142,10 @@ void PlayFrameEffects(FrameViewInterface& view)
 		                                    camera.GetOrigin());
 	}
 	// The rings on the water grow and fade
-	Locator::waterRingSystem::value().Update(clock.GetFrameRealTime(), clock.GetFrameGameTime());
+	if (Locator::waterRingSystem::has_value())
+	{
+		Locator::waterRingSystem::value().Update(clock.GetFrameRealTime(), clock.GetFrameGameTime());
+	}
 	// The ribbons' textures slide on the frames that draw them
 	if (Locator::particleRuleSystem::has_value())
 	{

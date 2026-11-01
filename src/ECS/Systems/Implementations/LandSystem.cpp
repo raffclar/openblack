@@ -845,6 +845,9 @@ void LandSystem::PrepareNewLand(land_change::Kind change)
 	{
 		Locator::weatherSystem::value().Reset();
 		Locator::snowSystem::value().Reset();
+	}
+	if (Locator::waterRingSystem::has_value())
+	{
 		Locator::waterRingSystem::value().Reset();
 	}
 	// The scripts' hold on the screen goes on through the story's change of land: a fade to black made on the last land
@@ -943,7 +946,10 @@ void LandSystem::PrepareNewLand(land_change::Kind change)
 		Locator::leashSystem::value().Reset();
 	}
 	Locator::explosionSystem::value().Reset();
-	Locator::floatingNumberSystem::value().Reset();
+	if (Locator::floatingNumberSystem::has_value())
+	{
+		Locator::floatingNumberSystem::value().Reset();
+	}
 	Locator::magicSystem::value().SetIgnoreInfluence(false);
 	Locator::animalSystem::value().Reset();
 	if (Locator::appleBarrelSystem::has_value())
