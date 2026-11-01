@@ -16,6 +16,7 @@
 #include <bitset>
 #include <future>
 #include <limits>
+#include <map>
 #include <memory>
 #include <optional>
 #include <regex>
@@ -24,6 +25,7 @@
 #include <string>
 #include <string_view>
 #include <unordered_map>
+#include <unordered_set>
 #include <utility>
 #include <variant>
 #include <vector>
@@ -253,6 +255,37 @@ TEST(WorldArchive, MapsGiveTheSameBytesInAnyOrder)
 	Save(a, first);
 	Save(b, second);
 	EXPECT_EQ(a.Bytes(), b.Bytes());
+}
+
+TEST(WorldArchive, AMapByHashGivesTheBytesOfAMapInOrderWithTheSameContents)
+{
+	entt::meta_ctx context;
+	Register(context);
+	// Small keys, keys of text, and a set, with the keys put in an order that is not their own
+	std::unordered_map<entt::entity, uint32_t> byHash;
+	std::map<entt::entity, uint32_t> inOrder;
+	std::unordered_map<std::string, uint32_t> namesByHash;
+	std::map<std::string, uint32_t> namesInOrder;
+	std::unordered_set<uint32_t> setByHash;
+	std::set<uint32_t> setInOrder;
+	for (uint32_t i = 0; i < 200; ++i)
+	{
+		const uint32_t key = (i * 7919u) % 1009u;
+		byHash.emplace(entt::entity {key}, i);
+		inOrder.emplace(entt::entity {key}, i);
+		namesByHash.emplace(std::to_string(key), i);
+		namesInOrder.emplace(std::to_string(key), i);
+		setByHash.insert(key);
+		setInOrder.insert(key);
+	}
+	const auto bytes = [&context](const auto& value) {
+		BinaryWriter writer(context);
+		Save(writer, value);
+		return writer.Bytes();
+	};
+	EXPECT_EQ(bytes(byHash), bytes(inOrder));
+	EXPECT_EQ(bytes(namesByHash), bytes(namesInOrder));
+	EXPECT_EQ(bytes(setByHash), bytes(setInOrder));
 }
 
 TEST(WorldArchive, RemapChangesEveryReference)
