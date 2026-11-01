@@ -73,7 +73,7 @@ std::vector<Action> EachCommand()
 	    FightCharge {.heldMs = 1200},
 	    CreatureReaction {.creature = Entity(21), .animation = 0x0A0B0C0D, .mirrored = true, .interruptsAfter = 0.8},
 	    HandClick {.thing = Entity(22), .release = true, .hasPlace = true, .placeX = -5, .placeZ = 0x7FFFFFFF},
-	    SeedGesture {.kind = SeedGesture::Kind::PowerUp, .level = -1},
+	    SeedGesture {.kind = SeedGesture::Kind::PowerUp, .level = -1, .icon = Entity(46)},
 	    HandPick {.object = Entity(23)},
 	    PlayerJoined {},
 	    MiracleRequest {.seed = SpellSeedType::Heal},
@@ -202,7 +202,8 @@ Action RandomAction(std::mt19937& random)
 		return HandPick {.object = entity()};
 	case 20:
 		return SeedGesture {.kind = static_cast<SeedGesture::Kind>(bits(random) % 3),
-		                    .level = static_cast<int8_t>(bits(random))};
+		                    .level = static_cast<int8_t>(bits(random)),
+		                    .icon = entity()};
 	case 19:
 	{
 		const bool release = bits(random) % 2 == 0;
@@ -385,7 +386,7 @@ std::vector<Action> BusyCommands()
 
 TEST(TurnCodec, EachCommandHasItsSize)
 {
-	const std::vector<size_t> sizes {2, 5, 9, 5,  53, 5, 10, 18, 5,  49, 17, 5,  5, 5, 9,  12, 1,  18, 11, 5, 18, 15, 3, 5,
+	const std::vector<size_t> sizes {2, 5, 9, 5,  53, 5, 10, 18, 5,  49, 17, 5,  5, 5, 9,  12, 1,  18, 11, 5, 18, 15, 7, 5,
 	                                 1, 2, 1, 61, 5,  2, 1,  13, 10, 18, 1,  54, 1, 5, 51, 5,  16, 7,  1,  1, 13, 1,  2};
 	const auto commands = EachCommand();
 	ASSERT_EQ(commands.size(), sizes.size());
@@ -520,6 +521,27 @@ TEST(TurnCodec, TheFieldsOfTheCommandsComeBackExactly)
 	EXPECT_EQ(order.object, Entity(44));
 	EXPECT_EQ(order.place.z, 3.0f);
 	EXPECT_EQ(std::get<LeashKey>(block.actions[3]).key, creature_leash::LeashKey::PreviousLeash);
+}
+
+// A power-up gesture keeps its icon: the turn charges at the icon of the gesture, not at the icon of the seed in the hand
+TEST(TurnCodec, APowerUpGestureComesBackWithItsIcon)
+{
+	const auto bytes = Encode(
+	    CommandBlock {.sequence = 3,
+	                  .turn = 8,
+	                  .actions = {SeedGesture {.kind = SeedGesture::Kind::PowerUp, .level = 1, .icon = Entity(0x01020304)}}});
+	const auto decoded = Decode(bytes);
+	ASSERT_EQ(decoded.error, DecodeError::None);
+	const auto& block = std::get<CommandBlock>(*decoded.frame);
+	ASSERT_EQ(block.actions.size(), 1u);
+	const auto& gesture = std::get<SeedGesture>(block.actions[0]);
+	EXPECT_EQ(gesture.kind, SeedGesture::Kind::PowerUp);
+	EXPECT_EQ(gesture.level, 1);
+	EXPECT_EQ(gesture.icon, Entity(0x01020304));
+	// The icon follows the level, in little-endian order
+	ASSERT_GE(bytes.size(), 4u);
+	EXPECT_EQ(bytes[bytes.size() - 4], 0x04);
+	EXPECT_EQ(bytes[bytes.size() - 1], 0x01);
 }
 
 TEST(TurnCodec, TheEncoderRefusesAFrameThatBreaksALimit)

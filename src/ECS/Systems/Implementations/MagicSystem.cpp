@@ -3409,17 +3409,26 @@ void MagicSystem::DeleteSeed(entt::entity entity)
 	registry.Destroy(entity);
 }
 
-void MagicSystem::AskPowerUpOfHeldSeed(int level)
+entt::entity MagicSystem::IconOfHeldSeed() const
 {
 	const auto& registry = EntityRegistry();
 	if (!Held().has_value() || !registry.Valid(*Held()) || !Locator::spellIconSystem::has_value())
 	{
+		return entt::null;
+	}
+	return Locator::spellIconSystem::value().IconOfSeed(*Held());
+}
+
+void MagicSystem::AskPowerUpAtIcon(entt::entity icon, int level)
+{
+	if (!Locator::spellIconSystem::has_value())
+	{
 		return;
 	}
-	// The icon that made the seed charges it to the level from the prayer power of its site, in the turns of the site.
-	// The seed keeps its level until the icon has charged it.
-	auto& icons = Locator::spellIconSystem::value();
-	icons.StartPowerUpCharge(icons.IconOfSeed(*Held()), ActingPlayer(), level);
+	// The icon of the command charges its seed to the level from the prayer power of its site, in the turns of the site.
+	// The seed keeps its level until the icon has charged it. The icon starts the charge only while a hand of the player
+	// holds its seed.
+	Locator::spellIconSystem::value().StartPowerUpCharge(icon, ActingPlayer(), level);
 }
 
 void MagicSystem::ShowHeldSeedPowerUp(int level, int previous)
@@ -3503,8 +3512,9 @@ void MagicSystem::TakeGestures()
 		}
 		// The gestures on the seed in the hand go as commands of the player, which the turn does
 		case GestureEvent::Kind::PowerUp:
-			SendSeedGesture(
-			    {.kind = player_commands::SeedGesture::Kind::PowerUp, .level = static_cast<int8_t>(event.powerUpLevel)});
+			SendSeedGesture({.kind = player_commands::SeedGesture::Kind::PowerUp,
+			                 .level = static_cast<int8_t>(event.powerUpLevel),
+			                 .icon = IconOfHeldSeed()});
 			break;
 		case GestureEvent::Kind::Scribble:
 			SendSeedGesture({.kind = player_commands::SeedGesture::Kind::Scribble, .level = 0});
@@ -3539,7 +3549,7 @@ void MagicSystem::DoSeedGesture(PlayerNames player, const player_commands::SeedG
 		{
 			Locator::miracleFxSystem::value().HandShaken();
 		}
-		AskPowerUpOfHeldSeed(gesture.level);
+		AskPowerUpAtIcon(gesture.icon, gesture.level);
 		break;
 	case player_commands::SeedGesture::Kind::Scribble:
 		// The hand asked for no power-up, so the scribble drops the seed
