@@ -10,11 +10,14 @@
 #pragma once
 
 #include <optional>
+#include <span>
 #include <vector>
 
 #include <entt/entity/entity.hpp>
 #include <glm/vec2.hpp>
 #include <glm/vec3.hpp>
+
+#include "ECS/Components/Footpath.h"
 
 namespace openblack::ecs::systems
 {
@@ -59,6 +62,10 @@ public:
 	/// Once a turn: the obstacle changes are done; then the paths being found take a few more steps, and those found are
 	/// laid
 	virtual void ProcessTurn() = 0;
+	/// The load of a saved game of the game made its things. They go onto the map, but no path goes round them, because
+	/// the game's load sends no path round a thing. Then all the paths, the links to them, the searches for paths and
+	/// the walks on them go, and the given paths take their place. Gives the entity of each given path, in order.
+	virtual std::vector<entt::entity> PutLoadedFootpaths(std::span<const components::Footpath> footpaths) = 0;
 
 	/// The places of the nodes of a path laid at once between two places, none when no way is found
 	[[nodiscard]] virtual std::optional<std::vector<glm::ivec2>> PlanBetween(glm::ivec2 from, glm::ivec2 to) const = 0;

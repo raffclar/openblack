@@ -149,7 +149,8 @@ void RemoveLandTownsContents(ecs::Registry& registry)
 }
 
 /// Each town plans the buildings of the file, in the order of its list
-void PutPlans(ecs::Registry& registry, const world_import::ImportedTowns& imported)
+void PutPlans(ecs::Registry& registry, const world_import::ImportedTowns& imported,
+              std::unordered_map<uint32_t, entt::entity>& made)
 {
 	std::unordered_map<uint32_t, const world_import::ImportedPlan*> plans;
 	for (const auto& plan : imported.plans)
@@ -171,6 +172,7 @@ void PutPlans(ecs::Registry& registry, const world_import::ImportedTowns& import
 			if (entity != entt::null)
 			{
 				registry.Get<PlannedAbode>(entity).wasBuilt = file.wasBuilt;
+				made.emplace(file.number, entity);
 			}
 		}
 	}
@@ -593,7 +595,7 @@ void PutTotems(ecs::Registry& registry, const world_import::ImportedTowns& impor
 } // namespace
 
 bool SaveGameSystem::ImportVanillaTowns(const gamesave::VanillaWorld& world, VanillaMade& made, VanillaWorks& works,
-                                        VanillaCircles& circles)
+                                        VanillaCircles& circles, VanillaFootpathWalks& footpathWalks)
 {
 	const auto imported = world_import::ReadTowns(world);
 	for (const auto& why : imported.skipped)
@@ -703,6 +705,10 @@ bool SaveGameSystem::ImportVanillaTowns(const gamesave::VanillaWorld& world, Van
 			{
 				circles.emplace_back(entity, *villager.walk.circle);
 			}
+			if (states[0] == static_cast<uint8_t>(VillagerStates::MoveOnPath))
+			{
+				footpathWalks.emplace_back(entity, villager.footpathWalk);
+			}
 			if (auto work = world_import::WorkOf(states[0], villager.topValues); work.has_value())
 			{
 				works.emplace_back(entity, *work);
@@ -781,7 +787,7 @@ bool SaveGameSystem::ImportVanillaTowns(const gamesave::VanillaWorld& world, Van
 		component.abodes = std::move(ordered);
 	}
 	PutDesireFlags(registry, imported, made);
-	PutPlans(registry, imported);
+	PutPlans(registry, imported, made);
 	PutSites(registry, imported, made);
 	registry.SetDirty();
 	SPDLOG_LOGGER_INFO(ImportLog(),

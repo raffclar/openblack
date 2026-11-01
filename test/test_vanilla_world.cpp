@@ -251,7 +251,7 @@ TEST(VanillaWorld, ReadsAVillagerRecord)
 	EXPECT_EQ(world->Ref(villager, "home"), 549);
 	EXPECT_EQ(world->Ref(villager, "town"), 436);
 	EXPECT_EQ(world->Ref(villager, "mother"), 0);
-	EXPECT_EQ(world->Ref(villager, "footpathLink"), 551);
+	EXPECT_EQ(world->Ref(villager, "walkFootpath"), 551);
 	EXPECT_EQ(world->Byte(villager, "discipleType"), 0);
 	EXPECT_EQ(world->Byte(villager, "moveState"), 4);
 	EXPECT_EQ(world->Half(villager, "speed"), 713);

@@ -55,6 +55,8 @@ constexpr float k_CellMetres = 10.0f;
 constexpr std::array k_FishermanStates = {VillagerStates::FishermanArrivesAtFishing, VillagerStates::Fishing};
 constexpr std::array k_FarmerStates = {VillagerStates::FarmerArrivesAtFarm, VillagerStates::FarmerPlantsCrop,
                                        VillagerStates::FarmerDigsUpCrop};
+/// The flag of the status of a living thing that walks a footpath towards its first node
+constexpr uint16_t k_TowardsStartStatus = 0x0008;
 /// The number of floats on each side of a speed that WalkSpeedOf tries
 constexpr int k_MetreTries = 4;
 
@@ -399,6 +401,10 @@ std::optional<ImportedVillager> ReadVillager(const VanillaWorld& world, const Va
 	                           .turnsSinceStateChange = static_cast<uint16_t>(action[4] | (action[5] << 8)),
 	                           .turnsUntilStateChange = world.Half(record, "turnsToStateChange").value_or(0)};
 	villager.walk = WalkOf(world, record);
+	villager.footpathWalk = {.footpath = world.Ref(record, "walkFootpath").value_or(0),
+	                         .node = world.Ref(record, "walkFootpathNode").value_or(0),
+	                         .towardsStart = (world.Half(record, "status").value_or(0) & k_TowardsStartStatus) != 0,
+	                         .next = world.Ref(record, "nextFootpath").value_or(0)};
 	villager.topValues = StateValues(world, record, "topStateValue");
 	villager.finalValues = StateValues(world, record, "finalStateValue");
 	if (const auto special = world.Word(record, "specialRow"); special.has_value())
@@ -515,7 +521,8 @@ bool IsInsideHome(VillagerStates state)
 
 bool CanKeepStateValues(uint8_t state)
 {
-	return !gamesave::VillagerStateKeepsValues(state) || IsOneOf(state, k_FishermanStates) || IsOneOf(state, k_FarmerStates);
+	return !gamesave::VillagerStateKeepsValues(state) || IsOneOf(state, k_FishermanStates) || IsOneOf(state, k_FarmerStates) ||
+	       state == static_cast<uint8_t>(VillagerStates::MoveOnPath);
 }
 
 bool CanKeepWalk(uint8_t moveState)

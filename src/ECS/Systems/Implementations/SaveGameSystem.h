@@ -137,9 +137,15 @@ private:
 	using VanillaWorks = std::vector<std::pair<entt::entity, ecs::vanilla_world_import::ImportedWork>>;
 	/// Each villager that keeps a walk with a circle in the file, and the circle
 	using VanillaCircles = std::vector<std::pair<entt::entity, ecs::vanilla_world_import::ImportedCircle>>;
+	/// Each villager that walks a footpath in the file, and its walk
+	using VanillaFootpathWalks = std::vector<std::pair<entt::entity, ecs::vanilla_footpath_import::FileWalk>>;
 	/// Puts the turn, the towns, the buildings of the towns and the villagers of the world file into the world
 	bool ImportVanillaTowns(const gamesave::VanillaWorld& world, VanillaMade& made, VanillaWorks& works,
-	                        VanillaCircles& circles);
+	                        VanillaCircles& circles, VanillaFootpathWalks& footpathWalks);
+	/// The footpaths of the file replace all the footpaths. Each thing of the file takes its link to its footpaths, and
+	/// each villager that walks a footpath goes on along it. The import makes all the things of the file first.
+	void ImportVanillaFootpaths(const gamesave::VanillaWorld& world, const VanillaMade& made,
+	                            const VanillaFootpathWalks& walks);
 	/// Each villager that keeps a walk with a circle takes its circle: the last circle of the thing of the file, or a
 	/// circle of water or of the edge of the land. The import makes all the things of the file first.
 	void ImportVanillaCircles(const VanillaCircles& circles, const VanillaMade& made);
