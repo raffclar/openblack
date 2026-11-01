@@ -68,6 +68,7 @@ TEST(HeaderOverrides, EmptyCallerValuesKeepTheDefaults)
 {
 	const auto start = ResolveStartSettings({}, {}, 0);
 	EXPECT_EQ(start, (StartPlaySettings {.volume = 127,
+	                                     .pan = 90,
 	                                     .pitchPercent = 100,
 	                                     .minDistance = 1.0f,
 	                                     .maxDistance = 9999.0f,
@@ -138,4 +139,18 @@ TEST(HeaderOverrides, LaterChangesDoNothingOnHeaderSettings)
 	EXPECT_TRUE(PitchChangeApplies(Bit(AudioBankOverride::Volume), 120));
 	EXPECT_FALSE(PitchChangeApplies(Bit(AudioBankOverride::Pitch), 120));
 	EXPECT_FALSE(PitchChangeApplies(0, 0));
+}
+
+TEST(HeaderOverrides, TheHeaderPanWinsOverTheCallerPan)
+{
+	const HeaderPlaySettings header {.overrideFlags = static_cast<uint32_t>(AudioBankOverride::Pan), .pan = 30};
+	EXPECT_EQ(ResolveStartSettings(header, {.pan = 150}, 0).pan, 30u);
+	EXPECT_EQ(ResolveStartSettings({.pan = 30}, {.pan = 150}, 0).pan, 150u);
+	EXPECT_EQ(ResolveStartSettings({}, {}, 0).pan, k_PlayCentrePan);
+}
+
+TEST(HeaderOverrides, ANegativeHeaderPanIsReadAsAnUnsignedNumber)
+{
+	const HeaderPlaySettings header {.overrideFlags = static_cast<uint32_t>(AudioBankOverride::Pan), .pan = -1};
+	EXPECT_EQ(ResolveStartSettings(header, {}, 0).pan, 0xFFFFFFFFu);
 }

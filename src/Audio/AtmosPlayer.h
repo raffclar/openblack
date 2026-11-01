@@ -41,6 +41,8 @@ struct VoiceStart
 	int32_t loopCount;
 	/// Listener relative 3D position, otherwise centred
 	bool positional;
+	/// The pan of a voice that is not positional, from the left (0) to the right (180), 90 the centre
+	uint32_t pan {90};
 	/// LHAudio listener frame: x right, y forward, z up
 	glm::vec3 position;
 	/// The game's distance mapping: full volume up to minDistance, then minDistance / (minDistance + distanceScale *

@@ -2299,7 +2299,7 @@
   "query": "help.messages"
  },
  {
-  "description": "The advisors' remarks on what the player does (towns attacked, buildings wrecked, alignment drifting, the moon): the ones asked for lately (kind, text, turn, whether the advisors got to say it), the turns until the moon is looked at again, and the player's guidance (each kind's last turn, the alignment's drift, the one-offs said)",
+  "description": "The advisors' remarks on what the player does (towns attacked, buildings wrecked, alignment drifting, the moon): the ones asked for lately (kind, text, turn, whether the advisors got to say it), the turns until the moon is looked at again, the player's guidance (each kind's last turn, the alignment's drift, the one-offs said), and the night whisper (the sample of the player's name, the count of real-night checks, the turns to the next check and the volume of the next whisper)",
   "kind": "object",
   "parameters": [],
   "query": "help.guidance"
