@@ -764,18 +764,24 @@ bool RenderingSystem::UploadInstances(bool drawBoundingBox)
 	const openblack::ecs::ComponentLookup<ScaffoldDrawnScale> drawnScales(registry);
 	const openblack::ecs::ComponentLookup<PhysicsDrawPose> physicsPoses(registry);
 	const openblack::ecs::ComponentLookup<DetailMeshes> detailMeshes(registry);
+	const openblack::ecs::ComponentLookup<Hand> hands(registry);
+	const openblack::ecs::ComponentLookup<ScriptHighlight> highlights(registry);
+	const openblack::ecs::ComponentLookup<CreatureMorph> creatureMorphs(registry);
+	const openblack::ecs::ComponentLookup<MorphWithTerrain> terrainMorphs(registry);
+	const openblack::ecs::ComponentLookup<ScaffoldGhost> ghosts(registry);
 	const auto lifelessTotemParts = LifelessTotemParts(registry);
 	EachBySegment(
 	    [this, &registry, &vegetation, &meshes, &fits, &fizzOrder, &segmentPlaced, &lastSegment, drawBoundingBox, camera, &view,
 	     modelDetail, drawList, drawnHand, &drawnPlaces, &villagerPoses, &highDetails, &drawnScales, &physicsPoses,
-	     &detailMeshes, &lifelessTotemParts](entt::entity entity, const Mesh& mesh, const Transform& transform) {
+	     &detailMeshes, &lifelessTotemParts, &hands, &highlights, &creatureMorphs, &terrainMorphs,
+	     &ghosts](entt::entity entity, const Mesh& mesh, const Transform& transform) {
 		    // The hands of the other gods and the right hands have no model on the screen
-		    if (!graphics::drawn_hand::Drawn(registry.AllOf<Hand>(entity), entity, drawnHand))
+		    if (!graphics::drawn_hand::Drawn(hands.Has(entity), entity, drawnHand))
 		    {
 			    return;
 		    }
 		    // A script highlight that its draw list did not select in this frame is not drawn
-		    if (HiddenHighlight(registry, entity))
+		    if (const auto* highlight = highlights.TryGet(entity); highlight != nullptr && highlight->hidden)
 		    {
 			    return;
 		    }
@@ -834,14 +840,14 @@ bool RenderingSystem::UploadInstances(bool drawBoundingBox)
 		    {
 			    // Of the things on the land's blocks only those in the land's draw list are drawn. One left out leaves
 			    // what it stands on painted, as one too far off does; the living and the creatures leave nothing.
-			    if (detail != nullptr || registry.AllOf<CreatureMorph>(entity))
+			    if (detail != nullptr || creatureMorphs.Has(entity))
 			    {
 				    return;
 			    }
 			    gone = true;
 			    _goneThings.push(entity);
 		    }
-		    else if (const auto* ghost = registry.TryGet<const ScaffoldGhost>(entity); ghost != nullptr)
+		    else if (const auto* ghost = ghosts.TryGet(entity); ghost != nullptr)
 		    {
 			    // The phantom building of a scaffold is drawn whole at any distance, blended by its own alpha among the
 			    // things that fade out
@@ -850,11 +856,11 @@ bool RenderingSystem::UploadInstances(bool drawBoundingBox)
 			    _fadingThings.emplace(entity, ghost->alpha);
 		    }
 		    else if (openblack::ecs::high_detail_rules::DrawsHighMeshAtAnyDistance(detail != nullptr, highDetails.Has(entity),
-		                                                                           registry.AllOf<MorphWithTerrain>(entity)))
+		                                                                           terrainMorphs.Has(entity)))
 		    {
 			    drawnMesh = detail->meshes.at(static_cast<size_t>(graphics::mesh_detail::Mesh::High));
 		    }
-		    else if (camera != nullptr && (detail == nullptr || !registry.AllOf<MorphWithTerrain>(entity)) &&
+		    else if (camera != nullptr && (detail == nullptr || !terrainMorphs.Has(entity)) &&
 		             object_detail::Banded(registry, entity) &&
 		             (detail != nullptr || object_detail::BandedNow(registry, entity)))
 		    {

@@ -59,6 +59,32 @@ TEST(LandShadowCasters, BuildingsCastOnceBuilt)
 	EXPECT_EQ(LandShadowOf(registry, house), LandShadow::Shape);
 }
 
+TEST(LandShadowCasters, ALookupGivesTheShadowOfEachThingAsTheirComponentsChange)
+{
+	Registry registry;
+	const auto house = AbodeOf(registry, AbodeNumber::A);
+	const auto field = AbodeOf(registry, AbodeNumber::Field);
+	const auto tree = registry.Create();
+	registry.Assign<components::Tree>(tree);
+	registry.Assign<components::BuildProgress>(house, 0.5f);
+	// A store that is not there yet gives nothing for its kind
+	const auto nothing = registry.Create();
+	const openblack::ecs::LandShadowLookup lookup(registry);
+	EXPECT_EQ(lookup.Of(house), LandShadow::None);
+	EXPECT_EQ(lookup.Of(field), LandShadow::None);
+	EXPECT_EQ(lookup.Of(tree), LandShadow::Leaves);
+	EXPECT_EQ(lookup.Of(nothing), LandShadow::None);
+	// The stores stay, so the lookup sees the changes of the things in them
+	registry.Get<components::BuildProgress>(house).built = 1.0f;
+	EXPECT_EQ(lookup.Of(house), LandShadow::Shape);
+	registry.Remove<components::BuildProgress>(house);
+	EXPECT_EQ(lookup.Of(house), LandShadow::Shape);
+	for (const auto entity : {house, field, tree, nothing})
+	{
+		EXPECT_EQ(lookup.Of(entity), LandShadowOf(registry, entity));
+	}
+}
+
 TEST(LandShadowCasters, AFootballPitchCastsFromTheStart)
 {
 	Registry registry;
