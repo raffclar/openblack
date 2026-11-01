@@ -391,13 +391,26 @@ std::string ToJson(const ClanCreature& creature)
 std::string ToJson(const ClanCreatureReply& reply)
 {
 	auto object = Json::object();
-	if (reply.creature.has_value())
+	switch (reply.kind)
 	{
-		object["creature"] = ClanCreatureJson(*reply.creature);
-	}
-	if (reply.make.has_value())
-	{
-		object["new"] = Json {{"type", reply.make->type}, {"name", reply.make->name}};
+	case ClanCreatureKind::None:
+		object["kind"] = "none";
+		break;
+	case ClanCreatureKind::Stored:
+		if (reply.creature.has_value())
+		{
+			object = ClanCreatureJson(*reply.creature);
+		}
+		object["kind"] = "stored";
+		break;
+	case ClanCreatureKind::Create:
+		object["kind"] = "create";
+		if (reply.make.has_value())
+		{
+			object["creature_type"] = reply.make->type;
+			object["name"] = reply.make->name;
+		}
+		break;
 	}
 	return Dump(object);
 }
@@ -714,28 +727,40 @@ std::optional<ClanCreature> ParseClanCreature(std::string_view text)
 std::optional<ClanCreatureReply> ParseClanCreatureReply(std::string_view text)
 {
 	return ParseWith<ClanCreatureReply>(text, [](const Json& object, ClanCreatureReply& out) {
-		const auto* creature = Member(object, "creature");
-		if (creature != nullptr && !creature->is_null())
+		std::string kind;
+		if (!ReadString(object, "kind", kind))
+		{
+			return false;
+		}
+		// The members of the other kinds can have null. The reader looks only at the members of the kind.
+		if (kind == "none")
+		{
+			out.kind = ClanCreatureKind::None;
+			return true;
+		}
+		if (kind == "stored")
 		{
 			ClanCreature value;
-			if (!creature->is_object() || !ReadClanCreature(*creature, value))
+			if (!ReadClanCreature(object, value))
 			{
 				return false;
 			}
+			out.kind = ClanCreatureKind::Stored;
 			out.creature = std::move(value);
+			return true;
 		}
-		const auto* make = Member(object, "new");
-		if (make != nullptr && !make->is_null())
+		if (kind == "create")
 		{
 			NewClanCreature value;
-			if (!make->is_object() || !ReadInteger(*make, "type", value.type) || !ReadString(*make, "name", value.name))
+			if (!ReadInteger(object, "creature_type", value.type) || !ReadString(object, "name", value.name))
 			{
 				return false;
 			}
+			out.kind = ClanCreatureKind::Create;
 			out.make = std::move(value);
+			return true;
 		}
-		// The answer has one of the two
-		return out.creature.has_value() != out.make.has_value();
+		return false;
 	});
 }
 

@@ -543,7 +543,7 @@ help::spirits::AdvisorSpiritController* ScriptAdvisors()
 	return &Locator::advisorSystem::value().GetController();
 }
 
-/// The advisor a script's spirit means, 1 the good one or 2 the evil one, by the local player's alignment for those
+/// The advisor a script's spirit means, 1 the good one or 2 the evil one, by the first player's alignment for those
 /// that go by it. A random spirit comes from the random numbers of the help, which no frame draws.
 int32_t ScriptHelpSpirit(int32_t scriptSpirit)
 {
@@ -703,7 +703,7 @@ void StartScriptRock(entt::entity rock, const script::create_rules::ScriptRockSt
 	dynamics.RaiseClearOfWhatIsUnder(*started.entry);
 }
 
-/// A one-shot miracle globe a script puts straight into the local player's hand, charged in full and ready, if the hand
+/// A one-shot miracle globe a script puts straight into the first player's hand, charged in full and ready, if the hand
 /// is free to take it: the seed, or none
 entt::entity CreateScriptSeedInHand(uint32_t subtype)
 {
@@ -967,8 +967,8 @@ int SpecialEffectTurns(float seconds)
 	return static_cast<int>(seconds * static_cast<float>(k_TurnsPerSecond));
 }
 
-/// One of the spot visuals started by a script, at a point or on an object that ends it when it goes, for the player at
-/// this computer; numbers past the table's last start nothing
+/// One of the spot visuals started by a script, at a point or on an object that ends it when it goes, for the first
+/// player; numbers past the table's last start nothing
 uint32_t StartScriptSpotVisual(int32_t effect, glm::vec3 position, int turns, entt::entity owner)
 {
 	constexpr int32_t k_LastSpotVisual = 49;
@@ -978,7 +978,7 @@ uint32_t StartScriptSpotVisual(int32_t effect, glm::vec3 position, int turns, en
 		return 0;
 	}
 	auto& effects = Locator::effectRequestSystem::value();
-	// Each computer shows the visual in the colour of its own player
+	// The visual shows the colour of the first player, the same on every computer (as the script player 0)
 	const auto handle = effects.Start({
 	    .type = static_cast<SpotVisualType>(effect),
 	    .position = position,
@@ -1209,7 +1209,7 @@ void CHLApi::ResetSwitches()
 	{
 		Locator::creatureAudioSystem::value().SetOtherVoicesEnabled(true);
 	}
-	// No lesson of growing up runs any more for the local player's creature, so the game's help about it speaks again
+	// No lesson of growing up runs any more for the first player's creature, so the game's help about it speaks again
 	if (Locator::playerSystem::has_value() && Locator::entitiesRegistry::has_value())
 	{
 		auto& players = Locator::playerSystem::value();
@@ -4080,7 +4080,7 @@ script::challenge_snapshots::Snapshot PopChallengeSnapshot(script::challenge_sna
 }
 
 /// The player's record of a challenge is kept up to date from a script's snapshot, and a snapshot of a challenge already
-/// recorded moves the player at this computer's alignment
+/// recorded moves the first player's alignment
 void KeepChallengeRecord(const script::challenge_snapshots::Snapshot& snapshot, script::challenge_snapshots::Call call)
 {
 	auto& registry = Locator::entitiesRegistry::value();
@@ -4760,7 +4760,7 @@ void ConvertCameraFocus() // 082 CONVERT_CAMERA_FOCUS
 	Pushv(focus[2]);
 }
 
-/// The creature becomes the local player's: their creature from now on, which they lead on the leash when they have no
+/// The creature becomes the first player's: their creature from now on, which they lead on the leash when they have no
 /// other to lead, named with their profile's creature name. The newest reaction that the creature started also becomes
 /// the player's.
 void MakePlayersCreature(entt::entity object)
@@ -6750,7 +6750,7 @@ void DevFunction() // 205 DEV_FUNCTION
 		}
 		return;
 	}
-	// The functions the tutorials use on the local player's creature: starting it growing up again kept at home, and
+	// The functions the tutorials use on the first player's creature: starting it growing up again kept at home, and
 	// granting it the learning leash, then the aggression and compassion leashes
 	if (!Locator::leashSystem::has_value())
 	{
@@ -7291,7 +7291,7 @@ void UpdateSnapshot() // 238 UPDATE_SNAPSHOT
 /// The kinds of reward a script can give are numbered 1 to 60
 constexpr int32_t k_LastRewardType = 60;
 
-/// A reward chest of a kind for the player at this computer, given to a town or none: on the land, or from the sky
+/// A reward chest of a kind for the first player, given to a town or none: on the land, or from the sky
 uint32_t GiveReward(int32_t type, glm::vec3 position, entt::entity town, bool fromSky)
 {
 	if (type < 1 || type > k_LastRewardType)
@@ -9892,7 +9892,7 @@ void GetPlayerAlly() // 398 GET_PLAYER_ALLY
 	Pushf(strength);
 }
 
-/// The player a script names: its 0 is the player at this computer, the others count from 1
+/// The player a script names: its 0 is the first player on every computer, the others count from 1
 PlayerNames ScriptPlayerName(int32_t scriptPlayer)
 {
 	if (scriptPlayer != 0)
@@ -10150,7 +10150,7 @@ void GetMana() // 422 GET_MANA
 
 void ClearPlayerSpellCharging() // 423 CLEAR_PLAYER_SPELL_CHARGING
 {
-	// At the sites of the player's temple, each icon that charges for the hand at this computer stops its charge
+	// At the sites of the player's temple, each icon that the first player charges stops its charge
 	const auto player = ScriptPlayerName(static_cast<int32_t>(Popf()));
 	if (!Locator::playerSystem::has_value() || !Locator::worshipSiteSystem::has_value() ||
 	    !Locator::spellIconSystem::has_value())

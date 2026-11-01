@@ -91,6 +91,22 @@ TEST(ClanCreatureOrder, TheNameIsInCodePage1252AndKeepsItsFirst63Characters)
 	EXPECT_EQ(longName->name, std::u16string(clan_creature_order::k_MostNameCharacters, u'a'));
 }
 
+TEST(ClanCreatureOrder, TheWrittenOrderReadsBackWithItsZeroByte)
+{
+	using namespace std::string_view_literals;
+	const auto data = clan_creature_order::Write({.row = 2, .name = u"Stripesé"});
+	ASSERT_TRUE(data.has_value());
+	EXPECT_EQ(*data, Bytes("CLANCREATECREATURE02Stripes\xE9\0"sv));
+	const auto back = clan_creature_order::Read(*data);
+	ASSERT_TRUE(back.has_value());
+	EXPECT_EQ(back->row, 2);
+	EXPECT_EQ(back->name, u"Stripesé");
+	EXPECT_EQ(clan_creature_order::Read(*clan_creature_order::Write({.row = 16, .name = u"Ape"}))->row, 16);
+	// A row that does not fit in two digits gives no order
+	EXPECT_FALSE(clan_creature_order::Write({.row = 100, .name = u"Ape"}).has_value());
+	EXPECT_FALSE(clan_creature_order::Write({.row = -1, .name = u"Ape"}).has_value());
+}
+
 TEST(WindowsText, TextGoesToTheCodePageAndBack)
 {
 	EXPECT_EQ(windows_text::ToWindowsText(u"\u00E9\u20AC\u2019\u4E00"), "\xE9\x80\x92?");

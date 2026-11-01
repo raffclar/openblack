@@ -16,7 +16,10 @@
 #include <PhysiqueFile.h>
 
 #include "Common/PlayerProfiles.h"
+#include "Creature/ClanCreatureOrder.h"
 #include "Creature/CreatureWebPage.h"
+#include "ECS/Components/Alignment.h"
+#include "ECS/Registry.h"
 #include "ECS/Systems/CreatureCarryOverSystemInterface.h"
 #include "ECS/Systems/PlayerProfileSystemInterface.h"
 #include "ECS/Systems/ProfileFolderSystemInterface.h"
@@ -89,23 +92,64 @@ std::variant<lobby_api::CreatureUpload, Problem> Gather(const Paths& paths)
 	};
 }
 
-std::optional<lobby_api::ClanCreature> PackClanCreature(float alignment, std::span<const uint8_t> mind,
-                                                        std::span<const uint8_t> physique)
+std::optional<lobby_api::ClanCreature> PackClanCreature(float godAlignment, std::span<const uint8_t> creatureFile,
+                                                        std::span<const uint8_t> userData)
 {
-	if (!IsMind(mind) || !IsPhysique(physique))
+	if (!IsMind(creatureFile))
 	{
 		return std::nullopt;
 	}
 	return lobby_api::ClanCreature {
-	    .alignment = alignment,
-	    .mind = {mind.begin(), mind.end()},
-	    .physique = {physique.begin(), physique.end()},
+	    .alignment = godAlignment,
+	    .mind = {creatureFile.begin(), creatureFile.end()},
+	    .physique = {userData.begin(), userData.end()},
 	};
 }
 
 bool IsValidClanCreature(const lobby_api::ClanCreature& creature)
 {
-	return IsMind(creature.mind) && IsPhysique(creature.physique);
+	// The game reads only the creature file. The second buffer is the user data, which the game does not read as a file.
+	return IsMind(creature.mind);
+}
+
+std::optional<lobby_api::ClanCreature> ClanCreatureAtGameEnd(entt::entity god, entt::entity creature,
+                                                             std::span<const uint8_t> userData)
+{
+	if (!Locator::entitiesRegistry::has_value() || !Locator::creatureCarryOverSystem::has_value())
+	{
+		return std::nullopt;
+	}
+	const auto& registry = Locator::entitiesRegistry::value();
+	const auto* alignment = registry.Valid(god) ? registry.TryGet<const ecs::components::Alignment>(god) : nullptr;
+	const auto file = Locator::creatureCarryOverSystem::value().CreatureFile(creature);
+	if (alignment == nullptr || !file.has_value())
+	{
+		return std::nullopt;
+	}
+	return PackClanCreature(alignment->value, *file, userData);
+}
+
+std::optional<std::vector<uint8_t>> StartData(const lobby_api::ClanCreatureReply& reply)
+{
+	switch (reply.kind)
+	{
+	case lobby_api::ClanCreatureKind::Stored:
+		// Every computer reads the bytes as a creature file. Bytes that are not a creature file give no creature.
+		if (reply.creature.has_value())
+		{
+			return reply.creature->mind;
+		}
+		return std::nullopt;
+	case lobby_api::ClanCreatureKind::Create:
+		if (reply.make.has_value())
+		{
+			return clan_creature_order::Write({.row = reply.make->type, .name = gui::ToUtf16(reply.make->name)});
+		}
+		return std::nullopt;
+	case lobby_api::ClanCreatureKind::None:
+		break;
+	}
+	return std::nullopt;
 }
 
 std::optional<Paths> PlayersCreaturePaths()

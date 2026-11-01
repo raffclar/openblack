@@ -52,8 +52,11 @@ public:
 	[[nodiscard]] virtual uint32_t MillisecondsPerTurn() const = 0;
 	/// The game turn
 	[[nodiscard]] virtual uint32_t Turn() const = 0;
-	/// The player at this machine, none when there are no players
+	/// The player at this machine, none when there are no players. Only the sounds of this machine use it.
 	[[nodiscard]] virtual std::optional<PlayerNames> LocalPlayer() const = 0;
+	/// The first player, none when there are no players. This is the player of a game alone, and it is the same on every
+	/// computer of a network game.
+	[[nodiscard]] virtual std::optional<PlayerNames> FirstPlayer() const = 0;
 	/// The game is a network game
 	[[nodiscard]] virtual bool NetworkGame() const = 0;
 
