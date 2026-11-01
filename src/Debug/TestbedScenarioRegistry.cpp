@@ -3545,6 +3545,7 @@ void AddLight(std::vector<Scenario>& all)
 	                   "cinema bars come in and the two villagers change to high detail.",
 	    .expected = "Each villager shows its whole body where it stands and continues to stand or walk. The man of the "
 	                "north changes to his detailed model, which has eyes. The farmer keeps his model.",
+	    .environment = {.dispenserGrid = false},
 	    .framing = {.shot = Shot::Placed, .eye = {0.0f, 2.5f, 16.0f}, .look = {0.0f, 1.2f, 6.0f}},
 	    .objects = {{.type = VillagerInfo::NorseFarmerMale, .offset = {-1.5f, 6.0f}},
 	                {.type = VillagerInfo::CelticFarmerMale, .offset = {1.5f, 6.0f}}},
