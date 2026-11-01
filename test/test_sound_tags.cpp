@@ -116,7 +116,8 @@ public:
 	void PlaySound(entt::id_type, audio::PlayType) override {}
 	void PlaySoundEffect(entt::id_type, std::optional<glm::vec3>) override {}
 	void StopSoundEffect(entt::id_type) override {}
-	[[nodiscard]] bool IsSoundEffectPlaying(entt::id_type) const override { return false; }
+	void StopNumberedSoundEffect(entt::id_type, uint32_t) override {}
+	[[nodiscard]] bool IsNumberedSoundEffectPlaying(entt::id_type, uint32_t) const override { return false; }
 	[[nodiscard]] bool IsInstalled() const override { return true; }
 	void StopAllSoundEffects() override {}
 	entt::entity StartSoundEffect(entt::id_type, const audio::SoundEffectOptions&) override { return entt::null; }

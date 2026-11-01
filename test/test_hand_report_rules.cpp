@@ -315,6 +315,20 @@ TEST(ViewReportRules, AChangeOfADifferentFieldSendsAReport)
 	auto other = last;
 	other.otherButton = true;
 	EXPECT_TRUE(view_report::ChangedEnough(last, other));
+	auto turned = last;
+	turned.cameraTurned = true;
+	EXPECT_TRUE(view_report::ChangedEnough(last, turned));
+}
+
+TEST(ViewReportRules, ACameraTurnCountsForTheRestOfItsGameTurn)
+{
+	// A turn in a frame keeps the flag for the later frames of the same game turn
+	EXPECT_TRUE(view_report::CameraTurnedInTurn(false, true, true));
+	EXPECT_TRUE(view_report::CameraTurnedInTurn(true, true, false));
+	EXPECT_FALSE(view_report::CameraTurnedInTurn(false, true, false));
+	// A new game turn starts again from the frame
+	EXPECT_FALSE(view_report::CameraTurnedInTurn(true, false, false));
+	EXPECT_TRUE(view_report::CameraTurnedInTurn(true, false, true));
 }
 
 TEST(ViewReportRules, AFieldChangeSendsAReportWithASmallCameraMove)

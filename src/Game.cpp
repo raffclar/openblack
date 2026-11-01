@@ -1170,13 +1170,9 @@ bool Game::ProcessEvents(const SDL_Event& event) noexcept
 	                                    event.type == SDL_MOUSEBUTTONUP && event.button.button == SDL_BUTTON_RIGHT) &&
 	    creatureHand.GetCreature().has_value())
 	{
-		const auto creature = *creatureHand.GetCreature();
 		// The click puts the leash on, and then the creature feels how the hand treated it. Both are commands of the
-		// player, which the world does at the start of the next turn.
-		if (creatureHand.IsClick())
-		{
-			Locator::playerCommandSystem::value().Submit(player_commands::LeashTap {.creature = creature});
-		}
+		// player, which the world does at the start of a later turn. The release sends them in a network game, and the
+		// draw of the hand sends them in a game alone.
 		creatureHand.Release();
 	}
 	const bool onCreature = creatureHand.GetCreature().has_value();
@@ -3268,7 +3264,13 @@ void Game::ReportView()
 	                         Locator::gameActionSystem::value().Get(input::UnbindableActionMap::TWO_BUTTON_CLICK);
 	const bool moveHeld = bothButtons || (Locator::gameActionSystem::has_value() &&
 	                                      Locator::gameActionSystem::value().Get(input::BindableActionMap::MOVE));
-	_reportLandGrip = input::land_grip::GripsLand(camera.GetModel().GetHandCues().dragging, _reportLandGrip, moveHeld);
+	const auto cues = camera.GetModel().GetHandCues();
+	_reportLandGrip = input::land_grip::GripsLand(cues.dragging, _reportLandGrip, moveHeld);
+	// The turn of the camera counts for the whole game turn, so that the scripts see it at all frame rates
+	const auto turn = Locator::time::value().GetTurn();
+	_reportCameraTurned =
+	    view_report::CameraTurnedInTurn(_reportCameraTurned, _reportCameraTurnTurn == turn, cues.controlsTurned);
+	_reportCameraTurnTurn = turn;
 	player_commands::ViewReport report {
 	    .eye = pose.eye,
 	    .focus = pose.focus,
@@ -3286,6 +3288,7 @@ void Game::ReportView()
 	    .mouseWheel = script::lesson_natives::MouseHasWheel(platform_mouse::SystemSaysWheel(),
 	                                                        Locator::gameActionSystem::has_value() &&
 	                                                            Locator::gameActionSystem::value().WheelTurned()),
+	    .cameraTurned = _reportCameraTurned,
 	    // The icons that the last draw kept, or the world camera's own when the draw did not run
 	    .cameraIcons =
 	        static_cast<uint16_t>((_interface ? _interface->GetDrawnCameraIcons() : std::nullopt).value_or(_cameraIcons)),
@@ -3567,6 +3570,11 @@ void Game::CloseMenuForCinema()
 
 void Game::UpdateHandFrame(std::chrono::microseconds deltaTime)
 {
+	// The draw of the hand sees the start and the end of a hold of a creature before the hand moves
+	if (Locator::creatureHandSystem::has_value())
+	{
+		Locator::creatureHandSystem::value().DrawFrame(Locator::time::value().GetInputSteps());
+	}
 	auto& profiler = Locator::profiler::value();
 	auto& camera = Locator::camera::value();
 	const auto& config = Locator::config::value();
@@ -5963,7 +5971,7 @@ std::unique_ptr<gui::MultiplayerFrontEnd> Game::MakeMultiplayerFrontEnd()
 		// A browser cannot search the local network
 		_lanDiscovery = std::make_unique<online::NoLanDiscovery>();
 #else
-		_lanDiscovery = std::make_unique<online::UdpLanDiscovery>([] {
+		_lanDiscovery = online::MakeUdpLanDiscovery([] {
 			return std::chrono::duration_cast<std::chrono::microseconds>(std::chrono::steady_clock::now().time_since_epoch())
 			    .count();
 		});

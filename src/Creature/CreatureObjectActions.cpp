@@ -518,6 +518,27 @@ bool creature_object_actions::MayPickUpKind(const KindFacts& kind, const PickUpF
 	return false;
 }
 
+creature_object_actions::PickUpFactsUsed creature_object_actions::PickUpFactsUsedBy(const KindFacts& kind)
+{
+	switch (kind.rule)
+	{
+	case KindRule::Mushroom:
+		return PickUpFactsUsed::Refusal;
+	case KindRule::Pile:
+		return kind.mayFly ? PickUpFactsUsed::Refusal : PickUpFactsUsed::None;
+	case KindRule::Whole:
+		return kind.canBePickedUp ? PickUpFactsUsed::All : PickUpFactsUsed::None;
+	case KindRule::Scaffold:
+		return kind.handCanTake && kind.canBePickedUp ? PickUpFactsUsed::All : PickUpFactsUsed::None;
+	case KindRule::Never:
+	case KindRule::Always:
+	case KindRule::Toy:
+	case KindRule::Bird:
+		return PickUpFactsUsed::None;
+	}
+	return PickUpFactsUsed::All;
+}
+
 bool creature_object_actions::MayTakeKindFromHand(const KindFacts& kind, const PickUpFacts& facts)
 {
 	return kind.canBePickedUp && MayPickUpWhereverItIs(facts);

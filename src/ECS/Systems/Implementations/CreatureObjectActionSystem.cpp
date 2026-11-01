@@ -2716,6 +2716,25 @@ creature_object_actions::KindFacts CreatureObjectActionSystem::KindFactsOf(entt:
 	return facts;
 }
 
+void CreatureObjectActionSystem::KeepPickUpReach(entt::entity creature)
+{
+	// The full pick-up facts measure the reach of a creature, and the synced world keeps that reach. Thus a test with
+	// fewer facts keeps the reach too, at the same turn.
+	const auto& registry = Locator::entitiesRegistry::value();
+	if (registry.Valid(creature) && registry.AllOf<Creature>(creature))
+	{
+		static_cast<void>(KeptReachPoints<PickUpReach>(creature, ReachWith::FingerEnds, creature_reach::k_PickUpAnimations));
+	}
+}
+
+bool CreatureObjectActionSystem::ComputerCreatureNotScripted(entt::entity creature)
+{
+	const auto& registry = Locator::entitiesRegistry::value();
+	const auto* body = registry.Valid(creature) ? registry.TryGet<const Creature>(creature) : nullptr;
+	return body != nullptr && Locator::playerSystem::has_value() &&
+	       Locator::playerSystem::value().IsComputerPlayer(body->owner) && !registry.AllOf<ScriptControlled>(creature);
+}
+
 creature_object_actions::PickUpFacts CreatureObjectActionSystem::PickUpFactsOf(entt::entity creature, entt::entity object) const
 {
 	const auto& registry = Locator::entitiesRegistry::value();
@@ -2726,8 +2745,6 @@ creature_object_actions::PickUpFacts CreatureObjectActionSystem::PickUpFactsOf(e
 	                         action->states[static_cast<size_t>(LivingAction::Index::Final)] ==
 	                             static_cast<uint8_t>(VillagerStates::WorshippingAtWorshipSite) &&
 	                         ecs::world_objects::PlayerOf(object) == owner;
-	const bool computerCreature =
-	    owner.has_value() && Locator::playerSystem::has_value() && Locator::playerSystem::value().IsComputerPlayer(*owner);
 	// In the map: in its cells, and out of any hand, flight or tornado
 	const auto* holder = registry.TryGet<const HeldByCreature>(object);
 	const bool inMap =
@@ -2758,8 +2775,7 @@ creature_object_actions::PickUpFacts CreatureObjectActionSystem::PickUpFactsOf(e
 	    .villagerAtHome = registry.AllOf<Villager, AtHome>(object),
 	    .worshippingForCreaturesPlayer = worshipping,
 	    .inScript = registry.AllOf<InScript>(object),
-	    .computerCreatureNotScripted =
-	        computerCreature && registry.Valid(creature) && !registry.AllOf<ScriptControlled>(creature),
+	    .computerCreatureNotScripted = ComputerCreatureNotScripted(creature),
 	    .townArtefact = registry.AllOf<TownArtefact>(object),
 	    .inMapOrHeldByCreature = inMap || heldByThisCreature,
 	    .leashTiedToIt = leashTied,
@@ -2769,9 +2785,30 @@ creature_object_actions::PickUpFacts CreatureObjectActionSystem::PickUpFactsOf(e
 
 bool CreatureObjectActionSystem::CanPickUp(entt::entity creature, entt::entity object) const
 {
-	const auto kind = KindFactsOf(object);
-	return kind.rule != creature_object_actions::KindRule::Never &&
-	       creature_object_actions::MayPickUpKind(kind, PickUpFactsOf(creature, object));
+	return CanPickUpKind(creature, object, KindFactsOf(object));
+}
+
+bool CreatureObjectActionSystem::CanPickUpKind(entt::entity creature, entt::entity object,
+                                               const creature_object_actions::KindFacts& kind) const
+{
+	// Find only the pick-up facts that the rule of the kind reads
+	using creature_object_actions::PickUpFactsUsed;
+	const auto used = creature_object_actions::PickUpFactsUsedBy(kind);
+	if (used != PickUpFactsUsed::All)
+	{
+		KeepPickUpReach(creature);
+	}
+	switch (used)
+	{
+	case PickUpFactsUsed::None:
+		return creature_object_actions::MayPickUpKind(kind, {});
+	case PickUpFactsUsed::Refusal:
+		return creature_object_actions::MayPickUpKind(
+		    kind, {.cannotBePickedUp = RefusesCreature(Locator::entitiesRegistry::value(), object)});
+	case PickUpFactsUsed::All:
+		break;
+	}
+	return creature_object_actions::MayPickUpKind(kind, PickUpFactsOf(creature, object));
 }
 
 bool CreatureObjectActionSystem::CanEat(entt::entity creature, entt::entity object) const
@@ -2781,7 +2818,6 @@ bool CreatureObjectActionSystem::CanEat(entt::entity creature, entt::entity obje
 	{
 		return false;
 	}
-	const auto pickUp = PickUpFactsOf(creature, object);
 	const auto* mind = registry.TryGet<const CreatureMindState>(creature);
 	const auto* info = FoodInfoOf(registry, object);
 	const bool refused =
@@ -2789,10 +2825,11 @@ bool CreatureObjectActionSystem::CanEat(entt::entity creature, entt::entity obje
 	const auto* body = registry.TryGet<const Creature>(creature);
 	const bool ownVillager = registry.AllOf<Villager>(object) && body != nullptr &&
 	                         ecs::world_objects::PlayerOf(object) == std::optional(body->owner);
-	return creature_object_actions::MayEat(KindFactsOf(object),
-	                                       {.mayPickUp = CanPickUp(creature, object),
+	const auto kind = KindFactsOf(object);
+	return creature_object_actions::MayEat(kind,
+	                                       {.mayPickUp = CanPickUpKind(creature, object, kind),
 	                                        .refusedSort = refused,
-	                                        .computersOwnVillager = pickUp.computerCreatureNotScripted && ownVillager});
+	                                        .computersOwnVillager = ownVillager && ComputerCreatureNotScripted(creature)});
 }
 
 bool CreatureObjectActionSystem::CanEatHeld(entt::entity creature) const

@@ -352,7 +352,9 @@ if (NOT EMSCRIPTEN)
     find_package(OpenSSL REQUIRED)
     target_link_libraries(openblack_lib PRIVATE OpenSSL::SSL OpenSSL::Crypto)
     if (WIN32)
-      target_link_libraries(openblack_lib PRIVATE ws2_32)
+      # The sockets, and the list of network interfaces for the search of the
+      # local network
+      target_link_libraries(openblack_lib PRIVATE ws2_32 iphlpapi)
     endif ()
   endif ()
   if (WIN32)

@@ -17,12 +17,14 @@
 
 #include <algorithm>
 #include <atomic>
+#include <chrono>
 #include <exception>
 #include <filesystem>
 #include <iostream>
 #include <iterator>
 #include <string>
 #include <string_view>
+#include <thread>
 #include <typeinfo>
 #include <vector>
 
@@ -32,6 +34,7 @@
 #include "Common/CrashHandler.h"
 #include "Common/DeveloperTools.h"
 #include "ECS/GameEndConditions.h"
+#include "Online/Desktop/UdpLanDiscovery.h"
 #include "Server/DedicatedServer.h"
 #include "Server/MapExport.h"
 
@@ -45,6 +48,46 @@ extern "C" void StopOnSignal(int /*signal*/)
 {
 	g_StopAsked.store(true);
 }
+
+#if defined(OPENBLACK_DEVELOPER_TOOLS)
+/// Searches the local network as the LAN list of the game does, and writes each room that answers
+int SearchLocalNetwork(uint32_t seconds)
+{
+	const auto now = [] {
+		return std::chrono::duration_cast<std::chrono::microseconds>(std::chrono::steady_clock::now().time_since_epoch())
+		    .count();
+	};
+	auto search = openblack::online::MakeUdpLanDiscovery(now);
+	if (!search->IsAvailable())
+	{
+		std::cerr << "The search of the local network cannot open a socket." << std::endl;
+		return EXIT_FAILURE;
+	}
+	search->Start();
+	const auto end = now() + static_cast<int64_t>(seconds) * 1'000'000;
+	size_t shown = 0;
+	while (now() < end && !g_StopAsked)
+	{
+		search->Poll();
+		const auto servers = search->GetServers();
+		for (; shown < servers.size(); ++shown)
+		{
+			std::cout << "found " << servers[shown].id << " \"" << servers[shown].hostname << "\" " << servers[shown].url
+			          << std::endl;
+		}
+		std::this_thread::sleep_for(std::chrono::milliseconds(10));
+	}
+	const auto servers = search->GetServers();
+	std::cout << "rooms " << servers.size() << std::endl;
+	for (const auto& server : servers)
+	{
+		std::cout << "room " << server.id << " \"" << server.hostname << "\" " << server.numplayers << "/" << server.maxplayers
+		          << " " << server.gamever << " " << server.url << std::endl;
+	}
+	search->Stop();
+	return EXIT_SUCCESS;
+}
+#endif
 
 } // namespace
 
@@ -113,7 +156,8 @@ int main(int argc, char* argv[])
 		("row-dump-turn", "Tools: with --row-dump, also write the rows of this turn.", cxxopts::value<uint32_t>())
 		("row-dump-keep", "Tools: with --row-dump, the count of the last turns of which the dump keeps the rows.", cxxopts::value<uint32_t>()->default_value("64"))
 		("world-states", "Tools: write the world state of the server to this folder at the end of each turn of --world-state-turns, with a map of its synced bytes (tools/sim/save_diff.py --synced compares two computers).", cxxopts::value<std::string>())
-		("world-state-turns", "Tools: with --world-states, the turns, such as 250 or 100,250,400.", cxxopts::value<std::string>());
+		("world-state-turns", "Tools: with --world-states, the turns, such as 250 or 100,250,400.", cxxopts::value<std::string>())
+		("lan-search", "Tests: search the local network for game servers for this number of seconds, as the game's LAN list does. Write each room and stop. Needs no -g.", cxxopts::value<uint32_t>());
 #endif
 	// clang-format on
 
@@ -148,6 +192,12 @@ int main(int argc, char* argv[])
 			std::cout << "openblack-server " << openblack::build_version::Text() << std::endl;
 			return EXIT_SUCCESS;
 		}
+#if defined(OPENBLACK_DEVELOPER_TOOLS)
+		if (result.count("lan-search") != 0)
+		{
+			return SearchLocalNetwork(result["lan-search"].as<uint32_t>());
+		}
+#endif
 		if (result.count("game-path") == 0)
 		{
 			std::cerr << "The server needs the folder of the game's data: use -g." << std::endl;
