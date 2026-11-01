@@ -2040,6 +2040,8 @@ def main():
             command = [game_exe, "-g", options.game_path, "--skip-logos"] + frame_time + [
                        "--sim-until-turn", str(options.turns),
                        "--sim-record", os.path.join(client_dir, "record.jsonl"), "--sim-record-every", "1",
+                       # The clients compare the checksums of each turn; every field of the creature on fewer turns
+                       "--sim-record-fields-every", "100",
                        "--inspect-lock-input", "-n", "4000000000", "--background",
                        "-l", os.path.join(client_dir, "client.log"),
                        "--join", url, "--join-ticket", ticket, "--join-test-ca", certs["ca.pem"]]

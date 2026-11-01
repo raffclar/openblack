@@ -10,6 +10,7 @@
 #include "ParticleDrawFrame.h"
 
 #include <cmath>
+#include <cstdint>
 
 #include <algorithm>
 #include <bit>
@@ -103,8 +104,10 @@ void GatherCommutingRuns(const Frame& frame, std::vector<uint32_t>& items)
 		const auto last =
 		    std::find_if(first, items.end(), [&frame](uint32_t index) { return !Commutes(frame, frame.items[index]); });
 		// By the material each first comes in, so the run starts with the material it started with. Each item gets the
-		// place of its material in that order one time, before the sort.
+		// place of its material in that order one time. Then each item goes after the items of the places before its own
+		// place, and after the items of its own place that came before it.
 		std::vector<uint32_t> order;
+		std::vector<uint32_t> counts;
 		std::vector<std::pair<uint32_t, uint32_t>> ranked;
 		ranked.reserve(static_cast<size_t>(last - first));
 		for (auto it = first; it != last; ++it)
@@ -114,11 +117,21 @@ void GatherCommutingRuns(const Frame& frame, std::vector<uint32_t>& items)
 			if (place == order.end())
 			{
 				place = order.insert(order.end(), material);
+				counts.push_back(0);
 			}
-			ranked.emplace_back(static_cast<uint32_t>(place - order.begin()), *it);
+			const auto rank = static_cast<uint32_t>(place - order.begin());
+			++counts[rank];
+			ranked.emplace_back(rank, *it);
 		}
-		std::ranges::stable_sort(ranked, {}, &std::pair<uint32_t, uint32_t>::first);
-		std::ranges::transform(ranked, first, &std::pair<uint32_t, uint32_t>::second);
+		uint32_t start = 0;
+		for (auto& count : counts)
+		{
+			start += std::exchange(count, start);
+		}
+		for (const auto& [rank, item] : ranked)
+		{
+			first[counts[rank]++] = item;
+		}
 		first = last;
 	}
 }
@@ -781,14 +794,12 @@ void draw::Order(const Frame& frame, const glm::vec3& camera, std::optional<glm:
 		}
 	};
 
-	// The sorted effects' things all together, the farthest first
-	struct Keyed
-	{
-		float key;
-		uint32_t item;
-	};
-	std::vector<Keyed> sorted;
-	std::vector<uint32_t> items;
+	// The sorted effects' things all together, the farthest first, and things at the same distance in the order they
+	// come. A distance is a sum of squares, thus it is never negative and never negative zero, so its bits give the same
+	// order as its value. Each key holds the inverted bits of the distance above the place where the thing comes, so
+	// that a plain sort of the keys gives that order.
+	std::vector<uint32_t> come;
+	std::vector<uint64_t> keys;
 	for (const auto& group : frame.groups)
 	{
 		if (group.path != DrawPath::Sorted)
@@ -797,12 +808,15 @@ void draw::Order(const Frame& frame, const glm::vec3& camera, std::optional<glm:
 		}
 		for (uint32_t i = group.firstItem; i < group.firstItem + group.itemCount; ++i)
 		{
-			sorted.push_back({graphics::zsort::Key(frame.items[i].sortPoint, camera), i});
+			const auto inverted = ~graphics::zsort::Depth(frame.items[i].sortPoint, camera);
+			keys.push_back((static_cast<uint64_t>(inverted) << 32u) | come.size());
+			come.push_back(i);
 		}
 	}
-	std::ranges::stable_sort(sorted, std::greater {}, &Keyed::key);
-	items.reserve(sorted.size());
-	std::ranges::transform(sorted, std::back_inserter(items), &Keyed::item);
+	std::ranges::sort(keys);
+	std::vector<uint32_t> items;
+	items.reserve(keys.size());
+	std::ranges::transform(keys, std::back_inserter(items), [&come](uint64_t key) { return come[key & 0xFFFFFFFFu]; });
 	GatherCommutingRuns(frame, items);
 	emit(items, [&camera](const Item& item) { return graphics::zsort::Depth(item.sortPoint, camera); });
 

@@ -9,7 +9,10 @@
 
 #pragma once
 
+#include <cstddef>
 #include <cstdint>
+
+#include <array>
 
 #include <entt/entity/fwd.hpp>
 
@@ -36,6 +39,28 @@ enum class LandShadow : uint8_t
 /// other things lying about. Fields, animated scenery, flowers, dead trees, pots and piles, the village totem, miracle
 /// shields, seeds and vortices, street lights and anything living cast none.
 [[nodiscard]] LandShadow LandShadowOf(const Registry& registry, entt::entity entity);
+
+/// The stores of the components that LandShadowOf reads, found one time for a walk of many things. Each look after that
+/// costs no search of the registry, and gives the same shadow as LandShadowOf. Make it again when the walk can make the
+/// first component of a kind.
+class LandShadowLookup
+{
+public:
+	explicit LandShadowLookup(const Registry& registry);
+	[[nodiscard]] LandShadow Of(entt::entity entity) const;
+
+	/// How many kinds of component the shadow depends on
+	static constexpr size_t k_StoreCount = 26;
+
+private:
+	template <typename... Components>
+	[[nodiscard]] bool AnyOf(entt::entity entity) const;
+	template <typename Component>
+	[[nodiscard]] const Component* TryGet(entt::entity entity) const;
+	[[nodiscard]] bool IsBuilt(entt::entity entity) const;
+
+	std::array<const entt::sparse_set*, k_StoreCount> _stores {};
+};
 
 /// Whether the shadow that LandShadowOf gives a thing can change while the thing keeps all its components: a building's
 /// shadow starts when its building ends, and an abode's shadow also depends on its type

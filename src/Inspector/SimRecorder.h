@@ -68,6 +68,8 @@ public:
 	void StopRecord();
 	/// What the records keep of the hashes of the parts of the world
 	void SetHashParts(sim_run::HashDetail parts) { _hashParts = parts; }
+	/// The records read every field of the creature only on the turns that this number divides
+	void SetFieldsEvery(uint32_t every) { _fieldsEvery = std::max(every, 1u); }
 
 private:
 	/// The record of the game now. With checks, the trackers see it; without, only its values are checked.
@@ -98,6 +100,7 @@ private:
 	uint64_t _frame {0};
 	/// What the records keep of the hashes of the parts of the world
 	sim_run::HashDetail _hashParts {sim_run::HashDetail::None};
+	uint32_t _fieldsEvery {1};
 	/// The synced part of the world as each turn to record left it, before the steps of the frame
 	struct Synced
 	{

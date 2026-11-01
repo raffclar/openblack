@@ -117,6 +117,8 @@ struct Request
 	std::optional<std::filesystem::path> traceDrawsPath;
 	/// Write a record each time this many turns go by
 	uint32_t recordEvery {k_DefaultRecordEvery};
+	/// The record reads every field of the creature only on the turns that this number divides
+	uint32_t recordFieldsEvery {1};
 	/// The table of the longest time that a plan or an activity can stay the same, as JSON
 	std::optional<std::filesystem::path> limitsPath;
 	/// What the records keep of the hash of the parts of the world
