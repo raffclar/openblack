@@ -20,6 +20,13 @@
 namespace openblack::view_report
 {
 
+/// Whether the camera turned in the game turn that the report counts: a turn asked in this frame, or in an earlier frame
+/// of the same game turn
+[[nodiscard]] constexpr bool CameraTurnedInTurn(bool turnedEarlier, bool sameTurn, bool turnedNow)
+{
+	return turnedNow || (sameTurn && turnedEarlier);
+}
+
 /// The view changed enough since the last report that went:
 /// - the eye or the focus moved by more than the move limit on an axis;
 /// - or a different field of the report changed.
