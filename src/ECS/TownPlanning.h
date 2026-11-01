@@ -20,11 +20,20 @@
 #include "ECS/ScaffoldOfferRules.h"
 #include "Enums.h"
 
+namespace openblack::ecs
+{
+class Registry;
+}
+
 /// A town starting the buildings it planned: a villager with nothing to build asks its town, at most once a game turn,
 /// for a new house or civic building, and the town starts the one of its plans it wants most, standing with nothing of
 /// it built and a site for its builders
 namespace openblack::ecs::town_planning
 {
+
+/// Whether a thing that covers its outline stops a new building in that outline. Rocks, dead trees, pieces of broken
+/// buildings and vortices cover their outline, but they do not stop a new building.
+[[nodiscard]] bool SolidToNewBuilding(const Registry& registry, entt::entity thing);
 
 /// Whether a town may still be asked this game turn to start a planned building; asking it uses the turn's ask
 [[nodiscard]] bool AskThisTurn(entt::entity town);
