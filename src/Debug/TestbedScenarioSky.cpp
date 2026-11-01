@@ -73,6 +73,27 @@ void testbed_scenarios::AddSkyScenarios(std::vector<Scenario>& all)
 	});
 
 	all.push_back({
+	    .id = "sky.night_whisper",
+	    .name = "The night whisper of the player's name",
+	    .facet = Facet::Audio,
+	    .description = "The computer's clock is set to 23:30 on 2 April 2026, a real night, and the land counts as the "
+	                   "third land. The night whisper checks the clock at once, after 1000 real-night checks. Use a "
+	                   "profile whose name sounds like a recorded name, for example James.",
+	    .expected = "At the first game turn a ghostly voice whispers the name of the player (James), from a random "
+	                "direction between the left and the right, at a random rate. help.guidance shows the sample of "
+	                "the name in night_whisper, the count 1 after the whisper and the next check in 99 turns. With no "
+	                "name that sounds like a recorded name, the sample is null and nothing plays.",
+	    .environment = {.hour = 0.0f,
+	                    .clockRuns = false,
+	                    .realDate = RealDate {.year = 2026, .month = 4, .day = 2, .hour = 23, .minute = 30},
+	                    .nightWhisperChecks = 1000,
+	                    .dispenserGrid = false,
+	                    .landNumber = 3},
+	    .framing = k_LookingEast,
+	    .objects = TreesToTheEast(),
+	});
+
+	all.push_back({
 	    .id = "sky.moon_night",
 	    .name = "The moon through a night",
 	    .facet = Facet::Sky,

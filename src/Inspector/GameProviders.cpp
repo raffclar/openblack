@@ -4490,8 +4490,9 @@ std::unique_ptr<ProviderInterface> HelpProvider()
 	    Query("guidance",
 	          "The advisors' remarks on what the player does (towns attacked, buildings wrecked, alignment drifting, the "
 	          "moon): the ones asked for lately (kind, text, turn, whether the advisors got to say it), the turns until "
-	          "the moon is looked at again, and the player's guidance (each kind's last turn, the alignment's drift, the "
-	          "one-offs said)",
+	          "the moon is looked at again, the player's guidance (each kind's last turn, the alignment's drift, the "
+	          "one-offs said), and the night whisper (the sample of the player's name, the count of real-night checks, "
+	          "the turns to the next check and the volume of the next whisper)",
 	          {}, ResultKind::Object),
 	    Serve<Locator::guidanceSystem>(
 	        "the guidance", [](const ecs::systems::GuidanceSystemInterface& system, const QueryContext& /*c*/) -> Json {
@@ -4514,7 +4515,16 @@ std::unique_ptr<ProviderInterface> HelpProvider()
 				                     {"one_offs_said", guidance.oneOffSaid}};
 			            });
 		        }
-		        return Json {{"remarks", remarks}, {"moon_wait", system.GetMoonWait()}, {"heard", heard}};
+		        const auto& whisper = system.GetNightWhisper();
+		        const Json whisperJson {
+		            {"sample", whisper.GetSample().has_value() ? Json(*whisper.GetSample()) : Json(nullptr)},
+		            {"count", whisper.GetCount()},
+		            {"countdown", whisper.GetCountdown()},
+		            {"volume", whisper.GetVolume()}};
+		        return Json {{"remarks", remarks},
+		                     {"moon_wait", system.GetMoonWait()},
+		                     {"heard", heard},
+		                     {"night_whisper", whisperJson}};
 	        }));
 	provider->Add(
 	    Query("bubble", "The tip bubble over the \"did you know\" sign tapped last: the sign, its tip, whether it is up, "

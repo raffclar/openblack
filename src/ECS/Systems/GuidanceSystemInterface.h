@@ -20,6 +20,7 @@
 #include "ECS/Systems/SavedStateInterface.h"
 #include "Enums.h"
 #include "Help/GuidanceRules.h"
+#include "Help/NightWhisper.h"
 #include "Help/VillageVoices.h"
 
 namespace openblack::ecs::systems
@@ -52,7 +53,7 @@ public:
 
 	/// A new land: each kind is taken as last heard a random while before the land's first turn
 	virtual void Reset() = 0;
-	/// Once a game turn: the first turn's stamps, and a look at the moon at night
+	/// Once a game turn: the first turn's stamps, the night whisper, and a look at the moon at night
 	virtual void ProcessTurn() = 0;
 
 	/// Whether a kind of guidance may be heard now, drawing its wait (the help level, the first land and the wait since
@@ -111,6 +112,10 @@ public:
 	[[nodiscard]] virtual const std::vector<Remark>& GetRemarks() const = 0;
 	/// Turns until the moon is looked at again
 	[[nodiscard]] virtual int32_t GetMoonWait() const = 0;
+	/// The night whisper of this computer
+	[[nodiscard]] virtual const night_whisper::Whisperer& GetNightWhisper() const = 0;
+	/// For the testbed: the next turn that can check the clock for the night whisper checks it, with this count of checks
+	virtual void StageNightWhisper(uint32_t count) = 0;
 };
 
 } // namespace openblack::ecs::systems
