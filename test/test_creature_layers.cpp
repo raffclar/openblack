@@ -160,6 +160,53 @@ TEST(CreatureLayers, TheHandMeasuresABodyActionByTheAnimationThatTheGameKeeps)
 	EXPECT_EQ(ShareAnimation(BodyAction {}), animations::k_Stand);
 }
 
+TEST(CreatureLayers, ADanceThatGoesFromItsStartStraightToItsFinishKeepsTheStand)
+{
+	auto dance = PlayDance({}, 1000.0f);
+	ASSERT_TRUE(dance.has_value());
+	*dance = EndDance(*dance);
+	const auto finish = AdvanceBody(*dance, 1000.0f, 1000);
+	ASSERT_EQ(finish.phase, BodyAction::Phase::End);
+	EXPECT_FALSE(finish.chooseDanceMove);
+	EXPECT_EQ(CurrentAnimation(finish), animations::k_DanceFinish);
+	EXPECT_EQ(ShareAnimation(finish), animations::k_Stand);
+
+	// A dance that gets to its moves needs its first move
+	const auto moves = AdvanceBody(*PlayDance({}, 1000.0f), 1000.0f, 1000);
+	EXPECT_EQ(moves.phase, BodyAction::Phase::Loop);
+	EXPECT_TRUE(moves.chooseDanceMove);
+}
+
+TEST(CreatureLayers, TheHandReadsTheActionOfTheBodyFirstThenTheMoveOfTheLegs)
+{
+	// A body at rest that does not move does no action
+	EXPECT_FALSE(ShareOf(BodyAction {}, false, std::nullopt).has_value());
+
+	// The legs give their time over the stand
+	const auto legs = ShareOf(BodyAction {}, false, 420);
+	ASSERT_TRUE(legs.has_value());
+	EXPECT_EQ(legs->animation, animations::k_Stand);
+	EXPECT_EQ(legs->timeMs, 420.0f);
+
+	// An action of the body comes first, with the animation that the game keeps for it
+	auto once = PlayOnce({}, animations::k_Tired, false);
+	ASSERT_TRUE(once.has_value());
+	once->timeMs = 250.0f;
+	const auto action = ShareOf(*once, false, 420);
+	ASSERT_TRUE(action.has_value());
+	EXPECT_EQ(action->animation, animations::k_Tired);
+	EXPECT_EQ(action->timeMs, 250.0f);
+
+	// The confused look of a walk that waits for its route keeps the stand
+	auto confused = PlayOnce({}, animations::k_Confused, false);
+	ASSERT_TRUE(confused.has_value());
+	confused->timeMs = 300.0f;
+	const auto look = ShareOf(*confused, true, 420);
+	ASSERT_TRUE(look.has_value());
+	EXPECT_EQ(look->animation, animations::k_Stand);
+	EXPECT_EQ(look->timeMs, 300.0f);
+}
+
 TEST(CreatureLayers, AMissingAnimationEndsAtOnce)
 {
 	const auto body = PlayOnce({}, animations::k_Tired, false);

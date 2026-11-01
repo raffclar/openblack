@@ -38,3 +38,14 @@ TEST(InstanceLightPoint, TheOffsetChangesOnlyTheUnusedValuesOfTheMatrix)
 	// The place, in the fourth column, does not change
 	EXPECT_EQ(model[3], glm::vec4(1796.0f, 30.0f, 2808.0f, 1.0f));
 }
+
+TEST(InstanceLightPoint, AnInstanceWithoutHazeKeepsItsFadeAndItsHiding)
+{
+	// A look z of 0 becomes the mark of no haze, which is not a fade and does not hide the instance
+	EXPECT_EQ(instance_light::WithoutHaze(0.0f), instance_light::k_NoHaze);
+	EXPECT_GT(instance_light::k_NoHaze, 0.0f);
+	EXPECT_LE(instance_light::k_NoHaze, 0.5f);
+	// A fade and a hidden instance stay as they are
+	EXPECT_EQ(instance_light::WithoutHaze(-0.25f), -0.25f);
+	EXPECT_EQ(instance_light::WithoutHaze(1.0f), 1.0f);
+}

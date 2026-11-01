@@ -73,6 +73,16 @@ struct ConditionPick
 	[[nodiscard]] bool operator==(const ConditionPick&) const = default;
 };
 
+/// A winning condition that the host switches on. With no value, the condition keeps the first value that the land gives
+/// it, as when the host only checks the box of the condition.
+struct SwitchedCondition
+{
+	Condition condition {Condition::VillagersKilled};
+	std::optional<int32_t> value;
+
+	[[nodiscard]] bool operator==(const SwitchedCondition&) const = default;
+};
+
 /// At the start of a network game, the player gets each condition that the host picked, with its value as the target.
 /// The player starts each condition from 0.
 void GiveConditions(ecs::components::GameStanding& standing, std::span<const ConditionPick> picks);

@@ -757,7 +757,6 @@ bool RenderingSystem::UploadInstances(bool drawBoundingBox)
 	uint32_t segmentPlaced = 0;
 	uint32_t lastSegment = 0;
 	const auto drawnHand = DrawnHand();
-	const auto lifelessTotemParts = LifelessTotemParts(registry);
 	// The walk makes no component, so the stores of the components stay the same for all of it
 	const openblack::ecs::drawn_place::DrawnPlaces drawnPlaces(registry);
 	const openblack::ecs::ComponentLookup<VillagerPose> villagerPoses(registry);
@@ -765,6 +764,7 @@ bool RenderingSystem::UploadInstances(bool drawBoundingBox)
 	const openblack::ecs::ComponentLookup<ScaffoldDrawnScale> drawnScales(registry);
 	const openblack::ecs::ComponentLookup<PhysicsDrawPose> physicsPoses(registry);
 	const openblack::ecs::ComponentLookup<DetailMeshes> detailMeshes(registry);
+	const auto lifelessTotemParts = LifelessTotemParts(registry);
 	EachBySegment(
 	    [this, &registry, &vegetation, &meshes, &fits, &fizzOrder, &segmentPlaced, &lastSegment, drawBoundingBox, camera, &view,
 	     modelDetail, drawList, drawnHand, &drawnPlaces, &villagerPoses, &highDetails, &drawnScales, &physicsPoses,
@@ -1196,6 +1196,12 @@ bool RenderingSystem::UploadInstances(bool drawBoundingBox)
 		    if (fade.has_value() && look.z != 1.0f)
 		    {
 			    look.z = -(1.0f - (static_cast<float>(*fade) / 255.0f));
+		    }
+		    // A villager that a script draws in high detail takes the land's light and colour where it stands each frame,
+		    // but no distance haze
+		    if (highDetail != nullptr)
+		    {
+			    look.z = graphics::instance_light::WithoutHaze(look.z);
 		    }
 
 		    const uint32_t idx = slots->second.offset + slots->second.filled;

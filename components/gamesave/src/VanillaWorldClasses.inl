@@ -333,19 +333,27 @@ void ReadCitadelPart(WorldReader& r)
 void ReadCitadelHeart(WorldReader& r)
 {
 	ReadCitadelPart(r);
+	// The game turn when a thrown thing last hit the heart
+	r.Word("heartLastHitTurn");
+	// The town that the temple was made for, and the flock of the doves or bats about the temple
+	r.Ref("heartTown");
+	r.Ref();
+	// Two colours that the draw sets again each frame: the glow and the shade of the heart
 	r.Word();
+	r.Word();
+	// The destruction of the temple: if it is under way, and its seconds since it started
+	r.Byte("heartDestroying");
+	r.Float("heartDestructionClock");
+	// The particle containers of the beams and of the glow of the destruction
 	r.Ref();
 	r.Ref();
-	r.Word();
-	r.Word();
-	r.Byte();
-	r.Word();
+	// The moment on the destruction clock of the next beam of the destruction
+	r.Float("heartDestructionBeamClock");
+	// The particle container of the beams of a hurt heart, the thing that the heart last beamed at, and the turn
 	r.Ref();
-	r.Ref();
-	r.Word();
-	r.Ref();
-	r.Ref();
-	r.Word();
+	r.Ref("heartBeamTarget");
+	r.Word("heartBeamTurn");
+	// The entrance of the temple
 	r.Ref();
 }
 
@@ -1433,7 +1441,8 @@ void ReadTownSpellIcon(WorldReader& r)
 void ReadCitadelBuildingSite(WorldReader& r)
 {
 	ReadBuildingSite(r);
-	r.Refs();
+	// The six piles of wood of the site of a temple
+	r.Refs("templeSitePiles");
 }
 
 // No save file of the tests has this type. This layout comes only from the game's save code.

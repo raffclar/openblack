@@ -101,6 +101,8 @@ enum class GrabKind : uint8_t
 	DeadTree,
 	/// A big forest, which is never held itself: the hand takes one of its trees
 	BigForest,
+	/// A miracle's seed out of the hand, shown over the miracle that it cast. The hand takes it back as a seed.
+	SpellSeed,
 };
 
 /// What deciding whether the hand may take a thing needs to know of it
@@ -121,6 +123,8 @@ struct Holdable
 	float radius {0.0f};
 	/// A rock (not another heavy static): its size limits it
 	bool isRock {false};
+	/// A miracle's seed of the player whose hand takes it
+	bool ownSeed {false};
 };
 
 /// Whether a thing of its kind says the hand may hold it

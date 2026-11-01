@@ -848,6 +848,9 @@ struct Command
 		/// creature); the hand gives what it holds to the creature, as the Action button pressed over it does
 		HandTake,
 		HandGive,
+		/// The player's hand takes back the seed that shows over the player's miracle at once, wherever the pointer is, as
+		/// the debug tools take a thing. Needs no creature
+		HandTakeShownSeed,
 		/// The player's hand uses what it holds on the scenario's object, as the Action button pressed over the object does.
 		/// The world does it at the turn. No creature is necessary.
 		HandApply,

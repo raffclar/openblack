@@ -346,6 +346,9 @@ using ConditionTemplate = std::array<ConditionLimits, k_ConditionCount>;
 /// The name of the text of a winning condition, such as "Number of villagers you kill"
 [[nodiscard]] std::string_view ConditionText(size_t index) noexcept;
 
+/// The name of a winning condition in the template file, such as "WC_HOUSES_BUILT". Empty for another number.
+[[nodiscard]] std::string_view ConditionKey(size_t index) noexcept;
+
 /// The conditions of a land from "Online Maps\ConditionTemplate.txt": the lines after "FORMAP <file>.txt", by the
 /// names of the conditions. None when the file has no block for the land.
 [[nodiscard]] std::optional<ConditionTemplate> FindConditions(std::string_view text, std::string_view landFile);
@@ -358,6 +361,11 @@ using ConditionTemplate = std::array<ConditionLimits, k_ConditionCount>;
 /// be from the least to the most value of its condition. No limits: the template file has no block for the land.
 [[nodiscard]] std::optional<std::string> ConditionsRefusal(const std::optional<ConditionTemplate>& limits,
                                                            std::span<const game_end::ConditionPick> picks);
+
+/// The picks of the conditions that the host switches on, on the limits of a land. When the host picks a land, each
+/// condition takes the first value of the land. Thus a condition with no value of its own keeps that first value.
+[[nodiscard]] std::vector<game_end::ConditionPick> PicksOnLand(const ConditionTemplate& limits,
+                                                               std::span<const game_end::SwitchedCondition> conditions);
 
 /// The lines of the list on the conditions page, one for each condition that the host switched on. The page adds the
 /// conditions in the order of the game, and each new line goes to the top. Thus the last condition of the game shows

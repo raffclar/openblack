@@ -108,6 +108,8 @@ struct CreatureObjectAction
 	Catching catching {Catching::Ready};
 	/// Whether it has finished turning to face the thing, which it waits for only once
 	bool catchTurned {false};
+	/// Whether it stepped towards the thing in this catch. Then the hand reads the share of the catch over the step.
+	bool catchStepped {false};
 	/// How high the thing was against the hand at the last frame it was still in the physics
 	float catchHeight {0.5f};
 	/// Eating: it swallows what it eats. Then it counts the meal, it can bring the meal back up, and its hunger falls.

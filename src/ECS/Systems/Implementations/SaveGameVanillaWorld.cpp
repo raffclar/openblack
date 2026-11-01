@@ -63,6 +63,7 @@ using namespace openblack::ecs::systems;
 namespace world_import = openblack::ecs::vanilla_world_import;
 using openblack::ecs::systems::vanilla_import::EntityOf;
 using openblack::ecs::systems::vanilla_import::GroundPosition;
+using openblack::ecs::systems::vanilla_import::PutMoveTag;
 
 namespace
 {
@@ -205,7 +206,19 @@ void PutSites(const world_import::ImportedTowns& imported, const std::unordered_
 					opened->workers.push_back(villager);
 				}
 			}
-			opened->piles.front() = EntityOf(made, file.woodPile);
+			if (!file.temple)
+			{
+				opened->piles.front() = EntityOf(made, file.woodPile);
+				continue;
+			}
+			// A pile of a temple's site that the import does not make stays as the site made it
+			for (size_t i = 0; i < std::min(file.piles.size(), opened->piles.size()); ++i)
+			{
+				if (const auto pile = EntityOf(made, file.piles[i]); pile != entt::null)
+				{
+					opened->piles.at(i) = pile;
+				}
+			}
 		}
 	}
 }
@@ -320,8 +333,28 @@ void PutDesireFlags(ecs::Registry& registry, const world_import::ImportedTowns& 
 	}
 }
 
-/// The tag of the move state of the file, for a walk that the import keeps
-void PutMoveTag(ecs::Registry& registry, entt::entity entity, uint8_t moveState, glm::vec2 at)
+/// The villager keeps the walk of the file: its goal, its step, its speed, the way it faces and its move state
+void PutWalk(ecs::Registry& registry, entt::entity entity, const world_import::ImportedVillager& villager, glm::ivec2 goal)
+{
+	const auto& walk = villager.walk;
+	auto& wallHug = registry.Get<WallHug>(entity);
+	wallHug.goalPlace = goal;
+	wallHug.step = {walk.stepX, walk.stepZ};
+	wallHug.stepAltitude = walk.stepAltitude;
+	wallHug.yAngle = villager.heading;
+	wallHug.speed = world_import::WalkSpeedOf(walk.speed);
+	wallHug.gameAngle = walk.angle;
+	wallHug.turnsUntilStepRebuild = walk.turnsUntilStepRebuild;
+	// The walk holds the villager at the map position of the file
+	wallHug.position = {villager.position.x, villager.position.z};
+	wallHug.placedAt = glm::vec2(registry.Get<Transform>(entity).position.x, registry.Get<Transform>(entity).position.z);
+	PutMoveTag(registry, entity, villager.moveState, ecs::wall_hug::ToPoint(wallHug.position));
+}
+
+} // namespace
+
+void openblack::ecs::systems::vanilla_import::PutMoveTag(ecs::Registry& registry, entt::entity entity, uint8_t moveState,
+                                                         glm::vec2 at)
 {
 	switch (moveState)
 	{
@@ -360,26 +393,6 @@ void PutMoveTag(ecs::Registry& registry, entt::entity entity, uint8_t moveState,
 	}
 }
 
-/// The villager keeps the walk of the file: its goal, its step, its speed, the way it faces and its move state
-void PutWalk(ecs::Registry& registry, entt::entity entity, const world_import::ImportedVillager& villager, glm::ivec2 goal)
-{
-	const auto& walk = villager.walk;
-	auto& wallHug = registry.Get<WallHug>(entity);
-	wallHug.goalPlace = goal;
-	wallHug.step = {walk.stepX, walk.stepZ};
-	wallHug.stepAltitude = walk.stepAltitude;
-	wallHug.yAngle = villager.heading;
-	wallHug.speed = world_import::WalkSpeedOf(walk.speed);
-	wallHug.gameAngle = walk.angle;
-	wallHug.turnsUntilStepRebuild = walk.turnsUntilStepRebuild;
-	// The walk holds the villager at the map position of the file
-	wallHug.position = {villager.position.x, villager.position.z};
-	wallHug.placedAt = glm::vec2(registry.Get<Transform>(entity).position.x, registry.Get<Transform>(entity).position.z);
-	PutMoveTag(registry, entity, villager.moveState, ecs::wall_hug::ToPoint(wallHug.position));
-}
-
-} // namespace
-
 glm::vec3 openblack::ecs::systems::vanilla_import::GroundPosition(const gamesave::MapCoords& position)
 {
 	const map_coords::MapCoords coords {position.x, position.z, position.altitude};
@@ -392,34 +405,64 @@ glm::vec3 openblack::ecs::systems::vanilla_import::GroundPosition(const gamesave
 
 namespace
 {
-/// A player whose temple stands whole in the file gets a whole temple. When the land has only the plan of the temple,
-/// the temple goes up whole on the plan, with no site, no music and no save.
-void RaiseFileTemples(ecs::Registry& registry, const gamesave::VanillaWorld& world)
+/// The temple of the player in the land, or none
+entt::entity LandTempleOf(ecs::Registry& registry, PlayerNames player)
 {
-	for (const auto player : ecs::vanilla_script_import::WholeTemplePlayers(world))
+	entt::entity found = entt::null;
+	registry.Each<const Temple>([&found, player](entt::entity entity, const Temple& temple) {
+		if (found == entt::null && temple.owner == player)
+		{
+			found = entity;
+		}
+	});
+	return found;
+}
+
+/// Each temple of the file is the temple of its player in the land. When the land has only the plan of the temple, the
+/// temple goes up on the plan: a whole temple with no site, no music and no save, or a temple that goes up with its site
+/// and as much of it built as the file has. The temple and its heart in the file become the temple of the land.
+void RaiseFileTemples(ecs::Registry& registry, const gamesave::VanillaWorld& world,
+                      const std::vector<world_import::ImportedSite>& sites, std::unordered_map<uint32_t, entt::entity>& made)
+{
+	for (const auto& file : ecs::vanilla_script_import::ReadTemples(world))
 	{
-		bool standing = false;
-		registry.Each<const Temple>(
-		    [&standing, player](entt::entity, const Temple& temple) { standing = standing || temple.owner == player; });
-		if (standing)
+		auto temple = LandTempleOf(registry, file.player);
+		if (temple == entt::null)
 		{
-			continue;
-		}
-		entt::entity plan = entt::null;
-		registry.Each<const PlannedTemple>([&plan, player](entt::entity entity, const PlannedTemple& planned) {
-			if (plan == entt::null && planned.owner == player)
+			entt::entity plan = entt::null;
+			registry.Each<const PlannedTemple>([&plan, &file](entt::entity entity, const PlannedTemple& planned) {
+				if (plan == entt::null && planned.owner == file.player)
+				{
+					plan = entity;
+				}
+			});
+			if (plan == entt::null)
 			{
-				plan = entity;
+				SPDLOG_LOGGER_WARN(ImportLog(), "The land has no temple and no plan of a temple for the player {} of the file",
+				                   static_cast<int>(file.player));
+				continue;
 			}
-		});
-		if (plan == entt::null)
-		{
-			SPDLOG_LOGGER_WARN(ImportLog(), "The land has no temple and no plan of a temple for the player {} of the file",
-			                   static_cast<int>(player));
-			continue;
+			if (file.Whole())
+			{
+				temple = ecs::construction::RaisePlannedTemple(plan);
+				SPDLOG_LOGGER_INFO(ImportLog(), "The temple of the player {} goes up whole on its plan",
+				                   static_cast<int>(file.player));
+			}
+			else
+			{
+				const auto site = std::ranges::find(sites, file.site, &world_import::ImportedSite::number);
+				temple = ecs::construction::StartPlannedTemple(plan, site != sites.end() ? site->desire : 0.0f);
+				SPDLOG_LOGGER_INFO(ImportLog(), "The temple of the player {} starts to go up on its plan",
+				                   static_cast<int>(file.player));
+			}
 		}
-		ecs::construction::RaisePlannedTemple(plan);
-		SPDLOG_LOGGER_INFO(ImportLog(), "The temple of the player {} goes up whole on its plan", static_cast<int>(player));
+		// A temple that goes up has as much of it built as the file has
+		if (!file.Whole())
+		{
+			ecs::construction::SetBuilt(temple, file.built);
+		}
+		made.emplace(file.citadel, temple);
+		made.emplace(file.heart, temple);
 	}
 }
 } // namespace
@@ -471,7 +514,7 @@ bool SaveGameSystem::ImportVanillaTowns(const gamesave::VanillaWorld& world, Van
 		}
 	}
 	ecs::player_towns::PutFirstInMadeOrder(registry, madeOrder);
-	RaiseFileTemples(registry, world);
+	RaiseFileTemples(registry, world, imported.sites, made);
 
 	for (const auto& abode : imported.abodes)
 	{

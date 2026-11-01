@@ -17,6 +17,7 @@
 #include "ECS/Components/Abode.h"
 #include "ECS/Components/Animal.h"
 #include "ECS/Components/Ball.h"
+#include "ECS/Components/BuildingDamage.h"
 #include "ECS/Components/Dance.h"
 #include "ECS/Components/Feature.h"
 #include "ECS/Components/Flock.h"
@@ -291,6 +292,23 @@ TEST(ScriptFind, WorshipSitesScaffoldsAndPoo)
 	const auto barrelKind = script_find::KindOf(registry, barrel);
 	ASSERT_TRUE(barrelKind.has_value());
 	EXPECT_EQ(barrelKind->type, ScriptType::MobileObject);
+}
+
+// A piece that broke off a building is a mobile static of the rock row, as a rock that the scripts made is not
+TEST(ScriptFind, APieceOfABuildingIsAMobileStaticOfTheRockRow)
+{
+	Registry registry;
+	const auto piece = registry.Create();
+	registry.Assign<components::BuildingPiece>(piece);
+
+	const auto kind = script_find::KindOf(registry, piece);
+	ASSERT_TRUE(kind.has_value());
+	EXPECT_EQ(kind->type, ScriptType::MobileStatic);
+	EXPECT_TRUE(script_find::Matches(*kind, ScriptType::MobileStatic, static_cast<uint32_t>(MobileStaticInfo::Rock)));
+	EXPECT_TRUE(script_find::Matches(*kind, ScriptType::MobileStatic, script_find::k_AnySubtype));
+	EXPECT_FALSE(script_find::Matches(*kind, ScriptType::MobileStatic, static_cast<uint32_t>(MobileStaticInfo::DeadTree)));
+	EXPECT_FALSE(script_find::Matches(*kind, ScriptType::Rock, script_find::k_AnySubtype));
+	EXPECT_EQ(script_find::GameTypeOf(registry, piece), ScriptType::MobileStatic);
 }
 
 TEST(ScriptFind, AMiracleInTheHandFromAGlobeIsAOneShotMiracle)

@@ -1064,12 +1064,10 @@ glm::vec2 FacingToReach(const Transform& transform, const creature_reach::Points
 }
 
 /// Whether a thing lies on the map, where a creature can stomp on it: not held, flying or carried off.
-/// A piece that broke off a building lies on the map when it is at rest, as a rock does. The pieces are not in the
-/// cells of the map yet, so this function examines the piece directly.
+/// A piece that broke off a building goes into the cells of the map when it comes to rest, as a rock does.
 bool OnTheMap(const ecs::Registry& registry, entt::entity thing)
 {
-	const bool placed = ecs::InMapCells(registry, thing) || registry.AllOf<BuildingPiece>(thing);
-	return placed && !registry.AnyOf<InHand, HeldByCreature, InPhysics, CarriedByTornado>(thing);
+	return ecs::InMapCells(registry, thing) && !registry.AnyOf<InHand, HeldByCreature, InPhysics, CarriedByTornado>(thing);
 }
 
 /// One game turn of walking or turning up to what the creature acts on
@@ -1741,6 +1739,7 @@ void UpdateReady(ecs::Registry& registry, entt::entity creature, const Creature&
 			break;
 		}
 		action.catching = Catching::Stepping;
+		action.catchStepped = true;
 		action.mirrored = ready.mirrored;
 		action.timeMs = 0.0f;
 		// The step's first frame is played at once
@@ -2498,6 +2497,19 @@ std::optional<float> CreatureObjectActionSystem::GetProgress(entt::entity creatu
 		return std::nullopt;
 	}
 	// The time and the length are whole milliseconds, so the float divide gives the same share as the game
+	if (action->kind == Kind::Catch)
+	{
+		const auto* legs = registry.TryGet<const CreatureLocomotion>(creature);
+		const auto* body = registry.TryGet<const CreatureAnimation>(creature);
+		const bool turns = legs != nullptr && legs->motion != CreatureLocomotion::Motion::Standing;
+		const auto standMs = static_cast<int32_t>(DurationOf(creature, creature_layers::animations::k_Stand));
+		const auto standTime = creature_walk_planner::StandTime(standMs, body != nullptr ? body->breathPhase : 0.0f);
+		const float length = DurationOf(creature, creature_catch::ShareAnimation(action->catchStepped));
+		const float time =
+		    creature_catch::ShareTimeMs(action->catching == CreatureObjectAction::Catching::Ready,
+		                                turns ? std::optional(legs->legsTimeMs) : std::nullopt, standTime, action->timeMs);
+		return length > 0.0f ? std::optional(time / length) : std::nullopt;
+	}
 	if (creature_object_actions::SharesByStand(action->kind))
 	{
 		const float stand = DurationOf(creature, creature_layers::animations::k_Stand);

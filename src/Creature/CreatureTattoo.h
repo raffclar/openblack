@@ -147,11 +147,14 @@ void RemakeMasks(Masks& masks, const Slots& slots, std::span<const uint8_t> bloc
 
 /// The skin's width and height in texels
 constexpr uint32_t k_SkinSize = 256;
+/// The skin's width and height in texels at the two lowest detail levels, where the game loads the skins at half size
+constexpr uint32_t k_LowDetailSkinSize = 128;
 
-/// A tattoo painted onto a skin of 256 by 256 texels: the design's mask for its size, turned and flipped, stretched to
+/// A tattoo painted onto a skin of side by side texels: the design's mask for its size, turned and flipped, stretched to
 /// the size times the largest mask's width (64 texels at size 1) and centred on the site. A tattoo that would run over
-/// an edge isn't painted.
-void Paint(std::span<uint16_t> skin, const Design& design, const glm::u8vec3& colour, const Site& site);
+/// an edge isn't painted. On a skin of half size (k_LowDetailSkinSize) the tattoo is painted at half the place and half
+/// the size, with the same mask.
+void Paint(std::span<uint16_t> skin, uint32_t side, const Design& design, const glm::u8vec3& colour, const Site& site);
 
 /// The tattoo palette, Data/tattoocols.raw, is 32 columns by 128 rows of colours
 constexpr uint32_t k_PaletteColumns = 32;

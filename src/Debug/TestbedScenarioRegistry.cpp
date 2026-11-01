@@ -3158,6 +3158,19 @@ void AddAppearance(std::vector<Scenario>& all)
 	    .framing = {.shot = Shot::Follow, .distance = 0.9f},
 	    .creatures = {tattooed, plain},
 	});
+	all.push_back({
+	    .id = "appearance.low_detail_tattoos_wounds",
+	    .name = "Tattoos and wounds on half-size skins",
+	    .facet = Facet::Appearance,
+	    .description = "Start the game with --detail-level 1 (Low) or 0 (Minimum). The same tiger as in "
+	                   "appearance.tattoos_wounds, with a tattoo in every slot, five wounds and burns and a trail of "
+	                   "blood, beside an unmarked tiger. Start it again with --detail-level 4 to compare.",
+	    .expected = "At Low and Minimum the skins are at half size, so they look softer. The tattoos, the wounds and the "
+	                "blood are at the same places on the body and have the same size as at the higher levels, with "
+	                "fewer texels. Nothing is missing and nothing moves to another place.",
+	    .framing = {.shot = Shot::Follow, .distance = 0.9f},
+	    .creatures = {tattooed, plain},
+	});
 
 	std::vector<Command> passing {Act(Kind::SitDown, 0, 0.5f)};
 	const std::array<glm::vec2, 2> across {glm::vec2 {-45.0f, -30.0f}, glm::vec2 {45.0f, -30.0f}};
@@ -3495,6 +3508,26 @@ void AddLight(std::vector<Scenario>& all)
 	    .framing = {.shot = Shot::Placed, .eye = {0.0f, 4.0f, -8.0f}, .look = {0.0f, 1.5f, 6.0f}},
 	    .objects = {{.type = VillagerInfo::CelticFarmerMale, .offset = {-1.5f, 6.0f}},
 	                {.type = VillagerInfo::CelticHousewifeFemale, .offset = {1.5f, 6.0f}}},
+	    .commands = {{.kind = Kind::WideScreen, .delaySeconds = 6.0f, .value = 1},
+	                 {.kind = Kind::CallNative,
+	                  .delaySeconds = 0.5f,
+	                  .script = "SET_HIGH_GRAPHICS_DETAIL",
+	                  .scriptArguments = {{.kind = ScriptArgument::Kind::Integer, .number = 1.0f},
+	                                      {.kind = ScriptArgument::Kind::Object, .index = 0}}}},
+	});
+
+	all.push_back({
+	    .id = "light.haze_high_detail_villager",
+	    .name = "No distance haze on a villager in high detail",
+	    .facet = Facet::Light,
+	    .description = "Two villagers stand in front of the camera. After six seconds, the cinema bars come in and the "
+	                   "villager on the left changes to high detail. Use --detail-level 3 or more, which has the haze.",
+	    .expected = "The villager on the left changes to its high-detail model. It keeps the light and the colour of the "
+	                "land where it stands, and it shows no distance haze. At this distance the haze is small, so its "
+	                "colours change only a little. The villager on the right does not change.",
+	    .framing = {.shot = Shot::Placed, .eye = {0.0f, 3.0f, 140.0f}, .look = {0.0f, 1.5f, 160.0f}},
+	    .objects = {{.type = VillagerInfo::CelticFarmerMale, .offset = {-3.0f, 160.0f}},
+	                {.type = VillagerInfo::CelticHousewifeFemale, .offset = {3.0f, 160.0f}}},
 	    .commands = {{.kind = Kind::WideScreen, .delaySeconds = 6.0f, .value = 1},
 	                 {.kind = Kind::CallNative,
 	                  .delaySeconds = 0.5f,
@@ -12953,6 +12986,26 @@ void AddWorkshopScenarios(std::vector<Scenario>& all)
 	});
 
 	all.push_back({
+	    .id = "objects.workshop_takes_thrown_wood",
+	    .name = "A workshop takes a handful of wood that the hand throws at it",
+	    .facet = Facet::Objects,
+	    .description = "A Celtic town of the player's with a village centre and a workshop that holds 1000 wood. A "
+	                   "handful of 600 wood is lifted 20 m west of the workshop and thrown at it as the hand throws it.",
+	    .expected = "The handful flies east and comes down at the workshop. It goes, and the workshop takes the 600 wood "
+	                "into its pile: the workshop then holds 1600 wood, still less than the wood of one scaffold.",
+	    .environment = {.dispenserGrid = false},
+	    .framing = {.shot = Shot::Overview, .include = {k_Workshop - glm::vec2 {25.0f}, k_Workshop + glm::vec2 {15.0f}}},
+	    .objects = {{.type = AbodeInfo::CelticTownCentre, .offset = {0.0f, 50.0f}},
+	                {.type = AbodeInfo::CelticWorkshop, .offset = k_Workshop, .yawDegrees = 90.0f, .storedWood = 1000},
+	                {.type = PotInfo::HandWood, .offset = k_Workshop + glm::vec2 {-20.0f, 0.0f}, .amount = 600}},
+	    .throws = {{.object = 2,
+	                .from = k_Workshop + glm::vec2 {-20.0f, 0.0f},
+	                .height = 6.0f,
+	                .velocity = {11.0f, 3.0f, 0.0f},
+	                .delaySeconds = 2.0f}},
+	});
+
+	all.push_back({
 	    .id = "objects.workshop_wood_flag",
 	    .name = "The flag of a workshop shows the wood that the workshop needs for a scaffold",
 	    .facet = Facet::Objects,
@@ -13599,8 +13652,8 @@ bool testbed_scenarios::NeedsNoCreature(Command::Kind kind)
 	       kind == Kind::RunText || kind == Kind::PlayHandDemo || kind == Kind::Reframe || kind == Kind::DestroyTemple ||
 	       kind == Kind::RunHelpMessage || kind == Kind::EndGuidanceWaits || kind == Kind::SetTownBeliefInRival ||
 	       kind == Kind::RecordChallenge || kind == Kind::EnterTemple || kind == Kind::HandTake || kind == Kind::HandApply ||
-	       kind == Kind::RunScript || kind == Kind::PlayBoatFilm || kind == Kind::HandPour || kind == Kind::HandRelease ||
-	       kind == Kind::SetReportLatency || kind == Kind::RemoveObject || kind == Kind::ReadTip ||
+	       kind == Kind::HandTakeShownSeed || kind == Kind::RunScript || kind == Kind::PlayBoatFilm || kind == Kind::HandPour ||
+	       kind == Kind::HandRelease || kind == Kind::SetReportLatency || kind == Kind::RemoveObject || kind == Kind::ReadTip ||
 	       kind == Kind::LookAtTempleScroll || kind == Kind::HandGripTotem || kind == Kind::ProfileFolderCheck ||
 	       kind == Kind::PlayCustomMusic || kind == Kind::ShowCustomMusicControls || kind == Kind::OwnTattooPicture ||
 	       kind == Kind::OpenTattooMenu || kind == Kind::OpenControlsBox || kind == Kind::OpenMenuPage ||
@@ -13645,7 +13698,7 @@ std::string_view testbed_scenarios::Name(Shot shot)
 
 std::string_view testbed_scenarios::Name(Command::Kind kind)
 {
-	constexpr std::array<std::string_view, 206> k_Names {
+	constexpr std::array<std::string_view, 207> k_Names {
 	    "walk to",
 	    "run to",
 	    "follow",
@@ -13763,6 +13816,7 @@ std::string_view testbed_scenarios::Name(Command::Kind kind)
 	    "reframe",
 	    "hand take",
 	    "hand give",
+	    "hand take shown seed",
 	    "hand apply",
 	    "swap minds",
 	    "record challenge",

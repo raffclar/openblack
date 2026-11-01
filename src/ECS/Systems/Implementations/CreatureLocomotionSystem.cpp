@@ -296,6 +296,33 @@ void Measure(CreatureLocomotion& self, const Creature& creature, const Transform
 	}
 }
 
+/// The time of the first animation of the legs at the end of the turn. The walk sets its own time as it blends its gait,
+/// and the confused look keeps the time it had.
+int32_t LegsTimeMs(const CreatureLocomotion& self, const Moves& moves, float breathPhase)
+{
+	switch (self.motion)
+	{
+	case Motion::Standing:
+	case Motion::Planning:
+		// It stands at the point of its breath. A move that starts before the next turn starts from this time.
+		return planner::StandTime(static_cast<int32_t>(moves.Duration(locomotion::animations::k_Stand)), breathPhase);
+	case Motion::Turning:
+	case Motion::Stepping:
+		return self.move.has_value() ? static_cast<int32_t>(self.move->timeMs) : self.legsTimeMs;
+	case Motion::Pointing:
+		// It turns to face the point first, then the arm points
+		if (self.routePoint.has_value() && self.routePoint->ready)
+		{
+			return static_cast<int32_t>(self.routePoint->timeMs);
+		}
+		return self.move.has_value() ? static_cast<int32_t>(self.move->timeMs) : self.legsTimeMs;
+	case Motion::Confused:
+	case Motion::Walking:
+		return self.legsTimeMs;
+	}
+	return self.legsTimeMs;
+}
+
 void SetIdle(CreatureLocomotion& self)
 {
 	self.motion = Motion::Standing;
@@ -427,6 +454,7 @@ void BeginTurn(CreatureLocomotion& self, const Moves& moves, GameHeading target)
 	                                                                                : locomotion::animations::k_LeftSpin;
 	const auto animations = moves.HasAll(firstSpin) ? std::optional(locomotion::SpinPairFor(firstSpin, angle)) : std::nullopt;
 	self.motion = Motion::Turning;
+	self.legsTimeMs = 0;
 	self.move =
 	    CreatureLocomotion::Move {.animations = animations,
 	                              .timeMs = 0.0f,
@@ -495,6 +523,7 @@ void StartLeg(CreatureLocomotion& self, const WalkTurn& turn, bool playNow)
 		self.motion = Motion::Walking;
 		self.move.reset();
 		self.walkTimeMs = 0;
+		self.legsTimeMs = 0;
 		if (playNow)
 		{
 			Walk(self, turn);
@@ -570,6 +599,7 @@ void TurnStep(CreatureLocomotion& self, const WalkTurn& turn)
 	// The walk starts in the same turn, from the start of its animations
 	self.motion = Motion::Walking;
 	self.walkTimeMs = 0;
+	self.legsTimeMs = 0;
 	self.tracks.clear();
 	Walk(self, turn);
 }
@@ -602,6 +632,8 @@ void StepOff(CreatureLocomotion& self, const WalkTurn& turn)
 		                                             ClipOf(turn.moves, locomotion::animations::k_Walk).durationMs, move.side);
 		self.move.reset();
 		self.motion = Motion::Walking;
+		// The legs keep the time of the step until the walk blends its gait
+		self.legsTimeMs = timeMs;
 		self.tracks.clear();
 		Walk(self, turn);
 		return;
@@ -698,6 +730,7 @@ void Walk(CreatureLocomotion& self, const WalkTurn& turn)
 		return;
 	}
 	self.walkTimeMs = gait->timesMs[1];
+	self.legsTimeMs = gait->timesMs[0];
 	// The walk moves on by its advance over the turn, round its loop
 	auto walkAdvance = self.walkTimeMs - walkFrom;
 	if (walkAdvance < 0)
@@ -1755,6 +1788,7 @@ void CreatureLocomotionSystem::CreatureTurn(entt::entity entity)
 				self.failed = true;
 			}
 		}
+		self.legsTimeMs = LegsTimeMs(self, moves, animation.breathPhase);
 		self.toHeading = self.headingSnaps ? self.fromHeading : self.heading;
 		stopped = !wasStanding && standing();
 	}

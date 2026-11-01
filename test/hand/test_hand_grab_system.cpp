@@ -34,6 +34,7 @@
 #include "ECS/Components/Pot.h"
 #include "ECS/Components/Reward.h"
 #include "ECS/Components/Scaffold.h"
+#include "ECS/Components/SpellSeed.h"
 #include "ECS/Components/Transform.h"
 #include "ECS/Components/Tree.h"
 #include "ECS/Components/Villager.h"
@@ -88,6 +89,15 @@ public:
 		return scaffold;
 	}
 
+	entt::entity AddShownSeed(glm::vec3 position, PlayerNames player)
+	{
+		const auto seed = registry.Create();
+		registry.Assign<Transform>(seed, position, glm::mat3(1.0f), glm::vec3(1.0f));
+		registry.Assign<SpellSeed>(seed, SpellSeed {.seedType = SpellSeedType::Shield, .player = player, .followsSpell = true});
+		sizes[seed] = {.radius = 1.0f, .height = 2.0f};
+		return seed;
+	}
+
 	entt::entity AddTree(glm::vec3 position, float weight)
 	{
 		const auto tree = registry.Create();
@@ -121,6 +131,11 @@ public:
 	[[nodiscard]] std::optional<PlayerNames> PlayerOfHand(entt::entity of) const override
 	{
 		return of == secondHand ? std::optional(PlayerNames::PLAYER_TWO) : std::nullopt;
+	}
+	[[nodiscard]] glm::vec3 ReportedHandPlace() const override
+	{
+		const auto found = reportedPlaces.find(Hand());
+		return found != reportedPlaces.end() ? found->second : PoseOf(Hand()).origin;
 	}
 	[[nodiscard]] glm::vec3 ReportedPlaceOf(entt::entity of) const override
 	{
@@ -188,10 +203,24 @@ public:
 	void ArtefactTaken(entt::entity object, PlayerNames) override { artefactsTaken.push_back(object); }
 	void GlobeIntoHand(entt::entity globe, PlayerNames player) override { globesTaken.emplace_back(globe, player); }
 	void ScaffoldIntoHand(entt::entity scaffold, PlayerNames player) override { scaffoldsTaken.emplace_back(scaffold, player); }
+	[[nodiscard]] std::optional<hand_grab::HoldFacts> SeedHoldOf(entt::entity seed) const override
+	{
+		if (!registry.AllOf<SpellSeed>(seed))
+		{
+			return std::nullopt;
+		}
+		return hand_grab::HoldFacts {.type = HoldType::Magic, .loweringMultiplier = 0.5f, .holdRadius = 1.0f};
+	}
+	bool SeedIntoHand(entt::entity seed, PlayerNames player) override
+	{
+		seedsTakenBack.emplace_back(seed, player);
+		return seedKept;
+	}
 	void PlaySample(uint32_t sample, glm::vec3) override { samples.push_back(sample); }
-	bool TapThing(entt::entity object, glm::vec3, PlayerNames) override
+	bool TapThing(entt::entity object, glm::vec3 place, PlayerNames) override
 	{
 		tapped.push_back(object);
+		tapPlaces.push_back(place);
 		return true;
 	}
 	[[nodiscard]] bool ValidToTap(entt::entity object) const override { return tappable.contains(object); }
@@ -534,8 +563,13 @@ public:
 	std::vector<entt::entity> artefactsTaken;
 	std::vector<std::pair<entt::entity, PlayerNames>> globesTaken;
 	std::vector<std::pair<entt::entity, PlayerNames>> scaffoldsTaken;
+	/// The seeds that the hand took back, and whether the miracles keep such a seed in the hand
+	std::vector<std::pair<entt::entity, PlayerNames>> seedsTakenBack;
+	bool seedKept {true};
 	std::vector<uint32_t> samples;
 	std::vector<entt::entity> tapped;
+	/// The place of the hand that each tap used
+	std::vector<glm::vec3> tapPlaces;
 	std::set<entt::entity> tappable;
 	std::vector<entt::entity> villagersInHand;
 	std::vector<entt::entity> uprooted;
@@ -893,6 +927,74 @@ TEST_F(HandGrabSystemWithWorld, AHeldPressCarriesAGlobeFromTheSide)
 	ASSERT_TRUE(pose.has_value());
 	EXPECT_EQ(pose->hold, HoldType::Side);
 	EXPECT_FLOAT_EQ(world->registry.Get<HandGrab>(world->hand).lowering, 0.7f * 2.0f);
+}
+
+// A held press on the player's own seed that shows over its miracle pulls it, then gives it back to the miracles. The
+// grab of the hand ends: the hand holds the seed as its miracle, not as a thing.
+TEST_F(HandGrabSystemWithWorld, AHeldPressTakesTheOwnShownSeedBackToTheMiracles)
+{
+	const auto seed = world->AddShownSeed({0.0f, 0.0f, 0.0f}, PlayerNames::PLAYER_ONE);
+	world->underCursor = seed;
+	EXPECT_EQ(system->WhyNotTake(seed), "");
+	EXPECT_TRUE(Press());
+	for (int i = 0; i < 40 && world->seedsTakenBack.empty(); ++i)
+	{
+		Frame(10);
+	}
+	ASSERT_EQ(world->seedsTakenBack.size(), 1u);
+	EXPECT_EQ(world->seedsTakenBack.front(), std::pair(seed, PlayerNames::PLAYER_ONE));
+	EXPECT_FALSE(system->GetHeld().has_value());
+	EXPECT_FALSE(system->IsBusy());
+	// The pick-up sound plays as the hand sends the take
+	EXPECT_EQ(world->samples.size(), 1u);
+	// The help counts the take, and those about the hand see it pick something up
+	EXPECT_EQ(world->helpEvents, std::vector<uint32_t> {help::profile::k_PickUp});
+	ASSERT_EQ(world->reactions.size(), 1u);
+	EXPECT_EQ(world->reactions.front().type, Reaction::ReactToHandPickUp);
+	EXPECT_EQ(world->spreadStopped, std::vector<entt::entity> {seed});
+	EXPECT_EQ(world->pathsForgotten, 1);
+	// It never goes into the hand as a thing
+	EXPECT_TRUE(world->leftWorld.empty());
+}
+
+// A seed whose miracle has too little left goes at the take: the hand counts no take and nobody sees one
+TEST_F(HandGrabSystemWithWorld, ASeedThatGoesAtTheTakeCountsNoTake)
+{
+	world->seedKept = false;
+	const auto seed = world->AddShownSeed({0.0f, 0.0f, 0.0f}, PlayerNames::PLAYER_ONE);
+	world->underCursor = seed;
+	EXPECT_TRUE(Press());
+	for (int i = 0; i < 40 && world->seedsTakenBack.empty(); ++i)
+	{
+		Frame(10);
+	}
+	ASSERT_EQ(world->seedsTakenBack.size(), 1u);
+	EXPECT_FALSE(system->IsBusy());
+	EXPECT_TRUE(world->helpEvents.empty());
+	EXPECT_TRUE(world->reactions.empty());
+	EXPECT_EQ(world->pathsForgotten, 0);
+}
+
+// The hand takes back only a seed of its own player
+TEST_F(HandGrabSystemWithWorld, TheHandLeavesTheShownSeedOfAnotherPlayer)
+{
+	const auto seed = world->AddShownSeed({0.0f, 0.0f, 0.0f}, PlayerNames::PLAYER_TWO);
+	world->underCursor = seed;
+	EXPECT_NE(system->WhyNotTake(seed), "");
+	EXPECT_FALSE(Press());
+	for (int i = 0; i < 40; ++i)
+	{
+		Frame(10);
+	}
+	EXPECT_TRUE(world->seedsTakenBack.empty());
+}
+
+// A seed that a hand holds is no thing for the hand to take
+TEST_F(HandGrabSystemWithWorld, AHeldSeedIsNoThingToTake)
+{
+	const auto seed = world->AddShownSeed({0.0f, 0.0f, 0.0f}, PlayerNames::PLAYER_ONE);
+	world->registry.Assign<HandHeldSeed>(world->secondHand, seed);
+	EXPECT_NE(system->WhyNotTake(seed), "");
 }
 
 TEST_F(HandGrabSystemWithWorld, AHeldPressCarriesAScaffoldFromTheSideAndItsWorkshopIsTold)
@@ -3037,6 +3139,25 @@ TEST_F(HandGrabSystemWithWorld, ATapWaitsForTheTurnThatDoesItsCommand)
 	RunWaiting();
 	ASSERT_EQ(world->tapped.size(), 1u);
 	EXPECT_EQ(world->tapped.front(), rock);
+}
+
+// The turn does the tap at the place of the hand that the last report gave, not where the game draws the hand
+TEST_F(HandGrabSystemWithWorld, ATapUsesThePlaceOfTheHandThatTheLastReportGave)
+{
+	deferCommands = true;
+	const auto rock = world->AddRock({0.0f, 0.0f, 0.0f});
+	world->underCursor = rock;
+	Press();
+	Frame(50);
+	Release();
+	ASSERT_TRUE(world->tapped.empty());
+	// A report comes before the turn of the tap. The game draws the hand at a different place.
+	const glm::vec3 reported {12.0f, 3.0f, -34.0f};
+	world->reportedPlaces[world->hand] = reported;
+	ASSERT_NE(world->PoseOf(world->hand).origin, reported);
+	RunWaiting();
+	ASSERT_EQ(world->tapPlaces.size(), 1u);
+	EXPECT_EQ(world->tapPlaces.front(), reported);
 }
 
 // The hand's work of the turn takes a thing in flight once the button was held long enough, also with no frame between

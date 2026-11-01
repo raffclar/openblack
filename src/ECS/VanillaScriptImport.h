@@ -143,9 +143,36 @@ struct ImportedScriptThings
 /// not a heart of a temple of a player.
 [[nodiscard]] std::optional<PlayerNames> HeartPlayer(const gamesave::VanillaWorld& world, uint32_t number);
 
-/// The players whose temple stands whole in the file. A file with a site of a temple has a temple that is not whole, so
-/// this gives no player for such a file.
-[[nodiscard]] std::vector<PlayerNames> WholeTemplePlayers(const gamesave::VanillaWorld& world);
+/// The temple of a player in the file, with the values of its heart
+struct ImportedTemple
+{
+	PlayerNames player {PlayerNames::NEUTRAL};
+	/// The numbers of the objects of the temple and of its heart
+	uint32_t citadel {0};
+	uint32_t heart {0};
+	/// How much of the heart is built, 0 to 1, and its life
+	float built {1.0f};
+	float life {1.0f};
+	/// The number of the object of the site of a temple that goes up, 0 when the temple has no site
+	uint32_t site {0};
+	/// The game turn when a thrown thing last hit the heart
+	uint32_t lastHitTurn {0};
+	/// The number of the object of the town that the temple was made for, 0 for none
+	uint32_t town {0};
+	/// The destruction of the temple: if it is under way, its seconds since it started and the moment of its next beam
+	bool destroying {false};
+	float destructionClock {0.0f};
+	float destructionBeamClock {0.0f};
+	/// The number of the object that a hurt heart last beamed at (0 for none), and the turn of that beam
+	uint32_t beamTarget {0};
+	uint32_t beamTurn {0};
+
+	/// A temple with no site stands whole
+	[[nodiscard]] bool Whole() const { return site == 0; }
+};
+
+/// The temple of each player in the file, in the order of the file. The heart owns the site of a temple that goes up.
+[[nodiscard]] std::vector<ImportedTemple> ReadTemples(const gamesave::VanillaWorld& world);
 
 /// The running scripts with the values that hold objects changed from places of the table into entities
 struct ImportedScripts

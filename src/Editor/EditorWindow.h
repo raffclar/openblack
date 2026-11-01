@@ -19,6 +19,7 @@
 #include "EditorContext.h"
 #include "EditorEntities.h"
 #include "Panels/InspectorPanel.h"
+#include "Panels/LandScriptPanel.h"
 #include "Panels/LogPanel.h"
 #include "Panels/OutlinerPanel.h"
 #include "Panels/PalettePanel.h"
@@ -67,6 +68,7 @@ private:
 		Palette,
 		Scenarios,
 		Scripts,
+		LandScript,
 		Log,
 	};
 
@@ -95,6 +97,7 @@ private:
 	InspectorPanel _inspector;
 	PalettePanel _palette;
 	ScriptsPanel _scripts;
+	LandScriptPanel _landScript;
 	LogPanel _log;
 
 	bool _showOutliner {true};
