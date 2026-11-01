@@ -59,8 +59,13 @@ struct ConditionsRequest
 {
 	/// The land whose limits the values must keep to, such as "mpm_2p_1". Empty: the land of the game.
 	std::string limitsLand;
-	std::vector<game_end::ConditionPick> picks;
+	/// The conditions in the order of the text. A condition with no value takes the first value of the land.
+	std::vector<game_end::SwitchedCondition> conditions;
 };
+
+/// The picks of a request that gives a value to each condition. None when a condition has no value, because only the
+/// limits of a land give that value.
+[[nodiscard]] std::optional<std::vector<game_end::ConditionPick>> PicksWithValues(const ConditionsRequest& request);
 
 /// How the game runs its frames
 struct Settings
@@ -178,9 +183,9 @@ constexpr uint32_t k_LongestFrameMs = 1000;
 /// The loss of a temple from the text "player:turn", such as "1:300". None for another text or a player past the seventh.
 [[nodiscard]] std::optional<TempleLoss> ParseTempleLoss(std::string_view text);
 
-/// The winning conditions from the text "[LAND:]NAME=VALUE,...", such as "mpm_2p_1:WC_HOUSES_BUILT=3,WC_GROW_TREES=5".
-/// A name is the name of the condition in the template file, or its number from 0. None for another text, or for a
-/// condition that the text names two times.
+/// The winning conditions from the text "[LAND:]NAME[=VALUE],...", such as "mpm_2p_1:WC_HOUSES_BUILT=3,WC_GROW_TREES".
+/// A name is the name of the condition in the template file, or its number from 0. A name with no "=VALUE" keeps the
+/// first value of the land. None for another text, or for a condition that the text names two times.
 [[nodiscard]] std::optional<ConditionsRequest> ParseConditions(std::string_view text);
 
 /// How long the frame waits at its end so that it takes its fixed game time in real time; no wait in fast mode, without

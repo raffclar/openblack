@@ -10,6 +10,7 @@
 #include <array>
 #include <chrono>
 #include <optional>
+#include <vector>
 
 #include <gtest/gtest.h>
 
@@ -138,23 +139,47 @@ TEST(SimRun, AFrameTimeCanHaveAPartOfAMillisecond)
 
 TEST(SimRun, TheConditionsSwitchReadsNamesNumbersAndALand)
 {
+	using openblack::game_end::Condition;
+	using openblack::game_end::SwitchedCondition;
 	const auto named = ParseConditions("WC_HOUSES_BUILT=3,WC_GROW_TREES=5");
 	ASSERT_TRUE(named.has_value());
 	EXPECT_TRUE(named->limitsLand.empty());
-	ASSERT_EQ(named->picks.size(), 2u);
-	EXPECT_EQ(named->picks[0],
-	          (openblack::game_end::ConditionPick {.condition = openblack::game_end::Condition::HousesBuilt, .value = 3}));
-	EXPECT_EQ(named->picks[1].condition, openblack::game_end::Condition::TreesGrown);
+	ASSERT_EQ(named->conditions.size(), 2u);
+	EXPECT_EQ(named->conditions[0], (SwitchedCondition {.condition = Condition::HousesBuilt, .value = 3}));
+	EXPECT_EQ(named->conditions[1].condition, Condition::TreesGrown);
 	const auto numbered = ParseConditions("mpm_2p_1:0=1,14=7");
 	ASSERT_TRUE(numbered.has_value());
 	EXPECT_EQ(numbered->limitsLand, "mpm_2p_1");
-	EXPECT_EQ(numbered->picks[0].condition, openblack::game_end::Condition::VillagersKilled);
-	EXPECT_EQ(numbered->picks[1].value, 7);
-	// A text with no value, an unknown name, a number past the last condition or a condition two times does not read
+	EXPECT_EQ(numbered->conditions[0].condition, Condition::VillagersKilled);
+	EXPECT_EQ(numbered->conditions[1].value, std::optional<int32_t>(7));
+	// An empty text, an empty value, an unknown name, a number past the last condition or a condition two times does not
+	// read
 	EXPECT_FALSE(ParseConditions("").has_value());
-	EXPECT_FALSE(ParseConditions("WC_HOUSES_BUILT").has_value());
+	EXPECT_FALSE(ParseConditions("WC_HOUSES_BUILT=").has_value());
 	EXPECT_FALSE(ParseConditions("WC_NOTHING=1").has_value());
+	EXPECT_FALSE(ParseConditions("WC_NOTHING").has_value());
 	EXPECT_FALSE(ParseConditions("15=1").has_value());
+	EXPECT_FALSE(ParseConditions("15").has_value());
 	EXPECT_FALSE(ParseConditions("3=x").has_value());
 	EXPECT_FALSE(ParseConditions("3=1,WC_HOUSES_BUILT=2").has_value());
+	EXPECT_FALSE(ParseConditions("3,WC_HOUSES_BUILT").has_value());
+}
+
+TEST(SimRun, AConditionWithNoValueKeepsTheFirstValueOfTheLand)
+{
+	using openblack::game_end::Condition;
+	using openblack::game_end::ConditionPick;
+	const auto request = ParseConditions("mpm_2p_1:WC_FOOD_IN_PITS,WC_HOUSES_BUILT=3");
+	ASSERT_TRUE(request.has_value());
+	ASSERT_EQ(request->conditions.size(), 2u);
+	EXPECT_EQ(request->conditions[0].condition, Condition::FoodInStores);
+	EXPECT_FALSE(request->conditions[0].value.has_value());
+	// Only the limits of a land give that value, so a run with no land gets no picks
+	EXPECT_FALSE(PicksWithValues(*request).has_value());
+	const auto all = ParseConditions("WC_FOOD_IN_PITS=9000,WC_HOUSES_BUILT=3");
+	ASSERT_TRUE(all.has_value());
+	EXPECT_EQ(PicksWithValues(*all), (std::optional(std::vector<ConditionPick> {
+	                                     {.condition = Condition::FoodInStores, .value = 9000},
+	                                     {.condition = Condition::HousesBuilt, .value = 3},
+	                                 })));
 }

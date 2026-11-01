@@ -81,11 +81,6 @@ void SetTopState(LivingAction& action, VillagerStates state)
 	Locator::livingActionSystem::value().VillagerSetState(action, LivingAction::Index::Top, state, false);
 }
 
-void MoveTo(LivingAction& action, glm::vec2 goal, VillagerStates final)
-{
-	villager_home::SetupMoveTo(action, goal, final);
-}
-
 void MoveTo(LivingAction& action, glm::ivec2 goal, VillagerStates final)
 {
 	villager_home::SetupMoveTo(action, goal, final);

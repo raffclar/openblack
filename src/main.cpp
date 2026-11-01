@@ -12,10 +12,12 @@
 #include <iterator>
 #include <map>
 #include <memory>
+#include <optional>
 #include <span>
 #include <string>
 #include <string_view>
 #include <typeinfo>
+#include <utility>
 #include <vector>
 
 #include <cxxopts.hpp>
@@ -439,15 +441,17 @@ bool parseOptions(int argc, char** argv, openblack::Arguments& args, int& return
 			}
 			if (result.count("sim-conditions") != 0)
 			{
+				// A run with no server reads no limits of a land, so each condition needs its value
 				const auto conditions = openblack::sim_run::ParseConditions(result["sim-conditions"].as<std::string>());
-				if (!conditions.has_value())
+				auto picks = conditions.has_value() ? openblack::sim_run::PicksWithValues(*conditions) : std::nullopt;
+				if (!picks.has_value())
 				{
 					std::cerr << "The winning conditions of --sim-conditions are not NAME=VALUE,... with each condition once."
 					          << std::endl;
 					returnCode = EXIT_FAILURE;
 					return false;
 				}
-				simulation.settings.conditions = conditions->picks;
+				simulation.settings.conditions = std::move(*picks);
 			}
 			if (result.count("sim-leave-at") != 0)
 			{

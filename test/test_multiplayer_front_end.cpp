@@ -569,6 +569,8 @@ TEST(MultiplayerRules, TheConditionsOfATestSwitchKeepToTheLimitsOfTheLand)
 {
 	EXPECT_EQ(ConditionIndex("WC_KILL_NUM_VILLAGERS"), 0u);
 	EXPECT_EQ(ConditionIndex("WC_GROW_TREES"), 14u);
+	EXPECT_EQ(ConditionKey(5), "WC_FOOD_IN_PITS");
+	EXPECT_TRUE(ConditionKey(15).empty());
 	EXPECT_FALSE(ConditionIndex("WC_NOTHING").has_value());
 	using openblack::game_end::Condition;
 	using openblack::game_end::ConditionPick;
@@ -582,6 +584,56 @@ TEST(MultiplayerRules, TheConditionsOfATestSwitchKeepToTheLimitsOfTheLand)
 	EXPECT_TRUE(ConditionsRefusal(limits, tooFew).has_value());
 	// A land with no block in the template has no limits, so the host can pick nothing there
 	EXPECT_TRUE(ConditionsRefusal(FindConditions(k_Conditions, "Land1"), inLimits).has_value());
+}
+
+TEST(MultiplayerRules, AConditionThatTheHostOnlySwitchesOnKeepsTheFirstValueOfTheLand)
+{
+	using openblack::game_end::Condition;
+	using openblack::game_end::ConditionPick;
+	using openblack::game_end::SwitchedCondition;
+	// A fake template with the food, wood, towns and belief lines of three lands of 2, 3 and 4 gods
+	constexpr std::string_view k_Lands = "FORMAP land_2.txt\n"
+	                                     "WC_FOOD_IN_PITS:\t9000\t9000\t250000\t1000\t10000\n"
+	                                     "WC_WOOD_IN_PITS:\t4000\t4000\t500000\t1000\t10000\n"
+	                                     "WC_TAKEOVER_NUM_TOWNS:\t1\t1\t8\t1\t1\n"
+	                                     "WC_BELIEF_IN_WORLD:\t2100\t2100\t100000\t100\t10000\n"
+	                                     "FORMAP land_3.txt\n"
+	                                     "WC_FOOD_IN_PITS:\t5000\t5000\t250000\t1000\t10000\n"
+	                                     "WC_TAKEOVER_NUM_TOWNS:\t1\t1\t12\t1\t1\n"
+	                                     "FORMAP land_4.txt\n"
+	                                     "WC_FOOD_IN_PITS:\t1000\t1000\t250000\t1000\t10000\n";
+	const std::array switched {
+	    SwitchedCondition {.condition = Condition::FoodInStores, .value = std::nullopt},
+	    SwitchedCondition {.condition = Condition::WoodInStores, .value = std::nullopt},
+	    SwitchedCondition {.condition = Condition::BeliefInWorld, .value = std::nullopt},
+	    SwitchedCondition {.condition = Condition::TownsTakenOver, .value = 8},
+	};
+	const auto two = FindConditions(k_Lands, "land_2");
+	ASSERT_TRUE(two.has_value());
+	const auto picks = PicksOnLand(*two, switched);
+	EXPECT_EQ(picks, (std::vector<ConditionPick> {
+	                     {.condition = Condition::FoodInStores, .value = 9000},
+	                     {.condition = Condition::WoodInStores, .value = 4000},
+	                     {.condition = Condition::BeliefInWorld, .value = 2100},
+	                     {.condition = Condition::TownsTakenOver, .value = 8},
+	                 }));
+	EXPECT_FALSE(ConditionsRefusal(two, picks).has_value());
+
+	// The land of 2 gods lets the host take at most 8 towns, the land of 3 gods 12
+	const std::array nineTowns {SwitchedCondition {.condition = Condition::TownsTakenOver, .value = 9}};
+	EXPECT_TRUE(ConditionsRefusal(two, PicksOnLand(*two, nineTowns)).has_value());
+	const auto three = FindConditions(k_Lands, "land_3");
+	ASSERT_TRUE(three.has_value());
+	EXPECT_FALSE(ConditionsRefusal(three, PicksOnLand(*three, nineTowns)).has_value());
+
+	// Each land starts the food at its own first value
+	const std::array food {SwitchedCondition {.condition = Condition::FoodInStores, .value = std::nullopt}};
+	EXPECT_EQ(PicksOnLand(*three, food).at(0).value, 5000);
+	EXPECT_EQ(PicksOnLand(*FindConditions(k_Lands, "land_4"), food).at(0).value, 1000);
+
+	// A value under the first value is under the least value of these lands, so the host cannot pick it
+	const std::array lessFood {SwitchedCondition {.condition = Condition::FoodInStores, .value = 8000}};
+	EXPECT_TRUE(ConditionsRefusal(two, PicksOnLand(*two, lessFood)).has_value());
 }
 
 TEST(MultiplayerRules, TheConditionsPageListsTheLastConditionFirst)
