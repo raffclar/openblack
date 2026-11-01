@@ -210,9 +210,9 @@ TEST(PhysicsLiving, AFleeingThingGivesUpWatchesOrRunsByDistanceAndHeading)
 
 TEST(PhysicsLiving, AVillagersStateChoosesItsClipOrTakesItsRow)
 {
-	// No state plays scared stiff
-	EXPECT_EQ(VillagerStateClip(0, std::nullopt, 385), AnimId::PScaredStiff);
-	EXPECT_EQ(VillagerStateClip(0xFF, std::nullopt, 385), AnimId::PScaredStiff);
+	// No state plays the stand clip, whatever the row gives
+	EXPECT_EQ(VillagerStateClip(0, std::nullopt, 355), AnimId::PStand);
+	EXPECT_EQ(VillagerStateClip(0xFF, std::nullopt, 355), AnimId::PStand);
 	// Flying and landing choose their own clips
 	EXPECT_TRUE(VillagerStateChoosesClip(10));
 	EXPECT_TRUE(VillagerStateChoosesClip(11));
