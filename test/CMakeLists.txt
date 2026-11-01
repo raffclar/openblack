@@ -2282,3 +2282,4 @@ openblack_setup_and_add_test(
   test_see_through_modes graphics/test_see_through_modes.cpp
 )
 openblack_setup_and_add_test(test_editor_history test_editor_history.cpp)
+openblack_setup_and_add_test(test_lan_discovery online/test_lan_discovery.cpp)

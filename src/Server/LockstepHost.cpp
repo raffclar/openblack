@@ -66,6 +66,24 @@ uint8_t GodSlotsOfLand(std::span<const bool> slotHasCitadel) noexcept
 	return static_cast<uint8_t>(std::min<size_t>(slots, std::numeric_limits<uint8_t>::max()));
 }
 
+std::optional<join_ticket::Claims> LanClaims(std::string_view name)
+{
+	const bool control = std::ranges::any_of(name, [](char letter) {
+		const auto byte = static_cast<uint8_t>(letter);
+		return byte < 0x20 || byte == 0x7F;
+	});
+	if (name.empty() || name.size() > k_MostLanNameBytes || control)
+	{
+		return std::nullopt;
+	}
+	join_ticket::Claims claims;
+	// The prefix keeps a name apart from the account ids of the lobby
+	claims.subject = "lan:" + std::string(name);
+	claims.name = std::string(name);
+	claims.role = game_socket::Role::God;
+	return claims;
+}
+
 bool RoomStarts(size_t godsInRoom, size_t readyGods, uint32_t minGods) noexcept
 {
 	return godsInRoom > 0 && readyGods == godsInRoom && readyGods >= minGods;
@@ -217,15 +235,32 @@ void LockstepHost::Join(ConnectionId connection, Peer& peer, const game_socket::
 		Refuse(connection, "protocol");
 		return;
 	}
-	const auto result = _checkTicket ? _checkTicket(join.ticket) : TicketCheck::Result {};
-	if (result.problem != TicketProblem::None || !result.claims.has_value())
+	// On the local network, a join with no ticket gives the name of the player's profile
+	const bool lan = _settings.lanNames && join.ticket.empty();
+	join_ticket::Claims claims;
+	if (lan)
 	{
-		Refuse(connection, "ticket");
-		Log(spdlog::level::info,
-		    fmt::format("The ticket of connection {} is not valid: {}", connection, ProblemName(result.problem)));
-		return;
+		auto named = LanClaims(join.name);
+		if (!named.has_value())
+		{
+			Refuse(connection, "ticket");
+			Log(spdlog::level::info, fmt::format("The name of connection {} on the local network is not valid", connection));
+			return;
+		}
+		claims = std::move(*named);
 	}
-	const auto& claims = *result.claims;
+	else
+	{
+		auto result = _checkTicket ? _checkTicket(join.ticket) : TicketCheck::Result {};
+		if (result.problem != TicketProblem::None || !result.claims.has_value())
+		{
+			Refuse(connection, "ticket");
+			Log(spdlog::level::info,
+			    fmt::format("The ticket of connection {} is not valid: {}", connection, ProblemName(result.problem)));
+			return;
+		}
+		claims = std::move(*result.claims);
+	}
 	// The room takes nobody new during the start
 	if (Starting())
 	{
@@ -255,11 +290,22 @@ void LockstepHost::Join(ConnectionId connection, Peer& peer, const game_socket::
 			return;
 		}
 		const auto free = std::ranges::find(_seats, SeatState::Open, &Seat::state);
-		if (free == _seats.end())
+		if (free == _seats.end() && !lan)
 		{
 			Refuse(connection, "full");
 			return;
 		}
+		// On the local network, a player who finds no free slot watches the game, as the game puts that player with the
+		// observers
+		if (free == _seats.end())
+		{
+			claims.role = game_socket::Role::Observer;
+			joined.role = claims.role;
+		}
+	}
+	if (claims.role == game_socket::Role::God)
+	{
+		const auto free = std::ranges::find(_seats, SeatState::Open, &Seat::state);
 		const auto seat = static_cast<uint8_t>(free - _seats.begin());
 		*free = Seat {.state = SeatState::Taken,
 		              .connection = connection,

@@ -74,6 +74,8 @@ int main(int argc, char* argv[])
 		("client-cert", "The PEM file of the client certificate that the server shows to the lobby (mutual TLS).", cxxopts::value<std::string>())
 		("client-key", "The PEM file of the key of --client-cert.", cxxopts::value<std::string>())
 		("room-name", "The name of the room in the list of the lobby.", cxxopts::value<std::string>()->default_value("Game"))
+		("lan", "The room is on the local network with no lobby: the server answers the search of the game on UDP port 2613, and a player joins with the name of the profile. The server then needs no --server-id and no --ticket-keys.")
+		("lan-host", "With --lan, the computer name of the game socket that the answers give, which the TLS certificate names. Without it, each client uses the address of the server.", cxxopts::value<std::string>())
 		("lobby-test-ca", "Tests on this computer only: a PEM file of a certificate authority of a test lobby on a loopback address (127.0.0.1).", cxxopts::value<std::string>())
 		("snapshot-folder", "The folder of the snapshots of the game server: the shared world, on the server's own disk, for a restart after a crash.", cxxopts::value<std::string>()->default_value(std::string(openblack::server::snapshots::k_DefaultFolder)))
 		("snapshot-every", "The turns between two snapshots of the game server (10 turns a second). 0 stops the snapshots.", cxxopts::value<uint32_t>()->default_value(std::to_string(openblack::server::snapshots::k_DefaultEveryTurns)))
@@ -317,6 +319,11 @@ int main(int argc, char* argv[])
 				network.clientKey = std::filesystem::path(result["client-key"].as<std::string>());
 			}
 			network.roomName = result["room-name"].as<std::string>();
+			network.lan = result.count("lan") != 0;
+			if (result.count("lan-host") != 0)
+			{
+				network.lanHost = result["lan-host"].as<std::string>();
+			}
 			network.snapshots = openblack::server::snapshots::Settings {
 			    .folder = std::filesystem::path(result["snapshot-folder"].as<std::string>()),
 			    .everyTurns = result["snapshot-every"].as<uint32_t>(),

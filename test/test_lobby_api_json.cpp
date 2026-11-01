@@ -198,6 +198,18 @@ TEST(LobbyApi, TicketClansRankingAndPlayer)
 	EXPECT_EQ(player->gamesRanked, 12);
 }
 
+TEST(LobbyApi, PlayerDetailLinesKeepTheOrderOfTheLobby)
+{
+	const auto details =
+	    ParsePlayerDetailLines(R"({"lines":[{"label":"Points","value":"12"},{"label":"Country","value":"gb"}]})");
+	ASSERT_TRUE(details.has_value());
+	ASSERT_EQ(details->lines.size(), 2u);
+	EXPECT_EQ(details->lines[0].label, "Points");
+	EXPECT_EQ(details->lines[1].value, "gb");
+	EXPECT_FALSE(ParsePlayerDetailLines(R"({"lines":[{"label":"Points"}]})").has_value());
+	EXPECT_FALSE(ParsePlayerDetailLines(R"({})").has_value());
+}
+
 TEST(LobbyApi, WeatherHasThePlace)
 {
 	const auto weather =

@@ -26,9 +26,12 @@
 
 #include "Common/BuildVersion.h"
 #include "Online/Desktop/CurlHttpClient.h"
+#include "Online/Desktop/UdpSocket.h"
+#include "Online/LanDiscovery.h"
 #include "Server/Desktop/Sha256SessionHasher.h"
 #include "Server/Desktop/SocketWebSocketServer.h"
 #include "Server/Ed25519.h"
+#include "Server/LanRoom.h"
 #include "Server/LobbyBans.h"
 #include "Server/LobbyStatus.h"
 #include "Server/TicketCheck.h"
@@ -97,6 +100,26 @@ struct GameRole::Parts
 	std::chrono::steady_clock::time_point nextMapSend {};
 	bool mapSending {false};
 	bool mapSent {false};
+	/// The answers to the search of the clients on the local network
+	std::unique_ptr<online::UdpSocket> lan;
+	std::string lanHost;
+
+	void AnswerSearches()
+	{
+		if (!lan || !host)
+		{
+			return;
+		}
+		while (auto datagram = lan->Receive())
+		{
+			if (!online::lan_discovery::IsSearch(datagram->bytes))
+			{
+				continue;
+			}
+			const auto answer = lan_room::AnswerOf(room, host->Started(), host->Seats(), sockets.Port(), lanHost);
+			lan->SendTo(datagram->address, datagram->port, online::lan_discovery::AnswerBytes(answer));
+		}
+	}
 
 	void SendMap()
 	{
@@ -205,7 +228,7 @@ std::optional<std::string> GameRole::Start(const NetworkSettings& settings, game
                                            uint8_t godSlots, std::optional<lobby_status::CustomMap> customMap)
 {
 	auto& parts = *_parts;
-	if (settings.serverId.empty())
+	if (settings.serverId.empty() && !settings.lan)
 	{
 		return "the game role needs the server's id (--server-id)";
 	}
@@ -248,7 +271,7 @@ std::optional<std::string> GameRole::Start(const NetworkSettings& settings, game
 		}
 		parts.tickets.SetKeys(*keys);
 	}
-	if (parts.tickets.KeyCount() == 0)
+	if (parts.tickets.KeyCount() == 0 && !settings.lan)
 	{
 		return "the server has no key to check the tickets (--ticket-keys)";
 	}
@@ -271,6 +294,21 @@ std::optional<std::string> GameRole::Start(const NetworkSettings& settings, game
 		}
 		return result;
 	};
+	parts.room = lobby_status::Room {.hostname = settings.roomName,
+	                                 .land = start.land,
+	                                 .maxGods = godSlots,
+	                                 .version = std::string(build_version::Semantic())};
+	if (settings.lan)
+	{
+		parts.lan = std::make_unique<online::UdpSocket>();
+		parts.lanHost = settings.lanHost;
+		if (!parts.lan->Open(online::lan_discovery::k_Port, false))
+		{
+			return "the UDP port of the search on the local network does not open";
+		}
+		SPDLOG_LOGGER_INFO(spdlog::get("game"), "The game server answers the search of the local network on UDP port {}",
+		                   online::lan_discovery::k_Port);
+	}
 	if (!settings.lobbyApi.empty())
 	{
 		if (!IsAddress(settings.lobbyApi) || !settings.clientCertificate.has_value() || !settings.clientKey.has_value())
@@ -304,10 +342,6 @@ std::optional<std::string> GameRole::Start(const NetworkSettings& settings, game
 			    }
 			    parts.host->SetBans(std::move(banned));
 		    });
-		parts.room = lobby_status::Room {.hostname = settings.roomName,
-		                                 .land = start.land,
-		                                 .maxGods = godSlots,
-		                                 .version = std::string(build_version::Semantic())};
 	}
 
 	parts.host = std::make_unique<LockstepHost>(
@@ -319,7 +353,8 @@ std::optional<std::string> GameRole::Start(const NetworkSettings& settings, game
 	                  .comeBackMicroseconds = static_cast<int64_t>(settings.comeBackSeconds) * 1'000'000,
 	                  .keptTurns = settings.comeBackSeconds * 10 + 200,
 	                  .testCommands = settings.testCommands,
-	                  .sessionHasher = std::make_shared<Sha256SessionHasher>()});
+	                  .sessionHasher = std::make_shared<Sha256SessionHasher>(),
+	                  .lanNames = settings.lan});
 	return std::nullopt;
 }
 
@@ -335,6 +370,7 @@ void GameRole::Update()
 	{
 		parts.host->Update();
 	}
+	parts.AnswerSearches();
 	if (parts.lobby)
 	{
 		if (std::chrono::steady_clock::now() >= parts.nextReport)

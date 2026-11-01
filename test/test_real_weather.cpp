@@ -135,6 +135,7 @@ public:
 	void GetPlayerRanking(int32_t, LobbyCallback<lobby_api::RankingPage>) override {}
 	void GetClanRanking(int32_t, LobbyCallback<lobby_api::RankingPage>) override {}
 	void GetPlayer(int64_t, LobbyCallback<lobby_api::PlayerDetails>) override {}
+	void GetPlayerDetailLines(int64_t, std::string, LobbyCallback<lobby_api::PlayerDetailLines>) override {}
 	void GetWeather(lobby_api::Date date, LobbyCallback<lobby_api::RealWeather> callback) override
 	{
 		askedFor = date;

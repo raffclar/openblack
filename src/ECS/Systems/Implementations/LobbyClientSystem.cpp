@@ -15,6 +15,7 @@
 
 #include <algorithm>
 #include <array>
+#include <string>
 #include <string_view>
 
 #include <LobbyApiJson.h>
@@ -63,6 +64,29 @@ void Succeed(const LobbyCallback<Value>& callback, Value value)
 LobbyError ErrorOfKind(LobbyErrorKind kind)
 {
 	return LobbyError {.kind = kind};
+}
+
+/// The text of a value in the query of an address: each byte that is not a letter, a digit, "-", ".", "_" or "~" becomes
+/// "%" and two hexadecimal digits
+std::string QueryText(std::string_view text)
+{
+	constexpr std::string_view k_Digits = "0123456789ABCDEF";
+	std::string out;
+	for (const auto character : text)
+	{
+		const auto byte = static_cast<uint8_t>(character);
+		const bool plain = (byte >= 'a' && byte <= 'z') || (byte >= 'A' && byte <= 'Z') || (byte >= '0' && byte <= '9') ||
+		                   byte == '-' || byte == '.' || byte == '_' || byte == '~';
+		if (plain)
+		{
+			out.push_back(character);
+			continue;
+		}
+		out.push_back('%');
+		out.push_back(k_Digits[byte >> 4]);
+		out.push_back(k_Digits[byte & 0x0F]);
+	}
+	return out;
 }
 
 bool IsSuccess(int32_t status)
@@ -796,6 +820,14 @@ void LobbyClientSystem::GetPlayer(int64_t playerId, LobbyCallback<lobby_api::Pla
 	CallFor<lobby_api::PlayerDetails>(
 	    HttpMethod::Get, fmt::format("/players/{}", playerId), std::move(callback),
 	    [](const HttpResponse& response) { return lobby_api::ParsePlayerDetails(TextOf(response)); });
+}
+
+void LobbyClientSystem::GetPlayerDetailLines(int64_t playerId, std::string version,
+                                             LobbyCallback<lobby_api::PlayerDetailLines> callback)
+{
+	CallFor<lobby_api::PlayerDetailLines>(
+	    HttpMethod::Get, fmt::format("/players/{}/details?version={}", playerId, QueryText(version)), std::move(callback),
+	    [](const HttpResponse& response) { return lobby_api::ParsePlayerDetailLines(TextOf(response)); });
 }
 
 void LobbyClientSystem::GetWeather(lobby_api::Date date, LobbyCallback<lobby_api::RealWeather> callback)
