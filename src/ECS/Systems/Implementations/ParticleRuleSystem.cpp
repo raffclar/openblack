@@ -81,6 +81,7 @@
 #include "Particles/ParticleArchive.h"
 #include "Particles/ParticleArchiveValues.h"
 #include "Particles/ParticleClassRegistry.h"
+#include "Particles/ParticleImport.h"
 #include "Particles/ParticleMiracleMaths.h"
 #include "Particles/ParticleSoundRelease.h"
 #include "Particles/ParticleTurnOrder.h"
@@ -1280,6 +1281,18 @@ EffectHandle ParticleRuleSystem::Serve(const EffectRequest& request, EffectHandl
 	{
 		started->saved = false;
 	}
+	// A saved spot visual of a particle type keeps its turns left and the thing it follows
+	if (request.restored && request.turns.has_value() && std::holds_alternative<ParticleType>(request.type))
+	{
+		started->turnsLeft = *request.turns;
+		started->owner = request.owner;
+	}
+	if (request.restored && !started->effect->Adopt(*request.restored))
+	{
+		SPDLOG_LOGGER_WARN(spdlog::get("game"), "Particles: the saved state of {} does not agree with its file", started->file);
+		Forget(started);
+		return k_NoEffect;
+	}
 	return id;
 }
 
@@ -1488,6 +1501,27 @@ bool ParticleRuleSystem::Renumber(EffectId from, EffectId to)
 		_lifeListener->EffectStarted(to);
 	}
 	return true;
+}
+
+void ParticleRuleSystem::RemoveOwnedBy(entt::entity owner)
+{
+	if (owner == entt::null)
+	{
+		return;
+	}
+	std::vector<EffectId> owned;
+	for (const auto& running :
+	     _effects | std::views::filter([owner](const Running& running) { return running.owner == owner; }))
+	{
+		owned.push_back(running.id);
+	}
+	for (const auto id : owned)
+	{
+		if (const auto it = FindRunning(id); it != _effects.end())
+		{
+			Forget(it);
+		}
+	}
 }
 
 void ParticleRuleSystem::KeepOutOfSaves(EffectId id)

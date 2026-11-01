@@ -29,6 +29,7 @@
 namespace openblack::particles
 {
 struct BeliefSprite;
+struct RestoredEffect;
 class LightSheet;
 struct ShieldSphere;
 namespace draw
@@ -91,6 +92,9 @@ struct EffectRequest
 	std::optional<particles::draw::DrawPath> drawPath;
 	/// A save keeps the effect. When false, the owner starts the effect again after a load.
 	bool saved {true};
+	/// The running state of the effect in a saved game of the game. The effect continues from that state instead of
+	/// from its start. When the state does not agree with the particle file, no effect starts.
+	std::shared_ptr<const particles::RestoredEffect> restored;
 };
 
 /// The side that steps the effects tells the simulation when an effect starts and when it ends. The simulation keeps
@@ -127,6 +131,8 @@ public:
 	virtual void Stop(EffectHandle handle) = 0;
 	/// The effect goes at once
 	virtual void Remove(EffectHandle handle) = 0;
+	/// Every effect that follows the thing goes at once
+	virtual void RemoveOwnedBy(entt::entity owner) = 0;
 	/// The player whose colour the effect shows
 	virtual void SetPlayer(EffectHandle handle, int player) = 0;
 	/// The strength of the miracle that the rules of the effect read
@@ -199,6 +205,8 @@ public:
 	virtual void Stop(EffectHandle handle) = 0;
 	/// The effect goes at once
 	virtual void Remove(EffectHandle handle) = 0;
+	/// Every effect that follows the thing goes at once
+	virtual void RemoveOwnedBy(entt::entity owner) = 0;
 	/// Whether the effect runs, from the record of the simulation. It is false on a computer that shows nothing.
 	[[nodiscard]] virtual bool IsRunning(EffectHandle handle) const = 0;
 	/// The player whose colour the effect shows

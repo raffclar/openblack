@@ -304,6 +304,7 @@ public:
 	void Move(EffectHandle handle, glm::vec3 position) override { SetOrigin(handle, position); }
 	void Stop(EffectHandle handle) override { CloseDown(handle); }
 	void Remove(EffectHandle handle) override { Delete(handle); }
+	void RemoveOwnedBy(entt::entity owner) override;
 	void SetMagnitude(EffectHandle handle, float magnitude) override;
 	void SetAlpha(EffectHandle handle, float alpha) override;
 	void SetProcessInfo(EffectHandle handle, const particles::ProcessInfo& info) override;

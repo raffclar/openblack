@@ -38,6 +38,7 @@ class VortexSystem final: public VortexSystemInterface
 {
 public:
 	entt::entity Create(glm::vec3 position, VortexType type, float altitude) override;
+	entt::entity Restore(const RestoredVortex& saved) override;
 	bool StartFadeOut(entt::entity vortex) override;
 	bool SetArrival(entt::entity vortex, const components::Vortex::Arrival& arrival) override;
 	[[nodiscard]] float GetOpenness(entt::entity vortex) const override;

@@ -97,6 +97,7 @@ public:
 	void Move(ecs::systems::EffectHandle /*handle*/, glm::vec3 /*position*/) override {}
 	void Stop(ecs::systems::EffectHandle /*handle*/) override {}
 	void Remove(ecs::systems::EffectHandle /*handle*/) override {}
+	void RemoveOwnedBy(entt::entity /*owner*/) override {}
 	void SetMagnitude(ecs::systems::EffectHandle /*handle*/, float /*magnitude*/) override {}
 	void SetAlpha(ecs::systems::EffectHandle /*handle*/, float /*alpha*/) override {}
 	void SetProcessInfo(ecs::systems::EffectHandle /*handle*/, const particles::ProcessInfo& /*info*/) override {}

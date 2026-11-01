@@ -41,6 +41,7 @@ public:
 	void Move(EffectHandle handle, glm::vec3 position) override;
 	void Stop(EffectHandle handle) override;
 	void Remove(EffectHandle handle) override;
+	void RemoveOwnedBy(entt::entity owner) override;
 	[[nodiscard]] bool IsRunning(EffectHandle handle) const override;
 	void SetPlayer(EffectHandle handle, int player) override;
 	void SetPower(EffectHandle handle, float power) override;

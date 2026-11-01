@@ -12,6 +12,7 @@
 #include <cstdint>
 
 #include <exception>
+#include <memory>
 #include <optional>
 #include <ranges>
 #include <unordered_map>
@@ -28,6 +29,7 @@
 #include "ECS/Archetypes/ScriptMarkerArchetype.h"
 #include "ECS/Components/Fire.h"
 #include "ECS/Components/Influence.h"
+#include "ECS/Components/Mobile.h"
 #include "ECS/Components/ScriptControl.h"
 #include "ECS/Components/ScriptHighlight.h"
 #include "ECS/Components/ScriptTimer.h"
@@ -36,12 +38,17 @@
 #include "ECS/Components/Transform.h"
 #include "ECS/Registry.h"
 #include "ECS/SaveGameFiles.h"
+#include "ECS/ScriptSpotVisuals.h"
 #include "ECS/Systems/CameraHelpSystemInterface.h"
+#include "ECS/Systems/EffectRequestSystemInterface.h"
 #include "ECS/Systems/ScriptHighlightSystemInterface.h"
 #include "ECS/Systems/ScriptObjectsSystemInterface.h"
+#include "ECS/Systems/VortexSystemInterface.h"
+#include "ECS/VanillaParticleImport.h"
 #include "ECS/VanillaScriptImport.h"
 #include "ECS/WorldObjects.h"
 #include "Locator.h"
+#include "Particles/ParticleImport.h"
 #include "SaveGameSystem.h"
 #include "SaveGameVanillaPlaces.h"
 
@@ -49,6 +56,7 @@ using namespace openblack;
 using namespace openblack::ecs::components;
 using namespace openblack::ecs::systems;
 namespace script_import = openblack::ecs::vanilla_script_import;
+namespace particle_import = openblack::ecs::vanilla_particle_import;
 using openblack::ecs::systems::vanilla_import::EntityOf;
 using openblack::ecs::systems::vanilla_import::GroundPosition;
 
@@ -81,12 +89,18 @@ void RemoveScriptThings(ecs::Registry& registry)
 	}
 }
 
+/// The effect that the import started for a particle container of the file, if any
+std::optional<uint32_t> EffectOfContainer(const std::unordered_map<uint32_t, uint32_t>& effects, uint32_t number)
+{
+	const auto found = effects.find(number);
+	return found != effects.end() ? std::optional(found->second) : std::nullopt;
+}
+
 /// The temple takes the values of its heart in the file: the life, the turn of the last hit, the town that it was made
-/// for, the last beam of a hurt heart and the clocks of a destruction under way. The particle containers of the beams
-/// and of the glow do not come in. The temple makes its beams again when it next needs them, but the glow of a
-/// destruction under way does not come back.
+/// for, the last beam of a hurt heart, the clocks of a destruction under way, and the effects of its beams and of the
+/// glow of a destruction, which continue from their saved state
 void PutHeart(ecs::Registry& registry, entt::entity entity, const script_import::ImportedTemple& file,
-              const std::unordered_map<uint32_t, entt::entity>& made)
+              const std::unordered_map<uint32_t, entt::entity>& made, const std::unordered_map<uint32_t, uint32_t>& effects)
 {
 	registry.AssignOrReplace<ObjectLife>(entity, ObjectLife {.life = file.life});
 	auto& temple = registry.Get<Temple>(entity);
@@ -104,6 +118,119 @@ void PutHeart(ecs::Registry& registry, entt::entity entity, const script_import:
 	temple.destroying = file.destroying;
 	temple.destructionClock = file.destructionClock;
 	temple.destructionBeamClock = file.destructionBeamClock;
+	temple.beamSource = EffectOfContainer(effects, file.beams);
+	temple.destructionBeamSource = EffectOfContainer(effects, file.destructionBeams);
+	temple.destructionGlow = EffectOfContainer(effects, file.destructionGlow);
+}
+
+/// Starts the effect of a particle container of the file from its saved state. The effect follows the thing of the
+/// file and keeps its turns left. Gives the number of the effect, none when no effect started.
+std::optional<uint32_t> StartContainer(const particle_import::ImportedContainer& container,
+                                       const std::unordered_map<uint32_t, entt::entity>& made)
+{
+	auto& effects = Locator::effectRequestSystem::value();
+	auto state = std::make_shared<particles::RestoredEffect>(container.effect.state);
+	// Each step of the game gives the effect the strength of its container
+	state->info.power = container.scale;
+	const auto origin = state->origin;
+	const auto handle = effects.Start({
+	    .type = container.effect.type,
+	    .position = origin,
+	    .synced = container.effect.synced,
+	    .turns = container.turns,
+	    .owner = EntityOf(made, container.follows),
+	    .drawPath = container.singleSort ? particles::draw::DrawPath::Queued : particles::draw::DrawPath::Sorted,
+	    .restored = std::move(state),
+	});
+	if (!effects.IsRunning(handle))
+	{
+		SPDLOG_LOGGER_WARN(ImportLog(), "The effect of the particle container {} of the file does not start", container.number);
+		return std::nullopt;
+	}
+	return handle;
+}
+
+/// Makes the particle containers of the file, the oldest first. A container of a temple heart is a part of the temple;
+/// each other container becomes a thing that holds its effect, as the things of the visuals that scripts start.
+std::unordered_map<uint32_t, uint32_t> PutContainers(const gamesave::VanillaWorld& world, ecs::Registry& registry,
+                                                     const std::vector<script_import::ImportedTemple>& temples,
+                                                     std::unordered_map<uint32_t, entt::entity>& made)
+{
+	std::unordered_map<uint32_t, uint32_t> effects;
+	if (!Locator::effectRequestSystem::has_value())
+	{
+		return effects;
+	}
+	std::unordered_set<uint32_t> hearts;
+	for (const auto& temple : temples)
+	{
+		hearts.insert({temple.beams, temple.destructionBeams, temple.destructionGlow});
+	}
+	// The game makes the flames of a bonfire as a particle container that follows it, and a load makes no new flames.
+	// A bonfire that the import made or kept loses the flames that it got as it was made; the containers of the file
+	// give the flames back from their saved state.
+	for (const auto& [number, entity] : made)
+	{
+		const auto* still = registry.TryGet<MobileStatic>(entity);
+		if (still != nullptr && still->type == MobileStaticInfo::Bonfire)
+		{
+			Locator::effectRequestSystem::value().RemoveOwnedBy(entity);
+		}
+	}
+	const auto read = particle_import::ReadContainers(world, [&made](uint32_t number) { return EntityOf(made, number); });
+	for (const auto& why : read.skipped)
+	{
+		SPDLOG_LOGGER_WARN(ImportLog(), "The import does not make the particle container {}", why);
+	}
+	for (const auto& container : read.containers)
+	{
+		const auto handle = StartContainer(container, made);
+		if (!handle.has_value())
+		{
+			continue;
+		}
+		effects.emplace(container.number, *handle);
+		if (!hearts.contains(container.number))
+		{
+			made.emplace(container.number,
+			             ecs::script_spot_visuals::MakeThing(registry, *handle, GroundPosition(container.position)));
+		}
+	}
+	return effects;
+}
+
+/// Makes the vortices of the file that draw things in, with the effect that draws things in from its saved state
+uint32_t PutVorticesIn(const gamesave::VanillaWorld& world, std::unordered_map<uint32_t, entt::entity>& made)
+{
+	if (!Locator::vortexSystem::has_value())
+	{
+		return 0;
+	}
+	const auto read = particle_import::ReadVorticesIn(world, [&made](uint32_t number) { return EntityOf(made, number); });
+	for (const auto& why : read.skipped)
+	{
+		SPDLOG_LOGGER_WARN(ImportLog(), "The import does not make the vortex {}", why);
+	}
+	uint32_t count = 0;
+	for (const auto& file : read.vortices)
+	{
+		const auto vortex = Locator::vortexSystem::value().Restore({
+		    .position = file.centre,
+		    .type = VortexType::In,
+		    .state = file.state,
+		    .altitude = file.altitude,
+		    .groundHeights = file.groundHeights,
+		    .groundAverage = file.groundAverage,
+		    .mover = file.mover.has_value() ? std::make_shared<particles::RestoredEffect>(file.mover->state) : nullptr,
+		    .crossing = file.crossing,
+		});
+		if (vortex != entt::null)
+		{
+			made.emplace(file.number, vortex);
+			++count;
+		}
+	}
+	return count;
 }
 
 /// The temple of a player, if the player has one
@@ -194,9 +321,12 @@ void SaveGameSystem::ImportVanillaScriptThings(const gamesave::VanillaWorld& wor
 		registry.Assign<InfluenceSource>(entity, ring.player, ring.radius, ring.anti, EntityOf(made, ring.follows));
 		made.emplace(ring.number, entity);
 	}
+	const auto temples = script_import::ReadTemples(world);
+	const auto containers = PutContainers(world, registry, temples, made);
+	const auto vortices = PutVorticesIn(world, made);
 	// The heart of a temple is a part of the temple of the land, and the temple takes the values of the heart
 	uint32_t hearts = 0;
-	for (const auto& file : script_import::ReadTemples(world))
+	for (const auto& file : temples)
 	{
 		const auto temple = TempleOf(registry, file.player);
 		if (!temple.has_value())
@@ -204,12 +334,14 @@ void SaveGameSystem::ImportVanillaScriptThings(const gamesave::VanillaWorld& wor
 			continue;
 		}
 		made.emplace(file.heart, *temple);
-		PutHeart(registry, *temple, file, made);
+		PutHeart(registry, *temple, file, made, containers);
 		++hearts;
 	}
 	SPDLOG_LOGGER_INFO(ImportLog(),
-	                   "Made {} markers, {} timers, {} highlights and {} influences of the scripts; {} temple hearts",
-	                   things.markers.size(), things.timers.size(), highlights, things.rings.size(), hearts);
+	                   "Made {} markers, {} timers, {} highlights and {} influences of the scripts; {} particle containers, {} "
+	                   "vortices and {} temple hearts",
+	                   things.markers.size(), things.timers.size(), highlights, things.rings.size(), containers.size(),
+	                   vortices, hearts);
 }
 
 void SaveGameSystem::ImportVanillaScripts(const gamesave::VanillaWorld& world, const VanillaMade& made)
