@@ -55,11 +55,18 @@
 
 using namespace openblack::audio;
 using openblack::debug::gui::DebugGuiInterface;
+using openblack::ecs::systems::AbodeSoundSystem;
 using openblack::ecs::systems::AdvisorVoiceSystem;
 using openblack::ecs::systems::CloudSystem;
+using openblack::ecs::systems::CreatureHairSystem;
+using openblack::ecs::systems::IncomingMessageSystem;
+using openblack::ecs::systems::LandShadeSystem;
 using openblack::ecs::systems::ParticleSystem;
+using openblack::ecs::systems::PauseTextSystem;
+using openblack::ecs::systems::RainSystem;
 using openblack::ecs::systems::RenderingSystem;
 using openblack::ecs::systems::RenderingSystemTemple;
+using openblack::ecs::systems::SnowfallSystem;
 using openblack::ecs::systems::TurnCheerSystem;
 using openblack::ecs::systems::VillageLightSystem;
 using openblack::graphics::RendererInterface;
