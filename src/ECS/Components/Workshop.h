@@ -44,7 +44,7 @@ struct Workshop
 	entt::entity woodPile {entt::null};
 	/// How much its flag shows that it wants wood, 0 to 1, from its last game turn (see workshop::WoodWant)
 	float woodWant {0.0f};
-	/// Its wood flag, made at its first game turn
+	/// Its wood flag, made with the workshop
 	entt::entity flag {entt::null};
 };
 
