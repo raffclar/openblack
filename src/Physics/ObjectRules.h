@@ -113,6 +113,8 @@ inline constexpr float k_RockHalfScale = 0.7935f;
 inline constexpr float k_RockHalfSpread = k_RockHalfScale;
 /// A flying rock's halves keep this share of its spin
 inline constexpr float k_RockHalfSpin = 0.5f;
+/// A piece that broke off a building has this size as a rock. Nothing changes it.
+inline constexpr float k_BuildingPieceScale = 1.0f;
 
 /// Tapping a rock to break it shows the player's creature how much fun the player is having, this much
 inline constexpr float k_TapEmpathy = 0.5f;

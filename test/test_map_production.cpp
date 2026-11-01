@@ -22,10 +22,12 @@
 #include "ECS/Components/MapCellResident.h"
 #include "ECS/Components/Mesh.h"
 #include "ECS/Components/Mobile.h"
+#include "ECS/Components/OneOffSpellSeed.h"
 #include "ECS/Components/Pot.h"
 #include "ECS/Components/ScriptHighlight.h"
 #include "ECS/Components/Shark.h"
 #include "ECS/Components/SpellIcon.h"
+#include "ECS/Components/SpellSeed.h"
 #include "ECS/Components/TeleportStone.h"
 #include "ECS/Components/Town.h"
 #include "ECS/Components/TownDesireFlag.h"
@@ -125,6 +127,36 @@ TEST_F(MapProductionFiling, AVillagerThatAScriptMakesIsOnTheMapBeforeTheScriptRe
 	map.Sync();
 	const auto inCell = map.GetAllInCell(map_coords::CellOf(glm::vec3(500.0f, 0.0f, 500.0f)));
 	EXPECT_EQ(std::ranges::count(inCell, villager), 1);
+}
+
+TEST_F(MapProductionFiling, AMiracleSeedIsNeverPutOnTheMap)
+{
+	// A miracle's seed, plain or out of a globe, never goes into the land's cells. Thus a script's search of the cells for
+	// a spell seed or a one-shot spell finds nothing, as in the game. A globe on the land is a thing of the cells.
+	auto& registry = Locator::entitiesRegistry::value();
+	auto& map = Locator::entitiesMap::value();
+	const glm::vec3 at {500.0f, 0.0f, 500.0f};
+	const auto plain = registry.Create();
+	registry.Assign<Transform>(plain, at, glm::mat3(1.0f), glm::vec3(1.0f));
+	registry.Assign<SpellSeed>(plain, SpellSeed {.seedType = SpellSeedType::Water});
+	const auto fromGlobe = registry.Create();
+	registry.Assign<Transform>(fromGlobe, at, glm::mat3(1.0f), glm::vec3(1.0f));
+	registry.Assign<SpellSeed>(fromGlobe, SpellSeed {.seedType = SpellSeedType::Heal, .fromGlobe = true});
+	const auto globe = registry.Create();
+	registry.Assign<Transform>(globe, at, glm::mat3(1.0f), glm::vec3(1.0f));
+	registry.Assign<OneOffSpellSeed>(globe, OneOffSpellSeed {.seedType = SpellSeedType::Heal});
+	map.Sync();
+	map.Refile(plain);
+	map.Refile(fromGlobe);
+	map.Refile(globe);
+	EXPECT_FALSE(MapProduction::KindOf(registry, plain).has_value());
+	EXPECT_FALSE(MapProduction::KindOf(registry, fromGlobe).has_value());
+	EXPECT_FALSE(registry.AllOf<MapCellResident>(plain));
+	EXPECT_FALSE(registry.AllOf<MapCellResident>(fromGlobe));
+	const auto inCell = map.GetAllInCell(map_coords::CellOf(at));
+	EXPECT_EQ(std::ranges::count(inCell, plain), 0);
+	EXPECT_EQ(std::ranges::count(inCell, fromGlobe), 0);
+	EXPECT_EQ(std::ranges::count(inCell, globe), 1);
 }
 
 TEST_F(MapProductionFiling, AStoneHandOfAVillageCentreIsNeverPutOnTheMap)

@@ -848,6 +848,9 @@ struct Command
 		/// creature); the hand gives what it holds to the creature, as the Action button pressed over it does
 		HandTake,
 		HandGive,
+		/// The player's hand uses what it holds on the scenario's object, as the Action button pressed over the object does.
+		/// The world does it at the turn. No creature is necessary.
+		HandApply,
 		/// A script swaps the minds of the creature and another (value, by its place in the scenario's creatures), as
 		/// "swap creature from A to B" does
 		SwapMinds,
@@ -1164,6 +1167,8 @@ struct Command
 	bool onTemple {false};
 	/// A script's action is done to the totem of the object, a town centre, in place of the object
 	bool onTotem {false};
+	/// A script's action is done to the piece of a building nearest to the creature, in place of the object
+	bool onPiece {false};
 	/// The leash put on
 	LeashType leash {LeashType::Rope};
 	/// The part of the body stroked, by its place in the hand's parts (the head first)
@@ -1555,6 +1560,11 @@ void AddCreatureLearningScenarios(std::vector<Scenario>& all);
 void AddCreatureExplorationScenarios(std::vector<Scenario>& all);
 /// Creature actions that Land 1 can start and that no other scenario stages, each told by a script
 void AddCreatureActionScenarios(std::vector<Scenario>& all);
+/// The casts that the creature's desires choose, each told by a script (called by AddCreatureActionScenarios)
+void AddCreatureActionCastScenarios(std::vector<Scenario>& all);
+/// The gifts to a town, throws, notices and villager actions that the creature's desires choose, each told by a script
+/// (called by AddCreatureActionScenarios)
+void AddCreatureActionTownScenarios(std::vector<Scenario>& all);
 /// The network map for 32 gods, with a citadel and a village in each slot
 void AddGodsRingMapScenarios(std::vector<Scenario>& all);
 /// The looks and the chant of a worship site: its ring of light, its need flags and its motes of prayer power

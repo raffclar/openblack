@@ -1026,7 +1026,7 @@ bool RenderingSystem::UploadInstances(bool drawBoundingBox)
 			    if (spells->freeze > 0.0f)
 			    {
 				    look.y = static_cast<float>(creature_spells::FrozenTint(spells->freeze));
-				    look.w = -spells->freeze;
+				    look.w = -static_cast<float>(creature_spells::IceAlpha(spells->freeze)) / 255.0f;
 			    }
 		    }
 

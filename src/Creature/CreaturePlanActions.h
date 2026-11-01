@@ -699,6 +699,10 @@ struct CastInfo
 };
 /// Whether an action casts a miracle
 [[nodiscard]] bool IsCast(const Executor& executor);
+/// Whether an action fishes first at the fish farm nearest to the creature: to eat, to give the fish to a store, to take
+/// the fish home or to put the fish by a worship site. This is the same when the creature chooses the action and when a
+/// script or the player tells it.
+[[nodiscard]] bool FishesFirst(const Executor& executor);
 /// Whether an action of the game's table, by its name there, needs a thing to use as well as the thing it acts on
 [[nodiscard]] bool NeedsThingToUse(std::string_view action);
 

@@ -35,10 +35,15 @@ using gamesave::VanillaWorld;
 constexpr std::array<uint8_t, 3> k_StillMoveStates = {0x00, 0x01, 0x04};
 /// The move state of a walk that steps straight through all that is in its way
 constexpr uint8_t k_StepThroughMoveState = 0x0B;
-/// The move states of a walk that goes straight to its goal: with no side to keep, clockwise and counterclockwise
-constexpr std::array<uint8_t, 3> k_LinearMoveStates = {0x0C, 0x0D, 0x0E};
-/// The circle that a walk heads for is "none in reach"
-constexpr uint8_t k_NoCircleInReach = 0xFF;
+/// The first and the last move state of a walk that keeps a circle: it goes straight, goes round a circle or goes out
+/// of a circle
+constexpr uint8_t k_FirstCircleMoveState = 0x0C;
+constexpr uint8_t k_LastCircleMoveState = 0x12;
+/// For a circle with no thing, the index of water or of the edge of the land
+constexpr int32_t k_LandscapeIndex = 1;
+/// The shift that changes whole map units to cells, and the metres along the side of a cell
+constexpr int32_t k_CellShift = 16;
+constexpr float k_CellMetres = 10.0f;
 
 /// The states of a fisherman that keep the fish farm, and the states of a farmer that keep the spot and the field
 constexpr std::array k_FishermanStates = {VillagerStates::FishermanArrivesAtFishing, VillagerStates::Fishing};
@@ -87,8 +92,18 @@ ImportedWalk WalkOf(const VanillaWorld& world, const VanillaRecord& record)
 		std::memcpy(&walk.stepAltitude, step.data() + 4, 4);
 		std::memcpy(&walk.stepZ, step.data() + 8, 4);
 	}
-	const auto turns = world.Byte(record, "hugTurnsToObject");
-	walk.hugsCircle = turns.has_value() && (*turns != k_NoCircleInReach || world.Ref(record, "hugObject").value_or(0) != 0);
+	if (const auto turns = world.Byte(record, "hugTurnsToObject"); turns.has_value())
+	{
+		ImportedCircle circle {.turnsToObject = *turns,
+		                       .entryDistance = world.Word(record, "hugEntryDistance").value_or(0),
+		                       .object = world.Ref(record, "hugObject").value_or(0),
+		                       .index = std::bit_cast<int32_t>(world.Word(record, "hugIndex").value_or(0))};
+		if (const auto coords = world.Raw(record, "hugCoords"); coords.size() == sizeof(gamesave::MapCoords))
+		{
+			std::memcpy(&circle.coords, coords.data(), sizeof(circle.coords));
+		}
+		walk.circle = circle;
+	}
 	return walk;
 }
 
@@ -434,13 +449,37 @@ bool CanKeepStateValues(uint8_t state)
 	return !gamesave::VillagerStateKeepsValues(state) || IsOneOf(state, k_FishermanStates) || IsOneOf(state, k_FarmerStates);
 }
 
-bool CanKeepWalk(uint8_t moveState, bool hugsCircle)
+bool CanKeepWalk(uint8_t moveState)
 {
-	if (std::ranges::find(k_StillMoveStates, moveState) != k_StillMoveStates.end() || moveState == k_StepThroughMoveState)
+	return std::ranges::find(k_StillMoveStates, moveState) != k_StillMoveStates.end() || moveState == k_StepThroughMoveState ||
+	       (moveState >= k_FirstCircleMoveState && moveState <= k_LastCircleMoveState);
+}
+
+CircleKind KindOf(const ImportedCircle& circle)
+{
+	if (circle.object != 0)
 	{
-		return true;
+		return CircleKind::Thing;
 	}
-	return std::ranges::find(k_LinearMoveStates, moveState) != k_LinearMoveStates.end() && !hugsCircle;
+	return circle.index == k_LandscapeIndex ? CircleKind::Landscape : CircleKind::None;
+}
+
+std::optional<size_t> CircleAfterLoad(size_t circles)
+{
+	if (circles == 0)
+	{
+		return std::nullopt;
+	}
+	return circles - 1;
+}
+
+wall_hug::BlockingCircle LandscapeCircleOf(const gamesave::MapCoords& coords)
+{
+	const glm::ivec2 cell {coords.x >> k_CellShift, coords.z >> k_CellShift};
+	return {.centre = (glm::vec2(cell) + 0.5f) * k_CellMetres,
+	        .radius = wall_hug::k_LandscapeBlockerRadius,
+	        .landscape = true,
+	        .landscapeOrFence = true};
 }
 
 std::optional<ImportedWork> WorkOf(uint8_t state, const std::vector<ImportedStateValue>& values)
@@ -477,9 +516,9 @@ std::array<uint8_t, 3> DecideAgain()
 	        static_cast<uint8_t>(VillagerStates::InvalidState)};
 }
 
-std::array<uint8_t, 3> StartStates(const std::array<uint8_t, 3>& states, uint8_t moveState, bool hugsCircle)
+std::array<uint8_t, 3> StartStates(const std::array<uint8_t, 3>& states, uint8_t moveState)
 {
-	if (!CanKeepWalk(moveState, hugsCircle) || !CanKeepStateValues(states[0]) || !CanKeepStateValues(states[1]))
+	if (!CanKeepWalk(moveState) || !CanKeepStateValues(states[0]) || !CanKeepStateValues(states[1]))
 	{
 		return DecideAgain();
 	}

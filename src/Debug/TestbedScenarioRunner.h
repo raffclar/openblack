@@ -258,6 +258,8 @@ private:
 	[[nodiscard]] std::optional<entt::entity> GlobeAt(size_t index) const;
 	/// The totem of a scenario's object, a town centre
 	[[nodiscard]] std::optional<entt::entity> TotemAt(size_t index) const;
+	/// The piece of a building nearest to a creature, none when no piece is about
+	[[nodiscard]] static std::optional<entt::entity> PieceNearest(entt::entity creature);
 	/// Builds the worship site of the town of a town centre at once
 	void BuildWorshipSiteOf(entt::entity centre) const;
 	void Log(std::string line);

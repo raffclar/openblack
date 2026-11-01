@@ -634,3 +634,25 @@ TEST(MagicFoundation, CreatureImpressiveValue)
 	inputs.curiousTownBelief = 4.0f;
 	EXPECT_FLOAT_EQ(magic::CreatureImpressiveValue(inputs), 2.0f * 0.5f * near * 4.0f * 2.0f);
 }
+
+// A creature's life below 0 after a fight: a small heal keeps it below 0, a heal stops at full life, and a harm more
+// than the life makes the life 0
+// NOLINTNEXTLINE(cppcoreguidelines-avoid-non-const-global-variables): external macro
+TEST(AreaEffect, ACreatureLifeBelowZeroTakesAHealAndAHarmAsACreature)
+{
+	EXPECT_EQ(magic::CreatureLifeAfterEffect(-0.5f, 0.25f, 0.0f), -0.25f);
+	EXPECT_EQ(magic::CreatureLifeAfterEffect(-0.5f, 0.0f, 0.0f), -0.5f);
+	EXPECT_EQ(magic::CreatureLifeAfterEffect(-0.5f, 2.0f, 0.0f), -0.5f + (1.0f - -0.5f));
+	EXPECT_EQ(magic::CreatureLifeAfterEffect(-0.5f, 0.0f, 0.1f), 0.0f);
+	EXPECT_EQ(magic::CreatureLifeAfterEffect(0.5f, 0.0f, 0.25f), 0.25f);
+	EXPECT_EQ(magic::CreatureLifeAfterEffect(0.5f, 0.75f, 0.25f), 0.75f);
+	// The effect on a creature receiver keeps its life below 0 where the effect takes no life
+	auto creature = Villager(static_cast<entt::entity>(1), {}, -0.5f);
+	creature.creature = true;
+	EffectValues heal;
+	heal[EffectKind::Heal] = 0.25f;
+	EXPECT_EQ(ApplyEffectTo(heal, creature, AlignmentTable(), 0.75f, 0.0f).lifeAfter, std::optional<float>(-0.25f));
+	// A villager keeps a life of 0 to 1
+	auto villager = Villager(static_cast<entt::entity>(1), {}, -0.5f);
+	EXPECT_EQ(ApplyEffectTo(heal, villager, AlignmentTable(), 0.75f, 0.0f).lifeAfter, std::optional<float>(0.0f));
+}

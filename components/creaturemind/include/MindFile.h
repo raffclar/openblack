@@ -237,9 +237,9 @@ struct MindFileData
 	std::optional<std::vector<uint8_t>> tattoo;
 	/// From version 29 on
 	std::optional<std::vector<MindLearningCount>> learningCounts;
-	/// From version 30 on, the scale its body is drawn at; from version 32 on another value; from version 33 on two
-	/// numbers
-	std::optional<float> drawnScale;
+	/// From version 30 on, the fight health of the creature, which stays as its last fight left it; from version 32 on
+	/// another value; from version 33 on two numbers
+	std::optional<float> fightHealth;
 	std::optional<float> unknown4;
 	std::optional<std::array<int32_t, 2>> unknown5;
 	/// Anything after the last section, kept so the file writes back the same

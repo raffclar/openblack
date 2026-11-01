@@ -11,6 +11,7 @@
 
 #include <cstdint>
 
+#include <optional>
 #include <unordered_map>
 #include <utility>
 #include <vector>
@@ -41,6 +42,7 @@ class TempleExteriorSystem final: public TempleExteriorSystemInterface
 {
 public:
 	void UpdateTurn() override;
+	void NoteSizeTarget(PlayerNames player, std::optional<float> share) override;
 	void FindAfterLoad() override;
 	void ForgetLand() override;
 

@@ -772,9 +772,20 @@ void BuildingDamageSystem::ProcessTurn()
 	});
 	for (const auto piece : expired)
 	{
-		world.EraseModel(registry.Get<BuildingPiece>(piece).drawMesh);
-		world.Remove(piece);
+		RemovePiece(piece);
 	}
+}
+
+void BuildingDamageSystem::RemovePiece(entt::entity piece)
+{
+	auto& world = *_world;
+	const auto* part = world.Entities().TryGet<const BuildingPiece>(piece);
+	if (part == nullptr)
+	{
+		return;
+	}
+	world.EraseModel(part->drawMesh);
+	world.Remove(piece);
 }
 
 void BuildingDamageSystem::RemakeModelsAfterLoad()

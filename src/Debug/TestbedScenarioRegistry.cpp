@@ -2226,6 +2226,32 @@ void AddTreePuzzle(std::vector<Scenario>& all)
 	                                      {.kind = ScriptArgument::Kind::Integer, .number = k_TreeKind},
 	                                      {.kind = ScriptArgument::Kind::Position, .point = k_Puzzle}}}},
 	});
+	all.push_back({
+	    .id = "story.tree_puzzle_deleted",
+	    .name = "A script deletes the second land's tree puzzle",
+	    .facet = Facet::Story,
+	    .description = "A script makes the second land's tree puzzle south of the middle. Four seconds later the script "
+	                   "deletes the puzzle game.",
+	    .expected = "The nine trees grow to full size and a lantern stands at each corner. At the delete, the nine trees "
+	                "and the four lanterns go at once. The mist over the spots and the bats over the middle stay.",
+	    .environment = {.dispenserGrid = false},
+	    .framing = {.shot = Shot::Placed,
+	                .eye = {k_Puzzle.x + 45.0f, 30.0f, k_Puzzle.y - 25.0f},
+	                .look = {k_Puzzle.x + 10.0f, 3.0f, k_Puzzle.y + 10.0f}},
+	    .commands = {{.kind = Kind::CallNative,
+	                  .delaySeconds = 0.5f,
+	                  .script = "CREATE_WITH_ANGLE_AND_SCALE",
+	                  .scriptArguments = {{.number = 0.0f},
+	                                      {.number = 1.0f},
+	                                      {.kind = ScriptArgument::Kind::Integer, .number = k_PuzzleObjectType},
+	                                      {.kind = ScriptArgument::Kind::Integer, .number = k_TreeKind},
+	                                      {.kind = ScriptArgument::Kind::Position, .point = k_Puzzle}}},
+	                 {.kind = Kind::CallNative,
+	                  .delaySeconds = 4.0f,
+	                  .script = "OBJECT_DELETE",
+	                  .scriptArguments = {{.kind = ScriptArgument::Kind::LastResult},
+	                                      {.kind = ScriptArgument::Kind::Integer, .number = 0.0f}}}},
+	});
 }
 
 void AddStory(std::vector<Scenario>& all)
@@ -2783,6 +2809,26 @@ void AddAppearance(std::vector<Scenario>& all)
 	                  .target = MiracleCast::Target::Creature,
 	                  .creature = 0,
 	                  .delaySeconds = 1.0f}},
+	});
+	// A frozen creature that fizzes: the ice goes over all of its body after the fizz, also where the body is gone
+	all.push_back({
+	    .id = "appearance.frozen_creature_fizzing",
+	    .name = "Frozen creature fizzing out of sight",
+	    .facet = Facet::Appearance,
+	    .description = "At noon, the clock stopped, a tiger stands on open land, seen from close by. After a second the "
+	                   "freeze spell is cast on it. When it is wholly frozen, a script fade fizzes it six tenths of the "
+	                   "way out of sight over three seconds.",
+	    .expected = "The tiger freezes to an icy blue with a sheen of ice. Then it fizzes through static. The sheen of ice "
+	                "stays over all of its body, also where the static has taken the body away: there the land behind "
+	                "shows through with the ice added over it.",
+	    .environment = {.hour = 12.0f, .clockRuns = false, .dispenserGrid = false},
+	    .framing = {.shot = Shot::Follow, .distance = 0.4f},
+	    .creatures = {Posed(CreatureType::Tiger, {0.0f, -90.0f}, 180.0f, "frozen tiger")},
+	    .miracles = {{.type = MagicType::CreatureSpellFreeze,
+	                  .target = MiracleCast::Target::Creature,
+	                  .creature = 0,
+	                  .delaySeconds = 1.0f}},
+	    .commands = {{.kind = Kind::SetFizz, .creature = 0, .delaySeconds = 5.5f, .value = 3000, .amount = 0.6f}},
 	});
 	// The land, a hut, trees and the sky as the lowest detail levels draw them, with textures of half the size
 	all.push_back({
@@ -5529,6 +5575,26 @@ void AddObjects(std::vector<Scenario>& all)
 	                {.type = PotInfo::MagicWood, .offset = {34.0f, 40.0f}, .amount = 1000},
 	                {.type = PotInfo::HandWood, .offset = {40.0f, 40.0f}},
 	                {.type = PotInfo::WoodPot, .offset = {46.0f, 40.0f}}},
+	});
+
+	// The hand holds a small pile of food over another on the land, and uses it on that pile
+	constexpr glm::vec2 k_PotOnLand {0.0f, 40.0f};
+	all.push_back({
+	    .id = "hand.pot_onto_pot",
+	    .name = "The hand puts a pot of food onto a pot of food",
+	    .facet = Facet::Hand,
+	    .description = "Two small piles of food such as the hand drops, 300 food each. The hand takes the west pile and "
+	                   "holds it over the east pile. Then the hand uses the pile that it holds on the east pile, as the "
+	                   "Action button pressed over it does.",
+	    .expected = "The pile in the hand goes. The east pile takes all of its food and becomes larger. No new pile "
+	                "comes on the land.",
+	    .environment = {.dispenserGrid = false},
+	    .framing = {.shot = Shot::Overview, .include = {{-20.0f, 30.0f}, {10.0f, 50.0f}}},
+	    .objects = {{.type = PotInfo::HandFood, .offset = k_PotOnLand + glm::vec2(-15.0f, 0.0f), .amount = 300},
+	                {.type = PotInfo::HandFood, .offset = k_PotOnLand, .amount = 300}},
+	    .commands = {{.kind = Kind::HandTake, .delaySeconds = 2.0f, .object = 0},
+	                 {.kind = Kind::HandApply, .delaySeconds = 3.0f, .object = 1}},
+	    .hand = HandHold {.offset = k_PotOnLand, .height = 6.0f},
 	});
 
 	all.push_back({
@@ -13119,6 +13185,49 @@ void AddWorkshopScenarios(std::vector<Scenario>& all)
 	});
 
 	all.push_back({
+	    .id = "objects.scaffold_script_active",
+	    .name = "A script sets a scaffold active, and the scaffold starts its building at once",
+	    .facet = Facet::Objects,
+	    .description = "The town, the scaffold and the camera of objects.scaffold_starts_building. After one second a "
+	                   "script sets the scaffold inactive. After one second more, the script sets the scaffold active.",
+	    .expected = "The first call does not change the scaffold. At the second call, a building site opens at the "
+	                "scaffold, with the phantom of the building that the town offers where the scaffold lies. No player "
+	                "put the scaffold down, so the planting sound does not play for the local player.",
+	    .environment = {.dispenserGrid = false},
+	    .framing = {.shot = Shot::Overview, .include = {k_LooseScaffold - glm::vec2 {10.0f}, k_BuildPlace + glm::vec2 {10.0f}}},
+	    .objects = {{.type = AbodeInfo::CelticTownCentre, .offset = {0.0f, 50.0f}},
+	                {.type = ScaffoldInfo::Normal, .offset = k_LooseScaffold, .scale = 0.7f}},
+	    .commands = {{.kind = Kind::CallNative,
+	                  .delaySeconds = 1.0f,
+	                  .script = "SET_ACTIVE",
+	                  .scriptArguments = {{.kind = ScriptArgument::Kind::Integer, .number = 0.0f},
+	                                      {.kind = ScriptArgument::Kind::Object, .index = 1}}},
+	                 {.kind = Kind::CallNative,
+	                  .delaySeconds = 1.0f,
+	                  .script = "SET_ACTIVE",
+	                  .scriptArguments = {{.kind = ScriptArgument::Kind::Integer, .number = 1.0f},
+	                                      {.kind = ScriptArgument::Kind::Object, .index = 1}}}},
+	});
+
+	all.push_back({
+	    .id = "objects.wood_poured_on_scaffold_site",
+	    .name = "The hand pours wood onto a scaffold on a site, and the site gets the wood",
+	    .facet = Facet::Objects,
+	    .description = "The town, the scaffold and the camera of objects.scaffold_starts_building. After one second the "
+	                   "scaffold starts the building that the town offers where it lies. After three seconds more, the "
+	                   "hand of the player pours 300 wood over the scaffold.",
+	    .expected = "A building site opens at the scaffold. The poured wood goes into the site, as into a store. No pile "
+	                "of wood stays on the ground at the scaffold. The inspector shows the wood of the site go up by the "
+	                "wood that the hand poured.",
+	    .environment = {.dispenserGrid = false},
+	    .framing = {.shot = Shot::Overview, .include = {k_LooseScaffold - glm::vec2 {10.0f}, k_BuildPlace + glm::vec2 {10.0f}}},
+	    .objects = {{.type = AbodeInfo::CelticTownCentre, .offset = {0.0f, 50.0f}},
+	                {.type = ScaffoldInfo::Normal, .offset = k_LooseScaffold, .scale = 0.7f}},
+	    .commands = {{.kind = Kind::ScaffoldStartsSite, .delaySeconds = 1.0f, .object = 1},
+	                 {.kind = Kind::HandPour, .delaySeconds = 3.0f, .point = k_LooseScaffold, .value = 300}},
+	});
+
+	all.push_back({
 	    .id = "objects.scaffold_founds_town",
 	    .name = "A scaffold put down away from every town founds a new town",
 	    .facet = Facet::Objects,
@@ -13522,8 +13631,8 @@ bool testbed_scenarios::NeedsNoCreature(Command::Kind kind)
 	       kind == Kind::SetOpenClose || kind == Kind::LayGateStone || kind == Kind::HandTapObject || kind == Kind::Advisor ||
 	       kind == Kind::RunText || kind == Kind::PlayHandDemo || kind == Kind::Reframe || kind == Kind::DestroyTemple ||
 	       kind == Kind::RunHelpMessage || kind == Kind::EndGuidanceWaits || kind == Kind::SetTownBeliefInRival ||
-	       kind == Kind::RecordChallenge || kind == Kind::EnterTemple || kind == Kind::HandTake || kind == Kind::RunScript ||
-	       kind == Kind::PlayBoatFilm || kind == Kind::HandPour || kind == Kind::HandRelease ||
+	       kind == Kind::RecordChallenge || kind == Kind::EnterTemple || kind == Kind::HandTake || kind == Kind::HandApply ||
+	       kind == Kind::RunScript || kind == Kind::PlayBoatFilm || kind == Kind::HandPour || kind == Kind::HandRelease ||
 	       kind == Kind::SetReportLatency || kind == Kind::RemoveObject || kind == Kind::ReadTip ||
 	       kind == Kind::LookAtTempleScroll || kind == Kind::HandGripTotem || kind == Kind::ProfileFolderCheck ||
 	       kind == Kind::PlayCustomMusic || kind == Kind::ShowCustomMusicControls || kind == Kind::OwnTattooPicture ||
@@ -13569,7 +13678,7 @@ std::string_view testbed_scenarios::Name(Shot shot)
 
 std::string_view testbed_scenarios::Name(Command::Kind kind)
 {
-	constexpr std::array<std::string_view, 205> k_Names {
+	constexpr std::array<std::string_view, 206> k_Names {
 	    "walk to",
 	    "run to",
 	    "follow",
@@ -13687,6 +13796,7 @@ std::string_view testbed_scenarios::Name(Command::Kind kind)
 	    "reframe",
 	    "hand take",
 	    "hand give",
+	    "hand apply",
 	    "swap minds",
 	    "record challenge",
 	    "enter temple",

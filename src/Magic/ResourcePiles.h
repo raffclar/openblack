@@ -109,6 +109,19 @@ inline constexpr float k_StoreReachMultiplier = 1.2f;
 /// A model's radius on the ground: the larger of its half width and half depth, scaled. A pile of food's shrinks with
 /// how much of it is raised.
 [[nodiscard]] float RadiusOnGround(glm::vec2 halfExtent, float scale);
+/// What takes a resource that is poured, of a thing in the map's cells
+enum class PourTaker : uint8_t
+{
+	None,
+	/// A store of the resource that is not a pot, as a storage pit or a building that goes up
+	Store,
+	/// A pot of the resource: a pile, or a pot that is not a pile, as a handful that the hand put down
+	Pot,
+};
+/// What a thing does with a poured resource. A pot is never a store here: the piles of a store take it as pots do.
+[[nodiscard]] PourTaker TakerOfPour(ResourceType poured, std::optional<ResourceType> potResource, bool storesIt);
+/// Whether the reach of a pot for a pour shrinks with how much of it is raised: only a pile of food rises
+[[nodiscard]] bool ReachFollowsRise(ResourceType poured, bool isPile);
 /// Whether a point poured at is within a store's or pile's reach: its radius on the ground times its multiplier, from
 /// the point it is measured from, across the land only
 [[nodiscard]] bool WithinReach(glm::vec2 at, glm::vec2 from, float radius, float multiplier);

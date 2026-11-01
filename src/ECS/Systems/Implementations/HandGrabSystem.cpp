@@ -1938,34 +1938,16 @@ void HandGrabSystem::ProcessHandTurn()
 	{
 		return;
 	}
-	if (!Exists(grab->lastPickedUp))
-	{
-		grab->lastPickedUp = entt::null;
-	}
-	if (!Exists(grab->lastDropped))
-	{
-		grab->lastDropped = entt::null;
-	}
 	if (!Holds(*grab))
 	{
 		return;
 	}
-	// What is no longer there leaves the hand
+	// A thing that went after the input of the turn leaves the hand
 	if (!Exists(grab->object))
 	{
 		EndScoop(*grab);
 		Empty(*grab);
 		return;
-	}
-	// A scoop goes on while its source is there, the hand is in its player's influence and the source gives more
-	if (grab->scoopSource != entt::null)
-	{
-		++grab->scoopTurns;
-		const auto hand = _world->ReportedHandPlace();
-		if (!Exists(grab->scoopSource) || !_world->InInfluence(_world->HandPlayer(), hand) || !Scoop(*grab))
-		{
-			EndScoop(*grab);
-		}
 	}
 	// The hold is asked again, as what is held may have changed
 	grab->hold = HoldOfObject(grab->object);
@@ -1975,6 +1957,41 @@ void HandGrabSystem::ProcessHandTurn()
 		_world->HeatHeld(grab->object);
 	}
 	_world->HeldTurn(grab->object);
+}
+
+void HandGrabSystem::LockTurn(PlayerNames player)
+{
+	// The turn acts with the hand of the god
+	const hand_grab::HandGrabWorldInterface::ActingPlayer acting(*_world, player);
+	auto* grab = Grab();
+	if (grab == nullptr)
+	{
+		return;
+	}
+	// The scoop continues while the hand holds its handful, the source is there, the hand is in its player's influence
+	// and the source gives more. The influence includes the share that the hand got in this turn.
+	if (grab->scoopSource != entt::null)
+	{
+		++grab->scoopTurns;
+		if (!Holds(*grab) || !Exists(grab->object) || !Exists(grab->scoopSource) ||
+		    !_world->InInfluence(_world->HandPlayer(), _world->ReportedHandPlace()) || !Scoop(*grab))
+		{
+			EndScoop(*grab);
+		}
+	}
+	if (!Exists(grab->lastPickedUp))
+	{
+		grab->lastPickedUp = entt::null;
+	}
+	if (!Exists(grab->lastDropped))
+	{
+		grab->lastDropped = entt::null;
+	}
+	// A held thing that is no longer there leaves the hand
+	if (Holds(*grab) && !Exists(grab->object))
+	{
+		Empty(*grab);
+	}
 }
 
 void HandGrabSystem::DoTwist(PlayerNames player, entt::entity object, glm::vec3 moved)

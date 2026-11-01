@@ -431,8 +431,9 @@ void Finish(entt::entity building)
 				Locator::wonderSystem::value().Built(building);
 			}
 		}
-		// A finished building of a town gets its footpath from the town's storage pit
-		if (registry.AllOf<Abode>(building) && TownOf(building).has_value() && Locator::footpathSystem::has_value())
+		// A finished building or miracle dispenser of a town gets its footpath from the town's storage pit
+		if (registry.AnyOf<Abode, SpellDispenser>(building) && TownOf(building).has_value() &&
+		    Locator::footpathSystem::has_value())
 		{
 			Locator::footpathSystem::value().BuildingWorking(building);
 		}
@@ -476,8 +477,9 @@ void Repaired(entt::entity building)
 	{
 		Locator::gameEndSystem::value().BuildingWorks(building);
 	}
-	// A repaired building of a town gets another footpath from the town's storage pit, as when it was first built
-	if (registry.AllOf<Abode>(building) && Locator::footpathSystem::has_value())
+	// A repaired building or miracle dispenser of a town gets another footpath from the town's storage pit, as when it
+	// was first built
+	if (registry.AnyOf<Abode, SpellDispenser>(building) && Locator::footpathSystem::has_value())
 	{
 		Locator::footpathSystem::value().BuildingWorking(building);
 	}

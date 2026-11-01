@@ -70,6 +70,7 @@
 #include "ECS/Systems/HandSystemInterface.h"
 #include "ECS/Systems/Implementations/ObjectMeasures.h"
 #include "ECS/Systems/Implementations/VillagerHome.h"
+#include "ECS/Systems/Implementations/VillagerPhysics.h"
 #include "ECS/Systems/ReactionSystemInterface.h"
 #include "ECS/Systems/ResourceStoreSystemInterface.h"
 #include "ECS/Systems/SoundTagSystemInterface.h"
@@ -1062,7 +1063,14 @@ void WorkshopSystem::Join(entt::entity held, entt::entity target, std::optional<
 	// The scaffold under the hand leaves its building site. It is not in the physics, because CanJoin refuses that.
 	LeaveSite(target);
 	// It becomes worth the two, and takes the offer of the held scaffold with the turn and the size of its phantom
-	registry.Get<Transform>(target).scale = glm::vec3(workshop::ScaleOfValue(heldValue + targetValue));
+	auto& targetScale = registry.Get<Transform>(target).scale;
+	const auto targetBefore = targetScale.x;
+	targetScale = glm::vec3(workshop::ScaleOfValue(heldValue + targetValue));
+	// A scaffold on the land that changes its size goes out of the map's cells and into them again at once
+	if (targetScale.x != targetBefore)
+	{
+		ecs::thing_map_place::Reinsert(target);
+	}
 	{
 		auto& phantom = registry.Get<Scaffold>(target).phantom;
 		phantom.shown = heldData.phantom.shown;
@@ -1148,7 +1156,14 @@ entt::entity WorkshopSystem::SplitOffRest(entt::entity scaffold)
 	{
 		return entt::null;
 	}
-	registry.Get<Transform>(scaffold).scale = glm::vec3(workshop::ScaleOfValue(value - *rest));
+	auto& scale = registry.Get<Transform>(scaffold).scale;
+	const auto before = scale.x;
+	scale = glm::vec3(workshop::ScaleOfValue(value - *rest));
+	// A scaffold in the map's cells that changes its size goes out of them and into them again at once
+	if (scale.x != before)
+	{
+		ecs::thing_map_place::Reinsert(scaffold);
+	}
 	registry.SetDirty();
 	if (const auto logger = spdlog::get("game"))
 	{
@@ -1374,12 +1389,13 @@ bool WorkshopSystem::BuildBuilding(entt::entity scaffold, std::optional<PlayerNa
 	}
 	const auto building = registry.Get<const Scaffold>(scaffold).site;
 	ecs::town_planning::DropPlansUnder(place, ecs::systems::object_measures::TwoDRadius(registry, building));
-	// The player who put the scaffold down hears the sound where the camera is. The other players hear it at the
-	// scaffold.
+	// The player whose hand let the scaffold go last hears the sound where the camera is. The other players hear it at
+	// the scaffold. This is also true when a script or a fire starts the site.
 	const auto sound = entt::hashed_string("InGame.sad/174").value();
+	const auto dropper = villager_physics::DropperOf(registry, scaffold);
 	const bool local =
-	    player.has_value() &&
-	    input::IsLocalPlayer(Locator::handSystem::has_value() ? &Locator::handSystem::value() : nullptr, *player);
+	    dropper.has_value() &&
+	    input::IsLocalPlayer(Locator::handSystem::has_value() ? &Locator::handSystem::value() : nullptr, *dropper);
 	if (local)
 	{
 		audio::PlayGameSoundEffect(sound, std::nullopt);
@@ -1618,7 +1634,7 @@ entt::entity WorkshopSystem::LeaveDestroyedSite(entt::entity building)
 	return first;
 }
 
-bool WorkshopSystem::ForceBuild(entt::entity scaffold, PlayerNames player)
+bool WorkshopSystem::ForceBuild(entt::entity scaffold, std::optional<PlayerNames> player)
 {
 	auto& registry = Entities();
 	if (!registry.Valid(scaffold) || !registry.AllOf<Scaffold, Transform>(scaffold) || !BuildBuilding(scaffold, player, true))

@@ -814,3 +814,23 @@ void PuzzleGameSystem::Forget(entt::entity puzzle)
 		}
 	}
 }
+
+bool PuzzleGameSystem::DeletePieces(entt::entity puzzle)
+{
+	auto& registry = Entities();
+	auto* game = puzzle != entt::null && registry.Valid(puzzle) ? registry.TryGet<PuzzleGame>(puzzle) : nullptr;
+	if (game == nullptr)
+	{
+		return false;
+	}
+	const auto pieces =
+	    ecs::puzzle_game::TakePiecesForDelete(*game, [&registry](entt::entity thing) { return registry.Valid(thing); });
+	for (const auto piece : pieces)
+	{
+		if (registry.Valid(piece))
+		{
+			world_objects::Remove(piece);
+		}
+	}
+	return true;
+}

@@ -234,3 +234,16 @@ TEST(ScriptWeather, AWeatherThingThatGoesEndsItsStormAtOnce)
 	// A weather thing that goes no longer follows the storm
 	EXPECT_EQ(weather::AfterTurn(!storm.dead, false), weather::ThingAfterTurn::Goes);
 }
+
+// A script reads the speed of a weather thing's storm, and 0 once the thing has lost its storm
+// NOLINTNEXTLINE(cppcoreguidelines-avoid-non-const-global-variables): external macro
+TEST(ScriptWeather, AWeatherThingGivesTheSpeedOfItsStorm)
+{
+	openblack::ecs::components::Storm storm {};
+	storm.speed = 2.5f;
+	EXPECT_EQ(openblack::ecs::script_weather::ThingSpeed(&storm), 2.5f);
+	// A storm that ended this turn still gives its speed until the thing loses it
+	storm.dead = true;
+	EXPECT_EQ(openblack::ecs::script_weather::ThingSpeed(&storm), 2.5f);
+	EXPECT_EQ(openblack::ecs::script_weather::ThingSpeed(nullptr), 0.0f);
+}

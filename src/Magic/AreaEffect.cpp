@@ -137,6 +137,25 @@ float magic::EffectAlignmentChange(const EffectValues& values, float burnDamage,
 	return total;
 }
 
+float magic::CreatureLifeAfterEffect(float before, float healed, float damaged)
+{
+	float life = before;
+	if (healed > 0.0f)
+	{
+		// The heal stops at full life. The gain is what full life lacks, added to the life.
+		const float gain = life + healed > 1.0f ? 1.0f - life : healed;
+		if (gain != 0.0f)
+		{
+			life = life + gain;
+		}
+	}
+	if (damaged > 0.0f)
+	{
+		life = life < damaged ? 0.0f : life - damaged;
+	}
+	return life;
+}
+
 EffectOutcome magic::ApplyEffectTo(const EffectValues& values, const EffectReceiver& receiver,
                                    std::span<const GAlignmentInfo> alignmentTable, float alignmentAddition,
                                    float casterAlignment)
@@ -150,8 +169,16 @@ EffectOutcome magic::ApplyEffectTo(const EffectValues& values, const EffectRecei
 	if (receiver.life.has_value())
 	{
 		const float before = *receiver.life;
-		float life = std::min(before + outcome.healed, 1.0f);
-		life = std::max(life - outcome.damaged, 0.0f);
+		float life = 0.0f;
+		if (receiver.creature)
+		{
+			life = CreatureLifeAfterEffect(before, outcome.healed, outcome.damaged);
+		}
+		else
+		{
+			life = std::min(before + outcome.healed, 1.0f);
+			life = std::max(life - outcome.damaged, 0.0f);
+		}
 		outcome.lifeAfter = life;
 		outcome.destroyed = life == 0.0f && before != 0.0f;
 		// Heat takes no life by itself: it heats what it reaches, which then burns. The alignment moves only when the heal

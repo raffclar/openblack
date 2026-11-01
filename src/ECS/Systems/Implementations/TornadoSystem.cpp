@@ -43,6 +43,9 @@
 #include "ECS/Systems/CreatureLocomotionSystemInterface.h"
 #include "ECS/Systems/LeashSystemInterface.h"
 #include "ECS/Systems/LivingActionSystemInterface.h"
+#include "ECS/Systems/ResourceStoreSystemInterface.h"
+#include "ECS/TornadoPileTake.h"
+#include "ECS/TownHomes.h"
 #include "ECS/WorldObjects.h"
 #include "InfoConstants.h"
 #include "Locator.h"
@@ -279,31 +282,31 @@ void TornadoSystem::CatchCreature(entt::entity creature)
 entt::entity TornadoSystem::TakeFromPile(entt::entity pile, uint32_t amount, float sizeShare)
 {
 	auto& registry = Locator::entitiesRegistry::value();
-	if (!registry.Valid(pile))
+	if (!registry.Valid(pile) || !Locator::resourceStoreSystem::has_value())
 	{
 		return entt::null;
 	}
-	auto* pot = registry.TryGet<Pot>(pile);
+	const auto* pot = registry.TryGet<const Pot>(pile);
 	const auto* transform = registry.TryGet<const Transform>(pile);
-	if (pot == nullptr || transform == nullptr)
-	{
-		return entt::null;
-	}
-	const auto* info = PotInfoOf(*pot);
-	const auto taken = std::min<uint32_t>(amount, pot->amount);
-	if (info == nullptr || taken == 0)
+	const auto* info = pot != nullptr ? PotInfoOf(*pot) : nullptr;
+	if (transform == nullptr || info == nullptr)
 	{
 		return entt::null;
 	}
 	const auto position = transform->position;
+	// The pot is in the town of the store that keeps the pile, and in no town when no store keeps the pile
+	auto& stores = Locator::resourceStoreSystem::value();
+	const auto store = stores.StoreOf(pile);
+	const auto town = store.has_value() ? town_homes::TownOfAbode(registry, *store) : entt::null;
 	// A pot such as the hand drops, of food or of wood
-	const auto type = info->resourceType == ResourceType::Wood ? PotInfo::HandWood : PotInfo::HandFood;
-	pot->amount -= taken;
-	if (pot->amount == 0)
+	const auto resource = info->resourceType;
+	const auto type = resource == ResourceType::Wood ? PotInfo::HandWood : PotInfo::HandFood;
+	const auto taken = tornado_pile::Take(stores, pile, resource, amount);
+	if (taken == 0)
 	{
-		registry.Destroy(pile);
+		return entt::null;
 	}
-	const auto made = archetypes::PotArchetype::Create(position, 0.0f, type, static_cast<int32_t>(taken));
+	const auto made = archetypes::PotArchetype::Create(position, 0.0f, type, static_cast<int32_t>(taken), town);
 	if (made != entt::null)
 	{
 		registry.Get<Transform>(made).scale *= sizeShare;

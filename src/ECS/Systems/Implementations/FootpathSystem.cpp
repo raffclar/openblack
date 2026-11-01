@@ -35,6 +35,7 @@
 #include "ECS/Components/Dance.h"
 #include "ECS/Components/Footpath.h"
 #include "ECS/Components/LivingAction.h"
+#include "ECS/Components/SpellDispenser.h"
 #include "ECS/Components/Town.h"
 #include "ECS/Components/Transform.h"
 #include "ECS/Components/WorshipSite.h"
@@ -123,7 +124,8 @@ public:
 			}
 			return PlaceOf(thing);
 		}
-		if (registry.AllOf<Abode>(thing))
+		// A miracle dispenser is reached at its door, as an abode
+		if (registry.AnyOf<Abode, SpellDispenser>(thing))
 		{
 			const auto* info = world_objects::AbodeInfoOf(thing);
 			const auto type = info != nullptr ? info->abodeType : AbodeType::General;
@@ -219,7 +221,12 @@ public:
 
 	[[nodiscard]] entt::entity TownOf(entt::entity building) const override
 	{
-		return town_homes::TownOfAbode(SharedRegistry(), building);
+		const auto& registry = SharedRegistry();
+		if (const auto* dispenser = registry.Valid(building) ? registry.TryGet<const SpellDispenser>(building) : nullptr)
+		{
+			return registry.Valid(dispenser->town) && registry.AllOf<Town>(dispenser->town) ? dispenser->town : entt::null;
+		}
+		return town_homes::TownOfAbode(registry, building);
 	}
 
 	[[nodiscard]] std::optional<entt::entity> StoragePitOf(entt::entity town) const override
@@ -607,7 +614,8 @@ std::optional<entt::entity> FootpathSystem::StandingStoragePit(entt::entity town
 void FootpathSystem::BuildingWorking(entt::entity building)
 {
 	auto& registry = _world->Entities();
-	if (!registry.Valid(building) || !registry.AllOf<Abode, Transform>(building))
+	// An abode or a miracle dispenser of a town starts to work
+	if (!registry.Valid(building) || !registry.AnyOf<Abode, SpellDispenser>(building) || !registry.AllOf<Transform>(building))
 	{
 		return;
 	}

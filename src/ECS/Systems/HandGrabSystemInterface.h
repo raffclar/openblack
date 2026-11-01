@@ -74,6 +74,10 @@ public:
 	virtual glm::vec3 UpdateFrame(const Frame& frame) = 0;
 	/// Each game turn: what it holds stays where the hand is for the game, and is dropped once it is gone
 	virtual void ProcessTurn() = 0;
+	/// Each game turn in the input of the players, for each god right after the share of influence of its hand: the scoop
+	/// of the god's hand continues or stops, the hand forgets the things that it last took and let go once they are gone,
+	/// and a held thing that is gone leaves the hand
+	virtual void LockTurn([[maybe_unused]] PlayerNames player) {}
 	/// At the start of each turn: what the hand holds is where the last report put the hand, at its own turn and size
 	virtual void PlaceHeldForTurn() {}
 	/// Each drawn frame of some game milliseconds: what the hands of the other players of a network game hold moves
