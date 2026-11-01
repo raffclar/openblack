@@ -158,6 +158,9 @@ struct Kept
 	uint32_t turns {0};
 	float energy {1.0f};
 	float exhaustion {0.0f};
+	float itchiness {0.0f};
+	float poo {0.0f};
+	float dehydration {0.0f};
 
 	bool operator==(const Kept&) const = default;
 };

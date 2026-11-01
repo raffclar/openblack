@@ -81,7 +81,10 @@ void openblack::ecs::reflection::RegisterFields_Values_creaturep(entt::meta_ctx&
 	    .Field<&openblack::creature_physiology::Kept::age>("age")
 	    .Field<&openblack::creature_physiology::Kept::turns>("turns")
 	    .Field<&openblack::creature_physiology::Kept::energy>("energy")
-	    .Field<&openblack::creature_physiology::Kept::exhaustion>("exhaustion");
+	    .Field<&openblack::creature_physiology::Kept::exhaustion>("exhaustion")
+	    .Field<&openblack::creature_physiology::Kept::itchiness>("itchiness")
+	    .Field<&openblack::creature_physiology::Kept::poo>("poo")
+	    .Field<&openblack::creature_physiology::Kept::dehydration>("dehydration");
 	Reflect<openblack::creature_physiology::Needs>(context, ValueOnly {})
 	    .Field<&openblack::creature_physiology::Needs::age>("age")
 	    .Field<&openblack::creature_physiology::Needs::turns>("turns")
