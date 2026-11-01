@@ -282,8 +282,8 @@ void TempleExteriorSystem::FinishMorphs(MadeBlends& made)
 	{
 		return;
 	}
-	// The work on the processor: the meshes of the blended shapes, and the copies of the shapes for the cache. Each job
-	// reads only its blended shape and writes only its own result.
+	// The work on the processor: the mesh of each blended shape one time, then a copy of the mesh and of the shape for
+	// each temple. Each job reads only the shapes and the meshes of the shapes, and writes only its own result.
 	struct Prepared
 	{
 		graphics::PreparedL3DMesh mesh;
@@ -291,9 +291,23 @@ void TempleExteriorSystem::FinishMorphs(MadeBlends& made)
 	};
 	const auto settings = graphics::L3DMesh::SettingsNow(graphics::ConfiguredUploads());
 	const auto count = made.loads.size();
+	// The shapes of the new meshes, in the order of their first temple, and the shape of each temple in that list
+	std::vector<size_t> shapes;
+	std::vector<size_t> shapeOf(count);
+	for (size_t i = 0; i < count; ++i)
+	{
+		const auto found = std::ranges::find(shapes, made.loads[i].shape);
+		shapeOf[i] = static_cast<size_t>(std::distance(shapes.begin(), found));
+		if (found == shapes.end())
+		{
+			shapes.push_back(made.loads[i].shape);
+		}
+	}
+	std::vector<graphics::PreparedL3DMesh> shapeMeshes(shapes.size());
 	std::vector<Prepared> prepared(count);
-	// Each job marks its result as ready when it ends, also when it stops with an exception
+	// Each copy is ready when its job ends. All of them stop when the work stops with an exception.
 	std::vector<bool> ready(count, false);
+	bool failed = false;
 	std::mutex readyMutex;
 	std::condition_variable readyChanged;
 	struct MarkReady
@@ -311,16 +325,30 @@ void TempleExteriorSystem::FinishMorphs(MadeBlends& made)
 		std::mutex& mutex;
 		std::condition_variable& changed;
 	};
-	// The threads take the jobs in the order of the temples. A thread of its own waits for them, so this thread can
-	// make the device objects of each mesh when it is ready.
+	// The threads take the copies in the order of the temples. A thread of its own gives them the jobs, so this thread
+	// can make the device objects of each mesh when it is ready.
 	auto& workers = Workers();
 	auto jobs = std::async(std::launch::async, [&]() {
-		workers.ForEach(count, [&](size_t index, size_t) {
-			const MarkReady mark {.ready = ready, .index = index, .mutex = readyMutex, .changed = readyChanged};
-			const auto& blended = made.shapes[made.loads[index].shape].second;
-			prepared[index].mesh = graphics::L3DMesh::Prepare(blended, settings);
-			prepared[index].copy = std::make_shared<l3d::L3DFile>(blended);
-		});
+		try
+		{
+			workers.ForEach(shapes.size(), [&](size_t index, size_t) {
+				shapeMeshes[index] = graphics::L3DMesh::Prepare(made.shapes[shapes[index]].second, settings);
+			});
+			workers.ForEach(count, [&](size_t index, size_t) {
+				const MarkReady mark {.ready = ready, .index = index, .mutex = readyMutex, .changed = readyChanged};
+				prepared[index].mesh = shapeMeshes[shapeOf[index]];
+				prepared[index].copy = std::make_shared<l3d::L3DFile>(made.shapes[made.loads[index].shape].second);
+			});
+		}
+		catch (...)
+		{
+			{
+				const std::scoped_lock lock(readyMutex);
+				failed = true;
+			}
+			readyChanged.notify_all();
+			throw;
+		}
 	});
 
 	// The objects on the graphics device, in the order of the temples
@@ -329,7 +357,11 @@ void TempleExteriorSystem::FinishMorphs(MadeBlends& made)
 	{
 		{
 			std::unique_lock lock(readyMutex);
-			readyChanged.wait(lock, [&ready, i]() { return ready[i]; });
+			readyChanged.wait(lock, [&ready, &failed, i]() { return ready[i] || failed; });
+			if (failed)
+			{
+				break;
+			}
 		}
 		const auto& load = made.loads[i];
 		meshes.Load(load.id, resources::L3DLoader::FromPreparedDynamicTag {}, load.name, std::move(prepared[i].mesh));
