@@ -138,6 +138,8 @@ private:
 		uint32_t fromTurn {0};
 		std::optional<uint64_t> toFrame;
 		std::optional<uint32_t> toTurn;
+		/// A land loaded during the step, which ended it there
+		bool endedByLoad {false};
 	};
 	[[nodiscard]] static Json ToJson(const StepRecord& step);
 

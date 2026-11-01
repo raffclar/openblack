@@ -871,6 +871,47 @@ TEST(InspectorRunControl, TheLastStepIsReportedWithItsFixedFrameTime)
 	EXPECT_EQ(Ask(inspector, R"({"query": "game.state"})")["last_step"]["fixed_ms"], 10);
 }
 
+// A land that loads during a step ends it there, because the turn count starts again from 0 in the new land
+TEST(InspectorRunControl, AStepEndsWhenALandLoadsDuringIt)
+{
+	FakeRunTarget target;
+	Inspector inspector;
+	auto provider = std::make_unique<GameProvider>(target);
+	auto* game = provider.get();
+	inspector.Add(std::move(provider));
+
+	target.turn = 17300;
+	target.paused = false;
+	const auto stepping = Ask(inspector, R"({"query": "game.step", "params": {"turns": 20}})");
+	EXPECT_EQ(stepping["stepping"]["until_turn"], 17320);
+	game->Frame();
+
+	// The next land loads and its turn count starts again
+	target.turn = 0;
+	game->Loaded();
+	EXPECT_TRUE(target.paused);
+	game->Frame();
+	const auto state = Ask(inspector, R"({"query": "game.state"})");
+	EXPECT_TRUE(state["stepping"].is_null());
+	EXPECT_EQ(state["last_step"]["done"], true);
+	EXPECT_EQ(state["last_step"]["ended_by_land_load"], true);
+	EXPECT_EQ(state["last_step"]["from_turn"], 17300);
+	EXPECT_EQ(state["last_step"]["to_turn"], 0);
+
+	// The game stays held: it does not run free to the old turn
+	for (int i = 0; i < 3; ++i)
+	{
+		game->Frame();
+		EXPECT_TRUE(target.paused);
+	}
+
+	// A step that ends on its own does not say a land loaded
+	Ask(inspector, R"({"query": "game.step", "params": {"frames": 1}})");
+	game->Frame();
+	game->Frame();
+	EXPECT_FALSE(Ask(inspector, R"({"query": "game.state"})")["last_step"].contains("ended_by_land_load"));
+}
+
 // game.seed reads the run's seed; given one, every random number starts again from it and the date is pinned
 TEST(InspectorRunControl, SeedStartsTheRunAgainFromASeed)
 {

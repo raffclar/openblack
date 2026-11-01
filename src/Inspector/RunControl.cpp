@@ -99,8 +99,9 @@ std::vector<QueryDescription> GameProvider::Describe() const
 	    state("resume", "Lets the game run, stopping any stepping; the state after"),
 	    state("step",
 	          "Runs the game for some frames or turns from the next frame, then pauses it; poll game.state until "
-	          "stepping is null. With fixed_ms each frame takes that long whatever the wall clock says, so that the "
-	          "same input gives the same frames",
+	          "stepping is null. A land that loads during the step ends it there: the game is paused at the start of "
+	          "the new land and game.state.last_step has ended_by_land_load true. With fixed_ms each frame takes that long "
+	          "whatever the wall clock says, so that the same input gives the same frames",
 	          {{.name = "frames", .type = "integer", .description = "Frames to run", .required = false},
 	           {.name = "turns", .type = "integer", .description = "Game turns to run (ten a second)", .required = false},
 	           {.name = "fixed_ms",
@@ -195,6 +196,10 @@ Json GameProvider::ToJson(const StepRecord& step)
 	    {"fixed_ms", optional(step.fixedMs)}, {"from_frame", step.fromFrame},     {"from_turn", step.fromTurn},
 	    {"to_frame", optional(step.toFrame)}, {"to_turn", optional(step.toTurn)}, {"done", step.toFrame.has_value()},
 	};
+	if (step.endedByLoad)
+	{
+		json["ended_by_land_load"] = true;
+	}
 	if (step.frames.has_value())
 	{
 		json["frames"] = *step.frames;
@@ -208,6 +213,17 @@ Json GameProvider::ToJson(const StepRecord& step)
 
 void GameProvider::Loaded()
 {
+	// A step ends at a land load: the turn count starts again from 0 in the new land, so a target turn of the old land
+	// would never come
+	if (_control.Stepping())
+	{
+		_control.Cancel();
+		_target.SetPaused(true);
+		if (_lastStep.has_value() && !_lastStep->toFrame.has_value())
+		{
+			_lastStep->endedByLoad = true;
+		}
+	}
 	if (_pauseOnLoad)
 	{
 		_control.Cancel();

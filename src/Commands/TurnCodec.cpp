@@ -227,6 +227,7 @@ void WriteAction(Writer& out, const Action& action)
 	               [&out](const SeedGesture& command) {
 		               out.Byte(static_cast<uint8_t>(command.kind));
 		               out.Byte(static_cast<uint8_t>(command.level));
+		               out.Entity(command.icon);
 	               },
 	               [&out](const HandPick& command) { out.Entity(command.object); },
 	               [&out](const HandClick& command) {
@@ -487,11 +488,12 @@ DecodeError ReadAction(Reader& in, Action& action)
 	{
 		const auto kind = in.Byte();
 		const auto level = static_cast<int8_t>(in.Byte());
+		const auto icon = in.Entity();
 		if (kind > static_cast<uint8_t>(SeedGesture::Kind::Shake))
 		{
 			return DecodeError::Value;
 		}
-		action = SeedGesture {.kind = static_cast<SeedGesture::Kind>(kind), .level = level};
+		action = SeedGesture {.kind = static_cast<SeedGesture::Kind>(kind), .level = level, .icon = icon};
 		return DecodeError::None;
 	}
 	case CommandTag::HandPick:
@@ -943,7 +945,7 @@ size_t SizeOf(const Action& action) noexcept
 	                   [](const FightCharge& /*command*/) { return size_t {4}; },
 	                   [](const CreatureReaction& /*command*/) { return k_Entity + 4 + 1 + 8; },
 	                   [](const HandClick& /*command*/) { return k_Entity + 2 + 4 + 4; },
-	                   [](const SeedGesture& /*command*/) { return size_t {2}; },
+	                   [](const SeedGesture& /*command*/) { return 2 + k_Entity; },
 	                   [](const PlayerLeft& /*command*/) { return size_t {0}; },
 	                   [](const HandPick& /*command*/) { return k_Entity; },
 	                   [](const PlayerJoined& /*command*/) { return size_t {0}; },

@@ -2425,7 +2425,7 @@
   "query": "game.resume"
  },
  {
-  "description": "Runs the game for some frames or turns from the next frame, then pauses it; poll game.state until stepping is null. With fixed_ms each frame takes that long whatever the wall clock says, so that the same input gives the same frames",
+  "description": "Runs the game for some frames or turns from the next frame, then pauses it; poll game.state until stepping is null. A land that loads during the step ends it there: the game is paused at the start of the new land and game.state.last_step has ended_by_land_load true. With fixed_ms each frame takes that long whatever the wall clock says, so that the same input gives the same frames",
   "kind": "object",
   "parameters": [
    {
