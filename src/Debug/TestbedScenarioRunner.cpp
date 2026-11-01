@@ -5956,7 +5956,7 @@ std::optional<glm::ivec2> Runner::BodyOnScreen(entt::entity creature, glm::vec2 
 	return glm::ivec2(glm::round(glm::vec2(screen)));
 }
 
-std::optional<glm::ivec2> Runner::AltarOnScreen(glm::vec2 size) const
+std::optional<glm::ivec2> Runner::AltarOnScreen(glm::vec2 size, bool foodPot) const
 {
 	auto& registry = Locator::entitiesRegistry::value();
 	const auto& towns = registry.Context().towns;
@@ -5967,12 +5967,14 @@ std::optional<glm::ivec2> Runner::AltarOnScreen(glm::vec2 size) const
 	}
 	const auto site = registry.Get<const ecs::components::Town>(found->second).worshipSite;
 	const auto* worship = registry.Valid(site) ? registry.TryGet<const ecs::components::WorshipSite>(site) : nullptr;
-	if (worship == nullptr || !registry.Valid(worship->altar))
+	const auto target = worship != nullptr ? (foodPot ? worship->foodPot : worship->altar) : entt::null;
+	if (!registry.Valid(target) || !registry.AllOf<ecs::components::Transform>(target))
 	{
 		return std::nullopt;
 	}
-	// The middle of the altar's foot: the line from the camera to it meets the altar's low top first
-	const auto& foot = registry.Get<const ecs::components::Transform>(worship->altar).position;
+	// The middle of the altar's foot: the line from the camera to it meets the altar's low top first. The food pot is
+	// low, so its middle is the place where it stands.
+	const auto& foot = registry.Get<const ecs::components::Transform>(target).position;
 	glm::vec3 screen;
 	if (!Locator::camera::value().ProjectWorldToScreen(foot, {0.0f, 0.0f, size.x, size.y}, screen))
 	{
@@ -6181,10 +6183,10 @@ std::string Runner::GivePointerCommand(const Command& command)
 	}
 	case Kind::PointerOnAltar:
 	{
-		const auto to = AltarOnScreen(size);
+		const auto to = AltarOnScreen(size, command.value == 1);
 		if (!to.has_value())
 		{
-			return "no altar on the screen";
+			return command.value == 1 ? "no food pot on the screen" : "no altar on the screen";
 		}
 		const auto moved = *to - pointer.position;
 		pointer.position = *to;
