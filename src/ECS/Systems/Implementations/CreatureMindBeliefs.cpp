@@ -617,13 +617,24 @@ bool CreatureMindSystem::CanSteal(entt::entity creature, entt::entity thing)
 	{
 		return false;
 	}
-	return creature_steal::IsStealable({
+	creature_steal::Facts facts {
 	    .toy = ecs::physics_classes::IsToy(registry, thing, Locator::infoConstants::value()),
 	    .scaffold = registry.AllOf<Scaffold>(thing),
 	    .oneShot = registry.AllOf<OneOffSpellSeed>(thing),
-	    .canPickUp = Locator::creatureObjectActionSystem::value().CanPickUp(creature, thing),
-	    .ownInfluence = Locator::influenceSystem::value().PlayerRawInfluence(body->owner, transform->position),
-	});
+	};
+	// Only a toy, a scaffold or a one-shot miracle that the creature can pick up can be stolen. The other facts are
+	// found only when they can change the answer, because the search of the influence costs much time.
+	if (!facts.toy && !facts.scaffold && !facts.oneShot)
+	{
+		return false;
+	}
+	facts.canPickUp = Locator::creatureObjectActionSystem::value().CanPickUp(creature, thing);
+	if (!facts.canPickUp)
+	{
+		return false;
+	}
+	facts.ownInfluence = Locator::influenceSystem::value().PlayerRawInfluence(body->owner, transform->position);
+	return creature_steal::IsStealable(facts);
 }
 
 std::optional<map_coords::MapCoords> CreatureMindSystem::BelievedPlace(const components::CreatureMindState& mind,

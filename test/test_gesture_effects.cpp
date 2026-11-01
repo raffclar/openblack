@@ -273,3 +273,33 @@ TEST_F(GestureEffects, TheChainFollowsTheGesturingHand)
 	}
 	EXPECT_EQ(effect->AtomCount(), 0u);
 }
+
+TEST(GestureTrail, APointAlongAPathWithRepeatedPointsIsOnTheFirstSegmentThatReachesIt)
+{
+	// Repeated points make segments of no length; the point is on the first segment whose end reaches the distance
+	const std::vector<glm::vec3> points {{0.0f, 0.0f, 0.0f},  {0.0f, 0.0f, 0.0f},  {10.0f, 0.0f, 0.0f}, {10.0f, 0.0f, 0.0f},
+	                                     {10.0f, 0.0f, 0.0f}, {10.0f, 5.0f, 0.0f}, {20.0f, 5.0f, 0.0f}, {20.0f, 5.0f, 0.0f}};
+	const TrailPath path(points);
+	std::vector<float> distances(points.size(), 0.0f);
+	for (size_t i = 1; i < points.size(); ++i)
+	{
+		distances[i] = glm::length(points[i] - points[i - 1]) + distances[i - 1];
+	}
+	for (int step = 0; step <= 400; ++step)
+	{
+		const float fraction = static_cast<float>(step) / 400.0f;
+		const float distance = fraction * distances.back();
+		size_t i = 0;
+		while (i + 2 < points.size() && distances[i + 1] < distance)
+		{
+			++i;
+		}
+		const float span = distances[i + 1] - distances[i];
+		const auto expected =
+		    span == 0.0f ? points[i] : (points[i + 1] - points[i]) * ((distance - distances[i]) / span) + points[i];
+		const auto actual = path.At(fraction);
+		EXPECT_EQ(actual.x, expected.x) << fraction;
+		EXPECT_EQ(actual.y, expected.y) << fraction;
+		EXPECT_EQ(actual.z, expected.z) << fraction;
+	}
+}
