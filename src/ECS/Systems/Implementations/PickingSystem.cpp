@@ -797,6 +797,7 @@ std::optional<screen_pick::MeshHit> PickingSystem::FeelModel(entt::entity object
 	}
 	const auto mesh = meshes.Handle(felt->first);
 	std::optional<screen_pick::MeshHit> nearest;
+	std::vector<glm::vec3> placed;
 	for (size_t s = 0; s < mesh->GetSubMeshes().size(); ++s)
 	{
 		// The submeshes of the nearest level of detail
@@ -804,7 +805,6 @@ std::optional<screen_pick::MeshHit> PickingSystem::FeelModel(entt::entity object
 		{
 			continue;
 		}
-		std::vector<glm::vec3> placed;
 		ecs::posed_model::Place(registry, object, *mesh, s, felt->second, placed);
 		const auto hit = screen_pick::NearestIntersection(placed, mesh->GetSubMeshes()[s]->GetBodyGeometry().indices, origin,
 		                                                  direction, false);

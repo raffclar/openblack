@@ -21,6 +21,7 @@
 #include <limits>
 #include <optional>
 #include <span>
+#include <utility>
 #include <vector>
 
 #include <bgfx/bgfx.h>
@@ -448,11 +449,25 @@ void Renderer::DrawIconSeeds(const DrawSceneDesc& desc) const
 	};
 	std::vector<Icon> icons;
 	const auto& info = Locator::infoConstants::value();
+	// The alignment of each player is found once for all of its icons
+	std::vector<std::pair<PlayerNames, float>> alignments;
+	const auto alignmentOf = [&alignments](PlayerNames player) {
+		if (!Locator::alignmentSystem::has_value() || player == PlayerNames::NEUTRAL)
+		{
+			return 0.0f;
+		}
+		if (const auto found = std::ranges::find(alignments, player, &std::pair<PlayerNames, float>::first);
+		    found != alignments.end())
+		{
+			return found->second;
+		}
+		const float alignment = Locator::alignmentSystem::value().GetPlayerAlignment(player);
+		alignments.emplace_back(player, alignment);
+		return alignment;
+	};
 	registry.Each<const IconSeed>([&](entt::entity icon, const IconSeed& shown) {
 		const auto player = ecs::world_objects::IconPlayer(registry, icon);
-		const float alignment = Locator::alignmentSystem::has_value() && player != PlayerNames::NEUTRAL
-		                            ? Locator::alignmentSystem::value().GetPlayerAlignment(player)
-		                            : 0.0f;
+		const float alignment = alignmentOf(player);
 		icons.push_back({.shown = &shown, .player = player, .alignment = alignment});
 		if (const auto model = magic::GetSeedModel(info, shown.seed, alignment); model.has_value())
 		{
