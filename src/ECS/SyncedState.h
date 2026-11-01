@@ -99,4 +99,22 @@ RowOrdersOf(const entt::registry& registry, const entt::meta_ctx& context, std::
 /// The checksum of a turn: the hash of the synced state, mixed with the synced seed and the count of synced draws
 [[nodiscard]] uint64_t Checksum(uint64_t stateHash, uint32_t seed, uint64_t draws);
 
+/// What the checksum of a turn must give in the turn itself
+struct ChecksumNeeds
+{
+	/// The frame lets the hash wait for its draw
+	bool besideDraw {false};
+	/// Tools: the checksum keeps the hash of each part
+	bool keepParts {false};
+	/// Tools: the checksum of this turn keeps a dump of rows
+	bool dumpThisTurn {false};
+	/// Tools: each checksum keeps the bytes of its rows
+	bool rowDump {false};
+	/// Tools: the system writes the world state after the checksum
+	bool worldStates {false};
+};
+
+/// The hash of the turn can wait for the draw of the frame: the frame lets it, and no tool needs the hash in the turn
+[[nodiscard]] bool HashCanWait(const ChecksumNeeds& needs);
+
 } // namespace openblack::synced_state

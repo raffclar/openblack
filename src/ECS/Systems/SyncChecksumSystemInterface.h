@@ -74,6 +74,21 @@ public:
 	/// function removes it.
 	virtual void SetTurnListener(std::function<void(const TurnChecksum&)> listener) = 0;
 	[[nodiscard]] virtual std::function<void(const TurnChecksum&)> GetTurnListener() const = 0;
+	/// A function that gets the hash of the synced world of each turn when the system finishes it. A tool that records
+	/// the turns uses it when the hash of a turn waits for the draw. An empty function removes it.
+	virtual void SetHashListener(std::function<void(uint32_t turn, const synced_state::Hash& hash)> listener) = 0;
+
+	/// The hash of the last turn of a frame can wait for the draw of the frame. Then the threads of the system hash the
+	/// world while the draw reads it, and the checksum is the same. Only a frame that changes no synced part of the world
+	/// after its turns can let the hash wait. A checksum that a tool needs in its turn does not wait.
+	virtual void SetHashBesideDraw(bool beside) = 0;
+	/// The hash of this turn waits for the draw: it has no checksum yet
+	[[nodiscard]] virtual bool HashWaits(uint32_t turn) const = 0;
+	/// Just before the draw reads the world: the threads start the hash that waits, if there is one
+	virtual void StartHashBesideDraw() = 0;
+	/// After the draw, and before anything changes the world: the hash that waits ends and makes its checksum. A hash that
+	/// did not start, the system makes at once. Without a hash that waits, nothing happens.
+	virtual void FinishHash() = 0;
 #if defined(OPENBLACK_DEVELOPER_TOOLS)
 	/// Tools: keep the bytes of each row of the synced world of the last turns, and write them to this file at a turn of
 	/// the settings and at a part (DumpPart). Returns false when the file does not open.

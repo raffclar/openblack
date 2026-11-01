@@ -5082,6 +5082,12 @@ Game::RunStart Game::StartRun() noexcept
 	_frameCount = 0;
 	_frameLoop = std::make_unique<FrameLoop>();
 	_frameLoop->startTicks = Locator::time::value().GetTicks();
+	// The hash of the checksum of the last turn of a frame waits for the draw, and the threads make it while the draw
+	// reads the world
+	if (Locator::syncChecksumSystem::has_value())
+	{
+		Locator::syncChecksumSystem::value().SetHashBesideDraw(true);
+	}
 	if (config.aiTimesEvery > 0 && Locator::computerPlayerSystem::has_value())
 	{
 		Locator::computerPlayerSystem::value().SetTimesReport(config.aiTimesEvery);
@@ -5209,6 +5215,8 @@ bool Game::RunFrame() noexcept
 	const auto turnBefore = Locator::time::has_value() ? std::optional(Locator::time::value().GetTurn()) : std::nullopt;
 	if (!Update())
 	{
+		// The game ends with this frame: the checksum of its last turn does not wait for a draw
+		Locator::syncChecksumSystem::value().FinishHash();
 		return false;
 	}
 	auto& config = Locator::config::value();
@@ -5266,8 +5274,14 @@ bool Game::RunFrame() noexcept
 			}
 			else
 			{
+				Locator::syncChecksumSystem::value().StartHashBesideDraw();
 				Locator::rendererInterface::value().DrawScene(drawDesc);
 			}
+		}
+		// The checksum of the turns of this frame is complete before anything changes the world again
+		{
+			auto section = profiler.BeginScoped(Profiler::Stage::SyncChecksum);
+			Locator::syncChecksumSystem::value().FinishHash();
 		}
 
 		ResolveScreenShapes();
