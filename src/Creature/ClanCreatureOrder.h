@@ -16,6 +16,7 @@
 #include <span>
 #include <string>
 #include <string_view>
+#include <vector>
 
 /// The order to make a new clan creature. Before the first game of a clan, the clan has no creature. The start data of
 /// the god that plays for the clan then holds the text "CLANCREATECREATURE", two digits that give the row of the creature
@@ -47,5 +48,9 @@ struct Order
 /// The order in the start data of a god, or none when the data does not start with the text of the order. The name is
 /// the text after the two digits, up to the first zero byte or the end of the data, in code page 1252.
 [[nodiscard]] std::optional<Order> Read(std::span<const uint8_t> data);
+
+/// The start data of the order: the text, the row in two digits, the name in code page 1252 and a zero byte. None when
+/// the row does not fit in two digits.
+[[nodiscard]] std::optional<std::vector<uint8_t>> Write(const Order& order);
 
 } // namespace openblack::clan_creature_order

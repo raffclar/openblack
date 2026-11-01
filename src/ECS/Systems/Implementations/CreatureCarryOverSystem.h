@@ -53,6 +53,7 @@ public:
 
 	void KeepPlayersCreature() override;
 	void KeepCreature(entt::entity creature) override;
+	[[nodiscard]] std::optional<std::vector<uint8_t>> CreatureFile(entt::entity creature) const override;
 	void Keep(std::shared_ptr<const creaturemind::MindFileData> file) override;
 	[[nodiscard]] std::shared_ptr<const creaturemind::MindFileData> Kept() const override;
 	[[nodiscard]] std::shared_ptr<const creaturemind::MindFileData> KeptOrRead() override;
