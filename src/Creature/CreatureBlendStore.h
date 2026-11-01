@@ -13,9 +13,11 @@
 #include <cstdint>
 
 #include <functional>
+#include <future>
 #include <optional>
 #include <span>
 #include <unordered_map>
+#include <vector>
 
 #include "3D/SkeletalAnimation.h"
 #include "Creature/CreatureMorph.h"
@@ -128,5 +130,28 @@ void Prepare(Stores& stores, std::span<const Wanted> wanted, WorkerPool& workers
 
 /// The stores forget each blend that no turn took during two counts of shapes
 void ForgetOld(Stores& stores, uint32_t shaping);
+
+/// A Prepare that runs on its own thread while the turn does other steps. Between Start and Finish, only the job uses
+/// the stores and the threads: the caller must call Finish before it reads or changes the stores. The job writes the
+/// same blends in the same stores as a Prepare on the calling thread.
+class BackgroundPrepare
+{
+public:
+	BackgroundPrepare() = default;
+	BackgroundPrepare(const BackgroundPrepare&) = delete;
+	BackgroundPrepare& operator=(const BackgroundPrepare&) = delete;
+	/// Waits for the job, so that it does not use stores or threads that go
+	~BackgroundPrepare();
+
+	/// Starts a Prepare of the wanted blends. A job that runs already finishes first.
+	void Start(Stores& stores, std::vector<Wanted> wanted, WorkerPool& workers, uint32_t shaping);
+	/// Waits until the job wrote its blends in the stores. It does nothing when no job runs.
+	void Finish();
+	/// True from Start until Finish
+	[[nodiscard]] bool Running() const { return _job.valid(); }
+
+private:
+	std::future<void> _job;
+};
 
 } // namespace openblack::creature_blends

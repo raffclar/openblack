@@ -92,6 +92,9 @@ enum class Step : uint8_t
 	/// The things that the frames draw between their last two turns stand at the place of the last turn
 	DrawnPlaces,
 	PlayerCommands,
+	/// The shared threads start to make the first blends of the creatures with no pose yet, in the background. The world
+	/// does not change.
+	CreatureFirstBlends,
 	HandStillness,
 	/// For each god: the influence that the god's hand keeps past the border of the god's influence, then the scoop of the
 	/// hand with that influence
@@ -265,6 +268,9 @@ inline constexpr std::array k_Turn = std::to_array<Place>({
     // The commands that the players sent come first in the turn, in the order that they went, before the hand does its
     // own work of the turn
     {.step = Step::PlayerCommands, .stage = Stage::Input},
+    // The commands can make creatures. The threads make the blends of their first poses while the next steps play, and
+    // the first step that uses the blends waits for them.
+    {.step = Step::CreatureFirstBlends, .stage = std::nullopt},
     // The hand's count of the turns that it stays still is part of the player's input
     {.step = Step::HandStillness, .stage = Stage::Input},
     // After the stillness of each hand, the influence that the hand keeps past the border and the scoop of the hand, god
