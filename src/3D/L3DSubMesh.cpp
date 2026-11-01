@@ -415,8 +415,11 @@ void L3DSubMesh::Finish(Prepared prepared) noexcept
 	// The mesh owns its buffers from here on
 	_mesh = std::make_unique<graphics::Mesh>(vertexBuffer.release(), indexBuffer.release());
 
-	SPDLOG_LOGGER_DEBUG(spdlog::get("game"), "{} submesh {} with {} verts and {} indices", _l3dMesh.GetDebugName(),
-	                    _data.meshIndex, vertexCount, indices.size());
+	if (const auto logger = spdlog::get("game"); logger != nullptr)
+	{
+		SPDLOG_LOGGER_DEBUG(logger, "{} submesh {} with {} verts and {} indices", _l3dMesh.GetDebugName(), _data.meshIndex,
+		                    vertexCount, indices.size());
+	}
 }
 
 bool L3DSubMesh::LoadMade(std::span<const MadePrimitive> primitives) noexcept
