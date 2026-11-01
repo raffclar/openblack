@@ -391,6 +391,31 @@ TEST(GameClock, TheTempleHoldStopsTheClockAtOnceAndKeepsThePause)
 	EXPECT_EQ(clock.time.GetTurn(), 2);
 }
 
+// A tap on the temple's entrance holds the clock in its turn. The frame of that turn steps with no game time, and no turn
+// plays after the tap's turn.
+TEST(GameClock, AHoldInATurnStopsTheFrameTimeAndTheTurnsAfterIt)
+{
+	Clock clock;
+	clock.time.StartGameClock(false);
+	clock.Frame();
+	clock.now += 150;
+	ASSERT_TRUE(clock.time.IsTurnDue());
+	clock.time.StartTurn();
+	EXPECT_EQ(clock.time.GetTurn(), 2);
+	clock.time.SetHeld(true);
+	EXPECT_FALSE(clock.time.IsTurnDue());
+	clock.time.UpdateFrame();
+	EXPECT_EQ(clock.time.GetFrameGameTime().count(), 0);
+	// The time for more turns goes by, but no turn plays while the hold stays
+	for (int i = 0; i < 10; ++i)
+	{
+		clock.now += 100;
+		EXPECT_FALSE(clock.Frame());
+	}
+	EXPECT_EQ(clock.time.GetTurn(), 2);
+	EXPECT_EQ(clock.time.GetFrameGameTime().count(), 0);
+}
+
 TEST(GameClock, ASavedGameResumesAtItsTurnWithTheTimePastIt)
 {
 	Clock clock;

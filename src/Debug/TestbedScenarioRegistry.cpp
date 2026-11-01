@@ -5293,6 +5293,24 @@ void AddAudio(std::vector<Scenario>& all)
 	                 {.kind = Kind::EnterTemple, .delaySeconds = 5.0f, .value = 3}},
 	});
 
+	all.push_back({
+	    .id = "temple.tap_entry",
+	    .name = "The hand's tap on the temple's entrance stops the world in its turn",
+	    .facet = Facet::Story,
+	    .description = "A script holds the dialogue with the cinema bars and shows two texts of the first lesson. The "
+	                   "player's temple stands in the middle of the land. Then the player's hand taps the temple's "
+	                   "entrance. Push Escape to leave the temple.",
+	    .expected = "The game turn of the tap stops the help, sends the advisors home, closes the dialogue box and stops "
+	                "the world, so no more turns play. The player goes into the temple's main room after the next drawn "
+	                "frame. When the player leaves, the box shows its last texts again.",
+	    .environment = {.temple = glm::vec2(0.0f)},
+	    .framing = {.shot = Shot::Overview},
+	    .commands = {{.kind = Kind::WideScreen, .delaySeconds = 0.5f, .value = 1},
+	                 {.kind = Kind::RunText, .delaySeconds = 0.5f, .value = 5128},
+	                 {.kind = Kind::RunText, .delaySeconds = 1.0f, .value = 5129},
+	                 {.kind = Kind::TapTempleEntrance, .delaySeconds = 5.0f}},
+	});
+
 	// The camera looks out across the north edge of the player's influence: the bottom of the screen is inside it,
 	// the middle and the top beyond it
 	all.push_back({
@@ -13914,16 +13932,16 @@ bool testbed_scenarios::NeedsNoCreature(Command::Kind kind)
 	       kind == Kind::PlayFallingSpellFilm || kind == Kind::PlayIntroFilm || kind == Kind::SayLine ||
 	       kind == Kind::PlayGuidanceVoice || kind == Kind::ScriptRelease || kind == Kind::FillSiteIcons ||
 	       kind == Kind::ChargeIconWithSeedHeld || kind == Kind::TakeIconSeed || kind == Kind::TapSiteIcon ||
-	       kind == Kind::FinishBuilding || kind == Kind::FillBuiltAmount || kind == Kind::ScaffoldStartsSite ||
-	       kind == Kind::DestroyScaffoldSite || kind == Kind::CallNative || kind == Kind::PauseGame ||
-	       kind == Kind::SetGameSpeed || kind == Kind::RemoveTeleportStone || kind == Kind::MakeDance ||
-	       kind == Kind::OpenMultiplayerBox || kind == Kind::BuildWorshipSites || kind == Kind::PressPlainKey ||
-	       kind == Kind::PlainKeyDown || kind == Kind::PlainKeyRepeat || kind == Kind::PlainKeyUp ||
-	       kind == Kind::OtherGodHand || kind == Kind::OwnGod || kind == Kind::JoinOnline || kind == Kind::EndBox ||
-	       kind == Kind::BringCreature || kind == Kind::TattooEditorAsNetworkGame || kind == Kind::ShowDemoPing ||
-	       kind == Kind::AddIncomingMessage || kind == Kind::Chat || kind == Kind::ComputerPersonality ||
-	       kind == Kind::ComputerUntaughtSends || kind == Kind::SkirmishBox || kind == Kind::LookAtSaveGamePicture ||
-	       IsPointerCommand(kind);
+	       kind == Kind::TapTempleEntrance || kind == Kind::FinishBuilding || kind == Kind::FillBuiltAmount ||
+	       kind == Kind::ScaffoldStartsSite || kind == Kind::DestroyScaffoldSite || kind == Kind::CallNative ||
+	       kind == Kind::PauseGame || kind == Kind::SetGameSpeed || kind == Kind::RemoveTeleportStone ||
+	       kind == Kind::MakeDance || kind == Kind::OpenMultiplayerBox || kind == Kind::BuildWorshipSites ||
+	       kind == Kind::PressPlainKey || kind == Kind::PlainKeyDown || kind == Kind::PlainKeyRepeat ||
+	       kind == Kind::PlainKeyUp || kind == Kind::OtherGodHand || kind == Kind::OwnGod || kind == Kind::JoinOnline ||
+	       kind == Kind::EndBox || kind == Kind::BringCreature || kind == Kind::TattooEditorAsNetworkGame ||
+	       kind == Kind::ShowDemoPing || kind == Kind::AddIncomingMessage || kind == Kind::Chat ||
+	       kind == Kind::ComputerPersonality || kind == Kind::ComputerUntaughtSends || kind == Kind::SkirmishBox ||
+	       kind == Kind::LookAtSaveGamePicture || IsPointerCommand(kind);
 }
 
 std::string_view testbed_scenarios::Name(Facet facet)
@@ -13951,7 +13969,7 @@ std::string_view testbed_scenarios::Name(Shot shot)
 
 std::string_view testbed_scenarios::Name(Command::Kind kind)
 {
-	constexpr std::array<std::string_view, 209> k_Names {
+	constexpr std::array<std::string_view, 210> k_Names {
 	    "walk to",
 	    "run to",
 	    "follow",
@@ -14161,6 +14179,7 @@ std::string_view testbed_scenarios::Name(Command::Kind kind)
 	    "take a seed from its icon",
 	    "tap a worship site icon",
 	    "change the body's look",
+	    "tap the temple's entrance",
 	};
 	return k_Names.at(static_cast<size_t>(kind));
 }
