@@ -3416,6 +3416,24 @@ void AddLight(std::vector<Scenario>& all)
 	});
 
 	all.push_back({
+	    .id = "light.snow_by_face",
+	    .name = "Snow on the faces of trees and fences",
+	    .facet = Facet::Light,
+	    .description = "Deep snow lies over the whole island. Two trees and two fences stand on the land near the camera. "
+	                   "A rock stands between them.",
+	    .expected = "In about four seconds the snow shows on the trees and the fences. Each face of a tree or a fence "
+	                "shows its snow as one flat area, with a sharp edge to the next face. The faces that point up show "
+	                "the most snow. The rock shows its snow with soft changes across its faces.",
+	    .environment = {.hour = 12.0f, .clockRuns = false, .dispenserGrid = false, .snowDepth = 200.0f},
+	    .framing = {.shot = Shot::Placed, .eye = {0.0f, 8.0f, -14.0f}, .look = {0.0f, 2.0f, 8.0f}},
+	    .objects = {{.type = TreeInfo::Conifer, .offset = {-6.0f, 12.0f}, .scale = 1.5f},
+	                {.type = TreeInfo::Oak, .offset = {7.0f, 14.0f}},
+	                {.type = MobileStaticInfo::CeltFenceShort, .offset = {-3.0f, 4.0f}},
+	                {.type = MobileStaticInfo::CeltFenceTall, .offset = {3.0f, 5.0f}},
+	                {.type = MobileStaticInfo::Rock, .offset = {0.0f, 8.0f}}},
+	});
+
+	all.push_back({
 	    .id = "light.snow_on_carried_things",
 	    .name = "Snow on villagers, not on what they carry",
 	    .facet = Facet::Light,
@@ -5504,6 +5522,26 @@ void AddObjects(std::vector<Scenario>& all)
 	                {.type = PotInfo::MagicWood, .offset = {34.0f, 40.0f}, .amount = 1000},
 	                {.type = PotInfo::HandWood, .offset = {40.0f, 40.0f}},
 	                {.type = PotInfo::WoodPot, .offset = {46.0f, 40.0f}}},
+	});
+
+	// The hand holds a small pile of food over another on the land, and uses it on that pile
+	constexpr glm::vec2 k_PotOnLand {0.0f, 40.0f};
+	all.push_back({
+	    .id = "hand.pot_onto_pot",
+	    .name = "The hand puts a pot of food onto a pot of food",
+	    .facet = Facet::Hand,
+	    .description = "Two small piles of food such as the hand drops, 300 food each. The hand takes the west pile and "
+	                   "holds it over the east pile. Then the hand uses the pile that it holds on the east pile, as the "
+	                   "Action button pressed over it does.",
+	    .expected = "The pile in the hand goes. The east pile takes all of its food and becomes larger. No new pile "
+	                "comes on the land.",
+	    .environment = {.dispenserGrid = false},
+	    .framing = {.shot = Shot::Overview, .include = {{-20.0f, 30.0f}, {10.0f, 50.0f}}},
+	    .objects = {{.type = PotInfo::HandFood, .offset = k_PotOnLand + glm::vec2(-15.0f, 0.0f), .amount = 300},
+	                {.type = PotInfo::HandFood, .offset = k_PotOnLand, .amount = 300}},
+	    .commands = {{.kind = Kind::HandTake, .delaySeconds = 2.0f, .object = 0},
+	                 {.kind = Kind::HandApply, .delaySeconds = 3.0f, .object = 1}},
+	    .hand = HandHold {.offset = k_PotOnLand, .height = 6.0f},
 	});
 
 	all.push_back({
@@ -13094,6 +13132,49 @@ void AddWorkshopScenarios(std::vector<Scenario>& all)
 	});
 
 	all.push_back({
+	    .id = "objects.scaffold_script_active",
+	    .name = "A script sets a scaffold active, and the scaffold starts its building at once",
+	    .facet = Facet::Objects,
+	    .description = "The town, the scaffold and the camera of objects.scaffold_starts_building. After one second a "
+	                   "script sets the scaffold inactive. After one second more, the script sets the scaffold active.",
+	    .expected = "The first call does not change the scaffold. At the second call, a building site opens at the "
+	                "scaffold, with the phantom of the building that the town offers where the scaffold lies. No player "
+	                "put the scaffold down, so the planting sound does not play for the local player.",
+	    .environment = {.dispenserGrid = false},
+	    .framing = {.shot = Shot::Overview, .include = {k_LooseScaffold - glm::vec2 {10.0f}, k_BuildPlace + glm::vec2 {10.0f}}},
+	    .objects = {{.type = AbodeInfo::CelticTownCentre, .offset = {0.0f, 50.0f}},
+	                {.type = ScaffoldInfo::Normal, .offset = k_LooseScaffold, .scale = 0.7f}},
+	    .commands = {{.kind = Kind::CallNative,
+	                  .delaySeconds = 1.0f,
+	                  .script = "SET_ACTIVE",
+	                  .scriptArguments = {{.kind = ScriptArgument::Kind::Integer, .number = 0.0f},
+	                                      {.kind = ScriptArgument::Kind::Object, .index = 1}}},
+	                 {.kind = Kind::CallNative,
+	                  .delaySeconds = 1.0f,
+	                  .script = "SET_ACTIVE",
+	                  .scriptArguments = {{.kind = ScriptArgument::Kind::Integer, .number = 1.0f},
+	                                      {.kind = ScriptArgument::Kind::Object, .index = 1}}}},
+	});
+
+	all.push_back({
+	    .id = "objects.wood_poured_on_scaffold_site",
+	    .name = "The hand pours wood onto a scaffold on a site, and the site gets the wood",
+	    .facet = Facet::Objects,
+	    .description = "The town, the scaffold and the camera of objects.scaffold_starts_building. After one second the "
+	                   "scaffold starts the building that the town offers where it lies. After three seconds more, the "
+	                   "hand of the player pours 300 wood over the scaffold.",
+	    .expected = "A building site opens at the scaffold. The poured wood goes into the site, as into a store. No pile "
+	                "of wood stays on the ground at the scaffold. The inspector shows the wood of the site go up by the "
+	                "wood that the hand poured.",
+	    .environment = {.dispenserGrid = false},
+	    .framing = {.shot = Shot::Overview, .include = {k_LooseScaffold - glm::vec2 {10.0f}, k_BuildPlace + glm::vec2 {10.0f}}},
+	    .objects = {{.type = AbodeInfo::CelticTownCentre, .offset = {0.0f, 50.0f}},
+	                {.type = ScaffoldInfo::Normal, .offset = k_LooseScaffold, .scale = 0.7f}},
+	    .commands = {{.kind = Kind::ScaffoldStartsSite, .delaySeconds = 1.0f, .object = 1},
+	                 {.kind = Kind::HandPour, .delaySeconds = 3.0f, .point = k_LooseScaffold, .value = 300}},
+	});
+
+	all.push_back({
 	    .id = "objects.scaffold_founds_town",
 	    .name = "A scaffold put down away from every town founds a new town",
 	    .facet = Facet::Objects,
@@ -13497,8 +13578,8 @@ bool testbed_scenarios::NeedsNoCreature(Command::Kind kind)
 	       kind == Kind::SetOpenClose || kind == Kind::LayGateStone || kind == Kind::HandTapObject || kind == Kind::Advisor ||
 	       kind == Kind::RunText || kind == Kind::PlayHandDemo || kind == Kind::Reframe || kind == Kind::DestroyTemple ||
 	       kind == Kind::RunHelpMessage || kind == Kind::EndGuidanceWaits || kind == Kind::SetTownBeliefInRival ||
-	       kind == Kind::RecordChallenge || kind == Kind::EnterTemple || kind == Kind::HandTake || kind == Kind::RunScript ||
-	       kind == Kind::HandTakeShownSeed || kind == Kind::PlayBoatFilm || kind == Kind::HandPour ||
+	       kind == Kind::RecordChallenge || kind == Kind::EnterTemple || kind == Kind::HandTake || kind == Kind::HandApply ||
+	       kind == Kind::HandTakeShownSeed || kind == Kind::RunScript || kind == Kind::PlayBoatFilm || kind == Kind::HandPour ||
 	       kind == Kind::HandRelease || kind == Kind::SetReportLatency || kind == Kind::RemoveObject || kind == Kind::ReadTip ||
 	       kind == Kind::LookAtTempleScroll || kind == Kind::HandGripTotem || kind == Kind::ProfileFolderCheck ||
 	       kind == Kind::PlayCustomMusic || kind == Kind::ShowCustomMusicControls || kind == Kind::OwnTattooPicture ||
@@ -13544,7 +13625,7 @@ std::string_view testbed_scenarios::Name(Shot shot)
 
 std::string_view testbed_scenarios::Name(Command::Kind kind)
 {
-	constexpr std::array<std::string_view, 206> k_Names {
+	constexpr std::array<std::string_view, 207> k_Names {
 	    "walk to",
 	    "run to",
 	    "follow",
@@ -13663,6 +13744,7 @@ std::string_view testbed_scenarios::Name(Command::Kind kind)
 	    "hand take",
 	    "hand give",
 	    "hand take shown seed",
+	    "hand apply",
 	    "swap minds",
 	    "record challenge",
 	    "enter temple",

@@ -174,6 +174,13 @@ struct BodyAction
 /// The animation that times the body: the animation that it plays now. The kiss times its low and its high kiss on
 /// the length of the high kiss.
 [[nodiscard]] size_t TimingAnimation(const BodyAction& body);
+/// The animation whose length the hand divides the time of the body by, to know how far the body is through its action.
+/// The game keeps one animation for each action:
+/// - A sequence keeps its loop, also in its start and its end.
+/// - A dance keeps the stand in its start, then the move that plays or played last.
+/// - A kiss keeps the stand.
+/// - Another action that plays once keeps its own animation.
+[[nodiscard]] size_t ShareAnimation(const BodyAction& body);
 /// An action that plays once, unless the body already plays one: nothing starts while one plays
 [[nodiscard]] std::optional<BodyAction> PlayOnce(const BodyAction& body, size_t animation, bool mirrored);
 /// A start, loop and end, unless the body already plays an action; the loop can hold its last frame, and the whole can

@@ -7,6 +7,8 @@
  * openblack is licensed under the GNU General Public License version 3.
  *******************************************************************************/
 
+#include <cmath>
+
 #include <gtest/gtest.h>
 
 #include "3D/Mists.h"
@@ -135,4 +137,23 @@ TEST(Mists, AStartAlphaPastAByteKeepsItsWholePart)
 	EXPECT_EQ(mists::WholeAlphaOf(colour, 0), 44);
 	EXPECT_EQ(mists::WholeAlphaOf(0xFFFFFFFFu, mists::AlphaHighBits(-1)), -1);
 	EXPECT_EQ(mists::WholeAlpha(-0.5f), 0);
+}
+
+TEST(Mists, AScriptReadsHowMuchOfTheFadeHasGone)
+{
+	auto fade = mists::StartFade(1.0f, 2.0f, 50.0f, 0.0f, 10.0f);
+	EXPECT_EQ(mists::FadeDone(fade.elapsed, fade.turns), 0.0f);
+	float size = 1.0f;
+	for (int turn = 0; turn < 25; ++turn)
+	{
+		ASSERT_TRUE(mists::StepFade(fade, size));
+	}
+	EXPECT_EQ(mists::FadeDone(fade.elapsed, fade.turns), 0.25f);
+	// A done fade stays at all of it
+	while (mists::StepFade(fade, size))
+	{
+	}
+	EXPECT_EQ(mists::FadeDone(fade.elapsed, fade.turns), 1.0f);
+	// A fade with no turns, and a mist that no script faded, give 0 / 0
+	EXPECT_TRUE(std::isnan(mists::FadeDone(0.0f, 0.0f)));
 }

@@ -4201,7 +4201,8 @@ void Game::UpdateEntitiesFrame(std::chrono::microseconds deltaTime)
 		{
 			auto updateEntities = profiler.BeginScoped(Profiler::Stage::UpdateEntities);
 			// The scrolls and signs spin, scale and glow towards the camera, and their glints play. The gates and the other
-			// scenery that the scripts open and close play on, and the stones of the plinths sit or sink. Both use the draw
+			// scenery that the scripts open and close play on, and the stones of the plinths sit or sink. The town totems
+			// that the list draws move to their shares by the real clock, also while the game is paused. All use the draw
 			// list of this frame.
 			const auto updateDrawnScenery = [&clock, &gameTime]() {
 				if (Locator::scriptHighlightSystem::has_value())
@@ -4211,6 +4212,10 @@ void Game::UpdateEntitiesFrame(std::chrono::microseconds deltaTime)
 					    Locator::camera::value().GetOrigin(), clock.GetFrameRealTime(), simulation::LandDrawn());
 				}
 				Locator::animatedStaticSystem::value().Update(clock.GetFrameGameTime());
+				if (Locator::villageTotemSystem::has_value())
+				{
+					Locator::villageTotemSystem::value().Update(static_cast<uint32_t>(clock.GetElapsedTime().count()));
+				}
 			};
 			if (config.drawEntities)
 			{

@@ -252,6 +252,25 @@ TEST(SavedSystemState, TheStateOfANewLandComesBack)
 	check(TeleportSystem {}, TeleportSystem {});
 }
 
+TEST(SavedSystemState, TheInfluenceStateKeepsTheOldPlaceOfTheRemovedTurnField)
+{
+	// A save from before the removal starts with the turn of the last share step, 4 bytes long. The state keeps that place,
+	// so the size of the saved state does not change and an old save still loads.
+	constexpr size_t k_RemovedFieldSize = sizeof(uint32_t);
+	const auto bytes = StateOf(InfluenceSystem {});
+	ASSERT_GT(bytes.size(), k_RemovedFieldSize);
+	EXPECT_TRUE(std::all_of(bytes.begin(), bytes.begin() + k_RemovedFieldSize, [](uint8_t byte) { return byte == 0; }));
+
+	auto old = bytes;
+	old.at(0) = 77;
+	InfluenceSystem loaded;
+	const reflection::EntityRemap identity;
+	reflection::BinaryReader in(Context(), old, identity);
+	ASSERT_TRUE(loaded.LoadState(in));
+	EXPECT_EQ(in.Remaining(), 0u);
+	EXPECT_EQ(StateOf(loaded), bytes);
+}
+
 TEST(SavedSystemState, TheStoryHistoryComesBack)
 {
 	help::StoryHistory history;

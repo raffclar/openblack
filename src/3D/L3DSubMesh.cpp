@@ -30,6 +30,7 @@
 #include "L3DMesh.h"
 #include "Locator.h"
 #include "MeshBounds.h"
+#include "SnowFaces.h"
 #include "VertexBlend.h"
 #include "Visual/RenderModes.h"
 
@@ -635,6 +636,52 @@ void L3DSubMesh::UpdateVertices(const l3d::L3DFile& l3d) noexcept
 		CreateBlendSource(vertices, _blendSourceWidth);
 	}
 	_mesh->GetVertexBuffer().Update(vertices);
+}
+
+bool L3DSubMesh::SplitFacesForSnow()
+{
+	const auto& corners = _surface.indices;
+	const auto vertexCount = _surface.positions.size();
+	if (_facesSplit || !_mesh || _flags.hasBones || _hasLightmapCoordinates || _made || _l3dMesh.IsDynamic() ||
+	    corners.empty() || corners.size() % 3 != 0 || corners.size() > std::numeric_limits<uint16_t>::max() ||
+	    _surface.uvs.size() != vertexCount || _surface.normals.size() != vertexCount ||
+	    std::ranges::any_of(corners, [vertexCount](uint16_t corner) { return corner >= vertexCount; }))
+	{
+		return false;
+	}
+	auto& device = Locator::graphicsDevice::value();
+	const auto* verticesMem = device.Alloc(static_cast<uint32_t>(sizeof(EnhancedL3DVertex) * corners.size()));
+	auto* vertices = reinterpret_cast<EnhancedL3DVertex*>(device.Bytes(verticesMem).data());
+	std::vector<uint16_t> indices(corners.size());
+	for (size_t face = 0; face < corners.size(); face += 3)
+	{
+		const auto& normals = _surface.normals;
+		const auto up = snow_faces::PackUp(
+		    snow_faces::FaceUp(normals[corners[face]], normals[corners[face + 1]], normals[corners[face + 2]]));
+		for (size_t i = face; i < face + 3; ++i)
+		{
+			const auto corner = corners[i];
+			vertices[i] = {.pos = _surface.positions[corner],
+			               .uv = _surface.uvs[corner],
+			               .norm = normals[corner],
+			               .index = glm::i16vec4(-1, -1, up[0], up[1])};
+			indices[i] = static_cast<uint16_t>(i);
+		}
+	}
+	VertexDecl decl;
+	decl.reserve(4);
+	decl.emplace_back(VertexAttrib::Attribute::Position, static_cast<uint8_t>(3), VertexAttrib::Type::Float);
+	decl.emplace_back(VertexAttrib::Attribute::TexCoord0, static_cast<uint8_t>(2), VertexAttrib::Type::Float);
+	decl.emplace_back(VertexAttrib::Attribute::Normal, static_cast<uint8_t>(3), VertexAttrib::Type::Float);
+	decl.emplace_back(VertexAttrib::Attribute::Indices, static_cast<uint8_t>(4), VertexAttrib::Type::Int16,
+	                  /*normalized=*/false, /*asInt=*/true);
+	const auto* indicesMem = device.Copy(indices.data(), static_cast<uint32_t>(indices.size() * sizeof(indices[0])));
+	auto vertexBuffer = std::make_unique<VertexBuffer>(_l3dMesh.GetDebugName(), verticesMem, decl, false);
+	auto indexBuffer = std::make_unique<IndexBuffer>(_l3dMesh.GetDebugName(), indicesMem, IndexBuffer::Type::Uint16);
+	// The mesh owns its buffers from here on
+	_mesh = std::make_unique<graphics::Mesh>(vertexBuffer.release(), indexBuffer.release());
+	_facesSplit = true;
+	return true;
 }
 
 Mesh& L3DSubMesh::GetMesh() const

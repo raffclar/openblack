@@ -100,6 +100,7 @@
 #include "ECS/BuildingReplan.h"
 #include "ECS/Components/Abode.h"
 #include "ECS/Components/Animal.h"
+#include "ECS/Components/BuildingDamage.h"
 #include "ECS/Components/Construction.h"
 #include "ECS/Components/Creature.h"
 #include "ECS/Components/CreatureBody.h"
@@ -2201,6 +2202,28 @@ std::optional<entt::entity> Runner::TotemAt(size_t index) const
 	return totem;
 }
 
+std::optional<entt::entity> Runner::PieceNearest(entt::entity creature)
+{
+	const auto& registry = Locator::entitiesRegistry::value();
+	const auto* from = registry.TryGet<const ecs::components::Transform>(creature);
+	if (from == nullptr)
+	{
+		return std::nullopt;
+	}
+	std::optional<entt::entity> nearest;
+	float best = std::numeric_limits<float>::max();
+	registry.Each<const ecs::components::BuildingPiece, const ecs::components::Transform>(
+	    [&](entt::entity piece, const ecs::components::BuildingPiece& /*part*/, const ecs::components::Transform& at) {
+		    const float distance = glm::distance(glm::xz(at.position), glm::xz(from->position));
+		    if (distance < best)
+		    {
+			    best = distance;
+			    nearest = piece;
+		    }
+	    });
+	return nearest;
+}
+
 void Runner::BuildWorshipSiteOf(entt::entity centre) const
 {
 	// The scenario does not wait for the villagers to build the worship site: it stands built at once
@@ -2726,6 +2749,18 @@ std::string Runner::GivePlayerCommand(const Command& command)
 		const auto held = Locator::magicSystem::value().GetHeldSeedOf(command.player);
 		return held == seed ? fmt::format("the hand takes back seed {}", entt::to_integral(*seed))
 		                    : fmt::format("the hand did not keep seed {}", entt::to_integral(*seed));
+	}
+	case Kind::HandApply:
+	{
+		const auto object = ObjectAt(command.object);
+		if (!object.has_value() || !Locator::handGrabSystem::has_value())
+		{
+			return "nothing to use the held thing on";
+		}
+		const auto player =
+		    Locator::playerSystem::has_value() ? Locator::playerSystem::value().GetLocalPlayer() : PlayerNames::PLAYER_ONE;
+		Locator::handGrabSystem::value().DoApply(player, *object);
+		return "the hand uses what it holds on the object";
 	}
 	case Kind::AttachObjectScriptSound:
 	{
@@ -3555,9 +3590,10 @@ void Runner::Give(const Command& command)
 {
 	if (command.kind == Kind::HoldSeed || command.kind == Kind::DrawGesture || command.kind == Kind::SummonSeed ||
 	    command.kind == Kind::PressKey || command.kind == Kind::HandTakeFireBall || command.kind == Kind::HandTapObject ||
-	    command.kind == Kind::HandTake || command.kind == Kind::HandTakeShownSeed || command.kind == Kind::HandPour ||
-	    command.kind == Kind::HandRelease || command.kind == Kind::SetReportLatency || command.kind == Kind::RemoveObject ||
-	    command.kind == Kind::HandGripTotem || command.kind == Kind::AttachObjectScriptSound || command.kind == Kind::SayLine ||
+	    command.kind == Kind::HandTake || command.kind == Kind::HandApply || command.kind == Kind::HandTakeShownSeed ||
+	    command.kind == Kind::HandPour || command.kind == Kind::HandRelease || command.kind == Kind::SetReportLatency ||
+	    command.kind == Kind::RemoveObject || command.kind == Kind::HandGripTotem ||
+	    command.kind == Kind::AttachObjectScriptSound || command.kind == Kind::SayLine ||
 	    command.kind == Kind::PlayGuidanceVoice || command.kind == Kind::ScriptRelease || command.kind == Kind::FillSiteIcons ||
 	    command.kind == Kind::BuildWorshipSites || command.kind == Kind::PressPlainKey || command.kind == Kind::PlainKeyDown ||
 	    command.kind == Kind::PlainKeyRepeat || command.kind == Kind::PlainKeyUp ||
@@ -4093,6 +4129,7 @@ void Runner::Give(const Command& command)
 		                    : command.onTemple && !_temples.empty()        ? std::optional(_temples.front())
 		                    : command.onGlobe && command.globe.has_value() ? GlobeAt(*command.globe)
 		                    : command.onTotem                              ? TotemAt(command.object)
+		                    : command.onPiece                              ? PieceNearest(*entity)
 		                                                                   : ObjectAt(command.object);
 		const auto with = command.globe.has_value() && !command.onGlobe ? GlobeAt(*command.globe)
 		                  : command.usesCreature.has_value()            ? CreatureAt(*command.usesCreature)
@@ -4428,6 +4465,7 @@ void Runner::Give(const Command& command)
 	case Kind::HandTapObject:
 	case Kind::HandTake:
 	case Kind::HandTakeShownSeed:
+	case Kind::HandApply:
 	case Kind::HandPour:
 	case Kind::HandRelease:
 	case Kind::SetReportLatency:

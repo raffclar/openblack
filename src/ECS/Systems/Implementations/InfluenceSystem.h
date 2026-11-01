@@ -11,6 +11,7 @@
 
 #include <array>
 #include <chrono>
+#include <optional>
 #include <vector>
 
 #include <entt/entity/fwd.hpp>
@@ -34,6 +35,7 @@ public:
 	bool LoadState(reflection::BinaryReader& in) override;
 
 	void ProcessTurn(uint32_t turn) override;
+	void ProcessVirtualInfluence(PlayerNames player, uint32_t turn) override;
 	void ProcessTownInfluence(entt::entity town) override;
 	void MarkTownInfluence(entt::entity town) override;
 	void BordersChanged() override { _bordersDirty = true; }
@@ -55,6 +57,7 @@ public:
 	[[nodiscard]] bool IsBorderShown(PlayerNames player) const override;
 	void NoteInfluencePower(PlayerNames player) override;
 	[[nodiscard]] float InfluencePower(PlayerNames player) const override;
+	[[nodiscard]] std::optional<float> RelativeInfluencePower(PlayerNames player) const override;
 	[[nodiscard]] float CitadelReachOf(PlayerNames player) const override;
 	[[nodiscard]] glm::vec2 GetScrollOffset() const override { return influence::ScrollOffset(_scrollClock); }
 	[[nodiscard]] std::span<const influence::Ripple> GetRipples() const override { return _ripples; }
@@ -72,8 +75,6 @@ private:
 	/// Whether another player's shield keeps a player out of a place
 	[[nodiscard]] static bool Shielded(PlayerNames player, const glm::vec3& point);
 	[[nodiscard]] static bool Shielded(PlayerNames player, const map_coords::MapCoords& position);
-	/// What each player's hand keeps of their influence past the border, once a turn
-	void ProcessVirtualInfluence(uint32_t turn);
 	/// One turn of what a player's hand keeps past the border, with the hand where it is
 	void ProcessVirtualInfluence(entt::entity playerEntity, PlayerNames player, glm::vec3 hand, uint32_t turn);
 	/// The own influence of a player at a place, or where it is none or less, the influence that an ally lends there
@@ -82,8 +83,6 @@ private:
 	[[nodiscard]] static bool InfluenceEverywhere();
 	/// What a player's hand keeps of their influence past the border, if they have a hand
 	[[nodiscard]] static const virtual_influence::State* VirtualStateOf(PlayerNames player);
-	/// The game turn last played
-	uint32_t _turn {0};
 
 	std::vector<influence::Circle> _circles;
 	std::array<bool, k_Players> _borderShown {};

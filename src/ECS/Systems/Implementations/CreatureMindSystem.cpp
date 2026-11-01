@@ -2577,11 +2577,11 @@ void CreatureMindSystem::AgendaTurn(entt::entity entity)
 			LetGoOfHeld(entity, mind, *commands.letGo);
 		}
 		StepSwap(entity, commands);
-		// A rock broken in two at once; anything else can't be, and the rest of the agenda is no use
+		// A rock or a piece of a building breaks in two at once. Nothing else can, and the rest of the agenda is no use.
 		if (commands.shatter.has_value())
 		{
 			const auto rock = static_cast<entt::entity>(*commands.shatter);
-			if (registry.Valid(rock) && object_physics::IsRock(rock) && Locator::dynamicsSystem::has_value())
+			if (registry.Valid(rock) && object_physics::IsRockOrPiece(rock) && Locator::dynamicsSystem::has_value())
 			{
 				object_physics::SplitRock(Locator::dynamicsSystem::value(), rock);
 			}
@@ -2606,9 +2606,22 @@ void CreatureMindSystem::AgendaTurn(entt::entity entity)
 		}
 		if (commands.carry != creature_mind::Commands::Carry::None)
 		{
+			using Carry = TeleportSystemInterface::Carry;
 			const bool start = commands.carry == creature_mind::Commands::Carry::Start;
-			if (!Locator::teleportSystem::has_value() || (start ? !Locator::teleportSystem::value().StartCarry(entity)
-			                                                    : Locator::teleportSystem::value().CarryTurn(entity)))
+			auto carried = Carry::Done;
+			if (Locator::teleportSystem::has_value())
+			{
+				auto& teleports = Locator::teleportSystem::value();
+				carried = start ? (teleports.StartCarry(entity) ? Carry::Carried : Carry::Done) : teleports.CarryTurn(entity);
+			}
+			// The creature that comes out of the far stone moves on its map: there it looks at the mountains and the water,
+			// and far about for the towns and the temples
+			if (carried == Carry::Arrived)
+			{
+				LookAtLand(entity, creature, mind, transform);
+				LookFarAbout(entity, mind, transform);
+			}
+			if (carried == Carry::Done)
 			{
 				creature_mind::CarryDone(mind.idle);
 			}
@@ -3199,7 +3212,7 @@ bool CreatureMindSystem::MayInterrupt(entt::entity creature, const CreatureAnima
 	{
 		// The time and the duration are whole milliseconds, so the float divide gives the same share as the game
 		const auto duration =
-		    Locator::creatureAnimationSystem::value().AnimationDuration(creature, creature_layers::CurrentAnimation(body.body));
+		    Locator::creatureAnimationSystem::value().AnimationDuration(creature, creature_layers::ShareAnimation(body.body));
 		if (duration.has_value() && *duration > 0.0f)
 		{
 			bodyShare = body.body.timeMs / *duration;

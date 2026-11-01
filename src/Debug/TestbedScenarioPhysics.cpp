@@ -429,6 +429,27 @@ void AddCreatureCatchesBuildingPiece(std::vector<Scenario>& all)
 	                      .waitUntilFree = false,
 	                      .point = k_Field + glm::vec2 {14.0f, 80.0f}}};
 	all.push_back(std::move(pointing));
+
+	// The tiger stomps on the piece nearest to it once the pieces lie still
+	constexpr float k_StompAfterTheBreak = 6.0f;
+	auto stomp = CatchBuildingPieceStage();
+	stomp.id = "physics.creature_smashes_building_piece";
+	stomp.name = "A creature that smashes a piece of a building in two";
+	stomp.description = "A big boulder thrown from the south breaks a creche once. A tiger north east of the creche stands "
+	                    "still. When the pieces lie still, a script tells it to smash the nearest piece in two.";
+	stomp.expected = "The tiger walks to the piece and stomps on it. The piece breaks in two as a rock does: two rocks of "
+	                 "the game's rock model lie either side of where the piece was, and the piece goes.";
+	stomp.objects.resize(2);
+	stomp.throws.resize(1);
+	stomp.throws.front().repeatSeconds = 600.0f;
+	stomp.creatures.front().pauseMind = true;
+	stomp.creatures.front().thinksAfterSeconds = k_StompAfterTheBreak - 0.5f;
+	stomp.commands = {{.kind = Command::Kind::DoAction,
+	                   .creature = 0,
+	                   .delaySeconds = k_StompAfterTheBreak,
+	                   .action = "SmashStoneInHalf",
+	                   .onPiece = true}};
+	all.push_back(std::move(stomp));
 }
 
 void AddCreatureCatchWhileWalking(std::vector<Scenario>& all)

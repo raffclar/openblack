@@ -56,6 +56,7 @@
 #include "ECS/Components/Pot.h"
 #include "ECS/Components/ResourceLastTaken.h"
 #include "ECS/Components/ResourcePile.h"
+#include "ECS/Components/Scaffold.h"
 #include "ECS/Components/SpellDispenser.h"
 #include "ECS/Components/StoragePit.h"
 #include "ECS/Components/Temple.h"
@@ -510,6 +511,11 @@ bool ResourceStoreSystem::IsStore(entt::entity store, ResourceType type) const
 	{
 		return type == ResourceType::Wood || type == ResourceType::Any;
 	}
+	// A scaffold on a building site stores wood, for the site. It does not answer for any resource.
+	if (const auto* scaffold = registry.TryGet<const Scaffold>(store))
+	{
+		return ecs::store_rules::ScaffoldStores(type, registry.Valid(scaffold->site));
+	}
 	// A pile stores only its own resource, and only through the store it is part of
 	if (const auto* pot = registry.TryGet<const Pot>(store))
 	{
@@ -623,6 +629,13 @@ uint32_t ResourceStoreSystem::AddToStore(entt::entity store, ResourceType type, 
 	if (IsWorshipSite(store))
 	{
 		return AddToWorshipSite(*this, store, type, amount, poisoned);
+	}
+	// A scaffold on a building site passes the wood to the site, as the builders bring it. Nobody's giving counts.
+	if (const auto* scaffold = registry.TryGet<const Scaffold>(store))
+	{
+		return ecs::store_rules::ScaffoldStores(type, registry.Valid(scaffold->site))
+		           ? AddResource(scaffold->site, ResourceType::Wood, amount, at)
+		           : 0u;
 	}
 	// A building going up takes wood onto its site, where the builders take it from. A workshop takes the wood itself,
 	// and its site uses the wood of the workshop.
@@ -807,6 +820,19 @@ uint32_t ResourceStoreSystem::TakeFromPile(entt::entity pile, ResourceType type,
 	return taken;
 }
 
+void ResourceStoreSystem::AnswerDrop(entt::entity store, PlayerNames giver)
+{
+	auto& registry = Entities();
+	const auto* pot = registry.Valid(store) ? registry.TryGet<const Pot>(store) : nullptr;
+	const auto* transform = registry.Valid(store) ? registry.TryGet<const Transform>(store) : nullptr;
+	const auto gift = guidance::DropGift(pot != nullptr ? std::optional(PotInfoOf(pot->type).resourceType) : std::nullopt);
+	if (!gift.has_value() || transform == nullptr || !Locator::guidanceSystem::has_value())
+	{
+		return;
+	}
+	Locator::guidanceSystem::value().ResourceDropped(giver, transform->position, *gift);
+}
+
 void ResourceStoreSystem::ReportGift(entt::entity store, ResourceType type, PlayerNames giver)
 {
 	auto& registry = Entities();
@@ -882,7 +908,11 @@ bool ResourceStoreSystem::TakeObjectAs(entt::entity store, entt::entity object, 
 	{
 		ReportGift(store, resource.type, *giver);
 	}
-	// TODO(stores): the advisor's resource-drop sound for the local player; openblack has no advisor yet
+	// The town near a pile that takes the drop can answer the gift to the player here
+	if (added != 0 && giver.has_value())
+	{
+		AnswerDrop(store, *giver);
+	}
 	// Wood that isn't a pot mulches as it goes in
 	if (resource.type == ResourceType::Wood && !registry.AllOf<Pot>(object))
 	{
@@ -915,8 +945,9 @@ bool ResourceStoreSystem::PourAt(ResourceType type, glm::vec3 point, uint32_t am
 	const auto near = [&](entt::entity entity, float multiplier) {
 		const auto& transform = registry.Get<const Transform>(entity);
 		float radius = piles::RadiusOnGround(HalfExtentOf(registry.Get<const Mesh>(entity)), transform.scale.x);
-		// A pile of food reaches as far as it is raised
-		if (const auto* pot = registry.TryGet<const Pot>(entity); pot != nullptr && type == ResourceType::Food)
+		// A pile of food reaches as far as it is raised. A pot that is not a pile does not rise.
+		if (const auto* pot = registry.TryGet<const Pot>(entity);
+		    pot != nullptr && piles::ReachFollowsRise(type, registry.AllOf<ResourcePile>(entity)))
 		{
 			radius *= piles::ProportionRaised(type, pot->amount, PotInfoOf(pot->type).maxAmountInPot);
 		}
@@ -949,10 +980,14 @@ bool ResourceStoreSystem::PourAt(ResourceType type, glm::vec3 point, uint32_t am
 			{
 				continue;
 			}
-			// Anything that stores it (a storage pit, a worship site's food, a building going up's wood), but not a
-			// store's own piles, which take it as piles do
-			if (!registry.AllOf<Pot>(entity) && IsStore(entity, type))
+			// Anything that stores it (a storage pit, a worship site's food, a building going up's wood, a workshop's
+			// wood, a scaffold on a site), but not a store's own piles, which take it as piles do. A pile or a pot of the same
+			// resource takes it too, as a handful that the hand put down.
+			const auto* pot = registry.TryGet<const Pot>(entity);
+			const auto potResource = pot != nullptr ? std::optional(PotInfoOf(pot->type).resourceType) : std::nullopt;
+			switch (piles::TakerOfPour(type, potResource, pot == nullptr && IsStore(entity, type)))
 			{
+			case piles::PourTaker::Store:
 				if (near(entity, piles::k_StoreReachMultiplier))
 				{
 					left -= AddToStore(entity, type, left, giver, poisoned, point);
@@ -963,14 +998,15 @@ bool ResourceStoreSystem::PourAt(ResourceType type, glm::vec3 point, uint32_t am
 						ReportGift(entity, type, *giver);
 					}
 				}
-			}
-			else if (const auto* pot = registry.TryGet<const Pot>(entity);
-			         pot != nullptr && registry.AllOf<ResourcePile>(entity) && PotInfoOf(pot->type).resourceType == type)
-			{
+				break;
+			case piles::PourTaker::Pot:
 				if (near(entity, piles::k_PotReachMultiplier))
 				{
 					left -= AddToPile(entity, type, left, poisoned);
 				}
+				break;
+			case piles::PourTaker::None:
+				break;
 			}
 		}
 	}

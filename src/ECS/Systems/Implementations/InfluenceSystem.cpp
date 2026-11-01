@@ -15,6 +15,7 @@
 
 #include <algorithm>
 #include <chrono>
+#include <iterator>
 #include <optional>
 #include <unordered_map>
 #include <utility>
@@ -277,8 +278,9 @@ influence::Ground LandHeight()
 
 void InfluenceSystem::SaveState(reflection::BinaryWriter& out) const
 {
+	// Keep the old place of a removed field, so the saved layout does not change.
+	reflection::Save(out, uint32_t {0});
 	// Each circle of the borders keeps its place, its size and its hidden columns. Its curtain is made again from the land.
-	reflection::Save(out, _turn);
 	reflection::Save(out, _circles.size());
 	for (const auto& circle : _circles)
 	{
@@ -300,7 +302,9 @@ void InfluenceSystem::SaveState(reflection::BinaryWriter& out) const
 
 bool InfluenceSystem::LoadState(reflection::BinaryReader& in)
 {
-	reflection::Load(in, _turn);
+	// Keep the old place of a removed field, so the saved layout does not change.
+	uint32_t removedField = 0;
+	reflection::Load(in, removedField);
 	size_t count = 0;
 	reflection::Load(in, count);
 	_circles.clear();
@@ -487,7 +491,6 @@ void InfluenceSystem::ProcessTurn(uint32_t turn)
 	{
 		DrawBorders();
 	}
-	ProcessVirtualInfluence(turn);
 }
 
 bool InfluenceSystem::Shielded(PlayerNames player, const glm::vec3& point)
@@ -530,6 +533,19 @@ float InfluenceSystem::InfluencePower(PlayerNames player) const
 	return noted != nullptr ? noted->power : 0.0f;
 }
 
+std::optional<float> InfluenceSystem::RelativeInfluencePower(PlayerNames player) const
+{
+	// All the players add their noted powers in the order of their numbers
+	std::vector<std::pair<PlayerNames, float>> players;
+	Locator::entitiesRegistry::value().Each<const Player, const PlayerInfluencePower>(
+	    [&players](const Player& each, const PlayerInfluencePower& noted) { players.emplace_back(each.name, noted.power); });
+	std::ranges::sort(players, {}, &std::pair<PlayerNames, float>::first);
+	std::vector<float> powers;
+	powers.reserve(players.size());
+	std::ranges::transform(players, std::back_inserter(powers), &std::pair<PlayerNames, float>::second);
+	return influence_rules::RelativeInfluencePower(InfluencePower(player), powers);
+}
+
 void InfluenceSystem::NoteInfluencePower(PlayerNames player)
 {
 	auto& registry = Locator::entitiesRegistry::value();
@@ -558,38 +574,32 @@ void InfluenceSystem::NoteInfluencePower(PlayerNames player)
 	player_statistics::CountInfluence(registry, player, noted->power);
 }
 
-void InfluenceSystem::ProcessVirtualInfluence(uint32_t turn)
+void InfluenceSystem::ProcessVirtualInfluence(PlayerNames player, uint32_t turn)
 {
-	_turn = turn;
-	if (!Locator::playerSystem::has_value() || !Locator::infoConstants::has_value())
+	if (player == PlayerNames::NEUTRAL || !Locator::playerSystem::has_value() || !Locator::infoConstants::has_value())
+	{
+		return;
+	}
+	const auto entity = PlayerEntityOf(player);
+	if (!entity.has_value())
 	{
 		return;
 	}
 	// The hand of every god keeps a share of the god's influence past the border, also the hand of a god that no person
 	// plays. The share measures from the point that the god's hand reports picked. A god that no person plays sends no
 	// reports, so its share measures from the origin of the world.
-	std::vector<std::pair<entt::entity, PlayerNames>> players;
-	Locator::entitiesRegistry::value().Each<const Player>([&players](entt::entity entity, const Player& player) {
-		if (player.name != PlayerNames::NEUTRAL)
-		{
-			players.emplace_back(entity, player.name);
-		}
-	});
-	const auto& playerSystem = Locator::playerSystem::value();
-	for (const auto& [entity, player] : players)
-	{
-		const auto hand = virtual_influence::TurnHandPoint(playerSystem.IsHumanPlayer(player), ReportedPickOf(player));
-		ProcessVirtualInfluence(entity, player, hand, turn);
-	}
+	const auto hand =
+	    virtual_influence::TurnHandPoint(Locator::playerSystem::value().IsHumanPlayer(player), ReportedPickOf(player));
+	ProcessVirtualInfluence(*entity, player, hand, turn);
 }
 
 void InfluenceSystem::HeldThingUsedOnLand(PlayerNames player)
 {
-	if (!Locator::infoConstants::has_value())
+	if (!Locator::infoConstants::has_value() || !Locator::time::has_value())
 	{
 		return;
 	}
-	// Measured from where the hand was at the last turn
+	// Measured from where the hand was at the last turn, at the game turn now
 	const auto* state = VirtualStateOf(player);
 	const auto entity = PlayerEntityOf(player);
 	if (state == nullptr || !state->turnHand.has_value() || !entity.has_value())
@@ -597,7 +607,7 @@ void InfluenceSystem::HeldThingUsedOnLand(PlayerNames player)
 		return;
 	}
 	const auto hand = *state->turnHand;
-	ProcessVirtualInfluence(*entity, player, hand, _turn);
+	ProcessVirtualInfluence(*entity, player, hand, Locator::time::value().GetTurn());
 }
 
 void InfluenceSystem::ProcessVirtualInfluence(entt::entity entity, PlayerNames player, glm::vec3 hand, uint32_t turn)

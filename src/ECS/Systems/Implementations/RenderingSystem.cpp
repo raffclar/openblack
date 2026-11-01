@@ -229,6 +229,26 @@ entt::id_type RootsMesh()
 	return openblack::resources::HashIdentifier(openblack::MeshId::TreeRoots);
 }
 
+/// Whether a model is a fence's: the fences read their snow by each face, as the trees do
+bool FenceModel(entt::id_type meshId)
+{
+	using openblack::MeshId;
+	constexpr std::array k_Fences {MeshId::BuildingAmericanFence, MeshId::BuildingCelticFenceShort,
+	                               MeshId::BuildingCelticFenceTall};
+	return std::ranges::any_of(k_Fences,
+	                           [meshId](MeshId fence) { return openblack::resources::HashIdentifier(fence) == meshId; });
+}
+
+/// The model gets three corners of its own for each face, which the snow of a tree or a fence reads
+void SplitFacesForSnow(entt::id_type meshId)
+{
+	auto& meshes = entt::locator<openblack::resources::ResourcesInterface>::value().GetMeshes();
+	if (meshes.Contains(meshId))
+	{
+		meshes.Handle(meshId)->SplitFacesForSnow();
+	}
+}
+
 /// The passes over the things that the land's draw list divides into segments (see graphics::fizz_draw_order)
 struct SegmentPasses
 {
@@ -554,6 +574,11 @@ void RenderingSystem::PrepareDrawDescs(bool drawBoundingBox)
 		drawDesc->second.additiveShare = desc.additiveShare;
 		drawDesc->second.instanceAlpha = desc.instanceAlpha;
 		drawDesc->second.environmentMapped = desc.environmentMapped;
+		if (FenceModel(meshId))
+		{
+			SplitFacesForSnow(meshId);
+			drawDesc->second.snowByFace = true;
+		}
 		drawDesc->second.changedMaterials = desc.changedMaterials;
 		drawDesc->second.partsByLevel = PartsDifferByLevel(meshId);
 		_instanceSlots.emplace(meshId, InstanceSlots {.offset = offset,
@@ -652,6 +677,8 @@ void RenderingSystem::PrepareTreeDrawDescs(bool drawBoundingBox)
 	auto& meshes = entt::locator<resources::ResourcesInterface>::value().GetMeshes();
 	for (const auto& [meshId, count] : treeMeshIds)
 	{
+		// The trees read their snow by each face
+		SplitFacesForSnow(meshId);
 		_renderContext.treeInstancedDrawDescs.emplace(std::piecewise_construct, std::forward_as_tuple(meshId),
 		                                              std::forward_as_tuple(treeOffset, count, false));
 		const auto height = meshes.Contains(meshId) ? meshes.Handle(meshId)->GetBoundingBox().Size().y : 0.0f;

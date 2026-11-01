@@ -76,6 +76,14 @@ TEST(StoreRules, ABuildingSiteStoresOnlyWood)
 	EXPECT_FALSE(store_rules::BuildingSiteStores(openblack::ResourceType::None));
 }
 
+TEST(StoreRules, AScaffoldStoresOnlyWoodAndOnlyOnASite)
+{
+	EXPECT_TRUE(store_rules::ScaffoldStores(openblack::ResourceType::Wood, true));
+	EXPECT_FALSE(store_rules::ScaffoldStores(openblack::ResourceType::Wood, false));
+	EXPECT_FALSE(store_rules::ScaffoldStores(openblack::ResourceType::Any, true));
+	EXPECT_FALSE(store_rules::ScaffoldStores(openblack::ResourceType::Food, true));
+}
+
 TEST(StoreRules, ARocksWoodIsItsScaleTimesItsWoodValueCutTowardsZero)
 {
 	EXPECT_EQ(store_rules::RockWood(1.0f, 200), 200u);

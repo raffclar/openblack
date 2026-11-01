@@ -1465,6 +1465,23 @@ TEST(CreaturePlanActions, FishingForSomethingOtherThanEatingIsAllowedWithFoodInH
 	EXPECT_FALSE(creature_plan_actions::Possible(*fish, situation));
 }
 
+TEST(CreaturePlanActions, EveryActionThatBringsFoodOutOfTheSeaFishesAtTheNearestFarmFirst)
+{
+	// Told or chosen, the four actions find the nearest fish farm themselves
+	for (const auto* name : {"FishAndEat", "GiveFishToStoragePit", "TakeFishHome", "PutFishByWorshipSite"})
+	{
+		const auto* action = creature_plan_actions::For(name);
+		ASSERT_NE(action, nullptr) << name;
+		EXPECT_TRUE(creature_plan_actions::FishesFirst(*action)) << name;
+	}
+	for (const auto* name : {"EatFromTree", "GiveFoodFromFieldToStoragePit", "BringFoodHome"})
+	{
+		const auto* action = creature_plan_actions::For(name);
+		ASSERT_NE(action, nullptr) << name;
+		EXPECT_FALSE(creature_plan_actions::FishesFirst(*action)) << name;
+	}
+}
+
 TEST(CreaturePlanActions, GivingFishToAStorePitFishesTurnsToThePitAndThrowsItIn)
 {
 	const auto random = [](uint32_t) { return 0u; };
@@ -1518,7 +1535,9 @@ TEST(CreaturePlanActions, TakingFishHomePutsItDownWithinItsHeightOfHome)
 	EXPECT_EQ(agenda->at(1).order.kind, creature_mind::ObjectOrder::Kind::FishFromSea);
 	EXPECT_EQ(agenda->at(2).movement.point, glm::vec2(100.0f, 200.0f));
 	EXPECT_FLOAT_EQ(agenda->at(2).movement.maxDistance, 12.0f);
-	EXPECT_EQ(agenda->at(3).order.kind, creature_mind::ObjectOrder::Kind::PutDown);
+	// It lets go of the food with the put-down animation, as when it brings a thing home
+	EXPECT_EQ(agenda->at(3).order.kind, creature_mind::ObjectOrder::Kind::Discard);
+	EXPECT_EQ(agenda->at(3).order.animation, 97u);
 }
 
 // The model of what is learnt

@@ -49,6 +49,7 @@ public:
 	void ProcessTurn() override;
 	/// The turn of the hand that HandGrabWorldInterface::Hand gives now
 	void ProcessHandTurn();
+	void LockTurn(PlayerNames player) override;
 	void PlaceHeldForTurn() override;
 	void PlaceOthersHeldForFrame(int32_t frameMs) override;
 	void DrawThrownForFrame() override;

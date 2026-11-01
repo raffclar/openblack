@@ -13,6 +13,7 @@
 
 #include <algorithm>
 #include <memory>
+#include <optional>
 #include <string_view>
 #include <utility>
 #include <vector>
@@ -27,9 +28,11 @@
 #include "CHLApi.h"
 #include "ECS/Components/Creature.h"
 #include "ECS/Components/CreatureBody.h"
+#include "ECS/Components/Scaffold.h"
 #include "ECS/Components/Villager.h"
 #include "ECS/Registry.h"
 #include "ECS/Systems/ScriptObjectsSystemInterface.h"
+#include "ECS/Systems/WorkshopSystemInterface.h"
 #include "Locator.h"
 #include "Sound/GameMusic.h"
 
@@ -58,6 +61,47 @@ public:
 	void ClearForNewLand() override {}
 };
 
+/// A workshop system that only records the scaffolds that a script starts at once, and for which player
+class FakeWorkshops final: public ecs::systems::WorkshopSystemInterface
+{
+public:
+	void ProcessWorkshop(entt::entity) override {}
+	[[nodiscard]] int32_t RoomOf(entt::entity) const override { return 0; }
+	entt::entity WoodPileOf(entt::entity) override { return entt::null; }
+	entt::entity CreateScaffold(glm::vec3, entt::entity, entt::entity, float, float) override { return entt::null; }
+	entt::entity RewardScaffold(entt::entity, glm::vec3) override { return entt::null; }
+	[[nodiscard]] bool CanTake(entt::entity) const override { return false; }
+	void TakenByHand(entt::entity, PlayerNames) override {}
+	void LetGoByHand(entt::entity, bool) override {}
+	void NotPutDownByHand(entt::entity) override {}
+	void CameToRest(entt::entity, bool, bool) override {}
+	[[nodiscard]] bool CanMove(entt::entity) const override { return false; }
+	void ProcessHeld(entt::entity) override {}
+	void SiteClosed(entt::entity) override {}
+	entt::entity LeaveDestroyedSite(entt::entity) override { return entt::null; }
+	bool ForceBuild(entt::entity scaffold, std::optional<PlayerNames> player) override
+	{
+		built.emplace_back(scaffold, player);
+		return true;
+	}
+	void PlaceGhostsForFrame(std::optional<glm::vec3>) override {}
+	void UpdateFlagsForFrame(float) override {}
+	[[nodiscard]] bool CanJoin(entt::entity, entt::entity) const override { return false; }
+	void Join(entt::entity, entt::entity, std::optional<glm::vec3>) override {}
+	[[nodiscard]] bool GoesIntoStore(entt::entity, entt::entity) const override { return false; }
+	bool GiveToStore(entt::entity, entt::entity, PlayerNames) override { return false; }
+	entt::entity SplitOffRest(entt::entity) override { return entt::null; }
+	[[nodiscard]] bool ValidToTap(entt::entity) const override { return false; }
+	bool Tap(entt::entity, glm::vec3) override { return false; }
+	[[nodiscard]] std::optional<ecs::components::ScaffoldOffer> OfferAt(entt::entity, glm::vec3, uint32_t) override
+	{
+		return std::nullopt;
+	}
+	[[nodiscard]] entt::entity TownForBuilding(glm::vec3) const override { return entt::null; }
+
+	std::vector<std::pair<entt::entity, std::optional<PlayerNames>>> built;
+};
+
 using Results = std::vector<std::pair<lhvm::VMValue, lhvm::DataType>>;
 
 class ScriptMiscNatives: public ::testing::Test
@@ -75,6 +119,7 @@ protected:
 
 	void TearDown() override
 	{
+		Locator::workshopSystem::reset();
 		Locator::sounds::reset();
 		Locator::audio::reset();
 		Locator::vm::reset();
@@ -121,6 +166,7 @@ protected:
 constexpr uint32_t k_GameThingClicked = 16;
 constexpr uint32_t k_GetProperty = 21;
 constexpr uint32_t k_RestartMusic = 190;
+constexpr uint32_t k_SetActive = 255;
 constexpr uint32_t k_SetAnimationModify = 202;
 constexpr uint32_t k_MusicPlayedOnObject = 191;
 constexpr uint32_t k_ImmersionExists = 304;
@@ -346,4 +392,22 @@ TEST_F(ScriptMiscNatives, AThingThatIsGoneIsNotClickedAndTheLogStaysQuiet)
 	EXPECT_TRUE(lines.empty());
 	ASSERT_EQ(property.size(), 1u);
 	EXPECT_EQ(property.front().first.floatVal, 0.0f);
+}
+
+// NOLINTNEXTLINE(cppcoreguidelines-avoid-non-const-global-variables): external macro
+TEST_F(ScriptMiscNatives, AScaffoldSetActiveStartsItsBuildingAtOnceForNoPlayer)
+{
+	auto& workshops = static_cast<FakeWorkshops&>(Locator::workshopSystem::emplace<FakeWorkshops>());
+	auto& registry = Locator::entitiesRegistry::value();
+	const auto scaffold = registry.Create();
+	registry.Assign<ecs::components::Scaffold>(scaffold);
+
+	// Set inactive, the scaffold does nothing
+	Call(k_SetActive, {Int(0), Object(scaffold)});
+	EXPECT_TRUE(workshops.built.empty());
+
+	Call(k_SetActive, {Int(1), Object(scaffold)});
+	ASSERT_EQ(workshops.built.size(), 1u);
+	EXPECT_EQ(workshops.built.front().first, scaffold);
+	EXPECT_FALSE(workshops.built.front().second.has_value());
 }

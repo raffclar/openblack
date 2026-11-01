@@ -145,6 +145,20 @@ float piles::RadiusOnGround(glm::vec2 halfExtent, float scale)
 	return std::max(halfExtent.x, halfExtent.y) * scale;
 }
 
+piles::PourTaker piles::TakerOfPour(ResourceType poured, std::optional<ResourceType> potResource, bool storesIt)
+{
+	if (potResource.has_value())
+	{
+		return *potResource == poured ? PourTaker::Pot : PourTaker::None;
+	}
+	return storesIt ? PourTaker::Store : PourTaker::None;
+}
+
+bool piles::ReachFollowsRise(ResourceType poured, bool isPile)
+{
+	return isPile && poured == ResourceType::Food;
+}
+
 bool piles::WithinReach(glm::vec2 at, glm::vec2 from, float radius, float multiplier)
 {
 	return glm::distance(at, from) <= radius * multiplier;

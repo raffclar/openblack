@@ -255,8 +255,6 @@ void PlayFrameEffects(FrameViewInterface& view)
 	}
 	// The disciples glow, and the one in or under the hand shows the symbol of its work
 	ecs::villager_disciple::UpdateMarks();
-	// The town totems move to their shares by the real clock, also while the game is paused
-	Locator::villageTotemSystem::value().Update(static_cast<uint32_t>(clock.GetElapsedTime().count()));
 	// The owners' symbols float over their worthiest artefacts
 	Locator::artefactSystem::value().UpdateFrame(static_cast<float>(gameTime.count()));
 	// The flags over the towns' stores ease to their desires and turn to the camera

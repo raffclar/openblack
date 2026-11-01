@@ -1113,8 +1113,8 @@ struct FishingTrip
 /// Fishing when it has no food in its hand, then going to where it can throw into a storage pit, turning to it and
 /// throwing the food in; the action counts as done as it turns
 [[nodiscard]] std::vector<Step> GiveFishToStore(const std::optional<FishingTrip>& trip, uint32_t store, float height);
-/// Fishing when it has no food in its hand, then walking to a place until within its height of it and putting the food
-/// down there
+/// Fishing when it has no food in its hand, then walking to a place until within its height of it and letting go of the
+/// food there with the animation that puts a thing down
 [[nodiscard]] std::vector<Step> TakeFishTo(const std::optional<FishingTrip>& trip, glm::vec2 place, float height);
 /// The thing a creature poos by, by its entity's number. The creature can poo by itself
 struct PooBy

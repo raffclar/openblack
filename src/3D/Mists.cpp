@@ -109,3 +109,8 @@ bool mists::StepFade(Fade& fade, float& size) noexcept
 	}
 	return true;
 }
+
+float mists::FadeDone(float elapsed, float turns) noexcept
+{
+	return elapsed / turns;
+}

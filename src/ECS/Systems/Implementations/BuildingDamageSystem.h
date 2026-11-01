@@ -39,6 +39,7 @@ public:
 	entt::entity PieceAtRest(DynamicsSystemInterface& dynamics, PhysicsEntry* entry, entt::entity piece, bool insert) override;
 	void ForgetHitter(entt::entity rock) override;
 	void ProcessTurn() override;
+	void RemovePiece(entt::entity piece) override;
 	void RemakeModelsAfterLoad() override;
 	[[nodiscard]] entt::id_type DrawnMesh(entt::entity object, entt::id_type own) const override;
 	[[nodiscard]] std::optional<float> PartialShare(entt::entity building) const override;
