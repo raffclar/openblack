@@ -32,7 +32,8 @@ ROOT = Path(__file__).resolve().parents[3]
 
 # The game's code (BW1W120, runblack.exe 1.20)
 FTOL = 0x7A1400  # the C library's float to int conversion
-SSE2_FLAG = 0xE83A20  # the C library's flag that the start-up code sets on a CPU with SSE2
+SSE2_FLAG = 0xE83A20  # the C library's flag that selects the SSE2 path of its float to int; 0 is the 64-bit path that
+# openblack copies on every target (deviations row 177)
 HALF = 0x8AA3B4  # 0.5
 SLOWING = 0x8CEFAC  # 0.85
 RATE_AT_ZERO = 0x8CF024  # 1.6
@@ -69,7 +70,7 @@ def main() -> None:
     rng = random.Random(0x244_4)
     rows = []
     with Oracle() as o:
-        o.write_u32(SSE2_FLAG, 1)
+        o.write_u32(SSE2_FLAG, 0)
         turn_ms = CODE
         clip_ms = CODE + 0x40
         o.write(turn_ms, TURN_MS)
