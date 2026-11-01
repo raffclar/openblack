@@ -794,9 +794,9 @@ void AddNeeds(std::vector<Scenario>& all)
 	                   "stands in front of it, with a cuddly toy at the middle of the creche. The creche, its turn and "
 	                   "the toy are as on the first land. A pig stands to the side.",
 	    .expected = "It chooses to stroke the toy. It walks to the edge of the creche, out of reach of the toy, and stays "
-	                "there. Its walk ends at once on each turn. When it has not moved for a span of 5 seconds, it gives up the "
-	                "toy, and then it eats the pig. The game does not give up and the creature starves until it faints "
-	                "(vanilla-bugs row 389, deviation 90).",
+	                "there. Its walk ends at once on each turn and starts again on the next turn. It does not give up the "
+	                "toy and does not eat the pig. As in the game, it stays until it faints from hunger "
+	                "(vanilla-bugs row 389).",
 	    .framing = {.shot = Shot::Overview, .include = {{-20.0f, -60.0f}, {20.0f, 10.0f}}},
 	    .creatures = {CreatureSetup {
 	        .species = CreatureType::Tiger,

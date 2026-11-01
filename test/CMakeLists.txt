@@ -2281,3 +2281,4 @@ openblack_setup_and_add_test(test_sync_checksum_beside_draw test_sync_checksum_b
 openblack_setup_and_add_test(
   test_see_through_modes graphics/test_see_through_modes.cpp
 )
+openblack_setup_and_add_test(test_creature_approach_walk test_creature_approach_walk.cpp)

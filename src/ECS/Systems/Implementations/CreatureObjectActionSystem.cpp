@@ -1280,10 +1280,10 @@ void AimWhileMoving(entt::entity creature, CreatureObjectAction& action, const C
 	}
 }
 
-/// One step of the walk or the turn to get in reach. Only the step of each game turn (newTurn) counts the turns of the
-/// walk. This step also occurs on the turn that the action starts.
+/// One step of the walk or the turn to get in reach. This step occurs on each game turn, and also on the turn that the
+/// action starts.
 void Approach(entt::entity creature, CreatureObjectAction& action, const Creature& body, const Transform& transform,
-              CreatureAnimation& animation, const CreatureHeldObject* held, bool newTurn)
+              CreatureAnimation& animation, const CreatureHeldObject* held)
 {
 	auto& registry = Locator::entitiesRegistry::value();
 	auto& locomotion = Locator::creatureLocomotionSystem::value();
@@ -1310,23 +1310,10 @@ void Approach(entt::entity creature, CreatureObjectAction& action, const Creatur
 		Fail(action, "it is not on the map", creature_object_actions::Failure::NoWay);
 		return;
 	}
-	// A walk to a thing to pick up or stomp on fails when it does not move the creature for a time. It fails as a walk
-	// to a place where the creature cannot stand fails. Then the mind does not choose the thing again for a time
-	// (deviation 90). The turns of one route search that has not found a route yet do not count.
-	const auto* moves = registry.TryGet<const CreatureLocomotion>(creature);
-	const auto searchingFor = moves != nullptr && moves->follower.GetState() == creature_route::Follower::State::Planning
-	                              ? moves->destination
-	                              : std::nullopt;
-	if (newTurn && (action.kind == Kind::PickUp || action.kind == Kind::Destroy) &&
-	    creature_object_actions::StallsOnTurn(action.stall, glm::xz(transform.position),
-	                                          registry.AllOf<ScriptControlled>(creature), searchingFor))
-	{
-		SPDLOG_LOGGER_DEBUG(spdlog::get("game"), "Creature {} gives up its walk to {}: it got nowhere",
-		                    entt::to_integral(creature), action.target.has_value() ? entt::to_integral(*action.target) : 0u);
-		locomotion.Stop(creature);
-		Fail(action, "navigation failed", creature_object_actions::Failure::NoWay);
-		return;
-	}
+	// A walk to a thing to pick up or stomp on has no turn limit, as in the game. The walk starts again on each turn
+	// while the thing is out of reach. When the thing is inside the circle of a building, or is not at the position
+	// where the creature saw it last, each new walk stops at once where it started. Then the walk continues for ever,
+	// and only a faint or a stronger plan stops it.
 	if (locomotion.IsMoving(creature))
 	{
 		// On its way to a thing to pick up or stomp on, it aims at the thing again on each turn
@@ -2009,8 +1996,8 @@ bool CreatureObjectActionSystem::Start(entt::entity creature, CreatureObjectActi
 	// that waits while this creature walks to a thing sees the walk at once.
 	if (started && kept.phase == Phase::Approach)
 	{
-		Approach(creature, kept, body, registry.Get<const Transform>(creature), registry.Get<CreatureAnimation>(creature), held,
-		         false);
+		Approach(creature, kept, body, registry.Get<const Transform>(creature), registry.Get<CreatureAnimation>(creature),
+		         held);
 	}
 	return started;
 }
@@ -3063,7 +3050,7 @@ void CreatureObjectActionSystem::CreatureTurn(entt::entity entity)
 		if (action.status == Status::Running && action.phase == Phase::Approach)
 		{
 			Approach(entity, action, registry.Get<const Creature>(entity), registry.Get<const Transform>(entity),
-			         registry.Get<CreatureAnimation>(entity), registry.TryGet<const CreatureHeldObject>(entity), true);
+			         registry.Get<CreatureAnimation>(entity), registry.TryGet<const CreatureHeldObject>(entity));
 		}
 	}
 
