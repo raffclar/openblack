@@ -10,6 +10,7 @@
 #include <cstdint>
 #include <cstring>
 
+#include <algorithm>
 #include <array>
 #include <optional>
 #include <vector>
@@ -216,4 +217,57 @@ TEST(CreatureBlendStore, ABlendThatNoTurnTookGoesAfterTwoShapes)
 	EXPECT_EQ(stores.prepared.size(), 2u);
 	creature_blends::ForgetOld(stores, 8);
 	EXPECT_TRUE(stores.prepared.empty());
+}
+
+TEST(CreatureBlendStore, ABlendThatTheBackgroundMadeIsTheBlendOfAPrepareOnTheCallingThread)
+{
+	const auto rig = Species();
+	const std::array bodies {Body(-0.4f, -0.7f), Body(0.6f, -0.25f), Body(-1.0f, 0.3f)};
+	std::vector<creature_blends::Wanted> wanted;
+	for (const auto& body : bodies)
+	{
+		for (const auto index : {size_t {0}, k_Walk, k_Wave})
+		{
+			wanted.push_back({.rig = &rig, .morph = body, .index = index});
+		}
+	}
+	WorkerPool workers(3);
+	creature_blends::Stores here;
+	creature_blends::Prepare(here, wanted, workers, 1);
+	creature_blends::Stores background;
+	creature_blends::BackgroundPrepare job;
+	EXPECT_FALSE(job.Running());
+	job.Start(background, wanted, workers, 1);
+	EXPECT_TRUE(job.Running());
+	job.Finish();
+	EXPECT_FALSE(job.Running());
+	ASSERT_EQ(background.prepared.size(), here.prepared.size());
+	ASSERT_EQ(background.adjusted.size(), here.adjusted.size());
+	for (const auto& [key, blend] : here.prepared)
+	{
+		const auto other = background.prepared.find(key);
+		ASSERT_NE(other, background.prepared.end());
+		EXPECT_EQ(other->second.shaping, blend.shaping);
+		EXPECT_TRUE(SameBits(other->second.animation, blend.animation));
+	}
+	// A second start finishes the first job, and a blend that the stores keep is not made again
+	job.Start(background, wanted, workers, 2);
+	job.Start(background, wanted, workers, 3);
+	job.Finish();
+	EXPECT_EQ(background.prepared.size(), here.prepared.size());
+	EXPECT_TRUE(std::ranges::all_of(background.prepared, [](const auto& kept) { return kept.second.shaping == 1; }));
+}
+
+TEST(CreatureBlendStore, TheBackgroundWaitsForItsJobWhenItGoes)
+{
+	const auto rig = Species();
+	const std::vector<creature_blends::Wanted> wanted {{.rig = &rig, .morph = Body(0.2f, 0.4f), .index = k_Walk},
+	                                                   {.rig = &rig, .morph = Body(0.2f, 0.4f), .index = k_Wave}};
+	WorkerPool workers(2);
+	creature_blends::Stores stores;
+	{
+		creature_blends::BackgroundPrepare job;
+		job.Start(stores, wanted, workers, 1);
+	}
+	EXPECT_EQ(stores.prepared.size(), wanted.size());
 }
