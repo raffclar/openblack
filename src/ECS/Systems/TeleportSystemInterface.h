@@ -53,8 +53,6 @@ public:
 	virtual void RemoveStonesOf(entt::entity spell) = 0;
 	/// Whether a stone may be put at a point: nothing standing fixed on the land within its reach
 	[[nodiscard]] virtual bool CanPlaceStone(glm::vec3 point) const = 0;
-	/// Whether a stone stands where a new building would go: nothing may be built on one
-	[[nodiscard]] virtual bool BlocksNewBuilding(glm::vec3 point) const = 0;
 	/// A player's stones, the newest first
 	[[nodiscard]] virtual std::vector<entt::entity> GetStones(PlayerNames player) const = 0;
 	/// The stone of a miracle, if it has one
@@ -77,6 +75,9 @@ public:
 	/// A villager dropped by a player's hand onto a stone of theirs jumps at once, if there is another stone: it decides
 	/// what to do as it lands and jumps to the stone nearest where that takes it. Whether it jumped.
 	virtual bool DropOnStone(entt::entity villager, entt::entity stone, PlayerNames dropper) = 0;
+	/// Whether the hand of a player can drop a villager onto a stone. The stone must be of the player, and the player
+	/// must not have only one stone.
+	[[nodiscard]] virtual bool TakesDrop(entt::entity villager, entt::entity stone, PlayerNames dropper) const = 0;
 	/// The stone the hand touches along a ray, within its touch radius
 	[[nodiscard]] virtual std::optional<entt::entity> StoneAlong(glm::vec3 origin, glm::vec3 direction) const = 0;
 	/// The stone a worshipper of a player heads for to reach a far worship site, if going through the stones is shorter

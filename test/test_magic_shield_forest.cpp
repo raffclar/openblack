@@ -118,6 +118,14 @@ TEST(ShieldRules, TheDomeIsDrawnByItsStrengthNeverFainterThanForty)
 	EXPECT_TRUE(shield::NeedsRescale(1.0f, 0.6f));
 }
 
+TEST(ShieldRules, TheSolidShapeFollowsADifferenceOfAFloatThreeTenths)
+{
+	// The float difference of 1 and 0.7 is a little more than the double 0.3, so the solid shape follows
+	ASSERT_GT(static_cast<double>(1.0f - 0.7f), 0.3);
+	EXPECT_TRUE(shield::NeedsRescale(1.0f, 0.7f));
+	EXPECT_TRUE(shield::NeedsRescale(0.7f, 1.0f));
+}
+
 TEST(ShieldRules, ABlowCostsTheDomeByItsMomentum)
 {
 	EXPECT_FLOAT_EQ(shield::ImpactCost(25.0f, 10.0f, 100.0f), 2.5f);
