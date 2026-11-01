@@ -390,9 +390,11 @@ private:
 	bool StoreFromSpell(entt::entity entity, components::SpellSeed& seed, components::Spell& spell);
 	/// The gesture events since the last frame: the circle remembered, a power-up, the seed dropped
 	void TakeGestures();
-	/// A power-up gesture on the seed in the hand: the icon of the seed charges it to the level. Level -1 calls the
+	/// The icon that made the seed in the hand, or none
+	[[nodiscard]] entt::entity IconOfHeldSeed() const;
+	/// A power-up gesture at its turn: the icon of the command charges its seed to the level. Level -1 calls the
 	/// power-up off.
-	void AskPowerUpOfHeldSeed(int level);
+	void AskPowerUpAtIcon(entt::entity icon, int level);
 	void ShowHeldSeedPowerUp(int level, int previous);
 	/// Keep the tooltip text of the held seed's miracle at its power-up level, for the hand to show next
 	void AnnounceHeldMiracle(const components::SpellSeed& seed);

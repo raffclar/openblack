@@ -15,6 +15,8 @@
 #include <map>
 #include <optional>
 #include <set>
+#include <span>
+#include <vector>
 
 #include <entt/entity/entity.hpp>
 #include <gtest/gtest.h>
@@ -26,6 +28,7 @@
 #include "ECS/Systems/Implementations/MagicSystem.h"
 #include "ECS/Systems/Implementations/SpellIconSystem.h"
 #include "ECS/Systems/PlayerSystemInterface.h"
+#include "ECS/Systems/SpellIconSystemInterface.h"
 #include "Enums.h"
 #include "Locator.h"
 
@@ -89,6 +92,60 @@ public:
 	std::set<PlayerNames> nobody;
 };
 
+/// The icons of the test: each seed has the icon that the test gives it, and each power-up charge that starts is kept
+class FakeIcons final: public ecs::systems::SpellIconSystemInterface
+{
+public:
+	struct Charge
+	{
+		entt::entity icon;
+		PlayerNames player;
+		int powerUp;
+	};
+
+	bool TownHolds(entt::entity, MagicType) override { return false; }
+	bool TownReleases(entt::entity, MagicType) override { return false; }
+	[[nodiscard]] std::optional<size_t> CentreMiraclesShown(entt::entity) const override { return std::nullopt; }
+	void CentreWorking(entt::entity) override {}
+	void TownChangedHands(entt::entity, PlayerNames) override {}
+	void TownRemoved(entt::entity) override {}
+	void TownJoinedSite(entt::entity, entt::entity) override {}
+	void TownLeftSite(entt::entity, entt::entity) override {}
+	void SiteRemoved(entt::entity) override {}
+	[[nodiscard]] bool ValidToTap(entt::entity, PlayerNames) const override { return false; }
+	bool Tap(entt::entity, PlayerNames) override { return false; }
+	[[nodiscard]] entt::entity IconOfSeed(entt::entity seed) const override
+	{
+		const auto found = iconOfSeed.find(seed);
+		return found != iconOfSeed.end() ? found->second : entt::null;
+	}
+	bool StartPowerUpCharge(entt::entity icon, PlayerNames player, int powerUp) override
+	{
+		charges.push_back({.icon = icon, .player = player, .powerUp = powerUp});
+		return true;
+	}
+	[[nodiscard]] entt::entity SiteOfIcon(entt::entity) const override { return entt::null; }
+	void EmptyIconStores(entt::entity) override {}
+	void CancelChargesFor(entt::entity, PlayerNames) override {}
+	[[nodiscard]] entt::entity IconInTemple(entt::entity, SpellSeedType) const override { return entt::null; }
+	[[nodiscard]] bool AnyIconStores(entt::entity, std::optional<MagicType>) const override { return false; }
+	[[nodiscard]] bool HasIconFor(PlayerNames, SpellSeedType) const override { return false; }
+	[[nodiscard]] bool IsIcon(entt::entity) const override { return false; }
+	[[nodiscard]] bool IsHandReady(PlayerNames) const override { return false; }
+	[[nodiscard]] std::vector<SpellSeedType> SeedsForSelection(PlayerNames, GestureType) const override { return {}; }
+	[[nodiscard]] bool ValidForRequest(PlayerNames, SpellSeedType) const override { return false; }
+	bool RequestSeed(PlayerNames, SpellSeedType) override { return false; }
+	[[nodiscard]] SpellSeedType LastSeedGained(PlayerNames) const override { return SpellSeedType::None; }
+	[[nodiscard]] std::optional<float> ShownCharge(entt::entity) const override { return std::nullopt; }
+	[[nodiscard]] std::vector<magic::WorshipIconCharge> ChargesAt(entt::entity) const override { return {}; }
+	void ChargedAt(entt::entity, std::span<const magic::WorshipIconCharge>) override {}
+	void Update(float) override {}
+	void Reset() override {}
+
+	std::map<entt::entity, entt::entity> iconOfSeed;
+	std::vector<Charge> charges;
+};
+
 class HandHeldSeeds: public ::testing::Test
 {
 protected:
@@ -104,6 +161,7 @@ protected:
 	}
 	void TearDown() override
 	{
+		Locator::spellIconSystem::reset();
 		Locator::playerSystem::reset();
 		Locator::magicSystem::reset();
 		Locator::handSystem::reset();
@@ -236,4 +294,29 @@ TEST_F(HandHeldSeeds, ADropOfANamedPlayersSeedIsTheSameOnEachComputer)
 		_magic->DiscardHeldSeedOf(PlayerNames::PLAYER_TWO);
 		EXPECT_FALSE(_magic->IsHandBusyOf(PlayerNames::PLAYER_TWO));
 	}
+}
+
+// A power-up gesture names the icon of the seed in the hand. At the turn, the icon of the gesture starts the charge,
+// also when the hand holds a seed of another icon by then.
+TEST_F(HandHeldSeeds, APowerUpChargesAtTheIconOfTheGestureNotTheIconOfTheSeedInTheHand)
+{
+	auto& icons = static_cast<FakeIcons&>(Locator::spellIconSystem::emplace<FakeIcons>());
+	auto& registry = Locator::entitiesRegistry::value();
+	const auto gestureIcon = registry.Create();
+	const auto otherIcon = registry.Create();
+	icons.iconOfSeed[HoldSeed(PlayerNames::PLAYER_TWO)] = otherIcon;
+
+	_magic->DoSeedGesture(
+	    PlayerNames::PLAYER_TWO,
+	    player_commands::SeedGesture {.kind = player_commands::SeedGesture::Kind::PowerUp, .level = 1, .icon = gestureIcon});
+	ASSERT_EQ(icons.charges.size(), 1u);
+	EXPECT_EQ(icons.charges[0].icon, gestureIcon);
+	EXPECT_EQ(icons.charges[0].player, PlayerNames::PLAYER_TWO);
+	EXPECT_EQ(icons.charges[0].powerUp, 1);
+
+	// A gesture with no icon gives no icon to the icon system. The icon system then starts no charge.
+	_magic->DoSeedGesture(PlayerNames::PLAYER_TWO,
+	                      player_commands::SeedGesture {.kind = player_commands::SeedGesture::Kind::PowerUp, .level = 0});
+	ASSERT_EQ(icons.charges.size(), 2u);
+	EXPECT_TRUE(icons.charges[1].icon == entt::null);
 }

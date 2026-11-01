@@ -269,6 +269,9 @@ struct SeedGesture
 	Kind kind;
 	/// The level of a power-up
 	int8_t level;
+	/// The icon that charges the seed to the level of a power-up. The gesture sends the icon of the seed in the hand.
+	/// The turn charges at this icon, not at the icon of the seed that the hand holds at the turn.
+	entt::entity icon {entt::null};
 };
 
 /// The player of the command left a network game, or did not come back in time. Only the game server sends it. The
