@@ -37,6 +37,8 @@ constexpr DialogRect k_ListRect {.min = {40, 345}, .max = {755, 525}};
 constexpr int k_CheckBoxTop = 295;
 constexpr int k_FirstCheckBoxLeft = 100;
 constexpr int k_CheckBoxSpacing = 100;
+// The window of gods of a game of more than 4 gods, on the line of the check boxes, right of them
+constexpr DialogRect k_GodWindowLine {.min = {520, 295}, .max = {755, 320}};
 
 // The values of the gods in the list
 constexpr int k_ValueTextSize = 26;
@@ -87,11 +89,18 @@ ConditionsBox::ConditionsBox(const TextDatabase& texts, const GameFont& font, st
 		    font, glm::ivec2 {k_FirstCheckBoxLeft + (k_CheckBoxSpacing * static_cast<int>(i)), k_CheckBoxTop},
 		    CheckBox::k_DefaultSize, std::move(label), BigButton::LabelSide::Below, true, false);
 		box.onChange = [this, i](bool ticked) {
-			_ticked.at(i) = ticked;
+			if (const auto god = _checkBoxGods.at(i); god.has_value() && *god < _ticked.size())
+			{
+				_ticked.at(*god) = ticked;
+			}
 			FillGraph();
 		};
 		_checkBoxes.at(i) = &box;
 	}
+	_window = std::make_unique<GodWindow>(dialog, font, k_GodWindowLine, [this] {
+		ShowCheckBoxes();
+		FillGraph();
+	});
 }
 
 ConditionsBox::~ConditionsBox() = default;
@@ -101,20 +110,10 @@ void ConditionsBox::Open(Figures figures, bool fromGameOver)
 	_figures = std::move(figures);
 	_dialog->SetTabLabel(0, fromGameOver ? _gameOverLabel : _mainMenuLabel);
 	_dialog->SelectTab(k_MultiplayerTab);
-	// Every check box is ticked again, and only the check boxes of the gods that play show
-	_ticked.fill(true);
-	for (auto* box : _checkBoxes)
-	{
-		box->SetChecked(true);
-		box->visible = false;
-	}
-	for (const auto& god : _figures.gods)
-	{
-		if (const auto number = static_cast<size_t>(god.player); number < k_Gods)
-		{
-			_checkBoxes.at(number)->visible = true;
-		}
-	}
+	// Every god is ticked again, and only the check boxes of the gods that play show
+	_ticked.assign(_figures.gods.size(), true);
+	_window->SetGods(_figures.gods.size());
+	ShowCheckBoxes();
 	std::vector<List::Item> items;
 	items.reserve(_figures.conditions.size());
 	for (const auto& condition : _figures.conditions)
@@ -132,11 +131,24 @@ void ConditionsBox::Open(Figures figures, bool fromGameOver)
 	_dialog->Reset();
 }
 
+void ConditionsBox::ShowCheckBoxes()
+{
+	_checkBoxGods = GodsOfCheckBoxes(_figures, _window->GetFirst());
+	for (size_t i = 0; i < k_Gods; ++i)
+	{
+		auto& box = *_checkBoxes.at(i);
+		const auto god = _checkBoxGods.at(i);
+		box.visible = god.has_value();
+		box.SetChecked(god.has_value() && *god < _ticked.size() && _ticked.at(*god));
+		box.label = CheckBoxLabel(_figures, _checkBoxGods, i);
+	}
+}
+
 void ConditionsBox::FillGraph()
 {
 	std::vector<std::vector<float>> lines;
 	std::vector<glm::vec4> colours;
-	for (const auto index : ShownGods(_figures, _ticked))
+	for (const auto index : ShownGods(_checkBoxGods, _ticked))
 	{
 		const auto& god = _figures.gods.at(index);
 		lines.push_back(god.scores);
@@ -154,7 +166,7 @@ void ConditionsBox::DrawValues(const DialogPainter& painter, const List::ItemPla
 	{
 		return;
 	}
-	const auto shown = ShownGods(_figures, _ticked);
+	const auto shown = ShownGods(_checkBoxGods, _ticked);
 	const auto columns = ValueColumns(_list->rect.min.x, place.right, shown.size());
 	const auto number = _figures.conditions.at(place.index).number;
 	auto x = columns.first;

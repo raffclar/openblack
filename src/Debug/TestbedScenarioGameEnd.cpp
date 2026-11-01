@@ -26,11 +26,16 @@ constexpr std::string_view k_TwoComputerGods = R"(TOGGLE_COMPUTER_PLAYER("PLAYER
 constexpr std::string_view k_ThreeComputerGods = R"(TOGGLE_COMPUTER_PLAYER("PLAYER_TWO", 1)
 TOGGLE_COMPUTER_PLAYER("PLAYER_THREE", 1)
 )";
+constexpr std::string_view k_FourGods = R"(TOGGLE_COMPUTER_PLAYER("PLAYER_TWO", 1)
+TOGGLE_COMPUTER_PLAYER("PLAYER_THREE", 1)
+TOGGLE_COMPUTER_PLAYER("PLAYER_FOUR", 1)
+)";
 
 // The temples: the player's to the south, player two's to the north and player three's to the east
 constexpr glm::vec2 k_OwnTemple {0.0f, -60.0f};
 constexpr glm::vec2 k_SecondTemple {0.0f, 90.0f};
 constexpr glm::vec2 k_ThirdTemple {120.0f, 20.0f};
+constexpr glm::vec2 k_FourthTemple {-120.0f, 20.0f};
 
 const Framing k_Overview {.shot = Shot::Overview, .include = {{-60.0f, -100.0f}, {160.0f, 130.0f}}, .distance = 1.0f};
 } // namespace
@@ -181,5 +186,68 @@ void testbed_scenarios::AddGameEndScenarios(std::vector<Scenario>& all)
 	    .temples = {{.offset = k_OwnTemple}, {.offset = k_SecondTemple, .owner = PlayerNames::PLAYER_TWO}},
 	    .landScript = k_TwoComputerGods,
 	    .commands = {{.kind = Kind::DestroyTemple, .delaySeconds = 1.0f, .value = 1}},
+	});
+	all.push_back({
+	    .id = "game_end.statistics_4_gods",
+	    .name = "The Statistics tab of the end box with 4 gods",
+	    .facet = Facet::Multiplayer,
+	    .description = "A skirmish of four gods: the player and the computer gods of players two, three and four, each "
+	                   "with a temple. Two seconds in, the end box asks the question to leave. One second after that, "
+	                   "the Statistics tab of the end box opens.",
+	    .expected = "The Game Statistics box shows as the game shows it for four players: Game Over as its first tab, "
+	                "Player Stats open, the two line graphs and the bars of Final Area Of Influence with one line and one "
+	                "bar for each of the four gods in its colour, and each row with one value or one part of the bar for "
+	                "each god. No arrows and no \"Players\" text show at the bottom right.",
+	    .environment = {.dispenserGrid = false,
+	                    .players = {PlayerNames::PLAYER_TWO, PlayerNames::PLAYER_THREE, PlayerNames::PLAYER_FOUR},
+	                    .skirmish = true},
+	    .framing = k_Overview,
+	    .temples = {{.offset = k_OwnTemple},
+	                {.offset = k_SecondTemple, .owner = PlayerNames::PLAYER_TWO},
+	                {.offset = k_ThirdTemple, .owner = PlayerNames::PLAYER_THREE},
+	                {.offset = k_FourthTemple, .owner = PlayerNames::PLAYER_FOUR}},
+	    .landScript = k_FourGods,
+	    .commands = {{.kind = Kind::EndBox, .delaySeconds = 2.0f, .value = 0},
+	                 {.kind = Kind::EndBox, .delaySeconds = 1.0f, .value = 2}},
+	});
+	all.push_back({
+	    .id = "game_end.statistics_32_gods",
+	    .name = "The Statistics tab of the end box with 32 gods",
+	    .facet = Facet::Multiplayer,
+	    .description = "The network map for 32 gods loads on this computer alone and plays as a network game. Two seconds "
+	                   "in, the end box asks the question to leave. One second after that, the Statistics tab of the end "
+	                   "box opens. Two seconds after that, and two seconds after that again, the window of gods moves a "
+	                   "page on. The map needs the game's Online Maps folder.",
+	    .expected = "The Game Statistics box shows the first 4 gods as the box shows 4 gods. At the bottom right, "
+	                "\"Players 1-4 of 32\" shows with a right arrow after it. Each move shows the next 4 gods in the "
+	                "rows, the bars and the line graphs, and the text reads \"Players 5-8 of 32\", then \"Players 9-12 of "
+	                "32\", with a left arrow before it. A click on an arrow moves the window a page. The right arrow goes "
+	                "at \"Players 29-32 of 32\" (deviation 195).",
+	    .environment = {.land = Land::GodsRingMap, .clockRuns = false, .dispenserGrid = false, .networkGame = true},
+	    .framing = {.shot = Shot::Placed, .eye = {0.0f, 5500.0f, -2600.0f}, .look = {0.0f, 0.0f, -200.0f}},
+	    .commands = {{.kind = Kind::EndBox, .delaySeconds = 2.0f, .value = 0},
+	                 {.kind = Kind::EndBox, .delaySeconds = 1.0f, .value = 2},
+	                 {.kind = Kind::EndBox, .delaySeconds = 2.0f, .value = 4},
+	                 {.kind = Kind::EndBox, .delaySeconds = 2.0f, .value = 4}},
+	});
+	all.push_back({
+	    .id = "game_end.conditions_32_gods",
+	    .name = "The Multiplayer tab of the end box with 32 gods",
+	    .facet = Facet::Multiplayer,
+	    .description = "The network map for 32 gods loads on this computer alone and plays as a network game. Two seconds "
+	                   "in, the end box asks the question to leave. One second after that, the Multiplayer tab of the end "
+	                   "box opens. Two seconds after that, and two seconds after that again, the window of gods moves a "
+	                   "page on. The map needs the game's Online Maps folder.",
+	    .expected = "The box of the winning conditions shows the check boxes Player 1 to Player 4 under the graph, and "
+	                "\"Players 1-4 of 32\" with a right arrow on the same line at the right. Each move puts the next 4 gods "
+	                "on the check boxes (Player 5 to Player 8, then Player 9 to Player 12) and in the graph, each god "
+	                "ticked as the player left it. A click on a check box takes the line of its god out of the graph or "
+	                "puts it back (deviation 195).",
+	    .environment = {.land = Land::GodsRingMap, .clockRuns = false, .dispenserGrid = false, .networkGame = true},
+	    .framing = {.shot = Shot::Placed, .eye = {0.0f, 5500.0f, -2600.0f}, .look = {0.0f, 0.0f, -200.0f}},
+	    .commands = {{.kind = Kind::EndBox, .delaySeconds = 2.0f, .value = 0},
+	                 {.kind = Kind::EndBox, .delaySeconds = 1.0f, .value = 1},
+	                 {.kind = Kind::EndBox, .delaySeconds = 2.0f, .value = 4},
+	                 {.kind = Kind::EndBox, .delaySeconds = 2.0f, .value = 4}},
 	});
 }
