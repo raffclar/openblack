@@ -41,9 +41,9 @@ float PlayerProperty(std::optional<PlayerNames> player, bool destroyedTown)
 	return static_cast<float>(static_cast<uint32_t>(*player) + 1);
 }
 
-bool InCreatureHand(entt::entity thing, entt::entity carried, std::optional<entt::entity> eating)
+bool InCreatureHand(entt::entity thing, entt::entity inHand, std::optional<entt::entity> eating)
 {
-	return thing != entt::null && (carried == thing || eating == thing);
+	return thing != entt::null && (inHand == thing || eating == thing);
 }
 
 namespace

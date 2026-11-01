@@ -13134,6 +13134,24 @@ void AddPoisonScenarios(std::vector<Scenario>& all)
 	                 poison(2.0f, {.kind = Argument::Kind::Object, .index = 1}, 1),
 	                 poison(7.0f, {.kind = Argument::Kind::Town}, 0)},
 	});
+
+	// The end of the Plague's script cures the storage pit and then the town. A script can cure the storage pit
+	// (deviation 179).
+	all.push_back({
+	    .id = "objects.script_cures_store",
+	    .name = "A script cures a storage pit",
+	    .facet = Facet::Objects,
+	    .description = "A Celtic town of the player's with a village centre and a storage pit with 2000 food and 1000 wood. "
+	                   "After one second a script poisons the storage pit. After six seconds it cures the storage pit.",
+	    .expected = "At one second the food pile of the storage pit is poisoned and shows a pale green tint. At six seconds "
+	                "the food pile is cured, and the tint goes. The food stays in the pile.",
+	    .environment = {.dispenserGrid = false},
+	    .framing = {.shot = Shot::Overview, .include = {k_Pit - glm::vec2 {12.0f}, k_Pit + glm::vec2 {12.0f}}},
+	    .objects = {{.type = AbodeInfo::CelticTownCentre, .offset = {0.0f, 50.0f}},
+	                {.type = AbodeInfo::CelticStoragePit, .offset = k_Pit, .storedFood = 2000, .storedWood = 1000}},
+	    .commands = {poison(1.0f, {.kind = Argument::Kind::Object, .index = 1}, 1),
+	                 poison(5.0f, {.kind = Argument::Kind::Object, .index = 1}, 0)},
+	});
 }
 
 void AddWorkshopScenarios(std::vector<Scenario>& all)

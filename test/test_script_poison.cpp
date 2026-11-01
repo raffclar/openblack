@@ -85,14 +85,14 @@ TEST(ScriptPoison, AnyValueButNoughtPoisonsAStore)
 	EXPECT_TRUE(registry.Get<components::Pot>(food).poisoned);
 }
 
-TEST(ScriptPoison, AScriptNeverCuresAStore)
+TEST(ScriptPoison, AScriptCuresAStoreWithAValueOfNought)
 {
 	Registry registry;
 	const auto food = MakePile(registry, 2000, true);
 	const auto pit = MakePit(registry, food, k_NoWood);
 	script_poison::SetPoisoned(registry, pit, 0u);
-	EXPECT_TRUE(registry.Get<components::Pot>(food).poisoned);
-	EXPECT_TRUE(script_poison::IsPoisoned(registry, pit));
+	EXPECT_FALSE(registry.Get<components::Pot>(food).poisoned);
+	EXPECT_FALSE(script_poison::IsPoisoned(registry, pit));
 }
 
 TEST(ScriptPoison, AStoreWithNoFoodPileIsLeftAlone)
