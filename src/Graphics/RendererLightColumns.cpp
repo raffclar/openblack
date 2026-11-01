@@ -36,6 +36,7 @@
 #include "ECS/Systems/TimeSystemInterface.h"
 #include "Graphics/LightColumn.h"
 #include "Graphics/ShaderManager.h"
+#include "Graphics/ViewFrustum.h"
 #include "Graphics/ZSort.h"
 #include "Locator.h"
 #include "Renderer.h"
@@ -78,8 +79,13 @@ void Renderer::DrawLightColumns(const DrawSceneDesc& desc) const
 	using namespace ecs::components;
 	const auto& column = *meshes.Handle(columnId);
 	const auto& influence = Locator::influenceSystem::value();
+	// The view of the main pass. A column out of it puts no pixel on the screen, so it is not drawn. A warm-up draws all
+	// of them.
+	const auto seenBy = view_frustum::FromViewProjection(desc.camera->GetProjectionMatrix() *
+	                                                     desc.camera->GetViewMatrix(Camera::Interpolation::Current));
+	const auto* testedView = _warmingUp || column.IsBoned() ? nullptr : &seenBy;
 	const auto draw = [&](const glm::vec3& position, PlayerNames owner, uint8_t alpha) {
-		DrawLightShaft(desc, column, position, light_column::Tint(ColourOf(owner), alpha));
+		DrawLightShaft(desc, column, position, light_column::Tint(ColourOf(owner), alpha), testedView);
 	};
 	// A warm-up draws a column that adds nothing, as the first column of a land draws it
 	if (_warmingUp)
@@ -126,11 +132,19 @@ void Renderer::DrawLightColumns(const DrawSceneDesc& desc) const
 	});
 }
 
-void Renderer::DrawLightShaft(const DrawSceneDesc& desc, const L3DMesh& mesh, const glm::vec3& position,
-                              const glm::vec4& tint) const
+void Renderer::DrawLightShaft(const DrawSceneDesc& desc, const L3DMesh& mesh, const glm::vec3& position, const glm::vec4& tint,
+                              const view_frustum::Frustum* seenBy) const
 {
 	const auto eye = desc.camera->GetOrigin();
 	const auto model = light_column::Model(position, eye);
+	if (seenBy != nullptr)
+	{
+		const auto box = mesh.GetBoundingBox();
+		if (!view_frustum::SeesBox(*seenBy, model, box.minima, box.maxima))
+		{
+			return;
+		}
+	}
 	L3DMeshSubmitDesc submitDesc = {};
 	submitDesc.viewId = TranslucentPassOf(desc.viewId);
 	submitDesc.program = _shaderManager->GetShader("Object");
