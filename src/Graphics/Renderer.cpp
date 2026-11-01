@@ -50,6 +50,7 @@
 #include "3D/InfluenceCircle.h"
 #include "3D/L3DAnim.h"
 #include "3D/L3DMesh.h"
+#include "3D/L3DSkinTexels.h"
 #include "3D/L3DSubMesh.h"
 #include "3D/LandBlock.h"
 #include "3D/LandColourStamps.h"
@@ -4656,9 +4657,15 @@ void Renderer::UploadCreatureSkins(const ecs::Registry& entities, std::unordered
 		{
 			const auto& painted = skin.skins[i];
 			auto& texture = entry.textures[i];
+			// The skins are at half size at the two lowest detail levels
+			const auto side = l3d_skin::SideOf(painted.texels.size());
+			if (texture && texture->GetResolution().x != side)
+			{
+				texture.reset();
+			}
 			if (!texture)
 			{
-				texture = TakeCreatureSkinTexture();
+				texture = TakeCreatureSkinTexture(side);
 				// Out of textures, as with thousands of creatures: this one keeps its species' skin as it was made
 				if (!texture)
 				{
@@ -4696,22 +4703,21 @@ void Renderer::UploadCreatureSkins(const ecs::Registry& entities, std::unordered
 	});
 }
 
-std::unique_ptr<Texture2D> Renderer::TakeCreatureSkinTexture() const
+std::unique_ptr<Texture2D> Renderer::TakeCreatureSkinTexture(uint16_t side) const
 {
-	if (!_spareCreatureSkins.empty())
+	if (!_spareCreatureSkins.empty() && _spareCreatureSkins.back()->GetResolution().x == side)
 	{
 		auto texture = std::move(_spareCreatureSkins.back());
 		_spareCreatureSkins.pop_back();
 		return texture;
 	}
-	return MakeCreatureSkinTexture();
+	return MakeCreatureSkinTexture(side);
 }
 
-std::unique_ptr<Texture2D> Renderer::MakeCreatureSkinTexture()
+std::unique_ptr<Texture2D> Renderer::MakeCreatureSkinTexture(uint16_t side)
 {
 	auto texture = std::make_unique<Texture2D>("Creature Skin");
-	texture->CreateWithinFrame(creature_tattoo::k_SkinSize, creature_tattoo::k_SkinSize, 1, TextureFormat::BGRA4,
-	                           Wrapping::Repeat, Filter::Linear, nullptr);
+	texture->CreateWithinFrame(side, side, 1, TextureFormat::BGRA4, Wrapping::Repeat, Filter::Linear, nullptr);
 	if (!bgfx::isValid(toBgfx(texture->GetNativeHandle())))
 	{
 		return nullptr;
@@ -4721,9 +4727,10 @@ std::unique_ptr<Texture2D> Renderer::MakeCreatureSkinTexture()
 
 void Renderer::PrepareCreatureSkins(size_t count) const noexcept
 {
+	const bool lowResolution = Locator::config::has_value() && Locator::config::value().detail.lowResTextures;
 	while (_spareCreatureSkins.size() < count)
 	{
-		auto texture = MakeCreatureSkinTexture();
+		auto texture = MakeCreatureSkinTexture(l3d_skin::LoadedSide(lowResolution));
 		if (!texture)
 		{
 			return;
@@ -4878,9 +4885,10 @@ void Renderer::UploadHandSkins() const
 		auto& texture = _handSkinTextures[i];
 		if (!texture)
 		{
+			// The skins are at half size at the two lowest detail levels
+			const auto side = l3d_skin::SideOf(skin.texels.size());
 			texture = std::make_unique<Texture2D>("Hand Skin");
-			texture->CreateWithinFrame(l3d::L3DTexture::k_Width, l3d::L3DTexture::k_Height, 1, TextureFormat::BGRA4,
-			                           Wrapping::Repeat, Filter::Linear, nullptr);
+			texture->CreateWithinFrame(side, side, 1, TextureFormat::BGRA4, Wrapping::Repeat, Filter::Linear, nullptr);
 		}
 		texture->Update(skin.texels.data(), static_cast<uint32_t>(skin.texels.size() * sizeof(skin.texels[0])));
 		_handSkins.emplace_back(skin.id, texture.get());
