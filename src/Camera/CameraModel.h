@@ -70,6 +70,9 @@ public:
 		/// hand's influence and the clock are left for the caller), and how far the clear view has come in
 		std::optional<hand_tricons::WorldCameraFrame> icons;
 		float clearView {0.0f};
+		/// The world camera's controls asked for a turn of more than a hundredth this frame, before the features take it
+		/// away. Always false for other cameras.
+		bool controlsTurned {false};
 	};
 
 	static std::unique_ptr<CameraModel> CreateModel(Model model);

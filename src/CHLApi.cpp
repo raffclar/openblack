@@ -10059,11 +10059,12 @@ void GetHandState() // 413 GET_HAND_STATE
 	facts.interfaceActive =
 	    !Locator::cinematicDirectorSystem::has_value() || Locator::cinematicDirectorSystem::value().IsInterfaceActive();
 	facts.inTemple = PlayerInsideTemple();
-	// The grip of the land and the other button come from the view report of the player
+	// The grip of the land, the other button and the turn of the camera come from the view report of the player
 	if (const auto view = ScriptView(); view.has_value())
 	{
 		facts.gripsLand = view->gripsLand;
 		facts.otherButton = view->otherButton;
+		facts.cameraTurned = view->cameraTurned;
 	}
 	if (Locator::cameraHelpSystem::has_value())
 	{

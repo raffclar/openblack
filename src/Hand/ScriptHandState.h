@@ -14,7 +14,7 @@
 #include "Camera/CameraDrag.h"
 
 /// What the hand is doing, as the scripts ask for it. The camera lessons wait for the player to grip the land, and
-/// don't replay a demonstration while the player is zooming with the land gripped.
+/// don't replay a demonstration while the player is turning or zooming with the land gripped.
 namespace openblack::hand::script_state
 {
 
@@ -25,7 +25,7 @@ enum class State : int32_t
 	Normal = 3,
 	/// The hand grips the land
 	GripLandscape = 20,
-	/// A number the scripts wait for while turning the camera, which the game never gives
+	/// The hand grips the land, the other button is held too, and the camera turns
 	RotateLandscape = 21,
 	/// The hand grips the land and the other button is held too, zooming
 	ZoomLandscape = 22,
@@ -45,14 +45,16 @@ struct Facts
 	bool gripsLand {false};
 	/// The other button is held too
 	bool otherButton {false};
+	/// The camera's controls asked for a turn of more than a hundredth in this turn
+	bool cameraTurned {false};
 	/// What the camera lets the player do
 	uint32_t cameraFeatures {camera_drag::k_DefaultFeatures};
 };
 
-/// The hand's state. Holding the land gives a grip, or a zoom with the other button held as well while zooming is
-/// allowed.
+/// The hand's state. Holding the land gives a grip. With the other button held as well, it gives a turn when the
+/// camera turns while turning is allowed, else a zoom while zooming is allowed.
 // TODO(advisor-point-things): the hand's other states (over an object, holding one, casting, the leash, the bubble,
-// fights) aren't told apart yet and give Normal; the scripts only ask after the land grip and the zoom
+// fights) aren't told apart yet and give Normal; the scripts only ask after the land grip, the turn and the zoom
 [[nodiscard]] constexpr State StateOf(const Facts& facts)
 {
 	if (!facts.interfaceActive)
@@ -65,7 +67,15 @@ struct Facts
 	}
 	if (facts.gripsLand)
 	{
-		const bool zooming = facts.otherButton && (facts.cameraFeatures & camera_drag::feature::k_Zoom) != 0;
+		if (!facts.otherButton)
+		{
+			return State::GripLandscape;
+		}
+		if (facts.cameraTurned && (facts.cameraFeatures & camera_drag::feature::k_Rotate) != 0)
+		{
+			return State::RotateLandscape;
+		}
+		const bool zooming = (facts.cameraFeatures & camera_drag::feature::k_Zoom) != 0;
 		return zooming ? State::ZoomLandscape : State::GripLandscape;
 	}
 	return State::Normal;

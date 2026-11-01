@@ -3262,7 +3262,13 @@ void Game::ReportView()
 	                         Locator::gameActionSystem::value().Get(input::UnbindableActionMap::TWO_BUTTON_CLICK);
 	const bool moveHeld = bothButtons || (Locator::gameActionSystem::has_value() &&
 	                                      Locator::gameActionSystem::value().Get(input::BindableActionMap::MOVE));
-	_reportLandGrip = input::land_grip::GripsLand(camera.GetModel().GetHandCues().dragging, _reportLandGrip, moveHeld);
+	const auto cues = camera.GetModel().GetHandCues();
+	_reportLandGrip = input::land_grip::GripsLand(cues.dragging, _reportLandGrip, moveHeld);
+	// The turn of the camera counts for the whole game turn, so that the scripts see it at all frame rates
+	const auto turn = Locator::time::value().GetTurn();
+	_reportCameraTurned =
+	    view_report::CameraTurnedInTurn(_reportCameraTurned, _reportCameraTurnTurn == turn, cues.controlsTurned);
+	_reportCameraTurnTurn = turn;
 	player_commands::ViewReport report {
 	    .eye = pose.eye,
 	    .focus = pose.focus,
@@ -3280,6 +3286,7 @@ void Game::ReportView()
 	    .mouseWheel = script::lesson_natives::MouseHasWheel(platform_mouse::SystemSaysWheel(),
 	                                                        Locator::gameActionSystem::has_value() &&
 	                                                            Locator::gameActionSystem::value().WheelTurned()),
+	    .cameraTurned = _reportCameraTurned,
 	    // The icons that the last draw kept, or the world camera's own when the draw did not run
 	    .cameraIcons =
 	        static_cast<uint16_t>((_interface ? _interface->GetDrawnCameraIcons() : std::nullopt).value_or(_cameraIcons)),

@@ -798,6 +798,9 @@ private:
 	bool _tipsLandGrip {false};
 	/// Whether the view report says that the hand grips the land: from a drag of the land until the Move button is let go
 	bool _reportLandGrip {false};
+	/// The world camera's controls asked for a turn in a frame of the game turn that the view report counts, and that turn
+	bool _reportCameraTurned {false};
+	std::optional<uint32_t> _reportCameraTurnTurn;
 	hand_navigation_pose::Pose _handPose {hand_navigation_pose::Pose::Idle};
 	/// The rotate arrow's turn, kept from frame to frame, which a demonstration's recording sets too
 	float _triconAngle {0.0f};
