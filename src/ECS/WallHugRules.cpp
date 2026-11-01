@@ -406,6 +406,11 @@ bool LeavesCircle(glm::ivec2 position, glm::ivec2 goal, glm::ivec2 step, uint32_
 	return (clockwise ? side < 0.0f : side > 0.0f) && goalAhead;
 }
 
+uint32_t LeaveDistanceAfterGoalMoves(glm::ivec2 position, glm::ivec2 goal, uint32_t entryDistance, bool goesRound)
+{
+	return goesRound ? EntryDistance(position, goal) : entryDistance;
+}
+
 CircleSweep SweepCircle(const CircleSweepInput& input)
 {
 	CircleSweep result {.outcome = CircleSweep::Outcome::Hug, .turnsToObstacle = k_NoObstacleInReach, .needsLookahead = false};

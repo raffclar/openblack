@@ -258,6 +258,22 @@ workshop::ClearingPush workshop::PushOutOfWay(glm::vec2 centre, glm::vec2 edge)
 	return {.velocity = {xShare + xShare, k_UpSpeed, zShare + zShare}, .offset = {x, z}};
 }
 
+map_coords::MapCoords workshop::PushStart(glm::vec2 centre, const ClearingPush& push)
+{
+	auto start = map_coords::FromMetres(centre + push.offset);
+	start.altitude = k_PushStartAltitude;
+	return start;
+}
+
+workshop::ClearingAction workshop::ClearingActionFor(const ClearingFacts& facts)
+{
+	if (facts.creature)
+	{
+		return ClearingAction::LeaveAlone;
+	}
+	return !facts.held && facts.canFly ? ClearingAction::Push : ClearingAction::Remove;
+}
+
 uint32_t workshop::FoundedTownId(std::span<const uint32_t> usedIds)
 {
 	auto id = k_FoundedTownId;
