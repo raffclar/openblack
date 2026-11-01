@@ -42,6 +42,11 @@ void SetShare(Ease& ease, float share)
 	ease.acceleration = -ease.jerk * t - ease.snap * t * t / 2.0f;
 }
 
+Ease StillAt(float share)
+{
+	return {.share = share, .target = share, .startShare = share};
+}
+
 void Step(Ease& ease, float milliseconds)
 {
 	ease.elapsed += milliseconds;

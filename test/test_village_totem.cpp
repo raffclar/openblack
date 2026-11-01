@@ -18,6 +18,7 @@
 #include <glm/glm.hpp>
 #include <gtest/gtest.h>
 
+#include "Common/PortableRotations.h"
 #include "ECS/Components/Abode.h"
 #include "ECS/Components/DrawnHeight.h"
 #include "ECS/Components/Mesh.h"
@@ -260,6 +261,42 @@ TEST(VillageTotemSystem, ItWearsItsPlayersCreatureAndStartsWithNoOneAtWorship)
 	// Set to none from none it arrives at once: the grinding stops and the bell rings
 	EXPECT_EQ(village.world->moving, (std::vector {true, false}));
 	EXPECT_EQ(village.world->bells, 1);
+}
+
+TEST(VillageTotemEase, AStatueThatStandsStillHasItsShareAndNoMovement)
+{
+	const auto ease = vt::StillAt(0.4f);
+	EXPECT_EQ(ease.share, 0.4f);
+	EXPECT_EQ(ease.target, 0.4f);
+	EXPECT_EQ(ease.startShare, 0.4f);
+	EXPECT_EQ(ease.speed, 0.0f);
+	EXPECT_EQ(ease.duration, 0.0f);
+	EXPECT_FALSE(ease.moving);
+	EXPECT_EQ(ease.clockMs, 0u);
+}
+
+TEST(VillageTotemSystem, ATotemOfASavedGameStandsStillAtItsShareWithItsHeadingAndNoSound)
+{
+	auto village = MakeVillage(true);
+	auto& registry = village.world->registry;
+	village.world->moving.clear();
+	village.world->reinserted.clear();
+	village.system->Restore(village.totem, 1.25f, 0.6f);
+	const auto& totem = registry.Get<VillageTotem>(village.totem);
+	EXPECT_EQ(totem.ease.share, 0.6f);
+	EXPECT_EQ(totem.ease.target, 0.6f);
+	EXPECT_FALSE(totem.ease.moving);
+	EXPECT_EQ(totem.held, 0.6f);
+	EXPECT_EQ(village.world->moving, std::vector {false});
+	const auto turned = glm::mat3(portable_math::EulerAngleY(-1.25f));
+	EXPECT_EQ(registry.Get<Transform>(village.totem).rotation, turned);
+	EXPECT_EQ(registry.Get<Transform>(village.icon).rotation, turned);
+	EXPECT_EQ(village.world->reinserted, std::vector {village.totem});
+	// It stands risen at its share at once
+	EXPECT_FLOAT_EQ(registry.Get<DrawnHeight>(village.totem).y, 3.0f + vt::RiseOf(0.6f));
+	// It does not move, so the turn rings no bell
+	village.system->ProcessTurn(10);
+	EXPECT_EQ(village.world->bells, 0);
 }
 
 TEST(VillageTotemSystem, ItEasesEachFrameButRingsTheBellOnlyInAGameTurn)

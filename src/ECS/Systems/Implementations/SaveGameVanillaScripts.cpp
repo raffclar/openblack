@@ -295,20 +295,15 @@ void SaveGameSystem::ImportVanillaScriptThings(const gamesave::VanillaWorld& wor
 		auto& system = Locator::scriptHighlightSystem::value();
 		for (const auto& highlight : things.highlights)
 		{
-			const auto entity =
-			    system.Create(static_cast<uint32_t>(highlight.kind), GroundPosition(highlight.position), highlight.text);
+			const auto entity = system.Restore({.kind = static_cast<uint32_t>(highlight.kind),
+			                                    .at = GroundPosition(highlight.position),
+			                                    .text = highlight.text,
+			                                    .category = highlight.category,
+			                                    .active = highlight.active,
+			                                    .drawHeight = highlight.drawHeight});
 			if (entity == entt::null)
 			{
 				continue;
-			}
-			system.SetProperties(entity, highlight.text, highlight.category);
-			if (highlight.drawHeight.has_value())
-			{
-				system.SetDrawHeight(entity, *highlight.drawHeight);
-			}
-			if (highlight.active)
-			{
-				system.SetActive(entity, true);
 			}
 			made.emplace(highlight.number, entity);
 			++highlights;

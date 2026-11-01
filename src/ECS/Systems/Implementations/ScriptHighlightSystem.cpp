@@ -16,6 +16,7 @@
 #include <algorithm>
 #include <array>
 #include <chrono>
+#include <functional>
 #include <optional>
 #include <vector>
 
@@ -81,6 +82,27 @@ void ScriptHighlightSystem::OnHighlightGone(entt::registry& registry, entt::enti
 
 entt::entity ScriptHighlightSystem::Create(uint32_t kind, glm::vec3 at, uint32_t challenge)
 {
+	return Make(kind, at, [challenge](ScriptHighlight& highlight) { highlight.scriptId = challenge; });
+}
+
+entt::entity ScriptHighlightSystem::Restore(const SavedHighlight& saved)
+{
+	// The load writes the saved values, the active value too, before the creation step. So the step shows the model
+	// of that value and does not start the highlight.
+	return Make(saved.kind, saved.at, [&saved](ScriptHighlight& highlight) {
+		highlight.scriptId = saved.text;
+		highlight.category = saved.category;
+		highlight.active = saved.active;
+		if (saved.drawHeight.has_value())
+		{
+			highlight.drawHeight = *saved.drawHeight;
+			highlight.heightAbove = *saved.drawHeight;
+		}
+	});
+}
+
+entt::entity ScriptHighlightSystem::Make(uint32_t kind, glm::vec3 at, const std::function<void(ScriptHighlight&)>& values)
+{
 	const auto info = _world->InfoOf(kind);
 	if (!info.has_value())
 	{
@@ -92,7 +114,7 @@ entt::entity ScriptHighlightSystem::Create(uint32_t kind, glm::vec3 at, uint32_t
 	openblack::ecs::archetypes::TakeThingMadePlace();
 	auto& highlight = registry.Assign<ScriptHighlight>(entity);
 	highlight.kind = static_cast<HighlightInfo>(kind);
-	highlight.scriptId = challenge;
+	values(highlight);
 	// It stands on the land where it is made, facing north, until its first turn finds what it stands on
 	const auto ground = glm::vec3(at.x, _world->LandHeight({at.x, at.z}), at.z);
 	registry.Assign<Transform>(entity, ground, glm::mat3(1.0f), glm::vec3(k_Scale));
