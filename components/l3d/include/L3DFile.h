@@ -511,6 +511,7 @@ public:
 	void AddVertices(const std::vector<L3DVertex>& vertices) noexcept;
 	void AddIndices(const std::vector<uint16_t>& indices) noexcept;
 	void AddBones(const std::vector<L3DBone>& bones) noexcept;
+	void AddSkin(const L3DTexture& skin) noexcept;
 };
 
 } // namespace openblack::l3d

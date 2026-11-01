@@ -99,14 +99,14 @@ L3DSubMesh::Primitive L3DSubMesh::Changed(const Primitive& primitive, const rend
 
 std::optional<float> L3DSubMesh::Pick(glm::vec3 origin, glm::vec3 direction) const
 {
-	if (_pickTriangles.empty())
+	if (_data.pickTriangles.empty())
 	{
 		return std::nullopt;
 	}
 	// Past the submesh's box, the ray can't meet it
 	const auto inverse = 1.0f / direction;
-	const auto near = (_boundingBox.minima - origin) * inverse;
-	const auto far = (_boundingBox.maxima - origin) * inverse;
+	const auto near = (_data.boundingBox.minima - origin) * inverse;
+	const auto far = (_data.boundingBox.maxima - origin) * inverse;
 	const float enter = glm::compMax(glm::min(near, far));
 	const float leave = glm::compMin(glm::max(near, far));
 	if (leave < 0.0f || enter > leave)
@@ -114,12 +114,12 @@ std::optional<float> L3DSubMesh::Pick(glm::vec3 origin, glm::vec3 direction) con
 		return std::nullopt;
 	}
 	std::optional<float> nearest;
-	for (size_t i = 0; i + 2 < _pickTriangles.size(); i += 3)
+	for (size_t i = 0; i + 2 < _data.pickTriangles.size(); i += 3)
 	{
 		// Möller and Trumbore's test, from either side, as the game picks
-		const auto& a = _pickTriangles[i];
-		const auto edge1 = _pickTriangles[i + 1] - a;
-		const auto edge2 = _pickTriangles[i + 2] - a;
+		const auto& a = _data.pickTriangles[i];
+		const auto edge1 = _data.pickTriangles[i + 1] - a;
+		const auto edge2 = _data.pickTriangles[i + 2] - a;
 		const auto across = glm::cross(direction, edge2);
 		const float determinant = glm::dot(edge1, across);
 		if (std::abs(determinant) < 1e-12f)
@@ -150,61 +150,75 @@ std::optional<float> L3DSubMesh::Pick(glm::vec3 origin, glm::vec3 direction) con
 
 bool L3DSubMesh::Load(const l3d::L3DFile& l3d, uint32_t meshIndex) noexcept
 {
+	auto prepared = Prepare(l3d, meshIndex, _l3dMesh.GetUploadMode() == UploadMode::Device);
+	if (!prepared.has_value())
+	{
+		return false;
+	}
+	Finish(std::move(*prepared));
+	return true;
+}
+
+std::optional<L3DSubMesh::Prepared> L3DSubMesh::Prepare(const l3d::L3DFile& l3d, uint32_t meshIndex, bool packVertices)
+{
 	const auto& header = l3d.GetSubmeshHeaders()[meshIndex];
 	const auto primitiveSpan = l3d.GetPrimitiveSpan(meshIndex);
 	const auto& verticesSpan = l3d.GetVertexSpan(meshIndex);
 	const auto& indexSpan = l3d.GetIndexSpan(meshIndex);
 
-	_flags = header.flags;
+	Prepared prepared;
+	auto& data = prepared.data;
+	data.flags = header.flags;
 	// The file's second flag of the pair after the status marks the part's levels of detail as set
 	constexpr uint32_t k_LevelsMarked = 0b10;
-	const bool levelsMarked = (_flags.unknown2 & k_LevelsMarked) != 0;
-	if (const auto levels = mesh_detail::LoadedPartLevels(static_cast<uint8_t>(_flags.lodMask), levelsMarked);
-	    levels != _flags.lodMask)
+	const bool levelsMarked = (data.flags.unknown2 & k_LevelsMarked) != 0;
+	if (const auto levels = mesh_detail::LoadedPartLevels(static_cast<uint8_t>(data.flags.lodMask), levelsMarked);
+	    levels != data.flags.lodMask)
 	{
-		_flags.lodMask = levels;
-		_flags.unknown2 |= k_LevelsMarked;
+		data.flags.lodMask = levels;
+		data.flags.unknown2 |= k_LevelsMarked;
 	}
 
 	// Count vertices and indices
 	uint32_t nVertices = 0;
 	uint32_t nIndices = 0;
-	for (auto& primitive : primitiveSpan)
+	for (const auto& primitive : primitiveSpan)
 	{
 		nVertices += primitive.numVertices;
 		nIndices += primitive.numTriangles * 3;
 	}
 
-	_meshIndex = meshIndex;
-	BoundVertices(l3d, meshIndex);
+	data.meshIndex = meshIndex;
+	data.boundingBox = BoundVertices(l3d, meshIndex, data.flags.hasBones);
 
 	if (nVertices == 0)
 	{
-		return false;
+		return std::nullopt;
 	}
 
 	// The UV2 block's lightmap coordinates run over the vertices of every submesh in turn, and it has a lightmap for
 	// each submesh, without a skin where there is none
 	const auto& lightmapCoordinates = l3d.GetLightmapCoordinates();
 	const auto vertexOffset = static_cast<size_t>(verticesSpan.data() - l3d.GetVertices().data());
-	_hasLightmapCoordinates = !lightmapCoordinates.empty() && vertexOffset + nVertices <= lightmapCoordinates.size();
-	if (_hasLightmapCoordinates && meshIndex < l3d.GetLightmaps().size() && l3d.GetLightmaps()[meshIndex].material.skinID != 0)
+	data.hasLightmapCoordinates = !lightmapCoordinates.empty() && vertexOffset + nVertices <= lightmapCoordinates.size();
+	if (data.hasLightmapCoordinates && meshIndex < l3d.GetLightmaps().size() &&
+	    l3d.GetLightmaps()[meshIndex].material.skinID != 0)
 	{
-		_lightmapSkinID = l3d.GetLightmaps()[meshIndex].material.skinID;
+		data.lightmapSkinID = l3d.GetLightmaps()[meshIndex].material.skinID;
 	}
 
 	if (meshIndex < l3d.GetSubmeshNames().size())
 	{
 		const auto& name = l3d.GetSubmeshNames()[meshIndex];
-		_name.assign(name.name.begin(), std::find(name.name.begin(), name.name.end(), '\0'));
+		data.name.assign(name.name.begin(), std::find(name.name.begin(), name.name.end(), '\0'));
 		const auto point = [](const l3d::L3DPoint& p) { return glm::vec3(p.x, p.y, p.z); };
-		_frame.toMesh = glm::mat4(glm::vec4(point(name.frameAxes[0]), 0.0f), glm::vec4(point(name.frameAxes[1]), 0.0f),
-		                          glm::vec4(point(name.frameAxes[2]), 0.0f), glm::vec4(point(name.frameOrigin), 1.0f));
-		_frame.min = point(name.frameMin);
-		_frame.max = point(name.frameMax);
+		data.frame.toMesh = glm::mat4(glm::vec4(point(name.frameAxes[0]), 0.0f), glm::vec4(point(name.frameAxes[1]), 0.0f),
+		                              glm::vec4(point(name.frameAxes[2]), 0.0f), glm::vec4(point(name.frameOrigin), 1.0f));
+		data.frame.min = point(name.frameMin);
+		data.frame.max = point(name.frameMax);
 		if (name.jointIndex >= 0 && name.jointIndex < 0x100)
 		{
-			_joint = Joint {
+			data.joint = Joint {
 			    .index = static_cast<uint32_t>(name.jointIndex),
 			    .pivot = glm::vec3(name.jointPivot.x, name.jointPivot.y, name.jointPivot.z),
 			};
@@ -213,35 +227,32 @@ bool L3DSubMesh::Load(const l3d::L3DFile& l3d, uint32_t meshIndex) noexcept
 
 	// A model that doesn't move keeps its vertices and how its primitives share them, for effects that crawl over its
 	// surface
-	_surfacePoints.clear();
-	_surfacePrimitives.clear();
-	if (!_flags.hasBones)
+	if (!data.flags.hasBones)
 	{
-		_surfacePoints.reserve(verticesSpan.size());
+		data.surfacePoints.reserve(verticesSpan.size());
 		for (const auto& vertex : verticesSpan)
 		{
-			_surfacePoints.push_back(
+			data.surfacePoints.push_back(
 			    {.position = glm::make_vec3(&vertex.position.x), .normal = glm::make_vec3(&vertex.normal.x)});
 		}
 		uint32_t first = 0;
 		for (const auto& primitive : primitiveSpan)
 		{
-			_surfacePrimitives.push_back({.first = first, .count = primitive.numVertices});
+			data.surfacePrimitives.push_back({.first = first, .count = primitive.numVertices});
 			first += primitive.numVertices;
 		}
 	}
 
 	// The vertices of the graphics device
-	const bool device = _l3dMesh.GetUploadMode() == UploadMode::Device;
-	const graphics::DeviceMemory* verticesMem = device ? PackVertices(l3d, meshIndex) : nullptr;
-	if (_flags.hasBones && device)
+	if (packVertices)
 	{
-		CreateBlendSource(verticesMem, nVertices);
+		prepared.vertices.resize(PackedSize(l3d, meshIndex, data.hasLightmapCoordinates));
+		PackVertices(l3d, meshIndex, data.hasLightmapCoordinates, prepared.vertices);
 	}
 
 	if (nIndices == 0)
 	{
-		return false;
+		return std::nullopt;
 	}
 
 	// Get Indices
@@ -251,12 +262,12 @@ bool L3DSubMesh::Load(const l3d::L3DFile& l3d, uint32_t meshIndex) noexcept
 	uint16_t startVertex = 0;
 	// The groups of vertices run on over the primitives, each primitive taking as many as it has
 	std::span<const l3d::L3DVertexGroup> primitiveGroups;
-	if (_flags.hasBones)
+	if (data.flags.hasBones)
 	{
 		primitiveGroups = l3d.GetVertexGroupSpan(meshIndex);
 	}
 	size_t firstGroup = 0;
-	for (auto& primitive : primitiveSpan)
+	for (const auto& primitive : primitiveSpan)
 	{
 		// Fix indices for merged vertex buffer
 		for (uint32_t j = 0; j < primitive.numTriangles * 3; j++)
@@ -268,7 +279,7 @@ bool L3DSubMesh::Load(const l3d::L3DFile& l3d, uint32_t meshIndex) noexcept
 		const auto blend = BlendOf(mode);
 
 		// TODO(bwrsandman): Interpret cull mode, color byte ordering and render mode, then store in primitive
-		_primitives.emplace_back(Primitive {
+		data.primitives.emplace_back(Primitive {
 		    primitive.material.skinID,
 		    startIndex,
 		    primitive.numTriangles * 3,
@@ -284,23 +295,23 @@ bool L3DSubMesh::Load(const l3d::L3DFile& l3d, uint32_t meshIndex) noexcept
 		});
 		if (primitive.numGroups >= 2 && firstGroup + 1 < primitiveGroups.size())
 		{
-			_primitives.back().secondGroupBone = primitiveGroups[firstGroup + 1].boneIndex;
+			data.primitives.back().secondGroupBone = primitiveGroups[firstGroup + 1].boneIndex;
 		}
 		firstGroup += primitive.numGroups;
 
 		// The temple's rooms, the meshes with lightmaps, keep their triangles for the hand to find where the cursor
 		// points at them
-		if (_hasLightmapCoordinates && !_flags.hasBones)
+		if (data.hasLightmapCoordinates && !data.flags.hasBones)
 		{
 			for (uint32_t j = 0; j < primitive.numTriangles * 3; j++)
 			{
 				const auto vertex = indexSpan[startIndex + j] + startVertex;
 				if (vertex >= 0 && static_cast<size_t>(vertex) < verticesSpan.size())
 				{
-					_pickTriangles.push_back(glm::make_vec3(&verticesSpan[vertex].position.x));
+					data.pickTriangles.push_back(glm::make_vec3(&verticesSpan[vertex].position.x));
 				}
 			}
-			_pickTriangles.resize(_pickTriangles.size() - (_pickTriangles.size() % 3));
+			data.pickTriangles.resize(data.pickTriangles.size() - (data.pickTriangles.size() % 3));
 		}
 		startVertex += static_cast<uint16_t>(primitive.numVertices);
 		startIndex += static_cast<uint16_t>(primitive.numTriangles * 3);
@@ -309,19 +320,16 @@ bool L3DSubMesh::Load(const l3d::L3DFile& l3d, uint32_t meshIndex) noexcept
 	// Every model keeps its vertices as the file holds them for the physics, boned or not, with each vertex's bone
 	{
 		const auto count = std::min<size_t>(nVertices, verticesSpan.size());
-		_bodyGeometry.positions.clear();
-		_bodyGeometry.positions.reserve(count);
-		_bodyGeometry.uvs.clear();
-		_bodyGeometry.uvs.reserve(count);
+		auto& body = data.bodyGeometry;
+		body.positions.reserve(count);
+		body.uvs.reserve(count);
 		for (size_t i = 0; i < count; ++i)
 		{
-			_bodyGeometry.positions.emplace_back(verticesSpan[i].position.x, verticesSpan[i].position.y,
-			                                     verticesSpan[i].position.z);
-			_bodyGeometry.uvs.emplace_back(verticesSpan[i].texCoord.x, verticesSpan[i].texCoord.y);
+			body.positions.emplace_back(verticesSpan[i].position.x, verticesSpan[i].position.y, verticesSpan[i].position.z);
+			body.uvs.emplace_back(verticesSpan[i].texCoord.x, verticesSpan[i].texCoord.y);
 		}
-		_bodyGeometry.indices = indices;
-		_bodyGeometry.bones.clear();
-		if (_flags.hasBones)
+		body.indices = indices;
+		if (data.flags.hasBones)
 		{
 			// Each primitive's vertices are moved by its groups' bones in turn, a run of vertices each
 			const auto& groups = l3d.GetVertexGroupSpan(meshIndex);
@@ -333,39 +341,52 @@ bool L3DSubMesh::Load(const l3d::L3DFile& l3d, uint32_t meshIndex) noexcept
 				{
 					for (uint32_t v = 0; v < groups[group].vertexCount && inPrimitive < primitive.numVertices; ++v)
 					{
-						_bodyGeometry.bones.push_back(groups[group].boneIndex);
+						body.bones.push_back(groups[group].boneIndex);
 						++inPrimitive;
 					}
 				}
 				// Vertices no group names belong to no bone
 				for (; inPrimitive < primitive.numVertices; ++inPrimitive)
 				{
-					_bodyGeometry.bones.push_back(k_NoBone);
+					body.bones.push_back(k_NoBone);
 				}
 			}
-			_bodyGeometry.bones.resize(count, k_NoBone);
+			body.bones.resize(count, k_NoBone);
 		}
 	}
 
 	// A model that doesn't move by bones keeps its triangles for the flames set on it and the pieces it breaks into
-	if (!_flags.hasBones)
+	if (!data.flags.hasBones)
 	{
 		const auto count = std::min<size_t>(nVertices, verticesSpan.size());
-		_surface.positions.reserve(count);
-		_surface.uvs.reserve(count);
-		_surface.normals.reserve(count);
+		auto& surface = data.surface;
+		surface.positions.reserve(count);
+		surface.uvs.reserve(count);
+		surface.normals.reserve(count);
 		for (size_t i = 0; i < count; ++i)
 		{
-			_surface.positions.emplace_back(verticesSpan[i].position.x, verticesSpan[i].position.y, verticesSpan[i].position.z);
-			_surface.uvs.emplace_back(verticesSpan[i].texCoord.x, verticesSpan[i].texCoord.y);
-			_surface.normals.emplace_back(verticesSpan[i].normal.x, verticesSpan[i].normal.y, verticesSpan[i].normal.z);
+			surface.positions.emplace_back(verticesSpan[i].position.x, verticesSpan[i].position.y, verticesSpan[i].position.z);
+			surface.uvs.emplace_back(verticesSpan[i].texCoord.x, verticesSpan[i].texCoord.y);
+			surface.normals.emplace_back(verticesSpan[i].normal.x, verticesSpan[i].normal.y, verticesSpan[i].normal.z);
 		}
-		_surface.indices = indices;
+		surface.indices = std::move(indices);
 	}
 
-	if (!device)
+	return prepared;
+}
+
+void L3DSubMesh::Finish(Prepared prepared) noexcept
+{
+	_data = std::move(prepared.data);
+	if (_l3dMesh.GetUploadMode() != UploadMode::Device || prepared.vertices.empty())
 	{
-		return true;
+		return;
+	}
+	const auto stride = _data.hasLightmapCoordinates ? sizeof(LightmappedL3DVertex) : sizeof(EnhancedL3DVertex);
+	const auto vertexCount = static_cast<uint32_t>(prepared.vertices.size() / stride);
+	if (_data.flags.hasBones)
+	{
+		CreateBlendSource(prepared.vertices, vertexCount);
 	}
 
 	VertexDecl decl;
@@ -379,29 +400,31 @@ bool L3DSubMesh::Load(const l3d::L3DFile& l3d, uint32_t meshIndex) noexcept
 	                  /*normalized=*/false, /*asInt=*/true);
 	// The lightmap coordinates go at the second texture coordinates: Direct3D gives the fourth to eighth to an instanced
 	// draw's instance data, which would replace them
-	if (_hasLightmapCoordinates)
+	if (_data.hasLightmapCoordinates)
 	{
 		decl.emplace_back(VertexAttrib::Attribute::TexCoord1, static_cast<uint8_t>(2), VertexAttrib::Type::Float);
 	}
 
-	// build our buffers
-	const auto* indicesMem =
-	    Locator::graphicsDevice::value().Copy(indices.data(), static_cast<uint32_t>(indices.size() * sizeof(indices[0])));
-	auto* vertexBuffer = new VertexBuffer(_l3dMesh.GetDebugName(), verticesMem, decl, _l3dMesh.IsDynamic());
-	auto* indexBuffer = new IndexBuffer(_l3dMesh.GetDebugName(), indicesMem, IndexBuffer::Type::Uint16);
-	_mesh = std::make_unique<graphics::Mesh>(vertexBuffer, indexBuffer);
+	// The buffers on the graphics device take copies of the packed vertices and of the triangles
+	const auto& device = Locator::graphicsDevice::value();
+	const auto& indices = _data.bodyGeometry.indices;
+	const auto* verticesMem = device.Copy(prepared.vertices.data(), static_cast<uint32_t>(prepared.vertices.size()));
+	const auto* indicesMem = device.Copy(indices.data(), static_cast<uint32_t>(indices.size() * sizeof(indices[0])));
+	auto vertexBuffer = std::make_unique<VertexBuffer>(_l3dMesh.GetDebugName(), verticesMem, decl, _l3dMesh.IsDynamic());
+	auto indexBuffer = std::make_unique<IndexBuffer>(_l3dMesh.GetDebugName(), indicesMem, IndexBuffer::Type::Uint16);
+	// The mesh owns its buffers from here on
+	_mesh = std::make_unique<graphics::Mesh>(vertexBuffer.release(), indexBuffer.release());
 
-	SPDLOG_LOGGER_DEBUG(spdlog::get("game"), "{} submesh {} with {} verts and {} indices", _l3dMesh.GetDebugName(), meshIndex,
-	                    nVertices, nIndices);
-	return true;
+	SPDLOG_LOGGER_DEBUG(spdlog::get("game"), "{} submesh {} with {} verts and {} indices", _l3dMesh.GetDebugName(),
+	                    _data.meshIndex, vertexCount, indices.size());
 }
 
 bool L3DSubMesh::LoadMade(std::span<const MadePrimitive> primitives) noexcept
 {
-	_flags = {};
-	_flags.lodMask = 1;
-	_primitives.clear();
-	_surface = {};
+	_data.flags = {};
+	_data.flags.lodMask = 1;
+	_data.primitives.clear();
+	_data.surface = {};
 	size_t vertexCount = 0;
 	size_t indexCount = 0;
 	for (const auto& primitive : primitives)
@@ -423,8 +446,8 @@ bool L3DSubMesh::LoadMade(std::span<const MadePrimitive> primitives) noexcept
 	auto* vertices =
 	    device ? reinterpret_cast<EnhancedL3DVertex*>(Locator::graphicsDevice::value().Bytes(verticesMem).data()) : nullptr;
 	auto* indices = device ? reinterpret_cast<uint16_t*>(Locator::graphicsDevice::value().Bytes(indicesMem).data()) : nullptr;
-	_boundingBox.maxima = glm::vec3(-FLT_MAX, -FLT_MAX, -FLT_MAX);
-	_boundingBox.minima = glm::vec3(FLT_MAX, FLT_MAX, FLT_MAX);
+	_data.boundingBox.maxima = glm::vec3(-FLT_MAX, -FLT_MAX, -FLT_MAX);
+	_data.boundingBox.minima = glm::vec3(FLT_MAX, FLT_MAX, FLT_MAX);
 	uint32_t firstVertex = 0;
 	uint32_t firstIndex = 0;
 	for (const auto& primitive : primitives)
@@ -440,8 +463,8 @@ bool L3DSubMesh::LoadMade(std::span<const MadePrimitive> primitives) noexcept
 				    .norm = vertex.normal,
 				    .index = glm::i16vec4(-1, -1, vertex.back ? 1 : 0, 0)};
 			}
-			_boundingBox.maxima = glm::max(_boundingBox.maxima, vertex.position);
-			_boundingBox.minima = glm::min(_boundingBox.minima, vertex.position);
+			_data.boundingBox.maxima = glm::max(_data.boundingBox.maxima, vertex.position);
+			_data.boundingBox.minima = glm::min(_data.boundingBox.minima, vertex.position);
 		}
 		for (size_t i = 0; device && i < primitive.indices.size(); ++i)
 		{
@@ -453,7 +476,7 @@ bool L3DSubMesh::LoadMade(std::span<const MadePrimitive> primitives) noexcept
 		drawn.indicesCount = static_cast<uint32_t>(primitive.indices.size());
 		// Seen from both sides
 		drawn.twoSided = true;
-		_primitives.push_back(drawn);
+		_data.primitives.push_back(drawn);
 		firstVertex += static_cast<uint32_t>(primitive.vertices.size());
 		firstIndex += static_cast<uint32_t>(primitive.indices.size());
 	}
@@ -475,7 +498,7 @@ bool L3DSubMesh::LoadMade(std::span<const MadePrimitive> primitives) noexcept
 	return true;
 }
 
-void L3DSubMesh::BoundVertices(const l3d::L3DFile& l3d, uint32_t meshIndex)
+AxisAlignedBoundingBox L3DSubMesh::BoundVertices(const l3d::L3DFile& l3d, uint32_t meshIndex, bool hasBones)
 {
 	const auto primitiveSpan = l3d.GetPrimitiveSpan(meshIndex);
 	const auto& verticesSpan = l3d.GetVertexSpan(meshIndex);
@@ -486,9 +509,10 @@ void L3DSubMesh::BoundVertices(const l3d::L3DFile& l3d, uint32_t meshIndex)
 	{
 		nVertices += primitive.numVertices;
 	}
-	_boundingBox.maxima = glm::vec3(-FLT_MAX, -FLT_MAX, -FLT_MAX);
-	_boundingBox.minima = glm::vec3(FLT_MAX, FLT_MAX, FLT_MAX);
-	if (_flags.hasBones)
+	AxisAlignedBoundingBox box;
+	box.maxima = glm::vec3(-FLT_MAX, -FLT_MAX, -FLT_MAX);
+	box.minima = glm::vec3(FLT_MAX, FLT_MAX, FLT_MAX);
+	if (hasBones)
 	{
 		// The engine puts the bones in their rest pose. Then it moves each group of vertices of a primitive by its
 		// bone. The groups of a primitive start at its first vertex. A vertex outside the groups does not change the box.
@@ -505,8 +529,8 @@ void L3DSubMesh::BoundVertices(const l3d::L3DFile& l3d, uint32_t meshIndex)
 				for (uint32_t j = 0; j < group.vertexCount && vertex < verticesSpan.size(); ++j, ++vertex)
 				{
 					const auto position = mesh_bounds::OnBone(bone, glm::make_vec3(&verticesSpan[vertex].position.x));
-					_boundingBox.maxima = glm::max(_boundingBox.maxima, position);
-					_boundingBox.minima = glm::min(_boundingBox.minima, position);
+					box.maxima = glm::max(box.maxima, position);
+					box.minima = glm::min(box.minima, position);
 				}
 			}
 			primitiveVertex += primitive.numVertices;
@@ -517,29 +541,35 @@ void L3DSubMesh::BoundVertices(const l3d::L3DFile& l3d, uint32_t meshIndex)
 		for (uint32_t i = 0; i < nVertices; i++)
 		{
 			const auto position = glm::make_vec3(&verticesSpan[i].position.x);
-			_boundingBox.maxima = glm::max(_boundingBox.maxima, position);
-			_boundingBox.minima = glm::min(_boundingBox.minima, position);
+			box.maxima = glm::max(box.maxima, position);
+			box.minima = glm::min(box.minima, position);
 		}
 	}
+	return box;
 }
 
-const graphics::DeviceMemory* L3DSubMesh::PackVertices(const l3d::L3DFile& l3d, uint32_t meshIndex) const
+size_t L3DSubMesh::PackedSize(const l3d::L3DFile& l3d, uint32_t meshIndex, bool hasLightmapCoordinates)
+{
+	size_t nVertices = 0;
+	for (const auto& primitive : l3d.GetPrimitiveSpan(meshIndex))
+	{
+		nVertices += primitive.numVertices;
+	}
+	return (hasLightmapCoordinates ? sizeof(LightmappedL3DVertex) : sizeof(EnhancedL3DVertex)) * nVertices;
+}
+
+void L3DSubMesh::PackVertices(const l3d::L3DFile& l3d, uint32_t meshIndex, bool hasLightmapCoordinates,
+                              std::span<uint8_t> bytes)
 {
 	const auto& verticesSpan = l3d.GetVertexSpan(meshIndex);
 	const auto& vertexGroupSpans = l3d.GetVertexGroupSpan(meshIndex);
 	const auto& lightmapCoordinates = l3d.GetLightmapCoordinates();
 	const auto vertexOffset = static_cast<size_t>(verticesSpan.data() - l3d.GetVertices().data());
-	uint32_t nVertices = 0;
-	for (const auto& primitive : l3d.GetPrimitiveSpan(meshIndex))
-	{
-		nVertices += primitive.numVertices;
-	}
-
-	const auto stride = _hasLightmapCoordinates ? sizeof(LightmappedL3DVertex) : sizeof(EnhancedL3DVertex);
-	const graphics::DeviceMemory* verticesMem =
-	    Locator::graphicsDevice::value().Alloc(static_cast<uint32_t>(stride * nVertices));
-	auto* bytes = Locator::graphicsDevice::value().Bytes(verticesMem).data();
-	const auto vertexAt = [bytes, stride](uint32_t i) { return reinterpret_cast<EnhancedL3DVertex*>(bytes + (stride * i)); };
+	const auto stride = hasLightmapCoordinates ? sizeof(LightmappedL3DVertex) : sizeof(EnhancedL3DVertex);
+	const auto nVertices = static_cast<uint32_t>(bytes.size() / stride);
+	const auto vertexAt = [&bytes, stride](uint32_t i) {
+		return reinterpret_cast<EnhancedL3DVertex*>(bytes.data() + (stride * i));
+	};
 	for (uint32_t i = 0; i < nVertices; ++i)
 	{
 		auto& vertex = *vertexAt(i);
@@ -548,7 +578,7 @@ const graphics::DeviceMemory* L3DSubMesh::PackVertices(const l3d::L3DFile& l3d, 
 		// TODO(bwrsandman): build normals from mesh
 		vertex.norm = glm::make_vec3(&verticesSpan[i].normal.x);
 		vertex.index = glm::i16vec4(-1, -1, 0, 0);
-		if (_hasLightmapCoordinates)
+		if (hasLightmapCoordinates)
 		{
 			const auto& lightmapUv = lightmapCoordinates[vertexOffset + i];
 			reinterpret_cast<LightmappedL3DVertex*>(&vertex)->lightmapUv = glm::vec2(lightmapUv.x, lightmapUv.y);
@@ -590,13 +620,12 @@ const graphics::DeviceMemory* L3DSubMesh::PackVertices(const l3d::L3DFile& l3d, 
 			vertexAt(i)->index[2] = vertex_blend::QuantiseWeight(partner.weight);
 		}
 	}
-	return verticesMem;
 }
 
-void L3DSubMesh::CreateBlendSource(const graphics::DeviceMemory* vertices, uint32_t count)
+void L3DSubMesh::CreateBlendSource(std::span<const uint8_t> vertices, uint32_t count)
 {
 	_hasBlends = false;
-	const auto stride = _hasLightmapCoordinates ? sizeof(LightmappedL3DVertex) : sizeof(EnhancedL3DVertex);
+	const auto stride = _data.hasLightmapCoordinates ? sizeof(LightmappedL3DVertex) : sizeof(EnhancedL3DVertex);
 	const auto& device = Locator::graphicsDevice::value();
 	if (count == 0 || count > device.MaxTextureSize() ||
 	    !device.HasTextureFormat(graphics::TextureFormat::RGBA32F, graphics::TextureUse::VertexTexture))
@@ -605,10 +634,9 @@ void L3DSubMesh::CreateBlendSource(const graphics::DeviceMemory* vertices, uint3
 		return;
 	}
 	std::vector<glm::vec4> texels(count);
-	const auto* bytes = device.Bytes(vertices).data();
 	for (uint32_t i = 0; i < count; ++i)
 	{
-		const auto& vertex = *reinterpret_cast<const EnhancedL3DVertex*>(bytes + (stride * i));
+		const auto& vertex = *reinterpret_cast<const EnhancedL3DVertex*>(vertices.data() + (stride * i));
 		texels[i] = glm::vec4(vertex.pos, static_cast<float>(std::max<int16_t>(vertex.index.x, 0)));
 		_hasBlends = _hasBlends || vertex.index.y >= 0;
 	}
@@ -624,27 +652,29 @@ void L3DSubMesh::CreateBlendSource(const graphics::DeviceMemory* vertices, uint3
 
 void L3DSubMesh::UpdateVertices(const l3d::L3DFile& l3d) noexcept
 {
-	BoundVertices(l3d, _meshIndex);
+	_data.boundingBox = BoundVertices(l3d, _data.meshIndex, _data.flags.hasBones);
 	// A submesh that keeps only its data has no buffer to change
 	if (!_mesh)
 	{
 		return;
 	}
-	const auto* vertices = PackVertices(l3d, _meshIndex);
-	if (_flags.hasBones && _blendSource)
+	const auto& device = Locator::graphicsDevice::value();
+	const auto* vertices = device.Alloc(static_cast<uint32_t>(PackedSize(l3d, _data.meshIndex, _data.hasLightmapCoordinates)));
+	PackVertices(l3d, _data.meshIndex, _data.hasLightmapCoordinates, device.Bytes(vertices));
+	if (_data.flags.hasBones && _blendSource)
 	{
-		CreateBlendSource(vertices, _blendSourceWidth);
+		CreateBlendSource(device.Bytes(vertices), _blendSourceWidth);
 	}
 	_mesh->GetVertexBuffer().Update(vertices);
 }
 
 bool L3DSubMesh::SplitFacesForSnow()
 {
-	const auto& corners = _surface.indices;
-	const auto vertexCount = _surface.positions.size();
-	if (_facesSplit || !_mesh || _flags.hasBones || _hasLightmapCoordinates || _made || _l3dMesh.IsDynamic() ||
+	const auto& corners = _data.surface.indices;
+	const auto vertexCount = _data.surface.positions.size();
+	if (_facesSplit || !_mesh || _data.flags.hasBones || _data.hasLightmapCoordinates || _made || _l3dMesh.IsDynamic() ||
 	    corners.empty() || corners.size() % 3 != 0 || corners.size() > std::numeric_limits<uint16_t>::max() ||
-	    _surface.uvs.size() != vertexCount || _surface.normals.size() != vertexCount ||
+	    _data.surface.uvs.size() != vertexCount || _data.surface.normals.size() != vertexCount ||
 	    std::ranges::any_of(corners, [vertexCount](uint16_t corner) { return corner >= vertexCount; }))
 	{
 		return false;
@@ -655,14 +685,14 @@ bool L3DSubMesh::SplitFacesForSnow()
 	std::vector<uint16_t> indices(corners.size());
 	for (size_t face = 0; face < corners.size(); face += 3)
 	{
-		const auto& normals = _surface.normals;
+		const auto& normals = _data.surface.normals;
 		const auto up = snow_faces::PackUp(
 		    snow_faces::FaceUp(normals[corners[face]], normals[corners[face + 1]], normals[corners[face + 2]]));
 		for (size_t i = face; i < face + 3; ++i)
 		{
 			const auto corner = corners[i];
-			vertices[i] = {.pos = _surface.positions[corner],
-			               .uv = _surface.uvs[corner],
+			vertices[i] = {.pos = _data.surface.positions[corner],
+			               .uv = _data.surface.uvs[corner],
 			               .norm = normals[corner],
 			               .index = glm::i16vec4(-1, -1, up[0], up[1])};
 			indices[i] = static_cast<uint16_t>(i);

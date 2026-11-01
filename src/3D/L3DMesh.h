@@ -14,6 +14,7 @@
 #include <limits>
 #include <optional>
 #include <span>
+#include <string>
 #include <unordered_map>
 #include <vector>
 
@@ -84,6 +85,8 @@ inline l3d::L3DMeshFlags operator&(l3d::L3DMeshFlags a, l3d::L3DMeshFlags b)
 	return static_cast<l3d::L3DMeshFlags>(static_cast<std::underlying_type<l3d::L3DMeshFlags>::type>(a) &
 	                                      static_cast<std::underlying_type<l3d::L3DMeshFlags>::type>(b));
 }
+
+struct PreparedL3DMesh;
 
 class L3DMesh
 {
@@ -226,10 +229,27 @@ public:
 	[[nodiscard]] std::optional<PickHit> Pick(glm::vec3 origin, glm::vec3 direction, bool onlyJoints = false,
 	                                          bool withoutJoints = false, std::span<const uint32_t> hidden = {}) const;
 
-private:
-	/// Keeps the masks of the solid texels of a skin, for picks and tree shadows
-	void KnowSkinMasks(SkinId skin, std::span<const uint16_t> texels);
+	/// The settings of this computer that a load reads. The main thread reads them before other threads prepare a load.
+	struct LoadSettings
+	{
+		/// Whether the graphics device keeps textures with 1 bit of alpha and 5 bits for each colour
+		bool deviceHas1555 {false};
+		/// At the lowest detail levels the skins load at half their size
+		bool lowResolution {false};
+		UploadMode upload {UploadMode::Device};
+	};
+	/// The settings of this computer now, for a mesh that makes what the upload mode says. Call it from the main thread.
+	[[nodiscard]] static LoadSettings SettingsNow(UploadMode upload);
+	/// The work of a load on the processor (see PreparedL3DMesh)
+	using Prepared = PreparedL3DMesh;
+	/// Does the work of a load on the processor. This function reads only the file and the settings, so any thread can
+	/// call it.
+	[[nodiscard]] static Prepared Prepare(const l3d::L3DFile& l3d, const LoadSettings& settings);
+	/// Keeps a prepared load and makes the skins and buffers on the graphics device, when the mesh makes them. The
+	/// prepared load must have the upload mode of the mesh. The result tells whether all the submeshes opened.
+	bool Finish(Prepared prepared) noexcept;
 
+private:
 	l3d::L3DMeshFlags _flags;
 	std::string _debugName;
 	bool _dynamic;
@@ -293,4 +313,45 @@ public:
 	[[nodiscard]] bool IsContainsNewEP() const { return static_cast<bool>(_flags & l3d::L3DMeshFlags::ContainsNewEP); }
 	// const bool IsContainsNewData() const { return _flags & 0xFC8000; } // ???
 };
+
+/// The work of a load on the processor: all that the mesh keeps of its file, the texels of its skins and the packed
+/// vertices of its submeshes. A copy of it gives a mesh of the same bits.
+struct PreparedL3DMesh
+{
+	/// A skin's id and its texels in the layout of the texture, or no texels when the mesh makes no texture
+	struct Skin
+	{
+		SkinId id;
+		std::vector<uint8_t> bytes;
+	};
+	UploadMode upload {UploadMode::Device};
+	l3d::L3DMeshFlags flags {};
+	std::string nameData;
+	l3d_skin::Layout skinLayout {l3d_skin::Layout::Argb4444};
+	uint16_t skinSide {l3d::L3DTexture::k_Width};
+	/// The skins in the order that the file gives them
+	std::vector<Skin> skins;
+	std::unordered_map<SkinId, screen_pick::AlphaMask> skinMasks;
+	std::unordered_map<SkinId, graphics::tree_shadows::AlphaMask> skinAlpha;
+	std::optional<glm::vec3> doorPos;
+	std::optional<glm::vec3> chimneyPos;
+	std::vector<L3DMesh::Footprint> footprints;
+	std::vector<glm::mat4> extraMetrics;
+	std::vector<L3DMesh::EffectPoint> effectPoints;
+	std::optional<L3DMesh::BonePoint> firstBonePoint;
+	std::vector<L3DMesh::BoneFrame> boneFrames;
+	std::vector<uint32_t> bonesParents;
+	std::vector<glm::mat4> bonesDefaultMatrices;
+	/// The submeshes that the mesh keeps, and the submeshes of the file that it cannot open
+	std::vector<L3DSubMesh::Prepared> subMeshes;
+	std::vector<uint32_t> failedSubMeshes;
+	std::vector<L3DMesh::Surface> surfaces;
+	std::vector<std::array<glm::vec3, 3>> physicsTriangles;
+	AxisAlignedBoundingBox boundingBox {
+	    {std::numeric_limits<float>::max(), std::numeric_limits<float>::max(), std::numeric_limits<float>::max()},
+	    {std::numeric_limits<float>::lowest(), std::numeric_limits<float>::lowest(), std::numeric_limits<float>::lowest()},
+	};
+	std::vector<L3DMesh::VolumeLight> volumeLights;
+};
+
 } // namespace openblack::graphics

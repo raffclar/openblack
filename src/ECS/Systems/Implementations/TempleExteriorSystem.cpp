@@ -13,6 +13,7 @@
 
 #include <algorithm>
 #include <iterator>
+#include <memory>
 #include <ranges>
 #include <string>
 #include <vector>
@@ -29,6 +30,7 @@
 #include "3D/TempleExteriorMorph.h"
 #include "3D/TempleLanterns.h"
 #include "Common/Bitmap16B.h"
+#include "Common/WorkerPool.h"
 #include "ECS/Archetypes/VillageLightArchetype.h"
 #include "ECS/BuildingConstruction.h"
 #include "ECS/Components/Mesh.h"
@@ -45,6 +47,7 @@
 #include "Locator.h"
 #include "Resources/ResourceManager.h"
 #include "Resources/ResourcesInterface.h"
+#include "Visual/UploadMode.h"
 
 using namespace openblack;
 using namespace openblack::ecs::systems;
@@ -72,6 +75,10 @@ TempleExteriorMorph::Blend BlendOf(const TempleExterior& exterior, PlayerNames o
 	return {.look = {exterior.size, exterior.alignment}, .textureSet = static_cast<uint32_t>(owner) & 3};
 }
 } // namespace
+
+TempleExteriorSystem::TempleExteriorSystem() = default;
+
+TempleExteriorSystem::~TempleExteriorSystem() = default;
 
 void TempleExteriorSystem::UpdateTurn()
 {
@@ -126,6 +133,7 @@ void TempleExteriorSystem::UpdateTurn()
 			    exterior.morphed = look;
 		    }
 	    });
+	FinishMorphs(made);
 	// Its entrances take the cursor while their player's do
 	registry.Each<const TempleEntrance, UndrawnPickModel>(
 	    [&registry](const entt::entity, const TempleEntrance& entrance, UndrawnPickModel& pick) {
@@ -167,6 +175,7 @@ void TempleExteriorSystem::FindAfterLoad()
 			    Morph(entity, mesh, exterior, temple.owner, made);
 		    }
 	    });
+	FinishMorphs(made);
 }
 
 void TempleExteriorSystem::ForgetLand()
@@ -241,29 +250,75 @@ void TempleExteriorSystem::Morph(entt::entity entity, Mesh& mesh, const TempleEx
 		made.shapes.emplace_back(look, std::move(blended));
 		shape = std::prev(made.shapes.end());
 	}
-	const auto& blended = shape->second;
+	const auto shapeIndex = static_cast<size_t>(std::distance(made.shapes.begin(), shape));
 
 	// The temple's own mesh, made once from the first temple's and changed after. A mesh made from the blend has the
 	// vertices of the blend already.
 	auto& meshes = resources.GetMeshes();
-	const auto name = MeshNameOf(entity);
+	auto name = MeshNameOf(entity);
 	const auto id = entt::hashed_string(name.c_str()).value();
-	if (!meshes.Contains(id))
-	{
-		meshes.Load(id, resources::L3DLoader::FromDynamicFileTag {}, name, blended);
-	}
-	else
-	{
-		meshes.Handle(id)->UpdateVertices(blended);
-	}
 	mesh.id = id;
-	auto& temple = *meshes.Handle(id);
 	// The same look and textures always give the same blend
 	_blends.insert_or_assign(id, BlendOf(exterior, owner));
+	if (!meshes.Contains(id))
+	{
+		// The threads prepare the new mesh after the other temples, and the rest of the work follows it
+		made.loads.push_back(
+		    {.id = id, .name = std::move(name), .shape = shapeIndex, .alignment = exterior.alignment, .owner = owner});
+		return;
+	}
+	const auto& blended = made.shapes[shapeIndex].second;
+	meshes.Handle(id)->UpdateVertices(blended);
+	Dress(id, blended, nullptr, exterior.alignment, owner, made);
+}
+
+void TempleExteriorSystem::FinishMorphs(MadeBlends& made)
+{
+	if (made.loads.empty())
+	{
+		return;
+	}
+	// The work on the processor: the meshes of the blended shapes, and the copies of the shapes for the cache. Each job
+	// reads only its blended shape and writes only its own result.
+	struct Prepared
+	{
+		graphics::PreparedL3DMesh mesh;
+		std::shared_ptr<l3d::L3DFile> copy;
+	};
+	const auto settings = graphics::L3DMesh::SettingsNow(graphics::ConfiguredUploads());
+	std::vector<Prepared> prepared(made.loads.size());
+	Workers().ForEach(made.loads.size(), [&made, &settings, &prepared](size_t index, size_t) {
+		const auto& blended = made.shapes[made.loads[index].shape].second;
+		prepared[index].mesh = graphics::L3DMesh::Prepare(blended, settings);
+		prepared[index].copy = std::make_shared<l3d::L3DFile>(blended);
+	});
+
+	// The objects on the graphics device, in the order of the temples
+	auto& meshes = Locator::resources::value().GetMeshes();
+	for (size_t i = 0; i < made.loads.size(); ++i)
+	{
+		const auto& load = made.loads[i];
+		meshes.Load(load.id, resources::L3DLoader::FromPreparedDynamicTag {}, load.name, std::move(prepared[i].mesh));
+		Dress(load.id, made.shapes[load.shape].second, std::move(prepared[i].copy), load.alignment, load.owner, made);
+	}
+	made.loads.clear();
+}
+
+void TempleExteriorSystem::Dress(entt::id_type id, const l3d::L3DFile& blended, std::shared_ptr<l3d::L3DFile> copy,
+                                 float alignment, PlayerNames owner, MadeBlends& made)
+{
+	using namespace TempleExteriorMorph;
+	auto& resources = Locator::resources::value();
+	auto& files = resources.GetL3DFiles();
+	auto& temple = *resources.GetMeshes().Handle(id);
 	// Its shape is kept too, for what is done at points on its surface
 	if (files.Contains(id))
 	{
 		*files.Handle(id) = blended;
+	}
+	else if (copy != nullptr)
+	{
+		files.Load(id, resources::L3DFileLoader::FromCopyTag {}, std::move(copy));
 	}
 	else
 	{
@@ -271,7 +326,7 @@ void TempleExteriorSystem::Morph(entt::entity entity, Mesh& mesh, const TempleEx
 	}
 
 	// Its texture, of its player's set, between the two looks about its alignment
-	const auto texture = TextureOf(exterior.alignment);
+	const auto texture = TextureOf(alignment);
 	const auto set = static_cast<uint32_t>(owner) & 3;
 	auto& bitmaps = resources.GetBitmaps();
 	const auto from = entt::hashed_string(fmt::format("temple/{}", ImageName(texture.from, set)).c_str()).value();
@@ -307,4 +362,13 @@ void TempleExteriorSystem::Morph(entt::entity entity, Mesh& mesh, const TempleEx
 		skin = std::prev(made.skins.end());
 	}
 	temple.UpdateSkin(skins.front().id, skin->texels);
+}
+
+WorkerPool& TempleExteriorSystem::Workers()
+{
+	if (_workers == nullptr)
+	{
+		_workers = std::make_unique<WorkerPool>(WorkerPool::DefaultThreadCount());
+	}
+	return *_workers;
 }
