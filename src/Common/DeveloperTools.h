@@ -213,6 +213,7 @@ inline constexpr std::array k_ServerDeveloperOptions {
     DeveloperOption {.name = "ai-seed", .takesValue = true},
     DeveloperOption {.name = "gods-need-no-temple"},
     DeveloperOption {.name = "temple-loss", .takesValue = true},
+    DeveloperOption {.name = "lan-search", .takesValue = true},
 };
 
 /// The tool modes of the AI soak: long games in which computer gods play every god. They exist only in builds with the
