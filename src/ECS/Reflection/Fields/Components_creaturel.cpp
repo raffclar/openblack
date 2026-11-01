@@ -84,6 +84,7 @@ void openblack::ecs::reflection::RegisterFields_Components_creaturel(entt::meta_
 	    .Field<&components::CreatureLocomotion::followDistance>("followDistance")
 	    .Field<&components::CreatureLocomotion::move>("move")
 	    .Field<&components::CreatureLocomotion::walkTimeMs>("walkTimeMs")
+	    .Field<&components::CreatureLocomotion::legsTimeMs>("legsTimeMs")
 	    .Field<&components::CreatureLocomotion::distance>("distance")
 	    .Field<&components::CreatureLocomotion::fidgetMs>("fidgetMs")
 	    .Field<&components::CreatureLocomotion::fidgeted>("fidgeted")

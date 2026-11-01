@@ -14,10 +14,13 @@
 
 #include <array>
 #include <numbers>
+#include <optional>
 
 #include <glm/mat3x3.hpp>
 #include <glm/vec2.hpp>
 #include <glm/vec3.hpp>
+
+#include "Creature/CreatureLayers.h"
 
 /// A creature catching a thing flying at it: whether it can reach where the thing will pass in time, and the four catching
 /// animations blended by how high and how far to the side the thing comes, played together to the moment the hand closes
@@ -28,6 +31,25 @@ constexpr size_t k_CatchStep = 225;
 /// The four catching animations, blended by height and side: low and to one side, low and to the other, high and to
 /// one side, high and to the other
 constexpr std::array<size_t, 4> k_CatchAnimations {231, 230, 229, 228};
+
+/// The animation whose length the hand divides the time of a catch by. The catch keeps the stand. After a step towards
+/// the catch, it keeps the step until the catch ends.
+[[nodiscard]] constexpr size_t ShareAnimation(bool stepped)
+{
+	return stepped ? k_CatchStep : creature_layers::animations::k_Stand;
+}
+/// The time that the hand reads of a catch:
+/// - While the creature is ready, a turn to face the thing gives the time of the turn.
+/// - After that turn, the creature stands at the point of its breath until it steps or catches.
+/// - A step or the catch gives its own time.
+[[nodiscard]] constexpr float ShareTimeMs(bool ready, std::optional<int32_t> turnTimeMs, int32_t standTimeMs, float timeMs)
+{
+	if (!ready)
+	{
+		return timeMs;
+	}
+	return static_cast<float>(turnTimeMs.value_or(standTimeMs));
+}
 
 /// A creature only catches what weighs less than this share of its own weight
 constexpr float k_MostWeightShare = 0.8f;
