@@ -60,6 +60,10 @@ std::string_view Name(Quantity quantity)
 		return "distance to the point";
 	case Quantity::ObjectResource:
 		return "food and wood held";
+	case Quantity::ObjectTemperature:
+		return "temperature";
+	case Quantity::FireNear:
+		return "fire near the point";
 	}
 	return "";
 }
