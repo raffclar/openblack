@@ -61,34 +61,50 @@ bool object_draw_list::BlockInView(const glm::mat4& viewProjection, float nearPl
 	uint32_t below = 0;
 	// The box has two values of each axis, so each column of the matrix is multiplied by each value one time. Each corner
 	// then adds the products in the order of the product of the matrix and the corner, so that each sum stays the same.
+	// The test uses only the x, y and w rows of the result, so the z row is not made.
+	constexpr std::array<size_t, 3> k_Rows {0, 1, 3};
 	const std::array<float, 2> xs {block.corner.x + 0.0f, block.corner.x + k_BlockSize};
 	const std::array<float, 2> ys {box.bottom, box.top};
 	const std::array<float, 2> zs {block.corner.y + 0.0f, block.corner.y + k_BlockSize};
-	const std::array<glm::vec4, 2> byX {viewProjection[0] * xs[0], viewProjection[0] * xs[1]};
-	const std::array<glm::vec4, 2> byY {viewProjection[1] * ys[0], viewProjection[1] * ys[1]};
-	const glm::vec4 byW = viewProjection[3] * 1.0f;
-	const std::array<glm::vec4, 2> byZW {viewProjection[2] * zs[0] + byW, viewProjection[2] * zs[1] + byW};
+	std::array<std::array<float, 3>, 2> byX {};
+	std::array<std::array<float, 3>, 2> byY {};
+	std::array<std::array<float, 3>, 2> byZW {};
+	for (size_t side = 0; side < 2; ++side)
+	{
+		for (size_t r = 0; r < k_Rows.size(); ++r)
+		{
+			const auto row = static_cast<glm::length_t>(k_Rows[r]);
+			byX[side][r] = viewProjection[0][row] * xs[side];
+			byY[side][r] = viewProjection[1][row] * ys[side];
+			byZW[side][r] = viewProjection[2][row] * zs[side] + viewProjection[3][row] * 1.0f;
+		}
+	}
 	for (uint32_t i = 0; i < 8; ++i)
 	{
-		const auto clip = (byX.at(i & 1u) + byY.at((i >> 1u) & 1u)) + byZW.at((i >> 2u) & 1u);
+		const auto& atX = byX[i & 1u];
+		const auto& atY = byY[(i >> 1u) & 1u];
+		const auto& atZW = byZW[(i >> 2u) & 1u];
+		const float x = (atX[0] + atY[0]) + atZW[0];
+		const float y = (atX[1] + atY[1]) + atZW[1];
+		const float w = (atX[2] + atY[2]) + atZW[2];
 		const uint32_t bit = 1u << i;
-		if (clip.w < nearPlane)
+		if (w < nearPlane)
 		{
 			behind |= bit;
 		}
-		if (clip.x > clip.w)
+		if (x > w)
 		{
 			right |= bit;
 		}
-		else if (clip.x < -clip.w)
+		else if (x < -w)
 		{
 			left |= bit;
 		}
-		if (clip.y > clip.w)
+		if (y > w)
 		{
 			above |= bit;
 		}
-		else if (clip.y < -clip.w)
+		else if (y < -w)
 		{
 			below |= bit;
 		}
