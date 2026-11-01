@@ -7519,6 +7519,33 @@ void AddHand(std::vector<Scenario>& all)
 	    .creatures = {Posed(CreatureType::Tiger, {0.0f, 0.0f})},
 	});
 
+	// The real button on the creature: a click, and then a hold with slow strokes. The draw of the hand sends the leash
+	// tap and the feedback in the frame of each release, after the send of that frame.
+	std::vector<Command> clickThenStroke {{.kind = Kind::PointerPress, .delaySeconds = 1.0f, .value = 3},
+	                                      {.kind = Kind::PointerRelease, .delaySeconds = 0.2f, .value = 3},
+	                                      {.kind = Kind::PointerPress, .delaySeconds = 2.0f, .value = 3}};
+	for (int stroke = 0; stroke < 4; ++stroke)
+	{
+		const float down = stroke % 2 == 0 ? 0.08f : -0.08f;
+		clickThenStroke.push_back({.kind = Kind::PointerSweep, .delaySeconds = 1.5f, .point = {0.0f, down}, .amount = 1.2f});
+	}
+	clickThenStroke.push_back({.kind = Kind::PointerRelease, .delaySeconds = 2.0f, .value = 3});
+	all.push_back({
+	    .id = "hand.click_then_stroke_draw",
+	    .name = "A click and a stroke send from the draw of the hand",
+	    .facet = Facet::Hand,
+	    .description = "Your tiger faces the camera in the middle of the screen. The action button clicks the tiger. Then "
+	                   "the button holds the tiger, the hand strokes it up and down slowly four times, and lets go.",
+	    .expected = "The click puts the leash on the tiger. The hold strokes the tiger, and the tiger feels the strokes "
+	                "when the hand lets go. The log shows \"The draw of the hand sends the leash tap\" for the click and "
+	                "\"The draw of the hand sends the feedback\" for each release with a pose on the tiger. In a game "
+	                "alone each command does its work one turn after the turn of the release.",
+	    .environment = {.dispenserGrid = false, .cursor = glm::vec2(0.5f, 0.5f)},
+	    .framing = {.shot = Shot::Follow, .distance = 1.2f},
+	    .creatures = {Posed(CreatureType::Tiger, {0.0f, 0.0f})},
+	    .commands = clickThenStroke,
+	});
+
 	all.push_back({
 	    .id = "hand.mesh_contact",
 	    .name = "The hand on the body",
