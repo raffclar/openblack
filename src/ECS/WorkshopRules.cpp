@@ -267,9 +267,12 @@ workshop::ClearingPush workshop::PushOutOfWay(glm::vec2 centre, glm::vec2 edge)
 
 map_coords::MapCoords workshop::PushStart(glm::vec2 centre, const ClearingPush& push)
 {
-	auto start = map_coords::FromMetres(centre + push.offset);
-	start.altitude = k_PushStartAltitude;
-	return start;
+	return map_coords::FromMetres(centre + push.offset);
+}
+
+float workshop::PushStartHeight(float scaffoldAltitude)
+{
+	return scaffoldAltitude + k_PushStartRise;
 }
 
 workshop::ClearingAction workshop::ClearingActionFor(const ClearingFacts& facts)
