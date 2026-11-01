@@ -7369,7 +7369,7 @@ void Renderer::DrawPass(const DrawSceneDesc& desc) const
 				const auto* hair = posers.TryGet<const ecs::components::CreatureHair>(poser);
 				const auto* transform = posers.TryGet<const ecs::components::Transform>(poser);
 				if (creature_fizz_look::HairShown(fizz, freeze) && hair != nullptr && transform != nullptr &&
-				    Locator::creatureHairSystem::value().IsShown())
+				    Locator::creatureHairSystem::has_value() && Locator::creatureHairSystem::value().IsShown())
 				{
 					// The hair hangs from the body where the frame draws it
 					DrawCreatureHair(desc, *hair,

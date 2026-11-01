@@ -58,37 +58,11 @@ int main(int argc, char* argv[])
 	options.add_options()
 		("g,game-path", "The folder of the game's data.", cxxopts::value<std::string>())
 		("s,start-level", "The script of the land under the game's Scripts folder, or a land of a network game such as Online Maps/mpm_2p_1.map (the default).", cxxopts::value<std::string>()->default_value(std::string(openblack::server::k_ServerDefaultLand)))
-		("testbed", "The flat testbed in place of a land.")
-		("scenario", "Tools: start on the testbed and play the testbed scenario of this id, as the game's --scenario.", cxxopts::value<std::string>())
 		("gods-ring-map", "The network map for 32 gods in place of a land.")
 		("write-gods-ring-map", "Write the file of the network map for 32 gods, which the players get from the lobby, to this file, then stop.", cxxopts::value<std::string>())
-		("skip-opening", "How the new game on the first land starts, as the game's --skip-opening.", cxxopts::value<std::string>()->default_value("cow"))
-		("seed", "Tools: the seed of every random number of the world, which also pins the date of the world. Without it, the world starts from the seed of a room and reads the date from the clock of the computer.", cxxopts::value<uint32_t>())
-		("n,turns", "Stop when the world gets to this turn. With none, the server runs until a signal stops it.", cxxopts::value<uint32_t>())
-		("frame-ms", "The game time of each frame in milliseconds. A turn is 100 ms.", cxxopts::value<double>()->default_value("100"))
-		("fast", "Tools: play the frames one after the other with no wait for the wall clock.")
 		("profile-folder", "The folder of the server's own profile. With none, the profile of a tool's run in the working folder.", cxxopts::value<std::string>())
-		("log-checksums", "Tools: write the checksum of each turn to the log, which server_check and net_check read.")
-		("record", "Tools: write the run record of each turn to this file, with the hash of each component.", cxxopts::value<std::string>())
-		("record-fields", "Tools: with --record, the hash of each field of each component too.")
-		("inspect-port", "The inspector of the server on this port of 127.0.0.1 (0 for a free port), for the operator and the tools on the same computer. It refuses the queries that change the world of a network game.", cxxopts::value<uint16_t>())
-		("trace-draws", "Tools: write each draw on the synced random seed to this file, as the game's --sim-trace-draws.", cxxopts::value<std::string>())
-		("reload-at", "Tools: at this turn the server takes its whole world into memory as a world state and loads it again, as a client that comes back loads the server's world.", cxxopts::value<uint32_t>())
-		("gods-need-no-temple", "Tests: a god with no temple stays in the game, for a land that makes no temple at its start (a story land). Each client needs the same switch (--sim-gods-need-no-temple).")
-		("temple-loss", "Tests: at a turn, the temple of a player starts its destruction, as PLAYER:TURN (the player from 0). Each client needs the same switch (--sim-temple-loss).", cxxopts::value<std::string>())
 		("time-limit", "The time limit of the network game in minutes, from 10 to 1440 (24 hours) as the host picks it, in place of the default 30. A build with the developer tools also accepts 1 to 9 minutes for tests. The start sends it to every client.", cxxopts::value<uint32_t>())
 		("conditions", "The winning conditions of the network game, as the host picks them: [LAND:]NAME[=VALUE],... with the names of Online Maps/ConditionTemplate.txt or their numbers from 0. A NAME with no VALUE keeps the first value of the land, as the host's check box does. The values must be in the limits of the land (or of LAND) in that file. The start sends them to every client.", cxxopts::value<std::string>())
-		("all-computer-gods", "Tools: every god with a citadel is a computer god, and the room has no human god. The game starts at once: with --gods N the world turns when N observers joined (for the AI soak).")
-		("ai-seed", "Tools: the seed of the personalities of the computer gods. Each client takes it from the start.", cxxopts::value<uint32_t>())
-		("commands", "Tools: do the commands of each turn that a game wrote with --sim-commands, at the same turns.", cxxopts::value<std::string>())
-		("test-commands", "Tests: the game server lets through the commands of the test tools, such as the fight cheat.")
-#if defined(OPENBLACK_DEVELOPER_TOOLS)
-		("row-dump", "Tools: keep each field of each row of the synced world of the last turns, and write the rows of a turn to this file when the world of a client parts from the server's world (tools/sim/row_dump.py compares two files).", cxxopts::value<std::string>())
-		("row-dump-turn", "Tools: with --row-dump, also write the rows of this turn.", cxxopts::value<uint32_t>())
-		("row-dump-keep", "Tools: with --row-dump, the count of the last turns of which the dump keeps the rows.", cxxopts::value<uint32_t>()->default_value("64"))
-		("world-states", "Tools: write the world state of the server to this folder at the end of each turn of --world-state-turns, with a map of its synced bytes (tools/sim/save_diff.py --synced compares two computers).", cxxopts::value<std::string>())
-		("world-state-turns", "Tools: with --world-states, the turns, such as 250 or 100,250,400.", cxxopts::value<std::string>())
-#endif
 		("listen", "The game role: listen for the clients on this IPv4 address and TCP port, such as 127.0.0.1:0 (0 for a free port).", cxxopts::value<std::string>())
 		("tls-cert", "The PEM file of the certificate chain of the game socket (wss). Without it, the socket speaks plain WebSocket on a loopback address only, behind a proxy that does the TLS.", cxxopts::value<std::string>())
 		("tls-key", "The PEM file of the key of --tls-cert.", cxxopts::value<std::string>())
@@ -109,6 +83,36 @@ int main(int argc, char* argv[])
 		("l,log-file", "The file of the log, or stdout.", cxxopts::value<std::string>()->default_value("stdout"))
 		("version", "Write the version of openblack (the semantic version and the git commit) and exit.")
 		("h,help", "Show this help.");
+	// The options that only developers and tools use. A build without the developer tools ignores them (see
+	// FilterDeveloperOptions), and its help does not show them.
+	options.add_options("Developer")
+		("testbed", "The flat testbed in place of a land.")
+		("scenario", "Tools: start on the testbed and play the testbed scenario of this id, as the game's --scenario.", cxxopts::value<std::string>())
+		("skip-opening", "How the new game on the first land starts, as the game's --skip-opening.", cxxopts::value<std::string>()->default_value("cow"))
+		("seed", "Tools: the seed of every random number of the world, which also pins the date of the world. Without it, the world starts from the seed of a room and reads the date from the clock of the computer.", cxxopts::value<uint32_t>())
+		("n,turns", "Stop when the world gets to this turn. With none, the server runs until a signal stops it.", cxxopts::value<uint32_t>())
+		("frame-ms", "The game time of each frame in milliseconds. A turn is 100 ms.", cxxopts::value<double>()->default_value("100"))
+		("fast", "Tools: play the frames one after the other with no wait for the wall clock.")
+		("log-checksums", "Tools: write the checksum of each turn to the log, which server_check and net_check read.")
+		("record", "Tools: write the run record of each turn to this file, with the hash of each component.", cxxopts::value<std::string>())
+		("record-fields", "Tools: with --record, the hash of each field of each component too.")
+		("inspect-port", "The inspector of the server on this port of 127.0.0.1 (0 for a free port), for the operator and the tools on the same computer. It refuses the queries that change the world of a network game.", cxxopts::value<uint16_t>())
+		("trace-draws", "Tools: write each draw on the synced random seed to this file, as the game's --sim-trace-draws.", cxxopts::value<std::string>())
+		("reload-at", "Tools: at this turn the server takes its whole world into memory as a world state and loads it again, as a client that comes back loads the server's world.", cxxopts::value<uint32_t>())
+		("gods-need-no-temple", "Tests: a god with no temple stays in the game, for a land that makes no temple at its start (a story land). Each client needs the same switch (--sim-gods-need-no-temple).")
+		("temple-loss", "Tests: at a turn, the temple of a player starts its destruction, as PLAYER:TURN (the player from 0). Each client needs the same switch (--sim-temple-loss).", cxxopts::value<std::string>())
+		("all-computer-gods", "Tools: every god with a citadel is a computer god, and the room has no human god. The game starts at once: with --gods N the world turns when N observers joined (for the AI soak).")
+		("ai-seed", "Tools: the seed of the personalities of the computer gods. Each client takes it from the start.", cxxopts::value<uint32_t>())
+		("commands", "Tools: do the commands of each turn that a game wrote with --sim-commands, at the same turns.", cxxopts::value<std::string>())
+		("test-commands", "Tests: the game server lets through the commands of the test tools, such as the fight cheat.");
+#if defined(OPENBLACK_DEVELOPER_TOOLS)
+	options.add_options("Developer")
+		("row-dump", "Tools: keep each field of each row of the synced world of the last turns, and write the rows of a turn to this file when the world of a client parts from the server's world (tools/sim/row_dump.py compares two files).", cxxopts::value<std::string>())
+		("row-dump-turn", "Tools: with --row-dump, also write the rows of this turn.", cxxopts::value<uint32_t>())
+		("row-dump-keep", "Tools: with --row-dump, the count of the last turns of which the dump keeps the rows.", cxxopts::value<uint32_t>()->default_value("64"))
+		("world-states", "Tools: write the world state of the server to this folder at the end of each turn of --world-state-turns, with a map of its synced bytes (tools/sim/save_diff.py --synced compares two computers).", cxxopts::value<std::string>())
+		("world-state-turns", "Tools: with --world-states, the turns, such as 250 or 100,250,400.", cxxopts::value<std::string>());
+#endif
 	// clang-format on
 
 	openblack::server::ServerSettings settings;
@@ -134,7 +138,7 @@ int main(int argc, char* argv[])
 		const auto result = options.parse(static_cast<int>(arguments.size()), arguments.data());
 		if (result.count("help") != 0)
 		{
-			std::cout << options.help() << std::endl;
+			std::cout << (openblack::developer_tools::k_Built ? options.help() : options.help({""})) << std::endl;
 			return EXIT_SUCCESS;
 		}
 		if (result.count("version") != 0)
@@ -329,7 +333,8 @@ int main(int argc, char* argv[])
 	}
 	catch (const cxxopts::exceptions::exception& error)
 	{
-		std::cerr << error.what() << std::endl << options.help() << std::endl;
+		std::cerr << error.what() << std::endl
+		          << (openblack::developer_tools::k_Built ? options.help() : options.help({""})) << std::endl;
 		return EXIT_FAILURE;
 	}
 
