@@ -41,6 +41,15 @@ inline constexpr float k_MaxSpeed = 124.0f;
 /// No body spins faster than one and a half turns a second
 inline constexpr float k_MaxSpin = 3.0f * std::numbers::pi_v<float>;
 
+/// The speed with which a body starts, from the speed that it gets. A speed above the most speed scales down to it.
+/// The game compares with the FPU, so a NaN part also scales the speed, unless each part is 0 or a NaN. Then every part
+/// is a NaN. The NaN has the bits of the FPU on each target.
+[[nodiscard]] glm::vec3 StartVelocity(glm::vec3 velocity);
+
+/// The place that a thing takes from its body. The game changes x and z to whole map units, so a part that is a NaN or
+/// an infinity becomes 0. The height keeps a NaN, with the bits of the FPU on each target.
+[[nodiscard]] glm::vec3 PlaceOfThing(glm::vec3 bodyPlace);
+
 /// What a step did to a body
 enum class StepResult : uint8_t
 {

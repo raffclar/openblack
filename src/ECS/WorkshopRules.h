@@ -241,4 +241,38 @@ struct ClearingPush
 /// sign. Thus a thing at low x and low z can get a very high speed, as in the game.
 [[nodiscard]] ClearingPush PushOutOfWay(glm::vec2 centre, glm::vec2 edge);
 
+/// The height of a pushed thing above the land at its new place when it starts to fly, in metres
+inline constexpr float k_PushStartAltitude = 0.5f;
+
+/// The new place of a thing that a scaffold which clears its ground pushes, from the middle of the scaffold `centre`
+/// in metres. The thing starts above the land at that place, not at the height of the scaffold (openblack's fix: the
+/// game can start it under the land).
+[[nodiscard]] map_coords::MapCoords PushStart(glm::vec2 centre, const ClearingPush& push);
+
+/// What a scaffold which clears its ground does to a thing in its reach
+enum class ClearingAction
+{
+	/// The thing flies out of the way
+	Push,
+	/// The thing goes from the game
+	Remove,
+	/// Nothing happens to the thing
+	LeaveAlone,
+};
+
+/// The facts about a thing in the reach of a scaffold which clears its ground
+struct ClearingFacts
+{
+	/// The thing is a creature
+	bool creature {false};
+	/// A hand holds the thing, or a script holds it still
+	bool held {false};
+	/// The thing can become a physics object
+	bool canFly {false};
+};
+
+/// What the scaffold does to the thing. It pushes a thing that can fly and that nothing holds, and it removes the other
+/// things. It does not touch a creature (openblack's fix: the game removes the creature from the game).
+[[nodiscard]] ClearingAction ClearingActionFor(const ClearingFacts& facts);
+
 } // namespace openblack::ecs::workshop

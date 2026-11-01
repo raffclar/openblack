@@ -1036,6 +1036,9 @@ struct Command
 		/// An effect destroys the building on whose site the scenario's object, a scaffold, stands, as when a fire takes
 		/// the last of the life of the building. Needs no creature.
 		DestroyScaffoldSite,
+		/// The scenario's object, a scaffold that a script marked to clear its ground, clears it at once, as when the
+		/// hand lets it go. Needs no creature.
+		ScaffoldClearsGround,
 		/// A script native (script, by its name) runs at once with its arguments in order (scriptArguments). A position
 		/// is three numbers. Needs no creature.
 		CallNative,

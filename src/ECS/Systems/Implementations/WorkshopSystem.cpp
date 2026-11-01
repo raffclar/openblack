@@ -51,7 +51,6 @@
 #include "ECS/Components/TownDesire.h"
 #include "ECS/Components/Transform.h"
 #include "ECS/Components/Workshop.h"
-#include "ECS/CreatureRemoval.h"
 #include "ECS/DiscipleWorkRules.h"
 #include "ECS/GamePlayers.h"
 #include "ECS/Map.h"
@@ -609,9 +608,14 @@ void WorkshopSystem::DestroyThingsInWay(entt::entity scaffold)
 					{
 						continue;
 					}
-					if (ClearThing(thing, coords, centre, ownRadius + thingRadius, building))
+					const auto cleared = ClearThing(thing, coords, centre, ownRadius + thingRadius, building);
+					if (cleared == Cleared::LeftMap)
 					{
 						break;
+					}
+					if (cleared == Cleared::LeftAlone)
+					{
+						continue;
 					}
 					// A pushed thing that did not start to fly stays in its new cell. The search continues with the things
 					// after it in the list of that cell.
@@ -629,21 +633,39 @@ void WorkshopSystem::DestroyThingsInWay(entt::entity scaffold)
 	}
 }
 
-bool WorkshopSystem::ClearThing(entt::entity thing, const map_coords::MapCoords& scaffoldAt, glm::vec2 centre,
-                                float edgeDistance, bool building)
+WorkshopSystem::Cleared WorkshopSystem::ClearThing(entt::entity thing, const map_coords::MapCoords& scaffoldAt,
+                                                   glm::vec2 centre, float edgeDistance, bool building)
 {
 	auto& registry = Entities();
 	auto* dynamics = Locator::dynamicsSystem::has_value() ? &Locator::dynamicsSystem::value() : nullptr;
+	const bool creature = registry.AllOf<Creature>(thing);
+	const bool held = registry.AnyOf<InHand, Immovable>(thing);
+	const auto action = workshop::ClearingActionFor({
+	    .creature = creature,
+	    .held = held,
+	    .canFly = dynamics != nullptr && !creature && !held && dynamics->CanBecomePhysicsObject(thing),
+	});
+	// A creature stays where it is and stays in the map
+	if (action == workshop::ClearingAction::LeaveAlone)
+	{
+		if (const auto logger = spdlog::get("game"))
+		{
+			SPDLOG_LOGGER_INFO(logger, "Scaffold: the scaffold leaves the creature {} in its way at turn {}",
+			                   entt::to_integral(thing), Turn());
+		}
+		return Cleared::LeftAlone;
+	}
 	// The scaffold pushes a thing that can fly and that no script holds still out of its way
-	if (dynamics != nullptr && !registry.AnyOf<InHand, Immovable>(thing) && dynamics->CanBecomePhysicsObject(thing))
+	if (action == workshop::ClearingAction::Push)
 	{
 		const auto thingAt = thing_map_place::Of(registry, thing);
 		auto edge = scaffoldAt;
 		edge += gutils::GetPosFromAngle(gutils::Get3DAngleFromXZ(scaffoldAt, thingAt), edgeDistance);
 		const auto push = workshop::PushOutOfWay(centre, map_coords::ToMetres(edge));
-		// The new place is at the height of the scaffold above the land, plus half a metre, as a height of the world
-		const float height = scaffoldAt.altitude + 0.5f;
-		const auto to = map_coords::FromMetres(centre + push.offset);
+		// The thing starts half a metre above the land at its new place
+		const auto to = workshop::PushStart(centre, push);
+		const float height =
+		    Locator::terrainSystem::has_value() ? map_coords::ToWorld(Locator::terrainSystem::value(), to).y : to.altitude;
 		thing_map_place::Put(registry, thing, to, height);
 		const auto started = dynamics->InitialisePhysics(thing, {.velocity = push.velocity, .spin = glm::vec3(0.0f)});
 		if (const auto logger = spdlog::get("game"))
@@ -651,7 +673,7 @@ bool WorkshopSystem::ClearThing(entt::entity thing, const map_coords::MapCoords&
 			SPDLOG_LOGGER_INFO(logger, "Scaffold: the scaffold pushes {} out of its way at turn {}", entt::to_integral(thing),
 			                   Turn());
 		}
-		return started.started;
+		return started.started ? Cleared::LeftMap : Cleared::StayedInMap;
 	}
 	// Anything else goes. A building that goes is not planned again.
 	if (building)
@@ -663,13 +685,8 @@ bool WorkshopSystem::ClearThing(entt::entity thing, const map_coords::MapCoords&
 		SPDLOG_LOGGER_INFO(logger, "Scaffold: the scaffold removes {} from its way at turn {}", entt::to_integral(thing),
 		                   Turn());
 	}
-	if (registry.AllOf<Creature>(thing))
-	{
-		static_cast<void>(creature_removal::RemoveFromGame(thing));
-		return true;
-	}
 	world_objects::Remove(thing);
-	return true;
+	return Cleared::LeftMap;
 }
 
 void WorkshopSystem::NotPutDownByHand(entt::entity scaffold)

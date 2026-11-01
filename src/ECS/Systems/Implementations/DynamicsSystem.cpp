@@ -751,12 +751,7 @@ PhysicsEntry* DynamicsSystem::AddObject(entt::entity object, const PhysicsStart&
 		return nullptr;
 	}
 	MakeRoomForOne();
-	body->velocity = start.velocity;
-	// The game compares the squares, added from z to x, then scales by the most speed over the length
-	if (physics::k_MaxSpeed * physics::k_MaxSpeed < x87::DotZyx(body->velocity, body->velocity))
-	{
-		body->velocity = x87::Scaled<x87::SumOrder::Zyx>(body->velocity, physics::k_MaxSpeed);
-	}
+	body->velocity = physics::StartVelocity(start.velocity);
 	// The spin comes the game's way round, the opposite of the body's
 	body->SetAngularVelocityInBodyAxes(-start.spin);
 	auto entry = std::make_unique<PhysicsEntry>();
@@ -894,10 +889,10 @@ void DynamicsSystem::SyncObject(const PhysicsEntry& entry, Place place)
 	switch (place)
 	{
 	case Place::Origin:
-		transform->position = body.ObjectPose().origin;
+		transform->position = physics::PlaceOfThing(body.ObjectPose().origin);
 		break;
 	case Place::Centre:
-		transform->position = body.Centre();
+		transform->position = physics::PlaceOfThing(body.Centre());
 		break;
 	case Place::Kept:
 		break;

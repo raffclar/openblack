@@ -336,3 +336,22 @@ TEST(WorkshopRules, AClearingScaffoldPushesAThingTwiceAsFarAsItsEdge)
 	const auto fast = workshop::PushOutOfWay({0.0f, 0.0f}, {-0.0005f, -2.0f});
 	EXPECT_NEAR(fast.velocity.z, 8000.0f, 1.0f);
 }
+
+TEST(WorkshopRules, APushedThingStartsHalfAMetreAboveTheLandAtItsNewPlace)
+{
+	const auto push = workshop::PushOutOfWay({10.0f, 20.0f}, {11.0f, 20.5f});
+	const auto start = workshop::PushStart({10.0f, 20.0f}, push);
+	EXPECT_EQ(start, openblack::map_coords::FromMetres({12.0f, 21.0f}) + openblack::map_coords::MapCoords {.altitude = 0.5f});
+	EXPECT_EQ(start.altitude, workshop::k_PushStartAltitude);
+}
+
+TEST(WorkshopRules, AClearingScaffoldPushesOrRemovesThingsAndLeavesCreaturesAlone)
+{
+	using workshop::ClearingAction;
+	EXPECT_EQ(workshop::ClearingActionFor({.canFly = true}), ClearingAction::Push);
+	EXPECT_EQ(workshop::ClearingActionFor({.held = true, .canFly = true}), ClearingAction::Remove);
+	EXPECT_EQ(workshop::ClearingActionFor({}), ClearingAction::Remove);
+	// A creature stays, also one that a hand holds
+	EXPECT_EQ(workshop::ClearingActionFor({.creature = true}), ClearingAction::LeaveAlone);
+	EXPECT_EQ(workshop::ClearingActionFor({.creature = true, .held = true}), ClearingAction::LeaveAlone);
+}

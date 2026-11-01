@@ -13,6 +13,7 @@
 #include <bit>
 
 #include "3D/MapCoords.h"
+#include "Common/X87.h"
 #include "Common/X87Angle.h"
 #include "Common/X87Matrix.h"
 #include "ECS/Components/Scaffold.h"
@@ -251,11 +252,29 @@ workshop::ClearingPush workshop::PushOutOfWay(glm::vec2 centre, glm::vec2 edge)
 	const float dz = edge.y - centre.y;
 	const float x = dx + dx;
 	const float z = dz + dz;
-	// The larger part, with its sign
+	// The larger part, with its sign. A thing straight to the west or the south of the scaffold has a larger part of 0.
+	// Then the divide gives the FPU's NaN and an infinity, as in the game.
 	const float larger = x > z ? x : z;
-	const float xShare = x / larger;
-	const float zShare = z / larger;
-	return {.velocity = {xShare + xShare, k_UpSpeed, zShare + zShare}, .offset = {x, z}};
+	const float xShare = x87::DivideAsFpu(x, larger);
+	const float zShare = x87::DivideAsFpu(z, larger);
+	// A NaN keeps the bits of the FPU on each target
+	return {.velocity = {x87::CanonicalNaN(xShare + xShare), k_UpSpeed, x87::CanonicalNaN(zShare + zShare)}, .offset = {x, z}};
+}
+
+map_coords::MapCoords workshop::PushStart(glm::vec2 centre, const ClearingPush& push)
+{
+	auto start = map_coords::FromMetres(centre + push.offset);
+	start.altitude = k_PushStartAltitude;
+	return start;
+}
+
+workshop::ClearingAction workshop::ClearingActionFor(const ClearingFacts& facts)
+{
+	if (facts.creature)
+	{
+		return ClearingAction::LeaveAlone;
+	}
+	return !facts.held && facts.canFly ? ClearingAction::Push : ClearingAction::Remove;
 }
 
 uint32_t workshop::FoundedTownId(std::span<const uint32_t> usedIds)

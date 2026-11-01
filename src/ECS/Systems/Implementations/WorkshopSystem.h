@@ -93,11 +93,20 @@ private:
 	/// A scaffold that a script marked clears its ground as a hand lets it go. It pushes the things that can fly out of
 	/// its way, and removes the other things in its reach.
 	void DestroyThingsInWay(entt::entity scaffold);
+	/// What happened to a thing that a scaffold cleared from its way
+	enum class Cleared
+	{
+		/// The thing went from the game, or it started to fly
+		LeftMap,
+		/// The scaffold pushed the thing, but it did not start to fly
+		StayedInMap,
+		/// The scaffold did not touch the thing
+		LeftAlone,
+	};
 	/// The scaffold at `scaffoldAt` (its middle `centre` in metres) clears one thing from its way. The edge point towards
-	/// the thing is `edgeDistance` from the scaffold. Whether the thing left the map: a pushed thing that does not start
-	/// to fly stays in it.
-	bool ClearThing(entt::entity thing, const map_coords::MapCoords& scaffoldAt, glm::vec2 centre, float edgeDistance,
-	                bool building);
+	/// the thing is `edgeDistance` from the scaffold.
+	Cleared ClearThing(entt::entity thing, const map_coords::MapCoords& scaffoldAt, glm::vec2 centre, float edgeDistance,
+	                   bool building);
 	/// Makes the wood flag of a workshop
 	entt::entity MakeFlag(entt::entity workshop);
 	/// The town starts the building that the scaffold offers, at the place of the scaffold. Whether it started it. With
