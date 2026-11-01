@@ -104,8 +104,9 @@ void PlayCreaturePoses()
 		auto creatureAnimation = profiler.BeginScoped(Profiler::Stage::CreatureAnimationUpdate);
 		Locator::creatureAnimationSystem::value().Update(gameTime);
 	}
+	// Their hair swings from the posed bodies. Only a computer that draws the world has the hair.
+	if (Locator::creatureHairSystem::has_value())
 	{
-		// Their hair swings from the posed bodies
 		auto creatureHair = profiler.BeginScoped(Profiler::Stage::CreatureHairUpdate);
 		Locator::creatureHairSystem::value().Update(gameTime);
 	}
@@ -134,9 +135,12 @@ void PlayFrameEffects(FrameViewInterface& view)
 		// The storms' own clouds gather and wander over them with the frames, at the screen refresh's pace
 		Locator::cloudSystem::value().UpdateStormClouds(clock.GetFrameRealTime());
 	}
-	// The rain falls as the storm nearest the camera has it
-	Locator::rainSystem::value().Update(std::chrono::duration<float>(gameTime).count(), clock.GetFrameRealTime(),
-	                                    camera.GetOrigin());
+	// The rain falls as the storm nearest the camera has it. Only a computer that draws the world has rain.
+	if (Locator::rainSystem::has_value())
+	{
+		Locator::rainSystem::value().Update(std::chrono::duration<float>(gameTime).count(), clock.GetFrameRealTime(),
+		                                    camera.GetOrigin());
+	}
 	// The rings on the water grow and fade
 	Locator::waterRingSystem::value().Update(clock.GetFrameRealTime(), clock.GetFrameGameTime());
 	// The ribbons' textures slide on the frames that draw them
@@ -228,9 +232,12 @@ void PlayFrameEffects(FrameViewInterface& view)
 		auto tornado = profiler.BeginScoped(Profiler::Stage::TornadoUpdate);
 		Locator::tornadoSystem::value().Update(clock.GetTurnFraction());
 	}
-	// The snow falls as the rain does
-	Locator::snowfallSystem::value().Update(std::chrono::duration<float>(gameTime).count(),
-	                                        Locator::rainSystem::value().GetFall());
+	// The snow falls as the rain does. Only a computer that draws the world has snow and rain.
+	if (Locator::snowfallSystem::has_value() && Locator::rainSystem::has_value())
+	{
+		Locator::snowfallSystem::value().Update(std::chrono::duration<float>(gameTime).count(),
+		                                        Locator::rainSystem::value().GetFall());
+	}
 	// The homes' smoke rises while someone is in
 	Locator::chimneySmokeSystem::value().Update(clock.GetFrameRealTime(), clock.GetFrameGameTime());
 	Locator::influenceSystem::value().Update(gameTime);

@@ -29,12 +29,19 @@
 #include "Common/MainThreadQueue.h"
 #include "Common/PlayerProfiles.h"
 #include "Debug/DebugGuiInterface.h"
+#include "ECS/Systems/Implementations/AbodeSoundSystem.h"
 #include "ECS/Systems/Implementations/AdvisorVoiceSystem.h"
 #include "ECS/Systems/Implementations/CloudSystem.h"
+#include "ECS/Systems/Implementations/CreatureHairSystem.h"
+#include "ECS/Systems/Implementations/IncomingMessageSystem.h"
+#include "ECS/Systems/Implementations/LandShadeSystem.h"
 #include "ECS/Systems/Implementations/ParticleSystem.h"
+#include "ECS/Systems/Implementations/PauseTextSystem.h"
+#include "ECS/Systems/Implementations/RainSystem.h"
 #include "ECS/Systems/Implementations/RenderingSystem.h"
 #include "ECS/Systems/Implementations/RenderingSystemTemple.h"
 #include "ECS/Systems/Implementations/SkySystem.h"
+#include "ECS/Systems/Implementations/SnowfallSystem.h"
 #include "ECS/Systems/Implementations/TurnCheerSystem.h"
 #include "ECS/Systems/Implementations/VillageLightSystem.h"
 #include "ECS/Systems/ParticleRuleSystemInterface.h"
@@ -107,6 +114,17 @@ bool openblack::InitializeEngine(GraphicsBackend backend, bool vsync) noexcept
 
 void openblack::InitializePresentation()
 {
+	// The snow and the rain that fall in the view. They draw local numbers when they start, so they stay first and in this
+	// order.
+	Locator::snowfallSystem::emplace<SnowfallSystem>();
+	Locator::rainSystem::emplace<RainSystem>();
+	// The hair of the creatures, which swings from their bodies in the frames
+	Locator::creatureHairSystem::emplace<CreatureHairSystem>();
+	// The sounds of the abodes near the camera, the shade of the land, the text of the pause and the strip of messages
+	Locator::abodeSoundSystem::emplace<AbodeSoundSystem>();
+	Locator::landShadeSystem::emplace<LandShadeSystem>();
+	Locator::pauseTextSystem::emplace<PauseTextSystem>();
+	Locator::incomingMessageSystem::emplace<IncomingMessageSystem>([]() { return machine_clock::Ticks(); });
 	// The sea, the sky, the clouds and the village lights, which the turns and the scripts do not read
 	Locator::oceanSystem::emplace<Ocean>(graphics::ConfiguredUploads());
 	Locator::skySystem::emplace<ecs::systems::SkySystem>();

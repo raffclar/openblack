@@ -31,7 +31,6 @@
 #include "CHLApi.h"
 #include "Common/EventManager.h"
 #include "Common/GameRandomProduction.h"
-#include "Common/MachineClock.h"
 #include "Common/MainThreadQueue.h"
 #include "Common/PlayerProfiles.h"
 #include "Common/RandomNumberManagerProduction.h"
@@ -62,7 +61,6 @@
 #include "ECS/Systems/Implementations/CreatureCaveSystem.h"
 #include "ECS/Systems/Implementations/CreatureFightSystem.h"
 #include "ECS/Systems/Implementations/CreatureFizzSystem.h"
-#include "ECS/Systems/Implementations/CreatureHairSystem.h"
 #include "ECS/Systems/Implementations/CreatureHandSystem.h"
 #include "ECS/Systems/Implementations/CreatureHelpSystem.h"
 #include "ECS/Systems/Implementations/CreatureLocomotionSystem.h"
@@ -99,7 +97,6 @@
 #include "ECS/Systems/Implementations/HighDetailSystem.h"
 #include "ECS/Systems/Implementations/InfluenceSystem.h"
 #include "ECS/Systems/Implementations/IntroSystem.h"
-#include "ECS/Systems/Implementations/LandShadeSystem.h"
 #include "ECS/Systems/Implementations/LiquidParticleSystem.h"
 #include "ECS/Systems/Implementations/LobbyClientSystem.h"
 #include "ECS/Systems/Implementations/NetworkGameSystem.h"
@@ -120,7 +117,6 @@
 #include "ECS/IncomingMessageRules.h"
 #include "ECS/Systems/GuidanceSystemInterface.h"
 #include "ECS/Systems/HandSystemInterface.h"
-#include "ECS/Systems/Implementations/AbodeSoundSystem.h"
 #include "ECS/Systems/Implementations/ArtefactSystem.h"
 #include "ECS/Systems/Implementations/ChatSystem.h"
 #include "ECS/Systems/Implementations/ComputerPlayerSystem.h"
@@ -129,7 +125,6 @@
 #include "ECS/Systems/Implementations/FixedOutlineSystem.h"
 #include "ECS/Systems/Implementations/GameEndSystem.h"
 #include "ECS/Systems/Implementations/HeartbeatSystem.h"
-#include "ECS/Systems/Implementations/IncomingMessageSystem.h"
 #include "ECS/Systems/Implementations/LandSystem.h"
 #include "ECS/Systems/Implementations/LeashSystem.h"
 #include "ECS/Systems/Implementations/LivingActionSystem.h"
@@ -140,13 +135,11 @@
 #include "ECS/Systems/Implementations/MusicMoodSystem.h"
 #include "ECS/Systems/Implementations/ParticleRuleSystem.h"
 #include "ECS/Systems/Implementations/PathfindingSystem.h"
-#include "ECS/Systems/Implementations/PauseTextSystem.h"
 #include "ECS/Systems/Implementations/PickingSystem.h"
 #include "ECS/Systems/Implementations/PlayerProfileSystem.h"
 #include "ECS/Systems/Implementations/PlayerSystem.h"
 #include "ECS/Systems/Implementations/ProfileFolderSystem.h"
 #include "ECS/Systems/Implementations/PuzzleGameSystem.h"
-#include "ECS/Systems/Implementations/RainSystem.h"
 #include "ECS/Systems/Implementations/ReactionSystem.h"
 #include "ECS/Systems/Implementations/ResourceStoreSystem.h"
 #include "ECS/Systems/Implementations/RewardSystem.h"
@@ -157,7 +150,6 @@
 #include "ECS/Systems/Implementations/SimulationSystem.h"
 #include "ECS/Systems/Implementations/SkyClockSystem.h"
 #include "ECS/Systems/Implementations/SnowSystem.h"
-#include "ECS/Systems/Implementations/SnowfallSystem.h"
 #include "ECS/Systems/Implementations/SoundTagSystem.h"
 #include "ECS/Systems/Implementations/SpellIconSystem.h"
 #include "ECS/Systems/Implementations/TattooEditorSystem.h"
@@ -652,7 +644,6 @@ bool openblack::InitializeSimulation(const player_profiles::Store& profiles) noe
 	Locator::time::emplace<TimeSystem>();
 	Locator::simulation::emplace<ecs::systems::SimulationSystem>();
 	Locator::vegetation::emplace<VegetationSystem>();
-	Locator::abodeSoundSystem::emplace<AbodeSoundSystem>();
 	Locator::villageTotemSystem::emplace<VillageTotemSystem>();
 	Locator::spellIconSystem::emplace<SpellIconSystem>();
 	Locator::artefactSystem::emplace<ArtefactSystem>();
@@ -663,12 +654,10 @@ bool openblack::InitializeSimulation(const player_profiles::Store& profiles) noe
 	Locator::workshopSystem::emplace<WorkshopSystem>();
 	Locator::animalSystem::emplace<AnimalSystem>();
 	Locator::snowSystem::emplace<SnowSystem>();
-	Locator::snowfallSystem::emplace<SnowfallSystem>();
 	Locator::waterRingSystem::emplace<WaterRingSystem>();
 	Locator::creatureAnimationSystem::emplace<CreatureAnimationSystem>();
 	Locator::creatureMindSystem::emplace<CreatureMindSystem>();
 	Locator::creaturePhysiologySystem::emplace<CreaturePhysiologySystem>();
-	Locator::creatureHairSystem::emplace<CreatureHairSystem>();
 	Locator::creatureAudioSystem::emplace<CreatureAudioSystem>();
 	Locator::creatureObjectActionSystem::emplace<CreatureObjectActionSystem>();
 	Locator::creatureHandSystem::emplace<CreatureHandSystem>();
@@ -706,7 +695,6 @@ bool openblack::InitializeSimulation(const player_profiles::Store& profiles) noe
 	Locator::syncChecksumSystem::emplace<SyncChecksumSystem>();
 	Locator::advisorSystem::emplace<AdvisorSystem>();
 	Locator::soundTagSystem::emplace<SoundTagSystem>();
-	Locator::rainSystem::emplace<RainSystem>();
 	Locator::chimneySmokeSystem::emplace<ChimneySmokeSystem>();
 	// The count of things made goes with the world: a new land starts it again and a saved game keeps it
 	Locator::thingsMadeSystem::emplace<ThingsMadeSystem>(
@@ -726,7 +714,6 @@ bool openblack::InitializeSimulation(const player_profiles::Store& profiles) noe
 	Locator::fixedOutlineSystem::emplace<FixedOutlineSystem>();
 	Locator::creatureFizzSystem::emplace<CreatureFizzSystem>();
 	Locator::liquidParticleSystem::emplace<LiquidParticleSystem>();
-	Locator::landShadeSystem::emplace<LandShadeSystem>();
 	// The player's creature is kept under their profile's file
 	Locator::creatureCarryOverSystem::emplace<CreatureCarryOverSystem>(
 	    profiles.creatureMinds, []() { return Locator::playerProfileSystem::value().CreatureFile(); });
@@ -750,8 +737,6 @@ bool openblack::InitializeSimulation(const player_profiles::Store& profiles) noe
 	                              [](GestureEventsInterface* /*unowned*/) {});
 	Locator::magicSystem::emplace<MagicSystem>();
 	Locator::miracleFxSystem::emplace<MiracleFxSystem>();
-	Locator::pauseTextSystem::emplace<PauseTextSystem>();
-	Locator::incomingMessageSystem::emplace<IncomingMessageSystem>([]() { return machine_clock::Ticks(); });
 	EmplaceChat(profiles.developer);
 	Locator::fireSystem::emplace<ecs::systems::FireSystem>();
 	Locator::explosionSystem::emplace<ecs::systems::ExplosionSystem>();
