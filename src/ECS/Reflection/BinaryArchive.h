@@ -17,7 +17,6 @@
 #include <functional>
 #include <iterator>
 #include <limits>
-#include <map>
 #include <memory>
 #include <optional>
 #include <set>
@@ -601,15 +600,10 @@ void LoadAlternative(BinaryReader& in, Variant& value, size_t index)
 
 /// Whether a container keeps its entries in the order of operator< of their keys, so that a sort changes nothing
 template <typename Container>
-inline constexpr bool k_KeepsKeyOrder = false;
-template <typename Key, typename Value, typename Allocator>
-inline constexpr bool k_KeepsKeyOrder<std::map<Key, Value, std::less<Key>, Allocator>> = true;
-template <typename Key, typename Value, typename Allocator>
-inline constexpr bool k_KeepsKeyOrder<std::map<Key, Value, std::less<>, Allocator>> = true;
-template <typename Key, typename Allocator>
-inline constexpr bool k_KeepsKeyOrder<std::set<Key, std::less<Key>, Allocator>> = true;
-template <typename Key, typename Allocator>
-inline constexpr bool k_KeepsKeyOrder<std::set<Key, std::less<>, Allocator>> = true;
+inline constexpr bool k_KeepsKeyOrder =
+    requires { typename Container::key_compare; } &&
+    (std::is_same_v<typename Container::key_compare, std::less<typename Container::key_type>> ||
+     std::is_same_v<typename Container::key_compare, std::less<>>);
 
 /// The key of an entry of a map or a set
 template <typename Container>
