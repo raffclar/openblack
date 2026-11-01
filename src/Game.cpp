@@ -352,6 +352,9 @@
 #include "LivingTurnOrder.h"
 #include "Locator.h"
 #include "Magic/TownBelief.h"
+#if !defined(__EMSCRIPTEN__)
+#include "Online/Desktop/UdpLanDiscovery.h"
+#endif
 #include "Online/HttpClientInterface.h"
 #include "Online/LanDiscoveryInterface.h"
 #include "Online/NetworkLand.h"
@@ -5891,7 +5894,15 @@ std::unique_ptr<gui::MultiplayerFrontEnd> Game::MakeMultiplayerFrontEnd()
 {
 	if (_lanDiscovery == nullptr)
 	{
+#if defined(__EMSCRIPTEN__)
+		// A browser cannot search the local network
 		_lanDiscovery = std::make_unique<online::NoLanDiscovery>();
+#else
+		_lanDiscovery = std::make_unique<online::UdpLanDiscovery>([] {
+			return std::chrono::duration_cast<std::chrono::microseconds>(std::chrono::steady_clock::now().time_since_epoch())
+			    .count();
+		});
+#endif
 	}
 	gui::MultiplayerFrontEnd::Services services {
 	    .lobby = Locator::lobbyClient::has_value() ? &Locator::lobbyClient::value() : nullptr,

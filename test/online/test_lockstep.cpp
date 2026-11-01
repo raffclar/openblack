@@ -138,7 +138,7 @@ struct Computer
 {
 	Computer(LoopbackSockets& network, int64_t& now, std::string ticket,
 	         std::optional<std::vector<uint8_t>> landFile = k_LandFile, std::vector<uint8_t> creature = {'C'},
-	         float alignment = 0.0f)
+	         float alignment = 0.0f, std::string name = {})
 	    : sockets(network.MakeClient())
 	    , session(*sockets, [&now] { return now; })
 	{
@@ -146,6 +146,7 @@ struct Computer
 		    .request = {.url = "wss://127.0.0.1/game/1", .headers = {}, .subprotocols = {}},
 		    .ticket = std::move(ticket),
 		    .gamePassword = {},
+		    .name = std::move(name),
 		    .comeBackMicroseconds = 5LL * 60 * 1'000'000,
 		    .readLand = [this](std::string_view land) -> std::optional<std::vector<uint8_t>> {
 			    askedLand = std::string(land);
@@ -217,7 +218,8 @@ server::TicketCheck::Result CheckFakeTicket(std::string_view token)
 class LockstepTest: public ::testing::Test
 {
 protected:
-	void MakeHost(uint32_t gods, int64_t comeBack = 5LL * 60 * 1'000'000, uint8_t slots = 7, bool testCommands = false)
+	void MakeHost(uint32_t gods, int64_t comeBack = 5LL * 60 * 1'000'000, uint8_t slots = 7, bool testCommands = false,
+	              bool lan = false)
 	{
 		host = std::make_unique<LockstepHost>(
 		    network, CheckFakeTicket, [this] { return now; }, [this] { return "secret-" + std::to_string(++secrets); },
@@ -229,7 +231,8 @@ protected:
 		        .comeBackMicroseconds = comeBack,
 		        .keptTurns = 3200,
 		        .testCommands = testCommands,
-		        .sessionHasher = hasher});
+		        .sessionHasher = hasher,
+		        .lanNames = lan});
 	}
 
 	/// A room with no human god (tools): the game starts at once, and the world turns when this many observers joined
@@ -1013,6 +1016,54 @@ TEST_F(LockstepTest, AThirdGodIsRefusedFromARoomOfTwoSlotsAndAnObserverIsLetIn)
 	alice.session.SetReady(true);
 	Frames({&alice, &bob, &watcher}, 6);
 	EXPECT_TRUE(host->Started());
+}
+
+TEST(LockstepRules, ALanNameHasNoControlCharacterAndAMostLength)
+{
+	const auto claims = server::LanClaims("Alice");
+	ASSERT_TRUE(claims.has_value());
+	EXPECT_EQ(claims->name, "Alice");
+	EXPECT_EQ(claims->subject, "lan:Alice");
+	EXPECT_EQ(claims->role, game_socket::Role::God);
+	EXPECT_FALSE(server::LanClaims("").has_value());
+	EXPECT_FALSE(server::LanClaims("Al
+ice").has_value());
+	EXPECT_TRUE(server::LanClaims(std::string(server::k_MostLanNameBytes, 'a')).has_value());
+	EXPECT_FALSE(server::LanClaims(std::string(server::k_MostLanNameBytes + 1, 'a')).has_value());
+}
+
+TEST_F(LockstepTest, OnTheLocalNetworkPlayersJoinByNameAndAFullRoomTakesAnObserver)
+{
+	MakeHost(1, 5LL * 60 * 1'000'000, 2, false, true);
+	Computer alice(network, now, "", k_LandFile, {'C'}, 0.0f, "Alice");
+	alice.session.SetReady(false);
+	Computer bob(network, now, "", k_LandFile, {'C'}, 0.0f, "Bob");
+	Computer again(network, now, "", k_LandFile, {'C'}, 0.0f, "Alice");
+	Computer carol(network, now, "", k_LandFile, {'C'}, 0.0f, "Carol");
+	Computer nameless(network, now, "", k_LandFile, {'C'}, 0.0f, "");
+	Frames({&alice, &bob, &again, &carol, &nameless}, 3);
+	ASSERT_TRUE(alice.session.GetJoined().has_value());
+	EXPECT_EQ(alice.session.GetJoined()->name, "Alice");
+	EXPECT_EQ(alice.session.GetJoined()->slot, 0);
+	EXPECT_EQ(bob.session.GetJoined()->slot, 1);
+	EXPECT_EQ(host->Seats()[0].name, "Alice");
+	// A second player with the name of a god in the room is refused, as a second player of an account
+	EXPECT_EQ(again.session.RefusedReason(), "already");
+	// With no free slot, a player on the local network watches the game
+	ASSERT_TRUE(carol.session.GetJoined().has_value());
+	EXPECT_EQ(carol.session.GetJoined()->role, game_socket::Role::Observer);
+	EXPECT_EQ(nameless.session.RefusedReason(), "ticket");
+	alice.session.SetReady(true);
+	Frames({&alice, &bob, &carol}, 6);
+	EXPECT_TRUE(host->Started());
+}
+
+TEST_F(LockstepTest, ARoomOfTheLobbyRefusesAJoinWithANameAndNoTicket)
+{
+	MakeHost(1);
+	Computer alice(network, now, "", k_LandFile, {'C'}, 0.0f, "Alice");
+	Frames({&alice}, 3);
+	EXPECT_EQ(alice.session.RefusedReason(), "ticket");
 }
 
 TEST_F(LockstepTest, ARoomWithNoHumanGodStartsAtOnceAndTurnsWhenTheObserversJoined)

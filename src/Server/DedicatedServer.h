@@ -83,6 +83,13 @@ struct NetworkSettings
 	std::optional<std::filesystem::path> clientKey;
 	/// The name of the room in the list of the lobby
 	std::string roomName {"Game"};
+	/// The room is on the local network with no lobby (deviation 113): the server answers the search of the clients on the
+	/// UDP port of the search, and a player joins with the name of the profile in place of a ticket. The server then needs
+	/// no id and no ticket keys.
+	bool lan {false};
+	/// The computer name in the address of the game socket that the answers give, which the TLS certificate names. Empty:
+	/// each client uses the address of the server.
+	std::string lanHost;
 	/// Tests on this computer only: a PEM file of more certificate authorities for a lobby on a loopback address
 	std::optional<std::filesystem::path> lobbyTestAuthorities;
 	/// The snapshots of the shared world on the server's own disk (deviation 100)

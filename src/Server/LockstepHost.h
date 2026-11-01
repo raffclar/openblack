@@ -66,7 +66,17 @@ struct HostSettings
 	/// Makes the salted hashes of the secrets of sessions, which the snapshots keep in place of the secrets. With none, a
 	/// restored room has no sessions, and no player can come back with a secret.
 	std::shared_ptr<const SessionHasherInterface> sessionHasher;
+	/// A room on the local network with no lobby (deviation 113): a join with no ticket gives the name of the player's
+	/// profile, and the room takes the player by that name. A god who finds no free slot joins as an observer.
+	bool lanNames {false};
 };
+
+/// The claims of a player who joins a room on the local network by the name of the profile, as a god. None when the name
+/// is empty, longer than the limit or has a control character.
+[[nodiscard]] std::optional<join_ticket::Claims> LanClaims(std::string_view name);
+
+/// The most bytes of the name of a player who joins on the local network
+constexpr size_t k_MostLanNameBytes = 64;
 
 /// The game role of the server in a network game (authoritative lockstep, user decision MP-Q1). It lets in the players
 /// with a ticket of the lobby, orders their commands into its turns, sends each turn and the checksum of its world after

@@ -138,6 +138,13 @@ public:
 	void GetPlayerRanking(int32_t, LobbyCallback<lobby_api::RankingPage>) override {}
 	void GetClanRanking(int32_t, LobbyCallback<lobby_api::RankingPage>) override {}
 	void GetPlayer(int64_t, LobbyCallback<lobby_api::PlayerDetails>) override {}
+	void GetPlayerDetailLines(int64_t playerId, std::string version,
+	                          LobbyCallback<lobby_api::PlayerDetailLines> callback) override
+	{
+		detailsAsked.push_back(playerId);
+		detailsVersion = std::move(version);
+		details = std::move(callback);
+	}
 	void GetWeather(lobby_api::Date, LobbyCallback<lobby_api::RealWeather>) override {}
 	void UploadCreature(lobby_api::CreatureUpload, LobbyCallback<lobby_api::CreatureUploadReply>) override {}
 	void SendSkirmishPing(LobbyCallback<LobbyDone>) override {}
@@ -200,6 +207,9 @@ public:
 	LobbyCallback<lobby_api::ClanList> myClans;
 	std::optional<int64_t> clanAsked;
 	LobbyCallback<lobby_api::ClanDetails> clan;
+	std::vector<int64_t> detailsAsked;
+	std::string detailsVersion;
+	LobbyCallback<lobby_api::PlayerDetailLines> details;
 	LobbyCallback<std::vector<uint8_t>> logo;
 	LobbyCallback<lobby_api::MapList> maps;
 	LobbyCallback<std::vector<uint8_t>> download;
@@ -1147,6 +1157,61 @@ TEST_F(FrontEndTest, UseThisClan)
 	EXPECT_FALSE(frontEnd->GetUsedClan().has_value());
 }
 
+TEST_F(FrontEndTest, PlayerDetailsAskTheLobbyOneTimeForThePickedPlayer)
+{
+	ToRoom();
+	// A pick on another tab asks for nothing
+	frontEnd->ShowSeat(0);
+	EXPECT_TRUE(lobby.detailsAsked.empty());
+	frontEnd->SelectTab(RoomTab::PlayerDetails);
+	EXPECT_TRUE(frontEnd->GetShownDetails().empty());
+	frontEnd->ShowSeat(0);
+	const auto picked = frontEnd->GetSeats()[0].account.id;
+	ASSERT_EQ(lobby.detailsAsked, (std::vector<int64_t> {picked}));
+	EXPECT_EQ(lobby.detailsVersion, k_GameVersion);
+	FakeLobby::Give(lobby.details, lobby_api::PlayerDetailLines {
+	                                   .lines = {{.label = "Points", .value = "12"}, {.label = "Country", .value = "gb"}}});
+	const auto shown = frontEnd->GetShownDetails();
+	ASSERT_EQ(shown.size(), 2u);
+	EXPECT_EQ(PlayerDetailLines(shown), (std::vector<std::u16string> {u"Points:12", u"Country:gb"}));
+	// The game keeps the lines: a second pick of the same player does not ask again
+	frontEnd->ShowSeat(std::nullopt);
+	frontEnd->ShowSeat(0);
+	EXPECT_EQ(lobby.detailsAsked.size(), 1u);
+	EXPECT_EQ(frontEnd->GetShownDetails().size(), 2u);
+}
+
+TEST_F(FrontEndTest, PlayerDetailsShowTheOwnLinesWithNoPickAndNothingAfterAFailure)
+{
+	ToRoom();
+	frontEnd->SelectTab(RoomTab::PlayerDetails);
+	const auto seats = frontEnd->GetSeats();
+	const auto own = static_cast<size_t>(frontEnd->GetOwnSeat() - seats.data());
+	std::vector<size_t> others;
+	for (size_t seat = 0; seat < seats.size(); ++seat)
+	{
+		if (seat != own)
+		{
+			others.push_back(seat);
+		}
+	}
+	ASSERT_EQ(others.size(), 2u);
+	frontEnd->ShowSeat(own);
+	FakeLobby::Give(lobby.details, lobby_api::PlayerDetailLines {.lines = {{.label = "Points", .value = "3"}}});
+	frontEnd->ShowSeat(others[0]);
+	FakeLobby::Fail(lobby.details, LobbyErrorKind::Network);
+	EXPECT_TRUE(frontEnd->GetShownDetails().empty());
+	// With no pick, the tab shows the player's own lines
+	frontEnd->ShowSeat(std::nullopt);
+	EXPECT_EQ(PlayerDetailLines(frontEnd->GetShownDetails()), (std::vector<std::u16string> {u"Points:3"}));
+	// An answer that comes after the player left the room changes nothing
+	frontEnd->ShowSeat(others[1]);
+	frontEnd->Back();
+	FakeLobby::Give(lobby.details, lobby_api::PlayerDetailLines {.lines = {{.label = "Points", .value = "9"}}});
+	EXPECT_TRUE(frontEnd->GetShownDetails().empty());
+	EXPECT_EQ(lobby.detailsAsked.size(), 3u);
+}
+
 TEST_F(FrontEndTest, ReadyShowsNoBoxAndTheTickTakesItAway)
 {
 	ToRoom();
@@ -1206,6 +1271,35 @@ TEST_F(FrontEndTest, TheLanListComesFromTheSearch)
 	frontEnd->Back();
 	EXPECT_EQ(frontEnd->GetBox(), Box::FindGames);
 	EXPECT_EQ(lan.stops, 1);
+}
+
+TEST_F(FrontEndTest, TheLanRoomFollowsTheAnswersOfItsServer)
+{
+	Make(true);
+	lan.servers = {Server("l1", "LAN game", 1, 32)};
+	lan.servers[0].players = {Player(0, "Bob", "god")};
+	frontEnd->Next();
+	frontEnd->SetLobbyKind(LobbyKind::Lan);
+	frontEnd->Next();
+	frontEnd->Update();
+	frontEnd->SelectGame(0);
+	frontEnd->Join(u"");
+	sockets.Accept(sockets.order.back());
+	Step();
+	ServerJoins();
+	ASSERT_EQ(frontEnd->GetBox(), Box::Room);
+	ASSERT_EQ(frontEnd->GetSeats().size(), 1u);
+	EXPECT_EQ(frontEnd->GetOwnSeat(), nullptr);
+	// The next answer of the server has the player in the room
+	lan.servers[0].players.push_back(Player(0, "Alice", "god"));
+	lan.servers[0].numplayers = 2;
+	const auto polls = lan.polls;
+	frontEnd->Update();
+	EXPECT_EQ(lan.polls, polls + 1);
+	ASSERT_EQ(frontEnd->GetSeats().size(), 2u);
+	ASSERT_NE(frontEnd->GetOwnSeat(), nullptr);
+	EXPECT_EQ(frontEnd->GetOwnSeat()->god, 2);
+	EXPECT_EQ(frontEnd->GetRoomServer()->numplayers, 2);
 }
 
 TEST_F(FrontEndTest, TheListenerGoesWithTheFrontEnd)

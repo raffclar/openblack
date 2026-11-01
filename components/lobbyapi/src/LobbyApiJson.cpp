@@ -592,6 +592,31 @@ std::string ToJson(const ServerStatus& status)
 	});
 }
 
+std::string ToJson(const LanAnswer& answer)
+{
+	auto players = Json::array();
+	for (const auto& player : answer.players)
+	{
+		players.push_back(Json {
+		    {"account", Json {{"id", player.account.id}, {"name", player.account.name}}},
+		    {"role", player.role},
+		    {"clan", nullptr},
+		});
+	}
+	return Dump(Json {
+	    {"hostname", answer.hostname},
+	    {"land", answer.land},
+	    {"gamemode", answer.gamemode},
+	    {"password", answer.password},
+	    {"numplayers", answer.numplayers},
+	    {"maxplayers", answer.maxplayers},
+	    {"gamever", answer.gamever},
+	    {"port", answer.port},
+	    {"host", answer.host},
+	    {"players", players},
+	});
+}
+
 std::optional<AccountNameCheck> ParseAccountNameCheck(std::string_view text)
 {
 	return ParseWith<AccountNameCheck>(text, [](const Json& object, AccountNameCheck& out) {
@@ -688,6 +713,26 @@ std::optional<PlayerDetails> ParsePlayerDetails(std::string_view text)
 		return ReadInteger(object, "id", out.id) && ReadString(object, "name", out.name) &&
 		       ReadNumber(object, "points", out.points, false) && ReadInteger(object, "games_ranked", out.gamesRanked, false) &&
 		       ReadArray(object, "clans", out.clans, ReadClanSummary, false);
+	});
+}
+
+std::optional<PlayerDetailLines> ParsePlayerDetailLines(std::string_view text)
+{
+	return ParseWith<PlayerDetailLines>(text, [](const Json& object, PlayerDetailLines& out) {
+		return ReadArray(object, "lines", out.lines, [](const Json& line, PlayerDetailLine& item) {
+			return ReadString(line, "label", item.label) && ReadString(line, "value", item.value);
+		});
+	});
+}
+
+std::optional<LanAnswer> ParseLanAnswer(std::string_view text)
+{
+	return ParseWith<LanAnswer>(text, [](const Json& object, LanAnswer& out) {
+		return ReadString(object, "hostname", out.hostname) && ReadString(object, "land", out.land) &&
+		       ReadString(object, "gamemode", out.gamemode) && ReadBool(object, "password", out.password) &&
+		       ReadInteger(object, "numplayers", out.numplayers) && ReadInteger(object, "maxplayers", out.maxplayers) &&
+		       ReadString(object, "gamever", out.gamever) && ReadInteger(object, "port", out.port) && out.port != 0 &&
+		       ReadString(object, "host", out.host, false) && ReadArray(object, "players", out.players, ReadRoomPlayer);
 	});
 }
 

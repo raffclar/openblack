@@ -181,6 +181,33 @@ struct ServerEntry
 	std::string map;
 };
 
+/// The answer of a game server on the local network to a search (deviation 113), with the room in the shape of the
+/// lobby's list. There is no lobby, so the players have no account id.
+struct LanAnswer
+{
+	/// "hostname": the name of the room
+	std::string hostname;
+	/// "land"
+	std::string land;
+	/// "gamemode": "openstaging" or "closedplaying"
+	std::string gamemode;
+	/// "password": the room needs a password
+	bool password {false};
+	/// "numplayers": the gods in the room
+	int32_t numplayers {0};
+	/// "maxplayers"
+	int32_t maxplayers {0};
+	/// "gamever": the version of the game server
+	std::string gamever;
+	/// "port": the TCP port of the game socket
+	uint16_t port {0};
+	/// "host": the name of the computer in the address of the game socket, which its TLS certificate names. Empty: the
+	/// address of the computer that sent the answer.
+	std::string host;
+	/// "players": the gods and the observers, each with the account id 0
+	std::vector<RoomPlayer> players;
+};
+
 /// A land of a network game in GET /api/v1/maps: a land that the players do not have, which the lobby gives to the
 /// players of a room that plays it. The list has the columns of the game's own list of lands and the place to get the
 /// file, with the hash and the start checksum of the file, so that a player asks only for a file that it does not have.
@@ -362,6 +389,23 @@ struct RankingPage
 	int32_t pages {1};
 	/// "entries"
 	std::vector<RankingEntry> entries;
+};
+
+/// A line of the Player Details tab: a label and a value, as the lobby gives them
+struct PlayerDetailLine
+{
+	/// "label"
+	std::string label;
+	/// "value"
+	std::string value;
+};
+
+/// GET /api/v1/players/{id}/details?version=<game version>: the lines of the Player Details tab for a player, in the
+/// order of the lobby. The lobby gives all the labels and all the values. Not in the contract of the lobby yet.
+struct PlayerDetailLines
+{
+	/// "lines"
+	std::vector<PlayerDetailLine> lines;
 };
 
 /// GET /api/v1/players/{id}. Not in the contract of the lobby yet.
