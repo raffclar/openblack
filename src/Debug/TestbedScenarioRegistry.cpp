@@ -8887,13 +8887,37 @@ void AddLeash(std::vector<Scenario>& all)
 	    .name = "Leash your creature with the hand",
 	    .facet = Facet::Leash,
 	    .description = "Your tiger stands to the north. The hand clicks it with the right button, putting the learning "
-	                   "leash on. Move the hand about to lead it; press L or shake the hand to take the leash off "
-	                   "again, or right click it yourself to put it back on.",
+	                   "leash on. Move the hand about to lead it; press L, right click it or shake the hand to "
+	                   "take the leash off again, and right click it again to put it back on.",
 	    .expected = "A rope runs from the hand to its collar; pulled taut, the tiger walks to the hand. The readout says "
 	                "\"on\".",
 	    .framing = {.shot = Shot::Testbed},
 	    .creatures = {Content(CreatureType::Tiger, {0.0f, 60.0f})},
 	    .commands = {{.kind = Kind::HandTapLeash, .creature = 0, .delaySeconds = 1.0f}},
+	});
+
+	// The real button clicks the creature that wears the leash: the click is the leash key, so the leash comes off
+	all.push_back({
+	    .id = "leash.click_takes_off",
+	    .name = "A click on your leashed creature takes the leash off",
+	    .facet = Facet::Leash,
+	    .description = "Your tiger faces the camera in the middle of the screen and wears the learning leash. The action "
+	                   "button clicks the tiger and the hand moves to the right. Then the hand comes back, clicks the "
+	                   "tiger again and moves to the right again.",
+	    .expected = "After the first click no rope follows the hand: the click took the leash off. After the second "
+	                "click a rope runs from the hand to the collar again. The log shows \"The draw of the hand sends the "
+	                "leash tap\" for each click, and a turn later \"Leash command: player 0 taps a creature\".",
+	    .environment = {.dispenserGrid = false, .cursor = glm::vec2(0.5f, 0.5f)},
+	    .framing = {.shot = Shot::Follow, .distance = 1.2f},
+	    .creatures = {Posed(CreatureType::Tiger, {0.0f, 0.0f})},
+	    .commands = {Leash(0, LeashType::Rope, 0.5f),
+	                 {.kind = Kind::PointerPress, .delaySeconds = 2.0f, .value = 3},
+	                 {.kind = Kind::PointerRelease, .delaySeconds = 0.2f, .value = 3},
+	                 {.kind = Kind::PointerSweep, .delaySeconds = 0.5f, .point = {0.25f, 0.0f}, .amount = 1.0f},
+	                 {.kind = Kind::PointerSweep, .delaySeconds = 2.5f, .point = {-0.25f, 0.0f}, .amount = 1.0f},
+	                 {.kind = Kind::PointerPress, .delaySeconds = 1.5f, .value = 3},
+	                 {.kind = Kind::PointerRelease, .delaySeconds = 0.2f, .value = 3},
+	                 {.kind = Kind::PointerSweep, .delaySeconds = 0.5f, .point = {0.25f, 0.0f}, .amount = 1.0f}},
 	});
 
 	all.push_back({

@@ -2335,7 +2335,11 @@ std::string Runner::GiveLeashCommand(entt::entity creature, const Command& comma
 		return leashes.SetLeashable(creature, true) ? "leashable" : RefusedText(leashes);
 	case Kind::HandTapLeash:
 		// As the player's Action button tapping it does
-		return leashes.TapCreature(command.player, creature) ? "on" : RefusedText(leashes);
+		if (!leashes.TapCreature(command.player, creature))
+		{
+			return RefusedText(leashes);
+		}
+		return leashes.IsLeashed(creature) ? "on" : "off";
 	case Kind::LeashShake:
 		// The game shakes a leash off with a scribble drawn with the empty hand
 		return DrawGesture(GestureType::Scribble);
