@@ -108,8 +108,8 @@ public:
 	void MouseDown(glm::ivec2 point);
 	/// True when a control acted: the game clicks
 	bool MouseUp(glm::ivec2 point);
-	/// The mouse wheel turned over a point: steps away from the player, and across to the right on a horizontal wheel
-	void Wheel(glm::ivec2 point, int steps, int across);
+	/// The mouse wheel turned over the pointer: steps away from the player, and across to the right on a horizontal wheel
+	void Wheel(int steps, int across);
 	/// What the player chose, once
 	[[nodiscard]] Action TakeAction() noexcept { return std::exchange(_action, Action::None); }
 	/// The controls that the player can press by name now

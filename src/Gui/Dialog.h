@@ -77,6 +77,8 @@ public:
 	/// The mouse wheel turned some notches over a point: steps away from the player, and across to the right on a
 	/// horizontal wheel. The top control that takes the wheel at the point gets them.
 	void Wheel(glm::ivec2 point, int steps, int across = 0);
+	/// The same, over the point where the last move of the pointer put it
+	void Wheel(int steps, int across) { Wheel(_pointer, steps, across); }
 	bool TextInput(std::u16string_view text);
 	/// A key pressed while the dialog has the keyboard. Tab, or Shift and Tab, moves the focus to the next or previous
 	/// control (see MoveFocus). Return in an edit box clicks it and moves the focus on. Other keys go to the control that

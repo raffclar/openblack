@@ -671,7 +671,7 @@ bool GameInterface::ProcessEndGameBoxEvent(const SDL_Event& event)
 		}
 		return true;
 	case SDL_MOUSEWHEEL:
-		_endGameBox->Wheel(_painter.ToDialog(input::WindowPointer()), event.wheel.y, event.wheel.x);
+		_endGameBox->Wheel(event.wheel.y, event.wheel.x);
 		return true;
 	case SDL_KEYDOWN:
 	case SDL_TEXTINPUT:

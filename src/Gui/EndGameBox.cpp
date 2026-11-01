@@ -229,11 +229,12 @@ bool EndGameBox::MouseUp(glm::ivec2 point)
 	return _open && CurrentDialog().MouseUp(point);
 }
 
-void EndGameBox::Wheel(glm::ivec2 point, int steps, int across)
+void EndGameBox::Wheel(int steps, int across)
 {
+	// The box takes the place of the pointer from its moves, which also come from the tools that move the pointer
 	if (_open)
 	{
-		CurrentDialog().Wheel(point, steps, across);
+		CurrentDialog().Wheel(steps, across);
 	}
 }
 
