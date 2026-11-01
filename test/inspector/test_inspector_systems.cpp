@@ -463,6 +463,32 @@ TEST(InspectorAudio, SoundsNearAPoint)
 	EXPECT_EQ(state["listener"], Json::array({1.0, 2.0, 3.0}));
 }
 
+TEST(InspectorAudio, SoundsWithoutAPlaceShowWithTheirNames)
+{
+	ecs::Registry registry;
+	const auto placed = registry.Create();
+	registry.Assign<AudioEmitter>(placed, AudioEmitter {.soundId = 1, .spatial = true});
+	const auto flat = registry.Create();
+	registry.Assign<AudioEmitter>(flat, AudioEmitter {.soundId = 2, .spatial = false});
+	registry.Get<AudioEmitter>(flat).state = audio::AudioStatus::Playing;
+	const auto stopped = registry.Create();
+	registry.Assign<AudioEmitter>(stopped, AudioEmitter {.soundId = 3, .spatial = false});
+	registry.Get<AudioEmitter>(stopped).state = audio::AudioStatus::Stopped;
+
+	Inspector inspector;
+	inspector.Add(MakeAudioProvider({.world = {.registry = [&registry]() -> const ecs::Registry* { return &registry; },
+	                                           .info = []() -> const InfoConstants* { return nullptr; }},
+	                                 .emitters = [&registry]() -> const ecs::Registry* { return &registry; },
+	                                 .soundName = [](entt::id_type id) -> std::string {
+		                                 return id == 2 ? "Scriptsfx.sad/57 CreatureGateStoneMove_01.wav" : "";
+	                                 }}));
+	const auto unplaced = Ask(inspector, R"({"query": "audio.unplaced"})");
+	ASSERT_EQ(unplaced["total"], 1);
+	EXPECT_EQ(unplaced["items"][0]["id"], entt::to_integral(flat));
+	EXPECT_EQ(unplaced["items"][0]["name"], "Scriptsfx.sad/57 CreatureGateStoneMove_01.wav");
+	EXPECT_FALSE(unplaced["items"][0].contains("position"));
+}
+
 TEST(InspectorParticles, EmittersByOwner)
 {
 	std::vector<ParticleEffectInfo> effects(3);
