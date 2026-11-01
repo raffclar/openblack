@@ -223,10 +223,22 @@ TEST(CreatureSpells, TheBodySpellsTargets)
 TEST(CreatureSpells, TheFrozenLookTintsTowardsIcyBlue)
 {
 	EXPECT_EQ(FrozenTint(0.0f), 0xFFFFFFu);
-	// All but a 256th of the way to the dark icy blue
-	EXPECT_EQ(FrozenTint(1.0f), 0x36508Eu);
-	const auto half = FrozenTint(0.5f);
-	EXPECT_EQ((half >> 16) & 0xFFu, 255u - (202u * 127u) / 256u);
+	// Wholly frozen, the dark icy blue itself
+	EXPECT_EQ(FrozenTint(1.0f), 0x354F8Du);
+	// Half frozen is level 128 (127.5 goes to the even number): the red goes down by 202 x 128 / 256
+	EXPECT_EQ(FreezeLevel(0.5f), 128u);
+	EXPECT_EQ((FrozenTint(0.5f) >> 16) & 0xFFu, 154u);
+	// A step that is not whole is rounded up: level 1 takes each channel down by one
+	EXPECT_EQ(FrozenTint(1.0f / 255.0f), 0xFEFEFEu);
+}
+
+TEST(CreatureSpells, TheIceIsAddedByTheFreezeLevelTimesWhite)
+{
+	EXPECT_EQ(IceAlpha(0.0f), 0u);
+	// Level 1 times 255 over 256 is none
+	EXPECT_EQ(IceAlpha(1.0f / 255.0f), 0u);
+	EXPECT_EQ(IceAlpha(0.5f), 127u);
+	EXPECT_EQ(IceAlpha(1.0f), 254u);
 }
 
 TEST(CreatureSpells, TimesAreWholeTurns)
