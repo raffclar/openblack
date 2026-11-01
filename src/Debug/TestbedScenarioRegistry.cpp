@@ -13314,6 +13314,35 @@ CREATE_ABODE(63, "0.0,-70.0", "CELTIC_ABODE_STORAGE_PIT", 0, 1000, 100, 100)
 	                 {.kind = Kind::BookmarkCreature, .creature = 0, .delaySeconds = 1.0f, .value = 3},
 	                 Go(Kind::WalkTo, 0, {0.0f, 160.0f}, 0.5f, false)},
 	});
+	{
+		// The first land's turning lesson, as the game's own script runs it after the turning demonstration. The lesson
+		// keeps the camera near the temple, and the temple's place is where the camera goes back to.
+		using Argument = ScriptArgument;
+		constexpr glm::vec2 k_LessonTemple {0.0f, 40.0f};
+		constexpr glm::vec2 k_ViewPlace {0.0f, 0.0f};
+		all.push_back({
+		    .id = "tutorial.teach_rotate",
+		    .name = "The turning lesson and the hand's turning state",
+		    .facet = Facet::Tutorial,
+		    .description = "The player's temple stands north of the middle. Half a second in, the game's TeachRotate "
+		                   "script runs, as the first land's lesson starts it. Hold the land with both buttons and move "
+		                   "the mouse across to turn the camera, or turn it with the keys while both buttons hold the land.",
+		    .expected = "The advisors tell the player to turn the camera. While both buttons hold the land and the camera "
+		                "turns, the hand's state that the scripts read is the turning state (21). When the lesson's minute "
+		                "runs out while the player turns the land in this way, the turning demonstration does not play "
+		                "again. With no turn, it plays again after each minute. Turning enough ends the lesson.",
+		    .environment = {.dispenserGrid = false},
+		    .framing = {.shot = Shot::Placed,
+		                .eye = {k_ViewPlace.x, 30.0f, k_ViewPlace.y - 40.0f},
+		                .look = {k_LessonTemple.x, 0.0f, k_LessonTemple.y}},
+		    .temples = {{.offset = k_LessonTemple}},
+		    .commands = {{.kind = Kind::RunScript,
+		                  .delaySeconds = 0.5f,
+		                  .script = "TeachRotate",
+		                  .scriptArguments = {{.kind = Argument::Kind::Temple, .index = 0},
+		                                      {.kind = Argument::Kind::Marker, .point = k_ViewPlace, .height = 30.0f}}}},
+		});
+	}
 }
 
 /// A blow that sways the creature, and a wolf that frightens it

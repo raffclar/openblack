@@ -133,8 +133,11 @@ public:
 	virtual entt::entity StartSoundEffect(entt::id_type id, const SoundEffectOptions& options) = 0;
 	/// Stops the sound effects of a sound that a request started
 	virtual void StopSoundEffect(entt::id_type id) = 0;
-	/// A sound effect that a request started is still playing
-	[[nodiscard]] virtual bool IsSoundEffectPlaying(entt::id_type id) const = 0;
+	/// Stops the sample that a caller started with an owner number. Only the first voice that keeps the sample for that
+	/// owner stops, and only if it plays.
+	virtual void StopNumberedSoundEffect(entt::id_type id, uint32_t ownerNumber) = 0;
+	/// True when the first voice that keeps the sample for the owner number plays
+	[[nodiscard]] virtual bool IsNumberedSoundEffectPlaying(entt::id_type id, uint32_t ownerNumber) const = 0;
 	/// Stops every sound effect that plays (not the music)
 	virtual void StopAllSoundEffects() = 0;
 

@@ -60,6 +60,7 @@ void openblack::ecs::reflection::RegisterFields_Components_r(entt::meta_ctx& con
 	    .Field<&components::ReportedHand::gripsLand>("gripsLand")
 	    .Field<&components::ReportedHand::otherButton>("otherButton")
 	    .Field<&components::ReportedHand::mouseWheel>("mouseWheel")
+	    .Field<&components::ReportedHand::cameraTurned>("cameraTurned")
 	    .Field<&components::ReportedHand::cameraIcons>("cameraIcons")
 	    .Field<&components::ReportedHand::keysHeld>("keysHeld");
 	Reflect<components::ResourceLastTaken>(context).Field<&components::ResourceLastTaken::turn>(

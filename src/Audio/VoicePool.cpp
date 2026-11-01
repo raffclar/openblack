@@ -137,6 +137,45 @@ std::optional<size_t> VoicePool::Steal(uint16_t priority) const
 	return lowest;
 }
 
+std::vector<size_t> VoicePool::VoicesToStop(uint64_t owner, uint32_t bank, uint32_t sample) const
+{
+	std::vector<size_t> voices;
+	if (sample == 0)
+	{
+		for (size_t i = 0; i < _slots.size(); ++i)
+		{
+			if (_slots[i].playing && _slots[i].bank == bank && _slots[i].owner == owner)
+			{
+				voices.push_back(i);
+			}
+		}
+		return voices;
+	}
+	if (const auto first = FirstKeeping(owner, bank, sample); first.has_value() && _slots.at(*first).playing)
+	{
+		voices.push_back(*first);
+	}
+	return voices;
+}
+
+bool VoicePool::IsPlaying(uint64_t owner, uint32_t bank, uint32_t sample) const
+{
+	const auto first = FirstKeeping(owner, bank, sample);
+	return first.has_value() && _slots.at(*first).playing;
+}
+
+std::optional<size_t> VoicePool::FirstKeeping(uint64_t owner, uint32_t bank, uint32_t sample) const
+{
+	const auto keeping = std::ranges::find_if(_slots, [owner, bank, sample](const VoiceSlot& slot) {
+		return slot.bank == bank && slot.owner == owner && slot.sample == sample;
+	});
+	if (keeping == _slots.end())
+	{
+		return std::nullopt;
+	}
+	return static_cast<size_t>(std::distance(_slots.begin(), keeping));
+}
+
 std::optional<size_t> VoicePool::FirstFree() const
 {
 	const auto free = std::ranges::find_if(_slots, [](const VoiceSlot& slot) { return !slot.playing; });

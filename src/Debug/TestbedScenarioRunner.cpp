@@ -5181,6 +5181,24 @@ std::optional<double> Runner::ReadCheck(const checks::Check& check) const
 		const auto goal = MapPoint(_middle, check.point);
 		return static_cast<double>(glm::distance(glm::vec2(transform->position.x, transform->position.z), goal));
 	}
+	case checks::Quantity::ObjectTemperature:
+	{
+		const auto object = ObjectAt(check.index);
+		if (!object.has_value() || !Locator::fireSystem::has_value())
+		{
+			return std::nullopt;
+		}
+		return static_cast<double>(Locator::fireSystem::value().GetTemperature(*object));
+	}
+	case checks::Quantity::FireNear:
+	{
+		if (!Locator::fireSystem::has_value())
+		{
+			return std::nullopt;
+		}
+		const auto point = MapPoint(_middle, check.point);
+		return Locator::fireSystem::value().IsFireNear({point.x, 0.0f, point.y}, check.radius) ? 1.0 : 0.0;
+	}
 	}
 	return std::nullopt;
 }

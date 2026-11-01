@@ -972,10 +972,12 @@ void DefaultWorldCameraModel::HandleActions(std::chrono::microseconds dt)
 	                           Locator::gameActionSystem::value().TakeDoubleClick();
 	// A drag of the land given up too far ahead takes every control away until the buttons are let go
 	_turnedThisFrame.reset();
+	_controlsTurned = false;
 	if (!_dragGivenUp)
 	{
 		const auto inputEvents = camera_help::events::InputEvents(_helpControls);
 		_helpEvents.Add(inputEvents);
+		_controlsTurned = camera_help::events::TurnAsked(_helpControls);
 		// The keys, the middle button and both buttons turned the camera as far as they asked
 		if (inputEvents.Contains(help::profile::k_CameraTurn) && Locator::windowing::has_value())
 		{
@@ -1080,6 +1082,7 @@ void DefaultWorldCameraModel::HandleActions(std::chrono::microseconds dt)
 			_mode = Mode::Cartesian;
 			_helpEvents = {};
 			_turnedThisFrame.reset();
+			_controlsTurned = false;
 		}
 	}
 	// What the fight view takes from the controls: any control used, before the features take any away, and the land held
@@ -1354,9 +1357,10 @@ CameraModel::HandCues DefaultWorldCameraModel::GetHandCues() const
 		        .dragMode = _drag.GetMode(),
 		        .clearViewGrip = _clearView.GetValue() > k_ClearViewGrips,
 		        .icons = _iconFrame,
-		        .clearView = _clearView.GetValue()};
+		        .clearView = _clearView.GetValue(),
+		        .controlsTurned = _controlsTurned};
 	}
-	return {.tricons = _tricons, .icons = _iconFrame, .clearView = _clearView.GetValue()};
+	return {.tricons = _tricons, .icons = _iconFrame, .clearView = _clearView.GetValue(), .controlsTurned = _controlsTurned};
 }
 
 void DefaultWorldCameraModel::SetFlight(glm::vec3 origin, glm::vec3 focus, float rise)

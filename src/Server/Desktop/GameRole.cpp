@@ -26,7 +26,7 @@
 
 #include "Common/BuildVersion.h"
 #include "Online/Desktop/CurlHttpClient.h"
-#include "Online/Desktop/UdpSocket.h"
+#include "Online/Desktop/UdpLanDiscovery.h"
 #include "Online/LanDiscovery.h"
 #include "Server/Desktop/Sha256SessionHasher.h"
 #include "Server/Desktop/SocketWebSocketServer.h"
@@ -101,7 +101,7 @@ struct GameRole::Parts
 	bool mapSending {false};
 	bool mapSent {false};
 	/// The answers to the search of the clients on the local network
-	std::unique_ptr<online::UdpSocket> lan;
+	std::unique_ptr<online::LanResponder> lan;
 	std::string lanHost;
 
 	void AnswerSearches()
@@ -110,15 +110,7 @@ struct GameRole::Parts
 		{
 			return;
 		}
-		while (auto datagram = lan->Receive())
-		{
-			if (!online::lan_discovery::IsSearch(datagram->bytes))
-			{
-				continue;
-			}
-			const auto answer = lan_room::AnswerOf(room, host->Started(), host->Seats(), sockets.Port(), lanHost);
-			lan->SendTo(datagram->address, datagram->port, online::lan_discovery::AnswerBytes(answer));
-		}
+		lan->Poll([this] { return lan_room::AnswerOf(room, host->Started(), host->Seats(), sockets.Port(), lanHost); });
 	}
 
 	void SendMap()
@@ -300,9 +292,12 @@ std::optional<std::string> GameRole::Start(const NetworkSettings& settings, game
 	                                 .version = std::string(build_version::Semantic())};
 	if (settings.lan)
 	{
-		parts.lan = std::make_unique<online::UdpSocket>();
+		parts.lan = online::MakeUdpLanResponder([] {
+			return std::chrono::duration_cast<std::chrono::microseconds>(std::chrono::steady_clock::now().time_since_epoch())
+			    .count();
+		});
 		parts.lanHost = settings.lanHost;
-		if (!parts.lan->Open(online::lan_discovery::k_Port, false))
+		if (parts.lan == nullptr)
 		{
 			return "the UDP port of the search on the local network does not open";
 		}
