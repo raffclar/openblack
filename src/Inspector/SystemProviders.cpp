@@ -1757,35 +1757,61 @@ std::unique_ptr<ProviderInterface> openblack::inspector::MakeAudioProvider(Audio
 		                   {"sounds_playing", playing},
 		                   {"listener", {state->listener.x, state->listener.y, state->listener.z}}});
 	              });
+	// A sound as the tools see it, with the name of its bank file, its sample and its wave file
+	const auto soundItem = [sources](entt::entity entity, const AudioEmitter& emitter) {
+		Json item = {
+		    {"id", ToId(entity)},
+		    {"sound", emitter.soundId},
+		    {"name", sources.soundName ? sources.soundName(emitter.soundId) : std::string()},
+		    {"bank", emitter.bank},
+		    {"state", StatusName(emitter.state)},
+		    {"loop", LoopName(emitter.loop)},
+		    {"volume", emitter.volume},
+		    {"gain", emitter.gain},
+		    {"music", emitter.music},
+		    {"owner", Id(emitter.owner)},
+		};
+		if (emitter.spatial)
+		{
+			item["position"] = Point(emitter.position);
+		}
+		return item;
+	};
 	provider->Add(Query("sounds", "The sounds about a point, nearest first (sounds without a place are left out)", {},
 	                    ResultKind::List, true),
-	              [sources](const QueryContext& /*context*/) {
+	              [sources, soundItem](const QueryContext& /*context*/) {
 		              const auto* registry = sources.emitters ? sources.emitters() : nullptr;
 		              if (registry == nullptr)
 		              {
 			              return QueryResult::Error("there is no audio");
 		              }
 		              Json items = Json::array();
-		              registry->Each<const AudioEmitter>([&items](entt::entity entity, const AudioEmitter& emitter) {
-			              if (!emitter.spatial)
-			              {
-				              return;
-			              }
-			              items.push_back({
-			                  {"id", ToId(entity)},
-			                  {"position", Point(emitter.position)},
-			                  {"sound", emitter.soundId},
-			                  {"bank", emitter.bank},
-			                  {"state", StatusName(emitter.state)},
-			                  {"loop", LoopName(emitter.loop)},
-			                  {"volume", emitter.volume},
-			                  {"gain", emitter.gain},
-			                  {"music", emitter.music},
-			                  {"owner", Id(emitter.owner)},
-			              });
-		              });
+		              registry->Each<const AudioEmitter>(
+		                  [&items, &soundItem](entt::entity entity, const AudioEmitter& emitter) {
+			                  if (emitter.spatial)
+			                  {
+				                  items.push_back(soundItem(entity, emitter));
+			                  }
+		                  });
 		              return QueryResult::Value(std::move(items));
 	              });
+	provider->Add(
+	    Query("unplaced", "The sounds that play without a place, such as a script's sound with no place", {}, ResultKind::List),
+	    [sources, soundItem](const QueryContext& /*context*/) {
+		    const auto* registry = sources.emitters ? sources.emitters() : nullptr;
+		    if (registry == nullptr)
+		    {
+			    return QueryResult::Error("there is no audio");
+		    }
+		    Json items = Json::array();
+		    registry->Each<const AudioEmitter>([&items, &soundItem](entt::entity entity, const AudioEmitter& emitter) {
+			    if (!emitter.spatial && emitter.state != audio::AudioStatus::Stopped)
+			    {
+				    items.push_back(soundItem(entity, emitter));
+			    }
+		    });
+		    return QueryResult::Value(std::move(items));
+	    });
 	auto loseDevice = Query("lose_device",
 	                        "A debug tool, not a rule of the game: the game acts as if the machine lost its sound device "
 	                        "(lost true), or has it again (lost false); answers whether the device counts as lost",
