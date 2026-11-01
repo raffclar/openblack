@@ -7580,6 +7580,40 @@ void AddHand(std::vector<Scenario>& all)
 	    .commands = clickThenStroke,
 	});
 
+	// The real button on the creature: a fast sweep at once after the press, before the hand has its pose, then slow
+	// strokes and fast sweeps once it has its pose
+	std::vector<Command> poseThenTouch {
+	    {.kind = Kind::PointerPress, .delaySeconds = 1.0f, .value = 3},
+	    {.kind = Kind::PointerSweep, .delaySeconds = 0.0f, .point = {0.2f, 0.0f}, .amount = 0.01f},
+	    {.kind = Kind::PointerSweep, .delaySeconds = 0.05f, .point = {-0.2f, 0.0f}, .amount = 0.3f}};
+	for (int stroke = 0; stroke < 4; ++stroke)
+	{
+		const float down = stroke % 2 == 0 ? 0.08f : -0.08f;
+		poseThenTouch.push_back({.kind = Kind::PointerSweep, .delaySeconds = 1.5f, .point = {0.0f, down}, .amount = 1.2f});
+	}
+	for (int sweep = 0; sweep < 2; ++sweep)
+	{
+		const float across = sweep % 2 == 0 ? 0.2f : -0.2f;
+		poseThenTouch.push_back({.kind = Kind::PointerSweep, .delaySeconds = 2.5f, .point = {across, 0.0f}, .amount = 0.01f});
+	}
+	poseThenTouch.push_back({.kind = Kind::PointerRelease, .delaySeconds = 2.5f, .value = 3});
+	all.push_back({
+	    .id = "hand.pose_then_strokes_and_slaps",
+	    .name = "The hand strokes and slaps only in its pose",
+	    .facet = Facet::Hand,
+	    .description = "Your tiger faces the camera in the middle of the screen. The action button holds the tiger, and at "
+	                   "once the hand sweeps fast across the middle of the screen. Then the hand strokes the tiger up and "
+	                   "down slowly four times, sweeps fast across it two times, and lets go.",
+	    .expected = "Until the world holds the tiger, the hand stays the usual hand and the camera stays where it is. The "
+	                "first fast sweep is not a slap. The camera then turns to the tiger. When the tiger faces you, the hand "
+	                "takes its pose on the body. The strokes and the two late sweeps count. The log shows \"The camera of "
+	                "the hold turns\" and then \"The hand takes its pose\".",
+	    .environment = {.dispenserGrid = false, .cursor = glm::vec2(0.5f, 0.5f)},
+	    .framing = {.shot = Shot::Follow, .distance = 1.2f},
+	    .creatures = {Posed(CreatureType::Tiger, {0.0f, 0.0f})},
+	    .commands = poseThenTouch,
+	});
+
 	all.push_back({
 	    .id = "hand.mesh_contact",
 	    .name = "The hand on the body",
