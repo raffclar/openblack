@@ -190,15 +190,26 @@ TEST(VanillaWorldImport, KeepsTheStatesOnlyWhenTheFileHasAllTheyNeed)
 	EXPECT_EQ(world_import::StartStates({1, k_Chillout, 0}, 0x13), world_import::DecideAgain());
 	EXPECT_EQ(world_import::DecideAgain(), (std::array<uint8_t, 3> {k_Decide, k_Invalid, k_Invalid}));
 	// A state with values that openblack does not keep, at the top or at the end, makes the villager decide again
-	constexpr auto k_InScript = static_cast<uint8_t>(VillagerStates::InScript);
-	EXPECT_EQ(world_import::StartStates({k_InScript, 0, 0}, 0x01), (std::array<uint8_t, 3> {k_Decide, k_Invalid, k_Invalid}));
-	EXPECT_EQ(world_import::StartStates({1, k_InScript, 0}, 0x01), (std::array<uint8_t, 3> {k_Decide, k_Invalid, k_Invalid}));
+	constexpr auto k_Inspect = static_cast<uint8_t>(VillagerStates::InspectObjectReaction);
+	EXPECT_EQ(world_import::StartStates({k_Inspect, 0, 0}, 0x01), (std::array<uint8_t, 3> {k_Decide, k_Invalid, k_Invalid}));
+	EXPECT_EQ(world_import::StartStates({1, k_Inspect, 0}, 0x01), (std::array<uint8_t, 3> {k_Decide, k_Invalid, k_Invalid}));
 	// A walk on a footpath keeps its states: the footpaths of the file give its values
 	EXPECT_EQ(world_import::StartStates({k_OnPath, k_Chillout, 0}, 0x0B), (std::array<uint8_t, 3> {k_OnPath, k_Chillout, 0}));
 	EXPECT_TRUE(world_import::CanKeepStateValues(k_OnPath));
 	EXPECT_TRUE(world_import::CanKeepStateValues(static_cast<uint8_t>(VillagerStates::Fishing)));
 	EXPECT_TRUE(world_import::CanKeepStateValues(static_cast<uint8_t>(VillagerStates::FarmerPlantsCrop)));
-	EXPECT_FALSE(world_import::CanKeepStateValues(static_cast<uint8_t>(VillagerStates::InScript)));
+	EXPECT_FALSE(world_import::CanKeepStateValues(k_Inspect));
+	// The states of a shepherd, the script states, the dead state and a disciple with nothing to do keep their values
+	for (const auto state : {VillagerStates::ShepherdLookForFlock, VillagerStates::ShepherdGotoFlock,
+	                         VillagerStates::ShepherdCheckAnimalForSlaughter, VillagerStates::InScript,
+	                         VillagerStates::ScriptWanderAroundPosition, VillagerStates::ScriptPlayAnim,
+	                         VillagerStates::ScriptInCrowd, VillagerStates::Dead, VillagerStates::DiscipleNothingToDo})
+	{
+		EXPECT_TRUE(world_import::CanKeepStateValues(static_cast<uint8_t>(state))) << static_cast<int>(state);
+	}
+	// The states before and after death that keep the reason are not kept yet
+	EXPECT_FALSE(world_import::CanKeepStateValues(static_cast<uint8_t>(VillagerStates::SetDying)));
+	EXPECT_FALSE(world_import::CanKeepStateValues(static_cast<uint8_t>(VillagerStates::Dying)));
 }
 
 TEST(VanillaWorldImport, TheCircleOfAWalkIsOnAThingOnTheLandscapeOrOnNothing)
@@ -2664,4 +2675,204 @@ TEST(VanillaFootpathImport, SavedGamesOfLandOneKeepTheFootpathWalksOfTheirVillag
 	{
 		std::cout << "Move state 0x" << std::hex << static_cast<int>(state) << std::dec << ": " << count << std::endl;
 	}
+}
+
+namespace
+{
+world_import::ImportedStateValue BytesValue(std::vector<uint8_t> bytes)
+{
+	return {.object = std::nullopt, .bytes = std::move(bytes)};
+}
+
+world_import::ImportedStateValue ObjectValue(uint32_t number)
+{
+	return {.object = number, .bytes = {}};
+}
+
+template <typename T>
+T BytesAs(const world_import::ImportedStateValue& value)
+{
+	T result {};
+	std::memcpy(&result, value.bytes.data(), sizeof(T));
+	return result;
+}
+} // namespace
+
+TEST(VanillaWorldImport, AScriptStateKeepsThePlaceTheNumberAndThePairOfItsScript)
+{
+	const std::vector values = {BytesValue({0x00, 0x00, 0x01, 0x00, 0x00, 0x80, 0x02, 0x00}),
+	                            BytesValue({0x00, 0x00, 0x20, 0x41}), BytesValue({0x8D, 0x01, 0x00, 0x00}),
+	                            BytesValue({0x03, 0x00, 0x00, 0x00})};
+	const auto script = world_import::ScriptValuesOf(static_cast<uint8_t>(VillagerStates::InScript), values);
+	ASSERT_TRUE(script.has_value());
+	EXPECT_EQ(script->x, 0x10000);
+	EXPECT_EQ(script->z, 0x28000);
+	EXPECT_EQ(script->number, 10.0f);
+	EXPECT_EQ(script->first, 397U);
+	EXPECT_EQ(script->second, 3U);
+	for (const auto state :
+	     {VillagerStates::ScriptWanderAroundPosition, VillagerStates::ScriptPlayAnim, VillagerStates::ScriptInCrowd})
+	{
+		EXPECT_TRUE(world_import::ScriptValuesOf(static_cast<uint8_t>(state), values).has_value());
+	}
+	// Another state, or values of other sizes, give nothing
+	EXPECT_FALSE(world_import::ScriptValuesOf(static_cast<uint8_t>(VillagerStates::Dead), values).has_value());
+	const std::vector three(values.begin(), values.begin() + 3);
+	EXPECT_FALSE(world_import::ScriptValuesOf(static_cast<uint8_t>(VillagerStates::InScript), three).has_value());
+}
+
+TEST(VanillaWorldImport, APlaceInMetresGivesTheMapUnitsAgain)
+{
+	// The game makes a place of a script from metres, so each place of a file is the map units of a float
+	for (const int32_t units : {0, 1, 65536, 0x28000, 8090858, map_coords::ToFixed(4999.37f), map_coords::ToFixed(-3.3f)})
+	{
+		EXPECT_EQ(map_coords::ToFixed(world_import::MetresOfMapUnits(units)), units) << units;
+	}
+}
+
+TEST(VanillaWorldImport, AShepherdStateKeepsItsCountdownAndTheStateAfterItsWait)
+{
+	const std::vector values = {BytesValue({0xFF, 0xFF}), BytesValue({0x5F, 0x00})};
+	const auto shepherd =
+	    world_import::ShepherdValuesOf(static_cast<uint8_t>(VillagerStates::ShepherdCheckAnimalForSlaughter), values);
+	ASSERT_TRUE(shepherd.has_value());
+	EXPECT_EQ(shepherd->countdown, -1);
+	EXPECT_EQ(shepherd->pending, static_cast<uint16_t>(VillagerStates::ShepherdDecideWhatToDoWithFlock));
+	EXPECT_TRUE(world_import::ShepherdValuesOf(static_cast<uint8_t>(VillagerStates::ShepherdLookForFlock), values));
+	EXPECT_FALSE(world_import::ShepherdValuesOf(static_cast<uint8_t>(VillagerStates::InScript), values));
+}
+
+TEST(VanillaWorldImport, TheDeadStateKeepsTheReasonForTheDeath)
+{
+	constexpr auto k_Dead = static_cast<uint8_t>(VillagerStates::Dead);
+	EXPECT_EQ(world_import::DeathReasonOf(k_Dead, {BytesValue({0x09})}), DeathReason::OldAge);
+	EXPECT_EQ(world_import::DeathReasonOf(k_Dead, {BytesValue({0x00})}), DeathReason::None);
+	// A reason that the game does not have, or another state, gives nothing
+	EXPECT_FALSE(world_import::DeathReasonOf(k_Dead, {BytesValue({0x0A})}).has_value());
+	EXPECT_FALSE(world_import::DeathReasonOf(static_cast<uint8_t>(VillagerStates::Dying), {BytesValue({0x09})}).has_value());
+	// The pose on its back is pose 2 in bits 4 and 5 of the living status
+	EXPECT_TRUE(world_import::LiesOnBack(0x0029));
+	EXPECT_FALSE(world_import::LiesOnBack(0x0039));
+	EXPECT_FALSE(world_import::LiesOnBack(0x0019));
+	EXPECT_FALSE(world_import::LiesOnBack(0x0000));
+}
+
+TEST(VanillaWorldImport, ATradingDiscipleWithNothingToDoKeepsItsResourceAndItsTown)
+{
+	constexpr auto k_Idle = static_cast<uint8_t>(VillagerStates::DiscipleNothingToDo);
+	constexpr auto k_Trader = static_cast<uint8_t>(VillagerDisciple::Trader);
+	const std::vector values = {BytesValue({0x01, 0x00, 0x00, 0x00}), ObjectValue(42)};
+	const auto trade = world_import::TradeOf(k_Idle, k_Trader, values);
+	ASSERT_TRUE(trade.has_value());
+	EXPECT_EQ(trade->resource, ResourceType::Wood);
+	EXPECT_EQ(trade->town, 42U);
+	// Another disciple keeps no values, and another state gives nothing
+	EXPECT_FALSE(world_import::TradeOf(k_Idle, static_cast<uint8_t>(VillagerDisciple::Fisherman), {}).has_value());
+	EXPECT_FALSE(world_import::TradeOf(static_cast<uint8_t>(VillagerStates::InScript), k_Trader, values).has_value());
+}
+
+TEST(VanillaWorldImport, TheVillagerFlagsGiveADiscipleOrAFollower)
+{
+	const auto disciple = world_import::DiscipleOf(3, 0x1200);
+	ASSERT_TRUE(disciple.has_value());
+	EXPECT_EQ(disciple->type, VillagerDisciple::Fisherman);
+	EXPECT_FALSE(disciple->follower);
+	const auto follower = world_import::DiscipleOf(0, 0x0400);
+	ASSERT_TRUE(follower.has_value());
+	EXPECT_EQ(follower->type, VillagerDisciple::None);
+	EXPECT_TRUE(follower->follower);
+	// With neither flag the villager is not a disciple, and a type that the game does not have gives nothing
+	EXPECT_FALSE(world_import::DiscipleOf(3, 0x1000).has_value());
+	EXPECT_FALSE(world_import::DiscipleOf(13, 0x0200).has_value());
+}
+
+// No villager of a Land 1 save decides again after the import: each keeps its states, and the values of its shepherd,
+// script, dead and disciple states are the bytes of the file
+TEST(VanillaWorldImport, SavedGamesOfLandOneHaveNoVillagerThatDecidesAgain)
+{
+	uint32_t villagers = 0;
+	uint32_t decideAgain = 0;
+	uint32_t shepherds = 0;
+	uint32_t scripts = 0;
+	uint32_t dead = 0;
+	uint32_t idleDisciples = 0;
+	uint32_t disciples = 0;
+	uint32_t followers = 0;
+	const auto files = ForEachLandOneSave([&](const std::filesystem::path& path, const VanillaWorld& world) {
+		const auto imported = world_import::ReadTowns(world);
+		for (const auto& villager : imported.villagers)
+		{
+			++villagers;
+			const auto* record = world.Record(villager.number);
+			ASSERT_NE(record, nullptr);
+			EXPECT_EQ(villager.discipleType, world.Byte(*record, "discipleType").value_or(0xFF));
+			EXPECT_EQ(villager.villagerFlags, world.Half(*record, "villagerFlags").value_or(0xFFFF));
+			EXPECT_EQ(villager.status, world.Half(*record, "status").value_or(0xFFFF));
+			if (const auto disciple = world_import::DiscipleOf(villager.discipleType, villager.villagerFlags);
+			    disciple.has_value())
+			{
+				EXPECT_EQ(static_cast<uint8_t>(disciple->type), villager.discipleType) << path << " " << villager.number;
+				disciples += disciple->follower ? 0 : 1;
+				followers += disciple->follower ? 1 : 0;
+			}
+			else
+			{
+				EXPECT_EQ(villager.discipleType, 0) << path << " " << villager.number;
+			}
+			if (world_import::StartStates(villager.states, villager.moveState) != villager.states)
+			{
+				++decideAgain;
+				ADD_FAILURE() << path << " " << villager.number << " decides again in state "
+				              << static_cast<int>(villager.states[0]) << "/" << static_cast<int>(villager.states[1]);
+				continue;
+			}
+			const std::array<std::pair<uint8_t, const std::vector<world_import::ImportedStateValue>*>, 2> states = {
+			    std::pair {villager.states[0], &villager.topValues}, std::pair {villager.states[1], &villager.finalValues}};
+			for (const auto& [state, values] : states)
+			{
+				if (const auto script = world_import::ScriptValuesOf(state, *values); script.has_value())
+				{
+					++scripts;
+					const auto place = BytesAs<std::array<int32_t, 2>>((*values)[0]);
+					EXPECT_EQ(script->x, place[0]);
+					EXPECT_EQ(script->z, place[1]);
+					EXPECT_EQ(std::bit_cast<uint32_t>(script->number), BytesAs<uint32_t>((*values)[1]));
+					EXPECT_EQ(script->first, BytesAs<uint32_t>((*values)[2]));
+					EXPECT_EQ(script->second, BytesAs<uint32_t>((*values)[3]));
+					EXPECT_EQ(map_coords::ToFixed(world_import::MetresOfMapUnits(script->x)), script->x);
+					EXPECT_EQ(map_coords::ToFixed(world_import::MetresOfMapUnits(script->z)), script->z);
+				}
+				if (const auto shepherd = world_import::ShepherdValuesOf(state, *values); shepherd.has_value())
+				{
+					++shepherds;
+					EXPECT_EQ(shepherd->countdown, BytesAs<int16_t>((*values)[0]));
+					EXPECT_EQ(shepherd->pending, BytesAs<uint16_t>((*values)[1]));
+				}
+				if (const auto reason = world_import::DeathReasonOf(state, *values); reason.has_value())
+				{
+					++dead;
+					EXPECT_EQ(static_cast<uint8_t>(*reason), (*values)[0].bytes[0]);
+				}
+				if (state == static_cast<uint8_t>(VillagerStates::DiscipleNothingToDo))
+				{
+					++idleDisciples;
+					EXPECT_TRUE(values->empty() || world_import::TradeOf(state, villager.discipleType, *values).has_value());
+				}
+			}
+		}
+	});
+	if (!files.has_value())
+	{
+		GTEST_SKIP() << "Set OPENBLACK_VANILLA_SAVES to a copy of a Profiles folder of the game to check its saved games";
+	}
+	EXPECT_GT(villagers, 0U);
+	EXPECT_EQ(decideAgain, 0U);
+	EXPECT_GT(shepherds, 0U);
+	EXPECT_GT(scripts, 0U);
+	EXPECT_GT(dead, 0U);
+	EXPECT_GT(idleDisciples, 0U);
+	EXPECT_GT(disciples, 0U);
+	std::cout << "Villagers " << villagers << ", shepherd values " << shepherds << ", script values " << scripts << ", dead "
+	          << dead << ", idle disciples " << idleDisciples << ", disciples " << disciples << ", followers " << followers
+	          << std::endl;
 }
