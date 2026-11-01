@@ -5165,6 +5165,17 @@ std::optional<double> Runner::ReadCheck(const checks::Check& check) const
 		return static_cast<double>(stores.GetResource(*object, ResourceType::Food)) +
 		       static_cast<double>(stores.GetResource(*object, ResourceType::Wood));
 	}
+	case checks::Quantity::ObjectDistance:
+	{
+		const auto object = ObjectAt(check.index);
+		const auto* transform = object.has_value() ? registry.TryGet<const Transform>(*object) : nullptr;
+		if (transform == nullptr)
+		{
+			return std::nullopt;
+		}
+		const auto goal = MapPoint(_middle, check.point);
+		return static_cast<double>(glm::distance(glm::vec2(transform->position.x, transform->position.z), goal));
+	}
 	}
 	return std::nullopt;
 }

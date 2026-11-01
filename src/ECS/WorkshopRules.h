@@ -238,7 +238,8 @@ struct ClearingPush
 
 /// The push of a thing from the middle of the scaffold `centre`, by the edge point `edge` towards the thing (both in
 /// metres). The thing goes twice as far as the edge point. Its speed divides each part by the larger part, with the
-/// sign. Thus a thing at low x and low z can get a very high speed, as in the game.
+/// sign. Thus a thing at low x and low z can get a very high speed, as in the game. When the larger part is 0, the
+/// divide uses the larger size, so a thing straight to the west or the south flies straight away.
 [[nodiscard]] ClearingPush PushOutOfWay(glm::vec2 centre, glm::vec2 edge);
 
 /// The height of a pushed thing above the land at its new place when it starts to fly, in metres

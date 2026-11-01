@@ -13725,9 +13725,9 @@ void AddWorkshopScenarios(std::vector<Scenario>& all)
 	    .description = "A loose scaffold that a script marked to destroy the things in its way. A bush stands 1.5 m "
 	                   "straight west of it and a ball 1.5 m straight south of it. After one second the scaffold clears "
 	                   "its ground, as when the hand lets it go.",
-	    .expected = "As in the game, the push of each thing divides by 0 and its speed is not a number. The bush and "
-	                "the ball go from their places. The inspector shows each at x 0 and z 0, the corner of the map, with "
-	                "a height that is not a number. Each stays in flight and does not land. The game does not stop.",
+	    .expected = "The bush flies straight west and the ball flies straight south, away from the scaffold. Each lands "
+	                "a few metres away, and the bush becomes a dead tree. The game divides by 0 here and the things go "
+	                "from the map. Instead, openblack divides by the larger size, as for every other pushed thing.",
 	    .environment = {.dispenserGrid = false},
 	    .framing = {.shot = Shot::Overview,
 	                .include = {k_FoundingScaffold - glm::vec2 {15.0f}, k_FoundingScaffold + glm::vec2 {15.0f}}},
@@ -13735,10 +13735,16 @@ void AddWorkshopScenarios(std::vector<Scenario>& all)
 	                {.type = TreeInfo::Bush, .offset = k_FoundingScaffold + glm::vec2 {-1.5f, 0.0f}},
 	                {.type = MobileObjectInfo::Ball, .offset = k_FoundingScaffold + glm::vec2 {0.0f, -1.5f}}},
 	    .commands = {{.kind = Kind::ScaffoldClearsGround, .delaySeconds = 1.0f, .object = 0}},
-	    .checks = {{.label = "the scaffold, the bush and the ball stay in the game",
+	    .checks = {{.label = "the scaffold and the ball stay in the game",
 	                .quantity = checks::Quantity::ObjectsAlive,
 	                .afterTurns = 100,
-	                .atLeast = 3}},
+	                .atLeast = 2},
+	               {.label = "the ball lands south of the scaffold, near its start",
+	                .quantity = checks::Quantity::ObjectDistance,
+	                .index = 2,
+	                .point = k_FoundingScaffold + glm::vec2 {0.0f, -4.0f},
+	                .afterTurns = 100,
+	                .atMost = 2.0}},
 	});
 
 	all.push_back({
