@@ -36,6 +36,7 @@
 #include "EditorMath.h"
 #include "EditorStyle.h"
 #include "Game.h"
+#include "Input/DeveloperKeys.h"
 #include "Input/GameActionMapInterface.h"
 #include "Locator.h"
 #include "Windowing/WindowingInterface.h"
@@ -511,132 +512,148 @@ void EditorWindow::EndDrag(EditorContext& context) noexcept
 	}
 }
 
-bool EditorWindow::IsEditorKey(const SDL_Event& event) const noexcept
+namespace
+{
+
+/// What a key does in the editor, or nothing when the game uses the key
+std::optional<input::developer_keys::EditorKeyAction> KeyAction(const SDL_Event& event) noexcept
 {
 	if (event.type != SDL_KEYDOWN && event.type != SDL_KEYUP)
+	{
+		return std::nullopt;
+	}
+	namespace keys = input::developer_keys;
+	const auto key = event.key.keysym.scancode;
+	const auto mod = event.key.keysym.mod;
+	// The game's keys go first: a key that the game uses, or that the player bound to an action, stays the game's
+	if (Locator::gameActionSystem::has_value() &&
+	    keys::GameUsesKey(Locator::gameActionSystem::value().GetKeyBindings(), k_Platform, key, mod))
+	{
+		return std::nullopt;
+	}
+	return keys::EditorKeyActionFor(key, keys::HeldModifiers(mod));
+}
+
+} // namespace
+
+bool EditorWindow::IsEditorKey(const SDL_Event& event) const noexcept
+{
+	using Action = input::developer_keys::EditorKeyAction;
+	const auto action = KeyAction(event);
+	if (!action.has_value())
 	{
 		return false;
 	}
 	const auto* system = Locator::editorSystem::has_value() ? &Locator::editorSystem::value() : nullptr;
 	const bool picked = system != nullptr && !system->GetSelection().Empty();
-	const bool ctrl = (event.key.keysym.mod & KMOD_CTRL) != 0;
-	switch (event.key.keysym.sym)
+	switch (*action)
 	{
-	case SDLK_DELETE:
-	case SDLK_g:
-	case SDLK_o:
+	case Action::Remove:
+	case Action::Duplicate:
+	case Action::Frame:
+	case Action::Orbit:
+	case Action::Follow:
 		return picked;
-	case SDLK_d:
-		return picked && ctrl;
-	case SDLK_z:
-	case SDLK_y:
-		return ctrl;
-	case SDLK_w:
-	case SDLK_e:
-	case SDLK_r:
-	case SDLK_h:
-	case SDLK_PERIOD:
-		return true;
-	case SDLK_LEFTBRACKET:
-	case SDLK_RIGHTBRACKET:
+	case Action::TurnPlacementLeft:
+	case Action::TurnPlacementRight:
 		return _placement.item.has_value();
-	case SDLK_EQUALS:
-	case SDLK_KP_PLUS:
-	case SDLK_MINUS:
-	case SDLK_KP_MINUS:
-	case SDLK_0:
-	case SDLK_KP_0:
-		return ctrl;
-	case SDLK_ESCAPE:
-		// Escape is only the editor's while there is something of it to let go of; otherwise the game has it
+	case Action::LetGo:
+		// The key is only the editor's while there is something of it to let go of
 		return _placement.item.has_value() || _drag != Drag::None || picked ||
 		       (system != nullptr && system->GetCameraMode() != CameraMode::Free);
-	default:
-		return false;
+	case Action::Undo:
+	case Action::Redo:
+	case Action::SelectTool:
+	case Action::MoveTool:
+	case Action::RotateTool:
+	case Action::HandTool:
+	case Action::StepTurn:
+	case Action::CameraFaster:
+	case Action::CameraSlower:
+	case Action::CameraSpeedReset:
+		return true;
 	}
+	return false;
 }
 
 void EditorWindow::HandleKey(const SDL_Event& event) noexcept
 {
+	using Action = input::developer_keys::EditorKeyAction;
 	if (event.type != SDL_KEYDOWN || !IsEditorKey(event))
 	{
 		return;
 	}
+	const auto action = KeyAction(event);
 	auto context = Context();
-	if (!context.has_value())
+	if (!action.has_value() || !context.has_value())
 	{
 		return;
 	}
 	auto& system = context->system;
 	auto& selection = system.GetSelection();
 	const auto turn = glm::radians(k_PlaceTurnDegrees);
-	switch (event.key.keysym.sym)
+	switch (*action)
 	{
-	case SDLK_DELETE:
+	case Action::Remove:
 		DeletePicked(*context);
 		_outliner.Invalidate();
 		break;
-	case SDLK_d:
+	case Action::Duplicate:
 		DuplicatePicked(*context);
 		_outliner.Invalidate();
 		break;
-	case SDLK_z:
-	case SDLK_y:
-	{
+	case Action::Undo:
+	case Action::Redo:
 		// A drag that is not done becomes its step first
 		if (_drag == Drag::Move || _drag == Drag::Rotate)
 		{
 			_drag = Drag::None;
 			EndDrag(*context);
 		}
-		const bool redo = event.key.keysym.sym == SDLK_y || (event.key.keysym.mod & KMOD_SHIFT) != 0;
-		_historyNote = redo ? RedoStep(*context) : UndoStep(*context);
+		_historyNote = *action == Action::Redo ? RedoStep(*context) : UndoStep(*context);
 		_outliner.Invalidate();
 		break;
-	}
-	case SDLK_g:
+	case Action::Frame:
 		system.FrameSelection();
 		break;
-	case SDLK_o:
+	case Action::Orbit:
+	case Action::Follow:
 	{
-		const auto wanted = (event.key.keysym.mod & KMOD_SHIFT) != 0 ? CameraMode::Follow : CameraMode::Orbit;
+		const auto wanted = *action == Action::Follow ? CameraMode::Follow : CameraMode::Orbit;
 		system.SetCameraMode(system.GetCameraMode() == wanted ? CameraMode::Free : wanted);
 		break;
 	}
-	case SDLK_w:
+	case Action::SelectTool:
 		system.SetTool(Tool::Select);
 		break;
-	case SDLK_e:
+	case Action::MoveTool:
 		system.SetTool(Tool::Move);
 		break;
-	case SDLK_r:
+	case Action::RotateTool:
 		system.SetTool(Tool::Rotate);
 		break;
-	case SDLK_h:
+	case Action::HandTool:
 		system.SetTool(Tool::GameHand);
 		break;
-	case SDLK_PERIOD:
+	case Action::StepTurn:
 		system.StepTurn();
 		break;
-	case SDLK_LEFTBRACKET:
+	case Action::TurnPlacementLeft:
 		_placement.yawRadians = WrapAngle(_placement.yawRadians - turn);
 		break;
-	case SDLK_RIGHTBRACKET:
+	case Action::TurnPlacementRight:
 		_placement.yawRadians = WrapAngle(_placement.yawRadians + turn);
 		break;
-	case SDLK_EQUALS:
-	case SDLK_KP_PLUS:
+	case Action::CameraFaster:
 		system.SetCameraMoveSpeed(StepKeyboardMoveSpeed(system.GetCameraMoveSpeed(), 1));
 		break;
-	case SDLK_MINUS:
-	case SDLK_KP_MINUS:
+	case Action::CameraSlower:
 		system.SetCameraMoveSpeed(StepKeyboardMoveSpeed(system.GetCameraMoveSpeed(), -1));
 		break;
-	case SDLK_0:
-	case SDLK_KP_0:
+	case Action::CameraSpeedReset:
 		system.SetCameraMoveSpeed(k_KeyboardMoveSpeedDefault);
 		break;
-	case SDLK_ESCAPE:
+	case Action::LetGo:
 		if (_placement.item.has_value())
 		{
 			_placement.item.reset();
@@ -654,8 +671,6 @@ void EditorWindow::HandleKey(const SDL_Event& event) noexcept
 		{
 			selection.Clear();
 		}
-		break;
-	default:
 		break;
 	}
 }
@@ -709,10 +724,20 @@ bool EditorWindow::TakesEvent(const SDL_Event& event) const noexcept
 
 void EditorWindow::ProcessEventAlways(const SDL_Event& event) noexcept
 {
-	if (event.type == SDL_KEYDOWN && event.key.keysym.sym == SDLK_F2 && event.key.repeat == 0 && !ImGui::GetIO().WantTextInput)
+	namespace keys = input::developer_keys;
+	if (event.type != SDL_KEYDOWN || event.key.keysym.scancode != input::platform_keys::EditorToggleKey(k_Platform) ||
+	    event.key.repeat != 0 || ImGui::GetIO().WantTextInput)
 	{
-		Toggle();
+		return;
 	}
+	// A key that the player bound to an action of the game stays the game's
+	if (Locator::gameActionSystem::has_value() &&
+	    keys::GameUsesKey(Locator::gameActionSystem::value().GetKeyBindings(), k_Platform, event.key.keysym.scancode,
+	                      event.key.keysym.mod))
+	{
+		return;
+	}
+	Toggle();
 }
 
 void EditorWindow::ProcessEventOpen(const SDL_Event& event) noexcept
@@ -953,7 +978,7 @@ void EditorWindow::DrawToolbar(EditorContext& context) noexcept
 		_outliner.Invalidate();
 	}
 	ImGui::EndDisabled();
-	ImGui::SetItemTooltip("%s (Ctrl+Z)", fmt::format("Undo {}", history.UndoLabel().value_or("")).c_str());
+	ImGui::SetItemTooltip("%s (Ctrl+[)", fmt::format("Undo {}", history.UndoLabel().value_or("")).c_str());
 	ImGui::SameLine();
 	ImGui::BeginDisabled(!history.CanRedo());
 	if (ImGui::Button("Redo"))
@@ -962,7 +987,7 @@ void EditorWindow::DrawToolbar(EditorContext& context) noexcept
 		_outliner.Invalidate();
 	}
 	ImGui::EndDisabled();
-	ImGui::SetItemTooltip("%s (Ctrl+Y or Ctrl+Shift+Z)", fmt::format("Redo {}", history.RedoLabel().value_or("")).c_str());
+	ImGui::SetItemTooltip("%s (Ctrl+] or Ctrl+Y)", fmt::format("Redo {}", history.RedoLabel().value_or("")).c_str());
 	if (!_historyNote.empty())
 	{
 		ImGui::SameLine();
@@ -973,8 +998,8 @@ void EditorWindow::DrawToolbar(EditorContext& context) noexcept
 	constexpr std::array<std::pair<const char*, Tool>, 4> k_Tools {{
 	    {"Select (W)", Tool::Select},
 	    {"Move (E)", Tool::Move},
-	    {"Rotate (R)", Tool::Rotate},
-	    {"Hand (H)", Tool::GameHand},
+	    {"Rotate (Y)", Tool::Rotate},
+	    {"Hand (D)", Tool::GameHand},
 	}};
 	for (const auto& [label, tool] : k_Tools)
 	{
@@ -1017,7 +1042,7 @@ void EditorWindow::DrawToolbar(EditorContext& context) noexcept
 		ImGui::SameLine();
 	}
 	ImGui::BeginDisabled(!picked);
-	if (ImGui::Button("View (G)"))
+	if (ImGui::Button("View (Home)"))
 	{
 		system.FrameSelection();
 	}
@@ -1054,11 +1079,12 @@ void EditorWindow::DrawToolbar(EditorContext& context) noexcept
 	ImGui::Checkbox("Tabs", &_showBottom);
 	ImGui::EndGroup();
 	// The close button keeps to the right edge, and is measured without the gap before it
-	_panelGroupWidth = ImGui::GetItemRectSize().x + ImGui::GetStyle().ItemSpacing.x + ImGui::CalcTextSize("Close (F2)").x +
+	_panelGroupWidth = ImGui::GetItemRectSize().x + ImGui::GetStyle().ItemSpacing.x +
+	                   ImGui::CalcTextSize(input::platform_keys::EditorCloseLabel(k_Platform).data()).x +
 	                   (ImGui::GetStyle().FramePadding.x * 2.0f);
 	ImGui::SameLine();
 	ImGui::SetCursorPosX(std::max(ImGui::GetCursorPosX(), closeX));
-	if (ImGui::Button("Close (F2)"))
+	if (ImGui::Button(input::platform_keys::EditorCloseLabel(k_Platform).data()))
 	{
 		Close();
 	}

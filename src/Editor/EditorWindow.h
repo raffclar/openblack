@@ -38,10 +38,11 @@ class CreatureSpawner;
 namespace openblack::editor
 {
 
-/// The in-game editor for testing and building on the land, toggled with F2. It lays out a tool bar along the top, the
-/// outliner on the left, the inspector on the right and a strip of tabs along the bottom (the palette, the testbed's
-/// scenarios, the scripts and the scripts' log), round the view of the world, where the mouse picks, moves, turns and
-/// places things and drives the editor's cameras. Closed, it only listens for its key and the game is as without it.
+/// The in-game editor for testing and building on the land, toggled with F10 (End on the web). It lays out a tool bar
+/// along the top, the outliner on the left, the inspector on the right and a strip of tabs along the bottom (the
+/// palette, the testbed's scenarios, the scripts and the scripts' log), round the view of the world, where the mouse
+/// picks, moves, turns and places things and drives the editor's cameras. Closed, it only listens for its key and the
+/// game is as without it.
 class EditorWindow final: public debug::gui::Window
 {
 public:

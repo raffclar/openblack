@@ -33,6 +33,7 @@
 #include "Creature/CreatureObjectActions.h"
 #include "ECS/IncomingMessageRules.h"
 #include "Input/BindableActions.h"
+#include "Input/PlatformKeys.h"
 #include "Particles/ParticleTypes.h"
 #include "ScriptHeaders/ScriptEnums.h"
 #include "Sound/GameMusic.h"
@@ -5121,6 +5122,26 @@ void AddAudio(std::vector<Scenario>& all)
 	                "names that the system gives them, such as Ctrl and Space.",
 	    .framing = {.shot = Shot::Overview},
 	    .commands = {{.kind = Kind::OpenControlsBox, .delaySeconds = 1.0f, .value = 0}},
+	});
+
+	all.push_back({
+	    .id = "interface.editor_key",
+	    .name = "The editor key and F2",
+	    .facet = Facet::Interface,
+	    .description = "After a second the scenario presses the editor key (F10, or End on the web). One second later it "
+	                   "presses the editor key again, and one second after that it presses F2, as the player does.",
+	    .expected = "The first press opens the editor and the second press closes it. F2 does not open the editor. F2 "
+	                "pauses the game, and the white box asks \"Are you sure you want to go to the Gods' Playground?\". "
+	                "Click No to close the box.",
+	    .environment = {.dispenserGrid = false},
+	    .framing = {.shot = Shot::Testbed},
+	    .commands = {{.kind = Kind::PressPlainKey,
+	                  .delaySeconds = 1.0f,
+	                  .value = static_cast<size_t>(input::platform_keys::EditorToggleKey(k_Platform))},
+	                 {.kind = Kind::PressPlainKey,
+	                  .delaySeconds = 1.0f,
+	                  .value = static_cast<size_t>(input::platform_keys::EditorToggleKey(k_Platform))},
+	                 {.kind = Kind::PressPlainKey, .delaySeconds = 1.0f, .value = static_cast<size_t>(SDL_SCANCODE_F2)}},
 	});
 
 	all.push_back({
