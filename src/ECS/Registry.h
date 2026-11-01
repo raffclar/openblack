@@ -9,10 +9,15 @@
 
 #pragma once
 
+#include <cstddef>
 #include <cstdint>
 
+#include <array>
+#include <atomic>
 #include <optional>
 #include <tuple>
+#include <type_traits>
+#include <utility>
 
 #include <entt/entity/entity.hpp>
 #include <entt/entity/helper.hpp>
@@ -35,6 +40,25 @@ class ShaderManager;
 
 namespace openblack::ecs
 {
+namespace registry_detail
+{
+/// The next free place in the store table of a registry. Each component type takes one place, the first time that a
+/// registry finds its store.
+inline size_t NextStorePlace()
+{
+	static std::atomic<size_t> next {0};
+	return next.fetch_add(1, std::memory_order_relaxed);
+}
+
+/// The place of the store of a component type in the store table of each registry
+template <typename Component>
+[[nodiscard]] size_t StorePlace()
+{
+	static const size_t place = NextStorePlace();
+	return place;
+}
+} // namespace registry_detail
+
 class Registry
 {
 public:
@@ -103,32 +127,62 @@ public:
 	template <typename... Components>
 	[[nodiscard]] bool AllOf(entt::entity entity) const
 	{
-		return _registry.all_of<Components...>(entity);
+		return (Has<Components>(entity) && ...);
 	}
 	template <typename... Components>
 	[[nodiscard]] bool AnyOf(entt::entity entity) const
 	{
-		return _registry.any_of<Components...>(entity);
+		return (Has<Components>(entity) || ...);
 	}
 	template <typename... Components>
 	decltype(auto) Get(entt::entity entity)
 	{
+		if constexpr (sizeof...(Components) == 1)
+		{
+			// A store that exists is the store that the registry gives; else the registry makes it
+			if (auto* store = MutableStoreOf<Components...>(); store != nullptr)
+			{
+				return static_cast<FirstOf<Components...>&>(store->get(entity));
+			}
+		}
 		return _registry.get<Components...>(entity);
 	}
 	template <typename... Components>
 	[[nodiscard]] decltype(auto) Get(entt::entity entity) const
 	{
-		return _registry.get<Components...>(entity);
+		if constexpr (sizeof...(Components) == 1)
+		{
+			return (StoreOf<Components...>()->get(entity));
+		}
+		else
+		{
+			return _registry.get<Components...>(entity);
+		}
 	}
 	template <typename... Components>
 	decltype(auto) TryGet(entt::entity entity)
 	{
+		if constexpr (sizeof...(Components) == 1)
+		{
+			if (auto* store = MutableStoreOf<Components...>(); store != nullptr)
+			{
+				return static_cast<FirstOf<Components...>*>(store->contains(entity) ? &store->get(entity) : nullptr);
+			}
+		}
 		return _registry.try_get<Components...>(entity);
 	}
 	template <typename... Components>
 	[[nodiscard]] decltype(auto) TryGet(entt::entity entity) const
 	{
-		return _registry.try_get<Components...>(entity);
+		if constexpr (sizeof...(Components) == 1)
+		{
+			const auto* store = StoreOf<Components...>();
+			return store != nullptr && store->contains(entity) ? &store->get(entity) : nullptr;
+		}
+		else
+		{
+			return _registry.try_get<Components...>(entity);
+		}
 	}
 	template <typename... Components>
 	[[nodiscard]] decltype(auto) Front() const
@@ -231,6 +285,48 @@ protected:
 	entt::registry _registry;
 
 private:
+	/// The first of some component types
+	template <typename... Components>
+	using FirstOf = std::tuple_element_t<0, std::tuple<Components...>>;
+	/// The store of a component type as the registry keeps it
+	template <typename Component>
+	using Store =
+	    std::remove_pointer_t<decltype(std::declval<const entt::registry&>().storage<std::remove_const_t<Component>>())>;
+	/// The store of a component type, none if the registry has no store of it yet. The table keeps each store that the
+	/// registry found, because a store stays while the registry exists (an empty registry keeps its stores). A search of
+	/// the registry then happens only one time for each type.
+	template <typename Component>
+	[[nodiscard]] Store<Component>* StoreOf() const
+	{
+		using Bare = std::remove_const_t<Component>;
+		const auto place = registry_detail::StorePlace<Bare>();
+		if (place < _stores.size())
+		{
+			if (const auto* kept = _stores[place].load(std::memory_order_acquire); kept != nullptr)
+			{
+				return static_cast<Store<Component>*>(kept);
+			}
+		}
+		const auto* found = _registry.storage<Bare>();
+		if (found != nullptr && place < _stores.size())
+		{
+			_stores[place].store(found, std::memory_order_release);
+		}
+		return found;
+	}
+	/// The same store, to change its components
+	template <typename Component>
+	[[nodiscard]] auto* MutableStoreOf()
+	{
+		return const_cast<std::remove_const_t<Store<Component>>*>(StoreOf<Component>());
+	}
+	template <typename Component>
+	[[nodiscard]] bool Has(entt::entity entity) const
+	{
+		const auto* store = StoreOf<Component>();
+		return store != nullptr && store->contains(entity);
+	}
+
 	void EntityMade(entt::registry& /*registry*/, entt::entity /*entity*/) { ++_entitiesMade; }
 	void EntityGone(entt::registry& /*registry*/, entt::entity /*entity*/) { ++_entitiesGone; }
 	/// A living that goes leaves its flock. A flock that it leaves with no members goes too.
@@ -241,6 +337,9 @@ private:
 	uint64_t _entitiesGone {0};
 	entt::sigh<void(entt::entity)> _destroying;
 	bool _freshIdsAtNextReset {false};
+	/// The stores that the registry found, by the place of their type. More types than places use the search each time.
+	static constexpr size_t k_StorePlaces = 1024;
+	mutable std::array<std::atomic<const entt::sparse_set*>, k_StorePlaces> _stores {};
 };
 
 /// The store of one kind of component, found one time for a walk of many things. Each look after that costs no search
