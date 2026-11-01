@@ -239,10 +239,11 @@ std::optional<script_find::Kind> script_find::KindOf(const Registry& registry, e
 	{
 		return Kind {.type = ScriptType::MobileStatic, .subtype = Row(MobileStaticInfo::Rock)};
 	}
-	// A street lantern stands as a mobile static, of a table of its own
-	if (registry.AllOf<StreetLantern>(entity))
+	// A street lantern is a mobile static. Its subtype is its row of the statics' table, so a search for the lantern
+	// row finds the lanterns of a tree puzzle.
+	if (const auto* lantern = registry.TryGet<const StreetLantern>(entity))
 	{
-		return Kind {.type = ScriptType::MobileStatic};
+		return Kind {.type = ScriptType::MobileStatic, .subtype = Row(lantern->info)};
 	}
 	// A lump of poo is a thing of its own type to the scripts, with its row of the mobile objects' table as its subtype
 	if (const auto* mobile = registry.TryGet<const MobileObject>(entity))

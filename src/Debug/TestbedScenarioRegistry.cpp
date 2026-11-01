@@ -2325,6 +2325,55 @@ void AddTreePuzzle(std::vector<Scenario>& all)
 	                  .scriptArguments = {{.kind = ScriptArgument::Kind::LastResult},
 	                                      {.kind = ScriptArgument::Kind::Integer, .number = 0.0f}}}},
 	});
+
+	// The third land's puzzle has three states. After its prize, its script finds each lantern of the puzzle by the
+	// lantern row of the mobile statics, and deletes the lantern with a fade.
+	constexpr float k_ThirdLandTreeKind = 2.0f;
+	constexpr float k_MobileStaticType = 8.0f;
+	constexpr float k_LanternRow = 7.0f;
+	constexpr float k_LanternReach = 50.0f;
+	constexpr float k_DeleteWithFade = 1.0f;
+	constexpr glm::vec2 k_PuzzleMiddle {k_Puzzle.x + 10.0f, k_Puzzle.y + 10.0f};
+	std::vector<Command> commands {{.kind = Kind::CallNative,
+	                                .delaySeconds = 0.5f,
+	                                .script = "CREATE_WITH_ANGLE_AND_SCALE",
+	                                .scriptArguments = {{.number = 0.0f},
+	                                                    {.number = 1.0f},
+	                                                    {.kind = ScriptArgument::Kind::Integer, .number = k_PuzzleObjectType},
+	                                                    {.kind = ScriptArgument::Kind::Integer, .number = k_ThirdLandTreeKind},
+	                                                    {.kind = ScriptArgument::Kind::Position, .point = k_Puzzle}}}};
+	constexpr int k_Lanterns = 4;
+	// The first search comes four seconds after the start, and each next search one second after the delete before it
+	for (int lantern = 0; lantern < k_Lanterns; ++lantern)
+	{
+		commands.push_back({.kind = Kind::CallNative,
+		                    .delaySeconds = lantern == 0 ? 3.5f : 1.0f,
+		                    .script = "CALL_NEAR",
+		                    .scriptArguments = {{.kind = ScriptArgument::Kind::Integer, .number = k_MobileStaticType},
+		                                        {.kind = ScriptArgument::Kind::Integer, .number = k_LanternRow},
+		                                        {.kind = ScriptArgument::Kind::Position, .point = k_PuzzleMiddle},
+		                                        {.number = k_LanternReach},
+		                                        {.kind = ScriptArgument::Kind::Integer, .number = 0.0f}}});
+		commands.push_back({.kind = Kind::CallNative,
+		                    .delaySeconds = 0.0f,
+		                    .script = "OBJECT_DELETE",
+		                    .scriptArguments = {{.kind = ScriptArgument::Kind::LastResult},
+		                                        {.kind = ScriptArgument::Kind::Integer, .number = k_DeleteWithFade}}});
+	}
+	all.push_back({
+	    .id = "story.l3_tree_puzzle_lanterns",
+	    .name = "The third land's tree puzzle loses its lanterns",
+	    .facet = Facet::Story,
+	    .description = "A script makes the third land's tree puzzle south of the middle. From four seconds, the script "
+	                   "finds a lantern of the puzzle by its row each second and deletes it with a fade.",
+	    .expected = "Nine small trees of three kinds grow to full size. A lantern stands one step out from each corner. "
+	                "From four seconds, one lantern each second fades away, until no lantern stays.",
+	    .environment = {.dispenserGrid = false},
+	    .framing = {.shot = Shot::Placed,
+	                .eye = {k_Puzzle.x + 45.0f, 30.0f, k_Puzzle.y - 25.0f},
+	                .look = {k_Puzzle.x + 10.0f, 3.0f, k_Puzzle.y + 10.0f}},
+	    .commands = std::move(commands),
+	});
 }
 
 void AddStory(std::vector<Scenario>& all)
