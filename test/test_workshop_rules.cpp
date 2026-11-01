@@ -337,12 +337,14 @@ TEST(WorkshopRules, AClearingScaffoldPushesAThingTwiceAsFarAsItsEdge)
 	EXPECT_NEAR(fast.velocity.z, 8000.0f, 1.0f);
 }
 
-TEST(WorkshopRules, APushedThingStartsHalfAMetreAboveTheLandAtItsNewPlace)
+TEST(WorkshopRules, APushedThingStartsAtTheHeightOfTheScaffoldAboveTheLandPlusHalfAMetre)
 {
 	const auto push = workshop::PushOutOfWay({10.0f, 20.0f}, {11.0f, 20.5f});
 	const auto start = workshop::PushStart({10.0f, 20.0f}, push);
-	EXPECT_EQ(start, openblack::map_coords::FromMetres({12.0f, 21.0f}) + openblack::map_coords::MapCoords {.altitude = 0.5f});
-	EXPECT_EQ(start.altitude, workshop::k_PushStartAltitude);
+	EXPECT_EQ(start, openblack::map_coords::FromMetres({12.0f, 21.0f}));
+	// The start is a height of the world, not a height above the land: on high land the thing starts under the land
+	EXPECT_EQ(workshop::PushStartHeight(0.0f), 0.5f);
+	EXPECT_EQ(workshop::PushStartHeight(2.25f), 2.75f);
 }
 
 TEST(WorkshopRules, AClearingScaffoldPushesOrRemovesThingsAndLeavesCreaturesAlone)

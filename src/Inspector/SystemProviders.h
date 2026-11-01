@@ -296,10 +296,14 @@ struct AudioSources
 	std::function<bool()> deviceLost;
 	/// The entities of the sounds that play, which are the audio's and not the world's; none with no sound
 	std::function<const ecs::Registry*()> emitters;
+	/// The bank file, the sample number and the wave file of a sound, as "Scriptsfx.sad/102 CreatureFrozenMoan_01.wav".
+	/// It is empty for a sound that the game does not know.
+	std::function<std::string(entt::id_type sound)> soundName;
 };
 
 ///   audio.state                          the volumes, the music, how many sounds play and where they're heard from
 ///   audio.sounds near, radius            the sounds playing about a point, nearest first
+///   audio.unplaced                       the sounds playing without a place
 ///   audio.lose_device lost               (writes) act as if the machine lost the sound device, or has it again
 [[nodiscard]] std::unique_ptr<ProviderInterface> MakeAudioProvider(AudioSources sources);
 

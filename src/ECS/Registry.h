@@ -13,6 +13,7 @@
 
 #include <optional>
 #include <tuple>
+#include <type_traits>
 
 #include <entt/entity/entity.hpp>
 #include <entt/entity/helper.hpp>
@@ -263,6 +264,43 @@ public:
 private:
 	// The store as its untyped base, so that a class can hold a lookup of a component that it only declares
 	const entt::sparse_set* _store;
+};
+
+/// The stores of several kinds of component, found one time for a walk of many things. It asks as the registry asks, and
+/// gives the same answers for these kinds while their stores exist. Make it again when the walk can make the first
+/// component of one of its kinds.
+template <typename... Components>
+class ComponentLookups
+{
+public:
+	explicit ComponentLookups(const Registry& registry)
+	    : _lookups(ComponentLookup<Components>(registry)...)
+	{
+	}
+	template <typename... Asked>
+	[[nodiscard]] bool AllOf(entt::entity entity) const
+	{
+		return (Of<Asked>().Has(entity) && ...);
+	}
+	template <typename... Asked>
+	[[nodiscard]] bool AnyOf(entt::entity entity) const
+	{
+		return (Of<Asked>().Has(entity) || ...);
+	}
+	template <typename Asked>
+	[[nodiscard]] const std::remove_const_t<Asked>* TryGet(entt::entity entity) const
+	{
+		return Of<Asked>().TryGet(entity);
+	}
+
+private:
+	template <typename Asked>
+	[[nodiscard]] const ComponentLookup<std::remove_const_t<Asked>>& Of() const
+	{
+		return std::get<ComponentLookup<std::remove_const_t<Asked>>>(_lookups);
+	}
+
+	std::tuple<ComponentLookup<Components>...> _lookups;
 };
 
 } // namespace openblack::ecs

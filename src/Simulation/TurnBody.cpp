@@ -513,6 +513,10 @@ void PlayTurnStep(game_turn::Step step, TurnViewInterface& view)
 		// The world does the commands that the players sent
 		Locator::playerCommandSystem::value().RunSent(turn);
 		break;
+	case Step::CreatureFirstBlends:
+		// The threads make the blends of the first poses while the next steps play
+		Locator::creatureAnimationSystem::value().StartFirstBlends();
+		break;
 	case Step::HandStillness:
 		// The player's input comes first in the turn: the game counts the turns that the hand stays in one place
 		Locator::handSystem::value().ProcessTurn();

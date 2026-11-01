@@ -1883,6 +1883,40 @@ void AddThirdLandPrison(std::vector<Scenario>& all)
 	                  .script = "FreeTheCreature",
 	                  .scriptGlobals = {{"GlobalDebug", {.number = 1.0f}}}}},
 	});
+	// The prison spot of the third land and a point far from it, from the middle of the map
+	static constexpr glm::vec2 k_PrisonSpot {-497.79f, -300.15f};
+	static constexpr glm::vec2 k_FarFromPrison {-575.0f, -385.0f};
+	all.push_back({
+	    .id = "story.l3_laetes_walks_back",
+	    .name = "Story: Lethys's creature walks back to the prison of the third land",
+	    .facet = Facet::Story,
+	    .description = "The third land loads with its own scripts and sky, and the player's Tiger stands on it. Its set-up "
+	                   "script and its prison script run. Four seconds later, Lethys's creature is put 115 metres from "
+	                   "the prison spot, which is more than 75 metres.",
+	    .expected = "If Lethys's creature does a miracle at the time, it does the miracle to its end. Then it walks back "
+	                "to its start point near the prison. When it is within 75 metres of the prisoner again, it does its "
+	                "miracles at the prisoner again.",
+	    .environment = {.land = Land::Story, .storyLand = "Land3.txt", .dispenserGrid = false},
+	    .framing = {.shot = Shot::Overview, .include = {k_FarFromPrison - glm::vec2 {15.0f}, k_PrisonSpot + glm::vec2 {15.0f}}},
+	    .creatures = {{.label = "player's tiger",
+	                   .species = CreatureType::Tiger,
+	                   .phase = 3,
+	                   .needs = {.energy = 1.0f, .exhaustion = 0.0f, .dehydration = 0.0f, .poo = 0.0f, .life = 1.0f}}},
+	    .commands = {{.kind = Kind::RunScript,
+	                  .delaySeconds = 0.5f,
+	                  .script = "SetupLand3",
+	                  .scriptGlobals = {{"MyCreature", {.kind = Argument::Kind::Creature, .index = 0}}}},
+	                 {.kind = Kind::RunScript, .delaySeconds = 1.0f, .script = "FreeTheCreature"},
+	                 {.kind = Kind::CallNative,
+	                  .delaySeconds = 4.0f,
+	                  .script = "CALL_PLAYER_CREATURE",
+	                  .scriptArguments = {{.kind = Argument::Kind::Number, .number = 2.0f}}},
+	                 {.kind = Kind::CallNative,
+	                  .delaySeconds = 0.0f,
+	                  .script = "SET_POSITION",
+	                  .scriptArguments = {{.kind = Argument::Kind::Result},
+	                                      {.kind = Argument::Kind::Position, .point = k_FarFromPrison}}}},
+	});
 
 	// A script makes a pack of wolves, sends it off and then lets it go, as the attack of the possessed wolves does
 	// when the first wolf reaches the village
@@ -7483,6 +7517,33 @@ void AddHand(std::vector<Scenario>& all)
 	                "with no wait after the stroke, once the stroke animation is far enough through.",
 	    .framing = {.shot = Shot::Follow, .distance = 1.2f},
 	    .creatures = {Posed(CreatureType::Tiger, {0.0f, 0.0f})},
+	});
+
+	// The real button on the creature: a click, and then a hold with slow strokes. The draw of the hand sends the leash
+	// tap and the feedback in the frame of each release, after the send of that frame.
+	std::vector<Command> clickThenStroke {{.kind = Kind::PointerPress, .delaySeconds = 1.0f, .value = 3},
+	                                      {.kind = Kind::PointerRelease, .delaySeconds = 0.2f, .value = 3},
+	                                      {.kind = Kind::PointerPress, .delaySeconds = 2.0f, .value = 3}};
+	for (int stroke = 0; stroke < 4; ++stroke)
+	{
+		const float down = stroke % 2 == 0 ? 0.08f : -0.08f;
+		clickThenStroke.push_back({.kind = Kind::PointerSweep, .delaySeconds = 1.5f, .point = {0.0f, down}, .amount = 1.2f});
+	}
+	clickThenStroke.push_back({.kind = Kind::PointerRelease, .delaySeconds = 2.0f, .value = 3});
+	all.push_back({
+	    .id = "hand.click_then_stroke_draw",
+	    .name = "A click and a stroke send from the draw of the hand",
+	    .facet = Facet::Hand,
+	    .description = "Your tiger faces the camera in the middle of the screen. The action button clicks the tiger. Then "
+	                   "the button holds the tiger, the hand strokes it up and down slowly four times, and lets go.",
+	    .expected = "The click puts the leash on the tiger. The hold strokes the tiger, and the tiger feels the strokes "
+	                "when the hand lets go. The log shows \"The draw of the hand sends the leash tap\" for the click and "
+	                "\"The draw of the hand sends the feedback\" for each release with a pose on the tiger. In a game "
+	                "alone each command does its work one turn after the turn of the release.",
+	    .environment = {.dispenserGrid = false, .cursor = glm::vec2(0.5f, 0.5f)},
+	    .framing = {.shot = Shot::Follow, .distance = 1.2f},
+	    .creatures = {Posed(CreatureType::Tiger, {0.0f, 0.0f})},
+	    .commands = clickThenStroke,
 	});
 
 	all.push_back({
@@ -13824,8 +13885,8 @@ void AddWorkshopScenarios(std::vector<Scenario>& all)
 	                   "scaffold to destroy the things in its way. A bush and a ball stand where the hand puts the "
 	                   "scaffold down. The input tools/sim/hand_inputs/scaffold_build.json moves the hand: it takes the "
 	                   "scaffold, holds it still near the village centre, and puts it down.",
-	    .expected = "When the hand lets the scaffold go, the bush and the ball jump out of the way. Each starts half a "
-	                "metre above the land at its new place and flies a short distance. A building site then opens where "
+	    .expected = "When the hand lets the scaffold go, the bush and the ball jump out of the way. Each starts from the "
+	                "height of the scaffold above the land and flies a short distance. A building site then opens where "
 	                "the scaffold is.",
 	    .environment = {.dispenserGrid = false},
 	    .framing = {.shot = Shot::Overview, .include = {k_LooseScaffold - glm::vec2 {10.0f}, k_BuildPlace + glm::vec2 {10.0f}}},
@@ -13858,14 +13919,14 @@ void AddWorkshopScenarios(std::vector<Scenario>& all)
 
 	all.push_back({
 	    .id = "objects.scaffold_push_on_high_land",
-	    .name = "A thing that a clearing scaffold pushes starts above high land",
+	    .name = "A thing that a clearing scaffold pushes starts under high land",
 	    .facet = Facet::Objects,
 	    .description = "A loose scaffold that a script marked to destroy the things in its way lies on the land, which is "
 	                   "about 21 m high here. A bush stands 1.5 m east of it and a ball 1.5 m north of it. After one second "
 	                   "the scaffold clears its ground, as when the hand lets it go.",
-	    .expected = "The bush and the ball start half a metre above the land, twice as far from the scaffold as the edge "
-	                "of the scaffold. Each flies a short distance and lands near its start. Neither starts under the land "
-	                "or flies far across the map.",
+	    .expected = "As in the game, the bush and the ball start at the height of the scaffold above the land plus half a "
+	                "metre, twice as far from the scaffold as the edge of the scaffold. That is a height of the world, so "
+	                "each starts under the land here. The land throws each one far across the map.",
 	    .environment = {.dispenserGrid = false},
 	    .framing = {.shot = Shot::Overview,
 	                .include = {k_FoundingScaffold - glm::vec2 {15.0f}, k_FoundingScaffold + glm::vec2 {15.0f}}},
@@ -13882,9 +13943,9 @@ void AddWorkshopScenarios(std::vector<Scenario>& all)
 	    .description = "A loose scaffold that a script marked to destroy the things in its way. A bush stands 1.5 m "
 	                   "straight west of it and a ball 1.5 m straight south of it. After one second the scaffold clears "
 	                   "its ground, as when the hand lets it go.",
-	    .expected = "As in the game, the push of each thing divides by 0 and its speed is not a number. The bush and "
-	                "the ball go from their places. The inspector shows each at x 0 and z 0, the corner of the map, with "
-	                "a height that is not a number. Each stays in flight and does not land. The game does not stop.",
+	    .expected = "The bush starts west and the ball starts south of the scaffold, under the land, as in the game. The "
+	                "land throws each one far, and the bush becomes a dead tree. The game divides the push by 0 here and "
+	                "the things go from the map. openblack divides by the larger size, so both things stay on the map.",
 	    .environment = {.dispenserGrid = false},
 	    .framing = {.shot = Shot::Overview,
 	                .include = {k_FoundingScaffold - glm::vec2 {15.0f}, k_FoundingScaffold + glm::vec2 {15.0f}}},
@@ -13892,10 +13953,16 @@ void AddWorkshopScenarios(std::vector<Scenario>& all)
 	                {.type = TreeInfo::Bush, .offset = k_FoundingScaffold + glm::vec2 {-1.5f, 0.0f}},
 	                {.type = MobileObjectInfo::Ball, .offset = k_FoundingScaffold + glm::vec2 {0.0f, -1.5f}}},
 	    .commands = {{.kind = Kind::ScaffoldClearsGround, .delaySeconds = 1.0f, .object = 0}},
-	    .checks = {{.label = "the scaffold, the bush and the ball stay in the game",
+	    .checks = {{.label = "the scaffold and the ball stay in the game",
 	                .quantity = checks::Quantity::ObjectsAlive,
 	                .afterTurns = 100,
-	                .atLeast = 3}},
+	                .atLeast = 2},
+	               {.label = "the ball lands near the scaffold, not at the corner of the map",
+	                .quantity = checks::Quantity::ObjectDistance,
+	                .index = 2,
+	                .point = k_FoundingScaffold,
+	                .afterTurns = 100,
+	                .atMost = 100.0}},
 	});
 
 	all.push_back({

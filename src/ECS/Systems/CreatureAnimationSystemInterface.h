@@ -61,6 +61,9 @@ public:
 	/// Before the turn of the living: the system makes the blends of the first pose and the first plan of each creature
 	/// with no pose yet, so that the creature's own turn finds them. It changes nothing in the world.
 	virtual void PrepareFirstPoses() {}
+	/// After the players' commands of the turn: the shared threads start to make the same blends in the background, while
+	/// the turn does its next steps. The first use of the blends waits for them. It changes nothing in the world.
+	virtual void StartFirstBlends() {}
 	/// A creature in the world takes its pose for this game turn now, at the end of its turn: its animations move on by
 	/// one turn, at the place and heading where its turn took it. A creature that has its pose for this turn keeps it.
 	virtual void PoseTurn(entt::entity creature) = 0;

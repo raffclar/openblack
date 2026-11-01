@@ -1168,13 +1168,9 @@ bool Game::ProcessEvents(const SDL_Event& event) noexcept
 	                                    event.type == SDL_MOUSEBUTTONUP && event.button.button == SDL_BUTTON_RIGHT) &&
 	    creatureHand.GetCreature().has_value())
 	{
-		const auto creature = *creatureHand.GetCreature();
 		// The click puts the leash on, and then the creature feels how the hand treated it. Both are commands of the
-		// player, which the world does at the start of the next turn.
-		if (creatureHand.IsClick())
-		{
-			Locator::playerCommandSystem::value().Submit(player_commands::LeashTap {.creature = creature});
-		}
+		// player, which the world does at the start of a later turn. The release sends them in a network game, and the
+		// draw of the hand sends them in a game alone.
 		creatureHand.Release();
 	}
 	const bool onCreature = creatureHand.GetCreature().has_value();
@@ -3565,6 +3561,11 @@ void Game::CloseMenuForCinema()
 
 void Game::UpdateHandFrame(std::chrono::microseconds deltaTime)
 {
+	// The draw of the hand sees the start and the end of a hold of a creature before the hand moves
+	if (Locator::creatureHandSystem::has_value())
+	{
+		Locator::creatureHandSystem::value().DrawFrame(Locator::time::value().GetInputSteps());
+	}
 	auto& profiler = Locator::profiler::value();
 	auto& camera = Locator::camera::value();
 	const auto& config = Locator::config::value();
