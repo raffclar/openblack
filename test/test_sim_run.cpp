@@ -60,6 +60,19 @@ TEST(SimRun, TheRunEndsAtItsLastTurn)
 	EXPECT_TRUE(Finished(settings, 51));
 }
 
+TEST(SimRun, ATurnLimitedRunEndsWhenTheTempleHoldsTheWorldAfterTheLastScenarioCommand)
+{
+	const Settings settings {.untilTurn = 300};
+	EXPECT_TRUE(EndsHeldInTemple(settings, true, false, true));
+	// A run with no last turn continues to its last frame
+	EXPECT_FALSE(EndsHeldInTemple(Settings {}, true, false, true));
+	// The world turns, or a network game turns in the temple too
+	EXPECT_FALSE(EndsHeldInTemple(settings, false, false, true));
+	EXPECT_FALSE(EndsHeldInTemple(settings, true, true, true));
+	// A scenario command can still take the player out of the temple, or the run has no scenario
+	EXPECT_FALSE(EndsHeldInTemple(settings, true, false, false));
+}
+
 TEST(SimRun, AHeldRunThatAToolStepsSkipsItsFrames)
 {
 	EXPECT_TRUE(SkipsHeldFrame(true, true, false));

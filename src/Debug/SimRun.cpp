@@ -34,6 +34,11 @@ bool Finished(const Settings& settings, uint32_t turn)
 	return settings.untilTurn.has_value() && turn >= *settings.untilTurn;
 }
 
+bool EndsHeldInTemple(const Settings& settings, bool clockHeld, bool networkGame, bool scenarioGaveAll)
+{
+	return settings.untilTurn.has_value() && clockHeld && !networkGame && scenarioGaveAll;
+}
+
 bool SkipsHeldFrame(bool steppedByTool, bool paused, bool workWaits)
 {
 	return steppedByTool && paused && !workWaits;

@@ -531,6 +531,9 @@ public:
 	/// The scenarios' window sets the work that a scenario does before each turn of a network game. None: the window is
 	/// gone.
 	void SetScenarioTurn(std::function<void()> turn) { _scenarioTurn = std::move(turn); }
+	/// The scenarios' window sets the question whether the scenario of the run gave all its commands. A turn-limited run
+	/// ends when the temple then holds the world (see sim_run::EndsHeldInTemple). None: the window is gone.
+	void SetScenarioGaveAll(std::function<bool()> gaveAll) { _scenarioGaveAll = std::move(gaveAll); }
 	/// A scenario asked for that the scenarios' window hasn't started yet
 	[[nodiscard]] const std::optional<ScenarioRequest>& PendingScenario() const { return _scenarioRequest; }
 	/// Asks for a scenario while the game runs: the scenarios' window runs it on a fresh testbed next frame. A build
@@ -705,6 +708,7 @@ private:
 	int _exitCode {0};
 	std::function<void()> _scenarioStager;
 	std::function<void()> _scenarioTurn;
+	std::function<bool()> _scenarioGaveAll;
 	/// The port the debug inspector is to listen on, if it is to start
 	std::optional<uint16_t> _inspectPort;
 	std::optional<FightAutopilotRequest> _fightAutopilot;

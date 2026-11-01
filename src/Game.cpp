@@ -2474,6 +2474,18 @@ bool Game::Update() noexcept
 		LeaveAsObserverAtTheEndOfTheRun();
 		return false;
 	}
+	// In a game alone, the temple holds the world. A run that stays there after its scenario does not come to its
+	// last turn
+	if (const auto& time = Locator::time::value();
+	    sim_run::EndsHeldInTemple(Locator::simulation::value().GetSettings(), time.IsHeld(), time.IsNetworkGame(),
+	                              _scenarioGaveAll && !_scenarioRequest.has_value() && _scenarioGaveAll()))
+	{
+		SPDLOG_LOGGER_INFO(
+		    spdlog::get("game"),
+		    "The temple holds the world after the last command of the scenario: the simulation run ends at turn {}",
+		    time.GetTurn());
+		return false;
+	}
 	// A game that joined from the command line stops when its network game ends: its world turns no more
 	// After the out-of-sync box, the game stops on No and plays on with Yes
 	if (_leaveNetworkGame)
