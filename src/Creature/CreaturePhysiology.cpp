@@ -69,11 +69,20 @@ void creature_physiology::TakeUp(Needs& needs, const Kept& kept)
 	needs.turns = kept.turns;
 	needs.energy = kept.energy;
 	needs.exhaustion = kept.exhaustion;
+	needs.itchiness = kept.itchiness;
+	needs.poo = kept.poo;
+	needs.dehydration = kept.dehydration;
 }
 
 Kept creature_physiology::Keep(const Needs& needs)
 {
-	return {.age = needs.age, .turns = needs.turns, .energy = needs.energy, .exhaustion = needs.exhaustion};
+	return {.age = needs.age,
+	        .turns = needs.turns,
+	        .energy = needs.energy,
+	        .exhaustion = needs.exhaustion,
+	        .itchiness = needs.itchiness,
+	        .poo = needs.poo,
+	        .dehydration = needs.dehydration};
 }
 
 float creature_physiology::Hunger(const Needs& needs)
