@@ -225,18 +225,53 @@ TEST(LobbyApi, ClanCreatureKeepsTheFilesAndTheBitsOfTheAlignment)
 	EXPECT_EQ(back->mind, creature.mind);
 	EXPECT_EQ(back->physique, creature.physique);
 
-	const auto reply = ParseClanCreatureReply(ToJson(ClanCreatureReply {.creature = creature}));
+	const auto reply =
+	    ParseClanCreatureReply(ToJson(ClanCreatureReply {.kind = ClanCreatureKind::Stored, .creature = creature}));
 	ASSERT_TRUE(reply.has_value());
-	EXPECT_TRUE(reply->creature.has_value());
+	EXPECT_EQ(reply->kind, ClanCreatureKind::Stored);
+	ASSERT_TRUE(reply->creature.has_value());
+	EXPECT_EQ(reply->creature->mind, creature.mind);
 	EXPECT_FALSE(reply->make.has_value());
+}
 
-	const auto make = ParseClanCreatureReply(R"({"new":{"type":3,"name":"Horace"}})");
+TEST(LobbyApi, ClanCreatureReplyReadsTheKindOfTheLobby)
+{
+	// The lobby gives every member. Only the members of the kind have a value.
+	const auto stored = ParseClanCreatureReply(
+	    R"({"kind":"stored","alignment":0.5,"mind":"AAEC","physique":"","creature_type":null,"name":null,"updated":"2026-10-31T10:00:00Z"})");
+	ASSERT_TRUE(stored.has_value());
+	EXPECT_EQ(stored->kind, ClanCreatureKind::Stored);
+	ASSERT_TRUE(stored->creature.has_value());
+	EXPECT_EQ(stored->creature->alignment, 0.5f);
+	EXPECT_EQ(stored->creature->mind, (std::vector<uint8_t> {0, 1, 2}));
+	EXPECT_TRUE(stored->creature->physique.empty());
+
+	const auto make = ParseClanCreatureReply(
+	    R"({"kind":"create","alignment":null,"mind":null,"physique":null,"creature_type":3,"name":"Horace","updated":null})");
 	ASSERT_TRUE(make.has_value());
+	EXPECT_EQ(make->kind, ClanCreatureKind::Create);
 	ASSERT_TRUE(make->make.has_value());
 	EXPECT_EQ(make->make->type, 3);
 	EXPECT_EQ(make->make->name, "Horace");
+	EXPECT_FALSE(make->creature.has_value());
+
+	const auto none = ParseClanCreatureReply(R"({"kind":"none","alignment":null,"mind":null,"physique":null})");
+	ASSERT_TRUE(none.has_value());
+	EXPECT_EQ(none->kind, ClanCreatureKind::None);
+	EXPECT_FALSE(none->creature.has_value());
+	EXPECT_FALSE(none->make.has_value());
+
+	const auto made = ParseClanCreatureReply(
+	    ToJson(ClanCreatureReply {.kind = ClanCreatureKind::Create, .make = NewClanCreature {.type = 7, .name = "Ox"}}));
+	ASSERT_TRUE(made.has_value());
+	EXPECT_EQ(made->make->type, 7);
+	EXPECT_EQ(ParseClanCreatureReply(ToJson(ClanCreatureReply {}))->kind, ClanCreatureKind::None);
 
 	EXPECT_FALSE(ParseClanCreatureReply("{}").has_value());
+	EXPECT_FALSE(ParseClanCreatureReply(R"({"kind":"other"})").has_value());
+	EXPECT_FALSE(ParseClanCreatureReply(R"({"kind":"stored","alignment":null,"mind":"AAEC","physique":""})").has_value());
+	EXPECT_FALSE(ParseClanCreatureReply(R"({"kind":"create","creature_type":3})").has_value());
+	EXPECT_FALSE(ParseClanCreatureReply(R"({"creature":{"alignment":0,"mind":"","physique":""}})").has_value());
 	EXPECT_FALSE(ParseClanCreature(R"({"alignment":0,"mind":"%%%%","physique":""})").has_value());
 }
 
