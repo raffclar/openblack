@@ -3525,15 +3525,40 @@ void AddLight(std::vector<Scenario>& all)
 	    .expected = "The villager on the left changes to its high-detail model. It keeps the light and the colour of the "
 	                "land where it stands, and it shows no distance haze. At this distance the haze is small, so its "
 	                "colours change only a little. The villager on the right does not change.",
-	    .framing = {.shot = Shot::Placed, .eye = {0.0f, 3.0f, 140.0f}, .look = {0.0f, 1.5f, 160.0f}},
-	    .objects = {{.type = VillagerInfo::CelticFarmerMale, .offset = {-3.0f, 160.0f}},
-	                {.type = VillagerInfo::CelticHousewifeFemale, .offset = {3.0f, 160.0f}}},
+	    .framing = {.shot = Shot::Placed, .eye = {0.0f, 3.0f, 40.0f}, .look = {0.0f, 1.5f, 60.0f}},
+	    .objects = {{.type = VillagerInfo::CelticFarmerMale, .offset = {-3.0f, 60.0f}},
+	                {.type = VillagerInfo::CelticHousewifeFemale, .offset = {3.0f, 60.0f}}},
 	    .commands = {{.kind = Kind::WideScreen, .delaySeconds = 6.0f, .value = 1},
 	                 {.kind = Kind::CallNative,
 	                  .delaySeconds = 0.5f,
 	                  .script = "SET_HIGH_GRAPHICS_DETAIL",
 	                  .scriptArguments = {{.kind = ScriptArgument::Kind::Integer, .number = 1.0f},
 	                                      {.kind = ScriptArgument::Kind::Object, .index = 0}}}},
+	});
+
+	// A villager of the north changes to its own detailed model on dry land, and one of another kind keeps its model
+	all.push_back({
+	    .id = "appearance.high_detail_villager_switch",
+	    .name = "Villagers change to high detail where they stand",
+	    .facet = Facet::Appearance,
+	    .description = "A man of the north and a farmer stand on dry land in front of the camera. After six seconds, the "
+	                   "cinema bars come in and the two villagers change to high detail.",
+	    .expected = "Each villager shows its whole body where it stands and continues to stand or walk. The man of the "
+	                "north changes to his detailed model, which has eyes. The farmer keeps his model.",
+	    .framing = {.shot = Shot::Placed, .eye = {0.0f, 2.5f, 16.0f}, .look = {0.0f, 1.2f, 6.0f}},
+	    .objects = {{.type = VillagerInfo::NorseFarmerMale, .offset = {-1.5f, 6.0f}},
+	                {.type = VillagerInfo::CelticFarmerMale, .offset = {1.5f, 6.0f}}},
+	    .commands = {{.kind = Kind::WideScreen, .delaySeconds = 6.0f, .value = 1},
+	                 {.kind = Kind::CallNative,
+	                  .delaySeconds = 0.5f,
+	                  .script = "SET_HIGH_GRAPHICS_DETAIL",
+	                  .scriptArguments = {{.kind = ScriptArgument::Kind::Integer, .number = 1.0f},
+	                                      {.kind = ScriptArgument::Kind::Object, .index = 0}}},
+	                 {.kind = Kind::CallNative,
+	                  .delaySeconds = 0.0f,
+	                  .script = "SET_HIGH_GRAPHICS_DETAIL",
+	                  .scriptArguments = {{.kind = ScriptArgument::Kind::Integer, .number = 1.0f},
+	                                      {.kind = ScriptArgument::Kind::Object, .index = 1}}}},
 	});
 
 	// The same things in snow of three depths. A thing that takes all the snow gets the level (depth - 20) x 255 / 256.
