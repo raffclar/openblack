@@ -1026,8 +1026,7 @@ TEST(LockstepRules, ALanNameHasNoControlCharacterAndAMostLength)
 	EXPECT_EQ(claims->subject, "lan:Alice");
 	EXPECT_EQ(claims->role, game_socket::Role::God);
 	EXPECT_FALSE(server::LanClaims("").has_value());
-	EXPECT_FALSE(server::LanClaims("Al
-ice").has_value());
+	EXPECT_FALSE(server::LanClaims("Al\x01ice").has_value());
 	EXPECT_TRUE(server::LanClaims(std::string(server::k_MostLanNameBytes, 'a')).has_value());
 	EXPECT_FALSE(server::LanClaims(std::string(server::k_MostLanNameBytes + 1, 'a')).has_value());
 }

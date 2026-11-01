@@ -95,8 +95,8 @@ void testbed_scenarios::AddMultiplayerFrontEndScenarios(std::vector<Scenario>& a
 	     Stage::RoomPlayerDetails,
 	     "The player joins Bob's game, opens the Player Details tab and picks Bob. Bob's game has Bob and Alice as gods 1 and "
 	     "2, and Eve as an observer, on Bombardment.",
-	     "\"Player Bob information:\" shows, with no lines under it: the lobby does not give the lines of the player "
-	     "database yet."},
+	     "\"Player Bob information:\" shows, with the two lines of the demonstration lobby under it: \"Points:1000\" and "
+	     "\"Games Played:12\". The lobby gives each label and each value. There is no space after the colon."},
 	    {"multiplayer.conditions", "The multiplayer front end: the winning conditions", Stage::Conditions,
 	     "The player joins Bob's game and clicks Next. Bob's game has Bob and Alice as gods 1 and 2, and Eve as an observer, "
 	     "on Bombardment.",
