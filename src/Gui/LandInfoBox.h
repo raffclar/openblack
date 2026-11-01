@@ -70,6 +70,12 @@ public:
 	[[nodiscard]] bool IsActive() const noexcept { return _active; }
 	/// The box shows, or it fades out
 	[[nodiscard]] bool IsVisible() const noexcept { return _active || _fade.GetValue() > 0.0f; }
+	/// Another box is over this box. The box fades out over a fifth of a second and takes no input. When the other box
+	/// goes, this box fades in again over half a second.
+	void SetCovered(bool covered);
+	[[nodiscard]] bool IsCovered() const noexcept { return _covered; }
+	/// The box shows, no other box covers it, and it takes the input
+	[[nodiscard]] bool TakesInput() const noexcept { return _active && !_covered; }
 
 	void MouseMove(glm::ivec2 point);
 	void MouseDown(glm::ivec2 point);
@@ -99,6 +105,7 @@ private:
 	List* _list {nullptr};
 	Choice _choice {Choice::None};
 	bool _active {false};
+	bool _covered {false};
 	Zoomer _fade;
 };
 

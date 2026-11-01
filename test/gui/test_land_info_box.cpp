@@ -154,6 +154,40 @@ TEST(LandInfoBox, EscapeClosesTheBoxOnlyWithNoModifierKey)
 	EXPECT_EQ(fixture.box.TakeChoice(), LandInfoBox::Choice::Go);
 }
 
+TEST(LandInfoBox, ACoveredBoxStaysButTakesNoInput)
+{
+	BoxFixture fixture;
+	fixture.Show(u"Two Gods");
+	fixture.box.SetCovered(true);
+	EXPECT_TRUE(fixture.box.IsActive());
+	EXPECT_FALSE(fixture.box.TakesInput());
+	// Escape and Go! go to the box that covers it
+	fixture.box.KeyDown(SDLK_ESCAPE, KMOD_NONE);
+	EXPECT_FALSE(fixture.Click(LandInfoBox::k_Go.Centre()));
+	EXPECT_TRUE(fixture.box.IsActive());
+	EXPECT_EQ(fixture.box.TakeChoice(), LandInfoBox::Choice::None);
+	// When the other box goes, the box takes the input again
+	fixture.box.SetCovered(false);
+	EXPECT_TRUE(fixture.box.TakesInput());
+	fixture.box.KeyDown(SDLK_ESCAPE, KMOD_NONE);
+	EXPECT_FALSE(fixture.box.IsActive());
+	EXPECT_EQ(fixture.box.TakeChoice(), LandInfoBox::Choice::Go);
+}
+
+TEST(LandInfoBox, OnlyAShownBoxCanBeCovered)
+{
+	BoxFixture fixture;
+	fixture.box.SetCovered(true);
+	EXPECT_FALSE(fixture.box.IsCovered());
+	fixture.Show(u"Two Gods");
+	fixture.box.SetCovered(true);
+	// A close and a new show both take the cover away
+	fixture.box.Close();
+	EXPECT_FALSE(fixture.box.IsCovered());
+	fixture.Show(u"Two Gods");
+	EXPECT_TRUE(fixture.box.TakesInput());
+}
+
 TEST(LandInfoBox, InASkirmishLeaveSkirmishGameAsksFirstAndYesLeaves)
 {
 	const auto texts = Texts();

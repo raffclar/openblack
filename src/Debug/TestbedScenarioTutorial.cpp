@@ -139,4 +139,22 @@ void testbed_scenarios::AddTutorialScenarios(std::vector<Scenario>& all)
 	    .commands = {{.kind = Kind::OpenMenuPage, .delaySeconds = 1.0f, .value = 0},
 	                 {.kind = Kind::PressPlainKey, .delaySeconds = 2.0f, .value = static_cast<size_t>(SDL_SCANCODE_F2)}},
 	});
+
+	all.push_back({
+	    .id = "tutorial.playground_trip_land_info_box",
+	    .name = "F2 over the land information box asks the trip to the Gods' Playground",
+	    .facet = Facet::Tutorial,
+	    .description = "After a second the land information box shows, as the script of a land shows it while the land "
+	                   "loads. Two seconds later the scenario presses F2 on the keyboard, as the player does. Click Yes to "
+	                   "go to the Gods' Playground, or No to stay.",
+	    .expected = "The land information box fades in and the game goes on under it. F2 pauses the game and fades the box "
+	                "out, and the white box asks \"Are you sure you want to go to the Gods' Playground?\" with a Yes arrow "
+	                "and a No arrow. No closes the question, the land information box fades in again and the game goes "
+	                "on. Yes saves the game into the slot of the save on exit. The Playground's land loads behind the land "
+	                "information box, and the cinema bars of the first lesson close the box.",
+	    .environment = {.dispenserGrid = false},
+	    .framing = {.shot = Shot::Testbed},
+	    .commands = {{.kind = Kind::SkirmishBox, .delaySeconds = 1.0f, .value = 3},
+	                 {.kind = Kind::PressPlainKey, .delaySeconds = 2.0f, .value = static_cast<size_t>(SDL_SCANCODE_F2)}},
+	});
 }
