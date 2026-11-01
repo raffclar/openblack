@@ -200,6 +200,7 @@ bool parseOptions(int argc, char** argv, openblack::Arguments& args, int& return
 	options.add_options("Developer")
 		("sim-record", "Tools: write the run record to this file, as JSON lines: the player's creature, the counts, the times and the problems that the stability checks find. Starts the inspector on a free port when --inspect-port is not given.", cxxopts::value<std::string>())
 		("sim-record-every", "Tools: with --sim-record, write a record each time this many game turns go by.", cxxopts::value<uint32_t>()->default_value("100"))
+		("sim-record-fields-every", "Tools: with --sim-record, the record reads every field of the creature (its state hash, its lists and the checks of its numbers) only on the turns that this number divides. The other records keep the rest of the creature.", cxxopts::value<uint32_t>()->default_value("1"))
 		("sim-start-paused", "Tools: each land starts paused, before any of its frames, for a tool that steps the run through the inspector.")
 		("sim-hash-parts", "Tools: with --sim-record, also keep in each record the hash of the transforms of the entities of each component, to find what made two runs part.")
 		("sim-hash-fields", "Tools: as --sim-hash-parts, and the synced hash of each field of each component too. The records get large: use it with few records.")
@@ -680,6 +681,7 @@ bool parseOptions(int argc, char** argv, openblack::Arguments& args, int& return
 			{
 				args.simulation->recordPath = std::filesystem::path(result["sim-record"].as<std::string>());
 				args.simulation->recordEvery = std::max(1u, result["sim-record-every"].as<uint32_t>());
+				args.simulation->recordFieldsEvery = std::max(1u, result["sim-record-fields-every"].as<uint32_t>());
 				args.simulation->hashParts = result["sim-hash-fields"].as<bool>()  ? openblack::sim_run::HashDetail::Fields
 				                             : result["sim-hash-parts"].as<bool>() ? openblack::sim_run::HashDetail::Components
 				                                                                   : openblack::sim_run::HashDetail::None;

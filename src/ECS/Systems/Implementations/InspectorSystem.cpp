@@ -564,9 +564,10 @@ void InspectorSystem::SetHostsNetworkGame(bool hosts)
 
 std::optional<std::string> InspectorSystem::StartSimRecord(const std::filesystem::path& path, uint32_t every,
                                                            const std::optional<std::filesystem::path>& limits,
-                                                           sim_run::HashDetail hashParts)
+                                                           sim_run::HashDetail hashParts, uint32_t fieldsEvery)
 {
 	_sim->SetHashParts(hashParts);
+	_sim->SetFieldsEvery(fieldsEvery);
 	return _sim->StartRecord(path, every, limits);
 }
 

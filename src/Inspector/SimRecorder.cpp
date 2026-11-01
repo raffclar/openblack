@@ -1133,7 +1133,12 @@ Json SimProvider::CreatureRecord(uint32_t turn, bool track, std::vector<sim_chec
 		}
 	}
 
-	// Every field of every component of the creature that the inspector can read: its numbers and its lists
+	// Every field of every component of the creature that the inspector can read: its numbers and its lists. A tool
+	// that does not need them on each record asks for them on fewer records.
+	if (turn % _fieldsEvery != 0)
+	{
+		return creature;
+	}
 	std::map<std::string, size_t, std::less<>> lists;
 	// The hash of all the fields, to compare two runs
 	uint64_t stateHash = k_HashOffset;

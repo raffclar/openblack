@@ -339,7 +339,8 @@ bool ServerWorld::Initialize()
 	if (_simulation.recordPath.has_value() && Locator::inspector::has_value())
 	{
 		if (const auto error = Locator::inspector::value().StartSimRecord(*_simulation.recordPath, _simulation.recordEvery,
-		                                                                  _simulation.limitsPath, _simulation.hashParts);
+		                                                                  _simulation.limitsPath, _simulation.hashParts,
+		                                                                  _simulation.recordFieldsEvery);
 		    error.has_value())
 		{
 			SPDLOG_LOGGER_ERROR(spdlog::get("game"), "The simulation record cannot start: {}", *error);
