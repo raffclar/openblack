@@ -270,9 +270,6 @@ inline constexpr std::array k_Turn = std::to_array<Place>({
     {.step = Step::PlayerCommands, .stage = Stage::Input},
     // The hand's count of the turns that it stays still is part of the player's input
     {.step = Step::HandStillness, .stage = Stage::Input},
-    // The commands can make creatures. The threads make the blends of their first poses while the next steps play, and
-    // the first step that uses the blends waits for them.
-    {.step = Step::CreatureFirstBlends, .stage = std::nullopt},
     // After the stillness of each hand, the influence that the hand keeps past the border and the scoop of the hand, god
     // by god. This step comes before the hand's own work and before the players and the computer minds act.
     {.step = Step::VirtualInfluence, .stage = Stage::Input},
@@ -285,6 +282,9 @@ inline constexpr std::array k_Turn = std::to_array<Place>({
     // The humans of a network game join with the commands of its first turn. Then the gods are known, and each god gets
     // the winning conditions of the game before a thing in the world can count for them.
     {.step = Step::GameConditions, .stage = Stage::StartTurn},
+    // The commands can make creatures. The threads make the blends of their first poses while the next steps play, and
+    // the first step that uses the blends waits for them. A decided game makes no creatures, so it does not do this step.
+    {.step = Step::CreatureFirstBlends, .stage = std::nullopt},
     // The living's reactions count their times by the same turn count as the game
     {.step = Step::ReactionClock, .stage = Stage::StartTurn},
     // The places of the turn's start, which the frames draw from. Each thing goes into its new map cells as it moves,

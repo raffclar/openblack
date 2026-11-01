@@ -507,4 +507,8 @@ TEST(GameTurnOrder, TheThreadsStartTheFirstBlendsAfterTheCommandsAndBeforeTheSlo
 	EXPECT_TRUE(recorder.Before(Step::CreatureFirstBlends, Step::CreaturesTurnStart));
 	EXPECT_TRUE(recorder.Before(Step::CreatureFirstBlends, Step::Living));
 	EXPECT_EQ(std::ranges::count(recorder.Steps(), Step::CreatureFirstBlends), 1);
+	// A decided game makes no creatures and starts no blends
+	TurnRecorder decided;
+	PlayTurn([&decided](Step step) { decided(step); }, true);
+	EXPECT_EQ(std::ranges::count(decided.Steps(), Step::CreatureFirstBlends), 0);
 }
