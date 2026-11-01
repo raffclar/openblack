@@ -2545,6 +2545,76 @@ ActingOf ActingOfUnliving(const ecs::Registry& registry, entt::entity thing)
 	return {.info = info, .canActOn = !whole && acts(info)};
 }
 
+/// The kind of a thing, by how the desires examine it. The components give the same answers as the registry: the
+/// registry itself, or the stores that KindStores finds.
+template <typename Components>
+creature_activity::Thing KindOf(const Components& components, entt::entity thing)
+{
+	using creature_activity::Thing;
+	if (components.template AllOf<Villager>(thing))
+	{
+		return Thing::Villager;
+	}
+	if (components.template AllOf<Animal>(thing))
+	{
+		return Thing::Animal;
+	}
+	if (components.template AllOf<Creature>(thing))
+	{
+		return Thing::Creature;
+	}
+	if (components.template AllOf<ecs::components::Spell>(thing))
+	{
+		return Thing::Spell;
+	}
+	if (components.template AllOf<Tree>(thing))
+	{
+		return Thing::Tree;
+	}
+	const auto* still = components.template TryGet<const MobileStatic>(thing);
+	if (components.template AnyOf<Rock, DeadTree>(thing) || (still != nullptr && still->type == MobileStaticInfo::Bonfire))
+	{
+		return Thing::Rock;
+	}
+	// A scaffold is a loose object
+	if (components.template AnyOf<MobileObject, Pot, Ball, Scaffold>(thing))
+	{
+		return Thing::MobileObject;
+	}
+	if (still != nullptr)
+	{
+		return Thing::MobileStatic;
+	}
+	if (components.template AllOf<Field>(thing))
+	{
+		return Thing::Field;
+	}
+	if (components.template AllOf<FishFarm>(thing))
+	{
+		return Thing::FishFarm;
+	}
+	if (components.template AllOf<VillageTotem>(thing))
+	{
+		return Thing::TotemStatue;
+	}
+	if (components.template AnyOf<Abode, Temple, WorshipSite, WorshipAltar, Feature, AnimatedStatic, Flowers, BigForest>(thing))
+	{
+		return Thing::Building;
+	}
+	if (components.template AllOf<TownDesireFlag>(thing))
+	{
+		return Thing::PlainObject;
+	}
+	return Thing::Other;
+}
+
+/// The stores of the components that tell the kind of a thing (KindOf), found one time for a walk of many things. No
+/// test of a desire makes the first component of one of these kinds.
+using KindStores =
+    ecs::ComponentLookups<Villager, Animal, Creature, ecs::components::Spell, Tree, MobileStatic, Rock, DeadTree, MobileObject,
+                          Pot, Ball, Scaffold, Field, FishFarm, VillageTotem, Abode, Temple, WorshipSite, WorshipAltar, Feature,
+                          AnimatedStatic, Flowers, BigForest, TownDesireFlag>;
+
 /// What a creature knows about a thing of a kind when it examines a desire for it. The function finds only the facts
 /// that the desire reads. The other facts keep their default values.
 creature_activity::ThingFacts ThingFactsOf(const ecs::Registry& registry, entt::entity creature, Desire desire,
@@ -2665,62 +2735,7 @@ std::optional<entt::entity> TownOfThing(const ecs::Registry& registry, entt::ent
 
 creature_activity::Thing mind_detail::KindOfThing(const ecs::Registry& registry, entt::entity thing)
 {
-	using creature_activity::Thing;
-	if (registry.AllOf<Villager>(thing))
-	{
-		return Thing::Villager;
-	}
-	if (registry.AllOf<Animal>(thing))
-	{
-		return Thing::Animal;
-	}
-	if (registry.AllOf<Creature>(thing))
-	{
-		return Thing::Creature;
-	}
-	if (registry.AllOf<ecs::components::Spell>(thing))
-	{
-		return Thing::Spell;
-	}
-	if (registry.AllOf<Tree>(thing))
-	{
-		return Thing::Tree;
-	}
-	const auto* still = registry.TryGet<const MobileStatic>(thing);
-	if (registry.AnyOf<Rock, DeadTree>(thing) || (still != nullptr && still->type == MobileStaticInfo::Bonfire))
-	{
-		return Thing::Rock;
-	}
-	// A scaffold is a loose object
-	if (registry.AnyOf<MobileObject, Pot, Ball, Scaffold>(thing))
-	{
-		return Thing::MobileObject;
-	}
-	if (still != nullptr)
-	{
-		return Thing::MobileStatic;
-	}
-	if (registry.AllOf<Field>(thing))
-	{
-		return Thing::Field;
-	}
-	if (registry.AllOf<FishFarm>(thing))
-	{
-		return Thing::FishFarm;
-	}
-	if (registry.AllOf<VillageTotem>(thing))
-	{
-		return Thing::TotemStatue;
-	}
-	if (registry.AnyOf<Abode, Temple, WorshipSite, WorshipAltar, Feature, AnimatedStatic, Flowers, BigForest>(thing))
-	{
-		return Thing::Building;
-	}
-	if (registry.AllOf<TownDesireFlag>(thing))
-	{
-		return Thing::PlainObject;
-	}
-	return Thing::Other;
+	return KindOf(registry, thing);
 }
 
 std::optional<CreatureMindSystem::ChosenActivity>
@@ -2796,13 +2811,15 @@ std::vector<creature_planner::ObjectCandidate> CreatureMindSystem::PartsToActOn(
 bool CreatureMindSystem::SuitsDesire(entt::entity creature, CreatureMindState& mind, Desire desire, entt::entity thing)
 {
 	const auto& registry = Locator::entitiesRegistry::value();
-	if (!registry.Valid(thing))
-	{
-		return false;
-	}
+	return registry.Valid(thing) && SuitsDesireOfKind(creature, mind, desire, thing, mind_detail::KindOfThing(registry, thing));
+}
+
+bool CreatureMindSystem::SuitsDesireOfKind(entt::entity creature, CreatureMindState& mind, Desire desire, entt::entity thing,
+                                           creature_activity::Thing kind)
+{
+	const auto& registry = Locator::entitiesRegistry::value();
 	// The test of the kind comes first because it costs less. The other tests only read the world and the beliefs, but
 	// the test for hunger can change the beliefs. Any kind can suit hunger, thus that test stays in its sequence.
-	const auto kind = mind_detail::KindOfThing(registry, thing);
 	if (!creature_activity::KindMaySuit(desire, kind) || NoWayLately(registry, mind, thing))
 	{
 		return false;
@@ -2867,10 +2884,12 @@ CreatureMindSystem::BelievedThingsToActOn(entt::entity creature, CreatureMindSta
 	kept.things.clear();
 	std::ranges::transform(held, std::back_inserter(kept.things), &creature_object_beliefs::Belief::thing);
 	kept.suiting.reserve(kept.things.size());
+	const KindStores kinds(registry);
 	for (const auto believedThing : kept.things)
 	{
 		const auto thing = ActedThingOf(registry, believedThing);
-		if (!thing.has_value() || *thing == creature || !SuitsDesire(creature, mind, desire, *thing))
+		if (!thing.has_value() || *thing == creature || !registry.Valid(*thing) ||
+		    !SuitsDesireOfKind(creature, mind, desire, *thing, KindOf(kinds, *thing)))
 		{
 			continue;
 		}

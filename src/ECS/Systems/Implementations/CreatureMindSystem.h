@@ -361,6 +361,9 @@ private:
 	/// The creature comes across that town when it examines the rule.
 	[[nodiscard]] bool SuitsDesire(entt::entity creature, components::CreatureMindState& mind, creature_desires::Desire desire,
 	                               entt::entity thing);
+	/// As SuitsDesire, for a thing that exists, of a kind that the caller found
+	[[nodiscard]] bool SuitsDesireOfKind(entt::entity creature, components::CreatureMindState& mind,
+	                                     creature_desires::Desire desire, entt::entity thing, creature_activity::Thing kind);
 	/// The things that the creature has beliefs about and that an action of a desire can act on, each with its worth.
 	/// The function examines the two lists of beliefs in their order: the whole things first, then the other things,
 	/// each list with the newest belief first.
