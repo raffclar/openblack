@@ -245,10 +245,12 @@ public:
 		const float distanceScale =
 		    town_belief::DistanceScale(params, x87::Distance<x87::SumOrder::Xzy>(world.CameraPosition(), base));
 		const auto random = [&effect](float min, float max) { return effect.Random(min, max); };
+		// The village's beliefs and the rank of each player are the same for each symbol
+		const auto beliefs = belief->OfPlayers();
+		const auto ranks = town_belief::Ranks(beliefs);
 		for (auto& atom : collection.atoms)
 		{
 			const auto found = atom->data.find(this);
-			const auto beliefs = belief->OfPlayers();
 			if (found == atom->data.end() || atom->player < 0 || static_cast<size_t>(atom->player) >= beliefs.size())
 			{
 				continue;
@@ -261,8 +263,8 @@ public:
 			                           .intoFight = data.b.y,
 			                           .fightLength = data.b.z};
 			const auto player = static_cast<size_t>(atom->player);
-			const auto look = town_belief::Step(state, params, beliefs[player], town_belief::Rank(beliefs, player),
-			                                    effect.GetDt(), distanceScale, random);
+			const auto look =
+			    town_belief::Step(state, params, beliefs[player], ranks[player], effect.GetDt(), distanceScale, random);
 			data.a = {state.around, state.tilt, state.sway, 0.0f};
 			data.b = {state.untilFight, state.intoFight, state.fightLength, 0.0f};
 			atom->position = base + look.offset;

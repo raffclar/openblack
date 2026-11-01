@@ -13,6 +13,7 @@
 
 #include <algorithm>
 #include <numbers>
+#include <numeric>
 
 #include "Common/PortableMath.h"
 
@@ -71,6 +72,32 @@ int Rank(std::span<const float> beliefs, size_t player)
 		}
 	}
 	return rank;
+}
+
+std::vector<int> Ranks(std::span<const float> beliefs)
+{
+	std::vector<int> ranks(beliefs.size(), 0);
+	std::vector<float> shown(beliefs.size());
+	std::ranges::transform(beliefs, shown.begin(), Shown);
+	// A belief that is not a number does not order with the others, so each rank is then found alone
+	if (std::ranges::any_of(shown, [](float belief) { return std::isnan(belief); }))
+	{
+		for (size_t player = 0; player < beliefs.size(); ++player)
+		{
+			ranks[player] = Rank(beliefs, player);
+		}
+		return ranks;
+	}
+	// The most believed first, and of equal beliefs the later player first: a player's place in this order is the
+	// count of players that rank above it
+	std::vector<size_t> order(beliefs.size());
+	std::iota(order.begin(), order.end(), size_t {0});
+	std::ranges::sort(order, [&shown](size_t a, size_t b) { return shown[a] > shown[b] || (shown[a] == shown[b] && a > b); });
+	for (size_t place = 0; place < order.size(); ++place)
+	{
+		ranks[order[place]] = static_cast<int>(place);
+	}
+	return ranks;
 }
 
 float DistanceScale(const Params& params, float distance)

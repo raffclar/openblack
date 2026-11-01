@@ -115,7 +115,6 @@
 #include "Debug/FightAutopilotInterface.h"
 #include "Debug/FrameStatsLog.h"
 #include "Debug/FrameWriteGuard.h"
-#include "Debug/TestbedDispenserGrid.h"
 #include "ECS/Archetypes/PlayerArchetype.h"
 #include "ECS/Archetypes/SkyArchetype.h"
 #include "ECS/ChallengePictures.h"
@@ -774,7 +773,9 @@ Game::Game(Arguments&& args) noexcept
     , _networkJoin(args.networkJoin)
     , _networkLandPending(args.networkJoin.has_value())
     , _inspectInputLock(args.inspectInputLock)
+#if defined(OPENBLACK_DEVELOPER_TOOLS)
     , _testbedWindow(!args.scenario.has_value() || !args.scenario->hideWindow)
+#endif
     , _requestScreenshot(args.requestScreenshot)
     , _turnApiCheck(args.turnApiCheck)
     , _turnBesideDraw(args.turnBesideDraw)
@@ -5446,7 +5447,7 @@ void Game::LoadTestbed() noexcept
 	{
 		return;
 	}
-	Locator::landSystem::value().LoadTestbed();
+	static_cast<void>(Locator::landSystem::value().LoadTestbed());
 }
 
 bool Game::RequestScenario(ScenarioRequest request)
@@ -5519,10 +5520,12 @@ void Game::StartCameraAtTemple()
 
 void Game::TestbedLoaded()
 {
+#if defined(OPENBLACK_DEVELOPER_TOOLS)
 	if (Locator::debugGui::has_value() && _testbedWindow)
 	{
 		Locator::debugGui::value().OpenWindow(debug::gui::k_TestbedScenariosWindow);
 	}
+#endif
 }
 
 bool Game::AskStartQuestion(bool hasCreature)
@@ -6328,7 +6331,13 @@ bool Game::StartNetworkLand(const game_socket::Start& start)
 	// The server chose the land: the testbed of a server is not a developer tool of this computer
 	if (start.testbed)
 	{
-		lands.LoadTestbed();
+		// A build for players has no testbed
+		if (!lands.LoadTestbed())
+		{
+			SPDLOG_LOGGER_ERROR(spdlog::get("game"), "The game server asks for a game this build cannot play: {}",
+			                    "the build has no developer tools, so it has no testbed");
+			return false;
+		}
 	}
 	else if (start.godsRingMap)
 	{

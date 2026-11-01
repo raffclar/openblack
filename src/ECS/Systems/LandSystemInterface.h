@@ -102,8 +102,9 @@ public:
 	virtual bool LoadMap(const std::filesystem::path& path, loading::LoadingClock::Mode look, land_change::Kind change) = 0;
 	/// Starts the scripts of the challenge again from the start, then loads the map script of a land
 	virtual bool LoadMapWithFreshScripts(const std::filesystem::path& path, land_change::Kind change) = 0;
-	/// Loads the testbed: a flat land over the whole map with a lake, a dispenser of each miracle and no script
-	virtual void LoadTestbed() = 0;
+	/// Loads the testbed: a flat land over the whole map with a lake, a dispenser of each miracle and no script. Gives
+	/// false, and loads nothing, in a build without the developer tools.
+	virtual bool LoadTestbed() = 0;
 	/// Loads the network map for 32 gods on this computer alone, for tests: a round island with a citadel and a village in
 	/// each slot. The village comes from a land of the game for network play. Gives false when that land is not there.
 	/// The game makes the file of the map and loads it as LoadGodsRingMapFile does.
