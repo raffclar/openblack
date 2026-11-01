@@ -3572,11 +3572,11 @@ void AddLight(std::vector<Scenario>& all)
 	    .expected = "The farmer in the shallows plays the drowning clip from the start, until his time in the water "
 	                "ends. Then he dies and lies drowned. The farmer on the dry land plays the clip of a new villager "
 	                "until he first decides what to do. No farmer stands still in the pose of a model with no clip.",
-	    .environment = {.hour = 12.0f, .clockRuns = false, .dispenserGrid = false},
-	    .framing = {.shot = Shot::Overview,
-	                .include = {{k_Lake.x - 2.0f, k_FarShallows - 4.0f}, {k_Lake.x + 2.0f, k_FarShallows + 14.0f}},
-	                .distance = 0.1f},
-	    .objects = {{.type = VillagerInfo::CelticFarmerMale, .offset = {k_Lake.x - 2.0f, k_FarShallows - 4.0f}},
+	    .environment = {.hour = 12.0f, .clockRuns = false, .dispenserGrid = false, .cursor = glm::vec2(0.95f, 0.1f)},
+	    .framing = {.shot = Shot::Placed,
+	                .eye = {k_Lake.x + 6.0f, 4.5f, k_FarShallows + 20.0f},
+	                .look = {k_Lake.x - 1.0f, 0.0f, k_FarShallows + 7.0f}},
+	    .objects = {{.type = VillagerInfo::CelticFarmerMale, .offset = {k_Lake.x - 2.0f, k_FarShallows + 4.0f}},
 	                {.type = VillagerInfo::CelticFarmerMale, .offset = {k_Lake.x + 2.0f, k_FarShallows + 14.0f}}},
 	});
 
