@@ -13084,6 +13084,26 @@ void AddWorkshopScenarios(std::vector<Scenario>& all)
 	});
 
 	all.push_back({
+	    .id = "objects.workshop_takes_thrown_wood",
+	    .name = "A workshop takes a handful of wood that the hand throws at it",
+	    .facet = Facet::Objects,
+	    .description = "A Celtic town of the player's with a village centre and a workshop that holds 1000 wood. A "
+	                   "handful of 600 wood is lifted 20 m west of the workshop and thrown at it as the hand throws it.",
+	    .expected = "The handful flies east and comes down at the workshop. It goes, and the workshop takes the 600 wood "
+	                "into its pile: the workshop then holds 1600 wood, still less than the wood of one scaffold.",
+	    .environment = {.dispenserGrid = false},
+	    .framing = {.shot = Shot::Overview, .include = {k_Workshop - glm::vec2 {25.0f}, k_Workshop + glm::vec2 {15.0f}}},
+	    .objects = {{.type = AbodeInfo::CelticTownCentre, .offset = {0.0f, 50.0f}},
+	                {.type = AbodeInfo::CelticWorkshop, .offset = k_Workshop, .yawDegrees = 90.0f, .storedWood = 1000},
+	                {.type = PotInfo::HandWood, .offset = k_Workshop + glm::vec2 {-20.0f, 0.0f}, .amount = 600}},
+	    .throws = {{.object = 2,
+	                .from = k_Workshop + glm::vec2 {-20.0f, 0.0f},
+	                .height = 6.0f,
+	                .velocity = {11.0f, 3.0f, 0.0f},
+	                .delaySeconds = 2.0f}},
+	});
+
+	all.push_back({
 	    .id = "objects.workshop_wood_flag",
 	    .name = "The flag of a workshop shows the wood that the workshop needs for a scaffold",
 	    .facet = Facet::Objects,

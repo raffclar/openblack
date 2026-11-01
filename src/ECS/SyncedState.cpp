@@ -11,6 +11,8 @@
 
 #include <algorithm>
 #include <array>
+#include <string_view>
+#include <utility>
 #include <vector>
 
 #include <entt/entity/registry.hpp>
@@ -430,6 +432,31 @@ namespace
 [[nodiscard]] std::vector<ecs::reflection::HashLeaveOut> LeaveOut(const entt::registry& registry,
                                                                   std::span<const PresentationPart> presentation)
 {
+	// The storage of each marker is the first storage with its name in the walk of the registry. One walk finds them
+	// all.
+	std::vector<std::pair<std::string_view, const entt::sparse_set*>> markers;
+	for (const auto& part : presentation)
+	{
+		if (!part.marker.empty() &&
+		    std::ranges::find(markers, part.marker, &decltype(markers)::value_type::first) == markers.end())
+		{
+			markers.emplace_back(part.marker, nullptr);
+		}
+	}
+	if (!markers.empty())
+	{
+		for (const auto& [id, storage] : registry.storage())
+		{
+			const auto name = ecs::reflection::ShortTypeName(ecs::reflection::StorageType(storage));
+			for (auto& [marker, found] : markers)
+			{
+				if (found == nullptr && marker == name)
+				{
+					found = &storage;
+				}
+			}
+		}
+	}
 	std::vector<ecs::reflection::HashLeaveOut> leaveOut;
 	leaveOut.reserve(presentation.size());
 	for (const auto& part : presentation)
@@ -437,8 +464,10 @@ namespace
 		if (part.marker.empty())
 		{
 			leaveOut.push_back({.component = part.component, .field = part.field, .marker = nullptr});
+			continue;
 		}
-		else if (const auto* marker = ecs::reflection::FindStorage(registry, part.marker); marker != nullptr)
+		const auto* marker = std::ranges::find(markers, part.marker, &decltype(markers)::value_type::first)->second;
+		if (marker != nullptr)
 		{
 			leaveOut.push_back({.component = part.component, .field = part.field, .marker = marker});
 		}
