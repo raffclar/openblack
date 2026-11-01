@@ -19,6 +19,7 @@
 #include <gtest/gtest.h>
 
 #include "Common/GameRandom.h"
+#include "Creature/CreatureBornWith.h"
 #include "Creature/CreatureDesireSources.h"
 #include "Creature/CreatureDesires.h"
 #include "Creature/CreatureMindFileBody.h"
@@ -96,6 +97,30 @@ TEST(CreatureLoadAfterDraws, TheBodyOfTheFileReplacesTheDrawnBody)
 	EXPECT_EQ(body.strength, saved.strength);
 	EXPECT_EQ(body.fatness, saved.fatness);
 	EXPECT_EQ(body.alignment, *saved.alignment);
+}
+
+// A creature takes the speeds, the facing and the environment map word of the file. A file with no environment map word
+// leaves the word of the creature. The capture of the creature then gives the values back.
+TEST(CreatureLoadAfterDraws, TheBodyTakesTheValuesOfTheFileFromTheTimeOfItsBirth)
+{
+	ecs::Registry registry;
+	const auto creature = registry.Create();
+	registry.Assign<ecs::components::Creature>(
+	    creature, ecs::components::Creature {.bornWith = creature_born::FromSpecies(0.5f, 0.7f, 0.9f), .environmentMap = 3});
+
+	creature_mind_body::Body saved {.species = CreatureType::Tiger};
+	saved.bornWith = creature_born::BornWith {.facing = 2, .slowSpeed = 0.4f, .walkSpeed = 0.6f, .runSpeed = 0.8f};
+	ecs::creature_body_file::Apply(registry, creature, saved);
+	const auto& body = registry.Get<const ecs::components::Creature>(creature);
+	EXPECT_EQ(body.bornWith, *saved.bornWith);
+	EXPECT_EQ(body.environmentMap, 3u);
+
+	saved.environmentMap = 0u;
+	ecs::creature_body_file::Apply(registry, creature, saved);
+	EXPECT_EQ(body.environmentMap, 0u);
+	const auto captured = ecs::creature_body_file::Capture(registry, creature);
+	EXPECT_EQ(captured.bornWith, saved.bornWith);
+	EXPECT_EQ(captured.environmentMap, std::optional<uint32_t>(0u));
 }
 
 // A mind file keeps every value that it holds, whatever the new creature drew before the file came: two minds made from

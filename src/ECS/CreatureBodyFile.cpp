@@ -38,6 +38,8 @@ creature_mind_body::Body creature_body_file::Capture(const Registry& registry, e
 		body.size = self->size;
 		body.fatness = self->fatness;
 		body.shownFatness = self->fatness;
+		body.bornWith = self->bornWith;
+		body.environmentMap = self->environmentMap;
 	}
 	if (const auto* morph = registry.TryGet<const CreatureMorph>(creature))
 	{
@@ -78,6 +80,14 @@ void creature_body_file::Apply(Registry& registry, entt::entity creature, const 
 		}
 		self->strength = body.strength;
 		self->fatness = body.fatness;
+		if (body.bornWith.has_value())
+		{
+			self->bornWith = *body.bornWith;
+		}
+		if (body.environmentMap.has_value())
+		{
+			self->environmentMap = *body.environmentMap;
+		}
 		if (body.size.has_value())
 		{
 			self->size = *body.size;

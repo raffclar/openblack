@@ -43,5 +43,7 @@ void openblack::ecs::reflection::RegisterFields_Components_creature(entt::meta_c
 	    .Field<&components::Creature::objectsDestroyed>("objectsDestroyed")
 	    .Field<&components::Creature::canDie>("canDie")
 	    .Field<&components::Creature::mayGoThroughVortex>("mayGoThroughVortex")
-	    .Field<&components::Creature::name>("name");
+	    .Field<&components::Creature::name>("name")
+	    .Field<&components::Creature::bornWith>("bornWith")
+	    .Field<&components::Creature::environmentMap>("environmentMap");
 }
