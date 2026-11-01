@@ -1905,3 +1905,51 @@ TEST(WorldArchive, TheLayoutsInTheMemoFollowThePartsThatTheHashLeavesOut)
 	expectSame({});
 	expectSame(alwaysOrder);
 }
+
+// The hash leaves out each row of an entity that a row marker has, for all components or for one, as if the row was not
+// there. A marked entity that has no row changes nothing.
+TEST(WorldArchive, TheHashLeavesOutTheRowsOfMarkedEntities)
+{
+	struct OtherMark
+	{
+	};
+	entt::meta_ctx context;
+	Register(context);
+	RegisterPlainRow(context);
+	entt::registry marked;
+	entt::registry plain;
+	std::vector<entt::entity> made(60);
+	marked.create(made.begin(), made.end());
+	plain.create(made.begin(), made.end());
+	const std::array leftOut {made[3], made[17], made[40], made[59]};
+	for (const auto entity : made)
+	{
+		marked.emplace<FakePlainRow>(entity, SamplePlainRow(entt::to_integral(entity)));
+		if (std::ranges::find(leftOut, entity) == leftOut.end())
+		{
+			plain.emplace<FakePlainRow>(entity, SamplePlainRow(entt::to_integral(entity)));
+		}
+	}
+	marked.emplace<FakeTag>(made[3]);
+	marked.emplace<FakeTag>(made[40]);
+	marked.emplace<OtherMark>(made[17]);
+	marked.emplace<OtherMark>(made[59]);
+	// A marked entity with no row
+	const auto alone = marked.create();
+	static_cast<void>(plain.create());
+	marked.emplace<FakeTag>(alone);
+	const std::array<HashLeaveOut, 2> leaveOut {
+	    HashLeaveOut {.component = "*", .field = "", .marker = &marked.storage<FakeTag>()},
+	    HashLeaveOut {.component = "FakePlainRow", .field = "", .marker = &marked.storage<OtherMark>()}};
+	const auto expected = HashWorld(plain, context, {}).components;
+	WorkerPool pool(3);
+	HashMemo memo;
+	EXPECT_EQ(HashWorld(marked, context, leaveOut).components, expected);
+	EXPECT_EQ(HashWorld(marked, context, leaveOut, false, {}, &pool, nullptr, &memo).components, expected);
+	EXPECT_EQ(HashWorld(marked, context, leaveOut, false, {}, &pool, nullptr, &memo).components, expected);
+	// A marker that loses an entity keeps its row again
+	marked.remove<OtherMark>(made[59]);
+	plain.emplace<FakePlainRow>(made[59], SamplePlainRow(entt::to_integral(made[59])));
+	EXPECT_EQ(HashWorld(marked, context, leaveOut, false, {}, &pool, nullptr, &memo).components,
+	          HashWorld(plain, context, {}).components);
+}
