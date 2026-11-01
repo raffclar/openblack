@@ -185,6 +185,7 @@
 #include "Graphics/ScreenshotCapture.h"
 #include "Graphics/SeaReflection.h"
 #include "Graphics/SeaRows.h"
+#include "Graphics/SeeThroughState.h"
 #include "Graphics/ShaderManager.h"
 #include "Graphics/ShadowTexture.h"
 #include "Graphics/SpriteTextures.h"
@@ -1292,6 +1293,11 @@ void Renderer::DrawSubMesh(const graphics::L3DMesh& mesh, const graphics::L3DSub
 		    desc.alphaTexturedAdditive && (prim.materialType == k_AlphaTextured || prim.materialType == k_AlphaTexturedAlpha);
 		// Those that shine in a colour of their own, solid on their second group of vertices
 		const bool shining = addedAlphaTextured && desc.shineColour.has_value() && prim.secondGroupBone != L3DSubMesh::k_NoBone;
+		// A see-through object draws each material in the mode of the game's second table
+		const bool seeThrough = desc.seeThrough && desc.instanceAlpha && !desc.fizz.has_value();
+		const auto seeThroughMode = render_modes::SeeThrough(
+		    static_cast<render_modes::Mode>(std::min(prim.materialType, render_modes::k_ModeCount - 1)));
+		const auto& seeThroughDesc = render_modes::Desc(seeThroughMode);
 
 		const bool hasNext = std::next(it) != primitives.end();
 
@@ -1303,10 +1309,11 @@ void Renderer::DrawSubMesh(const graphics::L3DMesh& mesh, const graphics::L3DSub
 		// nor inner walls, whose inset each primitive's material decides
 		// nor primitives that may each take the environment map or a sliding texture in their own way
 		// nor the submeshes of a mesh that moves some of its submeshes
-		const bool primitivePreserveState = !materialBlending && subMeshTexture == nullptr && desc.subMeshGlows.empty() &&
-		                                    desc.subMeshOffsets.empty() && !desc.innerWalls && !desc.cap &&
-		                                    desc.environment == nullptr && !desc.uvOffsetByMaterial && texture != nullptr &&
-		                                    texture == nextTexture && (preserveState || hasNext);
+		// nor the primitives of a see-through object, whose mode each primitive's material decides
+		const bool primitivePreserveState = !materialBlending && !seeThrough && subMeshTexture == nullptr &&
+		                                    desc.subMeshGlows.empty() && desc.subMeshOffsets.empty() && !desc.innerWalls &&
+		                                    !desc.cap && desc.environment == nullptr && !desc.uvOffsetByMaterial &&
+		                                    texture != nullptr && texture == nextTexture && (preserveState || hasNext);
 
 		// A cut building's inner walls and cap belong only to a primitive with a whole triangle below the cut, and a cap
 		// is drawn from geometry of its own, which a primitive not cut has none of
@@ -1429,9 +1436,9 @@ void Renderer::DrawSubMesh(const graphics::L3DMesh& mesh, const graphics::L3DSub
 				}
 				// z: 1 to blend by each instance's alpha rather than dissolve it. w: 1 to multiply the texture's alpha by
 				// the instance's before the alpha test, as the changed materials do.
+				const bool alphaBeforeTest = desc.changedMaterials.has_value() || (seeThrough && seeThroughDesc.alphaModulate);
 				const glm::vec4 u_seaClip {reflection || desc.cutBelow.has_value() ? 1.0f : 0.0f, height,
-				                           desc.instanceAlpha || shining ? 1.0f : 0.0f,
-				                           desc.changedMaterials.has_value() ? 1.0f : 0.0f};
+				                           desc.instanceAlpha || shining ? 1.0f : 0.0f, alphaBeforeTest ? 1.0f : 0.0f};
 				setUniform(MeshUniform::SeaClip, &u_seaClip);
 			}
 			if (has(MeshUniform::Snow))
@@ -1656,12 +1663,22 @@ void Renderer::DrawSubMesh(const graphics::L3DMesh& mesh, const graphics::L3DSub
 			}
 			if (!desc.isSky && has(MeshUniform::SkyAlphaThreshold))
 			{
+				// z: 0 for a primitive that is not see-through. A see-through primitive gives 1 for no alpha test, 2 for
+				// a test against the reference in w, and 3 for a test against w lowered by the alpha of each instance.
+				float seeThroughTest = 0.0f;
+				float seeThroughRef = 0.0f;
+				if (seeThrough)
+				{
+					seeThroughTest = static_cast<float>(see_through::TestOf(seeThroughMode));
+					seeThroughRef = desc.seeThroughRef.has_value() ? static_cast<float>(*desc.seeThroughRef)
+					                                               : std::round(prim.alphaCutoutThreshold * 255.0f);
+				}
 				const glm::vec4 u_skyAlphaThreshold = {
 				    Locator::skyClockSystem::value().GetCurrentSkyType(),
 				    desc.alphaThreshold.value_or(prim.thresholdAlpha || desc.materialAlphaTest ? prim.alphaCutoutThreshold
 				                                                                               : 0.0f),
-				    0.0f,
-				    0.0f,
+				    seeThroughTest,
+				    seeThroughRef,
 				};
 				setUniform(MeshUniform::SkyAlphaThreshold, &u_skyAlphaThreshold);
 			}
@@ -1752,7 +1769,13 @@ void Renderer::DrawSubMesh(const graphics::L3DMesh& mesh, const graphics::L3DSub
 					}
 				}
 				auto rgba = desc.rgba;
-				if (desc.instanceAlpha && !desc.fizz.has_value())
+				if (seeThrough)
+				{
+					// The mode of the second table sets the blending and the depth write
+					state &= ~(BGFX_STATE_BLEND_MASK | BGFX_STATE_WRITE_Z);
+					state |= see_through::State(seeThroughDesc);
+				}
+				else if (desc.instanceAlpha && !desc.fizz.has_value())
 				{
 					state &= ~BGFX_STATE_BLEND_MASK;
 					state |= BGFX_STATE_BLEND_ALPHA;
@@ -6791,6 +6814,15 @@ void Renderer::DrawPass(const DrawSceneDesc& desc) const
 				sd.additiveShare = placers.additiveShare;
 				sd.instanceAlpha = placers.instanceAlpha;
 				sd.changedMaterials = placers.changedMaterials;
+				// A thing see-through by its alpha draws in the game's second table of modes. A thing whose materials the
+				// game changed keeps its own rule.
+				sd.seeThrough = placers.instanceAlpha && !placers.changedMaterials.has_value();
+				sd.seeThroughRef.reset();
+				if (const auto ref = renderCtx.seeThroughRefs.find(first);
+				    sd.seeThrough && count == 1 && !instances.has_value() && ref != renderCtx.seeThroughRefs.end())
+				{
+					sd.seeThroughRef = ref->second;
+				}
 				// The game gives the rooms the temple's light; the hand keeps its own
 				const bool templeLit = Locator::temple::has_value() && Locator::temple::value().Active() &&
 				                       meshId != ecs::components::Hand::k_MeshId;

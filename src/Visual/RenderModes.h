@@ -91,6 +91,45 @@ inline constexpr std::array<ModeDesc, k_ModeCount> k_Modes = {{
 	return k_Modes.at(static_cast<uint8_t>(mode));
 }
 
+/// The mode that a material draws in when its whole object is see-through: the game's second table of modes. The opaque
+/// modes become their blended forms, and the chroma mode becomes the blended chroma mode. The other modes stay.
+[[nodiscard]] constexpr Mode SeeThrough(Mode mode)
+{
+	switch (mode)
+	{
+	case Mode::Smooth:
+		return Mode::SmoothAlpha;
+	case Mode::Textured:
+	case Mode::Mode17:
+		return Mode::TexturedAlpha;
+	case Mode::AlphaTextured:
+		return Mode::AlphaTexturedAlpha;
+	case Mode::TexturedChroma:
+		return Mode::TexturedChromaAlpha;
+	default:
+		return mode;
+	}
+}
+
+/// Whether a see-through object lowers the alpha reference of the mode by its alpha. Only the two chroma modes with
+/// an alpha test and depth do this, and the second table uses only the blended one.
+[[nodiscard]] constexpr bool SeeThroughScalesRef(Mode seeThroughMode)
+{
+	return seeThroughMode == Mode::TexturedChromaAlpha || seeThroughMode == Mode::TexturedChroma;
+}
+
+/// The alpha reference that `SeeThroughScalesRef` gives for the reference `ref` and an object alpha `alpha` of 255. It
+/// is the reference times the alpha over 255, less 5, cut to a whole number, and never below 0.
+///
+/// The game multiplies by a float a little more than 1 over 255. This float never gives a result below the true
+/// quotient, and never gives the next whole number. Thus a division of whole numbers gives the same result.
+[[nodiscard]] constexpr uint8_t SeeThroughRef(uint8_t ref, uint8_t alpha)
+{
+	constexpr int32_t k_Less = 5;
+	const int32_t scaled = (static_cast<int32_t>(ref) * static_cast<int32_t>(alpha)) / 255 - k_Less;
+	return static_cast<uint8_t>(scaled < 0 ? 0 : scaled);
+}
+
 /// Whether a material shows both faces of its triangles: the first bit of its cull byte set. Otherwise the back faces
 /// are not drawn.
 [[nodiscard]] constexpr bool DrawsBothSides(uint32_t cullByte)
