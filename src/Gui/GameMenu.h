@@ -146,7 +146,7 @@ public:
 	void MouseDown(glm::ivec2 point);
 	/// What the player chose by letting go of the button, Quit only once they have said yes
 	Action MouseUp(glm::ivec2 point);
-	void Wheel(glm::ivec2 point, int steps);
+	void Wheel(glm::ivec2 point, int steps, int across = 0);
 	/// Typing. In a question with a Yes and a No, the first letter of either word answers it.
 	Action TextInput(std::u16string_view text);
 	/// A key pressed while the menu is open. Tab, or Shift and Tab, moves the focus over the page's controls, or over

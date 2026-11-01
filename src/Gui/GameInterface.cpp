@@ -670,6 +670,9 @@ bool GameInterface::ProcessEndGameBoxEvent(const SDL_Event& event)
 			audio::PlayGameSoundEffect(static_cast<entt::id_type>(audio::SoundId::G_MenuButton), std::nullopt);
 		}
 		return true;
+	case SDL_MOUSEWHEEL:
+		_endGameBox->Wheel(_painter.ToDialog(input::WindowPointer()), event.wheel.y, event.wheel.x);
+		return true;
 	case SDL_KEYDOWN:
 	case SDL_TEXTINPUT:
 		// The end box takes the keys, and Escape does not close it
@@ -1550,7 +1553,7 @@ bool GameInterface::ProcessEvent(const SDL_Event& event, glm::u16vec2 resolution
 	case SDL_MOUSEWHEEL:
 	{
 		const auto mouse = input::WindowPointer();
-		_menu->Wheel(_painter.ToDialog(mouse), event.wheel.y);
+		_menu->Wheel(_painter.ToDialog(mouse), event.wheel.y, event.wheel.x);
 		return true;
 	}
 	case SDL_TEXTINPUT:

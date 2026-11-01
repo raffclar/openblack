@@ -54,13 +54,26 @@ void SetLines(LineGraph& graph, std::vector<std::vector<float>> lines, std::vect
 /// tab shows the influence and population over the whole game in two line graphs. A click on a line graph changes it
 /// from shares to values, or back. The Creature Stats tab shows each player's creature.
 ///
-/// A network game of more than 4 gods shows every god, 4 at a time: the window of gods (GodWindow) right of the check
-/// boxes picks the gods of the rows, the graphs and the creatures (deviation 195).
+/// A network game of more than 4 gods shows every god: the god columns of the values scroll along the gods under the
+/// window of gods (GodWindow). The 4 gods of the window give the totals, the bars, the graphs and the creatures
+/// (deviation 195).
 class StatisticsBox
 {
 public:
 	/// The box, 780 by 500 in the middle of the dialog space
 	static constexpr DialogRect k_Box = TabbedBox({780, 500});
+	/// The bottom of the list of rows
+	static constexpr int k_ListBottom = 515;
+	/// The window of gods. The god columns are the 4 columns of the values left of the total, 60 wide each, in the
+	/// right hand 300 of the rows: the list ends at 760 and its scroll bar is 24 wide, 2 from the rows. The list stops 26
+	/// higher, and the scroll bar of the window takes the place under the god columns.
+	static constexpr GodWindow::Layout k_GodWindowLayout {
+	    .line = {.min = {540, 530}, .max = {760, 555}},
+	    .view = {.min = {434, 365}, .max = {674, k_ListBottom - god_window::k_BarThickness - 2}},
+	    .column = 60,
+	    .bar = {.min = {434, k_ListBottom - god_window::k_BarThickness}, .max = {674, k_ListBottom}},
+	    .wheel = {.min = {434, 365}, .max = {674, k_ListBottom}},
+	};
 
 	StatisticsBox(const TextDatabase& texts, const GameFont& font, std::function<void()> back);
 	~StatisticsBox();
@@ -112,6 +125,8 @@ private:
 	PlayerNames _local {PlayerNames::PLAYER_ONE};
 	statistics_box::Tab _tab {statistics_box::Tab::Player};
 	statistics_box::Page _page;
+	/// The tab's rows for every god, which the god columns of the window of gods show
+	statistics_box::Page _allGodsPage;
 	/// The row last shown in a graph box
 	std::optional<size_t> _shownRow;
 	bool _graphic {true};
