@@ -73,8 +73,8 @@ entt::entity MakeFromMind(PlayerNames owner, CreatureType species, map_coords::M
 		if (Locator::creatureMindSystem::has_value())
 		{
 			Locator::creatureMindSystem::value().TakeUpMindFile(creature, file);
-			// Once it takes up the file, its leash words are all set and it is fully grown
-			Locator::creatureMindSystem::value().GrowUpAfterFile(creature);
+			// After it takes up the file, each leash word of its mind is set. It grows up fully below.
+			Locator::creatureMindSystem::value().LearnEveryLeash(creature);
 		}
 		if (const auto body = creature_mind_body::FromMindFile(*file); body.has_value())
 		{

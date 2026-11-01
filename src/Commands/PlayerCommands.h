@@ -471,6 +471,8 @@ struct ViewReport
 	bool otherButton {false};
 	/// The mouse has a wheel: the computer's system says so, or the wheel has turned
 	bool mouseWheel {false};
+	/// The controls of the world camera asked for a turn of more than a hundredth in a frame of this turn
+	bool cameraTurned {false};
 	/// The camera icons by the hand of the world camera's last frame, with their offered bits (hand_tricons::icon). The
 	/// lessons of the Gods' Playground read them as the turn of the camera at the edge of the screen.
 	uint16_t cameraIcons {0};

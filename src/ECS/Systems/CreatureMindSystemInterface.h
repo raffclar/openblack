@@ -450,9 +450,9 @@ public:
 	/// back, its time at the stage starts again, and it drops the plan it was carrying out. At the stage it may leave
 	/// home from, a creature that its home keeps it near, with no leash on, is let go.
 	virtual void MoveToStage(entt::entity /*creature*/, uint32_t /*stage*/) {}
-	/// A script made the creature from a mind file for a player. Once it takes up the file, it knows every leash and it
-	/// moves to the last stage of growing up.
-	virtual void GrowUpAfterFile(entt::entity /*creature*/) {}
+	/// The creature knows every leash: each leash word of its mind becomes 1. A script that makes a creature from a mind
+	/// file does this after the creature takes up the file.
+	virtual void LearnEveryLeash(entt::entity /*creature*/) {}
 	/// A script makes the creature stop what it does at once, as a failure. The action that its body plays ends at two
 	/// times the usual speed, and the creature stops where it is.
 	virtual void ForceFinish(entt::entity /*creature*/) {}

@@ -76,6 +76,8 @@ struct ControlsFrame
 /// or holding both buttons with the mouse moved more than 2 pixels either way
 [[nodiscard]] bool IsMoving(const ControlsFrame& frame);
 
+/// Whether the turn asked for is more than a hundredth either way: the turn test of the camera's controls
+[[nodiscard]] bool TurnAsked(const ControlsFrame& frame);
 /// The events of the keys, wheel and buttons: zooming whenever allowed; while not dragging with the grip, turning by
 /// more than a hundredth, tilting unless the camera tilts itself, and moving across the land
 [[nodiscard]] EventSet InputEvents(const ControlsFrame& frame);

@@ -77,6 +77,8 @@ constexpr float k_WorshipShare = 0.5f;
 /// The scale of a scaffold of the value of one scaffold and of two scaffolds
 constexpr float k_OneScaffold = 0.7f;
 constexpr float k_TwoScaffolds = 0.9f;
+/// The scale of a scaffold of the value of three scaffolds, as the workshop scaffold of the second land
+constexpr float k_ThreeScaffolds = 1.1f;
 
 /// The scenarios show the temple and the god's town
 Framing ScaffoldFraming()
@@ -130,6 +132,35 @@ void testbed_scenarios::AddComputerGodScaffoldScenarios(std::vector<Scenario>& a
 	    .computerActions = {{.afterTurns = k_Wait,
 	                         .node = "FindPlaceToUseScaffoldForBuilding",
 	                         .first = {.kind = ComputerActionThing::Kind::Object, .object = 0}}},
+	});
+	// The workshop scaffold of the second land: a script marks it to clear its ground, and a script force makes the
+	// computer god put it on a place. Here the creature of the player stands on that place.
+	all.push_back({
+	    .id = "mind.computer_god_clearing_scaffold_on_creature",
+	    .name = "A computer god puts a scaffold that clears its ground on the player's creature",
+	    .facet = Facet::Mind,
+	    .description = "The land of the join scenario, with one loose scaffold of the value of three scaffolds between "
+	                   "the temple and the town. A script marked the scaffold to destroy the things in its way, as the "
+	                   "second land marks its workshop scaffold. The player's tiger stands still 60 m west of the "
+	                   "scaffold. After five seconds, a testbed tool forces the action "
+	                   "FindPlaceToUseScaffoldForBuilding on the god, with the scaffold and a marker where the tiger "
+	                   "stands, as the script of the second land does.",
+	    .expected = "The hand of the god picks up the scaffold, carries it to the tiger and lets it go over the tiger. "
+	                "The game log tells that the scaffold leaves the creature in its way. The tiger stays where it is "
+	                "and stays in the game: the inspector still shows it (deviation 173). The original game removes the "
+	                "creature from the game here.",
+	    .framing = ScaffoldFraming(),
+	    .creatures =
+	        {{.label = "player's tiger", .species = CreatureType::Tiger, .offset = {-30.0f, -30.0f}, .pauseMind = true}},
+	    .objects = {{.type = ScaffoldInfo::Normal, .offset = {30.0f, -30.0f}, .scale = k_ThreeScaffolds, .clearsGround = true}},
+	    .landScript = k_WorkshopTownScript,
+	    .worshipShare = k_WorshipShare,
+	    .objectsAfterLandScript = true,
+	    .computerActions = {{.afterTurns = k_Wait,
+	                         .node = "FindPlaceToUseScaffoldForBuilding",
+	                         .first = {.kind = ComputerActionThing::Kind::Object, .object = 0},
+	                         .second = {.kind = ComputerActionThing::Kind::Marker, .point = {-30.0f, -30.0f}},
+	                         .forceAtOnce = true}},
 	});
 	all.push_back({
 	    .id = "mind.computer_god_fill_workshop",

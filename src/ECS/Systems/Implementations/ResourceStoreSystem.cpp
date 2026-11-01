@@ -317,15 +317,21 @@ glm::vec2 HalfExtentOf(const Mesh& mesh)
 }
 
 /// A worship site's food pot, the store of its food; none for anything else or a site without one
-Pot* WorshipSitePot(entt::entity site)
+entt::entity WorshipSiteFoodPot(entt::entity site)
 {
 	auto& registry = Locator::entitiesRegistry::value();
 	const auto* data = registry.Valid(site) ? registry.TryGet<const WorshipSite>(site) : nullptr;
-	if (data == nullptr || data->foodPot == entt::null || !registry.Valid(data->foodPot))
+	if (data == nullptr || !registry.Valid(data->foodPot) || !registry.AllOf<Pot>(data->foodPot))
 	{
-		return nullptr;
+		return entt::null;
 	}
-	return registry.TryGet<Pot>(data->foodPot);
+	return data->foodPot;
+}
+
+Pot* WorshipSitePot(entt::entity site)
+{
+	const auto pot = WorshipSiteFoodPot(site);
+	return pot != entt::null ? Locator::entitiesRegistry::value().TryGet<Pot>(pot) : nullptr;
 }
 
 bool IsWorshipSite(entt::entity thing)
@@ -341,8 +347,9 @@ bool IsWorshipSiteGoingUp(entt::entity site)
 	return ecs::construction::BroughtWoodSite(site) != nullptr;
 }
 
-/// A worship site takes food into its pot, as much as it is given, and while it goes up wood onto its building site's
-/// pile, made for the first wood brought
+/// A worship site takes food into its pot, and while it goes up wood onto its building site's pile, made for the first
+/// wood brought. The food pot takes the food as any pile does: the pile makes its sound, and the pile takes no more than
+/// it can hold.
 uint32_t AddToWorshipSite(ResourceStoreSystem& stores, entt::entity site, ResourceType type, uint32_t amount, bool poisoned)
 {
 	namespace wsc = ecs::worship_site_construction;
@@ -355,14 +362,8 @@ uint32_t AddToWorshipSite(ResourceStoreSystem& stores, entt::entity site, Resour
 	}
 	case wsc::Destination::FoodPot:
 	{
-		auto* pot = WorshipSitePot(site);
-		if (pot == nullptr)
-		{
-			return 0;
-		}
-		pot->amount += amount;
-		pot->poisoned = pot->poisoned || poisoned;
-		return amount;
+		const auto pot = WorshipSiteFoodPot(site);
+		return pot != entt::null ? stores.AddToPile(pot, type, amount, poisoned) : 0u;
 	}
 	case wsc::Destination::Nowhere:
 		break;
@@ -386,8 +387,22 @@ uint32_t TakeFromWorshipSite(entt::entity site, ResourceType type, uint32_t amou
 		break;
 	}
 	case wsc::Destination::FoodPot:
-		pot = WorshipSitePot(site);
-		break;
+	{
+		// The food pot gives food as any pile does. When the pot is empty, it loses its poison and stops calling people.
+		const auto foodPot = WorshipSiteFoodPot(site);
+		if (foodPot == entt::null)
+		{
+			return 0;
+		}
+		auto& food = registry.Get<Pot>(foodPot);
+		const auto taken = std::min(amount, food.amount);
+		food.amount -= taken;
+		if (food.amount == 0)
+		{
+			PileEmptied(foodPot, food);
+		}
+		return taken;
+	}
 	case wsc::Destination::Nowhere:
 		break;
 	}

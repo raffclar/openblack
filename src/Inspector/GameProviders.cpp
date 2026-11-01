@@ -17,6 +17,7 @@
 #include <chrono>
 #include <limits>
 #include <optional>
+#include <ranges>
 #include <span>
 #include <string>
 #include <string_view>
@@ -29,6 +30,7 @@
 #include <LHVM.h>
 #include <LNDFile.h>
 #include <SaveSlots.h>
+#include <entt/core/hashed_string.hpp>
 #include <fmt/format.h>
 #include <glm/matrix.hpp>
 #include <glm/trigonometric.hpp>
@@ -282,6 +284,7 @@
 #include "RunControl.h"
 #include "Sound/CustomMusicPlayerInterface.h"
 #include "Sound/GameMusic.h"
+#include "Sound/LoadedSound.h"
 #include "Sound/MusicMood.h"
 #include "Sound/SoundRequestInterface.h"
 #include "SystemProviders.h"
@@ -5021,6 +5024,26 @@ GameProvider* openblack::inspector::AddGameProviders(Inspector& inspector, const
 	    .deviceLost = []() { return Locator::sounds::has_value() && Locator::sounds::value().IsDeviceLost(); },
 	    .emitters = []() -> const ecs::Registry* {
 		    return Locator::sounds::has_value() ? Locator::sounds::value().GetEmitters() : nullptr;
+	    },
+	    .soundName = [](entt::id_type id) -> std::string {
+		    if (!Locator::sounds::has_value() || !Locator::resources::has_value() ||
+		        !Locator::resources::value().GetSounds().Contains(id))
+		    {
+			    return {};
+		    }
+		    const auto sound = Locator::resources::value().GetSounds().Handle(id);
+		    // The name of the sound is the path of its wave file. The tools show only the name of the file.
+		    const auto& path = sound->name;
+		    const auto slash = path.find_last_of("\\/");
+		    const auto wave = slash == std::string::npos ? path : path.substr(slash + 1);
+		    for (const auto& group : Locator::sounds::value().GetSoundGroups() | std::views::keys)
+		    {
+			    if (entt::hashed_string(group.c_str()).value() == sound->bank)
+			    {
+				    return fmt::format("{}/{} {}", group, sound->id, wave);
+			    }
+		    }
+		    return fmt::format("{} {}", sound->id, wave);
 	    },
 	}));
 

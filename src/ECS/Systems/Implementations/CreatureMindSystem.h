@@ -151,7 +151,7 @@ public:
 	void ChangeDesires(entt::entity creature, const std::function<void(creature_desires::Desires&)>& change) override;
 	void SetAgendaPriority(entt::entity creature, float priority) override;
 	void MoveToStage(entt::entity creature, uint32_t stage) override;
-	void GrowUpAfterFile(entt::entity creature) override;
+	void LearnEveryLeash(entt::entity creature) override;
 	void ForceFinish(entt::entity creature) override;
 	bool PointOutHighlight(entt::entity creature) override;
 
@@ -361,6 +361,9 @@ private:
 	/// The creature comes across that town when it examines the rule.
 	[[nodiscard]] bool SuitsDesire(entt::entity creature, components::CreatureMindState& mind, creature_desires::Desire desire,
 	                               entt::entity thing);
+	/// As SuitsDesire, for a thing that exists, of a kind that the caller found
+	[[nodiscard]] bool SuitsDesireOfKind(entt::entity creature, components::CreatureMindState& mind,
+	                                     creature_desires::Desire desire, entt::entity thing, creature_activity::Thing kind);
 	/// The things that the creature has beliefs about and that an action of a desire can act on, each with its worth.
 	/// The function examines the two lists of beliefs in their order: the whole things first, then the other things,
 	/// each list with the newest belief first.

@@ -141,10 +141,18 @@ void GameSoundRequests::StopSoundEffect(entt::id_type id)
 	}
 }
 
-bool GameSoundRequests::IsSoundEffectPlaying(entt::id_type id) const
+void GameSoundRequests::StopNumberedSoundEffect(entt::id_type id, uint32_t ownerNumber)
+{
+	if (auto* const audio = Manager(); audio != nullptr)
+	{
+		audio->StopNumberedSoundEffect(id, ownerNumber);
+	}
+}
+
+bool GameSoundRequests::IsNumberedSoundEffectPlaying(entt::id_type id, uint32_t ownerNumber) const
 {
 	const auto* const audio = Manager();
-	return audio != nullptr && audio->IsSoundEffectPlaying(id);
+	return audio != nullptr && audio->IsNumberedSoundEffectPlaying(id, ownerNumber);
 }
 
 void GameSoundRequests::StopAllSoundEffects()

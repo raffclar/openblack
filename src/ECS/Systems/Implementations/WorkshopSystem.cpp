@@ -662,11 +662,9 @@ WorkshopSystem::Cleared WorkshopSystem::ClearThing(entt::entity thing, const map
 		auto edge = scaffoldAt;
 		edge += gutils::GetPosFromAngle(gutils::Get3DAngleFromXZ(scaffoldAt, thingAt), edgeDistance);
 		const auto push = workshop::PushOutOfWay(centre, map_coords::ToMetres(edge));
-		// The thing starts half a metre above the land at its new place
+		// The thing starts at the height of the scaffold above the land, plus half a metre, as a height of the world
 		const auto to = workshop::PushStart(centre, push);
-		const float height =
-		    Locator::terrainSystem::has_value() ? map_coords::ToWorld(Locator::terrainSystem::value(), to).y : to.altitude;
-		thing_map_place::Put(registry, thing, to, height);
+		thing_map_place::Put(registry, thing, to, workshop::PushStartHeight(scaffoldAt.altitude));
 		const auto started = dynamics->InitialisePhysics(thing, {.velocity = push.velocity, .spin = glm::vec3(0.0f)});
 		if (const auto logger = spdlog::get("game"))
 		{

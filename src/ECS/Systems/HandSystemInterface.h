@@ -108,6 +108,8 @@ public:
 		/// the game's key number
 		bool mouseWheel;
 		uint16_t cameraIcons;
+		/// The controls of the world camera asked for a turn of more than a hundredth in the turn of the report
+		bool cameraTurned;
 		std::bitset<255> keysHeld;
 	};
 	/// The view of a player: from the last view report of the player that a turn did, none before the first view
