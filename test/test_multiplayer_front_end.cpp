@@ -569,6 +569,8 @@ TEST(MultiplayerRules, TheConditionsOfATestSwitchKeepToTheLimitsOfTheLand)
 {
 	EXPECT_EQ(ConditionIndex("WC_KILL_NUM_VILLAGERS"), 0u);
 	EXPECT_EQ(ConditionIndex("WC_GROW_TREES"), 14u);
+	EXPECT_EQ(ConditionKey(5), "WC_FOOD_IN_PITS");
+	EXPECT_TRUE(ConditionKey(15).empty());
 	EXPECT_FALSE(ConditionIndex("WC_NOTHING").has_value());
 	using openblack::game_end::Condition;
 	using openblack::game_end::ConditionPick;

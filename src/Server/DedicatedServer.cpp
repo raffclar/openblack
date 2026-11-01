@@ -440,7 +440,7 @@ bool ServerWorld::StartLand()
 		for (const auto& pick : picks)
 		{
 			SPDLOG_LOGGER_INFO(spdlog::get("game"), "The winning condition {} has the value {}",
-			                   gui::multiplayer::ConditionText(static_cast<size_t>(pick.condition)), pick.value);
+			                   gui::multiplayer::ConditionKey(static_cast<size_t>(pick.condition)), pick.value);
 		}
 		SPDLOG_LOGGER_INFO(spdlog::get("game"), "The network game has {} winning conditions in the limits of {}", picks.size(),
 		                   limitsLand);

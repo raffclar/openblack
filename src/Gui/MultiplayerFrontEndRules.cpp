@@ -601,6 +601,11 @@ std::string_view ConditionText(size_t index) noexcept
 	return index < k_Conditions.size() ? k_Conditions.at(index).text : std::string_view();
 }
 
+std::string_view ConditionKey(size_t index) noexcept
+{
+	return index < k_Conditions.size() ? k_Conditions.at(index).key : std::string_view();
+}
+
 std::optional<size_t> ConditionIndex(std::string_view key) noexcept
 {
 	const auto place = std::ranges::find(k_Conditions, key, &ConditionName::key);
