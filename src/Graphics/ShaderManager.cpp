@@ -449,7 +449,7 @@ std::vector<std::pair<std::string, std::vector<shader_samplers::Sampler>>> Shade
 	return programs;
 }
 
-const ShaderProgram* ShaderManager::GetShader(const std::string& name) const
+const ShaderProgram* ShaderManager::GetShader(std::string_view name) const
 {
 	auto i = _shaderPrograms.find(name);
 	if (i != _shaderPrograms.end())

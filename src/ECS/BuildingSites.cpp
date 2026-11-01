@@ -327,3 +327,18 @@ std::optional<entt::entity> construction::StoragePitOf(entt::entity town)
 	return registry.FindFirst<const Abode, const StoragePit>(
 	    [id](entt::entity, const Abode& abode, const StoragePit&) { return abode.townId == id; });
 }
+
+std::vector<std::pair<uint32_t, entt::entity>> construction::FirstStoragePits()
+{
+	const auto& registry = Entities();
+	// The walk of the pits in the same order as StoragePitOf, so that the first pit of each town is the same
+	std::vector<std::pair<uint32_t, entt::entity>> pits;
+	for (const auto [entity, abode, pit] : registry.Underlying().view<const Abode, const StoragePit>().each())
+	{
+		if (std::ranges::none_of(pits, [id = abode.townId](const auto& kept) { return kept.first == id; }))
+		{
+			pits.emplace_back(abode.townId, entity);
+		}
+	}
+	return pits;
+}

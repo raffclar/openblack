@@ -14,7 +14,9 @@
 
 #include <algorithm>
 #include <bit>
+#include <iterator>
 #include <numbers>
+#include <optional>
 #include <string>
 #include <utility>
 #include <vector>
@@ -24,6 +26,7 @@
 #include <glm/matrix.hpp>
 
 #include "Common/ModelInverseSquareRoot.h"
+#include "Common/RadixSort.h"
 #include "Common/X87Matrix.h"
 #include "Graphics/ZSort.h"
 #include "ParticleCreators.h"
@@ -88,28 +91,50 @@ bool Commutes(const Frame& frame, const Item& item)
 	return mode.blend == graphics::render_modes::Blend::Additive && !mode.zWrite;
 }
 
+/// The lists that GatherCommutingRuns uses, made one time for all the runs of a frame's order
+struct Gathering
+{
+	explicit Gathering(const Frame& frame)
+	    : frame(frame)
+	{
+		// Whether each item commutes, found one time for each item
+		commutes.reserve(frame.items.size());
+		std::ranges::transform(frame.items, std::back_inserter(commutes),
+		                       [&frame](const Item& item) { return static_cast<uint8_t>(Commutes(frame, item) ? 1 : 0); });
+	}
+
+	const Frame& frame;
+	std::vector<uint8_t> commutes;
+	std::vector<uint32_t> order;
+	std::vector<uint32_t> counts;
+	std::vector<std::pair<uint32_t, uint32_t>> ranked;
+};
+
 /// Each run of items that commute is gathered by material, keeping their order otherwise, so that it takes a draw for
 /// each material rather than one each time the material changes
-void GatherCommutingRuns(const Frame& frame, std::vector<uint32_t>& items)
+void GatherCommutingRuns(Gathering& gathering, std::vector<uint32_t>& items)
 {
+	const auto& frame = gathering.frame;
+	const auto commutes = [&gathering](uint32_t index) { return gathering.commutes[index] != 0; };
 	const auto materialOf = [&frame](uint32_t index) { return frame.spriteMaterials[frame.items[index].index]; };
 	auto first = items.begin();
 	while (first != items.end())
 	{
-		if (!Commutes(frame, frame.items[*first]))
+		if (!commutes(*first))
 		{
 			++first;
 			continue;
 		}
-		const auto last =
-		    std::find_if(first, items.end(), [&frame](uint32_t index) { return !Commutes(frame, frame.items[index]); });
+		const auto last = std::find_if_not(first, items.end(), commutes);
 		// By the material each first comes in, so the run starts with the material it started with. Each item gets the
 		// place of its material in that order one time. Then each item goes after the items of the places before its own
 		// place, and after the items of its own place that came before it.
-		std::vector<uint32_t> order;
-		std::vector<uint32_t> counts;
-		std::vector<std::pair<uint32_t, uint32_t>> ranked;
-		ranked.reserve(static_cast<size_t>(last - first));
+		auto& order = gathering.order;
+		auto& counts = gathering.counts;
+		auto& ranked = gathering.ranked;
+		order.clear();
+		counts.clear();
+		ranked.clear();
 		for (auto it = first; it != last; ++it)
 		{
 			const auto material = materialOf(*it);
@@ -813,11 +838,14 @@ void draw::Order(const Frame& frame, const glm::vec3& camera, std::optional<glm:
 			come.push_back(i);
 		}
 	}
-	std::ranges::sort(keys);
+	// The keys differ in their low bits, so a sort by their bytes gives the same order as a sort by comparisons
+	std::vector<uint64_t> scratch;
+	openblack::radix_sort::Sort(keys, scratch);
 	std::vector<uint32_t> items;
 	items.reserve(keys.size());
 	std::ranges::transform(keys, std::back_inserter(items), [&come](uint64_t key) { return come[key & 0xFFFFFFFFu]; });
-	GatherCommutingRuns(frame, items);
+	Gathering gathering(frame);
+	GatherCommutingRuns(gathering, items);
 	emit(items, [&camera](const Item& item) { return graphics::zsort::Depth(item.sortPoint, camera); });
 
 	// Each of the others at one place, in its own order
@@ -832,7 +860,7 @@ void draw::Order(const Frame& frame, const glm::vec3& camera, std::optional<glm:
 		{
 			items.push_back(i);
 		}
-		GatherCommutingRuns(frame, items);
+		GatherCommutingRuns(gathering, items);
 		// Just after the hand, which draws itself at its own place
 		const bool afterHand = group.path == DrawPath::Immediate && hand.has_value();
 		const auto base = graphics::zsort::Depth(afterHand ? *hand : group.origin, camera);
@@ -845,6 +873,8 @@ void draw::OrderBeforeLand(const Frame& frame, std::vector<Command>& commands, s
 {
 	commands.clear();
 	spriteOrder.clear();
+	// Made only when a group is drawn before the land
+	std::optional<Gathering> gathering;
 	for (const auto& group : frame.groups)
 	{
 		if (group.path != DrawPath::BeforeLand)
@@ -857,7 +887,11 @@ void draw::OrderBeforeLand(const Frame& frame, std::vector<Command>& commands, s
 		{
 			items.push_back(i);
 		}
-		GatherCommutingRuns(frame, items);
+		if (!gathering.has_value())
+		{
+			gathering.emplace(frame);
+		}
+		GatherCommutingRuns(*gathering, items);
 		for (const auto index : items)
 		{
 			const auto& item = frame.items[index];

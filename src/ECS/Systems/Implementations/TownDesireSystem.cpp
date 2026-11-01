@@ -13,6 +13,7 @@
 
 #include <algorithm>
 #include <ranges>
+#include <utility>
 #include <vector>
 
 #include <glm/gtx/euler_angles.hpp>
@@ -566,6 +567,8 @@ void TownDesireSystem::UpdateFlags(float seconds)
 	const auto* camera = Locator::camera::has_value() ? &Locator::camera::value() : nullptr;
 	const auto viewProjection = camera != nullptr ? camera->GetViewProjectionMatrix() : glm::mat4(1.0f);
 	const auto eye = camera != nullptr ? camera->GetOrigin() : glm::vec3(0.0f);
+	// The first pit of each town, found one time for all the flags
+	const auto pits = construction::FirstStoragePits();
 
 	registry.Each<TownDesireFlag>([&](TownDesireFlag& flag) {
 		// The turn removes the flags of a town that has gone
@@ -574,8 +577,9 @@ void TownDesireSystem::UpdateFlags(float seconds)
 			return;
 		}
 		// A store works while built and not hurt down to the share at which it stops working
-		const auto store = construction::StoragePitOf(flag.town);
-		const bool working = store.has_value() && villager_home::IsFunctional(*store);
+		const auto id = registry.Get<const Town>(flag.town).id;
+		const auto store = std::ranges::find(pits, id, &std::pair<uint32_t, entt::entity>::first);
+		const bool working = store != pits.end() && villager_home::IsFunctional(store->second);
 		const float desire = GetRawDesire(flag.town, flag.desire);
 		const float showsAfter = info.at(static_cast<size_t>(flag.desire)).showsAfterPercent;
 		const bool shows = town_desire_flags::Shows(working, flag.level, showsAfter);

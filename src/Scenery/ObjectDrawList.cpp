@@ -59,11 +59,18 @@ bool object_draw_list::BlockInView(const glm::mat4& viewProjection, float nearPl
 	uint32_t left = 0;
 	uint32_t above = 0;
 	uint32_t below = 0;
+	// The box has two values of each axis, so each column of the matrix is multiplied by each value one time. Each corner
+	// then adds the products in the order of the product of the matrix and the corner, so that each sum stays the same.
+	const std::array<float, 2> xs {block.corner.x + 0.0f, block.corner.x + k_BlockSize};
+	const std::array<float, 2> ys {box.bottom, box.top};
+	const std::array<float, 2> zs {block.corner.y + 0.0f, block.corner.y + k_BlockSize};
+	const std::array<glm::vec4, 2> byX {viewProjection[0] * xs[0], viewProjection[0] * xs[1]};
+	const std::array<glm::vec4, 2> byY {viewProjection[1] * ys[0], viewProjection[1] * ys[1]};
+	const glm::vec4 byW = viewProjection[3] * 1.0f;
+	const std::array<glm::vec4, 2> byZW {viewProjection[2] * zs[0] + byW, viewProjection[2] * zs[1] + byW};
 	for (uint32_t i = 0; i < 8; ++i)
 	{
-		const glm::vec3 corner {block.corner.x + ((i & 1u) != 0 ? k_BlockSize : 0.0f), (i & 2u) != 0 ? box.top : box.bottom,
-		                        block.corner.y + ((i & 4u) != 0 ? k_BlockSize : 0.0f)};
-		const auto clip = viewProjection * glm::vec4(corner, 1.0f);
+		const auto clip = (byX.at(i & 1u) + byY.at((i >> 1u) & 1u)) + byZW.at((i >> 2u) & 1u);
 		const uint32_t bit = 1u << i;
 		if (clip.w < nearPlane)
 		{
