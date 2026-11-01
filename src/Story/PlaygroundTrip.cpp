@@ -18,6 +18,37 @@ bool MayAskToGo(const GoSituation& situation) noexcept
 	       !situation.boxUp && !situation.scriptHoldsCinemaBars;
 }
 
+bool MenuLetsAsk(const MenuSituation& menu) noexcept
+{
+	if (menu.questionUp)
+	{
+		return false;
+	}
+	switch (menu.box)
+	{
+	case MenuBox::Main:
+		// Escape does not close the main menu, but F2 can ask over it
+		return true;
+	case MenuBox::Options:
+	case MenuBox::Advanced:
+		// Escape cannot close these pages until the game tells the player about the change of the detail
+		return !menu.detailUntold;
+	case MenuBox::Players:
+		// Escape cannot close the page while the game must start again
+		return !menu.restartPending;
+	case MenuBox::Controls:
+	case MenuBox::Statistics:
+	case MenuBox::Conditions:
+		return true;
+	}
+	return false;
+}
+
+bool PausesWhenBack(MenuBox box) noexcept
+{
+	return box == MenuBox::Main;
+}
+
 void StartLesson(Lessons& lessons) noexcept
 {
 	lessons.running = true;

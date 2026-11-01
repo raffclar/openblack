@@ -5655,8 +5655,7 @@ void Game::HandleTripKey()
 	    .networkGame = InNetworkGame(),
 	    .inTemple = Locator::temple::has_value() && Locator::temple::value().Active(),
 	    .land = context.mapScriptGlobals.landNumber,
-	    .boxUp = _interface->IsDialogOpen() || _interface->IsBoxWithBackgroundActive() || _interface->BoxTakesKeyboard() ||
-	             _interface->GetTattooEditor().IsOpen(),
+	    .boxUp = _interface->BoxRefusesTrip(),
 	    .scriptHoldsCinemaBars = director.IsWideScreenOn() && director.GetWideScreenOwner() != 0,
 	};
 	if (!playground_trip::MayAskToGo(situation))
@@ -5690,15 +5689,26 @@ void Game::FollowPlaygroundTrip()
 	// The answer gives the keyboard back to the game at once
 	Locator::gameActionSystem::value().BoxAnswered();
 	auto& trip = Locator::playgroundTripSystem::value();
-	if (!*answer)
+	// Each answer unpauses the game, but Yes to leave the Playground. The menu then comes back if it is open, and its main
+	// page pauses the game again.
+	auto& menu = _interface->GetMenu();
+	if (question == playground_trip::Question::Go || !*answer)
 	{
 		Locator::time::value().SetPlayerPause(false);
+		if (menu.IsOpen() && playground_trip::PausesWhenBack(_interface->GetTripMenuBox()))
+		{
+			Locator::time::value().SetPlayerPause(true);
+		}
+	}
+	if (!*answer)
+	{
 		return;
 	}
 	if (question == playground_trip::Question::Go)
 	{
-		// The saved game does not pause. The land of the Playground then loads.
-		Locator::time::value().SetPlayerPause(false);
+		// The saved game keeps the pause that the game has now. The land of the Playground then loads, and an open menu
+		// stays open over it.
+		_menuStaysForTrip = menu.IsOpen();
 		if (!trip.SaveBeforeTrip())
 		{
 			SPDLOG_LOGGER_WARN(spdlog::get("game"), "The save before the trip to the Gods' Playground did not write");
@@ -5707,6 +5717,7 @@ void Game::FollowPlaygroundTrip()
 		{
 			SPDLOG_LOGGER_ERROR(spdlog::get("game"), "The trip to the Gods' Playground did not load the land");
 		}
+		_menuStaysForTrip = false;
 		return;
 	}
 	// The saved game loads with its own pause. With no saved game, the game stays paused.
@@ -5796,6 +5807,12 @@ void Game::HandleInterfaceAction()
 		{
 			_menuClosedAt = std::chrono::steady_clock::now();
 		}
+	}
+	// The main menu comes back under each page that the menu shows, and pauses the game again. This is important after
+	// the question of the trip unpaused the game over another page. Inside the temple, the options show alone.
+	if (menu.TakePageShown() && menu.IsOpen() && !menu.IsInsideTemple())
+	{
+		Locator::time::value().SetPlayerPause(true);
 	}
 
 	switch (action)
@@ -6417,7 +6434,16 @@ void Game::ShowTattooMenuCreature() const
 
 void Game::CloseMenuForNewLand()
 {
-	// In the game, a land changes only when the menu is closed. The menu closes before the choices in it that change
+	// Yes to the trip over the open menu keeps the menu open, with its pause, while the land of the Playground loads
+	if (std::exchange(_menuStaysForTrip, false))
+	{
+		if (_interface && _interface->GetLandInfoBox().IsActive())
+		{
+			_interface->GetLandInfoBox().Close();
+		}
+		return;
+	}
+	// Each other change of land comes only when the menu is closed. The menu closes before the choices in it that change
 	// the land. This also closes the menu for a land that the debug tools load.
 	if (_interface && _interface->GetMenu().IsOpen())
 	{
