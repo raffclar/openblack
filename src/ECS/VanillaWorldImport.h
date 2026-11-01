@@ -54,7 +54,8 @@ constexpr uint32_t k_FirstVillagerRowNumber = k_FirstAbodeRowNumber - static_cas
 [[nodiscard]] bool IsInsideHome(VillagerStates state);
 
 /// True when the import can keep the values that the file keeps for the state: a state with no values, a state of a
-/// fisherman or of a farmer, or the walk on a footpath
+/// fisherman, a farmer or a shepherd, the walk on a footpath, a script state, the dead state or a disciple with nothing
+/// to do
 [[nodiscard]] bool CanKeepStateValues(uint8_t state);
 
 /// True when the import can keep a walk in the move state of the file. It keeps a walk that stands still, takes its
@@ -87,6 +88,69 @@ struct ImportedWork
 
 /// The work of a state of a fisherman or of a farmer, from the values of the file. Nothing for another state.
 [[nodiscard]] std::optional<ImportedWork> WorkOf(uint8_t state, const std::vector<ImportedStateValue>& values);
+
+/// The values that a script last gave a villager, which its script states keep: a place in map units (x, z), a number
+/// and a pair of whole numbers. The game keeps the clip and the plays of a script clip in the same pair.
+struct ImportedScriptValues
+{
+	int32_t x {0};
+	int32_t z {0};
+	float number {0.0f};
+	uint32_t first {0};
+	uint32_t second {0};
+};
+
+/// The values of a script state (held by the script, wandering round a place, playing a clip, in a crowd) from the
+/// values of the file. Nothing for another state.
+[[nodiscard]] std::optional<ImportedScriptValues> ScriptValuesOf(uint8_t state, const std::vector<ImportedStateValue>& values);
+
+/// A place in metres that gives the map units again when the game changes it back to map units. The game makes the
+/// place of a script from metres, so the map units of a file always come from a float.
+[[nodiscard]] float MetresOfMapUnits(int32_t units);
+
+/// The values of a state of a shepherd: the turns left of what it does with its flock, and the state that it goes to
+/// when its wait ends (0 to decide again)
+struct ImportedShepherdValues
+{
+	int16_t countdown {0};
+	uint16_t pending {0};
+};
+
+/// The values of a state of a shepherd from the values of the file. Nothing for another state.
+[[nodiscard]] std::optional<ImportedShepherdValues> ShepherdValuesOf(uint8_t state,
+                                                                     const std::vector<ImportedStateValue>& values);
+
+/// The reason for the death of a villager in the dead state, from the values of the file. Nothing for another state or
+/// for a reason that the game does not have.
+[[nodiscard]] std::optional<DeathReason> DeathReasonOf(uint8_t state, const std::vector<ImportedStateValue>& values);
+
+/// True when the living status of the file puts the villager on its back (landing pose 2 in bits 4 and 5)
+[[nodiscard]] bool LiesOnBack(uint16_t status);
+
+/// What a trading disciple with nothing to do keeps: the resource that it carries (0 food, 1 wood) and the number of
+/// the object of the town that it trades with in the file
+struct ImportedTrade
+{
+	ResourceType resource {ResourceType::Food};
+	uint32_t town {0};
+};
+
+/// The trade of a trading disciple with nothing to do, from the values of the file. Nothing for another state or for
+/// another kind of disciple.
+[[nodiscard]] std::optional<ImportedTrade> TradeOf(uint8_t state, uint8_t discipleType,
+                                                   const std::vector<ImportedStateValue>& values);
+
+/// The work that the hand gave a villager: a disciple (villager flag 0x200) or a villager that follows a disciple one
+/// time (villager flag 0x400)
+struct ImportedDisciple
+{
+	VillagerDisciple type {VillagerDisciple::None};
+	bool follower {false};
+};
+
+/// The disciple work of a villager from its disciple type and its villager flags. Nothing when it is not a disciple or
+/// a follower, or when the type is not a disciple type of the game.
+[[nodiscard]] std::optional<ImportedDisciple> DiscipleOf(uint8_t discipleType, uint16_t villagerFlags);
 
 /// The circle that a walk of the file heads for or goes round
 struct ImportedCircle
@@ -342,6 +406,10 @@ struct ImportedVillager
 	/// The values of the top state and of the final state
 	std::vector<ImportedStateValue> topValues;
 	std::vector<ImportedStateValue> finalValues;
+	/// The disciple type, the villager flags and the living status of the file
+	uint8_t discipleType {0};
+	uint16_t villagerFlags {0};
+	uint16_t status {0};
 	uint16_t turnsSinceStateChange {0};
 	uint16_t turnsUntilStateChange {0};
 };

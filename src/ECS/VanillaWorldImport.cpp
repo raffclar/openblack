@@ -55,6 +55,27 @@ constexpr float k_CellMetres = 10.0f;
 constexpr std::array k_FishermanStates = {VillagerStates::FishermanArrivesAtFishing, VillagerStates::Fishing};
 constexpr std::array k_FarmerStates = {VillagerStates::FarmerArrivesAtFarm, VillagerStates::FarmerPlantsCrop,
                                        VillagerStates::FarmerDigsUpCrop};
+/// The script states: each keeps the place, the number and the pair of whole numbers that the script last gave
+constexpr std::array k_ScriptValueStates = {VillagerStates::InScript, VillagerStates::ScriptWanderAroundPosition,
+                                            VillagerStates::ScriptPlayAnim, VillagerStates::ScriptInCrowd};
+/// The states of a shepherd: each keeps the countdown and the state after a wait
+constexpr std::array k_ShepherdStates = {VillagerStates::ShepherdLookForFlock,
+                                         VillagerStates::ShepherdMoveFlockToWater,
+                                         VillagerStates::ShepherdMoveFlockToFood,
+                                         VillagerStates::ShepherdMoveFlockBack,
+                                         VillagerStates::ShepherdDecideWhatToDoWithFlock,
+                                         VillagerStates::ShepherdWaitForFlock,
+                                         VillagerStates::ShepherdSlaughterAnimal,
+                                         VillagerStates::ShepherdFetchStray,
+                                         VillagerStates::ShepherdGotoFlock,
+                                         VillagerStates::ShepherdCheckAnimalForSlaughter};
+/// The flags of a villager that is a disciple, and of a villager that follows a disciple one time
+constexpr uint16_t k_DiscipleFlag = 0x0200;
+constexpr uint16_t k_FollowerFlag = 0x0400;
+/// The bits of the living status that keep the pose that the living thing landed in, and the pose on its back
+constexpr uint16_t k_LandingPoseShift = 4;
+constexpr uint16_t k_LandingPoseMask = 0x3;
+constexpr uint16_t k_OnBackPose = 2;
 /// The flag of the status of a living thing that walks a footpath towards its first node
 constexpr uint16_t k_TowardsStartStatus = 0x0008;
 /// The number of floats on each side of a speed that WalkSpeedOf tries
@@ -398,12 +419,15 @@ std::optional<ImportedVillager> ReadVillager(const VanillaWorld& world, const Va
 	                           .mother = world.Ref(record, "mother").value_or(0),
 	                           .states = {action[0], action[1], action[2]},
 	                           .moveState = world.Byte(record, "moveState").value_or(0),
+	                           .discipleType = world.Byte(record, "discipleType").value_or(0),
+	                           .villagerFlags = world.Half(record, "villagerFlags").value_or(0),
+	                           .status = world.Half(record, "status").value_or(0),
 	                           .turnsSinceStateChange = static_cast<uint16_t>(action[4] | (action[5] << 8)),
 	                           .turnsUntilStateChange = world.Half(record, "turnsToStateChange").value_or(0)};
 	villager.walk = WalkOf(world, record);
 	villager.footpathWalk = {.footpath = world.Ref(record, "walkFootpath").value_or(0),
 	                         .node = world.Ref(record, "walkFootpathNode").value_or(0),
-	                         .towardsStart = (world.Half(record, "status").value_or(0) & k_TowardsStartStatus) != 0,
+	                         .towardsStart = (villager.status & k_TowardsStartStatus) != 0,
 	                         .next = world.Ref(record, "nextFootpath").value_or(0)};
 	villager.topValues = StateValues(world, record, "topStateValue");
 	villager.finalValues = StateValues(world, record, "finalStateValue");
@@ -522,7 +546,9 @@ bool IsInsideHome(VillagerStates state)
 bool CanKeepStateValues(uint8_t state)
 {
 	return !gamesave::VillagerStateKeepsValues(state) || IsOneOf(state, k_FishermanStates) || IsOneOf(state, k_FarmerStates) ||
-	       state == static_cast<uint8_t>(VillagerStates::MoveOnPath);
+	       IsOneOf(state, k_ShepherdStates) || IsOneOf(state, k_ScriptValueStates) ||
+	       state == static_cast<uint8_t>(VillagerStates::MoveOnPath) || state == static_cast<uint8_t>(VillagerStates::Dead) ||
+	       state == static_cast<uint8_t>(VillagerStates::DiscipleNothingToDo);
 }
 
 bool CanKeepWalk(uint8_t moveState)
@@ -570,6 +596,119 @@ std::optional<ImportedWork> WorkOf(uint8_t state, const std::vector<ImportedStat
 		gamesave::MapCoords spot;
 		std::memcpy(&spot, values[0].bytes.data(), sizeof(spot));
 		return ImportedWork {.target = *values[1].object, .spot = spot};
+	}
+	return std::nullopt;
+}
+
+namespace
+{
+/// The value of the type in the bytes of a value of the file, nothing when the size is not the size of the type
+template <typename T>
+std::optional<T> ValueOf(const ImportedStateValue& value)
+{
+	if (value.object.has_value() || value.bytes.size() != sizeof(T))
+	{
+		return std::nullopt;
+	}
+	T result;
+	std::memcpy(&result, value.bytes.data(), sizeof(T));
+	return result;
+}
+} // namespace
+
+std::optional<ImportedScriptValues> ScriptValuesOf(uint8_t state, const std::vector<ImportedStateValue>& values)
+{
+	if (!IsOneOf(state, k_ScriptValueStates) || values.size() != 4)
+	{
+		return std::nullopt;
+	}
+	// The place (x, z), then the number, then the pair
+	const auto place = ValueOf<std::array<int32_t, 2>>(values[0]);
+	const auto number = ValueOf<float>(values[1]);
+	const auto first = ValueOf<uint32_t>(values[2]);
+	const auto second = ValueOf<uint32_t>(values[3]);
+	if (!place.has_value() || !number.has_value() || !first.has_value() || !second.has_value())
+	{
+		return std::nullopt;
+	}
+	return ImportedScriptValues {.x = (*place)[0], .z = (*place)[1], .number = *number, .first = *first, .second = *second};
+}
+
+float MetresOfMapUnits(int32_t units)
+{
+	float metres = map_coords::ToMetres(units);
+	// The rounding of the float can give one unit more or less: the value moves to the next float until it agrees
+	for (int i = 0; i < k_MetreTries && map_coords::ToFixed(metres) != units; ++i)
+	{
+		metres = std::nextafter(metres, map_coords::ToFixed(metres) < units ? std::numeric_limits<float>::infinity()
+		                                                                    : -std::numeric_limits<float>::infinity());
+	}
+	return metres;
+}
+
+std::optional<ImportedShepherdValues> ShepherdValuesOf(uint8_t state, const std::vector<ImportedStateValue>& values)
+{
+	if (!IsOneOf(state, k_ShepherdStates) || values.size() != 2)
+	{
+		return std::nullopt;
+	}
+	const auto countdown = ValueOf<int16_t>(values[0]);
+	const auto pending = ValueOf<uint16_t>(values[1]);
+	if (!countdown.has_value() || !pending.has_value())
+	{
+		return std::nullopt;
+	}
+	return ImportedShepherdValues {.countdown = *countdown, .pending = *pending};
+}
+
+std::optional<DeathReason> DeathReasonOf(uint8_t state, const std::vector<ImportedStateValue>& values)
+{
+	if (state != static_cast<uint8_t>(VillagerStates::Dead) || values.size() != 1)
+	{
+		return std::nullopt;
+	}
+	const auto reason = ValueOf<uint8_t>(values[0]);
+	if (!reason.has_value() || *reason >= static_cast<uint8_t>(DeathReason::_COUNT))
+	{
+		return std::nullopt;
+	}
+	return static_cast<DeathReason>(*reason);
+}
+
+bool LiesOnBack(uint16_t status)
+{
+	return ((status >> k_LandingPoseShift) & k_LandingPoseMask) == k_OnBackPose;
+}
+
+std::optional<ImportedTrade> TradeOf(uint8_t state, uint8_t discipleType, const std::vector<ImportedStateValue>& values)
+{
+	if (state != static_cast<uint8_t>(VillagerStates::DiscipleNothingToDo) ||
+	    discipleType != static_cast<uint8_t>(VillagerDisciple::Trader) || values.size() != 2 || !values[1].object.has_value())
+	{
+		return std::nullopt;
+	}
+	const auto resource = ValueOf<int32_t>(values[0]);
+	if (!resource.has_value())
+	{
+		return std::nullopt;
+	}
+	return ImportedTrade {.resource = static_cast<ResourceType>(*resource), .town = *values[1].object};
+}
+
+std::optional<ImportedDisciple> DiscipleOf(uint8_t discipleType, uint16_t villagerFlags)
+{
+	if (discipleType > static_cast<uint8_t>(VillagerDisciple::FromVortex))
+	{
+		return std::nullopt;
+	}
+	const auto type = static_cast<VillagerDisciple>(discipleType);
+	if ((villagerFlags & k_DiscipleFlag) != 0)
+	{
+		return ImportedDisciple {.type = type, .follower = false};
+	}
+	if ((villagerFlags & k_FollowerFlag) != 0)
+	{
+		return ImportedDisciple {.type = type, .follower = true};
 	}
 	return std::nullopt;
 }
