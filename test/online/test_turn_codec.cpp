@@ -110,6 +110,7 @@ std::vector<Action> EachCommand()
 	                .gripsLand = false,
 	                .otherButton = true,
 	                .mouseWheel = true,
+	                .cameraTurned = true,
 	                .cameraIcons = 0x202,
 	                .keysHeld = std::bitset<255>().set(0x39)},
 	    TempleLeashOff {},
@@ -269,6 +270,7 @@ Action RandomAction(std::mt19937& random)
 		                   .gripsLand = bits(random) % 2 == 0,
 		                   .otherButton = bits(random) % 2 == 0,
 		                   .mouseWheel = bits(random) % 2 == 0,
+		                   .cameraTurned = bits(random) % 2 == 0,
 		                   .cameraIcons = static_cast<uint16_t>(bits(random)),
 		                   .keysHeld = std::bitset<255>().set(bits(random) % 255).set(bits(random) % 255)};
 	case 34:
@@ -893,6 +895,7 @@ TEST(TurnCodec, AViewReportKeepsItsFieldsAndRefusesUnknownFlagsAndKeys)
 	                         .gripsLand = true,
 	                         .otherButton = true,
 	                         .mouseWheel = true,
+	                         .cameraTurned = true,
 	                         .cameraIcons = 0x0606,
 	                         .keysHeld = std::bitset<255>().set(0x1C).set(0x39)};
 	const auto bytes = Encode(CommandBlock {.sequence = 0, .turn = 0, .actions = {report}});
@@ -903,10 +906,10 @@ TEST(TurnCodec, AViewReportKeepsItsFieldsAndRefusesUnknownFlagsAndKeys)
 
 	// The flags, the camera icons, then the count of the keys held and each key's number, in order
 	const std::vector<uint8_t> tail(bytes.end() - 6, bytes.end());
-	EXPECT_EQ(tail, (std::vector<uint8_t> {0x0E, 0x06, 0x06, 2, 0x1C, 0x39}));
-	// A flag after the fourth is refused
+	EXPECT_EQ(tail, (std::vector<uint8_t> {0x1E, 0x06, 0x06, 2, 0x1C, 0x39}));
+	// A flag after the fifth is refused
 	auto wrongFlags = bytes;
-	*(wrongFlags.end() - 6) = 16;
+	*(wrongFlags.end() - 6) = 32;
 	EXPECT_EQ(Decode(wrongFlags).error, DecodeError::Value);
 	// A key number past the game's keys is refused
 	auto wrongKey = bytes;

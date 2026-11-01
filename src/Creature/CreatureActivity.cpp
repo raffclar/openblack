@@ -164,6 +164,65 @@ bool creature_activity::ThingSuits(Desire desire, const ThingFacts& thing)
 	}
 }
 
+bool creature_activity::KindMaySuit(Desire desire, Thing kind)
+{
+	const bool lives = kind == Thing::Villager || kind == Thing::Animal || kind == Thing::Creature;
+	const bool object = kind != Thing::Spell && kind != Thing::Other;
+	switch (desire)
+	{
+	case Desire::Impress:
+		return kind == Thing::Villager || kind == Thing::TotemStatue;
+	case Desire::Compassion:
+	case Desire::Anger:
+	case Desire::Play:
+	case Desire::Curiosity:
+		return object;
+	case Desire::Fear:
+		return kind == Thing::Creature || kind == Thing::Spell || kind == Thing::Animal;
+	case Desire::Poo:
+		return object && !lives;
+	case Desire::Tiredness:
+	case Desire::Rest:
+		switch (kind)
+		{
+		case Thing::Creature:
+		case Thing::Tree:
+		case Thing::Rock:
+		case Thing::MobileStatic:
+		case Thing::Building:
+		case Thing::TotemStatue:
+			return true;
+		default:
+			return false;
+		}
+	case Desire::BeFriends:
+	case Desire::TellCreature:
+	case Desire::EducateFriend:
+	case Desire::MissFriend:
+		return kind == Thing::Creature;
+	default:
+		return true;
+	}
+}
+
+creature_activity::ThingFactsRead creature_activity::FactsReadBy(Desire desire)
+{
+	switch (desire)
+	{
+	case Desire::Impress:
+	case Desire::Compassion:
+	case Desire::Anger:
+	case Desire::Play:
+	case Desire::Fear:
+	case Desire::Curiosity:
+		return {.living = true};
+	case Desire::GetHigh:
+		return {.mushroom = true};
+	default:
+		return {};
+	}
+}
+
 std::optional<size_t> creature_activity::MostUseful(std::span<const float> usefulness)
 {
 	std::optional<size_t> best;

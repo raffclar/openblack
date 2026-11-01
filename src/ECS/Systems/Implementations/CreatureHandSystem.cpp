@@ -25,6 +25,7 @@
 
 #include "3D/CreatureBody.h"
 #include "3D/LandIslandInterface.h"
+#include "3D/TempleInteriorInterface.h"
 #include "Camera/Camera.h"
 #include "Camera/CreatureCameraModel.h"
 #include "Camera/CreatureInteractCameraModel.h"
@@ -34,6 +35,7 @@
 #include "Common/X87.h"
 #include "Common/X87Vector.h"
 #include "Creature/CreatureFeedback.h"
+#include "Creature/CreatureHandDraw.h"
 #include "Creature/CreatureHandRules.h"
 #include "Creature/CreatureLocomotion.h"
 #include "Creature/CreatureRig.h"
@@ -46,6 +48,7 @@
 #include "ECS/Components/CreatureMind.h"
 #include "ECS/Components/CreatureNeeds.h"
 #include "ECS/Components/CreatureSpells.h"
+#include "ECS/Components/HandCreatureDraw.h"
 #include "ECS/Components/HandLockedCreature.h"
 #include "ECS/Components/HandOnCreature.h"
 #include "ECS/Components/Mesh.h"
@@ -80,6 +83,13 @@ namespace
 PlayerNames OwnPlayer()
 {
 	return Locator::handSystem::has_value() ? Locator::handSystem::value().GetOwnPlayer() : PlayerNames::PLAYER_ONE;
+}
+
+/// Whether the draw of the hand sends the leash tap of a click and the feedback. It does in a game alone with commands.
+/// In a network game the input of the release sends them (deviation MI-2).
+bool SendsFromDraw()
+{
+	return Locator::playerCommandSystem::has_value() && !(Locator::time::has_value() && Locator::time::value().IsNetworkGame());
 }
 
 /// The left hand that this computer moves and draws. Only the frames keep their hold of a creature on it.
@@ -911,25 +921,21 @@ void CreatureHandSystem::Release()
 	}
 	const auto creature = contact->creature;
 	const auto sum = contact->sum;
-	const auto delivered = feedback::Delivered(sum);
 	const bool byCommand = contact->byCommand;
+	const bool click = IsClick();
 	registry.Remove<HandOnCreature>(hand);
 	registry.AssignOrReplace<HandLastFeedback>(hand, HandLastFeedback {.sum = sum});
 	GiveCameraBack();
-	if (registry.Valid(creature) && Locator::creatureMindSystem::has_value() && ReleaseGivesFeedback(creature))
+	// In a network game the hand sends the leash tap of a click and the feedback from the input of the release (deviation
+	// MI-2). In a game alone the draw of the hand sends them in this frame (see DrawFrame). The release of a hold that a
+	// debug command started sends the feedback at once, because the draw possibly did not see that hold.
+	if (!SendsFromDraw() || byCommand)
 	{
-		// The creature feels the strokes and the slaps at the start of the next turn, as a command of the player
-		if (Locator::playerCommandSystem::has_value())
+		if (click && Locator::playerCommandSystem::has_value())
 		{
-			Locator::playerCommandSystem::value().Submit(
-			    player_commands::CreatureFeedback {.creature = creature, .amount = delivered});
+			Locator::playerCommandSystem::value().Submit(player_commands::LeashTap {.creature = creature});
 		}
-		else
-		{
-			Locator::creatureMindSystem::value().SendReleaseFeedback(creature, delivered);
-		}
-		// Too slight to count, as a click is, the hand offers to focus on the creature
-		_focusTip = std::abs(delivered) <= feedback::k_SlightFeedback;
+		SendFeedback(creature, sum);
 	}
 	// The world lets go of the creature at the start of a later turn, as a command of the player. A hold that a command
 	// started ends at once.
@@ -940,6 +946,86 @@ void CreatureHandSystem::Release()
 	else
 	{
 		DoUnlock(OwnPlayer(), creature);
+	}
+}
+
+void CreatureHandSystem::SendFeedback(entt::entity creature, float sum)
+{
+	const auto& registry = Locator::entitiesRegistry::value();
+	if (!registry.Valid(creature) || !Locator::creatureMindSystem::has_value() || !ReleaseGivesFeedback(creature))
+	{
+		return;
+	}
+	const auto delivered = feedback::Delivered(sum);
+	// The creature feels the strokes and the slaps at the start of the next turn, as a command of the player
+	if (Locator::playerCommandSystem::has_value())
+	{
+		Locator::playerCommandSystem::value().Submit(
+		    player_commands::CreatureFeedback {.creature = creature, .amount = delivered});
+	}
+	else
+	{
+		Locator::creatureMindSystem::value().SendReleaseFeedback(creature, delivered);
+	}
+	// Too slight to count, as a click is, the hand offers to focus on the creature
+	_focusTip = std::abs(delivered) <= feedback::k_SlightFeedback;
+}
+
+void CreatureHandSystem::DrawFrame(const input_steps::Steps& steps)
+{
+	if (!Locator::handSystem::has_value() || !SendsFromDraw())
+	{
+		return;
+	}
+	// The hand is not drawn on the land while the player is in the temple. Its draw counts no time and sends nothing.
+	if (Locator::temple::has_value() && Locator::temple::value().Active())
+	{
+		return;
+	}
+	auto& registry = Locator::entitiesRegistry::value();
+	const auto hand = PlayerHand();
+	if (!registry.Valid(hand))
+	{
+		return;
+	}
+	auto* draw = registry.TryGet<HandCreatureDraw>(hand);
+	if (draw == nullptr)
+	{
+		draw = &registry.Assign<HandCreatureDraw>(hand);
+	}
+	creature_hand_draw::Frame frame;
+	for (uint32_t step = 0; step < steps.count; ++step)
+	{
+		frame.time += steps.Time(step);
+	}
+	if (const auto* contact = registry.TryGet<const HandOnCreature>(hand); contact != nullptr)
+	{
+		frame.held = contact->creature;
+		frame.byCommand = contact->byCommand;
+		const auto* locked = registry.TryGet<const HandLockedCreature>(hand);
+		frame.worldHolds = locked != nullptr && locked->creature == contact->creature;
+		const auto* mind =
+		    registry.Valid(contact->creature) ? registry.TryGet<const CreatureMindState>(contact->creature) : nullptr;
+		frame.finishing = mind != nullptr && mind->showDesireOnHold;
+	}
+	const auto sends = creature_hand_draw::Step(*draw, frame);
+	// The leash tap goes first, then the feedback, as one draw sends them both
+	if (sends.click.has_value() && registry.Valid(*sends.click) && Locator::playerCommandSystem::has_value())
+	{
+		const auto* body = registry.TryGet<const Creature>(*sends.click);
+		if (body != nullptr && body->owner == OwnPlayer())
+		{
+			SPDLOG_LOGGER_INFO(spdlog::get("game"), "The draw of the hand sends the leash tap of creature {}",
+			                   entt::to_integral(*sends.click));
+			Locator::playerCommandSystem::value().Submit(player_commands::LeashTap {.creature = *sends.click});
+		}
+	}
+	if (sends.feedback.has_value())
+	{
+		const auto* last = registry.TryGet<const HandLastFeedback>(hand);
+		SPDLOG_LOGGER_INFO(spdlog::get("game"), "The draw of the hand sends the feedback to creature {}",
+		                   entt::to_integral(*sends.feedback));
+		SendFeedback(*sends.feedback, last != nullptr ? last->sum : 0.0f);
 	}
 }
 

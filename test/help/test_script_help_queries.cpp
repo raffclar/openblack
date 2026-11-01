@@ -75,14 +75,38 @@ TEST(ScriptHandState, OffWhileAScriptHoldsTheInterfaceAndInTheTemple)
 	EXPECT_EQ(static_cast<int32_t>(State::InsideTemple), 30);
 }
 
-TEST(ScriptHandState, TheTurningStateIsNeverGiven)
+TEST(ScriptHandState, TurningTheCameraWithBothButtonsOnTheLand)
 {
-	// The turning lesson replays its demonstration unless the hand state is the turning one, which the game never gives
-	for (const bool grips : {false, true})
-	{
-		for (const bool other : {false, true})
-		{
-			EXPECT_NE(StateOf({.gripsLand = grips, .otherButton = other}), State::RotateLandscape);
-		}
-	}
+	EXPECT_EQ(StateOf({.gripsLand = true, .otherButton = true, .cameraTurned = true}), State::RotateLandscape);
+	EXPECT_EQ(static_cast<int32_t>(State::RotateLandscape), 21);
+}
+
+TEST(ScriptHandState, ATurnAndAZoomInTheSameTurnGiveTheTurn)
+{
+	// The turn comes before the zoom, while both turning and zooming are allowed
+	constexpr uint32_t k_Both = camera_drag::feature::k_Rotate | camera_drag::feature::k_Zoom;
+	EXPECT_EQ(StateOf({.gripsLand = true, .otherButton = true, .cameraTurned = true, .cameraFeatures = k_Both}),
+	          State::RotateLandscape);
+}
+
+TEST(ScriptHandState, AZoomWithNoTurnGivesTheZoom)
+{
+	EXPECT_EQ(StateOf({.gripsLand = true, .otherButton = true, .cameraTurned = false}), State::ZoomLandscape);
+}
+
+TEST(ScriptHandState, WithoutTurningAllowedATurnGivesTheZoomOrTheGrip)
+{
+	EXPECT_EQ(
+	    StateOf({.gripsLand = true, .otherButton = true, .cameraTurned = true, .cameraFeatures = camera_drag::feature::k_Zoom}),
+	    State::ZoomLandscape);
+	EXPECT_EQ(StateOf({.gripsLand = true, .otherButton = true, .cameraTurned = true, .cameraFeatures = 0}),
+	          State::GripLandscape);
+}
+
+TEST(ScriptHandState, ATurnNeedsTheLandAndBothButtons)
+{
+	// A turn with only the select button on the land, or with no grip, gives no turning state
+	EXPECT_EQ(StateOf({.gripsLand = true, .otherButton = false, .cameraTurned = true}), State::GripLandscape);
+	EXPECT_EQ(StateOf({.gripsLand = false, .otherButton = true, .cameraTurned = true}), State::Normal);
+	EXPECT_EQ(StateOf({.interfaceActive = false, .gripsLand = true, .otherButton = true, .cameraTurned = true}), State::Off);
 }

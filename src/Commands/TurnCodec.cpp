@@ -283,7 +283,8 @@ void WriteAction(Writer& out, const Action& action)
 		               out.Float(command.inclusionDistance);
 		               out.Number(command.cameraOrders);
 		               out.Byte(static_cast<uint8_t>((command.cameraArrived ? 1u : 0u) | (command.gripsLand ? 2u : 0u) |
-		                                             (command.otherButton ? 4u : 0u) | (command.mouseWheel ? 8u : 0u)));
+		                                             (command.otherButton ? 4u : 0u) | (command.mouseWheel ? 8u : 0u) |
+		                                             (command.cameraTurned ? 16u : 0u)));
 		               out.Number(command.cameraIcons);
 		               // The keys held, as their count and then each key's number
 		               out.Byte(static_cast<uint8_t>(command.keysHeld.count()));
@@ -636,7 +637,7 @@ DecodeError ReadAction(Reader& in, Action& action)
 		report.inclusionDistance = in.Float();
 		report.cameraOrders = in.Number<uint32_t>();
 		const auto flags = in.Byte();
-		if (flags > 15)
+		if (flags > 31)
 		{
 			return DecodeError::Value;
 		}
@@ -644,6 +645,7 @@ DecodeError ReadAction(Reader& in, Action& action)
 		report.gripsLand = (flags & 2u) != 0;
 		report.otherButton = (flags & 4u) != 0;
 		report.mouseWheel = (flags & 8u) != 0;
+		report.cameraTurned = (flags & 16u) != 0;
 		report.cameraIcons = in.Number<uint16_t>();
 		const auto keys = in.Byte();
 		for (uint8_t i = 0; i < keys; ++i)

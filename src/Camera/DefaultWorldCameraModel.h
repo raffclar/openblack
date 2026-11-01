@@ -247,6 +247,8 @@ private:
 	bool _heldBack {false};
 	/// The angle the player turned the camera by this frame, in radians, none when the player didn't turn it
 	std::optional<float> _turnedThisFrame;
+	/// The controls asked for a turn of more than a hundredth this frame, before the features take it away
+	bool _controlsTurned {false};
 	/// What the player did with the controls this frame, as GetAsked gives it
 	bool _controlsUsed {false};
 	bool _landGripped {false};

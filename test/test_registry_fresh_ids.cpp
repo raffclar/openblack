@@ -126,3 +126,26 @@ TEST(RegistryComponentLookup, ALookupGivesTheAnswersOfTheRegistry)
 	}
 	EXPECT_EQ(others.TryGet(made[5])->value, 11);
 }
+
+TEST(RegistryComponentLookup, LookupsOfSeveralKindsAskAsTheRegistryAsks)
+{
+	Registry registry;
+	const auto made = MakeSome(registry, 6);
+	registry.Assign<Other>(made[1], 7);
+	registry.Assign<Other>(made[3], 9);
+	registry.Destroy(made[2]);
+	const openblack::ecs::ComponentLookups<Mark, Other> lookups(registry);
+	for (const auto entity : made)
+	{
+		if (entity == made[2])
+		{
+			EXPECT_FALSE((lookups.AnyOf<Mark, Other>(entity)));
+			continue;
+		}
+		EXPECT_EQ(lookups.AllOf<Mark>(entity), registry.AllOf<Mark>(entity));
+		EXPECT_EQ((lookups.AllOf<Mark, Other>(entity)), (registry.AllOf<Mark, Other>(entity)));
+		EXPECT_EQ((lookups.AnyOf<Mark, Other>(entity)), (registry.AnyOf<Mark, Other>(entity)));
+		EXPECT_EQ(lookups.TryGet<const Other>(entity), registry.TryGet<const Other>(entity));
+		EXPECT_EQ(lookups.TryGet<Mark>(entity), registry.TryGet<const Mark>(entity));
+	}
+}

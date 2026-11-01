@@ -28,6 +28,8 @@ constexpr glm::vec2 k_Spot {0.0f, 30.0f};
 /// A hand a little south of the spot and above it, which throws north
 constexpr glm::vec2 k_ThrowFrom {0.0f, -5.0f};
 constexpr glm::vec3 k_ThrowNorth {0.0f, 4.0f, 40.0f};
+/// Where the fireball thrown north from the hand comes down
+constexpr glm::vec2 k_HotRock {0.0f, 45.0f};
 /// A held miracle runs this long in a scenario, then the hand lets go
 constexpr float k_HoldSeconds = 4.0f;
 /// The creature spells hold for their tables' 25 seconds with a few seconds' easing either side
@@ -178,6 +180,51 @@ void AddCasting(std::vector<Scenario>& all)
 	                  .handHeight = 14.0f,
 	                  .delaySeconds = 5.0f,
 	                  .holdSeconds = 6.0f}},
+	});
+
+	all.push_back({
+	    .id = "miracles.fireball_hot_rock",
+	    .name = "Fireball heats a rock near a ring",
+	    .facet = Facet::Miracles,
+	    .description = "A hand lets a fireball go 3 m above a rock. The middle of a ring, as the ring of Land 2's riddle, "
+	                   "is 6 m east of the rock.",
+	    .expected = "The fireball falls on the rock and burns out on it in about 4 seconds. It heats the rock to about "
+	                "760. The rock glows red-orange. From 500 the rock is on fire, and a script's test for a fire within "
+	                "10 m of the ring finds it. The rock cools slowly. In about a minute it is below 500, and the test "
+	                "finds no fire. The rock is never hurt.",
+	    .environment = {.dispenserGrid = false},
+	    .framing = {.shot = Shot::Overview, .include = {{-5.0f, 38.0f}, {11.0f, 52.0f}}, .distance = 0.6f},
+	    .objects = {{.type = MobileStaticInfo::Rock, .offset = k_HotRock}},
+	    .miracles = {{.type = MagicType::Fireball,
+	                  .point = k_HotRock,
+	                  .handOffset = k_HotRock,
+	                  .handHeight = 3.0f,
+	                  .holdSeconds = 1.0f,
+	                  .byHand = true}},
+	    .checks = {{.label = "the rock is at 500 or more",
+	                .quantity = checks::Quantity::ObjectTemperature,
+	                .afterTurns = 10,
+	                .byTurn = 300,
+	                .atLeast = 500.0},
+	               {.label = "the test finds a fire within 10 m of the ring",
+	                .quantity = checks::Quantity::FireNear,
+	                .point = k_HotRock + glm::vec2(6.0f, 0.0f),
+	                .radius = 10.0f,
+	                .afterTurns = 10,
+	                .byTurn = 300,
+	                .atLeast = 1.0},
+	               {.label = "the rock cools below 500",
+	                .quantity = checks::Quantity::ObjectTemperature,
+	                .afterTurns = 300,
+	                .byTurn = 2000,
+	                .atMost = 499.999},
+	               {.label = "then the test finds no fire within 10 m of the ring",
+	                .quantity = checks::Quantity::FireNear,
+	                .point = k_HotRock + glm::vec2(6.0f, 0.0f),
+	                .radius = 10.0f,
+	                .afterTurns = 300,
+	                .byTurn = 2000,
+	                .atMost = 0.0}},
 	});
 
 	all.push_back({

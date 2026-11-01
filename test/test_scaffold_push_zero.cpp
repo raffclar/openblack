@@ -7,9 +7,10 @@
  * openblack is licensed under the GNU General Public License version 3.
  *******************************************************************************/
 
-// A thing straight to the west or the south of a scaffold that clears its ground gets a push that divides by 0. These
-// tests pin each step of what the game does with that push: the speed that is not a number, the start of the body, the
-// steps of the body and the place of the thing. Each value is the same on each target.
+// A thing straight to the west or the south of a scaffold that clears its ground has a push with a larger part of 0.
+// openblack then divides by the larger size, so the thing flies straight away from the scaffold. A push with two parts
+// of 0 still divides by 0. These tests also pin each step of what the game does with a speed that is not a number: the
+// start of the body, the steps of the body and the place of the thing. Each value is the same on each target.
 
 #include <cmath>
 #include <cstdint>
@@ -99,22 +100,29 @@ TEST(ScaffoldPushZero, TheFpuComparesPassWithANaN)
 	EXPECT_EQ(x87::CanonicalNaN(4.0f), 4.0f);
 }
 
-TEST(ScaffoldPushZero, AThingStraightWestGetsAnInfiniteSpeedWestAndANaNSpeedNorth)
+TEST(ScaffoldPushZero, AThingStraightWestFliesStraightWest)
 {
 	const auto push = ecs::workshop::PushOutOfWay({10.0f, 20.0f}, {9.0f, 20.0f});
 	EXPECT_EQ(push.offset, glm::vec2(-2.0f, 0.0f));
-	EXPECT_EQ(push.velocity.x, -k_Infinity);
-	EXPECT_EQ(push.velocity.y, 0.2f);
-	EXPECT_EQ(Bits(push.velocity.z), x87::k_IndefiniteBits);
+	EXPECT_EQ(push.velocity, glm::vec3(-2.0f, 0.2f, 0.0f));
+	EXPECT_EQ(Bits(push.velocity.z), 0u);
 }
 
-TEST(ScaffoldPushZero, AThingStraightSouthGetsANaNSpeedEastAndAnInfiniteSpeedSouth)
+TEST(ScaffoldPushZero, AThingStraightSouthFliesStraightSouth)
 {
 	const auto push = ecs::workshop::PushOutOfWay({10.0f, 20.0f}, {10.0f, 19.0f});
 	EXPECT_EQ(push.offset, glm::vec2(0.0f, -2.0f));
-	EXPECT_EQ(Bits(push.velocity.x), x87::k_IndefiniteBits);
-	EXPECT_EQ(push.velocity.y, 0.2f);
-	EXPECT_EQ(push.velocity.z, -k_Infinity);
+	EXPECT_EQ(push.velocity, glm::vec3(0.0f, 0.2f, -2.0f));
+	EXPECT_EQ(Bits(push.velocity.x), 0u);
+}
+
+TEST(ScaffoldPushZero, APushWithALargerPartThatIsNotZeroKeepsTheSignedDivide)
+{
+	// The thing straight east and the thing straight north keep the push of the game
+	EXPECT_EQ(ecs::workshop::PushOutOfWay({10.0f, 20.0f}, {11.0f, 20.0f}).velocity, glm::vec3(2.0f, 0.2f, 0.0f));
+	EXPECT_EQ(ecs::workshop::PushOutOfWay({10.0f, 20.0f}, {10.0f, 21.0f}).velocity, glm::vec3(0.0f, 0.2f, 2.0f));
+	// A thing at low x and low z still flies back over the scaffold
+	EXPECT_EQ(ecs::workshop::PushOutOfWay({0.0f, 0.0f}, {-1.0f, -2.0f}).velocity, glm::vec3(2.0f, 0.2f, 4.0f));
 }
 
 TEST(ScaffoldPushZero, AThingAtTheMiddleOfTheScaffoldGetsTwoNaNSpeeds)

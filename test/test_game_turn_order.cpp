@@ -495,3 +495,20 @@ TEST(GameTurnOrder, TheGodsGetTheirConditionsAfterTheJoinsAndBeforeTheWorldCount
 	PlayTurn([&decided](Step step) { decided(step); }, true);
 	EXPECT_EQ(std::ranges::count(decided.Steps(), Step::GameConditions), 0);
 }
+
+TEST(GameTurnOrder, TheThreadsStartTheFirstBlendsAfterTheCommandsAndBeforeTheSlowSteps)
+{
+	const auto recorder = PlayOneTurn();
+	// The commands can make creatures. The threads make their first blends while the players and the temples take
+	// their turns, before the creatures' steps use the blends.
+	EXPECT_TRUE(recorder.Before(Step::PlayerCommands, Step::CreatureFirstBlends));
+	EXPECT_TRUE(recorder.Before(Step::CreatureFirstBlends, Step::Players));
+	EXPECT_TRUE(recorder.Before(Step::CreatureFirstBlends, Step::TempleLooks));
+	EXPECT_TRUE(recorder.Before(Step::CreatureFirstBlends, Step::CreaturesTurnStart));
+	EXPECT_TRUE(recorder.Before(Step::CreatureFirstBlends, Step::Living));
+	EXPECT_EQ(std::ranges::count(recorder.Steps(), Step::CreatureFirstBlends), 1);
+	// A decided game makes no creatures and starts no blends
+	TurnRecorder decided;
+	PlayTurn([&decided](Step step) { decided(step); }, true);
+	EXPECT_EQ(std::ranges::count(decided.Steps(), Step::CreatureFirstBlends), 0);
+}

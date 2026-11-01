@@ -243,6 +243,28 @@ void creature_blends::Prepare(Stores& stores, std::span<const Wanted> wanted, Wo
 	}
 }
 
+creature_blends::BackgroundPrepare::~BackgroundPrepare()
+{
+	Finish();
+}
+
+void creature_blends::BackgroundPrepare::Start(Stores& stores, std::vector<Wanted> wanted, WorkerPool& workers,
+                                               uint32_t shaping)
+{
+	Finish();
+	_job = std::async(std::launch::async, [&stores, wanted = std::move(wanted), &workers, shaping]() {
+		Prepare(stores, wanted, workers, shaping);
+	});
+}
+
+void creature_blends::BackgroundPrepare::Finish()
+{
+	if (_job.valid())
+	{
+		_job.get();
+	}
+}
+
 void creature_blends::ForgetOld(Stores& stores, uint32_t shaping)
 {
 	std::erase_if(stores.prepared, [shaping](const auto& kept) { return kept.second.shaping + 2 < shaping; });
