@@ -59,6 +59,18 @@ Material Tree()
 	        .height = 8.0f,
 	        .fireRadius = 2.0f};
 }
+
+/// A rock: combustion 500, heat capacity 4000, no burn defence
+Material Rock()
+{
+	return {.combustion = 500.0f,
+	        .capacity = 4000.0f,
+	        .defence = 0.0f,
+	        .burningPriority = 0.0f,
+	        .radius = 1.5f,
+	        .height = 2.0f,
+	        .fireRadius = 1.5f};
+}
 } // namespace
 
 TEST(FireModel, NothingCatchesBelowFortyDegreesAndHoldsAtLeastOneUnitOfHeat)
@@ -418,4 +430,26 @@ TEST(FireModel, AHeldHotThingSpreadsFireOnlyInsideItsHoldersInfluence)
 	// A thing in the hand spreads where its holder has some influence, and not where the holder has none
 	EXPECT_TRUE(fire::SpreadsFrom(true, 0.25f));
 	EXPECT_FALSE(fire::SpreadsFrom(true, 0.0f));
+}
+
+TEST(FireModel, AHotRockIsOnFireFromItsCombustionTemperatureUntilItCoolsBelowIt)
+{
+	const auto rock = Rock();
+	EXPECT_TRUE(IsOnFire(500.0f, rock));
+	EXPECT_FALSE(IsOnFire(499.99f, rock));
+	// With no burn defence it never heats itself, so it only cools, a little each turn, and stops being on fire when
+	// it goes below its combustion temperature
+	State state {.temperature = 501.0f, .previous = 501.0f};
+	int turns = 0;
+	while (IsOnFire(state.temperature, rock) && turns < 1000)
+	{
+		const float before = state.temperature;
+		(void)Step(state, rock, {.life = 1.0f});
+		state.previous = state.temperature;
+		EXPECT_LT(state.temperature, before);
+		++turns;
+	}
+	EXPECT_GT(turns, 1);
+	EXPECT_LT(turns, 1000);
+	EXPECT_LT(state.temperature, 500.0f);
 }
