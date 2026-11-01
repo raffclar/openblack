@@ -77,20 +77,17 @@ private:
 	static void ApplyHum(entt::entity creature, creature_hand_glow::Hum hum);
 	/// While the body of a creature plays the loop of the puke animation, twelve drops of sick come out of its lips
 	static void AddPukeDrops(entt::entity creature);
-	/// Makes the blends of the first pose and the first plan of each body, on the shared threads. The turn then takes
+	/// Makes the blends of the first pose and the first plan of each body, on the shared threads. The turn then copies
 	/// each blend from the store when it asks for it. A blend comes only from the species and the drawn body, so it is
 	/// the same blend that the turn makes.
 	void PrepareFirstBlends(std::span<const entt::entity> creatures);
 
 	/// The threads that make the blends, made the first time that the system has many blends to make
 	std::unique_ptr<WorkerPool> _workers;
-	/// The count of the shapes of the bodies. A prepared blend that no turn took after two shapes goes from the store.
-	uint32_t _shapings {0};
-
 	/// The game's random numbers: the blinks and the eye movements draw on the local seed, the dance moves on the synced seed
 	GameRandomSource _random;
 	/// The animations adjusted to the variants' stands, made the first time that a creature of the species wants them,
-	/// and the blends made for the first poses
+	/// and the blends that the bodies of one shape share. A blend that no turn took after two shapes goes from the store.
 	creature_blends::Stores _stores;
 	/// The turns of the keyframes that the poses use, each turn made one time. Only the time that a pose takes changes.
 	skeletal_animation::KeyframeTurns _keyframeTurns;

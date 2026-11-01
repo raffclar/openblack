@@ -120,7 +120,7 @@ TEST(CreatureBlendStore, ABlendThatTheThreadsMadeIsTheBlendThatTheTurnMakes)
 	for (const auto& [_, morph, index] : wanted)
 	{
 		const auto now = creature_blends::Blend(made, rig, morph, index);
-		const auto early = creature_blends::TakePrepared(prepared, rig, morph, index);
+		const auto early = creature_blends::KeptBlend(prepared, rig, morph, index);
 		ASSERT_TRUE(now.has_value());
 		ASSERT_TRUE(early.has_value());
 		EXPECT_TRUE(SameBits(*now, *early)) << "animation " << index;
@@ -134,10 +134,10 @@ TEST(CreatureBlendStore, ABlendThatTheThreadsMadeIsTheBlendThatTheTurnMakes)
 		ASSERT_TRUE(adjusted.has_value() && other->second.has_value());
 		EXPECT_TRUE(SameBits(adjusted->animation, other->second->animation));
 	}
-	EXPECT_TRUE(prepared.prepared.empty());
+	EXPECT_EQ(prepared.prepared.size(), wanted.size());
 }
 
-TEST(CreatureBlendStore, TheStoresGiveAPreparedBlendOnlyOnceAndOnlyForItsBody)
+TEST(CreatureBlendStore, TheStoresGiveAKeptBlendToEachBodyOfItsShapeOnly)
 {
 	const auto rig = Species();
 	WorkerPool workers(2);
@@ -145,10 +145,50 @@ TEST(CreatureBlendStore, TheStoresGiveAPreparedBlendOnlyOnceAndOnlyForItsBody)
 	const std::array<creature_blends::Wanted, 2> wanted {
 	    {{.rig = &rig, .morph = Body(0.5f, 0.5f), .index = k_Walk}, {.rig = &rig, .morph = Body(0.5f, 0.5f), .index = k_Wave}}};
 	creature_blends::Prepare(stores, wanted, workers, 1);
-	EXPECT_FALSE(creature_blends::TakePrepared(stores, rig, Body(0.5f, 0.51f), k_Walk).has_value());
-	EXPECT_TRUE(creature_blends::TakePrepared(stores, rig, Body(0.5f, 0.5f), k_Walk).has_value());
-	EXPECT_FALSE(creature_blends::TakePrepared(stores, rig, Body(0.5f, 0.5f), k_Walk).has_value());
-	EXPECT_TRUE(creature_blends::TakePrepared(stores, rig, Body(0.5f, 0.5f), k_Wave).has_value());
+	EXPECT_FALSE(creature_blends::KeptBlend(stores, rig, Body(0.5f, 0.51f), k_Walk).has_value());
+	const auto first = creature_blends::KeptBlend(stores, rig, Body(0.5f, 0.5f), k_Walk);
+	const auto second = creature_blends::KeptBlend(stores, rig, Body(0.5f, 0.5f), k_Walk);
+	ASSERT_TRUE(first.has_value());
+	ASSERT_TRUE(second.has_value());
+	EXPECT_TRUE(SameBits(*first, *second));
+	EXPECT_TRUE(creature_blends::KeptBlend(stores, rig, Body(0.5f, 0.5f), k_Wave).has_value());
+}
+
+TEST(CreatureBlendStore, ABlendThatATurnMadeIsTheBlendOfTheNextBodyOfTheSameShape)
+{
+	const auto rig = Species();
+	creature_blends::Stores made;
+	creature_blends::Stores kept;
+	const auto body = Body(-0.35f, 0.65f);
+	for (const auto index : {size_t {0}, k_Walk, k_Wave})
+	{
+		const auto blend = creature_blends::Blend(kept, rig, body, index);
+		ASSERT_TRUE(blend.has_value());
+		creature_blends::Keep(kept, rig, body, index, *blend);
+		const auto copy = creature_blends::KeptBlend(kept, rig, body, index);
+		const auto fresh = creature_blends::Blend(made, rig, body, index);
+		ASSERT_TRUE(copy.has_value());
+		ASSERT_TRUE(fresh.has_value());
+		EXPECT_TRUE(SameBits(*copy, *fresh)) << "animation " << index;
+	}
+	EXPECT_FALSE(creature_blends::KeptBlend(kept, rig, Body(-0.35f, 0.66f), k_Walk).has_value());
+}
+
+TEST(CreatureBlendStore, ABlendThatATurnTookStaysForTwoMoreShapes)
+{
+	const auto rig = Species();
+	creature_blends::Stores stores;
+	stores.shaping = 5;
+	const auto body = Body(0.1f, 0.4f);
+	const auto blend = creature_blends::Blend(stores, rig, body, k_Walk);
+	ASSERT_TRUE(blend.has_value());
+	creature_blends::Keep(stores, rig, body, k_Walk, *blend);
+	stores.shaping = 7;
+	ASSERT_TRUE(creature_blends::KeptBlend(stores, rig, body, k_Walk).has_value());
+	creature_blends::ForgetOld(stores, 9);
+	EXPECT_EQ(stores.prepared.size(), 1u);
+	creature_blends::ForgetOld(stores, 10);
+	EXPECT_TRUE(stores.prepared.empty());
 }
 
 TEST(CreatureBlendStore, TheThreadsMakeEachBlendOnceAndNoneThatTheSpeciesDoesNotHave)

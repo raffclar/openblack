@@ -237,11 +237,15 @@ const Animation* AnimationOf(AnimationStores& stores, CreatureAnimation& animati
 	if (found == animation.animations.end())
 	{
 		// A species without the animation keeps an empty one, so as not to look for it again. A blend that the system
-		// made before the turn asked for it is the same blend.
-		auto blended = creature_blends::TakePrepared(stores, rig, morph, index);
+		// made before the turn asked for it, or that another body of the same shape made, is the same blend.
+		auto blended = creature_blends::KeptBlend(stores, rig, morph, index);
 		if (!blended.has_value())
 		{
 			blended = creature_blends::Blend(stores, rig, morph, index);
+			if (blended.has_value())
+			{
+				creature_blends::Keep(stores, rig, morph, index, *blended);
+			}
 		}
 		found = animation.animations.emplace(index, std::move(blended).value_or(Animation {})).first;
 	}
@@ -1024,8 +1028,8 @@ void CreatureAnimationSystem::ShapeBodies()
 {
 	auto& registry = Locator::entitiesRegistry::value();
 	// A blend that no turn took after two shapes goes, so that the store does not grow
-	++_shapings;
-	creature_blends::ForgetOld(_stores, _shapings);
+	++_stores.shaping;
+	creature_blends::ForgetOld(_stores, _stores.shaping);
 	std::vector<entt::entity> unposed;
 	registry.Each<const Creature, const CreatureMorph, CreatureAnimation, const Transform>(
 	    [&](entt::entity entity, const Creature& creature, const CreatureMorph& morph, CreatureAnimation& animation,
@@ -1101,7 +1105,7 @@ void CreatureAnimationSystem::PrepareFirstBlends(std::span<const entt::entity> c
 	{
 		_workers = std::make_unique<WorkerPool>(WorkerPool::DefaultThreadCount());
 	}
-	creature_blends::Prepare(_stores, wanted, *_workers, _shapings);
+	creature_blends::Prepare(_stores, wanted, *_workers, _stores.shaping);
 }
 
 void CreatureAnimationSystem::Update(std::chrono::duration<float, std::milli> gameTime)
