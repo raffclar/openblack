@@ -67,8 +67,9 @@ constexpr glm::vec2 k_FoodDrop {-40.0f, 40.0f};
 constexpr glm::vec2 k_PotDrop {-10.0f, -20.0f};
 /// The food pile of a Celtic storage pit at that place
 constexpr glm::vec2 k_StorePile = k_PotDrop + glm::vec2(3.4f, 4.8f);
-/// The camera looks at that pile from the side away from the pit, so that the pile is nearer than the pit
-constexpr glm::vec2 k_StorePileEye = k_StorePile + glm::vec2(11.5f, 16.3f);
+/// The camera looks at that pile from across the line of the pit and the pile. Thus the pit is not in front of the pile,
+/// and the town's need flag, which stands beyond the pile on the side away from the pit, is not in front of it either.
+constexpr glm::vec2 k_StorePileEye = k_StorePile + glm::vec2(16.3f, -11.5f);
 /// A point between the altar and the food pot of the worship site that the town builds by the temple
 constexpr glm::vec2 k_SiteMiddle {-23.0f, -36.0f};
 
