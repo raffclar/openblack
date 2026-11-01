@@ -66,6 +66,18 @@ constexpr size_t k_FirstVillager = 3;
 constexpr std::array<glm::vec2, 3> k_WoodBirches {glm::vec2 {-35.0f, 30.0f}, glm::vec2 {-40.0f, 38.0f},
                                                   glm::vec2 {-33.0f, 46.0f}};
 
+/// Where the workshop of the supply scenario stands, east of the worship site, and its place in the scenario's objects
+constexpr glm::vec2 k_SupplyWorkshop {22.0f, 5.0f};
+constexpr size_t k_SupplyWorkshopObject = 11;
+/// The handfuls of the supply scenario, after the town and the workshop in the scenario's objects: the food that the
+/// hand lets go, the food that it gives, the wood that it gives and the wood that it lets go
+constexpr size_t k_DroppedFood = 12;
+constexpr size_t k_GivenFood = 13;
+constexpr size_t k_GivenWood = 14;
+constexpr size_t k_DroppedWood = 15;
+/// The food that the hand throws down onto the worship site, after the other handfuls
+constexpr size_t k_ThrownFood = 16;
+
 /// A Celtic town centre of the player's, two huts and eight of its people about it
 std::vector<ObjectSetup> Town(glm::vec2 centre = k_Centre)
 {
@@ -747,5 +759,83 @@ void openblack::testbed_scenarios::AddTempleVillagerScenarios(std::vector<Scenar
 	    .commands = {{.kind = Command::Kind::EndGuidanceWaits, .delaySeconds = 0.5f},
 	                 {.kind = Command::Kind::HandTake, .delaySeconds = 1.0f, .object = 0},
 	                 {.kind = Command::Kind::HandRelease, .delaySeconds = 2.0f, .velocity = {0.0f, 8.0f, 16.0f}}},
+	});
+
+	// The hand lets food go over the worship site's food pot, gives more with the Action button and throws more down onto
+	// it. At a workshop, the hand gives wood with the Action button and then lets more wood go. Last, it holds a man over the
+	// altar and puts him down on the land in front of the camera.
+	auto supplyObjects = Town();
+	supplyObjects.push_back(
+	    {.type = AbodeInfo::CelticWorkshop, .offset = k_SupplyWorkshop, .yawDegrees = 270.0f, .storedWood = 1000});
+	supplyObjects.push_back({.type = PotInfo::HandFood, .offset = {10.0f, 10.0f}, .amount = 400});
+	supplyObjects.push_back({.type = PotInfo::HandFood, .offset = {12.0f, 10.0f}, .amount = 150});
+	supplyObjects.push_back({.type = PotInfo::HandWood, .offset = {14.0f, 10.0f}, .amount = 300});
+	supplyObjects.push_back({.type = PotInfo::HandWood, .offset = {16.0f, 10.0f}, .amount = 500});
+	supplyObjects.push_back({.type = PotInfo::HandFood, .offset = {18.0f, 10.0f}, .amount = 100});
+	const auto onWorkshop = [](float delay) {
+		return Command {.kind = Kind::PointerOnObject, .delaySeconds = delay, .object = k_SupplyWorkshopObject, .amount = 3.0f};
+	};
+	// The first steps let food go over the food pot
+	const std::vector<Command> supplyCommands {
+	    {.kind = Kind::PointerOnAltar, .delaySeconds = 3.0f, .value = 1},
+	    {.kind = Kind::PointerOnAltar, .delaySeconds = 1.0f, .value = 1},
+	    {.kind = Kind::HandTake, .delaySeconds = 0.5f, .object = k_DroppedFood},
+	    {.kind = Kind::PointerOnAltar, .delaySeconds = 0.5f, .value = 1},
+	    {.kind = Kind::HandRelease, .delaySeconds = 2.5f},
+	    // Food given to the site with the Action button
+	    {.kind = Kind::HandTake, .delaySeconds = 3.0f, .object = k_GivenFood},
+	    {.kind = Kind::PointerOnAltar, .delaySeconds = 0.5f, .value = 1},
+	    {.kind = Kind::PointerPress, .delaySeconds = 2.5f, .value = k_ActionButton},
+	    {.kind = Kind::PointerRelease, .delaySeconds = 0.2f, .value = k_ActionButton},
+	    // Food thrown down onto the site, which falls into it
+	    {.kind = Kind::HandTake, .delaySeconds = 2.0f, .object = k_ThrownFood},
+	    {.kind = Kind::PointerOnAltar, .delaySeconds = 0.5f, .value = 1},
+	    {.kind = Kind::HandRelease, .delaySeconds = 2.0f, .velocity = {0.0f, -8.0f, 0.0f}},
+	    // Wood given to the workshop with the Action button
+	    onWorkshop(4.0f),
+	    {.kind = Kind::HandTake, .delaySeconds = 0.5f, .object = k_GivenWood},
+	    onWorkshop(0.5f),
+	    {.kind = Kind::PointerPress, .delaySeconds = 2.5f, .value = k_ActionButton},
+	    {.kind = Kind::PointerRelease, .delaySeconds = 0.2f, .value = k_ActionButton},
+	    // Wood let go over the workshop
+	    {.kind = Kind::HandTake, .delaySeconds = 2.0f, .object = k_DroppedWood},
+	    onWorkshop(0.5f),
+	    {.kind = Kind::HandRelease, .delaySeconds = 2.0f},
+	    // A man held over the altar, then put down on the land in front of the camera
+	    {.kind = Kind::PointerOnAltar, .delaySeconds = 4.0f},
+	    {.kind = Kind::HandTake, .delaySeconds = 0.5f, .object = k_Man},
+	    {.kind = Kind::PointerOnAltar, .delaySeconds = 0.5f},
+	    {.kind = Kind::PointerTo, .delaySeconds = 2.5f, .point = {0.5f, 0.85f}},
+	    {.kind = Kind::HandRelease, .delaySeconds = 1.0f}};
+	all.push_back({
+	    .id = "hand.supply_site_and_workshop",
+	    .name = "The hand supplies the worship site with food and a workshop with wood",
+	    .facet = Facet::Hand,
+	    .description = "The town and temple of the sacrifice scenarios, the town's worship site put up built and nobody "
+	                   "sent to worship, and a workshop of the town east of the site that holds 1000 wood. The hand "
+	                   "takes 400 food and lets it go over the empty food pot of the site. Then it takes 150 food, moves "
+	                   "onto the pot and presses the Action button, and then throws 100 food down onto the pot. At the "
+	                   "workshop it gives 300 wood with the Action button and lets 500 wood go. Last, it holds a man of "
+	                   "the town over the altar and puts him down on the land in front of the camera.",
+	    .expected = "While the hand holds food over the site, and wood over the workshop, the tooltip says \"Supply\". "
+	                "The 400 food that the hand lets go pours into the pot, and the pile makes its loud sound. The pot "
+	                "rises from the ground. The press gives the 150 food at once with the quiet sound of the pile: the "
+	                "pot then holds 550 food. The 100 food falls onto the site and goes into the pot with the quiet "
+	                "sound: the pot then holds 650 food. The workshop takes the 300 wood at the press and the 500 wood "
+	                "when the hand lets it go, with the sound of its pile each time: it then holds 1800 wood. Over the "
+	                "altar the man shows \"Sacrifice\". He lands alive in front of the camera.",
+	    .environment = {.dispenserGrid = false},
+	    .framing = {.shot = Shot::Placed, .eye = {0.0f, 40.0f, 55.0f}, .look = {0.0f, 0.0f, 5.0f}},
+	    .objects = supplyObjects,
+	    .temples = {{.offset = k_Temple}},
+	    .commands = supplyCommands,
+	    .townBeliefInPlayer = k_TownBelief,
+	    .worshipShare = 0.0f,
+	    .checks = {{.label = "the workshop holds its 1000 wood and the 800 wood of the hand",
+	                .quantity = checks::Quantity::ObjectResource,
+	                .index = k_SupplyWorkshopObject,
+	                .afterTurns = 380,
+	                .atLeast = 1800.0,
+	                .atMost = 1800.0}},
 	});
 }
