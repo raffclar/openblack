@@ -58,6 +58,10 @@ struct LoadedAnimal
 	std::optional<glm::ivec2> sleepCell;
 	/// Its tilt into a turn
 	animals::Zoomer::State bank {};
+	/// An animal on the land whose walk goes round what is in its way, as a walk round a circle: the walk continues from
+	/// the step of the file and the height of that step
+	bool walksRound {false};
+	float stepAltitude {0.0f};
 };
 
 /// The animals: the land's birds and grazers, the doves or bats about each temple, and the flocks of doves and bats and the

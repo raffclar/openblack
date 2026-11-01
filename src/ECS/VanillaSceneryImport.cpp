@@ -17,6 +17,7 @@
 #include <unordered_map>
 #include <unordered_set>
 
+#include "ECS/ScriptFlockRules.h"
 #include "VanillaWorld.h"
 #include "VanillaWorldImport.h"
 
@@ -449,6 +450,11 @@ ImportedAnimals ReadAnimals(const VanillaWorld& world)
 			std::memcpy(&flock.savedPlace, saved.data(), sizeof(flock.savedPlace));
 			const auto members = world.Refs(record, "members");
 			flock.members.assign(members.begin(), members.end());
+			for (const auto member : members)
+			{
+				const auto* living = world.Record(member);
+				flock.memberOrders.push_back(living != nullptr ? world.Byte(*living, "flockOrder").value_or(0) : uint8_t {0});
+			}
 			flock.mostMembers = world.Word(record, "mostMembers").value_or(0);
 			flock.turnsOnLeg = world.Word(record, "turnsOnLeg").value_or(0);
 			flock.height = world.Float(record, "flockHeight").value_or(0.0f);
@@ -502,9 +508,24 @@ ImportedAnimals ReadAnimals(const VanillaWorld& world)
 		     .sleep = static_cast<int16_t>(world.Half(record, "sleep").value_or(0)),
 		     .breed = static_cast<int16_t>(world.Half(record, "breed").value_or(0)),
 		     .sleepCell = sleepCell.size() == 4 ? CellOf(sleepCell.first<4>()) : std::nullopt,
-		     .bank = bank.size() == k_GlideBytes ? GlideOf(bank.first<k_GlideBytes>()) : animals::Zoomer::State {}});
+		     .bank = bank.size() == k_GlideBytes ? GlideOf(bank.first<k_GlideBytes>()) : animals::Zoomer::State {},
+		     .stepAltitude = walk.stepAltitude,
+		     .circle = walk.circle});
 	}
 	return imported;
+}
+
+std::vector<size_t> LineAfterLoad(std::span<const uint8_t> orders)
+{
+	std::vector<size_t> line;
+	std::vector<uint8_t> lineOrders;
+	for (size_t i = 0; i < orders.size(); ++i)
+	{
+		const auto at = static_cast<std::ptrdiff_t>(script_flock_rules::InsertAt(lineOrders, orders[i]));
+		line.insert(line.begin() + at, i);
+		lineOrders.insert(lineOrders.begin() + at, orders[i]);
+	}
+	return line;
 }
 
 animals::Zoomer::State GlideOf(std::span<const uint8_t, k_GlideBytes> bytes)

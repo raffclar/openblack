@@ -683,8 +683,8 @@ void ReadComputerPlayer(WorldReader& r)
 	}
 	r.Byte();
 	r.Refs();
-	// The decision tree of the computer player. Each save of the tests has 396 words here.
-	for (int i = 0; i < 396; ++i)
+	// The decision tree of the computer player
+	for (size_t i = 0; i < k_ComputerPlayerTreeWords; ++i)
 	{
 		r.Word();
 	}
@@ -854,7 +854,9 @@ std::array<uint8_t, 2> ReadLiving(WorldReader& r)
 	r.Ref();
 	r.Word();
 	r.Word();
-	r.Byte();
+	// The place of the living thing in the line of its flock: the load puts each member before the first member whose
+	// place is not lower
+	r.Byte("flockOrder");
 	r.Ref("danceGroup");
 	r.Byte();
 	const auto pairs = r.Word();

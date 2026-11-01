@@ -325,7 +325,6 @@ entt::entity AnimalSystem::CreateLoadedAnimal(const LoadedAnimal& loaded)
 	animal.move.speed = loaded.speed;
 	animal.move.step = loaded.step;
 	animal.bank = animals::Zoomer::Resume(loaded.bank);
-	// A move that goes round a thing is not kept yet: the animal steps straight through to its goal
 	animal.move.stage = animals::MoveStageOfGame(loaded.moveState).value_or(animals::MoveStage::StepThrough);
 	// A state that openblack does not have yet becomes a new decision
 	SetTopState(animal, AnimalStateOfGame(loaded.state).value_or(AnimalState::DecideWhatToDo));
@@ -333,6 +332,22 @@ entt::entity AnimalSystem::CreateLoadedAnimal(const LoadedAnimal& loaded)
 	SyncWorld(animal);
 	animal.previousPosition = animal.position;
 	animal.previousHeading = animal.heading;
+	// A walk on the land that goes round what is in its way continues from where the file has it. A bird flies over
+	// what is in its way.
+	if (loaded.walksRound && !bird && Locator::pathfindingSystem::has_value())
+	{
+		auto& walk = registry.AssignOrReplace<WallHug>(entity);
+		walk.goalPlace = loaded.goal;
+		walk.position = loaded.position;
+		walk.placedAt = xz;
+		walk.step = loaded.step;
+		walk.stepAltitude = loaded.stepAltitude;
+		walk.gameAngle = loaded.angle;
+		walk.yAngle = animal.heading;
+		registry.AssignOrReplace<TurningWalker>(entity,
+		                                        TurningWalker {.turnAngle = TurnAngleOf(animal), .speed = loaded.speed});
+		animal.walksRound = true;
+	}
 	registry.Assign<AnimalPose>(entity, AnimalPose {.light = bird ? AnimalLight::BrightestLand : AnimalLight::Land});
 	animal.town = loaded.town;
 	auto* flockData = registry.Valid(loaded.flock) ? registry.TryGet<Flock>(loaded.flock) : nullptr;

@@ -28,6 +28,10 @@
 namespace openblack::gamesave
 {
 
+/// The number of words that the file keeps for the decision tree of a computer player: two values for each of the 198
+/// nodes of the tree, in the order of the tree from its top
+constexpr size_t k_ComputerPlayerTreeWords = 396;
+
 /// The types of the objects in the game's world file that openblack uses
 enum class VanillaType : uint32_t
 {

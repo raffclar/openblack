@@ -334,6 +334,9 @@ struct ImportedSite
 	/// The desire for builders that a script forced on the site
 	float desire {0.0f};
 	std::array<glm::vec3, k_ImportedSitePlaces> places {};
+	/// The site of a temple: it keeps its wood in six piles, which these numbers give (0 for a pile that has gone)
+	bool temple {false};
+	std::vector<uint32_t> piles;
 };
 
 /// The flag of a desire of a town: it flies as high as the town wants the thing
