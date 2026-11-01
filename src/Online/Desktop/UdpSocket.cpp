@@ -19,7 +19,7 @@
 #include <winsock2.h>
 #include <ws2tcpip.h>
 #include <iphlpapi.h>
-#include <mstcpip.h>
+#include <mswsock.h>
 // clang-format on
 #else
 #include <arpa/inet.h>
