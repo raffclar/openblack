@@ -2716,6 +2716,17 @@ creature_object_actions::KindFacts CreatureObjectActionSystem::KindFactsOf(entt:
 	return facts;
 }
 
+void CreatureObjectActionSystem::KeepPickUpReach(entt::entity creature)
+{
+	// The full pick-up facts measure the reach of a creature, and the synced world keeps that reach. Thus a test with
+	// fewer facts keeps the reach too, at the same turn.
+	const auto& registry = Locator::entitiesRegistry::value();
+	if (registry.Valid(creature) && registry.AllOf<Creature>(creature))
+	{
+		static_cast<void>(KeptReachPoints<PickUpReach>(creature, ReachWith::FingerEnds, creature_reach::k_PickUpAnimations));
+	}
+}
+
 bool CreatureObjectActionSystem::ComputerCreatureNotScripted(entt::entity creature)
 {
 	const auto& registry = Locator::entitiesRegistry::value();
@@ -2782,7 +2793,12 @@ bool CreatureObjectActionSystem::CanPickUpKind(entt::entity creature, entt::enti
 {
 	// Find only the pick-up facts that the rule of the kind reads
 	using creature_object_actions::PickUpFactsUsed;
-	switch (creature_object_actions::PickUpFactsUsedBy(kind))
+	const auto used = creature_object_actions::PickUpFactsUsedBy(kind);
+	if (used != PickUpFactsUsed::All)
+	{
+		KeepPickUpReach(creature);
+	}
+	switch (used)
 	{
 	case PickUpFactsUsed::None:
 		return creature_object_actions::MayPickUpKind(kind, {});
