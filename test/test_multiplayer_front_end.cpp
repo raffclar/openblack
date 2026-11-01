@@ -590,32 +590,22 @@ TEST(MultiplayerRules, AConditionThatTheHostOnlySwitchesOnKeepsTheFirstValueOfTh
 	using openblack::game_end::ConditionPick;
 	using openblack::game_end::SwitchedCondition;
 	// A fake template with the food, wood, towns and belief lines of three lands of 2, 3 and 4 gods
-	constexpr std::string_view k_Lands = "FORMAP land_2.txt
-	                                     "
-	                                     "WC_FOOD_IN_PITS:	9000	9000	250000	1000	10000
-	                                     "
-	                                     "WC_WOOD_IN_PITS:	4000	4000	500000	1000	10000
-	                                     "
-	                                     "WC_TAKEOVER_NUM_TOWNS:	1	1	8	1	1
-	                                     "
-	                                     "WC_BELIEF_IN_WORLD:	2100	2100	100000	100	10000
-	                                     "
-	                                     "FORMAP land_3.txt
-	                                     "
-	                                     "WC_FOOD_IN_PITS:	5000	5000	250000	1000	10000
-	                                     "
-	                                     "WC_TAKEOVER_NUM_TOWNS:	1	1	12	1	1
-	                                     "
-	                                     "FORMAP land_4.txt
-	                                     "
-	                                     "WC_FOOD_IN_PITS:	1000	1000	250000	1000	10000
-	                                     ";
-	    const std::array switched {
-	        SwitchedCondition {.condition = Condition::FoodInStores, .value = std::nullopt},
-	        SwitchedCondition {.condition = Condition::WoodInStores, .value = std::nullopt},
-	        SwitchedCondition {.condition = Condition::BeliefInWorld, .value = std::nullopt},
-	        SwitchedCondition {.condition = Condition::TownsTakenOver, .value = 8},
-	    };
+	constexpr std::string_view k_Lands = "FORMAP land_2.txt\n"
+	                                     "WC_FOOD_IN_PITS:\t9000\t9000\t250000\t1000\t10000\n"
+	                                     "WC_WOOD_IN_PITS:\t4000\t4000\t500000\t1000\t10000\n"
+	                                     "WC_TAKEOVER_NUM_TOWNS:\t1\t1\t8\t1\t1\n"
+	                                     "WC_BELIEF_IN_WORLD:\t2100\t2100\t100000\t100\t10000\n"
+	                                     "FORMAP land_3.txt\n"
+	                                     "WC_FOOD_IN_PITS:\t5000\t5000\t250000\t1000\t10000\n"
+	                                     "WC_TAKEOVER_NUM_TOWNS:\t1\t1\t12\t1\t1\n"
+	                                     "FORMAP land_4.txt\n"
+	                                     "WC_FOOD_IN_PITS:\t1000\t1000\t250000\t1000\t10000\n";
+	const std::array switched {
+	    SwitchedCondition {.condition = Condition::FoodInStores, .value = std::nullopt},
+	    SwitchedCondition {.condition = Condition::WoodInStores, .value = std::nullopt},
+	    SwitchedCondition {.condition = Condition::BeliefInWorld, .value = std::nullopt},
+	    SwitchedCondition {.condition = Condition::TownsTakenOver, .value = 8},
+	};
 	const auto two = FindConditions(k_Lands, "land_2");
 	ASSERT_TRUE(two.has_value());
 	const auto picks = PicksOnLand(*two, switched);
