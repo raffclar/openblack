@@ -16,6 +16,8 @@
 #include <glm/vec2.hpp>
 #include <glm/vec3.hpp>
 
+#include "Common/X87.h"
+
 namespace openblack
 {
 class LandIslandInterface;
@@ -84,15 +86,10 @@ struct MapCoords
 	}
 };
 
-/// The game's float to integer conversion: truncated towards 0, and 0x80000000 for a NaN or a value out of the int32
-/// range
+/// The game's float to integer conversion: the low 32 bits of the value truncated towards 0 (see x87::ToInteger)
 [[nodiscard]] constexpr int32_t FtoL(float value)
 {
-	if (!(value > -2147483648.0f && value < 2147483648.0f))
-	{
-		return static_cast<int32_t>(0x80000000u);
-	}
-	return static_cast<int32_t>(value);
+	return x87::ToInteger(value);
 }
 
 /// Metres to 16.16: a float product, truncated towards 0

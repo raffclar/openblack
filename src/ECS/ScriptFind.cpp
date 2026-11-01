@@ -126,11 +126,7 @@ int32_t EdgeFixed(int32_t fixed, float offset)
 	constexpr float k_InverseFixedOne = 1.0f / k_FixedOne;
 	const float metres = x87::Mul(static_cast<double>(fixed), k_Ten) * k_InverseFixedOne + offset;
 	const float value = metres * k_FixedOne / k_Ten;
-	if (!(value > -2147483648.0f && value < 2147483648.0f))
-	{
-		return static_cast<int32_t>(0x80000000u);
-	}
-	return static_cast<int32_t>(value);
+	return x87::ToInteger(value);
 }
 } // namespace
 
@@ -367,13 +363,7 @@ entt::entity script_find::FindNearest(const map_coords::MapCoords& from, float r
 
 uint32_t script_find::TownIdFromScript(float id)
 {
-	// Past the range of a whole number the game's conversion gives its "indefinite" value, the lowest one
-	constexpr float k_Limit = 2147483648.0f;
-	if (!(id > -k_Limit && id < k_Limit))
-	{
-		return static_cast<uint32_t>(std::numeric_limits<int32_t>::min());
-	}
-	return static_cast<uint32_t>(static_cast<int32_t>(id));
+	return static_cast<uint32_t>(x87::ToInteger(id));
 }
 
 entt::entity script_find::FindNearestTown(const map_coords::MapCoords& from, float reach, const std::vector<Candidate>& towns)

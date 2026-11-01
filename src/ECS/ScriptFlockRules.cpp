@@ -31,11 +31,7 @@ int32_t Offset(int32_t fixed, float along)
 	constexpr float k_InverseFixedOne = 1.0f / k_FixedOne;
 	const float metres = along + x87::Mul(static_cast<double>(fixed), k_Ten) * k_InverseFixedOne;
 	const float back = metres * k_FixedOne / k_Ten;
-	if (!(back > -2147483648.0f && back < 2147483648.0f))
-	{
-		return static_cast<int32_t>(0x80000000u);
-	}
-	return static_cast<int32_t>(back);
+	return x87::ToInteger(back);
 }
 
 constexpr int k_Draws = 2;

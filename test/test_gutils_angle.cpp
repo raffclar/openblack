@@ -148,7 +148,7 @@ TEST(GUtilsAngle, Conversions)
 	EXPECT_EQ(gu::ConvertAngle3DToGame(1.0f), 325u);
 	EXPECT_EQ(gu::ConvertAngle3DToGame(3.1415927f), 1024u);
 	EXPECT_EQ(gu::ConvertAngle3DToGame(6.2831855f), 0u);                              // 2048.0001 & 0x7FF
-	EXPECT_EQ(gu::ConvertAngle3DToGame(std::numeric_limits<float>::quiet_NaN()), 0u); // 0x80000000 & 0x7FF
+	EXPECT_EQ(gu::ConvertAngle3DToGame(std::numeric_limits<float>::quiet_NaN()), 0u); // a NaN gives 0
 	EXPECT_EQ(gu::ConvertGameAngleTo3D(0x800 + 3), gu::ConvertGameAngleTo3D(3));      // & 0x7FF
 	EXPECT_EQ(gu::ConvertGameAngleTo3D(0x200), static_cast<float>(0x200) * gu::k_GameAngleTo3D);
 	// truncated on the way back: 365 of the 2048 angles come back one less (15 is the first)

@@ -2281,3 +2281,7 @@ openblack_setup_and_add_test(test_sync_checksum_beside_draw test_sync_checksum_b
 openblack_setup_and_add_test(
   test_see_through_modes graphics/test_see_through_modes.cpp
 )
+openblack_setup_and_add_test(test_float_to_integer test_float_to_integer.cpp)
+openblack_setup_and_add_test(
+  test_oracle_ftol_portable oracle/test_oracle_ftol_portable.cpp
+)
