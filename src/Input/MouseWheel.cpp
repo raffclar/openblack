@@ -22,9 +22,9 @@ namespace openblack::platform_mouse
 bool SystemSaysWheel()
 {
 #if defined(_WIN32)
-	return GetSystemMetrics(SM_MOUSEWHEELPRESENT) != 0;
+	return SystemSaysWheelFor(System::Windows, GetSystemMetrics(SM_MOUSEWHEELPRESENT) != 0);
 #else
-	return false;
+	return SystemSaysWheelFor(System::Other, false);
 #endif
 }
 

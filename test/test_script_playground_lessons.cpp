@@ -18,6 +18,7 @@
 #include "3D/MapCoords.h"
 #include "Common/GUtilsAngle.h"
 #include "Input/LandGrip.h"
+#include "Input/MouseWheel.h"
 #include "ScriptHeaders/ScriptLessonNatives.h"
 
 using namespace openblack::script::lesson_natives;
@@ -81,6 +82,23 @@ TEST(PlaygroundLessonNatives, TheMouseHasAWheelWhenTheSystemSaysSoOrTheWheelTurn
 	EXPECT_FALSE(MouseHasWheel(false, false));
 	EXPECT_TRUE(MouseHasWheel(true, false));
 	EXPECT_TRUE(MouseHasWheel(false, true));
+}
+
+TEST(PlaygroundLessonNatives, WindowsKeepsTheAnswerOfItsOwnQueryForTheWheel)
+{
+	using openblack::platform_mouse::System;
+	using openblack::platform_mouse::SystemSaysWheelFor;
+	EXPECT_TRUE(SystemSaysWheelFor(System::Windows, true));
+	EXPECT_FALSE(SystemSaysWheelFor(System::Windows, false));
+}
+
+TEST(PlaygroundLessonNatives, OtherSystemsSayTheMouseHasAWheelBeforeItTurns)
+{
+	using openblack::platform_mouse::System;
+	using openblack::platform_mouse::SystemSaysWheelFor;
+	EXPECT_TRUE(SystemSaysWheelFor(System::Other, false));
+	EXPECT_TRUE(SystemSaysWheelFor(System::Other, true));
+	EXPECT_TRUE(MouseHasWheel(SystemSaysWheelFor(System::Other, false), false));
 }
 
 TEST(PlaygroundLessonNatives, TheCursorIsWithinRotationWhileACameraIconShowsOrIsOffered)
