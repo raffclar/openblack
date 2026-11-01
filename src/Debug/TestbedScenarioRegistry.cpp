@@ -13205,6 +13205,25 @@ void AddWorkshopScenarios(std::vector<Scenario>& all)
 	});
 
 	all.push_back({
+	    .id = "objects.scaffold_site_phantom_see_through",
+	    .name = "The phantom of the building on a scaffold's site draws in the see-through modes",
+	    .facet = Facet::Objects,
+	    .description = "The town and the scaffold of objects.scaffold_starts_building, with the camera near the scaffold. "
+	                   "After one second the scaffold starts the building that the town offers where it lies, as when "
+	                   "the hand puts it down.",
+	    .expected = "A building site opens at the scaffold, with the phantom of its building over the site at about a "
+	                "third of its alpha. Each material of the phantom draws in its see-through mode with the alpha "
+	                "reference 10, which becomes 0 at the alpha of the phantom. Thus no part of the phantom is cut: also "
+	                "the edges that its textures make clear show at the alpha of their texels, and write depth.",
+	    .environment = {.dispenserGrid = false},
+	    .framing = {.shot = Shot::Overview,
+	                .include = {k_LooseScaffold - glm::vec2 {12.0f}, k_LooseScaffold + glm::vec2 {12.0f}}},
+	    .objects = {{.type = AbodeInfo::CelticTownCentre, .offset = {0.0f, 50.0f}},
+	                {.type = ScaffoldInfo::Normal, .offset = k_LooseScaffold, .scale = 0.7f}},
+	    .commands = {{.kind = Kind::ScaffoldStartsSite, .delaySeconds = 1.0f, .object = 1}},
+	});
+
+	all.push_back({
 	    .id = "objects.scaffold_script_active",
 	    .name = "A script sets a scaffold active, and the scaffold starts its building at once",
 	    .facet = Facet::Objects,

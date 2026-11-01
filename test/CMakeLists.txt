@@ -2269,3 +2269,6 @@ openblack_setup_and_add_test(test_snow_faces test_snow_faces.cpp)
 openblack_setup_and_add_test(test_tornado_pile_take test_tornado_pile_take.cpp)
 openblack_setup_and_add_test(test_land_script_stepper test_land_script_stepper.cpp)
 openblack_setup_and_add_test(test_json_float_text test_json_float_text.cpp)
+openblack_setup_and_add_test(
+  test_see_through_modes graphics/test_see_through_modes.cpp
+)
