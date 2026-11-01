@@ -2288,3 +2288,4 @@ openblack_setup_and_add_test(
   test_oracle_ftol_portable oracle/test_oracle_ftol_portable.cpp
 )
 openblack_setup_and_add_test(test_radix_sort test_radix_sort.cpp)
+openblack_setup_and_add_test(test_creature_approach_walk test_creature_approach_walk.cpp)

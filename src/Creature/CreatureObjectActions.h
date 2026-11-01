@@ -196,29 +196,6 @@ constexpr float k_MostPickUpRise = 5.0f;
 /// more than k_MostPickUpRise and more than the distance between them. The pick-up then stops.
 [[nodiscard]] bool TooHighToPickUp(float rise, float distance);
 
-/// Whether a walk up to a thing to pick it up or stomp on it moves the creature. In the game, this walk has no limit.
-/// When the thing is in the circle of a building, or is not where the creature believes it is, each new walk ends at
-/// once where it started. Thus the creature never gives up. openblack gives up as a walk near a thing does
-/// (creature_cast_moves::CheckStall). It records where the creature is every k_StallTurns turns. On the last turn of
-/// that span, it gives up when the creature moved less than k_StallDistance. A creature under the control of a script
-/// never gives up. The walk then fails as a walk to a place where the creature cannot stand fails (deviation 90).
-/// A turn on which one route search of the walk continues, before the creature has a route, does not count: the search
-/// can take many turns to a far thing, and the game has no limit on it. A search that starts again on each turn, to a
-/// new place of a thing that moves, counts as before.
-struct ApproachStall
-{
-	/// The turns of the walk so far
-	uint32_t turns {0};
-	/// Where the creature was at the last record
-	glm::vec2 note {0.0f};
-	/// Where the route search went to on the last turn, while the creature had no route
-	std::optional<glm::vec2> searchedFor;
-};
-/// Counts one turn of the walk, with the creature here. Gives true when the creature gives up. `searchingFor` is the
-/// destination of the route search when the creature has no route yet. A turn on which the search to the same
-/// destination as on the last turn continues does not count and does not give up.
-bool StallsOnTurn(ApproachStall& stall, glm::vec2 here, bool scripted, std::optional<glm::vec2> searchingFor);
-
 /// The kicking animation
 constexpr size_t k_KickAnimation = 117;
 /// A thing kicked flies off at this many times the creature's size

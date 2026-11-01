@@ -77,8 +77,6 @@ struct CreatureObjectAction
 	uint32_t attempts {0};
 	/// Whether it has started a walk to get in reach
 	bool walked {false};
-	/// Whether its walk to get in reach moves it
-	creature_object_actions::ApproachStall stall;
 	/// Whether it turned to get the thing in reach, and reaches when the turn ends
 	bool turnedToReach {false};
 	/// Whether the thing got out of reach before the hold or the blow. Then the time of the reach decreases each turn.

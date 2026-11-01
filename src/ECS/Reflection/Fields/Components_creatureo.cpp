@@ -50,7 +50,6 @@ void openblack::ecs::reflection::RegisterFields_Components_creatureo(entt::meta_
 	    .Field<&components::CreatureObjectAction::maxReach>("maxReach")
 	    .Field<&components::CreatureObjectAction::attempts>("attempts")
 	    .Field<&components::CreatureObjectAction::walked>("walked")
-	    .Field<&components::CreatureObjectAction::stall>("stall")
 	    .Field<&components::CreatureObjectAction::turnedToReach>("turnedToReach")
 	    .Field<&components::CreatureObjectAction::withdraws>("withdraws")
 	    .Field<&components::CreatureObjectAction::waitedForWay>("waitedForWay")
