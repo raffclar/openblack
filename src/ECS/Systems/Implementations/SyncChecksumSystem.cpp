@@ -43,7 +43,7 @@ SyncChecksumSystem::SyncChecksumSystem()
 
 SyncChecksumSystem::~SyncChecksumSystem() = default;
 
-WorkerPool& SyncChecksumSystem::Pool()
+openblack::WorkerPool& SyncChecksumSystem::Pool()
 {
 	if (_pool == nullptr)
 	{
