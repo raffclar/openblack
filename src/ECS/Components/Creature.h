@@ -15,6 +15,7 @@
 #include <entt/fwd.hpp>
 
 #include "Creature.h"
+#include "Creature/CreatureBornWith.h"
 #include "Creature/CreatureMorph.h"
 #include "Enums.h"
 
@@ -61,6 +62,11 @@ struct Creature
 	bool mayGoThroughVortex {false};
 	/// Its own name, shown in the fight panel and on the Creature Cave's scroll; empty shows no name
 	std::u16string name;
+	/// The values that its body got when the game made it, or that it took from the last mind file that it loaded
+	creature_born::BornWith bornWith {};
+	/// A value that is not 0 tells the draw to show its body with the environment map. The draw does not use it yet. A
+	/// new creature has 0, and a body takes the value from a mind file that has it.
+	uint32_t environmentMap {0};
 };
 
 /// The size its body is shown at: its own size, or the smaller one while it is in its temple's pen. Whatever goes by

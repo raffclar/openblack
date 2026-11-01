@@ -146,6 +146,10 @@ entt::entity CreatureArchetype::Create(const glm::vec3& position, PlayerNames pl
 	const auto creationIndex = TakeThingMadePlace();
 	const auto morph =
 	    creature_morph::FromAttributes(body.alignment, body.fatness, body.strength, SpeciesStrength(creatureType));
+	// The body keeps the speeds that its species has when the game makes it
+	const auto* info = SpeciesInfo(creatureType);
+	const auto bornWith = info != nullptr ? creature_born::FromSpecies(info->slowSpeed, info->walkSpeed, info->runSpeed)
+	                                      : creature_born::BornWith {};
 	registry.Assign<Creature>(entity, Creature {.owner = playerName,
 	                                            .leashable = false,
 	                                            .species = creatureType,
@@ -155,7 +159,8 @@ entt::entity CreatureArchetype::Create(const glm::vec3& position, PlayerNames pl
 	                                            .strength = body.strength,
 	                                            .size = scale,
 	                                            .made = ++registry.Context().creaturesMade,
-	                                            .creationIndex = creationIndex});
+	                                            .creationIndex = creationIndex,
+	                                            .bornWith = bornWith});
 	// It goes to the front of the list of the living
 	registry.Assign<LivingListPlace>(entity, LivingListPlace {.made = registry.Context().livingMade++});
 	// The body is drawn with the base mesh's skins, its shape blended towards the other meshes

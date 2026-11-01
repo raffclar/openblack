@@ -15,6 +15,7 @@
 
 #include <algorithm>
 #include <array>
+#include <bit>
 #include <iterator>
 #include <ranges>
 #include <vector>
@@ -30,10 +31,13 @@ using namespace openblack::creature_mind_body;
 namespace
 {
 /// The six further values of the body that the file keeps: the first is its poo, the second its exhaustion and the third
-/// its dehydration. The last three are values that the file keeps from the species, and this code does not read them.
+/// its dehydration. The last three are the slow, walk and run speeds that the body got from its species.
 constexpr size_t k_PooNeed = 0;
 constexpr size_t k_ExhaustionNeed = 1;
 constexpr size_t k_DehydrationNeed = 2;
+constexpr size_t k_SlowSpeedNeed = 3;
+constexpr size_t k_WalkSpeedNeed = 4;
+constexpr size_t k_RunSpeedNeed = 5;
 } // namespace
 
 std::optional<CreatureType> creature_mind_body::SpeciesFromRow(uint32_t row)
@@ -120,6 +124,15 @@ std::optional<Body> creature_mind_body::FromMindFile(const creaturemind::MindFil
 	};
 	body.wounds = marks(physique.wounds, creature_marks::WoundFromWord);
 	body.blood = marks(physique.blood, creature_marks::BloodFromWord);
+	// The body takes these values as the file has them, also a value that is not a number
+	body.bornWith = creature_born::BornWith {.facing = physique.flags,
+	                                         .slowSpeed = physique.needs[k_SlowSpeedNeed],
+	                                         .walkSpeed = physique.needs[k_WalkSpeedNeed],
+	                                         .runSpeed = physique.needs[k_RunSpeedNeed]};
+	if (physique.unknown3.has_value())
+	{
+		body.environmentMap = std::bit_cast<uint32_t>(*physique.unknown3);
+	}
 	return body;
 }
 
@@ -156,6 +169,17 @@ void creature_mind_body::ToMindFile(const Body& body, creaturemind::MindFileData
 	if (body.tattooPictures.has_value())
 	{
 		file.tattoo = *body.tattooPictures;
+	}
+	if (body.bornWith.has_value())
+	{
+		physique.flags = body.bornWith->facing;
+		physique.needs[k_SlowSpeedNeed] = body.bornWith->slowSpeed;
+		physique.needs[k_WalkSpeedNeed] = body.bornWith->walkSpeed;
+		physique.needs[k_RunSpeedNeed] = body.bornWith->runSpeed;
+	}
+	if (body.environmentMap.has_value())
+	{
+		physique.unknown3 = std::bit_cast<int32_t>(*body.environmentMap);
 	}
 	physique.wounds.clear();
 	std::ranges::transform(body.wounds, std::back_inserter(physique.wounds), creature_marks::WoundToWord);
