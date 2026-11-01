@@ -548,6 +548,8 @@ public:
 	[[nodiscard]] bool InGame() const override { return _session.GetState() != online::NetworkSession::State::Ended; }
 	[[nodiscard]] const online::NetworkSession* Session() const override { return &_session; }
 	[[nodiscard]] std::optional<online::StartEvent> TakeStartEvent() override { return _session.TakeStartEvent(); }
+	void SendRoomChat(std::string text) override { _session.SendRoomChat(text); }
+	[[nodiscard]] std::vector<game_socket::RoomChat> TakeRoomChat() override { return _session.TakeRoomChat(); }
 
 private:
 	online::NetworkSession _session;
@@ -594,7 +596,7 @@ void Begin(MultiplayerFrontEnd& frontEnd, DemoServices& demo)
 		return;
 	}
 	frontEnd.Next();
-	const bool lan = stage == Stage::LanGameList;
+	const bool lan = stage == Stage::LanGameList || stage == Stage::LanRoomChat;
 	frontEnd.SetLobbyKind(lan ? LobbyKind::Lan : LobbyKind::Internet);
 	if (stage == Stage::FindGames)
 	{
@@ -605,6 +607,13 @@ void Begin(MultiplayerFrontEnd& frontEnd, DemoServices& demo)
 	if (stage == Stage::Login || stage == Stage::LanGameList)
 	{
 		demo.staged = true;
+		return;
+	}
+	if (stage == Stage::LanRoomChat)
+	{
+		// The player joins the first room of the local network by the profile's name
+		frontEnd.SelectGame(0);
+		frontEnd.Join(u"");
 		return;
 	}
 	if (stage == Stage::NotRegistered)
@@ -683,6 +692,10 @@ void Finish(MultiplayerFrontEnd& frontEnd, DemoServices& demo)
 		}
 		break;
 	}
+	case Stage::LanRoomChat:
+		// The room's game server sends a line of the host
+		demo.sockets.ServerSends(game_socket::RoomChat {.from = "Ian", .text = "Hello from the office!"});
+		break;
 	default:
 		break;
 	}

@@ -285,3 +285,16 @@ TEST(GameSocket, TheNamesOfTheGodsAndTheStopOfTheGameGoToJsonAndBack)
 	EXPECT_FALSE(Parse(R"({"type":"game.stop"})").has_value());
 	EXPECT_FALSE(Parse(R"({"type":"game.start","seed":1,"names":[1]})").has_value());
 }
+
+// A line of the room's chat on the local network: a client sends only the text, the server adds the sender's name
+TEST(GameSocket, TheLinesOfTheRoomsChatGoToJsonAndBack)
+{
+	const auto fromClient = RoundTrip(RoomChat {.from = {}, .text = "Hello, all!"});
+	EXPECT_EQ(fromClient, (RoomChat {.from = {}, .text = "Hello, all!"}));
+	EXPECT_EQ(ToJson(RoomChat {.from = {}, .text = "Hi"}).find("from"), std::string::npos);
+	const auto fromServer = RoundTrip(RoomChat {.from = "Ian", .text = "Hi"});
+	EXPECT_EQ(fromServer, (RoomChat {.from = "Ian", .text = "Hi"}));
+	EXPECT_FALSE(Parse(R"({"type":"room.chat"})").has_value());
+	EXPECT_FALSE(Parse(R"({"type":"room.chat","text":1})").has_value());
+	EXPECT_FALSE(Parse(R"({"type":"room.chat","text":"Hi","from":2})").has_value());
+}
