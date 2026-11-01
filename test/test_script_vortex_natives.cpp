@@ -21,6 +21,7 @@
 #include <glm/geometric.hpp>
 #include <gtest/gtest.h>
 #include <spdlog/sinks/null_sink.h>
+#include <spdlog/sinks/ringbuffer_sink.h>
 #include <spdlog/spdlog.h>
 
 #include "CHLApi.h"
@@ -36,6 +37,7 @@
 #include "ECS/Systems/DynamicsSystemInterface.h"
 #include "ECS/Systems/EffectRequestSystemInterface.h"
 #include "ECS/Systems/ScriptObjectsSystemInterface.h"
+#include "ECS/Systems/VortexSystemInterface.h"
 #include "Locator.h"
 #include "Particles/ParticleDrawFrame.h"
 #include "ScriptHeaders/ScriptEnums.h"
@@ -153,6 +155,48 @@ public:
 	[[nodiscard]] std::vector<ecs::systems::ScriptObjectPlace> Places() const override { return {}; }
 	[[nodiscard]] uint32_t TimesFull() const override { return 0; }
 	void ClearForNewLand() override {}
+};
+
+/// Keeps what the scripts asked of the vortices: each vortex made, and each thing told to fade out
+class FakeVortices final: public ecs::systems::VortexSystemInterface
+{
+public:
+	struct Made
+	{
+		glm::vec3 position;
+		VortexType type;
+		float altitude;
+	};
+
+	entt::entity Create(glm::vec3 position, VortexType type, float altitude) override
+	{
+		made.push_back({.position = position, .type = type, .altitude = altitude});
+		auto& registry = Locator::entitiesRegistry::value();
+		const auto vortex = registry.Create();
+		registry.Assign<ecs::components::Vortex>(vortex, ecs::components::Vortex {.type = type});
+		return vortex;
+	}
+	bool StartFadeOut(entt::entity vortex) override
+	{
+		fadeOuts.push_back(vortex);
+		return Locator::entitiesRegistry::value().AllOf<ecs::components::Vortex>(vortex);
+	}
+	bool SetArrival(entt::entity, const ecs::components::Vortex::Arrival&) override { return false; }
+	[[nodiscard]] float GetOpenness(entt::entity) const override { return 0.0f; }
+	void ProcessTurn() override {}
+	void UpdateFrame(std::chrono::milliseconds, std::chrono::milliseconds, bool) override {}
+	void UpdateDrawnFrame(ecs::systems::ObjectDrawListSystemInterface&, std::chrono::milliseconds, std::chrono::milliseconds,
+	                      bool) override
+	{
+	}
+	std::optional<Taken> EnterVortex(const std::shared_ptr<particles::CarriedObject>&) override { return std::nullopt; }
+	void StruckBy(entt::entity, entt::entity, const ecs::components::DrawnIntoVortex::Flight&) override {}
+	void ThrowOutOfVortex(entt::entity, float, float) override {}
+	[[nodiscard]] bool IsThrownOutByAVortex(entt::entity) const override { return false; }
+	[[nodiscard]] std::span<const GroundMark> GetGroundMarks() const override { return {}; }
+
+	std::vector<Made> made;
+	std::vector<entt::entity> fadeOuts;
 };
 
 using Results = std::vector<std::pair<lhvm::VMValue, lhvm::DataType>>;
@@ -466,4 +510,60 @@ TEST_F(ScriptVortexNatives, AScriptsVisualTakesTheSizeAndItsThingKeepsItsOwn)
 	EXPECT_EQ(server.magnitudes.front().second, 13.5f);
 	EXPECT_EQ(registry.Get<ecs::components::Transform>(thing).scale, scaleBefore);
 	Locator::effectRequestSystem::reset();
+}
+
+// The scripts make each of the three kinds of vortex where they say, and nothing of a kind past them
+// NOLINTNEXTLINE(cppcoreguidelines-avoid-non-const-global-variables): external macro
+TEST_F(ScriptVortexNatives, AScriptMakesAVortexOfEachKind)
+{
+	auto& vortices = static_cast<FakeVortices&>(Locator::vortexSystem::emplace<FakeVortices>());
+	const auto vortexType = static_cast<int32_t>(script::ObjectType::Vortex);
+	for (const auto kind : {VortexType::In, VortexType::Out, VortexType::Volcano})
+	{
+		const auto results =
+		    Call("CREATE", {Int(vortexType), Int(static_cast<int32_t>(kind)), Float(1061.0f), Float(147.0f), Float(3598.0f)});
+		ASSERT_EQ(results.size(), 1u);
+		EXPECT_NE(results.front().first.uintVal, 0u);
+		ASSERT_FALSE(vortices.made.empty());
+		EXPECT_EQ(vortices.made.back().type, kind);
+		EXPECT_EQ(vortices.made.back().position, glm::vec3(1061.0f, 147.0f, 3598.0f));
+		EXPECT_EQ(vortices.made.back().altitude, 0.0f);
+	}
+	const auto results = Call(
+	    "CREATE", {Int(vortexType), Int(static_cast<int32_t>(VortexType::Volcano) + 1), Float(1.0f), Float(2.0f), Float(3.0f)});
+	ASSERT_EQ(results.size(), 1u);
+	EXPECT_EQ(results.front().first.uintVal, 0u);
+	EXPECT_EQ(vortices.made.size(), 3u);
+}
+
+// A vortex starts to fade out; a thing that is not a vortex, or nothing given at all, is an error
+// NOLINTNEXTLINE(cppcoreguidelines-avoid-non-const-global-variables): external macro
+TEST_F(ScriptVortexNatives, OnlyAVortexFadesOut)
+{
+	auto& vortices = static_cast<FakeVortices&>(Locator::vortexSystem::emplace<FakeVortices>());
+	auto sink = std::make_shared<spdlog::sinks::ringbuffer_sink_mt>(8);
+	auto& sinks = spdlog::get("scripting")->sinks();
+	sinks.push_back(sink);
+	const auto errors = [&sink]() { return sink->last_formatted().size(); };
+
+	const auto vortex = MakeVortex(VortexType::In);
+	Call("VORTEX_FADE_OUT", {Object(vortex)});
+	ASSERT_EQ(vortices.fadeOuts.size(), 1u);
+	EXPECT_EQ(vortices.fadeOuts.back(), vortex);
+	EXPECT_EQ(errors(), 0u);
+
+	const auto rock = Locator::entitiesRegistry::value().Create();
+	Call("VORTEX_FADE_OUT", {Object(rock)});
+	EXPECT_EQ(vortices.fadeOuts.size(), 2u);
+	ASSERT_EQ(errors(), 2u);
+	EXPECT_NE(sink->last_formatted().front().find("Thing not vortex"), std::string::npos);
+	EXPECT_NE(sink->last_formatted().back().find("vortex fade out failed"), std::string::npos);
+
+	// Nothing of any type is an error; the script's object 0 alone is not
+	Call("VORTEX_FADE_OUT", {std::pair(lhvm::VMValue(0u), lhvm::DataType::None)});
+	EXPECT_EQ(errors(), 3u);
+	Call("VORTEX_FADE_OUT", {Object(entt::entity {0})});
+	EXPECT_EQ(errors(), 3u);
+	EXPECT_EQ(vortices.fadeOuts.size(), 2u);
+	sinks.pop_back();
 }
