@@ -11,9 +11,13 @@
 
 #include "TempleExteriorSystem.h"
 
+#include <condition_variable>
+
 #include <algorithm>
+#include <future>
 #include <iterator>
 #include <memory>
+#include <mutex>
 #include <ranges>
 #include <string>
 #include <vector>
@@ -286,21 +290,52 @@ void TempleExteriorSystem::FinishMorphs(MadeBlends& made)
 		std::shared_ptr<l3d::L3DFile> copy;
 	};
 	const auto settings = graphics::L3DMesh::SettingsNow(graphics::ConfiguredUploads());
-	std::vector<Prepared> prepared(made.loads.size());
-	Workers().ForEach(made.loads.size(), [&made, &settings, &prepared](size_t index, size_t) {
-		const auto& blended = made.shapes[made.loads[index].shape].second;
-		prepared[index].mesh = graphics::L3DMesh::Prepare(blended, settings);
-		prepared[index].copy = std::make_shared<l3d::L3DFile>(blended);
+	const auto count = made.loads.size();
+	std::vector<Prepared> prepared(count);
+	// Each job marks its result as ready when it ends, also when it stops with an exception
+	std::vector<bool> ready(count, false);
+	std::mutex readyMutex;
+	std::condition_variable readyChanged;
+	struct MarkReady
+	{
+		~MarkReady()
+		{
+			{
+				const std::scoped_lock lock(mutex);
+				ready[index] = true;
+			}
+			changed.notify_all();
+		}
+		std::vector<bool>& ready;
+		size_t index;
+		std::mutex& mutex;
+		std::condition_variable& changed;
+	};
+	// The threads take the jobs in the order of the temples. A thread of its own waits for them, so this thread can
+	// make the device objects of each mesh when it is ready.
+	auto& workers = Workers();
+	auto jobs = std::async(std::launch::async, [&]() {
+		workers.ForEach(count, [&](size_t index, size_t) {
+			const MarkReady mark {.ready = ready, .index = index, .mutex = readyMutex, .changed = readyChanged};
+			const auto& blended = made.shapes[made.loads[index].shape].second;
+			prepared[index].mesh = graphics::L3DMesh::Prepare(blended, settings);
+			prepared[index].copy = std::make_shared<l3d::L3DFile>(blended);
+		});
 	});
 
 	// The objects on the graphics device, in the order of the temples
 	auto& meshes = Locator::resources::value().GetMeshes();
-	for (size_t i = 0; i < made.loads.size(); ++i)
+	for (size_t i = 0; i < count; ++i)
 	{
+		{
+			std::unique_lock lock(readyMutex);
+			readyChanged.wait(lock, [&ready, i]() { return ready[i]; });
+		}
 		const auto& load = made.loads[i];
 		meshes.Load(load.id, resources::L3DLoader::FromPreparedDynamicTag {}, load.name, std::move(prepared[i].mesh));
 		Dress(load.id, made.shapes[load.shape].second, std::move(prepared[i].copy), load.alignment, load.owner, made);
 	}
+	jobs.get();
 	made.loads.clear();
 }
 
