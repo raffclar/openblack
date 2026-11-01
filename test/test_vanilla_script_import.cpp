@@ -19,6 +19,7 @@
 #include <optional>
 #include <string>
 #include <string_view>
+#include <utility>
 #include <vector>
 
 #include <LHVMFile.h>
@@ -49,6 +50,13 @@ public:
 		return *this;
 	}
 
+	/// Adds a named word after the table
+	FakeTable& Word(std::string_view name, uint32_t value)
+	{
+		_words.emplace_back(name, value);
+		return *this;
+	}
+
 	[[nodiscard]] VanillaWorld Make(uint32_t next) const
 	{
 		std::vector<uint8_t> bytes;
@@ -70,12 +78,17 @@ public:
 			    {.name = "scriptObjectCount", .at = put(&entry.count, sizeof(entry.count)), .size = sizeof(entry.count)});
 		}
 		game.fields.push_back({.name = "scriptNextPlace", .at = put(&next, sizeof(next)), .size = sizeof(next)});
+		for (const auto& [name, value] : _words)
+		{
+			game.fields.push_back({.name = name, .at = put(&value, sizeof(value)), .size = sizeof(value)});
+		}
 		return {bytes, VanillaFraming {}, {game}, {}};
 	}
 
 private:
 	VanillaRecord _game;
 	std::array<script_import::FilePlace, script_objects::k_Places> _places {};
+	std::vector<std::pair<std::string_view, uint32_t>> _words;
 };
 
 /// A script file with a global, a main stack and one task that each hold values
@@ -132,6 +145,27 @@ TEST(VanillaScriptImport, ReadsTheTableOfTheScriptObjects)
 	// A game object with no table
 	const VanillaWorld empty({}, VanillaFraming {}, {VanillaRecord {.number = 1}}, {});
 	EXPECT_FALSE(script_import::ReadScriptTable(empty).has_value());
+}
+
+// The values after the table give the level of the interface, the entry to the temple and the countdown timer of the
+// scripts. A game object without all of them gives no values.
+TEST(VanillaScriptImport, ReadsTheValuesOfTheScriptsAfterTheTable)
+{
+	FakeTable fake;
+	fake.Word("scriptCountdownOn", 1)
+	    .Word("scriptCountdownLeft", 90)
+	    .Word("scriptCountdownShown", 1)
+	    .Word("scriptTempleEntry", 0)
+	    .Word("scriptInterfaceLevel", 12);
+	const auto values = script_import::ReadScriptValues(fake.Make(1));
+	ASSERT_TRUE(values.has_value());
+	EXPECT_EQ(values->interfaceLevel, 12);
+	EXPECT_FALSE(values->templeEntry);
+	EXPECT_TRUE(values->countdownOn);
+	EXPECT_EQ(values->countdownLeft, 90U);
+	EXPECT_TRUE(values->countdownShown);
+
+	EXPECT_FALSE(script_import::ReadScriptValues(FakeTable().Make(1)).has_value());
 }
 
 // An object that openblack made takes its place as its entity. A place of an object that openblack did not make is
@@ -244,6 +278,13 @@ TEST(VanillaScriptImport, SavedGamesOfLandOneHaveTheirScriptObjectsInTheTable)
 		}
 		const auto table = script_import::ReadScriptTable(*read.world);
 		ASSERT_TRUE(table.has_value()) << entry.path();
+		// No script of these saves has a countdown timer or a lower level of the interface, and the temple lets the
+		// player in
+		const auto scriptValues = script_import::ReadScriptValues(*read.world);
+		ASSERT_TRUE(scriptValues.has_value()) << entry.path();
+		EXPECT_EQ(scriptValues->interfaceLevel, 0) << entry.path();
+		EXPECT_TRUE(scriptValues->templeEntry) << entry.path();
+		EXPECT_FALSE(scriptValues->countdownOn) << entry.path();
 		// Every object the file has goes into the table as itself
 		const auto imported = script_import::ImportTable(*table, [](uint32_t number) { return std::optional(number); });
 		EXPECT_TRUE(imported.lost.empty()) << entry.path();

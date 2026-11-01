@@ -9,12 +9,19 @@
 
 #include "Advisors.h"
 
+#include <cstddef>
+
+#include <algorithm>
 #include <string>
 
 #include <fmt/format.h>
 
 #include "Camera/Camera.h"
 #include "ECS/Systems/AdvisorSystemInterface.h"
+#include "ECS/Systems/DialogueControlSystemInterface.h"
+#include "ECS/Systems/HelpMessageSystemInterface.h"
+#include "ECS/Systems/HelpTextSystemInterface.h"
+#include "Gui/TextDatabase.h"
 #include "Help/Spirits.h"
 #include "Locator.h"
 
@@ -25,6 +32,8 @@ using namespace openblack::help::spirits;
 namespace
 {
 constexpr std::array<const char*, 4> k_ControlStates {"Home", "Going home", "Out", "Clinging"};
+/// The window lists this many of the newest help messages
+constexpr size_t k_ShownHelpMessages = 12;
 
 /// The help spirit type the scripts name an advisor by
 int32_t TypeOf(int advisor)
@@ -95,6 +104,56 @@ void Advisors::Draw() noexcept
 			DrawAdvisor(advisor);
 		}
 		ImGui::PopID();
+	}
+	if (ImGui::CollapsingHeader("The scripts' dialogue and the help messages"))
+	{
+		DrawHelp();
+	}
+}
+
+void Advisors::DrawHelp() noexcept
+{
+	if (!Locator::helpTextSystem::has_value())
+	{
+		ImGui::TextUnformatted("No help system");
+		return;
+	}
+	const auto& help = Locator::helpTextSystem::value();
+	ImGui::Text("Dialogue started: %s, text read: %s", help.IsStarted() ? "yes" : "no", help.IsTextRead() ? "yes" : "no");
+	if (Locator::dialogueControlSystem::has_value())
+	{
+		ImGui::Text("Dialogue held by script task %u", Locator::dialogueControlSystem::value().GetOwner());
+	}
+	if (const auto* dialogue = help.GetDialogue(); dialogue != nullptr)
+	{
+		const auto text = dialogue->GetCurrentText();
+		ImGui::Text("Text %u, narrator %d", text, help.GetNarrator(text));
+		ImGui::Text("Waits for a click: %s, drawn: %s", dialogue->IsWaitingForClick() ? "yes" : "no",
+		            dialogue->IsDrawn() ? "yes" : "no");
+		ImGui::Text("Started in turn %u, ends in turn %u", dialogue->GetStartTurn(), dialogue->GetEndTurn());
+		ImGui::TextWrapped("%s", openblack::gui::ToUtf8(help.GetWords(text)).c_str());
+	}
+	else
+	{
+		ImGui::TextUnformatted("No text shows");
+	}
+	if (!Locator::helpMessageSystem::has_value())
+	{
+		return;
+	}
+	const auto& started = Locator::helpMessageSystem::value().GetStarted();
+	ImGui::SeparatorText(fmt::format("Help messages started: {}", started.size()).c_str());
+	// The newest first
+	const auto shown = std::min(started.size(), k_ShownHelpMessages);
+	for (size_t i = 0; i < shown; ++i)
+	{
+		const auto& message = started[started.size() - 1 - i];
+		ImGui::Text("Turn %u: %s, texts %u to %u", message.turn, message.script.c_str(), message.first, message.last);
+		if (message.statText.has_value())
+		{
+			ImGui::SameLine();
+			ImGui::Text("(town need text %u, %.0f%%)", *message.statText, message.need.value_or(0.0f));
+		}
 	}
 }
 

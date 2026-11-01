@@ -144,6 +144,9 @@ struct RenderContext
 		glm::vec4 look {0.0f};
 	};
 	std::vector<ObjectInstance> instanceUniforms;
+	/// By instance, the alpha reference that a see-through instance uses in place of the references of its materials:
+	/// the phantom building over a building site uses 10
+	std::map<uint32_t, uint8_t> seeThroughRefs;
 	/// By instance, the detail it is drawn in this frame, as the bit its model's parts name it by (see
 	/// graphics::mesh_detail::LevelBit): only read for models whose parts differ by it
 	std::vector<uint8_t> instanceLevels;

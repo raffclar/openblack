@@ -54,8 +54,12 @@ std::string_view Name(Quantity quantity)
 		return "warmth";
 	case Quantity::CreatureSize:
 		return "size";
+	case Quantity::CreatureLife:
+		return "life";
 	case Quantity::CreatureDistance:
 		return "distance to the point";
+	case Quantity::ObjectResource:
+		return "food and wood held";
 	}
 	return "";
 }

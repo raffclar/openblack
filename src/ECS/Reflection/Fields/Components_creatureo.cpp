@@ -75,10 +75,18 @@ void openblack::ecs::reflection::RegisterFields_Components_creatureo(entt::meta_
 	    .Field<&components::CreatureHeldObject::mirrored>("mirrored")
 	    .Field<&components::CreatureHeldObject::bone>("bone");
 	Reflect<components::PendingCatch>(context).Field<&components::PendingCatch::object>("object");
-	Reflect<components::CatchHands>(context).Field<&components::CatchHands::hands>("hands");
-	Reflect<components::PickUpReach>(context).Field<&components::PickUpReach::points>("points");
-	Reflect<components::StompReach>(context).Field<&components::StompReach::points>("points");
-	Reflect<components::TossHandVelocity>(context).Field<&components::TossHandVelocity::velocity>("velocity");
+	Reflect<components::CatchHands>(context)
+	    .Field<&components::CatchHands::hands>("hands")
+	    .Field<&components::CatchHands::bodyRevision>("bodyRevision");
+	Reflect<components::PickUpReach>(context)
+	    .Field<&components::PickUpReach::points>("points")
+	    .Field<&components::PickUpReach::bodyRevision>("bodyRevision");
+	Reflect<components::StompReach>(context)
+	    .Field<&components::StompReach::points>("points")
+	    .Field<&components::StompReach::bodyRevision>("bodyRevision");
+	Reflect<components::TossHandVelocity>(context)
+	    .Field<&components::TossHandVelocity::velocity>("velocity")
+	    .Field<&components::TossHandVelocity::bodyRevision>("bodyRevision");
 	Reflect<components::HeldByCreature>(context)
 	    .Field<&components::HeldByCreature::creature>("creature")
 	    .Field<&components::HeldByCreature::drawn>("drawn")

@@ -84,22 +84,6 @@ uint32_t Abgr(uint32_t argb)
 	return (argb & 0xFF00FF00u) | ((argb >> 16u) & 0xFFu) | ((argb & 0xFFu) << 16u);
 }
 
-/// The mode a material is drawn in while the whole model fades: its blended form
-render_modes::Mode FadingMode(render_modes::Mode mode)
-{
-	switch (mode)
-	{
-	case render_modes::Mode::Textured:
-		return render_modes::Mode::TexturedAlpha;
-	case render_modes::Mode::AlphaTextured:
-		return render_modes::Mode::AlphaTexturedAlpha;
-	case render_modes::Mode::TexturedChroma:
-		return render_modes::Mode::TexturedChromaAlpha;
-	default:
-		return mode;
-	}
-}
-
 /// A sprite's four corners in the plane of the screen at its place, and its cell's texture coordinates: top left, top
 /// right, bottom right and bottom left
 void AddSprite(const AdvisorSystem::Sprite& sprite, const glm::vec3& right, const glm::vec3& up,
@@ -275,9 +259,13 @@ void Renderer::DrawAdvisors(const DrawSceneDesc& desc) const
 					float alphaRef = materialRef;
 					if (fading)
 					{
-						mode = FadingMode(mode);
+						mode = render_modes::SeeThrough(mode);
 						// Fading, the alpha a fragment needs drops with the model's
-						alphaRef = std::max(0.0f, std::trunc(materialRef * static_cast<float>(draw.alpha) / 255.0f - 5.0f));
+						if (render_modes::SeeThroughScalesRef(mode))
+						{
+							alphaRef = static_cast<float>(render_modes::SeeThroughRef(static_cast<uint8_t>(materialRef),
+							                                                          static_cast<uint8_t>(draw.alpha)));
+						}
 					}
 					const auto& modeDesc = render_modes::Desc(mode);
 					uint64_t state =

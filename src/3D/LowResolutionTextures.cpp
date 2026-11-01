@@ -89,6 +89,26 @@ std::optional<std::vector<uint8_t>> Halve(std::span<const uint8_t> picture, uint
 	return out;
 }
 
+std::optional<std::vector<uint16_t>> HalveTexels(std::span<const uint16_t> picture, uint16_t side)
+{
+	const auto texels = static_cast<size_t>(side) * side;
+	if (side < 2 || picture.size() != texels)
+	{
+		return std::nullopt;
+	}
+	const size_t half = side / 2u;
+	std::vector<uint16_t> out;
+	out.reserve(half * half);
+	for (size_t row = 0; row < half; ++row)
+	{
+		for (size_t column = 0; column < half; ++column)
+		{
+			out.push_back(picture[((row * 2) * side) + (column * 2)]);
+		}
+	}
+	return out;
+}
+
 namespace
 {
 /// A picture of 16-bit texels at half its size: each texel the mean of a two by two square, each channel of masks

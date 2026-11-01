@@ -7,9 +7,12 @@
  * openblack is licensed under the GNU General Public License version 3.
  *******************************************************************************/
 
+#include <cstdint>
+
 #include <array>
 #include <numeric>
 #include <optional>
+#include <span>
 #include <string>
 #include <vector>
 
@@ -115,6 +118,43 @@ TEST(TempleExteriorMorph, TexelsBlendByChannelKeepingTheFirstsAlpha)
 	// Halfway, 15 by 128 over 255 is 7 in each
 	BlendTexels(from, to, 128, blended);
 	EXPECT_EQ(blended[0], 0xF777);
+}
+
+// At the lowest detail levels each picture first takes the texel at the start of each two by two square, then the half
+// pictures blend into the half-size skin
+TEST(TempleExteriorMorph, AHalfSizeSkinBlendsTheFirstTexelOfEachSquare)
+{
+	constexpr size_t k_Side = 256;
+	std::vector<uint16_t> from(k_Side * k_Side, 0xF000);
+	std::vector<uint16_t> to(k_Side * k_Side, 0xF000);
+	// Each texel of a square has another colour, so that a mean of the square differs from the first texel
+	for (size_t row = 0; row < k_Side; ++row)
+	{
+		for (size_t column = 0; column < k_Side; ++column)
+		{
+			const auto corner = static_cast<uint16_t>(((row % 2) * 2) + (column % 2));
+			to[(row * k_Side) + column] = static_cast<uint16_t>(0xF000 | (corner * 5));
+		}
+	}
+	from[(2 * k_Side) + 2] = 0xFF00;
+
+	const auto full = SkinTexels(from, to, 255, false);
+	ASSERT_TRUE(full.has_value());
+	EXPECT_EQ(full->size(), k_Side * k_Side);
+	EXPECT_EQ((*full)[1], 0xF005);
+
+	const auto half = SkinTexels(from, to, 255, true);
+	ASSERT_TRUE(half.has_value());
+	ASSERT_EQ(half->size(), (k_Side / 2) * (k_Side / 2));
+	EXPECT_EQ((*half)[0], 0xF000);
+	EXPECT_EQ((*half)[1], 0xF000);
+	// The first picture's texel at row 2 and column 2 is the half picture's texel at row 1 and column 1
+	const auto zeroWeight = SkinTexels(from, to, 0, true);
+	ASSERT_TRUE(zeroWeight.has_value());
+	EXPECT_EQ((*zeroWeight)[(k_Side / 2) + 1], 0xFF00);
+	EXPECT_EQ((*zeroWeight)[(k_Side / 2) + 2], 0xF000);
+
+	EXPECT_FALSE(SkinTexels(std::span<const uint16_t>(from).first(100), to, 0, true).has_value());
 }
 
 // The mesh is blended again when the look changes, before its first blend, and when its blended mesh is not loaded, as

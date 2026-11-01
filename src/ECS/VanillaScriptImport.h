@@ -56,6 +56,22 @@ struct FileTable
 /// The table of the game object, nothing when the game object does not keep it
 [[nodiscard]] std::optional<FileTable> ReadScriptTable(const gamesave::VanillaWorld& world);
 
+/// The values of the scripts that the file keeps after the table and that stay after a load
+struct ScriptValues
+{
+	/// The level of the interface that the scripts set. The load sets the interface to this level again.
+	int32_t interfaceLevel {0};
+	/// A tap on the entrance of the temple takes the player inside
+	bool templeEntry {true};
+	/// The countdown timer of the scripts: on or off, the value that is left and whether it shows
+	bool countdownOn {false};
+	uint32_t countdownLeft {0};
+	bool countdownShown {false};
+};
+
+/// The values of the scripts of the game object, nothing when the game object does not keep them
+[[nodiscard]] std::optional<ScriptValues> ReadScriptValues(const gamesave::VanillaWorld& world);
+
 /// The entity that openblack made for the object with a number of the file, nothing when it made none
 using EntityOfNumber = std::function<std::optional<uint32_t>(uint32_t number)>;
 

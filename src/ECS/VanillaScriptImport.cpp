@@ -244,6 +244,29 @@ std::vector<vanilla_script_import::ImportedTemple> vanilla_script_import::ReadTe
 	return temples;
 }
 
+std::optional<ScriptValues> vanilla_script_import::ReadScriptValues(const gamesave::VanillaWorld& world)
+{
+	if (world.Records().empty())
+	{
+		return std::nullopt;
+	}
+	const auto& game = world.Game();
+	const auto level = world.Word(game, "scriptInterfaceLevel");
+	const auto entry = world.Word(game, "scriptTempleEntry");
+	const auto on = world.Word(game, "scriptCountdownOn");
+	const auto left = world.Word(game, "scriptCountdownLeft");
+	const auto shown = world.Word(game, "scriptCountdownShown");
+	if (!level.has_value() || !entry.has_value() || !on.has_value() || !left.has_value() || !shown.has_value())
+	{
+		return std::nullopt;
+	}
+	return ScriptValues {.interfaceLevel = static_cast<int32_t>(*level),
+	                     .templeEntry = *entry != 0,
+	                     .countdownOn = *on != 0,
+	                     .countdownLeft = *left,
+	                     .countdownShown = *shown != 0};
+}
+
 std::optional<FileTable> vanilla_script_import::ReadScriptTable(const gamesave::VanillaWorld& world)
 {
 	if (world.Records().empty())

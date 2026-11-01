@@ -10,6 +10,7 @@
 #include <cstdint>
 
 #include <algorithm>
+#include <span>
 #include <vector>
 
 #include <gtest/gtest.h>
@@ -118,4 +119,18 @@ TEST(LowResolutionTextures, TheSkinsOfAModelLoadAtHalfSizeAtTheLowestDetailLevel
 	// An opaque skin takes the five-bit mean and stays opaque: red (28 + 28 + 28 + 29) / 4 = 28, green (0 + 0 + 0 + 2) / 4
 	// = 0, blue (0 + 0 + 0 + 4) / 4 = 1
 	EXPECT_EQ(l3d_skin::LoadedTexels(skin, l3d_skin::k_OpaqueSkinsFlag, true)[0], 0xF001);
+}
+
+TEST(LowResolutionTextures, SixteenBitTexelsHalveToTheFirstTexelOfEachSquare)
+{
+	constexpr uint16_t k_Side = 4;
+	std::vector<uint16_t> picture(static_cast<size_t>(k_Side) * k_Side);
+	for (size_t i = 0; i < picture.size(); ++i)
+	{
+		picture[i] = static_cast<uint16_t>(0x1000 + i);
+	}
+	const auto half = low_resolution_textures::HalveTexels(picture, k_Side);
+	ASSERT_TRUE(half.has_value());
+	EXPECT_EQ(*half, (std::vector<uint16_t> {0x1000, 0x1002, 0x1008, 0x100A}));
+	EXPECT_FALSE(low_resolution_textures::HalveTexels(std::span<const uint16_t>(picture).first(15), k_Side).has_value());
 }

@@ -351,6 +351,17 @@ TEST(InstantSaves, AutosavesAfterTenMinutesOfTurns)
 	EXPECT_EQ(AutosaveSlot(5), 17u);
 }
 
+TEST(InstantSaves, TheExitSaveStopsOnceTheGameIsOver)
+{
+	EXPECT_TRUE(ExitSaveAllowed({.land = 1}));
+	// The game that is over keeps the saves that the player had
+	EXPECT_FALSE(ExitSaveAllowed({.gameOver = true, .land = 1}));
+	EXPECT_FALSE(ExitSaveAllowed({.skirmish = true, .land = 1}));
+	EXPECT_FALSE(ExitSaveAllowed({.networkGame = true, .land = 1}));
+	EXPECT_FALSE(ExitSaveAllowed({.land = k_PlaygroundLand}));
+	EXPECT_TRUE(ExitSaveAllowed({.land = 5}));
+}
+
 TEST(InstantSaves, QuickKeysNeedMoreThanThreeTurns)
 {
 	EXPECT_FALSE(QuickTurnAllowed(3, 0, false, false, false));

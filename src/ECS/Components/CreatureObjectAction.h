@@ -151,33 +151,41 @@ struct PendingCatch
 	entt::entity object {entt::null};
 };
 
-/// Where the creature's hand closes in each catching animation, in the model's units: measured at its first catch and
-/// never again, whatever its shape becomes
+/// Where the creature's hand closes in each catching animation, in the model's units: measured at its first catch, and
+/// measured again at the next catch after its animations follow a new body shape
 struct CatchHands
 {
 	std::array<glm::vec3, 4> hands {};
+	/// The revision of the body shape (CreatureMorph::revision) that the measure is for
+	uint32_t bodyRevision {0};
 };
 
 /// Where the creature's hand gets in its pick-up animations, at the model's own size: measured the first time it is
-/// wanted and never again, whatever its shape becomes
+/// wanted, and measured again the next time it is wanted after its animations follow a new body shape
 struct PickUpReach
 {
 	creature_reach::Points points {};
+	/// The revision of the body shape (CreatureMorph::revision) that the measure is for
+	uint32_t bodyRevision {0};
 };
 
-/// Where the creature's foot gets in its stomp animations, at the model's own size: measured the first time it is wanted
-/// and never again, whatever its shape becomes
+/// Where the creature's foot gets in its stomp animations, at the model's own size: measured the first time it is
+/// wanted, and measured again the next time it is wanted after its animations follow a new body shape
 struct StompReach
 {
 	creature_reach::Points points {};
+	/// The revision of the body shape (CreatureMorph::revision) that the measure is for
+	uint32_t bodyRevision {0};
 };
 
 /// How fast the creature's hand moves as it tosses something away, in the model's units a second at the model's own
-/// size, before it is mirrored for the other hand: measured at its first toss and never again, whatever its shape
-/// becomes
+/// size, before it is mirrored for the other hand: measured at its first toss, and measured again at the next toss after
+/// its animations follow a new body shape
 struct TossHandVelocity
 {
 	glm::vec3 velocity {0.0f};
+	/// The revision of the body shape (CreatureMorph::revision) that the measure is for
+	uint32_t bodyRevision {0};
 };
 
 /// On something a creature holds: which creature

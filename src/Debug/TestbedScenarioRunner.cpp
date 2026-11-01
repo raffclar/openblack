@@ -4582,6 +4582,19 @@ void Runner::Give(const Command& command)
 		}
 		result = Locator::creatureFizzSystem::has_value() ? fmt::format("fizzes to {:.2f}", command.amount) : "no fizz";
 		break;
+	case Kind::SetBodyLook:
+	{
+		auto* body = Locator::entitiesRegistry::value().TryGet<ecs::components::Creature>(*entity);
+		if (body == nullptr)
+		{
+			result = "no creature";
+			break;
+		}
+		auto& look = command.value == 0 ? body->alignment : body->fatness;
+		look = command.amount;
+		result = fmt::format("{} {:.2f}", command.value == 0 ? "alignment" : "fatness", command.amount);
+		break;
+	}
 	case Kind::SetFightLean:
 	{
 		auto& registry = Locator::entitiesRegistry::value();
@@ -5074,6 +5087,11 @@ std::optional<double> Runner::ReadCheck(const checks::Check& check) const
 		const auto* body = creature.has_value() ? registry.TryGet<const Creature>(*creature) : nullptr;
 		return body != nullptr ? std::optional(static_cast<double>(body->size)) : std::nullopt;
 	}
+	case checks::Quantity::CreatureLife:
+	{
+		const auto creature = CreatureAt(creatureIndex());
+		return creature.has_value() ? std::optional(static_cast<double>(ecs::world_objects::LifeOf(*creature))) : std::nullopt;
+	}
 	case checks::Quantity::CreatureDistance:
 	{
 		const auto creature = CreatureAt(creatureIndex());
@@ -5084,6 +5102,17 @@ std::optional<double> Runner::ReadCheck(const checks::Check& check) const
 		}
 		const auto goal = MapPoint(_middle, check.point);
 		return static_cast<double>(glm::distance(glm::vec2(transform->position.x, transform->position.z), goal));
+	}
+	case checks::Quantity::ObjectResource:
+	{
+		const auto object = ObjectAt(check.index);
+		if (!object.has_value() || !Locator::resourceStoreSystem::has_value())
+		{
+			return std::nullopt;
+		}
+		const auto& stores = Locator::resourceStoreSystem::value();
+		return static_cast<double>(stores.GetResource(*object, ResourceType::Food)) +
+		       static_cast<double>(stores.GetResource(*object, ResourceType::Wood));
 	}
 	}
 	return std::nullopt;

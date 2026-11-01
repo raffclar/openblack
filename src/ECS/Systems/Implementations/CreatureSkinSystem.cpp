@@ -114,6 +114,31 @@ std::optional<SkinSources> SourcesOf(const CreatureRig& rig, float evilGood)
 	};
 }
 
+/// The colour of the painted skin under the point of the eyelids
+std::optional<glm::u8vec3> LidColourOf(const CreatureSkin& skin, const CreatureRig& rig)
+{
+	const auto* point = rig.eyes.has_value() ? rig.eyes->LidColourPoint() : nullptr;
+	if (point == nullptr)
+	{
+		return std::nullopt;
+	}
+	const auto painted = std::ranges::find(skin.skins, point->skinId, &CreatureSkin::Skin::id);
+	if (painted == skin.skins.end())
+	{
+		return std::nullopt;
+	}
+	return creature_skin::ColourAt(painted->texels, point->skinPoint);
+}
+
+/// The eyelids of a body take the colour of its painted skin. A body without a colour keeps the colour that it has.
+void ShowLidColour(const CreatureSkin& skin, CreatureEyes& eyes)
+{
+	if (skin.lidColour.has_value())
+	{
+		eyes.lidColour = glm::vec3(*skin.lidColour) / 255.0f;
+	}
+}
+
 void Paint(CreatureSkin& skin, const SkinSources& sources, uint8_t weight, const creature_tattoo::Slots& tattoos,
            const creature_tattoo::Masks* masks, const CreatureMarks& marks, const CreatureRig& rig,
            const creature_skin::Art* art)
@@ -154,6 +179,7 @@ void Paint(CreatureSkin& skin, const SkinSources& sources, uint8_t weight, const
 		                        .art = art,
 		                        .masks = masks});
 	}
+	skin.lidColour = LidColourOf(skin, rig);
 	++skin.revision;
 }
 /// The entity of the player that a creature belongs to. A creature of nobody's uses the masks of the local player.
@@ -291,6 +317,32 @@ void CreatureSkinSystem::Update()
 	if (Locator::temple::has_value())
 	{
 		paintCopies(Locator::temple::value().GetRooms());
+	}
+
+	// The eyelids take their colour from the skins as painted for this frame. A copy without a skin of its own takes the
+	// colour of its creature's skin. The creature of a copy in the drawn registry is in that registry too.
+	const auto showLidColours = [](Registry& bodies, const Registry& creatures) {
+		bodies.Each<const CreatureSkin, CreatureEyes>(
+		    [](const CreatureSkin& skin, CreatureEyes& eyes) { ShowLidColour(skin, eyes); });
+		bodies.Each<const CreatureCopy, CreatureEyes>(
+		    [&creatures](const CreatureCopy& copy, CreatureEyes& eyes) {
+			    const auto* skin =
+			        creatures.Valid(copy.creature) ? creatures.TryGet<const CreatureSkin>(copy.creature) : nullptr;
+			    if (skin != nullptr)
+			    {
+				    ShowLidColour(*skin, eyes);
+			    }
+		    },
+		    entt::exclude<CreatureSkin>);
+	};
+	showLidColours(registry, registry);
+	if (Locator::drawnRegistry::has_value())
+	{
+		showLidColours(Locator::drawnRegistry::value(), Locator::drawnRegistry::value());
+	}
+	if (Locator::temple::has_value())
+	{
+		showLidColours(Locator::temple::value().GetRooms(), registry);
 	}
 }
 

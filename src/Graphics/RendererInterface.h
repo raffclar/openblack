@@ -93,6 +93,11 @@ public:
 		std::optional<float> additiveShare;
 		/// Every primitive is blended over what is behind it by each instance's own alpha, whatever its material says
 		bool instanceAlpha {false};
+		/// With `instanceAlpha`, every primitive draws in its mode of the game's second table, as a see-through object
+		/// does: that mode sets the blending, the depth write and the alpha test (see render_modes::SeeThrough)
+		bool seeThrough {false};
+		/// The alpha reference that every see-through primitive uses in place of the reference of its material, when given
+		std::optional<uint8_t> seeThroughRef;
 		/// Every primitive is drawn as its material is after the game changes the material to these properties. The
 		/// instance's alpha then multiplies the alpha of the texture before the alpha test, as in the game's materials.
 		std::optional<graphics::render_modes::Properties> changedMaterials;

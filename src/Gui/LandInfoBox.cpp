@@ -62,6 +62,7 @@ void LandInfoBox::Show(std::u16string title)
 		_fade.SetDestination(1.0f, k_FadeInSeconds);
 	}
 	_active = true;
+	_covered = false;
 	_dialog.Reset();
 }
 
@@ -76,13 +77,25 @@ void LandInfoBox::Hide(Choice choice)
 {
 	_choice = choice;
 	_active = false;
+	_covered = false;
 	_dialog.Reset();
 	_fade.SetDestination(0.0f, k_FadeOutSeconds);
 }
 
+void LandInfoBox::SetCovered(bool covered)
+{
+	if (_covered == covered || !_active)
+	{
+		return;
+	}
+	_covered = covered;
+	_dialog.Reset();
+	_fade.SetDestination(covered ? 0.0f : 1.0f, covered ? k_FadeOutSeconds : k_FadeInSeconds);
+}
+
 void LandInfoBox::MouseMove(glm::ivec2 point)
 {
-	if (_active)
+	if (TakesInput())
 	{
 		_dialog.MouseMove(point);
 	}
@@ -90,7 +103,7 @@ void LandInfoBox::MouseMove(glm::ivec2 point)
 
 void LandInfoBox::MouseDown(glm::ivec2 point)
 {
-	if (_active)
+	if (TakesInput())
 	{
 		_dialog.MouseDown(point);
 	}
@@ -98,12 +111,12 @@ void LandInfoBox::MouseDown(glm::ivec2 point)
 
 bool LandInfoBox::MouseUp(glm::ivec2 point)
 {
-	return _active && _dialog.MouseUp(point);
+	return TakesInput() && _dialog.MouseUp(point);
 }
 
 void LandInfoBox::Wheel(glm::ivec2 point, int steps)
 {
-	if (_active)
+	if (TakesInput())
 	{
 		_dialog.Wheel(point, steps);
 	}
@@ -111,7 +124,7 @@ void LandInfoBox::Wheel(glm::ivec2 point, int steps)
 
 void LandInfoBox::KeyDown(int key, uint16_t modifiers)
 {
-	if (!_active)
+	if (!TakesInput())
 	{
 		return;
 	}
@@ -127,7 +140,7 @@ void LandInfoBox::KeyDown(int key, uint16_t modifiers)
 void LandInfoBox::Update(float deltaSeconds)
 {
 	_fade.Update(deltaSeconds);
-	if (_active)
+	if (TakesInput())
 	{
 		_dialog.Update(deltaSeconds);
 	}
@@ -148,8 +161,8 @@ void LandInfoBox::Draw(const DialogPainter& painter) const
 	    {k_BandColour, k_BandColour, k_BandColour, k_BandColour});
 	painter.DrawBackground(k_Box, glm::vec3(1.0f), false, DialogPainter::All);
 	painter.SetAlpha(alpha);
-	// While the box fades out, no control lights up
-	_dialog.Draw(painter, _active);
+	// While the box fades out, or another box covers it, no control lights up
+	_dialog.Draw(painter, TakesInput());
 	painter.SetAlpha(1.0f);
 }
 
