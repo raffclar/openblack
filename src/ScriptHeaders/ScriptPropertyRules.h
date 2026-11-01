@@ -77,6 +77,11 @@ constexpr float k_DegreesToRadians = 0.0174532924f;
 constexpr float k_WholeTurnRadians = 6.28318548f;
 [[nodiscard]] float FacingAngle(glm::vec2 from, glm::vec2 to);
 
+/// The point at a distance from `to`, on the line from `from` through `to`, turned by an angle in degrees about the
+/// upright. The angle turns the x axis towards the z axis. When the two points are the same, the line has no length,
+/// and the point does not move.
+[[nodiscard]] glm::vec3 TargetRelativePosition(glm::vec3 from, glm::vec3 to, float distance, float angleDegrees);
+
 /// Whether a script may set a thing's life: a thing the scripts hold while they own the widescreen bars, and a thing
 /// made indestructible, can't be brought to a hundredth of its life or under it
 constexpr float k_LowestProtectedLife = 0.01f;

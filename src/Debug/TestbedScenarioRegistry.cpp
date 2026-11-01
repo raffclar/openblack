@@ -1843,6 +1843,31 @@ void AddThirdLandPrison(std::vector<Scenario>& all)
 	                  .script = "FreeTheCreature",
 	                  .scriptGlobals = {{"GlobalDebug", {.number = 1.0f}}}}},
 	});
+	all.push_back({
+	    .id = "story.l3_pillars_turn_away",
+	    .name = "Story: the prison pillars of the third land turn away from the freed creature",
+	    .facet = Facet::Story,
+	    .description = "The third land loads with its own scripts and sky, and the player's Tiger stands on it. Its set-up "
+	                   "script runs, then its prison script with the developer switch on, so the three statues count as "
+	                   "stopped at their first check. When the scene of the freed creature ends, each statue script ends.",
+	    .expected = "At the end of each statue script, its pillar turns about the upright to face away from the prison "
+	                "spot: it faces a point 10 metres past the pillar on the line from the prison spot. The freeze beams "
+	                "and the plasma sound stop.",
+	    .environment = {.land = Land::Story, .storyLand = "Land3.txt", .dispenserGrid = false},
+	    .framing = {.shot = Shot::Overview, .include = {{-40.0f, -40.0f}, {40.0f, 40.0f}}},
+	    .creatures = {{.label = "player's tiger",
+	                   .species = CreatureType::Tiger,
+	                   .phase = 3,
+	                   .needs = {.energy = 1.0f, .exhaustion = 0.0f, .dehydration = 0.0f, .poo = 0.0f, .life = 1.0f}}},
+	    .commands = {{.kind = Kind::RunScript,
+	                  .delaySeconds = 0.5f,
+	                  .script = "SetupLand3",
+	                  .scriptGlobals = {{"MyCreature", {.kind = Argument::Kind::Creature, .index = 0}}}},
+	                 {.kind = Kind::RunScript,
+	                  .delaySeconds = 1.0f,
+	                  .script = "FreeTheCreature",
+	                  .scriptGlobals = {{"GlobalDebug", {.number = 1.0f}}}}},
+	});
 
 	// A script makes a pack of wolves, sends it off and then lets it go, as the attack of the possessed wolves does
 	// when the first wolf reaches the village

@@ -169,6 +169,26 @@ TEST(ScriptProperties, BeliefForAPlayer)
 	EXPECT_FLOAT_EQ(BeliefForPlayer(false, std::nullopt, std::nullopt, PlayerNames::PLAYER_ONE), 0.0f);
 }
 
+TEST(ScriptProperties, ATargetPointLiesPastTheSecondPointTurnedByTheAngle)
+{
+	// Straight on, the point is the distance past the second point, away from the first point
+	const auto straight = TargetRelativePosition({0.0f, 0.0f, 0.0f}, {3.0f, 0.0f, 4.0f}, 10.0f, 0.0f);
+	EXPECT_NEAR(straight.x, 9.0f, 1e-5f);
+	EXPECT_NEAR(straight.y, 0.0f, 1e-5f);
+	EXPECT_NEAR(straight.z, 12.0f, 1e-5f);
+	// A quarter turn turns the x axis towards the z axis; the height of the line does not turn
+	const auto turned = TargetRelativePosition({0.0f, 0.0f, 0.0f}, {3.0f, 0.0f, 4.0f}, 10.0f, 90.0f);
+	EXPECT_NEAR(turned.x, -5.0f, 1e-4f);
+	EXPECT_NEAR(turned.z, 10.0f, 1e-4f);
+	const auto upright = TargetRelativePosition({1.0f, 2.0f, 3.0f}, {1.0f, 5.0f, 3.0f}, 2.0f, 45.0f);
+	EXPECT_NEAR(upright.x, 1.0f, 1e-6f);
+	EXPECT_NEAR(upright.y, 7.0f, 1e-6f);
+	EXPECT_NEAR(upright.z, 3.0f, 1e-6f);
+	// Two points that are the same give the second point
+	const auto same = TargetRelativePosition({2.0f, 1.0f, 2.0f}, {2.0f, 1.0f, 2.0f}, 10.0f, 30.0f);
+	EXPECT_EQ(same, glm::vec3(2.0f, 1.0f, 2.0f));
+}
+
 TEST(ScriptProperties, ACreaturesHeadingIsTheWayItFacesAcrossTheLand)
 {
 	// A creature with a heading walks towards (sin, -cos); a living thing at an angle faces (cos, sin)
