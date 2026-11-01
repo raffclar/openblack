@@ -21,6 +21,8 @@
 #include "ECS/Registry.h"
 #include "ECS/Systems/HandSystemInterface.h"
 #include "ECS/Systems/PickingSystemInterface.h"
+#include "Input/DeveloperKeys.h"
+#include "Input/GameActionMapInterface.h"
 #include "LHScriptX/FeatureScriptCommands.h"
 #include "LHScriptX/Script.h"
 #include "Locator.h"
@@ -476,7 +478,11 @@ void Console::ProcessEventAlways(const SDL_Event& event) noexcept
 	default:
 		break;
 	case SDL_KEYDOWN:
-		if (event.key.keysym.sym == SDLK_BACKQUOTE)
+		// A key that the player bound to an action of the game stays the game's
+		if (event.key.keysym.scancode == input::developer_keys::k_ConsoleKey &&
+		    (!Locator::gameActionSystem::has_value() ||
+		     !input::developer_keys::GameUsesKey(Locator::gameActionSystem::value().GetKeyBindings(), k_Platform,
+		                                         event.key.keysym.scancode, event.key.keysym.mod)))
 		{
 			Toggle();
 		}

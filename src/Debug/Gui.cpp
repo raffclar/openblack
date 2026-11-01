@@ -71,6 +71,7 @@
 #include "Graphics/GraphicsHandleBgfx.h"
 #include "Gui/CreatureCaveScreen.h"
 #include "ImGuiUtils.h"
+#include "Input/PlatformKeys.h"
 #include "KeyBindingsWindow.h"
 #include "LandIsland.h"
 #include "Locator.h"
@@ -836,7 +837,7 @@ bool Gui::ShowMenu() noexcept
 
 		if (ImGui::BeginMenu("Debug"))
 		{
-			if (ImGui::MenuItem("Editor", "F2"))
+			if (ImGui::MenuItem("Editor", input::platform_keys::EditorToggleKeyName(k_Platform).data()))
 			{
 				OpenWindow("Editor");
 			}
@@ -971,7 +972,7 @@ bool Gui::ShowMenu() noexcept
 			ImGui::EndMenu();
 		}
 
-		if (ImGui::MenuItem("Quit", "Esc"))
+		if (ImGui::MenuItem("Quit"))
 		{
 			return true;
 		}

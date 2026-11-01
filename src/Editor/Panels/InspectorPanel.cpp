@@ -209,7 +209,7 @@ void InspectorPanel::DrawHeader(EditorContext& context, entt::entity entity) noe
 	{
 		context.system.FrameSelection();
 	}
-	ImGui::SetItemTooltip("Bring it into view (G)");
+	ImGui::SetItemTooltip("Bring it into view (Home)");
 	ImGui::SameLine();
 	const auto mode = context.system.GetCameraMode();
 	if (ImGui::Button(mode == CameraMode::Orbit ? "Stop orbiting" : "Orbit"))

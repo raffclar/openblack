@@ -124,7 +124,7 @@ void PalettePanel::Draw(EditorContext& context) noexcept
 	if (context.placement.item.has_value())
 	{
 		const auto& item = *context.placement.item;
-		ImGui::TextColored(style::k_Good, "Placing %s: click the land to put it down, the wheel or [ ] turns it, Esc stops",
+		ImGui::TextColored(style::k_Good, "Placing %s: click the land to put it down, the wheel or [ ] turns it, X stops",
 		                   std::string(context.names.NameOf(item.kind, item.type)).c_str());
 	}
 	else if (!context.placement.last.empty())

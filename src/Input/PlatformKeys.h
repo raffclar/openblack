@@ -11,7 +11,10 @@
 
 #include <cstdint>
 
+#include <string_view>
+
 #include <SDL_keycode.h>
+#include <SDL_scancode.h>
 
 #include "Common/Platform.h"
 
@@ -153,6 +156,25 @@ enum class BookmarkMove : uint8_t
 [[nodiscard]] constexpr SDL_Keycode RendererStatisticsKey(Platform platform) noexcept
 {
 	return platform == Platform::Web ? SDLK_INSERT : SDLK_F11;
+}
+
+/// The key that opens and closes the editor: F10 on the desktop, and End on the web, because the browser uses F10 for
+/// its menu. The game uses F2 for the trip to the Gods' Playground.
+[[nodiscard]] constexpr SDL_Scancode EditorToggleKey(Platform platform) noexcept
+{
+	return platform == Platform::Web ? SDL_SCANCODE_END : SDL_SCANCODE_F10;
+}
+
+/// The words for the editor key on a button or in a menu, with the name of the key
+[[nodiscard]] constexpr std::string_view EditorCloseLabel(Platform platform) noexcept
+{
+	return platform == Platform::Web ? "Close (End)" : "Close (F10)";
+}
+
+/// The name of the editor key in a menu
+[[nodiscard]] constexpr std::string_view EditorToggleKeyName(Platform platform) noexcept
+{
+	return platform == Platform::Web ? "End" : "F10";
 }
 
 /// What an Escape press does
