@@ -1094,6 +1094,8 @@ void PlayTurnStep(game_turn::Step step, TurnViewInterface& view)
 
 void PlayTurn(TurnViewInterface& view)
 {
+	// The checksum of a turn before this one in the same frame takes the world of that turn, before this turn changes it
+	Locator::syncChecksumSystem::value().FinishHash();
 #if defined(OPENBLACK_DEVELOPER_TOOLS)
 	// The draw trace gives each synced draw of the turn the number of the turn. The turn count moves on at the start of
 	// the turn, so the number is the same as the number of the turn's checksum and record.

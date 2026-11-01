@@ -448,6 +448,8 @@ void NetworkGameSystem::Update()
 
 void NetworkGameSystem::LoadWorld(const online::NetworkSession::WorldState& world)
 {
+	// The checksum of the last turn takes the world of that turn, before the load replaces it
+	Locator::syncChecksumSystem::value().FinishHash();
 	const auto start = std::chrono::steady_clock::now();
 	if (!Locator::saveGameSystem::has_value() || !Locator::saveGameSystem::value().LoadWorldState(world.bytes))
 	{

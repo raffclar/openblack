@@ -586,6 +586,11 @@ std::optional<std::string> SimProvider::StartRecord(const std::filesystem::path&
 	// The record keeps the synced part of the world at the end of each turn that it records
 	_synced.clear();
 	Locator::simulation::value().SetTurnEndWatcher([this](uint32_t turn) { TurnEnded(turn); });
+	if (Locator::syncChecksumSystem::has_value())
+	{
+		Locator::syncChecksumSystem::value().SetHashListener(
+		    [this](uint32_t turn, const synced_state::Hash& hash) { HashEnded(turn, hash); });
+	}
 	auto start = State();
 	start["type"] = "start";
 	start["seed"] = Locator::rng::has_value() ? Json(Locator::rng::value().GetRunSeed()) : Json(nullptr);
@@ -600,6 +605,10 @@ void SimProvider::StopRecord()
 	if (Locator::simulation::has_value())
 	{
 		Locator::simulation::value().SetTurnEndWatcher({});
+	}
+	if (Locator::syncChecksumSystem::has_value())
+	{
+		Locator::syncChecksumSystem::value().SetHashListener({});
 	}
 	_synced.clear();
 	if (_sink != nullptr)
@@ -642,29 +651,61 @@ void SimProvider::TurnEnded(uint32_t turn)
 	{
 		return;
 	}
+	// The values of the systems that the checksum mixes, as the turn left them
+	Synced synced {.turn = turn};
+	if (Locator::scriptMusicSystem::has_value())
+	{
+		synced.music = Locator::scriptMusicSystem::value().GetMusic().SyncedValues();
+	}
+	if (Locator::gameRandom::has_value())
+	{
+		const auto& random = Locator::gameRandom::value();
+		synced.random = std::pair {random.GetSeeds().synced, random.GetSyncedDraws()};
+	}
 	// The hash of the entities and of every saved component, but for the parts that only show the world on this computer.
 	// The checksum of a network game hashed the same world in this turn, so the record uses that hash when it has one.
+	// When that hash waits for the draw of the frame, the record takes it when it ends (HashEnded).
 	const bool byField = _hashParts == sim_run::HashDetail::Fields;
-	const auto* checksumHash =
-	    Locator::syncChecksumSystem::has_value() ? Locator::syncChecksumSystem::value().GetHashOfTurn(turn, byField) : nullptr;
+	auto* checksums = Locator::syncChecksumSystem::has_value() ? &Locator::syncChecksumSystem::value() : nullptr;
+	if (checksums != nullptr && !byField && checksums->HashWaits(turn))
+	{
+		_synced.push_back(std::move(synced));
+		return;
+	}
+	const auto* checksumHash = checksums != nullptr ? checksums->GetHashOfTurn(turn, byField) : nullptr;
 	synced_state::Hash ownHash;
 	if (checksumHash == nullptr)
 	{
 		ownHash = synced_state::HashOf(registry->Underlying(), _context, synced_state::PresentationParts(), byField, {},
 		                               nullptr, nullptr, &_hashMemo);
 	}
-	const auto& synced = checksumHash != nullptr ? *checksumHash : ownHash;
+	AddHash(synced, checksumHash != nullptr ? *checksumHash : ownHash);
+	_synced.push_back(std::move(synced));
+}
+
+void SimProvider::HashEnded(uint32_t turn, const synced_state::Hash& hash)
+{
+	const auto waiting =
+	    std::ranges::find_if(_synced, [turn](const Synced& synced) { return synced.turn == turn && synced.value.is_null(); });
+	if (waiting != _synced.end())
+	{
+		AddHash(*waiting, hash);
+	}
+}
+
+void SimProvider::AddHash(Synced& synced, const synced_state::Hash& hash)
+{
 	Json parts = Json::object();
-	for (const auto& [name, part] : synced.parts)
+	for (const auto& [name, part] : hash.parts)
 	{
 		parts[name] = fmt::format("{:016x}", part);
 	}
-	Json value = {{"hash", fmt::format("{:016x}", synced.hash)}};
+	Json value = {{"hash", fmt::format("{:016x}", hash.hash)}};
 	// A component with no registration is left out of the hash: tell of each name once, and show the names in the record
-	if (!synced.unregistered.empty())
+	if (!hash.unregistered.empty())
 	{
-		value["unregistered"] = synced.unregistered;
-		if (const auto fresh = _unregisteredTold.Fresh(synced.unregistered); !fresh.empty())
+		value["unregistered"] = hash.unregistered;
+		if (const auto fresh = _unregisteredTold.Fresh(hash.unregistered); !fresh.empty())
 		{
 			if (const auto logger = spdlog::get("game"); logger != nullptr)
 			{
@@ -673,27 +714,25 @@ void SimProvider::TurnEnded(uint32_t turn)
 		}
 	}
 	// The music that the scripts start is synced too
-	auto stateHash = synced.hash;
-	if (Locator::scriptMusicSystem::has_value())
+	auto stateHash = hash.hash;
+	if (synced.music.has_value())
 	{
-		const auto music = Locator::scriptMusicSystem::value().GetMusic().SyncedValues();
-		value["script_music"] = music;
-		stateHash = synced_state::MixValues(stateHash, music);
+		value["script_music"] = *synced.music;
+		stateHash = synced_state::MixValues(stateHash, *synced.music);
 	}
-	if (Locator::gameRandom::has_value())
+	if (synced.random.has_value())
 	{
-		const auto& random = Locator::gameRandom::value();
-		value["seed"] = random.GetSeeds().synced;
-		value["draws"] = random.GetSyncedDraws();
+		const auto [seed, draws] = *synced.random;
+		value["seed"] = seed;
+		value["draws"] = draws;
 		// The checksum that a network game compares each turn
-		value["checksum"] =
-		    fmt::format("{:016x}", synced_state::Checksum(stateHash, random.GetSeeds().synced, random.GetSyncedDraws()));
+		value["checksum"] = fmt::format("{:016x}", synced_state::Checksum(stateHash, seed, draws));
 	}
 	if (_hashParts != sim_run::HashDetail::None)
 	{
 		value["parts"] = std::move(parts);
 	}
-	_synced.push_back(Synced {.turn = turn, .value = std::move(value)});
+	synced.value = std::move(value);
 }
 
 bool SimProvider::Keep(const sim_checks::Flag& flag)

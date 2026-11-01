@@ -545,4 +545,10 @@ uint64_t Checksum(uint64_t stateHash, uint32_t seed, uint64_t draws)
 	return hash;
 }
 
+bool HashCanWait(const ChecksumNeeds& needs)
+{
+	// A tool that keeps the parts, the rows, a dump or the world state reads the world of the turn in the turn
+	return needs.besideDraw && !needs.keepParts && !needs.dumpThisTurn && !needs.rowDump && !needs.worldStates;
+}
+
 } // namespace openblack::synced_state
