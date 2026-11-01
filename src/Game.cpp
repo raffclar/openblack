@@ -6587,7 +6587,7 @@ void Game::KeepProfileKeys()
 void Game::ReadTattooPictures()
 {
 	// The symbols' picture and the tattoo designs change with the pictures. The game loads them one time only
-	// (vanilla-bugs 380), and openblack fixes this.
+	// (vanilla-bugs 182), and openblack fixes this.
 	if (const auto pictures = simulation::ReadTattooPictures(); pictures.has_value() && _interface)
 	{
 		_interface->SetSymbolPictures(*pictures);

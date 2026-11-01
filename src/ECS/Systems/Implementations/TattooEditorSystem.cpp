@@ -343,7 +343,7 @@ void TattooEditorSystem::Cancel()
 	if (IsOpen() && _creature.has_value())
 	{
 		// The creature gets back its tattoos, but no skin is painted and the masks stay as they are. The game does not
-		// make the block of pictures again here (vanilla-bugs 379), and openblack fixes this.
+		// make the block of pictures again here (vanilla-bugs 181), and openblack fixes this.
 		_skin->WritePictures(*_creature, creature_tattoo::PicturesBlock(_session.opened, _pictures));
 		_skin->Write(*_creature, _session.opened);
 	}
