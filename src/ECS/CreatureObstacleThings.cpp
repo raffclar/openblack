@@ -40,6 +40,7 @@
 #include "ECS/Components/ScriptControl.h"
 #include "ECS/Components/ScriptHighlight.h"
 #include "ECS/Components/SpellDispenser.h"
+#include "ECS/Components/SpellIcon.h"
 #include "ECS/Components/StreetLantern.h"
 #include "ECS/Components/TeleportStone.h"
 #include "ECS/Components/Temple.h"
@@ -253,7 +254,8 @@ std::optional<obstacles::Thing> creature_obstacle_things::ThingOf(const Registry
 	{
 		thing.shape = obstacles::Shape::AtPlace;
 	}
-	else if (registry.AnyOf<Abode, Feature, Flowers, SpellDispenser, VillageTotem, WorshipSite, WorshipAltar>(entity))
+	else if (registry.AnyOf<Abode, Feature, Flowers, SpellDispenser, VillageTotem, WorshipSite, WorshipAltar, WorshipIcon>(
+	             entity))
 	{
 		thing.avoidance = obstacles::Avoidance::Building;
 	}

@@ -61,6 +61,9 @@ public:
 	/// A worship site goes (its temple destroyed): every icon of it goes with what it was charging, and the seed out from
 	/// each, in a hand or cast, goes too. The village centres' hands stay with their towns.
 	virtual void SiteRemoved(entt::entity site) = 0;
+	/// Something in the world removes an icon at a worship site: the icon leaves its site, and the seeds out from it, in a
+	/// hand or cast, go too. The icon goes from the world.
+	virtual void IconRemoved(entt::entity icon) = 0;
 
 	/// One more thing enables a magic type for a player, or one fewer does. The icons of the player's worship sites then
 	/// show the power-up levels that the player can cast.

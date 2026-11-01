@@ -22,6 +22,7 @@
 #include "3D/LandIslandInterface.h"
 #include "Common/PortableRotations.h"
 #include "ECS/Components/Abode.h"
+#include "ECS/Components/Fixed.h"
 #include "ECS/Components/Mesh.h"
 #include "ECS/Components/SpellIcon.h"
 #include "ECS/Components/Transform.h"
@@ -83,6 +84,11 @@ entt::entity MakeIcon(glm::vec3 position, const glm::mat3& rotation, float scale
 	registry.Assign<Transform>(entity, position, rotation, glm::vec3(scale));
 	const auto meshId = resources::HashIdentifier(IconMesh(kind));
 	registry.Assign<Mesh>(entity, meshId, static_cast<int8_t>(0), static_cast<int8_t>(0));
+	// An icon does not move, as a building does not: its circle on the ground is the circle of its model
+	if (const auto circle = GetFixedObstacleBoundingCircle(meshId, registry.Get<const Transform>(entity)))
+	{
+		registry.Assign<Fixed>(entity, circle->first, circle->second);
+	}
 	// The seed spins above the first point of the icon's model, which is its palm
 	auto middle = position;
 	if (const auto* model = MeshNamed(meshId); model != nullptr && !model->GetExtraMetrics().empty())

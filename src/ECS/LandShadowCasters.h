@@ -50,7 +50,7 @@ public:
 	[[nodiscard]] LandShadow Of(entt::entity entity) const;
 
 	/// How many kinds of component the shadow depends on
-	static constexpr size_t k_StoreCount = 27;
+	static constexpr size_t k_StoreCount = 28;
 
 private:
 	template <typename... Components>

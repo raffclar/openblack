@@ -31,6 +31,7 @@
 #include "ECS/Components/Pot.h"
 #include "ECS/Components/Reward.h"
 #include "ECS/Components/SpellDispenser.h"
+#include "ECS/Components/SpellIcon.h"
 #include "ECS/Components/SpellSeed.h"
 #include "ECS/Components/TeleportStone.h"
 #include "ECS/Components/Temple.h"
@@ -78,10 +79,11 @@ void ForEachCasterComponent(Func func)
 	  std::type_identity<SpellSeed> {}, std::type_identity<OneOffSpellSeed> {}, std::type_identity<Vortex> {},
 	  std::type_identity<Tree> {}, std::type_identity<BigForest> {}, std::type_identity<Temple> {},
 	  std::type_identity<BuildProgress> {}, std::type_identity<Abode> {}, std::type_identity<WorshipAltar> {},
-	  std::type_identity<WorshipSite> {}, std::type_identity<SpellDispenser> {}, std::type_identity<Feature> {},
-	  std::type_identity<MobileStatic> {}, std::type_identity<TeleportStone> {}, std::type_identity<MobileObject> {},
-	  std::type_identity<Ball> {}, std::type_identity<RewardOnLand> {}, std::type_identity<Mesh> {},
-	  std::type_identity<Transform> {}, std::type_identity<MapCellResident> {}, std::type_identity<NoLandShadow> {});
+	  std::type_identity<WorshipSite> {}, std::type_identity<WorshipIcon> {}, std::type_identity<SpellDispenser> {},
+	  std::type_identity<Feature> {}, std::type_identity<MobileStatic> {}, std::type_identity<TeleportStone> {},
+	  std::type_identity<MobileObject> {}, std::type_identity<Ball> {}, std::type_identity<RewardOnLand> {},
+	  std::type_identity<Mesh> {}, std::type_identity<Transform> {}, std::type_identity<MapCellResident> {},
+	  std::type_identity<NoLandShadow> {});
 }
 
 } // namespace
@@ -117,10 +119,10 @@ struct ShadowComponents
 	}
 };
 
-using ShadowStores =
-    ShadowComponents<Field, AnimatedStatic, Flowers, DeadTree, Pot, MagicPile, VillageTotem, MagicShield, ShieldDome, SpellSeed,
-                     OneOffSpellSeed, Vortex, Tree, BigForest, Temple, BuildProgress, Abode, WorshipAltar, WorshipSite,
-                     SpellDispenser, Feature, MobileStatic, TeleportStone, MobileObject, Ball, RewardOnLand, NoLandShadow>;
+using ShadowStores = ShadowComponents<Field, AnimatedStatic, Flowers, DeadTree, Pot, MagicPile, VillageTotem, MagicShield,
+                                      ShieldDome, SpellSeed, OneOffSpellSeed, Vortex, Tree, BigForest, Temple, BuildProgress,
+                                      Abode, WorshipAltar, WorshipSite, WorshipIcon, SpellDispenser, Feature, MobileStatic,
+                                      TeleportStone, MobileObject, Ball, RewardOnLand, NoLandShadow>;
 
 } // namespace
 
@@ -186,7 +188,9 @@ LandShadow LandShadowLookup::Of(entt::entity entity) const
 	{
 		return IsBuilt(entity) ? LandShadow::Shape : LandShadow::None;
 	}
-	if (AnyOf<WorshipSite, SpellDispenser, Feature, MobileStatic, TeleportStone, MobileObject, Ball, RewardOnLand>(entity))
+	// A worship site's icon casts as soon as the game makes it
+	if (AnyOf<WorshipSite, WorshipIcon, SpellDispenser, Feature, MobileStatic, TeleportStone, MobileObject, Ball, RewardOnLand>(
+	        entity))
 	{
 		return LandShadow::Shape;
 	}

@@ -2301,3 +2301,4 @@ openblack_setup_and_add_test(test_script_sound_stop audio/test_script_sound_stop
 target_link_libraries(test_script_sound_stop PRIVATE pack lnd)
 openblack_setup_and_add_test(test_god_window test_god_window.cpp)
 openblack_setup_and_add_test(test_creature_hand_pose test_creature_hand_pose.cpp)
+openblack_setup_and_add_test(test_worship_icons_map test_worship_icons_map.cpp)
