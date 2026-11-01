@@ -3290,15 +3290,28 @@ std::unique_ptr<ProviderInterface> ViewProvider(const GameSeamInterface* seam)
 		    }
 		    return QueryResult::Value(std::move(result));
 	    });
-	provider->Add(Query("editor", "The editor: open, its tool, its camera and what is selected"),
-	              Serve<Locator::editorSystem>(
-	                  "the editor", [](const ecs::systems::EditorSystemInterface& editor, const QueryContext& /*c*/) {
-		                  return Json {{"open", editor.IsOpen()},
-		                               {"tool", static_cast<int>(editor.GetTool())},
-		                               {"camera_mode", static_cast<int>(editor.GetCameraMode())},
-		                               {"stepping", editor.IsStepping()},
-		                               {"selected", Id(editor.GetSelection().Get())}};
-	                  }));
+	provider->Add(
+	    Query("editor", "The editor: open, its tool, its camera, what is selected (the main pick and all picks) and the steps "
+	                    "to undo and redo with their labels"),
+	    Serve<Locator::editorSystem>("the editor",
+	                                 [](const ecs::systems::EditorSystemInterface& editor, const QueryContext& /*c*/) {
+		                                 auto picks = Json::array();
+		                                 for (const auto entity : editor.GetSelection().All())
+		                                 {
+			                                 picks.push_back(Id(entity));
+		                                 }
+		                                 const auto& history = editor.GetHistory();
+		                                 return Json {{"open", editor.IsOpen()},
+		                                              {"tool", static_cast<int>(editor.GetTool())},
+		                                              {"camera_mode", static_cast<int>(editor.GetCameraMode())},
+		                                              {"stepping", editor.IsStepping()},
+		                                              {"selected", Id(editor.GetSelection().Get())},
+		                                              {"selected_all", std::move(picks)},
+		                                              {"undo_steps", history.UndoCount()},
+		                                              {"redo_steps", history.RedoCount()},
+		                                              {"undo_label", history.UndoLabel().value_or("")},
+		                                              {"redo_label", history.RedoLabel().value_or("")}};
+	                                 }));
 	return provider;
 }
 

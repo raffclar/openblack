@@ -12090,6 +12090,32 @@ void AddEditor(std::vector<Scenario>& all)
 	                 Go(Kind::WalkTo, 0, {-40.0f, 40.0f}, 0.5f), Go(Kind::WalkTo, 0, {-40.0f, -40.0f}, 0.5f)},
 	    .repeatFrom = 0,
 	});
+
+	all.push_back({
+	    .id = "editor.pick_several_undo",
+	    .name = "Things to pick together, then undo and redo",
+	    .facet = Facet::Editor,
+	    .description = "A row of five oaks, a ring of four pillars of rock and two villagers, still, for trying the "
+	                   "editor's picks of several things and its history (F2): a drag over the land with the Select (W) "
+	                   "tool picks all in the rectangle, Ctrl+click picks or lets go of one more, Shift+click adds one, "
+	                   "and Shift+click in the outliner picks a run of rows.",
+	    .expected = "Each picked thing has a box; the main pick has the brighter box. Move (E) drags all the picks "
+	                "together and Rotate (R) turns them about their middle. Ctrl+D copies each, Delete removes all. "
+	                "Ctrl+Z puts each step back and Ctrl+Y (or Ctrl+Shift+Z) does it again; the tool bar names the step.",
+	    .environment = {.clockRuns = false},
+	    .framing = {.shot = Shot::Overview, .include = {{-40.0f, 30.0f}, {40.0f, -30.0f}}},
+	    .objects = {{.type = TreeInfo::Oak, .offset = {-30.0f, 20.0f}},
+	                {.type = TreeInfo::Oak, .offset = {-15.0f, 20.0f}},
+	                {.type = TreeInfo::Oak, .offset = {0.0f, 20.0f}},
+	                {.type = TreeInfo::Oak, .offset = {15.0f, 20.0f}},
+	                {.type = TreeInfo::Oak, .offset = {30.0f, 20.0f}},
+	                {.type = FeatureInfo::FatPilarChalk, .offset = {-10.0f, -10.0f}},
+	                {.type = FeatureInfo::FatPilarChalk, .offset = {10.0f, -10.0f}},
+	                {.type = FeatureInfo::FatPilarChalk, .offset = {-10.0f, -25.0f}},
+	                {.type = FeatureInfo::FatPilarChalk, .offset = {10.0f, -25.0f}},
+	                {.type = VillagerInfo::CelticFarmerMale, .offset = {-30.0f, -15.0f}},
+	                {.type = VillagerInfo::CelticHousewifeFemale, .offset = {30.0f, -15.0f}}},
+	});
 }
 
 /// A benchmark of a crowd of the size, to compare runs of several sizes and see which costs grow faster than the crowd

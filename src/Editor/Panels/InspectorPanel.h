@@ -11,6 +11,8 @@
 
 #include <entt/entity/fwd.hpp>
 
+#include "Editor/EditorActions.h"
+
 namespace openblack::editor
 {
 struct EditorContext;
@@ -28,6 +30,9 @@ private:
 	void DrawTransform(EditorContext& context, entt::entity entity) noexcept;
 	void DrawVillager(EditorContext& context, entt::entity entity) noexcept;
 	void DrawComponents(EditorContext& context, entt::entity entity) noexcept;
+
+	/// The pose of the main pick as a field of the transform starts to change it
+	PoseEdit _edit;
 };
 
 } // namespace openblack::editor

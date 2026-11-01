@@ -197,6 +197,18 @@ void EditorSystem::StepTurn()
 
 void EditorSystem::Update([[maybe_unused]] std::chrono::microseconds dt)
 {
+	// A land or a saved world that loads can give a new thing the entity of an old one, so the picks and the history
+	// start again
+	if (Locator::entitiesRegistry::has_value())
+	{
+		const auto resets = Locator::entitiesRegistry::value().GetResets();
+		if (_registryResets.has_value() && *_registryResets != resets)
+		{
+			_selection.Clear();
+			_history.Clear();
+		}
+		_registryResets = resets;
+	}
 	if (_stepFrom.has_value() && Locator::time::has_value())
 	{
 		auto& time = Locator::time::value();

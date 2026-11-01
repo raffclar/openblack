@@ -11,7 +11,10 @@
 
 #include <algorithm>
 #include <array>
+#include <iterator>
 #include <limits>
+#include <utility>
+#include <vector>
 
 #include <SDL_events.h>
 #include <SDL_mouse.h>
@@ -33,6 +36,7 @@
 #include "EditorMath.h"
 #include "EditorStyle.h"
 #include "Game.h"
+#include "Input/GameActionMapInterface.h"
 #include "Locator.h"
 #include "Windowing/WindowingInterface.h"
 
@@ -158,11 +162,18 @@ glm::vec2 EditorWindow::MouseOnScreen() noexcept
 	{
 		return {0.5f, 0.5f};
 	}
+	const auto& windowing = Locator::windowing::value();
+	const auto size = glm::max(glm::vec2(windowing.GetSize()), glm::vec2(1.0f));
+	// The pointer that the game follows is in the pixels of the window, as the mouse events are. It is also the pointer
+	// that the inspector moves.
+	if (Locator::gameActionSystem::has_value())
+	{
+		return glm::vec2(Locator::gameActionSystem::value().GetPointerPosition()) / size;
+	}
 	glm::ivec2 mouse {};
 	SDL_GetMouseState(&mouse.x, &mouse.y);
 	// SDL gives the mouse in the window's units, which are CSS pixels on the web
-	const auto& windowing = Locator::windowing::value();
-	return glm::vec2(mouse) * windowing.GetPixelScale() / glm::max(glm::vec2(windowing.GetSize()), glm::vec2(1.0f));
+	return glm::vec2(mouse) * windowing.GetPixelScale() / size;
 }
 
 std::optional<glm::vec3> EditorWindow::LandAt(glm::vec2 screen) noexcept
@@ -251,6 +262,7 @@ void EditorWindow::PlaceAt(EditorContext& context, glm::vec2 screen) noexcept
 	_placement.last =
 	    fmt::format("Placed {} at {:.0f}, {:.0f}", context.names.NameOf(item.kind, item.type), position.x, position.z);
 	context.system.GetSelection().Select(entity);
+	RecordMade(context, entity, fmt::format("Place {}", context.names.NameOf(item.kind, item.type)));
 	_outliner.Invalidate();
 }
 
@@ -272,37 +284,16 @@ void EditorWindow::Update() noexcept
 	}
 	if (_pickAt.has_value())
 	{
-		const auto picked = Pick(*_pickAt);
-		const auto tool = system.GetTool();
-		if (picked.has_value())
-		{
-			selection.Select(*picked);
-		}
-		else if (tool == Tool::Select)
-		{
-			selection.Clear();
-		}
-		// Moving and turning start on what was clicked, or on what was already picked
-		const auto target = selection.Get();
-		if (target.has_value() && (tool == Tool::Move || tool == Tool::Rotate))
-		{
-			const auto& transform = context->registry.Get<ecs::components::Transform>(*target);
-			if (tool == Tool::Move)
-			{
-				const auto land = LandAt(*_pickAt);
-				_moveOffset = land.has_value() ? transform.position - *land : glm::vec3(0.0f);
-				_moveOffset.y = 0.0f;
-				_drag = Drag::Move;
-			}
-			else
-			{
-				_rotateFrom = YawOf(transform.rotation);
-				_rotated = 0.0f;
-				_dragAcross = 0.0f;
-				_drag = Drag::Rotate;
-			}
-		}
+		PickAt(*context, *_pickAt);
 		_pickAt.reset();
+	}
+	if (_drag == Drag::Box && _boxTo.has_value())
+	{
+		FinishBox(*context);
+	}
+	if (_dragEnded)
+	{
+		EndDrag(*context);
 	}
 
 	const auto selected = selection.Get();
@@ -311,26 +302,212 @@ void EditorWindow::Update() noexcept
 		if (_drag == Drag::Move || _drag == Drag::Rotate)
 		{
 			_drag = Drag::None;
+			EndDrag(*context);
 		}
 		return;
 	}
+	UpdateDrag(*context, *selected);
+}
+
+void EditorWindow::PickAt(EditorContext& context, glm::vec2 screen) noexcept
+{
+	auto& selection = context.system.GetSelection();
+	const auto tool = context.system.GetTool();
+	// The button can come up before the click is acted on: then the click starts no drag
+	const bool released = _boxTo.has_value();
+	const auto picked = Pick(screen);
+	if (!picked.has_value() && tool == Tool::Select)
+	{
+		// A drag from where no thing is draws a rectangle that picks the things in it
+		_boxFrom = screen;
+		_drag = Drag::Box;
+		if (released)
+		{
+			FinishBox(context);
+		}
+		_boxTo.reset();
+		return;
+	}
+	_boxTo.reset();
+	if (picked.has_value())
+	{
+		if (_pickToggle)
+		{
+			selection.Toggle(*picked);
+		}
+		else if (_pickAdd)
+		{
+			selection.Add(*picked);
+		}
+		else if (tool != Tool::Select && selection.IsSelected(*picked))
+		{
+			// A click on one of the picked things moves or turns all of them, and the thing clicked leads
+			selection.Add(*picked);
+		}
+		else
+		{
+			selection.Select(*picked);
+		}
+	}
+	// Moving and turning start on the picked things, also from a click where no thing is. The main pick leads. A
+	// Ctrl+click that lets go of a thing starts no drag.
+	const auto target = selection.Get();
+	const bool letGo = picked.has_value() && !selection.IsSelected(*picked);
+	if (released || letGo || !target.has_value() || (tool != Tool::Move && tool != Tool::Rotate))
+	{
+		return;
+	}
+	const auto* lead = context.registry.TryGet<ecs::components::Transform>(*target);
+	if (lead == nullptr)
+	{
+		return;
+	}
+	_dragStarts.clear();
+	for (const auto entity : selection.All())
+	{
+		if (const auto* transform = context.registry.TryGet<ecs::components::Transform>(entity))
+		{
+			_dragStarts.emplace_back(entity, transform->position);
+		}
+	}
+	_dragEdit.Begin(context.registry, selection.All());
+	const auto& transform = *lead;
+	if (tool == Tool::Move)
+	{
+		const auto land = LandAt(screen);
+		_moveOffset = land.has_value() ? transform.position - *land : glm::vec3(0.0f);
+		_moveOffset.y = 0.0f;
+		_dragFrom = MouseOnScreen();
+		_drag = Drag::Move;
+		_dragAction = "Move";
+	}
+	else
+	{
+		_rotateFrom = YawOf(transform.rotation);
+		_rotated = 0.0f;
+		_dragAcross = 0.0f;
+		_drag = Drag::Rotate;
+		_dragAction = "Turn";
+	}
+}
+
+void EditorWindow::UpdateDrag(EditorContext& context, entt::entity primary) noexcept
+{
+	const auto& snapping = context.system.GetSnapping();
 	if (_drag == Drag::Move)
 	{
-		if (const auto land = LandAt(MouseOnScreen()))
+		// A click that does not move the mouse leaves the things where they are
+		const auto mouse = MouseOnScreen();
+		if (mouse == _dragFrom)
 		{
-			auto position = SnapPoint(*land + _moveOffset, system.GetSnapping());
+			return;
+		}
+		_dragFrom.reset();
+		const auto land = LandAt(mouse);
+		const auto lead = std::ranges::find(_dragStarts, primary, &std::pair<entt::entity, glm::vec3>::first);
+		if (!land.has_value() || lead == _dragStarts.end())
+		{
+			return;
+		}
+		// The thing that leads goes under the mouse, and the other picked things keep their places beside it
+		const auto delta = SnapPoint(*land + _moveOffset, snapping) - lead->second;
+		for (const auto& [entity, start] : _dragStarts)
+		{
+			if (!context.registry.Valid(entity))
+			{
+				continue;
+			}
+			auto position = start + delta;
 			position.y = LandHeight({position.x, position.z});
-			MoveTo(*selected, position);
+			MoveTo(entity, position);
 		}
 	}
 	else if (_drag == Drag::Rotate)
 	{
-		const auto wanted = SnapAngle(_rotateFrom + (_dragAcross * k_RotatePerPixel), system.GetSnapping()) - _rotateFrom;
-		if (wanted != _rotated)
+		const auto wanted = SnapAngle(_rotateFrom + (_dragAcross * k_RotatePerPixel), snapping) - _rotateFrom;
+		if (wanted == _rotated)
 		{
-			Turn(*selected, wanted - _rotated);
-			_rotated = wanted;
+			return;
 		}
+		// One thing turns where it stands. Several things also turn about their middle, as one group.
+		std::vector<glm::vec3> starts;
+		starts.reserve(_dragStarts.size());
+		std::ranges::transform(_dragStarts, std::back_inserter(starts), &std::pair<entt::entity, glm::vec3>::second);
+		const auto middle = MiddleOf(starts);
+		for (const auto& [entity, start] : _dragStarts)
+		{
+			if (!context.registry.Valid(entity))
+			{
+				continue;
+			}
+			Turn(entity, wanted - _rotated);
+			if (_dragStarts.size() > 1)
+			{
+				auto position = TurnedAbout(start, middle, wanted);
+				position.y = LandHeight({position.x, position.z});
+				MoveTo(entity, position);
+			}
+		}
+		_rotated = wanted;
+	}
+}
+
+void EditorWindow::FinishBox(EditorContext& context) noexcept
+{
+	const auto rect = RectBetween(_boxFrom, _boxTo.value_or(_boxFrom));
+	_drag = Drag::None;
+	_boxTo.reset();
+	auto& selection = context.system.GetSelection();
+	const bool keep = _pickToggle || _pickAdd;
+	// A click with no drag lets go of all the picks, unless Ctrl or Shift is held
+	const auto display = ImGui::GetIO().DisplaySize;
+	constexpr float k_ClickPixels = 4.0f;
+	const glm::vec2 clickSize {k_ClickPixels / std::max(display.x, 1.0f), k_ClickPixels / std::max(display.y, 1.0f)};
+	if (rect.SmallerThan(clickSize) || !Locator::camera::has_value())
+	{
+		if (!keep)
+		{
+			selection.Clear();
+		}
+		return;
+	}
+	const auto& camera = Locator::camera::value();
+	const glm::vec4 viewport {0.0f, 0.0f, display.x, display.y};
+	std::vector<entt::entity> inside;
+	const auto& registry = context.registry;
+	registry.Each<const ecs::components::Transform, const ecs::components::Mesh>(
+	    [&](entt::entity entity, const ecs::components::Transform& transform, const ecs::components::Mesh&) {
+		    if (registry.AllOf<ecs::components::Hand>(entity))
+		    {
+			    return;
+		    }
+		    const auto bounds = WorldBoundsOf(registry, entity);
+		    const auto middle = bounds.has_value() ? (bounds->minima + bounds->maxima) * 0.5f : transform.position;
+		    glm::vec3 projected;
+		    if (camera.ProjectWorldToScreen(middle, viewport, projected) &&
+		        rect.Contains(glm::vec2(projected.x / viewport.z, projected.y / viewport.w)))
+		    {
+			    inside.push_back(entity);
+		    }
+	    });
+	if (!keep)
+	{
+		selection.SelectAll(inside);
+		return;
+	}
+	for (const auto entity : inside)
+	{
+		selection.Add(entity);
+	}
+}
+
+void EditorWindow::EndDrag(EditorContext& context) noexcept
+{
+	_dragEnded = false;
+	_dragStarts.clear();
+	if (_dragEdit.Active())
+	{
+		_dragEdit.Finish(context, _dragAction);
 	}
 }
 
@@ -351,6 +528,9 @@ bool EditorWindow::IsEditorKey(const SDL_Event& event) const noexcept
 		return picked;
 	case SDLK_d:
 		return picked && ctrl;
+	case SDLK_z:
+	case SDLK_y:
+		return ctrl;
 	case SDLK_w:
 	case SDLK_e:
 	case SDLK_r:
@@ -393,23 +573,27 @@ void EditorWindow::HandleKey(const SDL_Event& event) noexcept
 	switch (event.key.keysym.sym)
 	{
 	case SDLK_DELETE:
-		if (const auto entity = selection.Get())
-		{
-			selection.Clear();
-			Remove(*entity);
-			_outliner.Invalidate();
-		}
+		DeletePicked(*context);
+		_outliner.Invalidate();
 		break;
 	case SDLK_d:
-		if (const auto entity = selection.Get())
-		{
-			if (const auto copy = Duplicate(*entity, {8.0f, 0.0f}))
-			{
-				selection.Select(*copy);
-				_outliner.Invalidate();
-			}
-		}
+		DuplicatePicked(*context);
+		_outliner.Invalidate();
 		break;
+	case SDLK_z:
+	case SDLK_y:
+	{
+		// A drag that is not done becomes its step first
+		if (_drag == Drag::Move || _drag == Drag::Rotate)
+		{
+			_drag = Drag::None;
+			EndDrag(*context);
+		}
+		const bool redo = event.key.keysym.sym == SDLK_y || (event.key.keysym.mod & KMOD_SHIFT) != 0;
+		_historyNote = redo ? RedoStep(*context) : UndoStep(*context);
+		_outliner.Invalidate();
+		break;
+	}
 	case SDLK_g:
 		system.FrameSelection();
 		break;
@@ -459,6 +643,7 @@ void EditorWindow::HandleKey(const SDL_Event& event) noexcept
 		}
 		else if (_drag != Drag::None)
 		{
+			_dragEnded = _drag == Drag::Move || _drag == Drag::Rotate;
 			_drag = Drag::None;
 		}
 		else if (system.GetCameraMode() != CameraMode::Free)
@@ -493,7 +678,7 @@ bool EditorWindow::TakesEvent(const SDL_Event& event) const noexcept
 	{
 	case SDL_MOUSEBUTTONDOWN:
 	case SDL_MOUSEBUTTONUP:
-		if (event.type == SDL_MOUSEBUTTONUP && _drag != Drag::None)
+		if (event.type == SDL_MOUSEBUTTONUP && (_drag != Drag::None || _pickAt.has_value()))
 		{
 			return true;
 		}
@@ -538,17 +723,29 @@ void EditorWindow::ProcessEventOpen(const SDL_Event& event) noexcept
 	{
 		return;
 	}
-	// A drag ends wherever the button comes up
-	if (event.type == SDL_MOUSEBUTTONUP && _drag != Drag::None)
-	{
-		_drag = Drag::None;
-		return;
-	}
-	if (!TakesEvent(event) || !Locator::windowing::has_value())
+	if (!Locator::windowing::has_value())
 	{
 		return;
 	}
 	const auto size = glm::max(glm::vec2(Locator::windowing::value().GetSize()), glm::vec2(1.0f));
+	// A drag ends wherever the button comes up
+	if (event.type == SDL_MOUSEBUTTONUP && (_drag != Drag::None || _pickAt.has_value()))
+	{
+		const auto screen = glm::vec2(static_cast<float>(event.button.x), static_cast<float>(event.button.y)) / size;
+		if (event.button.button == SDL_BUTTON_LEFT && (_drag == Drag::Box || _pickAt.has_value()))
+		{
+			// The next update picks what is in the rectangle, or acts on a click that had no time for a drag
+			_boxTo = screen;
+			return;
+		}
+		_dragEnded = _drag == Drag::Move || _drag == Drag::Rotate;
+		_drag = Drag::None;
+		return;
+	}
+	if (!TakesEvent(event))
+	{
+		return;
+	}
 	switch (event.type)
 	{
 	case SDL_MOUSEBUTTONDOWN:
@@ -563,6 +760,8 @@ void EditorWindow::ProcessEventOpen(const SDL_Event& event) noexcept
 			else
 			{
 				_pickAt = screen;
+				_pickToggle = (SDL_GetModState() & KMOD_CTRL) != 0;
+				_pickAdd = !_pickToggle && (SDL_GetModState() & KMOD_SHIFT) != 0;
 			}
 		}
 		else if (IsMouseButton(event, SDL_BUTTON_RIGHT))
@@ -743,6 +942,31 @@ void EditorWindow::DrawToolbar(EditorContext& context) noexcept
 			game->SetGameSpeed(speed);
 		}
 		ImGui::SetItemTooltip("The game's speed: how long a game turn takes, as a multiple of its tenth of a second");
+	}
+	separator();
+
+	auto& history = system.GetHistory();
+	ImGui::BeginDisabled(!history.CanUndo());
+	if (ImGui::Button("Undo"))
+	{
+		_historyNote = UndoStep(context);
+		_outliner.Invalidate();
+	}
+	ImGui::EndDisabled();
+	ImGui::SetItemTooltip("%s (Ctrl+Z)", fmt::format("Undo {}", history.UndoLabel().value_or("")).c_str());
+	ImGui::SameLine();
+	ImGui::BeginDisabled(!history.CanRedo());
+	if (ImGui::Button("Redo"))
+	{
+		_historyNote = RedoStep(context);
+		_outliner.Invalidate();
+	}
+	ImGui::EndDisabled();
+	ImGui::SetItemTooltip("%s (Ctrl+Y or Ctrl+Shift+Z)", fmt::format("Redo {}", history.RedoLabel().value_or("")).c_str());
+	if (!_historyNote.empty())
+	{
+		ImGui::SameLine();
+		ImGui::TextColored(style::k_Muted, "%s", _historyNote.c_str());
 	}
 	separator();
 
@@ -937,12 +1161,28 @@ void EditorWindow::DrawBox(const AxisAlignedBoundingBox& box, uint32_t colour, f
 
 void EditorWindow::DrawOverlays(EditorContext& context) noexcept
 {
-	if (const auto selected = context.system.GetSelection().Get())
+	const auto& selection = context.system.GetSelection();
+	for (const auto entity : selection.All())
 	{
-		if (const auto bounds = WorldBoundsOf(context.registry, *selected))
+		if (!context.registry.Valid(entity))
 		{
-			DrawBox(*bounds, style::k_SelectionBox, 2.0f);
+			continue;
 		}
+		if (const auto bounds = WorldBoundsOf(context.registry, entity))
+		{
+			const bool primary = selection.IsPrimary(entity);
+			DrawBox(*bounds, primary ? style::k_SelectionBox : style::k_PickedBox, primary ? 2.0f : 1.5f);
+		}
+	}
+	if (_drag == Drag::Box)
+	{
+		const auto display = ImGui::GetIO().DisplaySize;
+		const auto rect = RectBetween(_boxFrom, _boxTo.value_or(MouseOnScreen()));
+		const ImVec2 from {rect.minima.x * display.x, rect.minima.y * display.y};
+		const ImVec2 to {rect.maxima.x * display.x, rect.maxima.y * display.y};
+		auto* drawList = ImGui::GetBackgroundDrawList();
+		drawList->AddRectFilled(from, to, style::k_PickRectFill);
+		drawList->AddRect(from, to, style::k_SelectionBox, 0.0f, ImDrawFlags_None, 1.5f);
 	}
 	if (!_placement.item.has_value() || ImGui::GetIO().WantCaptureMouse)
 	{

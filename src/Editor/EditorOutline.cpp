@@ -12,6 +12,7 @@
 #include <cctype>
 
 #include <algorithm>
+#include <optional>
 
 #include <fmt/format.h>
 
@@ -82,6 +83,27 @@ std::vector<OutlineGroup> Group(std::span<const OutlineEntry> entries, std::stri
 std::string RowLabel(const OutlineEntry& entry)
 {
 	return fmt::format("{}  #{}", entry.label, entt::to_entity(entry.entity));
+}
+
+std::vector<entt::entity> RangeOf(std::span<const OutlineEntry* const> entries, entt::entity from, entt::entity to)
+{
+	const auto indexOf = [&entries](entt::entity entity) -> std::optional<size_t> {
+		const auto found = std::ranges::find_if(entries, [entity](const auto* entry) { return entry->entity == entity; });
+		return found != entries.end() ? std::optional(static_cast<size_t>(found - entries.begin())) : std::nullopt;
+	};
+	const auto first = indexOf(from);
+	const auto last = indexOf(to);
+	if (!first.has_value() || !last.has_value())
+	{
+		const auto one = last.has_value() ? last : first;
+		return one.has_value() ? std::vector {entries[*one]->entity} : std::vector<entt::entity> {};
+	}
+	std::vector<entt::entity> range;
+	for (auto index = std::min(*first, *last); index <= std::max(*first, *last); ++index)
+	{
+		range.push_back(entries[index]->entity);
+	}
+	return range;
 }
 
 } // namespace openblack::editor

@@ -10,12 +10,17 @@
 #pragma once
 
 #include <optional>
+#include <string>
+#include <string_view>
+#include <utility>
+#include <vector>
 
 #include <entt/entity/fwd.hpp>
 #include <glm/vec2.hpp>
 #include <glm/vec3.hpp>
 
 #include "Debug/Window.h"
+#include "EditorActions.h"
 #include "EditorContext.h"
 #include "EditorEntities.h"
 #include "Panels/InspectorPanel.h"
@@ -62,6 +67,8 @@ private:
 		Move,
 		Rotate,
 		Camera,
+		/// A rectangle on the screen that picks the things in it
+		Box,
 	};
 	enum class BottomTab : uint8_t
 	{
@@ -88,6 +95,14 @@ private:
 	[[nodiscard]] static std::optional<glm::vec3> LandAt(glm::vec2 screen) noexcept;
 	[[nodiscard]] static glm::vec2 MouseOnScreen() noexcept;
 	void PlaceAt(EditorContext& context, glm::vec2 screen) noexcept;
+	/// Picks what a click of the left button meets, with the keys held at the click, and starts a drag of the tool
+	void PickAt(EditorContext& context, glm::vec2 screen) noexcept;
+	/// Moves or turns the picked things for the drag of the move or rotate tool
+	void UpdateDrag(EditorContext& context, entt::entity primary) noexcept;
+	/// Picks the things whose middles are in the rectangle of the drag
+	void FinishBox(EditorContext& context) noexcept;
+	/// Ends a drag of the move or rotate tool, as one step of the history
+	void EndDrag(EditorContext& context) noexcept;
 
 	debug::gui::CreatureSpawner& _spawner;
 	debug::gui::Window& _scenarios;
@@ -115,6 +130,24 @@ private:
 
 	/// Clicks in the world to act on at the next update, as points of the screen from 0 to 1
 	std::optional<glm::vec2> _pickAt;
+	/// The keys held at the click: Ctrl picks or lets go of one more thing, Shift picks one more thing
+	bool _pickToggle {false};
+	bool _pickAdd {false};
+	/// The corners of the rectangle that picks, as points of the screen from 0 to 1. The second corner is set when the
+	/// button comes up.
+	glm::vec2 _boxFrom {0.0f};
+	std::optional<glm::vec2> _boxTo;
+	/// The poses of the picked things as a drag of the move or rotate tool started
+	PoseEdit _dragEdit;
+	std::vector<std::pair<entt::entity, glm::vec3>> _dragStarts;
+	/// Where the mouse was as a move started, until it first moves
+	std::optional<glm::vec2> _dragFrom;
+	/// A drag of the move or rotate tool that stopped, to keep in the history at the next update
+	bool _dragEnded {false};
+	/// The label of the step that the drag becomes
+	std::string_view _dragAction;
+	/// What the last undo or redo did
+	std::string _historyNote;
 	std::optional<glm::vec2> _placeAt;
 	Drag _drag {Drag::None};
 	glm::ivec2 _dragLast {0};
