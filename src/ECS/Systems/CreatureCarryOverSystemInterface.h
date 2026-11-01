@@ -9,9 +9,12 @@
 
 #pragma once
 
+#include <cstdint>
+
 #include <filesystem>
 #include <memory>
 #include <optional>
+#include <vector>
 
 #include <entt/entity/fwd.hpp>
 #include <glm/vec2.hpp>
@@ -39,6 +42,13 @@ public:
 	/// A creature of the player's own is kept as it is now, in place of any kept before, as the game keeps it whenever
 	/// it is deleted: as it sparkles away through a vortex as much as with the land. Another player's creature isn't
 	virtual void KeepCreature(entt::entity creature) = 0;
+	/// The creature file of a creature as it is now: its mind, its body and the tattoos that this computer shows. The
+	/// game of a team leader sends this file for the clan creature at the end of a clan game. None when the creature
+	/// has no mind.
+	[[nodiscard]] virtual std::optional<std::vector<uint8_t>> CreatureFile(entt::entity /*creature*/) const
+	{
+		return std::nullopt;
+	}
 	/// A creature file kept in place of any before
 	virtual void Keep(std::shared_ptr<const creaturemind::MindFileData> file) = 0;
 	/// The creature kept, if any

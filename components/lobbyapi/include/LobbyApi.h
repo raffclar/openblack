@@ -432,32 +432,48 @@ struct CreatureUploadReply
 	std::string url;
 };
 
-/// The creature of a clan, which the game server gets before a clan game and puts back after it, at
-/// /api/v1/clans/{id}/creature. The files are vanilla's mind file and physique file, as base64 in the JSON.
+/// The creature of a clan, at /api/v1/clans/{id}/creature. The game of the team leader sent it at the end of the last
+/// clan game. The two buffers go as base64 in the JSON.
 struct ClanCreature
 {
-	/// "alignment"
+	/// "alignment": the alignment of the god of the team leader at the end of the game
 	float alignment {0.0f};
-	/// "mind"
+	/// "mind": the creature file of the clan creature
 	std::vector<uint8_t> mind;
-	/// "physique"
+	/// "physique": the second buffer of the game. The lobby calls it the physique, but the game puts the user data of
+	/// the team leader in it. It can be empty.
 	std::vector<uint8_t> physique;
 };
 
-/// Before the first clan game the clan has no creature. The lobby then tells the game server to make a new creature of
-/// a type with a name.
+/// Before the first clan game the clan has no creature. The lobby then tells the game to make a new creature of a type
+/// with a name.
 struct NewClanCreature
 {
-	/// "type": the species of the creature, 0 to 16
+	/// "creature_type": the row of the creature table, 0 to 16
 	int32_t type {0};
 	/// "name"
 	std::string name;
 };
 
-/// GET /api/v1/clans/{id}/creature: {"creature": {...}} or {"new": {...}}
+/// What the lobby has for a clan
+enum class ClanCreatureKind : uint8_t
+{
+	/// "none": the clan has no creature. The god brings the creature of its player.
+	None,
+	/// "stored": the creature that the clan kept from its last game
+	Stored,
+	/// "create": the order to make a new creature
+	Create,
+};
+
+/// GET /api/v1/clans/{id}/creature: {"kind": "stored" | "create" | "none", "alignment", "mind", "physique",
+/// "creature_type", "name", "updated"}. Only the members of the kind have a value.
 struct ClanCreatureReply
 {
+	ClanCreatureKind kind {ClanCreatureKind::None};
+	/// The stored creature, when the kind is Stored
 	std::optional<ClanCreature> creature;
+	/// The order for a new creature, when the kind is Create
 	std::optional<NewClanCreature> make;
 };
 

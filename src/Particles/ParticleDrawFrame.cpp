@@ -15,6 +15,8 @@
 #include <bit>
 #include <numbers>
 #include <string>
+#include <utility>
+#include <vector>
 
 #include <entt/core/hashed_string.hpp>
 #include <glm/geometric.hpp>
@@ -100,18 +102,23 @@ void GatherCommutingRuns(const Frame& frame, std::vector<uint32_t>& items)
 		}
 		const auto last =
 		    std::find_if(first, items.end(), [&frame](uint32_t index) { return !Commutes(frame, frame.items[index]); });
-		// By the material each first comes in, so the run starts with the material it started with
+		// By the material each first comes in, so the run starts with the material it started with. Each item gets the
+		// place of its material in that order one time, before the sort.
 		std::vector<uint32_t> order;
+		std::vector<std::pair<uint32_t, uint32_t>> ranked;
+		ranked.reserve(static_cast<size_t>(last - first));
 		for (auto it = first; it != last; ++it)
 		{
-			if (std::ranges::find(order, materialOf(*it)) == order.end())
+			const auto material = materialOf(*it);
+			auto place = std::ranges::find(order, material);
+			if (place == order.end())
 			{
-				order.push_back(materialOf(*it));
+				place = order.insert(order.end(), material);
 			}
+			ranked.emplace_back(static_cast<uint32_t>(place - order.begin()), *it);
 		}
-		std::stable_sort(first, last, [&](uint32_t a, uint32_t b) {
-			return std::ranges::find(order, materialOf(a)) < std::ranges::find(order, materialOf(b));
-		});
+		std::ranges::stable_sort(ranked, {}, &std::pair<uint32_t, uint32_t>::first);
+		std::ranges::transform(ranked, first, &std::pair<uint32_t, uint32_t>::second);
 		first = last;
 	}
 }

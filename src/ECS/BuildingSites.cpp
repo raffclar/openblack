@@ -323,12 +323,7 @@ std::optional<entt::entity> construction::StoragePitOf(entt::entity town)
 		return std::nullopt;
 	}
 	const auto id = registry.Get<const Town>(town).id;
-	std::optional<entt::entity> pit;
-	registry.Each<const Abode, const StoragePit>([&](entt::entity entity, const Abode& abode, const StoragePit&) {
-		if (abode.townId == id && !pit.has_value())
-		{
-			pit = entity;
-		}
-	});
-	return pit;
+	// The first storage pit of the town in the order of the walk of the pits
+	return registry.FindFirst<const Abode, const StoragePit>(
+	    [id](entt::entity, const Abode& abode, const StoragePit&) { return abode.townId == id; });
 }

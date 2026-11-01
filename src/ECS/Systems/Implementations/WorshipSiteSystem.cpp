@@ -418,16 +418,6 @@ void WorshipSiteSystem::UpdateNeeds(entt::entity site)
 	};
 	auto& component = registry.Get<WorshipSite>(site);
 	component.needs = needs;
-	for (uint8_t need = 0; need < worship_site_looks::k_NeedFlags; ++need)
-	{
-		auto& flag = component.needFlags.at(need);
-		if (flag == entt::null || !registry.Valid(flag))
-		{
-			// Made as the site's world makes it: the reference to the site's component is not kept over it
-			const auto made = _world->MakeNeedFlag(site, need);
-			registry.Get<WorshipSite>(site).needFlags.at(need) = made;
-		}
-	}
 }
 
 float WorshipSiteSystem::DesireForRest(entt::entity site) const
@@ -858,6 +848,13 @@ entt::entity WorshipSiteSystem::Make(entt::entity temple, Tribe tribe)
 	}
 	registry.Assign<WorshipAltar>(altar, WorshipAltar {.site = site, .model = altarModel});
 	registry.Get<WorshipSite>(site).altar = altar;
+	// The altar makes the three need flags of the site: food, then rest, then hiding
+	for (uint8_t need = 0; need < worship_site_looks::k_NeedFlags; ++need)
+	{
+		// The site's world makes the flag, thus the reference to the site's component is not kept over it
+		const auto flag = _world->MakeNeedFlag(site, need);
+		registry.Get<WorshipSite>(site).needFlags.at(need) = flag;
+	}
 	Init(site);
 	if (const auto logger = spdlog::get("game"))
 	{

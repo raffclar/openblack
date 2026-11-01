@@ -153,6 +153,41 @@ void CreatureCarryOverSystem::KeepPlayersCreature()
 	}
 }
 
+namespace
+{
+
+/// The creature file of a creature as it is now, with the tattoos that this computer shows
+std::optional<creaturemind::MindFileData> FileOf(const ecs::Registry& registry, entt::entity creature)
+{
+	if (!registry.Valid(creature) || !Locator::creatureMindSystem::has_value())
+	{
+		return std::nullopt;
+	}
+	auto file = Locator::creatureMindSystem::value().SaveMind(creature);
+	if (!file.has_value())
+	{
+		return std::nullopt;
+	}
+	// The file keeps the tattoos that this computer shows. In a network game, a change from the tattoo editor stays on
+	// this computer, and the creature takes it into the next game.
+	if (const auto* tattoos = registry.TryGet<const CreatureTattoos>(creature))
+	{
+		std::array<uint32_t, creature_tattoo::k_SlotCount> words {};
+		std::ranges::transform(ecs::creature_tattoo_change::ShownSlots(*tattoos), words.begin(), creature_tattoo::ToWord);
+		file->tattooHeader = words;
+		file->tattoo = ecs::creature_tattoo_change::ShownPictures(*tattoos);
+	}
+	return file;
+}
+
+} // namespace
+
+std::optional<std::vector<uint8_t>> CreatureCarryOverSystem::CreatureFile(entt::entity creature) const
+{
+	const auto file = FileOf(Locator::entitiesRegistry::value(), creature);
+	return file.has_value() ? std::optional(creaturemind::Write(*file)) : std::nullopt;
+}
+
 void CreatureCarryOverSystem::KeepCreature(entt::entity creature)
 {
 	const auto& registry = Locator::entitiesRegistry::value();
@@ -163,21 +198,12 @@ void CreatureCarryOverSystem::KeepCreature(entt::entity creature)
 	{
 		return;
 	}
-	auto file = Locator::creatureMindSystem::value().SaveMind(creature);
+	auto file = FileOf(registry, creature);
 	if (!file.has_value())
 	{
 		SPDLOG_LOGGER_WARN(spdlog::get("game"), "The player's creature {} has no mind yet to keep for the next land",
 		                   entt::to_integral(creature));
 		return;
-	}
-	// The file keeps the tattoos that this computer shows. In a network game, a change from the tattoo editor stays on
-	// this computer, and the creature takes it into the next game.
-	if (const auto* tattoos = registry.TryGet<const CreatureTattoos>(creature))
-	{
-		std::array<uint32_t, creature_tattoo::k_SlotCount> words {};
-		std::ranges::transform(ecs::creature_tattoo_change::ShownSlots(*tattoos), words.begin(), creature_tattoo::ToWord);
-		file->tattooHeader = words;
-		file->tattoo = ecs::creature_tattoo_change::ShownPictures(*tattoos);
 	}
 	// Its physique is saved beside its mind: its body as it is now, but for the alignment, as no spell made it
 	const auto now = ecs::creature_body_file::Capture(registry, creature);

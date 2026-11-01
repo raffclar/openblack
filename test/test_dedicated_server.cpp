@@ -206,10 +206,15 @@ TEST(DedicatedServer, TheServerKeepsTheSkysCloudsOutOfTheWorldAndMakesNoSystemTh
 	                           [&shown, &mists, &worldClouds, &drawnClouds](uint32_t /*turn*/, uint64_t /*checksum*/) {
 		                           using openblack::Locator;
 		                           using openblack::ecs::components::Cloud;
-		                           shown = shown || Locator::oceanSystem::has_value() || Locator::cloudSystem::has_value() ||
-		                                   Locator::villageLightSystem::has_value() ||
-		                                   Locator::advisorVoiceSystem::has_value() || Locator::turnCheerSystem::has_value() ||
-		                                   Locator::rendereringSystem::has_value();
+		                           shown =
+		                               shown || Locator::oceanSystem::has_value() || Locator::cloudSystem::has_value() ||
+		                               Locator::villageLightSystem::has_value() || Locator::advisorVoiceSystem::has_value() ||
+		                               Locator::turnCheerSystem::has_value() || Locator::rendereringSystem::has_value() ||
+		                               Locator::rainSystem::has_value() || Locator::snowfallSystem::has_value() ||
+		                               Locator::creatureHairSystem::has_value() || Locator::abodeSoundSystem::has_value() ||
+		                               Locator::landShadeSystem::has_value() || Locator::pauseTextSystem::has_value() ||
+		                               Locator::incomingMessageSystem::has_value() || Locator::waterRingSystem::has_value() ||
+		                               Locator::liquidParticleSystem::has_value() || Locator::floatingNumberSystem::has_value();
 		                           // The scripts fade the mists, and the turns change their size on every computer
 		                           mists = mists && Locator::mistSystem::has_value();
 		                           // Every computer draws the numbers of the sky's clouds at the start of the land, but

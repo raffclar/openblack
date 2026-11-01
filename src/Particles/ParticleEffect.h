@@ -1070,6 +1070,8 @@ private:
 	                const glm::vec3& parentScale);
 	void WalkCollection(const Collection& collection, float t, DrawWalk& out) const;
 	[[nodiscard]] std::optional<DrawAtom> Interpolate(const Atom& atom, float t, bool interpolated) const;
+	/// The alpha of an atom at a fraction of the step, as its draw gets it
+	[[nodiscard]] float DrawnAlpha(const Atom& atom, float fraction) const;
 	[[nodiscard]] bool AnyCreatorLeft(const Collection& collection) const;
 	void UpdateFloatProviders();
 	// The parts of a save

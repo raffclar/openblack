@@ -239,6 +239,33 @@ TEST(ParticleDraw, AddedSpritesOnDifferentSheetsAreDrawnASheetAtATime)
 	}
 }
 
+TEST(ParticleDraw, AddedSpritesOfOneEffectGoInTheOrderOfTheirFirstSheet)
+{
+	auto frame = MakeFrame();
+	frame.materials.push_back(
+	    {.texture = 5, .alphaTexture = 6, .mode = graphics::render_modes::Mode::AlphaTexturedAlphaAdditiveNz});
+	// One queued effect with three added sheets that take turns
+	for (const uint32_t material : {2u, 1u, 0u, 1u, 2u, 0u, 1u})
+	{
+		AddSprite(frame, glm::vec3(0.0f), material == 0 ? 3u : material);
+	}
+	frame.materials.push_back(
+	    {.texture = 7, .alphaTexture = 8, .mode = graphics::render_modes::Mode::AlphaTexturedAlphaAdditiveNz});
+	AddGroup(frame, DrawPath::Queued, glm::vec3(0.0f, 0.0f, 10.0f), 0);
+	std::vector<Command> commands;
+	std::vector<uint32_t> order;
+	Order(frame, glm::vec3(0.0f), std::nullopt, commands, order);
+	// A draw for each sheet, in the order that each sheet comes first; each sheet keeps the order of its sprites
+	ASSERT_EQ(commands.size(), 3u);
+	EXPECT_EQ(commands[0].material, 2u);
+	EXPECT_EQ(commands[0].count, 2u);
+	EXPECT_EQ(commands[1].material, 1u);
+	EXPECT_EQ(commands[1].count, 3u);
+	EXPECT_EQ(commands[2].material, 3u);
+	EXPECT_EQ(commands[2].count, 2u);
+	EXPECT_EQ(order, (std::vector<uint32_t> {0, 4, 1, 3, 6, 2, 5}));
+}
+
 TEST(ParticleDraw, TheMiracleInTheHandIsDrawnJustAfterTheHand)
 {
 	auto frame = MakeFrame();

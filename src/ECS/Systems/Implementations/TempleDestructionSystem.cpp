@@ -347,17 +347,18 @@ void TempleDestructionSystem::Start(entt::entity temple)
 void TempleDestructionSystem::EndTurn()
 {
 	auto* registry = _world->Entities();
-	const auto local = _world->LocalPlayer();
-	if (registry == nullptr || !local.has_value())
+	const auto first = _world->FirstPlayer();
+	if (registry == nullptr || !first.has_value())
 	{
 		return;
 	}
-	// The local player whose temple is being destroyed has lost: the game's end is played out by its script, once, and
-	// never in a skirmish or a network game
+	// The player of a game alone loses when the game destroys their temple: the script of the game's end plays out, one
+	// time. A skirmish and a network game do not end in this way. The turn reads the first player, which is the same on
+	// every computer, and not the player of this computer.
 	auto& context = registry->Context();
 	bool destroying = false;
-	registry->Each<const Temple>([&local, &destroying](entt::entity, const Temple& temple) {
-		destroying = destroying || (temple.owner == *local && temple.destroying);
+	registry->Each<const Temple>([&first, &destroying](entt::entity, const Temple& temple) {
+		destroying = destroying || (temple.owner == *first && temple.destroying);
 	});
 	if (temple_destruction::GameOverStarts({
 	        .over = context.gameOver,

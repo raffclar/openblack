@@ -275,7 +275,8 @@ void Renderer::DrawMenuCreature(const DrawSceneDesc& desc, const InterfaceCreatu
 	}
 	const auto* eyes = drawn.TryGet<const ecs::components::CreatureEyes>(shown.copy);
 	const auto* hair = drawn.TryGet<const ecs::components::CreatureHair>(shown.copy);
-	for (const auto layer : tattoo_menu::DrawOrder(hair != nullptr, Locator::creatureHairSystem::value().IsShown()))
+	for (const auto layer : tattoo_menu::DrawOrder(hair != nullptr, Locator::creatureHairSystem::has_value() &&
+	                                                                    Locator::creatureHairSystem::value().IsShown()))
 	{
 		switch (layer)
 		{
@@ -408,7 +409,7 @@ void Renderer::DrawFilmCopy(const DrawSceneDesc& desc, const interface_creatures
 	// Its own hair, which hangs from its own pose, faces the film's camera. The hair takes the colour of its own and the
 	// added colour that the body takes.
 	if (const auto* hair = copies.TryGet<const ecs::components::CreatureHair>(shown.copy);
-	    hair != nullptr && Locator::creatureHairSystem::value().IsShown())
+	    hair != nullptr && Locator::creatureHairSystem::has_value() && Locator::creatureHairSystem::value().IsShown())
 	{
 		DrawCreatureHair(desc, *hair, transform->position, RenderPass::FilmCreature, glm::vec3(glm::inverse(shown.view)[3]),
 		                 shown.colour, glm::round(shown.added * 255.0f));

@@ -757,11 +757,18 @@ bool RenderingSystem::UploadInstances(bool drawBoundingBox)
 	uint32_t segmentPlaced = 0;
 	uint32_t lastSegment = 0;
 	const auto drawnHand = DrawnHand();
+	// The walk makes no component, so the stores of the components stay the same for all of it
+	const openblack::ecs::drawn_place::DrawnPlaces drawnPlaces(registry);
+	const openblack::ecs::ComponentLookup<VillagerPose> villagerPoses(registry);
+	const openblack::ecs::ComponentLookup<HighDetail> highDetails(registry);
+	const openblack::ecs::ComponentLookup<ScaffoldDrawnScale> drawnScales(registry);
+	const openblack::ecs::ComponentLookup<PhysicsDrawPose> physicsPoses(registry);
+	const openblack::ecs::ComponentLookup<DetailMeshes> detailMeshes(registry);
 	const auto lifelessTotemParts = LifelessTotemParts(registry);
 	EachBySegment(
 	    [this, &registry, &vegetation, &meshes, &fits, &fizzOrder, &segmentPlaced, &lastSegment, drawBoundingBox, camera, &view,
-	     modelDetail, drawList, drawnHand,
-	     &lifelessTotemParts](entt::entity entity, const Mesh& mesh, const Transform& transform) {
+	     modelDetail, drawList, drawnHand, &drawnPlaces, &villagerPoses, &highDetails, &drawnScales, &physicsPoses,
+	     &detailMeshes, &lifelessTotemParts](entt::entity entity, const Mesh& mesh, const Transform& transform) {
 		    // The hands of the other gods and the right hands have no model on the screen
 		    if (!graphics::drawn_hand::Drawn(registry.AllOf<Hand>(entity), entity, drawnHand))
 		    {
@@ -789,20 +796,20 @@ bool RenderingSystem::UploadInstances(bool drawBoundingBox)
 		    }
 		    // A villager is drawn gliding between its turns and turning after the way it faces; one held by the opening's
 		    // hand is drawn in its grip
-		    const auto* villagerPose = registry.TryGet<const VillagerPose>(entity);
+		    const auto* villagerPose = villagerPoses.TryGet(entity);
 		    // A walking creature is drawn between its last two turns, and what it holds in its drawn hand
-		    const auto drawnPlace = openblack::ecs::drawn_place::DrawnTransformOf(registry, entity, transform);
+		    const auto drawnPlace = drawnPlaces.Of(entity, transform);
 		    const auto standsAt = DrawnPosition(drawnPlace.position, villagerPose);
 		    const auto rotation = DrawnRotation(drawnPlace.rotation, villagerPose);
-		    const auto* highDetail = registry.TryGet<const HighDetail>(entity);
+		    const auto* highDetail = highDetails.TryGet(entity);
 		    const auto drawnAt =
 		        highDetail != nullptr ? openblack::ecs::high_detail_rules::DrawnAt(highDetail->heldAt, standsAt) : standsAt;
 		    // A scaffold on a building site becomes small as the building grows
-		    const auto* drawnScale = registry.TryGet<const ScaffoldDrawnScale>(entity);
+		    const auto* drawnScale = drawnScales.TryGet(entity);
 		    auto modelMatrix =
 		        PlacedMatrix(drawnAt, rotation, drawnScale != nullptr ? glm::vec3(drawnScale->scale) : transform.scale);
 		    // A body moving in the physics is drawn between its last two turns, and not at all once sunk under the sea
-		    const auto* drawn = registry.TryGet<const PhysicsDrawPose>(entity);
+		    const auto* drawn = physicsPoses.TryGet(entity);
 		    const auto placed = physics_draw::ModelMatrix(modelMatrix, drawn);
 		    modelMatrix = placed.value_or(glm::mat4(0.0f));
 
@@ -814,7 +821,7 @@ bool RenderingSystem::UploadInstances(bool drawBoundingBox)
 		    std::optional<uint8_t> fade;
 		    auto level = graphics::mesh_detail::Mesh::High;
 		    bool gone = false;
-		    const auto* detail = registry.TryGet<const DetailMeshes>(entity);
+		    const auto* detail = detailMeshes.TryGet(entity);
 		    // On a frame that draws all of the land's draw list, note which listed things stay drawn while the camera
 		    // stands still. The icon of a village totem is noted too: it keeps its totem drawn. A thing of several meshes
 		    // uses the box of its standard mesh. Another thing uses its own mesh, also a broken building, which shows its
@@ -842,8 +849,8 @@ bool RenderingSystem::UploadInstances(bool drawBoundingBox)
 			    fade = ghost->alpha;
 			    _fadingThings.emplace(entity, ghost->alpha);
 		    }
-		    else if (openblack::ecs::high_detail_rules::DrawsHighMeshAtAnyDistance(
-		                 detail != nullptr, registry.AllOf<HighDetail>(entity), registry.AllOf<MorphWithTerrain>(entity)))
+		    else if (openblack::ecs::high_detail_rules::DrawsHighMeshAtAnyDistance(detail != nullptr, highDetails.Has(entity),
+		                                                                           registry.AllOf<MorphWithTerrain>(entity)))
 		    {
 			    drawnMesh = detail->meshes.at(static_cast<size_t>(graphics::mesh_detail::Mesh::High));
 		    }
@@ -1215,7 +1222,7 @@ bool RenderingSystem::UploadInstances(bool drawBoundingBox)
 		    // where they start
 		    if (slots->second.bonePalette)
 		    {
-			    const auto* pose = registry.TryGet<const VillagerPose>(entity);
+			    const auto* pose = villagerPoses.TryGet(entity);
 			    const auto& rest = meshes.Handle(slots->first)->GetBoneMatrices();
 			    const auto bones = pose != nullptr && pose->bones.size() == rest.size()
 			                           ? std::span<const glm::mat4>(pose->bones)

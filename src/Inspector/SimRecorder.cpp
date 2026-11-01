@@ -189,15 +189,16 @@ void Mix(uint64_t& hash, const void* data, size_t size)
 /// The hash that ecs.hash gives with no parameters: the entities in the order of their ids, each with its transform
 uint64_t TransformHash(const ecs::Registry& registry)
 {
-	std::vector<entt::entity> entities;
-	registry.Each<const Transform>([&entities](entt::entity entity, const Transform&) { entities.push_back(entity); });
-	std::ranges::sort(entities);
+	std::vector<std::pair<entt::entity, const Transform*>> entities;
+	registry.Each<const Transform>(
+	    [&entities](entt::entity entity, const Transform& transform) { entities.emplace_back(entity, &transform); });
+	std::ranges::sort(entities, {}, &std::pair<entt::entity, const Transform*>::first);
 	uint64_t hash = k_HashOffset;
-	for (const auto entity : entities)
+	for (const auto& [entity, placed] : entities)
 	{
 		const auto id = entt::to_integral(entity);
 		Mix(hash, &id, sizeof(id));
-		const auto& transform = registry.Get<const Transform>(entity);
+		const auto& transform = *placed;
 		Mix(hash, &transform.position, sizeof(transform.position));
 		Mix(hash, &transform.rotation, sizeof(transform.rotation));
 		Mix(hash, &transform.scale, sizeof(transform.scale));
@@ -1056,13 +1057,13 @@ Json SimProvider::CreatureRecord(uint32_t turn, bool track, std::vector<sim_chec
 
 	// The beliefs, the opinions and the lists of what it learnt
 	Json beliefs = Json::array();
-	for (const auto& belief : mind.beliefs.NewestFirst())
+	for (const auto* belief : mind.beliefs.HeldNewestFirst())
 	{
 		if (beliefs.size() >= k_TopItems)
 		{
 			break;
 		}
-		beliefs.push_back({{"thing", ToId(belief.thing)}, {"kind", belief.kind}});
+		beliefs.push_back({{"thing", ToId(belief->thing)}, {"kind", belief->kind}});
 	}
 	Json byKind = Json::object();
 	for (uint32_t kind = 0; kind < creature_object_beliefs::k_KindCount; ++kind)
