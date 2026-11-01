@@ -21,6 +21,7 @@
 
 #include "ECS/Components/Animal.h"
 #include "ECS/Components/Flock.h"
+#include "ECS/Components/ScriptControl.h"
 #include "ECS/Components/Transform.h"
 #include "ECS/Components/WallHug.h"
 #include "ECS/Registry.h"
@@ -368,6 +369,39 @@ TEST(FlockMembers, AFlockThatLosesItsLastMemberGoes)
 	script_flocks::AddLiving(registry, flock, bird);
 	registry.Destroy(bird);
 	EXPECT_FALSE(registry.Valid(flock));
+}
+
+TEST(FlockMembers, AFlockThatAScriptHoldsStaysWhenItsLastMemberGoes)
+{
+	Registry registry;
+	const auto flock = script_flocks::Create(registry, Metres(0, 0));
+	registry.Assign<components::InScript>(flock);
+	const auto bird = Bird(registry, 1, 1);
+	script_flocks::AddLiving(registry, flock, bird);
+	registry.Destroy(bird);
+	ASSERT_TRUE(script_flocks::IsFlock(registry, flock));
+	EXPECT_EQ(script_flocks::Size(registry, flock), 0u);
+	// The script can attach a newcomer to the empty flock
+	const auto newcomer = Living(registry, 2, 2);
+	EXPECT_TRUE(script_flocks::AddLiving(registry, flock, newcomer));
+	EXPECT_EQ(script_flocks::Size(registry, flock), 1u);
+}
+
+TEST(FlockMembers, ADeadVillagerLeavesAFlockThatAScriptHoldsInPlace)
+{
+	Registry registry;
+	const auto held = script_flocks::Create(registry, Metres(0, 0));
+	registry.Assign<components::InScript>(held);
+	const auto unheld = script_flocks::Create(registry, Metres(0, 0));
+	const auto first = Living(registry, 1, 1);
+	const auto second = Living(registry, 2, 2);
+	script_flocks::AddLiving(registry, held, first);
+	script_flocks::AddLiving(registry, unheld, second);
+	script_flocks::RemoveAtDeath(registry, first);
+	script_flocks::RemoveAtDeath(registry, second);
+	EXPECT_TRUE(script_flocks::IsFlock(registry, held));
+	EXPECT_EQ(script_flocks::FlockOf(registry, first), static_cast<entt::entity>(entt::null));
+	EXPECT_FALSE(registry.Valid(unheld));
 }
 
 TEST(FlockMembers, AVillagerThatGoesLeavesItsFlock)

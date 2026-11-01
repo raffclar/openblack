@@ -158,23 +158,8 @@ bool creature_watching::SetKnown(Knowledge& knowledge, KnownList list, size_t in
 	auto& known = list == KnownList::Skill ? knowledge.skillsKnown : knowledge.miraclesKnown;
 	if (index >= known.size())
 	{
-		auto& pastTable = list == KnownList::Skill ? knowledge.skillsKnownPastTable : knowledge.miraclesKnownPastTable;
-		const auto id = static_cast<uint32_t>(index);
-		const auto found = std::ranges::find(pastTable, id);
-		if (!knows)
-		{
-			if (found != pastTable.end())
-			{
-				pastTable.erase(found);
-			}
-			return false;
-		}
-		if (found != pastTable.end())
-		{
-			return false;
-		}
-		pastTable.push_back(id);
-		return true;
+		// The teach checks the index against the table. An index with no row does nothing (deviation 183).
+		return false;
 	}
 	const bool newlyKnown = knows && !known[index];
 	known[index] = knows;

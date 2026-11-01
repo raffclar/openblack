@@ -104,7 +104,7 @@ protected:
 	chlapi::CHLApi _api;
 };
 
-TEST_F(ScriptFlockAttach, HerdAttachedToTownStaysAndLeavesAZeroForEachAnimal)
+TEST_F(ScriptFlockAttach, HerdAttachedToTownStaysAndLeavesOnlyTheTown)
 {
 	auto& registry = Locator::entitiesRegistry::value();
 	const auto [herd, animals] = CreateHerd();
@@ -113,11 +113,9 @@ TEST_F(ScriptFlockAttach, HerdAttachedToTownStaysAndLeavesAZeroForEachAnimal)
 
 	const auto results = Attach(herd, town);
 
-	// Each animal that is not a villager leaves a 0, then the town comes last
-	ASSERT_EQ(results.size(), 3u);
-	EXPECT_EQ(results[0].first.uintVal, 0u);
-	EXPECT_EQ(results[1].first.uintVal, 0u);
-	EXPECT_EQ(results[2].first.uintVal, static_cast<uint32_t>(town));
+	// An animal that is not a villager puts no value on the stack. Only the town comes back.
+	ASSERT_EQ(results.size(), 1u);
+	EXPECT_EQ(results[0].first.uintVal, static_cast<uint32_t>(town));
 	for (const auto animal : animals)
 	{
 		EXPECT_EQ(ecs::script_flocks::FlockOf(registry, animal), herd);
