@@ -56,6 +56,8 @@ std::string_view Name(Quantity quantity)
 		return "size";
 	case Quantity::CreatureDistance:
 		return "distance to the point";
+	case Quantity::ObjectResource:
+		return "food and wood held";
 	}
 	return "";
 }
