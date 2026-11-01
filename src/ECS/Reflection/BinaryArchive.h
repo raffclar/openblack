@@ -14,7 +14,6 @@
 #include <cstring>
 
 #include <algorithm>
-#include <functional>
 #include <iterator>
 #include <limits>
 #include <memory>
@@ -598,62 +597,31 @@ void LoadAlternative(BinaryReader& in, Variant& value, size_t index)
 	}
 }
 
-/// Whether a container keeps its entries in the order of operator< of their keys, so that a sort changes nothing
-template <typename Container>
-inline constexpr bool k_KeepsKeyOrder =
-    requires { typename Container::key_compare; } &&
-    (std::is_same_v<typename Container::key_compare, std::less<typename Container::key_type>> ||
-     std::is_same_v<typename Container::key_compare, std::less<>>);
-
-/// The key of an entry of a map or a set
-template <typename Container>
-[[nodiscard]] const typename Container::key_type& KeyOf(const typename Container::value_type& entry)
-{
-	if constexpr (k_IsMap<Container>)
-	{
-		return entry.first;
-	}
-	else
-	{
-		return entry;
-	}
-}
-
 /// The entries of a map or a set in the order of their keys, so that the same contents always give the same bytes
 template <typename Container>
 [[nodiscard]] auto SortedEntries(const Container& container)
 {
-	using Entry = typename Container::value_type;
-	using Key = typename Container::key_type;
-	std::vector<const Entry*> entries;
+	std::vector<const typename Container::value_type*> entries;
 	entries.reserve(container.size());
-	if constexpr (!requires(const Key& a, const Key& b) { a < b; } || k_KeepsKeyOrder<Container>)
+	for (const auto& entry : container)
 	{
-		for (const auto& entry : container)
-		{
-			entries.push_back(&entry);
-		}
+		entries.push_back(&entry);
 	}
-	else if constexpr (std::is_trivially_copyable_v<Key> && sizeof(Key) <= sizeof(uint64_t))
+	if constexpr (k_IsMap<Container>)
 	{
-		// A small key is sorted beside its entry, so that the sort reads no entry. The keys of a container differ, so
-		// the order is the same as a sort of the entries.
-		std::vector<std::pair<Key, const Entry*>> keyed;
-		keyed.reserve(container.size());
-		for (const auto& entry : container)
+		using Key = typename Container::key_type;
+		if constexpr (requires(const Key& a, const Key& b) { a < b; })
 		{
-			keyed.emplace_back(KeyOf<Container>(entry), &entry);
+			std::ranges::sort(entries, [](const auto* a, const auto* b) { return a->first < b->first; });
 		}
-		std::ranges::sort(keyed, [](const auto& a, const auto& b) { return a.first < b.first; });
-		std::ranges::transform(keyed, std::back_inserter(entries), &std::pair<Key, const Entry*>::second);
 	}
 	else
 	{
-		for (const auto& entry : container)
+		using Key = typename Container::key_type;
+		if constexpr (requires(const Key& a, const Key& b) { a < b; })
 		{
-			entries.push_back(&entry);
+			std::ranges::sort(entries, [](const auto* a, const auto* b) { return *a < *b; });
 		}
-		std::ranges::sort(entries, [](const Entry* a, const Entry* b) { return KeyOf<Container>(*a) < KeyOf<Container>(*b); });
 	}
 	return entries;
 }
