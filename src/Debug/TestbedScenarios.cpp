@@ -131,6 +131,7 @@ TestbedScenarios::~TestbedScenarios()
 	{
 		game->SetScenarioStager({});
 		game->SetScenarioTurn({});
+		game->SetScenarioGaveAll({});
 	}
 }
 
@@ -171,6 +172,8 @@ void TestbedScenarios::ConnectToGame() noexcept
 	{
 		game->SetScenarioStager([this]() { RunRequested(); });
 		game->SetScenarioTurn([this]() { BeforeTurn(); });
+		game->SetScenarioGaveAll(
+		    [this]() { return _runner.GetScenario() != nullptr && (!_runner.IsRunning() || _runner.GetTimeline().done); });
 		_stagerSet = true;
 	}
 }

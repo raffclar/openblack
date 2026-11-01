@@ -176,6 +176,12 @@ constexpr uint32_t k_LongestFrameMs = 1000;
 /// Whether the run is at its end at this turn
 [[nodiscard]] bool Finished(const Settings& settings, uint32_t turn);
 
+/// Whether a turn-limited run ends because the temple holds the world. In a game alone, the world's turns stop while
+/// the player is in the temple, so the last turn does not come. The run ends when the temple holds the clock and the
+/// scenario of the run gave all its commands, because then nothing takes the player out of the temple. A network game
+/// does not stop its turns, and in a run with no scenario, the player can still go out.
+[[nodiscard]] bool EndsHeldInTemple(const Settings& settings, bool clockHeld, bool networkGame, bool scenarioGaveAll);
+
 /// Whether the game skips a frame of a run that a tool steps through the inspector. While the tool holds the run, the
 /// game is paused and the frame only gives the answers to the tool. The wall clock sets the number of these frames.
 /// Thus they must not move the clock, the camera or the hand, because the turns get the camera and the hand from the
