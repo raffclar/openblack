@@ -750,8 +750,10 @@ private:
 	/// The answer of the skirmish box over the game, until the screen is black after the box
 	std::optional<gui::SkirmishBox::Answer> _skirmishAnswer;
 	input::LockMode _inspectInputLock {input::LockMode::Auto};
+#if defined(OPENBLACK_DEVELOPER_TOOLS)
 	/// Whether the testbed opens its window of scenarios
 	bool _testbedWindow {true};
+#endif
 	bool _quitRequested {false};
 	/// The player closed the window. The game ends at the end of a frame outside a script's cut scene.
 	bool _closeAsked {false};

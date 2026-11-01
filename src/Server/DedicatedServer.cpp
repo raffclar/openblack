@@ -410,7 +410,11 @@ bool ServerWorld::StartLand()
 	}
 	else if (_settings.testbed)
 	{
-		land.LoadTestbed();
+		// A server for players has no testbed
+		if (!land.LoadTestbed())
+		{
+			return false;
+		}
 	}
 	else
 	{

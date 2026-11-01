@@ -129,7 +129,6 @@ bool parseOptions(int argc, char** argv, openblack::Arguments& args, int& return
 	options.add_options("Developer")
 		("u,ui-scale", "Scaling of the GUI", cxxopts::value<float>()->default_value("1.0"))
 		("s,start-level", "Level that is loaded at start-up: a script in Scripts, such as Land2.txt, or a playground such as Playgrounds/construct.txt, which starts without the story", cxxopts::value<std::string>()->default_value(std::string(openblack::k_DefaultStartLevel)))
-		("testbed", "Start on the flat creature testbed, a plane with a lake, instead of a level.")
 		("gods-ring-map", "Start on the network map for 32 gods instead of a level, as the game server does with the same switch.")
 		("screenshot-frame", "Request a screenshot of the backbuffer at a certain frame number.", cxxopts::value<uint32_t>())
 		("screenshot-path", "Path of the request a screenshot of the backbuffer.", cxxopts::value<std::filesystem::path>()->default_value("screenshot.png"))
@@ -148,13 +147,6 @@ bool parseOptions(int argc, char** argv, openblack::Arguments& args, int& return
 		("direct-start-creature", "Debug only: with -s on a land after the first, start that land's story directly (its control script runs) and make the player's creature of this species (cow, tiger, leopard, wolf, lion, horse, tortoise, zebra, brownbear, polarbear, sheep, chimp, ogre, mandrill, rhino, gorilla, giantape) where the land loads the creature that came through the vortex. A creature that came through, or one the player has, is used instead. The start-of-game question is answered normal unless --skip-opening says otherwise. Has no effect on the first land.", cxxopts::value<std::string>())
 		("play-video", "Play a full-screen video once the land is loaded: intro, fall (the falling spell, which needs the player's creature) or a path such as Data/logo.bik.", cxxopts::value<std::string>()->default_value(""))
 		("film-surface", "Debug: the 16-bit surface that each film picture goes through: 555 (the default, as the game on the display cards of today), 565 (as on cards with no 555) or none (the full colour of the decoder).", cxxopts::value<std::string>()->default_value(""))
-		("scenario", "Start on the testbed and run the testbed scenario of this id, such as benchmark.creatures_100.", cxxopts::value<std::string>())
-		("scenario-check", "With --scenario, run the scenario's checks of its own outcome, write their report to the console, and quit with the exit code 0 when they pass, 1 when one fails, 2 when the scenario states none. Tools and the merge train use this.")
-		("benchmark-warmup", "With --scenario, the frames a benchmark's crowd settles for once spawned, before it is measured.", cxxopts::value<uint32_t>()->default_value("120"))
-		("benchmark-frames", "With --scenario, the frames of a benchmark measured.", cxxopts::value<uint32_t>()->default_value("600"))
-		("scenario-hide-window", "With --scenario, keep the testbed's window of scenarios closed, so the view is clear.")
-		("list-scenarios", "Tools: write the id of each testbed scenario, one on each line, and stop.")
-		("benchmark-out", "With --scenario, where a benchmark writes its results (with .json and .csv after it); the game quits once they are written.", cxxopts::value<std::string>())
 		("profile-folder", "For developers and tests: keep the players' profiles and their creatures in this folder rather than the Profiles folder in the working folder, as on a first start when it is empty. Without it, a developer's or a tool's run (a level, the testbed, a scenario, --skip-opening, --skip-logos, the inspector, a seed, a video, a number of frames or a screenshot asked for) plays as a profile of its own, kept apart, and never sees the new player's box.", cxxopts::value<std::string>())
 		("seed", "Start every random number the game draws from this seed and pin the date the game reads (1 January 2001), so that two runs of the same scenario with a fixed frame time and the same input go the same way.", cxxopts::value<uint32_t>())
 		("sim-fast", "Tools: the fast simulation mode. The game plays its frames one after the other as fast as the processor can and draws none of them (see --sim-draw-every). Each frame takes the fixed game time of --sim-frame-ms, 20 ms by default in this mode, so the turns are the same as at the normal speed.")
@@ -187,6 +179,16 @@ bool parseOptions(int argc, char** argv, openblack::Arguments& args, int& return
 		("sim-play-commands", "Tools: do the commands of this file (as --sim-commands writes it) at their turns, and no command of the player of this computer, as a computer that only receives the commands of a network game.", cxxopts::value<std::string>())
 		("sim-trace-draws", "Tools: write each draw on the synced random seed to this file, with its turn and the place of its call in the source (tools/sim/draw_trace.py compares two files).", cxxopts::value<std::string>());
 #if defined(OPENBLACK_DEVELOPER_TOOLS)
+	// The testbed and its scenarios are developer tools: a build without them has no such options
+	options.add_options("Developer")
+		("testbed", "Start on the flat creature testbed, a plane with a lake, instead of a level.")
+		("scenario", "Start on the testbed and run the testbed scenario of this id, such as benchmark.creatures_100.", cxxopts::value<std::string>())
+		("scenario-check", "With --scenario, run the scenario's checks of its own outcome, write their report to the console, and quit with the exit code 0 when they pass, 1 when one fails, 2 when the scenario states none. Tools and the merge train use this.")
+		("benchmark-warmup", "With --scenario, the frames a benchmark's crowd settles for once spawned, before it is measured.", cxxopts::value<uint32_t>()->default_value("120"))
+		("benchmark-frames", "With --scenario, the frames of a benchmark measured.", cxxopts::value<uint32_t>()->default_value("600"))
+		("scenario-hide-window", "With --scenario, keep the testbed's window of scenarios closed, so the view is clear.")
+		("list-scenarios", "Tools: write the id of each testbed scenario, one on each line, and stop.")
+		("benchmark-out", "With --scenario, where a benchmark writes its results (with .json and .csv after it); the game quits once they are written.", cxxopts::value<std::string>());
 	options.add_options("Developer")
 		("sim-row-dump", "Tools: keep each field of each row of the synced world of the last turns, and write the rows of a turn to this file when the world parts from the server's world (tools/sim/row_dump.py compares two files).", cxxopts::value<std::string>())
 		("sim-row-dump-turn", "Tools: with --sim-row-dump, also write the rows of this turn.", cxxopts::value<uint32_t>())
@@ -253,6 +255,7 @@ bool parseOptions(int argc, char** argv, openblack::Arguments& args, int& return
 			returnCode = EXIT_SUCCESS;
 			return false;
 		}
+#if defined(OPENBLACK_DEVELOPER_TOOLS)
 		if (result.count("list-scenarios") != 0)
 		{
 			for (const auto& id : openblack::testbed_scenarios::ScenarioIds())
@@ -263,6 +266,7 @@ bool parseOptions(int argc, char** argv, openblack::Arguments& args, int& return
 			returnCode = EXIT_SUCCESS;
 			return false;
 		}
+#endif
 
 		// pick a sane renderer based on the user os
 		openblack::GraphicsBackend graphicsBackend;
@@ -580,7 +584,9 @@ bool parseOptions(int argc, char** argv, openblack::Arguments& args, int& return
 		args.logFile = result["log-file"].as<std::string>();
 		args.logLevels = logLevels;
 		args.startLevel = result["start-level"].as<std::string>();
+#if defined(OPENBLACK_DEVELOPER_TOOLS)
 		args.startTestbed = result.count("testbed") != 0;
+#endif
 		args.startGodsRingMap = result.count("gods-ring-map") != 0;
 		args.frameStatsInterval = result["frame-stats"].as<uint32_t>();
 		args.frameStatsViews = result.count("frame-stats-views") != 0;
@@ -725,6 +731,7 @@ bool parseOptions(int argc, char** argv, openblack::Arguments& args, int& return
 			args.inspectInputLock = openblack::input::LockMode::Unlocked;
 		}
 #endif
+#if defined(OPENBLACK_DEVELOPER_TOOLS)
 		if (result.count("scenario") != 0)
 		{
 			args.scenario = openblack::ScenarioRequest {
@@ -739,6 +746,7 @@ bool parseOptions(int argc, char** argv, openblack::Arguments& args, int& return
 				args.scenario->results = std::filesystem::path(result["benchmark-out"].as<std::string>());
 			}
 		}
+#endif
 	}
 	catch (cxxopts::exceptions::parsing& err)
 	{
