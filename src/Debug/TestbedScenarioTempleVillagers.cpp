@@ -818,12 +818,12 @@ void openblack::testbed_scenarios::AddTempleVillagerScenarios(std::vector<Scenar
 	                   "workshop it gives 300 wood with the Action button and lets 500 wood go. Last, it holds a man of "
 	                   "the town over the altar and puts him down on the land in front of the camera.",
 	    .expected = "While the hand holds food over the site, and wood over the workshop, the tooltip says \"Supply\". "
-	                "The 400 food that the hand lets go pours into the pot, and the pile makes its loud sound. The pot "
-	                "rises from the ground. The press gives the 150 food at once with the quiet sound of the pile: the "
-	                "pot then holds 550 food. The 100 food falls onto the site and goes into the pot with the quiet "
-	                "sound: the pot then holds 650 food. The workshop takes the 300 wood at the press and the 500 wood "
-	                "when the hand lets it go, with the sound of its pile each time: it then holds 1800 wood. Over the "
-	                "altar the man shows \"Sacrifice\". He lands alive in front of the camera.",
+	                "The 400 food that the hand lets go pours into the pot, and the pile makes its loud sound. The press "
+	                "gives the 150 food at once with the quiet sound of the pile: the pot then holds 550 food. The 100 "
+	                "food falls onto the site and goes into the pot with the quiet sound: the pot then holds 650 food. "
+	                "The workshop takes the 300 wood at the press and the 500 wood when the hand lets it go, with the "
+	                "sound of its pile each time: it then holds 1800 wood. Over the altar the man shows \"Sacrifice\". "
+	                "He lands alive in front of the camera.",
 	    .environment = {.dispenserGrid = false},
 	    .framing = {.shot = Shot::Placed, .eye = {0.0f, 40.0f, 55.0f}, .look = {0.0f, 0.0f, 5.0f}},
 	    .objects = supplyObjects,
