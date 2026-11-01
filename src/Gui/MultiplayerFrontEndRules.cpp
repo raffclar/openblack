@@ -601,6 +601,11 @@ std::string_view ConditionText(size_t index) noexcept
 	return index < k_Conditions.size() ? k_Conditions.at(index).text : std::string_view();
 }
 
+std::string_view ConditionKey(size_t index) noexcept
+{
+	return index < k_Conditions.size() ? k_Conditions.at(index).key : std::string_view();
+}
+
 std::optional<size_t> ConditionIndex(std::string_view key) noexcept
 {
 	const auto place = std::ranges::find(k_Conditions, key, &ConditionName::key);
@@ -629,6 +634,19 @@ std::optional<std::string> ConditionsRefusal(const std::optional<ConditionTempla
 		}
 	}
 	return std::nullopt;
+}
+
+std::vector<game_end::ConditionPick> PicksOnLand(const ConditionTemplate& limits,
+                                                 std::span<const game_end::SwitchedCondition> conditions)
+{
+	std::vector<game_end::ConditionPick> picks;
+	picks.reserve(conditions.size());
+	for (const auto& each : conditions)
+	{
+		const auto first = limits.at(static_cast<size_t>(each.condition)).value;
+		picks.push_back({.condition = each.condition, .value = each.value.value_or(first)});
+	}
+	return picks;
 }
 
 std::vector<game_end::ConditionPick> ConditionLines(std::span<const game_end::ConditionPick> picks)

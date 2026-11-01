@@ -181,13 +181,15 @@ TEST(DeveloperTools, ADeployedServerKeepsTheConditionsAndTheTimeLimitOfTheOperat
 	ASSERT_TRUE(request.has_value());
 	EXPECT_EQ(request->limitsLand, "mpm_2p_1");
 	const auto limits = openblack::gui::multiplayer::FindConditions(k_Template, request->limitsLand);
-	EXPECT_FALSE(openblack::gui::multiplayer::ConditionsRefusal(limits, request->picks).has_value());
+	EXPECT_FALSE(
+	    openblack::gui::multiplayer::ConditionsRefusal(limits, *openblack::sim_run::PicksWithValues(*request)).has_value());
 	EXPECT_FALSE(openblack::game_end::TimeLimitRefusal(90, false).has_value());
 
 	// A value out of the land's limits and a time limit out of the host's limits stop the server
 	const auto tooMany = openblack::sim_run::ParseConditions("WC_KILL_NUM_VILLAGERS=501");
 	ASSERT_TRUE(tooMany.has_value());
-	EXPECT_TRUE(openblack::gui::multiplayer::ConditionsRefusal(limits, tooMany->picks).has_value());
+	EXPECT_TRUE(
+	    openblack::gui::multiplayer::ConditionsRefusal(limits, *openblack::sim_run::PicksWithValues(*tooMany)).has_value());
 	EXPECT_TRUE(openblack::game_end::TimeLimitRefusal(5, false).has_value());
 	EXPECT_TRUE(openblack::game_end::TimeLimitRefusal(1500, false).has_value());
 }
