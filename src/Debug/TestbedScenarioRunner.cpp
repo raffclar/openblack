@@ -2706,6 +2706,27 @@ std::string Runner::GivePlayerCommand(const Command& command)
 		const auto why = hand.WhyNotTake(*object);
 		return hand.TakeIntoHand(*object) ? std::string("taken into the hand") : fmt::format("the hand can't take it: {}", why);
 	}
+	case Kind::HandTakeShownSeed:
+	{
+		// The first seed of the player that shows over its miracle
+		std::optional<entt::entity> seed;
+		Locator::entitiesRegistry::value().Each<const ecs::components::SpellSeed, const ecs::components::Mesh>(
+		    [&seed, &command](entt::entity entity, const ecs::components::SpellSeed& component, const ecs::components::Mesh&) {
+			    if (!seed.has_value() && component.followsSpell && component.player == command.player)
+			    {
+				    seed = entity;
+			    }
+		    });
+		if (!seed.has_value() || !Locator::handGrabSystem::has_value() || !Locator::magicSystem::has_value())
+		{
+			return "no seed shows over a miracle";
+		}
+		// The take of a debug tool: the hand takes the seed wherever the pointer is, also outside the influence
+		Locator::handGrabSystem::value().TakeIntoHandOf(command.player, *seed);
+		const auto held = Locator::magicSystem::value().GetHeldSeedOf(command.player);
+		return held == seed ? fmt::format("the hand takes back seed {}", entt::to_integral(*seed))
+		                    : fmt::format("the hand did not keep seed {}", entt::to_integral(*seed));
+	}
 	case Kind::AttachObjectScriptSound:
 	{
 		const auto object = ObjectAt(command.object);
@@ -3534,9 +3555,9 @@ void Runner::Give(const Command& command)
 {
 	if (command.kind == Kind::HoldSeed || command.kind == Kind::DrawGesture || command.kind == Kind::SummonSeed ||
 	    command.kind == Kind::PressKey || command.kind == Kind::HandTakeFireBall || command.kind == Kind::HandTapObject ||
-	    command.kind == Kind::HandTake || command.kind == Kind::HandPour || command.kind == Kind::HandRelease ||
-	    command.kind == Kind::SetReportLatency || command.kind == Kind::RemoveObject || command.kind == Kind::HandGripTotem ||
-	    command.kind == Kind::AttachObjectScriptSound || command.kind == Kind::SayLine ||
+	    command.kind == Kind::HandTake || command.kind == Kind::HandTakeShownSeed || command.kind == Kind::HandPour ||
+	    command.kind == Kind::HandRelease || command.kind == Kind::SetReportLatency || command.kind == Kind::RemoveObject ||
+	    command.kind == Kind::HandGripTotem || command.kind == Kind::AttachObjectScriptSound || command.kind == Kind::SayLine ||
 	    command.kind == Kind::PlayGuidanceVoice || command.kind == Kind::ScriptRelease || command.kind == Kind::FillSiteIcons ||
 	    command.kind == Kind::BuildWorshipSites || command.kind == Kind::PressPlainKey || command.kind == Kind::PlainKeyDown ||
 	    command.kind == Kind::PlainKeyRepeat || command.kind == Kind::PlainKeyUp ||
@@ -4406,6 +4427,7 @@ void Runner::Give(const Command& command)
 	case Kind::HandTakeFireBall:
 	case Kind::HandTapObject:
 	case Kind::HandTake:
+	case Kind::HandTakeShownSeed:
 	case Kind::HandPour:
 	case Kind::HandRelease:
 	case Kind::SetReportLatency:

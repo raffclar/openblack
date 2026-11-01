@@ -63,6 +63,7 @@
 #include "ECS/Components/ScriptControl.h"
 #include "ECS/Components/ScriptHighlight.h"
 #include "ECS/Components/SpellDispenser.h"
+#include "ECS/Components/SpellSeed.h"
 #include "ECS/Components/StoragePit.h"
 #include "ECS/Components/Temple.h"
 #include "ECS/Components/Town.h"
@@ -125,6 +126,7 @@
 #include "Input/GameActionMapInterface.h"
 #include "Locator.h"
 #include "Magic/AreaEffect.h"
+#include "Magic/HandHoldPose.h"
 #include "Magic/MagicTables.h"
 #include "Magic/ResourcePiles.h"
 #include "Physics/Body.h"
@@ -651,6 +653,26 @@ void GameHandGrabWorld::PuzzlePieceIntoHand(entt::entity piece)
 	{
 		Locator::puzzleGameSystem::value().TakenInHand(piece);
 	}
+}
+
+std::optional<hand_grab::HoldFacts> GameHandGrabWorld::SeedHoldOf(entt::entity seed) const
+{
+	const auto* info = Info();
+	const auto* component = Locator::entitiesRegistry::value().TryGet<const SpellSeed>(seed);
+	if (info == nullptr || component == nullptr)
+	{
+		return std::nullopt;
+	}
+	// As a miracle not yet ready until it is ready, then as the record of the seed says, its reach at its own size
+	const auto& record = magic::GetSpellSeedInfo(*info, component->seedType);
+	return hand_grab::HoldFacts {.type = magic::hand_hold::HoldTypeOf(component->ready, record.holdType),
+	                             .loweringMultiplier = record.holdLoweringMultiplier,
+	                             .holdRadius = record.scale * record.holdRadius};
+}
+
+bool GameHandGrabWorld::SeedIntoHand(entt::entity seed, PlayerNames player)
+{
+	return Locator::magicSystem::has_value() && Locator::magicSystem::value().TakeSeedBack(player, seed);
 }
 
 bool GameHandGrabWorld::TapThing(entt::entity object, glm::vec3 handPoint, PlayerNames player)

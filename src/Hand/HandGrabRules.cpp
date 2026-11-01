@@ -72,6 +72,9 @@ bool hand_grab::ValidForPlaceInHand(const Holdable& thing)
 	case GrabKind::Tree:
 	case GrabKind::BigForest:
 		return true;
+	case GrabKind::SpellSeed:
+		// Only the seed of the hand's own player, while it is still in the world
+		return thing.available && thing.ownSeed;
 	case GrabKind::None:
 		break;
 	}
@@ -173,6 +176,7 @@ HoldFacts hand_grab::HoldOf(GrabKind kind, MobileStaticInfo staticType, MeshId m
 		break;
 	case GrabKind::None:
 	case GrabKind::BigForest:
+	case GrabKind::SpellSeed:
 		facts.holdRadius = ObjectHoldRadius(facts.type, height, radius);
 		break;
 	}

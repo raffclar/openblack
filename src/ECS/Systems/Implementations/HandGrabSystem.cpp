@@ -39,6 +39,7 @@
 #include "ECS/Components/Reward.h"
 #include "ECS/Components/Scaffold.h"
 #include "ECS/Components/ScriptHighlight.h"
+#include "ECS/Components/SpellSeed.h"
 #include "ECS/Components/StreetLantern.h"
 #include "ECS/Components/TeleportStone.h"
 #include "ECS/Components/Transform.h"
@@ -198,6 +199,14 @@ GrabKind HandGrabSystem::KindOf(entt::entity object) const
 	{
 		return GrabKind::None;
 	}
+	// A miracle's seed out of every hand, which shows over its miracle
+	if (registry.AllOf<SpellSeed>(object))
+	{
+		bool held = false;
+		registry.Each<const HandHeldSeed>(
+		    [object, &held](entt::entity, const HandHeldSeed& hand) { held = held || hand.seed == object; });
+		return held ? GrabKind::None : GrabKind::SpellSeed;
+	}
 	// The hand holds a scaffold as any loose thing
 	if (registry.AllOf<Scaffold>(object))
 	{
@@ -250,6 +259,7 @@ hand_grab::Holdable HandGrabSystem::HoldableOf(entt::entity object) const
 	    .speciesAllows = kind == GrabKind::Animal && _world->SpeciesAllowsPickUp(object),
 	    .radius = _world->SizeOf(object).radius,
 	    .isRock = kind == GrabKind::Rock,
+	    .ownSeed = kind == GrabKind::SpellSeed && registry.Get<const SpellSeed>(object).player == _world->HandPlayer(),
 	};
 }
 
@@ -320,6 +330,11 @@ float HandGrabSystem::HangOf(entt::entity object) const
 
 hand_grab::HoldFacts HandGrabSystem::HoldOfObject(entt::entity object) const
 {
+	// A miracle's seed is held as its record says
+	if (const auto seed = _world->SeedHoldOf(object); seed.has_value())
+	{
+		return *seed;
+	}
 	const auto& registry = _world->Entities();
 	const auto size = _world->SizeOf(object);
 	const auto* still = registry.TryGet<const MobileStatic>(object);
@@ -1275,6 +1290,11 @@ void HandGrabSystem::Take(HandGrab& grab, entt::entity object, bool fromTheWorld
 		}
 		return;
 	}
+	if (KindOf(object) == GrabKind::SpellSeed)
+	{
+		TakeSeedBack(grab, object);
+		return;
+	}
 	const bool wasFlying = _world->IsFlying(object);
 	const auto kind = KindOf(object);
 	const auto player = _world->HandPlayer();
@@ -1373,6 +1393,46 @@ void HandGrabSystem::Take(HandGrab& grab, entt::entity object, bool fromTheWorld
 	grab.springPending = false;
 	grab.lastPickedUp = object;
 	registry.SetDirty();
+}
+
+void HandGrabSystem::TakeSeedBack(HandGrab& grab, entt::entity seed)
+{
+	// The miracles hold the seed, not the hand: the grab ends, and the frames draw the seed as the held miracle
+	const auto player = _world->HandPlayer();
+	const auto position = _world->PoseOf(seed).origin;
+	_world->ForgetPulledPose(seed);
+	const bool kept = _world->SeedIntoHand(seed, player);
+	// A seed that goes is let go of, as a gripped thing that the hand did not take
+	if (kept)
+	{
+		grab.grips = false;
+	}
+	Empty(grab);
+	if (!kept)
+	{
+		return;
+	}
+	// A firefly that hides exactly where the seed was is caught, for a miracle there
+	_world->CatchFirefly(seed);
+	// While the hand holds the seed, its reactions that a hand ends do not spread to more living things
+	_world->StopReactionSpreadInHand(seed);
+	grab.lastPickedUp = seed;
+	// The player of most influence where the seed was is where what the hand holds came from
+	_world->NoteTakenAt(position);
+	if (_world->IsLocalHand())
+	{
+		_world->ForgetGesturePath();
+	}
+	// The people and animals about the hand see it pick something up. The help counts the take of the local hand.
+	_world->CreateReaction({.initiator = _world->Hand(),
+	                        .type = Reaction::ReactToHandPickUp,
+	                        .player = player,
+	                        .position = _world->ReportedHandPlace()});
+	if (_world->IsLocalHand())
+	{
+		_world->CountHelpEvent(help::profile::k_PickUp);
+	}
+	LogHandDeed(player, "takes back", seed);
 }
 
 void HandGrabSystem::LetGo(HandGrab& grab, glm::vec3 velocity, const std::optional<player_commands::ThrowStart>& start)

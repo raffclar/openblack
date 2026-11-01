@@ -74,6 +74,8 @@ public:
 	void GlobeIntoHand(entt::entity globe, PlayerNames player) override;
 	void ScaffoldIntoHand(entt::entity scaffold, PlayerNames player) override;
 	void PuzzlePieceIntoHand(entt::entity piece) override;
+	[[nodiscard]] std::optional<hand_grab::HoldFacts> SeedHoldOf(entt::entity seed) const override;
+	bool SeedIntoHand(entt::entity seed, PlayerNames player) override;
 	[[nodiscard]] std::optional<creature_giving::Verdict> GiveVerdict(entt::entity target, entt::entity held) const override;
 	void SayCantPickUp(entt::entity creature) override;
 	bool GiveTo(entt::entity creature, entt::entity held, bool leftHand) override;
