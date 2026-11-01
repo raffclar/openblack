@@ -90,6 +90,11 @@ constexpr float k_LandscapeBlockerRadius = 7.2f;
 /// Whether a walker going round a circle leaves it now: it is nearer its goal than when it started round, and the goal
 /// lies ahead of it, off to the side away from the way it turns.
 [[nodiscard]] bool LeavesCircle(glm::ivec2 position, glm::ivec2 goal, glm::ivec2 step, uint32_t entryDistance, bool clockwise);
+/// The leave distance of a walker at `position` when its goal moves to `goal`. A walker that goes round a circle notes
+/// a new leave distance, as when it starts round the circle. Any other walker keeps `entryDistance`. This is openblack's
+/// fix: the game keeps the old distance, so a goal that moves away can keep the walker round the circle for ever.
+[[nodiscard]] uint32_t LeaveDistanceAfterGoalMoves(glm::ivec2 position, glm::ivec2 goal, uint32_t entryDistance,
+                                                   bool goesRound);
 
 /// A circle that can block a walker
 struct BlockingCircle

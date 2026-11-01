@@ -2549,6 +2549,18 @@ std::string Runner::GivePlayerCommand(const Command& command)
 		return Locator::workshopSystem::value().ForceBuild(*object, PlayerNames::PLAYER_ONE) ? "the site starts"
 		                                                                                     : "no building on offer";
 	}
+	case Kind::ScaffoldClearsGround:
+	{
+		const auto object = ObjectAt(command.object);
+		const auto* scaffold =
+		    object.has_value() ? Locator::entitiesRegistry::value().TryGet<const ecs::components::Scaffold>(*object) : nullptr;
+		if (scaffold == nullptr || !scaffold->destroysThingsInWay || !Locator::workshopSystem::has_value())
+		{
+			return "no scaffold that clears its ground";
+		}
+		Locator::workshopSystem::value().LetGoByHand(*object, false);
+		return "the scaffold clears its ground";
+	}
 	case Kind::DestroyScaffoldSite:
 	{
 		const auto object = ObjectAt(command.object);
@@ -3625,9 +3637,10 @@ void Runner::Give(const Command& command)
 	    command.kind == Kind::ChargeIconWithSeedHeld || command.kind == Kind::TakeIconSeed ||
 	    command.kind == Kind::TapSiteIcon || command.kind == Kind::TapTempleEntrance || command.kind == Kind::FinishBuilding ||
 	    command.kind == Kind::ScaffoldStartsSite || command.kind == Kind::DestroyScaffoldSite ||
-	    command.kind == Kind::FillBuiltAmount || command.kind == Kind::PauseGame || command.kind == Kind::SetGameSpeed ||
-	    command.kind == Kind::RemoveTeleportStone || command.kind == Kind::MakeDance || command.kind == Kind::OtherGodHand ||
-	    command.kind == Kind::OwnGod || command.kind == Kind::BringCreature || command.kind == Kind::ComputerPersonality ||
+	    command.kind == Kind::ScaffoldClearsGround || command.kind == Kind::FillBuiltAmount ||
+	    command.kind == Kind::PauseGame || command.kind == Kind::SetGameSpeed || command.kind == Kind::RemoveTeleportStone ||
+	    command.kind == Kind::MakeDance || command.kind == Kind::OtherGodHand || command.kind == Kind::OwnGod ||
+	    command.kind == Kind::BringCreature || command.kind == Kind::ComputerPersonality ||
 	    command.kind == Kind::ComputerUntaughtSends)
 	{
 		const auto result = GivePlayerCommand(command);
@@ -4523,6 +4536,7 @@ void Runner::Give(const Command& command)
 	case Kind::FillBuiltAmount:
 	case Kind::ScaffoldStartsSite:
 	case Kind::DestroyScaffoldSite:
+	case Kind::ScaffoldClearsGround:
 	case Kind::PauseGame:
 	case Kind::SetGameSpeed:
 	case Kind::RemoveTeleportStone:
