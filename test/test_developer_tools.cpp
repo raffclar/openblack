@@ -278,3 +278,12 @@ TEST(DeveloperTools, TheSoakOptionsOfTheGameAndTheServerAreDeveloperOptions)
 	const std::vector<std::string_view> arguments {"openblack-server", "--all-computer-gods", "--ai-seed", "5", "-g", "path"};
 	EXPECT_EQ(Kept(arguments, k_ServerDeveloperOptions), (std::vector<std::string> {"openblack-server", "-g", "path"}));
 }
+
+TEST(DeveloperTools, TheFrameStatisticsAndDrawEncodeOptionsAreDeveloperOptions)
+{
+	EXPECT_TRUE(IsDeveloperOption("frame-stats-out", k_DeveloperOptions));
+	EXPECT_TRUE(IsDeveloperOption("parallel-draw-encode", k_DeveloperOptions));
+	const std::vector<std::string_view> arguments {
+	    "openblack", "--frame-stats-out", "stats.csv", "--parallel-draw-encode", "-W", "800"};
+	EXPECT_EQ(Kept(arguments, k_DeveloperOptions), (std::vector<std::string> {"openblack", "-W", "800"}));
+}
