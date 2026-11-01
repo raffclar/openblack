@@ -81,9 +81,10 @@ struct Layers
 	const creature_tattoo::Masks* masks;
 };
 
-/// One of a creature's skins, 256 by 256 texels: the base skin blended towards the variant's by weight (the base alone
-/// without a variant), then the tattoos on enabled sites of this skin in slot order, the wounds and the blood on it.
-/// Each slot paints with its mask, not with the design that the slot names. A slot without a mask paints nothing.
+/// One of a creature's skins, 256 by 256 texels, or 128 by 128 at the two lowest detail levels: the base skin blended
+/// towards the variant's by weight (the base alone without a variant), then the tattoos on enabled sites of this skin in
+/// slot order, the wounds and the blood on it. Each slot paints with its mask, not with the design that the slot names.
+/// A slot without a mask paints nothing. On a skin of 128 the tattoos, wounds and blood follow their half-size rules.
 void Compose(std::span<uint16_t> out, std::span<const uint16_t> base, std::span<const uint16_t> variant, uint8_t weight,
              const Layers& layers);
 } // namespace openblack::creature_skin

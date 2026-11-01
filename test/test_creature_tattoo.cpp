@@ -137,13 +137,34 @@ TEST(CreatureTattoo, TattoosSpanTheirSizeOfTheLargestMask)
 	std::vector<uint16_t> skin(k_SkinTexels, 0x0000);
 	// Half size: drawn from the 32 texel mask at twice its size, 32 texels across, centred on 100, 120
 	const Site site {.enabled = true, .u = 100, .v = 120, .skin = 0, .size = 0.5f, .mirror = false, .rotation = 0};
-	Paint(skin, Solid(15), {0xFF, 0xFF, 0xFF}, site);
+	Paint(skin, k_SkinSize, Solid(15), {0xFF, 0xFF, 0xFF}, site);
 	const auto at = [&skin](int x, int y) { return skin.at(static_cast<size_t>((y * 256) + x)); };
 	EXPECT_EQ(at(84, 104), 0xFFFF);
 	EXPECT_EQ(at(115, 135), 0xFFFF);
 	EXPECT_EQ(at(83, 104), 0x0000);
 	EXPECT_EQ(at(116, 104), 0x0000);
 	EXPECT_EQ(at(84, 136), 0x0000);
+}
+
+TEST(CreatureTattoo, OnAHalfSizeSkinTattoosAreAtHalfThePlaceAndHalfTheSize)
+{
+	std::vector<uint16_t> skin(static_cast<size_t>(k_LowDetailSkinSize) * k_LowDetailSkinSize, 0x0000);
+	// Half size: the same 32 texel mask, now 16 texels across. The centre 101, 121 halves to 50.5, 60.5 in float, so the
+	// first texel is at 42.5 and 52.5 cut to whole numbers.
+	const Site site {.enabled = true, .u = 101, .v = 121, .skin = 0, .size = 0.5f, .mirror = false, .rotation = 0};
+	Paint(skin, k_LowDetailSkinSize, Solid(15), {0xFF, 0xFF, 0xFF}, site);
+	const auto at = [&skin](int x, int y) { return skin.at(static_cast<size_t>((y * 128) + x)); };
+	EXPECT_EQ(at(42, 52), 0xFFFF);
+	EXPECT_EQ(at(57, 67), 0xFFFF);
+	EXPECT_EQ(at(41, 52), 0x0000);
+	EXPECT_EQ(at(58, 52), 0x0000);
+	EXPECT_EQ(at(42, 68), 0x0000);
+
+	// Near the edge: 241 halves to 120.5, and 120.5 plus 8 is past the 128 texels, so it is not painted
+	std::ranges::fill(skin, 0x0000);
+	const Site nearEdge {.enabled = true, .u = 241, .v = 64, .skin = 0, .size = 0.5f, .mirror = false, .rotation = 0};
+	Paint(skin, k_LowDetailSkinSize, Solid(15), {0xFF, 0xFF, 0xFF}, nearEdge);
+	EXPECT_TRUE(std::ranges::all_of(skin, [](uint16_t texel) { return texel == 0; }));
 }
 
 TEST(CreatureTattoo, TattoosStepAlongTheMaskBySumsInFloat)
@@ -161,7 +182,7 @@ TEST(CreatureTattoo, TattoosStepAlongTheMaskBySumsInFloat)
 	// Three quarters: 48 texels from the 64 texel mask, from 104 to 151. The step 64 / 48 in float, added nine times, is
 	// a little under 12, so the tenth texel takes column 11, not 12.
 	const Site site {.enabled = true, .u = 128, .v = 128, .skin = 0, .size = 0.75f, .mirror = false, .rotation = 0};
-	Paint(skin, design, {0xFF, 0xFF, 0xFF}, site);
+	Paint(skin, k_SkinSize, design, {0xFF, 0xFF, 0xFF}, site);
 	const auto at = [&skin](int x, int y) { return skin.at(static_cast<size_t>((y * 256) + x)); };
 	EXPECT_EQ(at(104 + 9, 128), 0xFBBB);
 	EXPECT_EQ(at(104 + 3, 128), 0xF444);
@@ -206,7 +227,7 @@ TEST(CreatureTattoo, TattoosOverAnEdgeArentPainted)
 	std::vector<uint16_t> skin(k_SkinTexels, 0x0000);
 	// 64 texels across, centred 20 texels from the left edge
 	const Site site {.enabled = true, .u = 20, .v = 128, .skin = 0, .size = 1.0f, .mirror = false, .rotation = 0};
-	Paint(skin, Solid(15), {0xFF, 0xFF, 0xFF}, site);
+	Paint(skin, k_SkinSize, Solid(15), {0xFF, 0xFF, 0xFF}, site);
 	EXPECT_TRUE(std::ranges::all_of(skin, [](uint16_t texel) { return texel == 0; }));
 }
 

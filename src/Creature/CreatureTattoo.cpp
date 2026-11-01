@@ -24,6 +24,8 @@ namespace
 /// The masks' sizes by how big the tattoo is, in 64ths of the skin's width: at least 48, 24, 12 or 6, or smaller
 constexpr std::array<int32_t, k_MaskLevels - 1> k_LevelThresholds {48, 24, 12, 6};
 constexpr float k_SizeSteps = 64.0f;
+/// The place and the size of a tattoo on a skin of half size
+constexpr float k_Half = 0.5f;
 /// The skin's channels, 4 bits each, blue the lowest
 constexpr uint16_t k_Blue = 0x000F;
 constexpr uint16_t k_Green = 0x00F0;
@@ -260,9 +262,10 @@ uint16_t creature_tattoo::PaintTexel(uint16_t skin, uint8_t level, const glm::u8
 	return static_cast<uint16_t>(red | green | blue | k_Opaque);
 }
 
-void creature_tattoo::Paint(std::span<uint16_t> skin, const Design& design, const glm::u8vec3& colour, const Site& site)
+void creature_tattoo::Paint(std::span<uint16_t> skin, uint32_t side, const Design& design, const glm::u8vec3& colour,
+                            const Site& site)
 {
-	assert(skin.size() == static_cast<size_t>(k_SkinSize) * k_SkinSize);
+	assert(skin.size() == static_cast<size_t>(side) * side);
 	if (site.size < 0.0f)
 	{
 		return;
@@ -275,19 +278,31 @@ void creature_tattoo::Paint(std::span<uint16_t> skin, const Design& design, cons
 	{
 		scaled += scaled;
 	}
+	// On a skin of half size the place and the size are halved after the mask is chosen
+	auto u = static_cast<float>(site.u);
+	auto v = static_cast<float>(site.v);
+	if (side == k_LowDetailSkinSize)
+	{
+		u *= k_Half;
+		v *= k_Half;
+		scaled *= k_Half;
+	}
 	const auto extent = static_cast<int32_t>(static_cast<float>(mask.size) * scaled);
 	if (extent <= 0 || mask.size == 0)
 	{
 		return;
 	}
-	const auto half = extent / 2;
-	const auto left = static_cast<int32_t>(site.u) - half;
-	const auto top = static_cast<int32_t>(site.v) - half;
-	constexpr auto k_Size = static_cast<int32_t>(k_SkinSize);
-	if (left < 0 || top < 0 || site.u + half >= k_Size || site.v + half >= k_Size)
+	// A tattoo that runs over an edge is not painted. The game compares the place in float with half the extent cut to
+	// a whole number.
+	const auto half = static_cast<float>(extent / 2);
+	const auto edge = static_cast<float>(side);
+	if (u - half < 0.0f || edge <= half + u || v - half < 0.0f || edge <= half + v)
 	{
 		return;
 	}
+	const auto left = static_cast<int32_t>(u - half);
+	const auto top = static_cast<int32_t>(v - half);
+	const auto width = static_cast<int32_t>(side);
 	// The game moves along the mask by a step in float for each texel and truncates the sum. The sum can differ from
 	// the exact product, so a texel can come from the next texel of the mask.
 	const auto step = static_cast<float>(mask.size) / static_cast<float>(extent);
@@ -300,7 +315,7 @@ void creature_tattoo::Paint(std::span<uint16_t> skin, const Design& design, cons
 		{
 			const auto from = row + static_cast<uint32_t>(maskX);
 			maskX += step;
-			const auto index = static_cast<size_t>(((top + y) * k_Size) + left + x);
+			const auto index = static_cast<size_t>(((top + y) * width) + left + x);
 			// A sum at the end of a row reads the first texel of the next row. A texel after the mask stays as it is.
 			if (index >= skin.size() || from >= mask.levels.size())
 			{

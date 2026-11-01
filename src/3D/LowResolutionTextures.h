@@ -42,4 +42,10 @@ inline constexpr uint16_t k_HalfSide = 128;
 [[nodiscard]] std::optional<std::vector<uint16_t>> HalveByMean4444(std::span<const uint16_t> picture,
                                                                    uint16_t side = k_FullSide);
 
+/// A picture with 5 bits for each colour that the game makes opaque, at half its size: each texel of the half picture is
+/// the mean of a two by two square, each colour rounded down, with the alpha bit set. Nothing for a picture of another
+/// size.
+[[nodiscard]] std::optional<std::vector<uint16_t>> HalveByMean555Opaque(std::span<const uint16_t> picture,
+                                                                        uint16_t side = k_FullSide);
+
 } // namespace openblack::low_resolution_textures

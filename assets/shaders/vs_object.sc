@@ -265,6 +265,14 @@ void main()
 		hazeDepth = u_fogAt.x;
 	}
 	float hazeT = HazeT(hazeDepth);
+#ifdef USE_INSTANCING
+	// An instance with a look z above 0 and at most a half takes no distance haze of the world
+	// (graphics::instance_light::k_NoHaze)
+	if (i_data4.z > 0.0f && i_data4.z <= 0.5f && !InTempleFog())
+	{
+		hazeT = 0.0f;
+	}
+#endif // USE_INSTANCING
 	colour = HazeDiffuse(colour, HazeFactor(hazeT));
 	// The haze is added with the land's colour where the object stands, each channel at most white, unless the object is
 	// lit in a colour of its own that the land's colour doesn't reach (w)

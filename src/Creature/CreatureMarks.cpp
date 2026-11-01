@@ -21,6 +21,7 @@ using namespace openblack::creature_marks;
 namespace
 {
 constexpr uint32_t k_SkinSize = 256;
+constexpr uint32_t k_LowDetailSkinSize = 128;
 constexpr uint32_t k_Opaque = 0xF000;
 /// The blood's colours by how old it is: up to 21 steps, up to 42, then older
 constexpr std::array<glm::u8vec3, 3> k_BloodColours {glm::u8vec3(150, 0, 20), glm::u8vec3(120, 20, 20), glm::u8vec3(80, 40, 0)};
@@ -132,31 +133,38 @@ uint16_t creature_marks::BlendTexel(uint16_t skin, const glm::u8vec3& colour, ui
 	return static_cast<uint16_t>(channel(8, colour.r) | channel(4, colour.g) | channel(0, colour.b) | k_Opaque);
 }
 
-void creature_marks::PaintWound(std::span<uint16_t> skin, const DamageArt& art, const Mark& wound)
+void creature_marks::PaintWound(std::span<uint16_t> skin, uint32_t side, const DamageArt& art, const Mark& wound)
 {
-	assert(skin.size() == static_cast<size_t>(k_SkinSize) * k_SkinSize);
-	const auto left = static_cast<int32_t>(wound.u) - static_cast<int32_t>(k_CellSize / 2);
-	const auto top = static_cast<int32_t>(wound.v) - static_cast<int32_t>(k_CellSize / 2);
-	for (uint32_t y = 0; y < k_CellSize; ++y)
+	assert(skin.size() == static_cast<size_t>(side) * side);
+	// On a skin of half size the picture is centred at half the place, and each texel takes the second texel of each
+	// two by two square of the picture
+	const bool half = side == k_LowDetailSkinSize;
+	if (!half && side != k_SkinSize)
+	{
+		return;
+	}
+	const uint32_t step = half ? 2 : 1;
+	const uint32_t cells = k_CellSize / step;
+	const auto left = static_cast<int32_t>(half ? wound.u >> 1u : wound.u) - static_cast<int32_t>(cells / 2);
+	const auto top = static_cast<int32_t>(half ? wound.v >> 1u : wound.v) - static_cast<int32_t>(cells / 2);
+	const auto size = static_cast<int32_t>(side);
+	for (uint32_t y = 0; y < cells; ++y)
 	{
 		const auto skinY = top + static_cast<int32_t>(y);
-		if (skinY < 0 || skinY >= static_cast<int32_t>(k_SkinSize))
+		if (skinY < 0 || skinY >= size)
 		{
 			continue;
 		}
-		for (uint32_t x = 0; x < k_CellSize; ++x)
+		for (uint32_t x = 0; x < cells; ++x)
 		{
 			const auto skinX = left + static_cast<int32_t>(x);
-			if (skinX < 0 || skinX >= static_cast<int32_t>(k_SkinSize))
+			if (skinX < 0 || skinX >= size)
 			{
 				continue;
 			}
-			const auto texel = WoundTexel(art, wound, x, y);
-			if (texel.a == 0)
-			{
-				continue;
-			}
-			auto& target = skin[(static_cast<size_t>(skinY) * k_SkinSize) + static_cast<size_t>(skinX)];
+			const auto texel = WoundTexel(art, wound, (x * step) + step - 1, (y * step) + step - 1);
+			// The game blends each texel of the picture, also where its alpha is 0, which makes the skin texel opaque
+			auto& target = skin[(static_cast<size_t>(skinY) * side) + static_cast<size_t>(skinX)];
 			target = BlendTexel(target, glm::u8vec3(texel), texel.a);
 		}
 	}
@@ -180,10 +188,22 @@ uint16_t creature_marks::BloodTexel(uint16_t skin, const glm::u8vec3& colour)
 	return static_cast<uint16_t>(channel(8, colour.r) | channel(4, colour.g) | channel(0, colour.b) | k_Opaque);
 }
 
-void creature_marks::PaintBlood(std::span<uint16_t> skin, const Mark& blood)
+void creature_marks::PaintBlood(std::span<uint16_t> skin, uint32_t side, const Mark& blood)
 {
-	assert(skin.size() == static_cast<size_t>(k_SkinSize) * k_SkinSize);
-	auto& target = skin[(static_cast<size_t>(blood.v) * k_SkinSize) + blood.u];
+	assert(skin.size() == static_cast<size_t>(side) * side);
+	// On a skin of half size the drop is at half its place
+	size_t u = blood.u;
+	size_t v = blood.v;
+	if (side == k_LowDetailSkinSize)
+	{
+		u >>= 1u;
+		v >>= 1u;
+	}
+	else if (side != k_SkinSize)
+	{
+		return;
+	}
+	auto& target = skin[(v * side) + u];
 	target = BloodTexel(target, BloodColour(blood.age));
 }
 
