@@ -7586,13 +7586,16 @@ void LoadMyCreature() // 250 LOAD_MY_CREATURE
 		StartWithCow();
 		return;
 	}
-	const bool loaded = Locator::creatureCarryOverSystem::value().LoadPlayersCreature({position.x, position.z}).has_value();
-	// Not in the original game: a developer's direct start of a later land has no creature that came through the
-	// vortex, so the creature of the species the developer named stands at the place instead
-	const auto& landSystem = Locator::landSystem::value();
-	if (const auto species = new_game_choice::DirectStartCreature(
-	        landSystem.GetNewGameStart(), Locator::entitiesRegistry::value().Context().mapScriptGlobals.landNumber, loaded,
-	        PlayerHasCreature());
+	// Not in the original game: a developer's direct start of a later land reads no creature file of an earlier game. It
+	// has no creature that came through the vortex, so the creature of the species the developer named stands there.
+	const auto& start = Locator::landSystem::value().GetNewGameStart();
+	const auto landNumber = Locator::entitiesRegistry::value().Context().mapScriptGlobals.landNumber;
+	const auto source = new_game_choice::LoadsCreatureOfEarlierGame(start, landNumber)
+	                        ? ecs::systems::KeptCreatureSource::GameOrProfileFile
+	                        : ecs::systems::KeptCreatureSource::GameOnly;
+	const bool loaded =
+	    Locator::creatureCarryOverSystem::value().LoadPlayersCreature({position.x, position.z}, source).has_value();
+	if (const auto species = new_game_choice::DirectStartCreature(start, landNumber, loaded, PlayerHasCreature());
 	    species.has_value())
 	{
 		constexpr float k_ArrivalYawDegrees = 180.0f;

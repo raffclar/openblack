@@ -59,7 +59,7 @@ public:
 	[[nodiscard]] std::shared_ptr<const creaturemind::MindFileData> KeptOrRead() override;
 	[[nodiscard]] std::optional<std::filesystem::path> ProfilePhysique() const override;
 	[[nodiscard]] std::optional<std::filesystem::path> ProfileMind() const override;
-	std::optional<entt::entity> LoadPlayersCreature(glm::vec2 place) override;
+	std::optional<entt::entity> LoadPlayersCreature(glm::vec2 place, KeptCreatureSource source) override;
 	void ProcessTurn() override;
 	void CreatureTurn(entt::entity creature) override;
 	void SetLandKeepsCreatures(bool keeps) override;
