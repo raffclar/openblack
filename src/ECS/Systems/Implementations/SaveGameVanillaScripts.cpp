@@ -24,6 +24,7 @@
 #include <glm/mat3x3.hpp>
 #include <spdlog/spdlog.h>
 
+#include "CHLApi.h"
 #include "ECS/Archetypes/ScriptMarkerArchetype.h"
 #include "ECS/Components/Fire.h"
 #include "ECS/Components/Influence.h"
@@ -35,6 +36,7 @@
 #include "ECS/Components/Transform.h"
 #include "ECS/Registry.h"
 #include "ECS/SaveGameFiles.h"
+#include "ECS/Systems/CameraHelpSystemInterface.h"
 #include "ECS/Systems/ScriptHighlightSystemInterface.h"
 #include "ECS/Systems/ScriptObjectsSystemInterface.h"
 #include "ECS/VanillaScriptImport.h"
@@ -116,6 +118,29 @@ std::optional<entt::entity> TempleOf(ecs::Registry& registry, PlayerNames player
 	});
 	return found;
 }
+
+/// The values of the scripts that stay after a load: the entry to the temple and the level of the interface. As the
+/// game's load does, the import sets the interface to the level of the file again.
+void PutScriptValues(const gamesave::VanillaWorld& world, ecs::Registry& registry)
+{
+	const auto values = script_import::ReadScriptValues(world);
+	if (!values.has_value())
+	{
+		SPDLOG_LOGGER_WARN(ImportLog(), "The game object of the file has no values of the scripts");
+		return;
+	}
+	registry.Context().scriptLetsTempleBeEntered = values->templeEntry;
+	if (Locator::cameraHelpSystem::has_value() && !chlapi::CHLApi::ApplyInterfaceLevel(values->interfaceLevel))
+	{
+		SPDLOG_LOGGER_WARN(ImportLog(), "The level {} of the interface of the file is not a level of the game",
+		                   values->interfaceLevel);
+	}
+	if (values->countdownOn)
+	{
+		SPDLOG_LOGGER_WARN(ImportLog(), "The import does not make the countdown timer of the scripts ({} left)",
+		                   values->countdownLeft);
+	}
+}
 } // namespace
 
 void SaveGameSystem::ImportVanillaScriptThings(const gamesave::VanillaWorld& world, VanillaMade& made)
@@ -193,6 +218,7 @@ void SaveGameSystem::ImportVanillaScripts(const gamesave::VanillaWorld& world, c
 	{
 		return;
 	}
+	PutScriptValues(world, Locator::entitiesRegistry::value());
 	const auto table = script_import::ReadScriptTable(world);
 	const auto path = _vanilla->folder / gamesave::VanillaScriptFileName(_vanilla->slot);
 	const auto bytes = ecs::save_files::ReadFile(path);

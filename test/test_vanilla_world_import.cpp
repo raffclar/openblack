@@ -1250,6 +1250,9 @@ TEST(VanillaSceneryImport, ReadsTheAnimalsAndTheFlocksOfTheFile)
 	    .Value("flockHeight", 12.5f)
 	    .Value<uint32_t>("keepsTogether", 1)
 	    .Value<uint32_t>("calm", 2)
+	    .Value<uint32_t>("followState", 45)
+	    .Value<uint32_t>("afterMove", 43)
+	    .Value<uint32_t>("followMode", 3)
 	    .Value<uint32_t>("flockScriptId", 8);
 	std::array<float, 12> bank {};
 	bank.at(0) = 0.25f;
@@ -1294,6 +1297,9 @@ TEST(VanillaSceneryImport, ReadsTheAnimalsAndTheFlocksOfTheFile)
 	EXPECT_EQ(flock.height, 12.5f);
 	EXPECT_TRUE(flock.keepsTogether);
 	EXPECT_EQ(flock.calm, 2);
+	EXPECT_EQ(flock.followState, 45U);
+	EXPECT_EQ(flock.afterMove, 43U);
+	EXPECT_EQ(flock.followMode, 3);
 	EXPECT_EQ(flock.scriptId, 8);
 	ASSERT_EQ(imported.animals.size(), 3U);
 	const auto& sheep = imported.animals.front();
@@ -1634,4 +1640,166 @@ TEST(VanillaSceneryImport, TheLineOfAFlockAfterALoadFollowsThePlaces)
 	EXPECT_EQ(world_import::LineAfterLoad(std::vector<uint8_t> {0, 0, 0}), std::vector<size_t>({2, 1, 0}));
 	EXPECT_EQ(world_import::LineAfterLoad(std::vector<uint8_t> {5, 1, 3}), std::vector<size_t>({1, 2, 0}));
 	EXPECT_EQ(world_import::LineAfterLoad(std::vector<uint8_t> {2, 0, 2, 1}), std::vector<size_t>({1, 3, 2, 0}));
+}
+
+// A pile of a storage pit keeps its row, its amount, its poison and its rise. A pile of another building is not a pile
+// of the storage pit.
+TEST(VanillaWorldImport, ReadsThePilesOfAStoragePit)
+{
+	constexpr auto k_PotRow = [](PotInfo row) { return world_import::k_FirstPotRowNumber - static_cast<uint32_t>(row); };
+	auto fake = GameAtTurn(100);
+	// 2: the town, 3: its storage pit, 4: the food pile of the pit, 5: a wood pile of the pit, 6: a pile of building 7
+	fake.Record(VanillaType::Town).Position(0, 0).Value<uint32_t>("id", 0).Refs("abodes", {3});
+	fake.Record(VanillaType::StoragePit)
+	    .Position(1000, 2000)
+	    .Value("info", AbodeRowNumber(AbodeInfo::NorseStoragePit))
+	    .Ref("town", 2)
+	    .Refs("villagers", {})
+	    .Words("resources", {300, 5000});
+	std::array<float, 12> rise {};
+	for (size_t i = 0; i < rise.size(); ++i)
+	{
+		rise.at(i) = static_cast<float>(i) + 0.5f;
+	}
+	const auto pile = [&fake, &rise](VanillaType type, PotInfo row, uint32_t building, uint32_t amount, uint8_t flags) {
+		fake.Record(type)
+		    .Position(1000, 2000)
+		    .Value("info", k_PotRow(row))
+		    .Value<uint32_t>("potAmount", amount)
+		    .Value<uint8_t>("potFlags", flags)
+		    .Ref("potBuilding", building)
+		    .Value("pileRise", rise);
+	};
+	pile(VanillaType::PileFood, PotInfo::StoragePitFoodPile, 3, 300, 1);
+	pile(VanillaType::PileResource, PotInfo::WoodPile_2, 3, 5000, 0);
+	pile(VanillaType::PileResource, PotInfo::WoodPile_1, 7, 70, 0);
+	const auto imported = world_import::ReadTowns(fake.Make());
+	ASSERT_EQ(imported.abodes.size(), 1U);
+	const auto& piles = imported.abodes[0].piles;
+	ASSERT_EQ(piles.size(), 2U);
+	EXPECT_EQ(piles[0].number, 4U);
+	EXPECT_EQ(piles[0].row, PotInfo::StoragePitFoodPile);
+	EXPECT_EQ(piles[0].amount, 300U);
+	EXPECT_TRUE(piles[0].poisoned);
+	EXPECT_EQ(piles[1].row, PotInfo::WoodPile_2);
+	EXPECT_EQ(piles[1].amount, 5000U);
+	EXPECT_FALSE(piles[1].poisoned);
+	EXPECT_EQ(piles[1].rise.offset, 0.5f);
+	EXPECT_EQ(piles[1].rise.target, 1.5f);
+	EXPECT_EQ(piles[1].rise.currentSpeed, 3.5f);
+	EXPECT_EQ(piles[1].rise.time, 5.5f);
+	EXPECT_EQ(piles[1].rise.duration, 6.5f);
+	EXPECT_EQ(piles[1].rise.start, 7.5f);
+	EXPECT_EQ(piles[1].rise.speed, 8.5f);
+	EXPECT_EQ(piles[1].rise.acceleration, 9.5f);
+	EXPECT_EQ(piles[1].rise.jerk, 10.5f);
+	EXPECT_EQ(piles[1].rise.snap, 11.5f);
+}
+
+// A building site takes the values of its wood pile, and the site of a temple the values of each of its piles, nothing
+// for a pile that has gone
+TEST(VanillaWorldImport, ReadsThePilesOfTheBuildingSites)
+{
+	constexpr uint32_t k_MagicWoodRow = world_import::k_FirstPotRowNumber - static_cast<uint32_t>(PotInfo::MagicWood);
+	auto fake = GameAtTurn(100);
+	// 2: a site with its wood pile 4, 3: the site of a temple with its piles 5 and none
+	fake.Record(VanillaType::StandardBuildingSite)
+	    .Ref("siteBuilding", 6)
+	    .Refs("siteWorkers", {})
+	    .Value("sitePlaces", std::array<glm::vec3, world_import::k_ImportedSitePlaces> {})
+	    .Ref("siteWoodPile", 4);
+	fake.Record(VanillaType::CitadelBuildingSite)
+	    .Ref("siteBuilding", 7)
+	    .Refs("siteWorkers", {})
+	    .Value("sitePlaces", std::array<glm::vec3, world_import::k_ImportedSitePlaces> {})
+	    .Ref("siteWoodPile", 0)
+	    .Refs("templeSitePiles", {5, 0});
+	for (const uint32_t amount : {120U, 40U})
+	{
+		fake.Record(VanillaType::MagicWood)
+		    .Position(static_cast<int32_t>(amount) * 1000, 2000)
+		    .Value("info", k_MagicWoodRow)
+		    .Value("heading", 1.5f)
+		    .Value<uint32_t>("potAmount", amount)
+		    .Value<uint8_t>("potFlags", 0)
+		    .Ref("potBuilding", 0)
+		    .Value("pileRise", std::array<float, 12> {});
+	}
+	const auto imported = world_import::ReadTowns(fake.Make());
+	ASSERT_EQ(imported.sites.size(), 2U);
+	const auto& site = imported.sites[0];
+	ASSERT_TRUE(site.woodPileValues.has_value());
+	EXPECT_EQ(site.woodPileValues->number, 4U);
+	EXPECT_EQ(site.woodPileValues->row, PotInfo::MagicWood);
+	EXPECT_EQ(site.woodPileValues->amount, 120U);
+	EXPECT_EQ(site.woodPileValues->position.x, 120000);
+	EXPECT_EQ(site.woodPileValues->heading, 1.5f);
+	const auto& temple = imported.sites[1];
+	EXPECT_FALSE(temple.woodPileValues.has_value());
+	ASSERT_EQ(temple.pileValues.size(), 2U);
+	ASSERT_TRUE(temple.pileValues[0].has_value());
+	EXPECT_EQ(temple.pileValues[0]->amount, 40U);
+	EXPECT_FALSE(temple.pileValues[1].has_value());
+}
+
+// Each storage pit of a saved game of Land 1 has one pile of food and five piles of wood, and its piles hold the food
+// and the wood of the storage pit
+TEST(VanillaWorldImport, SavedGamesOfLandOneKeepThePilesOfTheirStoragePits)
+{
+	size_t pits = 0;
+	const auto files = ForEachLandOneSave([&pits](const std::filesystem::path& path, const VanillaWorld& world) {
+		for (const auto& abode : world_import::ReadTowns(world).abodes)
+		{
+			if (abode.piles.empty())
+			{
+				continue;
+			}
+			++pits;
+			ASSERT_EQ(abode.piles.size(), 6U) << path << " " << abode.number;
+			uint32_t food = 0;
+			uint32_t wood = 0;
+			for (const auto& pile : abode.piles)
+			{
+				(pile.row == PotInfo::StoragePitFoodPile ? food : wood) += pile.amount;
+				EXPECT_FALSE(pile.poisoned) << path << " " << pile.number;
+				EXPECT_EQ(pile.rise.duration, 1.0f) << path << " " << pile.number;
+			}
+			EXPECT_EQ(food, abode.food) << path << " " << abode.number;
+			EXPECT_EQ(wood, abode.wood) << path << " " << abode.number;
+		}
+	});
+	if (!files.has_value())
+	{
+		GTEST_SKIP() << "Set OPENBLACK_VANILLA_SAVES to a copy of a Profiles folder of the game to check its saved games";
+	}
+	EXPECT_GT(pits, 0U);
+}
+
+// Every flock of a saved game of Land 1 keeps the follow values of a new flock or of a flock of birds whose leader
+// wanders, and no flock keeps a thing
+TEST(VanillaSceneryImport, SavedGamesOfLandOneKeepTheFollowValuesOfTheirFlocks)
+{
+	size_t birds = 0;
+	const auto files = ForEachLandOneSave([&birds](const std::filesystem::path& path, const VanillaWorld& world) {
+		for (const auto& flock : world_import::ReadAnimals(world).flocks)
+		{
+			const auto* record = world.Record(flock.number);
+			ASSERT_NE(record, nullptr);
+			EXPECT_EQ(world.Ref(*record, "flockThing"), std::optional<uint32_t> {0}) << path << " " << flock.number;
+			if (flock.followState == 45)
+			{
+				++birds;
+				EXPECT_EQ(flock.afterMove, 43U) << path << " " << flock.number;
+				EXPECT_EQ(flock.followMode, 3) << path << " " << flock.number;
+				continue;
+			}
+			EXPECT_EQ(flock.followState, 43U) << path << " " << flock.number;
+			EXPECT_EQ(flock.followMode, 0) << path << " " << flock.number;
+		}
+	});
+	if (!files.has_value())
+	{
+		GTEST_SKIP() << "Set OPENBLACK_VANILLA_SAVES to a copy of a Profiles folder of the game to check its saved games";
+	}
+	EXPECT_GT(birds, 0U);
 }

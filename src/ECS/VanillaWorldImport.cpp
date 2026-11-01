@@ -17,8 +17,10 @@
 #include <limits>
 #include <ranges>
 #include <span>
+#include <unordered_map>
 
 #include "3D/MapCoords.h"
+#include "ECS/VanillaSceneryImport.h"
 #include "ECS/VillagerWalkRules.h"
 #include "ECS/WallHugRules.h"
 #include "VanillaWorld.h"
@@ -27,9 +29,13 @@ namespace openblack::ecs::vanilla_world_import
 {
 namespace
 {
+
 using gamesave::VanillaRecord;
 using gamesave::VanillaType;
 using gamesave::VanillaWorld;
+
+/// The flag of a pot whose food is poisoned
+constexpr uint8_t k_PotPoisonedFlag = 0x01;
 
 /// The move states that the file gives a thing that does not walk: no state, arrived and the final step
 constexpr std::array<uint8_t, 3> k_StillMoveStates = {0x00, 0x01, 0x04};
@@ -402,6 +408,69 @@ std::optional<ImportedVillager> ReadVillager(const VanillaWorld& world, const Va
 	return villager;
 }
 
+/// A pile of food or of wood of the file, nothing for another thing or a pile without all its values
+std::optional<ImportedPile> ReadPile(const VanillaWorld& world, const VanillaRecord& record)
+{
+	if (!record.Is(VanillaType::PileFood) && !record.Is(VanillaType::PileResource) && !record.Is(VanillaType::MagicWood))
+	{
+		return std::nullopt;
+	}
+	const auto row = PotRowOf(world.Word(record, "info").value_or(0));
+	const auto position = PositionOf(world, record);
+	const auto rise = world.Raw(record, "pileRise");
+	const auto amount = world.Word(record, "potAmount");
+	if (!row.has_value() || !position.has_value() || rise.size() != k_PileRiseBytes || !amount.has_value())
+	{
+		return std::nullopt;
+	}
+	return ImportedPile {.number = record.number,
+	                     .row = *row,
+	                     .position = *position,
+	                     .heading = world.Float(record, "heading").value_or(0.0f),
+	                     .amount = *amount,
+	                     .poisoned = (world.Byte(record, "potFlags").value_or(0) & k_PotPoisonedFlag) != 0,
+	                     .rise = PileRiseOf(rise.first<k_PileRiseBytes>())};
+}
+
+/// The pile of the file with the number, nothing for no pile
+std::optional<ImportedPile> PileNumbered(const VanillaWorld& world, uint32_t number)
+{
+	const auto* record = number != 0 ? world.Record(number) : nullptr;
+	return record != nullptr ? ReadPile(world, *record) : std::nullopt;
+}
+
+/// Gives each storage pit of the file its piles (the piles whose building is the storage pit), and each building site
+/// the values of its piles
+void PutPiles(const VanillaWorld& world, ImportedTowns& imported)
+{
+	std::unordered_map<uint32_t, ImportedAbode*> pits;
+	for (auto& abode : imported.abodes)
+	{
+		pits.emplace(abode.number, &abode);
+	}
+	for (const auto& record : world.Records())
+	{
+		const auto building = pits.find(world.Ref(record, "potBuilding").value_or(0));
+		if (building == pits.end())
+		{
+			continue;
+		}
+		if (auto pile = ReadPile(world, record); pile.has_value())
+		{
+			building->second->piles.push_back(*pile);
+		}
+	}
+	for (auto& site : imported.sites)
+	{
+		site.woodPileValues = PileNumbered(world, site.woodPile);
+		site.pileValues.clear();
+		for (const auto number : site.piles)
+		{
+			site.pileValues.push_back(PileNumbered(world, number));
+		}
+	}
+}
+
 } // namespace
 
 ImportedWalk ReadWalk(const VanillaWorld& world, const VanillaRecord& record)
@@ -659,7 +728,25 @@ ImportedTowns ReadTowns(const VanillaWorld& world)
 		}
 		imported.skipped.push_back(Skip(record, why));
 	}
+	PutPiles(world, imported);
 	return imported;
+}
+
+magic::piles::Rise PileRiseOf(std::span<const uint8_t, k_PileRiseBytes> bytes)
+{
+	std::array<float, k_PileRiseBytes / sizeof(float)> values {};
+	std::memcpy(values.data(), bytes.data(), bytes.size());
+	// The game does not read the fifth value of the file
+	return {.start = values[7],
+	        .speed = values[8],
+	        .acceleration = values[9],
+	        .jerk = values[10],
+	        .snap = values[11],
+	        .target = values[1],
+	        .time = values[5],
+	        .duration = values[6],
+	        .offset = values[0],
+	        .currentSpeed = values[3]};
 }
 
 } // namespace openblack::ecs::vanilla_world_import

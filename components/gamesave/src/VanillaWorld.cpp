@@ -497,22 +497,32 @@ void ReadScriptThings(WorldReader& r)
 		r.Word("scriptObjectMade");
 		r.Byte("scriptObjectCount");
 	}
-	// The place where the next search for a free place starts, then other values of the scripts
+	// The place where the next search for a free place starts, then a value that openblack does not use
 	r.Word("scriptNextPlace");
-	for (const uint32_t size : {4, 4, 4, 4, 12, 12, 4, 4, 4, 4})
-	{
-		r.Bytes(size);
-	}
-	for (int i = 0; i < 4; ++i)
+	r.Word();
+	// The countdown timer of the scripts: on or off, the seconds that are left and whether it shows
+	r.Word("scriptCountdownOn");
+	r.Word("scriptCountdownLeft");
+	r.Word("scriptCountdownShown");
+	// Values that a script function uses while it runs (places, loop values and things), and the music of the
+	// alignment that plays last. openblack does not use them.
+	r.Bytes(12);
+	r.Bytes(12);
+	for (int i = 0; i < 8; ++i)
 	{
 		r.Word();
 	}
 	r.Ref();
 	r.Ref();
-	for (int i = 0; i < 7; ++i)
-	{
-		r.Word();
-	}
+	r.Word();
+	r.Word();
+	// Whether a tap on the entrance of the temple takes the player inside, then a value that openblack does not use
+	r.Word("scriptTempleEntry");
+	r.Word();
+	// The level of the interface that the scripts set
+	r.Word("scriptInterfaceLevel");
+	r.Word();
+	r.Word();
 }
 
 void ReadCameraExclusions(WorldReader& r)

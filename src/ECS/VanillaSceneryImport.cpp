@@ -460,6 +460,9 @@ ImportedAnimals ReadAnimals(const VanillaWorld& world)
 			flock.height = world.Float(record, "flockHeight").value_or(0.0f);
 			flock.keepsTogether = world.Word(record, "keepsTogether").value_or(0) != 0;
 			flock.calm = static_cast<int32_t>(world.Word(record, "calm").value_or(0));
+			flock.followState = world.Word(record, "followState").value_or(0);
+			flock.afterMove = world.Word(record, "afterMove").value_or(0);
+			flock.followMode = static_cast<int32_t>(world.Word(record, "followMode").value_or(0));
 			if (const auto id = world.Word(record, "flockScriptId").value_or(0); id != 0)
 			{
 				flock.scriptId = static_cast<int32_t>(id);

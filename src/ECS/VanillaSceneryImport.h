@@ -289,6 +289,11 @@ struct ImportedFlock
 	bool keepsTogether {false};
 	/// How calm it is, as a script set it
 	int32_t calm {0};
+	/// For a flock of birds: the state that the followers take after the leader sets off and the state that a special
+	/// move ends in, by their numbers in the game's table of the animal states, and how the followers keep up
+	uint32_t followState {0};
+	uint32_t afterMove {0};
+	int32_t followMode {0};
 	/// The number that a script made it with, nothing for 0. The game gives 0 to a flock that it makes for one animal.
 	std::optional<int32_t> scriptId;
 };
