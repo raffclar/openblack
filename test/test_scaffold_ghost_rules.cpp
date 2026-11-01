@@ -9,6 +9,7 @@
 
 #include <bit>
 
+#include <PackFile.h>
 #include <gtest/gtest.h>
 
 #include "ECS/ScaffoldGhostRules.h"
@@ -105,6 +106,34 @@ TEST(ScaffoldGhostRules, TheGrowSoundIsLowerForAHigherAbodeNumber)
 	EXPECT_EQ(scaffold_ghost::GrowPitchPercent(0), 110);
 	EXPECT_EQ(scaffold_ghost::GrowPitchPercent(5), 95);
 	EXPECT_EQ(scaffold_ghost::GrowPitchPercent(-1), 100);
+}
+
+TEST(ScaffoldGhostRules, EachSoundHasItsOwnSampleAndNoSoundHasNone)
+{
+	EXPECT_EQ(scaffold_ghost::SampleOf(GhostSound::Shrinks), 50u);
+	EXPECT_EQ(scaffold_ghost::SampleOf(GhostSound::Grows), 51u);
+	EXPECT_FALSE(scaffold_ghost::SampleOf(GhostSound::None).has_value());
+}
+
+TEST(ScaffoldGhostRules, TheShrinkSoundDoesNotStartAgainWhilePlayingAndHasNoOwnerOrPlace)
+{
+	const auto options = scaffold_ghost::SoundOptionsOf(GhostSound::Shrinks, 3);
+	ASSERT_TRUE(options.voicePlayType.has_value());
+	EXPECT_EQ(*options.voicePlayType, openblack::pack::AudioBankLoop::Once);
+	EXPECT_FALSE(options.position.has_value());
+	EXPECT_FALSE(options.pitchPercent.has_value());
+	EXPECT_EQ(options.owner, entt::entity {entt::null});
+	EXPECT_EQ(options.voiceOwner, openblack::audio::VoiceOwner::Entity);
+}
+
+TEST(ScaffoldGhostRules, TheGrowSoundStartsAgainWithThePitchOfItsBuildingAndHasNoOwnerOrPlace)
+{
+	const auto options = scaffold_ghost::SoundOptionsOf(GhostSound::Grows, 2);
+	EXPECT_FALSE(options.voicePlayType.has_value());
+	ASSERT_TRUE(options.pitchPercent.has_value());
+	EXPECT_EQ(*options.pitchPercent, 104u);
+	EXPECT_FALSE(options.position.has_value());
+	EXPECT_EQ(options.owner, entt::entity {entt::null});
 }
 
 TEST(ScaffoldGhostRules, ThePhantomOnASiteFadesAsTheBuildingGrows)
