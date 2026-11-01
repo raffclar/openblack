@@ -39,7 +39,7 @@
 #include "Common/Platform.h"
 #include "Common/SystemLibraries.h"
 #include "Creature/BonusCreatures.h"
-#include "Debug/TestbedScenarioRegistry.h"
+#include "Debug/ScenarioPlayer.h"
 #include "EngineConfig.h"
 #include "Game.h"
 #include "LaunchSwitches.h"
@@ -256,9 +256,9 @@ bool parseOptions(int argc, char** argv, openblack::Arguments& args, int& return
 		}
 		if (result.count("list-scenarios") != 0)
 		{
-			for (const auto& scenario : openblack::testbed_scenarios::All())
+			for (const auto& id : openblack::testbed_scenarios::ScenarioIds())
 			{
-				std::cout << scenario.id << '\n';
+				std::cout << id << '\n';
 			}
 			std::cout << std::flush;
 			returnCode = EXIT_SUCCESS;
