@@ -2283,3 +2283,7 @@ openblack_setup_and_add_test(
 )
 openblack_setup_and_add_test(test_editor_history test_editor_history.cpp)
 openblack_setup_and_add_test(test_lan_discovery online/test_lan_discovery.cpp)
+openblack_setup_and_add_test(test_float_to_integer test_float_to_integer.cpp)
+openblack_setup_and_add_test(
+  test_oracle_ftol_portable oracle/test_oracle_ftol_portable.cpp
+)

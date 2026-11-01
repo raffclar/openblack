@@ -11,29 +11,17 @@
 
 #include <cmath>
 
-#include <limits>
-
 #include <glm/geometric.hpp>
+
+#include "Common/X87.h"
 
 using namespace openblack;
 
 namespace
 {
-/// The whole part of a number, as the game cuts a float to a whole number: a number that has no whole part in 32 bits
-/// gives the lowest one
-int32_t WholePart(float value) noexcept
-{
-	constexpr float k_Limit = 2147483648.0f;
-	if (std::isnan(value) || value >= k_Limit || value < -k_Limit)
-	{
-		return std::numeric_limits<int32_t>::min();
-	}
-	return static_cast<int32_t>(value);
-}
-
 uint32_t LowByte(float value) noexcept
 {
-	return static_cast<uint32_t>(WholePart(value)) & 0xFFu;
+	return static_cast<uint32_t>(x87::ToInteger(value)) & 0xFFu;
 }
 } // namespace
 
@@ -79,7 +67,7 @@ uint8_t mists::AlphaByte(float alpha) noexcept
 
 int32_t mists::WholeAlpha(float alpha) noexcept
 {
-	return WholePart(alpha);
+	return x87::ToInteger(alpha);
 }
 
 uint32_t mists::ScriptColour(float red, float green, float blue, float transparency) noexcept

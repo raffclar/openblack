@@ -95,7 +95,7 @@ using KeysHeld = std::bitset<k_KeyCount>;
 
 /// The parts of a half turn that a creature's look can be off the camera by, from the full angle in degrees that a
 /// script gives: 360 divided by the angle as a float, cut towards 0 as the game changes it to a whole number. An angle
-/// more than 360 gives 0, and an angle of 0 or a number that is not a number gives the game's value for out of range.
+/// more than 360, an angle of 0 and a number that is not a number give 0.
 [[nodiscard]] int32_t CreatureLookParts(float degrees);
 
 /// Whether a creature sees the camera. The creature is at the map position `creature` and looks in the direction of the

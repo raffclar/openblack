@@ -24,6 +24,7 @@
 #include <ParticleFile.h>
 #include <glm/geometric.hpp>
 
+#include "Common/X87.h"
 #include "CreatureSpellMaths.h"
 #include "ParticleClassRegistry.h"
 #include "ParticleSounds.h"
@@ -44,11 +45,7 @@ constexpr float k_AboutBone = std::bit_cast<float>(0x3E999999u);
 [[nodiscard]] int32_t SteamMapFixed(float metres)
 {
 	const float fixed = metres * 65536.0f * 0.1f;
-	if (!(fixed > -2147483648.0f && fixed < 2147483648.0f))
-	{
-		return static_cast<int32_t>(0x80000000u);
-	}
-	return static_cast<int32_t>(fixed);
+	return openblack::x87::ToInteger(fixed);
 }
 /// A creature casting a spell plays this sound for it rather than the spell's own
 constexpr std::string_view k_CastByCreatureSound = "SOUND_SPELL_CREATURE_SPELL_CAST_BY_OTHER_CREATURE";

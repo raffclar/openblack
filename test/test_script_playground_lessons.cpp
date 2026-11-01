@@ -181,9 +181,9 @@ TEST(PlaygroundLessonNatives, ACreaturesLookIsMeasuredInPartsOfAHalfTurn)
 	EXPECT_EQ(CreatureLookParts(-60.0f), -6);
 	// More than a full turn gives no parts
 	EXPECT_EQ(CreatureLookParts(400.0f), 0);
-	// No angle, or not a number: the value for out of range
-	EXPECT_EQ(CreatureLookParts(0.0f), std::numeric_limits<int32_t>::min());
-	EXPECT_EQ(CreatureLookParts(std::numeric_limits<float>::quiet_NaN()), std::numeric_limits<int32_t>::min());
+	// No angle (an infinity) or not a number: the game's conversion gives 0, so no parts
+	EXPECT_EQ(CreatureLookParts(0.0f), 0);
+	EXPECT_EQ(CreatureLookParts(std::numeric_limits<float>::quiet_NaN()), 0);
 }
 
 TEST(PlaygroundLessonNatives, ACreatureSeesTheCameraWhenItLooksNearTheDirectionToIt)
@@ -220,4 +220,5 @@ TEST(PlaygroundLessonNatives, ACreatureWithNoPartsOfLookSeesNothing)
 	// The game divides by 0 here; openblack sees nothing
 	const auto creature = map_coords::FromMetres({100.0f, 100.0f});
 	EXPECT_FALSE(CreatureSeesCamera(creature, creature, 0, 400.0f));
+	EXPECT_FALSE(CreatureSeesCamera(creature, creature, 0, 0.0f));
 }

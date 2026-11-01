@@ -59,7 +59,8 @@ ALLOCATE = 0x7DB790  # cdecl (size, file, line): hooked
 MEM_ALLOC = 0x842CE0  # cdecl (size): the 3D engine's allocator, hooked
 FREE = 0x7AEE98  # cdecl (block): stubbed
 CLIP_FREE = 0x85E490  # thiscall: stubbed
-SSE2_FLAG = 0xE83A20  # the C library's flag that the start-up code sets on a CPU with SSE2: its float to int uses it
+SSE2_FLAG = 0xE83A20  # the C library's flag that selects the SSE2 path of its float to int; 0 is the 64-bit path that
+# openblack copies on every target (deviations row 177)
 QUARTER_TURN = 0xFA51D4  # the float quarter turn of the leg heading, which a start-up initialiser writes as pi x 0.5
 
 # The 3D creature's fields
@@ -129,7 +130,7 @@ class Walk:
         o = self.o = oracle
         # The oracle does not run the start-up initialisers: write the quarter turn as the initialiser does
         o.write_u32(QUARTER_TURN, f2u(u2f(0x40490FDB) * 0.5))
-        o.write_u32(SSE2_FLAG, 1)
+        o.write_u32(SSE2_FLAG, 0)
         o.stub(ALTITUDE, st0=0.0)
         o.stub(STAND_POSE)
         o.stub(CAN_STAND, eax=1)
