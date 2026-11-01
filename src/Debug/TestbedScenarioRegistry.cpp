@@ -1868,6 +1868,40 @@ void AddThirdLandPrison(std::vector<Scenario>& all)
 	                  .script = "FreeTheCreature",
 	                  .scriptGlobals = {{"GlobalDebug", {.number = 1.0f}}}}},
 	});
+	// The prison spot of the third land and a point far from it, from the middle of the map
+	static constexpr glm::vec2 k_PrisonSpot {-497.79f, -300.15f};
+	static constexpr glm::vec2 k_FarFromPrison {-575.0f, -385.0f};
+	all.push_back({
+	    .id = "story.l3_laetes_walks_back",
+	    .name = "Story: Lethys's creature walks back to the prison of the third land",
+	    .facet = Facet::Story,
+	    .description = "The third land loads with its own scripts and sky, and the player's Tiger stands on it. Its set-up "
+	                   "script and its prison script run. Four seconds later, Lethys's creature is put 115 metres from "
+	                   "the prison spot, which is more than 75 metres.",
+	    .expected = "If Lethys's creature does a miracle at the time, it does the miracle to its end. Then it walks back "
+	                "to its start point near the prison. When it is within 75 metres of the prisoner again, it does its "
+	                "miracles at the prisoner again.",
+	    .environment = {.land = Land::Story, .storyLand = "Land3.txt", .dispenserGrid = false},
+	    .framing = {.shot = Shot::Overview, .include = {k_FarFromPrison - glm::vec2 {15.0f}, k_PrisonSpot + glm::vec2 {15.0f}}},
+	    .creatures = {{.label = "player's tiger",
+	                   .species = CreatureType::Tiger,
+	                   .phase = 3,
+	                   .needs = {.energy = 1.0f, .exhaustion = 0.0f, .dehydration = 0.0f, .poo = 0.0f, .life = 1.0f}}},
+	    .commands = {{.kind = Kind::RunScript,
+	                  .delaySeconds = 0.5f,
+	                  .script = "SetupLand3",
+	                  .scriptGlobals = {{"MyCreature", {.kind = Argument::Kind::Creature, .index = 0}}}},
+	                 {.kind = Kind::RunScript, .delaySeconds = 1.0f, .script = "FreeTheCreature"},
+	                 {.kind = Kind::CallNative,
+	                  .delaySeconds = 4.0f,
+	                  .script = "CALL_PLAYER_CREATURE",
+	                  .scriptArguments = {{.kind = Argument::Kind::Number, .number = 2.0f}}},
+	                 {.kind = Kind::CallNative,
+	                  .delaySeconds = 0.0f,
+	                  .script = "SET_POSITION",
+	                  .scriptArguments = {{.kind = Argument::Kind::Result},
+	                                      {.kind = Argument::Kind::Position, .point = k_FarFromPrison}}}},
+	});
 }
 
 /// The Pied Piper of the first land. The game's script runs at the same map positions as on the first land, with the
