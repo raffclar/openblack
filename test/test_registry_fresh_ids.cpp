@@ -97,3 +97,32 @@ TEST(RegistryFindFirst, TheFirstEntityIsTheFirstThatEachFinds)
 	}
 	EXPECT_FALSE(registry.FindFirst<const Mark>([](entt::entity, const Mark& mark) { return mark.value > 100; }).has_value());
 }
+
+TEST(RegistryComponentLookup, ALookupGivesTheAnswersOfTheRegistry)
+{
+	Registry registry;
+	// No store of Other exists yet: the lookup finds nothing
+	const auto made = MakeSome(registry, 6);
+	const openblack::ecs::ComponentLookup<Other> none(registry);
+	EXPECT_FALSE(none.Has(made[0]));
+	EXPECT_EQ(none.TryGet(made[0]), nullptr);
+	registry.Assign<Other>(made[1], 7);
+	registry.Assign<Other>(made[4], 9);
+	registry.Destroy(made[2]);
+	const openblack::ecs::ComponentLookup<Mark> marks(registry);
+	const openblack::ecs::ComponentLookup<Other> others(registry);
+	// The lookup stays right when the walk adds a component to a store that exists
+	registry.Assign<Other>(made[5], 11);
+	for (const auto entity : made)
+	{
+		if (entity == made[2])
+		{
+			EXPECT_FALSE(marks.Has(entity));
+			continue;
+		}
+		EXPECT_EQ(others.Has(entity), registry.AllOf<Other>(entity));
+		EXPECT_EQ(others.TryGet(entity), registry.TryGet<const Other>(entity));
+		EXPECT_EQ(marks.TryGet(entity), registry.TryGet<const Mark>(entity));
+	}
+	EXPECT_EQ(others.TryGet(made[5])->value, 11);
+}

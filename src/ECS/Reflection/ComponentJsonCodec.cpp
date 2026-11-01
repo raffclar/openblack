@@ -11,6 +11,7 @@
 
 #include "ComponentJsonCodec.h"
 
+#include <charconv>
 #include <cmath>
 #include <cstdint>
 #include <cstdio>
@@ -20,6 +21,7 @@
 #include <optional>
 #include <string>
 #include <string_view>
+#include <system_error>
 
 namespace openblack::ecs::reflection::detail
 {
@@ -30,14 +32,21 @@ double Shortest(float value)
 	{
 		return static_cast<double>(value);
 	}
-	// Nine significant digits always read back as the same float; fewer often do
+	// Nine significant digits always read back as the same float; fewer often do. The text is the text of printf with
+	// the same precision, and both reads round as the standard reads of the C library do.
 	std::array<char, 32> text {};
 	for (int precision = 6; precision <= 9; ++precision)
 	{
-		std::snprintf(text.data(), text.size(), "%.*g", precision, static_cast<double>(value));
-		if (std::strtof(text.data(), nullptr) == value)
+		const auto written = std::to_chars(text.data(), text.data() + text.size(), static_cast<double>(value),
+		                                   std::chars_format::general, precision);
+		float back = 0.0f;
+		if (std::from_chars(text.data(), written.ptr, back).ec == std::errc {} && back == value)
 		{
-			return std::strtod(text.data(), nullptr);
+			double read = 0.0;
+			if (std::from_chars(text.data(), written.ptr, read).ec == std::errc {})
+			{
+				return read;
+			}
 		}
 	}
 	return static_cast<double>(value);
