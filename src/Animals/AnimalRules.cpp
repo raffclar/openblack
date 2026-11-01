@@ -311,3 +311,8 @@ uint8_t animals::StateAfterReacting(uint8_t stateBefore, std::span<const GAnimal
 	}
 	return static_cast<uint8_t>(table[stateBefore].resumeState);
 }
+
+animals::WanderStart animals::WanderStartOf(bool grazer, bool hunter)
+{
+	return grazer || hunter ? WanderStart::OnTheLand : WanderStart::AsLeader;
+}

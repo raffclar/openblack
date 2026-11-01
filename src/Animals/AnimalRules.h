@@ -239,4 +239,14 @@ enum class LandedAs : uint8_t
 inline constexpr float k_DeadBodySmokeSize = 1.0f;
 [[nodiscard]] glm::vec3 DeadBodySmokePlace(const glm::vec3& position, float heading, float height);
 
+/// How an animal starts on a leg of its own when it decides again, for example after a landing or a release by a script
+enum class WanderStart : uint8_t
+{
+	/// A grazer or a hunter walks to a point about its flock on the land
+	OnTheLand,
+	/// Any other kind starts its leg as its flock's leader does, with a goal height
+	AsLeader,
+};
+[[nodiscard]] WanderStart WanderStartOf(bool grazer, bool hunter);
+
 } // namespace openblack::animals
