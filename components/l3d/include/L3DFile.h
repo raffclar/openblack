@@ -391,7 +391,7 @@ protected:
 	/// True when a file has been loaded
 	bool _isLoaded {false};
 
-	L3DHeader _header;
+	L3DHeader _header {};
 	std::vector<L3DSubmeshHeader> _submeshHeaders;
 	std::vector<L3DTexture> _skins;
 	/// If the flag HasDoorPosition is on the first extra point is the door

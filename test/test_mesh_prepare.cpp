@@ -215,8 +215,8 @@ TEST_F(MeshPrepare, ThePreparationAsksNothingOfTheGraphicsDevice)
 	ASSERT_EQ(prepared.subMeshes.size(), 1U);
 	ASSERT_EQ(prepared.skins.size(), 1U);
 	EXPECT_EQ(prepared.skins.front().id, 7U);
-	// Each texel at 32 bits, for a device with no texture format of 1 bit of alpha
-	EXPECT_EQ(prepared.skins.front().bytes.size(), 256U * 256U * 4U);
+	// Each texel at 16 bits, as the model with no flags keeps it
+	EXPECT_EQ(prepared.skins.front().bytes.size(), 256U * 256U * 2U);
 	// Six vertices of a position, texture coordinates, a normal and four 16-bit indices each
 	EXPECT_EQ(prepared.subMeshes.front().vertices.size(), 6U * 40U);
 	EXPECT_EQ(prepared.boundingBox.maxima, glm::vec3(2.0f, 5.0f, 3.0f));
