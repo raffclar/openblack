@@ -34,6 +34,7 @@
 #include "ECS/Archetypes/PotArchetype.h"
 #include "ECS/Archetypes/ScaffoldArchetype.h"
 #include "ECS/Archetypes/TownArchetype.h"
+#include "ECS/Archetypes/Utils.h"
 #include "ECS/Components/Abode.h"
 #include "ECS/Components/Creature.h"
 #include "ECS/Components/HandGrab.h"
@@ -286,13 +287,7 @@ void WorkshopSystem::ProcessWorkshop(entt::entity workshopEntity)
 			ReleaseScaffold(newest);
 		}
 	}
-	// The flag of the workshop shows the wood that the workshop still needs for a scaffold. The workshop makes its flag
-	// at its first turn.
-	auto& owned = registry.Get<Workshop>(workshopEntity);
-	if (!registry.Valid(owned.flag))
-	{
-		owned.flag = MakeFlag(workshopEntity);
-	}
+	// The flag of the workshop shows the wood that the workshop still needs for a scaffold
 	const uint32_t woodNow = Locator::resourceStoreSystem::has_value()
 	                             ? Locator::resourceStoreSystem::value().GetResource(workshopEntity, ResourceType::Wood)
 	                             : 0;
@@ -304,6 +299,8 @@ entt::entity WorkshopSystem::MakeFlag(entt::entity workshopEntity)
 	auto& registry = Entities();
 	const auto& row = Locator::infoConstants::value().showNeeds.at(ecs::need_flag::k_WoodRow);
 	const auto flag = registry.Create();
+	// It takes its place in the order of the things made
+	ecs::archetypes::TakeThingMadePlace();
 	registry.Assign<WorkshopFlag>(flag, WorkshopFlag {.workshop = workshopEntity});
 	registry.Assign<Mesh>(flag, resources::HashIdentifier(row.mesh), static_cast<int8_t>(0), static_cast<int8_t>(0));
 	registry.Assign<Transform>(flag, glm::vec3(0.0f), glm::mat3(1.0f), glm::vec3(1.0f));
@@ -422,6 +419,18 @@ void WorkshopSystem::FinishScaffold(entt::entity workshopEntity)
 		                                                   static_cast<entt::id_type>(audio::SoundId::G_Workshop));
 	}
 	registry.SetDirty();
+}
+
+void WorkshopSystem::Made(entt::entity workshopEntity)
+{
+	auto& registry = Entities();
+	if (!registry.Valid(workshopEntity) || !registry.AllOf<Workshop>(workshopEntity) || !Locator::infoConstants::has_value())
+	{
+		return;
+	}
+	const auto flag = MakeFlag(workshopEntity);
+	registry.Get<Workshop>(workshopEntity).flag = flag;
+	WoodPileOf(workshopEntity);
 }
 
 entt::entity WorkshopSystem::WoodPileOf(entt::entity workshopEntity)

@@ -36,6 +36,7 @@ public:
 	void ProcessWorkshop(entt::entity workshop) override;
 	[[nodiscard]] int32_t RoomOf(entt::entity workshop) const override;
 	entt::entity WoodPileOf(entt::entity workshop) override;
+	void Made(entt::entity workshop) override;
 	entt::entity CreateScaffold(glm::vec3 place, entt::entity town, entt::entity workshop, float yAngle, float scale) override;
 	[[nodiscard]] bool CanTake(entt::entity scaffold) const override;
 	void TakenByHand(entt::entity scaffold, PlayerNames player) override;

@@ -94,7 +94,8 @@ public:
 	virtual bool StepMotes(uint32_t /*effect*/) { return false; }
 	/// The motes' effect goes at once
 	virtual void RemoveMotes(uint32_t /*effect*/) {}
-	/// A need flag of a site, with the model of its row of the info; none when it can't be made
+	/// Makes a need flag of a site, with the model of its row of the info. The flag takes its place in the order of the
+	/// things made. None when the flag cannot be made.
 	virtual entt::entity MakeNeedFlag(entt::entity /*site*/, uint8_t /*need*/) { return entt::null; }
 	/// A thing of a site (the site itself, its altar, its food pot with what is in it, its need flags) goes from the world
 	virtual void Remove(entt::entity object) = 0;
