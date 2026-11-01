@@ -5085,6 +5085,17 @@ std::optional<double> Runner::ReadCheck(const checks::Check& check) const
 		const auto goal = MapPoint(_middle, check.point);
 		return static_cast<double>(glm::distance(glm::vec2(transform->position.x, transform->position.z), goal));
 	}
+	case checks::Quantity::ObjectResource:
+	{
+		const auto object = ObjectAt(check.index);
+		if (!object.has_value() || !Locator::resourceStoreSystem::has_value())
+		{
+			return std::nullopt;
+		}
+		const auto& stores = Locator::resourceStoreSystem::value();
+		return static_cast<double>(stores.GetResource(*object, ResourceType::Food)) +
+		       static_cast<double>(stores.GetResource(*object, ResourceType::Wood));
+	}
 	}
 	return std::nullopt;
 }

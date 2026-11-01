@@ -22,8 +22,10 @@ namespace
 {
 /// Where the tornado is cast, north of the camera
 constexpr glm::vec2 k_Centre {0.0f, 60.0f};
-/// The circle drawn for it: a storm of this radius makes a tornado about two thirds of it tall
-constexpr float k_CircleRadius = 60.0f;
+/// The circle drawn for it: at this radius the storm uses its usual prayer power each turn, and the power of the seed lasts
+/// about seventeen seconds. A wider storm makes a larger funnel but uses more power. From a circle of about 58, the power
+/// is gone before the funnel has faded in, so the tornado picks up nothing.
+constexpr float k_CircleRadius = 40.0f;
 
 std::vector<ObjectSetup> VillageAndWood()
 {
@@ -60,7 +62,7 @@ void testbed_scenarios::AddTornadoScenarios(std::vector<Scenario>& all)
 	    .id = "miracles.tornado_village",
 	    .name = "Tornado through a village and a wood",
 	    .facet = Facet::Miracles,
-	    .description = "A storm seed powered up twice to a tornado, let go over a circle of 60 drawn round a huddle of "
+	    .description = "A storm seed powered up twice to a tornado, let go over a circle of 40 drawn round a huddle of "
 	                   "villagers with piles of food and wood, with a wood of eight trees to the north.",
 	    .expected = "Storm clouds gather and a grey funnel of two spinning shells fades in over eight seconds, its foot "
 	                "wandering slowly under the clouds while a loud tornado roar loops. Dust the colour of the land is "
@@ -89,7 +91,7 @@ void testbed_scenarios::AddTornadoScenarios(std::vector<Scenario>& all)
 	    .id = "miracles.tornado_creature",
 	    .name = "Tornado meets a creature",
 	    .facet = Facet::Miracles,
-	    .description = "A tornado cast over a creature at a circle of 60, through the hand with a storm seed powered up "
+	    .description = "A tornado cast over a creature at a circle of 40, through the hand with a storm seed powered up "
 	                   "twice.",
 	    .expected = "Once the funnel has faded in and reaches the creature, the creature faints where it is, eyes closed, "
 	                "and is let off the leash; it is too big to be picked up and is never lifted. It lies four seconds for "
@@ -115,7 +117,7 @@ void testbed_scenarios::AddTornadoScenarios(std::vector<Scenario>& all)
 	    .id = "miracles.tornado_hand_pile",
 	    .name = "Tornado over piles the hand dropped",
 	    .facet = Facet::Miracles,
-	    .description = "A tornado cast at a circle of 60 over a pile of food and a pile of wood such as the hand drops, "
+	    .description = "A tornado cast at a circle of 40 over a pile of food and a pile of wood such as the hand drops, "
 	                   "beside a food pile and a wood pile of a store.",
 	    .expected = "Once the funnel has faded in, the hand's piles are lifted whole when they fit its funnel, rather than "
 	                "giving up pots; the store's food and wood piles give up pots of food and wood such as the hand drops, "
@@ -124,7 +126,7 @@ void testbed_scenarios::AddTornadoScenarios(std::vector<Scenario>& all)
 	    .framing = {.shot = Shot::Overview, .include = {{-25.0f, 40.0f}, {25.0f, 80.0f}}},
 	    .objects = {{.type = PotInfo::HandFood, .offset = {-4.0f, 58.0f}, .amount = 300},
 	                {.type = PotInfo::HandWood, .offset = {4.0f, 62.0f}, .amount = 300},
-	                {.type = PotInfo::StoragePitFoodPile, .offset = {10.0f, 56.0f}, .amount = 2000},
+	                {.type = PotInfo::StoragePitFoodPile, .offset = {6.0f, 56.0f}, .amount = 2000},
 	                {.type = PotInfo::WoodPile_1, .offset = {-10.0f, 64.0f}, .amount = 2000}},
 	    .miracles = {{.type = MagicType::Tornado,
 	                  .point = k_Centre,
@@ -132,13 +134,19 @@ void testbed_scenarios::AddTornadoScenarios(std::vector<Scenario>& all)
 	                  .delaySeconds = 1.0f,
 	                  .byHand = true,
 	                  .circleRadius = k_CircleRadius}},
+	    .checks = {{.label = "the wood pile gives up wood",
+	                .quantity = checks::Quantity::ObjectResource,
+	                .index = 3,
+	                .afterTurns = 90,
+	                .byTurn = 300,
+	                .atMost = 1999.0}},
 	});
 
 	all.push_back({
 	    .id = "miracles.tornado_empties_store_pile",
 	    .name = "Tornado empties the piles of a store",
 	    .facet = Facet::Miracles,
-	    .description = "A tornado cast at a circle of 60 over a Celtic storage pit that holds 50 food and 50 wood.",
+	    .description = "A tornado cast at a circle of 40 over a Celtic storage pit that holds 50 food and 50 wood.",
 	    .expected = "Once the funnel has faded in, the store's food and wood piles give up pots of food and wood until "
 	                "the store holds no food and no wood. The empty piles stay at the store, and the store fills them "
 	                "again when it gets food or wood.",
@@ -151,13 +159,19 @@ void testbed_scenarios::AddTornadoScenarios(std::vector<Scenario>& all)
 	                  .delaySeconds = 1.0f,
 	                  .byHand = true,
 	                  .circleRadius = k_CircleRadius}},
+	    .checks = {{.label = "the store holds no food and no wood",
+	                .quantity = checks::Quantity::ObjectResource,
+	                .index = 0,
+	                .afterTurns = 90,
+	                .byTurn = 300,
+	                .atMost = 0.0}},
 	});
 
 	all.push_back({
 	    .id = "miracles.tornado_animals",
 	    .name = "Tornado over a herd",
 	    .facet = Facet::Miracles,
-	    .description = "A tornado cast at a circle of 60 over two cows, two sheep and a pig.",
+	    .description = "A tornado cast at a circle of 40 over two cows, two sheep and a pig.",
 	    .expected = "Once the funnel has faded in, the animals are picked up whole and whirled round it. Each it lets go "
 	                "is put down where it was flung with no life left, falls dead in its kind's dying clip and lies dead, "
 	                "a cow, sheep or pig on its left side; a minute later the body is gone.",
