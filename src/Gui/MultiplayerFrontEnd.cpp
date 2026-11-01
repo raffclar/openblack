@@ -888,9 +888,12 @@ void MultiplayerFrontEnd::SendChat(std::u16string_view text)
 	{
 		return;
 	}
-	// On the internet the line comes back on the room's channel of the lobby to every player, the sender too
+	// On the internet the game shows its own line at once and the lobby sends it to the other players. The lobby
+	// sends the line back to the sender too, and the game leaves that copy out
 	if (_flow.kind == LobbyKind::Internet && _services.lobby != nullptr)
 	{
+		const auto* own = GetOwnSeat();
+		_chat.push_back(ChatLine(GetPlayerName(), line, true, own != nullptr ? own->god : 0));
 		_services.lobby->SendChatLine(ChannelOf(_room->id), ToUtf8(line),
 		                              [](ecs::systems::LobbyResult<ecs::systems::LobbyDone>&&) {});
 	}
@@ -919,10 +922,14 @@ void MultiplayerFrontEnd::HandleEvent(const lobby_api::PushEvent& event)
 			return;
 		}
 		const auto account = _services.lobby != nullptr ? _services.lobby->GetAccount() : std::nullopt;
-		const bool own = account.has_value() && account->id == line->from.id;
+		// The game showed its own line when the player sent it
+		if (account.has_value() && account->id == line->from.id)
+		{
+			return;
+		}
 		const auto seat = std::ranges::find(_seats, line->from.id, [](const Seat& s) { return s.account.id; });
 		const auto god = seat != _seats.end() ? seat->god : 0;
-		_chat.push_back(ChatLine(ToUtf16(line->from.name), ClampChat(ToUtf16(line->text)), own, god));
+		_chat.push_back(ChatLine(ToUtf16(line->from.name), ClampChat(ToUtf16(line->text)), false, god));
 		// The log keeps who spoke, never the words
 		if (auto logger = spdlog::get("game"))
 		{
