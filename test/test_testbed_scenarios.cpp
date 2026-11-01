@@ -186,7 +186,8 @@ TEST(TestbedScenarios, NoVillagerStartsInTheWaterByChance)
 {
 	// A villager that the game makes on a cell of water starts to drown and soon dies. Only these scenarios put one in
 	// the water on purpose.
-	const std::set<std::string_view> inTheWater {"appearance.swimmer_under_sea", "leash.rescue_from_water"};
+	const std::set<std::string_view> inTheWater {"appearance.swimmer_under_sea", "leash.rescue_from_water",
+	                                             "appearance.villager_made_on_water"};
 	const auto inWater = [](glm::vec2 offset) {
 		const auto at = glm::floor((flat_land::k_MapMiddle + offset) / flat_land::k_CellSize);
 		const auto kind = flat_land::KindOf(static_cast<int>(at.x), static_cast<int>(at.y));

@@ -66,6 +66,7 @@ public:
 	[[nodiscard]] std::optional<float> VillagerYAngle(entt::entity villager) const override;
 	void VillagerSetYAngle(entt::entity villager, float angle) const override;
 	void VillagerOverrideAnimation(entt::entity villager, int32_t clip) const override;
+	void VillagerStartFirstClip(entt::entity villager) const override;
 	void VillagerSetAge(entt::entity villager, uint32_t age) const override;
 
 private:

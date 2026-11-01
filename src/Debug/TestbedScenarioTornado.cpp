@@ -92,8 +92,11 @@ void testbed_scenarios::AddTornadoScenarios(std::vector<Scenario>& all)
 	    .name = "Tornado meets a creature",
 	    .facet = Facet::Miracles,
 	    .description = "A tornado cast over a creature at a circle of 40, through the hand with a storm seed powered up "
-	                   "twice.",
-	    .expected = "Once the funnel has faded in and reaches the creature, the creature faints where it is, eyes closed, "
+	                   "twice. The creature has no fear, which the testbed keeps at zero. A creature that is afraid runs "
+	                   "away from a nasty miracle cast near it, so it is gone before the funnel has faded in.",
+	    .expected = "When the miracle is cast, the creature does not run away. It looks at the place of the miracle, "
+	                "where it stands. Once the funnel has faded in and reaches the creature, the creature faints where it "
+	                "is, eyes closed, "
 	                "and is let off the leash; it is too big to be picked up and is never lifted. It lies four seconds for "
 	                "each of its size and eight more, is taken home, waits three seconds and for any spells on it to wear "
 	                "off, rests if it was tired or hurt when it fainted, and gets up. The tornado's foot keeps battering "
@@ -104,7 +107,9 @@ void testbed_scenarios::AddTornadoScenarios(std::vector<Scenario>& all)
 	                   .species = CreatureType::Tiger,
 	                   .offset = k_Centre,
 	                   .facingDegrees = 0.0f,
-	                   .needs = {.energy = 1.0f, .life = 1.0f}}},
+	                   .needs = {.energy = 1.0f, .life = 1.0f},
+	                   .desires = {{.desire = creature_desires::Desire::Fear, .fraction = 0.0f}},
+	                   .hold = true}},
 	    .miracles = {{.type = MagicType::Tornado,
 	                  .point = k_Centre,
 	                  .handOffset = {0.0f, 20.0f},

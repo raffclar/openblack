@@ -5074,6 +5074,11 @@ std::optional<double> Runner::ReadCheck(const checks::Check& check) const
 		const auto* body = creature.has_value() ? registry.TryGet<const Creature>(*creature) : nullptr;
 		return body != nullptr ? std::optional(static_cast<double>(body->size)) : std::nullopt;
 	}
+	case checks::Quantity::CreatureLife:
+	{
+		const auto creature = CreatureAt(creatureIndex());
+		return creature.has_value() ? std::optional(static_cast<double>(ecs::world_objects::LifeOf(*creature))) : std::nullopt;
+	}
 	case checks::Quantity::CreatureDistance:
 	{
 		const auto creature = CreatureAt(creatureIndex());

@@ -3562,6 +3562,25 @@ void AddLight(std::vector<Scenario>& all)
 	                                      {.kind = ScriptArgument::Kind::Object, .index = 1}}}},
 	});
 
+	// A villager that the game makes on the water starts to drown at once, with the clip of its first state
+	all.push_back({
+	    .id = "appearance.villager_made_on_water",
+	    .name = "A villager made on the water drowns from the start",
+	    .facet = Facet::Appearance,
+	    .description = "At noon, the clock stopped, the camera looks from the far shore of the lake of the testbed to "
+	                   "its shallows. One farmer is made in the shallows, and one farmer is made on the dry land in "
+	                   "front of the camera. Only the head of the farmer in the shallows is above the water.",
+	    .expected = "The farmer in the shallows plays the drowning clip from the start, until his time in the water "
+	                "ends. Then he dies and lies drowned. The farmer on the dry land plays the clip of a new villager "
+	                "until he first decides what to do. No farmer stands still in the pose of a model with no clip.",
+	    .environment = {.hour = 12.0f, .clockRuns = false, .dispenserGrid = false, .cursor = glm::vec2(0.95f, 0.1f)},
+	    .framing = {.shot = Shot::Placed,
+	                .eye = {k_Lake.x + 6.0f, 4.5f, k_FarShallows + 20.0f},
+	                .look = {k_Lake.x - 1.0f, 0.0f, k_FarShallows + 7.0f}},
+	    .objects = {{.type = VillagerInfo::CelticFarmerMale, .offset = {k_Lake.x - 2.0f, k_FarShallows + 4.0f}},
+	                {.type = VillagerInfo::CelticFarmerMale, .offset = {k_Lake.x + 2.0f, k_FarShallows + 14.0f}}},
+	});
+
 	// The same things in snow of three depths. A thing that takes all the snow gets the level (depth - 20) x 255 / 256.
 	struct SnowCoverStep
 	{
@@ -8720,6 +8739,60 @@ void AddCombat(std::vector<Scenario>& all)
 	    .framing = ringside,
 	    .creatures = {red(PlayerNames::PLAYER_ONE, 0.9f, -0.45f), blue(PlayerNames::PLAYER_TWO, 0.3f, -0.45f)},
 	    .commands = {Fight(Kind::StartFight, 0, 1, 1.0f), Fight(Kind::FightAuto, 0, 1, 0.2f)},
+	});
+
+	// The first land's Ogre, and creatures on later lands, heal by a script after they win a fight: the script gives the
+	// victor a hundredth of life every six seconds, until it is full or it fights again
+	const auto healScript = [](float delay) {
+		return Command {.kind = Kind::RunScript,
+		                .delaySeconds = delay,
+		                .script = "HealFightVictorOverTime",
+		                .scriptArguments = {{.kind = ScriptArgument::Kind::Creature, .index = 0}}};
+	};
+	const auto victor = [&](PlayerNames owner) {
+		auto creature = red(owner, 0.6f, -0.45f);
+		creature.label = "victor";
+		creature.needs.life = 0.9f;
+		creature.hold = false;
+		return creature;
+	};
+	all.push_back({
+	    .id = "combat.victor_heals_over_time",
+	    .name = "A fight victor heals slowly after the fight",
+	    .facet = Facet::Combat,
+	    .description = "A tiger with nine tenths of its life. Half a second in, the game's script that heals a creature "
+	                   "after it wins a fight starts on it, as the first land's Ogre quest starts it when the Ogre wins.",
+	    .expected = "The life of the tiger increases by 0.01 at once and then by 0.01 every six seconds: 0.91, 0.92 after "
+	                "six seconds, and so on. When the life is 1 or more, the script stops.",
+	    .framing = ringside,
+	    .creatures = {victor(PlayerNames::PLAYER_ONE)},
+	    .commands = {healScript(0.5f)},
+	    .checks =
+	        {{.label = "the first hundredth at once",
+	          .quantity = checks::Quantity::CreatureLife,
+	          .afterTurns = 20,
+	          .atLeast = 0.905,
+	          .atMost = 0.915},
+	         {.label = "a hundredth more after six seconds",
+	          .quantity = checks::Quantity::CreatureLife,
+	          .afterTurns = 80,
+	          .atLeast = 0.915,
+	          .atMost = 0.925},
+	         {.label = "full after a minute", .quantity = checks::Quantity::CreatureLife, .afterTurns = 620, .atLeast = 0.999}},
+	});
+	all.push_back({
+	    .id = "combat.victor_heal_stops_in_fight",
+	    .name = "A fight victor stops healing when it fights again",
+	    .facet = Facet::Combat,
+	    .description = "As combat.victor_heals_over_time, with a second tiger. Nine seconds in, the healed tiger asks the "
+	                   "other tiger to fight, and both fight by themselves.",
+	    .expected = "The life of the red tiger increases by 0.01 every six seconds while the tigers walk to the arena "
+	                "and take their places, because for the scripts a creature fights only while it duels. At the first "
+	                "check of the script in the duel, the script stops: the life gets no more hundredths from it. The "
+	                "inspector's script.tasks query no longer lists the script.",
+	    .framing = ringside,
+	    .creatures = {victor(PlayerNames::PLAYER_ONE), blue(PlayerNames::PLAYER_TWO, 0.6f, -0.45f)},
+	    .commands = {healScript(0.5f), Fight(Kind::StartFight, 0, 1, 8.5f), Fight(Kind::FightAuto, 0, 1, 0.2f)},
 	});
 
 	all.push_back({
