@@ -235,6 +235,15 @@ public:
 
 	uint32_t StartScript(const std::string& name, ScriptType allowedScriptTypesMask);
 
+	/// Starts a script at the instruction at the address, as though the script ran to that point. The script gets the
+	/// exception handler that its first instruction sets. Use it only for a developer's start. The result is the number
+	/// of the task, or 0 when the script is not found or the address is not in the code of the script.
+	uint32_t StartScriptAt(const std::string& name, ScriptType allowedScriptTypesMask, uint32_t address);
+
+	/// The address of the first instruction in the code of the caller that runs the callee. The result is empty when
+	/// the caller does not run the callee.
+	[[nodiscard]] std::optional<uint32_t> FindRunOfScript(const std::string& caller, const std::string& callee) const;
+
 	void StopAllTasks();
 
 	void StopScripts(std::function<bool(const std::string& name, const std::string& filename)> filter);
