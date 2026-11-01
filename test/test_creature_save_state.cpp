@@ -75,13 +75,23 @@ TEST(CreatureSaveState, TheFizzIsSavedOnlyWhileTheCreatureIsInvisible)
 {
 	const creature_fizz::Fizz fizz {.now = 0.4f, .target = 1.0f, .perSecond = 0.5f, .goesForGood = true};
 	creature_spells::Spells spells;
-	const auto none = FizzToSave(fizz, spells);
+	const auto none = FizzToSave(fizz, spells, SaveKind::SavedGame);
 	EXPECT_EQ(none.now, 0.0f);
 	EXPECT_EQ(none.target, 0.0f);
 	EXPECT_EQ(none.perSecond, 0.0f);
 	EXPECT_TRUE(none.goesForGood);
 	spells[Spell::Invisible].phase = Phase::Holding;
-	EXPECT_EQ(FizzToSave(fizz, spells), fizz);
+	EXPECT_EQ(FizzToSave(fizz, spells, SaveKind::SavedGame), fizz);
+}
+
+TEST(CreatureSaveState, AWorldStateKeepsTheFizzOfACreatureThatIsCarriedHome)
+{
+	// The server makes a world state while a creature fizzes out of sight. The clients make no world state, so the
+	// fizz on the server must not change.
+	const creature_fizz::Fizz fizz {.now = 0.55f, .target = 1.0f, .perSecond = 0.5f, .goesForGood = false};
+	const creature_spells::Spells spells {};
+	EXPECT_EQ(FizzToSave(fizz, spells, SaveKind::WorldState), fizz);
+	EXPECT_NE(FizzToSave(fizz, spells, SaveKind::SavedGame), fizz);
 }
 
 TEST(CreatureSaveState, TheKnownLeashesAndTheLeashTypesKeepTheGamesNumbers)

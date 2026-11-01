@@ -413,7 +413,7 @@ void LoadChangedAltitudes(const gamesave::WorldFile& world)
 
 /// The whole record of the creature as openblack writes it from the creature now, its player's leash on it, and the
 /// values that openblack keeps beside the record
-gamesave::SavedCreature Capture(ecs::Registry& registry, entt::entity entity, uint32_t index)
+gamesave::SavedCreature Capture(ecs::Registry& registry, entt::entity entity, uint32_t index, save_state::SaveKind kind)
 {
 	gamesave::SavedCreature saved {.key = save_state::ToRef(entity).key};
 	const auto& body = registry.Get<const Creature>(entity);
@@ -450,15 +450,16 @@ gamesave::SavedCreature Capture(ecs::Registry& registry, entt::entity entity, ui
 		record.freeze = spells->freeze;
 	}
 	record.mayGoThroughVortex = body.mayGoThroughVortex ? 1 : 0;
-	// The save writes the fizz only while the invisibility spell is on the creature. Else it puts the creature in full
-	// sight at once, as it writes it.
+	// A saved game writes the fizz only while the invisibility spell is on the creature. Else it puts the creature in
+	// full sight at once, as it writes it. A world state writes the fizz as it is and does not change the creature.
 	auto* fizz = registry.TryGet<CreatureFizz>(entity);
 	creature_fizz::Fizz now = fizz != nullptr ? fizz->fizz : creature_fizz::Fizz {};
 	if (fizz == nullptr && spells != nullptr)
 	{
 		now.now = spells->fizz;
 	}
-	const auto fizzSaved = spells != nullptr ? save_state::FizzToSave(now, spells->spells) : save_state::FizzToSave(now, {});
+	const auto fizzSaved =
+	    spells != nullptr ? save_state::FizzToSave(now, spells->spells, kind) : save_state::FizzToSave(now, {}, kind);
 	if (fizzSaved != now)
 	{
 		if (fizz != nullptr)
@@ -805,9 +806,9 @@ void Restore(ecs::Registry& registry, entt::entity entity, const gamesave::Saved
 
 /// The record that a save writes for the creature: openblack's record, or for a creature that came from a file of the
 /// game, the file's record with the values that openblack changed since the load
-gamesave::SavedCreature ToSave(ecs::Registry& registry, entt::entity entity, uint32_t index)
+gamesave::SavedCreature ToSave(ecs::Registry& registry, entt::entity entity, uint32_t index, save_state::SaveKind kind)
 {
-	auto saved = Capture(registry, entity, index);
+	auto saved = Capture(registry, entity, index, kind);
 	if (const auto* vanilla = registry.TryGet<const CreatureVanillaRecord>(entity))
 	{
 		saved.creature = save_state::MergeOnto(vanilla->loaded, vanilla->baseline, saved.creature);
@@ -957,7 +958,7 @@ std::shared_ptr<const std::atomic<ecs::save_files::SaveWrite>> SaveGameSystem::S
 	for (uint32_t index = 0; index < creatures.size(); ++index)
 	{
 		const auto entity = creatures[index];
-		auto creature = ToSave(registry, entity, index);
+		auto creature = ToSave(registry, entity, index, save_state::SaveKind::SavedGame);
 		SPDLOG_LOGGER_INFO(Log(), "Saved the creature {} as number {} of its file; the save keeps its plan: {}",
 		                   entt::to_integral(entity), creature.creature.creature.index,
 		                   creature.creature.creature.plan.has_value());
@@ -1341,7 +1342,7 @@ std::function<std::vector<uint8_t>()> SaveGameSystem::WorldStateLater()
 	std::vector<gamesave::SavedCreature> saved;
 	for (uint32_t index = 0; index < creatures.size(); ++index)
 	{
-		saved.push_back(ToSave(registry, creatures[index], index));
+		saved.push_back(ToSave(registry, creatures[index], index, save_state::SaveKind::WorldState));
 		// A visit to the temple is a view of this computer only, and the world state is the same on each computer
 		saved.back().creature.creature.savedInTemple = 0;
 	}
@@ -1475,7 +1476,7 @@ void SaveGameSystem::KeepVanillaRecord(ecs::Registry& registry, entt::entity ent
 {
 	const auto inOrder = CreaturesInOrder();
 	const auto index = static_cast<uint32_t>(std::ranges::find(inOrder, entity) - inOrder.begin());
-	const auto baseline = Capture(registry, entity, index);
+	const auto baseline = Capture(registry, entity, index, save_state::SaveKind::SavedGame);
 	CreatureVanillaRecord vanilla {.number = number,
 	                               .loaded = loaded,
 	                               .baseline = baseline.creature,
@@ -1660,7 +1661,7 @@ std::vector<SaveGameSystem::VanillaCheck> SaveGameSystem::CheckVanillaRecords() 
 		{
 			continue;
 		}
-		auto creature = ToSave(registry, creatures[index], index).creature;
+		auto creature = ToSave(registry, creatures[index], index, save_state::SaveKind::SavedGame).creature;
 		save_state::Rekey(creature, [&keys](gamesave::ObjectKey key) { return Translate(keys, key); });
 		const auto written = gamesave::WriteRecordAt(
 		    found->start, {.key = gamesave::NumberKey(vanilla->number),
