@@ -94,6 +94,27 @@ float FacingAngle(glm::vec2 from, glm::vec2 to)
 	return static_cast<float>(angle);
 }
 
+glm::vec3 TargetRelativePosition(glm::vec3 from, glm::vec3 to, float distance, float angleDegrees)
+{
+	float x = to.x - from.x;
+	float y = to.y - from.y;
+	float z = to.z - from.z;
+	if (x != 0.0f || y != 0.0f || z != 0.0f)
+	{
+		const float scale = 1.0f / std::sqrt(z * z + y * y + x * x);
+		x = scale * x;
+		y = y * scale;
+		z = z * scale;
+	}
+	// The cosine is kept as a float, the sine stays wide until each product rounds it
+	const float radians = angleDegrees * k_DegreesToRadians;
+	const float cosine = x87::RoundToFloat(x87::Cos(radians));
+	const double sine = x87::Sin(radians);
+	const float turnedX = x87::Mul(-sine, z) + cosine * x;
+	const float turnedZ = cosine * z + x87::Mul(sine, x);
+	return {turnedX * distance + to.x, y * distance + to.y, turnedZ * distance + to.z};
+}
+
 bool CanSetLife(float life, bool heldDuringCutscene, bool indestructible)
 {
 	return !((heldDuringCutscene || indestructible) && life <= k_LowestProtectedLife);

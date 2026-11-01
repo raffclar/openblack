@@ -5607,15 +5607,12 @@ void RemoveResource() // 135 REMOVE_RESOURCE
 
 void GetTargetRelativePos() // 136 GET_TARGET_RELATIVE_POS
 {
-	// const auto angle = Popf();
-	// const auto distance = Popf();
-	// const auto to = PopVec();
-	// const auto from = PopVec();
-	// TODO(Daniels118): implement this
-	NotImplemented();
-	Pushv(0.0f); // x
-	Pushv(0.0f); // y
-	Pushv(0.0f); // z
+	// The point at the distance past the second point, on the line from the first point, turned by the angle
+	const auto angle = Popf();
+	const auto distance = Popf();
+	const auto to = PopVec();
+	const auto from = PopVec();
+	PushVec(script::property_rules::TargetRelativePosition(from, to, distance, angle));
 }
 
 void StopPointing() // 137 STOP_POINTING
