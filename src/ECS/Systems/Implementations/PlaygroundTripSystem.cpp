@@ -26,7 +26,9 @@
 #include "Camera/CameraHelp.h"
 #include "ECS/ChallengeRecords.h"
 #include "ECS/Reflection/BinaryArchive.h"
+#include "ECS/Systems/CameraBookmarkSystemInterface.h"
 #include "ECS/Systems/CameraHelpSystemInterface.h"
+#include "ECS/Systems/CameraPathSystemInterface.h"
 #include "ECS/Systems/CameraZoneSystemInterface.h"
 #include "ECS/Systems/CinematicDirectorSystemInterface.h"
 #include "ECS/Systems/DialogueControlSystemInterface.h"
@@ -35,6 +37,7 @@
 #include "ECS/Systems/IntroSystemInterface.h"
 #include "ECS/Systems/LandSystemInterface.h"
 #include "ECS/Systems/SaveGameSystemInterface.h"
+#include "ECS/Systems/ScriptMusicSystemInterface.h"
 #include "ECS/Systems/ScriptObjectsSystemInterface.h"
 #include "ECS/Systems/TurnCheerSystemInterface.h"
 #include "FileSystem/FileSystemInterface.h"
@@ -107,12 +110,30 @@ void LetScriptsGo()
 	help.cameraKeys = true;
 	help.placeKeys = true;
 	Locator::handDemoSystem::value().Reset();
+	// The camera stops each mode that it had over the player's own control: a path, and the follow of a bookmark
+	if (Locator::cameraPathSystem::has_value())
+	{
+		Locator::cameraPathSystem::value().Stop();
+	}
+	if (Locator::cameraBookmarkSystem::has_value())
+	{
+		auto& bookmarks = Locator::cameraBookmarkSystem::value();
+		if (const auto followed = bookmarks.GetFollowed(); followed.has_value())
+		{
+			bookmarks.ToggleFollow(*followed);
+		}
+	}
 	// The camera zones that a script set go
 	if (Locator::cameraZoneSystem::has_value())
 	{
 		Locator::cameraZoneSystem::value().ClearZones();
 	}
 	std::ignore = openblack::chlapi::CHLApi::ApplyInterfaceLevel(k_NormalInterface);
+	// The music that a script started stops
+	if (Locator::scriptMusicSystem::has_value())
+	{
+		Locator::scriptMusicSystem::value().Start(openblack::audio::MusicType::None);
+	}
 	// The advisors stop the cheer of the camera's turn
 	if (Locator::turnCheerSystem::has_value())
 	{

@@ -1070,6 +1070,7 @@ void GameMenu::OpenStatistics()
 void GameMenu::ShowPage(Page page)
 {
 	CurrentDialog().Reset();
+	_pageShown = true;
 	if (_page == Page::Players && page != Page::Players)
 	{
 		KeepPlayerEdits();

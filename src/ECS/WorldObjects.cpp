@@ -106,6 +106,7 @@
 #include "Physics/DamageMesh.h"
 #include "Physics/LivingRules.h"
 #include "Resources/ResourcesInterface.h"
+#include "ScriptHeaders/ScriptPropertyRules.h"
 
 using namespace openblack;
 using namespace openblack::ecs;
@@ -697,11 +698,14 @@ float world_objects::ReduceLife(entt::entity object, float damage, std::optional
 		damage = LifeOf(object);
 	}
 	const float before = LifeOf(object);
-	if (auto* villager = registry.TryGet<Villager>(object))
+	if (const auto* villager = registry.TryGet<const Villager>(object))
 	{
-		villager->life = std::max(villager->life - damage, 0.0f);
-		CountInjury(object, before, villager->life);
-		return villager->life;
+		// The life goes down as a script sets it. So a villager that a script holds in a cutscene, or made indestructible,
+		// does not go down to nearly no life.
+		const float life = std::max(villager->life - damage, 0.0f);
+		SetLife(object, life,
+		        script::property_rules::CanSetLife(life, HeldDuringCutscene(object), registry.AllOf<Indestructible>(object)));
+		return LifeOf(object);
 	}
 	auto& life = registry.AllOf<ObjectLife>(object) ? registry.Get<ObjectLife>(object)
 	                                                : registry.Assign<ObjectLife>(object, ObjectLife {.life = before});
