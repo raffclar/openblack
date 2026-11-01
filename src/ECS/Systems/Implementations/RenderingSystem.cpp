@@ -1026,7 +1026,7 @@ bool RenderingSystem::UploadInstances(bool drawBoundingBox)
 			    if (spells->freeze > 0.0f)
 			    {
 				    look.y = static_cast<float>(creature_spells::FrozenTint(spells->freeze));
-				    look.w = -spells->freeze;
+				    look.w = -static_cast<float>(creature_spells::IceAlpha(spells->freeze)) / 255.0f;
 			    }
 		    }
 
@@ -1189,6 +1189,12 @@ bool RenderingSystem::UploadInstances(bool drawBoundingBox)
 		    if (fade.has_value() && look.z != 1.0f)
 		    {
 			    look.z = -(1.0f - (static_cast<float>(*fade) / 255.0f));
+		    }
+		    // A villager that a script draws in high detail takes the land's light and colour where it stands each frame,
+		    // but no distance haze
+		    if (highDetail != nullptr)
+		    {
+			    look.z = graphics::instance_light::WithoutHaze(look.z);
 		    }
 
 		    const uint32_t idx = slots->second.offset + slots->second.filled;

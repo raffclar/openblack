@@ -71,5 +71,7 @@ constexpr auto k_CoverView = RenderPass::Interface;
 
 /// How far the creatures that a warm-up draws fizzing have fizzed: half way, which fizzes their eyes too
 constexpr float k_CreatureFizz = 0.5f;
+/// How frozen the creatures that a warm-up draws fizzing are: wholly, which adds the ice over them
+constexpr float k_CreatureFreeze = 1.0f;
 
 } // namespace openblack::graphics::warm_up

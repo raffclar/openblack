@@ -450,6 +450,26 @@ void AddCreatureCatchesBuildingPiece(std::vector<Scenario>& all)
 	                   .action = "SmashStoneInHalf",
 	                   .onPiece = true}};
 	all.push_back(std::move(stomp));
+
+	// The pieces lie still in the cells of the map, and the tiger walks across them
+	auto cells = CatchBuildingPieceStage();
+	cells.id = "physics.building_pieces_lie_in_the_map_cells";
+	cells.name = "Pieces of a building that lie in the cells of the map";
+	cells.description = "A big boulder thrown from the south breaks a creche once. A tiger north east of the creche stands "
+	                    "still. When the pieces lie still, the tiger walks west across them.";
+	cells.expected = "Each piece that stays goes into the cells of the map when it comes to rest, as a rock does. The "
+	                 "inspector's map cell query shows the pieces in the cells. The tiger does not walk round the pieces, "
+	                 "because a piece is an obstacle only while it burns. The footpaths do not change.";
+	cells.objects.resize(2);
+	cells.throws.resize(1);
+	cells.throws.front().repeatSeconds = 600.0f;
+	// The mind stays paused, so that only the command moves the tiger
+	cells.creatures.front().pauseMind = true;
+	cells.commands = {{.kind = Command::Kind::WalkTo,
+	                   .creature = 0,
+	                   .delaySeconds = k_StompAfterTheBreak,
+	                   .point = k_Field + glm::vec2 {-16.0f, 22.0f}}};
+	all.push_back(std::move(cells));
 }
 
 void AddCreatureCatchWhileWalking(std::vector<Scenario>& all)
