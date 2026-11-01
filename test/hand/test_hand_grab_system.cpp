@@ -132,6 +132,11 @@ public:
 	{
 		return of == secondHand ? std::optional(PlayerNames::PLAYER_TWO) : std::nullopt;
 	}
+	[[nodiscard]] glm::vec3 ReportedHandPlace() const override
+	{
+		const auto found = reportedPlaces.find(Hand());
+		return found != reportedPlaces.end() ? found->second : PoseOf(Hand()).origin;
+	}
 	[[nodiscard]] glm::vec3 ReportedPlaceOf(entt::entity of) const override
 	{
 		const auto found = reportedPlaces.find(of);
@@ -212,9 +217,10 @@ public:
 		return seedKept;
 	}
 	void PlaySample(uint32_t sample, glm::vec3) override { samples.push_back(sample); }
-	bool TapThing(entt::entity object, glm::vec3, PlayerNames) override
+	bool TapThing(entt::entity object, glm::vec3 place, PlayerNames) override
 	{
 		tapped.push_back(object);
+		tapPlaces.push_back(place);
 		return true;
 	}
 	[[nodiscard]] bool ValidToTap(entt::entity object) const override { return tappable.contains(object); }
@@ -562,6 +568,8 @@ public:
 	bool seedKept {true};
 	std::vector<uint32_t> samples;
 	std::vector<entt::entity> tapped;
+	/// The place of the hand that each tap used
+	std::vector<glm::vec3> tapPlaces;
 	std::set<entt::entity> tappable;
 	std::vector<entt::entity> villagersInHand;
 	std::vector<entt::entity> uprooted;
@@ -3131,6 +3139,25 @@ TEST_F(HandGrabSystemWithWorld, ATapWaitsForTheTurnThatDoesItsCommand)
 	RunWaiting();
 	ASSERT_EQ(world->tapped.size(), 1u);
 	EXPECT_EQ(world->tapped.front(), rock);
+}
+
+// The turn does the tap at the place of the hand that the last report gave, not where the game draws the hand
+TEST_F(HandGrabSystemWithWorld, ATapUsesThePlaceOfTheHandThatTheLastReportGave)
+{
+	deferCommands = true;
+	const auto rock = world->AddRock({0.0f, 0.0f, 0.0f});
+	world->underCursor = rock;
+	Press();
+	Frame(50);
+	Release();
+	ASSERT_TRUE(world->tapped.empty());
+	// A report comes before the turn of the tap. The game draws the hand at a different place.
+	const glm::vec3 reported {12.0f, 3.0f, -34.0f};
+	world->reportedPlaces[world->hand] = reported;
+	ASSERT_NE(world->PoseOf(world->hand).origin, reported);
+	RunWaiting();
+	ASSERT_EQ(world->tapPlaces.size(), 1u);
+	EXPECT_EQ(world->tapPlaces.front(), reported);
 }
 
 // The hand's work of the turn takes a thing in flight once the button was held long enough, also with no frame between
