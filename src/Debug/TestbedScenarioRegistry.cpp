@@ -1953,6 +1953,39 @@ void AddThirdLandPrison(std::vector<Scenario>& all)
 	});
 }
 
+/// The man of the third land who wants to be thrown: the land's own script makes him at his campfire, with the player's
+/// creature near him, so that the hand or the creature can take him
+void AddThirdLandThrowBloke(std::vector<Scenario>& all)
+{
+	using Argument = ScriptArgument;
+	// His place on the beach of the third land, from the middle of the map
+	constexpr glm::vec2 k_Man = glm::vec2(2796.28f, 3146.40f) - flat_land::k_MapMiddle;
+	all.push_back({
+	    .id = "story.l3_throw_bloke",
+	    .name = "Story: the man of the third land who wants to be thrown",
+	    .facet = Facet::Story,
+	    .description = "The third land loads with its own scripts and sky. The land's script of the man who wants to be "
+	                   "thrown starts. It makes the man and his campfire on the beach, and the player's Tiger stands 15 "
+	                   "metres from him. Take the man with the hand and throw him, throw him into the sea to the north "
+	                   "west, set him alight, or let the Tiger take him and eat him.",
+	    .expected = "The man stands at his campfire, looks at the waterfall and plays his clip. While the camera is near, "
+	                "he asks to be thrown every 20 seconds. In the hand he says a line. When he flies, the game slows to "
+	                "0.32 of its speed under wide screen bars, and the camera follows him from 10 metres. After 3 "
+	                "seconds the speed comes back to normal over 3 seconds; when he lands the speed is normal again. On "
+	                "land he walks back to his place and boasts. In the sea he stays until the camera looks away, then "
+	                "a new man comes at his place. Fire does not hurt him. When the Tiger eats him, the Tiger plays its "
+	                "clip of a creature that must poo and then poos. A new man comes out at its back, flies to it and "
+	                "walks back to his place.",
+	    .environment = {.land = Land::Story, .storyLand = "Land3.txt", .dispenserGrid = false},
+	    .framing = {.shot = Shot::Placed, .eye = {k_Man.x + 20.0f, 25.0f, k_Man.y - 25.0f}, .look = {k_Man.x, 2.0f, k_Man.y}},
+	    .creatures = {Content(CreatureType::Tiger, k_Man + glm::vec2(12.0f, -9.0f), 300.0f, "player's tiger")},
+	    .commands = {{.kind = Kind::RunScript,
+	                  .delaySeconds = 0.5f,
+	                  .script = "ThrowBlokeMain",
+	                  .scriptGlobals = {{"MyCreature", {.kind = Argument::Kind::Creature, .index = 0}}}}},
+	});
+}
+
 /// The Pied Piper of the first land. The game's script runs at the same map positions as on the first land, with the
 /// Norse town, the creche and the piper's cave made there. The scenario clicks the creche, and the round starts.
 void AddPiedPiperRound(std::vector<Scenario>& all)
@@ -2688,6 +2721,7 @@ CREATE_CITADEL("0.0,0.0", 0, "PLAYER_ONE", 4254, 1000)
 	AddGuideStorm(all);
 	AddRivalCreatureLoads(all);
 	AddThirdLandPrison(all);
+	AddThirdLandThrowBloke(all);
 	AddSingingStones(all);
 	AddBeachTemplePuzzle(all);
 	AddTreePuzzle(all);
