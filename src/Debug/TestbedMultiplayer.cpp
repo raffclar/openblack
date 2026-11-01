@@ -203,7 +203,6 @@ public:
 		{
 			_pending.push_back(Line(3, "Bob", "Hello, and welcome to the game."));
 			_pending.push_back(Line(9, "Eve", "I am only watching."));
-			_pending.push_back(Line(k_PlayerId, "Alice", "Hi, all!"));
 		}
 		// In the big room each of the other gods says a line, so that the chat shows the colour of each god
 		if (watch && channel == "server-w5")
@@ -692,6 +691,10 @@ void Finish(MultiplayerFrontEnd& frontEnd, DemoServices& demo)
 		}
 		break;
 	}
+	case Stage::RoomChat:
+		// The player says a line, which shows at once
+		frontEnd.SendChat(u"Hi, all!");
+		break;
 	case Stage::LanRoomChat:
 		// The room's game server sends a line of the host
 		demo.sockets.ServerSends(game_socket::RoomChat {.from = "Ian", .text = "Hello from the office!"});
