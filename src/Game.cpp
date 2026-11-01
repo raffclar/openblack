@@ -681,7 +681,8 @@ bool InNetworkGame()
 }
 
 /// What the box of the winning conditions shows: the score history and the conditions of each god among the first four
-/// players that plays, and the conditions of the player of this computer
+/// players that plays, and the conditions of the player of this computer. A network game shows every god that plays,
+/// so a game of more than 4 gods shows them 4 at a time (deviation 195).
 gui::conditions_box::Figures ConditionsFigures()
 {
 	gui::conditions_box::Figures figures;
@@ -692,6 +693,7 @@ gui::conditions_box::Figures ConditionsFigures()
 	const auto local =
 	    (Locator::handSystem::has_value() ? Locator::handSystem::value().GetOwnPlayer() : PlayerNames::PLAYER_ONE);
 	const auto landNumber = Locator::entitiesRegistry::value().Context().mapScriptGlobals.landNumber;
+	const bool networkGame = Locator::time::has_value() && Locator::time::value().IsNetworkGame();
 	for (const auto& [god, standing] : Locator::gameEndSystem::value().Standings())
 	{
 		if (god == local)
@@ -704,7 +706,7 @@ gui::conditions_box::Figures ConditionsFigures()
 				}
 			}
 		}
-		if (!game_end::CanLose(god))
+		if (!game_end::CanLose(god) && !networkGame)
 		{
 			continue;
 		}

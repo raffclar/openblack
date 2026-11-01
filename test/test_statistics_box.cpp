@@ -9,6 +9,7 @@
 
 #include <cstdint>
 
+#include <algorithm>
 #include <array>
 #include <string>
 #include <vector>
@@ -73,6 +74,57 @@ TEST(StatisticsBoxPlayers, TheBoxCountsThePlayersThatPlayInTheFirstFourPlaces)
 	EXPECT_EQ(statistics::BoxPlayerCount(std::array {true, false, true, false}), 2U);
 	EXPECT_EQ(statistics::BoxPlayerCount(std::array {false, false, false, false}), 0U);
 	EXPECT_EQ(statistics::BoxPlayerCount(std::array {true, true, true, true}), 4U);
+}
+
+// Outside a network game the box counts the first four places, as the game does
+TEST(StatisticsBoxPlayers, AGameAloneCountsTheFirstFourPlaces)
+{
+	EXPECT_EQ(statistics::BoxPlaces(false, 33),
+	          (std::vector<PlayerNames> {PlayerNames::PLAYER_ONE, PlayerNames::PLAYER_TWO, PlayerNames::PLAYER_THREE,
+	                                     PlayerNames::PLAYER_FOUR}));
+}
+
+// A network game counts every god slot of the game, past the neutral player
+TEST(StatisticsBoxPlayers, ANetworkGameCountsEveryGodSlot)
+{
+	// A game of the 8 player numbers of a land: the 7 gods before the neutral player
+	const auto land = statistics::BoxPlaces(true, 8);
+	ASSERT_EQ(land.size(), 7u);
+	EXPECT_EQ(land.back(), PlayerNames::PLAYER_SEVEN);
+	// A game of 32 gods: the gods after the seventh take the numbers after the neutral player
+	const auto most = statistics::BoxPlaces(true, 33);
+	ASSERT_EQ(most.size(), 32u);
+	EXPECT_EQ(static_cast<size_t>(most.at(7)), 8u);
+	EXPECT_EQ(static_cast<size_t>(most.back()), 32u);
+	EXPECT_EQ(std::ranges::count(most, PlayerNames::NEUTRAL), 0);
+	// A game of 4 gods in the first places counts the same players as the game
+	std::array<bool, 7> plays {true, true, true, true, false, false, false};
+	EXPECT_EQ(statistics::BoxPlayerCount(plays), 4U);
+}
+
+// The window of gods: the rows show only the gods of the window, but the rows of men and women stay out of the first
+// player's people and the gods defeated out of every other god in the game
+TEST(StatisticsBoxPages, TheWindowPicksTheGodsOfTheRows)
+{
+	BoxFigures figures;
+	figures.playersInGame = 6;
+	for (size_t slot = 0; slot < 6; ++slot)
+	{
+		PlayerFigures player {.player = static_cast<PlayerNames>(slot)};
+		player.population = static_cast<uint32_t>(10 * (slot + 1));
+		player.men = static_cast<uint32_t>(slot + 1);
+		figures.players.push_back(player);
+	}
+	const std::vector<size_t> shown {2, 3, 4, 5};
+	const auto town = MakePage(Tab::Town, figures, PlayerNames::PLAYER_ONE, shown);
+	const auto& men = RowNamed(town, "HELP_TEXT_PAUSE_STATS_33");
+	EXPECT_EQ(men.values, (std::vector<float> {3.0f, 4.0f, 5.0f, 6.0f}));
+	EXPECT_EQ(men.players.front(), PlayerNames::PLAYER_THREE);
+	EXPECT_EQ(men.most, 10.0f);
+	const auto player = MakePage(Tab::Player, figures, PlayerNames::PLAYER_ONE, shown);
+	EXPECT_EQ(RowNamed(player, "HELP_TEXT_PAUSE_STATS_111").most, 5.0f);
+	// All the players, as before
+	EXPECT_EQ(RowNamed(MakePage(Tab::Town, figures, PlayerNames::PLAYER_ONE), "HELP_TEXT_PAUSE_STATS_33").values.size(), 6u);
 }
 
 TEST(StatisticsBoxPages, EachTabListsItsRowsInOrder)

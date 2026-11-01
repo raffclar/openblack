@@ -85,6 +85,9 @@ public:
 	/// Opens the box of a tab of the open box, as a click on the tab does: 1 for Multiplayer, 2 for Statistics. False
 	/// when the box is not open or the tab has no box.
 	bool OpenTab(size_t tab);
+	/// Moves the window of gods of the box of a tab that shows some pages, as a click on its arrow does. False when no box
+	/// of a tab shows or its window does not move.
+	bool MoveGodWindow(int pages);
 	/// Open and taking the player's input, not fading out
 	[[nodiscard]] bool IsOpen() const noexcept { return _open; }
 	/// On the screen, fading out included
@@ -96,6 +99,7 @@ public:
 	/// The end box is open and shows no box of a tab over it
 	[[nodiscard]] bool ShowsItself() const noexcept { return _open && !_showsStatistics && !_showsConditions; }
 	[[nodiscard]] const ConditionsBox& GetConditions() const noexcept { return *_conditions; }
+	[[nodiscard]] const StatisticsBox& GetStatistics() const noexcept { return *_statistics; }
 	[[nodiscard]] const Contents& GetContents() const noexcept { return _contents; }
 	[[nodiscard]] const StaticText& GetTitle() const noexcept { return *_title; }
 

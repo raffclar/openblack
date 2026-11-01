@@ -20,6 +20,7 @@
 
 #include "Common/Zoomer.h"
 #include "Dialog.h"
+#include "GodWindow.h"
 #include "StatisticsBoxRules.h"
 
 namespace openblack::gui
@@ -52,6 +53,9 @@ void SetLines(LineGraph& graph, std::vector<std::vector<float>> lines, std::vect
 /// is ticked, one bar split between the players. A click on a row shows it in the right hand graph box. The Player Stats
 /// tab shows the influence and population over the whole game in two line graphs. A click on a line graph changes it
 /// from shares to values, or back. The Creature Stats tab shows each player's creature.
+///
+/// A network game of more than 4 gods shows every god, 4 at a time: the window of gods (GodWindow) right of the check
+/// boxes picks the gods of the rows, the graphs and the creatures (deviation 195).
 class StatisticsBox
 {
 public:
@@ -80,8 +84,11 @@ public:
 	[[nodiscard]] statistics_box::Tab GetTab() const noexcept { return _tab; }
 	[[nodiscard]] const statistics_box::Page& GetPage() const noexcept { return _page; }
 	[[nodiscard]] bool IsGraphic() const noexcept { return _graphic; }
+	[[nodiscard]] GodWindow& GetGodWindow() noexcept { return *_window; }
 
 private:
+	/// The window of gods moved: the tab shows its gods, and the row the player picked stays in the right hand graph box
+	void ShowWindow();
 	void Fill(statistics_box::Graph graph, std::optional<size_t> row);
 	/// Draws a row's values or bar over its name in the list
 	void DrawRow(const DialogPainter& painter, const List::ItemPlace& place);
@@ -99,6 +106,7 @@ private:
 	statistics_box::LineGraph* _influence {nullptr};
 	statistics_box::LineGraph* _population {nullptr};
 	statistics_box::CreatureViews* _creatures {nullptr};
+	std::unique_ptr<GodWindow> _window;
 
 	statistics::BoxFigures _figures;
 	PlayerNames _local {PlayerNames::PLAYER_ONE};
