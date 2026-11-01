@@ -11,6 +11,7 @@
 
 #include <cstdint>
 
+#include <array>
 #include <chrono>
 #include <filesystem>
 #include <fstream>
@@ -20,6 +21,7 @@
 #include <set>
 #include <string>
 #include <string_view>
+#include <utility>
 #include <vector>
 
 #include <InspectorProvider.h>
@@ -105,13 +107,21 @@ private:
 	struct Synced
 	{
 		uint32_t turn {0};
+		/// Null while the hash of the turn waits for the draw of the frame
 		Json value;
+		/// The values of the systems that the checksum mixes: the music of the scripts, the synced seed and draws
+		std::optional<std::array<int64_t, 5>> music;
+		std::optional<std::pair<uint32_t, uint64_t>> random;
 	};
 	/// The turns to record that ended since the last record. A frame can end more than one turn: for example, when the
 	/// turns of the next frame play beside the draw
 	std::vector<Synced> _synced;
 	/// At the end of a turn to record: keeps the synced part of the world
 	void TurnEnded(uint32_t turn);
+	/// The checksum finished the hash of a turn that waited for the draw
+	void HashEnded(uint32_t turn, const synced_state::Hash& hash);
+	/// Puts the hash of the synced world and the checksum into the synced part of a turn
+	void AddHash(Synced& synced, const synced_state::Hash& hash);
 };
 
 /// The limits from a table as JSON: {"limits": [{"key": "plan:*", "turns": null}, ...]}; none when it is not one

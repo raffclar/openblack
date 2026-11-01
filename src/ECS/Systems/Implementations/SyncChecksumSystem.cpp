@@ -12,9 +12,12 @@
 #include "SyncChecksumSystem.h"
 
 #include <algorithm>
+#include <memory>
+#include <optional>
 #include <span>
 #include <string>
 #include <string_view>
+#include <utility>
 #include <vector>
 
 #include <entt/meta/context.hpp>
@@ -40,15 +43,56 @@ SyncChecksumSystem::SyncChecksumSystem()
 
 SyncChecksumSystem::~SyncChecksumSystem() = default;
 
+WorkerPool& SyncChecksumSystem::Pool()
+{
+	if (_pool == nullptr)
+	{
+		_pool = std::make_unique<WorkerPool>(WorkerPool::DefaultThreadCount());
+	}
+	return *_pool;
+}
+
 void SyncChecksumSystem::ProcessTurn()
 {
-	// A tool takes the hash only in the turn that made it
-	_lastHash.reset();
+	// The start of each turn ends a hash that waits. This call is for a turn that a tool plays alone
+	FinishHash();
 	if (!_enabled || !Locator::entitiesRegistry::has_value() || !Locator::time::has_value())
 	{
+		_lastHash.reset();
 		return;
 	}
 	const auto turn = Locator::time::value().GetTurn();
+	// The synced values that the systems keep outside the entities, as the turn left them
+	TurnValues values {.turn = turn};
+	if (Locator::gameRandom::has_value())
+	{
+		const auto& random = Locator::gameRandom::value();
+		values.seed = random.GetSeeds().synced;
+		values.draws = random.GetSyncedDraws();
+	}
+	// The music that the scripts start is synced too: its piece, its lyrics and its clock
+	if (Locator::scriptMusicSystem::has_value())
+	{
+		values.music = Locator::scriptMusicSystem::value().GetMusic().SyncedValues();
+	}
+	bool rowDump = false;
+	bool worldStates = false;
+#if defined(OPENBLACK_DEVELOPER_TOOLS)
+	rowDump = _rowDump != nullptr;
+	worldStates = _worldStates.has_value();
+#endif
+	if (synced_state::HashCanWait({.besideDraw = _besideDraw,
+	                               .keepParts = _keepParts,
+	                               .dumpThisTurn = _dumpTurn == turn,
+	                               .rowDump = rowDump,
+	                               .worldStates = worldStates}))
+	{
+		// The hash of the last turn stays for a tool until the hash of this turn ends
+		_waiting = values;
+		return;
+	}
+	// A tool takes the hash only in the turn that made it
+	_lastHash.reset();
 	std::vector<std::string> dump;
 	ecs::reflection::RowVisitor visit;
 	if (_dumpTurn == turn)
@@ -68,10 +112,6 @@ void SyncChecksumSystem::ProcessTurn()
 			dump.push_back(std::move(line));
 		};
 	}
-	if (_pool == nullptr)
-	{
-		_pool = std::make_unique<WorkerPool>(WorkerPool::DefaultThreadCount());
-	}
 	ecs::reflection::WorldRows* rows = nullptr;
 #if defined(OPENBLACK_DEVELOPER_TOOLS)
 	ecs::reflection::WorldRows keptRows;
@@ -82,31 +122,77 @@ void SyncChecksumSystem::ProcessTurn()
 #endif
 	const bool byField = _keepParts && _byField;
 	auto hash = synced_state::HashOf(Locator::entitiesRegistry::value().Underlying(), *_reflection,
-	                                 synced_state::PresentationParts(), byField, visit, _pool.get(), rows, &_memo);
-	// The music that the scripts start is synced too: its piece, its lyrics and its clock
-	auto stateHash = hash.hash;
-	if (Locator::scriptMusicSystem::has_value())
-	{
-		stateHash = synced_state::MixValues(stateHash, Locator::scriptMusicSystem::value().GetMusic().SyncedValues());
-	}
-	uint32_t seed = 0;
-	uint64_t draws = 0;
-	if (Locator::gameRandom::has_value())
-	{
-		const auto& random = Locator::gameRandom::value();
-		seed = random.GetSeeds().synced;
-		draws = random.GetSyncedDraws();
-	}
+	                                 synced_state::PresentationParts(), byField, visit, &Pool(), rows, &_memo);
 #if defined(OPENBLACK_DEVELOPER_TOOLS)
 	// The rows go to the dump before the listener compares the checksum, so that a part at this turn finds them. The
 	// checksum also mixes the synced seed and the count of the synced draws, so the rows keep them too.
 	if (_rowDump)
 	{
-		row_dump::AddValue(keptRows, "GameRandom.seed", std::span(reinterpret_cast<const uint8_t*>(&seed), sizeof(seed)));
-		row_dump::AddValue(keptRows, "GameRandom.draws", std::span(reinterpret_cast<const uint8_t*>(&draws), sizeof(draws)));
+		row_dump::AddValue(keptRows, "GameRandom.seed",
+		                   std::span(reinterpret_cast<const uint8_t*>(&values.seed), sizeof(values.seed)));
+		row_dump::AddValue(keptRows, "GameRandom.draws",
+		                   std::span(reinterpret_cast<const uint8_t*>(&values.draws), sizeof(values.draws)));
 		_rowDump->Keep(turn, std::move(keptRows));
 	}
 #endif
+	Finish(values, std::move(hash), byField, std::move(dump));
+#if defined(OPENBLACK_DEVELOPER_TOOLS)
+	// The world state of the tools is the world of this checksum
+	if (_worldStates.has_value())
+	{
+		world_state_at_turn::WriteIfDue(*_worldStates, turn, *_reflection);
+	}
+#endif
+}
+
+void SyncChecksumSystem::StartHashBesideDraw()
+{
+	if (!_waiting.has_value() || _besideStarted || !Locator::entitiesRegistry::has_value())
+	{
+		return;
+	}
+	if (_side == nullptr)
+	{
+		_side = std::make_unique<SideThread>();
+	}
+	auto& pool = Pool();
+	_besideStarted = true;
+	// The draw only reads the world, so the threads read it at the same time. The side thread shares the hash with the
+	// threads of the pool, as the main thread does when the hash does not wait.
+	_side->Start([this, &pool, &registry = Locator::entitiesRegistry::value().Underlying()] {
+		_besideHash =
+		    synced_state::HashOf(registry, *_reflection, synced_state::PresentationParts(), false, {}, &pool, nullptr, &_memo);
+	});
+}
+
+void SyncChecksumSystem::FinishHash()
+{
+	if (!_waiting.has_value())
+	{
+		return;
+	}
+	const auto values = *std::exchange(_waiting, std::nullopt);
+	synced_state::Hash hash;
+	if (std::exchange(_besideStarted, false))
+	{
+		_side->Wait();
+		hash = std::move(*std::exchange(_besideHash, std::nullopt));
+	}
+	else
+	{
+		hash = synced_state::HashOf(Locator::entitiesRegistry::value().Underlying(), *_reflection,
+		                            synced_state::PresentationParts(), false, {}, &Pool(), nullptr, &_memo);
+	}
+	Finish(values, std::move(hash), false, {});
+}
+
+void SyncChecksumSystem::Finish(const TurnValues& values, synced_state::Hash hash, bool byField, std::vector<std::string> dump)
+{
+	auto stateHash = hash.hash;
+	if (values.music.has_value())
+	{
+		stateHash = synced_state::MixValues(stateHash, *values.music);
+	}
 	// A component with no registration is left out of the checksum, so a change in it is never seen: tell of each name once
 	if (const auto fresh = _reported.Fresh(hash.unregistered); !fresh.empty())
 	{
@@ -115,8 +201,8 @@ void SyncChecksumSystem::ProcessTurn()
 			logger->error("{}", synced_state::UnregisteredLine(fresh));
 		}
 	}
-	_last = TurnChecksum {.turn = turn,
-	                      .checksum = synced_state::Checksum(stateHash, seed, draws),
+	_last = TurnChecksum {.turn = values.turn,
+	                      .checksum = synced_state::Checksum(stateHash, values.seed, values.draws),
 	                      .parts = {},
 	                      .dump = std::move(dump),
 	                      .unregistered = hash.unregistered};
@@ -128,14 +214,11 @@ void SyncChecksumSystem::ProcessTurn()
 	{
 		_listener(*_last);
 	}
-	_lastHash = TurnHash {.turn = turn, .byField = byField, .hash = std::move(hash)};
-#if defined(OPENBLACK_DEVELOPER_TOOLS)
-	// The world state of the tools is the world of this checksum
-	if (_worldStates.has_value())
+	_lastHash = TurnHash {.turn = values.turn, .byField = byField, .hash = std::move(hash)};
+	if (_hashListener)
 	{
-		world_state_at_turn::WriteIfDue(*_worldStates, turn, *_reflection);
+		_hashListener(values.turn, _lastHash->hash);
 	}
-#endif
 }
 
 #if defined(OPENBLACK_DEVELOPER_TOOLS)
