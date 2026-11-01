@@ -247,6 +247,9 @@ struct ChatItem
 /// The text of a chat line, cut to the first 254 characters
 [[nodiscard]] std::u16string ClampChat(std::u16string_view text);
 
+/// True when a chat line has a character above the space. The game sends no line of only spaces.
+[[nodiscard]] bool HasChatText(std::u16string_view text) noexcept;
+
 /// The time limit as hours and minutes: "1:30"
 [[nodiscard]] std::u16string TimeLimitText(uint32_t minutes);
 

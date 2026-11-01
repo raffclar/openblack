@@ -59,6 +59,17 @@ public:
 	{
 		return _session ? _session->TakeStartEvent() : std::nullopt;
 	}
+	void SendRoomChat(std::string text) override
+	{
+		if (_session)
+		{
+			_session->SendRoomChat(text);
+		}
+	}
+	[[nodiscard]] std::vector<game_socket::RoomChat> TakeRoomChat() override
+	{
+		return _session ? _session->TakeRoomChat() : std::vector<game_socket::RoomChat> {};
+	}
 
 private:
 	void Detach();

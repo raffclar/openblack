@@ -235,8 +235,23 @@ struct GameStop
 	uint32_t turn {0};
 };
 
+/// The most characters of a line of the room's chat, as the chat box of the game takes them (UTF-16 code units)
+inline constexpr size_t k_MostRoomChatCharacters = 254;
+
+/// "room.chat", in a room on the local network before the start. Client to server: a line that the player typed. Server
+/// to client: a line of another player in the room. The server sends the line to every player in the room but the
+/// sender, whose game shows its own line when it sends it.
+struct RoomChat
+{
+	/// The name of the player who typed the line. Empty from a client.
+	std::string from;
+	std::string text;
+
+	[[nodiscard]] bool operator==(const RoomChat&) const = default;
+};
+
 using Frame = std::variant<Join, Resume, Ready, Leave, Joined, Refused, Start, Resumed, PlayerState, StartQuery, StartReply,
-                           StartCancel, StartStop, StartTransfer, StartCreature, StopRequest, GameStop>;
+                           StartCancel, StartStop, StartTransfer, StartCreature, StopRequest, GameStop, RoomChat>;
 
 [[nodiscard]] std::string ToJson(const Frame& frame);
 [[nodiscard]] std::optional<Frame> Parse(std::string_view text);

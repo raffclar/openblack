@@ -75,6 +75,7 @@ void NetworkSession::Join(NetworkSessionSettings settings)
 	_joined.reset();
 	_start.reset();
 	_startEvents.clear();
+	_roomChat.clear();
 	_startCreatures.clear();
 	_startAlignments.clear();
 	_ownGodPlaysForClan = false;
@@ -159,6 +160,19 @@ void NetworkSession::SetReady(bool ready)
 	{
 		_stream->SendText(game_socket::ToJson(game_socket::Ready {.ready = ready}));
 	}
+}
+
+void NetworkSession::SendRoomChat(std::string_view text)
+{
+	if (_state == State::Waiting && _stream && _stream->IsOpen())
+	{
+		_stream->SendText(game_socket::ToJson(game_socket::RoomChat {.from = {}, .text = std::string(text)}));
+	}
+}
+
+std::vector<game_socket::RoomChat> NetworkSession::TakeRoomChat()
+{
+	return std::exchange(_roomChat, {});
 }
 
 void NetworkSession::Leave()
@@ -259,6 +273,14 @@ void NetworkSession::Text(std::string_view text)
 		_refusedReason = refused->reason;
 		Log(spdlog::level::warn, fmt::format("The game server refused the client: {}", refused->reason));
 		FinishWith(End::Refused);
+	}
+	else if (const auto* chat = std::get_if<game_socket::RoomChat>(&*frame))
+	{
+		// The chat of the room ends when the game starts
+		if (_state == State::Waiting)
+		{
+			_roomChat.push_back(*chat);
+		}
 	}
 	else if (_state == State::Waiting)
 	{

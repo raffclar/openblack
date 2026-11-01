@@ -420,6 +420,11 @@ std::u16string ClampChat(std::u16string_view text)
 	return std::u16string(text.substr(0, std::min(text.size(), k_MostChatCharacters)));
 }
 
+bool HasChatText(std::u16string_view text) noexcept
+{
+	return std::ranges::any_of(text, [](char16_t letter) { return letter > u' '; });
+}
+
 std::u16string TimeLimitText(uint32_t minutes)
 {
 	const std::array<TextArgument, 2> arguments = {static_cast<int64_t>(minutes / 60u), static_cast<int64_t>(minutes % 60u)};

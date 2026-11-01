@@ -84,6 +84,24 @@ std::optional<join_ticket::Claims> LanClaims(std::string_view name)
 	return claims;
 }
 
+bool IsRoomChatLine(std::string_view text) noexcept
+{
+	size_t units = 0;
+	bool visible = false;
+	for (const char letter : text)
+	{
+		const auto byte = static_cast<uint8_t>(letter);
+		// A continuation byte adds no code unit. A lead byte of four bytes gives two code units.
+		if ((byte & 0xC0) == 0x80)
+		{
+			continue;
+		}
+		units += byte >= 0xF0 ? 2 : 1;
+		visible = visible || byte > 0x20;
+	}
+	return visible && units <= game_socket::k_MostRoomChatCharacters;
+}
+
 bool RoomStarts(size_t godsInRoom, size_t readyGods, uint32_t minGods) noexcept
 {
 	return godsInRoom > 0 && readyGods == godsInRoom && readyGods >= minGods;
@@ -222,10 +240,49 @@ void LockstepHost::Text(ConnectionId connection, std::string_view text)
 	{
 		StartCreature(connection, peer, *creature);
 	}
+	else if (const auto* chat = std::get_if<game_socket::RoomChat>(&*frame))
+	{
+		ChatInRoom(connection, peer, *chat);
+	}
 	else
 	{
 		Refuse(connection, "protocol");
 	}
+}
+
+void LockstepHost::ChatInRoom(ConnectionId connection, const Peer& peer, const game_socket::RoomChat& chat)
+{
+	// Only a room on the local network has its chat on the game socket. On the internet the lobby's channel of the room
+	// has it. The chat of the room ends when the game starts.
+	if (!_settings.lanNames || !peer.joined || _started || !IsRoomChatLine(chat.text))
+	{
+		return;
+	}
+	std::string from;
+	if (peer.seat.has_value())
+	{
+		from = _seats[*peer.seat].name;
+	}
+	else if (const auto watcher = std::ranges::find(_watchers, std::optional(connection), &Watcher::connection);
+	         watcher != _watchers.end())
+	{
+		from = watcher->name;
+	}
+	if (from.empty())
+	{
+		return;
+	}
+	// The line goes to every other player in the room, as the host's lobby sends it. The sender's game shows its own line
+	// when it sends it. The log keeps who spoke, never the words.
+	const auto text = game_socket::ToJson(game_socket::RoomChat {.from = std::move(from), .text = chat.text});
+	for (const auto& [other, otherPeer] : _peers)
+	{
+		if (otherPeer.joined && other != connection)
+		{
+			_sockets.SendText(other, text);
+		}
+	}
+	Log(spdlog::level::info, fmt::format("A chat line from connection {} goes to the room", connection));
 }
 
 void LockstepHost::Join(ConnectionId connection, Peer& peer, const game_socket::Join& join)
@@ -330,7 +387,7 @@ void LockstepHost::Join(ConnectionId connection, Peer& peer, const game_socket::
 	}
 	else
 	{
-		joined.session = NewWatcher(connection);
+		joined.session = NewWatcher(connection, claims.name);
 		Log(spdlog::level::info, fmt::format("{} joins as an observer", claims.name));
 	}
 	peer.joined = true;
@@ -456,15 +513,19 @@ void LockstepHost::SendKeptTurns(ConnectionId connection, uint32_t from)
 	}
 }
 
-std::string LockstepHost::NewWatcher(ConnectionId connection)
+std::string LockstepHost::NewWatcher(ConnectionId connection, std::string name)
 {
 	if (!_makeSecret)
 	{
 		return {};
 	}
 	auto session = _makeSecret();
-	_watchers.push_back(
-	    Watcher {.session = session, .sessionHash = HashOf(session), .connection = connection, .awaySince = 0, .resumes = 0});
+	_watchers.push_back(Watcher {.session = session,
+	                             .sessionHash = HashOf(session),
+	                             .connection = connection,
+	                             .awaySince = 0,
+	                             .resumes = 0,
+	                             .name = std::move(name)});
 	return session;
 }
 
@@ -570,7 +631,7 @@ void LockstepHost::JoinRunning(ConnectionId connection, Peer& peer, const join_t
 	{
 		// Any other player who joins after the start is an observer (MP-Q12)
 		peer.role = game_socket::Role::Observer;
-		joined.session = NewWatcher(connection);
+		joined.session = NewWatcher(connection, claims.name);
 		Log(spdlog::level::info, fmt::format("{} joins the game at turn {} as an observer", claims.name, _turnsDone));
 	}
 	peer.joined = true;
@@ -1200,8 +1261,8 @@ void LockstepHost::Restore(const snapshots::Room& room, uint32_t turnsDone, std:
 	// hashes
 	for (const auto& hash : room.watchers)
 	{
-		_watchers.push_back(
-		    Watcher {.session = {}, .sessionHash = hash, .connection = std::nullopt, .awaySince = now, .resumes = 0});
+		_watchers.push_back(Watcher {
+		    .session = {}, .sessionHash = hash, .connection = std::nullopt, .awaySince = now, .resumes = 0, .name = {}});
 	}
 	// A room with no human god turned before the restart, so it turns again when an observer comes back
 	_observersJoined = true;
