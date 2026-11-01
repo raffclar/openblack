@@ -433,7 +433,12 @@ void L3DMesh::SplitFacesForSnow()
 
 void L3DMesh::UpdateSkin(SkinId skin, std::span<const uint16_t> given) noexcept
 {
-	assert(_dynamic);
+	UpdateSkin(skin, PrepareSkin(given));
+}
+
+L3DMesh::PreparedSkin L3DMesh::PrepareSkin(std::span<const uint16_t> given) const
+{
+	PreparedSkin prepared {.flags = GetFlags(), .side = _skinSide, .layout = _skinLayout, .upload = _upload};
 	// Full-size texels for a skin kept at half size go into it as the mean of each two by two square
 	std::vector<uint16_t> halved;
 	if (l3d_skin::SideOf(given.size()) != _skinSide)
@@ -441,21 +446,38 @@ void L3DMesh::UpdateSkin(SkinId skin, std::span<const uint16_t> given) noexcept
 		halved = l3d_skin::LoadedTexels(given, GetFlags(), true);
 	}
 	const auto texels = halved.empty() ? given : std::span<const uint16_t>(halved);
+	if (_upload == UploadMode::Device)
+	{
+		prepared.bytes = l3d_skin::TexelsIn(_skinLayout, texels);
+	}
+	if (l3d_skin::HasOpaqueSkins(GetFlags()))
+	{
+		prepared.alpha = tree_shadows::MaskOf(l3d_skin::SolidAlphaTexels(texels.size()), _skinSide, _skinSide);
+	}
+	else
+	{
+		prepared.alpha = tree_shadows::MaskOf(texels, _skinSide, _skinSide);
+	}
+	return prepared;
+}
+
+bool L3DMesh::Fits(const PreparedSkin& prepared) const
+{
+	return prepared.flags == GetFlags() && prepared.side == _skinSide && prepared.layout == _skinLayout &&
+	       prepared.upload == _upload;
+}
+
+void L3DMesh::UpdateSkin(SkinId skin, const PreparedSkin& prepared) noexcept
+{
+	assert(_dynamic);
+	assert(Fits(prepared));
 	if (const auto found = _skins.find(skin); found != _skins.end() && _upload == UploadMode::Device)
 	{
-		const auto bytes = l3d_skin::TexelsIn(_skinLayout, texels);
-		found->second->Update(bytes.data(), static_cast<uint32_t>(bytes.size()));
+		found->second->Update(prepared.bytes.data(), static_cast<uint32_t>(prepared.bytes.size()));
 	}
 	if (const auto found = _skinAlpha.find(skin); found != _skinAlpha.end())
 	{
-		if (l3d_skin::HasOpaqueSkins(GetFlags()))
-		{
-			found->second = tree_shadows::MaskOf(l3d_skin::SolidAlphaTexels(texels.size()), _skinSide, _skinSide);
-		}
-		else
-		{
-			found->second = tree_shadows::MaskOf(texels, _skinSide, _skinSide);
-		}
+		found->second = prepared.alpha;
 	}
 }
 

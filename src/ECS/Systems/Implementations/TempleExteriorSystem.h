@@ -23,6 +23,7 @@
 #include <entt/entity/fwd.hpp>
 #include <glm/vec2.hpp>
 
+#include "3D/L3DMesh.h"
 #include "3D/TempleExteriorMorph.h"
 #include "ECS/Systems/TempleExteriorSystemInterface.h"
 #include "Enums.h"
@@ -67,6 +68,8 @@ private:
 			TempleExteriorMorph::TextureBlend texture;
 			uint32_t set;
 			std::vector<uint16_t> texels;
+			/// The texels prepared for the first temple mesh that took them, which the meshes that fit use again
+			std::optional<graphics::L3DMesh::PreparedSkin> prepared;
 		};
 		std::vector<Skin> skins;
 		/// A temple whose own mesh is not in the cache. The threads prepare its mesh from its blended shape after the

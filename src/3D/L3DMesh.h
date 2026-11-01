@@ -129,6 +129,24 @@ public:
 	void SplitFacesForSnow();
 	/// A dynamic mesh's skin takes its texels afresh
 	void UpdateSkin(SkinId skin, std::span<const uint16_t> given) noexcept;
+	/// New texels for a skin, prepared on the processor: the bytes of the texture (none for a mesh of data only) and the
+	/// alpha mask. The flags, the side, the layout and the upload mode of the mesh decide them.
+	struct PreparedSkin
+	{
+		std::vector<uint8_t> bytes;
+		graphics::tree_shadows::AlphaMask alpha {};
+		uint32_t flags {0};
+		uint16_t side {0};
+		l3d_skin::Layout layout {l3d_skin::Layout::Argb4444};
+		UploadMode upload {UploadMode::Device};
+	};
+	/// Prepares new texels for a skin of this mesh. Other meshes with the same flags, side, layout and upload mode can
+	/// use the result.
+	[[nodiscard]] PreparedSkin PrepareSkin(std::span<const uint16_t> given) const;
+	/// Whether the prepared texels are for a mesh such as this one
+	[[nodiscard]] bool Fits(const PreparedSkin& prepared) const;
+	/// A dynamic mesh's skin takes prepared texels that fit it
+	void UpdateSkin(SkinId skin, const PreparedSkin& prepared) noexcept;
 	[[nodiscard]] bool IsDynamic() const { return _dynamic; }
 	/// The texels along a side of the mesh's skins as the game loads them: half the side at the lowest detail levels
 	[[nodiscard]] uint16_t GetSkinSide() const { return _skinSource != nullptr ? _skinSource->GetSkinSide() : _skinSide; }

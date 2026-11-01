@@ -306,3 +306,38 @@ TEST_F(MeshPrepare, APreparationForAMeshOfDataOnlyHasNoTexelsAndNoPackedVertices
 	EXPECT_FALSE(mesh.GetSubMeshes().front()->HasDeviceMesh());
 	EXPECT_EQ(mesh.GetSubMeshes().front()->GetSurface().indices.size(), 6U);
 }
+
+TEST_F(MeshPrepare, PreparedSkinTexelsGiveTheBitsOfTexelsGivenDirectly)
+{
+	const auto model = Model();
+	std::vector<uint16_t> texels(256U * 256U);
+	for (size_t i = 0; i < texels.size(); ++i)
+	{
+		texels[i] = static_cast<uint16_t>(0xF000U | (i * 13U));
+	}
+
+	L3DMesh direct("direct", true, UploadMode::Device);
+	ASSERT_TRUE(direct.Load(model));
+	static_cast<void>(Device().TakeMade());
+	direct.UpdateSkin(7, texels);
+	const auto fromDirect = Device().TakeMade();
+
+	L3DMesh other("other", true, UploadMode::Device);
+	ASSERT_TRUE(other.Load(model));
+	static_cast<void>(Device().TakeMade());
+	const auto prepared = direct.PrepareSkin(texels);
+	ASSERT_TRUE(other.Fits(prepared));
+	other.UpdateSkin(7, prepared);
+	const auto fromPrepared = Device().TakeMade();
+
+	ASSERT_EQ(fromDirect.size(), 1U);
+	ASSERT_EQ(fromPrepared.size(), 1U);
+	EXPECT_EQ(fromPrepared.front().kind, FakeDevice::Made::Kind::TextureUpdate);
+	EXPECT_EQ(fromPrepared.front().bytes, fromDirect.front().bytes);
+	EXPECT_EQ(*other.GetSkinAlpha(7), *direct.GetSkinAlpha(7));
+
+	// A mesh of data only needs other texels
+	L3DMesh dataOnly("data", true, UploadMode::DataOnly);
+	ASSERT_TRUE(dataOnly.Load(model));
+	EXPECT_FALSE(dataOnly.Fits(prepared));
+}

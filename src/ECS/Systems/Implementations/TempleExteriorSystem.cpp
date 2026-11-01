@@ -361,7 +361,12 @@ void TempleExteriorSystem::Dress(entt::id_type id, const l3d::L3DFile& blended, 
 		made.skins.push_back({.texture = texture, .set = set, .texels = std::move(*blendedTexels)});
 		skin = std::prev(made.skins.end());
 	}
-	temple.UpdateSkin(skins.front().id, skin->texels);
+	// The temples whose meshes are the same take the same prepared texels
+	if (!skin->prepared.has_value() || !temple.Fits(*skin->prepared))
+	{
+		skin->prepared = temple.PrepareSkin(skin->texels);
+	}
+	temple.UpdateSkin(skins.front().id, *skin->prepared);
 }
 
 WorkerPool& TempleExteriorSystem::Workers()
