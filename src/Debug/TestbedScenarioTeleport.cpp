@@ -49,6 +49,11 @@ constexpr glm::vec2 k_WorshipStoneB {300.0f, 0.0f};
 constexpr glm::vec2 k_NearStone {0.0f, 30.0f};
 constexpr glm::vec2 k_MiddleStone {0.0f, 400.0f};
 constexpr glm::vec2 k_FarStone {0.0f, 900.0f};
+/// On the second land, from the middle of the land: two stones west and east of the player's first town
+constexpr glm::vec2 k_LandTwoStoneA {985.0f, 652.0f};
+constexpr glm::vec2 k_LandTwoStoneB {1060.0f, 655.0f};
+/// On the second land, a stone further west of the first stone than villagers walk to worship
+constexpr glm::vec2 k_LandTwoFarStone {465.0f, 652.0f};
 } // namespace
 
 void testbed_scenarios::AddTeleportScenarios(std::vector<Scenario>& all)
@@ -228,6 +233,32 @@ void testbed_scenarios::AddTeleportScenarios(std::vector<Scenario>& all)
 	});
 
 	all.push_back({
+	    .id = "miracles.l2_teleport_worship",
+	    .name = "A worshipper of the second land goes through the stones",
+	    .facet = Facet::Miracles,
+	    .description = "The second land of the story. The hand casts a teleport miracle at the player's first town, and "
+	                   "a second one comes 520 metres west of it. A Norse villager beside the first stone then sets off "
+	                   "to worship at a point beside the far stone, further than villagers walk to worship.",
+	    .expected = "The villager turns aside into the near stone at once, vanishes in a burst of pale yellow sparks and "
+	                "comes out of the far one, near the worship point. The debug log says that it sets off through a "
+	                "stone.",
+	    .environment = {.land = Land::Story, .storyLand = "Land2.txt", .dispenserGrid = false},
+	    .framing = {.shot = Shot::Overview,
+	                .include = {k_LandTwoStoneA + glm::vec2(-20.0f, -20.0f), k_LandTwoStoneA + glm::vec2(20.0f, 20.0f)}},
+	    .objects = {{.type = VillagerInfo::NorseHousewifeFemale,
+	                 .offset = k_LandTwoStoneA + glm::vec2(4.0f, 3.0f),
+	                 .walkAfterSeconds = 6.0f,
+	                 .worshipAt = k_LandTwoFarStone + glm::vec2(6.0f, 4.0f)}},
+	    .miracles = {{.type = MagicType::Teleport,
+	                  .point = k_LandTwoStoneA,
+	                  .handOffset = k_LandTwoStoneA,
+	                  .handHeight = 12.0f,
+	                  .delaySeconds = 1.0f,
+	                  .byHand = true},
+	                 {.type = MagicType::Teleport, .point = k_LandTwoFarStone, .delaySeconds = 3.0f}},
+	});
+
+	all.push_back({
 	    .id = "miracles.teleport_worship",
 	    .name = "A worshipper goes through the stones",
 	    .facet = Facet::Miracles,
@@ -295,5 +326,57 @@ void testbed_scenarios::AddTeleportScenarios(std::vector<Scenario>& all)
 	                 {.kind = Command::Kind::LeashOrderAt, .creature = 0, .delaySeconds = k_LeashBefore, .point = k_Goal},
 	                 {.kind = Command::Kind::LeashTapBuilding, .creature = 0, .delaySeconds = k_TapWhileCarried},
 	                 {.kind = Command::Kind::LeashTapBuilding, .creature = 0, .delaySeconds = k_TapAfterArrival}},
+	});
+
+	all.push_back({
+	    .id = "miracles.l2_teleport_village",
+	    .name = "Teleport stones at a village of the second land",
+	    .facet = Facet::Miracles,
+	    .description = "The second land of the story. The hand casts two teleport miracles at the player's first town, "
+	                   "75 metres apart. Three villagers beside the west stone walk to beside the east stone, and back "
+	                   "after 30 seconds. A fourth villager beside the west stone goes onto it after 15 seconds, as the "
+	                   "hand drops one. After a minute the east stone goes.",
+	    .expected = "Each cast leaves a swirling pool with a low hum. The walkers turn aside into the near stone, vanish in "
+	                "a burst of pale yellow sparks and come out of the other, both ways. The dropped villager flies, lands "
+	                "on the stone, decides what to do and jumps at once to the east stone. When the east stone goes, its hum "
+	                "plays to the end of its pass, not cut at once, and the walkers then walk all the way. The hand can "
+	                "drop a held villager onto a stone with the same result.",
+	    .environment = {.land = Land::Story, .storyLand = "Land2.txt", .dispenserGrid = false},
+	    .framing = {.shot = Shot::Overview,
+	                .include = {k_LandTwoStoneA + glm::vec2(-20.0f, -20.0f), k_LandTwoStoneB + glm::vec2(20.0f, 20.0f)}},
+	    .objects = {{.type = VillagerInfo::NorseFarmerMale,
+	                 .offset = k_LandTwoStoneA + glm::vec2(4.0f, 4.0f),
+	                 .walkTo = k_LandTwoStoneB + glm::vec2(6.0f, 4.0f),
+	                 .walkAfterSeconds = k_WalkAfter,
+	                 .walkRepeatSeconds = k_WalkRepeat,
+	                 .walkFinal = VillagerStates::ArrivesHome},
+	                {.type = VillagerInfo::NorseForesterMale,
+	                 .offset = k_LandTwoStoneA + glm::vec2(6.0f, 2.0f),
+	                 .walkTo = k_LandTwoStoneB + glm::vec2(8.0f, 2.0f),
+	                 .walkAfterSeconds = k_WalkAfter + 1.0f,
+	                 .walkRepeatSeconds = k_WalkRepeat,
+	                 .walkFinal = VillagerStates::ArrivesHome},
+	                {.type = VillagerInfo::NorseLeaderMale,
+	                 .offset = k_LandTwoStoneA + glm::vec2(2.0f, 6.0f),
+	                 .walkTo = k_LandTwoStoneB + glm::vec2(4.0f, 6.0f),
+	                 .walkAfterSeconds = k_WalkAfter + 2.0f,
+	                 .walkRepeatSeconds = k_WalkRepeat,
+	                 .walkFinal = VillagerStates::ArrivesHome},
+	                {.type = VillagerInfo::NorseFarmerMale,
+	                 .offset = k_LandTwoStoneA + glm::vec2(-8.0f, -4.0f),
+	                 .dropOnStoneSeconds = 15.0f}},
+	    .miracles = {{.type = MagicType::Teleport,
+	                  .point = k_LandTwoStoneA,
+	                  .handOffset = k_LandTwoStoneA,
+	                  .handHeight = 12.0f,
+	                  .delaySeconds = 1.0f,
+	                  .byHand = true},
+	                 {.type = MagicType::Teleport,
+	                  .point = k_LandTwoStoneB,
+	                  .handOffset = k_LandTwoStoneB,
+	                  .handHeight = 12.0f,
+	                  .delaySeconds = 3.0f,
+	                  .byHand = true}},
+	    .commands = {{.kind = Command::Kind::RemoveTeleportStone, .delaySeconds = 60.0f, .point = k_LandTwoStoneB}},
 	});
 }

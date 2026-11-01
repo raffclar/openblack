@@ -378,6 +378,10 @@ public:
 	virtual entt::entity RestOfScaffold(entt::entity /*scaffold*/) { return entt::null; }
 	/// Lays a gate stone in the gate stone plinth it is given to; false for anything else, which is left as it is
 	virtual bool LayGateStone(entt::entity plinth, entt::entity stone) = 0;
+	/// Whether the hand can drop the held villager onto a teleport stone of the hand's player
+	[[nodiscard]] virtual bool DropsOnTeleport(entt::entity /*stone*/, entt::entity /*held*/) const { return false; }
+	/// The hand drops the held villager onto a teleport stone. The villager jumps at once to another stone, if it can.
+	virtual void DropOnTeleport(entt::entity /*stone*/, entt::entity /*held*/) {}
 	/// Some resource poured onto a point: to the stores and piles of it about the point, or a new pile
 	virtual void PourAt(ResourceType resource, glm::vec3 point, uint32_t amount, PlayerNames player, bool poisoned) = 0;
 	/// A thing is used up: a ghost of it flickers out where it was, and it goes

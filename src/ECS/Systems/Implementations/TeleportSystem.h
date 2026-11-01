@@ -28,13 +28,13 @@ public:
 	void RemoveStone(entt::entity stone) override;
 	void RemoveStonesOf(entt::entity spell) override;
 	[[nodiscard]] bool CanPlaceStone(glm::vec3 point) const override;
-	[[nodiscard]] bool BlocksNewBuilding(glm::vec3 point) const override;
 	[[nodiscard]] std::vector<entt::entity> GetStones(PlayerNames player) const override;
 	[[nodiscard]] std::optional<entt::entity> StoneOf(entt::entity spell) const override;
 	[[nodiscard]] bool ShouldReact(entt::entity stone, entt::entity living) const override;
 	void SetupReact(entt::entity stone, entt::entity living) override;
 	bool DoTeleport(entt::entity stone, entt::entity living, bool forced) override;
 	bool DropOnStone(entt::entity villager, entt::entity stone, PlayerNames dropper) override;
+	[[nodiscard]] bool TakesDrop(entt::entity villager, entt::entity stone, PlayerNames dropper) const override;
 	[[nodiscard]] std::optional<entt::entity> StoneAlong(glm::vec3 origin, glm::vec3 direction) const override;
 	[[nodiscard]] std::optional<entt::entity> RouteStoneFor(PlayerNames player, glm::vec3 worshipper, glm::vec3 site,
 	                                                        float maxDistance) const override;
