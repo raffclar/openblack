@@ -12,6 +12,7 @@
 #include <cstdint>
 
 #include <chrono>
+#include <optional>
 
 #include <entt/entity/entity.hpp>
 #include <glm/vec3.hpp>
@@ -22,6 +23,19 @@
 namespace openblack::ecs::systems
 {
 
+/// The values of a highlight in a saved game
+struct SavedHighlight
+{
+	uint32_t kind {0};
+	glm::vec3 at {0.0f};
+	/// The challenge or the text of a tip, and the category of a tip
+	uint32_t text {0};
+	uint32_t category {0};
+	bool active {false};
+	/// The height above the land that a script set, if a script set one
+	std::optional<float> drawHeight;
+};
+
 /// The scrolls and signs scripts put up to mark challenges and give tips: how they stand, spin, glint and glow, start,
 /// and answer the hand's tap; the beat they pulse to together, and the tips the player has read
 class ScriptHighlightSystemInterface: public SavedStateInterface
@@ -31,6 +45,9 @@ public:
 
 	/// A highlight of a kind at a point, belonging to a challenge; none for a kind past the info table
 	virtual entt::entity Create(uint32_t kind, glm::vec3 at, uint32_t challenge) = 0;
+	/// A highlight of a saved game. It takes its saved values before its creation step, as a load does. So an active
+	/// scroll shows its active model, but plays no sound and has no active effect. None for a kind past the info table.
+	virtual entt::entity Restore(const SavedHighlight& saved) = 0;
 	/// A script gives a highlight its text and category
 	virtual void SetProperties(entt::entity highlight, uint32_t text, uint32_t category) = 0;
 	/// It starts or stops: its model, its active effect and, as a scroll starts, its sound

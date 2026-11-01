@@ -675,6 +675,29 @@ ImportedTowns ReadTowns(const VanillaWorld& world)
 				continue;
 			}
 		}
+		else if (record.Is(VanillaType::TotemStatue))
+		{
+			const auto position = PositionOf(world, record);
+			const auto townCentre = world.Ref(record, "totemTownCentre");
+			const auto share = world.Float(record, "totemShare");
+			const auto held = world.Float(record, "totemHeldShare");
+			const auto word84 = world.Word(record, "totemWord84");
+			if (position.has_value() && townCentre.has_value() && *townCentre != 0 && share.has_value() && held.has_value() &&
+			    word84.has_value())
+			{
+				imported.totems.push_back({.number = record.number,
+				                           .townCentre = *townCentre,
+				                           .position = *position,
+				                           .heading = world.Float(record, "heading").value_or(0.0f),
+				                           .scale = world.Float(record, "scale").value_or(1.0f),
+				                           .life = world.Float(record, "life").value_or(1.0f),
+				                           .share = *share,
+				                           .heldShare = *held,
+				                           .word84 = *word84});
+				continue;
+			}
+			why = "the totem has no place, no town centre or not all its values";
+		}
 		else if (record.Is(VanillaType::PlannedAbode) || record.Is(VanillaType::PlannedTownCentre))
 		{
 			if (auto plan = ReadPlan(world, record, why); plan.has_value())

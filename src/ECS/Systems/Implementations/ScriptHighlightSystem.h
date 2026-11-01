@@ -10,6 +10,7 @@
 #pragma once
 
 #include <chrono>
+#include <functional>
 #include <memory>
 #include <optional>
 #include <vector>
@@ -44,6 +45,7 @@ public:
 	~ScriptHighlightSystem() override;
 
 	entt::entity Create(uint32_t kind, glm::vec3 at, uint32_t challenge) override;
+	entt::entity Restore(const SavedHighlight& saved) override;
 	void SetProperties(entt::entity highlight, uint32_t text, uint32_t category) override;
 	void SetActive(entt::entity highlight, bool active) override;
 	void SetDrawHeight(entt::entity highlight, float height) override;
@@ -59,6 +61,8 @@ public:
 	bool LoadState(reflection::BinaryReader& in) override;
 
 private:
+	/// A highlight of a kind at a point, with the values that the caller gives before the creation step
+	entt::entity Make(uint32_t kind, glm::vec3 at, const std::function<void(components::ScriptHighlight&)>& values);
 	/// The model it shows: its kind's active one once started, else its normal one
 	void ShowModel(entt::entity entity, const components::ScriptHighlight& highlight);
 	/// Where it stands: its place across the land, at its height above it

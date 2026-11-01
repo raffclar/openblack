@@ -1467,6 +1467,108 @@ TEST(VanillaScriptImport, ReadsTheThingsOfTheScripts)
 	EXPECT_FALSE(script_import::HeartPlayer(made, 0).has_value());
 }
 
+// Each totem of a Land 1 save keeps every value of the file, and stands on a town centre that the import makes
+TEST(VanillaWorldImport, SavedGamesOfLandOneKeepEveryValueOfTheirTotems)
+{
+	uint32_t totems = 0;
+	const auto files = ForEachLandOneSave([&](const std::filesystem::path& path, const VanillaWorld& world) {
+		const auto imported = world_import::ReadTowns(world);
+		std::vector<const VanillaRecord*> records;
+		for (const auto& record : world.Records())
+		{
+			if (record.Is(VanillaType::TotemStatue))
+			{
+				records.push_back(&record);
+			}
+		}
+		ASSERT_EQ(imported.totems.size(), records.size()) << path;
+		for (size_t i = 0; i < records.size(); ++i)
+		{
+			const auto& record = *records[i];
+			const auto& totem = imported.totems[i];
+			EXPECT_EQ(totem.number, record.number) << path;
+			EXPECT_EQ(totem.townCentre, world.Ref(record, "totemTownCentre")) << path;
+			const auto place = world.Raw(record, "position");
+			ASSERT_EQ(place.size(), sizeof(totem.position)) << path;
+			EXPECT_EQ(std::memcmp(place.data(), &totem.position, sizeof(totem.position)), 0) << path;
+			EXPECT_EQ(totem.heading, world.Float(record, "heading")) << path;
+			EXPECT_EQ(totem.scale, world.Float(record, "scale")) << path;
+			EXPECT_EQ(totem.life, world.Float(record, "life")) << path;
+			EXPECT_EQ(totem.share, world.Float(record, "totemShare")) << path;
+			EXPECT_EQ(totem.heldShare, world.Float(record, "totemHeldShare")) << path;
+			EXPECT_EQ(totem.word84, world.Word(record, "totemWord84")) << path;
+			const auto* centre = world.Record(totem.townCentre);
+			ASSERT_NE(centre, nullptr) << path;
+			EXPECT_TRUE(centre->Is(VanillaType::TownCentre)) << path;
+			// The totem has the scale of its town centre, as the totem that the town centre makes has
+			EXPECT_EQ(totem.scale, world.Float(*centre, "scale")) << path;
+			EXPECT_NE(std::ranges::find(imported.abodes, totem.townCentre, &world_import::ImportedAbode::number),
+			          imported.abodes.end())
+			    << path;
+			std::cout << path.parent_path().filename().string() << " totem " << totem.number << " share " << totem.share
+			          << " held " << totem.heldShare << " word " << totem.word84 << " life " << totem.life << " heading "
+			          << totem.heading << std::endl;
+			++totems;
+		}
+	});
+	if (!files.has_value())
+	{
+		GTEST_SKIP() << "Set OPENBLACK_VANILLA_SAVES to a copy of a Profiles folder of the game to check its saved games";
+	}
+	EXPECT_GT(totems, 0U);
+}
+
+// Each highlight of a Land 1 save keeps every value of the file: its row, its place, the active value, the height,
+// the text and the category. The import gives these values to the highlight before its creation step.
+TEST(VanillaScriptImport, SavedGamesOfLandOneKeepEveryValueOfTheirHighlights)
+{
+	uint32_t highlights = 0;
+	uint32_t active = 0;
+	const auto files = ForEachLandOneSave([&](const std::filesystem::path& path, const VanillaWorld& world) {
+		const auto things = script_import::ReadScriptThings(world);
+		std::vector<const VanillaRecord*> records;
+		for (const auto& record : world.Records())
+		{
+			if (record.Is(VanillaType::ScriptHighlight))
+			{
+				records.push_back(&record);
+			}
+		}
+		ASSERT_EQ(things.highlights.size(), records.size()) << path;
+		for (size_t i = 0; i < records.size(); ++i)
+		{
+			const auto& record = *records[i];
+			const auto& highlight = things.highlights[i];
+			EXPECT_EQ(highlight.number, record.number) << path;
+			EXPECT_EQ(highlight.kind, script_import::HighlightRowOf(world.Word(record, "info").value_or(0))) << path;
+			const auto place = world.Raw(record, "position");
+			ASSERT_EQ(place.size(), sizeof(highlight.position)) << path;
+			EXPECT_EQ(std::memcmp(place.data(), &highlight.position, sizeof(highlight.position)), 0) << path;
+			EXPECT_EQ(highlight.active, world.Word(record, "highlightActive").value_or(0) != 0) << path;
+			EXPECT_EQ(highlight.drawHeight.has_value(), world.Word(record, "highlightHeightSet").value_or(0) != 0) << path;
+			if (highlight.drawHeight.has_value())
+			{
+				EXPECT_EQ(highlight.drawHeight, world.Float(record, "highlightHeight")) << path;
+			}
+			EXPECT_EQ(highlight.text, world.Word(record, "highlightText")) << path;
+			EXPECT_EQ(highlight.category, world.Word(record, "highlightCategory")) << path;
+			++highlights;
+			if (highlight.active)
+			{
+				++active;
+				std::cout << "Active highlight " << highlight.number << " of row " << static_cast<int>(highlight.kind) << " in "
+				          << path.generic_string() << std::endl;
+			}
+		}
+	});
+	if (!files.has_value())
+	{
+		GTEST_SKIP() << "Set OPENBLACK_VANILLA_SAVES to a copy of a Profiles folder of the game to check its saved games";
+	}
+	EXPECT_GT(highlights, 0U);
+	std::cout << *files << " Land 1 saves: " << highlights << " highlights, " << active << " active" << std::endl;
+}
+
 // A temple of the file with no site stands whole
 TEST(VanillaScriptImport, ATempleOfTheFileWithNoSiteStandsWhole)
 {

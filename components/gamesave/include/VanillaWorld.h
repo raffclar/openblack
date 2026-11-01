@@ -81,6 +81,7 @@ enum class VanillaType : uint32_t
 	ScriptMarker = 0x7C,
 	ScriptTimer = 0x7D,
 	Flock = 0x7E,
+	TotemStatue = 0x7F,
 	Wonder = 0x80,
 	AtomCore = 0xA2,
 	AtomCollection = 0xA3,

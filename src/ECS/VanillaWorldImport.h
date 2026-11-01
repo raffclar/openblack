@@ -282,6 +282,24 @@ struct ImportedAbode
 	std::vector<ImportedPile> piles;
 };
 
+/// The totem of a town centre
+struct ImportedTotem
+{
+	uint32_t number {0};
+	/// The number of the object of its town centre in the file
+	uint32_t townCentre {0};
+	gamesave::MapCoords position {};
+	float heading {0.0f};
+	float scale {1.0f};
+	float life {1.0f};
+	/// The share of the town at worship. The load puts the totem at this share, still.
+	float share {0.0f};
+	/// The share that the hand or a god held the totem at. The creation step after the load sets it to the share again.
+	float heldShare {0.0f};
+	/// A word that only the save and the load use
+	uint32_t word84 {0};
+};
+
 /// The power that each tribe gives a player, by tribe number
 struct ImportedTribalPower
 {
@@ -385,6 +403,8 @@ struct ImportedTowns
 	uint32_t turn {0};
 	std::vector<ImportedTown> towns;
 	std::vector<ImportedAbode> abodes;
+	/// The totems of the town centres
+	std::vector<ImportedTotem> totems;
 	std::vector<ImportedVillager> villagers;
 	/// The plans and the building sites of the towns. The lists of each town give their order.
 	std::vector<ImportedPlan> plans;

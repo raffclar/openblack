@@ -574,10 +574,12 @@ void ReadTownCentre(WorldReader& r)
 void ReadTotemStatue(WorldReader& r)
 {
 	ReadMultiMapFixed(r);
-	r.Ref();
-	r.Word();
-	r.Word();
-	r.Word();
+	// The town centre of the totem, the share of the town at worship, a word that only the save and the load use, and
+	// the share that the hand or a god holds the totem at
+	r.Ref("totemTownCentre");
+	r.Float("totemShare");
+	r.Word("totemWord84");
+	r.Float("totemHeldShare");
 }
 
 void ReadPlannedAbode(WorldReader& r)
