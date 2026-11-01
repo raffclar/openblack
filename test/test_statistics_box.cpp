@@ -124,7 +124,8 @@ TEST(StatisticsBoxPages, TheWindowPicksTheGodsOfTheRows)
 	const auto player = MakePage(Tab::Player, figures, PlayerNames::PLAYER_ONE, shown);
 	EXPECT_EQ(RowNamed(player, "HELP_TEXT_PAUSE_STATS_111").most, 5.0f);
 	// All the players, as before
-	EXPECT_EQ(RowNamed(MakePage(Tab::Town, figures, PlayerNames::PLAYER_ONE), "HELP_TEXT_PAUSE_STATS_33").values.size(), 6u);
+	const auto every = MakePage(Tab::Town, figures, PlayerNames::PLAYER_ONE);
+	EXPECT_EQ(RowNamed(every, "HELP_TEXT_PAUSE_STATS_33").values.size(), 6u);
 }
 
 TEST(StatisticsBoxPages, EachTabListsItsRowsInOrder)
