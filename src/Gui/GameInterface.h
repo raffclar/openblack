@@ -46,6 +46,7 @@
 #include "ScreenFade.h"
 #include "SkipBox.h"
 #include "SkirmishBox.h"
+#include "Story/PlaygroundTrip.h"
 #include "StoryHistoryBox.h"
 #include "TattooEditorDialog.h"
 #include "TextDatabase.h"
@@ -235,6 +236,10 @@ public:
 	[[nodiscard]] bool IsTripQuestionUp() const noexcept { return _tripAsked; }
 	/// The player's answer to the question of the trip, once: true for Yes
 	[[nodiscard]] std::optional<bool> TakeTripAnswer() { return std::exchange(_tripAnswer, std::nullopt); }
+	/// The box of the menu that has the input now, for the question of the trip
+	[[nodiscard]] playground_trip::MenuBox GetTripMenuBox() const noexcept;
+	/// Whether a box on the screen stops F2 from asking the question of the trip. Over the open menu, F2 can ask.
+	[[nodiscard]] bool BoxRefusesTrip() const noexcept;
 	/// The save game room's boxes take the mouse and the keyboard while one is up; true when they took the event
 	bool ProcessSaveGameBoxesEvent(const SDL_Event& event);
 	/// The name of a saved game that the named zoom tooltip shows. The tooltip keeps the last name given.

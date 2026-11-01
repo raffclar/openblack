@@ -7,6 +7,8 @@
  * openblack is licensed under the GNU General Public License version 3.
  *******************************************************************************/
 
+#include <initializer_list>
+
 #include <gtest/gtest.h>
 
 #include "Gui/EscapeKeyRules.h"
@@ -98,4 +100,47 @@ TEST(PlaygroundTrip, LeavingStopsTheLessonAndItsEnd)
 	Leave(lessons);
 	EXPECT_FALSE(lessons.running);
 	EXPECT_FALSE(TakeEnd(lessons));
+}
+
+TEST(PlaygroundTrip, F2AsksOverTheMainMenu)
+{
+	EXPECT_TRUE(MenuLetsAsk({.box = MenuBox::Main}));
+	// The question to quit puts the main menu on hold
+	EXPECT_FALSE(MenuLetsAsk({.box = MenuBox::Main, .questionUp = true}));
+}
+
+TEST(PlaygroundTrip, F2AsksOverEachPageThatEscapeCanClose)
+{
+	for (const auto box :
+	     {MenuBox::Options, MenuBox::Advanced, MenuBox::Players, MenuBox::Controls, MenuBox::Statistics, MenuBox::Conditions})
+	{
+		EXPECT_TRUE(MenuLetsAsk({.box = box}));
+		// A key that the Controls page waits for, or a question on any page, stops F2
+		EXPECT_FALSE(MenuLetsAsk({.box = box, .questionUp = true}));
+	}
+}
+
+TEST(PlaygroundTrip, AnUntoldChangeOfTheDetailStopsF2OnTheOptionsPages)
+{
+	EXPECT_FALSE(MenuLetsAsk({.box = MenuBox::Options, .detailUntold = true}));
+	EXPECT_FALSE(MenuLetsAsk({.box = MenuBox::Advanced, .detailUntold = true}));
+	// The other pages do not read the detail
+	EXPECT_TRUE(MenuLetsAsk({.box = MenuBox::Main, .detailUntold = true}));
+	EXPECT_TRUE(MenuLetsAsk({.box = MenuBox::Controls, .detailUntold = true}));
+}
+
+TEST(PlaygroundTrip, ARestartThatWaitsStopsF2OnThePlayersPage)
+{
+	EXPECT_FALSE(MenuLetsAsk({.box = MenuBox::Players, .restartPending = true}));
+	EXPECT_TRUE(MenuLetsAsk({.box = MenuBox::Options, .restartPending = true}));
+}
+
+TEST(PlaygroundTrip, OnlyTheMainMenuPausesWhenItComesBack)
+{
+	EXPECT_TRUE(PausesWhenBack(MenuBox::Main));
+	for (const auto box :
+	     {MenuBox::Options, MenuBox::Advanced, MenuBox::Players, MenuBox::Controls, MenuBox::Statistics, MenuBox::Conditions})
+	{
+		EXPECT_FALSE(PausesWhenBack(box));
+	}
 }
