@@ -17,9 +17,11 @@
 #include "ECS/Components/Animal.h"
 #include "ECS/Components/Ball.h"
 #include "ECS/Components/Construction.h"
+#include "ECS/Components/CreatureNeeds.h"
 #include "ECS/Components/Fire.h"
 #include "ECS/Components/Firefly.h"
 #include "ECS/Components/FishFarm.h"
+#include "ECS/Components/Indestructible.h"
 #include "ECS/Components/Physics.h"
 #include "ECS/Components/ScriptControl.h"
 #include "ECS/Components/StreetLantern.h"
@@ -148,6 +150,23 @@ TEST_F(EffectReceivers, OneBurnCanTakeAllTheLifeOfAFirefly)
 	EXPECT_FLOAT_EQ(ecs::world_objects::ReduceLife(firefly, 0.25f), 0.75f);
 	EXPECT_FLOAT_EQ(ecs::world_objects::ReduceLife(firefly, 1.5f), 0.0f);
 	EXPECT_FLOAT_EQ(ecs::world_objects::LifeOf(firefly), 0.0f);
+}
+
+TEST_F(EffectReceivers, HarmNeverBringsAnIndestructibleCreatureToNearlyNoLife)
+{
+	auto& registry = Locator::entitiesRegistry::value();
+	const auto held = Made();
+	registry.Assign<CreatureNeeds>(held).needs.life = 0.1f;
+	registry.Assign<Indestructible>(held);
+	const auto free = Made();
+	registry.Assign<CreatureNeeds>(free).needs.life = 0.1f;
+	// The harm takes the life while more than nearly no life stays
+	EXPECT_FLOAT_EQ(ecs::world_objects::ReduceLife(held, 0.05f), 0.05f);
+	// The life stays as it is when the harm leaves nearly no life, or when the harm is more than the life
+	EXPECT_FLOAT_EQ(ecs::world_objects::ReduceLife(held, 0.045f), 0.05f);
+	EXPECT_FLOAT_EQ(ecs::world_objects::ReduceLife(held, 1.0f), 0.05f);
+	// A creature that is not indestructible loses all its life
+	EXPECT_FLOAT_EQ(ecs::world_objects::ReduceLife(free, 1.0f), 0.0f);
 }
 
 TEST_F(EffectReceivers, ATownsDesireFlagTakesNoEffectEvenWithTheDataOfThePrayerSite)

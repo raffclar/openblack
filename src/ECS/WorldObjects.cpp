@@ -106,6 +106,7 @@
 #include "Physics/DamageMesh.h"
 #include "Physics/LivingRules.h"
 #include "Resources/ResourcesInterface.h"
+#include "ScriptHeaders/ScriptPropertyRules.h"
 
 using namespace openblack;
 using namespace openblack::ecs;
@@ -681,7 +682,13 @@ float world_objects::ReduceLife(entt::entity object, float damage, std::optional
 		{
 			return 0.0f;
 		}
-		needs->needs.life = std::max(needs->needs.life - damage, 0.0f);
+		// The harm sets the life as a script sets it: a creature that a script holds in a cutscene, or an indestructible
+		// creature, keeps its life when the harm leaves nearly no life
+		const float after = needs->needs.life < damage ? 0.0f : needs->needs.life - damage;
+		if (script::property_rules::CanSetLife(after, HeldDuringCutscene(object), registry.AllOf<Indestructible>(object)))
+		{
+			needs->needs.life = after;
+		}
 		return needs->needs.life;
 	}
 	// A building, a worship site or a temple not yet built loses what is built of it rather than life, and all its life
