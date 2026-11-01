@@ -39,6 +39,9 @@ public:
 	/// The pile that holds the wood of a workshop. The workshop makes the pile when it has none, at the special point of
 	/// its wood pile. None for what is not a workshop.
 	virtual entt::entity WoodPileOf(entt::entity workshop) = 0;
+	/// A new workshop makes its wood flag, then its wood pile. Each of the two takes its place in the order of the things
+	/// made.
+	virtual void Made(entt::entity workshop) = 0;
 
 	/// Makes a scaffold of a scale at a place on the land, for a town and a workshop, turned by an angle about the up axis.
 	/// The town and the workshop can be none.

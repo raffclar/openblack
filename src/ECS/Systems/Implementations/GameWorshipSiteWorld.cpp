@@ -329,6 +329,8 @@ entt::entity GameWorshipSiteWorld::MakeNeedFlag(entt::entity site, uint8_t need)
 	auto& registry = Locator::entitiesRegistry::value();
 	const auto& row = Locator::infoConstants::value().showNeeds.at(need);
 	const auto flag = registry.Create();
+	// It takes its place in the order of the things made
+	ecs::archetypes::TakeThingMadePlace();
 	registry.Assign<WorshipSiteFlag>(flag, WorshipSiteFlag {.site = site, .need = need});
 	registry.Assign<Mesh>(flag, resources::HashIdentifier(row.mesh), static_cast<int8_t>(0), static_cast<int8_t>(0));
 	registry.Assign<Transform>(flag, glm::vec3(0.0f), glm::mat3(1.0f), glm::vec3(1.0f));

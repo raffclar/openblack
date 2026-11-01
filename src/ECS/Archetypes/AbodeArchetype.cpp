@@ -251,10 +251,11 @@ entt::entity AbodeArchetype::Create(uint32_t townId, const glm::vec3& position, 
 		AddStoragePitComponents(entity, mesh, info, position, yAngleRadians, foodAmount, woodAmount);
 		break;
 	case AbodeType::Workshop:
-		// A workshop makes its empty wood pile, then takes its food and its wood as a store does: it keeps only the wood
+		// A workshop makes its wood flag and its empty wood pile. Then it takes its food and its wood as a store does: it
+		// keeps only the wood.
 		if (Locator::workshopSystem::has_value())
 		{
-			Locator::workshopSystem::value().WoodPileOf(entity);
+			Locator::workshopSystem::value().Made(entity);
 		}
 		if (Locator::resourceStoreSystem::has_value())
 		{

@@ -1012,7 +1012,22 @@ TEST(WorshipSiteSystem, ATempleWithoutSitesLosesNothing)
 	EXPECT_TRUE(f.world->removedDances.empty());
 }
 
-TEST(WorshipSiteNeeds, EachTurnWorksOutTheNeedsAndGivesTheSiteItsThreeFlags)
+TEST(WorshipSiteNeeds, TheSiteMakesItsThreeFlagsWithItsAltar)
+{
+	Fixture f;
+	f.world->makesFlags = true;
+	const auto [temple, site] = BuiltSite(f, PlayerNames::PLAYER_ONE);
+	// The flags are there before the first turn of the site, in the order food, rest, hiding
+	const auto& component = f.registry.Get<const WorshipSite>(site);
+	for (uint8_t need = 0; need < 3; ++need)
+	{
+		const auto flag = component.needFlags.at(need);
+		ASSERT_TRUE(f.registry.Valid(flag));
+		EXPECT_EQ(f.registry.Get<const WorshipSiteFlag>(flag).need, need);
+	}
+}
+
+TEST(WorshipSiteNeeds, EachTurnWorksOutTheNeedsAndKeepsTheThreeFlags)
 {
 	Fixture f;
 	f.world->makesFlags = true;
