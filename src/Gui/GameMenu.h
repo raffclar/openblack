@@ -107,6 +107,10 @@ public:
 	/// A question or a message is up over the menu
 	[[nodiscard]] bool IsAskingToQuit() const noexcept { return _question.has_value(); }
 	[[nodiscard]] Page GetPage() const noexcept { return _page; }
+	/// The player changed the detail, and the menu did not tell the player yet that the change starts at the next start
+	[[nodiscard]] bool IsDetailUntold() const noexcept { return _settings.detail != _detailTold; }
+	/// Whether the menu showed a page since last asked. The main menu comes back under each page that the menu shows.
+	bool TakePageShown() noexcept { return std::exchange(_pageShown, false); }
 	/// Inside the temple the options are shown on their own, by the options room: their first tab is the World Room
 	/// rather than the Main Menu, Back and that tab close them rather than go back to the main menu, Escape closes them
 	/// too, and there is no Quit arrow
@@ -403,6 +407,7 @@ private:
 	std::optional<Question> _question;
 	Action _action {Action::None};
 	bool _clicked {false};
+	bool _pageShown {false};
 	bool _answered {false};
 	bool _settingsChanged {false};
 };

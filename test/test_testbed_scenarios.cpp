@@ -15,6 +15,7 @@
 #include <optional>
 #include <set>
 #include <string>
+#include <variant>
 #include <vector>
 
 #include <glm/common.hpp>
@@ -179,6 +180,42 @@ TEST(TestbedScenarios, NothingStartsOnTheLakesOpenWater)
 			}
 		}
 	}
+}
+
+TEST(TestbedScenarios, NoVillagerStartsInTheWaterByChance)
+{
+	// A villager that the game makes on a cell of water starts to drown and soon dies. Only these scenarios put one in
+	// the water on purpose.
+	const std::set<std::string_view> inTheWater {"appearance.swimmer_under_sea", "leash.rescue_from_water",
+	                                             "appearance.villager_made_on_water"};
+	const auto inWater = [](glm::vec2 offset) {
+		const auto at = glm::floor((flat_land::k_MapMiddle + offset) / flat_land::k_CellSize);
+		const auto kind = flat_land::KindOf(static_cast<int>(at.x), static_cast<int>(at.y));
+		return kind == flat_land::CellKind::OpenWater || kind == flat_land::CellKind::Shallows;
+	};
+	for (const auto& scenario : All())
+	{
+		if (scenario.environment.land != Land::Testbed || inTheWater.contains(scenario.id))
+		{
+			continue;
+		}
+		for (const auto& object : scenario.objects)
+		{
+			if (std::holds_alternative<VillagerInfo>(object.type))
+			{
+				EXPECT_FALSE(inWater(object.offset)) << scenario.id;
+			}
+		}
+	}
+}
+
+TEST(TestbedScenarios, AVillagerOnTheLakeShallowsIsInTheWater)
+{
+	// The shallows run round the open water of the lake
+	const auto shallows = flat_land::k_LakeCentre - flat_land::k_MapMiddle -
+	                      glm::vec2(0.0f, flat_land::k_LakeHalfExtent.y + flat_land::k_CellSize * 0.5f);
+	const auto at = glm::floor((flat_land::k_MapMiddle + shallows) / flat_land::k_CellSize);
+	EXPECT_EQ(flat_land::KindOf(static_cast<int>(at.x), static_cast<int>(at.y)), flat_land::CellKind::Shallows);
 }
 
 TEST(TestbedScenarios, CoversObjectsTheHandAndLeashes)

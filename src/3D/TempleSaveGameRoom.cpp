@@ -295,6 +295,32 @@ std::vector<TempleSaveGameControl> TempleSaveGameRoom::GetToolTipControls(const 
 	return controls;
 }
 
+TempleSaveGameRoom::Focus TempleSaveGameRoom::LookCloser(const Part& part, const ReadPicture& read)
+{
+	// The camera looks at the middle of the picture's box from in front of it along its frame's z axis, and the
+	// picture is shown in high detail
+	const auto middle = (part.min + part.max) * 0.5f;
+	_highDetail = part.control.slot;
+	_pictureLookedAt = true;
+	ReadLargePicture(part.control.slot, read);
+	return {
+	    .position = glm::vec3(part.frame * glm::vec4(middle + glm::vec3(0.0f, 0.0f, rules::k_LookDistance), 1.0f)),
+	    .lookAt = glm::vec3(part.frame * glm::vec4(middle, 1.0f)),
+	};
+}
+
+std::optional<TempleSaveGameRoom::Focus> TempleSaveGameRoom::LookAtPicture(uint32_t slot, const ReadPicture& read)
+{
+	const auto found = std::ranges::find_if(_parts, [slot](const Part& part) {
+		return part.control == rules::Control {.part = rules::Part::Picture, .slot = slot};
+	});
+	if (found == _parts.end())
+	{
+		return std::nullopt;
+	}
+	return LookCloser(*found, read);
+}
+
 bool TempleSaveGameRoom::Hold(bool pressed, std::optional<uint32_t> hoveredSubMesh, const rules::View& view,
                               const ReadPicture& read, Outcome& outcome)
 {
@@ -324,16 +350,7 @@ bool TempleSaveGameRoom::Hold(bool pressed, std::optional<uint32_t> hoveredSubMe
 	const auto click = rules::Clicked(part->control, view, HasSave(slot));
 	if (click == rules::Click::LookCloser)
 	{
-		// The camera looks at the middle of the picture's box from in front of it along its frame's z axis, and the
-		// picture is shown in high detail
-		const auto middle = (part->min + part->max) * 0.5f;
-		outcome.lookAt = Focus {
-		    .position = glm::vec3(part->frame * glm::vec4(middle + glm::vec3(0.0f, 0.0f, rules::k_LookDistance), 1.0f)),
-		    .lookAt = glm::vec3(part->frame * glm::vec4(middle, 1.0f)),
-		};
-		_highDetail = slot;
-		_pictureLookedAt = true;
-		ReadLargePicture(slot, read);
+		outcome.lookAt = LookCloser(*part, read);
 		return false;
 	}
 	outcome.click = click;

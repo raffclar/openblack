@@ -172,7 +172,7 @@ enum class FleeStep : uint8_t
 [[nodiscard]] AnimId PointingClip(bool womanOrChild, uint32_t firstRoll, uint32_t secondRoll);
 
 /// The clip a villager's state plays, as a villager picks it each time its state changes: no state (0 or 255) plays
-/// scared stiff; a state with a clip of its own plays the one it chose (`chosen`), and while openblack doesn't yet
+/// the stand clip; a state with a clip of its own plays the one it chose (`chosen`), and while openblack doesn't yet
 /// choose it the villager rests in its model's pose (Invalid); any other state plays its row of the state table. None
 /// when the table's clip is negative: the villager keeps the clip it has.
 [[nodiscard]] std::optional<AnimId> VillagerStateClip(uint8_t state, std::optional<AnimId> chosen, int32_t tableClip);

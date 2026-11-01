@@ -44,8 +44,13 @@ enum class Quantity : uint8_t
 	CreatureWarmth,
 	/// The size of the scenario's creature at the index
 	CreatureSize,
+	/// The life of the scenario's creature at the index, from 0 to 1, as a script reads its health
+	CreatureLife,
 	/// The distance in metres from the scenario's creature at the index to the point, on the ground
 	CreatureDistance,
+	/// The food and the wood that the scenario's object at the index holds together: a pile or a pot its own, a store
+	/// all of its piles
+	ObjectResource,
 };
 
 /// One statement about the world. It is read once at its turn; with byTurn it is read again at each frame from its

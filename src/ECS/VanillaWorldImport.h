@@ -21,6 +21,7 @@
 #include "CreatureRecord.h"
 #include "ECS/WallHugRules.h"
 #include "Enums.h"
+#include "Magic/ResourcePiles.h"
 
 namespace openblack::gamesave
 {
@@ -235,6 +236,28 @@ struct ImportedTown
 	std::vector<uint32_t> sites;
 };
 
+/// A pile of food or wood of a storage pit or of a building site in the file
+struct ImportedPile
+{
+	uint32_t number {0};
+	/// Its row of the table of pots, which says which pile of the storage pit it is
+	PotInfo row {PotInfo::StoragePitFoodPile};
+	gamesave::MapCoords position {};
+	float heading {0.0f};
+	uint32_t amount {0};
+	bool poisoned {false};
+	/// How it rises out of the ground or sinks into it
+	magic::piles::Rise rise {};
+};
+
+/// The number of bytes of the rise of a pile in the file
+inline constexpr size_t k_PileRiseBytes = 48;
+
+/// The rise of a pile of the file: its offset, its target, the speed of the target, its speed, a value that nothing
+/// reads, the time that went by, the time of the rise, its start and the speed at the start, then the three factors of
+/// its curve. The speed of the target is always 0 for a pile.
+[[nodiscard]] magic::piles::Rise PileRiseOf(std::span<const uint8_t, k_PileRiseBytes> bytes);
+
 struct ImportedAbode
 {
 	uint32_t number {0};
@@ -255,6 +278,8 @@ struct ImportedAbode
 	uint8_t present {0};
 	/// The power of a wonder, nothing for another building
 	std::optional<float> wonderPower;
+	/// The piles of a storage pit, in the order of the file
+	std::vector<ImportedPile> piles;
 };
 
 /// The power that each tribe gives a player, by tribe number
@@ -337,6 +362,10 @@ struct ImportedSite
 	/// The site of a temple: it keeps its wood in six piles, which these numbers give (0 for a pile that has gone)
 	bool temple {false};
 	std::vector<uint32_t> piles;
+	/// The values of its wood pile, and of each pile of the site of a temple in the order of the piles, nothing for a
+	/// pile that the file does not have
+	std::optional<ImportedPile> woodPileValues;
+	std::vector<std::optional<ImportedPile>> pileValues;
 };
 
 /// The flag of a desire of a town: it flies as high as the town wants the thing

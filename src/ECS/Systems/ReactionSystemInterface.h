@@ -138,6 +138,18 @@ public:
 	/// A living thing lets go of the reaction it has taken up, leaving what it is doing as it is, and remembers that it
 	/// last reacted to that kind now
 	virtual void StopReacting(entt::entity living) = 0;
+	/// The reaction that a living thing has taken up, and how urgent that reaction is to it now
+	struct HeldReaction
+	{
+		Reaction type {Reaction::None};
+		uint32_t priority {0};
+	};
+	/// The reaction of a living thing, weighed by the distance from it to the middle of the map cell of the reaction.
+	/// Empty when it has no reaction.
+	[[nodiscard]] virtual std::optional<HeldReaction> HeldReactionOf(entt::entity /*living*/) const { return std::nullopt; }
+	/// A villager changes from its reaction to a more urgent shield reaction. It leaves the reaction and keeps what it did
+	/// before the reaction, to go back to after the shield reaction.
+	virtual void LeaveForOtherReaction(entt::entity /*villager*/) {}
 	/// A villager takes up a reaction straight away, whatever else is more urgent to it and however lately it reacted to
 	/// that kind: a villager watching a creature goes to watch the fight the creature went into
 	virtual void TakeUp(uint32_t /*id*/, entt::entity /*living*/) {}

@@ -81,6 +81,24 @@ struct AutosaveState
 	return size > k_QuickTurnGap;
 }
 
+/// What the game looks at as the player leaves a game, to know whether it saves into the slot of the save on exit
+struct ExitSaveState
+{
+	bool gameOver {false};
+	bool skirmish {false};
+	/// The game is a network game, which never saves
+	bool networkGame {false};
+	uint32_t land {0};
+};
+
+/// Whether the game saves into the slot of the save on exit as the player leaves the game. Once the game is over the
+/// game does not save, so the saves that the player had stay. A skirmish, a network game and the Gods' Playground do not
+/// save either.
+[[nodiscard]] constexpr bool ExitSaveAllowed(const ExitSaveState& state)
+{
+	return !state.gameOver && !state.skirmish && !state.networkGame && state.land != k_PlaygroundLand;
+}
+
 /// The name of a save that the game does by itself: the slot's help text, with the land's number in the place of a
 /// number in the text ("%3.0f" writes the number right-aligned in three characters)
 [[nodiscard]] std::u16string InstantSaveName(std::u16string_view text, uint32_t land);

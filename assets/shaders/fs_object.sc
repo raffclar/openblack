@@ -16,6 +16,8 @@ SAMPLER2D(s_environment, 5);
 // 4 multiplied and doubled, 5 added
 uniform vec4 u_environmentStage;
 #endif // USE_ENVIRONMENT
+// y: the alpha threshold, of 1. z: 0 for a primitive that is not see-through. A see-through primitive gives 1 for no
+// alpha test, 2 for a test against the reference w of 255, and 3 for a test against w lowered by the instance's alpha.
 uniform vec4 u_skyAlphaThreshold;
 // The temple's controls glow under the cursor: the game adds the colour as the vertices' specular, after the texture
 // stages
@@ -92,7 +94,22 @@ void main()
 	{
 		diffuseTex.a = diffuseTex.a * v_color0.a;
 	}
-	if (diffuseTex.a <= alphaThreshold || (u_seaClip.x > 0.5f && v_position.y < u_seaClip.y) ||
+	// A see-through primitive drops the fragments whose alpha is below the reference of its mode, if its mode has an
+	// alpha test. The reference of the blended chroma mode becomes lower with the instance's alpha.
+	float seeThroughTest = floor(u_skyAlphaThreshold.z + 0.5f);
+	bool belowThreshold = diffuseTex.a <= alphaThreshold;
+	if (seeThroughTest > 0.5f)
+	{
+		float reference = seeThroughTest > 1.5f ? u_skyAlphaThreshold.w : 0.0f;
+		// At the full alpha the game draws the first table, which keeps the reference
+		float instanceAlpha = floor(v_color0.a * 255.0f + 0.5f);
+		if (seeThroughTest > 2.5f && instanceAlpha < 255.0f)
+		{
+			reference = max(floor((reference * instanceAlpha + 0.5f) / 255.0f) - 5.0f, 0.0f);
+		}
+		belowThreshold = diffuseTex.a * 255.0f < reference;
+	}
+	if (belowThreshold || (u_seaClip.x > 0.5f && v_position.y < u_seaClip.y) ||
 	    (u_keepBelow.x > 0.5f && v_position.y > u_keepBelow.y))
 	{
 		discard;

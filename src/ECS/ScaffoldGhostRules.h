@@ -37,6 +37,8 @@ inline constexpr float k_LandAlpha = 255.0f;
 /// The phantom on a site fades as the building grows: the land's alpha divided by 15 times the built part plus 3
 inline constexpr float k_SiteFade = 15.0f;
 inline constexpr float k_SiteFadeStart = 3.0f;
+/// The alpha reference of every material of the phantom on a site, in place of the reference of the material
+inline constexpr uint8_t k_SiteAlphaRef = 10;
 /// The pitch of the sound when the phantom grows: 110 percent less 3 percent for each abode number
 inline constexpr int32_t k_GrowPitch = 110;
 inline constexpr int32_t k_GrowPitchStep = 3;
@@ -85,6 +87,13 @@ struct HeldLook
 
 /// The alpha of the phantom on a site whose building has the built part `built`, 0 to 1
 [[nodiscard]] uint8_t SiteAlpha(float built);
+
+/// The alpha reference that the phantom uses in place of the references of its materials: the phantom on a site uses
+/// `k_SiteAlphaRef`, and the phantom in the hand uses the references of its materials
+[[nodiscard]] constexpr std::optional<uint8_t> SeeThroughRef(bool inHand)
+{
+	return inHand ? std::nullopt : std::optional<uint8_t>(k_SiteAlphaRef);
+}
 
 /// The size of a scaffold on a site whose building has the built part `built`. The phantom of the scaffold had the size
 /// `scale` when the site started.

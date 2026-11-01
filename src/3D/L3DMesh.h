@@ -127,6 +127,8 @@ public:
 	/// A dynamic mesh's skin takes its texels afresh
 	void UpdateSkin(SkinId skin, std::span<const uint16_t> given) noexcept;
 	[[nodiscard]] bool IsDynamic() const { return _dynamic; }
+	/// The texels along a side of the mesh's skins as the game loads them: half the side at the lowest detail levels
+	[[nodiscard]] uint16_t GetSkinSide() const { return _skinSource != nullptr ? _skinSource->GetSkinSide() : _skinSide; }
 	/// What the mesh makes: its data and its objects on the graphics device, or its data only
 	[[nodiscard]] UploadMode GetUploadMode() const { return _upload; }
 

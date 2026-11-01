@@ -1651,6 +1651,11 @@ void LivingActionSystem::VillagerSetAge(entt::entity villager, uint32_t age) con
 	villager_script::SetAge(villager, age);
 }
 
+void LivingActionSystem::VillagerStartFirstClip(entt::entity villager) const
+{
+	villager_animate::SetAnim(villager, villager_animate::StateClip(villager), true);
+}
+
 uint32_t LivingActionSystem::VillagerCallState(LivingAction& action, LivingAction::Index index) const
 {
 	const auto state = action.states.at(static_cast<size_t>(index));

@@ -228,4 +228,33 @@ struct DetailsSpan
 /// Where a line of the details starts across the screen, so that the line is centred in the span
 [[nodiscard]] float DetailsLineLeft(const DetailsSpan& span, float lineWidth);
 
+/// The camera must be closer than this to put the text of the scroll in front of the scroll
+inline constexpr float k_ScrollInFrontCloseness = 0.5f;
+/// What the room does with the text of its scroll in one frame
+struct ScrollSwitch
+{
+	/// The room writes the text in front of the scroll in this frame, with the time played of this frame
+	bool drawInFront;
+	/// The text stays in front of the scroll in the next frame
+	bool inFrontAfter;
+	/// The room writes the text on the texture of the scroll again in this frame
+	bool writeOnTexture;
+
+	bool operator==(const ScrollSwitch&) const = default;
+};
+/// The step of the scroll text in one frame of the room, from the state of the last frame and the closeness of the
+/// camera. The closeness is the same for a picture and for the scroll. These are the rules:
+/// - When the camera comes closer than half way, the room only keeps this. The text moves in front in the next frame.
+/// - While the text is in front, the room writes it in front again in each frame, so the time played moves on.
+/// - In the frame that the camera is half way or farther, the room also writes the text on the texture again.
+[[nodiscard]] constexpr ScrollSwitch StepScrollSwitch(bool inFront, float closeness) noexcept
+{
+	const bool close = closeness > k_ScrollInFrontCloseness;
+	if (!inFront)
+	{
+		return {.drawInFront = false, .inFrontAfter = close, .writeOnTexture = false};
+	}
+	return {.drawInFront = true, .inFrontAfter = close, .writeOnTexture = !close};
+}
+
 } // namespace openblack::temple::save_game_room

@@ -2386,6 +2386,22 @@ void AddStory(std::vector<Scenario>& all)
 	    .temples = {{.offset = k_Temple, .angle = k_TempleTurn, .life = 0.3f}},
 	});
 	all.push_back({
+	    .id = "temple.low_detail_skin",
+	    .name = "The temple's skin at the lowest detail levels",
+	    .facet = Facet::Story,
+	    .description = "Start the game with --detail-level 1 (Low) or 0 (Minimum). The player's temple stands west of "
+	                   "the middle, with the player a little evil, so that its skin is a blend of the evil and the neutral "
+	                   "pictures. Start it again with --detail-level 4 to compare.",
+	    .expected = "At Low and Minimum the temple's skin is at half size and looks a little sharper and more broken "
+	                "than a smooth half picture: each texel is one texel of each picture, not the mean of four. The "
+	                "patterns and the colours are at the same places as at the higher levels.",
+	    .environment = {.dispenserGrid = false, .playerAlignment = -0.4f},
+	    .framing = {.shot = Shot::Overview,
+	                .include = {k_Temple - glm::vec2 {30.0f}, k_Temple + glm::vec2 {30.0f}},
+	                .distance = 1.0f},
+	    .temples = {{.offset = k_Temple, .angle = k_TempleTurn}},
+	});
+	all.push_back({
 	    .id = "audio.temple_heartbeat",
 	    .name = "The heartbeat heard from the player's temple",
 	    .facet = Facet::Story,
@@ -3172,6 +3188,25 @@ void AddAppearance(std::vector<Scenario>& all)
 	    .creatures = {tattooed, plain},
 	});
 
+	auto evilFace = Posed(CreatureType::Tiger, {-4.0f, 0.0f}, 0.0f, "evil");
+	evilFace.alignment = -1.0f;
+	auto goodFace = Posed(CreatureType::Tiger, {4.0f, 0.0f}, 0.0f, "good");
+	goodFace.alignment = 1.0f;
+	goodFace.owner = PlayerNames::NEUTRAL;
+	all.push_back({
+	    .id = "appearance.eyelid_skin_colour",
+	    .name = "Eyelids in the colour of the painted skin",
+	    .facet = Facet::Appearance,
+	    .description = "An evil tiger and a good tiger stand side by side and face the camera, close up. Start it again "
+	                   "with --detail-level 1 to see the half-size skins.",
+	    .expected = "Each tiger's eyelids have the colour of its own painted skin under them: the evil skin on the evil "
+	                "tiger and the good skin on the good tiger. Both lids of a tiger have the same colour. A white part "
+	                "of the skin gives a lid that is a little darker than full white.",
+	    .environment = {.dispenserGrid = false},
+	    .framing = {.shot = Shot::Head, .distance = 0.8f},
+	    .creatures = {evilFace, goodFace},
+	});
+
 	std::vector<Command> passing {Act(Kind::SitDown, 0, 0.5f)};
 	const std::array<glm::vec2, 2> across {glm::vec2 {-45.0f, -30.0f}, glm::vec2 {45.0f, -30.0f}};
 	WalkRound(passing, 1, across);
@@ -3525,15 +3560,60 @@ void AddLight(std::vector<Scenario>& all)
 	    .expected = "The villager on the left changes to its high-detail model. It keeps the light and the colour of the "
 	                "land where it stands, and it shows no distance haze. At this distance the haze is small, so its "
 	                "colours change only a little. The villager on the right does not change.",
-	    .framing = {.shot = Shot::Placed, .eye = {0.0f, 3.0f, 140.0f}, .look = {0.0f, 1.5f, 160.0f}},
-	    .objects = {{.type = VillagerInfo::CelticFarmerMale, .offset = {-3.0f, 160.0f}},
-	                {.type = VillagerInfo::CelticHousewifeFemale, .offset = {3.0f, 160.0f}}},
+	    .framing = {.shot = Shot::Placed, .eye = {0.0f, 3.0f, 40.0f}, .look = {0.0f, 1.5f, 60.0f}},
+	    .objects = {{.type = VillagerInfo::CelticFarmerMale, .offset = {-3.0f, 60.0f}},
+	                {.type = VillagerInfo::CelticHousewifeFemale, .offset = {3.0f, 60.0f}}},
 	    .commands = {{.kind = Kind::WideScreen, .delaySeconds = 6.0f, .value = 1},
 	                 {.kind = Kind::CallNative,
 	                  .delaySeconds = 0.5f,
 	                  .script = "SET_HIGH_GRAPHICS_DETAIL",
 	                  .scriptArguments = {{.kind = ScriptArgument::Kind::Integer, .number = 1.0f},
 	                                      {.kind = ScriptArgument::Kind::Object, .index = 0}}}},
+	});
+
+	// A villager of the north changes to its own detailed model on dry land, and one of another kind keeps its model
+	all.push_back({
+	    .id = "appearance.high_detail_villager_switch",
+	    .name = "Villagers change to high detail where they stand",
+	    .facet = Facet::Appearance,
+	    .description = "A man of the north and a farmer stand on dry land in front of the camera. After six seconds, the "
+	                   "cinema bars come in and the two villagers change to high detail.",
+	    .expected = "Each villager shows its whole body where it stands and continues to stand or walk. The man of the "
+	                "north changes to his detailed model, which has eyes. The farmer keeps his model.",
+	    .environment = {.dispenserGrid = false},
+	    .framing = {.shot = Shot::Placed, .eye = {0.0f, 2.5f, 16.0f}, .look = {0.0f, 1.2f, 6.0f}},
+	    .objects = {{.type = VillagerInfo::NorseFarmerMale, .offset = {-1.5f, 6.0f}},
+	                {.type = VillagerInfo::CelticFarmerMale, .offset = {1.5f, 6.0f}}},
+	    .commands = {{.kind = Kind::WideScreen, .delaySeconds = 6.0f, .value = 1},
+	                 {.kind = Kind::CallNative,
+	                  .delaySeconds = 0.5f,
+	                  .script = "SET_HIGH_GRAPHICS_DETAIL",
+	                  .scriptArguments = {{.kind = ScriptArgument::Kind::Integer, .number = 1.0f},
+	                                      {.kind = ScriptArgument::Kind::Object, .index = 0}}},
+	                 {.kind = Kind::CallNative,
+	                  .delaySeconds = 0.0f,
+	                  .script = "SET_HIGH_GRAPHICS_DETAIL",
+	                  .scriptArguments = {{.kind = ScriptArgument::Kind::Integer, .number = 1.0f},
+	                                      {.kind = ScriptArgument::Kind::Object, .index = 1}}}},
+	});
+
+	// A villager that the game makes on the water starts to drown at once, with the clip of its first state
+	all.push_back({
+	    .id = "appearance.villager_made_on_water",
+	    .name = "A villager made on the water drowns from the start",
+	    .facet = Facet::Appearance,
+	    .description = "At noon, the clock stopped, the camera looks from the far shore of the lake of the testbed to "
+	                   "its shallows. One farmer is made in the shallows, and one farmer is made on the dry land in "
+	                   "front of the camera. Only the head of the farmer in the shallows is above the water.",
+	    .expected = "The farmer in the shallows plays the drowning clip from the start, until his time in the water "
+	                "ends. Then he dies and lies drowned. The farmer on the dry land plays the clip of a new villager "
+	                "until he first decides what to do. No farmer stands still in the pose of a model with no clip.",
+	    .environment = {.hour = 12.0f, .clockRuns = false, .dispenserGrid = false, .cursor = glm::vec2(0.95f, 0.1f)},
+	    .framing = {.shot = Shot::Placed,
+	                .eye = {k_Lake.x + 6.0f, 4.5f, k_FarShallows + 20.0f},
+	                .look = {k_Lake.x - 1.0f, 0.0f, k_FarShallows + 7.0f}},
+	    .objects = {{.type = VillagerInfo::CelticFarmerMale, .offset = {k_Lake.x - 2.0f, k_FarShallows + 4.0f}},
+	                {.type = VillagerInfo::CelticFarmerMale, .offset = {k_Lake.x + 2.0f, k_FarShallows + 14.0f}}},
 	});
 
 	// The same things in snow of three depths. A thing that takes all the snow gets the level (depth - 20) x 255 / 256.
@@ -4641,6 +4721,23 @@ void AddAudio(std::vector<Scenario>& all)
 	                 {.kind = Kind::SaveGame, .delaySeconds = 0.5f, .value = 1},
 	                 {.kind = Kind::EnterTemple, .delaySeconds = 1.0f, .value = 3},
 	                 {.kind = Kind::EnterTemple, .delaySeconds = 0.5f, .value = 6}},
+	});
+
+	all.push_back({
+	    .id = "temple.save_room_scroll_time",
+	    .name = "The temple's save game room writes its scroll again in each frame while the camera is close",
+	    .facet = Facet::Story,
+	    .description = "The game is saved into slot 0 with the name Testbed. Then the player goes through the temple's "
+	                   "main room into the save game room. After four seconds the camera looks at the picture of slot 0.",
+	    .expected = "While the camera is more than half way to the picture, the text of the scroll shows in yellow over "
+	                "a black shadow in front of the scroll, and the parchment under it has no text. The time played on "
+	                "the scroll moves on each second. When the camera moves back past half way, the text goes "
+	                "back onto the parchment.",
+	    .framing = {.shot = Shot::Overview},
+	    .commands = {{.kind = Kind::SaveGame, .delaySeconds = 1.0f, .value = 0},
+	                 {.kind = Kind::EnterTemple, .delaySeconds = 1.0f, .value = 3},
+	                 {.kind = Kind::EnterTemple, .delaySeconds = 0.5f, .value = 6},
+	                 {.kind = Kind::LookAtSaveGamePicture, .delaySeconds = 4.0f, .value = 0}},
 	});
 
 	all.push_back({
@@ -8066,6 +8163,23 @@ void AddLeash(std::vector<Scenario>& all)
 	    .commands = {Leash(0, LeashType::Rope, 1.0f), OnObject(Kind::LeashOrderOn, 0, 0, 2.0f, false)},
 	});
 
+	all.push_back({
+	    .id = "objects.pick_up_from_far",
+	    .name = "A creature walks a long way to a small thing and picks it up",
+	    .facet = Facet::Objects,
+	    .description = "A tiger of size 1 has a lump of poo 40 metres in front of it. After one second its alignment jumps "
+	                   "to fully evil, so its body takes the evil shape after it first measured its reach. After one and "
+	                   "a half seconds more it is told to pick up the poo.",
+	    .expected = "It walks up to the poo and stops a hand's reach from it. It turns a little on the spot if it must, "
+	                "then picks the poo up and holds it. Before, it stopped a little too far away for the arms of its new "
+	                "shape, reached for nothing and gave up the pick-up.",
+	    .framing = {.shot = Shot::Overview, .include = {{0.0f, 60.0f}, {0.0f, 20.0f}}},
+	    .creatures = {CreatureSetup {.species = CreatureType::Tiger, .offset = {0.0f, 60.0f}, .size = 1.0f}},
+	    .objects = {{.type = MobileObjectInfo::LumpOfPoo, .offset = {0.0f, 20.0f}}},
+	    .commands = {{.kind = Kind::SetBodyLook, .creature = 0, .delaySeconds = 1.0f, .value = 0, .amount = -1.0f},
+	                 OnObject(Kind::PickUp, 0, 0, 1.5f)},
+	});
+
 	// Worn out and wanting to sleep more than anything, far from its player's temple
 	CreatureSetup tired {.species = CreatureType::Tiger,
 	                     .offset = {0.0f, 20.0f},
@@ -8694,6 +8808,60 @@ void AddCombat(std::vector<Scenario>& all)
 	    .framing = ringside,
 	    .creatures = {red(PlayerNames::PLAYER_ONE, 0.9f, -0.45f), blue(PlayerNames::PLAYER_TWO, 0.3f, -0.45f)},
 	    .commands = {Fight(Kind::StartFight, 0, 1, 1.0f), Fight(Kind::FightAuto, 0, 1, 0.2f)},
+	});
+
+	// The first land's Ogre, and creatures on later lands, heal by a script after they win a fight: the script gives the
+	// victor a hundredth of life every six seconds, until it is full or it fights again
+	const auto healScript = [](float delay) {
+		return Command {.kind = Kind::RunScript,
+		                .delaySeconds = delay,
+		                .script = "HealFightVictorOverTime",
+		                .scriptArguments = {{.kind = ScriptArgument::Kind::Creature, .index = 0}}};
+	};
+	const auto victor = [&](PlayerNames owner) {
+		auto creature = red(owner, 0.6f, -0.45f);
+		creature.label = "victor";
+		creature.needs.life = 0.9f;
+		creature.hold = false;
+		return creature;
+	};
+	all.push_back({
+	    .id = "combat.victor_heals_over_time",
+	    .name = "A fight victor heals slowly after the fight",
+	    .facet = Facet::Combat,
+	    .description = "A tiger with nine tenths of its life. Half a second in, the game's script that heals a creature "
+	                   "after it wins a fight starts on it, as the first land's Ogre quest starts it when the Ogre wins.",
+	    .expected = "The life of the tiger increases by 0.01 at once and then by 0.01 every six seconds: 0.91, 0.92 after "
+	                "six seconds, and so on. When the life is 1 or more, the script stops.",
+	    .framing = ringside,
+	    .creatures = {victor(PlayerNames::PLAYER_ONE)},
+	    .commands = {healScript(0.5f)},
+	    .checks =
+	        {{.label = "the first hundredth at once",
+	          .quantity = checks::Quantity::CreatureLife,
+	          .afterTurns = 20,
+	          .atLeast = 0.905,
+	          .atMost = 0.915},
+	         {.label = "a hundredth more after six seconds",
+	          .quantity = checks::Quantity::CreatureLife,
+	          .afterTurns = 80,
+	          .atLeast = 0.915,
+	          .atMost = 0.925},
+	         {.label = "full after a minute", .quantity = checks::Quantity::CreatureLife, .afterTurns = 620, .atLeast = 0.999}},
+	});
+	all.push_back({
+	    .id = "combat.victor_heal_stops_in_fight",
+	    .name = "A fight victor stops healing when it fights again",
+	    .facet = Facet::Combat,
+	    .description = "As combat.victor_heals_over_time, with a second tiger. Nine seconds in, the healed tiger asks the "
+	                   "other tiger to fight, and both fight by themselves.",
+	    .expected = "The life of the red tiger increases by 0.01 every six seconds while the tigers walk to the arena "
+	                "and take their places, because for the scripts a creature fights only while it duels. At the first "
+	                "check of the script in the duel, the script stops: the life gets no more hundredths from it. The "
+	                "inspector's script.tasks query no longer lists the script.",
+	    .framing = ringside,
+	    .creatures = {victor(PlayerNames::PLAYER_ONE), blue(PlayerNames::PLAYER_TWO, 0.6f, -0.45f)},
+	    .commands = {healScript(0.5f), Fight(Kind::StartFight, 0, 1, 8.5f), Fight(Kind::FightAuto, 0, 1, 0.2f)},
 	});
 
 	all.push_back({
@@ -11939,6 +12107,32 @@ void AddEditor(std::vector<Scenario>& all)
 	                 Go(Kind::WalkTo, 0, {-40.0f, 40.0f}, 0.5f), Go(Kind::WalkTo, 0, {-40.0f, -40.0f}, 0.5f)},
 	    .repeatFrom = 0,
 	});
+
+	all.push_back({
+	    .id = "editor.pick_several_undo",
+	    .name = "Things to pick together, then undo and redo",
+	    .facet = Facet::Editor,
+	    .description = "A row of five oaks, a ring of four pillars of rock and two villagers, still, for trying the "
+	                   "editor's picks of several things and its history (F2): a drag over the land with the Select (W) "
+	                   "tool picks all in the rectangle, Ctrl+click picks or lets go of one more, Shift+click adds one, "
+	                   "and Shift+click in the outliner picks a run of rows.",
+	    .expected = "Each picked thing has a box; the main pick has the brighter box. Move (E) drags all the picks "
+	                "together and Rotate (R) turns them about their middle. Ctrl+D copies each, Delete removes all. "
+	                "Ctrl+Z puts each step back and Ctrl+Y (or Ctrl+Shift+Z) does it again; the tool bar names the step.",
+	    .environment = {.clockRuns = false},
+	    .framing = {.shot = Shot::Overview, .include = {{-40.0f, 30.0f}, {40.0f, -30.0f}}},
+	    .objects = {{.type = TreeInfo::Oak, .offset = {-30.0f, 20.0f}},
+	                {.type = TreeInfo::Oak, .offset = {-15.0f, 20.0f}},
+	                {.type = TreeInfo::Oak, .offset = {0.0f, 20.0f}},
+	                {.type = TreeInfo::Oak, .offset = {15.0f, 20.0f}},
+	                {.type = TreeInfo::Oak, .offset = {30.0f, 20.0f}},
+	                {.type = FeatureInfo::FatPilarChalk, .offset = {-10.0f, -10.0f}},
+	                {.type = FeatureInfo::FatPilarChalk, .offset = {10.0f, -10.0f}},
+	                {.type = FeatureInfo::FatPilarChalk, .offset = {-10.0f, -25.0f}},
+	                {.type = FeatureInfo::FatPilarChalk, .offset = {10.0f, -25.0f}},
+	                {.type = VillagerInfo::CelticFarmerMale, .offset = {-30.0f, -15.0f}},
+	                {.type = VillagerInfo::CelticHousewifeFemale, .offset = {30.0f, -15.0f}}},
+	});
 }
 
 /// A benchmark of a crowd of the size, to compare runs of several sizes and see which costs grow faster than the crowd
@@ -13205,6 +13399,25 @@ void AddWorkshopScenarios(std::vector<Scenario>& all)
 	});
 
 	all.push_back({
+	    .id = "objects.scaffold_site_phantom_see_through",
+	    .name = "The phantom of the building on a scaffold's site draws in the see-through modes",
+	    .facet = Facet::Objects,
+	    .description = "The town and the scaffold of objects.scaffold_starts_building, with the camera near the scaffold. "
+	                   "After one second the scaffold starts the building that the town offers where it lies, as when "
+	                   "the hand puts it down.",
+	    .expected = "A building site opens at the scaffold, with the phantom of its building over the site at about a "
+	                "third of its alpha. Each material of the phantom draws in its see-through mode with the alpha "
+	                "reference 10, which becomes 0 at the alpha of the phantom. Thus no part of the phantom is cut: also "
+	                "the edges that its textures make clear show at the alpha of their texels, and write depth.",
+	    .environment = {.dispenserGrid = false},
+	    .framing = {.shot = Shot::Overview,
+	                .include = {k_LooseScaffold - glm::vec2 {12.0f}, k_LooseScaffold + glm::vec2 {12.0f}}},
+	    .objects = {{.type = AbodeInfo::CelticTownCentre, .offset = {0.0f, 50.0f}},
+	                {.type = ScaffoldInfo::Normal, .offset = k_LooseScaffold, .scale = 0.7f}},
+	    .commands = {{.kind = Kind::ScaffoldStartsSite, .delaySeconds = 1.0f, .object = 1}},
+	});
+
+	all.push_back({
 	    .id = "objects.scaffold_script_active",
 	    .name = "A script sets a scaffold active, and the scaffold starts its building at once",
 	    .facet = Facet::Objects,
@@ -13670,7 +13883,8 @@ bool testbed_scenarios::NeedsNoCreature(Command::Kind kind)
 	       kind == Kind::OtherGodHand || kind == Kind::OwnGod || kind == Kind::JoinOnline || kind == Kind::EndBox ||
 	       kind == Kind::BringCreature || kind == Kind::TattooEditorAsNetworkGame || kind == Kind::ShowDemoPing ||
 	       kind == Kind::AddIncomingMessage || kind == Kind::Chat || kind == Kind::ComputerPersonality ||
-	       kind == Kind::ComputerUntaughtSends || kind == Kind::SkirmishBox || IsPointerCommand(kind);
+	       kind == Kind::ComputerUntaughtSends || kind == Kind::SkirmishBox || kind == Kind::LookAtSaveGamePicture ||
+	       IsPointerCommand(kind);
 }
 
 std::string_view testbed_scenarios::Name(Facet facet)
@@ -13698,7 +13912,7 @@ std::string_view testbed_scenarios::Name(Shot shot)
 
 std::string_view testbed_scenarios::Name(Command::Kind kind)
 {
-	constexpr std::array<std::string_view, 207> k_Names {
+	constexpr std::array<std::string_view, 209> k_Names {
 	    "walk to",
 	    "run to",
 	    "follow",
@@ -13831,6 +14045,7 @@ std::string_view testbed_scenarios::Name(Command::Kind kind)
 	    "remove object",
 	    "read tip",
 	    "look at temple scroll",
+	    "look at a save game picture",
 	    "set alight",
 	    "hand grips totem",
 	    "pointer on altar",
@@ -13906,6 +14121,7 @@ std::string_view testbed_scenarios::Name(Command::Kind kind)
 	    "a god orders its creature",
 	    "take a seed from its icon",
 	    "tap a worship site icon",
+	    "change the body's look",
 	};
 	return k_Names.at(static_cast<size_t>(kind));
 }

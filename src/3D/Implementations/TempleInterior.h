@@ -74,6 +74,7 @@ public:
 	void GoToRoom(TempleRoom room) override;
 	void EnterRoom(TempleRoom room) override;
 	void LookAtScroll(size_t place) override;
+	void LookAtSaveGamePicture(uint32_t slot) override;
 	[[nodiscard]] bool IsRoomDrawn(TempleRoom room) const override;
 	[[nodiscard]] std::optional<float> GetWayOutSeconds() const override;
 	[[nodiscard]] bool IsRoomAvailable(TempleRoom room) const override;

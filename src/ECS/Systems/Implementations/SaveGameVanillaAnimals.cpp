@@ -19,6 +19,7 @@
 #include <spdlog/spdlog.h>
 
 #include "3D/MapCoords.h"
+#include "AnimalSystemDetail.h"
 #include "ECS/Components/Animal.h"
 #include "ECS/Components/Flock.h"
 #include "ECS/Components/Temple.h"
@@ -38,6 +39,7 @@ using namespace openblack::ecs::components;
 using namespace openblack::ecs::systems;
 namespace world_import = openblack::ecs::vanilla_world_import;
 namespace script_import = openblack::ecs::vanilla_script_import;
+using openblack::ecs::systems::animal_detail::AnimalStateOfGame;
 using openblack::ecs::systems::vanilla_import::EntityOf;
 using openblack::ecs::systems::vanilla_import::PutMoveTag;
 
@@ -137,6 +139,10 @@ void SaveGameSystem::ImportVanillaAnimals(const gamesave::VanillaWorld& world, V
 		flock.turnsOnLeg = file.turnsOnLeg;
 		flock.keepsTogether = file.keepsTogether;
 		flock.calm = file.calm;
+		// A state that openblack does not have becomes a new decision, as for the states of an animal
+		flock.followState = AnimalStateOfGame(file.followState).value_or(AnimalState::DecideWhatToDo);
+		flock.afterMove = AnimalStateOfGame(file.afterMove).value_or(AnimalState::DecideWhatToDo);
+		flock.followMode = file.followMode;
 		flock.scriptId = file.scriptId;
 		flock.height = file.height;
 		flock.members.clear();

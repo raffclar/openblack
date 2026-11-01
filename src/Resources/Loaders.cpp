@@ -502,23 +502,6 @@ std::optional<TriangleRef> FindTriangle(const l3d::L3DFile& file, const morph::M
 	return triangle;
 }
 
-/// The colour of a skin of the mesh at a texture coordinate, as the game reads it for the eyelids
-glm::vec3 SkinColourAt(const l3d::L3DFile& file, uint32_t skinId, glm::vec2 uv)
-{
-	const auto skin = std::ranges::find(file.GetSkins(), skinId, &l3d::L3DTexture::id);
-	if (skin == file.GetSkins().end())
-	{
-		return glm::vec3(1.0f);
-	}
-	constexpr auto k_Width = static_cast<int>(l3d::L3DTexture::k_Width);
-	constexpr auto k_Height = static_cast<int>(l3d::L3DTexture::k_Height);
-	const auto x = static_cast<int>(std::floor(uv.x * k_Width)) & (k_Width - 1);
-	const auto y = static_cast<int>(std::floor(uv.y * k_Height)) & (k_Height - 1);
-	const auto& texel = skin->texels.at(static_cast<size_t>((y * k_Width) + x));
-	constexpr float k_Max = 15.0f;
-	return {static_cast<float>(texel.r) / k_Max, static_cast<float>(texel.g) / k_Max, static_cast<float>(texel.b) / k_Max};
-}
-
 std::optional<CreatureRig::Eyes> LoadEyes(const morph::CreatureEyes& eyes,
                                           const std::array<std::optional<l3d::L3DFile>, CreatureRig::k_MeshCount>& meshes)
 {
@@ -542,7 +525,8 @@ std::optional<CreatureRig::Eyes> LoadEyes(const morph::CreatureEyes& eyes,
 		         .bones = {},
 		         .u = source.intersect.u,
 		         .v = source.intersect.v,
-		         .skinColour = glm::vec3(1.0f)};
+		         .skinId = 0,
+		         .skinPoint = glm::vec2(0.0f)};
 		if (!source.enabled)
 		{
 			continue;
@@ -569,8 +553,8 @@ std::optional<CreatureRig::Eyes> LoadEyes(const morph::CreatureEyes& eyes,
 			const auto& coordinate = baseTriangle->vertices.at(i)->texCoord;
 			return glm::vec2(coordinate.x, coordinate.y);
 		};
-		const auto uv = uvOf(0) + ((uvOf(1) - uvOf(0)) * point.u) + ((uvOf(2) - uvOf(0)) * point.v);
-		point.skinColour = SkinColourAt(*base, baseTriangle->skinId, uv);
+		point.skinId = baseTriangle->skinId;
+		point.skinPoint = creature_skin::SkinPoint(uvOf(0), uvOf(1), uvOf(2), point.u, point.v);
 	}
 	return result;
 }

@@ -45,6 +45,8 @@ public:
 	[[nodiscard]] bool KeepsReactionOff(glm::vec3 watcher, glm::vec3 initiator) const override;
 	[[nodiscard]] std::optional<entt::entity> ShieldAt(glm::vec3 point) const override;
 	void RemoveWithSpell(entt::entity spell) override;
+	[[nodiscard]] std::optional<HeldReaction> HeldReactionOf(entt::entity villager) const override;
+	void LeaveForOtherReaction(entt::entity villager) override;
 	[[nodiscard]] std::vector<DomeDraw> GetDomes(float fraction) const override;
 
 private:
@@ -82,11 +84,18 @@ private:
 	void ProcessReactions();
 	void SpreadReaction(uint32_t id);
 	void ApplyToVillager(entt::entity villager, uint32_t id);
-	void StartReacting(entt::entity villager, uint32_t id);
+	/// A villager with a reaction of another kind weighs a shield reaction against it, and changes to the shield
+	/// reaction when it is more urgent and it has kept the other reaction long enough
+	void ChangeFromOtherReaction(entt::entity villager, uint32_t id, float distance);
+	/// A villager takes up a shield reaction; one that held another reaction before keeps what it did before that one
+	void StartReacting(entt::entity villager, uint32_t id, bool wasReacting = false);
 	void StopReacting(entt::entity villager, bool setState);
 	/// Each villager's reaction lasts as long as its kind says
 	void ProcessVillagers();
 	[[nodiscard]] uint8_t PriorityFor(entt::entity villager, const ShieldReaction& reaction, float distance) const;
+	/// How urgent the shield reaction that a villager holds is to it, by its distance to the middle of the map cell of
+	/// the reaction's shield
+	[[nodiscard]] uint8_t HeldPriorityFor(entt::entity villager, const ShieldReaction& held) const;
 	/// How long before a villager reacts to the same kind again, by its distance to the shield as the reaction spreads,
 	/// and how long it keeps reacting, by its distance to the shield now: the table's turns, longer the nearer it is, with
 	/// the shield's own reaction's rules on top

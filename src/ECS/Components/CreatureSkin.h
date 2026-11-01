@@ -16,6 +16,7 @@
 #include <vector>
 
 #include <entt/core/fwd.hpp>
+#include <glm/gtc/type_precision.hpp>
 
 #include "Creature/CreatureMarks.h"
 #include "Creature/CreatureTattoo.h"
@@ -82,6 +83,9 @@ struct CreatureSkin
 	std::optional<Painted> painted;
 	/// Goes up each time the skins are painted, for the renderer to take them up
 	uint32_t revision {0};
+	/// The colour of the painted skin under the point of the eyelids, 0 to 255 a channel. None when the species has no
+	/// eyelids or the skin has no colour there.
+	std::optional<glm::u8vec3> lidColour;
 };
 
 /// Wounds that bleed send drips of blood down the skin, up to eight at once. Each drip is kept as a point on a triangle

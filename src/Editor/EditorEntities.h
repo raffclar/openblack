@@ -22,6 +22,7 @@
 #include <glm/vec3.hpp>
 
 #include "3D/AxisAlignedBoundingBox.h"
+#include "EditorHistory.h"
 #include "EditorOutline.h"
 #include "EditorPalette.h"
 #include "Enums.h"
@@ -82,6 +83,25 @@ void Remove(entt::entity entity);
 void MoveTo(entt::entity entity, glm::vec3 position);
 /// Turns a thing about the up axis by an angle in radians
 void Turn(entt::entity entity, float radians);
+
+/// Where a thing is, how it turns and its size, if it has a place on the land
+[[nodiscard]] std::optional<Pose> PoseOf(const ecs::Registry& registry, entt::entity entity);
+/// Puts a thing back to a pose: it moves there as MoveTo moves it, and takes the turn and the size of the pose
+void SetPose(entt::entity entity, const Pose& pose);
+/// What the editor needs to make a thing again as it is now, if the palette makes its kind
+[[nodiscard]] std::optional<Recipe> RecipeOf(const ecs::Registry& registry, entt::entity entity);
+/// Makes a thing from a recipe, as a copy is made; entt::null when it cannot
+entt::entity Make(const Recipe& recipe);
+
+/// The things on the land in the game's registry, as the editor's history changes them
+class RegistryWorld final: public EditorWorld
+{
+public:
+	[[nodiscard]] bool Exists(entt::entity entity) const override;
+	void SetPose(entt::entity entity, const Pose& pose) override;
+	entt::entity Make(const Recipe& recipe) override;
+	void Remove(entt::entity entity) override;
+};
 
 /// The land's height under a point, or 0 with no land
 [[nodiscard]] float LandHeight(glm::vec2 point);

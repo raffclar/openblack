@@ -280,6 +280,13 @@ public:
 	void GetPlayerRanking(int32_t, LobbyCallback<lobby_api::RankingPage>) override {}
 	void GetClanRanking(int32_t, LobbyCallback<lobby_api::RankingPage>) override {}
 	void GetPlayer(int64_t, LobbyCallback<lobby_api::PlayerDetails>) override {}
+	/// The lobby defines each line. These lines only show the look of the tab.
+	void GetPlayerDetailLines(int64_t, std::string, LobbyCallback<lobby_api::PlayerDetailLines> callback) override
+	{
+		callback({.value = lobby_api::PlayerDetailLines {.lines = {{.label = "Points", .value = "1000"},
+		                                                           {.label = "Games Played", .value = "12"}}},
+		          .error = {}});
+	}
 	void GetWeather(lobby_api::Date, LobbyCallback<lobby_api::RealWeather>) override {}
 	void UploadCreature(lobby_api::CreatureUpload, LobbyCallback<lobby_api::CreatureUploadReply>) override {}
 	void SendSkirmishPing(LobbyCallback<LobbyDone>) override {}

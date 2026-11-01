@@ -92,6 +92,7 @@
 #include "ECS/ObjectDetail.h"
 #include "ECS/PlayerColour.h"
 #include "ECS/Registry.h"
+#include "ECS/ScaffoldGhostRules.h"
 #include "ECS/SnowLevels.h"
 #include "ECS/Systems/BuildingDamageSystemInterface.h"
 #include "ECS/Systems/ExplosionSystemInterface.h"
@@ -555,6 +556,7 @@ void RenderingSystem::PrepareDrawDescs(bool drawBoundingBox)
 	uint32_t offset = 0;
 	_renderContext.instancedDrawDescs.clear();
 	_instanceSlots.clear();
+	_renderContext.seeThroughRefs.clear();
 	for (const auto& [meshId, desc] : meshIds)
 	{
 		const auto [drawDesc, inserted] =
@@ -825,6 +827,7 @@ bool RenderingSystem::UploadInstances(bool drawBoundingBox)
 		    auto drawnMesh = DrawnMeshOf(entity, mesh);
 		    auto* slotMap = &_instanceSlots;
 		    std::optional<uint8_t> fade;
+		    std::optional<uint8_t> seeThroughRef;
 		    auto level = graphics::mesh_detail::Mesh::High;
 		    bool gone = false;
 		    const auto* detail = detailMeshes.TryGet(entity);
@@ -854,6 +857,7 @@ bool RenderingSystem::UploadInstances(bool drawBoundingBox)
 			    slotMap = &_fadingSlots;
 			    fade = ghost->alpha;
 			    _fadingThings.emplace(entity, ghost->alpha);
+			    seeThroughRef = openblack::ecs::scaffold_ghost::SeeThroughRef(registry.AllOf<InHand>(ghost->scaffold));
 		    }
 		    else if (openblack::ecs::high_detail_rules::DrawsHighMeshAtAnyDistance(detail != nullptr, highDetails.Has(entity),
 		                                                                           terrainMorphs.Has(entity)))
@@ -1224,6 +1228,10 @@ bool RenderingSystem::UploadInstances(bool drawBoundingBox)
 		    }
 		    _renderContext.instanceUniforms[idx] = {.model = instanceModel, .look = look};
 		    _renderContext.instanceLevels[idx] = graphics::mesh_detail::LevelBit(level);
+		    if (seeThroughRef.has_value())
+		    {
+			    _renderContext.seeThroughRefs.emplace(idx, *seeThroughRef);
+		    }
 		    // A villager's bones go into the palette, as its clip poses it or as its model rests, and its instance says
 		    // where they start
 		    if (slots->second.bonePalette)

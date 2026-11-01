@@ -750,8 +750,8 @@ void MultiplayerBoxes::SyncRoom()
 	const auto seatName = seat != nullptr ? ToUtf16(seat->account.name) : playerName;
 	const std::array<TextArgument, 1> seatArgument = {std::u16string_view(seatName)};
 	_playerLabel->text = FormatText(Text(k_PlayerInfoText), seatArgument);
-	// The game shows only the lines of the lobby's player database under the title. The lobby has no such lines yet.
-	SetItemsIfChanged(*_playerInfo, Items(PlayerDetailLines({})));
+	// The game shows only the lines of the lobby's player database under the title
+	SetItemsIfChanged(*_playerInfo, Items(PlayerDetailLines(_frontEnd->GetShownDetails())));
 
 	// The conditions page: the conditions of the game and its time limit, or "Please select a map first." The game
 	// server is the host, and it gives its picks when the player joins. With no picks, the list is empty.

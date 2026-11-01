@@ -355,7 +355,7 @@ std::optional<AnimId> living::VillagerStateClip(uint8_t state, std::optional<Ani
 {
 	if (state == 0 || state == 0xFF)
 	{
-		return AnimId::PScaredStiff;
+		return AnimId::PStand;
 	}
 	if (VillagerStateChoosesClip(state))
 	{

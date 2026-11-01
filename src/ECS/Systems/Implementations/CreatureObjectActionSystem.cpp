@@ -298,13 +298,30 @@ std::optional<glm::vec3> HandAt(entt::entity creature, const Transform& transfor
 	return at.has_value() ? std::optional(*at * transform.scale) : std::nullopt;
 }
 
+/// The revision of the creature's body shape. A kept measure of the animations is for one revision.
+uint32_t BodyRevision(const ecs::Registry& registry, entt::entity creature)
+{
+	const auto* morph = registry.TryGet<const CreatureMorph>(creature);
+	return morph != nullptr ? morph->revision : 0;
+}
+
+/// A kept measure of the animations, when it is correct for the body shape now. Else none, and the caller measures again.
+template <typename Kept>
+const Kept* KeptMeasure(const ecs::Registry& registry, entt::entity creature)
+{
+	const auto* kept = registry.TryGet<const Kept>(creature);
+	return kept != nullptr && creature_object_actions::MeasureHolds(kept->bodyRevision, BodyRevision(registry, creature))
+	           ? kept
+	           : nullptr;
+}
+
 /// How fast the hand moves as it tosses something away, in the model's units a second at its own size: the middle of
 /// the ends of the hand's bones over the span before the toss lets go. It is measured at the creature's first toss and
-/// kept, whatever its shape becomes.
+/// kept until the animations follow a new body shape.
 std::optional<glm::vec3> TossHand(entt::entity creature, const CreatureRig::ActionPoints& points)
 {
 	auto& registry = Locator::entitiesRegistry::value();
-	if (const auto* kept = registry.TryGet<const TossHandVelocity>(creature))
+	if (const auto* kept = KeptMeasure<TossHandVelocity>(registry, creature))
 	{
 		return kept->velocity;
 	}
@@ -323,7 +340,8 @@ std::optional<glm::vec3> TossHand(entt::entity creature, const CreatureRig::Acti
 		return std::nullopt;
 	}
 	const auto velocity = creature_throw::HandVelocity(*now, *before, creature_throw::k_HandSpeedSpanMs);
-	registry.AssignOrReplace<TossHandVelocity>(creature, TossHandVelocity {.velocity = velocity});
+	registry.AssignOrReplace<TossHandVelocity>(
+	    creature, TossHandVelocity {.velocity = velocity, .bodyRevision = BodyRevision(registry, creature)});
 	return velocity;
 }
 
@@ -356,8 +374,9 @@ std::optional<creature_reach::Points> MeasureReach(entt::entity creature, const 
 	return reach;
 }
 
-/// Where the hand or foot gets to in the reaching animations, measured once in the model's own size, the first time it
-/// is wanted. None before the creature is posed.
+/// Where the hand or foot gets to in the reaching animations, measured in the model's own size the first time it is
+/// wanted, and again the first time it is wanted after the animations follow a new body shape. None before the creature
+/// is posed.
 template <typename Kept>
 std::optional<creature_reach::Points> KeptReachPoints(entt::entity creature, ReachWith with,
                                                       const std::array<size_t, creature_reach::k_CornerCount>& animations)
@@ -372,7 +391,7 @@ std::optional<creature_reach::Points> KeptReachPoints(entt::entity creature, Rea
 	{
 		return std::nullopt;
 	}
-	if (const auto* kept = registry.TryGet<const Kept>(creature))
+	if (const auto* kept = KeptMeasure<Kept>(registry, creature))
 	{
 		return kept->points;
 	}
@@ -390,7 +409,7 @@ std::optional<creature_reach::Points> KeptReachPoints(entt::entity creature, Rea
 	{
 		return std::nullopt;
 	}
-	registry.AssignOrReplace<Kept>(creature, Kept {.points = *reach});
+	registry.AssignOrReplace<Kept>(creature, Kept {.points = *reach, .bodyRevision = BodyRevision(registry, creature)});
 	return *reach;
 }
 
@@ -1410,21 +1429,21 @@ void Approach(entt::entity creature, CreatureObjectAction& action, const Creatur
 		Fail(action, "it has gone");
 		return;
 	}
+	const bool pickingUp = action.kind == Kind::PickUp;
+	action.eventMs = pickingUp ? points->pickUpMs : points->destroyMs;
+	// The corners are the kept ones that the straight reach also uses, measured in the model's own size for the body
+	// shape now. They take the creature's scale each time the reach uses them. The turn to get the thing in reach keeps
+	// the corners of the test before it.
+	if (!action.turnedToReach || !action.reach.has_value())
+	{
+		action.reach = pickingUp
+		                   ? KeptReachPoints<PickUpReach>(creature, ReachWith::FingerEnds, creature_reach::k_PickUpAnimations)
+		                   : KeptReachPoints<StompReach>(creature, ReachWith::Foot, creature_reach::k_DestroyAnimations);
+	}
 	if (!action.reach.has_value())
 	{
-		const bool pickingUp = action.kind == Kind::PickUp;
-		action.eventMs = pickingUp ? points->pickUpMs : points->destroyMs;
-		// The corners are measured in the model's own size, and take the creature's scale each time the reach uses them
-		auto unscaled = transform;
-		unscaled.scale = glm::vec3(1.0f);
-		action.reach =
-		    MeasureReach(creature, unscaled, *points, pickingUp ? ReachWith::FingerEnds : ReachWith::Foot,
-		                 pickingUp ? creature_reach::k_PickUpAnimations : creature_reach::k_DestroyAnimations, action.eventMs);
-		if (!action.reach.has_value())
-		{
-			// Not posed yet: it tries again next turn
-			return;
-		}
+		// Not posed yet: it tries again next turn
+		return;
 	}
 	const auto corners = creature_reach::Scaled(*action.reach, transform.scale.x);
 	action.maxReach = creature_reach::MaxReach(corners);
@@ -1441,7 +1460,6 @@ void Approach(entt::entity creature, CreatureObjectAction& action, const Creatur
 		BeginReaching(creature, action, animation, ReachFor(corners, ToLocal(facing, reachPoint)));
 		return;
 	}
-	const bool pickingUp = action.kind == Kind::PickUp;
 	const auto straight =
 	    pickingUp ? KeptStraightReach<PickUpReach>(creature, ReachWith::FingerEnds, creature_reach::k_PickUpAnimations)
 	              : KeptStraightReach<StompReach>(creature, ReachWith::Foot, creature_reach::k_DestroyAnimations);
@@ -1554,17 +1572,18 @@ bool StartCatch(entt::entity creature, CreatureObjectAction& action, const Creat
 		Fail(action, "it can't catch that");
 		return false;
 	}
-	// Where the finger ends of the hand close is measured at the creature's first catch and kept
-	if (!registry.AllOf<CatchHands>(creature))
+	// Where the finger ends of the hand close is measured at the creature's first catch and kept until the animations
+	// follow a new body shape
+	if (KeptMeasure<CatchHands>(registry, creature) == nullptr)
 	{
-		CatchHands measured;
+		CatchHands measured {.bodyRevision = BodyRevision(registry, creature)};
 		for (size_t i = 0; i < creature_catch::k_CatchAnimations.size(); ++i)
 		{
 			measured.hands.at(i) =
 			    FingerEndsInAnimation(creature, points.rightHand, creature_catch::k_CatchAnimations.at(i), points.catchMs)
 			        .value_or(glm::vec3(0.0f));
 		}
-		registry.Assign<CatchHands>(creature, measured);
+		registry.AssignOrReplace<CatchHands>(creature, measured);
 	}
 	action.catchHands = registry.Get<const CatchHands>(creature).hands;
 	const std::array<float, 4> weights {0.25f, 0.25f, 0.25f, 0.25f};

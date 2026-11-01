@@ -12,6 +12,7 @@
 #include <cstdint>
 
 #include <functional>
+#include <map>
 #include <memory>
 #include <optional>
 #include <span>
@@ -205,7 +206,12 @@ public:
 
 	// The Player Details tab
 	[[nodiscard]] std::optional<size_t> GetShownSeat() const noexcept { return _shownSeat; }
-	void ShowSeat(std::optional<size_t> seat) noexcept { _shownSeat = seat; }
+	/// A click on a player of the room's list. On the Player Details tab, the front end asks the lobby one time for the
+	/// lines of that player.
+	void ShowSeat(std::optional<size_t> seat);
+	/// The lines of the Player Details tab: those of the picked player, else those of the player. Empty until the lobby
+	/// gives the lines.
+	[[nodiscard]] std::vector<multiplayer::PlayerDetail> GetShownDetails() const;
 
 	// The conditions page
 	/// The winning conditions of the server's land, from the template; none before a land is known
@@ -253,6 +259,8 @@ private:
 	void TakeHostPicks(const std::optional<game_socket::Start>& start);
 	/// Puts the pick on the place of its game in a list that changed, or takes it away when its game went
 	void FollowSelectedGame();
+	/// On the local network, the search gives the players of the room: the room follows its server's answers
+	void FollowLanRoom();
 	[[nodiscard]] const online::NetworkSession* Session() const;
 
 	Services _services;
@@ -300,6 +308,9 @@ private:
 	bool _logoChanged {false};
 	std::optional<int64_t> _usedClan;
 	std::optional<size_t> _shownSeat;
+	/// The lines of the Player Details tab of each account in the room, which the lobby gave. An account in the map has a
+	/// request that the front end sent, so the front end does not ask again.
+	std::map<int64_t, std::vector<multiplayer::PlayerDetail>> _details;
 
 	std::optional<multiplayer::ConditionTemplate> _conditions;
 	/// The time limit and the winning conditions of the game. The game server is the host: it gives its picks when the

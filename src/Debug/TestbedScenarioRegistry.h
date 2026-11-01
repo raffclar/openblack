@@ -896,6 +896,9 @@ struct Command
 		/// The temple's camera looks at a scroll of the room the player is in (value: its place among the room's
 		/// scrolls), as when the player presses the scroll. Needs no creature
 		LookAtTempleScroll,
+		/// The temple's camera looks at the picture of a slot of the save game room (value: the slot), as when the
+		/// player presses the picture. Needs no creature
+		LookAtSaveGamePicture,
 		/// The creature catches fire, and burns as at the start of a fire. With a value of 1, the scenario's object catches
 		/// fire in place of the creature.
 		SetAlight,
@@ -1134,6 +1137,9 @@ struct Command
 		/// With an amount, the battery of the site first gets that much of the cost of the plain miracle. Needs no
 		/// creature.
 		TapSiteIcon,
+		/// The creature's alignment (value 0) or fatness (value 1) jumps to an amount. Its body takes the new look at
+		/// the end of its next game turn, and its animations then follow the new shape.
+		SetBodyLook,
 	};
 	Kind kind {Kind::Stop};
 	/// Which creature, by its place in the scenario's creatures

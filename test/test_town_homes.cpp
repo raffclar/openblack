@@ -26,6 +26,7 @@
 #include "ECS/Components/Town.h"
 #include "ECS/Components/Transform.h"
 #include "ECS/Components/Villager.h"
+#include "ECS/Components/WorshipSite.h"
 #include "ECS/Registry.h"
 #include "ECS/TownHomes.h"
 
@@ -140,6 +141,17 @@ TEST_F(TownHomesTest, ANewcomerMovesIntoTheBestFunctionalBuildingTheFirstOfEqual
 	town_homes::AddVillagerToTown(registry, Rooms(), town, second);
 	EXPECT_EQ(registry.Get<Villager>(second).abode, older);
 	EXPECT_TRUE(registry.Get<Abode>(broken).inhabitants.empty());
+}
+
+TEST_F(TownHomesTest, AStoreBuildingIsInItsTownAndAWorshipSiteIsInNoTown)
+{
+	// A pot that a tornado takes from a pile is in the town of the building that keeps the pile. A worship site keeps a
+	// list of the towns that worship at it, but it is in no town itself.
+	const auto store = MakeAbode(glm::vec3(0.0f), AbodeRoom {});
+	EXPECT_EQ(town_homes::TownOfAbode(registry, store), town);
+	const auto site = registry.Create();
+	registry.Assign<WorshipSite>(site, WorshipSite {.towns = {town}});
+	EXPECT_EQ(town_homes::TownOfAbode(registry, site), entt::entity {entt::null});
 }
 
 TEST_F(TownHomesTest, WithNoRoomTheNewcomerIsHomelessTheNewestFirst)

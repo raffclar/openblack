@@ -1223,6 +1223,42 @@ openblack::input::box_keyboard::Boxes GameInterface::KeyboardBoxes() const
 	};
 }
 
+openblack::playground_trip::MenuBox GameInterface::GetTripMenuBox() const noexcept
+{
+	using MenuBox = playground_trip::MenuBox;
+	switch (_menu->GetPage())
+	{
+	case GameMenu::Page::Main:
+		return MenuBox::Main;
+	case GameMenu::Page::Options:
+		return MenuBox::Options;
+	case GameMenu::Page::Players:
+		return MenuBox::Players;
+	case GameMenu::Page::Advanced:
+		return MenuBox::Advanced;
+	case GameMenu::Page::Controls:
+		return MenuBox::Controls;
+	case GameMenu::Page::Statistics:
+		return MenuBox::Statistics;
+	case GameMenu::Page::Conditions:
+	case GameMenu::Page::_Count:
+		break;
+	}
+	return MenuBox::Conditions;
+}
+
+bool GameInterface::BoxRefusesTrip() const noexcept
+{
+	// The open menu lets F2 ask over its main page and over each page that Escape can close
+	const bool menuRefuses = _menu->IsOpen() && !playground_trip::MenuLetsAsk({
+	                                                .box = GetTripMenuBox(),
+	                                                .questionUp = _menu->IsAskingToQuit(),
+	                                                .detailUntold = _menu->IsDetailUntold(),
+	                                                .restartPending = _menu->IsRestartPending(),
+	                                            });
+	return menuRefuses || playground_trip::OtherBoxRefuses(KeyboardBoxes());
+}
+
 glm::ivec2 GameInterface::ToChatControls(glm::ivec2 screen, glm::u16vec2 resolution)
 {
 	_painter.Begin(resolution);
@@ -1434,7 +1470,8 @@ bool GameInterface::ProcessEvent(const SDL_Event& event, glm::u16vec2 resolution
 	{
 		return ProcessEndGameBoxEvent(event);
 	}
-	if (_landInfoBox->IsActive())
+	// While the question of the trip covers the land information box, the question takes the input
+	if (_landInfoBox->TakesInput())
 	{
 		return ProcessLandInfoBoxEvent(event);
 	}
@@ -1637,6 +1674,9 @@ void GameInterface::Update(float deltaSeconds)
 			_tripAnswer = *answer == SaveGameBoxes::Answer::Yes;
 		}
 	}
+	// The question of the trip comes over the land information box as a box of its own: the box fades out until the
+	// question goes
+	_landInfoBox->SetCovered(_tripAsked && _saveGameBoxes->IsActive());
 	_multiplayerBoxes->Update(deltaSeconds);
 	UpdateTattooEditor(deltaSeconds);
 	_toolTips.Update(deltaSeconds);
@@ -1669,7 +1709,8 @@ void GameInterface::UpdateTattooEditor(float deltaSeconds)
 	_tattooEditor->SetNetworkGame(_tattooEditorAsNetworkGame ||
 	                              (Locator::time::has_value() && Locator::time::value().IsNetworkGame()));
 	_tattooEditor->Update(deltaSeconds, editor, palette, _leftButtonDown);
-	_menu->SetCovered(_tattooEditor->IsOpen() && _tattooEditor->IsFramed());
+	// The question of the trip comes over the menu as a box of its own: the menu fades out until it comes back
+	_menu->SetCovered((_tattooEditor->IsOpen() && _tattooEditor->IsFramed()) || (_tripAsked && _saveGameBoxes->IsActive()));
 }
 
 void GameInterface::DrawSavingBox(glm::u16vec2 resolution, bool loading, bool darken)

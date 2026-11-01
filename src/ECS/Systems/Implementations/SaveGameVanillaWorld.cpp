@@ -13,6 +13,7 @@
 #include <iterator>
 #include <optional>
 #include <ranges>
+#include <span>
 #include <unordered_map>
 #include <vector>
 
@@ -24,6 +25,7 @@
 #include "3D/MapCoords.h"
 #include "Common/GameRandom.h"
 #include "ECS/Archetypes/AbodeArchetype.h"
+#include "ECS/Archetypes/PotArchetype.h"
 #include "ECS/Archetypes/TownArchetype.h"
 #include "ECS/Archetypes/VillagerArchetype.h"
 #include "ECS/BuildingSites.h"
@@ -33,6 +35,9 @@
 #include "ECS/Components/Field.h"
 #include "ECS/Components/MiracleImpression.h"
 #include "ECS/Components/Player.h"
+#include "ECS/Components/Pot.h"
+#include "ECS/Components/ResourcePile.h"
+#include "ECS/Components/StoragePit.h"
 #include "ECS/Components/Temple.h"
 #include "ECS/Components/Town.h"
 #include "ECS/Components/TownDesire.h"
@@ -169,9 +174,28 @@ void PutPlans(ecs::Registry& registry, const world_import::ImportedTowns& import
 	}
 }
 
+/// A pile of the land takes the amount, the poison and the rise of a pile of the file, and becomes the pile of the file
+void PutPileValues(ecs::Registry& registry, entt::entity entity, const world_import::ImportedPile& file,
+                   std::unordered_map<uint32_t, entt::entity>& made)
+{
+	auto& pot = registry.Get<Pot>(entity);
+	pot.amount = file.amount;
+	pot.poisoned = file.poisoned;
+	// The pile goes on from the rise of the file and does not rise again out of the ground
+	if (auto* pile = registry.TryGet<ResourcePile>(entity); pile != nullptr)
+	{
+		pile->rise = file.rise;
+		pile->risen = true;
+		pile->shownAmount = file.amount;
+	}
+	made.emplace(file.number, entity);
+}
+
 /// Each town opens the building sites of the file. The list of a town gives the newest site first, so the import opens
-/// the sites from the end of the list. A site keeps the places, the builders, the desire and the wood pile of the file.
-void PutSites(const world_import::ImportedTowns& imported, const std::unordered_map<uint32_t, entt::entity>& made)
+/// the sites from the end of the list. A site keeps the places, the builders and the desire of the file, and its piles
+/// take the values of the piles of the file.
+void PutSites(ecs::Registry& registry, const world_import::ImportedTowns& imported,
+              std::unordered_map<uint32_t, entt::entity>& made)
 {
 	std::unordered_map<uint32_t, const world_import::ImportedSite*> sites;
 	for (const auto& site : imported.sites)
@@ -206,18 +230,34 @@ void PutSites(const world_import::ImportedTowns& imported, const std::unordered_
 					opened->workers.push_back(villager);
 				}
 			}
+			// The site keeps the piles that it made, and each takes the values of the pile of the file in its place. A
+			// pile of the file that the site did not make yet (a site makes its pile when the first wood comes) is made at
+			// the place of the file.
+			const auto put = [&registry, &made](entt::entity& own, const std::optional<world_import::ImportedPile>& values) {
+				if (!values.has_value())
+				{
+					return;
+				}
+				if (!registry.Valid(own) || !registry.AllOf<Pot>(own))
+				{
+					own = ecs::archetypes::PotArchetype::CreateEmpty(GroundPosition(values->position), values->heading,
+					                                                 values->row);
+					if (own == entt::null)
+					{
+						return;
+					}
+					registry.Assign<SitePile>(own);
+				}
+				PutPileValues(registry, own, *values, made);
+			};
 			if (!file.temple)
 			{
-				opened->piles.front() = EntityOf(made, file.woodPile);
+				put(opened->piles.front(), file.woodPileValues);
 				continue;
 			}
-			// A pile of a temple's site that the import does not make stays as the site made it
-			for (size_t i = 0; i < std::min(file.piles.size(), opened->piles.size()); ++i)
+			for (size_t i = 0; i < std::min(file.pileValues.size(), opened->piles.size()); ++i)
 			{
-				if (const auto pile = EntityOf(made, file.piles[i]); pile != entt::null)
-				{
-					opened->piles.at(i) = pile;
-				}
+				put(opened->piles.at(i), file.pileValues[i]);
 			}
 		}
 	}
@@ -465,6 +505,41 @@ void RaiseFileTemples(ecs::Registry& registry, const gamesave::VanillaWorld& wor
 		made.emplace(file.heart, temple);
 	}
 }
+
+/// The piles of a storage pit take the amounts, the poison and the rise of the piles of the file. Each pile of the file
+/// is the pile of the storage pit with the same row of the table of pots. Gives the number of piles of the file that the
+/// storage pit does not have.
+uint32_t PutPiles(ecs::Registry& registry, entt::entity pit, std::span<const world_import::ImportedPile> piles,
+                  std::unordered_map<uint32_t, entt::entity>& made)
+{
+	const auto* storage = registry.TryGet<const StoragePit>(pit);
+	uint32_t lost = 0;
+	for (const auto& file : piles)
+	{
+		entt::entity entity = entt::null;
+		if (storage != nullptr)
+		{
+			for (const auto own : storage->woodPiles)
+			{
+				if (registry.Valid(own) && registry.Get<const Pot>(own).type == file.row)
+				{
+					entity = own;
+				}
+			}
+			if (registry.Valid(storage->foodPile) && registry.Get<const Pot>(storage->foodPile).type == file.row)
+			{
+				entity = storage->foodPile;
+			}
+		}
+		if (entity == entt::null)
+		{
+			++lost;
+			continue;
+		}
+		PutPileValues(registry, entity, file, made);
+	}
+	return lost;
+}
 } // namespace
 
 bool SaveGameSystem::ImportVanillaTowns(const gamesave::VanillaWorld& world, VanillaMade& made, VanillaWorks& works,
@@ -533,6 +608,10 @@ bool SaveGameSystem::ImportVanillaTowns(const gamesave::VanillaWorld& world, Van
 			continue;
 		}
 		ecs::world_objects::SetLife(entity, abode.life);
+		if (const auto lost = PutPiles(registry, entity, abode.piles, made); lost != 0)
+		{
+			SPDLOG_LOGGER_WARN(ImportLog(), "The storage pit {} has no pile for {} piles of the file", abode.number, lost);
+		}
 		// A wonder keeps the power of the file. The game reads the power and the tribal powers of the players from the
 		// file and adds no power again, so the tribal powers below replace what the new wonder added.
 		if (abode.wonderPower.has_value() && Locator::wonderSystem::has_value())
@@ -652,7 +731,7 @@ bool SaveGameSystem::ImportVanillaTowns(const gamesave::VanillaWorld& world, Van
 	}
 	PutDesireFlags(registry, imported, made);
 	PutPlans(registry, imported);
-	PutSites(imported, made);
+	PutSites(registry, imported, made);
 	registry.SetDirty();
 	SPDLOG_LOGGER_INFO(ImportLog(),
 	                   "Imported {} towns, {} buildings, {} plans, {} building sites and {} villagers of the game's file at "

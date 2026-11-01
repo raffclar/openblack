@@ -30,7 +30,7 @@ public:
 	[[nodiscard]] virtual bool DialogueWordsDrawn() const = 0;
 	/// The display of the villagers' names grows in or out over a frame of this game time
 	virtual void UpdateVillagerLabels(float milliseconds) = 0;
-	/// The bars of a cinema hide the dialogs of the game: the menu closes
+	/// The bars of a cinema hide the dialogs of the game: the menu and the land information box close
 	virtual void CloseMenuForCinema() = 0;
 };
 

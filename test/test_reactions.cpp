@@ -24,6 +24,7 @@
 #include "Creature/CreatureTeleportAgendas.h"
 #include "ECS/Components/Abode.h"
 #include "ECS/Components/Animal.h"
+#include "ECS/Components/AtHome.h"
 #include "ECS/Components/Creature.h"
 #include "ECS/Components/CreatureFight.h"
 #include "ECS/Components/CreatureLeash.h"
@@ -42,6 +43,7 @@
 #include "ECS/Components/ReportedHand.h"
 #include "ECS/Components/Scaffold.h"
 #include "ECS/Components/ScriptControl.h"
+#include "ECS/Components/Spell.h"
 #include "ECS/Components/TeleportStone.h"
 #include "ECS/Components/Town.h"
 #include "ECS/Components/TownDesire.h"
@@ -59,6 +61,7 @@
 #include "ECS/Systems/CreatureFightSystemInterface.h"
 #include "ECS/Systems/DanceSystemInterface.h"
 #include "ECS/Systems/DynamicsSystemInterface.h"
+#include "ECS/Systems/MagicShieldSystemInterface.h"
 #include "ECS/WallHugRules.h"
 #include "InfoConstants.h"
 #include "Locator.h"
@@ -70,7 +73,9 @@
 #include "ECS/MapProduction.h"
 #include "ECS/Systems/Implementations/FireSystem.h"
 #include "ECS/Systems/Implementations/LivingActionSystem.h"
+#include "ECS/Systems/Implementations/MagicShieldSystem.h"
 #include "ECS/Systems/Implementations/ReactionSystem.h"
+#include "ECS/Systems/Implementations/TimeSystem.h"
 #include "ECS/Systems/Implementations/VillagerDisciples.h"
 #include "ECS/Systems/Implementations/VillagerFire.h"
 #include "ECS/Systems/Implementations/VillagerHome.h"
@@ -286,6 +291,42 @@ public:
 	/// The things that the animal looked at and the food that it went to
 	std::vector<entt::entity> lookedAt;
 	std::vector<entt::entity> wentTo;
+};
+
+/// The shields, where one villager has a shield reaction of a priority, and which notes the villagers that leave it
+class HeldShield final: public ecs::systems::MagicShieldSystemInterface
+{
+public:
+	HeldShield(entt::entity villager, uint32_t priority)
+	    : _villager(villager)
+	    , _priority(priority)
+	{
+	}
+	void ProcessTurn() override {}
+	void Update(float /*seconds*/) override {}
+	void Reset() override {}
+	void ShieldStruck(entt::entity /*spell*/, bool /*destroyed*/) override {}
+	[[nodiscard]] bool HasObject(entt::entity /*spell*/) const override { return false; }
+	[[nodiscard]] std::vector<Avoid> CreatureAvoids(PlayerNames /*creaturePlayer*/, bool /*scripted*/) const override
+	{
+		return {};
+	}
+	[[nodiscard]] std::vector<DomeDraw> GetDomes(float /*fraction*/) const override { return {}; }
+	[[nodiscard]] std::optional<HeldReaction> HeldReactionOf(entt::entity villager) const override
+	{
+		if (villager != _villager || std::ranges::find(left, villager) != left.end())
+		{
+			return std::nullopt;
+		}
+		return HeldReaction {.type = Reaction::ReactToMagicShield, .priority = _priority};
+	}
+	void LeaveForOtherReaction(entt::entity villager) override { left.push_back(villager); }
+
+	std::vector<entt::entity> left;
+
+private:
+	entt::entity _villager;
+	uint32_t _priority;
 };
 } // namespace
 
@@ -625,6 +666,28 @@ TEST_F(Reactions, AVillagerCountedAtWorshipTakesUpNoMiracle)
 	const auto* held = registry.TryGet<const LivingReaction>(_villagers[0]);
 	EXPECT_TRUE(held == nullptr || held->reaction == 0u);
 	EXPECT_EQ(StateOf(_villagers[1]), VillagerStates::LookingAtObjectReaction);
+}
+
+TEST_F(Reactions, AVillagerAtHomeOrInAHandIsImpressedWithoutTakingUpAMiracle)
+{
+	auto& registry = Locator::entitiesRegistry::value();
+	for (const bool home : {true, false})
+	{
+		const auto villager = _villagers[0];
+		registry.Remove<LivingReaction, AtHome, InHand>(villager);
+		if (home)
+		{
+			registry.Assign<AtHome>(villager);
+		}
+		else
+		{
+			registry.Assign<InHand>(villager);
+		}
+		_reactions.Create(Miracle());
+		const auto* held = registry.TryGet<const LivingReaction>(villager);
+		EXPECT_TRUE(held == nullptr || held->reaction == 0u);
+		EXPECT_EQ(StateOf(villager), VillagerStates::DecideWhatToDo);
+	}
 }
 
 TEST_F(Reactions, VillagersStopAfterTheirTimeAndGoBack)
@@ -1306,6 +1369,123 @@ TEST_F(Reactions, VillagersBusyWithAShieldAreLeftToIt)
 	_reactions.Create(Miracle(Reaction::FleeFromSpell));
 	EXPECT_EQ(StateOf(_villagers[0]), VillagerStates::DecideWhatToDo);
 	EXPECT_EQ(StateOf(_villagers[1]), VillagerStates::FleeingFromObjectReaction);
+}
+
+TEST_F(Reactions, AVillagerWithAShieldReactionChangesToAMoreUrgentOneAfterTenSeconds)
+{
+	auto& registry = Locator::entitiesRegistry::value();
+	registry.Assign<VillagerShieldReaction>(_villagers[0]);
+	// It took up the shield reaction at the first turn, ten seconds ago
+	auto& memory = registry.Assign<VillagerReactionMemory>(_villagers[0]).memory;
+	memory.Record(static_cast<uint32_t>(Reaction::ReactToMagicShield), 0);
+	for (uint32_t i = 0; i < 100; ++i)
+	{
+		_reactions.StartTurn();
+	}
+	auto& shields = static_cast<HeldShield&>(Locator::magicShieldSystem::emplace<HeldShield>(_villagers[0], 10u));
+	_reactions.Create(Miracle(Reaction::FleeFromSpell));
+	EXPECT_EQ(StateOf(_villagers[0]), VillagerStates::FleeingFromObjectReaction);
+	EXPECT_EQ(registry.Get<const LivingReaction>(_villagers[0]).type, Reaction::FleeFromSpell);
+	const std::vector<entt::entity> left {_villagers[0]};
+	EXPECT_EQ(shields.left, left);
+	EXPECT_EQ(memory.LastReacted(static_cast<uint32_t>(Reaction::FleeFromSpell)), _reactions.CurrentTurn());
+	Locator::magicShieldSystem::reset();
+}
+
+TEST_F(Reactions, AVillagerKeepsAShieldReactionForTenSecondsOrWhenItIsMoreUrgent)
+{
+	auto& registry = Locator::entitiesRegistry::value();
+	registry.Assign<VillagerShieldReaction>(_villagers[0]);
+	registry.Assign<VillagerShieldReaction>(_villagers[1]);
+	for (uint32_t i = 0; i < 100; ++i)
+	{
+		_reactions.StartTurn();
+	}
+	// The first took up its shield reaction just now; the second long ago, but its reaction is the more urgent
+	registry.Assign<VillagerReactionMemory>(_villagers[0])
+	    .memory.Record(static_cast<uint32_t>(Reaction::ReactToMagicShield), _reactions.CurrentTurn());
+	auto& shields = static_cast<HeldShield&>(Locator::magicShieldSystem::emplace<HeldShield>(_villagers[0], 10u));
+	_reactions.Create(Miracle(Reaction::FleeFromSpell));
+	EXPECT_EQ(StateOf(_villagers[0]), VillagerStates::DecideWhatToDo);
+	EXPECT_TRUE(shields.left.empty());
+
+	auto& urgent = static_cast<HeldShield&>(Locator::magicShieldSystem::emplace<HeldShield>(_villagers[1], 255u));
+	_reactions.Create(Miracle(Reaction::FleeFromSpell));
+	EXPECT_EQ(StateOf(_villagers[1]), VillagerStates::DecideWhatToDo);
+	EXPECT_TRUE(urgent.left.empty());
+	Locator::magicShieldSystem::reset();
+}
+
+TEST_F(Reactions, AVillagerChangesFromAMiracleToAMoreUrgentStandingShieldAfterTenSeconds)
+{
+	auto& registry = Locator::entitiesRegistry::value();
+	// A villager with no town takes the shield's reaction by the table's priority, more urgent than the miracle
+	registry.Get<Villager>(_villagers[0]).town = entt::null;
+	_info->reaction.at(static_cast<size_t>(Reaction::ReactToMagicShield)).priority = 200;
+	Locator::gameRandom::emplace<AlwaysLowGameRandom>();
+	auto& reactions = Locator::reactionSystem::emplace<ecs::systems::ReactionSystem>();
+	auto& clock = Locator::time::emplace<ecs::systems::TimeSystem>([] { return uint32_t {1000}; });
+	reactions.Create(Miracle(Reaction::LookAtNiceSpell));
+	ASSERT_EQ(registry.Get<const LivingReaction>(_villagers[0]).type, Reaction::LookAtNiceSpell);
+	const auto remembered =
+	    registry.Get<const LivingAction>(_villagers[0]).states.at(static_cast<size_t>(LivingAction::Index::Previous));
+	// The state it is to end up in lets it react
+	registry.Get<LivingAction>(_villagers[0]).states.at(static_cast<size_t>(LivingAction::Index::Final)) =
+	    static_cast<uint8_t>(VillagerStates::LookingAtObjectReaction);
+
+	const auto raise = [&registry]() {
+		const auto spell = registry.Create();
+		auto& miracle = registry.Assign<Spell>(spell);
+		miracle.magicType = MagicType::Shield;
+		miracle.spellClass = magic::SpellClass::Shield;
+		miracle.caster.player = PlayerNames::PLAYER_ONE;
+		miracle.castPosition = k_Here;
+		miracle.magnitude = 30.0f;
+	};
+	ecs::systems::MagicShieldSystem shields;
+	// Less than ten seconds after it took up the miracle, it keeps the miracle
+	clock.ResumeAtTurn(reactions.CurrentTurn() + 50, 0);
+	raise();
+	shields.ProcessTurn();
+	EXPECT_EQ(registry.TryGet<const VillagerShieldReaction>(_villagers[0]), nullptr);
+	EXPECT_EQ(registry.Get<const LivingReaction>(_villagers[0]).type, Reaction::LookAtNiceSpell);
+
+	// Ten seconds after, it changes to the shield and keeps what it did before the miracle to go back to
+	clock.ResumeAtTurn(reactions.CurrentTurn() + 100, 0);
+	raise();
+	shields.ProcessTurn();
+	EXPECT_NE(registry.TryGet<const VillagerShieldReaction>(_villagers[0]), nullptr);
+	EXPECT_EQ(registry.Get<const LivingReaction>(_villagers[0]).reaction, 0u);
+	EXPECT_EQ(registry.Get<const LivingAction>(_villagers[0]).states.at(static_cast<size_t>(LivingAction::Index::Previous)),
+	          remembered);
+
+	Locator::time::reset();
+	Locator::gameRandom::reset();
+}
+
+TEST_F(Reactions, AVillagerTellsTheShieldsWhatItReactsToAndLeavesItKeepingWhatItDid)
+{
+	auto& registry = Locator::entitiesRegistry::value();
+	EXPECT_FALSE(_reactions.HeldReactionOf(_villagers[0]).has_value());
+	_reactions.Create(Miracle(Reaction::FleeFromSpell));
+	ASSERT_EQ(StateOf(_villagers[0]), VillagerStates::FleeingFromObjectReaction);
+	const auto held = _reactions.HeldReactionOf(_villagers[0]);
+	ASSERT_TRUE(held.has_value());
+	EXPECT_EQ(held->type, Reaction::FleeFromSpell);
+	EXPECT_GT(held->priority, 0u);
+	const auto& memory = registry.Get<const VillagerReactionMemory>(_villagers[0]).memory;
+	const auto taken = memory.LastReacted(static_cast<uint32_t>(Reaction::FleeFromSpell));
+	const auto remembered = registry.Get<const LivingAction>(_villagers[0]).states;
+	for (uint32_t i = 0; i < 20; ++i)
+	{
+		_reactions.StartTurn();
+	}
+	_reactions.LeaveForOtherReaction(_villagers[0]);
+	EXPECT_EQ(registry.Get<const LivingReaction>(_villagers[0]).reaction, 0u);
+	EXPECT_FALSE(_reactions.HeldReactionOf(_villagers[0]).has_value());
+	// What it does and what it did before stay as they were, and so does its memory of the kind
+	EXPECT_EQ(registry.Get<const LivingAction>(_villagers[0]).states, remembered);
+	EXPECT_EQ(memory.LastReacted(static_cast<uint32_t>(Reaction::FleeFromSpell)), taken);
 }
 
 TEST_F(Reactions, OnlyAMateToBeWaitsForAVillagerHeldInTheHandAndOnlyWhileItIsNear)

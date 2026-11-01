@@ -81,8 +81,11 @@ struct CreatureRig
 		std::array<uint32_t, 3> bones;
 		float u;
 		float v;
-		/// The colour of the base mesh's skin there, 0 to 1
-		glm::vec3 skinColour;
+		/// The skin of the base mesh under the point
+		uint32_t skinId;
+		/// The place of the point on that skin, as a part of the side of the skin. Multiply it by the side of the
+		/// painted skin to get the texel.
+		glm::vec2 skinPoint;
 	};
 	struct Eyes
 	{
@@ -91,6 +94,20 @@ struct CreatureRig
 		/// The left and right eyes, then the points the left and right eyelids are turned towards
 		std::array<EyePoint, 4> points;
 		creature_eyes::LidAngles lidAngles;
+
+		/// The point that gives the colour of both eyelids: the point that the lid of the first eye with a lid turns
+		/// towards. None when no eye has a lid.
+		[[nodiscard]] const EyePoint* LidColourPoint() const
+		{
+			for (size_t i = 0; i < 2; ++i)
+			{
+				if (points.at(i).enabled && points.at(i + 2).enabled)
+				{
+					return &points.at(i + 2);
+				}
+			}
+			return nullptr;
+		}
 	};
 	std::optional<Eyes> eyes;
 

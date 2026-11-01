@@ -351,6 +351,9 @@
 #include "LivingTurnOrder.h"
 #include "Locator.h"
 #include "Magic/TownBelief.h"
+#if !defined(__EMSCRIPTEN__)
+#include "Online/Desktop/UdpLanDiscovery.h"
+#endif
 #include "Online/HttpClientInterface.h"
 #include "Online/LanDiscoveryInterface.h"
 #include "Online/NetworkLand.h"
@@ -3530,6 +3533,11 @@ void Game::CloseMenuForCinema()
 	{
 		_interface->GetMenu().Close();
 	}
+	// The cinema bars close every box of the game, also the land information box
+	if (_interface && _interface->GetLandInfoBox().IsActive())
+	{
+		_interface->GetLandInfoBox().Close();
+	}
 }
 
 void Game::UpdateHandFrame(std::chrono::microseconds deltaTime)
@@ -5673,8 +5681,7 @@ void Game::HandleTripKey()
 	    .networkGame = InNetworkGame(),
 	    .inTemple = Locator::temple::has_value() && Locator::temple::value().Active(),
 	    .land = context.mapScriptGlobals.landNumber,
-	    .boxUp = _interface->IsDialogOpen() || _interface->IsBoxWithBackgroundActive() || _interface->BoxTakesKeyboard() ||
-	             _interface->GetTattooEditor().IsOpen(),
+	    .boxUp = _interface->BoxRefusesTrip(),
 	    .scriptHoldsCinemaBars = director.IsWideScreenOn() && director.GetWideScreenOwner() != 0,
 	};
 	if (!playground_trip::MayAskToGo(situation))
@@ -5708,15 +5715,26 @@ void Game::FollowPlaygroundTrip()
 	// The answer gives the keyboard back to the game at once
 	Locator::gameActionSystem::value().BoxAnswered();
 	auto& trip = Locator::playgroundTripSystem::value();
-	if (!*answer)
+	// Each answer unpauses the game, but Yes to leave the Playground. The menu then comes back if it is open, and its main
+	// page pauses the game again.
+	auto& menu = _interface->GetMenu();
+	if (question == playground_trip::Question::Go || !*answer)
 	{
 		Locator::time::value().SetPlayerPause(false);
+		if (menu.IsOpen() && playground_trip::PausesWhenBack(_interface->GetTripMenuBox()))
+		{
+			Locator::time::value().SetPlayerPause(true);
+		}
+	}
+	if (!*answer)
+	{
 		return;
 	}
 	if (question == playground_trip::Question::Go)
 	{
-		// The saved game does not pause. The land of the Playground then loads.
-		Locator::time::value().SetPlayerPause(false);
+		// The saved game keeps the pause that the game has now. The land of the Playground then loads. The trip closes no
+		// box: an open menu and the land information box stay over the new land.
+		_boxesStayForTrip = true;
 		if (!trip.SaveBeforeTrip())
 		{
 			SPDLOG_LOGGER_WARN(spdlog::get("game"), "The save before the trip to the Gods' Playground did not write");
@@ -5725,6 +5743,7 @@ void Game::FollowPlaygroundTrip()
 		{
 			SPDLOG_LOGGER_ERROR(spdlog::get("game"), "The trip to the Gods' Playground did not load the land");
 		}
+		_boxesStayForTrip = false;
 		return;
 	}
 	// The saved game loads with its own pause. With no saved game, the game stays paused.
@@ -5814,6 +5833,12 @@ void Game::HandleInterfaceAction()
 		{
 			_menuClosedAt = std::chrono::steady_clock::now();
 		}
+	}
+	// The main menu comes back under each page that the menu shows, and pauses the game again. This is important after
+	// the question of the trip unpaused the game over another page. Inside the temple, the options show alone.
+	if (menu.TakePageShown() && menu.IsOpen() && !menu.IsInsideTemple())
+	{
+		Locator::time::value().SetPlayerPause(true);
 	}
 
 	switch (action)
@@ -5909,7 +5934,15 @@ std::unique_ptr<gui::MultiplayerFrontEnd> Game::MakeMultiplayerFrontEnd()
 {
 	if (_lanDiscovery == nullptr)
 	{
+#if defined(__EMSCRIPTEN__)
+		// A browser cannot search the local network
 		_lanDiscovery = std::make_unique<online::NoLanDiscovery>();
+#else
+		_lanDiscovery = std::make_unique<online::UdpLanDiscovery>([] {
+			return std::chrono::duration_cast<std::chrono::microseconds>(std::chrono::steady_clock::now().time_since_epoch())
+			    .count();
+		});
+#endif
 	}
 	gui::MultiplayerFrontEnd::Services services {
 	    .lobby = Locator::lobbyClient::has_value() ? &Locator::lobbyClient::value() : nullptr,
@@ -6441,7 +6474,13 @@ void Game::ShowTattooMenuCreature() const
 
 void Game::CloseMenuForNewLand()
 {
-	// In the game, a land changes only when the menu is closed. The menu closes before the choices in it that change
+	// The trip to the Gods' Playground closes no box. An open menu keeps its pause, and the land information box stays,
+	// while the land of the Playground loads. The cinema bars of the first lesson close them.
+	if (std::exchange(_boxesStayForTrip, false))
+	{
+		return;
+	}
+	// Each other change of land comes only when the menu is closed. The menu closes before the choices in it that change
 	// the land. This also closes the menu for a land that the debug tools load.
 	if (_interface && _interface->GetMenu().IsOpen())
 	{
