@@ -68,6 +68,7 @@
 #include "ECS/Components/ScriptControl.h"
 #include "ECS/Components/ScriptHighlight.h"
 #include "ECS/Components/SpellDispenser.h"
+#include "ECS/Components/SpellIcon.h"
 #include "ECS/Components/TeleportStone.h"
 #include "ECS/Components/Temple.h"
 #include "ECS/Components/Transform.h"
@@ -162,7 +163,7 @@ std::vector<cast_moves::CollideSphere> CollideSpheres(const ecs::Registry& regis
 		return {spheres.begin(), spheres.end()};
 	}
 	if (!registry.AnyOf<Abode, Feature, AnimatedStatic, Flowers, SpellDispenser, TeleportStone, WorshipAltar, Vortex,
-	                    MobileStatic, DeadTree, MagicShield, ShieldDome, ScriptHighlight, FishFarm>(entity))
+	                    MobileStatic, DeadTree, MagicShield, ShieldDome, ScriptHighlight, FishFarm, WorshipIcon>(entity))
 	{
 		return {};
 	}

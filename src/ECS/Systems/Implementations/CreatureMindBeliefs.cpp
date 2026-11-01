@@ -435,8 +435,8 @@ std::optional<uint32_t> mind_detail::BeliefKindOf(const ecs::Registry& registry,
 		return KindOfLooseThing(
 		    Locator::infoConstants::value().mobileObject.at(static_cast<size_t>(MobileObjectInfo::OneOffSpellSeed)).mobileType);
 	}
-	// A stone hand on a village centre is the icon of a miracle
-	if (registry.AllOf<TownCentreIcon>(thing))
+	// A stone hand on a village centre and an icon at a worship site are icons of miracles
+	if (registry.AnyOf<TownCentreIcon, WorshipIcon>(thing))
 	{
 		return kinds::k_SpellIcon;
 	}

@@ -526,6 +526,9 @@ StatisticsBox::StatisticsBox(const TextDatabase& texts, const GameFont& font, st
 	_graphicBox->onChange = [this](bool) { SetGraphic(true); };
 	_numericBox->onChange = [this](bool) { SetGraphic(false); };
 	_creatures = &dialog.Add<CreatureViews>();
+	// The window of gods of a network game of more than 4 gods, on the line of the check boxes, right of them
+	_window =
+	    std::make_unique<GodWindow>(dialog, font, DialogRect {.min = {540, 530}, .max = {760, 555}}, [this] { ShowWindow(); });
 }
 
 StatisticsBox::~StatisticsBox() = default;
@@ -534,6 +537,7 @@ void StatisticsBox::Open(statistics::BoxFigures figures, PlayerNames local, bool
 {
 	_figures = std::move(figures);
 	_local = local;
+	_window->SetGods(_figures.players.size());
 	_dialog->SetTabLabel(0, fromGameOver ? _gameOverLabel : _mainMenuLabel);
 	// It opens on Player Stats, as it was. Its graphs do not grow again
 	_tab = Tab::Player;
@@ -552,7 +556,8 @@ void StatisticsBox::SetTab(Tab tab)
 		}
 	}
 	_tab = tab;
-	_page = MakePage(tab, _figures, _local);
+	const auto shown = _window->Shown();
+	_page = MakePage(tab, _figures, _local, shown);
 	for (size_t i = 0; i < k_GraphCount; ++i)
 	{
 		_graphs.at(i)->visible = _page.graphShown.at(i);
@@ -595,8 +600,9 @@ void StatisticsBox::SetTab(Tab tab)
 	std::vector<std::vector<float>> influence;
 	std::vector<std::vector<float>> population;
 	std::vector<glm::vec4> colours;
-	for (const auto& player : _figures.players)
+	for (const auto index : shown)
 	{
+		const auto& player = _figures.players.at(index);
 		influence.push_back(player.influenceHistory);
 		population.push_back(player.populationHistory);
 		colours.push_back(PlayerColour(player.player, _figures.landNumber));
@@ -605,9 +611,19 @@ void StatisticsBox::SetTab(Tab tab)
 	_population->SetLines(std::move(population), colours, std::nullopt);
 	_creatures->colours = std::move(colours);
 	_creatures->players.clear();
-	for (const auto& player : _figures.players)
+	for (const auto index : shown)
 	{
-		_creatures->players.push_back(player.player);
+		_creatures->players.push_back(_figures.players.at(index).player);
+	}
+}
+
+void StatisticsBox::ShowWindow()
+{
+	const auto picked = _shownRow;
+	SetTab(_tab);
+	if (picked.has_value())
+	{
+		PickRow(*picked);
 	}
 }
 

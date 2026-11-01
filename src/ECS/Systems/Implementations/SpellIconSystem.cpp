@@ -538,6 +538,14 @@ void SpellIconSystem::SiteRemoved(entt::entity site)
 	}
 }
 
+void SpellIconSystem::IconRemoved(entt::entity icon)
+{
+	if (Entities().Valid(icon))
+	{
+		Destroy(icon);
+	}
+}
+
 void SpellIconSystem::Destroy(entt::entity icon)
 {
 	auto& registry = Entities();

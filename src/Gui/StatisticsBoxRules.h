@@ -14,6 +14,7 @@
 
 #include <array>
 #include <optional>
+#include <span>
 #include <string>
 #include <string_view>
 #include <vector>
@@ -102,6 +103,10 @@ struct Page
 
 /// The tab's rows from the figures. The single figures are drawn in the local player's colour.
 [[nodiscard]] Page MakePage(Tab tab, const statistics::BoxFigures& figures, PlayerNames local);
+/// The tab's rows for some of the players only, by their places in the figures, in order: the window of gods of a game
+/// of more than 4 gods (deviation 195). The rows of men and women stay out of the first player's total, and the gods
+/// defeated out of every other player in the game.
+[[nodiscard]] Page MakePage(Tab tab, const statistics::BoxFigures& figures, PlayerNames local, std::span<const size_t> shown);
 
 /// A value as the box keeps it: held between minus and plus 10^20 for the rows of decimal figures
 [[nodiscard]] float Held(float value);

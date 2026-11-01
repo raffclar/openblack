@@ -194,7 +194,7 @@ bool flock::OutOfTheHunt(LivingStates finalState, bool broughtDown)
 
 bool flock::IsPrey(const PreyFacts& prey)
 {
-	if (prey.hunterFading || prey.uneatable || prey.skeleton || prey.helpless || !prey.hasMeat || !prey.onCorridor)
+	if (prey.hunterFading || prey.skeleton || prey.helpless || !prey.hasMeat || !prey.onCorridor)
 	{
 		return false;
 	}

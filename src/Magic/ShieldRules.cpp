@@ -17,6 +17,7 @@
 #include <glm/geometric.hpp>
 
 #include "Common/PortableMath.h"
+#include "Common/X87.h"
 #include "Common/X87Vector.h"
 #include "InfoConstants.h"
 #include "VillagerReactionRules.h"
@@ -113,7 +114,7 @@ float shield::DyingEffectAlpha(float alpha, float dieTime)
 
 bool shield::NeedsRescale(float drawnScale, float solidScale)
 {
-	return std::abs(drawnScale - solidScale) > k_DomeRescaleStep;
+	return x87::Greater(std::abs(drawnScale - solidScale), k_DomeRescaleStep);
 }
 
 shield::DomeVolume shield::VolumeOf(glm::vec3 meshHalfExtent, float scale)

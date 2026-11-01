@@ -11,6 +11,7 @@
 
 #include <algorithm>
 #include <array>
+#include <span>
 #include <utility>
 #include <vector>
 
@@ -417,17 +418,20 @@ statistics::BoxFigures player_statistics::Box()
 		global.linesOfCode += statistics::LinesOfCodeStep(global.townsAtStart,
 		                                                  [](int32_t n) { return Locator::gameRandom::value().LocalRand(n); });
 	}
-	// The box counts the players that play among the first places, then shows that many places from the first
-	std::array<bool, statistics::k_BoxPlayers> plays {};
-	for (size_t place = 0; place < plays.size(); ++place)
+	// The box counts the players that play among its places, then shows that many places from the first
+	const bool networkGame = Locator::time::has_value() && Locator::time::value().IsNetworkGame();
+	const auto playerNumbers =
+	    Locator::playerSystem::has_value() ? Locator::playerSystem::value().PlayerNumbersInGame() : player_slots::k_LandSlots;
+	const auto places = statistics::BoxPlaces(networkGame, playerNumbers);
+	std::array<bool, player_slots::k_MaxPlayers> plays {};
+	for (size_t place = 0; place < places.size() && place < plays.size(); ++place)
 	{
-		plays.at(place) =
-		    Locator::playerSystem::has_value() && Locator::playerSystem::value().PlaysInGame(static_cast<PlayerNames>(place));
+		plays.at(place) = Locator::playerSystem::has_value() && Locator::playerSystem::value().PlaysInGame(places.at(place));
 	}
-	box.playersInGame = statistics::BoxPlayerCount(plays);
-	for (uint32_t place = 0; place < box.playersInGame; ++place)
+	box.playersInGame = statistics::BoxPlayerCount(std::span(plays).first(std::min(places.size(), plays.size())));
+	for (uint32_t place = 0; place < box.playersInGame && place < places.size(); ++place)
 	{
-		const auto name = static_cast<PlayerNames>(place);
+		const auto name = places.at(place);
 		const auto entity = Locator::playerSystem::has_value()
 		                        ? Locator::playerSystem::value().FindPlayer(name).value_or(entt::null)
 		                        : entt::null;

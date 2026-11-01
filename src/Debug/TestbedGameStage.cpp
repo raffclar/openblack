@@ -193,6 +193,11 @@ std::string TestbedGameStage::OpenEndBox(size_t value)
 		game->AskToLeaveNetworkGame();
 		return "the question to leave opens";
 	}
+	if (value == 4)
+	{
+		const bool moved = game->GetInterface()->GetEndGameBox().MoveGodWindow(1);
+		return moved ? "the window of gods moves a page on" : "the window of gods does not move";
+	}
 	const bool opened = game->GetInterface()->GetEndGameBox().OpenTab(value);
 	return fmt::format("tab {} {}", value, opened ? "opens its box" : "does not open");
 }

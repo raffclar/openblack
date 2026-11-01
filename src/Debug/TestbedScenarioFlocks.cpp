@@ -26,6 +26,9 @@ constexpr glm::vec2 k_HandBehind {0.0f, 25.0f};
 /// The hand lets go once armed, then sweeps on for the second or so the flock takes to pour out
 constexpr float k_HoldSeconds = 0.4f;
 constexpr float k_SweepSeconds = 1.6f;
+/// On the second land, from the middle of the land: the flocks are cast 90 metres south of the player's first town and
+/// go north into it
+constexpr glm::vec2 k_LandTwoBase {991.5f, 586.5f};
 } // namespace
 
 void testbed_scenarios::AddFlockScenarios(std::vector<Scenario>& all)
@@ -405,5 +408,67 @@ void testbed_scenarios::AddFlockScenarios(std::vector<Scenario>& all)
 	                  .delaySeconds = 1.0f,
 	                  .holdSeconds = 3.0f,
 	                  .casterAlignment = 0.8f}},
+	});
+
+	all.push_back({
+	    .id = "miracles.l2_flock_bats",
+	    .name = "Flying flock: bats at a village of the second land",
+	    .facet = Facet::Miracles,
+	    .description = "The second land of the story. An evil player (alignment -0.8) casts the flying flock by hand "
+	                   "south of the player's first town and sweeps it east, the player's tiger standing to the north.",
+	    .expected = "Black bats flap out of the hand along the sweep with a single screech, not one for each bat, and a "
+	                "dark smoky trail follows the hand until the last bat is out. They fly north over the town. The bats "
+	                "frighten the tiger when it sees them. After 25 seconds they fly on whole for two seconds, then vanish.",
+	    .environment = {.land = Land::Story, .storyLand = "Land2.txt", .dispenserGrid = false},
+	    .framing = {.shot = Shot::Overview,
+	                .include = {k_LandTwoBase + glm::vec2(-40.0f, -10.0f), k_LandTwoBase + glm::vec2(40.0f, 120.0f)}},
+	    .creatures = {{.label = "watching", .offset = k_LandTwoBase + glm::vec2(0.0f, 70.0f), .facingDegrees = 180.0f}},
+	    .miracles = {{.type = MagicType::FlockFlying,
+	                  .point = k_LandTwoBase + k_Spot,
+	                  .handOffset = k_LandTwoBase + k_HandFrom,
+	                  .handHeight = 12.0f,
+	                  .throwVelocity = k_SweepEast,
+	                  .delaySeconds = 8.0f,
+	                  .holdSeconds = k_HoldSeconds,
+	                  .byHand = true,
+	                  .sweepSeconds = k_SweepSeconds,
+	                  .casterAlignment = -0.8f}},
+	});
+
+	all.push_back({
+	    .id = "miracles.l2_flock_wolves",
+	    .name = "Ground flock: wolves at a village of the second land",
+	    .facet = Facet::Miracles,
+	    .description = "The second land of the story. The ground flock cast by hand south of the player's first town and "
+	                   "swept east, with Norse villagers standing in the wolves' way to the north and one well off to "
+	                   "the side.",
+	    .expected = "The wolves appear along the sweep with a single howl, not one for each wolf, and run north. The "
+	                "villagers in their way are chased and brought down: each one falls with the clip of a villager that "
+	                "a lion attacks and lies there while a wolf eats it. A villager that a wolf cannot reach, or whose "
+	                "kind has no food that the wolf eats, is not hunted. The villager off to the side is left alone. A "
+	                "wolf set alight burns, drawn charred with flames.",
+	    .environment = {.land = Land::Story, .storyLand = "Land2.txt", .dispenserGrid = false},
+	    .framing = {.shot = Shot::Overview,
+	                .include = {k_LandTwoBase + glm::vec2(-20.0f, 0.0f), k_LandTwoBase + glm::vec2(20.0f, 110.0f)},
+	                .distance = 0.7f},
+	    .objects = {{.type = VillagerInfo::NorseFarmerMale, .offset = k_LandTwoBase + glm::vec2(-5.0f, 55.0f)},
+	                {.type = VillagerInfo::NorseForesterMale, .offset = k_LandTwoBase + glm::vec2(8.0f, 70.0f)},
+	                {.type = VillagerInfo::NorseFarmerMale, .offset = k_LandTwoBase + glm::vec2(0.0f, 90.0f)},
+	                {.type = VillagerInfo::NorseForesterMale, .offset = k_LandTwoBase + glm::vec2(-12.0f, 105.0f)},
+	                {.type = VillagerInfo::NorseFarmerMale, .offset = k_LandTwoBase + glm::vec2(110.0f, 40.0f)}},
+	    .miracles = {{.type = MagicType::FlockGround,
+	                  .point = k_LandTwoBase + k_Spot,
+	                  .handOffset = k_LandTwoBase + k_HandFrom,
+	                  .handHeight = 12.0f,
+	                  .throwVelocity = k_SweepEast,
+	                  .delaySeconds = 1.0f,
+	                  .holdSeconds = k_HoldSeconds,
+	                  .byHand = true,
+	                  .sweepSeconds = k_SweepSeconds},
+	                 {.type = MagicType::Fireball,
+	                  .point = k_LandTwoBase + glm::vec2(0.0f, 60.0f),
+	                  .handOffset = k_LandTwoBase + glm::vec2(0.0f, 45.0f),
+	                  .handHeight = 15.0f,
+	                  .delaySeconds = 6.0f}},
 	});
 }

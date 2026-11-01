@@ -16,6 +16,7 @@
 #include "ECS/Components/Hand.h"
 #include "ECS/Components/HandClicked.h"
 #include "ECS/Components/HandCreatureDraw.h"
+#include "ECS/Components/HandCreaturePose.h"
 #include "ECS/Components/HandGlow.h"
 #include "ECS/Components/HandGrab.h"
 #include "ECS/Components/HandHeldSeed.h"
@@ -55,6 +56,10 @@ void openblack::ecs::reflection::RegisterFields_Components_h(entt::meta_ctx& con
 	    .Field<&components::HandCreatureDraw::byCommand>("byCommand")
 	    .Field<&components::HandCreatureDraw::heldMs>("heldMs")
 	    .Field<&components::HandCreatureDraw::touching>("touching");
+	Reflect<components::HandCreaturePose>(context)
+	    .Field<&components::HandCreaturePose::cameraTaken>("cameraTaken")
+	    .Field<&components::HandCreaturePose::posed>("posed")
+	    .Field<&components::HandCreaturePose::releaseWaits>("releaseWaits");
 	Reflect<components::HandGlow>(context).Field<&components::HandGlow::rgb>("rgb");
 	Reflect<components::InHand>(context)
 	    .Field<&components::InHand::hand>("hand")

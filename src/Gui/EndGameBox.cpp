@@ -153,6 +153,18 @@ bool EndGameBox::OpenTab(size_t tab)
 	}
 }
 
+bool EndGameBox::MoveGodWindow(int pages)
+{
+	if (!_open || (!_showsStatistics && !_showsConditions))
+	{
+		return false;
+	}
+	auto& window = _showsStatistics ? _statistics->GetGodWindow() : _conditions->GetGodWindow();
+	const auto first = window.GetFirst();
+	window.Move(pages);
+	return window.GetFirst() != first;
+}
+
 void EndGameBox::OpenConditions()
 {
 	auto figures = _conditionsSource ? _conditionsSource() : conditions_box::Figures {};

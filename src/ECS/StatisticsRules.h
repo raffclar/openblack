@@ -21,6 +21,7 @@
 #include <vector>
 
 #include "Enums.h"
+#include "PlayerSlots.h"
 
 /// The rules of the game's statistics: how each player's counters move, how the histories of their influence and
 /// population are kept, and how the figures shown are worked out from the towns. Free of the game's state so they can be
@@ -380,17 +381,42 @@ struct BoxFigures
 {
 	/// The players of the first places, in player order: as many places as there are players in the game
 	std::vector<PlayerFigures> players;
-	/// The human and computer players among the first four places
+	/// The human and computer players among the places of the box (BoxPlaces)
 	uint32_t playersInGame {0};
 	/// The land, which gives some players another colour
 	int32_t landNumber {0};
 	TechFigures tech;
 };
-/// At most this many players are shown
+/// At most this many players are shown at a time
 inline constexpr size_t k_BoxPlayers = 4;
-/// How many players the box shows: the human and computer players among the first four places. The box then shows that
-/// many places from the first, also a place that nobody plays when a later place has a player.
-[[nodiscard]] constexpr uint32_t BoxPlayerCount(std::span<const bool, k_BoxPlayers> plays)
+/// The places the box counts its players among, in order. The game counts the first four places. A network game of
+/// openblack counts every god slot of the game (deviation 195): the box then shows every god, 4 at a time. A network game
+/// of 4 gods or fewer has its gods in the first four places, so the box shows the same players as the game.
+[[nodiscard]] inline std::vector<PlayerNames> BoxPlaces(bool networkGame, size_t playerNumbers)
+{
+	std::vector<PlayerNames> places;
+	if (!networkGame)
+	{
+		for (size_t place = 0; place < k_BoxPlayers; ++place)
+		{
+			places.push_back(static_cast<PlayerNames>(place));
+		}
+		return places;
+	}
+	for (size_t slot = 0; slot < player_slots::k_MaxPlayers; ++slot)
+	{
+		const auto player = player_slots::PlayerOfSlot(slot);
+		if (!player.has_value() || static_cast<size_t>(*player) >= playerNumbers)
+		{
+			break;
+		}
+		places.push_back(*player);
+	}
+	return places;
+}
+/// How many players the box shows: the human and computer players among its places. The box then shows that many
+/// places from the first, also a place that nobody plays when a later place has a player.
+[[nodiscard]] constexpr uint32_t BoxPlayerCount(std::span<const bool> plays)
 {
 	return static_cast<uint32_t>(std::ranges::count(plays, true));
 }

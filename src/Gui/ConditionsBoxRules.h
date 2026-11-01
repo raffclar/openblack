@@ -30,6 +30,10 @@
 /// winning conditions of the player of this computer. Each line of the list shows the name and the target of a
 /// condition, and in the right third of the line how far each god got: its value, or "Done" when it completed the
 /// condition. A check box for each god shows or hides the god in the graph and in the list.
+///
+/// A network game of more than 4 gods shows every god that plays. The 4 check boxes are then the gods of the window of
+/// gods (god_window, deviation 195), each labelled with the number of its god, and the graph and the list show the
+/// ticked gods of the window.
 namespace openblack::gui::conditions_box
 {
 
@@ -78,7 +82,18 @@ struct Columns
 };
 [[nodiscard]] Columns ValueColumns(int left, int right, size_t gods);
 
-/// The gods that the box shows: the gods whose check box is ticked
-[[nodiscard]] std::vector<size_t> ShownGods(const Figures& figures, const std::array<bool, k_Gods>& ticked);
+/// The god of each check box, by its place in the figures. With 4 gods or fewer, the check box of each of the first four
+/// players has the god of that player, if it plays. With more gods, the check boxes have the 4 gods of the window from
+/// the first god given.
+using CheckBoxGods = std::array<std::optional<size_t>, k_Gods>;
+[[nodiscard]] CheckBoxGods GodsOfCheckBoxes(const Figures& figures, size_t windowFirst);
+
+/// The label under a check box: "Player" and the number of the player, from 1. With more than 4 gods the number is the
+/// god's place in the game room, else the place of the check box.
+[[nodiscard]] std::u16string CheckBoxLabel(const Figures& figures, const CheckBoxGods& boxes, size_t box);
+
+/// The gods that the box shows: the gods of the check boxes that are ticked, in the order of the players. Each god has a
+/// tick, by its place in the figures.
+[[nodiscard]] std::vector<size_t> ShownGods(const CheckBoxGods& boxes, const std::vector<bool>& ticked);
 
 } // namespace openblack::gui::conditions_box

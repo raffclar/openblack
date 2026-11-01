@@ -85,6 +85,7 @@ public:
 	void TownJoinedSite(entt::entity, entt::entity) override {}
 	void TownLeftSite(entt::entity, entt::entity) override {}
 	void SiteRemoved(entt::entity) override {}
+	void IconRemoved(entt::entity) override {}
 	[[nodiscard]] bool ValidToTap(entt::entity, PlayerNames) const override { return false; }
 	bool Tap(entt::entity, PlayerNames) override { return false; }
 	[[nodiscard]] entt::entity SiteOfIcon(entt::entity entity) const override { return entity == icon ? iconSite : entt::null; }

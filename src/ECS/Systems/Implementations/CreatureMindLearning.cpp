@@ -919,6 +919,11 @@ std::optional<uint32_t> BeliefPlayerOf(const ecs::Registry& registry, entt::enti
 	{
 		return PlayerOfTown(registry, icon->town);
 	}
+	// An icon at a worship site is of the player of its site
+	if (registry.AllOf<WorshipIcon>(thing))
+	{
+		return PlayerNumberOf(ecs::world_objects::IconPlayer(registry, thing));
+	}
 	// A villager, a field or a fish farm with no town is of no player; a building, a totem or a pile with no town is of
 	// the neutral player
 	if (registry.AnyOf<Villager, Abode, Field, FishFarm, VillageTotem, Pot>(thing))
