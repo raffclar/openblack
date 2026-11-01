@@ -216,6 +216,19 @@ TEST(NewGameChoice, TheDirectStartCreatureIsMadeOnlyWhenNoneCameThrough)
 	EXPECT_EQ(AnswerAtOnce(withWolf, false), Choice::StartNormally);
 }
 
+TEST(NewGameChoice, ADirectStartReadsNoCreatureFileOfAnEarlierGame)
+{
+	using openblack::CreatureType;
+	using openblack::new_game_choice::LoadsCreatureOfEarlierGame;
+	const NewGameStart withTiger {.answer = Choice::StartNormally, .directCreature = CreatureType::Tiger};
+	EXPECT_FALSE(LoadsCreatureOfEarlierGame(withTiger, 2));
+	EXPECT_FALSE(LoadsCreatureOfEarlierGame(withTiger, 3));
+	// The first land and a start with no direct creature read the file as the game does
+	EXPECT_TRUE(LoadsCreatureOfEarlierGame(withTiger, 1));
+	EXPECT_TRUE(LoadsCreatureOfEarlierGame(NewGameStart {.answer = Choice::StartNormally}, 2));
+	EXPECT_TRUE(LoadsCreatureOfEarlierGame(std::nullopt, 2));
+}
+
 TEST(NewGameChoice, SelectionsAreBroughtIntoRange)
 {
 	EXPECT_EQ(ClampChoice(-1), Choice::StartNormally);

@@ -1376,24 +1376,18 @@ void CreatureMindSystem::ApplyLoaded(entt::entity creature, CreatureMindState& m
 	}
 	SPDLOG_LOGGER_INFO(spdlog::get("game"), "Creature {} took up a mind file: version {}, stage {}",
 	                   entt::to_integral(creature), file.version, mind.developmentPhase);
-	// A creature that a script made from a mind file knows every leash and is fully grown
-	if (mind.growUpAfterFile)
-	{
-		mind.growUpAfterFile = false;
-		mind.learnt->leashWords.fill(1);
-		if (auto* leashes = registry.TryGet<CreatureLeash>(creature))
-		{
-			leashes->known.set();
-		}
-		MoveToStage(creature, CreatureMindState::k_FullyGrownUp);
-	}
 }
 
-void CreatureMindSystem::GrowUpAfterFile(entt::entity creature)
+void CreatureMindSystem::LearnEveryLeash(entt::entity creature)
 {
-	if (auto* mind = Locator::entitiesRegistry::value().TryGet<CreatureMindState>(creature))
+	auto& registry = Locator::entitiesRegistry::value();
+	if (auto* mind = registry.TryGet<CreatureMindState>(creature); mind != nullptr && mind->learnt.has_value())
 	{
-		mind->growUpAfterFile = true;
+		mind->learnt->leashWords.fill(1);
+	}
+	if (auto* leashes = registry.TryGet<CreatureLeash>(creature))
+	{
+		leashes->known.set();
 	}
 }
 

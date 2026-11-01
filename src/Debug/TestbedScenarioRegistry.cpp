@@ -1760,8 +1760,8 @@ void AddBreederOffers(std::vector<Scenario>& all)
 	});
 }
 
-/// The computer gods' creatures of the third and fifth lands: the game's own scripts load each from its mind file for
-/// player two, as the two lands do. The player's Cow stands near, for the scripts that wait for it.
+/// The computer gods' creatures of the second, third and fifth lands: the game's own scripts load each from its mind
+/// file for player two, as the lands do. The player's Cow stands near, for the scripts that wait for it.
 void AddRivalCreatureLoads(std::vector<Scenario>& all)
 {
 	using Argument = ScriptArgument;
@@ -1809,6 +1809,21 @@ void AddRivalCreatureLoads(std::vector<Scenario>& all)
 	    .framing = {.shot = Shot::Placed, .eye = {0.0f, 30.0f, -60.0f}, .look = {10.0f, 8.0f, 10.0f}},
 	    .creatures = {cow, old},
 	    .commands = {load("SetupNemesisCreature", 2.0f)},
+	});
+	all.push_back({
+	    .id = "creature.load_khazar",
+	    .name = "The second land loads the creature of Khazar from his mind file",
+	    .facet = Facet::Story,
+	    .description = "The game's SetupKhazarCreature script runs for player two with the scale 1.2, as the second land "
+	                   "runs it.",
+	    .expected = "A Tortoise of player two appears on the ground at the place, fully grown, from the KhazarCreature "
+	                "mind file. It knows every leash: the CreatureLeash component shows four known leashes, and each "
+	                "leash word of its mind is 1. It is the creature of player two. The script makes it a friend of the "
+	                "player's Cow and gives it the alignment of the Cow.",
+	    .environment = {.dispenserGrid = false, .players = {PlayerNames::PLAYER_TWO}},
+	    .framing = {.shot = Shot::Placed, .eye = {0.0f, 25.0f, -55.0f}, .look = {10.0f, 8.0f, 0.0f}},
+	    .creatures = {cow},
+	    .commands = {load("SetupKhazarCreature", 1.2f)},
 	});
 }
 

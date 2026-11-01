@@ -1094,3 +1094,36 @@ TEST(CreatureMindFile, ACreatureMadeFromARealMindKnowsEveryLeashAndIsFullyGrown)
 	}
 	EXPECT_GT(checked, 0u);
 }
+
+// Khazar's, Lethys's and Nemesis's land scripts load their creatures from three mind files of the game. The three files
+// hold the same mind of version 25: it has no leash words, so the creature knows its leashes only because the script
+// load teaches them. The species comes from the script, not from the file. The file gives a body, and its alignment is
+// from -1 to 1.
+// NOLINTNEXTLINE(cppcoreguidelines-avoid-non-const-global-variables): external macro
+TEST(CreatureMindFile, TheRivalGodsCreaturesComeFromOneMind)
+{
+	const auto folder = GameMindFolder();
+	if (!folder.has_value())
+	{
+		GTEST_SKIP() << "Set OPENBLACK_GAME_PATH to the game's folder to check its creature files";
+	}
+	const auto khazar = ReadFileBytes(*folder / "KhazarCreature");
+	ASSERT_TRUE(khazar.has_value());
+	for (const auto* name : {"LethysCreature", "NemesisCreature"})
+	{
+		const auto other = ReadFileBytes(*folder / name);
+		ASSERT_TRUE(other.has_value()) << name;
+		EXPECT_EQ(*other, *khazar) << name;
+	}
+	MindFileData mind;
+	ASSERT_EQ(Read(*khazar, mind), MindResult::Success);
+	EXPECT_EQ(mind.version, 25u);
+	EXPECT_FALSE(mind.leashWords.has_value());
+	EXPECT_EQ(mind.developmentPhase, 13);
+	const auto body = creature_mind_body::FromMindFile(mind);
+	ASSERT_TRUE(body.has_value());
+	ASSERT_TRUE(body->alignment.has_value());
+	EXPECT_GE(*body->alignment, -1.0f);
+	EXPECT_LE(*body->alignment, 1.0f);
+	EXPECT_EQ(Write(mind), *khazar);
+}

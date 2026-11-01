@@ -149,7 +149,6 @@ void openblack::ecs::reflection::RegisterFields_Components_creaturem(entt::meta_
 	    .Field<&components::CreatureMindState::trainer>("trainer")
 	    .Field<&components::CreatureMindState::pendingFile>("pendingFile")
 	    .Field<&components::CreatureMindState::resourceChecked>("resourceChecked")
-	    .Field<&components::CreatureMindState::growUpAfterFile>("growUpAfterFile")
 	    .Field<&components::CreatureMindState::pendingTeaching>("pendingTeaching")
 	    .Field<&components::CreatureMindState::leash>("leash")
 	    .Field<&components::CreatureMindState::heldSortCounts>("heldSortCounts")
