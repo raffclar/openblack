@@ -36,8 +36,9 @@ NOT_COMPONENTS = {
     "RegistryContext",
     "VillageLightFlames",
     "MapScriptGlobals",
-    # The name of a template parameter, and the entity storage of the registry
+    # The names of template parameters, and the entity storage of the registry
     "Component",
+    "Components",
     "entity",
     # An alias of the component Mesh
     "MeshComponent",
