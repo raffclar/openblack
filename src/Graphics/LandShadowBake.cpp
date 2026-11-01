@@ -33,6 +33,7 @@
 #include "ECS/Components/Mobile.h"
 #include "ECS/Components/Reward.h"
 #include "ECS/Components/SpellDispenser.h"
+#include "ECS/Components/SpellIcon.h"
 #include "ECS/Components/TeleportStone.h"
 #include "ECS/Components/Temple.h"
 #include "ECS/Components/Transform.h"
@@ -463,6 +464,7 @@ void LandShadowBake::Update(bool rowsFromFarEnd, Casters casters)
 		GatherCasters<Temple>(registry, casters, found, mayCast);
 		GatherCasters<WorshipSite>(registry, casters, found, mayCast);
 		GatherCasters<WorshipAltar>(registry, casters, found, mayCast);
+		GatherCasters<WorshipIcon>(registry, casters, found, mayCast);
 		GatherCasters<SpellDispenser>(registry, casters, found, mayCast);
 		GatherCasters<Feature>(registry, casters, found, mayCast);
 		GatherCasters<MobileStatic>(registry, casters, found, mayCast);
