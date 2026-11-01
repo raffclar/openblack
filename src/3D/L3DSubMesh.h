@@ -102,6 +102,12 @@ public:
 	bool LoadMade(std::span<const MadePrimitive> primitives) noexcept;
 	/// A dynamic mesh's submesh takes its vertices afresh from a file of the same shape
 	void UpdateVertices(const l3d::L3DFile& l3d) noexcept;
+	/// The device mesh is made again with three corners of its own for each face, in the order of the triangles, so that
+	/// each corner can keep the up part of the normal of its face (snow_faces::PackUp, in its third and fourth indices).
+	/// The snow of a tree or a fence reads it. The corners keep their place, texture coordinates and normal, so the
+	/// submesh draws as before. Only a submesh without bones, without lightmap coordinates and with a device mesh is
+	/// changed, one time. Whether it was changed.
+	bool SplitFacesForSnow();
 
 	[[nodiscard]] openblack::l3d::L3DSubmeshHeader::Flags GetFlags() const { return _flags; }
 	[[nodiscard]] bool IsPhysics() const { return _flags.isPhysics; }
@@ -201,6 +207,7 @@ private:
 	std::optional<uint32_t> _lightmapSkinID;
 	bool _hasLightmapCoordinates {false};
 	bool _made {false};
+	bool _facesSplit {false};
 	std::optional<Joint> _joint;
 	std::string _name;
 	Frame _frame {glm::mat4(1.0f), glm::vec3(0.0f), glm::vec3(0.0f)};

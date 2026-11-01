@@ -3416,6 +3416,24 @@ void AddLight(std::vector<Scenario>& all)
 	});
 
 	all.push_back({
+	    .id = "light.snow_by_face",
+	    .name = "Snow on the faces of trees and fences",
+	    .facet = Facet::Light,
+	    .description = "Deep snow lies over the whole island. Two trees and two fences stand on the land near the camera. "
+	                   "A rock stands between them.",
+	    .expected = "In about four seconds the snow shows on the trees and the fences. Each face of a tree or a fence "
+	                "shows its snow as one flat area, with a sharp edge to the next face. The faces that point up show "
+	                "the most snow. The rock shows its snow with soft changes across its faces.",
+	    .environment = {.hour = 12.0f, .clockRuns = false, .dispenserGrid = false, .snowDepth = 200.0f},
+	    .framing = {.shot = Shot::Placed, .eye = {0.0f, 8.0f, -14.0f}, .look = {0.0f, 2.0f, 8.0f}},
+	    .objects = {{.type = TreeInfo::Conifer, .offset = {-6.0f, 12.0f}, .scale = 1.5f},
+	                {.type = TreeInfo::Oak, .offset = {7.0f, 14.0f}},
+	                {.type = MobileStaticInfo::CeltFenceShort, .offset = {-3.0f, 4.0f}},
+	                {.type = MobileStaticInfo::CeltFenceTall, .offset = {3.0f, 5.0f}},
+	                {.type = MobileStaticInfo::Rock, .offset = {0.0f, 8.0f}}},
+	});
+
+	all.push_back({
 	    .id = "light.snow_on_carried_things",
 	    .name = "Snow on villagers, not on what they carry",
 	    .facet = Facet::Light,
@@ -13111,6 +13129,49 @@ void AddWorkshopScenarios(std::vector<Scenario>& all)
 	                {.type = ScaffoldInfo::Normal, .offset = k_LooseScaffold, .scale = 0.7f}},
 	    .commands = {{.kind = Kind::ScaffoldStartsSite, .delaySeconds = 1.0f, .object = 1},
 	                 {.kind = Kind::DestroyScaffoldSite, .delaySeconds = 4.0f, .object = 1}},
+	});
+
+	all.push_back({
+	    .id = "objects.scaffold_script_active",
+	    .name = "A script sets a scaffold active, and the scaffold starts its building at once",
+	    .facet = Facet::Objects,
+	    .description = "The town, the scaffold and the camera of objects.scaffold_starts_building. After one second a "
+	                   "script sets the scaffold inactive. After one second more, the script sets the scaffold active.",
+	    .expected = "The first call does not change the scaffold. At the second call, a building site opens at the "
+	                "scaffold, with the phantom of the building that the town offers where the scaffold lies. No player "
+	                "put the scaffold down, so the planting sound does not play for the local player.",
+	    .environment = {.dispenserGrid = false},
+	    .framing = {.shot = Shot::Overview, .include = {k_LooseScaffold - glm::vec2 {10.0f}, k_BuildPlace + glm::vec2 {10.0f}}},
+	    .objects = {{.type = AbodeInfo::CelticTownCentre, .offset = {0.0f, 50.0f}},
+	                {.type = ScaffoldInfo::Normal, .offset = k_LooseScaffold, .scale = 0.7f}},
+	    .commands = {{.kind = Kind::CallNative,
+	                  .delaySeconds = 1.0f,
+	                  .script = "SET_ACTIVE",
+	                  .scriptArguments = {{.kind = ScriptArgument::Kind::Integer, .number = 0.0f},
+	                                      {.kind = ScriptArgument::Kind::Object, .index = 1}}},
+	                 {.kind = Kind::CallNative,
+	                  .delaySeconds = 1.0f,
+	                  .script = "SET_ACTIVE",
+	                  .scriptArguments = {{.kind = ScriptArgument::Kind::Integer, .number = 1.0f},
+	                                      {.kind = ScriptArgument::Kind::Object, .index = 1}}}},
+	});
+
+	all.push_back({
+	    .id = "objects.wood_poured_on_scaffold_site",
+	    .name = "The hand pours wood onto a scaffold on a site, and the site gets the wood",
+	    .facet = Facet::Objects,
+	    .description = "The town, the scaffold and the camera of objects.scaffold_starts_building. After one second the "
+	                   "scaffold starts the building that the town offers where it lies. After three seconds more, the "
+	                   "hand of the player pours 300 wood over the scaffold.",
+	    .expected = "A building site opens at the scaffold. The poured wood goes into the site, as into a store. No pile "
+	                "of wood stays on the ground at the scaffold. The inspector shows the wood of the site go up by the "
+	                "wood that the hand poured.",
+	    .environment = {.dispenserGrid = false},
+	    .framing = {.shot = Shot::Overview, .include = {k_LooseScaffold - glm::vec2 {10.0f}, k_BuildPlace + glm::vec2 {10.0f}}},
+	    .objects = {{.type = AbodeInfo::CelticTownCentre, .offset = {0.0f, 50.0f}},
+	                {.type = ScaffoldInfo::Normal, .offset = k_LooseScaffold, .scale = 0.7f}},
+	    .commands = {{.kind = Kind::ScaffoldStartsSite, .delaySeconds = 1.0f, .object = 1},
+	                 {.kind = Kind::HandPour, .delaySeconds = 3.0f, .point = k_LooseScaffold, .value = 300}},
 	});
 
 	all.push_back({

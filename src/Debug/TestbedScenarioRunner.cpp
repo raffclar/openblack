@@ -100,6 +100,7 @@
 #include "ECS/BuildingReplan.h"
 #include "ECS/Components/Abode.h"
 #include "ECS/Components/Animal.h"
+#include "ECS/Components/BuildingDamage.h"
 #include "ECS/Components/Construction.h"
 #include "ECS/Components/Creature.h"
 #include "ECS/Components/CreatureBody.h"
@@ -2201,6 +2202,28 @@ std::optional<entt::entity> Runner::TotemAt(size_t index) const
 	return totem;
 }
 
+std::optional<entt::entity> Runner::PieceNearest(entt::entity creature)
+{
+	const auto& registry = Locator::entitiesRegistry::value();
+	const auto* from = registry.TryGet<const ecs::components::Transform>(creature);
+	if (from == nullptr)
+	{
+		return std::nullopt;
+	}
+	std::optional<entt::entity> nearest;
+	float best = std::numeric_limits<float>::max();
+	registry.Each<const ecs::components::BuildingPiece, const ecs::components::Transform>(
+	    [&](entt::entity piece, const ecs::components::BuildingPiece& /*part*/, const ecs::components::Transform& at) {
+		    const float distance = glm::distance(glm::xz(at.position), glm::xz(from->position));
+		    if (distance < best)
+		    {
+			    best = distance;
+			    nearest = piece;
+		    }
+	    });
+	return nearest;
+}
+
 void Runner::BuildWorshipSiteOf(entt::entity centre) const
 {
 	// The scenario does not wait for the villagers to build the worship site: it stands built at once
@@ -4084,6 +4107,7 @@ void Runner::Give(const Command& command)
 		                    : command.onTemple && !_temples.empty()        ? std::optional(_temples.front())
 		                    : command.onGlobe && command.globe.has_value() ? GlobeAt(*command.globe)
 		                    : command.onTotem                              ? TotemAt(command.object)
+		                    : command.onPiece                              ? PieceNearest(*entity)
 		                                                                   : ObjectAt(command.object);
 		const auto with = command.globe.has_value() && !command.onGlobe ? GlobeAt(*command.globe)
 		                  : command.usesCreature.has_value()            ? CreatureAt(*command.usesCreature)

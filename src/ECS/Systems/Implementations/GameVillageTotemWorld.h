@@ -38,6 +38,7 @@ public:
 	void Reinsert(entt::entity totem) override;
 	void FloatNumber(glm::vec3 position, float value, uint32_t colour) override;
 	bool SendCommand(const player_commands::Action& action) override;
+	[[nodiscard]] bool DrawnThisFrame(entt::entity totem) const override;
 };
 
 } // namespace openblack::ecs::systems

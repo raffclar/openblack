@@ -155,6 +155,19 @@ bool guidance::GiftAnswered(float rawDesire)
 	return !(rawDesire < k_PleasedDesire) || rawDesire < k_DispleasedDesire;
 }
 
+std::optional<guidance::Gift> guidance::DropGift(std::optional<ResourceType> pileResource)
+{
+	if (pileResource == ResourceType::Food)
+	{
+		return Gift::Food;
+	}
+	if (pileResource == ResourceType::Wood)
+	{
+		return Gift::Wood;
+	}
+	return std::nullopt;
+}
+
 std::optional<uint32_t> guidance::GiftAnswer(Gift gift, float rawDesire, uint32_t draw)
 {
 	const bool pleased = !(rawDesire < k_PleasedDesire);

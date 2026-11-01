@@ -767,6 +767,20 @@ bool creature_plan_actions::IsCast(const Executor& executor)
 	}
 }
 
+bool creature_plan_actions::FishesFirst(const Executor& executor)
+{
+	switch (executor.build)
+	{
+	case Build::FishAndEat:
+	case Build::GiveFishToStore:
+	case Build::TakeFishHome:
+	case Build::PutFishBySite:
+		return true;
+	default:
+		return false;
+	}
+}
+
 bool creature_plan_actions::NeedsThingToUse(std::string_view action)
 {
 	return std::ranges::find(k_NeedThingToUse, action) != k_NeedThingToUse.end();

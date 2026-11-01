@@ -55,6 +55,10 @@ enum class Kind : uint8_t
 /// go, eating, keeping hold, knocking down and pointing do. Throwing, catching, taking from the hand and kicking keep
 /// their pace.
 [[nodiscard]] bool Hurries(Kind kind);
+/// Whether the hand divides the time of an action by the length of the stand animation, to know how far the action is
+/// through. The game keeps the animation of the stand for picking up, knocking down, throwing, pointing, taking from the
+/// hand and kicking. Letting go and keeping hold keep their own animation.
+[[nodiscard]] bool SharesByStand(Kind kind);
 /// What the stop of the plan that asked for an action does to the action
 enum class PlanStop : uint8_t
 {
@@ -361,6 +365,9 @@ enum class Thing : uint8_t
 [[nodiscard]] bool CanBePickedUp(Thing thing);
 /// Whether a kind of thing is alive: villagers, animals, birds and creatures
 [[nodiscard]] bool IsLiving(Thing thing);
+/// Whether a kind of thing is a rock for the creature's work with rocks: a rock, a bonfire or a piece that broke off a
+/// building. The creature breaks it in two and holds it as a rock.
+[[nodiscard]] bool IsRock(Thing thing);
 /// Whether a creature may throw things at a thing to knock it down: a living thing while it lives, and whatever is
 /// built or set into the land (shields and building pieces too). Not a tree, lantern, vortex or teleport stone, nor
 /// anything lying about

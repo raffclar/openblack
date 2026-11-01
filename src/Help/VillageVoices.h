@@ -88,6 +88,10 @@ enum class Gift : uint8_t
 [[nodiscard]] std::optional<uint32_t> GiftAnswer(Gift gift, float rawDesire, uint32_t draw);
 /// Whether a town with this raw desire for a gift answers it. The game draws the answer only when the town answers.
 [[nodiscard]] bool GiftAnswered(float rawDesire);
+/// The gift that a town answers when a store takes a drop. Only a pile of food or wood gives a gift. A drop onto
+/// another store, for example a storage pit or a worship site, gets no answer. Give no resource when the receiver is
+/// not a pile.
+[[nodiscard]] std::optional<Gift> DropGift(std::optional<ResourceType> pileResource);
 
 /// The town desire voices: every tenth turn, the people of the town near the camera call out what their town wants most.
 /// The people at a worship site near the camera call out for food or for more worshippers.

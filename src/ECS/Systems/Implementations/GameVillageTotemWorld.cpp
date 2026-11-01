@@ -24,6 +24,7 @@
 #include "ECS/Registry.h"
 #include "ECS/Systems/FloatingNumberSystemInterface.h"
 #include "ECS/Systems/LeashSystemInterface.h"
+#include "ECS/Systems/ObjectDrawListSystemInterface.h"
 #include "ECS/Systems/PlayerCommandSystemInterface.h"
 #include "ECS/Systems/ReactionSystemInterface.h"
 #include "ECS/Systems/SoundTagSystemInterface.h"
@@ -98,6 +99,15 @@ bool GameVillageTotemWorld::HeartBuilt(PlayerNames player) const
 float GameVillageTotemWorld::LifeOf(entt::entity object) const
 {
 	return world_objects::LifeOf(object);
+}
+
+bool GameVillageTotemWorld::DrawnThisFrame(entt::entity totem) const
+{
+	if (!Locator::objectDrawListSystem::has_value() || !Locator::entitiesRegistry::has_value())
+	{
+		return true;
+	}
+	return Locator::objectDrawListSystem::value().Drawn(Locator::entitiesRegistry::value(), totem);
 }
 
 bool GameVillageTotemWorld::Built(entt::entity building) const
