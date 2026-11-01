@@ -448,6 +448,61 @@ TEST(CreatureObjectActions, EachKindOfThingHasItsOwnRuleForBeingPickedUp)
 	EXPECT_FALSE(MayPickUpKind({.rule = KindRule::Whole, .canBePickedUp = true}, outOfReach));
 }
 
+TEST(CreatureObjectActions, TheFactsThatARuleDoesNotReadDoNotChangeItsAnswer)
+{
+	using creature_object_actions::KindFacts;
+	using creature_object_actions::KindRule;
+	using creature_object_actions::MayPickUpKind;
+	using creature_object_actions::PickUpFacts;
+	using creature_object_actions::PickUpFactsUsed;
+	constexpr std::array k_Rules {KindRule::Never,    KindRule::Always, KindRule::Toy,   KindRule::Bird,
+	                              KindRule::Mushroom, KindRule::Pile,   KindRule::Whole, KindRule::Scaffold};
+	const std::array lifts {std::optional<creature_object_actions::LiftFacts> {},
+	                        std::optional(creature_object_actions::LiftFacts {.reach = 1.0f, .creatureWeight = 1.0f}),
+	                        std::optional(creature_object_actions::LiftFacts {.thingRadius = 2.0f, .reach = 1.0f})};
+	for (const auto rule : k_Rules)
+	{
+		// Each set of the five kind flags
+		for (uint32_t kindBits = 0; kindBits < (1u << 5); ++kindBits)
+		{
+			const KindFacts kind {.rule = rule,
+			                      .canBePickedUp = (kindBits & 1u) != 0,
+			                      .toy = (kindBits & 2u) != 0,
+			                      .low = (kindBits & 4u) != 0,
+			                      .mayFly = (kindBits & 8u) != 0,
+			                      .handCanTake = (kindBits & 16u) != 0};
+			const auto used = creature_object_actions::PickUpFactsUsedBy(kind);
+			// Each set of the eight pick-up flags, with each lift
+			for (uint32_t bits = 0; bits < (1u << 8); ++bits)
+			{
+				for (const auto& lift : lifts)
+				{
+					const PickUpFacts facts {.cannotBePickedUp = (bits & 1u) != 0,
+					                         .villagerAtHome = (bits & 2u) != 0,
+					                         .worshippingForCreaturesPlayer = (bits & 4u) != 0,
+					                         .inScript = (bits & 8u) != 0,
+					                         .computerCreatureNotScripted = (bits & 16u) != 0,
+					                         .townArtefact = (bits & 32u) != 0,
+					                         .inMapOrHeldByCreature = (bits & 64u) != 0,
+					                         .leashTiedToIt = (bits & 128u) != 0,
+					                         .lift = lift};
+					PickUpFacts read;
+					if (used == PickUpFactsUsed::Refusal)
+					{
+						read.cannotBePickedUp = facts.cannotBePickedUp;
+					}
+					else if (used == PickUpFactsUsed::All)
+					{
+						read = facts;
+					}
+					EXPECT_EQ(MayPickUpKind(kind, read), MayPickUpKind(kind, facts))
+					    << static_cast<int>(rule) << " " << kindBits << " " << bits;
+				}
+			}
+		}
+	}
+}
+
 TEST(CreatureObjectActions, EachKindOfThingTakesItsRule)
 {
 	using creature_object_actions::CanBePickedUp;

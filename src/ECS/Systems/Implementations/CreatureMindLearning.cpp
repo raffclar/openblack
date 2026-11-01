@@ -2545,13 +2545,14 @@ ActingOf ActingOfUnliving(const ecs::Registry& registry, entt::entity thing)
 	return {.info = info, .canActOn = !whole && acts(info)};
 }
 
-/// What a creature knows about a thing when it examines a desire for it. Only the facts that the desire uses cost time
-/// to find: the height for poo, and the pick-up rule for bringing stuff home.
+/// What a creature knows about a thing of a kind when it examines a desire for it. The function finds only the facts
+/// that the desire reads. The other facts keep their default values.
 creature_activity::ThingFacts ThingFactsOf(const ecs::Registry& registry, entt::entity creature, Desire desire,
-                                           entt::entity thing, const creature_mind_tables::Tables* tables)
+                                           entt::entity thing, creature_activity::Thing kind,
+                                           const creature_mind_tables::Tables* tables)
 {
 	using creature_activity::Thing;
-	const auto kind = mind_detail::KindOfThing(registry, thing);
+	const auto read = creature_activity::FactsReadBy(desire);
 	// The kind comes from the first of these components that the thing has: a villager, an animal, a creature, a
 	// miracle. Thus the kind tells which of them the thing has, with no search of the registry.
 	const bool living = kind == Thing::Villager || kind == Thing::Animal || kind == Thing::Creature || kind == Thing::Spell;
@@ -2566,39 +2567,45 @@ creature_activity::ThingFacts ThingFactsOf(const ecs::Registry& registry, entt::
 	    .inspectable = info != nullptr && info->canCreatureInspectMe != 0,
 	    .itself = thing == creature,
 	};
-	if (kind == Thing::Villager)
+	if (read.living)
 	{
-		// A villager in its home, or one that may not be picked up, cannot have help
-		const auto& villager = registry.Get<const Villager>(thing);
-		facts.dead = registry.AllOf<VillagerDeath>(thing) || !(villager.life > 0.0f);
-		facts.dancing = registry.AllOf<Dancer>(thing);
-		facts.pickable = !registry.AnyOf<AtHome, CannotBePickedUp>(thing);
+		if (kind == Thing::Villager)
+		{
+			// A villager in its home, or one that may not be picked up, cannot have help
+			const auto& villager = registry.Get<const Villager>(thing);
+			facts.dead = registry.AllOf<VillagerDeath>(thing) || !(villager.life > 0.0f);
+			facts.dancing = registry.AllOf<Dancer>(thing);
+			facts.pickable = !registry.AnyOf<AtHome, CannotBePickedUp>(thing);
+		}
+		else if (kind == Thing::Animal)
+		{
+			const auto& animal = registry.Get<const Animal>(thing);
+			facts.dead = animal.Dead();
+			facts.frightening = Frightens(animal.type);
+		}
+		else if (kind == Thing::Creature)
+		{
+			facts.dead = tables != nullptr && mind_detail::IsDead(registry, thing, *tables);
+			facts.friendOfCreature = mind_detail::AreFriends(registry, thing, creature);
+		}
 	}
-	else if (kind == Thing::Animal)
+	if (read.mushroom)
 	{
-		const auto& animal = registry.Get<const Animal>(thing);
-		facts.dead = animal.Dead();
-		facts.frightening = Frightens(animal.type);
+		const auto* feature = registry.TryGet<const Feature>(thing);
+		const auto* mobile = registry.TryGet<const MobileObject>(thing);
+		// A scaffold has the loose kind of the one row of the scaffolds
+		std::optional<MobileObjectInfo> looseKind;
+		if (mobile != nullptr)
+		{
+			looseKind = mobile->type;
+		}
+		else if (registry.AllOf<Scaffold>(thing) && Locator::infoConstants::has_value())
+		{
+			looseKind = Locator::infoConstants::value().scaffold.mobileType;
+		}
+		facts.mushroom = (feature != nullptr && feature->type == FeatureInfo::MagicMushroom) ||
+		                 looseKind == MobileObjectInfo::MagicMushroom || looseKind == MobileObjectInfo::Toadstool;
 	}
-	else if (kind == Thing::Creature)
-	{
-		facts.dead = tables != nullptr && mind_detail::IsDead(registry, thing, *tables);
-		facts.friendOfCreature = mind_detail::AreFriends(registry, thing, creature);
-	}
-	const auto* feature = registry.TryGet<const Feature>(thing);
-	const auto* mobile = registry.TryGet<const MobileObject>(thing);
-	// A scaffold has the loose kind of the one row of the scaffolds
-	std::optional<MobileObjectInfo> looseKind;
-	if (mobile != nullptr)
-	{
-		looseKind = mobile->type;
-	}
-	else if (registry.AllOf<Scaffold>(thing) && Locator::infoConstants::has_value())
-	{
-		looseKind = Locator::infoConstants::value().scaffold.mobileType;
-	}
-	facts.mushroom = (feature != nullptr && feature->type == FeatureInfo::MagicMushroom) ||
-	                 looseKind == MobileObjectInfo::MagicMushroom || looseKind == MobileObjectInfo::Toadstool;
 	if (desire == Desire::Poo && kind != Thing::Spell && kind != Thing::Other)
 	{
 		facts.height = object_measures::Height(registry, thing);
@@ -2769,7 +2776,9 @@ std::vector<creature_planner::ObjectCandidate> CreatureMindSystem::PartsToActOn(
 		{
 			return;
 		}
-		if (creature_activity::ThingSuits(desire, ThingFactsOf(registry, creature, desire, thing, GetTables())))
+		const auto kind = mind_detail::KindOfThing(registry, thing);
+		if (creature_activity::KindMaySuit(desire, kind) &&
+		    creature_activity::ThingSuits(desire, ThingFactsOf(registry, creature, desire, thing, kind, GetTables())))
 		{
 			parts.push_back(GoalWorth(creature, mind, desire, thing, activity));
 		}
@@ -2787,7 +2796,14 @@ std::vector<creature_planner::ObjectCandidate> CreatureMindSystem::PartsToActOn(
 bool CreatureMindSystem::SuitsDesire(entt::entity creature, CreatureMindState& mind, Desire desire, entt::entity thing)
 {
 	const auto& registry = Locator::entitiesRegistry::value();
-	if (!registry.Valid(thing) || NoWayLately(registry, mind, thing))
+	if (!registry.Valid(thing))
+	{
+		return false;
+	}
+	// The test of the kind comes first because it costs less. The other tests only read the world and the beliefs, but
+	// the test for hunger can change the beliefs. Any kind can suit hunger, thus that test stays in its sequence.
+	const auto kind = mind_detail::KindOfThing(registry, thing);
+	if (!creature_activity::KindMaySuit(desire, kind) || NoWayLately(registry, mind, thing))
 	{
 		return false;
 	}
@@ -2808,7 +2824,7 @@ bool CreatureMindSystem::SuitsDesire(entt::entity creature, CreatureMindState& m
 			}
 		}
 	}
-	return creature_activity::ThingSuits(desire, ThingFactsOf(registry, creature, desire, thing, GetTables()));
+	return creature_activity::ThingSuits(desire, ThingFactsOf(registry, creature, desire, thing, kind, GetTables()));
 }
 
 std::vector<creature_planner::ObjectCandidate>
