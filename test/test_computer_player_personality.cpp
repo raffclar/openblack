@@ -16,6 +16,7 @@
 
 #include <gtest/gtest.h>
 
+#include "ECS/ComputerMind.h"
 #include "ECS/ComputerPlayerPersonality.h"
 
 using namespace openblack;
@@ -100,4 +101,23 @@ TEST(ComputerPlayerPersonality, TheStreamGivesSharesBelowOneThatSpreadOverTheRan
 	}
 	EXPECT_LT(least, 0.05f);
 	EXPECT_GT(most, 0.95f);
+}
+
+TEST(ComputerPlayerPersonality, EachWeightOfASeedGoesToTheNodesOfItsNeedInTheTreeOfAMind)
+{
+	auto mind = computer_mind::MakeMind();
+	const auto weights = WeightsFor(7u, PlayerNames::PLAYER_TWO);
+	for (const auto& weight : weights)
+	{
+		EXPECT_TRUE(computer_mind::SetPersonality(mind, weight.name, weight.value)) << weight.name;
+	}
+	for (const auto& weight : weights)
+	{
+		const auto nodes = computer_mind::FindNodes(mind, weight.name, computer_mind::FirstNodeNames());
+		ASSERT_FALSE(nodes.empty()) << weight.name;
+		for (const auto node : nodes)
+		{
+			EXPECT_EQ(mind.nodes[node].weight, weight.value) << weight.name;
+		}
+	}
 }
