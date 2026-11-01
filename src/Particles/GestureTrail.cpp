@@ -11,7 +11,9 @@
 
 #include <cmath>
 
+#include <algorithm>
 #include <array>
+#include <span>
 #include <utility>
 
 #include "Common/X87.h"
@@ -164,12 +166,10 @@ glm::vec3 TrailPath::At(float fraction) const
 	{
 		return _points.front();
 	}
-	// The first segment that reaches the distance
-	size_t i = 0;
-	while (i + 2 < _points.size() && _distances[i + 1] < distance)
-	{
-		++i;
-	}
+	// The first segment that reaches the distance, else the last segment. The distances along the path never decrease, so
+	// a binary search finds the same segment as a walk from the start.
+	const auto ends = std::span(_distances).subspan(1, _points.size() - 2);
+	const auto i = static_cast<size_t>(std::ranges::lower_bound(ends, distance) - ends.begin());
 	const auto& from = _points[i];
 	const auto& to = _points[i + 1];
 	const float span = _distances[i + 1] - _distances[i];
