@@ -18,6 +18,9 @@
 #include <vector>
 
 #include <entt/core/hashed_string.hpp>
+#include <glm/gtc/type_precision.hpp>
+#include <glm/vec2.hpp>
+#include <glm/vec3.hpp>
 
 #include "Creature/CreatureMarks.h"
 #include "Creature/CreatureTattoo.h"
@@ -47,6 +50,16 @@ constexpr uint8_t k_MaxWeight = 255;
 /// none when the variant has fewer skins
 [[nodiscard]] std::optional<uint32_t> PairedSkin(std::span<const uint32_t> baseSkins, std::span<const uint32_t> variantSkins,
                                                  uint32_t baseSkin);
+
+/// The place on the skin of a point on a triangle, as a part of the side of the skin. The point is u of the way from
+/// the first corner towards the second, and v of the way towards the third. The sum adds the two steps, then the
+/// first corner, in single precision.
+[[nodiscard]] glm::vec2 SkinPoint(glm::vec2 first, glm::vec2 second, glm::vec2 third, float u, float v);
+
+/// The colour of a painted skin at a place from SkinPoint, 0 to 255 a channel: each 4-bit channel moved up by 4 bits.
+/// The skin must be 256 or 128 texels a side, else there is no colour. The place multiplied by the side is cut towards
+/// zero. A place before the first texel or after the last texel gives the last texel of the side.
+[[nodiscard]] std::optional<glm::u8vec3> ColourAt(std::span<const uint16_t> texels, glm::vec2 point);
 
 /// What tattoos and marks are painted with: the designs, the damage atlases and the tattoo palette
 struct Art

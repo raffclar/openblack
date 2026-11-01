@@ -192,7 +192,6 @@ void PlaceEyes(CreatureEyes& eyes, const CreatureRig::Eyes& rig, const creature_
 	    .ahead = glm::vec3(back.x, 0.0f, back.z),
 	    .darts = {},
 	};
-	bool lidColourSet = false;
 	for (size_t i = 0; i < eyes.drawn.size(); ++i)
 	{
 		auto& drawn = eyes.drawn.at(i);
@@ -221,12 +220,6 @@ void PlaceEyes(CreatureEyes& eyes, const CreatureRig::Eyes& rig, const creature_
 		                            rig.points.at(i).depth, i == 1, look, rig.lidAngles, eyeSize, turn, milliseconds);
 		drawn.eyeball = placed.eyeball;
 		drawn.eyelid = placed.eyelid;
-		// Both lids take the skin's colour under the first one drawn
-		if (anchor && !lidColourSet)
-		{
-			eyes.lidColour = rig.points.at(i + 2).skinColour;
-			lidColourSet = true;
-		}
 	}
 }
 /// A blended animation of the creature's, blended the first time it is wanted, or nothing when the species has none

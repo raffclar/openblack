@@ -15,6 +15,7 @@
 #include <optional>
 #include <span>
 #include <string>
+#include <vector>
 
 #include <glm/vec2.hpp>
 
@@ -97,5 +98,10 @@ struct TextureBlend
 /// Each 16 bit texel, four bits a channel, blended from one image to another by weight from 0 to 255, keeping the first
 /// image's alpha
 void BlendTexels(std::span<const uint16_t> from, std::span<const uint16_t> to, uint8_t weight, std::span<uint16_t> blended);
+/// The texels of the temple's skin, blended from one picture of 256 by 256 texels to another by weight from 0 to 255.
+/// A skin of half size first takes the texel at the start of each two by two square of each picture, as the game loads
+/// the pictures at the lowest detail levels. Nothing for pictures of another size.
+[[nodiscard]] std::optional<std::vector<uint16_t>> SkinTexels(std::span<const uint16_t> from, std::span<const uint16_t> to,
+                                                              uint8_t weight, bool halfSize);
 
 } // namespace openblack::TempleExteriorMorph
