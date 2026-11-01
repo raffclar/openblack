@@ -234,8 +234,10 @@ TEST(VillagerFoodRules, StarvingToDeathIsStarvationUnlessFromWorship)
 {
 	EXPECT_EQ(HungerDeath(false), DeathReason::Starving);
 	EXPECT_EQ(HungerDeath(true), DeathReason::Chant);
-	EXPECT_TRUE(checks::ChantedLast(VillagerStates::GoHomeFromWorship));
-	EXPECT_FALSE(checks::ChantedLast(VillagerStates::GoHome));
+	EXPECT_TRUE(checks::ChantedLast(VillagerStates::GoHomeFromWorship, false));
+	EXPECT_FALSE(checks::ChantedLast(VillagerStates::GoHome, false));
+	EXPECT_TRUE(checks::ChantedLast(VillagerStates::MoveToDancePos, true));
+	EXPECT_TRUE(checks::ChantedLast(VillagerStates::HidingAtWorshipSite, true));
 	EXPECT_EQ(checks::ExhaustionDeath(false), DeathReason::Exhaustion);
 }
 
