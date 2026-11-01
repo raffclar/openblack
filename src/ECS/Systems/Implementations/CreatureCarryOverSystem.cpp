@@ -302,15 +302,19 @@ std::shared_ptr<const creaturemind::MindFileData> CreatureCarryOverSystem::KeptO
 	return _kept;
 }
 
-std::optional<entt::entity> CreatureCarryOverSystem::LoadPlayersCreature(glm::vec2 place)
+std::optional<entt::entity> CreatureCarryOverSystem::LoadPlayersCreature(glm::vec2 place, KeptCreatureSource source)
 {
 	if (PlayersCreature().has_value())
 	{
 		SPDLOG_LOGGER_INFO(spdlog::get("game"), "The player already has a creature, so theirs is not loaded");
 		return std::nullopt;
 	}
-	// The creature is loaded from its file, as the last land kept it or as an earlier game did
-	ReadIfNoneKept();
+	// The creature comes from what the last land kept. With none kept, the game reads the file of an earlier game, when
+	// the source permits it.
+	if (source == KeptCreatureSource::GameOrProfileFile)
+	{
+		ReadIfNoneKept();
+	}
 	if (_kept == nullptr || !Locator::terrainSystem::has_value())
 	{
 		SPDLOG_LOGGER_INFO(spdlog::get("game"), "The player has no creature kept to load");

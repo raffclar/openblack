@@ -27,6 +27,15 @@ struct MindFileData;
 namespace openblack::ecs::systems
 {
 
+/// The places where a script's load of the player's creature looks for the creature
+enum class KeptCreatureSource : uint8_t
+{
+	/// The creature kept in this game. With none, the creature that the profile's file keeps from an earlier game.
+	GameOrProfileFile,
+	/// Only the creature kept in this game, when it went through a vortex or its land was cleared
+	GameOnly,
+};
+
 /// The player's creature outlives the land it is on. As a land is cleared, the player's own creature is kept with its
 /// mind and body, as the game keeps it in the player's creature file; a later land's script then loads the creature from
 /// what was kept, at the place it gives. Whatever is not in the file starts again: its life, its spells, the leash, what
@@ -66,8 +75,9 @@ public:
 
 	/// A script loads the player's creature at a place on the land. Nothing happens when the player has a creature
 	/// already or none was kept. It is made standing on the ground in the middle of the place's cell, starts out of sight
-	/// with the sound of sparkling and sparkles into sight over three seconds.
-	virtual std::optional<entt::entity> LoadPlayersCreature(glm::vec2 place) = 0;
+	/// with the sound of sparkling and sparkles into sight over three seconds. The source tells where to look for the
+	/// kept creature.
+	virtual std::optional<entt::entity> LoadPlayersCreature(glm::vec2 place, KeptCreatureSource source) = 0;
 
 	/// Once a game turn: the creatures loaded sparkle into sight. A creature of the player's own is written to the
 	/// player's creature files each time it has lived 600 more turns, when the land keeps creatures
