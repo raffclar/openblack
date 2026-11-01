@@ -48,7 +48,7 @@ public:
 	             Display display)
 	{
 		Row row = Start(label, most, 0, show, display);
-		for (const auto& player : ShownPlayers())
+		for (const PlayerFigures& player : ShownPlayers())
 		{
 			row.values.push_back(static_cast<float>(value(player)));
 			row.players.push_back(player.player);
@@ -60,7 +60,7 @@ public:
 	             ShowMost show, Display display)
 	{
 		Row row = Start(label, most, decimals, show, display);
-		for (const auto& player : ShownPlayers())
+		for (const PlayerFigures& player : ShownPlayers())
 		{
 			row.values.push_back(Held(value(player)));
 			row.players.push_back(player.player);
