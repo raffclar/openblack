@@ -7530,8 +7530,9 @@ void SetLeashWorks() // 249 SET_LEASH_WORKS
 /// CREATURE_SET_PLAYER makes the one they pick
 void StartWithCreature(CreatureType species, const glm::vec3& position, float yawRadians)
 {
-	const auto creature =
-	    CreateScriptObject(ObjectType::Creature, static_cast<uint32_t>(species), position, 0.0f, 0.0f, yawRadians, 0.0f, 1.0f);
+	// The scripts give each species its own number, which is not the same as the game's number for the Giant Ape
+	const auto creature = CreateScriptObject(ObjectType::Creature, script::property_rules::ScriptCreatureType(species),
+	                                         position, 0.0f, 0.0f, yawRadians, 0.0f, 1.0f);
 	if (creature == entt::null || creature == static_cast<entt::entity>(0) ||
 	    !Locator::entitiesRegistry::value().Valid(creature))
 	{
