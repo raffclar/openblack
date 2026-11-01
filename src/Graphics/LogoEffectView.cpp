@@ -19,7 +19,8 @@
 #include <bgfx/bgfx.h>
 #include <glm/mat4x4.hpp>
 
-#include "3D/L3DSkinFormat.h"
+#include "3D/L3DSkinTexels.h"
+#include "EngineConfig.h"
 #include "Graphics/RendererInterface.h"
 #include "Graphics/ShaderManager.h"
 #include "Locator.h"
@@ -136,31 +137,21 @@ std::unique_ptr<LogoEffectView> LogoEffectView::Create(glm::u16vec2 size, const 
 		return nullptr;
 	}
 	auto texture = std::make_unique<Texture2D>("LogoEffectSky");
-	const auto texels = std::span(reinterpret_cast<const uint16_t*>(skin->texels.data()), skin->texels.size());
 	const auto flags = static_cast<uint32_t>(sky.GetHeader().flags);
-	if (!l3d_skin::HasOpaqueSkins(flags))
-	{
-		texture->Create(l3d::L3DTexture::k_Width, l3d::L3DTexture::k_Height, 1, TextureFormat::BGRA4, Wrapping::Repeat,
-		                Filter::Linear, bgfx::copy(skin->texels.data(), static_cast<uint32_t>(sizeof(skin->texels))));
-	}
-	else if ((bgfx::getCaps()->formats[bgfx::TextureFormat::BGR5A1] & BGFX_CAPS_FORMAT_TEXTURE_2D) != 0)
-	{
-		// The sky's skin: 5 bits for each colour, opaque
-		const auto* memory = bgfx::alloc(static_cast<uint32_t>(texels.size() * sizeof(uint16_t)));
-		std::ranges::transform(texels, reinterpret_cast<uint16_t*>(memory->data), l3d_skin::OpaqueTexel);
-		texture->Create(l3d::L3DTexture::k_Width, l3d::L3DTexture::k_Height, 1, TextureFormat::BGR5A1, Wrapping::Repeat,
-		                Filter::Linear, memory);
-	}
-	else
-	{
-		const auto* memory = bgfx::alloc(static_cast<uint32_t>(texels.size() * 4));
-		for (size_t i = 0; i < texels.size(); ++i)
-		{
-			std::ranges::copy(l3d_skin::OpaqueTexelBytes(texels[i]), memory->data + (i * 4));
-		}
-		texture->Create(l3d::L3DTexture::k_Width, l3d::L3DTexture::k_Height, 1, TextureFormat::RGBA8, Wrapping::Repeat,
-		                Filter::Linear, memory);
-	}
+	// At the two lowest detail levels the skin loads at half size
+	const bool lowResolution = Locator::config::has_value() && Locator::config::value().detail.lowResTextures;
+	const auto texels = l3d_skin::LoadedTexels(
+	    std::span(reinterpret_cast<const uint16_t*>(skin->texels.data()), skin->texels.size()), flags, lowResolution);
+	const auto side = l3d_skin::SideOf(texels.size());
+	// The sky's skin has 5 bits for each colour and is opaque
+	const bool has1555 = (bgfx::getCaps()->formats[bgfx::TextureFormat::BGR5A1] & BGFX_CAPS_FORMAT_TEXTURE_2D) != 0;
+	const auto layout = l3d_skin::LayoutOf(flags, has1555);
+	const auto bytes = l3d_skin::TexelsIn(layout, texels);
+	const auto format = layout == l3d_skin::Layout::Argb4444   ? TextureFormat::BGRA4
+	                    : layout == l3d_skin::Layout::Argb1555 ? TextureFormat::BGR5A1
+	                                                           : TextureFormat::RGBA8;
+	texture->Create(side, side, 1, format, Wrapping::Repeat, Filter::Linear,
+	                bgfx::copy(bytes.data(), static_cast<uint32_t>(bytes.size())));
 	return std::unique_ptr<LogoEffectView>(
 	    new LogoEffectView(size, std::move(skyVertices), std::move(skyIndices), std::move(texture)));
 }

@@ -125,7 +125,7 @@ public:
 	/// is drawn.
 	void SplitFacesForSnow();
 	/// A dynamic mesh's skin takes its texels afresh
-	void UpdateSkin(SkinId skin, std::span<const uint16_t> texels) noexcept;
+	void UpdateSkin(SkinId skin, std::span<const uint16_t> given) noexcept;
 	[[nodiscard]] bool IsDynamic() const { return _dynamic; }
 	/// What the mesh makes: its data and its objects on the graphics device, or its data only
 	[[nodiscard]] UploadMode GetUploadMode() const { return _upload; }
@@ -243,6 +243,8 @@ private:
 	std::unordered_map<SkinId, graphics::tree_shadows::AlphaMask> _skinAlpha;
 	/// How the skins' texels go into their textures, by the model's flags
 	l3d_skin::Layout _skinLayout {l3d_skin::Layout::Argb4444};
+	/// Texels along each side of each skin: 256, or 128 at the lowest detail levels
+	uint16_t _skinSide {l3d::L3DTexture::k_Width};
 	std::vector<Footprint> _footprints; ///< If ContainsLandscapeFeature() is true
 	std::optional<BonePoint> _firstBonePoint;
 	std::vector<BoneFrame> _boneFrames;

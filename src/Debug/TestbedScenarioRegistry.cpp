@@ -2810,6 +2810,26 @@ void AddAppearance(std::vector<Scenario>& all)
 	                  .creature = 0,
 	                  .delaySeconds = 1.0f}},
 	});
+	// A frozen creature that fizzes: the ice goes over all of its body after the fizz, also where the body is gone
+	all.push_back({
+	    .id = "appearance.frozen_creature_fizzing",
+	    .name = "Frozen creature fizzing out of sight",
+	    .facet = Facet::Appearance,
+	    .description = "At noon, the clock stopped, a tiger stands on open land, seen from close by. After a second the "
+	                   "freeze spell is cast on it. When it is wholly frozen, a script fade fizzes it six tenths of the "
+	                   "way out of sight over three seconds.",
+	    .expected = "The tiger freezes to an icy blue with a sheen of ice. Then it fizzes through static. The sheen of ice "
+	                "stays over all of its body, also where the static has taken the body away: there the land behind "
+	                "shows through with the ice added over it.",
+	    .environment = {.hour = 12.0f, .clockRuns = false, .dispenserGrid = false},
+	    .framing = {.shot = Shot::Follow, .distance = 0.4f},
+	    .creatures = {Posed(CreatureType::Tiger, {0.0f, -90.0f}, 180.0f, "frozen tiger")},
+	    .miracles = {{.type = MagicType::CreatureSpellFreeze,
+	                  .target = MiracleCast::Target::Creature,
+	                  .creature = 0,
+	                  .delaySeconds = 1.0f}},
+	    .commands = {{.kind = Kind::SetFizz, .creature = 0, .delaySeconds = 5.5f, .value = 3000, .amount = 0.6f}},
+	});
 	// The land, a hut, trees and the sky as the lowest detail levels draw them, with textures of half the size
 	all.push_back({
 	    .id = "appearance.low_resolution_textures",
@@ -3135,6 +3155,19 @@ void AddAppearance(std::vector<Scenario>& all)
 	                   "burns and a trail of blood, beside an unmarked tiger to compare.",
 	    .expected = "The designs sit on the species' tattoo sites in their colours; the wounds start fresh and red and "
 	                "heal over time to old scars, the blood running down the skin and fading.",
+	    .framing = {.shot = Shot::Follow, .distance = 0.9f},
+	    .creatures = {tattooed, plain},
+	});
+	all.push_back({
+	    .id = "appearance.low_detail_tattoos_wounds",
+	    .name = "Tattoos and wounds on half-size skins",
+	    .facet = Facet::Appearance,
+	    .description = "Start the game with --detail-level 1 (Low) or 0 (Minimum). The same tiger as in "
+	                   "appearance.tattoos_wounds, with a tattoo in every slot, five wounds and burns and a trail of "
+	                   "blood, beside an unmarked tiger. Start it again with --detail-level 4 to compare.",
+	    .expected = "At Low and Minimum the skins are at half size, so they look softer. The tattoos, the wounds and the "
+	                "blood are at the same places on the body and have the same size as at the higher levels, with "
+	                "fewer texels. Nothing is missing and nothing moves to another place.",
 	    .framing = {.shot = Shot::Follow, .distance = 0.9f},
 	    .creatures = {tattooed, plain},
 	});
@@ -3475,6 +3508,26 @@ void AddLight(std::vector<Scenario>& all)
 	    .framing = {.shot = Shot::Placed, .eye = {0.0f, 4.0f, -8.0f}, .look = {0.0f, 1.5f, 6.0f}},
 	    .objects = {{.type = VillagerInfo::CelticFarmerMale, .offset = {-1.5f, 6.0f}},
 	                {.type = VillagerInfo::CelticHousewifeFemale, .offset = {1.5f, 6.0f}}},
+	    .commands = {{.kind = Kind::WideScreen, .delaySeconds = 6.0f, .value = 1},
+	                 {.kind = Kind::CallNative,
+	                  .delaySeconds = 0.5f,
+	                  .script = "SET_HIGH_GRAPHICS_DETAIL",
+	                  .scriptArguments = {{.kind = ScriptArgument::Kind::Integer, .number = 1.0f},
+	                                      {.kind = ScriptArgument::Kind::Object, .index = 0}}}},
+	});
+
+	all.push_back({
+	    .id = "light.haze_high_detail_villager",
+	    .name = "No distance haze on a villager in high detail",
+	    .facet = Facet::Light,
+	    .description = "Two villagers stand in front of the camera. After six seconds, the cinema bars come in and the "
+	                   "villager on the left changes to high detail. Use --detail-level 3 or more, which has the haze.",
+	    .expected = "The villager on the left changes to its high-detail model. It keeps the light and the colour of the "
+	                "land where it stands, and it shows no distance haze. At this distance the haze is small, so its "
+	                "colours change only a little. The villager on the right does not change.",
+	    .framing = {.shot = Shot::Placed, .eye = {0.0f, 3.0f, 140.0f}, .look = {0.0f, 1.5f, 160.0f}},
+	    .objects = {{.type = VillagerInfo::CelticFarmerMale, .offset = {-3.0f, 160.0f}},
+	                {.type = VillagerInfo::CelticHousewifeFemale, .offset = {3.0f, 160.0f}}},
 	    .commands = {{.kind = Kind::WideScreen, .delaySeconds = 6.0f, .value = 1},
 	                 {.kind = Kind::CallNative,
 	                  .delaySeconds = 0.5f,

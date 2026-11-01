@@ -232,8 +232,15 @@ inline constexpr float k_LeastDominantFactor = 1.3f;
 /// A frozen creature's look: its colour multiplied by white thawed, by this dark icy blue fully frozen, with an icy
 /// sheen added over it by how frozen it is
 inline constexpr uint32_t k_FrozenColour = 0x354F8Du;
-/// The colour, 0xRRGGBB, the land's light on a creature is multiplied by at a freeze from 0 to 1
+/// How frozen a creature is as a byte, which the frozen look is made from: the freeze from 0 to 1 times 255, to the
+/// nearest whole number (a half goes to the even number)
+[[nodiscard]] uint8_t FreezeLevel(float freeze);
+/// The colour, 0xRRGGBB, the land's light on a creature is multiplied by at a freeze from 0 to 1: from white, all the way
+/// to the icy colour when wholly frozen
 [[nodiscard]] uint32_t FrozenTint(float freeze);
+/// The alpha, of 255, of the ice that is added over a frozen creature: its freeze level times the white of the light,
+/// over 256
+[[nodiscard]] uint8_t IceAlpha(float freeze);
 
 /// The size a size spell takes a creature to from its size before. Out of a fight small takes it down to its smallest
 /// and big up to its largest, neither ever the other way; in a fight they take its size now down to five ninths or up to
