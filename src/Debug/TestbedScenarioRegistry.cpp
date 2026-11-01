@@ -13862,6 +13862,51 @@ void AddWorkshopScenarios(std::vector<Scenario>& all)
 	                  .scriptArguments = {{.kind = ScriptArgument::Kind::Integer, .number = 0.0f},
 	                                      {.kind = ScriptArgument::Kind::Made, .index = 0}}}},
 	});
+
+	// The workshop's abode number and the size, as the third land's script lays out the workshop of the home town
+	constexpr float k_WorkshopNumber = 9.0f;
+	constexpr float k_WorkshopSize = 3.0f;
+	constexpr glm::vec2 k_RockyPlace {-45.0f, 15.0f};
+	all.push_back({
+	    .id = "objects.scaffold_builds_among_rocks",
+	    .name = "A script scaffold starts its workshop among rocks",
+	    .facet = Facet::Objects,
+	    .description = "A Celtic town of the player's (which believes in the player from the start) with a village "
+	                   "centre. Four rocks lie 4 m round a place 57 m from the centre. After one second, CREATE makes a "
+	                   "scaffold (type 39) at that place, and "
+	                   "SET_SCAFFOLD_PROPERTIES gives it the workshop (abode number 9) and the size 3. Then SET_ACTIVE "
+	                   "sets the scaffold active, as the third land's script does with the workshop of the home town.",
+	    .expected = "A building site of a workshop opens at the scaffold, with the phantom of the workshop over the "
+	                "rocks. The rocks do not stop the building. The scaffold stays on the site.",
+	    .environment = {.dispenserGrid = false},
+	    .framing = {.shot = Shot::Overview, .include = {k_RockyPlace - glm::vec2 {15.0f}, k_RockyPlace + glm::vec2 {15.0f}}},
+	    .objects = {{.type = AbodeInfo::CelticTownCentre, .offset = {0.0f, 50.0f}},
+	                {.type = MobileStaticInfo::RockChalk, .offset = k_RockyPlace + glm::vec2 {4.0f, 0.0f}},
+	                {.type = MobileStaticInfo::RockChalk, .offset = k_RockyPlace + glm::vec2 {-4.0f, 0.0f}},
+	                {.type = MobileStaticInfo::RockChalk, .offset = k_RockyPlace + glm::vec2 {0.0f, 4.0f}},
+	                {.type = MobileStaticInfo::RockChalk, .offset = k_RockyPlace + glm::vec2 {0.0f, -4.0f}}},
+	    .commands = {{.kind = Kind::CallNative,
+	                  .delaySeconds = 1.0f,
+	                  .script = "CREATE",
+	                  .scriptArguments = {{.kind = ScriptArgument::Kind::Integer,
+	                                       .number = static_cast<float>(script::ObjectType::Scaffold)},
+	                                      {.kind = ScriptArgument::Kind::Integer, .number = 5000.0f},
+	                                      {.kind = ScriptArgument::Kind::Position, .point = k_RockyPlace}}},
+	                 {.kind = Kind::CallNative,
+	                  .delaySeconds = 0.0f,
+	                  .script = "SET_SCAFFOLD_PROPERTIES",
+	                  .scriptArguments = {{.kind = ScriptArgument::Kind::Made, .index = 0},
+	                                      {.kind = ScriptArgument::Kind::Integer, .number = k_WorkshopNumber},
+	                                      {.kind = ScriptArgument::Kind::Number, .number = k_WorkshopSize},
+	                                      {.kind = ScriptArgument::Kind::Integer, .number = 0.0f}}},
+	                 {.kind = Kind::CallNative,
+	                  .delaySeconds = 0.0f,
+	                  .script = "SET_ACTIVE",
+	                  .scriptArguments = {{.kind = ScriptArgument::Kind::Integer, .number = 1.0f},
+	                                      {.kind = ScriptArgument::Kind::Made, .index = 0}}}},
+	    // A town of the neutral player wants no workshop, so the town stays the player's
+	    .townBeliefInPlayer = 1000.0f,
+	});
 }
 
 std::vector<Scenario> Build()
