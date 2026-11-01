@@ -345,3 +345,67 @@ TEST(CreatureSpells, AFaintBringsEverySpellToItsEnd)
 	starting.phase = Phase::Off;
 	EXPECT_TRUE(TryFinishAll(spells));
 }
+
+TEST(CreatureSpells, TheHoldOfASpellIsItsTimeCutToWholeTurns)
+{
+	EXPECT_EQ(HoldTurnsOf(3.0f, k_TurnsPerSecond), 30);
+	EXPECT_EQ(HoldTurnsOf(0.05f, k_TurnsPerSecond), 0);
+	EXPECT_EQ(HoldTurnsOf(0.0f, k_TurnsPerSecond), 0);
+	EXPECT_EQ(HoldTurnsOf(-0.05f, k_TurnsPerSecond), 0);
+	EXPECT_EQ(HoldTurnsOf(-1.0f, k_TurnsPerSecond), -1);
+}
+
+TEST(CreatureSpells, ASpellOfNoTimeEndsAfterItStarts)
+{
+	Spells spells;
+	Receive(spells, Spell::Freeze, HoldTurnsOf(0.0f, k_TurnsPerSecond), k_Miracle, 0.0f);
+	const auto run = StepUntilOff(spells, Spell::Freeze);
+	// The spell starts in a turn and eases in for two seconds. It holds for no turns, then eases out for two seconds.
+	EXPECT_EQ(run.turns, 1 + 20 + 1 + 0 + 1 + 20 + 1);
+}
+
+TEST(CreatureSpells, ATimeBelowZeroOnAHeldSpellHoldsItForEver)
+{
+	Spells spells;
+	Receive(spells, Spell::Freeze, HoldTurnsOf(3.0f, k_TurnsPerSecond), k_Miracle, 3.0f);
+	const auto timings = Timings();
+	while (spells[Spell::Freeze].phase != Phase::Holding)
+	{
+		(void)Step(spells, timings, k_TurnsPerSecond);
+	}
+	Receive(spells, Spell::Freeze, HoldTurnsOf(-0.05f, k_TurnsPerSecond), k_Other, -0.05f);
+	EXPECT_LT(spells[Spell::Freeze].turnsLeft, 0);
+}
+
+TEST(CreatureSpells, EachNewFreezeAddsItsTimeAndTakesThePlaceOfTheOldMiracle)
+{
+	// Three pillars freeze the creature for 3 seconds each, every 3 seconds, as the prison of the third land does
+	Spells spells;
+	const auto timings = Timings();
+	const auto hold = HoldTurnsOf(3.0f, k_TurnsPerSecond);
+	Receive(spells, Spell::Freeze, hold, k_Miracle, 3.0f);
+	while (spells[Spell::Freeze].phase != Phase::Holding)
+	{
+		(void)Step(spells, timings, k_TurnsPerSecond);
+	}
+	auto last = k_Miracle;
+	for (int round = 0; round < 10; ++round)
+	{
+		for (int pillar = 0; pillar < 3; ++pillar)
+		{
+			const auto miracle = static_cast<entt::entity>(100 + round * 3 + pillar);
+			const auto result = Receive(spells, Spell::Freeze, hold, miracle, 3.0f);
+			EXPECT_EQ(result.received, Received::Extended);
+			EXPECT_EQ(result.replaced, last);
+			last = miracle;
+		}
+		for (int turn = 0; turn < hold; ++turn)
+		{
+			(void)Step(spells, timings, k_TurnsPerSecond);
+		}
+	}
+	// The hold grows by two freezes a round: the creature stays frozen long after the pillars stop
+	EXPECT_EQ(spells[Spell::Freeze].phase, Phase::Holding);
+	EXPECT_EQ(spells[Spell::Freeze].turnsLeft, hold + 10 * 2 * hold);
+	EXPECT_EQ(spells[Spell::Freeze].miracle, last);
+}

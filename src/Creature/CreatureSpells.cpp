@@ -29,10 +29,10 @@ constexpr std::array<Kind, k_SpellCount> k_Kinds {
     Kind::Mood, Kind::Mood, Kind::Other, Kind::Other,    Kind::Other,    Kind::Other, Kind::Other, Kind::Mood,
 };
 
-/// Turns up a turn count, keeping "for ever" (negative) as it is
-int32_t Add(int32_t turns, int32_t more)
+/// Adds turns to a turn count. A count that is "for ever" (negative) stays so. A negative time also makes it "for ever".
+int32_t Add(int32_t turns, int32_t more, float seconds)
 {
-	return turns < 0 || more < 0 ? -1 : turns + more;
+	return seconds < 0.0f || turns < 0 || more < 0 ? -1 : turns + more;
 }
 
 /// The spell is cut short: it holds no longer
@@ -142,6 +142,13 @@ int32_t creature_spells::TurnsOf(float seconds, float turnsPerSecond)
 	return seconds > 0.0f ? static_cast<int32_t>(seconds * turnsPerSecond) : -1;
 }
 
+int32_t creature_spells::HoldTurnsOf(float seconds, float turnsPerSecond)
+{
+	// The count goes to zero from a fraction of a turn. A time of zero gives no hold, and a time below zero holds for ever.
+	const auto turns = static_cast<int32_t>(seconds * turnsPerSecond);
+	return turns < 0 ? -1 : turns;
+}
+
 ReceiveResult creature_spells::Receive(Spells& spells, Spell spell, int32_t holdTurns, entt::entity miracle, float seconds)
 {
 	auto& slot = spells[spell];
@@ -150,14 +157,14 @@ ReceiveResult creature_spells::Receive(Spells& spells, Spell spell, int32_t hold
 	case Phase::Waiting:
 	case Phase::Starting:
 	{
-		slot.holdTurns = Add(slot.holdTurns, holdTurns);
+		slot.holdTurns = Add(slot.holdTurns, holdTurns, seconds);
 		const auto replaced = slot.miracle;
 		slot.miracle = miracle;
 		return {Received::Extended, replaced};
 	}
 	case Phase::Holding:
 	{
-		slot.turnsLeft = Add(slot.turnsLeft, holdTurns);
+		slot.turnsLeft = Add(slot.turnsLeft, holdTurns, seconds);
 		const auto replaced = slot.miracle;
 		slot.miracle = miracle;
 		return {Received::Extended, replaced};
