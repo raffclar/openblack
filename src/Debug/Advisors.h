@@ -17,7 +17,7 @@ namespace openblack::debug::gui
 {
 
 /// The player's two advisors: sending them out and home as the scripts do, pointing, clinging, flying and acting, and
-/// what each is doing
+/// what each is doing. Also the dialogue of the scripts and the help messages that the game started.
 class Advisors final: public Window
 {
 public:
@@ -31,6 +31,8 @@ protected:
 
 private:
 	void DrawAdvisor(int advisor) noexcept;
+	/// The dialogue of the scripts and the help messages that the game started, the newest first
+	void DrawHelp() noexcept;
 
 	/// Where on the screen each advisor is sent to, across and down from 0 to 1
 	std::array<std::array<float, 2>, 2> _place {{{0.3f, 0.6f}, {0.7f, 0.6f}}};

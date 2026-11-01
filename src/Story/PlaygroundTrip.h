@@ -13,6 +13,8 @@
 
 #include <string_view>
 
+#include "Input/BoxKeyboard.h"
+
 /// The trip to the Gods' Playground and back. In single player, F2 asks whether the player wants to go there. Yes saves
 /// the game into the slot of the save on exit, stops every script, loads the Playground's land with no loading screen and
 /// starts its lessons. Escape on the Playground first ends the lesson that runs. The next Escape asks whether the player
@@ -93,6 +95,10 @@ struct MenuSituation
 /// Whether F2 can ask the question over the open menu. F2 asks over the main menu and over each page that Escape can
 /// close. While a box shows a question, F2 does not ask.
 [[nodiscard]] bool MenuLetsAsk(const MenuSituation& menu) noexcept;
+
+/// Whether a box other than the menu stops F2 from asking the question. Each box that takes the keyboard stops F2, but the
+/// land information box: Escape can close it, and it never holds a message of its own. The open menu has its own rule.
+[[nodiscard]] bool OtherBoxRefuses(input::box_keyboard::Boxes boxes) noexcept;
 
 /// Whether the box pauses the game when it comes back after the question of the trip. Only the main menu pauses the
 /// game each time that it comes back.

@@ -1256,10 +1256,7 @@ bool GameInterface::BoxRefusesTrip() const noexcept
 	                                                .detailUntold = _menu->IsDetailUntold(),
 	                                                .restartPending = _menu->IsRestartPending(),
 	                                            });
-	// Each other box that takes the keyboard stops F2
-	auto others = KeyboardBoxes();
-	others.menu = false;
-	return menuRefuses || input::box_keyboard::WantsKeys(others);
+	return menuRefuses || playground_trip::OtherBoxRefuses(KeyboardBoxes());
 }
 
 glm::ivec2 GameInterface::ToChatControls(glm::ivec2 screen, glm::u16vec2 resolution)
@@ -1473,7 +1470,8 @@ bool GameInterface::ProcessEvent(const SDL_Event& event, glm::u16vec2 resolution
 	{
 		return ProcessEndGameBoxEvent(event);
 	}
-	if (_landInfoBox->IsActive())
+	// While the question of the trip covers the land information box, the question takes the input
+	if (_landInfoBox->TakesInput())
 	{
 		return ProcessLandInfoBoxEvent(event);
 	}
@@ -1676,6 +1674,9 @@ void GameInterface::Update(float deltaSeconds)
 			_tripAnswer = *answer == SaveGameBoxes::Answer::Yes;
 		}
 	}
+	// The question of the trip comes over the land information box as a box of its own: the box fades out until the
+	// question goes
+	_landInfoBox->SetCovered(_tripAsked && _saveGameBoxes->IsActive());
 	_multiplayerBoxes->Update(deltaSeconds);
 	UpdateTattooEditor(deltaSeconds);
 	_toolTips.Update(deltaSeconds);

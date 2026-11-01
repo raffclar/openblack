@@ -120,6 +120,20 @@ TEST(PlaygroundTrip, F2AsksOverEachPageThatEscapeCanClose)
 	}
 }
 
+TEST(PlaygroundTrip, F2AsksOverTheLandInformationBox)
+{
+	EXPECT_FALSE(OtherBoxRefuses({}));
+	EXPECT_FALSE(OtherBoxRefuses({.landInfoBox = true}));
+	// The menu has its own rule
+	EXPECT_FALSE(OtherBoxRefuses({.menu = true, .landInfoBox = true}));
+	// Each other box that takes the keyboard stops F2, also over the land information box
+	EXPECT_TRUE(OtherBoxRefuses({.skirmishBox = true}));
+	EXPECT_TRUE(OtherBoxRefuses({.landInfoBox = true, .saveGameBoxes = true}));
+	EXPECT_TRUE(OtherBoxRefuses({.tattooEditor = true}));
+	// The story history and the music controls let the keys go to the game
+	EXPECT_FALSE(OtherBoxRefuses({.storyHistory = true, .musicControls = true}));
+}
+
 TEST(PlaygroundTrip, AnUntoldChangeOfTheDetailStopsF2OnTheOptionsPages)
 {
 	EXPECT_FALSE(MenuLetsAsk({.box = MenuBox::Options, .detailUntold = true}));

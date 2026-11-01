@@ -44,6 +44,13 @@ bool MenuLetsAsk(const MenuSituation& menu) noexcept
 	return false;
 }
 
+bool OtherBoxRefuses(input::box_keyboard::Boxes boxes) noexcept
+{
+	boxes.menu = false;
+	boxes.landInfoBox = false;
+	return input::box_keyboard::WantsKeys(boxes);
+}
+
 bool PausesWhenBack(MenuBox box) noexcept
 {
 	return box == MenuBox::Main;

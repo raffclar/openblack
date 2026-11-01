@@ -1859,7 +1859,12 @@ bool SaveGameSystem::SaveOnExit(bool quitting)
 	// No save as the player leaves the testbed, the Gods' Playground, a skirmish, a network game, or a game that is over
 	const auto* lands = Locator::landSystem::has_value() ? &Locator::landSystem::value() : nullptr;
 	if (lands == nullptr || lands->GetLandPath().empty() || lands->GetLandPath() == ecs::systems::k_TestbedLandPath ||
-	    context.gameOver || context.skirmish || NetworkGame() || LandNumber() == gamesave::k_PlaygroundLand)
+	    !gamesave::ExitSaveAllowed({
+	        .gameOver = context.gameOver,
+	        .skirmish = context.skirmish,
+	        .networkGame = NetworkGame(),
+	        .land = LandNumber(),
+	    }))
 	{
 		return false;
 	}

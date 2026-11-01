@@ -1067,7 +1067,7 @@ private:
 	std::optional<std::chrono::steady_clock::time_point> _menuClosedAt;
 	/// The question of the trip to the Gods' Playground that is on the screen
 	std::optional<playground_trip::Question> _tripQuestion;
-	/// Yes to the trip over the open menu: the menu stays open while the land of the Playground loads
-	bool _menuStaysForTrip {false};
+	/// Yes to the trip: the menu and the land information box stay as they are while the land of the Playground loads
+	bool _boxesStayForTrip {false};
 };
 } // namespace openblack

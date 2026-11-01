@@ -3529,6 +3529,11 @@ void Game::CloseMenuForCinema()
 	{
 		_interface->GetMenu().Close();
 	}
+	// The cinema bars close every box of the game, also the land information box
+	if (_interface && _interface->GetLandInfoBox().IsActive())
+	{
+		_interface->GetLandInfoBox().Close();
+	}
 }
 
 void Game::UpdateHandFrame(std::chrono::microseconds deltaTime)
@@ -5706,9 +5711,9 @@ void Game::FollowPlaygroundTrip()
 	}
 	if (question == playground_trip::Question::Go)
 	{
-		// The saved game keeps the pause that the game has now. The land of the Playground then loads, and an open menu
-		// stays open over it.
-		_menuStaysForTrip = menu.IsOpen();
+		// The saved game keeps the pause that the game has now. The land of the Playground then loads. The trip closes no
+		// box: an open menu and the land information box stay over the new land.
+		_boxesStayForTrip = true;
 		if (!trip.SaveBeforeTrip())
 		{
 			SPDLOG_LOGGER_WARN(spdlog::get("game"), "The save before the trip to the Gods' Playground did not write");
@@ -5717,7 +5722,7 @@ void Game::FollowPlaygroundTrip()
 		{
 			SPDLOG_LOGGER_ERROR(spdlog::get("game"), "The trip to the Gods' Playground did not load the land");
 		}
-		_menuStaysForTrip = false;
+		_boxesStayForTrip = false;
 		return;
 	}
 	// The saved game loads with its own pause. With no saved game, the game stays paused.
@@ -6434,13 +6439,10 @@ void Game::ShowTattooMenuCreature() const
 
 void Game::CloseMenuForNewLand()
 {
-	// Yes to the trip over the open menu keeps the menu open, with its pause, while the land of the Playground loads
-	if (std::exchange(_menuStaysForTrip, false))
+	// The trip to the Gods' Playground closes no box. An open menu keeps its pause, and the land information box stays,
+	// while the land of the Playground loads. The cinema bars of the first lesson close them.
+	if (std::exchange(_boxesStayForTrip, false))
 	{
-		if (_interface && _interface->GetLandInfoBox().IsActive())
-		{
-			_interface->GetLandInfoBox().Close();
-		}
 		return;
 	}
 	// Each other change of land comes only when the menu is closed. The menu closes before the choices in it that change
