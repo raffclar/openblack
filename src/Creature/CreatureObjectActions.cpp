@@ -190,6 +190,11 @@ creature_object_actions::MovingApproachStep creature_object_actions::NextMovingA
 	return turnsToReach ? MovingApproachStep::WaitForTurn : MovingApproachStep::AimAgain;
 }
 
+bool creature_object_actions::MeasureHolds(std::optional<uint32_t> measuredFor, uint32_t bodyRevision)
+{
+	return measuredFor == bodyRevision;
+}
+
 float creature_object_actions::NearWalkDistance(float creatureRadius, float thingRadius)
 {
 	const float radii = creatureRadius + thingRadius;

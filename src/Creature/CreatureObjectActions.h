@@ -184,6 +184,10 @@ enum class MovingApproachStep : uint8_t
 /// The next step while the creature moves. turnsToReach: it turns on the spot because the thing was outside the corners
 /// of its reach.
 [[nodiscard]] MovingApproachStep NextMovingApproachStep(bool turnsToReach);
+/// Whether a kept measure of where a hand or foot gets in the animations is correct for the body now. measuredFor is
+/// the revision of the body shape at the measure, or none when there is no measure. Each time the animations follow a
+/// new body shape, the next use measures the hand or foot again. The reach, the catch and the toss all use this rule.
+[[nodiscard]] bool MeasureHolds(std::optional<uint32_t> measuredFor, uint32_t bodyRevision);
 /// How far from the thing the walk near to it stops: twice the creature's radius and the thing's radius added
 [[nodiscard]] float NearWalkDistance(float creatureRadius, float thingRadius);
 /// A thing higher than this above the creature, in metres, can be too high to pick up
