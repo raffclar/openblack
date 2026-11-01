@@ -10,6 +10,8 @@
 #include <cstdint>
 
 #include <filesystem>
+#include <optional>
+#include <string_view>
 #include <variant>
 #include <vector>
 
@@ -115,6 +117,43 @@ TEST_F(CreatureUploadTest, AClanCreatureKeepsTheFilesThroughTheJson)
 
 	EXPECT_FALSE(creature_upload::PackClanCreature(0.0f, std::vector<uint8_t> {1}, _physique).has_value());
 	auto broken = *back;
-	broken.physique.resize(1);
+	broken.mind.resize(1);
 	EXPECT_FALSE(creature_upload::IsValidClanCreature(broken));
+}
+
+TEST_F(CreatureUploadTest, TheSecondBufferOfAClanCreatureIsUserDataThatTheGameDoesNotRead)
+{
+	// The second buffer holds the user data of the team leader, or nothing
+	const std::vector<uint8_t> userData {7, 0, 3};
+	const auto creature = creature_upload::PackClanCreature(0.75f, _mind, userData);
+	ASSERT_TRUE(creature.has_value());
+	EXPECT_EQ(creature->physique, userData);
+	EXPECT_TRUE(creature_upload::IsValidClanCreature(*creature));
+	const auto empty = creature_upload::PackClanCreature(0.75f, _mind, {});
+	ASSERT_TRUE(empty.has_value());
+	EXPECT_TRUE(empty->physique.empty());
+	EXPECT_TRUE(creature_upload::IsValidClanCreature(*empty));
+}
+
+TEST_F(CreatureUploadTest, TheLobbyAnswerGivesTheStartDataOfTheClanGod)
+{
+	using namespace std::string_view_literals;
+	const lobby_api::ClanCreatureReply stored {
+	    .kind = lobby_api::ClanCreatureKind::Stored,
+	    .creature = lobby_api::ClanCreature {.alignment = 0.5f, .mind = _mind, .physique = {1, 2}},
+	};
+	EXPECT_EQ(creature_upload::StartData(stored), std::optional(_mind));
+
+	const lobby_api::ClanCreatureReply make {
+	    .kind = lobby_api::ClanCreatureKind::Create,
+	    .make = lobby_api::NewClanCreature {.type = 2, .name = "Stripes"},
+	};
+	const auto order = "CLANCREATECREATURE02Stripes\0"sv;
+	EXPECT_EQ(creature_upload::StartData(make), std::optional(std::vector<uint8_t>(order.begin(), order.end())));
+
+	EXPECT_FALSE(creature_upload::StartData({.kind = lobby_api::ClanCreatureKind::None}).has_value());
+	// A row that does not fit in the two digits of the order gives no start data
+	auto wide = make;
+	wide.make->type = 100;
+	EXPECT_FALSE(creature_upload::StartData(wide).has_value());
 }

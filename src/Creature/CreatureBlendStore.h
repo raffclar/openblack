@@ -79,7 +79,7 @@ struct BlendKeyHash
 	}
 };
 
-/// A blend that the threads made before a turn asked for it, and the count of the shapes of the bodies at that time
+/// A blend that the threads or a turn made, and the count of the shapes of the bodies when a turn last took it
 struct PreparedBlend
 {
 	skeletal_animation::Animation animation;
@@ -87,11 +87,13 @@ struct PreparedBlend
 };
 
 /// The animations that the creatures of each species share: the animations adjusted to the variants' stands, and the
-/// blends that the threads made before a turn asks for them
+/// blends that the threads or a turn made. The bodies of one shape share the kept blends.
 struct Stores
 {
 	std::unordered_map<AdjustedKey, std::optional<AdjustedAnimation>, AdjustedKeyHash> adjusted;
 	std::unordered_map<BlendKey, PreparedBlend, BlendKeyHash> prepared;
+	/// The count of the shapes of the bodies now
+	uint32_t shaping {0};
 };
 
 /// A blend that the threads make: the species, the drawn body and the animation
@@ -110,9 +112,14 @@ struct Wanted
 [[nodiscard]] std::optional<skeletal_animation::Animation> Blend(Stores& stores, const creature::CreatureRig& rig,
                                                                  const creature_morph::Morph& morph, size_t index);
 
-/// The blend that the threads made for the drawn body, taken out of the stores, or nothing when they did not make it
-[[nodiscard]] std::optional<skeletal_animation::Animation> TakePrepared(Stores& stores, const creature::CreatureRig& rig,
-                                                                        const creature_morph::Morph& morph, size_t index);
+/// A copy of the blend that the stores keep for the drawn body, or nothing when they keep none. The stores keep the blend
+/// for two more counts of shapes.
+[[nodiscard]] std::optional<skeletal_animation::Animation> KeptBlend(Stores& stores, const creature::CreatureRig& rig,
+                                                                     const creature_morph::Morph& morph, size_t index);
+
+/// The stores keep a blend that a turn made, so that the next body of the same shape copies it
+void Keep(Stores& stores, const creature::CreatureRig& rig, const creature_morph::Morph& morph, size_t index,
+          const skeletal_animation::Animation& animation);
 
 /// The threads make the wanted blends that the stores do not have, and the stores keep them with the count of shapes.
 /// First the threads make the adjusted animations that the blends use, one time each. The species must have the base

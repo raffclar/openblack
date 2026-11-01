@@ -87,4 +87,22 @@ std::optional<Order> Read(std::span<const uint8_t> data)
 	return order;
 }
 
+std::optional<std::vector<uint8_t>> Write(const Order& order)
+{
+	if (order.row < 0 || order.row >= k_Ten * k_Ten)
+	{
+		return std::nullopt;
+	}
+	const auto name = windows_text::ToWindowsText(order.name);
+	std::vector<uint8_t> data;
+	data.reserve(k_Text.size() + k_RowDigits + name.size() + 1);
+	data.insert(data.end(), k_Text.begin(), k_Text.end());
+	data.push_back(static_cast<uint8_t>(k_Zero + order.row / k_Ten));
+	data.push_back(static_cast<uint8_t>(k_Zero + order.row % k_Ten));
+	data.insert(data.end(), name.begin(), name.end());
+	// The order keeps the zero byte at the end of its text
+	data.push_back(0);
+	return data;
+}
+
 } // namespace openblack::clan_creature_order
