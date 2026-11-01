@@ -4582,6 +4582,19 @@ void Runner::Give(const Command& command)
 		}
 		result = Locator::creatureFizzSystem::has_value() ? fmt::format("fizzes to {:.2f}", command.amount) : "no fizz";
 		break;
+	case Kind::SetBodyLook:
+	{
+		auto* body = Locator::entitiesRegistry::value().TryGet<ecs::components::Creature>(*entity);
+		if (body == nullptr)
+		{
+			result = "no creature";
+			break;
+		}
+		auto& look = command.value == 0 ? body->alignment : body->fatness;
+		look = command.amount;
+		result = fmt::format("{} {:.2f}", command.value == 0 ? "alignment" : "fatness", command.amount);
+		break;
+	}
 	case Kind::SetFightLean:
 	{
 		auto& registry = Locator::entitiesRegistry::value();

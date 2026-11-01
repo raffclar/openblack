@@ -8066,6 +8066,23 @@ void AddLeash(std::vector<Scenario>& all)
 	    .commands = {Leash(0, LeashType::Rope, 1.0f), OnObject(Kind::LeashOrderOn, 0, 0, 2.0f, false)},
 	});
 
+	all.push_back({
+	    .id = "objects.pick_up_from_far",
+	    .name = "A creature walks a long way to a small thing and picks it up",
+	    .facet = Facet::Objects,
+	    .description = "A tiger of size 1 has a lump of poo 40 metres in front of it. After one second its alignment jumps "
+	                   "to fully evil, so its body takes the evil shape after it first measured its reach. After one and "
+	                   "a half seconds more it is told to pick up the poo.",
+	    .expected = "It walks up to the poo and stops a hand's reach from it. It turns a little on the spot if it must, "
+	                "then picks the poo up and holds it. Before, it stopped a little too far away for the arms of its new "
+	                "shape, reached for nothing and gave up the pick-up.",
+	    .framing = {.shot = Shot::Overview, .include = {{0.0f, 60.0f}, {0.0f, 20.0f}}},
+	    .creatures = {CreatureSetup {.species = CreatureType::Tiger, .offset = {0.0f, 60.0f}, .size = 1.0f}},
+	    .objects = {{.type = MobileObjectInfo::LumpOfPoo, .offset = {0.0f, 20.0f}}},
+	    .commands = {{.kind = Kind::SetBodyLook, .creature = 0, .delaySeconds = 1.0f, .value = 0, .amount = -1.0f},
+	                 OnObject(Kind::PickUp, 0, 0, 1.5f)},
+	});
+
 	// Worn out and wanting to sleep more than anything, far from its player's temple
 	CreatureSetup tired {.species = CreatureType::Tiger,
 	                     .offset = {0.0f, 20.0f},
@@ -13678,7 +13695,7 @@ std::string_view testbed_scenarios::Name(Shot shot)
 
 std::string_view testbed_scenarios::Name(Command::Kind kind)
 {
-	constexpr std::array<std::string_view, 207> k_Names {
+	constexpr std::array<std::string_view, 208> k_Names {
 	    "walk to",
 	    "run to",
 	    "follow",
@@ -13886,6 +13903,7 @@ std::string_view testbed_scenarios::Name(Command::Kind kind)
 	    "a god orders its creature",
 	    "take a seed from its icon",
 	    "tap a worship site icon",
+	    "change the body's look",
 	};
 	return k_Names.at(static_cast<size_t>(kind));
 }

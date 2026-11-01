@@ -1134,6 +1134,9 @@ struct Command
 		/// With an amount, the battery of the site first gets that much of the cost of the plain miracle. Needs no
 		/// creature.
 		TapSiteIcon,
+		/// The creature's alignment (value 0) or fatness (value 1) jumps to an amount. Its body takes the new look at
+		/// the end of its next game turn, and its animations then follow the new shape.
+		SetBodyLook,
 	};
 	Kind kind {Kind::Stop};
 	/// Which creature, by its place in the scenario's creatures

@@ -7,6 +7,7 @@
  * openblack is licensed under the GNU General Public License version 3.
  *******************************************************************************/
 
+#include <cmath>
 #include <cstdint>
 #include <cstdlib>
 
@@ -24,6 +25,7 @@
 #include "Creature/CreatureDecisionTree.h"
 #include "Creature/CreatureObjectActions.h"
 #include "Creature/CreatureObjectBeliefs.h"
+#include "Creature/CreatureReach.h"
 
 using namespace openblack::creature_object_beliefs;
 
@@ -428,6 +430,34 @@ TEST(CreatureObjectBeliefs, TheTurnToGetAThingInReachIsNotAWalk)
 	EXPECT_EQ(NextMovingApproachStep(true), MovingApproachStep::WaitForTurn);
 	// On its way to the thing, it aims again on each turn
 	EXPECT_EQ(NextMovingApproachStep(false), MovingApproachStep::AimAgain);
+}
+
+TEST(CreatureObjectBeliefs, AKeptMeasureHoldsOnlyForTheBodyShapeItWasMadeFor)
+{
+	using openblack::creature_object_actions::MeasureHolds;
+	// No measure yet: the first use measures
+	EXPECT_FALSE(MeasureHolds(std::nullopt, 0));
+	// The body shape is the same: the kept measure is used
+	EXPECT_TRUE(MeasureHolds(3, 3));
+	// The animations follow a new body shape: the next use measures again
+	EXPECT_FALSE(MeasureHolds(3, 4));
+}
+
+TEST(CreatureObjectBeliefs, AThingJustInsideTheStraightReachOfTheSameCornersIsInReach)
+{
+	namespace reach = openblack::creature_reach;
+	// The corners of a size 1 tiger's pick-up, and the same corners of a body shape with arms three percent longer
+	const reach::Points now {glm::vec3 {3.68f, 2.62f, -0.92f}, glm::vec3 {-3.11f, 1.10f, -1.44f},
+	                         glm::vec3 {3.91f, 1.65f, -7.29f}, glm::vec3 {-1.14f, 0.24f, -7.38f}};
+	const auto longer = reach::Scaled(now, 1.03f);
+	// The thing lies 10 cm inside a straight reach, where the creature faces with the middle of its corners on it
+	const auto centre = reach::Centre(now);
+	const auto ahead = glm::vec2 {centre.x, centre.z} / std::sqrt((centre.x * centre.x) + (centre.z * centre.z));
+	const auto placeAt = [&ahead](float distance) { return glm::vec3 {ahead.x * distance, 0.0f, ahead.y * distance}; };
+	// The straight reach and the corners come from one measure: the thing is in reach
+	EXPECT_TRUE(reach::Solve(now, placeAt(reach::StraightReach(now, 1.0f) - 0.1f)).inRange);
+	// A straight reach from the measure of an older body shape stops the walk too far away for the corners of now
+	EXPECT_FALSE(reach::Solve(now, placeAt(reach::StraightReach(longer, 1.0f) - 0.1f)).inRange);
 }
 
 TEST(CreatureObjectBeliefs, AWalkNearAThingStopsAtTwiceTheRadii)
