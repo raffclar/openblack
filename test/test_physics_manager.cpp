@@ -449,6 +449,22 @@ TEST(PhysicsClasses, WeightGrowsWithTheCubeOfTheScaleAndNeverReachesNothing)
 	EXPECT_FLOAT_EQ(physics_classes::BodyMass(5.0f), 5.0f);
 }
 
+// The scaffold row of the game data gives a weight of 400 and the scaffold's own collision sound type. A scaffold of
+// value 3 (scale 1.1) thus weighs 400 x 1.1 cubed, and its hits use the scaffold codes of the sound bank.
+TEST(PhysicsClasses, AScaffoldWeighsByItsScaleAndSoundsAsAScaffold)
+{
+	constexpr float k_ScaffoldWeight = 400.0f;
+	EXPECT_FLOAT_EQ(physics_classes::Weight(k_ScaffoldWeight, 1.0f), 400.0f);
+	EXPECT_FLOAT_EQ(physics_classes::Weight(k_ScaffoldWeight, 1.1f), 1.1f * 1.1f * 1.1f * 400.0f);
+	const auto keys = turn::CollisionKeys(turn::SoundLevel::Soft, static_cast<int32_t>(SoundCollisionType::Scaffold),
+	                                      static_cast<int32_t>(SoundCollisionType::Ground));
+	EXPECT_EQ(keys, (std::array<int32_t, 5> {static_cast<int32_t>(turn::SoundLevel::Soft), 0, 42, 16, 75}));
+	const auto hit = turn::CollisionKeys(turn::SoundLevel::Soft, static_cast<int32_t>(SoundCollisionType::SolidStone),
+	                                     static_cast<int32_t>(SoundCollisionType::Scaffold));
+	EXPECT_EQ(hit[3], 24);
+	EXPECT_TRUE(turn::CollisionSoundFollows(keys));
+}
+
 TEST(PhysicsTurn, ImpactIsTheMeanForceAndIgnoresTheSmallest)
 {
 	EXPECT_FALSE(turn::Impact(glm::vec3(0.01f, 0.0f, 0.0f)).has_value());

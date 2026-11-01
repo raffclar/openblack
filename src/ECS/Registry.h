@@ -243,4 +243,26 @@ private:
 	bool _freshIdsAtNextReset {false};
 };
 
+/// The store of one kind of component, found one time for a walk of many things. Each look after that costs no search
+/// of the registry. It gives the same answers as the registry while the store exists. Make it again when the walk can
+/// make the first component of its kind.
+template <typename Component>
+class ComponentLookup
+{
+public:
+	explicit ComponentLookup(const Registry& registry)
+	    : _store(registry.Underlying().storage<Component>())
+	{
+	}
+	[[nodiscard]] bool Has(entt::entity entity) const { return _store != nullptr && _store->contains(entity); }
+	[[nodiscard]] const Component* TryGet(entt::entity entity) const
+	{
+		return Has(entity) ? &static_cast<const entt::storage_for_t<Component>*>(_store)->get(entity) : nullptr;
+	}
+
+private:
+	// The store as its untyped base, so that a class can hold a lookup of a component that it only declares
+	const entt::sparse_set* _store;
+};
+
 } // namespace openblack::ecs
