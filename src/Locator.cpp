@@ -31,7 +31,6 @@
 #include "CHLApi.h"
 #include "Common/EventManager.h"
 #include "Common/GameRandomProduction.h"
-#include "Common/MachineClock.h"
 #include "Common/MainThreadQueue.h"
 #include "Common/PlayerProfiles.h"
 #include "Common/RandomNumberManagerProduction.h"
@@ -62,7 +61,6 @@
 #include "ECS/Systems/Implementations/CreatureCaveSystem.h"
 #include "ECS/Systems/Implementations/CreatureFightSystem.h"
 #include "ECS/Systems/Implementations/CreatureFizzSystem.h"
-#include "ECS/Systems/Implementations/CreatureHairSystem.h"
 #include "ECS/Systems/Implementations/CreatureHandSystem.h"
 #include "ECS/Systems/Implementations/CreatureHelpSystem.h"
 #include "ECS/Systems/Implementations/CreatureLocomotionSystem.h"
@@ -99,7 +97,6 @@
 #include "ECS/Systems/Implementations/HighDetailSystem.h"
 #include "ECS/Systems/Implementations/InfluenceSystem.h"
 #include "ECS/Systems/Implementations/IntroSystem.h"
-#include "ECS/Systems/Implementations/LandShadeSystem.h"
 #include "ECS/Systems/Implementations/LiquidParticleSystem.h"
 #include "ECS/Systems/Implementations/LobbyClientSystem.h"
 #include "ECS/Systems/Implementations/NetworkGameSystem.h"
@@ -120,7 +117,6 @@
 #include "ECS/IncomingMessageRules.h"
 #include "ECS/Systems/GuidanceSystemInterface.h"
 #include "ECS/Systems/HandSystemInterface.h"
-#include "ECS/Systems/Implementations/AbodeSoundSystem.h"
 #include "ECS/Systems/Implementations/ArtefactSystem.h"
 #include "ECS/Systems/Implementations/ChatSystem.h"
 #include "ECS/Systems/Implementations/ComputerPlayerSystem.h"
@@ -129,7 +125,6 @@
 #include "ECS/Systems/Implementations/FixedOutlineSystem.h"
 #include "ECS/Systems/Implementations/GameEndSystem.h"
 #include "ECS/Systems/Implementations/HeartbeatSystem.h"
-#include "ECS/Systems/Implementations/IncomingMessageSystem.h"
 #include "ECS/Systems/Implementations/LandSystem.h"
 #include "ECS/Systems/Implementations/LeashSystem.h"
 #include "ECS/Systems/Implementations/LivingActionSystem.h"
@@ -140,13 +135,11 @@
 #include "ECS/Systems/Implementations/MusicMoodSystem.h"
 #include "ECS/Systems/Implementations/ParticleRuleSystem.h"
 #include "ECS/Systems/Implementations/PathfindingSystem.h"
-#include "ECS/Systems/Implementations/PauseTextSystem.h"
 #include "ECS/Systems/Implementations/PickingSystem.h"
 #include "ECS/Systems/Implementations/PlayerProfileSystem.h"
 #include "ECS/Systems/Implementations/PlayerSystem.h"
 #include "ECS/Systems/Implementations/ProfileFolderSystem.h"
 #include "ECS/Systems/Implementations/PuzzleGameSystem.h"
-#include "ECS/Systems/Implementations/RainSystem.h"
 #include "ECS/Systems/Implementations/ReactionSystem.h"
 #include "ECS/Systems/Implementations/ResourceStoreSystem.h"
 #include "ECS/Systems/Implementations/RewardSystem.h"
@@ -157,7 +150,6 @@
 #include "ECS/Systems/Implementations/SimulationSystem.h"
 #include "ECS/Systems/Implementations/SkyClockSystem.h"
 #include "ECS/Systems/Implementations/SnowSystem.h"
-#include "ECS/Systems/Implementations/SnowfallSystem.h"
 #include "ECS/Systems/Implementations/SoundTagSystem.h"
 #include "ECS/Systems/Implementations/SpellIconSystem.h"
 #include "ECS/Systems/Implementations/TattooEditorSystem.h"
@@ -179,6 +171,7 @@
 #include "ECS/Systems/Implementations/WeatherSystem.h"
 #include "ECS/Systems/Implementations/WonderSystem.h"
 #include "ECS/Systems/Implementations/WorshipSiteSystem.h"
+#include "ECS/Systems/IncomingMessageSystemInterface.h"
 #include "ECS/Systems/InspectorSystemInterface.h"
 #include "ECS/Systems/NetworkGameSystemInterface.h"
 #include "ECS/Systems/PlayerCommandSystemInterface.h"
@@ -229,7 +222,6 @@ using openblack::ecs::DrawnRegistry;
 using openblack::ecs::MapProduction;
 using openblack::ecs::Registry;
 using openblack::ecs::systems::AbodeKnockSystem;
-using openblack::ecs::systems::AbodeSoundSystem;
 using openblack::ecs::systems::AdvisorSystem;
 using openblack::ecs::systems::AlignmentSystem;
 using openblack::ecs::systems::AnimalSystem;
@@ -252,7 +244,6 @@ using openblack::ecs::systems::CreatureCarryOverSystem;
 using openblack::ecs::systems::CreatureCaveSystem;
 using openblack::ecs::systems::CreatureFightSystem;
 using openblack::ecs::systems::CreatureFizzSystem;
-using openblack::ecs::systems::CreatureHairSystem;
 using openblack::ecs::systems::CreatureHandSystem;
 using openblack::ecs::systems::CreatureHelpSystem;
 using openblack::ecs::systems::CreatureLocomotionSystem;
@@ -288,10 +279,8 @@ using openblack::ecs::systems::HelpProfileSystem;
 using openblack::ecs::systems::HelpSpeechSystem;
 using openblack::ecs::systems::HelpTextSystem;
 using openblack::ecs::systems::HighDetailSystem;
-using openblack::ecs::systems::IncomingMessageSystem;
 using openblack::ecs::systems::InfluenceSystem;
 using openblack::ecs::systems::IntroSystem;
-using openblack::ecs::systems::LandShadeSystem;
 using openblack::ecs::systems::LandSystem;
 using openblack::ecs::systems::LeashSystem;
 using openblack::ecs::systems::LiquidParticleSystem;
@@ -307,7 +296,6 @@ using openblack::ecs::systems::NetworkGameSystem;
 using openblack::ecs::systems::ObjectDrawListSystem;
 using openblack::ecs::systems::ParticleRuleSystem;
 using openblack::ecs::systems::PathfindingSystem;
-using openblack::ecs::systems::PauseTextSystem;
 using openblack::ecs::systems::PickingSystem;
 using openblack::ecs::systems::PlayerCommandSystem;
 using openblack::ecs::systems::PlayerProfileSystem;
@@ -315,7 +303,6 @@ using openblack::ecs::systems::PlayerSystem;
 using openblack::ecs::systems::PlaygroundTripSystem;
 using openblack::ecs::systems::ProfileFolderSystem;
 using openblack::ecs::systems::PuzzleGameSystem;
-using openblack::ecs::systems::RainSystem;
 using openblack::ecs::systems::ReactionSystem;
 using openblack::ecs::systems::RealWeatherSystem;
 using openblack::ecs::systems::ResourceStoreSystem;
@@ -323,7 +310,6 @@ using openblack::ecs::systems::SaveGameSystem;
 using openblack::ecs::systems::ScriptControlSystem;
 using openblack::ecs::systems::ScriptMusicSystem;
 using openblack::ecs::systems::SharkSystem;
-using openblack::ecs::systems::SnowfallSystem;
 using openblack::ecs::systems::SnowSystem;
 using openblack::ecs::systems::SoundTagSystem;
 using openblack::ecs::systems::SpellIconSystem;
@@ -652,7 +638,6 @@ bool openblack::InitializeSimulation(const player_profiles::Store& profiles) noe
 	Locator::time::emplace<TimeSystem>();
 	Locator::simulation::emplace<ecs::systems::SimulationSystem>();
 	Locator::vegetation::emplace<VegetationSystem>();
-	Locator::abodeSoundSystem::emplace<AbodeSoundSystem>();
 	Locator::villageTotemSystem::emplace<VillageTotemSystem>();
 	Locator::spellIconSystem::emplace<SpellIconSystem>();
 	Locator::artefactSystem::emplace<ArtefactSystem>();
@@ -663,12 +648,10 @@ bool openblack::InitializeSimulation(const player_profiles::Store& profiles) noe
 	Locator::workshopSystem::emplace<WorkshopSystem>();
 	Locator::animalSystem::emplace<AnimalSystem>();
 	Locator::snowSystem::emplace<SnowSystem>();
-	Locator::snowfallSystem::emplace<SnowfallSystem>();
 	Locator::waterRingSystem::emplace<WaterRingSystem>();
 	Locator::creatureAnimationSystem::emplace<CreatureAnimationSystem>();
 	Locator::creatureMindSystem::emplace<CreatureMindSystem>();
 	Locator::creaturePhysiologySystem::emplace<CreaturePhysiologySystem>();
-	Locator::creatureHairSystem::emplace<CreatureHairSystem>();
 	Locator::creatureAudioSystem::emplace<CreatureAudioSystem>();
 	Locator::creatureObjectActionSystem::emplace<CreatureObjectActionSystem>();
 	Locator::creatureHandSystem::emplace<CreatureHandSystem>();
@@ -706,7 +689,6 @@ bool openblack::InitializeSimulation(const player_profiles::Store& profiles) noe
 	Locator::syncChecksumSystem::emplace<SyncChecksumSystem>();
 	Locator::advisorSystem::emplace<AdvisorSystem>();
 	Locator::soundTagSystem::emplace<SoundTagSystem>();
-	Locator::rainSystem::emplace<RainSystem>();
 	Locator::chimneySmokeSystem::emplace<ChimneySmokeSystem>();
 	// The count of things made goes with the world: a new land starts it again and a saved game keeps it
 	Locator::thingsMadeSystem::emplace<ThingsMadeSystem>(
@@ -726,7 +708,6 @@ bool openblack::InitializeSimulation(const player_profiles::Store& profiles) noe
 	Locator::fixedOutlineSystem::emplace<FixedOutlineSystem>();
 	Locator::creatureFizzSystem::emplace<CreatureFizzSystem>();
 	Locator::liquidParticleSystem::emplace<LiquidParticleSystem>();
-	Locator::landShadeSystem::emplace<LandShadeSystem>();
 	// The player's creature is kept under their profile's file
 	Locator::creatureCarryOverSystem::emplace<CreatureCarryOverSystem>(
 	    profiles.creatureMinds, []() { return Locator::playerProfileSystem::value().CreatureFile(); });
@@ -750,8 +731,6 @@ bool openblack::InitializeSimulation(const player_profiles::Store& profiles) noe
 	                              [](GestureEventsInterface* /*unowned*/) {});
 	Locator::magicSystem::emplace<MagicSystem>();
 	Locator::miracleFxSystem::emplace<MiracleFxSystem>();
-	Locator::pauseTextSystem::emplace<PauseTextSystem>();
-	Locator::incomingMessageSystem::emplace<IncomingMessageSystem>([]() { return machine_clock::Ticks(); });
 	EmplaceChat(profiles.developer);
 	Locator::fireSystem::emplace<ecs::systems::FireSystem>();
 	Locator::explosionSystem::emplace<ecs::systems::ExplosionSystem>();
