@@ -13,6 +13,7 @@
 
 #include <array>
 #include <memory>
+#include <optional>
 #include <span>
 
 #include <glm/vec2.hpp>
@@ -72,8 +73,9 @@ public:
 	void BuildMesh(LandIslandInterface& island, std::span<LandVertex> vertices);
 	/// The block's triangles for a mesh and the sides it is stitched to coarser neighbours on, as indices of its
 	/// corners. Open-sea cells are left out only when dropOpenSea. Each set is made the first time it is asked for, and
-	/// shared with every other block of the island that draws the same triangles.
-	[[nodiscard]] const graphics::IndexBuffer& GetTriangles(graphics::land_detail::Mesh mesh, uint8_t coarserSides,
+	/// shared with every other block of the island that draws the same triangles. A set with no triangles gives nullptr,
+	/// and the block then has nothing to draw (all of its cells are open sea and dropOpenSea is true).
+	[[nodiscard]] const graphics::IndexBuffer* GetTriangles(graphics::land_detail::Mesh mesh, uint8_t coarserSides,
 	                                                        bool dropOpenSea) const;
 	/// Where the block's vertices are on the GPU: a run of the vertex buffer the island's blocks share, so a land of a
 	/// thousand blocks takes one of bgfx's buffers rather than a thousand
@@ -99,8 +101,9 @@ private:
 	static constexpr size_t k_TriangleSets = 3 * 16 * 2;
 
 	std::unique_ptr<lnd::LNDBlock> _block;
-	/// The block's sets once found among the island's
-	mutable std::array<const graphics::IndexBuffer*, k_TriangleSets> _triangles {};
+	/// The block's sets once found among the island's. No value: the set is not found yet. A nullptr value: the set has
+	/// no triangles.
+	mutable std::array<std::optional<const graphics::IndexBuffer*>, k_TriangleSets> _triangles {};
 	SharedIndexLists<graphics::IndexBuffer>* _triangleSets {nullptr};
 	const graphics::VertexBuffer* _vertices {nullptr};
 	uint32_t _firstVertex {0};
