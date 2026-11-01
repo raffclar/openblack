@@ -421,7 +421,8 @@ TEST_F(CreatureCarryOverSystem, WithNoCreatureWhatWasKeptBeforeStays)
 
 TEST_F(CreatureCarryOverSystem, NothingIsLoadedWhenNoCreatureWasKept)
 {
-	EXPECT_FALSE(_carryOver.LoadPlayersCreature({100.0f, 100.0f}).has_value());
+	EXPECT_FALSE(
+	    _carryOver.LoadPlayersCreature({100.0f, 100.0f}, ecs::systems::KeptCreatureSource::GameOrProfileFile).has_value());
 }
 
 TEST_F(CreatureCarryOverSystem, NothingIsLoadedWhenThePlayerAlreadyHasACreature)
@@ -435,7 +436,7 @@ TEST_F(CreatureCarryOverSystem, NothingIsLoadedWhenThePlayerAlreadyHasACreature)
 	file->name = u"Spot";
 	_carryOver.Keep(file);
 
-	const auto loaded = _carryOver.LoadPlayersCreature({100.0f, 100.0f});
+	const auto loaded = _carryOver.LoadPlayersCreature({100.0f, 100.0f}, ecs::systems::KeptCreatureSource::GameOrProfileFile);
 	Locator::leashSystem::reset();
 
 	EXPECT_FALSE(loaded.has_value());
@@ -503,9 +504,31 @@ TEST_F(CreatureCarryOverSystem, ACreatureKeptByAnEarlierGameIsReadFromItsFile)
 	ecs::systems::CreatureCarryOverSystem carryOver(folder.Path(), ProfileFile);
 	EXPECT_EQ(carryOver.Kept(), nullptr);
 	// With no land to make it on, it is still read
-	EXPECT_FALSE(carryOver.LoadPlayersCreature({100.0f, 100.0f}).has_value());
+	EXPECT_FALSE(
+	    carryOver.LoadPlayersCreature({100.0f, 100.0f}, ecs::systems::KeptCreatureSource::GameOrProfileFile).has_value());
 	ASSERT_NE(carryOver.Kept(), nullptr);
 	EXPECT_EQ(carryOver.Kept()->name, u"Rex");
+}
+
+TEST_F(CreatureCarryOverSystem, ALoadOfOnlyThisGamesCreatureDoesNotReadTheFileOfAnEarlierGame)
+{
+	const TestFolder folder("carry_over_game_only");
+	creaturemind::MindFileData file;
+	file.name = u"Rex";
+	const auto path = KeptFilesIn(folder.Path(), k_ProfileFile).mind;
+	ASSERT_EQ(creaturemind::WriteFile(path, file), creaturemind::MindResult::Success);
+
+	ecs::systems::CreatureCarryOverSystem carryOver(folder.Path(), ProfileFile);
+	EXPECT_FALSE(carryOver.LoadPlayersCreature({100.0f, 100.0f}, ecs::systems::KeptCreatureSource::GameOnly).has_value());
+	EXPECT_EQ(carryOver.Kept(), nullptr);
+
+	// A creature that this game kept is still the one to load
+	auto kept = std::make_shared<creaturemind::MindFileData>();
+	kept->name = u"Spot";
+	carryOver.Keep(kept);
+	EXPECT_FALSE(carryOver.LoadPlayersCreature({100.0f, 100.0f}, ecs::systems::KeptCreatureSource::GameOnly).has_value());
+	ASSERT_NE(carryOver.Kept(), nullptr);
+	EXPECT_EQ(carryOver.Kept()->name, u"Spot");
 }
 
 TEST_F(CreatureCarryOverSystem, ACreatureKeptSinceTheGameStartedIsNotReplacedByItsFile)
@@ -520,7 +543,8 @@ TEST_F(CreatureCarryOverSystem, ACreatureKeptSinceTheGameStartedIsNotReplacedByI
 	auto kept = std::make_shared<creaturemind::MindFileData>();
 	kept->name = u"Spot";
 	carryOver.Keep(kept);
-	EXPECT_FALSE(carryOver.LoadPlayersCreature({100.0f, 100.0f}).has_value());
+	EXPECT_FALSE(
+	    carryOver.LoadPlayersCreature({100.0f, 100.0f}, ecs::systems::KeptCreatureSource::GameOrProfileFile).has_value());
 	EXPECT_EQ(carryOver.Kept()->name, u"Spot");
 }
 
@@ -540,14 +564,16 @@ TEST_F(CreatureCarryOverSystem, AProfilePickedDuringAGameTakesOverOnlyWhenTheNex
 	carryOver.StartGame();
 	// Another profile is picked while the game goes on: the game's creature stays the first profile's
 	picked = "CSecond.erc";
-	EXPECT_FALSE(carryOver.LoadPlayersCreature({100.0f, 100.0f}).has_value());
+	EXPECT_FALSE(
+	    carryOver.LoadPlayersCreature({100.0f, 100.0f}, ecs::systems::KeptCreatureSource::GameOrProfileFile).has_value());
 	ASSERT_NE(carryOver.Kept(), nullptr);
 	EXPECT_EQ(carryOver.Kept()->name, u"Rex");
 
 	// The next game is played as the profile picked, whose own creature is read, not the last profile's
 	carryOver.StartGame();
 	EXPECT_EQ(carryOver.Kept(), nullptr);
-	EXPECT_FALSE(carryOver.LoadPlayersCreature({100.0f, 100.0f}).has_value());
+	EXPECT_FALSE(
+	    carryOver.LoadPlayersCreature({100.0f, 100.0f}, ecs::systems::KeptCreatureSource::GameOrProfileFile).has_value());
 	ASSERT_NE(carryOver.Kept(), nullptr);
 	EXPECT_EQ(carryOver.Kept()->name, u"Spot");
 }
