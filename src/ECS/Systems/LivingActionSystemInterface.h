@@ -101,6 +101,8 @@ public:
 	virtual void VillagerOverrideAnimation(entt::entity villager, int32_t clip) const = 0;
 	/// A script gives the villager an age, making it a child or an adult
 	virtual void VillagerSetAge(entt::entity villager, uint32_t age) const = 0;
+	/// A new villager starts the clip of its first state from the start, as soon as the game makes it
+	virtual void VillagerStartFirstClip(entt::entity villager) const = 0;
 };
 
 } // namespace openblack::ecs::systems

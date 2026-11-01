@@ -32,6 +32,7 @@
 #include "ECS/LivingBirth.h"
 #include "ECS/Registry.h"
 #include "ECS/SpecialVillagers.h"
+#include "ECS/Systems/LivingActionSystemInterface.h"
 #include "ECS/Systems/TimeSystemInterface.h"
 #include "ECS/Systems/TownSystemInterface.h"
 #include "ECS/Systems/WorshipSiteSystemInterface.h"
@@ -131,6 +132,12 @@ entt::entity VillagerArchetype::Create([[maybe_unused]] const glm::vec3& abodePo
 	const auto state = villager_clips::IsOnWater(position) ? VillagerStates::Drowning : VillagerStates::Created;
 	registry.Assign<LivingAction>(entity, state, born.turnsUntilFirstDecision);
 	registry.Assign<VillagerPose>(entity);
+	// It shows the clip of its first state at once, also when it starts in the water and drowns before its first
+	// change of state
+	if (Locator::livingActionSystem::has_value())
+	{
+		Locator::livingActionSystem::value().VillagerStartFirstClip(entity);
+	}
 	// It joins the nearest town: into the building there that suits it best, or one of its homeless
 	if (town != entt::null)
 	{
