@@ -2195,18 +2195,22 @@ void AddBeachTemplePuzzle(std::vector<Scenario>& all)
 	                                      {.kind = ScriptArgument::Kind::Integer, .number = k_HanoiKind},
 	                                      {.kind = ScriptArgument::Kind::Position, .point = k_Puzzle}}}},
 	});
+	// A script takes the smallest ring off the stack and puts it on open ground, then the game stops
+	constexpr float k_MobileObjectType = 20.0f;
+	constexpr float k_SmallestRing = 30.0f;
+	constexpr glm::vec2 k_OpenGround {k_Puzzle.x + 14.0f, k_Puzzle.y};
 	all.push_back({
 	    .id = "story.beach_temple_ring_shadows",
 	    .name = "The land shadows of The Beach Temple Puzzle",
 	    .facet = Facet::Story,
-	    .description = "A script makes the second land's beach temple puzzle, and the camera looks down on its stack of "
-	                   "rings from above.",
-	    .expected = "The land under the puzzle shows the shadows of the three bases and of the largest ring. The three "
-	                "smaller rings cast no shadow into the land.",
+	    .description = "A script makes the second land's beach temple puzzle, puts its smallest ring on open ground to "
+	                   "the east of the stack, and stops the game.",
+	    .expected = "The smallest ring lies on open ground and casts no shadow into the land. The three bases and the "
+	                "largest ring cast their shadows. A ring that the puzzle puts back on a stack casts a shadow again.",
 	    .environment = {.dispenserGrid = false},
 	    .framing = {.shot = Shot::Placed,
-	                .eye = {k_Puzzle.x + 12.0f, 40.0f, k_Puzzle.y - 30.0f},
-	                .look = {k_Puzzle.x, 0.0f, k_Puzzle.y - 20.0f}},
+	                .eye = {k_Puzzle.x + 8.0f, 40.0f, k_Puzzle.y - 25.0f},
+	                .look = {k_Puzzle.x + 8.0f, 0.0f, k_Puzzle.y}},
 	    .commands = {{.kind = Kind::CallNative,
 	                  .delaySeconds = 0.5f,
 	                  .script = "CREATE_WITH_ANGLE_AND_SCALE",
@@ -2214,7 +2218,21 @@ void AddBeachTemplePuzzle(std::vector<Scenario>& all)
 	                                      {.number = 1.0f},
 	                                      {.kind = ScriptArgument::Kind::Integer, .number = k_PuzzleObjectType},
 	                                      {.kind = ScriptArgument::Kind::Integer, .number = k_HanoiKind},
-	                                      {.kind = ScriptArgument::Kind::Position, .point = k_Puzzle}}}},
+	                                      {.kind = ScriptArgument::Kind::Position, .point = k_Puzzle}}},
+	                 {.kind = Kind::CallNative,
+	                  .delaySeconds = 1.0f,
+	                  .script = "CALL_NEAR",
+	                  .scriptArguments = {{.kind = ScriptArgument::Kind::Integer, .number = k_MobileObjectType},
+	                                      {.kind = ScriptArgument::Kind::Integer, .number = k_SmallestRing},
+	                                      {.kind = ScriptArgument::Kind::Position, .point = k_Puzzle},
+	                                      {.number = 5.0f},
+	                                      {.kind = ScriptArgument::Kind::Integer, .number = 0.0f}}},
+	                 {.kind = Kind::CallNative,
+	                  .delaySeconds = 0.5f,
+	                  .script = "SET_POSITION",
+	                  .scriptArguments = {{.kind = ScriptArgument::Kind::LastResult},
+	                                      {.kind = ScriptArgument::Kind::Position, .point = k_OpenGround}}},
+	                 {.kind = Kind::PauseGame, .delaySeconds = 0.0f, .value = 1}},
 	});
 }
 
