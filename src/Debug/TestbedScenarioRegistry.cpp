@@ -13546,6 +13546,29 @@ void AddWorkshopScenarios(std::vector<Scenario>& all)
 	});
 
 	all.push_back({
+	    .id = "objects.scaffold_push_straight_west_or_south",
+	    .name = "A clearing scaffold pushes a thing straight west and a thing straight south",
+	    .facet = Facet::Objects,
+	    .description = "A loose scaffold that a script marked to destroy the things in its way. A bush stands 1.5 m "
+	                   "straight west of it and a ball 1.5 m straight south of it. After one second the scaffold clears "
+	                   "its ground, as when the hand lets it go.",
+	    .expected = "As in the game, the push of each thing divides by 0 and its speed is not a number. The bush and "
+	                "the ball go from their places. The inspector shows each at x 0 and z 0, the corner of the map, with "
+	                "a height that is not a number. Each stays in flight and does not land. The game does not stop.",
+	    .environment = {.dispenserGrid = false},
+	    .framing = {.shot = Shot::Overview,
+	                .include = {k_FoundingScaffold - glm::vec2 {15.0f}, k_FoundingScaffold + glm::vec2 {15.0f}}},
+	    .objects = {{.type = ScaffoldInfo::Normal, .offset = k_FoundingScaffold, .scale = 0.7f, .clearsGround = true},
+	                {.type = TreeInfo::Bush, .offset = k_FoundingScaffold + glm::vec2 {-1.5f, 0.0f}},
+	                {.type = MobileObjectInfo::Ball, .offset = k_FoundingScaffold + glm::vec2 {0.0f, -1.5f}}},
+	    .commands = {{.kind = Kind::ScaffoldClearsGround, .delaySeconds = 1.0f, .object = 0}},
+	    .checks = {{.label = "the scaffold, the bush and the ball stay in the game",
+	                .quantity = checks::Quantity::ObjectsAlive,
+	                .afterTurns = 100,
+	                .atLeast = 3}},
+	});
+
+	all.push_back({
 	    .id = "objects.workshop_site_wood_on_its_pile",
 	    .name = "The wood for a workshop that goes up lies on the pile of the workshop",
 	    .facet = Facet::Objects,

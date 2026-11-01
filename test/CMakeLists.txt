@@ -2285,3 +2285,4 @@ openblack_setup_and_add_test(test_float_to_integer test_float_to_integer.cpp)
 openblack_setup_and_add_test(
   test_oracle_ftol_portable oracle/test_oracle_ftol_portable.cpp
 )
+openblack_setup_and_add_test(test_scaffold_push_zero test_scaffold_push_zero.cpp)
