@@ -52,6 +52,8 @@ public:
 	/// Play parameters of the bank header, used where the game plays the sample (see pack::AudioBankOverride)
 	uint32_t overrideFlags;
 	uint16_t headerVolume;
+	/// The pan of the bank header, from the left (0) to the right (180)
+	int32_t headerPan {0};
 	/// The world position of the bank header, which gives the value of each axis that the header locks
 	std::array<float, 3> headerPosition {};
 	/// When the bank lets the sample be heard (see SoundEffectUse)

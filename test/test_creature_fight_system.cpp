@@ -1220,8 +1220,11 @@ public:
 	void EndWaits() override {}
 	[[nodiscard]] const std::vector<Remark>& GetRemarks() const override { return remarks; }
 	[[nodiscard]] int32_t GetMoonWait() const override { return 0; }
+	[[nodiscard]] const night_whisper::Whisperer& GetNightWhisper() const override { return whisper; }
+	void StageNightWhisper(uint32_t) override {}
 
 	std::vector<guidance::Kind> asked;
+	night_whisper::Whisperer whisper;
 	std::vector<entt::entity> wonFight;
 	std::vector<Remark> remarks;
 };

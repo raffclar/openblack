@@ -1380,6 +1380,11 @@ void Runner::SetUpDate(const std::optional<RealDate>& date)
 void Runner::SetUpEnvironment(const Environment& environment)
 {
 	SetUpDate(environment.realDate);
+	if (environment.nightWhisperChecks.has_value() && Locator::guidanceSystem::has_value())
+	{
+		Locator::guidanceSystem::value().StageNightWhisper(*environment.nightWhisperChecks);
+		Log(fmt::format("The night whisper checks the clock next, after {} checks", *environment.nightWhisperChecks));
+	}
 	// A land of the story keeps its own sky, weather, alignment and prayer power
 	const bool storyLand = environment.land == Land::Story;
 	if (!storyLand && Locator::skyClockSystem::has_value())

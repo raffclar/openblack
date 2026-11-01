@@ -176,6 +176,9 @@ struct Environment
 	/// The date and time that the machine's clock gives while the scenario runs, as if the computer's clock were set to
 	/// it; the clock continues from it. When not given, the clock is as it was before the scenario.
 	std::optional<RealDate> realDate;
+	/// The night whisper checks the clock at the next turn that can check it, with this count of real-night checks. The
+	/// count of checks stays as the scenario leaves it.
+	std::optional<uint32_t> nightWhisperChecks;
 	/// The grid of every miracle's dispenser the testbed lays out in front of the camera stays, or is cleared away
 	bool dispenserGrid {true};
 	/// The footpaths are drawn as lines, as the debug menu's Footpaths box draws them
