@@ -154,8 +154,13 @@ public:
 	/// when the room has no such scroll.
 	std::optional<Focus> LookAt(TempleRoom room, size_t place, const Facts& facts);
 	/// How close the camera is to the scroll it looks at, from 0 to 1. Past half way the scroll's text is drawn in
-	/// front of it each frame, and once back under half way it is written on its texture again.
+	/// front of it each frame, and once back under half way it is written on its texture again. The save game room
+	/// does not use this for its scroll.
 	void SetFocus(float zoom, const Facts& facts);
+	/// One frame of the scroll of the save game room, with the closeness of the camera from 0 to 1. The closeness of the
+	/// camera to a picture also counts. Past half way, the text goes in front of the scroll from the next frame, and the
+	/// room writes it again in each frame. The room changes its scroll only in the frames that it draws.
+	void StepSaveGameRoom(bool roomDrawn, float closeness, const Facts& facts);
 	/// Whether a scroll is being dragged
 	[[nodiscard]] bool IsHeld() const { return _held.has_value(); }
 	/// Whether a submesh of a room's mesh is one of its scrolls, a control the cursor makes glow
@@ -230,6 +235,17 @@ private:
 	Focus LookAt(size_t index, const Facts& facts);
 	/// Writes the scroll's texture, its text left off while the camera is close to it
 	void Redraw(Scroll& scroll, const Facts& facts);
+	/// Whether the camera looks at the scroll and is close enough to put its text in front of it
+	[[nodiscard]] bool IsFocused(const Scroll& scroll) const;
+	/// Whether the texture of the scroll has no text, because the text is in front of the scroll
+	[[nodiscard]] bool IsTextInFront(const Scroll& scroll) const;
+	/// Whether the text of the scroll is drawn in front of it in this frame
+	[[nodiscard]] bool IsDrawnInFront(const Scroll& scroll) const;
+	/// Adds the text of a scroll in front of it
+	void AppendTextOf(const Scroll& scroll, std::vector<OrientedTextVertex>& vertices, const Facts& facts) const;
+	/// Adds the pictures of the lines of a scroll in front of it
+	void AppendPicturesOf(const Scroll& scroll, std::vector<temple::scroll_pictures::WorldPicture>& pictures,
+	                      const Facts& facts) const;
 
 	const gui::TextDatabase& _texts;
 	const gui::GameFont& _font;
@@ -248,6 +264,10 @@ private:
 	/// The scroll the camera looks at, and whether it is close enough for its text to be drawn in front of it
 	std::optional<size_t> _focused;
 	bool _focusedText {false};
+	/// Whether the text of the save game room's scroll is in front of it, and whether the room draws it there in this
+	/// frame. The room uses the closeness of the camera, also to a picture, and not the scroll that the camera looks at.
+	bool _saveGameInFront {false};
+	bool _saveGameDrawnInFront {false};
 	/// The line of the story history that its scroll starts at
 	int32_t _historyStart {0};
 };
