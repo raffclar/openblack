@@ -2386,6 +2386,22 @@ void AddStory(std::vector<Scenario>& all)
 	    .temples = {{.offset = k_Temple, .angle = k_TempleTurn, .life = 0.3f}},
 	});
 	all.push_back({
+	    .id = "temple.low_detail_skin",
+	    .name = "The temple's skin at the lowest detail levels",
+	    .facet = Facet::Story,
+	    .description = "Start the game with --detail-level 1 (Low) or 0 (Minimum). The player's temple stands west of "
+	                   "the middle, with the player a little evil, so that its skin is a blend of the evil and the neutral "
+	                   "pictures. Start it again with --detail-level 4 to compare.",
+	    .expected = "At Low and Minimum the temple's skin is at half size and looks a little sharper and more broken "
+	                "than a smooth half picture: each texel is one texel of each picture, not the mean of four. The "
+	                "patterns and the colours are at the same places as at the higher levels.",
+	    .environment = {.dispenserGrid = false, .playerAlignment = -0.4f},
+	    .framing = {.shot = Shot::Overview,
+	                .include = {k_Temple - glm::vec2 {30.0f}, k_Temple + glm::vec2 {30.0f}},
+	                .distance = 1.0f},
+	    .temples = {{.offset = k_Temple, .angle = k_TempleTurn}},
+	});
+	all.push_back({
 	    .id = "audio.temple_heartbeat",
 	    .name = "The heartbeat heard from the player's temple",
 	    .facet = Facet::Story,
@@ -3170,6 +3186,25 @@ void AddAppearance(std::vector<Scenario>& all)
 	                "fewer texels. Nothing is missing and nothing moves to another place.",
 	    .framing = {.shot = Shot::Follow, .distance = 0.9f},
 	    .creatures = {tattooed, plain},
+	});
+
+	auto evilFace = Posed(CreatureType::Tiger, {-4.0f, 0.0f}, 0.0f, "evil");
+	evilFace.alignment = -1.0f;
+	auto goodFace = Posed(CreatureType::Tiger, {4.0f, 0.0f}, 0.0f, "good");
+	goodFace.alignment = 1.0f;
+	goodFace.owner = PlayerNames::NEUTRAL;
+	all.push_back({
+	    .id = "appearance.eyelid_skin_colour",
+	    .name = "Eyelids in the colour of the painted skin",
+	    .facet = Facet::Appearance,
+	    .description = "An evil tiger and a good tiger stand side by side and face the camera, close up. Start it again "
+	                   "with --detail-level 1 to see the half-size skins.",
+	    .expected = "Each tiger's eyelids have the colour of its own painted skin under them: the evil skin on the evil "
+	                "tiger and the good skin on the good tiger. Both lids of a tiger have the same colour. A white part "
+	                "of the skin gives a lid that is a little darker than full white.",
+	    .environment = {.dispenserGrid = false},
+	    .framing = {.shot = Shot::Head, .distance = 0.8f},
+	    .creatures = {evilFace, goodFace},
 	});
 
 	std::vector<Command> passing {Act(Kind::SitDown, 0, 0.5f)};

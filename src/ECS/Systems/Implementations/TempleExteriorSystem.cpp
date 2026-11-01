@@ -25,6 +25,7 @@
 
 #include "3D/AllMeshes.h"
 #include "3D/L3DMesh.h"
+#include "3D/L3DSkinTexels.h"
 #include "3D/TempleExteriorMorph.h"
 #include "3D/TempleLanterns.h"
 #include "Common/Bitmap16B.h"
@@ -287,16 +288,22 @@ void TempleExteriorSystem::Morph(entt::entity entity, Mesh& mesh, const TempleEx
 	{
 		return;
 	}
+	// At the lowest detail levels the skin and the pictures have half the side
+	const bool halfSize = l3d_skin::SideOf(texels) != temple.GetSkinSide();
+	const auto wanted = halfSize ? texels / 4 : texels;
 	// A temple with the same texture and set as a temple before it in the call uses the same blend
-	auto skin = std::ranges::find_if(made.skins, [&texture, set](const MadeBlends::Skin& kept) {
+	auto skin = std::ranges::find_if(made.skins, [&texture, set, wanted](const MadeBlends::Skin& kept) {
 		return kept.texture.from == texture.from && kept.texture.to == texture.to && kept.texture.weight == texture.weight &&
-		       kept.set == set;
+		       kept.set == set && kept.texels.size() == wanted;
 	});
 	if (skin == made.skins.end())
 	{
-		std::vector<uint16_t> blendedTexels(texels);
-		BlendTexels({fromImage.Data(), texels}, {toImage.Data(), texels}, texture.weight, blendedTexels);
-		made.skins.push_back({.texture = texture, .set = set, .texels = std::move(blendedTexels)});
+		auto blendedTexels = SkinTexels({fromImage.Data(), texels}, {toImage.Data(), texels}, texture.weight, halfSize);
+		if (!blendedTexels.has_value())
+		{
+			return;
+		}
+		made.skins.push_back({.texture = texture, .set = set, .texels = std::move(*blendedTexels)});
 		skin = std::prev(made.skins.end());
 	}
 	temple.UpdateSkin(skins.front().id, skin->texels);

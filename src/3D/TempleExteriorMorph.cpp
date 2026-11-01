@@ -13,9 +13,12 @@
 #include <cmath>
 
 #include <algorithm>
+#include <vector>
 
 #include <entt/core/hashed_string.hpp>
 #include <fmt/format.h>
+
+#include "3D/LowResolutionTextures.h"
 
 namespace openblack::TempleExteriorMorph
 {
@@ -127,6 +130,32 @@ void BlendTexels(std::span<const uint16_t> from, std::span<const uint16_t> to, u
 		const uint32_t b = to[i];
 		blended[i] = static_cast<uint16_t>(channel(a, b, 0x00F) | channel(a, b, 0x0F0) | channel(a, b, 0xF00) | (a & 0xF000));
 	}
+}
+
+std::optional<std::vector<uint16_t>> SkinTexels(std::span<const uint16_t> from, std::span<const uint16_t> to, uint8_t weight,
+                                                bool halfSize)
+{
+	constexpr auto k_Texels = static_cast<size_t>(low_resolution_textures::k_FullSide) * low_resolution_textures::k_FullSide;
+	if (from.size() != k_Texels || to.size() != k_Texels)
+	{
+		return std::nullopt;
+	}
+	std::optional<std::vector<uint16_t>> halfFrom;
+	std::optional<std::vector<uint16_t>> halfTo;
+	if (halfSize)
+	{
+		halfFrom = low_resolution_textures::HalveTexels(from);
+		halfTo = low_resolution_textures::HalveTexels(to);
+		if (!halfFrom.has_value() || !halfTo.has_value())
+		{
+			return std::nullopt;
+		}
+		from = *halfFrom;
+		to = *halfTo;
+	}
+	std::vector<uint16_t> blended(from.size());
+	BlendTexels(from, to, weight, blended);
+	return blended;
 }
 
 } // namespace openblack::TempleExteriorMorph
