@@ -723,7 +723,10 @@ std::string GameLevels::LoadTestbed()
 	{
 		return "there is no game to load into";
 	}
-	Locator::landSystem::value().LoadTestbed();
+	if (!Locator::landSystem::value().LoadTestbed())
+	{
+		return "the build has no testbed";
+	}
 	return {};
 }
 

@@ -35,7 +35,7 @@ else ()
   # scenario player that plays none (Debug/NoScenarioPlayer.cpp).
   set(OPENBLACK_TESTBED_FILES
       "/Debug/TestbedScenario[A-Za-z]*[.](cpp|h)$"
-      "/Debug/Testbed(Crowd|GameStage|Multiplayer)[.](cpp|h)$"
+      "/Debug/Testbed(Crowd|GameStage|Multiplayer|DispenserGrid)[.](cpp|h)$"
       "/Debug/TestbedGameStageInterface[.]h$"
   )
   list(JOIN OPENBLACK_TESTBED_FILES "|" OPENBLACK_TESTBED_FILES)
