@@ -9,10 +9,14 @@
 
 #include <cstdint>
 
+#include <algorithm>
 #include <array>
 #include <bit>
+#include <functional>
+#include <iterator>
 #include <string>
 #include <string_view>
+#include <utility>
 #include <vector>
 
 #include <EnumHeader.h>
@@ -204,6 +208,49 @@ TEST(ParticleDraw, SortedThingsTakeTheirOwnPlacesAndSharedSheetsJoin)
 	EXPECT_GT(commands[0].depth, commands[2].depth);
 	EXPECT_GT(commands[3].depth, commands[1].depth);
 	EXPECT_EQ(order.size(), frame.sprites.size());
+}
+
+TEST(ParticleDraw, SortedThingsAtTheSameDistanceKeepTheOrderTheyCameIn)
+{
+	auto frame = MakeFrame();
+	// Two sorted effects. Four things are at the same distance, some on the negative side and some at negative zero.
+	AddSprite(frame, {0.0f, 0.0f, 5.0f}, 0);
+	AddSprite(frame, {3.0f, 4.0f, 0.0f}, 0);
+	AddSprite(frame, {0.0f, 0.0f, 9.0f}, 0);
+	AddGroup(frame, DrawPath::Sorted, glm::vec3(0.0f), 0);
+	AddSprite(frame, {-0.0f, -5.0f, 0.0f}, 0);
+	AddSprite(frame, {-3.0f, -0.0f, -4.0f}, 0);
+	AddSprite(frame, {0.0f, 0.0f, 1.0f}, 0);
+	AddGroup(frame, DrawPath::Sorted, glm::vec3(0.0f), 3);
+	std::vector<Command> commands;
+	std::vector<uint32_t> order;
+	Order(frame, glm::vec3(-0.0f), std::nullopt, commands, order);
+	// The farthest first, then the four in the order they came, then the nearest
+	EXPECT_EQ(order, (std::vector<uint32_t> {2, 0, 1, 3, 4, 5}));
+}
+
+TEST(ParticleDraw, SortedThingsGoInTheOrderOfAStableSortOfTheirDistances)
+{
+	auto frame = MakeFrame();
+	// Points on a small grid, so that many are at the same distance, with the sheet of each a blend so that none join
+	constexpr int k_Count = 300;
+	std::vector<std::pair<float, uint32_t>> expected;
+	for (int i = 0; i < k_Count; ++i)
+	{
+		const glm::vec3 point(static_cast<float>((i * 7) % 5 - 2), static_cast<float>((i * 3) % 4 - 2),
+		                      static_cast<float>((i * 11) % 3) - 1.0f);
+		AddSprite(frame, point, static_cast<uint32_t>(i % 2) * 2u);
+		expected.emplace_back(graphics::zsort::Key(point, glm::vec3(0.5f)), static_cast<uint32_t>(i));
+	}
+	frame.materials.push_back({.texture = 5, .alphaTexture = 6, .mode = graphics::render_modes::Mode::AlphaTexturedAlphaNz});
+	AddGroup(frame, DrawPath::Sorted, glm::vec3(0.0f), 0);
+	std::vector<Command> commands;
+	std::vector<uint32_t> order;
+	Order(frame, glm::vec3(0.5f), std::nullopt, commands, order);
+	std::ranges::stable_sort(expected, std::greater {}, &std::pair<float, uint32_t>::first);
+	std::vector<uint32_t> sprites;
+	std::ranges::transform(expected, std::back_inserter(sprites), &std::pair<float, uint32_t>::second);
+	EXPECT_EQ(order, sprites);
 }
 
 TEST(ParticleDraw, AddedSpritesOnDifferentSheetsAreDrawnASheetAtATime)
