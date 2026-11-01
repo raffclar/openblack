@@ -1811,6 +1811,39 @@ void AddRivalCreatureLoads(std::vector<Scenario>& all)
 	});
 }
 
+/// The end of the third land's prison: the land's own set-up and prison scripts run with the developer switch that
+/// makes every prison statue count as stopped, so the creature is freed at once
+void AddThirdLandPrison(std::vector<Scenario>& all)
+{
+	using Argument = ScriptArgument;
+	all.push_back({
+	    .id = "story.l3_creature_freed",
+	    .name = "Story: the creature is freed from the prison of the third land",
+	    .facet = Facet::Story,
+	    .description = "The third land loads with its own scripts and sky, and the player's Tiger stands on it. Its set-up "
+	                   "script runs, then its prison script with the developer switch on, so the three statues count as "
+	                   "stopped at their first check and the scene of the freed creature plays.",
+	    .expected = "The Tiger is put on the prison spot. The statues do not sink (the switch skips their scenes). Lethys "
+	                "speaks, both advisors speak about the freed creature, and the Tiger looks at the camera, walks down "
+	                "the hill and waves. After each statue's scene the help forgets every message about the creature, so "
+	                "no creature message from before the scene comes up when the scene ends.",
+	    .environment = {.land = Land::Story, .storyLand = "Land3.txt", .dispenserGrid = false},
+	    .framing = {.shot = Shot::Overview, .include = {{-20.0f, -20.0f}, {20.0f, 20.0f}}},
+	    .creatures = {{.label = "player's tiger",
+	                   .species = CreatureType::Tiger,
+	                   .phase = 3,
+	                   .needs = {.energy = 1.0f, .exhaustion = 0.0f, .dehydration = 0.0f, .poo = 0.0f, .life = 1.0f}}},
+	    .commands = {{.kind = Kind::RunScript,
+	                  .delaySeconds = 0.5f,
+	                  .script = "SetupLand3",
+	                  .scriptGlobals = {{"MyCreature", {.kind = Argument::Kind::Creature, .index = 0}}}},
+	                 {.kind = Kind::RunScript,
+	                  .delaySeconds = 1.0f,
+	                  .script = "FreeTheCreature",
+	                  .scriptGlobals = {{"GlobalDebug", {.number = 1.0f}}}}},
+	});
+}
+
 /// The Pied Piper of the first land. The game's script runs at the same map positions as on the first land, with the
 /// Norse town, the creche and the piper's cave made there. The scenario clicks the creche, and the round starts.
 void AddPiedPiperRound(std::vector<Scenario>& all)
@@ -2441,6 +2474,7 @@ CREATE_CITADEL("0.0,0.0", 0, "PLAYER_ONE", 4254, 1000)
 	AddOgreLair(all);
 	AddGuideStorm(all);
 	AddRivalCreatureLoads(all);
+	AddThirdLandPrison(all);
 	AddSingingStones(all);
 	AddBeachTemplePuzzle(all);
 	AddTreePuzzle(all);

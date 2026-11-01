@@ -319,3 +319,29 @@ TEST(CreatureHelp, AMoveToAStageClearsTheValueThatTheHelpKeepsForIt)
 	// Nothing else changes
 	EXPECT_EQ(memory.handOver, 0.5f);
 }
+
+TEST(CreatureHelp, AScriptMakesTheHelpForgetEveryMessageWaitingOrTold)
+{
+	Memory memory;
+	MarkTold(memory, Kind::PhysicalProblem, 2, 100);
+	Stack(memory, Of(Kind::CurrentDesire, 1), 100, k_Tps);
+	memory.tutorialDone[3] = true;
+	memory.tutorialToldTurn[3] = 90;
+	memory.physicalProblemTurn = 100;
+	memory.handOver = 0.5f;
+	ASSERT_TRUE(ToldLately(memory, Kind::PhysicalProblem, 2, 110, k_Tps));
+	ASSERT_TRUE(FirstWaiting(memory).has_value());
+	ForgetMessages(memory);
+	for (const auto& entries : memory.entries)
+	{
+		EXPECT_TRUE(entries.empty());
+	}
+	EXPECT_FALSE(FirstWaiting(memory).has_value());
+	// A message told a short time ago can be told again
+	EXPECT_FALSE(ToldLately(memory, Kind::PhysicalProblem, 2, 110, k_Tps));
+	// The prompts, the time of the last body message and the hand watch stay
+	EXPECT_TRUE(memory.tutorialDone[3]);
+	EXPECT_EQ(memory.tutorialToldTurn[3], 90u);
+	EXPECT_EQ(memory.physicalProblemTurn, 100u);
+	EXPECT_EQ(memory.handOver, 0.5f);
+}
