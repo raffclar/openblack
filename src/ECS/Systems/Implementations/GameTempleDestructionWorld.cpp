@@ -61,6 +61,15 @@ std::optional<PlayerNames> GameTempleDestructionWorld::LocalPlayer() const
 	return (Locator::handSystem::has_value() ? Locator::handSystem::value().GetOwnPlayer() : PlayerNames::PLAYER_ONE);
 }
 
+std::optional<PlayerNames> GameTempleDestructionWorld::FirstPlayer() const
+{
+	if (!Locator::playerSystem::has_value())
+	{
+		return std::nullopt;
+	}
+	return Locator::playerSystem::value().GetLocalPlayer();
+}
+
 bool GameTempleDestructionWorld::NetworkGame() const
 {
 	return Locator::time::has_value() && Locator::time::value().IsNetworkGame();
