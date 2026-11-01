@@ -7,6 +7,8 @@
  * openblack is licensed under the GNU General Public License version 3.
  *******************************************************************************/
 
+#include <optional>
+
 #include <gtest/gtest.h>
 
 #include "Creature/CreatureCatch.h"
@@ -159,4 +161,16 @@ TEST(CreatureCatch, ItWaitsForTheBodyAndTheWalkToStop)
 	EXPECT_TRUE(creature_catch::WaitsToStart(true, false));
 	EXPECT_TRUE(creature_catch::WaitsToStart(false, true));
 	EXPECT_TRUE(creature_catch::WaitsToStart(true, true));
+}
+
+TEST(CreatureCatch, TheHandReadsTheCatchOverTheStandOrTheStep)
+{
+	EXPECT_EQ(ShareAnimation(false), creature_layers::animations::k_Stand);
+	EXPECT_EQ(ShareAnimation(true), k_CatchStep);
+
+	// Ready, it gives the time of its turn to face the thing, then the stand at the point of its breath
+	EXPECT_EQ(ShareTimeMs(true, 120, 700, 0.0f), 120.0f);
+	EXPECT_EQ(ShareTimeMs(true, std::nullopt, 700, 0.0f), 700.0f);
+	// A step or the catch gives its own time
+	EXPECT_EQ(ShareTimeMs(false, 120, 700, 333.0f), 333.0f);
 }
