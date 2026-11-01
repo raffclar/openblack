@@ -631,6 +631,19 @@ std::optional<std::string> ConditionsRefusal(const std::optional<ConditionTempla
 	return std::nullopt;
 }
 
+std::vector<game_end::ConditionPick> PicksOnLand(const ConditionTemplate& limits,
+                                                 std::span<const game_end::SwitchedCondition> conditions)
+{
+	std::vector<game_end::ConditionPick> picks;
+	picks.reserve(conditions.size());
+	for (const auto& each : conditions)
+	{
+		const auto first = limits.at(static_cast<size_t>(each.condition)).value;
+		picks.push_back({.condition = each.condition, .value = each.value.value_or(first)});
+	}
+	return picks;
+}
+
 std::vector<game_end::ConditionPick> ConditionLines(std::span<const game_end::ConditionPick> picks)
 {
 	// The value of each condition, in the order of the game. The last pick of a condition sets its value.

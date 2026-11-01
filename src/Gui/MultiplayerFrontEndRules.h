@@ -359,6 +359,11 @@ using ConditionTemplate = std::array<ConditionLimits, k_ConditionCount>;
 [[nodiscard]] std::optional<std::string> ConditionsRefusal(const std::optional<ConditionTemplate>& limits,
                                                            std::span<const game_end::ConditionPick> picks);
 
+/// The picks of the conditions that the host switches on, on the limits of a land. When the host picks a land, each
+/// condition takes the first value of the land. Thus a condition with no value of its own keeps that first value.
+[[nodiscard]] std::vector<game_end::ConditionPick> PicksOnLand(const ConditionTemplate& limits,
+                                                               std::span<const game_end::SwitchedCondition> conditions);
+
 /// The lines of the list on the conditions page, one for each condition that the host switched on. The page adds the
 /// conditions in the order of the game, and each new line goes to the top. Thus the last condition of the game shows
 /// first. When a condition is in the picks two times, the last value is the value of the line.
