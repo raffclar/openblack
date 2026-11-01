@@ -3188,9 +3188,9 @@ void AddAppearance(std::vector<Scenario>& all)
 	    .creatures = {tattooed, plain},
 	});
 
-	auto evilFace = Posed(CreatureType::Tiger, {-6.0f, 0.0f}, 0.0f, "evil");
+	auto evilFace = Posed(CreatureType::Tiger, {-4.0f, 0.0f}, 0.0f, "evil");
 	evilFace.alignment = -1.0f;
-	auto goodFace = Posed(CreatureType::Tiger, {6.0f, 0.0f}, 0.0f, "good");
+	auto goodFace = Posed(CreatureType::Tiger, {4.0f, 0.0f}, 0.0f, "good");
 	goodFace.alignment = 1.0f;
 	goodFace.owner = PlayerNames::NEUTRAL;
 	all.push_back({
@@ -3202,7 +3202,8 @@ void AddAppearance(std::vector<Scenario>& all)
 	    .expected = "Each tiger's eyelids have the colour of its own painted skin under them: the evil skin on the evil "
 	                "tiger and the good skin on the good tiger. Both lids of a tiger have the same colour. A white part "
 	                "of the skin gives a lid that is a little darker than full white.",
-	    .framing = {.shot = Shot::Head, .distance = 1.8f},
+	    .environment = {.dispenserGrid = false},
+	    .framing = {.shot = Shot::Head, .distance = 0.8f},
 	    .creatures = {evilFace, goodFace},
 	});
 
