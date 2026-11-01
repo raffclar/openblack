@@ -18,6 +18,7 @@
 #include <utility>
 #include <vector>
 
+#include <VanillaWorld.h>
 #include <gtest/gtest.h>
 
 #include "ECS/ComputerMind.h"
@@ -107,6 +108,8 @@ TEST(ComputerMind, TreeHasTheShapeOfTheGame)
 {
 	const auto mind = MakeMind();
 	ASSERT_EQ(mind.nodes.size(), 198u);
+	// A saved game keeps two values for each node of the tree
+	EXPECT_EQ(mind.nodes.size() * 2, gamesave::k_ComputerPlayerTreeWords);
 	EXPECT_EQ(mind.nodes[0].childCount, 6);
 	EXPECT_EQ(mind.nodes[mind.nodes[0].children[2]].kind, NodeKind::TopTownInteract);
 	// The town desires list the wood for building sites two times, each with its own node

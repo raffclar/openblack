@@ -14,6 +14,7 @@
 #include <exception>
 #include <optional>
 #include <ranges>
+#include <unordered_map>
 #include <unordered_set>
 #include <vector>
 
@@ -24,11 +25,13 @@
 #include <spdlog/spdlog.h>
 
 #include "ECS/Archetypes/ScriptMarkerArchetype.h"
+#include "ECS/Components/Fire.h"
 #include "ECS/Components/Influence.h"
 #include "ECS/Components/ScriptControl.h"
 #include "ECS/Components/ScriptHighlight.h"
 #include "ECS/Components/ScriptTimer.h"
 #include "ECS/Components/Temple.h"
+#include "ECS/Components/Town.h"
 #include "ECS/Components/Transform.h"
 #include "ECS/Registry.h"
 #include "ECS/SaveGameFiles.h"
@@ -74,6 +77,31 @@ void RemoveScriptThings(ecs::Registry& registry)
 			ecs::world_objects::Remove(entity);
 		}
 	}
+}
+
+/// The temple takes the values of its heart in the file: the life, the turn of the last hit, the town that it was made
+/// for, the last beam of a hurt heart and the clocks of a destruction under way. The particle containers of the beams
+/// and of the glow do not come in. The temple makes its beams again when it next needs them, but the glow of a
+/// destruction under way does not come back.
+void PutHeart(ecs::Registry& registry, entt::entity entity, const script_import::ImportedTemple& file,
+              const std::unordered_map<uint32_t, entt::entity>& made)
+{
+	registry.AssignOrReplace<ObjectLife>(entity, ObjectLife {.life = file.life});
+	auto& temple = registry.Get<Temple>(entity);
+	temple.lastHitTurn = file.lastHitTurn;
+	if (const auto town = EntityOf(made, file.town); town != entt::null && registry.AllOf<Town>(town))
+	{
+		temple.town = static_cast<int32_t>(registry.Get<const Town>(town).id);
+	}
+	else if (file.town == 0)
+	{
+		temple.town.reset();
+	}
+	temple.beamTarget = EntityOf(made, file.beamTarget);
+	temple.beamTurn = file.beamTurn;
+	temple.destroying = file.destroying;
+	temple.destructionClock = file.destructionClock;
+	temple.destructionBeamClock = file.destructionBeamClock;
 }
 
 /// The temple of a player, if the player has one
@@ -141,17 +169,18 @@ void SaveGameSystem::ImportVanillaScriptThings(const gamesave::VanillaWorld& wor
 		registry.Assign<InfluenceSource>(entity, ring.player, ring.radius, ring.anti, EntityOf(made, ring.follows));
 		made.emplace(ring.number, entity);
 	}
-	// The heart of a temple is a part of the temple of the land
+	// The heart of a temple is a part of the temple of the land, and the temple takes the values of the heart
 	uint32_t hearts = 0;
-	for (const auto* heart : world.OfType(gamesave::VanillaType::CitadelHeart))
+	for (const auto& file : script_import::ReadTemples(world))
 	{
-		const auto player = script_import::HeartPlayer(world, heart->number);
-		const auto temple = player.has_value() ? TempleOf(registry, *player) : std::nullopt;
-		if (temple.has_value())
+		const auto temple = TempleOf(registry, file.player);
+		if (!temple.has_value())
 		{
-			made.emplace(heart->number, *temple);
-			++hearts;
+			continue;
 		}
+		made.emplace(file.heart, *temple);
+		PutHeart(registry, *temple, file, made);
+		++hearts;
 	}
 	SPDLOG_LOGGER_INFO(ImportLog(),
 	                   "Made {} markers, {} timers, {} highlights and {} influences of the scripts; {} temple hearts",

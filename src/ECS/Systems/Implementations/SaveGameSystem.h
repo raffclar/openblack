@@ -161,7 +161,7 @@ private:
 	void ImportVanillaScriptThings(const gamesave::VanillaWorld& world, VanillaMade& made);
 	/// The animals and the flocks of the file replace those of the land. The flock of a temple is the flock of the temple
 	/// of the land.
-	void ImportVanillaAnimals(const gamesave::VanillaWorld& world, VanillaMade& made);
+	void ImportVanillaAnimals(const gamesave::VanillaWorld& world, VanillaMade& made, VanillaCircles& circles);
 	/// The running scripts of the file replace the scripts of the land, with the table of the objects that they hold
 	void ImportVanillaScripts(const gamesave::VanillaWorld& world, const VanillaMade& made);
 	/// The world file in the game's layout of a save of a game that came from such a file
