@@ -68,6 +68,7 @@ public:
 	void ProcessWorkshop(entt::entity) override {}
 	[[nodiscard]] int32_t RoomOf(entt::entity) const override { return 0; }
 	entt::entity WoodPileOf(entt::entity) override { return entt::null; }
+	void Made(entt::entity) override {}
 	entt::entity CreateScaffold(glm::vec3, entt::entity, entt::entity, float, float) override { return entt::null; }
 	entt::entity RewardScaffold(entt::entity, glm::vec3) override { return entt::null; }
 	[[nodiscard]] bool CanTake(entt::entity) const override { return false; }

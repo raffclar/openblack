@@ -45,7 +45,9 @@
 #include "Common/MachineClock.h"
 #include "Common/MainThreadQueue.h"
 #include "Common/StringUtils.h"
+#if defined(OPENBLACK_DEVELOPER_TOOLS)
 #include "Debug/TestbedDispenserGrid.h"
+#endif
 #include "ECS/Archetypes/CloudArchetype.h"
 #include "ECS/Archetypes/PlayerArchetype.h"
 #include "ECS/Components/Influence.h"
@@ -154,9 +156,11 @@ namespace openblack::ecs::systems
 namespace
 {
 
+#if defined(OPENBLACK_DEVELOPER_TOOLS)
 /// How far the testbed's player's influence reaches from its middle, and the prayer power their worship has stored
 constexpr float k_TestbedInfluenceRadius = 400.0f;
 constexpr float k_TestbedPrayer = 1.0e6f;
+#endif
 /// How many times longer a turn takes than at the normal speed, at the normal speed
 constexpr float k_NormalTurnDurationMultiplier = 1.0f;
 
@@ -331,7 +335,8 @@ bool LandSystem::LoadMapWithFreshScripts(const std::filesystem::path& path, land
 	return LoadMap(path, loading::LoadingClock::Mode::Tips, change);
 }
 
-void LandSystem::LoadTestbed()
+#if defined(OPENBLACK_DEVELOPER_TOOLS)
+bool LandSystem::LoadTestbed()
 {
 	const InspectorLoading loading("testbed");
 	// No script runs on the testbed: the story's would set its time of day and stop its clock a few turns in
@@ -381,7 +386,15 @@ void LandSystem::LoadTestbed()
 
 	// The testbed comes with its window of scenarios to try out on it
 	View().TestbedLoaded();
+	return true;
 }
+#else
+bool LandSystem::LoadTestbed()
+{
+	// The testbed is a developer tool: a build for players has none
+	return false;
+}
+#endif
 
 bool LandSystem::LoadGodsRingMap()
 {
@@ -845,6 +858,9 @@ void LandSystem::PrepareNewLand(land_change::Kind change)
 	{
 		Locator::weatherSystem::value().Reset();
 		Locator::snowSystem::value().Reset();
+	}
+	if (Locator::waterRingSystem::has_value())
+	{
 		Locator::waterRingSystem::value().Reset();
 	}
 	// The scripts' hold on the screen goes on through the story's change of land: a fade to black made on the last land
@@ -943,7 +959,10 @@ void LandSystem::PrepareNewLand(land_change::Kind change)
 		Locator::leashSystem::value().Reset();
 	}
 	Locator::explosionSystem::value().Reset();
-	Locator::floatingNumberSystem::value().Reset();
+	if (Locator::floatingNumberSystem::has_value())
+	{
+		Locator::floatingNumberSystem::value().Reset();
+	}
 	Locator::magicSystem::value().SetIgnoreInfluence(false);
 	Locator::animalSystem::value().Reset();
 	if (Locator::appleBarrelSystem::has_value())

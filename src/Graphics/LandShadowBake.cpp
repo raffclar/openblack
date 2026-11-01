@@ -92,12 +92,13 @@ template <typename Kind>
 void GatherCasters(const ecs::Registry& registry, LandShadowBake::Casters wanted, std::vector<Caster>& casters,
                    std::vector<MayCast>& mayCast)
 {
+	const ecs::LandShadowLookup shadows(registry);
 	registry.Each<const Kind, const MeshComponent, const Transform>(
 	    // Kinds without data aren't passed in
 	    [&](entt::entity entity, const auto&... /*unused*/) {
 		    const auto& mesh = registry.Get<const MeshComponent>(entity);
 		    const auto& transform = registry.Get<const Transform>(entity);
-		    const auto shadow = ecs::LandShadowOf(registry, entity);
+		    const auto shadow = shadows.Of(entity);
 		    const bool leaves = shadow == LandShadow::Leaves;
 		    if (shadow == LandShadow::None || (leaves ? !wanted.leaves : !wanted.shapes))
 		    {
@@ -677,8 +678,9 @@ bool LandShadowBake::WatchedUnchanged(const ecs::Registry& registry) const
 	{
 		return _watched.empty();
 	}
-	return std::ranges::all_of(_watched, [&registry, transforms, meshes, residents](const Watched& thing) {
-		if (thing.shadowChangesInPlace && ecs::LandShadowOf(registry, thing.entity) != thing.shadow)
+	const ecs::LandShadowLookup shadows(registry);
+	return std::ranges::all_of(_watched, [&shadows, transforms, meshes, residents](const Watched& thing) {
+		if (thing.shadowChangesInPlace && shadows.Of(thing.entity) != thing.shadow)
 		{
 			return false;
 		}

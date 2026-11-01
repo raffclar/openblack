@@ -365,7 +365,9 @@ openblack_setup_and_add_test(test_leash_ownership test_leash_ownership.cpp)
 openblack_setup_and_add_test(test_primary_creature test_primary_creature.cpp)
 openblack_setup_and_add_test(test_leash_orders test_leash_orders.cpp)
 openblack_setup_and_add_test(test_temple_leashes test_temple_leashes.cpp)
-openblack_setup_and_add_test(test_testbed_scenarios test_testbed_scenarios.cpp)
+if (OPENBLACK_DEVELOPER_TOOLS)
+  openblack_setup_and_add_test(test_testbed_scenarios test_testbed_scenarios.cpp)
+endif ()
 openblack_setup_and_add_test(
   test_creature_status_panel test_creature_status_panel.cpp
 )
@@ -374,7 +376,9 @@ openblack_setup_and_add_test(
   test_creature_attention test_creature_attention.cpp
 )
 target_link_libraries(test_flat_land PRIVATE lnd)
-target_link_libraries(test_testbed_scenarios PRIVATE lnd)
+if (OPENBLACK_DEVELOPER_TOOLS)
+  target_link_libraries(test_testbed_scenarios PRIVATE lnd)
+endif ()
 openblack_setup_and_add_test(test_town_desire test_town_desire.cpp)
 openblack_setup_and_add_test(test_town_desire_flags test_town_desire_flags.cpp)
 openblack_setup_and_add_test(test_gutils_angle test_gutils_angle.cpp)
@@ -425,8 +429,10 @@ openblack_setup_and_add_test(
   test_temple_map_spells temple/test_temple_map_spells.cpp
 )
 openblack_setup_and_add_test(test_frame_stats test_frame_stats.cpp)
-openblack_setup_and_add_test(test_benchmark test_benchmark.cpp)
-target_link_libraries(test_benchmark PRIVATE lnd)
+if (OPENBLACK_DEVELOPER_TOOLS)
+  openblack_setup_and_add_test(test_benchmark test_benchmark.cpp)
+  target_link_libraries(test_benchmark PRIVATE lnd)
+endif ()
 openblack_setup_and_add_test(test_uniform_table graphics/test_uniform_table.cpp)
 openblack_setup_and_add_test(test_editor test_editor.cpp)
 openblack_setup_and_add_test(test_editor_scripts test_editor_scripts.cpp)
@@ -2249,10 +2255,12 @@ target_link_libraries(test_lhvm_save_in_native PRIVATE ScriptLibrary)
 openblack_setup_and_add_test(test_object_light_sheet test_object_light_sheet.cpp)
 target_link_libraries(test_object_light_sheet PRIVATE psys)
 openblack_setup_and_add_test(test_playground_trip story/test_playground_trip.cpp)
-openblack_setup_and_add_test(
-  test_testbed_scenario_checks test_testbed_scenario_checks.cpp
-)
-target_link_libraries(test_testbed_scenario_checks PRIVATE lnd)
+if (OPENBLACK_DEVELOPER_TOOLS)
+  openblack_setup_and_add_test(
+    test_testbed_scenario_checks test_testbed_scenario_checks.cpp
+  )
+  target_link_libraries(test_testbed_scenario_checks PRIVATE lnd)
+endif ()
 openblack_setup_and_add_test(test_state_hash_watch test_state_hash_watch.cpp)
 add_test(NAME test_recorded_scenario
          COMMAND ${Python3_EXECUTABLE}
@@ -2269,3 +2277,4 @@ openblack_setup_and_add_test(test_snow_faces test_snow_faces.cpp)
 openblack_setup_and_add_test(test_tornado_pile_take test_tornado_pile_take.cpp)
 openblack_setup_and_add_test(test_land_script_stepper test_land_script_stepper.cpp)
 openblack_setup_and_add_test(test_json_float_text test_json_float_text.cpp)
+openblack_setup_and_add_test(test_sync_checksum_beside_draw test_sync_checksum_beside_draw.cpp)

@@ -75,11 +75,12 @@ public:
 	/// ReplayOnLoad reads them. The recording goes to the file as the inspector stops.
 	virtual void RecordInputOnLoad([[maybe_unused]] const std::filesystem::path& path) {}
 	/// Starts the run record of a simulation run in a file, with a record every so many turns, and with the hash of each
-	/// component when asked: an error, or none
+	/// component when asked. The record reads every field of the creature on the turns that fieldsEvery divides. An
+	/// error, or none.
 	[[nodiscard]] virtual std::optional<std::string>
 	StartSimRecord([[maybe_unused]] const std::filesystem::path& path, [[maybe_unused]] uint32_t every,
 	               [[maybe_unused]] const std::optional<std::filesystem::path>& limits,
-	               [[maybe_unused]] sim_run::HashDetail hashParts)
+	               [[maybe_unused]] sim_run::HashDetail hashParts, [[maybe_unused]] uint32_t fieldsEvery)
 	{
 		return "this inspector writes no run record";
 	}

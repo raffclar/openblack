@@ -75,7 +75,7 @@ public:
 	void RecordInputOnLoad(const std::filesystem::path& path) override;
 	[[nodiscard]] std::optional<std::string> StartSimRecord(const std::filesystem::path& path, uint32_t every,
 	                                                        const std::optional<std::filesystem::path>& limits,
-	                                                        sim_run::HashDetail hashParts) override;
+	                                                        sim_run::HashDetail hashParts, uint32_t fieldsEvery) override;
 	void AddProvider(std::unique_ptr<inspector::ProviderInterface> provider) override;
 	void RemoveProvider(std::string_view name) override;
 	void SetHostsNetworkGame(bool hosts) override;

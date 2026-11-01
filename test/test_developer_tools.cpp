@@ -14,6 +14,7 @@
 #include <vector>
 
 #include <Common/DeveloperTools.h>
+#include <Debug/ScenarioPlayer.h>
 #include <Debug/SimRun.h>
 #include <ECS/GameEndConditions.h>
 #include <Gui/MultiplayerFrontEndRules.h>
@@ -286,4 +287,20 @@ TEST(DeveloperTools, TheFrameStatisticsAndDrawEncodeOptionsAreDeveloperOptions)
 	const std::vector<std::string_view> arguments {
 	    "openblack", "--frame-stats-out", "stats.csv", "--parallel-draw-encode", "-W", "800"};
 	EXPECT_EQ(Kept(arguments, k_DeveloperOptions), (std::vector<std::string> {"openblack", "-W", "800"}));
+}
+
+TEST(DeveloperTools, TheScenarioPlayersExistOnlyInABuildWithTheTools)
+{
+	const auto ids = openblack::testbed_scenarios::ScenarioIds();
+	if constexpr (k_Built)
+	{
+		ASSERT_FALSE(ids.empty());
+		EXPECT_NE(openblack::testbed_scenarios::MakeScenarioPlayer(ids.front()), nullptr);
+	}
+	else
+	{
+		EXPECT_TRUE(ids.empty());
+		EXPECT_EQ(openblack::testbed_scenarios::MakeScenarioPlayer("benchmark.creatures_10"), nullptr);
+	}
+	EXPECT_EQ(openblack::testbed_scenarios::MakeScenarioPlayer("no.such.scenario"), nullptr);
 }

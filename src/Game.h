@@ -37,7 +37,9 @@
 #include "Creature/BonusCreatures.h"
 #include "Creature/CreatureFight.h"
 #include "Debug/SimRun.h"
+#if defined(OPENBLACK_DEVELOPER_TOOLS)
 #include "Debug/TestbedScenarioChecks.h"
+#endif
 #include "ECS/StatisticsRules.h"
 #include "ECS/Systems/CreatureHandSystemInterface.h"
 #include "ECS/Systems/LandSystemInterface.h"
@@ -514,9 +516,11 @@ public:
 	/// The code that the program ends with. A run of a scenario's checks sets it from the verdict.
 	void SetExitCode(int code) { _exitCode = code; }
 	[[nodiscard]] int GetExitCode() const { return _exitCode; }
+#if defined(OPENBLACK_DEVELOPER_TOOLS)
 	/// The verdict of the scenario that ran last, as the inspector tells it. None until a scenario has a verdict.
 	void SetScenarioChecks(testbed_scenarios::checks::Report report) { _scenarioChecks = std::move(report); }
 	[[nodiscard]] const std::optional<testbed_scenarios::checks::Report>& GetScenarioChecks() const { return _scenarioChecks; }
+#endif
 	[[nodiscard]] std::optional<ScenarioRequest> TakeScenarioRequest() { return std::exchange(_scenarioRequest, std::nullopt); }
 	/// Tools: a run that writes the commands of each turn also writes each command of the testbed scenario that the game
 	/// gives before a turn, so that a dedicated server gives it before the same turn (command_log::GivesPathOf)
@@ -695,7 +699,9 @@ private:
 	bool _startTestbed {false};
 	bool _startGodsRingMap {false};
 	std::optional<ScenarioRequest> _scenarioRequest;
+#if defined(OPENBLACK_DEVELOPER_TOOLS)
 	std::optional<testbed_scenarios::checks::Report> _scenarioChecks;
+#endif
 	int _exitCode {0};
 	std::function<void()> _scenarioStager;
 	std::function<void()> _scenarioTurn;
@@ -744,8 +750,10 @@ private:
 	/// The answer of the skirmish box over the game, until the screen is black after the box
 	std::optional<gui::SkirmishBox::Answer> _skirmishAnswer;
 	input::LockMode _inspectInputLock {input::LockMode::Auto};
+#if defined(OPENBLACK_DEVELOPER_TOOLS)
 	/// Whether the testbed opens its window of scenarios
 	bool _testbedWindow {true};
+#endif
 	bool _quitRequested {false};
 	/// The player closed the window. The game ends at the end of a frame outside a script's cut scene.
 	bool _closeAsked {false};

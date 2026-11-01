@@ -31,6 +31,19 @@ else ()
   list(FILTER OPENBLACK_HEADERS EXCLUDE REGEX
        "/Simulation/WorldStateAtTurn[.]h$"
   )
+  # The testbed scenarios, their runner and the windows that play them are developer tools. The program then has a
+  # scenario player that plays none (Debug/NoScenarioPlayer.cpp).
+  set(OPENBLACK_TESTBED_FILES
+      "/Debug/TestbedScenario[A-Za-z]*[.](cpp|h)$"
+      "/Debug/Testbed(Crowd|GameStage|Multiplayer|DispenserGrid)[.](cpp|h)$"
+      "/Debug/TestbedGameStageInterface[.]h$"
+  )
+  list(JOIN OPENBLACK_TESTBED_FILES "|" OPENBLACK_TESTBED_FILES)
+  list(FILTER OPENBLACK_SOURCES EXCLUDE REGEX "${OPENBLACK_TESTBED_FILES}")
+  list(FILTER OPENBLACK_HEADERS EXCLUDE REGEX "${OPENBLACK_TESTBED_FILES}")
+endif ()
+if (OPENBLACK_DEVELOPER_TOOLS)
+  list(FILTER OPENBLACK_SOURCES EXCLUDE REGEX "/Debug/NoScenarioPlayer[.]cpp$")
 endif ()
 # The code that connects the game to a browser page is built only for the web
 if (NOT EMSCRIPTEN)
@@ -70,7 +83,7 @@ list(FILTER OPENBLACK_CLIENT_SOURCES INCLUDE REGEX
 )
 set(OPENBLACK_SIM_IN_CLIENT_FOLDERS
     "Audio/(MpegAudioDecoder|WavAudioDecoder|AudioDecoderInterface)"
-    "Debug/(SimRun|SimChecks|TempleVillagersSurvey|RowDump|ComputerGodTimes|ComputerActions|BenchmarkRecorder|FightAutopilotRules|TestbedCrowd|TestbedDispenserGrid|TestbedMultiplayer|TownMiracleRules|TownMiracles|TestbedScenarioRunner|DebugGuiInterface|FightAutopilotInterface|TestbedGameStageInterface|TestbedHandSweep|StateHashWatch)"
+    "Debug/(SimRun|SimChecks|TempleVillagersSurvey|RowDump|ComputerGodTimes|ComputerActions|BenchmarkRecorder|FightAutopilotRules|TestbedCrowd|TestbedDispenserGrid|TestbedMultiplayer|TownMiracleRules|TownMiracles|TestbedScenarioRunner|NoScenarioPlayer|ScenarioPlayer|DebugGuiInterface|FightAutopilotInterface|TestbedGameStageInterface|TestbedHandSweep|StateHashWatch)"
     "Debug/TestbedScenario[A-Z][A-Za-z]*"
     "Editor/(EditorMath|EditorEntities|EditorPalette|EditorSelection|EditorOutline)"
     "Graphics/(HandLight|InterfaceCreatures|MeshDetail|Moon|Sun|ViewFrustum|Texture2D|VertexBuffer|IndexBuffer|Mesh|TextureSize|GraphicsDeviceInterface|GraphicsHandle|FilmSurface|ZSort|FizzDrawOrder|HandReflection|ObjectTint|TempleHeartLook)"

@@ -9,6 +9,7 @@
 
 #include "LandShadowCasters.h"
 
+#include <array>
 #include <type_traits>
 
 #include "ECS/Components/Abode.h"
@@ -46,13 +47,6 @@ using namespace components;
 
 namespace
 {
-
-/// Whether a building's building has ended
-bool IsBuilt(const Registry& registry, entt::entity entity)
-{
-	const auto* progress = registry.TryGet<const BuildProgress>(entity);
-	return progress == nullptr || progress->built >= 1.0f;
-}
 
 /// The count of the changes to the land's shadow casters, kept with the registry
 struct LandShadowCasterChanges
@@ -93,34 +87,101 @@ void ForEachCasterComponent(Func func)
 
 LandShadow LandShadowOf(const Registry& registry, entt::entity entity)
 {
-	if (registry.AnyOf<Field, AnimatedStatic, Flowers, DeadTree, Pot, MagicPile, VillageTotem, MagicShield, ShieldDome,
-	                   SpellSeed, OneOffSpellSeed, Vortex>(entity))
+	return LandShadowLookup(registry).Of(entity);
+}
+
+namespace
+{
+
+/// The components that the shadow of a thing depends on, in the order of the stores of a lookup
+template <typename... Components>
+struct ShadowComponents
+{
+	static_assert(sizeof...(Components) == LandShadowLookup::k_StoreCount);
+
+	/// The place of a component in the list
+	template <typename Component>
+	static constexpr size_t k_Place = [] {
+		size_t place = 0;
+		bool found = false;
+		((found = found || std::is_same_v<Component, Components>, place += found ? 0 : 1), ...);
+		return place;
+	}();
+
+	static void Find(const entt::registry& registry,
+	                 std::array<const entt::sparse_set*, LandShadowLookup::k_StoreCount>& stores)
+	{
+		size_t place = 0;
+		((stores.at(place++) = registry.storage<Components>()), ...);
+	}
+};
+
+using ShadowStores =
+    ShadowComponents<Field, AnimatedStatic, Flowers, DeadTree, Pot, MagicPile, VillageTotem, MagicShield, ShieldDome, SpellSeed,
+                     OneOffSpellSeed, Vortex, Tree, BigForest, Temple, BuildProgress, Abode, WorshipAltar, WorshipSite,
+                     SpellDispenser, Feature, MobileStatic, TeleportStone, MobileObject, Ball, RewardOnLand>;
+
+} // namespace
+
+LandShadowLookup::LandShadowLookup(const Registry& registry)
+{
+	ShadowStores::Find(registry.Underlying(), _stores);
+}
+
+template <typename... Components>
+bool LandShadowLookup::AnyOf(entt::entity entity) const
+{
+	return ([this, entity] {
+		const auto* store = _stores.at(ShadowStores::k_Place<Components>);
+		return store != nullptr && store->contains(entity);
+	}() || ...);
+}
+
+template <typename Component>
+const Component* LandShadowLookup::TryGet(entt::entity entity) const
+{
+	if (!AnyOf<Component>(entity))
+	{
+		return nullptr;
+	}
+	return &static_cast<const entt::storage_for_t<Component>*>(_stores.at(ShadowStores::k_Place<Component>))->get(entity);
+}
+
+bool LandShadowLookup::IsBuilt(entt::entity entity) const
+{
+	const auto* progress = TryGet<BuildProgress>(entity);
+	return progress == nullptr || progress->built >= 1.0f;
+}
+
+LandShadow LandShadowLookup::Of(entt::entity entity) const
+{
+	if (AnyOf<Field, AnimatedStatic, Flowers, DeadTree, Pot, MagicPile, VillageTotem, MagicShield, ShieldDome, SpellSeed,
+	          OneOffSpellSeed, Vortex>(entity))
 	{
 		return LandShadow::None;
 	}
-	if (registry.AnyOf<Tree, BigForest>(entity))
+	if (AnyOf<Tree, BigForest>(entity))
 	{
 		return LandShadow::Leaves;
 	}
 	// The temple casts every one of its triangles, once it is built
-	if (registry.AllOf<Temple>(entity))
+	if (AnyOf<Temple>(entity))
 	{
-		return registry.AllOf<BuildProgress>(entity) ? LandShadow::None : LandShadow::ShapeBothSides;
+		return AnyOf<BuildProgress>(entity) ? LandShadow::None : LandShadow::ShapeBothSides;
 	}
-	if (const auto* abode = registry.TryGet<const Abode>(entity))
+	if (const auto* abode = TryGet<Abode>(entity))
 	{
 		if (abode->type == AbodeNumber::Field)
 		{
 			return LandShadow::None;
 		}
-		return abode->type == AbodeNumber::FootballPitch || IsBuilt(registry, entity) ? LandShadow::Shape : LandShadow::None;
+		return abode->type == AbodeNumber::FootballPitch || IsBuilt(entity) ? LandShadow::Shape : LandShadow::None;
 	}
-	if (registry.AllOf<WorshipAltar>(entity))
+	if (AnyOf<WorshipAltar>(entity))
 	{
-		return IsBuilt(registry, entity) ? LandShadow::Shape : LandShadow::None;
+		return IsBuilt(entity) ? LandShadow::Shape : LandShadow::None;
 	}
-	if (registry.AnyOf<WorshipSite, SpellDispenser, Feature, MobileStatic, TeleportStone, MobileObject, Ball, RewardOnLand>(
-	        entity))
+	if (AnyOf<WorshipSite, SpellDispenser, Feature, MobileStatic, TeleportStone, MobileObject, Ball, RewardOnLand>(entity))
 	{
 		return LandShadow::Shape;
 	}

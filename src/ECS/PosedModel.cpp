@@ -78,6 +78,14 @@ public:
 	    , _bones(bones)
 	    , _followsLand(registry.AllOf<MorphWithTerrain>(entity))
 	{
+		// The land under the model's origin, its up and its scale are the same for each corner
+		if (_followsLand)
+		{
+			const glm::vec3 origin(_model[3]);
+			_originHeight = HeightAt({origin.x, origin.z});
+			_up = glm::vec3(_model[1]);
+			_scale = glm::length(glm::vec3(_model[0]));
+		}
 		// A creature's body is its base mesh moved towards the meshes of how evil or good, thin or fat and weak or strong
 		// it is drawn
 		if (const auto* creature = registry.TryGet<const Creature>(entity))
@@ -121,17 +129,14 @@ public:
 		if (_followsLand)
 		{
 			// Each corner moves along the model's up by how much higher the land is under it than under its origin
-			const glm::vec3 origin(_model[3]);
-			const glm::vec3 up(_model[1]);
-			const float scale = glm::length(glm::vec3(_model[0]));
-			const float rise = HeightAt({world.x, world.z}) - HeightAt({origin.x, origin.z});
-			if (up.x == 0.0f && up.z == 0.0f)
+			const float rise = HeightAt({world.x, world.z}) - _originHeight;
+			if (_up.x == 0.0f && _up.z == 0.0f)
 			{
 				world.y += rise;
 			}
 			else
 			{
-				world += up * (rise / scale);
+				world += _up * (rise / _scale);
 			}
 		}
 		return world;
@@ -142,6 +147,9 @@ private:
 	glm::mat4 _model;
 	std::span<const glm::mat4> _bones;
 	bool _followsLand;
+	float _originHeight {0.0f};
+	glm::vec3 _up {0.0f};
+	float _scale {1.0f};
 	std::array<const graphics::L3DSubMesh*, 3> _morphs {};
 	const creature_morph::Morph* _morph {nullptr};
 };

@@ -37,7 +37,7 @@
 #include "Common/GameRandom.h"
 #include "Common/MachineClock.h"
 #include "Common/RandomNumberManager.h"
-#include "Debug/TestbedScenarioRunner.h"
+#include "Debug/ScenarioPlayer.h"
 #include "ECS/ChallengePictures.h"
 #include "ECS/Components/Temple.h"
 #include "ECS/GameEndConditions.h"
@@ -221,8 +221,8 @@ private:
 	bool _replaying {false};
 	std::chrono::steady_clock::time_point _frameStart;
 	/// The testbed scenario that the server plays, as the game's window of scenarios plays it
-	const testbed_scenarios::Scenario* _scenario {nullptr};
-	std::unique_ptr<testbed_scenarios::Runner> _scenarioRunner;
+	std::unique_ptr<testbed_scenarios::ScenarioPlayer> _scenario;
+	bool _scenarioStarted {false};
 	/// Gives false when the game of the network ended
 	std::function<NetworkStep()> _beforeTurns;
 };
@@ -339,7 +339,8 @@ bool ServerWorld::Initialize()
 	if (_simulation.recordPath.has_value() && Locator::inspector::has_value())
 	{
 		if (const auto error = Locator::inspector::value().StartSimRecord(*_simulation.recordPath, _simulation.recordEvery,
-		                                                                  _simulation.limitsPath, _simulation.hashParts);
+		                                                                  _simulation.limitsPath, _simulation.hashParts,
+		                                                                  _simulation.recordFieldsEvery);
 		    error.has_value())
 		{
 			SPDLOG_LOGGER_ERROR(spdlog::get("game"), "The simulation record cannot start: {}", *error);
@@ -371,13 +372,12 @@ bool ServerWorld::StartLand()
 	auto& land = Locator::landSystem::value();
 	if (_settings.scenario.has_value())
 	{
-		_scenario = testbed_scenarios::Find(*_settings.scenario);
+		_scenario = testbed_scenarios::MakeScenarioPlayer(*_settings.scenario);
 		if (_scenario == nullptr)
 		{
 			SPDLOG_LOGGER_ERROR(spdlog::get("game"), "No testbed scenario {}", *_settings.scenario);
 			return false;
 		}
-		_scenarioRunner = std::make_unique<testbed_scenarios::Runner>();
 		// A server that plays the commands of a game gives the commands of the scenario before the turns that the game
 		// gave them, when the game wrote them
 		if (_settings.commandsPath.has_value())
@@ -386,7 +386,7 @@ bool ServerWorld::StartLand()
 			std::error_code error;
 			if (std::filesystem::exists(gives, error))
 			{
-				_scenarioRunner->FollowGives(command_log::ReadGivesFile(gives));
+				_scenario->FollowGives(command_log::ReadGivesFile(gives));
 				SPDLOG_LOGGER_INFO(spdlog::get("game"), "The scenario gives its commands as the game did: {}", gives.string());
 			}
 		}
@@ -411,7 +411,11 @@ bool ServerWorld::StartLand()
 	}
 	else if (_settings.testbed)
 	{
-		land.LoadTestbed();
+		// A server for players has no testbed
+		if (!land.LoadTestbed())
+		{
+			return false;
+		}
 	}
 	else
 	{
@@ -484,9 +488,9 @@ void ServerWorld::StartPlayView()
 
 void ServerWorld::BeforeTurn()
 {
-	if (_scenarioRunner != nullptr)
+	if (_scenario != nullptr)
 	{
-		_scenarioRunner->BeforeTurn();
+		_scenario->BeforeTurn();
 	}
 }
 
@@ -526,12 +530,10 @@ bool ServerWorld::Frame()
 	}
 	// The scenario is laid out in the first frame in which the world turns: after the start of a network game, before its
 	// first turn, as each client lays it out
-	if (_scenario != nullptr && !clock.IsPaused())
+	if (_scenario != nullptr && !_scenarioStarted && !clock.IsPaused())
 	{
-		_scenarioRunner->Start(*std::exchange(_scenario, nullptr));
-		// Give the commands, throws and rewards that are due at the start, as each client does when it lays out the
-		// scenario
-		_scenarioRunner->Update(0.0f);
+		_scenarioStarted = true;
+		_scenario->Start();
 	}
 	// The tools check that a world state loads into the same world: the server loads its own world once
 	if (_settings.reloadAt.has_value() && clock.GetTurn() == *_settings.reloadAt && !_reloaded &&

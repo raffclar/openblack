@@ -10,6 +10,7 @@
 #include <cmath>
 
 #include <array>
+#include <initializer_list>
 #include <numbers>
 #include <span>
 
@@ -94,6 +95,36 @@ TEST(TownBeliefSymbols, RankCountsOnlyThePlayersOfTheGame)
 	EXPECT_EQ(Rank(beliefs, 20), 0);
 	EXPECT_EQ(Rank(beliefs, 7), 1);
 	EXPECT_EQ(Rank(beliefs, 2), 31);
+}
+
+// The ranks of all players from one sort are the ranks of each player alone, with ties, beliefs over one and no belief
+TEST(TownBeliefSymbols, RanksGiveTheRankOfEachPlayer)
+{
+	constexpr size_t k_GameOf32Gods = 33;
+	std::array<float, k_GameOf32Gods> beliefs {};
+	for (size_t player = 0; player < beliefs.size(); ++player)
+	{
+		beliefs[player] = static_cast<float>((player * 7) % 5) * 0.3f;
+	}
+	beliefs[3] = -1.0f;
+	beliefs[30] = 0.45f;
+	for (const auto players : {size_t {0}, size_t {1}, static_cast<size_t>(k_PlayerCount), k_GameOf32Gods})
+	{
+		const auto some = std::span<const float>(beliefs).first(players);
+		const auto ranks = Ranks(some);
+		ASSERT_EQ(ranks.size(), players);
+		for (size_t player = 0; player < players; ++player)
+		{
+			EXPECT_EQ(ranks[player], Rank(some, player)) << "player " << player << " of " << players;
+		}
+	}
+	// A belief that is not a number gives the same ranks as each rank found alone
+	beliefs[5] = std::nanf("");
+	const auto ranks = Ranks(beliefs);
+	for (size_t player = 0; player < beliefs.size(); ++player)
+	{
+		EXPECT_EQ(ranks[player], Rank(beliefs, player)) << "player " << player;
+	}
 }
 
 TEST(TownBeliefSymbols, TheWayRoundGrowsWithTheCameraDistanceUpToTenTimes)

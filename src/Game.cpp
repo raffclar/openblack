@@ -115,7 +115,6 @@
 #include "Debug/FightAutopilotInterface.h"
 #include "Debug/FrameStatsLog.h"
 #include "Debug/FrameWriteGuard.h"
-#include "Debug/TestbedDispenserGrid.h"
 #include "ECS/Archetypes/PlayerArchetype.h"
 #include "ECS/Archetypes/SkyArchetype.h"
 #include "ECS/ChallengePictures.h"
@@ -774,7 +773,9 @@ Game::Game(Arguments&& args) noexcept
     , _networkJoin(args.networkJoin)
     , _networkLandPending(args.networkJoin.has_value())
     , _inspectInputLock(args.inspectInputLock)
+#if defined(OPENBLACK_DEVELOPER_TOOLS)
     , _testbedWindow(!args.scenario.has_value() || !args.scenario->hideWindow)
+#endif
     , _requestScreenshot(args.requestScreenshot)
     , _turnApiCheck(args.turnApiCheck)
     , _turnBesideDraw(args.turnBesideDraw)
@@ -4826,7 +4827,8 @@ void Game::StartFightTools()
 	if (_simulation.has_value() && _simulation->recordPath.has_value() && Locator::inspector::has_value())
 	{
 		if (const auto error = Locator::inspector::value().StartSimRecord(*_simulation->recordPath, _simulation->recordEvery,
-		                                                                  _simulation->limitsPath, _simulation->hashParts);
+		                                                                  _simulation->limitsPath, _simulation->hashParts,
+		                                                                  _simulation->recordFieldsEvery);
 		    error.has_value())
 		{
 			SPDLOG_LOGGER_ERROR(spdlog::get("game"), "The simulation record cannot start: {}", *error);
@@ -5080,6 +5082,12 @@ Game::RunStart Game::StartRun() noexcept
 	_frameCount = 0;
 	_frameLoop = std::make_unique<FrameLoop>();
 	_frameLoop->startTicks = Locator::time::value().GetTicks();
+	// The hash of the checksum of the last turn of a frame waits for the draw, and the threads make it while the draw
+	// reads the world
+	if (Locator::syncChecksumSystem::has_value())
+	{
+		Locator::syncChecksumSystem::value().SetHashBesideDraw(true);
+	}
 	if (config.aiTimesEvery > 0 && Locator::computerPlayerSystem::has_value())
 	{
 		Locator::computerPlayerSystem::value().SetTimesReport(config.aiTimesEvery);
@@ -5207,6 +5215,8 @@ bool Game::RunFrame() noexcept
 	const auto turnBefore = Locator::time::has_value() ? std::optional(Locator::time::value().GetTurn()) : std::nullopt;
 	if (!Update())
 	{
+		// The game ends with this frame: the checksum of its last turn does not wait for a draw
+		Locator::syncChecksumSystem::value().FinishHash();
 		return false;
 	}
 	auto& config = Locator::config::value();
@@ -5264,8 +5274,14 @@ bool Game::RunFrame() noexcept
 			}
 			else
 			{
+				Locator::syncChecksumSystem::value().StartHashBesideDraw();
 				Locator::rendererInterface::value().DrawScene(drawDesc);
 			}
+		}
+		// The checksum of the turns of this frame is complete before anything changes the world again
+		{
+			auto section = profiler.BeginScoped(Profiler::Stage::SyncChecksum);
+			Locator::syncChecksumSystem::value().FinishHash();
 		}
 
 		ResolveScreenShapes();
@@ -5445,7 +5461,7 @@ void Game::LoadTestbed() noexcept
 	{
 		return;
 	}
-	Locator::landSystem::value().LoadTestbed();
+	static_cast<void>(Locator::landSystem::value().LoadTestbed());
 }
 
 bool Game::RequestScenario(ScenarioRequest request)
@@ -5518,10 +5534,12 @@ void Game::StartCameraAtTemple()
 
 void Game::TestbedLoaded()
 {
+#if defined(OPENBLACK_DEVELOPER_TOOLS)
 	if (Locator::debugGui::has_value() && _testbedWindow)
 	{
 		Locator::debugGui::value().OpenWindow(debug::gui::k_TestbedScenariosWindow);
 	}
+#endif
 }
 
 bool Game::AskStartQuestion(bool hasCreature)
@@ -6327,7 +6345,13 @@ bool Game::StartNetworkLand(const game_socket::Start& start)
 	// The server chose the land: the testbed of a server is not a developer tool of this computer
 	if (start.testbed)
 	{
-		lands.LoadTestbed();
+		// A build for players has no testbed
+		if (!lands.LoadTestbed())
+		{
+			SPDLOG_LOGGER_ERROR(spdlog::get("game"), "The game server asks for a game this build cannot play: {}",
+			                    "the build has no developer tools, so it has no testbed");
+			return false;
+		}
 	}
 	else if (start.godsRingMap)
 	{
@@ -7666,8 +7690,11 @@ void Game::PlayHandGrabSound()
 		if (!Locator::time::value().IsPaused())
 		{
 			const auto angle = Locator::gameRandom::value().CrtRandom(0.0f, glm::two_pi<float>());
-			Locator::waterRingSystem::value().Add(
-			    water_rings::HandSplash(glm::vec2(position.x, position.z), angle, FrameLandLight(255)));
+			if (Locator::waterRingSystem::has_value())
+			{
+				Locator::waterRingSystem::value().Add(
+				    water_rings::HandSplash(glm::vec2(position.x, position.z), angle, FrameLandLight(255)));
+			}
 			// The fish near where the hand went in dart away
 			Locator::fishFarmSystem::value().Scare({position.x, k_HandSplashHeight, position.z});
 		}

@@ -15,6 +15,7 @@
 
 #include "ECS/Components/Animal.h"
 #include "ECS/Components/DeadTree.h"
+#include "ECS/Components/Disciple.h"
 #include "ECS/Components/Mobile.h"
 #include "ECS/Components/OneOffSpellSeed.h"
 #include "ECS/Components/Physics.h"
@@ -145,6 +146,24 @@ TEST(VortexCrossingLines, AVillagerIsWrittenByItsTribeAndJob)
 	// One that keeps the row it was made from is written by that row
 	data.kind = VillagerInfo::Hermit;
 	EXPECT_EQ(LineText(registry, villager), "CREATE_SPECIAL_TOWN_VILLAGER(-1, \"10.00,20.00\", 66, 25)\n");
+}
+
+TEST(VortexCrossingLines, ADiscipleIsWrittenAsAPlainVillager)
+{
+	Registry registry;
+	const auto town = registry.Create();
+	registry.Assign<Town>(town, Town {.id = 3});
+	const auto villager = Thing(registry, {1010.0f, k_Ground, 2020.0f}, glm::mat3(1.0f), 1.0f);
+	auto& data = registry.Assign<Villager>(villager);
+	data.tribe = Tribe::NORSE;
+	data.number = VillagerNumber::Forester;
+	data.town = town;
+	data.birthTurn = 30000 - (30 * villager_age::k_TurnsPerYear);
+	const auto plain = LineText(registry, villager);
+	// The line has no place for the work that the hand gave it, so the next land gets a villager with no work
+	registry.Assign<Disciple>(villager, Disciple {.type = VillagerDisciple::Builder});
+	EXPECT_EQ(LineText(registry, villager), plain);
+	EXPECT_EQ(plain, "CREATE_TOWN_VILLAGER(3, \"10.00,20.00\", NORSE_FORESTER, 30)\n");
 }
 
 TEST(VortexCrossingLines, ATreeKeepsItsTurnAndSizes)

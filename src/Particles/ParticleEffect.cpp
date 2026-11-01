@@ -20,6 +20,7 @@
 #include <string_view>
 #include <system_error>
 #include <typeinfo>
+#include <utility>
 
 #include <glm/matrix.hpp>
 
@@ -810,10 +811,10 @@ void Effect::WalkCollection(const Collection& collection, float t, DrawWalk& out
 	const float fraction = collection.interpolated ? std::clamp(t, 0.0f, 1.0f) : 1.0f;
 	// Only an atom that the walk keeps gets all its drawn values. The joints of a ribbon get them in the second pass.
 	const auto keep = [&](const Atom& atom) {
-		if (const auto drawn = Interpolate(atom, t, collection.interpolated))
+		if (auto drawn = Interpolate(atom, t, collection.interpolated))
 		{
 			out.steps.push_back({.chain = false, .index = static_cast<uint32_t>(out.atoms.size())});
-			out.atoms.push_back(*drawn);
+			out.atoms.push_back(std::move(*drawn));
 		}
 	};
 	for (const auto& atom : std::ranges::reverse_view(collection.atoms))
@@ -848,9 +849,9 @@ void Effect::WalkCollection(const Collection& collection, float t, DrawWalk& out
 		{
 			if (atom->creator != nullptr && atom->creator->kind == Creator::Kind::Chain)
 			{
-				if (const auto joint = Interpolate(*atom, t, collection.interpolated))
+				if (auto joint = Interpolate(*atom, t, collection.interpolated))
 				{
-					out.joints.push_back(*joint);
+					out.joints.push_back(std::move(*joint));
 				}
 			}
 		}

@@ -3395,11 +3395,12 @@ void Renderer::DrawGroundBlobs(const DrawSceneDesc& desc) const
 	// Every villager out of doors and out of the sea casts one from each foot, on the land beneath it; one too far away
 	// to be drawn a wider one from where it stands, as if the land there were flat
 	// A villager a script draws in high detail casts none: it lays its shadow on the land instead (GroundShadow)
+	const ecs::drawn_place::DrawnPlaces drawnPlaces(desc.entities);
 	desc.entities.Each<const ecs::components::Villager, const ecs::components::Transform, const ecs::components::Mesh>(
 	    [&](entt::entity entity, const ecs::components::Villager& /*villager*/, const ecs::components::Transform& placed,
 	        const ecs::components::Mesh& mesh) {
 		    // A villager in a creature's hand is where the frame draws the hand
-		    const auto transform = ecs::drawn_place::DrawnTransformOf(desc.entities, entity, placed);
+		    const auto transform = drawnPlaces.Of(entity, placed);
 		    if (transform.position.y <= ground_blobs::k_LowestHeight || !meshes.Contains(mesh.id) || isFar(entity))
 		    {
 			    return;
@@ -8321,21 +8322,27 @@ void Renderer::DrawPass(const DrawSceneDesc& desc) const
 				    desc.camera->GetProjectionMatrix() * desc.camera->GetViewMatrix(Camera::Interpolation::Current));
 				const auto drawSprites = [this, &spriteShader, &desc, &textures, translucentViewId, cameraOrigin,
 				                          bookmarksShown, leashMarkersShown, &seenBy](const ecs::Registry& from) {
+					// The walk makes no component, so the stores of the components stay the same for all of it
+					const ecs::drawn_place::DrawnPlaces drawnPlaces(from);
+					const ecs::ComponentLookup<CameraBookmark> bookmarks(from);
+					const ecs::ComponentLookup<LeashMarker> markers(from);
+					const ecs::ComponentLookup<TempleInteriorPart> templeParts(from);
 					from.Each<const Sprite, const Transform>(
 					    [this, &spriteShader, &desc, &textures, translucentViewId, cameraOrigin, &from, bookmarksShown,
-					     leashMarkersShown, &seenBy](entt::entity entity, const Sprite& sprite, const Transform& transform) {
-						    if (!bookmarksShown && from.AllOf<CameraBookmark>(entity))
+					     leashMarkersShown, &seenBy, &drawnPlaces, &bookmarks, &markers,
+					     &templeParts](entt::entity entity, const Sprite& sprite, const Transform& transform) {
+						    if (!bookmarksShown && bookmarks.Has(entity))
 						    {
 							    return;
 						    }
-						    if (const auto* marker = from.TryGet<const LeashMarker>(entity);
+						    if (const auto* marker = markers.TryGet(entity);
 						        marker != nullptr && (!leashMarkersShown || !IsOwnLeashMarker(from, *marker)))
 						    {
 							    return;
 						    }
 						    // The temple draws the glows of the rooms it draws whole, and the main room reflects its own glows
 						    // alone in its floor
-						    if (const auto* templePart = from.TryGet<const TempleInteriorPart>(entity); templePart != nullptr)
+						    if (const auto* templePart = templeParts.TryGet(entity); templePart != nullptr)
 						    {
 							    const bool inMainRoom = templePart->room == TempleRoom::Main;
 							    const bool drawn = Locator::temple::value().IsRoomDrawn(templePart->room);
@@ -8356,7 +8363,7 @@ void Renderer::DrawPass(const DrawSceneDesc& desc) const
 						    const auto* texture = found->texture;
 						    const auto* alpha = found->alpha;
 						    // A sprite that moves between the turns is drawn at its drawn place
-						    const auto placed = ecs::drawn_place::DrawnTransformOf(from, entity, transform);
+						    const auto placed = drawnPlaces.Of(entity, transform);
 						    glm::mat4 modelMatrix = glm::mat4(1.0f);
 						    modelMatrix = glm::translate(modelMatrix, placed.position);
 						    modelMatrix *= glm::mat4(placed.rotation);
