@@ -16,6 +16,7 @@
 #include "3D/MapCoords.h"
 #include "ECS/Components/Abode.h"
 #include "ECS/Components/Ball.h"
+#include "ECS/Components/BuildingDamage.h"
 #include "ECS/Components/CreatureObjectAction.h"
 #include "ECS/Components/Field.h"
 #include "ECS/Components/Firefly.h"
@@ -243,6 +244,45 @@ TEST_F(MapProductionFiling, AFieldIsInEachCellItsOutlineCoversAndLeavesThemWhenG
 		EXPECT_TRUE(map.GetAllInCell(cell).empty());
 	}
 	registry.Destroy(field);
+	EXPECT_TRUE(map.GetAllInCell(middle).empty());
+	EXPECT_TRUE(map.GetAllInCell(middle + glm::ivec2 {1, 0}).empty());
+}
+
+TEST_F(MapProductionFiling, APieceOfABuildingGoesIntoTheCellsOnlyWhenItComesToRest)
+{
+	// A piece that broke off a building is not in the cells while it flies. When it comes to rest it goes into the front
+	// of the fixed things of each cell that its outline covers, as a rock does, and it leaves them when it goes. Here
+	// the outline is a circle of 3 units in the middle of a cell: it reaches the four cells beside that cell.
+	auto& registry = Locator::entitiesRegistry::value();
+	const glm::vec3 place {505.0f, 0.0f, 505.0f};
+	Locator::entitiesMap::reset();
+	Locator::entitiesMap::emplace<MapProduction>([](const Registry& from, entt::entity entity) {
+		const auto& transform = from.Get<const Transform>(entity);
+		return std::optional(map_cells::OutlineOfBox(transform.position, transform.rotation, transform.scale.x, glm::vec3(0.0f),
+		                                             {3.0f, 3.0f, 3.0f}));
+	});
+	auto& map = Locator::entitiesMap::value();
+	const auto piece = registry.Create();
+	registry.Assign<Transform>(piece, place, glm::mat3(1.0f), glm::vec3(1.0f));
+	registry.Assign<BuildingPiece>(piece);
+	map.Sync();
+	const auto middle = map_coords::CellOf(place);
+	EXPECT_FALSE(registry.AllOf<MapCellResident>(piece));
+	EXPECT_TRUE(map.GetAllInCell(middle).empty());
+	EXPECT_FALSE(map.InMap(piece));
+	// It comes to rest
+	map.Refile(piece);
+	ASSERT_TRUE(registry.AllOf<MapCellResident>(piece));
+	EXPECT_EQ(registry.Get<const MapCellResident>(piece).cells.size(), 5u);
+	EXPECT_EQ(registry.Get<const MapCellResident>(piece).placement, map_cells::Placement::FixedFront);
+	EXPECT_TRUE(registry.AllOf<MapCellMover>(piece));
+	ASSERT_EQ(map.GetFixedInGridCell(MapInterface::CellId(middle)).size(), 1u);
+	EXPECT_EQ(map.GetFixedInGridCell(MapInterface::CellId(middle)).front(), piece);
+	EXPECT_EQ(map.GetAllInCell(middle + glm::ivec2 {1, 0}).size(), 1u);
+	// The land's draw list decides it as it decides other things on its land block
+	const auto onBlock = map.GetOnBlock({middle.x >> 4, middle.y >> 4});
+	EXPECT_NE(std::ranges::find(onBlock, piece), onBlock.end());
+	registry.Destroy(piece);
 	EXPECT_TRUE(map.GetAllInCell(middle).empty());
 	EXPECT_TRUE(map.GetAllInCell(middle + glm::ivec2 {1, 0}).empty());
 }
