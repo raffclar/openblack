@@ -14,6 +14,7 @@
 #include <string_view>
 
 #include "ECS/Components/NeverFades.h"
+#include "ECS/Components/NoLandShadow.h"
 #include "ECS/Reflection/ComponentReflection.h"
 
 namespace components = openblack::ecs::components;
@@ -26,4 +27,5 @@ void RegisterFields_Components_n(entt::meta_ctx& context);
 void openblack::ecs::reflection::RegisterFields_Components_n(entt::meta_ctx& context)
 {
 	Reflect<components::NeverFades> {context};
+	Reflect<components::NoLandShadow> {context};
 }

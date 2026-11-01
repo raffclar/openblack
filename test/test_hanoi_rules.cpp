@@ -176,6 +176,15 @@ TEST(HanoiRules, TheCountOfCalmTurns)
 	EXPECT_EQ(hanoi::CalmAfterCalmTurn(-5), -4);
 }
 
+// Of the rings that the puzzle makes at the start, only the largest casts its shadow into the land
+TEST(HanoiRules, OnlyTheLargestStartRingCastsALandShadow)
+{
+	EXPECT_TRUE(hanoi::StartRingCastsLandShadow(0));
+	EXPECT_FALSE(hanoi::StartRingCastsLandShadow(1));
+	EXPECT_FALSE(hanoi::StartRingCastsLandShadow(2));
+	EXPECT_FALSE(hanoi::StartRingCastsLandShadow(3));
+}
+
 // A save keeps the puzzle, its links to its pieces and the links between the pieces
 TEST(HanoiRules, ASaveKeepsThePuzzleAndItsPieces)
 {

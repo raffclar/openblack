@@ -18,6 +18,7 @@
 #include "ECS/Components/MapCellResident.h"
 #include "ECS/Components/Mesh.h"
 #include "ECS/Components/Mobile.h"
+#include "ECS/Components/NoLandShadow.h"
 #include "ECS/Components/Physics.h"
 #include "ECS/Components/Pot.h"
 #include "ECS/Components/Temple.h"
@@ -234,4 +235,18 @@ TEST(LandShadowCasters, TheCountKeepsCountingAfterTheRegistryIsEmptied)
 	registry.Assign<components::Mesh>(again);
 	registry.Assign<components::Transform>(again);
 	EXPECT_GT(LandShadowCastersVersion(registry), emptied);
+}
+
+TEST(LandShadowCasters, AThingWithNoLandShadowCastsNothing)
+{
+	Registry registry;
+	const auto ring = registry.Create();
+	registry.Assign<components::MobileObject>(ring);
+	registry.Assign<components::Mesh>(ring);
+	registry.Assign<components::Transform>(ring);
+	EXPECT_EQ(LandShadowOf(registry, ring), LandShadow::Shape);
+	const auto version = LandShadowCastersVersion(registry);
+	registry.Assign<components::NoLandShadow>(ring);
+	EXPECT_EQ(LandShadowOf(registry, ring), LandShadow::None);
+	EXPECT_GT(LandShadowCastersVersion(registry), version);
 }

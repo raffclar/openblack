@@ -78,6 +78,13 @@ struct Steps
 /// The places of the four rings at the start: stacked on the first base, the largest at the bottom
 [[nodiscard]] std::array<map_coords::MapCoords, k_Rings> StartRingPlaces(const map_coords::MapCoords& firstBase);
 
+/// Whether a ring that the puzzle makes at the start casts its shadow into the land. Only the largest ring does. The
+/// bases cast, and so does a piece that the puzzle makes again later.
+[[nodiscard]] constexpr bool StartRingCastsLandShadow(size_t ring)
+{
+	return ring == 0;
+}
+
 /// The links of the pieces, by any key that names a piece (an entity in the game, a number in a test). None is no piece.
 template <typename Key>
 struct Stacks
