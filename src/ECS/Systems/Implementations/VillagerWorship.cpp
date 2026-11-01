@@ -710,6 +710,11 @@ bool villager_worship::IsAtOrOnTheWayToWorshipSite(entt::entity villager)
 	       state == VillagerStates::ArrivesAtWorshipSiteWithSupplies;
 }
 
+bool villager_worship::IsCountedAtWorshipSite(entt::entity villager)
+{
+	return IsCountedAtWorship(villager);
+}
+
 entt::entity villager_worship::WorshipSiteOf(entt::entity villager)
 {
 	// TODO(worship): a villager of no town worships at its player's temple's site of its tribe; openblack's townless
