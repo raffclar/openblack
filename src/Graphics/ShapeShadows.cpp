@@ -13,8 +13,9 @@
 #include <cstdint>
 
 #include <algorithm>
-#include <limits>
 #include <utility>
+
+#include "Common/X87.h"
 
 namespace openblack::graphics::shape_shadows
 {
@@ -28,18 +29,6 @@ constexpr float k_ColumnsPerTexelUnit = 0.025f;
 constexpr float k_RowsPerTexelUnit = 0.0125f;
 /// The edges' columns are followed in 16.16 fixed point
 constexpr float k_FixedOne = 65536.0f;
-
-/// A number taken towards zero to a whole one, as the processor does it: one too large for 32 bits becomes the
-/// smallest there is
-int Truncate(float value)
-{
-	constexpr auto k_Limit = 2147483648.0f;
-	if (!(value > -k_Limit && value < k_Limit))
-	{
-		return std::numeric_limits<int>::min();
-	}
-	return static_cast<int>(value);
-}
 
 /// The columns where each row's covered samples start and end. Every row a triangle's edges go through is passed by one
 /// edge going down the rows and one going up, so both are written for each row filled, and needn't be cleared first.
@@ -82,8 +71,8 @@ void Edge(Edges& edges, int fromRow, float fromColumn, int toRow, float toColumn
 	}
 	edges.first = std::min(edges.first, fromRow);
 	edges.last = std::max(edges.last, toRow);
-	const auto step = static_cast<uint32_t>(Truncate(slope * k_FixedOne));
-	auto column = static_cast<uint32_t>(Truncate(fromColumn * k_FixedOne));
+	const auto step = static_cast<uint32_t>(x87::ToInteger(slope * k_FixedOne));
+	auto column = static_cast<uint32_t>(x87::ToInteger(fromColumn * k_FixedOne));
 	for (int row = fromRow; row < toRow; ++row)
 	{
 		(*side)[static_cast<size_t>(row)] = static_cast<int32_t>(column) >> 16;
@@ -124,7 +113,7 @@ void Fill(tree_shadows::Coverage& coverage, const std::array<Sample, 3>& corners
 {
 	const int columns = 4 * side;
 	std::array<int, 3> rows {};
-	std::ranges::transform(corners, rows.begin(), [](const Sample& corner) { return Truncate(corner.row); });
+	std::ranges::transform(corners, rows.begin(), [](const Sample& corner) { return x87::ToInteger(corner.row); });
 	const auto turn = [&rows, &corners](size_t a, size_t b, size_t c) {
 		return static_cast<float>(rows[a] - rows[c]) * (corners[b].column - corners[c].column);
 	};

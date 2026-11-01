@@ -1646,7 +1646,7 @@ TEST(VanillaSceneryImport, TheLineOfAFlockAfterALoadFollowsThePlaces)
 // of the storage pit.
 TEST(VanillaWorldImport, ReadsThePilesOfAStoragePit)
 {
-	constexpr auto k_PotRow = [](PotInfo row) { return world_import::k_FirstPotRowNumber - static_cast<uint32_t>(row); };
+	static constexpr auto k_PotRow = [](PotInfo row) { return world_import::k_FirstPotRowNumber - static_cast<uint32_t>(row); };
 	auto fake = GameAtTurn(100);
 	// 2: the town, 3: its storage pit, 4: the food pile of the pit, 5: a wood pile of the pit, 6: a pile of building 7
 	fake.Record(VanillaType::Town).Position(0, 0).Value<uint32_t>("id", 0).Refs("abodes", {3});

@@ -240,6 +240,10 @@ public:
 	/// The player asks with the mouse or a key to go into the temple at the room. The game takes a picture of the
 	/// frame that it draws now, for the pictures of the saved games. The player goes in after that frame.
 	virtual void ActivateAfterFrame(TempleRoom room) = 0;
+	/// The hand of the player taps the entrance of their temple in a game turn. The world part of the entry occurs in
+	/// that turn: the help stops, the advisors go home, the temple keeps the dialogue of a script, and the world stops,
+	/// so that no more turns play. The player goes into the temple at the room after the frame that the game draws now.
+	virtual void TapIntoTemple(TempleRoom room) = 0;
 	/// The frame is drawn: the player goes into the temple if they asked to during the frame
 	virtual void FrameDrawn() = 0;
 	/// The player goes into the temple when the frame that is drawn now ends

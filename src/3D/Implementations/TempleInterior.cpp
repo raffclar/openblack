@@ -1901,6 +1901,41 @@ void TempleInterior::ActivateAfterFrame(TempleRoom room)
 	_activateAfterFrame = room;
 }
 
+void TempleInterior::TapIntoTemple(TempleRoom room)
+{
+	ActivateAfterFrame(room);
+	if (!_activateAfterFrame.has_value() || _worldPutAway)
+	{
+		return;
+	}
+	// The tap's turn puts the world away and stops it, so no more turns play before the player goes in
+	PutAwayWorld();
+	_worldPutAway = true;
+	if (Locator::time::has_value())
+	{
+		Locator::time::value().SetHeld(true);
+	}
+}
+
+void TempleInterior::PutAwayWorld()
+{
+	// The player of this computer goes into the temple with the leash of their creature held: a command takes the leash
+	// off in a later game turn, on every computer
+	if (Locator::leashSystem::has_value() && Locator::playerCommandSystem::has_value())
+	{
+		const auto player =
+		    Locator::handSystem::has_value() ? Locator::handSystem::value().GetOwnPlayer() : PlayerNames::PLAYER_ONE;
+		if (Locator::leashSystem::value().ComesOffAtTemple(player))
+		{
+			Locator::playerCommandSystem::value().Submit(player_commands::TempleLeashOff {});
+		}
+	}
+	// The help of the world stops. The temple keeps the dialogue of a script until the player leaves.
+	temple_help::GameScripts scripts;
+	temple_help::GameDialogue dialogue;
+	_heldDialogue = temple_help::PutAwayDialogue(scripts, dialogue);
+}
+
 void TempleInterior::FrameDrawn()
 {
 	if (const auto room = std::exchange(_activateAfterFrame, std::nullopt); room.has_value())
@@ -1915,27 +1950,16 @@ void TempleInterior::Activate(TempleRoom room)
 	{
 		return;
 	}
-	// The player cannot enter the temple directly into a room that is not open
-	if (!IsRoomAvailable(room))
+	// The player cannot enter the temple directly into a room that is not open. The tap's turn found the room open and
+	// stopped the world.
+	if (!_worldPutAway && !IsRoomAvailable(room))
 	{
 		return;
 	}
-	// The player of this computer goes into the temple with the leash of their creature held: a command takes the leash
-	// off in a later game turn, on every computer
-	if (Locator::leashSystem::has_value() && Locator::playerCommandSystem::has_value())
+	// A tap on the entrance put the world away in its turn. The keys and the mouse put it away now.
+	if (!std::exchange(_worldPutAway, false))
 	{
-		const auto player =
-		    Locator::handSystem::has_value() ? Locator::handSystem::value().GetOwnPlayer() : PlayerNames::PLAYER_ONE;
-		if (Locator::leashSystem::value().ComesOffAtTemple(player))
-		{
-			Locator::playerCommandSystem::value().Submit(player_commands::TempleLeashOff {});
-		}
-	}
-	// The help of the world stops. The temple keeps the dialogue of a script until the player leaves.
-	{
-		temple_help::GameScripts scripts;
-		temple_help::GameDialogue dialogue;
-		_heldDialogue = temple_help::PutAwayDialogue(scripts, dialogue);
+		PutAwayWorld();
 	}
 
 	auto& config = Locator::config::value();

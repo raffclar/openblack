@@ -2858,6 +2858,31 @@ std::string Runner::GivePlayerCommand(const Command& command)
 		return TakeIconSeed(command);
 	case Kind::TapSiteIcon:
 		return TapSiteIcon(command);
+	case Kind::TapTempleEntrance:
+	{
+		if (!Locator::playerCommandSystem::has_value())
+		{
+			return "no hand";
+		}
+		auto& registry = Locator::entitiesRegistry::value();
+		std::optional<entt::entity> found;
+		registry.Each<const ecs::components::TempleEntrance>(
+		    [&registry, &found, &command](entt::entity entity, const ecs::components::TempleEntrance& entrance) {
+			    const auto* temple =
+			        registry.Valid(entrance.temple) ? registry.TryGet<const ecs::components::Temple>(entrance.temple) : nullptr;
+			    if (temple != nullptr && temple->owner == command.player)
+			    {
+				    found = entity;
+			    }
+		    });
+		if (!found.has_value())
+		{
+			return "no temple";
+		}
+		// The same command as the hand sends when the Action button taps the entrance
+		Locator::playerCommandSystem::value().Submit(player_commands::HandTap {.object = *found});
+		return "tapped";
+	}
 	case Kind::PressPlainKey:
 	{
 		// The key goes down and comes up again, each as an event of the window
@@ -3598,11 +3623,12 @@ void Runner::Give(const Command& command)
 	    command.kind == Kind::BuildWorshipSites || command.kind == Kind::PressPlainKey || command.kind == Kind::PlainKeyDown ||
 	    command.kind == Kind::PlainKeyRepeat || command.kind == Kind::PlainKeyUp ||
 	    command.kind == Kind::ChargeIconWithSeedHeld || command.kind == Kind::TakeIconSeed ||
-	    command.kind == Kind::TapSiteIcon || command.kind == Kind::FinishBuilding || command.kind == Kind::ScaffoldStartsSite ||
-	    command.kind == Kind::DestroyScaffoldSite || command.kind == Kind::FillBuiltAmount || command.kind == Kind::PauseGame ||
-	    command.kind == Kind::SetGameSpeed || command.kind == Kind::RemoveTeleportStone || command.kind == Kind::MakeDance ||
-	    command.kind == Kind::OtherGodHand || command.kind == Kind::OwnGod || command.kind == Kind::BringCreature ||
-	    command.kind == Kind::ComputerPersonality || command.kind == Kind::ComputerUntaughtSends)
+	    command.kind == Kind::TapSiteIcon || command.kind == Kind::TapTempleEntrance || command.kind == Kind::FinishBuilding ||
+	    command.kind == Kind::ScaffoldStartsSite || command.kind == Kind::DestroyScaffoldSite ||
+	    command.kind == Kind::FillBuiltAmount || command.kind == Kind::PauseGame || command.kind == Kind::SetGameSpeed ||
+	    command.kind == Kind::RemoveTeleportStone || command.kind == Kind::MakeDance || command.kind == Kind::OtherGodHand ||
+	    command.kind == Kind::OwnGod || command.kind == Kind::BringCreature || command.kind == Kind::ComputerPersonality ||
+	    command.kind == Kind::ComputerUntaughtSends)
 	{
 		const auto result = GivePlayerCommand(command);
 		Log(fmt::format("{:.1f}s: {}{}{}", _seconds, Name(command.kind), result.empty() ? "" : ": ", result));
@@ -4491,6 +4517,7 @@ void Runner::Give(const Command& command)
 	case Kind::ChargeIconWithSeedHeld:
 	case Kind::TakeIconSeed:
 	case Kind::TapSiteIcon:
+	case Kind::TapTempleEntrance:
 	case Kind::RemoveObject:
 	case Kind::FinishBuilding:
 	case Kind::FillBuiltAmount:

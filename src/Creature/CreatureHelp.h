@@ -220,6 +220,10 @@ struct Memory
 /// The creature moved to a stage: the help clears the value that it keeps for that
 void MovedToStage(Memory& memory);
 
+/// A script tells the help to forget every message of each kind about the creature: those that wait and those told,
+/// so that a message told a short time ago can be told again. The prompts and the hand watch stay.
+void ForgetMessages(Memory& memory);
+
 /// Whole seconds between two game turns
 [[nodiscard]] uint32_t WholeSeconds(uint32_t now, uint32_t then, uint32_t turnsPerSecond);
 

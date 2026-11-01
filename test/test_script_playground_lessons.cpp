@@ -18,6 +18,7 @@
 #include "3D/MapCoords.h"
 #include "Common/GUtilsAngle.h"
 #include "Input/LandGrip.h"
+#include "Input/MouseWheel.h"
 #include "ScriptHeaders/ScriptLessonNatives.h"
 
 using namespace openblack::script::lesson_natives;
@@ -81,6 +82,23 @@ TEST(PlaygroundLessonNatives, TheMouseHasAWheelWhenTheSystemSaysSoOrTheWheelTurn
 	EXPECT_FALSE(MouseHasWheel(false, false));
 	EXPECT_TRUE(MouseHasWheel(true, false));
 	EXPECT_TRUE(MouseHasWheel(false, true));
+}
+
+TEST(PlaygroundLessonNatives, WindowsKeepsTheAnswerOfItsOwnQueryForTheWheel)
+{
+	using openblack::platform_mouse::System;
+	using openblack::platform_mouse::SystemSaysWheelFor;
+	EXPECT_TRUE(SystemSaysWheelFor(System::Windows, true));
+	EXPECT_FALSE(SystemSaysWheelFor(System::Windows, false));
+}
+
+TEST(PlaygroundLessonNatives, OtherSystemsSayTheMouseHasAWheelBeforeItTurns)
+{
+	using openblack::platform_mouse::System;
+	using openblack::platform_mouse::SystemSaysWheelFor;
+	EXPECT_TRUE(SystemSaysWheelFor(System::Other, false));
+	EXPECT_TRUE(SystemSaysWheelFor(System::Other, true));
+	EXPECT_TRUE(MouseHasWheel(SystemSaysWheelFor(System::Other, false), false));
 }
 
 TEST(PlaygroundLessonNatives, TheCursorIsWithinRotationWhileACameraIconShowsOrIsOffered)
@@ -163,9 +181,9 @@ TEST(PlaygroundLessonNatives, ACreaturesLookIsMeasuredInPartsOfAHalfTurn)
 	EXPECT_EQ(CreatureLookParts(-60.0f), -6);
 	// More than a full turn gives no parts
 	EXPECT_EQ(CreatureLookParts(400.0f), 0);
-	// No angle, or not a number: the value for out of range
-	EXPECT_EQ(CreatureLookParts(0.0f), std::numeric_limits<int32_t>::min());
-	EXPECT_EQ(CreatureLookParts(std::numeric_limits<float>::quiet_NaN()), std::numeric_limits<int32_t>::min());
+	// No angle (an infinity) or not a number: the game's conversion gives 0, so no parts
+	EXPECT_EQ(CreatureLookParts(0.0f), 0);
+	EXPECT_EQ(CreatureLookParts(std::numeric_limits<float>::quiet_NaN()), 0);
 }
 
 TEST(PlaygroundLessonNatives, ACreatureSeesTheCameraWhenItLooksNearTheDirectionToIt)
@@ -202,4 +220,5 @@ TEST(PlaygroundLessonNatives, ACreatureWithNoPartsOfLookSeesNothing)
 	// The game divides by 0 here; openblack sees nothing
 	const auto creature = map_coords::FromMetres({100.0f, 100.0f});
 	EXPECT_FALSE(CreatureSeesCamera(creature, creature, 0, 400.0f));
+	EXPECT_FALSE(CreatureSeesCamera(creature, creature, 0, 0.0f));
 }

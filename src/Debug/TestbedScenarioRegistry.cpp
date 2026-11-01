@@ -33,6 +33,7 @@
 #include "Creature/CreatureObjectActions.h"
 #include "ECS/IncomingMessageRules.h"
 #include "Input/BindableActions.h"
+#include "Input/PlatformKeys.h"
 #include "Particles/ParticleTypes.h"
 #include "ScriptHeaders/ScriptEnums.h"
 #include "Sound/GameMusic.h"
@@ -794,9 +795,9 @@ void AddNeeds(std::vector<Scenario>& all)
 	                   "stands in front of it, with a cuddly toy at the middle of the creche. The creche, its turn and "
 	                   "the toy are as on the first land. A pig stands to the side.",
 	    .expected = "It chooses to stroke the toy. It walks to the edge of the creche, out of reach of the toy, and stays "
-	                "there. Its walk ends at once on each turn. When it has not moved for a span of 5 seconds, it gives up the "
-	                "toy, and then it eats the pig. The game does not give up and the creature starves until it faints "
-	                "(vanilla-bugs row 389, deviation 90).",
+	                "there. Its walk ends at once on each turn and starts again on the next turn. It does not give up the "
+	                "toy and does not eat the pig. As in the game, it stays until it faints from hunger "
+	                "(vanilla-bugs row 389).",
 	    .framing = {.shot = Shot::Overview, .include = {{-20.0f, -60.0f}, {20.0f, 10.0f}}},
 	    .creatures = {CreatureSetup {
 	        .species = CreatureType::Tiger,
@@ -1811,6 +1812,39 @@ void AddRivalCreatureLoads(std::vector<Scenario>& all)
 	});
 }
 
+/// The end of the third land's prison: the land's own set-up and prison scripts run with the developer switch that
+/// makes every prison statue count as stopped, so the creature is freed at once
+void AddThirdLandPrison(std::vector<Scenario>& all)
+{
+	using Argument = ScriptArgument;
+	all.push_back({
+	    .id = "story.l3_creature_freed",
+	    .name = "Story: the creature is freed from the prison of the third land",
+	    .facet = Facet::Story,
+	    .description = "The third land loads with its own scripts and sky, and the player's Tiger stands on it. Its set-up "
+	                   "script runs, then its prison script with the developer switch on, so the three statues count as "
+	                   "stopped at their first check and the scene of the freed creature plays.",
+	    .expected = "The Tiger is put on the prison spot. The statues do not sink (the switch skips their scenes). Lethys "
+	                "speaks, both advisors speak about the freed creature, and the Tiger looks at the camera, walks down "
+	                "the hill and waves. After each statue's scene the help forgets every message about the creature, so "
+	                "no creature message from before the scene comes up when the scene ends.",
+	    .environment = {.land = Land::Story, .storyLand = "Land3.txt", .dispenserGrid = false},
+	    .framing = {.shot = Shot::Overview, .include = {{-20.0f, -20.0f}, {20.0f, 20.0f}}},
+	    .creatures = {{.label = "player's tiger",
+	                   .species = CreatureType::Tiger,
+	                   .phase = 3,
+	                   .needs = {.energy = 1.0f, .exhaustion = 0.0f, .dehydration = 0.0f, .poo = 0.0f, .life = 1.0f}}},
+	    .commands = {{.kind = Kind::RunScript,
+	                  .delaySeconds = 0.5f,
+	                  .script = "SetupLand3",
+	                  .scriptGlobals = {{"MyCreature", {.kind = Argument::Kind::Creature, .index = 0}}}},
+	                 {.kind = Kind::RunScript,
+	                  .delaySeconds = 1.0f,
+	                  .script = "FreeTheCreature",
+	                  .scriptGlobals = {{"GlobalDebug", {.number = 1.0f}}}}},
+	});
+}
+
 /// The Pied Piper of the first land. The game's script runs at the same map positions as on the first land, with the
 /// Norse town, the creche and the piper's cave made there. The scenario clicks the creche, and the round starts.
 void AddPiedPiperRound(std::vector<Scenario>& all)
@@ -2496,6 +2530,7 @@ CREATE_CITADEL("0.0,0.0", 0, "PLAYER_ONE", 4254, 1000)
 	AddOgreLair(all);
 	AddGuideStorm(all);
 	AddRivalCreatureLoads(all);
+	AddThirdLandPrison(all);
 	AddSingingStones(all);
 	AddBeachTemplePuzzle(all);
 	AddTreePuzzle(all);
@@ -5090,6 +5125,26 @@ void AddAudio(std::vector<Scenario>& all)
 	});
 
 	all.push_back({
+	    .id = "interface.editor_key",
+	    .name = "The editor key and F2",
+	    .facet = Facet::Interface,
+	    .description = "After a second the scenario presses the editor key (F10, or End on the web). One second later it "
+	                   "presses the editor key again, and one second after that it presses F2, as the player does.",
+	    .expected = "The first press opens the editor and the second press closes it. F2 does not open the editor. F2 "
+	                "pauses the game, and the white box asks \"Are you sure you want to go to the Gods' Playground?\". "
+	                "Click No to close the box.",
+	    .environment = {.dispenserGrid = false},
+	    .framing = {.shot = Shot::Testbed},
+	    .commands = {{.kind = Kind::PressPlainKey,
+	                  .delaySeconds = 1.0f,
+	                  .value = static_cast<size_t>(input::platform_keys::EditorToggleKey(k_Platform))},
+	                 {.kind = Kind::PressPlainKey,
+	                  .delaySeconds = 1.0f,
+	                  .value = static_cast<size_t>(input::platform_keys::EditorToggleKey(k_Platform))},
+	                 {.kind = Kind::PressPlainKey, .delaySeconds = 1.0f, .value = static_cast<size_t>(SDL_SCANCODE_F2)}},
+	});
+
+	all.push_back({
 	    .id = "interface.dialog_keys",
 	    .name = "Tab, the arrows and Return in the menu",
 	    .facet = Facet::Interface,
@@ -5291,6 +5346,24 @@ void AddAudio(std::vector<Scenario>& all)
 	                 {.kind = Kind::RunText, .delaySeconds = 0.5f, .value = 5128},
 	                 {.kind = Kind::RunText, .delaySeconds = 1.0f, .value = 5129},
 	                 {.kind = Kind::EnterTemple, .delaySeconds = 5.0f, .value = 3}},
+	});
+
+	all.push_back({
+	    .id = "temple.tap_entry",
+	    .name = "The hand's tap on the temple's entrance stops the world in its turn",
+	    .facet = Facet::Story,
+	    .description = "A script holds the dialogue with the cinema bars and shows two texts of the first lesson. The "
+	                   "player's temple stands in the middle of the land. Then the player's hand taps the temple's "
+	                   "entrance. Push Escape to leave the temple.",
+	    .expected = "The game turn of the tap stops the help, sends the advisors home, closes the dialogue box and stops "
+	                "the world, so no more turns play. The player goes into the temple's main room after the next drawn "
+	                "frame. When the player leaves, the box shows its last texts again.",
+	    .environment = {.temple = glm::vec2(0.0f)},
+	    .framing = {.shot = Shot::Overview},
+	    .commands = {{.kind = Kind::WideScreen, .delaySeconds = 0.5f, .value = 1},
+	                 {.kind = Kind::RunText, .delaySeconds = 0.5f, .value = 5128},
+	                 {.kind = Kind::RunText, .delaySeconds = 1.0f, .value = 5129},
+	                 {.kind = Kind::TapTempleEntrance, .delaySeconds = 5.0f}},
 	});
 
 	// The camera looks out across the north edge of the player's influence: the bottom of the screen is inside it,
@@ -13914,16 +13987,16 @@ bool testbed_scenarios::NeedsNoCreature(Command::Kind kind)
 	       kind == Kind::PlayFallingSpellFilm || kind == Kind::PlayIntroFilm || kind == Kind::SayLine ||
 	       kind == Kind::PlayGuidanceVoice || kind == Kind::ScriptRelease || kind == Kind::FillSiteIcons ||
 	       kind == Kind::ChargeIconWithSeedHeld || kind == Kind::TakeIconSeed || kind == Kind::TapSiteIcon ||
-	       kind == Kind::FinishBuilding || kind == Kind::FillBuiltAmount || kind == Kind::ScaffoldStartsSite ||
-	       kind == Kind::DestroyScaffoldSite || kind == Kind::CallNative || kind == Kind::PauseGame ||
-	       kind == Kind::SetGameSpeed || kind == Kind::RemoveTeleportStone || kind == Kind::MakeDance ||
-	       kind == Kind::OpenMultiplayerBox || kind == Kind::BuildWorshipSites || kind == Kind::PressPlainKey ||
-	       kind == Kind::PlainKeyDown || kind == Kind::PlainKeyRepeat || kind == Kind::PlainKeyUp ||
-	       kind == Kind::OtherGodHand || kind == Kind::OwnGod || kind == Kind::JoinOnline || kind == Kind::EndBox ||
-	       kind == Kind::BringCreature || kind == Kind::TattooEditorAsNetworkGame || kind == Kind::ShowDemoPing ||
-	       kind == Kind::AddIncomingMessage || kind == Kind::Chat || kind == Kind::ComputerPersonality ||
-	       kind == Kind::ComputerUntaughtSends || kind == Kind::SkirmishBox || kind == Kind::LookAtSaveGamePicture ||
-	       IsPointerCommand(kind);
+	       kind == Kind::TapTempleEntrance || kind == Kind::FinishBuilding || kind == Kind::FillBuiltAmount ||
+	       kind == Kind::ScaffoldStartsSite || kind == Kind::DestroyScaffoldSite || kind == Kind::CallNative ||
+	       kind == Kind::PauseGame || kind == Kind::SetGameSpeed || kind == Kind::RemoveTeleportStone ||
+	       kind == Kind::MakeDance || kind == Kind::OpenMultiplayerBox || kind == Kind::BuildWorshipSites ||
+	       kind == Kind::PressPlainKey || kind == Kind::PlainKeyDown || kind == Kind::PlainKeyRepeat ||
+	       kind == Kind::PlainKeyUp || kind == Kind::OtherGodHand || kind == Kind::OwnGod || kind == Kind::JoinOnline ||
+	       kind == Kind::EndBox || kind == Kind::BringCreature || kind == Kind::TattooEditorAsNetworkGame ||
+	       kind == Kind::ShowDemoPing || kind == Kind::AddIncomingMessage || kind == Kind::Chat ||
+	       kind == Kind::ComputerPersonality || kind == Kind::ComputerUntaughtSends || kind == Kind::SkirmishBox ||
+	       kind == Kind::LookAtSaveGamePicture || IsPointerCommand(kind);
 }
 
 std::string_view testbed_scenarios::Name(Facet facet)
@@ -13951,7 +14024,7 @@ std::string_view testbed_scenarios::Name(Shot shot)
 
 std::string_view testbed_scenarios::Name(Command::Kind kind)
 {
-	constexpr std::array<std::string_view, 209> k_Names {
+	constexpr std::array<std::string_view, 210> k_Names {
 	    "walk to",
 	    "run to",
 	    "follow",
@@ -14161,6 +14234,7 @@ std::string_view testbed_scenarios::Name(Command::Kind kind)
 	    "take a seed from its icon",
 	    "tap a worship site icon",
 	    "change the body's look",
+	    "tap the temple's entrance",
 	};
 	return k_Names.at(static_cast<size_t>(kind));
 }

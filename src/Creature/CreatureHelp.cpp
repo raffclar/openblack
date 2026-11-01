@@ -206,6 +206,11 @@ void creature_help::MovedToStage(Memory& memory)
 	memory.clearedAtStage = 0;
 }
 
+void creature_help::ForgetMessages(Memory& memory)
+{
+	std::ranges::for_each(memory.entries, [](auto& entries) { entries.clear(); });
+}
+
 uint32_t creature_help::WholeSeconds(uint32_t now, uint32_t then, uint32_t turnsPerSecond)
 {
 	return turnsPerSecond == 0 ? 0 : (now - then) / turnsPerSecond;

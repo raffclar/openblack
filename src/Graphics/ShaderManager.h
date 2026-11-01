@@ -9,11 +9,13 @@
 
 #pragma once
 
+#include <functional>
 #include <map>
 #include <memory>
 #include <optional>
 #include <span>
 #include <string>
+#include <string_view>
 #include <utility>
 #include <vector>
 
@@ -52,7 +54,7 @@ public:
 	~ShaderManager();
 
 	void LoadShaders();
-	[[nodiscard]] const ShaderProgram* GetShader(const std::string& name) const;
+	[[nodiscard]] const ShaderProgram* GetShader(std::string_view name) const;
 	/// Calls `visit(program)` for each program loaded
 	template <typename Visit>
 	void ForEachProgram(const Visit& visit) const
@@ -86,7 +88,8 @@ public:
 	[[nodiscard]] static std::vector<std::pair<std::string, std::vector<shader_samplers::Sampler>>> ProgramSamplers();
 
 private:
-	using ShaderMap = std::map<std::string, const ShaderProgram*>;
+	/// By name. A name is found with no copy of it into a string.
+	using ShaderMap = std::map<std::string, const ShaderProgram*, std::less<>>;
 
 	ShaderMap _shaderPrograms;
 	/// The textures bound to the samplers draws leave unset, shared by every program

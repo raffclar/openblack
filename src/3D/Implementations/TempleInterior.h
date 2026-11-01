@@ -121,6 +121,7 @@ public:
 	void Activate() override { Activate(TempleRoom::Main); }
 	void Activate(TempleRoom room) override;
 	void ActivateAfterFrame(TempleRoom room) override;
+	void TapIntoTemple(TempleRoom room) override;
 	void FrameDrawn() override;
 	[[nodiscard]] bool GoesInAfterFrame() const override { return _activateAfterFrame.has_value(); }
 	void EnterLockedRoom(TempleRoom room) override;
@@ -155,6 +156,9 @@ private:
 	void ApplyLens() const;
 	/// The temple gives back the dialogue that it kept when the player entered
 	void BringBackDialogue();
+	/// The world part of the entry: the leash of the creature comes off, the help stops and the temple keeps the
+	/// dialogue of a script
+	void PutAwayWorld();
 
 	bool _active {false};
 	/// True while a warm-up draws a visit, in which the temple draws all of its rooms
@@ -178,6 +182,8 @@ private:
 	TempleScrolls::KeptTextures _keptScrolls;
 	/// The room that the player goes into after the frame that is drawn now
 	std::optional<TempleRoom> _activateAfterFrame;
+	/// True when a tap on the entrance did the world part of the entry in its turn, before the player goes in
+	bool _worldPutAway {false};
 	/// The room the player last came into on this visit, whose help was asked for then
 	std::optional<TempleRoom> _enteredRoom;
 	bool _leaveRequested {false};

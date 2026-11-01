@@ -339,6 +339,7 @@
 #include "Help/SingAlong.h"
 #include "Help/Spirits.h"
 #include "Help/TurnCheer.h"
+#include "Input/DeveloperKeys.h"
 #include "Input/GameActionMapInterface.h"
 #include "Input/KeyBindings.h"
 #include "Input/KeyRebinding.h"
@@ -1228,14 +1229,21 @@ bool Game::ProcessEvents(const SDL_Event& event) noexcept
 			}
 			return false;
 		case SDLK_f:
-			if (Locator::config::value().background)
+			// A key that the player bound to an action of the game stays the game's
+			if (Locator::config::value().background ||
+			    input::developer_keys::GameUsesKey(Locator::gameActionSystem::value().GetKeyBindings(), k_Platform,
+			                                       event.key.keysym.scancode, event.key.keysym.mod))
 			{
 				break;
 			}
 			window.SetDisplayMode(windowing::DisplayMode::Fullscreen);
 			break;
 		case SDLK_p:
-			Locator::time::value().SetPlayerPause(!IsPaused());
+			// The game pauses only with no Shift, Ctrl or Alt held
+			if ((event.key.keysym.mod & (KMOD_SHIFT | KMOD_CTRL | KMOD_ALT)) == 0)
+			{
+				Locator::time::value().SetPlayerPause(!IsPaused());
+			}
 			break;
 		default:
 		{
@@ -1248,10 +1256,13 @@ bool Game::ProcessEvents(const SDL_Event& event) noexcept
 			    .alt = (mod & KMOD_ALT) != 0,
 			};
 			// F1 is the game's Help key, so the renderer's statistics are on another key. It is a debug key: a build
-			// without the developer tools, and a live network game, ignore it.
+			// without the developer tools, and a live network game, ignore it. A key that the player bound to an
+			// action of the game stays the game's.
 			if (key == keys::RendererStatisticsKey(k_Platform))
 			{
-				if (developer_tools::Allowed(developer_tools::Action::DebugKey))
+				if (developer_tools::Allowed(developer_tools::Action::DebugKey) &&
+				    !input::developer_keys::GameUsesKey(Locator::gameActionSystem::value().GetKeyBindings(), k_Platform,
+				                                        event.key.keysym.scancode, mod))
 				{
 					Locator::rendererInterface::value().SetDebug(!Locator::rendererInterface::value().GetDebug());
 				}

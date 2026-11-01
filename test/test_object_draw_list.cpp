@@ -9,6 +9,7 @@
 
 #include <cmath>
 
+#include <algorithm>
 #include <array>
 #include <map>
 #include <vector>
@@ -426,4 +427,68 @@ TEST(ObjectDrawList, AFrameWithoutTheLandKeepsTheListAndTheClock)
 	const auto back = clock.Next(0, eye, focus, false);
 	EXPECT_FALSE(back.rebuilt);
 	EXPECT_FALSE(back.drawAll);
+}
+
+namespace
+{
+/// The test of a block against the view, with the product of the matrix and each corner made one corner at a time
+bool BlockInViewCornerByCorner(const glm::mat4& viewProjection, float nearPlane, const Block& block)
+{
+	const float height = static_cast<float>(block.highestAltitude) * k_AltitudeUnit;
+	const float half = height * 0.5f;
+	const float bottom = block.reflected ? -height : half - half;
+	const float top = block.reflected ? height : half + half;
+	std::array<uint32_t, 5> sides {};
+	for (uint32_t i = 0; i < 8; ++i)
+	{
+		const glm::vec3 corner {block.corner.x + ((i & 1u) != 0 ? k_BlockSize : 0.0f), (i & 2u) != 0 ? top : bottom,
+		                        block.corner.y + ((i & 4u) != 0 ? k_BlockSize : 0.0f)};
+		const auto clip = viewProjection * glm::vec4(corner, 1.0f);
+		const uint32_t bit = 1u << i;
+		sides[0] |= clip.w < nearPlane ? bit : 0u;
+		sides[1] |= clip.x > clip.w ? bit : 0u;
+		sides[2] |= clip.x < -clip.w && !(clip.x > clip.w) ? bit : 0u;
+		sides[3] |= clip.y > clip.w ? bit : 0u;
+		sides[4] |= clip.y < -clip.w && !(clip.y > clip.w) ? bit : 0u;
+	}
+	return std::ranges::none_of(sides, [](uint32_t side) { return side == 0xffu; });
+}
+} // namespace
+
+TEST(ObjectDrawList, TheBlockTestGivesTheSameAnswerAsATestOfEachCornerInTurn)
+{
+	const auto projection = glm::perspectiveLH_NO(2.0f * std::atan(0.5f), 1.6f, 1.0f, 5000.0f);
+	size_t seen = 0;
+	size_t compared = 0;
+	for (int view = 0; view < 24; ++view)
+	{
+		const float angle = static_cast<float>(view) * 0.2618f;
+		const glm::vec3 eye {2560.0f + 900.0f * std::cos(angle), 150.0f + 40.0f * static_cast<float>(view % 5),
+		                     2560.0f + 900.0f * std::sin(angle)};
+		const glm::vec3 at {2560.0f + 300.0f * std::sin(angle * 3.0f), 0.0f, 2560.0f + 300.0f * std::cos(angle * 2.0f)};
+		const auto viewProjection = projection * glm::lookAtLH(eye, at, glm::vec3(0.0f, 1.0f, 0.0f));
+		for (int x = 0; x < 32; ++x)
+		{
+			for (int z = 0; z < 32; ++z)
+			{
+				for (const uint8_t altitude : {uint8_t {0}, uint8_t {37}, uint8_t {128}, uint8_t {255}})
+				{
+					for (const bool reflected : {false, true})
+					{
+						const Block block {.corner = {static_cast<float>(x) * k_BlockSize, static_cast<float>(z) * k_BlockSize},
+						                   .highestAltitude = altitude,
+						                   .reflected = reflected};
+						const bool inView = BlockInView(viewProjection, 1.0f, block);
+						ASSERT_EQ(inView, BlockInViewCornerByCorner(viewProjection, 1.0f, block))
+						    << "view " << view << " block " << x << "," << z;
+						seen += inView ? 1 : 0;
+						++compared;
+					}
+				}
+			}
+		}
+	}
+	// Both answers come up many times
+	EXPECT_GT(seen, compared / 20);
+	EXPECT_LT(seen, compared - compared / 20);
 }

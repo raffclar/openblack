@@ -2283,3 +2283,12 @@ openblack_setup_and_add_test(
 )
 openblack_setup_and_add_test(test_editor_history test_editor_history.cpp)
 openblack_setup_and_add_test(test_lan_discovery online/test_lan_discovery.cpp)
+openblack_setup_and_add_test(test_float_to_integer test_float_to_integer.cpp)
+openblack_setup_and_add_test(
+  test_oracle_ftol_portable oracle/test_oracle_ftol_portable.cpp
+)
+openblack_setup_and_add_test(test_radix_sort test_radix_sort.cpp)
+openblack_setup_and_add_test(test_creature_approach_walk test_creature_approach_walk.cpp)
+openblack_setup_and_add_test(test_lhvm_start_at lhvm/test_lhvm_start_at.cpp)
+target_link_libraries(test_lhvm_start_at PRIVATE ScriptLibrary)
+openblack_setup_and_add_test(test_developer_keys input/test_developer_keys.cpp)
