@@ -754,12 +754,19 @@ bool openblack::particles::ShareParentDrawOffset(Atom& atom)
 	return true;
 }
 
+float Effect::DrawnAlpha(const Atom& atom, float fraction) const
+{
+	const auto& a = atom.previous;
+	const auto& b = atom.current;
+	return (a.alpha + (b.alpha - a.alpha) * fraction) * _globalAlpha / 255.0f;
+}
+
 std::optional<Effect::DrawAtom> Effect::Interpolate(const Atom& atom, float t, bool interpolated) const
 {
 	const float k = interpolated ? std::clamp(t, 0.0f, 1.0f) : 1.0f;
 	const auto& a = atom.previous;
 	const auto& b = atom.current;
-	const float alpha = (a.alpha + (b.alpha - a.alpha) * k) * _globalAlpha / 255.0f;
+	const float alpha = DrawnAlpha(atom, k);
 	if (!IsDrawn(atom))
 	{
 		return std::nullopt;
@@ -800,30 +807,37 @@ void Effect::WalkCollection(const Collection& collection, float t, DrawWalk& out
 {
 	// The newest atom first, as the game keeps its lists
 	const Creator* chainCreator = nullptr;
+	const float fraction = collection.interpolated ? std::clamp(t, 0.0f, 1.0f) : 1.0f;
+	// Only an atom that the walk keeps gets all its drawn values. The joints of a ribbon get them in the second pass.
+	const auto keep = [&](const Atom& atom) {
+		if (const auto drawn = Interpolate(atom, t, collection.interpolated))
+		{
+			out.steps.push_back({.chain = false, .index = static_cast<uint32_t>(out.atoms.size())});
+			out.atoms.push_back(*drawn);
+		}
+	};
 	for (const auto& atom : std::ranges::reverse_view(collection.atoms))
 	{
-		const auto drawn = Interpolate(*atom, t, collection.interpolated);
-		if (!drawn.has_value())
+		if (!IsDrawn(*atom))
 		{
 			continue;
 		}
 		// An atom that lays a shell over an object's model, or sends up a shower of sparks from it, is drawn as that,
 		// whatever its creator
-		if (drawn->objectGlow.has_value() || drawn->shower != nullptr)
+		if (atom->objectGlow.has_value() || atom->shower != nullptr)
 		{
-			out.steps.push_back({.chain = false, .index = static_cast<uint32_t>(out.atoms.size())});
-			out.atoms.push_back(*drawn);
+			keep(*atom);
 			continue;
 		}
-		const auto kind = drawn->creator->kind;
+		const auto kind = atom->creator->kind;
 		if (kind == Creator::Kind::Chain)
 		{
-			chainCreator = drawn->creator;
+			chainCreator = atom->creator;
 		}
-		else if (kind != Creator::Kind::Point && kind != Creator::Kind::Other && drawn->alpha >= k_MinimumDrawnAlpha)
+		else if (kind != Creator::Kind::Point && kind != Creator::Kind::Other &&
+		         DrawnAlpha(*atom, fraction) >= k_MinimumDrawnAlpha)
 		{
-			out.steps.push_back({.chain = false, .index = static_cast<uint32_t>(out.atoms.size())});
-			out.atoms.push_back(*drawn);
+			keep(*atom);
 		}
 	}
 	// Then the ribbon through its joints, from the first made

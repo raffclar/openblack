@@ -305,6 +305,47 @@ struct ComponentLeaveOut
 	return std::ranges::any_of(storages, [entity](const entt::sparse_set* storage) { return storage->contains(entity); });
 }
 
+/// The entity numbers that a row marker of the hash has, one flag for each number. A clear flag means that no row marker
+/// has an entity with that number. A set flag needs the test of each marker.
+struct MarkedNumbers
+{
+	std::vector<uint8_t> flags;
+
+	[[nodiscard]] bool MayHave(entt::entity entity) const
+	{
+		const auto number = static_cast<size_t>(entt::to_entity(entity));
+		return number < flags.size() && flags[number] != 0;
+	}
+};
+
+/// Finds the entity numbers of all the row markers of the parts that the hash leaves out
+[[nodiscard]] MarkedNumbers FindMarkedNumbers(std::span<const HashLeaveOut> leaveOut)
+{
+	MarkedNumbers marked;
+	for (const auto& part : leaveOut)
+	{
+		if (!part.field.empty() || part.marker == nullptr)
+		{
+			continue;
+		}
+		for (const auto entity : *part.marker)
+		{
+			// A free place of a store that keeps its places has no entity
+			if (entity == entt::tombstone)
+			{
+				continue;
+			}
+			const auto number = static_cast<size_t>(entt::to_entity(entity));
+			if (number >= marked.flags.size())
+			{
+				marked.flags.resize(number + 1, 0);
+			}
+			marked.flags[number] = 1;
+		}
+	}
+	return marked;
+}
+
 void WriteHeader(BinaryWriter& out)
 {
 	out.Write({reinterpret_cast<const uint8_t*>(k_WorldArchiveMagic.data()), k_WorldArchiveMagic.size()});
@@ -410,6 +451,19 @@ struct RowLayout
 {
 	std::shared_ptr<const HashMemo::Layout> shape;
 	std::vector<entt::entity> rows;
+	/// The entity numbers of the row markers, when the hash found them. A row whose number no marker has needs no test of
+	/// each marker.
+	const MarkedNumbers* marked {nullptr};
+
+	/// Whether the hash leaves out the row of an entity, because a row marker has the entity
+	[[nodiscard]] bool LeavesOutRow(entt::entity row) const
+	{
+		if (marked != nullptr && !marked->MayHave(row))
+		{
+			return false;
+		}
+		return AnyHas(shape->left.rowMarkers, row);
+	}
 };
 
 /// Finds how the rows of a component save and what the hash leaves out of them. The first row, when there is one, gives
@@ -557,7 +611,7 @@ struct SavedRows
 	out.Clear();
 	for (const auto row : std::span<const entt::entity>(layout.rows).subspan(first, last - first))
 	{
-		if (AnyHas(layout.shape->left.rowMarkers, row))
+		if (layout.LeavesOutRow(row))
 		{
 			continue;
 		}
@@ -733,7 +787,7 @@ struct SharedParts
 	}
 	for (const auto row : layout.rows)
 	{
-		if (AnyHas(left.rowMarkers, row))
+		if (layout.LeavesOutRow(row))
 		{
 			continue;
 		}
@@ -890,6 +944,7 @@ openblack::ecs::reflection::WorldHashes openblack::ecs::reflection::HashWorld(co
 	const auto components = RegisteredStorages(registry, context, hashes.unregistered, memo);
 	std::vector<ComponentHash> results(components.size());
 	std::vector<RowLayout> layouts(components.size());
+	const auto marked = FindMarkedNumbers(leaveOut);
 	// The memo of each component, found before the threads share the components
 	std::vector<HashMemo::Component*> memos(components.size(), nullptr);
 	if (memo != nullptr)
@@ -929,6 +984,7 @@ openblack::ecs::reflection::WorldHashes openblack::ecs::reflection::HashWorld(co
 		std::ranges::for_each(writers, &BinaryWriter::ClearForNextWorld);
 		pool->ForEach(components.size(), [&](size_t index, size_t) {
 			layouts[index] = LayoutOf(components[index], leaveOut, memos[index] != nullptr ? &memos[index]->layout : nullptr);
+			layouts[index].marked = &marked;
 		});
 		// The bytes of each component in the last hash. The threads take the largest work first, so that no thread
 		// starts a large component when the others are near the end.
@@ -1025,6 +1081,7 @@ openblack::ecs::reflection::WorldHashes openblack::ecs::reflection::HashWorld(co
 		for (size_t index = 0; index < components.size(); ++index)
 		{
 			layouts[index] = LayoutOf(components[index], leaveOut, memos[index] != nullptr ? &memos[index]->layout : nullptr);
+			layouts[index].marked = &marked;
 			results[index] = HashComponent(components[index], layouts[index], byField, visit, out, rows != nullptr,
 			                               memos[index], SharedParts {});
 		}
