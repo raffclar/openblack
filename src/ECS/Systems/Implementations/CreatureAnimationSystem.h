@@ -17,6 +17,7 @@
 #include <random>
 #include <span>
 #include <unordered_map>
+#include <vector>
 
 #include "3D/SkeletalAnimation.h"
 #include "Common/FramePace.h"
@@ -46,6 +47,7 @@ public:
 	void MorphTurn(entt::entity creature) override;
 	void ShapeBodies() override;
 	void PrepareFirstPoses() override;
+	void StartFirstBlends() override;
 	void PoseTurn(entt::entity creature) override;
 	void PoseTurns() override;
 	void HoldTurnPose(entt::entity creature) override;
@@ -81,6 +83,14 @@ private:
 	/// each blend from the store when it asks for it. A blend comes only from the species and the drawn body, so it is
 	/// the same blend that the turn makes.
 	void PrepareFirstBlends(std::span<const entt::entity> creatures);
+	/// The creatures that have no pose yet
+	[[nodiscard]] static std::vector<entt::entity> Unposed();
+	/// The blends of the first pose and the first plan that the creatures do not keep already
+	[[nodiscard]] static std::vector<creature_blends::Wanted> FirstBlendsWanted(std::span<const entt::entity> creatures);
+	/// The stores of the blends. The blends that the threads make in the background go into the stores first.
+	[[nodiscard]] creature_blends::Stores& BlendStores();
+	/// The threads that make the blends, made the first time that the system has many blends to make
+	[[nodiscard]] WorkerPool& Workers();
 
 	/// The threads that make the blends, made the first time that the system has many blends to make
 	std::unique_ptr<WorkerPool> _workers;
@@ -91,6 +101,9 @@ private:
 	creature_blends::Stores _stores;
 	/// The turns of the keyframes that the poses use, each turn made one time. Only the time that a pose takes changes.
 	skeletal_animation::KeyframeTurns _keyframeTurns;
+	/// The first blends that the threads make while the turn does the steps before the creatures. It is the last member,
+	/// so that it waits for its job before the stores and the threads go.
+	creature_blends::BackgroundPrepare _background;
 };
 
 } // namespace openblack::ecs::systems
