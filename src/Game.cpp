@@ -5961,7 +5961,7 @@ std::unique_ptr<gui::MultiplayerFrontEnd> Game::MakeMultiplayerFrontEnd()
 		// A browser cannot search the local network
 		_lanDiscovery = std::make_unique<online::NoLanDiscovery>();
 #else
-		_lanDiscovery = std::make_unique<online::UdpLanDiscovery>([] {
+		_lanDiscovery = online::MakeUdpLanDiscovery([] {
 			return std::chrono::duration_cast<std::chrono::microseconds>(std::chrono::steady_clock::now().time_since_epoch())
 			    .count();
 		});
