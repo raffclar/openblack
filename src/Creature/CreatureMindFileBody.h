@@ -15,6 +15,7 @@
 #include <string>
 #include <vector>
 
+#include "Creature/CreatureBornWith.h"
 #include "Creature/CreatureMarks.h"
 #include "Creature/CreaturePhysiology.h"
 #include "Creature/CreatureTattoo.h"
@@ -53,6 +54,11 @@ struct Body
 	/// The wounds and blood on its skin
 	std::vector<creature_marks::Mark> wounds;
 	std::vector<creature_marks::Mark> blood;
+	/// The values that its body got when the game made it (see creature_born::BornWith)
+	std::optional<creature_born::BornWith> bornWith;
+	/// The word that tells the draw to show its body with the environment map. A file older than version 22 does not
+	/// have it, and a body that loads such a file keeps its own word.
+	std::optional<uint32_t> environmentMap;
 };
 
 /// The species of a row of the game's creature tables, which start with the Giant Ape

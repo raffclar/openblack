@@ -19,6 +19,7 @@
 #include <glm/vec3.hpp>
 
 #include "CreatureRecord.h"
+#include "ECS/VanillaFootpathImport.h"
 #include "ECS/WallHugRules.h"
 #include "Enums.h"
 #include "Magic/ResourcePiles.h"
@@ -52,8 +53,8 @@ constexpr uint32_t k_FirstVillagerRowNumber = k_FirstAbodeRowNumber - static_cas
 /// True when a villager in the state is in its abode: the game does not show it, and its abode counts it as present
 [[nodiscard]] bool IsInsideHome(VillagerStates state);
 
-/// True when the import can keep the values that the file keeps for the state: a state with no values, or a state of
-/// a fisherman or of a farmer
+/// True when the import can keep the values that the file keeps for the state: a state with no values, a state of a
+/// fisherman or of a farmer, or the walk on a footpath
 [[nodiscard]] bool CanKeepStateValues(uint8_t state);
 
 /// True when the import can keep a walk in the move state of the file. It keeps a walk that stands still, takes its
@@ -282,6 +283,24 @@ struct ImportedAbode
 	std::vector<ImportedPile> piles;
 };
 
+/// The totem of a town centre
+struct ImportedTotem
+{
+	uint32_t number {0};
+	/// The number of the object of its town centre in the file
+	uint32_t townCentre {0};
+	gamesave::MapCoords position {};
+	float heading {0.0f};
+	float scale {1.0f};
+	float life {1.0f};
+	/// The share of the town at worship. The load puts the totem at this share, still.
+	float share {0.0f};
+	/// The share that the hand or a god held the totem at. The creation step after the load sets it to the share again.
+	float heldShare {0.0f};
+	/// A word that only the save and the load use
+	uint32_t word84 {0};
+};
+
 /// The power that each tribe gives a player, by tribe number
 struct ImportedTribalPower
 {
@@ -318,6 +337,8 @@ struct ImportedVillager
 	std::array<uint8_t, 3> states {};
 	uint8_t moveState {0};
 	ImportedWalk walk;
+	/// The footpath that it walks, the node that it walks to, the way and the footpath after it
+	vanilla_footpath_import::FileWalk footpathWalk;
 	/// The values of the top state and of the final state
 	std::vector<ImportedStateValue> topValues;
 	std::vector<ImportedStateValue> finalValues;
@@ -385,6 +406,8 @@ struct ImportedTowns
 	uint32_t turn {0};
 	std::vector<ImportedTown> towns;
 	std::vector<ImportedAbode> abodes;
+	/// The totems of the town centres
+	std::vector<ImportedTotem> totems;
 	std::vector<ImportedVillager> villagers;
 	/// The plans and the building sites of the towns. The lists of each town give their order.
 	std::vector<ImportedPlan> plans;

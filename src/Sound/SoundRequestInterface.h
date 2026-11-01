@@ -83,6 +83,9 @@ struct SoundEffectOptions
 	std::optional<uint32_t> pitchPercent;
 	/// Its volume, 0 to 127. The bank header's volume wins, if it has one.
 	std::optional<uint32_t> volume;
+	/// The pan of a sound that is not in the world, from the left (0) to the right (180), 90 the centre. The bank header's
+	/// pan wins, if it has one.
+	std::optional<uint32_t> pan;
 	/// Repeat loops it until it is stopped or released; Once plays it the bank header's number of times
 	PlayType playType {PlayType::Once};
 	/// What it does about the voices that play already, unless its bank header gives another play type. Empty uses

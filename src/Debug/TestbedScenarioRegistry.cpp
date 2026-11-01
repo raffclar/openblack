@@ -1760,8 +1760,8 @@ void AddBreederOffers(std::vector<Scenario>& all)
 	});
 }
 
-/// The computer gods' creatures of the third and fifth lands: the game's own scripts load each from its mind file for
-/// player two, as the two lands do. The player's Cow stands near, for the scripts that wait for it.
+/// The computer gods' creatures of the second, third and fifth lands: the game's own scripts load each from its mind
+/// file for player two, as the lands do. The player's Cow stands near, for the scripts that wait for it.
 void AddRivalCreatureLoads(std::vector<Scenario>& all)
 {
 	using Argument = ScriptArgument;
@@ -1810,6 +1810,21 @@ void AddRivalCreatureLoads(std::vector<Scenario>& all)
 	    .creatures = {cow, old},
 	    .commands = {load("SetupNemesisCreature", 2.0f)},
 	});
+	all.push_back({
+	    .id = "creature.load_khazar",
+	    .name = "The second land loads the creature of Khazar from his mind file",
+	    .facet = Facet::Story,
+	    .description = "The game's SetupKhazarCreature script runs for player two with the scale 1.2, as the second land "
+	                   "runs it.",
+	    .expected = "A Tortoise of player two appears on the ground at the place, fully grown, from the KhazarCreature "
+	                "mind file. It knows every leash: the CreatureLeash component shows four known leashes, and each "
+	                "leash word of its mind is 1. It is the creature of player two. The script makes it a friend of the "
+	                "player's Cow and gives it the alignment of the Cow.",
+	    .environment = {.dispenserGrid = false, .players = {PlayerNames::PLAYER_TWO}},
+	    .framing = {.shot = Shot::Placed, .eye = {0.0f, 25.0f, -55.0f}, .look = {10.0f, 8.0f, 0.0f}},
+	    .creatures = {cow},
+	    .commands = {load("SetupKhazarCreature", 1.2f)},
+	});
 }
 
 /// The end of the third land's prison: the land's own set-up and prison scripts run with the developer switch that
@@ -1842,6 +1857,99 @@ void AddThirdLandPrison(std::vector<Scenario>& all)
 	                  .delaySeconds = 1.0f,
 	                  .script = "FreeTheCreature",
 	                  .scriptGlobals = {{"GlobalDebug", {.number = 1.0f}}}}},
+	});
+	all.push_back({
+	    .id = "story.l3_pillars_turn_away",
+	    .name = "Story: the prison pillars of the third land turn away from the freed creature",
+	    .facet = Facet::Story,
+	    .description = "The third land loads with its own scripts and sky, and the player's Tiger stands on it. Its set-up "
+	                   "script runs, then its prison script with the developer switch on, so the three statues count as "
+	                   "stopped at their first check. When the scene of the freed creature ends, each statue script ends.",
+	    .expected = "At the end of each statue script, its pillar turns about the upright to face away from the prison "
+	                "spot: it faces a point 10 metres past the pillar on the line from the prison spot. The freeze beams "
+	                "and the plasma sound stop.",
+	    .environment = {.land = Land::Story, .storyLand = "Land3.txt", .dispenserGrid = false},
+	    .framing = {.shot = Shot::Overview, .include = {{-40.0f, -40.0f}, {40.0f, 40.0f}}},
+	    .creatures = {{.label = "player's tiger",
+	                   .species = CreatureType::Tiger,
+	                   .phase = 3,
+	                   .needs = {.energy = 1.0f, .exhaustion = 0.0f, .dehydration = 0.0f, .poo = 0.0f, .life = 1.0f}}},
+	    .commands = {{.kind = Kind::RunScript,
+	                  .delaySeconds = 0.5f,
+	                  .script = "SetupLand3",
+	                  .scriptGlobals = {{"MyCreature", {.kind = Argument::Kind::Creature, .index = 0}}}},
+	                 {.kind = Kind::RunScript,
+	                  .delaySeconds = 1.0f,
+	                  .script = "FreeTheCreature",
+	                  .scriptGlobals = {{"GlobalDebug", {.number = 1.0f}}}}},
+	});
+
+	// A script makes a pack of wolves, sends it off and then lets it go, as the attack of the possessed wolves does
+	// when the first wolf reaches the village
+	const auto wolf = [](glm::vec2 point, float delay) {
+		return Command {
+		    .kind = Kind::CallNative,
+		    .delaySeconds = delay,
+		    .script = "CREATE",
+		    .scriptArguments = {{.kind = Argument::Kind::Integer, .number = static_cast<float>(script::ObjectType::Animal)},
+		                        {.kind = Argument::Kind::Integer, .number = static_cast<float>(AnimalInfo::Wolf)},
+		                        {.kind = Argument::Kind::Position, .point = point}}};
+	};
+	const auto attach = [](size_t made) {
+		return Command {.kind = Kind::CallNative,
+		                .delaySeconds = 0.0f,
+		                .script = "FLOCK_ATTACH",
+		                .scriptArguments = {{.kind = Argument::Kind::Made, .index = made},
+		                                    {.kind = Argument::Kind::Made, .index = 3},
+		                                    {.kind = Argument::Kind::Integer, .number = 0.0f}}};
+	};
+	all.push_back({
+	    .id = "story.l3_wolf_pack_released",
+	    .name = "Story: a script lets its pack of wolves go",
+	    .facet = Facet::Story,
+	    .description = "After one second, a script makes three wolves south of the middle and a flock, and attaches each "
+	                   "wolf to the flock, as the attack of the possessed wolves on the third land does. The flock gets "
+	                   "the distances 5 and 40, SET_PROPERTY gives it half speed, and MOVE_GAME_THING sends it 100 "
+	                   "metres to the north. After eight seconds, RELEASE_FROM_SCRIPT lets the flock go.",
+	    .expected = "The three wolves walk north together. When the script lets the flock go, each wolf also goes out "
+	                "of the control of the script at once: the inspector shows that no wolf is under script control. "
+	                "Each wolf then starts to wander as a wild wolf does: it walks on the land to a point about the place "
+	                "of its flock. No wolf stands still.",
+	    .environment = {.dispenserGrid = false},
+	    .framing = {.shot = Shot::Overview, .include = {{-25.0f, -40.0f}, {25.0f, 75.0f}}},
+	    .commands = {wolf({-6.0f, -30.0f}, 1.0f),
+	                 wolf({0.0f, -30.0f}, 0.0f),
+	                 wolf({6.0f, -30.0f}, 0.0f),
+	                 {.kind = Kind::CallNative,
+	                  .delaySeconds = 0.0f,
+	                  .script = "FLOCK_CREATE",
+	                  .scriptArguments = {{.kind = Argument::Kind::Position, .point = {0.0f, -30.0f}}}},
+	                 {.kind = Kind::CallNative,
+	                  .delaySeconds = 0.0f,
+	                  .script = "CHANGE_INNER_OUTER_PROPERTIES",
+	                  .scriptArguments = {{.kind = Argument::Kind::Made, .index = 3},
+	                                      {.kind = Argument::Kind::Number, .number = 5.0f},
+	                                      {.kind = Argument::Kind::Number, .number = 40.0f},
+	                                      {.kind = Argument::Kind::Number, .number = 0.0f}}},
+	                 attach(0),
+	                 attach(1),
+	                 attach(2),
+	                 {.kind = Kind::CallNative,
+	                  .delaySeconds = 0.0f,
+	                  .script = "SET_PROPERTY",
+	                  .scriptArguments = {{.kind = Argument::Kind::Integer, .number = 11.0f},
+	                                      {.kind = Argument::Kind::Made, .index = 3, .kept = true},
+	                                      {.kind = Argument::Kind::Number, .number = 0.5f}}},
+	                 {.kind = Kind::CallNative,
+	                  .delaySeconds = 0.0f,
+	                  .script = "MOVE_GAME_THING",
+	                  .scriptArguments = {{.kind = Argument::Kind::Made, .index = 3},
+	                                      {.kind = Argument::Kind::Position, .point = {0.0f, 70.0f}},
+	                                      {.kind = Argument::Kind::Number, .number = 0.0f}}},
+	                 {.kind = Kind::CallNative,
+	                  .delaySeconds = 8.0f,
+	                  .script = "RELEASE_FROM_SCRIPT",
+	                  .scriptArguments = {{.kind = Argument::Kind::Made, .index = 3}}}},
 	});
 }
 
@@ -2324,6 +2432,55 @@ void AddTreePuzzle(std::vector<Scenario>& all)
 	                  .script = "OBJECT_DELETE",
 	                  .scriptArguments = {{.kind = ScriptArgument::Kind::LastResult},
 	                                      {.kind = ScriptArgument::Kind::Integer, .number = 0.0f}}}},
+	});
+
+	// The third land's puzzle has three states. After its prize, its script finds each lantern of the puzzle by the
+	// lantern row of the mobile statics, and deletes the lantern with a fade.
+	constexpr float k_ThirdLandTreeKind = 2.0f;
+	constexpr float k_MobileStaticType = 8.0f;
+	constexpr float k_LanternRow = 7.0f;
+	constexpr float k_LanternReach = 50.0f;
+	constexpr float k_DeleteWithFade = 1.0f;
+	constexpr glm::vec2 k_PuzzleMiddle {k_Puzzle.x + 10.0f, k_Puzzle.y + 10.0f};
+	std::vector<Command> commands {{.kind = Kind::CallNative,
+	                                .delaySeconds = 0.5f,
+	                                .script = "CREATE_WITH_ANGLE_AND_SCALE",
+	                                .scriptArguments = {{.number = 0.0f},
+	                                                    {.number = 1.0f},
+	                                                    {.kind = ScriptArgument::Kind::Integer, .number = k_PuzzleObjectType},
+	                                                    {.kind = ScriptArgument::Kind::Integer, .number = k_ThirdLandTreeKind},
+	                                                    {.kind = ScriptArgument::Kind::Position, .point = k_Puzzle}}}};
+	constexpr int k_Lanterns = 4;
+	// The first search comes four seconds after the start, and each next search one second after the delete before it
+	for (int lantern = 0; lantern < k_Lanterns; ++lantern)
+	{
+		commands.push_back({.kind = Kind::CallNative,
+		                    .delaySeconds = lantern == 0 ? 3.5f : 1.0f,
+		                    .script = "CALL_NEAR",
+		                    .scriptArguments = {{.kind = ScriptArgument::Kind::Integer, .number = k_MobileStaticType},
+		                                        {.kind = ScriptArgument::Kind::Integer, .number = k_LanternRow},
+		                                        {.kind = ScriptArgument::Kind::Position, .point = k_PuzzleMiddle},
+		                                        {.number = k_LanternReach},
+		                                        {.kind = ScriptArgument::Kind::Integer, .number = 0.0f}}});
+		commands.push_back({.kind = Kind::CallNative,
+		                    .delaySeconds = 0.0f,
+		                    .script = "OBJECT_DELETE",
+		                    .scriptArguments = {{.kind = ScriptArgument::Kind::LastResult},
+		                                        {.kind = ScriptArgument::Kind::Integer, .number = k_DeleteWithFade}}});
+	}
+	all.push_back({
+	    .id = "story.l3_tree_puzzle_lanterns",
+	    .name = "The third land's tree puzzle loses its lanterns",
+	    .facet = Facet::Story,
+	    .description = "A script makes the third land's tree puzzle south of the middle. From four seconds, the script "
+	                   "finds a lantern of the puzzle by its row each second and deletes it with a fade.",
+	    .expected = "Nine small trees of three kinds grow to full size. A lantern stands one step out from each corner. "
+	                "From four seconds, one lantern each second fades away, until no lantern stays.",
+	    .environment = {.dispenserGrid = false},
+	    .framing = {.shot = Shot::Placed,
+	                .eye = {k_Puzzle.x + 45.0f, 30.0f, k_Puzzle.y - 25.0f},
+	                .look = {k_Puzzle.x + 10.0f, 3.0f, k_Puzzle.y + 10.0f}},
+	    .commands = std::move(commands),
 	});
 }
 

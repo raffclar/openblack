@@ -80,6 +80,8 @@ struct Ease
 /// The statue is given a new share: it eases there from where it stands, taking the time its last share and the new one
 /// are apart; so near that it would take no time, it is put there at once
 void SetShare(Ease& ease, float share);
+/// A statue that stands still at a share: it does not move, has no speed and has not moved on the real clock yet
+[[nodiscard]] Ease StillAt(float share);
 /// The statue moves on by the milliseconds that have passed
 void Step(Ease& ease, float milliseconds);
 /// The statue moves to a time on the real clock, in whole milliseconds. The clock does not stop for a pause and

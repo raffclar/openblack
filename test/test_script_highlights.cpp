@@ -380,6 +380,47 @@ TEST(ScriptHighlights, StartingAScrollShowsItsActiveModelEffectAndSound)
 	EXPECT_EQ(world->registry.Get<ecs::components::Mesh>(scroll).id, resources::HashIdentifier(MeshId::I_MiniscrollSilver));
 }
 
+TEST(ScriptHighlights, AnActiveScrollOfASavedGameShowsItsActiveModelWithNoSoundOrEffect)
+{
+	auto [world, system] = Make();
+	const auto scroll = system->Restore(
+	    {.kind = k_Silver, .at = {0.0f, 0.0f, 0.0f}, .text = 31, .category = 2, .active = true, .drawHeight = 1.5f});
+	const auto& highlight = world->registry.Get<ScriptHighlight>(scroll);
+	EXPECT_TRUE(highlight.active);
+	EXPECT_EQ(highlight.scriptId, 31u);
+	EXPECT_EQ(highlight.category, 2u);
+	EXPECT_EQ(highlight.drawHeight, std::optional<float>(1.5f));
+	EXPECT_FLOAT_EQ(highlight.heightAbove, 1.5f);
+	EXPECT_EQ(world->registry.Get<ecs::components::Mesh>(scroll).id,
+	          resources::HashIdentifier(MeshId::I_MiniscrollSilverActive));
+	// It has its glints, as a new scroll has, but no active effect and no sound
+	ASSERT_EQ(world->started.size(), 1u);
+	EXPECT_EQ(world->started[0].first, ParticleType::ScriptHighlightSilverGlints);
+	EXPECT_EQ(highlight.activeEffect, 0u);
+	EXPECT_TRUE(world->sounds.empty());
+	// A scroll that was not active shows its normal model
+	const auto idle = system->Restore({.kind = k_Gold, .at = {9.0f, 0.0f, 0.0f}, .text = 52});
+	EXPECT_FALSE(world->registry.Get<ScriptHighlight>(idle).active);
+	EXPECT_EQ(world->registry.Get<ecs::components::Mesh>(idle).id, resources::HashIdentifier(MeshId::I_MiniscrollGold));
+	EXPECT_TRUE(system->Restore({.kind = 4}) == entt::null);
+}
+
+TEST(ScriptHighlights, ASignOfASavedGameWhoseTipWasReadStartsWithItsSavedCategory)
+{
+	auto [world, system] = Make();
+	const auto first = system->Create(k_Sign, {0.0f, 0.0f, 0.0f}, 0);
+	system->SetProperties(first, 4127, 3);
+	system->Tap(first, true);
+	world->sounds.clear();
+	// The creation step checks the tip with the saved text and category, and starts the sign with no sound
+	const auto sign = system->Restore({.kind = k_Sign, .at = {30.0f, 0.0f, 0.0f}, .text = 4127, .category = 3});
+	EXPECT_TRUE(world->registry.Get<ScriptHighlight>(sign).active);
+	EXPECT_TRUE(world->sounds.empty());
+	// A sign of another category stays as the file has it
+	const auto other = system->Restore({.kind = k_Sign, .at = {60.0f, 0.0f, 0.0f}, .text = 4127, .category = 4});
+	EXPECT_FALSE(world->registry.Get<ScriptHighlight>(other).active);
+}
+
 TEST(ScriptHighlights, AScrollStandsAtItsDrawHeightOrOnWhatIsUnderIt)
 {
 	auto [world, system] = Make();

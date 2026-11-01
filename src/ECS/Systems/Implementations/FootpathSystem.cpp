@@ -922,6 +922,41 @@ void FootpathSystem::CatchUpWithMap()
 	ProcessObstacleChanges();
 }
 
+std::vector<entt::entity> FootpathSystem::PutLoadedFootpaths(std::span<const Footpath> footpaths)
+{
+	auto& registry = _world->Entities();
+	// The things that the load made go onto the map. The paths do not go round them, and do not go round the things
+	// that left the map before the load.
+	_world->SyncMap();
+	registry.Context().footpathObstacleChanges.clear();
+	std::vector<entt::entity> gone;
+	registry.Each<const Footpath>([&gone](entt::entity entity, const Footpath&) { gone.push_back(entity); });
+	registry.Each<const FootpathFinder>([&gone](entt::entity entity, const FootpathFinder&) { gone.push_back(entity); });
+	registry.Destroy(gone.begin(), gone.end());
+	std::vector<entt::entity> linked;
+	registry.Each<const FootpathLink>([&linked](entt::entity entity, const FootpathLink&) { linked.push_back(entity); });
+	for (const auto entity : linked)
+	{
+		registry.Remove<FootpathLink>(entity);
+	}
+	std::vector<entt::entity> walkers;
+	registry.Each<const FootpathWalk>([&walkers](entt::entity entity, const FootpathWalk&) { walkers.push_back(entity); });
+	for (const auto entity : walkers)
+	{
+		registry.Remove<FootpathWalk>(entity);
+	}
+	std::vector<entt::entity> made;
+	made.reserve(footpaths.size());
+	for (const auto& footpath : footpaths)
+	{
+		const auto entity = registry.Create();
+		registry.Assign<Footpath>(entity, footpath);
+		made.push_back(entity);
+	}
+	registry.SetDirty();
+	return made;
+}
+
 void FootpathSystem::ProcessTurn()
 {
 	auto& registry = _world->Entities();

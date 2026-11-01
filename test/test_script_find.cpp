@@ -32,6 +32,7 @@
 #include "ECS/Components/ScriptHighlight.h"
 #include "ECS/Components/ScriptTimer.h"
 #include "ECS/Components/SpellSeed.h"
+#include "ECS/Components/StreetLantern.h"
 #include "ECS/Components/Temple.h"
 #include "ECS/Components/Tree.h"
 #include "ECS/Components/VillageTotem.h"
@@ -292,6 +293,26 @@ TEST(ScriptFind, WorshipSitesScaffoldsAndPoo)
 	const auto barrelKind = script_find::KindOf(registry, barrel);
 	ASSERT_TRUE(barrelKind.has_value());
 	EXPECT_EQ(barrelKind->type, ScriptType::MobileObject);
+}
+
+// A search for the lantern row of the mobile statics finds a street lantern, as the tree puzzle of the third land asks
+TEST(ScriptFind, AStreetLanternIsAMobileStaticOfItsRow)
+{
+	Registry registry;
+	const auto lantern = registry.Create();
+	registry.Assign<components::StreetLantern>(lantern, false);
+	const auto country = registry.Create();
+	registry.Assign<components::StreetLantern>(country, true, MobileStaticInfo::Bonfire);
+
+	const auto kind = script_find::KindOf(registry, lantern);
+	ASSERT_TRUE(kind.has_value());
+	EXPECT_EQ(kind->type, ScriptType::MobileStatic);
+	EXPECT_EQ(kind->subtype, static_cast<uint32_t>(MobileStaticInfo::StreetLantern));
+	EXPECT_TRUE(script_find::Matches(*kind, ScriptType::MobileStatic, static_cast<uint32_t>(MobileStaticInfo::StreetLantern)));
+	EXPECT_FALSE(script_find::Matches(*kind, ScriptType::MobileStatic, static_cast<uint32_t>(MobileStaticInfo::Bonfire)));
+	const auto countryKind = script_find::KindOf(registry, country);
+	ASSERT_TRUE(countryKind.has_value());
+	EXPECT_EQ(countryKind->subtype, static_cast<uint32_t>(MobileStaticInfo::Bonfire));
 }
 
 // A piece that broke off a building is a mobile static of the rock row, as a rock that the scripts made is not

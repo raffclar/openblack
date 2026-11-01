@@ -14,6 +14,8 @@
 #include <algorithm>
 #include <iterator>
 #include <optional>
+#include <string>
+#include <variant>
 #include <vector>
 
 #include <PackFile.h>
@@ -47,6 +49,8 @@
 #include "ECS/Systems/HandSystemInterface.h"
 #include "ECS/Systems/HelpMessageSystemInterface.h"
 #include "ECS/Systems/HelpProfileSystemInterface.h"
+#include "ECS/Systems/HelpTextSystemInterface.h"
+#include "ECS/Systems/PlayerProfileSystemInterface.h"
 #include "ECS/Systems/PlayerSystemInterface.h"
 #include "ECS/Systems/SkyClockSystemInterface.h"
 #include "ECS/Systems/TimeSystemInterface.h"
@@ -54,6 +58,7 @@
 #include "ECS/ThingOnScreen.h"
 #include "ECS/TownDesire.h"
 #include "Graphics/Moon.h"
+#include "Gui/TextDatabase.h"
 #include "InfoConstants.h"
 #include "Locator.h"
 #include "Resources/ResourceManager.h"
@@ -263,6 +268,7 @@ void GuidanceSystem::Reset()
 {
 	_stampsDue = true;
 	_remarks.clear();
+	_nameDue = true;
 }
 
 void GuidanceSystem::ProcessTurn()
@@ -285,6 +291,7 @@ void GuidanceSystem::ProcessTurn()
 			_stampsDue = false;
 		}
 	}
+	NightWhisper();
 	LookAtMoon();
 	TownDesireVoices();
 }
@@ -708,6 +715,45 @@ void GuidanceSystem::LookAtMoon()
 		SayOneOff(guidance::OneOff::FullMoon);
 	}
 	_moonWait = look.wait;
+}
+
+void GuidanceSystem::NightWhisper()
+{
+	if (_nameDue && Locator::helpTextSystem::has_value())
+	{
+		std::vector<std::u16string> names;
+		names.reserve(night_whisper::k_NameCount);
+		for (size_t name = 0; name < night_whisper::k_NameCount; ++name)
+		{
+			names.push_back(Locator::helpTextSystem::value().GetWords(night_whisper::NameText(name)));
+		}
+		std::u16string player;
+		if (Locator::playerProfileSystem::has_value())
+		{
+			if (const auto profile = Locator::playerProfileSystem::value().GetCurrentProfile(); profile.has_value())
+			{
+				player = gui::ToUtf16(profile->name);
+			}
+		}
+		_whisper.SetSample(night_whisper::LookUpSample(names, player));
+		_nameDue = false;
+	}
+	if (!Locator::entitiesRegistry::has_value())
+	{
+		return;
+	}
+	const night_whisper::Draws draws {.floatRand = HelpFloatRand, .rand = HelpRand};
+	const auto result =
+	    _whisper.Turn(Locator::entitiesRegistry::value().Context().mapScriptGlobals.landNumber, ComputerNight, draws);
+	if (const auto* whisper = std::get_if<night_whisper::Whisper>(&result); whisper != nullptr)
+	{
+		audio::StartGameSoundEffect(resources::HashIdentifier(fmt::format("Guidance.sad/{}", whisper->sample)),
+		                            {.pitchPercent = whisper->pitchPercent, .volume = whisper->volume, .pan = whisper->pan});
+	}
+	else if (std::holds_alternative<night_whisper::NoWhisper>(result))
+	{
+		SayOneOff(guidance::OneOff::UpTooLate);
+	}
 }
 
 void GuidanceSystem::TownDesireVoices()

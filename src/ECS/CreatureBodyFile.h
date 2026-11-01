@@ -23,11 +23,13 @@ namespace openblack::ecs::creature_body_file
 {
 
 /// The creature's body as it is now: its alignment, strength, fatness, size, tattoos and marks, and how its body is
-/// doing once its body has been looked after. Its species and name aren't taken.
+/// doing once its body has been looked after. It also has the values that the body got when the game made it, and the
+/// environment map word. Its species and name aren't taken.
 [[nodiscard]] creature_mind_body::Body Capture(const Registry& registry, entt::entity creature);
 
 /// A creature takes up the body a file kept: its alignment, strength, fatness and size, the fatness its body shows, its
-/// tattoos and marks, and how its body was doing, which its body starts from
+/// tattoos and marks, how its body was doing, which its body starts from, the values that the body got when the game
+/// made it, and the environment map word
 void Apply(Registry& registry, entt::entity creature, const creature_mind_body::Body& body);
 
 } // namespace openblack::ecs::creature_body_file

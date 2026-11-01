@@ -203,6 +203,14 @@ inline constexpr std::array<DirectCreatureName, 17> k_DirectCreatureNames {{
 	return start->directCreature;
 }
 
+/// Whether a land's load of the player's creature can read the creature that the profile's file keeps from an earlier
+/// game. A direct start of a later land cannot: only a creature that came through the vortex in this game is used.
+/// Thus each run of a direct start with the same seed makes the same creature, whatever an earlier run wrote.
+[[nodiscard]] constexpr bool LoadsCreatureOfEarlierGame(const std::optional<NewGameStart>& start, int32_t landNumber) noexcept
+{
+	return !DirectStartLand(start, landNumber).has_value();
+}
+
 /// "ask", "normal", "creature" (straight to choosing a creature), "story" (skip all of the creature's tutorial too)
 /// or "old" (keep the old creature) or "cow" (debug: start with the Cow); nothing for anything else
 [[nodiscard]] constexpr std::optional<NewGameStart> ParseNewGameStart(std::string_view text) noexcept

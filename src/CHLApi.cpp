@@ -5608,15 +5608,12 @@ void RemoveResource() // 135 REMOVE_RESOURCE
 
 void GetTargetRelativePos() // 136 GET_TARGET_RELATIVE_POS
 {
-	// const auto angle = Popf();
-	// const auto distance = Popf();
-	// const auto to = PopVec();
-	// const auto from = PopVec();
-	// TODO(Daniels118): implement this
-	NotImplemented();
-	Pushv(0.0f); // x
-	Pushv(0.0f); // y
-	Pushv(0.0f); // z
+	// The point at the distance past the second point, on the line from the first point, turned by the angle
+	const auto angle = Popf();
+	const auto distance = Popf();
+	const auto to = PopVec();
+	const auto from = PopVec();
+	PushVec(script::property_rules::TargetRelativePosition(from, to, distance, angle));
 }
 
 void StopPointing() // 137 STOP_POINTING
@@ -7541,8 +7538,9 @@ void SetLeashWorks() // 249 SET_LEASH_WORKS
 /// CREATURE_SET_PLAYER makes the one they pick
 void StartWithCreature(CreatureType species, const glm::vec3& position, float yawRadians)
 {
-	const auto creature =
-	    CreateScriptObject(ObjectType::Creature, static_cast<uint32_t>(species), position, 0.0f, 0.0f, yawRadians, 0.0f, 1.0f);
+	// The scripts give each species its own number, which is not the same as the game's number for the Giant Ape
+	const auto creature = CreateScriptObject(ObjectType::Creature, script::property_rules::ScriptCreatureType(species),
+	                                         position, 0.0f, 0.0f, yawRadians, 0.0f, 1.0f);
 	if (creature == entt::null || creature == static_cast<entt::entity>(0) ||
 	    !Locator::entitiesRegistry::value().Valid(creature))
 	{
@@ -7586,13 +7584,16 @@ void LoadMyCreature() // 250 LOAD_MY_CREATURE
 		StartWithCow();
 		return;
 	}
-	const bool loaded = Locator::creatureCarryOverSystem::value().LoadPlayersCreature({position.x, position.z}).has_value();
-	// Not in the original game: a developer's direct start of a later land has no creature that came through the
-	// vortex, so the creature of the species the developer named stands at the place instead
-	const auto& landSystem = Locator::landSystem::value();
-	if (const auto species = new_game_choice::DirectStartCreature(
-	        landSystem.GetNewGameStart(), Locator::entitiesRegistry::value().Context().mapScriptGlobals.landNumber, loaded,
-	        PlayerHasCreature());
+	// Not in the original game: a developer's direct start of a later land reads no creature file of an earlier game. It
+	// has no creature that came through the vortex, so the creature of the species the developer named stands there.
+	const auto& start = Locator::landSystem::value().GetNewGameStart();
+	const auto landNumber = Locator::entitiesRegistry::value().Context().mapScriptGlobals.landNumber;
+	const auto source = new_game_choice::LoadsCreatureOfEarlierGame(start, landNumber)
+	                        ? ecs::systems::KeptCreatureSource::GameOrProfileFile
+	                        : ecs::systems::KeptCreatureSource::GameOnly;
+	const bool loaded =
+	    Locator::creatureCarryOverSystem::value().LoadPlayersCreature({position.x, position.z}, source).has_value();
+	if (const auto species = new_game_choice::DirectStartCreature(start, landNumber, loaded, PlayerHasCreature());
 	    species.has_value())
 	{
 		constexpr float k_ArrivalYawDegrees = 180.0f;

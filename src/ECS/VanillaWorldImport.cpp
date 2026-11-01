@@ -55,6 +55,8 @@ constexpr float k_CellMetres = 10.0f;
 constexpr std::array k_FishermanStates = {VillagerStates::FishermanArrivesAtFishing, VillagerStates::Fishing};
 constexpr std::array k_FarmerStates = {VillagerStates::FarmerArrivesAtFarm, VillagerStates::FarmerPlantsCrop,
                                        VillagerStates::FarmerDigsUpCrop};
+/// The flag of the status of a living thing that walks a footpath towards its first node
+constexpr uint16_t k_TowardsStartStatus = 0x0008;
 /// The number of floats on each side of a speed that WalkSpeedOf tries
 constexpr int k_MetreTries = 4;
 
@@ -399,6 +401,10 @@ std::optional<ImportedVillager> ReadVillager(const VanillaWorld& world, const Va
 	                           .turnsSinceStateChange = static_cast<uint16_t>(action[4] | (action[5] << 8)),
 	                           .turnsUntilStateChange = world.Half(record, "turnsToStateChange").value_or(0)};
 	villager.walk = WalkOf(world, record);
+	villager.footpathWalk = {.footpath = world.Ref(record, "walkFootpath").value_or(0),
+	                         .node = world.Ref(record, "walkFootpathNode").value_or(0),
+	                         .towardsStart = (world.Half(record, "status").value_or(0) & k_TowardsStartStatus) != 0,
+	                         .next = world.Ref(record, "nextFootpath").value_or(0)};
 	villager.topValues = StateValues(world, record, "topStateValue");
 	villager.finalValues = StateValues(world, record, "finalStateValue");
 	if (const auto special = world.Word(record, "specialRow"); special.has_value())
@@ -515,7 +521,8 @@ bool IsInsideHome(VillagerStates state)
 
 bool CanKeepStateValues(uint8_t state)
 {
-	return !gamesave::VillagerStateKeepsValues(state) || IsOneOf(state, k_FishermanStates) || IsOneOf(state, k_FarmerStates);
+	return !gamesave::VillagerStateKeepsValues(state) || IsOneOf(state, k_FishermanStates) || IsOneOf(state, k_FarmerStates) ||
+	       state == static_cast<uint8_t>(VillagerStates::MoveOnPath);
 }
 
 bool CanKeepWalk(uint8_t moveState)
@@ -674,6 +681,29 @@ ImportedTowns ReadTowns(const VanillaWorld& world)
 				imported.abodes.push_back(std::move(*abode));
 				continue;
 			}
+		}
+		else if (record.Is(VanillaType::TotemStatue))
+		{
+			const auto position = PositionOf(world, record);
+			const auto townCentre = world.Ref(record, "totemTownCentre");
+			const auto share = world.Float(record, "totemShare");
+			const auto held = world.Float(record, "totemHeldShare");
+			const auto word84 = world.Word(record, "totemWord84");
+			if (position.has_value() && townCentre.has_value() && *townCentre != 0 && share.has_value() && held.has_value() &&
+			    word84.has_value())
+			{
+				imported.totems.push_back({.number = record.number,
+				                           .townCentre = *townCentre,
+				                           .position = *position,
+				                           .heading = world.Float(record, "heading").value_or(0.0f),
+				                           .scale = world.Float(record, "scale").value_or(1.0f),
+				                           .life = world.Float(record, "life").value_or(1.0f),
+				                           .share = *share,
+				                           .heldShare = *held,
+				                           .word84 = *word84});
+				continue;
+			}
+			why = "the totem has no place, no town centre or not all its values";
 		}
 		else if (record.Is(VanillaType::PlannedAbode) || record.Is(VanillaType::PlannedTownCentre))
 		{

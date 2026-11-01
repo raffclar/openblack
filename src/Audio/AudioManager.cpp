@@ -43,6 +43,7 @@
 #include "ECS/Systems/TimeSystemInterface.h"
 #include "FileSystem/FileSystemInterface.h"
 #include "Locator.h"
+#include "PanPlace.h"
 #include "Resources/Resources.h"
 #include "Sound/EmitterFollow.h"
 #include "Sound/HeaderOverrides.h"
@@ -436,6 +437,7 @@ VoiceStart AudioManager::MakeVoiceStart(const Sound& sound, std::optional<glm::v
 	    {
 	        .overrideFlags = sound.overrideFlags,
 	        .volume = sound.headerVolume,
+	        .pan = sound.headerPan,
 	        .pitchPercent = static_cast<uint32_t>(sound.pitch),
 	        .pitchDeviation = static_cast<uint32_t>(sound.pitchDeviation),
 	        .minDistance = sound.minDistance,
@@ -463,6 +465,7 @@ VoiceStart AudioManager::MakeVoiceStart(const Sound& sound, std::optional<glm::v
 	    .pitch = rate,
 	    .loopCount = loopCount,
 	    .positional = worldPosition.has_value(),
+	    .pan = settings.pan,
 	    .position = worldPosition ? ToListenerFrame(*worldPosition) : glm::zero<glm::vec3>(),
 	    .minDistance = settings.minDistance,
 	    .maxDistance = settings.maxDistance,
@@ -687,6 +690,7 @@ entt::entity AudioManager::StartSoundEffect(entt::id_type id, const SoundEffectO
 	const auto start = MakeVoiceStart(*sound, placed, options.playType,
 	                                  {
 	                                      .volume = options.volume,
+	                                      .pan = options.pan,
 	                                      .pitchPercent = options.pitchPercent,
 	                                      .minDistance = options.minDistance,
 	                                      .maxDistance = options.maxDistance,
@@ -1228,7 +1232,8 @@ SourceId AudioManager::CreateSource(Sound& sound, const VoiceStart& start)
 	else
 	{
 		_audioPlayer->SetDistanceAttenuation(source, 1.0f, 1.0f, 0.0f);
-		PositionSource(source, std::nullopt);
+		// A pan away from the centre places the sound 1 m from the listener in its direction
+		PositionSource(source, start.pan != k_PlayCentrePan ? std::optional(PanPlace(start.pan)) : std::nullopt);
 	}
 	return source;
 }

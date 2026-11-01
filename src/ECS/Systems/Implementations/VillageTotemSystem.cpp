@@ -152,6 +152,36 @@ void VillageTotemSystem::AddToPlayer(entt::entity totem)
 	SetTownShare(town, 0.0f);
 }
 
+void VillageTotemSystem::Restore(entt::entity totem, float heading, float share)
+{
+	auto& registry = _world->Entities();
+	auto* totemComponent = registry.TryGet<VillageTotem>(totem);
+	if (totemComponent == nullptr)
+	{
+		return;
+	}
+	// The load keeps the heading of the file. It does not turn the totem to the worship site again.
+	auto& transform = registry.Get<Transform>(totem);
+	const auto turned = glm::mat3(portable_math::EulerAngleY(-heading));
+	const bool changed = turned != transform.rotation;
+	transform.rotation = turned;
+	if (auto* iconTransform = registry.Valid(totemComponent->icon) ? registry.TryGet<Transform>(totemComponent->icon) : nullptr)
+	{
+		iconTransform->rotation = turned;
+	}
+	if (changed)
+	{
+		_world->Reinsert(totem);
+	}
+	// The load puts the totem at its share with no movement, and the creation step after it sets the held share to that
+	// share. The game does not keep the sound of a totem that moves.
+	totemComponent->ease = village_totem::StillAt(share);
+	totemComponent->held = share;
+	totemComponent->gripped = false;
+	_world->SetMovingSound(totem, false);
+	Place(totem);
+}
+
 void VillageTotemSystem::ShowIcon(const VillageTotem& totem, entt::id_type iconMesh)
 {
 	// The player's creature stands on top, or the hand, on the second totem too. It is drawn afresh where it stands,

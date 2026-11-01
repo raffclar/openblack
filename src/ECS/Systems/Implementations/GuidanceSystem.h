@@ -52,6 +52,8 @@ public:
 
 	[[nodiscard]] const std::vector<Remark>& GetRemarks() const override { return _remarks; }
 	[[nodiscard]] int32_t GetMoonWait() const override { return _moonWait; }
+	[[nodiscard]] const night_whisper::Whisperer& GetNightWhisper() const override { return _whisper; }
+	void StageNightWhisper(uint32_t count) override { _whisper.Stage(count); }
 
 private:
 	/// The guidance kept on the player at this machine, none without one
@@ -60,6 +62,8 @@ private:
 	void SayRemark(guidance::Kind kind);
 	void Say(uint32_t text, guidance::Kind kind);
 	void LookAtMoon();
+	/// The night whisper of this turn, if there is one. The name of the player is looked up again on each new land.
+	void NightWhisper();
 	/// Play the town desire voice of this turn, if there is one: the voice of the town or the worship site near the
 	/// camera that wants something most
 	void TownDesireVoices();
@@ -69,6 +73,11 @@ private:
 	/// The moon's wait is kept from land to land, as the game keeps it
 	int32_t _moonWait {1};
 	std::vector<Remark> _remarks;
+	/// The night whisper is a sound of this computer. It keeps its state from the start of the program, and no save keeps
+	/// it.
+	night_whisper::Whisperer _whisper;
+	/// The name of the player is still to be looked up
+	bool _nameDue {true};
 };
 
 } // namespace openblack::ecs::systems

@@ -43,6 +43,7 @@
 #include "ECS/Components/TownDesire.h"
 #include "ECS/Components/TownDesireFlag.h"
 #include "ECS/Components/Transform.h"
+#include "ECS/Components/VillageTotem.h"
 #include "ECS/Components/Villager.h"
 #include "ECS/Components/VillagerWork.h"
 #include "ECS/Components/WallHug.h"
@@ -51,6 +52,7 @@
 #include "ECS/Systems/PlayerSystemInterface.h"
 #include "ECS/Systems/TimeSystemInterface.h"
 #include "ECS/Systems/TownSystemInterface.h"
+#include "ECS/Systems/VillageTotemSystemInterface.h"
 #include "ECS/Systems/WonderSystemInterface.h"
 #include "ECS/TempleConstruction.h"
 #include "ECS/ThingCircles.h"
@@ -147,7 +149,8 @@ void RemoveLandTownsContents(ecs::Registry& registry)
 }
 
 /// Each town plans the buildings of the file, in the order of its list
-void PutPlans(ecs::Registry& registry, const world_import::ImportedTowns& imported)
+void PutPlans(ecs::Registry& registry, const world_import::ImportedTowns& imported,
+              std::unordered_map<uint32_t, entt::entity>& made)
 {
 	std::unordered_map<uint32_t, const world_import::ImportedPlan*> plans;
 	for (const auto& plan : imported.plans)
@@ -169,6 +172,7 @@ void PutPlans(ecs::Registry& registry, const world_import::ImportedTowns& import
 			if (entity != entt::null)
 			{
 				registry.Get<PlannedAbode>(entity).wasBuilt = file.wasBuilt;
+				made.emplace(file.number, entity);
 			}
 		}
 	}
@@ -540,10 +544,58 @@ uint32_t PutPiles(ecs::Registry& registry, entt::entity pit, std::span<const wor
 	}
 	return lost;
 }
+
+/// Each totem of the file is the totem that its town centre made. It takes the heading, the life and the share of the
+/// file. A town centre gives its town no worship share when it makes its totem, but the load keeps the share of the
+/// town in the file, so each town gets the share of the file again.
+void PutTotems(ecs::Registry& registry, const world_import::ImportedTowns& imported,
+               std::unordered_map<uint32_t, entt::entity>& made)
+{
+	for (const auto& town : imported.towns)
+	{
+		if (const auto entity = made.find(town.number); entity != made.end())
+		{
+			if (auto* component = registry.TryGet<Town>(entity->second))
+			{
+				component->worshipShare = town.worshipShare;
+			}
+		}
+	}
+	if (!Locator::villageTotemSystem::has_value())
+	{
+		return;
+	}
+	uint32_t put = 0;
+	for (const auto& file : imported.totems)
+	{
+		const auto centre = made.find(file.townCentre);
+		entt::entity totem = entt::null;
+		if (centre != made.end())
+		{
+			registry.Each<const VillageTotem>([&totem, &centre](entt::entity each, const VillageTotem& component) {
+				if (component.townCentre == centre->second)
+				{
+					totem = each;
+				}
+			});
+		}
+		if (totem == entt::null)
+		{
+			SPDLOG_LOGGER_WARN(ImportLog(), "The totem {} of the file has no totem of a town centre, so it is not made",
+			                   file.number);
+			continue;
+		}
+		ecs::world_objects::SetLife(totem, file.life);
+		Locator::villageTotemSystem::value().Restore(totem, file.heading, file.share);
+		made.emplace(file.number, totem);
+		++put;
+	}
+	SPDLOG_LOGGER_INFO(ImportLog(), "Put {} totems of the file on their town centres", put);
+}
 } // namespace
 
 bool SaveGameSystem::ImportVanillaTowns(const gamesave::VanillaWorld& world, VanillaMade& made, VanillaWorks& works,
-                                        VanillaCircles& circles)
+                                        VanillaCircles& circles, VanillaFootpathWalks& footpathWalks)
 {
 	const auto imported = world_import::ReadTowns(world);
 	for (const auto& why : imported.skipped)
@@ -620,6 +672,7 @@ bool SaveGameSystem::ImportVanillaTowns(const gamesave::VanillaWorld& world, Van
 		}
 		made.emplace(abode.number, entity);
 	}
+	PutTotems(registry, imported, made);
 	PutTribalPowers(registry, imported.tribalPowers);
 
 	uint32_t present = 0;
@@ -651,6 +704,10 @@ bool SaveGameSystem::ImportVanillaTowns(const gamesave::VanillaWorld& world, Van
 			if (villager.walk.circle.has_value())
 			{
 				circles.emplace_back(entity, *villager.walk.circle);
+			}
+			if (states[0] == static_cast<uint8_t>(VillagerStates::MoveOnPath))
+			{
+				footpathWalks.emplace_back(entity, villager.footpathWalk);
 			}
 			if (auto work = world_import::WorkOf(states[0], villager.topValues); work.has_value())
 			{
@@ -730,7 +787,7 @@ bool SaveGameSystem::ImportVanillaTowns(const gamesave::VanillaWorld& world, Van
 		component.abodes = std::move(ordered);
 	}
 	PutDesireFlags(registry, imported, made);
-	PutPlans(registry, imported);
+	PutPlans(registry, imported, made);
 	PutSites(registry, imported, made);
 	registry.SetDirty();
 	SPDLOG_LOGGER_INFO(ImportLog(),
