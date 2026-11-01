@@ -58,7 +58,8 @@ public:
 	Registry* Entities() override { return &registry; }
 	[[nodiscard]] uint32_t MillisecondsPerTurn() const override { return 100; }
 	[[nodiscard]] uint32_t Turn() const override { return static_cast<uint32_t>(turn); }
-	[[nodiscard]] std::optional<PlayerNames> LocalPlayer() const override { return PlayerNames::PLAYER_ONE; }
+	[[nodiscard]] std::optional<PlayerNames> LocalPlayer() const override { return ownPlayer; }
+	[[nodiscard]] std::optional<PlayerNames> FirstPlayer() const override { return PlayerNames::PLAYER_ONE; }
 	[[nodiscard]] bool NetworkGame() const override { return networkGame; }
 	entt::entity StartLoop(entt::id_type sound, glm::vec3 /*position*/, entt::entity /*owner*/) override
 	{
@@ -120,6 +121,7 @@ public:
 	Registry registry;
 	int turn {0};
 	bool networkGame {false};
+	PlayerNames ownPlayer {PlayerNames::PLAYER_ONE};
 	float share {0.0f};
 	entt::id_type loopSound {0};
 	entt::id_type onceSound {0};
@@ -486,6 +488,22 @@ TEST_F(TempleDestructionSystemTest, TheLocalPlayersLossEndsTheGameOnceOnTheTurnI
 	EXPECT_TRUE(_world->registry.Context().gameOver);
 	Turn();
 	EXPECT_EQ(_world->scripts.size(), 1u);
+}
+
+TEST_F(TempleDestructionSystemTest, TheGameEndsForTheLossOfTheFirstPlayerAndNotOfThePlayerOfThisComputer)
+{
+	_world->ownPlayer = PlayerNames::PLAYER_TWO;
+	const auto own = MakeTemple(PlayerNames::PLAYER_TWO);
+	_system->Start(own);
+	Turn();
+	Turn();
+	EXPECT_TRUE(_world->scripts.empty());
+	EXPECT_FALSE(_world->registry.Context().gameOver);
+	const auto first = MakeTemple(PlayerNames::PLAYER_ONE);
+	_system->Start(first);
+	Turn();
+	EXPECT_EQ(_world->scripts, std::vector<std::string> {"GameOver"});
+	EXPECT_TRUE(_world->registry.Context().gameOver);
 }
 
 TEST_F(TempleDestructionSystemTest, LosingATempleInANetworkGameDoesntEndTheGame)
