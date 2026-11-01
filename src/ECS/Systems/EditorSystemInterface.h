@@ -15,15 +15,16 @@
 
 #include <glm/vec2.hpp>
 
+#include "Editor/EditorHistory.h"
 #include "Editor/EditorMath.h"
 #include "Editor/EditorSelection.h"
 
 namespace openblack::ecs::systems
 {
 
-/// The in-game editor's state, which its panels share: whether it is open, the thing picked, the tool the mouse works
-/// in the world, snapping, the camera on the picked thing, how fast the keys move the camera, and stepping the game one turn at
-/// a time. While the editor is closed it does nothing and leaves the camera to the player.
+/// The in-game editor's state, which its panels share: whether it is open, the things picked, the history, the tool the mouse
+/// works in the world, snapping, the camera on the picked thing, how fast the keys move the camera, and stepping the game one
+/// turn at a time. While the editor is closed it does nothing and leaves the camera to the player.
 class EditorSystemInterface
 {
 public:
@@ -60,6 +61,11 @@ public:
 
 	[[nodiscard]] virtual editor::EditorSelection& GetSelection() = 0;
 	[[nodiscard]] virtual const editor::EditorSelection& GetSelection() const = 0;
+
+	/// The changes that the editor made to the things on the land, to undo and redo. The history and the picks start
+	/// again empty when the land loads again.
+	[[nodiscard]] virtual editor::EditorHistory& GetHistory() = 0;
+	[[nodiscard]] virtual const editor::EditorHistory& GetHistory() const = 0;
 
 	virtual void SetTool(Tool tool) = 0;
 	[[nodiscard]] virtual Tool GetTool() const = 0;

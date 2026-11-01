@@ -289,3 +289,94 @@ TEST(EditorPalette, LaysOutInSquareRows)
 	}
 	EXPECT_EQ(distinct.size(), 30u);
 }
+
+TEST(EditorSelection, PicksSeveralThingsWithTheLastAsTheMainPick)
+{
+	EditorSelection selection;
+	const auto first = static_cast<entt::entity>(1);
+	const auto second = static_cast<entt::entity>(2);
+	const auto third = static_cast<entt::entity>(3);
+	selection.Select(first);
+	selection.Add(second);
+	selection.Add(third);
+	EXPECT_EQ(selection.Count(), 3u);
+	EXPECT_EQ(selection.Get(), third);
+	EXPECT_TRUE(selection.IsPrimary(third));
+	EXPECT_FALSE(selection.IsPrimary(first));
+	// A second pick of a picked thing makes it the main pick, and it is not in the list two times
+	selection.Add(first);
+	EXPECT_EQ(selection.Count(), 3u);
+	EXPECT_EQ(selection.Get(), first);
+	EXPECT_EQ(selection.All(), (std::vector {second, third, first}));
+	// Toggle lets go of a picked thing, and the thing picked before it becomes the main pick
+	selection.Toggle(first);
+	EXPECT_FALSE(selection.IsSelected(first));
+	EXPECT_EQ(selection.Get(), third);
+	selection.Toggle(first);
+	EXPECT_EQ(selection.Get(), first);
+	// Select picks only the one thing again
+	selection.Select(second);
+	EXPECT_EQ(selection.All(), std::vector {second});
+}
+
+TEST(EditorSelection, PicksAllAtOnceAndLetsGoOfTheGoneOnes)
+{
+	EditorSelection selection;
+	const std::vector<entt::entity> entities {static_cast<entt::entity>(5), entt::null, static_cast<entt::entity>(6),
+	                                          static_cast<entt::entity>(5)};
+	selection.SelectAll(entities);
+	EXPECT_EQ(selection.All(), (std::vector {static_cast<entt::entity>(5), static_cast<entt::entity>(6)}));
+	const auto picks = selection.GetPicks();
+	selection.Validate([](entt::entity entity) { return entity != static_cast<entt::entity>(6); });
+	EXPECT_EQ(selection.All(), std::vector {static_cast<entt::entity>(5)});
+	EXPECT_EQ(selection.GetPicks(), picks + 1);
+	// No change, no count
+	selection.Validate([](entt::entity) { return true; });
+	EXPECT_EQ(selection.GetPicks(), picks + 1);
+}
+
+TEST(EditorMath, RectanglesOnTheScreen)
+{
+	const auto rect = RectBetween({0.6f, 0.2f}, {0.1f, 0.5f});
+	EXPECT_EQ(rect.minima, glm::vec2(0.1f, 0.2f));
+	EXPECT_EQ(rect.maxima, glm::vec2(0.6f, 0.5f));
+	EXPECT_TRUE(rect.Contains({0.3f, 0.3f}));
+	EXPECT_TRUE(rect.Contains({0.1f, 0.5f}));
+	EXPECT_FALSE(rect.Contains({0.7f, 0.3f}));
+	EXPECT_FALSE(rect.SmallerThan({0.01f, 0.01f}));
+	EXPECT_TRUE(RectBetween({0.5f, 0.5f}, {0.501f, 0.499f}).SmallerThan({0.004f, 0.004f}));
+}
+
+TEST(EditorMath, TurnsGroupsAboutTheirMiddle)
+{
+	const std::array points {glm::vec3(0.0f, 1.0f, 0.0f), glm::vec3(10.0f, 3.0f, 0.0f)};
+	ExpectNear(MiddleOf(points), {5.0f, 2.0f, 0.0f});
+	ExpectNear(MiddleOf({}), glm::vec3(0.0f));
+	const glm::vec3 middle {5.0f, 0.0f, 0.0f};
+	// A point turns as the thing's own turn turns its front
+	const auto turned = TurnedAbout({10.0f, 3.0f, 0.0f}, middle, glm::half_pi<float>());
+	ExpectNear(turned, middle + (YawRotation(glm::half_pi<float>()) * glm::vec3(5.0f, 3.0f, 0.0f)));
+	EXPECT_NEAR(turned.y, 3.0f, k_Epsilon);
+	ExpectNear(TurnedAbout({10.0f, 3.0f, 0.0f}, middle, 0.0f), {10.0f, 3.0f, 0.0f});
+	ExpectNear(TurnedAbout(middle, middle, 1.0f), middle);
+}
+
+TEST(EditorOutline, RangesFromTheMainPickToTheRowClicked)
+{
+	const std::vector<OutlineEntry> entries {
+	    {.entity = static_cast<entt::entity>(1), .kind = EntityKind::Tree, .label = "Oak"},
+	    {.entity = static_cast<entt::entity>(2), .kind = EntityKind::Tree, .label = "Pine"},
+	    {.entity = static_cast<entt::entity>(3), .kind = EntityKind::Tree, .label = "Beech"},
+	    {.entity = static_cast<entt::entity>(4), .kind = EntityKind::Tree, .label = "Palm"},
+	};
+	const auto groups = Group(entries, "");
+	ASSERT_EQ(groups.size(), 1u);
+	const auto& rows = groups.at(0).entries;
+	const auto e = [](uint32_t id) { return static_cast<entt::entity>(id); };
+	EXPECT_EQ(RangeOf(rows, e(2), e(4)), (std::vector {e(2), e(3), e(4)}));
+	EXPECT_EQ(RangeOf(rows, e(4), e(2)), (std::vector {e(2), e(3), e(4)}));
+	EXPECT_EQ(RangeOf(rows, e(3), e(3)), std::vector {e(3)});
+	// The main pick in another group: only the row clicked
+	EXPECT_EQ(RangeOf(rows, e(9), e(1)), std::vector {e(1)});
+	EXPECT_TRUE(RangeOf(rows, e(9), e(8)).empty());
+}

@@ -45,6 +45,7 @@
 #include "ECS/Components/Town.h"
 #include "ECS/Components/Transform.h"
 #include "ECS/Components/Tree.h"
+#include "ECS/Components/TurnAngles.h"
 #include "ECS/Components/Villager.h"
 #include "ECS/Map.h"
 #include "ECS/PlacedTurn.h"
@@ -509,35 +510,130 @@ entt::entity Place(const PlaceItem& item, glm::vec3 position, float yawRadians)
 	return entt::null;
 }
 
-std::optional<entt::entity> Duplicate(entt::entity entity, glm::vec2 offset)
+std::optional<Pose> PoseOf(const ecs::Registry& registry, entt::entity entity)
 {
-	auto& registry = Locator::entitiesRegistry::value();
-	const auto item = ItemOf(registry, entity);
-	const auto* transform = registry.TryGet<Transform>(entity);
-	if (!item.has_value() || transform == nullptr)
+	const auto* transform = registry.TryGet<const Transform>(entity);
+	if (transform == nullptr)
 	{
 		return std::nullopt;
 	}
-	const glm::vec2 point {transform->position.x + offset.x, transform->position.z + offset.y};
-	const glm::vec3 position {point.x, LandHeight(point), point.y};
-	if (const auto* creature = registry.TryGet<Creature>(entity))
+	Pose pose {.position = transform->position, .rotation = transform->rotation, .scale = transform->scale};
+	if (const auto* kept = registry.TryGet<const TurnAngles>(entity))
 	{
-		// A creature's copy has its body as it is now
-		return CreatureArchetype::Create(
-		    position, creature->owner, creature->species, creature->mind, YawOf(transform->rotation), creature->size,
-		    {.alignment = creature->alignment, .fatness = creature->fatness, .strength = creature->strength});
+		pose.keptAngles = kept->angles;
 	}
-	const auto copy = Place(*item, position, 0.0f);
-	if (copy != entt::null)
+	return pose;
+}
+
+void SetPose(entt::entity entity, const Pose& pose)
+{
+	auto& registry = Locator::entitiesRegistry::value();
+	if (!registry.AllOf<Transform>(entity))
 	{
-		if (auto* copied = registry.TryGet<Transform>(copy))
-		{
-			copied->rotation = transform->rotation;
-			copied->scale = transform->scale;
-			registry.SetDirty();
-		}
+		return;
 	}
-	return copy;
+	MoveTo(entity, pose.position);
+	auto& transform = registry.Get<Transform>(entity);
+	transform.rotation = pose.rotation;
+	transform.scale = pose.scale;
+	// The thing keeps the angles that it kept with this turn, and no others
+	if (pose.keptAngles.has_value())
+	{
+		registry.AssignOrReplace<TurnAngles>(entity, TurnAngles {.angles = *pose.keptAngles, .turn = pose.rotation});
+	}
+	else if (registry.AllOf<TurnAngles>(entity))
+	{
+		registry.Remove<TurnAngles>(entity);
+	}
+	if (auto* locomotion = registry.TryGet<CreatureLocomotion>(entity))
+	{
+		const auto heading = GameHeading::FromYaw(YawOf(pose.rotation));
+		locomotion->heading = heading;
+		locomotion->targetHeading = heading;
+		locomotion->fromHeading = heading;
+		locomotion->toHeading = heading;
+	}
+	registry.SetDirty();
+}
+
+std::optional<Recipe> RecipeOf(const ecs::Registry& registry, entt::entity entity)
+{
+	const auto item = ItemOf(registry, entity);
+	const auto pose = PoseOf(registry, entity);
+	if (!item.has_value() || !pose.has_value())
+	{
+		return std::nullopt;
+	}
+	Recipe recipe {.item = *item, .pose = *pose};
+	if (const auto* creature = registry.TryGet<const Creature>(entity))
+	{
+		recipe.creature = CreatureCopy {
+		    .owner = creature->owner,
+		    .mind = creature->mind,
+		    .size = creature->size,
+		    .alignment = creature->alignment,
+		    .fatness = creature->fatness,
+		    .strength = creature->strength,
+		};
+	}
+	return recipe;
+}
+
+entt::entity Make(const Recipe& recipe)
+{
+	const auto& pose = recipe.pose;
+	if (recipe.creature.has_value() && recipe.item.kind == PlaceKind::Creature)
+	{
+		// A creature's copy has its body as it was
+		const auto& body = *recipe.creature;
+		const auto entity = CreatureArchetype::Create(
+		    pose.position, body.owner, static_cast<CreatureType>(recipe.item.type), body.mind, YawOf(pose.rotation), body.size,
+		    {.alignment = body.alignment, .fatness = body.fatness, .strength = body.strength});
+		return entity;
+	}
+	const auto entity = Place(recipe.item, pose.position, 0.0f);
+	if (entity != entt::null)
+	{
+		SetPose(entity, pose);
+	}
+	return entity;
+}
+
+std::optional<entt::entity> Duplicate(entt::entity entity, glm::vec2 offset)
+{
+	const auto& registry = Locator::entitiesRegistry::value();
+	auto recipe = RecipeOf(registry, entity);
+	if (!recipe.has_value())
+	{
+		return std::nullopt;
+	}
+	// The copy stands as high above the land as the original, such as a bubble that floats
+	auto& position = recipe->pose.position;
+	const auto aboveLand = position.y - LandHeight({position.x, position.z});
+	const glm::vec2 point {position.x + offset.x, position.z + offset.y};
+	position = {point.x, LandHeight(point) + aboveLand, point.y};
+	const auto copy = Make(*recipe);
+	return copy != entt::null ? std::optional(copy) : std::nullopt;
+}
+
+bool RegistryWorld::Exists(entt::entity entity) const
+{
+	return Locator::entitiesRegistry::has_value() && Locator::entitiesRegistry::value().Valid(entity);
+}
+
+void RegistryWorld::SetPose(entt::entity entity, const Pose& pose)
+{
+	editor::SetPose(entity, pose);
+}
+
+entt::entity RegistryWorld::Make(const Recipe& recipe)
+{
+	return editor::Make(recipe);
+}
+
+void RegistryWorld::Remove(entt::entity entity)
+{
+	editor::Remove(entity);
 }
 
 void Remove(entt::entity entity)

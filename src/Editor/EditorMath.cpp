@@ -15,6 +15,7 @@
 #include <array>
 #include <limits>
 
+#include <glm/common.hpp>
 #include <glm/geometric.hpp>
 #include <glm/gtc/constants.hpp>
 #include <glm/gtx/euler_angles.hpp>
@@ -199,6 +200,41 @@ std::optional<glm::vec3> RayLevel(glm::vec3 origin, glm::vec3 direction, float h
 		return std::nullopt;
 	}
 	return origin + (direction * along);
+}
+
+bool ScreenRect::Contains(glm::vec2 point) const
+{
+	return point.x >= minima.x && point.x <= maxima.x && point.y >= minima.y && point.y <= maxima.y;
+}
+
+bool ScreenRect::SmallerThan(glm::vec2 size) const
+{
+	const auto extent = maxima - minima;
+	return extent.x < size.x && extent.y < size.y;
+}
+
+ScreenRect RectBetween(glm::vec2 corner, glm::vec2 other)
+{
+	return {.minima = glm::min(corner, other), .maxima = glm::max(corner, other)};
+}
+
+glm::vec3 MiddleOf(std::span<const glm::vec3> points)
+{
+	if (points.empty())
+	{
+		return glm::vec3(0.0f);
+	}
+	glm::vec3 sum(0.0f);
+	for (const auto& point : points)
+	{
+		sum += point;
+	}
+	return sum / static_cast<float>(points.size());
+}
+
+glm::vec3 TurnedAbout(glm::vec3 point, glm::vec3 centre, float radians)
+{
+	return centre + (YawRotation(radians) * (point - centre));
 }
 
 } // namespace openblack::editor
