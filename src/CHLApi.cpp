@@ -103,6 +103,7 @@
 #include "ECS/Components/CreatureBody.h"
 #include "ECS/Components/CreatureFight.h"
 #include "ECS/Components/CreatureFriends.h"
+#include "ECS/Components/CreatureHelp.h"
 #include "ECS/Components/CreatureLeash.h"
 #include "ECS/Components/CreatureLocomotion.h"
 #include "ECS/Components/CreatureMind.h"
@@ -6796,6 +6797,13 @@ void DevFunction() // 205 DEV_FUNCTION
 		if (auto* body = Locator::entitiesRegistry::value().TryGet<ecs::components::Creature>(*creature))
 		{
 			body->canDie = func == 8;
+		}
+		break;
+	case 11:
+		// The help forgets every message about the creature, waiting or told
+		if (auto* help = Locator::entitiesRegistry::value().TryGet<ecs::components::CreatureHelpMemory>(*creature))
+		{
+			creature_help::ForgetMessages(help->memory);
 		}
 		break;
 	default:
