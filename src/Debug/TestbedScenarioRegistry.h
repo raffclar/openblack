@@ -896,6 +896,9 @@ struct Command
 		/// The temple's camera looks at a scroll of the room the player is in (value: its place among the room's
 		/// scrolls), as when the player presses the scroll. Needs no creature
 		LookAtTempleScroll,
+		/// The temple's camera looks at the picture of a slot of the save game room (value: the slot), as when the
+		/// player presses the picture. Needs no creature
+		LookAtSaveGamePicture,
 		/// The creature catches fire, and burns as at the start of a fire. With a value of 1, the scenario's object catches
 		/// fire in place of the creature.
 		SetAlight,

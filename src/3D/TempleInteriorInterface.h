@@ -129,6 +129,8 @@ public:
 	virtual void EnterRoom(TempleRoom room) = 0;
 	/// The camera looks at a scroll of the current room, by its place among the room's scrolls, as a press on it does
 	virtual void LookAtScroll(size_t place) = 0;
+	/// The camera looks at the picture of a slot in the save game room, as a press on the picture does
+	virtual void LookAtSaveGamePicture(uint32_t slot) = 0;
 	/// Whether the player can go into a room. The player cannot go to a closed room. Its door tells the player.
 	[[nodiscard]] virtual bool IsRoomAvailable(TempleRoom room) const = 0;
 	/// The player clicked the door of a room that is not open to them: the help that tells them so starts

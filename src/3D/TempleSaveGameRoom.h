@@ -126,6 +126,8 @@ public:
 	bool Hold(bool pressed, std::optional<uint32_t> hoveredSubMesh, const temple::save_game_room::View& view,
 	          const ReadPicture& read, Outcome& outcome);
 	[[nodiscard]] bool IsHeld() const { return _held.has_value(); }
+	/// The camera looks at the picture of a slot, as a click on the picture does. None when the room has no such picture.
+	std::optional<Focus> LookAtPicture(uint32_t slot, const ReadPicture& read);
 
 private:
 	struct Part
@@ -138,6 +140,8 @@ private:
 		glm::vec3 max {0.0f};
 	};
 	[[nodiscard]] const Part* FindPart(uint32_t subMesh) const;
+	/// Shows the picture of a part in high detail and gives where the camera looks at it from
+	Focus LookCloser(const Part& part, const ReadPicture& read);
 	void ReadLargePicture(uint32_t slot, const ReadPicture& read);
 	static void Destroy(std::optional<graphics::TextureHandle>& texture);
 

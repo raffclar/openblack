@@ -1607,6 +1607,18 @@ void TempleInterior::LookAtScroll(size_t place)
 	}
 }
 
+void TempleInterior::LookAtSaveGamePicture(uint32_t slot)
+{
+	if (!_active || _saveGameRoom == nullptr || _cameraModel == nullptr)
+	{
+		return;
+	}
+	if (const auto focus = _saveGameRoom->LookAtPicture(slot, ReadSavedGamePicture); focus.has_value())
+	{
+		_cameraModel->LookAtSubMesh(focus->position, focus->lookAt);
+	}
+}
+
 std::optional<TempleCursorHit> TempleInterior::GetCursorHit() const
 {
 	if (!_active || _cameraModel == nullptr)
@@ -1768,6 +1780,7 @@ void TempleInterior::Update(std::chrono::microseconds dt)
 		{
 			const auto facts = GatherScrollFacts();
 			_scrolls->SetFocus(_cameraModel->GetSubMeshZoom(), facts);
+			_scrolls->StepSaveGameRoom(IsRoomDrawn(TempleRoom::SaveGame), _cameraModel->GetSubMeshZoom(), facts);
 			// While the camera is close to the story history, its buttons show, and a press turns its first line
 			if (_interface != nullptr)
 			{
