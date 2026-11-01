@@ -1843,6 +1843,74 @@ void AddThirdLandPrison(std::vector<Scenario>& all)
 	                  .script = "FreeTheCreature",
 	                  .scriptGlobals = {{"GlobalDebug", {.number = 1.0f}}}}},
 	});
+
+	// A script makes a pack of wolves, sends it off and then lets it go, as the attack of the possessed wolves does
+	// when the first wolf reaches the village
+	const auto wolf = [](glm::vec2 point, float delay) {
+		return Command {
+		    .kind = Kind::CallNative,
+		    .delaySeconds = delay,
+		    .script = "CREATE",
+		    .scriptArguments = {{.kind = Argument::Kind::Integer, .number = static_cast<float>(script::ObjectType::Animal)},
+		                        {.kind = Argument::Kind::Integer, .number = static_cast<float>(AnimalInfo::Wolf)},
+		                        {.kind = Argument::Kind::Position, .point = point}}};
+	};
+	const auto attach = [](size_t made) {
+		return Command {.kind = Kind::CallNative,
+		                .delaySeconds = 0.0f,
+		                .script = "FLOCK_ATTACH",
+		                .scriptArguments = {{.kind = Argument::Kind::Made, .index = made},
+		                                    {.kind = Argument::Kind::Made, .index = 3},
+		                                    {.kind = Argument::Kind::Integer, .number = 0.0f}}};
+	};
+	all.push_back({
+	    .id = "story.l3_wolf_pack_released",
+	    .name = "Story: a script lets its pack of wolves go",
+	    .facet = Facet::Story,
+	    .description = "After one second, a script makes three wolves south of the middle and a flock, and attaches each "
+	                   "wolf to the flock, as the attack of the possessed wolves on the third land does. The flock gets "
+	                   "the distances 5 and 40, SET_PROPERTY gives it half speed, and MOVE_GAME_THING sends it 100 "
+	                   "metres to the north. After eight seconds, RELEASE_FROM_SCRIPT lets the flock go.",
+	    .expected = "The three wolves walk north together. When the script lets the flock go, each wolf also goes out "
+	                "of the control of the script at once: the inspector shows that no wolf is under script control. "
+	                "Each wolf then starts to wander as a wild wolf does: it walks on the land to a point about the place "
+	                "of its flock. No wolf stands still.",
+	    .environment = {.dispenserGrid = false},
+	    .framing = {.shot = Shot::Overview, .include = {{-25.0f, -40.0f}, {25.0f, 75.0f}}},
+	    .commands = {wolf({-6.0f, -30.0f}, 1.0f),
+	                 wolf({0.0f, -30.0f}, 0.0f),
+	                 wolf({6.0f, -30.0f}, 0.0f),
+	                 {.kind = Kind::CallNative,
+	                  .delaySeconds = 0.0f,
+	                  .script = "FLOCK_CREATE",
+	                  .scriptArguments = {{.kind = Argument::Kind::Position, .point = {0.0f, -30.0f}}}},
+	                 {.kind = Kind::CallNative,
+	                  .delaySeconds = 0.0f,
+	                  .script = "CHANGE_INNER_OUTER_PROPERTIES",
+	                  .scriptArguments = {{.kind = Argument::Kind::Made, .index = 3},
+	                                      {.kind = Argument::Kind::Number, .number = 5.0f},
+	                                      {.kind = Argument::Kind::Number, .number = 40.0f},
+	                                      {.kind = Argument::Kind::Number, .number = 0.0f}}},
+	                 attach(0),
+	                 attach(1),
+	                 attach(2),
+	                 {.kind = Kind::CallNative,
+	                  .delaySeconds = 0.0f,
+	                  .script = "SET_PROPERTY",
+	                  .scriptArguments = {{.kind = Argument::Kind::Integer, .number = 11.0f},
+	                                      {.kind = Argument::Kind::Made, .index = 3, .kept = true},
+	                                      {.kind = Argument::Kind::Number, .number = 0.5f}}},
+	                 {.kind = Kind::CallNative,
+	                  .delaySeconds = 0.0f,
+	                  .script = "MOVE_GAME_THING",
+	                  .scriptArguments = {{.kind = Argument::Kind::Made, .index = 3},
+	                                      {.kind = Argument::Kind::Position, .point = {0.0f, 70.0f}},
+	                                      {.kind = Argument::Kind::Number, .number = 0.0f}}},
+	                 {.kind = Kind::CallNative,
+	                  .delaySeconds = 8.0f,
+	                  .script = "RELEASE_FROM_SCRIPT",
+	                  .scriptArguments = {{.kind = Argument::Kind::Made, .index = 3}}}},
+	});
 }
 
 /// The Pied Piper of the first land. The game's script runs at the same map positions as on the first land, with the

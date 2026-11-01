@@ -202,3 +202,14 @@ TEST(AnimalSlope, TheLeanLiftsTheXAndZAxesAlongTheUpAxis)
 	EXPECT_FLOAT_EQ(lean[0].x, 1.0f);
 	EXPECT_FLOAT_EQ(lean[2].z, 1.0f);
 }
+
+TEST(AnimalWanderStart, AGrazerOrAHunterStartsItsLegOnTheLand)
+{
+	EXPECT_EQ(animals::WanderStartOf(true, false), animals::WanderStart::OnTheLand);
+	EXPECT_EQ(animals::WanderStartOf(false, true), animals::WanderStart::OnTheLand);
+}
+
+TEST(AnimalWanderStart, AnyOtherKindStartsItsLegAsALeader)
+{
+	EXPECT_EQ(animals::WanderStartOf(false, false), animals::WanderStart::AsLeader);
+}

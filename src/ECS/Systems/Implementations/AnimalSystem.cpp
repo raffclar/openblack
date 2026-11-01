@@ -429,8 +429,7 @@ void AnimalSystem::ReleaseFromScript(entt::entity entity)
 	if (animal->life > 0.0f)
 	{
 		// As after a landing: it joins a flock near it if it can, then it starts on a leg of its own
-		MergeNearbyHerd(entity, *animal);
-		StartWander(entity, *animal);
+		InteractDecideWhatToDo(entity, *animal);
 		return;
 	}
 	// With no life it dies. One that a kill made dying before is dead at once.
@@ -1007,6 +1006,26 @@ void AnimalSystem::StartWander(entt::entity entity, Animal& animal)
 	flockData->followMode = k_FollowInFormation;
 	flockData->afterMove = AnimalState::DecideWhatToDo;
 	SpecialMoveToPos(entity, animal);
+}
+
+void AnimalSystem::InteractDecideWhatToDo(entt::entity entity, Animal& animal)
+{
+	auto& registry = EntityRegistry();
+	if (registry.AllOf<Flock>(animal.flock))
+	{
+		MergeNearbyHerd(entity, animal);
+	}
+	// A grazer and a hunter walk on the land. Thus they do not start a leg with a goal height, which only the other
+	// kinds follow.
+	switch (animals::WanderStartOf(registry.AllOf<Grazer>(entity), registry.AllOf<Hunter>(entity)))
+	{
+	case animals::WanderStart::OnTheLand:
+		GrazerStartWander(entity, animal);
+		break;
+	case animals::WanderStart::AsLeader:
+		StartWander(entity, animal);
+		break;
+	}
 }
 
 void AnimalSystem::FollowFlock(entt::entity entity, Animal& animal)

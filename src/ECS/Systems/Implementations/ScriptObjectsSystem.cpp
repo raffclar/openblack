@@ -458,10 +458,25 @@ void ScriptObjectsSystem::ReleaseFromScript(entt::entity object)
 		SPDLOG_LOGGER_ERROR(spdlog::get("scripting"), "Thing not valid");
 		return;
 	}
-	if (_world->IsControlled(object))
+	if (!_world->IsControlled(object))
 	{
-		ReleaseIntoGame(object);
+		return;
 	}
+	// A flock first lets each member that a script controls go back into the game. Each member keeps its reference.
+	// The release of the members stops at the first controlled member that has no place in the table.
+	for (const auto member : _world->FlockMembers(object))
+	{
+		if (!_world->Exists(member) || !_world->IsControlled(member))
+		{
+			continue;
+		}
+		if (!_table.Find(Key(member)))
+		{
+			break;
+		}
+		ReleaseIntoGame(member);
+	}
+	ReleaseIntoGame(object);
 }
 
 void ScriptObjectsSystem::ReleaseIntoGame(entt::entity object)
