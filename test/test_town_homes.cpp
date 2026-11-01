@@ -151,7 +151,7 @@ TEST_F(TownHomesTest, AStoreBuildingIsInItsTownAndAWorshipSiteIsInNoTown)
 	EXPECT_EQ(town_homes::TownOfAbode(registry, store), town);
 	const auto site = registry.Create();
 	registry.Assign<WorshipSite>(site, WorshipSite {.towns = {town}});
-	EXPECT_EQ(town_homes::TownOfAbode(registry, site), entt::null);
+	EXPECT_EQ(town_homes::TownOfAbode(registry, site), entt::entity {entt::null});
 }
 
 TEST_F(TownHomesTest, WithNoRoomTheNewcomerIsHomelessTheNewestFirst)
