@@ -37,6 +37,7 @@ enum class VanillaType : uint32_t
 {
 	Villager = 0x06,
 	Abode = 0x07,
+	MagicWood = 0x1F,
 	StoragePit = 0x08,
 	Town = 0x28,
 	Field = 0x32,
@@ -53,6 +54,8 @@ enum class VanillaType : uint32_t
 	Graveyard = 0x51,
 	MobileObject = 0x53,
 	MobileStatic = 0x54,
+	PileFood = 0x59,
+	PileResource = 0x5A,
 	FishFarm = 0x5B,
 	StandardBuildingSite = 0x5C,
 	CitadelBuildingSite = 0x5D,

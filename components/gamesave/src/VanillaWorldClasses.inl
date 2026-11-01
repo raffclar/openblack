@@ -444,41 +444,43 @@ void ReadFlock(WorldReader& r)
 	r.Word("calm");
 	r.Bytes(12, "domainCentre");
 	r.Bytes(12, "madePlace");
-	// Three words and a reference that openblack does not use yet
-	r.Word();
-	r.Word();
-	r.Word();
-	r.Ref();
+	// For a flock of birds: the state of the followers after the leader sets off, the state that a special move ends
+	// in and how the followers keep up. Then a thing that only a load sets and that the game forgets when it goes.
+	r.Word("followState");
+	r.Word("afterMove");
+	r.Word("followMode");
+	r.Ref("flockThing");
 	r.Word("flockScriptId");
 }
 
 void ReadMagicWood(WorldReader& r)
 {
 	ReadPileResource(r);
-	r.Ref();
+	r.Ref("magicWoodThing");
 }
 
 void ReadPileResource(WorldReader& r)
 {
 	ReadPotStructure(r);
-	r.Bytes(48);
+	// How the pile rises out of the ground or sinks into it
+	r.Bytes(48, "pileRise");
 }
 
 void ReadPotStructure(WorldReader& r)
 {
 	ReadPot(r);
-	r.Ref();
-	r.Ref();
-	r.Byte();
+	r.Ref("potBuilding");
+	r.Ref("potStructureRef");
+	r.Byte("potStructureByte");
 }
 
 void ReadPot(WorldReader& r)
 {
 	ReadMobileObject(r);
-	r.Word();
-	r.Ref();
-	r.Word();
-	r.Byte();
+	r.Word("potResource");
+	r.Ref("potTown");
+	r.Word("potAmount");
+	r.Byte("potFlags");
 }
 
 void ReadMobileObject(WorldReader& r)
@@ -553,7 +555,7 @@ void ReadBuildingSite(WorldReader& r)
 void ReadPileFood(WorldReader& r)
 {
 	ReadPileResource(r);
-	r.Ref();
+	r.Ref("pileFoodThing");
 }
 
 void ReadGraveyard(WorldReader& r)
