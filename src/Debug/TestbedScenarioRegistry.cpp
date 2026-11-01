@@ -3562,6 +3562,24 @@ void AddLight(std::vector<Scenario>& all)
 	                                      {.kind = ScriptArgument::Kind::Object, .index = 1}}}},
 	});
 
+	// A villager that the game makes on the water starts to drown at once, with the clip of its first state
+	all.push_back({
+	    .id = "appearance.villager_made_on_water",
+	    .name = "A villager made on the water drowns from the start",
+	    .facet = Facet::Appearance,
+	    .description = "At noon, the clock stopped, the camera looks across the lake of the testbed to its far shallows. "
+	                   "One farmer is made in the shallows, and one farmer is made on the dry land behind them.",
+	    .expected = "The farmer in the shallows plays the drowning clip from the start, until his time in the water "
+	                "ends. Then he dies and lies drowned. The farmer on the dry land plays the clip of a new villager "
+	                "until he first decides what to do. No farmer stands still in the pose of a model with no clip.",
+	    .environment = {.hour = 12.0f, .clockRuns = false, .dispenserGrid = false},
+	    .framing = {.shot = Shot::Overview,
+	                .include = {{k_Lake.x - 2.0f, k_FarShallows - 4.0f}, {k_Lake.x + 2.0f, k_FarShallows + 14.0f}},
+	                .distance = 0.1f},
+	    .objects = {{.type = VillagerInfo::CelticFarmerMale, .offset = {k_Lake.x - 2.0f, k_FarShallows - 4.0f}},
+	                {.type = VillagerInfo::CelticFarmerMale, .offset = {k_Lake.x + 2.0f, k_FarShallows + 14.0f}}},
+	});
+
 	// The same things in snow of three depths. A thing that takes all the snow gets the level (depth - 20) x 255 / 256.
 	struct SnowCoverStep
 	{
