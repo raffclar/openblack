@@ -48,6 +48,7 @@
 #include "InfoConstants.h"
 #include "Locator.h"
 #include "Magic/MagicTables.h"
+#include "Magic/ReactionRules.h"
 #include "Magic/ReactionTimingRules.h"
 #include "Magic/ShieldRules.h"
 #include "Magic/VillagerReactionRules.h"
@@ -414,11 +415,6 @@ void MagicShieldSystem::ApplyToVillager(entt::entity villager, uint32_t id)
 	{
 		return;
 	}
-	// One reacting to a miracle through the reaction system is busy with that
-	if (const auto* other = registry.TryGet<const LivingReaction>(villager); other != nullptr && other->reaction != 0)
-	{
-		return;
-	}
 	auto& reaction = _reactions.at(id);
 	// As with every reaction, only one whose state lets it react, and that isn't dying, takes it up
 	if (!villager_reactions::Available(villager, reaction.type))
@@ -431,6 +427,12 @@ void MagicShieldSystem::ApplyToVillager(entt::entity villager, uint32_t id)
 		return;
 	}
 	const float distance = villager_reaction::SpreadDistance(glm::xz(at), PositionOf(reaction.object));
+	// One reacting through the reaction system weighs the shield reaction against what it reacts to
+	if (const auto* other = registry.TryGet<const LivingReaction>(villager); other != nullptr && other->reaction != 0)
+	{
+		ChangeFromOtherReaction(villager, id, distance);
+		return;
+	}
 	const auto again = AgainTurnsFor(villager, reaction, distance);
 	auto* memory = registry.TryGet<VillagerReactionMemory>(villager);
 	if (memory == nullptr)
@@ -461,12 +463,7 @@ void MagicShieldSystem::ApplyToVillager(entt::entity villager, uint32_t id)
 		return;
 	}
 	const auto& was = found->second;
-	// The reaction it has is weighed by the distance to the middle of that reaction's cell
-	const auto cellOfWas = map_coords::Cell(map_coords::FromMetres(PositionOf(was.object)));
-	const float a =
-	    PriorityFor(villager, was,
-	                gutils::GetDistanceInMetresToCell(map_coords::FromMetres(glm::xz(at)),
-	                                                  {static_cast<int16_t>(cellOfWas.x), static_cast<int16_t>(cellOfWas.y)}));
+	const float a = HeldPriorityFor(villager, was);
 	const float b = PriorityFor(villager, reaction, distance);
 	const bool reconsiderSame = reaction.type == Reaction::ReactToMagicShieldStruck;
 	if ((reaction.type != was.type || (reconsiderSame && currentId != id)) && a < b)
@@ -481,7 +478,80 @@ void MagicShieldSystem::ApplyToVillager(entt::entity villager, uint32_t id)
 	}
 }
 
-void MagicShieldSystem::StartReacting(entt::entity villager, uint32_t id)
+uint8_t MagicShieldSystem::HeldPriorityFor(entt::entity villager, const ShieldReaction& held) const
+{
+	// The reaction it has is weighed by the distance to the middle of that reaction's cell
+	const auto cell = map_coords::Cell(map_coords::FromMetres(PositionOf(held.object)));
+	return PriorityFor(villager, held,
+	                   gutils::GetDistanceInMetresToCell(map_coords::FromMetres(PositionOf(villager)),
+	                                                     {static_cast<int16_t>(cell.x), static_cast<int16_t>(cell.y)}));
+}
+
+void MagicShieldSystem::ChangeFromOtherReaction(entt::entity villager, uint32_t id, float distance)
+{
+	// TODO(raffclar): the game also weighs the fall of a shield against another reaction. A villager that changes to
+	// the fall keeps the thing of its old reaction as its target. This code does not keep that target yet.
+	const auto& reaction = _reactions.at(id);
+	if (reaction.type == Reaction::ReactToMagicShieldDestroyed || !Locator::reactionSystem::has_value())
+	{
+		return;
+	}
+	auto& reactions = Locator::reactionSystem::value();
+	const auto held = reactions.HeldReactionOf(villager);
+	if (!held.has_value())
+	{
+		return;
+	}
+	auto& registry = EntityRegistry();
+	auto* memory = registry.TryGet<VillagerReactionMemory>(villager);
+	if (memory == nullptr)
+	{
+		memory = &registry.Assign<VillagerReactionMemory>(villager);
+	}
+	const auto turn = GameTurn();
+	const auto seconds = (turn - memory->memory.LastReacted(static_cast<uint32_t>(held->type))) / k_TurnsPerSecond;
+	if (!magic::ChangesReaction(held->type, held->priority, PriorityFor(villager, reaction, distance), seconds))
+	{
+		return;
+	}
+	memory->memory.Record(static_cast<uint32_t>(reaction.type), turn);
+	reactions.LeaveForOtherReaction(villager);
+	StartReacting(villager, id, true);
+}
+
+std::optional<MagicShieldSystemInterface::HeldReaction> MagicShieldSystem::HeldReactionOf(entt::entity villager) const
+{
+	const auto& registry = EntityRegistry();
+	const auto* current = registry.Valid(villager) ? registry.TryGet<const VillagerShieldReaction>(villager) : nullptr;
+	if (current == nullptr || !registry.AllOf<Villager, Transform>(villager))
+	{
+		return std::nullopt;
+	}
+	const auto found = _reactions.find(current->reaction);
+	if (found == _reactions.end() || !registry.Valid(found->second.object))
+	{
+		return std::nullopt;
+	}
+	return HeldReaction {.type = found->second.type, .priority = HeldPriorityFor(villager, found->second)};
+}
+
+void MagicShieldSystem::LeaveForOtherReaction(entt::entity villager)
+{
+	auto& registry = EntityRegistry();
+	const auto* current = registry.TryGet<const VillagerShieldReaction>(villager);
+	if (current == nullptr)
+	{
+		return;
+	}
+	if (const auto found = _reactions.find(current->reaction); found != _reactions.end())
+	{
+		std::erase(found->second.reacting, villager);
+	}
+	// What it did before it reacted stays remembered, and its memory of the kind stays as it is
+	registry.Remove<VillagerShieldReaction, VillagerPanic>(villager);
+}
+
+void MagicShieldSystem::StartReacting(entt::entity villager, uint32_t id, bool wasReacting)
 {
 	auto& registry = EntityRegistry();
 	auto& random = Locator::gameRandom::value();
@@ -517,7 +587,7 @@ void MagicShieldSystem::StartReacting(entt::entity villager, uint32_t id)
 	}
 
 	// Not reacting yet, it remembers what it was doing to go back to
-	if (current == nullptr)
+	if (current == nullptr && !wasReacting)
 	{
 		ecs::systems::villager_reactions::RememberStateToGoBackTo(action);
 	}

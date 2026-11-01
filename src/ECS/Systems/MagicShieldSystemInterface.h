@@ -71,6 +71,19 @@ public:
 	/// A script deletes a shield miracle: the object of the miracle goes at once with it and does not fade
 	virtual void RemoveWithSpell(entt::entity /*spell*/) {}
 
+	/// The shield reaction that a villager has taken up, and how urgent that reaction is to the villager now
+	struct HeldReaction
+	{
+		Reaction type {Reaction::None};
+		uint32_t priority {0};
+	};
+	/// The shield reaction of a villager, weighed by the distance from the villager to the middle of the map cell of the
+	/// reaction. Empty when the villager has no shield reaction.
+	[[nodiscard]] virtual std::optional<HeldReaction> HeldReactionOf(entt::entity /*villager*/) const { return std::nullopt; }
+	/// A villager changes from its shield reaction to a more urgent reaction of another kind. It leaves the shield
+	/// reaction and keeps what it did before the shield reaction, to go back to after the new reaction.
+	virtual void LeaveForOtherReaction(entt::entity /*villager*/) {}
+
 	/// A dome as it is drawn this frame
 	struct DomeDraw
 	{

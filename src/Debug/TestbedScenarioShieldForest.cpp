@@ -201,6 +201,43 @@ void AddShields(std::vector<Scenario>& all)
 	    .repeatFrom = 0,
 	});
 
+	all.push_back({
+	    .id = "miracles.shield_people_change_reaction",
+	    .name = "A town's people under a shield change to a more urgent reaction",
+	    .facet = Facet::Miracles,
+	    .description = "As the scenario of the people that shelter under a shield, without the tiger: another player's "
+	                   "lightning strikes by the hut, then the player casts a spiritual shield of radius 30 over it. "
+	                   "At one minute the other player's lightning strikes again, inside the shield.",
+	    .expected = "Once the shield rises the town's people walk in under it and face out. The second lightning kills "
+	                "the town's leader under the shield. Each villager under the shield weighs the death's reaction "
+	                "against its shield reaction, as against any other reaction. The death is the more urgent, and each "
+	                "villager has held the shield reaction for more than ten seconds, so each one leaves the shield and "
+	                "reacts to the death. Before, the villagers under a shield took no notice of it.",
+	    .environment = {.dispenserGrid = false},
+	    .framing = {.shot = Shot::Overview, .include = {{-80.0f, -10.0f}, {80.0f, 90.0f}}},
+	    .objects = {{.type = AbodeInfo::CelticHut, .offset = {0.0f, 40.0f}},
+	                {.type = VillagerInfo::CelticFarmerMale, .offset = {-45.0f, 40.0f}, .joinTown = true},
+	                {.type = VillagerInfo::CelticForesterMale, .offset = {45.0f, 45.0f}, .joinTown = true},
+	                {.type = VillagerInfo::CelticHousewifeFemale, .offset = {0.0f, 82.0f}, .joinTown = true},
+	                {.type = VillagerInfo::CelticFishermanMale, .offset = {20.0f, 2.0f}, .joinTown = true},
+	                {.type = VillagerInfo::CelticLeaderMale, .offset = {12.0f, 45.0f}, .joinTown = true}},
+	    .miracles = {{.type = MagicType::LightningBolt,
+	                  .point = {12.0f, 45.0f},
+	                  .handOffset = {12.0f, 30.0f},
+	                  .handHeight = 15.0f,
+	                  .delaySeconds = 0.5f,
+	                  .holdSeconds = 2.0f,
+	                  .player = PlayerNames::PLAYER_TWO},
+	                 {.type = MagicType::Shield, .point = k_ShieldSpot, .delaySeconds = 4.0f},
+	                 {.type = MagicType::LightningBolt,
+	                  .point = {-10.0f, 30.0f},
+	                  .handOffset = {-10.0f, 15.0f},
+	                  .handHeight = 15.0f,
+	                  .delaySeconds = 60.0f,
+	                  .holdSeconds = 2.0f,
+	                  .player = PlayerNames::PLAYER_TWO}},
+	});
+
 	all.push_back(ShieldFall(
 	    "miracles.shield_fall_hide", "A town's people hide when their shield falls",
 	    "Four villagers of the player's town about a spiritual shield of radius 30, between two huts, one 50 to the "
