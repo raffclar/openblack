@@ -24,6 +24,7 @@
 #include "ECS/Components/MapCellResident.h"
 #include "ECS/Components/Mesh.h"
 #include "ECS/Components/Mobile.h"
+#include "ECS/Components/NoLandShadow.h"
 #include "ECS/Components/OneOffSpellSeed.h"
 #include "ECS/Components/Physics.h"
 #include "ECS/Components/Pot.h"
@@ -86,13 +87,17 @@ void ForEachCasterComponent(Func func)
 	  std::type_identity<WorshipSite> {}, std::type_identity<SpellDispenser> {}, std::type_identity<Feature> {},
 	  std::type_identity<MobileStatic> {}, std::type_identity<TeleportStone> {}, std::type_identity<MobileObject> {},
 	  std::type_identity<Ball> {}, std::type_identity<RewardOnLand> {}, std::type_identity<Mesh> {},
-	  std::type_identity<Transform> {}, std::type_identity<MapCellResident> {});
+	  std::type_identity<Transform> {}, std::type_identity<MapCellResident> {}, std::type_identity<NoLandShadow> {});
 }
 
 } // namespace
 
 LandShadow LandShadowOf(const Registry& registry, entt::entity entity)
 {
+	if (registry.AllOf<NoLandShadow>(entity))
+	{
+		return LandShadow::None;
+	}
 	if (registry.AnyOf<Field, AnimatedStatic, Flowers, DeadTree, Pot, MagicPile, VillageTotem, MagicShield, ShieldDome,
 	                   SpellSeed, OneOffSpellSeed, Vortex>(entity))
 	{

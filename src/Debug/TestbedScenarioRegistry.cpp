@@ -2195,6 +2195,27 @@ void AddBeachTemplePuzzle(std::vector<Scenario>& all)
 	                                      {.kind = ScriptArgument::Kind::Integer, .number = k_HanoiKind},
 	                                      {.kind = ScriptArgument::Kind::Position, .point = k_Puzzle}}}},
 	});
+	all.push_back({
+	    .id = "story.beach_temple_ring_shadows",
+	    .name = "The land shadows of The Beach Temple Puzzle",
+	    .facet = Facet::Story,
+	    .description = "A script makes the second land's beach temple puzzle, and the camera looks down on its stack of "
+	                   "rings from above.",
+	    .expected = "The land under the puzzle shows the shadows of the three bases and of the largest ring. The three "
+	                "smaller rings cast no shadow into the land.",
+	    .environment = {.dispenserGrid = false},
+	    .framing = {.shot = Shot::Placed,
+	                .eye = {k_Puzzle.x + 12.0f, 40.0f, k_Puzzle.y - 30.0f},
+	                .look = {k_Puzzle.x, 0.0f, k_Puzzle.y - 20.0f}},
+	    .commands = {{.kind = Kind::CallNative,
+	                  .delaySeconds = 0.5f,
+	                  .script = "CREATE_WITH_ANGLE_AND_SCALE",
+	                  .scriptArguments = {{.number = 180.0f},
+	                                      {.number = 1.0f},
+	                                      {.kind = ScriptArgument::Kind::Integer, .number = k_PuzzleObjectType},
+	                                      {.kind = ScriptArgument::Kind::Integer, .number = k_HanoiKind},
+	                                      {.kind = ScriptArgument::Kind::Position, .point = k_Puzzle}}}},
+	});
 }
 
 /// The tree puzzle of the second land, as a script makes it: not turned, at its normal size
