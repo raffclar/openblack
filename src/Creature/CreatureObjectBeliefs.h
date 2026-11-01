@@ -162,6 +162,8 @@ public:
 	};
 	Added Add(entt::entity thing, uint32_t kind, map_coords::MapCoords place);
 	[[nodiscard]] const Belief* Find(entt::entity thing) const;
+	/// The store keeps the order of its beliefs. Thus a caller must not change the thing, the kind or the order number
+	/// of a belief that it gets here or from Add.
 	[[nodiscard]] Belief* Find(entt::entity thing);
 	/// Forgets the belief about a thing; whether there was one
 	bool Forget(entt::entity thing);
@@ -210,9 +212,10 @@ public:
 	/// Every belief in the order that the creature looks through its two lists: the list of whole things first, then
 	/// the list of all other things. Each list has the newest belief first.
 	[[nodiscard]] std::vector<Belief> InListOrder() const;
-	/// The same two orders, as the beliefs in the store, not copies. They stay valid only while the store does not change.
-	[[nodiscard]] std::vector<const Belief*> HeldNewestFirst() const;
-	[[nodiscard]] std::vector<const Belief*> HeldInListOrder() const;
+	/// The same two orders, as the beliefs in the store, not copies. The store keeps each order until it next changes.
+	/// Thus a list and its beliefs stay valid only while the store does not change.
+	[[nodiscard]] const std::vector<const Belief*>& HeldNewestFirst() const;
+	[[nodiscard]] const std::vector<const Belief*>& HeldInListOrder() const;
 	/// How many beliefs it holds of a kind, and in all
 	[[nodiscard]] size_t Count(uint32_t kind) const;
 	[[nodiscard]] size_t Size() const { return _contents.index.size(); }
@@ -226,6 +229,7 @@ public:
 	{
 		_contents = contents;
 		_lookedAt = {};
+		_kept.Forget();
 		Reindex();
 	}
 
@@ -255,6 +259,36 @@ private:
 		}
 	};
 	LookedAt _lookedAt;
+	/// The two orders of the beliefs, as the store last found them. The store forgets them when it makes, replaces or
+	/// forgets a belief, and when it gets new contents. A copy or a move does not keep them, because they point into
+	/// the beliefs of the other store.
+	struct KeptOrders
+	{
+		std::vector<const Belief*> newestFirst;
+		std::vector<const Belief*> inListOrder;
+		bool newestFirstKept {false};
+		bool inListOrderKept {false};
+		KeptOrders() = default;
+		~KeptOrders() = default;
+		KeptOrders(const KeptOrders& /*other*/) {}
+		KeptOrders(KeptOrders&& /*other*/) noexcept {}
+		KeptOrders& operator=(const KeptOrders& /*other*/)
+		{
+			Forget();
+			return *this;
+		}
+		KeptOrders& operator=(KeptOrders&& /*other*/) noexcept
+		{
+			Forget();
+			return *this;
+		}
+		void Forget()
+		{
+			newestFirstKept = false;
+			inListOrderKept = false;
+		}
+	};
+	mutable KeptOrders _kept;
 };
 
 /// How a creature's eyes sweep about it: the cells of a square around its own, its own cell first and then ring after

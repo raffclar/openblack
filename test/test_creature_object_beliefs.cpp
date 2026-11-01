@@ -11,7 +11,9 @@
 #include <cstdint>
 #include <cstdlib>
 
+#include <algorithm>
 #include <array>
+#include <iterator>
 #include <optional>
 #include <set>
 #include <unordered_map>
@@ -699,4 +701,114 @@ TEST(CreatureObjectBeliefs, AStoreFindsItsBeliefsAfterItsContentsArePutBack)
 	EXPECT_EQ(copy.Find(Thing(0)), nullptr);
 	EXPECT_EQ(copy.Find(Thing(30)), nullptr);
 	EXPECT_NE(copy.Find(Thing(59)), nullptr);
+}
+
+namespace
+{
+/// The two orders as a fresh sort of the beliefs gives them: the newest first, and the whole things first in that order
+std::pair<std::vector<entt::entity>, std::vector<entt::entity>> FreshOrders(const Store& store)
+{
+	auto all = store.All();
+	std::ranges::sort(all, [](const Belief& a, const Belief& b) { return a.order > b.order; });
+	std::vector<entt::entity> newest;
+	std::ranges::transform(all, std::back_inserter(newest), &Belief::thing);
+	std::ranges::stable_partition(all, [](const Belief& belief) { return InListOfWholeThings(belief.kind); });
+	std::vector<entt::entity> listed;
+	std::ranges::transform(all, std::back_inserter(listed), &Belief::thing);
+	return {newest, listed};
+}
+
+/// The kept orders are the same as a fresh sort, and each kept belief is the belief that the store finds for its thing
+void ExpectKeptOrdersAreFresh(const Store& store)
+{
+	const auto [newest, listed] = FreshOrders(store);
+	const auto& keptNewest = store.HeldNewestFirst();
+	const auto& keptListed = store.HeldInListOrder();
+	ASSERT_EQ(keptNewest.size(), newest.size());
+	ASSERT_EQ(keptListed.size(), listed.size());
+	for (size_t at = 0; at < newest.size(); ++at)
+	{
+		EXPECT_EQ(keptNewest[at]->thing, newest[at]) << at;
+		EXPECT_EQ(keptNewest[at], store.Find(newest[at])) << at;
+		EXPECT_EQ(keptListed[at]->thing, listed[at]) << at;
+		EXPECT_EQ(keptListed[at], store.Find(listed[at])) << at;
+	}
+}
+} // namespace
+
+// The store keeps its two orders between its changes. After each change, the orders are the same as a fresh sort.
+TEST(CreatureObjectBeliefs, TheKeptOrdersAreTheSameAsAFreshSortAfterEachChange)
+{
+	// Whole things (towns, forests, temples, flocks) and other things (abodes, pots). The small kinds become full.
+	constexpr std::array<uint32_t, 6> k_Kinds {0, k_Forest, k_Temple, 3, 16, k_Flock};
+	Store store;
+	uint32_t state = 777;
+	const auto next = [&state](uint32_t below) {
+		state = state * 1103515245u + 12345u;
+		return (state >> 8) % below;
+	};
+	uint64_t gone = 0;
+	for (uint32_t step = 0; step < 3000; ++step)
+	{
+		const auto thing = Thing(next(400));
+		switch (next(8))
+		{
+		case 0:
+			store.Forget(thing);
+			break;
+		case 1:
+			store.ForgetIf([&](entt::entity held) { return entt::to_integral(held) % 37 == step % 37; });
+			break;
+		case 2:
+			store.ForgetIfAnyWent(++gone, [&](entt::entity held) { return entt::to_integral(held) % 41 == step % 41; });
+			break;
+		case 3:
+			store.MarkBlocked(thing, step);
+			store.JoinTo(thing, Thing(next(400)));
+			break;
+		case 4:
+		{
+			// A copy, a move and new contents each keep the same orders as a fresh sort of their own beliefs
+			Store copy = store;
+			ExpectKeptOrdersAreFresh(copy);
+			Store moved = std::move(copy);
+			ExpectKeptOrdersAreFresh(moved);
+			Store put;
+			put.SetContents(store.Contents());
+			ExpectKeptOrdersAreFresh(put);
+			put = moved;
+			ExpectKeptOrdersAreFresh(put);
+			break;
+		}
+		default:
+			store.Add(thing, k_Kinds.at(next(static_cast<uint32_t>(k_Kinds.size()))),
+			          {.x = static_cast<int32_t>(step), .z = 0});
+			break;
+		}
+		ExpectKeptOrdersAreFresh(store);
+		if (::testing::Test::HasFailure())
+		{
+			FAIL() << "step " << step;
+		}
+	}
+	EXPECT_GT(store.Size(), 0u);
+}
+
+// The store gives the orders as it holds them. An order that it gave before a change is not the order after it.
+TEST(CreatureObjectBeliefs, ANewBeliefMakesTheStoreSortItsBeliefsAgain)
+{
+	constexpr uint32_t k_Pot = 16;
+	Store store;
+	store.Add(Thing(1), k_Pot, {});
+	store.Add(Thing(2), k_Forest, {});
+	ASSERT_EQ(store.HeldInListOrder().size(), 2u);
+	EXPECT_EQ(store.HeldInListOrder()[0]->thing, Thing(2));
+	store.Add(Thing(3), k_Flock, {});
+	store.Add(Thing(1), k_Pot, {.x = 5, .z = 0});
+	const auto& listed = store.HeldInListOrder();
+	ASSERT_EQ(listed.size(), 3u);
+	EXPECT_EQ(listed[0]->thing, Thing(3));
+	EXPECT_EQ(listed[1]->thing, Thing(2));
+	EXPECT_EQ(listed[2]->thing, Thing(1));
+	EXPECT_EQ(listed[2]->place.x, 5);
 }

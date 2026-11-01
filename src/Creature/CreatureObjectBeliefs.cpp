@@ -73,6 +73,7 @@ Store::Added Store::Add(entt::entity thing, uint32_t kind, map_coords::MapCoords
 	{
 		return {};
 	}
+	_kept.Forget();
 	auto& pool = _contents.pools.at(kind);
 	const auto capacity = static_cast<size_t>(k_Capacity.at(kind));
 	if (pool.slots.empty())
@@ -241,6 +242,7 @@ bool Store::Forget(entt::entity thing)
 	{
 		return false;
 	}
+	_kept.Forget();
 	const auto [kind, slot] = known->second;
 	_contents.index.erase(known);
 	_places.Erase(thing);
@@ -319,16 +321,27 @@ std::vector<Belief> Store::InListOrder() const
 	return Copies(HeldInListOrder());
 }
 
-std::vector<const Belief*> Store::HeldNewestFirst() const
+const std::vector<const Belief*>& Store::HeldNewestFirst() const
 {
-	return NewestFirstOf(_contents.pools, _contents.index.size());
+	if (!_kept.newestFirstKept)
+	{
+		_kept.newestFirst = NewestFirstOf(_contents.pools, _contents.index.size());
+		_kept.newestFirstKept = true;
+	}
+	return _kept.newestFirst;
 }
 
-std::vector<const Belief*> Store::HeldInListOrder() const
+const std::vector<const Belief*>& Store::HeldInListOrder() const
 {
-	auto held = NewestFirstOf(_contents.pools, _contents.index.size());
-	std::ranges::stable_partition(held, [](const Belief* belief) { return InListOfWholeThings(belief->kind); });
-	return held;
+	if (!_kept.inListOrderKept)
+	{
+		// The list order is the newest first order with the whole things moved to the front, each part in its order
+		_kept.inListOrder = HeldNewestFirst();
+		std::ranges::stable_partition(_kept.inListOrder,
+		                              [](const Belief* belief) { return InListOfWholeThings(belief->kind); });
+		_kept.inListOrderKept = true;
+	}
+	return _kept.inListOrder;
 }
 
 std::vector<Belief> Store::All() const
