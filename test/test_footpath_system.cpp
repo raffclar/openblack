@@ -577,3 +577,57 @@ TEST_F(FootpathSystemTest, OnlyADanceAwayFromSitesAndTemplesGetsAPathFromTheNear
 }
 
 } // namespace
+
+// A load of a saved game of the game puts the things that it made on the map, but sends no path round them. All the
+// paths, links, searches and walks go, and the paths of the file take their place with their nodes as given.
+TEST_F(FootpathSystemTest, ALoadedGamePutsItsPathsAndSendsNoPathRoundTheThingsThatItMade)
+{
+	const auto house = MakeAbode(k_HousePosition);
+	system->BuildingWorking(house);
+	const auto site = world->Make(glm::vec3 {100.0f, 0.0f, 140.0f});
+	world->SyncMap();
+	world->stepsToFind = planning::k_StepsPerTurn * 3;
+	system->TownJoinedSite(site, town);
+	ASSERT_EQ(CountOfFinders(), 1U);
+	const auto villager = world->registry.Create();
+	world->registry.Assign<LivingAction>(villager, VillagerStates::MoveOnPath, static_cast<uint16_t>(0));
+	world->registry.Assign<FootpathWalk>(villager, PathsOf(house).front(), false, std::optional<uint32_t>(1), entt::null);
+
+	// The load makes a rock on the line between the pit and the house, which waits to go onto the map
+	world->Make(k_RockPosition, k_RockRadius);
+	const auto pitPlace = wall_hug::ToWhole(glm::xz(k_PitPosition));
+	const auto housePlace = wall_hug::ToWhole(glm::xz(k_HousePosition));
+	Footpath file {.walkable = true};
+	file.nodes.push_back({.position = k_PitPosition, .place = pitPlace});
+	file.nodes.push_back({.position = k_RockPosition, .place = wall_hug::ToWhole(glm::xz(k_RockPosition)), .hidden = true});
+	file.nodes.push_back({.position = k_HousePosition, .place = housePlace, .planned = true});
+	Footpath unwalked {.walkable = false};
+	unwalked.nodes.push_back({.position = k_HousePosition, .place = housePlace, .marker = true});
+	const std::array loaded {file, unwalked};
+	const auto made = system->PutLoadedFootpaths(loaded);
+
+	ASSERT_EQ(made.size(), 2U);
+	EXPECT_EQ(CountOfPaths(), 2U);
+	EXPECT_EQ(CountOfFinders(), 0U);
+	EXPECT_TRUE(PathsOf(house).empty());
+	EXPECT_TRUE(PathsOf(pit).empty());
+	EXPECT_FALSE(world->registry.AllOf<FootpathWalk>(villager));
+	// The rock is on the map, and no change waits for the paths
+	EXPECT_TRUE(world->registry.Context().footpathObstacleChanges.empty());
+	EXPECT_EQ(world->registry.Context().footpathObstacles.size(), 1U);
+	const auto& first = world->registry.Get<const Footpath>(made[0]);
+	EXPECT_TRUE(first.walkable);
+	ASSERT_EQ(first.nodes.size(), 3U);
+	EXPECT_EQ(PlacesOf(made[0]), (std::vector<glm::ivec2> {pitPlace, file.nodes[1].place, housePlace}));
+	EXPECT_TRUE(first.nodes[1].hidden);
+	EXPECT_TRUE(first.nodes[2].planned);
+	EXPECT_EQ(first.nodes[2].position, k_HousePosition);
+	const auto& second = world->registry.Get<const Footpath>(made[1]);
+	EXPECT_FALSE(second.walkable);
+	ASSERT_EQ(second.nodes.size(), 1U);
+	EXPECT_TRUE(second.nodes[0].marker);
+
+	// A later turn leaves the loaded paths as the file gave them
+	system->ProcessTurn();
+	EXPECT_EQ(PlacesOf(made[0]), (std::vector<glm::ivec2> {pitPlace, file.nodes[1].place, housePlace}));
+}

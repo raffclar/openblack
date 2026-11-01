@@ -128,6 +128,8 @@ private:
 	void DecideWhatToDo(entt::entity entity, components::Animal& animal);
 	/// A leader's next leg, about where its flock was made
 	void StartWander(entt::entity entity, components::Animal& animal);
+	/// It joins a flock near it if it can, then it starts on a leg of its own in the way of its kind
+	void InteractDecideWhatToDo(entt::entity entity, components::Animal& animal);
 	/// A follower near its leader, then in formation
 	void FollowFlock(entt::entity entity, components::Animal& animal);
 

@@ -37,6 +37,7 @@ public:
 	void AddToPlayer(entt::entity totem) override;
 	void RefreshIcons(PlayerNames player) override;
 	void SetTownShare(entt::entity town, float share) override;
+	void Restore(entt::entity totem, float heading, float share) override;
 	void Update(uint32_t realMs) override;
 	void ProcessTurn(uint32_t realMs) override;
 

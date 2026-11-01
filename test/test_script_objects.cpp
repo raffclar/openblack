@@ -777,6 +777,59 @@ TEST(ScriptObjectsSystem, AReleasedAnimalInThePhysicsWandersAfterAReaction)
 	EXPECT_EQ(world->releasedAnimals, std::vector {animal});
 }
 
+TEST(ScriptObjectsSystem, AReleasedFlockLetsItsControlledMembersGoAtOnce)
+{
+	// The possessed wolves of the third land: the script lets go of the pack when a wolf gets to the village
+	auto [world, system] = MakeSystem();
+	const auto wolf = world->Add(5, {.kind = Kind::Animal, .controlled = true});
+	const auto free = world->Add(6, {.kind = Kind::Animal});
+	const auto villager = world->Add(7, {.kind = Kind::Villager, .controlled = true});
+	const auto flock = world->Add(4, {.controlled = true, .container = Container::Flock, .members = {wolf, free, villager}});
+	system->AddReference(wolf);
+	system->AddReference(villager);
+	system->AddReference(flock);
+	system->ReleaseFromScript(flock);
+	EXPECT_EQ(world->releasedAnimals, std::vector {wolf});
+	EXPECT_FALSE(world->IsControlled(wolf));
+	EXPECT_FALSE(world->IsControlled(villager));
+	EXPECT_FALSE(world->IsControlled(flock));
+	ASSERT_FALSE(world->released.empty());
+	EXPECT_EQ(world->released.front(), std::make_pair(std::string("leaves flock"), villager));
+	// The members keep their references
+	for (const auto& place : system->Places())
+	{
+		EXPECT_EQ(place.references, 1);
+	}
+}
+
+TEST(ScriptObjectsSystem, AReleasedFlockStopsAtAControlledMemberWithNoPlace)
+{
+	auto [world, system] = MakeSystem();
+	const auto first = world->Add(5, {.kind = Kind::Animal, .controlled = true});
+	const auto noPlace = world->Add(6, {.kind = Kind::Animal, .controlled = true});
+	const auto last = world->Add(7, {.kind = Kind::Animal, .controlled = true});
+	const auto flock = world->Add(4, {.controlled = true, .container = Container::Flock, .members = {first, noPlace, last}});
+	system->AddReference(first);
+	system->AddReference(last);
+	system->AddReference(flock);
+	system->ReleaseFromScript(flock);
+	EXPECT_EQ(world->releasedAnimals, std::vector {first});
+	EXPECT_TRUE(world->IsControlled(noPlace));
+	EXPECT_TRUE(world->IsControlled(last));
+	EXPECT_FALSE(world->IsControlled(flock));
+}
+
+TEST(ScriptObjectsSystem, AFlockNoScriptControlsLetsNoMemberGoWhenReleased)
+{
+	auto [world, system] = MakeSystem();
+	const auto wolf = world->Add(5, {.kind = Kind::Animal, .controlled = true});
+	const auto flock = world->Add(4, {.container = Container::Flock, .members = {wolf}});
+	system->AddReference(wolf);
+	system->ReleaseFromScript(flock);
+	EXPECT_TRUE(world->releasedAnimals.empty());
+	EXPECT_TRUE(world->IsControlled(wolf));
+}
+
 TEST(ScriptObjectsSystem, TheSavedTableHasZeroInItsGapsAndKeepsItsLayout)
 {
 	auto [world, system] = MakeSystem();

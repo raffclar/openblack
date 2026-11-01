@@ -33,6 +33,9 @@ public:
 	/// top, it turns to face the town's worship site, and the town's worship share is set to none. A totem with no
 	/// see-through second plinth and icon gets them here, hidden.
 	virtual void AddToPlayer(entt::entity totem) = 0;
+	/// A totem of a saved game, after the load made it with its town centre. It faces the heading of the file and
+	/// stands still at the share of the file, and the hand holds it at that share. It makes no sound.
+	virtual void Restore(entt::entity totem, float heading, float share) = 0;
 	/// The player's primary creature changed: the player's own totems put the new icon on top, leaving their shares as
 	/// they are
 	virtual void RefreshIcons(PlayerNames player) = 0;

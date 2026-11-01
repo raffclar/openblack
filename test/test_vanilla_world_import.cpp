@@ -18,7 +18,9 @@
 #include <fstream>
 #include <iostream>
 #include <iterator>
+#include <map>
 #include <optional>
+#include <set>
 #include <string_view>
 #include <utility>
 #include <vector>
@@ -27,6 +29,7 @@
 #include <gtest/gtest.h>
 
 #include "3D/MapCoords.h"
+#include "ECS/VanillaFootpathImport.h"
 #include "ECS/VanillaParticleImport.h"
 #include "ECS/VanillaSceneryImport.h"
 #include "ECS/VanillaScriptImport.h"
@@ -187,8 +190,12 @@ TEST(VanillaWorldImport, KeepsTheStatesOnlyWhenTheFileHasAllTheyNeed)
 	EXPECT_EQ(world_import::StartStates({1, k_Chillout, 0}, 0x13), world_import::DecideAgain());
 	EXPECT_EQ(world_import::DecideAgain(), (std::array<uint8_t, 3> {k_Decide, k_Invalid, k_Invalid}));
 	// A state with values that openblack does not keep, at the top or at the end, makes the villager decide again
-	EXPECT_EQ(world_import::StartStates({k_OnPath, 0, 0}, 0x01), (std::array<uint8_t, 3> {k_Decide, k_Invalid, k_Invalid}));
-	EXPECT_EQ(world_import::StartStates({1, k_OnPath, 0}, 0x01), (std::array<uint8_t, 3> {k_Decide, k_Invalid, k_Invalid}));
+	constexpr auto k_InScript = static_cast<uint8_t>(VillagerStates::InScript);
+	EXPECT_EQ(world_import::StartStates({k_InScript, 0, 0}, 0x01), (std::array<uint8_t, 3> {k_Decide, k_Invalid, k_Invalid}));
+	EXPECT_EQ(world_import::StartStates({1, k_InScript, 0}, 0x01), (std::array<uint8_t, 3> {k_Decide, k_Invalid, k_Invalid}));
+	// A walk on a footpath keeps its states: the footpaths of the file give its values
+	EXPECT_EQ(world_import::StartStates({k_OnPath, k_Chillout, 0}, 0x0B), (std::array<uint8_t, 3> {k_OnPath, k_Chillout, 0}));
+	EXPECT_TRUE(world_import::CanKeepStateValues(k_OnPath));
 	EXPECT_TRUE(world_import::CanKeepStateValues(static_cast<uint8_t>(VillagerStates::Fishing)));
 	EXPECT_TRUE(world_import::CanKeepStateValues(static_cast<uint8_t>(VillagerStates::FarmerPlantsCrop)));
 	EXPECT_FALSE(world_import::CanKeepStateValues(static_cast<uint8_t>(VillagerStates::InScript)));
@@ -1467,6 +1474,108 @@ TEST(VanillaScriptImport, ReadsTheThingsOfTheScripts)
 	EXPECT_FALSE(script_import::HeartPlayer(made, 0).has_value());
 }
 
+// Each totem of a Land 1 save keeps every value of the file, and stands on a town centre that the import makes
+TEST(VanillaWorldImport, SavedGamesOfLandOneKeepEveryValueOfTheirTotems)
+{
+	uint32_t totems = 0;
+	const auto files = ForEachLandOneSave([&](const std::filesystem::path& path, const VanillaWorld& world) {
+		const auto imported = world_import::ReadTowns(world);
+		std::vector<const VanillaRecord*> records;
+		for (const auto& record : world.Records())
+		{
+			if (record.Is(VanillaType::TotemStatue))
+			{
+				records.push_back(&record);
+			}
+		}
+		ASSERT_EQ(imported.totems.size(), records.size()) << path;
+		for (size_t i = 0; i < records.size(); ++i)
+		{
+			const auto& record = *records[i];
+			const auto& totem = imported.totems[i];
+			EXPECT_EQ(totem.number, record.number) << path;
+			EXPECT_EQ(totem.townCentre, world.Ref(record, "totemTownCentre")) << path;
+			const auto place = world.Raw(record, "position");
+			ASSERT_EQ(place.size(), sizeof(totem.position)) << path;
+			EXPECT_EQ(std::memcmp(place.data(), &totem.position, sizeof(totem.position)), 0) << path;
+			EXPECT_EQ(totem.heading, world.Float(record, "heading")) << path;
+			EXPECT_EQ(totem.scale, world.Float(record, "scale")) << path;
+			EXPECT_EQ(totem.life, world.Float(record, "life")) << path;
+			EXPECT_EQ(totem.share, world.Float(record, "totemShare")) << path;
+			EXPECT_EQ(totem.heldShare, world.Float(record, "totemHeldShare")) << path;
+			EXPECT_EQ(totem.word84, world.Word(record, "totemWord84")) << path;
+			const auto* centre = world.Record(totem.townCentre);
+			ASSERT_NE(centre, nullptr) << path;
+			EXPECT_TRUE(centre->Is(VanillaType::TownCentre)) << path;
+			// The totem has the scale of its town centre, as the totem that the town centre makes has
+			EXPECT_EQ(totem.scale, world.Float(*centre, "scale")) << path;
+			EXPECT_NE(std::ranges::find(imported.abodes, totem.townCentre, &world_import::ImportedAbode::number),
+			          imported.abodes.end())
+			    << path;
+			std::cout << path.parent_path().filename().string() << " totem " << totem.number << " share " << totem.share
+			          << " held " << totem.heldShare << " word " << totem.word84 << " life " << totem.life << " heading "
+			          << totem.heading << std::endl;
+			++totems;
+		}
+	});
+	if (!files.has_value())
+	{
+		GTEST_SKIP() << "Set OPENBLACK_VANILLA_SAVES to a copy of a Profiles folder of the game to check its saved games";
+	}
+	EXPECT_GT(totems, 0U);
+}
+
+// Each highlight of a Land 1 save keeps every value of the file: its row, its place, the active value, the height,
+// the text and the category. The import gives these values to the highlight before its creation step.
+TEST(VanillaScriptImport, SavedGamesOfLandOneKeepEveryValueOfTheirHighlights)
+{
+	uint32_t highlights = 0;
+	uint32_t active = 0;
+	const auto files = ForEachLandOneSave([&](const std::filesystem::path& path, const VanillaWorld& world) {
+		const auto things = script_import::ReadScriptThings(world);
+		std::vector<const VanillaRecord*> records;
+		for (const auto& record : world.Records())
+		{
+			if (record.Is(VanillaType::ScriptHighlight))
+			{
+				records.push_back(&record);
+			}
+		}
+		ASSERT_EQ(things.highlights.size(), records.size()) << path;
+		for (size_t i = 0; i < records.size(); ++i)
+		{
+			const auto& record = *records[i];
+			const auto& highlight = things.highlights[i];
+			EXPECT_EQ(highlight.number, record.number) << path;
+			EXPECT_EQ(highlight.kind, script_import::HighlightRowOf(world.Word(record, "info").value_or(0))) << path;
+			const auto place = world.Raw(record, "position");
+			ASSERT_EQ(place.size(), sizeof(highlight.position)) << path;
+			EXPECT_EQ(std::memcmp(place.data(), &highlight.position, sizeof(highlight.position)), 0) << path;
+			EXPECT_EQ(highlight.active, world.Word(record, "highlightActive").value_or(0) != 0) << path;
+			EXPECT_EQ(highlight.drawHeight.has_value(), world.Word(record, "highlightHeightSet").value_or(0) != 0) << path;
+			if (highlight.drawHeight.has_value())
+			{
+				EXPECT_EQ(highlight.drawHeight, world.Float(record, "highlightHeight")) << path;
+			}
+			EXPECT_EQ(highlight.text, world.Word(record, "highlightText")) << path;
+			EXPECT_EQ(highlight.category, world.Word(record, "highlightCategory")) << path;
+			++highlights;
+			if (highlight.active)
+			{
+				++active;
+				std::cout << "Active highlight " << highlight.number << " of row " << static_cast<int>(highlight.kind) << " in "
+				          << path.generic_string() << std::endl;
+			}
+		}
+	});
+	if (!files.has_value())
+	{
+		GTEST_SKIP() << "Set OPENBLACK_VANILLA_SAVES to a copy of a Profiles folder of the game to check its saved games";
+	}
+	EXPECT_GT(highlights, 0U);
+	std::cout << *files << " Land 1 saves: " << highlights << " highlights, " << active << " active" << std::endl;
+}
+
 // A temple of the file with no site stands whole
 TEST(VanillaScriptImport, ATempleOfTheFileWithNoSiteStandsWhole)
 {
@@ -2367,4 +2476,192 @@ TEST(VanillaParticleImport, SavedGamesOfLandOneHaveEveryContainerAndVortexThatTh
 		GTEST_SKIP() << "Set OPENBLACK_VANILLA_SAVES to a copy of a Profiles folder of the game to check its saved games";
 	}
 	EXPECT_GT(held, 0U);
+}
+
+namespace footpath_import = openblack::ecs::vanilla_footpath_import;
+
+// Each footpath of a Land 1 save keeps every value of the file: its nodes in order, the place, the flags and the
+// walkers of each node, and the word that lets walkers take it. Each link of a thing keeps its footpaths in order.
+TEST(VanillaFootpathImport, SavedGamesOfLandOneKeepEveryValueOfTheirFootpaths)
+{
+	uint32_t paths = 0;
+	uint32_t nodes = 0;
+	uint32_t links = 0;
+	std::map<uint32_t, uint32_t> holderTypes;
+	std::map<uint8_t, uint32_t> flags;
+	const auto files = ForEachLandOneSave([&](const std::filesystem::path& path, const VanillaWorld& world) {
+		const auto imported = footpath_import::ReadFootpaths(world);
+		EXPECT_TRUE(imported.skipped.empty()) << path << " " << (imported.skipped.empty() ? "" : imported.skipped.front());
+		EXPECT_EQ(imported.finders, 0U) << path;
+		// Every footpath and every node of the file is in a footpath of the list, once
+		std::set<uint32_t> listed;
+		std::set<uint32_t> listedNodes;
+		for (const auto& footpath : imported.paths)
+		{
+			EXPECT_TRUE(listed.insert(footpath.number).second) << path;
+			const auto* record = world.Record(footpath.number);
+			ASSERT_NE(record, nullptr) << path;
+			EXPECT_EQ(footpath.walkable, world.Word(*record, "walkable")) << path;
+			const auto refs = world.Refs(*record, "nodes");
+			ASSERT_EQ(footpath.nodes.size(), refs.size()) << path;
+			for (size_t i = 0; i < refs.size(); ++i)
+			{
+				const auto& node = footpath.nodes[i];
+				EXPECT_EQ(node.number, refs[i]) << path;
+				EXPECT_TRUE(listedNodes.insert(node.number).second) << path;
+				const auto& nodeRecord = *world.Record(node.number);
+				const auto place = world.Raw(nodeRecord, "pos");
+				ASSERT_EQ(place.size(), sizeof(node.coords)) << path;
+				EXPECT_EQ(std::memcmp(place.data(), &node.coords, sizeof(node.coords)), 0) << path;
+				EXPECT_EQ(node.flags, world.Byte(nodeRecord, "nodeFlags")) << path;
+				const auto followers = world.Refs(nodeRecord, "followers");
+				EXPECT_TRUE(std::ranges::equal(node.followers, followers)) << path;
+				// openblack keeps every flag of the file but the first, which the game sets on each node it makes
+				EXPECT_EQ(node.flags & ~footpath_import::k_NodeKeptFlags, 0) << path;
+				EXPECT_NE(node.flags & footpath_import::k_NodeMade, 0) << path;
+				const auto made = footpath_import::NodeOf(node, 3.5f);
+				EXPECT_EQ(made.place, glm::ivec2(node.coords.x, node.coords.z)) << path;
+				EXPECT_EQ(made.planned, (node.flags & footpath_import::k_NodePlanned) != 0) << path;
+				EXPECT_EQ(made.hidden, (node.flags & footpath_import::k_NodeHidden) != 0) << path;
+				EXPECT_EQ(made.marker, (node.flags & footpath_import::k_NodeMarker) != 0) << path;
+				EXPECT_EQ(made.position.y, node.coords.altitude + 3.5f) << path;
+				++flags[node.flags];
+				++nodes;
+			}
+			++paths;
+		}
+		uint32_t footpathRecords = 0;
+		uint32_t nodeRecords = 0;
+		uint32_t linkRecords = 0;
+		for (const auto& record : world.Records())
+		{
+			footpathRecords += record.Is(VanillaType::Footpath) ? 1 : 0;
+			nodeRecords += record.Is(VanillaType::FootpathNode) ? 1 : 0;
+			linkRecords += record.Is(VanillaType::FootpathLink) ? 1 : 0;
+		}
+		EXPECT_EQ(listed.size(), footpathRecords) << path;
+		EXPECT_EQ(listedNodes.size(), nodeRecords) << path;
+		// Every link of the file is the link of one thing, and its footpaths are footpaths of the list
+		std::set<uint32_t> linked;
+		for (const auto& link : imported.links)
+		{
+			EXPECT_TRUE(linked.insert(link.number).second) << path;
+			EXPECT_TRUE(std::ranges::equal(link.footpaths, world.Refs(*world.Record(link.number), "footpaths"))) << path;
+			for (const auto footpath : link.footpaths)
+			{
+				EXPECT_TRUE(listed.contains(footpath)) << path << " link " << link.number;
+			}
+			++holderTypes[world.Record(link.holder)->type];
+			++links;
+		}
+		EXPECT_EQ(linked.size(), linkRecords) << path;
+		std::cout << path.parent_path().filename().string() << " footpaths " << imported.paths.size() << " links "
+		          << imported.links.size() << std::endl;
+	});
+	if (!files.has_value())
+	{
+		GTEST_SKIP() << "Set OPENBLACK_VANILLA_SAVES to a copy of a Profiles folder of the game to check its saved games";
+	}
+	EXPECT_GT(paths, 0U);
+	std::cout << "Footpaths " << paths << ", nodes " << nodes << ", links " << links << std::endl;
+	for (const auto& [type, count] : holderTypes)
+	{
+		std::cout << "Links on type 0x" << std::hex << type << std::dec << ": " << count << std::endl;
+	}
+	for (const auto& [value, count] : flags)
+	{
+		std::cout << "Node flags 0x" << std::hex << static_cast<int>(value) << std::dec << ": " << count << std::endl;
+	}
+}
+
+// Each villager of a Land 1 save that walks a footpath keeps its walk: the footpath, the node that it walks to, the way
+// and the footpath after it are footpaths and nodes of the file. The walkers of each node are the villagers that walk
+// to it.
+TEST(VanillaFootpathImport, SavedGamesOfLandOneKeepTheFootpathWalksOfTheirVillagers)
+{
+	constexpr auto k_OnPath = static_cast<uint8_t>(VillagerStates::MoveOnPath);
+	uint32_t walks = 0;
+	uint32_t kept = 0;
+	uint32_t withNext = 0;
+	uint32_t towardsStart = 0;
+	uint32_t noNode = 0;
+	uint32_t stale = 0;
+	std::map<uint8_t, uint32_t> finals;
+	std::map<uint8_t, uint32_t> moveStates;
+	const auto files = ForEachLandOneSave([&](const std::filesystem::path& path, const VanillaWorld& world) {
+		const auto footpaths = footpath_import::ReadFootpaths(world);
+		const auto imported = world_import::ReadTowns(world);
+		std::map<uint32_t, const footpath_import::ImportedFootpath*> byNumber;
+		for (const auto& footpath : footpaths.paths)
+		{
+			byNumber.emplace(footpath.number, &footpath);
+		}
+		std::map<uint32_t, std::set<uint32_t>> walkersOf;
+		for (const auto& villager : imported.villagers)
+		{
+			if (villager.states[0] != k_OnPath)
+			{
+				continue;
+			}
+			++walks;
+			const auto& walk = villager.footpathWalk;
+			// The values of the state are the footpath and the node of the living thing
+			ASSERT_EQ(villager.topValues.size(), 2U) << path;
+			EXPECT_EQ(villager.topValues[0].object.value_or(0), walk.footpath) << path << " " << villager.number;
+			EXPECT_EQ(villager.topValues[1].object.value_or(0), walk.node) << path << " " << villager.number;
+			const auto footpath = byNumber.find(walk.footpath);
+			ASSERT_NE(footpath, byNumber.end()) << path << " " << villager.number;
+			if (walk.node == 0)
+			{
+				++noNode;
+			}
+			else
+			{
+				EXPECT_TRUE(footpath_import::NodeIndexOf(*footpath->second, walk.node).has_value())
+				    << path << " " << villager.number;
+				walkersOf[walk.node].insert(villager.number);
+			}
+			if (walk.next != 0)
+			{
+				EXPECT_TRUE(byNumber.contains(walk.next)) << path << " " << villager.number;
+				++withNext;
+			}
+			towardsStart += walk.towardsStart ? 1 : 0;
+			++finals[villager.states[1]];
+			++moveStates[villager.moveState];
+			kept += world_import::StartStates(villager.states, villager.moveState) == villager.states ? 1 : 0;
+		}
+		// The walkers of each node: a walker that walks to the node, or a walker that went on and that the game drops
+		// from the list when it next looks at the list
+		for (const auto& footpath : footpaths.paths)
+		{
+			for (const auto& node : footpath.nodes)
+			{
+				const auto& walkers = walkersOf[node.number];
+				for (const auto follower : node.followers)
+				{
+					stale += walkers.contains(follower) ? 0 : 1;
+				}
+				for (const auto walker : walkers)
+				{
+					EXPECT_NE(std::ranges::find(node.followers, walker), node.followers.end()) << path << " " << walker;
+				}
+			}
+		}
+	});
+	if (!files.has_value())
+	{
+		GTEST_SKIP() << "Set OPENBLACK_VANILLA_SAVES to a copy of a Profiles folder of the game to check its saved games";
+	}
+	EXPECT_GT(walks, 0U);
+	std::cout << "Walks " << walks << ", kept " << kept << ", with a next footpath " << withNext << ", towards the start "
+	          << towardsStart << ", no node " << noNode << ", walkers of nodes that walk on " << stale << std::endl;
+	for (const auto& [state, count] : finals)
+	{
+		std::cout << "Final state " << static_cast<int>(state) << ": " << count << std::endl;
+	}
+	for (const auto& [state, count] : moveStates)
+	{
+		std::cout << "Move state 0x" << std::hex << static_cast<int>(state) << std::dec << ": " << count << std::endl;
+	}
 }

@@ -35,11 +35,16 @@ constexpr size_t k_ComputerPlayerTreeWords = 396;
 /// The types of the objects in the game's world file that openblack uses
 enum class VanillaType : uint32_t
 {
+	Footpath = 0x01,
+	FootpathLink = 0x02,
+	FootpathNode = 0x03,
+	FootpathFinder = 0x05,
 	Villager = 0x06,
 	Abode = 0x07,
 	LandscapeVortexIn = 0x1B,
 	MagicWood = 0x1F,
 	StoragePit = 0x08,
+	Dance = 0x27,
 	Town = 0x28,
 	Field = 0x32,
 	Citadel = 0x35,
@@ -81,6 +86,7 @@ enum class VanillaType : uint32_t
 	ScriptMarker = 0x7C,
 	ScriptTimer = 0x7D,
 	Flock = 0x7E,
+	TotemStatue = 0x7F,
 	Wonder = 0x80,
 	AtomCore = 0xA2,
 	AtomCollection = 0xA3,
