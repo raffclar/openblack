@@ -165,7 +165,6 @@ void FrameStatsLog::Frame(FrameTime time, const openblack::Profiler& profiler, u
 	const auto onCpuMilliseconds = cpuMilliseconds.has_value() && lastCpuMilliseconds.has_value()
 	                                   ? std::optional<double>(*cpuMilliseconds - *lastCpuMilliseconds)
 	                                   : std::nullopt;
-	const auto onCpu = onCpuMilliseconds.has_value() ? fmt::format("{:.2f} ms", *onCpuMilliseconds) : std::string("unknown");
 	if (!_out.empty())
 	{
 		_records.push_back({.milliseconds = milliseconds,
@@ -208,7 +207,9 @@ void FrameStatsLog::Frame(FrameTime time, const openblack::Profiler& profiler, u
 	_pipelinesSinceReport += newPipelines;
 	if (milliseconds >= k_SpikeMilliseconds)
 	{
-		// A slow frame: which stages took its time, and what the renderer waited for
+		// A slow frame: which stages took its time, and what the renderer waited for. Only such a frame makes this text.
+		const auto onCpu =
+		    onCpuMilliseconds.has_value() ? fmt::format("{:.2f} ms", *onCpuMilliseconds) : std::string("unknown");
 		SPDLOG_LOGGER_INFO(spdlog::get("game"),
 		                   "Frame spike: frame {} took {:.2f} ms, {} of it on the processor, {:.2f} ms of work; turn {}{}; "
 		                   "render submit {:.2f} wait {:.2f}; {} draws; {} new resources; {} new pipelines; stages (ms):{}",
