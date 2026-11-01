@@ -11,7 +11,8 @@
 // its miracle when it was made at an icon of the player's worship: its model, at its own size and unturned, sitting on
 // top of the tallest still thing beneath it. Any other such seed vanishes as it lands, inside its falling effect. The
 // forest miracle's shown seed is hidden under the land until the forest is planted, then rides over the tallest of its
-// trees as they grow. Out of its player's influence such a seed's miracle closes down.
+// trees as they grow. Out of its player's influence such a seed's miracle closes down. The hand of the seed's player can
+// take the shown seed back.
 
 #define LOCATOR_IMPLEMENTATIONS
 
@@ -24,6 +25,7 @@
 #include "ECS/Components/Creature.h"
 #include "ECS/Components/Mesh.h"
 #include "ECS/Components/Physics.h"
+#include "ECS/Components/Player.h"
 #include "ECS/Components/Spell.h"
 #include "ECS/Components/SpellSeed.h"
 #include "ECS/Components/Transform.h"
@@ -31,6 +33,8 @@
 #include "ECS/Map.h"
 #include "ECS/Registry.h"
 #include "ECS/Systems/ForestSystemInterface.h"
+#include "ECS/Systems/HelpProfileSystemInterface.h"
+#include "ECS/Systems/MiracleFxSystemInterface.h"
 #include "ECS/WorldObjects.h"
 #include "InfoConstants.h"
 #include "Locator.h"
@@ -254,4 +258,89 @@ void MagicSystem::ShowSeedsWithSpells()
 		}
 		transform->position.y = land.GetHeightAt({transform->position.x, transform->position.z}) + height;
 	}
+}
+
+bool MagicSystem::TakeSeedBack(PlayerNames player, entt::entity entity)
+{
+	auto& registry = EntityRegistry();
+	const ActingAs acting(*this, player);
+	if (!HasActingHand() || Held().has_value() || !registry.Valid(entity) || !registry.AllOf<SpellSeed, Transform>(entity) ||
+	    !Locator::infoConstants::has_value())
+	{
+		return false;
+	}
+	auto& seed = registry.Get<SpellSeed>(entity);
+	const bool own = ActsOnOwnHand();
+	// The seed keeps its power-up level. It holds nothing past the cost of that level after its cast, so it gives nothing
+	// back to its worship site. The local hand shows the name of the miracle at once.
+	if (own)
+	{
+		AnnounceHeldMiracle(seed);
+	}
+	auto* spell = FindSpell(seed.spell);
+	bool enough = true;
+	if (spell != nullptr)
+	{
+		enough = StoreFromSpell(entity, seed, *spell);
+	}
+	else
+	{
+		seed.storedChants = -1.0f;
+		seed.storedAge = 0.0f;
+		seed.storedMaxObjects = -1;
+		seed.spell = entt::null;
+	}
+	const auto takeBack = magic::TakeBackOf(spell != nullptr, enough);
+	if (own && Locator::helpProfileSystem::has_value())
+	{
+		Locator::helpProfileSystem::value().Trigger(takeBack.helpEvent);
+	}
+	if (!takeBack.kept)
+	{
+		SPDLOG_LOGGER_DEBUG(spdlog::get("game"), "Magic: the hand of player {} takes back a seed with too little left; it goes",
+		                    static_cast<int>(player));
+		DeleteSeed(entity);
+		return false;
+	}
+
+	// The seed no longer stays with a miracle. It is ready at once, and the hand holds it at its own size from the hand.
+	const auto& info = magic::GetSpellSeedInfo(Info(), seed.seedType);
+	seed.followsSpell = false;
+	seed.ready = true;
+	seed.turnsInHand = 0;
+	auto& transform = registry.Get<Transform>(entity);
+	transform.rotation = glm::mat3(1.0f);
+	transform.scale = glm::vec3(info.scale);
+	transform.position = own ? _hand.handPosition : ReportedHandOf(player).value_or(transform.position);
+	SetHeld(entity);
+	// The player's last miracle is now this one: the R gesture and the R key ask for it again
+	registry.Each<Player>([player, &seed](entt::entity, Player& record) {
+		if (record.name == player)
+		{
+			record.lastSeedGained = seed.seedType;
+		}
+	});
+	SPDLOG_LOGGER_DEBUG(spdlog::get("game"), "Magic: the hand of player {} takes back its seed, with {} prayer power left",
+	                    static_cast<int>(player), seed.storedChants);
+	// The hand of another player shows no effect on this computer
+	if (!own)
+	{
+		ShowHeldSeed();
+		return true;
+	}
+	_input = {};
+	_pour = {};
+	StartHandEffect(entity);
+	ShowHeldSeed();
+	if (Locator::miracleFxSystem::has_value())
+	{
+		auto& fx = Locator::miracleFxSystem::value();
+		fx.SeedInHand(seed.powerUp, seed.powerUp);
+		const auto type = magic::GetMagicTypeFromPowerUpLevel(info, seed.powerUp);
+		if (const auto tribe = TribalPowerTribe(player, type); tribe.has_value())
+		{
+			fx.StartTribalPowerRing(*tribe);
+		}
+	}
+	return true;
 }

@@ -85,11 +85,12 @@ void MagicSystem::ShowHeldSeed()
 	}
 }
 
-particles::ProcessInfo MagicSystem::HandEffectInfo(const SpellSeed& seed) const
+particles::ProcessInfo MagicSystem::HandEffectInfo() const
 {
 	auto info = HandInfo();
 	info.handPosition = _handEffectPoint.value_or(_hand.handPosition);
-	info.power = seed.power;
+	// The effect in the hand always has full power. The charge of the seed changes only the strength of what it casts.
+	info.power = 1.0f;
 	return info;
 }
 

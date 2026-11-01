@@ -141,6 +141,34 @@ void testbed_scenarios::AddWorshipSiteScenarios(std::vector<Scenario>& all)
 	    .worshipShare = 1.0f,
 	});
 	all.push_back({
+	    .id = "miracles.seed_take_back",
+	    .name = "Shield: the hand takes its seed back",
+	    .facet = Facet::Miracles,
+	    .description = "The land of the icon scenario. All of the people go to worship at the site. After one minute the "
+	                   "site gives a shield seed to the hand. The hand draws a circle of radius 25 north of the temple "
+	                   "and casts the shield there. The seed then shows over the shield. At 95 seconds, the "
+	                   "player's hand takes the seed back at once, as the debug tools take a thing. To do it as a player, "
+	                   "press and hold the Action button with the hand over the seed before then.",
+	    .expected = "At the take, the shield closes down and its sphere shrinks away. The seed goes into the hand as the "
+	                "held miracle, ready at once, and the hand shows the name of the miracle. The seed holds the prayer "
+	                "power that the shield had left. The help counts "
+	                "event 13 (a seed taken back), then event 2 (a take), but not event 12.",
+	    .environment = {.dispenserGrid = false},
+	    .framing = {.shot = Shot::Overview, .include = {glm::vec2(-40.0f, -70.0f), glm::vec2(40.0f, 10.0f)}},
+	    .miracles = {{.type = MagicType::Shield,
+	                  .point = {0.0f, -30.0f},
+	                  .handOffset = {0.0f, -30.0f},
+	                  .delaySeconds = 60.0f,
+	                  .byHand = true,
+	                  .fromWorship = true,
+	                  .fromSite = true,
+	                  .circleRadius = 25.0f,
+	                  .holdBeforePress = 2.0f}},
+	    .landScript = k_HolderTownScript,
+	    .commands = {{.kind = Command::Kind::HandTakeShownSeed, .delaySeconds = 95.0f}},
+	    .worshipShare = 1.0f,
+	});
+	all.push_back({
 	    .id = "worship.leash_feeds_site",
 	    .name = "A creature tied to the food flag of a worship site feeds the site",
 	    .facet = Facet::Leash,
