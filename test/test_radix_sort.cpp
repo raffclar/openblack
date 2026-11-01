@@ -29,7 +29,8 @@ std::vector<uint64_t> DepthKeys(size_t count, uint32_t seed, uint32_t depthRange
 	std::vector<uint64_t> keys;
 	for (size_t i = 0; i < count; ++i)
 	{
-		keys.push_back((static_cast<uint64_t>(~depth(random)) << 32u) | i);
+		const uint32_t inverted = 0xFFFFFFFFu - depth(random);
+		keys.push_back((static_cast<uint64_t>(inverted) << 32u) | i);
 	}
 	return keys;
 }
