@@ -108,7 +108,7 @@ TEST(CreatureMarks, WoundsAreCentredAndCutAtTheEdges)
 {
 	std::vector<uint16_t> skin(k_SkinTexels, 0x0000);
 	const auto art = FakeArt({0xFF, 0xFF, 0xFF}, 255, {0xFF, 0xFF, 0xFF}, 255);
-	PaintWound(skin, art, {.u = 4, .v = 100, .skin = 0, .age = 0, .type = 3, .column = 1});
+	PaintWound(skin, 256, art, {.u = 4, .v = 100, .skin = 0, .age = 0, .type = 3, .column = 1});
 	const auto at = [&skin](int x, int y) { return skin.at(static_cast<size_t>((y * 256) + x)); };
 	// 32 texels square about its place, the part off the left edge left out
 	EXPECT_EQ(at(0, 84), 0xFFFF);
@@ -118,6 +118,54 @@ TEST(CreatureMarks, WoundsAreCentredAndCutAtTheEdges)
 	EXPECT_EQ(at(255, 100), 0x0000);
 }
 
+TEST(CreatureMarks, AWoundPaintsEachTexelOfItsPictureAlsoWhereItsAlphaIsNone)
+{
+	// The colour stays as it is and the texel becomes opaque
+	std::vector<uint16_t> skin(k_SkinTexels, 0x0123);
+	const auto art = FakeArt({0xFF, 0xFF, 0xFF}, 0, {0xFF, 0xFF, 0xFF}, 0);
+	PaintWound(skin, 256, art, {.u = 100, .v = 100, .skin = 0, .age = 0, .type = 3, .column = 0});
+	EXPECT_EQ(skin.at((100 * 256) + 100), 0xF123);
+	EXPECT_EQ(skin.at((100 * 256) + 120), 0x0123);
+}
+
+TEST(CreatureMarks, OnAHalfSizeSkinAWoundIsAtHalfItsPlaceAndTakesTheSecondTexelOfEachSquare)
+{
+	constexpr size_t k_HalfTexels = 128 * 128;
+	std::vector<uint16_t> skin(k_HalfTexels, 0x0000);
+	// The fresh picture is white in its odd rows and columns and black in the rest
+	auto art = FakeArt({0, 0, 0}, 255, {0, 0, 0}, 255);
+	for (uint32_t y = 0; y < k_AtlasSize; ++y)
+	{
+		for (uint32_t x = 0; x < k_AtlasSize; ++x)
+		{
+			if ((x % 2) == 1 && (y % 2) == 1)
+			{
+				art.fresh.colours.at((static_cast<size_t>(y) * k_AtlasSize) + x) = {0xFF, 0xFF, 0xFF};
+			}
+		}
+	}
+	PaintWound(skin, 128, art, {.u = 101, .v = 41, .skin = 0, .age = 0, .type = 3, .column = 1});
+	const auto at = [&skin](int x, int y) { return skin.at(static_cast<size_t>((y * 128) + x)); };
+	// 16 texels square about (50, 20), every one from an odd texel of the picture
+	EXPECT_EQ(at(42, 12), 0xFFFF);
+	EXPECT_EQ(at(57, 27), 0xFFFF);
+	EXPECT_EQ(at(41, 12), 0x0000);
+	EXPECT_EQ(at(58, 27), 0x0000);
+	EXPECT_EQ(at(50, 28), 0x0000);
+	// A wound on a skin of another size paints nothing
+	std::vector<uint16_t> other(64 * 64, 0x0000);
+	PaintWound(other, 64, art, {.u = 32, .v = 32, .skin = 0, .age = 0, .type = 3, .column = 1});
+	EXPECT_EQ(other.at((32 * 64) + 32), 0x0000);
+}
+
+TEST(CreatureMarks, OnAHalfSizeSkinBloodIsAtHalfItsPlace)
+{
+	std::vector<uint16_t> skin(128 * 128, 0x0FFF);
+	PaintBlood(skin, 128, {.u = 7, .v = 5, .skin = 0, .age = 0, .type = 0, .column = 0});
+	EXPECT_EQ(skin.at((2 * 128) + 3), BloodTexel(0x0FFF, {150, 0, 20}));
+	EXPECT_EQ(skin.at((5 * 128) + 7), 0x0FFF);
+}
+
 TEST(CreatureMarks, BloodDarkensAsItDries)
 {
 	EXPECT_EQ(BloodColour(0), glm::u8vec3(150, 0, 20));
@@ -125,7 +173,7 @@ TEST(CreatureMarks, BloodDarkensAsItDries)
 	EXPECT_EQ(BloodColour(22), glm::u8vec3(120, 20, 20));
 	EXPECT_EQ(BloodColour(43), glm::u8vec3(80, 40, 0));
 	std::vector<uint16_t> skin(k_SkinTexels, 0x0FFF);
-	PaintBlood(skin, {.u = 3, .v = 2, .skin = 0, .age = 0, .type = 0, .column = 0});
+	PaintBlood(skin, 256, {.u = 3, .v = 2, .skin = 0, .age = 0, .type = 0, .column = 0});
 	// Three quarters red over white
 	EXPECT_EQ(skin.at((2 * 256) + 3), BloodTexel(0x0FFF, {150, 0, 20}));
 	EXPECT_EQ(skin.at((2 * 256) + 4), 0x0FFF);
@@ -184,6 +232,46 @@ TEST(CreatureMarks, SkinsArePaintedTattoosThenWoundsThenBlood)
 	Compose(out, base, variant, 0,
 	        {.skinIndex = 0, .tattoos = tattoos, .sites = sites, .marks = marks, .art = nullptr, .masks = &masks});
 	EXPECT_EQ(at(128, 128), 0x0000);
+}
+
+TEST(CreatureMarks, AHalfSizeSkinIsPaintedAtHalfThePlacesAndSizes)
+{
+	using namespace openblack::creature_skin;
+	auto art = std::make_unique<Art>();
+	art->damage = FakeArt({0, 0, 0}, 255, {0, 0, 0}, 255);
+	for (auto& design : art->designs)
+	{
+		for (size_t level = 0; level < creature_tattoo::k_MaskLevels; ++level)
+		{
+			const auto size = creature_tattoo::k_DesignSize >> level;
+			design.at(level) = {.size = size, .levels = std::vector<uint8_t>(static_cast<size_t>(size) * size, 15)};
+		}
+	}
+	creature_tattoo::Slots tattoos {};
+	tattoos[0] = {.design = 1, .site = 0, .colour = {0xFF, 0xFF, 0xFF}};
+	std::optional<creature_tattoo::Sites> sites = creature_tattoo::Sites {};
+	sites->at(0) = {.enabled = true, .u = 128, .v = 128, .skin = 0, .size = 1.0f, .mirror = false, .rotation = 0};
+	Marks marks;
+	Add(marks.wounds, {.u = 128, .v = 128, .skin = 0, .age = 0, .type = 3, .column = 0});
+	Add(marks.blood, {.u = 128, .v = 128, .skin = 0, .age = 0, .type = 0, .column = 0});
+	creature_tattoo::Masks masks {};
+	masks[0] = art->designs.at(1);
+
+	constexpr size_t k_HalfTexels = 128 * 128;
+	const std::vector<uint16_t> base(k_HalfTexels, 0x0000);
+	const std::vector<uint16_t> variant(k_HalfTexels, 0x0FFF);
+	std::vector<uint16_t> out(k_HalfTexels);
+	Compose(out, base, variant, 255,
+	        {.skinIndex = 0, .tattoos = tattoos, .sites = sites, .marks = marks, .art = art.get(), .masks = &masks});
+	const auto at = [&out](int x, int y) { return out.at(static_cast<size_t>((y * 128) + x)); };
+	// The tattoo is 32 texels square about (64, 64), the wound 16 texels square, the blood one texel at the middle
+	EXPECT_EQ(at(48, 48), 0xFFFF);
+	EXPECT_EQ(at(47, 64), 0x0FFF);
+	EXPECT_EQ(at(79, 79), 0xFFFF);
+	EXPECT_EQ(at(80, 64), 0x0FFF);
+	EXPECT_EQ(at(56, 56), 0xF000);
+	EXPECT_EQ(at(55, 56), 0xFFFF);
+	EXPECT_EQ(at(64, 64), BloodTexel(0xF000, BloodColour(0)));
 }
 
 TEST(CreatureMarks, EachSlotPaintsWithItsMaskAndALaterSlotPaintsOver)

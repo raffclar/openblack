@@ -22,6 +22,7 @@
 #include <spdlog/spdlog.h>
 
 #include "3D/L3DSubMesh.h"
+#include "EngineConfig.h"
 #include "FileSystem/FileSystemInterface.h"
 #include "Graphics/GraphicsDeviceInterface.h"
 #include "Graphics/Texture2D.h"
@@ -40,6 +41,12 @@ l3d_skin::Layout SkinLayoutOf(uint32_t flags)
 	    Locator::graphicsDevice::has_value() &&
 	    Locator::graphicsDevice::value().HasTextureFormat(graphics::TextureFormat::BGR5A1, graphics::TextureUse::Texture2D);
 	return l3d_skin::LayoutOf(flags, has1555);
+}
+
+/// Whether the game loads the skins at half their size, at the lowest detail levels
+bool LowResolutionSkins()
+{
+	return Locator::config::has_value() && Locator::config::value().detail.lowResTextures;
 }
 
 /// The texture format that keeps texels of this layout
@@ -92,8 +99,9 @@ void L3DMesh::KnowSkinMasks(SkinId skin, std::span<const uint16_t> texels)
 	const auto solid =
 	    l3d_skin::HasOpaqueSkins(GetFlags()) ? l3d_skin::SolidAlphaTexels(texels.size()) : std::vector<uint16_t> {};
 	const auto alpha = solid.empty() ? texels : std::span<const uint16_t>(solid);
-	_skinMasks[skin] = screen_pick::MaskOf(alpha, l3d::L3DTexture::k_Width, l3d::L3DTexture::k_Height);
-	_skinAlpha[skin] = tree_shadows::MaskOf(alpha, l3d::L3DTexture::k_Width, l3d::L3DTexture::k_Height);
+	const auto side = l3d_skin::SideOf(texels.size());
+	_skinMasks[skin] = screen_pick::MaskOf(alpha, side, side);
+	_skinAlpha[skin] = tree_shadows::MaskOf(alpha, side, side);
 }
 
 bool L3DMesh::LoadWithSkinsOf(const l3d::L3DFile& l3d, const L3DMesh& skinSource) noexcept
@@ -109,22 +117,25 @@ bool L3DMesh::Load(const l3d::L3DFile& l3d) noexcept
 	_flags = static_cast<l3d::L3DMeshFlags>(l3d.GetHeader().flags);
 	_nameData = l3d.GetNameData();
 	_skinLayout = SkinLayoutOf(GetFlags());
+	// At the lowest detail levels the skins load at half their size
+	const bool lowResolution = LowResolutionSkins();
+	_skinSide = l3d_skin::LoadedSide(lowResolution);
 	for (const auto& skin : l3d.GetSkins())
 	{
 		_skinOrder.push_back(skin.id);
-		const auto texels = std::span(reinterpret_cast<const uint16_t*>(skin.texels.data()), skin.texels.size());
+		const auto texels = l3d_skin::LoadedTexels(
+		    std::span(reinterpret_cast<const uint16_t*>(skin.texels.data()), skin.texels.size()), GetFlags(), lowResolution);
 		KnowSkinMasks(skin.id, texels);
 		_skins[skin.id] = std::make_unique<Texture2D>(_debugName.c_str());
 		if (_upload == UploadMode::DataOnly)
 		{
-			_skins[skin.id]->Describe(l3d::L3DTexture::k_Width, l3d::L3DTexture::k_Height, 1, TextureFormatOf(_skinLayout));
+			_skins[skin.id]->Describe(_skinSide, _skinSide, 1, TextureFormatOf(_skinLayout));
 			continue;
 		}
 		const auto bytes = l3d_skin::TexelsIn(_skinLayout, texels);
 		const auto size = static_cast<uint32_t>(bytes.size());
 		// bgfx only lets a texture created without texels have them changed
-		_skins[skin.id]->Create(l3d::L3DTexture::k_Width, l3d::L3DTexture::k_Height, 1, TextureFormatOf(_skinLayout),
-		                        Wrapping::Repeat, Filter::Linear,
+		_skins[skin.id]->Create(_skinSide, _skinSide, 1, TextureFormatOf(_skinLayout), Wrapping::Repeat, Filter::Linear,
 		                        _dynamic ? nullptr : Locator::graphicsDevice::value().Copy(bytes.data(), size));
 		if (_dynamic)
 		{
@@ -379,9 +390,16 @@ void L3DMesh::SplitFacesForSnow()
 	}
 }
 
-void L3DMesh::UpdateSkin(SkinId skin, std::span<const uint16_t> texels) noexcept
+void L3DMesh::UpdateSkin(SkinId skin, std::span<const uint16_t> given) noexcept
 {
 	assert(_dynamic);
+	// Full-size texels for a skin kept at half size go into it as the mean of each two by two square
+	std::vector<uint16_t> halved;
+	if (l3d_skin::SideOf(given.size()) != _skinSide)
+	{
+		halved = l3d_skin::LoadedTexels(given, GetFlags(), true);
+	}
+	const auto texels = halved.empty() ? given : std::span<const uint16_t>(halved);
 	if (const auto found = _skins.find(skin); found != _skins.end() && _upload == UploadMode::Device)
 	{
 		const auto bytes = l3d_skin::TexelsIn(_skinLayout, texels);
@@ -391,12 +409,11 @@ void L3DMesh::UpdateSkin(SkinId skin, std::span<const uint16_t> texels) noexcept
 	{
 		if (l3d_skin::HasOpaqueSkins(GetFlags()))
 		{
-			found->second = tree_shadows::MaskOf(l3d_skin::SolidAlphaTexels(texels.size()), l3d::L3DTexture::k_Width,
-			                                     l3d::L3DTexture::k_Height);
+			found->second = tree_shadows::MaskOf(l3d_skin::SolidAlphaTexels(texels.size()), _skinSide, _skinSide);
 		}
 		else
 		{
-			found->second = tree_shadows::MaskOf(texels, l3d::L3DTexture::k_Width, l3d::L3DTexture::k_Height);
+			found->second = tree_shadows::MaskOf(texels, _skinSide, _skinSide);
 		}
 	}
 }

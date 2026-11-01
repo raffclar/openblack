@@ -3112,6 +3112,19 @@ void AddAppearance(std::vector<Scenario>& all)
 	    .framing = {.shot = Shot::Follow, .distance = 0.9f},
 	    .creatures = {tattooed, plain},
 	});
+	all.push_back({
+	    .id = "appearance.low_detail_tattoos_wounds",
+	    .name = "Tattoos and wounds on half-size skins",
+	    .facet = Facet::Appearance,
+	    .description = "Start the game with --detail-level 1 (Low) or 0 (Minimum). The same tiger as in "
+	                   "appearance.tattoos_wounds, with a tattoo in every slot, five wounds and burns and a trail of "
+	                   "blood, beside an unmarked tiger. Start it again with --detail-level 4 to compare.",
+	    .expected = "At Low and Minimum the skins are at half size, so they look softer. The tattoos, the wounds and the "
+	                "blood are at the same places on the body and have the same size as at the higher levels, with "
+	                "fewer texels. Nothing is missing and nothing moves to another place.",
+	    .framing = {.shot = Shot::Follow, .distance = 0.9f},
+	    .creatures = {tattooed, plain},
+	});
 
 	std::vector<Command> passing {Act(Kind::SitDown, 0, 0.5f)};
 	const std::array<glm::vec2, 2> across {glm::vec2 {-45.0f, -30.0f}, glm::vec2 {45.0f, -30.0f}};
@@ -3449,6 +3462,26 @@ void AddLight(std::vector<Scenario>& all)
 	    .framing = {.shot = Shot::Placed, .eye = {0.0f, 4.0f, -8.0f}, .look = {0.0f, 1.5f, 6.0f}},
 	    .objects = {{.type = VillagerInfo::CelticFarmerMale, .offset = {-1.5f, 6.0f}},
 	                {.type = VillagerInfo::CelticHousewifeFemale, .offset = {1.5f, 6.0f}}},
+	    .commands = {{.kind = Kind::WideScreen, .delaySeconds = 6.0f, .value = 1},
+	                 {.kind = Kind::CallNative,
+	                  .delaySeconds = 0.5f,
+	                  .script = "SET_HIGH_GRAPHICS_DETAIL",
+	                  .scriptArguments = {{.kind = ScriptArgument::Kind::Integer, .number = 1.0f},
+	                                      {.kind = ScriptArgument::Kind::Object, .index = 0}}}},
+	});
+
+	all.push_back({
+	    .id = "light.haze_high_detail_villager",
+	    .name = "No distance haze on a villager in high detail",
+	    .facet = Facet::Light,
+	    .description = "Two villagers stand in front of the camera. After six seconds, the cinema bars come in and the "
+	                   "villager on the left changes to high detail. Use --detail-level 3 or more, which has the haze.",
+	    .expected = "The villager on the left changes to its high-detail model. It keeps the light and the colour of the "
+	                "land where it stands, and it shows no distance haze. At this distance the haze is small, so its "
+	                "colours change only a little. The villager on the right does not change.",
+	    .framing = {.shot = Shot::Placed, .eye = {0.0f, 3.0f, 140.0f}, .look = {0.0f, 1.5f, 160.0f}},
+	    .objects = {{.type = VillagerInfo::CelticFarmerMale, .offset = {-3.0f, 160.0f}},
+	                {.type = VillagerInfo::CelticHousewifeFemale, .offset = {3.0f, 160.0f}}},
 	    .commands = {{.kind = Kind::WideScreen, .delaySeconds = 6.0f, .value = 1},
 	                 {.kind = Kind::CallNative,
 	                  .delaySeconds = 0.5f,

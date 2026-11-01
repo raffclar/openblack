@@ -17,6 +17,7 @@
 #include <vector>
 
 #include "3D/L3DSkinFormat.h"
+#include "3D/LowResolutionTextures.h"
 
 /// How the texels of an L3D model's skin go into a texture, by the model's flags. Every loader of L3D skins uses these
 /// rules, so that each model with opaque skins looks the same in each place.
@@ -83,6 +84,39 @@ enum class Layout : uint8_t
 [[nodiscard]] inline std::vector<uint16_t> SolidAlphaTexels(size_t count)
 {
 	return std::vector<uint16_t>(count, static_cast<uint16_t>(0xF000U));
+}
+
+/// Texels along each side of an L3D model's skin as the game loads it: 256, or 128 at the lowest detail levels
+[[nodiscard]] constexpr uint16_t LoadedSide(bool lowResolution) noexcept
+{
+	return lowResolution ? low_resolution_textures::k_HalfSide : low_resolution_textures::k_FullSide;
+}
+
+/// The texels of an L3D model's skin as the game loads them into its texture. At the lowest detail levels the game keeps
+/// each skin at half its size along each side: each texel is the mean of a two by two square of the file's texels, each
+/// channel rounded down. An opaque skin takes the mean of its 5-bit colours and stays opaque. A skin of another size
+/// stays as it is.
+[[nodiscard]] inline std::vector<uint16_t> LoadedTexels(std::span<const uint16_t> texels, uint32_t meshFlags,
+                                                        bool lowResolution)
+{
+	if (lowResolution)
+	{
+		auto half = HasOpaqueSkins(meshFlags) ? low_resolution_textures::HalveByMean555Opaque(texels)
+		                                      : low_resolution_textures::HalveByMean4444(texels);
+		if (half.has_value())
+		{
+			return *std::move(half);
+		}
+	}
+	return {texels.begin(), texels.end()};
+}
+
+/// Texels along each side of a square skin of count texels
+[[nodiscard]] inline uint16_t SideOf(size_t count) noexcept
+{
+	return count == static_cast<size_t>(low_resolution_textures::k_HalfSide) * low_resolution_textures::k_HalfSide
+	           ? low_resolution_textures::k_HalfSide
+	           : low_resolution_textures::k_FullSide;
 }
 
 } // namespace openblack::l3d_skin
