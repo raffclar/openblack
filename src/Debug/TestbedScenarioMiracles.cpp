@@ -117,6 +117,25 @@ void AddCasting(std::vector<Scenario>& all)
 	});
 
 	all.push_back({
+	    .id = "miracles.heal_again",
+	    .name = "Heal the same creature again and again",
+	    .facet = Facet::Miracles,
+	    .description = "A hurt creature beside a heal that a script casts and casts again every ten seconds, as the beach "
+	                   "temple of the second land heals what comes near it.",
+	    .expected = "Each cast puts a chakra over the creature with sparks bursting under it, three and a half seconds "
+	                "after the cast. The creature's light goes out when each miracle ends, and the next cast lights it "
+	                "again: no cast leaves the creature out.",
+	    .environment = {.dispenserGrid = false},
+	    .framing = {.shot = Shot::Overview, .include = {k_Spot}, .distance = 0.6f},
+	    .creatures = {Subject(k_Spot, "hurt", 0.3f)},
+	    .miracles = {{.type = MagicType::HealPowerUpOne,
+	                  .point = k_Spot + glm::vec2(4.0f, 0.0f),
+	                  .handOffset = k_Spot + glm::vec2(4.0f, 0.0f),
+	                  .repeatSeconds = 10.0f,
+	                  .script = ScriptSpell {.radius = 10.0f, .seconds = -1.0f, .curl = 0.0f}}},
+	});
+
+	all.push_back({
 	    .id = "miracles.food_wood",
 	    .name = "Food and wood piles",
 	    .facet = Facet::Miracles,

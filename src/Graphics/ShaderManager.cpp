@@ -402,6 +402,7 @@ ShaderManager::~ShaderManager()
 
 	_shaderPrograms.clear();
 	_samplerDefaults.reset();
+	_mainEncoder.reset();
 }
 
 void ShaderManager::LoadShaders()
@@ -411,6 +412,13 @@ void ShaderManager::LoadShaders()
 	{
 		_drawWindow = std::make_unique<DrawWindow>();
 	}
+	// On the game's thread bgfx gives its own encoder, the one that bgfx's free functions draw with. The programs keep
+	// the same main encoder for as long as the manager lives.
+	if (!_mainEncoder)
+	{
+		_mainEncoder = std::make_unique<DrawEncoder>();
+	}
+	*_mainEncoder = {.encoder = bgfx::begin()};
 	std::map<std::string_view, ShaderProgram*> made;
 	for (const auto& shader : k_Shaders)
 	{
@@ -420,7 +428,7 @@ void ShaderManager::LoadShaders()
 		auto fs = bgfx::createEmbeddedShader(k_EmbeddedShaders.data(), type, shader.fragmentShaderName.data());
 		assert(bgfx::isValid(fs));
 		auto* program = new ShaderProgram(shader.name.data(), fromBgfx(vs), fromBgfx(fs), SamplersOf(shader), *_samplerDefaults,
-		                                  _drawWindow.get());
+		                                  *_mainEncoder, _drawWindow.get());
 		made[shader.name] = program;
 		_shaderPrograms[shader.name.data()] = program;
 	}
@@ -455,13 +463,14 @@ const ShaderProgram* ShaderManager::GetShader(const std::string& name) const
 
 void ShaderManager::DiscardBindings() const
 {
-	bgfx::discard(BGFX_DISCARD_BINDINGS);
-	_samplerDefaults->Discarded(BGFX_DISCARD_BINDINGS);
+	auto& main = *_mainEncoder;
+	main.encoder->discard(BGFX_DISCARD_BINDINGS);
+	main.stages.Discarded(BGFX_DISCARD_BINDINGS);
 }
 
 void ShaderManager::FrameEnded() const
 {
-	_samplerDefaults->FrameEnded();
+	_mainEncoder->stages.Clear();
 }
 
 bool ShaderManager::OpenDrawWindow(uint32_t first, uint32_t count, std::span<const uint16_t> views) const

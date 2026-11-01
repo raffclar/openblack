@@ -1053,7 +1053,7 @@
     "type": "string"
    },
    {
-    "description": "The scopes before the button: strings and numbers, e.g. [\"Creatures\", 3]",
+    "description": "The scopes before the button: strings and numbers, e.g. [\"Creatures\", 3]. The editor draws in windows of its own: the first label names the window, e.g. [\"##EditorBottom\", \"EditorTabs\"]",
     "name": "path",
     "type": "array"
    }
@@ -1566,7 +1566,7 @@
   "query": "living.flocks"
  },
  {
-  "description": "How many fireflies there are and how many hide, fly out, hover and fly home; whether the next nightfall tops them up; the trees and the things standing over several cells they can hide in; and what the last frame did with those out: in view, near enough to be seen, drawn, and whether their picture was found",
+  "description": "How many fireflies there are and how many hide, fly out, hover and fly home; whether the next nightfall tops them up; the trees and the things standing over several cells they can hide in; and what the last frame did with those out: in view, near enough to be seen, drawn, and whether their picture was found; and the land's reward weights by magic type number, with their total",
   "kind": "object",
   "parameters": [],
   "query": "living.fireflies"
@@ -1663,6 +1663,12 @@
   "kind": "object",
   "parameters": [],
   "query": "players.new_game"
+ },
+ {
+  "description": "The trip to the Gods' Playground: whether every player's influence covers the whole land, and whether a lesson runs",
+  "kind": "object",
+  "parameters": [],
+  "query": "players.playground_trip"
  },
  {
   "description": "The profile folder, the folder of the player played in it, and whether that folder holds the help record (helpstats.dat)",
@@ -2486,6 +2492,12 @@
   "query": "game.scenarios"
  },
  {
+  "description": "The verdict of the checks that the last testbed scenario states about its own outcome: the scenario, passed or failed or waiting, and a line for each check. Null before a scenario has a verdict. A scenario with no checks has none.",
+  "kind": "object",
+  "parameters": [],
+  "query": "game.scenario_checks"
+ },
+ {
   "description": "The run's seed, the date pinned (null for the wall clock's) and the machine's milliseconds as the game reads them. With seed: every random number the game draws starts again from it, and the clock counts from 0 at a pinned date; each land or scenario loaded afterwards starts them again the same way. For two runs to go the same way: game.pause, game.frame_time, game.seed, load the land or scenario, then step; compare ecs.hash",
   "kind": "object",
   "parameters": [
@@ -2627,6 +2639,11 @@
     "type": "string"
    },
    {
+    "description": "True when the press is meant for the debug window that takes it (such as the editor's tools); else a press that a debug window would take is refused, and says which",
+    "name": "to_window",
+    "type": "boolean"
+   },
+   {
     "description": "mouse (the default): a real mouse's timing, the move's event this frame and the pointer read there by the action map the next, steps of a drag or path going on from wherever the game put the cursor; immediate: seen the same frame, as before",
     "name": "timing",
     "type": "string"
@@ -2712,6 +2729,11 @@
     "type": "point"
    },
    {
+    "description": "True when the press is meant for the debug window that takes it (such as the editor's tools); else a press that a debug window would take is refused, and says which",
+    "name": "to_window",
+    "type": "boolean"
+   },
+   {
     "description": "mouse (the default): a real mouse's timing, the move's event this frame and the pointer read there by the action map the next, steps of a drag or path going on from wherever the game put the cursor; immediate: seen the same frame, as before",
     "name": "timing",
     "type": "string"
@@ -2739,6 +2761,11 @@
     "description": "Frames for each point (1 by default)",
     "name": "frames",
     "type": "integer"
+   },
+   {
+    "description": "True when the press is meant for the debug window that takes it (such as the editor's tools); else a press that a debug window would take is refused, and says which",
+    "name": "to_window",
+    "type": "boolean"
    },
    {
     "description": "mouse (the default): a real mouse's timing, the move's event this frame and the pointer read there by the action map the next, steps of a drag or path going on from wherever the game put the cursor; immediate: seen the same frame, as before",

@@ -429,6 +429,47 @@ void AddCreatureCatchesBuildingPiece(std::vector<Scenario>& all)
 	                      .waitUntilFree = false,
 	                      .point = k_Field + glm::vec2 {14.0f, 80.0f}}};
 	all.push_back(std::move(pointing));
+
+	// The tiger stomps on the piece nearest to it once the pieces lie still
+	constexpr float k_StompAfterTheBreak = 6.0f;
+	auto stomp = CatchBuildingPieceStage();
+	stomp.id = "physics.creature_smashes_building_piece";
+	stomp.name = "A creature that smashes a piece of a building in two";
+	stomp.description = "A big boulder thrown from the south breaks a creche once. A tiger north east of the creche stands "
+	                    "still. When the pieces lie still, a script tells it to smash the nearest piece in two.";
+	stomp.expected = "The tiger walks to the piece and stomps on it. The piece breaks in two as a rock does: two rocks of "
+	                 "the game's rock model lie either side of where the piece was, and the piece goes.";
+	stomp.objects.resize(2);
+	stomp.throws.resize(1);
+	stomp.throws.front().repeatSeconds = 600.0f;
+	stomp.creatures.front().pauseMind = true;
+	stomp.creatures.front().thinksAfterSeconds = k_StompAfterTheBreak - 0.5f;
+	stomp.commands = {{.kind = Command::Kind::DoAction,
+	                   .creature = 0,
+	                   .delaySeconds = k_StompAfterTheBreak,
+	                   .action = "SmashStoneInHalf",
+	                   .onPiece = true}};
+	all.push_back(std::move(stomp));
+
+	// The pieces lie still in the cells of the map, and the tiger walks across them
+	auto cells = CatchBuildingPieceStage();
+	cells.id = "physics.building_pieces_lie_in_the_map_cells";
+	cells.name = "Pieces of a building that lie in the cells of the map";
+	cells.description = "A big boulder thrown from the south breaks a creche once. A tiger north east of the creche stands "
+	                    "still. When the pieces lie still, the tiger walks west across them.";
+	cells.expected = "Each piece that stays goes into the cells of the map when it comes to rest, as a rock does. The "
+	                 "inspector's map cell query shows the pieces in the cells. The tiger does not walk round the pieces, "
+	                 "because a piece is an obstacle only while it burns. The footpaths do not change.";
+	cells.objects.resize(2);
+	cells.throws.resize(1);
+	cells.throws.front().repeatSeconds = 600.0f;
+	// The mind stays paused, so that only the command moves the tiger
+	cells.creatures.front().pauseMind = true;
+	cells.commands = {{.kind = Command::Kind::WalkTo,
+	                   .creature = 0,
+	                   .delaySeconds = k_StompAfterTheBreak,
+	                   .point = k_Field + glm::vec2 {-16.0f, 22.0f}}};
+	all.push_back(std::move(cells));
 }
 
 void AddCreatureCatchWhileWalking(std::vector<Scenario>& all)

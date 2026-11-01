@@ -16,12 +16,14 @@
 #include <span>
 #include <string>
 #include <utility>
+#include <vector>
 
 #include <L3DFile.h>
 #include <entt/core/hashed_string.hpp>
 #include <spdlog/spdlog.h>
 
 #include "3D/CreatureBody.h"
+#include "3D/L3DSkinTexels.h"
 #include "3D/TempleInteriorInterface.h"
 #include "Commands/PlayerCommands.h"
 #include "Creature/CreatureRig.h"
@@ -35,6 +37,7 @@
 #include "ECS/Registry.h"
 #include "ECS/Systems/HandSystemInterface.h"
 #include "ECS/Systems/PlayerSystemInterface.h"
+#include "EngineConfig.h"
 #include "FileSystem/FileSystemInterface.h"
 #include "Input/LocalPlayer.h"
 #include "Locator.h"
@@ -74,9 +77,12 @@ const l3d::L3DFile* MeshFile(const std::string& name)
 	return &*files.Handle(id);
 }
 
-std::span<const uint16_t> TexelsOf(const l3d::L3DTexture& skin)
+/// The texels of a skin of a creature mesh as the game loads them: at half size at the two lowest detail levels
+std::vector<uint16_t> TexelsOf(const l3d::L3DFile& file, const l3d::L3DTexture& skin)
 {
-	return {reinterpret_cast<const uint16_t*>(skin.texels.data()), skin.texels.size()};
+	const bool lowResolution = Locator::config::has_value() && Locator::config::value().detail.lowResTextures;
+	return l3d_skin::LoadedTexels({reinterpret_cast<const uint16_t*>(skin.texels.data()), skin.texels.size()},
+	                              static_cast<uint32_t>(file.GetHeader().flags), lowResolution);
 }
 
 /// The skins as the body is drawn: the base mesh's, and the evil or good mesh's it is blended towards, the base's
@@ -125,9 +131,10 @@ void Paint(CreatureSkin& skin, const SkinSources& sources, uint8_t weight, const
 		const auto& base = baseSkins[i];
 		auto& painted = skin.skins[i];
 		painted.id = base.id;
-		painted.texels.resize(base.texels.size());
+		const auto baseTexels = TexelsOf(*sources.base, base);
+		painted.texels.resize(baseTexels.size());
 		// A neutral creature, or one whose evil or good mesh lacks the skin, starts from its base skin
-		std::span<const uint16_t> variant;
+		std::vector<uint16_t> variant;
 		if (sources.variant != sources.base)
 		{
 			if (const auto paired = creature_skin::PairedSkin(baseOrder, variantOrder, base.id); paired.has_value())
@@ -135,11 +142,11 @@ void Paint(CreatureSkin& skin, const SkinSources& sources, uint8_t weight, const
 				const auto found = std::ranges::find(variantSkins, *paired, &l3d::L3DTexture::id);
 				if (found != variantSkins.end())
 				{
-					variant = TexelsOf(*found);
+					variant = TexelsOf(*sources.variant, *found);
 				}
 			}
 		}
-		creature_skin::Compose(painted.texels, TexelsOf(base), variant, weight,
+		creature_skin::Compose(painted.texels, baseTexels, variant, weight,
 		                       {.skinIndex = static_cast<uint8_t>(i),
 		                        .tattoos = tattoos,
 		                        .sites = rig.tattooSites,

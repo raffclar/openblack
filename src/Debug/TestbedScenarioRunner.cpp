@@ -97,8 +97,10 @@
 #include "ECS/Archetypes/TownArchetype.h"
 #include "ECS/Archetypes/TreeArchetype.h"
 #include "ECS/Archetypes/VillagerArchetype.h"
+#include "ECS/BuildingReplan.h"
 #include "ECS/Components/Abode.h"
 #include "ECS/Components/Animal.h"
+#include "ECS/Components/BuildingDamage.h"
 #include "ECS/Components/Construction.h"
 #include "ECS/Components/Creature.h"
 #include "ECS/Components/CreatureBody.h"
@@ -131,6 +133,7 @@
 #include "ECS/Components/Poisoned.h"
 #include "ECS/Components/Pot.h"
 #include "ECS/Components/PrayerPower.h"
+#include "ECS/Components/Scaffold.h"
 #include "ECS/Components/ScriptControl.h"
 #include "ECS/Components/Spell.h"
 #include "ECS/Components/SpellDispenser.h"
@@ -259,6 +262,7 @@
 #include "Input/PointerSettle.h"
 #include "LHScriptX/FeatureScriptCommands.h"
 #include "LHScriptX/Script.h"
+#include "LandChange.h"
 #include "Locator.h"
 #include "Magic/MagicTables.h"
 #include "Magic/ScriptCast.h"
@@ -889,6 +893,8 @@ void Runner::Start(const Scenario& scenario)
 	_miracles.clear();
 	_started.clear();
 	_log.clear();
+	_checks.Start(scenario.checks);
+	_checksReported = false;
 	_shot.reset();
 	_crowdCreatures.clear();
 	_village = {};
@@ -925,6 +931,18 @@ void Runner::Start(const Scenario& scenario)
 		{
 			if (!land.LoadGodsRingMap())
 			{
+				_running = false;
+				return;
+			}
+		}
+		else if (scenario.environment.land == Land::Story)
+		{
+			// The land plays as the story plays it, with its scripts from a fresh start
+			const auto path =
+			    Locator::filesystem::value().GetPath<filesystem::Path::Scripts>() / std::string(scenario.environment.storyLand);
+			if (!land.LoadMapWithFreshScripts(path, land_change::Kind::NewGame))
+			{
+				Log(fmt::format("The story land {} did not load", scenario.environment.storyLand));
 				_running = false;
 				return;
 			}
@@ -1078,6 +1096,21 @@ void Runner::Start(const Scenario& scenario)
 			if (auto* impression = registry.TryGet<ecs::components::TownImpression>(town->second))
 			{
 				magic::town_belief::SetInPlayer(impression->belief, PlayerNames::PLAYER_TWO, *scenario.townBeliefInRival);
+			}
+		}
+	}
+	if (!scenario.townBeliefInPlayers.empty())
+	{
+		auto& registry = Locator::entitiesRegistry::value();
+		const auto& towns = registry.Context().towns;
+		if (const auto town = towns.find(k_ScenarioTownId); town != towns.end() && registry.Valid(town->second))
+		{
+			if (auto* impression = registry.TryGet<ecs::components::TownImpression>(town->second))
+			{
+				for (const auto& [player, belief] : scenario.townBeliefInPlayers)
+				{
+					magic::town_belief::SetInPlayer(impression->belief, player, belief);
+				}
 			}
 		}
 	}
@@ -1347,13 +1380,15 @@ void Runner::SetUpDate(const std::optional<RealDate>& date)
 void Runner::SetUpEnvironment(const Environment& environment)
 {
 	SetUpDate(environment.realDate);
-	if (Locator::skyClockSystem::has_value())
+	// A land of the story keeps its own sky, weather, alignment and prayer power
+	const bool storyLand = environment.land == Land::Story;
+	if (!storyLand && Locator::skyClockSystem::has_value())
 	{
 		auto& sky = Locator::skyClockSystem::value();
 		sky.SetTime(environment.hour);
 		sky.GetClock().SetRunning(environment.clockRuns);
 	}
-	if (Locator::weatherSystem::has_value())
+	if (!storyLand && Locator::weatherSystem::has_value())
 	{
 		// Only the scenario's weather: the climates breed no storms of their own
 		auto& weather = Locator::weatherSystem::value();
@@ -1382,7 +1417,7 @@ void Runner::SetUpEnvironment(const Environment& environment)
 		Locator::footprintSystem::value().Reset();
 		Locator::footprintSystem::value().SetAprilFoolsOverride(environment.aprilFools);
 	}
-	if (Locator::alignmentSystem::has_value())
+	if (!storyLand && Locator::alignmentSystem::has_value())
 	{
 		Locator::alignmentSystem::value().SetPlayerAlignment(PlayerNames::PLAYER_ONE,
 		                                                     environment.playerAlignment.value_or(0.0f));
@@ -1393,7 +1428,7 @@ void Runner::SetUpEnvironment(const Environment& environment)
 		Locator::handSystem::value().SetOwnPlayer(PlayerNames::PLAYER_ONE);
 	}
 	// The player's prayer power: as much as the scenario gives, or plenty
-	if (Locator::entitiesRegistry::has_value())
+	if (!storyLand && Locator::entitiesRegistry::has_value())
 	{
 		auto& registry = Locator::entitiesRegistry::value();
 		registry.Each<const ecs::components::Player, ecs::components::PrayerPower>(
@@ -1633,6 +1668,21 @@ void Runner::PlaceObjects(const Scenario& scenario, glm::vec2 middle)
 					    }
 					    return plan;
 				    }
+				    // A miracle dispenser of the town, as a script makes it: it holds no miracle and is off
+				    const auto& rows = Locator::infoConstants::value().abode;
+				    if (static_cast<size_t>(type) < rows.size() &&
+				        ecs::building_replan::MadeAsDispenser(rows.at(static_cast<size_t>(type)).abodeType) &&
+				        Locator::magicSystem::has_value())
+				    {
+					    auto& registry = Locator::entitiesRegistry::value();
+					    const auto dispenser = Locator::magicSystem::value().CreateScriptDispenser(
+					        position, type, yaw, object.scale, registry.Context().towns.at(ScenarioTown(middle)));
+					    if (auto* data = registry.TryGet<ecs::components::SpellDispenser>(dispenser))
+					    {
+						    data->notPlannedAgain = object.notPlannedAgain;
+					    }
+					    return dispenser;
+				    }
 				    const auto abode = ecs::archetypes::AbodeArchetype::Create(
 				        ScenarioTown(middle), position, type, yaw, object.scale, object.storedFood.value_or(k_ScenarioTownFood),
 				        object.storedWood.value_or(k_ScenarioTownWood));
@@ -1640,7 +1690,9 @@ void Runner::PlaceObjects(const Scenario& scenario, glm::vec2 middle)
 				    {
 					    ecs::construction::SetBuilt(abode, *object.built);
 				    }
-				    Locator::entitiesRegistry::value().Get<ecs::components::Abode>(abode).neglect = object.neglect;
+				    auto& building = Locator::entitiesRegistry::value().Get<ecs::components::Abode>(abode);
+				    building.neglect = object.neglect;
+				    building.notPlannedAgain = object.notPlannedAgain;
 				    return abode;
 			    }
 			    else if constexpr (std::is_same_v<T, FieldTypeInfo>)
@@ -1679,9 +1731,20 @@ void Runner::PlaceObjects(const Scenario& scenario, glm::vec2 middle)
 			    }
 			    else if constexpr (std::is_same_v<T, ScaffoldInfo>)
 			    {
-				    return Locator::workshopSystem::has_value() ? Locator::workshopSystem::value().CreateScaffold(
-				                                                      position, entt::null, entt::null, yaw, object.scale)
-				                                                : entt::null;
+				    if (!Locator::workshopSystem::has_value())
+				    {
+					    return static_cast<entt::entity>(entt::null);
+				    }
+				    const auto town = object.joinTown
+				                          ? Locator::entitiesRegistry::value().Context().towns.at(ScenarioTown(middle))
+				                          : entt::null;
+				    const auto scaffold =
+				        Locator::workshopSystem::value().CreateScaffold(position, town, entt::null, yaw, object.scale);
+				    if (auto* data = Locator::entitiesRegistry::value().TryGet<ecs::components::Scaffold>(scaffold))
+				    {
+					    data->destroysThingsInWay = object.clearsGround;
+				    }
+				    return scaffold;
 			    }
 			    else
 			    {
@@ -1791,6 +1854,11 @@ void Runner::UpdateComputerActions()
 			continue;
 		}
 		_computerActionsDone[i] = true;
+		if (action.templeHit)
+		{
+			MarkTempleHit(action.player, turn);
+			continue;
+		}
 		// The tool makes a marker on the land when it gives the action
 		const auto thingOf = [this, &action](const ComputerActionThing& thing) {
 			if (thing.kind != ComputerActionThing::Kind::Marker)
@@ -1818,6 +1886,21 @@ void Runner::UpdateComputerActions()
 			                   static_cast<int>(action.player), action.node);
 		}
 	}
+}
+
+void Runner::MarkTempleHit(PlayerNames player, uint32_t turn) const
+{
+	const auto temple =
+	    Locator::worshipSiteSystem::has_value() ? Locator::worshipSiteSystem::value().TempleOf(player) : entt::null;
+	auto* record = temple != entt::null ? Locator::entitiesRegistry::value().TryGet<ecs::components::Temple>(temple) : nullptr;
+	if (record == nullptr)
+	{
+		SPDLOG_LOGGER_WARN(spdlog::get("game"), "Testbed: the computer god {} has no temple to hit", static_cast<int>(player));
+		return;
+	}
+	record->lastHitTurn = turn;
+	SPDLOG_LOGGER_INFO(spdlog::get("game"), "Testbed: the temple of the computer god {} is hit at turn {}",
+	                   static_cast<int>(player), turn);
 }
 
 entt::entity Runner::ComputerActionThingOf(const ComputerActionThing& thing, PlayerNames player) const
@@ -2119,6 +2202,28 @@ std::optional<entt::entity> Runner::TotemAt(size_t index) const
 	return totem;
 }
 
+std::optional<entt::entity> Runner::PieceNearest(entt::entity creature)
+{
+	const auto& registry = Locator::entitiesRegistry::value();
+	const auto* from = registry.TryGet<const ecs::components::Transform>(creature);
+	if (from == nullptr)
+	{
+		return std::nullopt;
+	}
+	std::optional<entt::entity> nearest;
+	float best = std::numeric_limits<float>::max();
+	registry.Each<const ecs::components::BuildingPiece, const ecs::components::Transform>(
+	    [&](entt::entity piece, const ecs::components::BuildingPiece& /*part*/, const ecs::components::Transform& at) {
+		    const float distance = glm::distance(glm::xz(at.position), glm::xz(from->position));
+		    if (distance < best)
+		    {
+			    best = distance;
+			    nearest = piece;
+		    }
+	    });
+	return nearest;
+}
+
 void Runner::BuildWorshipSiteOf(entt::entity centre) const
 {
 	// The scenario does not wait for the villagers to build the worship site: it stands built at once
@@ -2183,6 +2288,13 @@ std::string Runner::GiveHandCommand(entt::entity creature, const Command& comman
 		return hand.Stroke(creature, static_cast<creature_feedback::BodyPart>(command.bodyPart)) ? "stroked" : "busy";
 	case Kind::HandSlap:
 		return hand.Slap(creature, command.slapHeight, command.gentle, command.sweepsRight) ? "slapped" : "busy";
+	case Kind::HandLock:
+	{
+		const auto own =
+		    Locator::handSystem::has_value() ? Locator::handSystem::value().GetOwnPlayer() : PlayerNames::PLAYER_ONE;
+		hand.DoLock(own, creature);
+		return hand.IsLocked(creature) ? "held" : "busy";
+	}
 	case Kind::HandLetGo:
 		if (hand.GetCreature() == creature)
 		{
@@ -2248,6 +2360,23 @@ std::string Runner::GiveLeashCommand(entt::entity creature, const Command& comma
 		registry.Each<const ecs::components::TownDesireFlag>(
 		    [&](entt::entity flag, const ecs::components::TownDesireFlag& shown) {
 			    if (!found.has_value() && static_cast<size_t>(shown.desire) == command.value)
+			    {
+				    found = flag;
+			    }
+		    });
+		if (!found.has_value())
+		{
+			return "no flag";
+		}
+		return leashes.HandTie(creature, *found) ? "tied" : "can't";
+	}
+	case Kind::TieLeashToWorshipSiteFlag:
+	{
+		auto& registry = Locator::entitiesRegistry::value();
+		std::optional<entt::entity> found;
+		registry.Each<const ecs::components::WorshipSiteFlag>(
+		    [&](entt::entity flag, const ecs::components::WorshipSiteFlag& shown) {
+			    if (!found.has_value() && static_cast<size_t>(shown.need) == command.value)
 			    {
 				    found = flag;
 			    }
@@ -2409,6 +2538,28 @@ std::string Runner::GivePlayerCommand(const Command& command)
 		}
 		progress->built = 1.0f;
 		return "all of it built, not finished";
+	}
+	case Kind::ScaffoldStartsSite:
+	{
+		const auto object = ObjectAt(command.object);
+		if (!object.has_value() || !Locator::workshopSystem::has_value())
+		{
+			return "no scaffold";
+		}
+		return Locator::workshopSystem::value().ForceBuild(*object, PlayerNames::PLAYER_ONE) ? "the site starts"
+		                                                                                     : "no building on offer";
+	}
+	case Kind::DestroyScaffoldSite:
+	{
+		const auto object = ObjectAt(command.object);
+		const auto* scaffold =
+		    object.has_value() ? Locator::entitiesRegistry::value().TryGet<const ecs::components::Scaffold>(*object) : nullptr;
+		if (scaffold == nullptr || !Locator::entitiesRegistry::value().Valid(scaffold->site))
+		{
+			return "the scaffold is on no site";
+		}
+		ecs::world_objects::DestroyedByEffect(scaffold->site, {.killer = std::nullopt, .weight = 0.0f});
+		return "the building of the site is destroyed";
 	}
 	case Kind::RemoveObject:
 	{
@@ -2578,6 +2729,39 @@ std::string Runner::GivePlayerCommand(const Command& command)
 		const auto why = hand.WhyNotTake(*object);
 		return hand.TakeIntoHand(*object) ? std::string("taken into the hand") : fmt::format("the hand can't take it: {}", why);
 	}
+	case Kind::HandTakeShownSeed:
+	{
+		// The first seed of the player that shows over its miracle
+		std::optional<entt::entity> seed;
+		Locator::entitiesRegistry::value().Each<const ecs::components::SpellSeed, const ecs::components::Mesh>(
+		    [&seed, &command](entt::entity entity, const ecs::components::SpellSeed& component, const ecs::components::Mesh&) {
+			    if (!seed.has_value() && component.followsSpell && component.player == command.player)
+			    {
+				    seed = entity;
+			    }
+		    });
+		if (!seed.has_value() || !Locator::handGrabSystem::has_value() || !Locator::magicSystem::has_value())
+		{
+			return "no seed shows over a miracle";
+		}
+		// The take of a debug tool: the hand takes the seed wherever the pointer is, also outside the influence
+		Locator::handGrabSystem::value().TakeIntoHandOf(command.player, *seed);
+		const auto held = Locator::magicSystem::value().GetHeldSeedOf(command.player);
+		return held == seed ? fmt::format("the hand takes back seed {}", entt::to_integral(*seed))
+		                    : fmt::format("the hand did not keep seed {}", entt::to_integral(*seed));
+	}
+	case Kind::HandApply:
+	{
+		const auto object = ObjectAt(command.object);
+		if (!object.has_value() || !Locator::handGrabSystem::has_value())
+		{
+			return "nothing to use the held thing on";
+		}
+		const auto player =
+		    Locator::playerSystem::has_value() ? Locator::playerSystem::value().GetLocalPlayer() : PlayerNames::PLAYER_ONE;
+		Locator::handGrabSystem::value().DoApply(player, *object);
+		return "the hand uses what it holds on the object";
+	}
 	case Kind::AttachObjectScriptSound:
 	{
 		const auto object = ObjectAt(command.object);
@@ -2670,6 +2854,10 @@ std::string Runner::GivePlayerCommand(const Command& command)
 	}
 	case Kind::ChargeIconWithSeedHeld:
 		return ChargeIconWithSeedHeld(command);
+	case Kind::TakeIconSeed:
+		return TakeIconSeed(command);
+	case Kind::TapSiteIcon:
+		return TapSiteIcon(command);
 	case Kind::PressPlainKey:
 	{
 		// The key goes down and comes up again, each as an event of the window
@@ -2985,6 +3173,18 @@ std::string Runner::HandTapObject(size_t index)
 		                             transform != nullptr ? transform->position : glm::vec3(0.0f), player);
 		return "broke the rock";
 	}
+	// A tap breaks one scaffold off a scaffold
+	if (registry.AllOf<ecs::components::Scaffold>(*object) && Locator::workshopSystem::has_value())
+	{
+		auto& workshops = Locator::workshopSystem::value();
+		if (!workshops.ValidToTap(*object))
+		{
+			return "the scaffold takes no tap";
+		}
+		return workshops.Tap(*object, transform != nullptr ? transform->position : glm::vec3(0.0f))
+		           ? "broke the scaffold"
+		           : "the scaffold did not break";
+	}
 	const bool took =
 	    Locator::abodeKnockSystem::value().Tap(*object, transform != nullptr ? transform->position : glm::vec3(0.0f), true);
 	return took ? "knocked" : "it takes no knock";
@@ -3033,6 +3233,85 @@ std::string Runner::ChargeIconWithSeedHeld(const Command& command)
 	icon.store = 0.0f;
 	Locator::worshipSiteSystem::value().ReturnChants(icon.site, cost);
 	return fmt::format("the seed in the hand holds {:.0f} of {:.0f}, and its icon charges", seed.chantStore, cost);
+}
+
+std::string Runner::TakeIconSeed(const Command& command)
+{
+	if (!Locator::infoConstants::has_value() || !Locator::spellIconSystem::has_value() || !Locator::magicSystem::has_value() ||
+	    !Locator::worshipSiteSystem::has_value())
+	{
+		return "no miracles";
+	}
+	const auto& info = Locator::infoConstants::value();
+	auto& registry = Locator::entitiesRegistry::value();
+	const auto seedType = static_cast<SpellSeedType>(command.value);
+	std::optional<entt::entity> found;
+	registry.Each<const ecs::components::WorshipIcon>([&](entt::entity entity, const ecs::components::WorshipIcon& icon) {
+		const auto* site = registry.Valid(icon.site) ? registry.TryGet<const ecs::components::WorshipSite>(icon.site) : nullptr;
+		if (!found.has_value() && site != nullptr && site->player == command.player && icon.seed == seedType)
+		{
+			found = entity;
+		}
+	});
+	if (!found.has_value())
+	{
+		return "no such icon";
+	}
+	auto& icon = registry.Get<ecs::components::WorshipIcon>(*found);
+	const auto& seedInfo = magic::GetSpellSeedInfo(info, icon.seed);
+	const float cost =
+	    magic::GetChantsRequiredToCreate(info, magic::GetMagicTypeFromPowerUpLevel(seedInfo, magic::k_BasePowerUpLevel));
+	// A seed that the hand holds goes first. Then the icon is charged full and a tap puts its miracle in the hand.
+	if (Locator::magicSystem::value().GetHeldSeedOf(command.player).has_value())
+	{
+		Locator::magicSystem::value().DiscardHeldSeedOf(command.player);
+	}
+	icon.charging = false;
+	icon.store = cost;
+	Locator::spellIconSystem::value().Tap(*found, command.player);
+	const auto held = Locator::magicSystem::value().GetHeldSeed();
+	if (!held.has_value() || std::ranges::find(icon.seedsOut, *held) == icon.seedsOut.end())
+	{
+		return "the hand did not take the seed";
+	}
+	// The site gets prayer power for the power-ups, from the cost of the highest level that the seed has
+	const int top = magic::GetNumPowerUpLevels(seedInfo) - 2;
+	const float topCost = magic::GetChantsRequiredToCreate(info, magic::GetMagicTypeFromPowerUpLevel(seedInfo, top));
+	Locator::worshipSiteSystem::value().ReturnChants(icon.site, topCost * command.amount);
+	return fmt::format("the seed is in the hand, and the site gets {:.0f}", topCost * command.amount);
+}
+
+std::string Runner::TapSiteIcon(const Command& command)
+{
+	if (!Locator::infoConstants::has_value() || !Locator::spellIconSystem::has_value() ||
+	    !Locator::worshipSiteSystem::has_value())
+	{
+		return "no miracles";
+	}
+	auto& registry = Locator::entitiesRegistry::value();
+	const auto seedType = static_cast<SpellSeedType>(command.value);
+	std::optional<entt::entity> found;
+	registry.Each<const ecs::components::WorshipIcon>([&](entt::entity entity, const ecs::components::WorshipIcon& icon) {
+		const auto* site = registry.Valid(icon.site) ? registry.TryGet<const ecs::components::WorshipSite>(icon.site) : nullptr;
+		if (!found.has_value() && site != nullptr && site->player == command.player && icon.seed == seedType)
+		{
+			found = entity;
+		}
+	});
+	if (!found.has_value())
+	{
+		return "no such icon";
+	}
+	const auto& icon = registry.Get<const ecs::components::WorshipIcon>(*found);
+	if (command.amount > 0.0f)
+	{
+		const auto& info = Locator::infoConstants::value();
+		const float cost = magic::GetChantsRequiredToCreate(
+		    info, magic::GetMagicTypeFromPowerUpLevel(magic::GetSpellSeedInfo(info, seedType), magic::k_BasePowerUpLevel));
+		Locator::worshipSiteSystem::value().ReturnChants(icon.site, cost * command.amount);
+	}
+	const bool counted = Locator::spellIconSystem::value().Tap(*found, command.player);
+	return fmt::format("tapped the icon in place {}: {}", icon.place, counted ? "it counts" : "it does not count");
 }
 
 std::string Runner::HandTakeFireBall()
@@ -3311,17 +3590,19 @@ void Runner::Give(const Command& command)
 {
 	if (command.kind == Kind::HoldSeed || command.kind == Kind::DrawGesture || command.kind == Kind::SummonSeed ||
 	    command.kind == Kind::PressKey || command.kind == Kind::HandTakeFireBall || command.kind == Kind::HandTapObject ||
-	    command.kind == Kind::HandTake || command.kind == Kind::HandPour || command.kind == Kind::HandRelease ||
-	    command.kind == Kind::SetReportLatency || command.kind == Kind::RemoveObject || command.kind == Kind::HandGripTotem ||
+	    command.kind == Kind::HandTake || command.kind == Kind::HandApply || command.kind == Kind::HandTakeShownSeed ||
+	    command.kind == Kind::HandPour || command.kind == Kind::HandRelease || command.kind == Kind::SetReportLatency ||
+	    command.kind == Kind::RemoveObject || command.kind == Kind::HandGripTotem ||
 	    command.kind == Kind::AttachObjectScriptSound || command.kind == Kind::SayLine ||
 	    command.kind == Kind::PlayGuidanceVoice || command.kind == Kind::ScriptRelease || command.kind == Kind::FillSiteIcons ||
 	    command.kind == Kind::BuildWorshipSites || command.kind == Kind::PressPlainKey || command.kind == Kind::PlainKeyDown ||
 	    command.kind == Kind::PlainKeyRepeat || command.kind == Kind::PlainKeyUp ||
-	    command.kind == Kind::ChargeIconWithSeedHeld || command.kind == Kind::FinishBuilding ||
-	    command.kind == Kind::FillBuiltAmount || command.kind == Kind::PauseGame || command.kind == Kind::SetGameSpeed ||
-	    command.kind == Kind::RemoveTeleportStone || command.kind == Kind::MakeDance || command.kind == Kind::OtherGodHand ||
-	    command.kind == Kind::OwnGod || command.kind == Kind::BringCreature || command.kind == Kind::ComputerPersonality ||
-	    command.kind == Kind::ComputerUntaughtSends)
+	    command.kind == Kind::ChargeIconWithSeedHeld || command.kind == Kind::TakeIconSeed ||
+	    command.kind == Kind::TapSiteIcon || command.kind == Kind::FinishBuilding || command.kind == Kind::ScaffoldStartsSite ||
+	    command.kind == Kind::DestroyScaffoldSite || command.kind == Kind::FillBuiltAmount || command.kind == Kind::PauseGame ||
+	    command.kind == Kind::SetGameSpeed || command.kind == Kind::RemoveTeleportStone || command.kind == Kind::MakeDance ||
+	    command.kind == Kind::OtherGodHand || command.kind == Kind::OwnGod || command.kind == Kind::BringCreature ||
+	    command.kind == Kind::ComputerPersonality || command.kind == Kind::ComputerUntaughtSends)
 	{
 		const auto result = GivePlayerCommand(command);
 		Log(fmt::format("{:.1f}s: {}{}{}", _seconds, Name(command.kind), result.empty() ? "" : ": ", result));
@@ -3848,6 +4129,7 @@ void Runner::Give(const Command& command)
 		                    : command.onTemple && !_temples.empty()        ? std::optional(_temples.front())
 		                    : command.onGlobe && command.globe.has_value() ? GlobeAt(*command.globe)
 		                    : command.onTotem                              ? TotemAt(command.object)
+		                    : command.onPiece                              ? PieceNearest(*entity)
 		                                                                   : ObjectAt(command.object);
 		const auto with = command.globe.has_value() && !command.onGlobe ? GlobeAt(*command.globe)
 		                  : command.usesCreature.has_value()            ? CreatureAt(*command.usesCreature)
@@ -4046,11 +4328,13 @@ void Runner::Give(const Command& command)
 	case Kind::HandStroke:
 	case Kind::HandSlap:
 	case Kind::HandLetGo:
+	case Kind::HandLock:
 		result = GiveHandCommand(*entity, command);
 		break;
 	case Kind::PutOnLeash:
 	case Kind::TieLeash:
 	case Kind::TieLeashToDesireFlag:
+	case Kind::TieLeashToWorshipSiteFlag:
 	case Kind::UntieLeash:
 	case Kind::TakeOffLeash:
 	case Kind::ConfineToHome:
@@ -4180,6 +4464,8 @@ void Runner::Give(const Command& command)
 	case Kind::HandTakeFireBall:
 	case Kind::HandTapObject:
 	case Kind::HandTake:
+	case Kind::HandTakeShownSeed:
+	case Kind::HandApply:
 	case Kind::HandPour:
 	case Kind::HandRelease:
 	case Kind::SetReportLatency:
@@ -4194,9 +4480,13 @@ void Runner::Give(const Command& command)
 	case Kind::PlainKeyRepeat:
 	case Kind::PlainKeyUp:
 	case Kind::ChargeIconWithSeedHeld:
+	case Kind::TakeIconSeed:
+	case Kind::TapSiteIcon:
 	case Kind::RemoveObject:
 	case Kind::FinishBuilding:
 	case Kind::FillBuiltAmount:
+	case Kind::ScaffoldStartsSite:
+	case Kind::DestroyScaffoldSite:
 	case Kind::PauseGame:
 	case Kind::SetGameSpeed:
 	case Kind::RemoveTeleportStone:
@@ -4649,6 +4939,7 @@ void Runner::Update(float seconds)
 	{
 		return;
 	}
+	UpdateChecks();
 	// Another land was loaded over the testbed
 	const auto gone = [](entt::entity entity) { return !Locator::entitiesRegistry::value().Valid(entity); };
 	if ((!_creatures.empty() && std::ranges::none_of(std::views::iota(size_t {0}, _creatures.size()),
@@ -4710,6 +5001,125 @@ void Runner::BeforeTurn()
 	if (TurnStepOf(_layoutTurn, Locator::time::value().GetTurn()) == TurnStep::Update)
 	{
 		Update(std::chrono::duration<float>(ecs::systems::TimeSystemInterface::k_TurnDuration).count());
+	}
+}
+
+std::optional<double> Runner::ReadCheck(const checks::Check& check) const
+{
+	if (!Locator::entitiesRegistry::has_value())
+	{
+		return std::nullopt;
+	}
+	auto& registry = Locator::entitiesRegistry::value();
+	const auto creatureIndex = [&check]() { return check.index; };
+	switch (check.quantity)
+	{
+	case checks::Quantity::CreaturesAlive:
+	{
+		size_t alive = 0;
+		for (size_t i = 0; i < _creatures.size() + _slotCreatures.size(); ++i)
+		{
+			alive += CreatureAt(i).has_value() ? 1 : 0;
+		}
+		return static_cast<double>(alive);
+	}
+	case checks::Quantity::ObjectsAlive:
+	{
+		size_t alive = 0;
+		for (size_t i = 0; i < _objects.size(); ++i)
+		{
+			alive += ObjectAt(i).has_value() ? 1 : 0;
+		}
+		return static_cast<double>(alive);
+	}
+	case checks::Quantity::Entities:
+		for (const auto& [name, count] : EntityCounts())
+		{
+			if (name == check.kind)
+			{
+				return static_cast<double>(count);
+			}
+		}
+		return std::nullopt;
+	case checks::Quantity::CreatureEnergy:
+	case checks::Quantity::CreatureThirst:
+	case checks::Quantity::CreatureExhaustion:
+	case checks::Quantity::CreaturePoo:
+	case checks::Quantity::CreatureWarmth:
+	{
+		const auto creature = CreatureAt(creatureIndex());
+		const auto* needs = creature.has_value() ? registry.TryGet<const ecs::components::CreatureNeeds>(*creature) : nullptr;
+		if (needs == nullptr)
+		{
+			return std::nullopt;
+		}
+		const auto& body = needs->needs;
+		switch (check.quantity)
+		{
+		case checks::Quantity::CreatureEnergy:
+			return static_cast<double>(body.energy);
+		case checks::Quantity::CreatureThirst:
+			return static_cast<double>(body.dehydration);
+		case checks::Quantity::CreatureExhaustion:
+			return static_cast<double>(body.exhaustion);
+		case checks::Quantity::CreaturePoo:
+			return static_cast<double>(body.poo);
+		default:
+			return static_cast<double>(body.warmth);
+		}
+	}
+	case checks::Quantity::CreatureSize:
+	{
+		const auto creature = CreatureAt(creatureIndex());
+		const auto* body = creature.has_value() ? registry.TryGet<const Creature>(*creature) : nullptr;
+		return body != nullptr ? std::optional(static_cast<double>(body->size)) : std::nullopt;
+	}
+	case checks::Quantity::CreatureDistance:
+	{
+		const auto creature = CreatureAt(creatureIndex());
+		const auto* transform = creature.has_value() ? registry.TryGet<const Transform>(*creature) : nullptr;
+		if (transform == nullptr)
+		{
+			return std::nullopt;
+		}
+		const auto goal = MapPoint(_middle, check.point);
+		return static_cast<double>(glm::distance(glm::vec2(transform->position.x, transform->position.z), goal));
+	}
+	}
+	return std::nullopt;
+}
+
+void Runner::UpdateChecks()
+{
+	if (_scenario == nullptr || _checksReported || !Locator::time::has_value())
+	{
+		return;
+	}
+	// A scenario with no checks says nothing, unless the command line asked for its verdict
+	if (_scenario->checks.empty() && !_benchmark.reportChecks)
+	{
+		return;
+	}
+	if (!_checks.Done())
+	{
+		const auto turns = Locator::time::value().GetTurn() - _startTurn;
+		_checks.Update(turns, [this](const checks::Check& check) { return ReadCheck(check); });
+	}
+	const auto verdict = _checks.GetVerdict();
+	if (verdict == checks::Verdict::Waiting)
+	{
+		return;
+	}
+	_checksReported = true;
+	auto lines = _checks.Report(_scenario->id);
+	for (const auto& line : lines)
+	{
+		SPDLOG_LOGGER_INFO(spdlog::get("game"), "Scenario check: {}", line);
+	}
+	if (_stage != nullptr)
+	{
+		_stage->ReportChecks({.scenario = std::string(_scenario->id), .verdict = verdict, .lines = std::move(lines)},
+		                     _benchmark.reportChecks);
 	}
 }
 

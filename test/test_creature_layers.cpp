@@ -130,6 +130,36 @@ TEST(CreatureLayers, AnActionPlaysOnceThenTheBodyStands)
 	EXPECT_FALSE(played.mirrored);
 }
 
+TEST(CreatureLayers, TheHandMeasuresABodyActionByTheAnimationThatTheGameKeeps)
+{
+	// An action played once keeps its own animation, but a kiss keeps the stand
+	auto once = PlayOnce({}, animations::k_Tired, false);
+	ASSERT_TRUE(once.has_value());
+	EXPECT_EQ(ShareAnimation(*once), animations::k_Tired);
+	once->kiss = true;
+	EXPECT_EQ(ShareAnimation(*once), animations::k_Stand);
+
+	// A sequence keeps its loop in its start, its loop and its end
+	auto sequence = PlaySequence({}, 10, 11, 12);
+	ASSERT_TRUE(sequence.has_value());
+	EXPECT_EQ(CurrentAnimation(*sequence), 10u);
+	EXPECT_EQ(ShareAnimation(*sequence), 11u);
+	sequence->phase = BodyAction::Phase::End;
+	EXPECT_EQ(ShareAnimation(*sequence), 11u);
+
+	// A dance keeps the stand in its start, then the move that plays or played last
+	auto dance = PlayDance({}, 1000.0f);
+	ASSERT_TRUE(dance.has_value());
+	EXPECT_EQ(ShareAnimation(*dance), animations::k_Stand);
+	dance->phase = BodyAction::Phase::Loop;
+	dance->animations[1] = 150;
+	EXPECT_EQ(ShareAnimation(*dance), 150u);
+	dance->phase = BodyAction::Phase::End;
+	EXPECT_EQ(ShareAnimation(*dance), 150u);
+
+	EXPECT_EQ(ShareAnimation(BodyAction {}), animations::k_Stand);
+}
+
 TEST(CreatureLayers, AMissingAnimationEndsAtOnce)
 {
 	const auto body = PlayOnce({}, animations::k_Tired, false);
@@ -232,6 +262,22 @@ TEST(CreatureLayers, AFaintKeepsItsPaceWhenHurried)
 	auto faint = *PlaySequence({}, animations::k_Faint, animations::k_Faint, animations::k_GetUp);
 	faint.holdLoop = true;
 	EXPECT_FALSE(Hurry(faint).hurried);
+}
+
+TEST(CreatureLayers, AFaintStaysAtTheLastFrameFromTheTurnThatItsFallEnds)
+{
+	// The fall ends in this turn: the held loop shows the last frame at once, never the first frame of the clip
+	auto faint = *PlaySequence({}, animations::k_Faint, animations::k_Faint, animations::k_GetUp);
+	faint.holdLoop = true;
+	faint.timeMs = 1450.0f;
+	const auto held = AdvanceBody(faint, 100.0f, 1500);
+	EXPECT_EQ(held.phase, BodyAction::Phase::Loop);
+	EXPECT_FLOAT_EQ(held.timeMs, 1499.0f);
+	EXPECT_FLOAT_EQ(AdvanceBody(held, 100.0f, 1500).timeMs, 1499.0f);
+	// A loop that is not held starts its clip again
+	auto loop = *PlaySequence({}, animations::k_Faint, animations::k_Faint, animations::k_GetUp);
+	loop.timeMs = 1450.0f;
+	EXPECT_FLOAT_EQ(AdvanceBody(loop, 100.0f, 1500).timeMs, 0.0f);
 }
 
 TEST(CreatureLayers, ABodyTimedByWhatPlaysItStaysWherePut)

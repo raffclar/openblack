@@ -37,7 +37,6 @@ constexpr uint32_t k_PleasedFood = 209;
 constexpr uint32_t k_DispleasedFood = 165;
 constexpr uint32_t k_PleasedRain = 212;
 constexpr uint32_t k_PleasedWood = 215;
-constexpr uint32_t k_AnswerCount = 3;
 constexpr float k_PleasedDesire = 0.5f;
 constexpr float k_DispleasedDesire = 0.25f;
 
@@ -151,11 +150,28 @@ float guidance::AttackCryReach(float protection)
 	return k_CryReach * (1.0f + std::min(protection * k_ProtectionShare, 1.0f));
 }
 
+bool guidance::GiftAnswered(float rawDesire)
+{
+	return !(rawDesire < k_PleasedDesire) || rawDesire < k_DispleasedDesire;
+}
+
+std::optional<guidance::Gift> guidance::DropGift(std::optional<ResourceType> pileResource)
+{
+	if (pileResource == ResourceType::Food)
+	{
+		return Gift::Food;
+	}
+	if (pileResource == ResourceType::Wood)
+	{
+		return Gift::Wood;
+	}
+	return std::nullopt;
+}
+
 std::optional<uint32_t> guidance::GiftAnswer(Gift gift, float rawDesire, uint32_t draw)
 {
 	const bool pleased = !(rawDesire < k_PleasedDesire);
-	const bool displeased = rawDesire < k_DispleasedDesire;
-	if ((!pleased && !displeased) || draw >= k_AnswerCount)
+	if (!GiftAnswered(rawDesire) || draw >= k_GiftAnswers)
 	{
 		return std::nullopt;
 	}

@@ -59,6 +59,9 @@ public:
 	                          std::optional<PlayerNames> giver) = 0;
 	/// A player's gift of a resource to a thing, by hand or by a miracle: the player's creature may see a deed to copy
 	virtual void ReportGift(entt::entity /*store*/, ResourceType /*type*/, PlayerNames /*giver*/) {}
+	/// A store took a drop of a player. When the store is a pile of food or wood, the town near it can answer the gift
+	/// to the player here. Call it only when the store took a part of the drop.
+	virtual void AnswerDrop(entt::entity /*store*/, PlayerNames /*giver*/) {}
 	/// A resource poured at a point goes to the stores and piles of it about the point, each taking what it will; what is
 	/// left makes a new pile of the player's unless the point is in the water. A power-up's food sparkles over its new
 	/// pile. A poisoned pour poisons every pile it goes into or makes. Whether anything was taken or made.

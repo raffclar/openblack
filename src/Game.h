@@ -37,6 +37,7 @@
 #include "Creature/BonusCreatures.h"
 #include "Creature/CreatureFight.h"
 #include "Debug/SimRun.h"
+#include "Debug/TestbedScenarioChecks.h"
 #include "ECS/StatisticsRules.h"
 #include "ECS/Systems/CreatureHandSystemInterface.h"
 #include "ECS/Systems/LandSystemInterface.h"
@@ -63,6 +64,7 @@
 #include "Simulation/TurnBody.h"
 #include "Simulation/WorldStart.h"
 #include "Story/NewGameChoice.h"
+#include "Story/PlaygroundTrip.h"
 #include "Visual/UploadPacer.h"
 #include "Windowing/SizeFollower.h"
 #include "Windowing/WindowingInterface.h" // For DisplayMode
@@ -148,6 +150,9 @@ struct ScenarioRequest
 	/// A benchmark's crowd is measured, its results written and the game quit, as the command line asks; a scenario
 	/// asked for while the game runs (from the debug inspector) only runs
 	bool benchmark {true};
+	/// The command line asked for the scenario's checks: the game reports their verdict, then quits with an exit code
+	/// that tells it (0 passed, 1 failed, 2 the scenario states no checks)
+	bool checks {false};
 };
 
 struct Arguments
@@ -183,6 +188,8 @@ struct Arguments
 	std::string frameStatsOut;
 	/// Draw the first frame of a land once behind the loading screen, to make the renderer's pipelines there
 	bool warmUpFirstFrame {true};
+	/// Encode some of the draws on worker threads at the same time as the game's thread
+	bool parallelDrawEncode {false};
 	/// The https:// origin of the lobby, none for no online services
 	std::optional<std::string> lobbyOrigin;
 	std::optional<std::string> lobbyTestAuthorities;
@@ -504,6 +511,12 @@ public:
 	/// The game ends after this frame. Unlike the window's events, which say each time whether to go on, nothing takes
 	/// it back
 	void RequestQuit() { _quitRequested = true; }
+	/// The code that the program ends with. A run of a scenario's checks sets it from the verdict.
+	void SetExitCode(int code) { _exitCode = code; }
+	[[nodiscard]] int GetExitCode() const { return _exitCode; }
+	/// The verdict of the scenario that ran last, as the inspector tells it. None until a scenario has a verdict.
+	void SetScenarioChecks(testbed_scenarios::checks::Report report) { _scenarioChecks = std::move(report); }
+	[[nodiscard]] const std::optional<testbed_scenarios::checks::Report>& GetScenarioChecks() const { return _scenarioChecks; }
 	[[nodiscard]] std::optional<ScenarioRequest> TakeScenarioRequest() { return std::exchange(_scenarioRequest, std::nullopt); }
 	/// Tools: a run that writes the commands of each turn also writes each command of the testbed scenario that the game
 	/// gives before a turn, so that a dedicated server gives it before the same turn (command_log::GivesPathOf)
@@ -682,6 +695,8 @@ private:
 	bool _startTestbed {false};
 	bool _startGodsRingMap {false};
 	std::optional<ScenarioRequest> _scenarioRequest;
+	std::optional<testbed_scenarios::checks::Report> _scenarioChecks;
+	int _exitCode {0};
 	std::function<void()> _scenarioStager;
 	std::function<void()> _scenarioTurn;
 	/// The port the debug inspector is to listen on, if it is to start
@@ -769,9 +784,14 @@ private:
 	/// The hand grips the land for its tooltips: from the start of a drag of the land until the Move button is let go,
 	/// also while the Action button is held too
 	bool _tipsLandGrip {false};
+	/// Whether the view report says that the hand grips the land: from a drag of the land until the Move button is let go
+	bool _reportLandGrip {false};
 	hand_navigation_pose::Pose _handPose {hand_navigation_pose::Pose::Idle};
 	/// The rotate arrow's turn, kept from frame to frame, which a demonstration's recording sets too
 	float _triconAngle {0.0f};
+	/// The camera icons of the world camera's last frame or of a demonstration's recording, before the draw takes away
+	/// the camera icons that the hand does not show (hand_tricons::icon)
+	uint32_t _cameraIcons {0};
 	/// How far from the camera the hand holds while it drags by the edge of the screen
 	Zoomer _handHoldZoomer;
 	/// The land the hand grips while it drags it, and where the hand was when it gripped
@@ -949,6 +969,10 @@ private:
 	/// Escape in play with no dialog open: the menu opens, unless a script's cut scene is on, and a help script holding
 	/// the dialogue stops
 	void HandleEscapeInPlay(uint16_t keyModifiers);
+	/// F2 in play asks whether the player wants to go to the Gods' Playground, when the game may ask it
+	void HandleTripKey();
+	/// Once a frame: the answer to a question of the trip to the Gods' Playground, and what the answer starts
+	void FollowPlaygroundTrip();
 	/// Once a frame outside the temple: where the hand's tooltip is drawn, and the status panel of the creature the hand
 	/// is held to, or over
 	void UpdateHandInterface();
@@ -1041,5 +1065,7 @@ private:
 	std::optional<std::u16string> _profileAfterSave;
 	/// When the menu last closed, on the computer's clock
 	std::optional<std::chrono::steady_clock::time_point> _menuClosedAt;
+	/// The question of the trip to the Gods' Playground that is on the screen
+	std::optional<playground_trip::Question> _tripQuestion;
 };
 } // namespace openblack

@@ -344,7 +344,10 @@ TEST(CreatureFight, HealthStaminaAndLife)
 	// A knock out costs a quarter of the bar
 	EXPECT_FLOAT_EQ(LifeAfterFight(1.0f, 0.0f), 0.75f);
 	EXPECT_FLOAT_EQ(LifeAfterFight(0.8f, 0.6f), 0.7f);
-	EXPECT_FLOAT_EQ(LifeAfterFight(0.1f, 0.0f), 0.0f);
+	// Nothing keeps the life at 0 or more
+	EXPECT_FLOAT_EQ(LifeAfterFight(0.1f, 0.0f), 0.1f - 0.25f);
+	// A fight health below 0 makes a payment take more than a quarter
+	EXPECT_FLOAT_EQ(LifeAfterFight(1.0f, -0.2f), 1.0f - (1.2f * 0.25f));
 	EXPECT_TRUE(HealthyEnoughToFight(0.11f));
 	EXPECT_FALSE(HealthyEnoughToFight(0.1f));
 	EXPECT_FLOAT_EQ(FaintSeconds(1.0f), 12.0f);
@@ -880,6 +883,8 @@ TEST(CreatureFightHud, BarColours)
 	EXPECT_EQ(creature_fight_hud::HealthColour(0.75f), glm::u8vec3(127, 255, 0));
 	EXPECT_EQ(creature_fight_hud::HealthColour(1.0f), glm::u8vec3(0, 255, 0));
 	EXPECT_EQ(creature_fight_hud::HealthColour(2.0f), glm::u8vec3(0, 255, 0));
+	// A fight health below 0 after a knock out shows as no fight health
+	EXPECT_EQ(creature_fight_hud::HealthColour(-0.3f), creature_fight_hud::HealthColour(0.0f));
 	EXPECT_EQ(creature_fight_hud::StaminaColour(0.0f), glm::u8vec3(32, 128, 255));
 	EXPECT_EQ(creature_fight_hud::StaminaColour(1.0f), glm::u8vec3(127, 128, 255));
 	EXPECT_EQ(creature_fight_hud::StaminaColour(0.5f), glm::u8vec3(79, 128, 255));
@@ -1214,6 +1219,10 @@ TEST(CreatureFight, LifeLostInADuelComesOffTheFightHealth)
 	EXPECT_FLOAT_EQ(HealthAfterLifeLost(0.6f, 0.25f), 0.35f);
 	EXPECT_FLOAT_EQ(HealthAfterLifeLost(0.2f, 0.5f), 0.0f);
 	EXPECT_FLOAT_EQ(HealthAfterLifeLost(0.2f, 0.0f), 0.2f);
+	// A blow that lands has no lower limit
+	EXPECT_FLOAT_EQ(HealthAfterBlow(0.6f, 0.25f), 0.35f);
+	EXPECT_FLOAT_EQ(HealthAfterBlow(0.1f, 0.3f), 0.1f - 0.3f);
+	EXPECT_LT(HealthAfterBlow(0.1f, 0.3f), 0.0f);
 }
 
 TEST(CreatureFight, OnlyTheStartAfterItsTurnTheStanceTheBlockAndStepsFaceTheOpponentEachTurn)
@@ -1373,4 +1382,78 @@ TEST(CreatureFight, AStopInTheDuelGivesTheStrengthOfTheFightToBothCreatures)
 	EXPECT_EQ(gains(StopEnd::Failure,
 	                {.stopperDuels = true, .partnerDuels = true, .stopperHasPartner = true, .partnerHasPartner = false}),
 	          std::pair(1u, 1u));
+}
+
+TEST(CreatureFight, AnOrderThatStopsACreatureInItsDuelCountsTheGainsAndEachLeaveOfTheDuel)
+{
+	using creature_fight::StopEnd;
+	// The order stops the loser that is still in its duel. The winner left its duel at its win.
+	const auto ordered = creature_fight::CountsAtStop(StopEnd::Stopped, {.stopperDuels = true, .partnerDuels = false});
+	EXPECT_EQ(ordered.gains.stopper, 1u);
+	EXPECT_EQ(ordered.gains.partner, 2u);
+	// The stopped creature leaves its duel two times, the winner three times
+	EXPECT_EQ(ordered.stopperLeaves, 2u);
+	EXPECT_EQ(ordered.partnerLeaves, 3u);
+	// A failure in the duel of both: the creature that fails leaves two times, its partner three times
+	const auto failed = creature_fight::CountsAtStop(StopEnd::Failure, {.stopperDuels = true, .partnerDuels = true});
+	EXPECT_EQ(failed.gains.stopper, 2u);
+	EXPECT_EQ(failed.gains.partner, 2u);
+	EXPECT_EQ(failed.stopperLeaves, 2u);
+	EXPECT_EQ(failed.partnerLeaves, 3u);
+	// The release after a hold: only the partner is in its duel
+	const auto released = creature_fight::CountsAtStop(StopEnd::Failure, {.stopperDuels = false, .partnerDuels = true});
+	EXPECT_EQ(released.gains.stopper, 1u);
+	EXPECT_EQ(released.gains.partner, 1u);
+}
+
+TEST(CreatureFight, TheCallsOfAStopChainEndTheBodyOfEachCreatureAgainAtEachStop)
+{
+	using creature_fight::StopCall;
+	using creature_fight::StopStep;
+	const creature_fight::StopSides both {.duels = {true, true}, .partners = {true, true}};
+	// A call-off: two gains each, the creature that stops ends its fight two times, its partner three times
+	const auto calledOff = creature_fight::RunStopChain(both, creature_fight::StepsOf(creature_fight::CallOffStart::Failure));
+	EXPECT_EQ(calledOff.gains, (std::array<uint32_t, 2> {2, 2}));
+	EXPECT_EQ(calledOff.bodyEnds, (std::array<uint32_t, 2> {2, 3}));
+	EXPECT_EQ(calledOff.after.duels, (std::array<bool, 2> {false, false}));
+	EXPECT_EQ(calledOff.after.partners, (std::array<bool, 2> {false, false}));
+	// A walk back: the body ends its fight first, so each creature gets one gain
+	const auto walkedBack =
+	    creature_fight::RunStopChain(both, creature_fight::StepsOf(creature_fight::CallOffStart::BodyFirst));
+	EXPECT_EQ(walkedBack.gains, (std::array<uint32_t, 2> {1, 1}));
+	EXPECT_EQ(walkedBack.bodyEnds, (std::array<uint32_t, 2> {3, 1}));
+	// A knock out: the winner stops both, then the faint stops the loser again
+	const auto knockedOut = creature_fight::RunStopChain(both, creature_fight::KnockOutSteps());
+	EXPECT_EQ(knockedOut.gains, (std::array<uint32_t, 2> {2, 2}));
+	EXPECT_EQ(knockedOut.bodyEnds, (std::array<uint32_t, 2> {2, 4}));
+	// A loser that did not start its duel yet ends its body the same number of times
+	const auto early =
+	    creature_fight::RunStopChain({.duels = {true, false}, .partners = {true, true}}, creature_fight::KnockOutSteps());
+	EXPECT_EQ(early.bodyEnds, (std::array<uint32_t, 2> {2, 4}));
+	// The release after a hold: only the partner is in its duel
+	const auto released = creature_fight::RunStopChain({.duels = {false, true}, .partners = {true, true}},
+	                                                   creature_fight::StepsOf(creature_fight::CallOffStart::Failure));
+	EXPECT_EQ(released.gains, (std::array<uint32_t, 2> {1, 1}));
+	EXPECT_EQ(released.bodyEnds, (std::array<uint32_t, 2> {3, 1}));
+	// A creature with no duel and no partner ends only its own body
+	const std::array again {StopStep {.creature = 0, .call = StopCall::Fail}};
+	const auto alone = creature_fight::RunStopChain({}, again);
+	EXPECT_EQ(alone.bodyEnds, (std::array<uint32_t, 2> {1, 0}));
+	// A failure that keeps the body of a creature alone ends nothing
+	const std::array kept {StopStep {.creature = 0, .call = StopCall::FailKeepingBody}};
+	EXPECT_EQ(creature_fight::RunStopChain({}, kept).bodyEnds, (std::array<uint32_t, 2> {0, 0}));
+}
+
+TEST(CreatureFight, EachPaymentTakesAQuarterOfTheLostFightHealthFromTheLife)
+{
+	EXPECT_FLOAT_EQ(creature_fight::LifeAfterPayments(0.5f, 0.6f, 0), 0.5f);
+	EXPECT_FLOAT_EQ(creature_fight::LifeAfterPayments(0.5f, 0.6f, 1), creature_fight::LifeAfterFight(0.5f, 0.6f));
+	EXPECT_FLOAT_EQ(creature_fight::LifeAfterPayments(0.5f, 0.6f, 2),
+	                creature_fight::LifeAfterFight(creature_fight::LifeAfterFight(0.5f, 0.6f), 0.6f));
+	// After a knock out, each payment takes more than a quarter, and the life goes below 0
+	EXPECT_FLOAT_EQ(creature_fight::LifeAfterPayments(1.0f, -0.2f, 4), 1.0f - 0.3f - 0.3f - 0.3f - 0.3f);
+	// A protected life does not change at a payment that brings it to 0.01 or less, and it changes at the others
+	EXPECT_FLOAT_EQ(creature_fight::LifeAfterPayments(1.0f, -0.2f, 4, true), 1.0f - 0.3f - 0.3f - 0.3f);
+	EXPECT_FLOAT_EQ(creature_fight::LifeAfterPayments(0.2f, 0.0f, 1, true), 0.2f);
+	EXPECT_FLOAT_EQ(creature_fight::LifeAfterPayments(1.0f, 0.0f, 2, true), 0.5f);
 }

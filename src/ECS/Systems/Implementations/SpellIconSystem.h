@@ -13,11 +13,15 @@
 #error "Locator interface implementations should only be included in Locator.cpp"
 #endif
 
+#include <cstdint>
+
+#include <chrono>
 #include <memory>
 #include <optional>
 #include <unordered_map>
 #include <vector>
 
+#include "Common/FramePace.h"
 #include "ECS/Systems/SpellIconSystemInterface.h"
 #include "Magic/IconChargeLooks.h"
 #include "Magic/SpellIcons.h"
@@ -44,13 +48,20 @@ public:
 	[[nodiscard]] std::optional<size_t> CentreMiraclesShown(entt::entity town) const override;
 	void CentreWorking(entt::entity centre) override;
 	void TownChangedHands(entt::entity town, PlayerNames previous) override;
+	void TownRemoved(entt::entity town) override;
 	void PlayerMade(PlayerNames player) override;
 	void TownJoinedSite(entt::entity site, entt::entity town) override;
 	void TownLeftSite(entt::entity site, entt::entity town) override;
 	void SiteRemoved(entt::entity site) override;
 
+	void SetMagicTypeEnabled(PlayerNames player, MagicType type, bool enable) override { SetEnabled(player, type, enable); }
 	[[nodiscard]] bool ValidToTap(entt::entity icon, PlayerNames player) const override;
 	bool StartChargeForGod(entt::entity icon, PlayerNames player) override;
+	[[nodiscard]] entt::entity IconOfSeed(entt::entity seed) const override;
+	[[nodiscard]] entt::entity BestIconFor(PlayerNames player, SpellSeedType seed) const override;
+	void SeedMadeAt(entt::entity icon, entt::entity seed) override;
+	[[nodiscard]] bool ValidForPowerUp(entt::entity icon, PlayerNames player, int powerUp) const override;
+	bool StartPowerUpCharge(entt::entity icon, PlayerNames player, int powerUp) override;
 	[[nodiscard]] float ChantNeeded(entt::entity icon) const override;
 	void TakeCastCharge(entt::entity icon) override;
 	bool Tap(entt::entity icon, PlayerNames player) override;
@@ -77,6 +88,9 @@ public:
 	void UpdateChargeLooks(int32_t gameMilliseconds, bool landDrawn) override;
 	[[nodiscard]] uint32_t ShownTint(entt::entity icon) const override;
 	[[nodiscard]] std::vector<ChargePulse> ChargePulses() const override;
+	void UpdateHolderEffects(std::chrono::milliseconds frameRealTime, std::chrono::milliseconds frameGameTime,
+	                         bool landDrawn) override;
+	[[nodiscard]] std::optional<HolderTarget> FindHolderTarget(entt::entity icon) const override;
 	void Reset() override;
 
 private:
@@ -105,6 +119,8 @@ private:
 	[[nodiscard]] bool IsEnabled(PlayerNames player, MagicType type) const;
 	/// The hand of a player can take a miracle now: only the hand at this machine, holding nothing
 	[[nodiscard]] bool HandReady(PlayerNames player) const;
+	/// Whether every player's influence covers the whole land, as on the Gods' Playground
+	[[nodiscard]] static bool InfluenceEverywhere();
 	/// What an icon's miracle needs to be charged full, at the level it charges
 	[[nodiscard]] float Required(const components::WorshipIcon& icon) const;
 	/// What the miracle of a seed costs to create, at the power-up level of the seed
@@ -117,7 +133,7 @@ private:
 	/// A site icon is tapped by a hand: what the tap did
 	magic::spell_icons::TapResult TapSiteIcon(entt::entity icon, PlayerNames player);
 	/// An icon's charged miracle goes into its player's hand, carrying what the icon stored
-	bool GiveSeed(entt::entity icon);
+	bool GiveSeed(entt::entity icon, PlayerNames holder);
 	/// The icon starts to charge its miracle for the hand of a player. A charge that is full already goes into the hand.
 	void StartCharge(entt::entity icon, PlayerNames player);
 	/// The worship sites of a player, in the order of their places round the temple
@@ -130,6 +146,18 @@ private:
 	[[nodiscard]] bool IconValidForRequest(entt::entity icon, PlayerNames player) const;
 	/// Deletes an icon and forgets it, with the seeds out from it; what it was charging and what it stored are lost
 	void Destroy(entt::entity icon);
+
+	/// The effect of the holder of an icon's seed, made for the seed that the icon shows. The effect acts on the seed's
+	/// model, which keeps the place of the last frame that drew it.
+	struct HolderEffect
+	{
+		uint32_t effect {0};
+		SpellSeedType seed {SpellSeedType::None};
+		HolderTarget target {};
+	};
+	/// The effect of the holder of an icon's seed: made once for its seed, and shown and moved on when the frame draws
+	/// the icon, at the alpha of the icon's model
+	void StepHolderEffect(entt::entity icon, bool drawn, std::optional<float> step, uint8_t alpha);
 
 	/// A worship site's icon that is on the screen shows its charge in this frame
 	void ShowCharge(entt::entity entity, const components::WorshipIcon& icon, int32_t gameMilliseconds);
@@ -149,6 +177,11 @@ private:
 	magic::icon_charge_looks::DecayClock _decayClock;
 	/// The pulse models of this frame
 	std::vector<ChargePulse> _pulses;
+	/// The effects of the holders of the seeds of the stone hands and the worship sites' icons. A saved game does not
+	/// keep these.
+	std::unordered_map<entt::entity, HolderEffect> _holderEffects;
+	/// When the effects of the holders take a step
+	frame_pace::Pace _holderPace;
 };
 
 } // namespace openblack::ecs::systems

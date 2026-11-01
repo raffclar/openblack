@@ -224,6 +224,10 @@ public:
 	}
 	/// Something stops what the creature is doing, which it gives up as a failure, as a spell freezing it does
 	virtual void AbandonAction(entt::entity /*creature*/) {}
+	/// The creature gives up what it does as a failure, as for AbandonAction. A fight that it is in also ends for both
+	/// creatures, as a fight called off does. A script that lets go of the creature, the order of a computer god and a
+	/// gift that the hand calls off do this.
+	virtual void GiveUpAction(entt::entity creature) { AbandonAction(creature); }
 	/// What the creature does stops as a failure, as for AbandonAction. Also its walk stops, the pose of its body ends,
 	/// and a joint action stops for its partner too.
 	virtual void FailAction(entt::entity creature) { AbandonAction(creature); }
@@ -251,6 +255,9 @@ public:
 		/// emergency, and the plan does not count for its desire at its end. The plans of reactions, of copying the
 		/// player and of watching a villager are not marked, but they also have the highest priority.
 		bool forced {true};
+		/// After a fight that is over, the stop for the plan ends the fight of the body again while the body still plays
+		/// a move of the fight, and the life pays again. Reactions, emergencies and teleport stones do this.
+		bool fightBodyEndsAgain {false};
 	};
 	/// What the creature was doing stops as a failure and it carries out the plan instead: whether it could. A plan
 	/// carried out is remembered for the player's feedback (unless nothing says why it wants it), and the desires the
@@ -359,6 +366,10 @@ public:
 		/// Some orders of the leash keep one or both.
 		bool stopsWalk {true};
 		bool endsBody {true};
+		/// After a fight that is over, the stop for the plan ends the fight of the body again while the body still plays
+		/// a move of the fight, and the life pays again. The plans that the feedback of the player forces, the follow-ups
+		/// and the teleport stones do this. The other forced plans have a stop of their own, or keep the body.
+		bool fightBodyEndsAgain {false};
 		/// The plan is the part of the creature in its own fight, so the plan keeps the fight. Each other forced plan
 		/// stops a fight that the creature sets up, for both creatures.
 		bool ownFight {false};

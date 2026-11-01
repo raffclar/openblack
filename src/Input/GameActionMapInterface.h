@@ -232,6 +232,10 @@ public:
 	/// A key held by a script or the debug inspector rather than on the keyboard, by its SDL scancode: it stays held until
 	/// its own key-up comes, though the keyboard says it is up
 	virtual void HoldScriptedKey([[maybe_unused]] int scancode, [[maybe_unused]] bool held) {}
+	/// Whether a key is held, by its SDL scancode: it went down and its key-up has not come
+	[[nodiscard]] virtual bool IsKeyHeld([[maybe_unused]] int scancode) const { return false; }
+	/// Whether the mouse's wheel has turned since the game started
+	[[nodiscard]] virtual bool WheelTurned() const { return false; }
 	/// Puts the cursor, and the pointer, somewhere in the window, as the camera does dragging round the screen's edge
 	virtual void WarpCursor([[maybe_unused]] glm::ivec2 position) {}
 	/// Where the cursor was put this frame, if it was
@@ -241,6 +245,8 @@ public:
 	/// A key goes down, a repeat of a held key too: whether a box on the screen takes the keyboard now. The answer
 	/// stays until the next key goes down. While a box has the keyboard, every action reads as not held
 	virtual void BoxKeyDown([[maybe_unused]] bool boxWantsKeys) {}
+	/// The player answers a message box of the game, which gives the keyboard back at once
+	virtual void BoxAnswered() {}
 	/// Whether a box has the keyboard, as the last key that went down found it
 	[[nodiscard]] virtual bool BoxHasKeyboard() const { return false; }
 	/// Whether the camera the player has can be turned with the mouse, which holds the cursor still while it is

@@ -20,15 +20,20 @@
 #include "3D/MapCoords.h"
 #include "CHLApi.h"
 #include "ECS/Components/Abode.h"
+#include "ECS/Components/Creature.h"
 #include "ECS/Components/CreatureMind.h"
+#include "ECS/Components/Dance.h"
+#include "ECS/Components/LivingListPlace.h"
 #include "ECS/Components/ScriptControl.h"
 #include "ECS/Components/Town.h"
+#include "ECS/Components/Transform.h"
 #include "ECS/Components/Villager.h"
 #include "ECS/Registry.h"
 #include "ECS/ScriptFlocks.h"
 #include "ECS/Systems/ScriptObjectsSystemInterface.h"
 #include "Locator.h"
 #include "ScriptHeaders/ScriptEnums.h"
+#include "ScriptHeaders/ScriptPropertyRules.h"
 
 using namespace openblack;
 
@@ -55,7 +60,13 @@ public:
 
 using Results = std::vector<std::pair<lhvm::VMValue, lhvm::DataType>>;
 
+constexpr uint32_t k_SetScriptState = 17;
+constexpr uint32_t k_SetScriptStatePos = 18;
+constexpr uint32_t k_SetScriptFloat = 19;
 constexpr uint32_t k_SetScriptUlong = 20;
+constexpr uint32_t k_CallNearInState = 316;
+constexpr uint32_t k_GetFirstInContainer = 455;
+constexpr uint32_t k_GetNextInContainer = 456;
 constexpr uint32_t k_GetProperty = 21;
 constexpr uint32_t k_SetProperty = 22;
 
@@ -222,5 +233,118 @@ TEST_F(ScriptContainerProperties, OnlyALivingThingTakesAClip)
 {
 	const auto rock = Locator::entitiesRegistry::value().Create();
 	EXPECT_TRUE(Call(k_SetScriptUlong, {Object(rock), Int(343), Int(1)}).empty());
+	EXPECT_EQ(_api.GetStubCalls().Total(), 0u);
+}
+
+// A state given to a group gives each member to the script, also a member that takes no state
+// NOLINTNEXTLINE(cppcoreguidelines-avoid-non-const-global-variables): external macro
+TEST_F(ScriptContainerProperties, AStateGivenToAFlockTakesControlOfEachMember)
+{
+	auto& registry = Locator::entitiesRegistry::value();
+	const auto flock = ecs::script_flocks::Create(registry, map_coords::MapCoords {});
+	const auto first = CreateVillager();
+	const auto second = CreateVillager();
+	ASSERT_TRUE(ecs::script_flocks::AddLiving(registry, flock, first));
+	ASSERT_TRUE(ecs::script_flocks::AddLiving(registry, flock, second));
+	Call(k_SetScriptState, {Object(flock), Int(5)});
+	EXPECT_TRUE(registry.AllOf<ecs::components::ScriptControlled>(first));
+	EXPECT_TRUE(registry.AllOf<ecs::components::ScriptControlled>(second));
+	EXPECT_FALSE(registry.AllOf<ecs::components::ScriptControlled>(flock));
+}
+
+// A script gets the first dancer of the first group of a dance, and never a next thing in a dance
+// NOLINTNEXTLINE(cppcoreguidelines-avoid-non-const-global-variables): external macro
+TEST_F(ScriptContainerProperties, AScriptGetsOnlyTheFirstDancerOfTheFirstGroup)
+{
+	auto& registry = Locator::entitiesRegistry::value();
+	const auto dance = registry.Create();
+	auto& made = registry.Assign<ecs::components::Dance>(dance);
+	const auto first = CreateVillager();
+	const auto second = CreateVillager();
+	const auto other = CreateVillager();
+	made.groups.all.resize(2);
+	made.groups.all[0].dancers = {first, second};
+	made.groups.all[1].dancers = {other};
+	auto results = Call(k_GetFirstInContainer, {Object(dance)});
+	ASSERT_EQ(results.size(), 1u);
+	EXPECT_EQ(results.front().first.uintVal, static_cast<uint32_t>(first));
+	results = Call(k_GetNextInContainer, {Object(dance), Object(first)});
+	ASSERT_EQ(results.size(), 1u);
+	EXPECT_EQ(results.front().first.uintVal, 0u);
+	// The first group has no dancer: the script gets nothing, also with a dancer in a later group
+	made.groups.all[0].dancers.clear();
+	results = Call(k_GetFirstInContainer, {Object(dance)});
+	ASSERT_EQ(results.size(), 1u);
+	EXPECT_EQ(results.front().first.uintVal, 0u);
+	// A dance with no groups gives nothing
+	made.groups.all.clear();
+	results = Call(k_GetFirstInContainer, {Object(dance)});
+	ASSERT_EQ(results.size(), 1u);
+	EXPECT_EQ(results.front().first.uintVal, 0u);
+	EXPECT_EQ(_api.GetStubCalls().Total(), 0u);
+}
+
+// A place or a number given to a group gives each member to the script, also a member that takes no place or number
+// NOLINTNEXTLINE(cppcoreguidelines-avoid-non-const-global-variables): external macro
+TEST_F(ScriptContainerProperties, APlaceOrANumberGivenToAFlockTakesControlOfEachMember)
+{
+	auto& registry = Locator::entitiesRegistry::value();
+	for (const auto native : {k_SetScriptStatePos, k_SetScriptFloat})
+	{
+		const auto flock = ecs::script_flocks::Create(registry, map_coords::MapCoords {});
+		const auto villager = CreateVillager();
+		const auto creature = registry.Create();
+		registry.Assign<ecs::components::CreatureMindState>(creature);
+		ASSERT_TRUE(ecs::script_flocks::AddLiving(registry, flock, villager));
+		ASSERT_TRUE(ecs::script_flocks::AddLiving(registry, flock, creature));
+		if (native == k_SetScriptStatePos)
+		{
+			Call(native, {Object(flock), Float(10.0f), Float(0.0f), Float(20.0f)});
+		}
+		else
+		{
+			Call(native, {Object(flock), Float(3.0f)});
+		}
+		EXPECT_TRUE(registry.AllOf<ecs::components::ScriptControlled>(villager));
+		EXPECT_TRUE(registry.AllOf<ecs::components::ScriptControlled>(creature));
+		EXPECT_FALSE(registry.AllOf<ecs::components::ScriptControlled>(flock));
+	}
+	EXPECT_EQ(_api.GetStubCalls().Total(), 0u);
+}
+
+// A place or a number given to one thing that is not a villager does not take control of it
+// NOLINTNEXTLINE(cppcoreguidelines-avoid-non-const-global-variables): external macro
+TEST_F(ScriptContainerProperties, APlaceOrANumberGivenToOneThingThatIsNoVillagerDoesNothing)
+{
+	auto& registry = Locator::entitiesRegistry::value();
+	const auto rock = registry.Create();
+	EXPECT_TRUE(Call(k_SetScriptStatePos, {Object(rock), Float(10.0f), Float(0.0f), Float(20.0f)}).empty());
+	EXPECT_TRUE(Call(k_SetScriptFloat, {Object(rock), Float(3.0f)}).empty());
+	EXPECT_FALSE(registry.AllOf<ecs::components::ScriptControlled>(rock));
+	EXPECT_EQ(_api.GetStubCalls().Total(), 0u);
+}
+
+// A search for a creature in a state does not look at the state or at script control: it finds the newest creature of
+// the species within the radius, as the search near a place does
+// NOLINTNEXTLINE(cppcoreguidelines-avoid-non-const-global-variables): external macro
+TEST_F(ScriptContainerProperties, ACreatureSearchInAStateDoesNotLookAtTheState)
+{
+	auto& registry = Locator::entitiesRegistry::value();
+	const auto creature = registry.Create();
+	registry.Assign<ecs::components::Creature>(creature).species = CreatureType::Tiger;
+	registry.Assign<ecs::components::LivingListPlace>(creature);
+	registry.Assign<ecs::components::Transform>(creature).position = {100.0f, 0.0f, 100.0f};
+	registry.Assign<ecs::components::ScriptControlled>(creature);
+	const auto species = static_cast<int32_t>(script::property_rules::ScriptCreatureType(CreatureType::Tiger));
+	const auto search = [species](float radius, int32_t state) {
+		const auto results =
+		    Call(k_CallNearInState, {Int(static_cast<int32_t>(script::ObjectType::Creature)), Int(species), Int(state),
+		                             Float(103.0f), Float(0.0f), Float(100.0f), Float(radius), Int(1)});
+		EXPECT_EQ(results.size(), 1u);
+		return results.empty() ? 0u : results.front().first.uintVal;
+	};
+	EXPECT_EQ(search(5.0f, 0), static_cast<uint32_t>(creature));
+	EXPECT_EQ(search(5.0f, 200), static_cast<uint32_t>(creature));
+	EXPECT_EQ(search(2.0f, 0), 0u);
 	EXPECT_EQ(_api.GetStubCalls().Total(), 0u);
 }

@@ -82,6 +82,8 @@
 #include "ECS/Components/Transform.h"
 #include "ECS/Components/VillageTotem.h"
 #include "ECS/Components/Villager.h"
+#include "ECS/Components/WorshipSite.h"
+#include "ECS/NeedFlagRules.h"
 #include "ECS/Registry.h"
 #include "ECS/Systems/CameraBookmarkSystemInterface.h"
 #include "ECS/Systems/CreatureAnimationSystemInterface.h"
@@ -105,6 +107,7 @@
 #include "ECS/WorldObjects.h"
 #include "Graphics/Texture2D.h"
 #include "Help/HelpProfile.h"
+#include "InfoConstants.h"
 #include "Input/GameActionMapInterface.h"
 #include "Locator.h"
 #include "Resources/ResourcesInterface.h"
@@ -305,8 +308,9 @@ leash::Lengths LengthsOf(const Registry& registry, entt::entity creature, const 
 	{
 		return leash::TiedToMobile(CreatureHeight(body));
 	}
+	// A need flag of a worship site holds the leash at the place of the altar of its site, not where the draw shows it
 	const auto& from = registry.Get<const Transform>(creature).position;
-	const auto& to = registry.Get<const Transform>(*worn.tiedTo).position;
+	const auto to = object_measures::PositionOf(registry, *worn.tiedTo).value_or(from);
 	return leash::TiedToStatic(gutils::GetDistanceInMetres(from, to));
 }
 
@@ -344,6 +348,30 @@ void PlaySound(audio::SoundId sound, std::optional<glm::vec3> position)
 CreatureMindState* MindOf(Registry& registry, entt::entity creature)
 {
 	return registry.TryGet<CreatureMindState>(creature);
+}
+
+/// How full a need flag of a worship site is, as a share of the need that flies it at its full height. None for a thing
+/// that is not the need flag of a worship site that is still there.
+std::optional<float> SiteFlagFill(const Registry& registry, entt::entity thing)
+{
+	const auto* flag = registry.TryGet<const WorshipSiteFlag>(thing);
+	const auto* site = flag != nullptr && registry.Valid(flag->site) ? registry.TryGet<const WorshipSite>(flag->site) : nullptr;
+	if (site == nullptr || !registry.Valid(site->altar) || !Locator::infoConstants::has_value())
+	{
+		return std::nullopt;
+	}
+	const auto& info = Locator::infoConstants::value().showNeeds.at(flag->need);
+	const ecs::need_flag::Row row {
+	    .maxNeed = info.maxNeedValue, .showsAfter = info.showNeedGreater, .maxHeight = info.maxHieght};
+	return ecs::need_flag::Fill(site->needs.at(flag->need), row);
+}
+
+/// The creature feeds the worship site of the need flag when it completes its current work, in place of the other
+/// thing that waits
+void WaitToFeedSite(CreatureMindState& mind, entt::entity flag)
+{
+	mind.followUp = creature_follow_up::FollowUp::FeedWorshipSite;
+	mind.feedSiteFlag = flag;
 }
 
 /// What the leash shortcuts need to know about a creature
@@ -1033,6 +1061,11 @@ bool LeashSystem::Tie(entt::entity creature, entt::entity object, leash::TieSour
 			creature_town_compassion::TiedToFlag(mind->townCompassion, static_cast<uint32_t>(flag->desire),
 			                                     tables->townActions);
 		}
+		// Tied to a need flag of a worship site, the creature feeds the site when it completes its current work
+		if (SiteFlagFill(registry, object).has_value())
+		{
+			WaitToFeedSite(*mind, object);
+		}
 	}
 	// The hand of the player stops what the creature does as a failure, even when the creature then takes no order
 	if (effects.failsAction)
@@ -1435,6 +1468,18 @@ void LeashSystem::UpdateMoods(entt::entity creature, const CreatureLeash::Worn& 
 	{
 		return;
 	}
+	// Tied to a need flag of a worship site that shows a large need, the creature feeds the site again when it completes
+	// its current work. A feed that waits already keeps its flag.
+	if (worn.tiedTo.has_value())
+	{
+		auto* mind = MindOf(registry, creature);
+		const auto fill = SiteFlagFill(registry, *worn.tiedTo);
+		if (mind != nullptr && fill.has_value() && creature_follow_up::SetsFeedAgain(*fill) &&
+		    mind->followUp != creature_follow_up::FollowUp::FeedWorshipSite)
+		{
+			WaitToFeedSite(*mind, *worn.tiedTo);
+		}
+	}
 	// Tied to a village, it is made to want to impress it. On the compassion leash its own desire takes over at once.
 	if (worn.tiedTo.has_value())
 	{
@@ -1696,7 +1741,8 @@ void LeashSystem::CreatureTurn(entt::entity entity)
 			const auto hand = HandPoint(worn.holder);
 			if (worn.tiedTo.has_value())
 			{
-				leashes.confinementCentre = registry.Get<const Transform>(*worn.tiedTo).position;
+				leashes.confinementCentre =
+				    object_measures::PositionOf(registry, *worn.tiedTo).value_or(leashes.confinementCentre);
 			}
 			else if (hand.has_value())
 			{
@@ -1725,12 +1771,13 @@ void LeashSystem::CreatureTurn(entt::entity entity)
 		{
 			return;
 		}
-		// The walk back ends the current action of the creature, also a fight. The fight ends with no winner, as when
-		// the player gives an order with the leash.
+		// The walk back ends the current action of the creature, also a fight. The fight ends with no winner. The body of
+		// the creature ends its fight first, and then the creature gives up its action.
 		if (registry.AllOf<CreatureFighting>(entity) && Locator::creatureFightSystem::has_value())
 		{
 			SPDLOG_LOGGER_INFO(spdlog::get("game"), "Creature {} leaves its fight to walk back", entt::to_integral(entity));
-			Locator::creatureFightSystem::value().CallOff(entity);
+			Locator::creatureFightSystem::value().EndBodyFightAgain(entity);
+			Locator::creatureFightSystem::value().CallOffForWalkBack(entity);
 		}
 		WalkBack(entity);
 	}
@@ -1932,7 +1979,12 @@ void LeashSystem::LetGoOfRope(PlayerNames player, std::optional<glm::vec3> place
 	// The leash is as long as the hand is from what it is tied to: from the map position of the thing, on the land
 	const auto& registry = Locator::entitiesRegistry::value();
 	const auto tied = *worn->tiedTo;
-	const auto tiedAt = map_coords::FromMetres(glm::xz(registry.Get<const Transform>(tied).position));
+	const auto tiedPosition = object_measures::PositionOf(registry, tied);
+	if (!tiedPosition.has_value())
+	{
+		return;
+	}
+	const auto tiedAt = map_coords::FromMetres(glm::xz(*tiedPosition));
 	const auto tiedPoint = Locator::terrainSystem::has_value()
 	                           ? map_coords::ToWorld(Locator::terrainSystem::value(), tiedAt)
 	                           : glm::vec3(map_coords::ToMetres(tiedAt.x), 0.0f, map_coords::ToMetres(tiedAt.z));
@@ -2252,6 +2304,8 @@ bool LeashSystem::TakeOutOfFight(entt::entity creature)
 	}
 	if (fights.IsFighting(creature))
 	{
+		// After a stop that ended the fight, the order stops the creature again
+		fights.EndBodyFightAgain(creature);
 		fights.CallOff(creature);
 	}
 	return true;
@@ -2290,7 +2344,7 @@ bool LeashSystem::TakeGroundOrder(entt::entity creature, const glm::vec3& place)
 	const auto field = FieldAt(registry, at);
 	const bool carrying = HeldBy(creature).has_value();
 	const auto interruption = orders::OnGroundInterrupts(carrying, WalksToPointWhenForced(registry, creature));
-	const bool wantsWater = mind != nullptr && mind->desires.has_value() && (*mind->desires)[Desire::Water].activated;
+	const bool wantsWater = mind != nullptr && mind->desires.has_value() && mind->desires->IsActivated(Desire::Water);
 	const auto order = orders::OnGround(
 	    at,
 	    {
@@ -2460,7 +2514,7 @@ bool LeashSystem::TakeThingOrder(entt::entity creature, entt::entity object)
 	const auto fishSkill = static_cast<size_t>(CreatureActionKnownAbout::Fish);
 	const auto attempts = orders::OnThing({
 	    .fishFarm = registry.AllOf<FishFarm>(object),
-	    .hungry = thinking != nullptr && thinking->desires.has_value() && (*thinking->desires)[Desire::Hunger].activated,
+	    .hungry = thinking != nullptr && thinking->desires.has_value() && thinking->desires->IsActivated(Desire::Hunger),
 	    .knowsFishing = thinking != nullptr && thinking->learnt.has_value() &&
 	                    fishSkill < thinking->learnt->knowledge.skillsKnown.size() &&
 	                    thinking->learnt->knowledge.skillsKnown[fishSkill],

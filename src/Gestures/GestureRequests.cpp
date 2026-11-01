@@ -160,15 +160,16 @@ std::vector<Request> gesture::Requests(const HandContext& context)
 	const bool poweringUp = seed.has_value() && seed->ready && !seed->cast && seed->canPowerUp;
 	if (poweringUp)
 	{
-		// A scribble calls off the power-up asked for, or drops the seed; each other level's gesture powers it up
+		// A scribble calls off the power-up asked for, or drops the seed; each power-up gesture but the one asked for
+		// asks the icon of the seed for its level
 		requests.push_back({.gesture = GestureType::Scribble,
 		                    .purpose = Purpose::DropSeed,
-		                    .powerUpLevel = seed->powerUp,
+		                    .callsOff = seed->askedPowerUp != GestureType::None,
 		                    .seed = seed->type});
 		for (int level = 0; level < static_cast<int>(seed->powerUpGestures.size()); ++level)
 		{
 			const auto gesture = seed->powerUpGestures.at(static_cast<size_t>(level));
-			if (gesture != GestureType::None && level != seed->powerUp)
+			if (gesture != GestureType::None && gesture != seed->askedPowerUp)
 			{
 				requests.push_back(
 				    {.gesture = gesture, .purpose = Purpose::PowerUp, .powerUpLevel = level, .seed = seed->type});
@@ -297,7 +298,8 @@ std::optional<uint32_t> gesture::HelpEventOf(const Request& request, const HandC
 		{
 			return std::nullopt;
 		}
-		return context.seed->powerUp >= 0 ? help::profile::k_GestureStopPowerUp : help::profile::k_GestureDropMiracle;
+		return context.seed->askedPowerUp != GestureType::None ? help::profile::k_GestureStopPowerUp
+		                                                       : help::profile::k_GestureDropMiracle;
 	default:
 		return std::nullopt;
 	}
@@ -335,11 +337,25 @@ bool gesture::ChainFollows(const std::optional<HandContext::Seed>& seed, bool se
 
 bool gesture::CountsPoweredUpCast(const HandContext::Seed& seed, GestureType lastGesture)
 {
-	if (!seed.ready || seed.cast || !seed.canPowerUp || seed.powerUp < 0)
+	if (!seed.ready || seed.cast || !seed.canPowerUp || seed.askedPowerUp == GestureType::None)
 	{
 		return false;
 	}
-	return seed.sizingGesture == GestureType::None || lastGesture == seed.sizingGesture;
+	return PassesSizingCheck(seed.sizingGesture, lastGesture);
+}
+
+std::array<GestureType, 3> gesture::OfferedPowerUps(const std::array<GestureType, 3>& gestures,
+                                                    const std::array<bool, 3>& offered)
+{
+	std::array<GestureType, 3> result {GestureType::None, GestureType::None, GestureType::None};
+	for (size_t level = 0; level < result.size(); ++level)
+	{
+		if (offered.at(level))
+		{
+			result.at(level) = gestures.at(level);
+		}
+	}
+	return result;
 }
 
 void LeashPicker::Open()

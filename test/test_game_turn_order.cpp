@@ -129,6 +129,20 @@ TEST(GameTurnOrder, TheHandDoesItsOwnWorkAfterTheCommandsOfTheTurn)
 	EXPECT_TRUE(recorder.Before(Step::HandInterface, Step::Clock));
 }
 
+// The share of influence that each hand keeps past the border is part of the input of the players: after the reports of
+// the hands and their stillness, before the hand's own work and before the players and the computer minds act
+TEST(GameTurnOrder, TheHandsKeepTheirShareOfInfluenceInTheInputOfThePlayers)
+{
+	const auto recorder = PlayOneTurn();
+	EXPECT_TRUE(recorder.Before(Step::PlayerCommands, Step::VirtualInfluence));
+	EXPECT_TRUE(recorder.Before(Step::HandStillness, Step::VirtualInfluence));
+	EXPECT_TRUE(recorder.Before(Step::VirtualInfluence, Step::HandInterface));
+	EXPECT_TRUE(recorder.Before(Step::VirtualInfluence, Step::Clock));
+	EXPECT_TRUE(recorder.Before(Step::VirtualInfluence, Step::Players));
+	EXPECT_TRUE(recorder.Before(Step::VirtualInfluence, Step::ComputerPlayers));
+	EXPECT_TRUE(MeasuresInfluenceFromTurnHands(Step::VirtualInfluence));
+}
+
 TEST(GameTurnOrder, TheStormsMoveBeforeThePlayersAndTheClimatesAfterTheTimeOfDay)
 {
 	const auto recorder = PlayOneTurn();
@@ -223,7 +237,8 @@ TEST(GameTurnOrder, TheLateStepsOfTheTurnComeInTheGamesOrder)
 TEST(GameTurnOrder, TheEndOfTheTurnSoundsThenSavesThenEndsTheGame)
 {
 	const auto recorder = PlayOneTurn();
-	EXPECT_TRUE(recorder.Before(Step::MusicMoods, Step::SoundTags));
+	EXPECT_TRUE(recorder.Before(Step::MusicMoods, Step::PlaygroundLesson));
+	EXPECT_TRUE(recorder.Before(Step::PlaygroundLesson, Step::SoundTags));
 	EXPECT_TRUE(recorder.Before(Step::SoundTags, Step::Ambience));
 	EXPECT_TRUE(recorder.Before(Step::Ambience, Step::Autosave));
 	EXPECT_TRUE(recorder.Before(Step::Autosave, Step::GameOver));
@@ -441,10 +456,19 @@ TEST(GameTurnOrder, ADecidedGameDoesOnlyTheInputTheCountAndTheStepsAfterTheTurn)
 {
 	TurnRecorder recorder;
 	PlayTurn([&recorder](Step step) { recorder(step); }, true);
-	const std::vector<Step> expected {Step::DrawnPlaces,       Step::PlayerCommands,   Step::HandStillness,
-	                                  Step::HandInterface,     Step::ChimneySmoke,     Step::Clock,
-	                                  Step::RealWeather,       Step::WalkerLookahead,  Step::CreatureShapes,
-	                                  Step::MapCellsAtTurnEnd, Step::InfluenceTurnEnd, Step::SyncChecksum,
+	const std::vector<Step> expected {Step::DrawnPlaces,
+	                                  Step::PlayerCommands,
+	                                  Step::HandStillness,
+	                                  Step::VirtualInfluence,
+	                                  Step::HandInterface,
+	                                  Step::ChimneySmoke,
+	                                  Step::Clock,
+	                                  Step::RealWeather,
+	                                  Step::WalkerLookahead,
+	                                  Step::CreatureShapes,
+	                                  Step::MapCellsAtTurnEnd,
+	                                  Step::InfluenceTurnEnd,
+	                                  Step::SyncChecksum,
 	                                  Step::RunRecord};
 	EXPECT_EQ(recorder.Steps(), expected);
 }

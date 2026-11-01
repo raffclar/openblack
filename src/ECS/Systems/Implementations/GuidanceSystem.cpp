@@ -38,9 +38,11 @@
 #include "ECS/Components/TownDesire.h"
 #include "ECS/Components/Transform.h"
 #include "ECS/Components/WorshipSite.h"
+#include "ECS/GamePlayers.h"
 #include "ECS/PlayerTowns.h"
 #include "ECS/Reflection/BinaryArchive.h"
 #include "ECS/Registry.h"
+#include "ECS/ScriptFind.h"
 #include "ECS/Systems/AlignmentSystemInterface.h"
 #include "ECS/Systems/HandSystemInterface.h"
 #include "ECS/Systems/HelpMessageSystemInterface.h"
@@ -562,6 +564,52 @@ void GuidanceSystem::LosingVillager(entt::entity villager)
 	}
 }
 
+void GuidanceSystem::ResourceDropped(PlayerNames giver, glm::vec3 at, guidance::Gift gift)
+{
+	if (giver != OwnPlayer() || !Locator::entitiesRegistry::has_value() || !Locator::gameRandom::has_value() ||
+	    !PlayNow(guidance::Kind::ResourceDropSound))
+	{
+		return;
+	}
+	// The town nearest the point answers: the towns of each player in turn, then the neutral towns
+	const auto& registry = Locator::entitiesRegistry::value();
+	std::vector<script_find::Candidate> towns;
+	for (const auto town : player_towns::AllInOrder(registry))
+	{
+		if (const auto* transform = registry.TryGet<const Transform>(town))
+		{
+			towns.push_back({.entity = town, .at = map_coords::FromMetres(glm::xz(transform->position))});
+		}
+	}
+	const auto town = script_find::FindNearestTown(map_coords::FromMetres(glm::xz(at)), guidance::k_GiftTownReach, towns);
+	const auto* desires = town != entt::null ? registry.TryGet<const TownDesire>(town) : nullptr;
+	if (desires == nullptr)
+	{
+		return;
+	}
+	const auto desire = gift == guidance::Gift::Food   ? TownDesireInfo::ForFood
+	                    : gift == guidance::Gift::Wood ? TownDesireInfo::ForWood
+	                                                   : TownDesireInfo::ForRain;
+	const float raw = ecs::town_desire::GetRawDesire(*desires, static_cast<size_t>(desire));
+	if (!guidance::GiftAnswered(raw))
+	{
+		return;
+	}
+	const auto sample =
+	    guidance::GiftAnswer(gift, raw, Locator::gameRandom::value().LocalRand(static_cast<int32_t>(guidance::k_GiftAnswers)));
+	if (!sample.has_value())
+	{
+		return;
+	}
+	if (auto* heard = Heard(); heard != nullptr)
+	{
+		heard->lastTurn.at(static_cast<size_t>(guidance::Kind::ResourceDropSound)) = Turn();
+	}
+	SPDLOG_LOGGER_DEBUG(spdlog::get("audio"), "Town {} answers the gift: guidance sample {}, raw desire {:.3f}",
+	                    entt::to_integral(town), *sample, raw);
+	PlayVoice(*sample, at, guidance::k_GiftAnswerReach);
+}
+
 void GuidanceSystem::LowOnPeople(entt::entity town)
 {
 	if (!RemarkNow(guidance::Kind::LowOnPeople) || !Locator::entitiesRegistry::has_value())
@@ -607,11 +655,6 @@ void GuidanceSystem::LosingBeliefTurn()
 	}
 	// The towns of the player at this computer, in the order of the player's list
 	const auto player = OwnPlayer();
-	// The rule knows the belief of the players of a land only, so a god after the seventh gets no remark
-	if (static_cast<size_t>(player) >= guidance::k_BeliefPlayers)
-	{
-		return;
-	}
 	const auto towns = ecs::player_towns::InOrder(registry, player);
 	std::vector<guidance::TownBeliefs> beliefs;
 	beliefs.reserve(towns.size());
@@ -625,7 +668,8 @@ void GuidanceSystem::LosingBeliefTurn()
 		}
 	}
 	const auto margin = Locator::infoConstants::value().belief.beliefLeftWhenHelpSpritesWarn;
-	const auto found = guidance::LosingBeliefTown(beliefs, static_cast<size_t>(player), margin);
+	// The rule looks at each player of the game, so a god after the seventh also gets the remark (deviation 166)
+	const auto found = guidance::LosingBeliefTown(beliefs, static_cast<size_t>(player), ecs::game_players::Count(), margin);
 	if (!found.has_value() || !RemarkNow(guidance::Kind::LosingBelief))
 	{
 		return;

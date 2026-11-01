@@ -37,6 +37,10 @@ enum class HeldTurn : uint8_t
 };
 [[nodiscard]] HeldTurn WhileHeld(bool held, bool showDesireOnHold);
 
+/// A held creature shows what it wants when its body is at rest: no action plays, it does not turn, and no turn waits
+/// for the end of an action.
+[[nodiscard]] bool ShowsDesireOnHold(bool bodyPlaysAction, bool turns, bool turnWaits);
+
 /// After the hand let go of it, the first turn that finds a plan with steps to do starts the agenda of that plan again
 /// from its first step. The mark that the hand held it stays until then.
 [[nodiscard]] bool RestartsAfterHold(bool heldSinceRestart, bool planHasSteps);
@@ -84,4 +88,8 @@ struct DecisionState
 /// The creature does not decide, and does not do what waits for the end of its work, while it has a forced plan or a
 /// reaction. The check of the copy of the player comes before this and still occurs.
 [[nodiscard]] bool SkipsDecision(const DecisionState& state);
+/// When it completes its work, the creature does the thing that waits in place of its own decision. A plan for one
+/// desire only, such as an order on a thing, does not do the thing that waits. A creature that a script controls does
+/// not do it.
+[[nodiscard]] bool DoesFollowUp(const DecisionState& state, bool forOneDesire, bool scriptControlled);
 } // namespace openblack::creature_turn_order

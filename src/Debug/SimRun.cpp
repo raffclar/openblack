@@ -150,10 +150,6 @@ std::optional<ConditionsRequest> ParseConditions(std::string_view text)
 		const auto item = text.substr(0, comma);
 		text = comma == std::string_view::npos ? std::string_view() : text.substr(comma + 1);
 		const auto equals = item.find('=');
-		if (equals == std::string_view::npos)
-		{
-			return std::nullopt;
-		}
 		const auto name = item.substr(0, equals);
 		size_t index = 0;
 		if (const auto named = gui::multiplayer::ConditionIndex(name); named.has_value())
@@ -164,23 +160,47 @@ std::optional<ConditionsRequest> ParseConditions(std::string_view text)
 		{
 			return std::nullopt;
 		}
-		int32_t value = 0;
-		if (index >= static_cast<size_t>(game_end::Condition::_Count) || !readNumber(item.substr(equals + 1), value))
+		if (index >= static_cast<size_t>(game_end::Condition::_Count))
 		{
 			return std::nullopt;
+		}
+		std::optional<int32_t> value;
+		if (equals != std::string_view::npos)
+		{
+			int32_t number = 0;
+			if (!readNumber(item.substr(equals + 1), number))
+			{
+				return std::nullopt;
+			}
+			value = number;
 		}
 		const auto condition = static_cast<game_end::Condition>(index);
-		if (std::ranges::find(request.picks, condition, &game_end::ConditionPick::condition) != request.picks.end())
+		if (std::ranges::find(request.conditions, condition, &game_end::SwitchedCondition::condition) !=
+		    request.conditions.end())
 		{
 			return std::nullopt;
 		}
-		request.picks.push_back({.condition = condition, .value = value});
+		request.conditions.push_back({.condition = condition, .value = value});
 	}
-	if (request.picks.empty())
+	if (request.conditions.empty())
 	{
 		return std::nullopt;
 	}
 	return request;
+}
+
+std::optional<std::vector<game_end::ConditionPick>> PicksWithValues(const ConditionsRequest& request)
+{
+	std::vector<game_end::ConditionPick> picks;
+	for (const auto& each : request.conditions)
+	{
+		if (!each.value.has_value())
+		{
+			return std::nullopt;
+		}
+		picks.push_back({.condition = each.condition, .value = *each.value});
+	}
+	return picks;
 }
 
 } // namespace openblack::sim_run

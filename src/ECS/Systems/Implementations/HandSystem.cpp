@@ -15,6 +15,7 @@
 #include <array>
 #include <optional>
 #include <span>
+#include <utility>
 #include <vector>
 
 #include <L3DFile.h>
@@ -22,6 +23,7 @@
 #include <spdlog/spdlog.h>
 
 #include "3D/HandMorph.h"
+#include "3D/L3DSkinTexels.h"
 #include "Common/MachineClock.h"
 #include "ECS/Archetypes/HandArchetype.h"
 #include "ECS/Components/ComputerPlayer.h"
@@ -43,6 +45,8 @@
 #include "ECS/Systems/InfluenceSystemInterface.h"
 #include "ECS/Systems/PlayerSystemInterface.h"
 #include "ECS/Systems/TimeSystemInterface.h"
+#include "EngineConfig.h"
+#include "Hand/GodHand.h"
 #include "Hand/HandStart.h"
 #include "Hand/HandStillness.h"
 #include "Hand/OtherHeldDraw.h"
@@ -246,6 +250,9 @@ void HandSystem::StartAtCitadel(PlayerNames owner, const glm::vec3& point)
 	if (found != entt::null)
 	{
 		registry.AssignOrReplace<HandStart>(found, HandStart {.point = point});
+		// The hand of a god that no person plays starts at the citadel too
+		auto* godHand = registry.TryGet<HandStillness>(found);
+		god_hand::MindReport(godHand != nullptr ? *godHand : registry.Assign<HandStillness>(found), point);
 		// The camera of a computer mind also looks at the citadel until the mind moves its hand
 		if (auto* mind = registry.TryGet<ComputerPlayer>(found))
 		{
@@ -303,6 +310,30 @@ void HandSystem::ProcessTurn()
 		{
 			step((*hands)[static_cast<size_t>(Side::Left)]);
 		}
+	}
+	// No person reports the hand of each other god, so its input goes to the origin of the world. The gods take this
+	// step in the order of their player numbers.
+	if (!Locator::playerSystem::has_value())
+	{
+		return;
+	}
+	const auto& players = Locator::playerSystem::value();
+	std::vector<std::pair<PlayerNames, entt::entity>> gods;
+	registry.Each<const Player>([&gods](entt::entity entity, const Player& player) {
+		if (player.name != PlayerNames::NEUTRAL)
+		{
+			gods.emplace_back(player.name, entity);
+		}
+	});
+	std::ranges::sort(gods, {}, &std::pair<PlayerNames, entt::entity>::first);
+	for (const auto& [name, entity] : gods)
+	{
+		if (players.IsHumanPlayer(name))
+		{
+			continue;
+		}
+		auto* hand = registry.TryGet<HandStillness>(entity);
+		god_hand::InputTurn(hand != nullptr ? *hand : registry.Assign<HandStillness>(entity));
 	}
 }
 
@@ -423,6 +454,9 @@ void HandSystem::ReportView(PlayerNames player, const player_commands::ViewRepor
 	reported.cameraArrived = report.cameraArrived;
 	reported.gripsLand = report.gripsLand;
 	reported.otherButton = report.otherButton;
+	reported.mouseWheel = report.mouseWheel;
+	reported.cameraIcons = report.cameraIcons;
+	reported.keysHeld = report.keysHeld;
 }
 
 std::optional<HandSystemInterface::ReportedView> HandSystem::GetReportedView(PlayerNames player) const noexcept
@@ -451,6 +485,9 @@ std::optional<HandSystemInterface::ReportedView> HandSystem::GetReportedView(Pla
 	    .cameraArrived = reported->cameraArrived,
 	    .gripsLand = reported->gripsLand,
 	    .otherButton = reported->otherButton,
+	    .mouseWheel = reported->mouseWheel,
+	    .cameraIcons = reported->cameraIcons,
+	    .keysHeld = reported->keysHeld,
 	};
 }
 
@@ -512,9 +549,12 @@ HandSystem::GetOwnHandPositions() const noexcept
 
 namespace
 {
-std::span<const uint16_t> TexelsOf(const l3d::L3DTexture& skin)
+/// The texels of a skin of a hand mesh as the game loads them: at half size at the two lowest detail levels
+std::vector<uint16_t> TexelsOf(const l3d::L3DFile& file, const l3d::L3DTexture& skin)
 {
-	return {reinterpret_cast<const uint16_t*>(skin.texels.data()), skin.texels.size()};
+	const bool lowResolution = Locator::config::has_value() && Locator::config::value().detail.lowResTextures;
+	return l3d_skin::LoadedTexels({reinterpret_cast<const uint16_t*>(skin.texels.data()), skin.texels.size()},
+	                              static_cast<uint32_t>(file.GetHeader().flags), lowResolution);
 }
 
 /// The hand's skins drawn at an alignment: each of the base mesh's blended towards the one at the same place in the
@@ -527,10 +567,10 @@ std::vector<HandMorph::Skin> BlendSkins(const l3d::L3DFile& base, const l3d::L3D
 	skins.reserve(baseSkins.size());
 	for (size_t i = 0; i < baseSkins.size(); ++i)
 	{
-		const auto from = TexelsOf(baseSkins[i]);
+		const auto from = TexelsOf(base, baseSkins[i]);
 		auto& skin = skins.emplace_back(HandMorph::Skin {.id = baseSkins[i].id, .texels = {}});
 		skin.texels.resize(from.size());
-		const auto to = i < lookSkins.size() ? TexelsOf(lookSkins[i]) : from;
+		const auto to = i < lookSkins.size() ? TexelsOf(look, lookSkins[i]) : from;
 		hand_morph::BlendSkin(from, to, drawn, skin.texels);
 	}
 	return skins;

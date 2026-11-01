@@ -28,6 +28,10 @@
 namespace openblack::gamesave
 {
 
+/// The number of words that the file keeps for the decision tree of a computer player: two values for each of the 198
+/// nodes of the tree, in the order of the tree from its top
+constexpr size_t k_ComputerPlayerTreeWords = 396;
+
 /// The types of the objects in the game's world file that openblack uses
 enum class VanillaType : uint32_t
 {
@@ -41,6 +45,7 @@ enum class VanillaType : uint32_t
 	WorshipSite = 0x3C,
 	ScriptHighlight = 0x3F,
 	InfluenceRing = 0x49,
+	TownDesireFlags = 0x4C,
 	BigForest = 0x4D,
 	Forest = 0x4E,
 	Tree = 0x4F,
@@ -50,6 +55,7 @@ enum class VanillaType : uint32_t
 	MobileStatic = 0x54,
 	FishFarm = 0x5B,
 	StandardBuildingSite = 0x5C,
+	CitadelBuildingSite = 0x5D,
 	TownCentre = 0x60,
 	PlannedAbode = 0x61,
 	PlannedTownCentre = 0x62,
@@ -70,6 +76,7 @@ enum class VanillaType : uint32_t
 	ScriptMarker = 0x7C,
 	ScriptTimer = 0x7D,
 	Flock = 0x7E,
+	Wonder = 0x80,
 	BaseOnly = 0xF6,
 	Climate = 0xFC,
 	StreetLantern = 0xFE,

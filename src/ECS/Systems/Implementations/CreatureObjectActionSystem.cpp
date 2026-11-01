@@ -1063,7 +1063,8 @@ glm::vec2 FacingToReach(const Transform& transform, const creature_reach::Points
 	return from + glm::vec2((towards.x * c) - (towards.y * s), (towards.x * s) + (towards.y * c));
 }
 
-/// Whether a thing lies on the map, where a creature can stomp on it: not held, flying or carried off
+/// Whether a thing lies on the map, where a creature can stomp on it: not held, flying or carried off.
+/// A piece that broke off a building goes into the cells of the map when it comes to rest, as a rock does.
 bool OnTheMap(const ecs::Registry& registry, entt::entity thing)
 {
 	return ecs::InMapCells(registry, thing) && !registry.AnyOf<InHand, HeldByCreature, InPhysics, CarriedByTornado>(thing);
@@ -2494,6 +2495,12 @@ std::optional<float> CreatureObjectActionSystem::GetProgress(entt::entity creatu
 	{
 		return std::nullopt;
 	}
+	// The time and the length are whole milliseconds, so the float divide gives the same share as the game
+	if (creature_object_actions::SharesByStand(action->kind))
+	{
+		const float stand = DurationOf(creature, creature_layers::animations::k_Stand);
+		return stand > 0.0f ? std::optional(action->timeMs / stand) : std::nullopt;
+	}
 	if (action->holdMs > 0.0f || action->durationMs <= 0.0f)
 	{
 		return 0.0f;
@@ -3533,8 +3540,9 @@ void CreatureObjectActionSystem::AfterPoseTurn(entt::entity creature)
 			{
 				break;
 			}
-			// A building is broken about where it stands, and a rock is smashed in two. The blow does nothing to anything
-			// else. A living thing takes the crush from the plan of the creature on each turn after the blow.
+			// A building is broken about where it stands, and a rock or a piece of a building is smashed in two. The blow
+			// does nothing to anything else. A living thing takes the crush from the plan of the creature on each turn
+			// after the blow.
 			if (registry.AnyOf<Abode, SpellDispenser>(target))
 			{
 				if (Locator::buildingDamageSystem::has_value())
@@ -3542,7 +3550,7 @@ void CreatureObjectActionSystem::AfterPoseTurn(entt::entity creature)
 					Locator::buildingDamageSystem::value().Smash(target, creature, ShownSize(body));
 				}
 			}
-			else if (object_physics::IsRock(target) && Locator::dynamicsSystem::has_value())
+			else if (object_physics::IsRockOrPiece(target) && Locator::dynamicsSystem::has_value())
 			{
 				object_physics::SmashRock(Locator::dynamicsSystem::value(), target, creature);
 			}

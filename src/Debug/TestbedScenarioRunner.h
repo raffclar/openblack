@@ -58,6 +58,8 @@ struct BenchmarkSettings
 	/// Where the results are written, with .json and .csv after it, once that many frames are measured, after which the
 	/// game quits; for running a benchmark from the command line
 	std::optional<std::filesystem::path> autoSave;
+	/// The command line asked for the scenario's checks: the verdict is reported when it is decided and the game quits
+	bool reportChecks {false};
 };
 
 /// Plays a scenario on the testbed: loads the testbed afresh, which clears away everything on it, sets the time of
@@ -104,6 +106,8 @@ public:
 	[[nodiscard]] std::span<const entt::entity> GetCreatures() const { return _creatures; }
 	/// What became of the last commands, the newest last
 	[[nodiscard]] const std::deque<std::string>& GetLog() const { return _log; }
+	/// What the scenario states about its outcome and how the world answers it so far
+	[[nodiscard]] const checks::Evaluator& GetChecks() const { return _checks; }
 
 	/// The scenario's crowd as it spawns, if it has one
 	[[nodiscard]] std::optional<CrowdProgress> GetCrowdProgress() const;
@@ -145,6 +149,8 @@ private:
 	void UpdateComputerActions();
 	/// The thing that a forced action of a computer god gets, or none when the scenario has no such thing
 	[[nodiscard]] entt::entity ComputerActionThingOf(const ComputerActionThing& thing, PlayerNames player) const;
+	/// Marks the temple of the player as hit at the turn, as a thrown thing that harms the heart does
+	void MarkTempleHit(PlayerNames player, uint32_t turn) const;
 	/// The first player's statistics and their creature's tallies, as the scenario gives them
 	static void SetUpStatistics(const Scenario& scenario);
 	void PlaceCreatures(const Scenario& scenario, glm::vec2 middle);
@@ -167,6 +173,8 @@ private:
 	void UpdateThrows();
 	/// Asks again for the turns that did not start while their creatures walked to a stop
 	void UpdateTurnsAsked();
+	void UpdateChecks();
+	[[nodiscard]] std::optional<double> ReadCheck(const checks::Check& check) const;
 	/// Casts the scenario's miracle of that index; the running miracle, or none
 	entt::entity CastMiracle(size_t index);
 	void UpdateParticles(float seconds);
@@ -203,6 +211,8 @@ private:
 	std::string HandTakeFireBall();
 	std::string HandTapObject(size_t index);
 	std::string ChargeIconWithSeedHeld(const Command& command);
+	std::string TakeIconSeed(const Command& command);
+	std::string TapSiteIcon(const Command& command);
 	/// Once the hand is over the fireball, it taps it, or presses the action button with a seed in it
 	void FinishTakingFireBall();
 	/// Draws a gesture through the gesture recogniser, across the middle of the screen
@@ -248,6 +258,8 @@ private:
 	[[nodiscard]] std::optional<entt::entity> GlobeAt(size_t index) const;
 	/// The totem of a scenario's object, a town centre
 	[[nodiscard]] std::optional<entt::entity> TotemAt(size_t index) const;
+	/// The piece of a building nearest to a creature, none when no piece is about
+	[[nodiscard]] static std::optional<entt::entity> PieceNearest(entt::entity creature);
 	/// Builds the worship site of the town of a town centre at once
 	void BuildWorshipSiteOf(entt::entity centre) const;
 	void Log(std::string line);
@@ -362,6 +374,8 @@ private:
 	std::vector<bool> _started;
 
 	std::deque<std::string> _log;
+	checks::Evaluator _checks;
+	bool _checksReported {false};
 	/// The gesture being drawn, and the count of gestures recognised before it
 	std::optional<GestureType> _drawing;
 	uint32_t _recognisedBefore {0};

@@ -12,6 +12,7 @@
 #include "GestureSystem.h"
 
 #include <algorithm>
+#include <array>
 #include <stdexcept>
 #include <utility>
 
@@ -165,7 +166,8 @@ void GestureSystem::Reset()
 	_seedTurnedOnLand = false;
 	_selection.Close();
 	_circleSeconds = 0.0f;
-	_circleSeed = entt::null;
+	_powerUpGestures = {GestureType::None, GestureType::None, GestureType::None};
+	_askedPowerUp = GestureType::None;
 	_lastRecognised.reset();
 	_requests.clear();
 	// A new land: no hints, and the collars start unturned; the row's fade carries on
@@ -190,8 +192,59 @@ void GestureSystem::ForgetPath()
 
 void GestureSystem::SeedFirstTurnInHand()
 {
+	StartPowerUps();
 	ForgetPath();
 	_seedTurnedOnLand = true;
+	// The power-up that the seed has counts as the one asked for: the gesture of the first seed that casts its miracle,
+	// none for a plain miracle
+	if (!Locator::magicSystem::has_value() || !Locator::infoConstants::has_value())
+	{
+		return;
+	}
+	const auto held = Locator::magicSystem::value().GetHeldSeed();
+	const auto& registry = Locator::entitiesRegistry::value();
+	const auto* seed =
+	    held.has_value() && registry.Valid(*held) ? registry.TryGet<const ecs::components::SpellSeed>(*held) : nullptr;
+	if (seed == nullptr)
+	{
+		return;
+	}
+	const auto& info = Locator::infoConstants::value();
+	const auto type = magic::GetMagicTypeFromPowerUpLevel(magic::GetSpellSeedInfo(info, seed->seedType), seed->powerUp);
+	_askedPowerUp = magic::GetPowerUpGestureForMagicType(info, type).gesture;
+}
+
+void GestureSystem::StartPowerUps()
+{
+	_circleSeconds = 0.0f;
+	_askedPowerUp = GestureType::None;
+	_powerUpGestures = {GestureType::None, GestureType::None, GestureType::None};
+	if (!Locator::magicSystem::has_value() || !Locator::infoConstants::has_value())
+	{
+		return;
+	}
+	const auto held = Locator::magicSystem::value().GetHeldSeed();
+	const auto& registry = Locator::entitiesRegistry::value();
+	const auto* seed =
+	    held.has_value() && registry.Valid(*held) ? registry.TryGet<const ecs::components::SpellSeed>(*held) : nullptr;
+	if (seed == nullptr)
+	{
+		return;
+	}
+	const auto& seedInfo = magic::GetSpellSeedInfo(Locator::infoConstants::value(), seed->seedType);
+	// A level is offered when the seed has it, comes from an icon, and that icon can charge the level for the player
+	std::array<bool, 3> offered {};
+	if (seed->hasIcon && Locator::spellIconSystem::has_value())
+	{
+		const auto& icons = Locator::spellIconSystem::value();
+		const auto icon = icons.IconOfSeed(*held);
+		for (size_t level = 0; level < offered.size(); ++level)
+		{
+			offered.at(level) = seedInfo.magicTypes.at(level + 1) != MagicType::None &&
+			                    icons.ValidForPowerUp(icon, seed->player, static_cast<int>(level));
+		}
+	}
+	_powerUpGestures = gesture::OfferedPowerUps(seedInfo.powerUpGestures, offered);
 }
 
 void GestureSystem::DrawPath(std::vector<glm::vec2> path, bool holdingAction)
@@ -267,8 +320,9 @@ gesture::HandContext GestureSystem::ContextOf(const Frame& frame)
 			                                           .ready = seed->ready,
 			                                           .cast = seed->hasCast,
 			                                           .sizingGesture = seedInfo.sizingGesture,
-			                                           .powerUpGestures = seedInfo.powerUpGestures,
+			                                           .powerUpGestures = _powerUpGestures,
 			                                           .powerUp = seed->powerUp,
+			                                           .askedPowerUp = _askedPowerUp,
 			                                           .canPowerUp = seed->hasIcon};
 			context.inInfluence = Locator::magicSystem::value().IsHandInInfluence();
 		}
@@ -290,11 +344,7 @@ gesture::HandContext GestureSystem::ContextOf(const Frame& frame)
 		const auto temple = Locator::worshipSiteSystem::value().TempleOf(player);
 		context.iconCharging = Locator::spellIconSystem::value().ChargesFor(temple, player);
 	}
-	// A circle is remembered for the seed it was drawn for
-	if (!seedEntity.has_value() || *seedEntity != _circleSeed)
-	{
-		_circleSeconds = 0.0f;
-	}
+	// A circle stays remembered until its time is up, the hand starts its power-ups again, or the land changes
 	context.circleRemembered = _circleSeconds > 0.0f;
 
 	// The player's creature and its leash
@@ -744,17 +794,30 @@ bool GestureSystem::Act(const gesture::Request& request, const gesture::Match& m
 		                   .centre = centre,
 		                   .radius = gesture::CircleRadius(centre, edge, frame.view.cameraRight)});
 		_circleSeconds = gesture::k_CircleSeconds;
-		_circleSeed =
-		    Locator::magicSystem::has_value() ? Locator::magicSystem::value().GetHeldSeed().value_or(entt::null) : entt::null;
 		break;
 	}
 	case Purpose::PowerUp:
+		// The hand starts its power-ups again and keeps this one as asked for. The turn asks the icon of the seed to
+		// charge the level; the seed takes the level only when the icon has charged it.
+		StartPowerUps();
+		_askedPowerUp = request.gesture;
 		_events.push_back({.kind = GestureEvent::Kind::PowerUp,
 		                   .gesture = request.gesture,
 		                   .centre = handAt,
 		                   .powerUpLevel = request.powerUpLevel});
 		break;
 	case Purpose::DropSeed:
+		if (request.callsOff)
+		{
+			// The power-up asked for is called off: the icon charges the seed back to its plain miracle, and what the seed
+			// holds past that goes back to the site
+			StartPowerUps();
+			_events.push_back({.kind = GestureEvent::Kind::PowerUp,
+			                   .gesture = request.gesture,
+			                   .centre = handAt,
+			                   .powerUpLevel = magic::k_BasePowerUpLevel});
+			break;
+		}
 		_events.push_back({.kind = GestureEvent::Kind::Scribble, .gesture = request.gesture, .centre = handAt});
 		break;
 	case Purpose::ShakeOffLeash:

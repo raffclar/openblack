@@ -26,6 +26,7 @@
 #include "ECS/Components/Transform.h"
 #include "ECS/Components/VillageTotem.h"
 #include "ECS/Registry.h"
+#include "ECS/Systems/Implementations/ObjectMeasures.h"
 #include "ECS/Systems/Implementations/VillageTotemSystem.h"
 #include "ECS/VillageTotem.h"
 
@@ -177,6 +178,7 @@ public:
 	}
 	void EmpathiseWithPlayer(PlayerNames player, glm::vec3 position) override { empathies.push_back({player, position}); }
 	void Reinsert(entt::entity totem) override { reinserted.push_back(totem); }
+	[[nodiscard]] bool DrawnThisFrame(entt::entity /*unused*/) const override { return drawn; }
 	void FloatNumber(glm::vec3 position, float value, uint32_t colour) override
 	{
 		numbers.push_back({position, value, colour});
@@ -204,6 +206,7 @@ public:
 	std::vector<Empathy> empathies;
 	std::vector<Number> numbers;
 	bool heart {true};
+	bool drawn {true};
 	float life {1.0f};
 	std::vector<bool> moving;
 	std::vector<entt::entity> reinserted;
@@ -638,4 +641,108 @@ TEST(VillageTotemSystem, ATotemWithNoTownStaysInTheMapCellsAsItIs)
 	village.world->registry.Get<VillageTotem>(village.totem).townCentre = entt::null;
 	village.system->AddToPlayer(village.totem);
 	EXPECT_TRUE(village.world->reinserted.empty());
+}
+
+TEST(VillageTotemMeasures, ATotemIsAsWideAndAsHighAsTheIconOnItsPlinth)
+{
+	openblack::ecs::Registry registry;
+	const auto icon = registry.Create();
+	const auto totem = registry.Create();
+	registry.Assign<VillageTotem>(totem, VillageTotem {.icon = icon});
+	const auto other = registry.Create();
+
+	EXPECT_EQ(openblack::ecs::systems::object_measures::MeasuredPart(registry, totem), icon);
+	EXPECT_EQ(openblack::ecs::systems::object_measures::MeasuredPart(registry, other), other);
+	// A totem with no icon measures as itself
+	registry.Destroy(icon);
+	EXPECT_EQ(openblack::ecs::systems::object_measures::MeasuredPart(registry, totem), totem);
+}
+
+TEST(VillageTotemSystem, ANewPrimaryCreatureRefreshesTheTotemsInTheOrderThatThePlayerGainedTheTowns)
+{
+	auto village = MakeVillage(true);
+	auto& registry = village.world->registry;
+	// A second town of the same player, made later but gained first
+	const auto town = registry.Create();
+	registry.Assign<Town>(town, 8u, PlayerNames::PLAYER_ONE);
+	registry.Context().towns[8] = town;
+	const auto centre = registry.Create();
+	registry.Assign<Abode>(centre, AbodeNumber {}, 8u, 0u, 0u);
+	const auto totem = registry.Create();
+	const auto icon = registry.Create();
+	registry.Assign<Transform>(totem, glm::vec3(9.0f, 3.0f, 9.0f), glm::mat3(1.0f), glm::vec3(1.0f));
+	registry.Assign<Mesh>(icon, k_HandIcon, static_cast<int8_t>(0), static_cast<int8_t>(0));
+	registry.Assign<VillageTotem>(totem, VillageTotem {.townCentre = centre, .icon = icon, .restY = 3.0f});
+	registry.Get<Town>(village.town).gained = 5;
+	registry.Get<Town>(town).gained = 2;
+
+	village.world->reinserted.clear();
+	village.system->RefreshIcons(PlayerNames::PLAYER_ONE);
+	EXPECT_EQ(village.world->reinserted, (std::vector {totem, village.totem}));
+	registry.Get<Town>(town).gained = 9;
+	village.world->reinserted.clear();
+	village.system->RefreshIcons(PlayerNames::PLAYER_ONE);
+	EXPECT_EQ(village.world->reinserted, (std::vector {village.totem, totem}));
+}
+
+TEST(VillageTotemRules, ATotemShowsOnlyWithSomeLife)
+{
+	EXPECT_TRUE(vt::Shows(1.0f));
+	EXPECT_TRUE(vt::Shows(std::nextafter(0.0f, 1.0f)));
+	EXPECT_FALSE(vt::Shows(0.0f));
+	EXPECT_FALSE(vt::Shows(-0.5f));
+}
+
+TEST(VillageTotemSystem, ATotemWithNoLifeShowsNothingAndDoesNotMoveOrShowItsShare)
+{
+	auto village = MakeVillage(true);
+	auto& registry = village.world->registry;
+	auto& system = *village.system;
+	const auto& totem = registry.Get<VillageTotem>(village.totem);
+	// The first frame with its icon shows no share
+	system.Update(10);
+	ASSERT_TRUE(system.Grip(village.totem, PlayerNames::PLAYER_ONE));
+	const float totemY = registry.Get<DrawnHeight>(village.totem).y;
+	const float iconY = registry.Get<DrawnHeight>(village.icon).y;
+	// With no life its second totem hides, and it does not move or show the share it is held at
+	village.world->life = 0.0f;
+	system.Slide(300.0f, 600.0f);
+	system.Update(20);
+	EXPECT_TRUE(registry.AllOf<VillageTotemGhostHidden>(totem.ghost));
+	EXPECT_TRUE(registry.AllOf<VillageTotemGhostHidden>(totem.ghostIcon));
+	EXPECT_FLOAT_EQ(registry.Get<DrawnHeight>(village.totem).y, totemY);
+	EXPECT_FLOAT_EQ(registry.Get<DrawnHeight>(village.icon).y, iconY);
+	EXPECT_FALSE(system.TakeShareToolTip(PlayerNames::PLAYER_ONE).has_value());
+	// With life again it shows all of it
+	village.world->life = 1.0f;
+	system.Update(30);
+	EXPECT_FALSE(registry.AllOf<VillageTotemGhostHidden>(totem.ghost));
+	EXPECT_FLOAT_EQ(registry.Get<DrawnHeight>(village.totem).y, 3.0f + 0.3f * 8.0f);
+	EXPECT_TRUE(system.TakeShareToolTip(PlayerNames::PLAYER_ONE).has_value());
+}
+
+TEST(VillageTotemSystem, ATotemThatTheListDoesNotDrawStaysAsItIsButTheTurnStillMovesItOn)
+{
+	auto village = MakeVillage(true);
+	auto& registry = village.world->registry;
+	auto& system = *village.system;
+	system.ProcessTurn(10);
+	ASSERT_EQ(village.world->bells, 1);
+	system.Update(10);
+	static_cast<void>(system.TakeShareToolTip(PlayerNames::PLAYER_ONE));
+	ASSERT_FLOAT_EQ(registry.Get<DrawnHeight>(village.totem).y, 3.0f);
+	// Off the list, the frames do not move it or show its share
+	system.SetTownShare(village.town, 0.5f);
+	village.world->drawn = false;
+	system.Update(10 + 2600);
+	EXPECT_FLOAT_EQ(registry.Get<DrawnHeight>(village.totem).y, 3.0f);
+	EXPECT_FALSE(system.TakeShareToolTip(PlayerNames::PLAYER_ONE).has_value());
+	// The turn moves it on by the real clock and rings the bell when it arrives
+	system.ProcessTurn(10 + 5200);
+	EXPECT_EQ(village.world->bells, 2);
+	// Drawn again, it stands at its share and its player sees the share
+	village.world->drawn = true;
+	system.Update(10 + 5300);
+	EXPECT_FLOAT_EQ(registry.Get<DrawnHeight>(village.totem).y, 3.0f + 0.5f * 8.0f);
+	EXPECT_TRUE(system.TakeShareToolTip(PlayerNames::PLAYER_ONE).has_value());
 }

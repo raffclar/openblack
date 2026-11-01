@@ -9,7 +9,8 @@
 
 // The layout of each type of object in the game's world file, from the game's save code. Each function reads the
 // values of one type in the order that the game writes them, its base type first. A tool made this file. Only
-// VanillaWorld.cpp includes it, after the reader and after the functions whose layout changes with the values.
+// VanillaWorld.cpp includes it, after the reader and after the functions whose layout changes with the values. The
+// table at the end also gives the types whose functions are in VanillaWorld.cpp.
 
 void ReadPlayerActionState(WorldReader& r);
 void ReadComputerAttitude(WorldReader& r);
@@ -332,19 +333,27 @@ void ReadCitadelPart(WorldReader& r)
 void ReadCitadelHeart(WorldReader& r)
 {
 	ReadCitadelPart(r);
+	// The game turn when a thrown thing last hit the heart
+	r.Word("heartLastHitTurn");
+	// The town that the temple was made for, and the flock of the doves or bats about the temple
+	r.Ref("heartTown");
+	r.Ref();
+	// Two colours that the draw sets again each frame: the glow and the shade of the heart
 	r.Word();
+	r.Word();
+	// The destruction of the temple: if it is under way, and its seconds since it started
+	r.Byte("heartDestroying");
+	r.Float("heartDestructionClock");
+	// The particle containers of the beams and of the glow of the destruction
 	r.Ref();
 	r.Ref();
-	r.Word();
-	r.Word();
-	r.Byte();
-	r.Word();
+	// The moment on the destruction clock of the next beam of the destruction
+	r.Float("heartDestructionBeamClock");
+	// The particle container of the beams of a hurt heart, the thing that the heart last beamed at, and the turn
 	r.Ref();
-	r.Ref();
-	r.Word();
-	r.Ref();
-	r.Ref();
-	r.Word();
+	r.Ref("heartBeamTarget");
+	r.Word("heartBeamTurn");
+	// The entrance of the temple
 	r.Ref();
 }
 
@@ -423,23 +432,24 @@ void ReadFlock(WorldReader& r)
 	r.Word();
 	r.Word();
 	r.Ref("shepherd");
-	r.Ref();
+	r.Ref("flockTown");
 	r.Ref("heart");
 	r.Refs("members");
-	r.Word();
-	r.Word();
+	r.Word("mostMembers");
+	r.Word("turnsOnLeg");
 	r.Half("domainRadius");
 	r.Half("flockDistance");
-	r.Word();
-	r.Word();
-	r.Word();
+	r.Float("flockHeight");
+	r.Word("keepsTogether");
+	r.Word("calm");
 	r.Bytes(12, "domainCentre");
-	r.Bytes(12);
+	r.Bytes(12, "madePlace");
+	// Three words and a reference that openblack does not use yet
 	r.Word();
 	r.Word();
 	r.Word();
 	r.Ref();
-	r.Word();
+	r.Word("flockScriptId");
 }
 
 void ReadMagicWood(WorldReader& r)
@@ -512,11 +522,11 @@ void ReadTree(WorldReader& r)
 void ReadTownDesireFlags(WorldReader& r)
 {
 	ReadObject(r);
-	r.Ref();
+	r.Ref("flagTown");
 	r.Word();
-	r.Word();
-	r.Word();
-	r.Word();
+	r.Float("flagDesire");
+	r.Word("flagType");
+	r.Float("flagLevel");
 }
 
 void ReadStandardBuildingSite(WorldReader& r)
@@ -1431,7 +1441,8 @@ void ReadTownSpellIcon(WorldReader& r)
 void ReadCitadelBuildingSite(WorldReader& r)
 {
 	ReadBuildingSite(r);
-	r.Refs();
+	// The six piles of wood of the site of a temple
+	r.Refs("templeSitePiles");
 }
 
 // No save file of the tests has this type. This layout comes only from the game's save code.
@@ -1497,7 +1508,7 @@ void ReadWorshipSpellIcon(WorldReader& r)
 void ReadWonder(WorldReader& r)
 {
 	ReadAbode(r);
-	r.Word();
+	r.Word("wonderPower");
 }
 
 // No save file of the tests has this type. This layout comes only from the game's save code.
@@ -2258,6 +2269,7 @@ constexpr std::array k_Readers = {
     ClassReader {0x001, &ReadFootpath},
     ClassReader {0x002, &ReadFootpathLink},
     ClassReader {0x003, &ReadFootpathNode},
+    ClassReader {0x004, &ReadFootpathLinkSave},
     ClassReader {0x005, &ReadFootpathFinder},
     ClassReader {0x006, &ReadVillager},
     ClassReader {0x007, &ReadAbode},
@@ -2272,12 +2284,15 @@ constexpr std::array k_Readers = {
     ClassReader {0x011, &ReadSpellShield},
     ClassReader {0x012, &ReadSpell},
     ClassReader {0x013, &ReadSpellCreature},
+    ClassReader {0x014, &ReadSpellWithObjects},
     ClassReader {0x015, &ReadSpellWithObjects},
+    ClassReader {0x016, &ReadParticleSound},
     ClassReader {0x017, &ReadPhysicalShield},
     ClassReader {0x018, &ReadMagicShield},
     ClassReader {0x019, &ReadMagicTeleport},
     ClassReader {0x01a, &ReadLandscapeVortex},
     ClassReader {0x01b, &ReadLandscapeVortexIn},
+    ClassReader {0x01c, &ReadLandscapeVortexOut},
     ClassReader {0x01d, &ReadMagicTree},
     ClassReader {0x01e, &ReadMagicFood},
     ClassReader {0x01f, &ReadMagicWood},
@@ -2291,6 +2306,7 @@ constexpr std::array k_Readers = {
     ClassReader {0x029, &ReadFireEffect},
     ClassReader {0x02a, &ReadFireFly},
     ClassReader {0x02b, &ReadTotem},
+    ClassReader {0x02c, &ReadPuzzleGame},
     ClassReader {0x02d, &ReadAnimal},
     ClassReader {0x02e, &ReadAnimal},
     ClassReader {0x02f, &ReadAnimal},
@@ -2311,7 +2327,9 @@ constexpr std::array k_Readers = {
     ClassReader {0x040, &ReadWaterfall},
     ClassReader {0x041, &ReadArena},
     ClassReader {0x042, &ReadArenaSpellIcon},
+    ClassReader {0x043, &ReadWeatherThing},
     ClassReader {0x044, &ReadBall},
+    ClassReader {0x045, &ReadFootball},
     ClassReader {0x046, &ReadReward},
     ClassReader {0x047, &ReadStream},
     ClassReader {0x048, &ReadMist},
@@ -2322,9 +2340,12 @@ constexpr std::array k_Readers = {
     ClassReader {0x04f, &ReadTree},
     ClassReader {0x050, &ReadAbode},
     ClassReader {0x051, &ReadGraveyard},
+    ClassReader {0x052, &ReadWorkshop},
     ClassReader {0x053, &ReadMobileObject},
     ClassReader {0x054, &ReadMobileStatic},
     ClassReader {0x055, &ReadTownSpellIcon},
+    ClassReader {0x056, &ReadTownCentreSpellIcon},
+    ClassReader {0x058, &ReadPot},
     ClassReader {0x059, &ReadPileFood},
     ClassReader {0x05a, &ReadPileResource},
     ClassReader {0x05b, &ReadFishFarm},
@@ -2417,9 +2438,13 @@ constexpr std::array k_Readers = {
     ClassReader {0x0b3, &ReadParticleChainJoint},
     ClassReader {0x0b4, &ReadParticle3DSprite},
     ClassReader {0x0b5, &ReadParticlePlayerSymbol},
+    ClassReader {0x0b6, &ReadChain},
+    ClassReader {0x0b7, &ReadDefensiveSphere},
     ClassReader {0x0b8, &ReadSpellPointInf},
+    ClassReader {0x0b9, &ReadBeamSubCollection},
     ClassReader {0x0ba, &ReadURPlasmaInf},
     ClassReader {0x0bb, &ReadAtomDataURVolFXOnObject},
+    ClassReader {0x0bc, &ReadBeamSubCollection},
     ClassReader {0x0bd, &ReadAtomDataURPlasma},
     ClassReader {0x0be, &ReadAtomDataURBeliefSprite},
     ClassReader {0x0bf, &ReadAtomDataURSimpleBeam},
@@ -2438,12 +2463,15 @@ constexpr std::array k_Readers = {
     ClassReader {0x0cc, &ReadAtomDataCheckShieldDeflections},
     ClassReader {0x0cd, &ReadAtomDataURForestPath},
     ClassReader {0x0ce, &ReadAtomDataURExplosion},
+    ClassReader {0x0cf, &ReadExplosionCollection},
     ClassReader {0x0d0, &ReadCollectionDataURFlocking},
     ClassReader {0x0d1, &ReadCollectionDataURCloudMoverNew},
     ClassReader {0x0d2, &ReadCollectionDataURCloudGather},
     ClassReader {0x0d3, &ReadAtomDataURCloudGather},
     ClassReader {0x0d4, &ReadFlyingAtomDataURTornado},
+    ClassReader {0x0d5, &ReadDebrisCollection},
     ClassReader {0x0d7, &ReadCollectionDataURTornado},
+    ClassReader {0x0d8, &ReadLightningCollection},
     ClassReader {0x0d9, &ReadCollectionDataEmitterRuleLightningSprite},
     ClassReader {0x0da, &ReadAtomDataARFadeOutOnceConditionTrue},
     ClassReader {0x0db, &ReadAtomDataAttatchFireBallToAtom},
@@ -2468,12 +2496,17 @@ constexpr std::array k_Readers = {
     ClassReader {0x0ee, &ReadCollectionDataURWillowWisp},
     ClassReader {0x0ef, &ReadCollectionDataERBurstFromParentAtom},
     ClassReader {0x0f0, &ReadCollectionDataEREmitFromParentAtom},
+    ClassReader {0x0f1, &ReadFollowTargetsCollection},
     ClassReader {0x0f2, &ReadAtomDataURHealSpellChakra},
+    ClassReader {0x0f3, &ReadTrailCollection},
     ClassReader {0x0f4, &ReadCollectionDataLightningForkFlicker},
     ClassReader {0x0f5, &ReadCollectionDataURHandSprinkle},
     ClassReader {0x0f6, &ReadObject},
+    ClassReader {0x0f7, &ReadFragment},
+    ClassReader {0x0f8, &ReadAbode},
     ClassReader {0x0f9, &ReadPlayerActionState},
     ClassReader {0x0fa, &ReadPlayerSubAction},
+    ClassReader {0x0fb, &ReadPlayerSubActionArgument},
     ClassReader {0x0fc, &ReadClimate},
     ClassReader {0x0fe, &ReadStreetLantern},
     ClassReader {0x0ff, &ReadStreetLight},
@@ -2487,6 +2520,7 @@ constexpr std::array k_Readers = {
     ClassReader {0x109, &ReadThingMusicInfo},
     ClassReader {0x10a, &ReadMultiMapFixed},
     ClassReader {0x10b, &ReadSpellDispenser},
+    ClassReader {0x10c, &ReadComputerPlayerQueue},
     ClassReader {0x10d, &ReadComputerAttitude},
     ClassReader {0x10e, &ReadAtomDataURLightSheetOnObject},
     ClassReader {0x110, &ReadObject},

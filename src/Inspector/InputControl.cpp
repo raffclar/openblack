@@ -91,6 +91,25 @@ std::optional<uint8_t> ButtonParam(const Json& params, std::string& error)
 	return found->second;
 }
 
+/// Why a press of the button would never reach the game: a debug window, such as the editor with its tools, takes it for
+/// itself. Empty when the game gets it, or when the press is meant for the window.
+std::string WindowRefusal(const InputTargetInterface& target, const Json& params, uint8_t button)
+{
+	if (const auto meant = params.find("to_window"); meant != params.end() && meant->is_boolean() && meant->get<bool>())
+	{
+		return {};
+	}
+	const auto window = target.WindowTakingButton(button);
+	if (window.empty())
+	{
+		return {};
+	}
+	return "the " + window +
+	       " debug window takes this button's presses for itself, so the game never gets them. Close it "
+	       "(gui.close, window \"" +
+	       window + "\") first; to press in the window itself, ask with to_window true";
+}
+
 std::optional<uint32_t> FramesParam(const Json& params, uint32_t fallback, std::string& error)
 {
 	const auto value = NumberMember(params, "frames");
@@ -372,6 +391,9 @@ std::vector<QueryDescription> InputProvider::Describe() const
 	                                                 "one is shown)",
 	                                  .required = false};
 	const auto button = Optional("button", "string", "left (the default), middle or right");
+	const auto toWindow = Optional("to_window", "boolean",
+	                               "True when the press is meant for the debug window that takes it (such as the editor's "
+	                               "tools); else a press that a debug window would take is refused, and says which");
 	const auto timing = Optional("timing", "string",
 	                             "mouse (the default): a real mouse's timing, the move's event this frame and the "
 	                             "pointer read there by the action map the next, steps of a drag or path going on from "
@@ -402,7 +424,7 @@ std::vector<QueryDescription> InputProvider::Describe() const
 	          "frame) or double_click (a click, then pressed and let go of again as the second click of a double "
 	          "click, a frame apart). A press comes two frames after the pointer last moved, once the game knows what the "
 	          "pointer is over. Like all input, it waits behind input asked for earlier that is still to come",
-	          {button, Optional("action", "string", "press, release, click (the default) or double_click"), timing}),
+	          {button, Optional("action", "string", "press, release, click (the default) or double_click"), toWindow, timing}),
 	    Write("key",
 	          "A key by its name (\"L\", \"Space\", \"Left Shift\"), or an action by the options screen's name, "
 	          "pressed for a frame",
@@ -422,11 +444,13 @@ std::vector<QueryDescription> InputProvider::Describe() const
 	           button,
 	           Optional("frames", "integer", "Frames the move takes (30 by default)"),
 	           Optional("from", "point", "Where it starts, as to; the pointer's place by default"),
+	           toWindow,
 	           timing}),
 	    Write("path", "Moves the pointer through pixels, a frame or more each, with a button held throughout or none",
 	          {{.name = "points", .type = "array", .description = "[[x, y], ...] in pixels", .required = true},
 	           Optional("button", "string", "left, middle, right, or none (the default)"),
 	           Optional("frames", "integer", "Frames for each point (1 by default)"),
+	           toWindow,
 	           timing}),
 	    Write("gesture",
 	          "Draws a gesture through the recogniser as the hand would draw it, in the middle of the screen, in about a "
@@ -658,6 +682,13 @@ QueryResult InputProvider::Run(std::string_view query, const QueryContext& conte
 			return failed(error.empty() ? "action is press, release, click or double_click" : error);
 		}
 		const auto kind = action == "release" ? InputEvent::Kind::ButtonUp : InputEvent::Kind::ButtonDown;
+		if (kind == InputEvent::Kind::ButtonDown)
+		{
+			if (auto why = WindowRefusal(_target, params, *button); !why.empty())
+			{
+				return failed(std::move(why));
+			}
+		}
 		// A press waits for the game to know what the pointer is over, so that it acts as a press of a hand at rest
 		const auto start = kind == InputEvent::Kind::ButtonDown
 		                       ? input::pointer_settle::EarliestPressFrame(StartFrame(), _pointerMovedAt)
@@ -774,6 +805,10 @@ QueryResult InputProvider::Run(std::string_view query, const QueryContext& conte
 		{
 			return failed(error.empty() ? "input.drag needs to: {screen} or {world}" : error);
 		}
+		if (auto why = WindowRefusal(_target, params, *button); !why.empty())
+		{
+			return failed(std::move(why));
+		}
 		// Down where it starts, then evenly to the end a step a frame, and let go there the frame after
 		const auto start = StartFrame();
 		if (auto why = At(start, {.kind = InputEvent::Kind::PointerTo, .position = *from, .timing = *timing}); !why.empty())
@@ -821,6 +856,13 @@ QueryResult InputProvider::Run(std::string_view query, const QueryContext& conte
 		    static_cast<uint64_t>(*frames) * pixels.size() > static_cast<uint64_t>(k_LongestFrames))
 		{
 			return failed(error.empty() ? "the path would take too many frames" : error);
+		}
+		if (held)
+		{
+			if (auto why = WindowRefusal(_target, params, *button); !why.empty())
+			{
+				return failed(std::move(why));
+			}
 		}
 		const auto start = StartFrame();
 		At(start, {.kind = InputEvent::Kind::PointerTo, .position = pixels.front(), .timing = *timing});

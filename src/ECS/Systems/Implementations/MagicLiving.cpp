@@ -35,6 +35,7 @@
 #include "ECS/Components/CreatureNeeds.h"
 #include "ECS/Components/CreatureSkin.h"
 #include "ECS/Components/Fire.h"
+#include "ECS/Components/Indestructible.h"
 #include "ECS/Components/Mesh.h"
 #include "ECS/Components/MiracleImpression.h"
 #include "ECS/Components/Poisoned.h"
@@ -55,6 +56,7 @@
 #include "Magic/HealTargets.h"
 #include "Magic/MapSpiral.h"
 #include "Resources/ResourcesInterface.h"
+#include "ScriptHeaders/ScriptPropertyRules.h"
 
 using namespace openblack;
 using namespace openblack::ecs::components;
@@ -128,12 +130,19 @@ std::optional<float> magic_living::LifeOf(entt::entity entity)
 void magic_living::SetLife(entt::entity entity, float life)
 {
 	auto& registry = EntityRegistry();
-	life = std::clamp(life, 0.0f, 1.0f);
 	if (auto* needs = registry.TryGet<CreatureNeeds>(entity))
 	{
-		needs->needs.life = life;
+		// The life of a creature takes the value as it is, also below 0. A creature that a script holds in a cutscene, or
+		// an indestructible creature, keeps its life when the value is nearly no life.
+		if (script::property_rules::CanSetLife(life, ecs::world_objects::HeldDuringCutscene(entity),
+		                                       registry.AllOf<Indestructible>(entity)))
+		{
+			needs->needs.life = life;
+		}
+		return;
 	}
-	else if (auto* villager = registry.TryGet<Villager>(entity))
+	life = std::clamp(life, 0.0f, 1.0f);
+	if (auto* villager = registry.TryGet<Villager>(entity))
 	{
 		const float before = ecs::world_objects::LifeOf(entity);
 		villager->life = life;

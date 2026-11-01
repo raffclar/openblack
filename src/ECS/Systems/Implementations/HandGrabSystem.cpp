@@ -39,6 +39,7 @@
 #include "ECS/Components/Reward.h"
 #include "ECS/Components/Scaffold.h"
 #include "ECS/Components/ScriptHighlight.h"
+#include "ECS/Components/SpellSeed.h"
 #include "ECS/Components/StreetLantern.h"
 #include "ECS/Components/TeleportStone.h"
 #include "ECS/Components/Transform.h"
@@ -198,6 +199,14 @@ GrabKind HandGrabSystem::KindOf(entt::entity object) const
 	{
 		return GrabKind::None;
 	}
+	// A miracle's seed out of every hand, which shows over its miracle
+	if (registry.AllOf<SpellSeed>(object))
+	{
+		bool held = false;
+		registry.Each<const HandHeldSeed>(
+		    [object, &held](entt::entity, const HandHeldSeed& hand) { held = held || hand.seed == object; });
+		return held ? GrabKind::None : GrabKind::SpellSeed;
+	}
 	// The hand holds a scaffold as any loose thing
 	if (registry.AllOf<Scaffold>(object))
 	{
@@ -250,6 +259,7 @@ hand_grab::Holdable HandGrabSystem::HoldableOf(entt::entity object) const
 	    .speciesAllows = kind == GrabKind::Animal && _world->SpeciesAllowsPickUp(object),
 	    .radius = _world->SizeOf(object).radius,
 	    .isRock = kind == GrabKind::Rock,
+	    .ownSeed = kind == GrabKind::SpellSeed && registry.Get<const SpellSeed>(object).player == _world->HandPlayer(),
 	};
 }
 
@@ -320,6 +330,11 @@ float HandGrabSystem::HangOf(entt::entity object) const
 
 hand_grab::HoldFacts HandGrabSystem::HoldOfObject(entt::entity object) const
 {
+	// A miracle's seed is held as its record says
+	if (const auto seed = _world->SeedHoldOf(object); seed.has_value())
+	{
+		return *seed;
+	}
 	const auto& registry = _world->Entities();
 	const auto size = _world->SizeOf(object);
 	const auto* still = registry.TryGet<const MobileStatic>(object);
@@ -602,6 +617,14 @@ std::optional<entt::entity> HandGrabSystem::Release(uint32_t nowMs, uint32_t tur
 		// Letting go of the button sends the end of the lock, which ends the scoop at the turn
 		if (grab->scoopSource != entt::null)
 		{
+			// First, on this computer only, a field of the local player shows the amount that the hand holds
+			if (const auto* handful = _world->Entities().TryGet<const Pot>(grab->object);
+			    handful != nullptr && Exists(grab->scoopSource) &&
+			    hand_grab::FieldShowsHeldAtLetGo(_world->FieldFactsOf(grab->scoopSource).has_value(),
+			                                     _world->PlayerOf(grab->scoopSource), _world->HandPlayer()))
+			{
+				_amountToolTip = handful->amount;
+			}
 			_world->SendCommand(player_commands::HandUnlock {.object = grab->scoopSource});
 		}
 		break;
@@ -704,7 +727,7 @@ void HandGrabSystem::DoUnlock(PlayerNames player, entt::entity object)
 		return;
 	}
 	// The scoop ends; the hand holds its handful. After a pile or a fish farm, but not a field, the hand shows the amount it
-	// holds.
+	// holds. A field of the local player showed it as the hand let go.
 	if (const auto* handful = _world->Entities().TryGet<const Pot>(grab->object);
 	    handful != nullptr && Exists(object) && !_world->FieldFactsOf(object).has_value())
 	{
@@ -1267,6 +1290,11 @@ void HandGrabSystem::Take(HandGrab& grab, entt::entity object, bool fromTheWorld
 		}
 		return;
 	}
+	if (KindOf(object) == GrabKind::SpellSeed)
+	{
+		TakeSeedBack(grab, object);
+		return;
+	}
 	const bool wasFlying = _world->IsFlying(object);
 	const auto kind = KindOf(object);
 	const auto player = _world->HandPlayer();
@@ -1293,12 +1321,12 @@ void HandGrabSystem::Take(HandGrab& grab, entt::entity object, bool fromTheWorld
 	_world->FireStartedMoving(object, !registry.AllOf<Villager>(object));
 	// A firefly hiding exactly where the thing stood is caught, for a miracle there
 	_world->CatchFirefly(object);
-	// The help counts each thing that the hand takes. A thing that the hand catches as it flies counts the same.
-	_world->CountHelpEvent(help::profile::k_PickUp);
-	// The hand starts the path of its gesture again. Only the local hand draws a gesture: the hand of a computer god or of
-	// another player leaves the path of the local player as it is.
+	// The help counts each thing that the local hand takes. A thing that the hand catches as it flies counts the same.
+	// The hand starts the path of its gesture again. Only the local hand counts for the help and draws a gesture: the hand
+	// of a computer god or of another player leaves the help and the path of the local player as they are.
 	if (_world->IsLocalHand())
 	{
+		_world->CountHelpEvent(help::profile::k_PickUp);
 		_world->ForgetGesturePath();
 	}
 
@@ -1367,6 +1395,46 @@ void HandGrabSystem::Take(HandGrab& grab, entt::entity object, bool fromTheWorld
 	registry.SetDirty();
 }
 
+void HandGrabSystem::TakeSeedBack(HandGrab& grab, entt::entity seed)
+{
+	// The miracles hold the seed, not the hand: the grab ends, and the frames draw the seed as the held miracle
+	const auto player = _world->HandPlayer();
+	const auto position = _world->PoseOf(seed).origin;
+	_world->ForgetPulledPose(seed);
+	const bool kept = _world->SeedIntoHand(seed, player);
+	// A seed that goes is let go of, as a gripped thing that the hand did not take
+	if (kept)
+	{
+		grab.grips = false;
+	}
+	Empty(grab);
+	if (!kept)
+	{
+		return;
+	}
+	// A firefly that hides exactly where the seed was is caught, for a miracle there
+	_world->CatchFirefly(seed);
+	// While the hand holds the seed, its reactions that a hand ends do not spread to more living things
+	_world->StopReactionSpreadInHand(seed);
+	grab.lastPickedUp = seed;
+	// The player of most influence where the seed was is where what the hand holds came from
+	_world->NoteTakenAt(position);
+	if (_world->IsLocalHand())
+	{
+		_world->ForgetGesturePath();
+	}
+	// The people and animals about the hand see it pick something up. The help counts the take of the local hand.
+	_world->CreateReaction({.initiator = _world->Hand(),
+	                        .type = Reaction::ReactToHandPickUp,
+	                        .player = player,
+	                        .position = _world->ReportedHandPlace()});
+	if (_world->IsLocalHand())
+	{
+		_world->CountHelpEvent(help::profile::k_PickUp);
+	}
+	LogHandDeed(player, "takes back", seed);
+}
+
 void HandGrabSystem::LetGo(HandGrab& grab, glm::vec3 velocity, const std::optional<player_commands::ThrowStart>& start)
 {
 	// A let-go with no start is one that the hand must do: the thing goes from where it is, and is not planted again
@@ -1386,8 +1454,11 @@ void HandGrabSystem::LetGo(HandGrab& grab, glm::vec3 velocity, const std::option
 	registry.Remove<HeldLight>(object);
 	// Its reactions spread again
 	_world->SpreadReactionsAgain(object);
-	// The help counts each thing that the hand lets go of, also a pour or a drop that the hand must do
-	_world->CountHelpEvent(help::profile::k_Throw);
+	// The help counts each thing that the local hand lets go of, also a pour or a drop that the hand must do
+	if (_world->IsLocalHand())
+	{
+		_world->CountHelpEvent(help::profile::k_Throw);
+	}
 	// The hand starts the path of its gesture again. A thing that is gone when the hand lets go does not do this, and the
 	// hand of a computer god or of another player never does.
 	if (_world->IsLocalHand())
@@ -1751,8 +1822,11 @@ void HandGrabSystem::DoGive(PlayerNames player, entt::entity creature, entt::ent
 	{
 		return;
 	}
-	// The help counts the gift as the creature may take it, before the creature starts to take it
-	_world->CountHelpEvent(help::profile::k_Give);
+	// The help counts the gift of the local hand as the creature may take it, before the creature starts to take it
+	if (_world->IsLocalHand())
+	{
+		_world->CountHelpEvent(help::profile::k_Give);
+	}
 	if (!_world->GiveTo(creature, object, leftHand))
 	{
 		return;
@@ -1924,34 +1998,16 @@ void HandGrabSystem::ProcessHandTurn()
 	{
 		return;
 	}
-	if (!Exists(grab->lastPickedUp))
-	{
-		grab->lastPickedUp = entt::null;
-	}
-	if (!Exists(grab->lastDropped))
-	{
-		grab->lastDropped = entt::null;
-	}
 	if (!Holds(*grab))
 	{
 		return;
 	}
-	// What is no longer there leaves the hand
+	// A thing that went after the input of the turn leaves the hand
 	if (!Exists(grab->object))
 	{
 		EndScoop(*grab);
 		Empty(*grab);
 		return;
-	}
-	// A scoop goes on while its source is there, the hand is in its player's influence and the source gives more
-	if (grab->scoopSource != entt::null)
-	{
-		++grab->scoopTurns;
-		const auto hand = _world->ReportedHandPlace();
-		if (!Exists(grab->scoopSource) || !_world->InInfluence(_world->HandPlayer(), hand) || !Scoop(*grab))
-		{
-			EndScoop(*grab);
-		}
 	}
 	// The hold is asked again, as what is held may have changed
 	grab->hold = HoldOfObject(grab->object);
@@ -1961,6 +2017,41 @@ void HandGrabSystem::ProcessHandTurn()
 		_world->HeatHeld(grab->object);
 	}
 	_world->HeldTurn(grab->object);
+}
+
+void HandGrabSystem::LockTurn(PlayerNames player)
+{
+	// The turn acts with the hand of the god
+	const hand_grab::HandGrabWorldInterface::ActingPlayer acting(*_world, player);
+	auto* grab = Grab();
+	if (grab == nullptr)
+	{
+		return;
+	}
+	// The scoop continues while the hand holds its handful, the source is there, the hand is in its player's influence
+	// and the source gives more. The influence includes the share that the hand got in this turn.
+	if (grab->scoopSource != entt::null)
+	{
+		++grab->scoopTurns;
+		if (!Holds(*grab) || !Exists(grab->object) || !Exists(grab->scoopSource) ||
+		    !_world->InInfluence(_world->HandPlayer(), _world->ReportedHandPlace()) || !Scoop(*grab))
+		{
+			EndScoop(*grab);
+		}
+	}
+	if (!Exists(grab->lastPickedUp))
+	{
+		grab->lastPickedUp = entt::null;
+	}
+	if (!Exists(grab->lastDropped))
+	{
+		grab->lastDropped = entt::null;
+	}
+	// A held thing that is no longer there leaves the hand
+	if (Holds(*grab) && !Exists(grab->object))
+	{
+		Empty(*grab);
+	}
 }
 
 void HandGrabSystem::DoTwist(PlayerNames player, entt::entity object, glm::vec3 moved)

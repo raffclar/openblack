@@ -14,7 +14,9 @@
 #include <algorithm>
 #include <array>
 #include <ranges>
+#include <stdexcept>
 #include <string_view>
+#include <utility>
 
 #include <entt/signal/sigh.hpp>
 #include <glm/vec2.hpp>
@@ -50,56 +52,90 @@ Script::Script(glm::vec3 origin, const map_coords::MapCoords& originOnMap)
 {
 }
 
-void Script::Load(const std::string& source, const std::function<void()>& afterCommand)
+namespace
 {
-	Lexer lexer(source);
+/// Reads the tokens of a text one at a time, and keeps the token that it read last
+class TokenReader
+{
+public:
+	explicit TokenReader(const std::string& source)
+	    : _lexer(source)
+	{
+	}
 
-	const Token* token = this->PeekToken(lexer);
+	/// The token that the reader is on
+	const Token* Peek()
+	{
+		if (_token.IsInvalid())
+		{
+			_token = _lexer.GetToken();
+		}
+		return &_token;
+	}
+
+	/// Moves the reader to the next token
+	const Token* Advance()
+	{
+		_token = _lexer.GetToken();
+		return &_token;
+	}
+
+	/// The line that the token of the reader is on
+	[[nodiscard]] int Line() const noexcept { return _lexer.Line(); }
+
+private:
+	Lexer _lexer;
+	Token _token {Token::MakeInvalidToken()};
+};
+} // namespace
+
+void Script::ForEachCommand(const std::string& source, const std::function<void(Command&&)>& onCommand)
+{
+	TokenReader reader(source);
+
+	const Token* token = reader.Peek();
 	while (!token->IsEOF())
 	{
-		token = this->PeekToken(lexer);
+		token = reader.Peek();
 
 		if (token->IsIdentifier())
 		{
-			const std::string identifier = token->Identifier();
+			Command command {.name = token->Identifier(), .arguments = {}, .line = reader.Line()};
 
-			if (!IsCommand(identifier))
+			if (!IsCommand(command.name))
 			{
 				// A word the game doesn't know is passed over, as is everything after it up to the next command it
 				// knows, so a misspelt line is ignored and the rest of the land still loads
 				if (const auto logger = spdlog::get("scripting"); logger != nullptr)
 				{
-					SPDLOG_LOGGER_WARN(logger, "LHScriptX: skipping unknown command {}", identifier);
+					SPDLOG_LOGGER_WARN(logger, "LHScriptX: skipping unknown command {}", command.name);
 				}
-				this->AdvanceToken(lexer);
+				reader.Advance();
 				continue;
 			}
 
-			token = this->AdvanceToken(lexer);
+			token = reader.Advance();
 			if (!token->IsOP(Operator::LeftParentheses))
 			{
-				throw std::runtime_error("expected ( after identifier " + identifier);
+				throw std::runtime_error("expected ( after identifier " + command.name);
 			}
 
-			std::vector<Token> args;
-
 			// if it's an immediate right parentheses there are no args
-			token = this->AdvanceToken(lexer);
+			token = reader.Advance();
 			if (!token->IsOP(Operator::RightParentheses))
 			{
 				while (true)
 				{
-					const Token* peekToken = this->PeekToken(lexer);
-					args.push_back(*peekToken);
+					command.arguments.push_back(*reader.Peek());
 
 					// consume the ,
-					token = this->AdvanceToken(lexer);
+					token = reader.Advance();
 					if (!token->IsOP(Operator::Comma))
 					{
 						break;
 					}
 
-					this->AdvanceToken(lexer);
+					reader.Advance();
 				}
 			}
 
@@ -113,21 +149,51 @@ void Script::Load(const std::string& source, const std::function<void()>& afterC
 			// move token to whatever is after ')'
 			if (!closedByLineEnd)
 			{
-				this->AdvanceToken(lexer);
+				reader.Advance();
 			}
 
-			RunCommand(identifier, args);
-			if (afterCommand)
-			{
-				afterCommand();
-			}
+			onCommand(std::move(command));
 		}
 
-		this->AdvanceToken(lexer);
+		token = reader.Advance();
 	}
 }
 
-bool Script::IsCommand(const std::string& identifier) const
+void Script::Load(const std::string& source, const std::function<void()>& afterCommand)
+{
+	ForEachCommand(source, [this, &afterCommand](Command&& command) {
+		RunCommand(command.name, command.arguments);
+		if (afterCommand)
+		{
+			afterCommand();
+		}
+	});
+}
+
+ReadCommands Script::Read(const std::string& source)
+{
+	ReadCommands read;
+	try
+	{
+		ForEachCommand(source, [&read](Command&& command) { read.commands.push_back(std::move(command)); });
+	}
+	catch (const std::exception& e)
+	{
+		read.error = e.what();
+	}
+	return read;
+}
+
+void Script::Run(const Command& command)
+{
+	if (!IsCommand(command.name))
+	{
+		throw std::runtime_error("unknown command " + command.name);
+	}
+	RunCommand(command.name, command.arguments);
+}
+
+bool Script::IsCommand(const std::string& identifier)
 {
 	// TODO(handsomematt): this could be done a lot better
 	return std::any_of(FeatureScriptCommands::k_Signatures.cbegin(), FeatureScriptCommands::k_Signatures.cend(),
@@ -381,19 +447,4 @@ void Script::RunCommand(const std::string& identifier, const std::vector<Token>&
 		}
 		commandSignature->command(parameters);
 	});
-}
-
-const Token* Script::PeekToken(Lexer& lexer)
-{
-	if (_token.IsInvalid())
-	{
-		_token = lexer.GetToken();
-	}
-	return &_token;
-}
-
-const Token* Script::AdvanceToken(Lexer& lexer)
-{
-	_token = lexer.GetToken();
-	return &_token;
 }

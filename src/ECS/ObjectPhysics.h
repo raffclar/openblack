@@ -47,6 +47,8 @@ void TreeDropSound(entt::entity tree, uint64_t ticks);
 [[nodiscard]] bool IsBonfire(entt::entity object);
 /// Whether a thing is a rock, bonfires included: what a creature's blow smashes, and what doesn't wear another rock
 [[nodiscard]] bool IsRock(entt::entity object);
+/// Whether a thing is a rock or a piece that broke off a building. A creature breaks and holds a piece as a rock.
+[[nodiscard]] bool IsRockOrPiece(entt::entity object);
 /// A rock's reaction to a knock: worn away by a hard one, and broken in two once worn out
 void KnockRock(systems::DynamicsSystemInterface& dynamics, entt::entity rock, const ImpactInfo& impact);
 /// A rock breaks into two halves that carry on as it was moving, its fire spreading to both

@@ -68,7 +68,7 @@ std::optional<int> OrderOf(const gesture::Request& request)
 		return k_PowerUpOrderBase + request.powerUpLevel;
 	case gesture::Purpose::DropSeed:
 		// Only the scribble that calls off a power-up asked for
-		if (request.powerUpLevel >= 0)
+		if (request.callsOff)
 		{
 			return k_CancelPowerUpOrder;
 		}

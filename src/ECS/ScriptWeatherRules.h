@@ -134,4 +134,8 @@ enum class ThingAfterTurn : uint8_t
 /// the storm. Then a script that holds the thing keeps it, else the thing goes.
 [[nodiscard]] ThingAfterTurn AfterTurn(bool stormLives, bool heldByScript);
 
+/// The speed that a script reads of a weather thing: the speed of its storm, also of a storm that ended this turn. A
+/// thing that lost its storm gives 0.
+[[nodiscard]] float ThingSpeed(const components::Storm* storm);
+
 } // namespace openblack::ecs::script_weather

@@ -11,10 +11,12 @@
 
 #include <cstdint>
 
+#include <chrono>
 #include <optional>
 #include <span>
 #include <vector>
 
+#include <entt/core/fwd.hpp>
 #include <entt/entity/entity.hpp>
 #include <glm/mat4x4.hpp>
 
@@ -46,6 +48,9 @@ public:
 	virtual void CentreWorking(entt::entity centre) = 0;
 	/// A town has changed hands: what it offers goes from its old player to its new one
 	virtual void TownChangedHands(entt::entity town, PlayerNames previous) = 0;
+	/// A town goes from the game: its player counts one town less that offers each miracle that the town offers, and
+	/// the stone hands of the town go
+	virtual void TownRemoved(entt::entity town) = 0;
 	/// A player's entity is made after the land made its towns, as a god that joins a network game: the player may cast
 	/// what each of its towns offers, as if the player had been there when the towns were made
 	virtual void PlayerMade(PlayerNames /*player*/) {}
@@ -57,6 +62,10 @@ public:
 	/// each, in a hand or cast, goes too. The village centres' hands stay with their towns.
 	virtual void SiteRemoved(entt::entity site) = 0;
 
+	/// One more thing enables a magic type for a player, or one fewer does. The icons of the player's worship sites then
+	/// show the power-up levels that the player can cast.
+	virtual void SetMagicTypeEnabled(PlayerNames /*player*/, MagicType /*type*/, bool /*enable*/) {}
+
 	/// Whether a player's hand may tap an icon or a stone hand: the tap counts for the help, whatever it then does
 	[[nodiscard]] virtual bool ValidToTap(entt::entity icon, PlayerNames player) const = 0;
 	/// The hand taps an icon: whether the tap counted
@@ -66,6 +75,25 @@ public:
 	/// or the icon some stored. An icon that is full already then gives its miracle to the hand, as a tap does. Only the
 	/// hand of a human player takes it, so a computer god keeps its miracle in the icon. Whether the charge started.
 	virtual bool StartChargeForGod(entt::entity /*icon*/, PlayerNames /*player*/) { return false; }
+	/// The worship site icon that made a seed, none for a seed that no icon made or whose icon is gone
+	[[nodiscard]] virtual entt::entity IconOfSeed(entt::entity /*seed*/) const { return entt::null; }
+	/// The icon that makes the seed of a one-shot miracle for a player. It is the icon of the seed that can give the
+	/// miracle now, at the player's site with the most prayer power left this turn. The first site wins a tie. None
+	/// when no icon can give it.
+	[[nodiscard]] virtual entt::entity BestIconFor(PlayerNames /*player*/, SpellSeedType /*seed*/) const { return entt::null; }
+	/// A seed that an icon made is now out from the icon
+	virtual void SeedMadeAt(entt::entity /*icon*/, entt::entity /*seed*/) {}
+	/// Whether an icon can charge the seed of it in a hand to a power-up level for a player: the hand of the icon's
+	/// player holds a seed of the icon, and the player may cast the miracle of that level. Level -1 is the plain miracle.
+	[[nodiscard]] virtual bool ValidForPowerUp(entt::entity /*icon*/, PlayerNames /*player*/, int /*powerUp*/) const
+	{
+		return false;
+	}
+	/// A power-up gesture asks an icon to charge the seed of it in a hand to a power-up level, for the hand of a player.
+	/// The icon charges from then on, also when it charged something before. When the seed holds what the level costs,
+	/// it takes the level and gives what it holds past the cost back to the site. Level -1 calls a power-up off. Whether
+	/// the charge started.
+	virtual bool StartPowerUpCharge(entt::entity /*icon*/, PlayerNames /*player*/, int /*powerUp*/) { return false; }
 	/// The prayer power that an icon's miracle still needs to be charged full
 	[[nodiscard]] virtual float ChantNeeded(entt::entity /*icon*/) const { return 0.0f; }
 	/// A god cast the miracle of an icon: the icon's store loses the miracle's cost, never more than it holds
@@ -132,6 +160,21 @@ public:
 	/// Once a frame, while the frame draws the land: each icon at a worship site that is on the screen shows its charge.
 	/// Its ring of light fills and moves on, its shine changes, and its pulse model shrinks into it while it charges.
 	virtual void UpdateChargeLooks(int32_t /*gameMilliseconds*/, bool /*landDrawn*/) {}
+	/// Once a frame: the stone hands of the village centres and the icons at the worship sites show the effect of the
+	/// holder of their seeds. The effect of an icon shows and moves on, by the game time of the frame, only in a frame that
+	/// draws the icon on the screen.
+	virtual void UpdateHolderEffects(std::chrono::milliseconds /*frameRealTime*/, std::chrono::milliseconds /*frameGameTime*/,
+	                                 bool /*landDrawn*/)
+	{
+	}
+	/// The seed's model that the effect of the holder over an icon acts on: the model and where it was last drawn
+	struct HolderTarget
+	{
+		entt::id_type model {0};
+		glm::mat4 placement {1.0f};
+	};
+	/// The target of the effect of the holder over an icon, none for an icon with no such effect
+	[[nodiscard]] virtual std::optional<HolderTarget> FindHolderTarget(entt::entity /*icon*/) const { return std::nullopt; }
 	/// The colour that an icon adds to its model this frame (0xRRGGBB), 0 for none. The model shows the shine of the
 	/// frame before, because the game draws the model before it changes the shine.
 	[[nodiscard]] virtual uint32_t ShownTint(entt::entity /*icon*/) const { return 0; }

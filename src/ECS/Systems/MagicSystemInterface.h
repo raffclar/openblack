@@ -207,6 +207,13 @@ public:
 	{
 		return entt::null;
 	}
+	/// A dispenser that a town's plan or a scaffold puts up: as a script's dispenser, with a part of it built. A
+	/// dispenser with less than all of it built goes up with a site that its town opens later.
+	virtual entt::entity CreateTownDispenser(glm::vec3 /*position*/, AbodeInfo /*building*/, float /*yAngleRadians*/,
+	                                         float /*scale*/, entt::entity /*town*/, float /*built*/)
+	{
+		return entt::null;
+	}
 	/// A script gives a dispenser a miracle and the turns between its bubbles; with no turns it is turned off
 	virtual void SetDispenserMagic(entt::entity /*dispenser*/, MagicType /*type*/, uint32_t /*turns*/) {}
 	/// For the testbed: a dispenser that has counted its period, floating its bubble now if it has none
@@ -228,21 +235,34 @@ public:
 	/// A seed straight into the player's hand, fully charged and ready, as from a bubble, if the hand is free: the seed,
 	/// or none
 	virtual entt::entity GiveSeedToHand(PlayerNames player, SpellSeedType seed, int powerUp, float multiplier) = 0;
+	/// The seed of a one-shot miracle (a globe, or a miracle that a script puts into the hand) goes into the player's
+	/// hand, as GiveSeedToHand does. The best icon of the player for the seed makes it. Thus the seed can power up, and
+	/// it gives its prayer power back to the site of the icon. With no such icon, the seed has no icon. The seed, or none.
+	virtual entt::entity GiveOneShotSeedToHand(PlayerNames player, SpellSeedType seed, int powerUp, float multiplier)
+	{
+		return GiveSeedToHand(player, seed, powerUp, multiplier);
+	}
 	/// A seed summoned from the player's worship into their hand, if it is free: its cost to create is charged from the
 	/// player's prayer power, as much as they have, and it is ready after the usual delay. The seed, or none.
 	virtual entt::entity SummonSeed(PlayerNames player, SpellSeedType seed, int powerUp) = 0;
 	/// A seed summoned from an icon of a worship site into its player's hand, if it is free: the site charges it with its
 	/// cost to create, as much as it has, and tops up what it casts. The seed, or none.
 	virtual entt::entity SummonSeedAtSite(entt::entity site, SpellSeedType seed, int powerUp) = 0;
-	/// A miracle charged at an icon of a worship site goes into the site's player's hand, if it is free, holding the prayer
-	/// power the icon stored for it; the site tops up what it casts. The seed, or none.
-	virtual entt::entity TakeIconSeed(entt::entity /*site*/, SpellSeedType /*seed*/, int /*powerUp*/, float /*chants*/)
+	/// A miracle charged at an icon of a worship site goes into the hand of the player that tapped or charged the icon, if
+	/// it is free, holding the prayer power the icon stored for it; the site tops up what it casts. On the Gods'
+	/// Playground that hand can be of a player that does not own the site. The seed, or none.
+	virtual entt::entity TakeIconSeed(entt::entity /*site*/, PlayerNames /*holder*/, SpellSeedType /*seed*/, int /*powerUp*/,
+	                                  float /*chants*/)
 	{
 		return entt::null;
 	}
 	/// An icon that charged a seed held in a hand sets the power-up level of that seed. When the seed holds more than the
 	/// miracle at that level costs, the seed gives the rest back to its worship site.
 	virtual void SetIconSeedPowerUp(entt::entity /*seed*/, int /*powerUp*/) {}
+	/// The hand of a player takes back its own seed that shows over the miracle that it cast. The seed takes what the
+	/// miracle has left, and the miracle closes down. With enough left for another cast, the seed goes into the free
+	/// hand as the held miracle, ready at once. Else the seed goes. Whether the hand keeps the seed.
+	virtual bool TakeSeedBack(PlayerNames /*player*/, entt::entity /*seed*/) { return false; }
 	/// The tooltip text of the miracle in the hand, once after the hand takes a seed or the seed gets a new power-up
 	/// level. The hand shows this text at once, over the other tooltips. None when there is no new text.
 	[[nodiscard]] virtual std::optional<uint32_t> TakeHeldMiracleToolTip() { return std::nullopt; }

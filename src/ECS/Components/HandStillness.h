@@ -16,7 +16,9 @@
 namespace openblack::ecs::components
 {
 
-/// How long the player's hand has stayed in one place, counted in game turns (see hand_stillness::Step)
+/// How long the player's hand has stayed in one place, counted in game turns (see hand_stillness::Step). The left hand of
+/// a person's player has it for the reports. The entity of a player that no person plays has it for the hand of its god
+/// (see god_hand::InputTurn).
 struct HandStillness
 {
 	/// The game turns since the hand last moved far enough

@@ -16,15 +16,19 @@
 #include "3D/MapCoords.h"
 #include "ECS/Components/Abode.h"
 #include "ECS/Components/Ball.h"
+#include "ECS/Components/BuildingDamage.h"
 #include "ECS/Components/CreatureObjectAction.h"
 #include "ECS/Components/Field.h"
 #include "ECS/Components/Firefly.h"
 #include "ECS/Components/MapCellResident.h"
 #include "ECS/Components/Mesh.h"
 #include "ECS/Components/Mobile.h"
+#include "ECS/Components/OneOffSpellSeed.h"
 #include "ECS/Components/Pot.h"
 #include "ECS/Components/ScriptHighlight.h"
+#include "ECS/Components/Shark.h"
 #include "ECS/Components/SpellIcon.h"
+#include "ECS/Components/SpellSeed.h"
 #include "ECS/Components/TeleportStone.h"
 #include "ECS/Components/Town.h"
 #include "ECS/Components/TownDesireFlag.h"
@@ -126,6 +130,36 @@ TEST_F(MapProductionFiling, AVillagerThatAScriptMakesIsOnTheMapBeforeTheScriptRe
 	EXPECT_EQ(std::ranges::count(inCell, villager), 1);
 }
 
+TEST_F(MapProductionFiling, AMiracleSeedIsNeverPutOnTheMap)
+{
+	// A miracle's seed, plain or out of a globe, never goes into the land's cells. Thus a script's search of the cells for
+	// a spell seed or a one-shot spell finds nothing, as in the game. A globe on the land is a thing of the cells.
+	auto& registry = Locator::entitiesRegistry::value();
+	auto& map = Locator::entitiesMap::value();
+	const glm::vec3 at {500.0f, 0.0f, 500.0f};
+	const auto plain = registry.Create();
+	registry.Assign<Transform>(plain, at, glm::mat3(1.0f), glm::vec3(1.0f));
+	registry.Assign<SpellSeed>(plain, SpellSeed {.seedType = SpellSeedType::Water});
+	const auto fromGlobe = registry.Create();
+	registry.Assign<Transform>(fromGlobe, at, glm::mat3(1.0f), glm::vec3(1.0f));
+	registry.Assign<SpellSeed>(fromGlobe, SpellSeed {.seedType = SpellSeedType::Heal, .fromGlobe = true});
+	const auto globe = registry.Create();
+	registry.Assign<Transform>(globe, at, glm::mat3(1.0f), glm::vec3(1.0f));
+	registry.Assign<OneOffSpellSeed>(globe, OneOffSpellSeed {.seedType = SpellSeedType::Heal});
+	map.Sync();
+	map.Refile(plain);
+	map.Refile(fromGlobe);
+	map.Refile(globe);
+	EXPECT_FALSE(MapProduction::KindOf(registry, plain).has_value());
+	EXPECT_FALSE(MapProduction::KindOf(registry, fromGlobe).has_value());
+	EXPECT_FALSE(registry.AllOf<MapCellResident>(plain));
+	EXPECT_FALSE(registry.AllOf<MapCellResident>(fromGlobe));
+	const auto inCell = map.GetAllInCell(map_coords::CellOf(at));
+	EXPECT_EQ(std::ranges::count(inCell, plain), 0);
+	EXPECT_EQ(std::ranges::count(inCell, fromGlobe), 0);
+	EXPECT_EQ(std::ranges::count(inCell, globe), 1);
+}
+
 TEST_F(MapProductionFiling, AStoneHandOfAVillageCentreIsNeverPutOnTheMap)
 {
 	// A village centre's stone hand is not put in the land's cells. Thus no search of the cells finds it, and no miracle,
@@ -210,6 +244,45 @@ TEST_F(MapProductionFiling, AFieldIsInEachCellItsOutlineCoversAndLeavesThemWhenG
 		EXPECT_TRUE(map.GetAllInCell(cell).empty());
 	}
 	registry.Destroy(field);
+	EXPECT_TRUE(map.GetAllInCell(middle).empty());
+	EXPECT_TRUE(map.GetAllInCell(middle + glm::ivec2 {1, 0}).empty());
+}
+
+TEST_F(MapProductionFiling, APieceOfABuildingGoesIntoTheCellsOnlyWhenItComesToRest)
+{
+	// A piece that broke off a building is not in the cells while it flies. When it comes to rest it goes into the front
+	// of the fixed things of each cell that its outline covers, as a rock does, and it leaves them when it goes. Here
+	// the outline is a circle of 3 units in the middle of a cell: it reaches the four cells beside that cell.
+	auto& registry = Locator::entitiesRegistry::value();
+	const glm::vec3 place {505.0f, 0.0f, 505.0f};
+	Locator::entitiesMap::reset();
+	Locator::entitiesMap::emplace<MapProduction>([](const Registry& from, entt::entity entity) {
+		const auto& transform = from.Get<const Transform>(entity);
+		return std::optional(map_cells::OutlineOfBox(transform.position, transform.rotation, transform.scale.x, glm::vec3(0.0f),
+		                                             {3.0f, 3.0f, 3.0f}));
+	});
+	auto& map = Locator::entitiesMap::value();
+	const auto piece = registry.Create();
+	registry.Assign<Transform>(piece, place, glm::mat3(1.0f), glm::vec3(1.0f));
+	registry.Assign<BuildingPiece>(piece);
+	map.Sync();
+	const auto middle = map_coords::CellOf(place);
+	EXPECT_FALSE(registry.AllOf<MapCellResident>(piece));
+	EXPECT_TRUE(map.GetAllInCell(middle).empty());
+	EXPECT_FALSE(map.InMap(piece));
+	// It comes to rest
+	map.Refile(piece);
+	ASSERT_TRUE(registry.AllOf<MapCellResident>(piece));
+	EXPECT_EQ(registry.Get<const MapCellResident>(piece).cells.size(), 5u);
+	EXPECT_EQ(registry.Get<const MapCellResident>(piece).placement, map_cells::Placement::FixedFront);
+	EXPECT_TRUE(registry.AllOf<MapCellMover>(piece));
+	ASSERT_EQ(map.GetFixedInGridCell(MapInterface::CellId(middle)).size(), 1u);
+	EXPECT_EQ(map.GetFixedInGridCell(MapInterface::CellId(middle)).front(), piece);
+	EXPECT_EQ(map.GetAllInCell(middle + glm::ivec2 {1, 0}).size(), 1u);
+	// The land's draw list decides it as it decides other things on its land block
+	const auto onBlock = map.GetOnBlock({middle.x >> 4, middle.y >> 4});
+	EXPECT_NE(std::ranges::find(onBlock, piece), onBlock.end());
+	registry.Destroy(piece);
 	EXPECT_TRUE(map.GetAllInCell(middle).empty());
 	EXPECT_TRUE(map.GetAllInCell(middle + glm::ivec2 {1, 0}).empty());
 }
@@ -620,4 +693,19 @@ TEST_F(MapProductionFiling, AScrollThatAScriptPutsInAnotherCellGoesIntoThatCellA
 	thing_map_place::Put(registry, scroll, map_coords::FromMetres({there.x, there.z}), 0.0f);
 	EXPECT_EQ(std::vector(map.GetFixedInGridCell(here).begin(), map.GetFixedInGridCell(here).end()), std::vector {other});
 	EXPECT_EQ(std::vector(map.GetFixedInGridCell(there).begin(), map.GetFixedInGridCell(there).end()), std::vector {scroll});
+}
+
+TEST_F(MapProductionFiling, AWhaleIsNeverPutOnTheMap)
+{
+	// A whale is not in the cells of the land, so the land's draw list does not decide its draw: the whale draws itself on
+	// each frame, also while the camera does not move
+	auto& registry = Locator::entitiesRegistry::value();
+	auto& map = Locator::entitiesMap::value();
+	const auto whale = registry.Create();
+	registry.Assign<Transform>(whale, glm::vec3(500.0f, 0.0f, 500.0f), glm::mat3(1.0f), glm::vec3(2.0f));
+	registry.Assign<Shark>(whale);
+	EXPECT_FALSE(MapProduction::KindOf(registry, whale).has_value());
+	map.Sync();
+	map.Refile(whale);
+	EXPECT_FALSE(registry.AllOf<MapCellResident>(whale));
 }

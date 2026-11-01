@@ -1606,7 +1606,8 @@ bool SaveGameSystem::ImportVanillaWorld(uint32_t slot, std::span<const uint8_t> 
 	// The towns and the villagers of the file replace the towns and the villagers of the land
 	VanillaMade made = creatures;
 	VanillaWorks works;
-	ImportVanillaTowns(*read.world, made, works);
+	VanillaCircles circles;
+	ImportVanillaTowns(*read.world, made, works, circles);
 	// The forests, the big forests and the trees of the file replace those of the land
 	ImportVanillaForests(*read.world, made);
 	// The fields and the fish farms of the file replace those of the land
@@ -1614,9 +1615,11 @@ bool SaveGameSystem::ImportVanillaWorld(uint32_t slot, std::span<const uint8_t> 
 	// The still things and the loose things of the file replace those of the land
 	ImportVanillaStatics(*read.world, made);
 	// The animals and their flocks replace those of the land
-	ImportVanillaAnimals(*read.world, made);
+	ImportVanillaAnimals(*read.world, made, circles);
 	// The markers, the timers, the highlights and the influences of the scripts replace those of the land
 	ImportVanillaScriptThings(*read.world, made);
+	// The walkers take the circles of their walks when all the things of the file are made
+	ImportVanillaCircles(circles, made);
 	// The running scripts of the file, with the objects that they hold, replace the scripts of the land. The game loads
 	// them after all the objects of the file.
 	ImportVanillaScripts(*read.world, made);

@@ -19,6 +19,8 @@
 #include "Creature/CreaturePlanActions.h"
 #include "Creature/CreaturePlayerAgendas.h"
 #include "Creature/CreaturePlayerAttention.h"
+#include "ECS/Components/HandStillness.h"
+#include "Hand/HandStillness.h"
 
 using namespace openblack;
 using namespace openblack::creature_player_attention;
@@ -76,24 +78,25 @@ TEST(CreaturePlayerAttention, AwayFromTheHandIsAnEighthOfTheViewWidthAtTheFocus)
 	EXPECT_FALSE(AwayFromHand({1000.0f, 0.0f, 1000.0f}, {1000.0f, 500.0f, 1000.0f}, origin, focus));
 }
 
-// The speed follows six tenths of the way to the movement of the turn made a speed, so it stays more than 0 for many turns
-TEST(CreaturePlayerAttention, TheHandSpeedFadesSlowlyAfterTheHandStops)
+// The velocity of the hand follows six tenths of the way to the movement of the turn made a velocity, so the hand moves
+// for many turns after it stops
+TEST(CreaturePlayerAttention, TheHandMovesForManyTurnsAfterItStops)
 {
-	HandSpeed speed;
-	EXPECT_FALSE(IsHandMoving(speed));
-	UpdateHandSpeed(speed, {1.0f, 0.0f, 0.0f}, 10.0f);
-	EXPECT_FLOAT_EQ(speed.velocity.x, 6.0f);
-	EXPECT_TRUE(IsHandMoving(speed));
+	openblack::ecs::components::HandStillness hand;
+	EXPECT_FALSE(IsHandMoving(hand.velocity));
+	openblack::hand_stillness::Step(hand, {1.0f, 0.0f, 0.0f});
+	EXPECT_FLOAT_EQ(hand.velocity.x, 6.0f);
+	EXPECT_TRUE(IsHandMoving(hand.velocity));
 	for (int turn = 0; turn < 50; ++turn)
 	{
-		UpdateHandSpeed(speed, glm::vec3(0.0f), 10.0f);
+		openblack::hand_stillness::Step(hand, {1.0f, 0.0f, 0.0f});
 	}
-	EXPECT_TRUE(IsHandMoving(speed));
+	EXPECT_TRUE(IsHandMoving(hand.velocity));
 	for (int turn = 0; turn < 500; ++turn)
 	{
-		UpdateHandSpeed(speed, glm::vec3(0.0f), 10.0f);
+		openblack::hand_stillness::Step(hand, {1.0f, 0.0f, 0.0f});
 	}
-	EXPECT_FALSE(IsHandMoving(speed));
+	EXPECT_FALSE(IsHandMoving(hand.velocity));
 }
 
 // The angles are compared straight: across the zero angle two near directions count as far apart, as in the game

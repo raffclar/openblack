@@ -63,6 +63,7 @@
 #include "ECS/Components/TownDesireFlag.h"
 #include "ECS/Components/Transform.h"
 #include "ECS/Components/Tree.h"
+#include "ECS/Components/VillageTotem.h"
 #include "ECS/Components/Villager.h"
 #include "ECS/Components/Vortex.h"
 #include "ECS/Components/Weather.h"
@@ -92,6 +93,7 @@
 #include "ECS/Systems/TownSystemInterface.h"
 #include "ECS/Systems/WeatherSystemInterface.h"
 #include "ECS/Systems/WonderSystemInterface.h"
+#include "ECS/Systems/WorkshopSystemInterface.h"
 #include "ECS/TempleConstruction.h"
 #include "ECS/ThingModel.h"
 #include "ECS/TownAggression.h"
@@ -434,6 +436,21 @@ world_objects::Size world_objects::SizeOf(entt::entity object)
 	return size;
 }
 
+std::optional<world_objects::Size> world_objects::SizeOfModel(entt::id_type model, float scale)
+{
+	if (!Locator::resources::has_value())
+	{
+		return std::nullopt;
+	}
+	auto& meshes = Locator::resources::value().GetMeshes();
+	if (!meshes.Contains(model))
+	{
+		return std::nullopt;
+	}
+	const auto box = meshes.Handle(model)->GetBoundingBox().Size() * scale;
+	return Size {.radius = std::max(box.x, box.z) * 0.5f, .height = box.y};
+}
+
 namespace
 {
 /// The pot of a pile of food or wood, whose life is what it holds; none for anything else
@@ -460,6 +477,22 @@ entt::entity TownOfAbode(const Abode& abode)
 		}
 	});
 	return town;
+}
+
+/// The town that a building belongs to: the town of an abode or of a miracle dispenser, none for none
+entt::entity TownOfBuilding(entt::entity object)
+{
+	const auto& registry = Locator::entitiesRegistry::value();
+	if (const auto* abode = registry.TryGet<const Abode>(object))
+	{
+		return TownOfAbode(*abode);
+	}
+	if (const auto* dispenser = registry.TryGet<const SpellDispenser>(object);
+	    dispenser != nullptr && registry.Valid(dispenser->town) && registry.AllOf<Town>(dispenser->town))
+	{
+		return dispenser->town;
+	}
+	return entt::null;
 }
 
 /// The town of the storage pit a pile is part of, or of the building whose site keeps its wood in it; none for a pile
@@ -613,6 +646,11 @@ float world_objects::ReduceLife(entt::entity object, float damage, std::optional
 	if (!registry.Valid(object))
 	{
 		return 0.0f;
+	}
+	// A village totem gives the harm to its town centre, and keeps its own life
+	if (const auto* totem = registry.TryGet<const VillageTotem>(object); totem != nullptr && registry.Valid(totem->townCentre))
+	{
+		return ReduceLife(totem->townCentre, damage, by, byCreature);
 	}
 	// A field burns its food and keeps its life
 	if (auto* field = registry.TryGet<Field>(object))
@@ -878,7 +916,15 @@ void world_objects::DestroyedByEffect(entt::entity object, const EffectDeath& de
 			KeepForScript(object);
 			return;
 		}
+		// The scaffold of an unfinished building starts a new site there at once, after the building goes
+		const auto scaffold =
+		    Locator::workshopSystem::has_value() ? Locator::workshopSystem::value().LeaveDestroyedSite(object) : entt::null;
+		const auto player = PlayerOf(object).value_or(PlayerNames::NEUTRAL);
 		Remove(object);
+		if (scaffold != entt::null)
+		{
+			Locator::workshopSystem::value().ForceBuild(scaffold, player);
+		}
 		return;
 	}
 	if (registry.AllOf<Villager>(object))
@@ -986,8 +1032,9 @@ void world_objects::Remove(entt::entity object)
 	{
 		Locator::wonderSystem::value().Lost(object);
 	}
-	// A town's building going is planned again by its town, where it stood, and the things it put round itself go
-	if (registry.AllOf<Abode>(object))
+	// A town's building going is planned again by its town, where it stood, and the things it put round itself go. A
+	// miracle dispenser is one of the buildings of its town.
+	if (registry.AnyOf<Abode, SpellDispenser>(object))
 	{
 		town_planning::PlanAgain(object);
 		abode_surroundings::Delete(object);
@@ -1003,8 +1050,14 @@ void world_objects::Remove(entt::entity object)
 	}
 	// A building that goes closes each of its sites first, so that the builders stop their work and step away from it
 	construction::CloseSite(object);
+	const auto leftTown = TownOfBuilding(object);
 	registry.Destroy(object);
 	registry.SetDirty();
+	// The town that the building left goes from the game when it has nothing left
+	if (leftTown != entt::null && Locator::townSystem::has_value())
+	{
+		Locator::townSystem::value().BuildingLeft(leftTown);
+	}
 }
 
 void world_objects::AttackTown(entt::entity object, float damage, PlayerNames aggressor, const town_aggression::Harm& harm,
@@ -1113,6 +1166,11 @@ float world_objects::IncreaseLife(entt::entity object, float amount)
 	if (!registry.Valid(object))
 	{
 		return 0.0f;
+	}
+	// A village totem gives the life to its town centre, and keeps its own life
+	if (const auto* totem = registry.TryGet<const VillageTotem>(object); totem != nullptr && registry.Valid(totem->townCentre))
+	{
+		return IncreaseLife(totem->townCentre, amount);
 	}
 	const float before = LifeOf(object);
 	if (auto* villager = registry.TryGet<Villager>(object))

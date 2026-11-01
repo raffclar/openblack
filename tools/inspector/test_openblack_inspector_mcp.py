@@ -881,6 +881,56 @@ class GestureTest(SessionBase):
         self.assertIn("camera moves", entry["description"])
 
 
+class ButtonTest(SessionBase):
+    """input.button reaches the game as the call gives it: a click that answers a question box, a double click that
+    counts two clicks, and the refusal of a press that a debug window would take, which names the window"""
+
+    def setUp(self):
+        super().setUp()
+        self.window = None
+
+        def press(request):
+            if self.window is not None and not request["params"].get("to_window"):
+                return (f"the {self.window} debug window takes this button's presses for itself, so the game "
+                        f"never gets them. Close it (gui.close, window \"{self.window}\") first; to press in the "
+                        f"window itself, ask with to_window true")
+            return {"button": 1, "action": request["params"].get("action", "click"), "pending": 1,
+                    "starts_frame": 10, "timing": "mouse"}
+
+        self.first.handlers["input.button"] = press
+
+    def button(self, params):
+        return self.session.call("input_button", dict(params, port=self.first.port))
+
+    def test_a_click_and_a_double_click_are_sent_as_asked(self):
+        click = self.button({"action": "click"})
+        self.assertTrue(click["ok"], click)
+        self.assertEqual(click["result"]["action"], "click")
+        double = self.button({"action": "double_click", "button": "left", "timing": "immediate"})
+        self.assertTrue(double["ok"], double)
+        self.assertEqual(double["result"]["action"], "double_click")
+        asked = [r["params"] for r in self.first.asked() if r["query"] == "input.button"]
+        self.assertEqual(asked, [{"action": "click"},
+                                 {"action": "double_click", "button": "left", "timing": "immediate"}])
+
+    def test_a_press_a_window_takes_is_refused_by_name_and_can_be_meant_for_it(self):
+        self.window = "Editor"
+        refused = self.button({"action": "click"})
+        self.assertFalse(refused["ok"], refused)
+        self.assertIn("Editor", refused["error"])
+        self.assertIn("gui.close", refused["error"])
+        meant = self.button({"action": "click", "to_window": True})
+        self.assertTrue(meant["ok"], meant)
+        asked = [r["params"] for r in self.first.asked() if r["query"] == "input.button"]
+        self.assertEqual(asked[-1], {"action": "click", "to_window": True})
+
+    def test_the_tools_say_a_window_may_take_the_press(self):
+        for name in ("input_button", "input_drag", "input_path"):
+            properties = mcp.TOOLS_BY_NAME[name]["inputSchema"]["properties"]
+            self.assertEqual(properties["to_window"]["type"], "boolean", name)
+            self.assertIn("debug window", properties["to_window"]["description"], name)
+
+
 class ComputerMindTest(SessionBase):
     """A computer god's whole mind is read by name: every node with its personality weight, and its attitudes"""
 

@@ -210,6 +210,7 @@
 #include "ECS/Systems/PlayerCommandSystemInterface.h"
 #include "ECS/Systems/PlayerProfileSystemInterface.h"
 #include "ECS/Systems/PlayerSystemInterface.h"
+#include "ECS/Systems/PlaygroundTripSystemInterface.h"
 #include "ECS/Systems/ProfileFolderSystemInterface.h"
 #include "ECS/Systems/RainSystemInterface.h"
 #include "ECS/Systems/ReactionSystemInterface.h"
@@ -270,6 +271,7 @@
 #include "Input/GameActionMapInterface.h"
 #include "Locator.h"
 #include "Magic/MagicTables.h"
+#include "Nature/Fireflies.h"
 #include "Online/HttpClientInterface.h"
 #include "Online/NetworkSession.h"
 #include "Online/WebSocketInterface.h"
@@ -472,6 +474,7 @@ constexpr std::array k_Coverage {
     LocatorCoverage {"musicMoodSystem", "players.custom_music"},
     LocatorCoverage {"scriptMusicSystem", "audio.state"},
     LocatorCoverage {"tutorialSkipSystem", "players.new_game"},
+    LocatorCoverage {"playgroundTripSystem", "players.playground_trip"},
     LocatorCoverage {"advisorSystem", "help.advisors"},
     LocatorCoverage {"advisorVoiceSystem", "help.advisors"},
     LocatorCoverage {"helpTextSystem", "help.dialogue"},
@@ -1637,7 +1640,8 @@ std::unique_ptr<ProviderInterface> LivingProvider()
 	    Query("fireflies",
 	          "How many fireflies there are and how many hide, fly out, hover and fly home; whether the next nightfall "
 	          "tops them up; the trees and the things standing over several cells they can hide in; and what the last "
-	          "frame did with those out: in view, near enough to be seen, drawn, and whether their picture was found"),
+	          "frame did with those out: in view, near enough to be seen, drawn, and whether their picture was found; and the "
+	          "land's reward weights by magic type number, with their total"),
 	    Serve<Locator::fireflySystem>(
 	        "the fireflies", [](const ecs::systems::FireflySystemInterface& fireflies, const QueryContext& /*c*/) {
 		        std::array<size_t, 4> states {};
@@ -1652,7 +1656,19 @@ std::unique_ptr<ProviderInterface> LivingProvider()
 			        }
 		        }
 		        const auto frame = fireflies.GetLastFrame();
+		        // The land's reward weights that are not nothing, by the number of the magic type
+		        Json weights = Json::object();
+		        const auto& rewards = fireflies.GetRewards();
+		        for (size_t kind = 0; kind < fireflies::k_RewardKinds; ++kind)
+		        {
+			        if (rewards.Weight(kind) != 0.0f)
+			        {
+				        weights[std::to_string(kind)] = rewards.Weight(kind);
+			        }
+		        }
 		        return Json {{"fireflies", fireflies.GetFireflies().size()},
+		                     {"reward_weights", std::move(weights)},
+		                     {"reward_total", rewards.Total()},
 		                     {"resting", states.at(static_cast<size_t>(Firefly::State::Resting))},
 		                     {"flying_out", states.at(static_cast<size_t>(Firefly::State::FlyingOut))},
 		                     {"hovering", states.at(static_cast<size_t>(Firefly::State::Hovering))},
@@ -1921,6 +1937,18 @@ std::unique_ptr<ProviderInterface> PlayersProvider()
 			              const auto& profiles = Locator::playerProfileSystem::value();
 			              result["profiles"] = profiles.GetProfileCount();
 			              result["profile_has_creature"] = profiles.CurrentProfileHasCreature();
+		              }
+		              return QueryResult::Value(std::move(result));
+	              });
+	provider->Add(Query("playground_trip", "The trip to the Gods' Playground: whether every player's influence covers "
+	                                       "the whole land, and whether a lesson runs"),
+	              [](const QueryContext& /*c*/) {
+		              Json result = Json::object();
+		              if (Locator::playgroundTripSystem::has_value())
+		              {
+			              const auto& trip = Locator::playgroundTripSystem::value();
+			              result["influence_everywhere"] = trip.InfluenceEverywhere();
+			              result["lesson_running"] = trip.IsLessonRunning();
 		              }
 		              return QueryResult::Value(std::move(result));
 	              });
@@ -2405,6 +2433,7 @@ std::unique_ptr<ProviderInterface> PlayersProvider()
 		                                 {"templates", gestures.GetTemplates().size()},
 		                                 {"leash_picker_open", gestures.IsLeashPickerOpen()},
 		                                 {"circle_seconds_left", gestures.GetCircleSecondsLeft()},
+		                                 {"asked_power_up", static_cast<uint32_t>(gestures.GetAskedPowerUp())},
 		                                 {"events_queue", Locator::gestureEvents::has_value()}};
 		                  // The row of hints at the bottom right: each hinted gesture and its leash, and the row's fade
 		                  Json hints = Json::array();

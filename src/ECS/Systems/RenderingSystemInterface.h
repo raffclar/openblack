@@ -105,6 +105,8 @@ struct RenderContext
 		/// The instances are drawn with the first environment map, which each primitive takes as its material says: the
 		/// scripts' scrolls and signs
 		bool environmentMapped {false};
+		/// The instances read the snow by each face, as the fences do (see snow_faces)
+		bool snowByFace {false};
 		/// The properties that the game changed the materials of the instances' model to, which each primitive is
 		/// drawn by: the heart of a temple in its destruction
 		std::optional<graphics::render_modes::Properties> changedMaterials;

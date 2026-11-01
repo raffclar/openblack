@@ -18,10 +18,13 @@
 #include "ECS/Components/Dance.h"
 #include "ECS/Components/HandGrab.h"
 #include "ECS/Components/LivingAction.h"
+#include "ECS/Components/TeleportStone.h"
+#include "ECS/Components/Town.h"
 #include "ECS/Components/Transform.h"
 #include "ECS/Components/Villager.h"
 #include "ECS/Components/VillagerWork.h"
 #include "ECS/Components/WallHug.h"
+#include "ECS/Components/WorshipSite.h"
 #include "ECS/DanceRules.h"
 #include "ECS/Registry.h"
 #include "ECS/Systems/PathfindingSystemInterface.h"
@@ -43,6 +46,7 @@
 #include "ECS/Systems/Implementations/VillagerMoveToObject.h"
 #include "ECS/Systems/Implementations/VillagerReactions.h"
 #include "ECS/Systems/Implementations/VillagerTeleport.h"
+#include "ECS/Systems/Implementations/VillagerWorship.h"
 
 using namespace openblack;
 using namespace openblack::ecs;
@@ -125,8 +129,19 @@ protected:
 			villager.divisorForTownNeedsSpeedMod = 1.0f;
 			villager.maxFoodCarried = villager.maxTraderFoodCarried = 10;
 			villager.maxWoodCarried = villager.maxTraderWoodCarried = 10;
+			villager.moveState = LivingStates::LivingMoveToPos;
 		}
+		// The walk to a teleport stone ends in the state of the stone, as in the game's data
+		_info->villagerStateTable.at(static_cast<size_t>(VillagerStates::GoTowardsTeleportReaction)).isFinalState = 1;
 		_info->villagerStateTable.at(static_cast<size_t>(k_Next)).isFinalState = 1;
+		// The final states of the way to the worship site, as in the game's data
+		for (const auto state :
+		     {VillagerStates::GotoWorshipSiteForWorship, VillagerStates::ArrivesAtWorshipSiteForWorship,
+		      VillagerStates::WorshippingAtWorshipSite, VillagerStates::TeleportReaction,
+		      VillagerStates::ArrivesAtWorshipSiteWithSupplies, VillagerStates::GotoStoragePitForWorshipSupplies})
+		{
+			_info->villagerStateTable.at(static_cast<size_t>(state)).isFinalState = 1;
+		}
 		// The dance of a script is a state of the scripts, so that its dancer stays in the dance
 		_info->villagerStateTable.at(static_cast<size_t>(VillagerStates::InDance)).isScriptState = 1;
 		Locator::infoConstants::emplace(*_info);
@@ -364,14 +379,77 @@ TEST_F(VillagerWalkStates, TheStatesNotMadeYetTakeNoStep)
 	EXPECT_TRUE(_steps->steps.empty());
 }
 
-// A villager that walks to a teleport stone takes its step first, before it looks at the stone
+// A villager that heads for a teleport stone takes no step in that state. It starts a plain walk round things to the
+// stone, and the walk ends in the state of the stone again.
 // NOLINTNEXTLINE(cppcoreguidelines-avoid-non-const-global-variables): external macro
-TEST_F(VillagerWalkStates, AWalkToATeleportStoneStepsFirst)
+TEST_F(VillagerWalkStates, AWalkToATeleportStoneTakesNoStepAndStartsThePlainWalk)
 {
+	auto& registry = Locator::entitiesRegistry::value();
+	const auto stone = registry.Create();
+	const auto stoneAt = k_Here + glm::vec3(30.0f, 0.0f, 0.0f);
+	registry.Assign<Transform>(stone, stoneAt, glm::mat3(1.0f), glm::vec3(1.0f));
+	registry.Assign<TeleportTraveller>(_villager, TeleportTraveller {.stone = stone});
 	SetStates(VillagerStates::GoTowardsTeleportReaction, VillagerStates::InvalidState);
+
 	villager_teleport::GoTowardsTeleportReaction(Action());
-	ASSERT_EQ(_steps->steps.size(), 1u);
-	EXPECT_EQ(_steps->steps.front().top, VillagerStates::GoTowardsTeleportReaction);
+
+	EXPECT_TRUE(_steps->steps.empty());
+	EXPECT_EQ(Top(), VillagerStates::MoveToPos);
+	EXPECT_NE(Top(), VillagerStates::GoTowardsTeleportReaction);
+	EXPECT_EQ(Final(), VillagerStates::GoTowardsTeleportReaction);
+	EXPECT_EQ(registry.Get<const WallHug>(_villager).goalPlace, wall_hug::ToWhole(glm::xz(stoneAt)));
+	EXPECT_TRUE(registry.AllOf<MoveStateLinearTag>(_villager));
+}
+
+// A villager nearer to its stone than one step of its walk goes into the jump, with no step
+// NOLINTNEXTLINE(cppcoreguidelines-avoid-non-const-global-variables): external macro
+TEST_F(VillagerWalkStates, AVillagerAtItsTeleportStoneGoesIntoTheJumpWithNoStep)
+{
+	auto& registry = Locator::entitiesRegistry::value();
+	const auto stone = registry.Create();
+	registry.Assign<Transform>(stone, k_Here, glm::mat3(1.0f), glm::vec3(1.0f));
+	registry.Assign<TeleportTraveller>(_villager, TeleportTraveller {.stone = stone});
+	SetStates(VillagerStates::GoTowardsTeleportReaction, VillagerStates::InvalidState);
+
+	villager_teleport::GoTowardsTeleportReaction(Action());
+
+	EXPECT_TRUE(_steps->steps.empty());
+	EXPECT_EQ(Top(), VillagerStates::TeleportReaction);
+}
+
+// A villager that leaves the stone for a state that it works towards, and that is not a state of the stone, stops on
+// its way to worship
+// NOLINTNEXTLINE(cppcoreguidelines-avoid-non-const-global-variables): external macro
+TEST(VillagerTeleportRules, OnlyAFinalStateOutsideTheStoneEndsTheWayToWorship)
+{
+	EXPECT_TRUE(villager_teleport::LeavesTheWayToWorship(VillagerStates::DecideWhatToDo, true));
+	EXPECT_FALSE(villager_teleport::LeavesTheWayToWorship(VillagerStates::DecideWhatToDo, false));
+	for (const auto state : villager_teleport::k_TeleportStates)
+	{
+		EXPECT_FALSE(villager_teleport::LeavesTheWayToWorship(state, true));
+	}
+}
+
+// The exit of the stone's states takes the villager off its town's list of those on their way to worship when the
+// villager goes to another state that it works towards. The walk to the stone keeps the villager on the list.
+// NOLINTNEXTLINE(cppcoreguidelines-avoid-non-const-global-variables): external macro
+TEST_F(VillagerWalkStates, LeavingTheStoneForAnotherTaskEndsTheWayToWorship)
+{
+	auto& registry = Locator::entitiesRegistry::value();
+	const auto town = registry.Create();
+	registry.Assign<Town>(town).onWayToWorship.push_back(_villager);
+	registry.Get<Villager>(_villager).town = town;
+	registry.Assign<Worshipper>(_villager).onTheWay = true;
+	SetStates(VillagerStates::GoTowardsTeleportReaction, VillagerStates::InvalidState);
+
+	villager_teleport::ExitReactToTeleport(Action(), VillagerStates::TeleportReaction);
+	villager_teleport::ExitReactToTeleport(Action(), VillagerStates::MoveToPos);
+	EXPECT_EQ(registry.Get<const Town>(town).onWayToWorship.size(), 1u);
+	EXPECT_TRUE(registry.AllOf<Worshipper>(_villager));
+
+	villager_teleport::ExitReactToTeleport(Action(), k_Next);
+	EXPECT_TRUE(registry.Get<const Town>(town).onWayToWorship.empty());
+	EXPECT_FALSE(registry.AllOf<Worshipper>(_villager));
 }
 
 // A villager that walks to a creature that is not there takes no step
@@ -381,4 +459,46 @@ TEST_F(VillagerWalkStates, AWalkToACreatureThatIsNotThereTakesNoStep)
 	SetStates(VillagerStates::MoveTowardsCreatureReaction, k_Next);
 	villager_creature::MoveTowardsCreatureReaction(Action());
 	EXPECT_TRUE(_steps->steps.empty());
+}
+
+// The two states of the way to the worship site have one exit. The states of a food run for the site have one other exit.
+// NOLINTNEXTLINE(cppcoreguidelines-avoid-non-const-global-variables): external macro
+TEST_F(VillagerWalkStates, TheStatesOfTheWayToTheSiteShareTheirExit)
+{
+	const auto& living = Locator::livingActionSystem::value();
+	SetStates(VillagerStates::MoveToPos, VillagerStates::GotoWorshipSiteForWorship);
+	EXPECT_TRUE(living.VillagerHasSameExitAsFinal(Action(), VillagerStates::ArrivesAtWorshipSiteForWorship));
+	EXPECT_TRUE(living.VillagerHasSameExitAsFinal(Action(), VillagerStates::GotoWorshipSiteForWorship));
+	EXPECT_FALSE(living.VillagerHasSameExitAsFinal(Action(), VillagerStates::WorshippingAtWorshipSite));
+	EXPECT_FALSE(living.VillagerHasSameExitAsFinal(Action(), VillagerStates::MoveToWorshipSiteWithSupplies));
+	// The walk of a food run is not a final state: the state that it works towards gives the exit
+	SetStates(VillagerStates::MoveToWorshipSiteWithSupplies, VillagerStates::ArrivesAtWorshipSiteWithSupplies);
+	EXPECT_TRUE(living.VillagerHasSameExitAsFinal(Action(), VillagerStates::GotoStoragePitForWorshipSupplies));
+	EXPECT_FALSE(living.VillagerHasSameExitAsFinal(Action(), VillagerStates::ArrivesAtWorshipSiteForWorship));
+}
+
+// A villager on its way to the worship site stops its way only for a final state with another exit. A pause, a walk, a
+// teleport stone and the next state of the way keep it on its way.
+// NOLINTNEXTLINE(cppcoreguidelines-avoid-non-const-global-variables): external macro
+TEST_F(VillagerWalkStates, AVillagerOnItsWayToTheSiteStopsOnlyForAStateThatItWorksTowards)
+{
+	auto& registry = Locator::entitiesRegistry::value();
+	const auto town = registry.Create();
+	registry.Assign<Town>(town).onWayToWorship.push_back(_villager);
+	registry.Get<Villager>(_villager).town = town;
+	registry.Assign<Worshipper>(_villager, Worshipper {.onTheWay = true});
+	SetStates(VillagerStates::MoveToPos, VillagerStates::GotoWorshipSiteForWorship);
+	const auto onTheWay = [&] {
+		return registry.AllOf<Worshipper>(_villager) && registry.Get<const Worshipper>(_villager).onTheWay &&
+		       registry.Get<const Town>(town).onWayToWorship.size() == 1;
+	};
+	for (const auto next :
+	     {VillagerStates::MoveToPos, VillagerStates::ArrivesAtWorshipSiteForWorship, VillagerStates::TeleportReaction})
+	{
+		EXPECT_FALSE(villager_worship::ExitMoveToWorshipSite(Action(), next));
+		EXPECT_TRUE(onTheWay()) << static_cast<int>(next);
+	}
+	EXPECT_FALSE(villager_worship::ExitMoveToWorshipSite(Action(), VillagerStates::WorshippingAtWorshipSite));
+	EXPECT_FALSE(registry.AllOf<Worshipper>(_villager));
+	EXPECT_TRUE(registry.Get<const Town>(town).onWayToWorship.empty());
 }

@@ -29,6 +29,10 @@ constexpr glm::vec2 k_Temple {0.0f, -60.0f};
 constexpr float k_TownBelief = 1000.0f;
 /// The first land, which has no worship sites in a normal game
 constexpr int32_t k_FirstLand = 1;
+/// The second land, where a temple grows by the share of the influence of its player
+constexpr int32_t k_SecondLand = 2;
+/// Where the temple of player two stands, east of the town centre
+constexpr glm::vec2 k_RivalTemple {120.0f, 20.0f};
 /// The part of its miracle's charge that each worship site icon holds
 constexpr float k_IconCharge = 0.45f;
 /// Where the storage pit stands from the town centre
@@ -51,7 +55,216 @@ constexpr size_t k_MainRoom = 3;
 	        .include = {k_Temple - glm::vec2(50.0f, 45.0f), k_Centre + glm::vec2(25.0f, 15.0f)},
 	        .distance = 0.6f};
 }
+
+/// The object type and the seed with which a script puts a one-shot heal miracle into the hand
+constexpr float k_OneShotSpellInHand = 31.0f;
+constexpr float k_HealSeed = static_cast<float>(SpellSeedType::Heal);
+/// The plain fireball, the miracle that a challenge script gives the town
+constexpr float k_Fireball = static_cast<float>(MagicType::Fireball);
+/// Where a food miracle falls on the land away from every store, west of the town centre
+constexpr glm::vec2 k_FoodDrop {-40.0f, 40.0f};
+/// Between the temple and the town, in the reach of the temple and near the town
+constexpr glm::vec2 k_PotDrop {-10.0f, -20.0f};
+/// The food pile of a Celtic storage pit at that place
+constexpr glm::vec2 k_StorePile = k_PotDrop + glm::vec2(3.4f, 4.8f);
+/// The camera looks at that pile from the side away from the pit, so that the pile is nearer than the pit
+constexpr glm::vec2 k_StorePileEye = k_StorePile + glm::vec2(11.5f, 16.3f);
+/// A point between the altar and the food pot of the worship site that the town builds by the temple
+constexpr glm::vec2 k_SiteMiddle {-23.0f, -36.0f};
+
+/// Worship site icons, the seeds that they make and the gifts of food on the second land, as a story land plays them
+void AddSecondLandIconScenarios(std::vector<Scenario>& all)
+{
+	using Kind = Command::Kind;
+	using Argument = ScriptArgument;
+	const Framing icons {.shot = Shot::Placed, .eye = {9.0f, 14.0f, -40.0f}, .look = {9.0f, 2.0f, -19.0f}};
+	all.push_back({
+	    .id = "worship.icons_charge_second_land",
+	    .name = "Worship site icons charge, share the prayer power and give their miracle on the second land",
+	    .facet = Facet::Miracles,
+	    .description = "The town and temple of town.miracle_debug_given on the second land, with the site built. The "
+	                   "battery of the site gets the cost of the heal miracle, and a tap starts the heal icon. In the "
+	                   "same turn a tap starts the water icon. After the first turn of the charge, a second tap on the "
+	                   "heal icon stops it.",
+	    .expected = "Each tap clicks: the click of the water icon is higher, because it stands further along the "
+	                "site. At the next turn both icons charge, and each takes the same share of the battery. The second "
+	                "tap on the heal icon clicks, stops it, and gives its store back to the battery (worship.sites). The "
+	                "water icon is full at the turn after: the water miracle jumps into the hand and the announcer names "
+	                "it. The heal icon keeps no store.",
+	    .environment = {.dispenserGrid = false, .landNumber = k_SecondLand},
+	    .framing = icons,
+	    .objects = Town(),
+	    .temples = {{.offset = k_Temple}},
+	    .commands = {{.kind = Kind::BuildWorshipSites, .delaySeconds = 3.0f},
+	                 {.kind = Kind::TapSiteIcon,
+	                  .delaySeconds = 1.0f,
+	                  .value = static_cast<size_t>(SpellSeedType::Heal),
+	                  .amount = 1.0f},
+	                 {.kind = Kind::TapSiteIcon, .value = static_cast<size_t>(SpellSeedType::Water)},
+	                 {.kind = Kind::TapSiteIcon, .delaySeconds = 0.15f, .value = static_cast<size_t>(SpellSeedType::Heal)}},
+	    .townBeliefInPlayer = k_TownBelief,
+	    .townMiracles = {MagicType::Heal, MagicType::Water},
+	});
+	all.push_back({
+	    .id = "worship.one_shot_seed_from_icon",
+	    .name = "A one-shot miracle that a script puts in the hand comes from the worship site icon",
+	    .facet = Facet::Miracles,
+	    .description = "The town and temple of town.miracle_debug_given on the second land, with the site built and "
+	                   "each icon a fifth charged. A script puts a one-shot heal miracle into the hand. Three seconds "
+	                   "later a scribble shakes it off.",
+	    .expected = "The heal seed is in the hand, charged full. The inspector (town.spells) shows the seed as a seed "
+	                "out of the heal icon, so a power-up gesture can charge it there. The scribble shakes the hand, and "
+	                "the battery of the site (worship.sites) goes up by the full cost of the heal miracle.",
+	    .environment = {.dispenserGrid = false, .landNumber = k_SecondLand},
+	    .framing = icons,
+	    .objects = Town(),
+	    .temples = {{.offset = k_Temple}},
+	    .commands = {{.kind = Kind::BuildWorshipSites, .delaySeconds = 3.0f},
+	                 {.kind = Kind::FillSiteIcons, .delaySeconds = 0.5f, .amount = 0.2f},
+	                 {.kind = Kind::CallNative,
+	                  .delaySeconds = 1.0f,
+	                  .script = "CREATE",
+	                  .scriptArguments = {{.kind = Argument::Kind::Integer, .number = k_OneShotSpellInHand},
+	                                      {.kind = Argument::Kind::Integer, .number = k_HealSeed},
+	                                      {.kind = Argument::Kind::Position, .point = {9.0f, -19.0f}}}},
+	                 {.kind = Kind::DrawGesture, .delaySeconds = 3.0f, .value = static_cast<size_t>(GestureType::Scribble)}},
+	    .hand = HandHold {.offset = {9.0f, -25.0f}, .height = 6.0f},
+	    .townBeliefInPlayer = k_TownBelief,
+	    .townMiracles = {MagicType::Heal, MagicType::Water},
+	});
+	all.push_back({
+	    .id = "advisors.food_gift_answer_second_land",
+	    .name = "The town near a new pile of the player's food answers the gift on the second land",
+	    .facet = Facet::Advisors,
+	    .description = "The town of town.miracle_debug on the second land. Every kind of the advisors' guidance is taken "
+	                   "as heard long ago. The player casts the food miracle on the land west of the town, away from "
+	                   "every store, for three seconds.",
+	    .expected = "The grains make a new pile of food. The people of the town call out how much they wanted the food, "
+	                "heard near the pile: a pleased answer when the town wants food much, a displeased answer when it "
+	                "wants it little, and no answer between. Only the first new pile gets an answer for a while. On the "
+	                "first land no answer comes.",
+	    .environment = {.dispenserGrid = false, .landNumber = k_SecondLand},
+	    .framing = {.shot = Shot::Overview, .include = {k_FoodDrop - glm::vec2 {20.0f}, k_Centre + glm::vec2 {20.0f}}},
+	    .objects = Town(),
+	    .temples = {{.offset = k_Temple}},
+	    .miracles = {{.type = MagicType::Food,
+	                  .point = k_FoodDrop,
+	                  .handOffset = k_FoodDrop,
+	                  .handHeight = 20.0f,
+	                  .delaySeconds = 2.0f,
+	                  .holdSeconds = 3.0f}},
+	    .commands = {{.kind = Kind::EndGuidanceWaits, .delaySeconds = 0.5f}},
+	    .townBeliefInPlayer = k_TownBelief,
+	});
+	all.push_back({
+	    .id = "advisors.food_pot_dropped_on_pile_answer",
+	    .name = "The town near a store's pile answers a pot of food that the hand drops onto the pile",
+	    .facet = Facet::Advisors,
+	    .description = "The town of town.miracle_debug on the second land, with a Celtic storage pit that holds 300 food "
+	                   "between the temple and the town, and a pot of food beside the food pile of the pit. Every kind of "
+	                   "the advisors' guidance is taken as heard long ago. After one second the hand over the food pile "
+	                   "takes the pot. After a fifth of a second, the hand drops the pot onto the pile.",
+	    .expected = "The pit takes the food of the pot, and the pot goes. The people of the town call out how much they "
+	                "wanted the food, heard at the pile: a pleased answer when the town wants food much, a displeased "
+	                "answer when it wants it little, and no answer between. A pot dropped onto a pile that no store "
+	                "keeps, or onto the pit building, gets no answer. On the first land no answer comes.",
+	    .environment = {.dispenserGrid = false, .cursor = glm::vec2(0.5f, 0.5f), .landNumber = k_SecondLand},
+	    .framing = {.shot = Shot::Placed,
+	                .eye = {k_StorePileEye.x, 20.0f, k_StorePileEye.y},
+	                .look = {k_StorePile.x, 0.0f, k_StorePile.y}},
+	    .objects =
+	        [] {
+		        auto objects = Town();
+		        objects.push_back(
+		            {.type = AbodeInfo::CelticStoragePit, .offset = k_PotDrop, .storedFood = 300, .storedWood = 0});
+		        objects.push_back({.type = PotInfo::FoodPot, .offset = k_PotDrop + glm::vec2(9.0f, 5.0f)});
+		        return objects;
+	        }(),
+	    .temples = {{.offset = k_Temple}},
+	    .commands = {{.kind = Kind::EndGuidanceWaits, .delaySeconds = 0.5f},
+	                 {.kind = Kind::HandTake, .delaySeconds = 0.5f, .object = 6},
+	                 {.kind = Kind::HandRelease, .delaySeconds = 0.2f}},
+	    .townBeliefInPlayer = k_TownBelief,
+	});
+	all.push_back({
+	    .id = "worship.site_pot_takes_food",
+	    .name = "Food that the hand pours on a worship site goes into its food pot",
+	    .facet = Facet::Miracles,
+	    .description = "The town and temple of town.miracle_debug on the second land, with the site built. Two seconds "
+	                   "later the player casts the food miracle over the site, between its altar and its food pot, for "
+	                   "three seconds.",
+	    .expected = "The grains make no pile on the land. Their food goes into the food pot by the gate of the site, and "
+	                "the inspector shows the food in the pot (game_entity of the food_pot of worship.sites). The site "
+	                "takes food out to 1.2 times its radius from its middle.",
+	    .environment = {.dispenserGrid = false, .landNumber = k_SecondLand},
+	    .framing = icons,
+	    .objects = Town(),
+	    .temples = {{.offset = k_Temple}},
+	    .miracles = {{.type = MagicType::Food,
+	                  .point = k_SiteMiddle,
+	                  .handOffset = k_SiteMiddle,
+	                  .handHeight = 20.0f,
+	                  .delaySeconds = 5.0f,
+	                  .holdSeconds = 3.0f}},
+	    .commands = {{.kind = Kind::BuildWorshipSites, .delaySeconds = 3.0f}},
+	    .townBeliefInPlayer = k_TownBelief,
+	});
+	all.push_back({
+	    .id = "scripts.set_magic_in_town",
+	    .name = "A challenge script gives a town a miracle, and refuses an object that is not a town",
+	    .facet = Facet::Miracles,
+	    .description = "The town and temple of town.miracle_debug_given on the second land. A script gives the town the "
+	                   "fireball miracle, as the fireball challenge does. Two seconds later the script tries to give the "
+	                   "fireball to the town's hut.",
+	    .expected = "The village centre gets a stone hand with the fireball seed, and the worship site gets a fireball "
+	                "icon. The second call changes nothing, and the log says that the object should be a town.",
+	    .environment = {.dispenserGrid = false, .landNumber = k_SecondLand},
+	    .framing = TownAndTemple(),
+	    .objects = Town(),
+	    .temples = {{.offset = k_Temple}},
+	    .commands = {{.kind = Kind::BuildWorshipSites, .delaySeconds = 3.0f},
+	                 {.kind = Kind::CallNative,
+	                  .delaySeconds = 1.0f,
+	                  .script = "SET_MAGIC_IN_OBJECT",
+	                  .scriptArguments = {{.kind = Argument::Kind::Integer, .number = 1.0f},
+	                                      {.kind = Argument::Kind::Integer, .number = k_Fireball},
+	                                      {.kind = Argument::Kind::Town}}},
+	                 {.kind = Kind::CallNative,
+	                  .delaySeconds = 2.0f,
+	                  .script = "SET_MAGIC_IN_OBJECT",
+	                  .scriptArguments = {{.kind = Argument::Kind::Integer, .number = 1.0f},
+	                                      {.kind = Argument::Kind::Integer, .number = k_Fireball},
+	                                      {.kind = Argument::Kind::Object, .index = 1}}}},
+	    .townBeliefInPlayer = k_TownBelief,
+	    .townMiracles = {MagicType::Heal, MagicType::Water},
+	});
+	all.push_back({
+	    .id = "worship.converted_town_adds_icons",
+	    .name = "A town that the player converts adds its miracles to the player's worship site icons",
+	    .facet = Facet::Miracles,
+	    .description = "The town of town.miracle_debug_given on the second land, but the second player's, with the heal "
+	                   "and water miracles. The player's temple stands to the south. The town believes 1 in the player and "
+	                   "2 in the second player. A second in, the town stops its belief in the second player.",
+	    .expected = "At the town's next turn the player takes the town. The town's Norse worship site goes up by the "
+	                "player's temple with an icon of the heal miracle and an icon of the water miracle, and the player "
+	                "may now cast both miracles.",
+	    .environment = {.dispenserGrid = false, .landNumber = k_SecondLand, .players = {PlayerNames::PLAYER_TWO}},
+	    .framing = TownAndTemple(),
+	    .objects = Town(),
+	    .temples = {{.offset = k_Temple}},
+	    .commands = {{.kind = Kind::SetTownBeliefInRival, .delaySeconds = 1.0f, .amount = 0.0f}},
+	    .townBeliefInPlayer = 1.0f,
+	    .townBeliefInRival = 2.0f,
+	    .townMiracles = {MagicType::Heal, MagicType::Water},
+	    .townOwner = PlayerNames::PLAYER_TWO,
+	});
+}
 } // namespace
+
+std::vector<ObjectSetup> openblack::testbed_scenarios::WorshipTown()
+{
+	return Town();
+}
 
 void openblack::testbed_scenarios::AddTownMiracleScenarios(std::vector<Scenario>& all)
 {
@@ -105,6 +318,26 @@ void openblack::testbed_scenarios::AddTownMiracleScenarios(std::vector<Scenario>
 	    .commands = {{.kind = Command::Kind::PauseGame, .delaySeconds = 4.0f, .value = 1}},
 	    .townBeliefInPlayer = k_TownBelief,
 	    .townMiracles = {MagicType::Heal, MagicType::Water},
+	});
+	all.push_back({
+	    .id = "town.stone_hand_holder_effects",
+	    .name = "The effects of the seeds over a village centre's stone hands",
+	    .facet = Facet::Miracles,
+	    .description = "The same town and temple on the first land, given six miracles by the debug tool: heal, "
+	                   "fireball, lightning, water, teleport and storm. The camera looks at the village centre from near.",
+	    .expected = "Each stone hand shows the effect of its seed's holder above its palm, in the player's colours. The "
+	                "fireball, lightning, water, teleport and storm seeds have no model: only their effects show. The "
+	                "heal seed spins with its effect above it. The effects move only while the hands are on the screen, "
+	                "and they stop while the game is paused.",
+	    .environment = {.dispenserGrid = false, .landNumber = k_FirstLand},
+	    .framing = {.shot = Shot::Placed,
+	                .eye = {k_Centre.x + 6.0f, 14.0f, k_Centre.y - 30.0f},
+	                .look = {k_Centre.x, 5.0f, k_Centre.y}},
+	    .objects = Town(),
+	    .temples = {{.offset = k_Temple}},
+	    .townBeliefInPlayer = k_TownBelief,
+	    .townMiracles = {MagicType::Heal, MagicType::Fireball, MagicType::LightningBolt, MagicType::Water, MagicType::Teleport,
+	                     MagicType::StormWindRain},
 	});
 	all.push_back({
 	    .id = "town.miracle_spares_stone_hands",
@@ -307,6 +540,60 @@ void openblack::testbed_scenarios::AddTownMiracleScenarios(std::vector<Scenario>
 	    .townMiracles = {MagicType::Heal, MagicType::Water},
 	});
 	all.push_back({
+	    .id = "miracles.selection_creature_spell",
+	    .name = "A creature spell asked for by the inverse spiral and its gesture on the second land",
+	    .facet = Facet::Miracles,
+	    .description = "The town and temple of town.miracle_debug_given on the second land, with the freeze spell and the "
+	                   "water miracle. The site is built and each icon holds the full charge of its miracle. The hand "
+	                   "draws an inverse spiral, then a star.",
+	    .expected = "The inverse spiral opens the selection for the creature's miracles: white sparks come out of the "
+	                "hand, and the hints show the star of the freeze spell but not the W of the water miracle. The star "
+	                "closes the selection, and at the next turn the freeze spell comes into the hand.",
+	    .environment = {.dispenserGrid = false, .landNumber = k_SecondLand},
+	    .framing = {.shot = Shot::Placed, .eye = {9.0f, 14.0f, -40.0f}, .look = {9.0f, 2.0f, -19.0f}},
+	    .objects = Town(),
+	    .temples = {{.offset = k_Temple}},
+	    .commands = {{.kind = Kind::BuildWorshipSites, .delaySeconds = 3.0f},
+	                 {.kind = Kind::FillSiteIcons, .delaySeconds = 0.5f, .amount = 1.0f},
+	                 {.kind = Kind::DrawGesture,
+	                  .delaySeconds = 3.0f,
+	                  .value = static_cast<size_t>(GestureType::InverseSpiral)},
+	                 {.kind = Kind::DrawGesture, .delaySeconds = 4.0f, .value = static_cast<size_t>(GestureType::Star)}},
+	    .townBeliefInPlayer = k_TownBelief,
+	    .townMiracles = {MagicType::CreatureSpellFreeze, MagicType::Water},
+	});
+	all.push_back({
+	    .id = "miracles.power_up_icon_charge",
+	    .name = "A power-up gesture asks the worship site icon of the miracle in the hand to charge it",
+	    .facet = Facet::Miracles,
+	    .description = "The town and temple of town.miracle_debug_given, with the storm, its extreme storm and the tornado. "
+	                   "The site is built, and a tap puts the storm miracle from its icon into the hand. The battery of "
+	                   "the site gets the cost of the tornado. The hand draws the inverse spiral, then a scribble, then "
+	                   "a second scribble.",
+	    .expected = "After the inverse spiral, its hint goes at once and the scribble shows the storm seed with no rings, "
+	                "but the miracle in the hand stays the plain storm until the storm icon has charged the extra prayer "
+	                "power into it. Then the hand shows the name of the extreme storm, a bracelet more and the bands. "
+	                "The first scribble shakes the hand and the storm icon charges the seed back to the plain storm: "
+	                "the name of the storm shows again, and the prayer power past its cost goes back to the site. The "
+	                "second scribble drops the miracle.",
+	    .environment = {.dispenserGrid = false, .landNumber = k_FirstLand},
+	    .framing = {.shot = Shot::Placed, .eye = {9.0f, 14.0f, -40.0f}, .look = {9.0f, 2.0f, -19.0f}},
+	    .objects = Town(),
+	    .temples = {{.offset = k_Temple}},
+	    .commands = {{.kind = Kind::BuildWorshipSites, .delaySeconds = 3.0f},
+	                 {.kind = Kind::TakeIconSeed,
+	                  .delaySeconds = 0.5f,
+	                  .value = static_cast<size_t>(SpellSeedType::Storm),
+	                  .amount = 1.0f},
+	                 {.kind = Kind::DrawGesture,
+	                  .delaySeconds = 4.0f,
+	                  .value = static_cast<size_t>(GestureType::InverseSpiral)},
+	                 {.kind = Kind::DrawGesture, .delaySeconds = 8.0f, .value = static_cast<size_t>(GestureType::Scribble)},
+	                 {.kind = Kind::DrawGesture, .delaySeconds = 7.0f, .value = static_cast<size_t>(GestureType::Scribble)}},
+	    .townBeliefInPlayer = k_TownBelief,
+	    .townMiracles = {MagicType::StormWindRain, MagicType::StormWindRainLightning, MagicType::Tornado},
+	});
+	all.push_back({
 	    .id = "miracles.selection_help_events",
 	    .name = "The help events of the miracle selection and the R",
 	    .facet = Facet::Miracles,
@@ -422,4 +709,24 @@ void openblack::testbed_scenarios::AddTownMiracleScenarios(std::vector<Scenario>
 	    .townBeliefInPlayer = k_TownBelief,
 	    .townMiracles = {MagicType::Heal, MagicType::Water},
 	});
+	all.push_back({
+	    .id = "temple.size_follows_influence",
+	    .name = "The temples grow by their players' shares of the influence on the second land",
+	    .facet = Facet::Story,
+	    .description = "The town and temple of town.miracle_debug on the second land, and a temple of player two to the "
+	                   "east with no town. Both temples start at the smallest size.",
+	    .expected = "Each temple grows a step each turn, 0.016 of the way from the smallest size to the largest. The "
+	                "temple of player two stops after about four seconds at about 0.63 of the way: twice its share of "
+	                "the influence, 450 of 1430. The player's temple, with its town, has a share of 980 of 1430, so it "
+	                "grows on and reaches the largest size after about six seconds. On the first land both temples stay "
+	                "at the smallest size.",
+	    .environment = {.dispenserGrid = false, .landNumber = k_SecondLand, .players = {PlayerNames::PLAYER_TWO}},
+	    .framing = {.shot = Shot::Overview,
+	                .include = {k_Temple - glm::vec2(50.0f, 45.0f), k_RivalTemple + glm::vec2(50.0f, 45.0f)},
+	                .distance = 1.0f},
+	    .objects = Town(),
+	    .temples = {{.offset = k_Temple}, {.offset = k_RivalTemple, .owner = PlayerNames::PLAYER_TWO}},
+	    .townBeliefInPlayer = k_TownBelief,
+	});
+	AddSecondLandIconScenarios(all);
 }

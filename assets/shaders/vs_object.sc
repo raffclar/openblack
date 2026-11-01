@@ -265,6 +265,14 @@ void main()
 		hazeDepth = u_fogAt.x;
 	}
 	float hazeT = HazeT(hazeDepth);
+#ifdef USE_INSTANCING
+	// An instance with a look z above 0 and at most a half takes no distance haze of the world
+	// (graphics::instance_light::k_NoHaze)
+	if (i_data4.z > 0.0f && i_data4.z <= 0.5f && !InTempleFog())
+	{
+		hazeT = 0.0f;
+	}
+#endif // USE_INSTANCING
 	colour = HazeDiffuse(colour, HazeFactor(hazeT));
 	// The haze is added with the land's colour where the object stands, each channel at most white, unless the object is
 	// lit in a colour of its own that the land's colour doesn't reach (w)
@@ -302,6 +310,13 @@ void main()
 			// not change it.
 			vec3 snowNormal = u_snow.y > 0.5f ? normal : normalize(TO_WORLD(vec4(normal, 0.0f)).xyz);
 			v_snow = vec4(SnowUv(position, snowNormal), snowLevel / 255.0f, 0.0f);
+			// A fence reads the snow by each face: by the texture coordinates of the corner and the up part of the
+			// normal of its face in the file. A submesh with bones that reads the snow so shows none.
+			if (u_snow.w > 0.5f)
+			{
+				v_snow.xy = SnowFaceUv(SnowFaceUp(a_indices), a_texcoord0);
+				v_snow.z = u_snow.y > 0.5f ? 0.0f : v_snow.z;
+			}
 			v_snowLight = ModelLightColour(SnowColour(colour), ModelLightFactor(normal, localLight));
 			// The faces of a broken shape read the snow by where the corner is in the world and by the normal of its
 			// face. A back corner reads by its front corner, but from the first column of the snow texture.

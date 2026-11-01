@@ -32,6 +32,9 @@ constexpr uint32_t k_PickUp = 2;
 constexpr uint32_t k_Throw = 4;
 /// A new miracle seed goes into the hand of this computer's player, before the hand counts it as a thing it took
 constexpr uint32_t k_SeedInHand = 12;
+/// A seed that is still bound to its running miracle goes into the hand of this computer's player, in place of the event
+/// of a new seed
+constexpr uint32_t k_SeedTakenBack = 13;
 /// The hand of this computer's player gives what it holds to a creature
 constexpr uint32_t k_Give = 5;
 /// A store takes a thing that the hand of this computer's player threw into it
@@ -201,7 +204,10 @@ public:
 	[[nodiscard]] EventCount& Count(uint32_t event) { return _counts.at(event); }
 
 	/// Whether the scripts may ask about an event: 1 to 48
-	[[nodiscard]] static constexpr bool ScriptMayAsk(int32_t event) { return event > 0 && static_cast<uint32_t>(event) < k_EventCount; }
+	[[nodiscard]] static constexpr bool ScriptMayAsk(int32_t event)
+	{
+		return event > 0 && static_cast<uint32_t>(event) < k_EventCount;
+	}
 
 private:
 	std::array<EventCount, k_EventCount> _counts {};

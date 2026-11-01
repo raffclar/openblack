@@ -70,7 +70,7 @@ list(FILTER OPENBLACK_CLIENT_SOURCES INCLUDE REGEX
 )
 set(OPENBLACK_SIM_IN_CLIENT_FOLDERS
     "Audio/(MpegAudioDecoder|WavAudioDecoder|AudioDecoderInterface)"
-    "Debug/(SimRun|SimChecks|TempleVillagersSurvey|RowDump|ComputerGodTimes|ComputerActions|BenchmarkRecorder|FightAutopilotRules|TestbedCrowd|TestbedDispenserGrid|TestbedMultiplayer|TownMiracleRules|TownMiracles|TestbedScenarioRunner|DebugGuiInterface|FightAutopilotInterface|TestbedGameStageInterface|TestbedHandSweep)"
+    "Debug/(SimRun|SimChecks|TempleVillagersSurvey|RowDump|ComputerGodTimes|ComputerActions|BenchmarkRecorder|FightAutopilotRules|TestbedCrowd|TestbedDispenserGrid|TestbedMultiplayer|TownMiracleRules|TownMiracles|TestbedScenarioRunner|DebugGuiInterface|FightAutopilotInterface|TestbedGameStageInterface|TestbedHandSweep|StateHashWatch)"
     "Debug/TestbedScenario[A-Z][A-Za-z]*"
     "Editor/(EditorMath|EditorEntities|EditorPalette|EditorSelection|EditorOutline)"
     "Graphics/(HandLight|InterfaceCreatures|MeshDetail|Moon|Sun|ViewFrustum|Texture2D|VertexBuffer|IndexBuffer|Mesh|TextureSize|GraphicsDeviceInterface|GraphicsHandle|FilmSurface|ZSort|FizzDrawOrder|HandReflection|ObjectTint|TempleHeartLook)"
@@ -78,7 +78,7 @@ set(OPENBLACK_SIM_IN_CLIENT_FOLDERS
     "Input/(InjectedInput|InputLock|KeyBindings|KeyRebinding|GameActionMap|CursorFreeze|PointerSpeed|ScriptedMouse|ShortcutKeys|WindowPointer|NoInputDevice|GameActionMapInterface|InputDeviceInterface|BindableActions|LocalPlayer|PointerSettle|BoxKeyboard|MouseMotion|PlatformKeys)"
     "Windowing/(WindowFit|WindowPixels|WindowingInterface)"
     "Video/(FilmCreature|FilmEffects|FrameQueue|VideoRules|FallingSpellAudio|StillPicture)"
-    "Inspector/(CameraControl|ComponentReflection|EditProviders|EntityDescription|FightAutopilot|FightProviders|GameControls|GameInput|GameProviders|GameWorldEdit|GuiControl|InputControl|LevelControl|RegistryProviders|RunControl|ScriptControl|SimRecorder|SystemProviders|WorldProviders|GameSeamInterface)"
+    "Inspector/(CameraControl|ComponentReflection|EditProviders|EntityDescription|FightAutopilot|FightProviders|GameControls|GameInput|GameProviders|GameWorldEdit|GuiControl|InputControl|LevelControl|RegistryProviders|RunControl|ScriptControl|ServerProviders|SimRecorder|SystemProviders|WorldProviders|GameSeamInterface)"
     "Web/(WebPointer|FetchHttpClient|BrowserWebSocketClient|IndexedDbMapStore)"
 )
 list(JOIN OPENBLACK_SIM_IN_CLIENT_FOLDERS "|" OPENBLACK_SIM_IN_CLIENT_FOLDERS)

@@ -119,18 +119,21 @@ camera_zones::Zones CameraZoneSystem::FromFile(const exc::EXCZones& file)
 
 void CameraZoneSystem::Reset()
 {
+	ClearZones();
+	_fenceHits = 0;
+}
+
+void CameraZoneSystem::ClearZones()
+{
 	_zones = {};
 	_fileName.clear();
-	_fenceHits = 0;
 	PlaceForceField();
 }
 
 bool CameraZoneSystem::SetZones(std::string_view fileName)
 {
 	// The zones set before go first, so a file that can't be read leaves none
-	_zones = {};
-	_fileName.clear();
-	PlaceForceField();
+	ClearZones();
 	if (!Locator::resources::has_value() || !Locator::filesystem::has_value())
 	{
 		return false;

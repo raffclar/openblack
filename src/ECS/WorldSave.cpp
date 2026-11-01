@@ -87,6 +87,7 @@
 #include "ECS/Systems/MiracleFxSystemInterface.h"
 #include "ECS/Systems/ParticleRuleSystemInterface.h"
 #include "ECS/Systems/ParticleSystemInterface.h"
+#include "ECS/Systems/PlaygroundTripSystemInterface.h"
 #include "ECS/Systems/ReactionSystemInterface.h"
 #include "ECS/Systems/SavedStateInterface.h"
 #include "ECS/Systems/ScriptControlSystemInterface.h"
@@ -332,7 +333,7 @@ struct SavedSystem
 
 /// The systems that keep running state of their own, by the names of their sections. A load gives each system its state
 /// in this order: the map's lists first, then the systems that use them.
-constexpr std::array<SavedSystem, 43> k_SavedSystems {{
+constexpr std::array<SavedSystem, 44> k_SavedSystems {{
     {"map", &FindSystem<Locator::entitiesMap>},
     {"particles", &FindOldParticles, false},
     {"syncedParticles", &FindSystem<Locator::particleRuleSystem>},
@@ -376,6 +377,7 @@ constexpr std::array<SavedSystem, 43> k_SavedSystems {{
     {"cameraHelp", &FindSystem<Locator::cameraHelpSystem>},
     {"scriptHighlights", &FindSystem<Locator::scriptHighlightSystem>},
     {"cameraBookmarks", &FindSystem<Locator::cameraBookmarkSystem>},
+    {"playgroundTrip", &FindSystem<Locator::playgroundTripSystem>},
 }};
 
 gamesave::Chunk SystemsChunk(const entt::meta_ctx& reflection)
@@ -746,7 +748,17 @@ bool world_save::LoadRunningState(const entt::meta_ctx& reflection, const gamesa
 		try
 		{
 			const std::vector<uint8_t> bytes(script->begin(), script->end());
-			read = Locator::vm::value().RestoreState(bytes) == EXIT_SUCCESS && read;
+			auto& vm = Locator::vm::value();
+			read = vm.RestoreState(bytes) == EXIT_SUCCESS && read;
+			// A save from inside a native function, such as the save of a finished temple, makes the task call that
+			// native again with no arguments, as the game does
+			for (const auto& cut : vm.NativesCutBySave())
+			{
+				const auto task = vm.GetTasks().find(cut.task);
+				SPDLOG_LOGGER_INFO(
+				    Log(), "The save stopped the task {} ({}) inside the native {}: it calls it again with no arguments",
+				    cut.task, task != vm.GetTasks().end() ? task->second.name : "", vm.GetFunctions()->at(cut.native).name);
+			}
 		}
 		catch (const std::exception& error)
 		{

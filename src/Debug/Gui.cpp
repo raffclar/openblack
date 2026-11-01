@@ -82,6 +82,7 @@
 #include "PointerSpeedSlider.h"
 #include "Profiler.h"
 #include "Resources/ResourcesInterface.h"
+#include "StateHash.h"
 #include "Temple.h"
 #include "TempleVillagers.h"
 #include "TestbedScenarios.h"
@@ -149,6 +150,7 @@ std::unique_ptr<DebugGuiInterface> DebugGuiInterface::Create(graphics::RenderPas
 	debugWindows.emplace_back(new gui::Camera);
 	debugWindows.emplace_back(new Weather);
 	debugWindows.emplace_back(new Moon);
+	debugWindows.emplace_back(std::make_unique<StateHash>());
 	debugWindows.emplace_back(std::make_unique<AlignmentHistory>());
 	debugWindows.emplace_back(new Advisors);
 	debugWindows.emplace_back(new Magic);
@@ -367,6 +369,19 @@ void Gui::CloseWindow(std::string_view name) noexcept
 	}
 }
 
+std::string Gui::WindowTakingEvent(const SDL_Event& event) const noexcept
+{
+	// While a network game is live, no debug window takes an event
+	if (_networkDormant || _imgui == nullptr)
+	{
+		return {};
+	}
+	ImGui::SetCurrentContext(_imgui);
+	const auto taking =
+	    std::ranges::find_if(_debugWindows, [&event](const auto& window) { return window->WouldTakeEvent(event); });
+	return taking == _debugWindows.end() ? std::string {} : (*taking)->GetName();
+}
+
 bool Gui::PressButton(std::string_view window, std::span<const ButtonPathStep> path) noexcept
 {
 	if (ImGui::GetCurrentContext() == nullptr)
@@ -374,6 +389,16 @@ bool Gui::PressButton(std::string_view window, std::span<const ButtonPathStep> p
 		return false;
 	}
 	const auto* found = ImGui::FindWindowByName(std::string(window).c_str());
+	// A debug window that draws in more than one window of its own, such as the editor, names the window of the button
+	// as the first label of the path
+	if ((found == nullptr || !found->WasActive) && !path.empty())
+	{
+		if (const auto* part = std::get_if<std::string>(&path.front()); part != nullptr)
+		{
+			found = ImGui::FindWindowByName(part->c_str());
+			path = path.subspan(1);
+		}
+	}
 	if (found == nullptr || !found->WasActive)
 	{
 		return false;

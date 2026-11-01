@@ -42,6 +42,11 @@ bool DueToStart(const ecs::components::ComputerPlayer& player)
 	return player.switchedOn && !player.started;
 }
 
+glm::vec3 StartingHand(const std::optional<glm::vec3>& temple)
+{
+	return temple.value_or(k_HandWithoutTemple);
+}
+
 bool GetsCreature(const StartFacts& facts)
 {
 	return facts.temple && facts.pen && !facts.creature && facts.skirmish && !facts.network;

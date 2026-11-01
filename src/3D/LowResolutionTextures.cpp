@@ -23,6 +23,9 @@ namespace
 {
 /// The four bits of each channel of a texel of 16 bits
 constexpr std::array<uint32_t, 4> k_Channels4444 = {0xF000u, 0x0F00u, 0x00F0u, 0x000Fu};
+/// The five bits of each colour of a texel of 16 bits with one bit of alpha, and that bit
+constexpr std::array<uint32_t, 3> k_Channels555 = {0x7C00u, 0x03E0u, 0x001Fu};
+constexpr uint32_t k_OpaqueBit = 0x8000u;
 
 /// The pictures that the game loads from their files at half their size, by the names of their files in lower case.
 /// The atmosphere and the buttons of the front end are not in the list: the game keeps them at their full size.
@@ -86,7 +89,12 @@ std::optional<std::vector<uint8_t>> Halve(std::span<const uint8_t> picture, uint
 	return out;
 }
 
-std::optional<std::vector<uint16_t>> HalveByMean4444(std::span<const uint16_t> picture, uint16_t side)
+namespace
+{
+/// A picture of 16-bit texels at half its size: each texel the mean of a two by two square, each channel of masks
+/// summed, shifted down by 2 and kept to its own bits, then the bits of set added
+std::optional<std::vector<uint16_t>> HalveByMean(std::span<const uint16_t> picture, uint16_t side,
+                                                 std::span<const uint32_t> masks, uint32_t set)
 {
 	const auto texels = static_cast<size_t>(side) * side;
 	if (side < 2 || picture.size() != texels)
@@ -102,8 +110,8 @@ std::optional<std::vector<uint16_t>> HalveByMean4444(std::span<const uint16_t> p
 		{
 			const size_t at = ((row * 2) * side) + (column * 2);
 			const std::array<uint32_t, 4> square {picture[at], picture[at + 1], picture[at + side], picture[at + side + 1]};
-			uint32_t mean = 0;
-			for (const uint32_t mask : k_Channels4444)
+			uint32_t mean = set;
+			for (const uint32_t mask : masks)
 			{
 				uint32_t sum = 0;
 				for (const auto texel : square)
@@ -116,6 +124,17 @@ std::optional<std::vector<uint16_t>> HalveByMean4444(std::span<const uint16_t> p
 		}
 	}
 	return out;
+}
+} // namespace
+
+std::optional<std::vector<uint16_t>> HalveByMean4444(std::span<const uint16_t> picture, uint16_t side)
+{
+	return HalveByMean(picture, side, k_Channels4444, 0u);
+}
+
+std::optional<std::vector<uint16_t>> HalveByMean555Opaque(std::span<const uint16_t> picture, uint16_t side)
+{
+	return HalveByMean(picture, side, k_Channels555, k_OpaqueBit);
 }
 
 } // namespace openblack::low_resolution_textures

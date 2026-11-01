@@ -204,10 +204,11 @@ std::vector<Step> creature_mind::CastFireballAt(uint32_t magicType, uint32_t ges
 	return agenda;
 }
 
-std::vector<Step> creature_mind::CastFoodAt(uint32_t magicType, uint32_t gesture, uint32_t object)
+std::vector<Step> creature_mind::CastFoodAt(uint32_t magicType, uint32_t gesture, uint32_t object, bool needFlag)
 {
 	std::vector<Step> agenda;
-	agenda.push_back(GoNear(object, k_FoodCastDistance, creature_face::Cue::Compassion));
+	agenda.push_back(
+	    GoNear(object, needFlag ? k_FoodCastNeedFlagDistance : k_FoodCastDistance, creature_face::Cue::Compassion));
 	agenda.push_back(TurnToFace(object, creature_face::Cue::Compassion));
 	if (gesture != 0)
 	{

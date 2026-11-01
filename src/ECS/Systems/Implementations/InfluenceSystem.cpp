@@ -15,6 +15,7 @@
 
 #include <algorithm>
 #include <chrono>
+#include <iterator>
 #include <optional>
 #include <unordered_map>
 #include <utility>
@@ -36,6 +37,7 @@
 #include "ECS/Components/Physics.h"
 #include "ECS/Components/Player.h"
 #include "ECS/Components/PlayerRelations.h"
+#include "ECS/Components/ReportedHand.h"
 #include "ECS/Components/Temple.h"
 #include "ECS/Components/Town.h"
 #include "ECS/Components/Transform.h"
@@ -53,8 +55,10 @@
 #include "ECS/Systems/HandSystemInterface.h"
 #include "ECS/Systems/LandSystemInterface.h"
 #include "ECS/Systems/PlayerSystemInterface.h"
+#include "ECS/Systems/PlaygroundTripSystemInterface.h"
 #include "ECS/Systems/SoundTagSystemInterface.h"
 #include "ECS/Systems/TimeSystemInterface.h"
+#include "ECS/Systems/WorshipSiteSystemInterface.h"
 #include "InfoConstants.h"
 #include "Locator.h"
 #include "PlayerSlots.h"
@@ -212,16 +216,24 @@ std::optional<glm::vec3> HandPosition()
 	return Locator::handSystem::has_value() ? Locator::handSystem::value().GetDrawnHandPosition() : std::nullopt;
 }
 
-/// Where a player's hand is in the world, as the reports of the player put it. The turns measure from here. Each god
-/// with a hand has one: the first player's, and each god of a network game. The computer's gods have no hand in the
-/// world yet, so theirs keep nothing past the border.
-std::optional<glm::vec3> HandOf(PlayerNames player)
+/// The point under the cursor that the last hand report of a player picked, none before the first report or for a
+/// player with no hands
+std::optional<glm::vec3> ReportedPickOf(PlayerNames player)
 {
 	if (!Locator::handSystem::has_value())
 	{
 		return std::nullopt;
 	}
-	return Locator::handSystem::value().GetHandPositionsOf(player)[static_cast<size_t>(HandSystemInterface::Side::Left)];
+	const auto hands = Locator::handSystem::value().GetHandsOf(player);
+	if (!hands.has_value())
+	{
+		return std::nullopt;
+	}
+	const auto& registry = Locator::entitiesRegistry::value();
+	const auto hand = (*hands)[static_cast<size_t>(HandSystemInterface::Side::Left)];
+	const auto* reported = registry.Valid(hand) ? registry.TryGet<const ReportedHand>(hand) : nullptr;
+	return reported != nullptr && reported->collidePoint != glm::vec3(0.0f) ? std::optional(reported->collidePoint)
+	                                                                        : std::nullopt;
 }
 
 /// The player whose hand this computer moves and draws. Only the frames of this computer ask.
@@ -266,8 +278,9 @@ influence::Ground LandHeight()
 
 void InfluenceSystem::SaveState(reflection::BinaryWriter& out) const
 {
+	// Keep the old place of a removed field, so the saved layout does not change.
+	reflection::Save(out, uint32_t {0});
 	// Each circle of the borders keeps its place, its size and its hidden columns. Its curtain is made again from the land.
-	reflection::Save(out, _turn);
 	reflection::Save(out, _circles.size());
 	for (const auto& circle : _circles)
 	{
@@ -289,7 +302,9 @@ void InfluenceSystem::SaveState(reflection::BinaryWriter& out) const
 
 bool InfluenceSystem::LoadState(reflection::BinaryReader& in)
 {
-	reflection::Load(in, _turn);
+	// Keep the old place of a removed field, so the saved layout does not change.
+	uint32_t removedField = 0;
+	reflection::Load(in, removedField);
 	size_t count = 0;
 	reflection::Load(in, count);
 	_circles.clear();
@@ -348,7 +363,8 @@ void InfluenceSystem::ProcessTownInfluence(entt::entity entity)
 			buildings += AbodeInfluence(abode, data, tribe);
 		}
 	});
-	const float base = TownBaseInfluence();
+	// A town that a scaffold founded reaches nothing with no buildings
+	const float base = town.zeroBaseInfluence ? 0.0f : TownBaseInfluence();
 	auto& influence =
 	    registry.AnyOf<TownInfluence>(entity) ? registry.Get<TownInfluence>(entity) : registry.Assign<TownInfluence>(entity);
 	influence.radius = (base + buildings) * Globals().townInfluenceMultiplier;
@@ -475,7 +491,6 @@ void InfluenceSystem::ProcessTurn(uint32_t turn)
 	{
 		DrawBorders();
 	}
-	ProcessVirtualInfluence(turn);
 }
 
 bool InfluenceSystem::Shielded(PlayerNames player, const glm::vec3& point)
@@ -518,6 +533,19 @@ float InfluenceSystem::InfluencePower(PlayerNames player) const
 	return noted != nullptr ? noted->power : 0.0f;
 }
 
+std::optional<float> InfluenceSystem::RelativeInfluencePower(PlayerNames player) const
+{
+	// All the players add their noted powers in the order of their numbers
+	std::vector<std::pair<PlayerNames, float>> players;
+	Locator::entitiesRegistry::value().Each<const Player, const PlayerInfluencePower>(
+	    [&players](const Player& each, const PlayerInfluencePower& noted) { players.emplace_back(each.name, noted.power); });
+	std::ranges::sort(players, {}, &std::pair<PlayerNames, float>::first);
+	std::vector<float> powers;
+	powers.reserve(players.size());
+	std::ranges::transform(players, std::back_inserter(powers), &std::pair<PlayerNames, float>::second);
+	return influence_rules::RelativeInfluencePower(InfluencePower(player), powers);
+}
+
 void InfluenceSystem::NoteInfluencePower(PlayerNames player)
 {
 	auto& registry = Locator::entitiesRegistry::value();
@@ -546,33 +574,32 @@ void InfluenceSystem::NoteInfluencePower(PlayerNames player)
 	player_statistics::CountInfluence(registry, player, noted->power);
 }
 
-void InfluenceSystem::ProcessVirtualInfluence(uint32_t turn)
+void InfluenceSystem::ProcessVirtualInfluence(PlayerNames player, uint32_t turn)
 {
-	_turn = turn;
-	if (!Locator::playerSystem::has_value() || !Locator::infoConstants::has_value())
+	if (player == PlayerNames::NEUTRAL || !Locator::playerSystem::has_value() || !Locator::infoConstants::has_value())
 	{
 		return;
 	}
-	// Every player's hand keeps a share of their influence past the border, the computer's gods' too
-	std::vector<std::pair<entt::entity, PlayerNames>> players;
-	Locator::entitiesRegistry::value().Each<const Player>(
-	    [&players](entt::entity entity, const Player& player) { players.emplace_back(entity, player.name); });
-	for (const auto& [entity, player] : players)
+	const auto entity = PlayerEntityOf(player);
+	if (!entity.has_value())
 	{
-		if (const auto hand = HandOf(player); hand.has_value())
-		{
-			ProcessVirtualInfluence(entity, player, *hand, turn);
-		}
+		return;
 	}
+	// The hand of every god keeps a share of the god's influence past the border, also the hand of a god that no person
+	// plays. The share measures from the point that the god's hand reports picked. A god that no person plays sends no
+	// reports, so its share measures from the origin of the world.
+	const auto hand =
+	    virtual_influence::TurnHandPoint(Locator::playerSystem::value().IsHumanPlayer(player), ReportedPickOf(player));
+	ProcessVirtualInfluence(*entity, player, hand, turn);
 }
 
 void InfluenceSystem::HeldThingUsedOnLand(PlayerNames player)
 {
-	if (!Locator::infoConstants::has_value())
+	if (!Locator::infoConstants::has_value() || !Locator::time::has_value())
 	{
 		return;
 	}
-	// Measured from where the hand was at the last turn
+	// Measured from where the hand was at the last turn, at the game turn now
 	const auto* state = VirtualStateOf(player);
 	const auto entity = PlayerEntityOf(player);
 	if (state == nullptr || !state->turnHand.has_value() || !entity.has_value())
@@ -580,7 +607,7 @@ void InfluenceSystem::HeldThingUsedOnLand(PlayerNames player)
 		return;
 	}
 	const auto hand = *state->turnHand;
-	ProcessVirtualInfluence(*entity, player, hand, _turn);
+	ProcessVirtualInfluence(*entity, player, hand, Locator::time::value().GetTurn());
 }
 
 void InfluenceSystem::ProcessVirtualInfluence(entt::entity entity, PlayerNames player, glm::vec3 hand, uint32_t turn)
@@ -593,15 +620,19 @@ void InfluenceSystem::ProcessVirtualInfluence(entt::entity entity, PlayerNames p
 	// Only the player's own influence counts here, not what the hand keeps
 	const bool inInfluence = !shielded && PlayerRawInfluence(player, hand) > 0.0f;
 	const auto before = virtualInfluence.state;
-	// TODO(raffclar): the chants waiting at the player's worship sites, which slow the waning and are used up by it, once
-	// worship sites gather chants; until then there are none
+	// Out of its influence, the hand uses the chants of the player's worship sites. They slow the waning. The player has
+	// one hand, so the hand gets all of the chants.
+	const float chants =
+	    virtual_influence::UsesChants(virtualInfluence.state, shielded, inInfluence) && Locator::worshipSiteSystem::has_value()
+	        ? Locator::worshipSiteSystem::value().TakeChantsForVirtualInfluence(player, 1)
+	        : 0.0f;
 	const virtual_influence::TurnInputs inputs {
 	    .hand = hand,
 	    .turn = turn,
 	    .handShielded = shielded,
 	    .handInInfluence = inInfluence,
 	    .influencePower = InfluencePower(player),
-	    .chants = 0.0f,
+	    .chants = chants,
 	};
 	// Back in influence, the next trip out has a new mana path
 	if (virtual_influence::ManaPathEnds(virtualInfluence.state, inputs))
@@ -782,6 +813,12 @@ bool InfluenceSystem::CrossBorders(const glm::vec3& hand)
 	return crossed;
 }
 
+bool InfluenceSystem::InfluenceEverywhere()
+{
+	// On the trip to the Gods' Playground, every player's influence covers the whole land, under a shield too
+	return Locator::playgroundTripSystem::has_value() && Locator::playgroundTripSystem::value().InfluenceEverywhere();
+}
+
 float InfluenceSystem::PlayerInfluence(PlayerNames player, const map_coords::MapCoords& position) const
 {
 	return WithAllies(player, position, PlayerOwnInfluence(player, position));
@@ -825,6 +862,10 @@ float InfluenceSystem::WithAllies(PlayerNames player, const map_coords::MapCoord
 
 float InfluenceSystem::PlayerOwnInfluence(PlayerNames player, const map_coords::MapCoords& position) const
 {
+	if (InfluenceEverywhere())
+	{
+		return 1.0f;
+	}
 	if (const auto* state = VirtualStateOf(player); state != nullptr)
 	{
 		// The questions of a game turn measure from where the hand was at the turn; between turns this computer's
@@ -851,6 +892,10 @@ float InfluenceSystem::PlayerOwnInfluence(PlayerNames player, const map_coords::
 
 float InfluenceSystem::HandPointInfluence(PlayerNames player, const map_coords::MapCoords& hand) const
 {
+	if (InfluenceEverywhere())
+	{
+		return 1.0f;
+	}
 	// The place asked is the hand's own, so the hand is inside while it keeps anything
 	if (const auto* state = VirtualStateOf(player); state != nullptr && !Shielded(player, hand))
 	{
@@ -878,6 +923,11 @@ float InfluenceSystem::PlayerRawInfluence(PlayerNames player, const map_coords::
 	        Locator::time::has_value() && Locator::time::value().IsNetworkGame() && !testbed, hasTemple))
 	{
 		return 0.0f;
+	}
+	// On the trip to the Gods' Playground the player has full influence at each point
+	if (InfluenceEverywhere())
+	{
+		return 1.0f;
 	}
 	// Under another player's shield a player has no influence at all, nor within an anti-influence a script made for them
 	if (Shielded(player, position))

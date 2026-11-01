@@ -9,8 +9,10 @@
 
 #include <cmath>
 
+#include <numbers>
 #include <optional>
 
+#include <glm/geometric.hpp>
 #include <gtest/gtest.h>
 
 #include "Magic/HandMotion.h"
@@ -284,4 +286,30 @@ TEST(MiracleVisuals, TheHandSpinsAMiracleByHowItsWayTurns)
 		StepHandSpin(straight, {0.5f, 0.0f, 0.0f}, {30.0f, 0.0f, 0.0f}, k_Step);
 	}
 	EXPECT_NEAR(straight.spin, 0.0f, 1e-5f);
+}
+
+TEST(MiracleVisuals, APhialKeepsTheSizeOfItsLastDraw)
+{
+	// The big phial draws its growing copy last, the small phial draws the whole phial last
+	EXPECT_EQ(PhialLastDrawSize(2, 0.25f), 1.25f);
+	EXPECT_EQ(PhialLastDrawSize(1, 0.25f), 1.0f);
+	EXPECT_EQ(PhialLastDrawSize(0, 0.25f), 1.0f);
+}
+
+TEST(MiracleVisuals, TheSeedModelStandsAboveTheMiddleTurnedAndScaled)
+{
+	const glm::vec3 middle {10.0f, 5.0f, -3.0f};
+	const auto placed =
+	    SeedModelPlacement(middle, -0.5f, 2.0f, 0.6f, std::numbers::pi_v<float> / 2.0f, 1.25f, glm::vec3(1.0f, 1.0f, 2.0f));
+	// The origin of the model is the middle, raised by the model height at the drawn scale
+	const auto origin = glm::vec3(placed * glm::vec4(0.0f, 0.0f, 0.0f, 1.0f));
+	EXPECT_NEAR(origin.x, 10.0f, k_Epsilon);
+	EXPECT_NEAR(origin.y, 5.0f - 0.3f, k_Epsilon);
+	EXPECT_NEAR(origin.z, -3.0f, k_Epsilon);
+	// The seed scale, the drawn scale and the size scale a point, the shape scales each axis, then the spin turns it
+	const auto up = glm::vec3(placed * glm::vec4(0.0f, 1.0f, 0.0f, 0.0f));
+	EXPECT_NEAR(up.y, 2.0f * 0.6f * 1.25f, k_Epsilon);
+	const auto through = glm::vec3(placed * glm::vec4(0.0f, 0.0f, 1.0f, 0.0f));
+	EXPECT_NEAR(glm::length(through), 2.0f * 0.6f * 1.25f * 2.0f, k_Epsilon);
+	EXPECT_NEAR(std::abs(through.x), glm::length(through), k_Epsilon);
 }

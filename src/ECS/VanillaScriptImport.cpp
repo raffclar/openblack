@@ -11,6 +11,7 @@
 
 #include <cstring>
 
+#include <algorithm>
 #include <span>
 #include <string_view>
 
@@ -205,6 +206,42 @@ std::optional<PlayerNames> vanilla_script_import::HeartPlayer(const gamesave::Va
 		}
 	}
 	return std::nullopt;
+}
+
+std::vector<vanilla_script_import::ImportedTemple> vanilla_script_import::ReadTemples(const gamesave::VanillaWorld& world)
+{
+	std::vector<ImportedTemple> temples;
+	for (const auto* citadel : world.OfType(gamesave::VanillaType::Citadel))
+	{
+		const auto player = PlayerOfRecord(world, world.Ref(*citadel, "owner").value_or(0));
+		if (!player.has_value())
+		{
+			continue;
+		}
+		ImportedTemple temple {.player = *player, .citadel = citadel->number};
+		temple.heart = world.Ref(*citadel, "heart").value_or(0);
+		if (const auto* heart = temple.heart != 0 ? world.Record(temple.heart) : nullptr;
+		    heart != nullptr && heart->Is(gamesave::VanillaType::CitadelHeart))
+		{
+			temple.built = world.Float(*heart, "built").value_or(1.0f);
+			temple.life = world.Float(*heart, "life").value_or(1.0f);
+			const auto site = world.Ref(*heart, "buildingSite").value_or(0);
+			if (const auto* record = site != 0 ? world.Record(site) : nullptr;
+			    record != nullptr && record->Is(gamesave::VanillaType::CitadelBuildingSite))
+			{
+				temple.site = site;
+			}
+			temple.lastHitTurn = world.Word(*heart, "heartLastHitTurn").value_or(0);
+			temple.town = world.Ref(*heart, "heartTown").value_or(0);
+			temple.destroying = world.Byte(*heart, "heartDestroying").value_or(0) != 0;
+			temple.destructionClock = world.Float(*heart, "heartDestructionClock").value_or(0.0f);
+			temple.destructionBeamClock = world.Float(*heart, "heartDestructionBeamClock").value_or(0.0f);
+			temple.beamTarget = world.Ref(*heart, "heartBeamTarget").value_or(0);
+			temple.beamTurn = world.Word(*heart, "heartBeamTurn").value_or(0);
+		}
+		temples.push_back(temple);
+	}
+	return temples;
 }
 
 std::optional<FileTable> vanilla_script_import::ReadScriptTable(const gamesave::VanillaWorld& world)

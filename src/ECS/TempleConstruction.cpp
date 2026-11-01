@@ -44,6 +44,7 @@
 #include "ECS/Components/Town.h"
 #include "ECS/Components/Transform.h"
 #include "ECS/Components/VillageTotem.h"
+#include "ECS/Components/Workshop.h"
 #include "ECS/Components/WorshipSite.h"
 #include "ECS/Creches.h"
 #include "ECS/GameEndConditions.h"
@@ -202,8 +203,15 @@ void CallForLeftoverWood(entt::entity pile)
 
 namespace
 {
+/// Whether the pile is the wood pile of the workshop at the building
+bool IsWorkshopPile(entt::entity building, entt::entity pile)
+{
+	const auto* workshop = Entities().TryGet<const Workshop>(building);
+	return workshop != nullptr && workshop->woodPile == pile;
+}
+
 /// A town's site at the building has closed: its workers are let go, each told to find something else to do, and of its
-/// piles of wood, those with wood in them stay on as piles of their own and the empty ones go
+/// piles of wood, those with wood in them stay on as piles of their own and the empty ones go. A workshop keeps its pile.
 void SiteClosed(entt::entity building, const BuildingSite& site)
 {
 	auto& registry = Entities();
@@ -222,13 +230,15 @@ void SiteClosed(entt::entity building, const BuildingSite& site)
 		{
 			continue;
 		}
-		switch (building_site::WhenSiteCloses(registry.Get<const Pot>(pile).amount))
+		switch (building_site::WhenSiteCloses(registry.Get<const Pot>(pile).amount, IsWorkshopPile(building, pile)))
 		{
 		case building_site::LeftoverPile::Remove:
 			world_objects::Remove(pile);
 			break;
 		case building_site::LeftoverPile::CallForWood:
 			CallForLeftoverWood(pile);
+			break;
+		case building_site::LeftoverPile::Keep:
 			break;
 		}
 	}
@@ -374,6 +384,22 @@ void Finish(entt::entity building)
 		creches::StartsWorking(building);
 		// A finished storage pit starts working, and its town lets go of its temporary piles
 		StoragePitStartsWorking(building);
+		// A finished miracle dispenser of a town counts as put up for mending only while it is not whole, as an abode
+		if (auto* dispenser = registry.TryGet<SpellDispenser>(building); dispenser != nullptr && TownOf(building).has_value())
+		{
+			dispenser->putUpForMending = world_objects::LifeOf(building) < 1.0f;
+			// Its town's player counts one more building finished, of its kind. In a network game it counts as a house
+			// built, as each building that is not a wonder does.
+			const auto owner = world_objects::PlayerOf(building);
+			if (const auto* info = world_objects::AbodeInfoOf(building); owner.has_value() && info != nullptr)
+			{
+				player_statistics::CountBuilt(registry, *owner, info->abodeType);
+			}
+			if (owner.has_value() && Locator::gameEndSystem::has_value())
+			{
+				Locator::gameEndSystem::value().AddToCondition(owner, game_end::Condition::HousesBuilt, 1);
+			}
+		}
 		// A finished building of a town counts as put up for mending only while it isn't whole. No one is moved in: the
 		// homeless and the crowded find it when they next look for a better home.
 		if (auto* abode = registry.TryGet<Abode>(building); abode != nullptr && TownOf(building).has_value())
@@ -405,8 +431,9 @@ void Finish(entt::entity building)
 				Locator::wonderSystem::value().Built(building);
 			}
 		}
-		// A finished building of a town gets its footpath from the town's storage pit
-		if (registry.AllOf<Abode>(building) && TownOf(building).has_value() && Locator::footpathSystem::has_value())
+		// A finished building or miracle dispenser of a town gets its footpath from the town's storage pit
+		if (registry.AnyOf<Abode, SpellDispenser>(building) && TownOf(building).has_value() &&
+		    Locator::footpathSystem::has_value())
 		{
 			Locator::footpathSystem::value().BuildingWorking(building);
 		}
@@ -450,8 +477,9 @@ void Repaired(entt::entity building)
 	{
 		Locator::gameEndSystem::value().BuildingWorks(building);
 	}
-	// A repaired building of a town gets another footpath from the town's storage pit, as when it was first built
-	if (registry.AllOf<Abode>(building) && Locator::footpathSystem::has_value())
+	// A repaired building or miracle dispenser of a town gets another footpath from the town's storage pit, as when it
+	// was first built
+	if (registry.AnyOf<Abode, SpellDispenser>(building) && Locator::footpathSystem::has_value())
 	{
 		Locator::footpathSystem::value().BuildingWorking(building);
 	}
@@ -501,7 +529,11 @@ float construction::PlannedTempleReach(entt::entity plan)
 	return PlannedReach(Entities().Get<const Transform>(plan));
 }
 
-entt::entity construction::StartPlannedTemple(entt::entity plan, float siteDesire)
+namespace
+{
+/// A planned temple goes up where it was planned, with as much of it built as given. It is no longer among its town's
+/// plans, and the plan goes. The temple.
+entt::entity PlaceTemple(entt::entity plan, float built)
 {
 	auto& registry = Entities();
 	const auto planned = registry.Get<const PlannedTemple>(plan);
@@ -512,9 +544,9 @@ entt::entity construction::StartPlannedTemple(entt::entity plan, float siteDesir
 	{
 		std::erase(registry.Get<Town>(town->second).planned, plan);
 	}
-	// The temple's heart goes up where it was planned, with nothing of it built, and a site for its builders
+	// The temple's heart goes up where it was planned
 	const auto temple =
-	    archetypes::CitadelArchetype::Create(transform.position, OwnerOf(planned), planned.yAngle, transform.scale, 0.0f);
+	    archetypes::CitadelArchetype::Create(transform.position, OwnerOf(planned), planned.yAngle, transform.scale, built);
 	registry.Get<Temple>(temple).town = planned.townId;
 	// The temple and its heart take the exact map position of the plan
 	const auto place = thing_map_place::Of(registry, plan);
@@ -526,8 +558,21 @@ entt::entity construction::StartPlannedTemple(entt::entity plan, float siteDesir
 	// Move the footpaths of the plan to the heart. Then remove the plan.
 	villager_footpath::HandOverFootpaths(plan, temple);
 	registry.Destroy(plan);
+	return temple;
+}
+} // namespace
+
+entt::entity construction::StartPlannedTemple(entt::entity plan, float siteDesire)
+{
+	// Nothing of the temple is built, and a site wants builders for it
+	const auto temple = PlaceTemple(plan, 0.0f);
 	OpenSite(temple, siteDesire);
 	return temple;
+}
+
+entt::entity construction::RaisePlannedTemple(entt::entity plan)
+{
+	return PlaceTemple(plan, 1.0f);
 }
 
 float construction::BuiltOf(entt::entity object)
@@ -706,7 +751,7 @@ void construction::OpenSite(entt::entity building, float desire)
 	{
 		Locator::townSystem::value().MarkDesiresChanged(town);
 	}
-	if (registry.AllOf<Temple>(building))
+	if (registry.AnyOf<Temple, Workshop>(building))
 	{
 		MakeSitePiles(building, site);
 	}
@@ -724,11 +769,15 @@ bool construction::OpenSiteForTown(entt::entity building, entt::entity town)
 		return true;
 	}
 	// The town opens a new site at it, wanting it built no more than its other building; its pile of wood is made when
-	// the first wood comes
+	// the first wood comes. A workshop's site uses the wood pile of the workshop at once.
 	auto& site = building_site_list::Open(SitesToOpenAt(building), town);
 	NumberSite(site, town);
 	site.repair = IsBuilt(building);
 	site.places = PlacesRound(building);
+	if (registry.AllOf<Workshop>(building))
+	{
+		MakeSitePiles(building, site);
+	}
 	// A site added to a town changes what it wants
 	if (Locator::townSystem::has_value())
 	{
@@ -749,6 +798,15 @@ void construction::OpenWorshipSite(entt::entity site, entt::entity town, float d
 void construction::MakeSitePiles(entt::entity building, BuildingSite& site)
 {
 	auto& registry = Entities();
+	// A workshop's site keeps its wood on the wood pile of the workshop. Thus the wood is the workshop's wood.
+	if (registry.AllOf<Workshop>(building))
+	{
+		if (Locator::workshopSystem::has_value())
+		{
+			site.piles.front() = Locator::workshopSystem::value().WoodPileOf(building);
+		}
+		return;
+	}
 	// A worship site's one pile stands at a point of its model, turned as the site is
 	if (const auto* worship = registry.TryGet<const WorshipSite>(building))
 	{

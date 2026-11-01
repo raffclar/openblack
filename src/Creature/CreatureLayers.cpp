@@ -161,6 +161,23 @@ size_t creature_layers::TimingAnimation(const BodyAction& body)
 	return body.kind == BodyAction::Kind::Once && body.kiss ? creature_kiss::k_HighKiss : CurrentAnimation(body);
 }
 
+size_t creature_layers::ShareAnimation(const BodyAction& body)
+{
+	switch (body.kind)
+	{
+	case BodyAction::Kind::Once:
+		return body.kiss ? animations::k_Stand : body.animations[0];
+	case BodyAction::Kind::Sequence:
+		return body.animations[static_cast<size_t>(BodyAction::Phase::Loop)];
+	case BodyAction::Kind::Dance:
+		return body.phase == BodyAction::Phase::Start ? animations::k_Stand
+		                                              : body.animations[static_cast<size_t>(BodyAction::Phase::Loop)];
+	case BodyAction::Kind::Stand:
+	default:
+		return animations::k_Stand;
+	}
+}
+
 std::optional<BodyAction> creature_layers::PlayOnce(const BodyAction& body, size_t animation, bool mirrored)
 {
 	if (IsPlaying(body))
@@ -349,7 +366,8 @@ BodyAction creature_layers::AdvanceBody(BodyAction body, float milliseconds, std
 			}
 			// Told to end while still starting, it goes from its start straight into its end
 			body.phase = body.endWanted ? BodyAction::Phase::End : BodyAction::Phase::Loop;
-			body.timeMs = 0.0f;
+			// A held loop, such as a faint, stays at the last frame of its clip from the turn that its start ends
+			body.timeMs = body.phase == BodyAction::Phase::Loop && body.holdLoop ? std::max(length - 1.0f, 0.0f) : 0.0f;
 		}
 		break;
 	case BodyAction::Phase::Loop:

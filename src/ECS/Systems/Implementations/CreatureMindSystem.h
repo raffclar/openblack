@@ -105,6 +105,7 @@ public:
 	void FightOrdered(entt::entity creature, entt::entity asker) override;
 	void ObeyEnded(entt::entity creature, entt::entity asker) override;
 	void AbandonAction(entt::entity creature) override;
+	void GiveUpAction(entt::entity creature) override;
 	void FailAction(entt::entity creature) override;
 	bool ForceDesireOn(entt::entity creature, creature_desires::Desire desire, entt::entity thing) override;
 	void ForceCatch(entt::entity creature, entt::entity object) override;
@@ -191,9 +192,11 @@ private:
 	void StepSwap(entt::entity creature, const creature_mind::Commands& commands);
 	/// Remembers what the idle mind has started, for feedback to be credited to, and finishes plans that are done
 	void FollowAgenda(entt::entity creature, components::CreatureMindState& mind);
-	/// Carries out a plan in place of what the creature was doing; returns whether it could
+	/// Carries out a plan in place of what the creature was doing; returns whether it could. When fightBodyEndsAgain is
+	/// true, the stop for the plan ends the fight of the body again after a fight that is over (see
+	/// CreatureFightSystemInterface::CallOffForPlan). The best plan that the creature chooses and a copied deed do this.
 	bool Adopt(entt::entity creature, components::CreatureMindState& mind, const creature_planner::Plan& plan,
-	           const creature_plan_actions::Situation& situation);
+	           const creature_plan_actions::Situation& situation, bool fightBodyEndsAgain);
 	/// Gives up the plan carried out, if any
 	static void Abandon(components::CreatureMindState& mind);
 	/// A joint action: the asker asks another creature to be its partner, and the two become partners when it agrees;
@@ -260,6 +263,9 @@ private:
 	bool LetGoOfHeld(entt::entity creature, components::CreatureMindState& mind, creature_mind::LetGo how);
 	/// GameRand(range): a draw on the synced seed of the game from 0 to range - 1
 	uint32_t Random(uint32_t range);
+	/// The executor of an action of the tables, none when the action has no executor. The names of the actions find their
+	/// executors one time, when the tables are made.
+	[[nodiscard]] const creature_plan_actions::Executor* ExecutorOf(uint32_t action);
 	/// What an agenda needs to know of the creature itself: the camera's position, whether it has a player, whether a
 	/// script controls it, its radius, and a chance for what varies
 	void Situate(entt::entity creature, creature_plan_actions::Situation& situation);
@@ -392,8 +398,12 @@ private:
 	/// Gives the creature a plan for its fight with the other creature, unless a script controls the creature
 	void FightWith(entt::entity creature, entt::entity other, const ForcedPlan& plan);
 	/// A new plan stops the fight of the creature out of its duel. Before the duel the fight stops for both creatures, with
-	/// no winner. After the duel the creature and its partner stop with no response. A fight in its duel continues.
-	static void EndFightForPlan(entt::entity creature);
+	/// no winner. After the duel the creature and its partner stop with no response. A fight in its duel continues. When
+	/// fightBodyEndsAgain is true, the stop ends the fight of the body again after a fight that is over.
+	static void EndFightForPlan(entt::entity creature, bool fightBodyEndsAgain = false);
+	/// The plan stops the fight of the creature: a call-off. When fightBodyEndsAgain is true, the stop also ends the fight
+	/// of the body again after a fight that is over. The fights must be in the locator.
+	static void StopFightForPlan(entt::entity creature, bool fightBodyEndsAgain);
 	/// The whole thing that a desire is about when the leash shows the creature a thing: the whole thing that the shown
 	/// thing is part of, when the desire can be about it
 	[[nodiscard]] std::optional<ChosenActivity> ShownActivity(entt::entity creature, components::CreatureMindState& mind,
@@ -524,6 +534,11 @@ private:
 	void WalkOn(entt::entity creature, const components::CreatureMindState& mind);
 	/// What waited after the reaction on the leash: the creature casts the miracle at the thing it found
 	void CastOnLeash(entt::entity creature, components::CreatureMindState& mind);
+	/// The leash tied the creature to a need flag of a worship site: it feeds the site, forced, as an order
+	void FeedWorshipSite(entt::entity creature, components::CreatureMindState& mind);
+	/// The altar of the site of a need flag, or none when the flag or its site is gone. The game keeps a need flag at the
+	/// place of its altar.
+	[[nodiscard]] static entt::entity FeedSiteAltar(entt::entity flag);
 	/// Each turn: the mark of a creature that clears its way stays while the plan that clears it runs. The movement of
 	/// the creature gets the mark.
 	void StepClearingWay(entt::entity creature, components::CreatureMindState& mind);
@@ -585,6 +600,8 @@ private:
 	std::optional<entt::entity> _walkContinuesFor;
 	/// The game's tables for the minds, taken once the game's data is loaded
 	std::optional<creature_mind_tables::Tables> _tables;
+	/// The executor of each action of the tables, in the order of the actions
+	std::vector<const creature_plan_actions::Executor*> _executors;
 	/// The creatures whose minds continue to think after the first part of their own turns, until the second part
 	std::vector<entt::entity> _thinking;
 	/// The creatures whose minds do the step of their agendas after the second part, until the last part

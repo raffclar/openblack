@@ -537,7 +537,7 @@ Json openblack::inspector::DesireItems(const creature_desires::Desires& desires,
 {
 	std::vector<size_t> order(desires.desires.size());
 	std::iota(order.begin(), order.end(), size_t {0});
-	std::erase_if(order, [&desires](size_t i) { return !desires.desires.at(i).activated; });
+	std::erase_if(order, [&desires](size_t i) { return !desires.IsActivated(i); });
 	std::ranges::stable_sort(
 	    order, [&desires](size_t a, size_t b) { return desires.desires.at(a).value > desires.desires.at(b).value; });
 	Json items = Json::array();
@@ -1556,6 +1556,7 @@ std::unique_ptr<ProviderInterface> openblack::inspector::MakeTownProvider(WorldS
 				                  }
 				                  siteIcons.push_back(Json {{"id", ToId(icon)},
 				                                            {"seed", static_cast<int>(worship.seed)},
+				                                            {"place", worship.place},
 				                                            {"charging", worship.charging},
 				                                            {"store", worship.store},
 				                                            {"seeds_out", std::move(seedsOut)}});

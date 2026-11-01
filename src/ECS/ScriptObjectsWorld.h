@@ -81,6 +81,8 @@ public:
 	virtual void ReleaseAnimal(entt::entity animal) = 0;
 	/// The object goes from the world at once
 	virtual void Delete(entt::entity object) = 0;
+	/// A puzzle game stays when the scripts stop, but its pieces go. False for a thing that is not a puzzle game.
+	virtual bool DeletePuzzlePieces(entt::entity /*object*/) { return false; }
 	/// A flock, a dance or a town: something scripts fill with other things
 	[[nodiscard]] virtual bool IsContainer(entt::entity object) const = 0;
 	/// Every member leaves a flock or a dance, and one a script controls waits for the script: the members that left. A

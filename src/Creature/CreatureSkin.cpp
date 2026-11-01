@@ -13,6 +13,7 @@
 #include <cmath>
 
 #include <algorithm>
+#include <array>
 #include <string>
 
 using namespace openblack;
@@ -22,6 +23,7 @@ namespace
 {
 /// The axis is scaled to 256 steps before it is capped at the most a weight can be
 constexpr float k_WeightSteps = 256.0f;
+constexpr std::array<uint32_t, 2> k_Sides {creature_tattoo::k_SkinSize, creature_tattoo::k_LowDetailSkinSize};
 } // namespace
 
 entt::id_type creature_skin::MeshFileId(std::string_view meshName)
@@ -78,7 +80,10 @@ void creature_skin::Compose(std::span<uint16_t> out, std::span<const uint16_t> b
 	{
 		std::ranges::copy(base, out.begin());
 	}
-	if (layers.art == nullptr || out.size() != static_cast<size_t>(creature_tattoo::k_SkinSize) * creature_tattoo::k_SkinSize)
+	// The skins are 256 texels along each side, or 128 at the two lowest detail levels
+	const auto side = std::ranges::find_if(
+	    k_Sides, [&out](uint32_t candidate) { return out.size() == static_cast<size_t>(candidate) * candidate; });
+	if (layers.art == nullptr || side == k_Sides.end())
 	{
 		return;
 	}
@@ -98,21 +103,21 @@ void creature_skin::Compose(std::span<uint16_t> out, std::span<const uint16_t> b
 			{
 				continue;
 			}
-			creature_tattoo::Paint(out, *mask, slot.colour, site);
+			creature_tattoo::Paint(out, *side, *mask, slot.colour, site);
 		}
 	}
 	for (const auto& wound : layers.marks.wounds)
 	{
 		if (wound.skin == layers.skinIndex)
 		{
-			creature_marks::PaintWound(out, layers.art->damage, wound);
+			creature_marks::PaintWound(out, *side, layers.art->damage, wound);
 		}
 	}
 	for (const auto& blood : layers.marks.blood)
 	{
 		if (blood.skin == layers.skinIndex)
 		{
-			creature_marks::PaintBlood(out, blood);
+			creature_marks::PaintBlood(out, *side, blood);
 		}
 	}
 }

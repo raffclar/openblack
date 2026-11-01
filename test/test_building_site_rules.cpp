@@ -246,9 +246,21 @@ TEST(VillagerCarry, TheStoreIsTheStoragePitOfTheTownElseTheHome)
 
 TEST(BuildingSiteRules, AFinishedTemplesEmptyPilesGoAndThoseWithWoodCallTheVillagers)
 {
-	EXPECT_EQ(WhenSiteCloses(0), LeftoverPile::Remove);
-	EXPECT_EQ(WhenSiteCloses(1), LeftoverPile::CallForWood);
-	EXPECT_EQ(WhenSiteCloses(600), LeftoverPile::CallForWood);
+	EXPECT_EQ(WhenSiteCloses(0, false), LeftoverPile::Remove);
+	EXPECT_EQ(WhenSiteCloses(1, false), LeftoverPile::CallForWood);
+	EXPECT_EQ(WhenSiteCloses(600, false), LeftoverPile::CallForWood);
+}
+
+TEST(BuildingSiteRules, AFinishedWorkshopKeepsTheWoodOfItsSiteOnItsOwnPile)
+{
+	EXPECT_EQ(WhenSiteCloses(0, true), LeftoverPile::Keep);
+	EXPECT_EQ(WhenSiteCloses(1200, true), LeftoverPile::Keep);
+}
+
+TEST(BuildingSiteRules, ATownNeverCountsTheWoodAtTheSiteOfAWorkshop)
+{
+	EXPECT_EQ(WoodAtSitesAfter(10.0f, SiteWoodKind::Workshop, 500, 0), 10.0f);
+	EXPECT_EQ(WoodAtSitesAfter(10.0f, SiteWoodKind::Workshop, 0, 300), 10.0f);
 }
 
 TEST(BuildingSiteRules, ATownCountsTheWoodAtItsSitesButNeverTakesOffATemplesWood)

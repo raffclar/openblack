@@ -120,8 +120,12 @@ public:
 	bool LoadWithSkinsOf(const l3d::L3DFile& l3d, const L3DMesh& skinSource) noexcept;
 	/// A dynamic mesh takes its vertices afresh from a file of the same shape
 	void UpdateVertices(const l3d::L3DFile& l3d) noexcept;
+	/// Each submesh gets three corners of its own for each face, for the snow of a tree or a fence
+	/// (L3DSubMesh::SplitFacesForSnow). Only the first call changes the mesh. Call it from the main thread before the frame
+	/// is drawn.
+	void SplitFacesForSnow();
 	/// A dynamic mesh's skin takes its texels afresh
-	void UpdateSkin(SkinId skin, std::span<const uint16_t> texels) noexcept;
+	void UpdateSkin(SkinId skin, std::span<const uint16_t> given) noexcept;
 	[[nodiscard]] bool IsDynamic() const { return _dynamic; }
 	/// What the mesh makes: its data and its objects on the graphics device, or its data only
 	[[nodiscard]] UploadMode GetUploadMode() const { return _upload; }
@@ -227,6 +231,7 @@ private:
 	l3d::L3DMeshFlags _flags;
 	std::string _debugName;
 	bool _dynamic;
+	bool _facesSplit {false};
 	UploadMode _upload;
 
 	std::unordered_map<SkinId, std::unique_ptr<graphics::Texture2D>> _skins;
@@ -238,6 +243,8 @@ private:
 	std::unordered_map<SkinId, graphics::tree_shadows::AlphaMask> _skinAlpha;
 	/// How the skins' texels go into their textures, by the model's flags
 	l3d_skin::Layout _skinLayout {l3d_skin::Layout::Argb4444};
+	/// Texels along each side of each skin: 256, or 128 at the lowest detail levels
+	uint16_t _skinSide {l3d::L3DTexture::k_Width};
 	std::vector<Footprint> _footprints; ///< If ContainsLandscapeFeature() is true
 	std::optional<BonePoint> _firstBonePoint;
 	std::vector<BoneFrame> _boneFrames;

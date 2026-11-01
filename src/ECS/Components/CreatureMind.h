@@ -30,7 +30,6 @@
 #include "Creature/CreatureMindModel.h"
 #include "Creature/CreatureObjectBeliefs.h"
 #include "Creature/CreaturePlanner.h"
-#include "Creature/CreaturePlayerAttention.h"
 #include "Creature/CreatureScriptPlay.h"
 #include "Creature/CreatureTownCompassion.h"
 #include "Creature/LeashRules.h"
@@ -68,8 +67,6 @@ struct CreatureMindState
 	/// How much attention the player pays it, and how interesting it finds the player
 	creature_desire_sources::Attention attention {};
 	creature_desire_sources::PlayerInterest playerInterest {};
-	/// How fast the player's hand moves, which follows the hand by a part each turn
-	creature_player_attention::HandSpeed handSpeed {};
 	/// It has seen villages of other players, or of no player: a source of wanting to impress
 	float impressFromSeeing {0.0f};
 	/// Game turns its player's camera was looking at it, which over the turns it has lived is the attention its god has
@@ -257,6 +254,9 @@ struct CreatureMindState
 		uint32_t miracle {0};
 	};
 	std::optional<LeashCast> leashCast;
+	/// The need flag of a worship site that the leash tied the creature to, for the feed of the site that waits for the
+	/// end of its work. None when no feed waits.
+	entt::entity feedSiteFlag {entt::null};
 };
 
 } // namespace openblack::ecs::components

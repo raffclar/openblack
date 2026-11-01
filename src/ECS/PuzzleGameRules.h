@@ -11,8 +11,11 @@
 
 #include <cstdint>
 
-#include <optional>
+#include <vector>
 
+#include <entt/entity/entity.hpp>
+
+#include "ECS/Components/PuzzleGame.h"
 #include "ScriptHeaders/ScriptEnums.h"
 
 /// What the scripts read from a puzzle game before the player solves it
@@ -20,8 +23,8 @@ namespace openblack::ecs::puzzle_game
 {
 
 /// What PLAYED gives for a puzzle game that the player has not solved. Some kinds always give the same answer, and the
-/// others give no. Nothing comes for the two kinds whose answer before a solution depends on how the game starts.
-[[nodiscard]] constexpr std::optional<bool> PlayedBeforeSolved(script::PuzzleGameType type) noexcept
+/// others give no.
+[[nodiscard]] constexpr bool PlayedBeforeSolved(script::PuzzleGameType type) noexcept
 {
 	using script::PuzzleGameType;
 	switch (type)
@@ -32,10 +35,11 @@ namespace openblack::ecs::puzzle_game
 	case PuzzleGameType::Maze2:
 	case PuzzleGameType::Fishes2:
 		return true;
-	// The answer of these kinds is not known before the game starts
-	case PuzzleGameType::Immersion:
+	// The lions and sheep game starts with no side to move. The test then gives yes at once, so nobody can play it.
 	case PuzzleGameType::Lionsheep:
-		return std::nullopt;
+		return true;
+	// The mushroom game starts in progress and gives no until the player drops a mushroom in the cauldron
+	case PuzzleGameType::Immersion:
 	// Chess always gives no. Each other kind gives yes only when its pieces show a solution.
 	case PuzzleGameType::Tree1:
 	case PuzzleGameType::Tree2:
@@ -58,6 +62,13 @@ namespace openblack::ecs::puzzle_game
 	}
 }
 
+/// Whether a puzzle game lets go of its things that went at the start of each turn, also after the solution. All kinds
+/// but the beach temple puzzle do this. The beach temple puzzle makes its pieces again.
+[[nodiscard]] constexpr bool LetsGoOfThingsThatWent(script::PuzzleGameType type) noexcept
+{
+	return type != script::PuzzleGameType::Hanoi;
+}
+
 /// What GET_OBJECT_STATE gives for a puzzle game that nobody has started: won once it gives yes to PLAYED, else not
 /// yet begun
 [[nodiscard]] constexpr script::PuzzleGameStatus StateBeforeStart(bool played) noexcept
@@ -65,4 +76,38 @@ namespace openblack::ecs::puzzle_game
 	return played ? script::PuzzleGameStatus::Won : script::PuzzleGameStatus::GameNotYetBegun;
 }
 
+/// A script deletes a puzzle game. The puzzle game stays, but it lets go of these things, in this order:
+/// - each lantern that is still there,
+/// - its trees,
+/// - the bases and the rings of the beach temple puzzle.
+/// Its mists and its bats stay. The puzzle counts as played from then on, so its turn does nothing more.
+/// The result is the list of the things to remove from the world.
+template <typename IsThere>
+[[nodiscard]] std::vector<entt::entity> TakePiecesForDelete(components::PuzzleGame& game, IsThere&& isThere)
+{
+	std::vector<entt::entity> pieces;
+	for (auto& lantern : game.lanterns)
+	{
+		if (lantern != entt::null && isThere(lantern))
+		{
+			pieces.push_back(lantern);
+			lantern = entt::null;
+		}
+	}
+	const auto takeAll = [&pieces](auto& slots) {
+		for (auto& slot : slots)
+		{
+			if (slot != entt::null)
+			{
+				pieces.push_back(slot);
+				slot = entt::null;
+			}
+		}
+	};
+	takeAll(game.trees);
+	takeAll(game.bases);
+	takeAll(game.rings);
+	game.played = true;
+	return pieces;
+}
 } // namespace openblack::ecs::puzzle_game

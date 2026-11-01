@@ -52,6 +52,7 @@
 #include "ECS/Systems/InfluenceSystemInterface.h"
 #include "ECS/Systems/PlayerSystemInterface.h"
 #include "ECS/Systems/ProfileFolderSystemInterface.h"
+#include "ECS/Systems/TempleExteriorSystemInterface.h"
 #include "ECS/Systems/TimeSystemInterface.h"
 #include "FileSystem/FileSystemInterface.h"
 #include "Gui/TextDatabase.h"
@@ -66,9 +67,6 @@ using namespace openblack::ecs::components;
 
 namespace
 {
-
-/// Where the hand of a god with no temple starts, in metres
-constexpr glm::vec3 k_HandWithoutTemple {2150.0f, 0.0f, 2620.0f};
 
 /// The entity of the player, none when the land has no such player
 entt::entity FoundPlayer(PlayerNames player)
@@ -490,7 +488,23 @@ void ComputerPlayerSystem::SetHand(PlayerNames player, glm::vec3 place, bool fix
 
 std::optional<glm::vec3> ComputerPlayerSystem::HandPosition(PlayerNames player)
 {
-	const auto* mind = FindMind(player);
+	if (FindMind(player) == nullptr)
+	{
+		return std::nullopt;
+	}
+	return HandPositionForView(player);
+}
+
+std::optional<glm::vec3> ComputerPlayerSystem::HandPositionForView(PlayerNames player) const
+{
+	const auto& registry = Locator::entitiesRegistry::value();
+	const ComputerPlayer* mind = nullptr;
+	registry.Each<const Player>([&registry, &mind, player](entt::entity each, const Player& name) {
+		if (name.name == player && mind == nullptr)
+		{
+			mind = registry.TryGet<const ComputerPlayer>(each);
+		}
+	});
 	if (mind == nullptr)
 	{
 		return std::nullopt;
@@ -620,10 +634,18 @@ void ComputerPlayerSystem::ProcessTurn()
 				}
 			}
 		}
-		// After its mind, the player notes its influence power, its running average and a sample of its history
 		if (Locator::influenceSystem::has_value())
 		{
-			Locator::influenceSystem::value().NoteInfluencePower(name);
+			auto& influence = Locator::influenceSystem::value();
+			// The temples of the player grow toward twice the share of the influence that the player had as its turn
+			// started. The share has the power of the players before it in this turn, and the power of the others in the
+			// last turn.
+			if (Locator::templeExteriorSystem::has_value())
+			{
+				Locator::templeExteriorSystem::value().NoteSizeTarget(name, influence.RelativeInfluencePower(name));
+			}
+			// After its mind, the player notes its influence power, its running average and a sample of its history
+			influence.NoteInfluencePower(name);
 		}
 	}
 	if (_timesEvery != 0 && turn % _timesEvery == 0 && !_times.Gods().empty())
@@ -652,7 +674,7 @@ bool ComputerPlayerSystem::MindTurn(PlayerNames name, entt::entity entity, uint3
 	if (computer_player::DueToStart(*mind))
 	{
 		// The hand starts at the temple, or at a fixed place when the god has none
-		mind->hand.hand = computer_world::StartingHand(name).value_or(k_HandWithoutTemple);
+		mind->hand.hand = computer_player::StartingHand(computer_world::StartingHand(name));
 		// A start can make a creature, so the mind is found again after it
 		if (_aiSeed.has_value())
 		{

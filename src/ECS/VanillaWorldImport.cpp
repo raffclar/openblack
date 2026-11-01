@@ -35,16 +35,21 @@ using gamesave::VanillaWorld;
 constexpr std::array<uint8_t, 3> k_StillMoveStates = {0x00, 0x01, 0x04};
 /// The move state of a walk that steps straight through all that is in its way
 constexpr uint8_t k_StepThroughMoveState = 0x0B;
-/// The move states of a walk that goes straight to its goal: with no side to keep, clockwise and counterclockwise
-constexpr std::array<uint8_t, 3> k_LinearMoveStates = {0x0C, 0x0D, 0x0E};
-/// The circle that a walk heads for is "none in reach"
-constexpr uint8_t k_NoCircleInReach = 0xFF;
+/// The first and the last move state of a walk that keeps a circle: it goes straight, goes round a circle or goes out
+/// of a circle
+constexpr uint8_t k_FirstCircleMoveState = 0x0C;
+constexpr uint8_t k_LastCircleMoveState = 0x12;
+/// For a circle with no thing, the index of water or of the edge of the land
+constexpr int32_t k_LandscapeIndex = 1;
+/// The shift that changes whole map units to cells, and the metres along the side of a cell
+constexpr int32_t k_CellShift = 16;
+constexpr float k_CellMetres = 10.0f;
 
 /// The states of a fisherman that keep the fish farm, and the states of a farmer that keep the spot and the field
 constexpr std::array k_FishermanStates = {VillagerStates::FishermanArrivesAtFishing, VillagerStates::Fishing};
 constexpr std::array k_FarmerStates = {VillagerStates::FarmerArrivesAtFarm, VillagerStates::FarmerPlantsCrop,
                                        VillagerStates::FarmerDigsUpCrop};
-/// The number of floats on each side of a value that MetresOfWhole tries
+/// The number of floats on each side of a speed that WalkSpeedOf tries
 constexpr int k_MetreTries = 4;
 
 bool IsOneOf(uint8_t state, std::span<const VillagerStates> states)
@@ -87,20 +92,30 @@ ImportedWalk WalkOf(const VanillaWorld& world, const VanillaRecord& record)
 		std::memcpy(&walk.stepAltitude, step.data() + 4, 4);
 		std::memcpy(&walk.stepZ, step.data() + 8, 4);
 	}
-	const auto turns = world.Byte(record, "hugTurnsToObject");
-	walk.hugsCircle = turns.has_value() && (*turns != k_NoCircleInReach || world.Ref(record, "hugObject").value_or(0) != 0);
+	if (const auto turns = world.Byte(record, "hugTurnsToObject"); turns.has_value())
+	{
+		ImportedCircle circle {.turnsToObject = *turns,
+		                       .entryDistance = world.Word(record, "hugEntryDistance").value_or(0),
+		                       .object = world.Ref(record, "hugObject").value_or(0),
+		                       .index = std::bit_cast<int32_t>(world.Word(record, "hugIndex").value_or(0))};
+		if (const auto coords = world.Raw(record, "hugCoords"); coords.size() == sizeof(gamesave::MapCoords))
+		{
+			std::memcpy(&circle.coords, coords.data(), sizeof(circle.coords));
+		}
+		walk.circle = circle;
+	}
 	return walk;
 }
 
 /// The record types of the buildings of a town that the import takes
-constexpr std::array k_AbodeTypes = {VanillaType::Abode, VanillaType::Creche, VanillaType::Graveyard, VanillaType::StoragePit,
-                                     VanillaType::TownCentre};
+constexpr std::array k_AbodeTypes = {VanillaType::Abode,      VanillaType::Creche, VanillaType::Graveyard,
+                                     VanillaType::StoragePit, VanillaType::Wonder, VanillaType::TownCentre};
 
 /// Each tribe has 16 rows of buildings in the same order. The import takes the six abodes, the storage pit, the creche,
-/// the graveyard and the town centre.
+/// the wonder, the graveyard and the town centre.
 constexpr int32_t k_TribeRows = 16;
 constexpr int32_t k_Tribes = 9;
-constexpr std::array<int32_t, 10> k_ImportedPlaces = {0, 1, 2, 3, 4, 5, 7, 8, 11, 12};
+constexpr std::array<int32_t, 11> k_ImportedPlaces = {0, 1, 2, 3, 4, 5, 7, 8, 10, 11, 12};
 
 /// The record types of the villagers
 constexpr std::array k_VillagerTypes = {VanillaType::Villager, VanillaType::SpecialVillager};
@@ -276,6 +291,32 @@ std::optional<ImportedTown> ReadTown(const VanillaWorld& world, const VanillaRec
 	return town;
 }
 
+/// The tribal powers of a player record. The file keeps a count before each list, and the import takes only lists of a
+/// value for each tribe.
+std::optional<ImportedTribalPower> ReadTribalPower(const VanillaWorld& world, const VanillaRecord& record)
+{
+	const auto player = world.Byte(record, "number");
+	const auto* power = world.Field(record, "tribalPower");
+	const auto* most = world.Field(record, "maxTribalPower");
+	ImportedTribalPower imported;
+	if (!player.has_value() || *player >= static_cast<uint8_t>(PlayerNames::_COUNT) || power == nullptr || most == nullptr ||
+	    power->size != sizeof(float) || most->size != sizeof(float) || power->count != imported.power.size() ||
+	    most->count != imported.most.size())
+	{
+		return std::nullopt;
+	}
+	imported.player = static_cast<PlayerNames>(*player);
+	const auto powerBytes = world.Raw(record, "tribalPower");
+	const auto mostBytes = world.Raw(record, "maxTribalPower");
+	if (powerBytes.size() != sizeof(imported.power) || mostBytes.size() != sizeof(imported.most))
+	{
+		return std::nullopt;
+	}
+	std::memcpy(imported.power.data(), powerBytes.data(), sizeof(imported.power));
+	std::memcpy(imported.most.data(), mostBytes.data(), sizeof(imported.most));
+	return imported;
+}
+
 std::optional<ImportedAbode> ReadAbode(const VanillaWorld& world, const VanillaRecord& record, std::string& why)
 {
 	const auto position = PositionOf(world, record);
@@ -313,6 +354,10 @@ std::optional<ImportedAbode> ReadAbode(const VanillaWorld& world, const VanillaR
 	}
 	const auto villagers = world.Refs(record, "villagers");
 	abode.villagers.assign(villagers.begin(), villagers.end());
+	if (record.Is(VanillaType::Wonder))
+	{
+		abode.wonderPower = world.Float(record, "wonderPower");
+	}
 	return abode;
 }
 
@@ -404,13 +449,37 @@ bool CanKeepStateValues(uint8_t state)
 	return !gamesave::VillagerStateKeepsValues(state) || IsOneOf(state, k_FishermanStates) || IsOneOf(state, k_FarmerStates);
 }
 
-bool CanKeepWalk(uint8_t moveState, bool hugsCircle)
+bool CanKeepWalk(uint8_t moveState)
 {
-	if (std::ranges::find(k_StillMoveStates, moveState) != k_StillMoveStates.end() || moveState == k_StepThroughMoveState)
+	return std::ranges::find(k_StillMoveStates, moveState) != k_StillMoveStates.end() || moveState == k_StepThroughMoveState ||
+	       (moveState >= k_FirstCircleMoveState && moveState <= k_LastCircleMoveState);
+}
+
+CircleKind KindOf(const ImportedCircle& circle)
+{
+	if (circle.object != 0)
 	{
-		return true;
+		return CircleKind::Thing;
 	}
-	return std::ranges::find(k_LinearMoveStates, moveState) != k_LinearMoveStates.end() && !hugsCircle;
+	return circle.index == k_LandscapeIndex ? CircleKind::Landscape : CircleKind::None;
+}
+
+std::optional<size_t> CircleAfterLoad(size_t circles)
+{
+	if (circles == 0)
+	{
+		return std::nullopt;
+	}
+	return circles - 1;
+}
+
+wall_hug::BlockingCircle LandscapeCircleOf(const gamesave::MapCoords& coords)
+{
+	const glm::ivec2 cell {coords.x >> k_CellShift, coords.z >> k_CellShift};
+	return {.centre = (glm::vec2(cell) + 0.5f) * k_CellMetres,
+	        .radius = wall_hug::k_LandscapeBlockerRadius,
+	        .landscape = true,
+	        .landscapeOrFence = true};
 }
 
 std::optional<ImportedWork> WorkOf(uint8_t state, const std::vector<ImportedStateValue>& values)
@@ -425,31 +494,6 @@ std::optional<ImportedWork> WorkOf(uint8_t state, const std::vector<ImportedStat
 		gamesave::MapCoords spot;
 		std::memcpy(&spot, values[0].bytes.data(), sizeof(spot));
 		return ImportedWork {.target = *values[1].object, .spot = spot};
-	}
-	return std::nullopt;
-}
-
-std::optional<float> MetresOfWhole(int32_t whole)
-{
-	const float near = map_coords::ToMetres(whole);
-	if (map_coords::ToFixed(near) == whole)
-	{
-		return near;
-	}
-	float up = near;
-	float down = near;
-	for (int i = 0; i < k_MetreTries; ++i)
-	{
-		up = std::nextafter(up, std::numeric_limits<float>::infinity());
-		if (map_coords::ToFixed(up) == whole)
-		{
-			return up;
-		}
-		down = std::nextafter(down, -std::numeric_limits<float>::infinity());
-		if (map_coords::ToFixed(down) == whole)
-		{
-			return down;
-		}
 	}
 	return std::nullopt;
 }
@@ -472,9 +516,9 @@ std::array<uint8_t, 3> DecideAgain()
 	        static_cast<uint8_t>(VillagerStates::InvalidState)};
 }
 
-std::array<uint8_t, 3> StartStates(const std::array<uint8_t, 3>& states, uint8_t moveState, bool hugsCircle)
+std::array<uint8_t, 3> StartStates(const std::array<uint8_t, 3>& states, uint8_t moveState)
 {
-	if (!CanKeepWalk(moveState, hugsCircle) || !CanKeepStateValues(states[0]) || !CanKeepStateValues(states[1]))
+	if (!CanKeepWalk(moveState) || !CanKeepStateValues(states[0]) || !CanKeepStateValues(states[1]))
 	{
 		return DecideAgain();
 	}
@@ -519,6 +563,12 @@ std::optional<ImportedSite> ReadSite(const VanillaWorld& world, const VanillaRec
 	std::memcpy(site.places.data(), places.data(), places.size());
 	const auto workers = world.Refs(record, "siteWorkers");
 	site.workers.assign(workers.begin(), workers.end());
+	if (record.Is(VanillaType::CitadelBuildingSite))
+	{
+		site.temple = true;
+		const auto piles = world.Refs(record, "templeSitePiles");
+		site.piles.assign(piles.begin(), piles.end());
+	}
 	return site;
 }
 
@@ -528,6 +578,14 @@ ImportedTowns ReadTowns(const VanillaWorld& world)
 	if (const auto data = world.GameData(); data.has_value())
 	{
 		imported.turn = data->gameTurn;
+	}
+	if (!world.Records().empty() && world.Game().Is(VanillaType::Game))
+	{
+		if (const auto lists = world.Fields(world.Game(), "lists"); lists.size() == k_GameObjectLists)
+		{
+			const auto towns = world.Refs(*lists.at(k_GameTownList));
+			imported.gameTownList.assign(towns.begin(), towns.end());
+		}
 	}
 	for (const auto& record : world.Records())
 	{
@@ -556,7 +614,7 @@ ImportedTowns ReadTowns(const VanillaWorld& world)
 				continue;
 			}
 		}
-		else if (record.Is(VanillaType::StandardBuildingSite))
+		else if (record.Is(VanillaType::StandardBuildingSite) || record.Is(VanillaType::CitadelBuildingSite))
 		{
 			if (auto site = ReadSite(world, record, why); site.has_value())
 			{
@@ -572,11 +630,27 @@ ImportedTowns ReadTowns(const VanillaWorld& world)
 				continue;
 			}
 		}
+		else if (record.Is(VanillaType::TownDesireFlags))
+		{
+			const auto town = world.Ref(record, "flagTown");
+			const auto desire = world.Word(record, "flagType");
+			const auto level = world.Float(record, "flagLevel");
+			if (town.has_value() && desire.has_value() && level.has_value() && *desire < k_ImportedDesires)
+			{
+				imported.desireFlags.push_back({.town = *town, .desire = *desire, .level = *level});
+				continue;
+			}
+			why = "the flag of a desire has no town, no desire of the table or no level";
+		}
 		else if (record.Is(VanillaType::Player))
 		{
 			// The player's list of towns, in the order that the player got them
 			const auto towns = world.Refs(record, "towns");
 			imported.townLists.insert(imported.townLists.end(), towns.begin(), towns.end());
+			if (auto powers = ReadTribalPower(world, record); powers.has_value())
+			{
+				imported.tribalPowers.push_back(*powers);
+			}
 			continue;
 		}
 		else

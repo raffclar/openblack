@@ -25,6 +25,7 @@
 #include "ECS/Registry.h"
 #include "ECS/Systems/Implementations/SpellIconSystem.h"
 #include "ECS/Systems/MagicSystemInterface.h"
+#include "ECS/Systems/PlaygroundTripSystemInterface.h"
 #include "InfoConstants.h"
 #include "Locator.h"
 #include "Magic/WorshipBattery.h"
@@ -88,12 +89,13 @@ public:
 		return player == heldBy ? held : std::nullopt;
 	}
 	void SetIconSeedPowerUp(entt::entity seed, int powerUp) override { poweredUp.emplace_back(seed, powerUp); }
-	entt::entity TakeIconSeed(entt::entity site, SpellSeedType seed, int /*powerUp*/, float chants) override
+	entt::entity TakeIconSeed(entt::entity site, PlayerNames holder, SpellSeedType seed, int /*powerUp*/, float chants) override
 	{
 		auto& registry = Locator::entitiesRegistry::value();
 		const auto made = registry.Create();
-		registry.Assign<SpellSeed>(made, SpellSeed {.seedType = seed, .chantStore = chants});
+		registry.Assign<SpellSeed>(made, SpellSeed {.seedType = seed, .player = holder, .chantStore = chants});
 		taken.push_back(site);
+		holders.push_back(holder);
 		return made;
 	}
 	[[nodiscard]] HandResult GetLastHandResult() const override { return {}; }
@@ -116,8 +118,30 @@ public:
 	/// The player whose hand holds the seed
 	PlayerNames heldBy {PlayerNames::PLAYER_ONE};
 	std::vector<std::pair<entt::entity, int>> poweredUp;
-	/// The sites that gave a seed to a hand, in order
+	/// The sites that gave a seed to a hand, in order, and the players whose hands took the seeds
 	std::vector<entt::entity> taken;
+	std::vector<PlayerNames> holders;
+};
+
+/// The trip to the Gods' Playground, with every player's influence on the whole land or not
+class FakePlaygroundTrip final: public PlaygroundTripSystemInterface
+{
+public:
+	explicit FakePlaygroundTrip(bool everywhere)
+	    : _everywhere(everywhere)
+	{
+	}
+	[[nodiscard]] bool InfluenceEverywhere() const override { return _everywhere; }
+	[[nodiscard]] bool IsLessonRunning() const override { return false; }
+	void StartLesson() override {}
+	bool AskLessonEnd() override { return false; }
+	void EndTurn() override {}
+	bool SaveBeforeTrip() override { return false; }
+	bool Travel() override { return false; }
+	bool Leave() override { return false; }
+
+private:
+	bool _everywhere;
 };
 
 class SpellIconSystemTest: public ::testing::Test
@@ -162,7 +186,7 @@ TEST_F(SpellIconSystemTest, AGoneSiteTakesItsIconsAndTheSeedsOutFromThemButNotTh
 	const auto site = registry.Create();
 	registry.Assign<SiteIcons>(site);
 	const auto seed = registry.Create();
-	registry.Assign<SpellSeed>(seed, SpellSeed {.seedType = SpellSeedType::Heal});
+	registry.Assign<SpellSeed>(seed, SpellSeed {.seedType = SpellSeedType::Heal, .hasIcon = true, .worshipSite = site});
 	const auto heal = Icon(site, SpellSeedType::Heal, seed);
 	const auto water = Icon(site, SpellSeedType::Water, entt::null);
 	// A hand on the village centre showing the same miracle belongs to the town
@@ -242,7 +266,7 @@ TEST_F(SpellIconSystemTest, ASeedOutOfTheHandIsOutButNotHeld)
 	registry.Assign<SiteIcons>(site);
 	registry.Assign<WorshipSite>(site, WorshipSite {.player = PlayerNames::PLAYER_ONE});
 	const auto seed = registry.Create();
-	registry.Assign<SpellSeed>(seed, SpellSeed {.seedType = SpellSeedType::Heal});
+	registry.Assign<SpellSeed>(seed, SpellSeed {.seedType = SpellSeedType::Heal, .hasIcon = true, .worshipSite = site});
 	Icon(site, SpellSeedType::Heal, seed);
 
 	const auto charges = _system.ChargesAt(site);
@@ -584,4 +608,176 @@ TEST_F(GodChargeTest, AnIconWithAStoreCountsAsAMiracleThatCharges)
 	registry.Get<WorshipIcon>(heal).store = 0.0f;
 	EXPECT_FALSE(_system.AnyIconStores(made.temple, std::nullopt));
 	EXPECT_FALSE(_system.AnyIconStores(entt::null, std::nullopt));
+}
+
+// On the Gods' Playground the hand of a player taps a neutral icon, and the full icon's miracle goes into that hand
+TEST_F(GodChargeTest, OnThePlaygroundAFullNeutralIconGivesItsMiracleToTheHandThatTapsIt)
+{
+	Locator::playgroundTripSystem::emplace<FakePlaygroundTrip>(true);
+	const auto icon = IdleIcon(PlayerNames::NEUTRAL, 100.0f);
+	// The hand that taps may cast the miracle too
+	const auto tapper = Entities().Create();
+	Entities().Assign<Player>(tapper, PlayerNames::PLAYER_ONE);
+	player_miracles::SetMagicTypeEnabled(Entities().Get<Player>(tapper).miracles, MagicType::Heal, true);
+	EXPECT_TRUE(_system.Tap(icon, PlayerNames::PLAYER_ONE));
+	ASSERT_EQ(_magic->holders.size(), 1u);
+	EXPECT_EQ(_magic->holders[0], PlayerNames::PLAYER_ONE);
+	EXPECT_EQ(_magic->taken[0], Entities().Get<const WorshipIcon>(icon).site);
+	Locator::playgroundTripSystem::reset();
+}
+
+// Away from the Playground the neutral icon takes no tap from the hand of a player
+TEST_F(GodChargeTest, AwayFromThePlaygroundANeutralIconTakesNoTap)
+{
+	Locator::playgroundTripSystem::emplace<FakePlaygroundTrip>(false);
+	const auto icon = IdleIcon(PlayerNames::NEUTRAL, 100.0f);
+	EXPECT_FALSE(_system.Tap(icon, PlayerNames::PLAYER_ONE));
+	EXPECT_TRUE(_magic->taken.empty());
+	Locator::playgroundTripSystem::reset();
+}
+
+namespace
+{
+/// The heal seed has a power-up level 0 that costs 300. The player holds a seed of an idle icon that holds some prayer
+/// power.
+class PowerUpChargeTest: public GodChargeTest
+{
+protected:
+	void SetUp() override
+	{
+		GodChargeTest::SetUp();
+		_info->spellSeed.at(static_cast<size_t>(SpellSeedType::Heal)).magicTypes.at(1) = MagicType::HealPowerUpOne;
+		_info->magicEffect.at(static_cast<size_t>(MagicType::HealPowerUpOne)).costToCreate = 300.0f;
+		Locator::infoConstants::reset();
+		Locator::infoConstants::emplace(*_info);
+		_icon = IdleIcon(PlayerNames::PLAYER_ONE, 250.0f);
+		auto& registry = Entities();
+		_seed = registry.Create();
+		registry.Assign<SpellSeed>(_seed, SpellSeed {.seedType = SpellSeedType::Heal,
+		                                             .player = PlayerNames::PLAYER_ONE,
+		                                             .chantStore = 100.0f,
+		                                             .hasIcon = true,
+		                                             .worshipSite = registry.Get<const WorshipIcon>(_icon).site});
+		registry.Get<WorshipIcon>(_icon).seedsOut.push_back(_seed);
+		_magic->held = _seed;
+		_magic->heldBy = PlayerNames::PLAYER_ONE;
+		EnablePowerUp(true);
+	}
+
+	void EnablePowerUp(bool enable)
+	{
+		Entities().Each<Player>([enable](Player& player) {
+			player_miracles::SetMagicTypeEnabled(player.miracles, MagicType::HealPowerUpOne, enable);
+		});
+	}
+
+	/// One turn of the site: the share is what the site gives the icon
+	void SiteTurn(float share)
+	{
+		auto charges = _system.ChargesAt(Entities().Get<const WorshipIcon>(_icon).site);
+		charges.at(0).store += share;
+		_system.ChargedAt(Entities().Get<const WorshipIcon>(_icon).site, charges);
+	}
+
+	entt::entity _icon {entt::null};
+	entt::entity _seed {entt::null};
+};
+} // namespace
+
+// The icon that made a seed is the icon of its seed at its site, while the icon keeps it as a seed out
+TEST_F(PowerUpChargeTest, TheIconOfASeedIsTheIconThatKeepsItAsASeedOut)
+{
+	EXPECT_EQ(_system.IconOfSeed(_seed), _icon);
+	auto& registry = Entities();
+	registry.Get<WorshipIcon>(_icon).seedsOut.clear();
+	EXPECT_TRUE(_system.IconOfSeed(_seed) == entt::null);
+	registry.Get<WorshipIcon>(_icon).seedsOut.push_back(_seed);
+	registry.Get<SpellSeed>(_seed).hasIcon = false;
+	EXPECT_TRUE(_system.IconOfSeed(_seed) == entt::null);
+	EXPECT_TRUE(_system.IconOfSeed(entt::null) == entt::null);
+}
+
+// The icon can charge a level only while its seed is in the hand and the player may cast the miracle of that level
+TEST_F(PowerUpChargeTest, APowerUpNeedsTheSeedInTheHandAndTheMiracleEnabled)
+{
+	EXPECT_TRUE(_system.ValidForPowerUp(_icon, PlayerNames::PLAYER_ONE, 0));
+	EXPECT_TRUE(_system.ValidForPowerUp(_icon, PlayerNames::PLAYER_ONE, -1));
+	// The seed has no level 1
+	EXPECT_FALSE(_system.ValidForPowerUp(_icon, PlayerNames::PLAYER_ONE, 1));
+	EnablePowerUp(false);
+	EXPECT_FALSE(_system.ValidForPowerUp(_icon, PlayerNames::PLAYER_ONE, 0));
+	EXPECT_FALSE(_system.StartPowerUpCharge(_icon, PlayerNames::PLAYER_ONE, 0));
+	EXPECT_FALSE(Entities().Get<const WorshipIcon>(_icon).charging);
+	EnablePowerUp(true);
+	_magic->held.reset();
+	EXPECT_FALSE(_system.ValidForPowerUp(_icon, PlayerNames::PLAYER_ONE, 0));
+}
+
+// The seed keeps its level until the icon has charged the cost of the new level into it
+TEST_F(PowerUpChargeTest, TheSeedTakesTheLevelOnlyOnceTheIconHasChargedIt)
+{
+	ASSERT_TRUE(_system.StartPowerUpCharge(_icon, PlayerNames::PLAYER_ONE, 0));
+	const auto& icon = Entities().Get<const WorshipIcon>(_icon);
+	EXPECT_TRUE(icon.charging);
+	EXPECT_EQ(icon.powerUp, 0);
+	EXPECT_EQ(icon.charger, PlayerNames::PLAYER_ONE);
+
+	// The icon has 250 stored and the seed needs 200 more: the seed takes it and the level changes
+	SiteTurn(0.0f);
+	EXPECT_EQ(Entities().Get<const SpellSeed>(_seed).chantStore, 300.0f);
+	EXPECT_EQ(icon.store, 50.0f);
+	EXPECT_FALSE(icon.charging);
+	EXPECT_EQ(_magic->poweredUp, (std::vector<std::pair<entt::entity, int>> {{_seed, 0}}));
+}
+
+TEST_F(PowerUpChargeTest, TheIconChargesOverTurnsWhenItHasTooLittle)
+{
+	auto& registry = Entities();
+	registry.Get<WorshipIcon>(_icon).store = 120.0f;
+	ASSERT_TRUE(_system.StartPowerUpCharge(_icon, PlayerNames::PLAYER_ONE, 0));
+	SiteTurn(0.0f);
+	EXPECT_EQ(registry.Get<const SpellSeed>(_seed).chantStore, 220.0f);
+	EXPECT_TRUE(registry.Get<const WorshipIcon>(_icon).charging);
+	EXPECT_TRUE(_magic->poweredUp.empty());
+	SiteTurn(80.0f);
+	EXPECT_EQ(registry.Get<const SpellSeed>(_seed).chantStore, 300.0f);
+	EXPECT_FALSE(registry.Get<const WorshipIcon>(_icon).charging);
+	EXPECT_EQ(_magic->poweredUp, (std::vector<std::pair<entt::entity, int>> {{_seed, 0}}));
+}
+
+// A power-up asked for replaces the charge the icon did before. Calling it off asks for the plain miracle, which a seed
+// that holds its cost has at once.
+TEST_F(PowerUpChargeTest, CallingThePowerUpOffAsksForThePlainMiracle)
+{
+	auto& registry = Entities();
+	registry.Get<WorshipIcon>(_icon).store = 0.0f;
+	ASSERT_TRUE(_system.StartPowerUpCharge(_icon, PlayerNames::PLAYER_ONE, 0));
+	ASSERT_TRUE(_system.StartPowerUpCharge(_icon, PlayerNames::PLAYER_ONE, -1));
+	EXPECT_EQ(registry.Get<const WorshipIcon>(_icon).powerUp, -1);
+	SiteTurn(0.0f);
+	EXPECT_FALSE(registry.Get<const WorshipIcon>(_icon).charging);
+	EXPECT_EQ(registry.Get<const SpellSeed>(_seed).chantStore, 100.0f);
+	EXPECT_EQ(_magic->poweredUp, (std::vector<std::pair<entt::entity, int>> {{_seed, -1}}));
+}
+
+// A seed that an icon made, as the seed of a one-shot miracle, counts once as out from the icon. Seeds that are gone no
+// longer count.
+// NOLINTNEXTLINE(cppcoreguidelines-avoid-non-const-global-variables): external macro
+TEST_F(SpellIconSystemTest, ASeedMadeAtAnIconCountsOnceAsOut)
+{
+	auto& registry = Entities();
+	const auto site = registry.Create();
+	registry.Assign<SiteIcons>(site);
+	const auto gone = registry.Create();
+	const auto icon = Icon(site, SpellSeedType::Heal, gone);
+	registry.Destroy(gone);
+	const auto seed = registry.Create();
+	registry.Assign<SpellSeed>(seed, SpellSeed {.seedType = SpellSeedType::Heal, .hasIcon = true, .worshipSite = site});
+	_system.SeedMadeAt(icon, seed);
+	_system.SeedMadeAt(icon, seed);
+	EXPECT_EQ(registry.Get<WorshipIcon>(icon).seedsOut, std::vector<entt::entity> {seed});
+	EXPECT_EQ(_system.IconOfSeed(seed), icon);
+	// Something that is not an icon keeps no seed
+	_system.SeedMadeAt(site, seed);
+	EXPECT_FALSE(registry.AllOf<WorshipIcon>(site));
 }

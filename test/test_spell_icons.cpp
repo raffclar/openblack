@@ -231,6 +231,17 @@ TEST(SpellIcons, TheClickRisesWithTheHandAndStopsAtTheSixth)
 	EXPECT_EQ(ClickPitch(4), 155u);
 	EXPECT_EQ(ClickPitch(5), 175u);
 	EXPECT_EQ(ClickPitch(9), 175u);
+	// A site icon that stands further out has no place and clicks as the first place
+	EXPECT_EQ(ClickPitch(-1), 100u);
+}
+
+TEST(SpellIcons, ASiteIconTakesThePlaceOfItsPointAmongTheSix)
+{
+	EXPECT_EQ(SitePlace(10u), 0);
+	EXPECT_EQ(SitePlace(12u), 2);
+	EXPECT_EQ(SitePlace(15u), 5);
+	EXPECT_EQ(SitePlace(std::nullopt), -1);
+	EXPECT_EQ(ClickPitch(SitePlace(13u)), 145u);
 }
 
 TEST(SpellIcons, TheAnnouncerNamesTheChargedMiracle)
@@ -245,14 +256,31 @@ TEST(SpellIcons, TheAnnouncerNamesTheChargedMiracle)
 
 TEST(SpellIcons, OnlyTheOwnersHandTapsAnIcon)
 {
-	EXPECT_TRUE(ValidToTap(PlayerNames::PLAYER_ONE, PlayerNames::PLAYER_ONE, true));
-	EXPECT_FALSE(ValidToTap(PlayerNames::PLAYER_TWO, PlayerNames::PLAYER_ONE, true));
-	EXPECT_FALSE(ValidToTap(PlayerNames::NEUTRAL, PlayerNames::PLAYER_ONE, true));
+	EXPECT_TRUE(ValidToTap(PlayerNames::PLAYER_ONE, PlayerNames::PLAYER_ONE, true, false));
+	EXPECT_FALSE(ValidToTap(PlayerNames::PLAYER_TWO, PlayerNames::PLAYER_ONE, true, false));
+	EXPECT_FALSE(ValidToTap(PlayerNames::NEUTRAL, PlayerNames::PLAYER_ONE, true, false));
+}
+
+TEST(SpellIcons, AnyHandTapsANeutralIconWhileInfluenceCoversTheLand)
+{
+	EXPECT_TRUE(ValidToTap(PlayerNames::NEUTRAL, PlayerNames::PLAYER_ONE, true, true));
+	EXPECT_TRUE(ValidToTap(PlayerNames::NEUTRAL, PlayerNames::PLAYER_TWO, true, true));
+	// The icon of another player stays its own, and an icon that does not work takes no tap
+	EXPECT_FALSE(ValidToTap(PlayerNames::PLAYER_TWO, PlayerNames::PLAYER_ONE, true, true));
+	EXPECT_FALSE(ValidToTap(PlayerNames::NEUTRAL, PlayerNames::PLAYER_ONE, false, true));
+}
+
+TEST(SpellIcons, TheTapOfAnIconIsForItsOwnerOrForAnyHandOnANeutralIconOfThePlayground)
+{
+	EXPECT_TRUE(TapsFor(PlayerNames::PLAYER_ONE, PlayerNames::PLAYER_ONE, false));
+	EXPECT_FALSE(TapsFor(PlayerNames::NEUTRAL, PlayerNames::PLAYER_ONE, false));
+	EXPECT_TRUE(TapsFor(PlayerNames::NEUTRAL, PlayerNames::PLAYER_ONE, true));
+	EXPECT_FALSE(TapsFor(PlayerNames::PLAYER_TWO, PlayerNames::PLAYER_ONE, true));
 }
 
 TEST(SpellIcons, AnIconThatDoesNotWorkTakesNoTap)
 {
-	EXPECT_FALSE(ValidToTap(PlayerNames::PLAYER_ONE, PlayerNames::PLAYER_ONE, false));
+	EXPECT_FALSE(ValidToTap(PlayerNames::PLAYER_ONE, PlayerNames::PLAYER_ONE, false, false));
 }
 
 TEST(SpellIcons, AnIconWorksWhenBuiltWithMoreThanThreeQuartersOfItsLife)

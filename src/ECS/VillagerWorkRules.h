@@ -190,8 +190,8 @@ struct FieldDesireInputs
 /// A farmer works at random spots up to this many metres either way of the field's middle, along x and along z
 inline constexpr float k_FieldSpotReach = 5.0f;
 /// The next spot a farmer works the field at, from the field's middle and two draws of 0 to twice the reach, the first
-/// for x and the second for z, kept as a map position is
-[[nodiscard]] glm::vec2 FieldWorkSpot(glm::vec2 field, float drawX, float drawZ);
+/// for x and the second for z, as a map position in whole map units (x, z)
+[[nodiscard]] glm::ivec2 FieldWorkSpot(glm::vec2 field, float drawX, float drawZ);
 
 /// What a farmer does on getting to its field or its spot in it
 enum class FarmerArrival : uint8_t

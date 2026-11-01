@@ -36,6 +36,7 @@
 #include "Enums.h"
 #include "Particles/ParticleDrawPath.h"
 #include "TestbedCrowd.h"
+#include "TestbedScenarioChecks.h"
 
 namespace openblack::ecs::components
 {
@@ -137,6 +138,9 @@ enum class Land : uint8_t
 	/// The network map for 32 gods, with a citadel and a village in each slot. Its land and its things come from the
 	/// map, so the scenario puts nothing of the testbed on it.
 	GodsRingMap,
+	/// A land of the story, from its script in the Scripts folder (the environment's storyLand). The land keeps its own
+	/// scripts, weather, people and sky, so the scenario adds its things to a land that plays as the story plays it.
+	Story,
 };
 
 /// A date and time on the player's computer, by its own time zone
@@ -154,6 +158,8 @@ struct RealDate
 struct Environment
 {
 	Land land {Land::Testbed};
+	/// With Land::Story, the land's script, such as Land2.txt
+	std::string_view storyLand;
 	/// The hour of the day, as scripts give it, and whether the clock then runs on or stands still
 	float hour {12.0f};
 	bool clockRuns {true};
@@ -325,8 +331,10 @@ struct ObjectSetup
 	/// What a walking villager is to do once there: deciding afresh unless given. A villager walking to decide afresh takes
 	/// up no reaction on its way, as in the game
 	VillagerStates walkFinal {VillagerStates::DecideWhatToDo};
-	/// A villager belongs to the scenario's town of the player, rather than to none
+	/// A villager or a scaffold belongs to the scenario's town of the player, rather than to none
 	bool joinTown {false};
+	/// A scaffold clears its ground when a hand lets it go, as when a script marks it to destroy the things in its way
+	bool clearsGround {false};
 	/// A villager is made at this age, rather than as a grown up of 30
 	std::optional<uint32_t> villagerAge;
 	/// A villager of the town lives in the scenario's object of this index, a building of the town
@@ -389,6 +397,8 @@ struct ObjectSetup
 	std::optional<float> built;
 	/// A building starts with this part of the time to its next loss of life from neglect already gone
 	float neglect {0.0f};
+	/// The town does not plan the building again when it goes, as a building that a scaffold made
+	bool notPlannedAgain {false};
 	/// The crop of a field is fully sown and ripe, with all the food of its type. If false, the field is not sown.
 	bool ripeCrop {false};
 	/// A firefly hides exactly where the thing stands, as a land's script places one
@@ -664,6 +674,9 @@ struct Command
 		HandStroke,
 		HandSlap,
 		HandLetGo,
+		/// The player's hand takes hold of it as the hand does when the player grabs it: it stops, ends what its body
+		/// plays and turns to the player
+		HandLock,
 		/// Putting a leash on it, which it is first taught; tying the leash to the scenario's object, untying it to the
 		/// hand, taking it off; keeping it within a radius of where it stands
 		PutOnLeash,
@@ -671,6 +684,9 @@ struct Command
 		TieLeash,
 		/// The hand of the player ties the leash to the flag of a town's desire (by value), the first such flag found
 		TieLeashToDesireFlag,
+		/// The hand of the player ties the leash to the need flag of a worship site (value: 0 food, 1 rest, 2 hiding), the
+		/// first such flag found
+		TieLeashToWorshipSiteFlag,
 		UntieLeash,
 		TakeOffLeash,
 		ConfineToHome,
@@ -832,6 +848,12 @@ struct Command
 		/// creature); the hand gives what it holds to the creature, as the Action button pressed over it does
 		HandTake,
 		HandGive,
+		/// The player's hand takes back the seed that shows over the player's miracle at once, wherever the pointer is, as
+		/// the debug tools take a thing. Needs no creature
+		HandTakeShownSeed,
+		/// The player's hand uses what it holds on the scenario's object, as the Action button pressed over the object does.
+		/// The world does it at the turn. No creature is necessary.
+		HandApply,
 		/// A script swaps the minds of the creature and another (value, by its place in the scenario's creatures), as
 		/// "swap creature from A to B" does
 		SwapMinds,
@@ -1005,6 +1027,12 @@ struct Command
 		/// The scenario's object, a building going up, gets all of its built amount, but it is not finished. The
 		/// inspector makes the same state when it sets the built amount. Needs no creature.
 		FillBuiltAmount,
+		/// The scenario's object, a scaffold, starts the building that its town offers where it lies. The building does
+		/// not have to fit. Needs no creature.
+		ScaffoldStartsSite,
+		/// An effect destroys the building on whose site the scenario's object, a scaffold, stands, as when a fire takes
+		/// the last of the life of the building. Needs no creature.
+		DestroyScaffoldSite,
 		/// A script native (script, by its name) runs at once with its arguments in order (scriptArguments). A position
 		/// is three numbers. Needs no creature.
 		CallNative,
@@ -1098,6 +1126,14 @@ struct Command
 		/// creature of the scenario (atCreature), as the hand of a computer god orders it. A script does not give the
 		/// order, so the other creature answers a joint action by its own desires.
 		GodOrder,
+		/// The player's worship site icon of a seed (value, a SpellSeedType) is charged full and puts its miracle in the
+		/// hand, as a tap does. The battery of its site gets the cost of the highest power-up level of the seed times an
+		/// amount, for the power-ups to charge from. Needs no creature.
+		TakeIconSeed,
+		/// The player's hand taps the worship site icon of a seed (value, a SpellSeedType), as the Action button does.
+		/// With an amount, the battery of the site first gets that much of the cost of the plain miracle. Needs no
+		/// creature.
+		TapSiteIcon,
 	};
 	Kind kind {Kind::Stop};
 	/// Which creature, by its place in the scenario's creatures
@@ -1134,6 +1170,8 @@ struct Command
 	bool onTemple {false};
 	/// A script's action is done to the totem of the object, a town centre, in place of the object
 	bool onTotem {false};
+	/// A script's action is done to the piece of a building nearest to the creature, in place of the object
+	bool onPiece {false};
 	/// The leash put on
 	LeashType leash {LeashType::Rope};
 	/// The part of the body stroked, by its place in the hand's parts (the head first)
@@ -1326,6 +1364,9 @@ struct ComputerActionSetup
 	/// The tool forces the action as a land script's force command does: the god stops the action that it does and starts
 	/// this one at once, rather than after the actions before it in the queue
 	bool forceAtOnce {false};
+	/// The tool gives no action. It marks the temple of the player as hit, as a thrown thing does when it harms the
+	/// heart, and the god chooses what to do by itself.
+	bool templeHit {false};
 };
 
 struct Scenario
@@ -1372,6 +1413,8 @@ struct Scenario
 	/// A testbed set-up step: the scenario's town also believes this much in the second player from the start. Put the
 	/// second player in the environment's players.
 	std::optional<float> townBeliefInRival;
+	/// A testbed set-up step: the scenario's town also believes this much in each of these players from the start
+	std::vector<std::pair<PlayerNames, float>> townBeliefInPlayers;
 	/// A testbed set-up step: the debug tool gives the scenario's town these miracles, as a land file line gives them. A
 	/// town without a worship site then gets its site, on the first land too.
 	std::vector<MagicType> townMiracles;
@@ -1410,8 +1453,12 @@ struct Scenario
 	/// Sharks that a script makes as the game's whales, each at a point from the middle of the map. A shark that swims
 	/// on no path shows only its body under the sea.
 	std::vector<glm::vec2> sharks;
+	/// What the scenario states about its own outcome. A run reports pass or fail from them (see TestbedScenarioChecks.h).
+	std::vector<checks::Check> checks;
 };
 
+/// Scenarios that state their own outcome, with checks that a run reports as pass or fail
+void AddSelfCheckScenarios(std::vector<Scenario>& all);
 /// A town centre's totem
 void AddVillageTotemScenarios(std::vector<Scenario>& all);
 /// The boxes of the multiplayer front end over the temple's future room, with the demonstration lobby
@@ -1424,6 +1471,15 @@ void AddJoinOnlineScenarios(std::vector<Scenario>& all);
 void AddWorldSoundScenarios(std::vector<Scenario>& all);
 /// A town given miracles by the debug tool, and its worship site going up
 void AddTownMiracleScenarios(std::vector<Scenario>& all);
+/// The town of the player that the scenarios of worship site icons use: a Norse town centre with a hut and three
+/// villagers. With the temple at k_WorshipTemple, its worship site goes up by the temple.
+[[nodiscard]] std::vector<ObjectSetup> WorshipTown();
+/// Where the temple of the worship town stands
+inline constexpr glm::vec2 k_WorshipTemple {0.0f, -60.0f};
+/// The belief of the worship town in the player, so that it stays theirs
+inline constexpr float k_WorshipTownBelief = 1000.0f;
+/// The land of the worship town: the first land, which has no worship sites in a normal game
+inline constexpr int32_t k_WorshipTownLand = 1;
 /// The villagers around the player's temple, with their debug window open
 void AddTempleVillagerScenarios(std::vector<Scenario>& all);
 /// The miracles' scenarios, added to every scenario by the registry
@@ -1507,6 +1563,11 @@ void AddCreatureLearningScenarios(std::vector<Scenario>& all);
 void AddCreatureExplorationScenarios(std::vector<Scenario>& all);
 /// Creature actions that Land 1 can start and that no other scenario stages, each told by a script
 void AddCreatureActionScenarios(std::vector<Scenario>& all);
+/// The casts that the creature's desires choose, each told by a script (called by AddCreatureActionScenarios)
+void AddCreatureActionCastScenarios(std::vector<Scenario>& all);
+/// The gifts to a town, throws, notices and villager actions that the creature's desires choose, each told by a script
+/// (called by AddCreatureActionScenarios)
+void AddCreatureActionTownScenarios(std::vector<Scenario>& all);
 /// The network map for 32 gods, with a citadel and a village in each slot
 void AddGodsRingMapScenarios(std::vector<Scenario>& all);
 /// The looks and the chant of a worship site: its ring of light, its need flags and its motes of prayer power

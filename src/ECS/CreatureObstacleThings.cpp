@@ -21,6 +21,7 @@
 #include "ECS/Components/Animal.h"
 #include "ECS/Components/AnimatedStatic.h"
 #include "ECS/Components/Ball.h"
+#include "ECS/Components/BuildingDamage.h"
 #include "ECS/Components/Construction.h"
 #include "ECS/Components/Creature.h"
 #include "ECS/Components/CreatureLocomotion.h"
@@ -211,6 +212,18 @@ std::optional<obstacles::Thing> creature_obstacle_things::ThingOf(const Registry
 		                       Locator::infoConstants::value().mobileStatic.at(static_cast<size_t>(mobileStatic->type)).meshId);
 		thing.shape = fence ? obstacles::Shape::ModelBox : obstacles::Shape::AtPlace;
 		// A thing that does not move builds its turn and scale as a thing that can lean, from its three angles
+		thing.placement = obstacles::Placement::Leaning;
+		const auto angles = x87::GameAnglesYxz(transform->rotation[0], transform->rotation[2]);
+		thing.yAngle = angles.y;
+		thing.xAngle = angles.x;
+		thing.zAngle = angles.z;
+	}
+	else if (registry.AnyOf<BuildingPiece>(entity))
+	{
+		// A piece that broke off a building is a rock of the rock model: one circle at its place, from its three angles.
+		// A creature walks round it only while it burns, and the footpaths never go round it.
+		thing.avoidance = obstacles::Avoidance::Burning;
+		thing.shape = obstacles::Shape::AtPlace;
 		thing.placement = obstacles::Placement::Leaning;
 		const auto angles = x87::GameAnglesYxz(transform->rotation[0], transform->rotation[2]);
 		thing.yAngle = angles.y;

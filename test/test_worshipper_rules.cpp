@@ -168,3 +168,18 @@ TEST(WorshipperRules, TheStrainSoundGoesTowardsTheMostStrain)
 	EXPECT_FLOAT_EQ(rules::EaseStrainSound(0.05f, 0.0f, 0.1f), 0.0f);
 	EXPECT_FLOAT_EQ(rules::EaseStrainSound(0.3f, 0.3f, 0.1f), 0.3f);
 }
+
+TEST(WorshipperRules, AVillagerStopsItsWayOnlyForAFinalStateWithAnotherExit)
+{
+	EXPECT_TRUE(rules::LeavesTheWay(false, true));
+	// A pause or a walk is not a final state
+	EXPECT_FALSE(rules::LeavesTheWay(false, false));
+	// The next state of the way has the same exit
+	EXPECT_FALSE(rules::LeavesTheWay(true, true));
+	EXPECT_FALSE(rules::LeavesTheWay(true, false));
+	EXPECT_TRUE(rules::LeavesTheWayToSite(false, true, false));
+	// A teleport stone on the way keeps the villager on its way to the site
+	EXPECT_FALSE(rules::LeavesTheWayToSite(false, true, true));
+	EXPECT_FALSE(rules::LeavesTheWayToSite(false, false, false));
+	EXPECT_FALSE(rules::LeavesTheWayToSite(true, true, false));
+}

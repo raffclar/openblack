@@ -59,6 +59,7 @@
 #include "ECS/Components/VillageTotem.h"
 #include "ECS/Components/Villager.h"
 #include "ECS/DrawnPlace.h"
+#include "ECS/GamePlayers.h"
 #include "ECS/PlayerColour.h"
 #include "ECS/Reflection/BinaryArchive.h"
 #include "ECS/Registry.h"
@@ -196,13 +197,17 @@ std::optional<particles::TownCentreBelief> GameParticleWorld::TownCentreBeliefOf
 	{
 		return std::nullopt;
 	}
-	particles::TownCentreBelief belief {.totemTop = *totemTop};
+	static_assert(particles::TownCentreBelief::k_MostPlayerNumbers == player_slots::k_PlayerNumbers &&
+	                  particles::TownCentreBelief::k_LandPlayerNumbers == player_slots::k_LandSlots,
+	              "The symbols of belief count the player numbers of the game");
+	// The symbols show each player of the game: the 8 players of a land, or more in a network game with more gods
+	particles::TownCentreBelief belief {.totemTop = *totemTop, .players = ecs::game_players::Count()};
 	registry.Each<const Town, const TownImpression>([&belief, abode](const Town& town, const TownImpression& impression) {
 		if (town.id == abode->townId)
 		{
-			// The symbols show only the players of a land. The table of the town has a place for each player of a
-			// network game
-			std::copy_n(impression.belief.belief.begin(), belief.beliefs.size(), belief.beliefs.begin());
+			static_assert(std::tuple_size_v<decltype(impression.belief.belief)> == std::tuple_size_v<decltype(belief.beliefs)>,
+			              "The town and its symbols have a place for each player number");
+			std::ranges::copy(impression.belief.belief, belief.beliefs.begin());
 		}
 	});
 	return belief;
@@ -1041,6 +1046,10 @@ std::shared_ptr<const psys::ParticleFile> ParticleRuleSystem::LoadFile(std::stri
 	const auto id = ParticleFileId(file);
 	if (!files.Contains(id))
 	{
+		if (_missingFiles.contains(id))
+		{
+			return nullptr;
+		}
 		try
 		{
 			files.Load(id, resources::ParticleFileLoader::FromDiskTag {}, ParticleFileDirectory(), std::string(file));
@@ -1048,6 +1057,7 @@ std::shared_ptr<const psys::ParticleFile> ParticleRuleSystem::LoadFile(std::stri
 		catch (const std::exception& error)
 		{
 			SPDLOG_LOGGER_WARN(spdlog::get("game"), "Particles: cannot load {}: {}", file, error.what());
+			_missingFiles.insert(id);
 			return nullptr;
 		}
 	}

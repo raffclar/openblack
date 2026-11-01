@@ -55,6 +55,7 @@ class Texture2D;
 class FrameBuffer;
 class ShaderManager;
 class ShaderProgram;
+struct DrawEncoder;
 
 /// The renderer of the game. The requests of the world to the renderer are in the base class.
 class RendererInterface: public RendererRequestsInterface
@@ -85,6 +86,9 @@ public:
 	struct L3DMeshSubmitDesc
 	{
 		graphics::RenderPass viewId;
+		/// Where the draws go: the game thread's encoder when null, or the encoder of a thread that encodes at the same
+		/// time
+		graphics::DrawEncoder* encoder {nullptr};
 		/// Every primitive is added over what is behind it by this share, whatever its material says
 		std::optional<float> additiveShare;
 		/// Every primitive is blended over what is behind it by each instance's own alpha, whatever its material says
@@ -253,6 +257,9 @@ public:
 		std::optional<ObjectLook> objectLook;
 		/// The snow lying where the mesh stands shows on it
 		bool snow {false};
+		/// The mesh reads the snow by each face, as a fence does (see snow_faces). Its submeshes keep the up part of the
+		/// normal of each face in their corners (L3DSubMesh::SplitFacesForSnow).
+		bool snowByFace {false};
 		/// The creatures' and the hand's moving shadows fall on the mesh, where its program takes them: not on the
 		/// creatures themselves, the hand or the villagers a script draws in high detail
 		bool groundShadows {true};
@@ -271,13 +278,15 @@ public:
 		};
 		const MorphTargets* morphTargets {nullptr};
 		/// A creature fizzing out of sight, drawn twice through the static scrolling over its skin (creature_fizz_look):
-		/// first its depth alone where the static is strong enough, then its body blended over that depth
+		/// first its depth alone where the static is strong enough, then its body blended over that depth. Frozen, the
+		/// ice is then added over all of its mesh.
 		struct Fizz
 		{
 			enum class Pass : uint8_t
 			{
 				Depth,
 				Body,
+				Ice,
 			};
 			Pass pass;
 			/// How far it has fizzed, as a byte

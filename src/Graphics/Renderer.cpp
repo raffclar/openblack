@@ -50,6 +50,7 @@
 #include "3D/InfluenceCircle.h"
 #include "3D/L3DAnim.h"
 #include "3D/L3DMesh.h"
+#include "3D/L3DSkinTexels.h"
 #include "3D/L3DSubMesh.h"
 #include "3D/LandBlock.h"
 #include "3D/LandColourStamps.h"
@@ -628,6 +629,8 @@ Renderer::Renderer(uint32_t bgfxReset, std::unique_ptr<BgfxCallback>&& bgfxCallb
     , _workers(std::make_unique<WorkerPool>(WorkerPool::DefaultThreadCount()))
 {
 	_shaderManager->LoadShaders();
+	// Each program's mesh uniforms are found now, so that the threads that encode draws only read them
+	_shaderManager->ForEachProgram([this](const ShaderProgram& program) { static_cast<void>(MeshUniformsOf(program)); });
 	_groundShadowScratch.resize(_workers->GetLaneCount());
 	_plane = Primitive::CreatePlane();
 	_morphStreamLayouts = std::make_unique<MorphStreamLayouts>();
@@ -676,6 +679,7 @@ Renderer::~Renderer() noexcept
 	_landShadowBake.reset();
 	_landFootprints.reset();
 	_templeMapFrameBuffer.reset();
+	_templeMapHalfFrameBuffer.reset();
 	if (_landLightTexture)
 	{
 		bgfx::destroy(toBgfx(*_landLightTexture));
@@ -913,7 +917,7 @@ bool CreatureMirrored(entt::entity entity, glm::vec3 position, float fizz)
 
 /// Binds the submeshes of a creature's variant meshes that match one of its base mesh as the second to fourth vertex
 /// streams; the base's own where a variant's doesn't match
-void BindMorphTargets(const L3DMesh& mesh, const L3DSubMesh& subMesh,
+void BindMorphTargets(bgfx::Encoder& encoder, const L3DMesh& mesh, const L3DSubMesh& subMesh,
                       const RendererInterface::L3DMeshSubmitDesc::MorphTargets& targets, const MorphStreamLayouts& layouts)
 {
 	const auto& subMeshes = mesh.GetSubMeshes();
@@ -932,21 +936,21 @@ void BindMorphTargets(const L3DMesh& mesh, const L3DSubMesh& subMesh,
 				buffer = &candidate;
 			}
 		}
-		buffer->BindStream(static_cast<uint8_t>(axis + 1), layouts.Get(axis));
+		buffer->BindStream(encoder, static_cast<uint8_t>(axis + 1), layouts.Get(axis));
 	}
 }
 
 /// Binds every vertex's position and bone in the submesh and in its matches of the creature's variant meshes, for the
 /// vertex shader to blend the seams with; the base's own where a variant's doesn't match. Off where the submesh has no
 /// blends, or where the blends are turned off.
-void BindBlendSources(const L3DMesh& mesh, const L3DSubMesh& subMesh,
+void BindBlendSources(DrawEncoder& to, const L3DMesh& mesh, const L3DSubMesh& subMesh,
                       const RendererInterface::L3DMeshSubmitDesc::MorphTargets& targets, const ShaderProgram& program)
 {
 	const auto* base = subMesh.GetBlendSource();
 	const bool blended = targets.blendSeams && subMesh.HasBlends() && base != nullptr;
 	const auto width = base != nullptr ? static_cast<float>(base->GetResolution().x) : 1.0f;
 	const glm::vec4 u_vertexBlend {blended ? 1.0f : 0.0f, width, 0.0f, 0.0f};
-	program.SetUniformValue("u_vertexBlend", &u_vertexBlend);
+	program.SetUniformValue(to, "u_vertexBlend", &u_vertexBlend);
 	if (!blended)
 	{
 		return;
@@ -959,7 +963,7 @@ void BindBlendSources(const L3DMesh& mesh, const L3DSubMesh& subMesh,
 	    {"s_blendThinFat", 4},
 	    {"s_blendWeakStrong", 9},
 	}};
-	program.SetTextureSampler("s_blendBase", 2, *base);
+	program.SetTextureSampler(to, "s_blendBase", 2, *base);
 	for (size_t axis = 0; axis < targets.meshes.size(); ++axis)
 	{
 		const auto* target = targets.meshes.at(axis);
@@ -972,13 +976,13 @@ void BindBlendSources(const L3DMesh& mesh, const L3DSubMesh& subMesh,
 				source = candidate;
 			}
 		}
-		program.SetTextureSampler(k_Samplers.at(axis).first, k_Samplers.at(axis).second, *source);
+		program.SetTextureSampler(to, k_Samplers.at(axis).first, k_Samplers.at(axis).second, *source);
 	}
 }
 
 /// The textures of the looks the creature spells give a creature: the ice sheen of a frozen one, and the static one
 /// fizzing out of sight is drawn through
-void BindCreatureSpellLooks(const ShaderProgram& program)
+void BindCreatureSpellLooks(DrawEncoder& to, const ShaderProgram& program)
 {
 	const auto& textures = Locator::resources::value().GetTextures();
 	constexpr std::array<std::pair<const char*, std::pair<uint8_t, entt::hashed_string>>, 3> k_Looks {{
@@ -990,22 +994,27 @@ void BindCreatureSpellLooks(const ShaderProgram& program)
 	{
 		if (textures.Contains(binding.second.value()))
 		{
-			program.SetTextureSampler(sampler, binding.first, *textures.Handle(binding.second));
+			program.SetTextureSampler(to, sampler, binding.first, *textures.Handle(binding.second));
 		}
 	}
 }
 
 /// How a creature fizzing out of sight is drawn in the pass at hand: xy how far the static has slid across its skin, z
-/// 0 for none, 1 for its depth through the static, with w the least alpha the static must have, or 2 for its body over
-/// that depth, blended at w. With z 0, w is how frozen it is. With z -1, the mesh shows no ice, also where its instance
-/// is frozen.
+/// 0 for none, 1 for its depth through the static, with w the least alpha the static must have, 2 for its body over
+/// that depth, blended at w, or 3 for the ice alone over all of it, with w the ice's alpha. With z 0, w is the ice's
+/// alpha. With z -1, the mesh shows no ice, also where its instance is frozen.
 glm::vec4 CreatureSpellLookOf(const std::optional<RendererInterface::L3DMeshSubmitDesc::Fizz>& fizz, float freeze,
                               bool iceShown)
 {
 	using Pass = RendererInterface::L3DMeshSubmitDesc::Fizz::Pass;
+	const float iceAlpha = freeze > 0.0f ? static_cast<float>(creature_spells::IceAlpha(freeze)) / 255.0f : 0.0f;
 	if (!fizz.has_value())
 	{
-		return {0.0f, 0.0f, iceShown ? 0.0f : -1.0f, iceShown ? freeze : 0.0f};
+		return {0.0f, 0.0f, iceShown ? 0.0f : -1.0f, iceShown ? iceAlpha : 0.0f};
+	}
+	if (fizz->pass == Pass::Ice)
+	{
+		return {0.0f, 0.0f, 3.0f, iceAlpha};
 	}
 	const bool depth = fizz->pass == Pass::Depth;
 	const float w = depth ? static_cast<float>(creature_fizz_look::StaticThreshold(fizz->level)) / 255.0f
@@ -1036,13 +1045,15 @@ glm::vec3 HandGlowColour()
 
 const Renderer::MeshUniforms& Renderer::MeshUniformsOf(const ShaderProgram& program) const
 {
-	const auto [found, inserted] = _meshUniforms.try_emplace(&program);
-	if (inserted)
+	// Only a look-up for the programs loaded with the renderer, which the threads that encode draws can do together
+	if (const auto known = std::as_const(_meshUniforms).find(&program); known != _meshUniforms.cend())
 	{
-		for (size_t i = 0; i < k_MeshUniformNames.size(); ++i)
-		{
-			found->second.at(i) = program.FindUniform(k_MeshUniformNames.at(i));
-		}
+		return known->second;
+	}
+	const auto [found, inserted] = _meshUniforms.try_emplace(&program);
+	for (size_t i = 0; i < k_MeshUniformNames.size(); ++i)
+	{
+		found->second.at(i) = program.FindUniform(k_MeshUniformNames.at(i));
 	}
 	return found->second;
 }
@@ -1114,7 +1125,7 @@ const Renderer::Cap& Renderer::LandCapOf(const L3DSubMesh& subMesh, const CapPri
 	return _landCaps.emplace(key, std::move(cap)).first->second;
 }
 
-bool Renderer::BindCap(const std::vector<partial_build_cap::CapVertex>& cap)
+bool Renderer::BindCap(bgfx::Encoder& encoder, const std::vector<partial_build_cap::CapVertex>& cap)
 {
 	// Laid out as a model's own vertices, each moved by the model's matrix alone
 	struct Vertex
@@ -1145,7 +1156,7 @@ bool Renderer::BindCap(const std::vector<partial_build_cap::CapVertex>& cap)
 		// The first matrix, no partner to blend with
 		vertices[i] = {.position = cap[i].position, .uv = cap[i].uv, .normal = cap[i].normal, .indices = {0, -1, 0, 0}};
 	}
-	bgfx::setVertexBuffer(0, &buffer);
+	encoder.setVertexBuffer(0, &buffer);
 	return true;
 }
 
@@ -1234,28 +1245,30 @@ void Renderer::DrawSubMesh(const graphics::L3DMesh& mesh, const graphics::L3DSub
 		}
 		return GetTexture(skinID, skins);
 	};
+	// The encoder that the draws go into
+	auto& to = desc.encoder != nullptr ? *desc.encoder : _shaderManager->GetMainEncoder();
 	// The program's uniforms by handle: a draw sets them for every primitive
 	const auto& uniforms = MeshUniformsOf(*program);
 	const auto has = [&uniforms](MeshUniform uniform) { return uniforms[static_cast<size_t>(uniform)].has_value(); };
 	// Set by handle where the program has the uniform, or by name for its warning where it hasn't
-	const auto setUniform = [&uniforms, program](MeshUniform uniform, const void* value) {
+	const auto setUniform = [&uniforms, &to, program](MeshUniform uniform, const void* value) {
 		if (const auto& handle = uniforms[static_cast<size_t>(uniform)])
 		{
-			program->SetUniformValue(*handle, value);
+			program->SetUniformValue(to, *handle, value);
 		}
 		else
 		{
-			program->SetUniformValue(k_MeshUniformNames[static_cast<size_t>(uniform)].data(), value);
+			program->SetUniformValue(to, k_MeshUniformNames[static_cast<size_t>(uniform)].data(), value);
 		}
 	};
-	const auto setSampler = [&uniforms, program](MeshUniform sampler, uint8_t stage, const auto& texture) {
+	const auto setSampler = [&uniforms, &to, program](MeshUniform sampler, uint8_t stage, const auto& texture) {
 		if (const auto& handle = uniforms[static_cast<size_t>(sampler)])
 		{
-			program->SetTextureSampler(*handle, stage, texture);
+			program->SetTextureSampler(to, *handle, stage, texture);
 		}
 		else
 		{
-			program->SetTextureSampler(k_MeshUniformNames[static_cast<size_t>(sampler)].data(), stage, texture);
+			program->SetTextureSampler(to, k_MeshUniformNames[static_cast<size_t>(sampler)].data(), stage, texture);
 		}
 	};
 
@@ -1319,12 +1332,12 @@ void Renderer::DrawSubMesh(const graphics::L3DMesh& mesh, const graphics::L3DSub
 		{
 			if (modelMatrices != nullptr && desc.matrixCount > 0)
 			{
-				bgfx::setTransform(modelMatrices, desc.matrixCount);
+				to.encoder->setTransform(modelMatrices, desc.matrixCount);
 			}
 			if (desc.boneTexture != nullptr)
 			{
-				program->SetUniformValue("u_bones", &desc.bones);
-				program->SetTextureSampler("s_bones", 2, *desc.boneTexture);
+				program->SetUniformValue(to, "u_bones", &desc.bones);
+				program->SetTextureSampler(to, "s_bones", 2, *desc.boneTexture);
 			}
 			if (has(MeshUniform::DepthBias))
 			{
@@ -1354,12 +1367,12 @@ void Renderer::DrawSubMesh(const graphics::L3DMesh& mesh, const graphics::L3DSub
 			}
 			if (desc.morphTargets != nullptr && has(MeshUniform::VertexBlend))
 			{
-				BindBlendSources(mesh, subMesh, *desc.morphTargets, *program);
-				BindCreatureSpellLooks(*program);
+				BindBlendSources(to, mesh, subMesh, *desc.morphTargets, *program);
+				BindCreatureSpellLooks(to, *program);
 			}
 			else if (desc.fizz.has_value() || desc.freeze > 0.0f)
 			{
-				BindCreatureSpellLooks(*program);
+				BindCreatureSpellLooks(to, *program);
 			}
 			// Set for every mesh, so that none is drawn with another's fizz
 			if (has(MeshUniform::CreatureSpellLook))
@@ -1432,8 +1445,9 @@ void Renderer::DrawSubMesh(const graphics::L3DMesh& mesh, const graphics::L3DSub
 				// the normal of the posed vertex.
 				// z: 1 for the faces of a broken shape. Their snow is read by where each corner is in the world and by
 				// the normal of its face, and shows from a different alpha.
+				// w: 1 for a fence, which reads the snow by each face
 				const glm::vec4 u_snow {snowed ? 1.0f : 0.0f, subMesh.GetFlags().hasBones ? 1.0f : 0.0f,
-				                        subMesh.IsMade() ? 1.0f : 0.0f, 0.0f};
+				                        subMesh.IsMade() ? 1.0f : 0.0f, desc.snowByFace ? 1.0f : 0.0f};
 				setUniform(MeshUniform::Snow, &u_snow);
 				if (snowed)
 				{
@@ -1478,7 +1492,7 @@ void Renderer::DrawSubMesh(const graphics::L3DMesh& mesh, const graphics::L3DSub
 					        : std::nullopt;
 					if (diffuse.has_value())
 					{
-						program->SetTextureSampler(*diffuse, 0, *texture, BGFX_SAMPLER_U_CLAMP | BGFX_SAMPLER_V_CLAMP);
+						program->SetTextureSampler(to, *diffuse, 0, *texture, BGFX_SAMPLER_U_CLAMP | BGFX_SAMPLER_V_CLAMP);
 					}
 					else
 					{
@@ -1600,9 +1614,9 @@ void Renderer::DrawSubMesh(const graphics::L3DMesh& mesh, const graphics::L3DSub
 				// the reflection
 				const bool mainView = desc.viewId == RenderPass::Main || desc.viewId == RenderPass::Translucent;
 				const bool inTemple = Locator::temple::has_value() && Locator::temple::value().Active();
-				SetObjectGroundShadowUniforms(*program, desc.groundShadows && Locator::config::value().detail.objectShadows &&
-				                                            mainView && !inTemple && !desc.isSky && !desc.drawAll &&
-				                                            desc.morphTargets == nullptr);
+				SetObjectGroundShadowUniforms(to, *program,
+				                              desc.groundShadows && Locator::config::value().detail.objectShadows && mainView &&
+				                                  !inTemple && !desc.isSky && !desc.drawAll && desc.morphTargets == nullptr);
 			}
 			if (has(MeshUniform::LightRule))
 			{
@@ -1661,12 +1675,12 @@ void Renderer::DrawSubMesh(const graphics::L3DMesh& mesh, const graphics::L3DSub
 		{
 			if (desc.instanceDesc != nullptr && (skip & Mesh::SkipState::SkipInstanceBuffer) == 0)
 			{
-				bgfx::setInstanceDataBuffer(toBgfx(desc.instanceDesc->GetRawHandle()), desc.instanceDesc->GetStart(),
-				                            desc.instanceDesc->GetCount());
+				to.encoder->setInstanceDataBuffer(toBgfx(desc.instanceDesc->GetRawHandle()), desc.instanceDesc->GetStart(),
+				                                  desc.instanceDesc->GetCount());
 			}
 			if (cap != nullptr)
 			{
-				if (!BindCap(*cap))
+				if (!BindCap(*to.encoder, *cap))
 				{
 					lastPreserveState = false;
 					continue;
@@ -1674,23 +1688,24 @@ void Renderer::DrawSubMesh(const graphics::L3DMesh& mesh, const graphics::L3DSub
 			}
 			else if (subMesh.GetMesh().IsIndexed() && (skip & Mesh::SkipState::SkipIndexBuffer) == 0)
 			{
-				subMesh.GetMesh().GetIndexBuffer().Bind(prim.indicesCount, prim.indicesOffset);
+				subMesh.GetMesh().GetIndexBuffer().Bind(*to.encoder, prim.indicesCount, prim.indicesOffset);
 			}
 			if (cap == nullptr && (skip & Mesh::SkipState::SkipVertexBuffer) == 0)
 			{
-				subMesh.GetMesh().GetVertexBuffer().Bind();
+				subMesh.GetMesh().GetVertexBuffer().Bind(*to.encoder);
 				if (desc.morphTargets != nullptr && _morphStreamLayouts)
 				{
-					BindMorphTargets(mesh, subMesh, *desc.morphTargets, *_morphStreamLayouts);
+					BindMorphTargets(*to.encoder, mesh, subMesh, *desc.morphTargets, *_morphStreamLayouts);
 				}
 			}
 			if ((skip & Mesh::SkipState::SkipRenderState) == 0)
 			{
 				auto state = desc.state;
 				using FizzPass = L3DMeshSubmitDesc::Fizz::Pass;
-				if (desc.fizz.has_value() && desc.fizz->pass == FizzPass::Depth)
+				if (desc.fizz.has_value() && desc.fizz->pass != FizzPass::Body)
 				{
-					// A fizzing creature's depth through the static culls its back faces, whatever its materials say
+					// A fizzing creature's depth through the static and its ice cull their back faces, whatever its materials
+					// say
 					state &= ~BGFX_STATE_CULL_MASK;
 					state |= desc.mirrored ? BGFX_STATE_CULL_CW : BGFX_STATE_CULL_CCW;
 				}
@@ -1750,14 +1765,14 @@ void Renderer::DrawSubMesh(const graphics::L3DMesh& mesh, const graphics::L3DSub
 					const auto byte = static_cast<uint32_t>(std::clamp(*desc.additiveShare, 0.0f, 1.0f) * 255.0f);
 					rgba = (byte << 24) | (byte << 16) | (byte << 8) | byte;
 				}
-				bgfx::setState(state, rgba);
+				to.encoder->setState(state, rgba);
 				drawState = state;
 			}
 
 			// Opaque draws whose order doesn't show are gathered by the textures they bind
 			const auto sortDepth =
 			    draw_order::Reorderable(viewId, drawState, desc.sortDepth) ? draw_order::GroupKey(bindings) : desc.sortDepth;
-			program->Submit(static_cast<bgfx::ViewId>(viewId), sortDepth,
+			program->Submit(to, static_cast<bgfx::ViewId>(viewId), sortDepth,
 			                primitivePreserveState ? BGFX_DISCARD_NONE : BGFX_DISCARD_ALL);
 		}
 		lastPreserveState = primitivePreserveState;
@@ -1971,6 +1986,82 @@ void Renderer::DrawTempleMapPass() const
 		                          BGFX_DISCARD_VERTEX_STREAMS | BGFX_DISCARD_STATE);
 	}
 	_shaderManager->DiscardBindings();
+	// At the low detail levels the map has half the texels a side: 4 a block, each the texel of the full map at twice its
+	// column and twice its row
+	_templeMapHalved = Locator::config::has_value() && Locator::config::value().detail.lowResTextures;
+	if (_templeMapHalved)
+	{
+		HalveTempleMap();
+	}
+}
+
+void Renderer::HalveTempleMap() const
+{
+	constexpr uint16_t k_FullSize = 256;
+	constexpr uint16_t k_HalfSize = k_FullSize / 2;
+	if (!_templeMapHalfFrameBuffer)
+	{
+		_templeMapHalfFrameBuffer =
+		    std::make_unique<FrameBuffer>("Temple Map Half", k_HalfSize, k_HalfSize, TextureFormat::RGBA8, std::nullopt,
+		                                  static_cast<uint8_t>(1), Wrapping::ClampEdge);
+	}
+	const auto viewId = static_cast<bgfx::ViewId>(RenderPass::TempleMapHalf);
+	_templeMapHalfFrameBuffer->Bind(RenderPass::TempleMapHalf);
+	bgfx::setViewRect(viewId, 0, 0, k_HalfSize, k_HalfSize);
+	constexpr auto k_Side = static_cast<float>(k_HalfSize);
+	const auto projection =
+	    bgfx::getCaps()->originBottomLeft ? glm::ortho(0.0f, k_Side, 0.0f, k_Side) : glm::ortho(0.0f, k_Side, k_Side, 0.0f);
+	const glm::mat4 identity(1.0f);
+	bgfx::setViewTransform(viewId, glm::value_ptr(identity), glm::value_ptr(projection));
+	bgfx::touch(viewId);
+
+	struct Vertex
+	{
+		glm::vec3 position;
+		glm::vec2 uv;
+		uint32_t colour;
+	};
+	static const auto k_Layout = [] {
+		bgfx::VertexLayout layout;
+		layout.begin()
+		    .add(bgfx::Attrib::Position, 3, bgfx::AttribType::Float)
+		    .add(bgfx::Attrib::TexCoord0, 2, bgfx::AttribType::Float)
+		    .add(bgfx::Attrib::Color0, 4, bgfx::AttribType::Uint8, true)
+		    .end();
+		return layout;
+	}();
+	if (bgfx::getAvailTransientVertexBuffer(6, k_Layout) < 6)
+	{
+		return;
+	}
+	bgfx::TransientVertexBuffer buffer;
+	bgfx::allocTransientVertexBuffer(&buffer, 6, k_Layout);
+	// The centre of each texel of the half map reads the centre of the full map's texel at twice its column and row: the
+	// texture coordinates move back by half a texel of the full map
+	constexpr float k_Back = 0.5f / static_cast<float>(k_FullSize);
+	constexpr uint32_t k_White = 0xFFFFFFFF;
+	const std::array<Vertex, 4> corners {{
+	    {{0.0f, 0.0f, 0.0f}, {-k_Back, -k_Back}, k_White},
+	    {{k_Side, 0.0f, 0.0f}, {1.0f - k_Back, -k_Back}, k_White},
+	    {{k_Side, k_Side, 0.0f}, {1.0f - k_Back, 1.0f - k_Back}, k_White},
+	    {{0.0f, k_Side, 0.0f}, {-k_Back, 1.0f - k_Back}, k_White},
+	}};
+	constexpr std::array<size_t, 6> k_Indices {0, 1, 2, 2, 3, 0};
+	const auto vertices = std::span(reinterpret_cast<Vertex*>(buffer.data), 6);
+	for (size_t i = 0; i < vertices.size(); ++i)
+	{
+		vertices[i] = corners.at(k_Indices.at(i));
+	}
+	const auto* shader = _shaderManager->GetShader("Interface");
+	if (const auto sampler = shader->FindUniform("s_texture"); sampler.has_value())
+	{
+		shader->SetTextureSampler(*sampler, 0, _templeMapFrameBuffer->GetColorAttachment(),
+		                          BGFX_SAMPLER_U_CLAMP | BGFX_SAMPLER_V_CLAMP | BGFX_SAMPLER_POINT);
+	}
+	bgfx::setVertexBuffer(0, &buffer);
+	bgfx::setState(BGFX_STATE_WRITE_RGB | BGFX_STATE_WRITE_A);
+	shader->Submit(viewId);
+	_shaderManager->DiscardBindings();
 }
 
 void Renderer::DrawTempleUnderside(const DrawSceneDesc& desc) const
@@ -2055,7 +2146,9 @@ void Renderer::DrawTempleMap(const DrawSceneDesc& desc) const
 	const auto model = glm::translate(glm::mat4(1.0f), temple.GetPosition());
 	bgfx::setTransform(glm::value_ptr(model));
 	bgfx::setVertexBuffer(0, &buffer);
-	shader->SetTextureSampler("s_texture", 0, _templeMapFrameBuffer->GetColorAttachment());
+	// At the low detail levels the room shows the map at half size
+	const auto& map = _templeMapHalved && _templeMapHalfFrameBuffer ? *_templeMapHalfFrameBuffer : *_templeMapFrameBuffer;
+	shader->SetTextureSampler("s_texture", 0, map.GetColorAttachment());
 	bgfx::setState(BGFX_STATE_WRITE_RGB | BGFX_STATE_WRITE_A | BGFX_STATE_WRITE_Z | BGFX_STATE_DEPTH_TEST_GREATER |
 	               BGFX_STATE_MSAA | BGFX_STATE_BLEND_ALPHA);
 	shader->Submit(static_cast<bgfx::ViewId>(desc.viewId));
@@ -2696,6 +2789,122 @@ void Renderer::DrawMesh(const graphics::L3DMesh& mesh, const L3DMeshSubmitDesc& 
 	}
 }
 
+namespace
+{
+/// The runs of things that each lane encodes about, so that a lane that is done early takes another run
+constexpr size_t k_RunsPerLane = 4;
+/// Fewer things than this the game's thread draws alone: waking the threads would take longer
+constexpr size_t k_LeastThingsOnThreads = 16;
+
+/// Drops everything set on the encoder for the next draw, as a draw that drops all its state does
+void Clean(DrawEncoder& to)
+{
+	to.encoder->discard(BGFX_DISCARD_ALL);
+	to.stages.Clear();
+}
+} // namespace
+
+size_t Renderer::EncodeLanes() const
+{
+#if defined(__EMSCRIPTEN__)
+	// The web build encodes on one thread
+	return 1;
+#else
+	// A warm-up's draw window counts the draws of the game's thread alone
+	if (!Locator::config::has_value() || !Locator::config::value().parallelDrawEncode || _warmingUp ||
+	    _shaderManager->IsDrawWindowOpen())
+	{
+		return 1;
+	}
+	// Each lane but the game's thread takes an encoder of its own from bgfx
+	const auto encoders = static_cast<size_t>(bgfx::getCaps()->limits.maxEncoders);
+	return std::min(_workers->GetLaneCount(), encoders);
+#endif
+}
+
+void Renderer::EncodeInOrder(size_t count, const EncodeDraw& draw) const
+{
+	auto& main = _shaderManager->GetMainEncoder();
+	const size_t lanes = count >= k_LeastThingsOnThreads ? EncodeLanes() : 1;
+	if (lanes <= 1)
+	{
+		for (size_t index = 0; index < count; ++index)
+		{
+			Clean(main);
+			draw(index, main);
+		}
+		Clean(main);
+		return;
+	}
+
+	// Run r has the things from count * r / runs on, and the submit order after run r - 1. Run 0 goes on in the game
+	// thread's encoder, so that what the game's thread set before is set for its first draw, as when that thread draws
+	// all. The snow's depth changes a texture: that is done here first, so that the draws only read it.
+	static_cast<void>(SnowDepth(_snowDepth, _snowRevision));
+	const size_t runs = std::min(count, lanes * k_RunsPerLane);
+	const uint32_t firstOrder = ++_submitOrder;
+	_submitOrder = firstOrder + static_cast<uint32_t>(runs);
+	const auto runRange = [count, runs](size_t run) { return std::pair {count * run / runs, count * (run + 1) / runs}; };
+	const auto encodeRun = [&](size_t run, DrawEncoder& to) {
+		to.encoder->setSubmitOrder(firstOrder + static_cast<uint32_t>(run));
+		const auto [first, last] = runRange(run);
+		for (size_t index = first; index < last; ++index)
+		{
+			Clean(to);
+			draw(index, to);
+		}
+	};
+	const auto encodeRunOn = [&](size_t run, bgfx::Encoder* encoder) {
+		DrawEncoder to {.encoder = encoder};
+		encodeRun(run, to);
+	};
+
+	std::vector<bgfx::Encoder*> encoders(lanes, nullptr);
+	std::atomic<bool> firstRunTaken {false};
+	std::atomic<size_t> nextRun {1};
+	_workers->ForEach(lanes, [&](size_t /*index*/, size_t lane) {
+		if (lane == 0)
+		{
+			if (!firstRunTaken.exchange(true))
+			{
+				encodeRun(0, main);
+			}
+		}
+		else if (lane < encoders.size() && encoders[lane] == nullptr)
+		{
+			encoders[lane] = bgfx::begin(true);
+		}
+		auto* encoder = lane == 0 ? main.encoder : (lane < encoders.size() ? encoders[lane] : nullptr);
+		if (encoder == nullptr)
+		{
+			// bgfx had no encoder left for this thread: the others draw its runs
+			return;
+		}
+		for (auto run = nextRun.fetch_add(1); run < runs; run = nextRun.fetch_add(1))
+		{
+			encodeRunOn(run, encoder);
+		}
+	});
+	// The game's thread draws what no thread took
+	if (!firstRunTaken.exchange(true))
+	{
+		encodeRun(0, main);
+	}
+	for (auto run = nextRun.fetch_add(1); run < runs; run = nextRun.fetch_add(1))
+	{
+		encodeRunOn(run, main.encoder);
+	}
+	for (auto* encoder : encoders)
+	{
+		if (encoder != nullptr)
+		{
+			bgfx::end(encoder);
+		}
+	}
+	main.encoder->setSubmitOrder(_submitOrder);
+	Clean(main);
+}
+
 void Renderer::PaintLandFootprints(const DrawSceneDesc& drawDesc) const
 {
 	auto section = Locator::profiler::value().BeginScoped(Profiler::Stage::FootprintPass);
@@ -3045,7 +3254,9 @@ void Renderer::DrawMists(const DrawSceneDesc& desc) const
 
 	desc.entities.Each<const Mist, const ecs::components::Transform>(
 	    [&](const Mist& mist, const ecs::components::Transform& transform) {
-		    drawMist(mist, transform.position, mist.colour, nullptr);
+		    // A land mist draws with an alpha that its whole alpha gives, not with the alpha byte of its colour
+		    const auto drawnAlpha = mists::DrawnAlpha(mists::WholeAlphaOf(mist.colour, mist.alphaHighBits));
+		    drawMist(mist, transform.position, (static_cast<uint32_t>(drawnAlpha) << 24u) | (mist.colour & 0xFFFFFFu), nullptr);
 	    });
 	// The sky's clouds are things of the drawn registry
 	if (cloudsShown && Locator::drawnRegistry::has_value())
@@ -4446,9 +4657,15 @@ void Renderer::UploadCreatureSkins(const ecs::Registry& entities, std::unordered
 		{
 			const auto& painted = skin.skins[i];
 			auto& texture = entry.textures[i];
+			// The skins are at half size at the two lowest detail levels
+			const auto side = l3d_skin::SideOf(painted.texels.size());
+			if (texture && texture->GetResolution().x != side)
+			{
+				texture.reset();
+			}
 			if (!texture)
 			{
-				texture = TakeCreatureSkinTexture();
+				texture = TakeCreatureSkinTexture(side);
 				// Out of textures, as with thousands of creatures: this one keeps its species' skin as it was made
 				if (!texture)
 				{
@@ -4486,22 +4703,21 @@ void Renderer::UploadCreatureSkins(const ecs::Registry& entities, std::unordered
 	});
 }
 
-std::unique_ptr<Texture2D> Renderer::TakeCreatureSkinTexture() const
+std::unique_ptr<Texture2D> Renderer::TakeCreatureSkinTexture(uint16_t side) const
 {
-	if (!_spareCreatureSkins.empty())
+	if (!_spareCreatureSkins.empty() && _spareCreatureSkins.back()->GetResolution().x == side)
 	{
 		auto texture = std::move(_spareCreatureSkins.back());
 		_spareCreatureSkins.pop_back();
 		return texture;
 	}
-	return MakeCreatureSkinTexture();
+	return MakeCreatureSkinTexture(side);
 }
 
-std::unique_ptr<Texture2D> Renderer::MakeCreatureSkinTexture()
+std::unique_ptr<Texture2D> Renderer::MakeCreatureSkinTexture(uint16_t side)
 {
 	auto texture = std::make_unique<Texture2D>("Creature Skin");
-	texture->CreateWithinFrame(creature_tattoo::k_SkinSize, creature_tattoo::k_SkinSize, 1, TextureFormat::BGRA4,
-	                           Wrapping::Repeat, Filter::Linear, nullptr);
+	texture->CreateWithinFrame(side, side, 1, TextureFormat::BGRA4, Wrapping::Repeat, Filter::Linear, nullptr);
 	if (!bgfx::isValid(toBgfx(texture->GetNativeHandle())))
 	{
 		return nullptr;
@@ -4511,9 +4727,10 @@ std::unique_ptr<Texture2D> Renderer::MakeCreatureSkinTexture()
 
 void Renderer::PrepareCreatureSkins(size_t count) const noexcept
 {
+	const bool lowResolution = Locator::config::has_value() && Locator::config::value().detail.lowResTextures;
 	while (_spareCreatureSkins.size() < count)
 	{
-		auto texture = MakeCreatureSkinTexture();
+		auto texture = MakeCreatureSkinTexture(l3d_skin::LoadedSide(lowResolution));
 		if (!texture)
 		{
 			return;
@@ -4668,9 +4885,10 @@ void Renderer::UploadHandSkins() const
 		auto& texture = _handSkinTextures[i];
 		if (!texture)
 		{
+			// The skins are at half size at the two lowest detail levels
+			const auto side = l3d_skin::SideOf(skin.texels.size());
 			texture = std::make_unique<Texture2D>("Hand Skin");
-			texture->CreateWithinFrame(l3d::L3DTexture::k_Width, l3d::L3DTexture::k_Height, 1, TextureFormat::BGRA4,
-			                           Wrapping::Repeat, Filter::Linear, nullptr);
+			texture->CreateWithinFrame(side, side, 1, TextureFormat::BGRA4, Wrapping::Repeat, Filter::Linear, nullptr);
 		}
 		texture->Update(skin.texels.data(), static_cast<uint32_t>(skin.texels.size() * sizeof(skin.texels[0])));
 		_handSkins.emplace_back(skin.id, texture.get());
@@ -5828,7 +6046,7 @@ void Renderer::SetGroundShadowUniforms(const ShaderProgram& program, bool receiv
 	program.SetTextureSampler("s4_groundShadowData", 4, *_groundShadowData);
 }
 
-void Renderer::SetObjectGroundShadowUniforms(const ShaderProgram& program, bool receives) const
+void Renderer::SetObjectGroundShadowUniforms(DrawEncoder& to, const ShaderProgram& program, bool receives) const
 {
 	const glm::vec4 info {static_cast<float>(receives ? _groundShadowsOnObjects : 0U), 0.0f, 0.0f, 0.0f};
 	// By the handles the program's draws of meshes keep, as this is set for every primitive of them
@@ -5836,11 +6054,11 @@ void Renderer::SetObjectGroundShadowUniforms(const ShaderProgram& program, bool 
 	const auto handle = [&uniforms](MeshUniform uniform) { return uniforms[static_cast<size_t>(uniform)]; };
 	if (const auto uniform = handle(MeshUniform::GroundShadowInfo))
 	{
-		program.SetUniformValue(*uniform, &info);
+		program.SetUniformValue(to, *uniform, &info);
 	}
 	if (const auto uniform = handle(MeshUniform::GroundShadowData))
 	{
-		program.SetTextureSampler(*uniform, 14, *_groundShadowData);
+		program.SetTextureSampler(to, *uniform, 14, *_groundShadowData);
 	}
 }
 
@@ -6608,6 +6826,7 @@ void Renderer::DrawPass(const DrawSceneDesc& desc) const
 				}
 				submitDesc.landLightScale = meshId == ecs::components::Hand::k_MeshId ? 1.5f : 1.0f;
 				submitDesc.snow = !inTemple && meshId != ecs::components::Hand::k_MeshId;
+				submitDesc.snowByFace = placers.snowByFace;
 				// The villagers a script draws in high detail take no moving shadows, nor does the hand
 				const bool highDetail =
 				    std::ranges::any_of(renderCtx.highDetailDraws, [meshId](const auto& draw) { return draw.mesh == meshId; });
@@ -6967,10 +7186,12 @@ void Renderer::DrawPass(const DrawSceneDesc& desc) const
 			// A creature fizzing in or out of sight blends with what is behind it, but in its place among the solid
 			// models: after them in this view, before all that blends, the nearest fizzing creature first. First its depth
 			// alone, where the static scrolling over its skin is strong enough, then its body blended over just that
-			// depth. Returns the sort depth of the body.
+			// depth. Frozen, the ice is then added over all of its mesh where nothing nearer hides it, and lays no depth.
+			// Returns the sort depth of its last pass.
 			const auto drawFizzing = [&](entt::id_type meshId, const RenderContext::InstancedDrawDesc& placers,
 			                             uint32_t instance, std::optional<graphics::DynamicVertexBufferHandle> instances,
-			                             const EntityPose& pose, uint8_t level, glm::vec2 scroll, uint32_t depth) {
+			                             const EntityPose& pose, uint8_t level, glm::vec2 scroll, uint32_t depth,
+			                             float freeze) {
 				const auto mainState = submitDesc.state;
 				submitDesc.viewId = translucentViewId;
 				submitDesc.fizz =
@@ -6983,6 +7204,17 @@ void Renderer::DrawPass(const DrawSceneDesc& desc) const
 				                   BGFX_STATE_BLEND_ALPHA | BGFX_STATE_MSAA;
 				submitDesc.sortDepth = depth > 0 ? depth - 1 : 0;
 				drawInstances(meshId, placers, false, instance, 1, &pose, nullptr, instances);
+				if (creature_spells::IceAlpha(freeze) > 0)
+				{
+					submitDesc.fizz->pass = L3DMeshSubmitDesc::Fizz::Pass::Ice;
+					submitDesc.freeze = freeze;
+					submitDesc.state = BGFX_STATE_WRITE_RGB | BGFX_STATE_WRITE_A | BGFX_STATE_DEPTH_TEST_GEQUAL |
+					                   BGFX_STATE_BLEND_FUNC(BGFX_STATE_BLEND_SRC_ALPHA, BGFX_STATE_BLEND_ONE) |
+					                   BGFX_STATE_MSAA;
+					submitDesc.sortDepth = submitDesc.sortDepth > 0 ? submitDesc.sortDepth - 1 : 0;
+					drawInstances(meshId, placers, false, instance, 1, &pose, nullptr, instances);
+					submitDesc.freeze = 0.0f;
+				}
 				const auto bodyDepth = submitDesc.sortDepth;
 				submitDesc.fizz.reset();
 				submitDesc.state = mainState;
@@ -7090,7 +7322,7 @@ void Renderer::DrawPass(const DrawSceneDesc& desc) const
 					const auto depth = rank.has_value() ? graphics::fizz_draw_order::CreatureDepth(*rank)
 					                                    : zsort::BeforeSorted(position, cameraOrigin);
 					eyesSortDepth = drawFizzing(mesh->id, placers->second, instance, std::nullopt, pose,
-					                            creature_fizz_look::Level(fizz), spells->staticScroll, depth);
+					                            creature_fizz_look::Level(fizz), spells->staticScroll, depth, spells->freeze);
 				}
 				else if (creature_fizz_look::Drawn(fizz))
 				{
@@ -7213,7 +7445,8 @@ void Renderer::DrawPass(const DrawSceneDesc& desc) const
 					if (desc.viewId != RenderPass::Reflection)
 					{
 						drawFizzing(ids.base, placers, 0, *_warmUpInstances, pose,
-						            creature_fizz_look::Level(warm_up::k_CreatureFizz), glm::vec2(0.0f), 0);
+						            creature_fizz_look::Level(warm_up::k_CreatureFizz), glm::vec2(0.0f), 0,
+						            warm_up::k_CreatureFreeze);
 					}
 					submitDesc.posedModelLight = false;
 				}
@@ -8242,6 +8475,8 @@ void Renderer::Frame() noexcept
 #endif
 	// Advance to next frame. Process submitted rendering primitives.
 	const auto frame = bgfx::frame();
+	// The game thread's encoder starts each frame at submit order 0
+	_submitOrder = 0;
 #if defined(__EMSCRIPTEN__)
 	web::PresentFrame();
 #endif

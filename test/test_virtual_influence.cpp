@@ -7,6 +7,8 @@
  * openblack is licensed under the GNU General Public License version 3.
  *******************************************************************************/
 
+#include <optional>
+
 #include <gtest/gtest.h>
 
 #include "3D/MapCoords.h"
@@ -238,4 +240,35 @@ TEST(VirtualInfluence, BackInInfluenceTheManaPathIsWorkedOutAfresh)
 	// Switched off, the strength does not change, nor does the path
 	state.disabled = true;
 	EXPECT_FALSE(ManaPathEnds(state, Inside({30.0f, 0.0f, 40.0f}, 7)));
+}
+
+// A person's hand measures from the point that its last report picked. A god that no person plays sends no reports, so
+// its hand measures from the origin of the world. Out there, far from its influence, its share is soon gone.
+TEST(VirtualInfluence, AGodThatNoPersonPlaysMeasuresFromTheOrigin)
+{
+	constexpr glm::vec3 k_Pick {1200.0f, 30.0f, 900.0f};
+	static_assert(TurnHandPoint(true, k_Pick) == k_Pick);
+	static_assert(TurnHandPoint(true, std::nullopt) == glm::vec3(0.0f));
+	static_assert(TurnHandPoint(false, k_Pick) == glm::vec3(0.0f));
+	static_assert(TurnHandPoint(false, std::nullopt) == glm::vec3(0.0f));
+	State state;
+	for (uint32_t turn = 1; turn <= k_Settings.maxTurns && state.fraction > 0.0f; ++turn)
+	{
+		ProcessTurn(state, Outside(TurnHandPoint(false, k_Pick), turn), k_Settings);
+		ASSERT_TRUE(state.turnHand.has_value());
+		EXPECT_EQ(*state.turnHand, glm::vec3(0.0f));
+	}
+	EXPECT_EQ(state.fraction, 0.0f);
+}
+
+TEST(VirtualInfluence, OnlyATurnOutOfInfluenceUsesTheChantsOfTheWorshipSites)
+{
+	State state;
+	EXPECT_TRUE(UsesChants(state, false, false));
+	// In its own influence or under a shield, the hand uses no chants
+	EXPECT_FALSE(UsesChants(state, false, true));
+	EXPECT_FALSE(UsesChants(state, true, false));
+	// Switched off, the turn does nothing at all
+	state.disabled = true;
+	EXPECT_FALSE(UsesChants(state, false, false));
 }

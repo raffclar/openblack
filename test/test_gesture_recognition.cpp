@@ -244,12 +244,45 @@ TEST(GestureRequests, AStormSeedWaitsForACircleThenPowersUp)
 	EXPECT_EQ(requests[2], (Request {.gesture = GestureType::InverseSpiral, .purpose = Purpose::PowerUp, .powerUpLevel = 0}));
 	EXPECT_EQ(requests[3], (Request {.gesture = GestureType::Spiral, .purpose = Purpose::PowerUp, .powerUpLevel = 1}));
 
-	// With a circle remembered and the seed at level 0, only the other level and the scribble
+	// With a circle remembered and level 0 asked for, only the other level and the scribble that calls it off
 	context.circleRemembered = true;
-	context.seed->powerUp = 0;
+	context.seed->askedPowerUp = GestureType::InverseSpiral;
 	const auto later = Requests(context);
 	ASSERT_EQ(later.size(), 2u);
+	EXPECT_TRUE(later[0].callsOff);
 	EXPECT_EQ(later[1].powerUpLevel, 1);
+}
+
+// The level asked for is not waited for again, though the seed still casts at its old level until its icon charged it
+TEST(GestureRequests, ThePowerUpAskedForIsNotWaitedForAgain)
+{
+	HandContext context;
+	context.seed = HandContext::Seed {.powerUpGestures = {GestureType::InverseSpiral, GestureType::Spiral, GestureType::None},
+	                                  .powerUp = -1,
+	                                  .askedPowerUp = GestureType::Spiral};
+	const auto requests = Requests(context);
+	ASSERT_EQ(requests.size(), 2u);
+	EXPECT_EQ(requests[0].purpose, Purpose::DropSeed);
+	EXPECT_TRUE(requests[0].callsOff);
+	EXPECT_EQ(requests[1], (Request {.gesture = GestureType::InverseSpiral, .purpose = Purpose::PowerUp, .powerUpLevel = 0}));
+	// A seed at level 1 with no power-up asked for waits for both levels, and its scribble drops it
+	context.seed->powerUp = 1;
+	context.seed->askedPowerUp = GestureType::None;
+	const auto unasked = Requests(context);
+	ASSERT_EQ(unasked.size(), 3u);
+	EXPECT_FALSE(unasked[0].callsOff);
+	EXPECT_EQ(unasked[2].powerUpLevel, 1);
+}
+
+// The hand offers only the levels that the icon can charge for the player
+TEST(GestureRequests, TheHandOffersOnlyTheLevelsTheIconCanCharge)
+{
+	const std::array<GestureType, 3> gestures {GestureType::InverseSpiral, GestureType::Spiral, GestureType::None};
+	EXPECT_EQ(OfferedPowerUps(gestures, {true, false, true}),
+	          (std::array<GestureType, 3> {GestureType::InverseSpiral, GestureType::None, GestureType::None}));
+	EXPECT_EQ(OfferedPowerUps(gestures, {false, false, false}),
+	          (std::array<GestureType, 3> {GestureType::None, GestureType::None, GestureType::None}));
+	EXPECT_EQ(OfferedPowerUps(gestures, {true, true, true}), gestures);
 }
 
 TEST(GestureRequests, ASeedThatCantPowerUpIsStillDroppedByAScribble)
@@ -268,7 +301,10 @@ TEST(GestureRequests, TheHelpCountsSomeGestures)
 	context.seed = HandContext::Seed {.powerUpGestures = {GestureType::Spiral}};
 	const Request scribble {.gesture = GestureType::Scribble, .purpose = Purpose::DropSeed};
 	EXPECT_EQ(HelpEventOf(scribble, context), help::profile::k_GestureDropMiracle);
+	// A seed powered up already with no power-up asked for is dropped
 	context.seed->powerUp = 0;
+	EXPECT_EQ(HelpEventOf(scribble, context), help::profile::k_GestureDropMiracle);
+	context.seed->askedPowerUp = GestureType::Spiral;
 	EXPECT_EQ(HelpEventOf(scribble, context), help::profile::k_GestureStopPowerUp);
 	EXPECT_EQ(HelpEventOf({.gesture = GestureType::Spiral, .purpose = Purpose::PowerUp, .powerUpLevel = 0}, context),
 	          help::profile::k_GesturePowerUp);
@@ -291,7 +327,10 @@ TEST(GestureRequests, TheHelpCountsACastWithAPowerUp)
 {
 	HandContext::Seed seed {.powerUpGestures = {GestureType::Spiral}};
 	EXPECT_FALSE(CountsPoweredUpCast(seed, GestureType::None));
+	// The level of the seed does not count, only the power-up asked for
 	seed.powerUp = 0;
+	EXPECT_FALSE(CountsPoweredUpCast(seed, GestureType::None));
+	seed.askedPowerUp = GestureType::Spiral;
 	EXPECT_TRUE(CountsPoweredUpCast(seed, GestureType::None));
 	seed.cast = true;
 	EXPECT_FALSE(CountsPoweredUpCast(seed, GestureType::None));
@@ -302,6 +341,18 @@ TEST(GestureRequests, TheHelpCountsACastWithAPowerUp)
 	seed.sizingGesture = GestureType::Circle;
 	EXPECT_FALSE(CountsPoweredUpCast(seed, GestureType::Spiral));
 	EXPECT_TRUE(CountsPoweredUpCast(seed, GestureType::Circle));
+}
+
+// A cast passes the check of its sizing gesture when no gesture sizes the miracle, or when the gesture kept for the cast
+// is the sizing gesture. Only a cast that passes starts the path of the gesture again.
+TEST(GestureRequests, ACastPassesTheSizingCheckWithTheGestureThatSizesIt)
+{
+	static_assert(PassesSizingCheck(GestureType::None, GestureType::None));
+	static_assert(PassesSizingCheck(GestureType::None, GestureType::Spiral));
+	static_assert(PassesSizingCheck(GestureType::Circle, GestureType::Circle));
+	static_assert(!PassesSizingCheck(GestureType::Circle, GestureType::None));
+	static_assert(!PassesSizingCheck(GestureType::Circle, GestureType::Spiral));
+	EXPECT_TRUE(PassesSizingCheck(GestureType::Circle, GestureType::Circle));
 }
 
 TEST(GestureRequests, OutOfInfluenceOnlyASeedBeingPoweredUpIsScribbledAway)
@@ -584,11 +635,11 @@ TEST(GestureRequests, ThePowerUpsAndTheCancelCarryTheSeedForTheirHints)
 	          (Request {.gesture = GestureType::Scribble, .purpose = Purpose::DropSeed, .seed = SpellSeedType::Storm}));
 	EXPECT_EQ(requests[1].seed, SpellSeedType::Storm);
 	EXPECT_EQ(requests[2].seed, SpellSeedType::Storm);
-	// Once a level is asked for, the scribble has that level
-	context.seed->powerUp = 1;
+	// Once a level is asked for, the scribble calls it off
+	context.seed->askedPowerUp = GestureType::Spiral;
 	requests = Requests(context);
 	ASSERT_EQ(requests.size(), 2u);
-	EXPECT_EQ(requests[0].powerUpLevel, 1);
+	EXPECT_TRUE(requests[0].callsOff);
 }
 
 TEST(GestureRequests, TheSpiralsSayWhoseMiraclesTheyOpen)

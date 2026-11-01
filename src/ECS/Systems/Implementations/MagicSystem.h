@@ -172,6 +172,8 @@ public:
 	entt::entity CreateDispenser(glm::vec3 position, MagicType type, float yAngleRadians) override;
 	entt::entity CreateScriptDispenser(glm::vec3 position, AbodeInfo building, float yAngleRadians, float scale,
 	                                   entt::entity town) override;
+	entt::entity CreateTownDispenser(glm::vec3 position, AbodeInfo building, float yAngleRadians, float scale,
+	                                 entt::entity town, float built) override;
 	void SetDispenserMagic(entt::entity dispenser, MagicType type, uint32_t turns) override;
 	void SetDispenserPeriod(entt::entity dispenser, float seconds) override;
 	void ChargeDispenser(entt::entity dispenser) override;
@@ -181,13 +183,15 @@ public:
 	entt::entity CreateOneOffSeed(glm::vec3 position, SpellSeedType seed, int powerUp, float multiplier) override;
 	entt::entity CreateOneOffSeedFor(glm::vec3 position, MagicType type) override;
 	entt::entity GiveSeedToHand(PlayerNames player, SpellSeedType seed, int powerUp, float multiplier) override;
+	entt::entity GiveOneShotSeedToHand(PlayerNames player, SpellSeedType seed, int powerUp, float multiplier) override;
 	entt::entity SummonSeed(PlayerNames player, SpellSeedType seed, int powerUp) override;
 	entt::entity SummonSeedAtSite(entt::entity site, SpellSeedType seed, int powerUp) override;
-	entt::entity TakeIconSeed(entt::entity site, SpellSeedType seed, int powerUp, float chants) override;
+	entt::entity TakeIconSeed(entt::entity site, PlayerNames holder, SpellSeedType seed, int powerUp, float chants) override;
 	void DiscardHeldSeed() override;
 	void DiscardHeldSeedOf(PlayerNames player) override;
 	void DeleteSeed(entt::entity seed) override;
 	void SetIconSeedPowerUp(entt::entity seed, int powerUp) override;
+	bool TakeSeedBack(PlayerNames player, entt::entity seed) override;
 	[[nodiscard]] std::optional<uint32_t> TakeHeldMiracleToolTip() override;
 
 	void UpdateHand(const HandFrame& frame, const input_steps::Steps& steps) override;
@@ -381,9 +385,14 @@ private:
 	void HeldSeedTurn();
 	/// A locked miracle was let go: the seed keeps what is left for another go, if enough
 	void UnlockHeldMiracle();
+	/// A seed lets go of the miracle that it cast, which closes down when it still runs from the seed. The seed keeps
+	/// what the miracle had left and how long it ran. Whether the miracle had enough left for another cast.
+	bool StoreFromSpell(entt::entity entity, components::SpellSeed& seed, components::Spell& spell);
 	/// The gesture events since the last frame: the circle remembered, a power-up, the seed dropped
 	void TakeGestures();
-	void PowerUpHeldSeed(int level);
+	/// A power-up gesture on the seed in the hand: the icon of the seed charges it to the level. Level -1 calls the
+	/// power-up off.
+	void AskPowerUpOfHeldSeed(int level);
 	void ShowHeldSeedPowerUp(int level, int previous);
 	/// Keep the tooltip text of the held seed's miracle at its power-up level, for the hand to show next
 	void AnnounceHeldMiracle(const components::SpellSeed& seed);
@@ -422,8 +431,8 @@ private:
 	void KeepSeedInInfluence(entt::entity spellEntity, const components::Spell& spell);
 	/// Whether a player has an icon for a seed at one of their worship sites, at which a seed from a globe is then made
 	[[nodiscard]] bool PlayerHasSpellIcon(PlayerNames player, SpellSeedType seed) const;
-	/// What the held seed's in-hand effect is handed: where it sits, with the seed's power as its strength
-	[[nodiscard]] particles::ProcessInfo HandEffectInfo(const components::SpellSeed& seed) const;
+	/// What the held seed's in-hand effect is handed: where it sits, at full power
+	[[nodiscard]] particles::ProcessInfo HandEffectInfo() const;
 	/// The tribe whose power raises a player's miracle of a magic type, if any
 	[[nodiscard]] std::optional<Tribe> TribalPowerTribe(PlayerNames player, MagicType type) const;
 	/// A seed in the hand cast a new miracle: a tribe's power behind it is announced

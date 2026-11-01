@@ -12,6 +12,9 @@
 #include "GameRewardOpeningWorld.h"
 
 #include <algorithm>
+#include <iterator>
+#include <optional>
+#include <vector>
 
 #include <spdlog/spdlog.h>
 
@@ -32,6 +35,7 @@
 #include "ECS/Systems/ReactionSystemInterface.h"
 #include "ECS/Systems/ResourceStoreSystemInterface.h"
 #include "ECS/Systems/SpellIconSystemInterface.h"
+#include "ECS/Systems/WorkshopSystemInterface.h"
 #include "InfoConstants.h"
 #include "Locator.h"
 #include "Magic/MagicTables.h"
@@ -129,8 +133,11 @@ void GameRewardOpeningWorld::MakeObject(MobileStaticInfo object)
 
 void GameRewardOpeningWorld::MakeScaffold()
 {
-	// TODO(reward-chest): a scaffold for the town's workshop, marked as a full one, once openblack has scaffolds
-	SPDLOG_LOGGER_WARN(spdlog::get("game"), "A reward chest's scaffold isn't made: openblack has no scaffolds yet");
+	// A scaffold worth one at the chest, for the first workshop of the chest's town. Nothing when the town has no workshop.
+	if (Locator::workshopSystem::has_value() && Town() != entt::null)
+	{
+		Locator::workshopSystem::value().RewardScaffold(Town(), Position());
+	}
 }
 
 void GameRewardOpeningWorld::FindTownForMiracle()
@@ -140,16 +147,15 @@ void GameRewardOpeningWorld::FindTownForMiracle()
 		return;
 	}
 	auto& registry = Locator::entitiesRegistry::value();
-	// The first of the player's towns, in the order of their town list, that shows fewer miracles than its centre holds
 	const auto& icons = Locator::spellIconSystem::value();
-	for (const auto town : player_towns::InOrder(registry, Player()))
+	const auto towns = player_towns::InOrder(registry, Player());
+	std::vector<std::optional<size_t>> shown;
+	shown.reserve(towns.size());
+	std::ranges::transform(towns, std::back_inserter(shown),
+	                       [&icons](entt::entity town) { return icons.CentreMiraclesShown(town); });
+	if (const auto first = reward::FirstTownForMiracle(shown))
 	{
-		const auto shown = icons.CentreMiraclesShown(town);
-		if (shown.has_value() && *shown < reward::k_CentreMostMiracles)
-		{
-			registry.Get<Reward>(_chest).town = town;
-			return;
-		}
+		registry.Get<Reward>(_chest).town = towns.at(*first);
 	}
 }
 
@@ -247,7 +253,8 @@ void GameRewardOpeningWorld::ShowTownSeed(SpellSeedType seed)
 	{
 		return;
 	}
-	// It goes with the chest
+	// It goes with the chest. Only the model of the seed shows. The game makes the effect of the seed but never steps it,
+	// so the effect has no particles and shows nothing. Thus no effect starts here.
 	Locator::entitiesRegistry::value().AssignOrReplace<RewardSeed>(
 	    _chest, RewardSeed {.seed = seed, .middle = Position() + glm::vec3(0.0f, reward::k_TownSeedAbove, 0.0f)});
 }

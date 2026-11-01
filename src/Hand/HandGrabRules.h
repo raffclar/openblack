@@ -101,6 +101,8 @@ enum class GrabKind : uint8_t
 	DeadTree,
 	/// A big forest, which is never held itself: the hand takes one of its trees
 	BigForest,
+	/// A miracle's seed out of the hand, shown over the miracle that it cast. The hand takes it back as a seed.
+	SpellSeed,
 };
 
 /// What deciding whether the hand may take a thing needs to know of it
@@ -121,6 +123,8 @@ struct Holdable
 	float radius {0.0f};
 	/// A rock (not another heavy static): its size limits it
 	bool isRock {false};
+	/// A miracle's seed of the player whose hand takes it
+	bool ownSeed {false};
 };
 
 /// Whether a thing of its kind says the hand may hold it
@@ -418,6 +422,13 @@ struct ScoopFacts
 [[nodiscard]] uint32_t ScoopSoundPitch(float ramp);
 /// What a scoop takes, no more than the source has nor than the handful has room for
 [[nodiscard]] uint32_t ScoopTaken(uint32_t wanted, uint32_t sourceHas, uint32_t held, const ScoopFacts& facts);
+/// Whether the let-go of a scoop shows the amount that the hand holds on the computer that lets go, before the end of
+/// the lock goes to the turn. Only a field does this, and only when the player of the field is the player of this
+/// computer. The other player's fields, and a field of no town, show nothing.
+[[nodiscard]] constexpr bool FieldShowsHeldAtLetGo(bool isField, std::optional<PlayerNames> fieldPlayer, PlayerNames local)
+{
+	return isField && fieldPlayer == local;
+}
 
 /// What the player sees and hears when the hand grips the land or the sea
 enum class GripFeedback : uint8_t

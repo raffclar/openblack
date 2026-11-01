@@ -186,10 +186,15 @@ void CreatureMindSystem::ReactToFire(entt::entity creature, entt::entity burning
 		                         .activityObject = owner,
 		                         .action = k_PutOutFireAction,
 		                         .actionObject = burning,
-		                         .forced = false});
+		                         .forced = false,
+		                         .fightBodyEndsAgain = true});
 		return;
 	}
-	ForceActivity(creature, {.desire = Desire::Fear, .action = k_RunAwayAction, .actionObject = burning, .forced = false});
+	ForceActivity(creature, {.desire = Desire::Fear,
+	                         .action = k_RunAwayAction,
+	                         .actionObject = burning,
+	                         .forced = false,
+	                         .fightBodyEndsAgain = true});
 }
 
 bool CreatureMindSystem::Douse(entt::entity creature, entt::entity object)

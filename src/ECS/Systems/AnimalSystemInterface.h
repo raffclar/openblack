@@ -19,6 +19,7 @@
 #include <glm/vec2.hpp>
 #include <glm/vec3.hpp>
 
+#include "Animals/Zoomer.h"
 #include "ECS/Systems/SavedStateInterface.h"
 #include "Enums.h"
 
@@ -49,6 +50,18 @@ struct LoadedAnimal
 	/// The flock that it joins at the start of the line, and its town. None for none.
 	entt::entity flock {entt::null};
 	entt::entity town {entt::null};
+	/// The needs of a grazer to eat, to sleep and to breed
+	int16_t hunger {0};
+	int16_t sleep {0};
+	int16_t breed {0};
+	/// The cell where a grazer sleeps, nothing for no cell
+	std::optional<glm::ivec2> sleepCell;
+	/// Its tilt into a turn
+	animals::Zoomer::State bank {};
+	/// An animal on the land whose walk goes round what is in its way, as a walk round a circle: the walk continues from
+	/// the step of the file and the height of that step
+	bool walksRound {false};
+	float stepAltitude {0.0f};
 };
 
 /// The animals: the land's birds and grazers, the doves or bats about each temple, and the flocks of doves and bats and the

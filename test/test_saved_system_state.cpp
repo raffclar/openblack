@@ -15,6 +15,7 @@
 #include <cstddef>
 #include <cstdint>
 
+#include <algorithm>
 #include <optional>
 #include <string>
 #include <unordered_map>
@@ -105,6 +106,22 @@ void LoadInto(SavedStateInterface& system, const std::vector<uint8_t>& bytes)
 	ASSERT_TRUE(system.LoadState(in));
 	EXPECT_EQ(in.Remaining(), 0u);
 	EXPECT_EQ(StateOf(system), bytes);
+}
+
+/// The bytes from the first byte to the end of the save that no presentation value holds
+size_t SyncedBytesAfter(const SavedStateInterface& system, size_t first)
+{
+	reflection::BinaryWriter out(Context());
+	system.SaveState(out);
+	size_t synced = out.Size() - first;
+	for (const auto& [start, end] : out.PresentationRanges())
+	{
+		if (end > first)
+		{
+			synced -= end - std::max(start, first);
+		}
+	}
+	return synced;
 }
 
 } // namespace
@@ -233,6 +250,25 @@ TEST(SavedSystemState, TheStateOfANewLandComesBack)
 	check(HelpMessageSystem {}, HelpMessageSystem {});
 	check(InfluenceSystem {}, InfluenceSystem {});
 	check(TeleportSystem {}, TeleportSystem {});
+}
+
+TEST(SavedSystemState, TheInfluenceStateKeepsTheOldPlaceOfTheRemovedTurnField)
+{
+	// A save from before the removal starts with the turn of the last share step, 4 bytes long. The state keeps that place,
+	// so the size of the saved state does not change and an old save still loads.
+	constexpr size_t k_RemovedFieldSize = sizeof(uint32_t);
+	const auto bytes = StateOf(InfluenceSystem {});
+	ASSERT_GT(bytes.size(), k_RemovedFieldSize);
+	EXPECT_TRUE(std::all_of(bytes.begin(), bytes.begin() + k_RemovedFieldSize, [](uint8_t byte) { return byte == 0; }));
+
+	auto old = bytes;
+	old.at(0) = 77;
+	InfluenceSystem loaded;
+	const reflection::EntityRemap identity;
+	reflection::BinaryReader in(Context(), old, identity);
+	ASSERT_TRUE(loaded.LoadState(in));
+	EXPECT_EQ(in.Remaining(), 0u);
+	EXPECT_EQ(StateOf(loaded), bytes);
 }
 
 TEST(SavedSystemState, TheStoryHistoryComesBack)
@@ -579,4 +615,40 @@ TEST(SavedSystemState, BookmarksWithNoGoBackViewAndNoFollowComeBack)
 	LoadInto(bookmarks, StateOf(saved));
 	EXPECT_FALSE(bookmarks.GetFollowed().has_value());
 	EXPECT_TRUE(bookmarks.IsEnabled());
+}
+
+// The names of the tribes that spin in the world are of this computer only: all of the save of the miracle effects is a
+// presentation value
+TEST(SavedSystemState, TheSpinningNamesOfTheTribesAreAPresentationValue)
+{
+	MiracleFxSystem effects;
+	effects.StartTribalPowerRing(Tribe::NORSE);
+	effects.ReleaseTribalPowerRing(Tribe::CELTIC, {1.0f, 2.0f, 3.0f});
+	EXPECT_EQ(SyncedBytesAfter(effects, 0), 0u);
+}
+
+// The path of a miracle that holds the camera of this computer is a presentation value. The script's path stays synced.
+TEST(SavedSystemState, ThePathOfAMiracleIsAPresentationValue)
+{
+	CameraPathSystem paths;
+	paths.Pause();
+	reflection::BinaryWriter out(Context());
+	paths.SaveState(out);
+	ASSERT_EQ(out.PresentationRanges().size(), 1u);
+	// The placed path is the last part of the save: only whether there is one, when there is none
+	EXPECT_EQ(out.PresentationRanges().front().second, out.Size());
+	EXPECT_EQ(out.PresentationRanges().front().first + 1, out.Size());
+	EXPECT_GT(SyncedBytesAfter(paths, 0), 0u);
+}
+
+// The script's camera is the camera of this computer. The owners of the camera and of the game speed stay synced.
+TEST(SavedSystemState, TheCameraOfTheScriptIsAPresentationValue)
+{
+	const ScriptControlSystem control;
+	reflection::BinaryWriter out(Context());
+	control.SaveState(out);
+	ASSERT_EQ(out.PresentationRanges().size(), 1u);
+	EXPECT_EQ(out.PresentationRanges().front().second, out.Size());
+	EXPECT_GT(SyncedBytesAfter(control, 0), 0u);
+	EXPECT_EQ(SyncedBytesAfter(control, out.PresentationRanges().front().first), 0u);
 }

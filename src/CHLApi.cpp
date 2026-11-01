@@ -120,6 +120,7 @@
 #include "ECS/Components/Indestructible.h"
 #include "ECS/Components/Influence.h"
 #include "ECS/Components/LivingAction.h"
+#include "ECS/Components/LivingListPlace.h"
 #include "ECS/Components/LivingReaction.h"
 #include "ECS/Components/MapCellResident.h"
 #include "ECS/Components/Mesh.h"
@@ -233,6 +234,7 @@
 #include "ECS/Systems/ParticleRuleSystemInterface.h"
 #include "ECS/Systems/PlayerProfileSystemInterface.h"
 #include "ECS/Systems/PlayerSystemInterface.h"
+#include "ECS/Systems/PlaygroundTripSystemInterface.h"
 #include "ECS/Systems/PuzzleGameSystemInterface.h"
 #include "ECS/Systems/ReactionSystemInterface.h"
 #include "ECS/Systems/ResourceStoreSystemInterface.h"
@@ -302,12 +304,14 @@
 #include "ScriptHeaders/ScriptEnums.h"
 #include "ScriptHeaders/ScriptInfluence.h"
 #include "ScriptHeaders/ScriptInterfaceLevels.h"
+#include "ScriptHeaders/ScriptLessonNatives.h"
 #include "ScriptHeaders/ScriptNameLists.h"
 #include "ScriptHeaders/ScriptPropertyRules.h"
 #include "ScriptHeaders/ScriptRandom.h"
 #include "ScriptHeaders/ScriptRealTime.h"
 #include "ScriptHeaders/ScriptStart.h"
 #include "ScriptHeaders/ScriptSwitchChanges.h"
+#include "Story/PlaygroundTrip.h"
 #include "Temple/TempleEntrancePoint.h"
 #include "Visual/RendererRequestsInterface.h"
 #include "Windowing/WindowingInterface.h"
@@ -317,6 +321,7 @@ namespace openblack::chlapi
 
 using namespace openblack::ecs::archetypes;
 
+ecs::components::Player* ScriptPlayer(float number);
 PlayerNames ScriptPlayerName(int32_t scriptPlayer);
 
 /// Whether a player that a script names is a player of this game. The players of a land are the 8 of the game. A
@@ -715,14 +720,13 @@ entt::entity CreateScriptSeedInHand(uint32_t subtype)
 	{
 		return entt::null;
 	}
-	const auto seed = Locator::magicSystem::value().GiveSeedToHand(player, seedType, magic::k_BasePowerUpLevel, 1.0f);
+	const auto seed = Locator::magicSystem::value().GiveOneShotSeedToHand(player, seedType, magic::k_BasePowerUpLevel, 1.0f);
 	if (seed == entt::null)
 	{
 		return entt::null;
 	}
-	// It counts as a one-shot miracle, and the player has now had the miracle it casts
+	// The player has now had the miracle that it casts
 	auto& registry = Locator::entitiesRegistry::value();
-	registry.Get<ecs::components::SpellSeed>(seed).fromGlobe = true;
 	const auto type = magic::GetMagicTypeFromPowerUpLevel(magic::GetSpellSeedInfo(Locator::infoConstants::value(), seedType),
 	                                                      magic::k_BasePowerUpLevel);
 	if (const auto playerEntity = Locator::playerSystem::value().FindPlayer(player).value_or(entt::null);
@@ -768,11 +772,14 @@ entt::entity CreateScriptObject(const ObjectType type, uint32_t subtype, const g
 		// On the land under the place asked for, even when that is the hand up in the air
 		return CreateScriptBall(OnGround(position));
 	case ObjectType::Marker:
-		return ScriptMarkerArchetype::Create(position);
+	{
+		// A marker stands at the map position of the point and keeps the height of the point above the land
+		const auto& island = Locator::terrainSystem::value();
+		return ScriptMarkerArchetype::Create(map_coords::ToWorld(island, map_coords::FromWorld(island, position)));
+	}
 	case ObjectType::PuzzleGame:
 	{
-		// The system makes a puzzle game only for the kinds whose answer before a solution is known. Only the beach
-		// temple puzzle has pieces now.
+		// The system makes a puzzle game of each kind. Only the beach temple puzzle and the tree puzzles have pieces now.
 		const auto kind = static_cast<script::PuzzleGameType>(subtype);
 		if (subtype < static_cast<uint32_t>(script::PuzzleGameType::Last) && Locator::puzzleGameSystem::has_value())
 		{
@@ -1088,6 +1095,23 @@ void CHLApi::StopHelpScriptsByEscape()
 	{
 		Locator::helpTextSystem::value().InterruptAdvisorsByEscape();
 	}
+}
+
+bool CHLApi::ApplyInterfaceLevel(int32_t level)
+{
+	// What the camera lets the player do at this level of the interface, as the tutorials step through them
+	if (!Locator::cameraHelpSystem::value().Get().SetInterfaceLevel(level))
+	{
+		return false;
+	}
+	// The level also limits what the Action button of the player's hand can do
+	if (Locator::playerSystem::has_value())
+	{
+		script::interface_levels::Apply(Locator::entitiesRegistry::value(),
+		                                Locator::playerSystem::value().FindPlayer(PlayerNames::PLAYER_ONE).value_or(entt::null),
+		                                level);
+	}
+	return true;
 }
 
 bool CHLApi::StartHelpScript(std::string_view name)
@@ -1482,6 +1506,16 @@ void GameThingClicked() // 016 GAME_THING_CLICKED
 static bool IsScriptContainer(const ecs::Registry& registry, entt::entity thing);
 static std::vector<entt::entity> ContainerMembers(const ecs::Registry& registry, entt::entity container);
 
+/// A native that takes control gives each member of a container that it goes through to the script, before it does
+/// its work on the member. The member stays under the script's control until a script releases it.
+static void TakeControlInLoop(ecs::Registry& registry, entt::entity member)
+{
+	if (registry.Valid(member))
+	{
+		registry.AssignOrReplace<ecs::components::ScriptControlled>(member);
+	}
+}
+
 /// A creature given a state plays what the script last gave it to play
 void CreatureCarriesOutScriptPlay(entt::entity creature)
 {
@@ -1502,11 +1536,13 @@ void SetScriptState() // 017 SET_SCRIPT_STATE
 		ObjectNoLongerValid();
 		return;
 	}
-	// A group's living members each take the state as one would on its own, with no word of those that can't
+	// The script takes control of each member of a group. Each living member takes the state as one would on its own,
+	// with no word of those that can't.
 	if (IsScriptContainer(registry, object))
 	{
 		for (const auto member : ContainerMembers(registry, object))
 		{
+			TakeControlInLoop(registry, member);
 			if (IsDirectableVillager(member))
 			{
 				auto& living = Locator::livingActionSystem::value();
@@ -1563,32 +1599,59 @@ void SetScriptStatePos() // 018 SET_SCRIPT_STATE_POS
 {
 	const auto position = PopVec();
 	const auto object = PopObject();
-	if (!Locator::entitiesRegistry::value().Valid(object))
+	auto& registry = Locator::entitiesRegistry::value();
+	if (!registry.Valid(object))
 	{
 		ObjectNoLongerValid();
 		return;
 	}
+	const auto place = glm::vec2(position.x, position.z);
+	if (IsScriptContainer(registry, object))
+	{
+		// The script takes control of each member. Only a villager gets the place.
+		for (const auto member : ContainerMembers(registry, object))
+		{
+			TakeControlInLoop(registry, member);
+			if (IsDirectableVillager(member))
+			{
+				Locator::livingActionSystem::value().VillagerSetScriptPlace(member, place);
+			}
+		}
+		return;
+	}
 	if (!IsDirectableVillager(object))
 	{
-		// TODO(opening): groups of things
 		ScriptMessage("Object not villager for state data");
 		return;
 	}
-	Locator::livingActionSystem::value().VillagerSetScriptPlace(object, {position.x, position.z});
+	Locator::livingActionSystem::value().VillagerSetScriptPlace(object, place);
 }
 
 void SetScriptFloat() // 019 SET_SCRIPT_FLOAT
 {
 	const auto value = Popf();
 	const auto object = PopObject();
-	if (!Locator::entitiesRegistry::value().Valid(object))
+	auto& registry = Locator::entitiesRegistry::value();
+	if (!registry.Valid(object))
 	{
 		ObjectNoLongerValid();
 		return;
 	}
+	if (IsScriptContainer(registry, object))
+	{
+		// The script takes control of each member. Only a villager gets the number.
+		for (const auto member : ContainerMembers(registry, object))
+		{
+			TakeControlInLoop(registry, member);
+			if (IsDirectableVillager(member))
+			{
+				Locator::livingActionSystem::value().VillagerSetScriptNumber(member, value);
+			}
+		}
+		return;
+	}
 	if (!IsDirectableVillager(object))
 	{
-		// TODO(opening): groups of things
 		ScriptMessage("Object not villager for state data");
 		return;
 	}
@@ -1620,11 +1683,7 @@ void SetScriptUlong() // 020 SET_SCRIPT_ULONG
 		// group keeps the numbers that it had.
 		for (const auto member : ContainerMembers(registry, object))
 		{
-			if (!registry.Valid(member))
-			{
-				continue;
-			}
-			registry.AssignOrReplace<ecs::components::ScriptControlled>(member);
+			TakeControlInLoop(registry, member);
 			if (IsDirectableVillager(member))
 			{
 				giveVillager(member);
@@ -1794,6 +1853,26 @@ static float LivingAngleOf(entt::entity object, const Transform& transform)
 	// Standing still, a living thing is turned as it is drawn: its model faces the other way round, a quarter turn on
 	return script::property_rules::CreatureHeadingToLivingAngle(
 	    GameHeading(script::property_rules::PlacedAngles(transform.rotation).y));
+}
+
+/// The way a creature's head looks: towards the point that it looks at, when it looks at a point that is not where it
+/// stands; else the way its body faces
+static GameHeading CreatureLookHeading(entt::entity creature, const Transform& transform)
+{
+	const auto& registry = Locator::entitiesRegistry::value();
+	const auto* animation = registry.TryGet<const ecs::components::CreatureAnimation>(creature);
+	if (animation != nullptr && animation->lookAt.has_value() && *animation->lookAt != transform.position)
+	{
+		const float dx = animation->lookAt->x - transform.position.x;
+		const float dz = animation->lookAt->z - transform.position.z;
+		return GameHeading::Of(dx, dz);
+	}
+	if (const auto* locomotion = registry.TryGet<const ecs::components::CreatureLocomotion>(creature);
+	    locomotion != nullptr && locomotion->started)
+	{
+		return locomotion->heading;
+	}
+	return GameHeading(script::property_rules::PlacedAngles(transform.rotation).y);
 }
 
 /// Turns a living thing to face a way, given as the scripts take it: its walk, if it has one, faces that way from now
@@ -1976,6 +2055,15 @@ void GetProperty() // 021 GET_PROPERTY
 			if (const auto* entry = Locator::dynamicsSystem::value().Find(object); entry != nullptr && entry->body != nullptr)
 			{
 				Pushf(glm::length(entry->body->velocity));
+				return;
+			}
+		}
+		// A weather thing gives the speed of its storm
+		if (Locator::weatherSystem::has_value())
+		{
+			if (const auto stormSpeed = Locator::weatherSystem::value().WeatherThingSpeed(object))
+			{
+				Pushf(*stormSpeed);
 				return;
 			}
 		}
@@ -2446,6 +2534,15 @@ static void SetPropertyOf(entt::entity object, script::ObjectPropertyType prop, 
 			}
 			return;
 		}
+		// A thing that holds a visual of a script gives the size to its visual and keeps its own size
+		if (const auto effect = ecs::script_spot_visuals::EffectOf(registry, object); effect.has_value())
+		{
+			if (Locator::effectRequestSystem::has_value())
+			{
+				Locator::effectRequestSystem::value().SetMagnitude(*effect, value);
+			}
+			return;
+		}
 		// The thing is drawn at this size, the same along every axis. A thing in the map's cells that changes its size
 		// comes out of them and goes in again.
 		if (auto* transform = registry.TryGet<Transform>(object); transform != nullptr)
@@ -2740,8 +2837,37 @@ static entt::entity FindScriptTown(const map_coords::MapCoords& at, float reach)
 	return ecs::script_find::FindNearestTown(at, reach, ordered);
 }
 
+/// The creature a script's search finds, taken into the scripts' table, or none. The search looks at the creatures, the
+/// newest first.
+static entt::entity FindCreatureForScript(uint32_t subtype, const glm::vec3& position, std::optional<float> radius)
+{
+	const auto& registry = Locator::entitiesRegistry::value();
+	std::vector<std::pair<uint64_t, ecs::script_find::CreatureCandidate>> made;
+	registry.Each<const ecs::components::Creature, const ecs::components::LivingListPlace, const Transform>(
+	    [&registry, &made](entt::entity entity, const ecs::components::Creature& /*creature*/,
+	                       const ecs::components::LivingListPlace& place, const Transform& transform) {
+		    const auto kind = ecs::script_find::KindOf(registry, entity);
+		    made.emplace_back(place.made, ecs::script_find::CreatureCandidate {
+		                                      .entity = entity,
+		                                      .at = map_coords::FromMetres({transform.position.x, transform.position.z}),
+		                                      .subtype = kind.has_value() ? kind->subtype : std::nullopt,
+		                                  });
+	    });
+	std::ranges::sort(made, std::ranges::greater {}, &decltype(made)::value_type::first);
+	std::vector<ecs::script_find::CreatureCandidate> newestFirst;
+	newestFirst.reserve(made.size());
+	std::ranges::transform(made, std::back_inserter(newestFirst), &decltype(made)::value_type::second);
+	const auto found =
+	    ecs::script_find::FindCreature(map_coords::FromMetres({position.x, position.z}), radius, subtype, newestFirst);
+	if (found != entt::null)
+	{
+		Locator::scriptObjects::value().Register(found, false);
+	}
+	return found;
+}
+
 /// The thing a script's search finds, taken into the scripts' table, or none. Types with no search (markers, dances,
-/// flocks and two unused ones) and types out of range are an error; a creature's search isn't written yet. A search for
+/// flocks and two unused ones) and types out of range are an error. A creature has a search of its own. A search for
 /// livings in a state looks through the cells within the radius but doesn't measure the distance of what it finds there.
 static entt::entity FindForScript(int32_t type, uint32_t subtype, const glm::vec3& position, std::optional<float> radius,
                                   bool excludingScripted, std::optional<uint32_t> inState = std::nullopt)
@@ -2763,9 +2889,9 @@ static entt::entity FindForScript(int32_t type, uint32_t subtype, const glm::vec
 		SPDLOG_LOGGER_ERROR(spdlog::get("scripting"), "No search for script object type {}", type);
 		return entt::null;
 	case ObjectType::Creature:
-		// TODO(script-natives): the creatures' own searches (see docs scripts/calls.md)
-		NotImplemented(type);
-		return entt::null;
+		// The search for a creature does not look at the state or at script control: a search for a creature in a
+		// state finds the same creature as the search near the place
+		return FindCreatureForScript(subtype, position, radius);
 	default:
 		break;
 	}
@@ -3196,8 +3322,10 @@ static void FlockAttachToTown(entt::entity object, entt::entity town)
 	auto& registry = Locator::entitiesRegistry::value();
 	if (IsScriptContainer(registry, object))
 	{
+		// The script takes control of each member
 		for (const auto member : ContainerMembers(registry, object))
 		{
+			TakeControlInLoop(registry, member);
 			if (registry.Valid(member) && registry.AllOf<ecs::components::Villager>(member))
 			{
 				MoveVillagerToTown(member, town);
@@ -3248,11 +3376,12 @@ static void FlockAttachToDance(entt::entity object, entt::entity dance, bool asC
 	auto& scripts = Locator::scriptObjects::value();
 	if (IsScriptContainer(registry, object))
 	{
+		// The script takes control of each member
 		for (const auto member : ContainerMembers(registry, object))
 		{
+			TakeControlInLoop(registry, member);
 			if (IsFlockLiving(registry, member))
 			{
-				registry.AssignOrReplace<ecs::components::ScriptControlled>(member);
 				JoinDance(member, dance, asCentre);
 				scripts.AddReference(member);
 			}
@@ -3758,7 +3887,11 @@ void ObjectDelete() // 048 OBJECT_DELETE
 		Locator::particleRuleSystem::value().ExplodeObject(object, position, script_delete::k_TempleExplodeSpeed);
 		break;
 	case script_delete::Step::ClearPuzzle:
-		// TODO(puzzle-games): the puzzle game removes its pieces. The stand-in puzzle game has no pieces
+		// The puzzle game stays, but its pieces go
+		if (Locator::puzzleGameSystem::has_value())
+		{
+			static_cast<void>(Locator::puzzleGameSystem::value().DeletePieces(object));
+		}
 		break;
 	case script_delete::Step::LetGo:
 		break;
@@ -4131,18 +4264,9 @@ void GetInfluence() // 062 GET_INFLUENCE
 void SetInterfaceInteraction() // 063 SET_INTERFACE_INTERACTION
 {
 	const auto level = Pop().intVal;
-	// What the camera lets the player do at this level of the interface, as the tutorials step through them
-	if (!Locator::cameraHelpSystem::value().Get().SetInterfaceLevel(level))
+	if (!CHLApi::ApplyInterfaceLevel(level))
 	{
 		SPDLOG_LOGGER_ERROR(spdlog::get("scripting"), "Unexpected interaction : {}", level);
-		return;
-	}
-	// The level also limits what the Action button of the player's hand can do
-	if (Locator::playerSystem::has_value())
-	{
-		script::interface_levels::Apply(Locator::entitiesRegistry::value(),
-		                                Locator::playerSystem::value().FindPlayer(PlayerNames::PLAYER_ONE).value_or(entt::null),
-		                                level);
 	}
 }
 
@@ -6617,6 +6741,15 @@ void DevFunction() // 205 DEV_FUNCTION
 		}
 		return;
 	}
+	// Each lesson of the Gods' Playground tells the game that it runs, so that Escape ends it
+	if (func == playground_trip::k_LessonStartsFunction)
+	{
+		if (Locator::playgroundTripSystem::has_value())
+		{
+			Locator::playgroundTripSystem::value().StartLesson();
+		}
+		return;
+	}
 	// The functions the tutorials use on the local player's creature: starting it growing up again kept at home, and
 	// granting it the learning leash, then the aggression and compassion leashes
 	if (!Locator::leashSystem::has_value())
@@ -6674,9 +6807,9 @@ void DevFunction() // 205 DEV_FUNCTION
 
 void HasMouseWheel() // 206 HAS_MOUSE_WHEEL
 {
-	// TODO(Daniels118): implement this
-	NotImplemented();
-	Pushb(false);
+	// The view report of the player tells whether its mouse has a wheel
+	const auto view = ScriptView();
+	Pushb(view.has_value() && view->mouseWheel);
 }
 
 void NumMouseButtons() // 207 NUM_MOUSE_BUTTONS
@@ -6846,7 +6979,7 @@ void GameTeamSize() // 219 GAME_TEAM_SIZE
 
 void GameType() // 220 GAME_TYPE
 {
-	// The script type of the thing, as a find or an is-of-type test matches it. A thing that has no script type gives 0.
+	// The script type of the thing. A thing that has no script type gives 0.
 	const auto object = PopObject();
 	const auto& registry = Locator::entitiesRegistry::value();
 	if (object == entt::null || !registry.Valid(object))
@@ -6855,8 +6988,7 @@ void GameType() // 220 GAME_TYPE
 		Pushi(0);
 		return;
 	}
-	const auto kind = ecs::script_find::KindOf(registry, object);
-	Pushi(kind.has_value() ? static_cast<int32_t>(kind->type) : 0);
+	Pushi(static_cast<int32_t>(ecs::script_find::GameTypeOf(registry, object)));
 }
 
 void GameSubType() // 221 GAME_SUB_TYPE
@@ -7227,20 +7359,32 @@ void FadeFinished() // 243 FADE_FINISHED
 
 void SetPlayerMagic() // 244 SET_PLAYER_MAGIC
 {
-	// const auto unk2 = Pop().intVal;
-	// const auto unk1 = Pop().intVal;
-	// const auto unk0 = Pop().intVal;
-	// TODO(Daniels118): implement this
-	NotImplemented();
+	const auto player = Popf();
+	const auto magic = Pop().intVal;
+	const bool enable = Pop().intVal != 0;
+	if (!script::lesson_natives::ValidMagic(magic))
+	{
+		ScriptMessage(script::lesson_natives::k_InvalidMagic);
+		return;
+	}
+	// One more thing enables the magic type for the player, or one fewer does. A player that is not there is ignored.
+	if (ScriptPlayer(player) != nullptr && Locator::spellIconSystem::has_value())
+	{
+		Locator::spellIconSystem::value().SetMagicTypeEnabled(ScriptPlayerName(static_cast<int32_t>(player)),
+		                                                      static_cast<MagicType>(magic), enable);
+	}
 }
 
 void HasPlayerMagic() // 245 HAS_PLAYER_MAGIC
 {
-	// const auto player = Popf();
-	// const auto spell = Pop().intVal;
-	// TODO(Daniels118): implement this
-	NotImplemented();
-	Pushb(false);
+	const auto player = Popf();
+	const auto magic = Pop().intVal;
+	if (!script::lesson_natives::ValidMagic(magic))
+	{
+		ScriptMessage(script::lesson_natives::k_InvalidMagic);
+	}
+	const auto* component = script::lesson_natives::ValidMagic(magic) ? ScriptPlayer(player) : nullptr;
+	Pushb(script::lesson_natives::HasPlayerMagic(magic, component != nullptr ? &component->miracles : nullptr));
 }
 
 void SpiritSpeaks() // 246 SPIRIT_SPEAKS
@@ -7525,7 +7669,15 @@ void SetActive() // 255 SET_ACTIVE
 		Locator::magicSystem::value().SetDispenserActive(object, active);
 		return;
 	}
-	// TODO(script-natives): a scaffold set active is built at once, for the script's player; openblack has no scaffolds
+	// A scaffold set active starts its building at once where it stands, for no player. Set inactive, it does nothing.
+	if (registry.AllOf<ecs::components::Scaffold>(object))
+	{
+		if (active && Locator::workshopSystem::has_value())
+		{
+			Locator::workshopSystem::value().ForceBuild(object, std::nullopt);
+		}
+		return;
+	}
 	SPDLOG_LOGGER_ERROR(spdlog::get("scripting"), "Invalid object type");
 }
 
@@ -7670,10 +7822,24 @@ void SetMistFade() // 264 SET_MIST_FADE
 
 void GetObjectFade() // 265 GET_OBJECT_FADE
 {
-	// const auto object = Pop().uintVal;
-	// TODO(Daniels118): implement this
-	NotImplemented();
-	Pushf(0.0f);
+	// How much of its script fade a mist did, from 0 to 1. Any other object gives 1.
+	const auto object = PopObject();
+	auto& registry = Locator::entitiesRegistry::value();
+	if (object == entt::null || !registry.Valid(object))
+	{
+		ScriptMessage("Thing deleted");
+		Pushf(1.0f);
+		return;
+	}
+	const auto* mist = registry.TryGet<const ecs::components::Mist>(object);
+	if (mist == nullptr)
+	{
+		ScriptMessage("Must be mist object!");
+		Pushf(1.0f);
+		return;
+	}
+	// A mist that no script faded has no fade turns, so it gives 0 / 0 as a fade of 0 seconds does
+	Pushf(mists::FadeDone(mist->fadeElapsed, mist->fadeTurns));
 }
 
 void PlayHandDemo() // 266 PLAY_HAND_DEMO
@@ -8778,11 +8944,34 @@ void SetCreatureCreedProperties() // 338 SET_CREATURE_CREED_PROPERTIES
 
 void GameThingCanViewCamera() // 339 GAME_THING_CAN_VIEW_CAMERA
 {
-	// const auto degrees = Popf();
-	// const auto object = Pop().uintVal;
-	// TODO(Daniels118): implement this
-	NotImplemented();
-	Pushb(false);
+	const auto degrees = Popf();
+	const auto object = PopObject();
+	auto& registry = Locator::entitiesRegistry::value();
+	const auto* transform = object != entt::null && registry.Valid(object) ? registry.TryGet<const Transform>(object) : nullptr;
+	if (transform == nullptr || !IsWorldObject(object))
+	{
+		ScriptMessage(script::lesson_natives::k_ThingNotValid);
+		Pushb(false);
+		return;
+	}
+	// The camera is where the player's report put it
+	const auto camera = ecs::ReportedPlayerCamera(PlayerNames::PLAYER_ONE);
+	const auto eye = camera.has_value() ? camera->origin : glm::vec3(0.0f);
+	if (registry.AllOf<ecs::components::Creature>(object))
+	{
+		// A creature looks with its head, not with the way its body faces
+		const auto look = CreatureLookHeading(object, *transform);
+		const auto at = map_coords::FromMetres(glm::vec2(transform->position.x, transform->position.z));
+		Pushb(script::lesson_natives::CreatureSeesCamera(at, map_coords::FromMetres(glm::vec2(eye.x, eye.z)), look.GameAngle(),
+		                                                 degrees));
+		return;
+	}
+	// The thing sees from its place on the map in the way it faces
+	const auto place = glm::vec3(map_coords::Quantise(transform->position.x), transform->position.y,
+	                             map_coords::Quantise(transform->position.z));
+	const float yAngle =
+	    IsLivingThing(object) ? LivingAngleOf(object, *transform) : ecs::placed_turn::AnglesOf(registry, object).y;
+	Pushb(script::lesson_natives::InViewCone(place, yAngle, script::lesson_natives::HalfViewAngle(degrees), eye));
 }
 
 void GamePlaySaySoundEffect() // 340 GAME_PLAY_SAY_SOUND_EFFECT
@@ -9273,18 +9462,54 @@ void SetComputerPlayerSpeed() // 371 SET_COMPUTER_PLAYER_SPEED
 	}
 }
 
+/// The script's camera for a command that follows the hand of a computer god: with a warning when the script has none
+ScriptCameraModel* ComputerHandCamera()
+{
+	auto* camera = OrderedScriptCamera();
+	if (camera == nullptr)
+	{
+		ScriptMessage("Script camera has been removed! - Exception happened?");
+		return nullptr;
+	}
+	// While a two-thing camera has taken over, the script's own commands do not reach the camera
+	if (camera->InDualView())
+	{
+		ScriptMessage("We are in the wrong camera mode!");
+		return nullptr;
+	}
+	return camera;
+}
+
+/// The place of the hand of a computer god, as a camera reads it in each frame
+ScriptCameraModel::HandLookup ComputerHandPlace(PlayerNames player)
+{
+	return [player]() -> std::optional<glm::vec3> {
+		if (!Locator::computerPlayerSystem::has_value())
+		{
+			return std::nullopt;
+		}
+		return Locator::computerPlayerSystem::value().HandPositionForView(player);
+	};
+}
+
 void SetFocusFollowComputerPlayer() // 372 SET_FOCUS_FOLLOW_COMPUTER_PLAYER
 {
-	// const auto player = Popf();
-	// TODO(Daniels118): implement this
-	NotImplemented();
+	const auto player = ScriptPlayerName(static_cast<int32_t>(Popf()));
+	if (auto* camera = ComputerHandCamera(); camera != nullptr)
+	{
+		// The script's camera keeps looking at the hand of the god
+		camera->LookAtComputerHand(ComputerHandPlace(player));
+	}
 }
 
 void SetPositionFollowComputerPlayer() // 373 SET_POSITION_FOLLOW_COMPUTER_PLAYER
 {
-	// const auto player = Popf();
-	// TODO(Daniels118): implement this
-	NotImplemented();
+	const auto player = ScriptPlayerName(static_cast<int32_t>(Popf()));
+	if (auto* camera = ComputerHandCamera(); camera != nullptr)
+	{
+		// The script's camera follows the hand of the god
+		camera->FollowComputerHand(ComputerHandPlace(player));
+	}
 }
 
 void CallComputerPlayer() // 374 CALL_COMPUTER_PLAYER
@@ -9850,9 +10075,9 @@ void MapScriptFunction() // 415 MAP_SCRIPT_FUNCTION
 
 void WithinRotation() // 416 WITHIN_ROTATION
 {
-	// TODO(Daniels118): implement this
-	NotImplemented();
-	Pushb(false);
+	// The view report of the player tells which camera icons the hand showed or offered
+	const auto view = ScriptView();
+	Pushb(view.has_value() && script::lesson_natives::WithinRotation(view->cameraIcons));
 }
 
 void GetPlayerTownTotal() // 417 GET_PLAYER_TOWN_TOTAL
@@ -9880,10 +10105,10 @@ void SpiritScreenPoint() // 418 SPIRIT_SCREEN_POINT
 
 void KeyDown() // 419 KEY_DOWN
 {
-	// const auto key = Pop().intVal;
-	// TODO(Daniels118): implement this (translate key to physical key code)
-	NotImplemented();
-	Pushb(false);
+	// The key comes by the game's number of the key. The view report of the player tells the keys held.
+	const auto key = Pop().intVal;
+	const auto view = ScriptView();
+	Pushb(view.has_value() && script::lesson_natives::KeyDown(key, view->keysHeld));
 }
 
 void SetFightExit() // 420 SET_FIGHT_EXIT
@@ -10154,20 +10379,17 @@ void GetTimeSinceObjectAttacked() // 442 GET_TIME_SINCE_OBJECT_ATTACKED
 	const auto town = PopObject();
 	const auto player = ScriptPlayerName(static_cast<int32_t>(Popf()));
 	auto& registry = Locator::entitiesRegistry::value();
+	// Only a town keeps a record of attacks. Any other thing gives the largest float.
 	const auto* aggression = registry.Valid(town) ? registry.TryGet<const ecs::components::TownAggression>(town) : nullptr;
-	const auto index = static_cast<size_t>(player);
-	// The seconds since the player last attacked the town, while the town still holds more than a little against them
-	constexpr double k_StillHeld = 0.15;
-	if (aggression == nullptr || index >= aggression->record.aggression.size() ||
-	    !(aggression->record.aggression.at(index) > k_StillHeld) || !Locator::time::has_value())
+	if (aggression == nullptr || !Locator::time::has_value())
 	{
 		Pushf(std::numeric_limits<float>::max());
 		return;
 	}
-	const auto turns = static_cast<int32_t>(Locator::time::value().GetTurn() - aggression->record.lastTurns.at(index));
 	const auto msPerTurn =
 	    std::chrono::duration_cast<std::chrono::milliseconds>(ecs::systems::TimeSystemInterface::k_TurnDuration);
-	Pushf(static_cast<float>(turns * msPerTurn.count()) * 0.001f);
+	Pushf(ecs::town_aggression::SecondsSinceAttacked(aggression->record, player, Locator::time::value().GetTurn(),
+	                                                 static_cast<uint32_t>(msPerTurn.count())));
 }
 
 void GetTownAndVillagerHealthTotal() // 443 GET_TOWN_AND_VILLAGER_HEALTH_TOTAL
@@ -10395,8 +10617,7 @@ void GameClearComputerPlayerActions() // 454 GAME_CLEAR_COMPUTER_PLAYER_ACTIONS
 	}
 }
 
-/// The first thing in a town or a flock for a script, or nothing. A dance is a container too, but its order is not
-/// known yet, so it gives nothing and tells of it.
+/// The first thing in a town, a flock or a dance for a script, or nothing
 static entt::entity FirstInContainer(const ecs::Registry& registry, entt::entity container)
 {
 	if (const auto* town = registry.TryGet<const ecs::components::Town>(container); town != nullptr)
@@ -10413,8 +10634,10 @@ static entt::entity FirstInContainer(const ecs::Registry& registry, entt::entity
 		const auto& members = registry.Get<const ecs::components::Flock>(container).members;
 		return members.empty() ? entt::entity {entt::null} : members.front();
 	}
-	// TODO(lesson-natives): the order in which a script walks through a dance
-	NotImplemented();
+	if (ecs::dances::IsDance(registry, container))
+	{
+		return ecs::dance_rules::FirstForScript(registry.Get<const ecs::components::Dance>(container).groups);
+	}
 	return entt::null;
 }
 
@@ -10468,8 +10691,8 @@ void GetNextInContainer() // 456 GET_NEXT_IN_CONTAINER
 	}
 	if (ecs::dances::IsDance(registry, container))
 	{
-		// TODO(lesson-natives): the order in which a script walks through a dance
-		NotImplemented();
+		// The game walks a list of the dance's things that nothing fills while the game runs, so a script never gets
+		// a next thing in a dance
 		Pusho(0);
 		return;
 	}

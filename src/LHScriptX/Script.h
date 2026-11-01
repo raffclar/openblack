@@ -10,6 +10,8 @@
 #pragma once
 
 #include <functional>
+#include <optional>
+#include <string>
 #include <vector>
 
 #include <glm/vec3.hpp>
@@ -19,6 +21,23 @@
 
 namespace openblack::lhscriptx
 {
+
+/// One command of a map script, as the script gives it
+struct Command
+{
+	std::string name;
+	std::vector<Token> arguments;
+	/// The line of the text that the command starts on. The first line is 1.
+	int line {0};
+};
+
+/// The commands of a map script, read with none of them done
+struct ReadCommands
+{
+	std::vector<Command> commands;
+	/// Why the read stopped before the end of the text, if it stopped. The game stops the script at this point.
+	std::optional<std::string> error;
+};
 
 class Script
 {
@@ -32,20 +51,23 @@ public:
 	/// Carries out the commands of a map script, calling `afterCommand`, when given, after each one
 	void Load(const std::string& source, const std::function<void()>& afterCommand = {});
 
-private:
-	[[nodiscard]] bool IsCommand(const std::string& identifier) const;
-	void RunCommand(const std::string& identifier, const std::vector<Token>& args);
+	/// Reads the commands of a map script and does none of them. The read stops where `Load` stops.
+	[[nodiscard]] static ReadCommands Read(const std::string& source);
 
-	const Token* PeekToken(Lexer&);
-	const Token* AdvanceToken(Lexer&);
+	/// Does one command of a map script, as `Load` does it. A command that has the wrong arguments throws.
+	void Run(const Command& command);
+
+private:
+	/// Reads the commands of the text in their order and gives each to `onCommand`. A line that the script cannot read
+	/// throws.
+	static void ForEachCommand(const std::string& source, const std::function<void(Command&&)>& onCommand);
+	[[nodiscard]] static bool IsCommand(const std::string& identifier);
+	void RunCommand(const std::string& identifier, const std::vector<Token>& args);
 
 	/// What every place the script gives is moved by
 	glm::vec3 _origin {0.0f};
 	/// What the map position of every place the script gives is moved by
 	map_coords::MapCoords _originOnMap {};
-
-	// The current token.
-	Token _token {Token::MakeInvalidToken()};
 };
 
 } // namespace openblack::lhscriptx

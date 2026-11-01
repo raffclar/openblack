@@ -371,6 +371,9 @@ constexpr float k_StaminaPerTurn = 1.0f / 600.0f;
 [[nodiscard]] float RegainStamina(float stamina);
 /// A quarter of the fight health lost comes off the real life at the end
 constexpr float k_LifeLostShare = 0.25f;
+/// The life of a creature after one payment for its fight. The life loses a quarter of the fight health that the
+/// creature does not have. Nothing keeps the fight health or the life between 0 and 1, so after a knock out a payment
+/// can take more than a quarter, and the life can go below 0.
 [[nodiscard]] float LifeAfterFight(float life, float fightHealth);
 /// A creature this healthy or less won't start a fight
 constexpr float k_MinLifeToFight = 0.1f;
@@ -921,6 +924,9 @@ constexpr float k_FightMusicDistance = 100.0f;
 constexpr float k_BlowHitEffect = 0.05f;
 /// The fight health of a creature in a duel after it loses damage to its life: the same amount less, never below none
 [[nodiscard]] float HealthAfterLifeLost(float health, float damage);
+/// The fight health of the victim after a blow that lands: the damage of the blow less, with no lower limit. A knock out
+/// can thus leave the fight health below 0.
+[[nodiscard]] float HealthAfterBlow(float health, float damage);
 
 /// How a creature stops what it does
 enum class StopEnd : uint8_t
@@ -929,6 +935,8 @@ enum class StopEnd : uint8_t
 	Failure,
 	/// It completes its action
 	Success,
+	/// Something else stops what it does, as an order to it does. It does not give up its action itself.
+	Stopped,
 };
 /// The two creatures of a fight as one of them stops what it does
 struct StopLinks
@@ -955,4 +963,69 @@ struct StrengthGains
 /// 3. A mind that has a partner forgets the partner as it stops, and makes the partner give up its action.
 /// So a creature can get the gain two times.
 [[nodiscard]] StrengthGains StrengthGainsAtStop(StopEnd end, StopLinks links);
+/// The results of a stop: the strength gains, and how many times each creature leaves its duel. Each time that a
+/// creature leaves its duel, its life pays for the fight again if its body is in a state of the fight. The body does not
+/// change its state during the stop.
+struct StopCounts
+{
+	StrengthGains gains {};
+	uint32_t stopperLeaves {0};
+	uint32_t partnerLeaves {0};
+};
+/// The strength gains of a stop and how many times each creature leaves its duel, by the rules of StrengthGainsAtStop
+[[nodiscard]] StopCounts CountsAtStop(StopEnd end, StopLinks links);
+/// One call of a stop chain, on one of the two creatures of a fight
+enum class StopCall : uint8_t
+{
+	/// The creature gives up its action as a failure, and its body ends its fight
+	Fail,
+	/// The creature gives up its action as a failure, but its own body keeps what it does at the start. Each call that
+	/// this call starts again ends the body of its creature.
+	FailKeepingBody,
+	/// Only the body of the creature ends its fight. Its partner does not change.
+	EndBody,
+};
+/// A call of a stop chain and the creature that it is on: 0 is the creature that stops, 1 is its partner
+struct StopStep
+{
+	size_t creature {0};
+	StopCall call {StopCall::Fail};
+};
+/// The two creatures of a fight at a stop: 0 is the creature that stops, 1 is its partner
+struct StopSides
+{
+	/// Whether each creature is in its duel against the other
+	std::array<bool, 2> duels {};
+	/// Whether the mind of each creature has the other creature as its partner
+	std::array<bool, 2> partners {};
+};
+/// What the calls of a stop chain do to the two creatures
+struct StopChainResult
+{
+	/// How many times each creature gets the strength gain of the fight action
+	std::array<uint32_t, 2> gains {};
+	/// How many times the body of each creature ends its fight. Each time, the life of the creature pays for the fight
+	/// again if its body is in a state of the fight. The body does not change its state during the chain.
+	std::array<uint32_t, 2> bodyEnds {};
+	/// The two creatures after the chain
+	StopSides after {};
+};
+/// The calls of a stop chain, one after the other, by the rules of StrengthGainsAtStop
+[[nodiscard]] StopChainResult RunStopChain(StopSides sides, std::span<const StopStep> steps);
+/// How a call-off starts. Usually the creature gives up its action. A walk back into the area of the creature first
+/// ends the fight of its body, and then gives up the action with no more change to the body.
+enum class CallOffStart : uint8_t
+{
+	Failure,
+	BodyFirst,
+};
+/// The calls on the creature that stops, for each start of a call-off
+[[nodiscard]] std::span<const StopStep> StepsOf(CallOffStart start);
+/// The calls of a knock out: the winner gives up its action for the plan that the win forces on it, then the loser
+/// faints and gives up its action for its faint
+[[nodiscard]] std::span<const StopStep> KnockOutSteps();
+/// The life of a creature after its life pays for the fight a number of times, one payment after the other. The life of
+/// a protected creature (a creature that a script holds in a cutscene, or an indestructible creature) does not change at
+/// a payment that would bring it to 0.01 or less.
+[[nodiscard]] float LifeAfterPayments(float life, float fightHealth, uint32_t payments, bool protectedLife = false);
 } // namespace openblack::creature_fight

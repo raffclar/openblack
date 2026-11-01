@@ -108,6 +108,19 @@ challenge_records::Outcome challenge_records::Record(Registry& registry, const s
 	return {.record = entity, .alignment = std::nullopt, .takesPicture = true};
 }
 
+void challenge_records::Clear(Registry& registry, const References& references)
+{
+	std::vector<entt::entity> records;
+	registry.Each<const ChallengeRecord>([&records, &references](entt::entity entity, const ChallengeRecord& record) {
+		ForEachThing(record.arguments, references.remove);
+		records.push_back(entity);
+	});
+	for (const auto entity : records)
+	{
+		registry.Destroy(entity);
+	}
+}
+
 std::vector<entt::entity> challenge_records::InOrder(const Registry& registry)
 {
 	std::vector<std::pair<uint32_t, entt::entity>> ordered;

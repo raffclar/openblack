@@ -52,16 +52,6 @@ enum class CastStyle : uint8_t
 /// Whether a seed held for some turns is ready to cast: a seed from a worship site waits a delay, one that is ready at
 /// once (from a dispenser) is always ready
 [[nodiscard]] bool SeedReadyAfter(uint32_t turnsInHand, float turnSeconds, float delaySeconds);
-/// What a scribble does to the seed in the hand
-enum class ScribbleResult : uint8_t
-{
-	/// The seed goes back to its plain miracle and stays in the hand
-	StopPowerUp,
-	/// The seed leaves the hand
-	Drop,
-};
-/// A scribble stops the power-up of a seed from an icon that is ready, not cast and powered up. Any other seed drops.
-[[nodiscard]] ScribbleResult ScribbleOn(bool hasIcon, bool ready, bool cast, int powerUp);
 
 /// A seed out of the hand that stays with the miracle it cast (the storms', the shields' and the forest's)
 struct SeedWithSpell
@@ -79,6 +69,18 @@ struct SeedWithSpell
 /// Whether such a seed is shown over its miracle: one bound to its miracle and made at an icon of the player's worship,
 /// until the miracle closes down. A seed whose miracle runs from the hand, or which stays in the hand, never is.
 [[nodiscard]] bool ShownWithSpell(const SeedWithSpell& seed);
+/// What happens when the hand takes a seed out of the world
+struct SeedTakeBack
+{
+	/// The event that the help counts for the hand of this computer's player
+	uint32_t helpEvent {0};
+	/// The hand keeps the seed as the miracle that it holds; else the seed goes
+	bool kept {false};
+};
+/// The take of a seed into the hand. A seed bound to a running miracle counts as a seed that the hand took back, else
+/// as a new seed. The hand keeps the seed only when its miracle had enough left for another cast (a seed with no
+/// miracle always has enough).
+[[nodiscard]] SeedTakeBack TakeBackOf(bool boundToSpell, bool enoughForRecast);
 /// A miracle whose seed is shown closes down once the seed stands where its player has no influence
 [[nodiscard]] bool ClosesOutOfInfluence(bool shown, bool inInfluence, bool closedDown);
 /// The place at which the turn finds a seed out of the hand for the check of its player's influence. A seed that

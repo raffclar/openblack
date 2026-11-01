@@ -52,24 +52,24 @@ float creature_player_attention::ViewWidthAtFocus(glm::vec3 cameraOrigin, glm::v
 	return x87::Mul(x87::Tan(k_ViewHalfAngle), focusDistance);
 }
 
-void creature_player_attention::UpdateHandSpeed(HandSpeed& speed, glm::vec3 movement, float turnsPerSecond)
+bool creature_player_attention::IsHandMoving(const glm::vec3& velocity)
 {
-	const auto now = movement * turnsPerSecond;
-	speed.velocity += (now - speed.velocity) * k_HandSpeedFollow;
-}
-
-bool creature_player_attention::IsHandMoving(const HandSpeed& speed)
-{
-	return glm::length(speed.velocity) > 0.0f;
+	return glm::length(velocity) > 0.0f;
 }
 
 bool creature_player_attention::IsDirectionClose(const map_coords::MapCoords& creature, const map_coords::MapCoords& point,
                                                  uint16_t heading)
 {
+	return IsDirectionClose(creature, point, heading, k_CloseDirectionParts);
+}
+
+bool creature_player_attention::IsDirectionClose(const map_coords::MapCoords& creature, const map_coords::MapCoords& point,
+                                                 uint16_t heading, uint32_t parts)
+{
 	const auto toPoint = gutils::GetAngleFromXZ(creature, point);
 	// The difference does not go round the circle. Thus two angles near the zero angle, one on each side, are far apart
 	const auto difference = toPoint > heading ? toPoint - heading : heading - toPoint;
-	if (static_cast<uint32_t>(difference) < k_HalfTurn / k_CloseDirectionParts)
+	if (static_cast<uint32_t>(difference) < k_HalfTurn / parts)
 	{
 		return true;
 	}

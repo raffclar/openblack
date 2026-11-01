@@ -34,6 +34,7 @@
 #include "ECS/Components/Pot.h"
 #include "ECS/Components/Reward.h"
 #include "ECS/Components/Scaffold.h"
+#include "ECS/Components/SpellSeed.h"
 #include "ECS/Components/Transform.h"
 #include "ECS/Components/Tree.h"
 #include "ECS/Components/Villager.h"
@@ -86,6 +87,15 @@ public:
 		registry.Assign<Scaffold>(scaffold);
 		sizes[scaffold] = {.radius = 2.0f, .height = 3.0f};
 		return scaffold;
+	}
+
+	entt::entity AddShownSeed(glm::vec3 position, PlayerNames player)
+	{
+		const auto seed = registry.Create();
+		registry.Assign<Transform>(seed, position, glm::mat3(1.0f), glm::vec3(1.0f));
+		registry.Assign<SpellSeed>(seed, SpellSeed {.seedType = SpellSeedType::Shield, .player = player, .followsSpell = true});
+		sizes[seed] = {.radius = 1.0f, .height = 2.0f};
+		return seed;
 	}
 
 	entt::entity AddTree(glm::vec3 position, float weight)
@@ -164,7 +174,11 @@ public:
 	[[nodiscard]] bool IsLoosePot(PotInfo type) const override { return type == PotInfo::FoodPot; }
 	[[nodiscard]] bool IsOfRockMaterial(entt::entity object) const override { return registry.AllOf<MobileStatic>(object); }
 	[[nodiscard]] bool IsSexuallyActive(entt::entity) const override { return true; }
-	[[nodiscard]] std::optional<PlayerNames> PlayerOf(entt::entity) const override { return PlayerNames::PLAYER_ONE; }
+	[[nodiscard]] std::optional<PlayerNames> PlayerOf(entt::entity object) const override
+	{
+		const auto found = owners.find(object);
+		return found != owners.end() ? found->second : std::optional(PlayerNames::PLAYER_ONE);
+	}
 
 	void LeavePhysicsAndMap(entt::entity object) override
 	{
@@ -184,6 +198,19 @@ public:
 	void ArtefactTaken(entt::entity object, PlayerNames) override { artefactsTaken.push_back(object); }
 	void GlobeIntoHand(entt::entity globe, PlayerNames player) override { globesTaken.emplace_back(globe, player); }
 	void ScaffoldIntoHand(entt::entity scaffold, PlayerNames player) override { scaffoldsTaken.emplace_back(scaffold, player); }
+	[[nodiscard]] std::optional<hand_grab::HoldFacts> SeedHoldOf(entt::entity seed) const override
+	{
+		if (!registry.AllOf<SpellSeed>(seed))
+		{
+			return std::nullopt;
+		}
+		return hand_grab::HoldFacts {.type = HoldType::Magic, .loweringMultiplier = 0.5f, .holdRadius = 1.0f};
+	}
+	bool SeedIntoHand(entt::entity seed, PlayerNames player) override
+	{
+		seedsTakenBack.emplace_back(seed, player);
+		return seedKept;
+	}
 	void PlaySample(uint32_t sample, glm::vec3) override { samples.push_back(sample); }
 	bool TapThing(entt::entity object, glm::vec3, PlayerNames) override
 	{
@@ -498,6 +525,8 @@ public:
 	std::optional<PlayerNames> acting;
 	/// The player whose hands this computer moves, when it is not the first player
 	std::optional<PlayerNames> ownHandPlayer;
+	/// The players of things that are not the first player's; a missing optional is a thing of nobody's
+	std::map<entt::entity, std::optional<PlayerNames>> owners;
 	std::optional<entt::entity> underCursor;
 	std::optional<entt::entity> nearHand;
 	bool influence {true};
@@ -528,6 +557,9 @@ public:
 	std::vector<entt::entity> artefactsTaken;
 	std::vector<std::pair<entt::entity, PlayerNames>> globesTaken;
 	std::vector<std::pair<entt::entity, PlayerNames>> scaffoldsTaken;
+	/// The seeds that the hand took back, and whether the miracles keep such a seed in the hand
+	std::vector<std::pair<entt::entity, PlayerNames>> seedsTakenBack;
+	bool seedKept {true};
 	std::vector<uint32_t> samples;
 	std::vector<entt::entity> tapped;
 	std::set<entt::entity> tappable;
@@ -631,6 +663,13 @@ protected:
 		};
 		// The hand has been over the land a frame before anything is pressed
 		Frame(0);
+	}
+
+	/// One game turn of the first player's hand: the scoop in the input of the turn, then the held thing in the hand step
+	void Turn()
+	{
+		system->LockTurn(PlayerNames::PLAYER_ONE);
+		system->ProcessTurn();
 	}
 
 	/// The world does one command of the hand's player
@@ -882,6 +921,74 @@ TEST_F(HandGrabSystemWithWorld, AHeldPressCarriesAGlobeFromTheSide)
 	EXPECT_FLOAT_EQ(world->registry.Get<HandGrab>(world->hand).lowering, 0.7f * 2.0f);
 }
 
+// A held press on the player's own seed that shows over its miracle pulls it, then gives it back to the miracles. The
+// grab of the hand ends: the hand holds the seed as its miracle, not as a thing.
+TEST_F(HandGrabSystemWithWorld, AHeldPressTakesTheOwnShownSeedBackToTheMiracles)
+{
+	const auto seed = world->AddShownSeed({0.0f, 0.0f, 0.0f}, PlayerNames::PLAYER_ONE);
+	world->underCursor = seed;
+	EXPECT_EQ(system->WhyNotTake(seed), "");
+	EXPECT_TRUE(Press());
+	for (int i = 0; i < 40 && world->seedsTakenBack.empty(); ++i)
+	{
+		Frame(10);
+	}
+	ASSERT_EQ(world->seedsTakenBack.size(), 1u);
+	EXPECT_EQ(world->seedsTakenBack.front(), std::pair(seed, PlayerNames::PLAYER_ONE));
+	EXPECT_FALSE(system->GetHeld().has_value());
+	EXPECT_FALSE(system->IsBusy());
+	// The pick-up sound plays as the hand sends the take
+	EXPECT_EQ(world->samples.size(), 1u);
+	// The help counts the take, and those about the hand see it pick something up
+	EXPECT_EQ(world->helpEvents, std::vector<uint32_t> {help::profile::k_PickUp});
+	ASSERT_EQ(world->reactions.size(), 1u);
+	EXPECT_EQ(world->reactions.front().type, Reaction::ReactToHandPickUp);
+	EXPECT_EQ(world->spreadStopped, std::vector<entt::entity> {seed});
+	EXPECT_EQ(world->pathsForgotten, 1);
+	// It never goes into the hand as a thing
+	EXPECT_TRUE(world->leftWorld.empty());
+}
+
+// A seed whose miracle has too little left goes at the take: the hand counts no take and nobody sees one
+TEST_F(HandGrabSystemWithWorld, ASeedThatGoesAtTheTakeCountsNoTake)
+{
+	world->seedKept = false;
+	const auto seed = world->AddShownSeed({0.0f, 0.0f, 0.0f}, PlayerNames::PLAYER_ONE);
+	world->underCursor = seed;
+	EXPECT_TRUE(Press());
+	for (int i = 0; i < 40 && world->seedsTakenBack.empty(); ++i)
+	{
+		Frame(10);
+	}
+	ASSERT_EQ(world->seedsTakenBack.size(), 1u);
+	EXPECT_FALSE(system->IsBusy());
+	EXPECT_TRUE(world->helpEvents.empty());
+	EXPECT_TRUE(world->reactions.empty());
+	EXPECT_EQ(world->pathsForgotten, 0);
+}
+
+// The hand takes back only a seed of its own player
+TEST_F(HandGrabSystemWithWorld, TheHandLeavesTheShownSeedOfAnotherPlayer)
+{
+	const auto seed = world->AddShownSeed({0.0f, 0.0f, 0.0f}, PlayerNames::PLAYER_TWO);
+	world->underCursor = seed;
+	EXPECT_NE(system->WhyNotTake(seed), "");
+	EXPECT_FALSE(Press());
+	for (int i = 0; i < 40; ++i)
+	{
+		Frame(10);
+	}
+	EXPECT_TRUE(world->seedsTakenBack.empty());
+}
+
+// A seed that a hand holds is no thing for the hand to take
+TEST_F(HandGrabSystemWithWorld, AHeldSeedIsNoThingToTake)
+{
+	const auto seed = world->AddShownSeed({0.0f, 0.0f, 0.0f}, PlayerNames::PLAYER_ONE);
+	world->registry.Assign<HandHeldSeed>(world->secondHand, seed);
+	EXPECT_NE(system->WhyNotTake(seed), "");
+}
+
 TEST_F(HandGrabSystemWithWorld, AHeldPressCarriesAScaffoldFromTheSideAndItsWorkshopIsTold)
 {
 	const auto scaffold = world->AddScaffold({0.0f, 0.0f, 0.0f});
@@ -949,6 +1056,24 @@ TEST_F(HandGrabSystemWithWorld, AShortPressOnAScaffoldTakesNothing)
 	Release();
 	EXPECT_FALSE(system->GetHeld().has_value());
 	EXPECT_TRUE(world->scaffoldsTaken.empty());
+}
+
+// The hand takes a scaffold of the town of another god as any other scaffold, but only in its influence
+TEST_F(HandGrabSystemWithWorld, AScaffoldOfAnotherGodsTownIsTakenOnlyInTheInfluence)
+{
+	const auto scaffold = world->AddScaffold({0.0f, 0.0f, 0.0f});
+	world->registry.Get<Scaffold>(scaffold).town = world->registry.Create();
+	world->underCursor = scaffold;
+	world->influenceOnlyOf = PlayerNames::PLAYER_TWO;
+	EXPECT_FALSE(Press());
+	EXPECT_TRUE(world->scaffoldsTaken.empty());
+	world->influenceOnlyOf.reset();
+	EXPECT_TRUE(Press());
+	for (int i = 0; i < 40 && !system->GetHeld().has_value(); ++i)
+	{
+		Frame(10);
+	}
+	EXPECT_EQ(system->GetHeld(), std::optional(scaffold));
 }
 
 TEST_F(HandGrabSystemWithWorld, WithTheLeashHeldAShortPressIsAnOrderInsteadOfATap)
@@ -1211,6 +1336,31 @@ TEST_F(HandGrabSystemWithWorld, TheGesturePathIsLeftAloneByAHandThatIsNotTheLoca
 	EXPECT_EQ(world->pathsForgotten, 0);
 }
 
+// The help counts only the events of the local hand: the hand of a computer god or of another player takes and lets go
+// of things with no count
+TEST_F(HandGrabSystemWithWorld, TheHelpCountsNothingForAHandThatIsNotTheLocalOne)
+{
+	world->localHand = false;
+	const auto rock = world->AddRock({0.0f, 0.0f, 0.0f});
+	world->underCursor = rock;
+	Press();
+	for (int i = 0; i < 20 && !system->GetHeld().has_value(); ++i)
+	{
+		Frame(10);
+	}
+	Release();
+	ASSERT_TRUE(system->GetHeld().has_value());
+	world->underCursor.reset();
+	world->borderX = 10.0f;
+	world->pickedPoint = glm::vec3(8.0f, 0.0f, 0.0f);
+	Frame(10, {12.0f, 0.0f, 0.0f}, {12.0f, 0.0f, 0.0f});
+	Press();
+	Frame(10, {12.0f, 0.0f, 0.0f}, {12.0f, 0.0f, 0.0f});
+	Release();
+	EXPECT_FALSE(system->GetHeld().has_value());
+	EXPECT_TRUE(world->helpEvents.empty());
+}
+
 // The hand says why a press on a thing wouldn't take it, as the inspector shows it
 // The hand stops the spread of the reactions of a thing that it takes. They spread again when the hand lets go.
 TEST_F(HandGrabSystemWithWorld, TheReactionsOfAHeldThingSpreadAgainOnALetGo)
@@ -1315,6 +1465,25 @@ TEST_F(HandGrabSystemWithWorld, APressOnAThingAScriptFixedInPlaceIsAPressOnTheLa
 	world->looseLeash = true;
 	EXPECT_FALSE(Press());
 	EXPECT_EQ(world->registry.Get<HandClicked>(world->hand).thing, stone);
+}
+
+// A tap on a stone that a script fixed in place is only a click, which the script reads. The creature gets no deed,
+// no reaction and no help event from it, so it can not learn from the taps of the singing stones.
+TEST_F(HandGrabSystemWithWorld, ATapOnAFixedStoneGivesTheCreatureNothingToSee)
+{
+	const auto stone = world->AddRock({0.0f, 0.0f, 0.0f});
+	world->registry.Assign<CannotBePickedUp>(stone);
+	world->underCursor = stone;
+	commandTurn = now / 100;
+	EXPECT_FALSE(Press());
+	Frame(50);
+	EXPECT_FALSE(Release().has_value());
+	system->ClickReleased();
+	EXPECT_EQ(world->registry.Get<HandClicked>(world->hand).thing, stone);
+	EXPECT_TRUE(world->tapped.empty());
+	EXPECT_TRUE(world->reactions.empty());
+	EXPECT_TRUE(world->potReactionsSetUp.empty());
+	EXPECT_TRUE(world->helpEvents.empty());
 }
 
 TEST(HandGrabRules, APressTapsAThingTheHandCouldHoldOrThatTakesTaps)
@@ -2067,10 +2236,10 @@ TEST_F(HandGrabSystemWithWorld, WhatIsHeldIsHeatedEachTurnAndDroppedOnceGone)
 	}
 	// A rock taken stops being its town's artefact
 	EXPECT_EQ(world->artefactsTaken, std::vector<entt::entity> {rock});
-	system->ProcessTurn();
+	Turn();
 	EXPECT_EQ(world->heated, std::vector<entt::entity> {rock});
 	world->registry.Destroy(rock);
-	system->ProcessTurn();
+	Turn();
 	EXPECT_FALSE(system->IsBusy());
 }
 
@@ -2084,7 +2253,7 @@ TEST_F(HandGrabSystemWithWorld, WhatIsHeldOutsideTheInfluenceIsNotHeated)
 		Frame(10);
 	}
 	world->influence = false;
-	system->ProcessTurn();
+	Turn();
 	EXPECT_TRUE(world->heated.empty());
 }
 
@@ -2118,9 +2287,9 @@ TEST_F(HandGrabSystemWithWorld, APileIsScoopedIntoAHandfulThatGrowsWhileTheButto
 	// The cursor is pinned while it scoops
 	EXPECT_TRUE(world->cursorPinned);
 	// Each game turn takes more, from 8 a turn
-	system->ProcessTurn();
+	Turn();
 	EXPECT_EQ(world->registry.Get<const Pot>(*handful).amount, 25u + 8u);
-	system->ProcessTurn();
+	Turn();
 	EXPECT_GT(world->registry.Get<const Pot>(*handful).amount, 33u);
 	EXPECT_EQ(world->scoopSounds.size(), 2u);
 	// The scooping sound is asked for every turn but its loop starts only once
@@ -2141,7 +2310,7 @@ TEST_F(HandGrabSystemWithWorld, APileIsScoopedIntoAHandfulThatGrowsWhileTheButto
 	// Its sound stops with it, and isn't asked for again
 	EXPECT_EQ(world->scoopSoundStops, 1u);
 	EXPECT_FALSE(world->scoopSoundPlaying);
-	system->ProcessTurn();
+	Turn();
 	EXPECT_EQ(world->scoopSounds.size(), 2u);
 	EXPECT_TRUE(system->GetHeld().has_value());
 }
@@ -2294,16 +2463,16 @@ TEST_F(HandGrabSystemWithWorld, AScoopThatGetsNothingMoreStopsItsSoundButKeepsTh
 	const auto handful = system->GetHeld();
 	ASSERT_TRUE(handful.has_value());
 	// The pile gives its last 5 the next turn, then has nothing more
-	system->ProcessTurn();
+	Turn();
 	EXPECT_EQ(world->scoopSoundStarts, 1u);
-	system->ProcessTurn();
+	Turn();
 	// Still holding the button, the sound has stopped and the hand keeps what it took
 	EXPECT_FALSE(world->scoopSoundPlaying);
 	EXPECT_GE(world->scoopSoundStops, 1u);
 	const auto stops = world->scoopSoundStops;
 	const auto asked = world->scoopSounds.size();
-	system->ProcessTurn();
-	system->ProcessTurn();
+	Turn();
+	Turn();
 	EXPECT_EQ(world->scoopSounds.size(), asked);
 	EXPECT_EQ(world->scoopSoundStops, stops);
 	EXPECT_EQ(system->GetHeld(), handful);
@@ -2316,8 +2485,8 @@ TEST_F(HandGrabSystemWithWorld, AFieldAndAFishFarmSoundAsFoodWhileTheyAreScooped
 	world->fields[field] = {.food = 1000, .ripe = false};
 	world->underCursor = field;
 	EXPECT_TRUE(Press());
-	system->ProcessTurn();
-	system->ProcessTurn();
+	Turn();
+	Turn();
 	EXPECT_EQ(world->scoopSoundStarts, 1u);
 	EXPECT_EQ(world->scoopSoundResources, (std::vector<ResourceType> {ResourceType::Food, ResourceType::Food}));
 	Release();
@@ -2336,7 +2505,7 @@ TEST_F(HandGrabSystemWithWorld, ARipeFieldGivesHalfOfEachScoop)
 	// The first scoop of 25 is halved, and so is each turn's 8
 	EXPECT_EQ(world->registry.Get<const Pot>(*handful).amount, 12u);
 	EXPECT_EQ(world->fields[field].food, 988u);
-	system->ProcessTurn();
+	Turn();
 	EXPECT_EQ(world->registry.Get<const Pot>(*handful).amount, 16u);
 }
 
@@ -2364,11 +2533,11 @@ TEST_F(HandGrabSystemWithWorld, TheLockOntoAScoopedThingHoldsWhileTheInfluenceHo
 	world->underCursor = field;
 	EXPECT_TRUE(Press());
 	EXPECT_EQ(system->GetLockedOn(), std::optional(field));
-	system->ProcessTurn();
+	Turn();
 	EXPECT_EQ(system->GetLockedOn(), std::optional(field));
 	// The player's influence goes from under the hand: the lock ends, and the hand keeps its handful
 	world->influence = false;
-	system->ProcessTurn();
+	Turn();
 	EXPECT_FALSE(system->GetLockedOn().has_value());
 	EXPECT_TRUE(system->GetHeld().has_value());
 }
@@ -2388,19 +2557,19 @@ TEST_F(HandGrabSystemWithWorld, AFishFarmGivesAFirstHandfulForNothingThenItsFish
 	ASSERT_EQ(world->fishStreams.size(), 1u);
 	EXPECT_EQ(world->fishStreams.front(), glm::vec3(5.0f, 0.0f, 5.0f));
 	// Each turn the ramp's fish are taken from the farm
-	system->ProcessTurn();
+	Turn();
 	const auto first = world->registry.Get<const Pot>(*handful).amount - 25u;
 	EXPECT_GT(first, 0u);
 	EXPECT_FLOAT_EQ(world->fishFarms[farm], 100.0f - static_cast<float>(first));
 	// A farm with fewer left than the ramp wants still gives all of it
 	world->fishFarms[farm] = 1.0f;
 	const auto before = world->registry.Get<const Pot>(*handful).amount;
-	system->ProcessTurn();
+	Turn();
 	EXPECT_GT(world->registry.Get<const Pot>(*handful).amount - before, 1u);
 	EXPECT_FLOAT_EQ(world->fishFarms[farm], 0.0f);
 	// An empty farm ends the scoop: its stream stops and the hand keeps its handful
 	EXPECT_TRUE(world->stopped.empty());
-	system->ProcessTurn();
+	Turn();
 	EXPECT_FALSE(world->stopped.empty());
 	EXPECT_FALSE(world->cursorPinned);
 	EXPECT_EQ(system->GetHeld(), handful);
@@ -2505,6 +2674,21 @@ TEST_F(HandGrabSystemGiving, ThePressWhileOfferingGivesItToTheCreatureWithTheMat
 	EXPECT_FALSE(world->registry.AllOf<InHand>(rock));
 	EXPECT_FALSE(system->GetOfferedCreature().has_value());
 	EXPECT_FALSE(system->HandOver(rock));
+}
+
+// The gift of a hand that is not the local one gives the thing with no count for the help
+TEST_F(HandGrabSystemGiving, TheGiftOfAHandThatIsNotTheLocalOneCountsNothing)
+{
+	const auto rock = HoldRock();
+	const auto creature = AddCreature(creature_giving::Verdict::Give);
+	world->underCursor = creature;
+	Frame(16);
+	world->helpEvents.clear();
+	world->localHand = false;
+	EXPECT_TRUE(Press());
+	ASSERT_EQ(world->given.size(), 1u);
+	EXPECT_EQ(world->given.front().held, rock);
+	EXPECT_TRUE(world->helpEvents.empty());
 }
 
 TEST_F(HandGrabSystemGiving, TheGiveOfThePressIsACommandThatWaitsForItsTurn)
@@ -2640,12 +2824,12 @@ TEST_F(HandGrabSystemWithWorld, TheLastThingsTakenAndLetGoAreForgottenWhenTheyGo
 	const auto dropped = world->AddRock({4.0f, 0.0f, 0.0f});
 	grab.lastPickedUp = taken;
 	grab.lastDropped = dropped;
-	system->ProcessTurn();
+	Turn();
 	EXPECT_EQ(world->registry.Get<HandGrab>(world->hand).lastPickedUp, taken);
 	EXPECT_EQ(world->registry.Get<HandGrab>(world->hand).lastDropped, dropped);
 	world->registry.Destroy(taken);
 	world->registry.Destroy(dropped);
-	system->ProcessTurn();
+	Turn();
 	EXPECT_EQ(world->registry.Get<HandGrab>(world->hand).lastPickedUp, entt::entity {entt::null});
 	EXPECT_EQ(world->registry.Get<HandGrab>(world->hand).lastDropped, entt::entity {entt::null});
 }
@@ -2662,7 +2846,7 @@ TEST_F(HandGrabSystemWithWorld, TheHandShowsWhatItHoldsAfterEachTurnOfAScoopAndA
 	const auto handful = system->GetHeld();
 	ASSERT_TRUE(handful.has_value());
 	// Each turn that it takes some, what it holds now, once
-	system->ProcessTurn();
+	Turn();
 	EXPECT_EQ(system->TakeAmountToolTip(), std::optional(world->registry.Get<const Pot>(*handful).amount));
 	EXPECT_FALSE(system->TakeAmountToolTip().has_value());
 	// At the let go too
@@ -2672,15 +2856,17 @@ TEST_F(HandGrabSystemWithWorld, TheHandShowsWhatItHoldsAfterEachTurnOfAScoopAndA
 
 TEST_F(HandGrabSystemWithWorld, AFieldAndAFishFarmShowWhatTheHandHoldsEachTurnButOnlyAFishFarmAtTheLetGo)
 {
+	// The field of another player
 	const auto field = world->registry.Create();
 	world->registry.Assign<Transform>(field, glm::vec3(0.0f), glm::mat3(1.0f), glm::vec3(1.0f));
 	world->fields[field] = {.food = 1000, .ripe = false};
+	world->owners[field] = PlayerNames::PLAYER_TWO;
 	world->underCursor = field;
 	EXPECT_TRUE(Press());
 	EXPECT_FALSE(system->TakeAmountToolTip().has_value());
 	const auto fromField = system->GetHeld();
 	ASSERT_TRUE(fromField.has_value());
-	system->ProcessTurn();
+	Turn();
 	EXPECT_EQ(system->TakeAmountToolTip(), std::optional(world->registry.Get<const Pot>(*fromField).amount));
 	Release();
 	EXPECT_FALSE(system->TakeAmountToolTip().has_value());
@@ -2694,10 +2880,45 @@ TEST_F(HandGrabSystemWithWorld, AFieldAndAFishFarmShowWhatTheHandHoldsEachTurnBu
 	EXPECT_FALSE(system->TakeAmountToolTip().has_value());
 	const auto fromFarm = system->GetHeld();
 	ASSERT_TRUE(fromFarm.has_value());
-	system->ProcessTurn();
+	Turn();
 	EXPECT_EQ(system->TakeAmountToolTip(), std::optional(world->registry.Get<const Pot>(*fromFarm).amount));
 	Release();
 	EXPECT_EQ(system->TakeAmountToolTip(), std::optional(world->registry.Get<const Pot>(*fromFarm).amount));
+}
+
+// The let-go of a scoop from a field of the local player shows what the hand holds, as the hand lets go. A field of no
+// town does not.
+TEST_F(HandGrabSystemWithWorld, AFieldOfTheLocalPlayerShowsWhatTheHandHoldsAtTheLetGo)
+{
+	static_assert(hand_grab::FieldShowsHeldAtLetGo(true, PlayerNames::PLAYER_ONE, PlayerNames::PLAYER_ONE));
+	static_assert(!hand_grab::FieldShowsHeldAtLetGo(true, PlayerNames::PLAYER_TWO, PlayerNames::PLAYER_ONE));
+	static_assert(!hand_grab::FieldShowsHeldAtLetGo(true, std::nullopt, PlayerNames::PLAYER_ONE));
+	static_assert(!hand_grab::FieldShowsHeldAtLetGo(false, PlayerNames::PLAYER_ONE, PlayerNames::PLAYER_ONE));
+	const auto field = world->registry.Create();
+	world->registry.Assign<Transform>(field, glm::vec3(0.0f), glm::mat3(1.0f), glm::vec3(1.0f));
+	world->fields[field] = {.food = 1000, .ripe = false};
+	world->underCursor = field;
+	EXPECT_TRUE(Press());
+	const auto fromField = system->GetHeld();
+	ASSERT_TRUE(fromField.has_value());
+	Turn();
+	EXPECT_TRUE(system->TakeAmountToolTip().has_value());
+	Release();
+	EXPECT_EQ(system->TakeAmountToolTip(), std::optional(world->registry.Get<const Pot>(*fromField).amount));
+	EXPECT_FALSE(system->TakeAmountToolTip().has_value());
+	system->HandOver(*fromField);
+
+	const auto noTown = world->registry.Create();
+	world->registry.Assign<Transform>(noTown, glm::vec3(0.0f), glm::mat3(1.0f), glm::vec3(1.0f));
+	world->fields[noTown] = {.food = 1000, .ripe = false};
+	world->owners[noTown] = std::nullopt;
+	world->underCursor = noTown;
+	EXPECT_TRUE(Press());
+	ASSERT_TRUE(system->GetHeld().has_value());
+	Turn();
+	EXPECT_TRUE(system->TakeAmountToolTip().has_value());
+	Release();
+	EXPECT_FALSE(system->TakeAmountToolTip().has_value());
 }
 
 TEST_F(HandGrabSystemWithWorld, AHeldThingThatIsDestroyedLeavesTheHandAtTheNextTurn)
@@ -2712,7 +2933,7 @@ TEST_F(HandGrabSystemWithWorld, AHeldThingThatIsDestroyedLeavesTheHandAtTheNextT
 	Release();
 	ASSERT_EQ(system->GetHeld(), std::optional(rock));
 	world->registry.Destroy(rock);
-	system->ProcessTurn();
+	Turn();
 	EXPECT_FALSE(system->GetHeld().has_value());
 }
 
@@ -2996,7 +3217,7 @@ TEST_F(HandGrabSystemWithWorld, APressOnAPileSendsTheLockAndTheTurnStartsTheScoo
 	ASSERT_TRUE(handful.has_value());
 	EXPECT_EQ(world->registry.Get<const Pot>(*handful).amount, 25u);
 	EXPECT_EQ(world->registry.Get<const Pot>(pile).amount, 975u);
-	system->ProcessTurn();
+	Turn();
 	EXPECT_EQ(world->registry.Get<const Pot>(*handful).amount, 25u);
 	EXPECT_EQ(system->TakeAmountToolTip(), std::optional(25u));
 }
@@ -3068,7 +3289,7 @@ TEST_F(HandGrabSystemWithWorld, TheEndOfTheLockOfAnotherThingLeavesTheScoop)
 	const auto handful = system->GetHeld();
 	ASSERT_TRUE(handful.has_value());
 	system->DoUnlock(world->HandPlayer(), *handful);
-	system->ProcessTurn();
+	Turn();
 	EXPECT_EQ(world->registry.Get<const Pot>(*handful).amount, 25u + 8u);
 }
 
@@ -3090,4 +3311,59 @@ TEST_F(HandGrabSystemWithWorld, TheSeedInTheHandOfAnotherGodIsDrawnAtTheHandItRe
 	EXPECT_EQ(placed.rotation, glm::mat3(1.0f));
 	// The seed of the own hand is where the hand's pose puts it
 	EXPECT_EQ(registry.Get<const Transform>(ownSeed).position, glm::vec3(7.0f, 8.0f, 9.0f));
+}
+
+// The scoop continues in the input of the turn, and the hand step of the turn takes no handful
+TEST_F(HandGrabSystemWithWorld, TheScoopContinuesInTheInputOfTheTurnAndNotInTheHandStep)
+{
+	const auto pile = world->registry.Create();
+	world->registry.Assign<Transform>(pile, glm::vec3(0.0f), glm::mat3(1.0f), glm::vec3(1.0f));
+	world->registry.Assign<Pot>(pile, Pot {.amount = 1000, .maxAmount = 2000, .type = PotInfo::FoodPile});
+	world->underCursor = pile;
+	EXPECT_TRUE(Press());
+	const auto handful = system->GetHeld();
+	ASSERT_TRUE(handful.has_value());
+	system->ProcessTurn();
+	EXPECT_EQ(world->registry.Get<const Pot>(*handful).amount, 25u);
+	system->LockTurn(PlayerNames::PLAYER_ONE);
+	EXPECT_EQ(world->registry.Get<const Pot>(*handful).amount, 25u + 8u);
+	// Out of the influence, the scoop stops in the input of the turn
+	world->influence = false;
+	system->LockTurn(PlayerNames::PLAYER_ONE);
+	EXPECT_EQ(world->registry.Get<const Pot>(*handful).amount, 25u + 8u);
+	EXPECT_FALSE(world->cursorPinned);
+	EXPECT_FALSE(world->acting.has_value());
+}
+
+// The scoop of another god continues with the hand of that god, and the first player's hand stays empty
+TEST_F(HandGrabSystemWithWorld, TheScoopOfAnotherGodContinuesWithThatGodsHand)
+{
+	const auto pile = world->registry.Create();
+	world->registry.Assign<Transform>(pile, glm::vec3(0.0f), glm::mat3(1.0f), glm::vec3(1.0f));
+	world->registry.Assign<Pot>(pile, Pot {.amount = 1000, .maxAmount = 2000, .type = PotInfo::FoodPile});
+	world->secondPlayerHasHands = true;
+	system->DoLock(PlayerNames::PLAYER_TWO, pile);
+	const auto handful = world->registry.Get<const HandGrab>(world->secondHand).object;
+	system->LockTurn(PlayerNames::PLAYER_ONE);
+	EXPECT_EQ(world->registry.Get<const Pot>(handful).amount, 25u);
+	system->LockTurn(PlayerNames::PLAYER_TWO);
+	EXPECT_EQ(world->registry.Get<const Pot>(handful).amount, 25u + 8u);
+	EXPECT_FALSE(system->GetHeld().has_value());
+	EXPECT_FALSE(world->acting.has_value());
+}
+
+// A held thing that goes leaves the hand in the input of the next turn
+TEST_F(HandGrabSystemWithWorld, AHeldThingThatGoesLeavesTheHandInTheInputOfTheTurn)
+{
+	const auto rock = world->AddRock({0.0f, 0.0f, 0.0f});
+	world->underCursor = rock;
+	Press();
+	for (int i = 0; i < 20 && !system->GetHeld().has_value(); ++i)
+	{
+		Frame(10);
+	}
+	ASSERT_TRUE(system->GetHeld().has_value());
+	world->registry.Destroy(rock);
+	system->LockTurn(PlayerNames::PLAYER_ONE);
+	EXPECT_FALSE(system->IsBusy());
 }

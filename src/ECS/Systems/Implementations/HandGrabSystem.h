@@ -49,6 +49,7 @@ public:
 	void ProcessTurn() override;
 	/// The turn of the hand that HandGrabWorldInterface::Hand gives now
 	void ProcessHandTurn();
+	void LockTurn(PlayerNames player) override;
 	void PlaceHeldForTurn() override;
 	void PlaceOthersHeldForFrame(int32_t frameMs) override;
 	void DrawThrownForFrame() override;
@@ -135,6 +136,8 @@ private:
 	/// of the computer gods)
 	void Take(components::HandGrab& grab, entt::entity object, bool fromTheWorld = true, bool sounds = true,
 	          bool askInfluence = true);
+	/// The take of a miracle's seed that shows over its miracle: the seed goes back to the miracles of the hand's player
+	void TakeSeedBack(components::HandGrab& grab, entt::entity seed);
 	/// The take of a command at the turn, by the hand of its player; with askInfluence as for Take
 	void TakeAtTurn(PlayerNames player, entt::entity object, bool askInfluence);
 	/// The hand sends the command that takes a thing that it waited for or pulled free, and plays the sounds of the take

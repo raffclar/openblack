@@ -148,6 +148,87 @@ void openblack::testbed_scenarios::AddVillageTotemScenarios(std::vector<Scenario
 	    .worshipShare = 0.0f,
 	});
 	all.push_back({
+	    .id = "objects.totem_without_life",
+	    .name = "A totem with no life shows nothing",
+	    .facet = Facet::Objects,
+	    .description = "The player's Norse town centre with its totem. After three seconds a script sets the health of "
+	                   "the totem to 0. Five seconds later the script sets it to 1 again. Keep the camera still for a "
+	                   "time, then move it.",
+	    .expected = "When its health becomes 0, the totem, its icon and its see-through second totem go from the "
+	                "screen, and the cursor does not find them. The town centre and its stone hands stay. When the "
+	                "health becomes 1 again, the totem and its icon show again at once, also while the camera is still.",
+	    .framing = {.shot = Shot::Overview,
+	                .include = {k_Centre - glm::vec2(15.0f), k_Centre + glm::vec2(15.0f)},
+	                .distance = 0.5f},
+	    .objects = {{.type = AbodeInfo::NorseTownCentre, .offset = k_Centre}},
+	    .temples = {{.offset = k_Temple}},
+	    .commands = {{.kind = Command::Kind::CallNative,
+	                  .delaySeconds = 3.0f,
+	                  .script = "GET_TOTEM_STATUE",
+	                  .scriptArguments = {{.kind = ScriptArgument::Kind::Object, .index = 0}}},
+	                 {.kind = Command::Kind::CallNative,
+	                  .delaySeconds = 0.1f,
+	                  .script = "SET_PROPERTY",
+	                  .scriptArguments = {{.kind = ScriptArgument::Kind::Integer, .number = 1.0f},
+	                                      {.kind = ScriptArgument::Kind::Result},
+	                                      {.kind = ScriptArgument::Kind::Number, .number = 0.0f}}},
+	                 {.kind = Command::Kind::CallNative,
+	                  .delaySeconds = 5.0f,
+	                  .script = "GET_TOTEM_STATUE",
+	                  .scriptArguments = {{.kind = ScriptArgument::Kind::Object, .index = 0}}},
+	                 {.kind = Command::Kind::CallNative,
+	                  .delaySeconds = 0.1f,
+	                  .script = "SET_PROPERTY",
+	                  .scriptArguments = {{.kind = ScriptArgument::Kind::Integer, .number = 1.0f},
+	                                      {.kind = ScriptArgument::Kind::Result},
+	                                      {.kind = ScriptArgument::Kind::Number, .number = 1.0f}}}},
+	    .townBeliefInPlayer = k_TownBelief,
+	});
+	// The camera turns away from the totem and back, so that the land's draw list leaves the totem out for a time
+	const auto turnCamera = [](glm::vec2 focus, float delay) {
+		return Command {
+		    .kind = Command::Kind::CallNative,
+		    .delaySeconds = delay,
+		    .script = "MOVE_CAMERA_FOCUS",
+		    .scriptArguments = {{.kind = ScriptArgument::Kind::Position, .point = focus, .height = 3.0f}, {.number = 1.0f}}};
+	};
+	all.push_back({
+	    .id = "objects.totem_off_the_list",
+	    .name = "A totem moves and shows its share only while it is drawn",
+	    .facet = Facet::Objects,
+	    .description = "The player's Norse town centre with the player's temple and the town's worship site built, no one "
+	                   "at worship. A script takes the camera and turns it to look south, away from the totem. Then the "
+	                   "script sets the height of the totem to all of the town. After 2.5 seconds the camera turns back "
+	                   "to the totem and the script gives the camera back.",
+	    .expected = "While the camera looks away, the totem is not drawn. When the camera turns back, the totem shows at "
+	                "once about three quarters of the way up and rises on to the top. The People Worshipping tooltip "
+	                "shows only when the totem comes into view again, not while the camera looks away. The village "
+	                "bell rings when the totem gets to the top, also if the camera still looks away.",
+	    .framing = {.shot = Shot::Placed, .eye = {0.0f, 25.0f, 5.0f}, .look = {k_Centre.x, 3.0f, k_Centre.y}},
+	    .objects = {{.type = AbodeInfo::NorseTownCentre, .offset = k_Centre},
+	                {.type = VillagerInfo::NorseHousewifeFemale,
+	                 .offset = k_Centre + glm::vec2(10.0f, -10.0f),
+	                 .joinTown = true}},
+	    .temples = {{.offset = k_Temple}},
+	    .commands = {{.kind = Command::Kind::CallNative, .delaySeconds = 2.0f, .script = "START_CAMERA_CONTROL"},
+	                 turnCamera({0.0f, -200.0f}, 0.1f),
+	                 {.kind = Command::Kind::CallNative,
+	                  .delaySeconds = 1.5f,
+	                  .script = "GET_TOTEM_STATUE",
+	                  .scriptArguments = {{.kind = ScriptArgument::Kind::Object, .index = 0}}},
+	                 // The height of a totem sets the share of its town at worship
+	                 {.kind = Command::Kind::CallNative,
+	                  .delaySeconds = 0.1f,
+	                  .script = "SET_PROPERTY",
+	                  .scriptArguments = {{.kind = ScriptArgument::Kind::Integer, .number = 19.0f},
+	                                      {.kind = ScriptArgument::Kind::Result},
+	                                      {.kind = ScriptArgument::Kind::Number, .number = 1.0f}}},
+	                 turnCamera(k_Centre, 2.5f),
+	                 {.kind = Command::Kind::CallNative, .delaySeconds = 1.0f, .script = "END_CAMERA_CONTROL"}},
+	    .townBeliefInPlayer = k_TownBelief,
+	    .worshipShare = 0.0f,
+	});
+	all.push_back({
 	    .id = "interface.floating_number_pause",
 	    .name = "The share floats up and stops while the game pauses",
 	    .facet = Facet::Interface,

@@ -138,6 +138,37 @@ TEST(AnimalReactions, TheReactionStatesAreTheTablesFleeLookFollowInspectFoodWood
 	}
 }
 
+TEST(AnimalReactions, AnAnimalThatDiesOrFallsInAReactionStateStopsTheReaction)
+{
+	// A cow that flees a fire and burns to death lies dead. The end of its reaction does not make it wander again
+	constexpr uint8_t k_Dying = 14;
+	constexpr uint8_t k_Downed = 17;
+	for (uint8_t state = 0; state < 60; ++state)
+	{
+		EXPECT_EQ(animals::StateChangeEndsReaction(state, k_Dying), animals::IsReactionState(state)) << int(state);
+		EXPECT_EQ(animals::StateChangeEndsReaction(state, k_Downed), animals::IsReactionState(state)) << int(state);
+	}
+}
+
+TEST(AnimalReactions, AnAnimalThatGoesFromOneReactionStateToAnotherKeepsTheReaction)
+{
+	constexpr uint8_t k_Fleeing = 6;
+	constexpr uint8_t k_WatchingWhatItFled = 30;
+	constexpr uint8_t k_FleeingAHunter = 49;
+	EXPECT_FALSE(animals::StateChangeEndsReaction(k_Fleeing, k_WatchingWhatItFled));
+	EXPECT_FALSE(animals::StateChangeEndsReaction(k_WatchingWhatItFled, k_Fleeing));
+	EXPECT_FALSE(animals::StateChangeEndsReaction(k_FleeingAHunter, k_Fleeing));
+}
+
+TEST(AnimalReactions, AnAnimalThatIsNotInAReactionStateKeepsItsReaction)
+{
+	constexpr uint8_t k_Wander = 32;
+	constexpr uint8_t k_DecideWhatToDo = 43;
+	constexpr uint8_t k_Dying = 14;
+	EXPECT_FALSE(animals::StateChangeEndsReaction(k_Wander, k_Dying));
+	EXPECT_FALSE(animals::StateChangeEndsReaction(k_DecideWhatToDo, k_Dying));
+}
+
 TEST(AnimalReactions, OnlyWanderSleepLairAndSeekFoodHaveAStartOfTheirOwn)
 {
 	for (size_t state = 0; state < 60; ++state)

@@ -28,6 +28,7 @@
 #include "ECS/Components/Animal.h"
 #include "ECS/Components/AnimatedStatic.h"
 #include "ECS/Components/Ball.h"
+#include "ECS/Components/BuildingDamage.h"
 #include "ECS/Components/Creature.h"
 #include "ECS/Components/CreatureObjectAction.h"
 #include "ECS/Components/DeadTree.h"
@@ -212,7 +213,9 @@ std::optional<MapProduction::Kind> MapProduction::KindOf(const Registry& registr
 	{
 		return Kind {.placement = Placement::FixedFront, .coversOutline = true, .moves = false};
 	}
-	if (registry.AnyOf<MobileStatic, DeadTree>(entity))
+	// A piece that broke off a building is a rock. It goes into the cells only when it comes to rest, because nothing
+	// files it when the game makes it.
+	if (registry.AnyOf<MobileStatic, DeadTree, BuildingPiece>(entity))
 	{
 		return Kind {.placement = Placement::FixedFront, .coversOutline = true, .moves = true};
 	}

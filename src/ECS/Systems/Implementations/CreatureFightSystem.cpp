@@ -83,6 +83,7 @@
 #include "ECS/Components/DeadTree.h"
 #include "ECS/Components/Field.h"
 #include "ECS/Components/HandGrab.h"
+#include "ECS/Components/Indestructible.h"
 #include "ECS/Components/Mesh.h"
 #include "ECS/Components/Mobile.h"
 #include "ECS/Components/ScriptControl.h"
@@ -577,6 +578,28 @@ bool InDuel(const ecs::Registry& registry, entt::entity creature)
 {
 	const auto* fighting = registry.TryGet<const CreatureFighting>(creature);
 	return fighting != nullptr && fighting->stage == CreatureFighting::Stage::Duel;
+}
+
+/// Whether the body of the creature is still in its duel: the fight of the creature has not ended yet
+bool BodyInDuel(const ecs::Registry& registry, entt::entity creature)
+{
+	const auto* fighting = registry.TryGet<const CreatureFighting>(creature);
+	return fighting != nullptr && fighting->stage == CreatureFighting::Stage::Duel && !fighting->ended;
+}
+
+/// Whether nothing can bring the life of the creature to nearly none: a script holds it in a cutscene, or it is
+/// indestructible
+bool LifeProtected(const ecs::Registry& registry, entt::entity creature)
+{
+	return ecs::world_objects::HeldDuringCutscene(creature) || registry.AllOf<Indestructible>(creature);
+}
+
+/// How many times the life of the creature pays for its fight when its body ends its fight a number of times. Its life
+/// pays each time while its body is in a state of the fight, else never.
+uint32_t LifePaymentsOf(const ecs::Registry& registry, entt::entity creature, uint32_t bodyEnds)
+{
+	const auto* fighting = registry.Valid(creature) ? registry.TryGet<const CreatureFighting>(creature) : nullptr;
+	return fighting != nullptr && fight::LifePaysAtStop(fighting->fighter.state) ? bodyEnds : 0U;
 }
 
 /// Whether the creature still fights its opponent. The opponent is in the duel, or the opponent left the duel before the
@@ -1670,22 +1693,47 @@ void CreatureFightSystem::AbortFight(entt::entity creature)
 
 void CreatureFightSystem::CallOff(entt::entity creature)
 {
+	CallOffWith(creature, fight::CallOffStart::Failure);
+}
+
+void CreatureFightSystem::CallOffForWalkBack(entt::entity creature)
+{
+	CallOffWith(creature, fight::CallOffStart::BodyFirst);
+}
+
+void CreatureFightSystem::CallOffForPlan(entt::entity creature)
+{
+	CallOffWith(creature, fight::CallOffStart::Failure, true);
+}
+
+void CreatureFightSystem::CallOffWith(entt::entity creature, fight::CallOffStart start, bool endedFightPays)
+{
 	auto& registry = Locator::entitiesRegistry::value();
 	auto* fighting = registry.TryGet<CreatureFighting>(creature);
 	if (fighting == nullptr)
 	{
 		return;
 	}
-	// The creature gives up its action as a failure
-	GainStrengthAtStop(creature, fight::StopEnd::Failure);
 	const auto opponent = fighting->opponent;
+	// The creature gives up its action as a failure. The stop makes each creature stop again through the partners, and
+	// the body of a creature can end its fight more than one time. Each time, its life pays again.
+	const auto bodyEnds = RunStops(creature, fight::StepsOf(start)).bodyEnds;
+	const std::array payments {LifePaymentsOf(registry, creature, bodyEnds[0]),
+	                           LifePaymentsOf(registry, opponent, bodyEnds[1])};
 	const auto asked = AskedOnly(registry, creature);
-	for (const auto self : {creature, opponent})
+	for (size_t index = 0; index < payments.size(); ++index)
 	{
+		const auto self = index == 0 ? creature : opponent;
 		auto* side = registry.Valid(self) ? registry.TryGet<CreatureFighting>(self) : nullptr;
 		if (side == nullptr)
 		{
 			continue;
+		}
+		// The fight is over, but a stop for a new plan ends the fight of the body again. The life pays again while the
+		// body plays a move of the fight.
+		if (endedFightPays && side->ended)
+		{
+			PayLifeForFight(self, payments.at(index), "stopped_again");
 		}
 		if (side->stage == CreatureFighting::Stage::Duel)
 		{
@@ -1696,7 +1744,7 @@ void CreatureFightSystem::CallOff(entt::entity creature)
 				PartnerPlanFails(self, creature, side->madeArena);
 			}
 			NoteFightOver(self, "called_off");
-			EndFightFor(self, std::nullopt);
+			EndFightFor(self, std::nullopt, payments.at(index));
 			NoteStage(self, side->stage, CreatureFighting::Stage::Respond);
 			side->stage = CreatureFighting::Stage::Respond;
 			side->played = true;
@@ -2283,10 +2331,10 @@ void CreatureFightSystem::DoFightCheat(PlayerNames player)
 	{
 		Locator::leashSystem::value().TakeOff(*self);
 	}
-	// A creature in a duel stops its fight with no winner
+	// A creature in a duel gives up its action: its fight is called off, with no winner
 	if (IsDuelling(*self))
 	{
-		AbortFight(*self);
+		CallOff(*self);
 		return;
 	}
 	// Any other creature fights the nearest creature by the distance on the map. The first creature found at the least
@@ -3199,6 +3247,19 @@ void CreatureFightSystem::StageTurn(entt::entity entity)
 		{
 			break;
 		}
+		// The first creature won by the life of the other creature, which stays in its duel. On the turn that its body
+		// is at rest, its duel step ends. On the next turn, it orders the other creature to respond.
+		if (starter && !fighting->played && together && partner->stage == CreatureFighting::Stage::Duel &&
+		    partner->partnerLeft == CreatureFighting::PartnerLeft::Won)
+		{
+			if (!fighting->restedAfterDuel)
+			{
+				fighting->restedAfterDuel = true;
+				break;
+			}
+			OrderLoserToRespond(entity, opponent);
+			return;
+		}
 		if (!fighting->played)
 		{
 			fighting->played = true;
@@ -3225,8 +3286,10 @@ void CreatureFightSystem::StageTurn(entt::entity entity)
 						registry.Get<CreatureFighting>(*freed).mindFree = true;
 					}
 				}
-				const bool ends = fighting->madeArena ? fighting->turnsAfterResponse >= fight::k_PlanEndTurnsAfterResponse
-				                                      : !PartnerAfterDuel(registry, entity, *fighting).has_value();
+				// A creature that the first creature released waits until its mind chooses a new plan
+				const bool ends = fighting->madeArena
+				                      ? fighting->turnsAfterResponse >= fight::k_PlanEndTurnsAfterResponse
+				                      : !fighting->released && !PartnerAfterDuel(registry, entity, *fighting).has_value();
 				if (ends)
 				{
 					Leave(entity);
@@ -3241,7 +3304,8 @@ void CreatureFightSystem::StageTurn(entt::entity entity)
 			}
 			// The creature that has no more life than the other is made to fear the other
 			const bool fears = opponentHere && fight::FearsAfterFight(LifeOf(registry, entity), LifeOf(registry, opponent));
-			if (!fears && (fighting->madeArena || PartnerAfterDuel(registry, entity, *fighting).has_value()))
+			if (!fears &&
+			    (fighting->madeArena || fighting->released || PartnerAfterDuel(registry, entity, *fighting).has_value()))
 			{
 				fighting->responded = true;
 				fighting->turnsAfterResponse = 0;
@@ -3712,11 +3776,11 @@ std::optional<CreatureFightSystem::ActionStep> CreatureFightSystem::StepAnimatio
 	const auto& body = registry.Get<const Creature>(entity);
 	const bool hasOpponent = fighting->stage == CreatureFighting::Stage::Duel && HasDuelPartner(registry, entity, *fighting);
 	// While it turns on the spot in its start, the turn's own animation plays, and the start animation waits. When the
-	// turn ends, the start animation plays from its beginning in the same turn.
+	// turn ends, the start animation plays from its beginning in the same turn. This also occurs when the fight ended
+	// during the turn: then the start plays to its end, and the finish follows.
 	if (fighting->fighter.state == fight::State::Start && fighting->fighter.turning)
 	{
-		if (fighting->stage != CreatureFighting::Stage::Duel ||
-		    (Locator::creatureLocomotionSystem::has_value() && Locator::creatureLocomotionSystem::value().IsMoving(entity)))
+		if (Locator::creatureLocomotionSystem::has_value() && Locator::creatureLocomotionSystem::value().IsMoving(entity))
 		{
 			return std::nullopt;
 		}
@@ -4110,7 +4174,7 @@ void CreatureFightSystem::LandBlow(entt::entity creature, const glm::vec3& point
 	    },
 	    direction);
 	const auto healthBefore = victim.health;
-	victim.health = std::max(victim.health - result.damage, 0.0f);
+	victim.health = fight::HealthAfterBlow(victim.health, result.damage);
 	const auto blowIndex = fight_transcript::Note(
 	    creature, "blow",
 	    [&] {
@@ -4332,36 +4396,126 @@ void CreatureFightSystem::DripTurn(entt::entity creature)
 	}
 }
 
-void CreatureFightSystem::GainStrengthAtStop(entt::entity stopper, fight::StopEnd end)
+fight::StopChainResult CreatureFightSystem::RunStops(entt::entity stopper, std::span<const fight::StopStep> steps)
 {
 	auto& registry = Locator::entitiesRegistry::value();
-	const auto* fighting = registry.Valid(stopper) ? registry.TryGet<const CreatureFighting>(stopper) : nullptr;
-	if (fighting == nullptr || !Locator::creaturePhysiologySystem::has_value())
+	auto* fighting = registry.Valid(stopper) ? registry.TryGet<CreatureFighting>(stopper) : nullptr;
+	if (fighting == nullptr)
 	{
-		return;
+		return {};
 	}
 	const auto partner = fighting->opponent;
-	const auto* other = registry.Valid(partner) ? registry.TryGet<const CreatureFighting>(partner) : nullptr;
+	auto* other = registry.Valid(partner) ? registry.TryGet<CreatureFighting>(partner) : nullptr;
 	const bool together = other != nullptr && other->opponent == stopper;
-	const auto gains = fight::StrengthGainsAtStop(
-	    end, {.stopperDuels = together && InDuel(registry, stopper), .partnerDuels = together && InDuel(registry, partner)});
-	if (gains.stopper == 0 && gains.partner == 0)
+	const auto result = fight::RunStopChain(
+	    {
+	        .duels = {together && BodyInDuel(registry, stopper), together && BodyInDuel(registry, partner)},
+	        .partners = {together && fighting->partnerInMind, together && other->partnerInMind},
+	    },
+	    steps);
+	if (together)
+	{
+		fighting->partnerInMind = result.after.partners[0];
+		other->partnerInMind = result.after.partners[1];
+	}
+	if (result.gains[0] != 0 || result.gains[1] != 0)
+	{
+		fight_transcript::Note(stopper, "strength_gain", [&] {
+			return fight_transcript::Fields {{"creature", fight_transcript::Id(stopper)},
+			                                 {"partner", fight_transcript::Id(partner)},
+			                                 {"creature_gains", result.gains[0]},
+			                                 {"partner_gains", result.gains[1]}};
+		});
+		GainStrength(stopper, result.gains[0]);
+		GainStrength(partner, result.gains[1]);
+	}
+	return result;
+}
+
+void CreatureFightSystem::PayLifeForFight(entt::entity creature, uint32_t payments, std::string_view why)
+{
+	auto& registry = Locator::entitiesRegistry::value();
+	const auto* fighting = registry.Valid(creature) ? registry.TryGet<const CreatureFighting>(creature) : nullptr;
+	auto* needs = fighting != nullptr && payments > 0 ? registry.TryGet<CreatureNeeds>(creature) : nullptr;
+	if (needs == nullptr)
 	{
 		return;
 	}
-	fight_transcript::Note(stopper, "strength_gain", [&] {
-		return fight_transcript::Fields {{"creature", fight_transcript::Id(stopper)},
-		                                 {"partner", fight_transcript::Id(partner)},
-		                                 {"creature_gains", gains.stopper},
-		                                 {"partner_gains", gains.partner}};
+	const auto before = needs->needs.life;
+	needs->needs.life = fight::LifeAfterPayments(before, fighting->fighter.health, payments, LifeProtected(registry, creature));
+	fight_transcript::Note(creature, "level", [&] {
+		auto fields = LevelChange(creature, "life", before, needs->needs.life, why);
+		fields.emplace_back("life_payments", payments);
+		return fields;
 	});
-	auto& physiology = Locator::creaturePhysiologySystem::value();
-	for (const auto& [creature, count] : {std::pair(stopper, gains.stopper), std::pair(partner, gains.partner)})
+}
+
+void CreatureFightSystem::OrderLoserToRespond(entt::entity creature, entt::entity loser)
+{
+	auto& registry = Locator::entitiesRegistry::value();
+	auto* lost = registry.TryGet<CreatureFighting>(loser);
+	if (lost == nullptr)
 	{
-		for (uint32_t gain = 0; gain < count; ++gain)
+		return;
+	}
+	// The order stops what the other creature does while it is still in its duel. It gives the strength gain to the first
+	// creature, which fails, and the failure stops the other creature again through the partners.
+	const auto counts =
+	    fight::CountsAtStop(fight::StopEnd::Stopped, {.stopperDuels = true, .partnerDuels = InDuel(registry, creature)});
+	fight_transcript::Note(creature, "order_respond", [&] {
+		return fight_transcript::Fields {{"creature", fight_transcript::Id(creature)},
+		                                 {"loser", fight_transcript::Id(loser)},
+		                                 {"loser_gains", counts.gains.stopper},
+		                                 {"creature_gains", counts.gains.partner},
+		                                 {"loser_leaves", counts.stopperLeaves}};
+	});
+	GainStrength(loser, counts.gains.stopper);
+	GainStrength(creature, counts.gains.partner);
+	// The other creature leaves its duel and finishes its move. Its life pays each time that it leaves its duel in the stop,
+	// while its body is in a state of the fight.
+	NoteFightOver(loser, "ordered_to_respond");
+	EndFightFor(loser, false, fight::LifePaysAtStop(lost->fighter.state) ? counts.stopperLeaves : 0U);
+	NoteStage(loser, lost->stage, CreatureFighting::Stage::Respond);
+	lost->stage = CreatureFighting::Stage::Respond;
+	lost->stageSeconds = 0.0f;
+	lost->played = false;
+	lost->fighter.stopping = true;
+	lost->fighter.queue.Clear();
+	lost->marks.Clear();
+	lost->partnerLeft = CreatureFighting::PartnerLeft::None;
+	// The partners of the two minds forget each other, so the mind of the other creature is free again. The first creature
+	// does not stop it when it leaves.
+	lost->released = true;
+	lost->mindFree = true;
+	lost->partnerInMind = false;
+	if (auto* asker = registry.TryGet<CreatureFighting>(creature))
+	{
+		asker->partnerInMind = false;
+	}
+	// The plan of the first creature fails, so it plays no response and leaves its fight
+	PartnerPlanFails(creature, loser, true);
+	Leave(creature);
+	// Then the order gives the other creature the plan to obey again, to respond
+	if (registry.Valid(loser) && registry.AllOf<CreatureFighting>(loser))
+	{
+		StopWhatItDoes(registry, loser);
+		if (Locator::creatureMindSystem::has_value())
 		{
-			physiology.GainStrengthOf(creature, "Fight");
+			Locator::creatureMindSystem::value().FightOrdered(loser, creature);
 		}
+	}
+}
+
+void CreatureFightSystem::GainStrength(entt::entity creature, uint32_t times)
+{
+	if (!Locator::creaturePhysiologySystem::has_value())
+	{
+		return;
+	}
+	auto& physiology = Locator::creaturePhysiologySystem::value();
+	for (uint32_t gain = 0; gain < times; ++gain)
+	{
+		physiology.GainStrengthOf(creature, "Fight");
 	}
 }
 
@@ -4375,8 +4529,12 @@ void CreatureFightSystem::Win(entt::entity winner, entt::entity loser, bool byBl
 		                                 {"winner_health", GetFightHealth(winner)},
 		                                 {"loser_health", GetFightHealth(loser)}};
 	});
-	// The plan that the win forces on the winner makes the winner give up its action as a failure
-	GainStrengthAtStop(winner, fight::StopEnd::Failure);
+	// The plan that the win forces on the winner makes the winner give up its action as a failure. Then the loser faints,
+	// and its faint makes it give up its action again. The body of each creature can end its fight more than one time,
+	// and each time its life pays again.
+	const auto bodyEnds = RunStops(winner, fight::KnockOutSteps()).bodyEnds;
+	const auto winnerPayments = LifePaymentsOf(registry, winner, bodyEnds[0]);
+	const auto loserPayments = LifePaymentsOf(registry, loser, bodyEnds[1]);
 	// The winner is made to do something to the loser at once: an evil winner has a poo on it, any other shows off. Its
 	// mind does it when the winner has left the fight. This plan counts for the feedback of the player, and it is an
 	// order. After a knock out by a blow the plan is not forced: it has the low priority of the order.
@@ -4414,9 +4572,9 @@ void CreatureFightSystem::Win(entt::entity winner, entt::entity loser, bool byBl
 		    winRecord);
 	}
 	NoteFightOver(winner, "knockout");
-	EndFightFor(winner, true);
+	EndFightFor(winner, true, winnerPayments);
 	// A loser that did not start its duel yet is in no fight state, so its life does not pay for the fight
-	EndFightFor(loser, false, InDuel(registry, loser));
+	EndFightFor(loser, false, loserPayments);
 	if (auto* record = registry.TryGet<CreatureFightRecord>(winner))
 	{
 		++record->wins;
@@ -4511,14 +4669,15 @@ void CreatureFightSystem::WinByOpponentsLife(entt::entity winner, entt::entity l
 		lost->partnerLeft = CreatureFighting::PartnerLeft::Won;
 	}
 	NoteFightOver(winner, "opponent_out_of_life");
-	EndFightFor(winner, true);
+	// Only the body of the winner ends its fight, one time
+	EndFightFor(winner, true, LifePaymentsOf(registry, winner, 1));
 	NoteStage(winner, fighting.stage, CreatureFighting::Stage::Respond);
 	fighting.stage = CreatureFighting::Stage::Respond;
 	fighting.played = false;
 	fighting.fighter.stopping = true;
 }
 
-void CreatureFightSystem::EndFightFor(entt::entity creature, std::optional<bool> won, bool paysLife)
+void CreatureFightSystem::EndFightFor(entt::entity creature, std::optional<bool> won, uint32_t lifePayments)
 {
 	auto& registry = Locator::entitiesRegistry::value();
 	auto* fighting = registry.TryGet<CreatureFighting>(creature);
@@ -4534,13 +4693,20 @@ void CreatureFightSystem::EndFightFor(entt::entity creature, std::optional<bool>
 		                                 {"tendency", fighting->fighter.tendency},
 		                                 {"control", fight::Name(fighting->fighter.control)}};
 	});
-	// A quarter of the fight health it lost comes off its life
-	if (auto* needs = paysLife ? registry.TryGet<CreatureNeeds>(creature) : nullptr)
+	// A quarter of the fight health it lost comes off its life, one time for each payment
+	if (auto* needs = lifePayments > 0 ? registry.TryGet<CreatureNeeds>(creature) : nullptr)
 	{
 		const auto before = needs->needs.life;
-		needs->needs.life = fight::LifeAfterFight(needs->needs.life, fighting->fighter.health);
+		needs->needs.life = fight::LifeAfterPayments(needs->needs.life, fighting->fighter.health, lifePayments,
+		                                             LifeProtected(registry, creature));
 		fight_transcript::Note(
-		    creature, "level", [&] { return LevelChange(creature, "life", before, needs->needs.life, "fight_end"); }, ended);
+		    creature, "level",
+		    [&] {
+			    auto fields = LevelChange(creature, "life", before, needs->needs.life, "fight_end");
+			    fields.emplace_back("life_payments", lifePayments);
+			    return fields;
+		    },
+		    ended);
 	}
 	auto& record = registry.AllOf<CreatureFightRecord>(creature) ? registry.Get<CreatureFightRecord>(creature)
 	                                                             : registry.Assign<CreatureFightRecord>(creature);
@@ -4601,8 +4767,9 @@ void CreatureFightSystem::Leave(entt::entity creature)
 	{
 		Locator::creatureMindSystem::value().ObeyEnded(creature, opponent);
 	}
+	// An opponent that it released with its last order continues without it
 	auto* other = registry.Valid(opponent) ? registry.TryGet<CreatureFighting>(opponent) : nullptr;
-	if (other == nullptr || other->opponent != creature)
+	if (other == nullptr || other->opponent != creature || other->released)
 	{
 		return;
 	}
@@ -4639,7 +4806,7 @@ void CreatureFightSystem::StopPartnerAfterDuel(entt::entity partner, entt::entit
 	}
 }
 
-void CreatureFightSystem::StopFight(entt::entity creature, std::optional<bool> won, std::string_view why)
+void CreatureFightSystem::StopFight(entt::entity creature, std::optional<bool> won, std::string_view why, uint32_t bodyEnds)
 {
 	auto& registry = Locator::entitiesRegistry::value();
 	auto* fighting = registry.Valid(creature) ? registry.TryGet<CreatureFighting>(creature) : nullptr;
@@ -4661,7 +4828,7 @@ void CreatureFightSystem::StopFight(entt::entity creature, std::optional<bool> w
 	if (!fighting->ended)
 	{
 		NoteFightOver(creature, why);
-		EndFightFor(creature, won, fight::LifePaysAtStop(fighting->fighter.state));
+		EndFightFor(creature, won, LifePaymentsOf(registry, creature, bodyEnds));
 	}
 	NoteStage(creature, fighting->stage, CreatureFighting::Stage::Stop);
 	fighting->stage = CreatureFighting::Stage::Stop;
@@ -4699,7 +4866,7 @@ void CreatureFightSystem::HandTookHold(entt::entity creature)
 		other->partnerLeft = CreatureFighting::PartnerLeft::Held;
 	}
 	NoteFightOver(creature, "held_by_hand");
-	EndFightFor(creature, std::nullopt, fight::LifePaysAtStop(fighting->fighter.state));
+	EndFightFor(creature, std::nullopt, fight::LifePaysAtStop(fighting->fighter.state) ? 1U : 0U);
 	NoteStage(creature, fighting->stage, CreatureFighting::Stage::Stop);
 	fighting->stage = CreatureFighting::Stage::Stop;
 	fighting->stageSeconds = 0.0f;
@@ -4717,18 +4884,35 @@ void CreatureFightSystem::HandLetGo(entt::entity creature)
 	}
 	fighting->held = false;
 	const auto opponent = fighting->opponent;
-	// The plan of the creature starts again: it gives up its action as a failure
-	GainStrengthAtStop(creature, fight::StopEnd::Failure);
+	// The plan of the creature starts again: it gives up its action as a failure. Its body already ended its fight at
+	// the hold, but each stop ends it again, and each time its life pays again while its body is in a state of the fight.
+	const auto bodyEnds = RunStops(creature, fight::StepsOf(fight::CallOffStart::Failure)).bodyEnds;
+	const auto payments = LifePaymentsOf(registry, creature, bodyEnds[0]);
 	fight_transcript::Note(creature, "let_go_by_hand", [&] {
 		return fight_transcript::Fields {{"creature", fight_transcript::Id(creature)}, {"stage", Name(fighting->stage)}};
 	});
+	if (fighting->ended)
+	{
+		PayLifeForFight(creature, payments, "let_go_by_hand");
+	}
 	// Its plan stops: its fight stops with no response, and it tells its opponent to stop too
-	StopFight(creature, std::nullopt, "let_go_by_hand");
+	StopFight(creature, std::nullopt, "let_go_by_hand", bodyEnds[0]);
 	if (auto* other = registry.Valid(opponent) ? registry.TryGet<CreatureFighting>(opponent) : nullptr;
 	    other != nullptr && other->opponent == creature)
 	{
-		StopFight(opponent, ResultWhenStopped(other->partnerLeft), "partner_stopped");
+		StopFight(opponent, ResultWhenStopped(other->partnerLeft), "partner_stopped", bodyEnds[1]);
 	}
+}
+
+void CreatureFightSystem::EndBodyFightAgain(entt::entity creature)
+{
+	auto& registry = Locator::entitiesRegistry::value();
+	const auto* fighting = registry.Valid(creature) ? registry.TryGet<const CreatureFighting>(creature) : nullptr;
+	if (fighting == nullptr || !fighting->ended || fighting->partnerInMind)
+	{
+		return;
+	}
+	PayLifeForFight(creature, LifePaymentsOf(registry, creature, 1), "stopped_again");
 }
 
 void CreatureFightSystem::ProcessKnockedOut()

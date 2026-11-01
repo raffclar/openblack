@@ -17,17 +17,25 @@
 #include "ECS/Components/Abode.h"
 #include "ECS/Components/Animal.h"
 #include "ECS/Components/Ball.h"
+#include "ECS/Components/BuildingDamage.h"
+#include "ECS/Components/Dance.h"
 #include "ECS/Components/Feature.h"
+#include "ECS/Components/Flock.h"
 #include "ECS/Components/Flowers.h"
+#include "ECS/Components/Influence.h"
+#include "ECS/Components/Mist.h"
 #include "ECS/Components/Mobile.h"
 #include "ECS/Components/OneOffSpellSeed.h"
 #include "ECS/Components/Pot.h"
 #include "ECS/Components/Scaffold.h"
+#include "ECS/Components/ScriptControl.h"
 #include "ECS/Components/ScriptHighlight.h"
+#include "ECS/Components/ScriptTimer.h"
 #include "ECS/Components/SpellSeed.h"
 #include "ECS/Components/Temple.h"
 #include "ECS/Components/Tree.h"
 #include "ECS/Components/VillageTotem.h"
+#include "ECS/Components/Weather.h"
 #include "ECS/Components/WorshipSite.h"
 #include "ECS/Registry.h"
 #include "ECS/ScriptFind.h"
@@ -207,6 +215,50 @@ TEST(ScriptFind, KindsOfThings)
 	EXPECT_FALSE(script_find::KindOf(registry, nothing).has_value());
 }
 
+// GAME_TYPE gives the type of a thing's kind, and also a type for things that a search does not find
+TEST(ScriptFind, GameTypesOfThings)
+{
+	Registry registry;
+	const auto cow = registry.Create();
+	registry.Assign<components::Animal>(cow).type = AnimalInfo::Cow;
+	const auto marker = registry.Create();
+	registry.Assign<components::ScriptMarker>(marker);
+	const auto flock = registry.Create();
+	registry.Assign<components::Flock>(flock);
+	const auto dance = registry.Create();
+	registry.Assign<components::Dance>(dance);
+	const auto ring = registry.Create();
+	registry.Assign<components::InfluenceSource>(ring);
+	const auto weather = registry.Create();
+	registry.Assign<components::WeatherThing>(weather);
+	const auto timer = registry.Create();
+	registry.Assign<components::ScriptTimer>(timer);
+	const auto mist = registry.Create();
+	registry.Assign<components::Mist>(mist);
+	const auto nothing = registry.Create();
+	const auto gone = registry.Create();
+	registry.Destroy(gone);
+
+	EXPECT_EQ(script_find::GameTypeOf(registry, cow), ScriptType::Animal);
+	EXPECT_EQ(script_find::GameTypeOf(registry, marker), ScriptType::Marker);
+	EXPECT_EQ(script_find::GameTypeOf(registry, flock), ScriptType::Flock);
+	EXPECT_EQ(script_find::GameTypeOf(registry, dance), ScriptType::Dance);
+	EXPECT_EQ(script_find::GameTypeOf(registry, ring), ScriptType::InfluenceRing);
+	EXPECT_EQ(script_find::GameTypeOf(registry, weather), ScriptType::WeatherThing);
+	EXPECT_EQ(script_find::GameTypeOf(registry, timer), ScriptType::Timer);
+	EXPECT_EQ(script_find::GameTypeOf(registry, mist), ScriptType::Mist);
+	EXPECT_EQ(script_find::GameTypeOf(registry, nothing), ScriptType::None);
+	EXPECT_EQ(script_find::GameTypeOf(registry, gone), ScriptType::None);
+	// The game's numbers of these types
+	EXPECT_EQ(static_cast<int>(ScriptType::Marker), 1);
+	EXPECT_EQ(static_cast<int>(ScriptType::Dance), 10);
+	EXPECT_EQ(static_cast<int>(ScriptType::Flock), 11);
+	EXPECT_EQ(static_cast<int>(ScriptType::InfluenceRing), 14);
+	EXPECT_EQ(static_cast<int>(ScriptType::WeatherThing), 15);
+	EXPECT_EQ(static_cast<int>(ScriptType::Timer), 17);
+	EXPECT_EQ(static_cast<int>(ScriptType::Mist), 29);
+}
+
 // The scripts find a worship site by its tribe, a scaffold of any subtype and a lump of poo as a thing of its own type
 TEST(ScriptFind, WorshipSitesScaffoldsAndPoo)
 {
@@ -240,6 +292,23 @@ TEST(ScriptFind, WorshipSitesScaffoldsAndPoo)
 	const auto barrelKind = script_find::KindOf(registry, barrel);
 	ASSERT_TRUE(barrelKind.has_value());
 	EXPECT_EQ(barrelKind->type, ScriptType::MobileObject);
+}
+
+// A piece that broke off a building is a mobile static of the rock row, as a rock that the scripts made is not
+TEST(ScriptFind, APieceOfABuildingIsAMobileStaticOfTheRockRow)
+{
+	Registry registry;
+	const auto piece = registry.Create();
+	registry.Assign<components::BuildingPiece>(piece);
+
+	const auto kind = script_find::KindOf(registry, piece);
+	ASSERT_TRUE(kind.has_value());
+	EXPECT_EQ(kind->type, ScriptType::MobileStatic);
+	EXPECT_TRUE(script_find::Matches(*kind, ScriptType::MobileStatic, static_cast<uint32_t>(MobileStaticInfo::Rock)));
+	EXPECT_TRUE(script_find::Matches(*kind, ScriptType::MobileStatic, script_find::k_AnySubtype));
+	EXPECT_FALSE(script_find::Matches(*kind, ScriptType::MobileStatic, static_cast<uint32_t>(MobileStaticInfo::DeadTree)));
+	EXPECT_FALSE(script_find::Matches(*kind, ScriptType::Rock, script_find::k_AnySubtype));
+	EXPECT_EQ(script_find::GameTypeOf(registry, piece), ScriptType::MobileStatic);
 }
 
 TEST(ScriptFind, AMiracleInTheHandFromAGlobeIsAOneShotMiracle)
@@ -327,4 +396,26 @@ TEST(ScriptFind, ATownTotemIsATotemStatueOfItsCentresTribe)
 	EXPECT_EQ(loneKind->type, ScriptType::TotemStatue);
 	EXPECT_FALSE(loneKind->subtype.has_value());
 	Locator::infoConstants::reset();
+}
+
+// The search for a creature takes the first creature that is near enough, the newest first, not the nearest. A plain
+// search takes any creature within a metre. A search with a radius takes only a creature of the subtype.
+// NOLINTNEXTLINE(cppcoreguidelines-avoid-non-const-global-variables): external macro
+TEST(ScriptFind, ACreatureSearchTakesTheNewestNearEnoughCreature)
+{
+	using script_find::CreatureCandidate;
+	const auto at = [](float x, float z) { return map_coords::FromMetres({x, z}); };
+	const auto from = at(100.0f, 100.0f);
+	const std::vector<CreatureCandidate> newestFirst {
+	    {.entity = static_cast<entt::entity>(1), .at = at(100.9f, 100.0f), .subtype = 3},
+	    {.entity = static_cast<entt::entity>(2), .at = at(100.1f, 100.0f), .subtype = 5},
+	    {.entity = static_cast<entt::entity>(3), .at = at(130.0f, 100.0f), .subtype = 7},
+	};
+	EXPECT_EQ(script_find::FindCreature(from, std::nullopt, 7, newestFirst), static_cast<entt::entity>(1));
+	EXPECT_EQ(script_find::FindCreature(at(102.0f, 100.0f), std::nullopt, 7, newestFirst), entt::entity {entt::null});
+	EXPECT_EQ(script_find::FindCreature(from, 50.0f, 5, newestFirst), static_cast<entt::entity>(2));
+	EXPECT_EQ(script_find::FindCreature(from, 50.0f, 7, newestFirst), static_cast<entt::entity>(3));
+	EXPECT_EQ(script_find::FindCreature(from, 10.0f, 7, newestFirst), entt::entity {entt::null});
+	// "Any subtype" does not match a creature in a search with a radius
+	EXPECT_EQ(script_find::FindCreature(from, 50.0f, script_find::k_AnySubtype, newestFirst), entt::entity {entt::null});
 }

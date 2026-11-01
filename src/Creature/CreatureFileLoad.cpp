@@ -62,4 +62,9 @@ Refusal WhyNotBrought(const BroughtRequest& request)
 	return Refusal::None;
 }
 
+bool KeptByThisComputer(const BroughtCreature& creature)
+{
+	return creature.ownGod && !creature.clanOrder && !creature.ownGodPlaysForClan;
+}
+
 } // namespace openblack::creature_file_load

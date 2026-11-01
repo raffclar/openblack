@@ -93,6 +93,9 @@ enum class Step : uint8_t
 	DrawnPlaces,
 	PlayerCommands,
 	HandStillness,
+	/// For each god: the influence that the god's hand keeps past the border of the god's influence, then the scoop of the
+	/// hand with that influence
+	VirtualInfluence,
 	/// The hand's own work of the turn: it can send commands, which a later turn does
 	HandInterface,
 	TurnCheering,
@@ -219,6 +222,8 @@ enum class Step : uint8_t
 	CameraChecks,
 	BuildingPieces,
 	MusicMoods,
+	/// A lesson of the Gods' Playground that Escape asked to end ends, last in the game's turn
+	PlaygroundLesson,
 	CreatureAlignment,
 	SoundTags,
 	Ambience,
@@ -262,6 +267,9 @@ inline constexpr std::array k_Turn = std::to_array<Place>({
     {.step = Step::PlayerCommands, .stage = Stage::Input},
     // The hand's count of the turns that it stays still is part of the player's input
     {.step = Step::HandStillness, .stage = Stage::Input},
+    // After the stillness of each hand, the influence that the hand keeps past the border and the scoop of the hand, god
+    // by god. This step comes before the hand's own work and before the players and the computer minds act.
+    {.step = Step::VirtualInfluence, .stage = Stage::Input},
     // Then the hand does the work that it also does each frame: it takes a thing that it waited for, or gives what it
     // holds after a long press. The commands that it sends go to a later turn.
     {.step = Step::HandInterface, .stage = Stage::Input},
@@ -290,8 +298,7 @@ inline constexpr std::array k_Turn = std::to_array<Place>({
     {.step = Step::ComputerPlayers, .stage = Stage::Players},
     // After its computer mind, the power that each tribe gives a player becomes the most power that the tribe gave it
     {.step = Step::TribalPowers, .stage = Stage::Players},
-    // The influence of the towns and the temples. The borders that it draws and the influence that the hand keeps are
-    // also in this step.
+    // The influence of the towns and the temples, and the borders that it draws
     {.step = Step::Influence, .stage = Stage::Players},
     {.step = Step::PlayerStatistics, .stage = Stage::Players},
     {.step = Step::Heartbeats, .stage = Stage::Players},
@@ -359,6 +366,7 @@ inline constexpr std::array k_Turn = std::to_array<Place>({
     {.step = Step::CameraChecks, .stage = Stage::CameraChecks},
     {.step = Step::BuildingPieces, .stage = Stage::Fragments},
     {.step = Step::MusicMoods, .stage = Stage::MusicMoods},
+    {.step = Step::PlaygroundLesson, .stage = std::nullopt},
     {.step = Step::SoundTags, .stage = Stage::EndTurn},
     {.step = Step::Ambience, .stage = Stage::EndTurn},
     // The world times the scripts' music before the music heard follows it

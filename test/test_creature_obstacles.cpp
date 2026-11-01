@@ -23,6 +23,7 @@
 
 #include "Creature/CreatureObstacles.h"
 #include "Creature/CreatureRoute.h"
+#include "ECS/Components/BuildingDamage.h"
 #include "ECS/Components/ScriptHighlight.h"
 #include "ECS/Components/Transform.h"
 #include "ECS/CreatureObstacleThings.h"
@@ -214,6 +215,31 @@ TEST(CreatureObstacles, AHighlightIsWalkedRoundAtItsWorldSize)
 	EXPECT_EQ(thing->shape, Shape::AtPlace);
 	EXPECT_FLOAT_EQ(thing->scale, 1.0f);
 	EXPECT_FLOAT_EQ(thing->yAngle, 0.0f);
+}
+
+// A piece that broke off a building lies on the map as a rock: one circle at its place. A creature walks round it only
+// while it burns, and the footpaths never go round it.
+TEST(CreatureObstacles, APieceOfABuildingIsWalkedRoundOnlyWhileItBurns)
+{
+	ecs::Registry registry;
+	const auto piece = registry.Create();
+	registry.Assign<ecs::components::Transform>(piece, glm::vec3(4.0f, 0.0f, 6.0f), glm::mat3(glm::eulerAngleY(1.0f)),
+	                                            glm::vec3(1.0f));
+	registry.Assign<ecs::components::BuildingPiece>(piece);
+	auto thing = ecs::creature_obstacle_things::ThingOf(registry, piece);
+	ASSERT_TRUE(thing.has_value());
+	EXPECT_EQ(thing->avoidance, Avoidance::Burning);
+	EXPECT_EQ(thing->shape, Shape::AtPlace);
+	EXPECT_EQ(thing->placement, Placement::Leaning);
+	EXPECT_NEAR(std::abs(thing->yAngle), 1.0f, k_Tolerance);
+	// Taller than the creature, but it does not burn
+	thing->height = 100.0f;
+	const auto walker = AWalker();
+	EXPECT_FALSE(MustAvoid(*thing, walker));
+	EXPECT_FALSE(MustAvoidWithoutWalker(*thing));
+	thing->burning = true;
+	EXPECT_TRUE(MustAvoid(*thing, walker));
+	EXPECT_FALSE(MustAvoidWithoutWalker(*thing));
 }
 
 TEST(CreatureObstacles, OtherCreaturesAndSceneryHaveTheirOwnCircles)

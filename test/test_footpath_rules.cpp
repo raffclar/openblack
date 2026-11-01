@@ -10,6 +10,7 @@
 #include <cstdint>
 
 #include <array>
+#include <bit>
 #include <optional>
 #include <vector>
 
@@ -194,4 +195,22 @@ TEST(FootpathRules, TheScriptCountsItsFootpathsFromTheNewest)
 	EXPECT_FALSE(footpath_rules::ScriptFootpathIndex(3, 3));
 	EXPECT_FALSE(footpath_rules::ScriptFootpathIndex(3, -1));
 	EXPECT_FALSE(footpath_rules::ScriptFootpathIndex(0, 0));
+}
+
+TEST(FootpathRules, AFileLinkGoesToTheFirstPlaceInItsReach)
+{
+	constexpr glm::ivec2 k_Link {100000, 200000};
+	// 327 whole units are 0.0499 m, in the reach; 328 whole units are 0.0500 m, out of the reach
+	constexpr glm::ivec2 k_Near {k_Link.x + 327, k_Link.y};
+	constexpr glm::ivec2 k_Far {k_Link.x + 328, k_Link.y};
+	const std::array<glm::ivec2, 3> places {k_Far, k_Near, k_Link};
+	EXPECT_EQ(footpath_rules::FileLinkHolder(k_Link, places), std::optional<size_t> {1});
+	const std::array<glm::ivec2, 1> far {k_Far};
+	EXPECT_FALSE(footpath_rules::FileLinkHolder(k_Link, far));
+	EXPECT_FALSE(footpath_rules::FileLinkHolder(k_Link, {}));
+}
+
+TEST(FootpathRules, TheReachOfAFileLinkIsTheGamesDouble)
+{
+	EXPECT_EQ(std::bit_cast<uint64_t>(footpath_rules::k_FileLinkReachSq), 0x3F647AE147AE147CU);
 }

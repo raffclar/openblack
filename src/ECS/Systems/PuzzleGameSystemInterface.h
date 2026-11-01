@@ -28,7 +28,7 @@ public:
 	virtual ~PuzzleGameSystemInterface() = default;
 
 	/// A script makes a puzzle game of a kind on the land under a point, at an angle in radians and a size. A kind with
-	/// pieces makes its pieces. None for a kind whose answer before a solution is not known.
+	/// pieces makes its pieces.
 	virtual entt::entity Create(script::PuzzleGameType type, glm::vec3 point, float yAngleRadians, float scale) = 0;
 	/// Each turn: each puzzle that is not solved puts back its pieces that moved and tests for a solution
 	virtual void ProcessTurn() = 0;
@@ -41,6 +41,9 @@ public:
 	virtual void TakenInHand(entt::entity piece) = 0;
 	/// A puzzle game goes from the world: its rings keep their links but belong to no puzzle
 	virtual void Forget(entt::entity puzzle) = 0;
+	/// A script deletes a puzzle game, or the scripts stop: the puzzle game stays, but its pieces go from the world.
+	/// False for a thing that is not a puzzle game.
+	virtual bool DeletePieces(entt::entity puzzle) = 0;
 };
 
 } // namespace openblack::ecs::systems

@@ -550,7 +550,7 @@ bool TestSolution(entt::entity puzzle, PuzzleGame& game)
 	}
 	if (game.type != script::PuzzleGameType::Hanoi)
 	{
-		return ecs::puzzle_game::PlayedBeforeSolved(game.type).value_or(false);
+		return ecs::puzzle_game::PlayedBeforeSolved(game.type);
 	}
 	auto& registry = Entities();
 	if (!hanoi::Solved(StacksOf(registry, game)))
@@ -665,6 +665,18 @@ void ProcessHanoi(entt::entity puzzle, PuzzleGame& game)
 /// One turn of a puzzle game
 void Process(entt::entity puzzle, PuzzleGame& game)
 {
+	if (ecs::puzzle_game::LetsGoOfThingsThatWent(game.type))
+	{
+		// The puzzle lets go of each lantern that went. It does not make the lantern again.
+		const auto& registry = Entities();
+		for (auto& lantern : game.lanterns)
+		{
+			if (lantern != entt::null && !registry.Valid(lantern))
+			{
+				lantern = entt::null;
+			}
+		}
+	}
 	if (game.played)
 	{
 		return;
@@ -688,11 +700,6 @@ void Process(entt::entity puzzle, PuzzleGame& game)
 
 entt::entity PuzzleGameSystem::Create(script::PuzzleGameType type, glm::vec3 point, float yAngleRadians, float scale)
 {
-	if (!ecs::puzzle_game::PlayedBeforeSolved(type).has_value())
-	{
-		SPDLOG_LOGGER_DEBUG(spdlog::get("game"), "No puzzle game of kind {} is made", static_cast<int>(type));
-		return entt::null;
-	}
 	auto& registry = Entities();
 	uint32_t order = 0;
 	registry.Each<const PuzzleGame>([&order](const PuzzleGame& other) { order = std::max(order, other.order + 1); });
@@ -806,4 +813,24 @@ void PuzzleGameSystem::Forget(entt::entity puzzle)
 			registry.AssignOrReplace<CannotBePickedUp>(ring);
 		}
 	}
+}
+
+bool PuzzleGameSystem::DeletePieces(entt::entity puzzle)
+{
+	auto& registry = Entities();
+	auto* game = puzzle != entt::null && registry.Valid(puzzle) ? registry.TryGet<PuzzleGame>(puzzle) : nullptr;
+	if (game == nullptr)
+	{
+		return false;
+	}
+	const auto pieces =
+	    ecs::puzzle_game::TakePiecesForDelete(*game, [&registry](entt::entity thing) { return registry.Valid(thing); });
+	for (const auto piece : pieces)
+	{
+		if (registry.Valid(piece))
+		{
+			world_objects::Remove(piece);
+		}
+	}
+	return true;
 }

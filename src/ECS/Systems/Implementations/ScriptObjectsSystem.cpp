@@ -43,6 +43,7 @@
 #include "ECS/Systems/Implementations/VillagerFire.h"
 #include "ECS/Systems/Implementations/VillagerHome.h"
 #include "ECS/Systems/LivingActionSystemInterface.h"
+#include "ECS/Systems/PuzzleGameSystemInterface.h"
 #include "ECS/VillagerMemory.h"
 #include "ECS/WorldObjects.h"
 #include "Locator.h"
@@ -228,7 +229,7 @@ public:
 	{
 		if (Locator::creatureMindSystem::has_value())
 		{
-			Locator::creatureMindSystem::value().AbandonAction(creature);
+			Locator::creatureMindSystem::value().GiveUpAction(creature);
 		}
 	}
 
@@ -264,6 +265,11 @@ public:
 		{
 			ecs::world_objects::Remove(object);
 		}
+	}
+
+	bool DeletePuzzlePieces(entt::entity object) override
+	{
+		return Locator::puzzleGameSystem::has_value() && Locator::puzzleGameSystem::value().DeletePieces(object);
 	}
 
 	[[nodiscard]] bool IsContainer(entt::entity object) const override
@@ -539,8 +545,11 @@ void ScriptObjectsSystem::Reset()
 		}
 		if (place.createdByScript)
 		{
-			// What a script made goes with its scripts
-			_world->Delete(object);
+			// What a script made goes with its scripts. A puzzle game stays, but its pieces go.
+			if (!_world->DeletePuzzlePieces(object))
+			{
+				_world->Delete(object);
+			}
 			continue;
 		}
 		// Anything else a script held goes back into the game, no longer in a script

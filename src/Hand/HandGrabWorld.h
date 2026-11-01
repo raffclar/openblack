@@ -225,6 +225,13 @@ public:
 	virtual void ScaffoldIntoHand(entt::entity /*scaffold*/, PlayerNames /*player*/) {}
 	/// A piece of a puzzle game goes into the hand: it comes off the piece that it rested on
 	virtual void PuzzlePieceIntoHand(entt::entity /*piece*/) {}
+	/// How the hand holds a miracle's seed that it takes back from the world, from the record of the seed. None for
+	/// other things.
+	[[nodiscard]] virtual std::optional<HoldFacts> SeedHoldOf(entt::entity /*seed*/) const { return std::nullopt; }
+	/// A miracle's seed that shows over its miracle goes back into the hand of the player, as the miracle that the hand
+	/// holds. The seed takes what the miracle has left, and the miracle closes down. Whether the hand keeps the seed:
+	/// with too little left for another cast, the seed goes.
+	virtual bool SeedIntoHand(entt::entity /*seed*/, PlayerNames /*player*/) { return false; }
 	/// Pulling up a tree moves the player's alignment
 	virtual void TreeUprooted(PlayerNames player, entt::entity tree) = 0;
 	/// A big forest gives a tree for the hand, taking a tree's wood from it (which may shrink it or use it up): a full

@@ -96,8 +96,21 @@ struct TurnInputs
 /// shield it has none.
 void ProcessTurn(State& state, const TurnInputs& inputs, const Settings& settings);
 
+/// Whether the turn uses the chants of the player's worship sites: only when the hand keeps its strength switched on, is
+/// not under a shield and is out of its player's own influence. Each such turn uses up the chants that it reads.
+[[nodiscard]] bool UsesChants(const State& state, bool handShielded, bool handInInfluence);
+
 /// True when the turn puts the hand back in influence, so the next trip out works out a new mana path
 [[nodiscard]] bool ManaPathEnds(const State& state, const TurnInputs& inputs);
+
+/// The point that the hand of a god measures its strength from in the turn: the point under the cursor that the last
+/// hand report of the god picked. Only a person sends hand reports. A god that no person plays never sends one, so its
+/// point stays at the origin of the world, where the point of every god starts. A person before the first report is
+/// at the origin too.
+[[nodiscard]] constexpr glm::vec3 TurnHandPoint(bool person, const std::optional<glm::vec3>& reportedPick)
+{
+	return person && reportedPick.has_value() ? *reportedPick : glm::vec3(0.0f);
+}
 
 /// Whether the hum plays this frame: the hand has strength left and is out of its player's influence, unshielded, while
 /// the last place it was in is still in influence and unshielded

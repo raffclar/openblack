@@ -12,6 +12,7 @@
 #include "3D/L3DMesh.h"
 #include "ECS/Components/Abode.h"
 #include "ECS/Components/AnimatedStatic.h"
+#include "ECS/Components/BuildingDamage.h"
 #include "ECS/Components/DeadTree.h"
 #include "ECS/Components/Feature.h"
 #include "ECS/Components/Field.h"
@@ -52,8 +53,9 @@ wall_hug::ThingShape thing_circles::ShapeOf(const Registry& registry, entt::enti
 	{
 		return wall_hug::ThingShape::WorshipSiteBalls;
 	}
+	// A piece that broke off a building is a rock, with the outline of the rock model
 	if (registry.AnyOf<Abode, Feature, AnimatedStatic, Flowers, MobileStatic, DeadTree, SpellDispenser, TeleportStone,
-	                   WorshipAltar>(thing))
+	                   WorshipAltar, BuildingPiece>(thing))
 	{
 		return wall_hug::ThingShape::ModelBox;
 	}

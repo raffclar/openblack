@@ -286,16 +286,8 @@ float ReactionPriorityOf(const ecs::Registry& registry, entt::entity creature)
 
 std::optional<glm::vec2> PointOf(const ecs::Registry& registry, entt::entity entity)
 {
-	if (!registry.Valid(entity))
-	{
-		return std::nullopt;
-	}
-	const auto* transform = registry.TryGet<const Transform>(entity);
-	if (transform == nullptr)
-	{
-		return std::nullopt;
-	}
-	return glm::vec2(transform->position.x, transform->position.z);
+	const auto position = object_measures::PositionOf(registry, entity);
+	return position.has_value() ? std::optional(glm::vec2(position->x, position->z)) : std::nullopt;
 }
 
 uint32_t PlayerNumberOf(PlayerNames owner)
@@ -565,9 +557,8 @@ bool Accepts(const ecs::Registry& registry, Target target, entt::entity entity, 
 		{
 			return false;
 		}
-		const auto thing = hands->KindOf(entity).thing;
-		const bool rock = thing == creature_object_actions::Thing::Rock || thing == creature_object_actions::Thing::Bonfire;
-		return rock && (target == Target::Rock || hands->CanPickUp(self, entity));
+		return creature_object_actions::IsRock(hands->KindOf(entity).thing) &&
+		       (target == Target::Rock || hands->CanPickUp(self, entity));
 	}
 	case Target::BuildingBeingBuilt:
 	{
@@ -785,8 +776,14 @@ TownFeelings TownFeelingsOf(const ecs::Registry& registry, entt::entity town)
 bool CompassionMostWanted(const creature_desires::Desires& desires)
 {
 	const auto compassion = desires[Desire::Compassion].value;
-	return std::ranges::none_of(desires.desires,
-	                            [compassion](const auto& state) { return state.activated && state.value > compassion; });
+	for (size_t d = 0; d < creature_desires::k_DesireCount; ++d)
+	{
+		if (desires.IsActivated(d) && desires.desires.at(d).value > compassion)
+		{
+			return false;
+		}
+	}
+	return true;
 }
 
 /// The action that heals, which hurt people in a town may make a creature think of first
@@ -1198,8 +1195,17 @@ const creature_mind_tables::Tables* CreatureMindSystem::GetTables()
 	if (!_tables.has_value() && Locator::infoConstants::has_value())
 	{
 		_tables = creature_mind_tables::Build(Locator::infoConstants::value());
+		_executors.clear();
+		std::ranges::transform(
+		    _tables->actions, std::back_inserter(_executors),
+		    [](const creature_mind_tables::ActionInfo& action) { return creature_plan_actions::For(action.name); });
 	}
 	return _tables.has_value() ? &*_tables : nullptr;
+}
+
+const creature_plan_actions::Executor* CreatureMindSystem::ExecutorOf(uint32_t action)
+{
+	return GetTables() != nullptr && action < _executors.size() ? _executors[action] : nullptr;
 }
 
 void CreatureMindSystem::StartMind(entt::entity creature)
@@ -1356,6 +1362,16 @@ void CreatureMindSystem::ApplyLoaded(entt::entity creature, CreatureMindState& m
 		for (size_t i = 0; i < creature_leash::k_Types.size(); ++i)
 		{
 			leashes->known.set(i, mind.learnt->leashWords.at(LeashWordOf(creature_leash::k_Types.at(i))) != 0);
+		}
+	}
+	// A file of version 30 or later gives the fight health of the creature. An older file keeps the fight health that the
+	// creature has.
+	if (file.fightHealth.has_value() && Locator::creatureFightSystem::has_value())
+	{
+		auto& fights = Locator::creatureFightSystem::value();
+		if (fights.GetFightHealth(creature) != *file.fightHealth)
+		{
+			fights.SetFightHealth(creature, *file.fightHealth);
 		}
 	}
 	SPDLOG_LOGGER_INFO(spdlog::get("game"), "Creature {} took up a mind file: version {}, stage {}",
@@ -1806,7 +1822,7 @@ void DrawAgendaLengths(const creature_plan_actions::Executor& executor, creature
 } // namespace
 
 bool CreatureMindSystem::Adopt(entt::entity creature, CreatureMindState& mind, const creature_planner::Plan& plan,
-                               const creature_plan_actions::Situation& situation)
+                               const creature_plan_actions::Situation& situation, bool fightBodyEndsAgain)
 {
 	const auto* tables = GetTables();
 	if (tables == nullptr || plan.action >= tables->actions.size() || !mind.learnt.has_value() || !mind.desires.has_value())
@@ -1828,7 +1844,7 @@ bool CreatureMindSystem::Adopt(entt::entity creature, CreatureMindState& mind, c
 		auto& registry = Locator::entitiesRegistry::value();
 		if (registry.AllOf<CreatureFighting>(creature) && Locator::creatureFightSystem::has_value())
 		{
-			Locator::creatureFightSystem::value().CallOff(creature);
+			StopFightForPlan(creature, fightBodyEndsAgain);
 		}
 		if (Locator::creatureObjectActionSystem::has_value() &&
 		    Locator::creatureObjectActionSystem::value().GetState(creature) == CreatureObjectActionSystemInterface::State::Busy)
@@ -1879,7 +1895,7 @@ bool CreatureMindSystem::Adopt(entt::entity creature, CreatureMindState& mind, c
 	// A new plan ends the fight that the creature started by its own plan, for both creatures
 	if (registry.AllOf<CreatureFighting>(creature) && Locator::creatureFightSystem::has_value())
 	{
-		Locator::creatureFightSystem::value().CallOff(creature);
+		StopFightForPlan(creature, fightBodyEndsAgain);
 	}
 	// Whatever its hands were doing stops for the plan. An action that the body started plays on, and a point plays its
 	// end.
@@ -1947,7 +1963,7 @@ CreatureMindSystem::PlanAgenda(entt::entity creature, uint32_t action, std::opti
 	{
 		return std::nullopt;
 	}
-	const auto* executor = creature_plan_actions::For(tables->actions[action].name);
+	const auto* executor = ExecutorOf(action);
 	if (executor == nullptr)
 	{
 		return std::nullopt;
@@ -2249,9 +2265,11 @@ std::optional<PlayerNames> PlayerOfThing(const ecs::Registry& registry, entt::en
 	return std::nullopt;
 }
 
-/// What a creature knows about a whole thing that it examines a desire about
+/// What a creature knows about a whole thing that it examines a desire about. Whether its player looks at it is the
+/// same for each whole thing, thus the caller finds it one time.
 creature_activity::WholeFacts WholeFactsOf(const ecs::Registry& registry, entt::entity creature, entt::entity whole,
-                                           creature_activity::Whole kind, const creature_mind_tables::Tables& tables)
+                                           creature_activity::Whole kind, const creature_mind_tables::Tables& tables,
+                                           bool lookedAt)
 {
 	const auto& self = registry.Get<const Creature>(creature);
 	creature_activity::WholeFacts facts {.kind = kind};
@@ -2293,12 +2311,7 @@ creature_activity::WholeFacts WholeFactsOf(const ecs::Registry& registry, entt::
 		facts.samePlayer = self.owner == PlayerNames::NEUTRAL;
 		break;
 	}
-	// Only the player of the creature looks at it. In a game with one player, that is the first player.
-	if (const auto camera = openblack::ecs::ReportedCameraOfItsPlayer(creature))
-	{
-		const auto* at = registry.TryGet<const Transform>(creature);
-		facts.lookedAt = at != nullptr && creature_attention::IsLookingAt(camera->origin, camera->focus, at->position);
-	}
+	facts.lookedAt = lookedAt;
 	return facts;
 }
 
@@ -2716,6 +2729,7 @@ CreatureMindSystem::ChooseActivity(entt::entity creature, const CreatureMindStat
 	const auto& rules = tables->rules.at(static_cast<size_t>(desire));
 	std::vector<ChosenActivity> found;
 	std::vector<float> worth;
+	const bool lookedAt = LookedAtByItsPlayer(creature);
 	for (const auto* held : mind.beliefs.HeldNewestFirst())
 	{
 		const auto& belief = *held;
@@ -2724,7 +2738,7 @@ CreatureMindSystem::ChooseActivity(entt::entity creature, const CreatureMindStat
 		{
 			continue;
 		}
-		const auto facts = WholeFactsOf(registry, creature, belief.thing, *kind, *tables);
+		const auto facts = WholeFactsOf(registry, creature, belief.thing, *kind, *tables, lookedAt);
 		if (!creature_activity::CanBeAbout(desire, facts, mind.mayAttackOwnPlayer))
 		{
 			continue;
@@ -2927,7 +2941,7 @@ CreatureMindSystem::ShownActivity(entt::entity creature, CreatureMindState& mind
 	{
 		return std::nullopt;
 	}
-	const auto facts = WholeFactsOf(registry, creature, *whole, *kind, *tables);
+	const auto facts = WholeFactsOf(registry, creature, *whole, *kind, *tables, LookedAtByItsPlayer(creature));
 	if (!creature_activity::CanBeAbout(desire, facts, mind.mayAttackOwnPlayer))
 	{
 		return std::nullopt;
@@ -3107,10 +3121,16 @@ void CreatureMindSystem::PlanCreature(entt::entity creature, CreatureMindState& 
 		mind.followUp.reset();
 		mind.leashCast.reset();
 	}
+	// The feed of a worship site waits only for a flag of a site that is still there
+	if (mind.followUp == creature_follow_up::FollowUp::FeedWorshipSite && FeedSiteAltar(mind.feedSiteFlag) == entt::null)
+	{
+		mind.followUp.reset();
+		mind.feedSiteFlag = entt::null;
+	}
 	// When it completes its work, the thing that waits replaces its next decision: it becomes high after a magic
 	// mushroom, or it reacts to a stroke or a slap
-	if (adopt && mind.followUp.has_value() && mind.idle.step >= mind.idle.agenda.size() &&
-	    !registry.AllOf<ScriptControlled>(creature))
+	if (adopt && mind.followUp.has_value() &&
+	    creature_turn_order::DoesFollowUp(decisionState(), only.has_value(), registry.AllOf<ScriptControlled>(creature)))
 	{
 		const auto followUp = *mind.followUp;
 		mind.followUp.reset();
@@ -3126,11 +3146,7 @@ void CreatureMindSystem::PlanCreature(entt::entity creature, CreatureMindState& 
 	const auto random = [this](uint32_t range) { return Random(range); };
 	bool fishingLooked = false;
 	const auto prepare = [&](const creature_plan_actions::Executor& executor) {
-		const bool fishing = executor.build == creature_plan_actions::Build::FishAndEat ||
-		                     executor.build == creature_plan_actions::Build::GiveFishToStore ||
-		                     executor.build == creature_plan_actions::Build::TakeFishHome ||
-		                     executor.build == creature_plan_actions::Build::PutFishBySite;
-		if (fishing && !fishingLooked)
+		if (creature_plan_actions::FishesFirst(executor) && !fishingLooked)
 		{
 			fishingLooked = true;
 			situation.fishing = FishingFor(registry, creature, position);
@@ -3146,10 +3162,10 @@ void CreatureMindSystem::PlanCreature(entt::entity creature, CreatureMindState& 
 	for (size_t d = 0; d < creature_desires::k_DesireCount; ++d)
 	{
 		const auto& state = desires.desires.at(d);
-		const auto strength = state.activated && state.suppressedTurns == 0 ? state.value : 0.0f;
+		const auto strength = desires.IsActivated(d) && state.suppressedTurns == 0 ? state.value : 0.0f;
 		strengths.at(d) = strength;
-		eligible.at(d) = strength > 0.0f && std::ranges::any_of(tables->desireActions.at(d), [tables](uint32_t action) {
-			                 return creature_plan_actions::For(tables->actions.at(action).name) != nullptr;
+		eligible.at(d) = strength > 0.0f && std::ranges::any_of(tables->desireActions.at(d), [this](uint32_t action) {
+			                 return ExecutorOf(action) != nullptr;
 		                 });
 	}
 	// The desire to explore has a condition of its own: a young creature, or one that is not too exhausted
@@ -3263,7 +3279,7 @@ void CreatureMindSystem::PlanCreature(entt::entity creature, CreatureMindState& 
 		executors.clear();
 		for (const auto action : actions)
 		{
-			const auto* executor = creature_plan_actions::For(tables->actions.at(action).name);
+			const auto* executor = ExecutorOf(action);
 			if (executor == nullptr)
 			{
 				continue;
@@ -3377,7 +3393,7 @@ void CreatureMindSystem::PlanCreature(entt::entity creature, CreatureMindState& 
 	{
 		if (const auto plan = mind.planner.best.at(static_cast<size_t>(*only)); adopt && plan.has_value())
 		{
-			Adopt(creature, mind, *plan, situation);
+			Adopt(creature, mind, *plan, situation, false);
 		}
 		return;
 	}
@@ -3389,7 +3405,7 @@ void CreatureMindSystem::PlanCreature(entt::entity creature, CreatureMindState& 
 	mind.planner.currentHasNoSteps = mind.planActive && mind.idle.stoppedByScript && mind.idle.serial == mind.planSerial &&
 	                                 mind.idle.step >= mind.idle.agenda.size();
 	const auto choice = creature_planner::Choose(mind.planner);
-	if (choice.has_value() && !Adopt(creature, mind, *choice, situation))
+	if (choice.has_value() && !Adopt(creature, mind, *choice, situation, true))
 	{
 		mind.planner.best.at(static_cast<size_t>(choice->desire)).reset();
 	}
@@ -3424,13 +3440,15 @@ void CreatureMindSystem::DoFollowUp(entt::entity creature, CreatureMindState& mi
 		                                       .action = "CommunicateState",
 		                                       .object = creature,
 		                                       .agenda = creature_follow_up::ShowHappy(),
-		                                       .ordered = true}));
+		                                       .ordered = true,
+		                                       .fightBodyEndsAgain = true}));
 		return;
 	case FollowUp::FrightenedOfPlayer:
 		static_cast<void>(ForcePlan(creature, {.desire = Desire::Fear,
 		                                       .action = creature_follow_up::FrightenedAction(Random(3)),
 		                                       .object = creature,
-		                                       .ordered = true}));
+		                                       .ordered = true,
+		                                       .fightBodyEndsAgain = true}));
 		return;
 	case FollowUp::DoLessonAgain:
 		DoLessonAgain(creature, mind);
@@ -3439,14 +3457,20 @@ void CreatureMindSystem::DoFollowUp(entt::entity creature, CreatureMindState& mi
 		WalkOn(creature, mind);
 		return;
 	case FollowUp::ScratchAfterNewMusic:
-		static_cast<void>(
-		    ForcePlan(creature, {.desire = Desire::Curiosity, .action = "Scratch", .object = creature, .ordered = true}));
+		static_cast<void>(ForcePlan(creature, {.desire = Desire::Curiosity,
+		                                       .action = "Scratch",
+		                                       .object = creature,
+		                                       .ordered = true,
+		                                       .fightBodyEndsAgain = true}));
 		return;
 	case FollowUp::DanceAfterLikedMusic:
 		DanceAfterMusic(creature, mind);
 		return;
 	case FollowUp::CastOnLeash:
 		CastOnLeash(creature, mind);
+		return;
+	case FollowUp::FeedWorshipSite:
+		FeedWorshipSite(creature, mind);
 		return;
 	case FollowUp::ShowSlapFeeling:
 	{
@@ -3461,7 +3485,8 @@ void CreatureMindSystem::DoFollowUp(entt::entity creature, CreatureMindState& mi
 		                                       .action = "CommunicateState",
 		                                       .object = creature,
 		                                       .agenda = std::move(agenda),
-		                                       .ordered = true}));
+		                                       .ordered = true,
+		                                       .fightBodyEndsAgain = true}));
 		return;
 	}
 	}
@@ -3482,8 +3507,11 @@ void CreatureMindSystem::BecomeHigh(entt::entity creature)
 		return place.has_value() ? std::optional(creature_mind::HighSeat {.place = *place, .radius = radius}) : std::nullopt;
 	};
 	auto agenda = creature_mind::BecomeHigh(findSeat, [this](uint32_t range) { return Random(range); }, _random.GameFloat());
-	static_cast<void>(
-	    ForcePlan(creature, {.desire = Desire::GetHigh, .action = "GetHigh", .object = creature, .agenda = std::move(agenda)}));
+	static_cast<void>(ForcePlan(creature, {.desire = Desire::GetHigh,
+	                                       .action = "GetHigh",
+	                                       .object = creature,
+	                                       .agenda = std::move(agenda),
+	                                       .fightBodyEndsAgain = true}));
 }
 
 bool CreatureMindSystem::ForcePlan(entt::entity creature, const ForcedPlan& plan)
@@ -3502,7 +3530,7 @@ bool CreatureMindSystem::ForcePlan(entt::entity creature, const ForcedPlan& plan
 	EndReaction(creature);
 	if (!plan.ownFight)
 	{
-		EndFightForPlan(creature);
+		EndFightForPlan(creature, plan.fightBodyEndsAgain);
 	}
 	// A creature told to do something as soon as it is made has a mind ready for it
 	SetUpMind(creature, *body, *mind);
@@ -3558,8 +3586,9 @@ bool CreatureMindSystem::ForcePlan(entt::entity creature, const ForcedPlan& plan
 			{
 				situation.drink = DrinkPlaceOf(creature);
 			}
-			// Told to fish, it fishes at the fish farm nearest to itself, as when it chooses to fish
-			if (executor->build == creature_plan_actions::Build::FishAndEat)
+			// Told to fish, to give fish to a store, to take fish home or to put fish by a worship site, it fishes at the fish
+			// farm nearest to itself, as when it chooses to fish
+			if (creature_plan_actions::FishesFirst(*executor))
 			{
 				situation.fishing = FishingFor(registry, creature, position);
 			}
@@ -3867,8 +3896,7 @@ void CreatureMindSystem::Situate(entt::entity creature, creature_plan_actions::S
 		const auto* mobile = registry.TryGet<const MobileObject>(*held);
 		situation.holdingTree = thing == creature_object_actions::Thing::Tree;
 		situation.holdingLiving = creature_object_actions::IsLiving(thing);
-		situation.holdingRock =
-		    thing == creature_object_actions::Thing::Rock || thing == creature_object_actions::Thing::Bonfire;
+		situation.holdingRock = creature_object_actions::IsRock(thing);
 		situation.holdingMushroom = thing == creature_object_actions::Thing::MagicMushroom ||
 		                            (mobile != nullptr && (mobile->type == MobileObjectInfo::MagicMushroom ||
 		                                                   mobile->type == MobileObjectInfo::Toadstool));
@@ -3877,17 +3905,9 @@ void CreatureMindSystem::Situate(entt::entity creature, creature_plan_actions::S
 	{
 		situation.position = {at->position.x, at->position.z};
 		// The nearest hand of the creature's own player, which it may throw to
-		if (body != nullptr && Locator::handSystem::has_value())
+		if (body != nullptr)
 		{
-			for (const auto& hand : Locator::handSystem::value().GetHandPositionsOf(body->owner))
-			{
-				if (hand.has_value() &&
-				    (!situation.playerHand.has_value() ||
-				     glm::distance(*hand, at->position) < glm::distance(*situation.playerHand, at->position)))
-				{
-					situation.playerHand = hand;
-				}
-			}
+			situation.playerHand = openblack::ecs::NearestHandOf(body->owner, at->position);
 		}
 	}
 	if (const auto* transform = registry.TryGet<const Transform>(creature); transform != nullptr && situation.eye.has_value())
@@ -3921,9 +3941,11 @@ void CreatureMindSystem::SituatePlayer(entt::entity creature, creature_plan_acti
 	{
 		situation.lookedAt = creature_attention::IsLookingAt(camera->origin, camera->focus, at->position);
 	}
-	if (const auto* mind = registry.TryGet<const CreatureMindState>(creature); mind != nullptr)
+	// The hand moves while the velocity of the hand of its player is more than 0
+	if (const auto* body = registry.TryGet<const Creature>(creature); body != nullptr)
 	{
-		situation.handMoving = situation.playerHand.has_value() && creature_player_attention::IsHandMoving(mind->handSpeed);
+		situation.handMoving = situation.playerHand.has_value() &&
+		                       creature_player_attention::IsHandMoving(openblack::ecs::PlayerHandVelocityOf(body->owner));
 	}
 	if (at != nullptr && situation.playerHand.has_value() && camera.has_value())
 	{
@@ -4153,7 +4175,7 @@ std::optional<Desire> CreatureMindSystem::DesireForShownThing(entt::entity creat
 	{
 		const auto desire = static_cast<Desire>(d);
 		const auto& state = mind.desires->desires.at(d);
-		if (!state.activated || state.suppressedTurns != 0 || std::ranges::find(tried, desire) != tried.end())
+		if (!mind.desires->IsActivated(d) || state.suppressedTurns != 0 || std::ranges::find(tried, desire) != tried.end())
 		{
 			continue;
 		}
@@ -4161,8 +4183,9 @@ std::optional<Desire> CreatureMindSystem::DesireForShownThing(entt::entity creat
 		if (rule.aboutSomething)
 		{
 			if (!kind.has_value() ||
-			    !creature_activity::CanBeAbout(desire, WholeFactsOf(registry, creature, *whole, *kind, *tables),
-			                                   mind.mayAttackOwnPlayer))
+			    !creature_activity::CanBeAbout(
+			        desire, WholeFactsOf(registry, creature, *whole, *kind, *tables, LookedAtByItsPlayer(creature)),
+			        mind.mayAttackOwnPlayer))
 			{
 				continue;
 			}
@@ -4372,7 +4395,8 @@ void CreatureMindSystem::LearnFromFeedback(entt::entity creature, CreatureMindSt
 			                                       .object = *held,
 			                                       .agenda = creature_mind::EatHeld(),
 			                                       .activity = creature_mind::Activity::Eat,
-			                                       .forced = false}));
+			                                       .forced = false,
+			                                       .fightBodyEndsAgain = true}));
 			// When the meal is done, it does again what it was stroked for. This replaces a thing that waits.
 			mind.followUp = creature_follow_up::FollowUp::DoLessonAgain;
 			return;
@@ -4768,7 +4792,7 @@ void CreatureMindSystem::CopyPlayersDeed(entt::entity creature, CreatureMindStat
 			            .priority = creature_planner::Priority(1.0f, std::nullopt,
 			                                                   creature_planner::ActionPriority(learnt.opinions.at(action)),
 			                                                   creature_planner::k_DefaultUsefulness, std::nullopt)},
-			           situation))
+			           situation, true))
 			{
 				continue;
 			}
@@ -4880,7 +4904,8 @@ void CreatureMindSystem::ProcessMimicry(entt::entity creature, CreatureMindState
 			                         .action = tables->actions.at(rule.noticeAction).name,
 			                         .actionObject = object,
 			                         .ordered = true,
-			                         .forced = false});
+			                         .forced = false,
+			                         .fightBodyEndsAgain = true});
 		}
 		break;
 	}
@@ -4961,6 +4986,11 @@ std::optional<creaturemind::MindFileData> CreatureMindSystem::SaveMind(entt::ent
 	{
 		const auto records = Locator::musicMoodSystem::value().WriteRecords();
 		file.database = music_mood::ToMindFile(records);
+	}
+	// The file keeps the fight health that the creature has now: as its last fight left it, or full before any
+	if (Locator::creatureFightSystem::has_value())
+	{
+		file.fightHealth = Locator::creatureFightSystem::value().GetFightHealth(creature);
 	}
 	// It is saved as itself: as it was before any spell on it changed it
 	const creature_spells::SavedBody now {.size = body->size, .strength = body->strength, .alignment = body->alignment};
@@ -5403,6 +5433,12 @@ void CreatureMindSystem::NoticeDeed(size_t deed, const glm::vec3& point, std::op
 		// What it was doing stops as a failure. With no plan, it then notices the deed (see ProcessMimicry).
 		{
 			creature_mind_model::Think(*mind->learnt, fmt::format("I saw you: {}", tables->mimics.at(deed).name));
+			// The failure stops a fight that the creature is in, for both creatures. After a fight that is over, the body
+			// ends its fight again and the life pays again.
+			if (registry.AllOf<CreatureFighting>(entity) && Locator::creatureFightSystem::has_value())
+			{
+				Locator::creatureFightSystem::value().CallOffForPlan(entity);
+			}
 			if (Locator::creatureObjectActionSystem::has_value() &&
 			    Locator::creatureObjectActionSystem::value().GetState(entity) ==
 			        CreatureObjectActionSystemInterface::State::Busy)
@@ -5514,7 +5550,8 @@ void CreatureMindSystem::DoLessonAgain(entt::entity creature, CreatureMindState&
 	                                       .object = object,
 	                                       .instrument = instrument,
 	                                       .activityObject = whole,
-	                                       .ordered = true}));
+	                                       .ordered = true,
+	                                       .fightBodyEndsAgain = true}));
 }
 
 void CreatureMindSystem::DanceAfterMusic(entt::entity creature, CreatureMindState& mind)
@@ -5549,13 +5586,17 @@ void CreatureMindSystem::DanceAfterMusic(entt::entity creature, CreatureMindStat
 				                         .action = k_DanceWithVillagers,
 				                         .object = object,
 				                         .activityObject = WholeOfForcedPlan(creature, mind, Desire::Impress, object),
-				                         .ordered = true}));
+				                         .ordered = true,
+				                         .fightBodyEndsAgain = true}));
 				return;
 			}
 		}
 	}
-	static_cast<void>(ForcePlan(
-	    creature, {.desire = Desire::IdleWithPlayer, .action = "PracticeDance", .object = creature, .ordered = true}));
+	static_cast<void>(ForcePlan(creature, {.desire = Desire::IdleWithPlayer,
+	                                       .action = "PracticeDance",
+	                                       .object = creature,
+	                                       .ordered = true,
+	                                       .fightBodyEndsAgain = true}));
 }
 
 void CreatureMindSystem::LearnFromDeedSeen(entt::entity creature, CreatureMindState& mind, size_t deed, entt::entity thing,

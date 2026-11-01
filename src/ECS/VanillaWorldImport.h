@@ -19,6 +19,7 @@
 #include <glm/vec3.hpp>
 
 #include "CreatureRecord.h"
+#include "ECS/WallHugRules.h"
 #include "Enums.h"
 
 namespace openblack::gamesave
@@ -44,7 +45,7 @@ constexpr uint32_t k_FirstVillagerRowNumber = k_FirstAbodeRowNumber - static_cas
 [[nodiscard]] std::optional<VillagerInfo> VillagerRowOf(uint32_t number);
 
 /// True when the import makes buildings of the row from the file: the abodes, the storage pit, the creche, the
-/// graveyard and the town centre of each tribe. The import removes the buildings of these rows that the land made.
+/// wonder, the graveyard and the town centre of each tribe. The import removes the buildings of these rows that the land made.
 [[nodiscard]] bool IsImportedBuilding(AbodeInfo row);
 
 /// True when a villager in the state is in its abode: the game does not show it, and its abode counts it as present
@@ -55,8 +56,8 @@ constexpr uint32_t k_FirstVillagerRowNumber = k_FirstAbodeRowNumber - static_cas
 [[nodiscard]] bool CanKeepStateValues(uint8_t state);
 
 /// True when the import can keep a walk in the move state of the file. It keeps a walk that stands still, takes its
-/// last step, steps straight through, or goes straight with no circle ahead. It does not keep a walk round a circle.
-[[nodiscard]] bool CanKeepWalk(uint8_t moveState, bool hugsCircle);
+/// last step, steps straight through, goes straight, goes round a circle or goes out of a circle.
+[[nodiscard]] bool CanKeepWalk(uint8_t moveState);
 
 /// The states of a villager that decides again: it decides what to do, with no final state and no state before
 [[nodiscard]] std::array<uint8_t, 3> DecideAgain();
@@ -64,8 +65,7 @@ constexpr uint32_t k_FirstVillagerRowNumber = k_FirstAbodeRowNumber - static_cas
 /// The three states that a villager starts in after the import: the top state, the final state and the state before.
 /// The import keeps the states of the file when it can keep the walk and the values of the top and final states.
 /// Otherwise the villager decides again.
-[[nodiscard]] std::array<uint8_t, 3> StartStates(const std::array<uint8_t, 3>& states, uint8_t moveState,
-                                                 bool hugsCircle = false);
+[[nodiscard]] std::array<uint8_t, 3> StartStates(const std::array<uint8_t, 3>& states, uint8_t moveState);
 
 /// One value that a villager keeps in the file for one of its states: the number of an object, or bytes
 struct ImportedStateValue
@@ -86,6 +86,44 @@ struct ImportedWork
 /// The work of a state of a fisherman or of a farmer, from the values of the file. Nothing for another state.
 [[nodiscard]] std::optional<ImportedWork> WorkOf(uint8_t state, const std::vector<ImportedStateValue>& values);
 
+/// The circle that a walk of the file heads for or goes round
+struct ImportedCircle
+{
+	/// The turns until the walker comes to the circle, or 0xff when the circle is not in reach
+	uint8_t turnsToObject {0};
+	/// How far from its goal the walker was when it started round the circle, in 128ths of a metre less one
+	uint32_t entryDistance {0};
+	/// The number in the file of the thing of the circle, or 0 when the circle is not on a thing
+	uint32_t object {0};
+	/// For a thing, the circle of the thing that the save gave (-1 for its only circle). The load does not use it.
+	/// When there is no thing, 1 for water or the edge of the land, 0 for no circle.
+	int32_t index {0};
+	/// A map position in the cell of the water or of the edge of the land
+	gamesave::MapCoords coords {};
+};
+
+/// What the circle of a walk of the file is on
+enum class CircleKind : uint8_t
+{
+	/// The walk has no circle
+	None,
+	/// A thing of the file
+	Thing,
+	/// Water or the edge of the land
+	Landscape,
+};
+
+/// What the circle of a walk of the file is on
+[[nodiscard]] CircleKind KindOf(const ImportedCircle& circle);
+
+/// The circle of a thing that a walker takes after a load, from the number of circles of the thing: always the last
+/// circle, whichever circle the save gave. Nothing for a thing with no circles.
+[[nodiscard]] std::optional<size_t> CircleAfterLoad(size_t circles);
+
+/// The circle of water or of the edge of the land that a walker takes after a load: a circle at the middle of the cell
+/// of the map position
+[[nodiscard]] wall_hug::BlockingCircle LandscapeCircleOf(const gamesave::MapCoords& coords);
+
 /// The walk of a villager in the file
 struct ImportedWalk
 {
@@ -101,16 +139,13 @@ struct ImportedWalk
 	uint16_t angle {0};
 	/// Turns until a walker that steps straight through aims at its goal again
 	int8_t turnsUntilStepRebuild {0};
-	/// It heads for or goes round the circle of a thing, of water or of the edge of the land
-	bool hugsCircle {false};
+	/// The circle that a walk heads for or goes round. Only a walk that goes straight, goes round a circle or goes out
+	/// of a circle has one.
+	std::optional<ImportedCircle> circle;
 };
 
 /// The walk of a record of a walker of the file: a villager or an animal
 [[nodiscard]] ImportedWalk ReadWalk(const gamesave::VanillaWorld& world, const gamesave::VanillaRecord& record);
-
-/// A metre value that gives the whole map units again, as openblack changes metres to whole units. Nothing when no
-/// float near the value does.
-[[nodiscard]] std::optional<float> MetresOfWhole(int32_t whole);
 
 /// A speed in metres a second that gives the whole map units a turn of the file again
 [[nodiscard]] float WalkSpeedOf(uint16_t wholeSpeed);
@@ -218,6 +253,17 @@ struct ImportedAbode
 	std::vector<uint32_t> villagers;
 	/// The number of its villagers that are in it
 	uint8_t present {0};
+	/// The power of a wonder, nothing for another building
+	std::optional<float> wonderPower;
+};
+
+/// The power that each tribe gives a player, by tribe number
+struct ImportedTribalPower
+{
+	PlayerNames player {PlayerNames::PLAYER_ONE};
+	std::array<float, static_cast<size_t>(Tribe::_COUNT)> power {};
+	/// The most power that each tribe gave the player
+	std::array<float, static_cast<size_t>(Tribe::_COUNT)> most {};
 };
 
 struct ImportedVillager
@@ -270,6 +316,10 @@ struct ImportedPlan
 
 /// The number of places round a building where its builders stand
 inline constexpr size_t k_ImportedSitePlaces = 128;
+/// The game object of a file keeps this many lists of objects
+inline constexpr size_t k_GameObjectLists = 44;
+/// The place of the game's list of all the towns among the lists of the game object
+inline constexpr size_t k_GameTownList = 31;
 
 /// The site of a town at a building that goes up or that its builders mend
 struct ImportedSite
@@ -284,6 +334,20 @@ struct ImportedSite
 	/// The desire for builders that a script forced on the site
 	float desire {0.0f};
 	std::array<glm::vec3, k_ImportedSitePlaces> places {};
+	/// The site of a temple: it keeps its wood in six piles, which these numbers give (0 for a pile that has gone)
+	bool temple {false};
+	std::vector<uint32_t> piles;
+};
+
+/// The flag of a desire of a town: it flies as high as the town wants the thing
+struct ImportedDesireFlag
+{
+	/// The number of the object of its town in the file
+	uint32_t town {0};
+	/// The desire, by its row of the table of the desires of a town
+	uint32_t desire {0};
+	/// How high it flies, from 0 to 1
+	float level {0.0f};
 };
 
 /// The towns, buildings and villagers of a world file, in the order of the file
@@ -299,6 +363,13 @@ struct ImportedTowns
 	/// The numbers of the objects of the towns in the order of the town lists of the players: the list of each player of
 	/// the file in turn, each list in the order that its player got the towns
 	std::vector<uint32_t> townLists;
+	/// The numbers of the objects of the towns in the game's list of all the towns, as the game object of the file keeps
+	/// it: the town that the game made last comes first
+	std::vector<uint32_t> gameTownList;
+	/// The tribal powers of each player of the file that keeps a value for each tribe
+	std::vector<ImportedTribalPower> tribalPowers;
+	/// The flags of the desires of the towns
+	std::vector<ImportedDesireFlag> desireFlags;
 	/// Each record that the import does not take, and why
 	std::vector<std::string> skipped;
 };

@@ -50,6 +50,7 @@
 #include "ECS/Components/Physics.h"
 #include "ECS/Components/Pot.h"
 #include "ECS/Components/Reward.h"
+#include "ECS/Components/Scaffold.h"
 #include "ECS/Components/StoragePit.h"
 #include "ECS/Components/Transform.h"
 #include "ECS/Components/Tree.h"
@@ -386,6 +387,10 @@ physics_classes::ClassFacts DynamicsSystem::FactsOf(entt::entity object) const
 	// A workshop's wood pile is part of its workshop, as a pile of a storage pit is
 	inputs.partOfStoragePit = inputs.partOfStoragePit || workshop::IsWoodPile(registry, object);
 	inputs.scaffoldInYard = workshop::StandsInYard(registry, object);
+	if (const auto* scaffold = registry.TryGet<const Scaffold>(object))
+	{
+		inputs.scaffoldOnSite = registry.Valid(scaffold->site);
+	}
 	auto facts = physics_classes::Classify(registry, object, *info, inputs);
 	// Every model moved by bones is drawn from its body turned a quarter about its up axis
 	if (const auto* mesh = registry.TryGet<const Mesh>(object); mesh != nullptr)

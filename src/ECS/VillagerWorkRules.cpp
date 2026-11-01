@@ -228,13 +228,13 @@ float villager_work::DesireToBeFarmed(const FieldDesireInputs& in)
 	return 0.0f;
 }
 
-glm::vec2 villager_work::FieldWorkSpot(glm::vec2 field, float drawX, float drawZ)
+glm::ivec2 villager_work::FieldWorkSpot(glm::vec2 field, float drawX, float drawZ)
 {
 	// Each axis goes through a map position, its offset added in metres and truncated back
 	const auto at = map_coords::FromMetres(field);
 	const auto x = map_coords::ToFixedGUtils(map_coords::ToMetres(at.x) + (k_FieldSpotReach - drawX));
 	const auto z = map_coords::ToFixedGUtils(map_coords::ToMetres(at.z) + (k_FieldSpotReach - drawZ));
-	return {map_coords::ToMetres(x), map_coords::ToMetres(z)};
+	return {x, z};
 }
 
 villager_work::FarmerArrival villager_work::ArriveAtField(bool sowing, bool grown, bool ripe, bool atSpot)

@@ -129,5 +129,7 @@ void RegisterManaPathRules(ParticleClassRegistry& registry);
 void RegisterBlastRules(ParticleClassRegistry& registry);
 /// The glowing shell laid over the models of the objects an effect is given, as over a worthy artefact
 void RegisterVolumeGlowRules(ParticleClassRegistry& registry);
+/// The ring of light stood on the land round each atom of a rule, as round the singing stones while they heal
+void RegisterLightSheetRules(ParticleClassRegistry& registry);
 
 } // namespace openblack::particles

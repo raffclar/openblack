@@ -22,6 +22,7 @@
 #include <system_error>
 #include <thread>
 #include <utility>
+#include <vector>
 
 #include <fmt/format.h>
 #include <glm/gtc/constants.hpp>
@@ -46,6 +47,7 @@
 #include "ECS/StatisticsRules.h"
 #include "ECS/SyncedState.h"
 #include "ECS/Systems/CreatureWebPageSystemInterface.h"
+#include "ECS/Systems/GameEndSystemInterface.h"
 #include "ECS/Systems/HandDemoSystemInterface.h"
 #include "ECS/Systems/HandSystemInterface.h"
 #include "ECS/Systems/InspectorSystemInterface.h"
@@ -82,6 +84,10 @@
 #define OPENBLACK_GAME_ROLE 1
 #include "Online/StartRules.h"
 #include "Server/Desktop/GameRole.h"
+#include "Server/ServerAdmin.h"
+#if defined(OPENBLACK_INSPECTOR)
+#include "Inspector/ServerProviders.h"
+#endif
 #endif
 
 namespace openblack::server
@@ -176,6 +182,8 @@ public:
 	void SetNetwork(std::function<NetworkStep()> beforeTurns) { _beforeTurns = std::move(beforeTurns); }
 	/// The file of the map for 32 gods that the server plays, empty for another land
 	[[nodiscard]] const std::vector<uint8_t>& GodsRingMapFile() const { return _godsRingMap; }
+	/// The winning conditions of the game with their values, once the land started. The start sends them to every client.
+	[[nodiscard]] const std::vector<game_end::ConditionPick>& ConditionPicks() const { return _conditionPicks; }
 
 	void StartupStep(std::string_view /*step*/) override {}
 	void LoadHandAnimation() override {}
@@ -198,6 +206,8 @@ private:
 	std::filesystem::path _startMap;
 	/// The file of the map for 32 gods, which the server makes from its game folder and sends to the lobby
 	std::vector<uint8_t> _godsRingMap;
+	/// The winning conditions of the operator, each with its value on the land
+	std::vector<game_end::ConditionPick> _conditionPicks;
 	bool _servicesStarted {false};
 	/// The texts of the game, which the help's dialogue reads
 	std::optional<gui::TextDatabase> _texts;
@@ -319,8 +329,14 @@ bool ServerWorld::Initialize()
 		                    _simulation.traceDrawsPath->string());
 	}
 #endif
-	// The run record of the tools starts with the inspector
-	if (_simulation.recordPath.has_value() && StartInspector(0))
+	// The inspector starts for the operator or for the run record of the tools, only on 127.0.0.1
+	if (const bool wanted = _settings.inspectPort.has_value() || _simulation.recordPath.has_value();
+	    wanted && StartInspector(_settings.inspectPort.value_or(0)))
+	{
+		// No query of the inspector changes the world of a network game: each client must play the same world as the server
+		Locator::inspector::value().SetHostsNetworkGame(_settings.network.has_value());
+	}
+	if (_simulation.recordPath.has_value() && Locator::inspector::has_value())
 	{
 		if (const auto error = Locator::inspector::value().StartSimRecord(*_simulation.recordPath, _simulation.recordEvery,
 		                                                                  _simulation.limitsPath, _simulation.hashParts);
@@ -413,13 +429,26 @@ bool ServerWorld::StartLand()
 		const auto limitsLand =
 		    request.limitsLand.empty() ? std::filesystem::path(_settings.land).stem().string() : request.limitsLand;
 		const auto limits = gui::multiplayer::FindConditions(gui::ReadOnlineMapTexts().conditionTemplate, limitsLand);
-		if (const auto refusal = gui::multiplayer::ConditionsRefusal(limits, request.picks); refusal.has_value())
+		// A condition with no value of the operator keeps the first value of the land, as on the page of the host
+		auto picks = limits.has_value() ? gui::multiplayer::PicksOnLand(*limits, request.conditions)
+		                                : std::vector<game_end::ConditionPick> {};
+		if (const auto refusal = gui::multiplayer::ConditionsRefusal(limits, picks); refusal.has_value())
 		{
 			SPDLOG_LOGGER_CRITICAL(spdlog::get("game"), "The server cannot start: {} ({})", *refusal, limitsLand);
 			return false;
 		}
-		SPDLOG_LOGGER_INFO(spdlog::get("game"), "The network game has {} winning conditions in the limits of {}",
-		                   request.picks.size(), limitsLand);
+		for (const auto& pick : picks)
+		{
+			SPDLOG_LOGGER_INFO(spdlog::get("game"), "The winning condition {} has the value {}",
+			                   gui::multiplayer::ConditionKey(static_cast<size_t>(pick.condition)), pick.value);
+		}
+		SPDLOG_LOGGER_INFO(spdlog::get("game"), "The network game has {} winning conditions in the limits of {}", picks.size(),
+		                   limitsLand);
+		_conditionPicks = std::move(picks);
+		if (Locator::gameEndSystem::has_value())
+		{
+			Locator::gameEndSystem::value().SetConditions(_conditionPicks);
+		}
 	}
 	Locator::playerProfileSystem::value().StartPlaying(static_cast<int64_t>(std::time(nullptr)));
 	// The story's scripts run the first land, but not the testbed or a playground. The server's world is the world of a
@@ -822,13 +851,10 @@ bool StartNetwork(const ServerSettings& settings, ServerWorld& world, std::uniqu
 	    .conditions = {},
 	    .gods = {},
 	};
-	if (settings.conditions.has_value())
+	for (const auto& pick : world.ConditionPicks())
 	{
-		for (const auto& pick : settings.conditions->picks)
-		{
-			start.conditions.push_back(
-			    {.condition = static_cast<uint8_t>(pick.condition), .value = static_cast<uint32_t>(pick.value)});
-		}
+		start.conditions.push_back(
+		    {.condition = static_cast<uint8_t>(pick.condition), .value = static_cast<uint32_t>(pick.value)});
 	}
 	// A land of a network game has a god slot for each citadel, as the room of the land has a team for each citadel. The
 	// map for 32 gods has a slot for each of its citadels too. The other lands of the tools and the testbed keep the
@@ -937,6 +963,13 @@ bool StartNetwork(const ServerSettings& settings, ServerWorld& world, std::uniqu
 		    // Every client gets the checksum of the server's world
 		    host.TurnChecksum(turn.turn, turn.checksum);
 	    });
+#if defined(OPENBLACK_INSPECTOR)
+	// The operator reads the room through the inspector
+	if (Locator::inspector::has_value())
+	{
+		Locator::inspector::value().AddProvider(inspector::MakeServerProvider([&host] { return admin::RoomReportOf(host); }));
+	}
+#endif
 	return true;
 }
 #else
@@ -1021,10 +1054,6 @@ sim_run::Request SimulationFor(const ServerSettings& settings)
 	simulation.settings.templeLoss = settings.templeLoss;
 	simulation.settings.godsNeedNoTemple = settings.godsNeedNoTemple;
 	simulation.settings.timeLimit = settings.timeLimit;
-	if (settings.conditions.has_value())
-	{
-		simulation.settings.conditions = settings.conditions->picks;
-	}
 	simulation.frameTime = sim_run::FrameTimeFromMs(settings.frameMilliseconds);
 	simulation.traceDrawsPath = settings.traceDrawsPath;
 	if (settings.recordPath.has_value())
@@ -1167,6 +1196,13 @@ int RunWithDevices(const ServerSettings& settings, const std::atomic<bool>& stop
 		{
 			SPDLOG_LOGGER_INFO(spdlog::get("game"), "Network game: {}", line);
 		}
+#if defined(OPENBLACK_INSPECTOR)
+		// The queries of the room read the host, so they go before the host
+		if (Locator::inspector::has_value())
+		{
+			Locator::inspector::value().RemoveProvider(inspector::k_ServerProviderName);
+		}
+#endif
 		network->Close();
 		Locator::playerCommandSystem::value().SetSource(nullptr);
 		world->SetNetwork({});

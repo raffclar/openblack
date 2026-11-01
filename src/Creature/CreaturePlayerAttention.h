@@ -30,8 +30,6 @@ constexpr float k_CrossBelow = -0.1f;
 constexpr float k_AwayFromHandShare = 0.125f;
 /// The half angle of the camera's view that gives that width, in radians
 constexpr double k_ViewHalfAngle = 0.875;
-/// The hand's speed follows its movement by this part each turn
-constexpr float k_HandSpeedFollow = 0.6f;
 /// The creature follows the hand for this many seconds at most, and stops this far past its own radius from the hand
 constexpr float k_FollowHandSeconds = 30.0f;
 constexpr float k_FollowHandReach = 4.0f;
@@ -90,21 +88,19 @@ constexpr float k_PointAtHandSeconds = 1.0f;
 /// The camera's view width at its focus: the tangent of the half angle times the distance from the camera to the focus
 [[nodiscard]] float ViewWidthAtFocus(glm::vec3 cameraOrigin, glm::vec3 cameraFocus);
 
-/// The speed of the player's hand: it follows the movement of each turn, made a speed, by a part each turn. Thus it
-/// stays more than 0 for many turns after the hand stops.
-struct HandSpeed
-{
-	glm::vec3 velocity {0.0f};
-};
-/// One turn of the hand's speed: the hand moved this much in the turn, and the game does this many turns a second
-void UpdateHandSpeed(HandSpeed& speed, glm::vec3 movement, float turnsPerSecond);
-/// Whether the hand moves, for the look at the hand: its speed is more than 0
-[[nodiscard]] bool IsHandMoving(const HandSpeed& speed);
+/// Whether the hand moves, for the look at the hand: the length of its velocity is more than 0. The velocity of the
+/// hand follows the movement of each turn by a part each turn (see hand_stillness::Step), so it stays more than 0 for
+/// many turns after the hand stops.
+[[nodiscard]] bool IsHandMoving(const glm::vec3& velocity);
 
 /// Whether the direction from a creature to a point is near its heading: the two game angles are less than a sixth of a
 /// half turn apart, measured straight and not round the circle; or the point is in the creature's own map cell
 [[nodiscard]] bool IsDirectionClose(const map_coords::MapCoords& creature, const map_coords::MapCoords& point,
                                     uint16_t heading);
+/// As IsDirectionClose, with the angle that counts as near given in parts of a half turn: the two game angles are less
+/// than a half turn divided by `parts` apart. `parts` must not be 0.
+[[nodiscard]] bool IsDirectionClose(const map_coords::MapCoords& creature, const map_coords::MapCoords& point, uint16_t heading,
+                                    uint32_t parts);
 
 /// The turns a creature follows the hand for, from the whole turns a second
 [[nodiscard]] uint32_t FollowHandTurns(uint32_t turnsPerSecond);

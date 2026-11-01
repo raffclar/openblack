@@ -32,6 +32,13 @@ struct BuildingDamage
 	uint32_t version {0};
 };
 
+/// How many broken models a building had. Each break of its whole model makes a new broken model. The count stays when
+/// the building is whole again.
+struct BrokenModels
+{
+	uint32_t made {0};
+};
+
 /// A piece broken off a building, flying or lying where it fell until its time runs out
 struct BuildingPiece
 {

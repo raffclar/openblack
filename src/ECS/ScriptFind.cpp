@@ -11,6 +11,7 @@
 
 #include <cmath>
 
+#include <algorithm>
 #include <limits>
 
 #include "Common/GUtilsDistance.h"
@@ -19,17 +20,24 @@
 #include "ECS/Components/Animal.h"
 #include "ECS/Components/AnimatedStatic.h"
 #include "ECS/Components/Ball.h"
+#include "ECS/Components/BuildingDamage.h"
 #include "ECS/Components/Creature.h"
+#include "ECS/Components/Dance.h"
 #include "ECS/Components/DeadTree.h"
 #include "ECS/Components/Feature.h"
 #include "ECS/Components/Field.h"
+#include "ECS/Components/Flock.h"
 #include "ECS/Components/Flowers.h"
+#include "ECS/Components/Influence.h"
+#include "ECS/Components/Mist.h"
 #include "ECS/Components/Mobile.h"
 #include "ECS/Components/OneOffSpellSeed.h"
 #include "ECS/Components/Pot.h"
 #include "ECS/Components/Reward.h"
 #include "ECS/Components/Scaffold.h"
+#include "ECS/Components/ScriptControl.h"
 #include "ECS/Components/ScriptHighlight.h"
+#include "ECS/Components/ScriptTimer.h"
 #include "ECS/Components/SpellDispenser.h"
 #include "ECS/Components/SpellSeed.h"
 #include "ECS/Components/StreetLantern.h"
@@ -39,6 +47,7 @@
 #include "ECS/Components/VillageTotem.h"
 #include "ECS/Components/Villager.h"
 #include "ECS/Components/Vortex.h"
+#include "ECS/Components/Weather.h"
 #include "ECS/Components/WorshipSite.h"
 #include "ECS/Registry.h"
 #include "InfoConstants.h"
@@ -228,6 +237,12 @@ std::optional<script_find::Kind> script_find::KindOf(const Registry& registry, e
 		return Kind {.type = registry.AllOf<Rock>(entity) ? ScriptType::Rock : ScriptType::MobileStatic,
 		             .subtype = Row(still->type)};
 	}
+	// A piece that broke off a building is a mobile static of the rock row. A search of the map cells finds the piece
+	// when the piece is at rest.
+	if (registry.AllOf<BuildingPiece>(entity))
+	{
+		return Kind {.type = ScriptType::MobileStatic, .subtype = Row(MobileStaticInfo::Rock)};
+	}
 	// A street lantern stands as a mobile static, of a table of its own
 	if (registry.AllOf<StreetLantern>(entity))
 	{
@@ -262,6 +277,47 @@ std::optional<script_find::Kind> script_find::KindOf(const Registry& registry, e
 		return Kind {.type = ScriptType::Highlight, .subtype = Row(highlight->kind)};
 	}
 	return std::nullopt;
+}
+
+ScriptType script_find::GameTypeOf(const Registry& registry, entt::entity entity)
+{
+	if (const auto kind = KindOf(registry, entity))
+	{
+		return kind->type;
+	}
+	if (!registry.Valid(entity))
+	{
+		return ScriptType::None;
+	}
+	if (registry.AllOf<ScriptMarker>(entity))
+	{
+		return ScriptType::Marker;
+	}
+	if (registry.AllOf<Flock>(entity))
+	{
+		return ScriptType::Flock;
+	}
+	if (registry.AllOf<Dance>(entity))
+	{
+		return ScriptType::Dance;
+	}
+	if (registry.AllOf<InfluenceSource>(entity))
+	{
+		return ScriptType::InfluenceRing;
+	}
+	if (registry.AllOf<WeatherThing>(entity))
+	{
+		return ScriptType::WeatherThing;
+	}
+	if (registry.AllOf<ScriptTimer>(entity))
+	{
+		return ScriptType::Timer;
+	}
+	if (registry.AllOf<Mist>(entity))
+	{
+		return ScriptType::Mist;
+	}
+	return ScriptType::None;
 }
 
 entt::entity script_find::MeasuredFrom(const Registry& registry, entt::entity entity)
@@ -334,4 +390,17 @@ entt::entity script_find::FindNearestTown(const map_coords::MapCoords& from, flo
 		}
 	}
 	return nearest;
+}
+
+entt::entity script_find::FindCreature(const map_coords::MapCoords& from, std::optional<float> radius, uint32_t subtype,
+                                       std::span<const CreatureCandidate> newestFirst)
+{
+	const auto found = std::ranges::find_if(newestFirst, [&](const CreatureCandidate& creature) {
+		if (radius.has_value() && creature.subtype != subtype)
+		{
+			return false;
+		}
+		return gutils::GetDistanceInMetres(from, creature.at) <= radius.value_or(k_CreatureAtReach);
+	});
+	return found != newestFirst.end() ? found->entity : entt::entity {entt::null};
 }

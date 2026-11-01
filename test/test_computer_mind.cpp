@@ -9,13 +9,16 @@
 
 #include <cstdint>
 
+#include <algorithm>
 #include <bit>
+#include <iterator>
 #include <map>
 #include <optional>
 #include <string>
 #include <utility>
 #include <vector>
 
+#include <VanillaWorld.h>
 #include <gtest/gtest.h>
 
 #include "ECS/ComputerMind.h"
@@ -105,6 +108,8 @@ TEST(ComputerMind, TreeHasTheShapeOfTheGame)
 {
 	const auto mind = MakeMind();
 	ASSERT_EQ(mind.nodes.size(), 198u);
+	// A saved game keeps two values for each node of the tree
+	EXPECT_EQ(mind.nodes.size() * 2, gamesave::k_ComputerPlayerTreeWords);
 	EXPECT_EQ(mind.nodes[0].childCount, 6);
 	EXPECT_EQ(mind.nodes[mind.nodes[0].children[2]].kind, NodeKind::TopTownInteract);
 	// The town desires list the wood for building sites two times, each with its own node
@@ -316,6 +321,84 @@ TEST(ComputerMind, NamesSetEveryNodeThatStartsTheSame)
 	EXPECT_FLOAT_EQ(mind.nodes[NodeOf(mind, NodeKind::ActionChargeUpSpell)].suppression, 0.5f);
 }
 
+TEST(ComputerMind, NameSearchFindsANodeBeforeItsChildrenAndTheFirstChildFirst)
+{
+	const auto mind = MakeMind();
+	const auto kindsOf = [&mind](const std::vector<uint16_t>& found) {
+		std::vector<NodeKind> kinds;
+		std::ranges::transform(found, std::back_inserter(kinds), [&mind](uint16_t node) { return mind.nodes[node].kind; });
+		return kinds;
+	};
+	// The need above the action has a shorter name that starts the name of the action, so the search finds the need first
+	const auto found = FindNodes(mind, "ReactToPlayerThrowingStuff");
+	const std::vector<NodeKind> expected {NodeKind::NeedReactToPlayer, NodeKind::ActionReactToPlayerThrowingStuff,
+	                                      NodeKind::TopReactToPlayer, NodeKind::NeedReactToPlayer,
+	                                      NodeKind::ActionReactToPlayerThrowingStuff};
+	EXPECT_EQ(kindsOf(found), expected);
+	// The search goes in the order of the tree: the root first, then each child and all of its branch in turn
+	EXPECT_TRUE(std::ranges::is_sorted(found));
+	// A script that forces the creature defence of a town starts the first node found: the town defence above it
+	const auto defence = FindNodes(mind, "DefendTownWithCreature");
+	ASSERT_FALSE(defence.empty());
+	EXPECT_EQ(defence.front(), NodeOf(mind, NodeKind::ActionDefendTown));
+	// A name that is shorter than the name of a node does not find the node
+	EXPECT_TRUE(FindNodes(mind, "ReactToPlay").empty());
+	// A weight for the miracle attack on a creature also goes to the creature attack above it, but not to its other child
+	auto weights = MakeMind();
+	EXPECT_EQ(FindNodes(weights, "AttackCreatureWithSpells").size(), 4u);
+	EXPECT_TRUE(SetPersonality(weights, "AttackCreatureWithSpells", 0.5f));
+	EXPECT_FLOAT_EQ(weights.nodes[NodeOf(weights, NodeKind::ActionAttackCreature)].weight, 0.5f);
+	EXPECT_FLOAT_EQ(weights.nodes[NodeOf(weights, NodeKind::ObjectAttackCreatureWithSpells)].weight, 0.5f);
+	EXPECT_NE(weights.nodes[NodeOf(weights, NodeKind::ObjectAttackCreatureWithCreature)].weight, 0.5f);
+}
+
+TEST(ComputerMind, KindsThatTheirOwnNameDoesNotFindFirst)
+{
+	const auto mind = MakeMind();
+	const auto shortName = [](NodeKind kind) {
+		const auto name = NameOf(FirstNodeNames(), kind);
+		return name.substr(0, name.rfind(':'));
+	};
+	std::vector<NodeKind> hidden;
+	for (size_t i = 0; i < static_cast<size_t>(NodeKind::_Count); ++i)
+	{
+		const auto kind = static_cast<NodeKind>(i);
+		// Some rows of the table are under no node of the tree
+		if (std::ranges::none_of(mind.nodes, [kind](const Node& node) { return node.kind == kind; }))
+		{
+			continue;
+		}
+		const auto name = shortName(kind);
+		const auto found = FindNodes(mind, name);
+		ASSERT_FALSE(found.empty());
+		// Some kinds have the same name as other kinds: a node of the same name found first does not hide the kind
+		if (shortName(mind.nodes[found.front()].kind) != name)
+		{
+			hidden.push_back(kind);
+		}
+	}
+	// A node whose name starts with the name of a node that comes before it in the tree is never the first node found
+	std::vector<NodeKind> expected {NodeKind::ActionGiveToPlayer,
+	                                NodeKind::ActionTeachCreatureNormalAction,
+	                                NodeKind::ActionTeachCreatureAggressiveMagic,
+	                                NodeKind::ActionTeachCreatureCompassionateMagic,
+	                                NodeKind::ActionTeachCreatureImpressiveMagic,
+	                                NodeKind::ObjectTeachCreatureAggressiveMagic,
+	                                NodeKind::ObjectTeachCreatureCompassionateMagic,
+	                                NodeKind::ObjectTeachCreatureImpressiveMagic,
+	                                NodeKind::ObjectGetCreaturetoHelpBuild,
+	                                NodeKind::ObjectCastFoodSpellOnWorshipSite,
+	                                NodeKind::ObjectAttackCreatureWithSpells,
+	                                NodeKind::ObjectAttackCreatureWithCreature,
+	                                NodeKind::ActionReactToPlayerCastingSpells,
+	                                NodeKind::ActionReactToPlayerThrowingStuff,
+	                                NodeKind::ObjectDefendTownWithCreature,
+	                                NodeKind::ActionDefendTownAgainstBeliefAttack};
+	std::ranges::sort(hidden);
+	std::ranges::sort(expected);
+	EXPECT_EQ(hidden, expected);
+}
+
 TEST(ComputerMindScript, DirectActionUsesBothThingsAndHoldsTheHelp)
 {
 	auto mind = MakeMind();
@@ -483,4 +566,57 @@ TEST(ComputerMindSeen, LongListForgetsOldThingsEveryFiveHundredTurns)
 	EXPECT_EQ(seen.size(), 51u);
 	SeeNearHand(seen, hand, 9000, world);
 	EXPECT_EQ(seen.size(), 41u);
+}
+
+namespace
+{
+
+/// A world in which the even miracles are gone and the things from 50 up are not available
+class FakeGoneWorld final: public GoneWorld
+{
+public:
+	[[nodiscard]] bool CastStillThere(entt::entity spell) const override { return static_cast<uint32_t>(spell) % 2 != 0; }
+	[[nodiscard]] bool Available(entt::entity thing) const override { return static_cast<uint32_t>(thing) < 50; }
+};
+
+entt::entity Thing(uint32_t value)
+{
+	return static_cast<entt::entity>(value);
+}
+
+} // namespace
+
+TEST(ComputerMindGone, GodForgetsGoneMiraclesSeenThingsAndQueuedActionsInOrder)
+{
+	auto mind = MakeMind();
+	std::vector<entt::entity> casts {Thing(5), Thing(4), Thing(3), Thing(2), Thing(1)};
+	std::vector<SeenThing> seen {
+	    {.thing = Thing(60), .turn = 3}, {.thing = Thing(20), .turn = 2}, {.thing = Thing(10), .turn = 1}};
+	QueueAction(mind, "First", Thing(10), entt::null, 1);
+	QueueAction(mind, "Second", Thing(10), Thing(70), 2);
+	QueueAction(mind, "Third", entt::null, Thing(20), 3);
+	ForgetGone(casts, seen, mind, FakeGoneWorld {});
+	EXPECT_EQ(casts, (std::vector<entt::entity> {Thing(5), Thing(3), Thing(1)}));
+	ASSERT_EQ(seen.size(), 2u);
+	EXPECT_EQ(seen[0].thing, Thing(20));
+	EXPECT_EQ(seen[1].thing, Thing(10));
+	ASSERT_EQ(mind.queue.size(), 2u);
+	EXPECT_EQ(mind.queue[0].name, "First");
+	EXPECT_EQ(mind.queue[1].name, "Third");
+}
+
+TEST(ComputerMind, NodeIsWorkedOutAgainInTheSameTurn)
+{
+	// The game has no check that keeps the value of a node that it already worked out in the turn
+	auto mind = MakeMind();
+	FakeWorld world;
+	world.intensities[NodeKind::ActionTownWithHighestFoodDesire] = 0.5f;
+	world.intensities[NodeKind::ObjectGetFoodFromField] = 0.5f;
+	const auto node = NodeOf(mind, NodeKind::ActionTownWithHighestFoodDesire);
+	EXPECT_FLOAT_EQ(WorkOut(mind, world, node, 9), 0.25f);
+	world.intensities[NodeKind::ObjectGetFoodFromField] = 1.0f;
+	EXPECT_FLOAT_EQ(WorkOut(mind, world, node, 9), 0.5f);
+	EXPECT_EQ(world.asked[NodeKind::ActionTownWithHighestFoodDesire], 2);
+	EXPECT_EQ(world.asked[NodeKind::ObjectGetFoodFromField], 2);
+	EXPECT_EQ(mind.nodes[node].lastWorkedOut, 9u);
 }

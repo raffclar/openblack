@@ -11,6 +11,7 @@
 
 #include <array>
 #include <numbers>
+#include <span>
 
 #include <gtest/gtest.h>
 
@@ -70,6 +71,29 @@ TEST(TownBeliefSymbols, RankCountsThePlayersBelievedInMoreTiesGoingToTheLater)
 	beliefs[7] = 2.0f;
 	EXPECT_EQ(Rank(beliefs, 7), 0);
 	EXPECT_EQ(Rank(beliefs, 0), 1);
+}
+
+// A land ranks its 8 players only. The places of the later gods count only in a game that has them.
+TEST(TownBeliefSymbols, RankCountsOnlyThePlayersOfTheGame)
+{
+	constexpr size_t k_GameOf32Gods = 33;
+	std::array<float, k_GameOf32Gods> beliefs {};
+	beliefs[0] = 0.1f;
+	beliefs[7] = 0.3f;
+	const std::span<const float> land = std::span<const float>(beliefs).first(k_PlayerCount);
+	// The ranks of a land are the same as with a table of 8 places
+	EXPECT_EQ(Rank(land, 7), 0);
+	EXPECT_EQ(Rank(land, 0), 1);
+	EXPECT_EQ(Rank(land, 1), 7);
+	// With 33 players, the 31 players with no belief all rank below player one and the neutral player
+	EXPECT_EQ(Rank(beliefs, 0), 1);
+	// Player two ties with the 30 later players that have no belief, and each later one ranks above it
+	EXPECT_EQ(Rank(beliefs, 1), 32);
+	// A later god believed in most has its symbol over the totem
+	beliefs[20] = 0.9f;
+	EXPECT_EQ(Rank(beliefs, 20), 0);
+	EXPECT_EQ(Rank(beliefs, 7), 1);
+	EXPECT_EQ(Rank(beliefs, 2), 31);
 }
 
 TEST(TownBeliefSymbols, TheWayRoundGrowsWithTheCameraDistanceUpToTenTimes)

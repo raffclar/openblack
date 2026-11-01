@@ -66,7 +66,7 @@ creaturemind::MindFileData Skeleton(size_t skills, size_t miracles)
 	file.tattooHeader = tattoos;
 	file.tattoo = std::vector<uint8_t> {};
 	file.learningCounts = std::vector<creaturemind::MindLearningCount>(k_LearningCounts, {.c = 0});
-	file.drawnScale = 1.0f;
+	file.fightHealth = 1.0f;
 	file.unknown4 = 0.0f;
 	file.unknown5 = k_NewCreatureLast;
 	return file;
@@ -335,7 +335,7 @@ creaturemind::MindFileData creature_mind_model::ToFile(const creature_desires::D
 	const auto& knowledge = learnt.knowledge;
 	auto file = learnt.file != nullptr ? *learnt.file : Skeleton(knowledge.skillsSeen.size(), knowledge.miraclesSeen.size());
 	// Written as the current version. For each field that an older version lacks, the game writes the value of the new
-	// creature that the file was loaded over: no leash known, empty tattoo slots, no learning counts, a drawn scale of 1
+	// creature that the file was loaded over: no leash known, empty tattoo slots, no learning counts, a full fight health
 	// and the last two numbers 0 and -1.
 	if (file.version != creaturemind::k_CurrentVersion)
 	{
@@ -366,7 +366,7 @@ creaturemind::MindFileData creature_mind_model::ToFile(const creature_desires::D
 		{
 			count.c = count.c.value_or(0);
 		}
-		file.drawnScale = file.drawnScale.value_or(1.0f);
+		file.fightHealth = file.fightHealth.value_or(1.0f);
 		file.unknown4 = file.unknown4.value_or(0.0f);
 		file.unknown5 = file.unknown5.value_or(*skeleton.unknown5);
 	}

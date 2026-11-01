@@ -12,10 +12,12 @@
 #include <iterator>
 #include <map>
 #include <memory>
+#include <optional>
 #include <span>
 #include <string>
 #include <string_view>
 #include <typeinfo>
+#include <utility>
 #include <vector>
 
 #include <cxxopts.hpp>
@@ -136,6 +138,7 @@ bool parseOptions(int argc, char** argv, openblack::Arguments& args, int& return
 		("ai-times", "Tools: log the mean and longest time of the seen list, the mind and the hand of each computer god each time this many turns go by (0 for never).", cxxopts::value<uint32_t>()->default_value("0"))
 		("frame-stats-out", "With --frame-stats, write each frame of the run (its time, its time on the processor and the game turn) into this CSV file when the game ends.", cxxopts::value<std::string>())
 		("no-first-frame-warm-up", "Do not draw the first frame of a land behind the loading screen. Then the first frames of the game make the renderer's pipelines and render targets.")
+		("parallel-draw-encode", "Developer: let worker threads encode some of the draws at the same time as the game's thread, in the same order and with the same picture. By default the game's thread encodes all draws.")
 		("unlock-bonus-creatures", "Debug: take the Creature Breeder's bonus creatures as unlocked, which the game only had once an unlock from outside it was installed: all, or some of leopard, horse, mandrill, gorilla and rhino joined by commas. None by default, as on a normal install.", cxxopts::value<std::string>())
 		("no-draw", "Tools: open the window but draw nothing on the graphics card, so that a long run that the inspector drives does not wait on a busy graphics card. Screenshots are black.")
 		("skip-logos", "Leave out the logo pictures at start-up.")
@@ -146,6 +149,7 @@ bool parseOptions(int argc, char** argv, openblack::Arguments& args, int& return
 		("play-video", "Play a full-screen video once the land is loaded: intro, fall (the falling spell, which needs the player's creature) or a path such as Data/logo.bik.", cxxopts::value<std::string>()->default_value(""))
 		("film-surface", "Debug: the 16-bit surface that each film picture goes through: 555 (the default, as the game on the display cards of today), 565 (as on cards with no 555) or none (the full colour of the decoder).", cxxopts::value<std::string>()->default_value(""))
 		("scenario", "Start on the testbed and run the testbed scenario of this id, such as benchmark.creatures_100.", cxxopts::value<std::string>())
+		("scenario-check", "With --scenario, run the scenario's checks of its own outcome, write their report to the console, and quit with the exit code 0 when they pass, 1 when one fails, 2 when the scenario states none. Tools and the merge train use this.")
 		("benchmark-warmup", "With --scenario, the frames a benchmark's crowd settles for once spawned, before it is measured.", cxxopts::value<uint32_t>()->default_value("120"))
 		("benchmark-frames", "With --scenario, the frames of a benchmark measured.", cxxopts::value<uint32_t>()->default_value("600"))
 		("scenario-hide-window", "With --scenario, keep the testbed's window of scenarios closed, so the view is clear.")
@@ -437,15 +441,17 @@ bool parseOptions(int argc, char** argv, openblack::Arguments& args, int& return
 			}
 			if (result.count("sim-conditions") != 0)
 			{
+				// A run with no server reads no limits of a land, so each condition needs its value
 				const auto conditions = openblack::sim_run::ParseConditions(result["sim-conditions"].as<std::string>());
-				if (!conditions.has_value())
+				auto picks = conditions.has_value() ? openblack::sim_run::PicksWithValues(*conditions) : std::nullopt;
+				if (!picks.has_value())
 				{
 					std::cerr << "The winning conditions of --sim-conditions are not NAME=VALUE,... with each condition once."
 					          << std::endl;
 					returnCode = EXIT_FAILURE;
 					return false;
 				}
-				simulation.settings.conditions = conditions->picks;
+				simulation.settings.conditions = std::move(*picks);
 			}
 			if (result.count("sim-leave-at") != 0)
 			{
@@ -584,6 +590,7 @@ bool parseOptions(int argc, char** argv, openblack::Arguments& args, int& return
 			args.frameStatsOut = result["frame-stats-out"].as<std::string>();
 		}
 		args.warmUpFirstFrame = result.count("no-first-frame-warm-up") == 0;
+		args.parallelDrawEncode = result.count("parallel-draw-encode") != 0;
 		args.lobbyOrigin = result["lobby"].as<std::string>();
 		if (result.count("lobby-test-ca") != 0)
 		{
@@ -726,6 +733,7 @@ bool parseOptions(int argc, char** argv, openblack::Arguments& args, int& return
 			    .frames = std::max<uint32_t>(result["benchmark-frames"].as<uint32_t>(), 1),
 			};
 			args.scenario->hideWindow = result.count("scenario-hide-window") != 0;
+			args.scenario->checks = result.count("scenario-check") != 0;
 			if (result.count("benchmark-out") != 0)
 			{
 				args.scenario->results = std::filesystem::path(result["benchmark-out"].as<std::string>());
@@ -810,6 +818,8 @@ int main(int argc, char* argv[]) noexcept
 		{
 			return EXIT_FAILURE;
 		}
+		// A run of a scenario's checks ends with the verdict as its code
+		return game->GetExitCode();
 #endif
 	}
 	catch (std::exception& e)

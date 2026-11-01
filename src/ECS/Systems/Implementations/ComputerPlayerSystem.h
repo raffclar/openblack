@@ -50,6 +50,7 @@ public:
 	void MoveHand(PlayerNames player, glm::vec3 place, float speed, bool fixedHeight) override;
 	void SetHand(PlayerNames player, glm::vec3 place, bool fixedHeight) override;
 	[[nodiscard]] std::optional<glm::vec3> HandPosition(PlayerNames player) override;
+	[[nodiscard]] std::optional<glm::vec3> HandPositionForView(PlayerNames player) const override;
 	void SetAttitude(PlayerNames player, PlayerNames other, float attitude) override;
 	[[nodiscard]] float Attitude(PlayerNames player, PlayerNames other) const override;
 	bool SavePersonality(PlayerNames player, std::string_view file) override;

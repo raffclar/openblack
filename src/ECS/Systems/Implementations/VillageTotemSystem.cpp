@@ -11,8 +11,12 @@
 
 #include "VillageTotemSystem.h"
 
+#include <cstdint>
+
+#include <algorithm>
 #include <optional>
 #include <string_view>
+#include <utility>
 #include <vector>
 
 #include <glm/gtx/euler_angles.hpp>
@@ -166,16 +170,23 @@ void VillageTotemSystem::RefreshIcons(PlayerNames player)
 {
 	auto& registry = _world->Entities();
 	const auto iconMesh = _world->IconMeshFor(player);
-	registry.Each<const VillageTotem>([&](entt::entity totem, const VillageTotem& totemComponent) {
+	// The totems of the player's towns, in the order that the player gained the towns
+	std::vector<std::pair<uint32_t, entt::entity>> totems;
+	registry.Each<const VillageTotem>([&](entt::entity totem, const VillageTotem& /*unused*/) {
 		const auto town = TownOf(totem);
 		const auto* townComponent = town != entt::null ? registry.TryGet<const Town>(town) : nullptr;
 		if (townComponent != nullptr && townComponent->owner == player)
 		{
-			ShowIcon(totemComponent, iconMesh);
-			// The new icon gives the totem a new outline, so it goes out of the map's cells and in again
-			_world->Reinsert(totem);
+			totems.emplace_back(townComponent->gained, totem);
 		}
 	});
+	std::ranges::stable_sort(totems, {}, &std::pair<uint32_t, entt::entity>::first);
+	for (const auto& entry : totems)
+	{
+		ShowIcon(registry.Get<const VillageTotem>(entry.second), iconMesh);
+		// The new icon gives the totem a new outline, so it goes out of the map's cells and in again
+		_world->Reinsert(entry.second);
+	}
 }
 
 void VillageTotemSystem::SetTotemShare(entt::entity totem, float share)
@@ -215,6 +226,11 @@ void VillageTotemSystem::Place(entt::entity totem)
 {
 	auto& registry = _world->Entities();
 	const auto& totemComponent = registry.Get<const VillageTotem>(totem);
+	// A totem with no life does not move
+	if (!village_totem::Shows(_world->LifeOf(totem)))
+	{
+		return;
+	}
 	// Held by the hand, it stands where the hand holds it; otherwise where it has eased to. It eases by the computer's
 	// clock, so only its drawn height moves: the turns go by where it stands on the land.
 	const float share = totemComponent.gripped ? totemComponent.held : totemComponent.ease.share;
@@ -325,7 +341,19 @@ void VillageTotemSystem::Update(uint32_t realMs)
 		{
 			continue;
 		}
+		// Only the draw of a totem moves it, shows its second totem and its share. A totem that the land's draw list does
+		// not draw stays as it is until the turn moves it or the list draws it again.
+		if (!_world->DrawnThisFrame(totem))
+		{
+			continue;
+		}
 		village_totem::StepTo(totemComponent.ease, realMs);
+		// A totem with no life shows nothing. Its second totem hides, and the totem does not move or show its share.
+		if (!village_totem::Shows(_world->LifeOf(totem)))
+		{
+			PlaceGhost(totem, std::nullopt);
+			continue;
+		}
 		Place(totem);
 		// The second totem shows the other share, and the player sees the share as it moves
 		const auto shown = village_totem::ShownShares(totemComponent.ease.share, totemComponent.held, totemComponent.gripped);

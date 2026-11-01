@@ -13,6 +13,7 @@
 
 #include <glm/geometric.hpp>
 
+#include "Help/HelpProfile.h"
 #include "InfoConstants.h"
 
 using namespace openblack;
@@ -47,11 +48,6 @@ float magic::SeedPower(float store, float costToCreate)
 	return costToCreate > 0.0f ? std::min(store / costToCreate, 1.0f) : 1.0f;
 }
 
-magic::ScribbleResult magic::ScribbleOn(bool hasIcon, bool ready, bool cast, int powerUp)
-{
-	return hasIcon && ready && !cast && powerUp >= 0 ? ScribbleResult::StopPowerUp : ScribbleResult::Drop;
-}
-
 bool magic::SeedReadyAfter(uint32_t turnsInHand, float turnSeconds, float delaySeconds)
 {
 	return static_cast<float>(turnsInHand) * turnSeconds > delaySeconds;
@@ -60,6 +56,12 @@ bool magic::SeedReadyAfter(uint32_t turnsInHand, float turnSeconds, float delayS
 bool magic::ShownWithSpell(const SeedWithSpell& seed)
 {
 	return !seed.castInHand && !seed.keptInHand && seed.followsSpell && !seed.spellClosedDown && seed.hasIcon;
+}
+
+magic::SeedTakeBack magic::TakeBackOf(bool boundToSpell, bool enoughForRecast)
+{
+	return {.helpEvent = boundToSpell ? help::profile::k_SeedTakenBack : help::profile::k_SeedInHand,
+	        .kept = !boundToSpell || enoughForRecast};
 }
 
 bool magic::ClosesOutOfInfluence(bool shown, bool inInfluence, bool closedDown)

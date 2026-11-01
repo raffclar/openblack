@@ -81,9 +81,10 @@ void Renderer::DrawVillagerEyes(const DrawSceneDesc& desc) const
 	submitDesc.useMaterialCulling = true;
 	submitDesc.matrixCount = 1;
 	submitDesc.groundShadows = false;
-	// Lit as the villager's body is, by the land's light and colour where it stands and the haze there, but shaded by the
-	// sun only once for each eye
+	// Lit as the villager's body is, by the land's light and colour where it stands with no distance haze, but shaded by
+	// the sun only once for each eye
 	submitDesc.tint = glm::vec4(1.0f, 1.0f, 1.0f, 0.0f);
+	submitDesc.hazed = false;
 
 	desc.entities.Each<const ecs::components::HighDetail, const ecs::components::Mesh>(
 	    [&](const ecs::components::HighDetail& detail, const ecs::components::Mesh& mesh) {

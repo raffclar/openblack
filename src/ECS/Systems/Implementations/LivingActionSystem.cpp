@@ -968,13 +968,13 @@ const static std::array<VillagerStateTableEntry, static_cast<size_t>(VillagerSta
     /* GO_TOWARDS_TELEPORT_REACTION */
     VillagerStateTableEntry {
         .state = &villager_teleport::GoTowardsTeleportReaction,
-        .exitState = &villager_reactions::ExitReaction,
+        .exitState = &villager_teleport::ExitReactToTeleport,
         .validate = &villager_reactions::ReactionValidate,
     },
     /* TELEPORT_REACTION */
     VillagerStateTableEntry {
         .state = &villager_teleport::TeleportReaction,
-        .exitState = &villager_reactions::ExitReaction,
+        .exitState = &villager_teleport::ExitReactToTeleport,
         .validate = &villager_reactions::ReactionValidate,
     },
     /* DANCE_WHILE_REACTING */
@@ -1211,7 +1211,7 @@ const static std::array<VillagerStateTableEntry, static_cast<size_t>(VillagerSta
     /* GO_TOWARDS_TELEPORT_REACTION_QUICKLY: running to a teleport stone is walking to it, faster */
     VillagerStateTableEntry {
         .state = &villager_teleport::GoTowardsTeleportReaction,
-        .exitState = &villager_reactions::ExitReaction,
+        .exitState = &villager_teleport::ExitReactToTeleport,
         .validate = &villager_reactions::ReactionValidate,
     },
     /* GO_AND_CHILLOUT_IN_TOWN */
@@ -1366,6 +1366,21 @@ VillagerStates FinalStateOf(const LivingAction& action)
 VillagerStates LivingActionSystem::VillagerGetFinalState(const LivingAction& action) const
 {
 	return FinalStateOf(action);
+}
+
+bool LivingActionSystem::VillagerHasSameExitAsFinal(const LivingAction& action, VillagerStates next) const
+{
+	using ExitFunction = bool (*)(LivingAction&, VillagerStates);
+	const auto& finalExit = k_VillagerStateTable.at(static_cast<size_t>(FinalStateOf(action))).exitState;
+	const auto& nextExit = k_VillagerStateTable.at(static_cast<size_t>(next)).exitState;
+	if (!finalExit || !nextExit)
+	{
+		return !finalExit && !nextExit;
+	}
+	// A row that is not a plain function (a row that is not made yet) has the same exit as no other row
+	const auto* finalFunction = finalExit.target<ExitFunction>();
+	const auto* nextFunction = nextExit.target<ExitFunction>();
+	return finalFunction != nullptr && nextFunction != nullptr && *finalFunction == *nextFunction;
 }
 
 void LivingActionSystem::SetStateDirectly(LivingAction& action, LivingAction::Index index, VillagerStates state) const

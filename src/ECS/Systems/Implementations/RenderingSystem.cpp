@@ -22,6 +22,7 @@
 #include <tuple>
 #include <unordered_map>
 #include <utility>
+#include <vector>
 
 #include <glm/gtx/transform.hpp>
 
@@ -103,7 +104,9 @@
 #include "ECS/Systems/TimeSystemInterface.h"
 #include "ECS/Systems/VegetationInterface.h"
 #include "ECS/TreeRoots.h"
+#include "ECS/VillageTotem.h"
 #include "ECS/VillagerHeldObject.h"
+#include "ECS/WorldObjects.h"
 #include "Game.h"
 #include "Graphics/BonePalette.h"
 #include "Graphics/DebugLines.h"
@@ -226,6 +229,26 @@ entt::id_type RootsMesh()
 	return openblack::resources::HashIdentifier(openblack::MeshId::TreeRoots);
 }
 
+/// Whether a model is a fence's: the fences read their snow by each face, as the trees do
+bool FenceModel(entt::id_type meshId)
+{
+	using openblack::MeshId;
+	constexpr std::array k_Fences {MeshId::BuildingAmericanFence, MeshId::BuildingCelticFenceShort,
+	                               MeshId::BuildingCelticFenceTall};
+	return std::ranges::any_of(k_Fences,
+	                           [meshId](MeshId fence) { return openblack::resources::HashIdentifier(fence) == meshId; });
+}
+
+/// The model gets three corners of its own for each face, which the snow of a tree or a fence reads
+void SplitFacesForSnow(entt::id_type meshId)
+{
+	auto& meshes = entt::locator<openblack::resources::ResourcesInterface>::value().GetMeshes();
+	if (meshes.Contains(meshId))
+	{
+		meshes.Handle(meshId)->SplitFacesForSnow();
+	}
+}
+
 /// The passes over the things that the land's draw list divides into segments (see graphics::fizz_draw_order)
 struct SegmentPasses
 {
@@ -278,6 +301,21 @@ bool HiddenHighlight(const openblack::ecs::Registry& registry, entt::entity enti
 {
 	const auto* highlight = registry.TryGet<const ScriptHighlight>(entity);
 	return highlight != nullptr && highlight->hidden;
+}
+
+/// The plinths and the icons of the village totems that show nothing: the totems with no life
+std::vector<entt::entity> LifelessTotemParts(const openblack::ecs::Registry& registry)
+{
+	using openblack::ecs::components::VillageTotem;
+	std::vector<entt::entity> parts;
+	registry.Each<const VillageTotem>([&parts](entt::entity totem, const VillageTotem& component) {
+		if (!openblack::ecs::village_totem::Shows(openblack::ecs::world_objects::LifeOf(totem)))
+		{
+			parts.push_back(totem);
+			parts.push_back(component.icon);
+		}
+	});
+	return parts;
 }
 
 entt::entity DrawnHand()
@@ -536,6 +574,11 @@ void RenderingSystem::PrepareDrawDescs(bool drawBoundingBox)
 		drawDesc->second.additiveShare = desc.additiveShare;
 		drawDesc->second.instanceAlpha = desc.instanceAlpha;
 		drawDesc->second.environmentMapped = desc.environmentMapped;
+		if (FenceModel(meshId))
+		{
+			SplitFacesForSnow(meshId);
+			drawDesc->second.snowByFace = true;
+		}
 		drawDesc->second.changedMaterials = desc.changedMaterials;
 		drawDesc->second.partsByLevel = PartsDifferByLevel(meshId);
 		_instanceSlots.emplace(meshId, InstanceSlots {.offset = offset,
@@ -634,6 +677,8 @@ void RenderingSystem::PrepareTreeDrawDescs(bool drawBoundingBox)
 	auto& meshes = entt::locator<resources::ResourcesInterface>::value().GetMeshes();
 	for (const auto& [meshId, count] : treeMeshIds)
 	{
+		// The trees read their snow by each face
+		SplitFacesForSnow(meshId);
 		_renderContext.treeInstancedDrawDescs.emplace(std::piecewise_construct, std::forward_as_tuple(meshId),
 		                                              std::forward_as_tuple(treeOffset, count, false));
 		const auto height = meshes.Contains(meshId) ? meshes.Handle(meshId)->GetBoundingBox().Size().y : 0.0f;
@@ -719,10 +764,11 @@ bool RenderingSystem::UploadInstances(bool drawBoundingBox)
 	const openblack::ecs::ComponentLookup<ScaffoldDrawnScale> drawnScales(registry);
 	const openblack::ecs::ComponentLookup<PhysicsDrawPose> physicsPoses(registry);
 	const openblack::ecs::ComponentLookup<DetailMeshes> detailMeshes(registry);
+	const auto lifelessTotemParts = LifelessTotemParts(registry);
 	EachBySegment(
 	    [this, &registry, &vegetation, &meshes, &fits, &fizzOrder, &segmentPlaced, &lastSegment, drawBoundingBox, camera, &view,
 	     modelDetail, drawList, drawnHand, &drawnPlaces, &villagerPoses, &highDetails, &drawnScales, &physicsPoses,
-	     &detailMeshes](entt::entity entity, const Mesh& mesh, const Transform& transform) {
+	     &detailMeshes, &lifelessTotemParts](entt::entity entity, const Mesh& mesh, const Transform& transform) {
 		    // The hands of the other gods and the right hands have no model on the screen
 		    if (!graphics::drawn_hand::Drawn(registry.AllOf<Hand>(entity), entity, drawnHand))
 		    {
@@ -731,6 +777,15 @@ bool RenderingSystem::UploadInstances(bool drawBoundingBox)
 		    // A script highlight that its draw list did not select in this frame is not drawn
 		    if (HiddenHighlight(registry, entity))
 		    {
+			    return;
+		    }
+		    // A village totem with no life shows nothing. It stays drawn while the camera does not move.
+		    if (std::ranges::find(lifelessTotemParts, entity) != lifelessTotemParts.end())
+		    {
+			    if (drawList != nullptr && drawList->GetFrame().drawAll && drawList->NotesKept(entity))
+			    {
+				    drawList->NoteFullFrame(entity, true);
+			    }
 			    return;
 		    }
 		    const auto segment = fizzOrder.SegmentOf(entity);
@@ -978,7 +1033,7 @@ bool RenderingSystem::UploadInstances(bool drawBoundingBox)
 			    if (spells->freeze > 0.0f)
 			    {
 				    look.y = static_cast<float>(creature_spells::FrozenTint(spells->freeze));
-				    look.w = -spells->freeze;
+				    look.w = -static_cast<float>(creature_spells::IceAlpha(spells->freeze)) / 255.0f;
 			    }
 		    }
 
@@ -1141,6 +1196,12 @@ bool RenderingSystem::UploadInstances(bool drawBoundingBox)
 		    if (fade.has_value() && look.z != 1.0f)
 		    {
 			    look.z = -(1.0f - (static_cast<float>(*fade) / 255.0f));
+		    }
+		    // A villager that a script draws in high detail takes the land's light and colour where it stands each frame,
+		    // but no distance haze
+		    if (highDetail != nullptr)
+		    {
+			    look.z = graphics::instance_light::WithoutHaze(look.z);
 		    }
 
 		    const uint32_t idx = slots->second.offset + slots->second.filled;

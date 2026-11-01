@@ -91,6 +91,14 @@ enum class Arrival
 };
 [[nodiscard]] Arrival OnReachingGate(float distanceToGate, uint32_t dancers, uint32_t maxDancersVisible);
 
+/// Whether a villager on its way to the site, or on a food run for the site, stops its way when it changes state. It
+/// stops only when the next state is a final state and has an exit that is not the exit of the state that it works
+/// towards. A pause or a walk on the way keeps it on its way.
+[[nodiscard]] bool LeavesTheWay(bool nextHasSameExit, bool nextIsFinal);
+/// Whether a villager on its way to the site stops its way when it changes state. As LeavesTheWay, but a teleport stone
+/// on the way also keeps it on its way.
+[[nodiscard]] bool LeavesTheWayToSite(bool nextHasSameExit, bool nextIsFinal, bool nextIsTeleport);
+
 /// The life a turn's worship costs a worshipper: what each dancer chanted last turn at its site, at the villager's rate
 [[nodiscard]] float ChantDamage(float chantsPerDancer, float chantLifeRate);
 

@@ -61,6 +61,11 @@ protected:
 	std::map<uint32_t, uint32_t> _resumeFrom;
 	/// The task that stopped itself during its run, which goes when the run ends
 	std::optional<uint32_t> _stoppedWhileRunning;
+	/// The tasks that a save stopped inside a native function, each with the address of the call. The save keeps the
+	/// task at the call with the arguments already taken, so after a load the task calls the native again.
+	std::map<uint32_t, uint32_t> _resumesInsideNative;
+	/// True while a task calls again the native function that a save stopped. Its empty pops are expected.
+	bool _repeatsCutNative {false};
 	/// A copy of the program as a SAV file has it. A save shares the copy with the writer on another thread, so that a
 	/// save does not copy the program again. Only the thread of the game uses it. Each change of the program removes
 	/// the copy, and the next use makes it again.
@@ -214,6 +219,17 @@ public:
 	[[nodiscard]] RunningState CopyRunningState() const;
 	/// The SAV file of a program and a running state. Any thread can call it.
 	[[nodiscard]] static LHVMFile StateFile(const LHVMFile& program, const RunningState& state);
+
+	/// A task that a save stopped inside a native function, and that native
+	struct CutNative
+	{
+		uint32_t task {0};
+		uint32_t native {0};
+	};
+	/// The tasks of the last restored state that a save stopped inside a native function. Each one calls the native
+	/// again when it next runs, with the arguments that the native took before the save missing, as the game does.
+	/// The pops of these missing arguments give zeros and are not errors.
+	[[nodiscard]] std::vector<CutNative> NativesCutBySave() const;
 
 	void LookIn(ScriptType allowedScriptTypesMask);
 

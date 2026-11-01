@@ -89,8 +89,10 @@ struct Request
 {
 	GestureType gesture {GestureType::None};
 	Purpose purpose {Purpose::DropSeed};
-	/// PowerUp: the level, 0 to 2. DropSeed with a seed that can power up: the level that the seed has, -1 for none.
+	/// PowerUp: the level, 0 to 2
 	int powerUpLevel {-1};
+	/// DropSeed: a power-up is asked for the seed, so the scribble calls it off and the seed stays in the hand
+	bool callsOff {false};
 	/// PickLeash: the leash; LeashGesture: the leash worn, else the one picked to put on next
 	LeashType leash {LeashType::None};
 	/// FightMiracle: the miracle, and the seed of the miracle that its hint shows
@@ -116,10 +118,14 @@ struct HandContext
 		bool cast {false};
 		/// The gesture that sizes what it casts, a circle for the storm and the shields
 		GestureType sizingGesture {GestureType::None};
-		/// The gestures that power it up to levels 0, 1 and 2, none where it has no such level
+		/// The gestures that power it up to levels 0, 1 and 2, none where the hand does not offer that level. The hand
+		/// finds them when it starts its power-ups.
 		std::array<GestureType, 3> powerUpGestures {GestureType::None, GestureType::None, GestureType::None};
 		/// The level it casts at, -1 for its plain miracle
 		int powerUp {-1};
+		/// The gesture of the power-up that the hand asked for, none when it asked for none. The level of the seed
+		/// changes only when the icon of the seed has charged it.
+		GestureType askedPowerUp {GestureType::None};
 		/// Whether it can be powered up at all. The game only powers up a seed charged at a worship site's icon.
 		bool canPowerUp {true};
 	};
@@ -233,8 +239,20 @@ enum class SelectionStep : uint8_t
 /// miracle.
 [[nodiscard]] bool ChainFollows(const std::optional<HandContext::Seed>& seed, bool seedTurnedOnLand);
 /// Whether the help counts a cast of the miracle in the hand as a cast with a power-up. The miracle must be ready, not
-/// cast, from an icon and powered up. A miracle that a gesture sizes must have that gesture as the last gesture drawn.
+/// cast and from an icon, and the hand must have asked for a power-up. A miracle that a gesture sizes must have that
+/// gesture as the last gesture drawn.
 [[nodiscard]] bool CountsPoweredUpCast(const HandContext::Seed& seed, GestureType lastGesture);
+/// Whether the cast of a miracle passes the check of the gesture that sizes it. A miracle that no gesture sizes always
+/// passes. Another miracle passes when the gesture kept for the cast is its sizing gesture.
+[[nodiscard]] constexpr bool PassesSizingCheck(GestureType sizingGesture, GestureType keptGesture)
+{
+	return sizingGesture == GestureType::None || keptGesture == sizingGesture;
+}
+/// The power-up gestures that the hand offers for the seed in it when it starts its power-ups: the gesture of each level
+/// that the seed has and that is offered. A level is offered when the player may cast its miracle and the icon of the
+/// seed can charge it.
+[[nodiscard]] std::array<GestureType, 3> OfferedPowerUps(const std::array<GestureType, 3>& gestures,
+                                                         const std::array<bool, 3>& offered);
 
 /// The leash picker: open after the leash gesture while the creature knows more than one leash, offering each other
 /// leash it knows as a gesture to draw. It closes when a leash is picked, on a scribble, when the leash comes off, or

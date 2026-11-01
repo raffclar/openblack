@@ -685,6 +685,13 @@ void GameInterface::AskOutOfSync()
 	_outOfSyncAsked = true;
 }
 
+void GameInterface::AskTripQuestion(std::string_view textName)
+{
+	_saveGameBoxes->Ask(std::u16string(_texts.Get(textName)));
+	_tripAsked = true;
+	_tripAnswer.reset();
+}
+
 void GameInterface::OpenMultiplayer(std::unique_ptr<MultiplayerFrontEnd> frontEnd)
 {
 	_menu->Close();
@@ -1621,6 +1628,15 @@ void GameInterface::Update(float deltaSeconds)
 			_outOfSyncAnswer = *answer == SaveGameBoxes::Answer::Yes;
 		}
 	}
+	// The answer to the question of the trip to the Gods' Playground
+	if (_tripAsked && !_saveGameBoxes->IsActive())
+	{
+		_tripAsked = false;
+		if (const auto answer = _saveGameBoxes->TakeAnswer(); answer.has_value())
+		{
+			_tripAnswer = *answer == SaveGameBoxes::Answer::Yes;
+		}
+	}
 	_multiplayerBoxes->Update(deltaSeconds);
 	UpdateTattooEditor(deltaSeconds);
 	_toolTips.Update(deltaSeconds);
@@ -2007,8 +2023,9 @@ void GameInterface::DrawHandTricons(glm::u16vec2 resolution)
 	}
 	const auto& in = *_handTricons;
 	const bool toolTipsOn = _menu->GetSettings().toolTips != 0;
+	_drawnCameraIcons = tricons::Shown(in.icons, toolTipsOn, in.handStateShowsIcons);
 	tricons::Fade(_tricons, {
-	                            .icons = tricons::Shown(in.icons, toolTipsOn, in.handStateShowsIcons),
+	                            .icons = *_drawnCameraIcons,
 	                            .seconds = in.seconds,
 	                            .demonstration = in.demonstration,
 	                            .cameraBusy = in.cameraBusy,

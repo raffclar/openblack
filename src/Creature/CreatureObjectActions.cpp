@@ -148,6 +148,27 @@ Hands creature_object_actions::HandsFor(Kind kind)
 	return Hands::Either;
 }
 
+bool creature_object_actions::SharesByStand(Kind kind)
+{
+	switch (kind)
+	{
+	case Kind::PickUp:
+	case Kind::Destroy:
+	case Kind::Throw:
+	case Kind::Point:
+	case Kind::TakeFromHand:
+	case Kind::Kick:
+		return true;
+	case Kind::PutDown:
+	case Kind::Discard:
+	case Kind::Eat:
+	case Kind::Keep:
+	case Kind::Catch:
+		return false;
+	}
+	return false;
+}
+
 bool creature_object_actions::LeavesThingAlone(Kind kind, Failure failure)
 {
 	const bool walksToThing = kind == Kind::PickUp || kind == Kind::Destroy || kind == Kind::Kick;
@@ -398,6 +419,11 @@ bool creature_object_actions::CanBePickedUp(Thing thing)
 bool creature_object_actions::IsLiving(Thing thing)
 {
 	return thing == Thing::Villager || thing == Thing::Animal || thing == Thing::Bird || thing == Thing::Creature;
+}
+
+bool creature_object_actions::IsRock(Thing thing)
+{
+	return thing == Thing::Rock || thing == Thing::Bonfire || thing == Thing::BuildingPiece;
 }
 
 bool creature_object_actions::CanBeStoned(Thing thing, bool dead)

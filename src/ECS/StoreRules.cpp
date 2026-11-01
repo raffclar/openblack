@@ -103,3 +103,8 @@ bool store_rules::BuildingSiteStores(ResourceType type)
 {
 	return type == ResourceType::Wood || type == ResourceType::Any;
 }
+
+bool store_rules::ScaffoldStores(ResourceType type, bool onSite)
+{
+	return onSite && type == ResourceType::Wood;
+}
