@@ -3099,6 +3099,11 @@ void Game::UpdateTemple(std::chrono::microseconds deltaTime)
 
 void Game::UpdateInterfaceFrame(std::chrono::microseconds deltaTime)
 {
+	// A release of a creature that waited for the hold of the world lets go now, before the turns
+	if (Locator::creatureHandSystem::has_value())
+	{
+		Locator::creatureHandSystem::value().InterfaceFrame();
+	}
 	// The interface reads the places of the pointer that came in, and the help counts each movement of the mouse
 	if (Locator::gameActionSystem::has_value())
 	{
@@ -3561,9 +3566,11 @@ void Game::CloseMenuForCinema()
 
 void Game::UpdateHandFrame(std::chrono::microseconds deltaTime)
 {
-	// The draw of the hand sees the start and the end of a hold of a creature before the hand moves
+	// The draw of the hand sees the start and the end of a hold of a creature before the hand moves. First the camera of
+	// the hold turns and the hand takes its pose.
 	if (Locator::creatureHandSystem::has_value())
 	{
+		Locator::creatureHandSystem::value().HoldFrame(Locator::time::value().GetInputSteps());
 		Locator::creatureHandSystem::value().DrawFrame(Locator::time::value().GetInputSteps());
 	}
 	auto& profiler = Locator::profiler::value();
