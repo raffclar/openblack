@@ -115,6 +115,18 @@ TEST_F(CreatureCarriedTest, APreparedThrowCarriesNothingUntilTheRelease)
 	EXPECT_EQ(creature_carried::CarriedBy(registry, creature), thing);
 }
 
+// The script test "in creature hand" reads the hand. It sees the thing also while the creature prepares a throw.
+// NOLINTNEXTLINE(cppcoreguidelines-avoid-non-const-global-variables): external macro
+TEST_F(CreatureCarriedTest, TheHandHoldsTheThingWhileTheCreaturePreparesAThrow)
+{
+	EXPECT_EQ(creature_carried::InHandOf(registry, creature), thing);
+	Act(actions::Kind::Throw, actions::Status::Running, false);
+	EXPECT_FALSE(creature_carried::CarriedBy(registry, creature).has_value());
+	EXPECT_EQ(creature_carried::InHandOf(registry, creature), thing);
+	registry.Remove<CreatureHeldObject>(creature);
+	EXPECT_FALSE(creature_carried::InHandOf(registry, creature).has_value());
+}
+
 // NOLINTNEXTLINE(cppcoreguidelines-avoid-non-const-global-variables): external macro
 TEST_F(CreatureCarriedTest, AnEmptyHandCarriesNothing)
 {

@@ -90,6 +90,14 @@ void EffectRequestSystem::Remove(EffectHandle handle)
 	}
 }
 
+void EffectRequestSystem::RemoveOwnedBy(entt::entity owner)
+{
+	if (auto* server = _findServer())
+	{
+		server->RemoveOwnedBy(owner);
+	}
+}
+
 bool EffectRequestSystem::IsRunning(EffectHandle handle) const
 {
 	// The record answers. The turns never ask the particles.

@@ -345,12 +345,12 @@ void ReadCitadelHeart(WorldReader& r)
 	r.Byte("heartDestroying");
 	r.Float("heartDestructionClock");
 	// The particle containers of the beams and of the glow of the destruction
-	r.Ref();
-	r.Ref();
+	r.Ref("heartDestructionBeams");
+	r.Ref("heartDestructionGlow");
 	// The moment on the destruction clock of the next beam of the destruction
 	r.Float("heartDestructionBeamClock");
 	// The particle container of the beams of a hurt heart, the thing that the heart last beamed at, and the turn
-	r.Ref();
+	r.Ref("heartBeams");
 	r.Ref("heartBeamTarget");
 	r.Word("heartBeamTurn");
 	// The entrance of the temple
@@ -631,38 +631,46 @@ void ReadDataPath(WorldReader& r)
 void ReadParticleContainer(WorldReader& r)
 {
 	ReadPositioned(r);
-	r.Byte();
-	r.Ref();
-	r.Ref();
-	r.Word();
-	r.Word();
+	// 1 when the effect draws all its sprites together at its origin
+	r.Byte("containerSingleSort");
+	// The thing that the effect follows and ends with, and its particle system
+	r.Ref("containerFollows");
+	r.Ref("containerSystem");
+	// The turns left, below 0 for ever, and the strength that each step gives the effect
+	r.Word("containerTurns");
+	r.Float("containerScale");
 }
 
 void ReadJPSysInterface(WorldReader& r)
 {
-	r.Ref();
+	r.Ref("systemManager");
 }
 
 void ReadPSysManager(WorldReader& r)
 {
-	r.Word();
-	r.Ref();
-	r.Refs();
-	r.Bytes(60);
-	r.Bytes(12);
-	r.Byte();
-	r.Word();
-	r.Word();
-	r.Bytes(12);
-	r.Bytes(12);
-	r.Bytes(12);
-	r.Word();
-	r.Word();
-	r.Word();
-	r.Ref();
-	r.Byte();
-	r.Byte();
-	r.Persistent();
+	r.Word("managerAtomCount");
+	r.Ref("managerPlayer");
+	// The first collections, the newest first
+	r.Refs("managerRoots");
+	// What the miracle gave the effect on its last step, written as one value: three words, the hand, the camera, the
+	// direction, the power, the spin and if the miracle is still cast
+	r.Bytes(60, "managerInfo");
+	r.Point("managerOrigin");
+	r.Byte("managerAlpha");
+	r.Float("managerAge");
+	// Bit 0: closing down; bit 1: the miracle is still cast
+	r.Word("managerFlags");
+	r.Point("managerLastHand");
+	r.Point("managerDirection");
+	r.Point("managerUnitDirection");
+	r.Float("managerDirectionLength");
+	r.Float("managerMagnitude");
+	r.Float("managerCloseAge");
+	r.Ref("managerSpell");
+	r.Byte("managerSynced");
+	r.Byte("managerStepTwice");
+	// The particle type of the effect, then a word that is always -1
+	r.Persistent("managerType", "managerTypeWord");
 	ReadSpellTargets(r);
 }
 
@@ -688,40 +696,46 @@ void ReadMobileStatic(WorldReader& r)
 
 void ReadAtomCore(WorldReader& r)
 {
-	r.Refs();
-	r.Refs();
-	r.Refs();
-	r.Bytes(12);
-	r.Word();
-	r.Bytes(48);
-	r.Word();
-	r.Word();
-	r.Word();
-	r.Bytes(12);
-	r.Word();
-	r.Word();
-	r.Half();
-	r.Bytes(56);
-	r.Bytes(56);
-	r.Word();
-	r.Word();
-	r.Bytes(12);
-	r.Word();
-	r.Ref();
-	r.Ref();
-	r.Ref();
-	r.Byte();
+	r.Refs("atomCollections");
+	r.Refs("atomRuleData");
+	r.Refs("atomSounds");
+	r.Point("atomVelocity");
+	r.Float("atomBirth");
+	// The rotation as three rows, then three words that are always 0
+	r.Bytes(48, "atomRotation");
+	r.Float("atomBaseScale");
+	r.Float("atomRuleScale");
+	r.Float("atomStretch");
+	r.Point("atomPosition");
+	// Blue, green, red and alpha; then the added light as red, green and blue in one word
+	r.Word("atomColour");
+	r.Word("atomSpecular");
+	// Bit 0: drawn from its first step; bits 1 and 2: the steps it has been through; bit 3: turned away; bit 4: visible
+	r.Half("atomFlags");
+	// Where it was drawn at the two last steps: the rotation times the scale, the position, the scale and the alpha
+	r.Bytes(56, "atomPrevious");
+	r.Bytes(56, "atomCurrent");
+	r.Float("atomPreviousFrame");
+	r.Float("atomFrame");
+	// The animation: frames a second, the number of frames, if it plays and if it loops
+	r.Bytes(12, "atomAnimation");
+	r.Float("atomGravity");
+	r.Ref("atomCollection");
+	r.Ref("atomDrawOffset");
+	r.Ref("atomRender");
+	r.Byte("atomRandom");
 }
 
 void ReadParticle3DSprite(WorldReader& r)
 {
 	ReadRenderParticle(r);
-	r.Byte();
-	r.Persistent();
-	r.Byte();
-	r.Byte();
-	r.Word();
-	r.Word();
+	// Copies of values of the creator: the alpha scale, the creator, the place in the sheet, the flags and two numbers
+	r.Byte("spriteScaleAlpha");
+	r.Persistent("spriteCreatorFile", "spriteCreator");
+	r.Byte("spriteFileOffset");
+	r.Byte("spriteFlags");
+	r.Float("spriteValueA");
+	r.Float("spriteValueB");
 }
 
 void ReadRenderParticle(WorldReader& r)
@@ -742,8 +756,9 @@ void ReadRenderParticleGoldenShower(WorldReader& r)
 void ReadRenderParticleGameObjectRef(WorldReader& r)
 {
 	ReadRenderParticle(r);
-	r.Word();
-	r.Ref();
+	// The game turn of the last step that found the object, and the object
+	r.Word("objectRefTurn");
+	r.Ref("objectRef");
 }
 
 void ReadBonfire(WorldReader& r)
@@ -763,14 +778,15 @@ void ReadRock(WorldReader& r)
 void ReadCollectionDataEmitterRule(WorldReader& r)
 {
 	ReadBaseCollectionModifierData(r);
-	r.Word();
-	r.Word();
-	r.Byte();
+	// When the next atom is due, how many atoms it let out, and 1 until it first ran
+	r.Float("emitterNext");
+	r.Word("emitterEmitted");
+	r.Byte("emitterNotStarted");
 }
 
 void ReadBaseCollectionModifierData(WorldReader& r)
 {
-	r.Persistent();
+	r.Persistent("dataRuleFile", "dataRule");
 }
 
 void ReadReaction(WorldReader& r)
@@ -1042,9 +1058,11 @@ void ReadDanceGroup(WorldReader& r)
 void ReadLandscapeVortexIn(WorldReader& r)
 {
 	ReadLandscapeVortex(r);
-	r.Ref();
-	r.Ref();
-	r.Array(4);
+	// The writer of the crossing file, the particle container that draws things in, and five words that only the save
+	// and the load use
+	r.Ref("vortexCrossing");
+	r.Ref("vortexMover");
+	r.Array(4, "vortexWords");
 }
 
 // No save file of the tests has this type. This layout comes only from the game's save code.

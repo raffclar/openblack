@@ -46,8 +46,9 @@ namespace openblack::gui
 ///
 /// The player chooses a connection, then finds the games on the internet or on the local network. On the internet the
 /// player logs in to the lobby, which gives the list of the game servers. A join asks the lobby for a ticket, then the
-/// network game joins the server with it. The game room shows the server's players, its chat on the lobby's channel of
-/// the server, its land, the player's clans and the winning conditions. When the server starts the game, the network
+/// network game joins the server with it. The game room shows the server's players, its chat (on the lobby's channel of
+/// the server, or on the local network through the game server), its land, the player's clans and the winning
+/// conditions. When the server starts the game, the network
 /// game keeps its session with the server, and the game loads the server's land.
 ///
 /// The lobby gives a ticket for a full room only to an observer, so a join of a full room asks again for an observer's
@@ -261,6 +262,8 @@ private:
 	void FollowSelectedGame();
 	/// On the local network, the search gives the players of the room: the room follows its server's answers
 	void FollowLanRoom();
+	/// On the local network, the room's game server sends the lines of the room's chat
+	void FollowLanChat();
 	[[nodiscard]] const online::NetworkSession* Session() const;
 
 	Services _services;

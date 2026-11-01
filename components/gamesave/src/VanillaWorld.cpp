@@ -100,6 +100,13 @@ public:
 		Word();
 	}
 
+	/// A shared resource as two named words: the number of its file and the number of the object in that file
+	void Persistent(std::string_view file, std::string_view object)
+	{
+		Word(file);
+		Word(object);
+	}
+
 	/// A count, then each value on its own. Gives the count.
 	uint32_t Array(uint32_t size, std::string_view name = {})
 	{
@@ -1023,48 +1030,55 @@ void ReadInterfaceStatus(WorldReader& r)
 
 void ReadSpellTargets(WorldReader& r)
 {
-	const auto objects = r.Word();
+	// The objects that the effect is to act on, each with a word before it, then the points to act on
+	const auto objects = r.Word("targetObjectCount");
 	for (uint32_t i = 0; i < objects && !r.Failed(); ++i)
 	{
 		r.Word();
-		r.Ref();
+		r.Ref("targetObject");
 	}
-	const auto points = r.Word();
+	const auto points = r.Word("targetPointCount");
 	for (uint32_t i = 0; i < points && !r.Failed(); ++i)
 	{
-		r.Bytes(12);
+		r.Point("targetPoint");
 	}
-	r.Word();
+	r.Word("targetWord");
 }
 
 void ReadAtomCollection(WorldReader& r)
 {
-	const auto resources = r.Word();
-	for (uint32_t i = 0; i < resources && !r.Failed(); ++i)
+	// The rules of the group that are still on the collection, each by its object in the particle file
+	const auto rules = r.Word("ruleCount");
+	for (uint32_t i = 0; i < rules && !r.Failed(); ++i)
 	{
-		r.Persistent();
+		r.Persistent("ruleFile", "rule");
 	}
-	r.Refs("atoms");
-	r.Word();
-	r.Ref();
-	r.Word();
-	r.Byte();
-	r.Ref();
-	r.Refs("children");
-	r.Ref();
-	r.Word();
-	r.Byte();
+	// What the rules keep for the collection
+	r.Refs("ruleData");
+	// The age of the effect when the collection was made, the effect and the group
+	r.Float("collectionBirth");
+	r.Ref("collectionManager");
+	r.Word("collectionGroup");
+	// Bit 0: not under an atom whose group is a hierarchy; bit 1: drawn between the last two steps; bit 2: emitting
+	r.Byte("collectionFlags");
+	r.Ref("collectionParent");
+	r.Refs("collectionAtoms");
+	r.Ref("collectionUnused");
+	// The hierarchy value of the group in the particle file
+	r.Word("collectionHierarchy");
+	r.Byte("collectionAlpha");
 }
 
 void ReadLandscapeVortex(WorldReader& r)
 {
 	ReadMobileStatic(r);
-	r.Bytes(12);
-	for (int i = 0; i < 4; ++i)
-	{
-		r.Word();
-	}
-	const auto count = r.Word();
+	// The middle, the kind of vortex, its state, its height above the land and the average height of the levelled square
+	r.Point("vortexCentre");
+	r.Word("vortexType");
+	r.Word("vortexState");
+	r.Float("vortexAltitude");
+	r.Float("vortexGroundAverage");
+	const auto count = r.Word("vortexGroundCount");
 	if (count > 4096)
 	{
 		r.Fail("The vortex has too many bytes");
@@ -1072,7 +1086,7 @@ void ReadLandscapeVortex(WorldReader& r)
 	}
 	for (uint32_t i = 0; i < count && !r.Failed(); ++i)
 	{
-		r.Byte();
+		r.Byte("vortexGround");
 	}
 }
 
@@ -1257,9 +1271,9 @@ void ReadCreature(WorldReader& r)
 
 void ReadVortexSave(WorldReader& r)
 {
-	r.Byte();
-	r.Word();
-	r.Array(1);
+	r.Byte("crossingWriting");
+	r.Word("crossingWord");
+	r.Array(1, "crossingName");
 	r.Array(1, "file");
 }
 

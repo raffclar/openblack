@@ -270,6 +270,8 @@ public:
 	[[nodiscard]] bool InGame() const override { return session.GetState() != online::NetworkSession::State::Ended; }
 	[[nodiscard]] const online::NetworkSession* Session() const override { return &session; }
 	[[nodiscard]] std::optional<online::StartEvent> TakeStartEvent() override { return session.TakeStartEvent(); }
+	void SendRoomChat(std::string text) override { session.SendRoomChat(text); }
+	[[nodiscard]] std::vector<game_socket::RoomChat> TakeRoomChat() override { return session.TakeRoomChat(); }
 
 	int64_t now {0};
 	online::NetworkSession session;
@@ -1110,19 +1112,94 @@ TEST_F(FrontEndTest, TheStartGivesTheSessionToTheNetworkGame)
 TEST_F(FrontEndTest, TheRoomChatUsesTheServersChannel)
 {
 	ToRoom();
+	// The own line shows at once, cut to the chat box's length, and goes to the room's channel
 	frontEnd->SendChat(std::u16string(300, u'a'));
 	EXPECT_EQ(lobby.chatChannel, "server-w1");
 	EXPECT_EQ(lobby.chatText.size(), 254u);
+	ASSERT_EQ(frontEnd->GetChat().size(), 1u);
+	EXPECT_EQ(frontEnd->GetChat()[0].text, u"Alice> " + std::u16string(254, u'a'));
+	EXPECT_EQ(frontEnd->GetChat()[0].colour, OwnLineColour());
+	// The lobby sends the line back to the sender too: the game leaves that copy out
+	lobby.Event("chat.line",
+	            R"({"channel":"server-w1","from":{"id":7,"name":"Alice"},"text":")" + std::string(254, 'a') + R"("})");
 	lobby.Event("chat.line", R"({"channel":"server-w1","from":{"id":3,"name":"Bob"},"text":"hello"})");
-	lobby.Event("chat.line", R"({"channel":"server-w1","from":{"id":7,"name":"Alice"},"text":"hi"})");
 	// A line of another channel is not the room's
 	lobby.Event("chat.line", R"({"channel":"lobby","from":{"id":3,"name":"Bob"},"text":"elsewhere"})");
 	const auto& chat = frontEnd->GetChat();
 	ASSERT_EQ(chat.size(), 2u);
-	EXPECT_EQ(chat[0].text, u"Bob: hello");
-	EXPECT_EQ(chat[0].colour, GodColour(1));
-	EXPECT_EQ(chat[1].text, u"Alice> hi");
-	EXPECT_EQ(chat[1].colour, OwnLineColour());
+	EXPECT_EQ(chat[1].text, u"Bob: hello");
+	EXPECT_EQ(chat[1].colour, GodColour(1));
+}
+
+TEST_F(FrontEndTest, TheRoomChatShowsTheOwnLineEvenIfTheLobbyDropsIt)
+{
+	ToRoom();
+	frontEnd->SendChat(u"hello");
+	// No line comes back from the lobby
+	ASSERT_EQ(frontEnd->GetChat().size(), 1u);
+	EXPECT_EQ(frontEnd->GetChat()[0].text, u"Alice> hello");
+}
+
+TEST_F(FrontEndTest, TheRoomChatSendsNoLineOfOnlySpaces)
+{
+	ToRoom();
+	frontEnd->SendChat(u"   ");
+	EXPECT_TRUE(lobby.chatChannel.empty());
+	frontEnd->SendChat(u" a ");
+	EXPECT_EQ(lobby.chatText, " a ");
+}
+
+TEST_F(FrontEndTest, TheLanRoomChatGoesThroughTheGameServer)
+{
+	Make(true);
+	lan.servers = {Server("l1", "LAN game", 1, 32)};
+	lan.servers[0].players = {Player(0, "Bob", "god"), Player(0, "Eve", "observer"), Player(0, "Alice", "god")};
+	frontEnd->Next();
+	frontEnd->SetLobbyKind(LobbyKind::Lan);
+	frontEnd->Next();
+	frontEnd->Update();
+	frontEnd->SelectGame(0);
+	frontEnd->Join(u"");
+	const auto socket = sockets.order.back();
+	sockets.Accept(socket);
+	Step();
+	ServerJoins();
+	ASSERT_EQ(frontEnd->GetBox(), Box::Room);
+	// The own line shows at once and goes to the room's game server, cut to the chat box's length; the lobby gets
+	// nothing
+	frontEnd->SendChat(std::u16string(300, u'a'));
+	frontEnd->SendChat(u"   ");
+	ASSERT_EQ(frontEnd->GetChat().size(), 1u);
+	EXPECT_EQ(frontEnd->GetChat()[0].text, u"Alice> " + std::u16string(254, u'a'));
+	EXPECT_EQ(frontEnd->GetChat()[0].colour, OwnLineColour());
+	Step();
+	const auto& sent = sockets.sockets.at(socket).sent;
+	const auto isChat = [](const auto& frame) { return frame.Text().find("room.chat") != std::string::npos; };
+	ASSERT_EQ(std::ranges::count_if(sent, isChat), 1);
+	EXPECT_EQ(std::ranges::find_if(sent, isChat)->Text(), R"({"text":")" + std::string(254, 'a') + R"(","type":"room.chat"})");
+	EXPECT_TRUE(lobby.chatChannel.empty());
+	// The server sends the lines of the other players, each in the colour of the player's god
+	sockets.ServerText(socket, game_socket::ToJson(game_socket::RoomChat {.from = "Bob", .text = "hello"}));
+	sockets.ServerText(socket, game_socket::ToJson(game_socket::RoomChat {.from = "Eve", .text = "I watch"}));
+	Step();
+	const auto& chat = frontEnd->GetChat();
+	ASSERT_EQ(chat.size(), 3u);
+	EXPECT_EQ(chat[1].text, u"Bob: hello");
+	EXPECT_EQ(chat[1].colour, GodColour(1));
+	EXPECT_EQ(chat[2].text, u"Eve: I watch");
+	EXPECT_EQ(chat[2].colour, GodColour(0));
+	// Back leaves the room and its chat
+	frontEnd->Back();
+	EXPECT_TRUE(frontEnd->GetChat().empty());
+}
+
+TEST(MultiplayerRules, AChatLineNeedsACharacterAboveTheSpace)
+{
+	EXPECT_TRUE(HasChatText(u"a"));
+	EXPECT_TRUE(HasChatText(u"  .  "));
+	EXPECT_FALSE(HasChatText(u""));
+	EXPECT_FALSE(HasChatText(u"    "));
+	EXPECT_FALSE(HasChatText(u"\t\n"));
 }
 
 TEST_F(FrontEndTest, RoomChangesUpdateTheSeats)

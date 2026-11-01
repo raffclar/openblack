@@ -40,6 +40,8 @@ public:
 	std::vector<std::pair<EffectHandle, glm::vec3>> moved;
 	std::vector<EffectHandle> stopped;
 	std::vector<EffectHandle> removed;
+	/// The things whose effects went
+	std::vector<entt::entity> removedOwners;
 	/// The effects that run, by their numbers
 	std::vector<EffectHandle> running;
 	/// The calls that change a running effect, as the name of the call and the number of the effect
@@ -61,6 +63,7 @@ public:
 	}
 	void Move(EffectHandle handle, glm::vec3 position) override { moved.emplace_back(handle, position); }
 	void Stop(EffectHandle handle) override { stopped.push_back(handle); }
+	void RemoveOwnedBy(entt::entity owner) override { removedOwners.push_back(owner); }
 	void Remove(EffectHandle handle) override
 	{
 		removed.push_back(handle);
@@ -213,6 +216,18 @@ TEST(EffectRequests, AComputerThatShowsNothingGivesTheSameNumbers)
 	}
 	EXPECT_EQ(shown.NextHandle(), unshown.NextHandle());
 	EXPECT_EQ(server.served.size(), 2u);
+}
+
+TEST(EffectRequests, TheEffectsOfAThingGoToThePresentationByTheThing)
+{
+	FakeServer server;
+	EffectRequestSystem effects([&server]() -> EffectServerInterface* { return &server; });
+	const auto thing = static_cast<entt::entity>(5);
+	effects.RemoveOwnedBy(thing);
+	EXPECT_EQ(server.removedOwners, std::vector {thing});
+	// With no presentation, nothing goes and nothing fails
+	EffectRequestSystem unshown([]() -> EffectServerInterface* { return nullptr; });
+	unshown.RemoveOwnedBy(thing);
 }
 
 TEST(EffectRequests, MovesStopsAndRemovesGoToThePresentationByTheNumber)

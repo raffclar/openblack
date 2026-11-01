@@ -13,6 +13,7 @@
 
 #include "Components/Animal.h"
 #include "Components/Flock.h"
+#include "Components/ScriptControl.h"
 #include "Locator.h"
 #include "ScriptFlocks.h"
 #include "Systems/RenderingSystemInterface.h"
@@ -29,15 +30,17 @@ Registry::Registry()
 	_registry.on_destroy<entt::entity>().connect<&Registry::EntityGone>(*this);
 	// Every living that goes leaves its flock first, as each living does when the game deletes it. Thus a flock never
 	// keeps a member that is gone, and its leader is always a living that is there. The stores of the flock components
-	// exist from the start, so that the removal of a living never adds a store while the registry removes components.
+	// exist from the start, so that the removal of a living never adds a store while the registry removes components. The
+	// store of the script hold exists from the start for the same reason.
 	_registry.storage<components::Flock>();
+	_registry.storage<components::InScript>();
 	_registry.on_destroy<components::Animal>().connect<&Registry::LivingGone>(*this);
 	_registry.on_destroy<components::FlockMember>().connect<&Registry::LivingGone>(*this);
 }
 
 void Registry::LivingGone(entt::registry& /*registry*/, entt::entity living)
 {
-	script_flocks::Remove(*this, living, true);
+	script_flocks::RemoveAtDeath(*this, living);
 }
 
 void Registry::Release(entt::entity entity)

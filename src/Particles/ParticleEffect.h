@@ -53,6 +53,8 @@ namespace openblack::particles
 class Effect;
 struct Atom;
 struct Collection;
+struct RestoredEffect;
+struct RestoredCollection;
 struct SurfaceInstance;
 class Modifier;
 class ParticleClassRegistry;
@@ -1061,6 +1063,9 @@ public:
 	/// A collection that a rule keeps outside the tree of the effect, with everything under it and the state of its rules
 	void SaveSubtree(const Collection& collection, EffectWriter& out) const;
 	[[nodiscard]] std::unique_ptr<Collection> LoadSubtree(EffectReader& in, Atom* parent);
+	/// Takes the state that a saved game of the game keeps, in place of its first collections, so that it continues
+	/// from where the save stopped. Gives false, and changes nothing, when the state does not agree with the file.
+	bool Adopt(const RestoredEffect& saved);
 
 private:
 	void StepOnce(float dt);
@@ -1080,11 +1085,16 @@ private:
 	[[nodiscard]] std::unique_ptr<Collection> LoadStructure(EffectReader& in, Atom* parent);
 	void LoadRuleState(Collection& collection, EffectReader& in);
 	[[nodiscard]] int ModifierNumber(const Modifier* modifier) const;
+	[[nodiscard]] std::unique_ptr<Collection> AdoptCollection(const RestoredCollection& saved, Atom* parent) const;
+	/// The creator of the points of a group: the creator that the rules of the group name, when they name only one
+	[[nodiscard]] const Creator* PointCreatorOfGroup(int group) const;
 	[[nodiscard]] const Modifier* ModifierAt(int number) const;
 
 	std::shared_ptr<const psys::ParticleFile> _file;
 	EffectServices _services;
 	std::vector<std::unique_ptr<Modifier>> _modifiers;
+	/// For each object of the file, the number of the rule made from it, or -1
+	std::vector<int> _objectModifiers;
 	std::array<std::vector<const Modifier*>, k_GroupCount> _groups;
 	std::array<bool, k_GroupCount> _hierarchies {};
 	std::unordered_map<std::string, std::unique_ptr<Creator>> _creators;

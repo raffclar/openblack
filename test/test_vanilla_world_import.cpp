@@ -27,6 +27,7 @@
 #include <gtest/gtest.h>
 
 #include "3D/MapCoords.h"
+#include "ECS/VanillaParticleImport.h"
 #include "ECS/VanillaSceneryImport.h"
 #include "ECS/VanillaScriptImport.h"
 #include "ECS/VanillaWorldImport.h"
@@ -1802,4 +1803,568 @@ TEST(VanillaSceneryImport, SavedGamesOfLandOneKeepTheFollowValuesOfTheirFlocks)
 		GTEST_SKIP() << "Set OPENBLACK_VANILLA_SAVES to a copy of a Profiles folder of the game to check its saved games";
 	}
 	EXPECT_GT(birds, 0U);
+}
+
+namespace
+{
+namespace particle_import = openblack::ecs::vanilla_particle_import;
+
+/// Every object of a saved game becomes an entity of the same number, so that a test sees which object a value holds
+entt::entity SameNumber(uint32_t number)
+{
+	return static_cast<entt::entity>(number);
+}
+
+/// A value of a record as the file keeps it, from its bytes
+template <typename T>
+T FileValue(const VanillaWorld& world, const VanillaRecord& record, std::string_view name)
+{
+	T value {};
+	const auto bytes = world.Raw(record, name);
+	EXPECT_GE(bytes.size(), sizeof(T)) << record.number << " " << name;
+	if (bytes.size() >= sizeof(T))
+	{
+		std::memcpy(&value, bytes.data(), sizeof(T));
+	}
+	return value;
+}
+
+glm::vec3 FilePoint(const VanillaWorld& world, const VanillaRecord& record, std::string_view name)
+{
+	const auto point = FileValue<std::array<float, 3>>(world, record, name);
+	return {point[0], point[1], point[2]};
+}
+
+/// The values of the file that the import took, with how many of each group it checked
+struct Checked
+{
+	uint32_t containers {0};
+	uint32_t effects {0};
+	uint32_t collections {0};
+	uint32_t atoms {0};
+	uint32_t emitters {0};
+};
+
+void CheckAtom(const VanillaWorld& world, const VanillaRecord& record, const particles::RestoredAtom& atom, Checked& checked);
+
+/// The collection of the import agrees with each value of its record
+void CheckCollection(const VanillaWorld& world, uint32_t number, const particles::RestoredCollection& collection,
+                     Checked& checked)
+{
+	const auto* record = world.Record(number);
+	ASSERT_NE(record, nullptr);
+	ASSERT_TRUE(record->Is(VanillaType::AtomCollection));
+	++checked.collections;
+	EXPECT_EQ(collection.group, static_cast<int>(FileValue<uint32_t>(world, *record, "collectionGroup")));
+	EXPECT_EQ(collection.birth, FileValue<float>(world, *record, "collectionBirth"));
+	EXPECT_EQ(collection.alpha, static_cast<float>(FileValue<uint8_t>(world, *record, "collectionAlpha")));
+	const auto flags = FileValue<uint8_t>(world, *record, "collectionFlags");
+	EXPECT_EQ(collection.hierarchy, (flags & 1U) == 0);
+	EXPECT_EQ(collection.interpolated, (flags & 2U) != 0);
+	EXPECT_EQ(collection.emitting, (flags & 4U) != 0);
+	// A collection is in a hierarchy when the group of an atom over it is a hierarchy, as the file's hierarchy value says
+	if (const auto* parent = world.Record(world.Ref(*record, "collectionParent").value_or(0)); parent != nullptr)
+	{
+		const auto* above = world.Record(world.Ref(*parent, "atomCollection").value_or(0));
+		ASSERT_NE(above, nullptr);
+		const bool aboveHierarchy = FileValue<uint32_t>(world, *above, "collectionHierarchy") != 0 ||
+		                            (FileValue<uint8_t>(world, *above, "collectionFlags") & 1U) == 0;
+		EXPECT_EQ(collection.hierarchy, aboveHierarchy) << number;
+	}
+	const auto rules = world.Fields(*record, "rule");
+	ASSERT_EQ(collection.rules.size(), rules.size());
+	for (size_t i = 0; i < rules.size(); ++i)
+	{
+		uint32_t rule = 0;
+		std::memcpy(&rule, world.Bytes().data() + rules[i]->at, sizeof(rule));
+		EXPECT_EQ(collection.rules[i], static_cast<int>(rule));
+	}
+	const auto data = world.Refs(*record, "ruleData");
+	ASSERT_EQ(collection.emitters.size(), data.size());
+	for (size_t i = 0; i < data.size(); ++i)
+	{
+		const auto* emitter = world.Record(data[i]);
+		ASSERT_NE(emitter, nullptr);
+		++checked.emitters;
+		const auto& clock = collection.emitters[i];
+		EXPECT_EQ(clock.rule, static_cast<int>(FileValue<uint32_t>(world, *emitter, "dataRule")));
+		EXPECT_EQ(clock.clock.next, FileValue<float>(world, *emitter, "emitterNext"));
+		EXPECT_EQ(clock.clock.emitted, static_cast<int>(FileValue<uint32_t>(world, *emitter, "emitterEmitted")));
+		EXPECT_EQ(clock.clock.started, FileValue<uint8_t>(world, *emitter, "emitterNotStarted") == 0);
+		// An emitter of the collection is one of its rules
+		EXPECT_NE(std::ranges::find(collection.rules, clock.rule), collection.rules.end());
+	}
+	// The file keeps the newest atom first, the import the oldest first
+	const auto atoms = world.Refs(*record, "collectionAtoms");
+	ASSERT_EQ(collection.atoms.size(), atoms.size());
+	for (size_t i = 0; i < atoms.size(); ++i)
+	{
+		const auto* atom = world.Record(atoms[atoms.size() - 1 - i]);
+		ASSERT_NE(atom, nullptr);
+		CheckAtom(world, *atom, collection.atoms[i], checked);
+		if (i > 0)
+		{
+			EXPECT_LE(collection.atoms[i - 1].birth, collection.atoms[i].birth) << "the oldest atom first";
+		}
+	}
+}
+
+void CheckDrawState(std::span<const uint8_t> bytes, const particles::DrawState& state, float frame)
+{
+	ASSERT_EQ(bytes.size(), 56U);
+	std::array<float, 13> floats {};
+	std::memcpy(floats.data(), bytes.data(), sizeof(floats));
+	EXPECT_EQ(state.position, glm::vec3(floats[9], floats[10], floats[11]));
+	EXPECT_EQ(state.scale, floats[12]);
+	EXPECT_EQ(state.alpha, static_cast<float>(bytes[52]));
+	EXPECT_EQ(state.frame, frame);
+	// The file keeps the rotation times the scale
+	for (int row = 0; row < 3; ++row)
+	{
+		for (int column = 0; column < 3; ++column)
+		{
+			EXPECT_FLOAT_EQ(state.rotation[row][column] * state.scale, floats[static_cast<size_t>(row * 3 + column)]);
+		}
+	}
+}
+
+void CheckAtom(const VanillaWorld& world, const VanillaRecord& record, const particles::RestoredAtom& atom, Checked& checked)
+{
+	ASSERT_TRUE(record.Is(VanillaType::AtomCore));
+	++checked.atoms;
+	EXPECT_EQ(atom.position, FilePoint(world, record, "atomPosition"));
+	EXPECT_EQ(atom.velocity, FilePoint(world, record, "atomVelocity"));
+	EXPECT_EQ(atom.birth, FileValue<float>(world, record, "atomBirth"));
+	const auto rotation = FileValue<std::array<float, 12>>(world, record, "atomRotation");
+	for (int row = 0; row < 3; ++row)
+	{
+		for (int column = 0; column < 3; ++column)
+		{
+			EXPECT_EQ(atom.rotation[row][column], rotation[static_cast<size_t>(row * 3 + column)]);
+		}
+	}
+	EXPECT_EQ(atom.baseScale, FileValue<float>(world, record, "atomBaseScale"));
+	EXPECT_EQ(atom.ruleScale, FileValue<float>(world, record, "atomRuleScale"));
+	EXPECT_EQ(atom.stretch, FileValue<float>(world, record, "atomStretch"));
+	const auto colour = FileValue<std::array<uint8_t, 4>>(world, record, "atomColour");
+	EXPECT_EQ(atom.rgba, (std::array<uint8_t, 4> {colour[2], colour[1], colour[0], colour[3]}));
+	const auto specular = FileValue<uint32_t>(world, record, "atomSpecular");
+	EXPECT_EQ(atom.specular, (std::array<uint8_t, 3> {static_cast<uint8_t>(specular >> 16U),
+	                                                  static_cast<uint8_t>(specular >> 8U), static_cast<uint8_t>(specular)}));
+	const auto flags = FileValue<uint8_t>(world, record, "atomFlags");
+	EXPECT_EQ(atom.drawOnFirstUpdate, (flags & 1U) != 0);
+	EXPECT_EQ(atom.steps, (flags >> 1U) & 3U);
+	EXPECT_EQ(atom.deflected, (flags & 8U) != 0);
+	EXPECT_EQ(atom.visible, (flags & 16U) != 0);
+	CheckDrawState(world.Raw(record, "atomPrevious"), atom.previous, FileValue<float>(world, record, "atomPreviousFrame"));
+	CheckDrawState(world.Raw(record, "atomCurrent"), atom.current, FileValue<float>(world, record, "atomFrame"));
+	const auto animation = world.Raw(record, "atomAnimation");
+	ASSERT_EQ(animation.size(), 12U);
+	EXPECT_EQ(atom.frameRate, FileValue<float>(world, record, "atomAnimation"));
+	EXPECT_EQ(atom.playAnim, animation[8] != 0);
+	EXPECT_EQ(atom.gravity, FileValue<float>(world, record, "atomGravity"));
+	EXPECT_EQ(atom.random, FileValue<uint8_t>(world, record, "atomRandom"));
+	const auto* render = world.Record(world.Ref(record, "atomRender").value_or(0));
+	ASSERT_NE(render, nullptr);
+	switch (atom.look)
+	{
+	case particles::RestoredLook::Sprite:
+		ASSERT_TRUE(render->Is(VanillaType::SpriteParticle));
+		EXPECT_EQ(atom.creator, static_cast<int>(FileValue<uint32_t>(world, *render, "spriteCreator")));
+		// The sprite keeps the number of the particle file of its effect with its creator
+		EXPECT_NE(FileValue<uint32_t>(world, *render, "spriteCreatorFile"), 0U);
+		break;
+	case particles::RestoredLook::GoldenShower:
+	case particles::RestoredLook::ObjectRef:
+		EXPECT_TRUE(render->Is(VanillaType::GoldenShowerParticle) || render->Is(VanillaType::ObjectRefParticle));
+		EXPECT_EQ(atom.object, SameNumber(world.Ref(*render, "objectRef").value_or(0)));
+		break;
+	case particles::RestoredLook::Point:
+		EXPECT_TRUE(render->Is(VanillaType::PointParticle));
+		break;
+	}
+	const auto collections = world.Refs(record, "atomCollections");
+	ASSERT_EQ(atom.collections.size(), collections.size());
+	for (size_t i = 0; i < collections.size(); ++i)
+	{
+		CheckCollection(world, collections[collections.size() - 1 - i], atom.collections[i], checked);
+	}
+}
+
+size_t CountAtoms(const particles::RestoredCollection& collection)
+{
+	size_t count = collection.atoms.size();
+	for (const auto& atom : collection.atoms)
+	{
+		for (const auto& sub : atom.collections)
+		{
+			count += CountAtoms(sub);
+		}
+	}
+	return count;
+}
+
+/// The effect of the import agrees with each value of its particle system
+void CheckEffect(const VanillaWorld& world, uint32_t system, const particle_import::ImportedEffect& effect, Checked& checked)
+{
+	const auto* interface = world.Record(system);
+	ASSERT_NE(interface, nullptr);
+	const auto* manager = world.Record(world.Ref(*interface, "systemManager").value_or(0));
+	ASSERT_NE(manager, nullptr);
+	++checked.effects;
+	const auto& state = effect.state;
+	EXPECT_EQ(static_cast<uint32_t>(effect.type), FileValue<uint32_t>(world, *manager, "managerType"));
+	EXPECT_EQ(effect.synced, FileValue<uint8_t>(world, *manager, "managerSynced") != 0);
+	EXPECT_EQ(state.atomCount, FileValue<uint32_t>(world, *manager, "managerAtomCount"));
+	EXPECT_EQ(state.origin, FilePoint(world, *manager, "managerOrigin"));
+	EXPECT_EQ(state.globalAlpha, static_cast<float>(FileValue<uint8_t>(world, *manager, "managerAlpha")));
+	EXPECT_EQ(state.age, FileValue<float>(world, *manager, "managerAge"));
+	EXPECT_EQ(state.closing, (FileValue<uint32_t>(world, *manager, "managerFlags") & 1U) != 0);
+	EXPECT_EQ(state.direction, FilePoint(world, *manager, "managerDirection"));
+	EXPECT_EQ(state.magnitude, FileValue<float>(world, *manager, "managerMagnitude"));
+	EXPECT_EQ(state.closeAge, FileValue<float>(world, *manager, "managerCloseAge"));
+	EXPECT_EQ(state.firstStepTwice, FileValue<uint8_t>(world, *manager, "managerStepTwice") != 0);
+	// The process info: three words that are 0 in every save, the hand, the camera, the direction, the power, the spin
+	// and the enabled byte
+	const auto info = FileValue<std::array<float, 15>>(world, *manager, "managerInfo");
+	const auto infoWords = FileValue<std::array<uint32_t, 15>>(world, *manager, "managerInfo");
+	EXPECT_EQ(infoWords[0], 0U);
+	EXPECT_EQ(infoWords[1], 0U);
+	EXPECT_EQ(infoWords[2], 0U);
+	EXPECT_EQ(state.info.handPosition, glm::vec3(info[3], info[4], info[5]));
+	EXPECT_EQ(state.info.cameraForward, glm::vec3(info[6], info[7], info[8]));
+	EXPECT_EQ(state.info.direction, glm::vec3(info[9], info[10], info[11]));
+	EXPECT_EQ(state.info.power, info[12]);
+	EXPECT_EQ(state.info.spin, info[13]);
+	EXPECT_EQ(state.info.enabled, (infoWords[14] & 0xFFU) != 0);
+	// The flags keep a copy of whether the miracle is still cast
+	EXPECT_EQ(state.info.enabled, (FileValue<uint32_t>(world, *manager, "managerFlags") & 2U) != 0);
+	EXPECT_EQ(state.targets.size(), FileValue<uint32_t>(world, *manager, "targetObjectCount"));
+	EXPECT_EQ(state.targetPositions.size(), FileValue<uint32_t>(world, *manager, "targetPointCount"));
+	if (const auto player = world.Ref(*manager, "managerPlayer").value_or(0); player != 0)
+	{
+		EXPECT_EQ(state.player, static_cast<int>(world.Byte(*world.Record(player), "number").value_or(0xFF)));
+	}
+	else
+	{
+		EXPECT_EQ(state.player, -1);
+	}
+	const auto roots = world.Refs(*manager, "managerRoots");
+	ASSERT_EQ(state.roots.size(), roots.size());
+	size_t atoms = 0;
+	for (size_t i = 0; i < roots.size(); ++i)
+	{
+		CheckCollection(world, roots[roots.size() - 1 - i], state.roots[i], checked);
+		atoms += CountAtoms(state.roots[i]);
+	}
+	// The effect counts every atom of its tree
+	EXPECT_EQ(state.atomCount, atoms);
+}
+
+} // namespace
+
+TEST(VanillaParticleImport, ReadsAContainerAndItsWholeEffect)
+{
+	auto fake = GameAtTurn(5);
+	for (size_t list = 0; list < 44; ++list)
+	{
+		fake.Refs("lists",
+		          list == particle_import::k_ParticleContainerList ? std::vector<uint32_t> {2} : std::vector<uint32_t> {});
+	}
+	// 2: the container, 3: its system, 4: the manager, 5: the first collection, 6: its atom, 7: the sprite of the atom,
+	// 8: the data of the emitter, 9: the thing the effect follows
+	fake.Record(VanillaType::ParticleContainer)
+	    .Position(100, 200)
+	    .Value("containerSingleSort", uint8_t {1})
+	    .Ref("containerFollows", 9)
+	    .Ref("containerSystem", 3)
+	    .Value("containerTurns", int32_t {-10})
+	    .Value("containerScale", 1.5f);
+	fake.Record(VanillaType::ParticleSystem).Ref("systemManager", 4);
+	fake.Record(VanillaType::ParticleManager)
+	    .Value("managerAtomCount", uint32_t {1})
+	    .Ref("managerPlayer", 0)
+	    .Refs("managerRoots", {5})
+	    .Value("managerInfo", std::array<float, 15> {0.0f, 0.0f, 0.0f, 1.0f, 2.0f, 3.0f, 1.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f,
+	                                                 1.0f, 0.0f, std::bit_cast<float>(uint32_t {1})})
+	    .Value("managerOrigin", std::array<float, 3> {10.0f, 20.0f, 30.0f})
+	    .Value("managerAlpha", uint8_t {200})
+	    .Value("managerAge", 6.5f)
+	    .Value("managerFlags", uint32_t {3})
+	    .Value("managerDirection", std::array<float, 3> {0.0f, 0.0f, 1.0f})
+	    .Value("managerMagnitude", 2.0f)
+	    .Value("managerCloseAge", 0.5f)
+	    .Ref("managerSpell", 0)
+	    .Value("managerSynced", uint8_t {1})
+	    .Value("managerStepTwice", uint8_t {0})
+	    .Value("managerType", uint32_t {116})
+	    .Value("targetObjectCount", uint32_t {1})
+	    .Ref("targetObject", 9)
+	    .Value("targetPointCount", uint32_t {0});
+	fake.Record(VanillaType::AtomCollection)
+	    .Value("ruleCount", uint32_t {1})
+	    .Value("ruleFile", uint32_t {116})
+	    .Value("rule", uint32_t {4})
+	    .Refs("ruleData", {8})
+	    .Value("collectionBirth", 0.25f)
+	    .Ref("collectionManager", 4)
+	    .Value("collectionGroup", uint32_t {2})
+	    .Value("collectionFlags", uint8_t {0xCB})
+	    .Ref("collectionParent", 0)
+	    .Refs("collectionAtoms", {6})
+	    .Ref("collectionUnused", 0)
+	    .Value("collectionHierarchy", uint32_t {0})
+	    .Value("collectionAlpha", uint8_t {128});
+	std::array<float, 14> draw {2.0f, 0.0f, 0.0f, 0.0f, 2.0f, 0.0f, 0.0f, 0.0f, 2.0f, 4.0f, 5.0f, 6.0f, 2.0f, 0.0f};
+	std::memcpy(&draw[13], std::array<uint8_t, 4> {77, 0xCD, 0xCD, 0xCD}.data(), 4);
+	fake.Record(VanillaType::AtomCore)
+	    .Refs("atomCollections", {})
+	    .Refs("atomRuleData", {})
+	    .Refs("atomSounds", {})
+	    .Value("atomVelocity", std::array<float, 3> {0.0f, 1.0f, 0.0f})
+	    .Value("atomBirth", 6.0f)
+	    .Value("atomRotation", std::array<float, 12> {1.0f, 0.0f, 0.0f, 0.0f, 1.0f, 0.0f, 0.0f, 0.0f, 1.0f})
+	    .Value("atomBaseScale", 0.5f)
+	    .Value("atomRuleScale", 4.0f)
+	    .Value("atomStretch", 1.0f)
+	    .Value("atomPosition", std::array<float, 3> {4.0f, 5.0f, 6.0f})
+	    .Value("atomColour", std::array<uint8_t, 4> {30, 20, 10, 140})
+	    .Value("atomSpecular", uint32_t {0x010203})
+	    .Value("atomFlags", uint16_t {0xC0D4})
+	    .Value("atomPrevious", draw)
+	    .Value("atomCurrent", draw)
+	    .Value("atomPreviousFrame", 3.0f)
+	    .Value("atomFrame", 4.0f)
+	    .Value("atomAnimation", std::array<uint32_t, 3> {std::bit_cast<uint32_t>(13.5f), 9, 0x0101})
+	    .Value("atomGravity", 1.0f)
+	    .Ref("atomCollection", 5)
+	    .Ref("atomDrawOffset", 0)
+	    .Ref("atomRender", 7)
+	    .Value("atomRandom", uint8_t {99});
+	fake.Record(VanillaType::SpriteParticle).Value("spriteCreatorFile", uint32_t {116}).Value("spriteCreator", uint32_t {14});
+	fake.Record(VanillaType::EmitterRuleData)
+	    .Value("dataRuleFile", uint32_t {116})
+	    .Value("dataRule", uint32_t {4})
+	    .Value("emitterNext", 6.6f)
+	    .Value("emitterEmitted", uint32_t {42})
+	    .Value("emitterNotStarted", uint8_t {0});
+	fake.Record(VanillaType::Bonfire);
+	const auto world = fake.Make();
+
+	const auto read = particle_import::ReadContainers(world, SameNumber);
+	EXPECT_TRUE(read.skipped.empty());
+	ASSERT_EQ(read.containers.size(), 1U);
+	const auto& container = read.containers.front();
+	EXPECT_EQ(container.number, 2U);
+	EXPECT_EQ(container.position.x, 100);
+	EXPECT_TRUE(container.singleSort);
+	EXPECT_EQ(container.follows, 9U);
+	EXPECT_EQ(container.turns, -10);
+	EXPECT_EQ(container.scale, 1.5f);
+	Checked checked;
+	CheckEffect(world, 3, container.effect, checked);
+	EXPECT_EQ(checked.collections, 1U);
+	EXPECT_EQ(checked.atoms, 1U);
+	EXPECT_EQ(checked.emitters, 1U);
+	const auto& state = container.effect.state;
+	EXPECT_EQ(state.targets, std::vector<entt::entity> {SameNumber(9)});
+	const auto& collection = state.roots.front();
+	EXPECT_FALSE(collection.hierarchy);
+	EXPECT_TRUE(collection.interpolated);
+	EXPECT_FALSE(collection.emitting);
+	const auto& atom = collection.atoms.front();
+	EXPECT_EQ(atom.look, particles::RestoredLook::Sprite);
+	EXPECT_EQ(atom.rgba, (std::array<uint8_t, 4> {10, 20, 30, 140}));
+	EXPECT_EQ(atom.steps, 2);
+	EXPECT_TRUE(atom.visible);
+	EXPECT_EQ(atom.current.rotation, glm::mat3(1.0f));
+	EXPECT_EQ(atom.current.alpha, 77.0f);
+}
+
+TEST(VanillaParticleImport, AContainerOfAMiracleIsNotTaken)
+{
+	auto fake = GameAtTurn(5);
+	fake.Record(VanillaType::ParticleContainer).Ref("containerSystem", 3).Value("containerTurns", int32_t {-1});
+	fake.Record(VanillaType::ParticleSystem).Ref("systemManager", 4);
+	fake.Record(VanillaType::ParticleManager).Ref("managerSpell", 2).Refs("managerRoots", {});
+	const auto read = particle_import::ReadContainer(fake.Make(), 2, SameNumber);
+	EXPECT_FALSE(read.container.has_value());
+	EXPECT_NE(read.why.find("miracle"), std::string::npos);
+}
+
+TEST(VanillaParticleImport, SavedGamesOfLandOneKeepEveryValueOfTheirParticleContainers)
+{
+	Checked checked;
+	const auto files = ForEachLandOneSave([&checked](const std::filesystem::path& path, const VanillaWorld& world) {
+		const auto read = particle_import::ReadContainers(world, SameNumber);
+		EXPECT_TRUE(read.skipped.empty()) << path << " " << (read.skipped.empty() ? "" : read.skipped.front());
+		const auto list = world.Refs(*world.Fields(world.Game(), "lists").at(particle_import::k_ParticleContainerList));
+		ASSERT_EQ(read.containers.size(), list.size()) << path;
+		for (size_t i = 0; i < list.size(); ++i)
+		{
+			// The import takes the oldest container first, the file keeps the newest first
+			const auto& container = read.containers[i];
+			const auto* record = world.Record(list[list.size() - 1 - i]);
+			ASSERT_NE(record, nullptr);
+			EXPECT_EQ(container.number, record->number);
+			++checked.containers;
+			EXPECT_EQ(container.turns, FileValue<int32_t>(world, *record, "containerTurns"));
+			EXPECT_EQ(container.scale, FileValue<float>(world, *record, "containerScale"));
+			EXPECT_EQ(container.singleSort, FileValue<uint8_t>(world, *record, "containerSingleSort") == 1);
+			EXPECT_EQ(container.follows, world.Ref(*record, "containerFollows").value_or(0));
+			CheckEffect(world, world.Ref(*record, "containerSystem").value_or(0), container.effect, checked);
+			std::cout << path.generic_string() << " container " << container.number << ": type "
+			          << static_cast<uint32_t>(container.effect.type) << ", turns " << container.turns << " (file "
+			          << FileValue<int32_t>(world, *record, "containerTurns") << "), scale " << container.scale << " (file "
+			          << FileValue<float>(world, *record, "containerScale") << "), follows " << container.follows << ", age "
+			          << container.effect.state.age << ", atoms " << container.effect.state.atomCount << "\n";
+		}
+	});
+	if (!files.has_value())
+	{
+		GTEST_SKIP() << "Set OPENBLACK_VANILLA_SAVES to a copy of a Profiles folder of the game to check its saved games";
+	}
+	std::cout << "checked " << checked.containers << " containers, " << checked.effects << " effects, " << checked.collections
+	          << " collections, " << checked.atoms << " atoms, " << checked.emitters << " emitters\n";
+	EXPECT_GT(checked.containers, 0U);
+	EXPECT_GT(checked.atoms, 0U);
+	EXPECT_GT(checked.emitters, 0U);
+}
+
+TEST(VanillaParticleImport, SavedGamesOfLandOneGiveEachTempleHeartItsContainers)
+{
+	uint32_t beams = 0;
+	const auto files = ForEachLandOneSave([&beams](const std::filesystem::path& path, const VanillaWorld& world) {
+		const auto read = particle_import::ReadContainers(world, SameNumber);
+		for (const auto& temple : ecs::vanilla_script_import::ReadTemples(world))
+		{
+			for (const auto number : {temple.beams, temple.destructionBeams, temple.destructionGlow})
+			{
+				if (number == 0)
+				{
+					continue;
+				}
+				// Each container of a heart is a container of the game list, so the import starts its effect
+				EXPECT_TRUE(std::ranges::any_of(read.containers, [number](const auto& c) { return c.number == number; }))
+				    << path << " " << number;
+				++beams;
+				std::cout << path.generic_string() << " heart " << temple.heart << " holds container " << number << "\n";
+			}
+		}
+	});
+	if (!files.has_value())
+	{
+		GTEST_SKIP() << "Set OPENBLACK_VANILLA_SAVES to a copy of a Profiles folder of the game to check its saved games";
+	}
+	EXPECT_GT(beams, 0U);
+}
+
+TEST(VanillaParticleImport, SavedGamesOfLandOneKeepEveryValueOfTheirVorticesThatDrawThingsIn)
+{
+	uint32_t vortices = 0;
+	Checked checked;
+	const auto files = ForEachLandOneSave([&](const std::filesystem::path& path, const VanillaWorld& world) {
+		const auto read = particle_import::ReadVorticesIn(world, SameNumber);
+		EXPECT_TRUE(read.skipped.empty()) << path;
+		for (const auto& vortex : read.vortices)
+		{
+			const auto* record = world.Record(vortex.number);
+			ASSERT_NE(record, nullptr);
+			++vortices;
+			EXPECT_EQ(vortex.centre, FilePoint(world, *record, "vortexCentre"));
+			EXPECT_EQ(static_cast<uint32_t>(vortex.state), FileValue<uint32_t>(world, *record, "vortexState"));
+			// A vortex that draws things in is of the first kind
+			EXPECT_EQ(FileValue<uint32_t>(world, *record, "vortexType"), static_cast<uint32_t>(VortexType::In));
+			EXPECT_EQ(vortex.altitude, FileValue<float>(world, *record, "vortexAltitude"));
+			EXPECT_EQ(vortex.groundAverage, FileValue<float>(world, *record, "vortexGroundAverage"));
+			EXPECT_EQ(vortex.groundHeights.size(), FileValue<uint32_t>(world, *record, "vortexGroundCount"));
+			// The five words that only the save and the load use are 0
+			const auto* words = world.Field(*record, "vortexWords");
+			ASSERT_NE(words, nullptr);
+			EXPECT_EQ(words->count, 5U);
+			const auto bytes = world.Raw(*record, "vortexWords");
+			EXPECT_TRUE(std::ranges::all_of(bytes, [](uint8_t b) { return b == 0; })) << path;
+			ASSERT_TRUE(vortex.mover.has_value());
+			CheckEffect(world, world.Ref(*record, "vortexMover").value_or(0), *vortex.mover, checked);
+			std::cout << path.generic_string() << " vortex " << vortex.number << ": state "
+			          << static_cast<uint32_t>(vortex.state) << ", altitude " << vortex.altitude << ", mover type "
+			          << static_cast<uint32_t>(vortex.mover->type) << ", crossing bytes "
+			          << (vortex.crossing.has_value() ? vortex.crossing->size() : 0) << "\n";
+		}
+	});
+	if (!files.has_value())
+	{
+		GTEST_SKIP() << "Set OPENBLACK_VANILLA_SAVES to a copy of a Profiles folder of the game to check its saved games";
+	}
+	EXPECT_GT(vortices, 0U);
+}
+
+TEST(VanillaParticleImport, SavedGamesOfLandOneHaveEachAtomOfTheFileInAnEffectThatTheImportStarts)
+{
+	size_t atoms = 0;
+	const auto files = ForEachLandOneSave([&atoms](const std::filesystem::path& path, const VanillaWorld& world) {
+		size_t imported = 0;
+		const auto count = [&imported](const particles::RestoredEffect& state) {
+			for (const auto& root : state.roots)
+			{
+				imported += CountAtoms(root);
+			}
+		};
+		for (const auto& container : particle_import::ReadContainers(world, SameNumber).containers)
+		{
+			count(container.effect.state);
+		}
+		for (const auto& vortex : particle_import::ReadVorticesIn(world, SameNumber).vortices)
+		{
+			if (vortex.mover.has_value())
+			{
+				count(vortex.mover->state);
+			}
+		}
+		EXPECT_EQ(imported, world.OfType(VanillaType::AtomCore).size()) << path;
+		atoms += imported;
+	});
+	if (!files.has_value())
+	{
+		GTEST_SKIP() << "Set OPENBLACK_VANILLA_SAVES to a copy of a Profiles folder of the game to check its saved games";
+	}
+	EXPECT_GT(atoms, 0U);
+}
+
+TEST(VanillaParticleImport, SavedGamesOfLandOneHaveEveryContainerAndVortexThatTheScriptsHold)
+{
+	uint32_t held = 0;
+	const auto files = ForEachLandOneSave([&held](const std::filesystem::path& path, const VanillaWorld& world) {
+		const auto table = ecs::vanilla_script_import::ReadScriptTable(world);
+		ASSERT_TRUE(table.has_value());
+		const auto containers = particle_import::ReadContainers(world, SameNumber);
+		const auto vortices = particle_import::ReadVorticesIn(world, SameNumber);
+		for (const auto& place : table->places)
+		{
+			const auto* record = place.number != 0 ? world.Record(place.number) : nullptr;
+			if (record == nullptr)
+			{
+				continue;
+			}
+			if (record->Is(VanillaType::ParticleContainer))
+			{
+				++held;
+				EXPECT_TRUE(
+				    std::ranges::any_of(containers.containers, [&place](const auto& c) { return c.number == place.number; }))
+				    << path << " " << place.number;
+			}
+			else if (record->Is(VanillaType::LandscapeVortexIn))
+			{
+				++held;
+				EXPECT_TRUE(
+				    std::ranges::any_of(vortices.vortices, [&place](const auto& v) { return v.number == place.number; }))
+				    << path << " " << place.number;
+			}
+		}
+	});
+	if (!files.has_value())
+	{
+		GTEST_SKIP() << "Set OPENBLACK_VANILLA_SAVES to a copy of a Profiles folder of the game to check its saved games";
+	}
+	EXPECT_GT(held, 0U);
 }

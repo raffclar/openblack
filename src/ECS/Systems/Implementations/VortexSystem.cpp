@@ -876,6 +876,61 @@ bool VortexSystem::LoadState(reflection::BinaryReader& in)
 	return true;
 }
 
+entt::entity VortexSystem::Restore(const RestoredVortex& saved)
+{
+	const auto* info = InfoOf(saved.type);
+	if (info == nullptr)
+	{
+		return entt::null;
+	}
+	const auto ground = Locator::terrainSystem::value().GetHeightAt({saved.position.x, saved.position.z});
+	const glm::vec3 centre {saved.position.x, ground + saved.altitude, saved.position.z};
+	const auto entity = archetypes::VortexArchetype::Create(centre, saved.type, saved.state, Locator::time::value().GetTurn());
+	auto& vortex = Locator::entitiesRegistry::value().Get<Vortex>(entity);
+	vortex.altitude = saved.altitude;
+	vortex.arrival.gatheringPlace = centre;
+	// The land is levelled again from the saved heights at the next turn
+	vortex.groundHeights = saved.groundHeights;
+	vortex.groundAverage = saved.groundAverage;
+	// The effect that draws things in continues from its saved state; the other effects start again, as they do in the
+	// game's load
+	if (saved.mover && Locator::effectRequestSystem::has_value() && info->particleTypeObjectMover != ParticleType::None)
+	{
+		auto& effects = Locator::effectRequestSystem::value();
+		vortex.objectMoverEffect = effects.Start({
+		    .type = info->particleTypeObjectMover,
+		    .position = vortex.centre,
+		    .synced = true,
+		    .direction = glm::vec3(0.0f),
+		    .sink = &g_noMiracle,
+		    .restored = saved.mover,
+		});
+		if (!effects.IsRunning(vortex.objectMoverEffect))
+		{
+			vortex.objectMoverEffect = k_NoEffectHandle;
+		}
+	}
+	StartEffects(vortex);
+	const auto path = CrossingFilePath();
+	if (saved.crossing.has_value() && path.has_value())
+	{
+		// The saved text takes the place of the crossing file, and the vortex writes after it
+		_crossing.Close();
+		std::error_code error;
+		std::filesystem::create_directories(path->parent_path(), error);
+		{
+			std::ofstream file(*path, std::ios::binary | std::ios::trunc);
+			file.write(reinterpret_cast<const char*>(saved.crossing->data()),
+			           static_cast<std::streamsize>(saved.crossing->size()));
+		}
+		if (_crossing.Resume(entity, *path) && !_vortexGone)
+		{
+			_vortexGone = Locator::entitiesRegistry::value().OnDestroy<Vortex>().connect<&VortexSystem::OnVortexGone>(*this);
+		}
+	}
+	return entity;
+}
+
 void VortexSystem::StartAgainAfterLoad()
 {
 	auto* effects = Locator::effectRequestSystem::has_value() ? &Locator::effectRequestSystem::value() : nullptr;

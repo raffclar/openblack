@@ -96,10 +96,10 @@ void SetPoisoned(Registry& registry, entt::entity thing, uint32_t value)
 	}
 	if (const auto* pit = registry.TryGet<const components::StoragePit>(thing))
 	{
-		// Only the food pile, and it keeps the poison that it has: a store is never cured by a script
+		// Only the food pile changes. A value of 0 cures the pile, so a script can cure the store (deviation 179).
 		if (auto* pile = PileOf(registry, pit->foodPile))
 		{
-			pile->poisoned = value != 0u || pile->poisoned;
+			pile->poisoned = value != 0u;
 		}
 		return;
 	}

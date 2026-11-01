@@ -31,6 +31,7 @@
 #include "ParticleBlast.h"
 #include "ParticleClassRegistry.h"
 #include "ParticleCreators.h"
+#include "ParticleImport.h"
 #include "ParticleMaths.h"
 #include "ParticleSurfaces.h"
 
@@ -170,8 +171,10 @@ Effect::Effect(std::shared_ptr<const psys::ParticleFile> file, EffectServices se
 	_deleteOnCloseDown = _file->header.Bool("DeleteOnCloseDown", true);
 	_maxSpellAge = _file->header.Float("MaxSpellAge", -1.0f);
 
-	for (const auto& object : _file->objects)
+	_objectModifiers.assign(_file->objects.size(), -1);
+	for (size_t index = 0; index < _file->objects.size(); ++index)
 	{
+		const auto& object = _file->objects[index];
 		if (const auto* factory = _services.classes.FindCreator(object.className))
 		{
 			_creators.insert_or_assign(object.name, (*factory)(object));
@@ -213,6 +216,7 @@ Effect::Effect(std::shared_ptr<const psys::ParticleFile> file, EffectServices se
 		if (modifier->group >= 0 && modifier->group < static_cast<int>(k_GroupCount))
 		{
 			_groups.at(static_cast<size_t>(modifier->group)).push_back(modifier.get());
+			_objectModifiers[index] = static_cast<int>(_modifiers.size());
 			_modifiers.push_back(std::move(modifier));
 		}
 	}
@@ -1396,6 +1400,172 @@ std::unique_ptr<Collection> Effect::LoadSubtree(EffectReader& in, Atom* parent)
 	if (collection)
 	{
 		LoadRuleState(*collection, in);
+	}
+	return collection;
+}
+
+bool Effect::Adopt(const RestoredEffect& saved)
+{
+	// The new collections are made first, so that a state that does not agree with the file changes nothing
+	std::vector<std::unique_ptr<Collection>> roots;
+	for (const auto& root : saved.roots)
+	{
+		auto collection = AdoptCollection(root, nullptr);
+		if (!collection)
+		{
+			return false;
+		}
+		roots.push_back(std::move(collection));
+	}
+	_roots = std::move(roots);
+	_origin = saved.origin;
+	_magnitude = saved.magnitude;
+	_age = saved.age;
+	_closeAge = saved.closeAge;
+	_closing = saved.closing;
+	_firstStepTwice = saved.firstStepTwice;
+	_atomCount = saved.atomCount;
+	_player = saved.player;
+	_globalAlpha = saved.globalAlpha;
+	_direction = saved.direction;
+	SetProcessInfo(saved.info);
+	_targets = saved.targets;
+	_targetPositions = saved.targetPositions;
+	return true;
+}
+
+const Creator* Effect::PointCreatorOfGroup(int group) const
+{
+	const Creator* found = nullptr;
+	for (const auto& object : _file->objects)
+	{
+		if (object.Int("Group", -1) != group)
+		{
+			continue;
+		}
+		const auto* creator = FindCreator(object.String("PCreator"));
+		if (creator == nullptr || creator->kind != Creator::Kind::Point)
+		{
+			continue;
+		}
+		if (found != nullptr && found != creator)
+		{
+			return nullptr;
+		}
+		found = creator;
+	}
+	return found;
+}
+
+std::unique_ptr<Collection> Effect::AdoptCollection(const RestoredCollection& saved, Atom* parent) const
+{
+	if (saved.group < 0 || saved.group >= static_cast<int>(k_GroupCount))
+	{
+		return nullptr;
+	}
+	auto collection = std::make_unique<Collection>();
+	collection->group = saved.group;
+	collection->parent = parent;
+	collection->birth = saved.birth;
+	collection->alpha = saved.alpha;
+	collection->emitting = saved.emitting;
+	collection->interpolated = saved.interpolated;
+	collection->hierarchy = saved.hierarchy;
+	const auto objectOf = [this](const Modifier* modifier) {
+		const auto found = std::ranges::find(_objectModifiers, ModifierNumber(modifier));
+		return found != _objectModifiers.end() ? static_cast<int>(found - _objectModifiers.begin()) : -1;
+	};
+	// Every rule that the save names must be a rule of the group
+	for (const auto rule : saved.rules)
+	{
+		if (rule < 0 || rule >= static_cast<int>(_objectModifiers.size()) || _objectModifiers[static_cast<size_t>(rule)] < 0 ||
+		    ModifierAt(_objectModifiers[static_cast<size_t>(rule)])->group != saved.group)
+		{
+			return nullptr;
+		}
+	}
+	const Modifier* objectRule = nullptr;
+	for (const auto* modifier : _groups.at(static_cast<size_t>(saved.group)))
+	{
+		const auto object = objectOf(modifier);
+		auto& slot = collection->modifiers.emplace_back(Collection::Slot {.modifier = modifier});
+		slot.attached = std::ranges::find(saved.rules, object) != saved.rules.end();
+		if (const auto emitter = std::ranges::find(saved.emitters, object, &RestoredEmitter::rule);
+		    emitter != saved.emitters.end())
+		{
+			slot.emitter = emitter->clock;
+		}
+		if (object >= 0 && _file->objects[static_cast<size_t>(object)].className == "CreateRule_GameObjectRef")
+		{
+			objectRule = modifier;
+		}
+	}
+	for (const auto& savedAtom : saved.atoms)
+	{
+		auto& atom = *collection->atoms.emplace_back(std::make_unique<Atom>());
+		atom.collection = collection.get();
+		switch (savedAtom.look)
+		{
+		case RestoredLook::Point:
+			atom.creator = PointCreatorOfGroup(saved.group);
+			break;
+		case RestoredLook::Sprite:
+			if (!savedAtom.creator.has_value() || *savedAtom.creator < 0 ||
+			    *savedAtom.creator >= static_cast<int>(_file->objects.size()))
+			{
+				return nullptr;
+			}
+			atom.creator = FindCreator(_file->objects[static_cast<size_t>(*savedAtom.creator)].name);
+			if (atom.creator == nullptr)
+			{
+				return nullptr;
+			}
+			break;
+		case RestoredLook::ObjectRef:
+		case RestoredLook::GoldenShower:
+			// The rule that keeps atoms on objects made it, with the creator that the rule names
+			if (objectRule == nullptr)
+			{
+				return nullptr;
+			}
+			atom.creator = FindCreator(_file->objects[static_cast<size_t>(objectOf(objectRule))].String("PCreator"));
+			atom.data[objectRule].object = savedAtom.object;
+			if (savedAtom.look == RestoredLook::GoldenShower)
+			{
+				atom.shower = std::make_shared<ObjectShower>(ObjectShower {.object = savedAtom.object});
+			}
+			break;
+		}
+		atom.position = savedAtom.position;
+		atom.velocity = savedAtom.velocity;
+		atom.rotation = savedAtom.rotation;
+		atom.baseScale = savedAtom.baseScale;
+		atom.ruleScale = savedAtom.ruleScale;
+		atom.stretch = savedAtom.stretch;
+		atom.rgba = savedAtom.rgba;
+		atom.specular = savedAtom.specular;
+		atom.birth = savedAtom.birth;
+		atom.visible = savedAtom.visible;
+		atom.frame = savedAtom.current.frame;
+		atom.frameRate = savedAtom.frameRate;
+		atom.playAnim = savedAtom.playAnim;
+		atom.gravity = savedAtom.gravity;
+		atom.random = savedAtom.random;
+		atom.deflected = savedAtom.deflected;
+		atom.previous = savedAtom.previous;
+		atom.current = savedAtom.current;
+		atom.steps = savedAtom.steps;
+		atom.drawn = savedAtom.steps > 0;
+		atom.drawOnFirstUpdate = savedAtom.drawOnFirstUpdate;
+		for (const auto& sub : savedAtom.collections)
+		{
+			auto child = AdoptCollection(sub, &atom);
+			if (!child)
+			{
+				return nullptr;
+			}
+			atom.subCollections.push_back(std::move(child));
+		}
 	}
 	return collection;
 }

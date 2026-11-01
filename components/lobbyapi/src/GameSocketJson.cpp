@@ -40,6 +40,7 @@ constexpr std::string_view k_StartTransfer = "start.transfer";
 constexpr std::string_view k_StartCreature = "start.creature";
 constexpr std::string_view k_StopRequest = "game.stop_request";
 constexpr std::string_view k_GameStop = "game.stop";
+constexpr std::string_view k_RoomChat = "room.chat";
 
 /// The most god slots that a frame can name
 constexpr uint64_t k_MostSlots = 32;
@@ -515,6 +516,15 @@ std::optional<Frame> ParseObject(const Json& object, std::string_view type)
 		}
 		return GameStop {.turn = static_cast<uint32_t>(turn)};
 	}
+	if (type == k_RoomChat)
+	{
+		RoomChat chat;
+		if (!ReadString(object, "text", chat.text) || !ReadString(object, "from", chat.from, false))
+		{
+			return std::nullopt;
+		}
+		return chat;
+	}
 	return std::nullopt;
 }
 
@@ -640,6 +650,14 @@ std::string ToJson(const Frame& frame)
 		    else if constexpr (std::is_same_v<Kind, GameStop>)
 		    {
 			    object = Json {{"type", k_GameStop}, {"turn", value.turn}};
+		    }
+		    else if constexpr (std::is_same_v<Kind, RoomChat>)
+		    {
+			    object = Json {{"type", k_RoomChat}, {"text", value.text}};
+			    if (!value.from.empty())
+			    {
+				    object["from"] = value.from;
+			    }
 		    }
 		    else
 		    {

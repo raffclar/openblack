@@ -27,9 +27,9 @@ namespace openblack::ecs::script_poison
 /// thing is not.
 [[nodiscard]] bool IsPoisoned(const Registry& registry, entt::entity thing);
 
-/// What a script's value does to a thing. A living thing, a pile and a handful take the lowest bit of the value, so they
-/// can be cured. A storage pit poisons its food pile when the value is not 0, if it has the pile, and it never cures
-/// anything: the pile keeps the poison it has. Any other thing does nothing.
+/// What a script's value does to a thing. A living thing, a pile and a handful take the lowest bit of the value, so a
+/// script can cure them. A storage pit poisons its food pile when the value is not 0, and cures it when the value is 0.
+/// A storage pit with no food pile does nothing. Any other thing does nothing.
 void SetPoisoned(Registry& registry, entt::entity thing, uint32_t value);
 
 } // namespace openblack::ecs::script_poison
