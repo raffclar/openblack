@@ -1112,19 +1112,32 @@ TEST_F(FrontEndTest, TheStartGivesTheSessionToTheNetworkGame)
 TEST_F(FrontEndTest, TheRoomChatUsesTheServersChannel)
 {
 	ToRoom();
+	// The own line shows at once, cut to the chat box's length, and goes to the room's channel
 	frontEnd->SendChat(std::u16string(300, u'a'));
 	EXPECT_EQ(lobby.chatChannel, "server-w1");
 	EXPECT_EQ(lobby.chatText.size(), 254u);
+	ASSERT_EQ(frontEnd->GetChat().size(), 1u);
+	EXPECT_EQ(frontEnd->GetChat()[0].text, u"Alice> " + std::u16string(254, u'a'));
+	EXPECT_EQ(frontEnd->GetChat()[0].colour, OwnLineColour());
+	// The lobby sends the line back to the sender too: the game leaves that copy out
+	lobby.Event("chat.line",
+	            R"({"channel":"server-w1","from":{"id":7,"name":"Alice"},"text":")" + std::string(254, 'a') + R"("})");
 	lobby.Event("chat.line", R"({"channel":"server-w1","from":{"id":3,"name":"Bob"},"text":"hello"})");
-	lobby.Event("chat.line", R"({"channel":"server-w1","from":{"id":7,"name":"Alice"},"text":"hi"})");
 	// A line of another channel is not the room's
 	lobby.Event("chat.line", R"({"channel":"lobby","from":{"id":3,"name":"Bob"},"text":"elsewhere"})");
 	const auto& chat = frontEnd->GetChat();
 	ASSERT_EQ(chat.size(), 2u);
-	EXPECT_EQ(chat[0].text, u"Bob: hello");
-	EXPECT_EQ(chat[0].colour, GodColour(1));
-	EXPECT_EQ(chat[1].text, u"Alice> hi");
-	EXPECT_EQ(chat[1].colour, OwnLineColour());
+	EXPECT_EQ(chat[1].text, u"Bob: hello");
+	EXPECT_EQ(chat[1].colour, GodColour(1));
+}
+
+TEST_F(FrontEndTest, TheRoomChatShowsTheOwnLineEvenIfTheLobbyDropsIt)
+{
+	ToRoom();
+	frontEnd->SendChat(u"hello");
+	// No line comes back from the lobby
+	ASSERT_EQ(frontEnd->GetChat().size(), 1u);
+	EXPECT_EQ(frontEnd->GetChat()[0].text, u"Alice> hello");
 }
 
 TEST_F(FrontEndTest, TheRoomChatSendsNoLineOfOnlySpaces)
