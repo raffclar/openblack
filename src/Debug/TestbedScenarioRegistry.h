@@ -1149,6 +1149,9 @@ struct Command
 		/// The player's hand taps the entrance of the player's temple, as the Action button does: the tap goes to the
 		/// game turn as the hand's command. Needs no creature.
 		TapTempleEntrance,
+		/// The town that the land's script made with a number (value) believes this much (amount) in the player and
+		/// nothing in the other gods. Then the town goes to the player at its next check. Needs no creature.
+		GiveLandTown,
 	};
 	Kind kind {Kind::Stop};
 	/// Which creature, by its place in the scenario's creatures

@@ -1902,6 +1902,37 @@ void AddThirdLandPrison(std::vector<Scenario>& all)
 	                  .scriptArguments = {{.kind = Argument::Kind::Result},
 	                                      {.kind = Argument::Kind::Position, .point = k_FarFromPrison}}}},
 	});
+	// The numbers that the land's script gave the villages of the three pillars
+	static constexpr size_t k_EgyptianVillage = 2;
+	static constexpr size_t k_IndianVillage = 3;
+	static constexpr size_t k_JapaneseVillage = 4;
+	all.push_back({
+	    .id = "story.l3_third_village_in_second_scene",
+	    .name = "Story: the third village of the prison goes to the player while the second pillar's scene plays",
+	    .facet = Facet::Story,
+	    .description = "The third land loads with its own scripts and sky, and the player's Tiger stands on it. Its set-up "
+	                   "script and its prison script run, and the pillars freeze the Tiger every 3 seconds. The Japanese "
+	                   "village goes to the player, then the Indian village after the first pillar's scene. Ten seconds "
+	                   "later, while the second pillar's scene plays, the Egyptian village goes to the player.",
+	    .expected = "The first and second pillars sink. The second scene sees three pillars down and plays the release. "
+	                "The third pillar froze the Tiger again just before, and every freeze added its time to the ice. So the "
+	                "Tiger stays in the ice and does not play its release animation until the added time runs out. Then "
+	                "the third scene plays the release again. This is the land's script as it is written.",
+	    .environment = {.land = Land::Story, .storyLand = "Land3.txt", .dispenserGrid = false},
+	    .framing = {.shot = Shot::Overview, .include = {{-40.0f, -40.0f}, {40.0f, 40.0f}}},
+	    .creatures = {{.label = "player's tiger",
+	                   .species = CreatureType::Tiger,
+	                   .phase = 3,
+	                   .needs = {.energy = 1.0f, .exhaustion = 0.0f, .dehydration = 0.0f, .poo = 0.0f, .life = 1.0f}}},
+	    .commands = {{.kind = Kind::RunScript,
+	                  .delaySeconds = 0.5f,
+	                  .script = "SetupLand3",
+	                  .scriptGlobals = {{"MyCreature", {.kind = Argument::Kind::Creature, .index = 0}}}},
+	                 {.kind = Kind::RunScript, .delaySeconds = 1.0f, .script = "FreeTheCreature"},
+	                 {.kind = Kind::GiveLandTown, .delaySeconds = 10.0f, .value = k_JapaneseVillage, .amount = 5.0f},
+	                 {.kind = Kind::GiveLandTown, .delaySeconds = 90.0f, .value = k_IndianVillage, .amount = 5.0f},
+	                 {.kind = Kind::GiveLandTown, .delaySeconds = 10.0f, .value = k_EgyptianVillage, .amount = 5.0f}},
+	});
 }
 
 /// The Pied Piper of the first land. The game's script runs at the same map positions as on the first land, with the
@@ -14151,9 +14182,10 @@ bool testbed_scenarios::NeedsNoCreature(Command::Kind kind)
 	       kind == Kind::SetOpenClose || kind == Kind::LayGateStone || kind == Kind::HandTapObject || kind == Kind::Advisor ||
 	       kind == Kind::RunText || kind == Kind::PlayHandDemo || kind == Kind::Reframe || kind == Kind::DestroyTemple ||
 	       kind == Kind::RunHelpMessage || kind == Kind::EndGuidanceWaits || kind == Kind::SetTownBeliefInRival ||
-	       kind == Kind::RecordChallenge || kind == Kind::EnterTemple || kind == Kind::HandTake || kind == Kind::HandApply ||
-	       kind == Kind::HandTakeShownSeed || kind == Kind::RunScript || kind == Kind::PlayBoatFilm || kind == Kind::HandPour ||
-	       kind == Kind::HandRelease || kind == Kind::SetReportLatency || kind == Kind::RemoveObject || kind == Kind::ReadTip ||
+	       kind == Kind::GiveLandTown || kind == Kind::RecordChallenge || kind == Kind::EnterTemple || kind == Kind::HandTake ||
+	       kind == Kind::HandApply || kind == Kind::HandTakeShownSeed || kind == Kind::RunScript ||
+	       kind == Kind::PlayBoatFilm || kind == Kind::HandPour || kind == Kind::HandRelease ||
+	       kind == Kind::SetReportLatency || kind == Kind::RemoveObject || kind == Kind::ReadTip ||
 	       kind == Kind::LookAtTempleScroll || kind == Kind::HandGripTotem || kind == Kind::ProfileFolderCheck ||
 	       kind == Kind::PlayCustomMusic || kind == Kind::ShowCustomMusicControls || kind == Kind::OwnTattooPicture ||
 	       kind == Kind::OpenTattooMenu || kind == Kind::OpenControlsBox || kind == Kind::OpenMenuPage ||
@@ -14199,7 +14231,7 @@ std::string_view testbed_scenarios::Name(Shot shot)
 
 std::string_view testbed_scenarios::Name(Command::Kind kind)
 {
-	constexpr std::array<std::string_view, 211> k_Names {
+	constexpr std::array<std::string_view, 212> k_Names {
 	    "walk to",
 	    "run to",
 	    "follow",
@@ -14411,6 +14443,7 @@ std::string_view testbed_scenarios::Name(Command::Kind kind)
 	    "tap a worship site icon",
 	    "change the body's look",
 	    "tap the temple's entrance",
+	    "give a town of the land to the player",
 	};
 	return k_Names.at(static_cast<size_t>(kind));
 }
