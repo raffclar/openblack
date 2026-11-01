@@ -270,6 +270,8 @@ public:
 	[[nodiscard]] bool InGame() const override { return session.GetState() != online::NetworkSession::State::Ended; }
 	[[nodiscard]] const online::NetworkSession* Session() const override { return &session; }
 	[[nodiscard]] std::optional<online::StartEvent> TakeStartEvent() override { return session.TakeStartEvent(); }
+	void SendRoomChat(std::string text) override { session.SendRoomChat(text); }
+	[[nodiscard]] std::vector<game_socket::RoomChat> TakeRoomChat() override { return session.TakeRoomChat(); }
 
 	int64_t now {0};
 	online::NetworkSession session;
@@ -1159,10 +1161,9 @@ TEST_F(FrontEndTest, TheLanRoomChatGoesThroughTheGameServer)
 	EXPECT_EQ(frontEnd->GetChat()[0].colour, OwnLineColour());
 	Step();
 	const auto& sent = sockets.sockets.at(socket).sent;
-	ASSERT_FALSE(sent.empty());
-	EXPECT_EQ(sent.back().Text(), R"({"text":")" + std::string(254, 'a') + R"(","type":"room.chat"})");
-	EXPECT_EQ(
-	    std::ranges::count_if(sent, [](const auto& frame) { return frame.Text().find("room.chat") != std::string::npos; }), 1);
+	const auto isChat = [](const auto& frame) { return frame.Text().find("room.chat") != std::string::npos; };
+	ASSERT_EQ(std::ranges::count_if(sent, isChat), 1);
+	EXPECT_EQ(std::ranges::find_if(sent, isChat)->Text(), R"({"text":")" + std::string(254, 'a') + R"(","type":"room.chat"})");
 	EXPECT_TRUE(lobby.chatChannel.empty());
 	// The server sends the lines of the other players, each in the colour of the player's god
 	sockets.ServerText(socket, game_socket::ToJson(game_socket::RoomChat {.from = "Bob", .text = "hello"}));
