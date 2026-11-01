@@ -439,7 +439,8 @@ void ReadWallHug(WorldReader& r)
 	{
 		r.Byte("turnsUntilStepRebuild");
 	}
-	r.Ref("footpath");
+	// The footpath that the walker goes on along when the footpath that it walks ends
+	r.Ref("nextFootpath");
 	r.Coords("goal");
 	r.Ref("target");
 	r.Bytes(12, "step");
@@ -855,8 +856,9 @@ void ReadAbode(WorldReader& r)
 std::array<uint8_t, 2> ReadLiving(WorldReader& r)
 {
 	ReadWallHug(r);
-	r.Ref("footpathLink");
-	r.Ref("footpathNode");
+	// The footpath that the living thing walks and the node of the footpath that it walks to
+	r.Ref("walkFootpath");
+	r.Ref("walkFootpathNode");
 	// The three states, a spare byte and the turns since the last change of state
 	const auto action = r.Bytes(6, "action");
 	r.Ref("reaction");

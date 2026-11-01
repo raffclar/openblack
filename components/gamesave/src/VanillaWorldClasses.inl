@@ -365,14 +365,18 @@ void ReadFootpathLink(WorldReader& r)
 void ReadFootpath(WorldReader& r)
 {
 	r.Refs("nodes");
-	r.Word("word20");
+	// Not 0 when walkers can take the footpath
+	r.Word("walkable");
 }
 
 void ReadFootpathNode(WorldReader& r)
 {
 	r.Coords("pos");
-	r.Byte("byte14");
-	r.Refs("links");
+	// Bit 1: a plan laid the node. Bit 2: the node is under a thing. Bit 3: the node marks a thing that the footpath
+	// goes round.
+	r.Byte("nodeFlags");
+	// The living things that walk to the node
+	r.Refs("followers");
 }
 
 void ReadStoragePit(WorldReader& r)
@@ -496,7 +500,8 @@ void ReadForest(WorldReader& r)
 {
 	ReadContainer(r);
 	r.Word("scenic");
-	r.Ref();
+	// The footpaths that lead to the forest
+	r.Ref("footpathLink");
 	r.Word("forestId");
 	r.Refs("grownTrees");
 	r.Refs("growingTrees");
@@ -979,7 +984,8 @@ void ReadDance(WorldReader& r)
 	r.Word();
 	r.Bytes(16);
 	r.Word();
-	r.Ref();
+	// The footpaths that lead to the dance
+	r.Ref("footpathLink");
 }
 
 void ReadGroupBehaviour(WorldReader& r)

@@ -44,6 +44,7 @@ public:
 	void ProcessObstacleChanges() override;
 	void CatchUpWithMap() override;
 	void ProcessTurn() override;
+	std::vector<entt::entity> PutLoadedFootpaths(std::span<const components::Footpath> footpaths) override;
 	[[nodiscard]] std::optional<std::vector<glm::ivec2>> PlanBetween(glm::ivec2 from, glm::ivec2 to) const override;
 
 private:
