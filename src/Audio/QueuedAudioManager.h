@@ -81,7 +81,8 @@ public:
 	void PlaySound(entt::id_type id, PlayType type) override;
 	void PlaySoundEffect(entt::id_type id, std::optional<glm::vec3> worldPosition) override;
 	void StopSoundEffect(entt::id_type id) override;
-	[[nodiscard]] bool IsSoundEffectPlaying(entt::id_type id) const override;
+	void StopNumberedSoundEffect(entt::id_type id, uint32_t ownerNumber) override;
+	[[nodiscard]] bool IsNumberedSoundEffectPlaying(entt::id_type id, uint32_t ownerNumber) const override;
 	entt::entity StartSoundEffect(entt::id_type id, const SoundEffectOptions& options) override;
 	void SetEmitterPosition(entt::entity emitter, const glm::vec3& position) override;
 	void SetEmitterFollows(entt::entity emitter, Follows follows) override;
