@@ -11,8 +11,11 @@
 
 #include <cmath>
 
+#include <algorithm>
+#include <array>
 #include <functional>
 #include <string>
+#include <string_view>
 
 #include <fmt/format.h>
 #include <glm/trigonometric.hpp>
@@ -40,6 +43,7 @@
 #include "ECS/Systems/EditorSystemInterface.h"
 #include "ECS/Systems/LivingActionSystemInterface.h"
 #include "ECS/VillagerAge.h"
+#include "Editor/EditorActions.h"
 #include "Editor/EditorContext.h"
 #include "Editor/EditorEntities.h"
 #include "Editor/EditorMath.h"
@@ -218,25 +222,31 @@ void InspectorPanel::DrawHeader(EditorContext& context, entt::entity entity) noe
 		context.system.SetCameraMode(mode == CameraMode::Follow ? CameraMode::Free : CameraMode::Follow);
 	}
 	ImGui::SameLine();
-	ImGui::BeginDisabled(!ItemOf(context.registry, entity).has_value());
+	const auto& selection = context.system.GetSelection();
+	const auto picks = selection.Count();
+	ImGui::BeginDisabled(std::ranges::none_of(selection.All(), [&context](entt::entity picked) {
+		return context.registry.Valid(picked) && ItemOf(context.registry, picked).has_value();
+	}));
 	if (ImGui::Button("Duplicate"))
 	{
-		if (const auto copy = Duplicate(entity, {8.0f, 0.0f}))
-		{
-			context.system.GetSelection().Select(*copy);
-		}
+		DuplicatePicked(context);
 	}
 	ImGui::EndDisabled();
-	ImGui::SetItemTooltip("A copy beside it (Ctrl+D)");
+	ImGui::SetItemTooltip(picks > 1 ? "A copy beside each picked thing (Ctrl+D)" : "A copy beside it (Ctrl+D)");
 	ImGui::SameLine();
 	ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.55f, 0.20f, 0.20f, 1.0f));
 	if (ImGui::Button("Delete"))
 	{
-		context.system.GetSelection().Clear();
-		Remove(entity);
+		DeletePicked(context);
 	}
 	ImGui::PopStyleColor();
-	ImGui::SetItemTooltip("Remove it from the land (Delete)");
+	ImGui::SetItemTooltip(picks > 1 ? "Remove all the picked things from the land (Delete). Undo makes them again "
+	                                  "as the palette makes them."
+	                                : "Remove it from the land (Delete). Undo makes it again as the palette makes it.");
+	if (picks > 1)
+	{
+		ImGui::TextColored(style::k_Muted, "%zu things picked: the sections below show the main pick", picks);
+	}
 }
 
 void InspectorPanel::DrawTransform(EditorContext& context, entt::entity entity) noexcept
@@ -246,22 +256,48 @@ void InspectorPanel::DrawTransform(EditorContext& context, entt::entity entity) 
 	{
 		return;
 	}
+	const std::array one {entity};
+	// Each change of a field becomes one step of the history when the field lets go of the mouse or the keys. A field
+	// can change the pose in the frame that it starts, so the pose from before the field is the one to keep.
+	PoseEdit before;
+	before.Begin(context.registry, one);
+	const auto track = [&](std::string_view action) {
+		if (ImGui::IsItemActivated())
+		{
+			_edit = before;
+		}
+		if (ImGui::IsItemDeactivated() && _edit.Active())
+		{
+			_edit.Finish(context, action);
+		}
+		before.Begin(context.registry, one);
+	};
 	auto position = transform->position;
 	if (ImGui::DragFloat3("Position", &position.x, 0.25f, 0.0f, 0.0f, "%.1f"))
 	{
 		MoveTo(entity, position);
 	}
+	track("Move");
 	ImGui::SameLine();
 	if (ImGui::SmallButton("Ground"))
 	{
+		_edit.Begin(context.registry, one);
 		MoveTo(entity, {position.x, LandHeight({position.x, position.z}), position.z});
+		_edit.Finish(context, "Ground");
+		before.Begin(context.registry, one);
 	}
 	ImGui::SetItemTooltip("Puts it on the land");
+	transform = context.registry.TryGet<Transform>(entity);
+	if (transform == nullptr)
+	{
+		return;
+	}
 	auto yaw = glm::degrees(YawOf(transform->rotation));
 	if (ImGui::SliderFloat("Turn", &yaw, -180.0f, 180.0f, "%.0f degrees"))
 	{
 		Turn(entity, glm::radians(yaw) - YawOf(transform->rotation));
 	}
+	track("Turn");
 	auto scale = transform->scale.x;
 	if (ImGui::DragFloat("Scale", &scale, 0.01f, 0.05f, 50.0f, "%.2f"))
 	{
@@ -269,6 +305,7 @@ void InspectorPanel::DrawTransform(EditorContext& context, entt::entity entity) 
 		transform->scale *= ratio;
 		context.registry.SetDirty();
 	}
+	track("Scale");
 	if (const auto bounds = WorldBoundsOf(context.registry, entity))
 	{
 		const auto size = bounds->Size();

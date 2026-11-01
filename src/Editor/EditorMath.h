@@ -10,6 +10,7 @@
 #pragma once
 
 #include <optional>
+#include <span>
 
 #include <glm/mat3x3.hpp>
 #include <glm/vec2.hpp>
@@ -78,5 +79,24 @@ constexpr float k_MaxOrbitDistance = 2000.0f;
                                               glm::vec3 scale);
 /// Where a ray meets a level plane at a height, if it points down or up towards it
 [[nodiscard]] std::optional<glm::vec3> RayLevel(glm::vec3 origin, glm::vec3 direction, float height);
+
+/// A rectangle on the screen, from its smaller corner to its larger corner
+struct ScreenRect
+{
+	glm::vec2 minima {0.0f};
+	glm::vec2 maxima {0.0f};
+
+	/// Whether a point is in the rectangle or on its edge
+	[[nodiscard]] bool Contains(glm::vec2 point) const;
+	/// Whether the rectangle is smaller than a size on both sides, as a click that did not drag
+	[[nodiscard]] bool SmallerThan(glm::vec2 size) const;
+};
+/// The rectangle that two corners, in any order, make
+[[nodiscard]] ScreenRect RectBetween(glm::vec2 corner, glm::vec2 other);
+
+/// The middle of some points, or the origin with no points
+[[nodiscard]] glm::vec3 MiddleOf(std::span<const glm::vec3> points);
+/// A point turned about the up axis through a centre, by an angle in radians in the direction of YawRotation
+[[nodiscard]] glm::vec3 TurnedAbout(glm::vec3 point, glm::vec3 centre, float radians);
 
 } // namespace openblack::editor

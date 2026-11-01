@@ -3950,6 +3950,15 @@ void Runner::Give(const Command& command)
 		Log(fmt::format("{:.1f}s: the temple's camera looks at scroll {}", _seconds, command.value));
 		return;
 	}
+	if (command.kind == Kind::LookAtSaveGamePicture)
+	{
+		if (Locator::temple::has_value())
+		{
+			Locator::temple::value().LookAtSaveGamePicture(static_cast<uint32_t>(command.value));
+		}
+		Log(fmt::format("{:.1f}s: the temple's camera looks at the picture of save slot {}", _seconds, command.value));
+		return;
+	}
 	if (command.kind == Kind::ReadTip)
 	{
 		// A sign far under the land, tapped once by the player
@@ -4539,6 +4548,7 @@ void Runner::Give(const Command& command)
 	case Kind::RunText:
 	case Kind::ReadTip:
 	case Kind::LookAtTempleScroll:
+	case Kind::LookAtSaveGamePicture:
 	case Kind::PlayHandDemo:
 	case Kind::Reframe:
 	case Kind::RecordChallenge:

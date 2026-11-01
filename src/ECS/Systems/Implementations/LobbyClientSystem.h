@@ -99,6 +99,8 @@ public:
 	void GetPlayerRanking(int32_t page, LobbyCallback<lobby_api::RankingPage> callback) override;
 	void GetClanRanking(int32_t page, LobbyCallback<lobby_api::RankingPage> callback) override;
 	void GetPlayer(int64_t playerId, LobbyCallback<lobby_api::PlayerDetails> callback) override;
+	void GetPlayerDetailLines(int64_t playerId, std::string version,
+	                          LobbyCallback<lobby_api::PlayerDetailLines> callback) override;
 
 	void GetWeather(lobby_api::Date date, LobbyCallback<lobby_api::RealWeather> callback) override;
 	void UploadCreature(lobby_api::CreatureUpload upload, LobbyCallback<lobby_api::CreatureUploadReply> callback) override;

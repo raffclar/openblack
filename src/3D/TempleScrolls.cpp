@@ -35,6 +35,7 @@
 #include "Sound/GameSoundEffects.h"
 #include "Sound/SoundId.h"
 #include "Sound/SoundRequestInterface.h"
+#include "Temple/SaveGameRoomRules.h"
 
 using namespace openblack;
 
@@ -194,6 +195,9 @@ TempleScrolls::KeptTextures TempleScrolls::TakeTextures()
 
 void TempleScrolls::Create(const Facts& facts, KeptTextures kept)
 {
+	// Each visit starts with the text of the save game room on its scroll
+	_saveGameInFront = false;
+	_saveGameDrawnInFront = false;
 	auto& meshes = Locator::resources::value().GetMeshes();
 	_halfSize = Locator::config::has_value() && Locator::config::value().detail.lowResTextures;
 	const uint16_t side = _halfSize ? low_resolution_textures::k_HalfSide : TempleScrollTexture::k_Size;
@@ -264,7 +268,7 @@ void TempleScrolls::Redraw(Scroll& scroll, const Facts& facts)
 	{
 		return;
 	}
-	const bool textInFront = _focusedText && _focused.has_value() && &_scrolls[*_focused] == &scroll;
+	const bool textInFront = IsTextInFront(scroll);
 	constexpr uint16_t k_FullSide = TempleScrollTexture::k_Size;
 	// The texture already shows what the scroll is written with now, so the same texels are not made again
 	Drawn drawn {.text = Write(scroll.content, _texts, _font, facts, _historyStart),
@@ -441,7 +445,45 @@ void TempleScrolls::TurnHistory(help::StoryTurn turn, const Facts& facts)
 
 bool TempleScrolls::IsWrittenInFront(Content content) const
 {
-	return _focused.has_value() && _focusedText && _scrolls.at(*_focused).content == content;
+	return std::ranges::any_of(
+	    _scrolls, [this, content](const Scroll& scroll) { return scroll.content == content && IsDrawnInFront(scroll); });
+}
+
+bool TempleScrolls::IsFocused(const Scroll& scroll) const
+{
+	return _focusedText && _focused.has_value() && &_scrolls[*_focused] == &scroll;
+}
+
+bool TempleScrolls::IsTextInFront(const Scroll& scroll) const
+{
+	return scroll.content == Content::SaveGame ? _saveGameInFront : IsFocused(scroll);
+}
+
+bool TempleScrolls::IsDrawnInFront(const Scroll& scroll) const
+{
+	return scroll.content == Content::SaveGame ? _saveGameDrawnInFront : IsFocused(scroll);
+}
+
+void TempleScrolls::StepSaveGameRoom(bool roomDrawn, float closeness, const Facts& facts)
+{
+	// The room changes its scroll only in the frames that it draws
+	if (!roomDrawn)
+	{
+		_saveGameDrawnInFront = false;
+		return;
+	}
+	const auto step = temple::save_game_room::StepScrollSwitch(_saveGameInFront, closeness);
+	_saveGameDrawnInFront = step.drawInFront;
+	if (step.drawInFront)
+	{
+		// The texture of the scroll has no text while the text is in front of it
+		Rewrite(Content::SaveGame, facts);
+	}
+	_saveGameInFront = step.inFrontAfter;
+	if (step.writeOnTexture)
+	{
+		Rewrite(Content::SaveGame, facts);
+	}
 }
 
 std::optional<TempleScrolls::Content> TempleScrolls::GetFocusedContent() const
@@ -509,11 +551,18 @@ std::optional<TempleScrolls::Layout> TempleScrolls::FocusedLayout(const Scroll& 
 void TempleScrolls::AppendFocusedPictures(std::vector<temple::scroll_pictures::WorldPicture>& pictures,
                                           const Facts& facts) const
 {
-	if (!_focusedText || !_focused.has_value())
+	for (const auto& scroll : _scrolls)
 	{
-		return;
+		if (IsDrawnInFront(scroll))
+		{
+			AppendPicturesOf(scroll, pictures, facts);
+		}
 	}
-	const auto& scroll = _scrolls[*_focused];
+}
+
+void TempleScrolls::AppendPicturesOf(const Scroll& scroll, std::vector<temple::scroll_pictures::WorldPicture>& pictures,
+                                     const Facts& facts) const
+{
 	const auto layout = FocusedLayout(scroll);
 	if (!layout.has_value())
 	{
@@ -555,11 +604,17 @@ void TempleScrolls::AppendFocusedPictures(std::vector<temple::scroll_pictures::W
 
 void TempleScrolls::AppendFocusedText(std::vector<OrientedTextVertex>& vertices, const Facts& facts) const
 {
-	if (!_focusedText || !_focused.has_value())
+	for (const auto& scroll : _scrolls)
 	{
-		return;
+		if (IsDrawnInFront(scroll))
+		{
+			AppendTextOf(scroll, vertices, facts);
+		}
 	}
-	const auto& scroll = _scrolls[*_focused];
+}
+
+void TempleScrolls::AppendTextOf(const Scroll& scroll, std::vector<OrientedTextVertex>& vertices, const Facts& facts) const
+{
 	const auto text = Write(scroll.content, _texts, _font, facts, _historyStart);
 	if (!text.has_value())
 	{

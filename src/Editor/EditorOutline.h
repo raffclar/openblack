@@ -67,6 +67,10 @@ struct OutlineGroup
 [[nodiscard]] bool MatchesSearch(std::string_view label, std::string_view search);
 /// The entries sorted into a group per kind, in the kinds' order, the empty kinds left out
 [[nodiscard]] std::vector<OutlineGroup> Group(std::span<const OutlineEntry> entries, std::string_view search);
+/// The entities of a group's entries from one entity to another, both included, in the order of the list. With either
+/// entity not in the group, only the other entity, if it is in the group.
+[[nodiscard]] std::vector<entt::entity> RangeOf(std::span<const OutlineEntry* const> entries, entt::entity from,
+                                                entt::entity to);
 /// The entry's label as the outliner shows it: its own label and its entity number, so two alike can be told apart
 [[nodiscard]] std::string RowLabel(const OutlineEntry& entry);
 

@@ -664,6 +664,18 @@ TEST_F(LobbyClientTest, ClansRankingAndPlayerUseTheirPaths)
 	_http.Answer(200, R"({"id":4,"name":"x"})");
 }
 
+TEST_F(LobbyClientTest, PlayerDetailLinesSendTheVersionOfTheGame)
+{
+	Make();
+	LogIn();
+	std::optional<LobbyResult<lobby_api::PlayerDetailLines>> got;
+	_client->GetPlayerDetailLines(4, "0.1.0+ab c", [&](auto&& result) { got = std::move(result); });
+	EXPECT_EQ(_http.Next().url, "https://bw.example/api/v1/players/4/details?version=0.1.0%2Bab%20c");
+	_http.Answer(200, R"({"lines":[{"label":"Points","value":"12"}]})");
+	ASSERT_TRUE(got.has_value() && got->Ok());
+	EXPECT_EQ(got->value->lines.at(0).label, "Points");
+}
+
 TEST_F(LobbyClientTest, TheLogoMustBeABmpFile)
 {
 	Make();

@@ -39,6 +39,10 @@ constexpr ImU32 k_Breakpoint = IM_COL32(230, 70, 70, 255);
 
 // The world's overlays
 constexpr ImU32 k_SelectionBox = IM_COL32(90, 170, 255, 255);
+/// The picked things other than the main pick
+constexpr ImU32 k_PickedBox = IM_COL32(90, 170, 255, 150);
+/// The inside of the rectangle that picks
+constexpr ImU32 k_PickRectFill = IM_COL32(90, 170, 255, 40);
 constexpr ImU32 k_HoverBox = IM_COL32(255, 255, 255, 120);
 constexpr ImU32 k_GhostBox = IM_COL32(120, 255, 140, 230);
 

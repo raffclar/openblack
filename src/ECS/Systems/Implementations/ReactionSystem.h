@@ -39,6 +39,8 @@ public:
 	void SpreadAgain(entt::entity initiator) override;
 	void Remove(uint32_t id) override;
 	void StopReacting(entt::entity living) override;
+	[[nodiscard]] std::optional<HeldReaction> HeldReactionOf(entt::entity living) const override;
+	void LeaveForOtherReaction(entt::entity villager) override;
 	void TakeUp(uint32_t id, entt::entity living) override;
 	void Impress(uint32_t id, entt::entity living) override;
 	void SetInitiator(uint32_t id, entt::entity initiator) override;
@@ -75,6 +77,11 @@ private:
 	/// How urgent a reaction is to a living thing where it stands now, by its distance to the reaction or one given
 	[[nodiscard]] uint32_t PriorityTo(const Active& reaction, entt::entity living, const glm::vec3& at) const;
 	[[nodiscard]] uint32_t PriorityTo(const Active& reaction, entt::entity living, const glm::vec3& at, float distance) const;
+	/// How urgent the reaction that a living thing holds is to it, by its distance to the middle of the reaction's map cell
+	[[nodiscard]] uint32_t HeldPriority(const Active& held, entt::entity living, const glm::vec3& at) const;
+	/// A villager with a shield reaction weighs a reaction against it. It changes to the reaction when the reaction is
+	/// more urgent and it has kept the shield reaction long enough.
+	void ChangeFromShield(Active& reaction, entt::entity villager, const glm::vec3& at, components::LivingReaction& state);
 	/// The turns a living thing waits before taking up a reaction's kind again, by its distance to the reaction's thing
 	[[nodiscard]] uint32_t AgainTurns(const Active& reaction, entt::entity living, const glm::vec3& at) const;
 	/// The turns a living thing keeps at the reaction it holds, by its distance to what it reacts to now; negative when it

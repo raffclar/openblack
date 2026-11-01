@@ -89,9 +89,14 @@ void MultiplayerFrontEnd::Update()
 	{
 		_services.poll(*this);
 	}
-	if (_services.lan != nullptr && _flow.box == Box::GameList && _flow.kind == LobbyKind::Lan)
+	const bool inLanRoom = _room.has_value() && (_flow.box == Box::Room || _flow.box == Box::Conditions);
+	if (_services.lan != nullptr && _flow.kind == LobbyKind::Lan && (_flow.box == Box::GameList || inLanRoom))
 	{
 		_services.lan->Poll();
+		if (inLanRoom)
+		{
+			FollowLanRoom();
+		}
 	}
 	FollowSession();
 	FollowStart();
@@ -481,6 +486,27 @@ void MultiplayerFrontEnd::FollowSelectedGame()
 	_selectedGame = static_cast<size_t>(found - games.begin());
 }
 
+void MultiplayerFrontEnd::FollowLanRoom()
+{
+	const auto games = _services.lan->GetServers();
+	const auto found = std::ranges::find(games, _room->id, &lobby_api::ServerEntry::id);
+	if (found == games.end())
+	{
+		return;
+	}
+	const auto same = [](const lobby_api::RoomPlayer& a, const lobby_api::RoomPlayer& b) {
+		return a.account.name == b.account.name && a.role == b.role;
+	};
+	if (std::ranges::equal(found->players, _room->players, same) && found->gamemode == _room->gamemode)
+	{
+		return;
+	}
+	_room->players = found->players;
+	_room->numplayers = found->numplayers;
+	_room->gamemode = found->gamemode;
+	_seats = Seats(_room->players);
+}
+
 void MultiplayerFrontEnd::EnterGameList()
 {
 	_flow.box = Box::GameList;
@@ -731,6 +757,10 @@ void MultiplayerFrontEnd::UpdateRoom()
 {
 	_seats = Seats(_room->players);
 	_shownSeat.reset();
+	// The lines of a player who left the room go. The game asks again when that player comes back.
+	std::erase_if(_details, [this](const auto& entry) {
+		return std::ranges::none_of(_seats, [&entry](const Seat& seat) { return seat.account.id == entry.first; });
+	});
 	_shownClan.reset();
 	_shownLogo.reset();
 	KeepUsedClan(std::nullopt);
@@ -780,6 +810,7 @@ void MultiplayerFrontEnd::LeaveRoom()
 	_observer = false;
 	_ready = false;
 	_seats.clear();
+	_details.clear();
 	_chat.clear();
 }
 
@@ -918,6 +949,50 @@ void MultiplayerFrontEnd::HandleEvent(const lobby_api::PushEvent& event)
 std::optional<size_t> MultiplayerFrontEnd::GetServerLand() const
 {
 	return _room.has_value() ? FindLand(_maps, _room->land) : std::nullopt;
+}
+
+void MultiplayerFrontEnd::ShowSeat(std::optional<size_t> seat)
+{
+	_shownSeat = seat.has_value() && *seat < _seats.size() ? seat : std::nullopt;
+	// The game asks for the lines of a player when the player picks that player on the Player Details tab, one time
+	if (!_shownSeat.has_value() || _tab != RoomTab::PlayerDetails || _flow.kind != LobbyKind::Internet ||
+	    _services.lobby == nullptr || !_room.has_value())
+	{
+		return;
+	}
+	const auto account = _seats[*_shownSeat].account.id;
+	if (_details.contains(account))
+	{
+		return;
+	}
+	_details.emplace(account, std::vector<PlayerDetail> {});
+	_services.lobby->GetPlayerDetailLines(
+	    account, _settings.gameVersion,
+	    [this, account, room = _room->id](ecs::systems::LobbyResult<lobby_api::PlayerDetailLines>&& result) {
+		    // An answer that comes after the player left the room has no place to go. A failed request keeps no lines.
+		    if (!_room.has_value() || _room->id != room || !result.Ok())
+		    {
+			    return;
+		    }
+		    std::vector<PlayerDetail> lines;
+		    lines.reserve(result.value->lines.size());
+		    for (const auto& line : result.value->lines)
+		    {
+			    lines.push_back({.label = ToUtf16(line.label), .value = ToUtf16(line.value)});
+		    }
+		    _details[account] = std::move(lines);
+	    });
+}
+
+std::vector<PlayerDetail> MultiplayerFrontEnd::GetShownDetails() const
+{
+	const auto* seat = _shownSeat.has_value() && *_shownSeat < _seats.size() ? &_seats[*_shownSeat] : GetOwnSeat();
+	if (seat == nullptr)
+	{
+		return {};
+	}
+	const auto found = _details.find(seat->account.id);
+	return found != _details.end() ? found->second : std::vector<PlayerDetail> {};
 }
 
 std::optional<int64_t> MultiplayerFrontEnd::GetUsedClan() const

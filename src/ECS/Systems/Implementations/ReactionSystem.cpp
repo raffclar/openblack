@@ -48,6 +48,7 @@
 #include "ECS/Components/CreatureNeeds.h"
 #include "ECS/Components/Dance.h"
 #include "ECS/Components/Disciple.h"
+#include "ECS/Components/Fire.h"
 #include "ECS/Components/Hand.h"
 #include "ECS/Components/HandGrab.h"
 #include "ECS/Components/LivingAction.h"
@@ -580,8 +581,8 @@ bool Available(const ecs::Registry& registry, entt::entity entity, Reaction type
 	return true;
 }
 
-/// A villager hiding in a building, or one of the kinds of reaction only believed in, is impressed by what it sees
-/// without taking the reaction up
+/// A villager that the hand cannot reach (at home, in a hand, or hiding in a building), or one of the kinds of reaction
+/// only believed in, is impressed by what it sees without taking the reaction up
 bool BelievesWithoutReacting(const ecs::Registry& registry, entt::entity entity, Reaction type)
 {
 	if (!registry.AllOf<Villager>(entity))
@@ -593,7 +594,10 @@ bool BelievesWithoutReacting(const ecs::Registry& registry, entt::entity entity,
 	{
 		return true;
 	}
-	// TODO(raffclar): the game also counts a villager out of reach by two flags whose meaning is unknown
+	if (registry.AnyOf<AtHome, InHand>(entity))
+	{
+		return true;
+	}
 	const auto* action = registry.TryGet<const LivingAction>(entity);
 	return action != nullptr && Locator::livingActionSystem::has_value() &&
 	       Locator::livingActionSystem::value().VillagerGetState(*action, LivingAction::Index::Top) ==
@@ -1128,16 +1132,12 @@ void ReactionSystem::SpreadInCell(Active& reaction, const std::vector<entt::enti
 	const auto type = static_cast<uint32_t>(reaction.source.type);
 	for (const auto entity : mobiles)
 	{
-		// The shields' villagers react to the shields' own reactions through the shields, and while they do, to nothing
-		// else but what flies inside the shield, which their priority weighs
-		// TODO(raffclar): the game weighs another reaction against a villager's shield reaction as against any other
+		// The shields' villagers take up the shields' own reactions through the shields
 		// A burning creature takes up its own fire's reaction, as any other within reach does
 		const bool ownFire = reaction.source.type == Reaction::ReactToFire && registry.AllOf<Creature>(entity);
 		if (!registry.Valid(entity) || !registry.AllOf<Transform>(entity) ||
 		    (entity == reaction.source.initiator && !ownFire) || !Reaches(registry, entity, reaction.source.type) ||
-		    (registry.AllOf<Villager>(entity) &&
-		     (ShieldKind(reaction.source.type) ||
-		      (registry.AllOf<VillagerShieldReaction>(entity) && reaction.source.type != Reaction::ReactToFlyingObject))) ||
+		    (registry.AllOf<Villager>(entity) && ShieldKind(reaction.source.type)) ||
 		    !Available(registry, entity, reaction.source.type))
 		{
 			continue;
@@ -1165,6 +1165,12 @@ void ReactionSystem::SpreadInCell(Active& reaction, const std::vector<entt::enti
 			}
 			return;
 		}
+		// A villager with a shield reaction weighs the reaction against it as against any other reaction
+		if (state->reaction == 0 && registry.AllOf<Villager, VillagerShieldReaction>(entity))
+		{
+			ChangeFromShield(reaction, entity, at, *state);
+			continue;
+		}
 		if (state->reaction == 0)
 		{
 			if (PriorityTo(reaction, entity, at) != 0 && memory.MayReactAgain(type, _turn, again))
@@ -1187,13 +1193,8 @@ void ReactionSystem::SpreadInCell(Active& reaction, const std::vector<entt::enti
 		{
 			continue;
 		}
-		// Weighed against what it reacts to now, by how far it is from the middle of that reaction's cell
-		const auto cellOfCurrent =
-		    map_coords::Cell(map_coords::FromMetres({current->source.position.x, current->source.position.z}));
-		const auto currentPriority = PriorityTo(
-		    *current, entity, at,
-		    gutils::GetDistanceInMetresToCell(map_coords::FromMetres({at.x, at.z}),
-		                                      {static_cast<int16_t>(cellOfCurrent.x), static_cast<int16_t>(cellOfCurrent.y)}));
+		// Weighed against what it reacts to now
+		const auto currentPriority = HeldPriority(*current, entity, at);
 		const auto priority = PriorityTo(reaction, entity, at);
 		const bool differs =
 		    state->type != reaction.source.type || (SameKindRetakes(reaction.source.type) && state->reaction != reaction.id);
@@ -1223,6 +1224,79 @@ void ReactionSystem::SpreadInCell(Active& reaction, const std::vector<entt::enti
 			Start(reaction, entity, *state, true);
 		}
 	}
+}
+
+uint32_t ReactionSystem::HeldPriority(const Active& held, entt::entity living, const glm::vec3& at) const
+{
+	const auto cell = map_coords::Cell(map_coords::FromMetres({held.source.position.x, held.source.position.z}));
+	return PriorityTo(held, living, at,
+	                  gutils::GetDistanceInMetresToCell(map_coords::FromMetres({at.x, at.z}),
+	                                                    {static_cast<int16_t>(cell.x), static_cast<int16_t>(cell.y)}));
+}
+
+void ReactionSystem::ChangeFromShield(Active& reaction, entt::entity villager, const glm::vec3& at, LivingReaction& state)
+{
+	if (!Locator::magicShieldSystem::has_value())
+	{
+		return;
+	}
+	auto& shields = Locator::magicShieldSystem::value();
+	const auto held = shields.HeldReactionOf(villager);
+	if (!held.has_value())
+	{
+		return;
+	}
+	auto& registry = Locator::entitiesRegistry::value();
+	auto& memory = MemoryOf(registry, villager, state);
+	const auto type = static_cast<uint32_t>(reaction.source.type);
+	const auto seconds = (_turn - memory.LastReacted(static_cast<uint32_t>(held->type))) / k_TurnsPerSecond;
+	if (!magic::ChangesReaction(held->type, held->priority, PriorityTo(reaction, villager, at), seconds))
+	{
+		return;
+	}
+	memory.Record(type, _turn);
+	// It keeps the shield reaction rather than change to a kind it never takes up
+	if (!villager_reaction::TakesUp(reaction.source.type))
+	{
+		return;
+	}
+	shields.LeaveForOtherReaction(villager);
+	Start(reaction, villager, state, true);
+}
+
+std::optional<ReactionSystemInterface::HeldReaction> ReactionSystem::HeldReactionOf(entt::entity living) const
+{
+	const auto& registry = Locator::entitiesRegistry::value();
+	const auto* state = registry.Valid(living) ? registry.TryGet<const LivingReaction>(living) : nullptr;
+	if (state == nullptr || state->reaction == 0 || !registry.AllOf<Transform>(living))
+	{
+		return std::nullopt;
+	}
+	const auto current = Find(state->reaction);
+	if (!current.has_value())
+	{
+		return std::nullopt;
+	}
+	return HeldReaction {.type = state->type,
+	                     .priority = HeldPriority(*current, living, registry.Get<const Transform>(living).position)};
+}
+
+void ReactionSystem::LeaveForOtherReaction(entt::entity villager)
+{
+	auto& registry = Locator::entitiesRegistry::value();
+	auto* state = registry.TryGet<LivingReaction>(villager);
+	if (state == nullptr || state->reaction == 0)
+	{
+		return;
+	}
+	// What it did before it reacted stays remembered, and its memory of the kind stays as it is
+	if (auto* fire = registry.TryGet<VillagerFireState>(villager))
+	{
+		fire->reaction = 0;
+		fire->reactionTarget = entt::null;
+	}
+	state->reaction = 0;
+	state->type = Reaction::None;
 }
 
 uint32_t ReactionSystem::AgainTurns(const Active& reaction, entt::entity living, const glm::vec3& at) const

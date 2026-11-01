@@ -19,6 +19,7 @@
 #include "ECS/Components/Transform.h"
 #include "ECS/Registry.h"
 #include "ECS/Systems/EditorSystemInterface.h"
+#include "Editor/EditorActions.h"
 #include "Editor/EditorContext.h"
 #include "Editor/EditorEntities.h"
 #include "Editor/EditorStyle.h"
@@ -113,7 +114,28 @@ void OutlinerPanel::Draw(EditorContext& context) noexcept
 				{
 					if (context.registry.Valid(entry.entity))
 					{
-						selection.Select(entry.entity);
+						// Ctrl picks or lets go of one more thing. Shift picks all the rows from the main pick to this row.
+						const auto& io = ImGui::GetIO();
+						if (io.KeyCtrl)
+						{
+							selection.Toggle(entry.entity);
+						}
+						else if (io.KeyShift && selection.Get().has_value())
+						{
+							for (const auto entity : RangeOf(group.entries, *selection.Get(), entry.entity))
+							{
+								if (context.registry.Valid(entity))
+								{
+									selection.Add(entity);
+								}
+							}
+							// The row clicked is the main pick
+							selection.Add(entry.entity);
+						}
+						else
+						{
+							selection.Select(entry.entity);
+						}
 						_scrolledFor = selection.GetPicks();
 						if (ImGui::IsMouseDoubleClicked(ImGuiMouseButton_Left))
 						{
@@ -129,7 +151,15 @@ void OutlinerPanel::Draw(EditorContext& context) noexcept
 				{
 					if (context.registry.Valid(entry.entity))
 					{
-						selection.Select(entry.entity);
+						// The menu of one of several picked things acts on all of them
+						if (selection.IsSelected(entry.entity))
+						{
+							selection.Add(entry.entity);
+						}
+						else
+						{
+							selection.Select(entry.entity);
+						}
 						_scrolledFor = selection.GetPicks();
 						if (ImGui::MenuItem("Bring into view"))
 						{
@@ -144,18 +174,14 @@ void OutlinerPanel::Draw(EditorContext& context) noexcept
 							context.system.SetCameraMode(ecs::systems::EditorSystemInterface::CameraMode::Follow);
 						}
 						ImGui::Separator();
-						if (ImGui::MenuItem("Duplicate", "Ctrl+D"))
+						if (ImGui::MenuItem(StepLabel("Duplicate", selection.Count()).c_str(), "Ctrl+D"))
 						{
-							if (const auto copy = Duplicate(entry.entity, {8.0f, 0.0f}))
-							{
-								selection.Select(*copy);
-							}
+							DuplicatePicked(context);
 							Invalidate();
 						}
-						if (ImGui::MenuItem("Delete", "Del"))
+						if (ImGui::MenuItem(StepLabel("Delete", selection.Count()).c_str(), "Del"))
 						{
-							selection.Clear();
-							Remove(entry.entity);
+							DeletePicked(context);
 							Invalidate();
 						}
 					}

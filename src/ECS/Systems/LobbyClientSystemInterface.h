@@ -175,6 +175,10 @@ public:
 	virtual void GetPlayerRanking(int32_t page, LobbyCallback<lobby_api::RankingPage> callback) = 0;
 	virtual void GetClanRanking(int32_t page, LobbyCallback<lobby_api::RankingPage> callback) = 0;
 	virtual void GetPlayer(int64_t playerId, LobbyCallback<lobby_api::PlayerDetails> callback) = 0;
+	/// The lines of the Player Details tab for a player. The game sends its own version, and the lobby can give lines
+	/// for that version.
+	virtual void GetPlayerDetailLines(int64_t playerId, std::string version,
+	                                  LobbyCallback<lobby_api::PlayerDetailLines> callback) = 0;
 
 	/// The real-world weather on a day at the place of the player's account
 	virtual void GetWeather(lobby_api::Date date, LobbyCallback<lobby_api::RealWeather> callback) = 0;

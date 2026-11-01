@@ -313,3 +313,28 @@ TEST(SaveGameRoom, TheRoomReadsTheSavedGamesAgainOnlyWhenTheyChanged)
 	EXPECT_TRUE(ReadsSavedGamesAgain(read, {.changes = 3, .player = "players/two", .land = 1}));
 	EXPECT_TRUE(ReadsSavedGamesAgain(read, {.changes = 3, .player = "players/one", .land = 2}));
 }
+
+// The text of the scroll moves in front of the scroll one frame after the camera comes past half way. The room then
+// writes it again in each frame, and writes it on the texture again in the frame that the camera is half way or farther.
+TEST(SaveGameRoom, TheScrollTextMovesInFrontOneFrameAfterTheCameraComesPastHalfWay)
+{
+	using rules::ScrollSwitch;
+	using rules::StepScrollSwitch;
+	// Far away: nothing changes
+	EXPECT_EQ(StepScrollSwitch(false, 0.0f),
+	          (ScrollSwitch {.drawInFront = false, .inFrontAfter = false, .writeOnTexture = false}));
+	// Exactly half way is not close
+	EXPECT_EQ(StepScrollSwitch(false, 0.5f),
+	          (ScrollSwitch {.drawInFront = false, .inFrontAfter = false, .writeOnTexture = false}));
+	// The first close frame only keeps the change
+	EXPECT_EQ(StepScrollSwitch(false, 0.51f),
+	          (ScrollSwitch {.drawInFront = false, .inFrontAfter = true, .writeOnTexture = false}));
+	// While close, the text is in front in each frame
+	EXPECT_EQ(StepScrollSwitch(true, 1.0f),
+	          (ScrollSwitch {.drawInFront = true, .inFrontAfter = true, .writeOnTexture = false}));
+	// In the frame that the camera is half way, the text is in front once more and then goes on the texture again
+	EXPECT_EQ(StepScrollSwitch(true, 0.5f),
+	          (ScrollSwitch {.drawInFront = true, .inFrontAfter = false, .writeOnTexture = true}));
+	EXPECT_EQ(StepScrollSwitch(true, 0.0f),
+	          (ScrollSwitch {.drawInFront = true, .inFrontAfter = false, .writeOnTexture = true}));
+}

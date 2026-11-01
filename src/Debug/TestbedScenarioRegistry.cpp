@@ -4724,6 +4724,23 @@ void AddAudio(std::vector<Scenario>& all)
 	});
 
 	all.push_back({
+	    .id = "temple.save_room_scroll_time",
+	    .name = "The temple's save game room writes its scroll again in each frame while the camera is close",
+	    .facet = Facet::Story,
+	    .description = "The game is saved into slot 0 with the name Testbed. Then the player goes through the temple's "
+	                   "main room into the save game room. After four seconds the camera looks at the picture of slot 0.",
+	    .expected = "While the camera is more than half way to the picture, the text of the scroll shows in yellow over "
+	                "a black shadow in front of the scroll, and the parchment under it has no text. The time played on "
+	                "the scroll moves on each second. When the camera moves back past half way, the text goes "
+	                "back onto the parchment.",
+	    .framing = {.shot = Shot::Overview},
+	    .commands = {{.kind = Kind::SaveGame, .delaySeconds = 1.0f, .value = 0},
+	                 {.kind = Kind::EnterTemple, .delaySeconds = 1.0f, .value = 3},
+	                 {.kind = Kind::EnterTemple, .delaySeconds = 0.5f, .value = 6},
+	                 {.kind = Kind::LookAtSaveGamePicture, .delaySeconds = 4.0f, .value = 0}},
+	});
+
+	all.push_back({
 	    .id = "temple.future_room_turn",
 	    .name = "The temple's future room turns by itself under its words",
 	    .facet = Facet::Story,
@@ -12090,6 +12107,32 @@ void AddEditor(std::vector<Scenario>& all)
 	                 Go(Kind::WalkTo, 0, {-40.0f, 40.0f}, 0.5f), Go(Kind::WalkTo, 0, {-40.0f, -40.0f}, 0.5f)},
 	    .repeatFrom = 0,
 	});
+
+	all.push_back({
+	    .id = "editor.pick_several_undo",
+	    .name = "Things to pick together, then undo and redo",
+	    .facet = Facet::Editor,
+	    .description = "A row of five oaks, a ring of four pillars of rock and two villagers, still, for trying the "
+	                   "editor's picks of several things and its history (F2): a drag over the land with the Select (W) "
+	                   "tool picks all in the rectangle, Ctrl+click picks or lets go of one more, Shift+click adds one, "
+	                   "and Shift+click in the outliner picks a run of rows.",
+	    .expected = "Each picked thing has a box; the main pick has the brighter box. Move (E) drags all the picks "
+	                "together and Rotate (R) turns them about their middle. Ctrl+D copies each, Delete removes all. "
+	                "Ctrl+Z puts each step back and Ctrl+Y (or Ctrl+Shift+Z) does it again; the tool bar names the step.",
+	    .environment = {.clockRuns = false},
+	    .framing = {.shot = Shot::Overview, .include = {{-40.0f, 30.0f}, {40.0f, -30.0f}}},
+	    .objects = {{.type = TreeInfo::Oak, .offset = {-30.0f, 20.0f}},
+	                {.type = TreeInfo::Oak, .offset = {-15.0f, 20.0f}},
+	                {.type = TreeInfo::Oak, .offset = {0.0f, 20.0f}},
+	                {.type = TreeInfo::Oak, .offset = {15.0f, 20.0f}},
+	                {.type = TreeInfo::Oak, .offset = {30.0f, 20.0f}},
+	                {.type = FeatureInfo::FatPilarChalk, .offset = {-10.0f, -10.0f}},
+	                {.type = FeatureInfo::FatPilarChalk, .offset = {10.0f, -10.0f}},
+	                {.type = FeatureInfo::FatPilarChalk, .offset = {-10.0f, -25.0f}},
+	                {.type = FeatureInfo::FatPilarChalk, .offset = {10.0f, -25.0f}},
+	                {.type = VillagerInfo::CelticFarmerMale, .offset = {-30.0f, -15.0f}},
+	                {.type = VillagerInfo::CelticHousewifeFemale, .offset = {30.0f, -15.0f}}},
+	});
 }
 
 /// A benchmark of a crowd of the size, to compare runs of several sizes and see which costs grow faster than the crowd
@@ -13840,7 +13883,8 @@ bool testbed_scenarios::NeedsNoCreature(Command::Kind kind)
 	       kind == Kind::OtherGodHand || kind == Kind::OwnGod || kind == Kind::JoinOnline || kind == Kind::EndBox ||
 	       kind == Kind::BringCreature || kind == Kind::TattooEditorAsNetworkGame || kind == Kind::ShowDemoPing ||
 	       kind == Kind::AddIncomingMessage || kind == Kind::Chat || kind == Kind::ComputerPersonality ||
-	       kind == Kind::ComputerUntaughtSends || kind == Kind::SkirmishBox || IsPointerCommand(kind);
+	       kind == Kind::ComputerUntaughtSends || kind == Kind::SkirmishBox || kind == Kind::LookAtSaveGamePicture ||
+	       IsPointerCommand(kind);
 }
 
 std::string_view testbed_scenarios::Name(Facet facet)
@@ -13868,7 +13912,7 @@ std::string_view testbed_scenarios::Name(Shot shot)
 
 std::string_view testbed_scenarios::Name(Command::Kind kind)
 {
-	constexpr std::array<std::string_view, 208> k_Names {
+	constexpr std::array<std::string_view, 209> k_Names {
 	    "walk to",
 	    "run to",
 	    "follow",
@@ -14001,6 +14045,7 @@ std::string_view testbed_scenarios::Name(Command::Kind kind)
 	    "remove object",
 	    "read tip",
 	    "look at temple scroll",
+	    "look at a save game picture",
 	    "set alight",
 	    "hand grips totem",
 	    "pointer on altar",
