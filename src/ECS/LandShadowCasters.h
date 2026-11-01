@@ -37,7 +37,7 @@ enum class LandShadow : uint8_t
 /// How a thing casts its shadow into the land. Buildings cast once they are built (a football pitch and a worship site
 /// from the start), and so do the island's features, rocks, teleport stones, spell dispensers, balls, rewards and the
 /// other things lying about. Fields, animated scenery, flowers, dead trees, pots and piles, the village totem, miracle
-/// shields, seeds and vortices, street lights and anything living cast none.
+/// shields, seeds and vortices, street lights and anything living cast none. A thing with NoLandShadow casts none.
 [[nodiscard]] LandShadow LandShadowOf(const Registry& registry, entt::entity entity);
 
 /// The stores of the components that LandShadowOf reads, found one time for a walk of many things. Each look after that
@@ -50,7 +50,7 @@ public:
 	[[nodiscard]] LandShadow Of(entt::entity entity) const;
 
 	/// How many kinds of component the shadow depends on
-	static constexpr size_t k_StoreCount = 26;
+	static constexpr size_t k_StoreCount = 27;
 
 private:
 	template <typename... Components>

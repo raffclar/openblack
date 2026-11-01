@@ -34,6 +34,7 @@
 #include "ECS/Components/HandGrab.h"
 #include "ECS/Components/Indestructible.h"
 #include "ECS/Components/Mobile.h"
+#include "ECS/Components/NoLandShadow.h"
 #include "ECS/Components/Physics.h"
 #include "ECS/Components/PuzzleGame.h"
 #include "ECS/Components/ScriptControl.h"
@@ -302,6 +303,10 @@ void StartHanoi(entt::entity puzzle, PuzzleGame& game)
 	{
 		const auto piece = MakePiece(puzzle, hanoi::k_RingKinds.at(ring), places.at(ring));
 		game.rings.at(ring) = piece;
+		if (!hanoi::StartRingCastsLandShadow(ring))
+		{
+			registry.Assign<NoLandShadow>(piece);
+		}
 		registry.Get<HanoiBlock>(piece).below = below;
 		registry.Get<HanoiBlock>(below).above = piece;
 		below = piece;
