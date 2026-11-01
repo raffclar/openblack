@@ -97,14 +97,14 @@ namespace
 template <typename... Components>
 struct ShadowComponents
 {
-	static_assert(sizeof...(Shadowed) == LandShadowLookup::k_StoreCount);
+	static_assert(sizeof...(Components) == LandShadowLookup::k_StoreCount);
 
 	/// The place of a component in the list
 	template <typename Component>
 	static constexpr size_t k_Place = [] {
 		size_t place = 0;
 		bool found = false;
-		((found = found || std::is_same_v<Component, Shadowed>, place += found ? 0 : 1), ...);
+		((found = found || std::is_same_v<Component, Components>, place += found ? 0 : 1), ...);
 		return place;
 	}();
 
@@ -112,7 +112,7 @@ struct ShadowComponents
 	                 std::array<const entt::sparse_set*, LandShadowLookup::k_StoreCount>& stores)
 	{
 		size_t place = 0;
-		((stores.at(place++) = registry.storage<Shadowed>()), ...);
+		((stores.at(place++) = registry.storage<Components>()), ...);
 	}
 };
 
