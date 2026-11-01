@@ -389,6 +389,16 @@ bool Gui::PressButton(std::string_view window, std::span<const ButtonPathStep> p
 		return false;
 	}
 	const auto* found = ImGui::FindWindowByName(std::string(window).c_str());
+	// A debug window that draws in more than one window of its own, such as the editor, names the window of the button
+	// as the first label of the path
+	if ((found == nullptr || !found->WasActive) && !path.empty())
+	{
+		if (const auto* part = std::get_if<std::string>(&path.front()); part != nullptr)
+		{
+			found = ImGui::FindWindowByName(part->c_str());
+			path = path.subspan(1);
+		}
+	}
 	if (found == nullptr || !found->WasActive)
 	{
 		return false;
