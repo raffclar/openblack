@@ -168,17 +168,23 @@ std::optional<Animation> creature_blends::Blend(Stores& stores, const CreatureRi
 	return BlendVariants(*base, morph, evilGood, thinFat);
 }
 
-std::optional<Animation> creature_blends::TakePrepared(Stores& stores, const CreatureRig& rig,
-                                                       const creature_morph::Morph& morph, size_t index)
+std::optional<Animation> creature_blends::KeptBlend(Stores& stores, const CreatureRig& rig, const creature_morph::Morph& morph,
+                                                    size_t index)
 {
 	const auto kept = stores.prepared.find(KeyOf(rig, morph, index));
 	if (kept == stores.prepared.end())
 	{
 		return std::nullopt;
 	}
-	auto animation = std::move(kept->second.animation);
-	stores.prepared.erase(kept);
-	return animation;
+	kept->second.shaping = stores.shaping;
+	return kept->second.animation;
+}
+
+void creature_blends::Keep(Stores& stores, const CreatureRig& rig, const creature_morph::Morph& morph, size_t index,
+                           const Animation& animation)
+{
+	stores.prepared.insert_or_assign(KeyOf(rig, morph, index),
+	                                 PreparedBlend {.animation = animation, .shaping = stores.shaping});
 }
 
 void creature_blends::Prepare(Stores& stores, std::span<const Wanted> wanted, WorkerPool& workers, uint32_t shaping)
