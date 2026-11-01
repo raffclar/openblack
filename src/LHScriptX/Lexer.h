@@ -136,6 +136,9 @@ public:
 
 	Token GetToken();
 
+	/// The line of the text that the lexer is on. The first line is 1.
+	[[nodiscard]] int Line() const noexcept { return _currentLine; }
+
 private:
 	[[nodiscard]] size_t Remaining() const noexcept { return static_cast<size_t>(_end - _current); }
 
