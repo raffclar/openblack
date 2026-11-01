@@ -60,6 +60,7 @@ public:
 	void Move(EffectHandle /*handle*/, glm::vec3 /*position*/) override {}
 	void Stop(EffectHandle /*handle*/) override {}
 	void Remove(EffectHandle /*handle*/) override {}
+	void RemoveOwnedBy(entt::entity /*owner*/) override {}
 	void SetMagnitude(EffectHandle /*handle*/, float /*magnitude*/) override {}
 	void SetAlpha(EffectHandle /*handle*/, float /*alpha*/) override {}
 	void SetProcessInfo(EffectHandle /*handle*/, const particles::ProcessInfo& /*info*/) override {}

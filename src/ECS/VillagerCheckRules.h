@@ -72,11 +72,12 @@ struct WoundedInputs
 	       (!in.goingForFood || in.hungryForFood < in.food);
 }
 
-/// Whether a death at a check counts as from chanting: it was going home or to sleep from worship
-[[nodiscard]] constexpr bool ChantedLast(VillagerStates workingTowards)
+/// Whether a death at a check counts as from chanting: the villager is counted at its worship site, or it was going home
+/// or to sleep from worship
+[[nodiscard]] constexpr bool ChantedLast(VillagerStates workingTowards, bool countedAtWorship)
 {
 	return workingTowards == VillagerStates::GoHomeFromWorship || workingTowards == VillagerStates::ArrivesHomeFromWorship ||
-	       workingTowards == VillagerStates::SleepInTentFromWorship;
+	       workingTowards == VillagerStates::SleepInTentFromWorship || countedAtWorship;
 }
 
 /// What a villager with no life left at a check dies of

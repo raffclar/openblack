@@ -48,6 +48,9 @@ bool AddLiving(Registry& registry, entt::entity flock, entt::entity living);
 void AddLeader(Registry& registry, entt::entity flock, entt::entity living);
 /// A living leaves its flock. With `deleteWhenEmpty` a flock it leaves empty goes.
 void Remove(Registry& registry, entt::entity living, bool deleteWhenEmpty);
+/// A living that dies or goes leaves its flock. A flock it leaves empty goes, but a flock that a script holds stays. The
+/// script can then still ask for the size of the flock and attach more livings to it (deviation 181).
+void RemoveAtDeath(Registry& registry, entt::entity living);
 
 /// Where a flock is: its leader's position, or its own place when it has nobody
 [[nodiscard]] map_coords::MapCoords Position(const Registry& registry, entt::entity flock);

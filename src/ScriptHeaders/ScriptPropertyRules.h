@@ -47,8 +47,8 @@ constexpr float k_StandingBuilt = 0.1f;
 /// thing of no player or of the neutral player; otherwise the player's number counted from 1
 [[nodiscard]] float PlayerProperty(std::optional<PlayerNames> player, bool destroyedTown);
 
-/// Whether a thing is in a creature's hand, as the scripts ask: it is what the creature carries, or what it is eating
-[[nodiscard]] bool InCreatureHand(entt::entity thing, entt::entity carried, std::optional<entt::entity> eating);
+/// Whether a thing is in a creature's hand, as the scripts ask: it is the thing in the hand, or what the creature eats
+[[nodiscard]] bool InCreatureHand(entt::entity thing, entt::entity inHand, std::optional<entt::entity> eating);
 
 /// A creature's need that the scripts can set
 enum class CreatureNeed : uint8_t

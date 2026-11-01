@@ -210,6 +210,15 @@ TEST(FootpathRules, AFileLinkGoesToTheFirstPlaceInItsReach)
 	EXPECT_FALSE(footpath_rules::FileLinkHolder(k_Link, {}));
 }
 
+TEST(FootpathRules, AFileLinkLooksInTheMapCellOfItsPlace)
+{
+	// A cell is 0x10000 whole units across
+	EXPECT_EQ(footpath_rules::FileLinkCell({0, 0}), glm::ivec2(0, 0));
+	EXPECT_EQ(footpath_rules::FileLinkCell({0xFFFF, 0x10000}), glm::ivec2(0, 1));
+	// A place far into the map
+	EXPECT_EQ(footpath_rules::FileLinkCell({6595281, 24097628}), glm::ivec2(100, 367));
+}
+
 TEST(FootpathRules, TheReachOfAFileLinkIsTheGamesDouble)
 {
 	EXPECT_EQ(std::bit_cast<uint64_t>(footpath_rules::k_FileLinkReachSq), 0x3F647AE147AE147CU);

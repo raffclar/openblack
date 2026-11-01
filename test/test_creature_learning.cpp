@@ -1884,35 +1884,27 @@ TEST(CreatureWatching, AScriptTeachesAndTakesAwaySkillsAndMiracles)
 	EXPECT_FALSE(knowledge.skillsKnown[4]);
 }
 
-TEST(CreatureWatching, AScriptTeachesAnIndexPastTheTable)
+TEST(CreatureWatching, AScriptTeachOfAnIndexPastTheTableDoesNothing)
 {
 	const std::vector<creature_watching::SkillRule> skills(6);
 	const std::vector<creature_watching::MiracleRule> miracles(42);
 	auto knowledge = creature_watching::StartKnowledge(skills, miracles);
 	using creature_watching::KnownList;
-	// The seventh skill has no row, but the creature knows it after the teach, the first time only
-	EXPECT_FALSE(creature_watching::IsKnown(knowledge, KnownList::Skill, 6));
-	EXPECT_TRUE(creature_watching::SetKnown(knowledge, KnownList::Skill, 6, true, 0));
+	// The seventh skill has no row, so the teach does not give it to the creature
 	EXPECT_FALSE(creature_watching::SetKnown(knowledge, KnownList::Skill, 6, true, 0));
-	EXPECT_TRUE(creature_watching::IsKnown(knowledge, KnownList::Skill, 6));
-	EXPECT_EQ(knowledge.skillsKnownPastTable, std::vector<uint32_t> {6});
-	// The table rows do not change
+	EXPECT_FALSE(creature_watching::IsKnown(knowledge, KnownList::Skill, 6));
+	EXPECT_TRUE(knowledge.skillsKnownPastTable.empty());
 	EXPECT_EQ(knowledge.skillsKnown.size(), 6u);
 	EXPECT_TRUE(std::ranges::none_of(knowledge.skillsKnown, std::identity {}));
-	// A miracle past the table is known, but it gets no sightings
-	EXPECT_TRUE(creature_watching::SetKnown(knowledge, KnownList::Miracle, 42, true, 9));
-	EXPECT_TRUE(creature_watching::IsKnown(knowledge, KnownList::Miracle, 42));
-	EXPECT_EQ(knowledge.miraclesSeen.size(), 42u);
+	// A miracle past the table is not known and gets no sightings
+	EXPECT_FALSE(creature_watching::SetKnown(knowledge, KnownList::Miracle, 42, true, 9));
+	EXPECT_FALSE(creature_watching::IsKnown(knowledge, KnownList::Miracle, 42));
+	EXPECT_TRUE(knowledge.miraclesKnownPastTable.empty());
 	EXPECT_TRUE(std::ranges::all_of(knowledge.miraclesSeen, [](const auto& seen) { return seen.count == 0; }));
-	// The ids keep the order of the teach
-	EXPECT_TRUE(creature_watching::SetKnown(knowledge, KnownList::Skill, 100, true, 0));
-	EXPECT_EQ(knowledge.skillsKnownPastTable, (std::vector<uint32_t> {6, 100}));
-	// A teach to forget removes the id, and the next teach makes it newly known
+	// An index from a mind file stays known: a teach to forget it does nothing
+	knowledge.skillsKnownPastTable.push_back(6);
 	EXPECT_FALSE(creature_watching::SetKnown(knowledge, KnownList::Skill, 6, false, 0));
-	EXPECT_FALSE(creature_watching::IsKnown(knowledge, KnownList::Skill, 6));
-	EXPECT_FALSE(creature_watching::SetKnown(knowledge, KnownList::Skill, 6, false, 0));
-	EXPECT_TRUE(creature_watching::SetKnown(knowledge, KnownList::Skill, 6, true, 0));
-	EXPECT_EQ(knowledge.skillsKnownPastTable, (std::vector<uint32_t> {100, 6}));
+	EXPECT_TRUE(creature_watching::IsKnown(knowledge, KnownList::Skill, 6));
 }
 
 TEST(CreatureWatching, TaughtSightingsAreTheTimesNeededRoundedDown)

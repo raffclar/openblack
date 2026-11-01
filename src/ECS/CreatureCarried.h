@@ -30,6 +30,10 @@ namespace openblack::ecs::creature_carried
 /// The creature that carries the thing, none when no creature carries it
 [[nodiscard]] std::optional<entt::entity> CarrierOf(const Registry& registry, entt::entity thing);
 
+/// The thing in the hand of the creature, none when the hand is empty. While the creature prepares a throw, the thing
+/// is in its hand, but the creature does not carry it.
+[[nodiscard]] std::optional<entt::entity> InHandOf(const Registry& registry, entt::entity creature);
+
 /// Whether the creature carries the thing
 [[nodiscard]] bool Carries(const Registry& registry, entt::entity creature, entt::entity thing);
 

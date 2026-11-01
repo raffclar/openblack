@@ -58,6 +58,7 @@
 #include "VillagerFootpath.h"
 #include "VillagerHome.h"
 #include "VillagerReactions.h"
+#include "VillagerWorship.h"
 
 using namespace openblack;
 using namespace openblack::ecs::components;
@@ -386,8 +387,9 @@ bool villager_food::CheckHungry(LivingAction& action)
 		                        person.food, info.starvingForFood, [&action] { return ChangeStateToFindFoodToEat(action); });
 		if (world_objects::LifeOf(villager) <= 0.0f)
 		{
-			// A worshipper at its site dies of its chanting there, in its worship turn
-			const auto reason = rules::HungerDeath(ecs::villager_check_rules::ChantedLast(FinalState(action)));
+			// A villager that its town counts at its worship site, or that goes home or to sleep from worship, dies of chanting
+			const auto reason = rules::HungerDeath(ecs::villager_check_rules::ChantedLast(
+			    FinalState(action), ecs::villager_worship::IsCountedAtWorshipSite(villager)));
 			villager_fire::DieByEffect(villager, villager_fire::DeathCause {.reason = reason,
 			                                                                .killer = world_objects::PlayerOf(villager),
 			                                                                .weight = world_objects::LifeOf(villager)});

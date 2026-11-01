@@ -106,6 +106,7 @@ public:
 	void Move(ecs::systems::EffectHandle, glm::vec3) override {}
 	void Stop(ecs::systems::EffectHandle) override {}
 	void Remove(ecs::systems::EffectHandle) override {}
+	void RemoveOwnedBy(entt::entity) override {}
 	void SetPlayer(ecs::systems::EffectHandle, int) override {}
 	void SetPower(ecs::systems::EffectHandle, float) override {}
 	void SetMagnitude(ecs::systems::EffectHandle handle, float magnitude) override
@@ -168,6 +169,7 @@ public:
 		float altitude;
 	};
 
+	entt::entity Restore(const RestoredVortex& /*saved*/) override { return entt::null; }
 	entt::entity Create(glm::vec3 position, VortexType type, float altitude) override
 	{
 		made.push_back({.position = position, .type = type, .altitude = altitude});

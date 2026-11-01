@@ -78,6 +78,11 @@ struct HostSettings
 /// The most bytes of the name of a player who joins on the local network
 constexpr size_t k_MostLanNameBytes = 64;
 
+/// True when a line of the room's chat can go to the players: it has a character above the space, as the game sends no
+/// line of only spaces, and it has at most the characters that the chat box of the game takes. The game counts the
+/// characters in UTF-16 code units.
+[[nodiscard]] bool IsRoomChatLine(std::string_view text) noexcept;
+
 /// The game role of the server in a network game (authoritative lockstep, user decision MP-Q1). It lets in the players
 /// with a ticket of the lobby, orders their commands into its turns, sends each turn and the checksum of its world after
 /// the turn to every client, and compares the clients' checksums with its own. A god's player who loses the socket can
@@ -150,6 +155,8 @@ public:
 		std::optional<ConnectionId> connection;
 		int64_t awaySince {0};
 		uint32_t resumes {0};
+		/// The name of the player, for the room's chat. Empty after a restore from a snapshot.
+		std::string name;
 	};
 
 	LockstepHost(WebSocketServerInterface& sockets, CheckTicket checkTicket, Clock clock, MakeSecret makeSecret,
@@ -248,7 +255,10 @@ private:
 	void SendKeptTurns(ConnectionId connection, uint32_t from);
 	/// Gives a new session to an observer on a connection, and returns its secret. With no secrets, the observer cannot
 	/// come back.
-	[[nodiscard]] std::string NewWatcher(ConnectionId connection);
+	[[nodiscard]] std::string NewWatcher(ConnectionId connection, std::string name);
+	/// A line of the room's chat from a player: it goes to every other player in a room on the local network, until the
+	/// start
+	void ChatInRoom(ConnectionId connection, const Peer& peer, const game_socket::RoomChat& chat);
 	/// The salted hash of a secret. None when the secret is empty or the host has no hasher.
 	[[nodiscard]] std::optional<SessionHash> HashOf(std::string_view secret) const;
 	/// True when the secret that a client gives is the secret of a session. A session that a restore gave has only the

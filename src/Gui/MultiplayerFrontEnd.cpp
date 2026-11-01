@@ -99,6 +99,7 @@ void MultiplayerFrontEnd::Update()
 		}
 	}
 	FollowSession();
+	FollowLanChat();
 	FollowStart();
 	FollowMapDownload();
 	if (_flow.box == Box::GameList)
@@ -507,6 +508,32 @@ void MultiplayerFrontEnd::FollowLanRoom()
 	_seats = Seats(_room->players);
 }
 
+void MultiplayerFrontEnd::FollowLanChat()
+{
+	if (_flow.kind != LobbyKind::Lan || _services.network == nullptr)
+	{
+		return;
+	}
+	// The game server of the room sends the lines of the other players
+	auto lines = _services.network->TakeRoomChat();
+	if (!_joined || !_room.has_value())
+	{
+		return;
+	}
+	const auto ownName = ToUtf8(_settings.profileName);
+	for (const auto& line : lines)
+	{
+		const auto seat = std::ranges::find(_seats, line.from, [](const Seat& s) { return s.account.name; });
+		const auto god = seat != _seats.end() ? seat->god : 0;
+		_chat.push_back(ChatLine(ToUtf16(line.from), ClampChat(ToUtf16(line.text)), line.from == ownName, god));
+		// The log keeps who spoke, never the words
+		if (auto logger = spdlog::get("game"))
+		{
+			logger->info("A chat line from {} came on the room's game server", line.from);
+		}
+	}
+}
+
 void MultiplayerFrontEnd::EnterGameList()
 {
 	_flow.box = Box::GameList;
@@ -856,15 +883,27 @@ std::u16string MultiplayerFrontEnd::GetPlayerName() const
 void MultiplayerFrontEnd::SendChat(std::u16string_view text)
 {
 	const auto line = ClampChat(text);
-	if (line.empty() || !_joined || !_room.has_value())
+	// The game sends no line of only spaces
+	if (!HasChatText(line) || !_joined || !_room.has_value())
 	{
 		return;
 	}
-	// The line comes back on the room's channel to every player, the sender too
+	// On the internet the game shows its own line at once and the lobby sends it to the other players. The lobby
+	// sends the line back to the sender too, and the game leaves that copy out
 	if (_flow.kind == LobbyKind::Internet && _services.lobby != nullptr)
 	{
+		const auto* own = GetOwnSeat();
+		_chat.push_back(ChatLine(GetPlayerName(), line, true, own != nullptr ? own->god : 0));
 		_services.lobby->SendChatLine(ChannelOf(_room->id), ToUtf8(line),
 		                              [](ecs::systems::LobbyResult<ecs::systems::LobbyDone>&&) {});
+	}
+	// On the local network the game shows its own line at once, and the room's game server sends it to the other
+	// players, as the host's lobby does
+	else if (_flow.kind == LobbyKind::Lan && _services.network != nullptr)
+	{
+		const auto* own = GetOwnSeat();
+		_chat.push_back(ChatLine(_settings.profileName, line, true, own != nullptr ? own->god : 0));
+		_services.network->SendRoomChat(ToUtf8(line));
 	}
 }
 
@@ -883,10 +922,14 @@ void MultiplayerFrontEnd::HandleEvent(const lobby_api::PushEvent& event)
 			return;
 		}
 		const auto account = _services.lobby != nullptr ? _services.lobby->GetAccount() : std::nullopt;
-		const bool own = account.has_value() && account->id == line->from.id;
+		// The game showed its own line when the player sent it
+		if (account.has_value() && account->id == line->from.id)
+		{
+			return;
+		}
 		const auto seat = std::ranges::find(_seats, line->from.id, [](const Seat& s) { return s.account.id; });
 		const auto god = seat != _seats.end() ? seat->god : 0;
-		_chat.push_back(ChatLine(ToUtf16(line->from.name), ClampChat(ToUtf16(line->text)), own, god));
+		_chat.push_back(ChatLine(ToUtf16(line->from.name), ClampChat(ToUtf16(line->text)), false, god));
 		// The log keeps who spoke, never the words
 		if (auto logger = spdlog::get("game"))
 		{

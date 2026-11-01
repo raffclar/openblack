@@ -37,6 +37,7 @@ enum class VanillaType : uint32_t
 {
 	Villager = 0x06,
 	Abode = 0x07,
+	LandscapeVortexIn = 0x1B,
 	MagicWood = 0x1F,
 	StoragePit = 0x08,
 	Town = 0x28,
@@ -68,6 +69,7 @@ enum class VanillaType : uint32_t
 	Creature = 0x69,
 	Game = 0x6A,
 	Poo = 0x6B,
+	ParticleContainer = 0x6E,
 	Rock = 0x6F,
 	DeadTree = 0x70,
 	FelledTree = 0x71,
@@ -80,9 +82,19 @@ enum class VanillaType : uint32_t
 	ScriptTimer = 0x7D,
 	Flock = 0x7E,
 	Wonder = 0x80,
+	AtomCore = 0xA2,
+	AtomCollection = 0xA3,
+	ParticleManager = 0xA4,
+	ParticleSystem = 0xA5,
+	PointParticle = 0xA8,
+	ObjectRefParticle = 0xB0,
+	GoldenShowerParticle = 0xB1,
+	SpriteParticle = 0xB4,
+	EmitterRuleData = 0xED,
 	BaseOnly = 0xF6,
 	Climate = 0xFC,
 	StreetLantern = 0xFE,
+	VortexCrossingWriter = 0x106,
 };
 
 /// How a named value of a record is kept in the file

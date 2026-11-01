@@ -55,6 +55,8 @@ enum class Stage : uint8_t
 	MapDownloadFailed,
 	/// The conditions page of a game whose server picked winning conditions and a time limit
 	ConditionsPicked,
+	/// The chat of a room on the local network, which goes through the room's game server
+	LanRoomChat,
 	_Count
 };
 

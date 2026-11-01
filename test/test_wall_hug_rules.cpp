@@ -174,6 +174,23 @@ TEST(WallHugRules, AWalkerLeavesTheCircleOnlyNearerItsGoalAndWithTheGoalAhead)
 	EXPECT_FALSE(LeavesCircle(at(-11.0f), goal, {3277, 3277}, entry, false));
 }
 
+TEST(WallHugRules, AWalkerRoundACircleNotesANewLeaveDistanceWhenItsGoalMoves)
+{
+	const auto at = [](float x) { return ToWhole(k_Middle + glm::vec2(x, 0.0f)); };
+	const glm::ivec2 position = at(-8.4f);
+	// The walker started round 8.4 m from its goal. The goal then moved 45 m away.
+	const auto oldEntry = EntryDistance(position, at(0.0f));
+	const glm::ivec2 movedGoal = at(36.6f);
+	EXPECT_FALSE(LeavesCircle(at(-8.0f), movedGoal, {3277, 3277}, oldEntry, false));
+	// Round a circle, it notes the distance to the new goal, as when it starts round
+	const auto newEntry = LeaveDistanceAfterGoalMoves(position, movedGoal, oldEntry, true);
+	EXPECT_EQ(newEntry, EntryDistance(position, movedGoal));
+	// Nearer the new goal, with the goal ahead, it can now leave the circle
+	EXPECT_TRUE(LeavesCircle(at(-8.0f), movedGoal, {3277, -3277}, newEntry, true));
+	// A walker that does not go round a circle keeps its distance
+	EXPECT_EQ(LeaveDistanceAfterGoalMoves(position, movedGoal, oldEntry, false), oldEntry);
+}
+
 namespace
 {
 /// A walker at 1000 m, 1000 m stepping 5 m a turn along x

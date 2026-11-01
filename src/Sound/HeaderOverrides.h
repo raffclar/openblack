@@ -23,6 +23,8 @@ struct HeaderPlaySettings
 {
 	uint32_t overrideFlags {0};
 	uint16_t volume {0};
+	/// From the left (0) to the right (180)
+	int32_t pan {0};
 	uint32_t pitchPercent {0};
 	/// The largest random change of the playback rate, in percent of the rate, up or down
 	uint32_t pitchDeviation {0};
@@ -35,6 +37,8 @@ struct HeaderPlaySettings
 struct CallerPlaySettings
 {
 	std::optional<uint32_t> volume;
+	/// From the left (0) to the right (180) for a sound that is not in the world
+	std::optional<uint32_t> pan;
 	std::optional<uint32_t> pitchPercent;
 	std::optional<float> minDistance;
 	std::optional<float> maxDistance;
@@ -46,6 +50,8 @@ struct CallerPlaySettings
 struct StartPlaySettings
 {
 	uint32_t volume;
+	/// From the left (0) to the right (180), 90 the centre. A larger value plays at 180.
+	uint32_t pan;
 	uint32_t pitchPercent;
 	float minDistance;
 	float maxDistance;
@@ -57,6 +63,8 @@ struct StartPlaySettings
 };
 
 inline constexpr uint32_t k_PlayMaxVolume = 127;
+/// The pan of a sound at the centre
+inline constexpr uint32_t k_PlayCentrePan = 90;
 inline constexpr uint32_t k_PlayDefaultPitchPercent = 100;
 inline constexpr float k_PlayDefaultMinDistance = 1.0f;
 inline constexpr float k_PlayDefaultMaxDistance = 9999.0f;
@@ -97,6 +105,10 @@ inline constexpr uint32_t k_CallerDistancesWin =
 		volume = k_PlayMaxVolume;
 	}
 
+	// The pan of the header is a signed number, and the sound library reads it as an unsigned number
+	const auto pan =
+	    fromHeader(pack::AudioBankOverride::Pan) ? static_cast<uint32_t>(header.pan) : caller.pan.value_or(k_PlayCentrePan);
+
 	auto pitch = fromHeader(pack::AudioBankOverride::Pitch) ? header.pitchPercent
 	                                                        : caller.pitchPercent.value_or(k_PlayDefaultPitchPercent);
 	if (pitch == 0)
@@ -113,6 +125,7 @@ inline constexpr uint32_t k_CallerDistancesWin =
 
 	return {
 	    .volume = volume,
+	    .pan = pan,
 	    .pitchPercent = pitch,
 	    .minDistance = fromHeader(pack::AudioBankOverride::MinDist) ? header.minDistance
 	                                                                : caller.minDistance.value_or(k_PlayDefaultMinDistance),

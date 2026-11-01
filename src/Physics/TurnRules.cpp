@@ -17,6 +17,7 @@
 #include <glm/gtc/constants.hpp>
 
 #include "Body.h"
+#include "Common/X87.h"
 
 using namespace openblack;
 using namespace openblack::physics;
@@ -45,8 +46,9 @@ constexpr float k_SinkShare = 0.5f;
 
 int32_t CellOfMetres(float metres)
 {
-	// Truncated to map coordinates, then the cell is the high word (rounding down)
-	const auto fixed = static_cast<int32_t>(metres * k_FixedPerMetre);
+	// Truncated to map coordinates, then the cell is the high word (rounding down). A NaN or an infinity gives the
+	// map coordinate 0, as the game's change does.
+	const auto fixed = openblack::x87::ToInteger(metres * k_FixedPerMetre);
 	return fixed >> 16;
 }
 
@@ -178,7 +180,9 @@ bool turn::PassesCamera(glm::vec3 before, glm::vec3 after, glm::vec3 camera, glm
 {
 	const auto from = before - camera;
 	const auto to = after - camera;
-	return glm::dot(from, from) > k_WhooshDistanceSquared && glm::dot(to, to) < k_WhooshDistanceSquared &&
+	// The game compares the distance after the step with the FPU, so a NaN passes that compare
+	return glm::dot(from, from) > k_WhooshDistanceSquared &&
+	       openblack::x87::LessOrUnordered(glm::dot(to, to), k_WhooshDistanceSquared) &&
 	       glm::dot(velocity, velocity) > k_WhooshSpeedSquared;
 }
 
@@ -194,7 +198,8 @@ bool turn::SunkOutOfSight(float centreHeight, float radius)
 
 bool turn::Bobbed(float upwardSpeedBefore, float upwardSpeedAfter)
 {
-	return upwardSpeedBefore * upwardSpeedAfter < 0.0f;
+	// The game compares with the FPU, so a NaN speed also counts as a change of sign
+	return openblack::x87::LessOrUnordered(upwardSpeedBefore * upwardSpeedAfter, 0.0f);
 }
 
 float turn::PushForce(float weight)

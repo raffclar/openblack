@@ -49,7 +49,7 @@ void testbed_scenarios::AddMultiplayerFrontEndScenarios(std::vector<Scenario>& a
 {
 	using Kind = Command::Kind;
 	using Stage = testbed_multiplayer::Stage;
-	const std::array<BoxScenario, 20> boxes = {{
+	const std::array<BoxScenario, 21> boxes = {{
 	    {"multiplayer.choose_connection", "The multiplayer front end: choose a connection", Stage::ChooseConnection,
 	     "The multiplayer front end opens with the demonstration lobby. The player goes straight into the temple's "
 	     "future room.",
@@ -157,6 +157,12 @@ void testbed_scenarios::AddMultiplayerFrontEndScenarios(std::vector<Scenario>& a
 	     "demonstration does not give its file (deviation 169).",
 	     "A white box says \"ERROR: Could not download map from Internet.\" and \"Please check your Internet "
 	     "connection.\" with OK, over the dimmed room. OK closes the box, and the player stays in the room."},
+	    {"multiplayer.lan_room_chat", "The multiplayer front end: the chat of a room on the local network", Stage::LanRoomChat,
+	     "The player joins \"Office game\" on the demonstration's local network by the profile's name. The room's game "
+	     "server sends a line of Ian, god 1.",
+	     "The game room of \"Office game\" opens on the Chat tab. The chat shows \"Ian: Hello from the office!\" in red. "
+	     "Type a line and push Return: it shows at once as \"name> text\" in light grey, with the profile's name, and "
+	     "goes to the room's game server. A line of only spaces does not go."},
 	}};
 	for (const auto& box : boxes)
 	{

@@ -1783,3 +1783,83 @@ TEST_F(LockstepTest, TheReportOfTheRoomGivesTheGodsAndTheTurnsForTheOperator)
 	EXPECT_EQ(report.seats.at(1).account, "bob");
 	EXPECT_EQ(report.seats.at(2).state, "open");
 }
+
+TEST(LockstepRules, ALineOfTheRoomsChatHasAVisibleCharacterAndTheMostCharactersOfTheChatBox)
+{
+	EXPECT_TRUE(server::IsRoomChatLine("Hi"));
+	EXPECT_TRUE(server::IsRoomChatLine("  a  "));
+	EXPECT_FALSE(server::IsRoomChatLine(""));
+	EXPECT_FALSE(server::IsRoomChatLine("   "));
+	EXPECT_FALSE(server::IsRoomChatLine("\t\r\n"));
+	EXPECT_TRUE(server::IsRoomChatLine(std::string(game_socket::k_MostRoomChatCharacters, 'a')));
+	EXPECT_FALSE(server::IsRoomChatLine(std::string(game_socket::k_MostRoomChatCharacters + 1, 'a')));
+	// A letter of two bytes is one code unit; a letter of four bytes is two code units
+	std::string accents;
+	for (size_t i = 0; i < game_socket::k_MostRoomChatCharacters; ++i)
+	{
+		accents += "\xC3\xA9";
+	}
+	EXPECT_TRUE(server::IsRoomChatLine(accents));
+	std::string faces;
+	for (size_t i = 0; i < game_socket::k_MostRoomChatCharacters / 2; ++i)
+	{
+		faces += "\xF0\x9F\x98\x80";
+	}
+	EXPECT_TRUE(server::IsRoomChatLine(faces));
+	EXPECT_FALSE(server::IsRoomChatLine(faces + "a"));
+}
+
+TEST_F(LockstepTest, OnTheLocalNetworkTheRoomsChatGoesToTheOtherPlayersInTheRoomUntilTheStart)
+{
+	MakeHost(1, 5LL * 60 * 1'000'000, 2, false, true);
+	Computer alice(network, now, "", k_LandFile, {'C'}, 0.0f, "Alice");
+	alice.session.SetReady(false);
+	Computer bob(network, now, "", k_LandFile, {'C'}, 0.0f, "Bob");
+	bob.session.SetReady(false);
+	Computer carol(network, now, "", k_LandFile, {'C'}, 0.0f, "Carol");
+	Frames({&alice, &bob, &carol}, 3);
+	ASSERT_EQ(carol.session.GetJoined()->role, game_socket::Role::Observer);
+
+	alice.session.SendRoomChat("Hello, all!");
+	carol.session.SendRoomChat("I watch.");
+	// The server sends no line of only spaces and no line that is longer than the chat box
+	bob.session.SendRoomChat("   ");
+	bob.session.SendRoomChat(std::string(game_socket::k_MostRoomChatCharacters + 1, 'b'));
+	Frames({&alice, &bob, &carol}, 3);
+	// Each line goes to the other players in the room with the sender's name. The sender's game shows its own line.
+	const game_socket::RoomChat fromAlice {.from = "Alice", .text = "Hello, all!"};
+	const game_socket::RoomChat fromCarol {.from = "Carol", .text = "I watch."};
+	EXPECT_EQ(alice.session.TakeRoomChat(), std::vector<game_socket::RoomChat> {fromCarol});
+	EXPECT_EQ(bob.session.TakeRoomChat(), (std::vector<game_socket::RoomChat> {fromAlice, fromCarol}));
+	EXPECT_EQ(carol.session.TakeRoomChat(), std::vector<game_socket::RoomChat> {fromAlice});
+	EXPECT_TRUE(bob.session.TakeRoomChat().empty());
+
+	// The chat of the room ends when the game starts
+	alice.session.SetReady(true);
+	bob.session.SetReady(true);
+	Frames({&alice, &bob, &carol}, 6);
+	ASSERT_TRUE(host->Started());
+	alice.session.SendRoomChat("Too late");
+	Frames({&alice, &bob, &carol}, 3);
+	for (auto* computer : {&alice, &bob, &carol})
+	{
+		EXPECT_TRUE(computer->session.TakeRoomChat().empty());
+	}
+}
+
+TEST_F(LockstepTest, ARoomOfTheLobbyHasNoChatOnTheGameSocket)
+{
+	MakeHost(1);
+	Computer alice(network, now, "god:alice");
+	alice.session.SetReady(false);
+	Computer bob(network, now, "god:bob");
+	bob.session.SetReady(false);
+	Frames({&alice, &bob}, 3);
+	ASSERT_TRUE(alice.session.GetJoined().has_value());
+	// On the internet the lobby's channel of the room has the chat
+	alice.session.SendRoomChat("Hello");
+	Frames({&alice, &bob}, 3);
+	EXPECT_TRUE(alice.session.TakeRoomChat().empty());
+	EXPECT_TRUE(bob.session.TakeRoomChat().empty());
+	EXPECT_EQ(alice.session.GetEnd(), NetworkSession::End::None);
+}

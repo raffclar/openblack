@@ -328,4 +328,54 @@ namespace detail
 	return static_cast<int32_t>(static_cast<uint32_t>(static_cast<uint64_t>(wide)));
 }
 
+/// The bits of the number that the FPU gives for an operation with no answer, for example 0 / 0. This number is a
+/// quiet NaN with the sign bit set.
+inline constexpr uint32_t k_IndefiniteBits = 0xFFC00000u;
+
+/// The number that the FPU gives for an operation with no answer
+[[nodiscard]] inline float Indefinite()
+{
+	return std::bit_cast<float>(k_IndefiniteBits);
+}
+
+/// a / b as the game's FPU divides, with all of its exceptions masked. The code does not divide by zero in C++:
+/// - A NaN in a or b gives that NaN.
+/// - 0 / 0 gives the FPU's NaN (Indefinite).
+/// - Any other number divided by zero gives an infinity. Its sign comes from the signs of a and b.
+[[nodiscard]] inline float DivideAsFpu(float a, float b)
+{
+	if (std::isnan(a))
+	{
+		return a;
+	}
+	if (b != 0.0f || std::isnan(b))
+	{
+		return a / b;
+	}
+	if (a == 0.0f)
+	{
+		return Indefinite();
+	}
+	const bool negative = std::signbit(a) != std::signbit(b);
+	return negative ? -std::numeric_limits<float>::infinity() : std::numeric_limits<float>::infinity();
+}
+
+/// The FPU compare a < b of the game, where a NaN in a or b makes the compare true
+[[nodiscard]] constexpr bool LessOrUnordered(float a, float b)
+{
+	return !(a >= b);
+}
+
+/// The FPU compare a == b of the game, where a NaN in a or b makes the compare true
+[[nodiscard]] constexpr bool EqualOrUnordered(float a, float b)
+{
+	return !(a < b) && !(a > b);
+}
+
+/// The value with a NaN changed to the FPU's NaN, so that a NaN has the same bits on each target
+[[nodiscard]] inline float CanonicalNaN(float value)
+{
+	return std::isnan(value) ? Indefinite() : value;
+}
+
 } // namespace openblack::x87

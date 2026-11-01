@@ -15,6 +15,7 @@
 #include <memory>
 #include <optional>
 #include <span>
+#include <vector>
 
 #include <entt/entity/entity.hpp>
 #include <glm/mat3x3.hpp>
@@ -28,7 +29,8 @@
 namespace openblack::particles
 {
 struct CarriedObject;
-}
+struct RestoredEffect;
+} // namespace openblack::particles
 
 namespace openblack::ecs::systems
 {
@@ -65,8 +67,28 @@ public:
 		bool indestructible {false};
 	};
 
+	/// A vortex as a saved game of the game keeps it
+	struct RestoredVortex
+	{
+		/// The point on the land under its middle
+		glm::vec3 position {0.0f};
+		VortexType type {VortexType::In};
+		VortexStateType state {VortexStateType::Active};
+		float altitude {0.0f};
+		/// The heights of the square that it levels, as they were before it levelled them, and their average
+		std::vector<uint8_t> groundHeights;
+		float groundAverage {0.0f};
+		/// The saved state of the effect that draws things in, which continues from it; none to start a new effect
+		std::shared_ptr<const particles::RestoredEffect> mover;
+		/// The text that it wrote to the crossing file, none when it writes no crossing file
+		std::optional<std::vector<uint8_t>> crossing;
+	};
+
 	/// A vortex of a kind made at a point on the land, raised by an altitude above the ground there
 	virtual entt::entity Create(glm::vec3 position, VortexType type, float altitude) = 0;
+	/// A vortex made again from a saved game of the game. Its state starts again at this turn, as the clocks of its
+	/// state start again in the game's load. It levels the land again from the saved heights.
+	virtual entt::entity Restore(const RestoredVortex& saved) = 0;
 	/// A vortex starts to fade out, whatever it was doing, and goes when it has. Whether the thing was a vortex.
 	virtual bool StartFadeOut(entt::entity vortex) = 0;
 	/// A vortex that leads into the land is told whom those who come out join and where its animals gather; any other

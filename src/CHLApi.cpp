@@ -123,6 +123,7 @@
 #include "ECS/Components/LivingAction.h"
 #include "ECS/Components/LivingListPlace.h"
 #include "ECS/Components/LivingReaction.h"
+#include "ECS/Components/MagicShield.h"
 #include "ECS/Components/MapCellResident.h"
 #include "ECS/Components/Mesh.h"
 #include "ECS/Components/MiracleImpression.h"
@@ -3332,9 +3333,8 @@ static void FlockAttachToTown(entt::entity object, entt::entity town)
 				MoveVillagerToTown(member, town);
 				continue;
 			}
-			// A member that is not a villager stays where it is. Each one also leaves a 0 on the script's stack.
+			// A member that is not a villager stays where it is. It puts no value on the script's stack (deviation 178).
 			ScriptMessage("JONTY-Trying to add non villager to town");
-			Pusho(0);
 		}
 		Pusho(static_cast<uint32_t>(town));
 		return;
@@ -4650,11 +4650,12 @@ void InCreatureHand() // 076 IN_CREATURE_HAND
 		Pushb(false);
 		return;
 	}
-	// What the creature carries: while it prepares a throw, it carries nothing
-	const auto carried = ecs::creature_carried::CarriedBy(registry, creature);
+	// The thing in the hand of the creature. While the creature prepares a throw, it carries nothing, but the thing stays
+	// in its hand until the release, and the test sees it there (deviation 182).
+	const auto inHand = ecs::creature_carried::InHandOf(registry, creature);
 	const auto* action = registry.TryGet<const ecs::components::CreatureObjectAction>(creature);
 	const auto eating = action != nullptr && action->kind == creature_object_actions::Kind::Eat ? action->target : std::nullopt;
-	Pushb(script::property_rules::InCreatureHand(thing, carried.value_or(entt::null), eating));
+	Pushb(script::property_rules::InCreatureHand(thing, inHand.value_or(entt::null), eating));
 }
 
 /// Changes the desires of the creature a script names, telling the script when it names no creature
@@ -6522,7 +6523,17 @@ void GameThingHit() // 194 GAME_THING_HIT
 		return;
 	}
 	// Whether it is the thing the physics last saw hit, until a script clears it
-	Pushb(Locator::dynamicsSystem::value().GetHitObject() == object);
+	const auto hit = Locator::dynamicsSystem::value().GetHitObject();
+	if (hit == object)
+	{
+		Pushb(true);
+		return;
+	}
+	// The physics sees only the dome of a shield miracle. A hit on the dome is also a hit on its miracle (deviation 180).
+	const auto& registry = Locator::entitiesRegistry::value();
+	const auto* shield =
+	    hit != entt::null && registry.Valid(hit) ? registry.TryGet<const ecs::components::MagicShield>(hit) : nullptr;
+	Pushb(shield != nullptr && shield->spell == object);
 }
 
 void SpellAtThing() // 195 SPELL_AT_THING
@@ -7527,8 +7538,9 @@ void SetLeashWorks() // 249 SET_LEASH_WORKS
 /// CREATURE_SET_PLAYER makes the one they pick
 void StartWithCreature(CreatureType species, const glm::vec3& position, float yawRadians)
 {
-	const auto creature =
-	    CreateScriptObject(ObjectType::Creature, static_cast<uint32_t>(species), position, 0.0f, 0.0f, yawRadians, 0.0f, 1.0f);
+	// The scripts give each species its own number, which is not the same as the game's number for the Giant Ape
+	const auto creature = CreateScriptObject(ObjectType::Creature, script::property_rules::ScriptCreatureType(species),
+	                                         position, 0.0f, 0.0f, yawRadians, 0.0f, 1.0f);
 	if (creature == entt::null || creature == static_cast<entt::entity>(0) ||
 	    !Locator::entitiesRegistry::value().Valid(creature))
 	{

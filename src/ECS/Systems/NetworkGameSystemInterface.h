@@ -13,6 +13,7 @@
 
 #include <optional>
 #include <string>
+#include <vector>
 
 #include <GameSocket.h>
 
@@ -79,6 +80,11 @@ public:
 	/// The god of the player plays for a clan in the game room, or for no clan. The start data of the god tells it to
 	/// the game, so that the creature of a clan god does not go to the files of the player's profile.
 	virtual void SetPlaysForClan(bool /*playsForClan*/) {}
+	/// A line of the chat of a room on the local network: the game server sends it to the other players in the room.
+	/// Only in the room, before the start.
+	virtual void SendRoomChat(std::string /*text*/) {}
+	/// The lines of the room's chat that the game server sent since the last call, in the order that they came
+	[[nodiscard]] virtual std::vector<game_socket::RoomChat> TakeRoomChat() { return {}; }
 	/// The player leaves the network game
 	virtual void Leave() = 0;
 	/// The end box of a decided game opened: the game server stops the turns of the game. When the last turn came, the

@@ -31,6 +31,16 @@ std::optional<entt::entity> creature_carried::CarriedBy(const Registry& registry
 	return carries ? std::optional(held->object) : std::nullopt;
 }
 
+std::optional<entt::entity> creature_carried::InHandOf(const Registry& registry, entt::entity creature)
+{
+	const auto* held = registry.Valid(creature) ? registry.TryGet<const CreatureHeldObject>(creature) : nullptr;
+	if (held == nullptr || !registry.Valid(held->object))
+	{
+		return std::nullopt;
+	}
+	return held->object;
+}
+
 std::optional<entt::entity> creature_carried::CarrierOf(const Registry& registry, entt::entity thing)
 {
 	const auto* holder = registry.Valid(thing) ? registry.TryGet<const HeldByCreature>(thing) : nullptr;

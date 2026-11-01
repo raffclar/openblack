@@ -17,6 +17,7 @@
 
 #include "ECS/Components/Animal.h"
 #include "ECS/Components/Flock.h"
+#include "ECS/Components/ScriptControl.h"
 #include "ECS/Components/Transform.h"
 #include "ECS/Components/WallHug.h"
 #include "ECS/Registry.h"
@@ -225,6 +226,13 @@ void script_flocks::Remove(Registry& registry, entt::entity living, bool deleteW
 	{
 		Destroy(registry, flock);
 	}
+}
+
+void script_flocks::RemoveAtDeath(Registry& registry, entt::entity living)
+{
+	const auto flock = FlockOf(registry, living);
+	const bool heldByScript = flock != entt::null && registry.Valid(flock) && registry.AllOf<InScript>(flock);
+	Remove(registry, living, !heldByScript);
 }
 
 entt::entity script_flocks::SeparateIntoNewFlock(Registry& registry, entt::entity living)

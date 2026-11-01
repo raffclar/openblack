@@ -182,6 +182,11 @@ struct ImportedTemple
 	/// The number of the object that a hurt heart last beamed at (0 for none), and the turn of that beam
 	uint32_t beamTarget {0};
 	uint32_t beamTurn {0};
+	/// The numbers of the particle containers of the heart (0 for none): the beams of a hurt heart, and the beams and the
+	/// glow of the destruction
+	uint32_t beams {0};
+	uint32_t destructionBeams {0};
+	uint32_t destructionGlow {0};
 
 	/// A temple with no site stands whole
 	[[nodiscard]] bool Whole() const { return site == 0; }

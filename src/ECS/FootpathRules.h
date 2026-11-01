@@ -129,8 +129,18 @@ constexpr double k_FileLinkReachSq = std::bit_cast<double>(uint64_t {0x3F647AE14
 
 /// The building that takes a link of the land's footpath file: the first place in the list that is in the reach of the
 /// place of the link. None when no place is near enough.
-/// The list gives the buildings that stand there first. Then it gives the plans of the towns in the order of the game's
-/// list of all towns, and the plans of each town in the order that the town made them.
+/// The list gives the buildings in the map cell of the link first, in the order that a search of the cell meets them. Then it
+/// gives the plans of the towns in the order of the game's list of all towns, and the plans of each town in the order that the
+/// town made them.
 [[nodiscard]] std::optional<size_t> FileLinkHolder(glm::ivec2 link, Places places);
+
+/// The map cell (column and row) that holds the place of a link of the land's footpath file. Only a building in this
+/// cell can take the link.
+[[nodiscard]] constexpr glm::ivec2 FileLinkCell(glm::ivec2 link)
+{
+	constexpr uint32_t k_CellShift = 0x10;
+	return {static_cast<int32_t>(static_cast<uint32_t>(link.x) >> k_CellShift),
+	        static_cast<int32_t>(static_cast<uint32_t>(link.y) >> k_CellShift)};
+}
 
 } // namespace openblack::ecs::footpath_rules

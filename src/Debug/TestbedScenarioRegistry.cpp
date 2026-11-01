@@ -12964,6 +12964,41 @@ void AddVillagerSizeAndReachScenarios(std::vector<Scenario>& all)
 	                  .value = static_cast<size_t>(DanceInfo::DanceAroundPerson),
 	                  .object = 0}},
 	});
+	// A dancer that must go round a hut to get to its place, while the dance turns its place away
+	all.push_back({
+	    .id = "movement.dancer_leaves_circle_when_goal_moves",
+	    .name = "A dancer round a hut leaves it when the dance moves its place",
+	    .facet = Facet::Movement,
+	    .description = "A leader stands in the middle. A Celtic hut stands 9 metres west of him, and a villager stands "
+	                   "behind the hut, 16 metres west of the leader. After one second, a script makes the dance about "
+	                   "a person about the leader, and the villager joins it.",
+	    .expected = "The villager walks round the hut to its place. Each time the dance moves its place, it notes a new "
+	                "distance at which it can leave the hut. It leaves the hut when it is nearer its place than at "
+	                "the last move, and it gets to the dance. It does not go round the hut for ever.",
+	    .environment = {.dispenserGrid = false},
+	    .framing = {.shot = Shot::Overview, .include = {{-22.0f, -12.0f}, {12.0f, 12.0f}}},
+	    .objects = {{.type = VillagerInfo::CelticLeaderMale, .offset = {0.0f, 0.0f}},
+	                {.type = AbodeInfo::CelticHut, .offset = {-9.0f, 0.0f}},
+	                {.type = VillagerInfo::CelticFarmerMale, .offset = {-16.0f, 0.0f}}},
+	    .commands = {{.kind = Kind::MakeDance,
+	                  .delaySeconds = 1.0f,
+	                  .value = static_cast<size_t>(DanceInfo::DanceAroundPerson),
+	                  .object = 0}},
+	});
+	// Lethys's worship site on the second land dances among the spokes of his temple
+	all.push_back({
+	    .id = "movement.lethys_dancers_leave_temple_spokes",
+	    .name = "Lethys's worshippers do not go round a spoke of his temple for ever",
+	    .facet = Facet::Movement,
+	    .description = "The second land of the story, as the story plays it, with the camera on Lethys's worship site. "
+	                   "The dance of the site stands next to the spokes of his temple, and the dance moves the places of "
+	                   "its dancers. Best watched at a high game speed, or run with --sim-fast to turn 60000.",
+	    .expected = "A worshipper that goes round a temple spoke to get to its place notes a new distance to leave the "
+	                "spoke each time the dance moves its place. It leaves the spoke and dances again. No worshipper "
+	                "of the site goes round a spoke for ever, and none dies of hunger because of it.",
+	    .environment = {.land = Land::Story, .storyLand = "Land2.txt", .dispenserGrid = false},
+	    .framing = {.shot = Shot::Overview, .include = {{-1609.0f, 1086.0f}, {-1549.0f, 1146.0f}}},
+	});
 	// Two creatures, each with its own turn in the list of the living
 	all.push_back({
 	    .id = "mind.two_creatures_own_turns",
@@ -13231,6 +13266,24 @@ void AddPoisonScenarios(std::vector<Scenario>& all)
 	    .commands = {poison(1.0f, {.kind = Argument::Kind::Town}, 1),
 	                 poison(2.0f, {.kind = Argument::Kind::Object, .index = 1}, 1),
 	                 poison(7.0f, {.kind = Argument::Kind::Town}, 0)},
+	});
+
+	// The end of the Plague's script cures the storage pit and then the town. A script can cure the storage pit
+	// (deviation 179).
+	all.push_back({
+	    .id = "objects.script_cures_store",
+	    .name = "A script cures a storage pit",
+	    .facet = Facet::Objects,
+	    .description = "A Celtic town of the player's with a village centre and a storage pit with 2000 food and 1000 wood. "
+	                   "After one second a script poisons the storage pit. After six seconds it cures the storage pit.",
+	    .expected = "At one second the food pile of the storage pit is poisoned and shows a pale green tint. At six seconds "
+	                "the food pile is cured, and the tint goes. The food stays in the pile.",
+	    .environment = {.dispenserGrid = false},
+	    .framing = {.shot = Shot::Overview, .include = {k_Pit - glm::vec2 {12.0f}, k_Pit + glm::vec2 {12.0f}}},
+	    .objects = {{.type = AbodeInfo::CelticTownCentre, .offset = {0.0f, 50.0f}},
+	                {.type = AbodeInfo::CelticStoragePit, .offset = k_Pit, .storedFood = 2000, .storedWood = 1000}},
+	    .commands = {poison(1.0f, {.kind = Argument::Kind::Object, .index = 1}, 1),
+	                 poison(5.0f, {.kind = Argument::Kind::Object, .index = 1}, 0)},
 	});
 }
 
@@ -13639,8 +13692,8 @@ void AddWorkshopScenarios(std::vector<Scenario>& all)
 	                   "scaffold to destroy the things in its way. A bush and a ball stand where the hand puts the "
 	                   "scaffold down. The input tools/sim/hand_inputs/scaffold_build.json moves the hand: it takes the "
 	                   "scaffold, holds it still near the village centre, and puts it down.",
-	    .expected = "When the hand lets the scaffold go, the bush and the ball jump out of the way. Each starts from the "
-	                "height of the scaffold above the land and flies a short distance. A building site then opens where "
+	    .expected = "When the hand lets the scaffold go, the bush and the ball jump out of the way. Each starts half a "
+	                "metre above the land at its new place and flies a short distance. A building site then opens where "
 	                "the scaffold is.",
 	    .environment = {.dispenserGrid = false},
 	    .framing = {.shot = Shot::Overview, .include = {k_LooseScaffold - glm::vec2 {10.0f}, k_BuildPlace + glm::vec2 {10.0f}}},
@@ -13648,6 +13701,69 @@ void AddWorkshopScenarios(std::vector<Scenario>& all)
 	                {.type = ScaffoldInfo::Normal, .offset = k_LooseScaffold, .scale = 0.7f, .clearsGround = true},
 	                {.type = TreeInfo::Bush, .offset = k_BuildPlace},
 	                {.type = MobileObjectInfo::Ball, .offset = k_BuildPlace + glm::vec2 {0.0f, -1.5f}}},
+	});
+
+	all.push_back({
+	    .id = "objects.scaffold_clears_ground_creature",
+	    .name = "A scaffold that clears its ground leaves a creature alone",
+	    .facet = Facet::Objects,
+	    .description =
+	        "A loose scaffold that a script marked to destroy the things in its way, away from every town. The "
+	        "player's tiger stands still 3 m east of the scaffold, and a bush stands 1.4 m north-east of it. After one "
+	        "second the scaffold clears its ground, as when the hand lets it go.",
+	    .expected = "The bush jumps out of the way. The tiger stays where it is and stays in the game: the inspector "
+	                "still shows it. The game log tells of the push of the bush and of no removal.",
+	    .environment = {.dispenserGrid = false},
+	    .framing = {.shot = Shot::Overview,
+	                .include = {k_FoundingScaffold - glm::vec2 {15.0f}, k_FoundingScaffold + glm::vec2 {15.0f}}},
+	    .creatures = {{.species = CreatureType::Tiger,
+	                   .offset = k_FoundingScaffold + glm::vec2 {3.0f, 0.0f},
+	                   .pauseMind = true}},
+	    .objects = {{.type = ScaffoldInfo::Normal, .offset = k_FoundingScaffold, .scale = 0.7f, .clearsGround = true},
+	                {.type = TreeInfo::Bush, .offset = k_FoundingScaffold + glm::vec2 {1.0f, 1.0f}}},
+	    .commands = {{.kind = Kind::ScaffoldClearsGround, .delaySeconds = 1.0f, .object = 0}},
+	});
+
+	all.push_back({
+	    .id = "objects.scaffold_push_on_high_land",
+	    .name = "A thing that a clearing scaffold pushes starts above high land",
+	    .facet = Facet::Objects,
+	    .description = "A loose scaffold that a script marked to destroy the things in its way lies on the land, which is "
+	                   "about 21 m high here. A bush stands 1.5 m east of it and a ball 1.5 m north of it. After one second "
+	                   "the scaffold clears its ground, as when the hand lets it go.",
+	    .expected = "The bush and the ball start half a metre above the land, twice as far from the scaffold as the edge "
+	                "of the scaffold. Each flies a short distance and lands near its start. Neither starts under the land "
+	                "or flies far across the map.",
+	    .environment = {.dispenserGrid = false},
+	    .framing = {.shot = Shot::Overview,
+	                .include = {k_FoundingScaffold - glm::vec2 {15.0f}, k_FoundingScaffold + glm::vec2 {15.0f}}},
+	    .objects = {{.type = ScaffoldInfo::Normal, .offset = k_FoundingScaffold, .scale = 0.7f, .clearsGround = true},
+	                {.type = TreeInfo::Bush, .offset = k_FoundingScaffold + glm::vec2 {1.5f, 0.0f}},
+	                {.type = MobileObjectInfo::Ball, .offset = k_FoundingScaffold + glm::vec2 {0.0f, 1.5f}}},
+	    .commands = {{.kind = Kind::ScaffoldClearsGround, .delaySeconds = 1.0f, .object = 0}},
+	});
+
+	all.push_back({
+	    .id = "objects.scaffold_push_straight_west_or_south",
+	    .name = "A clearing scaffold pushes a thing straight west and a thing straight south",
+	    .facet = Facet::Objects,
+	    .description = "A loose scaffold that a script marked to destroy the things in its way. A bush stands 1.5 m "
+	                   "straight west of it and a ball 1.5 m straight south of it. After one second the scaffold clears "
+	                   "its ground, as when the hand lets it go.",
+	    .expected = "As in the game, the push of each thing divides by 0 and its speed is not a number. The bush and "
+	                "the ball go from their places. The inspector shows each at x 0 and z 0, the corner of the map, with "
+	                "a height that is not a number. Each stays in flight and does not land. The game does not stop.",
+	    .environment = {.dispenserGrid = false},
+	    .framing = {.shot = Shot::Overview,
+	                .include = {k_FoundingScaffold - glm::vec2 {15.0f}, k_FoundingScaffold + glm::vec2 {15.0f}}},
+	    .objects = {{.type = ScaffoldInfo::Normal, .offset = k_FoundingScaffold, .scale = 0.7f, .clearsGround = true},
+	                {.type = TreeInfo::Bush, .offset = k_FoundingScaffold + glm::vec2 {-1.5f, 0.0f}},
+	                {.type = MobileObjectInfo::Ball, .offset = k_FoundingScaffold + glm::vec2 {0.0f, -1.5f}}},
+	    .commands = {{.kind = Kind::ScaffoldClearsGround, .delaySeconds = 1.0f, .object = 0}},
+	    .checks = {{.label = "the scaffold, the bush and the ball stay in the game",
+	                .quantity = checks::Quantity::ObjectsAlive,
+	                .afterTurns = 100,
+	                .atLeast = 3}},
 	});
 
 	all.push_back({
@@ -14013,15 +14129,15 @@ bool testbed_scenarios::NeedsNoCreature(Command::Kind kind)
 	       kind == Kind::PlayGuidanceVoice || kind == Kind::ScriptRelease || kind == Kind::FillSiteIcons ||
 	       kind == Kind::ChargeIconWithSeedHeld || kind == Kind::TakeIconSeed || kind == Kind::TapSiteIcon ||
 	       kind == Kind::TapTempleEntrance || kind == Kind::FinishBuilding || kind == Kind::FillBuiltAmount ||
-	       kind == Kind::ScaffoldStartsSite || kind == Kind::DestroyScaffoldSite || kind == Kind::CallNative ||
-	       kind == Kind::PauseGame || kind == Kind::SetGameSpeed || kind == Kind::RemoveTeleportStone ||
-	       kind == Kind::MakeDance || kind == Kind::OpenMultiplayerBox || kind == Kind::BuildWorshipSites ||
-	       kind == Kind::PressPlainKey || kind == Kind::PlainKeyDown || kind == Kind::PlainKeyRepeat ||
-	       kind == Kind::PlainKeyUp || kind == Kind::OtherGodHand || kind == Kind::OwnGod || kind == Kind::JoinOnline ||
-	       kind == Kind::EndBox || kind == Kind::BringCreature || kind == Kind::TattooEditorAsNetworkGame ||
-	       kind == Kind::ShowDemoPing || kind == Kind::AddIncomingMessage || kind == Kind::Chat ||
-	       kind == Kind::ComputerPersonality || kind == Kind::ComputerUntaughtSends || kind == Kind::SkirmishBox ||
-	       kind == Kind::LookAtSaveGamePicture || IsPointerCommand(kind);
+	       kind == Kind::ScaffoldStartsSite || kind == Kind::DestroyScaffoldSite || kind == Kind::ScaffoldClearsGround ||
+	       kind == Kind::CallNative || kind == Kind::PauseGame || kind == Kind::SetGameSpeed ||
+	       kind == Kind::RemoveTeleportStone || kind == Kind::MakeDance || kind == Kind::OpenMultiplayerBox ||
+	       kind == Kind::BuildWorshipSites || kind == Kind::PressPlainKey || kind == Kind::PlainKeyDown ||
+	       kind == Kind::PlainKeyRepeat || kind == Kind::PlainKeyUp || kind == Kind::OtherGodHand || kind == Kind::OwnGod ||
+	       kind == Kind::JoinOnline || kind == Kind::EndBox || kind == Kind::BringCreature ||
+	       kind == Kind::TattooEditorAsNetworkGame || kind == Kind::ShowDemoPing || kind == Kind::AddIncomingMessage ||
+	       kind == Kind::Chat || kind == Kind::ComputerPersonality || kind == Kind::ComputerUntaughtSends ||
+	       kind == Kind::SkirmishBox || kind == Kind::LookAtSaveGamePicture || IsPointerCommand(kind);
 }
 
 std::string_view testbed_scenarios::Name(Facet facet)
@@ -14049,7 +14165,7 @@ std::string_view testbed_scenarios::Name(Shot shot)
 
 std::string_view testbed_scenarios::Name(Command::Kind kind)
 {
-	constexpr std::array<std::string_view, 210> k_Names {
+	constexpr std::array<std::string_view, 211> k_Names {
 	    "walk to",
 	    "run to",
 	    "follow",
@@ -14228,6 +14344,7 @@ std::string_view testbed_scenarios::Name(Command::Kind kind)
 	    "fill the built amount",
 	    "start a site with the scaffold",
 	    "destroy the site of the scaffold",
+	    "clear the ground of the scaffold",
 	    "call a script native",
 	    "animal flees",
 	    "hold the route search",

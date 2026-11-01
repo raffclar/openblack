@@ -1128,8 +1128,9 @@ uint32_t villager_fire::Dead(LivingAction& action)
 {
 	auto& registry = Entities();
 	const auto villager = EntityOf(action);
-	// A dead body leaves its flock, also a body that a script controls. A flock with no member left goes.
-	ecs::script_flocks::Remove(registry, villager, true);
+	// A dead body leaves its flock, also a body that a script controls. A flock with no member left goes, but a flock
+	// that a script holds stays.
+	ecs::script_flocks::RemoveAtDeath(registry, villager);
 	auto* death = registry.TryGet<VillagerDeath>(villager);
 	if (death == nullptr)
 	{

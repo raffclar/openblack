@@ -402,11 +402,15 @@ void Body::TouchGround(const Ground& ground)
 	_contacts = 0;
 	_force.y -= _mass * k_Gravity;
 
-	const bool overSea = ground.HeightAt(Xz(_centre)) < k_SeaLevelTolerance && _centre.y < _radius && !_points.empty() &&
-	                     ground.IsSeaCell(Xz(_points.front().world));
+	// The game compares with the FPU here: a NaN makes each compare true. Thus a body with a place that is not a number
+	// counts as a body in the sea, with all of its points under the water.
+	using openblack::x87::LessOrUnordered;
+	const bool overSea = LessOrUnordered(ground.HeightAt(Xz(_centre)), k_SeaLevelTolerance) &&
+	                     LessOrUnordered(_centre.y, _radius) && !_points.empty() && ground.IsSeaCell(Xz(_points.front().world));
 	if (overSea)
 	{
-		const auto submerged = std::ranges::count_if(_points, [](const Point& point) { return point.world.y < 0.0f; });
+		const auto submerged =
+		    std::ranges::count_if(_points, [](const Point& point) { return LessOrUnordered(point.world.y, 0.0f); });
 		if (submerged > 0)
 		{
 			inWater = true;
@@ -422,7 +426,7 @@ void Body::TouchGround(const Ground& ground)
 			{
 				point.contact = point.world;
 				point.depth = 0.0f;
-				if (point.world.y < 0.0f)
+				if (LessOrUnordered(point.world.y, 0.0f))
 				{
 					_torque += glm::cross(point.world - _aheadCentre, turn);
 				}
@@ -784,6 +788,31 @@ void Body::SetAngularVelocityInBodyAxes(glm::vec3 omega)
 void Body::SetAngularVelocity(glm::vec3 omega)
 {
 	SetAngularVelocityInBodyAxes(glm::transpose(_axes) * omega);
+}
+
+glm::vec3 openblack::physics::StartVelocity(glm::vec3 velocity)
+{
+	// The game compares the squares, added from z to x. A NaN makes the compare true.
+	if (!openblack::x87::LessOrUnordered(k_MaxSpeed * k_MaxSpeed, openblack::x87::DotZyx(velocity, velocity)))
+	{
+		return velocity;
+	}
+	// A part that is 0 or a NaN counts as 0. A speed of only such parts stays as it is.
+	const auto isZero = [](float part) { return openblack::x87::EqualOrUnordered(part, 0.0f); };
+	if (isZero(velocity.x) && isZero(velocity.y) && isZero(velocity.z))
+	{
+		return velocity;
+	}
+	// The game scales by the most speed over the length
+	const auto scaled = openblack::x87::Scaled<openblack::x87::SumOrder::Zyx>(velocity, k_MaxSpeed);
+	return {openblack::x87::CanonicalNaN(scaled.x), openblack::x87::CanonicalNaN(scaled.y),
+	        openblack::x87::CanonicalNaN(scaled.z)};
+}
+
+glm::vec3 openblack::physics::PlaceOfThing(glm::vec3 bodyPlace)
+{
+	const auto acrossMap = [](float metres) { return std::isfinite(metres) ? metres : 0.0f; };
+	return {acrossMap(bodyPlace.x), openblack::x87::CanonicalNaN(bodyPlace.y), acrossMap(bodyPlace.z)};
 }
 
 StepResult Body::Integrate()

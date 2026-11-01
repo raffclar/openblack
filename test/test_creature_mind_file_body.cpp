@@ -87,6 +87,41 @@ TEST(CreatureMindFileBody, ValuesAreKeptAsTheFileHasThem)
 	EXPECT_EQ(body->fatness, 1.5f);
 }
 
+TEST(CreatureMindFileBody, TheFileKeepsThePooTheDehydrationAndTheItchiness)
+{
+	// The six further values of the body: the poo first, the exhaustion second and the dehydration third
+	creaturemind::MindFileData file;
+	file.speciesRow = 2;
+	file.physique.needs = {0.3f, 0.25f, 0.8f, 7.0f, 8.0f, 9.0f};
+	file.physique.scratch = 0.6f;
+	const auto body = FromMindFile(file);
+	ASSERT_TRUE(body.has_value());
+	ASSERT_TRUE(body->needs.has_value());
+	EXPECT_EQ(body->needs->poo, 0.3f);
+	EXPECT_EQ(body->needs->exhaustion, 0.25f);
+	EXPECT_EQ(body->needs->dehydration, 0.8f);
+	EXPECT_EQ(body->needs->itchiness, 0.6f);
+
+	// The body writes the same values back to the same places of the file
+	creaturemind::MindFileData written;
+	ToMindFile(*body, written);
+	EXPECT_EQ(written.physique.needs.at(0), 0.3f);
+	EXPECT_EQ(written.physique.needs.at(1), 0.25f);
+	EXPECT_EQ(written.physique.needs.at(2), 0.8f);
+	EXPECT_EQ(written.physique.scratch, std::optional<float>(0.6f));
+}
+
+TEST(CreatureMindFileBody, AFileOlderThanTheItchinessLeavesItAtNone)
+{
+	creaturemind::MindFileData file;
+	file.speciesRow = 2;
+	file.physique.scratch = std::nullopt;
+	const auto body = FromMindFile(file);
+	ASSERT_TRUE(body.has_value());
+	ASSERT_TRUE(body->needs.has_value());
+	EXPECT_EQ(body->needs->itchiness, 0.0f);
+}
+
 TEST(CreatureMindFileBody, UnknownSpeciesIsNoCreature)
 {
 	creaturemind::MindFileData file;

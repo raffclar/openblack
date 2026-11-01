@@ -16,6 +16,7 @@
 #include <gtest/gtest.h>
 
 #include "CHLApi.h"
+#include "ECS/Components/MagicShield.h"
 #include "ECS/Registry.h"
 #include "ECS/Systems/DynamicsSystemInterface.h"
 #include "ECS/Systems/ScriptObjectsSystemInterface.h"
@@ -130,6 +131,31 @@ TEST_F(ScriptHitNatives, AThingIsHitOnlyUntilAScriptClearsIt)
 
 	ClearHit();
 	EXPECT_FALSE(IsHit(gates));
+}
+
+// The shield challenge asks whether the shield miracle at the hut was hit. The physics sees only the dome of the
+// miracle, so a hit on the dome is also a hit on the miracle
+// NOLINTNEXTLINE(cppcoreguidelines-avoid-non-const-global-variables): external macro
+TEST_F(ScriptHitNatives, AHitOnTheDomeIsAHitOnItsShieldMiracle)
+{
+	auto& registry = Locator::entitiesRegistry::value();
+	[[maybe_unused]] const auto none = registry.Create();
+	const auto miracle = registry.Create();
+	const auto otherMiracle = registry.Create();
+	const auto dome = registry.Create();
+	registry.Assign<ecs::components::MagicShield>(
+	    dome, ecs::components::MagicShield {.kind = ecs::components::MagicShield::Kind::Physical, .spell = miracle});
+	const auto rock = registry.Create();
+	EXPECT_FALSE(IsHit(miracle));
+
+	Locator::dynamicsSystem::value().RecordHit(dome, rock);
+	EXPECT_TRUE(IsHit(dome));
+	EXPECT_TRUE(IsHit(miracle));
+	EXPECT_FALSE(IsHit(otherMiracle));
+	EXPECT_FALSE(IsHit(rock));
+
+	ClearHit();
+	EXPECT_FALSE(IsHit(miracle));
 }
 
 // NOLINTNEXTLINE(cppcoreguidelines-avoid-non-const-global-variables): external macro

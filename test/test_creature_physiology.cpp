@@ -624,3 +624,32 @@ TEST(CreaturePhysiology, ANewBodyAddsTheDrawThenTakesTheSpreadOff)
 	ASSERT_EQ(mosts.size(), 1u);
 	EXPECT_FLOAT_EQ(mosts.front(), 0.2f);
 }
+
+TEST(CreaturePhysiology, TheFileKeepsWhatTheMindFileKeepsOfTheBody)
+{
+	// The file keeps the age, the turns, the energy, the exhaustion, the itchiness, the poo and the dehydration. The
+	// warmth, the life and the meals stay with the body.
+	const Needs lived {.age = 5,
+	                   .turns = 900,
+	                   .warmth = -0.5f,
+	                   .energy = 0.4f,
+	                   .itchiness = 0.3f,
+	                   .poo = 0.7f,
+	                   .exhaustion = 0.2f,
+	                   .dehydration = 0.9f,
+	                   .life = 0.6f,
+	                   .meals = 3};
+	const auto kept = Keep(lived);
+	Needs other {.warmth = 0.25f, .life = 1.0f, .meals = 1};
+	TakeUp(other, kept);
+	EXPECT_EQ(other.age, 5u);
+	EXPECT_EQ(other.turns, 900u);
+	EXPECT_EQ(other.energy, 0.4f);
+	EXPECT_EQ(other.itchiness, 0.3f);
+	EXPECT_EQ(other.poo, 0.7f);
+	EXPECT_EQ(other.exhaustion, 0.2f);
+	EXPECT_EQ(other.dehydration, 0.9f);
+	EXPECT_EQ(other.warmth, 0.25f);
+	EXPECT_EQ(other.life, 1.0f);
+	EXPECT_EQ(other.meals, 1u);
+}

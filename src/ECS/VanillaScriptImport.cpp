@@ -238,6 +238,9 @@ std::vector<vanilla_script_import::ImportedTemple> vanilla_script_import::ReadTe
 			temple.destructionBeamClock = world.Float(*heart, "heartDestructionBeamClock").value_or(0.0f);
 			temple.beamTarget = world.Ref(*heart, "heartBeamTarget").value_or(0);
 			temple.beamTurn = world.Word(*heart, "heartBeamTurn").value_or(0);
+			temple.beams = world.Ref(*heart, "heartBeams").value_or(0);
+			temple.destructionBeams = world.Ref(*heart, "heartDestructionBeams").value_or(0);
+			temple.destructionGlow = world.Ref(*heart, "heartDestructionGlow").value_or(0);
 		}
 		temples.push_back(temple);
 	}

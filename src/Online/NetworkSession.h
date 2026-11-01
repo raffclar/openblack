@@ -137,6 +137,11 @@ public:
 	void Join(NetworkSessionSettings settings);
 	/// The player is ready for the start, or cancels the ready before the start
 	void SetReady(bool ready);
+	/// A line of the room's chat on the local network goes to the server, which sends it to the other players in the
+	/// room. Only in the room, before the start.
+	void SendRoomChat(std::string_view text);
+	/// The lines of the room's chat that the server sent since the last call, in the order that they came
+	[[nodiscard]] std::vector<game_socket::RoomChat> TakeRoomChat();
 	/// The player leaves the game. The server defeats the god.
 	void Leave();
 	/// The end box of a decided game opened: the client asks the server to stop the turns of the game, one time
@@ -236,6 +241,7 @@ private:
 	std::optional<game_socket::Joined> _joined;
 	std::optional<game_socket::Start> _start;
 	std::vector<StartEvent> _startEvents;
+	std::vector<game_socket::RoomChat> _roomChat;
 	std::map<uint8_t, std::vector<uint8_t>> _startCreatures;
 	std::map<uint8_t, float> _startAlignments;
 	bool _ownGodPlaysForClan {false};

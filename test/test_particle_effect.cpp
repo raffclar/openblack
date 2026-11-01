@@ -31,6 +31,7 @@
 #include "Particles/ParticleCreators.h"
 #include "Particles/ParticleDrawFrame.h"
 #include "Particles/ParticleEffect.h"
+#include "Particles/ParticleImport.h"
 
 using namespace openblack;
 using namespace openblack::particles;
@@ -1160,4 +1161,112 @@ TEST(ParticleDrawOffsets, AnAtomHasOneDrawOffset)
 	// A shared offset is not replaced by a live hand offset of its own
 	FollowLiveHand(child, glm::vec3(0.0f), 1.0f);
 	EXPECT_FALSE(child.handOffset.has_value());
+}
+
+namespace
+{
+/// A collection of a saved effect at an age, with its rules still on it
+RestoredCollection SavedCollection(int group, std::vector<int> rules)
+{
+	return RestoredCollection {.group = group, .birth = 0.0f, .alpha = 255.0f, .rules = std::move(rules)};
+}
+
+RestoredAtom SavedAtom(RestoredLook look, std::optional<int> creator, glm::vec3 position)
+{
+	RestoredAtom atom {.look = look, .creator = creator, .position = position, .rgba = {10, 20, 30, 200}, .birth = 1.0f};
+	atom.steps = 2;
+	atom.previous = DrawState {.position = position, .scale = 1.0f, .alpha = 200.0f};
+	atom.current = atom.previous;
+	return atom;
+}
+
+/// A sphere of sprites made once under a point, which a rule lets go after the effect closes down
+std::string SphereFile()
+{
+	return Header() +
+	       Object("CreateRuleSphere", "Sphere",
+	              "PROPERTY Group INTEGER 1\nPROPERTY NumAtoms INTEGER 6\nPROPERTY PCreator PERSIS_PNTR Sprite0\n"
+	              "PROPERTY Radius FLOAT 2\n") +
+	       Object("ParticleSpriteCreator", "Sprite0", std::string(k_Sprite)) +
+	       Object("CreateRuleAnAtom", "Base",
+	              "PROPERTY Group INTEGER 0\nPROPERTY NextGroups ARRAY SIZE 1 1\nPROPERTY PCreator PERSIS_PNTR Point0\n") +
+	       Object("ParticlePointCreator", "Point0", "PROPERTY InitialScale FLOAT 1\n") +
+	       Object("RemoveRuleAfterCloseDown", "Remove", "PROPERTY Group INTEGER 0\nPROPERTY Delay FLOAT 3\n");
+}
+} // namespace
+
+TEST_F(ParticleEffectTest, AnEffectContinuesFromTheStateOfASavedGame)
+{
+	auto effect = Make(SphereFile());
+	RestoredEffect saved {.origin = {1.0f, 2.0f, 3.0f}, .age = 3.1f, .closeAge = 0.5f, .closing = true, .atomCount = 3};
+	auto root = SavedCollection(0, {4});
+	auto base = SavedAtom(RestoredLook::Point, std::nullopt, {1.0f, 2.0f, 3.0f});
+	auto sphere = SavedCollection(1, {});
+	sphere.atoms.push_back(SavedAtom(RestoredLook::Sprite, 1, {5.0f, 6.0f, 7.0f}));
+	sphere.atoms.push_back(SavedAtom(RestoredLook::Sprite, 1, {8.0f, 9.0f, 10.0f}));
+	base.collections.push_back(std::move(sphere));
+	root.atoms.push_back(std::move(base));
+	saved.roots.push_back(std::move(root));
+
+	ASSERT_TRUE(effect->Adopt(saved));
+	EXPECT_EQ(effect->GetAge(), 3.1f);
+	EXPECT_EQ(effect->GetCloseAge(), 0.5f);
+	EXPECT_TRUE(effect->Closing());
+	EXPECT_EQ(effect->GetOrigin(), glm::vec3(1.0f, 2.0f, 3.0f));
+	EXPECT_EQ(effect->AtomCount(), 3u);
+	EXPECT_EQ(effect->CollectionCount(), 2u);
+	std::vector<Effect::DrawAtom> atoms;
+	effect->Collect(1.0f, atoms);
+	ASSERT_EQ(atoms.size(), 2u);
+	EXPECT_EQ(atoms[0].position, glm::vec3(8.0f, 9.0f, 10.0f)) << "the newest atom is drawn first";
+	EXPECT_EQ(atoms[1].position, glm::vec3(5.0f, 6.0f, 7.0f));
+	EXPECT_EQ(atoms[0].rgb, (std::array<uint8_t, 3> {10, 20, 30}));
+
+	// The sphere and the point rules had let their collections go, so a step makes no atoms
+	effect->Step(k_Step);
+	EXPECT_EQ(effect->AtomCount(), 3u);
+	// The rule that removes atoms after the close down is still on the first collection: more than 3 seconds after the
+	// effect closed down, at the age 0.5 that the save keeps, the point goes with the sphere under it
+	for (int i = 0; i < 2; ++i)
+	{
+		effect->Step(k_Step);
+	}
+	EXPECT_EQ(effect->AtomCount(), 3u);
+	for (int i = 0; i < 3; ++i)
+	{
+		effect->Step(k_Step);
+	}
+	EXPECT_LT(effect->AtomCount(), 3u);
+}
+
+TEST_F(ParticleEffectTest, AStateThatDoesNotAgreeWithTheFileChangesNothing)
+{
+	auto effect = Make(SphereFile());
+	const auto atoms = effect->AtomCount();
+	RestoredEffect saved {.age = 2.0f};
+	// The sphere's rule is of group 1, not of group 0
+	saved.roots.push_back(SavedCollection(0, {0}));
+	EXPECT_FALSE(effect->Adopt(saved));
+	saved.roots.front() = SavedCollection(0, {4});
+	saved.roots.front().atoms.push_back(SavedAtom(RestoredLook::Sprite, 99, glm::vec3(0.0f)));
+	EXPECT_FALSE(effect->Adopt(saved));
+	EXPECT_EQ(effect->GetAge(), 0.0f);
+	EXPECT_EQ(effect->AtomCount(), atoms);
+}
+
+TEST_F(ParticleEffectTest, ASavedAtomOnAnObjectKeepsItsObjectAndItsShower)
+{
+	auto effect = Make(Header() + Object("CreateRule_GameObjectRef", "Ref",
+	                                     "PROPERTY Group INTEGER 0\nPROPERTY PCreator PERSIS_PNTR NULL_STRING\n"
+	                                     "PROPERTY DoShower BOOL 1\nPROPERTY Alpha INTEGER 100\n"));
+	RestoredEffect saved {.age = 1.0f, .atomCount = 1};
+	auto root = SavedCollection(0, {0});
+	auto atom = SavedAtom(RestoredLook::GoldenShower, std::nullopt, glm::vec3(0.0f));
+	atom.object = static_cast<entt::entity>(42);
+	root.atoms.push_back(std::move(atom));
+	saved.roots.push_back(std::move(root));
+	ASSERT_TRUE(effect->Adopt(saved));
+	std::vector<entt::entity> showers;
+	effect->ForEachDrawnShower([&showers](ObjectShower& shower) { showers.push_back(shower.object); });
+	EXPECT_EQ(showers, std::vector<entt::entity> {static_cast<entt::entity>(42)});
 }
