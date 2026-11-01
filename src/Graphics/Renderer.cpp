@@ -3217,6 +3217,13 @@ void Renderer::DrawMists(const DrawSceneDesc& desc) const
 	const ProgramUniform u_mistUniform {*program, "u_mist"};
 	const ProgramUniform u_mistColourUniform {*program, "u_mistColour"};
 
+	// The view of the main pass. A mist out of it puts no pixel on the screen, so it is not drawn. A warm-up and the
+	// other passes draw all of them.
+	const auto seenBy =
+	    view_frustum::FromViewProjection(camera.GetProjectionMatrix() * camera.GetViewMatrix(Camera::Interpolation::Current));
+	const bool testsView = desc.viewId == RenderPass::Main && !_warmingUp && !mesh->IsBoned();
+	const auto box = mesh->GetBoundingBox();
+
 	// A storm's cloud is lit by the lightning of its storm
 	const auto drawMist = [&](const Mist& mist, const glm::vec3& position, uint32_t colour,
 	                          const ecs::systems::StormCloud* stormCloud) {
@@ -3232,6 +3239,10 @@ void Renderer::DrawMists(const DrawSceneDesc& desc) const
 			scale.y = scale.z = mists::EdgeOnSize(mist.size, mist.edgeShrink, position - origin);
 		}
 		const auto model = glm::translate(position) * glm::mat4(facing) * glm::scale(scale);
+		if (testsView && !view_frustum::SeesBox(seenBy, model, box.minima, box.maxima))
+		{
+			return;
+		}
 		const auto frame = mists::FrameOffset(mists::Frame(mist.counter), mist.shrinksEdgeOn);
 		const glm::vec4 u_mist {frame, 0.0f, 0.0f};
 		const glm::vec4 u_mistColour {static_cast<float>((colour >> 16u) & 0xFFu) / 255.0f,

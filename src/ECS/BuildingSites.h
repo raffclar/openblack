@@ -12,6 +12,7 @@
 #include <cstdint>
 
 #include <optional>
+#include <utility>
 #include <vector>
 
 #include <entt/entity/entity.hpp>
@@ -81,5 +82,9 @@ void RemoveWorker(entt::entity town, entt::entity building, entt::entity village
 
 /// The town's storage pit, if it has one
 [[nodiscard]] std::optional<entt::entity> StoragePitOf(entt::entity town);
+
+/// The first storage pit of each town, by the id of the town, as StoragePitOf finds it. A step that wants the pits of
+/// many towns makes this list one time.
+[[nodiscard]] std::vector<std::pair<uint32_t, entt::entity>> FirstStoragePits();
 
 } // namespace openblack::ecs::construction

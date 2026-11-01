@@ -13,6 +13,7 @@
 #define LOCATOR_IMPLEMENTATIONS
 
 #include <algorithm>
+#include <functional>
 #include <memory>
 #include <utility>
 #include <vector>
@@ -217,20 +218,21 @@ void ParticleRuleSystem::StepShowers(float gameSeconds)
 		           : 0u;
 	};
 	// The sparks showers over objects: made the first frame they are drawn, their sparks moving on by each drawn frame's
-	// game time, only while their object is there to rise from
+	// game time, only while their object is there to rise from. The visit is made one time for all the effects.
+	const std::function<void(particles::ObjectShower&)> step = [&](particles::ObjectShower& shower) {
+		if (!_world.ObjectPosition(shower.object).has_value())
+		{
+			return;
+		}
+		if (!shower.sparks.has_value())
+		{
+			shower.sparks = particles::rising_sparks::MakeSparks(localFloat, local);
+		}
+		particles::rising_sparks::StepSparks(*shower.sparks, shower.clock.Take(gameSeconds * k_MillisecondsPerSecond),
+		                                     localFloat);
+	};
 	for (auto& running : _effects)
 	{
-		running.effect->ForEachDrawnShower([&](particles::ObjectShower& shower) {
-			if (!_world.ObjectPosition(shower.object).has_value())
-			{
-				return;
-			}
-			if (!shower.sparks.has_value())
-			{
-				shower.sparks = particles::rising_sparks::MakeSparks(localFloat, local);
-			}
-			particles::rising_sparks::StepSparks(*shower.sparks, shower.clock.Take(gameSeconds * k_MillisecondsPerSecond),
-			                                     localFloat);
-		});
+		running.effect->ForEachDrawnShower(step);
 	}
 }
