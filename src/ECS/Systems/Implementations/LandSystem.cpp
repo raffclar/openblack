@@ -1278,14 +1278,17 @@ void LandSystem::StartStoryScripts()
 	{
 		Locator::cinematicDirectorSystem::value().StartStory();
 	}
-	// Not in the original game: a developer's direct start of a later land runs the control script of that land, which
-	// the game runs only after the last land is left
+	// Not in the original game: a developer's direct start of a later land starts the story's top script at the step
+	// that runs the control script of that land. The game comes to this step only after the last land is left. When the
+	// control script ends, the top script loads the next land, as in the story.
 	if (const auto land = new_game_choice::DirectStartLand(_newGameStart, landNumber); land.has_value())
 	{
+		auto& vm = Locator::vm::value();
 		const auto script = "LandControl" + std::to_string(*land);
-		if (Locator::vm::value().StartScript(script, script::start::StartableScripts()) == 0)
+		const auto step = vm.FindRunOfScript("LandControlAll", script);
+		if (!step.has_value() || vm.StartScriptAt("LandControlAll", script::start::StartableScripts(), *step) == 0)
 		{
-			SPDLOG_LOGGER_WARN(spdlog::get("game"), "The direct start could not start the script {}", script);
+			SPDLOG_LOGGER_WARN(spdlog::get("game"), "The direct start could not start the story at the script {}", script);
 		}
 	}
 }

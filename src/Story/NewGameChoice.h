@@ -177,7 +177,8 @@ inline constexpr std::array<DirectCreatureName, 17> k_DirectCreatureNames {{
 }
 
 /// The land whose control script a developer's direct start runs: a land after the first, when the developer asked for
-/// a creature. The first land has the story's top script, and a land with no such request plays as the game plays it.
+/// a creature. The story's top script starts at the step of this land. The first land has the story's top script from
+/// its start, and a land with no such request plays as the game plays it.
 [[nodiscard]] constexpr std::optional<int32_t> DirectStartLand(const std::optional<NewGameStart>& start,
                                                                int32_t landNumber) noexcept
 {

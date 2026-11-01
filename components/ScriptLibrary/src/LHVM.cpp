@@ -16,7 +16,9 @@
 
 #include <algorithm>
 #include <fstream>
+#include <iterator>
 #include <limits>
+#include <span>
 #include <sstream>
 #include <stdexcept>
 #include <string>
@@ -575,6 +577,56 @@ uint32_t LHVM::StartScript(const std::string& name, const ScriptType allowedScri
 		SignalError(ErrorCode::ErrScriptNameNotFound, name);
 	}
 	return 0;
+}
+
+uint32_t LHVM::StartScriptAt(const std::string& name, const ScriptType allowedScriptTypesMask, const uint32_t address)
+{
+	const auto* const script = GetScript(name);
+	if (script == nullptr || !(script->type & allowedScriptTypesMask) || address < script->instructionAddress ||
+	    address >= _instructions.size())
+	{
+		return 0;
+	}
+	// The code of the script stops at its first end instruction
+	const auto code = std::span(_instructions).subspan(script->instructionAddress);
+	const auto end = std::ranges::find(code, Opcode::End, &VMInstruction::code);
+	if (address >= script->instructionAddress + static_cast<uint32_t>(std::distance(code.begin(), end)))
+	{
+		return 0;
+	}
+	const auto taskNumber = StartScript(*script);
+	auto& task = _tasks.at(taskNumber);
+	if (code.front().code == Opcode::Except)
+	{
+		task.exceptionHandlerIps.emplace_back(code.front().data.uintVal);
+	}
+	task.instructionAddress = address;
+	return taskNumber;
+}
+
+std::optional<uint32_t> LHVM::FindRunOfScript(const std::string& caller, const std::string& callee) const
+{
+	const auto byName = [this](const std::string& name) { return std::ranges::find(_scripts, name, &VMScript::name); };
+	const auto callerScript = byName(caller);
+	const auto calleeScript = byName(callee);
+	if (callerScript == _scripts.end() || calleeScript == _scripts.end() ||
+	    callerScript->instructionAddress >= _instructions.size())
+	{
+		return std::nullopt;
+	}
+	for (auto address = callerScript->instructionAddress; address < _instructions.size(); ++address)
+	{
+		const auto& instruction = _instructions[address];
+		if (instruction.code == Opcode::End)
+		{
+			break;
+		}
+		if (instruction.code == Opcode::Run && instruction.data.uintVal == calleeScript->scriptId)
+		{
+			return address;
+		}
+	}
+	return std::nullopt;
 }
 
 uint32_t LHVM::StartScript(const uint32_t id)
