@@ -866,6 +866,11 @@ void EditorWindow::DrawBottom(EditorContext& context) noexcept
 		_scripts.Draw();
 		ImGui::EndTabItem();
 	}
+	if (ImGui::BeginTabItem("Land script", nullptr, flags(BottomTab::LandScript)))
+	{
+		_landScript.Draw();
+		ImGui::EndTabItem();
+	}
 	const auto errors = _log.Errors();
 	const auto logLabel = errors > 0 ? fmt::format("Log ({} errors)###Log", errors) : std::string("Log###Log");
 	if (ImGui::BeginTabItem(logLabel.c_str(), nullptr, flags(BottomTab::Log)))

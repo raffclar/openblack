@@ -1053,7 +1053,7 @@
     "type": "string"
    },
    {
-    "description": "The scopes before the button: strings and numbers, e.g. [\"Creatures\", 3]",
+    "description": "The scopes before the button: strings and numbers, e.g. [\"Creatures\", 3]. The editor draws in windows of its own: the first label names the window, e.g. [\"##EditorBottom\", \"EditorTabs\"]",
     "name": "path",
     "type": "array"
    }

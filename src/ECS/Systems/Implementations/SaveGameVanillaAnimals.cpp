@@ -22,6 +22,8 @@
 #include "ECS/Components/Animal.h"
 #include "ECS/Components/Flock.h"
 #include "ECS/Components/Temple.h"
+#include "ECS/Components/Villager.h"
+#include "ECS/Components/WallHug.h"
 #include "ECS/Registry.h"
 #include "ECS/Systems/AnimalSystemInterface.h"
 #include "ECS/VanillaSceneryImport.h"
@@ -37,6 +39,7 @@ using namespace openblack::ecs::systems;
 namespace world_import = openblack::ecs::vanilla_world_import;
 namespace script_import = openblack::ecs::vanilla_script_import;
 using openblack::ecs::systems::vanilla_import::EntityOf;
+using openblack::ecs::systems::vanilla_import::PutMoveTag;
 
 namespace
 {
@@ -88,7 +91,7 @@ entt::entity TempleOf(ecs::Registry& registry, PlayerNames player)
 }
 } // namespace
 
-void SaveGameSystem::ImportVanillaAnimals(const gamesave::VanillaWorld& world, VanillaMade& made)
+void SaveGameSystem::ImportVanillaAnimals(const gamesave::VanillaWorld& world, VanillaMade& made, VanillaCircles& circles)
 {
 	if (!Locator::animalSystem::has_value())
 	{
@@ -187,22 +190,63 @@ void SaveGameSystem::ImportVanillaAnimals(const gamesave::VanillaWorld& world, V
 		                                               .sleep = animal->sleep,
 		                                               .breed = animal->breed,
 		                                               .sleepCell = animal->sleepCell,
-		                                               .bank = animal->bank});
+		                                               .bank = animal->bank,
+		                                               .walksRound = animal->circle.has_value(),
+		                                               .stepAltitude = animal->stepAltitude});
 		if (entity == entt::null)
 		{
 			++lost;
 			continue;
 		}
 		made.emplace(animal->number, entity);
-	}
-	// Each flock keeps the most members that it had in the file
-	for (const auto& file : imported.flocks)
-	{
-		if (const auto entity = EntityOf(made, file.number); entity != entt::null && registry.AllOf<Flock>(entity))
+		// A walk round a circle keeps its move state, and takes its circle when all the things of the file are made
+		if (const auto* walk = registry.TryGet<const WallHug>(entity); walk != nullptr && animal->circle.has_value())
 		{
-			registry.Get<Flock>(entity).most = file.mostMembers;
+			PutMoveTag(registry, entity, animal->moveState, walk->placedAt);
+			circles.emplace_back(entity, *animal->circle);
 		}
 	}
-	SPDLOG_LOGGER_INFO(ImportLog(), "Made {} animals ({} not made) and {} flocks ({} of temples)", order.size() - lost, lost,
-	                   flocks, templeFlocks);
+	// Each flock takes its line as the load puts it together, the villagers of the file in it too, and the most members
+	// that it had in the file
+	uint32_t villagers = 0;
+	for (const auto& file : imported.flocks)
+	{
+		const auto entity = EntityOf(made, file.number);
+		if (entity == entt::null || !registry.AllOf<Flock>(entity))
+		{
+			continue;
+		}
+		auto& flock = registry.Get<Flock>(entity);
+		flock.members.clear();
+		for (const auto index : world_import::LineAfterLoad(file.memberOrders))
+		{
+			const auto member = EntityOf(made, file.members.at(index));
+			if (member == entt::null || !registry.Valid(member))
+			{
+				continue;
+			}
+			const auto place = file.memberOrders.at(index);
+			if (registry.AllOf<Animal>(member))
+			{
+				// An animal keeps its flock itself, and a place in the line only when it has one
+				if (place != 0)
+				{
+					registry.AssignOrReplace<FlockMember>(member, FlockMember {.flock = entt::null, .order = place});
+				}
+			}
+			else if (registry.AllOf<Villager>(member))
+			{
+				registry.AssignOrReplace<FlockMember>(member, FlockMember {.flock = entity, .order = place});
+				++villagers;
+			}
+			else
+			{
+				continue;
+			}
+			flock.members.push_back(member);
+		}
+		flock.most = file.mostMembers;
+	}
+	SPDLOG_LOGGER_INFO(ImportLog(), "Made {} animals ({} not made) and {} flocks ({} of temples, {} villagers in flocks)",
+	                   order.size() - lost, lost, flocks, templeFlocks, villagers);
 }

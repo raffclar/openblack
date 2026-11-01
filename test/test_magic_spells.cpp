@@ -18,6 +18,7 @@
 #include <gtest/gtest.h>
 
 #include "ECS/Components/Spell.h"
+#include "Help/HelpProfile.h"
 #include "Magic/DispenserRules.h"
 #include "Magic/MagicTables.h"
 #include "Magic/MagicWorldInterface.h"
@@ -384,6 +385,22 @@ TEST(SpellSeedRules, ASeedsChargeAndReadiness)
 	// Held for longer than its delay of a second and a half
 	EXPECT_FALSE(SeedReadyAfter(15, k_TurnSeconds, 1.5f));
 	EXPECT_TRUE(SeedReadyAfter(16, k_TurnSeconds, 1.5f));
+}
+
+// A seed bound to its running miracle counts as taken back, and stays only with enough left for another cast. A seed
+// with no miracle counts as a new seed and always stays.
+TEST(SpellSeedRules, ATakeBackCountsItsOwnEventAndKeepsASeedWithEnoughLeft)
+{
+	const auto kept = TakeBackOf(true, true);
+	EXPECT_EQ(kept.helpEvent, help::profile::k_SeedTakenBack);
+	EXPECT_TRUE(kept.kept);
+	const auto gone = TakeBackOf(true, false);
+	EXPECT_EQ(gone.helpEvent, help::profile::k_SeedTakenBack);
+	EXPECT_FALSE(gone.kept);
+	const auto free = TakeBackOf(false, false);
+	EXPECT_EQ(free.helpEvent, help::profile::k_SeedInHand);
+	EXPECT_TRUE(free.kept);
+	EXPECT_EQ(help::profile::k_SeedTakenBack, 13u);
 }
 
 // Dispensers

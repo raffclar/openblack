@@ -563,6 +563,12 @@ std::optional<ImportedSite> ReadSite(const VanillaWorld& world, const VanillaRec
 	std::memcpy(site.places.data(), places.data(), places.size());
 	const auto workers = world.Refs(record, "siteWorkers");
 	site.workers.assign(workers.begin(), workers.end());
+	if (record.Is(VanillaType::CitadelBuildingSite))
+	{
+		site.temple = true;
+		const auto piles = world.Refs(record, "templeSitePiles");
+		site.piles.assign(piles.begin(), piles.end());
+	}
 	return site;
 }
 
@@ -608,7 +614,7 @@ ImportedTowns ReadTowns(const VanillaWorld& world)
 				continue;
 			}
 		}
-		else if (record.Is(VanillaType::StandardBuildingSite))
+		else if (record.Is(VanillaType::StandardBuildingSite) || record.Is(VanillaType::CitadelBuildingSite))
 		{
 			if (auto site = ReadSite(world, record, why); site.has_value())
 			{

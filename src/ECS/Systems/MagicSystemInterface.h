@@ -259,6 +259,10 @@ public:
 	/// An icon that charged a seed held in a hand sets the power-up level of that seed. When the seed holds more than the
 	/// miracle at that level costs, the seed gives the rest back to its worship site.
 	virtual void SetIconSeedPowerUp(entt::entity /*seed*/, int /*powerUp*/) {}
+	/// The hand of a player takes back its own seed that shows over the miracle that it cast. The seed takes what the
+	/// miracle has left, and the miracle closes down. With enough left for another cast, the seed goes into the free
+	/// hand as the held miracle, ready at once. Else the seed goes. Whether the hand keeps the seed.
+	virtual bool TakeSeedBack(PlayerNames /*player*/, entt::entity /*seed*/) { return false; }
 	/// The tooltip text of the miracle in the hand, once after the hand takes a seed or the seed gets a new power-up
 	/// level. The hand shows this text at once, over the other tooltips. None when there is no new text.
 	[[nodiscard]] virtual std::optional<uint32_t> TakeHeldMiracleToolTip() { return std::nullopt; }

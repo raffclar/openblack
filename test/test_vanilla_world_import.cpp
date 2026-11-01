@@ -977,6 +977,25 @@ TEST(VanillaWorldImport, SavedGamesOfLandOneKeepTheBeliefAndTheDesiresOfTheTowns
 	EXPECT_GT(*files, 0U);
 }
 
+TEST(VanillaWorldImport, ReadsTheSiteOfATempleWithItsPiles)
+{
+	auto fake = GameAtTurn(100);
+	// 2: the site of the temple, with its building 3 and six piles
+	fake.Record(VanillaType::CitadelBuildingSite).Ref("siteBuilding", 3).Refs("siteWorkers", {});
+	fake.Value("sitePlaces", std::array<glm::vec3, world_import::k_ImportedSitePlaces> {})
+	    .Value("siteWorkerCount", uint32_t {0})
+	    .Value("siteDesire", 0.75f)
+	    .Ref("siteWoodPile", 0)
+	    .Refs("templeSitePiles", {4, 0, 5, 0, 0, 6});
+	const auto imported = world_import::ReadTowns(fake.Make());
+	ASSERT_EQ(imported.sites.size(), 1U);
+	const auto& site = imported.sites[0];
+	EXPECT_TRUE(site.temple);
+	EXPECT_EQ(site.building, 3U);
+	EXPECT_EQ(site.desire, 0.75f);
+	EXPECT_EQ(site.piles, std::vector<uint32_t>({4, 0, 5, 0, 0, 6}));
+}
+
 TEST(VanillaWorldImport, ReadsThePlansAndTheBuildingSitesOfTheTowns)
 {
 	auto fake = GameAtTurn(100);
@@ -1441,24 +1460,68 @@ TEST(VanillaScriptImport, ReadsTheThingsOfTheScripts)
 	EXPECT_FALSE(script_import::HeartPlayer(made, 0).has_value());
 }
 
-// A player whose temple is in the file has a whole temple, but a file with a site of a temple gives no player
-TEST(VanillaScriptImport, ATempleOfTheFileStandsWholeWhenNoSiteBuildsIt)
+// A temple of the file with no site stands whole
+TEST(VanillaScriptImport, ATempleOfTheFileWithNoSiteStandsWhole)
 {
 	auto fake = GameAtTurn(100);
 	// 2: the second player, 3: its temple
 	fake.Record(VanillaType::Player).Value<uint8_t>("number", 1);
 	fake.Record(VanillaType::Citadel).Ref("owner", 2).Ref("heart", 0);
-	EXPECT_EQ(script_import::WholeTemplePlayers(fake.Make()), std::vector<PlayerNames> {PlayerNames::PLAYER_TWO});
-	// 4: a site of a temple
+	const auto temples = script_import::ReadTemples(fake.Make());
+	ASSERT_EQ(temples.size(), 1U);
+	EXPECT_EQ(temples[0].player, PlayerNames::PLAYER_TWO);
+	EXPECT_EQ(temples[0].citadel, 3U);
+	EXPECT_TRUE(temples[0].Whole());
+}
+
+// The heart of a temple that goes up owns the site of the temple, and keeps its life, its last hit, its town, its last
+// beam and the clocks of its destruction
+TEST(VanillaScriptImport, ATempleOfTheFileTakesTheValuesOfItsHeart)
+{
+	auto fake = GameAtTurn(100);
+	// 2: the first player, 3: its temple, 4: the heart, 5: the site, 6: the town
+	fake.Record(VanillaType::Player).Value<uint8_t>("number", 0);
+	fake.Record(VanillaType::Citadel).Ref("owner", 2).Ref("heart", 4);
+	fake.Record(VanillaType::CitadelHeart)
+	    .Value("built", 0.25f)
+	    .Value("life", 0.5f)
+	    .Ref("buildingSite", 5)
+	    .Value<uint32_t>("heartLastHitTurn", 70)
+	    .Ref("heartTown", 6)
+	    .Value<uint8_t>("heartDestroying", 1)
+	    .Value("heartDestructionClock", 2.5f)
+	    .Value("heartDestructionBeamClock", 3.0f)
+	    .Ref("heartBeamTarget", 6)
+	    .Value<uint32_t>("heartBeamTurn", 80);
 	fake.Record(VanillaType::CitadelBuildingSite);
-	EXPECT_TRUE(script_import::WholeTemplePlayers(fake.Make()).empty());
+	fake.Record(VanillaType::Town);
+	const auto temples = script_import::ReadTemples(fake.Make());
+	ASSERT_EQ(temples.size(), 1U);
+	const auto& temple = temples[0];
+	EXPECT_EQ(temple.player, PlayerNames::PLAYER_ONE);
+	EXPECT_EQ(temple.heart, 4U);
+	EXPECT_EQ(temple.site, 5U);
+	EXPECT_FALSE(temple.Whole());
+	EXPECT_EQ(temple.built, 0.25f);
+	EXPECT_EQ(temple.life, 0.5f);
+	EXPECT_EQ(temple.lastHitTurn, 70U);
+	EXPECT_EQ(temple.town, 6U);
+	EXPECT_TRUE(temple.destroying);
+	EXPECT_EQ(temple.destructionClock, 2.5f);
+	EXPECT_EQ(temple.destructionBeamClock, 3.0f);
+	EXPECT_EQ(temple.beamTarget, 6U);
+	EXPECT_EQ(temple.beamTurn, 80U);
 }
 
 /// Each saved game of Land 1 has the whole temple of the first player
 TEST(VanillaScriptImport, SavedGamesOfLandOneHaveTheWholeTempleOfThePlayer)
 {
 	const auto files = ForEachLandOneSave([](const std::filesystem::path& path, const VanillaWorld& world) {
-		EXPECT_EQ(script_import::WholeTemplePlayers(world), std::vector<PlayerNames> {PlayerNames::PLAYER_ONE}) << path;
+		const auto temples = script_import::ReadTemples(world);
+		ASSERT_EQ(temples.size(), 1U) << path;
+		EXPECT_EQ(temples[0].player, PlayerNames::PLAYER_ONE) << path;
+		EXPECT_TRUE(temples[0].Whole()) << path;
+		EXPECT_FALSE(temples[0].destroying) << path;
 	});
 	if (!files.has_value())
 	{
@@ -1510,4 +1573,65 @@ TEST(VanillaWorldImport, ReadsThePowerOfEachWonderAndTheTribalPowersOfEachPlayer
 	EXPECT_EQ(player.power.at(static_cast<size_t>(Tribe::CELTIC)), 1.0f);
 	EXPECT_EQ(player.most.at(static_cast<size_t>(Tribe::CELTIC)), 2.5f);
 	EXPECT_EQ(player.most.at(static_cast<size_t>(Tribe::TIBETAN)), 1.0f);
+}
+
+// An animal that goes round a circle keeps its circle and the height of its step. Each member of a flock keeps its place
+// in the line.
+TEST(VanillaSceneryImport, ReadsTheCircleOfAnAnimalAndThePlaceInTheLineOfEachMember)
+{
+	constexpr uint32_t k_SheepRow = world_import::k_FirstAnimalRowNumber - static_cast<uint32_t>(AnimalInfo::Sheep);
+	auto world = GameAtTurn(10);
+	// 2: the flock, 3: a sheep that goes round a tree, 4: a sheep that steps straight through
+	world.Record(VanillaType::Flock)
+	    .Position(100, 200)
+	    .Ref("shepherd", 0)
+	    .Ref("heart", 0)
+	    .Refs("members", {3, 4})
+	    .Value<uint16_t>("domainRadius", 40)
+	    .Value<uint16_t>("flockDistance", 12)
+	    .Value("domainCentre", MapCoords {.x = 100, .z = 200, .altitude = 0.0f})
+	    .Value<uint32_t>("mostMembers", 2);
+	const auto sheep = [&world](uint8_t moveState, uint8_t order) {
+		world.Record(static_cast<VanillaType>(0x83))
+		    .Position(1000, 7)
+		    .Value("info", k_SheepRow)
+		    .Value("life", 1.0f)
+		    .Value<uint8_t>("moveState", moveState)
+		    .Value("step", std::array<uint32_t, 3> {3, std::bit_cast<uint32_t>(2.5f), 4})
+		    .Value("action", std::array<uint8_t, 6> {2, 1, 0, 0, 0, 0})
+		    .Value("birthTurn", 5U)
+		    .Ref("flock", 2)
+		    .Value<uint8_t>("flockOrder", order);
+		if (moveState >= 0x0C && moveState <= 0x12)
+		{
+			world.Value<uint8_t>("hugTurnsToObject", 6)
+			    .Value<uint32_t>("hugEntryDistance", 9)
+			    .Ref("hugObject", 4)
+			    .Value<uint32_t>("hugIndex", 2);
+		}
+	};
+	sheep(0x0E, 0);
+	sheep(0x0B, 3);
+	const auto imported = world_import::ReadAnimals(world.Make());
+	ASSERT_EQ(imported.flocks.size(), 1U);
+	EXPECT_EQ(imported.flocks[0].memberOrders, std::vector<uint8_t>({0, 3}));
+	ASSERT_EQ(imported.animals.size(), 2U);
+	const auto& round = imported.animals[0];
+	EXPECT_EQ(round.stepAltitude, 2.5f);
+	ASSERT_TRUE(round.circle.has_value());
+	EXPECT_EQ(round.circle->turnsToObject, 6U);
+	EXPECT_EQ(round.circle->entryDistance, 9U);
+	EXPECT_EQ(round.circle->object, 4U);
+	EXPECT_EQ(round.circle->index, 2);
+	EXPECT_FALSE(imported.animals[1].circle.has_value());
+}
+
+// The load puts each member before the first member whose place is not lower, so members with the same place come back
+// in the opposite order
+TEST(VanillaSceneryImport, TheLineOfAFlockAfterALoadFollowsThePlaces)
+{
+	EXPECT_TRUE(world_import::LineAfterLoad({}).empty());
+	EXPECT_EQ(world_import::LineAfterLoad(std::vector<uint8_t> {0, 0, 0}), std::vector<size_t>({2, 1, 0}));
+	EXPECT_EQ(world_import::LineAfterLoad(std::vector<uint8_t> {5, 1, 3}), std::vector<size_t>({1, 2, 0}));
+	EXPECT_EQ(world_import::LineAfterLoad(std::vector<uint8_t> {2, 0, 2, 1}), std::vector<size_t>({1, 3, 2, 0}));
 }

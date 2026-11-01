@@ -1738,7 +1738,7 @@ void MagicSystem::Update(float /*seconds*/)
 		if (seed.handEffect != k_NoEffectHandle && Locator::effectRequestSystem::has_value() && step.has_value())
 		{
 			const auto milliseconds = std::max<int64_t>(step->count(), 1);
-			const auto info = HandEffectInfo(seed);
+			const auto info = HandEffectInfo();
 			auto& effects = Locator::effectRequestSystem::value();
 			if (!effects.Step(seed.handEffect, info, static_cast<float>(milliseconds) * 0.001f))
 			{
@@ -2401,7 +2401,7 @@ void MagicSystem::StartHandEffect(entt::entity entity)
 	const auto type = magic::GetMagicTypeFromPowerUpLevel(seedInfo, seed.powerUp);
 	// Only this computer shows it. It steps with the frames that this computer draws, so it uses the random numbers of
 	// this computer. It draws immediately after the hand, and does not sort with the other effects.
-	const auto info = HandEffectInfo(seed);
+	const auto info = HandEffectInfo();
 	seed.handEffect = Locator::effectRequestSystem::value().StartHere({
 	    .type = magic::GetMagicInfo(Info(), type).particleTypeInHand,
 	    .position = info.handPosition,
@@ -3305,13 +3305,8 @@ void MagicSystem::UnlockHeldMiracle()
 	bool enough = true;
 	if (auto* spell = FindSpell(seed.spell))
 	{
-		// The seed keeps what the miracle has left, and how long it has run, for another go
-		seed.storedChants = spell->chants.chants;
-		seed.storedAge = spell->age;
-		seed.storedMaxObjects = spell->maxObjectsToCreate;
-		enough = !spell->closedDown && magic::spells::HasEnoughForRecast(Info(), *spell);
-		spell->seed = entt::null;
-		CloseDown(seed.spell);
+		const bool closedDown = spell->closedDown;
+		enough = StoreFromSpell(*Held(), seed, *spell) && !closedDown;
 	}
 	seed.spell = entt::null;
 	if (own)
@@ -3322,6 +3317,23 @@ void MagicSystem::UnlockHeldMiracle()
 	{
 		LetGoOfSeed(true);
 	}
+}
+
+bool MagicSystem::StoreFromSpell(entt::entity entity, SpellSeed& seed, Spell& spell)
+{
+	// The seed keeps what the miracle has left, and how long it has run, for another go
+	seed.storedChants = spell.chants.chants;
+	seed.storedAge = spell.age;
+	seed.storedMaxObjects = spell.maxObjectsToCreate;
+	const bool enough = magic::spells::HasEnoughForRecast(Info(), spell);
+	// The seed lets go of the miracle. A miracle that still runs from this seed closes down.
+	if (spell.seed == entity)
+	{
+		spell.seed = entt::null;
+		CloseDown(seed.spell);
+	}
+	seed.spell = entt::null;
+	return enough;
 }
 
 void MagicSystem::DiscardHeldSeedOf(PlayerNames player)

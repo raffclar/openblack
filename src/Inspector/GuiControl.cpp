@@ -127,27 +127,30 @@ std::unique_ptr<ProviderInterface> openblack::inspector::MakeGuiProvider(GuiTarg
 	                    {Required("window", "string", "The window's name")}),
 	              openOrClose(false));
 	provider->Add(
-	    Write("press",
-	          "Presses a button of a window by its label, as a click on it would. The game's menu: any control of the page "
-	          "it shows (buttons, check boxes, sliders in their middle, tabs) or of the question it asks, as gui.windows "
-	          "lists them; path [n] for the n-th of a name. The start-of-game question (skip_box): OK, or an answer's "
-	          "radio button by its answer or by normal, creature, story, old or cow. The tattoo_editor: OK or Cancel. The "
-	          "multiplayer front end (multiplayer): the controls of its box, or of its message, by name. The "
-	          "music_player: its buttons by name (Music, Play, Pause, Stop, Previous, Next, Rewind, Fast Forward, "
-	          "Shuffle, Repeat, Play List) while they show. The end box (end_box): its tabs and arrows by name. The "
-	          "skirmish box (skirmish_box): Back, Start Game while it shows, or a land of its list by its name. The land "
-	          "information box (land_info_box): Back or Go!. The "
-	          "game's dialogs are clicked through the game's input, in order behind any input still to come. A debug "
-	          "window's button inside a table row or another scope its window pushed needs path: the labels and numbers "
-	          "leading to it. The press is made at the window's next frame; read what it changed after. When another dialog "
-	          "takes the clicks, no "
-	          "click is sent and the answer gives the reason",
-	          {Required("window", "string", "The window's name"),
-	           Required("button", "string", "The button's label"),
-	           {.name = "path",
-	            .type = "array",
-	            .description = "The scopes before the button: strings and numbers, e.g. [\"Creatures\", 3]",
-	            .required = false}}),
+	    Write(
+	        "press",
+	        "Presses a button of a window by its label, as a click on it would. The game's menu: any control of the page "
+	        "it shows (buttons, check boxes, sliders in their middle, tabs) or of the question it asks, as gui.windows "
+	        "lists them; path [n] for the n-th of a name. The start-of-game question (skip_box): OK, or an answer's "
+	        "radio button by its answer or by normal, creature, story, old or cow. The tattoo_editor: OK or Cancel. The "
+	        "multiplayer front end (multiplayer): the controls of its box, or of its message, by name. The "
+	        "music_player: its buttons by name (Music, Play, Pause, Stop, Previous, Next, Rewind, Fast Forward, "
+	        "Shuffle, Repeat, Play List) while they show. The end box (end_box): its tabs and arrows by name. The "
+	        "skirmish box (skirmish_box): Back, Start Game while it shows, or a land of its list by its name. The land "
+	        "information box (land_info_box): Back or Go!. The "
+	        "game's dialogs are clicked through the game's input, in order behind any input still to come. A debug "
+	        "window's button inside a table row or another scope its window pushed needs path: the labels and numbers "
+	        "leading to it. The press is made at the window's next frame; read what it changed after. When another dialog "
+	        "takes the clicks, no "
+	        "click is sent and the answer gives the reason",
+	        {Required("window", "string", "The window's name"),
+	         Required("button", "string", "The button's label"),
+	         {.name = "path",
+	          .type = "array",
+	          .description = "The scopes before the button: strings and numbers, e.g. [\"Creatures\", 3]. The editor draws in "
+	                         "windows of its own: the first label names the window, e.g. [\"##EditorBottom\", "
+	                         "\"EditorTabs\"]",
+	          .required = false}}),
 	    [&gui](const QueryContext& context) {
 		    const auto window = StringMember(context.params, "window").value_or("");
 		    const auto button = StringMember(context.params, "button");

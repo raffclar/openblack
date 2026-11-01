@@ -21,6 +21,7 @@
 
 #include "Animals/Zoomer.h"
 #include "CreatureRecord.h"
+#include "ECS/VanillaWorldImport.h"
 #include "Enums.h"
 
 namespace openblack::gamesave
@@ -254,6 +255,10 @@ struct ImportedAnimal
 	std::optional<glm::ivec2> sleepCell;
 	/// Its tilt into a turn
 	animals::Zoomer::State bank {};
+	/// The height of the step of a turn, and the circle that a walk on the land heads for or goes round. Only a walk
+	/// that goes straight, goes round a circle or goes out of a circle has a circle.
+	float stepAltitude {0.0f};
+	std::optional<vanilla_world_import::ImportedCircle> circle;
 };
 
 /// A flock of the file
@@ -272,6 +277,8 @@ struct ImportedFlock
 	uint32_t town {0};
 	/// The numbers of its members in the order of its line. The last is its leader.
 	std::vector<uint32_t> members;
+	/// The place in the line of each member, as each member keeps it
+	std::vector<uint8_t> memberOrders;
 	/// The most members that it had
 	uint32_t mostMembers {0};
 	/// The turns that its leader kept to its present leg
@@ -297,6 +304,11 @@ struct ImportedAnimals
 /// The animals and the flocks of the world. An animal without a row of the table of the animals goes into the skipped
 /// list.
 [[nodiscard]] ImportedAnimals ReadAnimals(const gamesave::VanillaWorld& world);
+
+/// The line of a flock after a load, from the places in the line that its members keep, in the order of the file. The
+/// load puts each member before the first member whose place is not lower, else at the end. So members with the same
+/// place come back in the opposite order. Gives the index in the file of each member, from the first to the leader.
+[[nodiscard]] std::vector<size_t> LineAfterLoad(std::span<const uint8_t> orders);
 
 /// The number of bytes of a glide in the file
 inline constexpr size_t k_GlideBytes = 48;

@@ -20,6 +20,7 @@
 #include "ECS/Components/Animal.h"
 #include "ECS/Components/AnimatedStatic.h"
 #include "ECS/Components/Ball.h"
+#include "ECS/Components/BuildingDamage.h"
 #include "ECS/Components/Creature.h"
 #include "ECS/Components/Dance.h"
 #include "ECS/Components/DeadTree.h"
@@ -235,6 +236,12 @@ std::optional<script_find::Kind> script_find::KindOf(const Registry& registry, e
 	{
 		return Kind {.type = registry.AllOf<Rock>(entity) ? ScriptType::Rock : ScriptType::MobileStatic,
 		             .subtype = Row(still->type)};
+	}
+	// A piece that broke off a building is a mobile static of the rock row. A search of the map cells finds the piece
+	// when the piece is at rest.
+	if (registry.AllOf<BuildingPiece>(entity))
+	{
+		return Kind {.type = ScriptType::MobileStatic, .subtype = Row(MobileStaticInfo::Rock)};
 	}
 	// A street lantern stands as a mobile static, of a table of its own
 	if (registry.AllOf<StreetLantern>(entity))
