@@ -28,11 +28,13 @@ struct SpellSeed
 	/// The power-up level it casts at, magic::k_BasePowerUpLevel for its plain miracle
 	int powerUp {magic::k_BasePowerUpLevel};
 	PlayerNames player {PlayerNames::PLAYER_ONE};
-	/// Its charge of prayer power, which a seed from a dispenser is given in full
+	/// Its charge of prayer power, which a seed from a dispenser is given in full. A cast empties it, and a store of
+	/// its miracle sets it to what the miracle has left.
 	float chantStore {0.0f};
 	/// A creature has learnt from a miracle it cast: no creature learns from its miracles again
 	bool learnedFrom {false};
-	/// What its last miracle had left when the hand let go, to carry on with; negative for none
+	/// What its last miracle had left when the hand let go, to carry on with; negative for none. A cast that
+	/// continues from it does not clear it.
 	float storedChants {-1.0f};
 	float storedAge {0.0f};
 	int storedMaxObjects {-1};
@@ -62,11 +64,10 @@ struct SpellSeed
 	uint32_t turnsInHand {0};
 	/// The miracle it cast that still runs from it, if any
 	entt::entity spell {entt::null};
-	/// Its miracle has been cast at least once
-	bool hasCast {false};
-	/// It cast a miracle, and the hand did not take it back from a miracle after that. A dispenser takes only a seed
-	/// that did not cast.
-	bool castBefore {false};
+	/// The miracle of its last cast, if the hand did not take it back from a miracle after that cast; None for a seed
+	/// that did not cast. A seed that cast casts this miracle again, a dispenser does not take it, and no gesture
+	/// powers it up.
+	MagicType lastCastType {MagicType::None};
 	/// A cast linked it to its miracle. A store of the miracle's prayer power, or a take back into the hand, clears
 	/// this. A seed with this mark and no miracle does not cast.
 	bool linkedByCast {false};

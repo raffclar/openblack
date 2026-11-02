@@ -128,6 +128,10 @@ struct IconTurn
 /// required is what the miracle at the power-up level of the charge costs. heldSeedStore is what the held seed holds.
 [[nodiscard]] IconTurn ChargingIconTurn(float store, float required, std::optional<float> heldSeedStore);
 
+/// Whether a cast of a seed stops the charge of the icon that made the seed. The charge stops when the player of the
+/// cast is the charger, and the icon charges or holds prayer power.
+[[nodiscard]] bool CastStopsCharge(bool charging, float store, bool castByCharger);
+
 /// The prayer power that a worship site's icon shows as the full charge of its miracle. While the player's hand holds
 /// the seed that the icon made, the charge of that seed comes off the full charge.
 [[nodiscard]] float ShownRequired(float required, std::optional<float> heldSeedCharge);

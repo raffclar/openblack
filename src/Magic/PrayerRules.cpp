@@ -42,22 +42,13 @@ float magic::ChargeSeed(PrayerPower& store, float costToCreate)
 	return DrawPrayer(store, costToCreate);
 }
 
-float magic::SeedChantStore(float chantStore, float storedChants, bool hasCast)
-{
-	if (storedChants >= 0.0f)
-	{
-		return storedChants;
-	}
-	return hasCast ? 0.0f : chantStore;
-}
-
-float magic::SeedRefund(bool hasIcon, float chantStore, float storedChants, bool hasCast)
+float magic::SeedRefund(bool hasIcon, float chantStore)
 {
 	if (!hasIcon)
 	{
 		return 0.0f;
 	}
-	return std::max(SeedChantStore(chantStore, storedChants, hasCast), 0.0f);
+	return std::max(chantStore, 0.0f);
 }
 
 float magic::PlayerMaintainSpell(PlayerNames player, PrayerPower* store, float amount)
