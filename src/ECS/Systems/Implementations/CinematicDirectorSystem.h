@@ -46,6 +46,9 @@ public:
 	void FadeAllTexts(float seconds) override;
 	void UpdateTexts(int32_t milliseconds) override;
 	[[nodiscard]] std::span<const gui::script_text::ScreenText> GetTexts() const override { return _texts; }
+	void OpenClipWindow(glm::vec2 corner, glm::vec2 extent, float seconds) override;
+	void CloseClipWindow(float seconds) override;
+	[[nodiscard]] gui::script_text::ClipWindow GetClipWindow() const override { return _clipWindow; }
 
 	void Reset() override;
 	void SaveState(reflection::BinaryWriter& out) const override;
@@ -68,6 +71,8 @@ private:
 	/// The newest first
 	std::vector<gui::script_text::ScreenText> _texts;
 	glm::u8vec3 _textColour {0, 0, 0};
+	/// A saved game does not keep it
+	gui::script_text::ClipWindow _clipWindow;
 };
 
 } // namespace openblack::ecs::systems

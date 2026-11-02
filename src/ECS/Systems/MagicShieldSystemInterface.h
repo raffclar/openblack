@@ -70,6 +70,8 @@ public:
 	[[nodiscard]] virtual std::optional<entt::entity> ShieldAt(glm::vec3 /*point*/) const { return std::nullopt; }
 	/// A script deletes a shield miracle: the object of the miracle goes at once with it and does not fade
 	virtual void RemoveWithSpell(entt::entity /*spell*/) {}
+	/// A shield miracle's radius changed: its object's reach follows it at once
+	virtual void FollowSpellRadius(entt::entity /*spell*/, float /*radius*/) {}
 
 	/// The shield reaction that a villager has taken up, and how urgent that reaction is to the villager now
 	struct HeldReaction

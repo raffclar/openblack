@@ -216,6 +216,8 @@ struct CreatureMindState
 		CreatureActionLearningType type {CreatureActionLearningType::Normal};
 		uint32_t action {0};
 		bool knows {false};
+		/// Every skill and every miracle, in place of the one action
+		bool everything {false};
 	};
 	std::vector<Teaching> pendingTeaching;
 

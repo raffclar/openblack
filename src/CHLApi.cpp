@@ -313,6 +313,7 @@
 #include "ScriptHeaders/ScriptRealTime.h"
 #include "ScriptHeaders/ScriptStart.h"
 #include "ScriptHeaders/ScriptSwitchChanges.h"
+#include "ScriptHeaders/ScriptTownHealth.h"
 #include "Story/PlaygroundTrip.h"
 #include "Temple/TempleEntrancePoint.h"
 #include "Visual/RendererRequestsInterface.h"
@@ -4524,9 +4525,23 @@ void CreatureCreateRelativeToCreature() // 069 CREATURE_CREATE_RELATIVE_TO_CREAT
 
 void CreatureLearnEverything() // 070 CREATURE_LEARN_EVERYTHING
 {
-	// const auto creature = Pop().uintVal;
-	// TODO(Daniels118): implement this
-	NotImplemented();
+	// The creature knows every skill and every miracle, with no lesson shown
+	const auto creature = PopObject();
+	const auto& registry = Locator::entitiesRegistry::value();
+	if (creature == entt::null || !registry.Valid(creature))
+	{
+		ScriptMessage("No creature for script");
+		return;
+	}
+	if (!registry.AllOf<ecs::components::Creature>(creature))
+	{
+		ScriptMessage("No script for creature");
+		return;
+	}
+	if (Locator::creatureMindSystem::has_value())
+	{
+		Locator::creatureMindSystem::value().LearnEverything(creature);
+	}
 }
 
 void CreatureSetKnowsAction() // 071 CREATURE_SET_KNOWS_ACTION
@@ -7188,10 +7203,19 @@ void IsFighting() // 229 IS_FIGHTING
 
 void SetMagicRadius() // 230 SET_MAGIC_RADIUS
 {
-	// const auto radius = Popf();
-	// const auto object = Pop().uintVal;
-	// TODO(Daniels118): implement this
-	NotImplemented();
+	// A miracle's radius changes at once, and its effect and its shield follow it. Anything that is not a miracle does
+	// not change.
+	const auto radius = Popf();
+	const auto object = PopObject();
+	if (!Locator::entitiesRegistry::value().Valid(object))
+	{
+		ScriptMessage("Thing not valid");
+		return;
+	}
+	if (Locator::magicSystem::has_value())
+	{
+		Locator::magicSystem::value().SetSpellRadius(object, radius);
+	}
 }
 
 void TempTextWithNumber() // 231 TEMP_TEXT_WITH_NUMBER
@@ -7771,10 +7795,25 @@ void CreatureLearnEverythingExcluding() // 259 CREATURE_LEARN_EVERYTHING_EXCLUDI
 
 void PlayedPercentage() // 260 PLAYED_PERCENTAGE
 {
-	// const auto object = Pop().uintVal;
-	// TODO(Daniels118): implement this
-	NotImplemented();
-	Pushf(0.0f);
+	// How far a creature's body is through what it plays, 0 to 1: the time of its action over the length of the
+	// animation that the game keeps for it. Anything else gives 1.
+	const auto object = PopObject();
+	const auto& registry = Locator::entitiesRegistry::value();
+	if (!registry.Valid(object))
+	{
+		ObjectNoLongerValid();
+		Pushf(1.0f);
+		return;
+	}
+	if (!registry.AllOf<ecs::components::Creature>(object))
+	{
+		ScriptMessage("Not coded for non creature");
+		Pushf(1.0f);
+		return;
+	}
+	const auto share =
+	    Locator::creatureMindSystem::has_value() ? Locator::creatureMindSystem::value().BodyShare(object) : std::nullopt;
+	Pushf(share.value_or(0.0f));
 }
 
 void ObjectCastByObject() // 261 OBJECT_CAST_BY_OBJECT
@@ -9642,14 +9681,50 @@ void SetPlayerAlly() // 382 SET_PLAYER_ALLY
 
 void CallFlying() // 383 CALL_FLYING
 {
-	// const auto excluding = static_cast<bool>(Pop().intVal);
-	// const auto radius = Popf();
-	// const auto position = PopVec();
-	// const auto subtype = Pop().intVal;
-	// const auto type = Pop().intVal;
-	// TODO(Daniels118): implement this
-	NotImplemented();
-	Pusho(0);
+	// The first thing of the type and subtype in the physics within the radius of the place, measured across the land:
+	// the search examines the bodies in the order of the physics' list
+	const auto excludingScripted = Pop().intVal != 0;
+	const auto radius = Popf();
+	const auto position = PopVec();
+	const auto subtype = Pop().uintVal;
+	const auto type = Pop().intVal;
+	if (!Locator::dynamicsSystem::has_value())
+	{
+		Pusho(0);
+		return;
+	}
+	const auto& registry = Locator::entitiesRegistry::value();
+	const auto at = map_coords::FromMetres({position.x, position.z});
+	const auto objectType = static_cast<ObjectType>(type);
+	entt::entity found = entt::null;
+	Locator::dynamicsSystem::value().ForEachEntry([&](const ecs::PhysicsEntry& entry) {
+		const auto thing = entry.entity;
+		if (found != entt::null || !registry.Valid(thing) || !registry.AllOf<Transform>(thing))
+		{
+			return;
+		}
+		// The excluding variant does not use a thing that a script holds already
+		if (excludingScripted && registry.AllOf<ecs::components::InScript>(thing))
+		{
+			return;
+		}
+		const auto kind = ecs::script_find::KindOf(registry, thing);
+		if (!kind.has_value() || !ecs::script_find::Matches(*kind, objectType, subtype))
+		{
+			return;
+		}
+		if (gutils::GetDistanceInMetres(at, ScriptFindPosition(registry, thing)) <= radius)
+		{
+			found = thing;
+		}
+	});
+	if (found == entt::null)
+	{
+		Pusho(0);
+		return;
+	}
+	Locator::scriptObjects::value().Register(found, false);
+	Pusho(static_cast<uint32_t>(found));
 }
 
 void SetObjectFadeIn() // 384 SET_OBJECT_FADE_IN
@@ -9676,11 +9751,25 @@ void SetObjectFadeIn() // 384 SET_OBJECT_FADE_IN
 
 void IsAffectedBySpell() // 385 IS_AFFECTED_BY_SPELL
 {
-	// const auto spell = Pop().intVal;
-	// const auto object = Pop().uintVal;
-	// TODO(Daniels118): implement this
-	NotImplemented();
-	Pushb(false);
+	// Whether a creature is under a spell of the magic type now. A magic type that casts no spell on a creature gives no.
+	const auto spell = static_cast<MagicType>(Pop().intVal);
+	const auto object = PopObject();
+	const auto& registry = Locator::entitiesRegistry::value();
+	if (!registry.Valid(object))
+	{
+		ScriptMessage("Object dead man!");
+		Pushb(false);
+		return;
+	}
+	const auto* spells = registry.TryGet<const ecs::components::CreatureSpells>(object);
+	if (!registry.AllOf<ecs::components::Creature>(object) || spells == nullptr)
+	{
+		ScriptMessage("Object must be a creature!");
+		Pushb(false);
+		return;
+	}
+	const auto creatureSpell = creature_spells::SpellOf(spell);
+	Pushb(creatureSpell.has_value() && spells->spells.IsActive(*creatureSpell));
 }
 
 void SetMagicInObject() // 386 SET_MAGIC_IN_OBJECT
@@ -10336,20 +10425,20 @@ void SetDrawTextColour() // 436 SET_DRAW_TEXT_COLOUR
 
 void SetClippingWindow() // 437 SET_CLIPPING_WINDOW
 {
-	// const auto time = Popf();
-	// const auto height = Popf();
-	// const auto width = Popf();
-	// const auto down = Popf();
-	// const auto across = Popf();
-	// TODO(Daniels118): implement this
-	NotImplemented();
+	// The screen goes black but for a box, its place and size shares of the screen, the black fading in over the time
+	const auto time = Popf();
+	const auto height = Popf();
+	const auto width = Popf();
+	const auto down = Popf();
+	const auto across = Popf();
+	Locator::cinematicDirectorSystem::value().OpenClipWindow({across, down}, {width, height}, time);
 }
 
 void ClearClippingWindow() // 438 CLEAR_CLIPPING_WINDOW
 {
-	// const auto time = Popf();
-	// TODO(Daniels118): implement this
-	NotImplemented();
+	// The black round the box fades out over the time
+	const auto time = Popf();
+	Locator::cinematicDirectorSystem::value().CloseClipWindow(time);
 }
 
 void SaveGameInSlot() // 439 SAVE_GAME_IN_SLOT
@@ -10415,10 +10504,33 @@ void GetTimeSinceObjectAttacked() // 442 GET_TIME_SINCE_OBJECT_ATTACKED
 
 void GetTownAndVillagerHealthTotal() // 443 GET_TOWN_AND_VILLAGER_HEALTH_TOTAL
 {
-	// const auto town = Pop().uintVal;
-	// TODO(Daniels118): implement this
-	NotImplemented();
-	Pushf(0.0f);
+	// The life of a town's buildings and of all its people added up: each building's people and then the building, the
+	// buildings in the scripts' order, then the homeless
+	const auto town = PopObject();
+	const auto& registry = Locator::entitiesRegistry::value();
+	const auto* data = registry.Valid(town) ? registry.TryGet<const ecs::components::Town>(town) : nullptr;
+	if (data == nullptr)
+	{
+		ScriptMessage("Invalid objects");
+		Pushf(0.0f);
+		return;
+	}
+	std::vector<script::town_health::AbodeLives> abodes;
+	for (const auto abode : data->abodes)
+	{
+		const auto* building = registry.Valid(abode) ? registry.TryGet<const ecs::components::Abode>(abode) : nullptr;
+		if (building == nullptr)
+		{
+			continue;
+		}
+		auto& lives = abodes.emplace_back(script::town_health::AbodeLives {.life = ecs::world_objects::LifeOf(abode)});
+		std::ranges::transform(building->inhabitants, std::back_inserter(lives.people),
+		                       [](entt::entity person) { return ecs::world_objects::LifeOf(person); });
+	}
+	std::vector<float> homeless;
+	std::ranges::transform(data->homelessVillagers, std::back_inserter(homeless),
+	                       [](entt::entity person) { return ecs::world_objects::LifeOf(person); });
+	Pushf(script::town_health::Total(abodes, homeless));
 }
 
 void GameAddForBuilding() // 444 GAME_ADD_FOR_BUILDING

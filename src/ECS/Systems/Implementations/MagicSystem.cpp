@@ -3788,6 +3788,24 @@ float MagicSystem::ForcePayForSpell(entt::entity entity, float cost)
 	return magic::PayFor(spell->chants, magic::spells::RulesOf(*this, *spell), CasterOf(*spell), cost, magic::Refill::Whole);
 }
 
+void MagicSystem::SetSpellRadius(entt::entity entity, float radius)
+{
+	auto* spell = Locator::entitiesRegistry::value().TryGet<Spell>(entity);
+	if (spell == nullptr)
+	{
+		return;
+	}
+	spell->magnitude = radius;
+	if (Locator::effectRequestSystem::has_value() && Locator::effectRequestSystem::value().IsRunning(spell->effect))
+	{
+		Locator::effectRequestSystem::value().SetMagnitude(spell->effect, radius);
+	}
+	if (Locator::magicShieldSystem::has_value())
+	{
+		Locator::magicShieldSystem::value().FollowSpellRadius(entity, radius);
+	}
+}
+
 float MagicSystem::SpellStrength(entt::entity entity)
 {
 	const auto* spell = FindSpell(entity);

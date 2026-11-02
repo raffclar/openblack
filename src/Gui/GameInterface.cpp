@@ -1912,6 +1912,19 @@ void GameInterface::Draw(glm::u16vec2 resolution, glm::ivec2 mouse, uint32_t mil
 void GameInterface::DrawScriptTexts(glm::u16vec2 resolution)
 {
 	const auto screen = glm::vec2(resolution);
+	// The scripts' window goes under their words: black round its box
+	if (const auto window = script_text::Draw(Locator::cinematicDirectorSystem::value().GetClipWindow(), resolution))
+	{
+		const auto black = glm::vec4(0.0f, 0.0f, 0.0f, static_cast<float>(window->alpha) / 255.0f);
+		for (const auto& box : window->boxes)
+		{
+			if (box.max.x <= box.min.x || box.max.y <= box.min.y)
+			{
+				continue;
+			}
+			_canvas.DrawQuad(glm::vec2(box.min), glm::vec2(box.max), glm::vec2(0.0f), glm::vec2(1.0f), black, nullptr);
+		}
+	}
 	for (const auto& text : Locator::cinematicDirectorSystem::value().GetTexts())
 	{
 		const auto box = script_text::Place(text, screen);

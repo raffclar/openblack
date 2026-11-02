@@ -193,6 +193,10 @@ public:
 		return false;
 	}
 
+	/// How far the body is through what it plays, 0 to 1: the time of its action, or of its legs in a move, over the
+	/// length of the animation that the game keeps for it. None when the body plays nothing and does not move.
+	[[nodiscard]] virtual std::optional<float> BodyShare(entt::entity /*creature*/) const { return std::nullopt; }
+
 	/// Sees to a need now, in place of whatever it was doing: sleeps until rested, eats something (the nearest food when
 	/// none is given), goes and drinks at the nearest water, has a poo, is sick, or faints. Returns whether it could.
 	virtual bool Sleep(entt::entity creature) = 0;
@@ -325,6 +329,8 @@ public:
 	/// knows it at once, and its sightings of a miracle do not change. A thing that it did not know before shows the
 	/// player the creature's lesson. A creature with no learning yet learns nothing.
 	virtual void LearnAction(entt::entity /*creature*/, CreatureActionLearningType /*type*/, uint32_t /*action*/) {}
+	/// A script makes the creature know every skill and every miracle, with no lesson shown
+	virtual void LearnEverything(entt::entity /*creature*/) {}
 	/// Whether the creature knows an ordinary skill or a miracle (by its row in the game's tables). A creature with no
 	/// learning yet knows nothing.
 	[[nodiscard]] virtual bool KnowsAction(entt::entity /*creature*/, CreatureActionLearningType /*type*/,

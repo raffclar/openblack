@@ -13245,6 +13245,32 @@ void AddLandOneScriptStubScenarios(std::vector<Scenario>& all)
 	                                      {.kind = Argument::Kind::Number, .number = 3.0f}}}},
 	});
 
+	// A script opens a window of the screen and closes it again, as the end of the fifth land does
+	all.push_back({
+	    .id = "script.clipping_window",
+	    .name = "A script opens a window of the screen and closes it again",
+	    .facet = Facet::Story,
+	    .description = "After one second, SET_CLIPPING_WINDOW opens a window 40% wide and 60% high, 10% from the left "
+	                   "and 20% from the top, in half a second. Four seconds later, CLEAR_CLIPPING_WINDOW closes it in "
+	                   "half a second. The waving villagers at the end of the fifth land are shown in this window.",
+	    .expected = "Four black boxes fade in around the window in half a second and cover all of the screen out of it. "
+	                "The world shows in the window. After four seconds the boxes fade out in half a second.",
+	    .environment = {.dispenserGrid = false},
+	    .framing = {.shot = Shot::Overview, .include = {{-20.0f, -20.0f}, {20.0f, 20.0f}}},
+	    .commands = {{.kind = Kind::CallNative,
+	                  .delaySeconds = 1.0f,
+	                  .script = "SET_CLIPPING_WINDOW",
+	                  .scriptArguments = {{.kind = Argument::Kind::Number, .number = 0.1f},
+	                                      {.kind = Argument::Kind::Number, .number = 0.2f},
+	                                      {.kind = Argument::Kind::Number, .number = 0.4f},
+	                                      {.kind = Argument::Kind::Number, .number = 0.6f},
+	                                      {.kind = Argument::Kind::Number, .number = 0.5f}}},
+	                 {.kind = Kind::CallNative,
+	                  .delaySeconds = 4.0f,
+	                  .script = "CLEAR_CLIPPING_WINDOW",
+	                  .scriptArguments = {{.kind = Argument::Kind::Number, .number = 0.5f}}}},
+	});
+
 	// A script gives a clip to a flock of villagers, as Idol Pyre does to its extra worshippers
 	all.push_back({
 	    .id = "script.flock_plays_clip",
