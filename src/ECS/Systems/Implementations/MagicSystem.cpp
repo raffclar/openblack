@@ -2914,12 +2914,22 @@ entt::entity MagicSystem::CastHeldSeed(const player_commands::HandCast& command)
 	{
 		Locator::spellIconSystem::value().CancelSeedIconCharge(heldEntity, after.player);
 	}
-	// The hand of another player shows no effect and gives no help on this computer
+	// A tribe's power behind the miracle shows for the hand of every player. A miracle cast on a thing starts at the
+	// place of the thing.
+	glm::vec3 place = point;
+	if (object.has_value())
+	{
+		if (const auto* transform = registry.TryGet<const Transform>(*object))
+		{
+			place = transform->position;
+		}
+	}
+	AfterSeedCast(after, type, place);
+	// The hand of another player shows no other effect and gives no help on this computer
 	if (!ActsOnOwnHand())
 	{
 		return spellEntity;
 	}
-	AfterSeedCast(after, type);
 	// The help counts the cast of this computer's hand, a spell for creatures apart from the other miracles
 	if (Locator::helpProfileSystem::has_value())
 	{
