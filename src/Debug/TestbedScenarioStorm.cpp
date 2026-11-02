@@ -339,4 +339,44 @@ void testbed_scenarios::AddStormScenarios(std::vector<Scenario>& all)
 	                  .scriptArguments = {{.kind = ScriptArgument::Kind::Made, .index = 0},
 	                                      {.kind = ScriptArgument::Kind::Integer, .number = 0.0f}}}},
 	});
+
+	// The weather commands of the arrival on the third land: stop the climates, then end the storms in a circle
+	all.push_back({
+	    .id = "sky.script_kills_storms_in_area",
+	    .name = "A script stops the climates and ends the storms in a circle",
+	    .facet = Facet::Sky,
+	    .description = "Two storms of outer radius 80 stand 280 metres apart, the west one 80 metres east of a marked "
+	                   "point. After three seconds, PAUSE_UNPAUSE_CLIMATE_SYSTEM stops the weather of the climates, as the "
+	                   "set-up script of the third land does. Then KILL_STORMS_IN_AREA ends every storm whose edge is in "
+	                   "a circle of radius 50 round the point.",
+	    .expected =
+	        "Both storms rain under their clouds. At three seconds the west storm ends at once: its rain, its "
+	        "clouds and its shadow go. The east storm is 360 metres from the point, so its edge is not in the "
+	        "circle and it continues to rain. The testbed's clear weather over the whole land also has its edge in the "
+	        "circle, so it ends too; it has no rain and no clouds, so this does not show. The inspector shows the climates "
+	        "stopped and one storm.",
+	    .environment = {.dispenserGrid = false},
+	    .framing = {.shot = Shot::Overview, .include = {{-260.0f, -60.0f}, {260.0f, 200.0f}}, .distance = 1.4f},
+	    .landStorms = {{.offset = {-120.0f, 60.0f},
+	                    .destination = {-120.0f, 60.0f},
+	                    .age = 30.0f,
+	                    .shape = "60.00,80.00,10.00,2000.00,1.00,1.10",
+	                    .clouds = "0.30,200.00,0.00,0.00,0.00,0.00",
+	                    .weather = "0,0,8,93,0,0"},
+	                   {.offset = {160.0f, 60.0f},
+	                    .destination = {160.0f, 60.0f},
+	                    .age = 30.0f,
+	                    .shape = "60.00,80.00,10.00,2000.00,1.00,1.10",
+	                    .clouds = "0.30,200.00,0.00,0.00,0.00,0.00",
+	                    .weather = "0,0,8,93,0,0"}},
+	    .commands = {{.kind = Kind::CallNative,
+	                  .delaySeconds = 3.0f,
+	                  .script = "PAUSE_UNPAUSE_CLIMATE_SYSTEM",
+	                  .scriptArguments = {{.kind = ScriptArgument::Kind::Integer, .number = 0.0f}}},
+	                 {.kind = Kind::CallNative,
+	                  .delaySeconds = 0.0f,
+	                  .script = "KILL_STORMS_IN_AREA",
+	                  .scriptArguments = {{.kind = ScriptArgument::Kind::Position, .point = {-200.0f, 60.0f}},
+	                                      {.kind = ScriptArgument::Kind::Number, .number = 50.0f}}}},
+	});
 }
