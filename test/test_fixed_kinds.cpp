@@ -25,11 +25,14 @@
 #include "ECS/Components/Forest.h"
 #include "ECS/Components/Mobile.h"
 #include "ECS/Components/Pot.h"
+#include "ECS/Components/SpellDispenser.h"
 #include "ECS/Components/SpellIcon.h"
+#include "ECS/Components/StoragePit.h"
 #include "ECS/Components/StreetLantern.h"
 #include "ECS/Components/TeleportStone.h"
 #include "ECS/Components/Temple.h"
 #include "ECS/Components/Tree.h"
+#include "ECS/Components/VillageTotem.h"
 #include "ECS/Components/Villager.h"
 #include "ECS/Components/Vortex.h"
 #include "ECS/Components/WorshipSite.h"
@@ -154,4 +157,27 @@ TEST(FixedKinds, AFixedThingWantsRepairByItsLostLife)
 	EXPECT_EQ(town_desire::FixedDesireToBeRepaired(0.0f, 3.0f), 1.0f);
 	// A kind that wants no repair
 	EXPECT_EQ(town_desire::FixedDesireToBeRepaired(0.2f, 0.0f), 0.0f);
+}
+
+TEST(FixedKinds, WorshipSitesTheTempleAndTheLandWantRepairByLifeAlone)
+{
+	Registry registry;
+	EXPECT_TRUE(fixed_kinds::WantsRepairByLifeAlone(registry, Make<WorshipSite>(registry)));
+	EXPECT_TRUE(fixed_kinds::WantsRepairByLifeAlone(registry, Make<Temple>(registry)));
+	EXPECT_TRUE(fixed_kinds::WantsRepairByLifeAlone(registry, Make<WorshipAltar>(registry)));
+	EXPECT_TRUE(fixed_kinds::WantsRepairByLifeAlone(registry, Make<Feature>(registry)));
+	EXPECT_TRUE(fixed_kinds::WantsRepairByLifeAlone(registry, Make<AnimatedStatic>(registry)));
+	EXPECT_TRUE(fixed_kinds::WantsRepairByLifeAlone(registry, Make<Flowers>(registry)));
+	EXPECT_TRUE(fixed_kinds::WantsRepairByLifeAlone(registry, Make<VillageTotem>(registry)));
+}
+
+TEST(FixedKinds, BuildingsOfTheAbodesAndFieldsAlsoAskTheirTown)
+{
+	Registry registry;
+	EXPECT_FALSE(fixed_kinds::WantsRepairByLifeAlone(registry, Make<Abode>(registry)));
+	EXPECT_FALSE(fixed_kinds::WantsRepairByLifeAlone(registry, Make<StoragePit>(registry)));
+	EXPECT_FALSE(fixed_kinds::WantsRepairByLifeAlone(registry, Make<SpellDispenser>(registry)));
+	EXPECT_FALSE(fixed_kinds::WantsRepairByLifeAlone(registry, Make<Field>(registry)));
+	// A thing with no mark is not one of them
+	EXPECT_FALSE(fixed_kinds::WantsRepairByLifeAlone(registry, Make<Tree>(registry)));
 }

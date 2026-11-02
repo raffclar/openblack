@@ -28,6 +28,7 @@
 #include "Common/GUtilsDistance.h"
 #include "Common/GameRandom.h"
 #include "Creature/CreatureDeeds.h"
+#include "ECS/BuildingSites.h"
 #include "ECS/Components/Abode.h"
 #include "ECS/Components/CreatureObjectAction.h"
 #include "ECS/Components/Disciple.h"
@@ -40,8 +41,11 @@
 #include "ECS/Components/LivingAction.h"
 #include "ECS/Components/Physics.h"
 #include "ECS/Components/ScriptControl.h"
+#include "ECS/Components/SpellDispenser.h"
 #include "ECS/Components/Sprite.h"
+#include "ECS/Components/TeleportStone.h"
 #include "ECS/Components/Town.h"
+#include "ECS/Components/TownDesireFlag.h"
 #include "ECS/Components/Transform.h"
 #include "ECS/Components/Tree.h"
 #include "ECS/Components/Villager.h"
@@ -167,7 +171,8 @@ std::optional<entt::entity> TownOfVillager(entt::entity villager)
 	return person != nullptr ? ValidTown(person->town) : std::nullopt;
 }
 
-/// The town a thing belongs to, if it belongs to one
+/// The town a thing belongs to, if it belongs to one. A worship site, the temple and the other things with the fixed
+/// mark that are not buildings of a town belong to no town.
 std::optional<entt::entity> TownOfThing(entt::entity thing)
 {
 	const auto& registry = Entities();
@@ -183,9 +188,9 @@ std::optional<entt::entity> TownOfThing(entt::entity thing)
 	{
 		return ValidTown(farm->town);
 	}
-	if (const auto* site = registry.TryGet<const WorshipSite>(thing); site != nullptr && !site->towns.empty())
+	if (const auto* dispenser = registry.TryGet<const SpellDispenser>(thing))
 	{
-		return ValidTown(site->towns.back());
+		return ValidTown(dispenser->town);
 	}
 	if (registry.AllOf<Villager>(thing))
 	{
@@ -240,30 +245,56 @@ bool IsRepaired(entt::entity thing)
 	return world_objects::LifeOf(thing) >= 1.0f;
 }
 
-/// How much a kind of thing draws villagers, none for a kind that offers no work or isn't a thing at all
-std::optional<float> KindDesire(entt::entity thing)
+/// The table row of a thing that sets how much it draws a held villager
+const GObjectInfo* InteractRowOf(entt::entity thing)
 {
 	const auto& registry = Entities();
+	const auto& info = Locator::infoConstants::value();
+	// An altar has the row of its worship site
+	if (const auto* altar = registry.TryGet<const WorshipAltar>(thing))
+	{
+		const auto* site = registry.Valid(altar->site) ? registry.TryGet<const WorshipSite>(altar->site) : nullptr;
+		const auto row = site != nullptr ? static_cast<size_t>(site->tribe) : info.worshipSite.size();
+		return row < info.worshipSite.size() ? &info.worshipSite.at(row) : nullptr;
+	}
+	// A teleport stone has its row in the table of static things, and a town's flag has the row of the prayer site
+	if (registry.AllOf<TeleportStone>(thing))
+	{
+		return &info.mobileStatic.at(static_cast<size_t>(MobileStaticInfo::Teleport));
+	}
+	if (registry.AllOf<TownDesireFlag>(thing))
+	{
+		return &info.prayerSite;
+	}
+	return world_objects::EffectInfoOf(thing);
+}
+
+/// How much a kind of thing draws villagers: the value of its row, also for a kind that offers no work. None for a thing
+/// with no row.
+std::optional<float> KindDesire(entt::entity thing)
+{
 	if (!Locator::infoConstants::has_value())
 	{
 		return std::nullopt;
 	}
-	const auto& info = Locator::infoConstants::value();
-	if (registry.AllOf<FishFarm>(thing))
-	{
-		return info.fishFarm.villagerInteractDesire;
-	}
-	if (const auto* site = registry.TryGet<const WorshipSite>(thing))
-	{
-		const auto row = static_cast<size_t>(site->tribe);
-		return row < info.worshipSite.size() ? std::optional(info.worshipSite.at(row).villagerInteractDesire) : std::nullopt;
-	}
-	if (!registry.AnyOf<Abode, Field, Tree, BigForest, Villager>(thing))
-	{
-		return std::nullopt;
-	}
-	const auto* row = world_objects::InfoOf(thing);
+	const auto* row = InteractRowOf(thing);
 	return row != nullptr ? std::optional(row->villagerInteractDesire) : std::nullopt;
+}
+
+/// The player of a thing with the fixed mark: an altar is its worship site's, a teleport stone its miracle's
+std::optional<PlayerNames> FixedOwnerOf(entt::entity thing)
+{
+	const auto& registry = Entities();
+	if (const auto* altar = registry.TryGet<const WorshipAltar>(thing))
+	{
+		const auto* site = registry.Valid(altar->site) ? registry.TryGet<const WorshipSite>(altar->site) : nullptr;
+		return site != nullptr ? site->player : PlayerNames::NEUTRAL;
+	}
+	if (const auto* stone = registry.TryGet<const TeleportStone>(thing))
+	{
+		return stone->player;
+	}
+	return world_objects::PlayerOf(thing);
 }
 
 /// The adults living in a home
@@ -347,6 +378,15 @@ disciple::NearFacts NearFactsOf(entt::entity thing, entt::entity held)
 		}
 		return facts;
 	}
+	// A miracle dispenser is a building of its town with no room for people
+	if (registry.AllOf<SpellDispenser>(thing))
+	{
+		facts.kind = disciple::NearKind::Building;
+		facts.built = IsBuilt(thing);
+		facts.repaired = IsRepaired(thing);
+		facts.functional = villager_home::IsFunctional(thing);
+		return facts;
+	}
 	if (const auto* site = registry.TryGet<const WorshipSite>(thing))
 	{
 		facts.kind = disciple::NearKind::WorshipSite;
@@ -377,7 +417,20 @@ disciple::NearFacts NearFactsOf(entt::entity thing, entt::entity held)
 		facts.villagerFunctional = IsFunctionalVillager(thing);
 		facts.villagerSexuallyActive = IsSexuallyActive(*other);
 		facts.villagerMale = other->sex == Villager::Sex::MALE;
+		return facts;
 	}
+	// Another thing with the fixed mark has no town. Its player's villager builds it up or mends it.
+	if (fixed_kinds::IsFixedKind(registry, thing))
+	{
+		facts.kind = disciple::NearKind::Building;
+		facts.hasTown = false;
+		facts.townHabitable = true;
+		facts.owner = FixedOwnerOf(thing);
+		facts.built = true;
+		facts.repaired = construction::IsBuiltAndRepaired(thing);
+		return facts;
+	}
+	facts.kind = disciple::NearKind::Other;
 	return facts;
 }
 

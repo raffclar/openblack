@@ -50,6 +50,11 @@ bool openblack::ecs::fixed_kinds::IsAlwaysWhole(const Registry& registry, entt::
 	return registry.AnyOf<MobileStatic, DeadTree, BuildingPiece, BigForest, FishFarm, TeleportStone, Vortex>(thing);
 }
 
+bool openblack::ecs::fixed_kinds::WantsRepairByLifeAlone(const Registry& registry, entt::entity thing)
+{
+	return IsFixedKind(registry, thing) && !registry.AnyOf<Abode, StoragePit, SpellDispenser, Field>(thing);
+}
+
 bool openblack::ecs::fixed_kinds::CellIsFixed(std::span<const entt::entity> fixedInCell,
                                               const std::function<bool(entt::entity)>& isFixedKind)
 {

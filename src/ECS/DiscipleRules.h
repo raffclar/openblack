@@ -43,7 +43,8 @@ inline constexpr float k_LeastInterest = 0.001f;
 /// What a thing near the held villager is, as the choice reads it
 enum class NearKind : uint8_t
 {
-	/// Any building of a town other than those below, such as a creche, a graveyard, a wonder or the totem
+	/// Any building of a town other than those below, such as a creche, a graveyard, a wonder or the totem, or another
+	/// thing with the fixed mark, such as the temple, an altar or a teleport stone
 	Building,
 	/// A house people live in
 	House,
@@ -57,6 +58,8 @@ enum class NearKind : uint8_t
 	Forest,
 	FishFarm,
 	Villager,
+	/// A thing that offers no work, such as an animal, a creature, a pot or a firefly
+	Other,
 };
 
 /// What the choice needs to know of a thing held near

@@ -188,5 +188,6 @@ void openblack::ecs::reflection::RegisterFields_Components_w(entt::meta_ctx& con
 	    .Field<&components::Worshipper::onTheWay>("onTheWay");
 	Reflect<components::WorshipAltar>(context)
 	    .Field<&components::WorshipAltar::site>("site")
-	    .Field<&components::WorshipAltar::model>("model");
+	    .Field<&components::WorshipAltar::model>("model")
+	    .Field<&components::WorshipAltar::built>("built");
 }

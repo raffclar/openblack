@@ -107,9 +107,12 @@ public:
 	/// shared among the player's hands. Returns all it asked for.
 	virtual float TakeChantsForVirtualInfluence(PlayerNames player, uint32_t interfaces) = 0;
 
-	/// A site is built up by a share of the whole, its altar with it. Reaching the whole, no town is asked to build it
-	/// any more.
+	/// A site is built up by a share of the whole. Reaching the whole, no town is asked to build it any more. Each share,
+	/// also a share on a built site, builds the altar of the site by the same share until the altar is built.
 	virtual void BuildBy(entt::entity site, float share) = 0;
+	/// An altar not yet built is built up by a share of the whole, at least none. A built altar takes no more. At the
+	/// whole, a site at the altar for its builders goes.
+	virtual void BuildAltarBy(entt::entity altar, float share) = 0;
 	/// A script sets how much of a site is built, at least none. At the whole or more, the site stands built as when
 	/// its builders finish it, also when it stood built before.
 	virtual void SetBuilt(entt::entity site, float built) = 0;

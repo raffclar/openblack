@@ -28,6 +28,7 @@
 #include "Common/GUtilsDistance.h"
 #include "Common/PortableRotations.h"
 #include "ECS/Archetypes/Utils.h"
+#include "ECS/Components/Construction.h"
 #include "ECS/Components/Dance.h"
 #include "ECS/Components/Fixed.h"
 #include "ECS/Components/Footpath.h"
@@ -627,16 +628,41 @@ void WorshipSiteSystem::CountChantsUsed(entt::entity site, float amount)
 void WorshipSiteSystem::BuildBy(entt::entity site, float share)
 {
 	auto& registry = _world->Entities();
-	if (IsBuilt(site))
+	if (!registry.AllOf<WorshipSite>(site))
 	{
 		return;
 	}
-	// Its altar goes up with it, but isn't seen until it stands whole
-	auto& progress = registry.Get<BuildProgress>(site);
-	progress.built = std::max(progress.built + share, 0.0f);
-	if (progress.built >= 1.0f)
+	if (!IsBuilt(site))
 	{
-		Built(site);
+		auto& progress = registry.Get<BuildProgress>(site);
+		progress.built = std::max(progress.built + share, 0.0f);
+		if (progress.built >= 1.0f)
+		{
+			Built(site);
+		}
+	}
+	// Each share of work on the site, also work that mends a built site, builds its altar by the same share. The altar
+	// is not seen until its site stands whole.
+	BuildAltarBy(registry.Get<const WorshipSite>(site).altar, share);
+}
+
+void WorshipSiteSystem::BuildAltarBy(entt::entity altar, float share)
+{
+	auto& registry = _world->Entities();
+	auto* part = registry.Valid(altar) ? registry.TryGet<WorshipAltar>(altar) : nullptr;
+	if (part == nullptr || part->built >= 1.0f)
+	{
+		return;
+	}
+	part->built = std::max(part->built + share, 0.0f);
+	if (part->built >= 1.0f)
+	{
+		part->built = 1.0f;
+		// A site that a town opened at the altar for its builders goes
+		if (registry.AllOf<BuildingSites>(altar))
+		{
+			_world->CloseBuildingSite(altar);
+		}
 	}
 }
 

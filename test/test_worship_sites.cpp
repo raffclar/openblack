@@ -23,6 +23,7 @@
 #include <glm/gtc/matrix_transform.hpp>
 #include <gtest/gtest.h>
 
+#include "ECS/Components/Construction.h"
 #include "ECS/Components/Dance.h"
 #include "ECS/Components/FishFarm.h"
 #include "ECS/Components/Footpath.h"
@@ -1100,4 +1101,30 @@ TEST(WorshipSiteMotes, TheFirstMoteStartsTheEffectAndTheSiteTurnsEndIt)
 	f.system->AddMote(site, icon, miracle);
 	EXPECT_EQ(f.world->motesStarted, 2u);
 	EXPECT_EQ(f.world->motes.back().effect, 2u);
+}
+
+TEST(WorshipSiteSystem, EachShareOfWorkOnASiteBuildsItsAltarToo)
+{
+	Fixture f;
+	f.Town(0, PlayerNames::PLAYER_ONE, Tribe::NORSE, {0.0f, 0.0f, -50.0f});
+	const auto temple = f.Temple(PlayerNames::PLAYER_ONE);
+	f.system->AddTemple(temple, 0.0f, true);
+	const auto site = *std::ranges::find_if(f.registry.Get<const CitadelWorship>(temple).sites,
+	                                        [](auto entity) { return entity != entt::null; });
+	const auto altar = f.registry.Get<const WorshipSite>(site).altar;
+	ASSERT_TRUE(f.registry.Valid(altar));
+	EXPECT_FLOAT_EQ(f.registry.Get<const WorshipAltar>(altar).built, 0.0f);
+	f.system->BuildBy(site, 0.6f);
+	EXPECT_FLOAT_EQ(f.registry.Get<const WorshipAltar>(altar).built, 0.6f);
+	// The altar stays at none, not under it
+	f.system->BuildAltarBy(altar, -1.0f);
+	EXPECT_FLOAT_EQ(f.registry.Get<const WorshipAltar>(altar).built, 0.0f);
+	f.system->BuildBy(site, 0.6f);
+	ASSERT_TRUE(f.system->IsBuilt(site));
+	EXPECT_TRUE(std::ranges::find(f.world->closedSites, altar) == f.world->closedSites.end());
+	// Work on the built site goes on to the altar until it is built, and a site that a town opened at the altar goes
+	f.registry.Assign<BuildingSites>(altar);
+	f.system->BuildBy(site, 0.6f);
+	EXPECT_FLOAT_EQ(f.registry.Get<const WorshipAltar>(altar).built, 1.0f);
+	EXPECT_TRUE(std::ranges::find(f.world->closedSites, altar) != f.world->closedSites.end());
 }
