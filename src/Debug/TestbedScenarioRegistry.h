@@ -1581,6 +1581,8 @@ void AddVillagerLabelScenarios(std::vector<Scenario>& all);
 void AddTempleKeyScenarios(std::vector<Scenario>& all);
 /// The scrolls and signs the land scripts put up
 void AddHighlightScenarios(std::vector<Scenario>& all);
+/// The Heavenly Fire, Stanley the Wolf and the Treacherous Path
+void AddLateSilverScrollScenarios(std::vector<Scenario>& all);
 /// The moon at night, seen to the east, for trying its phases and its path with the moon debug window
 void AddSkyScenarios(std::vector<Scenario>& all);
 /// The advisors coming out, clinging, pointing and acting

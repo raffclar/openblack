@@ -14736,6 +14736,7 @@ std::vector<Scenario> Build()
 	AddGodsRingMapScenarios(all);
 	AddSelfCheckScenarios(all);
 	AddWorshipSiteScenarios(all);
+	AddLateSilverScrollScenarios(all);
 	return all;
 }
 
