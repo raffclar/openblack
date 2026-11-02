@@ -238,6 +238,7 @@ public:
 	bool SendSpellEvent(entt::entity spell, const particles::SpellEventInfo& event) override;
 	float ForcePayForSpell(entt::entity spell, float cost) override;
 	[[nodiscard]] float SpellStrength(entt::entity spell) override;
+	void SetSpellRadius(entt::entity spell, float radius) override;
 
 	void ProcessTurn() override;
 	void Update(float seconds) override;
