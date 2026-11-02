@@ -43,11 +43,15 @@ struct HttpRequest
 	std::string url;
 	std::vector<HttpHeader> headers;
 	std::vector<uint8_t> body;
-	/// A transfer of a large file, such as a land of a network game. The answer has no size limit and the request has
-	/// no limit on its full time. The request stops when no bytes come for the time of the stall limit. The client also
-	/// asks the server for a compressed answer, and gives the body after it expands it.
+	/// A transfer of a large file, such as a land of a network game. The answer has the larger limit
+	/// k_MostLargeAnswerBytes, and the request has no limit on its full time. The request stops when no bytes come for the
+	/// time of the stall limit. The client asks for the file as it is, with no compression, so that a small compressed
+	/// answer cannot expand to a very large body.
 	bool large {false};
 };
+
+/// The most bytes of the answer to a transfer of a large file. The lobby keeps maps of at most 1 MiB.
+inline constexpr size_t k_MostLargeAnswerBytes = 64 * 1024 * 1024;
 
 /// Why a request got no answer from the server
 enum class HttpError : uint8_t

@@ -17,6 +17,7 @@
 #include <optional>
 #include <string>
 
+#include "Server/ConnectionLimits.h"
 #include "Server/WebSocketServerInterface.h"
 
 namespace openblack::server
@@ -72,6 +73,8 @@ private:
 	uint16_t _port {0};
 	ConnectionId _nextId {1};
 	std::map<ConnectionId, std::unique_ptr<Connection>> _connections;
+	/// The connections of each client address
+	connection_limits::AddressCounts _addresses;
 };
 
 /// True for an address of 127.0.0.0/8

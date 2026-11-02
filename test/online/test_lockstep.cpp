@@ -1863,3 +1863,221 @@ TEST_F(LockstepTest, ARoomOfTheLobbyHasNoChatOnTheGameSocket)
 	EXPECT_TRUE(bob.session.TakeRoomChat().empty());
 	EXPECT_EQ(alice.session.GetEnd(), NetworkSession::End::None);
 }
+
+// A changed client of an observer asks the server to stop the turns of a ranked game. Only the player of a god can do
+// that.
+TEST_F(LockstepTest, AnObserverCannotStopTheTurns)
+{
+	MakeHost(1);
+	GiveWorldState();
+	Computer alice(network, now, "god:alice");
+	Frames({&alice}, 7);
+	ASSERT_TRUE(host->Started());
+	Computer watcher(network, now, "observer:carol");
+	Frames({&alice, &watcher}, 10);
+	ASSERT_EQ(watcher.session.GetJoined()->role, game_socket::Role::Observer);
+	watcher.sockets->SendText(watcher.sockets->Ids().back(), game_socket::ToJson(game_socket::StopRequest {}));
+	Frames({&alice, &watcher}, 5);
+	EXPECT_FALSE(host->StoppedAfter().has_value());
+	EXPECT_FALSE(watcher.session.StoppedAfter().has_value());
+	// The god's player can still stop the turns of the decided game
+	alice.session.StopGame();
+	Frames({&alice, &watcher}, 5);
+	EXPECT_TRUE(host->StoppedAfter().has_value());
+}
+
+// On the local network a name is only a label. A computer that gives the name of a god of the running game does not take
+// the god: it watches the game, and the player of the god keeps playing.
+TEST_F(LockstepTest, OnTheLocalNetworkANameDoesNotTakeTheGodOfTheRunningGame)
+{
+	MakeHost(1, 5LL * 60 * 1'000'000, 2, false, true);
+	GiveWorldState();
+	Computer alice(network, now, "", k_LandFile, {'C'}, 0.0f, "Alice");
+	Frames({&alice}, 8);
+	ASSERT_TRUE(host->Started());
+	const auto aliceConnection = host->Seats()[0].connection;
+	Computer impostor(network, now, "", k_LandFile, {'C'}, 0.0f, "Alice");
+	Frames({&alice, &impostor}, 10);
+	ASSERT_TRUE(impostor.session.GetJoined().has_value());
+	EXPECT_EQ(impostor.session.GetJoined()->role, game_socket::Role::Observer);
+	EXPECT_EQ(host->Seats()[0].connection, aliceConnection);
+	EXPECT_EQ(host->Seats()[0].state, LockstepHost::SeatState::Taken);
+	EXPECT_EQ(alice.session.GetState(), NetworkSession::State::Playing);
+	alice.session.Send(HandTap {.object = Entity(4)});
+	Frames({&alice, &impostor}, 5);
+	EXPECT_EQ(serverWorld.taps[4], 1u);
+}
+
+// One god sends more commands than a turn can hold. The server refuses the commands of that god over the limit, and the
+// commands of the other god still come in the turn on every computer.
+TEST_F(LockstepTest, AFloodOfOneGodDoesNotPushTheCommandsOfAnotherGodOutOfTheTurn)
+{
+	MakeHost(2);
+	Computer alice(network, now, "god:alice");
+	Computer bob(network, now, "god:bob");
+	Frames({&alice, &bob}, 7);
+	ASSERT_TRUE(host->Started());
+	const ChatSpeech line {.recipients = {PlayerNames::PLAYER_TWO}, .text = std::u16string(1000, u'a')};
+	const std::vector<Action> lines(turn_codec::k_MostBlockCommands, line);
+	for (uint16_t sequence = 1000; sequence < 1040; ++sequence)
+	{
+		const auto bytes = turn_codec::Encode(turn_codec::CommandBlock {.sequence = sequence, .turn = 0, .actions = lines});
+		ASSERT_FALSE(bytes.empty());
+		alice.sockets->SendBinary(alice.sockets->Ids().back(), bytes);
+	}
+	bob.session.Send(HandTap {.object = Entity(5)});
+	Frames({&alice, &bob}, 5);
+	EXPECT_GT(host->RefusedBlocks(), 0u);
+	EXPECT_EQ(serverWorld.taps[5], 1u);
+	EXPECT_EQ(alice.world.taps[5], 1u);
+	EXPECT_EQ(bob.world.taps[5], 1u);
+	Frames({&alice, &bob}, 5);
+	EXPECT_EQ(alice.world.hash, bob.world.hash);
+	EXPECT_EQ(alice.session.GetCompares().compared, alice.session.GetCompares().same);
+}
+
+// The room takes no more observers than its limit
+TEST_F(LockstepTest, TheRoomRefusesAnObserverOverItsLimit)
+{
+	MakeHost(1);
+	std::vector<std::unique_ptr<Computer>> watchers;
+	for (size_t i = 0; i <= server::k_MostObservers; ++i)
+	{
+		watchers.push_back(std::make_unique<Computer>(network, now, "observer:w" + std::to_string(i)));
+	}
+	std::vector<Computer*> computers;
+	std::ranges::transform(watchers, std::back_inserter(computers), [](const auto& watcher) { return watcher.get(); });
+	Frames(computers, 3);
+	EXPECT_EQ(host->Observers(), server::k_MostObservers);
+	EXPECT_EQ(watchers.back()->session.RefusedReason(), "full");
+}
+
+// A socket that never joins does not stay open
+TEST_F(LockstepTest, AConnectionThatDoesNotJoinInItsTimeCloses)
+{
+	MakeHost(1);
+	auto client = network.MakeClient();
+	const auto id = client->Connect({.url = "wss://127.0.0.1/game/1", .headers = {}, .subprotocols = {}}, {});
+	Frames({}, 2);
+	EXPECT_EQ(network.Count(), 1u);
+	Frames({}, 200);
+	EXPECT_EQ(network.Count(), 0u);
+	client->Close(id, server::server_close::k_Normal);
+}
+
+namespace
+{
+
+/// A game server that a test controls: it sends the frames that the test gives to the client that connected
+struct HostileServer
+{
+	explicit HostileServer(LoopbackSockets& sockets)
+	    : network(sockets)
+	{
+		network.SetHandlers(server::ServerSocketHandlers {
+		    .opened = [this](server::ConnectionId connection) { opened.push_back(connection); },
+		    .text = {},
+		    .binary = {},
+		    .closed = {},
+		});
+	}
+
+	void Text(const game_socket::Frame& frame) { network.SendText(opened.back(), game_socket::ToJson(frame)); }
+	void Binary(const turn_codec::Frame& frame) { network.SendBinary(opened.back(), turn_codec::Encode(frame)); }
+
+	LoopbackSockets& network;
+	std::vector<server::ConnectionId> opened;
+};
+
+void Exchange(LoopbackSockets& network, Computer& computer, int frames = 3)
+{
+	for (int i = 0; i < frames; ++i)
+	{
+		network.Poll();
+		computer.Frame();
+	}
+}
+
+} // namespace
+
+// A changed server names a land that is not a plain name of a land of the game: a network share, a drive, a device or a
+// path out of the folder. The client opens no file and leaves the game.
+TEST(HostileGameServer, ALandThatIsNotAPlainNameOfALandEndsTheJoin)
+{
+	for (const std::string land : {"//host/share/x.txt", "\\\\host\\share\\x.txt", "C:/Windows/win.ini", "../../x.txt",
+	                               "Scripts/../../x.txt", "NUL", "con.txt", "Land1.txt:stream", "a/./b.txt", "x.txt."})
+	{
+		SCOPED_TRACE(land);
+		LoopbackSockets network;
+		HostileServer server(network);
+		int64_t now = 0;
+		Computer alice(network, now, "god:alice");
+		Exchange(network, alice);
+		ASSERT_FALSE(server.opened.empty());
+		server.Text(game_socket::Joined {.role = game_socket::Role::God,
+		                                 .slot = 0,
+		                                 .session = "s",
+		                                 .name = "alice",
+		                                 .start = game_socket::Start {.land = land, .seed = 1}});
+		Exchange(network, alice);
+		EXPECT_EQ(alice.session.GetEnd(), NetworkSession::End::ServerLimit);
+		EXPECT_TRUE(alice.askedLand.empty());
+	}
+}
+
+TEST(HostileGameServer, ALandQueryWithAPathOutOfTheGameEndsTheJoin)
+{
+	LoopbackSockets network;
+	HostileServer server(network);
+	int64_t now = 0;
+	Computer alice(network, now, "god:alice");
+	Exchange(network, alice);
+	server.Text(game_socket::Joined {.role = game_socket::Role::God, .slot = 0, .session = "s", .name = "alice"});
+	Exchange(network, alice);
+	server.Text(game_socket::StartQuery {.land = "\\\\host\\share\\land.txt", .testbed = false, .checksum = 1});
+	Exchange(network, alice);
+	EXPECT_EQ(alice.session.GetEnd(), NetworkSession::End::ServerLimit);
+	EXPECT_TRUE(alice.askedLand.empty());
+}
+
+// A changed server sends turns far ahead of the game
+TEST(HostileGameServer, TurnsFarAheadEndTheGame)
+{
+	LoopbackSockets network;
+	HostileServer server(network);
+	int64_t now = 0;
+	Computer alice(network, now, "god:alice");
+	Exchange(network, alice);
+	const game_socket::Start start {.land = "Land1.txt", .seed = 1};
+	server.Text(
+	    game_socket::Joined {.role = game_socket::Role::God, .slot = 0, .session = "s", .name = "alice", .start = start});
+	server.Text(start);
+	Exchange(network, alice);
+	ASSERT_EQ(alice.session.GetState(), NetworkSession::State::Playing);
+	server.Binary(turn_codec::TurnBundle {.turn = 0, .blocks = {}});
+	Exchange(network, alice);
+	EXPECT_EQ(alice.session.GetEnd(), NetworkSession::End::None);
+	server.Binary(turn_codec::TurnBundle {.turn = 0x7FFFFFFF, .blocks = {}});
+	Exchange(network, alice);
+	EXPECT_EQ(alice.session.GetEnd(), NetworkSession::End::ServerLimit);
+}
+
+// A changed server sends a world state larger than the client keeps
+TEST(HostileGameServer, AWorldStateLargerThanTheLimitEndsTheGame)
+{
+	LoopbackSockets network;
+	HostileServer server(network);
+	int64_t now = 0;
+	Computer alice(network, now, "god:alice");
+	Exchange(network, alice);
+	const game_socket::Start start {.land = "Land1.txt", .seed = 1};
+	server.Text(
+	    game_socket::Joined {.role = game_socket::Role::God, .slot = 0, .session = "s", .name = "alice", .start = start});
+	server.Text(start);
+	server.Text(game_socket::Resumed {.turn = 0, .world = true});
+	Exchange(network, alice);
+	ASSERT_TRUE(alice.session.WaitsForWorld());
+	server.Binary(turn_codec::WorldPart {.turn = 0, .part = 0, .parts = 0xFFFF, .bytes = {1, 2, 3}});
+	Exchange(network, alice);
+	EXPECT_EQ(alice.session.GetEnd(), NetworkSession::End::ServerLimit);
+}

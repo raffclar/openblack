@@ -235,6 +235,8 @@ struct DecodeResult
 [[nodiscard]] size_t SizeOf(const player_commands::Action& action) noexcept;
 /// The size of a frame on the wire
 [[nodiscard]] size_t SizeOf(const Frame& frame) noexcept;
+/// The size of a block in a turn on the wire: its stamp and its commands
+[[nodiscard]] size_t BlockSize(const StampedBlock& block) noexcept;
 
 /// Adds the bytes of a frame to the end of a buffer. Returns false, and adds nothing, when the frame breaks a limit: too
 /// many commands in a block, too many blocks, a sender that is not a player, or a frame that is too large.

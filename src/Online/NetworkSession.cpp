@@ -39,6 +39,36 @@ void Log(spdlog::level::level_enum level, std::string_view text)
 	}
 }
 
+/// The name of the land of a start, when the start loads a land of a file. The testbed and the map for 32 gods have no
+/// file.
+[[nodiscard]] std::optional<std::string_view> LandFileOf(const game_socket::Start& start)
+{
+	// A start with no land name opens no file
+	if (start.testbed || start.godsRingMap || start.land.empty())
+	{
+		return std::nullopt;
+	}
+	return start.land;
+}
+
+/// The name of the land that a message of the server gives, when it gives a land of a file
+[[nodiscard]] std::optional<std::string_view> LandFileOf(const game_socket::Frame& frame)
+{
+	if (const auto* joined = std::get_if<game_socket::Joined>(&frame); joined != nullptr && joined->start.has_value())
+	{
+		return LandFileOf(*joined->start);
+	}
+	if (const auto* start = std::get_if<game_socket::Start>(&frame))
+	{
+		return LandFileOf(*start);
+	}
+	if (const auto* query = std::get_if<game_socket::StartQuery>(&frame); query != nullptr && !query->testbed)
+	{
+		return query->land;
+	}
+	return std::nullopt;
+}
+
 /// The god slot of a player, as the key of the start files. The neutral player has no slot.
 [[nodiscard]] std::optional<uint8_t> SlotKey(PlayerNames player)
 {
@@ -80,6 +110,7 @@ void NetworkSession::Join(NetworkSessionSettings settings)
 	_startAlignments.clear();
 	_ownGodPlaysForClan = false;
 	_turns.clear();
+	_waitingCommands = 0;
 	_playout.Reset();
 	_turnsDone = 0;
 	// A new session counts its blocks of commands from 0
@@ -206,6 +237,31 @@ void NetworkSession::DropStream()
 	_dropStream = true;
 }
 
+void NetworkSession::BreaksLimit(std::string_view what)
+{
+	Log(spdlog::level::err, fmt::format("The game server breaks a limit of the client: {}. The client leaves the game.", what));
+	FinishWith(End::ServerLimit);
+}
+
+size_t NetworkSession::CommandsIn(const turn_codec::TurnBundle& turn)
+{
+	size_t commands = 0;
+	for (const auto& block : turn.blocks)
+	{
+		commands += block.actions.size();
+	}
+	return commands;
+}
+
+void NetworkSession::CountWaitingCommands()
+{
+	_waitingCommands = 0;
+	for (const auto& [number, turn] : _turns)
+	{
+		_waitingCommands += CommandsIn(turn);
+	}
+}
+
 void NetworkSession::FinishWith(End end)
 {
 	DropStream();
@@ -218,6 +274,12 @@ void NetworkSession::Text(std::string_view text)
 	const auto frame = game_socket::Parse(text);
 	if (!frame.has_value())
 	{
+		return;
+	}
+	// A server names a land only by a plain name of a land of the game. The client opens no file for another name.
+	if (const auto land = LandFileOf(*frame); land.has_value() && !start_rules::IsLandPath(*land))
+	{
+		BreaksLimit("the land of the game is not a plain name of a land of the game");
 		return;
 	}
 	if (const auto* joined = std::get_if<game_socket::Joined>(&*frame))
@@ -258,6 +320,7 @@ void NetworkSession::Text(std::string_view text)
 			_worldParts.clear();
 			_world.reset();
 			_turns.clear();
+			_waitingCommands = 0;
 			_playout.Reset();
 		}
 		SendKeptAgain();
@@ -441,6 +504,7 @@ void NetworkSession::Update()
 		{
 			// The server sends again the turns after the last turn that the world did
 			std::erase_if(_turns, [this](const auto& entry) { return entry.first >= _turnsDone; });
+			CountWaitingCommands();
 			_playout.Reset();
 			Open(true);
 		}
@@ -548,6 +612,10 @@ std::vector<player_commands::Command> NetworkSession::TakeTurn(uint32_t turn)
 			commands.push_back(player_commands::Command {.player = block.sender, .action = std::move(action)});
 		}
 	}
+	for (auto done = _turns.begin(); done != std::next(found); ++done)
+	{
+		_waitingCommands -= std::min(_waitingCommands, CommandsIn(done->second));
+	}
 	_turns.erase(_turns.begin(), std::next(found));
 	_playout.Done(turn);
 	_turnsDone = turn + 1;
@@ -563,18 +631,39 @@ void NetworkSession::Turn(const turn_codec::TurnBundle& turn)
 	}
 	// While the world of the server comes, the session keeps the turns from the turn of that world. After a restart of the
 	// server, that turn can come before the turns that this computer did.
-	if (turn.turn < _worldTurn.value_or(_turnsDone) || _turns.contains(turn.turn))
+	const auto first = _worldTurn.value_or(_turnsDone);
+	if (turn.turn < first || _turns.contains(turn.turn))
 	{
+		return;
+	}
+	// A server that sends more turns than the client can keep breaks a limit: the client leaves the game
+	const auto commands = CommandsIn(turn);
+	if (turn.turn - first >= k_MostWaitingTurns || _turns.size() >= k_MostWaitingTurns ||
+	    _waitingCommands + commands > k_MostWaitingCommands)
+	{
+		BreaksLimit(fmt::format("turn {} goes over the turns that the client keeps", turn.turn));
 		return;
 	}
 	_playout.Arrived(turn.turn, _clock());
 	_turns.emplace(turn.turn, turn);
+	_waitingCommands += commands;
 }
 
 void NetworkSession::WorldPart(const turn_codec::WorldPart& part)
 {
 	if (!_worldTurn.has_value() || part.turn != *_worldTurn || part.part != _worldParts.size())
 	{
+		return;
+	}
+	// Each part of a world state gives the same count of parts, and the whole state has a size that the client can keep
+	if (part.part == 0)
+	{
+		_worldPartCount = part.parts;
+	}
+	if (part.parts != _worldPartCount || static_cast<size_t>(part.parts) * turn_codec::k_WorldPartBytes > k_MostWorldBytes)
+	{
+		_worldParts.clear();
+		BreaksLimit(fmt::format("the world state of turn {} has {} parts", part.turn, part.parts));
 		return;
 	}
 	_worldParts.push_back(part.bytes);
@@ -603,6 +692,7 @@ void NetworkSession::WorldLoaded(uint32_t turn)
 	_worldTurn.reset();
 	_turnsDone = turn;
 	std::erase_if(_turns, [turn](const auto& entry) { return entry.first < turn; });
+	CountWaitingCommands();
 	// The checksums of the parted world are of no use
 	_localChecksums.clear();
 	std::erase_if(_serverChecksums, [turn](const auto& entry) { return entry.first <= turn; });
@@ -727,6 +817,8 @@ std::string_view EndName(NetworkSession::End end) noexcept
 		return "lost";
 	case NetworkSession::End::NoConnection:
 		return "no connection";
+	case NetworkSession::End::ServerLimit:
+		return "server broke a limit";
 	}
 	return "unknown";
 }

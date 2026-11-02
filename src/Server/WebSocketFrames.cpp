@@ -104,7 +104,7 @@ HandshakeResult ReadHandshake(std::string_view bytes, Handshake& out, size_t& us
 	{
 		return HandshakeResult::Bad;
 	}
-	Handshake handshake {.path = std::string(requestLine.substr(4, pathEnd - 4)), .key = {}};
+	Handshake handshake {.path = std::string(requestLine.substr(4, pathEnd - 4)), .key = {}, .forwardedFor = {}};
 	bool upgrade = false;
 	bool connection = false;
 	bool version = false;
@@ -136,6 +136,10 @@ HandshakeResult ReadHandshake(std::string_view bytes, Handshake& out, size_t& us
 		else if (name == "sec-websocket-key")
 		{
 			handshake.key = std::string(value);
+		}
+		else if (name == "x-forwarded-for")
+		{
+			handshake.forwardedFor = std::string(value);
 		}
 	}
 	// The key is the base64 text of 16 bytes

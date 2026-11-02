@@ -31,6 +31,8 @@ struct Handshake
 	std::string path;
 	/// The value of Sec-WebSocket-Key
 	std::string key;
+	/// The value of X-Forwarded-For, which a reverse proxy in front of the server adds. Empty when the request has none.
+	std::string forwardedFor;
 };
 
 enum class HandshakeResult : uint8_t

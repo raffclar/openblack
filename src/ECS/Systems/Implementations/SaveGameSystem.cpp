@@ -37,6 +37,7 @@
 #include <CreatureRecord.h>
 #include <InstantSaves.h>
 #include <LHVM.h>
+#include <LHVMFile.h>
 #include <MindFile.h>
 #include <SaveGameInfo.h>
 #include <SavePictureMaker.h>
@@ -102,6 +103,7 @@
 #include "LandChange.h"
 #include "Locator.h"
 #include "MainThreadWork.h"
+#include "Online/NetworkLand.h"
 #include "Visual/RendererRequestsInterface.h"
 
 #ifdef _WIN32
@@ -837,6 +839,28 @@ gamesave::ObjectKey Translate(const ObjectRefKeys& keys, gamesave::ObjectKey key
 	return found != keys.end() ? found->second : key;
 }
 
+/// Whether the running state of the scripts in a world file runs the program that the land loaded. A file with no state
+/// of the scripts, or a game with no scripts, restores no script code.
+bool ScriptsRunLoadedProgram(const gamesave::WorldFile& world)
+{
+	const auto script = gamesave::FindChunk(world, gamesave::k_ScriptTag);
+	if (!script.has_value() || !Locator::vm::has_value())
+	{
+		return true;
+	}
+	try
+	{
+		lhvm::LHVMFile file;
+		file.Open(std::vector<uint8_t>(script->begin(), script->end()));
+		return Locator::vm::value().RunsLoadedProgram(file);
+	}
+	catch (const std::exception& error)
+	{
+		SPDLOG_LOGGER_WARN(Log(), "The scripts of the world state do not read: {}", error.what());
+		return false;
+	}
+}
+
 /// Whether the land's file of the game's saved game is the land that is open
 bool IsOpenLand(std::string_view landscape)
 {
@@ -1384,6 +1408,40 @@ bool SaveGameSystem::LoadWorldState(std::span<const uint8_t> bytes)
 		SPDLOG_LOGGER_WARN(Log(), "The world state has no game block");
 		return false;
 	}
+	return LoadWholeWorld(0, *world, *game, ecs::world_save::LoadKind::WorldState);
+}
+
+bool SaveGameSystem::LoadServerWorldState(std::span<const uint8_t> bytes)
+{
+	FlushWrites();
+	const auto world = gamesave::ReadWorldFile(bytes);
+	if (!world.has_value() || !ecs::world_save::HasWholeWorld(*world))
+	{
+		SPDLOG_LOGGER_WARN(Log(), "The world state of the game server has no whole world that the game can read");
+		return false;
+	}
+	const auto gameChunk = std::ranges::find(world->chunks, gamesave::k_GameTag, &gamesave::Chunk::tag);
+	auto game = gameChunk != world->chunks.end() ? gamesave::ReadGameChunk(gameChunk->bytes) : std::nullopt;
+	if (!game.has_value() || !Locator::landSystem::has_value())
+	{
+		SPDLOG_LOGGER_WARN(Log(), "The world state of the game server has no game block");
+		return false;
+	}
+	// The state keeps the paths of the server's files. The game loads the land that is open from its own files.
+	const auto& lands = Locator::landSystem::value();
+	if (!network_land::NamesOpenLand(game->landscape, game->landscapeFile, lands.GetLandPath(), lands.GetLandscapePath()))
+	{
+		SPDLOG_LOGGER_WARN(Log(), "The world state of the game server is not of the land that is open: the game refuses it");
+		return false;
+	}
+	if (!ScriptsRunLoadedProgram(*world))
+	{
+		SPDLOG_LOGGER_WARN(Log(), "The scripts of the world state of the game server are not the scripts of the land: the "
+		                          "game refuses the state");
+		return false;
+	}
+	game->landscape = lands.GetLandPath().generic_string();
+	game->landscapeFile = lands.GetLandscapePath().generic_string();
 	return LoadWholeWorld(0, *world, *game, ecs::world_save::LoadKind::WorldState);
 }
 

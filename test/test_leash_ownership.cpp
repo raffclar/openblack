@@ -261,6 +261,19 @@ TEST(CreatureHand, TheHandHoldsTheCreatureOfAnAlliedGodAsItsOwn)
 	EXPECT_FALSE(MayHold({.owner = PlayerNames::PLAYER_TWO, .species = CreatureType::Ogre}, k_Hand, true));
 }
 
+// A changed client can send the feedback of a release for any creature. Only the creature that the player's hand can
+// hold gets it.
+TEST(CreatureHand, TheFeedbackOfAReleaseComesOnlyToTheCreatureOfThePlayerOrOfAnAlly)
+{
+	using creature_hand::FeelsHandOf;
+	constexpr auto k_Hand = PlayerNames::PLAYER_ONE;
+	EXPECT_TRUE(FeelsHandOf(PlayerNames::PLAYER_ONE, k_Hand, false));
+	EXPECT_TRUE(FeelsHandOf(PlayerNames::PLAYER_TWO, k_Hand, true));
+	EXPECT_FALSE(FeelsHandOf(PlayerNames::PLAYER_TWO, k_Hand, false));
+	EXPECT_FALSE(FeelsHandOf(PlayerNames::NEUTRAL, k_Hand, false));
+	EXPECT_FALSE(FeelsHandOf(PlayerNames::NEUTRAL, k_Hand, true));
+}
+
 TEST(CreatureHand, TheInteractTipIsForTheOwnCreatureAnywhereAndOthersInTheInfluence)
 {
 	using creature_hand::Holdable;

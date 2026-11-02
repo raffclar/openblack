@@ -451,7 +451,7 @@ void NetworkGameSystem::LoadWorld(const online::NetworkSession::WorldState& worl
 	// The checksum of the last turn takes the world of that turn, before the load replaces it
 	Locator::syncChecksumSystem::value().FinishHash();
 	const auto start = std::chrono::steady_clock::now();
-	if (!Locator::saveGameSystem::has_value() || !Locator::saveGameSystem::value().LoadWorldState(world.bytes))
+	if (!Locator::saveGameSystem::has_value() || !Locator::saveGameSystem::value().LoadServerWorldState(world.bytes))
 	{
 		SPDLOG_LOGGER_ERROR(spdlog::get("game"), "The world state of turn {} from the game server did not load", world.turn);
 		_session->Leave();

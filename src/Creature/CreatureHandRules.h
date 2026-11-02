@@ -40,6 +40,9 @@ struct Holdable
 /// Whether a player's hand may take hold of a creature to stroke and slap it: only the player's own creature, or the
 /// creature of a god that is the ally of the player (allied), wherever it is. The creature must also take hold at all.
 [[nodiscard]] bool MayHold(const Holdable& creature, PlayerNames handPlayer, bool allied = false);
+/// Whether the strokes and the slaps of a player's hand can come to a creature. The hand holds only the creature of the
+/// player or of an ally of the player (allied), so the feedback of a release comes only to such a creature.
+[[nodiscard]] bool FeelsHandOf(PlayerNames owner, PlayerNames handPlayer, bool allied);
 /// Whether the hand, empty, shows its tooltip for interacting with a creature it is over. Never for a creature of no
 /// player or one under a script's control. Out of the player's influence (asked at the creature) only for the player's
 /// own creature. Within it for any player's, except one that would take hold while a hand already holds it; one that

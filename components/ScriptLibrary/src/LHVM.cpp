@@ -303,6 +303,30 @@ int LHVM::RestoreState(const LHVMFile& file)
 	return EXIT_SUCCESS;
 }
 
+bool LHVM::RunsLoadedProgram(const LHVMFile& file) const
+{
+	const auto sameInstruction = [](const VMInstruction& a, const VMInstruction& b) {
+		return a.code == b.code && a.mode == b.mode && a.type == b.type && a.data.uintVal == b.data.uintVal && a.line == b.line;
+	};
+	const auto sameScript = [](const VMScript& a, const VMScript& b) {
+		return a.name == b.name && a.filename == b.filename && a.type == b.type && a.variables == b.variables &&
+		       a.variablesOffset == b.variablesOffset && a.instructionAddress == b.instructionAddress &&
+		       a.parameterCount == b.parameterCount && a.scriptId == b.scriptId;
+	};
+	if (!file.IsLoaded() || !std::ranges::equal(file.GetInstructions(), _instructions, sameInstruction) ||
+	    !std::ranges::equal(file.GetScripts(), _scripts, sameScript) || file.GetData().size() < _data.size() ||
+	    !std::equal(_data.begin(), _data.end(), file.GetData().begin()) || file.GetAutostart() != _auto ||
+	    file.GetVariablesNames() != _variablesNames)
+	{
+		return false;
+	}
+	// Each task and each exception handler of a task goes on at an instruction of the program
+	const auto inProgram = [this](uint32_t address) { return address < _instructions.size(); };
+	return std::ranges::all_of(file.GetTasks(), [&inProgram](const VMTask& task) {
+		return inProgram(task.instructionAddress) && std::ranges::all_of(task.exceptionHandlerIps, inProgram);
+	});
+}
+
 VMValue LHVM::Pop(DataType& type)
 {
 	_currentStack->popCount++;

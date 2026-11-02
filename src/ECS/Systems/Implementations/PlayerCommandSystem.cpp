@@ -24,6 +24,7 @@
 
 #include "Creature/ClanCreatureOrder.h"
 #include "Creature/CreatureFileLoad.h"
+#include "Creature/CreatureHandRules.h"
 #include "Creature/LeashReport.h"
 #include "ECS/Components/Creature.h"
 #include "ECS/Components/CreatureLeash.h"
@@ -32,6 +33,7 @@
 #include "ECS/Components/Player.h"
 #include "ECS/Components/VillageTotem.h"
 #include "ECS/CreatureFromFile.h"
+#include "ECS/PlayerRelations.h"
 #include "ECS/ProfileAlignment.h"
 #include "ECS/Registry.h"
 #include "ECS/Statistics.h"
@@ -51,6 +53,7 @@
 #include "ECS/Systems/LeashSystemInterface.h"
 #include "ECS/Systems/MagicSystemInterface.h"
 #include "ECS/Systems/MusicMoodSystemInterface.h"
+#include "ECS/Systems/PlayerSystemInterface.h"
 #include "ECS/Systems/SaveGameSystemInterface.h"
 #include "ECS/Systems/SpellIconSystemInterface.h"
 #include "ECS/Systems/TimeSystemInterface.h"
@@ -164,6 +167,20 @@ void LogLeashCommand(openblack::PlayerNames player, std::string_view words, uint
 	SPDLOG_LOGGER_INFO(logger, "{}", openblack::creature_leash::ReportLine(report));
 }
 
+/// Whether the hand of the player can hold the creature, so that the feedback of the player's release comes to it
+[[nodiscard]] bool FeelsHand(const openblack::ecs::Registry& registry, openblack::PlayerNames player, entt::entity creature)
+{
+	const auto* body = registry.TryGet<const openblack::ecs::components::Creature>(creature);
+	if (body == nullptr)
+	{
+		return false;
+	}
+	const bool allied =
+	    body->owner != openblack::PlayerNames::NEUTRAL && openblack::Locator::playerSystem::has_value() &&
+	    openblack::player_relations::IsAlly(openblack::Locator::playerSystem::value().AllyStrength(body->owner, player));
+	return openblack::creature_hand::FeelsHandOf(body->owner, player, allied);
+}
+
 /// Do one command for the player that sent it, at a turn
 void Run(const Command& command, uint32_t turn)
 {
@@ -187,10 +204,20 @@ void Run(const Command& command, uint32_t turn)
 		    }
 		    else if constexpr (std::is_same_v<Kind, CreatureFeedback>)
 		    {
-			    // The creature can go from the world before the start of the turn
+			    // The creature can go from the world before the start of the turn. Only the player of the creature, or an
+			    // ally, holds it, so the feedback of another player does not come to it.
 			    if (openblack::Locator::creatureMindSystem::has_value() && registry.Valid(action.creature))
 			    {
-				    openblack::Locator::creatureMindSystem::value().SendReleaseFeedback(action.creature, action.amount);
+				    if (FeelsHand(registry, command.player, action.creature))
+				    {
+					    openblack::Locator::creatureMindSystem::value().SendReleaseFeedback(action.creature, action.amount);
+				    }
+				    else if (const auto logger = spdlog::get("game"); logger != nullptr)
+				    {
+					    SPDLOG_LOGGER_WARN(logger,
+					                       "Player {} cannot hold creature {}: the feedback of the player does not come to it",
+					                       static_cast<int>(command.player), entt::to_integral(action.creature));
+				    }
 			    }
 		    }
 		    else if constexpr (std::is_same_v<Kind, HandTake> || std::is_same_v<Kind, HandLetGo> ||

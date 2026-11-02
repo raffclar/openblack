@@ -34,6 +34,9 @@
 namespace openblack::server
 {
 
+/// The most observers of a room, when the settings give no other limit
+constexpr size_t k_MostObservers = 64;
+
 /// The god slots of a room when the land gives none, such as the testbed: each god of a network land
 constexpr uint8_t k_DefaultGodSlots = 7;
 
@@ -69,6 +72,8 @@ struct HostSettings
 	/// A room on the local network with no lobby (deviation 113): a join with no ticket gives the name of the player's
 	/// profile, and the room takes the player by that name. A god who finds no free slot joins as an observer.
 	bool lanNames {false};
+	/// The most observers of the room, connected or away. The room refuses an observer over this with "full".
+	size_t mostObservers {k_MostObservers};
 };
 
 /// The claims of a player who joins a room on the local network by the name of the profile, as a god. None when the name
@@ -143,6 +148,8 @@ public:
 		std::optional<uint16_t> lastBlockInTurn;
 		/// The blocks that the client sent again and that the server had, so left out
 		uint32_t blocksAgain {0};
+		/// The blocks whose commands the server refused because the commands of the god did not fit in the turn
+		uint32_t refusedBlocks {0};
 	};
 
 	/// The session of an observer. An observer has no god, but it can come back with the secret of its session, as the
@@ -241,6 +248,8 @@ private:
 		bool joined {false};
 		game_socket::Role role {game_socket::Role::God};
 		std::optional<uint8_t> seat;
+		/// The time that the connection opened. A connection that does not join in its time closes.
+		int64_t openedAt {0};
 	};
 
 	void Opened(ConnectionId connection);
@@ -266,7 +275,10 @@ private:
 	[[nodiscard]] bool SessionMatches(std::string_view session, const std::optional<SessionHash>& hash,
 	                                  std::string_view given) const;
 	/// A join after the start: the player of a waiting god comes back into it, and any other player is an observer
-	void JoinRunning(ConnectionId connection, Peer& peer, const join_ticket::Claims& claims);
+	/// A join by the name of the profile on the local network never takes a god.
+	void JoinRunning(ConnectionId connection, Peer& peer, const join_ticket::Claims& claims, bool byName);
+	/// True when the room has as many observers as it takes
+	[[nodiscard]] bool ObserversFull() const;
 	/// Sends the server's world at the start of the next turn to a connection. False when the server has no world state.
 	bool SendWorld(ConnectionId connection);
 	void Refuse(ConnectionId connection, std::string_view reason);
@@ -341,6 +353,8 @@ private:
 	};
 	/// The blocks that came since the last turn
 	std::vector<PendingBlock> _pending;
+	/// The bytes of the commands of each god slot in the blocks that came since the last turn
+	std::map<uint8_t, size_t> _pendingBytes;
 	/// The number of the last session that a god's player got
 	uint32_t _sessions {0};
 	/// The slots whose god leaves at the next turn

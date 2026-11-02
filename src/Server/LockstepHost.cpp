@@ -19,6 +19,7 @@
 
 #include "Online/StartRules.h"
 #include "PlayerSlots.h"
+#include "Server/ConnectionLimits.h"
 #include "Server/LobbyBans.h"
 
 namespace openblack::server
@@ -30,6 +31,11 @@ namespace
 constexpr uint32_t k_CompareLogEvery = 100;
 /// The clients' checksums that wait for the server's own, at most, for each god
 constexpr size_t k_MostEarlyChecksums = 64;
+/// The server writes a line about the refused blocks of a god after this many refused blocks
+constexpr uint32_t k_RefusedLogEvery = 100;
+/// The most bytes of the commands of one god in one turn: the commands of a turn that fills a frame
+constexpr size_t k_MostGodBytesInTurn =
+    turn_codec::k_MostFrameBytes - turn_codec::sizes::k_Header - turn_codec::sizes::k_TurnBody;
 
 void Log(spdlog::level::level_enum level, std::string_view text)
 {
@@ -43,6 +49,30 @@ void Log(spdlog::level::level_enum level, std::string_view text)
 [[nodiscard]] PlayerNames SeatPlayer(size_t seat)
 {
 	return player_slots::PlayerOfSlot(seat).value_or(PlayerNames::PLAYER_ONE);
+}
+
+/// True when two secrets are the same. The time of the compare does not depend on where the texts differ, so that a
+/// client cannot find a secret from the times of the answers.
+[[nodiscard]] bool SameSecret(std::string_view a, std::string_view b) noexcept
+{
+	uint8_t difference = a.size() == b.size() ? 0 : 1;
+	for (size_t i = 0; i < a.size(); ++i)
+	{
+		difference |= static_cast<uint8_t>(static_cast<uint8_t>(a[i]) ^ static_cast<uint8_t>(i < b.size() ? b[i] : 0));
+	}
+	return difference == 0;
+}
+
+/// The sender with the most bytes of commands in the blocks. None when no block has a command.
+[[nodiscard]] std::optional<PlayerNames> HeaviestSender(std::span<const turn_codec::StampedBlock> blocks)
+{
+	std::map<PlayerNames, size_t> bytes;
+	for (const auto& block : blocks)
+	{
+		bytes[block.sender] += turn_codec::BlockSize(block);
+	}
+	const auto heaviest = std::ranges::max_element(bytes, {}, [](const auto& entry) { return entry.second; });
+	return heaviest != bytes.end() ? std::optional(heaviest->first) : std::nullopt;
 }
 
 /// The seat of a player, as the key of the start files. The neutral player has no seat.
@@ -131,7 +161,7 @@ LockstepHost::~LockstepHost()
 
 void LockstepHost::Opened(ConnectionId connection)
 {
-	_peers[connection] = Peer {};
+	_peers[connection] = Peer {.joined = false, .role = game_socket::Role::God, .seat = std::nullopt, .openedAt = _clock()};
 }
 
 void LockstepHost::SendTo(ConnectionId connection, const game_socket::Frame& frame)
@@ -227,9 +257,15 @@ void LockstepHost::Text(ConnectionId connection, std::string_view text)
 	}
 	else if (std::holds_alternative<game_socket::StopRequest>(*frame))
 	{
-		if (peer.joined)
+		// Only the player of a god can stop the turns. The end box of an observer does not stop the game.
+		if (peer.joined && peer.role == game_socket::Role::God && peer.seat.has_value())
 		{
 			StopTurns();
+		}
+		else
+		{
+			Log(spdlog::level::warn,
+			    fmt::format("Connection {} has no god: the server refuses its request to stop the turns", connection));
 		}
 	}
 	else if (const auto* reply = std::get_if<game_socket::StartReply>(&*frame))
@@ -326,7 +362,7 @@ void LockstepHost::Join(ConnectionId connection, Peer& peer, const game_socket::
 	}
 	if (_started)
 	{
-		JoinRunning(connection, peer, claims);
+		JoinRunning(connection, peer, claims, lan);
 		return;
 	}
 	game_socket::Joined joined {
@@ -378,7 +414,8 @@ void LockstepHost::Join(ConnectionId connection, Peer& peer, const game_socket::
 		              .sessionNumber = ++_sessions,
 		              .lastBlock = std::nullopt,
 		              .lastBlockInTurn = std::nullopt,
-		              .blocksAgain = 0};
+		              .blocksAgain = 0,
+		              .refusedBlocks = 0};
 		free->sessionHash = HashOf(free->session);
 		peer.seat = seat;
 		joined.slot = seat;
@@ -387,12 +424,22 @@ void LockstepHost::Join(ConnectionId connection, Peer& peer, const game_socket::
 	}
 	else
 	{
+		if (ObserversFull())
+		{
+			Refuse(connection, "full");
+			return;
+		}
 		joined.session = NewWatcher(connection, claims.name);
 		Log(spdlog::level::info, fmt::format("{} joins as an observer", claims.name));
 	}
 	peer.joined = true;
 	peer.role = claims.role;
 	SendTo(connection, joined);
+}
+
+bool LockstepHost::ObserversFull() const
+{
+	return std::max(Observers(), _watchers.size()) >= _settings.mostObservers;
 }
 
 void LockstepHost::Resume(ConnectionId connection, Peer& peer, const game_socket::Resume& resume)
@@ -547,7 +594,7 @@ bool LockstepHost::SessionMatches(std::string_view session, const std::optional<
 	}
 	if (!session.empty())
 	{
-		return session == given;
+		return SameSecret(session, given);
 	}
 	return hash.has_value() && _settings.sessionHasher && _settings.sessionHasher->Matches(*hash, given);
 }
@@ -574,7 +621,7 @@ bool LockstepHost::SendWorld(ConnectionId connection)
 	return true;
 }
 
-void LockstepHost::JoinRunning(ConnectionId connection, Peer& peer, const join_ticket::Claims& claims)
+void LockstepHost::JoinRunning(ConnectionId connection, Peer& peer, const join_ticket::Claims& claims, bool byName)
 {
 	// A player who joins the game that turns needs the server's world. The testbed scenario of the tools keeps its state
 	// out of the world and plays from the first turn, so nobody can join its game as it turns.
@@ -584,11 +631,18 @@ void LockstepHost::JoinRunning(ConnectionId connection, Peer& peer, const join_t
 		return;
 	}
 	// The player of a god that waits, or whose old socket is not closed yet, comes back into the god (MP-Q6). The ticket
-	// of the lobby shows the account, so a new process of the player needs no secret of the old session.
-	const auto own = std::ranges::find_if(_seats, [&claims](const Seat& seat) {
-		return claims.role == game_socket::Role::God && !seat.account.empty() && seat.account == claims.subject &&
+	// of the lobby shows the account, so a new process of the player needs no secret of the old session. A name on the
+	// local network is only a label that any computer can give: a player who joins by name never takes a god. The player
+	// of the god comes back only with the secret of the session.
+	const auto own = std::ranges::find_if(_seats, [&claims, byName](const Seat& seat) {
+		return !byName && claims.role == game_socket::Role::God && !seat.account.empty() && seat.account == claims.subject &&
 		       (seat.state == SeatState::Taken || seat.state == SeatState::Away);
 	});
+	if (own == _seats.end() && ObserversFull())
+	{
+		Refuse(connection, "full");
+		return;
+	}
 	auto start = _settings.start;
 	start.turn = _turnsDone;
 	start.gods = Gods();
@@ -683,6 +737,27 @@ void LockstepHost::Binary(ConnectionId connection, std::span<const uint8_t> byte
 			return;
 		}
 		seat.lastBlock = block->sequence;
+		// The commands of one god in a turn fit in one frame at most. The server refuses the commands of a block that go
+		// over this, so that the flood of one god does not push the commands of the other gods out of the turn.
+		auto& used = _pendingBytes[*peer.seat];
+		const auto blockBytes =
+		    turn_codec::BlockSize({.sender = SeatPlayer(*peer.seat), .sequence = block->sequence, .actions = block->actions});
+		if (used + blockBytes > k_MostGodBytesInTurn)
+		{
+			++_refusedBlocks;
+			// The log gets the first refused block of the god and then one line for each 100 blocks
+			if (seat.refusedBlocks++ % k_RefusedLogEvery == 0)
+			{
+				Log(spdlog::level::warn,
+				    fmt::format("The commands of slot {} do not fit in the turn: the server refuses block {}", *peer.seat,
+				                block->sequence));
+			}
+			block->actions.clear();
+		}
+		else
+		{
+			used += blockBytes;
+		}
 		if (!block->actions.empty())
 		{
 			for (const auto& action : block->actions)
@@ -780,6 +855,19 @@ void LockstepHost::CloseSeat(uint8_t seat)
 void LockstepHost::Update()
 {
 	const auto now = _clock();
+	// A connection that does not join or come back in its time closes, so that a socket with no ticket does not stay
+	std::vector<ConnectionId> late;
+	for (const auto& [connection, peer] : _peers)
+	{
+		if (!peer.joined && now - peer.openedAt > connection_limits::k_JoinMicroseconds)
+		{
+			late.push_back(connection);
+		}
+	}
+	for (const auto connection : late)
+	{
+		Refuse(connection, "protocol");
+	}
 	// An observer that does not come back in the time to come back loses its session
 	if (std::erase_if(_watchers, [this, now](const Watcher& watcher) {
 		    return !watcher.connection.has_value() && now - watcher.awaySince > _settings.comeBackMicroseconds;
@@ -1084,6 +1172,8 @@ std::vector<player_commands::Command> LockstepHost::TakeTurn(uint32_t turn)
 		    turn_codec::StampedBlock {.sender = SeatPlayer(seat), .sequence = 0, .actions = {player_commands::PlayerLeft {}}});
 	}
 	_leaving.clear();
+	// The joins and the leaves of the gods always go in the turn
+	const auto fixedBlocks = bundle.blocks.size();
 	for (auto& pending : _pending)
 	{
 		// The turn holds the block even when the turn is too large and drops its commands. The client never sends it again.
@@ -1098,12 +1188,28 @@ std::vector<player_commands::Command> LockstepHost::TakeTurn(uint32_t turn)
 		}
 	}
 	_pending.clear();
+	_pendingBytes.clear();
 	auto bytes = turn_codec::Encode(bundle);
-	if (bytes.empty())
+	// A turn larger than a frame drops the commands of the god with the most bytes in the turn, until the turn fits. The
+	// commands of the other gods stay in the turn. The turn itself always goes.
+	while (bytes.empty())
 	{
-		// A turn larger than a frame drops the commands of the turn, but never the turn itself
-		Log(spdlog::level::err, fmt::format("The commands of turn {} do not fit in a frame", turn));
-		bundle.blocks.clear();
+		const auto heaviest = HeaviestSender(std::span(bundle.blocks).subspan(fixedBlocks));
+		if (!heaviest.has_value())
+		{
+			Log(spdlog::level::err, fmt::format("The commands of turn {} do not fit in a frame", turn));
+			bundle.blocks.resize(fixedBlocks);
+			bytes = turn_codec::Encode(bundle);
+			break;
+		}
+		Log(spdlog::level::err, fmt::format("The commands of turn {} do not fit in a frame: the server drops the commands "
+		                                    "of slot {}",
+		                                    turn, PlayerSeat(*heaviest).value_or(0)));
+		const auto from = bundle.blocks.begin() + static_cast<std::ptrdiff_t>(fixedBlocks);
+		bundle.blocks.erase(
+		    std::remove_if(from, bundle.blocks.end(),
+		                   [&heaviest](const turn_codec::StampedBlock& block) { return block.sender == *heaviest; }),
+		    bundle.blocks.end());
 		bytes = turn_codec::Encode(bundle);
 	}
 	// The journal keeps the turn before any client gets it, so that a restart of the server can send it again
@@ -1248,7 +1354,8 @@ void LockstepHost::Restore(const snapshots::Room& room, uint32_t turnsDone, std:
 		                  .sessionNumber = ++_sessions,
 		                  .lastBlock = std::nullopt,
 		                  .lastBlockInTurn = std::nullopt,
-		                  .blocksAgain = 0};
+		                  .blocksAgain = 0,
+		                  .refusedBlocks = 0};
 		// The server takes only the blocks after the last block that the sent turns hold
 		if (const auto last = blocks.find(static_cast<uint8_t>(i)); last != blocks.end())
 		{

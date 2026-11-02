@@ -12,7 +12,10 @@
 #include <algorithm>
 #include <array>
 #include <chrono>
+#include <limits>
+#include <string>
 #include <string_view>
+#include <tuple>
 #include <utility>
 #include <vector>
 
@@ -35,6 +38,7 @@
 #include <openssl/ssl.h>
 #include <spdlog/spdlog.h>
 
+#include "Server/ConnectionLimits.h"
 #include "Server/WebSocketFrames.h"
 
 namespace openblack::server
@@ -43,6 +47,7 @@ namespace
 {
 
 namespace frames = websocket_frames;
+namespace limits = connection_limits;
 
 #if defined(_WIN32)
 using Socket = SOCKET;
@@ -159,7 +164,7 @@ struct ContextDeleter
 
 bool IsLoopbackAddress(std::string_view address)
 {
-	return address.starts_with("127.") || address == "localhost";
+	return limits::IsLoopback(address);
 }
 
 struct SocketWebSocketServer::Tls
@@ -184,7 +189,13 @@ struct SocketWebSocketServer::Connection
 	Stage stage {Stage::Handshake};
 	std::string handshake;
 	frames::FrameReader reader {k_MostMessageBytes};
-	std::vector<uint8_t> out;
+	limits::OutQueue out;
+	/// The address of the other end of the socket
+	std::string peer;
+	/// The address that the limit per address counts for this connection. Empty when no count is kept.
+	std::string counted;
+	/// The server had more bytes for the client than the queue takes: the connection ends at the next poll
+	bool overflow {false};
 	std::chrono::steady_clock::time_point started;
 	std::chrono::steady_clock::time_point lastHeard;
 
@@ -197,11 +208,12 @@ struct SocketWebSocketServer::Connection
 		}
 	}
 
-	/// Reads what the socket has. Gives false when the connection ended.
+	/// Reads what the socket has, up to the limit of one poll. The rest waits in the socket. Gives false when the
+	/// connection ended.
 	bool Read(std::vector<uint8_t>& into)
 	{
 		std::array<uint8_t, k_ReadChunk> chunk {};
-		while (true)
+		while (into.size() < limits::k_MostReadBytesPerPoll)
 		{
 			int got = 0;
 			if (ssl)
@@ -227,17 +239,19 @@ struct SocketWebSocketServer::Connection
 			}
 			into.insert(into.end(), chunk.begin(), chunk.begin() + got);
 		}
+		return true;
 	}
 
 	/// Writes what waits. Gives false when the connection ended.
 	bool Flush()
 	{
-		while (!out.empty())
+		while (!out.Empty())
 		{
 			int sent = 0;
+			const auto size = static_cast<int>(std::min<size_t>(out.Size(), std::numeric_limits<int>::max()));
 			if (ssl)
 			{
-				sent = SSL_write(ssl.get(), out.data(), static_cast<int>(out.size()));
+				sent = SSL_write(ssl.get(), out.Data(), size);
 				if (sent <= 0)
 				{
 					const auto error = SSL_get_error(ssl.get(), sent);
@@ -246,14 +260,13 @@ struct SocketWebSocketServer::Connection
 			}
 			else
 			{
-				sent = static_cast<int>(
-				    send(socket, reinterpret_cast<const char*>(out.data()), static_cast<int>(out.size()), k_SendFlags));
+				sent = static_cast<int>(send(socket, reinterpret_cast<const char*>(out.Data()), size, k_SendFlags));
 				if (sent < 0)
 				{
 					return WouldBlock();
 				}
 			}
-			out.erase(out.begin(), out.begin() + sent);
+			out.Sent(static_cast<size_t>(sent));
 		}
 		return true;
 	}
@@ -341,13 +354,31 @@ void SocketWebSocketServer::Accept()
 {
 	while (true)
 	{
-		const auto client = accept(ToSocket(_listener), nullptr, nullptr);
+		sockaddr_in from {};
+		socklen_t fromLength = sizeof(from);
+		const auto client = accept(ToSocket(_listener), reinterpret_cast<sockaddr*>(&from), &fromLength);
 		if (client == k_NoSocket)
 		{
 			return;
 		}
+		std::array<char, INET_ADDRSTRLEN> text {};
+		const auto* named = inet_ntop(AF_INET, &from.sin_addr, text.data(), text.size());
+		const std::string peer = named != nullptr ? std::string(named) : std::string();
+		// The server closes a connection over its limits at once: too many connections, or too many from the address.
+		// A connection from this computer is counted when its handshake gives the address of the client of the proxy.
+		const bool countNow = !limits::IsLoopback(peer);
+		if (_connections.size() >= limits::k_MostConnections || (countNow && !_addresses.Add(peer)))
+		{
+			SPDLOG_LOGGER_INFO(spdlog::get("game"), "The game server refuses a connection from {}: too many connections", peer);
+			CloseSocket(client);
+			continue;
+		}
 		if (!MakeNonBlocking(client))
 		{
+			if (countNow)
+			{
+				_addresses.Remove(peer);
+			}
 			CloseSocket(client);
 			continue;
 		}
@@ -356,6 +387,8 @@ void SocketWebSocketServer::Accept()
 		setsockopt(client, IPPROTO_TCP, TCP_NODELAY, reinterpret_cast<const char*>(&on), sizeof(on));
 		auto connection = std::make_unique<Connection>();
 		connection->socket = client;
+		connection->peer = peer;
+		connection->counted = countNow ? peer : std::string();
 		connection->started = std::chrono::steady_clock::now();
 		connection->lastHeard = connection->started;
 		if (_tls)
@@ -363,6 +396,10 @@ void SocketWebSocketServer::Accept()
 			connection->ssl.reset(SSL_new(_tls->context.get()));
 			if (!connection->ssl || SSL_set_fd(connection->ssl.get(), static_cast<int>(client)) != 1)
 			{
+				if (!connection->counted.empty())
+				{
+					_addresses.Remove(connection->counted);
+				}
 				continue;
 			}
 			connection->stage = Connection::Stage::Tls;
@@ -406,10 +443,28 @@ bool SocketWebSocketServer::Service(ConnectionId id, Connection& connection)
 		frames::Handshake handshake;
 		size_t used = 0;
 		const auto result = frames::ReadHandshake(connection.handshake, handshake, used);
+		if (result == frames::HandshakeResult::Ready && connection.counted.empty())
+		{
+			// Behind the proxy, the limit per address counts the address of the proxy's client
+			const auto client = limits::ClientAddress(connection.peer, handshake.forwardedFor);
+			if (!limits::IsLoopback(client))
+			{
+				if (!_addresses.Add(client))
+				{
+					SPDLOG_LOGGER_INFO(spdlog::get("game"),
+					                   "The game server refuses a connection from {}: too many connections", client);
+					const auto answer = frames::RefuseAnswer();
+					std::ignore = connection.out.Add(reinterpret_cast<const uint8_t*>(answer.data()), answer.size());
+					connection.Flush();
+					return false;
+				}
+				connection.counted = client;
+			}
+		}
 		if (result == frames::HandshakeResult::Bad)
 		{
 			const auto answer = frames::RefuseAnswer();
-			connection.out.assign(answer.begin(), answer.end());
+			std::ignore = connection.out.Add(reinterpret_cast<const uint8_t*>(answer.data()), answer.size());
 			connection.Flush();
 			return false;
 		}
@@ -418,7 +473,7 @@ bool SocketWebSocketServer::Service(ConnectionId id, Connection& connection)
 			return alive && now - connection.started < k_HandshakeLimit;
 		}
 		const auto answer = frames::AcceptAnswer(AcceptValue(handshake.key));
-		connection.out.insert(connection.out.end(), answer.begin(), answer.end());
+		std::ignore = connection.out.Add(reinterpret_cast<const uint8_t*>(answer.data()), answer.size());
 		// Bytes after the request are the first frames
 		bytes.assign(connection.handshake.begin() + static_cast<std::ptrdiff_t>(used), connection.handshake.end());
 		connection.handshake.clear();
@@ -430,7 +485,7 @@ bool SocketWebSocketServer::Service(ConnectionId id, Connection& connection)
 		}
 		if (connection.stage != Stage::Open)
 		{
-			return connection.Flush() && !connection.out.empty();
+			return connection.Flush() && !connection.out.Empty();
 		}
 	}
 
@@ -460,7 +515,7 @@ bool SocketWebSocketServer::Service(ConnectionId id, Connection& connection)
 			case frames::Opcode::Ping:
 			{
 				const auto pong = frames::EncodeFrame(frames::Opcode::Pong, message.payload);
-				connection.out.insert(connection.out.end(), pong.begin(), pong.end());
+				connection.overflow = !connection.out.Add(pong.data(), pong.size()) || connection.overflow;
 				break;
 			}
 			case frames::Opcode::Close:
@@ -469,7 +524,7 @@ bool SocketWebSocketServer::Service(ConnectionId id, Connection& connection)
 				                          ? static_cast<uint16_t>((message.payload[0] << 8) | message.payload[1])
 				                          : server_close::k_Normal;
 				const auto reply = frames::EncodeClose(code);
-				connection.out.insert(connection.out.end(), reply.begin(), reply.end());
+				std::ignore = connection.out.Add(reply.data(), reply.size(), limits::k_MostQueuedBytes + reply.size());
 				connection.Flush();
 				connection.stage = Stage::Ended;
 				if (_handlers.closed)
@@ -487,7 +542,7 @@ bool SocketWebSocketServer::Service(ConnectionId id, Connection& connection)
 			const auto code = connection.reader.GetError() == frames::FrameReader::Error::TooLarge ? server_close::k_TooLarge
 			                                                                                       : server_close::k_Protocol;
 			const auto reply = frames::EncodeClose(code);
-			connection.out.insert(connection.out.end(), reply.begin(), reply.end());
+			std::ignore = connection.out.Add(reply.data(), reply.size(), limits::k_MostQueuedBytes + reply.size());
 			connection.Flush();
 			connection.stage = Stage::Ended;
 			if (_handlers.closed)
@@ -497,11 +552,22 @@ bool SocketWebSocketServer::Service(ConnectionId id, Connection& connection)
 			return false;
 		}
 	}
+	// A client that does not read what the server sends ends, so that its queue does not use the memory of the server
+	if (connection.overflow && connection.stage == Stage::Open)
+	{
+		SPDLOG_LOGGER_INFO(spdlog::get("game"), "Game socket {} does not read what the server sends: it closes", id);
+		connection.stage = Stage::Ended;
+		if (_handlers.closed)
+		{
+			_handlers.closed(id, server_close::k_TooLarge);
+		}
+		return false;
+	}
 
 	const bool flushed = connection.Flush();
 	if (connection.stage == Stage::Closing)
 	{
-		return flushed && !connection.out.empty() && now - connection.lastHeard < k_HandshakeLimit;
+		return flushed && !connection.out.Empty() && now - connection.lastHeard < k_HandshakeLimit;
 	}
 	if (!alive || !flushed || now - connection.lastHeard > k_IdleLimit)
 	{
@@ -537,7 +603,11 @@ void SocketWebSocketServer::Poll()
 		}
 		if (!Service(id, *found->second))
 		{
-			_connections.erase(id);
+			if (!found->second->counted.empty())
+			{
+				_addresses.Remove(found->second->counted);
+			}
+			_connections.erase(found);
 		}
 	}
 }
@@ -550,8 +620,17 @@ bool SocketWebSocketServer::Send(ConnectionId id, uint8_t opcode, std::span<cons
 		return false;
 	}
 	auto& connection = *found->second;
+	if (connection.overflow)
+	{
+		return false;
+	}
 	const auto frame = frames::EncodeFrame(static_cast<frames::Opcode>(opcode), bytes);
-	connection.out.insert(connection.out.end(), frame.begin(), frame.end());
+	if (!connection.out.Add(frame.data(), frame.size()))
+	{
+		// The connection ends at the next poll, never inside a handler of the game
+		connection.overflow = true;
+		return false;
+	}
 	// The frame goes at once when the socket takes it
 	connection.Flush();
 	ERR_clear_error();
@@ -580,7 +659,7 @@ void SocketWebSocketServer::Close(ConnectionId id, uint16_t code)
 	if (connection.stage == Connection::Stage::Open)
 	{
 		const auto frame = frames::EncodeClose(code);
-		connection.out.insert(connection.out.end(), frame.begin(), frame.end());
+		std::ignore = connection.out.Add(frame.data(), frame.size(), limits::k_MostQueuedBytes + frame.size());
 		connection.stage = Connection::Stage::Closing;
 		connection.lastHeard = std::chrono::steady_clock::now();
 		connection.Flush();

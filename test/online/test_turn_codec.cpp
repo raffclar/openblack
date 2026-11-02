@@ -7,8 +7,10 @@
  * openblack is licensed under the GNU General Public License version 3.
  *******************************************************************************/
 
+#include <cmath>
 #include <cstdint>
 
+#include <algorithm>
 #include <array>
 #include <bit>
 #include <bitset>
@@ -143,13 +145,29 @@ void ExpectRoundTrip(const Frame& frame)
 	EXPECT_EQ(Encode(*decoded.frame), bytes);
 }
 
-/// A random command, with random bits in the floats (also NaNs, infinities and denormals)
+/// A random command, with random bits in the floats (also denormals). The floats are finite, as the codec refuses the
+/// other floats.
 Action RandomAction(std::mt19937& random)
 {
 	std::uniform_int_distribution<uint32_t> bits;
 	const auto entity = [&]() { return Entity(bits(random)); };
-	const auto number = [&]() { return std::bit_cast<float>(bits(random)); };
-	const auto wide = [&]() { return (static_cast<uint64_t>(bits(random)) << 32U) | bits(random); };
+	const auto number = [&]() {
+		auto value = std::bit_cast<float>(bits(random));
+		while (!std::isfinite(value))
+		{
+			value = std::bit_cast<float>(bits(random));
+		}
+		return value;
+	};
+	const auto amount = [&]() { return std::clamp(number(), -1.0f, 1.0f); };
+	const auto wide = [&]() {
+		auto value = std::bit_cast<double>((static_cast<uint64_t>(bits(random)) << 32U) | bits(random));
+		while (!std::isfinite(value))
+		{
+			value = std::bit_cast<double>((static_cast<uint64_t>(bits(random)) << 32U) | bits(random));
+		}
+		return value;
+	};
 	const auto vector = [&]() { return glm::vec3 {number(), number(), number()}; };
 	switch (bits(random) % 47)
 	{
@@ -158,7 +176,7 @@ Action RandomAction(std::mt19937& random)
 	case 1:
 		return LeashTap {.creature = entity()};
 	case 2:
-		return CreatureFeedback {.creature = entity(), .amount = number()};
+		return CreatureFeedback {.creature = entity(), .amount = amount()};
 	case 3:
 		return HandTake {.object = entity()};
 	case 4:
@@ -195,10 +213,8 @@ Action RandomAction(std::mt19937& random)
 	case 17:
 		return FightCharge {.heldMs = bits(random)};
 	case 18:
-		return CreatureReaction {.creature = entity(),
-		                         .animation = bits(random),
-		                         .mirrored = bits(random) % 2 == 0,
-		                         .interruptsAfter = std::bit_cast<double>(wide())};
+		return CreatureReaction {
+		    .creature = entity(), .animation = bits(random), .mirrored = bits(random) % 2 == 0, .interruptsAfter = wide()};
 	case 22:
 		return HandPick {.object = entity()};
 	case 20:
@@ -467,7 +483,7 @@ TEST(TurnCodec, TheFieldsOfTheCommandsComeBackExactly)
 	                           .start = {.angularMomentum = {-0.0f, 0.0f, 5.0f},
 	                                     .origin = {11.0f, 12.0f, 13.0f},
 	                                     .angles = {0.5f, -0.25f, 2.0f}}},
-	                CreatureFeedback {.creature = Entity(43), .amount = 2.0f},
+	                CreatureFeedback {.creature = Entity(43), .amount = -1.0f},
 	                LeashOrder {.kind = LeashOrder::Kind::Tie, .object = Entity(44), .place = {1.0f, 2.0f, 3.0f}},
 	                LeashKey {.key = creature_leash::LeashKey::PreviousLeash},
 	            },
@@ -475,17 +491,21 @@ TEST(TurnCodec, TheFieldsOfTheCommandsComeBackExactly)
 	};
 	auto bytes = Encode(turn);
 	ASSERT_EQ(bytes.size(), 94u);
-	// The test puts NaNs in the bytes, because a NaN constant of the compiler can lose its signalling bit. The velocity's
-	// y is at byte 21, and the amount is at byte 70.
-	const auto put = [&bytes](size_t at, uint32_t value) {
+	// The velocity's y is at byte 21, and the amount is at byte 70
+	const auto put = [](std::vector<uint8_t> into, size_t at, uint32_t value) {
 		for (size_t i = 0; i < 4; ++i)
 		{
-			bytes[at + i] = static_cast<uint8_t>(value >> (8 * i));
+			into[at + i] = static_cast<uint8_t>(value >> (8 * i));
 		}
+		return into;
 	};
 	ASSERT_EQ(bytes[12], static_cast<uint8_t>(CommandTag::HandLetGo));
-	put(21, 0x7F800001U);
-	put(70, 0xFFC12345U);
+	// A command with a number that is not finite, or an amount out of its range, does not read. The test puts the NaNs in
+	// the bytes, because a NaN constant of the compiler can lose its signalling bit.
+	EXPECT_EQ(Decode(put(bytes, 21, 0x7F800001U)).error, DecodeError::Value);
+	EXPECT_EQ(Decode(put(bytes, 21, 0x7F800000U)).error, DecodeError::Value);
+	EXPECT_EQ(Decode(put(bytes, 70, 0xFFC12345U)).error, DecodeError::Value);
+	EXPECT_EQ(Decode(put(bytes, 70, std::bit_cast<uint32_t>(1.5f))).error, DecodeError::Value);
 	// After the velocity come the spin, the origin and the angles of the start, in this order
 	const auto at = [&bytes](size_t from) {
 		uint32_t value = 0;
@@ -512,12 +532,12 @@ TEST(TurnCodec, TheFieldsOfTheCommandsComeBackExactly)
 	const auto& letGo = std::get<HandLetGo>(block.actions[0]);
 	EXPECT_EQ(letGo.object, Entity(42));
 	EXPECT_EQ(std::bit_cast<uint32_t>(letGo.velocity.x), 0x80000000U);
-	EXPECT_EQ(std::bit_cast<uint32_t>(letGo.velocity.y), 0x7F800001U);
+	EXPECT_EQ(letGo.velocity.y, 1.0f);
 	EXPECT_EQ(std::bit_cast<uint32_t>(letGo.velocity.z), std::bit_cast<uint32_t>(denormal));
 	EXPECT_EQ(std::bit_cast<uint32_t>(letGo.start.angularMomentum.x), 0x80000000U);
 	EXPECT_EQ(letGo.start.origin, glm::vec3(11.0f, 12.0f, 13.0f));
 	EXPECT_EQ(letGo.start.angles, glm::vec3(0.5f, -0.25f, 2.0f));
-	EXPECT_EQ(std::bit_cast<uint32_t>(std::get<CreatureFeedback>(block.actions[1]).amount), 0xFFC12345U);
+	EXPECT_EQ(std::get<CreatureFeedback>(block.actions[1]).amount, -1.0f);
 	const auto& order = std::get<LeashOrder>(block.actions[2]);
 	EXPECT_EQ(order.kind, LeashOrder::Kind::Tie);
 	EXPECT_EQ(order.object, Entity(44));

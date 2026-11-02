@@ -23,6 +23,11 @@ bool creature_hand::MayHold(const Holdable& creature, PlayerNames handPlayer, bo
 	return TakesHold(creature) && (creature.owner == handPlayer || allied);
 }
 
+bool creature_hand::FeelsHandOf(PlayerNames owner, PlayerNames handPlayer, bool allied)
+{
+	return owner != PlayerNames::NEUTRAL && (owner == handPlayer || allied);
+}
+
 bool creature_hand::ShowsInteractTip(PlayerNames player, const Holdable& creature, bool held, bool handInInfluence)
 {
 	if (player == PlayerNames::NEUTRAL || creature.owner == PlayerNames::NEUTRAL || creature.scriptControlled)

@@ -172,6 +172,11 @@ public:
 	/// Reads the running state from the bytes of a SAV file
 	int RestoreState(const std::vector<uint8_t>& buffer);
 	int RestoreState(const LHVMFile& file);
+	/// Whether the running state of a SAV file runs the program that is loaded now: the same instructions, scripts,
+	/// globals and scripts that start by themselves, the data of the program at the start of its data (a save in a native
+	/// call adds the texts of the call after it), and each task at an instruction of that program. A state of another
+	/// program could bring code that the loaded program does not have, so the game restores only a state that passes.
+	[[nodiscard]] bool RunsLoadedProgram(const LHVMFile& file) const;
 
 	/// Take a newer build of the loaded program that keeps the existing code where it is and adds to it, as recompiling
 	/// a script does: the instructions, scripts and data are replaced and new globals added, while running tasks and

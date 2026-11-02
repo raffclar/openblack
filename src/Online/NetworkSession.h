@@ -9,6 +9,7 @@
 
 #pragma once
 
+#include <cstddef>
 #include <cstdint>
 
 #include <functional>
@@ -117,7 +118,17 @@ public:
 		Lost,
 		/// The socket closed before the server accepted the client
 		NoConnection,
+		/// The server sent more than the client keeps, or a land that is not a plain land name
+		ServerLimit,
 	};
+
+	/// The most turns that wait to turn, also the most turns after the first turn that waits. The server keeps
+	/// 5 minutes of turns for a client that comes back, which is fewer.
+	static constexpr size_t k_MostWaitingTurns = 16 * 1024;
+	/// The most commands in the turns that wait
+	static constexpr size_t k_MostWaitingCommands = 1024 * 1024;
+	/// The most bytes of a world state from the server. A world state of a land is a few megabytes.
+	static constexpr size_t k_MostWorldBytes = 128 * 1024 * 1024;
 
 	/// The counts of the checksums that the client compared with the server's
 	struct Compares
@@ -222,6 +233,11 @@ private:
 	void WorldPart(const turn_codec::WorldPart& part);
 	void Compare(uint32_t turn);
 	void FinishWith(End end);
+	/// The server sent more than the client keeps: the log names what, and the session ends
+	void BreaksLimit(std::string_view what);
+	/// Counts the commands of the turns that wait again
+	void CountWaitingCommands();
+	[[nodiscard]] static size_t CommandsIn(const turn_codec::TurnBundle& turn);
 	void DropStream();
 	void SendWaiting();
 	/// Sends a block of commands with the next number of the session. False when the block did not go.
@@ -274,6 +290,10 @@ private:
 	/// The turn of the world state that comes, and its parts so far
 	std::optional<uint32_t> _worldTurn;
 	std::vector<std::vector<uint8_t>> _worldParts;
+	/// The count of parts that the first part of the world state gave
+	uint16_t _worldPartCount {0};
+	/// The commands in the turns that wait
+	size_t _waitingCommands {0};
 	std::optional<WorldState> _world;
 	/// The client asked the server to stop the turns of the game
 	bool _stopAsked {false};

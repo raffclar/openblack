@@ -9,6 +9,8 @@
 
 #include "TurnCodec.h"
 
+#include <cmath>
+
 #include <algorithm>
 #include <bit>
 #include <limits>
@@ -103,8 +105,18 @@ public:
 		return value;
 	}
 	uint8_t Byte() { return Number<uint8_t>(); }
-	float Float() { return std::bit_cast<float>(Number<uint32_t>()); }
-	double Double() { return std::bit_cast<double>(Number<uint64_t>()); }
+	float Float()
+	{
+		const auto value = std::bit_cast<float>(Number<uint32_t>());
+		_finite = _finite && std::isfinite(value);
+		return value;
+	}
+	double Double()
+	{
+		const auto value = std::bit_cast<double>(Number<uint64_t>());
+		_finite = _finite && std::isfinite(value);
+		return value;
+	}
 	entt::entity Entity() { return static_cast<entt::entity>(Number<uint32_t>()); }
 	glm::vec3 Vector()
 	{
@@ -115,6 +127,8 @@ public:
 	}
 
 	[[nodiscard]] bool Bad() const { return _bad; }
+	/// False after a read of a number that is not finite: an infinity or not a number
+	[[nodiscard]] bool Finite() const { return _finite; }
 	[[nodiscard]] size_t Left() const { return _bytes.size() - _at; }
 	[[nodiscard]] bool AtEnd() const { return _at == _bytes.size(); }
 
@@ -122,6 +136,7 @@ private:
 	std::span<const uint8_t> _bytes;
 	size_t _at {0};
 	bool _bad {false};
+	bool _finite {true};
 };
 
 /// The god slot of a player, as a byte of a frame. The check of the frame before the write makes sure that the player
@@ -371,7 +386,13 @@ DecodeError ReadAction(Reader& in, Action& action)
 	case CommandTag::CreatureFeedback:
 	{
 		const auto creature = in.Entity();
-		action = CreatureFeedback {.creature = creature, .amount = in.Float()};
+		const auto amount = in.Float();
+		// The game sends the sum of the strokes and the slaps in the range from -1 to 1
+		if (amount < -1.0f || amount > 1.0f)
+		{
+			return DecodeError::Value;
+		}
+		action = CreatureFeedback {.creature = creature, .amount = amount};
 		return DecodeError::None;
 	}
 	case CommandTag::HandTake:
@@ -799,6 +820,11 @@ DecodeError ReadActions(Reader& in, std::vector<Action>& actions)
 		{
 			return DecodeError::Truncated;
 		}
+		// No command of the game has a number that is not finite
+		if (!in.Finite())
+		{
+			return DecodeError::Value;
+		}
 	}
 	return DecodeError::None;
 }
@@ -979,6 +1005,11 @@ size_t SizeOf(const Action& action) noexcept
 	               },
 	               action);
 	return 1 + fields;
+}
+
+size_t BlockSize(const StampedBlock& block) noexcept
+{
+	return sizes::k_Stamp - 1 + SizeOfActions(block.actions);
 }
 
 size_t SizeOf(const Frame& frame) noexcept

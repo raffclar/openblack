@@ -40,6 +40,9 @@ struct FetchHttpClient::Transfer
 namespace
 {
 
+/// The largest answer that the client keeps, as on the desktop
+constexpr uint64_t k_MostAnswerBytes = 16 * 1024 * 1024;
+
 const char* MethodName(HttpMethod method)
 {
 	switch (method)
@@ -74,7 +77,14 @@ void Done(emscripten_fetch_t* fetch)
 	else
 	{
 		response.status = static_cast<int32_t>(fetch->status);
-		if (fetch->data != nullptr && fetch->numBytes > 0)
+		const auto most = transfer.request.large ? online::k_MostLargeAnswerBytes : k_MostAnswerBytes;
+		if (fetch->numBytes > most)
+		{
+			// The game keeps no answer that is larger than its limit
+			response.error = HttpError::Network;
+			response.status = 0;
+		}
+		else if (fetch->data != nullptr && fetch->numBytes > 0)
 		{
 			const auto* bytes = reinterpret_cast<const uint8_t*>(fetch->data);
 			response.body.assign(bytes, bytes + fetch->numBytes);

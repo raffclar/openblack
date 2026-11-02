@@ -92,7 +92,8 @@ struct CurlHttpClient::Transfer
 	{
 		auto& transfer = *static_cast<Transfer*>(user);
 		const auto bytes = size * count;
-		if (!transfer.request.large && transfer.response.body.size() + bytes > tls_settings::k_MostAnswerBytes)
+		const auto most = transfer.request.large ? k_MostLargeAnswerBytes : tls_settings::k_MostAnswerBytes;
+		if (transfer.response.body.size() + bytes > most)
 		{
 			transfer.tooLarge = true;
 			// A value other than the number of bytes stops the transfer
@@ -207,12 +208,11 @@ HttpRequestId CurlHttpClient::Send(HttpRequest request, HttpCallback callback)
 	curl_easy_setopt(easy, CURLOPT_CONNECTTIMEOUT_MS, tls_settings::k_ConnectTimeoutMs);
 	if (sent.large)
 	{
-		// A large file has no limit on its full time, only on a stall. An empty text asks for each compression that
-		// libcurl can expand.
+		// A large file has no limit on its full time, only on a stall. The request asks for no compression, so that the
+		// limit of the answer is the limit of the bytes that come.
 		curl_easy_setopt(easy, CURLOPT_TIMEOUT_MS, 0L);
 		curl_easy_setopt(easy, CURLOPT_LOW_SPEED_LIMIT, tls_settings::k_StallBytesPerSecond);
 		curl_easy_setopt(easy, CURLOPT_LOW_SPEED_TIME, tls_settings::k_StallSeconds);
-		curl_easy_setopt(easy, CURLOPT_ACCEPT_ENCODING, "");
 	}
 	else
 	{
