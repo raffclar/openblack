@@ -307,3 +307,26 @@ TEST(DiscipleRules, AScriptNamesAWorkByItsNumberOrNoneOutsideTheKinds)
 	EXPECT_FALSE(FromScript(13).has_value());
 	EXPECT_FALSE(FromScript(-1).has_value());
 }
+
+TEST(DiscipleRules, AThingThatOffersNoWorkIsPassedOver)
+{
+	// An animal, a pot or a creature is first in the order, but the next thing gives the work
+	const std::array<NearFacts, 2> ordered {NearFacts {.kind = NearKind::Other, .owner = k_Me},
+	                                        NearFacts {.kind = NearKind::Tree}};
+	EXPECT_EQ(Offered(ordered[0], MyAdult()), None);
+	const auto choice = ChooseWhileHeld(ordered, MyAdult(), None);
+	EXPECT_EQ(choice.type, Forester);
+	EXPECT_EQ(choice.from, 1u);
+}
+
+TEST(DiscipleRules, AFixedThingOfNoTownIsMendedOnlyByItsOwnPlayer)
+{
+	// The temple or an altar of my own, not whole: built up or mended
+	NearFacts temple {.kind = NearKind::Building, .owner = k_Me, .repaired = false};
+	EXPECT_EQ(Offered(temple, MyAdult()), Builder);
+	// Whole, it offers nothing
+	temple.repaired = true;
+	EXPECT_EQ(Offered(temple, MyAdult()), None);
+	// Their temple has no town to preach to
+	EXPECT_EQ(Offered({.kind = NearKind::Building, .owner = k_Them, .repaired = false}, MyAdult()), None);
+}

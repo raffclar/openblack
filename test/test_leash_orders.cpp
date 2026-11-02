@@ -49,8 +49,8 @@ TEST(LeashOrders, ASingleTapGivesAnOrderAndNeverTies)
 {
 	EXPECT_EQ(OnTap(Held(), {.object = k_Cow}), Tap::OrderOnThing);
 	EXPECT_EQ(OnTap(Held(), {}), Tap::OrderOnLand);
-	// The creature's own taps are the hand's
-	EXPECT_EQ(OnTap(Held(), {.object = k_Creature}), Tap::Normal);
+	// A tap on the creature itself is an order on the creature, as on any other thing
+	EXPECT_EQ(OnTap(Held(), {.object = k_Creature}), Tap::OrderOnThing);
 	// Posts and worship icons aren't ordered on
 	EXPECT_EQ(OnTap(Held(), {.object = k_Cow, .leashTarget = false}), Tap::Normal);
 	// Tied, or without the leash, a tap is an ordinary tap
@@ -212,6 +212,41 @@ TEST(LeashOrders, TheAggressionLeashFightsCreaturesNearEnough)
 	auto carrying = near;
 	carrying.carrying = true;
 	EXPECT_EQ(OnThing(carrying), (std::vector {Desires, Fight, Look}));
+}
+
+TEST(LeashOrders, TheAggressionLeashOnItselfIsAFightWithItself)
+{
+	using enum Attempt;
+	// The creature itself is a creature at no distance
+	const Thing itself {.creature = true, .distance = 0.0f, .leash = LeashType::Evil, .height = 5.0f};
+	EXPECT_EQ(OnThing(itself), (std::vector {Fight, Look}));
+	auto rope = itself;
+	rope.leash = LeashType::Rope;
+	EXPECT_EQ(OnThing(rope), (std::vector {Desires, Look}));
+}
+
+TEST(LeashOrders, TheFightWithItselfStartsAsEachFightStarts)
+{
+	const auto agenda = FightItself(k_Creature);
+	ASSERT_EQ(agenda.size(), 3u);
+	// It asks itself to fight, looking at itself
+	EXPECT_EQ(agenda[0].kind, Step::Kind::RequestPartner);
+	EXPECT_EQ(agenda[0].object, k_Creature);
+	EXPECT_EQ(agenda[0].request, creature_friendship::RequestKind::Fight);
+	ASSERT_TRUE(agenda[0].gaze.has_value());
+	EXPECT_EQ(agenda[0].gaze->object, k_Creature);
+	EXPECT_EQ(agenda[0].face, creature_face::Cue::None);
+	// It makes itself stand still in its mind
+	EXPECT_EQ(agenda[1].kind, Step::Kind::Demobilise);
+	EXPECT_EQ(agenda[1].object, k_Creature);
+	// It orders itself to turn and face itself for a tenth of a second
+	EXPECT_EQ(agenda[2].kind, Step::Kind::Order);
+	EXPECT_EQ(agenda[2].object, k_Creature);
+	ASSERT_NE(agenda[2].ordered, nullptr);
+	EXPECT_EQ(agenda[2].ordered->kind, Step::Kind::Move);
+	EXPECT_EQ(agenda[2].ordered->movement.kind, Movement::Kind::TurnToFaceObject);
+	EXPECT_EQ(agenda[2].ordered->movement.object, k_Creature);
+	EXPECT_EQ(agenda[2].ordered->seconds, 0.1f);
 }
 
 TEST(LeashOrders, Agendas)

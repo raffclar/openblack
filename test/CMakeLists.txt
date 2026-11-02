@@ -2320,3 +2320,5 @@ openblack_setup_and_add_test(
   test_custom_music_decode audio/test_custom_music_decode.cpp
 )
 openblack_setup_and_add_test(test_game_font_glyphs gui/test_game_font_glyphs.cpp)
+openblack_setup_and_add_test(test_designed_waterfall test_designed_waterfall.cpp)
+openblack_setup_and_add_test(test_leaver_hand test_leaver_hand.cpp)

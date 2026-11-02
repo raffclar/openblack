@@ -20,6 +20,8 @@
 #include <entt/core/hashed_string.hpp>
 #include <fmt/format.h>
 
+#include "3D/LandIslandInterface.h"
+#include "3D/MapCoords.h"
 #include "ECS/Components/MagicFireBall.h"
 #include "ECS/Components/Mesh.h"
 #include "ECS/Components/ScriptHighlight.h"
@@ -34,6 +36,7 @@
 #include "Magic/HandHoldPose.h"
 #include "Magic/MagicTables.h"
 #include "Magic/SpellBehaviours.h"
+#include "Magic/TribalPowerSpin.h"
 #include "MagicSystem.h"
 #include "Resources/ResourceManager.h"
 #include "Resources/ResourcesInterface.h"
@@ -166,7 +169,7 @@ std::optional<magic::HeldCastAtPointer> MagicSystem::HeldCastAt(std::optional<en
 		                                                     .fireBall = registry.AllOf<MagicFireBall>(*pointed),
 		                                                     .castOnByKind = castOnByKind,
 		                                                     .ownDispenser = IsOwnDispenser(*pointed, seed.player),
-		                                                     .heldSeedHasCast = seed.hasCast,
+		                                                     .heldSeedCastBefore = seed.lastCastType != MagicType::None,
 		                                                 });
 	}
 	else if (_hand.point.has_value())
@@ -181,23 +184,33 @@ std::optional<Tribe> MagicSystem::TribalPowerTribe(PlayerNames player, MagicType
 	return magic::GetTribalPowerTribe(magic::GetMagicEffectInfo(Info(), type), PlayerTribalMultipliers(player));
 }
 
-void MagicSystem::AfterSeedCast(const SpellSeed& seed, MagicType type)
+void MagicSystem::AfterSeedCast(const SpellSeed& seed, MagicType type, glm::vec3 place)
 {
 	const auto tribe = TribalPowerTribe(seed.player, type);
 	if (!tribe.has_value())
 	{
 		return;
 	}
-	// The name round the hand is let go and rises from where the hand is
 	if (Locator::miracleFxSystem::has_value())
 	{
-		Locator::miracleFxSystem::value().ReleaseTribalPowerRing(*tribe, _hand.handPosition);
+		auto& fx = Locator::miracleFxSystem::value();
+		if (ActsOnOwnHand())
+		{
+			// The hand of this computer releases the name round it, and the name rises from the hand
+			fx.ReleaseTribalPowerRing(*tribe, _hand.handPosition);
+		}
+		else if (Locator::terrainSystem::has_value())
+		{
+			// The name of the tribe rises in the colour of the other player, from the map position of the cast
+			const auto coords = map_coords::FromWorld(Locator::terrainSystem::value(), place);
+			fx.TribalPowerColumn(*tribe, magic::tribal_spin::ColumnPlace(coords), seed.player);
+		}
 	}
 	if (!Locator::sounds::has_value())
 	{
 		return;
 	}
-	// The announcer names the tribe whose power is behind the miracle
+	// The announcer names the tribe whose power is behind the miracle, for the hand of each player
 	const auto sample = k_TribalPowerVoice + static_cast<int>(*tribe);
 	audio::StartGameSoundEffect(entt::hashed_string(fmt::format("SpellDialogue.sad/{}", sample).c_str()).value(),
 	                            {.voicePlayType = pack::AudioBankLoop::Once});

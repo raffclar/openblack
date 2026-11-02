@@ -821,6 +821,10 @@ private:
 	bool _handKnocking {false};
 	/// The way the surface the cursor is on in the temple faces, which the hand turns to
 	Zoomer3 _handTempleNormal {glm::vec3(0.0f, 1.0f, 0.0f)};
+	/// The hand was in the temple in the last frame
+	bool _handInTemple {false};
+	/// The hand went into the normal mode, so it ignores the next sparkle of a fight
+	bool _handDropsSparkle {false};
 	/// The options screen's one-press actions: the temple and realm keys, the villagers' names and details
 	input::ShortcutKeys _shortcutKeys;
 	/// Which way the hand faces across the land, and its up, easing to the slope under it

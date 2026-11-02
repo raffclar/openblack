@@ -265,7 +265,8 @@ bool CreatureMindSystem::SwapMinds(entt::entity from, entt::entity to)
 		                     .action = k_SwapAction,
 		                     .object = other,
 		                     .agenda = std::vector {creature_mind::Step {.kind = creature_mind::Step::Kind::SwapMind,
-		                                                                 .animation = k_SwapAnimation}}});
+		                                                                 .animation = k_SwapAnimation}},
+		                     .fightBodyEndsAgain = true});
 	}
 
 	// The owners swap: the player now has the second creature, which they can lead as they did the first

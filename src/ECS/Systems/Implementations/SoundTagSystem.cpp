@@ -140,6 +140,11 @@ void SoundTagSystem::StartPointSound(PointSound& point, std::optional<glm::vec3>
 bool SoundTagSystem::ProcessPointSound(PointSound& point, const glm::vec3& camera) const
 {
 	const auto& sounds = Locator::resources::value().GetSounds();
+	if (point.kept != 0)
+	{
+		ProcessKeptSound(point, camera);
+		return false;
+	}
 	++point.turns;
 	if (!sounds.Contains(point.sound))
 	{
@@ -167,6 +172,27 @@ bool SoundTagSystem::ProcessPointSound(PointSound& point, const glm::vec3& camer
 		return true;
 	}
 	return false;
+}
+
+void SoundTagSystem::ProcessKeptSound(PointSound& point, const glm::vec3& camera) const
+{
+	const auto& sounds = Locator::resources::value().GetSounds();
+	++point.turns;
+	if (!sounds.Contains(point.sound) || IsPlaying(point.emitter) ||
+	    !WithinReach(sounds.Handle(point.sound)->maxDistance, point.position, camera) || !Heard(point.sound))
+	{
+		return;
+	}
+	StopSound(point.emitter);
+	// The sound owns its own voice, so the voice rules never give its voice to another sound
+	auto& audio = Locator::sounds::value();
+	point.emitter = audio.CreateOwnSoundEmitter(point.sound, point.position, audio::PlayType::Repeat);
+	if (point.emitter != entt::null)
+	{
+		// The sound stays at its point, and the audio turn stops it when the camera goes too far
+		audio.SetEmitterFollows(point.emitter, audio::Follows::Place);
+		audio.PlayEmitter(point.emitter);
+	}
 }
 
 bool SoundTagSystem::ProcessObjectTag(entt::entity entity, SoundTag& tag, const glm::vec3& camera) const
@@ -320,6 +346,38 @@ void SoundTagSystem::CreatePointSound(entt::id_type sound, const glm::vec3& posi
 	{
 		StartPointSound(point, Locator::sounds::value().GetListener().origin);
 	}
+}
+
+uint32_t SoundTagSystem::KeepPointSound(entt::id_type sound, const glm::vec3& position)
+{
+	_lastKept = _lastKept == UINT32_MAX ? 1 : _lastKept + 1;
+	// A new tag goes at the start of the list. Its sound starts on the next turn.
+	_tags.emplace_front(Entry {
+	    .tag = entt::null,
+	    .point = PointSound {.sound = sound, .position = position, .kept = _lastKept},
+	});
+	return _lastKept;
+}
+
+void SoundTagSystem::EndPointSound(uint32_t kept)
+{
+	if (kept == 0)
+	{
+		return;
+	}
+	const auto entry = std::ranges::find_if(
+	    _tags, [kept](const Entry& candidate) { return candidate.point.has_value() && candidate.point->kept == kept; });
+	if (entry == _tags.end())
+	{
+		return;
+	}
+	// A loop that plays finishes its loop, and the audio removes the emitter when the sound stops
+	auto& emitter = entry->point->emitter;
+	if (emitter != entt::null && Locator::sounds::has_value() && IsPlaying(emitter))
+	{
+		Locator::sounds::value().ReleaseEmitterLoop(emitter);
+	}
+	_tags.erase(entry);
 }
 
 entt::entity SoundTagSystem::AttachObjectSound(entt::entity entity, entt::id_type sound, bool loops)

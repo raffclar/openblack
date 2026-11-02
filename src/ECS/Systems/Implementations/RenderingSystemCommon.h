@@ -52,6 +52,8 @@ protected:
 	/// Each thing in a hand keeps the light at its point, which the sea mirrors it in on the next frame. A warm-up draw
 	/// uses the kept light and keeps no light.
 	void KeepHeldLights(DrawUse use);
+	/// The draws of the models whose things of the drawn registry slide their textures take the slides of this frame
+	void SlideTextures();
 	/// The piles of roots of this frame into their instances, every frame: there are few, and they fade every frame
 	void UploadRootsPiles();
 

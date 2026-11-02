@@ -310,3 +310,15 @@ TEST(SpellIcons, TheSeedInTheHandTakesItsChargeOffTheNeedThatTheIconShows)
 	// The icon charges what the held seed still needs: 100 of the 400 left shows as 25
 	EXPECT_EQ(*ShownCharge(100.0f, ShownRequired(1000.0f, 600.0f)), 25.0f);
 }
+
+// The cast of a seed stops the charge of the icon that made it, when the player of the cast charges it. An icon that
+// does not charge but holds prayer power also stops. An empty icon that does not charge has nothing to stop.
+TEST(SpellIcons, TheCastOfASeedStopsTheChargeOfItsIconForTheCharger)
+{
+	EXPECT_TRUE(CastStopsCharge(true, 0.0f, true));
+	EXPECT_TRUE(CastStopsCharge(true, 500.0f, true));
+	EXPECT_TRUE(CastStopsCharge(false, 500.0f, true));
+	EXPECT_FALSE(CastStopsCharge(false, 0.0f, true));
+	EXPECT_FALSE(CastStopsCharge(true, 500.0f, false));
+	EXPECT_FALSE(CastStopsCharge(false, 500.0f, false));
+}

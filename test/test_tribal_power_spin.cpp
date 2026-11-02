@@ -9,6 +9,8 @@
 
 #include <cmath>
 
+#include <glm/ext/matrix_clip_space.hpp>
+#include <glm/ext/matrix_transform.hpp>
 #include <glm/geometric.hpp>
 #include <gtest/gtest.h>
 
@@ -77,7 +79,7 @@ TEST(TribalPowerSpin, ItFliesInFromTheCamera)
 	EXPECT_LT(glm::distance(letters.front().origin, frame.camera), glm::distance(letters.front().origin, frame.handPosition));
 }
 
-TEST(TribalPowerSpin, LetGoItRisesAsAColumnAndIsGoneAfterFourSecondsAndAHalf)
+TEST(TribalPowerSpin, LetGoItRisesAsAColumnAndIsGoneAfterFourPointEightSeconds)
 {
 	Runner runner(u"Norse Power", glm::vec3(0.0f), {255, 0, 0, 255}, true);
 	for (int frame = 0; frame < 40; ++frame)
@@ -115,4 +117,25 @@ TEST(TribalPowerSpin, TheColumnFadesAfterThreeSeconds)
 	ASSERT_FALSE(letters.empty());
 	EXPECT_LT(letters.front().alpha, 255);
 	EXPECT_GT(letters.front().alpha, 0);
+}
+
+TEST(TribalPowerSpin, ALetterNearerThanTheNearPlaneDoesNotShow)
+{
+	// A view that looks down the z axis: the clip w is the distance along z from the eye
+	const auto worldToClip = glm::perspective(1.0f, 4.0f / 3.0f, 2.0f, 1000.0f) *
+	                         glm::lookAt(glm::vec3(0.0f), glm::vec3(0.0f, 0.0f, 1.0f), glm::vec3(0.0f, 1.0f, 0.0f));
+	EXPECT_FALSE(Shows(worldToClip, 2.0f, {0.0f, 0.0f, -1.0f}));
+	EXPECT_FALSE(Shows(worldToClip, 2.0f, {0.0f, 0.0f, 1.0f}));
+	EXPECT_TRUE(Shows(worldToClip, 2.0f, {0.0f, 0.0f, 2.0f}));
+	// A point off the screen, but beyond the near plane, shows
+	EXPECT_TRUE(Shows(worldToClip, 2.0f, {500.0f, 0.0f, 3.0f}));
+}
+
+TEST(TribalPowerSpin, TheColumnOfAnotherPlayerRisesAtTheAltitudeOfTheCast)
+{
+	// The x and z come from the 16.16 map position, and the height is the altitude above the ground only
+	const auto place = ColumnPlace({.x = 0x10000 * 300 + 0x8000, .z = 0x10000 * 120, .altitude = 4.5f});
+	EXPECT_FLOAT_EQ(place.x, 3005.0f);
+	EXPECT_FLOAT_EQ(place.y, 4.5f);
+	EXPECT_FLOAT_EQ(place.z, 1200.0f);
 }

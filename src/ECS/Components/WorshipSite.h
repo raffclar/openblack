@@ -122,6 +122,9 @@ struct WorshipAltar
 	/// The model of the altar. The altar has this size and shape on the map from when the game makes the site, but the
 	/// game shows the model only when the town builds the site.
 	entt::id_type model {0};
+	/// How much of the altar is built. Each share of work on its site also builds the altar by that share, the work
+	/// that mends the site too. Nothing else changes it.
+	float built {0.0f};
 };
 
 } // namespace openblack::ecs::components
