@@ -250,6 +250,51 @@ TEST(InspectorSplash, SplashAtAPositionWithinARadius)
 	EXPECT_FALSE(inspector.Answer(std::get<Request>(decoded)).Ok());
 }
 
+// A running effect shows its size, so that a script's change of the size of a cloud of dust can be read
+TEST(InspectorEffects, AnEffectShowsItsSize)
+{
+	auto dust = FakeEffect(8, "SF_Smoke", glm::vec3(10.0f, 0.0f, 10.0f), 90);
+	dust.magnitude = 7.0f;
+	const std::vector<ParticleEffectInfo> effects {FakeEffect(7, "SF_Splash", glm::vec3(0.0f), 10), dust};
+	Inspector inspector;
+	inspector.Add(std::make_unique<ParticlesProvider>(ParticleSources {
+	    .effects = [&effects]() { return effects; },
+	}));
+
+	const auto found = Ask(inspector, R"({"query": "particles.effects", "params": {"file": "smoke"}})");
+	ASSERT_EQ(found["items"].size(), 1);
+	EXPECT_EQ(found["items"][0]["id"], 8);
+	EXPECT_DOUBLE_EQ(found["items"][0]["magnitude"].get<double>(), 7.0);
+	// An effect with no change of size has the normal size
+	const auto all = Ask(inspector, R"({"query": "particles.effects"})");
+	EXPECT_DOUBLE_EQ(all["items"][0]["magnitude"].get<double>(), 1.0);
+}
+
+// Each camera shake that goes on shows its place, its radius, its strength and its time, all and left
+TEST(InspectorShakes, EachShakeShowsItsPlaceRadiusStrengthAndTime)
+{
+	const std::vector<camera_shake::Shake> shakes {
+	    {.position = {1.0f, 2.0f, 3.0f},
+	     .radius = 150.0f,
+	     .strength = 0.25f,
+	     .milliseconds = 5000,
+	     .millisecondsLeft = 4980,
+	     .verticalOnly = false},
+	    {.position = {4.0f, 5.0f, 6.0f}, .radius = 20.0f, .strength = 1.0f, .milliseconds = 300, .millisecondsLeft = 0},
+	};
+
+	const auto items = ShakeItems(shakes);
+	ASSERT_EQ(items.size(), 2);
+	EXPECT_EQ(items[0]["position"], Json::array({1.0f, 2.0f, 3.0f}));
+	EXPECT_DOUBLE_EQ(items[0]["radius"].get<double>(), 150.0);
+	EXPECT_DOUBLE_EQ(items[0]["strength"].get<double>(), 0.25);
+	EXPECT_EQ(items[0]["ms"], 5000);
+	EXPECT_EQ(items[0]["ms_left"], 4980);
+	EXPECT_EQ(items[0]["vertical_only"], false);
+	EXPECT_EQ(items[1]["vertical_only"], true);
+	EXPECT_TRUE(ShakeItems({}).empty());
+}
+
 // The symbols of belief that rose last show with their place, amount and colour, the newest first
 TEST(InspectorBelief, TheSymbolsOfBeliefThatRoseLast)
 {

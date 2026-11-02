@@ -395,7 +395,7 @@
   "query": "particles.splash"
  },
  {
-  "description": "The running particle effects: file, place, age, particle count, closing",
+  "description": "The running particle effects: file, place, age, particle count, closing, size",
   "kind": "list",
   "parameters": [
    {
@@ -1863,7 +1863,7 @@
   "writes": true
  },
  {
-  "description": "The hand's miracle, the spells and dispensers there are, and the other miracles' systems: shields, tornadoes, explosions and the piles of roots",
+  "description": "The hand's miracle, the spells and dispensers there are, and the other miracles' systems: shields, tornadoes, explosions, the camera shakes and the piles of roots",
   "kind": "object",
   "parameters": [],
   "query": "magic.state"

@@ -1757,6 +1757,7 @@ std::vector<ParticleRuleSystemInterface::EffectInfo> ParticleRuleSystem::GetEffe
 		    .secondsLeft = secondsLeft,
 		    .unportedClasses = effect.UnportedClasses(),
 		    .owner = running.owner,
+		    .magnitude = effect.GetMagnitude(),
 		});
 	}
 	return result;
