@@ -1178,6 +1178,13 @@ struct Command
 		/// The miracle that is locked on in the player's hand closes down. Then the hand lets go of it in the same step,
 		/// as when the miracle stops just before the let go. Needs no creature.
 		CloseHeldMiracle,
+		/// The player clicks the scroll that a script put up nearest a point (point, from the middle of the map), as the
+		/// Action button pressed and let go on the scroll does. The script that waits for a click on it goes on. Needs no
+		/// creature
+		ClickScroll,
+		/// The player puts the camera at once 40 metres south of a point (point, from the middle of the map) and 30 metres
+		/// above the land there, looking at the point. Needs no creature
+		CameraLooksAt,
 		/// The scenario's villager (object) comes to the football pitch of its town, as a villager that relaxes and
 		/// chooses football. Needs no creature.
 		JoinFootball,
@@ -1570,6 +1577,8 @@ void AddBirdScenarios(std::vector<Scenario>& all);
 void AddTeleportScenarios(std::vector<Scenario>& all);
 /// The vortices between the lands: opening, levelling the ground and closing
 void AddVortexScenarios(std::vector<Scenario>& all);
+/// Three quests of the fifth land: the crusaders and the dragon, the brown bear's trail, and Nemesis's curse
+void AddLandFiveQuestScenarios(std::vector<Scenario>& all);
 /// Three silver scrolls of the fourth and fifth lands, each from its own script: the fish puzzle, the stranger who
 /// prays at the forest fire, and the explorers who come back
 void AddLandsFourFiveScrollScenarios(std::vector<Scenario>& all);

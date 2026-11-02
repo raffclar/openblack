@@ -46,6 +46,15 @@ bool IsCreatableType(int32_t type)
 	return type >= k_FirstCreateType && type <= k_LastCreateType;
 }
 
+std::optional<ResourceType> StoreResource(uint32_t subtype)
+{
+	if (subtype > static_cast<uint32_t>(ResourceType::Wood))
+	{
+		return std::nullopt;
+	}
+	return static_cast<ResourceType>(subtype);
+}
+
 float AngleFromDegrees(float degrees)
 {
 	return degrees * k_RadiansPerDegree;

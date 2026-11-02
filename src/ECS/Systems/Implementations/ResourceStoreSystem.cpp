@@ -1032,18 +1032,35 @@ bool ResourceStoreSystem::PourAt(ResourceType type, glm::vec3 point, uint32_t am
 	}
 
 	// What is left makes a new pile, which thuds as it lands
-	const auto potType = type == ResourceType::Food ? PotInfo::MagicFood : PotInfo::MagicWood;
 	point.y = LandHeight(at);
-	const auto created = ecs::archetypes::PotArchetype::Create(point, 0.0f, potType, static_cast<int32_t>(left));
-	if (created == entt::null)
+	if (NewPile(type, point, left, speedUp, player, poisoned) == entt::null)
 	{
 		return left != amount;
+	}
+	// The town near a new pile can answer the gift to the player here
+	if (Locator::guidanceSystem::has_value())
+	{
+		Locator::guidanceSystem::value().ResourceDropped(
+		    player, point, type == ResourceType::Food ? guidance::Gift::Food : guidance::Gift::Wood);
+	}
+	return true;
+}
+
+entt::entity ResourceStoreSystem::NewPile(ResourceType type, glm::vec3 point, uint32_t amount, bool speedUp, PlayerNames player,
+                                          bool poisoned)
+{
+	auto& registry = Locator::entitiesRegistry::value();
+	const auto potType = type == ResourceType::Food ? PotInfo::MagicFood : PotInfo::MagicWood;
+	const auto created = ecs::archetypes::PotArchetype::Create(point, 0.0f, potType, static_cast<int32_t>(amount));
+	if (created == entt::null)
+	{
+		return entt::null;
 	}
 	registry.Get<Transform>(created).scale =
 	    glm::vec3(type == ResourceType::Food ? piles::k_MagicFoodScale : piles::k_MagicWoodScale);
 	registry.Assign<MagicPile>(created, type, player);
 	registry.Get<Pot>(created).poisoned = poisoned;
-	Thud(created, type, left, point);
+	Thud(created, type, amount, point);
 	// A power-up's food speeds up the people who take from the new pile, and sparkles over it for as long as it lasts
 	auto& pile = registry.Get<ResourcePile>(created);
 	if (speedUp && type == ResourceType::Food)
@@ -1068,13 +1085,18 @@ bool ResourceStoreSystem::PourAt(ResourceType type, glm::vec3 point, uint32_t am
 		                                         .magicType = MagicType::None,
 		                                         .casterCreature = entt::null});
 	}
-	// The town near a new pile can answer the gift to the player here
-	if (Locator::guidanceSystem::has_value())
+	return created;
+}
+
+entt::entity ResourceStoreSystem::MakePile(ResourceType type, glm::vec3 point, uint32_t amount)
+{
+	if ((type != ResourceType::Food && type != ResourceType::Wood) || amount == 0)
 	{
-		Locator::guidanceSystem::value().ResourceDropped(
-		    player, point, type == ResourceType::Food ? guidance::Gift::Food : guidance::Gift::Wood);
+		return entt::null;
 	}
-	return true;
+	// The pile stands on the land under the point, and belongs to nobody
+	point.y = LandHeight(glm::vec2(point.x, point.z));
+	return NewPile(type, point, amount, false, PlayerNames::NEUTRAL, false);
 }
 
 namespace
