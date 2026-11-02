@@ -13,6 +13,7 @@
 
 #include <algorithm>
 #include <optional>
+#include <span>
 #include <utility>
 #include <vector>
 
@@ -101,6 +102,9 @@ struct Side
 	float weight;
 	std::vector<std::optional<size_t>> rotated;
 	std::vector<std::optional<size_t>> translated;
+	/// The frame turns of the animation that the side made, when the term gave none
+	std::vector<Matrix> ownTurns;
+	std::span<const Matrix> turns;
 
 	explicit Side(const creature_animation::BlendTerm& term)
 	    : animation(term.animation != nullptr && !term.animation->frames.empty() ? term.animation : nullptr)
@@ -111,8 +115,20 @@ struct Side
 		{
 			rotated = JointSlots(animation->rotatedJoints);
 			translated = JointSlots(animation->translatedJoints);
+			if (term.turns.empty())
+			{
+				ownTurns = creature_animation::FrameTurns(*animation);
+				turns = ownTurns;
+			}
+			else
+			{
+				turns = term.turns;
+			}
 		}
 	}
+	/// The turns can point into the own matrices of the side, so a side does not move
+	Side(const Side&) = delete;
+	Side& operator=(const Side&) = delete;
 
 	[[nodiscard]] size_t Frame(size_t frame) const { return std::min(frame, animation->frames.size() - 1); }
 
@@ -137,7 +153,7 @@ struct Side
 	{
 		if (!fixed.has_value())
 		{
-			return RotationYXZ(animation->frames[Frame(frame)].eulerAngles[*SlotOf(rotated, joint)]);
+			return turns[(Frame(frame) * animation->rotatedJoints.size()) + *SlotOf(rotated, joint)];
 		}
 		return fixed->stand.value_or(base);
 	}
@@ -153,8 +169,28 @@ struct Side
 };
 } // namespace
 
+std::vector<Matrix> creature_animation::FrameTurns(const Animation& animation)
+{
+	std::vector<Matrix> turns;
+	turns.reserve(animation.frames.size() * animation.rotatedJoints.size());
+	for (const auto& frame : animation.frames)
+	{
+		for (size_t i = 0; i < animation.rotatedJoints.size(); ++i)
+		{
+			turns.push_back(RotationYXZ(frame.eulerAngles[i]));
+		}
+	}
+	return turns;
+}
+
 Animation creature_animation::AdjustFromStand(const Animation& animation, const Animation& baseStand,
                                               const Animation& variantStand)
+{
+	return AdjustFromStand(animation, FrameTurns(animation), baseStand, variantStand);
+}
+
+Animation creature_animation::AdjustFromStand(const Animation& animation, std::span<const Matrix> turns,
+                                              const Animation& baseStand, const Animation& variantStand)
 {
 	const StandPose base(&baseStand);
 	const StandPose variant(&variantStand);
@@ -168,12 +204,14 @@ Animation creature_animation::AdjustFromStand(const Animation& animation, const 
 		const auto to = variant.Euler(joint);
 		standTurns.emplace_back(from ? Transpose(RotationYXZ(*from)) : k_Identity, to ? RotationYXZ(*to) : k_Identity);
 	}
-	for (auto& frame : adjusted.frames)
+	const auto joints = adjusted.rotatedJoints.size();
+	for (size_t f = 0; f < adjusted.frames.size(); ++f)
 	{
-		for (size_t i = 0; i < adjusted.rotatedJoints.size(); ++i)
+		auto& frame = adjusted.frames[f];
+		for (size_t i = 0; i < joints; ++i)
 		{
 			const auto& [inverseFrom, toRotation] = standTurns[i];
-			frame.eulerAngles[i] = EulerYXZ(Multiply(Multiply(RotationYXZ(frame.eulerAngles[i]), inverseFrom), toRotation));
+			frame.eulerAngles[i] = EulerYXZ(Multiply(Multiply(turns[(f * joints) + i], inverseFrom), toRotation));
 		}
 		for (size_t i = 0; i < adjusted.translatedJoints.size(); ++i)
 		{
@@ -187,13 +225,23 @@ Animation creature_animation::AdjustFromStand(const Animation& animation, const 
 
 Animation creature_animation::Blend(const Animation& base, const BlendTerm& evilGood, const BlendTerm& thinFat)
 {
-	const Side a(evilGood);
-	const Side b(thinFat);
+	if (evilGood.weight == 0.0f && thinFat.weight == 0.0f)
+	{
+		return base;
+	}
+	return Blend(base, FrameTurns(base), evilGood, thinFat);
+}
+
+Animation creature_animation::Blend(const Animation& base, std::span<const Matrix> baseTurns, const BlendTerm& evilGood,
+                                    const BlendTerm& thinFat)
+{
 	auto blended = base;
-	if (a.weight == 0.0f && b.weight == 0.0f)
+	if (evilGood.weight == 0.0f && thinFat.weight == 0.0f)
 	{
 		return blended;
 	}
+	const Side a(evilGood);
+	const Side b(thinFat);
 	// The turns of the joints that a side does not animate are the same in every frame, so each joint finds them once
 	std::vector<std::pair<std::optional<Side::FixedTurn>, std::optional<Side::FixedTurn>>> fixed;
 	fixed.reserve(blended.rotatedJoints.size());
@@ -207,7 +255,7 @@ Animation creature_animation::Blend(const Animation& base, const BlendTerm& evil
 		for (size_t i = 0; i < blended.rotatedJoints.size(); ++i)
 		{
 			const auto joint = blended.rotatedJoints[i];
-			const auto rotation = RotationYXZ(frame.eulerAngles[i]);
+			const auto& rotation = baseTurns[(f * blended.rotatedJoints.size()) + i];
 			const auto towardsA = a.Rotation(joint, f, rotation, fixed[i].first);
 			const auto towardsB = b.Rotation(joint, f, rotation, fixed[i].second);
 			Matrix result {};

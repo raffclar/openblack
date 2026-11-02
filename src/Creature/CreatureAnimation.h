@@ -28,9 +28,17 @@ using skeletal_animation::Animation;
 /// The animation of the stand pose, the first of a species' animations, which the others fall back on
 constexpr size_t k_StandAnimation = 0;
 
+/// The rotation matrix of each rotated joint in each frame of the animation, frame after frame. Many blends use the same
+/// animation, so they can share these matrices and not make them again.
+[[nodiscard]] std::vector<skeletal_animation::Matrix> FrameTurns(const Animation& animation);
+
 /// A variant the species has no animation of its own for moves as the base does, turned and moved by how its stand pose
 /// differs from the base's
 [[nodiscard]] Animation AdjustFromStand(const Animation& animation, const Animation& baseStand, const Animation& variantStand);
+
+/// The same adjustment with the frame turns of the animation that FrameTurns made. The result has the same bits.
+[[nodiscard]] Animation AdjustFromStand(const Animation& animation, std::span<const skeletal_animation::Matrix> turns,
+                                        const Animation& baseStand, const Animation& variantStand);
 
 /// One side of a blend: the variant's animation and its stand pose, and how far towards it
 struct BlendTerm
@@ -38,12 +46,18 @@ struct BlendTerm
 	const Animation* animation;
 	const Animation* stand;
 	float weight;
+	/// The frame turns of the animation that FrameTurns made, or none. With none, the blend makes them.
+	std::span<const skeletal_animation::Matrix> turns {};
 };
 
 /// The base animation pulled towards an evil or good and a thin or fat animation, keyframe by keyframe. Rotations blend
 /// on their matrices' elements. A bone a variant doesn't move takes the first frame of that variant's stand. The
 /// blend keeps the base's keyframes and length.
 [[nodiscard]] Animation Blend(const Animation& base, const BlendTerm& evilGood, const BlendTerm& thinFat);
+
+/// The same blend with the frame turns of the base that FrameTurns made. The result has the same bits.
+[[nodiscard]] Animation Blend(const Animation& base, std::span<const skeletal_animation::Matrix> baseTurns,
+                              const BlendTerm& evilGood, const BlendTerm& thinFat);
 
 /// Two animations of a move blended into one, keyframe by keyframe, as a turn on the spot or a step off blends its
 /// pair of 0, 90 and 180 degree animations for the angle. Each keyframe's rotations blend on their matrices' elements

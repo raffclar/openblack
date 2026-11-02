@@ -608,6 +608,42 @@ TEST(CreatureAnimation, TheBlendAndTheStandAdjustmentGiveTheBitsOfTheOldWay)
 	}
 }
 
+// The frame turns that many blends share give the bits of a blend and of an adjustment that make their own turns
+TEST(CreatureAnimation, TheSharedFrameTurnsGiveTheBitsOfTheOldWay)
+{
+	std::mt19937 random(4321);
+	std::uniform_real_distribution<float> weight(-1.0f, 1.0f);
+	std::bernoulli_distribution present(0.75);
+	for (int round = 0; round < 300; ++round)
+	{
+		const auto base = RandomAnimation(random, 1 + (round % 9));
+		const auto baseStand = RandomAnimation(random, 1);
+		const auto variantStand = RandomAnimation(random, 1);
+		const auto variant = RandomAnimation(random, 1 + (round % 5));
+		const auto baseTurns = creature_animation::FrameTurns(base);
+		const auto variantTurns = creature_animation::FrameTurns(variant);
+		const auto standTurns = creature_animation::FrameTurns(baseStand);
+		EXPECT_EQ(baseTurns.size(), base.frames.size() * base.rotatedJoints.size());
+		EXPECT_TRUE(SameBits(creature_animation::AdjustFromStand(base, baseTurns, baseStand, variantStand),
+		                     reference::AdjustFromStand(base, baseStand, variantStand)))
+		    << "round " << round;
+		const bool hasA = present(random);
+		const bool hasB = present(random);
+		const creature_animation::BlendTerm a {.animation = hasA ? &variant : nullptr,
+		                                       .stand = present(random) ? &variantStand : nullptr,
+		                                       .weight = std::abs(weight(random)),
+		                                       .turns = hasA ? std::span<const skeletal_animation::Matrix>(variantTurns)
+		                                                     : std::span<const skeletal_animation::Matrix> {}};
+		const creature_animation::BlendTerm b {.animation = hasB ? &baseStand : nullptr,
+		                                       .stand = present(random) ? &baseStand : nullptr,
+		                                       .weight = round % 7 == 0 ? 0.0f : std::abs(weight(random)),
+		                                       .turns = hasB ? std::span<const skeletal_animation::Matrix>(standTurns)
+		                                                     : std::span<const skeletal_animation::Matrix> {}};
+		EXPECT_TRUE(SameBits(creature_animation::Blend(base, baseTurns, a, b), reference::Blend(base, a, b)))
+		    << "round " << round;
+	}
+}
+
 // A skeleton of many bones samples as a small one does, and a bone that the list holds twice takes its last place
 TEST(SkeletalAnimation, ManyBonesAndATwiceListedBoneSample)
 {
