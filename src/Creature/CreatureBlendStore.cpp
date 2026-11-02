@@ -13,6 +13,8 @@
 
 #include <algorithm>
 #include <bit>
+#include <span>
+#include <unordered_map>
 #include <utility>
 #include <vector>
 
@@ -23,6 +25,7 @@ using namespace openblack;
 using namespace openblack::creature_blends;
 using openblack::creature::CreatureRig;
 using openblack::skeletal_animation::Animation;
+using openblack::skeletal_animation::Matrix;
 
 namespace
 {
@@ -145,6 +148,36 @@ Animation BlendVariants(const Animation& base, const creature_morph::Morph& morp
 	                                  .weight = thinFat.animation != nullptr ? std::abs(morph.thinFat) : 0.0f});
 }
 
+/// The frame turns of the animations that a Prepare uses, one time for each animation
+using TurnsOfAnimations = std::unordered_map<const Animation*, std::vector<Matrix>>;
+
+/// The frame turns of the animation, or none when the Prepare did not make them
+std::span<const Matrix> TurnsOf(const TurnsOfAnimations& turns, const Animation* animation)
+{
+	const auto found = turns.find(animation);
+	return found != turns.end() ? std::span<const Matrix>(found->second) : std::span<const Matrix> {};
+}
+
+/// The same blend as BlendVariants, with the frame turns that the Prepare made
+Animation BlendVariants(const Animation& base, const creature_morph::Morph& morph, const Variant& evilGood,
+                        const Variant& thinFat, const TurnsOfAnimations& turns)
+{
+	const auto weightOf = [](const Variant& variant, float value) {
+		return variant.animation != nullptr ? std::abs(value) : 0.0f;
+	};
+	const creature_animation::BlendTerm towardsEvilGood {.animation = evilGood.animation,
+	                                                     .stand = evilGood.stand,
+	                                                     .weight = weightOf(evilGood, morph.evilGood),
+	                                                     .turns = TurnsOf(turns, evilGood.animation)};
+	const creature_animation::BlendTerm towardsThinFat {.animation = thinFat.animation,
+	                                                    .stand = thinFat.stand,
+	                                                    .weight = weightOf(thinFat, morph.thinFat),
+	                                                    .turns = TurnsOf(turns, thinFat.animation)};
+	const auto baseTurns = TurnsOf(turns, &base);
+	return baseTurns.empty() ? creature_animation::Blend(base, towardsEvilGood, towardsThinFat)
+	                         : creature_animation::Blend(base, baseTurns, towardsEvilGood, towardsThinFat);
+}
+
 } // namespace
 
 BlendKey creature_blends::KeyOf(const CreatureRig& rig, const creature_morph::Morph& morph, size_t index)
@@ -219,23 +252,68 @@ void creature_blends::Prepare(Stores& stores, std::span<const Wanted> wanted, Wo
 			}
 		}
 	}
+	// The frame turns of each animation that the blends and the adjustments use, one time for each animation. The
+	// creatures of a species share the base animations and the variants, so this does less work than each blend alone.
+	// A variant that the adjustments make again gets its turns after its adjustment.
+	TurnsOfAnimations turns;
+	std::vector<const Animation*> turned;
+	const auto turn = [&turns, &turned](const Animation* animation) {
+		if (animation != nullptr && turns.try_emplace(animation).second)
+		{
+			turned.push_back(animation);
+		}
+	};
+	for (const auto& [rig, morph, index] : blends)
+	{
+		turn(rig->GetAnimation(CreatureRig::Mesh::Base, index));
+		for (const auto mesh : {EvilGoodMesh(morph.evilGood), ThinFatMesh(morph.thinFat)})
+		{
+			const AdjustedKey key {.rig = rig, .mesh = mesh, .index = index};
+			if (std::ranges::none_of(adjustments, [&key](const AdjustmentSources& other) { return other.key == key; }))
+			{
+				turn(FindVariant(stores, *rig, mesh, index).animation);
+			}
+		}
+	}
+	for (const auto& sources : adjustments)
+	{
+		turn(sources.base);
+	}
+	std::vector<std::vector<Matrix>> madeTurns(turned.size());
+	workers.ForEach(turned.size(), [&turned, &madeTurns](size_t index, size_t /*lane*/) {
+		madeTurns[index] = creature_animation::FrameTurns(*turned[index]);
+	});
+	for (size_t i = 0; i < turned.size(); ++i)
+	{
+		turns.insert_or_assign(turned[i], std::move(madeTurns[i]));
+	}
+
 	std::vector<Animation> adjusted(adjustments.size());
-	workers.ForEach(adjustments.size(), [&adjustments, &adjusted](size_t index, size_t /*lane*/) {
+	std::vector<std::vector<Matrix>> adjustedTurns(adjustments.size());
+	workers.ForEach(adjustments.size(), [&adjustments, &adjusted, &adjustedTurns, &turns](size_t index, size_t /*lane*/) {
 		const auto& sources = adjustments[index];
-		adjusted[index] = creature_animation::AdjustFromStand(*sources.base, *sources.baseStand, *sources.stand);
+		const auto baseTurns = TurnsOf(turns, sources.base);
+		adjusted[index] =
+		    baseTurns.empty()
+		        ? creature_animation::AdjustFromStand(*sources.base, *sources.baseStand, *sources.stand)
+		        : creature_animation::AdjustFromStand(*sources.base, baseTurns, *sources.baseStand, *sources.stand);
+		adjustedTurns[index] = creature_animation::FrameTurns(adjusted[index]);
 	});
 	for (size_t i = 0; i < adjustments.size(); ++i)
 	{
-		stores.adjusted.insert_or_assign(adjustments[i].key, AdjustmentOf(adjustments[i], std::move(adjusted[i])));
+		const auto& kept =
+		    stores.adjusted.insert_or_assign(adjustments[i].key, AdjustmentOf(adjustments[i], std::move(adjusted[i])))
+		        .first->second;
+		turns.insert_or_assign(&kept->animation, std::move(adjustedTurns[i]));
 	}
 
-	// Then the blends. The threads only read the stores.
+	// Then the blends. The threads only read the stores and the turns.
 	std::vector<Animation> made(blends.size());
-	workers.ForEach(blends.size(), [&stores, &blends, &made](size_t index, size_t /*lane*/) {
+	workers.ForEach(blends.size(), [&stores, &blends, &made, &turns](size_t index, size_t /*lane*/) {
 		const auto& [rig, morph, animation] = blends[index];
 		made[index] = BlendVariants(*rig->GetAnimation(CreatureRig::Mesh::Base, animation), morph,
 		                            FindVariant(stores, *rig, EvilGoodMesh(morph.evilGood), animation),
-		                            FindVariant(stores, *rig, ThinFatMesh(morph.thinFat), animation));
+		                            FindVariant(stores, *rig, ThinFatMesh(morph.thinFat), animation), turns);
 	});
 	for (size_t i = 0; i < blends.size(); ++i)
 	{
