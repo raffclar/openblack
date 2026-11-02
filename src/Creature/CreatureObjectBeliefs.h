@@ -14,10 +14,10 @@
 
 #include <algorithm>
 #include <array>
+#include <map>
 #include <optional>
 #include <span>
 #include <tuple>
-#include <unordered_map>
 #include <utility>
 #include <vector>
 
@@ -108,7 +108,9 @@ struct BeliefPool
 struct StoreContents
 {
 	std::array<BeliefPool, k_KindCount> pools {};
-	std::unordered_map<entt::entity, BeliefPlace> index;
+	/// The place of the belief about each thing, in the order of the numbers of the things. A save writes the index in
+	/// this order, thus the index keeps it and the save does not sort it.
+	std::map<entt::entity, BeliefPlace> index;
 	uint64_t made {0};
 };
 
@@ -169,8 +171,8 @@ public:
 	template <typename Gone>
 	void ForgetIf(Gone gone)
 	{
-		// The store forgets them in the order of their kinds and places. The order of the index is different on each
-		// C++ library, and the marker of the oldest belief moves on as each belief goes.
+		// The store forgets them in the order of their kinds and places, not in the order of the things in the index,
+		// because the marker of the oldest belief moves on as each belief goes.
 		std::vector<std::pair<BeliefPlace, entt::entity>> forgotten;
 		for (const auto& [thing, at] : _contents.index)
 		{
