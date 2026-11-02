@@ -160,6 +160,7 @@
 #include "ECS/Map.h"
 #include "ECS/ObjectPhysics.h"
 #include "ECS/Registry.h"
+#include "ECS/ScriptFind.h"
 #include "ECS/ScriptFlocks.h"
 #include "ECS/Systems/AbodeKnockSystemInterface.h"
 #include "ECS/Systems/AdvisorSystemInterface.h"
@@ -267,6 +268,7 @@
 #include "Magic/MagicTables.h"
 #include "Magic/ScriptCast.h"
 #include "Magic/SpellRules.h"
+#include "Magic/TownBelief.h"
 #include "Resources/ResourceManager.h"
 #include "Resources/ResourcesInterface.h"
 #include "ScriptHeaders/ScriptInterfaceLevels.h"
@@ -2335,7 +2337,11 @@ std::string Runner::GiveLeashCommand(entt::entity creature, const Command& comma
 		return leashes.SetLeashable(creature, true) ? "leashable" : RefusedText(leashes);
 	case Kind::HandTapLeash:
 		// As the player's Action button tapping it does
-		return leashes.TapCreature(command.player, creature) ? "on" : RefusedText(leashes);
+		if (!leashes.TapCreature(command.player, creature))
+		{
+			return RefusedText(leashes);
+		}
+		return leashes.IsLeashed(creature) ? "on" : "off";
 	case Kind::LeashShake:
 		// The game shakes a leash off with a scribble drawn with the empty hand
 		return DrawGesture(GestureType::Scribble);
@@ -3959,6 +3965,29 @@ void Runner::Give(const Command& command)
 		Log(fmt::format("{:.1f}s: the town believes {:.2f} in the second player", _seconds, command.amount));
 		return;
 	}
+	if (command.kind == Kind::GiveLandTown)
+	{
+		auto& registry = Locator::entitiesRegistry::value();
+		const auto id = ecs::script_find::TownIdFromScript(static_cast<float>(command.value));
+		const auto& towns = registry.Context().towns;
+		auto* impression = [&]() -> ecs::components::TownImpression* {
+			const auto town = towns.find(id);
+			return town != towns.end() && registry.Valid(town->second)
+			           ? registry.TryGet<ecs::components::TownImpression>(town->second)
+			           : nullptr;
+		}();
+		if (impression != nullptr)
+		{
+			for (size_t i = 0; i < magic::town_belief::k_PlayerCount; ++i)
+			{
+				const auto other = static_cast<PlayerNames>(i);
+				magic::town_belief::Set(impression->belief, other, other == command.player ? command.amount : 0.0f);
+			}
+		}
+		Log(fmt::format("{:.1f}s: the land's town {} believes {:.2f} in the player{}", _seconds, command.value, command.amount,
+		                impression != nullptr ? "" : " (no such town)"));
+		return;
+	}
 	if (command.kind == Kind::EndGuidanceWaits)
 	{
 		if (Locator::guidanceSystem::has_value())
@@ -4572,6 +4601,7 @@ void Runner::Give(const Command& command)
 	case Kind::RunHelpMessage:
 	case Kind::EndGuidanceWaits:
 	case Kind::SetTownBeliefInRival:
+	case Kind::GiveLandTown:
 	case Kind::ProfileFolderCheck:
 	case Kind::OwnTattooPicture:
 	case Kind::OpenTattooMenu:

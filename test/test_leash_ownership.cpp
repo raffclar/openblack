@@ -18,6 +18,7 @@
 #include "Creature/CreatureHandRules.h"
 #include "Creature/LeashKeys.h"
 #include "Creature/LeashOwnership.h"
+#include "Creature/LeashTakeOff.h"
 #include "Input/GameActionMap.h"
 
 using namespace openblack;
@@ -214,6 +215,50 @@ TEST(LeashKeys, TheLeashKeyTakesTheLeashOffHoweverManyItKnows)
 	const auto all = Knowing({LeashType::Evil, LeashType::Rope, LeashType::Good});
 	EXPECT_EQ(CommandFor(LeashKey::Leash, {.worn = true, .known = all, .selected = LeashType::Good}),
 	          (KeyCommand {.kind = Kind::TakeOff}));
+}
+
+TEST(LeashKeys, AClickOnTheCreatureIsTheLeashKey)
+{
+	const auto all = Knowing({LeashType::Evil, LeashType::Rope, LeashType::Good});
+	// Off: the picked leash goes on, or the learning leash when it does not know the picked one
+	EXPECT_EQ(CommandForClick({.known = all, .selected = LeashType::Evil}),
+	          (KeyCommand {.kind = Kind::PutOn, .type = LeashType::Evil}));
+	EXPECT_EQ(CommandForClick({.known = Knowing({LeashType::Rope}), .selected = LeashType::Good}),
+	          (KeyCommand {.kind = Kind::PutOn, .type = LeashType::Rope}));
+	// Worn: the leash comes off, whichever leash it is
+	for (const auto type : {LeashType::Evil, LeashType::Rope, LeashType::Good})
+	{
+		EXPECT_EQ(CommandForClick({.worn = true, .known = all, .selected = type}), (KeyCommand {.kind = Kind::TakeOff}));
+	}
+	// Tied: the leash comes back to the hand
+	EXPECT_EQ(CommandForClick({.worn = true, .tied = true, .known = all}), (KeyCommand {.kind = Kind::UntieToHand}));
+	// With no learning leash known, the click does nothing
+	EXPECT_EQ(CommandForClick({.known = Knowing({LeashType::Good})}), KeyCommand {});
+	// Every state gives the command of the leash key
+	for (const bool worn : {false, true})
+	{
+		for (const bool tied : {false, true})
+		{
+			const KeyState state {.worn = worn, .tied = worn && tied, .known = all, .selected = LeashType::Good};
+			EXPECT_EQ(CommandForClick(state), CommandFor(LeashKey::Leash, state));
+		}
+	}
+}
+
+TEST(LeashTakeOff, TheMindForgetsTheLeash)
+{
+	ecs::components::CreatureMindState mind;
+	mind.leash.learningInHand = true;
+	mind.leash.miracleSightingWeight = MiracleSightingWeight(true);
+	mind.ledByLeash = true;
+	mind.leftAreaActions = {false, true, true};
+	ForgetLeash(mind);
+	EXPECT_FALSE(mind.leash.learningInHand);
+	EXPECT_EQ(mind.leash.miracleSightingWeight, MiracleSightingWeight(false));
+	// The leash no longer leads the plan
+	EXPECT_FALSE(mind.ledByLeash);
+	// The actions that the area refused are possible again
+	EXPECT_TRUE(mind.leftAreaActions.empty());
 }
 
 TEST(CreatureHand, ALeashedCreatureIsHeldAsUsual)

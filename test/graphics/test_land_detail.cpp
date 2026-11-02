@@ -172,6 +172,17 @@ TEST(LandDetail, FullMeshSplitsEachCellAlongItsDiagonal)
 	EXPECT_EQ(BlockTriangles(Mesh::Full, 0, false, cells).size(), plain.size());
 }
 
+TEST(LandDetail, ABlockOfOpenSeaOnlyHasNoTrianglesWhenTheSeaIsLeftOut)
+{
+	auto cells = PlainCells();
+	for (auto& cell : cells)
+	{
+		cell.openSea = true;
+	}
+	EXPECT_TRUE(BlockTriangles(Mesh::Full, 0, true, cells).empty());
+	EXPECT_EQ(BlockTriangles(Mesh::Full, 0, false, cells).size(), 16u * 16u * 6u);
+}
+
 TEST(LandDetail, CoarserMeshesStepOverCorners)
 {
 	const auto cells = PlainCells();

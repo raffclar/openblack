@@ -12,6 +12,7 @@
 #include <cstdint>
 
 #include <array>
+#include <optional>
 #include <string_view>
 #include <vector>
 
@@ -120,6 +121,10 @@ public:
 	/// From 0 to 1: how opaque everything drawn is
 	void SetAlpha(float alpha) const noexcept { _alpha = alpha; }
 	[[nodiscard]] float GetAlpha() const noexcept { return _alpha; }
+
+	/// What is drawn from now on shows only inside a rectangle of the dialog space. With no rectangle it shows everywhere
+	/// again.
+	void SetClip(const std::optional<DialogRect>& rect) const;
 
 	/// A rectangle of the atlas, tinted
 	void DrawBox(const DialogRect& rect, glm::vec2 uvMin, glm::vec2 uvMax, glm::vec3 tint = glm::vec3(1.0f)) const;
