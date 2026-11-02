@@ -14833,7 +14833,8 @@ bool testbed_scenarios::NeedsNoCreature(Command::Kind kind)
 	       kind == Kind::JoinOnline || kind == Kind::EndBox || kind == Kind::BringCreature ||
 	       kind == Kind::TattooEditorAsNetworkGame || kind == Kind::ShowDemoPing || kind == Kind::AddIncomingMessage ||
 	       kind == Kind::Chat || kind == Kind::ComputerPersonality || kind == Kind::ComputerUntaughtSends ||
-	       kind == Kind::SkirmishBox || kind == Kind::LookAtSaveGamePicture || IsPointerCommand(kind);
+	       kind == Kind::SkirmishBox || kind == Kind::LookAtSaveGamePicture || kind == Kind::HandCastOnDispenser ||
+	       kind == Kind::HandCastOnCreature || kind == Kind::CloseHeldMiracle || IsPointerCommand(kind);
 }
 
 std::string_view testbed_scenarios::Name(Facet facet)
@@ -14861,7 +14862,7 @@ std::string_view testbed_scenarios::Name(Shot shot)
 
 std::string_view testbed_scenarios::Name(Command::Kind kind)
 {
-	constexpr std::array<std::string_view, 212> k_Names {
+	constexpr std::array<std::string_view, 215> k_Names {
 	    "walk to",
 	    "run to",
 	    "follow",
@@ -15074,6 +15075,9 @@ std::string_view testbed_scenarios::Name(Command::Kind kind)
 	    "change the body's look",
 	    "tap the temple's entrance",
 	    "give a town of the land to the player",
+	    "cast the held miracle on a dispenser",
+	    "cast the held miracle on a creature",
+	    "close the held miracle and let go",
 	};
 	return k_Names.at(static_cast<size_t>(kind));
 }

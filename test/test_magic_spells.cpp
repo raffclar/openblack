@@ -403,6 +403,29 @@ TEST(SpellSeedRules, ATakeBackCountsItsOwnEventAndKeepsASeedWithEnoughLeft)
 	EXPECT_EQ(help::profile::k_SeedTakenBack, 13u);
 }
 
+// A held seed linked to a miracle that runs from the hand gives that miracle again, also after it closed down. Any other
+// linked seed casts a new miracle. A seed that lost the link of its last cast with no store does not cast.
+TEST(SpellSeedRules, ARecastReusesALinkedHeldMiracleAndRefusesASeedThatLostItsLink)
+{
+	EXPECT_EQ(RecastOf(true, true, true), SeedRecast::Reuse);
+	EXPECT_EQ(RecastOf(true, true, false), SeedRecast::Reuse);
+	EXPECT_EQ(RecastOf(true, false, true), SeedRecast::New);
+	EXPECT_EQ(RecastOf(false, false, true), SeedRecast::Refused);
+	EXPECT_EQ(RecastOf(false, true, true), SeedRecast::Refused);
+	EXPECT_EQ(RecastOf(false, true, false), SeedRecast::New);
+	EXPECT_EQ(RecastOf(false, false, false), SeedRecast::New);
+}
+
+// The let go of a locked miracle keeps the seed only when its record does not delete it once cast and its miracle had
+// enough for another cast
+TEST(SpellSeedRules, TheUnlockKeepsASeedWithEnoughForARecast)
+{
+	EXPECT_TRUE(KeptAtUnlock(false, true));
+	EXPECT_FALSE(KeptAtUnlock(false, false));
+	EXPECT_FALSE(KeptAtUnlock(true, true));
+	EXPECT_FALSE(KeptAtUnlock(true, false));
+}
+
 // Dispensers
 
 TEST(DispenserRules, ADispenserWaitsForItsBubbleToBeTakenThenMakesAnotherAfterItsPeriod)

@@ -64,6 +64,12 @@ struct SpellSeed
 	entt::entity spell {entt::null};
 	/// Its miracle has been cast at least once
 	bool hasCast {false};
+	/// It cast a miracle, and the hand did not take it back from a miracle after that. A dispenser takes only a seed
+	/// that did not cast.
+	bool castBefore {false};
+	/// A cast linked it to its miracle. A store of the miracle's prayer power, or a take back into the hand, clears
+	/// this. A seed with this mark and no miracle does not cast.
+	bool linkedByCast {false};
 	/// Its miracle's in-hand effect, 0 for none
 	uint32_t handEffect {0};
 };

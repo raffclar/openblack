@@ -166,7 +166,7 @@ std::optional<magic::HeldCastAtPointer> MagicSystem::HeldCastAt(std::optional<en
 		                                                     .fireBall = registry.AllOf<MagicFireBall>(*pointed),
 		                                                     .castOnByKind = castOnByKind,
 		                                                     .ownDispenser = IsOwnDispenser(*pointed, seed.player),
-		                                                     .heldSeedHasCast = seed.hasCast,
+		                                                     .heldSeedCastBefore = seed.castBefore,
 		                                                 });
 	}
 	else if (_hand.point.has_value())
