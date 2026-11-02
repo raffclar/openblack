@@ -315,12 +315,31 @@ void AddExpressions(std::vector<Scenario>& all)
 	    .facet = Facet::Expressions,
 	    .description = "A tiger whose mind is paused, close up, pulls each of its ten faces in turn, then plays each "
 	                   "gesture on top of its body.",
-	    .expected =
-	        "Smile, grimace, growl, scared, sad, amazed, puzzled, laugh, ooh and aah, each held then easing out of the last, "
-	        "then a nod, a shake of the head, a yawn, thirst, squirting water and talking.",
+	    .expected = "Smile, grimace, growl, scared, sad, amazed and puzzled, each held then easing out of the last. The "
+	                "tiger has no laugh, ooh or aah, so its face stays plain for those three. Then a nod, a shake of the "
+	                "head, a yawn, thirst, squirting water and talking.",
 	    .framing = {.shot = Shot::Head, .distance = 1.6f},
 	    .creatures = {CreatureSetup {.species = CreatureType::Tiger, .needs = Content(), .hold = true, .pauseMind = true}},
 	    .commands = faces,
+	    .repeatFrom = 0,
+	});
+
+	// The tiger has no clip for the laugh. The tiger keeps the face that it wants, but the face shows nothing. The smile
+	// after it starts at once.
+	constexpr size_t k_TigerLaugh = animations::k_FirstFace + 7;
+	all.push_back({
+	    .id = "expressions.face_without_clip",
+	    .name = "A face that the tiger has no clip for",
+	    .facet = Facet::Expressions,
+	    .description = "A tiger whose mind is paused, close up, pulls the laugh face, which the tiger has no clip for, "
+	                   "then the smile, three seconds later.",
+	    .expected = "For three seconds the face stays plain and does not move: the laugh shows nothing. Then the smile "
+	                "starts at once from its first frame and holds. The readout of the face names the laugh, then the "
+	                "smile.",
+	    .framing = {.shot = Shot::Head, .distance = 1.6f},
+	    .creatures = {CreatureSetup {.species = CreatureType::Tiger, .needs = Content(), .hold = true, .pauseMind = true}},
+	    .commands = {Play(Kind::PullFace, 0, k_TigerLaugh, 1.0f, false),
+	                 Play(Kind::PullFace, 0, animations::k_FirstFace, 3.0f, false)},
 	    .repeatFrom = 0,
 	});
 
@@ -10402,6 +10421,43 @@ void AddCombat(std::vector<Scenario>& all)
 		                                       .number = static_cast<float>(script::ObjectPropertyType::Health)},
 		                                      {.kind = ScriptArgument::Kind::Creature, .index = 1},
 		                                      {.kind = ScriptArgument::Kind::Number, .number = 0.0f}}}},
+		});
+	}
+
+	{
+		// The same win by the life of the opponent, but the script gives the blue tiger its life back after the win, so
+		// it has more life than the red tiger when it responds
+		auto loser = blue(PlayerNames::PLAYER_TWO, 0.5f, -0.2f);
+		loser.hold = false;
+		const auto setBlueLife = [](float life, float delay) {
+			return Command {.kind = Kind::CallNative,
+			                .delaySeconds = delay,
+			                .script = "SET_PROPERTY",
+			                .scriptArguments = {{.kind = ScriptArgument::Kind::Integer,
+			                                     .number = static_cast<float>(script::ObjectPropertyType::Health)},
+			                                    {.kind = ScriptArgument::Kind::Creature, .index = 1},
+			                                    {.kind = ScriptArgument::Kind::Number, .number = life}}};
+		};
+		all.push_back({
+		    .id = "combat.loser_waits_free_mind",
+		    .name = "The loser waits after its response until its own mind takes a plan",
+		    .facet = Facet::Combat,
+		    .description = "The red tiger of the player and a blue tiger fight by themselves, and the creatures do not faint. "
+		                   "When the duel is on, a script sets the life of the blue tiger to zero, and gives it full life "
+		                   "again a moment after the red tiger wins.",
+		    .expected = "The red tiger wins, finishes its move, orders the blue tiger to respond and plays no response. "
+		                "The blue tiger finishes its move, plays the happy response and does not fear the red tiger. Then "
+		                "it waits with its mind free. Its mind takes a new plan only when it wants that plan more than "
+		                "twice as much as the order, and that plan ends its fight. The fight transcript shows "
+		                "order_respond.",
+		    .environment = {.fainting = false},
+		    .framing = ringside,
+		    .creatures = {red(PlayerNames::PLAYER_ONE, 0.6f, -0.2f), loser},
+		    .commands = {{.kind = Kind::EndGuidanceWaits, .delaySeconds = 0.5f},
+		                 Fight(Kind::StartFight, 0, 1, 0.5f),
+		                 Fight(Kind::FightAuto, 0, 1, 0.2f),
+		                 setBlueLife(0.0f, 12.0f),
+		                 setBlueLife(1.0f, 0.3f)},
 		});
 	}
 

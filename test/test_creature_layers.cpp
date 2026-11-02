@@ -371,6 +371,27 @@ TEST(CreatureLayers, AFaceRunsBackBeforeTheNextStarts)
 	EXPECT_FALSE(face.current.has_value());
 }
 
+TEST(CreatureLayers, AFaceThatTheRigHasNoClipForIsKeptButItsTimeDoesNotMove)
+{
+	// The tiger has no clip for the laugh: the laugh becomes the face, but with no clip its time stays at zero
+	auto face = PullFace({}, 23, 3000.0f);
+	face = AdvanceFace(face, 100.0f, std::nullopt);
+	EXPECT_EQ(face.current, 23u);
+	for (int turn = 0; turn < 20; ++turn)
+	{
+		face = AdvanceFace(face, 100.0f, std::nullopt);
+		EXPECT_EQ(face.current, 23u);
+		EXPECT_FLOAT_EQ(face.timeMs, 0.0f);
+	}
+	// The next face starts at once, as the face with no clip has no time to run back
+	face = PullFace(face, 16, 3000.0f);
+	face = AdvanceFace(face, 100.0f, std::nullopt);
+	EXPECT_EQ(face.current, 16u);
+	EXPECT_FLOAT_EQ(face.timeMs, 0.0f);
+	face = AdvanceFace(face, 100.0f, 1000);
+	EXPECT_NEAR(face.timeMs, 100.0f, k_Tolerance);
+}
+
 TEST(CreatureLayers, AFaceHoldsItsExpressionRatherThanLooping)
 {
 	auto face = PullFace({}, 20, 3000.0f);

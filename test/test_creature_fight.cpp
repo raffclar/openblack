@@ -22,6 +22,7 @@
 
 #include "Creature/CreatureFight.h"
 #include "Creature/CreatureFightHud.h"
+#include "Creature/CreaturePlanner.h"
 
 using namespace openblack;
 using namespace openblack::creature_fight;
@@ -1039,6 +1040,15 @@ TEST(CreatureFight, OnlyTheCreatureThatPlannedAFightStillChoosesInIt)
 	EXPECT_FALSE(ObeysInFight({.fighting = true, .won = true}));
 	EXPECT_FALSE(ObeysInFight({.fighting = true, .startedIt = true}));
 	EXPECT_FALSE(ObeysInFight({}));
+	// The loser that the winner ordered to respond has its mind free again: it chooses, and it no longer only obeys
+	EXPECT_TRUE(LetsChoose({.fighting = true, .mindFree = true}));
+	EXPECT_FALSE(ObeysInFight({.fighting = true, .mindFree = true}));
+	// While it responds and waits, the order to obey keeps its priority. Only a plan with more than two times that
+	// priority replaces it.
+	const auto obey = creature_fight::k_ObeyPlanPriority;
+	EXPECT_FALSE(creature_planner::ShouldSwitch(2.0f * obey, obey));
+	EXPECT_TRUE(creature_planner::ShouldSwitch(std::nextafter(2.0f * obey, 3.0f), obey));
+	EXPECT_FALSE(creature_planner::ShouldSwitch(0.9f, obey));
 }
 
 // After its response, the first creature frees the mind of the other creature again. The other creature thinks and
