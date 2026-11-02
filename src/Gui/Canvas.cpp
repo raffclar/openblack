@@ -9,6 +9,8 @@
 
 #include "Canvas.h"
 
+#include <cmath>
+
 #include <algorithm>
 #include <array>
 
@@ -89,13 +91,15 @@ Canvas::~Canvas() = default;
 void Canvas::StartBatch(const graphics::Texture2D* texture)
 {
 	if (_batches.empty() || _batches.back().texture != texture || _batches.back().blend != _blend ||
-	    _batches.back().sortDepth != _sortDepth || _batches.back().vertexCount + 6 > k_MaxBatchVertices)
+	    _batches.back().sortDepth != _sortDepth || _batches.back().clip != _clip ||
+	    _batches.back().vertexCount + 6 > k_MaxBatchVertices)
 	{
 		_batches.push_back({.texture = texture,
 		                    .blend = _blend,
 		                    .firstVertex = static_cast<uint32_t>(_vertices.size()),
 		                    .vertexCount = 0,
-		                    .sortDepth = _sortDepth});
+		                    .sortDepth = _sortDepth,
+		                    .clip = _clip});
 	}
 }
 
@@ -108,6 +112,28 @@ void Canvas::Begin(glm::u16vec2 resolution)
 	_depth = 0.0f;
 	_sortDepth = 0;
 	_origin = glm::vec2(0.0f);
+	_clip.reset();
+}
+
+void Canvas::SetClip(std::optional<std::array<glm::vec2, 2>> corners) noexcept
+{
+	if (!corners.has_value())
+	{
+		_clip.reset();
+		return;
+	}
+	// A pixel shows when its centre is inside the rectangle, as a pixel that a draw covers
+	const auto edge = [](float value, uint16_t most) {
+		return static_cast<uint16_t>(std::clamp(std::round(value), 0.0f, static_cast<float>(most)));
+	};
+	const auto left = edge(corners->at(0).x + _origin.x, _resolution.x);
+	const auto top = edge(corners->at(0).y + _origin.y, _resolution.y);
+	const auto right = edge(corners->at(1).x + _origin.x, _resolution.x);
+	const auto bottom = edge(corners->at(1).y + _origin.y, _resolution.y);
+	_clip = Clip {.x = left,
+	              .y = top,
+	              .width = static_cast<uint16_t>(std::max(right, left) - left),
+	              .height = static_cast<uint16_t>(std::max(bottom, top) - top)};
 }
 
 void Canvas::DrawQuad(glm::vec2 min, glm::vec2 max, glm::vec2 uvMin, glm::vec2 uvMax, glm::vec4 colour,
@@ -187,6 +213,11 @@ void Canvas::End()
 	auto& layout = GetLayout();
 	for (const auto& batch : _batches)
 	{
+		// A clip with no pixels hides the batch. The renderer reads a scissor with no area as no scissor.
+		if (batch.clip.has_value() && (batch.clip->width == 0 || batch.clip->height == 0))
+		{
+			continue;
+		}
 		if (bgfx::getAvailTransientVertexBuffer(batch.vertexCount, layout) < batch.vertexCount)
 		{
 			break;
@@ -197,6 +228,10 @@ void Canvas::End()
 		bgfx::setVertexBuffer(0, &vertices);
 		program->SetTextureSampler("s_texture", 0, *batch.texture);
 		bgfx::setState(StateOf(batch.blend, _depthTest));
+		if (batch.clip.has_value())
+		{
+			bgfx::setScissor(batch.clip->x, batch.clip->y, batch.clip->width, batch.clip->height);
+		}
 		if (_sortedView.has_value())
 		{
 			program->SetUniformValue("u_canvasProjection", projection.data());

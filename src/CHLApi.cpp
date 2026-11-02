@@ -10059,11 +10059,12 @@ void GetHandState() // 413 GET_HAND_STATE
 	facts.interfaceActive =
 	    !Locator::cinematicDirectorSystem::has_value() || Locator::cinematicDirectorSystem::value().IsInterfaceActive();
 	facts.inTemple = PlayerInsideTemple();
-	// The grip of the land and the other button come from the view report of the player
+	// The grip of the land, the other button and the turn of the camera come from the view report of the player
 	if (const auto view = ScriptView(); view.has_value())
 	{
 		facts.gripsLand = view->gripsLand;
 		facts.otherButton = view->otherButton;
+		facts.cameraTurned = view->cameraTurned;
 	}
 	if (Locator::cameraHelpSystem::has_value())
 	{
@@ -10197,9 +10198,10 @@ void StopSoundEffect() // 424 STOP_SOUND_EFFECT
 		NotImplemented();
 		return;
 	}
+	// A script's sound has its sample number as its owner, so the stop leaves the copies that the game plays
 	if (const auto sound = BankSound(bank, sample))
 	{
-		Locator::sounds::value().StopSoundEffect(*sound);
+		Locator::sounds::value().StopNumberedSoundEffect(*sound, static_cast<uint32_t>(sample));
 	}
 }
 
@@ -10549,11 +10551,11 @@ void GetSacrificeTotal() // 449 GET_SACRIFICE_TOTAL
 
 void GameSoundPlaying() // 450 GAME_SOUND_PLAYING
 {
-	// Whether a sample a script started from a script bank is still playing
+	// Whether a sample that a script started from a script bank still plays. The sample number is the owner.
 	const auto bank = Pop().intVal;
 	const auto sample = Pop().intVal;
 	const auto sound = BankSound(bank, sample);
-	Pushb(sound.has_value() && Locator::sounds::value().IsSoundEffectPlaying(*sound));
+	Pushb(sound.has_value() && Locator::sounds::value().IsNumberedSoundEffectPlaying(*sound, static_cast<uint32_t>(sample)));
 }
 
 /// A player's temple, the earliest made when there are several, none when the player has none

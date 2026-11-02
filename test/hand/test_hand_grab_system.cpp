@@ -485,6 +485,14 @@ public:
 		restsAsked.push_back(scaffold);
 		return restOfScaffold;
 	}
+	[[nodiscard]] bool DropsOnTeleport(entt::entity stone, entt::entity held) const override
+	{
+		return teleportStones.contains(stone) && !registry.AllOf<Pot>(held);
+	}
+	void DropOnTeleport(entt::entity stone, entt::entity held) override
+	{
+		droppedOnStones.emplace_back(stone, held, registry.AllOf<InHand>(held));
+	}
 	bool LayGateStone(entt::entity plinth, entt::entity stone) override
 	{
 		if (!plinths.contains(plinth) || !gateStones.contains(stone))
@@ -623,6 +631,10 @@ public:
 	std::set<entt::entity> stores;
 	std::set<entt::entity> plinths;
 	std::set<entt::entity> gateStones;
+	/// The teleport stones that take a dropped villager, and each drop: the stone, the villager, and whether the hand
+	/// still held the villager then
+	std::set<entt::entity> teleportStones;
+	std::vector<std::tuple<entt::entity, entt::entity, bool>> droppedOnStones;
 	std::vector<std::pair<entt::entity, entt::entity>> laidStones;
 	/// The scaffolds that the hand can join, and each join: the target, the held scaffold, and whether the hand still
 	/// held it then
@@ -2385,6 +2397,32 @@ TEST_F(HandGrabSystemWithWorld, AGateStonePressedOntoThePlinthIsLaidInIt)
 	// The stone is used up, leaving its ghost, and the hand is empty
 	EXPECT_EQ(world->usedUp, std::vector<entt::entity> {stone});
 	EXPECT_TRUE(world->takenWhole.empty());
+	EXPECT_FALSE(system->GetHeld().has_value());
+}
+
+TEST_F(HandGrabSystemWithWorld, AVillagerPressedOntoATeleportStoneLeavesTheHandOnTheStone)
+{
+	const auto villager = world->AddTree({0.0f, 0.0f, 0.0f}, 10.0f);
+	world->underCursor = villager;
+	Press();
+	for (int i = 0; i < 40 && !system->GetHeld().has_value(); ++i)
+	{
+		Frame(10);
+	}
+	ASSERT_TRUE(system->GetHeld().has_value());
+	Release();
+	const auto stone = world->registry.Create();
+	world->teleportStones.insert(stone);
+	world->underCursor = stone;
+	world->spreadAgain.clear();
+	EXPECT_TRUE(Press());
+	// The villager is out of the hand before the stone takes it, and its reactions spread again
+	ASSERT_EQ(world->droppedOnStones.size(), 1u);
+	EXPECT_EQ(std::get<0>(world->droppedOnStones.front()), stone);
+	EXPECT_EQ(std::get<1>(world->droppedOnStones.front()), villager);
+	EXPECT_FALSE(std::get<2>(world->droppedOnStones.front()));
+	EXPECT_EQ(world->spreadAgain, std::vector<entt::entity> {villager});
+	EXPECT_TRUE(world->usedUp.empty());
 	EXPECT_FALSE(system->GetHeld().has_value());
 }
 

@@ -391,7 +391,7 @@ protected:
 	/// True when a file has been loaded
 	bool _isLoaded {false};
 
-	L3DHeader _header;
+	L3DHeader _header {};
 	std::vector<L3DSubmeshHeader> _submeshHeaders;
 	std::vector<L3DTexture> _skins;
 	/// If the flag HasDoorPosition is on the first extra point is the door
@@ -511,6 +511,7 @@ public:
 	void AddVertices(const std::vector<L3DVertex>& vertices) noexcept;
 	void AddIndices(const std::vector<uint16_t>& indices) noexcept;
 	void AddBones(const std::vector<L3DBone>& bones) noexcept;
+	void AddSkin(const L3DTexture& skin) noexcept;
 };
 
 } // namespace openblack::l3d

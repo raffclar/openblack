@@ -127,8 +127,11 @@ public:
 	virtual void PlaySoundEffect(entt::id_type id, std::optional<glm::vec3> worldPosition) = 0;
 	/// Stops the sound effects of a sound that PlaySoundEffect started, as one that loops forever goes on until then
 	virtual void StopSoundEffect(entt::id_type id) = 0;
-	/// A sound effect PlaySoundEffect started is still playing
-	[[nodiscard]] virtual bool IsSoundEffectPlaying(entt::id_type id) const = 0;
+	/// Stops the sample that a caller started with an owner number. Only the first voice that keeps the sample for that
+	/// owner stops, and only if it plays.
+	virtual void StopNumberedSoundEffect(entt::id_type id, uint32_t ownerNumber) = 0;
+	/// True when the first voice that keeps the sample for the owner number plays
+	[[nodiscard]] virtual bool IsNumberedSoundEffectPlaying(entt::id_type id, uint32_t ownerNumber) const = 0;
 	/// A sound effect played with options: its emitter, null when nothing plays (not loaded, or too far away)
 	virtual entt::entity StartSoundEffect(entt::id_type id, const SoundEffectOptions& options) = 0;
 	/// Moves a 3D emitter, as a loop follows its owner

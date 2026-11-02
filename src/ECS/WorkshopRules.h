@@ -24,6 +24,7 @@
 #include "3D/MapCoords.h"
 #include "ECS/Components/Workshop.h"
 #include "Enums.h"
+#include "Sound/SoundRequestInterface.h"
 
 namespace openblack::ecs
 {
@@ -212,6 +213,26 @@ struct JoinedTownFacts
 /// worth more. When the two are worth the same, the town of the held scaffold only when the player who holds it has
 /// that town.
 [[nodiscard]] JoinedTown TownOfJoined(const JoinedTownFacts& facts);
+
+/// The player whose colour the puff of a join shows: the player of the scaffold under the hand. Every scaffold has the
+/// neutral player.
+inline constexpr PlayerNames k_JoinPuffPlayer = PlayerNames::NEUTRAL;
+/// The sounds of a join of scaffolds: four samples, one after the other
+inline constexpr uint32_t k_FirstJoinSample = 201;
+inline constexpr uint32_t k_JoinSamples = 4;
+
+/// The sound of a join: the sample in the bank of the game's sounds and how it plays
+struct JoinSound
+{
+	uint32_t sample;
+	audio::SoundEffectOptions options;
+};
+
+/// The sound of a join with a hand. `step` is the number of the sound in the four sounds, 0 to 3. The sound plays at
+/// the hand and does not move. Its owner is the held scaffold, which the join removes.
+[[nodiscard]] JoinSound JoinSoundOf(uint32_t step, entt::entity held, glm::vec3 hand);
+/// The number of the sound that the next join with a hand plays
+[[nodiscard]] uint32_t NextJoinSound(uint32_t step);
 
 /// The id that the game gives to each town that a scaffold founds
 inline constexpr uint32_t k_FoundedTownId = 703058;

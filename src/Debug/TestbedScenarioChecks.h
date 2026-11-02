@@ -53,6 +53,10 @@ enum class Quantity : uint8_t
 	ObjectResource,
 	/// The distance in metres from the scenario's object at the index to the point, on the ground
 	ObjectDistance,
+	/// The temperature of the scenario's object at the index
+	ObjectTemperature,
+	/// 1 when a script's test for a fire near the point finds a burning thing within the radius, else 0
+	FireNear,
 };
 
 /// One statement about the world. It is read once at its turn; with byTurn it is read again at each frame from its
@@ -66,8 +70,10 @@ struct Check
 	size_t index {0};
 	/// For Entities: the kind of thing
 	std::string_view kind;
-	/// For CreatureDistance and ObjectDistance: the point, from the middle of the map, x east and y north in metres
+	/// For CreatureDistance, ObjectDistance and FireNear: the point, from the middle of the map, x east and y north in metres
 	glm::vec2 point {0.0f};
+	/// For FireNear: the radius in metres
+	float radius {0.0f};
 	/// The game turns after the scenario starts. A turn is a tenth of a second.
 	uint32_t afterTurns {0};
 	/// With a value: the check holds when it holds at any read from afterTurns to this turn, and fails after it

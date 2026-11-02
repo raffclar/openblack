@@ -46,11 +46,11 @@ void LandBlock::BuildMesh(LandIslandInterface& island, std::span<LandVertex> ver
 	BuildVertexList(vertices, island);
 }
 
-const IndexBuffer& LandBlock::GetTriangles(land_detail::Mesh mesh, uint8_t coarserSides, bool dropOpenSea) const
+const IndexBuffer* LandBlock::GetTriangles(land_detail::Mesh mesh, uint8_t coarserSides, bool dropOpenSea) const
 {
 	const size_t set = (static_cast<size_t>(mesh) * 16 + (coarserSides & 0xF)) * 2 + (dropOpenSea ? 1 : 0);
 	auto& triangles = _triangles.at(set);
-	if (triangles == nullptr)
+	if (!triangles.has_value())
 	{
 		assert(_block);
 		assert(_triangleSets != nullptr);
@@ -60,7 +60,7 @@ const IndexBuffer& LandBlock::GetTriangles(land_detail::Mesh mesh, uint8_t coars
 		std::ranges::transform(_block->cells, flags.begin(), [](const lnd::LNDCell& cell) {
 			return land_detail::CellFlags {.split = cell.properties.split != 0, .openSea = (cell.flags & k_OpenSeaFlag) != 0};
 		});
-		triangles = &_triangleSets->Get(
+		triangles = _triangleSets->Get(
 		    land_detail::BlockTriangles(mesh, coarserSides, dropOpenSea, flags), [](std::span<const uint16_t> indices) {
 			    // bgfx keeps a copy: the list is gone before it reads it
 			    const auto* memory = Locator::graphicsDevice::value().Copy(
@@ -82,7 +82,7 @@ void LandBlock::SetVertices(const VertexBuffer& buffer, uint32_t firstVertex)
 void LandBlock::SetTriangleSets(SharedIndexLists<IndexBuffer>& sets)
 {
 	_triangleSets = &sets;
-	_triangles.fill(nullptr);
+	_triangles.fill(std::nullopt);
 }
 
 void LandBlock::BuildVertexList(std::span<LandVertex> vertices, LandIslandInterface& island)
@@ -133,7 +133,7 @@ glm::vec2 LandBlock::GetMapPosition() const
 void LandBlock::SetLndBlock(const lnd::LNDBlock& block)
 {
 	_block = std::make_unique<lnd::LNDBlock>(block);
-	_triangles.fill(nullptr);
+	_triangles.fill(std::nullopt);
 	_highestAltitude = std::ranges::max(_block->cells, {}, &lnd::LNDCell::altitude).altitude;
 }
 

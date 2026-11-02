@@ -7,6 +7,11 @@
  * openblack is licensed under the GNU General Public License version 3.
  *******************************************************************************/
 
+#include <cstddef>
+#include <cstdint>
+
+#include <vector>
+
 #include <gtest/gtest.h>
 
 #include "Audio/VoicePool.h"
@@ -223,4 +228,41 @@ TEST(VoiceOwnerKey, EachOwnSoundHasItsOwnKey)
 	const auto choice = pool.Choose(Request(9, 400, AudioBankLoop::Once, second));
 	EXPECT_TRUE(choice.start);
 	EXPECT_EQ(choice.slot, 1u);
+}
+
+TEST(VoicePool, AStopForAnOwnerStopsOnlyTheFirstVoiceThatKeepsTheSample)
+{
+	VoicePool pool;
+	pool.Occupy(2, Request(5, 400, AudioBankLoop::Overlap, 0));
+	pool.Occupy(4, Request(5, 400, AudioBankLoop::Overlap, 9));
+	pool.Occupy(6, Request(5, 400, AudioBankLoop::Overlap, 9));
+	// The voice of the sample for the other owner stays, and so does the second voice for the same owner
+	EXPECT_EQ(pool.VoicesToStop(9, k_Bank, 5), (std::vector<size_t> {4}));
+	EXPECT_TRUE(pool.VoicesToStop(9, k_Bank + 1, 5).empty());
+	EXPECT_TRUE(pool.VoicesToStop(9, k_Bank, 6).empty());
+}
+
+TEST(VoicePool, AStoppedCopyOnAnEarlierVoiceHidesTheCopiesAfterIt)
+{
+	VoicePool pool;
+	pool.Occupy(1, Request(5, 400, AudioBankLoop::Overlap, 9));
+	pool.Occupy(3, Request(5, 400, AudioBankLoop::Overlap, 9));
+	pool.Finish(1, false);
+	EXPECT_TRUE(pool.VoicesToStop(9, k_Bank, 5).empty());
+	EXPECT_FALSE(pool.IsPlaying(9, k_Bank, 5));
+	// A voice that forgot its sample does not hide the copies after it
+	pool.Finish(1, true);
+	EXPECT_EQ(pool.VoicesToStop(9, k_Bank, 5), (std::vector<size_t> {3}));
+	EXPECT_TRUE(pool.IsPlaying(9, k_Bank, 5));
+}
+
+TEST(VoicePool, AStopOfSampleZeroStopsEachVoiceOfTheBankThatPlaysForTheOwner)
+{
+	VoicePool pool;
+	pool.Occupy(0, Request(5, 400, AudioBankLoop::Overlap, 0));
+	pool.Occupy(1, Request(6, 400, AudioBankLoop::Overlap, 0));
+	pool.Occupy(2, Request(7, 400, AudioBankLoop::Overlap, 0));
+	pool.Occupy(3, Request(8, 400, AudioBankLoop::Overlap, 9));
+	pool.Finish(2, false);
+	EXPECT_EQ(pool.VoicesToStop(0, k_Bank, 0), (std::vector<size_t> {0, 1}));
 }

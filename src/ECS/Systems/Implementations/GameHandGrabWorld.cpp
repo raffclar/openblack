@@ -113,6 +113,7 @@
 #include "ECS/Systems/RewardSystemInterface.h"
 #include "ECS/Systems/ScriptHighlightSystemInterface.h"
 #include "ECS/Systems/SpellIconSystemInterface.h"
+#include "ECS/Systems/TeleportSystemInterface.h"
 #include "ECS/Systems/TimeSystemInterface.h"
 #include "ECS/Systems/WorkshopSystemInterface.h"
 #include "ECS/VillagerAge.h"
@@ -1587,6 +1588,19 @@ bool GameHandGrabWorld::TakesWhole(entt::entity target, entt::entity held) const
 bool GameHandGrabWorld::LayGateStone(entt::entity plinth, entt::entity stone)
 {
 	return Locator::animatedStaticSystem::has_value() && Locator::animatedStaticSystem::value().LayGateStone(plinth, stone);
+}
+
+bool GameHandGrabWorld::DropsOnTeleport(entt::entity stone, entt::entity held) const
+{
+	return Locator::teleportSystem::has_value() && Locator::teleportSystem::value().TakesDrop(held, stone, HandPlayer());
+}
+
+void GameHandGrabWorld::DropOnTeleport(entt::entity stone, entt::entity held)
+{
+	if (Locator::teleportSystem::has_value())
+	{
+		Locator::teleportSystem::value().DropOnStone(held, stone, HandPlayer());
+	}
 }
 
 bool GameHandGrabWorld::JoinsScaffold(entt::entity target, entt::entity held) const

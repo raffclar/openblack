@@ -75,6 +75,7 @@
 #include "ECS/PosedModel.h"
 #include "ECS/Reflection/BinaryArchive.h"
 #include "ECS/Registry.h"
+#include "ECS/ScriptFind.h"
 #include "ECS/Systems/FieldSystemInterface.h"
 #include "ECS/Systems/Implementations/ObjectMeasures.h"
 #include "ECS/Systems/InfluenceSystemInterface.h"
@@ -741,20 +742,22 @@ bool FireSystem::IsFireNear(const glm::vec3& point, float radius) const
 	}
 	const auto& registry = Entities();
 	const auto& map = Locator::entitiesMap::value();
-	// The objects fixed to and moving over the land's cells that the radius's square round the point touches, as a map
-	// position finds them
+	// The objects fixed to and moving over the land's cells that the radius's square round the point touches, as a
+	// script's search finds them. A worship site is measured from its altar, as the script's searches measure it
 	const auto coords = map_coords::FromMetres({point.x, point.z});
-	const auto low = [radius](int32_t fixed) { return map_coords::ToFixed(map_coords::ToMetres(fixed) - radius) >> 16; };
-	const auto high = [radius](int32_t fixed) { return map_coords::ToFixed(map_coords::ToMetres(fixed) + radius) >> 16; };
 	const auto burningInReach = [&](entt::entity object) {
-		const auto* transform = registry.TryGet<const Transform>(object);
-		return transform != nullptr && IsOnFire(object) &&
-		       gutils::GetDistanceInMetres(coords, map_coords::FromMetres({transform->position.x, transform->position.z})) <=
-		           radius;
+		if (!registry.AllOf<Transform>(object) || !IsOnFire(object))
+		{
+			return false;
+		}
+		const auto* measured = registry.TryGet<const Transform>(ecs::script_find::MeasuredFrom(registry, object));
+		const auto& position = (measured != nullptr ? measured : &registry.Get<const Transform>(object))->position;
+		return gutils::GetDistanceInMetres(coords, map_coords::FromMetres({position.x, position.z})) <= radius;
 	};
-	for (int32_t x = low(coords.x); x <= high(coords.x); ++x)
+	const auto range = ecs::script_find::CellsAround(coords, radius);
+	for (int32_t x = range.low.x; x <= range.high.x; ++x)
 	{
-		for (int32_t z = low(coords.z); z <= high(coords.z); ++z)
+		for (int32_t z = range.low.y; z <= range.high.y; ++z)
 		{
 			if (!map_coords::InBounds(glm::ivec2(x, z)))
 			{

@@ -652,9 +652,39 @@ void AudioManager::StopSoundEffect(entt::id_type id)
 	}
 }
 
-bool AudioManager::IsSoundEffectPlaying(entt::id_type id) const
+void AudioManager::StopNumberedSoundEffect(entt::id_type id, uint32_t ownerNumber)
 {
-	return FindPlaying(entt::null, BankOf(id), id, 0) != entt::null;
+	auto& sounds = Locator::resources::value().GetSounds();
+	if (!sounds.Contains(id))
+	{
+		return;
+	}
+	const auto sound = sounds.Handle(id);
+	const auto owner = VoiceOwnerKey(VoiceOwner::Number, std::nullopt, ownerNumber, 0);
+	for (const auto slot : _voicePool.VoicesToStop(owner, sound->bank, static_cast<uint32_t>(sound->id)))
+	{
+		const auto occupant = _voiceOccupants.at(slot);
+		if (occupant.emitter != entt::null && EmitterExists(occupant.emitter))
+		{
+			DestroyEmitter(occupant.emitter);
+		}
+		else if (occupant.atmos != k_InvalidHandle)
+		{
+			Stop(occupant.atmos);
+		}
+	}
+}
+
+bool AudioManager::IsNumberedSoundEffectPlaying(entt::id_type id, uint32_t ownerNumber) const
+{
+	auto& sounds = Locator::resources::value().GetSounds();
+	if (!sounds.Contains(id))
+	{
+		return false;
+	}
+	const auto sound = sounds.Handle(id);
+	const auto owner = VoiceOwnerKey(VoiceOwner::Number, std::nullopt, ownerNumber, 0);
+	return _voicePool.IsPlaying(owner, sound->bank, static_cast<uint32_t>(sound->id));
 }
 
 uint32_t AudioManager::BankOf(entt::id_type id)

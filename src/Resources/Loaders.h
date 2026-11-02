@@ -38,6 +38,7 @@ class LandLightPalette;
 namespace openblack::graphics
 {
 class L3DMesh;
+struct PreparedL3DMesh;
 class Texture2D;
 } // namespace openblack::graphics
 
@@ -145,6 +146,13 @@ struct L3DLoader final: BaseLoader<graphics::L3DMesh>
 	};
 	[[nodiscard]] result_type operator()(FromFileWithSkinsOfTag, const std::string& debugName, const l3d::L3DFile& file,
 	                                     const graphics::L3DMesh& skinSource) const;
+	/// From a load that another thread prepared from a file already read, as a mesh whose vertices and skins can be
+	/// changed after. Only the objects on the graphics device are made here.
+	struct FromPreparedDynamicTag
+	{
+	};
+	[[nodiscard]] result_type operator()(FromPreparedDynamicTag, const std::string& debugName,
+	                                     graphics::PreparedL3DMesh prepared) const;
 };
 
 /// The data of an L3D file, .l3d or zipped .zzz, for what changes meshes on the CPU
@@ -156,6 +164,11 @@ struct L3DFileLoader final: BaseLoader<l3d::L3DFile>
 	{
 	};
 	[[nodiscard]] result_type operator()(FromFileTag, const l3d::L3DFile& file) const;
+	/// A copy of a file made in the game that another thread made already
+	struct FromCopyTag
+	{
+	};
+	[[nodiscard]] result_type operator()(FromCopyTag, std::shared_ptr<l3d::L3DFile> copy) const;
 };
 
 /// A 16 bit image, .16B

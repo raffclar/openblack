@@ -11,6 +11,9 @@
 
 #include <algorithm>
 
+#include "GodWindowRules.h"
+#include "PlayerSlots.h"
+
 namespace openblack::gui::conditions_box
 {
 
@@ -62,17 +65,60 @@ Columns ValueColumns(int left, int right, size_t gods)
 	return {.first = left + (third * 2), .width = width};
 }
 
-std::vector<size_t> ShownGods(const Figures& figures, const std::array<bool, k_Gods>& ticked)
+CheckBoxGods GodsOfCheckBoxes(const Figures& figures, size_t windowFirst)
 {
-	std::vector<size_t> shown;
+	CheckBoxGods boxes {};
+	if (god_window::Scrolls(figures.gods.size()))
+	{
+		const auto shown = god_window::Shown(figures.gods.size(), windowFirst);
+		for (size_t box = 0; box < shown.size() && box < boxes.size(); ++box)
+		{
+			boxes.at(box) = shown.at(box);
+		}
+		return boxes;
+	}
 	for (size_t i = 0; i < figures.gods.size(); ++i)
 	{
-		const auto number = static_cast<size_t>(figures.gods[i].player);
-		if (number < k_Gods && ticked.at(number))
+		if (const auto number = static_cast<size_t>(figures.gods[i].player); number < k_Gods)
 		{
-			shown.push_back(i);
+			boxes.at(number) = i;
 		}
 	}
+	return boxes;
+}
+
+std::u16string GodLabel(const Figures& figures, size_t god)
+{
+	size_t number = god;
+	if (god < figures.gods.size())
+	{
+		number = player_slots::SlotOfPlayer(figures.gods.at(god).player).value_or(god);
+	}
+	return u"Player " + Unsigned(static_cast<uint32_t>(number + 1));
+}
+
+std::u16string CheckBoxLabel(const Figures& figures, const CheckBoxGods& boxes, size_t box)
+{
+	size_t number = box;
+	if (god_window::Scrolls(figures.gods.size()) && box < boxes.size() && boxes.at(box).has_value() &&
+	    *boxes.at(box) < figures.gods.size())
+	{
+		number = player_slots::SlotOfPlayer(figures.gods.at(*boxes.at(box)).player).value_or(box);
+	}
+	return u"Player " + Unsigned(static_cast<uint32_t>(number + 1));
+}
+
+std::vector<size_t> ShownGods(const CheckBoxGods& boxes, const std::vector<bool>& ticked)
+{
+	std::vector<size_t> shown;
+	for (const auto& god : boxes)
+	{
+		if (god.has_value() && *god < ticked.size() && ticked.at(*god))
+		{
+			shown.push_back(*god);
+		}
+	}
+	std::ranges::sort(shown);
 	return shown;
 }
 

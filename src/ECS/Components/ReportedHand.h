@@ -58,6 +58,8 @@ struct ReportedHand
 	bool otherButton {false};
 	/// The mouse has a wheel
 	bool mouseWheel {false};
+	/// The controls of the world camera asked for a turn of more than a hundredth in the turn of the report
+	bool cameraTurned {false};
 	/// The camera icons by the hand of the world camera's last frame, with their offered bits (hand_tricons::icon)
 	uint16_t cameraIcons {0};
 	/// The keys held, by the game's key number
