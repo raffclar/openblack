@@ -224,3 +224,27 @@ TEST(ScriptCreate, OnlyACreatureTakesNoNoticeOfReactionsWhenAScriptMakesIt)
 	EXPECT_FALSE(IgnoresReactions(ScriptType::Marker));
 	EXPECT_FALSE(IgnoresReactions(ScriptType::MobileStatic));
 }
+
+TEST(ScriptCreate, AStoreIsAPileOfFoodOrWood)
+{
+	// The fifth land's crusaders make their pyre with "create 16 1": a store of wood
+	EXPECT_EQ(static_cast<int32_t>(ScriptType::Store), 16);
+	EXPECT_EQ(StoreResource(0), ResourceType::Food);
+	EXPECT_EQ(StoreResource(1), ResourceType::Wood);
+	EXPECT_FALSE(StoreResource(2).has_value());
+	EXPECT_FALSE(StoreResource(5000).has_value());
+}
+
+TEST(ScriptCreate, AMobileObjectIsItsRowAndAPooIsAlwaysALumpOfPoo)
+{
+	// The crusaders' cauldron is "create 20 31" and the brown bear's dung "create 25 5000"
+	constexpr auto k_Rows = static_cast<std::size_t>(MobileObjectInfo::_COUNT);
+	EXPECT_EQ(static_cast<int32_t>(ScriptType::MobileObject), 20);
+	EXPECT_EQ(static_cast<int32_t>(ScriptType::Poo), 25);
+	EXPECT_EQ(MobileObjectRow(ScriptType::MobileObject, 31, k_Rows), MobileObjectInfo::Cauldron);
+	EXPECT_EQ(MobileObjectRow(ScriptType::MobileObject, 0, k_Rows), MobileObjectInfo::EgyptBarrel);
+	EXPECT_FALSE(MobileObjectRow(ScriptType::MobileObject, 32, k_Rows).has_value());
+	EXPECT_EQ(MobileObjectRow(ScriptType::Poo, 5000, k_Rows), MobileObjectInfo::LumpOfPoo);
+	EXPECT_EQ(MobileObjectRow(ScriptType::Poo, 0, k_Rows), MobileObjectInfo::LumpOfPoo);
+	EXPECT_FALSE(MobileObjectRow(ScriptType::Tree, 5, k_Rows).has_value());
+}

@@ -46,6 +46,32 @@ bool IsCreatableType(int32_t type)
 	return type >= k_FirstCreateType && type <= k_LastCreateType;
 }
 
+std::optional<ResourceType> StoreResource(uint32_t subtype)
+{
+	if (subtype > static_cast<uint32_t>(ResourceType::Wood))
+	{
+		return std::nullopt;
+	}
+	return static_cast<ResourceType>(subtype);
+}
+
+std::optional<MobileObjectInfo> MobileObjectRow(ObjectType type, uint32_t subtype, std::size_t rows)
+{
+	switch (type)
+	{
+	case ObjectType::Poo:
+		return MobileObjectInfo::LumpOfPoo;
+	case ObjectType::MobileObject:
+		if (!IsRow(subtype, rows))
+		{
+			return std::nullopt;
+		}
+		return static_cast<MobileObjectInfo>(subtype);
+	default:
+		return std::nullopt;
+	}
+}
+
 float AngleFromDegrees(float degrees)
 {
 	return degrees * k_RadiansPerDegree;

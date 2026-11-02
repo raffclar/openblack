@@ -135,6 +135,7 @@
 #include "ECS/Components/PrayerPower.h"
 #include "ECS/Components/Scaffold.h"
 #include "ECS/Components/ScriptControl.h"
+#include "ECS/Components/ScriptHighlight.h"
 #include "ECS/Components/Spell.h"
 #include "ECS/Components/SpellDispenser.h"
 #include "ECS/Components/SpellIcon.h"
@@ -3164,6 +3165,34 @@ std::string Runner::CallNative(const Command& command)
 	return fmt::format("{} ran and gave back {} values", command.script, results.size());
 }
 
+std::string Runner::ClickScroll(const Command& command)
+{
+	if (!Locator::handGrabSystem::has_value())
+	{
+		return "no hand";
+	}
+	// The scroll nearest the point, as the player clicks the one that the camera looks at
+	const auto at = MapPoint(_middle, command.point);
+	auto& registry = Locator::entitiesRegistry::value();
+	auto nearest = entt::entity {entt::null};
+	float best = std::numeric_limits<float>::max();
+	registry.Each<const ecs::components::ScriptHighlight, const ecs::components::Transform>(
+	    [&](entt::entity entity, const ecs::components::ScriptHighlight&, const ecs::components::Transform& transform) {
+		    const auto distance = glm::distance(glm::vec2(transform.position.x, transform.position.z), at);
+		    if (distance < best)
+		    {
+			    best = distance;
+			    nearest = entity;
+		    }
+	    });
+	if (nearest == entt::null)
+	{
+		return "no scroll";
+	}
+	Locator::handGrabSystem::value().ClickThing(nearest);
+	return fmt::format("clicked the scroll {} m from the point", best);
+}
+
 std::string Runner::RunScript(const Command& command)
 {
 	if (!Locator::vm::has_value() || !Locator::scriptObjects::has_value())
@@ -3665,6 +3694,22 @@ void Runner::Give(const Command& command)
 		const auto line = fmt::format("{:.2f}s: {}: {}", _seconds, Name(command.kind), result);
 		SPDLOG_LOGGER_INFO(spdlog::get("game"), "Testbed {}", line);
 		Log(line);
+		return;
+	}
+	if (command.kind == Kind::CameraLooksAt)
+	{
+		const auto look = MapPoint(_middle, command.point);
+		const glm::vec2 eye {look.x, look.y - 40.0f};
+		const auto& land = Locator::terrainSystem::value();
+		Locator::camera::value()
+		    .SetOrigin({eye.x, land.GetHeightAt(eye) + 30.0f, eye.y})
+		    .SetFocus({look.x, land.GetHeightAt(look), look.y});
+		Log(fmt::format("{:.1f}s: {}", _seconds, Name(command.kind)));
+		return;
+	}
+	if (command.kind == Kind::ClickScroll)
+	{
+		Log(fmt::format("{:.1f}s: {}: {}", _seconds, Name(command.kind), ClickScroll(command)));
 		return;
 	}
 	if (command.kind == Kind::RunScript)
@@ -4635,6 +4680,8 @@ void Runner::Give(const Command& command)
 	case Kind::ContinueGame:
 	case Kind::PlayLogoEffect:
 	case Kind::StopScript:
+	case Kind::ClickScroll:
+	case Kind::CameraLooksAt:
 	case Kind::RunScript:
 	case Kind::CallNative:
 	case Kind::StartScriptMusic:

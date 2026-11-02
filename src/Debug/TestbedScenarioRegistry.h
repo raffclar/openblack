@@ -1155,6 +1155,13 @@ struct Command
 		/// The town that the land's script made with a number (value) believes this much (amount) in the player and
 		/// nothing in the other gods. Then the town goes to the player at its next check. Needs no creature.
 		GiveLandTown,
+		/// The player clicks the scroll that a script put up nearest a point (point, from the middle of the map), as the
+		/// Action button pressed and let go on the scroll does. The script that waits for a click on it goes on. Needs no
+		/// creature
+		ClickScroll,
+		/// The player puts the camera at once 40 metres south of a point (point, from the middle of the map) and 30 metres
+		/// above the land there, looking at the point. Needs no creature
+		CameraLooksAt,
 	};
 	Kind kind {Kind::Stop};
 	/// Which creature, by its place in the scenario's creatures
@@ -1539,6 +1546,8 @@ void AddBirdScenarios(std::vector<Scenario>& all);
 void AddTeleportScenarios(std::vector<Scenario>& all);
 /// The vortices between the lands: opening, levelling the ground and closing
 void AddVortexScenarios(std::vector<Scenario>& all);
+/// Three quests of the fifth land: the crusaders and the dragon, the brown bear's trail, and Nemesis's curse
+void AddLandFiveQuestScenarios(std::vector<Scenario>& all);
 /// The reward chests the challenges give: falling, landing and being opened
 void AddRewardScenarios(std::vector<Scenario>& all);
 /// The tornado's scenarios: through a village and a wood, and meeting a creature

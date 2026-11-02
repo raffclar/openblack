@@ -85,6 +85,7 @@
 #include "ECS/Archetypes/CreatureArchetype.h"
 #include "ECS/Archetypes/FeatureArchetype.h"
 #include "ECS/Archetypes/MistArchetype.h"
+#include "ECS/Archetypes/MobileObjectArchetype.h"
 #include "ECS/Archetypes/MobileStaticArchetype.h"
 #include "ECS/Archetypes/ScriptMarkerArchetype.h"
 #include "ECS/Archetypes/SharkArchetype.h"
@@ -882,6 +883,29 @@ entt::entity CreateScriptObject(const ObjectType type, uint32_t subtype, const g
 		}
 		return Locator::weatherSystem::value().CreateWeatherThing(
 		    script::create_rules::WeatherThingStorm(info.weather.at(subtype), OnGround(position)));
+	}
+	case ObjectType::Store:
+	{
+		// A new pile of food or wood on the land, holding one of it and belonging to nobody. It thuds as it lands. The
+		// script then fills it.
+		const auto resource = script::create_rules::StoreResource(subtype);
+		if (!resource.has_value() || !Locator::resourceStoreSystem::has_value())
+		{
+			break;
+		}
+		return Locator::resourceStoreSystem::value().MakePile(*resource, position, 1);
+	}
+	case ObjectType::MobileObject:
+	case ObjectType::Poo:
+	{
+		// A mobile object of the table's kinds, turned and scaled, on the land under the place asked for
+		const auto row =
+		    script::create_rules::MobileObjectRow(type, subtype, Locator::infoConstants::value().mobileObject.size());
+		if (!row.has_value())
+		{
+			break;
+		}
+		return ecs::archetypes::MobileObjectArchetype::Create(OnGround(position), *row, yAngleRadians, scale);
 	}
 	case ObjectType::OneShotSpell:
 		// A globe of a seed at its plain miracle, lying on the ground

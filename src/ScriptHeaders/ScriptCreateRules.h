@@ -72,6 +72,15 @@ struct ScriptRockStart
 /// Whether a subtype numbers a row of a table with this many rows
 [[nodiscard]] bool IsRow(uint32_t subtype, std::size_t rows);
 
+/// The resource of a store that a script makes: a store is a new pile of food (subtype 0) or of wood (subtype 1).
+/// None for any other subtype, which makes nothing.
+[[nodiscard]] std::optional<ResourceType> StoreResource(uint32_t subtype);
+
+/// The row of the mobile objects' table that a script's thing is made as: a mobile object is the row its subtype
+/// numbers, and a poo is always a lump of poo, whatever its subtype. None for a mobile object whose subtype numbers no
+/// row of a table with this many rows, and for every other type.
+[[nodiscard]] std::optional<MobileObjectInfo> MobileObjectRow(ObjectType type, uint32_t subtype, std::size_t rows);
+
 /// Each tribe has this many kinds of villager in the villagers' table, one after another: its housewife, forester,
 /// fisherman, farmer, shepherd, leader and trader
 inline constexpr uint32_t k_VillagersPerTribe = 7;
