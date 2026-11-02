@@ -74,9 +74,15 @@ entt::id_type OwnMeshId(entt::entity entity)
 }
 
 /// What the temple's blend comes from: its look now and the textures of its player
+/// The set of textures of the player's temples
+uint32_t TextureSetOf(PlayerNames owner)
+{
+	return static_cast<uint32_t>(owner) & 3;
+}
+
 TempleExteriorMorph::Blend BlendOf(const TempleExterior& exterior, PlayerNames owner)
 {
-	return {.look = {exterior.size, exterior.alignment}, .textureSet = static_cast<uint32_t>(owner) & 3};
+	return {.look = {exterior.size, exterior.alignment}, .textureSet = TextureSetOf(owner)};
 }
 } // namespace
 
@@ -256,57 +262,112 @@ void TempleExteriorSystem::Morph(entt::entity entity, Mesh& mesh, const TempleEx
 	}
 	const auto shapeIndex = static_cast<size_t>(std::distance(made.shapes.begin(), shape));
 
-	// The temple's own mesh, made once from the first temple's and changed after. A mesh made from the blend has the
-	// vertices of the blend already.
-	auto& meshes = resources.GetMeshes();
+	// The temple's own mesh in the cache. The temples of the same blend in the call share one mesh, which the call makes
+	// or changes after the other temples (see FinishMorphs).
 	auto name = MeshNameOf(entity);
 	const auto id = entt::hashed_string(name.c_str()).value();
 	mesh.id = id;
 	// The same look and textures always give the same blend
 	_blends.insert_or_assign(id, BlendOf(exterior, owner));
-	if (!meshes.Contains(id))
-	{
-		// The threads prepare the new mesh after the other temples, and the rest of the work follows it
-		made.loads.push_back(
-		    {.id = id, .name = std::move(name), .shape = shapeIndex, .alignment = exterior.alignment, .owner = owner});
-		return;
-	}
-	const auto& blended = made.shapes[shapeIndex].second;
-	meshes.Handle(id)->UpdateVertices(blended);
-	Dress(id, blended, nullptr, exterior.alignment, owner, made);
+	made.changes.push_back(
+	    {.id = id, .name = std::move(name), .shape = shapeIndex, .alignment = exterior.alignment, .owner = owner});
 }
 
 void TempleExteriorSystem::FinishMorphs(MadeBlends& made)
 {
-	if (made.loads.empty())
+	if (made.changes.empty())
 	{
 		return;
 	}
-	// The work on the processor: the mesh of each blended shape one time, then a copy of the mesh and of the shape for
-	// each temple. Each job reads only the shapes and the meshes of the shapes, and writes only its own result.
+	auto& meshes = Locator::resources::value().GetMeshes();
+	const auto count = made.changes.size();
+
+	// The temples of each blend, in groups in the order of their first temple, and a number for each mesh that the temples
+	// have now
+	struct Group
+	{
+		size_t shape;
+		uint32_t set;
+		std::vector<size_t> temples;
+	};
+	std::vector<Group> groups;
+	std::vector<const graphics::L3DMesh*> objects;
+	const auto numberOf = [&meshes, &objects](entt::id_type id) -> std::optional<size_t> {
+		const auto* found = meshes.Find(id);
+		if (found == nullptr)
+		{
+			return std::nullopt;
+		}
+		const auto known = std::ranges::find(objects, found);
+		if (known != objects.end())
+		{
+			return static_cast<size_t>(std::distance(objects.begin(), known));
+		}
+		objects.push_back(found);
+		return objects.size() - 1;
+	};
+	std::vector<TempleExteriorMorph::MeshChange> changes;
+	changes.reserve(count);
+	for (size_t i = 0; i < count; ++i)
+	{
+		const auto& change = made.changes[i];
+		const auto set = TextureSetOf(change.owner);
+		auto group = std::ranges::find_if(
+		    groups, [&change, set](const Group& kept) { return kept.shape == change.shape && kept.set == set; });
+		if (group == groups.end())
+		{
+			groups.push_back({.shape = change.shape, .set = set, .temples = {}});
+			group = std::prev(groups.end());
+		}
+		group->temples.push_back(i);
+		changes.push_back({.group = static_cast<size_t>(std::distance(groups.begin(), group)), .mesh = numberOf(change.id)});
+	}
+	// The meshes of the temples that do not change in the call
+	std::vector<size_t> others;
+	for (const auto id : _blends | std::views::keys)
+	{
+		if (std::ranges::none_of(made.changes, [id](const MadeBlends::Change& change) { return change.id == id; }))
+		{
+			if (const auto number = numberOf(id); number.has_value())
+			{
+				others.push_back(*number);
+			}
+		}
+	}
+	const auto kept = TempleExteriorMorph::MeshesToKeep(changes, groups.size(), others);
+
+	// The work on the processor for the groups that get a new mesh: the mesh of each blended shape one time, then a copy
+	// of the mesh and of the shape for each group. Each job reads only the shapes and the meshes of the shapes, and
+	// writes only its own result.
 	struct Prepared
 	{
 		graphics::PreparedL3DMesh mesh;
 		std::shared_ptr<l3d::L3DFile> copy;
 	};
-	const auto settings = graphics::L3DMesh::SettingsNow(graphics::ConfiguredUploads());
-	const auto count = made.loads.size();
-	// The shapes of the new meshes, in the order of their first temple, and the shape of each temple in that list
-	std::vector<size_t> shapes;
-	std::vector<size_t> shapeOf(count);
-	for (size_t i = 0; i < count; ++i)
+	std::vector<size_t> fresh;
+	for (size_t group = 0; group < groups.size(); ++group)
 	{
-		const auto found = std::ranges::find(shapes, made.loads[i].shape);
+		if (!kept[group].has_value())
+		{
+			fresh.push_back(group);
+		}
+	}
+	// The shapes of the new meshes, in the order of their first group, and the shape of each new mesh in that list
+	std::vector<size_t> shapes;
+	std::vector<size_t> shapeOf(fresh.size());
+	for (size_t i = 0; i < fresh.size(); ++i)
+	{
+		const auto found = std::ranges::find(shapes, groups[fresh[i]].shape);
 		shapeOf[i] = static_cast<size_t>(std::distance(shapes.begin(), found));
 		if (found == shapes.end())
 		{
-			shapes.push_back(made.loads[i].shape);
+			shapes.push_back(groups[fresh[i]].shape);
 		}
 	}
 	std::vector<graphics::PreparedL3DMesh> shapeMeshes(shapes.size());
-	std::vector<Prepared> prepared(count);
+	std::vector<Prepared> prepared(fresh.size());
 	// Each copy is ready when its job ends. All of them stop when the work stops with an exception.
-	std::vector<bool> ready(count, false);
+	std::vector<bool> ready(fresh.size(), false);
 	bool failed = false;
 	std::mutex readyMutex;
 	std::condition_variable readyChanged;
@@ -325,50 +386,128 @@ void TempleExteriorSystem::FinishMorphs(MadeBlends& made)
 		std::mutex& mutex;
 		std::condition_variable& changed;
 	};
-	// The threads take the copies in the order of the temples. A thread of its own gives them the jobs, so this thread
-	// can make the device objects of each mesh when it is ready.
-	auto& workers = Workers();
-	auto jobs = std::async(std::launch::async, [&]() {
-		try
-		{
-			workers.ForEach(shapes.size(), [&](size_t index, size_t) {
-				shapeMeshes[index] = graphics::L3DMesh::Prepare(made.shapes[shapes[index]].second, settings);
-			});
-			workers.ForEach(count, [&](size_t index, size_t) {
-				const MarkReady mark {.ready = ready, .index = index, .mutex = readyMutex, .changed = readyChanged};
-				prepared[index].mesh = shapeMeshes[shapeOf[index]];
-				prepared[index].copy = std::make_shared<l3d::L3DFile>(made.shapes[made.loads[index].shape].second);
-			});
-		}
-		catch (...)
-		{
-			{
-				const std::scoped_lock lock(readyMutex);
-				failed = true;
-			}
-			readyChanged.notify_all();
-			throw;
-		}
-	});
-
-	// The objects on the graphics device, in the order of the temples
-	auto& meshes = Locator::resources::value().GetMeshes();
-	for (size_t i = 0; i < count; ++i)
+	const auto settings =
+	    fresh.empty() ? graphics::L3DMesh::LoadSettings {} : graphics::L3DMesh::SettingsNow(graphics::ConfiguredUploads());
+	const auto prepareShape = [&made, &shapes, &shapeMeshes, &settings](size_t index, size_t) {
+		shapeMeshes[index] = graphics::L3DMesh::Prepare(made.shapes[shapes[index]].second, settings);
+	};
+	const auto copyForGroup = [&](size_t index, size_t) {
+		const MarkReady mark {.ready = ready, .index = index, .mutex = readyMutex, .changed = readyChanged};
+		prepared[index].mesh = shapeMeshes[shapeOf[index]];
+		prepared[index].copy = std::make_shared<l3d::L3DFile>(made.shapes[groups[fresh[index]].shape].second);
+	};
+	// One shape gives the threads no work to share, so this thread does it and does not wait for threads to start
+	std::future<void> jobs;
+	if (shapes.size() == 1)
 	{
+		prepareShape(0, 0);
+		for (size_t index = 0; index < fresh.size(); ++index)
 		{
-			std::unique_lock lock(readyMutex);
-			readyChanged.wait(lock, [&ready, &failed, i]() { return ready[i] || failed; });
-			if (failed)
-			{
-				break;
-			}
+			copyForGroup(index, 0);
 		}
-		const auto& load = made.loads[i];
-		meshes.Load(load.id, resources::L3DLoader::FromPreparedDynamicTag {}, load.name, std::move(prepared[i].mesh));
-		Dress(load.id, made.shapes[load.shape].second, std::move(prepared[i].copy), load.alignment, load.owner, made);
 	}
-	jobs.get();
-	made.loads.clear();
+	// The threads take the copies in the order of the groups. A thread of its own gives them the jobs, so this thread can
+	// make the device objects of each mesh when it is ready.
+	else if (!shapes.empty())
+	{
+		auto& workers = Workers();
+		jobs = std::async(std::launch::async, [&]() {
+			try
+			{
+				workers.ForEach(shapes.size(), prepareShape);
+				workers.ForEach(fresh.size(), copyForGroup);
+			}
+			catch (...)
+			{
+				{
+					const std::scoped_lock lock(readyMutex);
+					failed = true;
+				}
+				readyChanged.notify_all();
+				throw;
+			}
+		});
+	}
+
+	// The mesh of each group, in the order of the groups: the mesh that the group keeps, changed here, or the new mesh,
+	// with its objects on the graphics device made here. Then each temple of the group shares it.
+	size_t next = 0;
+	for (size_t group = 0; group < groups.size(); ++group)
+	{
+		const auto& temples = groups[group].temples;
+		const auto& shape = made.shapes[groups[group].shape].second;
+		const auto& first = made.changes[temples.front()];
+		entt::id_type source = 0;
+		if (kept[group].has_value())
+		{
+			const auto* object = objects[*kept[group]];
+			const auto holder = std::ranges::find_if(
+			    temples, [&meshes, &made, object](size_t i) { return meshes.Find(made.changes[i].id) == object; });
+			source = made.changes[*holder].id;
+			meshes.Handle(source)->UpdateVertices(shape);
+			Dress(source, shape, nullptr, first.alignment, first.owner, made);
+		}
+		else
+		{
+			const auto index = next++;
+			{
+				std::unique_lock lock(readyMutex);
+				readyChanged.wait(lock, [&ready, &failed, index]() { return ready[index] || failed; });
+				if (failed)
+				{
+					break;
+				}
+			}
+			source = first.id;
+			Unbind(source);
+			meshes.Load(source, resources::L3DLoader::FromPreparedDynamicTag {}, first.name, std::move(prepared[index].mesh));
+			Dress(source, shape, std::move(prepared[index].copy), first.alignment, first.owner, made);
+		}
+		for (const auto i : temples)
+		{
+			Share(made.changes[i].id, source);
+		}
+	}
+	if (jobs.valid())
+	{
+		jobs.get();
+	}
+	made.changes.clear();
+}
+
+void TempleExteriorSystem::Unbind(entt::id_type id)
+{
+	auto& resources = Locator::resources::value();
+	auto& meshes = resources.GetMeshes();
+	// The worship site mesh first, as it wears the skins of the temple's mesh
+	const auto madeFor = TempleExteriorMorph::MeshesMadeFor(id);
+	for (const auto made : madeFor | std::views::reverse)
+	{
+		if (meshes.Contains(made))
+		{
+			meshes.Erase(made);
+		}
+	}
+	if (auto& files = resources.GetL3DFiles(); files.Contains(id))
+	{
+		files.Erase(id);
+	}
+}
+
+void TempleExteriorSystem::Share(entt::id_type id, entt::id_type source)
+{
+	auto& resources = Locator::resources::value();
+	auto& meshes = resources.GetMeshes();
+	if (id == source || meshes.Find(id) == meshes.Find(source))
+	{
+		return;
+	}
+	Unbind(id);
+	meshes.Load(id, resources::L3DLoader::FromSharedTag {}, meshes.Handle(source).handle());
+	if (auto& files = resources.GetL3DFiles(); files.Contains(source))
+	{
+		files.Load(id, resources::L3DFileLoader::FromCopyTag {}, files.Handle(source).handle());
+	}
 }
 
 void TempleExteriorSystem::Dress(entt::id_type id, const l3d::L3DFile& blended, std::shared_ptr<l3d::L3DFile> copy,
@@ -394,7 +533,7 @@ void TempleExteriorSystem::Dress(entt::id_type id, const l3d::L3DFile& blended, 
 
 	// Its texture, of its player's set, between the two looks about its alignment
 	const auto texture = TextureOf(alignment);
-	const auto set = static_cast<uint32_t>(owner) & 3;
+	const auto set = TextureSetOf(owner);
 	auto& bitmaps = resources.GetBitmaps();
 	const auto from = entt::hashed_string(fmt::format("temple/{}", ImageName(texture.from, set)).c_str()).value();
 	const auto to = entt::hashed_string(fmt::format("temple/{}", ImageName(texture.to, set)).c_str()).value();

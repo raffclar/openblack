@@ -203,3 +203,56 @@ TEST(TempleExteriorMorph, TheMeshesMadeForATempleAreItsOwnAndItsSitesMesh)
 	EXPECT_NE(made.at(0), made.at(1));
 	EXPECT_NE(MeshesMadeFor(templeMesh + 1).at(1), made.at(1));
 }
+
+TEST(TempleExteriorMorph, NewTemplesOfOneBlendGetOneNewMesh)
+{
+	// The first turn: 32 temples with no mesh, of four sets of textures, all of one look
+	std::vector<MeshChange> changes;
+	for (size_t temple = 0; temple < 32; ++temple)
+	{
+		changes.push_back({.group = temple % 4, .mesh = std::nullopt});
+	}
+	const auto kept = MeshesToKeep(changes, 4, {});
+	ASSERT_EQ(kept.size(), 4U);
+	for (const auto& mesh : kept)
+	{
+		EXPECT_FALSE(mesh.has_value());
+	}
+}
+
+TEST(TempleExteriorMorph, TemplesThatShareAMeshAndChangeTogetherKeepIt)
+{
+	const std::vector<MeshChange> changes {{.group = 0, .mesh = 5}, {.group = 0, .mesh = 5}, {.group = 0, .mesh = 5}};
+	EXPECT_EQ(MeshesToKeep(changes, 1, {}), (std::vector<std::optional<size_t>> {5}));
+}
+
+TEST(TempleExteriorMorph, AMeshThatATempleKeepsUnchangedIsNotChanged)
+{
+	// Two temples share mesh 0 and one of them does not change
+	const std::vector<MeshChange> changes {{.group = 0, .mesh = 0}};
+	const std::vector<size_t> others {0};
+	EXPECT_EQ(MeshesToKeep(changes, 1, others), (std::vector<std::optional<size_t>> {std::nullopt}));
+}
+
+TEST(TempleExteriorMorph, TheLastGroupKeepsTheMeshThatTheEarlierGroupsLeave)
+{
+	// Three temples share mesh 0 and go to three blends: the first two get new meshes and the last keeps mesh 0
+	const std::vector<MeshChange> changes {{.group = 0, .mesh = 0}, {.group = 1, .mesh = 0}, {.group = 2, .mesh = 0}};
+	EXPECT_EQ(MeshesToKeep(changes, 3, {}), (std::vector<std::optional<size_t>> {std::nullopt, std::nullopt, 0}));
+}
+
+TEST(TempleExteriorMorph, AGroupKeepsTheFirstMeshThatOnlyItsTemplesHave)
+{
+	// Mesh 1 is also another temple's, so the group keeps mesh 2. The temple of mesh 3 joins it.
+	const std::vector<MeshChange> changes {
+	    {.group = 0, .mesh = 1}, {.group = 0, .mesh = 2}, {.group = 0, .mesh = 3}, {.group = 0, .mesh = std::nullopt}};
+	const std::vector<size_t> others {1};
+	EXPECT_EQ(MeshesToKeep(changes, 1, others), (std::vector<std::optional<size_t>> {2}));
+}
+
+TEST(TempleExteriorMorph, AGroupDoesNotKeepAMeshThatALaterGroupHas)
+{
+	// The temples of mesh 0 go to groups 0 and 1. Group 0 cannot keep it, but group 1 can after group 0 leaves it.
+	const std::vector<MeshChange> changes {{.group = 0, .mesh = 0}, {.group = 1, .mesh = 0}, {.group = 1, .mesh = 0}};
+	EXPECT_EQ(MeshesToKeep(changes, 2, {}), (std::vector<std::optional<size_t>> {std::nullopt, 0}));
+}
