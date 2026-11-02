@@ -1044,8 +1044,8 @@ std::unique_ptr<ProviderInterface> openblack::inspector::MakeCreatureProvider(Cr
 		return sources.clipLine ? sources.clipLine(creature, clip) : std::nullopt;
 	};
 	provider->Add(Query("animation",
-	                    "The clips that a creature's body plays now: for each, its layer (body, blend, face, gesture, "
-	                    "wobble), the clip's place and name in the creature spec file, the time in it, its speed (clip "
+	                    "The clips that a creature's body plays now: for each, its layer (body, blend, face or gesture), "
+	                    "the clip's place and name in the creature spec file, the time in it, its speed (clip "
 	                    "milliseconds for each millisecond of the turn), whether it loops, its weight and pair blend, and "
 	                    "what asked for it (the mind's activity, plan and agenda step, the action with a thing, the fight)",
 	                    {id}),
@@ -1089,8 +1089,8 @@ std::unique_ptr<ProviderInterface> openblack::inspector::MakeCreatureProvider(Cr
 	              });
 	provider->Add(Query("animation_problems",
 	                    "The clips that something asked a creature's body for that did not play: missing (the species has "
-	                    "no such clip: the body showed the stand, the action ended at once, or a face, gesture or wobble "
-	                    "showed nothing) or refused (the body "
+	                    "no such clip: the body showed the stand, the action ended at once, or a face or gesture showed "
+	                    "nothing) or refused (the body "
 	                    "played another action), with the turn, what asked and how many turns in a row it came again",
 	                    {id}),
 	              [logOf, lineOf](const QueryContext& context) {

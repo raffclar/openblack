@@ -637,6 +637,36 @@ void openblack::testbed_scenarios::AddTownMiracleScenarios(std::vector<Scenario>
 	    .townMiracles = {MagicType::StormWindRain, MagicType::StormWindRainLightning, MagicType::Tornado},
 	});
 	all.push_back({
+	    .id = "miracles.seed_take_back_power_up",
+	    .name = "Storm: the hand powers up a seed that it took back",
+	    .facet = Facet::Miracles,
+	    .description = "The town and temple of miracles.power_up_icon_charge. The site is built, and a tap puts the storm "
+	                   "miracle from its icon into the hand. The hand draws a circle with the Action button held and casts "
+	                   "the storm. Ten seconds later the hand takes the storm seed back. Then the hand draws the first "
+	                   "power-up gesture of the storm, the inverse spiral.",
+	    .expected = "At the take, the storm closes down and the seed goes into the hand with the prayer power that the "
+	                "storm had left. The hand took the seed back as a seed that did not cast, so the inverse spiral asks "
+	                "the storm icon for the increased storm. The icon charges only the prayer power that the seed does "
+	                "not hold. Then the hand shows the name of the increased storm, a bracelet more and the bands. If the "
+	                "seed counted as a seed that cast, the gesture would not power it up.",
+	    .environment = {.dispenserGrid = false, .landNumber = k_FirstLand},
+	    .framing = {.shot = Shot::Placed, .eye = {9.0f, 14.0f, -40.0f}, .look = {9.0f, 2.0f, -19.0f}},
+	    .objects = Town(),
+	    .temples = {{.offset = k_Temple}},
+	    .commands = {{.kind = Kind::BuildWorshipSites, .delaySeconds = 3.0f},
+	                 {.kind = Kind::TakeIconSeed,
+	                  .delaySeconds = 0.5f,
+	                  .value = static_cast<size_t>(SpellSeedType::Storm),
+	                  .amount = 1.0f},
+	                 {.kind = Kind::DrawGesture, .delaySeconds = 4.0f, .value = static_cast<size_t>(GestureType::Circle)},
+	                 {.kind = Kind::HandTakeShownSeed, .delaySeconds = 10.0f},
+	                 {.kind = Kind::DrawGesture,
+	                  .delaySeconds = 3.0f,
+	                  .value = static_cast<size_t>(GestureType::InverseSpiral)}},
+	    .townBeliefInPlayer = k_TownBelief,
+	    .townMiracles = {MagicType::StormWindRain, MagicType::StormWindRainLightning, MagicType::Tornado},
+	});
+	all.push_back({
 	    .id = "miracles.selection_help_events",
 	    .name = "The help events of the miracle selection and the R",
 	    .facet = Facet::Miracles,

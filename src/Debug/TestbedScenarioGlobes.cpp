@@ -10,6 +10,10 @@
 // The testbed's scenarios of the miracles' globes and dispensers, close up: the swirl under a dispenser, what floats in
 // each globe, and the rings round the extreme ones
 
+#include <algorithm>
+#include <iterator>
+#include <vector>
+
 #include "TestbedScenarioRegistry.h"
 
 using namespace openblack;
@@ -368,6 +372,42 @@ void AddHand(std::vector<Scenario>& all)
 	    .tribalPower = std::pair {Tribe::NORSE, 2.0f},
 	});
 
+	// The second land of the story: a finished Norse wonder of the player raises the player's Norse power. The offsets on
+	// a story land start at the middle of the land.
+	constexpr glm::vec2 k_LandTwoWonder {1060.0f, 610.0f};
+	constexpr glm::vec2 k_LandTwoWood = k_LandTwoWonder + glm::vec2(-45.0f, -10.0f);
+	all.push_back({
+	    .id = "miracles.l2_wonder_tribal_power",
+	    .name = "A finished wonder gives its tribe's power to the player's miracles",
+	    .facet = Facet::Miracles,
+	    .description = "The second land of the story. A finished Norse wonder of the player stands south east of the "
+	                   "player's first town, to the right of the camera. A wood seed comes to a hand held over the land west "
+	                   "of the wonder. The hand "
+	                   "pours it for three seconds, once two seconds after it comes; again every eight seconds.",
+	    .expected = "The Norse power of the player becomes 2 at the next turn (the inspector query players shows it). As "
+	                "the seed comes, \"Norse Power\" flies in from the camera over a second as a ring of letters in the "
+	                "player's colour, and settles round the hand, turning slowly. No letter shows while it is nearer than "
+	                "the near plane of the camera. When the wood is cast the announcer says \"Norse Power\" and the ring "
+	                "rises from where the hand was in a widening column, turning faster and faster, fading after three "
+	                "seconds and gone after 4.8 seconds.",
+	    .environment = {.land = Land::Story, .storyLand = "Land2.txt", .dispenserGrid = false},
+	    .framing = {.shot = Shot::Placed,
+	                .eye = {k_LandTwoWood.x + 10.0f, 22.0f, k_LandTwoWood.y - 38.0f},
+	                .look = {k_LandTwoWood.x + 10.0f, 9.0f, k_LandTwoWood.y}},
+	    .objects = {{.type = AbodeInfo::NorseWonder, .offset = k_LandTwoWonder}},
+	    .miracles = {{.type = MagicType::Wood,
+	                  .point = k_LandTwoWood,
+	                  .handOffset = k_LandTwoWood,
+	                  .handHeight = 8.0f,
+	                  .delaySeconds = 2.0f,
+	                  .holdSeconds = 3.0f,
+	                  .repeatSeconds = 8.0f,
+	                  .byHand = true,
+	                  .holdBeforePress = 2.0f}},
+	    .townBeliefInPlayer = k_TownBelief,
+	    .objectsAfterLandScript = true,
+	});
+
 	all.push_back({
 	    .id = "miracles.hand_extreme_lightning",
 	    .name = "An extreme lightning held by hand",
@@ -394,6 +434,48 @@ void AddHand(std::vector<Scenario>& all)
 }
 void AddPiles(std::vector<Scenario>& all)
 {
+	// Clean food and then poisoned food given to the worship site of the player on the second land go into the site's
+	// food pot. The pot is clean first, then poisoned.
+	{
+		constexpr size_t k_ActionButton = 3;
+		auto objects = WorshipTown();
+		const size_t cleanFood = objects.size();
+		objects.push_back({.type = PotInfo::HandFood, .offset = {10.0f, 10.0f}, .amount = 150});
+		const size_t poisonedFood = objects.size();
+		objects.push_back({.type = PotInfo::HandFood, .offset = {14.0f, 10.0f}, .amount = 150, .poisoned = true});
+		const auto give = [](size_t food, float delay) {
+			return std::vector<Command> {
+			    {.kind = Command::Kind::HandTake, .delaySeconds = delay, .object = food},
+			    {.kind = Command::Kind::PointerOnAltar, .delaySeconds = 0.5f, .value = 1},
+			    {.kind = Command::Kind::PointerPress, .delaySeconds = 2.5f, .value = k_ActionButton},
+			    {.kind = Command::Kind::PointerRelease, .delaySeconds = 0.2f, .value = k_ActionButton},
+			};
+		};
+		std::vector<Command> commands {{.kind = Command::Kind::BuildWorshipSites, .delaySeconds = 1.0f},
+		                               {.kind = Command::Kind::PointerOnAltar, .delaySeconds = 2.0f, .value = 1}};
+		std::ranges::copy(give(cleanFood, 0.5f), std::back_inserter(commands));
+		std::ranges::copy(give(poisonedFood, 8.0f), std::back_inserter(commands));
+		all.push_back({
+		    .id = "appearance.l2_poisoned_site_pot",
+		    .name = "Poisoned food given to a worship site tints its food pot",
+		    .facet = Facet::Appearance,
+		    .description = "The worship town of the player, counted as the second land, its worship site put up built. "
+		                   "The camera looks at the food pot of the site. The hand takes 150 clean food, moves onto the "
+		                   "empty food pot and presses the Action button. Eight seconds later it gives 150 poisoned food "
+		                   "in the same way.",
+		    .expected = "Each press gives the 150 food to the site with the quiet sound of the pile. After the clean food "
+		                "the pot shows in the colour of the land. After the poisoned food the pot is a little green, as a "
+		                "poisoned pot on the land is.",
+		    .environment = {.dispenserGrid = false, .landNumber = 2},
+		    .framing = {.shot = Shot::Placed, .eye = {-25.0f, 10.0f, -24.0f}, .look = {-25.0f, 0.0f, -30.0f}},
+		    .objects = objects,
+		    .temples = {{.offset = k_WorshipTemple}},
+		    .commands = commands,
+		    .townBeliefInPlayer = k_WorshipTownBelief,
+		    .townMiracles = {MagicType::Food},
+		    .worshipShare = 0.0f,
+		});
+	}
 	all.push_back({
 	    .id = "miracles.food_speedup_and_stores",
 	    .name = "Powered food, and a storage pit taking food and wood",

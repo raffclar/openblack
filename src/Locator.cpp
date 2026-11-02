@@ -943,6 +943,7 @@ void openblack::ShutDownServices()
 	Locator::rainSystem::reset();
 	Locator::snowfallSystem::reset();
 	Locator::waterRingSystem::reset();
+	Locator::designedWaterfallSystem::reset();
 	Locator::filmCreatureSystem::reset();
 	Locator::tattooMenuSystem::reset();
 	Locator::tattooEditorSystem::reset();

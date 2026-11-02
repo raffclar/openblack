@@ -20,6 +20,8 @@
 #include <ParticleFile.h>
 #include <glm/gtx/transform.hpp>
 
+#include "Camera/CameraPathControl.h"
+#include "CameraPathLink.h"
 #include "Common/X87.h"
 #include "KeyPointSpline.h"
 #include "Magic/ForestRules.h"
@@ -139,7 +141,8 @@ public:
 };
 
 /// An atom that draws nothing but, for the player casting, takes the camera along a camera path placed where it is: the
-/// camera glides onto the path's start while the atom waits, then follows the path
+/// camera glides onto the path's start while the atom waits, then follows the path at the time of the atom's animation
+/// frame
 class AnimWithCameraCreator final: public Creator
 {
 public:
@@ -151,19 +154,57 @@ public:
 	{
 		ReadCreatorProperties(object, *this);
 		kind = Kind::Point;
+		numFrames = openblack::camera_path::k_AnimationFrames;
 	}
 
 	void InitAtom(Effect& effect, Atom& atom) const override
 	{
-		if (!effect.IsMyInterfaceCasting() || cameraFile.empty() || cameraFile == "NULL_STRING")
+		// One play of the animation is a thousand frames over its cycle time, shortened by the speed-up. The frames start
+		// to move on once the pause has gone by. Every computer moves them on alike.
+		const auto cycle = effect.Services().world.AnimationCycleMilliseconds(animFile);
+		if (!cycle.has_value() || *cycle <= 0)
 		{
 			return;
 		}
-		const auto position = effect.GlobalPosition(atom);
-		const glm::mat4 placement =
-		    glm::translate(position) * glm::mat4(atom.rotation) * glm::scale(glm::vec3(atom.baseScale * atom.ruleScale));
-		effect.Services().world.FollowCameraPath(cameraFile, animFile, placement, pauseBeforePlay, speedUp,
-		                                         effect.GetSink() != nullptr ? effect.GetSink()->Spell() : entt::null);
+		atom.frame = 0.0f;
+		atom.frameRate = openblack::camera_path::FrameRate(*cycle, speedUp);
+		atom.playAnim = false;
+		// Only the camera of the player who casts follows the path
+		if (effect.IsMyInterfaceCasting() && !cameraFile.empty() && cameraFile != "NULL_STRING")
+		{
+			atom.cameraPath = std::make_shared<CameraPathLink>(
+			    CameraPathLink {.cycleMilliseconds = *cycle, .frames = numFrames, .loop = loopAnim});
+		}
+	}
+
+	void AfterStep(Effect& effect, Atom& atom) const override
+	{
+		const bool pauseOver = effect.AtomAge(atom) > pauseBeforePlay;
+		if (auto& link = atom.cameraPath; link != nullptr)
+		{
+			link->previousFrame = atom.previous.frame;
+			link->currentFrame = atom.current.frame;
+			link->shown = atom.visible && (atom.steps >= 2 || atom.drawOnFirstUpdate);
+			if (!link->started)
+			{
+				// The first step takes the camera onto the path, placed where the atom is. No rule moves, turns or scales
+				// the atom, so this place stays right.
+				link->started = true;
+				const auto position = effect.GlobalPosition(atom);
+				const glm::mat4 placement = glm::translate(position) * glm::mat4(atom.rotation) *
+				                            glm::scale(glm::vec3(atom.baseScale * atom.ruleScale));
+				effect.Services().world.FollowCameraPath(cameraFile, placement, pauseBeforePlay, link);
+			}
+			else if (pauseOver)
+			{
+				link->playing = true;
+			}
+		}
+		// The frame moves on from the next step
+		if (pauseOver)
+		{
+			atom.playAnim = true;
+		}
 	}
 
 	std::string cameraFile;

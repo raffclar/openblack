@@ -580,3 +580,25 @@ TEST(ParticleDraw, AModelThatFacesTheCameraBeatsWithTheScrolls)
 	creator.scriptHighlightPulse = false;
 	EXPECT_EQ(creator.PulsedAlpha(180, 0.4f), 180);
 }
+
+TEST(ParticleDraw, TheForceFieldIsDrawnAfterEverythingSorted)
+{
+	auto frame = MakeFrame();
+	const glm::vec3 camera(0.0f);
+	// A sprite nearer than the sheet's middle, then the force field
+	AddSprite(frame, {0.0f, 0.0f, 5.0f}, 0);
+	AddGroup(frame, DrawPath::Sorted, glm::vec3(0.0f), 0);
+	const std::vector<particles::LightSheet::Vertex> vertices(3);
+	const std::vector<uint32_t> triangles {0, 1, 2};
+	AddLightSheet(frame, vertices, triangles, {0.0f, 0.0f, 100.0f}, particles::LightSheet::Look::ForceField);
+
+	std::vector<Command> commands;
+	std::vector<uint32_t> order;
+	Order(frame, camera, std::nullopt, commands, order);
+	ASSERT_EQ(commands.size(), 2u);
+	EXPECT_EQ(commands[0].kind, ItemKind::Sprite);
+	EXPECT_EQ(commands[1].kind, ItemKind::Surface);
+	// The nearest place of all, so the view draws it last
+	EXPECT_EQ(commands[1].depth, 0u);
+	EXPECT_GT(commands[0].depth, commands[1].depth);
+}

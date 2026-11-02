@@ -579,3 +579,65 @@ TEST_F(SoundTags, ATurnDoesTheTagsAndThePointSoundsInOneListTheNewestFirst)
 	_tags.ProcessTurn(glm::vec3(0.0f));
 	EXPECT_EQ(_tags.TurnOrder(), (std::vector<entt::entity> {lantern, entt::null, first}));
 }
+
+TEST_F(SoundTags, AKeptPointSoundLoopsFromTheNextTurn)
+{
+	const auto entitiesBefore = Locator::entitiesRegistry::value().Underlying().storage<entt::entity>().size();
+	const auto kept = _tags.KeepPointSound(k_Sound, {10.0f, 0.0f, 0.0f});
+	EXPECT_NE(kept, 0u);
+	// It starts on the next turn, as a tag of an object does
+	EXPECT_TRUE(Audio().emitters.empty());
+	_tags.ProcessTurn(glm::vec3(0.0f));
+	ASSERT_EQ(Audio().emitters.size(), 1u);
+	const auto& played = Audio().emitters.begin()->second;
+	EXPECT_TRUE(played.played);
+	EXPECT_EQ(played.playType, audio::PlayType::Repeat);
+	EXPECT_TRUE(played.ownSound);
+	EXPECT_EQ(played.follows, audio::Follows::Place);
+	EXPECT_EQ(played.position, glm::vec3(10.0f, 0.0f, 0.0f));
+	// While it plays, no turn starts it again
+	_tags.ProcessTurn(glm::vec3(0.0f));
+	EXPECT_EQ(Audio().emitters.size(), 1u);
+	// Only this computer hears it: the world gets no entity for it
+	EXPECT_EQ(Locator::entitiesRegistry::value().Underlying().storage<entt::entity>().size(), entitiesBefore);
+}
+
+TEST_F(SoundTags, AKeptPointSoundStartsAgainWhenTheCameraComesBack)
+{
+	static_cast<void>(_tags.KeepPointSound(k_Sound, {10.0f, 0.0f, 0.0f}));
+	_tags.ProcessTurn(glm::vec3(10.0f + k_Reach + 1.0f, 0.0f, 0.0f));
+	EXPECT_TRUE(Audio().emitters.empty());
+	_tags.ProcessTurn(glm::vec3(0.0f));
+	ASSERT_EQ(Audio().emitters.size(), 1u);
+
+	// The audio stopped it when the camera went too far: it stays in the list and starts again
+	Audio().emitters.begin()->second.stopped = true;
+	_tags.ProcessTurn(glm::vec3(0.0f));
+	ASSERT_EQ(Audio().emitters.size(), 1u);
+	EXPECT_FALSE(Audio().emitters.begin()->second.stopped);
+	EXPECT_EQ(_tags.PointSounds().size(), 1u);
+}
+
+TEST_F(SoundTags, AnEndedKeptPointSoundFinishesItsLoop)
+{
+	const auto kept = _tags.KeepPointSound(k_Sound, {10.0f, 0.0f, 0.0f});
+	const auto other = _tags.KeepPointSound(k_Sound, {20.0f, 0.0f, 0.0f});
+	EXPECT_NE(kept, other);
+	_tags.ProcessTurn(glm::vec3(0.0f));
+	ASSERT_EQ(Audio().emitters.size(), 2u);
+
+	_tags.EndPointSound(kept);
+	ASSERT_EQ(_tags.PointSounds().size(), 1u);
+	EXPECT_EQ(_tags.PointSounds()[0].kept, other);
+	int released = 0;
+	for (const auto& [entity, emitter] : Audio().emitters)
+	{
+		released += emitter.released ? 1 : 0;
+		EXPECT_EQ(emitter.released, emitter.position.x == 10.0f);
+	}
+	EXPECT_EQ(released, 1);
+	// An end of a sound that is not kept changes nothing
+	_tags.EndPointSound(0);
+	_tags.EndPointSound(kept);
+	EXPECT_EQ(_tags.PointSounds().size(), 1u);
+}

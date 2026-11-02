@@ -43,6 +43,10 @@ namespace openblack::ecs::fixed_kinds
 /// worship site with its altar and icons, the game asks how much of it is built and how much life it has.
 [[nodiscard]] bool IsAlwaysWhole(const Registry& registry, entt::entity thing);
 
+/// Whether the game sets the want of repair of a thing by its lost life alone: each thing with the mark that is not a
+/// building of the abodes, a miracle dispenser or a field. These others also ask their town.
+[[nodiscard]] bool WantsRepairByLifeAlone(const Registry& registry, entt::entity thing);
+
 /// Whether the first of the things that stay put in a cell has the mark. The game does not look at the other things of
 /// the cell. A cell with no thing that stays put has no mark.
 [[nodiscard]] bool CellIsFixed(std::span<const entt::entity> fixedInCell, const std::function<bool(entt::entity)>& isFixedKind);

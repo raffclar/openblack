@@ -247,3 +247,27 @@ TEST(ScriptWeather, AWeatherThingGivesTheSpeedOfItsStorm)
 	EXPECT_EQ(openblack::ecs::script_weather::ThingSpeed(&storm), 2.5f);
 	EXPECT_EQ(openblack::ecs::script_weather::ThingSpeed(nullptr), 0.0f);
 }
+
+TEST(ScriptWeather, AStormEndsWhenItsEdgeIsInTheCircle)
+{
+	// The Land 3 command: a circle of 220 round the home town
+	const glm::vec3 town {3108.09f, 0.0f, 3116.82f};
+	// The edge of a storm of outer radius 100 is 10 into the circle
+	EXPECT_TRUE(weather::InKillArea({town.x + 310.0f, 50.0f, town.z}, 100.0f, town, 220.0f));
+	// The edge touches the circle but is not in it
+	EXPECT_FALSE(weather::InKillArea({town.x, 0.0f, town.z - 320.0f}, 100.0f, town, 220.0f));
+	// Only the distance across the land counts, not the height
+	EXPECT_TRUE(weather::InKillArea({town.x + 180.0f, 900.0f, town.z + 240.0f}, 81.0f, town, 220.0f));
+	EXPECT_FALSE(weather::InKillArea({town.x + 180.0f, 900.0f, town.z + 240.0f}, 80.0f, town, 220.0f));
+}
+
+TEST(ScriptWeather, AStormEndsWhereTheLastWeatherTurnPutIt)
+{
+	// After the weather turn the wind moves the storm a little. The command looks at the place of the weather turn.
+	Storm storm {};
+	storm.outerRadius = 50.0f;
+	storm.currentPosition = {0.0f, 0.0f, 269.9f};
+	storm.position = weather::Drift(storm.currentPosition, {.x = 0, .z = 30});
+	EXPECT_TRUE(weather::InKillArea(storm.currentPosition, storm.outerRadius, {}, 220.0f));
+	EXPECT_FALSE(weather::InKillArea(storm.position, storm.outerRadius, {}, 220.0f));
+}

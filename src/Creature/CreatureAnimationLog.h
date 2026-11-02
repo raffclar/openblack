@@ -39,8 +39,6 @@ enum class Layer : uint8_t
 	Face,
 	/// A gesture on top of the body, such as a nod
 	Gesture,
-	/// The wobble that a blow sends through the body
-	Wobble,
 };
 
 [[nodiscard]] std::string_view Name(Layer layer);
@@ -117,8 +115,8 @@ enum class Problem : uint8_t
 
 [[nodiscard]] std::string_view Name(Problem problem);
 
-/// What the creature showed in place of a clip of this layer that its species does not have. A missing face, gesture
-/// or wobble adds nothing, so the body does not change.
+/// What the creature showed in place of a clip of this layer that its species does not have. A missing face or gesture
+/// adds nothing, so the body does not change.
 [[nodiscard]] std::string_view MissingDetail(Layer layer);
 
 struct ProblemEntry
