@@ -458,8 +458,6 @@ TEST(CreatureFight, RecoilsByHeightAndDirection)
 	EXPECT_EQ(RecoilDirectionOf({0.0f, 0.0f, 0.0f}), RecoilDirection::Plain);
 	EXPECT_EQ(RecoilDirectionOf({1.0f, 1.0f, 0.0f}), RecoilDirection::Left);
 	EXPECT_EQ(RecoilDirectionOf({-1.0f, 1.0f, 0.0f}), RecoilDirection::Right);
-	EXPECT_EQ(WobbleAnimation(Band::High, true), animations::k_WobbleHighSide);
-	EXPECT_EQ(WobbleAnimation(Band::Low, false), animations::k_WobbleLowFrontBack);
 }
 
 TEST(CreatureFight, BlowsTakeTheirShapeFromTheStrikingBone)

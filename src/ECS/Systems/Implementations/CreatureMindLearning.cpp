@@ -4895,6 +4895,7 @@ bool CreatureMindSystem::ContinueKeptPlanWith(entt::entity creature, CreatureMin
 	                                   .actionObject = actsOnGift ? gift : static_cast<entt::entity>(*kept->object),
 	                                   .instrument = actsOnGift ? toEntity(kept->instrument) : std::optional(gift),
 	                                   .ordered = true,
+	                                   .fightBodyEndsAgain = true,
 	                               });
 }
 
@@ -5279,7 +5280,8 @@ void CreatureMindSystem::WatchVillagerSkill(entt::entity creature, CreatureMindS
 	ForceActivity(creature, {.desire = creature_desires::Desire::Curiosity,
 	                         .action = k_FollowToWatchAction,
 	                         .actionObject = villager,
-	                         .forced = false});
+	                         .forced = false,
+	                         .fightBodyEndsAgain = true});
 }
 
 void CreatureMindSystem::ShowLearningMeter(entt::entity creature, CreatureMindState& mind, std::optional<float> share)
