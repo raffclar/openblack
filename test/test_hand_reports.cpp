@@ -33,6 +33,7 @@
 #include "ECS/Components/CreatureBody.h"
 #include "ECS/Components/GodHand.h"
 #include "ECS/Components/Hand.h"
+#include "ECS/Components/HandCreaturePress.h"
 #include "ECS/Components/HandGrab.h"
 #include "ECS/Components/HandLockedCreature.h"
 #include "ECS/Components/HandStillness.h"
@@ -694,6 +695,63 @@ TEST_F(ReportedHands, TheHandOfEachGodHoldsItsOwnCreature)
 	EXPECT_TRUE(creatures.IsLocked(own));
 	creatures.DoUnlock(PlayerNames::PLAYER_TWO, own);
 	EXPECT_FALSE(creatures.IsLocked(own));
+	Locator::handSystem::reset();
+	if (log != nullptr)
+	{
+		spdlog::drop("game");
+	}
+}
+
+// With the leash held loose, a press on the own creature waits for a tap. Only a press that lasts longer than the wait
+// sends the hold, and the time of the press is no longer than the game turns allow.
+TEST_F(ReportedHands, APressThatWaitsForATapHoldsOnlyAfterTheWait)
+{
+	auto& registry = Locator::entitiesRegistry::value();
+	Locator::handSystem::reset(&_hands, [](ecs::systems::HandSystemInterface* /*unowned*/) {});
+	const auto log = spdlog::get("game") != nullptr ? nullptr : spdlog::null_logger_mt("game");
+	const auto creature = registry.Create();
+	registry.Assign<ecs::components::Creature>(creature, ecs::components::Creature {.owner = PlayerNames::PLAYER_ONE});
+	ecs::systems::CreatureHandSystem creatures;
+	creatures.WaitForTap(creature, 1000, 10);
+	// The clock is far on, but only one turn went by
+	creatures.WaitFrame(5000, 10);
+	EXPECT_TRUE(registry.AllOf<ecs::components::HandCreaturePress>(_hand));
+	EXPECT_FALSE(creatures.GetLockedCreature(PlayerNames::PLAYER_ONE).has_value());
+	// 225 ms is not longer than the wait
+	creatures.WaitFrame(1225, 12);
+	EXPECT_FALSE(creatures.GetCreature().has_value());
+	EXPECT_FALSE(creatures.GetLockedCreature(PlayerNames::PLAYER_ONE).has_value());
+	// 226 ms is longer: the hand holds the creature that it pressed
+	creatures.WaitFrame(1226, 12);
+	EXPECT_EQ(creatures.GetCreature(), creature);
+	EXPECT_EQ(creatures.GetLockedCreature(PlayerNames::PLAYER_ONE), creature);
+	EXPECT_FALSE(registry.AllOf<ecs::components::HandCreaturePress>(_hand));
+	// The press does not wait any more, so its release is not a tap
+	EXPECT_FALSE(creatures.ReleaseWait().has_value());
+	Locator::handSystem::reset();
+	if (log != nullptr)
+	{
+		spdlog::drop("game");
+	}
+}
+
+// A press that waits for a tap and is let go before the wait ends is a tap on its creature, and it holds nothing
+TEST_F(ReportedHands, APressLetGoWhileItWaitsIsATap)
+{
+	auto& registry = Locator::entitiesRegistry::value();
+	Locator::handSystem::reset(&_hands, [](ecs::systems::HandSystemInterface* /*unowned*/) {});
+	const auto log = spdlog::get("game") != nullptr ? nullptr : spdlog::null_logger_mt("game");
+	const auto creature = registry.Create();
+	registry.Assign<ecs::components::Creature>(creature, ecs::components::Creature {.owner = PlayerNames::PLAYER_ONE});
+	ecs::systems::CreatureHandSystem creatures;
+	EXPECT_FALSE(creatures.ReleaseWait().has_value());
+	creatures.WaitForTap(creature, 1000, 10);
+	creatures.WaitFrame(1100, 10);
+	EXPECT_EQ(creatures.ReleaseWait(), creature);
+	// Later frames hold nothing
+	creatures.WaitFrame(2000, 30);
+	EXPECT_FALSE(creatures.GetCreature().has_value());
+	EXPECT_FALSE(creatures.GetLockedCreature(PlayerNames::PLAYER_ONE).has_value());
 	Locator::handSystem::reset();
 	if (log != nullptr)
 	{
