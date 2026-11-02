@@ -14840,6 +14840,7 @@ std::vector<Scenario> Build()
 	AddBirdScenarios(all);
 	AddTeleportScenarios(all);
 	AddVortexScenarios(all);
+	AddLandsFourFiveScrollScenarios(all);
 	AddLand4StoneScenarios(all);
 	AddLand4SlegScenarios(all);
 	AddRewardScenarios(all);
