@@ -2329,3 +2329,7 @@ openblack_setup_and_add_test(
 )
   target_compile_options(test_reactions PRIVATE /bigobj)
 openblack_setup_and_add_test(test_football_rules test_football_rules.cpp)
+openblack_setup_and_add_test(test_data_report test_data_report.cpp)
+target_link_libraries(test_data_report PRIVATE datareport)
+openblack_setup_and_add_test(test_morph_file_write test_morph_file_write.cpp)
+target_link_libraries(test_morph_file_write PRIVATE morph)
