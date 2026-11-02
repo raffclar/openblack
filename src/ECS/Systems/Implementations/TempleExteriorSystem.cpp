@@ -386,24 +386,36 @@ void TempleExteriorSystem::FinishMorphs(MadeBlends& made)
 		std::mutex& mutex;
 		std::condition_variable& changed;
 	};
+	const auto settings =
+	    fresh.empty() ? graphics::L3DMesh::LoadSettings {} : graphics::L3DMesh::SettingsNow(graphics::ConfiguredUploads());
+	const auto prepareShape = [&made, &shapes, &shapeMeshes, &settings](size_t index, size_t) {
+		shapeMeshes[index] = graphics::L3DMesh::Prepare(made.shapes[shapes[index]].second, settings);
+	};
+	const auto copyForGroup = [&](size_t index, size_t) {
+		const MarkReady mark {.ready = ready, .index = index, .mutex = readyMutex, .changed = readyChanged};
+		prepared[index].mesh = shapeMeshes[shapeOf[index]];
+		prepared[index].copy = std::make_shared<l3d::L3DFile>(made.shapes[groups[fresh[index]].shape].second);
+	};
+	// One shape gives the threads no work to share, so this thread does it and does not wait for threads to start
+	std::future<void> jobs;
+	if (shapes.size() == 1)
+	{
+		prepareShape(0, 0);
+		for (size_t index = 0; index < fresh.size(); ++index)
+		{
+			copyForGroup(index, 0);
+		}
+	}
 	// The threads take the copies in the order of the groups. A thread of its own gives them the jobs, so this thread can
 	// make the device objects of each mesh when it is ready.
-	std::future<void> jobs;
-	if (!fresh.empty())
+	else if (!shapes.empty())
 	{
-		const auto settings = graphics::L3DMesh::SettingsNow(graphics::ConfiguredUploads());
 		auto& workers = Workers();
-		jobs = std::async(std::launch::async, [&, settings]() {
+		jobs = std::async(std::launch::async, [&]() {
 			try
 			{
-				workers.ForEach(shapes.size(), [&](size_t index, size_t) {
-					shapeMeshes[index] = graphics::L3DMesh::Prepare(made.shapes[shapes[index]].second, settings);
-				});
-				workers.ForEach(fresh.size(), [&](size_t index, size_t) {
-					const MarkReady mark {.ready = ready, .index = index, .mutex = readyMutex, .changed = readyChanged};
-					prepared[index].mesh = shapeMeshes[shapeOf[index]];
-					prepared[index].copy = std::make_shared<l3d::L3DFile>(made.shapes[groups[fresh[index]].shape].second);
-				});
+				workers.ForEach(shapes.size(), prepareShape);
+				workers.ForEach(fresh.size(), copyForGroup);
 			}
 			catch (...)
 			{
