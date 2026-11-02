@@ -1772,7 +1772,15 @@ void Runner::PlaceObjects(const Scenario& scenario, glm::vec2 middle)
 			    }
 			    else
 			    {
-				    return ecs::archetypes::FeatureArchetype::Create(position, type, yaw, object.scale);
+				    const auto feature = ecs::archetypes::FeatureArchetype::Create(position, type, yaw, object.scale);
+				    // A feature that is only part built has a site of the scenario's town, which builds it up
+				    if (object.built.has_value())
+				    {
+					    ecs::construction::SetBuilt(feature, *object.built);
+					    static_cast<void>(ecs::construction::OpenSiteForTown(
+					        feature, Locator::entitiesRegistry::value().Context().towns.at(ScenarioTown(middle))));
+				    }
+				    return feature;
 			    }
 		    },
 		    object.type));

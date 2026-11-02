@@ -33,6 +33,8 @@
 #include "ECS/Components/CarriedByTornado.h"
 #include "ECS/Components/DetailMeshes.h"
 #include "ECS/Components/Disciple.h"
+#include "ECS/Components/Field.h"
+#include "ECS/Components/FishFarm.h"
 #include "ECS/Components/Fixed.h"
 #include "ECS/Components/HandGrab.h"
 #include "ECS/Components/LivingAction.h"
@@ -853,7 +855,8 @@ glm::vec2 villager_home::DoorPosition(entt::entity abode)
 	auto& registry = WorldRegistry();
 	const auto& transform = registry.Get<const Transform>(abode);
 	const auto* info = registry.AllOf<Abode>(abode) ? world_objects::AbodeInfoOf(abode) : nullptr;
-	const auto door = info != nullptr ? abode_door::DoorOf(info->abodeType) : abode_door::Door::Model;
+	const auto door = abode_door::DoorOfThing(info != nullptr ? std::optional(info->abodeType) : std::nullopt,
+	                                          registry.AnyOf<Field, FishFarm>(abode));
 	if (door == abode_door::Door::VillageCentre)
 	{
 		return abode_door::VillageCentreDoor(transform.position, transform.rotation, transform.scale);
