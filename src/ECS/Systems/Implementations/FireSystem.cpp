@@ -67,6 +67,7 @@
 #include "ECS/Components/WorshipSite.h"
 #include "ECS/CreatureScars.h"
 #include "ECS/DrawnPlace.h"
+#include "ECS/FixedKinds.h"
 #include "ECS/GamePhysicsHooksWorld.h"
 #include "ECS/GamePlayers.h"
 #include "ECS/HandPlayer.h"
@@ -74,6 +75,8 @@
 #include "ECS/PosedModel.h"
 #include "ECS/Reflection/BinaryArchive.h"
 #include "ECS/Registry.h"
+#include "ECS/Systems/FieldSystemInterface.h"
+#include "ECS/Systems/Implementations/ObjectMeasures.h"
 #include "ECS/Systems/InfluenceSystemInterface.h"
 #include "ECS/Systems/MagicSystemInterface.h"
 #include "ECS/Systems/PlayerSystemInterface.h"
@@ -115,7 +118,7 @@ constexpr entt::hashed_string k_PuffSheetAlpha = entt::hashed_string("raw/S_Spri
 constexpr std::string_view k_LightMapFile = "Spells/LightMaps/S_LMFireBall.raw";
 constexpr int k_LightMapPitch = 6;
 constexpr int k_LightMapChannels = 3;
-/// A burning building this wide or wider lights the land
+/// A burning thing with the fixed mark lights the land when its radius across the ground is more than this
 constexpr float k_LightingRadius = 2.0f;
 /// The light lies this far across the land from what burns
 constexpr glm::vec3 k_LightMapOffset {10.0f, 0.0f, 10.0f};
@@ -272,14 +275,20 @@ bool TakesBurn(entt::entity object, float burn)
 	return true;
 }
 
-/// What stands fixed over the land's cells, as the game builds its buildings, features, flowers, forests, rocks and the
-/// like: the objects whose fire may light the land. A field is one too, but its fire never lights the land.
+/// Whether an object's fire lights the land: the object has the fixed mark of the land and its radius across the ground
+/// is more than the least radius
 bool LightsLandWhenBurning(entt::entity object)
 {
 	const auto& registry = Entities();
-	return !registry.AllOf<Field>(object) &&
-	       registry.AnyOf<Abode, StoragePit, SpellDispenser, Feature, AnimatedStatic, Flowers, BigForest, MobileStatic,
-	                      TeleportStone, TempleExterior, WorshipSite, FishFarm>(object);
+	return ecs::fixed_kinds::IsFixedKind(registry, object) && object_measures::TwoDRadius(registry, object) > k_LightingRadius;
+}
+
+/// Whether the object is not drawn now, so that its fire is not drawn either. A field is drawn only while its crop
+/// shows.
+bool FireIsHidden(entt::entity object)
+{
+	const auto* field = Entities().TryGet<const Field>(object);
+	return field != nullptr && Locator::fieldSystem::has_value() && !Locator::fieldSystem::value().GetLook(*field).has_value();
 }
 
 /// What an object's flames are sized for
@@ -561,7 +570,7 @@ Fire* FireSystem::FindOrCreate(entt::entity object, std::optional<PlayerNames> p
 		look.graphic.kinds.followsLand = registry.AllOf<MorphWithTerrain>(object);
 		look.graphic.maxFlames = fire::graphic::MaxFlames(tree, material->radius, material->height);
 		look.graphic.localScale = fire::graphic::LocalFlameScale(FlameShapeOf(object), material->height);
-		look.lightsLand = LightsLandWhenBurning(object) && material->radius > k_LightingRadius;
+		look.lightsLand = LightsLandWhenBurning(object);
 		registry.Assign<FireLook>(object, std::move(look));
 	}
 	// What the living thought of it before it burned is forgotten while it burns; a magic tree stops drawing its
@@ -1787,6 +1796,10 @@ void FireSystem::CollectDrawFrame(float turnFraction, particles::draw::Frame& fr
 	registry.Each<const Fire, const FireLook, const Transform>([&](entt::entity object, const Fire& fire, const FireLook& look,
 	                                                               const Transform& transform) {
 		walk.Clear();
+		if (FireIsHidden(object))
+		{
+			return;
+		}
 		const auto& graphic = look.graphic;
 		const float ground = graphic.kinds.followsLand ? LandHeight({transform.position.x, transform.position.z}) : 0.0f;
 		const auto add = [&](const particles::Creator& creator, const glm::vec3& position, float scale, float alpha, int cell,

@@ -13943,6 +13943,30 @@ void AddWorkshopScenarios(std::vector<Scenario>& all)
 	});
 
 	all.push_back({
+	    .id = "objects.scaffold_clears_ground_fixed_rock",
+	    .name = "A scaffold that clears its ground removes a rock and pushes a ball",
+	    .facet = Facet::Objects,
+	    .description = "A loose scaffold that a script marked to destroy the things in its way, away from every town. A "
+	                   "rock stands 1.5 m east of it and a ball 1.5 m north of it. After one second the scaffold clears "
+	                   "its ground, as when the hand lets it go.",
+	    .expected = "The rock has the fixed mark of the land, so the scaffold does not push it: the rock goes from the "
+	                "game at once. The ball has no mark, so it jumps out of the way and stays in the game. The game log "
+	                "tells of the removal of the rock and of the push of the ball.",
+	    .environment = {.dispenserGrid = false},
+	    .framing = {.shot = Shot::Overview,
+	                .include = {k_FoundingScaffold - glm::vec2 {15.0f}, k_FoundingScaffold + glm::vec2 {15.0f}}},
+	    .objects = {{.type = ScaffoldInfo::Normal, .offset = k_FoundingScaffold, .scale = 0.7f, .clearsGround = true},
+	                {.type = MobileStaticInfo::Rock, .offset = k_FoundingScaffold + glm::vec2 {1.5f, 0.0f}},
+	                {.type = MobileObjectInfo::Ball, .offset = k_FoundingScaffold + glm::vec2 {0.0f, 1.5f}}},
+	    .commands = {{.kind = Kind::ScaffoldClearsGround, .delaySeconds = 1.0f, .object = 0}},
+	    .checks = {{.label = "the rock goes; the scaffold and the ball stay in the game",
+	                .quantity = checks::Quantity::ObjectsAlive,
+	                .afterTurns = 50,
+	                .atLeast = 2,
+	                .atMost = 2}},
+	});
+
+	all.push_back({
 	    .id = "objects.scaffold_push_on_high_land",
 	    .name = "A thing that a clearing scaffold pushes starts under high land",
 	    .facet = Facet::Objects,

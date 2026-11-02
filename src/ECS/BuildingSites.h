@@ -44,6 +44,9 @@ namespace openblack::ecs::construction
 /// site, the temple), or a building that its town mends while it is below its full life
 [[nodiscard]] bool IsBeingBuilt(entt::entity thing);
 
+/// Whether a thing stands whole, so that no builder works at it: built, and its life full. The game always counts a rock,
+/// a dead tree and the other such things with the fixed mark as whole.
+[[nodiscard]] bool IsBuiltAndRepaired(entt::entity building);
 /// Whether the town has a site at the building and the building still wants building or mending
 [[nodiscard]] bool IsSiteValid(entt::entity town, entt::entity building);
 

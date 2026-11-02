@@ -15,15 +15,19 @@
 #include <gtest/gtest.h>
 
 #include "ECS/Components/Abode.h"
+#include "ECS/Components/AnimatedStatic.h"
+#include "ECS/Components/BuildingDamage.h"
 #include "ECS/Components/DeadTree.h"
 #include "ECS/Components/Feature.h"
 #include "ECS/Components/Field.h"
 #include "ECS/Components/FishFarm.h"
+#include "ECS/Components/Flowers.h"
 #include "ECS/Components/Forest.h"
 #include "ECS/Components/Mobile.h"
 #include "ECS/Components/Pot.h"
 #include "ECS/Components/SpellIcon.h"
 #include "ECS/Components/StreetLantern.h"
+#include "ECS/Components/TeleportStone.h"
 #include "ECS/Components/Temple.h"
 #include "ECS/Components/Tree.h"
 #include "ECS/Components/Villager.h"
@@ -31,6 +35,7 @@
 #include "ECS/Components/WorshipSite.h"
 #include "ECS/FixedKinds.h"
 #include "ECS/Registry.h"
+#include "ECS/TownDesire.h"
 
 using namespace openblack;
 using namespace openblack::ecs;
@@ -107,4 +112,46 @@ TEST(FixedKinds, AnEmptyCellHasNoMark)
 {
 	const MarkedSet marks {.marked = {static_cast<entt::entity>(1)}};
 	EXPECT_FALSE(fixed_kinds::CellIsFixed(std::vector<entt::entity> {}, marks));
+}
+
+TEST(FixedKinds, RocksDeadTreesAndForestsAreAlwaysWhole)
+{
+	Registry registry;
+	EXPECT_TRUE(fixed_kinds::IsAlwaysWhole(registry, Make<MobileStatic>(registry)));
+	EXPECT_TRUE(fixed_kinds::IsAlwaysWhole(registry, Make<DeadTree>(registry)));
+	EXPECT_TRUE(fixed_kinds::IsAlwaysWhole(registry, Make<BuildingPiece>(registry)));
+	EXPECT_TRUE(fixed_kinds::IsAlwaysWhole(registry, Make<BigForest>(registry)));
+	EXPECT_TRUE(fixed_kinds::IsAlwaysWhole(registry, Make<FishFarm>(registry)));
+	EXPECT_TRUE(fixed_kinds::IsAlwaysWhole(registry, Make<Vortex>(registry)));
+	EXPECT_TRUE(fixed_kinds::IsAlwaysWhole(registry, Make<TeleportStone>(registry)));
+}
+
+TEST(FixedKinds, BuildingsFeaturesAndWorshipSitesAreNotAlwaysWhole)
+{
+	Registry registry;
+	EXPECT_FALSE(fixed_kinds::IsAlwaysWhole(registry, Make<Abode>(registry)));
+	EXPECT_FALSE(fixed_kinds::IsAlwaysWhole(registry, Make<Field>(registry)));
+	EXPECT_FALSE(fixed_kinds::IsAlwaysWhole(registry, Make<Feature>(registry)));
+	EXPECT_FALSE(fixed_kinds::IsAlwaysWhole(registry, Make<AnimatedStatic>(registry)));
+	EXPECT_FALSE(fixed_kinds::IsAlwaysWhole(registry, Make<Flowers>(registry)));
+	EXPECT_FALSE(fixed_kinds::IsAlwaysWhole(registry, Make<WorshipSite>(registry)));
+	EXPECT_FALSE(fixed_kinds::IsAlwaysWhole(registry, Make<WorshipAltar>(registry)));
+	EXPECT_FALSE(fixed_kinds::IsAlwaysWhole(registry, Make<WorshipIcon>(registry)));
+	EXPECT_FALSE(fixed_kinds::IsAlwaysWhole(registry, Make<Temple>(registry)));
+	// A thing with no mark is not one of them
+	EXPECT_FALSE(fixed_kinds::IsAlwaysWhole(registry, Make<Tree>(registry)));
+}
+
+TEST(FixedKinds, AFixedThingWantsRepairByItsLostLife)
+{
+	// Full life: no wish
+	EXPECT_EQ(town_desire::FixedDesireToBeRepaired(1.0f, 0.8f), 0.0f);
+	// Half life: (0.5 x 0.5 + 0.5) x 0.8
+	EXPECT_EQ(town_desire::FixedDesireToBeRepaired(0.5f, 0.8f), 0.6f);
+	// No life: (1 x 0.5 + 0.5) x 0.8
+	EXPECT_EQ(town_desire::FixedDesireToBeRepaired(0.0f, 0.8f), 0.8f);
+	// At most 1
+	EXPECT_EQ(town_desire::FixedDesireToBeRepaired(0.0f, 3.0f), 1.0f);
+	// A kind that wants no repair
+	EXPECT_EQ(town_desire::FixedDesireToBeRepaired(0.2f, 0.0f), 0.0f);
 }

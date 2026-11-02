@@ -272,12 +272,15 @@ struct ClearingFacts
 	bool creature {false};
 	/// A hand holds the thing, or a script holds it still
 	bool held {false};
+	/// The thing has the fixed mark of the land, as a building, a rock or a dead tree has
+	bool fixed {false};
 	/// The thing can become a physics object
 	bool canFly {false};
 };
 
-/// What the scaffold does to the thing. It pushes a thing that can fly and that nothing holds, and it removes the other
-/// things. It does not touch a creature (openblack's fix: the game removes the creature from the game).
+/// What the scaffold does to the thing. It pushes a thing that can fly, that has no fixed mark and that nothing holds,
+/// and it removes the other things. It does not touch a creature (openblack's fix: the game removes the creature from the
+/// game).
 [[nodiscard]] ClearingAction ClearingActionFor(const ClearingFacts& facts);
 
 } // namespace openblack::ecs::workshop
