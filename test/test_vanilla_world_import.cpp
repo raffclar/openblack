@@ -29,6 +29,10 @@
 #include <gtest/gtest.h>
 
 #include "3D/MapCoords.h"
+#include "Animals/AnimalMove.h"
+#include "Animals/BirdRules.h"
+#include "Animals/GrazerRules.h"
+#include "ECS/Systems/Implementations/AnimalSystemDetail.h"
 #include "ECS/VanillaFootpathImport.h"
 #include "ECS/VanillaParticleImport.h"
 #include "ECS/VanillaSceneryImport.h"
@@ -1015,6 +1019,15 @@ TEST(VanillaWorldImport, ReadsTheSiteOfATempleWithItsPiles)
 	EXPECT_EQ(site.piles, std::vector<uint32_t>({4, 0, 5, 0, 0, 6}));
 }
 
+// The site of a temple keeps only the piles of the file: a place with no pile in the file has no pile after the load
+TEST(VanillaWorldImport, TheSiteOfATempleKeepsOnlyThePilesOfTheFile)
+{
+	EXPECT_EQ(world_import::SitePileAfterLoad(0, false), world_import::SitePileLoad::Remove);
+	EXPECT_EQ(world_import::SitePileAfterLoad(0, true), world_import::SitePileLoad::Remove);
+	EXPECT_EQ(world_import::SitePileAfterLoad(4, true), world_import::SitePileLoad::TakeValues);
+	EXPECT_EQ(world_import::SitePileAfterLoad(4, false), world_import::SitePileLoad::Keep);
+}
+
 TEST(VanillaWorldImport, ReadsThePlansAndTheBuildingSitesOfTheTowns)
 {
 	auto fake = GameAtTurn(100);
@@ -1923,6 +1936,72 @@ TEST(VanillaSceneryImport, SavedGamesOfLandOneKeepTheFollowValuesOfTheirFlocks)
 		GTEST_SKIP() << "Set OPENBLACK_VANILLA_SAVES to a copy of a Profiles folder of the game to check its saved games";
 	}
 	EXPECT_GT(birds, 0U);
+}
+
+// Each animal of the saves of Land 1 is a kind that openblack makes, and keeps its state, the state that it goes into
+// next and the state of its move: no animal decides again after the import. The follow states of each flock are
+// states of openblack too.
+TEST(VanillaSceneryImport, SavedGamesOfLandOneHaveNoAnimalThatDecidesAgain)
+{
+	using openblack::ecs::systems::animal_detail::AnimalStateOfGame;
+	size_t count = 0;
+	size_t birds = 0;
+	size_t grazers = 0;
+	size_t staged = 0;
+	size_t noMove = 0;
+	size_t wandering = 0;
+	const auto files = ForEachLandOneSave([&](const std::filesystem::path& path, const VanillaWorld& world) {
+		const auto imported = world_import::ReadAnimals(world);
+		for (const auto& animal : imported.animals)
+		{
+			++count;
+			const bool bird = animals::birds::IsLandBird(animal.row);
+			const bool grazer = animals::grazers::IsGrazer(animal.row);
+			birds += bird ? 1 : 0;
+			grazers += grazer ? 1 : 0;
+			EXPECT_TRUE(bird || grazer) << path << " " << animal.number << " kind " << static_cast<int>(animal.row);
+			EXPECT_TRUE(AnimalStateOfGame(animal.state).has_value())
+			    << path << " " << animal.number << " state " << static_cast<int>(animal.state);
+			EXPECT_TRUE(AnimalStateOfGame(animal.finalState).has_value())
+			    << path << " " << animal.number << " next state " << static_cast<int>(animal.finalState);
+			// A move state with no stage of openblack is only the move that a script has not set up yet, on an animal
+			// that a script holds, or the wander move of a grazer that wanders. openblack reads no stage in these two
+			// states: the next move that the animal sets up gives the stage, as the game sets the move state then.
+			constexpr uint8_t k_NoMove = 0;
+			constexpr uint8_t k_WanderMove = 5;
+			constexpr uint8_t k_InScript = 4;
+			constexpr uint8_t k_Wander = 32;
+			if (animals::MoveStageOfGame(animal.moveState).has_value())
+			{
+				++staged;
+			}
+			else if (animal.moveState == k_NoMove)
+			{
+				++noMove;
+				EXPECT_EQ(animal.state, k_InScript) << path << " " << animal.number;
+			}
+			else
+			{
+				++wandering;
+				EXPECT_EQ(animal.moveState, k_WanderMove) << path << " " << animal.number;
+				EXPECT_EQ(animal.state, k_Wander) << path << " " << animal.number;
+				EXPECT_TRUE(grazer) << path << " " << animal.number;
+			}
+		}
+		for (const auto& flock : imported.flocks)
+		{
+			EXPECT_TRUE(AnimalStateOfGame(flock.followState).has_value()) << path << " " << flock.number;
+			EXPECT_TRUE(flock.afterMove == 0 || AnimalStateOfGame(flock.afterMove).has_value()) << path << " " << flock.number;
+		}
+	});
+	if (!files.has_value())
+	{
+		GTEST_SKIP() << "Set OPENBLACK_VANILLA_SAVES to a copy of a Profiles folder of the game to check its saved games";
+	}
+	EXPECT_GT(count, 0U);
+	EXPECT_GT(staged, 0U);
+	std::cout << "Animals " << count << ", birds " << birds << ", grazers " << grazers << ", with a move stage " << staged
+	          << ", held by a script with no move " << noMove << ", wander move " << wandering << std::endl;
 }
 
 namespace
