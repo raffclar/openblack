@@ -128,8 +128,10 @@ void testbed_scenarios::AddWorshipSiteScenarios(std::vector<Scenario>& all)
 	                   "Two oaks stand on the last part of the footpath, near the gate of the site. After twenty "
 	                   "seconds, when the first people come near the gate, both oaks catch fire.",
 	    .expected = "A villager on its way that comes near the burning oaks goes round them and stays on its way to the "
-	                "site. Open point (worship/worshippers.md): some villagers stand still near the fire while it is in "
-	                "reach, because each new reaction comes before their walk takes its first step.",
+	                "site. As in the game, the villagers at the gate stand still while the fire is in reach: each new "
+	                "reaction to the fire comes before their walk takes its first step. When the oaks burn down, they "
+	                "go on to the site and worship. The town counts them on the way to the site again only when their "
+	                "walk round the fire ends at their arrival.",
 	    .environment = {.dispenserGrid = false},
 	    .framing = {.shot = Shot::Overview, .include = {glm::vec2(-30.0f, -55.0f), glm::vec2(5.0f, -25.0f)}},
 	    .objects = {{.type = TreeInfo::Oak, .offset = {-20.0f, -36.0f}}, {.type = TreeInfo::Oak, .offset = {-6.0f, -34.0f}}},

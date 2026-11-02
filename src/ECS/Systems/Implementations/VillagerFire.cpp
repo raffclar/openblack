@@ -846,6 +846,9 @@ bool villager_fire::ExitPutOutFire(LivingAction& action, VillagerStates next)
 		fires.RemoveFireman(state.fire, villager);
 	}
 	state.fire = entt::null;
+	// A fireman, or a villager with no fire, that leaves the fire is not on the town's list of the way to worship. It
+	// keeps its own mark of the way.
+	villager_worship::TownForgetsOnTheWay(villager);
 	ExitReaction(action, next);
 	return false;
 }
