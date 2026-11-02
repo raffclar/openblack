@@ -302,6 +302,8 @@ public:
 	/// A sample of the game's in-game bank played to the listener rather than at a place, as a fireball rushing past the
 	/// camera is heard. A sample that plays once does not start again while it plays.
 	virtual void PlayListenerSound(uint32_t /*inGameSample*/, bool /*playsOnce*/) {}
+	/// A sample of the game's in-game bank played one time at a place
+	virtual void PlayPointSound(uint32_t /*inGameSample*/, glm::vec3 /*point*/) {}
 	/// A particle starts a sound; the world keeps a weak hold on it to play it, keep a loop going and let it die away
 	virtual void StartSound(const Effect& /*effect*/, const std::shared_ptr<ParticleSoundLink>& /*sound*/) {}
 	/// Whether a point of the land is under water

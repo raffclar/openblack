@@ -374,7 +374,7 @@ TEST_F(ParticleSaveParts, ASaveFromBeforeTheSplitLoads)
 	// The synced part starts with its form, the next synced number and the values of the rules. The tables, the effects
 	// and the world follow, as in the one part of an old save.
 	reflection::BinaryWriter head(Context());
-	reflection::Save(head, uint32_t {3});
+	reflection::Save(head, uint32_t {4});
 	reflection::Save(head, ParticleRuleSystemInterface::EffectId {synced + 1});
 	reflection::Save(head, false);
 	reflection::Save(head, ParticleRuleSystemInterface::k_NoEffect);
@@ -487,6 +487,29 @@ TEST_F(ParticleSaveParts, AThunderThatTravelsWhileItsStrikeLivesKeepsItsWaitInTh
 	EXPECT_EQ(TurnsUntilSilent(loaded), original);
 }
 
+TEST_F(ParticleSaveParts, TwoPartsOfTheFormBeforeTheTrailsKeptWhereTheyAreHeardLoad)
+{
+	ParticleRuleSystem rules;
+	rules.Start("Synced", {1.0f, 0.0f, 0.0f}, 1.0f, true);
+	rules.Start("Local", {2.0f, 0.0f, 0.0f}, 1.0f, false);
+	const auto parts = Save(rules);
+
+	// With no gesture trail, the older form has the same bytes after its form
+	constexpr uint32_t k_Older = 3;
+	auto synced = parts.synced;
+	auto local = parts.local;
+	std::memcpy(synced.data(), &k_Older, sizeof(k_Older));
+	std::memcpy(local.data(), &k_Older, sizeof(k_Older));
+
+	ParticleRuleSystem loaded;
+	ASSERT_TRUE(Read(loaded, synced));
+	ASSERT_TRUE(Read(*loaded.LocalEffectsState(), local));
+	EXPECT_EQ(Effects(loaded), Effects(rules));
+	const auto again = Save(loaded);
+	EXPECT_EQ(again.synced, parts.synced);
+	EXPECT_EQ(again.local, parts.local);
+}
+
 TEST_F(ParticleSaveParts, TwoPartsOfTheFormBeforeTheWaitsMovedLoad)
 {
 	ParticleRuleSystem rules;
@@ -501,7 +524,7 @@ TEST_F(ParticleSaveParts, TwoPartsOfTheFormBeforeTheWaitsMovedLoad)
 	// - the part of this computer has no effect of the gesture trails
 	// - the part of this computer has no list of waits. With no sound, that list is one of the counts of 0 at its end.
 	reflection::BinaryWriter now(Context());
-	reflection::Save(now, uint32_t {3});
+	reflection::Save(now, uint32_t {4});
 	reflection::BinaryWriter before(Context());
 	reflection::Save(before, uint32_t {1});
 	const auto& nowBytes = now.Bytes();

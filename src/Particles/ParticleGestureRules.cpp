@@ -141,8 +141,16 @@ public:
 		if (auto waiting = world.TakeGestureTrail())
 		{
 			auto& atom = effect.NewAtom(collection, pointCreator, nextGroups);
+			// The gesture of this computer's player is heard with no position, another player's at the place of its hand
+			if (waiting->heardAt.has_value())
+			{
+				world.PlayPointSound(k_RecognisedSample, *waiting->heardAt);
+			}
+			else
+			{
+				world.PlayListenerSound(k_RecognisedSample, false);
+			}
 			trails[&atom].trail = std::move(waiting);
-			world.PlayListenerSound(k_RecognisedSample, false);
 		}
 
 		// A trail ends when its atom has lived its time, and the hand's glow goes with it
