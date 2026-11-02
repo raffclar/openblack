@@ -250,24 +250,24 @@ void testbed_scenarios::AddHandLookScenarios(std::vector<Scenario>& all)
 	    .id = "hand.offer_roll_by_hold",
 	    .name = "The hand rolling a rock and a villager over while it offers them to a creature",
 	    .facet = Facet::Hand,
-	    .description = "The first land. The player's hand takes a rock. The pointer moves onto a tiger for two seconds, then "
-	                   "onto the land far behind it for two seconds, and the hand puts the rock down. Then the hand takes "
+	    .description = "The player's hand takes a rock. The pointer moves onto a tiger for two seconds, then onto the land "
+	                   "near the camera for two seconds, and the hand puts the rock down. Then the hand takes "
 	                   "a villager, and the pointer moves onto the tiger and away in the same way.",
 	    .expected = "Over the tiger, the hand that holds the rock rolls its palm over by half a turn in about 0.4 seconds. "
 	                "About 0.8 seconds after the pointer leaves the tiger, it rolls back in about 0.4 seconds. The hand "
 	                "that holds the villager rolls by a quarter turn only, at the same times.",
-	    .environment = {.dispenserGrid = false, .cursor = glm::vec2(0.5f, 0.8f), .landNumber = 1},
-	    .framing = {.shot = Shot::Placed, .eye = {0.0f, 25.0f, -40.0f}, .look = {0.0f, 5.0f, 0.0f}},
+	    .environment = {.dispenserGrid = false, .cursor = glm::vec2(0.5f, 0.8f)},
+	    .framing = {.shot = Shot::Placed, .eye = {0.0f, 12.0f, -24.0f}, .look = {0.0f, 5.0f, 0.0f}},
 	    .creatures = {still},
 	    .objects = {{.type = MobileStaticInfo::Rock, .offset = {15.0f, -25.0f}},
 	                {.type = VillagerInfo::CelticFarmerMale, .offset = {-15.0f, -25.0f}, .inScript = true}},
 	    .commands = {{.kind = Kind::HandTake, .delaySeconds = 1.0f, .object = 0},
 	                 {.kind = Kind::PointerOnCreature, .creature = 0, .delaySeconds = 1.0f},
-	                 {.kind = Kind::PointerTo, .delaySeconds = 2.0f, .point = {0.5f, 0.25f}},
+	                 {.kind = Kind::PointerTo, .delaySeconds = 2.0f, .point = {0.5f, 0.9f}},
 	                 {.kind = Kind::HandRelease, .delaySeconds = 2.0f, .velocity = {0.0f, 0.0f, 0.0f}},
 	                 {.kind = Kind::HandTake, .delaySeconds = 1.0f, .object = 1},
 	                 {.kind = Kind::PointerOnCreature, .creature = 0, .delaySeconds = 1.0f},
-	                 {.kind = Kind::PointerTo, .delaySeconds = 2.0f, .point = {0.5f, 0.25f}},
+	                 {.kind = Kind::PointerTo, .delaySeconds = 2.0f, .point = {0.5f, 0.9f}},
 	                 {.kind = Kind::HandRelease, .delaySeconds = 2.0f, .velocity = {0.0f, 0.0f, 0.0f}}},
 	});
 
