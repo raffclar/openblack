@@ -1535,6 +1535,8 @@ void AddCreatureCastingScenarios(std::vector<Scenario>& all);
 /// A computer player's creature at the start of the computer mind
 void AddComputerPlayerScenarios(std::vector<Scenario>& all);
 void AddGameEndScenarios(std::vector<Scenario>& all);
+/// The end of the story on the fifth land: the last fight, the volcano, the fall of the temple and the credits
+void AddEndingScenarios(std::vector<Scenario>& all);
 /// The joint actions of two friends, each close up
 void AddFriendActionScenarios(std::vector<Scenario>& all);
 /// Creature Mode's and the Creature Cave's scenarios
