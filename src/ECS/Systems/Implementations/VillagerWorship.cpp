@@ -692,10 +692,7 @@ void villager_worship::Forget(entt::entity villager)
 void villager_worship::LeaveTown(entt::entity villager)
 {
 	// Only the town's list forgets it on its way; it keeps walking to the site
-	if (const auto town = TownOf(villager); town != entt::null)
-	{
-		std::erase(Entities().Get<Town>(town).onWayToWorship, villager);
-	}
+	TownForgetsOnTheWay(villager);
 	if (IsCountedAtWorship(villager))
 	{
 		RemoveFromWorshipSite(villager);
@@ -1158,6 +1155,14 @@ bool villager_worship::IsAvailableForWorshipSite(entt::entity villager, bool dis
 void villager_worship::LeaveTheWayToWorshipSite(entt::entity villager)
 {
 	LeaveTheWay(villager);
+}
+
+void villager_worship::TownForgetsOnTheWay(entt::entity villager)
+{
+	if (const auto town = TownOf(villager); town != entt::null)
+	{
+		std::erase(Entities().Get<Town>(town).onWayToWorship, villager);
+	}
 }
 
 void villager_worship::BackOnTheWayToWorshipSite(entt::entity villager)
