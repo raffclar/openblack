@@ -2305,3 +2305,10 @@ openblack_setup_and_add_test(test_worship_icons_map test_worship_icons_map.cpp)
 openblack_setup_and_add_test(test_fixed_kinds test_fixed_kinds.cpp)
 openblack_setup_and_add_test(test_mesh_prepare test_mesh_prepare.cpp)
 target_link_libraries(test_mesh_prepare PRIVATE l3d)
+openblack_setup_and_add_test(
+  test_clan_creature_system test_clan_creature_system.cpp
+)
+openblack_setup_and_add_test(
+  test_script_ally_natives test_script_ally_natives.cpp
+)
+target_link_libraries(test_script_ally_natives PRIVATE ScriptLibrary)
