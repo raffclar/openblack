@@ -67,6 +67,7 @@
 #include "ECS/Components/Villager.h"
 #include "ECS/Components/Workshop.h"
 #include "ECS/Components/WorshipSite.h"
+#include "ECS/FixedKinds.h"
 #include "ECS/Map.h"
 #include "ECS/ObjectPhysics.h"
 #include "ECS/PhysicsClasses.h"
@@ -1118,15 +1119,16 @@ BuildingSite* PiledSite(entt::entity object)
 	return Entities().AllOf<Temple>(object) ? ecs::construction::BroughtWoodSite(object) : nullptr;
 }
 
-/// Any other building with a site, going up or being mended, keeps its wood in the site's one pile: its site taking
-/// brought wood. A miracle dispenser is such a building. A workshop is not: it keeps all its wood itself, also while
-/// it has a site.
+/// Any other thing with the fixed mark and a site, going up or being mended, keeps its wood in the site's one pile: its
+/// site taking brought wood. A building, a miracle dispenser, a field, a feature, flowers and an animated static are
+/// such things. A workshop is not: it keeps all its wood itself, also while it has a site. A rock and a dead tree keep
+/// wood in their own way.
 BuildingSite* StandardSite(entt::entity object)
 {
 	auto& registry = Entities();
-	return registry.AnyOf<Abode, SpellDispenser>(object) && !registry.AllOf<Workshop>(object)
-	           ? ecs::construction::BroughtWoodSite(object)
-	           : nullptr;
+	const bool fixed = registry.AnyOf<Abode, SpellDispenser>(object) || ecs::fixed_kinds::IsFixedKind(registry, object);
+	const bool ownWay = registry.AnyOf<Workshop, DeadTree>(object) || ecs::object_physics::IsRock(object);
+	return fixed && !ownWay ? ecs::construction::BroughtWoodSite(object) : nullptr;
 }
 
 TownResourceTally* TallyOf(entt::entity town)

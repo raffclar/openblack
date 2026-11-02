@@ -63,6 +63,11 @@ struct ScriptRockStart
 /// does not react to what happens near it, and it does not catch what flies to it.
 [[nodiscard]] bool IgnoresReactions(ObjectType type);
 
+/// The row of the mobile object info table that a script's CREATE makes for the type, none for a type that does not
+/// make a mobile object. A mobile object takes the row that the script gives. A lump of poo and an ark always take
+/// their own rows.
+[[nodiscard]] std::optional<MobileObjectInfo> MobileObjectRowOf(ObjectType type, uint32_t subtype);
+
 /// CREATE_WITH_ANGLE_AND_SCALE gives its angle in degrees; things are turned in radians
 [[nodiscard]] float AngleFromDegrees(float degrees);
 
@@ -75,11 +80,6 @@ struct ScriptRockStart
 /// The resource of a store that a script makes: a store is a new pile of food (subtype 0) or of wood (subtype 1).
 /// None for any other subtype, which makes nothing.
 [[nodiscard]] std::optional<ResourceType> StoreResource(uint32_t subtype);
-
-/// The row of the mobile objects' table that a script's thing is made as: a mobile object is the row its subtype
-/// numbers, and a poo is always a lump of poo, whatever its subtype. None for a mobile object whose subtype numbers no
-/// row of a table with this many rows, and for every other type.
-[[nodiscard]] std::optional<MobileObjectInfo> MobileObjectRow(ObjectType type, uint32_t subtype, std::size_t rows);
 
 /// Each tribe has this many kinds of villager in the villagers' table, one after another: its housewife, forester,
 /// fisherman, farmer, shepherd, leader and trader

@@ -653,12 +653,12 @@ TEST_F(LobbyClientTest, ClansRankingAndPlayerUseTheirPaths)
 	_client->GetClan(3, [](auto&& /*result*/) {});
 	EXPECT_EQ(_http.Next().url, "https://bw.example/api/v1/clans/3");
 	_http.Answer(200, R"({"id":3,"name":"A"})");
-	_client->GetPlayerRanking(2, [](auto&& /*result*/) {});
-	EXPECT_EQ(_http.Next().url, "https://bw.example/api/v1/rankings/players?page=2");
-	_http.Answer(200, R"({"page":2,"pages":2,"entries":[]})");
-	_client->GetClanRanking(1, [](auto&& /*result*/) {});
-	EXPECT_EQ(_http.Next().url, "https://bw.example/api/v1/rankings/clans?page=1");
-	_http.Answer(200, R"({"page":1,"pages":1,"entries":[]})");
+	_client->GetPlayerRanking({.limit = 50, .offset = 50}, [](auto&& /*result*/) {});
+	EXPECT_EQ(_http.Next().url, "https://bw.example/api/v1/rankings/players?limit=50&offset=50");
+	_http.Answer(200, R"({"players":[],"count":60})");
+	_client->GetClanRanking({}, [](auto&& /*result*/) {});
+	EXPECT_EQ(_http.Next().url, "https://bw.example/api/v1/rankings/clans?limit=50&offset=0");
+	_http.Answer(200, R"({"clans":[],"count":0})");
 	_client->GetPlayer(4, [](auto&& /*result*/) {});
 	EXPECT_EQ(_http.Next().url, "https://bw.example/api/v1/players/4");
 	_http.Answer(200, R"({"id":4,"name":"x"})");

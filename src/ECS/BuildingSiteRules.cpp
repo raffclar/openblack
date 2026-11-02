@@ -323,6 +323,15 @@ PilePlace building_site::StandardPilePlace(glm::vec2 building, glm::vec2 door, c
 	return {.position = building + glm::vec2(offset.x, offset.z), .yAngle = angle - std::numbers::pi_v<float>};
 }
 
+glm::vec2 building_site::WonderPilePlace(glm::vec3 position, const glm::mat3& rotation, glm::vec3 scale)
+{
+	const glm::vec3 side = rotation[0] * scale.x;
+	const glm::vec3 back = rotation[2] * scale.z;
+	const float x = (back.x * -k_WonderPileBack + side.x * k_WonderPileSide) + position.x;
+	const float z = (back.z * -k_WonderPileBack + side.z * k_WonderPileSide) + position.z;
+	return {x, z};
+}
+
 std::optional<size_t> building_site::BestRepairSite(std::span<const RepairCandidate> sites)
 {
 	std::optional<size_t> best;

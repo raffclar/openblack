@@ -235,16 +235,18 @@ TEST(ScriptCreate, AStoreIsAPileOfFoodOrWood)
 	EXPECT_FALSE(StoreResource(5000).has_value());
 }
 
-TEST(ScriptCreate, AMobileObjectIsItsRowAndAPooIsAlwaysALumpOfPoo)
+TEST(ScriptCreate, AMobileObjectTakesTheRowOfItsType)
 {
-	// The crusaders' cauldron is "create 20 31" and the brown bear's dung "create 25 5000"
-	constexpr auto k_Rows = static_cast<std::size_t>(MobileObjectInfo::_COUNT);
+	// The fourth land's Creed is "create 20 21": the mobile object of row 21
+	EXPECT_EQ(MobileObjectRowOf(ScriptType::MobileObject, 21), MobileObjectInfo::Creed);
+	EXPECT_EQ(MobileObjectRowOf(ScriptType::MobileObject, 0), MobileObjectInfo::EgyptBarrel);
+	// A lump of poo and an ark always take their own rows, whatever the script gives
+	EXPECT_EQ(MobileObjectRowOf(ScriptType::Poo, 0), MobileObjectInfo::LumpOfPoo);
+	EXPECT_EQ(MobileObjectRowOf(ScriptType::Ark, 7), MobileObjectInfo::Ark);
+	// A row past the end of the table and a type that is not a mobile object make nothing
+	EXPECT_FALSE(MobileObjectRowOf(ScriptType::MobileObject, static_cast<uint32_t>(MobileObjectInfo::_COUNT)).has_value());
+	EXPECT_FALSE(MobileObjectRowOf(ScriptType::MobileStatic, 21).has_value());
 	EXPECT_EQ(static_cast<int32_t>(ScriptType::MobileObject), 20);
 	EXPECT_EQ(static_cast<int32_t>(ScriptType::Poo), 25);
-	EXPECT_EQ(MobileObjectRow(ScriptType::MobileObject, 31, k_Rows), MobileObjectInfo::Cauldron);
-	EXPECT_EQ(MobileObjectRow(ScriptType::MobileObject, 0, k_Rows), MobileObjectInfo::EgyptBarrel);
-	EXPECT_FALSE(MobileObjectRow(ScriptType::MobileObject, 32, k_Rows).has_value());
-	EXPECT_EQ(MobileObjectRow(ScriptType::Poo, 5000, k_Rows), MobileObjectInfo::LumpOfPoo);
-	EXPECT_EQ(MobileObjectRow(ScriptType::Poo, 0, k_Rows), MobileObjectInfo::LumpOfPoo);
-	EXPECT_FALSE(MobileObjectRow(ScriptType::Tree, 5, k_Rows).has_value());
+	EXPECT_EQ(static_cast<int32_t>(ScriptType::Ark), 27);
 }

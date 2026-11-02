@@ -771,6 +771,18 @@ entt::entity CreateScriptObject(const ObjectType type, uint32_t subtype, const g
 		}
 		return made;
 	}
+	case ObjectType::MobileObject:
+	case ObjectType::Poo:
+	case ObjectType::Ark:
+	{
+		// A mobile object of the row that the type gives, on the land under the place asked for. It belongs to nobody.
+		const auto row = script::create_rules::MobileObjectRowOf(type, subtype);
+		if (!row.has_value())
+		{
+			return entt::null;
+		}
+		return MobileObjectArchetype::Create(OnGround(position), *row, yAngleRadians, scale);
+	}
 	case ObjectType::Ball:
 		// On the land under the place asked for, even when that is the hand up in the air
 		return CreateScriptBall(OnGround(position));
@@ -894,18 +906,6 @@ entt::entity CreateScriptObject(const ObjectType type, uint32_t subtype, const g
 			break;
 		}
 		return Locator::resourceStoreSystem::value().MakePile(*resource, position, 1);
-	}
-	case ObjectType::MobileObject:
-	case ObjectType::Poo:
-	{
-		// A mobile object of the table's kinds, turned and scaled, on the land under the place asked for
-		const auto row =
-		    script::create_rules::MobileObjectRow(type, subtype, Locator::infoConstants::value().mobileObject.size());
-		if (!row.has_value())
-		{
-			break;
-		}
-		return ecs::archetypes::MobileObjectArchetype::Create(OnGround(position), *row, yAngleRadians, scale);
 	}
 	case ObjectType::OneShotSpell:
 		// A globe of a seed at its plain miracle, lying on the ground
@@ -2255,6 +2255,12 @@ void GetProperty() // 021 GET_PROPERTY
 			Pushf(seed->castMultiplier);
 			return;
 		}
+		// A miracle that is cast: what multiplies the strength its prayer power gives
+		if (const auto* spell = registry.TryGet<const ecs::components::Spell>(object); spell != nullptr)
+		{
+			Pushf(spell->chants.strengthMultiplier);
+			return;
+		}
 		// Anything else answers its life
 		SPDLOG_LOGGER_ERROR(spdlog::get("scripting"), "Script-Did you want the strength of this?");
 		Pushf(ecs::world_objects::LifeOf(object));
@@ -2474,6 +2480,12 @@ static void SetPropertyOf(entt::entity object, script::ObjectPropertyType prop, 
 		if (auto* seed = registry.TryGet<ecs::components::SpellSeed>(object); seed != nullptr)
 		{
 			seed->castMultiplier = value;
+			return;
+		}
+		// A miracle that is cast: the value multiplies each strength that it gets after this
+		if (auto* spell = registry.TryGet<ecs::components::Spell>(object); spell != nullptr)
+		{
+			spell->chants.strengthMultiplier = value;
 			return;
 		}
 		SPDLOG_LOGGER_ERROR(spdlog::get("scripting"), "Cannot set strength of this");

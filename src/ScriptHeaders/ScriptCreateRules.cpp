@@ -55,23 +55,6 @@ std::optional<ResourceType> StoreResource(uint32_t subtype)
 	return static_cast<ResourceType>(subtype);
 }
 
-std::optional<MobileObjectInfo> MobileObjectRow(ObjectType type, uint32_t subtype, std::size_t rows)
-{
-	switch (type)
-	{
-	case ObjectType::Poo:
-		return MobileObjectInfo::LumpOfPoo;
-	case ObjectType::MobileObject:
-		if (!IsRow(subtype, rows))
-		{
-			return std::nullopt;
-		}
-		return static_cast<MobileObjectInfo>(subtype);
-	default:
-		return std::nullopt;
-	}
-}
-
 float AngleFromDegrees(float degrees)
 {
 	return degrees * k_RadiansPerDegree;
@@ -139,6 +122,25 @@ std::optional<ScriptRockStart> RockStartOf(ObjectType type, uint32_t subtype, bo
 bool IgnoresReactions(ObjectType type)
 {
 	return type == ObjectType::Creature;
+}
+
+std::optional<MobileObjectInfo> MobileObjectRowOf(ObjectType type, uint32_t subtype)
+{
+	switch (type)
+	{
+	case ObjectType::MobileObject:
+		if (!IsRow(subtype, static_cast<std::size_t>(MobileObjectInfo::_COUNT)))
+		{
+			return std::nullopt;
+		}
+		return static_cast<MobileObjectInfo>(subtype);
+	case ObjectType::Poo:
+		return MobileObjectInfo::LumpOfPoo;
+	case ObjectType::Ark:
+		return MobileObjectInfo::Ark;
+	default:
+		return std::nullopt;
+	}
 }
 
 ScriptVillager ScriptVillagerOf(bool child, uint32_t grownUpAge)

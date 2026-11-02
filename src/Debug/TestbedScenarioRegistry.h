@@ -315,6 +315,8 @@ struct CreatureSetup
 	std::string_view mindFile;
 	/// The skills it knows as it starts, as a script teaches them
 	std::vector<CreatureActionKnownAbout> skills;
+	/// The environment map value that a mind file gives its body; not 0 draws the body with the environment map
+	uint32_t environmentMap {0};
 };
 
 /// Something put on the land for the creatures: an object, a tree, a feature such as a pillar of rock, a villager, a pot
@@ -400,7 +402,8 @@ struct ObjectSetup
 	/// A planned building is the plan of one that had been finished and went from the land, which its town wants
 	/// rebuilt as a repair
 	bool wasBuilt {false};
-	/// A building stands only this much built, a site open for its town's builders to finish it
+	/// A building stands only this much built, a site open for its town's builders to finish it. A feature stands only
+	/// this much built, with a site of the scenario's town at it.
 	std::optional<float> built;
 	/// A building starts with this part of the time to its next loss of life from neglect already gone
 	float neglect {0.0f};
@@ -623,6 +626,8 @@ constexpr size_t k_IncomingMail = 101;
 /// The values of a Chat command: a god says a line, or the chat of this computer opens with a line in it
 constexpr size_t k_ChatSays = 0;
 constexpr size_t k_ChatTypes = 1;
+/// The value of a Chat command that gives the list of people made-up friends and others, and opens the chat
+constexpr size_t k_ChatFriends = 2;
 /// The names that a Chat command gives the first gods
 constexpr std::array<std::u16string_view, 4> k_ChatNames {u"Alice", u"Bob", u"Carol", u"Dave"};
 
@@ -1117,7 +1122,8 @@ struct Command
 		AddIncomingMessage,
 		/// The chat of a network game, with the names that the testbed gives the gods (k_ChatNames). With value
 		/// k_ChatSays, the god (player) says the action to all of the players. With value k_ChatTypes, the chat of this
-		/// computer opens and the action is in its line. Needs no creature.
+		/// computer opens and the action is in its line. With value k_ChatFriends, the list of people gets made-up
+		/// friends and others and the chat opens. Needs no creature.
 		Chat,
 		/// The god of the player (player) gets the weight (amount) for each node of its mind of the name (action), as a
 		/// script's SET_COMPUTER_PLAYER_PERSONALITY gives it. Needs no creature.
@@ -1167,6 +1173,9 @@ struct Command
 		/// The miracle that is locked on in the player's hand closes down. Then the hand lets go of it in the same step,
 		/// as when the miracle stops just before the let go. Needs no creature.
 		CloseHeldMiracle,
+		/// A script sets each worship site of the player as built (amount, the built share), as SET_PROPERTY does. The
+		/// altars of the sites stay as they are. Needs no creature.
+		ScriptBuildsWorshipSites,
 		/// The player clicks the scroll that a script put up nearest a point (point, from the middle of the map), as the
 		/// Action button pressed and let go on the scroll does. The script that waits for a click on it goes on. Needs no
 		/// creature
@@ -1558,6 +1567,13 @@ void AddBirdScenarios(std::vector<Scenario>& all);
 void AddTeleportScenarios(std::vector<Scenario>& all);
 /// The vortices between the lands: opening, levelling the ground and closing
 void AddVortexScenarios(std::vector<Scenario>& all);
+/// Three silver scrolls of the fourth and fifth lands, each from its own script: the fish puzzle, the stranger who
+/// prays at the forest fire, and the explorers who come back
+void AddLandsFourFiveScrollScenarios(std::vector<Scenario>& all);
+/// Two Guardian Stones of the fourth land: the Heartbroken Man and the bell towers
+void AddLand4StoneScenarios(std::vector<Scenario>& all);
+/// The ogre of the fourth land with his fight and his gremlins, and the undead village with its Creed
+void AddLand4SlegScenarios(std::vector<Scenario>& all);
 /// Three quests of the fifth land: the crusaders and the dragon, the brown bear's trail, and Nemesis's curse
 void AddLandFiveQuestScenarios(std::vector<Scenario>& all);
 /// The reward chests the challenges give: falling, landing and being opened

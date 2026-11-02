@@ -7,6 +7,8 @@
  * openblack is licensed under the GNU General Public License version 3.
  *******************************************************************************/
 
+#include <optional>
+
 #include <glm/mat3x3.hpp>
 #include <glm/vec3.hpp>
 #include <gtest/gtest.h>
@@ -56,4 +58,14 @@ TEST(AbodeDoor, TheVillageCentreDoorTurnsAndGrowsWithTheCentre)
 	const auto door = VillageCentreDoor({100.0f, 0.0f, 200.0f}, quarter, glm::vec3(0.5f));
 	EXPECT_EQ(door.x, 94.0f);
 	EXPECT_EQ(door.y, 199.0f);
+}
+
+TEST(AbodeDoor, AFieldAndAFishFarmHaveTheirMiddleAsTheirDoor)
+{
+	EXPECT_EQ(DoorOfThing(std::nullopt, true), Door::Middle);
+	EXPECT_EQ(DoorOfThing(AbodeType::Graveyard, true), Door::Middle);
+	// A building of the abodes has the door of its kind, and any other thing its model's door
+	EXPECT_EQ(DoorOfThing(AbodeType::TownCentre, false), Door::VillageCentre);
+	EXPECT_EQ(DoorOfThing(AbodeType::Graveyard, false), Door::Model);
+	EXPECT_EQ(DoorOfThing(std::nullopt, false), Door::Model);
 }

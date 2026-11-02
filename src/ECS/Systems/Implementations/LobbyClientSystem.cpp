@@ -834,16 +834,18 @@ void LobbyClientSystem::DownloadMap(const lobby_api::OnlineMap& map, LobbyCallba
 	    [](const HttpResponse& response) -> std::optional<std::vector<uint8_t>> { return response.body; }, true);
 }
 
-void LobbyClientSystem::GetPlayerRanking(int32_t page, LobbyCallback<lobby_api::RankingPage> callback)
+void LobbyClientSystem::GetPlayerRanking(lobby_api::RankingQuery query, LobbyCallback<lobby_api::RankingPage> callback)
 {
-	CallFor<lobby_api::RankingPage>(HttpMethod::Get, fmt::format("/rankings/players?page={}", page), std::move(callback),
-	                                [](const HttpResponse& response) { return lobby_api::ParseRankingPage(TextOf(response)); });
+	CallFor<lobby_api::RankingPage>(
+	    HttpMethod::Get, fmt::format("/rankings/players?limit={}&offset={}", query.limit, query.offset), std::move(callback),
+	    [](const HttpResponse& response) { return lobby_api::ParsePlayerRanking(TextOf(response)); });
 }
 
-void LobbyClientSystem::GetClanRanking(int32_t page, LobbyCallback<lobby_api::RankingPage> callback)
+void LobbyClientSystem::GetClanRanking(lobby_api::RankingQuery query, LobbyCallback<lobby_api::RankingPage> callback)
 {
-	CallFor<lobby_api::RankingPage>(HttpMethod::Get, fmt::format("/rankings/clans?page={}", page), std::move(callback),
-	                                [](const HttpResponse& response) { return lobby_api::ParseRankingPage(TextOf(response)); });
+	CallFor<lobby_api::RankingPage>(
+	    HttpMethod::Get, fmt::format("/rankings/clans?limit={}&offset={}", query.limit, query.offset), std::move(callback),
+	    [](const HttpResponse& response) { return lobby_api::ParseClanRanking(TextOf(response)); });
 }
 
 void LobbyClientSystem::GetPlayer(int64_t playerId, LobbyCallback<lobby_api::PlayerDetails> callback)
