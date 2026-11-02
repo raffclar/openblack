@@ -52,6 +52,8 @@ public:
 	[[nodiscard]] virtual entt::id_type SiteMesh(entt::entity temple) = 0;
 	/// The model of a tribe's altar
 	[[nodiscard]] virtual entt::id_type AltarMesh(Tribe tribe) const = 0;
+	/// The life that the altar of a tribe starts with, from the tribe's row of the worship sites
+	[[nodiscard]] virtual float AltarStartLife(Tribe /*tribe*/) const { return 1.0f; }
 	/// The circle on the ground that a model covers, at a place, as for the other things that stay put; none without the
 	/// model
 	[[nodiscard]] virtual std::optional<std::pair<glm::vec2, float>>
@@ -77,6 +79,9 @@ public:
 	virtual void OpenBuildingSite(entt::entity /*site*/, entt::entity /*town*/, float /*desire*/) {}
 	/// A site's building sites go: no town builds it any more
 	virtual void CloseBuildingSite(entt::entity /*site*/) {}
+	/// The work of builders on a built altar mends it by a share while it is short of its full life. At the full life,
+	/// its site for its builders goes.
+	virtual void MendBy(entt::entity /*altar*/, float /*share*/) {}
 	/// A town's building site at a site goes: the town no longer builds it, while other towns asked to still do
 	virtual void CloseTownsBuildingSite(entt::entity /*site*/, entt::entity /*town*/) {}
 	/// A site's spell icons go, with the seeds out from them and what they were charging

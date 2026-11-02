@@ -39,6 +39,10 @@ inline constexpr std::array<EnvironmentStage, 8> k_EnvironmentStages = {
     EnvironmentStage::Modulated2, EnvironmentStage::Map,  EnvironmentStage::Off,   EnvironmentStage::Off,
 };
 
+/// The stage that every primitive of a creature's body with the environment map takes: the map's colour added over the
+/// lit texture. The game gives the body's materials the third stage of the table.
+inline constexpr EnvironmentStage k_CreatureBodyStage = k_EnvironmentStages[2];
+
 /// A material whose flags have this bit repeats its texture past the edges of the texture. Without the bit, the
 /// texture stops at its edge texels.
 inline constexpr uint8_t k_RepeatsTexture = 0x04;

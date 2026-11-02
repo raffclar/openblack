@@ -33,6 +33,8 @@
 #include "ECS/Components/CarriedByTornado.h"
 #include "ECS/Components/DetailMeshes.h"
 #include "ECS/Components/Disciple.h"
+#include "ECS/Components/Field.h"
+#include "ECS/Components/FishFarm.h"
 #include "ECS/Components/Fixed.h"
 #include "ECS/Components/HandGrab.h"
 #include "ECS/Components/LivingAction.h"
@@ -58,6 +60,7 @@
 #include "ECS/Systems/PathfindingSystemInterface.h"
 #include "ECS/Systems/TownDesireSystemInterface.h"
 #include "ECS/Systems/TownSystemInterface.h"
+#include "ECS/ThingModel.h"
 #include "ECS/VillagerAfterDeath.h"
 #include "ECS/VillagerAge.h"
 #include "ECS/VillagerNeeds.h"
@@ -852,18 +855,20 @@ glm::vec2 villager_home::DoorPosition(entt::entity abode)
 	auto& registry = WorldRegistry();
 	const auto& transform = registry.Get<const Transform>(abode);
 	const auto* info = registry.AllOf<Abode>(abode) ? world_objects::AbodeInfoOf(abode) : nullptr;
-	const auto door = info != nullptr ? abode_door::DoorOf(info->abodeType) : abode_door::Door::Model;
+	const auto door = abode_door::DoorOfThing(info != nullptr ? std::optional(info->abodeType) : std::nullopt,
+	                                          registry.AnyOf<Field, FishFarm>(abode));
 	if (door == abode_door::Door::VillageCentre)
 	{
 		return abode_door::VillageCentreDoor(transform.position, transform.rotation, transform.scale);
 	}
 	glm::vec3 point = transform.position;
-	if (const auto* mesh = registry.TryGet<const Mesh>(abode); door == abode_door::Door::Model && mesh != nullptr)
+	// An altar has its model also while the game does not show it
+	if (const auto model = thing_model::ModelOf(registry, abode); door == abode_door::Door::Model && model.has_value())
 	{
 		const auto& meshes = Locator::resources::value().GetMeshes();
-		if (meshes.Contains(mesh->id))
+		if (meshes.Contains(*model))
 		{
-			if (const auto& modelDoor = meshes.Handle(mesh->id)->GetDoorPos(); modelDoor.has_value())
+			if (const auto& modelDoor = meshes.Handle(*model)->GetDoorPos(); modelDoor.has_value())
 			{
 				point = transform.position + transform.rotation * (transform.scale * *modelDoor);
 			}

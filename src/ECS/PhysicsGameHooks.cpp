@@ -199,11 +199,12 @@ void HurtCreature(World& world, DynamicsSystemInterface& dynamics, const Physics
 }
 
 /// Something thrown strikes a temple's heart: the heart passes the blow on to a building or a homeless villager of its
-/// player's towns, and only with none to take it is the heart itself harmed, by what breaks buildings
-void StrikeHeart(World& world, DynamicsSystemInterface& dynamics, PhysicsEntry& entry, const ImpactInfo& impact)
+/// player's towns, and only with none to take it is the heart itself harmed, by what breaks buildings. The struck body
+/// is the heart's, or the body of a part of the temple that passes its blows to the heart.
+void StrikeHeart(World& world, DynamicsSystemInterface& dynamics, entt::entity heart, PhysicsEntry& entry,
+                 const ImpactInfo& impact)
 {
 	auto& registry = world.Entities();
-	const auto heart = entry.entity;
 	const auto hitter = impact.hitBy;
 	if (hitter == entt::null)
 	{
@@ -716,7 +717,18 @@ void PhysicsGameHooks::ReactToImpact(DynamicsSystemInterface& dynamics, PhysicsE
 	}
 	if (registry.AllOf<Temple>(object))
 	{
-		StrikeHeart(world, dynamics, entry, impact);
+		StrikeHeart(world, dynamics, object, entry, impact);
+		return;
+	}
+	// The altar of a worship site is a part of its temple: the temple's heart takes each blow on it. An altar with no
+	// temple feels nothing.
+	if (const auto* altar = registry.TryGet<const WorshipAltar>(object))
+	{
+		const auto* site = registry.Valid(altar->site) ? registry.TryGet<const WorshipSite>(altar->site) : nullptr;
+		if (site != nullptr && registry.Valid(site->temple) && registry.AllOf<Temple>(site->temple))
+		{
+			StrikeHeart(world, dynamics, site->temple, entry, impact);
+		}
 		return;
 	}
 	// Rocks break buildings, the village centre, storage pits and spell dispensers among them
