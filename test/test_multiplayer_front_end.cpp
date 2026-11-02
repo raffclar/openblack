@@ -136,8 +136,8 @@ public:
 		clan = std::move(callback);
 	}
 	void GetClanLogo(int64_t, LobbyCallback<std::vector<uint8_t>> callback) override { logo = std::move(callback); }
-	void GetPlayerRanking(int32_t, LobbyCallback<lobby_api::RankingPage>) override {}
-	void GetClanRanking(int32_t, LobbyCallback<lobby_api::RankingPage>) override {}
+	void GetPlayerRanking(lobby_api::RankingQuery, LobbyCallback<lobby_api::RankingPage>) override {}
+	void GetClanRanking(lobby_api::RankingQuery, LobbyCallback<lobby_api::RankingPage>) override {}
 	void GetPlayer(int64_t, LobbyCallback<lobby_api::PlayerDetails>) override {}
 	void GetPlayerDetailLines(int64_t playerId, std::string version,
 	                          LobbyCallback<lobby_api::PlayerDetailLines> callback) override

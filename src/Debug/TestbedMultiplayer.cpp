@@ -276,8 +276,8 @@ public:
 	{
 		callback({.value = DemoLogo(), .error = {}});
 	}
-	void GetPlayerRanking(int32_t, LobbyCallback<lobby_api::RankingPage>) override {}
-	void GetClanRanking(int32_t, LobbyCallback<lobby_api::RankingPage>) override {}
+	void GetPlayerRanking(lobby_api::RankingQuery, LobbyCallback<lobby_api::RankingPage>) override {}
+	void GetClanRanking(lobby_api::RankingQuery, LobbyCallback<lobby_api::RankingPage>) override {}
 	void GetPlayer(int64_t, LobbyCallback<lobby_api::PlayerDetails>) override {}
 	/// The lobby defines each line. These lines only show the look of the tab.
 	void GetPlayerDetailLines(int64_t, std::string, LobbyCallback<lobby_api::PlayerDetailLines> callback) override
