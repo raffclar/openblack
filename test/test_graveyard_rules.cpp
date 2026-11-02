@@ -14,6 +14,7 @@
 #include <gtest/gtest.h>
 
 #include "ECS/GraveyardRules.h"
+#include "ECS/WorkshopRules.h"
 
 using namespace openblack::graveyard;
 using openblack::AbodeType;
@@ -144,6 +145,32 @@ TEST(GraveyardRules, AStandInsCountGrowsAsAGraveyardsUntilFull)
 	EXPECT_EQ(last->partsShown, 9u);
 	EXPECT_FALSE(BurialOnStandIn(k_MostBurials).has_value());
 	EXPECT_FALSE(BurialOnStandIn(1000).has_value());
+}
+
+TEST(GraveyardRules, ABurialOnARestingWorkshopMakesAScaffoldWithNoWoodNextTurn)
+{
+	// A resting workshop counts 0 turns. The burial makes it 1, so its next turn finishes a scaffold although the
+	// workshop has no wood
+	const auto burial = BurialOnStandIn(0);
+	ASSERT_TRUE(burial.has_value());
+	auto makingTurns = static_cast<int32_t>(burial->count);
+	const openblack::ecs::workshop::TurnFacts facts {.functional = true, .room = 3, .wood = 0, .scaffoldWood = 2500};
+	EXPECT_EQ(openblack::ecs::workshop::NextEvent(makingTurns, facts), openblack::ecs::workshop::TurnEvent::Finishes);
+	EXPECT_EQ(makingTurns, 0);
+}
+
+TEST(GraveyardRules, ABurialOnAWorkshopThatMakesAScaffoldDelaysItByATurn)
+{
+	const auto burial = BurialOnStandIn(5);
+	ASSERT_TRUE(burial.has_value());
+	auto makingTurns = static_cast<int32_t>(burial->count);
+	const openblack::ecs::workshop::TurnFacts facts {.functional = true, .room = 2, .wood = 0, .scaffoldWood = 2500};
+	int32_t turns = 0;
+	while (openblack::ecs::workshop::NextEvent(makingTurns, facts) != openblack::ecs::workshop::TurnEvent::Finishes)
+	{
+		++turns;
+	}
+	EXPECT_EQ(turns + 1, 6);
 }
 
 TEST(GraveyardRules, ASkeletonWearsTheSkeletonAtEveryDistance)

@@ -134,4 +134,19 @@ enum class GoingBack
 /// The strain sound level of a temple goes towards the most strain of its sites by at most a step each turn
 [[nodiscard]] float EaseStrainSound(float level, float mostStrain, float step);
 
+/// A villager on its way to worship does not help to fight a fire: only a villager of a town that is not on that way
+/// weighs whether a blaze needs it
+[[nodiscard]] constexpr bool WeighsFireFight(bool hasTown, bool onTheWayToWorship)
+{
+	return hasTown && !onTheWayToWorship;
+}
+
+/// The state that a villager on its way to worship goes to after it goes around a fire: the state that it heads for, or
+/// the state that it remembers when the state that it heads for keeps the remembered state
+template <typename State>
+[[nodiscard]] constexpr State StateAfterFireOnTheWay(State heading, bool headingKeepsRemembered, State remembered)
+{
+	return headingKeepsRemembered ? remembered : heading;
+}
+
 } // namespace openblack::ecs::worshipper_rules

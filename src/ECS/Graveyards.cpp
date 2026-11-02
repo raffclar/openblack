@@ -15,6 +15,7 @@
 #include "ECS/Components/Graveyard.h"
 #include "ECS/Components/SpellDispenser.h"
 #include "ECS/Components/Town.h"
+#include "ECS/Components/Workshop.h"
 #include "ECS/GraveyardRules.h"
 #include "ECS/Registry.h"
 #include "ECS/Systems/Implementations/VillagerHome.h"
@@ -31,6 +32,7 @@ using ecs::components::Graveyard;
 using ecs::components::SpellDispenser;
 using ecs::components::StandInGraves;
 using ecs::components::Town;
+using ecs::components::Workshop;
 
 ecs::Registry& Entities()
 {
@@ -78,16 +80,21 @@ void CountBurialOnStandIn(entt::entity building)
 	}
 	auto* dispenser = registry.TryGet<SpellDispenser>(building);
 	const auto* kept = registry.TryGet<const StandInGraves>(building);
+	auto* workshop = registry.TryGet<Workshop>(building);
 	uint32_t count = 0;
 	switch (graveyard::StandInCountOf(info->abodeType))
 	{
 	case graveyard::StandInCount::None:
 		return;
 	case graveyard::StandInCount::ScaffoldTurns:
-		// TODO(workshops): openblack's workshops make no scaffolds yet, so the count is always at rest. In the original
-		// game a burial on a resting workshop leaves it one turn from finishing a scaffold, which it then makes without
-		// using any wood; a burial on a workshop making one delays it by a turn.
-		count = 0;
+		// The count is the turns until the workshop finishes its scaffold. Thus a burial on a workshop that makes no
+		// scaffold puts it one turn from a scaffold, which it then makes with no wood. A burial on a workshop that makes a
+		// scaffold delays that scaffold by one turn.
+		if (workshop == nullptr)
+		{
+			return;
+		}
+		count = static_cast<uint32_t>(workshop->makingTurns);
 		break;
 	case graveyard::StandInCount::Kept:
 		// TODO(totems): the hand letting go of a totem it slid sets this count to where it was let go
@@ -109,6 +116,10 @@ void CountBurialOnStandIn(entt::entity building)
 	if (dispenser != nullptr)
 	{
 		dispenser->timer.tick = burial->count;
+	}
+	if (workshop != nullptr)
+	{
+		workshop->makingTurns = static_cast<int32_t>(burial->count);
 	}
 	registry.AssignOrReplace<StandInGraves>(building, StandInGraves {.count = burial->count, .partsShown = burial->partsShown});
 	registry.SetDirty();

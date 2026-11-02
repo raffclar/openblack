@@ -20,11 +20,10 @@
 #include "Common/GUtilsDistance.h"
 #include "ECS/Archetypes/AnimalArchetype.h"
 #include "ECS/Components/Flock.h"
-#include "ECS/Components/ForestMember.h"
 #include "ECS/Components/ScriptControl.h"
 #include "ECS/Components/Transform.h"
-#include "ECS/Components/Tree.h"
 #include "ECS/Components/WallHug.h"
+#include "ECS/FixedKinds.h"
 #include "ECS/Map.h"
 #include "ECS/ScriptFlockRules.h"
 #include "ECS/Systems/PathfindingSystemInterface.h"
@@ -35,6 +34,7 @@ using namespace openblack;
 using namespace openblack::ecs::components;
 using namespace openblack::ecs::systems;
 using namespace openblack::ecs::systems::animal_detail;
+namespace fixed_kinds = openblack::ecs::fixed_kinds;
 namespace grazers = openblack::animals::grazers;
 
 namespace
@@ -56,7 +56,7 @@ grazers::NeedLimits LimitsOf(const GAnimalInfo& info)
 	return {.hunger = info.hunger, .sleep = info.sleep, .breed = info.needToBreed, .grownUpAge = info.grownUpAge};
 }
 
-/// Whether a cell holds a thing that stays put: a building, field, feature, pile and the like, or a tree of a forest
+/// Whether the first thing that stays put in a cell has the fixed mark, as a building, a field or a rock has
 bool HasFixed(glm::vec2 point)
 {
 	if (!Locator::entitiesMap::has_value())
@@ -65,11 +65,10 @@ bool HasFixed(glm::vec2 point)
 	}
 	const auto& registry = EntityRegistry();
 	const auto cell = map_coords::CellOf(point);
-	const auto fixed = Locator::entitiesMap::value().GetFixedInGridCell(glm::u16vec2(cell));
-	// A tree on its own is no fixed thing to the game; a tree of a forest is
-	return std::ranges::any_of(fixed, [&registry](entt::entity entity) {
-		return registry.Valid(entity) && (!registry.AllOf<Tree>(entity) || registry.AllOf<ForestMember>(entity));
-	});
+	// Only the first thing that stays put in the cell counts, and a tree has no fixed mark
+	return fixed_kinds::CellIsFixed(
+	    Locator::entitiesMap::value().GetFixedInGridCell(glm::u16vec2(cell)),
+	    [&registry](entt::entity thing) { return registry.Valid(thing) && fixed_kinds::IsFixedKind(registry, thing); });
 }
 
 /// Where a walker in a herd, its shepherd, stands, in map units
