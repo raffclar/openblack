@@ -80,7 +80,12 @@ public:
 	}
 	void PlaySoundEffect([[maybe_unused]] entt::id_type id, [[maybe_unused]] std::optional<glm::vec3> worldPosition) override {}
 	void StopSoundEffect([[maybe_unused]] entt::id_type id) override {}
-	[[nodiscard]] bool IsSoundEffectPlaying([[maybe_unused]] entt::id_type id) const override { return false; }
+	void StopNumberedSoundEffect([[maybe_unused]] entt::id_type id, [[maybe_unused]] uint32_t ownerNumber) override {}
+	[[nodiscard]] bool IsNumberedSoundEffectPlaying([[maybe_unused]] entt::id_type id,
+	                                                [[maybe_unused]] uint32_t ownerNumber) const override
+	{
+		return false;
+	}
 	[[nodiscard]] bool IsInstalled() const override { return false; }
 	entt::entity StartSoundEffect([[maybe_unused]] entt::id_type id,
 	                              [[maybe_unused]] const SoundEffectOptions& options) override

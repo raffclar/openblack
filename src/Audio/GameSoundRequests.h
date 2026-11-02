@@ -31,7 +31,8 @@ public:
 
 	entt::entity StartSoundEffect(entt::id_type id, const SoundEffectOptions& options) override;
 	void StopSoundEffect(entt::id_type id) override;
-	[[nodiscard]] bool IsSoundEffectPlaying(entt::id_type id) const override;
+	void StopNumberedSoundEffect(entt::id_type id, uint32_t ownerNumber) override;
+	[[nodiscard]] bool IsNumberedSoundEffectPlaying(entt::id_type id, uint32_t ownerNumber) const override;
 	void StopAllSoundEffects() override;
 
 	entt::entity CreateEmitter(entt::id_type id, std::optional<glm::vec3> worldPosition, PlayType playType,

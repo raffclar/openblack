@@ -85,6 +85,9 @@ public:
 	/// Opens the box of a tab of the open box, as a click on the tab does: 1 for Multiplayer, 2 for Statistics. False
 	/// when the box is not open or the tab has no box.
 	bool OpenTab(size_t tab);
+	/// Scrolls the window of gods of the box of a tab that has more than 4 gods, as notches of the mouse wheel over its
+	/// god columns do: on with a positive count. False when no box of a tab shows or its view does not scroll.
+	bool ScrollGodWindow(int notches);
 	/// Open and taking the player's input, not fading out
 	[[nodiscard]] bool IsOpen() const noexcept { return _open; }
 	/// On the screen, fading out included
@@ -96,6 +99,7 @@ public:
 	/// The end box is open and shows no box of a tab over it
 	[[nodiscard]] bool ShowsItself() const noexcept { return _open && !_showsStatistics && !_showsConditions; }
 	[[nodiscard]] const ConditionsBox& GetConditions() const noexcept { return *_conditions; }
+	[[nodiscard]] const StatisticsBox& GetStatistics() const noexcept { return *_statistics; }
 	[[nodiscard]] const Contents& GetContents() const noexcept { return _contents; }
 	[[nodiscard]] const StaticText& GetTitle() const noexcept { return *_title; }
 
@@ -104,6 +108,8 @@ public:
 	void MouseDown(glm::ivec2 point);
 	/// True when a control acted: the game clicks
 	bool MouseUp(glm::ivec2 point);
+	/// The mouse wheel turned over the pointer: steps away from the player, and across to the right on a horizontal wheel
+	void Wheel(int steps, int across);
 	/// What the player chose, once
 	[[nodiscard]] Action TakeAction() noexcept { return std::exchange(_action, Action::None); }
 	/// The controls that the player can press by name now

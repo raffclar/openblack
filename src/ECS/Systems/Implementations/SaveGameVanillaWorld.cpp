@@ -10,11 +10,13 @@
 #define LOCATOR_IMPLEMENTATIONS
 
 #include <algorithm>
+#include <array>
 #include <iterator>
 #include <optional>
 #include <ranges>
 #include <span>
 #include <unordered_map>
+#include <utility>
 #include <vector>
 
 #include <VanillaWorld.h>
@@ -32,11 +34,14 @@
 #include "ECS/Components/Abode.h"
 #include "ECS/Components/AtHome.h"
 #include "ECS/Components/Construction.h"
+#include "ECS/Components/Disciple.h"
 #include "ECS/Components/Field.h"
 #include "ECS/Components/MiracleImpression.h"
 #include "ECS/Components/Player.h"
 #include "ECS/Components/Pot.h"
 #include "ECS/Components/ResourcePile.h"
+#include "ECS/Components/ScriptAnimation.h"
+#include "ECS/Components/ScriptStateArguments.h"
 #include "ECS/Components/StoragePit.h"
 #include "ECS/Components/Temple.h"
 #include "ECS/Components/Town.h"
@@ -45,6 +50,7 @@
 #include "ECS/Components/Transform.h"
 #include "ECS/Components/VillageTotem.h"
 #include "ECS/Components/Villager.h"
+#include "ECS/Components/VillagerDeath.h"
 #include "ECS/Components/VillagerWork.h"
 #include "ECS/Components/WallHug.h"
 #include "ECS/PlayerTowns.h"
@@ -592,6 +598,77 @@ void PutTotems(ecs::Registry& registry, const world_import::ImportedTowns& impor
 	}
 	SPDLOG_LOGGER_INFO(ImportLog(), "Put {} totems of the file on their town centres", put);
 }
+
+/// Gives a villager whose states the import keeps the values of its top state and of its final state. The game's load
+/// writes these values into the villager, and the states use them as they are.
+void PutStateValues(ecs::Registry& registry, entt::entity entity, const world_import::ImportedVillager& villager,
+                    const std::unordered_map<uint32_t, entt::entity>& made)
+{
+	const std::array<std::pair<uint8_t, const std::vector<world_import::ImportedStateValue>*>, 2> states = {
+	    std::pair {villager.states[0], &villager.topValues}, std::pair {villager.states[1], &villager.finalValues}};
+	for (const auto& [state, values] : states)
+	{
+		if (const auto script = world_import::ScriptValuesOf(state, *values); script.has_value())
+		{
+			// The game keeps the clip and the plays of a script clip in the same pair of whole numbers
+			registry.AssignOrReplace<ScriptStateArguments>(
+			    entity, ScriptStateArguments {
+			                .place = {world_import::MetresOfMapUnits(script->x), world_import::MetresOfMapUnits(script->z)},
+			                .number = script->number,
+			                .first = script->first,
+			                .second = script->second});
+			registry.AssignOrReplace<ScriptAnimation>(
+			    entity, ScriptAnimation {.clip = static_cast<AnimId>(script->first), .playsLeft = script->second});
+		}
+		if (const auto shepherd = world_import::ShepherdValuesOf(state, *values); shepherd.has_value())
+		{
+			registry.AssignOrReplace<ShepherdWork>(
+			    entity,
+			    ShepherdWork {.countdown = shepherd->countdown, .pending = static_cast<VillagerStates>(shepherd->pending)});
+		}
+		if (const auto reason = world_import::DeathReasonOf(state, *values); reason.has_value())
+		{
+			// The body lies for the turns that its state still counts. The people about it knew of the death as it fell.
+			registry.AssignOrReplace<VillagerDeath>(entity, VillagerDeath {.turnsLeft = villager.turnsUntilStateChange,
+			                                                               .skeleton = false,
+			                                                               .reason = *reason,
+			                                                               .killer = std::nullopt,
+			                                                               .onBack = world_import::LiesOnBack(villager.status),
+			                                                               .noticed = true});
+		}
+		if (const auto trade = world_import::TradeOf(state, villager.discipleType, *values); trade.has_value())
+		{
+			if (auto* disciple = registry.TryGet<Disciple>(entity); disciple != nullptr)
+			{
+				disciple->tradeResource = trade->resource;
+				disciple->tradeTown = EntityOf(made, trade->town);
+			}
+		}
+	}
+}
+
+/// Gives a villager the disciple work of the file: a disciple, or a villager that follows a disciple one time
+void PutDisciple(ecs::Registry& registry, entt::entity entity, const world_import::ImportedVillager& villager)
+{
+	const auto disciple = world_import::DiscipleOf(villager.discipleType, villager.villagerFlags);
+	if (!disciple.has_value())
+	{
+		if (villager.discipleType != 0)
+		{
+			SPDLOG_LOGGER_WARN(ImportLog(), "The villager {} of the file has the disciple type {} with no disciple flag",
+			                   villager.number, villager.discipleType);
+		}
+		return;
+	}
+	if (disciple->follower)
+	{
+		registry.AssignOrReplace<DiscipleFollower>(entity, DiscipleFollower {.type = disciple->type});
+	}
+	else if (disciple->type != VillagerDisciple::None)
+	{
+		registry.AssignOrReplace<Disciple>(entity, Disciple {.type = disciple->type});
+	}
+}
 } // namespace
 
 bool SaveGameSystem::ImportVanillaTowns(const gamesave::VanillaWorld& world, VanillaMade& made, VanillaWorks& works,
@@ -698,8 +775,10 @@ bool SaveGameSystem::ImportVanillaTowns(const gamesave::VanillaWorld& world, Van
 		                                                      .turnsUntilStateChange = villager.turnsUntilStateChange,
 		                                                      .turnsSinceStateChange = villager.turnsSinceStateChange});
 		made.emplace(villager.number, entity);
+		PutDisciple(registry, entity, villager);
 		if (states == villager.states)
 		{
+			PutStateValues(registry, entity, villager, made);
 			PutWalk(registry, entity, villager, {villager.walk.goal.x, villager.walk.goal.z});
 			if (villager.walk.circle.has_value())
 			{

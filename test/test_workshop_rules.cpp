@@ -337,12 +337,14 @@ TEST(WorkshopRules, AClearingScaffoldPushesAThingTwiceAsFarAsItsEdge)
 	EXPECT_NEAR(fast.velocity.z, 8000.0f, 1.0f);
 }
 
-TEST(WorkshopRules, APushedThingStartsHalfAMetreAboveTheLandAtItsNewPlace)
+TEST(WorkshopRules, APushedThingStartsAtTheHeightOfTheScaffoldAboveTheLandPlusHalfAMetre)
 {
 	const auto push = workshop::PushOutOfWay({10.0f, 20.0f}, {11.0f, 20.5f});
 	const auto start = workshop::PushStart({10.0f, 20.0f}, push);
-	EXPECT_EQ(start, openblack::map_coords::FromMetres({12.0f, 21.0f}) + openblack::map_coords::MapCoords {.altitude = 0.5f});
-	EXPECT_EQ(start.altitude, workshop::k_PushStartAltitude);
+	EXPECT_EQ(start, openblack::map_coords::FromMetres({12.0f, 21.0f}));
+	// The start is a height of the world, not a height above the land: on high land the thing starts under the land
+	EXPECT_EQ(workshop::PushStartHeight(0.0f), 0.5f);
+	EXPECT_EQ(workshop::PushStartHeight(2.25f), 2.75f);
 }
 
 TEST(WorkshopRules, AClearingScaffoldPushesOrRemovesThingsAndLeavesCreaturesAlone)
@@ -354,4 +356,27 @@ TEST(WorkshopRules, AClearingScaffoldPushesOrRemovesThingsAndLeavesCreaturesAlon
 	// A creature stays, also one that a hand holds
 	EXPECT_EQ(workshop::ClearingActionFor({.creature = true}), ClearingAction::LeaveAlone);
 	EXPECT_EQ(workshop::ClearingActionFor({.creature = true, .held = true}), ClearingAction::LeaveAlone);
+}
+
+TEST(WorkshopRules, AJoinPlaysTheFourSoundsInTurnAtTheHandForTheHeldScaffold)
+{
+	const auto held = static_cast<entt::entity>(42);
+	const glm::vec3 hand {10.0f, 2.0f, -3.0f};
+	uint32_t step = 0;
+	for (const uint32_t sample : {201u, 202u, 203u, 204u, 201u})
+	{
+		const auto sound = workshop::JoinSoundOf(step, held, hand);
+		EXPECT_EQ(sound.sample, sample);
+		ASSERT_TRUE(sound.options.position.has_value());
+		EXPECT_EQ(*sound.options.position, hand);
+		EXPECT_EQ(sound.options.owner, held);
+		EXPECT_EQ(sound.options.follows, openblack::audio::Follows::Nothing);
+		EXPECT_FALSE(sound.options.voicePlayType.has_value());
+		step = workshop::NextJoinSound(step);
+	}
+}
+
+TEST(WorkshopRules, ThePuffOfAJoinShowsTheColourOfTheNeutralPlayer)
+{
+	EXPECT_EQ(workshop::k_JoinPuffPlayer, openblack::PlayerNames::NEUTRAL);
 }

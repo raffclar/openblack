@@ -1267,6 +1267,12 @@
   "query": "audio.sounds"
  },
  {
+  "description": "The sounds that play without a place, such as a script's sound with no place",
+  "kind": "list",
+  "parameters": [],
+  "query": "audio.unplaced"
+ },
+ {
   "description": "A debug tool, not a rule of the game: the game acts as if the machine lost its sound device (lost true), or has it again (lost false); answers whether the device counts as lost",
   "kind": "object",
   "parameters": [

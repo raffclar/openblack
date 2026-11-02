@@ -100,6 +100,13 @@ private:
 	[[nodiscard]] creature_object_actions::KindFacts KindFactsOf(entt::entity object) const;
 	/// What the rules for a creature picking the thing up depend on
 	[[nodiscard]] creature_object_actions::PickUpFacts PickUpFactsOf(entt::entity creature, entt::entity object) const;
+	/// Whether the creature may pick the thing up, with the kind facts of the thing already found
+	[[nodiscard]] bool CanPickUpKind(entt::entity creature, entt::entity object,
+	                                 const creature_object_actions::KindFacts& kind) const;
+	/// Keeps the reach of the creature for a pick-up in the synced world, as the full pick-up facts do
+	static void KeepPickUpReach(entt::entity creature);
+	/// Whether the creature belongs to a computer player and no script controls it
+	[[nodiscard]] static bool ComputerCreatureNotScripted(entt::entity creature);
 	/// Catches made to wait while a creature's body acted out something else start once it is free
 	/// Starts the catches that waited, of one creature or of all
 	void StartPendingCatches(std::optional<entt::entity> only = std::nullopt);

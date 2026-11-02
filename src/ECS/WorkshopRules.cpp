@@ -9,6 +9,8 @@
 
 #include "WorkshopRules.h"
 
+#include <cmath>
+
 #include <algorithm>
 #include <bit>
 
@@ -240,6 +242,17 @@ workshop::JoinedTown workshop::TownOfJoined(const JoinedTownFacts& facts)
 	return facts.heldValue > facts.targetValue ? JoinedTown::Held : JoinedTown::Target;
 }
 
+workshop::JoinSound workshop::JoinSoundOf(uint32_t step, entt::entity held, glm::vec3 hand)
+{
+	return {.sample = k_FirstJoinSample + (step % k_JoinSamples),
+	        .options = {.position = hand, .owner = held, .follows = audio::Follows::Nothing}};
+}
+
+uint32_t workshop::NextJoinSound(uint32_t step)
+{
+	return (step + 1) % k_JoinSamples;
+}
+
 bool workshop::InClearingReach(float distance, float thingRadius, float reach)
 {
 	return distance - thingRadius <= reach;
@@ -253,8 +266,10 @@ workshop::ClearingPush workshop::PushOutOfWay(glm::vec2 centre, glm::vec2 edge)
 	const float x = dx + dx;
 	const float z = dz + dz;
 	// The larger part, with its sign. A thing straight to the west or the south of the scaffold has a larger part of 0.
-	// Then the divide gives the FPU's NaN and an infinity, as in the game.
-	const float larger = x > z ? x : z;
+	// The divide then uses the larger size, so the thing flies straight away from the scaffold.
+	// When both parts are 0, the divide gives the FPU's NaN, as in the game.
+	const float signedLarger = x > z ? x : z;
+	const float larger = signedLarger == 0.0f ? std::max(std::abs(x), std::abs(z)) : signedLarger;
 	const float xShare = x87::DivideAsFpu(x, larger);
 	const float zShare = x87::DivideAsFpu(z, larger);
 	// A NaN keeps the bits of the FPU on each target
@@ -263,9 +278,12 @@ workshop::ClearingPush workshop::PushOutOfWay(glm::vec2 centre, glm::vec2 edge)
 
 map_coords::MapCoords workshop::PushStart(glm::vec2 centre, const ClearingPush& push)
 {
-	auto start = map_coords::FromMetres(centre + push.offset);
-	start.altitude = k_PushStartAltitude;
-	return start;
+	return map_coords::FromMetres(centre + push.offset);
+}
+
+float workshop::PushStartHeight(float scaffoldAltitude)
+{
+	return scaffoldAltitude + k_PushStartRise;
 }
 
 workshop::ClearingAction workshop::ClearingActionFor(const ClearingFacts& facts)

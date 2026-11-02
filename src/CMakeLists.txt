@@ -87,7 +87,7 @@ set(OPENBLACK_SIM_IN_CLIENT_FOLDERS
     "Debug/TestbedScenario[A-Z][A-Za-z]*"
     "Editor/(EditorMath|EditorEntities|EditorPalette|EditorSelection|EditorOutline|EditorHistory)"
     "Graphics/(HandLight|InterfaceCreatures|MeshDetail|Moon|Sun|ViewFrustum|Texture2D|VertexBuffer|IndexBuffer|Mesh|TextureSize|GraphicsDeviceInterface|GraphicsHandle|FilmSurface|ZSort|FizzDrawOrder|HandReflection|ObjectTint|TempleHeartLook)"
-    "Gui/(ChatControlsRules|CinemaBars|ConditionsBoxRules|CustomMusicControlsRules|DialogKeyRules|EndGameBoxRules|EscapeKeyRules|GameFont|GameTexts|HandToolTipRules|HandToolTips|IncomingMessageStripRules|JoinOnlineEntry|LandThumbnail|LoadingScreenRules|LogoEffect|MenuBackdrop|MenuSettings|MultiplayerFrontEnd|MultiplayerFrontEndRules|OnlineMapTexts|PauseText|PingDisplay|ScreenFade|ScreenFit|ScriptFade|ScriptTexts|SkirmishBoxRules|StartupRules|StatisticsBoxRules|TextDatabase|TextEditRules|TextWrap|ToolTips|VillagerLabels|WorldTextDepth|WorldToolTipRules|WorldToolTips|DialogRect|SavingBoxRules)"
+    "Gui/(ChatControlsRules|CinemaBars|ConditionsBoxRules|CustomMusicControlsRules|DialogKeyRules|EndGameBoxRules|EscapeKeyRules|GameFont|GameTexts|GodWindowRules|HandToolTipRules|HandToolTips|IncomingMessageStripRules|JoinOnlineEntry|LandThumbnail|LoadingScreenRules|LogoEffect|MenuBackdrop|MenuSettings|MultiplayerFrontEnd|MultiplayerFrontEndRules|OnlineMapTexts|PauseText|PingDisplay|ScreenFade|ScreenFit|ScriptFade|ScriptTexts|SkirmishBoxRules|StartupRules|StatisticsBoxRules|TextDatabase|TextEditRules|TextWrap|ToolTips|VillagerLabels|WorldTextDepth|WorldToolTipRules|WorldToolTips|DialogRect|SavingBoxRules)"
     "Input/(InjectedInput|InputLock|KeyBindings|KeyRebinding|GameActionMap|CursorFreeze|PointerSpeed|ScriptedMouse|ShortcutKeys|WindowPointer|NoInputDevice|GameActionMapInterface|InputDeviceInterface|BindableActions|LocalPlayer|PointerSettle|BoxKeyboard|MouseMotion|PlatformKeys|DeveloperKeys)"
     "Windowing/(WindowFit|WindowPixels|WindowingInterface)"
     "Video/(FilmCreature|FilmEffects|FrameQueue|VideoRules|FallingSpellAudio|StillPicture)"
@@ -352,7 +352,9 @@ if (NOT EMSCRIPTEN)
     find_package(OpenSSL REQUIRED)
     target_link_libraries(openblack_lib PRIVATE OpenSSL::SSL OpenSSL::Crypto)
     if (WIN32)
-      target_link_libraries(openblack_lib PRIVATE ws2_32)
+      # The sockets, and the list of network interfaces for the search of the
+      # local network
+      target_link_libraries(openblack_lib PRIVATE ws2_32 iphlpapi)
     endif ()
   endif ()
   if (WIN32)

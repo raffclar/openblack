@@ -48,6 +48,7 @@
 #include "ECS/Components/Player.h"
 #include "ECS/Components/Spell.h"
 #include "ECS/Components/SpellDispenser.h"
+#include "ECS/Components/SpellIcon.h"
 #include "ECS/Components/StoragePit.h"
 #include "ECS/Components/Temple.h"
 #include "ECS/Components/TempleExterior.h"
@@ -150,7 +151,7 @@ bool IsLand(glm::vec3 point)
 bool IsMultiCellFixed(const ecs::Registry& registry, entt::entity entity)
 {
 	return registry.AnyOf<Abode, AnimatedStatic, BigForest, Feature, Field, Flowers, MobileStatic, StoragePit, SpellDispenser,
-	                      Temple, TempleExterior>(entity);
+	                      Temple, TempleExterior, WorshipIcon>(entity);
 }
 
 /// Where a tree may be planted: on land, in a cell no building or other large fixed thing stands in. Trees, even new

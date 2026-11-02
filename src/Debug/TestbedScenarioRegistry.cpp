@@ -1883,6 +1883,71 @@ void AddThirdLandPrison(std::vector<Scenario>& all)
 	                  .script = "FreeTheCreature",
 	                  .scriptGlobals = {{"GlobalDebug", {.number = 1.0f}}}}},
 	});
+	// The prison spot of the third land and a point far from it, from the middle of the map
+	static constexpr glm::vec2 k_PrisonSpot {-497.79f, -300.15f};
+	static constexpr glm::vec2 k_FarFromPrison {-575.0f, -385.0f};
+	all.push_back({
+	    .id = "story.l3_laetes_walks_back",
+	    .name = "Story: Lethys's creature walks back to the prison of the third land",
+	    .facet = Facet::Story,
+	    .description = "The third land loads with its own scripts and sky, and the player's Tiger stands on it. Its set-up "
+	                   "script and its prison script run. Four seconds later, Lethys's creature is put 115 metres from "
+	                   "the prison spot, which is more than 75 metres.",
+	    .expected = "If Lethys's creature does a miracle at the time, it does the miracle to its end. Then it walks back "
+	                "to its start point near the prison. When it is within 75 metres of the prisoner again, it does its "
+	                "miracles at the prisoner again.",
+	    .environment = {.land = Land::Story, .storyLand = "Land3.txt", .dispenserGrid = false},
+	    .framing = {.shot = Shot::Overview, .include = {k_FarFromPrison - glm::vec2 {15.0f}, k_PrisonSpot + glm::vec2 {15.0f}}},
+	    .creatures = {{.label = "player's tiger",
+	                   .species = CreatureType::Tiger,
+	                   .phase = 3,
+	                   .needs = {.energy = 1.0f, .exhaustion = 0.0f, .dehydration = 0.0f, .poo = 0.0f, .life = 1.0f}}},
+	    .commands = {{.kind = Kind::RunScript,
+	                  .delaySeconds = 0.5f,
+	                  .script = "SetupLand3",
+	                  .scriptGlobals = {{"MyCreature", {.kind = Argument::Kind::Creature, .index = 0}}}},
+	                 {.kind = Kind::RunScript, .delaySeconds = 1.0f, .script = "FreeTheCreature"},
+	                 {.kind = Kind::CallNative,
+	                  .delaySeconds = 4.0f,
+	                  .script = "CALL_PLAYER_CREATURE",
+	                  .scriptArguments = {{.kind = Argument::Kind::Number, .number = 2.0f}}},
+	                 {.kind = Kind::CallNative,
+	                  .delaySeconds = 0.0f,
+	                  .script = "SET_POSITION",
+	                  .scriptArguments = {{.kind = Argument::Kind::Result},
+	                                      {.kind = Argument::Kind::Position, .point = k_FarFromPrison}}}},
+	});
+	// The numbers that the land's script gave the villages of the three pillars
+	static constexpr size_t k_EgyptianVillage = 2;
+	static constexpr size_t k_IndianVillage = 3;
+	static constexpr size_t k_JapaneseVillage = 4;
+	all.push_back({
+	    .id = "story.l3_third_village_in_second_scene",
+	    .name = "Story: the third village of the prison goes to the player while the second pillar's scene plays",
+	    .facet = Facet::Story,
+	    .description = "The third land loads with its own scripts and sky, and the player's Tiger stands on it. Its set-up "
+	                   "script and its prison script run, and the pillars freeze the Tiger every 3 seconds. The Japanese "
+	                   "village goes to the player, then the Indian village after the first pillar's scene. Ten seconds "
+	                   "later, while the second pillar's scene plays, the Egyptian village goes to the player.",
+	    .expected = "The first and second pillars sink. The second scene sees three pillars down and plays the release. "
+	                "The third pillar froze the Tiger again just before, and every freeze added its time to the ice. So the "
+	                "Tiger stays in the ice and does not play its release animation until the added time runs out. Then "
+	                "the third scene plays the release again. This is the land's script as it is written.",
+	    .environment = {.land = Land::Story, .storyLand = "Land3.txt", .dispenserGrid = false},
+	    .framing = {.shot = Shot::Overview, .include = {{-40.0f, -40.0f}, {40.0f, 40.0f}}},
+	    .creatures = {{.label = "player's tiger",
+	                   .species = CreatureType::Tiger,
+	                   .phase = 3,
+	                   .needs = {.energy = 1.0f, .exhaustion = 0.0f, .dehydration = 0.0f, .poo = 0.0f, .life = 1.0f}}},
+	    .commands = {{.kind = Kind::RunScript,
+	                  .delaySeconds = 0.5f,
+	                  .script = "SetupLand3",
+	                  .scriptGlobals = {{"MyCreature", {.kind = Argument::Kind::Creature, .index = 0}}}},
+	                 {.kind = Kind::RunScript, .delaySeconds = 1.0f, .script = "FreeTheCreature"},
+	                 {.kind = Kind::GiveLandTown, .delaySeconds = 10.0f, .value = k_JapaneseVillage, .amount = 5.0f},
+	                 {.kind = Kind::GiveLandTown, .delaySeconds = 90.0f, .value = k_IndianVillage, .amount = 5.0f},
+	                 {.kind = Kind::GiveLandTown, .delaySeconds = 10.0f, .value = k_EgyptianVillage, .amount = 5.0f}},
+	});
 
 	// A script makes a pack of wolves, sends it off and then lets it go, as the attack of the possessed wolves does
 	// when the first wolf reaches the village
@@ -1950,6 +2015,78 @@ void AddThirdLandPrison(std::vector<Scenario>& all)
 	                  .delaySeconds = 8.0f,
 	                  .script = "RELEASE_FROM_SCRIPT",
 	                  .scriptArguments = {{.kind = Argument::Kind::Made, .index = 3}}}},
+	});
+
+	// The campfire of the burning fishermen on the beach of the Japanese village, from the middle of the map
+	static constexpr glm::vec2 k_Campfire {376.11f, 36.22f};
+	all.push_back({
+	    .id = "story.l3_fishermen_in_reach",
+	    .name = "Story: the burning fishermen of the third land in reach of the hand",
+	    .facet = Facet::Story,
+	    .description = "The third land loads with its own scripts and sky, and the player's Tiger stands on it. Its set-up "
+	                   "script runs. Then a script ring of the player's influence with a radius of 80 metres goes on the "
+	                   "fishermen's campfire on the beach, and the script of Lethys's fireballs runs with no wait. When "
+	                   "his scene ends, the hand can take a burning fisherman during its first short runs.",
+	    .expected = "Lethys speaks three lines, throws his fireballs and sets 16 fishermen alight. The script makes 18 "
+	                "fishermen: it lets the first two of fishermen seven and eight go at the end of the turn that makes "
+	                "them, and they then live as homeless villagers. A fisherman that the hand takes during its short "
+	                "runs stays alight in the hand. When the hand puts it down, it lands and goes back to its script "
+	                "walk: it runs to the last place the script gave it, then does its other runs and runs to the "
+	                "village.",
+	    .environment = {.land = Land::Story, .storyLand = "Land3.txt", .dispenserGrid = false},
+	    .framing = {.shot = Shot::Overview, .include = {k_Campfire - glm::vec2 {30.0f}, k_Campfire + glm::vec2 {30.0f}}},
+	    .creatures = {{.label = "player's tiger",
+	                   .species = CreatureType::Tiger,
+	                   .phase = 3,
+	                   .needs = {.energy = 1.0f, .exhaustion = 0.0f, .dehydration = 0.0f, .poo = 0.0f, .life = 1.0f}}},
+	    .commands = {{.kind = Kind::RunScript,
+	                  .delaySeconds = 0.5f,
+	                  .script = "SetupLand3",
+	                  .scriptGlobals = {{"MyCreature", {.kind = Argument::Kind::Creature, .index = 0}}}},
+	                 {.kind = Kind::CallNative,
+	                  .delaySeconds = 1.0f,
+	                  .script = "INFLUENCE_POSITION",
+	                  .scriptArguments = {{.kind = Argument::Kind::Position, .point = k_Campfire},
+	                                      {.kind = Argument::Kind::Number, .number = 80.0f},
+	                                      {.kind = Argument::Kind::Integer, .number = 0.0f},
+	                                      {.kind = Argument::Kind::Integer, .number = 0.0f}}},
+	                 {.kind = Kind::RunScript,
+	                  .delaySeconds = 0.5f,
+	                  .script = "FanaticAttack",
+	                  .scriptArguments = {{.kind = Argument::Kind::Number, .number = 1.0f}}}},
+	});
+}
+
+/// The man of the third land who wants to be thrown: the land's own script makes him at his campfire, with the player's
+/// creature near him, so that the hand or the creature can take him
+void AddThirdLandThrowBloke(std::vector<Scenario>& all)
+{
+	using Argument = ScriptArgument;
+	// His place on the beach of the third land, from the middle of the map
+	constexpr glm::vec2 k_Man = glm::vec2(2796.28f, 3146.40f) - flat_land::k_MapMiddle;
+	all.push_back({
+	    .id = "story.l3_throw_bloke",
+	    .name = "Story: the man of the third land who wants to be thrown",
+	    .facet = Facet::Story,
+	    .description = "The third land loads with its own scripts and sky. The land's script of the man who wants to be "
+	                   "thrown starts. It makes the man and his campfire on the beach, and the player's Tiger stands 15 "
+	                   "metres from him. Take the man with the hand and throw him, throw him into the sea to the north "
+	                   "west, set him alight, or let the Tiger take him and eat him.",
+	    .expected = "The man stands at his campfire, looks at the waterfall and plays his clip. While the camera is near, "
+	                "he asks to be thrown every 20 seconds. In the hand he says a line. When he flies, the game slows to "
+	                "0.32 of its speed under wide screen bars, and the camera follows him from 10 metres. After 3 "
+	                "seconds the speed comes back to normal over 3 seconds; when he lands the speed is normal again. On "
+	                "land he walks back to his place and boasts. In the sea he stays until the camera looks away, then "
+	                "a new man comes at his place. Fire does not hurt him. When the Tiger eats him, the Tiger plays its "
+	                "clip of a creature that must poo and then poos. A new man comes out at its back, flies to it and "
+	                "walks back to his place.",
+	    .environment = {.land = Land::Story, .storyLand = "Land3.txt", .dispenserGrid = false},
+	    .framing = {.shot = Shot::Placed, .eye = {k_Man.x + 20.0f, 25.0f, k_Man.y - 25.0f}, .look = {k_Man.x, 2.0f, k_Man.y}},
+	    .creatures = {Content(CreatureType::Tiger, k_Man + glm::vec2(12.0f, -9.0f), 300.0f, "player's tiger")},
+	    .commands = {{.kind = Kind::RunScript,
+	                  .delaySeconds = 0.5f,
+	                  .script = "ThrowBlokeMain",
+	                  .scriptGlobals = {{"MyCreature", {.kind = Argument::Kind::Creature, .index = 0}}}}},
 	});
 }
 
@@ -2688,6 +2825,7 @@ CREATE_CITADEL("0.0,0.0", 0, "PLAYER_ONE", 4254, 1000)
 	AddGuideStorm(all);
 	AddRivalCreatureLoads(all);
 	AddThirdLandPrison(all);
+	AddThirdLandThrowBloke(all);
 	AddSingingStones(all);
 	AddBeachTemplePuzzle(all);
 	AddTreePuzzle(all);
@@ -13406,6 +13544,35 @@ CREATE_ABODE(63, "0.0,-70.0", "CELTIC_ABODE_STORAGE_PIT", 0, 1000, 100, 100)
 	                 {.kind = Kind::BookmarkCreature, .creature = 0, .delaySeconds = 1.0f, .value = 3},
 	                 Go(Kind::WalkTo, 0, {0.0f, 160.0f}, 0.5f, false)},
 	});
+	{
+		// The first land's turning lesson, as the game's own script runs it after the turning demonstration. The lesson
+		// keeps the camera near the temple, and the temple's place is where the camera goes back to.
+		using Argument = ScriptArgument;
+		constexpr glm::vec2 k_LessonTemple {0.0f, 40.0f};
+		constexpr glm::vec2 k_ViewPlace {0.0f, 0.0f};
+		all.push_back({
+		    .id = "tutorial.teach_rotate",
+		    .name = "The turning lesson and the hand's turning state",
+		    .facet = Facet::Tutorial,
+		    .description = "The player's temple stands north of the middle. Half a second in, the game's TeachRotate "
+		                   "script runs, as the first land's lesson starts it. Hold the land with both buttons and move "
+		                   "the mouse across to turn the camera, or turn it with the keys while both buttons hold the land.",
+		    .expected = "The advisors tell the player to turn the camera. While both buttons hold the land and the camera "
+		                "turns, the hand's state that the scripts read is the turning state (21). When the lesson's minute "
+		                "runs out while the player turns the land in this way, the turning demonstration does not play "
+		                "again. With no turn, it plays again after each minute. Turning enough ends the lesson.",
+		    .environment = {.dispenserGrid = false},
+		    .framing = {.shot = Shot::Placed,
+		                .eye = {k_ViewPlace.x, 30.0f, k_ViewPlace.y - 40.0f},
+		                .look = {k_LessonTemple.x, 0.0f, k_LessonTemple.y}},
+		    .temples = {{.offset = k_LessonTemple}},
+		    .commands = {{.kind = Kind::RunScript,
+		                  .delaySeconds = 0.5f,
+		                  .script = "TeachRotate",
+		                  .scriptArguments = {{.kind = Argument::Kind::Temple, .index = 0},
+		                                      {.kind = Argument::Kind::Marker, .point = k_ViewPlace, .height = 30.0f}}}},
+		});
+	}
 }
 
 /// A blow that sways the creature, and a wolf that frightens it
@@ -13781,6 +13948,29 @@ void AddWorkshopScenarios(std::vector<Scenario>& all)
 	                {.type = ScaffoldInfo::Normal, .offset = k_LooseScaffold, .scale = 0.7f}},
 	});
 
+	constexpr glm::vec2 k_JoinTarget {-25.0f, 18.0f};
+	all.push_back({
+	    .id = "hand.scaffold_phantom_sounds_and_join",
+	    .name = "A held scaffold plays the sounds of its phantom, names the building, and joins a scaffold",
+	    .facet = Facet::Hand,
+	    .description = "A Celtic town of the player's with a village centre, a loose scaffold of the value of two "
+	                   "scaffolds and, 12 m south of it, a loose scaffold of the value of one. Take the larger "
+	                   "scaffold and hold it still near the village centre. Then hold it over the smaller scaffold and "
+	                   "press the Action button. Run with the audio log at the debug level to see the sounds.",
+	    .expected = "Near the village centre the phantom of the building that the town wants grows below the scaffold, "
+	                "and the appear sound plays one time. The tooltip shows the name of that building, then \"Throw\". "
+	                "When the offer changes or goes, the phantom becomes small and the vanish sound plays one time. Over "
+	                "the smaller scaffold the tooltip shows \"Combine Scaffolds\". The press removes the held scaffold. "
+	                "The scaffold on the land now has the value of three. A puff shows at it, and the first of the four "
+	                "join sounds plays at the hand.",
+	    .environment = {.dispenserGrid = false},
+	    .framing = {.shot = Shot::Overview, .include = {k_JoinTarget - glm::vec2 {10.0f}, k_BuildPlace + glm::vec2 {10.0f}}},
+	    .objects = {{.type = AbodeInfo::CelticTownCentre, .offset = {0.0f, 50.0f}},
+	                {.type = ScaffoldInfo::Normal, .offset = k_LooseScaffold, .scale = 0.9f},
+	                {.type = ScaffoldInfo::Normal, .offset = k_JoinTarget, .scale = 0.7f}},
+	    .townBeliefInPlayer = 1.0f,
+	});
+
 	all.push_back({
 	    .id = "light.snow_on_scaffold_phantom",
 	    .name = "The phantom of a scaffold carries snow in the hand and none on its site",
@@ -13977,8 +14167,8 @@ void AddWorkshopScenarios(std::vector<Scenario>& all)
 	                   "scaffold to destroy the things in its way. A bush and a ball stand where the hand puts the "
 	                   "scaffold down. The input tools/sim/hand_inputs/scaffold_build.json moves the hand: it takes the "
 	                   "scaffold, holds it still near the village centre, and puts it down.",
-	    .expected = "When the hand lets the scaffold go, the bush and the ball jump out of the way. Each starts half a "
-	                "metre above the land at its new place and flies a short distance. A building site then opens where "
+	    .expected = "When the hand lets the scaffold go, the bush and the ball jump out of the way. Each starts from the "
+	                "height of the scaffold above the land and flies a short distance. A building site then opens where "
 	                "the scaffold is.",
 	    .environment = {.dispenserGrid = false},
 	    .framing = {.shot = Shot::Overview, .include = {k_LooseScaffold - glm::vec2 {10.0f}, k_BuildPlace + glm::vec2 {10.0f}}},
@@ -14011,14 +14201,14 @@ void AddWorkshopScenarios(std::vector<Scenario>& all)
 
 	all.push_back({
 	    .id = "objects.scaffold_push_on_high_land",
-	    .name = "A thing that a clearing scaffold pushes starts above high land",
+	    .name = "A thing that a clearing scaffold pushes starts under high land",
 	    .facet = Facet::Objects,
 	    .description = "A loose scaffold that a script marked to destroy the things in its way lies on the land, which is "
 	                   "about 21 m high here. A bush stands 1.5 m east of it and a ball 1.5 m north of it. After one second "
 	                   "the scaffold clears its ground, as when the hand lets it go.",
-	    .expected = "The bush and the ball start half a metre above the land, twice as far from the scaffold as the edge "
-	                "of the scaffold. Each flies a short distance and lands near its start. Neither starts under the land "
-	                "or flies far across the map.",
+	    .expected = "As in the game, the bush and the ball start at the height of the scaffold above the land plus half a "
+	                "metre, twice as far from the scaffold as the edge of the scaffold. That is a height of the world, so "
+	                "each starts under the land here. The land throws each one far across the map.",
 	    .environment = {.dispenserGrid = false},
 	    .framing = {.shot = Shot::Overview,
 	                .include = {k_FoundingScaffold - glm::vec2 {15.0f}, k_FoundingScaffold + glm::vec2 {15.0f}}},
@@ -14035,9 +14225,9 @@ void AddWorkshopScenarios(std::vector<Scenario>& all)
 	    .description = "A loose scaffold that a script marked to destroy the things in its way. A bush stands 1.5 m "
 	                   "straight west of it and a ball 1.5 m straight south of it. After one second the scaffold clears "
 	                   "its ground, as when the hand lets it go.",
-	    .expected = "As in the game, the push of each thing divides by 0 and its speed is not a number. The bush and "
-	                "the ball go from their places. The inspector shows each at x 0 and z 0, the corner of the map, with "
-	                "a height that is not a number. Each stays in flight and does not land. The game does not stop.",
+	    .expected = "The bush starts west and the ball starts south of the scaffold, under the land, as in the game. The "
+	                "land throws each one far, and the bush becomes a dead tree. The game divides the push by 0 here and "
+	                "the things go from the map. openblack divides by the larger size, so both things stay on the map.",
 	    .environment = {.dispenserGrid = false},
 	    .framing = {.shot = Shot::Overview,
 	                .include = {k_FoundingScaffold - glm::vec2 {15.0f}, k_FoundingScaffold + glm::vec2 {15.0f}}},
@@ -14045,10 +14235,16 @@ void AddWorkshopScenarios(std::vector<Scenario>& all)
 	                {.type = TreeInfo::Bush, .offset = k_FoundingScaffold + glm::vec2 {-1.5f, 0.0f}},
 	                {.type = MobileObjectInfo::Ball, .offset = k_FoundingScaffold + glm::vec2 {0.0f, -1.5f}}},
 	    .commands = {{.kind = Kind::ScaffoldClearsGround, .delaySeconds = 1.0f, .object = 0}},
-	    .checks = {{.label = "the scaffold, the bush and the ball stay in the game",
+	    .checks = {{.label = "the scaffold and the ball stay in the game",
 	                .quantity = checks::Quantity::ObjectsAlive,
 	                .afterTurns = 100,
-	                .atLeast = 3}},
+	                .atLeast = 2},
+	               {.label = "the ball lands near the scaffold, not at the corner of the map",
+	                .quantity = checks::Quantity::ObjectDistance,
+	                .index = 2,
+	                .point = k_FoundingScaffold,
+	                .afterTurns = 100,
+	                .atMost = 100.0}},
 	});
 
 	all.push_back({
@@ -14171,6 +14367,51 @@ void AddWorkshopScenarios(std::vector<Scenario>& all)
 	                  .script = "SET_ID_MOVEABLE",
 	                  .scriptArguments = {{.kind = ScriptArgument::Kind::Integer, .number = 0.0f},
 	                                      {.kind = ScriptArgument::Kind::Made, .index = 0}}}},
+	});
+
+	// The workshop's abode number and the size, as the third land's script lays out the workshop of the home town
+	constexpr float k_WorkshopNumber = 9.0f;
+	constexpr float k_WorkshopSize = 3.0f;
+	constexpr glm::vec2 k_RockyPlace {-45.0f, 15.0f};
+	all.push_back({
+	    .id = "objects.scaffold_builds_among_rocks",
+	    .name = "A script scaffold starts its workshop among rocks",
+	    .facet = Facet::Objects,
+	    .description = "A Celtic town of the player's (which believes in the player from the start) with a village "
+	                   "centre. Four rocks lie 4 m round a place 57 m from the centre. After one second, CREATE makes a "
+	                   "scaffold (type 39) at that place, and "
+	                   "SET_SCAFFOLD_PROPERTIES gives it the workshop (abode number 9) and the size 3. Then SET_ACTIVE "
+	                   "sets the scaffold active, as the third land's script does with the workshop of the home town.",
+	    .expected = "A building site of a workshop opens at the scaffold, with the phantom of the workshop over the "
+	                "rocks. The rocks do not stop the building. The scaffold stays on the site.",
+	    .environment = {.dispenserGrid = false},
+	    .framing = {.shot = Shot::Overview, .include = {k_RockyPlace - glm::vec2 {15.0f}, k_RockyPlace + glm::vec2 {15.0f}}},
+	    .objects = {{.type = AbodeInfo::CelticTownCentre, .offset = {0.0f, 50.0f}},
+	                {.type = MobileStaticInfo::RockChalk, .offset = k_RockyPlace + glm::vec2 {4.0f, 0.0f}},
+	                {.type = MobileStaticInfo::RockChalk, .offset = k_RockyPlace + glm::vec2 {-4.0f, 0.0f}},
+	                {.type = MobileStaticInfo::RockChalk, .offset = k_RockyPlace + glm::vec2 {0.0f, 4.0f}},
+	                {.type = MobileStaticInfo::RockChalk, .offset = k_RockyPlace + glm::vec2 {0.0f, -4.0f}}},
+	    .commands = {{.kind = Kind::CallNative,
+	                  .delaySeconds = 1.0f,
+	                  .script = "CREATE",
+	                  .scriptArguments = {{.kind = ScriptArgument::Kind::Integer,
+	                                       .number = static_cast<float>(script::ObjectType::Scaffold)},
+	                                      {.kind = ScriptArgument::Kind::Integer, .number = 5000.0f},
+	                                      {.kind = ScriptArgument::Kind::Position, .point = k_RockyPlace}}},
+	                 {.kind = Kind::CallNative,
+	                  .delaySeconds = 0.0f,
+	                  .script = "SET_SCAFFOLD_PROPERTIES",
+	                  .scriptArguments = {{.kind = ScriptArgument::Kind::Made, .index = 0},
+	                                      {.kind = ScriptArgument::Kind::Integer, .number = k_WorkshopNumber},
+	                                      {.kind = ScriptArgument::Kind::Number, .number = k_WorkshopSize},
+	                                      {.kind = ScriptArgument::Kind::Integer, .number = 0.0f}}},
+	                 {.kind = Kind::CallNative,
+	                  .delaySeconds = 0.0f,
+	                  .script = "SET_ACTIVE",
+	                  .scriptArguments = {{.kind = ScriptArgument::Kind::Integer, .number = 1.0f},
+	                                      {.kind = ScriptArgument::Kind::Made, .index = 0}}}},
+	    // A town of the neutral player wants no workshop, so the town stays the player's
+	    .townBeliefInPlayer = 1000.0f,
 	});
 }
 
@@ -14402,9 +14643,10 @@ bool testbed_scenarios::NeedsNoCreature(Command::Kind kind)
 	       kind == Kind::SetOpenClose || kind == Kind::LayGateStone || kind == Kind::HandTapObject || kind == Kind::Advisor ||
 	       kind == Kind::RunText || kind == Kind::PlayHandDemo || kind == Kind::Reframe || kind == Kind::DestroyTemple ||
 	       kind == Kind::RunHelpMessage || kind == Kind::EndGuidanceWaits || kind == Kind::SetTownBeliefInRival ||
-	       kind == Kind::RecordChallenge || kind == Kind::EnterTemple || kind == Kind::HandTake || kind == Kind::HandApply ||
-	       kind == Kind::HandTakeShownSeed || kind == Kind::RunScript || kind == Kind::PlayBoatFilm || kind == Kind::HandPour ||
-	       kind == Kind::HandRelease || kind == Kind::SetReportLatency || kind == Kind::RemoveObject || kind == Kind::ReadTip ||
+	       kind == Kind::GiveLandTown || kind == Kind::RecordChallenge || kind == Kind::EnterTemple || kind == Kind::HandTake ||
+	       kind == Kind::HandApply || kind == Kind::HandTakeShownSeed || kind == Kind::RunScript ||
+	       kind == Kind::PlayBoatFilm || kind == Kind::HandPour || kind == Kind::HandRelease ||
+	       kind == Kind::SetReportLatency || kind == Kind::RemoveObject || kind == Kind::ReadTip ||
 	       kind == Kind::LookAtTempleScroll || kind == Kind::HandGripTotem || kind == Kind::ProfileFolderCheck ||
 	       kind == Kind::PlayCustomMusic || kind == Kind::ShowCustomMusicControls || kind == Kind::OwnTattooPicture ||
 	       kind == Kind::OpenTattooMenu || kind == Kind::OpenControlsBox || kind == Kind::OpenMenuPage ||
@@ -14450,7 +14692,7 @@ std::string_view testbed_scenarios::Name(Shot shot)
 
 std::string_view testbed_scenarios::Name(Command::Kind kind)
 {
-	constexpr std::array<std::string_view, 211> k_Names {
+	constexpr std::array<std::string_view, 212> k_Names {
 	    "walk to",
 	    "run to",
 	    "follow",
@@ -14662,6 +14904,7 @@ std::string_view testbed_scenarios::Name(Command::Kind kind)
 	    "tap a worship site icon",
 	    "change the body's look",
 	    "tap the temple's entrance",
+	    "give a town of the land to the player",
 	};
 	return k_Names.at(static_cast<size_t>(kind));
 }

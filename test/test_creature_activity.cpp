@@ -7,6 +7,9 @@
  * openblack is licensed under the GNU General Public License version 3.
  *******************************************************************************/
 
+#include <cstddef>
+#include <cstdint>
+
 #include <array>
 #include <optional>
 #include <vector>
@@ -274,4 +277,58 @@ TEST(CreatureActivity, AScriptMakesTwoCreaturesFriendsBothWays)
 	// Either list is enough
 	EXPECT_TRUE(creature_activity::AreFriends({}, 3, ofOgre, 7));
 	EXPECT_FALSE(creature_activity::AreFriends(ofGremlin, 3, {}, 9));
+}
+
+TEST(CreatureActivity, TheKindAndTheFactsThatADesireReadsGiveTheSameAnswer)
+{
+	for (size_t d = 0; d < creature_desires::k_DesireCount; ++d)
+	{
+		const auto desire = static_cast<Desire>(d);
+		const auto read = FactsReadBy(desire);
+		for (auto k = static_cast<uint8_t>(Thing::Villager); k <= static_cast<uint8_t>(Thing::Other); ++k)
+		{
+			const auto kind = static_cast<Thing>(k);
+			const bool maySuit = KindMaySuit(desire, kind);
+			// Each set of the twelve flags, with a low height and with a tall height
+			for (uint32_t bits = 0; bits < (1u << 13); ++bits)
+			{
+				const auto bit = [bits](uint32_t n) { return (bits & (1u << n)) != 0; };
+				const ThingFacts facts {
+				    .kind = kind,
+				    .canActOn = bit(0),
+				    .attackable = bit(1),
+				    .playable = bit(2),
+				    .inspectable = bit(3),
+				    .dead = bit(4),
+				    .dancing = bit(5),
+				    .pickable = bit(6),
+				    .itself = bit(7),
+				    .friendOfCreature = bit(8),
+				    .frightening = bit(9),
+				    .mushroom = bit(10),
+				    .height = bit(11) ? 2.0f : 0.0f,
+				    .creatureCanPickUp = bit(12),
+				};
+				const bool suits = ThingSuits(desire, facts);
+				if (!maySuit)
+				{
+					ASSERT_FALSE(suits) << d << " " << static_cast<int>(k) << " " << bits;
+				}
+				auto readOnly = facts;
+				if (!read.living)
+				{
+					readOnly.dead = false;
+					readOnly.dancing = false;
+					readOnly.pickable = true;
+					readOnly.friendOfCreature = false;
+					readOnly.frightening = false;
+				}
+				if (!read.mushroom)
+				{
+					readOnly.mushroom = false;
+				}
+				ASSERT_EQ(ThingSuits(desire, readOnly), suits) << d << " " << static_cast<int>(k) << " " << bits;
+			}
+		}
+	}
 }

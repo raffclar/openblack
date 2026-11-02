@@ -510,8 +510,8 @@ StatisticsBox::StatisticsBox(const TextDatabase& texts, const GameFont& font, st
 	                                    std::u16string(texts.Get("HELP_TEXT_PAUSE_STATS_05")), true);
 	_population = &dialog.Add<LineGraph>(DialogRect {.min = {40, 230}, .max = {510, 330}},
 	                                     std::u16string(texts.Get("HELP_TEXT_PAUSE_STATS_06")), false);
-	_list = &dialog.Add<List>(font, DialogRect {.min = {40, 365}, .max = {760, 515}}, DialogPainter::SmallTextSize(), false,
-	                          true, true);
+	_list = &dialog.Add<List>(font, DialogRect {.min = {40, 365}, .max = {760, k_ListBottom}}, DialogPainter::SmallTextSize(),
+	                          false, true, true);
 	_list->drawOver = [this](const DialogPainter& painter, const List::ItemPlace& place) { DrawRow(painter, place); };
 	_list->onClick = [this] {
 		if (const auto row = _list->GetSelection(); row.has_value())
@@ -526,6 +526,14 @@ StatisticsBox::StatisticsBox(const TextDatabase& texts, const GameFont& font, st
 	_graphicBox->onChange = [this](bool) { SetGraphic(true); };
 	_numericBox->onChange = [this](bool) { SetGraphic(false); };
 	_creatures = &dialog.Add<CreatureViews>();
+	// The window of gods of a network game of more than 4 gods: the arrows on the line of the check boxes, right of them,
+	// and the scroll bar under the god columns of the rows
+	_window = std::make_unique<GodWindow>(dialog, font, k_GodWindowLayout, [this](bool windowMoved) {
+		if (windowMoved)
+		{
+			ShowWindow();
+		}
+	});
 }
 
 StatisticsBox::~StatisticsBox() = default;
@@ -534,6 +542,9 @@ void StatisticsBox::Open(statistics::BoxFigures figures, PlayerNames local, bool
 {
 	_figures = std::move(figures);
 	_local = local;
+	_window->SetGods(_figures.players.size());
+	// With the window of gods the list makes room under it for the scroll bar
+	_list->rect.max.y = _window->IsShown() ? k_GodWindowLayout.view.max.y : k_ListBottom;
 	_dialog->SetTabLabel(0, fromGameOver ? _gameOverLabel : _mainMenuLabel);
 	// It opens on Player Stats, as it was. Its graphs do not grow again
 	_tab = Tab::Player;
@@ -552,7 +563,9 @@ void StatisticsBox::SetTab(Tab tab)
 		}
 	}
 	_tab = tab;
-	_page = MakePage(tab, _figures, _local);
+	const auto shown = _window->Shown();
+	_page = MakePage(tab, _figures, _local, shown);
+	_allGodsPage = _window->IsShown() ? MakePage(tab, _figures, _local) : Page {};
 	for (size_t i = 0; i < k_GraphCount; ++i)
 	{
 		_graphs.at(i)->visible = _page.graphShown.at(i);
@@ -595,8 +608,9 @@ void StatisticsBox::SetTab(Tab tab)
 	std::vector<std::vector<float>> influence;
 	std::vector<std::vector<float>> population;
 	std::vector<glm::vec4> colours;
-	for (const auto& player : _figures.players)
+	for (const auto index : shown)
 	{
+		const auto& player = _figures.players.at(index);
 		influence.push_back(player.influenceHistory);
 		population.push_back(player.populationHistory);
 		colours.push_back(PlayerColour(player.player, _figures.landNumber));
@@ -605,9 +619,19 @@ void StatisticsBox::SetTab(Tab tab)
 	_population->SetLines(std::move(population), colours, std::nullopt);
 	_creatures->colours = std::move(colours);
 	_creatures->players.clear();
-	for (const auto& player : _figures.players)
+	for (const auto index : shown)
 	{
-		_creatures->players.push_back(player.player);
+		_creatures->players.push_back(_figures.players.at(index).player);
+	}
+}
+
+void StatisticsBox::ShowWindow()
+{
+	const auto picked = _shownRow;
+	SetTab(_tab);
+	if (picked.has_value())
+	{
+		PickRow(*picked);
 	}
 }
 
@@ -714,7 +738,22 @@ void StatisticsBox::DrawRow(const DialogPainter& painter, const List::ItemPlace&
 	// Numbers: each player's value in their colour, then the total; with one value, the total alone
 	const auto y = place.top + 2;
 	const auto width = ColumnWidth(values);
-	if (values > 1)
+	const auto* allGods = place.index < _allGodsPage.rows.size() ? &_allGodsPage.rows.at(place.index) : nullptr;
+	if (values > 1 && allGods != nullptr && allGods->values.size() == _window->GetGods())
+	{
+		// The window of gods: the value of each god whose column the view shows, cut at the edges of the view
+		const auto& view = _window->GetLayout().view;
+		const auto column = _window->GetLayout().column;
+		painter.SetClip(DialogRect {.min = {view.min.x, 0}, .max = {view.max.x, k_DialogSize.y}});
+		for (const auto& visible : _window->Visible())
+		{
+			painter.DrawText({visible.left + (column / 2), y}, width * 5, Justify::Centre,
+			                 Widen(Format(*allGods, allGods->values.at(visible.god))), Small(),
+			                 PlayerColour(allGods->players.at(visible.god), _figures.landNumber));
+		}
+		painter.SetClip(std::nullopt);
+	}
+	else if (values > 1)
 	{
 		for (size_t i = 0; i < values; ++i)
 		{

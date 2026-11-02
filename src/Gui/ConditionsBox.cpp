@@ -37,6 +37,24 @@ constexpr DialogRect k_ListRect {.min = {40, 345}, .max = {755, 525}};
 constexpr int k_CheckBoxTop = 295;
 constexpr int k_FirstCheckBoxLeft = 100;
 constexpr int k_CheckBoxSpacing = 100;
+// The window of gods of a game of more than 4 gods. The arrows go on the line of the check boxes, right of them. The god
+// columns are 100 wide, as the check boxes are 100 apart, with each check box 38 in from the left of its column. The
+// view of 4 columns goes down to the shadow of the labels under the check boxes. The scroll bar takes the place under
+// it, and the list starts 2 under the scroll bar.
+constexpr int k_GodColumn = k_CheckBoxSpacing;
+constexpr int k_CheckBoxInColumn = 38;
+constexpr int k_ViewLeft = k_FirstCheckBoxLeft - k_CheckBoxInColumn;
+constexpr int k_ViewBottom = 347;
+constexpr GodWindow::Layout k_GodWindowLayout {
+    .line = {.min = {520, 295}, .max = {755, 320}},
+    .view = {.min = {k_ViewLeft, 290}, .max = {k_ViewLeft + god_window::ViewWidth(k_GodColumn), k_ViewBottom}},
+    .column = k_GodColumn,
+    .bar = {.min = {k_ViewLeft, k_ViewBottom},
+            .max = {k_ViewLeft + god_window::ViewWidth(k_GodColumn), k_ViewBottom + god_window::k_BarThickness}},
+    .wheel = {.min = {k_ViewLeft, 290},
+              .max = {k_ViewLeft + god_window::ViewWidth(k_GodColumn), k_ViewBottom + god_window::k_BarThickness}},
+};
+constexpr int k_ScrolledListTop = k_ViewBottom + god_window::k_BarThickness + 2;
 
 // The values of the gods in the list
 constexpr int k_ValueTextSize = 26;
@@ -80,18 +98,28 @@ ConditionsBox::ConditionsBox(const TextDatabase& texts, const GameFont& font, st
 	_list = &dialog.Add<List>(font, k_ListRect, DialogPainter::MidTextSize(), false, true, true);
 	_list->ShowScrollBarWhenNeeded();
 	_list->drawUnder = [this](const DialogPainter& painter, const List::ItemPlace& place) { DrawValues(painter, place); };
-	for (size_t i = 0; i < k_Gods; ++i)
+	for (size_t i = 0; i < k_CheckBoxes; ++i)
 	{
 		auto label = std::u16string(u"Player ") + static_cast<char16_t>(u'1' + i);
 		auto& box = dialog.Add<CheckBox>(
 		    font, glm::ivec2 {k_FirstCheckBoxLeft + (k_CheckBoxSpacing * static_cast<int>(i)), k_CheckBoxTop},
 		    CheckBox::k_DefaultSize, std::move(label), BigButton::LabelSide::Below, true, false);
 		box.onChange = [this, i](bool ticked) {
-			_ticked.at(i) = ticked;
+			if (const auto god = _boxGods.at(i); god.has_value() && *god < _ticked.size())
+			{
+				_ticked.at(*god) = ticked;
+			}
 			FillGraph();
 		};
 		_checkBoxes.at(i) = &box;
 	}
+	_window = std::make_unique<GodWindow>(dialog, font, k_GodWindowLayout, [this](bool windowMoved) {
+		ShowCheckBoxes();
+		if (windowMoved)
+		{
+			FillGraph();
+		}
+	});
 }
 
 ConditionsBox::~ConditionsBox() = default;
@@ -101,20 +129,12 @@ void ConditionsBox::Open(Figures figures, bool fromGameOver)
 	_figures = std::move(figures);
 	_dialog->SetTabLabel(0, fromGameOver ? _gameOverLabel : _mainMenuLabel);
 	_dialog->SelectTab(k_MultiplayerTab);
-	// Every check box is ticked again, and only the check boxes of the gods that play show
-	_ticked.fill(true);
-	for (auto* box : _checkBoxes)
-	{
-		box->SetChecked(true);
-		box->visible = false;
-	}
-	for (const auto& god : _figures.gods)
-	{
-		if (const auto number = static_cast<size_t>(god.player); number < k_Gods)
-		{
-			_checkBoxes.at(number)->visible = true;
-		}
-	}
+	// Every god is ticked again, and only the check boxes of the gods that play show
+	_ticked.assign(_figures.gods.size(), true);
+	_window->SetGods(_figures.gods.size());
+	// With the window of gods the list makes room over it for the scroll bar
+	_list->rect.min.y = _window->IsShown() ? k_ScrolledListTop : k_ListRect.min.y;
+	ShowCheckBoxes();
 	std::vector<List::Item> items;
 	items.reserve(_figures.conditions.size());
 	for (const auto& condition : _figures.conditions)
@@ -132,11 +152,55 @@ void ConditionsBox::Open(Figures figures, bool fromGameOver)
 	_dialog->Reset();
 }
 
+void ConditionsBox::ShowCheckBoxes()
+{
+	_checkBoxGods = GodsOfCheckBoxes(_figures, _window->GetFirst());
+	_boxGods = {};
+	if (!_window->IsShown())
+	{
+		// The check boxes of the game, in their places
+		for (size_t i = 0; i < k_CheckBoxes; ++i)
+		{
+			auto& box = *_checkBoxes.at(i);
+			const auto god = i < k_Gods ? _checkBoxGods.at(i) : std::nullopt;
+			_boxGods.at(i) = god;
+			box.visible = god.has_value();
+			box.SetChecked(god.has_value() && *god < _ticked.size() && _ticked.at(*god));
+			box.label = i < k_Gods ? CheckBoxLabel(_figures, _checkBoxGods, i) : std::u16string();
+			const auto left = k_FirstCheckBoxLeft + (k_CheckBoxSpacing * static_cast<int>(i));
+			box.rect = {.min = {left, k_CheckBoxTop},
+			            .max = {left + CheckBox::k_DefaultSize, k_CheckBoxTop + CheckBox::k_DefaultSize}};
+			box.clip.reset();
+		}
+		return;
+	}
+	// The window of gods: a check box for each god column that the view shows, cut at the edges of the view
+	const auto visible = _window->Visible();
+	for (size_t i = 0; i < k_CheckBoxes; ++i)
+	{
+		auto& box = *_checkBoxes.at(i);
+		if (i >= visible.size())
+		{
+			box.visible = false;
+			continue;
+		}
+		const auto god = visible.at(i).god;
+		_boxGods.at(i) = god;
+		const auto left = visible.at(i).left + k_CheckBoxInColumn;
+		box.rect = {.min = {left, k_CheckBoxTop},
+		            .max = {left + CheckBox::k_DefaultSize, k_CheckBoxTop + CheckBox::k_DefaultSize}};
+		box.clip = k_GodWindowLayout.view;
+		box.visible = true;
+		box.SetChecked(god < _ticked.size() && _ticked.at(god));
+		box.label = GodLabel(_figures, god);
+	}
+}
+
 void ConditionsBox::FillGraph()
 {
 	std::vector<std::vector<float>> lines;
 	std::vector<glm::vec4> colours;
-	for (const auto index : ShownGods(_figures, _ticked))
+	for (const auto index : ShownGods(_checkBoxGods, _ticked))
 	{
 		const auto& god = _figures.gods.at(index);
 		lines.push_back(god.scores);
@@ -154,7 +218,7 @@ void ConditionsBox::DrawValues(const DialogPainter& painter, const List::ItemPla
 	{
 		return;
 	}
-	const auto shown = ShownGods(_figures, _ticked);
+	const auto shown = ShownGods(_checkBoxGods, _ticked);
 	const auto columns = ValueColumns(_list->rect.min.x, place.right, shown.size());
 	const auto number = _figures.conditions.at(place.index).number;
 	auto x = columns.first;

@@ -24,6 +24,7 @@
 #include "3D/MapCoords.h"
 #include "ECS/Components/Workshop.h"
 #include "Enums.h"
+#include "Sound/SoundRequestInterface.h"
 
 namespace openblack::ecs
 {
@@ -213,6 +214,26 @@ struct JoinedTownFacts
 /// that town.
 [[nodiscard]] JoinedTown TownOfJoined(const JoinedTownFacts& facts);
 
+/// The player whose colour the puff of a join shows: the player of the scaffold under the hand. Every scaffold has the
+/// neutral player.
+inline constexpr PlayerNames k_JoinPuffPlayer = PlayerNames::NEUTRAL;
+/// The sounds of a join of scaffolds: four samples, one after the other
+inline constexpr uint32_t k_FirstJoinSample = 201;
+inline constexpr uint32_t k_JoinSamples = 4;
+
+/// The sound of a join: the sample in the bank of the game's sounds and how it plays
+struct JoinSound
+{
+	uint32_t sample;
+	audio::SoundEffectOptions options;
+};
+
+/// The sound of a join with a hand. `step` is the number of the sound in the four sounds, 0 to 3. The sound plays at
+/// the hand and does not move. Its owner is the held scaffold, which the join removes.
+[[nodiscard]] JoinSound JoinSoundOf(uint32_t step, entt::entity held, glm::vec3 hand);
+/// The number of the sound that the next join with a hand plays
+[[nodiscard]] uint32_t NextJoinSound(uint32_t step);
+
 /// The id that the game gives to each town that a scaffold founds
 inline constexpr uint32_t k_FoundedTownId = 703058;
 
@@ -238,16 +259,21 @@ struct ClearingPush
 
 /// The push of a thing from the middle of the scaffold `centre`, by the edge point `edge` towards the thing (both in
 /// metres). The thing goes twice as far as the edge point. Its speed divides each part by the larger part, with the
-/// sign. Thus a thing at low x and low z can get a very high speed, as in the game.
+/// sign. Thus a thing at low x and low z can get a very high speed, as in the game. When the larger part is 0, the
+/// divide uses the larger size, so a thing straight to the west or the south flies straight away.
 [[nodiscard]] ClearingPush PushOutOfWay(glm::vec2 centre, glm::vec2 edge);
 
-/// The height of a pushed thing above the land at its new place when it starts to fly, in metres
-inline constexpr float k_PushStartAltitude = 0.5f;
+/// The height that a pushed thing starts at above the height of the scaffold, in metres
+inline constexpr float k_PushStartRise = 0.5f;
 
-/// The new place of a thing that a scaffold which clears its ground pushes, from the middle of the scaffold `centre`
-/// in metres. The thing starts above the land at that place, not at the height of the scaffold (openblack's fix: the
-/// game can start it under the land).
+/// The new place on the map of a thing that a scaffold which clears its ground pushes, from the middle of the scaffold
+/// `centre` in metres
 [[nodiscard]] map_coords::MapCoords PushStart(glm::vec2 centre, const ClearingPush& push);
+
+/// The world height at which a pushed thing starts: the height of the scaffold above the land `scaffoldAltitude`, plus
+/// half a metre. This is not a height above the land, so the thing starts under the land where the land is higher, as
+/// in the game.
+[[nodiscard]] float PushStartHeight(float scaffoldAltitude);
 
 /// What a scaffold which clears its ground does to a thing in its reach
 enum class ClearingAction

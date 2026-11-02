@@ -83,6 +83,11 @@ bool IsMoving(const ControlsFrame& frame)
 	return (Gripping(frame) || frame.rotateAroundMouse || frame.bothButtons) && mouseMoved;
 }
 
+bool TurnAsked(const ControlsFrame& frame)
+{
+	return std::fabs(frame.turn) > k_TurnThreshold;
+}
+
 EventSet InputEvents(const ControlsFrame& frame)
 {
 	EventSet events;
@@ -94,7 +99,7 @@ EventSet InputEvents(const ControlsFrame& frame)
 	{
 		return events;
 	}
-	if (Allows(frame.features, feature::k_Rotate) && std::fabs(frame.turn) > k_TurnThreshold)
+	if (Allows(frame.features, feature::k_Rotate) && TurnAsked(frame))
 	{
 		events.Add(profile::k_CameraTurn);
 		events.Add(frame.turn > 0.0f ? profile::k_CameraTurnPositive : profile::k_CameraTurnNegative);

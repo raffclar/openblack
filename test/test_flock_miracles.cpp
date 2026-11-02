@@ -194,6 +194,8 @@ TEST(FlockMiracleRules, WhatAWolfHunts)
 	EXPECT_FALSE(flock::IsPrey({.isVillager = true, .onCorridor = false}));
 	EXPECT_FALSE(flock::IsPrey({.isVillager = true, .hunterFading = true}));
 	EXPECT_FALSE(flock::IsPrey({.isOtherAnimal = true, .hasMeat = false}));
+	// A villager whose kind has no food that the wolf eats is not hunted either
+	EXPECT_FALSE(flock::IsPrey({.isVillager = true, .hasMeat = false}));
 }
 
 TEST(FlockMiracleRules, AWolfLeavesAloneWhatItCannotGetToOrKill)

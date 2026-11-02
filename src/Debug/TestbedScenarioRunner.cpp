@@ -160,6 +160,7 @@
 #include "ECS/Map.h"
 #include "ECS/ObjectPhysics.h"
 #include "ECS/Registry.h"
+#include "ECS/ScriptFind.h"
 #include "ECS/ScriptFlocks.h"
 #include "ECS/Systems/AbodeKnockSystemInterface.h"
 #include "ECS/Systems/AdvisorSystemInterface.h"
@@ -267,6 +268,7 @@
 #include "Magic/MagicTables.h"
 #include "Magic/ScriptCast.h"
 #include "Magic/SpellRules.h"
+#include "Magic/TownBelief.h"
 #include "Resources/ResourceManager.h"
 #include "Resources/ResourcesInterface.h"
 #include "ScriptHeaders/ScriptInterfaceLevels.h"
@@ -3963,6 +3965,29 @@ void Runner::Give(const Command& command)
 		Log(fmt::format("{:.1f}s: the town believes {:.2f} in the second player", _seconds, command.amount));
 		return;
 	}
+	if (command.kind == Kind::GiveLandTown)
+	{
+		auto& registry = Locator::entitiesRegistry::value();
+		const auto id = ecs::script_find::TownIdFromScript(static_cast<float>(command.value));
+		const auto& towns = registry.Context().towns;
+		auto* impression = [&]() -> ecs::components::TownImpression* {
+			const auto town = towns.find(id);
+			return town != towns.end() && registry.Valid(town->second)
+			           ? registry.TryGet<ecs::components::TownImpression>(town->second)
+			           : nullptr;
+		}();
+		if (impression != nullptr)
+		{
+			for (size_t i = 0; i < magic::town_belief::k_PlayerCount; ++i)
+			{
+				const auto other = static_cast<PlayerNames>(i);
+				magic::town_belief::Set(impression->belief, other, other == command.player ? command.amount : 0.0f);
+			}
+		}
+		Log(fmt::format("{:.1f}s: the land's town {} believes {:.2f} in the player{}", _seconds, command.value, command.amount,
+		                impression != nullptr ? "" : " (no such town)"));
+		return;
+	}
 	if (command.kind == Kind::EndGuidanceWaits)
 	{
 		if (Locator::guidanceSystem::has_value())
@@ -4576,6 +4601,7 @@ void Runner::Give(const Command& command)
 	case Kind::RunHelpMessage:
 	case Kind::EndGuidanceWaits:
 	case Kind::SetTownBeliefInRival:
+	case Kind::GiveLandTown:
 	case Kind::ProfileFolderCheck:
 	case Kind::OwnTattooPicture:
 	case Kind::OpenTattooMenu:
@@ -5173,6 +5199,35 @@ std::optional<double> Runner::ReadCheck(const checks::Check& check) const
 		const auto& stores = Locator::resourceStoreSystem::value();
 		return static_cast<double>(stores.GetResource(*object, ResourceType::Food)) +
 		       static_cast<double>(stores.GetResource(*object, ResourceType::Wood));
+	}
+	case checks::Quantity::ObjectDistance:
+	{
+		const auto object = ObjectAt(check.index);
+		const auto* transform = object.has_value() ? registry.TryGet<const Transform>(*object) : nullptr;
+		if (transform == nullptr)
+		{
+			return std::nullopt;
+		}
+		const auto goal = MapPoint(_middle, check.point);
+		return static_cast<double>(glm::distance(glm::vec2(transform->position.x, transform->position.z), goal));
+	}
+	case checks::Quantity::ObjectTemperature:
+	{
+		const auto object = ObjectAt(check.index);
+		if (!object.has_value() || !Locator::fireSystem::has_value())
+		{
+			return std::nullopt;
+		}
+		return static_cast<double>(Locator::fireSystem::value().GetTemperature(*object));
+	}
+	case checks::Quantity::FireNear:
+	{
+		if (!Locator::fireSystem::has_value())
+		{
+			return std::nullopt;
+		}
+		const auto point = MapPoint(_middle, check.point);
+		return Locator::fireSystem::value().IsFireNear({point.x, 0.0f, point.y}, check.radius) ? 1.0 : 0.0;
 	}
 	}
 	return std::nullopt;
@@ -5949,7 +6004,7 @@ std::optional<glm::ivec2> Runner::BodyOnScreen(entt::entity creature, glm::vec2 
 	return glm::ivec2(glm::round(glm::vec2(screen)));
 }
 
-std::optional<glm::ivec2> Runner::AltarOnScreen(glm::vec2 size) const
+std::optional<glm::ivec2> Runner::AltarOnScreen(glm::vec2 size, bool foodPot) const
 {
 	auto& registry = Locator::entitiesRegistry::value();
 	const auto& towns = registry.Context().towns;
@@ -5960,12 +6015,14 @@ std::optional<glm::ivec2> Runner::AltarOnScreen(glm::vec2 size) const
 	}
 	const auto site = registry.Get<const ecs::components::Town>(found->second).worshipSite;
 	const auto* worship = registry.Valid(site) ? registry.TryGet<const ecs::components::WorshipSite>(site) : nullptr;
-	if (worship == nullptr || !registry.Valid(worship->altar))
+	const auto target = worship != nullptr ? (foodPot ? worship->foodPot : worship->altar) : entt::null;
+	if (!registry.Valid(target) || !registry.AllOf<ecs::components::Transform>(target))
 	{
 		return std::nullopt;
 	}
-	// The middle of the altar's foot: the line from the camera to it meets the altar's low top first
-	const auto& foot = registry.Get<const ecs::components::Transform>(worship->altar).position;
+	// The middle of the altar's foot: the line from the camera to it meets the altar's low top first. The food pot is
+	// low, so its middle is the place where it stands.
+	const auto& foot = registry.Get<const ecs::components::Transform>(target).position;
 	glm::vec3 screen;
 	if (!Locator::camera::value().ProjectWorldToScreen(foot, {0.0f, 0.0f, size.x, size.y}, screen))
 	{
@@ -6174,10 +6231,10 @@ std::string Runner::GivePointerCommand(const Command& command)
 	}
 	case Kind::PointerOnAltar:
 	{
-		const auto to = AltarOnScreen(size);
+		const auto to = AltarOnScreen(size, command.value == 1);
 		if (!to.has_value())
 		{
-			return "no altar on the screen";
+			return command.value == 1 ? "no food pot on the screen" : "no altar on the screen";
 		}
 		const auto moved = *to - pointer.position;
 		pointer.position = *to;

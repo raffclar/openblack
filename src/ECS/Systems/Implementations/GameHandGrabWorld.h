@@ -141,6 +141,8 @@ public:
 	bool TakeIntoStore(entt::entity store, entt::entity object) override;
 	[[nodiscard]] bool TakesWhole(entt::entity target, entt::entity held) const override;
 	bool LayGateStone(entt::entity plinth, entt::entity stone) override;
+	[[nodiscard]] bool DropsOnTeleport(entt::entity stone, entt::entity held) const override;
+	void DropOnTeleport(entt::entity stone, entt::entity held) override;
 	[[nodiscard]] bool JoinsScaffold(entt::entity target, entt::entity held) const override;
 	void JoinScaffold(entt::entity target, entt::entity held) override;
 	entt::entity RestOfScaffold(entt::entity scaffold) override;

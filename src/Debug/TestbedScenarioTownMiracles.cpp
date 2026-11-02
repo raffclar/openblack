@@ -14,6 +14,7 @@
 #include <SDL_scancode.h>
 
 #include "Input/BindableActions.h"
+#include "ScriptHeaders/ScriptEnums.h"
 #include "TestbedScenarioRegistry.h"
 
 using namespace openblack;
@@ -130,6 +131,47 @@ void AddSecondLandIconScenarios(std::vector<Scenario>& all)
 	                                      {.kind = Argument::Kind::Position, .point = {9.0f, -19.0f}}}},
 	                 {.kind = Kind::DrawGesture, .delaySeconds = 3.0f, .value = static_cast<size_t>(GestureType::Scribble)}},
 	    .hand = HandHold {.offset = {9.0f, -25.0f}, .height = 6.0f},
+	    .townBeliefInPlayer = k_TownBelief,
+	    .townMiracles = {MagicType::Heal, MagicType::Water},
+	});
+	// The workshop's abode number and size, as the third land's script lays out the workshop of the home town
+	constexpr float k_WorkshopNumber = 9.0f;
+	constexpr float k_WorkshopSize = 3.0f;
+	// North of the heal and water icons of the site, near to them and far from the altar
+	constexpr glm::vec2 k_NextToIcons {-24.0f, -21.0f};
+	all.push_back({
+	    .id = "objects.scaffold_stopped_by_worship_icons",
+	    .name = "A script scaffold next to a worship site's icons opens no building site",
+	    .facet = Facet::Objects,
+	    .description = "The town and temple of worship.icons_charge_second_land, with the site built and its heal "
+	                   "and water icons. One second after the site, CREATE makes a scaffold (type 39) a few metres "
+	                   "north of the icons, SET_SCAFFOLD_PROPERTIES gives it the workshop (abode number 9) and the size "
+	                   "3, and SET_ACTIVE sets it active, as the third land's script does with a workshop.",
+	    .expected = "The icons stand in the cells of the land, as buildings do, so the workshop does not fit: no "
+	                "building site opens and no phantom of a workshop shows. The scaffold stays where it is. Each "
+	                "icon casts its shadow on the land.",
+	    .environment = {.dispenserGrid = false, .landNumber = k_SecondLand},
+	    .framing = {.shot = Shot::Placed, .eye = {-8.0f, 16.0f, -2.0f}, .look = {-24.0f, 2.0f, -25.0f}},
+	    .objects = Town(),
+	    .temples = {{.offset = k_Temple}},
+	    .commands = {{.kind = Kind::BuildWorshipSites, .delaySeconds = 3.0f},
+	                 {.kind = Kind::CallNative,
+	                  .delaySeconds = 1.0f,
+	                  .script = "CREATE",
+	                  .scriptArguments = {{.kind = Argument::Kind::Integer,
+	                                       .number = static_cast<float>(script::ObjectType::Scaffold)},
+	                                      {.kind = Argument::Kind::Integer, .number = 5000.0f},
+	                                      {.kind = Argument::Kind::Position, .point = k_NextToIcons}}},
+	                 {.kind = Kind::CallNative,
+	                  .script = "SET_SCAFFOLD_PROPERTIES",
+	                  .scriptArguments = {{.kind = Argument::Kind::Made, .index = 0},
+	                                      {.kind = Argument::Kind::Integer, .number = k_WorkshopNumber},
+	                                      {.kind = Argument::Kind::Number, .number = k_WorkshopSize},
+	                                      {.kind = Argument::Kind::Integer, .number = 0.0f}}},
+	                 {.kind = Kind::CallNative,
+	                  .script = "SET_ACTIVE",
+	                  .scriptArguments = {{.kind = Argument::Kind::Integer, .number = 1.0f},
+	                                      {.kind = Argument::Kind::Made, .index = 0}}}},
 	    .townBeliefInPlayer = k_TownBelief,
 	    .townMiracles = {MagicType::Heal, MagicType::Water},
 	});

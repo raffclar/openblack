@@ -12,10 +12,13 @@
 #include <array>
 #include <functional>
 #include <memory>
+#include <optional>
 #include <string>
+#include <vector>
 
 #include "ConditionsBoxRules.h"
 #include "Dialog.h"
+#include "GodWindow.h"
 
 namespace openblack::gui
 {
@@ -37,6 +40,9 @@ class LineGraph;
 /// this computer (see conditions_box). The check boxes show only for the gods that play. A click on a check box shows
 /// or hides the god in the graph and in the list.
 ///
+/// A network game of more than 4 gods shows every god: the check boxes scroll along the gods under the window of gods
+/// (GodWindow). The graph and the list show the ticked gods among the 4 gods of the window (deviation 195).
+///
 /// The figures are taken as the box opens and stay as they were while it is open.
 class ConditionsBox
 {
@@ -54,12 +60,16 @@ public:
 	[[nodiscard]] Dialog& GetDialog() noexcept { return *_dialog; }
 	[[nodiscard]] const Dialog& GetDialog() const noexcept { return *_dialog; }
 	[[nodiscard]] const conditions_box::Figures& GetFigures() const noexcept { return _figures; }
-	[[nodiscard]] const std::array<bool, conditions_box::k_Gods>& GetTicked() const noexcept { return _ticked; }
+	/// Whether each god is ticked, by its place in the figures
+	[[nodiscard]] const std::vector<bool>& GetTicked() const noexcept { return _ticked; }
+	[[nodiscard]] GodWindow& GetGodWindow() noexcept { return *_window; }
 
 	/// The box, 780 by 500 in the middle of the dialog space
 	static constexpr DialogRect k_Box = TabbedBox({780, 500});
 
 private:
+	/// The check boxes show the gods of the view, ticked as the player left them
+	void ShowCheckBoxes();
 	/// The graph shows the score history of each god whose check box is ticked
 	void FillGraph();
 	/// Draws the values of the gods under the name of a condition in the list
@@ -73,8 +83,16 @@ private:
 	std::unique_ptr<Dialog> _dialog;
 	statistics_box::LineGraph* _graph {nullptr};
 	List* _list {nullptr};
-	std::array<CheckBox*, conditions_box::k_Gods> _checkBoxes {};
-	std::array<bool, conditions_box::k_Gods> _ticked {true, true, true, true};
+	/// The check boxes: one for each of the first four players, and one more for the window of gods, which can show
+	/// parts of 5 god columns
+	static constexpr size_t k_CheckBoxes = conditions_box::k_Gods + 1;
+	std::array<CheckBox*, k_CheckBoxes> _checkBoxes {};
+	std::unique_ptr<GodWindow> _window;
+	/// The 4 gods of the window, which the graph and the list show when they are ticked
+	conditions_box::CheckBoxGods _checkBoxGods {};
+	/// The god of each check box
+	std::array<std::optional<size_t>, k_CheckBoxes> _boxGods {};
+	std::vector<bool> _ticked;
 	conditions_box::Figures _figures;
 };
 
