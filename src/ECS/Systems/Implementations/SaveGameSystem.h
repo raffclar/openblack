@@ -51,6 +51,7 @@ public:
 	void PrepareWorldState() override;
 	[[nodiscard]] std::function<std::vector<uint8_t>()> WorldStateLater() override;
 	bool LoadWorldState(std::span<const uint8_t> bytes) override;
+	bool LoadServerWorldState(std::span<const uint8_t> bytes) override;
 	bool Delete(uint32_t slot) override;
 	[[nodiscard]] std::optional<std::vector<uint8_t>> ReadPictureFile(std::string_view name) const override;
 	[[nodiscard]] temple::save_game_room::SavedGamesStamp GetSavedGamesStamp() const override;

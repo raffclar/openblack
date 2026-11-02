@@ -105,6 +105,10 @@ public:
 	/// Puts back the whole world from the bytes that WorldState gave. The land of the bytes starts again, and the world
 	/// goes on from the turn of the bytes. Returns whether the world loaded.
 	virtual bool LoadWorldState(std::span<const uint8_t> /*bytes*/) { return false; }
+	/// Puts back the world state that a game server sent. The state must be of the land that is open, and its scripts must
+	/// run the program that the land loaded: the game opens no file that the state names and runs no code that the
+	/// state brings. Returns whether the world loaded.
+	virtual bool LoadServerWorldState(std::span<const uint8_t> /*bytes*/) { return false; }
 
 	/// The player goes into the temple: the game takes a picture of the screen for the saves that come next
 	virtual void TakeTemplePicture() = 0;

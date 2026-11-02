@@ -481,6 +481,17 @@ std::string_view VillageTotemSystem::WhyNotGrip(entt::entity totem, PlayerNames 
 	return {};
 }
 
+std::optional<PlayerNames> VillageTotemSystem::TownOwnerOf(entt::entity totem) const
+{
+	const auto& registry = _world->Entities();
+	if (!registry.Valid(totem) || !registry.AllOf<VillageTotem>(totem))
+	{
+		return std::nullopt;
+	}
+	const auto town = TownOf(totem);
+	return town != entt::null ? std::optional(registry.Get<const Town>(town).owner) : std::nullopt;
+}
+
 bool VillageTotemSystem::Grip(entt::entity totem, PlayerNames player)
 {
 	// Only a totem of the player's own town that works, with the heart of their temple and the town's worship site

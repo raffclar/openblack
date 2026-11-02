@@ -43,11 +43,15 @@ struct HttpRequest
 	std::string url;
 	std::vector<HttpHeader> headers;
 	std::vector<uint8_t> body;
-	/// A transfer of a large file, such as a land of a network game. The answer has no size limit and the request has
-	/// no limit on its full time. The request stops when no bytes come for the time of the stall limit. The client also
-	/// asks the server for a compressed answer, and gives the body after it expands it.
+	/// A transfer of a large file, such as a land of a network game. The answer has the larger limit
+	/// k_MostLargeAnswerBytes, and the request has no limit on its full time. The request stops when no bytes come for the
+	/// time of the stall limit. The client asks for the file as it is, with no compression, so that a small compressed
+	/// answer cannot expand to a very large body.
 	bool large {false};
 };
+
+/// The most bytes of the answer to a transfer of a large file. The lobby keeps maps of at most 1 MiB.
+inline constexpr size_t k_MostLargeAnswerBytes = 64 * 1024 * 1024;
 
 /// Why a request got no answer from the server
 enum class HttpError : uint8_t
@@ -122,8 +126,11 @@ namespace http_policy
 [[nodiscard]] bool IsSameOriginPath(std::string_view url) noexcept;
 /// True when the address starts with wss:// and has a host
 [[nodiscard]] bool IsWssAddress(std::string_view url) noexcept;
-/// True when the host of an https:// or wss:// address is this computer: localhost or an IPv4 address 127.x.x.x. The
-/// test authorities of the tools are only for such addresses.
+/// True when the host is this computer: the name localhost, or an IPv4 address of four decimal numbers from 0 to 255 with
+/// 127 first. A name such as 127.example.com is not such a host.
+[[nodiscard]] bool IsLoopbackHost(std::string_view host) noexcept;
+/// True when the host of an https:// or wss:// address is this computer (IsLoopbackHost). The test authorities of the
+/// tools are only for such addresses.
 [[nodiscard]] bool IsLoopbackAddress(std::string_view url) noexcept;
 
 } // namespace http_policy

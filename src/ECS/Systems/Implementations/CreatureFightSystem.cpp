@@ -32,6 +32,7 @@
 #include <glm/gtx/euler_angles.hpp>
 #include <glm/gtx/vec_swizzle.hpp>
 #include <glm/mat3x3.hpp>
+#include <spdlog/spdlog.h>
 
 #include "3D/CreatureBody.h"
 #include "3D/L3DMesh.h"
@@ -576,6 +577,23 @@ std::optional<entt::entity> PrimaryCreatureOf(const ecs::Registry& registry, Pla
 		}
 	});
 	return first;
+}
+
+/// The miracles of the fight that the creature knows. A creature with no mind, or a game with no tables, knows none.
+std::vector<MagicType> KnownFightMagic(const ecs::Registry& registry, entt::entity creature)
+{
+	std::vector<MagicType> known;
+	const auto* mind = registry.TryGet<const CreatureMindState>(creature);
+	if (mind == nullptr || !mind->learnt.has_value() || !Locator::infoConstants::has_value())
+	{
+		return known;
+	}
+	for (const auto& miracle :
+	     magic::KnownFightMiracles(Locator::infoConstants::value(), mind->learnt->knowledge.miraclesKnown))
+	{
+		known.push_back(miracle.magic);
+	}
+	return known;
 }
 
 /// Who is in a duel with whom, both of them still at it
@@ -2307,6 +2325,18 @@ void CreatureFightSystem::DoMove(PlayerNames player, entt::entity target, const 
 	const auto self = PrimaryCreatureOf(registry, player);
 	if (!self.has_value())
 	{
+		return;
+	}
+	// The hand and the gestures of a real player give only these moves. A miracle must be a fight miracle that the
+	// creature knows.
+	if (!fight::HandGives(move, KnownFightMagic(registry, *self)))
+	{
+		if (const auto logger = spdlog::get("game"); logger != nullptr)
+		{
+			SPDLOG_LOGGER_WARN(
+			    logger, "The turn refuses the fight move of kind {} and value {} of player {}: the hand does not give it",
+			    static_cast<int>(move.kind), move.value, static_cast<int>(player));
+		}
 		return;
 	}
 	const bool gesture = move.kind == fight::Move::Kind::Special || move.kind == fight::Move::Kind::Spell;

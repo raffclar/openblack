@@ -9,6 +9,10 @@
 
 #include "CreatureFileLoad.h"
 
+#include <MindFile.h>
+
+#include "Creature/ClanCreatureOrder.h"
+
 namespace openblack::creature_file_load
 {
 
@@ -65,6 +69,17 @@ Refusal WhyNotBrought(const BroughtRequest& request)
 bool KeptByThisComputer(const BroughtCreature& creature)
 {
 	return creature.ownGod && !creature.clanOrder && !creature.ownGodPlaysForClan;
+}
+
+bool ServerRelays(std::span<const uint8_t> data)
+{
+	if (data.empty() || clan_creature_order::Read(data).has_value())
+	{
+		return true;
+	}
+	// The server reads the file as each computer reads it before it brings the creature
+	creaturemind::MindFileData mind;
+	return creaturemind::Read(data, mind) == creaturemind::MindResult::Success;
 }
 
 } // namespace openblack::creature_file_load
