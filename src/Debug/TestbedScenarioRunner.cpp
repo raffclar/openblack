@@ -3159,6 +3159,9 @@ std::optional<lhvm::VMValue> Runner::ScriptValueOf(const ScriptArgument& argumen
 			return std::nullopt;
 		}
 		return lhvm::VMValue(_madeByNatives.at(argument.index));
+	case ScriptArgument::Kind::Text:
+		// A text is not a value: only a native call gives it
+		return std::nullopt;
 	}
 	if (!object.has_value())
 	{
@@ -3197,6 +3200,11 @@ std::string Runner::CallNative(const Command& command)
 			{
 				arguments.emplace_back(std::pair(lhvm::VMValue(part), lhvm::DataType::Float));
 			}
+			continue;
+		}
+		if (argument.kind == ScriptArgument::Kind::Text)
+		{
+			arguments.emplace_back(std::string(argument.text));
 			continue;
 		}
 		const auto given = ScriptValueOf(argument);

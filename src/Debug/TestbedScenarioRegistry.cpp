@@ -14794,7 +14794,7 @@ bool ScriptArgumentsFit(const Command& command, const Scenario& scenario)
 	    std::ranges::find_if(scenario.commands, [&command](const Command& other) { return &other == &command; });
 	const auto earlierCalls = static_cast<size_t>(
 	    std::count_if(scenario.commands.begin(), before, [](const Command& other) { return other.kind == Kind::CallNative; }));
-	const auto fits = [&scenario, earlierCalls](const ScriptArgument& argument) {
+	const auto fits = [&scenario, &command, earlierCalls](const ScriptArgument& argument) {
 		switch (argument.kind)
 		{
 		case ScriptArgument::Kind::Number:
@@ -14819,6 +14819,8 @@ bool ScriptArgumentsFit(const Command& command, const Scenario& scenario)
 			});
 		case ScriptArgument::Kind::Made:
 			return argument.index < earlierCalls;
+		case ScriptArgument::Kind::Text:
+			return command.kind == Command::Kind::CallNative && !argument.text.empty();
 		}
 		return false;
 	};
