@@ -16,8 +16,10 @@
 #include "Creature/CreatureIdleMind.h"
 #include "Creature/CreatureObjectActions.h"
 #include "ECS/Components/CreatureObjectAction.h"
+#include "ECS/Components/Transform.h"
 #include "ECS/CreatureCarried.h"
 #include "ECS/Registry.h"
+#include "ECS/ThingMapPlace.h"
 
 using namespace openblack;
 using namespace openblack::ecs;
@@ -135,6 +137,42 @@ TEST_F(CreatureCarriedTest, AnEmptyHandCarriesNothing)
 	EXPECT_FALSE(creature_carried::CarrierOf(registry, thing).has_value());
 	const auto other = registry.Create();
 	EXPECT_FALSE(creature_carried::CarrierOf(registry, other).has_value());
+}
+
+// At each turn of the creature, the thing that it carries takes the place of the creature, not the place of its hand.
+// The thing keeps its own turn.
+// NOLINTNEXTLINE(cppcoreguidelines-avoid-non-const-global-variables): external macro
+TEST_F(CreatureCarriedTest, TheCarriedThingTakesThePlaceOfTheCreature)
+{
+	const glm::mat3 turned {0.0f, 0.0f, -1.0f, 0.0f, 1.0f, 0.0f, 1.0f, 0.0f, 0.0f};
+	registry.Assign<Transform>(creature, glm::vec3(1234.5f, 17.25f, 2345.75f), glm::mat3(1.0f), glm::vec3(1.0f));
+	registry.Assign<Transform>(thing, glm::vec3(1200.0f, 20.0f, 2300.0f), turned, glm::vec3(0.5f));
+	creature_carried::FollowCarrier(registry, creature);
+	const auto& at = registry.Get<const Transform>(thing);
+	EXPECT_EQ(at.position, glm::vec3(1234.5f, 17.25f, 2345.75f));
+	EXPECT_EQ(at.rotation, turned);
+	EXPECT_EQ(at.scale, glm::vec3(0.5f));
+	const auto place = thing_map_place::Of(registry, thing);
+	const auto carrierPlace = thing_map_place::Of(registry, creature);
+	EXPECT_EQ(place.x, carrierPlace.x);
+	EXPECT_EQ(place.z, carrierPlace.z);
+}
+
+// While the creature prepares a throw it carries nothing, so the thing in its hand stays where it is. An empty hand moves
+// nothing.
+// NOLINTNEXTLINE(cppcoreguidelines-avoid-non-const-global-variables): external macro
+TEST_F(CreatureCarriedTest, AThingThatTheCreatureDoesNotCarryStaysWhereItIs)
+{
+	const glm::vec3 where {1200.0f, 20.0f, 2300.0f};
+	registry.Assign<Transform>(creature, glm::vec3(1234.5f, 17.25f, 2345.75f), glm::mat3(1.0f), glm::vec3(1.0f));
+	registry.Assign<Transform>(thing, where, glm::mat3(1.0f), glm::vec3(1.0f));
+	Act(actions::Kind::Throw, actions::Status::Running, false);
+	creature_carried::FollowCarrier(registry, creature);
+	EXPECT_EQ(registry.Get<const Transform>(thing).position, where);
+	registry.Remove<CreatureObjectAction>(creature);
+	registry.Remove<CreatureHeldObject>(creature);
+	creature_carried::FollowCarrier(registry, creature);
+	EXPECT_EQ(registry.Get<const Transform>(thing).position, where);
 }
 
 // After the blow, the stomp crushes the thing on each turn until the body has played the stomp. Only a last step

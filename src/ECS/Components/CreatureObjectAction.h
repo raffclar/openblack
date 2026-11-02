@@ -19,7 +19,6 @@
 #include <glm/mat3x3.hpp>
 #include <glm/vec3.hpp>
 
-#include "3D/MapCoords.h"
 #include "Creature/CreatureObjectActions.h"
 #include "Creature/CreatureReach.h"
 
@@ -186,7 +185,9 @@ struct TossHandVelocity
 	uint32_t bodyRevision {0};
 };
 
-/// On something a creature holds: which creature
+/// On something a creature holds: which creature. The Transform of the thing is its place in the world, which is not
+/// the place of the hand: the thing stays where the creature took it until the next turn of the creature, then it takes
+/// the place of the creature at each turn of the creature. Its turn does not change until the creature lets it go.
 struct HeldByCreature
 {
 	entt::entity creature {entt::null};
@@ -198,15 +199,6 @@ struct HeldByCreature
 	};
 	/// Empty: the thing is drawn where its Transform puts it
 	std::optional<Drawn> drawn;
-	/// Where the thing was when the creature took it. The thing is out of the map while the creature holds it, and the
-	/// map keeps it at this place until the creature lets it go.
-	struct Taken
-	{
-		glm::vec3 position;
-		map_coords::MapCoords place;
-	};
-	/// Empty: the creature took it before this record was kept, for example in a loaded game
-	std::optional<Taken> takenFrom;
 };
 
 } // namespace openblack::ecs::components
