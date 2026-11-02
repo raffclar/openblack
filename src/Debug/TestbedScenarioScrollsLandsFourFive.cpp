@@ -99,6 +99,13 @@ Framing LookingAt(glm::vec2 middle, glm::vec2 point, float height)
 	const auto at = FromMiddle(middle, point.x, point.y);
 	return {.shot = Shot::Placed, .eye = {at.x - 20.0f, 20.0f, at.y - 20.0f}, .look = {at.x, height, at.y}};
 }
+
+/// A placed camera at an offset from a point of a land, looking at the point at a height above the land
+Framing LookingFrom(glm::vec2 middle, glm::vec2 point, glm::vec3 eyeOffset, float height)
+{
+	const auto at = FromMiddle(middle, point.x, point.y);
+	return {.shot = Shot::Placed, .eye = {at.x + eyeOffset.x, eyeOffset.y, at.y + eyeOffset.z}, .look = {at.x, height, at.y}};
+}
 } // namespace
 
 void testbed_scenarios::AddLandsFourFiveScrollScenarios(std::vector<Scenario>& all)
@@ -137,15 +144,20 @@ void testbed_scenarios::AddLandsFourFiveScrollScenarios(std::vector<Scenario>& a
 
 	// The stranger of the fifth land: his praying place at the fire, as the quest's script gives it
 	constexpr glm::vec3 k_PrayingPlace {2197.82f, 26.609f, 3502.809f};
-	std::vector<Command> traitorCommands {
-	    {.kind = Kind::RunScript, .delaySeconds = 0.5f, .script = "SetupLand5"},
+	// The set-up of the fifth land, the Wonders, a time of day and then the stranger's script
+	const auto traitorStart = [](float hour) {
+		std::vector<Command> commands {
+		    {.kind = Kind::RunScript, .delaySeconds = 0.5f, .script = "SetupLand5"},
+		};
+		BuildNemesisWonders(commands);
+		commands.push_back({.kind = Kind::CallNative,
+		                    .delaySeconds = 0.0f,
+		                    .script = "SET_GAME_TIME",
+		                    .scriptArguments = {{.kind = Argument::Kind::Number, .number = hour}}});
+		commands.push_back({.kind = Kind::RunScript, .delaySeconds = 0.5f, .script = "JapaneseTraitor"});
+		return commands;
 	};
-	BuildNemesisWonders(traitorCommands);
-	traitorCommands.push_back({.kind = Kind::CallNative,
-	                           .delaySeconds = 0.0f,
-	                           .script = "SET_GAME_TIME",
-	                           .scriptArguments = {{.kind = Argument::Kind::Number, .number = 19.0f}}});
-	traitorCommands.push_back({.kind = Kind::RunScript, .delaySeconds = 0.5f, .script = "JapaneseTraitor"});
+	auto traitorCommands = traitorStart(19.0f);
 	ClickMiddle(traitorCommands, 40.0f, 8, 5.0f);
 	all.push_back({
 	    .id = "story.l5_japanese_traitor",
@@ -167,6 +179,24 @@ void testbed_scenarios::AddLandsFourFiveScrollScenarios(std::vector<Scenario>& a
 	                                  "player's tiger")},
 	    .commands = traitorCommands,
 	});
+	all.push_back({
+	    .id = "story.l5_traitor_fire_remarks",
+	    .name = "Story: the good advisor remarks on the forest fire of the fifth land",
+	    .facet = Facet::Story,
+	    .description = "As story.l5_japanese_traitor, but the time of day jumps to 15:45 and nothing clicks. The camera "
+	                   "stays on the praying place into the evening.",
+	    .expected = "The good advisor comes out, points at the fire and says \"I sense something special about this "
+	                "place.\" and \"Don't forget it. We should come back this way later.\" one time. About a minute "
+	                "later the clock passes 16:00, the stranger comes and the bonfire turns into a lantern. After that "
+	                "she says nothing more about the fire, also after 18:00, because her remarks watch the first "
+	                "bonfire, which is gone.",
+	    .environment = {.land = Land::Story, .storyLand = "Land5.txt", .dispenserGrid = false},
+	    .framing = LookingAt(k_Land5Middle, {k_PrayingPlace.x, k_PrayingPlace.z}, 12.5f),
+	    .creatures = {PlayersCreature(CreatureType::Tiger,
+	                                  FromMiddle(k_Land5Middle, k_PrayingPlace.x - 30.0f, k_PrayingPlace.z - 30.0f), 45.0f,
+	                                  "player's tiger")},
+	    .commands = traitorStart(15.75f),
+	});
 
 	// The explorers of the fifth land: the scroll by their wreck, as the quest's script gives it
 	constexpr glm::vec3 k_WreckScroll {1583.323f, 1.5f, 3920.859f};
@@ -181,7 +211,7 @@ void testbed_scenarios::AddLandsFourFiveScrollScenarios(std::vector<Scenario>& a
 	    .facet = Facet::Story,
 	    .description = "The fifth land loads with its own scripts and sky, and the player's Tiger stands on the shore. Its "
 	                   "set-up script runs, then the script of the explorers who come back, as when they sailed on the "
-	                   "first land. The camera looks at the scroll by their wreck. Eight "
+	                   "first land. The camera looks at the scroll by their wreck from the east. Eight "
 	                   "seconds in, the pointer at the middle of the screen clicks it three times, four seconds apart.",
 	    .expected = "The wreck of the explorers' boat lies on the shore, and the empty Norse town above it gets all its "
 	                "eleven buildings and twenty villagers at once. On the click a film plays with the explorers' tune: "
@@ -189,7 +219,8 @@ void testbed_scenarios::AddLandsFourFiveScrollScenarios(std::vector<Scenario>& a
 	                "a polar bear walks up the beach. The challenge \"The Explorers Again\" is recorded as done, and a "
 	                "silver scroll hangs over the bear, which the player's creature can swap with.",
 	    .environment = {.land = Land::Story, .storyLand = "Land5.txt", .dispenserGrid = false},
-	    .framing = LookingAt(k_Land5Middle, {k_WreckScroll.x, k_WreckScroll.z}, 3.0f),
+	    // The wreck hides the scroll from the west and from above, so the camera looks at it from the east
+	    .framing = LookingFrom(k_Land5Middle, {k_WreckScroll.x, k_WreckScroll.z}, {17.0f, 8.0f, -6.0f}, 4.0f),
 	    .creatures = {PlayersCreature(CreatureType::Tiger,
 	                                  FromMiddle(k_Land5Middle, k_WreckScroll.x - 15.0f, k_WreckScroll.z - 20.0f), 30.0f,
 	                                  "player's tiger")},
