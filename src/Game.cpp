@@ -2731,8 +2731,12 @@ bool Game::PlayFrameStep(game_frame::Step step, FrameState& frame)
 		UpdateEntitiesFrame(frame.deltaTime);
 		break;
 	case Step::Audio:
+	{
+		// The frame stats show the time of the audio, with the music, as a stage of its own
+		auto audio = Locator::profiler::value().BeginScoped(Profiler::Stage::UpdateAudio);
 		Locator::audio::value().Update();
 		break;
+	}
 	case Step::Online:
 		UpdateOnline();
 		FollowGameEnd();

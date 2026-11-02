@@ -25,8 +25,9 @@
 namespace openblack::audio
 {
 
-/// Plays the MP3 tracks of the custom music folder on an OpenAL source. Another thread reads and opens a track and
-/// finds its length. The player decodes a quarter of a second at a time and keeps a second of music queued on the source.
+/// Plays the MP3 tracks of the custom music folder on an OpenAL source. Another thread reads and opens a track, finds its
+/// length and decodes its first second. Other threads then decode a quarter of a second at a time, so that a frame of the
+/// game does not wait for the decode. The player keeps a second of music queued on the source.
 class CustomMusicPlayer final: public CustomMusicPlayerInterface
 {
 public:
@@ -65,6 +66,20 @@ public:
 
 	/// A track read and opened for decoding
 	struct OpenTrack;
+	/// The parts of a track that another thread decoded, in the sequence that they play
+	struct DecodedParts
+	{
+		/// The samples of each part, a quarter of a second each. The last part can be shorter.
+		std::vector<std::vector<int16_t>> parts;
+		/// The frames of each part
+		std::vector<uint64_t> frames;
+		/// True when the decode came to the end of the track
+		bool end {false};
+		/// The frame that the decode moved to before it decoded the parts, when it moved
+		std::optional<uint64_t> movedTo;
+		/// True when the decode could not move to the frame: it then decoded nothing
+		bool moveFailed {false};
+	};
 
 private:
 	/// Starts to read and open the current track on another thread
@@ -73,8 +88,13 @@ private:
 	void Close();
 	/// The track plays again from the start: the current track is opened anew when the player plays
 	void Restart();
-	/// Decodes more of the track onto the source, up to the queue's length
+	/// Queues the parts that other threads decoded, then starts the decode of more, up to the queue's length
 	void Refill();
+	/// Queues decoded parts on the source
+	void QueueParts(DecodedParts decoded);
+	/// Starts the decode of parts on another thread, after the decode that runs now. With a frame, the decode first moves
+	/// the track to that frame.
+	void StartDecode(std::optional<uint64_t> moveTo, size_t parts);
 	/// Takes the played buffers off the source
 	void ReleasePlayed();
 	[[nodiscard]] float Gain() const;
@@ -88,6 +108,11 @@ private:
 	/// Opens of tracks let go of before they were done, kept until they end so that no frame waits for them
 	std::vector<std::future<std::shared_ptr<OpenTrack>>> _abandoned;
 	std::shared_ptr<OpenTrack> _open;
+	/// The decode of parts that runs on another thread, none when no decode runs
+	std::future<DecodedParts> _decoding;
+	/// Decodes of tracks that the player closed before the decodes ended. The player keeps them until they end, so that no
+	/// frame waits for them.
+	std::vector<std::future<DecodedParts>> _abandonedDecodes;
 	std::optional<SourceId> _source;
 	/// The buffers queued on the source and the frames of each
 	std::deque<std::pair<BufferId, uint64_t>> _queued;

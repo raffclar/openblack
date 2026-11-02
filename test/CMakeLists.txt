@@ -2316,3 +2316,6 @@ openblack_setup_and_add_test(test_creature_reach_read_only test_creature_reach_r
 if(MSVC)
   target_compile_options(test_creature_reach_read_only PRIVATE /bigobj)
 endif()
+openblack_setup_and_add_test(
+  test_custom_music_decode audio/test_custom_music_decode.cpp
+)

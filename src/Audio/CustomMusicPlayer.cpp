@@ -30,6 +30,8 @@ struct CustomMusicPlayer::OpenTrack
 	uint32_t sampleRate {0};
 	uint32_t channels {0};
 	uint64_t frames {0};
+	/// The first second of the track, decoded with the open, so that the track plays as soon as it is open
+	DecodedParts first;
 
 	OpenTrack() = default;
 	OpenTrack(const OpenTrack&) = delete;
@@ -60,7 +62,38 @@ void Log(const std::string& text)
 	}
 }
 
-/// Reads the track and opens it, then finds its length with a second decoder over the same bytes
+/// Decodes parts of the track from where its decoder is. With a frame, first moves the decoder to that frame.
+CustomMusicPlayer::DecodedParts DecodeParts(CustomMusicPlayer::OpenTrack& track, std::optional<uint64_t> moveTo, size_t count)
+{
+	CustomMusicPlayer::DecodedParts decoded;
+	if (moveTo.has_value())
+	{
+		if (drmp3_seek_to_pcm_frame(&track.decoder, *moveTo) == DRMP3_FALSE)
+		{
+			decoded.moveFailed = true;
+			return decoded;
+		}
+		decoded.movedTo = moveTo;
+	}
+	const auto frames = track.sampleRate / k_PartsOfASecond;
+	for (size_t i = 0; i < count; ++i)
+	{
+		std::vector<int16_t> samples(static_cast<size_t>(frames) * track.channels);
+		const auto read = drmp3_read_pcm_frames_s16(&track.decoder, frames, samples.data());
+		if (read == 0)
+		{
+			decoded.end = true;
+			break;
+		}
+		samples.resize(static_cast<size_t>(read) * track.channels);
+		decoded.parts.push_back(std::move(samples));
+		decoded.frames.push_back(read);
+	}
+	return decoded;
+}
+
+/// Reads the track and opens it, then finds its length with a second decoder over the same bytes. Then decodes the
+/// first second of the track.
 std::shared_ptr<CustomMusicPlayer::OpenTrack> OpenOnThread(const CustomMusicPlayer::Reader& read,
                                                            const std::filesystem::path& path)
 {
@@ -84,10 +117,12 @@ std::shared_ptr<CustomMusicPlayer::OpenTrack> OpenOnThread(const CustomMusicPlay
 		track->frames = drmp3_get_pcm_frame_count(&counter);
 		drmp3_uninit(&counter);
 	}
+	track->first = DecodeParts(*track, std::nullopt, k_QueuedBuffers);
 	return track;
 }
 
-[[nodiscard]] bool Ready(const std::future<std::shared_ptr<CustomMusicPlayer::OpenTrack>>& future)
+template <typename T>
+[[nodiscard]] bool Ready(const std::future<T>& future)
 {
 	return future.valid() && future.wait_for(std::chrono::seconds(0)) == std::future_status::ready;
 }
@@ -207,18 +242,9 @@ void CustomMusicPlayer::SetPosition(uint32_t milliseconds)
 	const auto frame = std::min<uint64_t>(static_cast<uint64_t>(milliseconds) * _open->sampleRate / 1000, _open->frames);
 	_player.StopSource(*_source);
 	ReleasePlayed();
-	if (drmp3_seek_to_pcm_frame(&_open->decoder, frame) == DRMP3_FALSE)
-	{
-		return;
-	}
-	_startFrame = frame;
-	_playedFrames = 0;
+	// Another thread moves the track to the frame and decodes from there. The source plays again when the parts come.
 	_decodedAll = false;
-	Refill();
-	if (_state == PlayState::Playing)
-	{
-		_player.StartSource(*_source);
-	}
+	StartDecode(frame, k_QueuedBuffers);
 }
 
 void CustomMusicPlayer::SetVolume(uint32_t volume)
@@ -233,6 +259,7 @@ void CustomMusicPlayer::SetVolume(uint32_t volume)
 void CustomMusicPlayer::Update()
 {
 	std::erase_if(_abandoned, [](const auto& future) { return Ready(future); });
+	std::erase_if(_abandonedDecodes, [](const auto& future) { return Ready(future); });
 	if (Ready(_opening))
 	{
 		_open = _opening.get();
@@ -247,7 +274,7 @@ void CustomMusicPlayer::Update()
 		_startFrame = 0;
 		_playedFrames = 0;
 		_decodedAll = false;
-		Refill();
+		QueueParts(std::exchange(_open->first, {}));
 		if (_state == PlayState::Playing)
 		{
 			_player.PlaySource(*_source, Gain(), false);
@@ -262,12 +289,17 @@ void CustomMusicPlayer::Update()
 		return;
 	}
 	ReleasePlayed();
+	// The parts that came while the music does not play are queued too, such as the parts after a move of the position
 	if (_state != PlayState::Playing)
 	{
+		if (Ready(_decoding))
+		{
+			QueueParts(_decoding.get());
+		}
 		return;
 	}
 	Refill();
-	if (_queued.empty() && _decodedAll)
+	if (_queued.empty() && _decodedAll && !_decoding.valid())
 	{
 		// The track has played to its end: the next track plays, or the music stops
 		if (_playlist.AfterEnd(_random))
@@ -305,6 +337,10 @@ void CustomMusicPlayer::Close()
 	{
 		_abandoned.push_back(std::move(_opening));
 	}
+	if (_decoding.valid())
+	{
+		_abandonedDecodes.push_back(std::move(_decoding));
+	}
 	if (_source.has_value())
 	{
 		_player.StopSource(*_source);
@@ -336,23 +372,48 @@ void CustomMusicPlayer::Refill()
 	{
 		return;
 	}
-	const auto frames = _open->sampleRate / k_PartsOfASecond;
-	std::vector<int16_t> samples;
-	while (!_decodedAll && _queued.size() < k_QueuedBuffers)
+	if (Ready(_decoding))
 	{
-		samples.resize(static_cast<size_t>(frames) * _open->channels);
-		const auto read = drmp3_read_pcm_frames_s16(&_open->decoder, frames, samples.data());
-		if (read == 0)
-		{
-			_decodedAll = true;
-			break;
-		}
-		samples.resize(static_cast<size_t>(read) * _open->channels);
-		const auto layout = _open->channels == 1 ? ChannelLayout::Mono : ChannelLayout::Stereo;
-		const auto buffer = _player.CreateBuffer(layout, samples, static_cast<int>(_open->sampleRate));
-		_player.QueueBuffer(*_source, buffer);
-		_queued.emplace_back(buffer, read);
+		QueueParts(_decoding.get());
 	}
+	if (!_decoding.valid() && !_decodedAll && _queued.size() < k_QueuedBuffers)
+	{
+		StartDecode(std::nullopt, k_QueuedBuffers - _queued.size());
+	}
+}
+
+void CustomMusicPlayer::QueueParts(DecodedParts decoded)
+{
+	if (decoded.moveFailed)
+	{
+		return;
+	}
+	if (decoded.movedTo.has_value())
+	{
+		_startFrame = *decoded.movedTo;
+		_playedFrames = 0;
+		_decodedAll = false;
+	}
+	const auto layout = _open->channels == 1 ? ChannelLayout::Mono : ChannelLayout::Stereo;
+	for (size_t i = 0; i < decoded.parts.size(); ++i)
+	{
+		const auto buffer = _player.CreateBuffer(layout, decoded.parts.at(i), static_cast<int>(_open->sampleRate));
+		_player.QueueBuffer(*_source, buffer);
+		_queued.emplace_back(buffer, decoded.frames.at(i));
+	}
+	_decodedAll = _decodedAll || decoded.end;
+}
+
+void CustomMusicPlayer::StartDecode(std::optional<uint64_t> moveTo, size_t parts)
+{
+	// Only one decode uses the decoder at a time: a new decode waits for the decode before it, and leaves out its parts
+	_decoding = std::async(std::launch::async, [track = _open, before = std::move(_decoding), moveTo, parts]() mutable {
+		if (before.valid())
+		{
+			before.wait();
+		}
+		return DecodeParts(*track, moveTo, parts);
+	});
 }
 
 void CustomMusicPlayer::ReleasePlayed()
