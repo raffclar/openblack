@@ -15,6 +15,15 @@ namespace openblack::ecs::town_desire_alignment
 float Change(std::array<uint32_t, components::k_TownDesireCount>& turnsOver, const Wants& wants,
              std::span<const DesireRule, components::k_TownDesireCount> rules, People people, float maxChangePerTurn)
 {
+	std::array<float, components::k_TownDesireCount> terms {};
+	return Change(turnsOver, wants, rules, people, maxChangePerTurn, terms);
+}
+
+float Change(std::array<uint32_t, components::k_TownDesireCount>& turnsOver, const Wants& wants,
+             std::span<const DesireRule, components::k_TownDesireCount> rules, People people, float maxChangePerTurn,
+             std::array<float, components::k_TownDesireCount>& terms)
+{
+	terms.fill(0.0f);
 	float total = 0.0f;
 	for (size_t d = 0; d < components::k_TownDesireCount; ++d)
 	{
@@ -44,6 +53,7 @@ float Change(std::array<uint32_t, components::k_TownDesireCount>& turnsOver, con
 		}
 		const float townShare = static_cast<float>(people.town) / static_cast<float>(people.all);
 		const float change = ((cube * rule.importance) * townShare) * want;
+		terms.at(d) = change;
 		total = change + total;
 	}
 	if (total < -1.0f)

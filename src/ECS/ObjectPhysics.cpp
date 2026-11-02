@@ -264,7 +264,9 @@ void Replant(const PhysicsEntry* entry, entt::entity tree)
 	{
 		auto& alignment = Locator::alignmentSystem::value();
 		const float change = Locator::infoConstants::value().player.treePullPutAlignmentChange;
-		alignment.AddPendingAlignment(player, magic::DampAlignmentChange(change, alignment.GetPlayerAlignment(player)));
+		const float damped = magic::DampAlignmentChange(change, alignment.GetPlayerAlignment(player));
+		alignment.AddToHistory(player, ecs::components::AlignmentCause::Tree, damped);
+		alignment.AddPendingAlignment(player, damped);
 	}
 }
 

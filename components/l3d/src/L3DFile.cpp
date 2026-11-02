@@ -367,6 +367,7 @@ L3DFile& L3DFile::operator=(const L3DFile& other)
 	_nameData = other._nameData;
 	_submeshNames = other._submeshNames;
 	_extraMetrics = other._extraMetrics;
+	_boxes = other._boxes;
 	_eBone = other._eBone;
 	_newEffectPoints = other._newEffectPoints;
 	return *this;
@@ -520,6 +521,20 @@ L3DResult L3DFile::ReadFile(std::istream& stream) noexcept
 		}
 		stream.seekg(_header.extraDataOffset);
 		stream.read(reinterpret_cast<char*>(_extraPoints.data()), _extraPoints.size() * sizeof(_extraPoints[0]));
+	}
+
+	_boxes.clear();
+	if (_header.anotherOffset != std::numeric_limits<uint32_t>::max() && _header.anotherOffset != 0 &&
+	    _header.anotherOffset + sizeof(uint32_t) <= fsize)
+	{
+		uint32_t boxCount = 0;
+		stream.seekg(_header.anotherOffset);
+		stream.read(reinterpret_cast<char*>(&boxCount), sizeof(boxCount));
+		if (_header.anotherOffset + sizeof(uint32_t) + boxCount * sizeof(L3DBoundingBox) <= fsize)
+		{
+			_boxes.resize(boxCount);
+			stream.read(reinterpret_cast<char*>(_boxes.data()), _boxes.size() * sizeof(_boxes[0]));
+		}
 	}
 
 	// Reserve space and read submeshes

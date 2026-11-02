@@ -126,3 +126,82 @@ std::vector<script_text::DrawnLine> script_text::Lay(const ScreenBox& box, std::
 	}
 	return drawn;
 }
+
+void script_text::OpenClipWindow(ClipWindow& window, glm::vec2 corner, glm::vec2 extent, float seconds)
+{
+	window.corner = corner;
+	window.extent = extent;
+	window.target = 1.0f;
+	if (seconds == 0.0f)
+	{
+		window.alpha = 1.0f;
+		window.rate = 0.0f;
+		return;
+	}
+	window.rate = 1.0f / seconds;
+}
+
+void script_text::CloseClipWindow(ClipWindow& window, float seconds)
+{
+	window.target = 0.0f;
+	if (seconds == 0.0f)
+	{
+		window.alpha = 0.0f;
+		window.rate = 0.0f;
+		return;
+	}
+	window.rate = 1.0f / seconds;
+}
+
+void script_text::Step(ClipWindow& window, int32_t milliseconds)
+{
+	const auto seconds = static_cast<float>(milliseconds) * 0.001f;
+	// Up towards the target, stopping at it, or else down towards it, stopping at it
+	if (window.alpha < window.target)
+	{
+		window.alpha += window.rate * seconds;
+		if (window.alpha > window.target)
+		{
+			window.alpha = window.target;
+		}
+		return;
+	}
+	if (window.alpha > window.target)
+	{
+		window.alpha -= window.rate * seconds;
+		if (window.alpha < window.target)
+		{
+			window.alpha = window.target;
+		}
+	}
+}
+
+std::optional<script_text::ClipDraw> script_text::Draw(const ClipWindow& window, glm::u16vec2 screen)
+{
+	if (!(window.alpha > k_ClipWindowGoneAlpha))
+	{
+		return std::nullopt;
+	}
+	const auto alpha = std::clamp(static_cast<int32_t>(window.alpha * 255.0f), 0, 255);
+	const auto width = static_cast<int32_t>(screen.x);
+	const auto height = static_cast<int32_t>(screen.y);
+	// The box in pixels, each edge cut to a whole pixel
+	const float left = static_cast<float>(width) * window.corner.x;
+	const float top = static_cast<float>(height) * window.corner.y;
+	const float across = static_cast<float>(width) * window.extent.x;
+	const float down = static_cast<float>(height) * window.extent.y;
+	const auto leftEdge = static_cast<int32_t>(left);
+	const auto topEdge = static_cast<int32_t>(top);
+	const auto rightEdge = static_cast<int32_t>(across + left);
+	const auto bottomEdge = static_cast<int32_t>(down + top);
+	// The black covers the whole screen round the box, from a pixel past its top left corner
+	return ClipDraw {
+	    .alpha = static_cast<uint8_t>(alpha),
+	    .boxes = {{
+	        {.min = {-1, -1}, .max = {width, topEdge}},
+	        {.min = {-1, bottomEdge}, .max = {width, height}},
+	        {.min = {-1, topEdge}, .max = {leftEdge, bottomEdge}},
+	        {.min = {rightEdge, topEdge}, .max = {width, bottomEdge}},
+	    }},
+	};
+}

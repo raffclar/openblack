@@ -225,16 +225,6 @@ TEST(ScriptCreate, OnlyACreatureTakesNoNoticeOfReactionsWhenAScriptMakesIt)
 	EXPECT_FALSE(IgnoresReactions(ScriptType::MobileStatic));
 }
 
-TEST(ScriptCreate, AStoreIsAPileOfFoodOrWood)
-{
-	// The fifth land's crusaders make their pyre with "create 16 1": a store of wood
-	EXPECT_EQ(static_cast<int32_t>(ScriptType::Store), 16);
-	EXPECT_EQ(StoreResource(0), ResourceType::Food);
-	EXPECT_EQ(StoreResource(1), ResourceType::Wood);
-	EXPECT_FALSE(StoreResource(2).has_value());
-	EXPECT_FALSE(StoreResource(5000).has_value());
-}
-
 TEST(ScriptCreate, AMobileObjectTakesTheRowOfItsType)
 {
 	// The fourth land's Creed is "create 20 21": the mobile object of row 21
@@ -249,4 +239,22 @@ TEST(ScriptCreate, AMobileObjectTakesTheRowOfItsType)
 	EXPECT_EQ(static_cast<int32_t>(ScriptType::MobileObject), 20);
 	EXPECT_EQ(static_cast<int32_t>(ScriptType::Poo), 25);
 	EXPECT_EQ(static_cast<int32_t>(ScriptType::Ark), 27);
+}
+
+TEST(ScriptCreate, AStoreIsAPileOfFoodOrWood)
+{
+	// The fifth land's crusaders make their pyre with "create 16 1": a store of wood
+	EXPECT_EQ(static_cast<int32_t>(ScriptType::Store), 16);
+	EXPECT_EQ(StoreResource(0), ResourceType::Food);
+	EXPECT_EQ(StoreResource(1), ResourceType::Wood);
+	EXPECT_FALSE(StoreResource(2).has_value());
+	EXPECT_FALSE(StoreResource(5000).has_value());
+}
+
+TEST(ScriptCreate, ACauldronAndDungComeFromTheMobileObjectRules)
+{
+	// The fifth land's crusaders make their cauldron with "create 20 31" and the brown bear's dung with "create 25 5000"
+	EXPECT_EQ(MobileObjectRowOf(ScriptType::MobileObject, 31), MobileObjectInfo::Cauldron);
+	EXPECT_EQ(MobileObjectRowOf(ScriptType::Poo, 5000), MobileObjectInfo::LumpOfPoo);
+	EXPECT_FALSE(MobileObjectRowOf(ScriptType::Tree, 5).has_value());
 }

@@ -479,4 +479,33 @@ void testbed_scenarios::AddVortexScenarios(std::vector<Scenario>& all)
 	    .objects = {{.type = FieldTypeInfo::Wheat, .offset = k_OnThePlane + glm::vec2(0.0f, -40.0f)}},
 	    .landScript = k_PotOnFieldScript,
 	});
+
+	// The story's top script ends each land with two calls: all other scripts stop, then the next land loads
+	const auto crossing = [&all](std::string_view id, std::string_view name, std::string_view from, std::string_view to) {
+		all.push_back({
+		    .id = id,
+		    .name = name,
+		    .facet = Facet::Story,
+		    .description = "The land loads with its own scripts. After 3 seconds, every script stops and the next land "
+		                   "loads, with the two calls that the story's top script makes at the end of a land.",
+		    .expected = "The next land loads through the story's land change and draws. The log has the load of the land.",
+		    .environment = {.land = Land::Story, .storyLand = from, .dispenserGrid = false},
+		    .commands = {{.kind = Command::Kind::CallNative,
+		                  .delaySeconds = 3.0f,
+		                  .script = "STOP_ALL_SCRIPTS_EXCLUDING",
+		                  .scriptArguments = {{.kind = ScriptArgument::Kind::Text, .text = "NoScriptHasThisName.txt"}}},
+		                 {.kind = Command::Kind::CallNative,
+		                  .delaySeconds = 0.0f,
+		                  .script = "LOAD_MAP",
+		                  .scriptArguments = {{.kind = ScriptArgument::Kind::Text, .text = to}}}},
+		});
+	};
+	crossing("story.crossing_to_the_second_land", "Story: the first land's end loads the second land", "Land1.txt",
+	         "scripts/land2.txt");
+	crossing("story.crossing_to_the_third_land", "Story: the second land's end loads the third land", "Land2.txt",
+	         "scripts/land3.txt");
+	crossing("story.crossing_to_the_fourth_land", "Story: the third land's end loads the fourth land", "Land3.txt",
+	         "scripts/land4.txt");
+	crossing("story.crossing_to_the_fifth_land", "Story: the fourth land's end loads the fifth land", "Land4.txt",
+	         "scripts/land5.txt");
 }

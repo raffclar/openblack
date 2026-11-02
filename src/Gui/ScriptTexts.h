@@ -11,12 +11,15 @@
 
 #include <cstdint>
 
+#include <array>
 #include <functional>
+#include <optional>
 #include <span>
 #include <string>
 #include <string_view>
 #include <vector>
 
+#include <glm/gtc/type_precision.hpp>
 #include <glm/vec2.hpp>
 #include <glm/vec3.hpp>
 
@@ -103,5 +106,43 @@ using WidthFn = std::function<float(std::u16string_view words)>;
 /// its top is within the box.
 [[nodiscard]] std::vector<DrawnLine> Lay(const ScreenBox& box, std::span<const std::u16string_view> lines,
                                          const WidthFn& width);
+
+/// The scripts' window: the screen goes black but for a box, the black fading in and out. The scripts open it to show a
+/// scene in a part of the screen.
+struct ClipWindow
+{
+	/// The box's left, top, width and height, as shares of the screen's width and height
+	glm::vec2 corner {0.0f, 0.0f};
+	glm::vec2 extent {0.0f, 0.0f};
+	/// How much the black shows, from 0 to 1, moving towards `target` by `rate` a second
+	float alpha {0.0f};
+	float target {0.0f};
+	float rate {0.0f};
+};
+
+/// The black shows only while its alpha is above this
+constexpr float k_ClipWindowGoneAlpha = 0.001f;
+
+/// Opens the window on a box, the black fading in over `seconds`, or shown at once for none
+void OpenClipWindow(ClipWindow& window, glm::vec2 corner, glm::vec2 extent, float seconds);
+/// Fades the black out over `seconds`, or removes it at once for none. The box stays where it was.
+void CloseClipWindow(ClipWindow& window, float seconds);
+/// Moves the fade of the black on by the game's time of a frame
+void Step(ClipWindow& window, int32_t milliseconds);
+
+/// A black box drawn round the window, in whole pixels from its top left corner to its bottom right corner
+struct ClipBox
+{
+	glm::ivec2 min {0, 0};
+	glm::ivec2 max {0, 0};
+};
+/// What the window draws on a screen of a size in pixels: the alpha of its black, from 0 to 255, and four boxes round
+/// the window (above it, under it, to its left and to its right). Nothing while the black does not show.
+struct ClipDraw
+{
+	uint8_t alpha {0};
+	std::array<ClipBox, 4> boxes {};
+};
+[[nodiscard]] std::optional<ClipDraw> Draw(const ClipWindow& window, glm::u16vec2 screen);
 
 } // namespace openblack::gui::script_text

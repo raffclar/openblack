@@ -16,6 +16,7 @@
 #include <entt/entity/fwd.hpp>
 #include <glm/vec3.hpp>
 
+#include "ECS/Components/AlignmentHistory.h"
 #include "Enums.h"
 
 namespace openblack::ecs::systems
@@ -96,6 +97,9 @@ public:
 	virtual void AddPendingAlignment(PlayerNames player, float change) = 0;
 	/// The change still to come
 	[[nodiscard]] virtual float GetPendingAlignment(PlayerNames player) const = 0;
+	/// Adds a change to the total of its cause in the history of the player at this computer. The changes of other
+	/// players are not kept. Only a debug window shows the totals.
+	virtual void AddToHistory(PlayerNames /*player*/, components::AlignmentCause /*cause*/, float /*change*/) {}
 
 	/// At the end of the players' turns: each player's waiting change moves its alignment. Then the camera takes the
 	/// alignment of the player of most influence at its eye, the neutral player's where no player has any. The eye is

@@ -50,6 +50,7 @@
 #include "ECS/MapCells.h"
 #include "ECS/PlannedBuildingRules.h"
 #include "ECS/Registry.h"
+#include "ECS/Systems/FootballSystemInterface.h"
 #include "ECS/Systems/Implementations/ObjectMeasures.h"
 #include "ECS/Systems/Implementations/VillagerFootpath.h"
 #include "ECS/Systems/MagicSystemInterface.h"
@@ -111,6 +112,7 @@ planned_building::TownForPlans TownForPlans(entt::entity town)
 	const auto& data = registry.Get<const Town>(town);
 	planned_building::TownForPlans plans {
 	    .neutral = data.owner == PlayerNames::NEUTRAL,
+	    .football = Locator::footballSystem::has_value() && Locator::footballSystem::value().IsOn(),
 	    .homeless = static_cast<uint32_t>(data.homelessVillagers.size()),
 	};
 	if (const auto* stats = registry.TryGet<const TownStats>(town))

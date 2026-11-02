@@ -313,3 +313,16 @@ TEST(ComputerSettingsSystem, WithoutAFileNothingIsWritten)
 	system.Keep({.detailLevel = 1});
 	EXPECT_EQ(system.GetSettings().detailLevel, 1);
 }
+
+TEST(ComputerSettings, TheFootballOfTheSoccerAddOnIsOffUnlessTheFileTurnsItOn)
+{
+	EXPECT_FALSE(Parse("{}").settings.footballAddOn.value_or(false));
+	const auto [settings, problems] = Parse(R"({"football_add_on": true})");
+	EXPECT_TRUE(problems.empty());
+	EXPECT_EQ(settings.footballAddOn, true);
+	// A value that is not true or false is refused
+	EXPECT_FALSE(Parse(R"({"football_add_on": 1})").settings.footballAddOn.has_value());
+	// The value is written back with the others
+	const auto written = Parse(Update("{}", Settings {.footballAddOn = true}));
+	EXPECT_EQ(written.settings.footballAddOn, true);
+}

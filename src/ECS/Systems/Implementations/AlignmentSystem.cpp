@@ -19,6 +19,7 @@
 
 #include "3D/CreatureBody.h"
 #include "Creature/CreatureDeedAlignment.h"
+#include "ECS/AlignmentHistory.h"
 #include "ECS/Components/Alignment.h"
 #include "ECS/Components/Creature.h"
 #include "ECS/Components/CreatureMind.h"
@@ -144,6 +145,27 @@ float AlignmentSystem::GetPendingAlignment(PlayerNames player) const
 	return alignment != nullptr ? alignment->pending : 0.0f;
 }
 
+void AlignmentSystem::AddToHistory(PlayerNames player, AlignmentCause cause, float change)
+{
+	if (change == 0.0f || !Locator::playerSystem::has_value() || !Locator::infoConstants::has_value() ||
+	    player != Locator::playerSystem::value().GetLocalPlayer())
+	{
+		return;
+	}
+	const auto entity = FindPlayer(player);
+	if (!entity.has_value())
+	{
+		return;
+	}
+	auto& registry = Locator::entitiesRegistry::value();
+	auto* history = registry.TryGet<AlignmentHistory>(*entity);
+	if (history == nullptr)
+	{
+		history = &registry.Assign<AlignmentHistory>(*entity);
+	}
+	alignment_history::Add(*history, cause, change, Locator::infoConstants::value().player.maxAlignmentChangePerGameTurn);
+}
+
 void AlignmentSystem::AddPlayerAlignment(PlayerNames player, float change)
 {
 	SetPlayerAlignment(player, alignment::AddedAlignment(GetPlayerAlignment(player), change));
@@ -228,8 +250,11 @@ void AlignmentSystem::CreatureTurn(entt::entity entity)
 	{
 		// The plan that the creature does adds its change before the turn moves the alignment
 		const auto& species = info.creature.at(row);
-		creature->pendingAlignment += creature_deed_alignment::TurnChange(DeedOf(registry, entity, info),
-		                                                                  species.alignmentChangeScale, creature->alignment);
+		const float change = creature_deed_alignment::TurnChange(DeedOf(registry, entity, info), species.alignmentChangeScale,
+		                                                         creature->alignment);
+		// The history of its owner keeps the change of the creature too
+		AddToHistory(creature->owner, AlignmentCause::Creature, change);
+		creature->pendingAlignment += change;
 		creature->alignment =
 		    magic::StepPendingAlignment(creature->alignment, creature->pendingAlignment, species.alignmentChangePerTurn);
 	}
