@@ -29,9 +29,12 @@
 #include "Common/X87.h"
 #include "Common/X87Angle.h"
 #include "Common/X87Vector.h"
+#include "Creature/TattooEditor.h"
 #include "ECS/Systems/CinematicDirectorSystemInterface.h"
 #include "ECS/Systems/CreatureCaveSystemInterface.h"
+#include "ECS/Systems/GameEndSystemInterface.h"
 #include "ECS/Systems/TattooEditorSystemInterface.h"
+#include "ECS/Systems/TimeSystemInterface.h"
 #include "Input/GameActionMapInterface.h"
 #include "Locator.h"
 #include "Resources/ResourcesInterface.h"
@@ -1165,6 +1168,12 @@ void TempleCameraModel::ZoomToCaveTarget(CreatureCaveTargets::Target target)
 		// The creature opens the tattoo editor on the player's creature, the camera taking the editor's view of it: from
 		// in front of it and above
 		if (!Locator::creatureCaveSystem::has_value() || !Locator::tattooEditorSystem::has_value())
+		{
+			return;
+		}
+		const bool networkGame = Locator::time::has_value() && Locator::time::value().IsNetworkGame();
+		const bool decided = Locator::gameEndSystem::has_value() && Locator::gameEndSystem::value().IsDecided();
+		if (!creature_tattoo_editor::OfferedInCave(networkGame, decided))
 		{
 			return;
 		}
