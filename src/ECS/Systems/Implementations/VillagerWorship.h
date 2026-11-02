@@ -49,6 +49,9 @@ void LeaveTown(entt::entity villager);
 
 /// The villager stops on its way to its town's worship site, and its town no longer counts it on the way
 void LeaveTheWayToWorshipSite(entt::entity villager);
+/// A villager of a town goes back on its way to the town's worship site, and its town counts it on the way once. A
+/// villager with no town does not change.
+void BackOnTheWayToWorshipSite(entt::entity villager);
 
 /// Whether a villager is worshipping or on its way to
 [[nodiscard]] bool IsAtOrOnTheWayToWorshipSite(entt::entity villager);

@@ -502,3 +502,21 @@ TEST_F(VillagerWalkStates, AVillagerOnItsWayToTheSiteStopsOnlyForAStateThatItWor
 	EXPECT_FALSE(registry.AllOf<Worshipper>(_villager));
 	EXPECT_TRUE(registry.Get<const Town>(town).onWayToWorship.empty());
 }
+
+// A villager that goes back on its way to the worship site is counted once by its town; one with no town does not change
+// NOLINTNEXTLINE(cppcoreguidelines-avoid-non-const-global-variables): external macro
+TEST_F(VillagerWalkStates, AVillagerBackOnItsWayToTheSiteIsCountedOnceByItsTown)
+{
+	auto& registry = Locator::entitiesRegistry::value();
+	villager_worship::BackOnTheWayToWorshipSite(_villager);
+	EXPECT_FALSE(registry.AllOf<Worshipper>(_villager));
+
+	const auto town = registry.Create();
+	registry.Assign<Town>(town);
+	registry.Get<Villager>(_villager).town = town;
+	villager_worship::BackOnTheWayToWorshipSite(_villager);
+	villager_worship::BackOnTheWayToWorshipSite(_villager);
+	ASSERT_TRUE(registry.AllOf<Worshipper>(_villager));
+	EXPECT_TRUE(registry.Get<const Worshipper>(_villager).onTheWay);
+	EXPECT_EQ(registry.Get<const Town>(town).onWayToWorship.size(), 1u);
+}
