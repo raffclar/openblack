@@ -46,6 +46,9 @@
 #if defined(__EMSCRIPTEN__)
 #include "Web/WebPlatform.h"
 #endif
+#if defined(__APPLE__)
+#include <pthread/qos.h>
+#endif
 
 namespace
 {
@@ -764,6 +767,12 @@ bool parseOptions(int argc, char** argv, openblack::Arguments& args, int& return
 
 int main(int argc, char* argv[]) noexcept
 {
+#if defined(__APPLE__)
+	// The game thread draws the frames that the player sees. Started from a shell, it otherwise gets the default class,
+	// and on a light load macOS then moves it to the slow cores between the turns. The threads that it starts take the
+	// same class.
+	pthread_set_qos_class_self_np(QOS_CLASS_USER_INTERACTIVE, 0);
+#endif
 	const bool crashDialogs = openblack::crash_handler::WantsCrashDialogs(std::span(argv, static_cast<size_t>(argc)));
 	if (!crashDialogs)
 	{
