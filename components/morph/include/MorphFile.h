@@ -278,6 +278,17 @@ struct CreatureBlow
 };
 using CreatureBlows = std::array<CreatureBlow, 12>;
 
+/// What a tattoo site holds that the parsed fields leave out, so that a file is written back as it was read
+struct TattooSiteRaw
+{
+	/// The four bytes of the packed place: the centre's two texels, then the skin in the top two bits of the third byte
+	/// with six bits that are kept as they were, then a byte that is kept as it was
+	std::array<uint8_t, 4> packed {};
+	/// The flip and the turn as stored, of which the parsed fields hold the low part
+	uint32_t mirror {0};
+	uint32_t rotation {0};
+};
+
 /**
   This class is used to read the Creature block of CBN and the Hand block of HBN files.
  */
@@ -315,6 +326,16 @@ protected:
 	std::optional<MeshIntersect> _creaturePukePoint;
 	std::vector<int32_t> _creatureTail;
 	uint32_t _creatureVersion {0};
+	/// What the creature block holds that the fields above leave out, for writing the file back as it was read
+	/// The name that older morph data puts before the block's numbers (binary version 5)
+	std::vector<uint8_t> _creaturePrefix;
+	/// The sound bank's name as stored, with whatever follows its end mark
+	std::array<char, 0x20> _soundBankRaw {};
+	/// The seven sizes (one in older files) between the sound bank's name and the fight blows
+	std::vector<uint32_t> _creatureSizes;
+	std::array<TattooSiteRaw, 8> _tattooRaw {};
+	/// Every number after the last field read, to the end of the file
+	std::vector<int32_t> _creatureRest;
 
 	/// Read file from the input source
 	MorphResult ReadFile(std::istream& stream, const std::filesystem::path& specsDirectory) noexcept;
@@ -325,6 +346,8 @@ protected:
 	void ReadCreatureBlock(std::istream& stream) noexcept;
 	/// The rest of the block after the eyes, as far as the tattoo sites
 	void ReadTattooSites(std::istream& stream, uint32_t version) noexcept;
+	/// The creature block as ReadCreatureBlock reads it
+	void WriteCreatureBlock(std::vector<uint8_t>& out) const;
 
 public:
 	MorphFile() noexcept;
@@ -335,6 +358,12 @@ public:
 
 	/// Read morph file from a buffer
 	MorphResult Open(const std::vector<uint8_t>& buffer, const std::filesystem::path& specsDirectory) noexcept;
+
+	/// The bytes of the file as it was read: the animations, the variants' animations, the hair, what happens at moments
+	/// of the animations and, in a creature file, the creature block. Laid out one block after the next, with no gap.
+	[[nodiscard]] std::vector<uint8_t> Write() const;
+	/// Writes the file to a path; ErrCantOpen when it cannot be written
+	MorphResult Write(const std::filesystem::path& filepath) const;
 
 	[[nodiscard]] const MorphHeader& GetHeader() const noexcept { return _header; }
 	[[nodiscard]] const AnimationSpecs& GetAnimationSpecs() const noexcept { return _animationSpecs; }

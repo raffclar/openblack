@@ -87,6 +87,9 @@ struct EffectReceiver
 inline constexpr float k_CrushReactionThreshold = 0.01f;
 
 /// What an effect did to one object
+/// The change of the alignment for each of the five kinds of effect that count for it
+using EffectAlignmentTerms = std::array<float, 5>;
+
 struct EffectOutcome
 {
 	entt::entity entity {entt::null};
@@ -103,6 +106,8 @@ struct EffectOutcome
 	bool crushed {false};
 	/// How much the caster's alignment moves for it, before the turn's limit
 	float alignmentChange {0.0f};
+	/// The change of each kind of effect before the damping, in the order that the alignment history counts them
+	EffectAlignmentTerms alignmentTerms {};
 	/// What was done to it counts as an attack: it burnt, crushed, hit or threw it, and it was hurt
 	bool aggression {false};
 };
@@ -134,6 +139,11 @@ struct EffectOutcome
 /// How much a change of alignment moves a caster who already leans: less the same way, more the other way
 [[nodiscard]] float DampAlignmentChange(float change, float current);
 
+/// The change of each kind of effect for a thing whose life changed by so much, before the damping: crush, hit, heal,
+/// fly away, then heat. The alignment history counts each one in this order. All are 0 when the life did not change.
+[[nodiscard]] EffectAlignmentTerms EffectAlignmentChanges(const EffectValues& values, float burnDamage, AlignmentType type,
+                                                          float lifeChange, std::span<const GAlignmentInfo> alignmentTable,
+                                                          float alignmentAddition);
 /// The caster's alignment moves for what an effect did to a thing whose life changed by so much; its heat counts by the
 /// harm it did
 [[nodiscard]] float EffectAlignmentChange(const EffectValues& values, float burnDamage, AlignmentType type, float lifeChange,

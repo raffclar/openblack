@@ -31,6 +31,7 @@
 #include "ECS/Components/LivingAction.h"
 #include "ECS/Components/Mesh.h"
 #include "ECS/Components/Mobile.h"
+#include "ECS/Components/Physics.h"
 #include "ECS/Components/Pot.h"
 #include "ECS/Components/Transform.h"
 #include "ECS/Components/Tree.h"
@@ -120,7 +121,8 @@ bool IsReachableVillager(const ecs::Registry& registry, entt::entity villager)
 std::optional<TornadoCandidate> CandidateOf(const ecs::Registry& registry, entt::entity entity, const Transform& transform,
                                             float radius)
 {
-	TornadoCandidate candidate {.object = entity, .position = transform.position, .radius = radius};
+	TornadoCandidate candidate {
+	    .object = entity, .position = transform.position, .radius = radius, .immovable = registry.AllOf<Immovable>(entity)};
 	if (registry.AnyOf<Creature>(entity))
 	{
 		// Too big for it: caught where it stands

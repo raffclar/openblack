@@ -1992,9 +1992,10 @@ void ReactionSystem::Impress(const Active& reaction, entt::entity living, const 
 		if (Locator::alignmentSystem::has_value())
 		{
 			auto& alignment = Locator::alignmentSystem::value();
-			alignment.AddPendingAlignment(
-			    source.player, magic::DampAlignmentChange(magic::ImpressionAlignment(info->alignmentModifier, desire),
-			                                              alignment.GetPlayerAlignment(source.player)));
+			const float change = magic::DampAlignmentChange(magic::ImpressionAlignment(info->alignmentModifier, desire),
+			                                                alignment.GetPlayerAlignment(source.player));
+			alignment.AddToHistory(source.player, AlignmentCause::Reaction, change);
+			alignment.AddPendingAlignment(source.player, change);
 		}
 		// The town tires of the kind of thing, by its share of the town. A scaffold tires the town by its own amount.
 		if (Locator::infoConstants::has_value())
