@@ -1756,7 +1756,13 @@ void RenderingSystem::UploadPartialBuilds()
 	}
 	const auto& buildings = Locator::buildingDamageSystem::value();
 	const auto& meshes = Locator::resources::value().GetMeshes();
+	// Only a broken building, one with a site for its repair or one with an amount built can show a part of its model
+	const openblack::ecs::ComponentLookups<BuildingDamage, RepairSite, BuildProgress> partialKinds(registry);
 	registry.Each<const Mesh, const Transform>([&](entt::entity entity, const Mesh& mesh, const Transform& transform) {
+		if (!partialKinds.AnyOf<BuildingDamage, RepairSite, BuildProgress>(entity))
+		{
+			return;
+		}
 		const auto share = buildings.PartialShare(entity);
 		if (!share.has_value() || !meshes.Contains(mesh.id) || _goneThings.contains(entity))
 		{
