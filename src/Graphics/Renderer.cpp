@@ -75,6 +75,7 @@
 #include "Common/Platform.h"
 #include "Common/UserData.h"
 #include "Common/WorkerPool.h"
+#include "Creature/CreatureEnvironmentMap.h"
 #include "Creature/CreatureFizzLook.h"
 #include "Creature/CreatureHair.h"
 #include "Creature/CreatureMorph.h"
@@ -1394,8 +1395,10 @@ void Renderer::DrawSubMesh(const graphics::L3DMesh& mesh, const graphics::L3DSub
 			// Each primitive takes the environment map as its material says, and its texture slides with the skin
 			// where it may; a frozen thing's ice is the map alone over every primitive
 			const bool environmentMapped = desc.environment != nullptr && desc.environmentOnlyAlpha <= 0.0f;
-			const auto environmentStage = environmentMapped ? material_stages::EnvironmentStageOf(prim.materialFlags)
-			                                                : material_stages::EnvironmentStage::Added;
+			const auto environmentStage =
+			    environmentMapped
+			        ? desc.environmentStageForAll.value_or(material_stages::EnvironmentStageOf(prim.materialFlags))
+			        : material_stages::EnvironmentStage::Added;
 			if (has(MeshUniform::UvOffset))
 			{
 				const bool slides =
@@ -6448,6 +6451,7 @@ void Renderer::DrawPass(const DrawSceneDesc& desc) const
 	const auto* objectShaderInstanced = _shaderManager->GetShader("ObjectInstanced");
 	const auto* objectShaderFewBonesInstanced = _shaderManager->GetShader("ObjectFewBonesInstanced");
 	const auto* objectShaderMorphInstanced = _shaderManager->GetShader("ObjectMorphInstanced");
+	const auto* objectShaderMorphEnvironmentInstanced = _shaderManager->GetShader("ObjectMorphEnvironmentInstanced");
 	const auto* objectShaderPosedInstanced = _shaderManager->GetShader("ObjectPosedInstanced");
 	const auto* objectShaderStaticInstanced = _shaderManager->GetShader("ObjectStaticInstanced");
 	const auto* objectShaderEnvironmentStaticInstanced = _shaderManager->GetShader("ObjectEnvironmentStaticInstanced");
@@ -6797,6 +6801,8 @@ void Renderer::DrawPass(const DrawSceneDesc& desc) const
 				const L3DMeshSubmitDesc::MorphTargets* morphTargets;
 				/// Each instance's bones are read from the bone palette, where its instance says they start
 				bool bonePalette {false};
+				/// The body draws with the first environment map added over every part
+				bool environmentMapped {false};
 			};
 			// The creatures are drawn with a light of their own, at every detail level
 			bool drawingCreatures = false;
@@ -6994,14 +7000,25 @@ void Renderer::DrawPass(const DrawSceneDesc& desc) const
 				}
 				// The scripts' scrolls and signs take the first environment map, each primitive as its material says. The
 				// sea mirrors them without it.
-				const bool environmentMapped =
-				    placers.environmentMapped && environmentMap != nullptr && desc.viewId != RenderPass::Reflection &&
-				    desc.viewId != RenderPass::ReflectionTranslucent && desc.viewId != RenderPass::ReflectionMirrored &&
-				    !flatReflection.has_value() && sd.program == objectShaderStaticInstanced;
+				const bool reflected = desc.viewId == RenderPass::Reflection ||
+				                       desc.viewId == RenderPass::ReflectionTranslucent ||
+				                       desc.viewId == RenderPass::ReflectionMirrored || flatReflection.has_value();
+				const bool environmentMapped = placers.environmentMapped && environmentMap != nullptr && !reflected &&
+				                               sd.program == objectShaderStaticInstanced;
 				sd.environment = environmentMapped ? environmentMap : nullptr;
+				sd.environmentStageForAll.reset();
 				if (environmentMapped)
 				{
 					sd.program = objectShaderEnvironmentStaticInstanced;
+				}
+				// A creature's body with the environment map takes it on every part, added over the lit texture. The sea
+				// mirrors the body without it.
+				if (pose != nullptr && pose->environmentMapped && environmentMap != nullptr && !reflected &&
+				    sd.program == objectShaderMorphInstanced)
+				{
+					sd.program = objectShaderMorphEnvironmentInstanced;
+					sd.environment = environmentMap;
+					sd.environmentStageForAll = material_stages::k_CreatureBodyStage;
 				}
 				if (heldReflection.has_value())
 				{
@@ -7018,6 +7035,7 @@ void Renderer::DrawPass(const DrawSceneDesc& desc) const
 				DrawMesh(*mesh, sd, std::numeric_limits<uint8_t>::max());
 				sd.morphTargets = nullptr;
 				sd.environment = nullptr;
+				sd.environmentStageForAll.reset();
 				sd.landLightAndHaze = true;
 				sd.shadeAt = glm::vec4(0.0f);
 				sd.heldMirror.reset();
@@ -7352,10 +7370,13 @@ void Renderer::DrawPass(const DrawSceneDesc& desc) const
 					}
 				}
 				const bool posed = animation != nullptr && animation->boneMatrices.size() == bodyMesh->GetBoneMatrices().size();
+				// The environment map belongs to the creature's own body: a copy drawn elsewhere has its own body, without it
+				const uint32_t environmentWord = creature != nullptr && !copy ? creature->environmentMap : 0;
 				const EntityPose pose {
 				    .bones = posed ? std::span<const glm::mat4>(animation->boneMatrices)
 				                   : std::span<const glm::mat4>(bodyMesh->GetBoneMatrices()),
 				    .morphTargets = targets ? &*targets : nullptr,
+				    .environmentMapped = creature_environment_map::DrawnWithMap(environmentWord),
 				};
 				if (pose.bones.empty())
 				{
@@ -7394,7 +7415,7 @@ void Renderer::DrawPass(const DrawSceneDesc& desc) const
 				// The game lights the body as it poses it, with the posed models' rule, also while the body fizzes. The
 				// eyes keep the usual model light.
 				submitDesc.posedModelLight = true;
-				if (creature_fizz_look::Fizzing(fizz) && instance < renderCtx.instanceUniforms.size())
+				if (creature_environment_map::BodyFizzes(fizz, environmentWord) && instance < renderCtx.instanceUniforms.size())
 				{
 					// A creature in the land's draw list takes its place in the order of the list. Any other creature
 					// takes its place by its distance, after the creatures of the list.
@@ -7405,7 +7426,7 @@ void Renderer::DrawPass(const DrawSceneDesc& desc) const
 					eyesSortDepth = drawFizzing(mesh->id, placers->second, instance, std::nullopt, pose,
 					                            creature_fizz_look::Level(fizz), spells->staticScroll, depth, spells->freeze);
 				}
-				else if (creature_fizz_look::Drawn(fizz))
+				else if (creature_environment_map::BodyDrawn(fizz, environmentWord))
 				{
 					inSegment(copy ? 0 : renderCtx.fizzOrder.SegmentOf(entity), [&] {
 						drawInstances(mesh->id, placers->second, placers->second.materialBlending, instance, 1, &pose);
@@ -7418,12 +7439,14 @@ void Renderer::DrawPass(const DrawSceneDesc& desc) const
 					DrawCreatureEyes(desc, *eyes, submitDesc, fizz, freeze, eyesSortDepth);
 				}
 				submitDesc.modelLight.reset();
-				// The hair is drawn as it is until the creature has fizzed or frozen a fifth of the way, then not at all
-				// A copy draws the hair of its own, which hangs from its own pose
+				// The hair is drawn as it is until the creature has fizzed or frozen a fifth of the way, then not at all. With
+				// the environment map, the hair shows at all times. A copy draws the hair of its own, which hangs from its
+				// own pose.
 				const auto* hair = posers.TryGet<const ecs::components::CreatureHair>(poser);
 				const auto* transform = posers.TryGet<const ecs::components::Transform>(poser);
-				if (creature_fizz_look::HairShown(fizz, freeze) && hair != nullptr && transform != nullptr &&
-				    Locator::creatureHairSystem::has_value() && Locator::creatureHairSystem::value().IsShown())
+				if (creature_environment_map::HairShown(fizz, freeze, environmentWord) && hair != nullptr &&
+				    transform != nullptr && Locator::creatureHairSystem::has_value() &&
+				    Locator::creatureHairSystem::value().IsShown())
 				{
 					// The hair hangs from the body where the frame draws it
 					DrawCreatureHair(desc, *hair,

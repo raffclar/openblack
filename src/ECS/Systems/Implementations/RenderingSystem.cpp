@@ -30,6 +30,7 @@
 #include "3D/L3DMesh.h"
 #include "3D/PhysicsDrawMatrix.h"
 #include "Camera/Camera.h"
+#include "Creature/CreatureEnvironmentMap.h"
 #include "Creature/CreatureFizzLook.h"
 #include "ECS/BoatFilmBoat.h"
 #include "ECS/BoatLaunchRules.h"
@@ -1037,8 +1038,11 @@ bool RenderingSystem::UploadInstances(bool drawBoundingBox)
 		    }
 
 		    // A frozen creature takes an icy look, tinted dark blue and sheened with ice as it freezes (one fizzing out of
-		    // sight is drawn through the static by the renderer)
-		    if (const auto* spells = registry.TryGet<const CreatureSpells>(entity))
+		    // sight is drawn through the static by the renderer). A body with the environment map takes no icy look.
+		    const auto* creatureOwn = registry.TryGet<const Creature>(entity);
+		    const bool frozenLookShown =
+		        creatureOwn == nullptr || creature_environment_map::FrozenLookShown(creatureOwn->environmentMap);
+		    if (const auto* spells = registry.TryGet<const CreatureSpells>(entity); spells != nullptr && frozenLookShown)
 		    {
 			    if (spells->freeze > 0.0f)
 			    {

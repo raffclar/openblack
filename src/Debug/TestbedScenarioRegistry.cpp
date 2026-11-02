@@ -3159,6 +3159,30 @@ void AddAppearance(std::vector<Scenario>& all)
 	          "and do their other gestures.",
 	          "The light that the hand carries at night lights each body as the game lights the bodies it poses. The side "
 	          "away from the hand keeps two fifths of the light. The eyes keep the usual light of the models.");
+	// A creature whose mind file gives its body the environment map, beside one whose mind file does not
+	{
+		auto plain = Content(CreatureType::GiantApe, {-12.0f, 0.0f}, 0.0f, "plain ape");
+		plain.pauseMind = true;
+		auto mapped = Content(CreatureType::GiantApe, {12.0f, 0.0f}, 0.0f, "environment-mapped ape");
+		mapped.pauseMind = true;
+		mapped.environmentMap = 1;
+		all.push_back({
+		    .id = "appearance.creature_environment_map",
+		    .name = "Creature body with the environment map",
+		    .facet = Facet::Appearance,
+		    .description = "At noon, the clock stopped, two giant apes stand side by side. The mind file of the ape on the "
+		                   "right gives its body the environment map. They nod, shake their heads and do their other "
+		                   "gestures.",
+		    .expected = "The ape on the right shows the environment map added over every part of its body, so it looks "
+		                "brighter and shiny. The shine moves over the body as it turns, as if it reflects the sky. The "
+		                "light on the body is the same as on the ape on the left. The eyes of the two apes look the same.",
+		    .environment = {.hour = 12.0f, .clockRuns = false, .dispenserGrid = false},
+		    .framing = {.shot = Shot::Overview, .include = {{-18.0f, -4.0f}, {18.0f, 4.0f}}, .distance = 0.6f},
+		    .creatures = {plain, mapped},
+		    .commands = headMoves,
+		    .repeatFrom = 0,
+		});
+	}
 	// The player's creature mirrored in the lake, beside a creature of no player that the game does not mirror
 	auto mirroredApe = Posed(CreatureType::GiantApe, {k_Lake.x - 15.0f, k_FarShallows}, 0.0f, "player's ape");
 	auto unmirroredCow = Posed(CreatureType::Cow, {k_Lake.x + 15.0f, k_FarShallows}, 0.0f, "cow of no player");
