@@ -115,6 +115,25 @@ bool IgnoresReactions(ObjectType type)
 	return type == ObjectType::Creature;
 }
 
+std::optional<MobileObjectInfo> MobileObjectRowOf(ObjectType type, uint32_t subtype)
+{
+	switch (type)
+	{
+	case ObjectType::MobileObject:
+		if (!IsRow(subtype, static_cast<std::size_t>(MobileObjectInfo::_COUNT)))
+		{
+			return std::nullopt;
+		}
+		return static_cast<MobileObjectInfo>(subtype);
+	case ObjectType::Poo:
+		return MobileObjectInfo::LumpOfPoo;
+	case ObjectType::Ark:
+		return MobileObjectInfo::Ark;
+	default:
+		return std::nullopt;
+	}
+}
+
 ScriptVillager ScriptVillagerOf(bool child, uint32_t grownUpAge)
 {
 	constexpr uint32_t k_ChildAge = 10;

@@ -224,3 +224,19 @@ TEST(ScriptCreate, OnlyACreatureTakesNoNoticeOfReactionsWhenAScriptMakesIt)
 	EXPECT_FALSE(IgnoresReactions(ScriptType::Marker));
 	EXPECT_FALSE(IgnoresReactions(ScriptType::MobileStatic));
 }
+
+TEST(ScriptCreate, AMobileObjectTakesTheRowOfItsType)
+{
+	// The fourth land's Creed is "create 20 21": the mobile object of row 21
+	EXPECT_EQ(MobileObjectRowOf(ScriptType::MobileObject, 21), MobileObjectInfo::Creed);
+	EXPECT_EQ(MobileObjectRowOf(ScriptType::MobileObject, 0), MobileObjectInfo::EgyptBarrel);
+	// A lump of poo and an ark always take their own rows, whatever the script gives
+	EXPECT_EQ(MobileObjectRowOf(ScriptType::Poo, 0), MobileObjectInfo::LumpOfPoo);
+	EXPECT_EQ(MobileObjectRowOf(ScriptType::Ark, 7), MobileObjectInfo::Ark);
+	// A row past the end of the table and a type that is not a mobile object make nothing
+	EXPECT_FALSE(MobileObjectRowOf(ScriptType::MobileObject, static_cast<uint32_t>(MobileObjectInfo::_COUNT)).has_value());
+	EXPECT_FALSE(MobileObjectRowOf(ScriptType::MobileStatic, 21).has_value());
+	EXPECT_EQ(static_cast<int32_t>(ScriptType::MobileObject), 20);
+	EXPECT_EQ(static_cast<int32_t>(ScriptType::Poo), 25);
+	EXPECT_EQ(static_cast<int32_t>(ScriptType::Ark), 27);
+}
