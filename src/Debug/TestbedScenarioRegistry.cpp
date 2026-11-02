@@ -7767,6 +7767,28 @@ void AddHand(std::vector<Scenario>& all)
 	                 {.kind = Kind::PointerRelease, .delaySeconds = 2.0f, .value = 3}},
 	});
 
+	// A script takes control of the own creature while the press waits for a tap. The press then sends the hold, and the
+	// turn holds the creature: only the press asks if the hand may hold it.
+	all.push_back({
+	    .id = "hand.turn_holds_creature_a_script_took",
+	    .name = "The hand holds your creature that a script took during the press",
+	    .facet = Facet::Hand,
+	    .description = "Your tiger faces the camera in the middle of the screen and wears the learning leash, held loose "
+	                   "in the hand. The action button presses the tiger. 0.1 seconds later a script tells the tiger to "
+	                   "be frightened on the spot. The press continues for two seconds and then the button lets go.",
+	    .expected = "The hand holds the tiger after the short wait of the press, although the script now controls the "
+	                "tiger. The camera turns to the tiger. The log shows \"waited long enough: the hand holds it\" and "
+	                "then \"The hand of player 0 holds creature\". The log does not show \"The turn does not hold\".",
+	    .environment = {.dispenserGrid = false, .cursor = glm::vec2(0.5f, 0.5f)},
+	    .framing = {.shot = Shot::Follow, .distance = 1.2f},
+	    .creatures = {Posed(CreatureType::Tiger, {0.0f, 0.0f})},
+	    .commands =
+	        {Leash(0, LeashType::Rope, 0.5f),
+	         {.kind = Kind::PointerPress, .delaySeconds = 2.0f, .value = 3},
+	         {.kind = Kind::DoAction, .creature = 0, .delaySeconds = 0.1f, .action = "BeFrightenedOnTheSpot", .atCreature = 0},
+	         {.kind = Kind::PointerRelease, .delaySeconds = 1.9f, .value = 3}},
+	});
+
 	all.push_back({
 	    .id = "hand.mesh_contact",
 	    .name = "The hand on the body",

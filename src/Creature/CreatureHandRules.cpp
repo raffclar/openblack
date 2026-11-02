@@ -75,3 +75,8 @@ bool creature_hand::HoldsAfterWait(uint32_t elapsedMs)
 {
 	return elapsedMs > k_TapWaitMs;
 }
+
+bool creature_hand::TurnTakesHold(bool inWorld, bool heldByAHand)
+{
+	return inWorld && !heldByAHand;
+}

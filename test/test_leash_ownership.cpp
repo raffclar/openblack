@@ -293,6 +293,16 @@ TEST(CreatureHand, TheHandHoldsOnlyItsOwnPlayersCreature)
 	EXPECT_FALSE(MayHold({.owner = PlayerNames::PLAYER_ONE, .species = CreatureType::Tiger, .fainting = true}, k_Hand));
 }
 
+// The turn that does a hold refuses only a creature that is not in the world any more, or one that a hand holds
+TEST(CreatureHand, TheTurnRefusesOnlyAGoneCreatureOrAHeldOne)
+{
+	using creature_hand::TurnTakesHold;
+	EXPECT_TRUE(TurnTakesHold(true, false));
+	EXPECT_FALSE(TurnTakesHold(true, true));
+	EXPECT_FALSE(TurnTakesHold(false, false));
+	EXPECT_FALSE(TurnTakesHold(false, true));
+}
+
 TEST(CreatureHand, TheHandHoldsTheCreatureOfAnAlliedGodAsItsOwn)
 {
 	using creature_hand::MayHold;
