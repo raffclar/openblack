@@ -58,6 +58,7 @@
 #include "ECS/Systems/PathfindingSystemInterface.h"
 #include "ECS/Systems/TownDesireSystemInterface.h"
 #include "ECS/Systems/TownSystemInterface.h"
+#include "ECS/ThingModel.h"
 #include "ECS/VillagerAfterDeath.h"
 #include "ECS/VillagerAge.h"
 #include "ECS/VillagerNeeds.h"
@@ -858,12 +859,13 @@ glm::vec2 villager_home::DoorPosition(entt::entity abode)
 		return abode_door::VillageCentreDoor(transform.position, transform.rotation, transform.scale);
 	}
 	glm::vec3 point = transform.position;
-	if (const auto* mesh = registry.TryGet<const Mesh>(abode); door == abode_door::Door::Model && mesh != nullptr)
+	// An altar has its model also while the game does not show it
+	if (const auto model = thing_model::ModelOf(registry, abode); door == abode_door::Door::Model && model.has_value())
 	{
 		const auto& meshes = Locator::resources::value().GetMeshes();
-		if (meshes.Contains(mesh->id))
+		if (meshes.Contains(*model))
 		{
-			if (const auto& modelDoor = meshes.Handle(mesh->id)->GetDoorPos(); modelDoor.has_value())
+			if (const auto& modelDoor = meshes.Handle(*model)->GetDoorPos(); modelDoor.has_value())
 			{
 				point = transform.position + transform.rotation * (transform.scale * *modelDoor);
 			}
