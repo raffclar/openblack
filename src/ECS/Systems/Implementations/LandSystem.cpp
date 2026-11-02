@@ -113,6 +113,7 @@
 #include "ECS/Systems/PlayerCommandSystemInterface.h"
 #include "ECS/Systems/PlayerProfileSystemInterface.h"
 #include "ECS/Systems/PlayerSystemInterface.h"
+#include "ECS/Systems/PuzzleGameSystemInterface.h"
 #include "ECS/Systems/ReactionSystemInterface.h"
 #include "ECS/Systems/RealWeatherSystemInterface.h"
 #include "ECS/Systems/SaveGameSystemInterface.h"
@@ -673,6 +674,12 @@ bool LandSystem::LoadSavedLand(const std::filesystem::path& landPath, const std:
 	Locator::handSystem::value().FindAfterLoad();
 	Locator::skyClockSystem::value().FindAfterLoad();
 	Locator::cameraBookmarkSystem::value().FindAfterLoad();
+	// The puzzle games of a saved game lose the state that a save does not keep. The world of a game server continues
+	// as the server has it.
+	if (use == SavedLandUse::SavedGame && Locator::puzzleGameSystem::has_value())
+	{
+		Locator::puzzleGameSystem::value().AfterLoad();
+	}
 	if (Locator::appleBarrelSystem::has_value())
 	{
 		Locator::appleBarrelSystem::value().FindAfterLoad();

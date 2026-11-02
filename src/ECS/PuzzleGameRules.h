@@ -128,4 +128,23 @@ template <typename IsThere>
 	game.played = true;
 	return pieces;
 }
+
+/// The calm count of each puzzle game after a load of a saved game
+constexpr int32_t k_CalmTurnsAfterLoad = 5;
+
+/// A load of a saved game gives back a puzzle game without some of its state, as the game does:
+/// - the calm count of the beach temple puzzle is 5,
+/// - a maze has no marker on the last tapped cell, and its two animals turn to angle 0 before their next move,
+/// - a maze has no fences towards the next cell across. These fences stay in the world, but the maze does not put them
+///   back and does not delete them,
+/// - the fish puzzle has no ring of floats and no shoals. It makes them again, as at its start, in its next turn.
+inline void ForgetUnsavedState(components::PuzzleGame& game) noexcept
+{
+	game.calmTurns = k_CalmTurnsAfterLoad;
+	game.maze.marker = components::MazeState {}.marker;
+	game.maze.heroAngle = 0;
+	game.maze.lionAngle = 0;
+	game.maze.acrossFences.fill(entt::null);
+	game.fish.reset();
+}
 } // namespace openblack::ecs::puzzle_game

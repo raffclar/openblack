@@ -158,6 +158,8 @@ private:
 	void DrawCreatureFootprints(const DrawSceneDesc& desc) const;
 	/// The fish farms' shoals, drawn into what lies under the sea for the sea to be blended over them
 	void DrawFishShoals(const DrawSceneDesc& desc) const;
+	/// The floats of the ring of the fish puzzle, their parts under the sea's level
+	void DrawFishPuzzleFloats(const DrawSceneDesc& desc) const;
 	/// The villagers' ground blobs, in the main view
 	void DrawGroundBlobs(const DrawSceneDesc& desc) const;
 	/// The advisors: those out in the world with the scene, their rainbow trails after all else that blends, and those

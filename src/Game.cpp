@@ -261,6 +261,7 @@
 #include "ECS/Systems/PlayerSystemInterface.h"
 #include "ECS/Systems/PlaygroundTripSystemInterface.h"
 #include "ECS/Systems/ProfileFolderSystemInterface.h"
+#include "ECS/Systems/PuzzleGameSystemInterface.h"
 #include "ECS/Systems/RainSystemInterface.h"
 #include "ECS/Systems/ReactionSystemInterface.h"
 #include "ECS/Systems/RealWeatherSystemInterface.h"
@@ -7866,6 +7867,12 @@ void Game::PlayHandGrabSound()
 			}
 			// The fish near where the hand went in dart away
 			Locator::fishFarmSystem::value().Scare({position.x, k_HandSplashHeight, position.z});
+			// The shoals of the fish puzzle get the scare at the next turn, on each computer of a network game
+			if (Locator::puzzleGameSystem::has_value() && Locator::puzzleGameSystem::value().HasFishPuzzle())
+			{
+				Locator::playerCommandSystem::value().Submit(
+				    player_commands::FishScare {.point = {position.x, k_HandSplashHeight, position.z}});
+			}
 		}
 		// G_HandInWater_01 to _10 in turn, on the water's surface where the hand went in
 		const auto id = fmt::format("InGame.sad/{}", 99 + _handInWaterSample);

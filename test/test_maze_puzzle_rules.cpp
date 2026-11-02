@@ -18,12 +18,16 @@
 #include <vector>
 
 #include <entt/entity/entity.hpp>
+#include <entt/entity/registry.hpp>
+#include <entt/meta/context.hpp>
 #include <gtest/gtest.h>
 
 #include "ECS/Components/PuzzleGame.h"
 #include "ECS/HanoiRules.h"
 #include "ECS/MazePuzzleRules.h"
 #include "ECS/PuzzleGameRules.h"
+#include "ECS/Reflection/ComponentReflection.h"
+#include "ECS/Reflection/WorldArchive.h"
 
 using openblack::script::PuzzleGameType;
 namespace hanoi = openblack::ecs::hanoi;
@@ -405,4 +409,83 @@ TEST(MazePuzzleRules, AScriptHeightOfATotemIsWholeAndNotMoreThanItsGreatestHeigh
 	EXPECT_EQ(TotemHeight(250.0f, 100), 100);
 	EXPECT_EQ(TotemHeight(5.0f, -1), -1);
 	EXPECT_EQ(TotemHeight(-2.5f, -1), -2);
+}
+
+// A save keeps a maze with its fences, its animals, their cells and move stages, its bells and the bells' heights
+TEST(MazePuzzleRules, ASaveKeepsTheMazeAndItsPieces)
+{
+	using openblack::ecs::components::PuzzleGame;
+	using openblack::ecs::components::PuzzlePiece;
+	using openblack::ecs::components::PuzzleTotem;
+	namespace reflection = openblack::ecs::reflection;
+	entt::meta_ctx context;
+	reflection::RegisterComponents(context);
+	entt::registry registry;
+	const auto puzzle = registry.create();
+	const auto alongFence = registry.create();
+	const auto acrossFence = registry.create();
+	const auto sheep = registry.create();
+	const auto lion = registry.create();
+	const auto bell = registry.create();
+	PuzzleGame game {.type = PuzzleGameType::Tilt1, .angle = 512, .started = true};
+	game.maze.alongFences.at(10) = alongFence;
+	game.maze.acrossFences.at(11) = acrossFence;
+	game.maze.hero = sheep;
+	game.maze.lion = lion;
+	game.maze.heroAcross = 3;
+	game.maze.lionAlong = 5;
+	game.maze.lionStage = 1;
+	game.maze.lionAngle = 1536;
+	game.maze.bells.at(4) = bell;
+	registry.emplace<PuzzleGame>(puzzle, game);
+	registry.emplace<PuzzlePiece>(sheep, PuzzlePiece {.puzzle = puzzle});
+	registry.emplace<PuzzlePiece>(lion, PuzzlePiece {.puzzle = puzzle});
+	registry.emplace<PuzzleTotem>(bell, PuzzleTotem {.puzzle = puzzle, .highest = maze::k_TappableHighest, .height = -1});
+
+	reflection::WorldSaveReport report;
+	const auto bytes = reflection::SaveWorld(registry, context, &report);
+	EXPECT_TRUE(report.unsavedValues.empty());
+	entt::registry loaded;
+	ASSERT_TRUE(reflection::LoadWorld(loaded, context, bytes, reflection::WorldLoadMode::Exact).has_value());
+	const auto& maze = loaded.get<PuzzleGame>(puzzle).maze;
+	EXPECT_EQ(maze.alongFences.at(10), alongFence);
+	EXPECT_EQ(maze.acrossFences.at(11), acrossFence);
+	EXPECT_EQ(maze.hero, sheep);
+	EXPECT_EQ(maze.lion, lion);
+	EXPECT_EQ(maze.heroAcross, 3);
+	EXPECT_EQ(maze.lionAlong, 5);
+	EXPECT_EQ(maze.lionStage, 1);
+	EXPECT_EQ(maze.bells.at(4), bell);
+	EXPECT_EQ(loaded.get<PuzzlePiece>(lion).puzzle, puzzle);
+	EXPECT_EQ(loaded.get<PuzzleTotem>(bell).highest, maze::k_TappableHighest);
+	EXPECT_EQ(loaded.get<PuzzleTotem>(bell).height, -1);
+}
+
+// After a load the game gives back a puzzle with the calm count 5, no marker, both animals at angle 0, and no fences
+// towards the next cell across. The other state stays.
+TEST(MazePuzzleRules, ALoadForgetsWhatTheGameDoesNotSave)
+{
+	using openblack::ecs::components::PuzzleGame;
+	PuzzleGame game {.type = PuzzleGameType::Thesius1, .calmTurns = -3};
+	game.maze.marker = 7;
+	game.maze.heroAngle = 1024;
+	game.maze.lionAngle = 512;
+	game.maze.heroStage = 1;
+	game.maze.lionStage = 2;
+	game.maze.heroAlong = 4;
+	game.maze.acrossFences.fill(static_cast<entt::entity>(3));
+	game.maze.alongFences.fill(static_cast<entt::entity>(5));
+	openblack::ecs::puzzle_game::ForgetUnsavedState(game);
+	EXPECT_EQ(game.calmTurns, openblack::ecs::puzzle_game::k_CalmTurnsAfterLoad);
+	EXPECT_EQ(game.maze.marker, 0u);
+	EXPECT_EQ(game.maze.heroAngle, 0);
+	EXPECT_EQ(game.maze.lionAngle, 0);
+	EXPECT_EQ(game.maze.heroStage, 1);
+	EXPECT_EQ(game.maze.lionStage, 2);
+	EXPECT_EQ(game.maze.heroAlong, 4);
+	for (size_t slot = 0; slot < game.maze.acrossFences.size(); ++slot)
+	{
+		EXPECT_EQ(game.maze.acrossFences.at(slot), entt::entity {entt::null});
+		EXPECT_EQ(game.maze.alongFences.at(slot), static_cast<entt::entity>(5));
+	}
 }

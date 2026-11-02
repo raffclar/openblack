@@ -51,6 +51,14 @@ public:
 	/// A player tapped a puzzle totem, such as a bell of the lion maze. A totem that the hand can tap takes the tap as a
 	/// height of -1, and each tap makes a sound. False for a thing that is not a puzzle totem.
 	virtual bool TapTotem(entt::entity totem) = 0;
+	/// Something scared the fish at a point, such as the hand going into the sea. The shoals of the fish puzzle read the
+	/// point in the next turn, and then the point goes. A later scare before that turn takes the place of an earlier one.
+	virtual void ScareFish(glm::vec3 point) = 0;
+	/// Whether there is a fish puzzle, whose shoals the scares of the fish go to
+	[[nodiscard]] virtual bool HasFishPuzzle() const = 0;
+	/// After a load of a saved game: each puzzle game forgets the state that a save does not keep, and no tapped place
+	/// waits for the next turn
+	virtual void AfterLoad() = 0;
 };
 
 } // namespace openblack::ecs::systems

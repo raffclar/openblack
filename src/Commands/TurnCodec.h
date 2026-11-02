@@ -110,6 +110,7 @@ enum class CommandTag : uint8_t
 	IconChargeStop = 46,
 	DialogueClick = 47,
 	PuzzleTap = 48,
+	FishScare = 49,
 };
 
 /// The sizes of the parts of the frames, in bytes

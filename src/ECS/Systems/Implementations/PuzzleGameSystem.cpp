@@ -41,6 +41,7 @@
 #include "ECS/Components/ScriptControl.h"
 #include "ECS/Components/Transform.h"
 #include "ECS/Components/Tree.h"
+#include "ECS/FishPuzzleRules.h"
 #include "ECS/HanoiRules.h"
 #include "ECS/Map.h"
 #include "ECS/MazePuzzleRules.h"
@@ -50,10 +51,15 @@
 #include "ECS/Systems/EffectRequestSystemInterface.h"
 #include "ECS/Systems/FireSystemInterface.h"
 #include "ECS/Systems/HelpSpeechSystemInterface.h"
+#include "ECS/Systems/TimeSystemInterface.h"
+#include "ECS/Systems/WaterRingSystemInterface.h"
 #include "ECS/ThingMapPlace.h"
 #include "ECS/TreePuzzleRules.h"
 #include "ECS/WorldObjects.h"
+#include "FileSystem/FileSystemInterface.h"
 #include "Locator.h"
+#include "Resources/Loaders.h"
+#include "Resources/ResourcesInterface.h"
 #include "Sound/GameSoundEffects.h"
 #include "Sound/HelpSpeech.h"
 
@@ -1010,6 +1016,11 @@ bool TestSolution(entt::entity puzzle, PuzzleGame& game)
 	{
 		return TestMaze(game);
 	}
+	// The fish puzzle is solved when its fish are caught
+	if (game.type == script::PuzzleGameType::Fishes1)
+	{
+		return game.fish.has_value() && game.fish->net.caught;
+	}
 	if (game.type != script::PuzzleGameType::Hanoi)
 	{
 		return ecs::puzzle_game::PlayedBeforeSolved(game.type);
@@ -1124,9 +1135,62 @@ void ProcessHanoi(entt::entity puzzle, PuzzleGame& game)
 	}
 }
 
-/// One turn of a puzzle game, with the place on the land that a player tapped in this turn
-void Process(entt::entity puzzle, PuzzleGame& game, const std::optional<map_coords::MapCoords>& tapped)
+/// The model of the floats goes into the mesh cache the first time a fish puzzle needs it
+void LoadFloatModel()
 {
+	if (!Locator::resources::has_value() || !Locator::filesystem::has_value())
+	{
+		return;
+	}
+	auto& meshes = Locator::resources::value().GetMeshes();
+	if (meshes.Contains(ecs::fish_puzzle::k_FloatMeshId.value()))
+	{
+		return;
+	}
+	auto& fileSystem = Locator::filesystem::value();
+	const auto path = fileSystem.GetPath<filesystem::Path::Misc>() / ecs::fish_puzzle::k_FloatModelFile;
+	if (!fileSystem.Exists(path))
+	{
+		SPDLOG_LOGGER_ERROR(spdlog::get("game"), "Model {} not found", path.generic_string());
+		return;
+	}
+	meshes.Load(ecs::fish_puzzle::k_FloatMeshId.value(), resources::L3DLoader::FromDiskTag {}, path);
+}
+
+/// One turn of the fish puzzle. Its first turn makes the ring of floats and the two shoals. Then the shoals swim, also
+/// after the solution, until the fish are caught; each fish that is caught makes a ring on the water.
+void ProcessFish(PuzzleGame& game, const std::optional<glm::vec3>& scare)
+{
+	auto& random = Locator::gameRandom::value();
+	// The draws come from the seed that every computer of a game shares
+	const fish_shoal::Random draw = [&random](float low, float high) { return low + random.GameFloatRand(high - low); };
+	if (!game.fish.has_value())
+	{
+		const glm::vec3 middle {map_coords::ToMetres(game.place.x), game.place.altitude, map_coords::ToMetres(game.place.z)};
+		game.fish = ecs::fish_puzzle::Make(middle, draw);
+		LoadFloatModel();
+	}
+	constexpr auto k_TurnMilliseconds = static_cast<uint32_t>(TimeSystemInterface::k_TurnDuration.count());
+	const auto caught = ecs::fish_puzzle::StepTurn(*game.fish, k_TurnMilliseconds, scare, draw);
+	if (caught.empty() || !Locator::waterRingSystem::has_value())
+	{
+		return;
+	}
+	for (const auto& point : caught)
+	{
+		Locator::waterRingSystem::value().Add({.position = point, .growth = ecs::fish_puzzle::k_CaughtRingGrowth});
+	}
+}
+
+/// One turn of a puzzle game, with the place on the land that a player tapped in this turn and the last scare of the
+/// fish
+void Process(entt::entity puzzle, PuzzleGame& game, const std::optional<map_coords::MapCoords>& tapped,
+             const std::optional<glm::vec3>& fishScare)
+{
+	if (game.type == script::PuzzleGameType::Fishes1)
+	{
+		ProcessFish(game, fishScare);
+	}
 	if (ecs::puzzle_game::LetsGoOfThingsThatWent(game.type))
 	{
 		// The puzzle lets go of each palm tree and each lantern that went. It does not make them again.
@@ -1216,11 +1280,12 @@ void PuzzleGameSystem::ProcessTurn()
 	{
 		if (auto* game = registry.Valid(puzzle) ? registry.TryGet<PuzzleGame>(puzzle) : nullptr)
 		{
-			Process(puzzle, *game, _tappedPlace);
+			Process(puzzle, *game, _tappedPlace, _fishScare);
 		}
 	}
-	// The tapped place is for this turn only
+	// The tapped place and the scare of the fish are for this turn only
 	_tappedPlace.reset();
+	_fishScare.reset();
 }
 
 std::optional<bool> PuzzleGameSystem::Played(entt::entity puzzle)
@@ -1338,4 +1403,25 @@ bool PuzzleGameSystem::TapTotem(entt::entity totem)
 		    entt::hashed_string(fmt::format("{}/{}", k_GameBank, maze_puzzle::k_BellTapSound).c_str()).value(), {});
 	}
 	return true;
+}
+
+void PuzzleGameSystem::ScareFish(glm::vec3 point)
+{
+	_fishScare = point;
+}
+
+bool PuzzleGameSystem::HasFishPuzzle() const
+{
+	bool found = false;
+	Entities().Each<const PuzzleGame>(
+	    [&found](const PuzzleGame& game) { found = found || game.type == script::PuzzleGameType::Fishes1; });
+	return found;
+}
+
+void PuzzleGameSystem::AfterLoad()
+{
+	_tappedPlace.reset();
+	_fishScare.reset();
+	auto& registry = Entities();
+	registry.Each<PuzzleGame>([](PuzzleGame& game) { ecs::puzzle_game::ForgetUnsavedState(game); });
 }

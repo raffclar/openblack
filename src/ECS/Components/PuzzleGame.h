@@ -12,11 +12,13 @@
 #include <cstdint>
 
 #include <array>
+#include <optional>
 
 #include <entt/entity/entity.hpp>
 #include <glm/vec3.hpp>
 
 #include "3D/MapCoords.h"
+#include "ECS/FishPuzzleRules.h"
 #include "ScriptHeaders/ScriptEnums.h"
 
 namespace openblack::ecs::components
@@ -135,6 +137,8 @@ struct PuzzleGame
 	std::array<entt::entity, 4> lanterns {NoThings<4>()};
 	/// The fences, the animals and the bells of a maze
 	MazeState maze {};
+	/// The ring of floats and the two shoals of the fish puzzle, made in its first turn
+	std::optional<fish_puzzle::FishNet> fish;
 };
 
 } // namespace openblack::ecs::components

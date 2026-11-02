@@ -33,6 +33,7 @@
 #include "ECS/Systems/FishFarmSystemInterface.h"
 #include "ECS/Systems/ObjectDrawListSystemInterface.h"
 #include "ECS/Systems/PlayerSystemInterface.h"
+#include "ECS/Systems/PuzzleGameSystemInterface.h"
 #include "ECS/Systems/WaterRingSystemInterface.h"
 #include "ECS/WorldObjects.h"
 #include "InfoConstants.h"
@@ -233,6 +234,10 @@ void GameDynamicsWorld::ScareFish(glm::vec3 point)
 	if (Locator::fishFarmSystem::has_value())
 	{
 		Locator::fishFarmSystem::value().Scare(point);
+	}
+	if (Locator::puzzleGameSystem::has_value())
+	{
+		Locator::puzzleGameSystem::value().ScareFish(point);
 	}
 }
 

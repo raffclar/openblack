@@ -422,6 +422,14 @@ void Run(const Command& command, uint32_t turn)
 				    openblack::Locator::helpProfileSystem::value().DoReport(action);
 			    }
 		    }
+		    else if constexpr (std::is_same_v<Kind, FishScare>)
+		    {
+			    // The shoals of the fish puzzle of every computer take the scare in this turn
+			    if (openblack::Locator::puzzleGameSystem::has_value())
+			    {
+				    openblack::Locator::puzzleGameSystem::value().ScareFish(action.point);
+			    }
+		    }
 		    else if constexpr (std::is_same_v<Kind, PuzzleTap>)
 		    {
 			    // The maze puzzles of every computer take the tapped place in this turn

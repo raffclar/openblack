@@ -155,5 +155,6 @@ void openblack::ecs::reflection::RegisterFields_Components_p(entt::meta_ctx& con
 	    .Field<&components::PuzzleGame::mists>("mists")
 	    .Field<&components::PuzzleGame::bats>("bats")
 	    .Field<&components::PuzzleGame::lanterns>("lanterns")
-	    .Field<&components::PuzzleGame::maze>("maze");
+	    .Field<&components::PuzzleGame::maze>("maze")
+	    .Field<&components::PuzzleGame::fish>("fish");
 }

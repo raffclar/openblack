@@ -42,6 +42,7 @@
 #include "ECS/Components/Vortex.h"
 #include "ECS/Components/WorshipSite.h"
 #include "ECS/CreatureAttitudeRules.h"
+#include "ECS/FishPuzzleRules.h"
 #include "ECS/FixedOutlines.h"
 #include "ECS/Heartbeat.h"
 #include "ECS/HighDetailRules.h"
@@ -322,6 +323,16 @@ void openblack::ecs::reflection::RegisterFields_Values_e(entt::meta_ctx& context
 	    .Field<&openblack::ecs::creature_attitude::Feeling::attitude>("attitude")
 	    .Field<&openblack::ecs::creature_attitude::Feeling::shownTurn>("shownTurn")
 	    .Field<&openblack::ecs::creature_attitude::Feeling::lapsedTurn>("lapsedTurn");
+	Reflect<openblack::ecs::fish_puzzle::FishNet>(context, ValueOnly {})
+	    .Field<&openblack::ecs::fish_puzzle::FishNet::net>("net")
+	    .Field<&openblack::ecs::fish_puzzle::FishNet::shoals>("shoals");
+	Reflect<openblack::ecs::fish_puzzle::Net>(context, ValueOnly {})
+	    .Field<&openblack::ecs::fish_puzzle::Net::middle>("middle")
+	    .Field<&openblack::ecs::fish_puzzle::Net::fishInRing>("fishInRing")
+	    .Field<&openblack::ecs::fish_puzzle::Net::heldMilliseconds>("heldMilliseconds")
+	    .Field<&openblack::ecs::fish_puzzle::Net::caught>("caught")
+	    .Field<&openblack::ecs::fish_puzzle::Net::closing>("closing")
+	    .Field<&openblack::ecs::fish_puzzle::Net::bobTime>("bobTime");
 	Reflect<openblack::ecs::fixed_outlines::Circle>(context, ValueOnly {})
 	    .Field<&openblack::ecs::fixed_outlines::Circle::centre>("centre")
 	    .Field<&openblack::ecs::fixed_outlines::Circle::radius>("radius")

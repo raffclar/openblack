@@ -379,6 +379,16 @@ struct PuzzleTap
 	bool operator==(const PuzzleTap& other) const = default;
 };
 
+/// The hand of the player went into the sea. At the turn, the shoals of the fish puzzle take the point as a scare. Thus
+/// the fish of every computer dart away at the same turn.
+struct FishScare
+{
+	/// The point in the sea where the hand went in
+	glm::vec3 point {0.0f};
+
+	bool operator==(const FishScare& other) const = default;
+};
+
 /// Tools: the creature of the player starts a fight with the nearest creature, or a fight that it is in stops. Only a
 /// game server with its test commands on lets this command through.
 struct CreatureFightCheat
@@ -551,7 +561,7 @@ using Action =
                  FightCharge, CreatureReaction, HandClick, SeedGesture, PlayerLeft, HandPick, PlayerJoined, MiracleRequest,
                  MiracleRepeat, HandCast, HandCastUnlock, LeashPick, HandShakeOff, GripDust, HelpReport, HelpQuery,
                  CreatureFightCheat, ViewReport, TempleLeashOff, GiveCallOff, CreatureTattoo, LeashLength, ChatSpeech,
-                 ChatTaunt, QuickSave, QuickLoad, MusicMood, IconChargeStop, DialogueClick, PuzzleTap>;
+                 ChatTaunt, QuickSave, QuickLoad, MusicMood, IconChargeStop, DialogueClick, PuzzleTap, FishScare>;
 
 /// A command and the player that sent it
 struct Command

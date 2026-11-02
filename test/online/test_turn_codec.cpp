@@ -128,6 +128,7 @@ std::vector<Action> EachCommand()
 	    IconChargeStop {},
 	    DialogueClick {.click = true, .skipKey = true},
 	    PuzzleTap {.placeX = -0x12345678, .placeZ = 0x7FEDCBA9},
+	    FishScare {.point = {2497.875f, 0.2f, -3628.25f}},
 	};
 }
 
@@ -152,7 +153,7 @@ Action RandomAction(std::mt19937& random)
 	const auto number = [&]() { return std::bit_cast<float>(bits(random)); };
 	const auto wide = [&]() { return (static_cast<uint64_t>(bits(random)) << 32U) | bits(random); };
 	const auto vector = [&]() { return glm::vec3 {number(), number(), number()}; };
-	switch (bits(random) % 48)
+	switch (bits(random) % 49)
 	{
 	case 0:
 		return LeashKey {.key = static_cast<creature_leash::LeashKey>(bits(random) % 3)};
@@ -331,6 +332,8 @@ Action RandomAction(std::mt19937& random)
 		return DialogueClick {.click = bits(random) % 2 == 0, .skipKey = bits(random) % 2 == 0};
 	case 46:
 		return PuzzleTap {.placeX = static_cast<int32_t>(bits(random)), .placeZ = static_cast<int32_t>(bits(random))};
+	case 47:
+		return FishScare {.point = vector()};
 	default:
 		return PlayerLeft {};
 	}
@@ -391,8 +394,8 @@ std::vector<Action> BusyCommands()
 
 TEST(TurnCodec, EachCommandHasItsSize)
 {
-	const std::vector<size_t> sizes {2, 5, 9, 5,  53, 5, 10, 18, 5,  49, 17, 5,  5, 5, 9,  12, 1,  18, 11, 5, 18, 15, 7, 5,
-	                                 1, 2, 1, 61, 5,  2, 1,  13, 10, 18, 1,  54, 1, 5, 51, 5,  16, 7,  1,  1, 13, 1,  2, 9};
+	const std::vector<size_t> sizes {2, 5, 9,  5, 53, 5, 10, 18, 5,  49, 17, 5, 5, 5,  9, 12, 1, 18, 11, 5,  18, 15, 7, 5, 1,
+	                                 2, 1, 61, 5, 2,  1, 13, 10, 18, 1,  54, 1, 5, 51, 5, 16, 7, 1,  1,  13, 1,  2,  9, 13};
 	const auto commands = EachCommand();
 	ASSERT_EQ(commands.size(), sizes.size());
 	for (size_t i = 0; i < commands.size(); ++i)

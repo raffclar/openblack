@@ -30,6 +30,7 @@
 #include "ECS/Components/Transform.h"
 #include "ECS/Registry.h"
 #include "ECS/Systems/FishFarmSystemInterface.h"
+#include "ECS/Systems/PuzzleGameSystemInterface.h"
 #include "Locator.h"
 #include "Resources/ResourcesInterface.h"
 
@@ -143,6 +144,10 @@ void FootprintSystem::Step(entt::entity creature)
 	if (foot.position.y < k_FishScareFootHeight && Locator::fishFarmSystem::has_value())
 	{
 		Locator::fishFarmSystem::value().Scare(foot.position);
+	}
+	if (foot.position.y < k_FishScareFootHeight && Locator::puzzleGameSystem::has_value())
+	{
+		Locator::puzzleGameSystem::value().ScareFish(foot.position);
 	}
 }
 

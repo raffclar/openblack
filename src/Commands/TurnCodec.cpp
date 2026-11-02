@@ -339,6 +339,7 @@ void WriteAction(Writer& out, const Action& action)
 		               out.Number(static_cast<uint32_t>(command.placeX));
 		               out.Number(static_cast<uint32_t>(command.placeZ));
 	               },
+	               [&out](const FishScare& command) { out.Vector(command.point); },
 	               [&out](const MusicMood& command) {
 		               out.Entity(command.creature);
 		               out.Number(command.track);
@@ -772,6 +773,9 @@ DecodeError ReadAction(Reader& in, Action& action)
 		action = PuzzleTap {.placeX = placeX, .placeZ = static_cast<int32_t>(in.Number<uint32_t>())};
 		return DecodeError::None;
 	}
+	case CommandTag::FishScare:
+		action = FishScare {.point = in.Vector()};
+		return DecodeError::None;
 	case CommandTag::MusicMood:
 	{
 		const auto creature = in.Entity();
@@ -926,6 +930,7 @@ CommandTag TagOf(const Action& action) noexcept
 	                      [](const IconChargeStop& /*command*/) { return CommandTag::IconChargeStop; },
 	                      [](const DialogueClick& /*command*/) { return CommandTag::DialogueClick; },
 	                      [](const PuzzleTap& /*command*/) { return CommandTag::PuzzleTap; },
+	                      [](const FishScare& /*command*/) { return CommandTag::FishScare; },
 	                  },
 	                  action);
 }
@@ -988,6 +993,7 @@ size_t SizeOf(const Action& action) noexcept
 	                   [](const IconChargeStop& /*command*/) { return size_t {0}; },
 	                   [](const DialogueClick& /*command*/) { return size_t {1}; },
 	                   [](const PuzzleTap& /*command*/) { return size_t {4 + 4}; },
+	                   [](const FishScare& /*command*/) { return k_Vector; },
 	               },
 	               action);
 	return 1 + fields;
