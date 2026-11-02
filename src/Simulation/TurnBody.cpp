@@ -11,6 +11,7 @@
 
 #include <cstdint>
 
+#include <algorithm>
 #include <optional>
 #include <span>
 #include <vector>
@@ -590,7 +591,15 @@ void PlayTurnStep(game_turn::Step step, TurnViewInterface& view)
 		if (const auto& loss = Locator::simulation::value().GetSettings().templeLoss;
 		    loss.has_value() && loss->turn == turn && Locator::templeDestructionSystem::has_value())
 		{
-			StartTempleLoss(static_cast<PlayerNames>(loss->player));
+			// The neutral player has no temple. A loss with no range has the player as its last player.
+			const auto lastPlayer = std::max(loss->player, loss->lastPlayer);
+			for (auto player = loss->player; player <= lastPlayer; ++player)
+			{
+				if (static_cast<PlayerNames>(player) != PlayerNames::NEUTRAL)
+				{
+					StartTempleLoss(static_cast<PlayerNames>(player));
+				}
+			}
 		}
 		// The players take their turns, each its temple and then its towns
 		PlayPlayerTurns();
