@@ -1177,12 +1177,24 @@ struct Command
 		/// altars of the sites stay as they are. Needs no creature.
 		ScriptBuildsWorshipSites,
 		/// The player clicks the scroll that a script put up nearest a point (point, from the middle of the map), as the
-		/// Action button pressed and let go on the scroll does. The script that waits for a click on it goes on. Needs no
+		/// Action button pressed and let go on the scroll does: the hand taps it and clicks it. The script that waits for a
+		/// click on it goes on, and a tap on the scroll of a challenge that has started replays its reminder. Needs no
 		/// creature
 		ClickScroll,
-		/// The player puts the camera at once 40 metres south of a point (point, from the middle of the map) and 30 metres
-		/// above the land there, looking at the point. Needs no creature
+		/// The player puts the camera at once 15 metres south of a point (point, from the middle of the map) and 15 metres
+		/// above the land at the point, looking at the point. Needs no creature
 		CameraLooksAt,
+		/// The player's hand takes the mobile object nearest a point (point, from the middle of the map, within 10
+		/// metres) at once, as if picked up from where it lies, such as a pile of dung that a script made. Needs no
+		/// creature
+		HandTakeNear,
+		/// The player clicks the creature nearest a point (point, from the middle of the map), as the Action button pressed
+		/// and let go on it does, such as to answer a creature swap offer. Needs no creature of the scenario
+		ClickCreatureNear,
+		/// The player's hand taps and clicks the reward chest nearest a point (point, from the middle of the map), as a
+		/// short press of the Action button on it does: the chest opens and the script that waits for a click on it goes on.
+		/// Needs no creature
+		TapRewardNear,
 	};
 	Kind kind {Kind::Stop};
 	/// Which creature, by its place in the scenario's creatures
