@@ -138,4 +138,10 @@ enum class ThingAfterTurn : uint8_t
 /// thing that lost its storm gives 0.
 [[nodiscard]] float ThingSpeed(const components::Storm* storm);
 
+/// A script command ends every storm that has its edge in a circle on the land. The command uses the place of the storm
+/// from the last weather turn, not the place after the wind moves it in that turn. It also uses the full outer radius
+/// of the storm. The storm ends when the distance across the land from the centre of the circle to the storm is less
+/// than the sum of the two radii.
+[[nodiscard]] bool InKillArea(glm::vec3 stormPlace, float stormOuterRadius, glm::vec3 centre, float radius);
+
 } // namespace openblack::ecs::script_weather
