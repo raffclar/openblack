@@ -848,7 +848,7 @@ float computer_world::KnownFightMiracleShare(entt::entity creature, CreatureDesi
 	for (size_t number = 0; number < computer_mind::k_MagicTypes && number < tables->miracles.size(); ++number)
 	{
 		const auto type = static_cast<MagicType>(number);
-		if (!tables->miracles[number].knownAtStart || magic::GetMagicEffectInfo(info, type).perceivedPlayerDesire.at(0) != kind)
+		if (!tables->miracles[number].teachable || magic::GetMagicEffectInfo(info, type).perceivedPlayerDesire.at(0) != kind)
 		{
 			continue;
 		}

@@ -81,7 +81,7 @@ namespace
 	const auto& skills = Locator::infoConstants::value().creatireActionKnownAboutEntry;
 	for (size_t skill = 0; skill < skills.size(); ++skill)
 	{
-		facts.push_back({.teachable = skills.at(skill).field0x54 != 0,
+		facts.push_back({.teachable = skills.at(skill).teachable != 0,
 		                 .known = Knows(creature, CreatureActionLearningType::Normal, skill)});
 	}
 	return facts;
@@ -103,7 +103,7 @@ namespace
 		// The game gives each miracle the first seed that casts it when it starts. The miracle of no type keeps no seed and
 		// reads an empty record before the table of seeds.
 		const auto seed = type == MagicType::None ? std::nullopt : magic::FindFirstSpellSeedForMagicType(info, type);
-		facts.push_back({.teachable = miracles.at(miracle).field0x54 != 0,
+		facts.push_back({.teachable = miracles.at(miracle).teachable != 0,
 		                 .known = Knows(creature, CreatureActionLearningType::Magic, miracle),
 		                 .perceived = magic::GetMagicEffectInfo(info, type).perceivedPlayerDesire.at(0),
 		                 .seedExists = seed.has_value() && magic::GetSpellSeedInfo(info, *seed).exists != 0});
