@@ -778,12 +778,13 @@ bool RenderingSystem::UploadInstances(bool drawBoundingBox)
 	                                       Villager, Animal, InPhysics, SnowLevel, BuildingDamage>
 	    stores(registry);
 	const openblack::ecs::object_detail::Stores detailStores(registry);
+	const openblack::ecs::systems::DrawnStores drawnStores(registry);
 	const auto lifelessTotemParts = LifelessTotemParts(registry);
 	EachBySegment(
 	    [this, &registry, &vegetation, &meshes, &fits, &fizzOrder, &segmentPlaced, &lastSegment, drawBoundingBox, camera, &view,
 	     modelDetail, drawList, drawnHand, &drawnPlaces, &villagerPoses, &highDetails, &drawnScales, &physicsPoses,
 	     &detailMeshes, &lifelessTotemParts, &hands, &highlights, &creatureMorphs, &terrainMorphs, &ghosts, &stores,
-	     &detailStores](entt::entity entity, const Mesh& mesh, const Transform& transform) {
+	     &detailStores, &drawnStores](entt::entity entity, const Mesh& mesh, const Transform& transform) {
 		    // The hands of the other gods and the right hands have no model on the screen
 		    if (!graphics::drawn_hand::Drawn(hands.Has(entity), entity, drawnHand))
 		    {
@@ -851,7 +852,7 @@ bool RenderingSystem::UploadInstances(bool drawBoundingBox)
 		    const auto keptBox =
 		        detail != nullptr ? detail->meshes.at(static_cast<size_t>(graphics::mesh_detail::Mesh::Standard)) : mesh.id;
 		    bool noted = false;
-		    if (drawList != nullptr && !drawList->Drawn(registry, entity))
+		    if (drawList != nullptr && !drawList->DrawnWith(registry, entity, drawnStores))
 		    {
 			    // Of the things on the land's blocks only those in the land's draw list are drawn. One left out leaves
 			    // what it stands on painted, as one too far off does; the living and the creatures leave nothing.

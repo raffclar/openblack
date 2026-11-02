@@ -16,12 +16,16 @@
 
 #include <entt/entity/entity.hpp>
 
+#include "ECS/Registry.h"
 #include "Scenery/ObjectDrawList.h"
 
-namespace openblack::ecs
+namespace openblack::ecs::components
 {
-class Registry;
-}
+struct HighDetail;
+struct MapCellResident;
+struct Temple;
+struct WalkPath;
+} // namespace openblack::ecs::components
 
 namespace openblack::ecs::systems
 {
@@ -32,6 +36,25 @@ namespace openblack::ecs::systems
 /// or after ten turns, so a thing that comes onto the blocks in between waits for it. Things not standing in the map's
 /// cells (held, flying in the physics) and those drawn on their own (the temple, things drawn in high detail) aren't the
 /// list's to decide. A part of a thing, such as the icon on a village totem, is drawn when its owner is drawn.
+/// The stores of the components that the draw test of a thing reads, found one time for a walk of many things. The test
+/// with them gives the same answers as the test with the registry while these stores exist. Make it again when the walk
+/// can make the first component of one of these kinds.
+class DrawnStores
+{
+public:
+	explicit DrawnStores(const Registry& registry);
+	/// The cells that a thing stands on, none for a thing that is not in the map
+	[[nodiscard]] const components::MapCellResident* Resident(entt::entity entity) const;
+	/// Whether the game draws a thing on its own, not by the list
+	[[nodiscard]] bool DrawnOnItsOwn(entt::entity entity) const;
+
+private:
+	ComponentLookup<components::MapCellResident> _resident;
+	ComponentLookup<components::Temple> _temple;
+	ComponentLookup<components::HighDetail> _highDetail;
+	ComponentLookup<components::WalkPath> _walkPath;
+};
+
 class ObjectDrawListSystemInterface
 {
 public:
@@ -89,6 +112,11 @@ public:
 	/// Whether the list lets a thing be drawn: true for anything it doesn't decide. A frame that does not draw all of
 	/// the list draws only the listed things that the last full frame kept (see NoteFullFrame).
 	[[nodiscard]] virtual bool Drawn(const Registry& registry, entt::entity entity) const = 0;
+	/// Whether the list lets a thing be drawn, as Drawn, with the stores of a walk of many things
+	[[nodiscard]] virtual bool DrawnWith(const Registry& registry, entt::entity entity, const DrawnStores& /*stores*/) const
+	{
+		return Drawn(registry, entity);
+	}
 	/// Whether the list decides if a frame draws a thing: the thing stands on the land's blocks, and the game does not draw
 	/// it on its own
 	[[nodiscard]] virtual bool Decides(const Registry& /*registry*/, entt::entity /*entity*/) const { return false; }

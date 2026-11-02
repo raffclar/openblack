@@ -296,6 +296,47 @@ bool ObjectDrawListSystem::Drawn(const Registry& registry, entt::entity entity) 
 	return _frame.drawAll || _keptByIndex[static_cast<size_t>(entt::to_entity(entity))];
 }
 
+bool ObjectDrawListSystem::DrawnWith(const Registry& registry, entt::entity entity, const DrawnStores& stores) const
+{
+	// A part asks as its owner, by the registry
+	if (_parts.Of(entity))
+	{
+		return Drawn(registry, entity);
+	}
+	const auto* resident = stores.Resident(entity);
+	if (!(_view.has_value() && resident != nullptr && !resident->cells.empty() && !stores.DrawnOnItsOwn(entity)))
+	{
+		return true;
+	}
+	if (!_frame.landDrawn || !Listed(entity))
+	{
+		return false;
+	}
+	return _frame.drawAll || _keptByIndex[static_cast<size_t>(entt::to_entity(entity))];
+}
+
+DrawnStores::DrawnStores(const Registry& registry)
+    : _resident(registry)
+    , _temple(registry)
+    , _highDetail(registry)
+    , _walkPath(registry)
+{
+}
+
+const MapCellResident* DrawnStores::Resident(entt::entity entity) const
+{
+	return _resident.TryGet(entity);
+}
+
+bool DrawnStores::DrawnOnItsOwn(entt::entity entity) const
+{
+	return object_draw_list::DrawnOnItsOwn({
+	    .temple = _temple.Has(entity),
+	    .highDetail = _highDetail.Has(entity),
+	    .walkingTrack = _walkPath.Has(entity),
+	});
+}
+
 bool ObjectDrawListSystem::NotesKept(entt::entity entity) const
 {
 	const auto part = _parts.Of(entity);
