@@ -14842,6 +14842,7 @@ std::vector<Scenario> Build()
 	AddVortexScenarios(all);
 	AddLand4StoneScenarios(all);
 	AddLand4SlegScenarios(all);
+	AddLandsFourFiveScrollScenarios(all);
 	AddRewardScenarios(all);
 	AddTornadoScenarios(all);
 	AddPhysicsScenarios(all);
