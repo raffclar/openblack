@@ -20,6 +20,7 @@
 #include "ECS/Systems/AppleBarrelSystemInterface.h"
 #include "ECS/Systems/ArtefactSystemInterface.h"
 #include "ECS/Systems/BoatLaunchSystemInterface.h"
+#include "ECS/Systems/CameraPathSystemInterface.h"
 #include "ECS/Systems/ChatSystemInterface.h"
 #include "ECS/Systems/ChimneySmokeSystemInterface.h"
 #include "ECS/Systems/CinematicDirectorSystemInterface.h"
@@ -150,6 +151,11 @@ void PlayFrameEffects(FrameViewInterface& view)
 	if (Locator::particleRuleSystem::has_value())
 	{
 		Locator::particleRuleSystem::value().ScrollChains(clock.GetFrameRealTime(), clock.GetFrameGameTime());
+	}
+	// The draw shows the frame of a miracle's camera atom, which gives the time on its camera path in the next frame
+	if (Locator::cameraPathSystem::has_value())
+	{
+		Locator::cameraPathSystem::value().ShowPlaced(clock.GetTurnFraction());
 	}
 	{
 		// The flames, steam and smoke of what burns move on

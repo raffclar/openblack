@@ -30,11 +30,13 @@
 #include <3D/CameraPath.h>
 #include <Audio/AudioManagerNoOp.h>
 #include <Camera/Camera.h>
+#include <Camera/CameraPathControl.h>
 #include <Camera/DefaultWorldCameraModel.h>
 #include <Camera/ScriptCameraModel.h>
 #include <ECS/Registry.h>
 #include <ECS/Systems/Implementations/CameraPathSystem.h>
 #include <Locator.h>
+#include <Particles/CameraPathLink.h>
 
 #include "scenarios/Mock.h"
 
@@ -48,6 +50,8 @@ constexpr glm::vec3 k_Focus {1000.0f, 0.0f, 1060.0f};
 /// The path is placed this far from the camera
 constexpr glm::vec3 k_PathPlace {1400.0f, 0.0f, 1000.0f};
 constexpr auto k_Frame = 20ms;
+/// The animation that the path goes with plays over ten seconds
+constexpr int32_t k_CycleMilliseconds = 10000;
 
 /// A path of two points
 std::unique_ptr<CameraPath> TwoPointPath()
@@ -92,7 +96,6 @@ protected:
 		camera.SetProjectionMatrixPerspective(70.0f, Locator::windowing::value().GetAspectRatio(), 1.0f);
 		std::ignore = camera.SetModel(std::make_unique<DefaultWorldCameraModel>(k_Origin, k_Focus));
 		camera.SetOrigin(k_Origin).SetFocus(k_Focus);
-		_spell = Locator::entitiesRegistry::value().Create();
 	}
 
 	void TearDown() override
@@ -108,29 +111,40 @@ protected:
 
 	void FollowAPath()
 	{
-		_paths.FollowPlaced(TwoPointPath(), glm::translate(glm::mat4(1.0f), k_PathPlace), 1.0f, 0.6f, 10000.0f, _spell);
+		_link = std::make_shared<particles::CameraPathLink>(
+		    particles::CameraPathLink {.cycleMilliseconds = k_CycleMilliseconds, .frames = camera_path::k_AnimationFrames});
+		_paths.FollowPlaced(TwoPointPath(), glm::translate(glm::mat4(1.0f), k_PathPlace), 1.0f, _link);
 	}
 
-	/// Frames of the game: the path, else the player's camera, moves the camera. Each frame takes so much game time:
-	/// none while the game is paused.
-	void RunFrames(int frames, std::chrono::milliseconds gameTime = k_Frame)
+	/// The atom's step ends at a frame of its animation, drawn from now on, with the pause gone by or not
+	void StepAtom(float frame, bool playing)
+	{
+		_link->previousFrame = _link->currentFrame;
+		_link->currentFrame = frame;
+		_link->shown = true;
+		_link->playing = playing;
+	}
+
+	/// Frames of the game: the path, else the player's camera, moves the camera. Each frame draws the atom's last step.
+	void RunFrames(int frames)
 	{
 		auto& camera = Locator::camera::value();
 		for (int frame = 0; frame < frames; ++frame)
 		{
 			const bool held = _paths.HoldsCamera();
-			_paths.Update(k_Frame, gameTime);
+			_paths.Update(k_Frame, k_Frame);
 			if (!held)
 			{
 				camera.HandleActions(k_Frame);
 				camera.Update(k_Frame);
 				camera.HandleKeys(k_Frame);
 			}
+			_paths.ShowPlaced(1.0f);
 		}
 	}
 
 	ecs::systems::CameraPathSystem _paths;
-	entt::entity _spell {entt::null};
+	std::shared_ptr<particles::CameraPathLink> _link;
 };
 } // namespace
 
@@ -148,18 +162,62 @@ TEST_F(CameraPathStart, AScriptsCameraKeepsTheCameraFromAMiraclesPath)
 	EXPECT_FALSE(_paths.HoldsCamera());
 }
 
-TEST_F(CameraPathStart, APathThatEndsByItselfFliesTheWorldCameraBack)
+TEST_F(CameraPathStart, TheGlideStartsInTheNextFrame)
 {
 	FollowAPath();
+	const auto& camera = Locator::camera::value();
+	EXPECT_EQ(camera.GetOrigin(), k_Origin);
+	RunFrames(1);
+	EXPECT_NE(camera.GetOrigin(), k_Origin);
+}
+
+TEST_F(CameraPathStart, TheLastFrameEndsThePathAtTheEndOfTheNextTurn)
+{
+	FollowAPath();
+	StepAtom(0.0f, true);
 	RunFrames(100);
 	const auto& camera = Locator::camera::value();
 	ASSERT_LT(glm::distance(camera.GetOrigin(), k_PathPlace), 100.0f);
-	// The miracle goes, and the path ends with it. The world camera flies back to where it was going.
-	Locator::entitiesRegistry::value().Destroy(_spell);
+	// The draw shows the last frame. The path keeps the camera until the turn ends.
+	StepAtom(999.0f, true);
 	RunFrames(1);
+	EXPECT_TRUE(_link->ended);
+	EXPECT_TRUE(_paths.HoldsCamera());
+	_paths.CheckPlaced();
 	EXPECT_FALSE(_paths.HoldsCamera());
+	// The world camera flies back to where it was going
 	RunFrames(300);
 	EXPECT_LT(glm::distance(camera.GetOrigin(), k_Origin), 1.0f);
+}
+
+TEST_F(CameraPathStart, TheAtomGoingEndsThePathAtTheEndOfTheTurn)
+{
+	FollowAPath();
+	RunFrames(10);
+	_link.reset();
+	RunFrames(1);
+	EXPECT_TRUE(_paths.HoldsCamera());
+	_paths.CheckPlaced();
+	EXPECT_FALSE(_paths.HoldsCamera());
+}
+
+TEST_F(CameraPathStart, ThePathTimeIsThatOfTheDrawnFrame)
+{
+	FollowAPath();
+	StepAtom(100.0f, true);
+	StepAtom(200.0f, true);
+	_paths.ShowPlaced(0.5f);
+	// Frame 150 of a thousand over ten seconds
+	EXPECT_EQ(_link->drawnMilliseconds, 1500);
+	EXPECT_FALSE(_link->ended);
+}
+
+TEST_F(CameraPathStart, AnAtomNotYetDrawnLeavesThePathTime)
+{
+	FollowAPath();
+	_link->currentFrame = 500.0f;
+	_paths.ShowPlaced(1.0f);
+	EXPECT_EQ(_link->drawnMilliseconds, 0);
 }
 
 TEST_F(CameraPathStart, TakingThePathsCameraBackStartsTheWorldCameraWhereItIs)
@@ -178,16 +236,44 @@ TEST_F(CameraPathStart, TakingThePathsCameraBackStartsTheWorldCameraWhereItIs)
 TEST_F(CameraPathStart, WhileTheGameIsPausedTheCameraStaysWhereThePathStopped)
 {
 	FollowAPath();
-	// Past the pause before the path plays
+	StepAtom(10.0f, true);
+	StepAtom(20.0f, true);
 	RunFrames(70);
 	const auto& camera = Locator::camera::value();
-	// Paused: the path stands still, and the camera comes to it in a moment and stays there
-	RunFrames(50, 0ms);
+	// Paused: no step moves the frame on, so the camera comes to the path's place in a moment and stays there
+	RunFrames(50);
 	const auto stopped = camera.GetOrigin();
-	RunFrames(100, 0ms);
+	RunFrames(100);
 	EXPECT_LT(glm::distance(camera.GetOrigin(), stopped), 0.01f);
 	EXPECT_TRUE(_paths.HoldsCamera());
 	// The game goes on, and the path with it
+	StepAtom(60.0f, true);
 	RunFrames(20);
 	EXPECT_GT(glm::distance(camera.GetOrigin(), stopped), 0.1f);
+}
+
+// The frames move on at one play of the animation over its cycle time, shortened by the speed-up
+TEST(CameraPathTiming, TheFrameRateIsAThousandFramesOverTheSpedUpCycle)
+{
+	EXPECT_FLOAT_EQ(camera_path::FrameRate(10000, 0.6f), 60.0f);
+	EXPECT_EQ(camera_path::FrameRate(1000, 1.0f), 1000.0f);
+}
+
+TEST(CameraPathTiming, TheDrawnFrameIsCutOffAndKeptInTheFrames)
+{
+	EXPECT_EQ(camera_path::DrawnFrame(10.0f, 20.0f, 0.55f, 1000, false), 15);
+	EXPECT_EQ(camera_path::DrawnFrame(10.0f, 20.0f, -1.0f, 1000, false), 10);
+	EXPECT_EQ(camera_path::DrawnFrame(10.0f, 20.0f, 3.0f, 1000, false), 20);
+	EXPECT_EQ(camera_path::DrawnFrame(0.0f, 0.9f, 1.0f, 1000, false), 0);
+	EXPECT_EQ(camera_path::DrawnFrame(990.0f, 1020.0f, 1.0f, 1000, false), 999);
+	// A looped frame goes round and may run on past the step
+	EXPECT_EQ(camera_path::DrawnFrame(990.0f, 1000.0f, 2.0f, 1000, true), 10);
+}
+
+TEST(CameraPathTiming, ThePathTimeIsInWholeMilliseconds)
+{
+	EXPECT_EQ(camera_path::PathMilliseconds(10000, 1), 10);
+	EXPECT_EQ(camera_path::PathMilliseconds(1234, 999), 1232);
+	EXPECT_TRUE(camera_path::EndsPath(999, 1000));
+	EXPECT_FALSE(camera_path::EndsPath(998, 1000));
 }

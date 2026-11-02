@@ -46,6 +46,7 @@
 #include "ECS/Systems/AnimalSystemInterface.h"
 #include "ECS/Systems/BuildingDamageSystemInterface.h"
 #include "ECS/Systems/CameraBookmarkSystemInterface.h"
+#include "ECS/Systems/CameraPathSystemInterface.h"
 #include "ECS/Systems/ChatSystemInterface.h"
 #include "ECS/Systems/ChimneySmokeSystemInterface.h"
 #include "ECS/Systems/CinematicDirectorSystemInterface.h"
@@ -997,6 +998,11 @@ void PlayTurnStep(game_turn::Step step, TurnViewInterface& view)
 		if (Locator::danceSystem::has_value())
 		{
 			Locator::danceSystem::value().CheckCamera();
+		}
+		// The camera path of a miracle whose animation came to its end, or whose atom went, gives the camera back
+		if (Locator::cameraPathSystem::has_value())
+		{
+			Locator::cameraPathSystem::value().CheckPlaced();
 		}
 		break;
 	case Step::BuildingPieces:

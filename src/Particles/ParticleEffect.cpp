@@ -573,6 +573,11 @@ void Effect::PostUpdate(Collection& collection, const glm::vec3& parentPosition,
 			atom->drawn = true;
 		}
 		atom->steps = static_cast<uint8_t>(std::min(atom->steps + 1, 2));
+		// The creator acts on its atom after the frame moved on
+		if (atom->creator != nullptr)
+		{
+			atom->creator->AfterStep(*this, *atom);
+		}
 		const glm::vec3 subScale =
 		    flagged ? FrameScale(*atom) * (collection.hierarchy ? parentScale : glm::vec3(1.0f)) : parentScale;
 		for (auto& sub : atom->subCollections)

@@ -52,6 +52,7 @@ namespace openblack::particles
 {
 class Effect;
 struct Atom;
+struct CameraPathLink;
 struct Collection;
 struct RestoredEffect;
 struct RestoredCollection;
@@ -482,11 +483,16 @@ public:
 	{
 		return std::nullopt;
 	}
+	/// The cycle time of an animation file in whole milliseconds, none when it does not load
+	[[nodiscard]] virtual std::optional<int32_t> AnimationCycleMilliseconds(std::string_view /*animation*/) const
+	{
+		return std::nullopt;
+	}
 	/// The camera follows a camera path file, its points placed by a matrix: it glides onto the path's start over the
-	/// pause and then follows it, its time sped up by a factor, for as long as the animation file it goes with lasts and
-	/// the miracle behind it is there
-	virtual void FollowCameraPath(std::string_view /*file*/, std::string_view /*animation*/, const glm::mat4& /*placement*/,
-	                              float /*pauseSeconds*/, float /*speedUp*/, entt::entity /*spell*/)
+	/// pause, then follows the path at the time that the atom's animation frame gives (see CameraPathLink), until the
+	/// animation comes to its end or the atom goes
+	virtual void FollowCameraPath(std::string_view /*file*/, const glm::mat4& /*placement*/, float /*pauseSeconds*/,
+	                              const std::shared_ptr<CameraPathLink>& /*link*/)
 	{
 	}
 	/// The next recognised gesture's trail waiting to be shown, the last given first
@@ -592,6 +598,8 @@ struct Creator
 
 	/// What a creator class adds to a new atom
 	virtual void InitAtom(Effect& /*effect*/, Atom& /*atom*/) const {}
+	/// What a creator class does with its atom at the end of each step, after the atom's frame moved on
+	virtual void AfterStep(Effect& /*effect*/, Atom& /*atom*/) const {}
 };
 
 /// Where an atom was at the end of a step, for drawing between steps
@@ -746,6 +754,8 @@ struct Atom
 	std::optional<ObjectGlow> objectGlow;
 	/// The shower of sparks it sends up from an object, when a rule keeps it on one and asks for it; it needs no creator
 	std::shared_ptr<ObjectShower> shower;
+	/// The camera path that it takes its caster's camera along, when its creator places one
+	std::shared_ptr<CameraPathLink> cameraPath;
 	std::vector<std::unique_ptr<Collection>> subCollections;
 	std::unordered_map<const Modifier*, AtomRuleData> data;
 };

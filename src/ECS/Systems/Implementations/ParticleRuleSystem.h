@@ -135,8 +135,9 @@ public:
 	[[nodiscard]] uint32_t TargetPointCount(entt::entity object) const override;
 	[[nodiscard]] std::optional<glm::vec3> TargetPoint(entt::entity object, uint32_t index) const override;
 	[[nodiscard]] float TargetScale(entt::entity object) const override;
-	void FollowCameraPath(std::string_view file, std::string_view animation, const glm::mat4& placement, float pauseSeconds,
-	                      float speedUp, entt::entity spell) override;
+	[[nodiscard]] std::optional<int32_t> AnimationCycleMilliseconds(std::string_view animation) const override;
+	void FollowCameraPath(std::string_view file, const glm::mat4& placement, float pauseSeconds,
+	                      const std::shared_ptr<particles::CameraPathLink>& link) override;
 	[[nodiscard]] particles::ObjectEffectsInterface* ObjectEffects() override { return &_objectEffects; }
 	[[nodiscard]] particles::FragmentSourceInterface* FragmentSource() override { return &_fragments; }
 
