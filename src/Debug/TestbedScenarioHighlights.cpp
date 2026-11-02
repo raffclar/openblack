@@ -133,6 +133,20 @@ void testbed_scenarios::AddHighlightScenarios(std::vector<Scenario>& all)
 	                   {.kind = 3, .offset = {1.5f, 0.0f}},
 	                   {.kind = 3, .offset = {4.5f, 0.0f}, .active = true}},
 	});
+	// The shine on a scroll turns with the scroll, because the game turns the map by the scroll's own axes
+	all.push_back({
+	    .id = "light.scroll_shine_spin",
+	    .name = "The shine of a scroll turns as the scroll spins",
+	    .facet = Facet::Light,
+	    .description = "A gold scroll and a silver scroll, close before the camera, on bare land. Do not move the camera. "
+	                   "Look at the scrolls for some seconds.",
+	    .expected = "The two scrolls spin, half a turn a second. The bright sheen on each scroll moves over its faces as it "
+	                "spins, and shows the same pattern again after each full turn. The sheen does not stay in the same "
+	                "place on the screen while the scroll turns below it.",
+	    .environment = {.dispenserGrid = false},
+	    .framing = {.shot = Shot::Placed, .eye = {0.0f, 3.0f, -6.0f}, .look = {0.0f, 1.5f, 0.0f}},
+	    .highlights = {{.kind = 3, .offset = {-1.5f, 0.0f}}, {.kind = 2, .offset = {1.5f, 0.0f}}},
+	});
 	// A script's mist, as the Singing Stones' Twinkle tune makes it: white and a tenth opaque. Then the mist grows to
 	// twice its size and fades out over ten seconds.
 	using Argument = ScriptArgument;
