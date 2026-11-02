@@ -2551,7 +2551,7 @@ std::unique_ptr<ProviderInterface> MagicProvider()
 	});
 	provider->Add(
 	    Query("state", "The hand's miracle, the spells and dispensers there are, and the other miracles' "
-	                   "systems: shields, tornadoes, explosions and the piles of roots"),
+	                   "systems: shields, tornadoes, explosions, the camera shakes and the piles of roots"),
 	    Serve<Locator::magicSystem>("magic", [](const ecs::systems::MagicSystemInterface& magic, const QueryContext& /*c*/) {
 		    Json result = {{"spells", magic.GetSpells().size()},
 		                   {"dispensers", magic.GetDispensers().size()},
@@ -2570,6 +2570,7 @@ std::unique_ptr<ProviderInterface> MagicProvider()
 		    if (Locator::explosionSystem::has_value())
 		    {
 			    result["shaking"] = Locator::explosionSystem::value().IsShaking();
+			    result["shakes"] = ShakeItems(Locator::explosionSystem::value().Shakes());
 			    result["ghosts"] = Locator::explosionSystem::value().Ghosts().size();
 			    // The piles of roots that this computer draws, with the milliseconds that stay for each
 			    auto piles = Json::array();

@@ -63,6 +63,7 @@ Json EffectItem(const inspector::ParticleEffectInfo& effect)
 	    {"owned_by_spell", effect.ownedBySpell},
 	    {"seconds_left", effect.secondsLeft.has_value() ? Json(*effect.secondsLeft) : Json(nullptr)},
 	    {"owner", effect.owner == entt::null ? Json(nullptr) : Json(entt::to_integral(effect.owner))},
+	    {"magnitude", effect.magnitude},
 	};
 }
 
@@ -142,6 +143,23 @@ Json openblack::inspector::SplashItems(std::span<const water_rings::Ring> rings,
 		{
 			items.push_back(EffectItem(effect));
 		}
+	}
+	return items;
+}
+
+Json openblack::inspector::ShakeItems(std::span<const camera_shake::Shake> shakes)
+{
+	Json items = Json::array();
+	for (const auto& shake : shakes)
+	{
+		items.push_back({
+		    {"position", Point(shake.position)},
+		    {"radius", shake.radius},
+		    {"strength", shake.strength},
+		    {"ms", shake.milliseconds},
+		    {"ms_left", shake.millisecondsLeft},
+		    {"vertical_only", shake.verticalOnly},
+		});
 	}
 	return items;
 }
@@ -226,7 +244,7 @@ std::vector<QueryDescription> ParticlesProvider::Describe() const
 	     .kind = ResultKind::List,
 	     .needsNear = true},
 	    {.name = "effects",
-	     .description = "The running particle effects: file, place, age, particle count, closing",
+	     .description = "The running particle effects: file, place, age, particle count, closing, size",
 	     .parameters = {{.name = "file",
 	                     .type = "string",
 	                     .description = "Only effects whose file name holds this text, in any case",

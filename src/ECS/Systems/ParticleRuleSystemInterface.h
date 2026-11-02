@@ -92,6 +92,8 @@ public:
 		std::vector<std::string> unportedClasses;
 		/// The object it follows and ends with, if any
 		entt::entity owner {entt::null};
+		/// Its size, which a script or a miracle can change while it runs (1 is the normal size)
+		float magnitude {1.0f};
 	};
 
 	virtual ~ParticleRuleSystemInterface() = default;
