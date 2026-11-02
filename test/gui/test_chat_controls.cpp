@@ -8,6 +8,7 @@
  *******************************************************************************/
 
 #include <algorithm>
+#include <optional>
 #include <string>
 #include <vector>
 
@@ -232,12 +233,20 @@ TEST_F(ChatFixture, AtFirstALineGoesToAllOfThePlayers)
 
 namespace
 {
-/// The friend button, when it shows
-const Dialog::NamedControl* FriendButton(const std::vector<Dialog::NamedControl>& controls)
+/// The name of the friend button, when it shows
+std::optional<std::u16string> FriendButtonName(const std::vector<Dialog::NamedControl>& controls)
 {
 	const auto found = std::ranges::find_if(
 	    controls, [](const auto& control) { return control.name == u"Make" || control.name == u"Unmake"; });
-	return found != controls.end() ? &*found : nullptr;
+	return found != controls.end() ? std::optional(found->name) : std::nullopt;
+}
+
+/// The centre of the friend button, when it shows
+std::optional<glm::ivec2> FriendButtonCentre(const std::vector<Dialog::NamedControl>& controls)
+{
+	const auto found = std::ranges::find_if(
+	    controls, [](const auto& control) { return control.name == u"Make" || control.name == u"Unmake"; });
+	return found != controls.end() ? std::optional((found->rect.min + found->rect.max) / 2) : std::nullopt;
 }
 } // namespace
 
@@ -247,12 +256,10 @@ TEST_F(ChatFixture, TheFriendButtonShowsOnlyWithTheFriendsOn)
 	Click(k_OpenButton);
 	Update();
 	// Both players are selected at first, and neither is a friend
-	EXPECT_EQ(FriendButton(chat.GetNamedControls()), nullptr);
+	EXPECT_FALSE(FriendButtonName(chat.GetNamedControls()).has_value());
 	chat.SetFriendsOn(true);
 	Update();
-	const auto* button = FriendButton(chat.GetNamedControls());
-	ASSERT_NE(button, nullptr);
-	EXPECT_EQ(button->name, u"Make");
+	EXPECT_EQ(FriendButtonName(chat.GetNamedControls()), u"Make");
 }
 
 TEST_F(ChatFixture, TheFriendButtonMakesTheSelectedPlayersFriends)
@@ -264,10 +271,9 @@ TEST_F(ChatFixture, TheFriendButtonMakesTheSelectedPlayersFriends)
 	Update();
 	Click(k_OpenButton);
 	Update();
-	const auto* button = FriendButton(chat.GetNamedControls());
-	ASSERT_NE(button, nullptr);
-	const auto centre = (button->rect.min + button->rect.max) / 2;
-	Click(centre);
+	const auto centre = FriendButtonCentre(chat.GetNamedControls());
+	ASSERT_TRUE(centre.has_value());
+	Click(*centre);
 	const auto kept = chat.TakeChangedFriends();
 	ASSERT_TRUE(kept.has_value());
 	// Each new friend goes to the top: the second player in the list comes first
@@ -276,7 +282,5 @@ TEST_F(ChatFixture, TheFriendButtonMakesTheSelectedPlayersFriends)
 	EXPECT_FALSE(chat.TakeChangedFriends().has_value());
 	// The players stay selected, and now they are friends
 	Update();
-	button = FriendButton(chat.GetNamedControls());
-	ASSERT_NE(button, nullptr);
-	EXPECT_EQ(button->name, u"Unmake");
+	EXPECT_EQ(FriendButtonName(chat.GetNamedControls()), u"Unmake");
 }
