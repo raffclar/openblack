@@ -51,6 +51,8 @@
 #include "ECS/Components/CreatureSpells.h"
 #include "ECS/Components/HandCreatureDraw.h"
 #include "ECS/Components/HandCreaturePose.h"
+#include "ECS/Components/HandCreaturePress.h"
+#include "ECS/Components/HandGrab.h"
 #include "ECS/Components/HandLockedCreature.h"
 #include "ECS/Components/HandOnCreature.h"
 #include "ECS/Components/Mesh.h"
@@ -69,6 +71,7 @@
 #include "ECS/Systems/PlayerCommandSystemInterface.h"
 #include "ECS/Systems/PlayerSystemInterface.h"
 #include "ECS/Systems/TimeSystemInterface.h"
+#include "Hand/HandGrabRules.h"
 #include "Locator.h"
 #include "Resources/ResourcesInterface.h"
 #include "Windowing/WindowingInterface.h"
@@ -279,11 +282,11 @@ std::optional<creature_hand::Holdable> HoldableOf(const ecs::Registry& registry,
 	return creature_hand::Holdable {
 	    .owner = body->owner,
 	    .species = body->species,
-	    .asleep = mind != nullptr && creature_mind::IsAsleep(mind->idle),
 	    .frozen = spells != nullptr && spells->spells.IsActive(creature_spells::Spell::Freeze),
 	    .scriptControlled = registry.AllOf<ScriptControlled>(creature),
 	    .fainting = mind != nullptr && mind->idle.activity == creature_mind::Activity::Faint &&
 	                creature_mind::IsUnconscious(mind->idle),
+	    .cannotBePickedUp = registry.AllOf<CannotBePickedUp>(creature),
 	};
 }
 
@@ -309,21 +312,86 @@ bool CreatureHandSystem::Grab()
 	{
 		return false;
 	}
+	Hold(*nearest);
+	return true;
+}
+
+void CreatureHandSystem::Hold(entt::entity creature)
+{
 	auto& registry = Locator::entitiesRegistry::value();
-	registry.AssignOrReplace<HandOnCreature>(PlayerHand(), HandOnCreature {.creature = *nearest});
+	registry.Remove<HandCreaturePress>(PlayerHand());
+	registry.AssignOrReplace<HandOnCreature>(PlayerHand(), HandOnCreature {.creature = creature});
 	registry.Remove<HandLastFeedback>(PlayerHand());
 	// The camera turns to the creature and the hand takes its pose only after the world holds the creature
 	registry.AssignOrReplace<HandCreaturePose>(PlayerHand());
 	// The world takes the hold at the start of a later turn, as a command of the player
 	if (Locator::playerCommandSystem::has_value())
 	{
-		Locator::playerCommandSystem::value().Submit(player_commands::HandLock {.object = *nearest});
+		Locator::playerCommandSystem::value().Submit(player_commands::HandLock {.object = creature});
 	}
 	else
 	{
-		DoLock(OwnPlayer(), *nearest);
+		DoLock(OwnPlayer(), creature);
 	}
-	return true;
+}
+
+void CreatureHandSystem::WaitForTap(entt::entity creature, uint32_t nowMs, uint32_t turn)
+{
+	auto& registry = Locator::entitiesRegistry::value();
+	const auto hand = PlayerHand();
+	if (!registry.Valid(hand) || !registry.Valid(creature))
+	{
+		return;
+	}
+	registry.AssignOrReplace<HandCreaturePress>(hand,
+	                                            HandCreaturePress {.creature = creature, .pressMs = nowMs, .pressTurn = turn});
+}
+
+void CreatureHandSystem::WaitFrame(uint32_t nowMs, uint32_t turn)
+{
+	auto& registry = Locator::entitiesRegistry::value();
+	const auto hand = PlayerHand();
+	if (!registry.Valid(hand))
+	{
+		return;
+	}
+	const auto* press = registry.TryGet<const HandCreaturePress>(hand);
+	if (press == nullptr || !creature_hand::HoldsAfterWait(hand_grab::ElapsedMs(nowMs, press->pressMs, turn, press->pressTurn)))
+	{
+		return;
+	}
+	const auto creature = press->creature;
+	registry.Remove<HandCreaturePress>(hand);
+	// The press held long enough sends the hold of the creature that it pressed. The world can still refuse it.
+	if (registry.Valid(creature) && registry.AllOf<Creature>(creature))
+	{
+		SPDLOG_LOGGER_INFO(spdlog::get("game"), "The press on creature {} waited long enough: the hand holds it",
+		                   entt::to_integral(creature));
+		Hold(creature);
+	}
+}
+
+std::optional<entt::entity> CreatureHandSystem::ReleaseWait()
+{
+	auto& registry = Locator::entitiesRegistry::value();
+	const auto hand = PlayerHand();
+	if (!registry.Valid(hand))
+	{
+		return std::nullopt;
+	}
+	const auto* press = registry.TryGet<const HandCreaturePress>(hand);
+	if (press == nullptr)
+	{
+		return std::nullopt;
+	}
+	const auto creature = press->creature;
+	registry.Remove<HandCreaturePress>(hand);
+	if (!registry.Valid(creature))
+	{
+		return std::nullopt;
+	}
+	SPDLOG_LOGGER_INFO(spdlog::get("game"), "The press on creature {} let go soon: it is a tap", entt::to_integral(creature));
+	return creature;
 }
 
 std::optional<entt::entity> CreatureHandSystem::GetLockedCreature(PlayerNames player) const
@@ -350,8 +418,22 @@ void CreatureHandSystem::DoLock(PlayerNames player, entt::entity creature)
 	// The lock goes on the left hand of the player of the command
 	auto& registry = Locator::entitiesRegistry::value();
 	const auto hand = HandOf(player);
-	if (!hand.has_value() || !registry.Valid(*hand) || !registry.Valid(creature) || !MayHoldFor(player, creature))
+	if (!hand.has_value() || !registry.Valid(*hand))
 	{
+		EndRefusedHold(player, creature);
+		return;
+	}
+	// The press asked if the hand may hold the creature. The turn does not ask again: it refuses only a creature that
+	// is not in the world any more, or one that a hand already holds.
+	const bool inWorld = registry.Valid(creature) && registry.AllOf<Creature>(creature);
+	if (!creature_hand::TurnTakesHold(inWorld, inWorld && HandThatHolds(registry, creature).has_value()))
+	{
+		if (const auto logger = spdlog::get("game"))
+		{
+			SPDLOG_LOGGER_INFO(logger,
+			                   "The turn does not hold creature {}: it is not in the world any more, or a hand holds it",
+			                   entt::to_integral(creature));
+		}
 		EndRefusedHold(player, creature);
 		return;
 	}
@@ -486,7 +568,7 @@ bool CreatureHandSystem::MayHoldFor(PlayerNames player, entt::entity creature)
 	{
 		SPDLOG_LOGGER_INFO(spdlog::get("game"),
 		                   "The hand can't hold creature {}: it isn't the player's own or an ally's, another hand holds it, "
-		                   "it is an ogre, or it is asleep, frozen or under a script's control",
+		                   "it is an ogre, or it is frozen, out cold, under a script's control or not to be picked up",
 		                   entt::to_integral(creature));
 		return false;
 	}

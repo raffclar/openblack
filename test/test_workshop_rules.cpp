@@ -353,6 +353,9 @@ TEST(WorkshopRules, AClearingScaffoldPushesOrRemovesThingsAndLeavesCreaturesAlon
 	EXPECT_EQ(workshop::ClearingActionFor({.canFly = true}), ClearingAction::Push);
 	EXPECT_EQ(workshop::ClearingActionFor({.held = true, .canFly = true}), ClearingAction::Remove);
 	EXPECT_EQ(workshop::ClearingActionFor({}), ClearingAction::Remove);
+	// A thing with the fixed mark (a rock, a dead tree, a piece of a building) goes, also when it can fly
+	EXPECT_EQ(workshop::ClearingActionFor({.fixed = true, .canFly = true}), ClearingAction::Remove);
+	EXPECT_EQ(workshop::ClearingActionFor({.fixed = true}), ClearingAction::Remove);
 	// A creature stays, also one that a hand holds
 	EXPECT_EQ(workshop::ClearingActionFor({.creature = true}), ClearingAction::LeaveAlone);
 	EXPECT_EQ(workshop::ClearingActionFor({.creature = true, .held = true}), ClearingAction::LeaveAlone);

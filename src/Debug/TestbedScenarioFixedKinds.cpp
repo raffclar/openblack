@@ -33,6 +33,15 @@ constexpr glm::vec2 k_PileTemple {-10.0f, -60.0f};
 constexpr glm::vec2 k_Altar {-9.641f, -31.804f};
 constexpr glm::vec2 k_Gathering {k_Altar.x - 5.0f, k_Altar.y};
 constexpr glm::vec2 k_BuildingGap {25.0f, 0.0f};
+
+/// A burning field and a burning hut side by side, and a rock that burns between them
+constexpr glm::vec2 k_BurningField {-15.0f, 40.0f};
+constexpr glm::vec2 k_BurningHut {15.0f, 40.0f};
+constexpr glm::vec2 k_BurningRock {0.0f, 40.0f};
+constexpr glm::vec2 k_BurningDeadTree {0.0f, 58.0f};
+
+/// Where the hand puts a villager down, four metres west of the altar of the town's worship site
+constexpr glm::vec2 k_BuilderDrop {k_Altar.x - 4.0f, k_Altar.y};
 } // namespace
 
 void openblack::testbed_scenarios::AddFixedKindScenarios(std::vector<Scenario>& all)
@@ -58,6 +67,24 @@ void openblack::testbed_scenarios::AddFixedKindScenarios(std::vector<Scenario>& 
 	                  .handOffset = k_ForestPoint,
 	                  .delaySeconds = 1.0f,
 	                  .script = ScriptSpell {.radius = 15.0f, .seconds = 600.0f, .curl = 0.0f}}},
+	});
+
+	all.push_back({
+	    .id = "appearance.fire_lights_land_by_fixed_mark",
+	    .name = "A burning field lights the land as a burning hut does",
+	    .facet = Facet::Appearance,
+	    .description = "At night, a ripe wheat field and a Norse hut of the player's town stand 30 metres apart, with a "
+	                   "rock between them, and a dead oak north of the rock. The four are set alight as they are made.",
+	    .expected = "The field, the hut, the rock and the dead oak each have the fixed mark of the land and are wider "
+	                "than 2 metres across the ground, so the land round each glows and flickers with the light of the "
+	                "fire. Before, the field and the dead oak did not light the land. When the fire has eaten the food of "
+	                "the field so that its crop no longer shows, the field and its flames and light are no longer drawn.",
+	    .environment = {.hour = 23.0f, .clockRuns = false, .dispenserGrid = false},
+	    .framing = {.shot = Shot::Overview, .include = {k_BurningField, k_BurningHut}, .distance = 0.4f},
+	    .objects = {{.type = AbodeInfo::NorseHut, .offset = k_BurningHut, .yawDegrees = 180.0f, .alight = true},
+	                {.type = FieldTypeInfo::Wheat, .offset = k_BurningField, .ripeCrop = true, .alight = true},
+	                {.type = MobileStaticInfo::Rock, .offset = k_BurningRock, .alight = true},
+	                {.type = TreeInfo::Oak, .offset = k_BurningDeadTree, .alight = true, .dead = true}},
 	});
 
 	std::vector<ObjectSetup> town {
@@ -88,5 +115,32 @@ void openblack::testbed_scenarios::AddFixedKindScenarios(std::vector<Scenario>& 
 	    .temples = {{.offset = k_PileTemple}},
 	    .commands = {{.kind = Kind::BuildWorshipSites, .delaySeconds = 0.0f}},
 	    .townBeliefInPlayer = k_WorshipTownBelief,
+	});
+
+	std::vector<ObjectSetup> builderTown {
+	    {.type = AbodeInfo::NorseTownCentre, .offset = k_Gathering - k_BuildingGap},
+	    {.type = AbodeInfo::NorseStoragePit, .offset = k_Gathering + k_BuildingGap, .yawDegrees = 180.0f},
+	    {.type = VillagerInfo::NorseForesterMale, .offset = k_BuilderDrop, .joinTown = true}};
+	all.push_back({
+	    .id = "villagers.builder_takes_up_worship_site",
+	    .name = "A builder put down by an unbuilt worship site takes up its site",
+	    .facet = Facet::Hand,
+	    .description = "A Norse town of the player with a village centre, a storage pit and one villager, and the town's "
+	                   "worship site, which goes up by the temple as the scenario starts and is not built. The villager "
+	                   "stands four metres west of the altar, under the hand. After two seconds the hand takes the "
+	                   "villager, and three seconds later it puts the villager down at the same place.",
+	    .expected = "Over the unbuilt site the villager glows and shows the builder's symbol. It lands, turns to the site "
+	                "and takes up the work there at once: the site has the fixed mark of the land, as every building "
+	                "has. It goes to the storage pit for wood or goes to the site to build. The inspector shows the "
+	                "villager as one of the workers of the town's site at the worship site.",
+	    .environment = {.dispenserGrid = false, .cursor = glm::vec2 {0.5f, 0.5f}},
+	    .framing = {.shot = Shot::Placed,
+	                .eye = {k_BuilderDrop.x, 22.0f, k_BuilderDrop.y - 30.0f},
+	                .look = {k_BuilderDrop.x, 0.0f, k_BuilderDrop.y}},
+	    .objects = std::move(builderTown),
+	    .temples = {{.offset = k_PileTemple}},
+	    .commands = {{.kind = Kind::HandTake, .delaySeconds = 2.0f, .object = 2},
+	                 {.kind = Kind::HandRelease, .delaySeconds = 3.0f}},
+	    .townBeliefInPlayer = 1000.0f,
 	});
 }

@@ -292,7 +292,7 @@ workshop::ClearingAction workshop::ClearingActionFor(const ClearingFacts& facts)
 	{
 		return ClearingAction::LeaveAlone;
 	}
-	return !facts.held && facts.canFly ? ClearingAction::Push : ClearingAction::Remove;
+	return !facts.fixed && !facts.held && facts.canFly ? ClearingAction::Push : ClearingAction::Remove;
 }
 
 uint32_t workshop::FoundedTownId(std::span<const uint32_t> usedIds)
