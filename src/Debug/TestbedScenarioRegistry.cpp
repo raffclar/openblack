@@ -324,6 +324,24 @@ void AddExpressions(std::vector<Scenario>& all)
 	    .repeatFrom = 0,
 	});
 
+	// A creature that freezes lives fewer milliseconds in each game turn. Its face, its gesture and its head move on by
+	// these milliseconds, once a turn.
+	all.push_back({
+	    .id = "expressions.frozen_face_and_gesture",
+	    .name = "Face and gesture of a creature that freezes",
+	    .facet = Facet::Expressions,
+	    .description = "A tiger whose mind is paused, close up, pulls a grimace. The player casts the freeze spell on it. "
+	                   "While the ice grows, the tiger starts a yawn.",
+	    .expected = "The yawn plays more slowly and stops part of the way through. The grimace relaxes more slowly and "
+	                "stops. Nothing jumps: each part moves on by the time that the frozen body lives in the turn.",
+	    .environment = {.dispenserGrid = false},
+	    .framing = {.shot = Shot::Head, .distance = 1.6f},
+	    .creatures = {CreatureSetup {.species = CreatureType::Tiger, .needs = Content(), .hold = true, .pauseMind = true}},
+	    .miracles = {{.type = MagicType::CreatureSpellFreeze, .target = MiracleCast::Target::Creature, .delaySeconds = 2.0f}},
+	    .commands = {Play(Kind::PullFace, 0, animations::k_FirstFace + 1, 1.0f, false),
+	                 Play(Kind::PlayGesture, 0, animations::k_Yawn, 3.0f, false)},
+	});
+
 	// The tiger has no clip for the laugh. The tiger keeps the face that it wants, but the face shows nothing. The smile
 	// after it starts at once.
 	constexpr size_t k_TigerLaugh = animations::k_FirstFace + 7;
@@ -7808,6 +7826,27 @@ void AddHand(std::vector<Scenario>& all)
 	         {.kind = Kind::PointerRelease, .delaySeconds = 1.9f, .value = 3}},
 	});
 
+	// The hand lets go of a thing over the slope of the lake's far shallows. The empty hand starts its up and its hover
+	// distance again.
+	all.push_back({
+	    .id = "hand.lets_go_stands_straight",
+	    .name = "The empty hand stands straight up after it lets go",
+	    .facet = Facet::Hand,
+	    .description = "The hand takes a barrel over the slope of the lake's far shallows. The pointer moves slowly "
+	                   "across the slope, and the hand puts the barrel down. The pointer stays still for two seconds. "
+	                   "Then the pointer moves across the slope again.",
+	    .expected = "While the hand holds the barrel, it leans to the slope under it. When it lets go, it stands "
+	                "straight up and stays straight up while the pointer is still. When the pointer moves across the "
+	                "screen, the hand leans to the slope again in a short time.",
+	    .environment = {.dispenserGrid = false, .cursor = glm::vec2(0.4f, 0.2f)},
+	    .framing = {.shot = Shot::Overview, .include = {{k_Lake.x, k_FarShallows - 25.0f}}, .distance = 0.2f},
+	    .objects = {{.type = MobileObjectInfo::EgyptBarrel, .offset = {k_Lake.x + 10.0f, k_FarShallows + 10.0f}}},
+	    .commands = {{.kind = Kind::HandTake, .delaySeconds = 1.0f, .object = 0},
+	                 {.kind = Kind::PointerSweep, .delaySeconds = 0.5f, .point = {0.2f, 0.0f}, .amount = 2.0f},
+	                 {.kind = Kind::HandRelease, .delaySeconds = 2.5f},
+	                 {.kind = Kind::PointerSweep, .delaySeconds = 2.0f, .point = {-0.2f, 0.0f}, .amount = 2.0f}},
+	});
+
 	all.push_back({
 	    .id = "hand.mesh_contact",
 	    .name = "The hand on the body",
@@ -14812,7 +14851,8 @@ bool testbed_scenarios::NeedsNoCreature(Command::Kind kind)
 	       kind == Kind::JoinOnline || kind == Kind::EndBox || kind == Kind::BringCreature ||
 	       kind == Kind::TattooEditorAsNetworkGame || kind == Kind::ShowDemoPing || kind == Kind::AddIncomingMessage ||
 	       kind == Kind::Chat || kind == Kind::ComputerPersonality || kind == Kind::ComputerUntaughtSends ||
-	       kind == Kind::SkirmishBox || kind == Kind::LookAtSaveGamePicture || IsPointerCommand(kind);
+	       kind == Kind::SkirmishBox || kind == Kind::LookAtSaveGamePicture || kind == Kind::HandCastOnDispenser ||
+	       kind == Kind::HandCastOnCreature || kind == Kind::CloseHeldMiracle || IsPointerCommand(kind);
 }
 
 std::string_view testbed_scenarios::Name(Facet facet)
@@ -14840,7 +14880,7 @@ std::string_view testbed_scenarios::Name(Shot shot)
 
 std::string_view testbed_scenarios::Name(Command::Kind kind)
 {
-	constexpr std::array<std::string_view, 212> k_Names {
+	constexpr std::array<std::string_view, 215> k_Names {
 	    "walk to",
 	    "run to",
 	    "follow",
@@ -15053,6 +15093,9 @@ std::string_view testbed_scenarios::Name(Command::Kind kind)
 	    "change the body's look",
 	    "tap the temple's entrance",
 	    "give a town of the land to the player",
+	    "cast the held miracle on a dispenser",
+	    "cast the held miracle on a creature",
+	    "close the held miracle and let go",
 	};
 	return k_Names.at(static_cast<size_t>(kind));
 }

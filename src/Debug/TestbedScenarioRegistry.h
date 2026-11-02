@@ -216,6 +216,10 @@ struct Environment
 	/// The world plays as a network game while the scenario runs, so that a player with hands of its own is a person at
 	/// another computer. The runner puts the testbed back when the scenario stops.
 	bool networkGame {false};
+	/// The camera zones of a file under Data/Zones, such as Land1Choose.exc, set as a land's script sets them: the world
+	/// camera is kept inside its fence. The places of the file are on the map, not from its middle. The runner clears the
+	/// zones when the scenario stops.
+	std::string_view cameraZone;
 };
 
 /// Where the camera looks as the scenario starts
@@ -1155,6 +1159,14 @@ struct Command
 		/// The town that the land's script made with a number (value) believes this much (amount) in the player and
 		/// nothing in the other gods. Then the town goes to the player at its next check. Needs no creature.
 		GiveLandTown,
+		/// The player's hand casts the miracle that it holds on a thing, as the Action button over the thing sends the
+		/// cast: on the scenario's dispenser (value, by its place in the scenario's dispensers), or on one of the
+		/// scenario's creatures (value, by its place). The world does it at the turn.
+		HandCastOnDispenser,
+		HandCastOnCreature,
+		/// The miracle that is locked on in the player's hand closes down. Then the hand lets go of it in the same step,
+		/// as when the miracle stops just before the let go. Needs no creature.
+		CloseHeldMiracle,
 	};
 	Kind kind {Kind::Stop};
 	/// Which creature, by its place in the scenario's creatures

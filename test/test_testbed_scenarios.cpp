@@ -472,6 +472,22 @@ TEST(TestbedScenarios, CoversTheHandFindingItsWay)
 	}
 }
 
+TEST(TestbedScenarios, StagesTheFenceAndTheForestPath)
+{
+	const auto* fence = Find("hand.fence_force_field");
+	ASSERT_NE(fence, nullptr);
+	EXPECT_EQ(fence->environment.cameraZone, "Land1Choose.exc");
+	EXPECT_TRUE(std::ranges::any_of(fence->commands,
+	                                [](const Command& command) { return command.kind == Command::Kind::PlainKeyDown; }));
+	EXPECT_TRUE(
+	    std::ranges::any_of(fence->commands, [](const Command& command) { return command.kind == Command::Kind::WheelTurn; }));
+	const auto* forest = Find("miracles.forest_camera_path");
+	ASSERT_NE(forest, nullptr);
+	ASSERT_EQ(forest->miracles.size(), 1);
+	EXPECT_TRUE(forest->miracles.front().byHand);
+	EXPECT_TRUE(forest->commands.empty());
+}
+
 TEST(TestbedScenarios, ProblemsAreFound)
 {
 	Scenario broken {

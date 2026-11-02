@@ -421,9 +421,10 @@ creature_animation_log::Clip LogClip(creature_animation_log::Layer layer, size_t
 
 /// The body posed for this frame: its action or breathing, or its slots blended, then the arm that holds a thing, the
 /// head turned, the face and any gesture on top. The body's animations move on by bodyStepMs, the face by milliseconds.
+/// The head finds its look after the body, the face and the gestures move on, so the look sees what the body does now.
 void PoseBody(AnimationStores& stores, skeletal_animation::KeyframeTurns& turns, CreatureAnimation& animation,
               const CreatureRig& rig, const creature_morph::Morph& morph, const Transform& transform, float size,
-              float milliseconds, float seconds, float bodyStepMs, const HeadLook& look,
+              float milliseconds, float seconds, float bodyStepMs, const std::function<HeadLook()>& lookOf,
               const std::function<uint32_t(uint32_t)>& random, std::optional<HoldingHand> holding = std::nullopt,
               PoseReport* report = nullptr, const ShownFacePose* shown = nullptr)
 {
@@ -482,6 +483,7 @@ void PoseBody(AnimationStores& stores, skeletal_animation::KeyframeTurns& turns,
 	    DurationOf(animation.wobble.animation.has_value() ? animationOf(*animation.wobble.animation) : nullptr));
 
 	// The head turns towards its target from the height of the eyes, or back to straight ahead
+	const auto look = lookOf();
 	const auto eyes = transform.position + glm::vec3(0.0f, creature_look::k_HeadHeight * size, 0.0f);
 	const auto angles = look.target.has_value() ? creature_head_look::AnglesTowards(eyes, look.facing, *look.target)
 	                                            : creature_head_look::Angles {};
@@ -702,7 +704,7 @@ float HeadAcceleration(CreatureType species, float size)
 /// the body decide the pose, in that order.
 HeadLook HeadLookOf(AnimationStores& stores, ecs::Registry& registry, entt::entity entity, CreatureAnimation& animation,
                     const CreatureRig* rig, const creature_morph::Morph& morph, const Transform& transform,
-                    const Creature& creature, int32_t milliseconds)
+                    const Creature& creature, int32_t turnMs)
 {
 	using creature_head_look::Pose;
 	using Motion = CreatureLocomotion::Motion;
@@ -797,10 +799,9 @@ HeadLook HeadLookOf(AnimationStores& stores, ecs::Registry& registry, entt::enti
 			const auto ground = [](glm::vec2 at) {
 				return Locator::terrainSystem::has_value() ? Locator::terrainSystem::value().GetHeightAt(at) : 0.0f;
 			};
+			// The search moves on by the body's step of the turn, which a hurry makes two times as long
 			const auto rate = animation.body.hurried ? 2 : 1;
-			const auto stepMs = static_cast<int32_t>(static_cast<float>(milliseconds) *
-			                                         creature_layers::BodyRate(ShownSize(creature), animation.realTime)) *
-			                    rate;
+			const auto stepMs = creature_layers::TurnStepMs(turnMs, ShownSize(creature), animation.realTime) * rate;
 			walk->routeLook = creature_head_look::StepRouteLook(
 			    walk->routeLook, stepMs, {.searchHead = walk->follower.GetSearchHead(), .destination = *walk->destination},
 			    ground);
@@ -1364,8 +1365,9 @@ void CreatureAnimationSystem::PoseForTurn(entt::entity entity, float millisecond
 		// these milliseconds at the rate of its size, cut to whole milliseconds.
 		const auto turnMs = creature_walk_planner::TurnMs(animation->playbackScale, static_cast<int32_t>(milliseconds));
 		const auto stepMs = creature_layers::TurnStepMs(turnMs, ShownSize(*creature), animation->realTime);
-		const auto look = HeadLookOf(BlendStores(), registry, entity, *animation, &rig, morph->drawn, *transform, *creature,
-		                             static_cast<int32_t>(std::lround(milliseconds)));
+		const auto lookOf = [&]() {
+			return HeadLookOf(BlendStores(), registry, entity, *animation, &rig, morph->drawn, *transform, *creature, turnMs);
+		};
 		// The developer log of the clips reads what the pose used, and changes nothing that the pose does
 		std::optional<PoseReport> report;
 		if (Locator::creatureAnimationLog::has_value())
@@ -1388,7 +1390,7 @@ void CreatureAnimationSystem::PoseForTurn(entt::entity entity, float millisecond
 		_keyframeTurns.Trim();
 		PoseBody(
 		    BlendStores(), _keyframeTurns, *animation, rig, morph->drawn, *transform, ShownSize(*creature),
-		    static_cast<float>(turnMs), static_cast<float>(turnMs) / 1000.0f, static_cast<float>(stepMs), look,
+		    static_cast<float>(turnMs), creature_layers::TurnSeconds(turnMs), static_cast<float>(stepMs), lookOf,
 		    [this](uint32_t range) { return _random.GameRand(range); }, HoldingHandOf(registry, entity),
 		    report.has_value() ? &*report : nullptr, shownPose.has_value() ? &*shownPose : nullptr);
 		if (shown != nullptr && !creature_shown_face::StaysAfterPose(shown->face, animation->face))
@@ -1589,10 +1591,11 @@ void CreatureAnimationSystem::PoseCopy(Registry& copies, entt::entity copy, floa
 	if (rig != nullptr)
 	{
 		_keyframeTurns.Trim();
-		PoseBody(BlendStores(), _keyframeTurns, *animation, *rig, morph->drawn, *transform, self->size, milliseconds, seconds,
-		         milliseconds * creature_layers::BodyRate(self->size, animation->realTime),
-		         HeadLookOfCopy(*animation, *transform, creature->species, self->size),
-		         [this](uint32_t range) { return _random.GameRand(range); });
+		PoseBody(
+		    BlendStores(), _keyframeTurns, *animation, *rig, morph->drawn, *transform, self->size, milliseconds, seconds,
+		    milliseconds * creature_layers::BodyRate(self->size, animation->realTime),
+		    [&]() { return HeadLookOfCopy(*animation, *transform, creature->species, self->size); },
+		    [this](uint32_t range) { return _random.GameRand(range); });
 	}
 	if (animation->boneMatrices.size() != base->GetBoneMatrices().size())
 	{

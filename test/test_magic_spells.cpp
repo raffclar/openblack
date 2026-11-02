@@ -403,6 +403,39 @@ TEST(SpellSeedRules, ATakeBackCountsItsOwnEventAndKeepsASeedWithEnoughLeft)
 	EXPECT_EQ(help::profile::k_SeedTakenBack, 13u);
 }
 
+// A held seed linked to a miracle that runs from the hand gives that miracle again, also after it closed down. Any other
+// linked seed casts a new miracle. A seed that lost the link of its last cast with no store does not cast.
+TEST(SpellSeedRules, ARecastReusesALinkedHeldMiracleAndRefusesASeedThatLostItsLink)
+{
+	EXPECT_EQ(RecastOf(true, true, true), SeedRecast::Reuse);
+	EXPECT_EQ(RecastOf(true, true, false), SeedRecast::Reuse);
+	EXPECT_EQ(RecastOf(true, false, true), SeedRecast::New);
+	EXPECT_EQ(RecastOf(false, false, true), SeedRecast::Refused);
+	EXPECT_EQ(RecastOf(false, true, true), SeedRecast::Refused);
+	EXPECT_EQ(RecastOf(false, true, false), SeedRecast::New);
+	EXPECT_EQ(RecastOf(false, false, false), SeedRecast::New);
+}
+
+// A seed that cast before casts the miracle of its last cast again, also when its power-up level names another one. A
+// seed that did not cast casts the miracle of its power-up level.
+TEST(SpellSeedRules, ASeedThatCastCastsTheMiracleOfItsLastCast)
+{
+	EXPECT_EQ(SeedCastMagicType(MagicType::None, MagicType::StormWindRain), MagicType::StormWindRain);
+	EXPECT_EQ(SeedCastMagicType(MagicType::StormWindRain, MagicType::StormWindRain), MagicType::StormWindRain);
+	EXPECT_EQ(SeedCastMagicType(MagicType::StormWindRain, MagicType::StormWindRainLightning), MagicType::StormWindRain);
+	EXPECT_EQ(SeedCastMagicType(MagicType::Fireball, MagicType::None), MagicType::Fireball);
+}
+
+// The let go of a locked miracle keeps the seed only when its record does not delete it once cast and its miracle had
+// enough for another cast
+TEST(SpellSeedRules, TheUnlockKeepsASeedWithEnoughForARecast)
+{
+	EXPECT_TRUE(KeptAtUnlock(false, true));
+	EXPECT_FALSE(KeptAtUnlock(false, false));
+	EXPECT_FALSE(KeptAtUnlock(true, true));
+	EXPECT_FALSE(KeptAtUnlock(true, false));
+}
+
 // Dispensers
 
 TEST(DispenserRules, ADispenserWaitsForItsBubbleToBeTakenThenMakesAnotherAfterItsPeriod)

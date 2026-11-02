@@ -821,8 +821,31 @@ float GameParticleWorld::PlayerAlignment(int player) const
 	return Locator::alignmentSystem::value().GetPlayerAlignment(static_cast<PlayerNames>(player));
 }
 
-void GameParticleWorld::FollowCameraPath(std::string_view file, std::string_view animation, const glm::mat4& placement,
-                                         float pauseSeconds, float speedUp, entt::entity spell)
+std::optional<int32_t> GameParticleWorld::AnimationCycleMilliseconds(std::string_view animation) const
+{
+	if (!Locator::filesystem::has_value())
+	{
+		return std::nullopt;
+	}
+	auto& fileSystem = Locator::filesystem::value();
+	L3DAnim anim;
+	try
+	{
+		if (!anim.LoadFromFile(fileSystem.FindPath(fileSystem.GetPath<filesystem::Path::Data>() / DataRelative(animation))))
+		{
+			return std::nullopt;
+		}
+	}
+	catch (const std::exception& error)
+	{
+		SPDLOG_LOGGER_WARN(spdlog::get("game"), "Particles: cannot load the animation {}: {}", animation, error.what());
+		return std::nullopt;
+	}
+	return static_cast<int32_t>(anim.GetPlayTime());
+}
+
+void GameParticleWorld::FollowCameraPath(std::string_view file, const glm::mat4& placement, float pauseSeconds,
+                                         const std::shared_ptr<particles::CameraPathLink>& link)
 {
 	if (!Locator::filesystem::has_value() || !Locator::cameraPathSystem::has_value())
 	{
@@ -842,14 +865,7 @@ void GameParticleWorld::FollowCameraPath(std::string_view file, std::string_view
 		SPDLOG_LOGGER_WARN(spdlog::get("game"), "Particles: cannot load the camera path {}: {}", file, error.what());
 		return;
 	}
-	// The path lasts as long as one play of its animation
-	L3DAnim anim;
-	if (!anim.LoadFromFile(fileSystem.FindPath(fileSystem.GetPath<filesystem::Path::Data>() / DataRelative(animation))))
-	{
-		return;
-	}
-	Locator::cameraPathSystem::value().FollowPlaced(std::move(path), placement, pauseSeconds, speedUp,
-	                                                static_cast<float>(anim.GetPlayTime()), spell);
+	Locator::cameraPathSystem::value().FollowPlaced(std::move(path), placement, pauseSeconds, link);
 }
 
 void GameParticleWorld::Reset()

@@ -99,6 +99,9 @@ public:
 	virtual bool StartPowerUpCharge(entt::entity /*icon*/, PlayerNames /*player*/, int /*powerUp*/) { return false; }
 	/// The prayer power that an icon's miracle still needs to be charged full
 	[[nodiscard]] virtual float ChantNeeded(entt::entity /*icon*/) const { return 0.0f; }
+	/// A seed cast its miracle. The icon that made the seed stops its charge when the charger is the player of the cast
+	/// and the icon charges or holds prayer power. Its store goes back to its site. Returns true if the charge stopped.
+	virtual bool CancelSeedIconCharge(entt::entity /*seed*/, PlayerNames /*charger*/) { return false; }
 	/// A god cast the miracle of an icon: the icon's store loses the miracle's cost, never more than it holds
 	virtual void TakeCastCharge(entt::entity /*icon*/) {}
 	/// The worship site of an icon: the site of a worship site's icon, or the site of the town of a stone hand. None for a

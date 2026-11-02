@@ -115,6 +115,7 @@ struct HandContext
 		SpellSeedType type {SpellSeedType::None};
 		/// Held long enough to cast, and not yet cast
 		bool ready {true};
+		/// It cast a miracle, and the hand did not take it back from a miracle after that cast. No gesture powers it up.
 		bool cast {false};
 		/// The gesture that sizes what it casts, a circle for the storm and the shields
 		GestureType sizingGesture {GestureType::None};

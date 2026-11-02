@@ -318,7 +318,7 @@ gesture::HandContext GestureSystem::ContextOf(const Frame& frame)
 			// Only a seed made at an icon of the player's worship can be powered up
 			context.seed = gesture::HandContext::Seed {.type = seed->seedType,
 			                                           .ready = seed->ready,
-			                                           .cast = seed->hasCast,
+			                                           .cast = seed->lastCastType != MagicType::None,
 			                                           .sizingGesture = seedInfo.sizingGesture,
 			                                           .powerUpGestures = _powerUpGestures,
 			                                           .powerUp = seed->powerUp,

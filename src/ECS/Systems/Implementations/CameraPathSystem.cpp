@@ -11,14 +11,11 @@
 
 #include "CameraPathSystem.h"
 
-#include <cctype>
-
 #include <algorithm>
-#include <exception>
 #include <memory>
 #include <string>
+#include <utility>
 
-#include <glm/gtx/euler_angles.hpp>
 #include <spdlog/spdlog.h>
 
 #include "Camera/Camera.h"
@@ -26,14 +23,11 @@
 #include "Camera/DefaultWorldCameraModel.h"
 #include "Camera/FightCameraModel.h"
 #include "ECS/Reflection/BinaryArchive.h"
-#include "ECS/Registry.h"
-#include "FileSystem/FileSystemInterface.h"
 #include "Locator.h"
 #include "Resources/Resources.h"
 
 using namespace openblack;
 using namespace openblack::ecs::systems;
-using namespace openblack::ecs::components;
 
 void CameraPathSystem::Start(entt::id_type id)
 {
@@ -62,8 +56,6 @@ namespace
 constexpr float k_PlacedLagSeconds = 0.3f;
 /// The camera moves on by no more than this a frame
 constexpr float k_MaxFrameSeconds = 0.1f;
-/// The path is let go of as its animation reaches its last of a thousand frames
-constexpr float k_AnimationFrames = 1000.0f;
 
 glm::vec3 Place(const glm::mat4& placement, const glm::vec3& point)
 {
@@ -85,9 +77,9 @@ glm::vec3 ValueOf(const std::array<camera::Zoomer, 3>& zoomers)
 } // namespace
 
 void CameraPathSystem::FollowPlaced(std::unique_ptr<CameraPath> path, const glm::mat4& placement, float pauseSeconds,
-                                    float speedUp, float animationMs, entt::entity spell)
+                                    const std::shared_ptr<particles::CameraPathLink>& link)
 {
-	if (path == nullptr || path->GetPoints().empty() || !Locator::camera::has_value())
+	if (path == nullptr || path->GetPoints().empty() || link == nullptr || !Locator::camera::has_value())
 	{
 		return;
 	}
@@ -100,10 +92,8 @@ void CameraPathSystem::FollowPlaced(std::unique_ptr<CameraPath> path, const glm:
 	_placed = Placed {.path = std::move(path),
 	                  .placement = placement,
 	                  .pauseSeconds = pauseSeconds,
-	                  .speedUp = speedUp,
-	                  .animationMs = animationMs,
-	                  .spell = spell,
-	                  .seconds = 0.0f,
+	                  .link = link,
+	                  .glided = false,
 	                  .origin = {},
 	                  .focus = {},
 	                  .returnOrigin = camera.GetModel().GetTargetOrigin(),
@@ -116,10 +106,41 @@ void CameraPathSystem::FollowPlaced(std::unique_ptr<CameraPath> path, const glm:
 		placed.origin.at(static_cast<size_t>(i)).SetPosition(origin[i]);
 		placed.focus.at(static_cast<size_t>(i)).SetPosition(focus[i]);
 	}
-	// One glide from where the camera is onto the path's start, arriving still after the pause and a little more
-	const auto first = placed.path->SampleAt(std::chrono::milliseconds(0));
-	SendTo(placed.focus, Place(placed.placement, first.focus), placed.pauseSeconds + k_PlacedLagSeconds);
-	SendTo(placed.origin, Place(placed.placement, first.position), placed.pauseSeconds + k_PlacedLagSeconds);
+}
+
+void CameraPathSystem::ShowPlaced(float turnFraction)
+{
+	if (!_placed.has_value())
+	{
+		return;
+	}
+	const auto link = _placed->link.lock();
+	// The atom is drawn from its second step on
+	if (link == nullptr || !link->shown)
+	{
+		return;
+	}
+	const auto frame = camera_path::DrawnFrame(link->previousFrame, link->currentFrame, turnFraction, link->frames, link->loop);
+	link->drawnMilliseconds = camera_path::PathMilliseconds(link->cycleMilliseconds, frame);
+	if (!link->ended && camera_path::EndsPath(frame, link->frames))
+	{
+		SPDLOG_LOGGER_DEBUG(spdlog::get("game"), "Camera: a miracle's path came to the last frame of its animation");
+		link->ended = true;
+	}
+}
+
+void CameraPathSystem::CheckPlaced()
+{
+	if (!_placed.has_value())
+	{
+		return;
+	}
+	const auto link = _placed->link.lock();
+	if (link == nullptr || link->ended)
+	{
+		SPDLOG_LOGGER_DEBUG(spdlog::get("game"), "Camera: a miracle's path let go of the camera");
+		EndPlaced();
+	}
 }
 
 void CameraPathSystem::HandlePlayerControl(const PlayerControl& control)
@@ -132,36 +153,30 @@ void CameraPathSystem::HandlePlayerControl(const PlayerControl& control)
 	}
 }
 
-void CameraPathSystem::UpdatePlaced(float seconds, float gameSeconds)
+void CameraPathSystem::UpdatePlaced(float seconds)
 {
 	auto& placed = *_placed;
-	// It goes with the miracle that placed it
-	if (placed.spell != entt::null &&
-	    (!Locator::entitiesRegistry::has_value() || !Locator::entitiesRegistry::value().Valid(placed.spell)))
-	{
-		SPDLOG_LOGGER_DEBUG(spdlog::get("game"), "Camera: a miracle's path ended with its miracle");
-		EndPlaced();
-		return;
-	}
 	auto& camera = Locator::camera::value();
-	// The path goes with the age of the miracle's effect, which moves on by the game's time. The camera glides by its own
-	// time, so while the game is paused it comes to where the path stopped and stays there.
-	placed.seconds += gameSeconds;
 	const float dt = std::min(seconds, k_MaxFrameSeconds);
-	if (placed.seconds > placed.pauseSeconds)
+	const auto link = placed.link.lock();
+	// The time on the path is that of the frame that the last draw showed
+	const auto pathTime = std::chrono::milliseconds(link != nullptr ? link->drawnMilliseconds : 0);
+	if (link != nullptr && link->playing)
 	{
 		// Playing: every frame the camera is sent afresh to where the path is now, to arrive in a moment, so it follows a
 		// little behind
-		const float pathMs = (placed.seconds - placed.pauseSeconds) * placed.speedUp * 1000.0f;
-		const auto sample = placed.path->SampleAt(std::chrono::milliseconds(static_cast<int64_t>(pathMs)));
+		const auto sample = placed.path->SampleAt(pathTime);
 		SendTo(placed.focus, Place(placed.placement, sample.focus), k_PlacedLagSeconds);
 		SendTo(placed.origin, Place(placed.placement, sample.position), k_PlacedLagSeconds);
-		if (pathMs >= placed.animationMs * (k_AnimationFrames - 1.0f) / k_AnimationFrames)
-		{
-			SPDLOG_LOGGER_DEBUG(spdlog::get("game"), "Camera: a miracle's path ended after {:.1f} s", placed.seconds);
-			EndPlaced();
-			return;
-		}
+	}
+	else if (!placed.glided)
+	{
+		// One glide from where the camera is onto the path's start, arriving still after the pause and a little more
+		const auto sample = placed.path->SampleAt(pathTime);
+		const float glideSeconds = placed.pauseSeconds + k_PlacedLagSeconds;
+		SendTo(placed.focus, Place(placed.placement, sample.focus), glideSeconds);
+		SendTo(placed.origin, Place(placed.placement, sample.position), glideSeconds);
+		placed.glided = true;
 	}
 	for (int i = 0; i < 3; ++i)
 	{
@@ -195,11 +210,11 @@ void CameraPathSystem::EndPlaced()
 	}
 }
 
-void CameraPathSystem::Update(const std::chrono::microseconds& dt, std::chrono::milliseconds frameGameTime)
+void CameraPathSystem::Update(const std::chrono::microseconds& dt, std::chrono::milliseconds /*frameGameTime*/)
 {
 	if (_placed.has_value() && Locator::camera::has_value())
 	{
-		UpdatePlaced(std::chrono::duration<float>(dt).count(), std::chrono::duration<float>(frameGameTime).count());
+		UpdatePlaced(std::chrono::duration<float>(dt).count());
 	}
 	if (_state == CameraPathState::STOPPED || !_path)
 	{
@@ -229,25 +244,10 @@ void CameraPathSystem::SaveState(reflection::BinaryWriter& out) const
 	reflection::Save(out, static_cast<bool>(_path));
 	reflection::Save(out, _elapsed);
 	reflection::Save(out, _state);
-	// The path of a miracle holds the camera of this computer. The frames move it along and end it, the keys stop it, and
-	// no game turn reads it.
+	// The path of a miracle holds the camera of this computer and goes with an atom that the save does not link to it. A
+	// load gives the camera back to the player, so the save keeps only that there is no such path.
 	out.BeginPresentation();
-	reflection::Save(out, _placed.has_value());
-	if (_placed.has_value())
-	{
-		// A placed path goes by the name of its file, which the load reads again
-		reflection::Save(out, _placed->path->GetDebugName());
-		reflection::Save(out, _placed->placement);
-		reflection::Save(out, _placed->pauseSeconds);
-		reflection::Save(out, _placed->speedUp);
-		reflection::Save(out, _placed->animationMs);
-		reflection::Save(out, _placed->spell);
-		reflection::Save(out, _placed->seconds);
-		reflection::Save(out, _placed->origin);
-		reflection::Save(out, _placed->focus);
-		reflection::Save(out, _placed->returnOrigin);
-		reflection::Save(out, _placed->returnFocus);
-	}
+	reflection::Save(out, false);
 	out.EndPresentation();
 }
 
@@ -267,51 +267,28 @@ bool CameraPathSystem::LoadState(reflection::BinaryReader& in)
 	{
 		return !in.Failed();
 	}
+	// An older save kept the placed path: read past it. The camera goes back to the player.
 	std::string file;
-	Placed loaded {.path = nullptr, .placement = glm::mat4(1.0f), .pauseSeconds = 0.0f, .speedUp = 1.0f, .animationMs = 0.0f};
+	glm::mat4 placement(1.0f);
+	float pauseSeconds = 0.0f;
+	float speedUp = 1.0f;
+	float animationMs = 0.0f;
+	entt::entity spell {entt::null};
+	float seconds = 0.0f;
+	std::array<camera::Zoomer, 3> origin;
+	std::array<camera::Zoomer, 3> focus;
+	glm::vec3 returnOrigin(0.0f);
+	glm::vec3 returnFocus(0.0f);
 	reflection::Load(in, file);
-	reflection::Load(in, loaded.placement);
-	reflection::Load(in, loaded.pauseSeconds);
-	reflection::Load(in, loaded.speedUp);
-	reflection::Load(in, loaded.animationMs);
-	reflection::Load(in, loaded.spell);
-	reflection::Load(in, loaded.seconds);
-	reflection::Load(in, loaded.origin);
-	reflection::Load(in, loaded.focus);
-	reflection::Load(in, loaded.returnOrigin);
-	reflection::Load(in, loaded.returnFocus);
-	if (in.Failed())
-	{
-		return false;
-	}
-	// The file name is as the effect file gives it, under the data folder of the game
-	if (Locator::filesystem::has_value())
-	{
-		std::string name = file;
-		std::ranges::replace(name, '\\', '/');
-		if (name.starts_with("./"))
-		{
-			name.erase(0, 2);
-		}
-		if (name.size() >= 5 && std::equal(name.begin(), name.begin() + 5, "data/",
-		                                   [](char a, char b) { return std::tolower(static_cast<unsigned char>(a)) == b; }))
-		{
-			name.erase(0, 5);
-		}
-		auto& fileSystem = Locator::filesystem::value();
-		auto path = std::make_unique<CameraPath>(file);
-		try
-		{
-			if (path->LoadFromFile(fileSystem.FindPath(fileSystem.GetPath<filesystem::Path::Data>() / name)))
-			{
-				loaded.path = std::move(path);
-				_placed = std::move(loaded);
-			}
-		}
-		catch (const std::exception& error)
-		{
-			SPDLOG_LOGGER_WARN(spdlog::get("game"), "The saved camera path {} does not load: {}", file, error.what());
-		}
-	}
-	return true;
+	reflection::Load(in, placement);
+	reflection::Load(in, pauseSeconds);
+	reflection::Load(in, speedUp);
+	reflection::Load(in, animationMs);
+	reflection::Load(in, spell);
+	reflection::Load(in, seconds);
+	reflection::Load(in, origin);
+	reflection::Load(in, focus);
+	reflection::Load(in, returnOrigin);
+	reflection::Load(in, returnFocus);
+	return !in.Failed();
 }

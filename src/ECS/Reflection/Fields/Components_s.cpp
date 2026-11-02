@@ -272,7 +272,8 @@ void openblack::ecs::reflection::RegisterFields_Components_s(entt::meta_ctx& con
 	    .Field<&components::SpellSeed::followsSpell>("followsSpell")
 	    .Field<&components::SpellSeed::turnsInHand>("turnsInHand")
 	    .Field<&components::SpellSeed::spell>("spell")
-	    .Field<&components::SpellSeed::hasCast>("hasCast")
+	    .Field<&components::SpellSeed::lastCastType>("lastCastType")
+	    .Field<&components::SpellSeed::linkedByCast>("linkedByCast")
 	    .Field<&components::SpellSeed::handEffect>("handEffect");
 	Reflect<components::Sprite>(context)
 	    .Field<&components::Sprite::texture>("texture")
