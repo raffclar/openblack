@@ -85,6 +85,7 @@
 #include "ECS/Archetypes/CreatureArchetype.h"
 #include "ECS/Archetypes/FeatureArchetype.h"
 #include "ECS/Archetypes/MistArchetype.h"
+#include "ECS/Archetypes/MobileObjectArchetype.h"
 #include "ECS/Archetypes/MobileStaticArchetype.h"
 #include "ECS/Archetypes/ScriptMarkerArchetype.h"
 #include "ECS/Archetypes/SharkArchetype.h"
@@ -769,6 +770,18 @@ entt::entity CreateScriptObject(const ObjectType type, uint32_t subtype, const g
 			StartScriptRock(made, *start);
 		}
 		return made;
+	}
+	case ObjectType::MobileObject:
+	case ObjectType::Poo:
+	case ObjectType::Ark:
+	{
+		// A mobile object of the row that the type gives, on the land under the place asked for. It belongs to nobody.
+		const auto row = script::create_rules::MobileObjectRowOf(type, subtype);
+		if (!row.has_value())
+		{
+			return entt::null;
+		}
+		return MobileObjectArchetype::Create(OnGround(position), *row, yAngleRadians, scale);
 	}
 	case ObjectType::Ball:
 		// On the land under the place asked for, even when that is the hand up in the air
