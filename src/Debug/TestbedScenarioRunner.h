@@ -283,6 +283,8 @@ private:
 	/// The debug option's bonus creatures as they were before the scenario took some as unlocked
 	std::optional<creature_swap::Unlocked> _unlockedBefore;
 	std::optional<int32_t> _landNumberBefore;
+	/// Whether the scenario set camera zones, which go when it stops
+	bool _cameraZoneSet {false};
 	/// The date that the machine's clock was pinned to (none for the wall clock's) before a scenario set the date
 	std::optional<std::optional<int64_t>> _pinnedDateBefore;
 	/// Whether the game was a skirmish before a scenario made it one
