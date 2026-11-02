@@ -2312,3 +2312,7 @@ openblack_setup_and_add_test(
   test_script_ally_natives test_script_ally_natives.cpp
 )
 target_link_libraries(test_script_ally_natives PRIVATE ScriptLibrary)
+openblack_setup_and_add_test(test_creature_reach_read_only test_creature_reach_read_only.cpp)
+if(MSVC)
+  target_compile_options(test_creature_reach_read_only PRIVATE /bigobj)
+endif()

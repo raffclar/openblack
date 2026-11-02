@@ -375,10 +375,12 @@ std::optional<creature_reach::Points> MeasureReach(entt::entity creature, const 
 
 /// Where the hand or foot gets to in the reaching animations, measured in the model's own size the first time it is
 /// wanted, and again the first time it is wanted after the animations follow a new body shape. None before the creature
-/// is posed.
+/// is posed. A measure is the same whenever it is made for the same body shape. Thus a frame that only reads uses the
+/// kept measure, or makes a new measure and does not keep it, and a turn keeps the new measure.
 template <typename Kept>
 std::optional<creature_reach::Points> KeptReachPoints(entt::entity creature, ReachWith with,
-                                                      const std::array<size_t, creature_reach::k_CornerCount>& animations)
+                                                      const std::array<size_t, creature_reach::k_CornerCount>& animations,
+                                                      ReachKeep keep = ReachKeep::Keep)
 {
 	auto& registry = Locator::entitiesRegistry::value();
 	if (!registry.Valid(creature))
@@ -408,7 +410,10 @@ std::optional<creature_reach::Points> KeptReachPoints(entt::entity creature, Rea
 	{
 		return std::nullopt;
 	}
-	registry.AssignOrReplace<Kept>(creature, Kept {.points = *reach, .bodyRevision = BodyRevision(registry, creature)});
+	if (keep == ReachKeep::Keep)
+	{
+		registry.AssignOrReplace<Kept>(creature, Kept {.points = *reach, .bodyRevision = BodyRevision(registry, creature)});
+	}
 	return *reach;
 }
 
@@ -416,9 +421,10 @@ std::optional<creature_reach::Points> KeptReachPoints(entt::entity creature, Rea
 /// is posed.
 template <typename Kept>
 std::optional<float> KeptStraightReach(entt::entity creature, ReachWith with,
-                                       const std::array<size_t, creature_reach::k_CornerCount>& animations)
+                                       const std::array<size_t, creature_reach::k_CornerCount>& animations,
+                                       ReachKeep keep = ReachKeep::Keep)
 {
-	const auto points = KeptReachPoints<Kept>(creature, with, animations);
+	const auto points = KeptReachPoints<Kept>(creature, with, animations, keep);
 	if (!points.has_value())
 	{
 		return std::nullopt;
@@ -2722,7 +2728,8 @@ bool CreatureObjectActionSystem::ComputerCreatureNotScripted(entt::entity creatu
 	       Locator::playerSystem::value().IsComputerPlayer(body->owner) && !registry.AllOf<ScriptControlled>(creature);
 }
 
-creature_object_actions::PickUpFacts CreatureObjectActionSystem::PickUpFactsOf(entt::entity creature, entt::entity object) const
+creature_object_actions::PickUpFacts CreatureObjectActionSystem::PickUpFactsOf(entt::entity creature, entt::entity object,
+                                                                               ReachKeep keep) const
 {
 	const auto& registry = Locator::entitiesRegistry::value();
 	const auto* body = registry.Valid(creature) ? registry.TryGet<const Creature>(creature) : nullptr;
@@ -2743,7 +2750,8 @@ creature_object_actions::PickUpFacts CreatureObjectActionSystem::PickUpFactsOf(e
 	std::optional<creature_object_actions::LiftFacts> lift;
 	if (body != nullptr)
 	{
-		if (const auto reach = PickUpStraightReach(creature))
+		if (const auto reach =
+		        KeptStraightReach<PickUpReach>(creature, ReachWith::FingerEnds, creature_reach::k_PickUpAnimations, keep))
 		{
 			const auto* morph = registry.TryGet<const CreatureMorph>(creature);
 			lift = creature_object_actions::LiftFacts {
@@ -2795,7 +2803,7 @@ bool CreatureObjectActionSystem::CanPickUpKind(entt::entity creature, entt::enti
 	case PickUpFactsUsed::All:
 		break;
 	}
-	return creature_object_actions::MayPickUpKind(kind, PickUpFactsOf(creature, object));
+	return creature_object_actions::MayPickUpKind(kind, PickUpFactsOf(creature, object, ReachKeep::Keep));
 }
 
 bool CreatureObjectActionSystem::CanEat(entt::entity creature, entt::entity object) const
@@ -2827,8 +2835,9 @@ bool CreatureObjectActionSystem::CanEatHeld(entt::entity creature) const
 
 bool CreatureObjectActionSystem::CanTakeFromHand(entt::entity creature, entt::entity object) const
 {
+	// The frames of the hand ask this as it offers a thing, so the test only reads the synced world
 	const auto kind = KindFactsOf(object);
-	return creature_object_actions::MayTakeKindFromHand(kind, PickUpFactsOf(creature, object));
+	return creature_object_actions::MayTakeKindFromHand(kind, PickUpFactsOf(creature, object, ReachKeep::ReadOnly));
 }
 
 bool CreatureObjectActionSystem::CanBeCaught(entt::entity object) const
