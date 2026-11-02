@@ -22,29 +22,30 @@ using ecs::components::WinCondition;
 
 namespace
 {
-/// The number of gods among the first four players that take part
-[[nodiscard]] uint32_t GodsThatCanLose(const std::vector<PlayerNames>& gods)
-{
-	return static_cast<uint32_t>(std::ranges::count_if(gods, [](PlayerNames god) { return CanLose(god); }));
-}
-
-/// The number of gods among the first four players that are out
-[[nodiscard]] uint32_t GodsOut(World& world, const std::vector<PlayerNames>& gods)
+/// The number of gods that take part in the end of the game
+[[nodiscard]] uint32_t GodsThatCanLose(const std::vector<PlayerNames>& gods, bool networkGame)
 {
 	return static_cast<uint32_t>(
-	    std::ranges::count_if(gods, [&world](PlayerNames god) { return CanLose(god) && world.Standing(god).out; }));
+	    std::ranges::count_if(gods, [networkGame](PlayerNames god) { return CanLose(god, networkGame); }));
+}
+
+/// The number of gods that take part in the end of the game and are out
+[[nodiscard]] uint32_t GodsOut(World& world, const std::vector<PlayerNames>& gods, bool networkGame)
+{
+	return static_cast<uint32_t>(std::ranges::count_if(
+	    gods, [&world, networkGame](PlayerNames god) { return CanLose(god, networkGame) && world.Standing(god).out; }));
 }
 
 /// Whether so many gods are out that one god at most is left
-[[nodiscard]] bool OneGodLeft(World& world, const std::vector<PlayerNames>& gods)
+[[nodiscard]] bool OneGodLeft(World& world, const std::vector<PlayerNames>& gods, bool networkGame)
 {
 	// The game compares the counts as numbers with no sign
-	return GodsOut(world, gods) >= GodsThatCanLose(gods) - 1u;
+	return GodsOut(world, gods, networkGame) >= GodsThatCanLose(gods, networkGame) - 1u;
 }
 
 /// The game is decided: the god with the largest share of the conditions wins, and the others are out, the worst
 /// first. Gives the winner.
-std::optional<PlayerNames> Decide(World& world, State& state, const std::vector<PlayerNames>& gods, bool skirmish)
+std::optional<PlayerNames> Decide(World& world, State& state, const std::vector<PlayerNames>& gods, const Facts& facts)
 {
 	state.decided = true;
 	// Every god finished its game, and its computer mind stops
@@ -102,7 +103,7 @@ std::optional<PlayerNames> Decide(World& world, State& state, const std::vector<
 	{
 		if (*god != PlayerNames::NEUTRAL)
 		{
-			CountOut(world, state, *god, OutReason::Defeated, skirmish);
+			CountOut(world, state, *god, OutReason::Defeated, facts);
 		}
 	}
 	return winner;
@@ -179,12 +180,12 @@ std::span<const float> ShownScores(const GameStanding& standing)
 	return std::span<const float>(standing.scoreHistory).first(static_cast<size_t>(count));
 }
 
-void CountOut(World& world, State& state, PlayerNames god, OutReason reason, bool skirmish)
+void CountOut(World& world, State& state, PlayerNames god, OutReason reason, const Facts& facts)
 {
 	const auto gods = world.ActiveGods();
 	// Every other human god that is still in saw a god defeated. A god that a computer mind plays makes the human gods
 	// count only in a skirmish.
-	const bool counts = world.IsHuman(god) || skirmish;
+	const bool counts = world.IsHuman(god) || facts.skirmish;
 	std::optional<PlayerNames> lastHumanIn;
 	for (const auto other : gods)
 	{
@@ -206,7 +207,7 @@ void CountOut(World& world, State& state, PlayerNames god, OutReason reason, boo
 		standing.reason = reason;
 	}
 	// When one god is left, the last human god that is still in takes the place after that
-	if (GodsOut(world, gods) == GodsThatCanLose(gods) - 1u && lastHumanIn.has_value())
+	if (GodsOut(world, gods, facts.networkGame) == GodsThatCanLose(gods, facts.networkGame) - 1u && lastHumanIn.has_value())
 	{
 		world.Standing(*lastHumanIn).place = ++state.lastPlace;
 	}
@@ -235,7 +236,7 @@ std::vector<Event> ProcessTurn(World& world, const Facts& facts, State& state)
 		templesLost = false;
 		for (const auto god : gods)
 		{
-			if (!CanLose(god))
+			if (!CanLose(god, facts.networkGame))
 			{
 				continue;
 			}
@@ -257,7 +258,7 @@ std::vector<Event> ProcessTurn(World& world, const Facts& facts, State& state)
 		}
 		if (state.decided || timeUp)
 		{
-			if (const auto winner = Decide(world, state, gods, facts.skirmish); winner.has_value())
+			if (const auto winner = Decide(world, state, gods, facts); winner.has_value())
 			{
 				events.push_back({.kind = Event::Kind::Won, .god = *winner});
 			}
@@ -281,11 +282,11 @@ std::vector<Event> ProcessTurn(World& world, const Facts& facts, State& state)
 			AddScore(world.Standing(god), x87::Div(world.InfluencePower(god), total));
 		}
 	}
-	// A god among the first four players with no temple is out, and its creature goes from the land
+	// A god that takes part and has no temple is out, and its creature goes from the land
 	for (const auto god : gods)
 	{
 		auto& standing = world.Standing(god);
-		if (CanLose(god) && !HasTempleOrNeedsNone(world, facts, god) && !standing.out)
+		if (CanLose(god, facts.networkGame) && !HasTempleOrNeedsNone(world, facts, god) && !standing.out)
 		{
 			standing.out = true;
 			world.RemoveCreature(god);
@@ -299,8 +300,8 @@ std::vector<Event> ProcessTurn(World& world, const Facts& facts, State& state)
 		{
 			continue;
 		}
-		CountOut(world, state, god, standing.reason, facts.skirmish);
-		if (OneGodLeft(world, gods))
+		CountOut(world, state, god, standing.reason, facts);
+		if (OneGodLeft(world, gods, facts.networkGame))
 		{
 			state.decided = true;
 			events.push_back({.kind = Event::Kind::GodOutAndDecided, .god = god});

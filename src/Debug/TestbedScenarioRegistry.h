@@ -833,7 +833,8 @@ struct Command
 		/// impressed. Needs no creature
 		SetTownBeliefInRival,
 		/// The scenario's temple (value: its place in the scenario's temples) starts being destroyed, as when its heart
-		/// loses the last of its life. Needs no creature
+		/// loses the last of its life. When the scenario made no temples, the value is a god slot, and the land's temple
+		/// of that god starts its destruction. Needs no creature
 		DestroyTemple,
 		/// A script tells the creature to play an animation (value) some times (amount, rounded), as "play 47 loop 1"
 		/// does: a static action's start, loop and end, or an individual action

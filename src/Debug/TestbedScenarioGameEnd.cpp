@@ -38,6 +38,26 @@ constexpr glm::vec2 k_ThirdTemple {120.0f, 20.0f};
 constexpr glm::vec2 k_FourthTemple {-120.0f, 20.0f};
 
 const Framing k_Overview {.shot = Shot::Overview, .include = {{-60.0f, -100.0f}, {160.0f, 130.0f}}, .distance = 1.0f};
+
+/// The temples of the gods after the fourth go first, a quarter second apart. 20 seconds later, the temples of the
+/// gods two to four go, so that only the god of the player is left.
+std::vector<Command> TemplesOfTheGodsAfterTheFirst()
+{
+	constexpr size_t k_LastSlot = 31;
+	constexpr size_t k_FirstSlotAfterTheFourth = 4;
+	std::vector<Command> commands;
+	for (size_t slot = k_FirstSlotAfterTheFourth; slot <= k_LastSlot; ++slot)
+	{
+		commands.push_back({.kind = Command::Kind::DestroyTemple,
+		                    .delaySeconds = slot == k_FirstSlotAfterTheFourth ? 2.0f : 0.25f,
+		                    .value = slot});
+	}
+	for (size_t slot = 1; slot < k_FirstSlotAfterTheFourth; ++slot)
+	{
+		commands.push_back({.kind = Command::Kind::DestroyTemple, .delaySeconds = slot == 1 ? 20.0f : 0.25f, .value = slot});
+	}
+	return commands;
+}
 } // namespace
 
 void testbed_scenarios::AddGameEndScenarios(std::vector<Scenario>& all)
@@ -249,5 +269,21 @@ void testbed_scenarios::AddGameEndScenarios(std::vector<Scenario>& all)
 	                 {.kind = Kind::EndBox, .delaySeconds = 1.0f, .value = 1},
 	                 {.kind = Kind::EndBox, .delaySeconds = 2.0f, .value = 4},
 	                 {.kind = Kind::EndBox, .delaySeconds = 2.0f, .value = 4}},
+	});
+	all.push_back({
+	    .id = "game_end.gods_after_the_fourth",
+	    .name = "The gods after the fourth lose a network game of 32 gods",
+	    .facet = Facet::Multiplayer,
+	    .description = "The network map for 32 gods loads on this computer alone and plays as a network game. Two seconds "
+	                   "in, the temples of the gods 5 to 32 start their destruction, a quarter second apart. 20 seconds "
+	                   "later, the temples of the gods 2 to 4 start their destruction. The map needs the game's Online "
+	                   "Maps folder.",
+	    .expected = "When the temple of each god after the fourth goes, that god is out: its creature goes from the land, "
+	                "and the white box says \"Player[n] is out of the game.\". The game goes on with 4 gods. When the "
+	                "temples of the gods 2 to 4 go, only the god of the player is left, and the end box opens with "
+	                "\"Congratulations! You've won the game!\" (deviation 193).",
+	    .environment = {.land = Land::GodsRingMap, .dispenserGrid = false, .networkGame = true},
+	    .framing = {.shot = Shot::Placed, .eye = {0.0f, 5500.0f, -2600.0f}, .look = {0.0f, 0.0f, -200.0f}},
+	    .commands = TemplesOfTheGodsAfterTheFirst(),
 	});
 }
