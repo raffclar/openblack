@@ -382,6 +382,8 @@ entt::entity MakePiece(building_world::World& world, damage::Primitive primitive
 	damage::Offset(primitive, -centre);
 	damage::LinkNeighbours(primitive);
 	const auto piece = registry.Create();
+	// It takes its place in the order of the things made before it lets go of its own loose parts
+	world.PieceMade(piece);
 	registry.Assign<Transform>(piece, offset + centre, glm::mat3(1.0f), glm::vec3(1.0f));
 	const auto triangles = static_cast<uint32_t>(primitive.triangles.size());
 	auto& part = registry.Assign<BuildingPiece>(piece);

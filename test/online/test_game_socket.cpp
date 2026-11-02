@@ -294,6 +294,13 @@ TEST(GameSocket, TheLinesOfTheRoomsChatGoToJsonAndBack)
 	EXPECT_EQ(ToJson(RoomChat {.from = {}, .text = "Hi"}).find("from"), std::string::npos);
 	const auto fromServer = RoundTrip(RoomChat {.from = "Ian", .text = "Hi"});
 	EXPECT_EQ(fromServer, (RoomChat {.from = "Ian", .text = "Hi"}));
+	// A private line names its player from the client, and keeps the private and team marks from the server
+	const RoomChat toOne {.from = {}, .text = "psst", .to = "Ian", .privateLine = false, .team = true};
+	EXPECT_EQ(RoundTrip(toOne), toOne);
+	EXPECT_EQ(ToJson(toOne), R"({"team":true,"text":"psst","to":"Ian","type":"room.chat"})");
+	const RoomChat privateLine {.from = "Ian", .text = "psst", .to = {}, .privateLine = true, .team = false};
+	EXPECT_EQ(RoundTrip(privateLine), privateLine);
+	EXPECT_EQ(ToJson(privateLine), R"({"from":"Ian","private":true,"text":"psst","type":"room.chat"})");
 	EXPECT_FALSE(Parse(R"({"type":"room.chat"})").has_value());
 	EXPECT_FALSE(Parse(R"({"type":"room.chat","text":1})").has_value());
 	EXPECT_FALSE(Parse(R"({"type":"room.chat","text":"Hi","from":2})").has_value());

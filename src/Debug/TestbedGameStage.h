@@ -26,6 +26,7 @@ public:
 	[[nodiscard]] std::string TattooEditorAsNetworkGame(bool asNetworkGame) override;
 	[[nodiscard]] std::string OpenControlsBox(size_t row) override;
 	void OpenChat(std::u16string_view line) override;
+	[[nodiscard]] std::string OpenChatWithFriends() override;
 	[[nodiscard]] std::string OpenMultiplayerBox(size_t stage) override;
 	[[nodiscard]] std::string OpenMenuPage(size_t page, bool noSound) override;
 	[[nodiscard]] std::string PressMenuKey(size_t key, bool shift) override;

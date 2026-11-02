@@ -112,6 +112,8 @@ public:
 	[[nodiscard]] virtual std::optional<PlayerNames> PlayerOf(entt::entity object) const = 0;
 	/// The object goes from the world
 	virtual void Remove(entt::entity object) = 0;
+	/// A new piece of a building is a thing of the world, so it takes the next place in the count of things made
+	virtual void PieceMade(entt::entity piece) = 0;
 
 	/// The game's crush, which a breaking blow applies; none before the game's data is loaded or without magic
 	[[nodiscard]] virtual std::optional<magic::EffectValues> Crush() const = 0;

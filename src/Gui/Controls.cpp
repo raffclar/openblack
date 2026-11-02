@@ -620,6 +620,10 @@ void List::MouseDown(glm::ivec2 point)
 	{
 		_selection = item;
 	}
+	else if (clearsOnEmptyPick)
+	{
+		_selection.reset();
+	}
 }
 
 void List::Drag(glm::ivec2 point)

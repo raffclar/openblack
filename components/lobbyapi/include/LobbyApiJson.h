@@ -33,6 +33,7 @@ namespace openblack::lobby_api
 [[nodiscard]] std::string ToJson(const UseClanRequest& request);
 [[nodiscard]] std::string ToJson(const TicketRequest& request);
 [[nodiscard]] std::string ToJson(const ServerStatus& status);
+[[nodiscard]] std::optional<ServerStatusReply> ParseServerStatusReply(std::string_view text);
 [[nodiscard]] std::string ToJson(const LanAnswer& answer);
 /// The frame that asks for the events of a channel, or stops them
 [[nodiscard]] std::string SubscribeFrame(bool subscribe, std::string_view channel);
@@ -55,7 +56,8 @@ namespace openblack::lobby_api
 [[nodiscard]] std::optional<JoinTicket> ParseJoinTicket(std::string_view text);
 [[nodiscard]] std::optional<ClanList> ParseClanList(std::string_view text);
 [[nodiscard]] std::optional<ClanDetails> ParseClanDetails(std::string_view text);
-[[nodiscard]] std::optional<RankingPage> ParseRankingPage(std::string_view text);
+[[nodiscard]] std::optional<RankingPage> ParsePlayerRanking(std::string_view text);
+[[nodiscard]] std::optional<RankingPage> ParseClanRanking(std::string_view text);
 [[nodiscard]] std::optional<PlayerDetails> ParsePlayerDetails(std::string_view text);
 [[nodiscard]] std::optional<PlayerDetailLines> ParsePlayerDetailLines(std::string_view text);
 [[nodiscard]] std::optional<LanAnswer> ParseLanAnswer(std::string_view text);

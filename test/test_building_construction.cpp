@@ -70,6 +70,20 @@ TEST(BuildingConstruction, RepairByLeavesAWholeBuildingAsItIs)
 	EXPECT_FALSE(whole.repaired);
 }
 
+TEST(BuildingConstruction, HurtUnbuiltTakesFromTheBuiltShareThenAllLife)
+{
+	const auto partly = HurtUnbuilt(0.5f, 0.25f);
+	EXPECT_FLOAT_EQ(partly.built, 0.25f);
+	EXPECT_FALSE(partly.allLife);
+	// A hurt that takes all that is built, or more, leaves none built and takes all the life
+	const auto all = HurtUnbuilt(0.25f, 0.25f);
+	EXPECT_FLOAT_EQ(all.built, 0.0f);
+	EXPECT_TRUE(all.allLife);
+	const auto more = HurtUnbuilt(0.1f, 0.5f);
+	EXPECT_FLOAT_EQ(more.built, 0.0f);
+	EXPECT_TRUE(more.allLife);
+}
+
 TEST(BuildingConstruction, ScriptDesireIsFiveTimesOnTheSite)
 {
 	EXPECT_FLOAT_EQ(SiteDesire(1.0f), 5.0f);

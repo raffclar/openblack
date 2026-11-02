@@ -60,6 +60,12 @@ constexpr uint32_t k_ObserverColour = 0xFF808080;
 constexpr const auto& k_GodColours = player_colour::k_GodChatColours;
 /// The player's own chat lines
 constexpr uint32_t k_OwnLine = 0xFFC8C8C8;
+/// The lines that another player sent to all the players
+constexpr uint32_t k_PublicLine = 0xFFFFFFFF;
+/// The lines that another player sent to this player only
+constexpr uint32_t k_PrivateLine = 0xFFFFC8C8;
+/// The team lines of a sender who is not in the room
+constexpr uint32_t k_UnknownTeamLine = 0xFFC8FFC8;
 
 glm::vec4 Colour(uint32_t argb)
 {
@@ -407,12 +413,73 @@ glm::vec4 OwnLineColour() noexcept
 	return Colour(k_OwnLine);
 }
 
-ChatItem ChatLine(std::u16string_view from, std::u16string_view text, bool own, int32_t god)
+ChatItem OwnChatLine(std::u16string_view from, std::u16string_view text)
 {
-	ChatItem item;
-	item.text = std::u16string(from) + (own ? u"> " : u": ") + std::u16string(text);
-	item.colour = own ? OwnLineColour() : GodColour(god);
-	return item;
+	return {.text = std::u16string(from) + u"> " + std::u16string(text), .colour = OwnLineColour()};
+}
+
+ChatItem ReceivedChatLine(std::u16string_view from, std::u16string_view text, ChatPrivacy privacy,
+                          std::optional<int32_t> senderGod)
+{
+	uint32_t colour = k_PublicLine;
+	if (privacy == ChatPrivacy::Private)
+	{
+		colour = k_PrivateLine;
+	}
+	else if (privacy == ChatPrivacy::Team)
+	{
+		colour = senderGod.has_value() ? HalfwayToWhite(GodColourBits(*senderGod)) : k_UnknownTeamLine;
+	}
+	auto shown = senderGod.has_value() ? std::u16string(from) + u": " + std::u16string(text) : std::u16string(text);
+	return {.text = std::move(shown), .colour = Colour(colour)};
+}
+
+uint32_t HalfwayToWhite(uint32_t argb) noexcept
+{
+	const auto halfway = [argb](uint32_t shift) {
+		const auto part = (argb >> shift) & 0xFFu;
+		return (part + (0xFFu - part) / 2u) << shift;
+	};
+	return 0xFF000000u | halfway(16u) | halfway(8u) | halfway(0u);
+}
+
+bool SameChatName(std::u16string_view a, std::u16string_view b) noexcept
+{
+	a = a.substr(0, std::min(a.size(), k_ChatNameCompareLength));
+	b = b.substr(0, std::min(b.size(), k_ChatNameCompareLength));
+	return std::ranges::equal(a, b, [](char16_t x, char16_t y) { return Lower(x) == Lower(y); });
+}
+
+std::optional<size_t> FindChatName(std::span<const std::u16string> names, std::u16string_view name) noexcept
+{
+	const auto found = std::ranges::find_if(names, [name](const std::u16string& each) { return SameChatName(each, name); });
+	return found != names.end() ? std::optional(static_cast<size_t>(found - names.begin())) : std::nullopt;
+}
+
+RoomChatPlan PlanRoomChat(std::span<const std::u16string> names, std::u16string_view own,
+                          std::optional<std::u16string_view> player, std::optional<std::span<const std::u16string>> team)
+{
+	const auto ownPlace = FindChatName(names, own);
+	RoomChatPlan plan;
+	if (team.has_value())
+	{
+		// The own line shows only for the line to the player self, so a team without the player shows no own line
+		plan.ownLine = false;
+		for (const auto& member : *team)
+		{
+			const auto place = FindChatName(names, member);
+			if (place == ownPlace)
+			{
+				plan.ownLine = true;
+			}
+			// A name that is not in the room makes a line to all the players
+			plan.sends.push_back(place.has_value() ? RoomChatSend {.to = names[*place], .team = true} : RoomChatSend {});
+		}
+		return plan;
+	}
+	const auto place = player.has_value() ? FindChatName(names, *player) : std::nullopt;
+	plan.sends.push_back(place.has_value() ? RoomChatSend {.to = names[*place], .team = false} : RoomChatSend {});
+	return plan;
 }
 
 std::u16string ClampChat(std::u16string_view text)

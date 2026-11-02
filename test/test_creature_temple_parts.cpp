@@ -156,12 +156,25 @@ TEST_F(AltarInTheMap, WalkersAndArenasMeetTheAltarAsAModelBox)
 	EXPECT_EQ(thing_circles::ShapeOf(Entities(), altar), wall_hug::ThingShape::ModelBox);
 }
 
-// Things that fly go through the altar: the game never builds the altar, so it is not in their way
-TEST_F(AltarInTheMap, ThingsThatFlyGoThroughTheAltar)
+// Things that fly go through an altar until more than a tenth of it is built, and through an altar with nearly no life.
+// Otherwise the altar is in their way, as a feature is, and it never flies.
+TEST_F(AltarInTheMap, ThingsThatFlyMeetTheAltarWhenATenthOfItIsBuilt)
 {
 	const auto altar = MakeAltar(entt::null, k_InCell);
 	const auto info = std::make_unique<InfoConstants>();
-	const auto facts = physics_classes::Classify(Entities(), altar, *info, physics_classes::ClassInputs {});
-	EXPECT_FALSE(facts.interacts);
+	const auto classify = [&](float built, float life) {
+		return physics_classes::Classify(Entities(), altar, *info, {.life = life, .percentBuilt = built});
+	};
+	EXPECT_FALSE(classify(0.0f, 1.0f).interacts);
+	EXPECT_FALSE(classify(0.1f, 1.0f).interacts);
+	EXPECT_TRUE(classify(0.11f, 1.0f).interacts);
+	EXPECT_TRUE(classify(1.0f, 0.02f).interacts);
+	EXPECT_FALSE(classify(1.0f, 0.01f).interacts);
+	const auto facts = classify(1.0f, 1.0f);
+	EXPECT_EQ(facts.body, physics_classes::BodyKind::Model);
+	EXPECT_EQ(facts.row, physics::MaterialRow::DefaultUnmovable);
+	EXPECT_TRUE(facts.checksPoints);
+	EXPECT_FALSE(facts.fixedMass.has_value());
 	EXPECT_FALSE(facts.canBecomePhysicsObject);
+	EXPECT_FALSE(facts.dynamic);
 }

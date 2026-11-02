@@ -57,6 +57,8 @@ enum class Stage : uint8_t
 	ConditionsPicked,
 	/// The chat of a room on the local network, which goes through the room's game server
 	LanRoomChat,
+	/// The private lines of the chat of a room on the local network: the player picked a player in the roster
+	LanRoomPrivateChat,
 	_Count
 };
 

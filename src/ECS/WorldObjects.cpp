@@ -21,6 +21,7 @@
 #include "Animals/FishFarmRules.h"
 #include "ECS/AbodeKnock.h"
 #include "ECS/AbodeSurroundings.h"
+#include "ECS/BuildingConstruction.h"
 #include "ECS/BuildingSites.h"
 #include "ECS/Components/Abode.h"
 #include "ECS/Components/Animal.h"
@@ -697,8 +698,20 @@ float world_objects::ReduceLife(entt::entity object, float damage, std::optional
 	if (auto* progress = registry.TryGet<BuildProgress>(object);
 	    progress != nullptr && progress->built < 1.0f && registry.AnyOf<Abode, SpellDispenser, WorshipSite, Temple>(object))
 	{
-		progress->built = progress->built - damage <= 0.0f ? 0.0f : progress->built - damage;
-		if (progress->built != 0.0f)
+		const auto hurt = building_construction::HurtUnbuilt(progress->built, damage);
+		progress->built = hurt.built;
+		if (!hurt.allLife)
+		{
+			return LifeOf(object);
+		}
+		damage = LifeOf(object);
+	}
+	// An altar not yet built loses what is built of it in the same way
+	if (auto* altar = registry.TryGet<WorshipAltar>(object); altar != nullptr && altar->built < 1.0f)
+	{
+		const auto hurt = building_construction::HurtUnbuilt(altar->built, damage);
+		altar->built = hurt.built;
+		if (!hurt.allLife)
 		{
 			return LifeOf(object);
 		}
@@ -922,8 +935,8 @@ void world_objects::DestroyedByEffect(entt::entity object, const EffectDeath& de
 		}
 		return;
 	}
-	// A worship site with no life left stays as it is
-	if (registry.AllOf<WorshipSite>(object))
+	// A worship site or its altar with no life left stays as it is
+	if (registry.AnyOf<WorshipSite, WorshipAltar>(object))
 	{
 		return;
 	}

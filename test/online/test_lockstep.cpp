@@ -1847,6 +1847,33 @@ TEST_F(LockstepTest, OnTheLocalNetworkTheRoomsChatGoesToTheOtherPlayersInTheRoom
 	}
 }
 
+TEST_F(LockstepTest, OnTheLocalNetworkAPrivateRoomChatLineGoesOnlyToItsPlayer)
+{
+	MakeHost(1, 5LL * 60 * 1'000'000, 2, false, true);
+	Computer alice(network, now, "", k_LandFile, {'C'}, 0.0f, "Alice");
+	alice.session.SetReady(false);
+	Computer bob(network, now, "", k_LandFile, {'C'}, 0.0f, "Bob");
+	bob.session.SetReady(false);
+	Computer carol(network, now, "", k_LandFile, {'C'}, 0.0f, "Carol");
+	Frames({&alice, &bob, &carol}, 3);
+	ASSERT_EQ(carol.session.GetJoined()->role, game_socket::Role::Observer);
+
+	// A private line goes only to the named player, also to an observer and to the sender self. A team line keeps its
+	// mark. A name that is not in the room gets no line.
+	bob.session.SendRoomChat("Our team", "Alice", true);
+	Frames({&alice, &bob, &carol}, 3);
+	alice.session.SendRoomChat("Hi Carol", "Carol");
+	alice.session.SendRoomChat("Note to self", "Alice");
+	alice.session.SendRoomChat("Anyone?", "Zed");
+	Frames({&alice, &bob, &carol}, 3);
+	const game_socket::RoomChat toCarol {.from = "Alice", .text = "Hi Carol", .to = {}, .privateLine = true, .team = false};
+	const game_socket::RoomChat toAlice {.from = "Bob", .text = "Our team", .to = {}, .privateLine = true, .team = true};
+	const game_socket::RoomChat toSelf {.from = "Alice", .text = "Note to self", .to = {}, .privateLine = true, .team = false};
+	EXPECT_EQ(alice.session.TakeRoomChat(), (std::vector<game_socket::RoomChat> {toAlice, toSelf}));
+	EXPECT_TRUE(bob.session.TakeRoomChat().empty());
+	EXPECT_EQ(carol.session.TakeRoomChat(), std::vector<game_socket::RoomChat> {toCarol});
+}
+
 TEST_F(LockstepTest, ARoomOfTheLobbyHasNoChatOnTheGameSocket)
 {
 	MakeHost(1);

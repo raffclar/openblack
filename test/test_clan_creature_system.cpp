@@ -66,8 +66,8 @@ public:
 		sent.emplace_back(clanId, std::move(creature));
 		callback({.value = LobbyDone {}, .error = {}});
 	}
-	void GetPlayerRanking(int32_t, LobbyCallback<lobby_api::RankingPage>) override {}
-	void GetClanRanking(int32_t, LobbyCallback<lobby_api::RankingPage>) override {}
+	void GetPlayerRanking(lobby_api::RankingQuery, LobbyCallback<lobby_api::RankingPage>) override {}
+	void GetClanRanking(lobby_api::RankingQuery, LobbyCallback<lobby_api::RankingPage>) override {}
 	void GetPlayer(int64_t, LobbyCallback<lobby_api::PlayerDetails>) override {}
 	void GetPlayerDetailLines(int64_t, std::string, LobbyCallback<lobby_api::PlayerDetailLines>) override {}
 	void GetWeather(lobby_api::Date, LobbyCallback<lobby_api::RealWeather>) override {}

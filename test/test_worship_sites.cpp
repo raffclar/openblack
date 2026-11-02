@@ -23,8 +23,10 @@
 #include <glm/gtc/matrix_transform.hpp>
 #include <gtest/gtest.h>
 
+#include "ECS/BuildingSites.h"
 #include "ECS/Components/Construction.h"
 #include "ECS/Components/Dance.h"
+#include "ECS/Components/Fire.h"
 #include "ECS/Components/FishFarm.h"
 #include "ECS/Components/Footpath.h"
 #include "ECS/Components/Mesh.h"
@@ -42,7 +44,10 @@
 #include "ECS/ScriptFind.h"
 #include "ECS/Systems/Implementations/ObjectMeasures.h"
 #include "ECS/Systems/Implementations/WorshipSiteSystem.h"
+#include "ECS/TempleConstruction.h"
 #include "ECS/WorshipSites.h"
+#include "InfoConstants.h"
+#include "Locator.h"
 
 using namespace openblack;
 using namespace openblack::ecs;
@@ -90,6 +95,7 @@ public:
 		return skinned != templeSkins.end() ? skinned->second : 1;
 	}
 	[[nodiscard]] entt::id_type AltarMesh(Tribe tribe) const override { return 100 + static_cast<entt::id_type>(tribe); }
+	[[nodiscard]] float AltarStartLife(Tribe /*tribe*/) const override { return altarStartLife; }
 	[[nodiscard]] float LandHeightAt(glm::vec2 /*point*/) const override { return 0.0f; }
 	[[nodiscard]] uint32_t PopulationOf(entt::entity town) const override
 	{
@@ -127,6 +133,7 @@ public:
 		siteDesires[site] = desire;
 	}
 	void CloseBuildingSite(entt::entity site) override { closedSites.push_back(site); }
+	void MendBy(entt::entity altar, float share) override { mended.emplace_back(altar, share); }
 	void CloseTownsBuildingSite(entt::entity site, entt::entity town) override { closedTownSites.push_back({site, town}); }
 	void RemoveSpellIcons(entt::entity site) override
 	{
@@ -197,6 +204,9 @@ public:
 	std::vector<std::pair<entt::entity, entt::entity>> openedSites;
 	std::unordered_map<entt::entity, float> siteDesires;
 	std::vector<entt::entity> closedSites;
+	/// The life that each altar starts with, and the altars that builders mended, each with its share
+	float altarStartLife {0.75f};
+	std::vector<std::pair<entt::entity, float>> mended;
 	std::vector<std::pair<entt::entity, entt::entity>> closedTownSites;
 	/// The dances removed, each with the towns that still had a site as it went
 	std::vector<std::pair<entt::entity, std::vector<entt::entity>>> removedDances;
@@ -711,6 +721,91 @@ TEST(WorshipSiteSystem, AScriptSetsHowMuchOfASiteIsBuiltAndAtTheWholeItStandsBui
 	f.system->SetBuilt(site, 0.25f);
 	EXPECT_FALSE(f.system->IsBuilt(site));
 	EXPECT_FLOAT_EQ(f.registry.Get<const BuildProgress>(site).built, 0.25f);
+}
+
+TEST(WorshipSiteConstruction, AnAltarIsBuiltOnlyWhenAllOfTheAltarIsBuilt)
+{
+	Locator::entitiesRegistry::emplace<ecs::Registry>();
+	auto& registry = Locator::entitiesRegistry::value();
+	const auto altar = registry.Create();
+	registry.Assign<WorshipAltar>(altar, WorshipAltar {.built = 0.5f});
+	// The altar has no build progress of its own, but it keeps its own built amount
+	EXPECT_FALSE(construction::IsBuilt(altar));
+	EXPECT_FLOAT_EQ(construction::BuiltOf(altar), 0.5f);
+	registry.Get<WorshipAltar>(altar).built = 1.0f;
+	EXPECT_TRUE(construction::IsBuilt(altar));
+	EXPECT_FLOAT_EQ(construction::BuiltOf(altar), 1.0f);
+	Locator::entitiesRegistry::reset();
+}
+
+TEST(WorshipSiteConstruction, AnAltarHasTheBuildingValuesOfItsSitesRow)
+{
+	Locator::entitiesRegistry::emplace<ecs::Registry>();
+	auto info = std::make_unique<InfoConstants>();
+	auto& row = info->worshipSite.at(static_cast<size_t>(Tribe::NORSE));
+	row.maxVillagerNeededToBuild = 3;
+	row.woodValue = 400;
+	Locator::infoConstants::emplace(*info);
+	auto& registry = Locator::entitiesRegistry::value();
+	const auto site = registry.Create();
+	const auto altar = registry.Create();
+	registry.Assign<WorshipSite>(site, WorshipSite {.tribe = Tribe::NORSE, .altar = altar});
+	registry.Assign<Transform>(site, Transform {.scale = glm::vec3(1.5f)});
+	registry.Assign<WorshipAltar>(altar, WorshipAltar {.site = site});
+	registry.Assign<Transform>(altar, Transform {.scale = glm::vec3(1.5f)});
+	// The builders and the wood that a site at the altar wants come from the row of the altar's worship site
+	EXPECT_EQ(construction::MaxBuilders(altar), 3);
+	EXPECT_GT(construction::SiteWoodValue(altar), 0.0f);
+	EXPECT_FLOAT_EQ(construction::SiteWoodValue(altar), construction::SiteWoodValue(site));
+	// An altar with no site has no row
+	registry.Get<WorshipAltar>(altar).site = entt::null;
+	EXPECT_EQ(construction::MaxBuilders(altar), 0);
+	Locator::infoConstants::reset();
+	Locator::entitiesRegistry::reset();
+}
+
+TEST(WorshipSiteSystem, AScriptThatBuildsASiteLeavesItsAltarAsItIs)
+{
+	Fixture f;
+	f.Town(0, PlayerNames::PLAYER_ONE, Tribe::NORSE, {0.0f, 0.0f, -50.0f});
+	const auto temple = f.Temple(PlayerNames::PLAYER_ONE);
+	f.system->AddTemple(temple, 0.0f, true);
+	const auto site = *std::ranges::find_if(f.registry.Get<const CitadelWorship>(temple).sites,
+	                                        [](auto entity) { return entity != entt::null; });
+	const auto altar = f.registry.Get<const WorshipSite>(site).altar;
+	// The altar starts with the life of its tribe's row
+	EXPECT_FLOAT_EQ(f.registry.Get<const ObjectLife>(altar).life, 0.75f);
+	f.system->SetBuilt(site, 1.0f);
+	ASSERT_TRUE(f.system->IsBuilt(site));
+	EXPECT_FLOAT_EQ(f.registry.Get<const WorshipAltar>(altar).built, 0.0f);
+	EXPECT_FALSE(f.registry.AllOf<Mesh>(altar));
+	// The altar shows only when its own builders finish it
+	f.system->BuildAltarBy(altar, 0.5f);
+	EXPECT_FALSE(f.registry.AllOf<Mesh>(altar));
+	f.system->BuildAltarBy(altar, 0.5f);
+	EXPECT_FLOAT_EQ(f.registry.Get<const WorshipAltar>(altar).built, 1.0f);
+	EXPECT_EQ(f.registry.Get<const Mesh>(altar).id, 100u + static_cast<uint32_t>(Tribe::NORSE));
+	EXPECT_TRUE(f.world->mended.empty());
+}
+
+TEST(WorshipSiteSystem, WorkOnABuiltAltarMendsIt)
+{
+	Fixture f;
+	f.Town(0, PlayerNames::PLAYER_ONE, Tribe::NORSE, {0.0f, 0.0f, -50.0f});
+	const auto temple = f.Temple(PlayerNames::PLAYER_ONE);
+	f.system->AddTemple(temple, 0.0f, true);
+	const auto site = *std::ranges::find_if(f.registry.Get<const CitadelWorship>(temple).sites,
+	                                        [](auto entity) { return entity != entt::null; });
+	const auto altar = f.registry.Get<const WorshipSite>(site).altar;
+	// The share that finishes the site and its altar builds them, and mends nothing
+	f.system->BuildBy(site, 1.0f);
+	EXPECT_TRUE(f.registry.AllOf<Mesh>(altar));
+	EXPECT_TRUE(f.world->mended.empty());
+	// Each later share on the site goes on to the built altar, which its builders mend
+	f.system->BuildBy(site, 0.25f);
+	ASSERT_EQ(f.world->mended.size(), 1u);
+	EXPECT_EQ(f.world->mended.front().first, altar);
+	EXPECT_FLOAT_EQ(f.world->mended.front().second, 0.25f);
 }
 
 TEST(WorshipSiteSystem, ASiteWearsItsTemplesSkinOnceTheTempleHasOne)

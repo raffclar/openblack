@@ -434,9 +434,10 @@ void main()
 	// The environment-mapped mode: the environment map's coordinates are where the normal points across and up
 	// the camera's view, from 0 to 0.498. The normal is turned by the model's axes, each made one unit long, so the
 	// model's size has no effect.
-	vec3 axisX = normalize(mul(BONE, vec4(1.0f, 0.0f, 0.0f, 0.0f)).xyz);
-	vec3 axisY = normalize(mul(BONE, vec4(0.0f, 1.0f, 0.0f, 0.0f)).xyz);
-	vec3 axisZ = normalize(mul(BONE, vec4(0.0f, 0.0f, 1.0f, 0.0f)).xyz);
+	// The axes come from the bone of the vertex and from the instance, so the map turns when the object turns.
+	vec3 axisX = normalize(TO_WORLD(vec4(1.0f, 0.0f, 0.0f, 0.0f)).xyz);
+	vec3 axisY = normalize(TO_WORLD(vec4(0.0f, 1.0f, 0.0f, 0.0f)).xyz);
+	vec3 axisZ = normalize(TO_WORLD(vec4(0.0f, 0.0f, 1.0f, 0.0f)).xyz);
 	vec3 turnedNormal = axisX * normal.x + axisY * normal.y + axisZ * normal.z;
 	vec3 viewNormal = mul(u_view, vec4(turnedNormal, 0.0f)).xyz;
 	v_texcoord0 = vec4(a_texcoord0, (viewNormal.xy + 1.0f) * 0.498046875f);
