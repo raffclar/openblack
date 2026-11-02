@@ -265,9 +265,27 @@ void PutSites(ecs::Registry& registry, const world_import::ImportedTowns& import
 				put(opened->piles.front(), file.woodPileValues);
 				continue;
 			}
-			for (size_t i = 0; i < std::min(file.pileValues.size(), opened->piles.size()); ++i)
+			// A pile that the file does not have is not on the site after the load. The site makes its piles again
+			// only when wood comes and no pile is left.
+			const auto count = std::min({file.piles.size(), file.pileValues.size(), opened->piles.size()});
+			for (size_t i = 0; i < count; ++i)
 			{
-				put(opened->piles.at(i), file.pileValues[i]);
+				auto& own = opened->piles.at(i);
+				switch (world_import::SitePileAfterLoad(file.piles[i], file.pileValues[i].has_value()))
+				{
+				case world_import::SitePileLoad::Remove:
+					if (registry.Valid(own) && registry.AllOf<Pot>(own))
+					{
+						ecs::world_objects::Remove(own);
+					}
+					own = entt::null;
+					break;
+				case world_import::SitePileLoad::TakeValues:
+					put(own, file.pileValues[i]);
+					break;
+				case world_import::SitePileLoad::Keep:
+					break;
+				}
 			}
 		}
 	}
