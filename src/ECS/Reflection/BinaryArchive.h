@@ -784,6 +784,16 @@ void detail::SaveValue(BinaryWriter& out, const Type& value)
 			out.WriteRaw(byte);
 		}
 	}
+	else if constexpr (detail::k_IsMap<Type> && detail::k_KeepsKeyOrder<Type>)
+	{
+		// The map keeps its keys in order already, thus it writes the same bytes with no sort
+		out.WriteSize(value.size());
+		for (const auto& [key, mapped] : value)
+		{
+			SaveValue(out, key);
+			SaveValue(out, mapped);
+		}
+	}
 	else if constexpr (detail::k_IsMap<Type>)
 	{
 		out.WriteSize(value.size());
@@ -791,6 +801,14 @@ void detail::SaveValue(BinaryWriter& out, const Type& value)
 		{
 			SaveValue(out, entry->first);
 			SaveValue(out, entry->second);
+		}
+	}
+	else if constexpr (detail::k_IsSet<Type> && detail::k_KeepsKeyOrder<Type>)
+	{
+		out.WriteSize(value.size());
+		for (const auto& key : value)
+		{
+			SaveValue(out, key);
 		}
 	}
 	else if constexpr (detail::k_IsSet<Type>)
