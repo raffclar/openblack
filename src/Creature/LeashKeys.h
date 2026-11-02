@@ -86,6 +86,10 @@ struct KeyCommand
 /// What pressing the shortcut does to the player's creature. The leash key needs the learning leash known, as every
 /// leash does; the picked leash goes on when known, the learning leash otherwise.
 [[nodiscard]] KeyCommand CommandFor(LeashKey key, const KeyState& state);
+
+/// What a click of the action button on the player's own creature does. The click and the leash key are one command:
+/// the click puts the picked leash on, unties a tied leash back to the hand, or takes the worn leash off.
+[[nodiscard]] KeyCommand CommandForClick(const KeyState& state);
 /// The leash one number up or down from the picked one, going round from compassion to aggression and back, if the
 /// creature knows it; none when it doesn't, as the step skips nothing
 [[nodiscard]] std::optional<LeashType> StepType(LeashType selected, const std::bitset<k_Types.size()>& known, bool up);

@@ -74,7 +74,7 @@ public:
 	{
 		BlocksTown,
 		AnyObject,
-		/// Anything fixed, trees too: for a town's temporary pile
+		/// A thing with the fixed mark (a building, a worship site or a rock, but not a tree): for a temporary pile of a town
 		AnyFixed,
 	};
 	/// Whether nothing of the kind stands within a radius of a point, the things' own sizes counted, the cells about it

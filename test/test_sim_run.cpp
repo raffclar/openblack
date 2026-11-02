@@ -178,6 +178,27 @@ TEST(SimRun, TheConditionsSwitchReadsNamesNumbersAndALand)
 	EXPECT_FALSE(ParseConditions("3,WC_HOUSES_BUILT").has_value());
 }
 
+TEST(SimRun, ATempleLossNamesOnePlayerOrARangeOfPlayers)
+{
+	const auto one = ParseTempleLoss("1:300");
+	ASSERT_TRUE(one.has_value());
+	EXPECT_EQ(one->player, 1u);
+	EXPECT_EQ(one->lastPlayer, 1u);
+	EXPECT_EQ(one->turn, 300u);
+	const auto range = ParseTempleLoss("4-32:500");
+	ASSERT_TRUE(range.has_value());
+	EXPECT_EQ(range->player, 4u);
+	EXPECT_EQ(range->lastPlayer, 32u);
+	EXPECT_EQ(range->turn, 500u);
+	// A player after the last god of 32, a range that goes down, or a part with no number does not read
+	EXPECT_FALSE(ParseTempleLoss("33:10").has_value());
+	EXPECT_FALSE(ParseTempleLoss("5-4:10").has_value());
+	EXPECT_FALSE(ParseTempleLoss("-4:10").has_value());
+	EXPECT_FALSE(ParseTempleLoss("4-:10").has_value());
+	EXPECT_FALSE(ParseTempleLoss("4:").has_value());
+	EXPECT_FALSE(ParseTempleLoss("4").has_value());
+}
+
 TEST(SimRun, AConditionWithNoValueKeepsTheFirstValueOfTheLand)
 {
 	using openblack::game_end::Condition;

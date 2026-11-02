@@ -31,14 +31,17 @@
 #include "Creature/CreatureLayers.h"
 #include "ECS/Components/Creature.h"
 #include "ECS/Components/CreatureBody.h"
+#include "ECS/Components/CreatureSpells.h"
 #include "ECS/Components/GodHand.h"
 #include "ECS/Components/Hand.h"
+#include "ECS/Components/HandCreaturePress.h"
 #include "ECS/Components/HandGrab.h"
 #include "ECS/Components/HandLockedCreature.h"
 #include "ECS/Components/HandStillness.h"
 #include "ECS/Components/Player.h"
 #include "ECS/Components/PlayerHands.h"
 #include "ECS/Components/ReportedHand.h"
+#include "ECS/Components/ScriptControl.h"
 #include "ECS/Components/ShownCreatureFace.h"
 #include "ECS/Components/Transform.h"
 #include "ECS/Reflection/ComponentReflection.h"
@@ -680,9 +683,6 @@ TEST_F(ReportedHands, TheHandOfEachGodHoldsItsOwnCreature)
 	EXPECT_FALSE(creatures.GetLockedCreature(PlayerNames::PLAYER_TWO).has_value());
 	EXPECT_FALSE(creatures.IsLocked(own));
 	const auto hands = _hands.MakeHandsOf(PlayerNames::PLAYER_TWO);
-	// The first player's hand may not hold the creature of the second player
-	creatures.DoLock(PlayerNames::PLAYER_ONE, own);
-	EXPECT_FALSE(creatures.IsLocked(own));
 	creatures.DoLock(PlayerNames::PLAYER_TWO, own);
 	EXPECT_EQ(creatures.GetLockedCreature(PlayerNames::PLAYER_TWO), own);
 	EXPECT_FALSE(creatures.GetLockedCreature(PlayerNames::PLAYER_ONE).has_value());
@@ -701,17 +701,126 @@ TEST_F(ReportedHands, TheHandOfEachGodHoldsItsOwnCreature)
 	}
 }
 
-TEST_F(ReportedHands, TheWorldHoldsNoCreatureOfAnotherPlayer)
+// With the leash held loose, a press on the own creature waits for a tap. Only a press that lasts longer than the wait
+// sends the hold, and the time of the press is no longer than the game turns allow.
+TEST_F(ReportedHands, APressThatWaitsForATapHoldsOnlyAfterTheWait)
 {
 	auto& registry = Locator::entitiesRegistry::value();
 	Locator::handSystem::reset(&_hands, [](ecs::systems::HandSystemInterface* /*unowned*/) {});
+	const auto log = spdlog::get("game") != nullptr ? nullptr : spdlog::null_logger_mt("game");
 	const auto creature = registry.Create();
-	registry.Assign<ecs::components::Creature>(creature, ecs::components::Creature {.owner = PlayerNames::PLAYER_TWO});
-	// The refusal is written to the game's log
+	registry.Assign<ecs::components::Creature>(creature, ecs::components::Creature {.owner = PlayerNames::PLAYER_ONE});
+	ecs::systems::CreatureHandSystem creatures;
+	creatures.WaitForTap(creature, 1000, 10);
+	// The clock is far on, but only one turn went by
+	creatures.WaitFrame(5000, 10);
+	EXPECT_TRUE(registry.AllOf<ecs::components::HandCreaturePress>(_hand));
+	EXPECT_FALSE(creatures.GetLockedCreature(PlayerNames::PLAYER_ONE).has_value());
+	// 225 ms is not longer than the wait
+	creatures.WaitFrame(1225, 12);
+	EXPECT_FALSE(creatures.GetCreature().has_value());
+	EXPECT_FALSE(creatures.GetLockedCreature(PlayerNames::PLAYER_ONE).has_value());
+	// 226 ms is longer: the hand holds the creature that it pressed
+	creatures.WaitFrame(1226, 12);
+	EXPECT_EQ(creatures.GetCreature(), creature);
+	EXPECT_EQ(creatures.GetLockedCreature(PlayerNames::PLAYER_ONE), creature);
+	EXPECT_FALSE(registry.AllOf<ecs::components::HandCreaturePress>(_hand));
+	// The press does not wait any more, so its release is not a tap
+	EXPECT_FALSE(creatures.ReleaseWait().has_value());
+	Locator::handSystem::reset();
+	if (log != nullptr)
+	{
+		spdlog::drop("game");
+	}
+}
+
+// A press that waits for a tap and is let go before the wait ends is a tap on its creature, and it holds nothing
+TEST_F(ReportedHands, APressLetGoWhileItWaitsIsATap)
+{
+	auto& registry = Locator::entitiesRegistry::value();
+	Locator::handSystem::reset(&_hands, [](ecs::systems::HandSystemInterface* /*unowned*/) {});
+	const auto log = spdlog::get("game") != nullptr ? nullptr : spdlog::null_logger_mt("game");
+	const auto creature = registry.Create();
+	registry.Assign<ecs::components::Creature>(creature, ecs::components::Creature {.owner = PlayerNames::PLAYER_ONE});
+	ecs::systems::CreatureHandSystem creatures;
+	EXPECT_FALSE(creatures.ReleaseWait().has_value());
+	creatures.WaitForTap(creature, 1000, 10);
+	creatures.WaitFrame(1100, 10);
+	EXPECT_EQ(creatures.ReleaseWait(), creature);
+	// Later frames hold nothing
+	creatures.WaitFrame(2000, 30);
+	EXPECT_FALSE(creatures.GetCreature().has_value());
+	EXPECT_FALSE(creatures.GetLockedCreature(PlayerNames::PLAYER_ONE).has_value());
+	Locator::handSystem::reset();
+	if (log != nullptr)
+	{
+		spdlog::drop("game");
+	}
+}
+
+// The turn does not ask again what the press asked. It holds a creature that changed after the press, and the
+// creature of another player that the press sent.
+TEST_F(ReportedHands, TheTurnHoldsTheCreatureThatThePressSent)
+{
+	auto& registry = Locator::entitiesRegistry::value();
+	Locator::handSystem::reset(&_hands, [](ecs::systems::HandSystemInterface* /*unowned*/) {});
 	const auto log = spdlog::get("game") != nullptr ? nullptr : spdlog::null_logger_mt("game");
 	ecs::systems::CreatureHandSystem creatures;
-	creatures.DoLock(PlayerNames::PLAYER_ONE, creature);
+	const auto makeCreature = [&registry](PlayerNames owner, CreatureType species) {
+		const auto creature = registry.Create();
+		registry.Assign<ecs::components::Creature>(creature, ecs::components::Creature {.owner = owner, .species = species});
+		return creature;
+	};
+	const auto frozen = makeCreature(PlayerNames::PLAYER_ONE, CreatureType::Tiger);
+	registry.Assign<ecs::components::CreatureSpells>(frozen).spells[creature_spells::Spell::Freeze].phase =
+	    creature_spells::Phase::Holding;
+	const auto scripted = makeCreature(PlayerNames::PLAYER_ONE, CreatureType::Tiger);
+	registry.Assign<ecs::components::ScriptControlled>(scripted);
+	const auto notToPickUp = makeCreature(PlayerNames::PLAYER_ONE, CreatureType::Tiger);
+	registry.Assign<ecs::components::CannotBePickedUp>(notToPickUp);
+	const auto ogre = makeCreature(PlayerNames::PLAYER_ONE, CreatureType::Ogre);
+	const auto theirs = makeCreature(PlayerNames::PLAYER_TWO, CreatureType::Tiger);
+	const auto nobodys = makeCreature(PlayerNames::NEUTRAL, CreatureType::Tiger);
+	for (const auto creature : {frozen, scripted, notToPickUp, ogre, theirs, nobodys})
+	{
+		creatures.DoLock(PlayerNames::PLAYER_ONE, creature);
+		EXPECT_EQ(creatures.GetLockedCreature(PlayerNames::PLAYER_ONE), creature);
+		EXPECT_TRUE(creatures.IsLocked(creature));
+		creatures.DoUnlock(PlayerNames::PLAYER_ONE, creature);
+		EXPECT_FALSE(creatures.IsLocked(creature));
+	}
+	Locator::handSystem::reset();
+	if (log != nullptr)
+	{
+		spdlog::drop("game");
+	}
+}
+
+// The turn refuses a creature that is not in the world any more, and one that a hand already holds
+TEST_F(ReportedHands, TheTurnRefusesAGoneCreatureAndOneThatAHandHolds)
+{
+	auto& registry = Locator::entitiesRegistry::value();
+	Locator::handSystem::reset(&_hands, [](ecs::systems::HandSystemInterface* /*unowned*/) {});
+	const auto log = spdlog::get("game") != nullptr ? nullptr : spdlog::null_logger_mt("game");
+	ecs::systems::CreatureHandSystem creatures;
+	const auto gone = registry.Create();
+	registry.Assign<ecs::components::Creature>(gone, ecs::components::Creature {.owner = PlayerNames::PLAYER_ONE});
+	registry.Destroy(gone);
+	creatures.DoLock(PlayerNames::PLAYER_ONE, gone);
 	EXPECT_FALSE(creatures.GetLockedCreature(PlayerNames::PLAYER_ONE).has_value());
+	// A thing that is not a creature is not one that the hand holds
+	creatures.DoLock(PlayerNames::PLAYER_ONE, registry.Create());
+	EXPECT_FALSE(creatures.GetLockedCreature(PlayerNames::PLAYER_ONE).has_value());
+	// The hand of the second god holds the creature first. The lock of the first player comes too late.
+	const auto shared = registry.Create();
+	registry.Assign<ecs::components::Creature>(shared, ecs::components::Creature {.owner = PlayerNames::PLAYER_TWO});
+	const auto hands = _hands.MakeHandsOf(PlayerNames::PLAYER_TWO);
+	creatures.DoLock(PlayerNames::PLAYER_TWO, shared);
+	creatures.DoLock(PlayerNames::PLAYER_ONE, shared);
+	EXPECT_EQ(creatures.GetLockedCreature(PlayerNames::PLAYER_TWO), shared);
+	EXPECT_FALSE(creatures.GetLockedCreature(PlayerNames::PLAYER_ONE).has_value());
+	EXPECT_FALSE(registry.AllOf<ecs::components::HandLockedCreature>(_hand));
+	EXPECT_TRUE(registry.AllOf<ecs::components::HandLockedCreature>(hands[0]));
 	Locator::handSystem::reset();
 	if (log != nullptr)
 	{

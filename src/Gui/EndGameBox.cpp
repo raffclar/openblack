@@ -153,16 +153,16 @@ bool EndGameBox::OpenTab(size_t tab)
 	}
 }
 
-bool EndGameBox::MoveGodWindow(int pages)
+bool EndGameBox::ScrollGodWindow(int notches)
 {
 	if (!_open || (!_showsStatistics && !_showsConditions))
 	{
 		return false;
 	}
 	auto& window = _showsStatistics ? _statistics->GetGodWindow() : _conditions->GetGodWindow();
-	const auto first = window.GetFirst();
-	window.Move(pages);
-	return window.GetFirst() != first;
+	const auto scroll = window.GetScroll();
+	window.Wheel(-notches, 0);
+	return window.GetScroll() != scroll;
 }
 
 void EndGameBox::OpenConditions()
@@ -227,6 +227,15 @@ void EndGameBox::MouseDown(glm::ivec2 point)
 bool EndGameBox::MouseUp(glm::ivec2 point)
 {
 	return _open && CurrentDialog().MouseUp(point);
+}
+
+void EndGameBox::Wheel(int steps, int across)
+{
+	// The box takes the place of the pointer from its moves, which also come from the tools that move the pointer
+	if (_open)
+	{
+		CurrentDialog().Wheel(steps, across);
+	}
 }
 
 std::vector<Dialog::NamedControl> EndGameBox::GetNamedControls() const

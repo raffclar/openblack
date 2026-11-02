@@ -52,6 +52,7 @@
 #include "ECS/DiscipleSymbol.h"
 #include "ECS/DiscipleWorkRules.h"
 #include "ECS/DrawnRegistry.h"
+#include "ECS/FixedKinds.h"
 #include "ECS/GameEndConditions.h"
 #include "ECS/HandPlayer.h"
 #include "ECS/Map.h"
@@ -990,7 +991,9 @@ uint32_t villager_disciple::InspectObject(LivingAction& action)
 	if (villager_animate::IsReadyForNewAnimation(action))
 	{
 		registry.Remove<DiscipleInspect>(villager);
-		if (TypeOf(villager) == Builder && thing != entt::null && world_objects::IsBuilding(thing) &&
+		// A builder tries to build or repair any thing with the fixed mark that it looks at. Its town opens a site there
+		// first, also at a thing that is whole.
+		if (TypeOf(villager) == Builder && thing != entt::null && fixed_kinds::IsFixedKind(registry, thing) &&
 		    villager_build::TakeUpSite(action, thing) == 1)
 		{
 			return 1;

@@ -18,6 +18,7 @@
 #include "Creature/CreatureHandRules.h"
 #include "Creature/LeashKeys.h"
 #include "Creature/LeashOwnership.h"
+#include "Creature/LeashTakeOff.h"
 #include "Input/GameActionMap.h"
 
 using namespace openblack;
@@ -216,6 +217,50 @@ TEST(LeashKeys, TheLeashKeyTakesTheLeashOffHoweverManyItKnows)
 	          (KeyCommand {.kind = Kind::TakeOff}));
 }
 
+TEST(LeashKeys, AClickOnTheCreatureIsTheLeashKey)
+{
+	const auto all = Knowing({LeashType::Evil, LeashType::Rope, LeashType::Good});
+	// Off: the picked leash goes on, or the learning leash when it does not know the picked one
+	EXPECT_EQ(CommandForClick({.known = all, .selected = LeashType::Evil}),
+	          (KeyCommand {.kind = Kind::PutOn, .type = LeashType::Evil}));
+	EXPECT_EQ(CommandForClick({.known = Knowing({LeashType::Rope}), .selected = LeashType::Good}),
+	          (KeyCommand {.kind = Kind::PutOn, .type = LeashType::Rope}));
+	// Worn: the leash comes off, whichever leash it is
+	for (const auto type : {LeashType::Evil, LeashType::Rope, LeashType::Good})
+	{
+		EXPECT_EQ(CommandForClick({.worn = true, .known = all, .selected = type}), (KeyCommand {.kind = Kind::TakeOff}));
+	}
+	// Tied: the leash comes back to the hand
+	EXPECT_EQ(CommandForClick({.worn = true, .tied = true, .known = all}), (KeyCommand {.kind = Kind::UntieToHand}));
+	// With no learning leash known, the click does nothing
+	EXPECT_EQ(CommandForClick({.known = Knowing({LeashType::Good})}), KeyCommand {});
+	// Every state gives the command of the leash key
+	for (const bool worn : {false, true})
+	{
+		for (const bool tied : {false, true})
+		{
+			const KeyState state {.worn = worn, .tied = worn && tied, .known = all, .selected = LeashType::Good};
+			EXPECT_EQ(CommandForClick(state), CommandFor(LeashKey::Leash, state));
+		}
+	}
+}
+
+TEST(LeashTakeOff, TheMindForgetsTheLeash)
+{
+	ecs::components::CreatureMindState mind;
+	mind.leash.learningInHand = true;
+	mind.leash.miracleSightingWeight = MiracleSightingWeight(true);
+	mind.ledByLeash = true;
+	mind.leftAreaActions = {false, true, true};
+	ForgetLeash(mind);
+	EXPECT_FALSE(mind.leash.learningInHand);
+	EXPECT_EQ(mind.leash.miracleSightingWeight, MiracleSightingWeight(false));
+	// The leash no longer leads the plan
+	EXPECT_FALSE(mind.ledByLeash);
+	// The actions that the area refused are possible again
+	EXPECT_TRUE(mind.leftAreaActions.empty());
+}
+
 TEST(CreatureHand, ALeashedCreatureIsHeldAsUsual)
 {
 	using creature_hand::CreaturePress;
@@ -238,13 +283,24 @@ TEST(CreatureHand, TheHandHoldsOnlyItsOwnPlayersCreature)
 	EXPECT_FALSE(MayHold({.owner = PlayerNames::PLAYER_FOUR, .species = CreatureType::Wolf}, k_Hand));
 	// Another god's hand holds that god's own
 	EXPECT_TRUE(MayHold({.owner = PlayerNames::PLAYER_THREE, .species = CreatureType::Tortoise}, PlayerNames::PLAYER_THREE));
-	// Not nobody's, nor an ogre, nor one asleep or frozen
+	// Not nobody's, nor an ogre, nor one frozen
 	EXPECT_FALSE(MayHold({.owner = PlayerNames::NEUTRAL, .species = CreatureType::Tiger}, k_Hand));
 	EXPECT_FALSE(MayHold({.owner = PlayerNames::PLAYER_ONE, .species = CreatureType::Ogre}, k_Hand));
-	EXPECT_FALSE(MayHold({.owner = PlayerNames::PLAYER_ONE, .species = CreatureType::Tiger, .asleep = true}, k_Hand));
 	EXPECT_FALSE(MayHold({.owner = PlayerNames::PLAYER_ONE, .species = CreatureType::Tiger, .frozen = true}, k_Hand));
+	// Nor one that a script made a thing the hand cannot pick up
+	EXPECT_FALSE(MayHold({.owner = PlayerNames::PLAYER_ONE, .species = CreatureType::Tiger, .cannotBePickedUp = true}, k_Hand));
 	// Nor one out cold in a faint
 	EXPECT_FALSE(MayHold({.owner = PlayerNames::PLAYER_ONE, .species = CreatureType::Tiger, .fainting = true}, k_Hand));
+}
+
+// The turn that does a hold refuses only a creature that is not in the world any more, or one that a hand holds
+TEST(CreatureHand, TheTurnRefusesOnlyAGoneCreatureOrAHeldOne)
+{
+	using creature_hand::TurnTakesHold;
+	EXPECT_TRUE(TurnTakesHold(true, false));
+	EXPECT_FALSE(TurnTakesHold(true, true));
+	EXPECT_FALSE(TurnTakesHold(false, false));
+	EXPECT_FALSE(TurnTakesHold(false, true));
 }
 
 TEST(CreatureHand, TheHandHoldsTheCreatureOfAnAlliedGodAsItsOwn)
@@ -255,7 +311,7 @@ TEST(CreatureHand, TheHandHoldsTheCreatureOfAnAlliedGodAsItsOwn)
 	EXPECT_TRUE(MayHold(lethys, k_Hand, true));
 	EXPECT_FALSE(MayHold(lethys, k_Hand, false));
 	// An ally's creature that does not take hold is not held
-	EXPECT_FALSE(MayHold({.owner = PlayerNames::PLAYER_TWO, .species = CreatureType::Cow, .asleep = true}, k_Hand, true));
+	EXPECT_FALSE(MayHold({.owner = PlayerNames::PLAYER_TWO, .species = CreatureType::Cow, .frozen = true}, k_Hand, true));
 	EXPECT_FALSE(
 	    MayHold({.owner = PlayerNames::PLAYER_TWO, .species = CreatureType::Cow, .scriptControlled = true}, k_Hand, true));
 	EXPECT_FALSE(MayHold({.owner = PlayerNames::PLAYER_TWO, .species = CreatureType::Ogre}, k_Hand, true));
@@ -284,14 +340,14 @@ TEST(CreatureHand, TheInteractTipShowsTheActionButtonOnlyWhereTheHandCanTakeHold
 	using creature_hand::InteractTipOf;
 	const Holdable own {.owner = PlayerNames::PLAYER_ONE, .species = CreatureType::Tiger};
 	const Holdable other {.owner = PlayerNames::PLAYER_THREE, .species = CreatureType::Tiger};
-	const Holdable asleep {.owner = PlayerNames::PLAYER_ONE, .species = CreatureType::Tiger, .asleep = true};
+	const Holdable frozen {.owner = PlayerNames::PLAYER_ONE, .species = CreatureType::Tiger, .frozen = true};
 	// Within the influence, over a creature that takes hold: the Action button
 	EXPECT_EQ(InteractTipOf(PlayerNames::PLAYER_ONE, own, false, true), InteractTip::WithAction);
 	EXPECT_EQ(InteractTipOf(PlayerNames::PLAYER_ONE, other, false, true), InteractTip::WithAction);
 	// Out of the influence, the player's own creature: the words with no mouse
 	EXPECT_EQ(InteractTipOf(PlayerNames::PLAYER_ONE, own, false, false), InteractTip::WordsOnly);
 	// A creature that does not take hold: the words with no mouse
-	EXPECT_EQ(InteractTipOf(PlayerNames::PLAYER_ONE, asleep, false, true), InteractTip::WordsOnly);
+	EXPECT_EQ(InteractTipOf(PlayerNames::PLAYER_ONE, frozen, false, true), InteractTip::WordsOnly);
 	// No tooltip
 	EXPECT_EQ(InteractTipOf(PlayerNames::PLAYER_ONE, other, false, false), InteractTip::None);
 	EXPECT_EQ(InteractTipOf(PlayerNames::PLAYER_ONE, own, true, true), InteractTip::None);
@@ -306,11 +362,11 @@ TEST(CreatureHand, TheInteractTipIsNeverForACreatureUnderAScriptsControl)
 	EXPECT_FALSE(ShowsInteractTip(PlayerNames::PLAYER_ONE, own, false, false));
 }
 
-TEST(CreatureHand, ASleepingCreatureStillShowsTheInteractTip)
+TEST(CreatureHand, AFrozenCreatureStillShowsTheInteractTip)
 {
 	using creature_hand::Holdable;
 	using creature_hand::ShowsInteractTip;
-	const Holdable own {.owner = PlayerNames::PLAYER_ONE, .species = CreatureType::Tiger, .asleep = true};
+	const Holdable own {.owner = PlayerNames::PLAYER_ONE, .species = CreatureType::Tiger, .frozen = true};
 	const Holdable other {.owner = PlayerNames::PLAYER_THREE, .species = CreatureType::Tiger, .frozen = true};
 	EXPECT_TRUE(ShowsInteractTip(PlayerNames::PLAYER_ONE, own, false, false));
 	EXPECT_TRUE(ShowsInteractTip(PlayerNames::PLAYER_ONE, own, false, true));
@@ -327,14 +383,46 @@ TEST(CreatureHand, ACreatureAlreadyHeldOffersNoInteractTipWithinTheInfluence)
 	// Outside it the own creature is offered whatever holds it
 	EXPECT_TRUE(ShowsInteractTip(PlayerNames::PLAYER_ONE, own, true, false));
 	// One that wouldn't take hold isn't held by the hand in the first place, and is offered
-	const Holdable asleep {.owner = PlayerNames::PLAYER_ONE, .species = CreatureType::Tiger, .asleep = true};
-	EXPECT_TRUE(ShowsInteractTip(PlayerNames::PLAYER_ONE, asleep, true, true));
+	const Holdable frozen {.owner = PlayerNames::PLAYER_ONE, .species = CreatureType::Tiger, .frozen = true};
+	EXPECT_TRUE(ShowsInteractTip(PlayerNames::PLAYER_ONE, frozen, true, true));
 }
 
 TEST(CreatureHand, ACreatureUnderAScriptsControlCantBeHeld)
 {
 	EXPECT_FALSE(creature_hand::MayHold(
 	    {.owner = PlayerNames::PLAYER_ONE, .species = CreatureType::Tiger, .scriptControlled = true}, PlayerNames::PLAYER_ONE));
+}
+
+// A creature that sleeps takes hold: only a faint, the freeze, a script or an ogre stop the hold
+TEST(CreatureHand, ASleepingCreatureTakesHold)
+{
+	EXPECT_TRUE(creature_hand::TakesHold({.owner = PlayerNames::PLAYER_ONE, .species = CreatureType::Tiger}));
+	EXPECT_FALSE(
+	    creature_hand::TakesHold({.owner = PlayerNames::PLAYER_ONE, .species = CreatureType::Tiger, .fainting = true}));
+	// A script stops the pick up, not the hold that the tooltip shows
+	EXPECT_TRUE(
+	    creature_hand::TakesHold({.owner = PlayerNames::PLAYER_ONE, .species = CreatureType::Tiger, .cannotBePickedUp = true}));
+}
+
+// The press on a creature: with the leash held loose, the hand waits for a tap on a creature that it may hold, and taps
+// at once a creature that it may not hold. Without the leash held loose, the press holds or does nothing.
+TEST(CreatureHand, TheLooseLeashMakesThePressOnACreatureATapFirst)
+{
+	using creature_hand::PressStart;
+	using creature_hand::PressStartOn;
+	EXPECT_EQ(PressStartOn(true, false), PressStart::Hold);
+	EXPECT_EQ(PressStartOn(true, true), PressStart::WaitForTap);
+	EXPECT_EQ(PressStartOn(false, true), PressStart::TapAtOnce);
+	EXPECT_EQ(PressStartOn(false, false), PressStart::Nothing);
+}
+
+// The wait for a tap ends with the hold only when the press lasts longer than 225 ms
+TEST(CreatureHand, ThePressHoldsOnlyAfterLongerThanTheWait)
+{
+	EXPECT_EQ(creature_hand::k_TapWaitMs, 225U);
+	EXPECT_FALSE(creature_hand::HoldsAfterWait(0));
+	EXPECT_FALSE(creature_hand::HoldsAfterWait(225));
+	EXPECT_TRUE(creature_hand::HoldsAfterWait(226));
 }
 
 TEST(CreatureHand, AQuickPressIsAClickAndALongOneAHold)

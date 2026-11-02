@@ -87,6 +87,16 @@ CheckBoxGods GodsOfCheckBoxes(const Figures& figures, size_t windowFirst)
 	return boxes;
 }
 
+std::u16string GodLabel(const Figures& figures, size_t god)
+{
+	size_t number = god;
+	if (god < figures.gods.size())
+	{
+		number = player_slots::SlotOfPlayer(figures.gods.at(god).player).value_or(god);
+	}
+	return u"Player " + Unsigned(static_cast<uint32_t>(number + 1));
+}
+
 std::u16string CheckBoxLabel(const Figures& figures, const CheckBoxGods& boxes, size_t box)
 {
 	size_t number = box;

@@ -833,7 +833,8 @@ struct Command
 		/// impressed. Needs no creature
 		SetTownBeliefInRival,
 		/// The scenario's temple (value: its place in the scenario's temples) starts being destroyed, as when its heart
-		/// loses the last of its life. Needs no creature
+		/// loses the last of its life. When the scenario made no temples, the value is a god slot, and the land's temple
+		/// of that god starts its destruction. Needs no creature
 		DestroyTemple,
 		/// A script tells the creature to play an animation (value) some times (amount, rounded), as "play 47 loop 1"
 		/// does: a static action's start, loop and end, or an individual action
@@ -1088,8 +1089,9 @@ struct Command
 		JoinOnline,
 		/// The end box: the question to leave a network game opens (value 0), as Exit Online Game opens it, or the open
 		/// end box opens the box of one of its tabs (value 1 Multiplayer, 2 Statistics), as a click on the tab does.
-		/// Value 3 opens the main menu as it shows in a network game. Value 4 moves the window of gods of the open box of a
-		/// tab a page on, as a click on its right arrow does. Needs no creature.
+		/// Value 3 opens the main menu as it shows in a network game. A value of 4 or more scrolls the window of gods of the
+		/// open box of a tab on, as the mouse wheel over its god columns does: one notch for each unit over 3. Needs no
+		/// creature.
 		EndBox,
 		/// The god of the player (player) brings a creature as it does at the start of a network game. The mind file
 		/// (mindFile) of the creature mind folder of the game takes the place of the creature file of the god's player.
@@ -1490,6 +1492,8 @@ void AddJoinOnlineScenarios(std::vector<Scenario>& all);
 void AddWorldSoundScenarios(std::vector<Scenario>& all);
 /// A town given miracles by the debug tool, and its worship site going up
 void AddTownMiracleScenarios(std::vector<Scenario>& all);
+/// The things that the game marks as fixed to the land: a forest miracle by a hut, a temporary pile by a worship site
+void AddFixedKindScenarios(std::vector<Scenario>& all);
 /// The town of the player that the scenarios of worship site icons use: a Norse town centre with a hut and three
 /// villagers. With the temple at k_WorshipTemple, its worship site goes up by the temple.
 [[nodiscard]] std::vector<ObjectSetup> WorshipTown();

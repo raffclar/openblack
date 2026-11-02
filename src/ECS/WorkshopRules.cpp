@@ -242,6 +242,17 @@ workshop::JoinedTown workshop::TownOfJoined(const JoinedTownFacts& facts)
 	return facts.heldValue > facts.targetValue ? JoinedTown::Held : JoinedTown::Target;
 }
 
+workshop::JoinSound workshop::JoinSoundOf(uint32_t step, entt::entity held, glm::vec3 hand)
+{
+	return {.sample = k_FirstJoinSample + (step % k_JoinSamples),
+	        .options = {.position = hand, .owner = held, .follows = audio::Follows::Nothing}};
+}
+
+uint32_t workshop::NextJoinSound(uint32_t step)
+{
+	return (step + 1) % k_JoinSamples;
+}
+
 bool workshop::InClearingReach(float distance, float thingRadius, float reach)
 {
 	return distance - thingRadius <= reach;
@@ -281,7 +292,7 @@ workshop::ClearingAction workshop::ClearingActionFor(const ClearingFacts& facts)
 	{
 		return ClearingAction::LeaveAlone;
 	}
-	return !facts.held && facts.canFly ? ClearingAction::Push : ClearingAction::Remove;
+	return !facts.fixed && !facts.held && facts.canFly ? ClearingAction::Push : ClearingAction::Remove;
 }
 
 uint32_t workshop::FoundedTownId(std::span<const uint32_t> usedIds)

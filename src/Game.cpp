@@ -367,6 +367,7 @@
 #include "Parsers/InfoFile.h"
 #include "Particles/LiquidParticles.h"
 #include "Physics/Materials.h"
+#include "PlayerSlots.h"
 #include "Profiler.h"
 #include "Resources/Loaders.h"
 #include "Resources/ResourcesInterface.h"
@@ -706,7 +707,7 @@ gui::conditions_box::Figures ConditionsFigures()
 				}
 			}
 		}
-		if (!game_end::CanLose(god) && !networkGame)
+		if (!game_end::CanLose(god, networkGame))
 		{
 			continue;
 		}
@@ -1010,6 +1011,12 @@ bool Game::ProcessEvents(const SDL_Event& event) noexcept
 		magic.ReleaseAction();
 		// Let go quickly on a fireball, it is tapped
 		magic.ReleaseFireBall(machine_clock::Ticks(), Locator::time::value().GetTurn());
+		// Let go while a press on a creature waits, the press is a tap. The held leash takes it as an order to act on the
+		// creature.
+		if (const auto tapped = creatureHand.ReleaseWait(); tapped.has_value())
+		{
+			Locator::leashSystem::value().TapThing(LocalInputPlayer(), *tapped);
+		}
 	}
 	if (handTakesPresses && !inTemple && event.type == SDL_MOUSEBUTTONDOWN && event.button.button == SDL_BUTTON_RIGHT &&
 	    !Locator::debugGui::value().IsMouseOverWindow())
@@ -1097,11 +1104,23 @@ bool Game::ProcessEvents(const SDL_Event& event) noexcept
 				{
 					handGrab->ClickThing(*under);
 				}
-				if (!creatureHand.Grab())
+				// With the leash of the player's creature held loose (not tied), a press on a creature that the hand may
+				// hold first waits for a tap. A press on a creature that the hand may not hold sends no leash click.
+				const bool leashHeldLoose = own.has_value() && leashes.HolderPoint(*own).has_value();
+				switch (creature_hand::PressStartOn(creatureHand.MayHold(*under), leashHeldLoose))
 				{
-					// A creature the hand may not hold: a click on it still asks the leash, which says why not. The leash
-					// hears the click at the start of a later turn, as a command of the player.
-					Locator::playerCommandSystem::value().Submit(player_commands::LeashTap {.creature = *under});
+				case creature_hand::PressStart::Hold:
+					creatureHand.Grab();
+					break;
+				case creature_hand::PressStart::WaitForTap:
+					creatureHand.WaitForTap(*under, machine_clock::Ticks(), Locator::time::value().GetTurn());
+					break;
+				case creature_hand::PressStart::TapAtOnce:
+					// The leash takes the tap as an order to act on the creature
+					Locator::leashSystem::value().TapThing(LocalInputPlayer(), *under);
+					break;
+				case creature_hand::PressStart::Nothing:
+					break;
 				}
 			}
 		}
@@ -2819,7 +2838,8 @@ void Game::FollowGameEnd()
 		return;
 	}
 	const auto local = LocalGodForGameEnd();
-	const auto opened = end_game_box::Follow(events, local, _endGameBoxState);
+	const bool networkGame = Locator::time::has_value() && Locator::time::value().IsNetworkGame();
+	const auto opened = end_game_box::Follow(events, local, networkGame, _endGameBoxState);
 
 	// The name of a god: the name of the player of its slot in a network game, the profile's name for the god of this
 	// computer in another game
@@ -2828,10 +2848,11 @@ void Game::FollowGameEnd()
 		std::optional<std::u16string> human;
 		if (session != nullptr && session->GetStart().has_value())
 		{
+			// The names follow the god slots: the gods after the neutral player have the slot before their number
 			const auto& names = session->GetStart()->names;
-			if (static_cast<size_t>(god) < names.size())
+			if (const auto slot = player_slots::SlotOfPlayer(god); slot.has_value() && *slot < names.size())
 			{
-				human = gui::ToUtf16(names.at(static_cast<size_t>(god)));
+				human = gui::ToUtf16(names.at(*slot));
 			}
 		}
 		else if (god == local && profile.has_value())
@@ -2851,16 +2872,17 @@ void Game::FollowGameEnd()
 	const auto& texts = _interface->GetTexts();
 	const auto winner = gameEnd.LastGodIn();
 	const auto winnerName = winner.has_value() ? nameOf(*winner) : std::u16string();
-	const auto title = end_game_box::Title(opened.endBox->kind, end_game_box::LooksOn(local), winnerName,
+	const bool looksOn = end_game_box::LooksOn(local, networkGame);
+	const auto title = end_game_box::Title(opened.endBox->kind, looksOn, winnerName,
 	                                       {.leave = texts.Get("HELP_TEXT_DIALOG_AREYOUSUREQUIT"),
 	                                        .lost = texts.Get("HELP_TEXT_DIALOG_ADDITION_152"),
 	                                        .won = texts.Get("HELP_TEXT_WIN_GAME_04"),
 	                                        .gameOver = texts.Get("HELP_TEXT_GAME_OVER"),
 	                                        .winnerFormat = u"%s - %s Won"});
-	// The band under the title has the colour of the player's god. A looker-on has no god among the four, and its
-	// band is not drawn (vanilla-bugs 470).
+	// The band under the title has the colour of the player's god. A looker-on has no god that takes part, and the game
+	// does not draw its band (vanilla-bugs 470).
 	const auto landNumber = Locator::entitiesRegistry::value().Context().mapScriptGlobals.landNumber;
-	const auto colour = end_game_box::LooksOn(local) ? glm::vec4(0.0f) : gui::statistics_box::PlayerColour(local, landNumber);
+	const auto colour = looksOn ? glm::vec4(0.0f) : gui::statistics_box::PlayerColour(local, landNumber);
 	_interface->OpenEndGameBox({.box = *opened.endBox, .title = title, .colour = colour});
 	SPDLOG_LOGGER_INFO(spdlog::get("game"), "The end box opens for player {}: {}", static_cast<int>(local), gui::ToUtf8(title));
 	// The end box of a decided game asks the game server to stop the turns of the game
@@ -3952,6 +3974,11 @@ void Game::UpdateHandFrame(std::chrono::microseconds deltaTime)
 			}
 			// A fireball pressed long enough is taken, which catches it
 			Locator::magicSystem::value().HoldFireBall(machine_clock::Ticks(), Locator::time::value().GetTurn());
+			// A press on a creature that waits for a tap and lasts long enough sends the hold
+			if (Locator::creatureHandSystem::has_value())
+			{
+				Locator::creatureHandSystem::value().WaitFrame(machine_clock::Ticks(), Locator::time::value().GetTurn());
+			}
 			{
 				// The hand and the piles show their miracles
 				auto miracleFx = profiler.BeginScoped(Profiler::Stage::MiracleFxUpdate);
@@ -6144,7 +6171,9 @@ void Game::AskToLeaveNetworkGame()
 	    {.leave = texts.Get("HELP_TEXT_DIALOG_AREYOUSUREQUIT"), .lost = {}, .won = {}, .gameOver = {}, .winnerFormat = {}});
 	const auto local = LocalGodForGameEnd();
 	const auto landNumber = Locator::entitiesRegistry::value().Context().mapScriptGlobals.landNumber;
-	const auto colour = end_game_box::LooksOn(local) ? glm::vec4(0.0f) : gui::statistics_box::PlayerColour(local, landNumber);
+	const bool networkGame = Locator::time::has_value() && Locator::time::value().IsNetworkGame();
+	const auto colour =
+	    end_game_box::LooksOn(local, networkGame) ? glm::vec4(0.0f) : gui::statistics_box::PlayerColour(local, landNumber);
 	_interface->OpenEndGameBox({.box = box, .title = title, .colour = colour});
 	SPDLOG_LOGGER_INFO(spdlog::get("game"), "The end box asks the question to leave the network game");
 }
@@ -6247,11 +6276,12 @@ void Game::LeaveAsAPlayerDoes()
 
 PlayerNames Game::LocalGodForGameEnd() const
 {
-	// A looker-on of a network game has no god: the game names it player seven
+	// A looker-on of a network game has no god. The original game names it player seven. In a network game every god
+	// takes part, and player seven can be a god, so the looker-on gets the neutral player, which is no god.
 	const auto* session = Locator::networkGame::has_value() ? Locator::networkGame::value().Session() : nullptr;
 	const bool looksOn =
 	    session != nullptr && session->GetJoined().has_value() && session->GetJoined()->role == game_socket::Role::Observer;
-	return looksOn ? PlayerNames::PLAYER_SEVEN : LocalInputPlayer();
+	return looksOn ? PlayerNames::NEUTRAL : LocalInputPlayer();
 }
 
 bool Game::OpenMultiplayerFrontEnd(std::unique_ptr<gui::MultiplayerFrontEnd> frontEnd)

@@ -142,6 +142,7 @@
 #include "ECS/CreatureExplorationLand.h"
 #include "ECS/CreatureHome.h"
 #include "ECS/CreatureNaming.h"
+#include "ECS/FixedKinds.h"
 #include "ECS/LearningMarker.h"
 #include "ECS/PlayerTowns.h"
 #include "ECS/Registry.h"
@@ -2369,7 +2370,7 @@ const GTotemStatueInfo* TotemStatueInfo(const ecs::Registry& registry, entt::ent
 	return row < statues.size() ? &statues.at(row) : nullptr;
 }
 
-/// Whether the creature found no way to a thing lately. A thing fixed in the land is left alone for longer.
+/// Whether the creature found no way to a thing lately. The creature waits longer for a thing with the fixed mark.
 bool NoWayLately(const ecs::Registry& registry, const CreatureMindState& mind, entt::entity thing)
 {
 	const auto* belief = mind.beliefs.Find(thing);
@@ -2378,9 +2379,7 @@ bool NoWayLately(const ecs::Registry& registry, const CreatureMindState& mind, e
 	{
 		return false;
 	}
-	const bool fixed = registry.AnyOf<Abode, Tree, Feature, Field, FishFarm, AnimatedStatic, Flowers, Temple, WorshipSite,
-	                                  WorshipAltar, VillageTotem>(thing);
-	return creature_object_beliefs::BlockedRecently(*belief, mind.turn, fixed);
+	return creature_object_beliefs::BlockedRecently(*belief, mind.turn, ecs::fixed_kinds::IsFixedKind(registry, thing));
 }
 
 /// A hungry creature does not eat a thing of a town for which it learnt a compassion worth more than this

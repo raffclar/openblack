@@ -52,6 +52,7 @@
 #include "ECS/Components/Transform.h"
 #include "ECS/Components/Workshop.h"
 #include "ECS/DiscipleWorkRules.h"
+#include "ECS/FixedKinds.h"
 #include "ECS/GamePlayers.h"
 #include "ECS/Map.h"
 #include "ECS/NearestSearch.h"
@@ -204,9 +205,6 @@ constexpr float k_UnderReach = 15.0f;
 /// Two scaffolds touch when the distance between their edges is at most this gap, in metres
 constexpr float k_TouchGap = 0.001f;
 
-/// The sounds of a join of scaffolds: four samples, one after the other
-constexpr uint32_t k_FirstJoinSound = 201;
-constexpr uint32_t k_JoinSounds = 4;
 /// The first of the four sounds of a tap that breaks a scaffold, in turn
 constexpr uint32_t k_FirstTapSound = 151;
 constexpr uint32_t k_TapSounds = 4;
@@ -640,10 +638,12 @@ WorkshopSystem::Cleared WorkshopSystem::ClearThing(entt::entity thing, const map
 	auto* dynamics = Locator::dynamicsSystem::has_value() ? &Locator::dynamicsSystem::value() : nullptr;
 	const bool creature = registry.AllOf<Creature>(thing);
 	const bool held = registry.AnyOf<InHand, Immovable>(thing);
+	const bool fixed = ecs::fixed_kinds::IsFixedKind(registry, thing);
 	const auto action = workshop::ClearingActionFor({
 	    .creature = creature,
 	    .held = held,
-	    .canFly = dynamics != nullptr && !creature && !held && dynamics->CanBecomePhysicsObject(thing),
+	    .fixed = fixed,
+	    .canFly = dynamics != nullptr && !creature && !held && !fixed && dynamics->CanBecomePhysicsObject(thing),
 	});
 	// A creature stays where it is and stays in the map
 	if (action == workshop::ClearingAction::LeaveAlone)
@@ -655,7 +655,7 @@ WorkshopSystem::Cleared WorkshopSystem::ClearThing(entt::entity thing, const map
 		}
 		return Cleared::LeftAlone;
 	}
-	// The scaffold pushes a thing that can fly and that no script holds still out of its way
+	// The scaffold pushes a thing that can fly, that has no fixed mark and that no script holds still out of its way
 	if (action == workshop::ClearingAction::Push)
 	{
 		const auto thingAt = thing_map_place::Of(registry, thing);
@@ -1114,18 +1114,21 @@ void WorkshopSystem::Join(entt::entity held, entt::entity target, std::optional<
 		                   entt::to_integral(target), heldValue + targetValue, Turn());
 	}
 	BuildBuilding(target, heldData.handPlayer);
-	// A puff shows at the joined scaffold, and one of four sounds plays where the hand is
+	// A puff shows at the joined scaffold in the colour of its player, the neutral player of every scaffold
 	if (Locator::effectRequestSystem::has_value())
 	{
-		Locator::effectRequestSystem::value().Show(
-		    {.type = SpotVisualType::ObjectAppear, .position = registry.Get<const Transform>(target).position});
+		Locator::effectRequestSystem::value().Show({.type = SpotVisualType::ObjectAppear,
+		                                            .position = registry.Get<const Transform>(target).position,
+		                                            .player = static_cast<int>(workshop::k_JoinPuffPlayer)});
 	}
+	// One of four sounds plays where the hand is, and only a join with a hand moves to the next sound
 	if (hand.has_value())
 	{
-		const auto name = fmt::format("InGame.sad/{}", k_FirstJoinSound + _joinSound);
-		audio::StartGameSoundEffect(entt::hashed_string(name.c_str()).value(), {.position = *hand});
+		const auto sound = workshop::JoinSoundOf(_joinSound, held, *hand);
+		const auto name = fmt::format("InGame.sad/{}", sound.sample);
+		audio::StartGameSoundEffect(entt::hashed_string(name.c_str()).value(), sound.options);
+		_joinSound = workshop::NextJoinSound(_joinSound);
 	}
-	_joinSound = (_joinSound + 1) % k_JoinSounds;
 }
 
 bool WorkshopSystem::GoesIntoStore(entt::entity scaffold, entt::entity store) const
@@ -1747,15 +1750,11 @@ bool WorkshopSystem::PlaceHeldGhost(entt::entity scaffold, entt::entity ghost, g
 	const auto msIntoTurn = Locator::time::has_value() ? Locator::time::value().GetTurnRemainderMs() : 0;
 	const auto look = scaffold_ghost::Held(
 	    phantom, msIntoTurn, Locator::infoConstants::value().scaffold.phantomBuildingRotationPerGameTurn, _ghostSounds);
-	if (look.sound == scaffold_ghost::GhostSound::Shrinks)
+	if (const auto sample = scaffold_ghost::SampleOf(look.sound); sample.has_value())
 	{
-		audio::PlayGameSoundEffect(entt::hashed_string("InGame.sad/50").value(), std::nullopt);
-	}
-	else if (look.sound == scaffold_ghost::GhostSound::Grows)
-	{
-		const auto pitch = scaffold_ghost::GrowPitchPercent(static_cast<int32_t>(phantom.shown->number));
-		audio::StartGameSoundEffect(entt::hashed_string("InGame.sad/51").value(),
-		                            {.pitchPercent = static_cast<uint32_t>(pitch)});
+		const auto name = fmt::format("InGame.sad/{}", *sample);
+		audio::StartGameSoundEffect(entt::hashed_string(name.c_str()).value(),
+		                            scaffold_ghost::SoundOptionsOf(look.sound, static_cast<int32_t>(phantom.shown->number)));
 	}
 	if (!look.pose.has_value())
 	{

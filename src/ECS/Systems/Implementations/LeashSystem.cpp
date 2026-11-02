@@ -50,6 +50,7 @@
 #include "Creature/LeashOrders.h"
 #include "Creature/LeashOwnership.h"
 #include "Creature/LeashRules.h"
+#include "Creature/LeashTakeOff.h"
 #include "Creature/TempleLeashes.h"
 #include "ECS/Archetypes/LeashMarkerArchetype.h"
 #include "ECS/Components/Abode.h"
@@ -791,12 +792,7 @@ void LeashSystem::TakeOff(entt::entity creature)
 	leashes->confinementRadius = 0.0f;
 	if (auto* mind = MindOf(registry, creature))
 	{
-		mind->leash.learningInHand = false;
-		mind->leash.miracleSightingWeight = leash::MiracleSightingWeight(false);
-		// The leash no longer leads what the creature does
-		mind->ledByLeash = false;
-		// It forgets the actions that the area that held it refused
-		mind->leftAreaActions.clear();
+		leash::ForgetLeash(*mind);
 	}
 	// Off any leash but the learning leash, the desire it made dominant lets go
 	if (leash::TakingOffEndsDominantDesire(leashes->selected) && Locator::creatureMindSystem::has_value())
@@ -910,18 +906,9 @@ bool LeashSystem::TakeOffAtTemple(PlayerNames player)
 
 bool LeashSystem::TapCreature(PlayerNames player, entt::entity creature)
 {
-	if (IsLeashed(creature))
-	{
-		// Already on: tapping its own creature again does nothing, and another's is refused
-		if (const auto why = WhyNot(player, creature, TypeOf(creature)); why != leash::Refusal::None)
-		{
-			Refuse(player, creature, why);
-		}
-		return false;
-	}
-	const auto* leashes = Locator::entitiesRegistry::value().TryGet<const CreatureLeash>(creature);
-	const auto picked = leashes != nullptr ? leashes->selected : LeashType::Rope;
-	return PutOnFor(player, creature, Knows(creature, picked) ? picked : LeashType::Rope);
+	// The click is the leash key on the clicked creature. The checks refuse a creature that the player cannot lead.
+	const auto& registry = Locator::entitiesRegistry::value();
+	return Carry(player, creature, leash::CommandForClick(KeyStateOf(registry, creature)));
 }
 
 bool LeashSystem::ChangeType(entt::entity creature, LeashType type)

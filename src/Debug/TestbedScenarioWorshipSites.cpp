@@ -103,6 +103,24 @@ void testbed_scenarios::AddWorshipSiteScenarios(std::vector<Scenario>& all)
 	    .worshipShare = 1.0f,
 	});
 	all.push_back({
+	    .id = "worship.way_passes_fire",
+	    .name = "Villagers on their way to worship go round a fire and do not stop to fight it",
+	    .facet = Facet::Miracles,
+	    .description =
+	        "The land of the ring scenario. All of the people go to worship at the site, which stands built. "
+	        "Two oaks stand by the footpath from the village centre to the site. After twelve seconds, when the people "
+	        "are on their way, both oaks catch fire.",
+	    .expected = "A villager on its way to worship that comes near a burning oak goes round the fire and then on to "
+	                "the site. No villager on its way stops to beat out the fire or to fetch water. The oaks burn down.",
+	    .environment = {.dispenserGrid = false},
+	    .framing = {.shot = Shot::Overview, .include = {glm::vec2(-40.0f, -10.0f), glm::vec2(0.0f, 45.0f)}},
+	    .objects = {{.type = TreeInfo::Oak, .offset = {-26.0f, -5.0f}}, {.type = TreeInfo::Oak, .offset = {-28.0f, 22.0f}}},
+	    .landScript = k_PlayerOneTownScript,
+	    .commands = {{.kind = Command::Kind::SetAlight, .delaySeconds = 12.0f, .value = 1, .object = 0},
+	                 {.kind = Command::Kind::SetAlight, .delaySeconds = 0.0f, .value = 1, .object = 1}},
+	    .worshipShare = 1.0f,
+	});
+	all.push_back({
 	    .id = "worship.site_motes",
 	    .name = "The motes of prayer power from a worship site to its miracle",
 	    .facet = Facet::Miracles,
