@@ -257,8 +257,10 @@ void LockstepHost::Text(ConnectionId connection, std::string_view text)
 	}
 	else if (std::holds_alternative<game_socket::StopRequest>(*frame))
 	{
-		// Only the player of a god can stop the turns. The end box of an observer does not stop the game.
-		if (peer.joined && peer.role == game_socket::Role::God && peer.seat.has_value())
+		// Only the player of a god can stop the turns. The end box of an observer does not stop the game. A room with
+		// no human god has only observers, so an observer stops its turns.
+		const bool god = peer.role == game_socket::Role::God && peer.seat.has_value();
+		if (peer.joined && (god || AllComputerGods()))
 		{
 			StopTurns();
 		}

@@ -202,7 +202,7 @@ Action RandomAction(std::mt19937& random)
 	case 13:
 		return HandApply {.target = entity()};
 	case 14:
-		return TotemShare {.totem = entity(), .share = number()};
+		return TotemShare {.totem = entity(), .share = std::clamp(number(), 0.0f, 1.0f)};
 	case 15:
 		return FightGround {.creature = entity(), .point = vector(), .replace = bits(random) % 2 == 0};
 	case 16:
@@ -506,6 +506,16 @@ TEST(TurnCodec, TheFieldsOfTheCommandsComeBackExactly)
 	EXPECT_EQ(Decode(put(bytes, 21, 0x7F800000U)).error, DecodeError::Value);
 	EXPECT_EQ(Decode(put(bytes, 70, 0xFFC12345U)).error, DecodeError::Value);
 	EXPECT_EQ(Decode(put(bytes, 70, std::bit_cast<uint32_t>(1.5f))).error, DecodeError::Value);
+	// The share of a totem is from 0 to 1
+	const auto share = [](float value) {
+		return Encode(TurnBundle {.turn = 1,
+		                          .blocks = {StampedBlock {.sender = PlayerNames::PLAYER_ONE,
+		                                                   .sequence = 1,
+		                                                   .actions = {TotemShare {.totem = Entity(3), .share = value}}}}});
+	};
+	EXPECT_EQ(Decode(share(1.0f)).error, DecodeError::None);
+	EXPECT_EQ(Decode(share(1.5f)).error, DecodeError::Value);
+	EXPECT_EQ(Decode(share(-0.25f)).error, DecodeError::Value);
 	// After the velocity come the spin, the origin and the angles of the start, in this order
 	const auto at = [&bytes](size_t from) {
 		uint32_t value = 0;

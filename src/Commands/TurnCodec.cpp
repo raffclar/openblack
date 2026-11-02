@@ -475,7 +475,13 @@ DecodeError ReadAction(Reader& in, Action& action)
 	case CommandTag::TotemShare:
 	{
 		const auto totem = in.Entity();
-		action = TotemShare {.totem = totem, .share = in.Float()};
+		const auto share = in.Float();
+		// The share of the people of the town is from 0 to 1
+		if (share < 0.0f || share > 1.0f)
+		{
+			return DecodeError::Value;
+		}
+		action = TotemShare {.totem = totem, .share = share};
 		return DecodeError::None;
 	}
 	case CommandTag::FightGround:

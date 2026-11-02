@@ -204,6 +204,25 @@ TEST(CreatureMindFile, RejectsWhatIsNotAMind)
 	EXPECT_EQ(Read(bytes, read), MindResult::ErrTruncated);
 }
 
+// A file from the network can give a large count and end soon after it. The read stops before it makes the entries.
+TEST(CreatureMindFile, ACountLargerThanTheRestOfTheFileIsTruncated)
+{
+	auto more = SampleMind();
+	more.desires.push_back(more.desires.back());
+	const auto bytes = Write(SampleMind());
+	const auto moreBytes = Write(more);
+	const auto at = std::ranges::mismatch(bytes, moreBytes).in1;
+	ASSERT_NE(at, bytes.end());
+	const auto count = static_cast<size_t>(std::distance(bytes.begin(), at));
+	ASSERT_EQ(bytes[count], 3);
+	std::vector<uint8_t> hostile(bytes.begin(), bytes.begin() + static_cast<std::ptrdiff_t>(count));
+	const std::array<uint8_t, 4> large {0x00, 0x00, 0x08, 0x00};
+	hostile.insert(hostile.end(), large.begin(), large.end());
+	hostile.resize(hostile.size() + 16, 0);
+	MindFileData read;
+	EXPECT_EQ(Read(hostile, read), MindResult::ErrTruncated);
+}
+
 TEST(CreatureMindFile, KeepsTrailingBytes)
 {
 	auto bytes = Write(SampleMind());

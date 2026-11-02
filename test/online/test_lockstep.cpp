@@ -1886,6 +1886,20 @@ TEST_F(LockstepTest, AnObserverCannotStopTheTurns)
 	EXPECT_TRUE(host->StoppedAfter().has_value());
 }
 
+// A room of computer gods has no human god. The end box of its observer stops the turns of the decided game.
+TEST_F(LockstepTest, AnObserverStopsTheTurnsOfARoomWithNoHumanGod)
+{
+	MakeAllComputerHost(1);
+	GiveWorldState();
+	Computer watcher(network, now, "observer:one");
+	Frames({&watcher}, 20);
+	ASSERT_GT(serverWorld.turns, 0u);
+	watcher.session.StopGame();
+	Frames({&watcher}, 5);
+	EXPECT_TRUE(host->StoppedAfter().has_value());
+	EXPECT_TRUE(watcher.session.StoppedAfter().has_value());
+}
+
 // On the local network a name is only a label. A computer that gives the name of a god of the running game does not take
 // the god: it watches the game, and the player of the god keeps playing.
 TEST_F(LockstepTest, OnTheLocalNetworkANameDoesNotTakeTheGodOfTheRunningGame)
