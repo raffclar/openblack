@@ -392,6 +392,7 @@ bool creature_object_actions::CanBePickedUp(Thing thing)
 	case Thing::Lantern:
 	case Thing::Shield:
 	case Thing::MagicMushroom:
+	case Thing::Vortex:
 		return false;
 	default:
 		return true;
@@ -482,7 +483,6 @@ bool creature_object_actions::CanBeThrownInTheSea(Thing thing)
 	case Thing::Bonfire:
 	case Thing::DeadTree:
 	case Thing::Static:
-	case Thing::Vortex:
 	case Thing::TeleportStone:
 	case Thing::Tree:
 	case Thing::BuildingPiece:

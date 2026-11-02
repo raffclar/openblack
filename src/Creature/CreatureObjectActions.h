@@ -342,7 +342,8 @@ enum class Thing : uint8_t
 /// How a creature decides on picking up a kind of thing
 [[nodiscard]] KindRule RuleOf(Thing thing);
 /// Whether the kind of a thing lets something pick it up at all. A creature that catches a thing or takes it from a
-/// hand asks only this, not the kind's rule. Buildings, features, lanterns and shields say no. Creatures say yes.
+/// hand asks only this, not the kind's rule. Buildings, features, lanterns, shields and vortices say no. Creatures say
+/// yes.
 [[nodiscard]] bool CanBePickedUp(Thing thing);
 /// Whether a kind of thing is alive: villagers, animals, birds and creatures
 [[nodiscard]] bool IsLiving(Thing thing);
@@ -362,7 +363,7 @@ enum class Thing : uint8_t
 [[nodiscard]] bool CanBeThrownToImpress(Thing thing, float thingHeight, float creatureWeight);
 constexpr float k_ThrowToImpressWeightShare = 0.64f;
 /// Whether a creature may throw a thing into the sea in play: what lies about (reward chests and scaffolds too), the
-/// statics, rocks, building pieces, dead trees and trees
+/// statics, rocks, building pieces, dead trees and trees. Not a vortex.
 [[nodiscard]] bool CanBeThrownInTheSea(Thing thing);
 
 /// The toys among the statics, known by their models
