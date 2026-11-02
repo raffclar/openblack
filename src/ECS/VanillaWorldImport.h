@@ -457,6 +457,29 @@ struct ImportedSite
 	std::vector<std::optional<ImportedPile>> pileValues;
 };
 
+/// What the import does with a pile of the site of a temple
+enum class SitePileLoad
+{
+	/// The file has no pile in this place, so the pile of the site goes
+	Remove,
+	/// The pile takes the values of the pile of the file
+	TakeValues,
+	/// The file has a pile that the import cannot read, so the pile of the site stays as it is
+	Keep,
+};
+
+/// A pile of the site of a temple after a load, from the number of the pile in the file (0 for no pile) and whether
+/// the import can read the values of that pile. The load gives the site only the piles of the file. The site makes its
+/// piles again only when wood comes and it has no pile.
+[[nodiscard]] constexpr SitePileLoad SitePileAfterLoad(uint32_t fileNumber, bool hasValues)
+{
+	if (fileNumber == 0)
+	{
+		return SitePileLoad::Remove;
+	}
+	return hasValues ? SitePileLoad::TakeValues : SitePileLoad::Keep;
+}
+
 /// The flag of a desire of a town: it flies as high as the town wants the thing
 struct ImportedDesireFlag
 {
