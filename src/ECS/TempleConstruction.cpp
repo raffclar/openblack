@@ -582,13 +582,24 @@ float construction::BuiltOf(entt::entity object)
 	{
 		return 1.0f;
 	}
+	// The altar of a worship site keeps how much of it is built
+	if (const auto* altar = registry.TryGet<const WorshipAltar>(object))
+	{
+		return altar->built;
+	}
 	const auto* progress = registry.TryGet<const BuildProgress>(object);
 	return progress != nullptr ? progress->built : 1.0f;
 }
 
 bool construction::IsBuilt(entt::entity object)
 {
-	return !Entities().AllOf<BuildProgress>(object);
+	const auto& registry = Entities();
+	// The altar of a worship site is built when all of the altar is built, not when its site is built
+	if (const auto* altar = registry.TryGet<const WorshipAltar>(object))
+	{
+		return altar->built >= 1.0f;
+	}
+	return !registry.AllOf<BuildProgress>(object);
 }
 
 void construction::SetBuilt(entt::entity building, float built)

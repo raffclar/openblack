@@ -43,7 +43,9 @@
 #include "ECS/ScriptFind.h"
 #include "ECS/Systems/Implementations/ObjectMeasures.h"
 #include "ECS/Systems/Implementations/WorshipSiteSystem.h"
+#include "ECS/TempleConstruction.h"
 #include "ECS/WorshipSites.h"
+#include "Locator.h"
 
 using namespace openblack;
 using namespace openblack::ecs;
@@ -717,6 +719,21 @@ TEST(WorshipSiteSystem, AScriptSetsHowMuchOfASiteIsBuiltAndAtTheWholeItStandsBui
 	f.system->SetBuilt(site, 0.25f);
 	EXPECT_FALSE(f.system->IsBuilt(site));
 	EXPECT_FLOAT_EQ(f.registry.Get<const BuildProgress>(site).built, 0.25f);
+}
+
+TEST(WorshipSiteConstruction, AnAltarIsBuiltOnlyWhenAllOfTheAltarIsBuilt)
+{
+	Locator::entitiesRegistry::emplace<ecs::Registry>();
+	auto& registry = Locator::entitiesRegistry::value();
+	const auto altar = registry.Create();
+	registry.Assign<WorshipAltar>(altar, WorshipAltar {.built = 0.5f});
+	// The altar has no build progress of its own, but it keeps its own built amount
+	EXPECT_FALSE(construction::IsBuilt(altar));
+	EXPECT_FLOAT_EQ(construction::BuiltOf(altar), 0.5f);
+	registry.Get<WorshipAltar>(altar).built = 1.0f;
+	EXPECT_TRUE(construction::IsBuilt(altar));
+	EXPECT_FLOAT_EQ(construction::BuiltOf(altar), 1.0f);
+	Locator::entitiesRegistry::reset();
 }
 
 TEST(WorshipSiteSystem, AScriptThatBuildsASiteLeavesItsAltarAsItIs)

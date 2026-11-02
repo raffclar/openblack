@@ -35,11 +35,11 @@ entt::entity StartPlannedTemple(entt::entity plan, float siteDesire);
 /// music for it. The temple.
 entt::entity RaisePlannedTemple(entt::entity plan);
 
-/// How much of an object is built, 0 to 1: all of anything not under construction
+/// How much of an object is built, 0 to 1: all of anything not under construction. An altar keeps its own amount.
 [[nodiscard]] float BuiltOf(entt::entity object);
 
-/// Whether a building is built: a temple whose heart is built has its features (the creature shrinks to go in, its
-/// entrance can be clicked, its heart beats)
+/// Whether a building is built. An altar is built when all of the altar is built. A temple whose heart is built has its
+/// features (the creature shrinks to go in, its entrance can be clicked, its heart beats)
 [[nodiscard]] bool IsBuilt(entt::entity object);
 
 /// A script sets how much of a building is built: it is finished at all of it, and a town's building left unfinished
