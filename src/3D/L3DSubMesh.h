@@ -109,31 +109,31 @@ public:
 	/// changed, one time. Whether it was changed.
 	bool SplitFacesForSnow();
 
-	[[nodiscard]] openblack::l3d::L3DSubmeshHeader::Flags GetFlags() const { return _flags; }
-	[[nodiscard]] bool IsPhysics() const { return _flags.isPhysics; }
+	[[nodiscard]] openblack::l3d::L3DSubmeshHeader::Flags GetFlags() const { return _data.flags; }
+	[[nodiscard]] bool IsPhysics() const { return _data.flags.isPhysics; }
 	/// True for a submesh made while the game runs from the faces of a broken shape
 	[[nodiscard]] bool IsMade() const { return _made; }
 	/// The buffers on the graphics device. Only a submesh with a device mesh (HasDeviceMesh) has them.
 	[[nodiscard]] graphics::Mesh& GetMesh() const;
 	/// False for a submesh that keeps only its data (see UploadMode), and for one with no triangles
 	[[nodiscard]] bool HasDeviceMesh() const { return _mesh != nullptr; }
-	[[nodiscard]] const AxisAlignedBoundingBox& GetBoundingBox() const { return _boundingBox; }
-	[[nodiscard]] const std::vector<Primitive>& GetPrimitives() const { return _primitives; }
+	[[nodiscard]] const AxisAlignedBoundingBox& GetBoundingBox() const { return _data.boundingBox; }
+	[[nodiscard]] const std::vector<Primitive>& GetPrimitives() const { return _data.primitives; }
 	/// The lightmap skin the game multiplies the submesh by, twice over, with the vertices' second texture
 	/// coordinates. Submeshes without one are drawn as they are.
-	[[nodiscard]] std::optional<uint32_t> GetLightmapSkinID() const { return _lightmapSkinID; }
+	[[nodiscard]] std::optional<uint32_t> GetLightmapSkinID() const { return _data.lightmapSkinID; }
 	/// Whether the vertices carry the lightmap coordinates of the mesh, which all of its submeshes do when any has a
 	/// lightmap
-	[[nodiscard]] bool HasLightmapCoordinates() const { return _hasLightmapCoordinates; }
+	[[nodiscard]] bool HasLightmapCoordinates() const { return _data.hasLightmapCoordinates; }
 	/// The matrix of the table of joints the submesh turns by, about its pivot, when it has one
 	struct Joint
 	{
 		uint32_t index;
 		glm::vec3 pivot;
 	};
-	[[nodiscard]] const std::optional<Joint>& GetJoint() const { return _joint; }
+	[[nodiscard]] const std::optional<Joint>& GetJoint() const { return _data.joint; }
 	/// The submesh's name, which the temple's rooms find their scrolls and signs by
-	[[nodiscard]] const std::string& GetName() const { return _name; }
+	[[nodiscard]] const std::string& GetName() const { return _data.name; }
 	/// The frame of the submesh's name record, from the frame to the mesh, and the submesh's box in it
 	struct Frame
 	{
@@ -141,7 +141,7 @@ public:
 		glm::vec3 min;
 		glm::vec3 max;
 	};
-	[[nodiscard]] const Frame& GetFrame() const { return _frame; }
+	[[nodiscard]] const Frame& GetFrame() const { return _data.frame; }
 	/// How far along a ray, in the mesh's space, it first meets the submesh, which the temple's rooms keep the triangles
 	/// of to find
 	[[nodiscard]] std::optional<float> Pick(glm::vec3 origin, glm::vec3 direction) const;
@@ -154,7 +154,7 @@ public:
 		std::vector<glm::vec3> normals;
 		std::vector<uint16_t> indices;
 	};
-	[[nodiscard]] const Surface& GetSurface() const { return _surface; }
+	[[nodiscard]] const Surface& GetSurface() const { return _data.surface; }
 	/// Every submesh's vertices as the file holds them (a boned one's in the space of the bone that moves each), its
 	/// triangles over them, and for a boned one the bone of each vertex: what the physics builds bodies from
 	static constexpr uint16_t k_NoBone = 0xFFFF;
@@ -166,7 +166,7 @@ public:
 		std::vector<uint16_t> indices;
 		std::vector<uint16_t> bones;
 	};
-	[[nodiscard]] const BodyGeometry& GetBodyGeometry() const { return _bodyGeometry; }
+	[[nodiscard]] const BodyGeometry& GetBodyGeometry() const { return _data.bodyGeometry; }
 	/// Whether some of the vertices are blended towards others where the body's parts meet (see vertex_blend). Each
 	/// vertex then names its partner in its bone indices' second and its weight, in 32767ths, in their third.
 	[[nodiscard]] bool HasBlends() const { return _hasBlends; }
@@ -185,40 +185,59 @@ public:
 		uint32_t first;
 		uint32_t count;
 	};
-	[[nodiscard]] const std::vector<SurfacePoint>& GetSurfacePoints() const { return _surfacePoints; }
-	[[nodiscard]] const std::vector<SurfacePrimitive>& GetSurfacePrimitives() const { return _surfacePrimitives; }
+	[[nodiscard]] const std::vector<SurfacePoint>& GetSurfacePoints() const { return _data.surfacePoints; }
+	[[nodiscard]] const std::vector<SurfacePrimitive>& GetSurfacePrimitives() const { return _data.surfacePrimitives; }
+
+	/// All that a submesh keeps of its file, other than its objects on the graphics device
+	struct Data
+	{
+		/// Which of its file's submeshes it is
+		uint32_t meshIndex {0};
+		openblack::l3d::L3DSubmeshHeader::Flags flags {};
+		std::vector<Primitive> primitives;
+		std::optional<uint32_t> lightmapSkinID;
+		bool hasLightmapCoordinates {false};
+		std::optional<Joint> joint;
+		std::string name;
+		Frame frame {glm::mat4(1.0f), glm::vec3(0.0f), glm::vec3(0.0f)};
+		/// The corners of each triangle in turn, of the temple's rooms
+		std::vector<glm::vec3> pickTriangles;
+		std::vector<SurfacePoint> surfacePoints;
+		std::vector<SurfacePrimitive> surfacePrimitives;
+		Surface surface;
+		BodyGeometry bodyGeometry;
+		AxisAlignedBoundingBox boundingBox;
+	};
+	/// The work of a load on the processor: the data of the submesh, and its vertices packed as the graphics device draws
+	/// them. The vertices are empty when the load makes nothing on the graphics device.
+	struct Prepared
+	{
+		Data data;
+		std::vector<uint8_t> vertices;
+	};
+	/// Does the work of a load on the processor. This function reads only the file, so any thread can call it. Nothing
+	/// when the submesh has no vertices or no triangles.
+	[[nodiscard]] static std::optional<Prepared> Prepare(const l3d::L3DFile& l3d, uint32_t meshIndex, bool packVertices);
+	/// Keeps the prepared data and makes the objects on the graphics device, when the mesh makes them
+	void Finish(Prepared prepared) noexcept;
 
 private:
-	/// The submesh's vertices as they are drawn, in device memory
-	[[nodiscard]] const graphics::DeviceMemory* PackVertices(const l3d::L3DFile& l3d, uint32_t meshIndex) const;
+	/// The bytes of the submesh's packed vertices
+	[[nodiscard]] static size_t PackedSize(const l3d::L3DFile& l3d, uint32_t meshIndex, bool hasLightmapCoordinates);
+	/// Writes the submesh's vertices as they are drawn into the bytes, which have the size that PackedSize gives
+	static void PackVertices(const l3d::L3DFile& l3d, uint32_t meshIndex, bool hasLightmapCoordinates,
+	                         std::span<uint8_t> bytes);
 	/// The box about the submesh's vertices, as they are placed by its bones
-	void BoundVertices(const l3d::L3DFile& l3d, uint32_t meshIndex);
+	[[nodiscard]] static AxisAlignedBoundingBox BoundVertices(const l3d::L3DFile& l3d, uint32_t meshIndex, bool hasBones);
 	/// The blend source texture of count packed vertices, where the renderer can read one in the vertex shader
-	void CreateBlendSource(const graphics::DeviceMemory* vertices, uint32_t count);
+	void CreateBlendSource(std::span<const uint8_t> vertices, uint32_t count);
 
 	graphics::L3DMesh& _l3dMesh;
-	/// Which of its file's submeshes it is
-	uint32_t _meshIndex {0};
-
-	openblack::l3d::L3DSubmeshHeader::Flags _flags;
+	Data _data;
 
 	std::unique_ptr<graphics::Mesh> _mesh;
-	std::vector<Primitive> _primitives;
-	std::optional<uint32_t> _lightmapSkinID;
-	bool _hasLightmapCoordinates {false};
 	bool _made {false};
 	bool _facesSplit {false};
-	std::optional<Joint> _joint;
-	std::string _name;
-	Frame _frame {glm::mat4(1.0f), glm::vec3(0.0f), glm::vec3(0.0f)};
-	/// The corners of each triangle in turn, of the temple's rooms
-	std::vector<glm::vec3> _pickTriangles;
-	std::vector<SurfacePoint> _surfacePoints;
-	std::vector<SurfacePrimitive> _surfacePrimitives;
-	Surface _surface;
-	BodyGeometry _bodyGeometry;
-
-	AxisAlignedBoundingBox _boundingBox;
 	bool _hasBlends {false};
 	std::unique_ptr<Texture2D> _blendSource;
 	uint32_t _blendSourceWidth {0};
