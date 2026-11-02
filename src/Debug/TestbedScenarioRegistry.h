@@ -1564,6 +1564,8 @@ void AddVortexScenarios(std::vector<Scenario>& all);
 void AddLand4StoneScenarios(std::vector<Scenario>& all);
 /// The ogre of the fourth land with his fight and his gremlins, and the undead village with its Creed
 void AddLand4SlegScenarios(std::vector<Scenario>& all);
+/// The puzzle quests of the fourth and fifth lands: the two Theseus mazes and the lion maze
+void AddPuzzleQuestScenarios(std::vector<Scenario>& all);
 /// The reward chests the challenges give: falling, landing and being opened
 void AddRewardScenarios(std::vector<Scenario>& all);
 /// The tornado's scenarios: through a village and a wood, and meeting a creature
