@@ -48,6 +48,7 @@
 #include "ECS/Components/WallHug.h"
 #include "ECS/Dances.h"
 #include "ECS/DiscipleRules.h"
+#include "ECS/FixedKinds.h"
 #include "ECS/LivingFacing.h"
 #include "ECS/Map.h"
 #include "ECS/NearestSearch.h"
@@ -470,8 +471,8 @@ uint32_t HomeNothingToDo(LivingAction& action)
 	return villager_home::SetupNothingToDo(action);
 }
 
-/// What blocks a spot to lie down by a tree: a sleeper lying down, or something fixed, close to the tree past its size.
-/// The tree counts itself.
+/// What blocks a spot to lie down by a tree: a sleeper lying down, or a thing with the fixed mark, close to the tree past
+/// its size. A tree has no fixed mark, so the tree does not block its own spot.
 bool BlocksTreeTent(entt::entity thing, glm::vec2 tree)
 {
 	auto& registry = WorldRegistry();
@@ -486,11 +487,12 @@ bool BlocksTreeTent(entt::entity thing, glm::vec2 tree)
 	{
 		return State(*action, LivingAction::Index::Top) == VillagerStates::SleepInTent;
 	}
-	return registry.AllOf<Fixed>(thing);
+	return ecs::fixed_kinds::IsFixedKind(registry, thing);
 }
 
-/// A spot to lie down by a tree, on its far side from what is near it; none when two things are near it
-std::optional<glm::vec2> TreeTentPos(entt::entity tree)
+/// A spot to lie down by a tree, on its far side from what is near it; none when two things are near it. With nothing
+/// near it, the spot is on the side of the tree that is towards the villager.
+std::optional<glm::vec2> TreeTentPos(entt::entity tree, glm::vec2 villager)
 {
 	const auto& map = Locator::entitiesMap::value();
 	const auto at = PositionOf(tree);
@@ -514,9 +516,7 @@ std::optional<glm::vec2> TreeTentPos(entt::entity tree)
 		const auto& step = spiral.Next();
 		cell += glm::ivec2(step.x, step.z);
 	}
-	// TODO(villagers): with nothing near, it lies on the side towards the villager; the tree always counts itself, so
-	// the game never meets that case
-	const float angle = gutils::Get3DAngleFromXZ(blocker.value_or(at), at);
+	const float angle = blocker.has_value() ? gutils::Get3DAngleFromXZ(*blocker, at) : gutils::Get3DAngleFromXZ(at, villager);
 	return routine::Polar(at, angle, routine::k_TentTreeGap);
 }
 
@@ -612,7 +612,7 @@ std::optional<glm::vec2> GetTentPos(entt::entity villager, glm::vec2 spot)
 	    });
 	if (tree != entt::null)
 	{
-		if (const auto byTree = TreeTentPos(tree); byTree.has_value())
+		if (const auto byTree = TreeTentPos(tree, PositionOf(villager)); byTree.has_value())
 		{
 			return byTree;
 		}
