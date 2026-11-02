@@ -239,13 +239,19 @@ struct GameStop
 inline constexpr size_t k_MostRoomChatCharacters = 254;
 
 /// "room.chat", in a room on the local network before the start. Client to server: a line that the player typed. Server
-/// to client: a line of another player in the room. The server sends the line to every player in the room but the
-/// sender, whose game shows its own line when it sends it.
+/// to client: a line of another player in the room. A line with no addressee goes to every player in the room but the
+/// sender, whose game shows its own line when it sends it. A line with an addressee goes only to that player.
 struct RoomChat
 {
 	/// The name of the player who typed the line. Empty from a client.
 	std::string from;
 	std::string text;
+	/// From a client: the name of the one player who gets the line, empty for all the players. Empty from the server.
+	std::string to;
+	/// From the server: the line went to this player only
+	bool privateLine {false};
+	/// The sender picked a team: the game sends one private line to each player of the team
+	bool team {false};
 
 	[[nodiscard]] bool operator==(const RoomChat&) const = default;
 };
