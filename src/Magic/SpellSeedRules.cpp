@@ -73,6 +73,11 @@ magic::SeedRecast magic::RecastOf(bool linked, bool castInHand, bool linkedByCas
 	return linkedByCast ? SeedRecast::Refused : SeedRecast::New;
 }
 
+MagicType magic::SeedCastMagicType(MagicType lastCast, MagicType ofPowerUp)
+{
+	return lastCast != MagicType::None ? lastCast : ofPowerUp;
+}
+
 bool magic::KeptAtUnlock(bool deleteOnceCast, bool enoughForRecast)
 {
 	return !deleteOnceCast && enoughForRecast;

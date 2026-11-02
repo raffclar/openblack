@@ -305,9 +305,9 @@ bool MagicSystem::TakeSeedBack(PlayerNames player, entt::entity entity)
 	seed.followsSpell = false;
 	seed.ready = true;
 	seed.turnsInHand = 0;
-	// The seed counts as a seed that did not cast, so a dispenser of its player takes it again. The mark of the cast's
-	// link goes.
-	seed.castBefore = false;
+	// The seed counts as a seed that did not cast. A dispenser of its player takes it again, gestures can power it up,
+	// and it casts the miracle of its power-up level. The mark of the cast's link goes.
+	seed.lastCastType = MagicType::None;
 	seed.linkedByCast = false;
 	auto& transform = registry.Get<Transform>(entity);
 	transform.rotation = glm::mat3(1.0f);

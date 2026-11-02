@@ -96,6 +96,9 @@ enum class SeedRecast : uint8_t
 /// - a seed with no link that a cast linked before does not cast;
 /// - any other seed casts a new miracle.
 [[nodiscard]] SeedRecast RecastOf(bool linked, bool castInHand, bool linkedByCast);
+/// The miracle that a held seed casts. A seed that cast before casts the miracle of its last cast again. Any other seed
+/// casts the miracle of its power-up level.
+[[nodiscard]] MagicType SeedCastMagicType(MagicType lastCast, MagicType ofPowerUp);
 /// Whether the hand keeps a seed when it lets go of the miracle locked on in it. The seed goes if its record deletes it
 /// once cast, or if its miracle did not have enough for another cast. A closed miracle does not change this.
 [[nodiscard]] bool KeptAtUnlock(bool deleteOnceCast, bool enoughForRecast);

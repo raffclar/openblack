@@ -2516,7 +2516,7 @@ std::optional<entt::entity> MagicSystem::HeldSeedTarget() const
 	// The player's own dispenser comes first: it takes a seed that did not cast before, and is no target for any other
 	if (const auto picked = PickedUnderHand(); picked.has_value() && IsOwnDispenser(*picked, seed.player))
 	{
-		if (seed.castBefore || EntityRegistry().AllOf<ScriptHighlight>(*picked))
+		if (seed.lastCastType != MagicType::None || EntityRegistry().AllOf<ScriptHighlight>(*picked))
 		{
 			return std::nullopt;
 		}
@@ -2698,7 +2698,7 @@ void MagicSystem::SendCast(magic::CastTarget target)
 		{
 			auto* gestures = Locator::gestureSystem::has_value() ? &Locator::gestureSystem::value() : nullptr;
 			const gesture::HandContext::Seed facts {.ready = seed.ready,
-			                                        .cast = seed.hasCast,
+			                                        .cast = seed.lastCastType != MagicType::None,
 			                                        .sizingGesture = seedInfo.sizingGesture,
 			                                        .powerUp = seed.powerUp,
 			                                        .askedPowerUp =
@@ -2757,7 +2757,8 @@ void MagicSystem::DoCast(PlayerNames player, const player_commands::HandCast& ca
 	if (cast.object != entt::null && registry.Valid(cast.object) && registry.AllOf<SpellDispenser>(cast.object))
 	{
 		const auto& seed = registry.Get<const SpellSeed>(*Held());
-		if (IsOwnDispenser(cast.object, seed.player) && !seed.castBefore && !registry.AllOf<ScriptHighlight>(cast.object))
+		if (IsOwnDispenser(cast.object, seed.player) && seed.lastCastType == MagicType::None &&
+		    !registry.AllOf<ScriptHighlight>(cast.object))
 		{
 			StoreHeldSeedIn(cast.object);
 		}
@@ -2859,7 +2860,10 @@ entt::entity MagicSystem::CastHeldSeed(const player_commands::HandCast& command)
 		return entt::null;
 	}
 	ReleaseSpellLink(*Held(), seed);
-	auto cast = magic::SeedCastData(Info(), type, seed.seedType, seed.castMultiplier, size);
+	// A seed that cast before casts the miracle of its last cast again. Any other seed casts the miracle of its
+	// power-up level.
+	const auto castType = magic::SeedCastMagicType(seed.lastCastType, type);
+	auto cast = magic::SeedCastData(Info(), castType, seed.seedType, seed.castMultiplier, size);
 	cast.maxObjectsToCreate = seed.storedMaxObjects;
 	const bool resuming = seed.storedChants >= 0.0f;
 	if (resuming)
@@ -2885,7 +2889,7 @@ entt::entity MagicSystem::CastHeldSeed(const player_commands::HandCast& command)
 	    .spin = command.spin,
 	};
 	const auto spellEntity =
-	    object.has_value() ? CastOn(type, caster, *object, cast, hand) : Cast(type, caster, point, cast, hand);
+	    object.has_value() ? CastOn(castType, caster, *object, cast, hand) : Cast(castType, caster, point, cast, hand);
 	if (spellEntity == entt::null)
 	{
 		return entt::null;
@@ -2901,10 +2905,15 @@ entt::entity MagicSystem::CastHeldSeed(const player_commands::HandCast& command)
 		spell.age = after.storedAge;
 	}
 	after.spell = spellEntity;
-	after.hasCast = true;
-	after.castBefore = true;
+	after.lastCastType = spell.magicType;
 	after.linkedByCast = true;
-	after.storedChants = -1.0f;
+	// The cast empties the seed's charge. The seed keeps what it stored, so a later cast continues from it again.
+	after.chantStore = 0.0f;
+	// The cast stops the charge of the seed's icon for this player, and the icon's store goes back to its site
+	if (Locator::spellIconSystem::has_value())
+	{
+		Locator::spellIconSystem::value().CancelSeedIconCharge(heldEntity, after.player);
+	}
 	// The hand of another player shows no effect and gives no help on this computer
 	if (!ActsOnOwnHand())
 	{
@@ -3342,8 +3351,10 @@ void MagicSystem::UnlockHeldMiracle()
 
 bool MagicSystem::StoreFromSpell(entt::entity entity, SpellSeed& seed, Spell& spell)
 {
-	// The seed keeps what the miracle has left, and how long it has run, for another go
+	// The seed keeps what the miracle has left, and how long it has run, for another go. Its charge becomes what the
+	// miracle has left.
 	seed.storedChants = spell.chants.chants;
+	seed.chantStore = spell.chants.chants;
 	seed.storedAge = spell.age;
 	seed.storedMaxObjects = spell.maxObjectsToCreate;
 	const bool enough = magic::spells::HasEnoughForRecast(Info(), spell);
@@ -3407,7 +3418,7 @@ void MagicSystem::DiscardHeldSeed()
 	{
 		// What the seed still holds goes back to the player's worship
 		const auto& seed = registry.Get<const SpellSeed>(*Held());
-		ReturnFromSeed(seed, magic::SeedRefund(seed.hasIcon, seed.chantStore, seed.storedChants, seed.hasCast));
+		ReturnFromSeed(seed, magic::SeedRefund(seed.hasIcon, seed.chantStore));
 	}
 	// The hand shakes: its sound plays and a band flies off the hand
 	if (own && Locator::miracleFxSystem::has_value())
