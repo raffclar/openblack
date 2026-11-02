@@ -83,6 +83,12 @@ const GMultiMapFixedInfo* InfoOf(entt::entity building)
 	{
 		return &info.worshipSite.at(static_cast<size_t>(site->tribe));
 	}
+	// An altar has the row of its worship site
+	if (const auto* altar = registry.TryGet<const WorshipAltar>(building))
+	{
+		const auto* site = registry.Valid(altar->site) ? registry.TryGet<const WorshipSite>(altar->site) : nullptr;
+		return site != nullptr ? &info.worshipSite.at(static_cast<size_t>(site->tribe)) : nullptr;
+	}
 	if (const auto* abode = registry.TryGet<const Abode>(building); abode != nullptr && abode->info != AbodeInfo::None)
 	{
 		return &info.abode.at(static_cast<size_t>(abode->info));

@@ -129,3 +129,51 @@ TEST(ScriptTexts, NothingInABoxTooSmall)
 	EXPECT_TRUE(Lay({.min = {0.0f, 0.0f}, .max = {400.0f, 40.0f}, .size = 45.0f}, lines, TenAChar).empty());
 	EXPECT_EQ(Lay({.min = {0.0f, 0.0f}, .max = {22.5f, 45.0f}, .size = 45.0f}, lines, TenAChar).size(), 1);
 }
+
+TEST(ScriptTexts, AClipWindowOpenedAtOnceShowsItsBlackAtFull)
+{
+	ClipWindow window;
+	OpenClipWindow(window, {0.1f, 0.2f}, {0.4f, 0.6f}, 0.0f);
+	const auto drawn = Draw(window, {800, 600});
+	ASSERT_TRUE(drawn.has_value());
+	EXPECT_EQ(drawn->alpha, 255);
+	// Above, under, left of and right of the box: 80 to 400 across, 120 to 480 down
+	EXPECT_EQ(drawn->boxes[0].min, glm::ivec2(-1, -1));
+	EXPECT_EQ(drawn->boxes[0].max, glm::ivec2(800, 120));
+	EXPECT_EQ(drawn->boxes[1].min, glm::ivec2(-1, 480));
+	EXPECT_EQ(drawn->boxes[1].max, glm::ivec2(800, 600));
+	EXPECT_EQ(drawn->boxes[2].min, glm::ivec2(-1, 120));
+	EXPECT_EQ(drawn->boxes[2].max, glm::ivec2(80, 480));
+	EXPECT_EQ(drawn->boxes[3].min, glm::ivec2(400, 120));
+	EXPECT_EQ(drawn->boxes[3].max, glm::ivec2(800, 480));
+}
+
+TEST(ScriptTexts, AClipWindowFadesInAndOutAtItsRate)
+{
+	ClipWindow window;
+	EXPECT_FALSE(Draw(window, {800, 600}).has_value());
+	OpenClipWindow(window, {0.5f, 0.2f}, {0.4f, 0.6f}, 0.5f);
+	Step(window, 100);
+	EXPECT_FLOAT_EQ(window.alpha, 0.2f);
+	ASSERT_TRUE(Draw(window, {800, 600}).has_value());
+	EXPECT_EQ(Draw(window, {800, 600})->alpha, 51);
+	Step(window, 1000);
+	EXPECT_FLOAT_EQ(window.alpha, 1.0f);
+	CloseClipWindow(window, 0.5f);
+	Step(window, 250);
+	EXPECT_FLOAT_EQ(window.alpha, 0.5f);
+	Step(window, 1000);
+	EXPECT_FLOAT_EQ(window.alpha, 0.0f);
+	EXPECT_FALSE(Draw(window, {800, 600}).has_value());
+	// The box stays where it was
+	EXPECT_FLOAT_EQ(window.corner.x, 0.5f);
+}
+
+TEST(ScriptTexts, AClipWindowClosedAtOnceIsGone)
+{
+	ClipWindow window;
+	OpenClipWindow(window, {0.1f, 0.2f}, {0.4f, 0.6f}, 0.0f);
+	CloseClipWindow(window, 0.0f);
+	EXPECT_FLOAT_EQ(window.alpha, 0.0f);
+	EXPECT_FALSE(Draw(window, {800, 600}).has_value());
+}

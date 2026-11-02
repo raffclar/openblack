@@ -2005,3 +2005,29 @@ TEST(CreatureLearning, AForgottenOrderTeachesApprovalWhenItsDesireLearnsFromOrde
 	slapped.credited = -1.0f;
 	EXPECT_EQ(creature_learning::ForgottenOrderApproval(slapped, approves, k_Approval), k_Approval);
 }
+
+TEST(CreatureWatching, AScriptsLearnEverythingKnowsEverySkillAndMiracleWithNoSightings)
+{
+	const std::vector<creature_watching::SkillRule> skills(6);
+	const std::vector<creature_watching::MiracleRule> miracles(42);
+	auto knowledge = creature_watching::StartKnowledge(skills, miracles);
+	creature_watching::LearnEverything(knowledge);
+	EXPECT_TRUE(std::ranges::all_of(knowledge.skillsKnown, std::identity {}));
+	EXPECT_TRUE(std::ranges::all_of(knowledge.miraclesKnown, std::identity {}));
+	EXPECT_TRUE(std::ranges::all_of(knowledge.miraclesSeen, [](const auto& seen) { return seen.count == 0; }));
+	EXPECT_TRUE(knowledge.skillsKnownPastTable.empty());
+	EXPECT_TRUE(knowledge.miraclesKnownPastTable.empty());
+}
+
+TEST(CreatureWatching, AScriptsLearnEverythingKeepsRowsPastAShortTableOnce)
+{
+	const std::vector<creature_watching::SkillRule> skills(4);
+	const std::vector<creature_watching::MiracleRule> miracles(40);
+	auto knowledge = creature_watching::StartKnowledge(skills, miracles);
+	knowledge.miraclesKnownPastTable.push_back(41);
+	creature_watching::LearnEverything(knowledge);
+	EXPECT_EQ(knowledge.skillsKnownPastTable, (std::vector<uint32_t> {4, 5}));
+	EXPECT_EQ(knowledge.miraclesKnownPastTable, (std::vector<uint32_t> {41, 40}));
+	EXPECT_TRUE(creature_watching::IsKnown(knowledge, creature_watching::KnownList::Skill, 5));
+	EXPECT_FALSE(creature_watching::IsKnown(knowledge, creature_watching::KnownList::Skill, 6));
+}

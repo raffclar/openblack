@@ -139,7 +139,18 @@ void CinematicDirectorSystem::FadeAllTexts(float seconds)
 
 void CinematicDirectorSystem::UpdateTexts(int32_t milliseconds)
 {
+	gui::script_text::Step(_clipWindow, milliseconds);
 	std::erase_if(_texts, [milliseconds](auto& text) { return !gui::script_text::Step(text, milliseconds); });
+}
+
+void CinematicDirectorSystem::OpenClipWindow(glm::vec2 corner, glm::vec2 extent, float seconds)
+{
+	gui::script_text::OpenClipWindow(_clipWindow, corner, extent, seconds);
+}
+
+void CinematicDirectorSystem::CloseClipWindow(float seconds)
+{
+	gui::script_text::CloseClipWindow(_clipWindow, seconds);
 }
 
 void CinematicDirectorSystem::SaveState(reflection::BinaryWriter& out) const

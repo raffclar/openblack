@@ -354,6 +354,9 @@ public:
 	virtual float ForcePayForSpell(entt::entity spell, float cost) = 0;
 	/// A miracle's strength now, 0 once it has gone
 	[[nodiscard]] virtual float SpellStrength(entt::entity spell) = 0;
+	/// A script sets a miracle's radius: its particle effect and its shield follow it at once. Anything that is not a
+	/// miracle does not change.
+	virtual void SetSpellRadius(entt::entity /*spell*/, float /*radius*/) {}
 
 	// Turns and frames
 
