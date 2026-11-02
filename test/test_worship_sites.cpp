@@ -23,6 +23,7 @@
 #include <glm/gtc/matrix_transform.hpp>
 #include <gtest/gtest.h>
 
+#include "ECS/BuildingSites.h"
 #include "ECS/Components/Construction.h"
 #include "ECS/Components/Dance.h"
 #include "ECS/Components/Fire.h"
@@ -45,6 +46,7 @@
 #include "ECS/Systems/Implementations/WorshipSiteSystem.h"
 #include "ECS/TempleConstruction.h"
 #include "ECS/WorshipSites.h"
+#include "InfoConstants.h"
 #include "Locator.h"
 
 using namespace openblack;
@@ -733,6 +735,32 @@ TEST(WorshipSiteConstruction, AnAltarIsBuiltOnlyWhenAllOfTheAltarIsBuilt)
 	registry.Get<WorshipAltar>(altar).built = 1.0f;
 	EXPECT_TRUE(construction::IsBuilt(altar));
 	EXPECT_FLOAT_EQ(construction::BuiltOf(altar), 1.0f);
+	Locator::entitiesRegistry::reset();
+}
+
+TEST(WorshipSiteConstruction, AnAltarHasTheBuildingValuesOfItsSitesRow)
+{
+	Locator::entitiesRegistry::emplace<ecs::Registry>();
+	auto info = std::make_unique<InfoConstants>();
+	auto& row = info->worshipSite.at(static_cast<size_t>(Tribe::NORSE));
+	row.maxVillagerNeededToBuild = 3;
+	row.woodValue = 400;
+	Locator::infoConstants::emplace(*info);
+	auto& registry = Locator::entitiesRegistry::value();
+	const auto site = registry.Create();
+	const auto altar = registry.Create();
+	registry.Assign<WorshipSite>(site, WorshipSite {.tribe = Tribe::NORSE, .altar = altar});
+	registry.Assign<Transform>(site, Transform {.scale = glm::vec3(1.5f)});
+	registry.Assign<WorshipAltar>(altar, WorshipAltar {.site = site});
+	registry.Assign<Transform>(altar, Transform {.scale = glm::vec3(1.5f)});
+	// The builders and the wood that a site at the altar wants come from the row of the altar's worship site
+	EXPECT_EQ(construction::MaxBuilders(altar), 3);
+	EXPECT_GT(construction::SiteWoodValue(altar), 0.0f);
+	EXPECT_FLOAT_EQ(construction::SiteWoodValue(altar), construction::SiteWoodValue(site));
+	// An altar with no site has no row
+	registry.Get<WorshipAltar>(altar).site = entt::null;
+	EXPECT_EQ(construction::MaxBuilders(altar), 0);
+	Locator::infoConstants::reset();
 	Locator::entitiesRegistry::reset();
 }
 

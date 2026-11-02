@@ -35,7 +35,6 @@
 #include "ECS/Components/Construction.h"
 #include "ECS/Components/Feature.h"
 #include "ECS/Components/Fire.h"
-#include "ECS/Components/Mesh.h"
 #include "ECS/Components/Physics.h"
 #include "ECS/Components/Pot.h"
 #include "ECS/Components/SpellDispenser.h"
@@ -71,6 +70,7 @@
 #include "ECS/Systems/WorshipSiteSystemInterface.h"
 #include "ECS/TempleHeartOf.h"
 #include "ECS/ThingMapPlace.h"
+#include "ECS/ThingModel.h"
 #include "ECS/TownCentreParts.h"
 #include "ECS/WorldObjects.h"
 #include "ECS/WorshipSiteConstruction.h"
@@ -709,15 +709,16 @@ building_site::Places PlacesRound(entt::entity building)
 {
 	auto& registry = Entities();
 	const auto& transform = registry.Get<const Transform>(building);
-	const auto* mesh = registry.TryGet<const Mesh>(building);
+	// An altar has its model also while the game does not show it
+	const auto modelId = thing_model::ModelOf(registry, building);
 	const auto& meshes = Locator::resources::value().GetMeshes();
 	building_site::Places places;
 	places.fill(transform.position);
-	if (mesh == nullptr || !meshes.Contains(mesh->id))
+	if (!modelId.has_value() || !meshes.Contains(*modelId))
 	{
 		return places;
 	}
-	const auto& model = *meshes.Handle(mesh->id);
+	const auto& model = *meshes.Handle(*modelId);
 	std::vector<building_site::Triangle> triangles;
 	for (const auto& surface : model.GetSurfaces())
 	{
@@ -860,9 +861,11 @@ void construction::MakeSitePiles(entt::entity building, BuildingSite& site)
 	const auto* temple = registry.TryGet<const Temple>(building);
 	if (temple == nullptr)
 	{
-		// Any other building's one pile stands beyond it, away from its door. A miracle dispenser is such a building.
+		// Any other building's one pile stands beyond it, away from its door. A miracle dispenser and the altar of a
+		// worship site are such buildings.
 		auto& pile = site.piles.front();
-		if ((registry.Valid(pile) && registry.AllOf<Pot>(pile)) || !registry.AnyOf<Abode, SpellDispenser>(building))
+		if ((registry.Valid(pile) && registry.AllOf<Pot>(pile)) ||
+		    !registry.AnyOf<Abode, SpellDispenser, WorshipAltar>(building))
 		{
 			return;
 		}

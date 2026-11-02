@@ -169,8 +169,9 @@ void openblack::testbed_scenarios::AddFixedKindScenarios(std::vector<Scenario>& 
 	                   "script sets the site as built.",
 	    .expected = "The script builds the site only. The site stands built, but its altar does not show, because the "
 	                "altar keeps its own built amount: the inspector shows WorshipAltar built 0 and no Mesh on the altar. "
-	                "Only work on the site, for example the repair of a damaged site, builds the altar, and the altar "
-	                "shows when all of it is built. Before, the altar showed when the script built the site.",
+	                "Only work on the site, for example the repair of a damaged site, or a builder that the hand puts down "
+	                "by the altar (worship.builder_put_down_by_unbuilt_altar) builds the altar, and the altar shows when "
+	                "all of it is built. Before, the altar showed when the script built the site.",
 	    .environment = {.dispenserGrid = false, .cursor = glm::vec2 {0.5f, 0.5f}},
 	    .framing = {.shot = Shot::Placed,
 	                .eye = {k_BuilderDrop.x, 22.0f, k_BuilderDrop.y - 30.0f},
@@ -178,6 +179,38 @@ void openblack::testbed_scenarios::AddFixedKindScenarios(std::vector<Scenario>& 
 	    .objects = std::move(scriptBuiltTown),
 	    .temples = {{.offset = k_PileTemple}},
 	    .commands = {{.kind = Kind::ScriptBuildsWorshipSites, .delaySeconds = 1.0f, .amount = 1.0f}},
+	    .townBeliefInPlayer = 1000.0f,
+	});
+	std::vector<ObjectSetup> altarBuilderTown {
+	    {.type = AbodeInfo::NorseTownCentre, .offset = k_Gathering - k_BuildingGap},
+	    {.type = AbodeInfo::NorseStoragePit, .offset = k_Gathering + k_BuildingGap, .yawDegrees = 180.0f, .storedWood = 2000},
+	    {.type = VillagerInfo::NorseForesterMale, .offset = k_BuilderDrop, .joinTown = true, .woodHeld = 250}};
+	all.push_back({
+	    .id = "worship.builder_put_down_by_unbuilt_altar",
+	    .name = "A villager put down by the unbuilt altar of a worship site that a script built",
+	    .facet = Facet::Hand,
+	    .description =
+	        "A Norse town of the player with a village centre, a storage pit with 2000 wood and one villager "
+	        "that carries 250 wood. The town's worship site goes up by the temple as the scenario starts. After "
+	        "one second a script sets the site as built, and the altar stays unbuilt. The villager stands four metres west "
+	        "of the altar, under the hand. One second later the hand takes the villager, and three seconds "
+	        "later it puts the villager down at the same place.",
+	    .expected = "The altar and the site are both at the villager's feet and interest it the same. The altar is made after "
+	                "its site, so the search meets the altar first. Over the unbuilt altar the villager glows and shows "
+	                "the builder's symbol. It lands, turns to the altar, and its town opens a site at the altar: the "
+	                "inspector shows BuildingSites on the altar with the villager as its worker. The villager puts its "
+	                "wood on a pile beyond the altar, builds, and goes to the storage pit for more wood. WorshipAltar "
+	                "built goes up with each stroke, and the altar shows when all of it is built. Before, the site at "
+	                "the altar took no wood, and the villager stood at the altar and built nothing.",
+	    .environment = {.dispenserGrid = false, .cursor = glm::vec2 {0.5f, 0.5f}},
+	    .framing = {.shot = Shot::Placed,
+	                .eye = {k_BuilderDrop.x, 22.0f, k_BuilderDrop.y + 30.0f},
+	                .look = {k_BuilderDrop.x, 0.0f, k_BuilderDrop.y}},
+	    .objects = std::move(altarBuilderTown),
+	    .temples = {{.offset = k_PileTemple}},
+	    .commands = {{.kind = Kind::ScriptBuildsWorshipSites, .delaySeconds = 1.0f, .amount = 1.0f},
+	                 {.kind = Kind::HandTake, .delaySeconds = 1.0f, .object = 2},
+	                 {.kind = Kind::HandRelease, .delaySeconds = 3.0f}},
 	    .townBeliefInPlayer = 1000.0f,
 	});
 
