@@ -198,7 +198,7 @@ void testbed_scenarios::AddWorshipSiteScenarios(std::vector<Scenario>& all)
 	                "seed leaves the hand. A shield globe comes into view above the dispenser and floats there. The hand "
 	                "took the seed back as a seed that did not cast, so the dispenser takes it.",
 	    .environment = {.dispenserGrid = false},
-	    .framing = {.shot = Shot::Overview, .include = {glm::vec2(-40.0f, -70.0f), glm::vec2(50.0f, 10.0f)}},
+	    .framing = {.shot = Shot::Overview, .include = {glm::vec2(5.0f, -50.0f), glm::vec2(45.0f, -10.0f)}},
 	    .dispensers = {{.type = MagicType::LightningBolt,
 	                    .offset = {35.0f, -30.0f},
 	                    .charged = false,

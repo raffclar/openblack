@@ -115,7 +115,9 @@ void AddCasting(std::vector<Scenario>& all)
 	                   "same step, as when the bolt stops just before the let go.",
 	    .expected = "The bolt stops. The hand keeps the lightning seed, with the prayer power that the bolt had left, "
 	                "because a lightning bolt always has enough for another cast. The log line of the step says that the "
-	                "hand keeps the seed.",
+	                "hand keeps the seed. The button is still down, so the hand casts the bolt again at once from the "
+	                "kept seed, and the bolt continues until the let go at 6 seconds. If the hand did not keep the seed, "
+	                "the bolt would stop and the hand would be empty.",
 	    .environment = {.dispenserGrid = false},
 	    .framing = {.shot = Shot::Overview, .include = {{-15.0f, 15.0f}, {15.0f, 45.0f}}},
 	    .miracles = {{.type = MagicType::LightningBolt,
