@@ -437,6 +437,42 @@ void testbed_scenarios::AddCreatureActionCastScenarios(std::vector<Scenario>& al
 	    .dispensers = {Globe(MagicType::LightningBolt, {0.0f, -25.0f})},
 	    .commands = {Know(MagicType::LightningBolt), DoWithGlobe("PickUpAndCastOneOffSpellAggressi", 1.0f, 0)},
 	});
+	// On Land 2 the fireflies give one-shot globes of the creature miracles, and these are the playful one-shots
+	all.push_back({
+	    .id = "actions.cast_playful_one_shot_in_hand",
+	    .name = "Casts a playful one-shot miracle that it holds",
+	    .facet = Facet::Miracles,
+	    .description = "A grown tiger that knows the creature miracle that makes a creature big is told to hold a one-shot "
+	                   "globe of it at its feet. Then it is told to cast the playful one-shot miracle in its hand at a cow "
+	                   "60 metres in front of it.",
+	    .expected = "It walks near to the cow and turns to it. The globe goes from its hand, it holds the casting pose and "
+	                "the miracle goes to the cow.",
+	    .environment = {.dispenserGrid = false},
+	    .framing = Far(),
+	    .creatures = {Actor(), StillCow({0.0f, -60.0f})},
+	    .dispensers = {Globe(MagicType::CreatureSpellBig, {0.0f, -12.0f})},
+	    .commands = {Know(MagicType::CreatureSpellBig), HoldGlobe(1.0f),
+	                 DoToCreature("CastOneOffSpellInHandPlayful", 10.0f, 1)},
+	});
+	all.push_back({
+	    .id = "actions.pick_up_and_cast_playful_one_shot",
+	    .name = "Picks up a playful one-shot miracle and casts it",
+	    .facet = Facet::Miracles,
+	    .description = "A grown tiger that knows the creature miracle that makes a creature big is told to pick up a "
+	                   "one-shot globe of it 25 metres in front of it and cast it at a cow 60 metres in front of it.",
+	    .expected = "It walks to the globe and picks it up. It walks near to the cow and turns to it. The globe goes from "
+	                "its hand, it holds the casting pose and the miracle goes to the cow.",
+	    .environment = {.dispenserGrid = false},
+	    .framing = Far(),
+	    .creatures = {Actor(), StillCow({0.0f, -60.0f})},
+	    .dispensers = {Globe(MagicType::CreatureSpellBig, {0.0f, -25.0f})},
+	    .commands = {Know(MagicType::CreatureSpellBig),
+	                 {.kind = Kind::DoAction,
+	                  .delaySeconds = 1.0f,
+	                  .action = "PickUpAndCastOneOffSpellPlayful",
+	                  .globe = 0,
+	                  .atCreature = 1}},
+	});
 	all.push_back({
 	    .id = "actions.sprinkle_water_on_crops",
 	    .name = "Sprinkles miracle water on a field",

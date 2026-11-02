@@ -1150,8 +1150,7 @@ bool WeatherSystem::MoveMiracleStorm(entt::entity entity, glm::vec3 centre)
 void WeatherSystem::KillStormsInArea(glm::vec3 position, float radius)
 {
 	Locator::entitiesRegistry::value().Each<Storm>([position, radius](entt::entity, Storm& storm) {
-		const float distance = glm::distance(glm::vec2(storm.position.x, storm.position.z), glm::vec2(position.x, position.z));
-		if (distance < radius + storm.outerRadius)
+		if (script_weather::InKillArea(storm.currentPosition, storm.outerRadius, position, radius))
 		{
 			storm.dead = true;
 		}

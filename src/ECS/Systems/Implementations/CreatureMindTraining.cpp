@@ -166,7 +166,9 @@ bool CreatureMindSystem::PointOutHighlight(entt::entity creature)
 	// It obeys its player by pointing the highlight out, forced over anything it wants
 	const auto action = creature_mind_tables::FindAction(*tables, "PointOutHighlight");
 	if (!action.has_value() ||
-	    !ForcePlan(creature, {.desire = Desire::ObeyPlayer, .action = "PointOutHighlight", .object = *highlight}))
+	    !ForcePlan(
+	        creature,
+	        {.desire = Desire::ObeyPlayer, .action = "PointOutHighlight", .object = *highlight, .fightBodyEndsAgain = true}))
 	{
 		// The tables lack the action, or the creature can't plan it from where it is
 		SPDLOG_LOGGER_DEBUG(spdlog::get("game"), "Creature {} can't point out highlight {}", entt::to_integral(creature),

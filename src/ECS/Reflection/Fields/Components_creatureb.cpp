@@ -37,7 +37,6 @@ void openblack::ecs::reflection::RegisterFields_Components_creatureb(entt::meta_
 	    .Field<&components::CreatureAnimation::slots>("slots")
 	    .Field<&components::CreatureAnimation::face>("face")
 	    .Field<&components::CreatureAnimation::gesture>("gesture")
-	    .Field<&components::CreatureAnimation::wobble>("wobble")
 	    .Field<&components::CreatureAnimation::sway>("sway")
 	    .Field<&components::CreatureAnimation::lookAt>("lookAt")
 	    .Field<&components::CreatureAnimation::yaw>("yaw")

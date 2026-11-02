@@ -79,6 +79,7 @@
 #include "ECS/Systems/ComputerPlayerSystemInterface.h"
 #include "ECS/Systems/CreatureCarryOverSystemInterface.h"
 #include "ECS/Systems/CreatureFightSystemInterface.h"
+#include "ECS/Systems/DesignedWaterfallSystemInterface.h"
 #include "ECS/Systems/DialogueControlSystemInterface.h"
 #include "ECS/Systems/DynamicsSystemInterface.h"
 #include "ECS/Systems/EffectRequestSystemInterface.h"
@@ -1110,6 +1111,11 @@ void LandSystem::StartNewLand(land_change::Kind change)
 	if (Locator::scriptMusicSystem::has_value())
 	{
 		Locator::scriptMusicSystem::value().Reset();
+	}
+	// The things of the last land went, and the sound of the third land's waterfall with them
+	if (Locator::designedWaterfallSystem::has_value())
+	{
+		Locator::designedWaterfallSystem::value().Reset();
 	}
 	View().StartLandAudio();
 	// A skirmish starts: in the first turn the god of the player brings the creature that the profile keeps. The commands

@@ -23,18 +23,20 @@ namespace openblack::particles::draw
 /// the farthest from the camera first. A few spot visuals are queued: the whole effect takes one place, at its origin,
 /// and is drawn there all at once in the order its collections hold it. The miracle in the hand is drawn at once, in
 /// that order, just after the hand. A vortex's swirl is drawn before the land, over the sea alone, in the order its
-/// collections hold it: the land and everything drawn after it cover it.
+/// collections hold it: the land and everything drawn after it cover it. The force field of the fence is drawn after
+/// everything that is sorted.
 enum class DrawPath : uint8_t
 {
 	Sorted,
 	Queued,
 	Immediate,
 	BeforeLand,
+	AfterSorted,
 
 	_Count
 };
 
 constexpr std::array<std::string_view, static_cast<size_t>(DrawPath::_Count)> k_DrawPathNames {"Sorted", "Queued", "Immediate",
-                                                                                               "Before land"};
+                                                                                               "Before land", "After sorted"};
 
 } // namespace openblack::particles::draw

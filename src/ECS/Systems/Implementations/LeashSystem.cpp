@@ -491,6 +491,20 @@ bool TravelsByTeleport(const Registry& registry, entt::entity creature)
 	return registry.AllOf<TeleportTraveller>(creature) && mind != nullptr && creature_mind::StoneControls(mind->idle);
 }
 
+/// The plan of the creature is a fight with itself. The creature asked for that fight, and the fight never starts.
+bool FightsItself(const Registry& registry, entt::entity creature)
+{
+	const auto* mind = registry.TryGet<const CreatureMindState>(creature);
+	if (mind == nullptr || !mind->planActive || !mind->planner.current.has_value() ||
+	    mind->planner.current->object != entt::to_integral(creature) || !Locator::creatureMindSystem::has_value())
+	{
+		return false;
+	}
+	const auto* tables = Locator::creatureMindSystem::value().GetTables();
+	const auto action = mind->planner.current->action;
+	return tables != nullptr && action < tables->actions.size() && tables->actions[action].name == orders::k_FightAction;
+}
+
 using ForcedPlan = CreatureMindSystemInterface::ForcedPlan;
 /// An order on the leash: the player makes the creature do the plan. The order stops the walk and ends what the body
 /// does, or keeps them.
@@ -900,6 +914,20 @@ bool LeashSystem::TakeOffAtTemple(PlayerNames player)
 	const auto creature = *PlayersCreature(player);
 	SPDLOG_LOGGER_INFO(spdlog::get("game"), "Player {} goes into the temple: the leash comes off creature {}",
 	                   PlayerNumber(player), entt::to_integral(creature));
+	TakeOff(creature);
+	return true;
+}
+
+bool LeashSystem::TakeOffAtLeave(PlayerNames player)
+{
+	// The same rule as at the temple: the leash comes off only when the player holds it
+	if (!ComesOffAtTemple(player))
+	{
+		return false;
+	}
+	const auto creature = *PlayersCreature(player);
+	SPDLOG_LOGGER_INFO(spdlog::get("game"), "Player {} leaves the game: the leash comes off creature {}", PlayerNumber(player),
+	                   entt::to_integral(creature));
 	TakeOff(creature);
 	return true;
 }
@@ -2276,6 +2304,14 @@ bool LeashSystem::OrderOn(PlayerNames player, entt::entity object)
 
 bool LeashSystem::TakeOutOfFight(entt::entity creature)
 {
+	// A creature that plans a fight with itself asked for a fight and is not in it. It takes no orders until the order
+	// that it gives to itself stops that plan.
+	if (FightsItself(Locator::entitiesRegistry::value(), creature))
+	{
+		SPDLOG_LOGGER_INFO(spdlog::get("game"), "Creature {} takes no orders while it asks itself for a fight",
+		                   entt::to_integral(creature));
+		return false;
+	}
 	if (!Locator::creatureFightSystem::has_value())
 	{
 		return true;
@@ -2472,7 +2508,8 @@ bool LeashSystem::TakeGroundOrder(entt::entity creature, const glm::vec3& place)
 bool LeashSystem::TakeThingOrder(entt::entity creature, entt::entity object)
 {
 	auto& registry = Locator::entitiesRegistry::value();
-	if (!registry.Valid(object) || registry.TryGet<const Transform>(object) == nullptr || object == creature)
+	// The creature itself is a thing that it can be told to act on, as any other thing
+	if (!registry.Valid(object) || registry.TryGet<const Transform>(object) == nullptr)
 	{
 		return false;
 	}
@@ -2550,6 +2587,21 @@ bool LeashSystem::TakeThingOrder(entt::entity creature, entt::entity object)
 			}
 			break;
 		case orders::Attempt::Fight:
+			// A fight with itself is a plan of its mind that never meets an opponent
+			if (object == creature)
+			{
+				if (Force(creature,
+				          {.desire = Desire::Anger,
+				           .action = orders::k_FightAction,
+				           .object = creature,
+				           .agenda = orders::FightItself(entt::to_integral(creature)),
+				           .activityObject = creature},
+				          interruption))
+				{
+					desire = Desire::Anger;
+				}
+				break;
+			}
 			if (Locator::creatureFightSystem::has_value() &&
 			    Locator::creatureFightSystem::value().StartFight(creature, object) ==
 			        CreatureFightSystemInterface::StartResult::Started)
