@@ -1539,6 +1539,9 @@ void AddBirdScenarios(std::vector<Scenario>& all);
 void AddTeleportScenarios(std::vector<Scenario>& all);
 /// The vortices between the lands: opening, levelling the ground and closing
 void AddVortexScenarios(std::vector<Scenario>& all);
+/// Three silver scrolls of the fourth and fifth lands, each from its own script: the fish puzzle, the stranger who
+/// prays at the forest fire, and the explorers who come back
+void AddLandsFourFiveScrollScenarios(std::vector<Scenario>& all);
 /// The reward chests the challenges give: falling, landing and being opened
 void AddRewardScenarios(std::vector<Scenario>& all);
 /// The tornado's scenarios: through a village and a wood, and meeting a creature
