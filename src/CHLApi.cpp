@@ -266,6 +266,7 @@
 #include "ECS/ThingMapPlace.h"
 #include "ECS/ThingOnScreen.h"
 #include "ECS/TownDesire.h"
+#include "ECS/TownHealth.h"
 #include "ECS/TownHomes.h"
 #include "ECS/TownPlanning.h"
 #include "ECS/TownPlaythings.h"
@@ -10415,10 +10416,51 @@ void GetTimeSinceObjectAttacked() // 442 GET_TIME_SINCE_OBJECT_ATTACKED
 
 void GetTownAndVillagerHealthTotal() // 443 GET_TOWN_AND_VILLAGER_HEALTH_TOTAL
 {
-	// const auto town = Pop().uintVal;
-	// TODO(Daniels118): implement this
-	NotImplemented();
-	Pushf(0.0f);
+	const auto object = PopObject();
+	auto& registry = Locator::entitiesRegistry::value();
+	const auto* town =
+	    object != entt::null && registry.Valid(object) ? registry.TryGet<const ecs::components::Town>(object) : nullptr;
+	if (town == nullptr)
+	{
+		ScriptMessage("Invalid objects");
+		Pushf(0.0f);
+		return;
+	}
+	// The lives of the people of each building, then of the building, then of the people without a home
+	std::vector<std::vector<float>> residentLives;
+	std::vector<ecs::town_health::AbodeLives> abodes;
+	residentLives.reserve(town->abodes.size());
+	abodes.reserve(town->abodes.size());
+	for (const auto abode : town->abodes)
+	{
+		if (!registry.Valid(abode))
+		{
+			continue;
+		}
+		auto& lives = residentLives.emplace_back();
+		if (const auto* building = registry.TryGet<const ecs::components::Abode>(abode); building != nullptr)
+		{
+			lives.reserve(building->inhabitants.size());
+			for (const auto person : building->inhabitants)
+			{
+				if (registry.Valid(person))
+				{
+					lives.push_back(ecs::world_objects::LifeOf(person));
+				}
+			}
+		}
+		abodes.push_back({.residents = lives, .life = ecs::world_objects::LifeOf(abode)});
+	}
+	std::vector<float> homeless;
+	homeless.reserve(town->homelessVillagers.size());
+	for (const auto person : town->homelessVillagers)
+	{
+		if (registry.Valid(person))
+		{
+			homeless.push_back(ecs::world_objects::LifeOf(person));
+		}
+	}
+	Pushf(ecs::town_health::Total(abodes, homeless));
 }
 
 void GameAddForBuilding() // 444 GAME_ADD_FOR_BUILDING
