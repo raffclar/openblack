@@ -107,6 +107,19 @@ rules::Joins rules::JoinAs(bool hasReferee, uint32_t homePlayers, uint32_t awayP
 	return Joins::Crowd;
 }
 
+std::optional<rules::Side> rules::ScriptTeam(bool homeTeam, uint32_t homePlayers, uint32_t awayPlayers)
+{
+	if (homeTeam && homePlayers < k_TeamSize)
+	{
+		return Side::Home;
+	}
+	if (awayPlayers < k_TeamSize)
+	{
+		return Side::Away;
+	}
+	return std::nullopt;
+}
+
 float rules::CrowdPlaceAngle(uint32_t filledPlaces)
 {
 	return x87::Mul(static_cast<double>(filledPlaces), static_cast<double>(k_CrowdPlaceAngle));
@@ -428,4 +441,9 @@ float rules::MatchBelief(float beliefForMatch, uint32_t matchMeasure, float matc
 	const float ratio = static_cast<float>(matchMeasure) / static_cast<float>(lengthInTurns);
 	const float measure = ratio < 2.0f ? ratio : 2.0f;
 	return measure * beliefForMatch;
+}
+
+bool rules::IsMatchState(VillagerStates state)
+{
+	return state >= VillagerStates::FootballWalkToPosition && state <= VillagerStates::FootballMexicanWave;
 }

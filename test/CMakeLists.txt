@@ -2329,3 +2329,4 @@ openblack_setup_and_add_test(
   test_creature_environment_map test_creature_environment_map.cpp
 )
 openblack_setup_and_add_test(test_football_rules test_football_rules.cpp)
+openblack_setup_and_add_test(test_creature_football test_creature_football.cpp)

@@ -43,6 +43,19 @@ public:
 	uint32_t PlayRole(components::LivingAction& action) override;
 	void RestartDeadBall(entt::entity villager) override;
 	[[nodiscard]] std::optional<football_rules::PlayState> PlayStateOf(entt::entity pitch) const override;
+	[[nodiscard]] bool IsPlaying(entt::entity villager) const override;
+	[[nodiscard]] std::optional<bool> HomeMournsGoal(entt::entity pitch) const override;
+	glm::vec3 AttackedGoalPosition(entt::entity pitch, bool homeTeam) override;
+	[[nodiscard]] entt::entity FirstPlayer(entt::entity pitch, bool homeTeam) const override;
+	[[nodiscard]] bool IsPitch(entt::entity thing) const override;
+	[[nodiscard]] entt::entity TownPitch(entt::entity town) const override;
+	void StopAllGames(entt::entity pitch) override;
+	bool AttachToGame(entt::entity pitch, entt::entity villager, bool homeTeam) override;
+	bool DetachFromGame(entt::entity pitch, entt::entity villager) override;
+	bool DetachFirstPlayer(entt::entity pitch, bool homeTeam) override;
+	void SetOnlyForScripts(entt::entity pitch, bool onlyForScripts) override;
+	bool StartWithReferee(entt::entity pitch, entt::entity referee) override;
+	[[nodiscard]] uint32_t TeamSize(entt::entity pitch, bool homeTeam) const override;
 
 private:
 	/// A goal of the goal model, in the model's own space
@@ -69,6 +82,10 @@ private:
 	void ChooseTask(entt::entity pitch, entt::entity villager);
 	void StopMatch(entt::entity town, entt::entity pitch, components::FootballPitch& football);
 	void SendPlayersHome(components::FootballPitch& football);
+	/// The match data of a pitch, made when a script first asks for it. None for a thing that is not a pitch.
+	components::FootballPitch* PitchData(entt::entity pitch);
+	/// A player walks to a random place near the centre spot, to wait for the kick-off
+	void SendToKickOff(entt::entity pitch, entt::entity villager);
 	void ForgetGone(components::FootballPitch& football);
 
 	/// A player's own place on the pitch

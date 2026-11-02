@@ -752,7 +752,15 @@ building_site::Places PlacesRound(entt::entity building)
 	const auto matrix = glm::translate(transform.position) * glm::mat4(transform.rotation) * glm::scale(transform.scale);
 	// The model's reach is its box's half diagonal, scaled
 	const float reach = transform.scale.x * openblack::graphics::mesh_detail::HalfDiagonal(box.Size());
-	// TODO(temple-builders): football pitches put their places on a circle (building_site::CirclePlaces)
+	// The builders of a football pitch stand on a circle of the model's reach about the middle of its box
+	const auto* abode = registry.TryGet<const Abode>(building);
+	if (abode != nullptr && abode->type == AbodeNumber::FootballPitch)
+	{
+		const auto centre = glm::vec3(matrix * glm::vec4(box.Center(), 1.0f));
+		return building_site::CirclePlaces(centre, reach, [](glm::vec2 ground) {
+			return Locator::terrainSystem::has_value() ? Locator::terrainSystem::value().GetHeightAt(ground) : 0.0f;
+		});
+	}
 	return building_site::OutlinePlaces(triangles, matrix, box.Center(), reach);
 }
 

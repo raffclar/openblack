@@ -307,3 +307,27 @@ TEST(FootballRules, AScatterMovesAPlaceInTheGameSteps)
 	EXPECT_EQ(rules::Scatter(0, 1.0f), 6553);
 	EXPECT_EQ(rules::Scatter(65536, -1.0f), 58982);
 }
+
+// Only the states of the match make a villager one that plays football, as a creature sees it: the state to go and
+// build the pitch and the run to a flying ball are not states of the match
+TEST(FootballRules, TheStatesOfTheMatchRunFromTheWalkToTheWave)
+{
+	using openblack::VillagerStates;
+	EXPECT_FALSE(rules::IsMatchState(VillagerStates::MoveToFootballPitchConstruction));
+	EXPECT_TRUE(rules::IsMatchState(VillagerStates::FootballWalkToPosition));
+	EXPECT_TRUE(rules::IsMatchState(VillagerStates::FootballGoalie));
+	EXPECT_TRUE(rules::IsMatchState(VillagerStates::FootballWatchMatch));
+	EXPECT_TRUE(rules::IsMatchState(VillagerStates::FootballMexicanWave));
+	EXPECT_FALSE(rules::IsMatchState(VillagerStates::Created));
+	EXPECT_FALSE(rules::IsMatchState(VillagerStates::FootballMoveToBall));
+}
+
+// A script puts a villager in the home team only when it asks for that team and the team has room
+TEST(FootballRules, AScriptAddsToTheHomeTeamFirstOnlyWhenItAsks)
+{
+	EXPECT_EQ(rules::ScriptTeam(true, 4, 0), rules::Side::Home);
+	EXPECT_EQ(rules::ScriptTeam(true, 5, 4), rules::Side::Away);
+	EXPECT_EQ(rules::ScriptTeam(false, 0, 0), rules::Side::Away);
+	EXPECT_EQ(rules::ScriptTeam(false, 0, 5), std::nullopt);
+	EXPECT_EQ(rules::ScriptTeam(true, 5, 5), std::nullopt);
+}

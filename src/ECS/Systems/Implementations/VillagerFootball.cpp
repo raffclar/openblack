@@ -86,6 +86,11 @@ uint32_t football::WalkToPosition(LivingAction& action)
 	return villager_home::MoveToPos(action);
 }
 
+uint32_t football::MoveToPitchConstruction(LivingAction& /*action*/)
+{
+	return 1;
+}
+
 uint32_t football::WaitForKickOff(LivingAction& action)
 {
 	if (PlayStateOf(PitchOf(VillagerOf(action))) == PlayState::Playing)

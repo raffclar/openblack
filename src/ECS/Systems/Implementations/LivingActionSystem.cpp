@@ -551,7 +551,10 @@ const static std::array<VillagerStateTableEntry, static_cast<size_t>(VillagerSta
         .entryState = &villager_farmer::EnterFarming,
         .exitState = &villager_farmer::ExitFarming,
     },
-    /* MOVE_TO_FOOTBALL_PITCH_CONSTRUCTION */ k_TodoEntry,
+    /* MOVE_TO_FOOTBALL_PITCH_CONSTRUCTION */
+    VillagerStateTableEntry {
+        .state = &ecs::villager_football::MoveToPitchConstruction,
+    },
     /* FOOTBALL_WALK_TO_POSITION */
     VillagerStateTableEntry {
         .state = &ecs::villager_football::WalkToPosition,
