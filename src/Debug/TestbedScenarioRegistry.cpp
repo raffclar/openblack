@@ -2640,6 +2640,69 @@ void AddTreePuzzle(std::vector<Scenario>& all)
 	});
 }
 
+void AddFourthLandArrival(std::vector<Scenario>& all)
+{
+	using Argument = ScriptArgument;
+	// The fourth land's home village, from the middle of the map
+	static constexpr glm::vec2 k_Land4Village {-314.42f, 102.99f};
+	all.push_back({
+	    .id = "story.l4_arrival",
+	    .name = "Story: the player comes through the vortex to the fourth land",
+	    .facet = Facet::Story,
+	    .description = "The fourth land loads with its own scripts and sky, and the player's Tiger stands on it. Its set-up "
+	                   "script runs, then its arrival script with the whole scene.",
+	    .expected = "A vortex opens beside the home village and closes 23 seconds later; until it closes the Tiger points "
+	                "at it again and again. With Nemesis's music the camera starts in the vortex looking down, rises 65 "
+	                "metres in 10 seconds while the picture fades in over 6 seconds, then sweeps to the village. Five "
+	                "storms with lightning stand near the village, and the sky moves to evening. The advisors speak "
+	                "about the ruined land along a camera path, and both point when they speak about the gates and the "
+	                "temple.",
+	    .environment = {.land = Land::Story, .storyLand = "Land4.txt", .dispenserGrid = false},
+	    .framing = {.shot = Shot::Overview,
+	                .include = {{k_Land4Village.x - 60.0f, k_Land4Village.y - 60.0f},
+	                            {k_Land4Village.x + 60.0f, k_Land4Village.y + 100.0f}}},
+	    .creatures = {{.label = "player's tiger",
+	                   .species = CreatureType::Tiger,
+	                   .phase = 3,
+	                   .needs = {.energy = 1.0f, .exhaustion = 0.0f, .dehydration = 0.0f, .poo = 0.0f, .life = 1.0f}}},
+	    .commands = {{.kind = Kind::RunScript,
+	                  .delaySeconds = 0.5f,
+	                  .script = "SetupLand4",
+	                  .scriptGlobals = {{"MyCreature", {.kind = Argument::Kind::Creature, .index = 0}}}},
+	                 {.kind = Kind::RunScript,
+	                  .delaySeconds = 0.5f,
+	                  .script = "BeginLand4",
+	                  .scriptArguments = {{.kind = ScriptArgument::Kind::Number, .number = 1.0f}}}},
+	});
+	all.push_back({
+	    .id = "story.l4_aggressive_fireballs",
+	    .name = "Story: the fourth land's fireballs come in an aggressive wave",
+	    .facet = Facet::Story,
+	    .description = "The fourth land loads with its own scripts and sky, and the player's Tiger stands on it. Its set-up "
+	                   "script runs, then its arrival script without the scene, with the switch of the aggressive waves "
+	                   "already on.",
+	    .expected = "Five fireball throwers high in the sky to the north throw level one fireballs, one every 1 to 20 "
+	                "seconds each. Two throwers aim at the edge of the home village, and three at their own points west "
+	                "of it. Each fireball has two times the strength of a fireball of a plain wave. The log shows no "
+	                "\"Cannot set strength of this\" message.",
+	    .environment = {.land = Land::Story, .storyLand = "Land4.txt", .dispenserGrid = false},
+	    .framing = {.shot = Shot::Overview, .include = {{-720.0f, -130.0f}, {-300.0f, 350.0f}}},
+	    .creatures = {{.label = "player's tiger",
+	                   .species = CreatureType::Tiger,
+	                   .phase = 3,
+	                   .needs = {.energy = 1.0f, .exhaustion = 0.0f, .dehydration = 0.0f, .poo = 0.0f, .life = 1.0f}}},
+	    .commands = {{.kind = Kind::RunScript,
+	                  .delaySeconds = 0.5f,
+	                  .script = "SetupLand4",
+	                  .scriptGlobals = {{"MyCreature", {.kind = Argument::Kind::Creature, .index = 0}}}},
+	                 {.kind = Kind::RunScript,
+	                  .delaySeconds = 0.5f,
+	                  .script = "BeginLand4",
+	                  .scriptArguments = {{.kind = ScriptArgument::Kind::Number, .number = 0.0f}},
+	                  .scriptGlobals = {{"FireMeteorWaveAggressive", {.number = 1.0f}}}}},
+	});
+}
+
 void AddStory(std::vector<Scenario>& all)
 {
 	// The player's temple west of the middle, turned as Land 1's
@@ -2848,6 +2911,7 @@ CREATE_CITADEL("0.0,0.0", 0, "PLAYER_ONE", 4254, 1000)
 	AddSingingStones(all);
 	AddBeachTemplePuzzle(all);
 	AddTreePuzzle(all);
+	AddFourthLandArrival(all);
 }
 
 void AddExplorersBoat(std::vector<Scenario>& all)
@@ -11668,6 +11732,46 @@ void AddMind(std::vector<Scenario>& all)
 	                  .delaySeconds = 4.0f}},
 	    .commands = {{.kind = Kind::SaveGame, .delaySeconds = 4.6f, .value = 0},
 	                 {.kind = Kind::LoadGame, .delaySeconds = 3.0f, .value = 0}},
+	});
+
+	// A script casts two fireballs and doubles the strength of the second, as the fourth land's fireballs do in their
+	// aggressive waves
+	all.push_back({
+	    .id = "miracles.script_fireball_strength",
+	    .name = "A script doubles the strength of the fireball that it casts",
+	    .facet = Facet::Miracles,
+	    .description = "One second after the start, a script casts two level one fireballs from 30 metres above two "
+	                   "points 30 metres apart, as no player's miracle with radius 1 and time 30. Then SET_PROPERTY sets "
+	                   "the strength of the second fireball to 2.",
+	    .expected = "Both fireballs fall onto their points. The left fireball has the strength of a plain script "
+	                "fireball. The right fireball has two times that strength each turn. A script that reads the "
+	                "strength of the right fireball gets 2. The log shows no \"Cannot set strength of this\" message.",
+	    .environment = {.dispenserGrid = false},
+	    .framing = {.shot = Shot::Overview, .include = {{-25.0f, -10.0f}, {25.0f, 10.0f}}},
+	    .commands = {{.kind = Kind::CallNative,
+	                  .delaySeconds = 1.0f,
+	                  .script = "SPELL_AT_POS",
+	                  .scriptArguments = {{.kind = ScriptArgument::Kind::Integer, .number = 1.0f},
+	                                      {.kind = ScriptArgument::Kind::Position, .point = {-15.0f, 0.0f}},
+	                                      {.kind = ScriptArgument::Kind::Position, .point = {-15.0f, 0.0f}, .height = 30.0f},
+	                                      {.kind = ScriptArgument::Kind::Number, .number = 1.0f},
+	                                      {.kind = ScriptArgument::Kind::Number, .number = 30.0f},
+	                                      {.kind = ScriptArgument::Kind::Number, .number = 0.0f}}},
+	                 {.kind = Kind::CallNative,
+	                  .delaySeconds = 0.1f,
+	                  .script = "SPELL_AT_POS",
+	                  .scriptArguments = {{.kind = ScriptArgument::Kind::Integer, .number = 1.0f},
+	                                      {.kind = ScriptArgument::Kind::Position, .point = {15.0f, 0.0f}},
+	                                      {.kind = ScriptArgument::Kind::Position, .point = {15.0f, 0.0f}, .height = 30.0f},
+	                                      {.kind = ScriptArgument::Kind::Number, .number = 1.0f},
+	                                      {.kind = ScriptArgument::Kind::Number, .number = 30.0f},
+	                                      {.kind = ScriptArgument::Kind::Number, .number = 0.0f}}},
+	                 {.kind = Kind::CallNative,
+	                  .delaySeconds = 0.1f,
+	                  .script = "SET_PROPERTY",
+	                  .scriptArguments = {{.kind = ScriptArgument::Kind::Integer, .number = 17.0f},
+	                                      {.kind = ScriptArgument::Kind::Made, .index = 1, .kept = true},
+	                                      {.kind = ScriptArgument::Kind::Number, .number = 2.0f}}}},
 	});
 
 	// A physical shield stands in the physics as a solid dome from the turn that it goes up
