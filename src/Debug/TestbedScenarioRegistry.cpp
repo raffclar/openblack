@@ -5488,6 +5488,27 @@ void AddAudio(std::vector<Scenario>& all)
 	});
 
 	all.push_back({
+	    .id = "multiplayer.chat_friends",
+	    .name = "Friends and others in the list of people of the chat",
+	    .facet = Facet::Interface,
+	    .description = "The chat opens. Its list of people has Bob, the god of the second player, under Players. It has "
+	                   "the made-up friends Carol and Dave under Friends, and Eve, a person of the staff, under Others. "
+	                   "Carol was seen now.",
+	    .expected = "Under the line of the chat, the list shows three headings: Players, Friends and Others, each with "
+	                "its speech button. Bob is selected and has a bar. Carol has an envelope at the right of her row. "
+	                "Dave has no envelope. Eve is yellow and has a bar. Under the list, the button \"Make Friends\" shows, "
+	                "because Bob is selected. Click the button: Bob goes to the top of the friends, and the button changes "
+	                "to \"Make Not Friends\".",
+	    .environment = {.players = {PlayerNames::PLAYER_TWO}},
+	    .commands = {{.kind = Kind::Chat,
+	                  .player = PlayerNames::PLAYER_TWO,
+	                  .delaySeconds = 1.0f,
+	                  .value = k_ChatSays,
+	                  .action = "Hello"},
+	                 {.kind = Kind::Chat, .delaySeconds = 0.5f, .value = k_ChatFriends}},
+	});
+
+	all.push_back({
 	    .id = "interface.controls_rebind",
 	    .name = "The Controls page asks for a new key",
 	    .facet = Facet::Interface,

@@ -147,40 +147,109 @@ enum class Font : uint8_t
 /// character that the code page does not have becomes '?'.
 [[nodiscard]] std::string LogLine(std::u16string_view name, std::u16string_view text);
 
-/// The list of players of the chat: a heading, and under it the other players of the game when it is open
+/// The list of people of the chat. It has three groups, each with a heading, in this order:
+/// - Players: the other players of the game.
+/// - Friends: the friends of the profile, at most 25 kept.
+/// - Others: other people that sent a line.
+/// A group with no people does not show. Each heading shows its people under it when it is expanded.
 namespace people
 {
 
+/// The lasting number of a person, which the friends of the profile keep
+using UserId = uint32_t;
+
+/// The texts of the headings and of the friend button
+constexpr uint32_t k_FriendsText = 6618;
+constexpr uint32_t k_OthersText = 6620;
+/// "Make Friends" and "Make Not Friends"
+constexpr uint32_t k_MakeFriendsText = 6779;
+constexpr uint32_t k_MakeNotFriendsText = 6780;
+
+/// The profile keeps at most this many friends
+constexpr size_t k_MostKeptFriends = 25;
+/// A friend that was seen less than this long ago is online, in milliseconds of the online clock
+constexpr uint32_t k_OnlineTime = 450000;
+/// The online clock starts at this time, so that a friend that was never seen is not online
+constexpr uint32_t k_OnlineClockStart = k_OnlineTime;
+
+/// The colour of a person with no god, as 0xAARRGGBB
+constexpr uint32_t k_NoGodColour = 0x00AFEFFFu;
+/// The colour of a person of the game's staff. Its full alpha gives the row a bar, also when it is not selected.
+constexpr uint32_t k_StaffColour = 0xFFFFFF00u;
+/// The numbers of the staff are after the first and before the last
+constexpr UserId k_BeforeFirstStaff = 9999998;
+constexpr UserId k_AfterLastStaff = 10000015;
+
 struct Person
 {
+	/// The god slot of a player of the game. The other groups do not use it.
 	PlayerNames slot {PlayerNames::PLAYER_ONE};
+	/// None when the game does not know the lasting number of the person
+	std::optional<UserId> user;
 	std::u16string name;
 	bool selected {false};
+	/// The person is a friend of the profile
+	bool isFriend {false};
+	/// A friend that is online shows an envelope
+	bool online {false};
+	/// When the friend was last seen, on the online clock
+	uint32_t lastSeen {0};
+	/// The colour of the row, as 0xAARRGGBB. Full alpha gives the row a bar.
+	uint32_t colour {k_NoGodColour};
+};
+
+struct Category
+{
+	/// The heading shows the people under it, else "..." after its name
+	bool expanded {true};
+	/// The speech button of the heading
+	bool messagesOn {true};
+	std::vector<Person> people;
+};
+
+enum class Group : uint8_t
+{
+	Players,
+	Friends,
+	Others,
 };
 
 struct List
 {
-	/// The heading shows the players under it, else "..." after its name
-	bool expanded {true};
-	/// The speech button of the heading
-	bool messagesOn {true};
-	std::vector<Person> players;
-	/// The row of the last player that a click selected, for a click with Shift
+	Category players;
+	Category friends;
+	Category others;
+	/// The row of the last person that a click selected, for a click with Shift
 	std::optional<size_t> lastSelected;
+
+	[[nodiscard]] Category& Of(Group group) noexcept;
+	[[nodiscard]] const Category& Of(Group group) const noexcept;
 };
 
 /// The other players of the game, in the order of their god slots, each selected
-[[nodiscard]] List MakeList(std::vector<Person> players);
-/// The rows of the list: the heading first, then each player when the list is expanded
-[[nodiscard]] size_t RowCount(const List& list) noexcept;
+[[nodiscard]] Category MakePlayers(std::vector<Person> players);
+
+/// A row of the list: the heading of a group, or a person of the group
+struct Row
+{
+	Group group {Group::Players};
+	/// None for the heading
+	std::optional<size_t> person;
+	bool operator==(const Row&) const = default;
+};
+/// The rows of the list: for each group with people, in the order Players, Friends, Others, the heading and then each
+/// person when the group is expanded
+[[nodiscard]] std::vector<Row> Rows(const List& list);
+[[nodiscard]] size_t RowCount(const List& list);
 
 /// A click on a row of the list:
-/// - On the heading, the click removes the selection. On the speech button of the heading it turns the messages on or
-///   off, and the list expands with them. Elsewhere it expands or collapses the list.
-/// - On a selected player with no modifier key, the click removes the selection of all players.
-/// - Else, with no Ctrl, the click first removes the selection of all players.
-/// - With Shift, the players from the last player that a click selected to this one change as this player changes.
-/// - Else this player changes, and is the last player that a click selected.
+/// - On a heading, the click removes the selection of all people. On the speech button of the heading it turns the
+///   messages on or off, and the group expands with them. Elsewhere it expands or collapses the group.
+/// - On a selected person with no modifier key, the click removes the selection of all people.
+/// - Else, with no Ctrl, the click first removes the selection of all people.
+/// - With Shift, the people of the rows from the last row that a click selected to this one change as this person
+///   changes. The headings between them do not change.
+/// - Else this person changes, and its row is the last row that a click selected.
 struct Click
 {
 	size_t row {0};
@@ -194,6 +263,53 @@ void Apply(List& list, const Click& click);
 
 /// The players that the list selects, for Recipients
 [[nodiscard]] std::vector<ListedPlayer> Listed(const List& list);
+
+/// Each friend marks the people of the other groups with its number as friends. Nothing removes these marks.
+void MarkFriends(List& list);
+
+/// The friend button under the list. It is usable when at least one person is selected and all the selected people
+/// are friends, or none of them is. It removes friends when the first selected person is a friend.
+struct FriendButton
+{
+	bool usable {false};
+	bool removes {false};
+	bool operator==(const FriendButton&) const = default;
+};
+[[nodiscard]] FriendButton FriendButtonOf(const List& list);
+
+/// The friend button changes the friends:
+/// 1. Each selected player that is a friend selects its friend. Each other selected player goes to the top of the
+///    friends as a friend that is not selected, and stays in the players.
+/// 2. Each selected other that is a friend selects its friend. Each other selected other moves to the top of the
+///    friends, not selected.
+/// 3. Each selected friend goes, and the player with its number is no longer selected and no longer a friend.
+/// 4. The people get their friend marks again.
+void MakeFriends(List& list);
+
+/// A friend as the profile keeps it
+struct FriendRecord
+{
+	UserId user {0};
+	std::u16string name;
+	bool operator==(const FriendRecord&) const = default;
+};
+/// The friends that the profile keeps: the first 25, from the top
+[[nodiscard]] std::vector<FriendRecord> KeptFriends(const List& list);
+/// The friends of the profile replace the friends of the list, in the same order, at most 25. The heading keeps
+/// whether it is expanded and whether its messages are on.
+void LoadFriends(List& list, std::span<const FriendRecord> records);
+
+/// A person that is not a player and not a friend sent a line: the person goes to the top of the others, in the
+/// colour of the staff when its number is a number of the staff. The own number and a friend do not go.
+void AddOther(List& list, std::u16string_view name, UserId user, std::optional<UserId> own);
+
+/// The friends that were seen now are seen at this time of the online clock. Then each friend is online when it is a
+/// player of the game, or when it was seen less than 450 seconds ago. A time of a friend that is later than now goes
+/// back to 0.
+void UpdateOnline(List& list, std::span<const UserId> seen, uint32_t now);
+
+/// The numbers of all friends, from the top. The list can have more than the 25 that the profile keeps.
+[[nodiscard]] std::vector<UserId> FriendNumbers(const List& list);
 
 } // namespace people
 

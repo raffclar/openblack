@@ -90,6 +90,20 @@ TEST(LobbyStatus, ReportGoesToTheJsonOfTheLobby)
 	EXPECT_NE(text.find(R"("players":[{"account":7,"clan":null,"role":"god"}])"), std::string::npos);
 }
 
+TEST(LobbyStatus, TheAnswerGivesTheListingAndTheTimeOfTheNextReport)
+{
+	const auto reply =
+	    openblack::lobby_api::ParseServerStatusReply(R"({"next_status_in":15,"listed":true,"clans":[{"account":7,"clan":3}]})");
+	ASSERT_TRUE(reply.has_value());
+	EXPECT_EQ(reply->nextStatusIn, 15);
+	EXPECT_TRUE(reply->listed);
+	ASSERT_EQ(reply->clans.size(), 1);
+	EXPECT_EQ(reply->clans[0].account, 7);
+	EXPECT_EQ(reply->clans[0].clan, 3);
+	EXPECT_FALSE(openblack::lobby_api::ParseServerStatusReply(R"({"listed":true,"clans":[]})").has_value());
+	EXPECT_FALSE(openblack::lobby_api::ParseServerStatusReply("{}").has_value());
+}
+
 TEST(LobbyStatus, TheGameListComparesTheVersionThatTheServerReports)
 {
 	// The game server reports its semantic version whole, and the game list of a client of the same build shows no
