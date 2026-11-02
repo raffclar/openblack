@@ -10,6 +10,8 @@
 // The testbed's scenarios of three quests of the fifth land: the crusaders and the dragon in the cave, the brown bear's
 // trail of dung, and Nemesis's curse on the creature. Each loads the fifth land and starts the quest's own script.
 
+#include <cstddef>
+
 #include <array>
 
 #include <glm/vec2.hpp>
@@ -24,28 +26,30 @@ namespace
 using Kind = Command::Kind;
 using Argument = ScriptArgument;
 
-// Places of the fifth land that the quests' scripts use, from the middle of the map
+// Places of the fifth land that the quests' scripts use, from the middle of the land (2720, 3040)
 /// The crusaders' camp by the cave's mouth, and their pyre
-constexpr glm::vec2 k_Camp {-663.55f, -213.43f};
-constexpr glm::vec2 k_Pyre {-676.70f, -210.00f};
+constexpr glm::vec2 k_Camp {-823.55f, -693.43f};
+constexpr glm::vec2 k_Pyre {-836.70f, -690.00f};
 /// The five blowholes along the hill over the cave, from the mouth's end, and the cave's exit
 constexpr std::array<glm::vec2, 5> k_Blowholes {{
-    {-733.87f, -254.20f},
-    {-815.06f, -334.73f},
-    {-896.42f, -393.63f},
-    {-978.99f, -437.69f},
-    {-1093.93f, -476.15f},
+    {-893.86f, -734.20f},
+    {-975.06f, -814.73f},
+    {-1056.42f, -873.63f},
+    {-1138.99f, -917.69f},
+    {-1253.93f, -956.15f},
 }};
-constexpr glm::vec2 k_CaveExit {-1158.51f, -496.69f};
+constexpr glm::vec2 k_CaveExit {-1299.04f, -971.28f};
 /// The farmer's house at the edge of the Japanese village, and the first pile of dung west of it
-constexpr glm::vec2 k_FarmersHouse {-200.68f, 830.02f};
-constexpr glm::vec2 k_FirstDung {-305.09f, 826.62f};
+constexpr glm::vec2 k_FarmersHouse {-360.68f, 350.02f};
+constexpr glm::vec2 k_FirstDung {-465.09f, 346.62f};
+/// The Japanese village's number in the land's script
+constexpr size_t k_JapaneseVillage = 7;
 /// The four Wonders: in Nemesis's Aztec, Greek and Tibetan villages, and in his own village
 constexpr std::array<glm::vec2, 4> k_Wonders {{
-    {103.77f, 1111.00f},
-    {-228.08f, 21.00f},
-    {-801.56f, -222.95f},
-    {590.26f, 49.82f},
+    {-56.23f, 631.00f},
+    {-388.08f, -459.00f},
+    {-961.56f, -702.95f},
+    {430.26f, -430.18f},
 }};
 
 /// The player's creature, at the home town of the fifth land
@@ -68,6 +72,16 @@ Command FindBuilding(glm::vec2 at, float delaySeconds)
 	                            {.kind = Argument::Kind::Integer, .number = 5000.0f},
 	                            {.kind = Argument::Kind::Position, .point = at},
 	                            {.kind = Argument::Kind::Number, .number = 0.0f}}};
+}
+
+/// A script's order to the town at a place to build its Wonder there, with the desire that the land's script gives
+Command BuildWonder(glm::vec2 at, float delaySeconds)
+{
+	return {
+	    .kind = Kind::CallNative,
+	    .delaySeconds = delaySeconds,
+	    .script = "BUILD_BUILDING",
+	    .scriptArguments = {{.kind = Argument::Kind::Position, .point = at}, {.kind = Argument::Kind::Number, .number = 0.6f}}};
 }
 } // namespace
 
@@ -124,8 +138,9 @@ void testbed_scenarios::AddLandFiveQuestScenarios(std::vector<Scenario>& all)
 	    .id = "story.l5_brown_bear_trail",
 	    .name = "Story: the brown bear's trail of dung on the fifth land",
 	    .facet = Facet::Story,
-	    .description = "The fifth land loads with its own scripts. The brown bear quest starts as when the Japanese "
-	                   "village becomes the player's, and two seconds later the player clicks its scroll over the "
+	    .description = "The fifth land loads with its own scripts. The Japanese village becomes the player's, the brown "
+	                   "bear quest starts as the land's script starts it then, and two seconds later the player clicks its "
+	                   "scroll over the "
 	                   "farmer's house. Pick up each pile of dung with the hand to go on.",
 	    .expected = "A pile of dung with flies over it lies about 100 metres west of the house. A Japanese farmer comes "
 	                "out, retches and asks the player to check the stench from the forest. Each pile that the hand picks "
@@ -134,24 +149,30 @@ void testbed_scenarios::AddLandFiveQuestScenarios(std::vector<Scenario>& all)
 	                "offers itself for a creature swap.",
 	    .environment = {.land = Land::Story, .storyLand = "Land5.txt", .dispenserGrid = false},
 	    .framing = {.shot = Shot::Overview, .include = {k_FirstDung, k_FarmersHouse}},
-	    .commands = {{.kind = Kind::RunScript, .delaySeconds = 0.5f, .script = "SwapToBrownBear"},
+	    .commands = {{.kind = Kind::GiveLandTown, .delaySeconds = 0.5f, .value = k_JapaneseVillage, .amount = 5.0f},
+	                 {.kind = Kind::RunScript, .delaySeconds = 10.0f, .script = "SwapToBrownBear"},
 	                 {.kind = Kind::ClickScroll, .delaySeconds = 2.0f, .point = k_FarmersHouse}},
 	});
 	all.push_back({
 	    .id = "story.l5_curse_strikes",
 	    .name = "Story: Nemesis's curse strikes the creature at night on the fifth land",
 	    .facet = Facet::Story,
-	    .description = "The fifth land loads with its own scripts at 23:00, with the player's tiger near the Greek Wonder. "
-	                   "The curse starts with the land's four Wonders, as the land's script starts it.",
+	    .description = "The fifth land loads with its own scripts, with the player's tiger near the Greek Wonder. The hour "
+	                   "jumps to 23:00. The towns are told to build their Wonders as the land's script tells them, and the "
+	                   "curse starts with the land's four Wonders, as the land's script starts it.",
 	    .expected = "At once (it is night) a dust cloud covers the tiger for 8 seconds. Its strength falls by 0.16, its "
 	                "height by 1 and its alignment moves 0.4 away from the player's, each with a short wobble. The tiger "
 	                "is frightened, both advisors cling to the edges of the screen and one of them asks what is wrong "
-	                "with the creature. Then the good advisor says the creature seems to be all right. The curse does "
-	                "not strike again until a day has passed.",
-	    .environment = {.land = Land::Story, .storyLand = "Land5.txt", .hour = 23.0f, .dispenserGrid = false},
+	                "with the creature. When the fright ends the tiger looks at the hand. Then the good advisor says the "
+	                "creature seems to be all right. The curse does not strike again until a day has passed.",
+	    .environment = {.land = Land::Story, .storyLand = "Land5.txt", .dispenserGrid = false},
 	    .framing = {.shot = Shot::Follow},
 	    .creatures = {PlayersTiger(k_Wonders[1] + glm::vec2(30.0f, -30.0f))},
-	    .commands = {FindBuilding(k_Wonders[0], 0.5f),
+	    .commands = {{.kind = Kind::SetHour, .delaySeconds = 0.2f, .hour = 23.0f},
+	                 BuildWonder(k_Wonders[0], 0.3f),
+	                 BuildWonder(k_Wonders[1], 0.0f),
+	                 BuildWonder(k_Wonders[2], 0.0f),
+	                 FindBuilding(k_Wonders[0], 0.5f),
 	                 FindBuilding(k_Wonders[1], 0.0f),
 	                 FindBuilding(k_Wonders[2], 0.0f),
 	                 FindBuilding(k_Wonders[3], 0.0f),
@@ -161,7 +182,6 @@ void testbed_scenarios::AddLandFiveQuestScenarios(std::vector<Scenario>& all)
 	                  .scriptArguments = {{.kind = Argument::Kind::Made, .index = 0},
 	                                      {.kind = Argument::Kind::Made, .index = 1},
 	                                      {.kind = Argument::Kind::Made, .index = 2},
-	                                      {.kind = Argument::Kind::Made, .index = 3}},
-	                  .scriptGlobals = {{"MyCreature", {.kind = Argument::Kind::Creature, .index = 0}}}}},
+	                                      {.kind = Argument::Kind::Made, .index = 3}}}},
 	});
 }
