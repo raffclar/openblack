@@ -897,6 +897,17 @@ entt::entity CreateScriptObject(const ObjectType type, uint32_t subtype, const g
 		return Locator::weatherSystem::value().CreateWeatherThing(
 		    script::create_rules::WeatherThingStorm(info.weather.at(subtype), OnGround(position)));
 	}
+	case ObjectType::Store:
+	{
+		// A new pile of food or wood on the land, holding one of it and belonging to nobody. It thuds as it lands. The
+		// script then fills it.
+		const auto resource = script::create_rules::StoreResource(subtype);
+		if (!resource.has_value() || !Locator::resourceStoreSystem::has_value())
+		{
+			break;
+		}
+		return Locator::resourceStoreSystem::value().MakePile(*resource, position, 1);
+	}
 	case ObjectType::OneShotSpell:
 		// A globe of a seed at its plain miracle, lying on the ground
 		return Locator::magicSystem::value().CreateOneOffSeed(OnGround(position), static_cast<SpellSeedType>(subtype),
