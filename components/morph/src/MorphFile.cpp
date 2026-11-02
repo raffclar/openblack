@@ -82,7 +82,9 @@
 #include <cassert>
 #include <cstring>
 
+#include <algorithm>
 #include <fstream>
+#include <optional>
 #include <utility>
 #include <vector>
 
@@ -298,12 +300,20 @@ void MorphFile::ReadCreatureBlock(std::istream& stream) noexcept
 	const auto version = _header.unknown0x0;
 	constexpr uint32_t k_EyesVersion = 14;
 
-	const auto skip = [&stream](std::streamoff bytes) { stream.seekg(bytes, std::ios_base::cur); };
 	// Older morph data ends with a name
 	if (_header.binaryVersion <= 5)
 	{
-		skip(0x20);
+		_creaturePrefix.resize(0x20);
+		stream.read(reinterpret_cast<char*>(_creaturePrefix.data()), static_cast<std::streamsize>(_creaturePrefix.size()));
 	}
+	// Every number after the last field read is kept, for writing the file back
+	const auto readRest = [this, &stream]() {
+		_creatureRest.clear();
+		for (int32_t value = 0; stream.read(reinterpret_cast<char*>(&value), sizeof(value)).good();)
+		{
+			_creatureRest.push_back(value);
+		}
+	};
 	// The bones it acts with and the moments of its object animations, as many as the version has
 	CreatureActionPoints points {};
 	const auto read = [&stream](int32_t& value) { stream.read(reinterpret_cast<char*>(&value), sizeof(value)); };
@@ -354,6 +364,7 @@ void MorphFile::ReadCreatureBlock(std::istream& stream) noexcept
 	}
 	if (version < k_EyesVersion)
 	{
+		readRest();
 		return;
 	}
 	// Then up to two points on the body, each after whether it is there
@@ -405,13 +416,9 @@ void MorphFile::ReadCreatureBlock(std::istream& stream) noexcept
 	// counted in the mesh rather than here.
 	constexpr size_t k_MostTail = 512;
 	_creatureVersion = version;
-	std::vector<int32_t> rest;
-	for (int32_t value = 0; stream.read(reinterpret_cast<char*>(&value), sizeof(value)).good();)
-	{
-		rest.push_back(value);
-	}
-	const auto keep = std::min(rest.size(), k_MostTail);
-	_creatureTail.assign(rest.end() - static_cast<std::ptrdiff_t>(keep), rest.end());
+	readRest();
+	const auto keep = std::min(_creatureRest.size(), k_MostTail);
+	_creatureTail.assign(_creatureRest.end() - static_cast<std::ptrdiff_t>(keep), _creatureRest.end());
 }
 
 void MorphFile::ReadTattooSites(std::istream& stream, uint32_t version) noexcept
@@ -422,16 +429,15 @@ void MorphFile::ReadTattooSites(std::istream& stream, uint32_t version) noexcept
 	{
 		return;
 	}
-	const auto skip = [&stream](std::streamoff bytes) { stream.seekg(bytes, std::ios_base::cur); };
-	constexpr std::streamoff k_Field = sizeof(uint32_t);
 	// The sound bank's name, then seven sizes, then a pair or triple of numbers for each of the twelve fight blows
 	if (version > 18)
 	{
-		std::array<char, 0x20> bank {};
-		stream.read(bank.data(), bank.size());
-		_soundBankName.assign(bank.data(), strnlen(bank.data(), bank.size()));
+		stream.read(_soundBankRaw.data(), _soundBankRaw.size());
+		_soundBankName.assign(_soundBankRaw.data(), strnlen(_soundBankRaw.data(), _soundBankRaw.size()));
 	}
-	skip((version < 11 ? 1 : 7) * k_Field);
+	_creatureSizes.resize(version < 11 ? 1 : 7);
+	stream.read(reinterpret_cast<char*>(_creatureSizes.data()),
+	            static_cast<std::streamsize>(_creatureSizes.size() * sizeof(uint32_t)));
 	CreatureBlows blows {};
 	for (auto& blow : blows)
 	{
@@ -448,8 +454,9 @@ void MorphFile::ReadTattooSites(std::istream& stream, uint32_t version) noexcept
 	}
 
 	TattooSites sites {};
-	for (auto& site : sites)
+	for (size_t siteIndex = 0; siteIndex < sites.size(); ++siteIndex)
 	{
+		auto& site = sites[siteIndex];
 		site = {};
 		uint32_t enabled = 0;
 		stream.read(reinterpret_cast<char*>(&enabled), sizeof(enabled));
@@ -462,6 +469,7 @@ void MorphFile::ReadTattooSites(std::istream& stream, uint32_t version) noexcept
 		stream.read(reinterpret_cast<char*>(packed.data()), packed.size());
 		stream.read(reinterpret_cast<char*>(&site.size), sizeof(site.size));
 		site.enabled = true;
+		_tattooRaw[siteIndex].packed = packed;
 		site.u = packed[0];
 		site.v = packed[1];
 		site.skin = static_cast<uint8_t>(packed[2] >> 6u);
@@ -470,6 +478,8 @@ void MorphFile::ReadTattooSites(std::istream& stream, uint32_t version) noexcept
 			uint32_t mirror = 0;
 			stream.read(reinterpret_cast<char*>(&mirror), sizeof(mirror));
 			stream.read(reinterpret_cast<char*>(&site.rotation), sizeof(site.rotation));
+			_tattooRaw[siteIndex].mirror = mirror;
+			_tattooRaw[siteIndex].rotation = site.rotation;
 			site.mirror = mirror != 0;
 			site.rotation &= 3u;
 		}
@@ -639,4 +649,260 @@ MorphResult MorphFile::Open(const std::vector<uint8_t>& buffer, const std::files
 	imemstream stream(reinterpret_cast<const char*>(buffer.data()), buffer.size() * sizeof(buffer[0]));
 
 	return ReadFile(stream, specsDirectory);
+}
+
+namespace
+{
+template <typename T>
+void Put(std::vector<uint8_t>& out, const T& value)
+{
+	const auto* bytes = reinterpret_cast<const uint8_t*>(&value);
+	out.insert(out.end(), bytes, bytes + sizeof(T));
+}
+
+template <typename T>
+void PutAll(std::vector<uint8_t>& out, const std::vector<T>& values)
+{
+	for (const auto& value : values)
+	{
+		Put(out, value);
+	}
+}
+
+void PatchU32(std::vector<uint8_t>& out, size_t at, uint32_t value)
+{
+	std::memcpy(out.data() + at, &value, sizeof(value));
+}
+
+void PutAnimation(std::vector<uint8_t>& out, const Animation& animation)
+{
+	Put(out, animation.header);
+	PutAll(out, animation.rotatedJointIndices);
+	PutAll(out, animation.translatedJointIndices);
+	for (const auto& frame : animation.keyframes)
+	{
+		PutAll(out, frame.eulerAngles);
+		PutAll(out, frame.translations);
+	}
+}
+
+/// A set of animations: an offset for each animation of the spec file (0 for none), the offset of the block after the
+/// set, then the animations that are present, one after the other
+void PutAnimationSet(std::vector<uint8_t>& out, const std::vector<Animation>& animations, const std::vector<int32_t>& indices,
+                     size_t specCount)
+{
+	const auto offsetsAt = out.size();
+	out.resize(out.size() + ((specCount + 1) * sizeof(uint32_t)), 0);
+	for (size_t i = 0; i < specCount; ++i)
+	{
+		if (i < indices.size() && indices[i] >= 0)
+		{
+			PatchU32(out, offsetsAt + (i * sizeof(uint32_t)), static_cast<uint32_t>(out.size()));
+			PutAnimation(out, animations[static_cast<size_t>(indices[i])]);
+		}
+	}
+	PatchU32(out, offsetsAt + (specCount * sizeof(uint32_t)), static_cast<uint32_t>(out.size()));
+}
+} // namespace
+
+void MorphFile::WriteCreatureBlock(std::vector<uint8_t>& out) const
+{
+	const auto version = _header.unknown0x0;
+	out.insert(out.end(), _creaturePrefix.begin(), _creaturePrefix.end());
+	// What the reader reads, in its order, field for field
+	if (_creatureActionPoints.has_value())
+	{
+		const auto& points = *_creatureActionPoints;
+		Put(out, points.rightHand);
+		Put(out, points.rightFoot);
+		if (version > 2)
+		{
+			Put(out, points.rightArmpit);
+			Put(out, points.belly);
+		}
+		Put(out, points.head);
+		if (version > 11)
+		{
+			Put(out, points.unknownBone);
+		}
+		Put(out, points.groin);
+		if (version > 4)
+		{
+			Put(out, points.leashBone);
+			Put(out, points.rightEye);
+		}
+		Put(out, points.pickUpTime);
+		if (version > 8)
+		{
+			Put(out, points.catchTimes[0]);
+			Put(out, points.catchTimes[1]);
+		}
+		if (version > 9)
+		{
+			Put(out, points.pointTime);
+		}
+		Put(out, points.destroyTime);
+		Put(out, points.discardTime);
+		Put(out, points.eatTime);
+		Put(out, points.throwTime);
+		Put(out, points.putDownTime);
+		if (version > 15)
+		{
+			Put(out, points.kickTime);
+		}
+		if (version > 7)
+		{
+			Put(out, points.kissTime);
+		}
+	}
+	constexpr uint32_t k_EyesVersion = 14;
+	constexpr uint32_t k_TattooVersion = 15;
+	if (version >= k_EyesVersion && _creatureActionPoints.has_value())
+	{
+		const auto putOptionalPoint = [&out](const std::optional<MeshIntersect>& point) {
+			Put(out, static_cast<uint32_t>(point.has_value() ? 1 : 0));
+			if (point.has_value())
+			{
+				Put(out, *point);
+			}
+		};
+		if (version > 7)
+		{
+			putOptionalPoint(_creatureKissPoint);
+		}
+		if (version > 17)
+		{
+			putOptionalPoint(_creaturePukePoint);
+		}
+		if (_creatureEyes.has_value())
+		{
+			const auto& eyes = *_creatureEyes;
+			Put(out, eyes.scale);
+			for (const auto& point : eyes.points)
+			{
+				Put(out, point.intersect);
+				Put(out, static_cast<uint32_t>(point.enabled ? 1 : 0));
+				Put(out, point.depth);
+			}
+			for (size_t k = 0; k < 3; ++k)
+			{
+				for (const auto& row : eyes.lidAngles)
+				{
+					Put(out, row.at(k));
+				}
+			}
+			if (version >= k_TattooVersion)
+			{
+				if (version > 18)
+				{
+					out.insert(out.end(), reinterpret_cast<const uint8_t*>(_soundBankRaw.data()),
+					           reinterpret_cast<const uint8_t*>(_soundBankRaw.data()) + _soundBankRaw.size());
+				}
+				PutAll(out, _creatureSizes);
+				if (_creatureBlows.has_value())
+				{
+					for (const auto& blow : *_creatureBlows)
+					{
+						Put(out, blow.landTime);
+						Put(out, blow.strikingBone);
+						if (version > 12)
+						{
+							Put(out, blow.woundType);
+						}
+					}
+				}
+				if (_tattooSites.has_value())
+				{
+					for (size_t i = 0; i < _tattooSites->size(); ++i)
+					{
+						const auto& site = (*_tattooSites)[i];
+						Put(out, static_cast<uint32_t>(site.enabled ? 1 : 0));
+						if (!site.enabled)
+						{
+							continue;
+						}
+						auto packed = _tattooRaw[i].packed;
+						packed[0] = site.u;
+						packed[1] = site.v;
+						packed[2] = static_cast<uint8_t>((packed[2] & 0x3Fu) | (static_cast<uint32_t>(site.skin) << 6u));
+						out.insert(out.end(), packed.begin(), packed.end());
+						Put(out, site.size);
+						if (version > 16)
+						{
+							const auto mirror = site.mirror ? std::max<uint32_t>(_tattooRaw[i].mirror, 1u) : 0u;
+							Put(out, mirror);
+							Put(out, (_tattooRaw[i].rotation & ~3u) | (site.rotation & 3u));
+						}
+					}
+				}
+			}
+		}
+	}
+	PutAll(out, _creatureRest);
+}
+
+std::vector<uint8_t> MorphFile::Write() const
+{
+	assert(_isLoaded);
+
+	std::vector<uint8_t> out;
+	Put(out, _header);
+
+	size_t specCount = 0;
+	for (const auto& set : _animationSpecs.animationSets)
+	{
+		specCount += set.animations.size();
+	}
+	PutAnimationSet(out, _baseAnimation, _baseAnimationIndices, specCount);
+	// Creature files have an animation set for each variant mesh that is named, in the order of the variants
+	for (size_t i = 0; i < _variantAnimations.size(); ++i)
+	{
+		if (std::strlen(_header.variantMeshNames.at(i).data()) > 0)
+		{
+			PutAnimationSet(out, _variantAnimations.at(i), _variantAnimationIndices.at(i), specCount);
+		}
+	}
+
+	Put(out, _hairHeader);
+	for (const auto& group : _hairGroups)
+	{
+		Put(out, group.header);
+		PutAll(out, group.hairs);
+	}
+
+	// What happens at moments of each base animation, each after a flag, and a flag of 0 ends the list
+	for (size_t i = 0; i < specCount; ++i)
+	{
+		if (i >= _baseAnimationIndices.size() || _baseAnimationIndices[i] < 0)
+		{
+			continue;
+		}
+		if (i < _extraData.size())
+		{
+			for (const auto& data : _extraData[i])
+			{
+				Put(out, static_cast<uint32_t>(1));
+				Put(out, data);
+			}
+		}
+		Put(out, static_cast<uint32_t>(0));
+	}
+
+	if (_header.unknown0x0 != 0u)
+	{
+		WriteCreatureBlock(out);
+	}
+	return out;
+}
+
+MorphResult MorphFile::Write(const std::filesystem::path& filepath) const
+{
+	std::ofstream stream(filepath, std::ios::binary);
+	if (!stream.is_open())
+	{
+		return MorphResult::ErrCantOpen;
+	}
+	const auto bytes = Write();
+	stream.write(reinterpret_cast<const char*>(bytes.data()), static_cast<std::streamsize>(bytes.size()));
+	return stream.good() ? MorphResult::Success : MorphResult::ErrCantOpen;
 }
