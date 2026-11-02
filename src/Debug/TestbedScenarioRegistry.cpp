@@ -5968,6 +5968,22 @@ void AddObjects(std::vector<Scenario>& all)
 	});
 
 	all.push_back({
+	    .id = "objects.held_world_place",
+	    .name = "The world place of a thing in a creature's hand",
+	    .facet = Facet::Objects,
+	    .description = "A player's tiger picks up a rock, walks 20 with it and puts it down there.",
+	    .expected = "The rock stays in the tiger's hand while the tiger walks, and the draw shows it in the hand. In the "
+	                "inspector, the rock's Transform stays where the tiger took the rock until the next turn of the "
+	                "tiger. Then at each turn of the tiger it is the tiger's own place, on the land below the tiger, "
+	                "and its turn does not change. When the tiger lets go, the rock starts at the finger ends.",
+	    .framing = {.shot = Shot::Follow, .distance = 1.2f},
+	    .creatures = {CreatureSetup {.species = CreatureType::Tiger, .offset = {0.0f, 60.0f}}},
+	    .objects = {{.type = MobileStaticInfo::RockChalk, .offset = {4.0f, 54.0f}}},
+	    .commands = {OnObject(Kind::PickUp, 0, 0, 1.0f), Go(Kind::WalkTo, 0, {0.0f, 80.0f}, 0.5f),
+	                 Act(Kind::PutDown, 0, 1.0f, true)},
+	});
+
+	all.push_back({
 	    .id = "objects.pickup_head_look",
 	    .name = "The head look after the hold of a pick-up, close up",
 	    .facet = Facet::Objects,
