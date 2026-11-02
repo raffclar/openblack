@@ -99,14 +99,16 @@ protected:
 	static void SetAlly(float player, float other, float strength)
 	{
 		Results results;
-		EXPECT_TRUE(Locator::vm::value().CallNative(k_SetPlayerAlly, {Float(player), Float(other), Float(strength)}, results));
+		const std::vector<lhvm::NativeArgument> arguments {Float(player), Float(other), Float(strength)};
+		EXPECT_TRUE(Locator::vm::value().CallNative(k_SetPlayerAlly, arguments, results));
 		EXPECT_TRUE(results.empty());
 	}
 
 	static float GetAlly(float player, float other)
 	{
 		Results results;
-		EXPECT_TRUE(Locator::vm::value().CallNative(k_GetPlayerAlly, {Float(player), Float(other)}, results));
+		const std::vector<lhvm::NativeArgument> arguments {Float(player), Float(other)};
+		EXPECT_TRUE(Locator::vm::value().CallNative(k_GetPlayerAlly, arguments, results));
 		EXPECT_EQ(results.size(), 1u);
 		return results.empty() ? -1.0f : results.front().first.floatVal;
 	}
