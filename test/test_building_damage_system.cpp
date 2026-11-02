@@ -616,3 +616,13 @@ TEST(BuildingDamageSystem, ALoadMakesTheModelOfABrokenBuildingAgainUnderTheSameV
 	EXPECT_EQ(again, 1);
 	EXPECT_TRUE(f.world->models.contains(after.drawMesh));
 }
+
+TEST(BuildingDamage, ABrokenBuildingIsDrawnWithItsBrokenModelOnceItHasOne)
+{
+	constexpr entt::id_type k_Own = 7;
+	EXPECT_EQ(building_damage::DrawnMeshOf(nullptr, k_Own), k_Own);
+	BuildingDamage broken {};
+	EXPECT_EQ(building_damage::DrawnMeshOf(&broken, k_Own), k_Own);
+	broken.drawMesh = 12;
+	EXPECT_EQ(building_damage::DrawnMeshOf(&broken, k_Own), 12u);
+}

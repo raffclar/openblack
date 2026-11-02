@@ -22,6 +22,18 @@ struct PhysicsEntry;
 struct ImpactInfo;
 } // namespace openblack::ecs
 
+namespace openblack::ecs::components
+{
+struct BuildingDamage;
+} // namespace openblack::ecs::components
+
+namespace openblack::ecs::building_damage
+{
+/// The model that a thing is drawn with: the broken model of a broken building (`broken`, none for a thing that is not
+/// broken) in place of its own model
+[[nodiscard]] entt::id_type DrawnMeshOf(const components::BuildingDamage* broken, entt::id_type own);
+} // namespace openblack::ecs::building_damage
+
 namespace openblack::ecs::systems
 {
 class DynamicsSystemInterface;

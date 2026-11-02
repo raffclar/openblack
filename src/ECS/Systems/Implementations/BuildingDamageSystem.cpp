@@ -845,10 +845,14 @@ bool BuildingDamageSystem::DrawsWhole(entt::entity object) const
 	return DrawShare(world, object) >= 1.0f;
 }
 
+entt::id_type building_damage::DrawnMeshOf(const BuildingDamage* broken, entt::id_type own)
+{
+	return broken != nullptr && broken->drawMesh != 0 ? broken->drawMesh : own;
+}
+
 entt::id_type BuildingDamageSystem::DrawnMesh(entt::entity object, entt::id_type own) const
 {
-	const auto* broken = _world->Entities().TryGet<const BuildingDamage>(object);
-	return broken != nullptr && broken->drawMesh != 0 ? broken->drawMesh : own;
+	return building_damage::DrawnMeshOf(_world->Entities().TryGet<const BuildingDamage>(object), own);
 }
 
 void BuildingDamageSystem::Repaired(entt::entity building)

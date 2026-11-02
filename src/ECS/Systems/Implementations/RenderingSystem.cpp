@@ -775,7 +775,7 @@ bool RenderingSystem::UploadInstances(bool drawBoundingBox)
 	const openblack::ecs::ComponentLookups<Abode, Field, Swayable, ResourcePile, InHand, Pot, CreatureSpells, Fire, ObjectGlow,
 	                                       SeeThrough, WorshipIcon, Temple, ChangedMaterials, TownDesireFlag, WorkshopFlag,
 	                                       WorshipSiteFlag, GateLantern, BuildProgress, Feature, AnimalPose, HeldByCreature,
-	                                       Villager, Animal, InPhysics, SnowLevel>
+	                                       Villager, Animal, InPhysics, SnowLevel, BuildingDamage>
 	    stores(registry);
 	const openblack::ecs::object_detail::Stores detailStores(registry);
 	const auto lifelessTotemParts = LifelessTotemParts(registry);
@@ -831,7 +831,11 @@ bool RenderingSystem::UploadInstances(bool drawBoundingBox)
 		    // A thing on the land is drawn in less detail the further off it is, fades out, then isn't drawn; a villager
 		    // then shows only as a smudge on a blob while it stands above the sea. One flying in the physics or one that
 		    // is kept in view never fades, and one a script draws in high detail is drawn in full however far off.
-		    const auto ownDrawnMesh = DrawnMeshOf(entity, mesh);
+		    // A broken building is drawn with its broken model
+		    const auto ownDrawnMesh =
+		        Locator::buildingDamageSystem::has_value()
+		            ? openblack::ecs::building_damage::DrawnMeshOf(stores.TryGet<BuildingDamage>(entity), mesh.id)
+		            : mesh.id;
 		    auto drawnMesh = ownDrawnMesh;
 		    auto* slotMap = &_instanceSlots;
 		    std::optional<uint8_t> fade;
