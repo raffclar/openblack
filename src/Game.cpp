@@ -1010,6 +1010,12 @@ bool Game::ProcessEvents(const SDL_Event& event) noexcept
 		magic.ReleaseAction();
 		// Let go quickly on a fireball, it is tapped
 		magic.ReleaseFireBall(machine_clock::Ticks(), Locator::time::value().GetTurn());
+		// Let go while a press on a creature waits, the press is a tap. The held leash takes it as an order to act on the
+		// creature.
+		if (const auto tapped = creatureHand.ReleaseWait(); tapped.has_value())
+		{
+			Locator::leashSystem::value().TapThing(LocalInputPlayer(), *tapped);
+		}
 	}
 	if (handTakesPresses && !inTemple && event.type == SDL_MOUSEBUTTONDOWN && event.button.button == SDL_BUTTON_RIGHT &&
 	    !Locator::debugGui::value().IsMouseOverWindow())
@@ -1097,11 +1103,23 @@ bool Game::ProcessEvents(const SDL_Event& event) noexcept
 				{
 					handGrab->ClickThing(*under);
 				}
-				if (!creatureHand.Grab())
+				// With the leash of the player's creature held loose (not tied), a press on a creature that the hand may
+				// hold first waits for a tap. A press on a creature that the hand may not hold sends no leash click.
+				const bool leashHeldLoose = own.has_value() && leashes.HolderPoint(*own).has_value();
+				switch (creature_hand::PressStartOn(creatureHand.MayHold(*under), leashHeldLoose))
 				{
-					// A creature the hand may not hold: a click on it still asks the leash, which says why not. The leash
-					// hears the click at the start of a later turn, as a command of the player.
-					Locator::playerCommandSystem::value().Submit(player_commands::LeashTap {.creature = *under});
+				case creature_hand::PressStart::Hold:
+					creatureHand.Grab();
+					break;
+				case creature_hand::PressStart::WaitForTap:
+					creatureHand.WaitForTap(*under, machine_clock::Ticks(), Locator::time::value().GetTurn());
+					break;
+				case creature_hand::PressStart::TapAtOnce:
+					// The leash takes the tap as an order to act on the creature
+					Locator::leashSystem::value().TapThing(LocalInputPlayer(), *under);
+					break;
+				case creature_hand::PressStart::Nothing:
+					break;
 				}
 			}
 		}
@@ -3952,6 +3970,11 @@ void Game::UpdateHandFrame(std::chrono::microseconds deltaTime)
 			}
 			// A fireball pressed long enough is taken, which catches it
 			Locator::magicSystem::value().HoldFireBall(machine_clock::Ticks(), Locator::time::value().GetTurn());
+			// A press on a creature that waits for a tap and lasts long enough sends the hold
+			if (Locator::creatureHandSystem::has_value())
+			{
+				Locator::creatureHandSystem::value().WaitFrame(machine_clock::Ticks(), Locator::time::value().GetTurn());
+			}
 			{
 				// The hand and the piles show their miracles
 				auto miracleFx = profiler.BeginScoped(Profiler::Stage::MiracleFxUpdate);

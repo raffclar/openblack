@@ -9,6 +9,8 @@
 
 #pragma once
 
+#include <cstdint>
+
 #include <optional>
 
 #include <entt/entity/fwd.hpp>
@@ -57,6 +59,14 @@ public:
 	/// The hand's button was pressed over the creature the interface picked under the cursor: whether it is now held to a
 	/// creature. A creature the player's hand may not touch is refused.
 	virtual bool Grab() = 0;
+	/// The hand's button was pressed over a creature that the hand may hold, while the leash of the player's creature is
+	/// held loose. The press waits for a tap, with the time on the clock in milliseconds and the game turn.
+	virtual void WaitForTap(entt::entity /*creature*/, uint32_t /*nowMs*/, uint32_t /*turn*/) {}
+	/// Once a frame: a press that waits for a tap and lasts too long sends the hold of its creature (see
+	/// creature_hand::HoldsAfterWait)
+	virtual void WaitFrame(uint32_t /*nowMs*/, uint32_t /*turn*/) {}
+	/// The button was let go while its press waits for a tap: the press ends. Returns the creature that the press taps.
+	virtual std::optional<entt::entity> ReleaseWait() { return std::nullopt; }
 	/// Whether the player's hand may take hold of the creature to stroke and slap it
 	[[nodiscard]] virtual bool MayHold(entt::entity creature) const = 0;
 	/// How the empty hand over the creature offers to interact with it, given whether the hand is within the player's
