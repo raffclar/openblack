@@ -96,7 +96,9 @@ void testbed_scenarios::AddFootballScenarios(std::vector<Scenario>& all)
 	    .objects = std::move(objects),
 	    .commands = std::move(commands),
 	});
-	std::vector<ObjectSetup> site {{.type = AbodeInfo::CelticFootballPitch, .offset = k_Pitch, .built = 0.3f}};
+	std::vector<ObjectSetup> site {{.type = AbodeInfo::CelticFootballPitch, .offset = k_Pitch, .built = 0.3f},
+	                               {.type = AbodeInfo::CelticTownCentre, .offset = {-30.0f, -15.0f}},
+	                               {.type = AbodeInfo::CelticStoragePit, .offset = {30.0f, -15.0f}, .storedWood = 5000}};
 	for (size_t i = 0; i < 6; ++i)
 	{
 		site.push_back({.type = VillagerInfo::CelticFarmerMale,
@@ -108,13 +110,14 @@ void testbed_scenarios::AddFootballScenarios(std::vector<Scenario>& all)
 	    .name = "Villagers that build a football pitch",
 	    .facet = Facet::Idle,
 	    .description = "The switch of the Soccer Add-On is on. A Celtic football pitch of the player's town stands only "
-	                   "three tenths built, as a building site. Six grown men of the town stand in a row in front of it.",
+	                   "three tenths built, as a building site. The town has a village centre and a storage pit with 5000 "
+	                   "wood. Six grown men of the town stand in a row in front of the pitch.",
 	    .expected = "The men come to the site as builders of any building. They bring wood to the pile of the site, stand "
 	                "at places on a circle round the pitch, and build it up. A creature or a footpath does not go round "
 	                "the pitch. When the pitch is built, the villagers of the town do not run to look at it as they do at "
 	                "other new civic buildings.",
 	    .environment = {.dispenserGrid = false, .football = true},
-	    .framing = {.shot = Shot::Overview, .include = {k_Pitch, glm::vec2 {0.0f, 5.0f}}, .distance = 0.5f},
+	    .framing = {.shot = Shot::Overview, .include = {k_Pitch, glm::vec2 {0.0f, -15.0f}}, .distance = 0.5f},
 	    .objects = std::move(site),
 	});
 	all.push_back(CreatureAction(
