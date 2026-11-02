@@ -7,8 +7,11 @@
  * openblack is licensed under the GNU General Public License version 3.
  *******************************************************************************/
 
-// The testbed's scenarios of three silver scrolls of the fourth and fifth lands: the fish puzzle, the stranger who
-// prays at the forest fire, and the explorers who come back. Each loads its land and starts the quest's own script.
+// The testbed's scenarios of four silver scrolls of the fourth and fifth lands: the fish puzzle, the creature breeder,
+// the stranger who prays at the forest fire, and the explorers who come back. Each loads its land and starts the quest's
+// own script.
+
+#include <cstddef>
 
 #include <array>
 #include <string_view>
@@ -140,6 +143,49 @@ void testbed_scenarios::AddLandsFourFiveScrollScenarios(std::vector<Scenario>& a
 	                                  FromMiddle(k_Land4Middle, k_FishermanSpot.x - 20.0f, k_FishermanSpot.z - 10.0f), 45.0f,
 	                                  "player's tiger")},
 	    .commands = fishCommands,
+	});
+
+	// The creature breeder of the fourth land: the kennels and the place of the creatures on show, as the land's launcher
+	// of the breeder gives them
+	constexpr glm::vec3 k_Kennels {3760.273f, 52.26f, 3412.651f};
+	constexpr glm::vec3 k_ShowPlace {3767.373f, 52.26f, 3417.875f};
+	std::vector<Command> breederCommands {
+	    {.kind = Kind::RunScript,
+	     .delaySeconds = 0.5f,
+	     .script = "RunCreatureBreederLand",
+	     .scriptArguments = {{.kind = Argument::Kind::Number, .number = 4.0f}},
+	     // As the land control scripts set them up: the player's creature, and no swap at the breeder yet
+	     .scriptGlobals = {{"MyCreature", {.kind = Argument::Kind::Creature, .index = 0}},
+	                       {"GlobalCurrentCreature", {.number = -1.0f}},
+	                       {"GlobalOldCreature", {.number = -1.0f}},
+	                       {"BreederRunning", {.number = 0.0f}},
+	                       {"NrOfChoosenCreature", {.number = 0.0f}},
+	                       {"GlobalReset", {.number = 0.0f}}}},
+	};
+	ClickMiddle(breederCommands, 11.0f, 1, 0.0f);
+	creature_swap::Unlocked leopardAndHorse;
+	leopardAndHorse.set(static_cast<size_t>(creature_swap::Bonus::Leopard));
+	leopardAndHorse.set(static_cast<size_t>(creature_swap::Bonus::Horse));
+	all.push_back({
+	    .id = "story.lfour_breeder",
+	    .name = "Story: the creature breeder of the fourth land",
+	    .facet = Facet::Story,
+	    .description = "The fourth land loads with its own scripts and sky. The Leopard and the Horse are taken as unlocked. "
+	                   "The land's own launcher of the breeder runs, which finds the kennels as a house. The camera looks "
+	                   "at the kennels. Eleven seconds in, the pointer at the middle of the screen clicks the scroll.",
+	    .expected = "The breeder, an ordinary man, stands by a Norse house of the neutral Norse village in the east of the "
+	                "land. Ten seconds in, a silver scroll stands over the house. On the click the breeder walks to his "
+	                "soap box, the camera glides to him, and the Leopard and the Horse appear side by side in sparkles, "
+	                "each with a scroll. Click the scroll of one with the Tiger within 50 metres to choose it, then click "
+	                "that creature to swap: the two creatures walk to two spots 30 to 50 metres east of the kennels, on "
+	                "ground of the same height, and change bodies.",
+	    .environment =
+	        {.land = Land::Story, .storyLand = "Land4.txt", .dispenserGrid = false, .unlockedBonusCreatures = leopardAndHorse},
+	    .framing = LookingFrom(k_Land4Middle, {k_Kennels.x, k_Kennels.z}, {-20.0f, 10.0f, 22.0f}, 5.0f),
+	    .creatures = {PlayersCreature(CreatureType::Tiger,
+	                                  FromMiddle(k_Land4Middle, k_ShowPlace.x + 10.0f, k_ShowPlace.z - 12.0f), 0.0f,
+	                                  "player's tiger")},
+	    .commands = breederCommands,
 	});
 
 	// The stranger of the fifth land: his praying place at the fire, as the quest's script gives it
