@@ -355,18 +355,14 @@ TEST(PrayerRules, ASummonedSeedIsChargedAndGivesBackWhatItHoldsWhenDropped)
 	EXPECT_FLOAT_EQ(charge, 7000.0f);
 	EXPECT_FLOAT_EQ(store.chants, 3000.0f);
 	// Never cast: all of it back
-	ReturnPrayer(store, SeedRefund(true, charge, -1.0f, false));
+	ReturnPrayer(store, SeedRefund(true, charge));
 	EXPECT_FLOAT_EQ(store.chants, 10000.0f);
-	// A held miracle let go: what it had left
-	EXPECT_FLOAT_EQ(SeedRefund(true, charge, 1200.0f, true), 1200.0f);
-	// Cast and gone: nothing
-	EXPECT_FLOAT_EQ(SeedRefund(true, charge, -1.0f, true), 0.0f);
+	// A held miracle let go: what it had left, which the store put in the charge
+	EXPECT_FLOAT_EQ(SeedRefund(true, 1200.0f), 1200.0f);
+	// Cast and gone: the cast emptied the charge
+	EXPECT_FLOAT_EQ(SeedRefund(true, 0.0f), 0.0f);
 	// A bubble's seed was never the player's
-	EXPECT_FLOAT_EQ(SeedRefund(false, charge, -1.0f, false), 0.0f);
-	// The seed holds the same as it gives back
-	EXPECT_FLOAT_EQ(SeedChantStore(charge, -1.0f, false), charge);
-	EXPECT_FLOAT_EQ(SeedChantStore(charge, 1200.0f, true), 1200.0f);
-	EXPECT_FLOAT_EQ(SeedChantStore(charge, -1.0f, true), 0.0f);
+	EXPECT_FLOAT_EQ(SeedRefund(false, charge), 0.0f);
 	EXPECT_TRUE(ReadyAtOnce(SeedOrigin::Bubble));
 	EXPECT_FALSE(ReadyAtOnce(SeedOrigin::Worship));
 }

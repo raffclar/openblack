@@ -83,6 +83,12 @@ const GMultiMapFixedInfo* InfoOf(entt::entity building)
 	{
 		return &info.worshipSite.at(static_cast<size_t>(site->tribe));
 	}
+	// An altar has the row of its worship site
+	if (const auto* altar = registry.TryGet<const WorshipAltar>(building))
+	{
+		const auto* site = registry.Valid(altar->site) ? registry.TryGet<const WorshipSite>(altar->site) : nullptr;
+		return site != nullptr ? &info.worshipSite.at(static_cast<size_t>(site->tribe)) : nullptr;
+	}
 	if (const auto* abode = registry.TryGet<const Abode>(building); abode != nullptr && abode->info != AbodeInfo::None)
 	{
 		return &info.abode.at(static_cast<size_t>(abode->info));
@@ -111,6 +117,11 @@ bool construction::IsBuiltAndRepaired(entt::entity building)
 	if (fixed_kinds::IsAlwaysWhole(registry, building))
 	{
 		return true;
+	}
+	// The altar of a worship site keeps how much of it is built
+	if (const auto* altar = registry.TryGet<const WorshipAltar>(building))
+	{
+		return altar->built >= 1.0f && world_objects::LifeOf(building) >= 1.0f;
 	}
 	// The icon of a worship site is built when its site is built
 	const auto* icon = registry.TryGet<const WorshipIcon>(building);
@@ -221,9 +232,14 @@ float construction::DesireToBeRepaired(entt::entity building)
 	const auto& registry = Entities();
 	const auto* abode = registry.TryGet<const Abode>(building);
 	const auto* info = InfoOf(building);
-	// A feature, an animated thing of the land and flowers want to be mended by their life alone, with no town
-	if (info != nullptr && registry.AnyOf<Feature, AnimatedStatic, Flowers>(building))
+	// A thing with the mark that is not a building of the abodes, such as a worship site, the temple, a feature or
+	// flowers, wants to be mended by its lost life alone, with no town. A thing that is always whole wants nothing.
+	if (fixed_kinds::WantsRepairByLifeAlone(registry, building))
 	{
+		if (info == nullptr || fixed_kinds::IsAlwaysWhole(registry, building))
+		{
+			return 0.0f;
+		}
 		return town_desire::FixedDesireToBeRepaired(world_objects::LifeOf(building), info->desireToBeRepaired);
 	}
 	// The town wants to mend a miracle dispenser as one of its buildings with nobody in it

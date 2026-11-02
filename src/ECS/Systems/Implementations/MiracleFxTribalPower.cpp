@@ -14,7 +14,9 @@
 #define LOCATOR_IMPLEMENTATIONS
 
 #include <algorithm>
+#include <optional>
 #include <string>
+#include <utility>
 
 #include <fmt/format.h>
 #include <glm/glm.hpp>
@@ -134,12 +136,23 @@ std::vector<OrientedTextVertex> MiracleFxSystem::GetTribalPowerText() const
 	{
 		return vertices;
 	}
+	// The game draws no letter whose origin is nearer than the near plane, as the ring that flies in from the camera
+	std::optional<std::pair<glm::mat4, float>> view;
+	if (Locator::camera::has_value())
+	{
+		const auto& camera = Locator::camera::value();
+		view = std::pair {camera.GetViewProjectionMatrix(), camera.GetNearClip()};
+	}
 	const auto& font = _interface->GetFont();
 	for (const auto& runner : _runners)
 	{
 		const auto colour = runner->Colour();
 		for (const auto& letter : runner->GetSpin().Letters())
 		{
+			if (view.has_value() && !magic::tribal_spin::Shows(view->first, view->second, letter.origin))
+			{
+				continue;
+			}
 			const TextFrame frame {.origin = letter.origin, .axes = letter.axes};
 			AppendOrientedText(vertices, font, frame, 0, letter.down, std::u16string_view(&letter.character, 1),
 			                   glm::vec3(0.0f), letter.size, 1.0f, {colour.r, colour.g, colour.b, letter.alpha});

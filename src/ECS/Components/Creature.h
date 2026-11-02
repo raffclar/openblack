@@ -64,8 +64,8 @@ struct Creature
 	std::u16string name;
 	/// The values that its body got when the game made it, or that it took from the last mind file that it loaded
 	creature_born::BornWith bornWith {};
-	/// A value that is not 0 tells the draw to show its body with the environment map. The draw does not use it yet. A
-	/// new creature has 0, and a body takes the value from a mind file that has it.
+	/// A value that is not 0 tells the draw to show its body with the environment map added over every part (see
+	/// creature_environment_map). A new creature has 0, and a body takes the value from a mind file that has it.
 	uint32_t environmentMap {0};
 };
 

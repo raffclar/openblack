@@ -42,6 +42,24 @@ constexpr glm::vec2 k_BurningDeadTree {0.0f, 58.0f};
 
 /// Where the hand puts a villager down, four metres west of the altar of the town's worship site
 constexpr glm::vec2 k_BuilderDrop {k_Altar.x - 4.0f, k_Altar.y};
+/// A hut of the town that is not built, and a food pot between it and the place where the hand puts a villager down
+constexpr glm::vec2 k_PotDrop {0.0f, 20.0f};
+constexpr glm::vec2 k_PotNearDrop {-2.0f, 20.0f};
+constexpr glm::vec2 k_UnbuiltHut {7.0f, 20.0f};
+/// A statue of the land that is only part built, east of the place where the hand puts a villager down
+constexpr glm::vec2 k_PartBuiltStatue {7.0f, 20.0f};
+/// The town's storage pit and village centre west of the place where the hand puts a villager down
+constexpr glm::vec2 k_DropPit {k_PotDrop.x - 30.0f, k_PotDrop.y - 15.0f};
+constexpr glm::vec2 k_DropCentre {k_PotDrop.x - 30.0f, k_PotDrop.y + 15.0f};
+
+/// Where the hand puts a villager down, south of a hurt temple, and the temple. The town stands north of the temple, so its
+/// worship site goes up on the far side of the temple.
+constexpr glm::vec2 k_HurtTemple {-10.0f, -60.0f};
+constexpr glm::vec2 k_TempleDrop {12.0f, -60.0f};
+constexpr glm::vec2 k_TempleTown {-10.0f, -110.0f};
+
+/// Where a boulder flies from towards the altar of the town's worship site: 20 metres north of the altar
+constexpr glm::vec2 k_BoulderFrom {k_Altar.x, k_Altar.y + 20.0f};
 } // namespace
 
 void openblack::testbed_scenarios::AddFixedKindScenarios(std::vector<Scenario>& all)
@@ -135,10 +153,213 @@ void openblack::testbed_scenarios::AddFixedKindScenarios(std::vector<Scenario>& 
 	                "villager as one of the workers of the town's site at the worship site.",
 	    .environment = {.dispenserGrid = false, .cursor = glm::vec2 {0.5f, 0.5f}},
 	    .framing = {.shot = Shot::Placed,
-	                .eye = {k_BuilderDrop.x, 22.0f, k_BuilderDrop.y - 30.0f},
+	                .eye = {k_BuilderDrop.x, 22.0f, k_BuilderDrop.y + 30.0f},
 	                .look = {k_BuilderDrop.x, 0.0f, k_BuilderDrop.y}},
 	    .objects = std::move(builderTown),
 	    .temples = {{.offset = k_PileTemple}},
+	    .commands = {{.kind = Kind::HandTake, .delaySeconds = 2.0f, .object = 2},
+	                 {.kind = Kind::HandRelease, .delaySeconds = 3.0f}},
+	    .townBeliefInPlayer = 1000.0f,
+	});
+	std::vector<ObjectSetup> scriptBuiltTown {
+	    {.type = AbodeInfo::NorseTownCentre, .offset = k_Gathering - k_BuildingGap},
+	    {.type = AbodeInfo::NorseStoragePit, .offset = k_Gathering + k_BuildingGap, .yawDegrees = 180.0f},
+	    {.type = VillagerInfo::NorseForesterMale, .offset = k_BuilderDrop, .joinTown = true, .woodHeld = 250}};
+	all.push_back({
+	    .id = "worship.script_built_site_keeps_altar_unbuilt",
+	    .name = "A script builds a worship site, and its altar stays unbuilt",
+	    .facet = Facet::Objects,
+	    .description = "A Norse town of the player with a village centre, a storage pit and one villager that carries 250 "
+	                   "wood. The town's worship site goes up by the temple as the scenario starts. After one second a "
+	                   "script sets the site as built.",
+	    .expected = "The script builds the site only. The site stands built, but its altar does not show, because the "
+	                "altar keeps its own built amount: the inspector shows WorshipAltar built 0 and no Mesh on the altar. "
+	                "Only work on the site, for example the repair of a damaged site, or a builder that the hand puts down "
+	                "by the altar (worship.builder_put_down_by_unbuilt_altar) builds the altar, and the altar shows when "
+	                "all of it is built. Before, the altar showed when the script built the site.",
+	    .environment = {.dispenserGrid = false, .cursor = glm::vec2 {0.5f, 0.5f}},
+	    .framing = {.shot = Shot::Placed,
+	                .eye = {k_BuilderDrop.x, 22.0f, k_BuilderDrop.y + 30.0f},
+	                .look = {k_BuilderDrop.x, 0.0f, k_BuilderDrop.y}},
+	    .objects = std::move(scriptBuiltTown),
+	    .temples = {{.offset = k_PileTemple}},
+	    .commands = {{.kind = Kind::ScriptBuildsWorshipSites, .delaySeconds = 1.0f, .amount = 1.0f}},
+	    .townBeliefInPlayer = 1000.0f,
+	});
+	std::vector<ObjectSetup> altarBuilderTown {
+	    {.type = AbodeInfo::NorseTownCentre, .offset = k_Gathering - k_BuildingGap},
+	    {.type = AbodeInfo::NorseStoragePit, .offset = k_Gathering + k_BuildingGap, .yawDegrees = 180.0f, .storedWood = 2000},
+	    {.type = VillagerInfo::NorseForesterMale, .offset = k_BuilderDrop, .joinTown = true, .woodHeld = 250}};
+	all.push_back({
+	    .id = "worship.builder_put_down_by_unbuilt_altar",
+	    .name = "A villager put down by the unbuilt altar of a worship site that a script built",
+	    .facet = Facet::Hand,
+	    .description =
+	        "A Norse town of the player with a village centre, a storage pit with 2000 wood and one villager "
+	        "that carries 250 wood. The town's worship site goes up by the temple as the scenario starts. After "
+	        "one second a script sets the site as built, and the altar stays unbuilt. The villager stands four metres west "
+	        "of the altar, under the hand. One second later the hand takes the villager, and three seconds "
+	        "later it puts the villager down at the same place.",
+	    .expected = "The altar and the site are both at the villager's feet and interest it the same. The altar is made after "
+	                "its site, so the search meets the altar first. Over the unbuilt altar the villager glows and shows "
+	                "the builder's symbol. It lands, turns to the altar, and its town opens a site at the altar: the "
+	                "inspector shows BuildingSites on the altar with the villager as its worker. The villager puts its "
+	                "wood on a pile beyond the altar, builds, and goes to the storage pit for more wood. WorshipAltar "
+	                "built goes up with each stroke, and the altar shows when all of it is built. Before, the site at "
+	                "the altar took no wood, and the villager stood at the altar and built nothing.",
+	    .environment = {.dispenserGrid = false, .cursor = glm::vec2 {0.5f, 0.5f}},
+	    .framing = {.shot = Shot::Placed,
+	                .eye = {k_BuilderDrop.x, 22.0f, k_BuilderDrop.y + 30.0f},
+	                .look = {k_BuilderDrop.x, 0.0f, k_BuilderDrop.y}},
+	    .objects = std::move(altarBuilderTown),
+	    .temples = {{.offset = k_PileTemple}},
+	    .commands = {{.kind = Kind::ScriptBuildsWorshipSites, .delaySeconds = 1.0f, .amount = 1.0f},
+	                 {.kind = Kind::HandTake, .delaySeconds = 1.0f, .object = 2},
+	                 {.kind = Kind::HandRelease, .delaySeconds = 3.0f}},
+	    .townBeliefInPlayer = 1000.0f,
+	});
+
+	std::vector<ObjectSetup> boulderTown {
+	    {.type = AbodeInfo::NorseTownCentre, .offset = k_Gathering - k_BuildingGap},
+	    {.type = AbodeInfo::NorseStoragePit, .offset = k_Gathering + k_BuildingGap, .yawDegrees = 180.0f},
+	    {.type = MobileStaticInfo::Boulder1Chalk, .offset = k_BoulderFrom},
+	    {.type = VillagerInfo::NorseForesterMale, .offset = k_Gathering + glm::vec2(0.0f, 15.0f), .joinTown = true}};
+	all.push_back({
+	    .id = "worship.boulder_hits_built_altar",
+	    .name = "A boulder thrown at a built altar hits it, and the temple takes the blow",
+	    .facet = Facet::Objects,
+	    .description = "A Norse town of the player with a village centre, a storage pit and one villager. The town's "
+	                   "worship site goes up by the temple and is built at once with its altar. After three seconds a small "
+	                   "boulder flies at the altar from 20 metres north of it.",
+	    .expected = "The boulder hits the altar and stops or bounces off it: a built altar is in the way of what flies, as "
+	                "a feature is. The altar does not take the blow itself. The temple's heart takes it, and passes it "
+	                "on to a building of the town, as a blow on the temple does. Before, the boulder flew through the "
+	                "altar.",
+	    .environment = {.dispenserGrid = false},
+	    .framing = {.shot = Shot::Placed,
+	                .eye = {k_Altar.x + 25.0f, 15.0f, k_Altar.y + 10.0f},
+	                .look = {k_Altar.x, 2.0f, k_Altar.y + 5.0f}},
+	    .objects = std::move(boulderTown),
+	    .temples = {{.offset = k_PileTemple}},
+	    .commands = {{.kind = Kind::BuildWorshipSites, .delaySeconds = 0.5f}},
+	    .townBeliefInPlayer = 1000.0f,
+	    .throws =
+	        {{.object = 2, .from = k_BoulderFrom, .height = 4.0f, .velocity = {0.0f, 3.0f, -20.0f}, .delaySeconds = 3.0f}},
+	});
+
+	std::vector<ObjectSetup> potTown {
+	    {.type = AbodeInfo::NorseTownCentre, .offset = k_PotDrop + glm::vec2(-30.0f, 15.0f)},
+	    {.type = AbodeInfo::NorseStoragePit, .offset = k_PotDrop + glm::vec2(-30.0f, -15.0f), .yawDegrees = 180.0f},
+	    {.type = AbodeInfo::NorseHut, .offset = k_UnbuiltHut, .yawDegrees = 270.0f, .built = 0.3f},
+	    {.type = PotInfo::FoodPot, .offset = k_PotNearDrop},
+	    {.type = VillagerInfo::NorseForesterMale, .offset = k_PotDrop, .joinTown = true, .woodHeld = 250}};
+	all.push_back({
+	    .id = "villagers.put_down_looks_at_pot_first",
+	    .name = "A builder put down by a food pot looks at the pot before the hut",
+	    .facet = Facet::Hand,
+	    .description = "A Norse town of the player with a village centre, a storage pit, a hut that is only part built, and "
+	                   "one villager that carries 250 wood. A food pot stands 2 metres west of the villager, and the hut "
+	                   "stands 7 metres east of it. After two seconds the hand takes the villager, and three seconds "
+	                   "later it puts the villager down at the same place.",
+	    .expected = "Over the part built hut the villager glows and shows the builder's symbol: the pot is nearer, but it "
+	                "offers no work, so the hut gives the work. After it lands, the villager turns to the pot first, "
+	                "because the pot interests a villager most. A pot is not a building, so the villager then decides "
+	                "again as a builder and goes to build the hut. Before, the villager looked only at buildings, "
+	                "fields, trees and villagers, and turned to the hut at once.",
+	    .environment = {.dispenserGrid = false, .cursor = glm::vec2 {0.5f, 0.5f}},
+	    .framing = {.shot = Shot::Placed,
+	                .eye = {k_PotDrop.x, 7.0f, k_PotDrop.y - 11.0f},
+	                .look = {k_PotDrop.x, 0.0f, k_PotDrop.y}},
+	    .objects = std::move(potTown),
+	    .commands = {{.kind = Kind::HandTake, .delaySeconds = 2.0f, .object = 4},
+	                 {.kind = Kind::HandRelease, .delaySeconds = 3.0f}},
+	    .townBeliefInPlayer = 1000.0f,
+	});
+
+	std::vector<ObjectSetup> statueTown {
+	    {.type = AbodeInfo::NorseTownCentre, .offset = k_DropCentre},
+	    {.type = AbodeInfo::NorseStoragePit, .offset = k_DropPit, .yawDegrees = 180.0f},
+	    {.type = FeatureInfo::AztcStatue, .offset = k_PartBuiltStatue, .yawDegrees = 90.0f, .built = 0.5f}};
+	all.push_back({
+	    .id = "building.feature_site_wood_pile",
+	    .name = "Wood poured on the site of a part built statue goes on a new pile by the statue",
+	    .facet = Facet::Hand,
+	    .description = "A Norse town of the player with a village centre and a storage pit, and a statue of the land that is "
+	                   "half built, with a site of the town at it. After three seconds the hand pours 300 wood over the "
+	                   "statue.",
+	    .expected = "The site of the statue takes the wood. It makes its one pile of wood for the first wood, about 4 "
+	                "metres beyond the statue, turned an eighth of a turn either way at random, and the pile holds the 300 "
+	                "wood: the inspector shows the pile in the BuildingSites piles of the statue. Every site of a thing "
+	                "with the fixed mark (a feature, flowers, an animated static, a field, a building) makes its pile so. "
+	                "Before, the site of a statue made no pile, and the wood brought to it was lost.",
+	    .environment = {.dispenserGrid = false},
+	    .framing = {.shot = Shot::Placed,
+	                .eye = {k_PartBuiltStatue.x - 3.0f, 6.0f, k_PartBuiltStatue.y - 10.0f},
+	                .look = {k_PartBuiltStatue.x, 0.0f, k_PartBuiltStatue.y}},
+	    .objects = std::move(statueTown),
+	    .commands = {{.kind = Kind::HandPour, .delaySeconds = 3.0f, .point = k_PartBuiltStatue, .value = 300}},
+	    .townBeliefInPlayer = 1000.0f,
+	});
+
+	std::vector<ObjectSetup> noWoodTown {
+	    {.type = AbodeInfo::NorseTownCentre, .offset = k_DropCentre},
+	    {.type = AbodeInfo::NorseStoragePit, .offset = k_DropPit, .yawDegrees = 180.0f, .storedWood = 0},
+	    {.type = AbodeInfo::NorseHut, .offset = k_UnbuiltHut, .yawDegrees = 270.0f, .built = 0.3f},
+	    {.type = VillagerInfo::NorseForesterMale, .offset = k_PotDrop, .joinTown = true}};
+	all.push_back({
+	    .id = "villagers.builder_waits_with_no_wood",
+	    .name = "A builder with no wood at its site and none to fetch stays at the site",
+	    .facet = Facet::Hand,
+	    .description = "A Norse town of the player with a village centre, an empty storage pit and a hut that is only part "
+	                   "built, and one villager of the town that carries no wood. No forest is near. After two seconds the "
+	                   "hand takes the villager, and three seconds later it puts the villager down at the same place. "
+	                   "Forty seconds later the hand pours 300 wood over the storage pit, and sixty seconds after that "
+	                   "300 wood again.",
+	    .expected = "The villager looks at the hut as a builder. It has nowhere to get wood, so it does not take up the site "
+	                "and has nothing to do. After the first pour the store holds more wood than the villager can carry: "
+	                "the villager takes as much as it can carry, puts it on the hut's site and builds until the site has "
+	                "no wood. The store now holds less wood than the villager can carry, and a builder takes wood from "
+	                "the store only when the store holds more. So the villager stays in the building state (Building in "
+	                "the inspector's LivingAction) at its place by the hut and plays its building clip again and again, "
+	                "with no wood used. Each time the clip ends, it tries again to get wood. After the second pour, at "
+	                "the end of its clip, it goes to the storage pit for wood and builds on.",
+	    .environment = {.dispenserGrid = false, .cursor = glm::vec2 {0.5f, 0.5f}},
+	    .framing = {.shot = Shot::Placed,
+	                .eye = {k_PotDrop.x, 22.0f, k_PotDrop.y - 30.0f},
+	                .look = {k_PotDrop.x, 0.0f, k_PotDrop.y}},
+	    .objects = std::move(noWoodTown),
+	    .commands = {{.kind = Kind::HandTake, .delaySeconds = 2.0f, .object = 3},
+	                 {.kind = Kind::HandRelease, .delaySeconds = 3.0f},
+	                 {.kind = Kind::HandPour, .delaySeconds = 40.0f, .point = k_DropPit, .value = 300},
+	                 {.kind = Kind::HandPour, .delaySeconds = 60.0f, .point = k_DropPit, .value = 300}},
+	    .townBeliefInPlayer = 1000.0f,
+	});
+
+	std::vector<ObjectSetup> templeTown {
+	    {.type = AbodeInfo::NorseTownCentre, .offset = k_TempleTown + glm::vec2(-30.0f, 0.0f)},
+	    {.type = AbodeInfo::NorseStoragePit, .offset = k_TempleTown + glm::vec2(30.0f, 0.0f), .yawDegrees = 180.0f},
+	    {.type = VillagerInfo::NorseForesterMale, .offset = k_TempleDrop, .joinTown = true, .woodHeld = 250}};
+	all.push_back({
+	    .id = "villagers.builder_mends_hurt_temple",
+	    .name = "A builder put down by the hurt temple mends it",
+	    .facet = Facet::Hand,
+	    .description = "The player's temple has half of its life. A Norse town of the player with a village centre and a "
+	                   "storage pit stands 50 metres from the temple, so its worship site goes up away from the temple. One "
+	                   "villager of the town that carries 250 wood stands 22 metres east of the middle of the temple, under "
+	                   "the hand. After two seconds the hand takes the villager, and three seconds later it puts the "
+	                   "villager down at the same place.",
+	    .expected = "Over the hurt temple the villager glows and shows the builder's symbol. It lands, turns to the temple "
+	                "and takes up the work there: the town opens a site at the temple, and the temple wants its builders "
+	                "by its lost life, as each thing with the fixed mark that is not a building of a town. The villager "
+	                "builds at the temple, and the life of the temple goes up (the inspector's ObjectLife of the "
+	                "temple). Before, the villager did not look at the temple, and a site at a hurt temple wanted no "
+	                "builders.",
+	    .environment = {.dispenserGrid = false, .cursor = glm::vec2 {0.5f, 0.5f}},
+	    .framing = {.shot = Shot::Placed,
+	                .eye = {k_TempleDrop.x + 10.0f, 25.0f, k_TempleDrop.y + 35.0f},
+	                .look = {k_TempleDrop.x, 0.0f, k_TempleDrop.y}},
+	    .objects = std::move(templeTown),
+	    .temples = {{.offset = k_HurtTemple, .life = 0.5f}},
 	    .commands = {{.kind = Kind::HandTake, .delaySeconds = 2.0f, .object = 2},
 	                 {.kind = Kind::HandRelease, .delaySeconds = 3.0f}},
 	    .townBeliefInPlayer = 1000.0f,

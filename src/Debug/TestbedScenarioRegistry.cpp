@@ -324,6 +324,24 @@ void AddExpressions(std::vector<Scenario>& all)
 	    .repeatFrom = 0,
 	});
 
+	// A creature that freezes lives fewer milliseconds in each game turn. Its face, its gesture and its head move on by
+	// these milliseconds, once a turn.
+	all.push_back({
+	    .id = "expressions.frozen_face_and_gesture",
+	    .name = "Face and gesture of a creature that freezes",
+	    .facet = Facet::Expressions,
+	    .description = "A tiger whose mind is paused, close up, pulls a grimace. The player casts the freeze spell on it. "
+	                   "While the ice grows, the tiger starts a yawn.",
+	    .expected = "The yawn plays more slowly and stops part of the way through. The grimace relaxes more slowly and "
+	                "stops. Nothing jumps: each part moves on by the time that the frozen body lives in the turn.",
+	    .environment = {.dispenserGrid = false},
+	    .framing = {.shot = Shot::Head, .distance = 1.6f},
+	    .creatures = {CreatureSetup {.species = CreatureType::Tiger, .needs = Content(), .hold = true, .pauseMind = true}},
+	    .miracles = {{.type = MagicType::CreatureSpellFreeze, .target = MiracleCast::Target::Creature, .delaySeconds = 2.0f}},
+	    .commands = {Play(Kind::PullFace, 0, animations::k_FirstFace + 1, 1.0f, false),
+	                 Play(Kind::PlayGesture, 0, animations::k_Yawn, 3.0f, false)},
+	});
+
 	// The tiger has no clip for the laugh. The tiger keeps the face that it wants, but the face shows nothing. The smile
 	// after it starts at once.
 	constexpr size_t k_TigerLaugh = animations::k_FirstFace + 7;
@@ -2109,6 +2127,27 @@ void AddThirdLandThrowBloke(std::vector<Scenario>& all)
 	});
 }
 
+/// The waterfall of the third land, which the draw of the land makes with no script
+void AddThirdLandWaterfall(std::vector<Scenario>& all)
+{
+	// The camera stands south-west of the waterfall, near enough to hear its sound, and looks at its foot. Both points
+	// are from the middle of the map.
+	constexpr glm::vec2 k_Eye = glm::vec2(2985.0f, 3082.0f) - flat_land::k_MapMiddle;
+	constexpr glm::vec2 k_Look = glm::vec2(3030.0f, 3135.0f) - flat_land::k_MapMiddle;
+	all.push_back({
+	    .id = "story.l3_waterfall",
+	    .name = "Story: the waterfall of the third land",
+	    .facet = Facet::Story,
+	    .description = "The third land loads with its own scripts and sky. The camera looks north-east at the waterfall "
+	                   "on the coast, which no script makes: the draw of the land makes it on its first frame.",
+	    .expected = "The water slides down the waterfall at half the height of its texture each second. The rock "
+	                "around it stays still. Every 0.7 seconds a ring of spray starts at its foot, grows to 60 metres "
+	                "across and fades. The sound of water that flows comes from the waterfall.",
+	    .environment = {.land = Land::Story, .storyLand = "Land3.txt", .dispenserGrid = false},
+	    .framing = {.shot = Shot::Placed, .eye = {k_Eye.x, 32.0f, k_Eye.y}, .look = {k_Look.x, 7.0f, k_Look.y}},
+	});
+}
+
 /// The Pied Piper of the first land. The game's script runs at the same map positions as on the first land, with the
 /// Norse town, the creche and the piper's cave made there. The scenario clicks the creche, and the round starts.
 void AddPiedPiperRound(std::vector<Scenario>& all)
@@ -2938,6 +2977,7 @@ CREATE_CITADEL("0.0,0.0", 0, "PLAYER_ONE", 4254, 1000)
 	AddRivalCreatureLoads(all);
 	AddThirdLandPrison(all);
 	AddThirdLandThrowBloke(all);
+	AddThirdLandWaterfall(all);
 	AddSingingStones(all);
 	AddBeachTemplePuzzle(all);
 	AddTreePuzzle(all);
@@ -3253,6 +3293,30 @@ void AddAppearance(std::vector<Scenario>& all)
 	          "and do their other gestures.",
 	          "The light that the hand carries at night lights each body as the game lights the bodies it poses. The side "
 	          "away from the hand keeps two fifths of the light. The eyes keep the usual light of the models.");
+	// A creature whose mind file gives its body the environment map, beside one whose mind file does not
+	{
+		auto plain = Content(CreatureType::GiantApe, {-12.0f, 0.0f}, 0.0f, "plain ape");
+		plain.pauseMind = true;
+		auto mapped = Content(CreatureType::GiantApe, {12.0f, 0.0f}, 0.0f, "environment-mapped ape");
+		mapped.pauseMind = true;
+		mapped.environmentMap = 1;
+		all.push_back({
+		    .id = "appearance.creature_environment_map",
+		    .name = "Creature body with the environment map",
+		    .facet = Facet::Appearance,
+		    .description = "At noon, the clock stopped, two giant apes stand side by side. The mind file of the ape on the "
+		                   "right gives its body the environment map. They nod, shake their heads and do their other "
+		                   "gestures.",
+		    .expected = "The ape on the right shows the environment map added over every part of its body, so it looks "
+		                "brighter and shiny. The shine moves over the body as it turns, as if it reflects the sky. The "
+		                "light on the body is the same as on the ape on the left. The eyes of the two apes look the same.",
+		    .environment = {.hour = 12.0f, .clockRuns = false, .dispenserGrid = false},
+		    .framing = {.shot = Shot::Overview, .include = {{-18.0f, -4.0f}, {18.0f, 4.0f}}, .distance = 0.6f},
+		    .creatures = {plain, mapped},
+		    .commands = headMoves,
+		    .repeatFrom = 0,
+		});
+	}
 	// The player's creature mirrored in the lake, beside a creature of no player that the game does not mirror
 	auto mirroredApe = Posed(CreatureType::GiantApe, {k_Lake.x - 15.0f, k_FarShallows}, 0.0f, "player's ape");
 	auto unmirroredCow = Posed(CreatureType::Cow, {k_Lake.x + 15.0f, k_FarShallows}, 0.0f, "cow of no player");
@@ -7834,6 +7898,27 @@ void AddHand(std::vector<Scenario>& all)
 	                 {.kind = Kind::PointerRelease, .delaySeconds = 2.0f, .value = 3}},
 	});
 
+	// A tap of the hand on the own creature with the aggression leash held loose: the creature acts on itself, which on
+	// the aggression leash is a fight with itself
+	all.push_back({
+	    .id = "leash.tap_itself_aggression",
+	    .name = "A tap on your creature with the aggression leash tells it to fight itself",
+	    .facet = Facet::Leash,
+	    .description = "Your tiger faces the camera in the middle of the screen and wears the aggression leash, held loose "
+	                   "in the hand. The action button taps the tiger for 0.1 seconds.",
+	    .expected = "The tap is an order on the tiger itself. The tiger nods, the order ring shows above it and the help "
+	                "tells of its anger. It looks down at itself and stands still for some turns, then it stops the order "
+	                "and decides again by itself. The leash stays on and the hand does not hold the tiger. The log shows "
+	                "\"is told to act on\" with the tiger as the thing, then \"is the partner of creature\" with the "
+	                "tiger as its own partner.",
+	    .environment = {.dispenserGrid = false, .cursor = glm::vec2(0.5f, 0.5f)},
+	    .framing = {.shot = Shot::Follow, .distance = 1.2f},
+	    .creatures = {Content(CreatureType::Tiger, {0.0f, 0.0f})},
+	    .commands = {Leash(0, LeashType::Evil, 0.5f),
+	                 {.kind = Kind::PointerPress, .delaySeconds = 2.0f, .value = 3},
+	                 {.kind = Kind::PointerRelease, .delaySeconds = 0.1f, .value = 3}},
+	});
+
 	// The real button on the own creature while it sleeps: a sleeping creature takes hold. Its tiredness stays high, so
 	// it does not wake by itself.
 	auto sleepy = Content(CreatureType::Tiger, {0.0f, 0.0f});
@@ -7900,6 +7985,27 @@ void AddHand(std::vector<Scenario>& all)
 	         {.kind = Kind::PointerPress, .delaySeconds = 2.0f, .value = 3},
 	         {.kind = Kind::DoAction, .creature = 0, .delaySeconds = 0.1f, .action = "BeFrightenedOnTheSpot", .atCreature = 0},
 	         {.kind = Kind::PointerRelease, .delaySeconds = 1.9f, .value = 3}},
+	});
+
+	// The hand lets go of a thing over the slope of the lake's far shallows. The empty hand starts its up and its hover
+	// distance again.
+	all.push_back({
+	    .id = "hand.lets_go_stands_straight",
+	    .name = "The empty hand stands straight up after it lets go",
+	    .facet = Facet::Hand,
+	    .description = "The hand takes a barrel over the slope of the lake's far shallows. The pointer moves slowly "
+	                   "across the slope, and the hand puts the barrel down. The pointer stays still for two seconds. "
+	                   "Then the pointer moves across the slope again.",
+	    .expected = "While the hand holds the barrel, it leans to the slope under it. When it lets go, it stands "
+	                "straight up and stays straight up while the pointer is still. When the pointer moves across the "
+	                "screen, the hand leans to the slope again in a short time.",
+	    .environment = {.dispenserGrid = false, .cursor = glm::vec2(0.4f, 0.2f)},
+	    .framing = {.shot = Shot::Overview, .include = {{k_Lake.x, k_FarShallows - 25.0f}}, .distance = 0.2f},
+	    .objects = {{.type = MobileObjectInfo::EgyptBarrel, .offset = {k_Lake.x + 10.0f, k_FarShallows + 10.0f}}},
+	    .commands = {{.kind = Kind::HandTake, .delaySeconds = 1.0f, .object = 0},
+	                 {.kind = Kind::PointerSweep, .delaySeconds = 0.5f, .point = {0.2f, 0.0f}, .amount = 2.0f},
+	                 {.kind = Kind::HandRelease, .delaySeconds = 2.5f},
+	                 {.kind = Kind::PointerSweep, .delaySeconds = 2.0f, .point = {-0.2f, 0.0f}, .amount = 2.0f}},
 	});
 
 	all.push_back({
@@ -9513,9 +9619,22 @@ void AddCombat(std::vector<Scenario>& all)
 	    .description = "Two somewhat evil tigers, so aggressive fighters, the red one stronger, are told to fight, and both "
 	                   "fight by themselves.",
 	    .expected = "They walk to their places either side of the arena, face each other and maybe taunt, then duel: "
-	                "blows high, in the middle and low with their hit wobbles and reeling, blocks and steps. The panel at "
-	                "the top left shows both fight healths falling. The loser faints, and the winner finishes and shows "
+	                "blows high, in the middle and low with their reels, blocks and steps. The panel at the top left "
+	                " shows both fight healths falling. The loser faints, and the winner finishes and shows "
 	                "off.",
+	    .framing = ringside,
+	    .creatures = {red(PlayerNames::PLAYER_ONE, 0.9f, -0.45f), blue(PlayerNames::PLAYER_TWO, 0.3f, -0.45f)},
+	    .commands = {Fight(Kind::StartFight, 0, 1, 1.0f), Fight(Kind::FightAuto, 0, 1, 0.2f)},
+	});
+
+	all.push_back({
+	    .id = "combat.blow_no_wobble",
+	    .name = "A struck tiger reels with no wobble on top",
+	    .facet = Facet::Combat,
+	    .description = "Two tigers duel by themselves, the red one stronger, so that blows land on both bodies.",
+	    .expected = "Each blow that lands makes the struck body reel high, in the middle or low. No second clip shakes "
+	                "the body on top of the reel. The animation query shows only the body and blend layers, and maybe a "
+	                "face or a gesture.",
 	    .framing = ringside,
 	    .creatures = {red(PlayerNames::PLAYER_ONE, 0.9f, -0.45f), blue(PlayerNames::PLAYER_TWO, 0.3f, -0.45f)},
 	    .commands = {Fight(Kind::StartFight, 0, 1, 1.0f), Fight(Kind::FightAuto, 0, 1, 0.2f)},
@@ -14901,12 +15020,14 @@ bool testbed_scenarios::NeedsNoCreature(Command::Kind kind)
 	       kind == Kind::ScaffoldStartsSite || kind == Kind::DestroyScaffoldSite || kind == Kind::ScaffoldClearsGround ||
 	       kind == Kind::CallNative || kind == Kind::PauseGame || kind == Kind::SetGameSpeed ||
 	       kind == Kind::RemoveTeleportStone || kind == Kind::MakeDance || kind == Kind::OpenMultiplayerBox ||
-	       kind == Kind::BuildWorshipSites || kind == Kind::PressPlainKey || kind == Kind::PlainKeyDown ||
-	       kind == Kind::PlainKeyRepeat || kind == Kind::PlainKeyUp || kind == Kind::OtherGodHand || kind == Kind::OwnGod ||
-	       kind == Kind::JoinOnline || kind == Kind::EndBox || kind == Kind::BringCreature ||
-	       kind == Kind::TattooEditorAsNetworkGame || kind == Kind::ShowDemoPing || kind == Kind::AddIncomingMessage ||
-	       kind == Kind::Chat || kind == Kind::ComputerPersonality || kind == Kind::ComputerUntaughtSends ||
-	       kind == Kind::SkirmishBox || kind == Kind::LookAtSaveGamePicture || IsPointerCommand(kind);
+	       kind == Kind::BuildWorshipSites || kind == Kind::ScriptBuildsWorshipSites || kind == Kind::PressPlainKey ||
+	       kind == Kind::PlainKeyDown || kind == Kind::PlainKeyRepeat || kind == Kind::PlainKeyUp ||
+	       kind == Kind::OtherGodHand || kind == Kind::OwnGod || kind == Kind::JoinOnline || kind == Kind::EndBox ||
+	       kind == Kind::BringCreature || kind == Kind::TattooEditorAsNetworkGame || kind == Kind::ShowDemoPing ||
+	       kind == Kind::AddIncomingMessage || kind == Kind::Chat || kind == Kind::ComputerPersonality ||
+	       kind == Kind::ComputerUntaughtSends || kind == Kind::SkirmishBox || kind == Kind::LookAtSaveGamePicture ||
+	       kind == Kind::HandCastOnDispenser || kind == Kind::HandCastOnCreature || kind == Kind::CloseHeldMiracle ||
+	       IsPointerCommand(kind);
 }
 
 std::string_view testbed_scenarios::Name(Facet facet)
@@ -14934,7 +15055,7 @@ std::string_view testbed_scenarios::Name(Shot shot)
 
 std::string_view testbed_scenarios::Name(Command::Kind kind)
 {
-	constexpr std::array<std::string_view, 212> k_Names {
+	constexpr std::array<std::string_view, 216> k_Names {
 	    "walk to",
 	    "run to",
 	    "follow",
@@ -15147,6 +15268,10 @@ std::string_view testbed_scenarios::Name(Command::Kind kind)
 	    "change the body's look",
 	    "tap the temple's entrance",
 	    "give a town of the land to the player",
+	    "cast the held miracle on a dispenser",
+	    "cast the held miracle on a creature",
+	    "close the held miracle and let go",
+	    "a script builds the worship sites",
 	};
 	return k_Names.at(static_cast<size_t>(kind));
 }

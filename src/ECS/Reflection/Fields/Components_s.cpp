@@ -25,6 +25,7 @@
 #include "ECS/Components/Shark.h"
 #include "ECS/Components/ShownCreatureFace.h"
 #include "ECS/Components/Sky.h"
+#include "ECS/Components/SlidingTexture.h"
 #include "ECS/Components/SnowLevel.h"
 #include "ECS/Components/SoundTag.h"
 #include "ECS/Components/Spell.h"
@@ -157,6 +158,7 @@ void openblack::ecs::reflection::RegisterFields_Components_s(entt::meta_ctx& con
 	    .Field<&components::Moon::placement>("placement")
 	    .Field<&components::Moon::colour>("colour")
 	    .Field<&components::Moon::strength>("strength");
+	Reflect<components::SlidingTexture>(context).Field<&components::SlidingTexture::offset>("offset");
 	Reflect<components::SnowLevel>(context)
 	    .Field<&components::SnowLevel::level>("level")
 	    .Field<&components::SnowLevel::broken>("broken")
@@ -272,7 +274,8 @@ void openblack::ecs::reflection::RegisterFields_Components_s(entt::meta_ctx& con
 	    .Field<&components::SpellSeed::followsSpell>("followsSpell")
 	    .Field<&components::SpellSeed::turnsInHand>("turnsInHand")
 	    .Field<&components::SpellSeed::spell>("spell")
-	    .Field<&components::SpellSeed::hasCast>("hasCast")
+	    .Field<&components::SpellSeed::lastCastType>("lastCastType")
+	    .Field<&components::SpellSeed::linkedByCast>("linkedByCast")
 	    .Field<&components::SpellSeed::handEffect>("handEffect");
 	Reflect<components::Sprite>(context)
 	    .Field<&components::Sprite::texture>("texture")

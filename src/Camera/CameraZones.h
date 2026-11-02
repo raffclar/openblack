@@ -93,6 +93,27 @@ inline constexpr float k_EdgeTurnSearchRadius = 50.0f;
 {
 	return edgeTurning ? k_EdgeTurnSearchRadius : k_SearchRadius;
 }
+/// The controls that keep a camera put back inside the fence held back. The camera takes no control until none of them
+/// is held. The mouse wheel is not one of them: it zooms the camera while it is held back.
+struct HoldingControls
+{
+	/// The hand grips the land to drag it
+	bool grippingLand {false};
+	/// The action button (the right button) is held
+	bool actionButton {false};
+	/// Both buttons are held
+	bool bothButtons {false};
+	/// The camera turns round the mouse
+	bool rotateAroundMouse {false};
+	/// The camera keys of the last frame asked to turn, tilt, zoom or move the camera. Opposite keys cancel.
+	bool keyStep {false};
+};
+[[nodiscard]] constexpr bool HoldsBack(const HoldingControls& controls)
+{
+	return controls.grippingLand || controls.actionButton || controls.bothButtons || controls.rotateAroundMouse ||
+	       controls.keyStep;
+}
+
 struct FenceKeep
 {
 	/// The point that the camera goes to across the ground (its x and z), none when the camera is inside

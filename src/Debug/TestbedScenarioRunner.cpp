@@ -170,6 +170,7 @@
 #include "ECS/Systems/BoatLaunchSystemInterface.h"
 #include "ECS/Systems/CameraBookmarkSystemInterface.h"
 #include "ECS/Systems/CameraHelpSystemInterface.h"
+#include "ECS/Systems/CameraZoneSystemInterface.h"
 #include "ECS/Systems/ChatSystemInterface.h"
 #include "ECS/Systems/CinematicDirectorSystemInterface.h"
 #include "ECS/Systems/ComputerPlayerSystemInterface.h"
@@ -884,6 +885,7 @@ void Runner::Start(const Scenario& scenario)
 	_keptByScript.clear();
 	_madeByNatives.clear();
 	_globes.clear();
+	_dispensers.clear();
 	_temples.clear();
 	_throwsDue.clear();
 	_turnsAsked.clear();
@@ -1224,6 +1226,12 @@ void Runner::Stop()
 		Locator::entitiesRegistry::value().Context().mapScriptGlobals.landNumber = *_landNumberBefore;
 	}
 	_landNumberBefore.reset();
+	// The camera zones that the scenario set go
+	if (_cameraZoneSet && Locator::cameraZoneSystem::has_value())
+	{
+		Locator::cameraZoneSystem::value().ClearZones();
+	}
+	_cameraZoneSet = false;
 	if (_skirmishBefore.has_value() && Locator::entitiesRegistry::has_value())
 	{
 		// The end of the skirmish goes too, so that the world turns again
@@ -1472,6 +1480,14 @@ void Runner::SetUpEnvironment(const Environment& environment)
 			_unlockedBefore = unlocked;
 		}
 		unlocked = *environment.unlockedBonusCreatures;
+	}
+	if (!environment.cameraZone.empty() && Locator::cameraZoneSystem::has_value())
+	{
+		_cameraZoneSet = true;
+		if (!Locator::cameraZoneSystem::value().SetZones(environment.cameraZone))
+		{
+			Log(fmt::format("The camera zones of {} did not load", environment.cameraZone));
+		}
 	}
 	if (environment.landNumber.has_value() && Locator::entitiesRegistry::has_value())
 	{
@@ -1756,7 +1772,15 @@ void Runner::PlaceObjects(const Scenario& scenario, glm::vec2 middle)
 			    }
 			    else
 			    {
-				    return ecs::archetypes::FeatureArchetype::Create(position, type, yaw, object.scale);
+				    const auto feature = ecs::archetypes::FeatureArchetype::Create(position, type, yaw, object.scale);
+				    // A feature that is only part built has a site of the scenario's town, which builds it up
+				    if (object.built.has_value())
+				    {
+					    ecs::construction::SetBuilt(feature, *object.built);
+					    static_cast<void>(ecs::construction::OpenSiteForTown(
+					        feature, Locator::entitiesRegistry::value().Context().towns.at(ScenarioTown(middle))));
+				    }
+				    return feature;
 			    }
 		    },
 		    object.type));
@@ -2042,6 +2066,14 @@ void Runner::PlaceCreatures(const Scenario& scenario, glm::vec2 middle)
 		{
 			LoadMindFile(entity, setup.mindFile);
 		}
+		// The value of a mind file, as the body takes it when it loads one
+		if (setup.environmentMap != 0)
+		{
+			if (auto* creature = registry.TryGet<ecs::components::Creature>(entity))
+			{
+				creature->environmentMap = setup.environmentMap;
+			}
+		}
 		if (Locator::creatureMindSystem::has_value())
 		{
 			for (const auto skill : setup.skills)
@@ -2304,13 +2336,23 @@ std::string Runner::GiveHandCommand(entt::entity creature, const Command& comman
 		return hand.IsLocked(creature) ? "held" : "busy";
 	}
 	case Kind::HandLetGo:
+	{
 		if (hand.GetCreature() == creature)
 		{
 			const auto sum = hand.GetFeedbackSum();
 			hand.Release();
 			return fmt::format("{:+.2f}", sum);
 		}
+		// A hold that the scenario took with no touch of the body ends as the turn ends it
+		const auto own =
+		    Locator::handSystem::has_value() ? Locator::handSystem::value().GetOwnPlayer() : PlayerNames::PLAYER_ONE;
+		if (hand.GetLockedCreature(own) == creature)
+		{
+			hand.DoUnlock(own, creature);
+			return "let go of the hold";
+		}
 		return "not held";
+	}
 	default:
 		return {};
 	}
@@ -2786,6 +2828,49 @@ std::string Runner::GivePlayerCommand(const Command& command)
 		Locator::handGrabSystem::value().DoApply(player, *object);
 		return "the hand uses what it holds on the object";
 	}
+	case Kind::HandCastOnDispenser:
+	case Kind::HandCastOnCreature:
+	{
+		const auto target =
+		    command.kind == Kind::HandCastOnDispenser
+		        ? (command.value < _dispensers.size() ? std::optional(_dispensers[command.value]) : std::nullopt)
+		        : CreatureAt(command.value);
+		if (!target.has_value() || !Locator::magicSystem::has_value())
+		{
+			return "no such thing to cast on";
+		}
+		auto& magic = Locator::magicSystem::value();
+		const auto seed = magic.GetHeldSeedOf(command.player);
+		if (!seed.has_value())
+		{
+			return "the hand holds no miracle";
+		}
+		magic.DoCast(command.player, player_commands::HandCast {.object = *target});
+		const auto& registry = Locator::entitiesRegistry::value();
+		const auto* after = registry.TryGet<const ecs::components::SpellSeed>(*seed);
+		return fmt::format("cast on thing {}: the seed is {}, linked to miracle {}", entt::to_integral(*target),
+		                   magic.GetHeldSeedOf(command.player) == seed ? "still in the hand" : "out of the hand",
+		                   after != nullptr ? entt::to_integral(after->spell) : entt::to_integral(entt::entity {entt::null}));
+	}
+	case Kind::CloseHeldMiracle:
+	{
+		if (!Locator::magicSystem::has_value())
+		{
+			return "no magic";
+		}
+		auto& magic = Locator::magicSystem::value();
+		const auto seed = magic.GetHeldSeedOf(command.player);
+		const auto& registry = Locator::entitiesRegistry::value();
+		const auto* held = seed.has_value() ? registry.TryGet<const ecs::components::SpellSeed>(*seed) : nullptr;
+		if (held == nullptr || held->spell == entt::null)
+		{
+			return "no miracle is locked on in the hand";
+		}
+		magic.CloseDown(held->spell);
+		magic.DoCastUnlock(command.player, *seed);
+		return magic.GetHeldSeedOf(command.player) == seed ? "closed and let go: the hand keeps the seed"
+		                                                   : "closed and let go: the seed goes";
+	}
 	case Kind::AttachObjectScriptSound:
 	{
 		const auto object = ObjectAt(command.object);
@@ -2968,6 +3053,23 @@ std::string Runner::GivePlayerCommand(const Command& command)
 			sites.BuildBy(site, 1.0f);
 		}
 		return fmt::format("{} worship sites built", unbuilt.size());
+	}
+	case Kind::ScriptBuildsWorshipSites:
+	{
+		auto& registry = Locator::entitiesRegistry::value();
+		std::vector<entt::entity> sites;
+		registry.Each<const ecs::components::WorshipSite>(
+		    [&](entt::entity site, const ecs::components::WorshipSite& component) {
+			    if (component.player == command.player)
+			    {
+				    sites.push_back(site);
+			    }
+		    });
+		for (const auto site : sites)
+		{
+			ecs::construction::SetBuilt(site, command.amount);
+		}
+		return fmt::format("{} worship sites set to {}", sites.size(), command.amount);
 	}
 	case Kind::HandRelease:
 		if (!Locator::handGrabSystem::has_value() || !Locator::handGrabSystem::value().LetGoAt(command.velocity))
@@ -3644,16 +3746,17 @@ void Runner::Give(const Command& command)
 	    command.kind == Kind::RemoveObject || command.kind == Kind::HandGripTotem ||
 	    command.kind == Kind::AttachObjectScriptSound || command.kind == Kind::SayLine ||
 	    command.kind == Kind::PlayGuidanceVoice || command.kind == Kind::ScriptRelease || command.kind == Kind::FillSiteIcons ||
-	    command.kind == Kind::BuildWorshipSites || command.kind == Kind::PressPlainKey || command.kind == Kind::PlainKeyDown ||
-	    command.kind == Kind::PlainKeyRepeat || command.kind == Kind::PlainKeyUp ||
-	    command.kind == Kind::ChargeIconWithSeedHeld || command.kind == Kind::TakeIconSeed ||
-	    command.kind == Kind::TapSiteIcon || command.kind == Kind::TapTempleEntrance || command.kind == Kind::FinishBuilding ||
-	    command.kind == Kind::ScaffoldStartsSite || command.kind == Kind::DestroyScaffoldSite ||
-	    command.kind == Kind::ScaffoldClearsGround || command.kind == Kind::FillBuiltAmount ||
-	    command.kind == Kind::PauseGame || command.kind == Kind::SetGameSpeed || command.kind == Kind::RemoveTeleportStone ||
-	    command.kind == Kind::MakeDance || command.kind == Kind::OtherGodHand || command.kind == Kind::OwnGod ||
-	    command.kind == Kind::BringCreature || command.kind == Kind::ComputerPersonality ||
-	    command.kind == Kind::ComputerUntaughtSends)
+	    command.kind == Kind::BuildWorshipSites || command.kind == Kind::ScriptBuildsWorshipSites ||
+	    command.kind == Kind::PressPlainKey || command.kind == Kind::PlainKeyDown || command.kind == Kind::PlainKeyRepeat ||
+	    command.kind == Kind::PlainKeyUp || command.kind == Kind::ChargeIconWithSeedHeld ||
+	    command.kind == Kind::TakeIconSeed || command.kind == Kind::TapSiteIcon || command.kind == Kind::TapTempleEntrance ||
+	    command.kind == Kind::FinishBuilding || command.kind == Kind::ScaffoldStartsSite ||
+	    command.kind == Kind::DestroyScaffoldSite || command.kind == Kind::ScaffoldClearsGround ||
+	    command.kind == Kind::FillBuiltAmount || command.kind == Kind::PauseGame || command.kind == Kind::SetGameSpeed ||
+	    command.kind == Kind::RemoveTeleportStone || command.kind == Kind::MakeDance || command.kind == Kind::OtherGodHand ||
+	    command.kind == Kind::OwnGod || command.kind == Kind::BringCreature || command.kind == Kind::ComputerPersonality ||
+	    command.kind == Kind::ComputerUntaughtSends || command.kind == Kind::HandCastOnDispenser ||
+	    command.kind == Kind::HandCastOnCreature || command.kind == Kind::CloseHeldMiracle)
 	{
 		const auto result = GivePlayerCommand(command);
 		Log(fmt::format("{:.1f}s: {}{}{}", _seconds, Name(command.kind), result.empty() ? "" : ": ", result));
@@ -4565,6 +4668,9 @@ void Runner::Give(const Command& command)
 	case Kind::HandTake:
 	case Kind::HandTakeShownSeed:
 	case Kind::HandApply:
+	case Kind::HandCastOnDispenser:
+	case Kind::HandCastOnCreature:
+	case Kind::CloseHeldMiracle:
 	case Kind::HandPour:
 	case Kind::HandRelease:
 	case Kind::SetReportLatency:
@@ -4574,6 +4680,7 @@ void Runner::Give(const Command& command)
 	case Kind::ScriptRelease:
 	case Kind::FillSiteIcons:
 	case Kind::BuildWorshipSites:
+	case Kind::ScriptBuildsWorshipSites:
 	case Kind::PressPlainKey:
 	case Kind::PlainKeyDown:
 	case Kind::PlainKeyRepeat:
@@ -5363,7 +5470,7 @@ void Runner::PlaceDispensers(const Scenario& scenario)
 		}
 		else if (dispenser.reward)
 		{
-			PlaceRewardDispenser(dispenser, {point.x, ground, point.y});
+			_dispensers.push_back(PlaceRewardDispenser(dispenser, {point.x, ground, point.y}));
 		}
 		else
 		{
@@ -5372,11 +5479,12 @@ void Runner::PlaceDispensers(const Scenario& scenario)
 			{
 				magic.ChargeDispenser(made);
 			}
+			_dispensers.push_back(made);
 		}
 	}
 }
 
-void Runner::PlaceRewardDispenser(const DispenserSetup& setup, glm::vec3 position)
+entt::entity Runner::PlaceRewardDispenser(const DispenserSetup& setup, glm::vec3 position)
 {
 	auto& registry = Locator::entitiesRegistry::value();
 	auto& magic = Locator::magicSystem::value();
@@ -5390,7 +5498,7 @@ void Runner::PlaceRewardDispenser(const DispenserSetup& setup, glm::vec3 positio
 	const auto made = magic.CreateScriptDispenser(position, AbodeInfo::NorseSpellDispenser, 0.0f, 1.0f, town);
 	if (made == entt::null)
 	{
-		return;
+		return entt::null;
 	}
 	if (setup.noTown)
 	{
@@ -5417,6 +5525,7 @@ void Runner::PlaceRewardDispenser(const DispenserSetup& setup, glm::vec3 positio
 	{
 		ecs::world_objects::ReduceLife(made, 1.0f - setup.life, std::nullopt);
 	}
+	return made;
 }
 
 void Runner::UpdateMiracles(float seconds)

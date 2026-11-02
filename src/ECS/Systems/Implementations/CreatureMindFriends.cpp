@@ -187,7 +187,7 @@ void CreatureMindSystem::TakeOrder(entt::entity partner, entt::entity asker, con
 	EndReaction(partner);
 	const auto self = entt::to_integral(asker);
 	std::vector agenda {
-	    ordered,
+	    creature_mind::OrderedStep(ordered, partner == asker),
 	    creature_mind::Step {.kind = creature_mind::Step::Kind::Wait,
 	                         .seconds = std::numeric_limits<float>::infinity(),
 	                         .gaze = creature_mind::Gaze {.object = self}},

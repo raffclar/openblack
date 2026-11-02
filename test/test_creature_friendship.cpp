@@ -108,6 +108,29 @@ TEST(CreatureFriendship, AFightIsAgreedToOnlyNearInHeight)
 	EXPECT_FALSE(AnswerOf(fight).agrees);
 }
 
+// A creature that asks itself to fight, with no partner, is free and of its own height, so it agrees
+TEST(CreatureFriendship, ACreatureThatAsksItselfToFightAgrees)
+{
+	const auto free = AvailabilityOf({.partner = std::nullopt, .asker = k_Asker});
+	EXPECT_EQ(free, Availability::Free);
+	EXPECT_TRUE(AnswerOf({.kind = RequestKind::Fight, .availability = free, .heightRatio = 1.0f}).agrees);
+}
+
+// An order to itself clears the agenda that holds it: the creature reads a pick-up of no thing in place of the order
+TEST(CreatureFriendship, AnOrderToItselfIsAPickUpOfNoThing)
+{
+	const Step face {.kind = Step::Kind::Move, .seconds = 0.1f};
+	const auto toPartner = creature_mind::OrderedStep(face, false);
+	EXPECT_EQ(toPartner.kind, Step::Kind::Move);
+	EXPECT_EQ(toPartner.seconds, 0.1f);
+	const auto toItself = creature_mind::OrderedStep(face, true);
+	EXPECT_EQ(toItself.kind, Step::Kind::Object);
+	EXPECT_EQ(toItself.order.kind, creature_mind::ObjectOrder::Kind::PickUp);
+	EXPECT_FALSE(toItself.order.object.has_value());
+	EXPECT_FALSE(toItself.gaze.has_value());
+	EXPECT_EQ(toItself.face, creature_face::Cue::None);
+}
+
 TEST(CreatureFriendship, PlayIsAgreedToWhenPlayOrFriendshipIsWantedMost)
 {
 	EXPECT_TRUE(AnswerOf(Asked(RequestKind::Play, {0.3f, 0.0f, 0.2f, 0.1f, 0.0f})).agrees);

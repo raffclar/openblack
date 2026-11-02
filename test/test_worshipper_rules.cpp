@@ -199,3 +199,13 @@ TEST(WorshipperRules, AVillagerOnItsWayToWorshipGoesOnToTheStateItHeadsForAfterA
 	// A state that keeps the remembered state sends it on to the remembered state
 	EXPECT_EQ(rules::StateAfterFireOnTheWay(59, true, 7), 7);
 }
+
+TEST(WorshipperRules, AVillagerThatGoesOnToItsArrivalAtTheSiteAfterAFireIsBackOnItsWay)
+{
+	constexpr int k_Arrival = 59;
+	EXPECT_TRUE(rules::BackOnTheWayAfterFire(59, k_Arrival));
+	// The walk to the site itself, the fire fight and any other state do not put it back on its way
+	EXPECT_FALSE(rules::BackOnTheWayAfterFire(58, k_Arrival));
+	EXPECT_FALSE(rules::BackOnTheWayAfterFire(216, k_Arrival));
+	EXPECT_FALSE(rules::BackOnTheWayAfterFire(0, k_Arrival));
+}

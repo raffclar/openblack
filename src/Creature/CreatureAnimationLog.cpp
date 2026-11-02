@@ -29,8 +29,6 @@ std::string_view Name(Layer layer)
 		return "face";
 	case Layer::Gesture:
 		return "gesture";
-	case Layer::Wobble:
-		return "wobble";
 	}
 	return "body";
 }
@@ -59,8 +57,6 @@ std::string_view MissingDetail(Layer layer)
 		return "the species has no such clip: no face clip showed and the body did not change";
 	case Layer::Gesture:
 		return "the species has no such clip: no gesture showed and the body did not change";
-	case Layer::Wobble:
-		return "the species has no such clip: no wobble showed and the body did not change";
 	}
 	return "the species has no such clip";
 }

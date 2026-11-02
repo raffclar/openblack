@@ -638,7 +638,7 @@ TOOLS = [
     {
         "name": "creature_animation",
         "description": "The clips a creature's body plays now (developer log, starts with the inspector): per clip "
-                       "its layer (body, blend, face, gesture, wobble), spec-file index and name, time, speed (clip ms "
+                       "its layer (body, blend, face or gesture), spec-file index and name, time, speed (clip ms "
                        "per turn ms), loop, weight and pair blend, and the cause (mind activity, plan action, agenda "
                        "step, object action, fight stage).",
         "inputSchema": schema({"id": {"type": "integer"}}),
@@ -656,7 +656,7 @@ TOOLS = [
     {
         "name": "creature_animation_problems",
         "description": "Clips asked of a creature's body that did not play: missing (the species lacks the clip: "
-                       "the body showed the stand, the action ended at once, or a face, gesture or wobble showed "
+                       "the body showed the stand, the action ended at once, or a face or gesture showed "
                        "nothing) or refused (the body was playing "
                        "another action), with turn, asker and repeats.",
         "inputSchema": schema({"id": {"type": "integer"}, **SHAPING}),

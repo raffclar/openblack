@@ -875,6 +875,8 @@ void DefaultWorldCameraModel::HandleActions(std::chrono::microseconds dt)
 	// frame that does not read the keys gives the next step no key steps.
 	_rotateAroundDelta = _keySteps.rotateAround;
 	_keyBoardMoveDelta = _keySteps.move;
+	// Whether the keys asked for a step, which keeps a camera put back inside the fence held back
+	const bool keyStep = _keySteps.rotateAround != glm::vec3() || _keySteps.move != glm::vec2();
 	_keySteps = {};
 	_dragTurn = 0.0f;
 	_dragTilt = 0.0f;
@@ -901,16 +903,17 @@ void DefaultWorldCameraModel::HandleActions(std::chrono::microseconds dt)
 	const bool wheelZooms = _clearView.GetValue() < clear_view::k_Starts;
 
 	// A wheel step is a fixed distance, whatever the frame time
+	float wheelZoom = 0.0f;
 	const auto wheelNotches = actionSystem.GetMouseWheelDelta();
 	if (wheelZooms && wheelNotches != 0.0f)
 	{
-		_rotateAroundDelta.z -= wheelNotches * k_WheelZoomPerNotch;
+		wheelZoom = -wheelNotches * k_WheelZoomPerNotch;
 	}
 	else if (wheelZooms && actionSystem.GetAny(input::BindableActionMap::ZOOM_IN, input::BindableActionMap::ZOOM_OUT))
 	{
-		_rotateAroundDelta.z +=
-		    actionSystem.Get(input::BindableActionMap::ZOOM_IN) ? -k_WheelZoomPerNotch : k_WheelZoomPerNotch;
+		wheelZoom = actionSystem.Get(input::BindableActionMap::ZOOM_IN) ? -k_WheelZoomPerNotch : k_WheelZoomPerNotch;
 	}
+	_rotateAroundDelta.z += wheelZoom;
 
 	const bool twoButtons = aroundMouse && actionSystem.Get(input::UnbindableActionMap::TWO_BUTTON_CLICK);
 	if (twoButtons)
@@ -996,6 +999,7 @@ void DefaultWorldCameraModel::HandleActions(std::chrono::microseconds dt)
 	if ((_features & camera_help::feature::k_Zoom) == 0)
 	{
 		_rotateAroundDelta.z = 0.0f;
+		wheelZoom = 0.0f;
 	}
 	if ((_features & camera_help::feature::k_Rotate) == 0)
 	{
@@ -1066,20 +1070,27 @@ void DefaultWorldCameraModel::HandleActions(std::chrono::microseconds dt)
 		_mode = Mode::Cartesian;
 	}
 
-	// Put back inside the fence, nothing the player does moves the camera, or counts towards the help, until every
-	// control is let go
+	// Put back inside the fence, the player's controls do not move the camera, or count towards the help, until all of
+	// them are let go. The wheel still zooms.
 	if (_heldBack)
 	{
-		if (!AnyControlHeld())
+		const camera_zones::HoldingControls holding {
+		    .grippingLand = gripping,
+		    .actionButton = actionSystem.Get(input::BindableActionMap::ACTION),
+		    .bothButtons = actionSystem.Get(input::UnbindableActionMap::TWO_BUTTON_CLICK),
+		    .rotateAroundMouse = actionSystem.Get(input::BindableActionMap::ROTATE_AROUND_MOUSE_ON),
+		    .keyStep = keyStep,
+		};
+		if (!camera_zones::HoldsBack(holding))
 		{
 			_heldBack = false;
 		}
 		else
 		{
-			_rotateAroundDelta = glm::vec3();
+			_rotateAroundDelta = glm::vec3(0.0f, 0.0f, wheelZoom);
 			_keyBoardMoveDelta = glm::vec2();
 			std::ignore = HandleDrag(false);
-			_mode = Mode::Cartesian;
+			_mode = wheelZoom != 0.0f ? Mode::Polar : Mode::Cartesian;
 			_helpEvents = {};
 			_turnedThisFrame.reset();
 			_controlsTurned = false;
@@ -1229,18 +1240,6 @@ void DefaultWorldCameraModel::UpdateIconFrame(bool onFight)
 	    .blocked = _heldBack || _dragGivenUp,
 	    .cursor = cursor,
 	};
-}
-
-bool DefaultWorldCameraModel::AnyControlHeld() const
-{
-	using input::BindableActionMap;
-	const auto& actionSystem = Locator::gameActionSystem::value();
-	return actionSystem.GetAny(BindableActionMap::MOVE, BindableActionMap::ROTATE_AROUND_MOUSE_ON,
-	                           BindableActionMap::ROTATE_LEFT, BindableActionMap::ROTATE_RIGHT, BindableActionMap::TILT_UP,
-	                           BindableActionMap::TILT_DOWN, BindableActionMap::MOVE_FORWARDS,
-	                           BindableActionMap::MOVE_BACKWARDS, BindableActionMap::MOVE_LEFT, BindableActionMap::MOVE_RIGHT,
-	                           BindableActionMap::ZOOM_IN, BindableActionMap::ZOOM_OUT) ||
-	       actionSystem.Get(input::UnbindableActionMap::TWO_BUTTON_CLICK) || actionSystem.GetMouseWheelDelta() != 0.0f;
 }
 
 void DefaultWorldCameraModel::SendHelpEvents(camera_help::events::EventSet events)

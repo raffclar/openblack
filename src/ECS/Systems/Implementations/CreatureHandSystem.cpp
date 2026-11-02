@@ -67,6 +67,7 @@
 #include "ECS/Systems/CreatureMindSystemInterface.h"
 #include "ECS/Systems/CreatureSkinSystemInterface.h"
 #include "ECS/Systems/HandSystemInterface.h"
+#include "ECS/Systems/MagicSystemInterface.h"
 #include "ECS/Systems/PickingSystemInterface.h"
 #include "ECS/Systems/PlayerCommandSystemInterface.h"
 #include "ECS/Systems/PlayerSystemInterface.h"
@@ -446,6 +447,12 @@ void CreatureHandSystem::DoLock(PlayerNames player, entt::entity creature)
 	if (Locator::creatureMindSystem::has_value())
 	{
 		Locator::creatureMindSystem::value().HandTookHold(creature);
+	}
+	// The hold stops the beams from the hands of a creature that casts from above. The miracle continues, and the beams
+	// do not come back when the hand lets go.
+	if (Locator::magicSystem::has_value())
+	{
+		Locator::magicSystem::value().EndCreatureCastBeams(creature);
 	}
 }
 

@@ -149,4 +149,12 @@ template <typename State>
 	return headingKeepsRemembered ? remembered : heading;
 }
 
+/// Whether a villager that goes around a fire goes back on its way to worship: only when the state that it goes on to
+/// after the fire is its arrival at the worship site
+template <typename State>
+[[nodiscard]] constexpr bool BackOnTheWayAfterFire(State then, State arrival)
+{
+	return then == arrival;
+}
+
 } // namespace openblack::ecs::worshipper_rules

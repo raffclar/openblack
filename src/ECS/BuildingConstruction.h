@@ -50,6 +50,19 @@ struct Mending
 /// life, never beyond all of it, and it is repaired once its life is full. A whole building is left as it is.
 [[nodiscard]] Mending RepairBy(float life, float amount);
 
+/// What a hurt does to a building that is not built yet
+struct UnbuiltHurt
+{
+	/// How much of it stays built, never below none
+	float built;
+	/// Nothing of it stays built, so it loses all of its life as well
+	bool allLife;
+};
+
+/// A building that is not built yet loses what is built of it rather than life. When nothing of it stays built, it loses
+/// all of its life.
+[[nodiscard]] UnbuiltHurt HurtUnbuilt(float built, float damage);
+
 /// A feature a script leaves short of built is drawn going up as a building is only if it is the ark's dry dock; any
 /// other feature is drawn whole whatever its built amount
 [[nodiscard]] constexpr bool FeatureDrawnGoingUp(FeatureInfo type)
