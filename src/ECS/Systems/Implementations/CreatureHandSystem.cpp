@@ -418,8 +418,22 @@ void CreatureHandSystem::DoLock(PlayerNames player, entt::entity creature)
 	// The lock goes on the left hand of the player of the command
 	auto& registry = Locator::entitiesRegistry::value();
 	const auto hand = HandOf(player);
-	if (!hand.has_value() || !registry.Valid(*hand) || !registry.Valid(creature) || !MayHoldFor(player, creature))
+	if (!hand.has_value() || !registry.Valid(*hand))
 	{
+		EndRefusedHold(player, creature);
+		return;
+	}
+	// The press asked if the hand may hold the creature. The turn does not ask again: it refuses only a creature that
+	// is not in the world any more, or one that a hand already holds.
+	const bool inWorld = registry.Valid(creature) && registry.AllOf<Creature>(creature);
+	if (!creature_hand::TurnTakesHold(inWorld, inWorld && HandThatHolds(registry, creature).has_value()))
+	{
+		if (const auto logger = spdlog::get("game"))
+		{
+			SPDLOG_LOGGER_INFO(logger,
+			                   "The turn does not hold creature {}: it is not in the world any more, or a hand holds it",
+			                   entt::to_integral(creature));
+		}
 		EndRefusedHold(player, creature);
 		return;
 	}

@@ -110,4 +110,9 @@ constexpr uint32_t k_TapWaitMs = 225;
 /// clock but no more than the game turns allow.
 [[nodiscard]] bool HoldsAfterWait(uint32_t elapsedMs);
 
+/// Whether the turn that does a hold takes the creature that a press sent. The press asked all the questions of MayHold
+/// before it sent the hold. The turn refuses only a creature that is not in the world any more, or one that a hand
+/// already holds. So the turn holds a creature that changed after the press: frozen, out cold, under a script's control.
+[[nodiscard]] bool TurnTakesHold(bool inWorld, bool heldByAHand);
+
 } // namespace openblack::creature_hand

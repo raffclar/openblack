@@ -107,11 +107,12 @@ public:
 	{
 		return std::nullopt;
 	}
-	/// Whether the world has the hand of a player hold the creature (see GetLockedCreature). Only the hand of the
-	/// creature's own player can hold it.
+	/// Whether the world has the hand of a player hold the creature (see GetLockedCreature). Only one hand at a time
+	/// holds it.
 	[[nodiscard]] virtual bool IsLocked([[maybe_unused]] entt::entity creature) const { return false; }
 	/// At the turn: the hand of the player locks on to a creature, which stops and turns to the player's camera
-	/// (player_commands::HandLock)
+	/// (player_commands::HandLock). The turn refuses only a creature that is not in the world any more, or one that a
+	/// hand already holds. The press asked all the other questions before it sent the lock.
 	virtual void DoLock(PlayerNames /*player*/, entt::entity /*creature*/) {}
 	/// At the turn: the lock on the creature ends (player_commands::HandUnlock)
 	virtual void DoUnlock(PlayerNames /*player*/, entt::entity /*creature*/) {}
