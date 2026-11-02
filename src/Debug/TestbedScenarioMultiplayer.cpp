@@ -76,7 +76,7 @@ void testbed_scenarios::AddMultiplayerFrontEndScenarios(std::vector<Scenario>& a
 	     "gods 1 and 2, and Eve as an observer, on Bombardment.",
 	     "The game room has four tabs: Chat, Landscape, Clans and Player Details. The caption reads \"Alice, you are "
 	     "in Bob's game, landscape: Bombardment - 2 players (2 players).\". The gods show in their colours, and the "
-	     "observer in grey. The chat shows Bob's line in red, Eve's in grey and Alice's own line as \"Alice> Hi, "
+	     "observer in grey. The chat shows the lines of Bob and Eve in white and Alice's own line as \"Alice> Hi, "
 	     "all!\" in light grey. Type a line and push Return: it comes back as Alice's line."},
 	    {"multiplayer.room_landscape", "The multiplayer front end: the game room's land", Stage::RoomLandscape,
 	     "The player joins Bob's game and opens the Landscape tab. Bob's game has Bob and Alice as gods 1 and 2, and Eve as an "
@@ -126,9 +126,9 @@ void testbed_scenarios::AddMultiplayerFrontEndScenarios(std::vector<Scenario>& a
 	     "and No. Yes opens the registration page of the lobby's site in the browser."},
 	    {"multiplayer.room_chat_32_gods", "The multiplayer front end: the chat colours of 32 gods", Stage::RoomChat32,
 	     "The player joins the game of 32 gods as god 32. Each of the other 31 gods says a line in the chat.",
-	     "The chat shows 31 lines, \"God1: I am god 1.\" to \"God31: I am god 31.\". Gods 1 to 4 are red, green, blue "
-	     "and yellow. Each of gods 5 to 31 has a different colour, and each line is easy to read on the chat box. Scroll "
-	     "the chat to see all the lines. The list of gods at the side uses the same colours."},
+	     "The chat shows 31 lines, \"God1: I am god 1.\" to \"God31: I am god 31.\", in white because each line goes "
+	     "to all the players. Scroll the chat to see all the lines. In the list of gods at the side, gods 1 to 4 are red, "
+	     "green, blue and yellow, and each of gods 5 to 32 has a different colour."},
 	    {"multiplayer.full_room_observer", "The multiplayer front end: a full room joined as an observer",
 	     Stage::FullRoomObserver,
 	     "The player picks \"Full game (2/2)\" and joins it. The lobby gives no god's ticket for the full room.",
@@ -160,9 +160,16 @@ void testbed_scenarios::AddMultiplayerFrontEndScenarios(std::vector<Scenario>& a
 	    {"multiplayer.lan_room_chat", "The multiplayer front end: the chat of a room on the local network", Stage::LanRoomChat,
 	     "The player joins \"Office game\" on the demonstration's local network by the profile's name. The room's game "
 	     "server sends a line of Ian, god 1.",
-	     "The game room of \"Office game\" opens on the Chat tab. The chat shows \"Ian: Hello from the office!\" in red. "
+	     "The game room of \"Office game\" opens on the Chat tab. The chat shows \"Ian: Hello from the office!\" in white. "
 	     "Type a line and push Return: it shows at once as \"name> text\" in light grey, with the profile's name, and "
 	     "goes to the room's game server. A line of only spaces does not go."},
+	    {"multiplayer.lan_room_private_chat", "The multiplayer front end: the private lines of a room's chat",
+	     Stage::LanRoomPrivateChat,
+	     "The player joins \"Office game\" on the demonstration's local network and picks Ian in the roster. The player "
+	     "sends a line. The room's game server sends a line of Ian to all, then a private line of Ian to the player.",
+	     "The roster shows Ian picked. The chat shows \"name> Only for you, Ian.\" in light grey, \"Ian: Hello from the "
+	     "office!\" in white and \"Ian: This line is only for you.\" in light red. A click under the roster removes the "
+	     "pick, and the next line goes to all the players."},
 	}};
 	for (const auto& box : boxes)
 	{

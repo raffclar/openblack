@@ -271,7 +271,7 @@ public:
 	[[nodiscard]] bool InGame() const override { return session.GetState() != online::NetworkSession::State::Ended; }
 	[[nodiscard]] const online::NetworkSession* Session() const override { return &session; }
 	[[nodiscard]] std::optional<online::StartEvent> TakeStartEvent() override { return session.TakeStartEvent(); }
-	void SendRoomChat(std::string text) override { session.SendRoomChat(text); }
+	void SendRoomChat(std::string text, std::string to, bool team) override { session.SendRoomChat(text, to, team); }
 	[[nodiscard]] std::vector<game_socket::RoomChat> TakeRoomChat() override { return session.TakeRoomChat(); }
 
 	int64_t now {0};
@@ -545,12 +545,9 @@ TEST(MultiplayerRules, SeatsNumberTheGodsInOrder)
 
 TEST(MultiplayerRules, ChatLinesHaveTheGodsColours)
 {
-	const auto own = ChatLine(u"Alice", u"hi", true, 2);
+	const auto own = OwnChatLine(u"Alice", u"hi");
 	EXPECT_EQ(own.text, u"Alice> hi");
 	EXPECT_EQ(own.colour, OwnLineColour());
-	const auto other = ChatLine(u"Bob", u"hello", false, 1);
-	EXPECT_EQ(other.text, u"Bob: hello");
-	EXPECT_EQ(other.colour, glm::vec4(1.0f, 0.0f, 0.0f, 1.0f));
 	EXPECT_EQ(GodColour(0), GodColour(-1));
 	EXPECT_EQ(GodColour(4), glm::vec4(1.0f, 1.0f, 0.0f, 1.0f));
 	// The fifth god has a colour of its own, and a number past the last god is grey as the observers
@@ -1145,7 +1142,7 @@ TEST_F(FrontEndTest, TheRoomChatUsesTheServersChannel)
 	const auto& chat = frontEnd->GetChat();
 	ASSERT_EQ(chat.size(), 2u);
 	EXPECT_EQ(chat[1].text, u"Bob: hello");
-	EXPECT_EQ(chat[1].colour, GodColour(1));
+	EXPECT_EQ(chat[1].colour, glm::vec4(1.0f));
 }
 
 TEST_F(FrontEndTest, TheRoomChatShowsTheOwnLineEvenIfTheLobbyDropsIt)
@@ -1195,19 +1192,169 @@ TEST_F(FrontEndTest, TheLanRoomChatGoesThroughTheGameServer)
 	ASSERT_EQ(std::ranges::count_if(sent, isChat), 1);
 	EXPECT_EQ(std::ranges::find_if(sent, isChat)->Text(), R"({"text":")" + std::string(254, 'a') + R"(","type":"room.chat"})");
 	EXPECT_TRUE(lobby.chatChannel.empty());
-	// The server sends the lines of the other players, each in the colour of the player's god
+	// The server sends the lines of the other players to all, in white
 	sockets.ServerText(socket, game_socket::ToJson(game_socket::RoomChat {.from = "Bob", .text = "hello"}));
 	sockets.ServerText(socket, game_socket::ToJson(game_socket::RoomChat {.from = "Eve", .text = "I watch"}));
 	Step();
 	const auto& chat = frontEnd->GetChat();
 	ASSERT_EQ(chat.size(), 3u);
 	EXPECT_EQ(chat[1].text, u"Bob: hello");
-	EXPECT_EQ(chat[1].colour, GodColour(1));
+	EXPECT_EQ(chat[1].colour, glm::vec4(1.0f));
 	EXPECT_EQ(chat[2].text, u"Eve: I watch");
-	EXPECT_EQ(chat[2].colour, GodColour(0));
+	EXPECT_EQ(chat[2].colour, glm::vec4(1.0f));
 	// Back leaves the room and its chat
 	frontEnd->Back();
 	EXPECT_TRUE(frontEnd->GetChat().empty());
+}
+
+TEST(MultiplayerRules, TheRoomChatColoursEachKindOfLine)
+{
+	// A line to all is white, and a private line is light red, also from an observer
+	const auto all = ReceivedChatLine(u"Bob", u"hello", ChatPrivacy::Public, 1);
+	EXPECT_EQ(all.text, u"Bob: hello");
+	EXPECT_EQ(all.colour, glm::vec4(1.0f));
+	const auto whisper = ReceivedChatLine(u"Eve", u"psst", ChatPrivacy::Private, 0);
+	EXPECT_EQ(whisper.text, u"Eve: psst");
+	EXPECT_EQ(whisper.colour, glm::vec4(1.0f, 200.0f / 255.0f, 200.0f / 255.0f, 1.0f));
+	// A team line has the colour of the sender's god, halfway to white
+	const auto team = ReceivedChatLine(u"Bob", u"attack", ChatPrivacy::Team, 1);
+	EXPECT_EQ(team.text, u"Bob: attack");
+	EXPECT_EQ(team.colour, glm::vec4(1.0f, 127.0f / 255.0f, 127.0f / 255.0f, 1.0f));
+	// A sender who is not in the room: only the text, and a team line is light green
+	const auto stranger = ReceivedChatLine(u"Zed", u"who?", ChatPrivacy::Team, std::nullopt);
+	EXPECT_EQ(stranger.text, u"who?");
+	EXPECT_EQ(stranger.colour, glm::vec4(200.0f / 255.0f, 1.0f, 200.0f / 255.0f, 1.0f));
+	EXPECT_EQ(ReceivedChatLine(u"Zed", u"hi", ChatPrivacy::Public, std::nullopt).text, u"hi");
+}
+
+TEST(MultiplayerRules, HalfwayToWhiteRemovesTheFraction)
+{
+	EXPECT_EQ(HalfwayToWhite(0xFFFF0000u), 0xFFFF7F7Fu);
+	EXPECT_EQ(HalfwayToWhite(0x00808080u), 0xFFBFBFBFu);
+	EXPECT_EQ(HalfwayToWhite(0xFF010203u), 0xFF808181u);
+	EXPECT_EQ(HalfwayToWhite(0xFFFFFFFFu), 0xFFFFFFFFu);
+}
+
+TEST(MultiplayerRules, ChatNamesAgreeWithNoCaseInTheFirst128Characters)
+{
+	EXPECT_TRUE(SameChatName(u"Alice", u"aLICE"));
+	EXPECT_FALSE(SameChatName(u"Alice", u"Alicia"));
+	EXPECT_TRUE(SameChatName(std::u16string(128, u'a') + u"x", std::u16string(128, u'A') + u"y"));
+	const std::vector<std::u16string> names = {u"Bob", u"Eve", u"Alice"};
+	EXPECT_EQ(FindChatName(names, u"eve"), 1u);
+	EXPECT_EQ(FindChatName(names, u"Zed"), std::nullopt);
+}
+
+TEST(MultiplayerRules, ThePickSendsTheRoomChatLine)
+{
+	const std::vector<std::u16string> names = {u"Bob", u"Eve", u"Alice"};
+	// Nothing picked: one line to all, and the own line
+	const auto all = PlanRoomChat(names, u"Alice", std::nullopt, std::nullopt);
+	EXPECT_TRUE(all.ownLine);
+	EXPECT_EQ(all.sends, (std::vector<RoomChatSend> {RoomChatSend {}}));
+	// A picked player: one private line with the name as the room has it
+	const auto one = PlanRoomChat(names, u"Alice", u"bob", std::nullopt);
+	EXPECT_TRUE(one.ownLine);
+	EXPECT_EQ(one.sends, (std::vector<RoomChatSend> {RoomChatSend {.to = u"Bob", .team = false}}));
+	// A picked name that is not in the room: one line to all
+	EXPECT_EQ(PlanRoomChat(names, u"Alice", u"Zed", std::nullopt).sends, (std::vector<RoomChatSend> {RoomChatSend {}}));
+	// A picked team: one team line to each player. The own line shows only when the player is in the team.
+	const std::vector<std::u16string> withAlice = {u"Eve", u"Alice"};
+	const auto ownTeam = PlanRoomChat(names, u"Alice", std::nullopt, std::span<const std::u16string>(withAlice));
+	EXPECT_TRUE(ownTeam.ownLine);
+	EXPECT_EQ(ownTeam.sends, (std::vector<RoomChatSend> {RoomChatSend {.to = u"Eve", .team = true},
+	                                                     RoomChatSend {.to = u"Alice", .team = true}}));
+	const std::vector<std::u16string> other = {u"Bob"};
+	const auto otherTeam = PlanRoomChat(names, u"Alice", std::nullopt, std::span<const std::u16string>(other));
+	EXPECT_FALSE(otherTeam.ownLine);
+	EXPECT_EQ(otherTeam.sends, (std::vector<RoomChatSend> {RoomChatSend {.to = u"Bob", .team = true}}));
+	// An empty team: no line and no own line
+	const auto empty = PlanRoomChat(names, u"Alice", std::nullopt, std::span<const std::u16string>());
+	EXPECT_FALSE(empty.ownLine);
+	EXPECT_TRUE(empty.sends.empty());
+}
+
+TEST_F(FrontEndTest, TheLanRoomChatSendsAPrivateLineToThePickedPlayer)
+{
+	Make(true);
+	lan.servers = {Server("l1", "LAN game", 1, 32)};
+	lan.servers[0].players = {Player(0, "Bob", "god"), Player(0, "Eve", "observer"), Player(0, "Alice", "god")};
+	frontEnd->Next();
+	frontEnd->SetLobbyKind(LobbyKind::Lan);
+	frontEnd->Next();
+	frontEnd->Update();
+	frontEnd->SelectGame(0);
+	frontEnd->Join(u"");
+	const auto socket = sockets.order.back();
+	sockets.Accept(socket);
+	Step();
+	ServerJoins();
+	ASSERT_EQ(frontEnd->GetBox(), Box::Room);
+	const auto chatFrames = [this, socket] {
+		std::vector<std::string> frames;
+		for (const auto& frame : sockets.sockets.at(socket).sent)
+		{
+			if (frame.Text().find("room.chat") != std::string::npos)
+			{
+				frames.push_back(frame.Text());
+			}
+		}
+		return frames;
+	};
+	// A pick of Eve makes the line private to Eve. The own line shows at once.
+	frontEnd->ShowSeat(1);
+	frontEnd->SendChat(u"psst");
+	Step();
+	ASSERT_EQ(chatFrames().size(), 1u);
+	EXPECT_EQ(chatFrames()[0], R"({"text":"psst","to":"Eve","type":"room.chat"})");
+	ASSERT_EQ(frontEnd->GetChat().size(), 1u);
+	EXPECT_EQ(frontEnd->GetChat()[0].text, u"Alice> psst");
+	// A private line from Bob is light red. A private line from the player self shows as an own line.
+	sockets.ServerText(socket, game_socket::ToJson(game_socket::RoomChat {
+	                               .from = "Bob", .text = "hi", .to = {}, .privateLine = true, .team = false}));
+	sockets.ServerText(socket, game_socket::ToJson(game_socket::RoomChat {
+	                               .from = "Alice", .text = "me", .to = {}, .privateLine = true, .team = false}));
+	Step();
+	const auto& chat = frontEnd->GetChat();
+	ASSERT_EQ(chat.size(), 3u);
+	EXPECT_EQ(chat[1].text, u"Bob: hi");
+	EXPECT_EQ(chat[1].colour, glm::vec4(1.0f, 200.0f / 255.0f, 200.0f / 255.0f, 1.0f));
+	EXPECT_EQ(chat[2].text, u"Alice> me");
+	EXPECT_EQ(chat[2].colour, OwnLineColour());
+	// With no pick, the line goes to all again
+	frontEnd->ShowSeat(std::nullopt);
+	frontEnd->SendChat(u"all");
+	Step();
+	ASSERT_EQ(chatFrames().size(), 2u);
+	EXPECT_EQ(chatFrames()[1], R"({"text":"all","type":"room.chat"})");
+}
+
+TEST_F(FrontEndTest, TheChatPickFollowsItsPlayerAndGoesWithThePlayer)
+{
+	Make(true);
+	lan.servers = {Server("l1", "LAN game", 1, 32)};
+	lan.servers[0].players = {Player(0, "Bob", "god"), Player(0, "Eve", "observer"), Player(0, "Alice", "god")};
+	frontEnd->Next();
+	frontEnd->SetLobbyKind(LobbyKind::Lan);
+	frontEnd->Next();
+	frontEnd->Update();
+	frontEnd->SelectGame(0);
+	frontEnd->Join(u"");
+	const auto socket = sockets.order.back();
+	sockets.Accept(socket);
+	Step();
+	ServerJoins();
+	ASSERT_EQ(frontEnd->GetBox(), Box::Room);
+	frontEnd->ShowSeat(1);
+	ASSERT_EQ(frontEnd->GetShownSeat(), 1u);
+	// Bob leaves: the pick stays on Eve, who is now first
+	lan.servers[0].players = {Player(0, "Eve", "observer"), Player(0, "Alice", "god")};
+	frontEnd->Update();
+	EXPECT_EQ(frontEnd->GetShownSeat(), 0u);
+	// Eve leaves: the pick goes
+	lan.servers[0].players = {Player(0, "Alice", "god")};
+	frontEnd->Update();
+	EXPECT_EQ(frontEnd->GetShownSeat(), std::nullopt);
 }
 
 TEST(MultiplayerRules, AChatLineNeedsACharacterAboveTheSpace)

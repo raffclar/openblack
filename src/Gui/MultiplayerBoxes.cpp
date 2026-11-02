@@ -451,6 +451,8 @@ void MultiplayerBoxes::BuildRoom()
 	_caption = &dialog.Add<StaticText>(DialogRect {.min = {40, 60}, .max = {760, 88}}, std::u16string(), Layout::Centre, Mid());
 	// The gods and the observers of the room, one line each in their colour
 	_roster = &dialog.Add<List>(_font, DialogRect {.min = {40, 95}, .max = {760, 370}}, Mid(), false, true, true);
+	// A click on a player picks that player, and a click under the players removes the pick
+	_roster->clearsOnEmptyPick = true;
 	_roster->onClick = [this] { _frontEnd->ShowSeat(_roster->GetSelection()); };
 
 	// The Chat tab
@@ -648,6 +650,8 @@ void MultiplayerBoxes::SyncRoom()
 		    {.text = RosterLine(seat, ToUtf16(seat.account.name), isOwn, rosterTexts, ping), .colour = GodColour(seat.god)});
 	}
 	SetItemsIfChanged(*_roster, std::move(roster));
+	// The pick follows its player when the list of the room changes
+	_roster->SetSelection(_frontEnd->GetShownSeat());
 
 	// What shows on each tab and on the conditions page. The roster does not show on the Landscape tab.
 	const bool onTab = !conditionsPage;
