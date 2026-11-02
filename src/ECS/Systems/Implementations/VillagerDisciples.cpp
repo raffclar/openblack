@@ -556,7 +556,9 @@ void ConsiderAlignment(entt::entity villager, PlayerNames player, VillagerDiscip
 	                                                  info.consideredGoodIfMakingDisciplesAndDesireIsGreaterThan,
 	                                                  info.alignmentChangePerDisciple);
 	auto& alignment = Locator::alignmentSystem::value();
-	alignment.AddPendingAlignment(player, disciple::DampedAlignment(alignment.GetPlayerAlignment(player), change));
+	const float damped = disciple::DampedAlignment(alignment.GetPlayerAlignment(player), change);
+	alignment.AddToHistory(player, AlignmentCause::Villager, damped);
+	alignment.AddPendingAlignment(player, damped);
 }
 
 /// Walks up to a thing, unless already near its edge, and looks at it

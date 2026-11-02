@@ -602,8 +602,10 @@ void GameHandGrabWorld::TreeUprooted(PlayerNames player, entt::entity /*tree*/)
 		return;
 	}
 	auto& alignment = Locator::alignmentSystem::value();
-	alignment.AddPendingAlignment(
-	    player, magic::DampAlignmentChange(-Info()->player.treePullPutAlignmentChange, alignment.GetPlayerAlignment(player)));
+	const float change =
+	    magic::DampAlignmentChange(-Info()->player.treePullPutAlignmentChange, alignment.GetPlayerAlignment(player));
+	alignment.AddToHistory(player, AlignmentCause::Tree, change);
+	alignment.AddPendingAlignment(player, change);
 }
 
 std::optional<entt::entity> GameHandGrabWorld::TreeFromBigForest(entt::entity bigForest)

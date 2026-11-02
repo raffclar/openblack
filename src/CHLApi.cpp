@@ -78,7 +78,6 @@
 #include "Creature/CreatureSwap.h"
 #include "Creature/LeashRules.h"
 #include "Creature/TemplePen.h"
-#include "ECS/AlignmentHistory.h"
 #include "ECS/AllyInfluence.h"
 #include "ECS/Archetypes/AnimatedStaticArchetype.h"
 #include "ECS/Archetypes/BallArchetype.h"
@@ -94,7 +93,6 @@
 #include "ECS/ChallengePictures.h"
 #include "ECS/ChallengeRecords.h"
 #include "ECS/Components/Abode.h"
-#include "ECS/Components/AlignmentHistory.h"
 #include "ECS/Components/Animal.h"
 #include "ECS/Components/Ball.h"
 #include "ECS/Components/CarriedByTornado.h"
@@ -4152,19 +4150,7 @@ void KeepChallengeRecord(const script::challenge_snapshots::Snapshot& snapshot, 
 	    ecs::challenge_records::AlignmentChange(alignment.GetPlayerAlignment(player), *outcome.alignment,
 	                                            Locator::infoConstants::value().player.maxScriptAlignmentChange);
 	// The totals of the alignment changes count the change before the alignment takes it
-	if (Locator::playerSystem::has_value())
-	{
-		const auto playerEntity = Locator::playerSystem::value().FindPlayer(player).value_or(entt::null);
-		if (registry.Valid(playerEntity))
-		{
-			auto* history = registry.TryGet<ecs::components::AlignmentHistory>(playerEntity);
-			if (history == nullptr)
-			{
-				history = &registry.Assign<ecs::components::AlignmentHistory>(playerEntity);
-			}
-			ecs::alignment_history::Add(*history, ecs::components::AlignmentCause::Script, change, 1.0f);
-		}
-	}
+	alignment.AddToHistory(player, ecs::components::AlignmentCause::Script, change);
 	alignment.AddPlayerAlignment(player, change);
 }
 

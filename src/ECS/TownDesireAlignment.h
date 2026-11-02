@@ -55,5 +55,10 @@ struct People
 [[nodiscard]] float Change(std::array<uint32_t, components::k_TownDesireCount>& turnsOver, const Wants& wants,
                            std::span<const DesireRule, components::k_TownDesireCount> rules, People people,
                            float maxChangePerTurn);
+/// The same turn. The change of each want, before the sum is held, also comes back in the terms: 0 for a want that does
+/// not count.
+[[nodiscard]] float Change(std::array<uint32_t, components::k_TownDesireCount>& turnsOver, const Wants& wants,
+                           std::span<const DesireRule, components::k_TownDesireCount> rules, People people,
+                           float maxChangePerTurn, std::array<float, components::k_TownDesireCount>& terms);
 
 } // namespace openblack::ecs::town_desire_alignment

@@ -418,4 +418,35 @@ TEST_F(TornadoRuleTest, AHandDroppedPileTooBigForTheFunnelGivesUpAPot)
 	ASSERT_FALSE(world.carried.empty());
 	EXPECT_EQ(world.carried.front()->object, world.pot);
 }
+
+TEST_F(TornadoRuleTest, AThingAScriptHoldsInPlaceIsNeverLifted)
+{
+	const auto rock = static_cast<entt::entity>(5);
+	world.candidates = {{.object = rock,
+	                     .kind = TornadoCandidate::Kind::Liftable,
+	                     .position = {100.0f, 0.0f, 100.0f},
+	                     .radius = 0.5f,
+	                     .immovable = true}};
+	auto effect = Make();
+	Run(*effect, 85);
+	EXPECT_TRUE(world.carried.empty());
+	EXPECT_EQ(spell.Count(SpellEventInfo::Type::Capture), 0u);
+}
+
+TEST_F(TornadoRuleTest, AHandDroppedPileAScriptHoldsInPlaceGivesUpAPotThoughItFits)
+{
+	const auto pile = static_cast<entt::entity>(5);
+	world.pot = static_cast<entt::entity>(6);
+	world.candidates = {{.object = pile,
+	                     .kind = TornadoCandidate::Kind::Liftable,
+	                     .position = {100.0f, 0.0f, 100.0f},
+	                     .radius = 0.5f,
+	                     .pile = true,
+	                     .immovable = true}};
+	auto effect = Make();
+	Run(*effect, 85);
+	ASSERT_FALSE(world.taken.empty());
+	ASSERT_FALSE(world.carried.empty());
+	EXPECT_EQ(world.carried.front()->object, world.pot);
+}
 } // namespace

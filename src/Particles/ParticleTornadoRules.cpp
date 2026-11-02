@@ -486,7 +486,7 @@ private:
 			switch (candidate.kind)
 			{
 			case TornadoCandidate::Kind::Liftable:
-				if (tornado::Fits(shape, candidate.radius))
+				if (!candidate.immovable && tornado::Fits(shape, candidate.radius))
 				{
 					// Turned down by the miracle, it is passed over
 					if (effect.SendSpellEvent({.type = SpellEventInfo::Type::Capture,

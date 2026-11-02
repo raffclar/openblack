@@ -894,11 +894,17 @@ void MoveAlignmentByWants(entt::entity townEntity)
 	}
 	const auto& counted = registry.Context().peopleCountedInTurn;
 	const auto all = std::accumulate(counted.begin(), counted.end(), uint32_t {0});
+	std::array<float, k_TownDesireCount> terms {};
 	const auto change = town_desire_alignment::Change(
 	    wants->turnsOverAlignmentLevel, {.boostA = wants->boostA, .desire = wants->desire, .boost = wants->boost}, rules,
-	    {.town = CountedPeopleOf(registry, townEntity), .all = all}, info.town.maxAlignmentChangePerGameTurnForDesires);
+	    {.town = CountedPeopleOf(registry, townEntity), .all = all}, info.town.maxAlignmentChangePerGameTurnForDesires, terms);
 	auto& alignment = Locator::alignmentSystem::value();
 	const auto owner = registry.Get<const Town>(townEntity).owner;
+	// The alignment history of the owner keeps the change of each want, before the sum is held and damped
+	for (const float term : terms)
+	{
+		alignment.AddToHistory(owner, AlignmentCause::Town, term);
+	}
 	const float damped = magic::DampAlignmentChange(change, alignment.GetPlayerAlignment(owner));
 	if (damped != 0.0f)
 	{
