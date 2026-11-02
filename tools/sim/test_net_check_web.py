@@ -291,6 +291,15 @@ class LeashCheckOfTheWebGod(unittest.TestCase):
         self.assertFalse(net_check.decided_after_the_run(900, 1200))
         self.assertFalse(net_check.decided_after_the_run(None, 1200))
 
+    def test_a_time_limit_after_the_last_turn_of_the_run_needs_no_stop_of_the_turns(self):
+        # 40 minutes are 24000 turns: a run of 20000 turns ends at its own turn count
+        self.assertFalse(net_check.stop_expected(False, 40, 20000))
+        # 30 minutes are 18000 turns: the limit decides the game before the run ends
+        self.assertTrue(net_check.stop_expected(False, 30, 20000))
+        self.assertFalse(net_check.stop_expected(False, None, 20000))
+        self.assertTrue(net_check.stop_expected(True, None, 2000))
+        self.assertTrue(net_check.stop_expected(True, 40, 2000))
+
     def test_the_escape_key_closes_the_box_before_the_first_leash_key(self):
         leash = {"client": "web", "slot": 1, "turn": 300, "hold": 100, "off": "key"}
         self.assertEqual([key for _, key, _ in net_check.web_leash_presses(leash, True)], ["Escape", "L", "L"])
