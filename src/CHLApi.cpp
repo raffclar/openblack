@@ -8882,9 +8882,8 @@ void OpposingCreature() // 332 OPPOSING_CREATURE
 		Pushi(0);
 		return;
 	}
-	const auto& opposing = table.at(row);
-	const std::array<uint32_t, k_Gods> types {opposing.field0x0, opposing.field0x4, opposing.field0x8};
-	Pushi(static_cast<int32_t>(types.at(god)));
+	static_assert(std::tuple_size_v<decltype(table.at(row).byGod)> == k_Gods);
+	Pushi(static_cast<int32_t>(table.at(row).byGod.at(god)));
 }
 
 void FlockWithinLimits() // 333 FLOCK_WITHIN_LIMITS

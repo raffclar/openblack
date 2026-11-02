@@ -108,7 +108,7 @@ protected:
 		}
 		_info = std::make_unique<InfoConstants>();
 		// One deed that a creature copies, and one action for its plans
-		_info->creatureMimic.at(0).field0x80 = 1.0f;
+		_info->creatureMimic.at(0).chance = 1.0f;
 		Locator::infoConstants::emplace(*_info);
 		Locator::entitiesRegistry::emplace<Registry>();
 		fights = &static_cast<RecordedFights&>(Locator::creatureFightSystem::emplace<RecordedFights>());

@@ -1339,7 +1339,7 @@ void CountWhatTownIsDoing(entt::entity villager, VillagerStates previous, Villag
 		{
 			return;
 		}
-		const auto change = ecs::town_desire::DoingNowChange({.desire = row.field0x4, .weight = row.field0x8}, sign);
+		const auto change = ecs::town_desire::DoingNowChange({.desire = row.townDesire, .weight = row.townDesireWeight}, sign);
 		if (change.has_value())
 		{
 			desire->doingNow.at(change->desire) += change->amount;

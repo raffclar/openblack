@@ -299,7 +299,7 @@ void villager_physics::Land(PhysicsEntry* entry, entt::entity villager)
 	villager_animate::SetAnim(villager, static_cast<int32_t>(landed.clip), true);
 	// A villager a script controls goes straight back to what it was doing, and so does one in some states
 	if (const auto* row = StateRowOf(previous);
-	    registry.AllOf<ScriptControlled>(villager) || (row != nullptr && row->field0xf4 != 0))
+	    registry.AllOf<ScriptControlled>(villager) || (row != nullptr && row->resumesAfterLanding != 0))
 	{
 		SetTopState(*action, previous);
 	}

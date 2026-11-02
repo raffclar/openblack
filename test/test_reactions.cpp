@@ -1794,7 +1794,7 @@ TEST_F(Reactions, AVillagerIsFreeForANewTaskOnlyWhenNothingHoldsItAndItsStateLet
 	const auto state = Locator::livingActionSystem::value().VillagerGetFinalState(registry.Get<const LivingAction>(villager));
 	// The locator holds its own copy of the tables: give it the changed tables each time
 	const auto stateLetsGo = [this, state](int lets) {
-		_info->villagerStateTable.at(static_cast<size_t>(state)).field0xa8 = lets;
+		_info->villagerStateTable.at(static_cast<size_t>(state)).availableFlags = lets;
 		Locator::infoConstants::emplace(*_info);
 	};
 	stateLetsGo(1);
@@ -2229,7 +2229,7 @@ TEST_F(Reactions, AVillagerNearADiscipleFollowsItToItsWorkOneTime)
 	row.maxReactionDistance = 60.0f;
 	row.numGameTurnsForNormalThingsToReact = 80;
 	row.numGameTurnsForNormalThingsBeforeReactingAgain = 15;
-	_info->villagerStateTable.at(static_cast<size_t>(VillagerStates::DecideWhatToDo)).field0xa8 = 1;
+	_info->villagerStateTable.at(static_cast<size_t>(VillagerStates::DecideWhatToDo)).availableFlags = 1;
 	Locator::infoConstants::reset();
 	Locator::infoConstants::emplace(*_info);
 	for (const auto villager : _villagers)

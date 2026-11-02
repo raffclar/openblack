@@ -132,7 +132,7 @@ entt::entity TownOf(entt::entity villager)
 ImpressiveType ImpressiveOf(uint32_t action)
 {
 	const auto& actions = Locator::infoConstants::value().creatureAction;
-	return action < actions.size() ? static_cast<ImpressiveType>(actions.at(action).field0xc)
+	return action < actions.size() ? static_cast<ImpressiveType>(actions.at(action).impressiveType)
 	                               : ImpressiveType::CreatureNotImpressive;
 }
 
@@ -175,11 +175,12 @@ std::optional<float> Wanted(entt::entity villager, entt::entity town)
 		return std::nullopt;
 	}
 	const auto& info = StateInfo(FinalStateOf(*action));
-	if (info.field0x4 < 0 || info.field0x4 >= k_TownDesires)
+	if (info.townDesire < 0 || info.townDesire >= k_TownDesires)
 	{
 		return std::nullopt;
 	}
-	return Locator::townDesireSystem::value().GetRawDesire(town, static_cast<TownDesireInfo>(info.field0x4)) * info.field0x8;
+	return Locator::townDesireSystem::value().GetRawDesire(town, static_cast<TownDesireInfo>(info.townDesire)) *
+	       info.townDesireWeight;
 }
 
 /// The villager walks to a point on its way to or from the creature, then goes into a state

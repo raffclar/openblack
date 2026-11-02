@@ -147,7 +147,7 @@ bool AnimalSystem::LoadState(reflection::BinaryReader& in)
 
 bool AnimalSystem::SeesToNeedsIn(AnimalState state)
 {
-	return Locator::infoConstants::value().animalStateTable.at(GameStateOf(state)).field0xa4 != 0;
+	return Locator::infoConstants::value().animalStateTable.at(GameStateOf(state)).seesToNeeds != 0;
 }
 
 namespace
