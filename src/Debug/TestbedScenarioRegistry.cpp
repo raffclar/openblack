@@ -14830,6 +14830,43 @@ void AddWorkshopScenarios(std::vector<Scenario>& all)
 	    // A town of the neutral player wants no workshop, so the town stays the player's
 	    .townBeliefInPlayer = 1000.0f,
 	});
+	// A fish farm 10 m from the scaffold, in the middle of the next cell and inside the outline of the workshop
+	constexpr glm::vec2 k_FarmPlace {10.0f, 0.0f};
+	all.push_back({
+	    .id = "objects.scaffold_stopped_by_fish_farm",
+	    .name = "A fish farm stops the workshop of a script scaffold",
+	    .facet = Facet::Objects,
+	    .description = "A Celtic town of the player's (which believes in the player from the start) with a village "
+	                   "centre. A fish farm stands 10 m from a place 57 m from the centre. After one second, CREATE makes "
+	                   "a scaffold (type 39) at that place, and SET_SCAFFOLD_PROPERTIES gives it the workshop (abode "
+	                   "number 9) and the size 3. Then SET_ACTIVE sets the scaffold active.",
+	    .expected = "No building site opens at the scaffold, because the fish farm is in the outline of the workshop. "
+	                "The scaffold stays where it is, with no phantom of the workshop.",
+	    .environment = {.dispenserGrid = false},
+	    .framing = {.shot = Shot::Overview, .include = {k_RockyPlace - glm::vec2 {15.0f}, k_RockyPlace + glm::vec2 {15.0f}}},
+	    .objects = {{.type = AbodeInfo::CelticTownCentre, .offset = {0.0f, 50.0f}},
+	                {.type = FishFarmInfo::Normal, .offset = k_RockyPlace + k_FarmPlace}},
+	    .commands = {{.kind = Kind::CallNative,
+	                  .delaySeconds = 1.0f,
+	                  .script = "CREATE",
+	                  .scriptArguments = {{.kind = ScriptArgument::Kind::Integer,
+	                                       .number = static_cast<float>(script::ObjectType::Scaffold)},
+	                                      {.kind = ScriptArgument::Kind::Integer, .number = 5000.0f},
+	                                      {.kind = ScriptArgument::Kind::Position, .point = k_RockyPlace}}},
+	                 {.kind = Kind::CallNative,
+	                  .delaySeconds = 0.0f,
+	                  .script = "SET_SCAFFOLD_PROPERTIES",
+	                  .scriptArguments = {{.kind = ScriptArgument::Kind::Made, .index = 0},
+	                                      {.kind = ScriptArgument::Kind::Integer, .number = k_WorkshopNumber},
+	                                      {.kind = ScriptArgument::Kind::Number, .number = k_WorkshopSize},
+	                                      {.kind = ScriptArgument::Kind::Integer, .number = 0.0f}}},
+	                 {.kind = Kind::CallNative,
+	                  .delaySeconds = 0.0f,
+	                  .script = "SET_ACTIVE",
+	                  .scriptArguments = {{.kind = ScriptArgument::Kind::Integer, .number = 1.0f},
+	                                      {.kind = ScriptArgument::Kind::Made, .index = 0}}}},
+	    .townBeliefInPlayer = 1000.0f,
+	});
 }
 
 std::vector<Scenario> Build()

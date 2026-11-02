@@ -15,6 +15,7 @@
 
 #include "3D/MapCoords.h"
 #include "ECS/Components/Abode.h"
+#include "ECS/Components/AnimatedStatic.h"
 #include "ECS/Components/Ball.h"
 #include "ECS/Components/BuildingDamage.h"
 #include "ECS/Components/CreatureObjectAction.h"
@@ -22,23 +23,33 @@
 #include "ECS/Components/Feature.h"
 #include "ECS/Components/Field.h"
 #include "ECS/Components/Firefly.h"
+#include "ECS/Components/FishFarm.h"
+#include "ECS/Components/Flowers.h"
+#include "ECS/Components/Forest.h"
+#include "ECS/Components/MagicShield.h"
 #include "ECS/Components/MapCellResident.h"
 #include "ECS/Components/Mesh.h"
 #include "ECS/Components/Mobile.h"
 #include "ECS/Components/OneOffSpellSeed.h"
 #include "ECS/Components/Pot.h"
+#include "ECS/Components/Scaffold.h"
 #include "ECS/Components/ScriptHighlight.h"
 #include "ECS/Components/Shark.h"
+#include "ECS/Components/SpellDispenser.h"
 #include "ECS/Components/SpellIcon.h"
 #include "ECS/Components/SpellSeed.h"
+#include "ECS/Components/StreetLantern.h"
 #include "ECS/Components/TeleportStone.h"
+#include "ECS/Components/Temple.h"
 #include "ECS/Components/Town.h"
 #include "ECS/Components/TownDesireFlag.h"
 #include "ECS/Components/Transform.h"
+#include "ECS/Components/Tree.h"
 #include "ECS/Components/VillageTotem.h"
 #include "ECS/Components/Villager.h"
 #include "ECS/Components/Vortex.h"
 #include "ECS/Components/WallHug.h"
+#include "ECS/Components/WorshipSite.h"
 #include "ECS/LivingFacing.h"
 #include "ECS/Map.h"
 #include "ECS/MapCells.h"
@@ -714,27 +725,78 @@ TEST_F(MapProductionFiling, AWhaleIsNeverPutOnTheMap)
 	EXPECT_FALSE(registry.AllOf<MapCellResident>(whale));
 }
 
-TEST(MapProductionSolid, OnlyBuildingsAndOtherFixedThingsStopANewBuilding)
+namespace
+{
+/// Whether a thing of one kind stops a new building
+template <typename Kind>
+bool KindIsSolid()
 {
 	Registry registry;
-	const auto abode = registry.Create();
-	registry.Assign<Abode>(abode);
-	const auto rock = registry.Create();
-	registry.Assign<MobileStatic>(rock);
-	const auto deadTree = registry.Create();
-	registry.Assign<DeadTree>(deadTree);
-	const auto piece = registry.Create();
-	registry.Assign<BuildingPiece>(piece);
-	const auto vortex = registry.Create();
-	registry.Assign<Vortex>(vortex);
-	const auto feature = registry.Create();
-	registry.Assign<Feature>(feature);
-	// A rock and the things of a rock kind cover their outline but do not stop a new building
-	for (const auto thing : {rock, deadTree, piece, vortex})
-	{
-		ASSERT_TRUE(MapProduction::KindOf(registry, thing).value().coversOutline);
-		EXPECT_FALSE(town_planning::SolidToNewBuilding(registry, thing));
-	}
-	EXPECT_TRUE(town_planning::SolidToNewBuilding(registry, abode));
-	EXPECT_TRUE(town_planning::SolidToNewBuilding(registry, feature));
+	const auto thing = registry.Create();
+	registry.Assign<Kind>(thing);
+	return town_planning::SolidToNewBuilding(registry, thing);
+}
+} // namespace
+
+TEST(MapProductionSolid, BuildingsAndOtherFixedThingsOfABuildingKindStopANewBuilding)
+{
+	EXPECT_TRUE(KindIsSolid<Abode>());
+	EXPECT_TRUE(KindIsSolid<Feature>());
+	EXPECT_TRUE(KindIsSolid<AnimatedStatic>());
+	EXPECT_TRUE(KindIsSolid<Flowers>());
+	EXPECT_TRUE(KindIsSolid<BigForest>());
+	EXPECT_TRUE(KindIsSolid<SpellDispenser>());
+	EXPECT_TRUE(KindIsSolid<TeleportStone>());
+	EXPECT_TRUE(KindIsSolid<WorshipSite>());
+	EXPECT_TRUE(KindIsSolid<WorshipAltar>());
+	EXPECT_TRUE(KindIsSolid<Temple>());
+	EXPECT_TRUE(KindIsSolid<VillageTotem>());
+}
+
+TEST(MapProductionSolid, AFishFarmStopsANewBuilding)
+{
+	// A fish farm stands in its own cell only, but it stops a new building as other buildings do
+	Registry registry;
+	const auto farm = registry.Create();
+	registry.Assign<FishFarm>(farm);
+	ASSERT_FALSE(MapProduction::KindOf(registry, farm).value().coversOutline);
+	EXPECT_TRUE(town_planning::SolidToNewBuilding(registry, farm));
+}
+
+TEST(MapProductionSolid, RocksAndThingsOfARockKindDoNotStopANewBuilding)
+{
+	EXPECT_FALSE(KindIsSolid<MobileStatic>());
+	EXPECT_FALSE(KindIsSolid<DeadTree>());
+	EXPECT_FALSE(KindIsSolid<BuildingPiece>());
+	EXPECT_FALSE(KindIsSolid<Vortex>());
+}
+
+TEST(MapProductionSolid, TreesShieldsAndThingsThatMoveDoNotStopANewBuilding)
+{
+	EXPECT_FALSE(KindIsSolid<Tree>());
+	EXPECT_FALSE(KindIsSolid<MagicShield>());
+	EXPECT_FALSE(KindIsSolid<ShieldDome>());
+	EXPECT_FALSE(KindIsSolid<ScriptHighlight>());
+	EXPECT_FALSE(KindIsSolid<StreetLantern>());
+	EXPECT_FALSE(KindIsSolid<TownDesireFlag>());
+	EXPECT_FALSE(KindIsSolid<Pot>());
+	EXPECT_FALSE(KindIsSolid<OneOffSpellSeed>());
+	EXPECT_FALSE(KindIsSolid<Villager>());
+	EXPECT_FALSE(KindIsSolid<Scaffold>());
+}
+
+TEST_F(MapProductionFiling, AFishFarmIsAFixedThingOfItsOwnCell)
+{
+	// The fit check of a new building finds a fish farm in the fixed things of the cell where the farm stands
+	auto& registry = Locator::entitiesRegistry::value();
+	auto& map = Locator::entitiesMap::value();
+	const glm::vec3 place {500.0f, 0.0f, 500.0f};
+	const auto farm = registry.Create();
+	registry.Assign<Transform>(farm, place, glm::mat3(1.0f), glm::vec3(1.0f));
+	registry.Assign<FishFarm>(farm);
+	map.Sync();
+	map.Refile(farm);
+	ASSERT_TRUE(registry.AllOf<MapCellResident>(farm));
+	EXPECT_EQ(registry.Get<MapCellResident>(farm).cells.size(), 1U);
+	EXPECT_EQ(std::ranges::count(map.GetFixedInGridCell(place), farm), 1);
 }

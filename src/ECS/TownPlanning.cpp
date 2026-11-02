@@ -33,18 +33,22 @@
 #include "ECS/BuildingReplan.h"
 #include "ECS/BuildingSites.h"
 #include "ECS/Components/Abode.h"
-#include "ECS/Components/BuildingDamage.h"
+#include "ECS/Components/AnimatedStatic.h"
 #include "ECS/Components/Construction.h"
-#include "ECS/Components/DeadTree.h"
+#include "ECS/Components/Feature.h"
 #include "ECS/Components/Field.h"
+#include "ECS/Components/FishFarm.h"
+#include "ECS/Components/Flowers.h"
+#include "ECS/Components/Forest.h"
 #include "ECS/Components/MapCellResident.h"
-#include "ECS/Components/Mobile.h"
 #include "ECS/Components/SpellDispenser.h"
+#include "ECS/Components/SpellIcon.h"
+#include "ECS/Components/TeleportStone.h"
 #include "ECS/Components/Temple.h"
 #include "ECS/Components/Town.h"
 #include "ECS/Components/TownDesire.h"
 #include "ECS/Components/Transform.h"
-#include "ECS/Components/Vortex.h"
+#include "ECS/Components/VillageTotem.h"
 #include "ECS/Components/WorshipSite.h"
 #include "ECS/Map.h"
 #include "ECS/MapCells.h"
@@ -266,11 +270,11 @@ BuildingsInOutline(const map_cells::Outline& outline, glm::vec3 place, entt::ent
 		{
 			const auto* resident = registry.TryGet<const MapCellResident>(thing);
 			const auto* placed = registry.TryGet<const Transform>(thing);
-			if (resident == nullptr || !resident->coversOutline || placed == nullptr || thing == ignored)
+			if (resident == nullptr || placed == nullptr || thing == ignored)
 			{
 				continue;
 			}
-			// A rock, a dead tree, a piece of a broken building and a vortex do not stop a new building
+			// Only buildings and the other fixed things of a building kind stop a new building
 			if (!town_planning::SolidToNewBuilding(registry, thing))
 			{
 				continue;
@@ -643,7 +647,8 @@ std::vector<scaffold_offer::Candidate> town_planning::ScaffoldCandidates(entt::e
 
 bool town_planning::SolidToNewBuilding(const Registry& registry, entt::entity thing)
 {
-	return !registry.AnyOf<MobileStatic, DeadTree, BuildingPiece, Vortex>(thing);
+	return registry.AnyOf<Abode, Feature, AnimatedStatic, Flowers, BigForest, SpellDispenser, TeleportStone, WorshipSite,
+	                      WorshipAltar, WorshipIcon, Temple, VillageTotem, FishFarm>(thing);
 }
 
 bool town_planning::FitsForScaffold(glm::vec3 place, MeshId mesh, float yAngle, float scale, entt::entity ignored)

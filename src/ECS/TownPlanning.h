@@ -31,8 +31,9 @@ class Registry;
 namespace openblack::ecs::town_planning
 {
 
-/// Whether a thing that covers its outline stops a new building in that outline. Rocks, dead trees, pieces of broken
-/// buildings and vortices cover their outline, but they do not stop a new building.
+/// Whether a fixed thing in the cells of an outline stops a new building in that outline. Buildings, features, flowers,
+/// forests, spell dispensers, teleport stones, worship sites and their icons, temples, totems and fish farms stop it.
+/// Rocks, dead trees, pieces of broken buildings, vortices, trees, shields and all things that move do not stop it.
 [[nodiscard]] bool SolidToNewBuilding(const Registry& registry, entt::entity thing);
 
 /// Whether a town may still be asked this game turn to start a planned building; asking it uses the turn's ask
