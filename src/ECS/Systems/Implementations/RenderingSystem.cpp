@@ -777,12 +777,13 @@ bool RenderingSystem::UploadInstances(bool drawBoundingBox)
 	                                       WorshipSiteFlag, GateLantern, BuildProgress, Feature, AnimalPose, HeldByCreature,
 	                                       Villager, Animal, InPhysics, SnowLevel>
 	    stores(registry);
+	const openblack::ecs::object_detail::Stores detailStores(registry);
 	const auto lifelessTotemParts = LifelessTotemParts(registry);
 	EachBySegment(
 	    [this, &registry, &vegetation, &meshes, &fits, &fizzOrder, &segmentPlaced, &lastSegment, drawBoundingBox, camera, &view,
 	     modelDetail, drawList, drawnHand, &drawnPlaces, &villagerPoses, &highDetails, &drawnScales, &physicsPoses,
-	     &detailMeshes, &lifelessTotemParts, &hands, &highlights, &creatureMorphs, &terrainMorphs, &ghosts,
-	     &stores](entt::entity entity, const Mesh& mesh, const Transform& transform) {
+	     &detailMeshes, &lifelessTotemParts, &hands, &highlights, &creatureMorphs, &terrainMorphs, &ghosts, &stores,
+	     &detailStores](entt::entity entity, const Mesh& mesh, const Transform& transform) {
 		    // The hands of the other gods and the right hands have no model on the screen
 		    if (!graphics::drawn_hand::Drawn(hands.Has(entity), entity, drawnHand))
 		    {
@@ -871,9 +872,8 @@ bool RenderingSystem::UploadInstances(bool drawBoundingBox)
 		    {
 			    drawnMesh = detail->meshes.at(static_cast<size_t>(graphics::mesh_detail::Mesh::High));
 		    }
-		    else if (camera != nullptr && (detail == nullptr || !terrainMorphs.Has(entity)) &&
-		             object_detail::Banded(registry, entity) &&
-		             (detail != nullptr || object_detail::BandedNow(registry, entity)))
+		    else if (camera != nullptr && (detail == nullptr || !terrainMorphs.Has(entity)) && detailStores.Banded(entity) &&
+		             (detail != nullptr || detailStores.BandedNow(entity)))
 		    {
 			    // A villager's bands are by its standard mesh's box, any other thing's by its own
 			    const auto bounding = detail != nullptr
@@ -881,11 +881,11 @@ bool RenderingSystem::UploadInstances(bool drawBoundingBox)
 			                              : drawnMesh;
 			    if (const auto& box = MeshBox(bounding); box.has_value())
 			    {
-				    const float drawImportance = object_detail::Importance(registry, entity);
+				    const float drawImportance = detailStores.Importance(entity);
 				    const auto choice = ChooseDetail(
 				        *box, drawImportance, modelMatrix, transform.scale.x,
-				        [&registry, entity] {
-					        return object_detail::Disappears(registry, entity, IsTownCentre(registry, entity));
+				        [&registry, &detailStores, entity] {
+					        return detailStores.Disappears(entity, IsTownCentre(registry, entity));
 				        },
 				        *view, modelDetail);
 				    if (noteKept)

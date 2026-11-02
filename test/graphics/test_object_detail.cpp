@@ -7,7 +7,12 @@
  * openblack is licensed under the GNU General Public License version 3.
  *******************************************************************************/
 
+#include <cstdint>
+
+#include <array>
+#include <functional>
 #include <optional>
+#include <vector>
 
 #include <gtest/gtest.h>
 
@@ -21,11 +26,14 @@
 #include "ECS/Components/Hand.h"
 #include "ECS/Components/HandGrab.h"
 #include "ECS/Components/HighDetail.h"
+#include "ECS/Components/IntroHand.h"
 #include "ECS/Components/MagicShield.h"
 #include "ECS/Components/NeverFades.h"
 #include "ECS/Components/Physics.h"
 #include "ECS/Components/ScriptHighlight.h"
+#include "ECS/Components/SeeThrough.h"
 #include "ECS/Components/Temple.h"
+#include "ECS/Components/Translucent.h"
 #include "ECS/Components/Vortex.h"
 #include "ECS/ObjectDetail.h"
 #include "ECS/Registry.h"
@@ -144,4 +152,69 @@ TEST(ObjectDetail, AThingThatAVortexCarriesAwayKeepsItsDetailAndDoesNotFade)
 	const auto caught = registry.Create();
 	registry.Assign<CarriedByTornado>(caught);
 	EXPECT_EQ(object_detail::Importance(registry, caught), 0.0f);
+}
+
+TEST(ObjectDetail, TheStoresGiveTheAnswersOfTheRegistry)
+{
+	using Registry = openblack::ecs::Registry;
+	using Give = std::function<void(Registry&, entt::entity)>;
+	const std::array<Give, 24> gives {
+	    [](Registry& r, entt::entity e) { r.Assign<CreatureMorph>(e); },
+	    [](Registry& r, entt::entity e) { r.Assign<Hand>(e); },
+	    [](Registry& r, entt::entity e) { r.Assign<IntroHand>(e); },
+	    [](Registry& r, entt::entity e) { r.Assign<Temple>(e); },
+	    [](Registry& r, entt::entity e) { r.Assign<TempleInteriorPart>(e); },
+	    [](Registry& r, entt::entity e) { r.Assign<Translucent>(e); },
+	    [](Registry& r, entt::entity e) { r.Assign<InHand>(e); },
+	    [](Registry& r, entt::entity e) { r.Assign<HeldByCreature>(e); },
+	    [](Registry& r, entt::entity e) { r.Assign<HighDetail>(e); },
+	    [](Registry& r, entt::entity e) { r.Assign<SeeThrough>(e); },
+	    [](Registry& r, entt::entity e) { r.Assign<NeverFades>(e); },
+	    [](Registry& r, entt::entity e) { r.Assign<InPhysics>(e); },
+	    [](Registry& r, entt::entity e) { r.Assign<Ball>(e); },
+	    [](Registry& r, entt::entity e) { r.Assign<Vortex>(e); },
+	    [](Registry& r, entt::entity e) { r.Assign<ScriptHighlight>(e); },
+	    [](Registry& r, entt::entity e) { r.Assign<DrawnIntoVortex>(e); },
+	    [](Registry& r, entt::entity e) { r.Assign<CarriedByTornado>(e); },
+	    [](Registry& r, entt::entity e) { r.Assign<MagicShield>(e, MagicShield {.kind = MagicShield::Kind::Physical}); },
+	    [](Registry& r, entt::entity e) { r.Assign<MagicShield>(e, MagicShield {.kind = MagicShield::Kind::Spiritual}); },
+	    [](Registry& r, entt::entity e) { r.Assign<Animal>(e, Animal {.type = AnimalInfo::Vulture}); },
+	    [](Registry& r, entt::entity e) { r.Assign<Animal>(e, Animal {.type = AnimalInfo::None}); },
+	    [](Registry& r, entt::entity e) { r.Assign<DetailMeshes>(e, DetailMeshes {.meshes = {}, .importance = 0.025f}); },
+	    [](Registry& r, entt::entity e) { r.Assign<DrawImportance>(e, DrawImportance {.importance = 2.0f}); },
+	    [](Registry& r, entt::entity e) { r.Assign<DrawImportance>(e, DrawImportance {.importance = 0.5f}); },
+	};
+	// Each thing takes a spread of the kinds. The first registry has only a few kinds, so most stores do not exist.
+	for (const uint32_t kindsUsed : {3u, static_cast<uint32_t>(gives.size())})
+	{
+		Registry registry;
+		std::vector<entt::entity> things;
+		uint32_t mix = 1u;
+		for (uint32_t n = 0; n < 2000; ++n)
+		{
+			const auto thing = registry.Create();
+			mix = mix * 1664525u + 1013904223u;
+			for (uint32_t kind = 0; kind < kindsUsed; ++kind)
+			{
+				// A thing has one shield, one animal and one importance at most
+				const bool second = kind == 18 || kind == 20 || kind == 23;
+				if (((mix >> (kind + 4u)) & 3u) == 0u && !(second && ((mix >> (kind + 3u)) & 3u) == 0u))
+				{
+					gives.at(kind)(registry, thing);
+				}
+			}
+			things.push_back(thing);
+		}
+		const object_detail::Stores stores(registry);
+		for (const auto thing : things)
+		{
+			EXPECT_EQ(stores.Banded(thing), object_detail::Banded(registry, thing));
+			EXPECT_EQ(stores.BandedNow(thing), object_detail::BandedNow(registry, thing));
+			EXPECT_EQ(stores.Importance(thing), object_detail::Importance(registry, thing));
+			for (const bool townCentre : {false, true})
+			{
+				EXPECT_EQ(stores.Disappears(thing, townCentre), object_detail::Disappears(registry, thing, townCentre));
+			}
+		}
+	}
 }
