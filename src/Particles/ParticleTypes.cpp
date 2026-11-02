@@ -19,7 +19,7 @@ namespace
 constexpr std::array<std::pair<std::string_view, std::string_view>, openblack::particles::k_ParticleTypeCount> k_Types {{
     {"None", ""},                                                                  // 0
     {"Tornado", ""},                                                               // 1
-    {"Firework", ""},                                                              // 2
+    {"Firework", "SF_FireWorks"},                                                  // 2
     {"Firework Single", ""},                                                       // 3
     {"Leaves", "SF_Forest"},                                                       // 4
     {"Magicball", ""},                                                             // 5
