@@ -657,6 +657,15 @@ void GameMagicWorld::Apply(const magic::EffectValues& values, std::span<const ma
 		}
 		magic_living::AfterEffect(outcome.entity, values, source);
 		alignment += outcome.alignmentChange;
+		// The alignment history of the effect's player keeps each kind of change before the damping, also for a creature's
+		// miracle
+		if (!source.playerless && Locator::alignmentSystem::has_value())
+		{
+			for (const float term : outcome.alignmentTerms)
+			{
+				Locator::alignmentSystem::value().AddToHistory(source.player, AlignmentCause::Effect, term);
+			}
+		}
 		// What applied the effect, when no miracle did: none for a fall onto the land
 		const bool appliedByNothing =
 		    source.appliedBy.has_value() && (*source.appliedBy == entt::null || !PositionOf(*source.appliedBy).has_value());
@@ -892,12 +901,13 @@ void GameMagicWorld::PlantNear(entt::entity tree, const magic::WaterDrop& drop)
 	{
 		Locator::gameEndSystem::value().AddToCondition(drop.source.player, game_end::Condition::TreesGrown, 1);
 	}
-	// Planting a tree is good. (The game also counts it in the alignment's history, which is not kept here yet.)
+	// Planting a tree is good. The alignment history of the player keeps the change.
 	if (planted.has_value() && drop.source.player != PlayerNames::NEUTRAL && Locator::alignmentSystem::has_value())
 	{
 		auto& alignment = Locator::alignmentSystem::value();
 		const float change = magic::DampAlignmentChange(Locator::infoConstants::value().player.treePullPutAlignmentChange,
 		                                                alignment.GetPlayerAlignment(drop.source.player));
+		alignment.AddToHistory(drop.source.player, AlignmentCause::Tree, change);
 		alignment.AddPendingAlignment(drop.source.player, change);
 	}
 }
