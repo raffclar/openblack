@@ -35,6 +35,7 @@
 #include "ECS/Components/Tree.h"
 #include "ECS/Components/Villager.h"
 #include "ECS/Components/Vortex.h"
+#include "ECS/Components/WorshipSite.h"
 #include "ECS/Registry.h"
 #include "InfoConstants.h"
 #include "Physics/BodyShapes.h"
@@ -413,9 +414,9 @@ physics_classes::ClassFacts ClassifyKind(const Registry& registry, entt::entity 
 		        .interacts = vortex->type == VortexType::In,
 		        .collisionMesh = static_cast<uint32_t>(MeshId::SpellVortexCylinder)};
 	}
-	if (registry.AnyOf<Feature, Flowers>(entity))
+	if (registry.AnyOf<Feature, Flowers, WorshipAltar>(entity))
 	{
-		// Features stand as buildings do, and never move
+		// Features and the altar of a worship site stand as buildings do, and never move
 		return {.body = BodyKind::Model, .row = MaterialRow::DefaultUnmovable, .interacts = StandingBuilding(inputs)};
 	}
 	// Fields, forests, teleport stones and anything else the physics doesn't know

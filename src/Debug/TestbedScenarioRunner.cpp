@@ -3038,6 +3038,23 @@ std::string Runner::GivePlayerCommand(const Command& command)
 		}
 		return fmt::format("{} worship sites built", unbuilt.size());
 	}
+	case Kind::ScriptBuildsWorshipSites:
+	{
+		auto& registry = Locator::entitiesRegistry::value();
+		std::vector<entt::entity> sites;
+		registry.Each<const ecs::components::WorshipSite>(
+		    [&](entt::entity site, const ecs::components::WorshipSite& component) {
+			    if (component.player == command.player)
+			    {
+				    sites.push_back(site);
+			    }
+		    });
+		for (const auto site : sites)
+		{
+			ecs::construction::SetBuilt(site, command.amount);
+		}
+		return fmt::format("{} worship sites set to {}", sites.size(), command.amount);
+	}
 	case Kind::HandRelease:
 		if (!Locator::handGrabSystem::has_value() || !Locator::handGrabSystem::value().LetGoAt(command.velocity))
 		{
@@ -3713,15 +3730,15 @@ void Runner::Give(const Command& command)
 	    command.kind == Kind::RemoveObject || command.kind == Kind::HandGripTotem ||
 	    command.kind == Kind::AttachObjectScriptSound || command.kind == Kind::SayLine ||
 	    command.kind == Kind::PlayGuidanceVoice || command.kind == Kind::ScriptRelease || command.kind == Kind::FillSiteIcons ||
-	    command.kind == Kind::BuildWorshipSites || command.kind == Kind::PressPlainKey || command.kind == Kind::PlainKeyDown ||
-	    command.kind == Kind::PlainKeyRepeat || command.kind == Kind::PlainKeyUp ||
-	    command.kind == Kind::ChargeIconWithSeedHeld || command.kind == Kind::TakeIconSeed ||
-	    command.kind == Kind::TapSiteIcon || command.kind == Kind::TapTempleEntrance || command.kind == Kind::FinishBuilding ||
-	    command.kind == Kind::ScaffoldStartsSite || command.kind == Kind::DestroyScaffoldSite ||
-	    command.kind == Kind::ScaffoldClearsGround || command.kind == Kind::FillBuiltAmount ||
-	    command.kind == Kind::PauseGame || command.kind == Kind::SetGameSpeed || command.kind == Kind::RemoveTeleportStone ||
-	    command.kind == Kind::MakeDance || command.kind == Kind::OtherGodHand || command.kind == Kind::OwnGod ||
-	    command.kind == Kind::BringCreature || command.kind == Kind::ComputerPersonality ||
+	    command.kind == Kind::BuildWorshipSites || command.kind == Kind::ScriptBuildsWorshipSites ||
+	    command.kind == Kind::PressPlainKey || command.kind == Kind::PlainKeyDown || command.kind == Kind::PlainKeyRepeat ||
+	    command.kind == Kind::PlainKeyUp || command.kind == Kind::ChargeIconWithSeedHeld ||
+	    command.kind == Kind::TakeIconSeed || command.kind == Kind::TapSiteIcon || command.kind == Kind::TapTempleEntrance ||
+	    command.kind == Kind::FinishBuilding || command.kind == Kind::ScaffoldStartsSite ||
+	    command.kind == Kind::DestroyScaffoldSite || command.kind == Kind::ScaffoldClearsGround ||
+	    command.kind == Kind::FillBuiltAmount || command.kind == Kind::PauseGame || command.kind == Kind::SetGameSpeed ||
+	    command.kind == Kind::RemoveTeleportStone || command.kind == Kind::MakeDance || command.kind == Kind::OtherGodHand ||
+	    command.kind == Kind::OwnGod || command.kind == Kind::BringCreature || command.kind == Kind::ComputerPersonality ||
 	    command.kind == Kind::ComputerUntaughtSends || command.kind == Kind::HandCastOnDispenser ||
 	    command.kind == Kind::HandCastOnCreature || command.kind == Kind::CloseHeldMiracle)
 	{
@@ -4647,6 +4664,7 @@ void Runner::Give(const Command& command)
 	case Kind::ScriptRelease:
 	case Kind::FillSiteIcons:
 	case Kind::BuildWorshipSites:
+	case Kind::ScriptBuildsWorshipSites:
 	case Kind::PressPlainKey:
 	case Kind::PlainKeyDown:
 	case Kind::PlainKeyRepeat:

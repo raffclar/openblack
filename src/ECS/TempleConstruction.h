@@ -35,11 +35,11 @@ entt::entity StartPlannedTemple(entt::entity plan, float siteDesire);
 /// music for it. The temple.
 entt::entity RaisePlannedTemple(entt::entity plan);
 
-/// How much of an object is built, 0 to 1: all of anything not under construction
+/// How much of an object is built, 0 to 1: all of anything not under construction. An altar keeps its own amount.
 [[nodiscard]] float BuiltOf(entt::entity object);
 
-/// Whether a building is built: a temple whose heart is built has its features (the creature shrinks to go in, its
-/// entrance can be clicked, its heart beats)
+/// Whether a building is built. An altar is built when all of the altar is built. A temple whose heart is built has its
+/// features (the creature shrinks to go in, its entrance can be clicked, its heart beats)
 [[nodiscard]] bool IsBuilt(entt::entity object);
 
 /// A script sets how much of a building is built: it is finished at all of it, and a town's building left unfinished
@@ -50,6 +50,10 @@ void SetBuilt(entt::entity building, float built);
 /// short of its full life they add to its life instead, and once it is whole it is repaired: a repaired town building
 /// starts working again as when it was built (a graveyard counts a burial and takes its town back).
 void BuildBy(entt::entity building, float amount);
+
+/// Builders mend a built building short of its full life: their work adds to its life, and once it is whole it is
+/// repaired. A whole building stays as it is.
+void MendBy(entt::entity building, float amount);
 
 /// A building going up gets a site of its own town's for its builders (a new one, even if the town has one there), with
 /// a desire, its builders' places worked out round its model and, for a temple, its six piles of wood

@@ -582,13 +582,24 @@ float construction::BuiltOf(entt::entity object)
 	{
 		return 1.0f;
 	}
+	// The altar of a worship site keeps how much of it is built
+	if (const auto* altar = registry.TryGet<const WorshipAltar>(object))
+	{
+		return altar->built;
+	}
 	const auto* progress = registry.TryGet<const BuildProgress>(object);
 	return progress != nullptr ? progress->built : 1.0f;
 }
 
 bool construction::IsBuilt(entt::entity object)
 {
-	return !Entities().AllOf<BuildProgress>(object);
+	const auto& registry = Entities();
+	// The altar of a worship site is built when all of the altar is built, not when its site is built
+	if (const auto* altar = registry.TryGet<const WorshipAltar>(object))
+	{
+		return altar->built >= 1.0f;
+	}
+	return !registry.AllOf<BuildProgress>(object);
 }
 
 void construction::SetBuilt(entt::entity building, float built)
@@ -636,10 +647,7 @@ void construction::SetBuilt(entt::entity building, float built)
 	}
 }
 
-namespace
-{
-/// A built building short of its full life is mended by the work, and repaired once whole
-void MendBy(entt::entity building, float amount)
+void construction::MendBy(entt::entity building, float amount)
 {
 	const float life = world_objects::LifeOf(building);
 	const auto mending = building_construction::RepairBy(life, amount);
@@ -653,7 +661,6 @@ void MendBy(entt::entity building, float amount)
 		Repaired(building);
 	}
 }
-} // namespace
 
 void construction::BuildBy(entt::entity building, float amount)
 {
@@ -678,7 +685,7 @@ void construction::BuildBy(entt::entity building, float amount)
 		sites.BuildBy(building, amount);
 		return;
 	}
-	// An altar keeps how much of it is built. It has no life to mend.
+	// An altar keeps how much of it is built, and its builders mend it when it is built
 	if (registry.AllOf<WorshipAltar>(building))
 	{
 		if (Locator::worshipSiteSystem::has_value())

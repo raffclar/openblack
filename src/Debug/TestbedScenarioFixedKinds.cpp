@@ -52,6 +52,9 @@ constexpr glm::vec2 k_UnbuiltHut {7.0f, 20.0f};
 constexpr glm::vec2 k_HurtTemple {-10.0f, -60.0f};
 constexpr glm::vec2 k_TempleDrop {12.0f, -60.0f};
 constexpr glm::vec2 k_TempleTown {-10.0f, -110.0f};
+
+/// Where a boulder flies from towards the altar of the town's worship site: 20 metres north of the altar
+constexpr glm::vec2 k_BoulderFrom {k_Altar.x, k_Altar.y + 20.0f};
 } // namespace
 
 void openblack::testbed_scenarios::AddFixedKindScenarios(std::vector<Scenario>& all)
@@ -153,6 +156,59 @@ void openblack::testbed_scenarios::AddFixedKindScenarios(std::vector<Scenario>& 
 	                 {.kind = Kind::HandRelease, .delaySeconds = 3.0f}},
 	    .townBeliefInPlayer = 1000.0f,
 	});
+	std::vector<ObjectSetup> scriptBuiltTown {
+	    {.type = AbodeInfo::NorseTownCentre, .offset = k_Gathering - k_BuildingGap},
+	    {.type = AbodeInfo::NorseStoragePit, .offset = k_Gathering + k_BuildingGap, .yawDegrees = 180.0f},
+	    {.type = VillagerInfo::NorseForesterMale, .offset = k_BuilderDrop, .joinTown = true, .woodHeld = 250}};
+	all.push_back({
+	    .id = "worship.script_built_site_keeps_altar_unbuilt",
+	    .name = "A script builds a worship site, and its altar stays unbuilt",
+	    .facet = Facet::Objects,
+	    .description = "A Norse town of the player with a village centre, a storage pit and one villager that carries 250 "
+	                   "wood. The town's worship site goes up by the temple as the scenario starts. After one second a "
+	                   "script sets the site as built.",
+	    .expected = "The script builds the site only. The site stands built, but its altar does not show, because the "
+	                "altar keeps its own built amount: the inspector shows WorshipAltar built 0 and no Mesh on the altar. "
+	                "Only work on the site, for example the repair of a damaged site, builds the altar, and the altar "
+	                "shows when all of it is built. Before, the altar showed when the script built the site.",
+	    .environment = {.dispenserGrid = false, .cursor = glm::vec2 {0.5f, 0.5f}},
+	    .framing = {.shot = Shot::Placed,
+	                .eye = {k_BuilderDrop.x, 22.0f, k_BuilderDrop.y - 30.0f},
+	                .look = {k_BuilderDrop.x, 0.0f, k_BuilderDrop.y}},
+	    .objects = std::move(scriptBuiltTown),
+	    .temples = {{.offset = k_PileTemple}},
+	    .commands = {{.kind = Kind::ScriptBuildsWorshipSites, .delaySeconds = 1.0f, .amount = 1.0f}},
+	    .townBeliefInPlayer = 1000.0f,
+	});
+
+	std::vector<ObjectSetup> boulderTown {
+	    {.type = AbodeInfo::NorseTownCentre, .offset = k_Gathering - k_BuildingGap},
+	    {.type = AbodeInfo::NorseStoragePit, .offset = k_Gathering + k_BuildingGap, .yawDegrees = 180.0f},
+	    {.type = MobileStaticInfo::Boulder1Chalk, .offset = k_BoulderFrom},
+	    {.type = VillagerInfo::NorseForesterMale, .offset = k_Gathering + glm::vec2(0.0f, 15.0f), .joinTown = true}};
+	all.push_back({
+	    .id = "worship.boulder_hits_built_altar",
+	    .name = "A boulder thrown at a built altar hits it, and the temple takes the blow",
+	    .facet = Facet::Objects,
+	    .description = "A Norse town of the player with a village centre, a storage pit and one villager. The town's "
+	                   "worship site goes up by the temple and is built at once with its altar. After three seconds a small "
+	                   "boulder flies at the altar from 20 metres north of it.",
+	    .expected = "The boulder hits the altar and stops or bounces off it: a built altar is in the way of what flies, as "
+	                "a feature is. The altar does not take the blow itself. The temple's heart takes it, and passes it "
+	                "on to a building of the town, as a blow on the temple does. Before, the boulder flew through the "
+	                "altar.",
+	    .environment = {.dispenserGrid = false},
+	    .framing = {.shot = Shot::Placed,
+	                .eye = {k_Altar.x + 25.0f, 15.0f, k_Altar.y + 10.0f},
+	                .look = {k_Altar.x, 2.0f, k_Altar.y + 5.0f}},
+	    .objects = std::move(boulderTown),
+	    .temples = {{.offset = k_PileTemple}},
+	    .commands = {{.kind = Kind::BuildWorshipSites, .delaySeconds = 0.5f}},
+	    .townBeliefInPlayer = 1000.0f,
+	    .throws =
+	        {{.object = 2, .from = k_BoulderFrom, .height = 4.0f, .velocity = {0.0f, 3.0f, -20.0f}, .delaySeconds = 3.0f}},
+	});
+
 	std::vector<ObjectSetup> potTown {
 	    {.type = AbodeInfo::NorseTownCentre, .offset = k_PotDrop + glm::vec2(-30.0f, 15.0f)},
 	    {.type = AbodeInfo::NorseStoragePit, .offset = k_PotDrop + glm::vec2(-30.0f, -15.0f), .yawDegrees = 180.0f},

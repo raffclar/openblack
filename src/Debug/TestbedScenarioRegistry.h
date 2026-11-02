@@ -1167,6 +1167,9 @@ struct Command
 		/// The miracle that is locked on in the player's hand closes down. Then the hand lets go of it in the same step,
 		/// as when the miracle stops just before the let go. Needs no creature.
 		CloseHeldMiracle,
+		/// A script sets each worship site of the player as built (amount, the built share), as SET_PROPERTY does. The
+		/// altars of the sites stay as they are. Needs no creature.
+		ScriptBuildsWorshipSites,
 	};
 	Kind kind {Kind::Stop};
 	/// Which creature, by its place in the scenario's creatures
