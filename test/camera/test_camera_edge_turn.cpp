@@ -8,9 +8,12 @@
  *******************************************************************************/
 
 #include <cmath>
+#include <cstdint>
 
 #include <chrono>
+#include <memory>
 #include <optional>
+#include <utility>
 
 #include <glm/geometric.hpp>
 #include <glm/gtx/vec_swizzle.hpp>
@@ -21,6 +24,7 @@
 #include <Camera/Camera.h>
 #include <Camera/DefaultWorldCameraModel.h>
 #include <ECS/Registry.h>
+#include <ECS/Systems/CameraHelpSystemInterface.h>
 #include <Locator.h>
 
 #include "scenarios/Mock.h"
@@ -84,6 +88,19 @@ private:
 	int _warps {0};
 };
 
+/// What the lesson's script lets the camera do, by its interface level
+class LessonCameraHelp final: public ecs::systems::CameraHelpSystemInterface
+{
+public:
+	explicit LessonCameraHelp(int32_t level) { _help.SetInterfaceLevel(level); }
+
+	[[nodiscard]] const camera_help::CameraHelp& Get() const override { return _help; }
+	[[nodiscard]] camera_help::CameraHelp& Get() override { return _help; }
+
+private:
+	camera_help::CameraHelp _help;
+};
+
 /// The way the camera looks across the land, in radians round the up axis
 float Heading(const CameraModel& model)
 {
@@ -127,6 +144,7 @@ protected:
 
 	void TearDown() override
 	{
+		Locator::cameraHelpSystem::reset();
 		Locator::gameActionSystem::reset();
 		Locator::pickingSystem::reset();
 		Locator::windowing::reset();
@@ -205,4 +223,44 @@ TEST_F(EdgeTurn, TheCameraStopsTurningWhenTheMouseStops)
 		Step({0, 0});
 	}
 	EXPECT_NEAR(Difference(Heading(_camera.GetModel()), settled), 0.0f, glm::radians(0.1f));
+}
+
+// The first lesson of the Gods' Playground (interface level 1) lets the player move the camera, and the camera tilts
+// itself, but the player cannot turn it. A drag round the edge of the screen does not turn the camera. The turning step
+// of the lesson (level 10) lets the same drag turn it.
+TEST_F(EdgeTurn, AtTheMoveOnlyLessonLevelADragRoundTheEdgeDoesNotTurnTheCamera)
+{
+	for (const auto& [level, turns] : {std::pair {1, false}, std::pair {10, true}})
+	{
+		Locator::cameraHelpSystem::emplace<LessonCameraHelp>(level);
+		_camera.SetOrigin(k_Origin).SetFocus(k_Focus);
+		_camera.SetModel(std::make_unique<DefaultWorldCameraModel>(k_Origin, k_Focus));
+		// The cursor rests at the side of the screen again
+		_mouse = new RealMouse();
+		Locator::gameActionSystem::reset<MockAction>(_mouse);
+		for (int frame = 0; frame < 5; ++frame)
+		{
+			Step({0, 0});
+		}
+		const auto before = Heading(_camera.GetModel());
+		_mouse->SetHeld(true);
+		for (int frame = 0; frame < 60; ++frame)
+		{
+			Step({0, 4});
+		}
+		_mouse->SetHeld(false);
+		for (int frame = 0; frame < 60; ++frame)
+		{
+			Step({0, 0});
+		}
+		const auto turned = std::abs(Difference(Heading(_camera.GetModel()), before));
+		if (turns)
+		{
+			EXPECT_GT(turned, glm::radians(30.0f)) << "level " << level;
+		}
+		else
+		{
+			EXPECT_LT(turned, glm::radians(0.01f)) << "level " << level;
+		}
+	}
 }
