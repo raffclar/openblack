@@ -443,8 +443,9 @@ private:
 	[[nodiscard]] particles::ProcessInfo HandEffectInfo() const;
 	/// The tribe whose power raises a player's miracle of a magic type, if any
 	[[nodiscard]] std::optional<Tribe> TribalPowerTribe(PlayerNames player, MagicType type) const;
-	/// A seed in the hand cast a new miracle: a tribe's power behind it is announced
-	void AfterSeedCast(const components::SpellSeed& seed, MagicType type);
+	/// A seed in the hand of a player cast a new miracle at a place: the announcer names the tribe's power behind it. The name
+	/// of the tribe rises from the hand of this computer, or from the place for the hand of another player.
+	void AfterSeedCast(const components::SpellSeed& seed, MagicType type, glm::vec3 place);
 	/// Whether the hand, holding no miracle, has its point on the land in its player's influence
 	[[nodiscard]] bool EmptyHandInInfluence() const;
 	void DestroyOrb(entt::entity orb);

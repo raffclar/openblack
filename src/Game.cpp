@@ -4284,8 +4284,9 @@ void Game::UpdateHandFrame(std::chrono::microseconds deltaTime)
 			}
 			// The temples' leashes, the picked one round the wrist of the hand as it is drawn, after the blend of its pose
 			Locator::leashSystem::value().ShowPosts(IsHandDrawn());
-			// A tribe's power behind a miracle spins its name round the hand, or up from where it was cast
-			Locator::miracleFxSystem::value().UpdateTribalPower(std::chrono::duration<float>(gameTime).count());
+			// A tribe's power behind a miracle spins its name round the hand, or up from the place of the cast. Its step is
+			// the whole milliseconds of the game clock in this frame, times a thousandth.
+			Locator::miracleFxSystem::value().UpdateTribalPower(gameTime.count() * 0.001f);
 		}
 
 		// The hand shows its player's alignment, catching up with it each frame once it has moved far enough. Its skin is

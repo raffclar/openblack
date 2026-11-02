@@ -145,7 +145,6 @@ TEST(CreatureAnimationLog, AMissingFaceClipDoesNotSayThatTheBodyShowedTheStand)
 	EXPECT_EQ(log.Problems()[0].detail.find("stand"), std::string::npos);
 	EXPECT_EQ(log.Problems()[1].detail, MissingDetail(Layer::Blend));
 	EXPECT_NE(MissingDetail(Layer::Gesture).find("did not change"), std::string_view::npos);
-	EXPECT_NE(MissingDetail(Layer::Wobble).find("did not change"), std::string_view::npos);
 }
 
 TEST(CreatureAnimationLog, AProblemInTheNextTurnsCountsAsARepeat)

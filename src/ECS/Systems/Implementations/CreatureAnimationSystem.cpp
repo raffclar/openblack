@@ -478,9 +478,6 @@ void PoseBody(AnimationStores& stores, skeletal_animation::KeyframeTurns& turns,
 	animation.gesture = creature_layers::AdvanceGesture(
 	    animation.gesture, playbackMs,
 	    DurationOf(animation.gesture.animation.has_value() ? animationOf(*animation.gesture.animation) : nullptr));
-	animation.wobble = creature_layers::AdvanceGesture(
-	    animation.wobble, playbackMs,
-	    DurationOf(animation.wobble.animation.has_value() ? animationOf(*animation.wobble.animation) : nullptr));
 
 	// The head turns towards its target from the height of the eyes, or back to straight ahead
 	const auto look = lookOf();
@@ -595,7 +592,7 @@ void PoseBody(AnimationStores& stores, skeletal_animation::KeyframeTurns& turns,
 			                             {}, &turns);
 		}
 	};
-	// The gestures and a blow's wobble, relative to their first frames, on top of the face
+	// The gestures, relative to their first frames, on top of the face
 	const auto addGestures = [&](std::vector<skeletal_animation::Pose>& to, PoseReport* log) {
 		if (animation.gesture.animation.has_value())
 		{
@@ -608,20 +605,6 @@ void PoseBody(AnimationStores& stores, skeletal_animation::KeyframeTurns& turns,
 			{
 				skeletal_animation::AddLayer(to, *gesture, static_cast<uint32_t>(std::max(animation.gesture.timeMs, 0.0f)), 0,
 				                             animation.skeleton, {}, &turns);
-			}
-		}
-		// The wobble plays the way the body plays
-		if (animation.wobble.animation.has_value())
-		{
-			if (log != nullptr)
-			{
-				log->clips.push_back(LogClip(creature_animation_log::Layer::Wobble, *animation.wobble.animation,
-				                             animation.wobble.timeMs, animationOf(*animation.wobble.animation)));
-			}
-			if (const auto* wobble = animationOf(*animation.wobble.animation))
-			{
-				skeletal_animation::AddLayer(to, *wobble, static_cast<uint32_t>(std::max(animation.wobble.timeMs, 0.0f)), 0,
-				                             animation.skeleton, mirror, &turns);
 			}
 		}
 	};

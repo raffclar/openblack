@@ -17,8 +17,11 @@
 #include <vector>
 
 #include <glm/mat3x3.hpp>
+#include <glm/mat4x4.hpp>
 #include <glm/vec3.hpp>
 #include <glm/vec4.hpp>
+
+#include "3D/MapCoords.h"
 
 // A tribe's power behind a miracle, shown as the tribe's name ("Norse Power") spinning in the world. While the miracle is
 // in the hand its name is a ring of letters round the hand, which flies in from the camera over the first second; when
@@ -139,5 +142,13 @@ private:
 	bool _held;
 	float _age {0.0f};
 };
+
+/// Where the column of another player's cast rises from: the x and z of the map position, and its altitude above the
+/// ground as the height. The game does not add the height of the ground.
+[[nodiscard]] glm::vec3 ColumnPlace(const map_coords::MapCoords& place);
+
+/// Whether a letter shows: the game draws a letter only when its origin is at or beyond the near plane of the view. The
+/// depth of the origin is its clip w.
+[[nodiscard]] bool Shows(const glm::mat4& worldToClip, float nearClip, glm::vec3 origin);
 
 } // namespace openblack::magic::tribal_spin
