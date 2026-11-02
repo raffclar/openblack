@@ -542,6 +542,27 @@ void testbed_scenarios::AddCreatureCastingScenarios(std::vector<Scenario>& all)
 	});
 
 	all.push_back({
+	    .id = "miracles.hand_phial_recast",
+	    .name = "Creature spells: the hand casts its phial again on another creature",
+	    .facet = Facet::Miracles,
+	    .description = "Two cows stand side by side, ten apart. The player's hand is given the itchy creature spell. The "
+	                   "hand casts the phial on the west cow. One second later, while the phial is still in the hand, the "
+	                   "hand casts it on the east cow.",
+	    .expected = "At the first cast, the flies swarm round the west cow, and the phial stays in the hand. At the second "
+	                "cast, the itchy spell on the west cow stops, and the flies swarm round the east cow. The phial stays "
+	                "in the hand, linked to the new spell, and leaves the hand four seconds after the second cast.",
+	    .environment = {.dispenserGrid = false},
+	    .framing = {.shot = Shot::Overview, .include = {{-15.0f, 20.0f}, {15.0f, 40.0f}}},
+	    .creatures = {Other({-5.0f, 30.0f}, "west"), Other({5.0f, 30.0f}, "east")},
+	    .commands = {{.kind = Kind::HoldSeed,
+	                  .delaySeconds = 1.0f,
+	                  .value = static_cast<size_t>(SpellSeedType::CreatureSpellItchy)},
+	                 {.kind = Kind::HandCastOnCreature, .delaySeconds = 1.0f, .value = 0},
+	                 {.kind = Kind::HandCastOnCreature, .delaySeconds = 1.0f, .value = 1}},
+	    .hand = HandHold {.offset = {0.0f, 25.0f}, .height = 8.0f},
+	});
+
+	all.push_back({
 	    .id = "miracles.hand_fire_seed_frames",
 	    .name = "The fireball held in the hand, its effect stepped in the drawn frames",
 	    .facet = Facet::Miracles,

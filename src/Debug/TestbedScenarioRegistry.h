@@ -1154,6 +1154,14 @@ struct Command
 		/// The town that the land's script made with a number (value) believes this much (amount) in the player and
 		/// nothing in the other gods. Then the town goes to the player at its next check. Needs no creature.
 		GiveLandTown,
+		/// The player's hand casts the miracle that it holds on a thing, as the Action button over the thing sends the
+		/// cast: on the scenario's dispenser (value, by its place in the scenario's dispensers), or on one of the
+		/// scenario's creatures (value, by its place). The world does it at the turn.
+		HandCastOnDispenser,
+		HandCastOnCreature,
+		/// The miracle that is locked on in the player's hand closes down. Then the hand lets go of it in the same step,
+		/// as when the miracle stops just before the let go. Needs no creature.
+		CloseHeldMiracle,
 	};
 	Kind kind {Kind::Stop};
 	/// Which creature, by its place in the scenario's creatures

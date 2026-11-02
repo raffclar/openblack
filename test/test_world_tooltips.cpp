@@ -264,7 +264,7 @@ TEST(WorldToolTips, TheOwnDispenserTakesAHeldMiracleThatDidNotCastBefore)
 	{
 		EXPECT_TRUE(MayCastOn(seed, {.ownDispenser = true}));
 		// A seed that cast its miracle before does not go in, and no other rule applies to the dispenser
-		EXPECT_FALSE(MayCastOn(seed, {.castOnByKind = true, .ownDispenser = true, .heldSeedHasCast = true}));
+		EXPECT_FALSE(MayCastOn(seed, {.castOnByKind = true, .ownDispenser = true, .heldSeedCastBefore = true}));
 	}
 	// A highlighted dispenser takes nothing
 	EXPECT_FALSE(MayCastOn(SpellSeedType::Heal, {.scriptHighlight = true, .ownDispenser = true}));

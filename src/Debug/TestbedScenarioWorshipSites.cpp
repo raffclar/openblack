@@ -187,6 +187,38 @@ void testbed_scenarios::AddWorshipSiteScenarios(std::vector<Scenario>& all)
 	    .worshipShare = 1.0f,
 	});
 	all.push_back({
+	    .id = "miracles.seed_take_back_to_dispenser",
+	    .name = "Shield: the hand puts a seed that it took back into a dispenser",
+	    .facet = Facet::Miracles,
+	    .description = "As miracles.seed_take_back, with a miracle dispenser of the player's town east of the shield. The "
+	                   "dispenser comes as a reward of a challenge, with no globe. At 95 seconds the hand takes the shield "
+	                   "seed back. At 98 seconds the hand casts the seed on the dispenser, as the Action button over it "
+	                   "does.",
+	    .expected = "At the take, the shield closes down and the seed goes into the hand. At the cast on the dispenser, the "
+	                "seed leaves the hand. A shield globe comes into view above the dispenser and floats there. The hand "
+	                "took the seed back as a seed that did not cast, so the dispenser takes it.",
+	    .environment = {.dispenserGrid = false},
+	    .framing = {.shot = Shot::Overview, .include = {glm::vec2(-40.0f, -70.0f), glm::vec2(50.0f, 10.0f)}},
+	    .dispensers = {{.type = MagicType::LightningBolt,
+	                    .offset = {35.0f, -30.0f},
+	                    .charged = false,
+	                    .reward = true,
+	                    .globeTaken = true}},
+	    .miracles = {{.type = MagicType::Shield,
+	                  .point = {0.0f, -30.0f},
+	                  .handOffset = {0.0f, -30.0f},
+	                  .delaySeconds = 60.0f,
+	                  .byHand = true,
+	                  .fromWorship = true,
+	                  .fromSite = true,
+	                  .circleRadius = 25.0f,
+	                  .holdBeforePress = 2.0f}},
+	    .landScript = k_HolderTownScript,
+	    .commands = {{.kind = Command::Kind::HandTakeShownSeed, .delaySeconds = 95.0f},
+	                 {.kind = Command::Kind::HandCastOnDispenser, .delaySeconds = 3.0f, .value = 0}},
+	    .worshipShare = 1.0f,
+	});
+	all.push_back({
 	    .id = "worship.leash_feeds_site",
 	    .name = "A creature tied to the food flag of a worship site feeds the site",
 	    .facet = Facet::Leash,

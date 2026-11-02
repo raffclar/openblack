@@ -64,6 +64,20 @@ magic::SeedTakeBack magic::TakeBackOf(bool boundToSpell, bool enoughForRecast)
 	        .kept = !boundToSpell || enoughForRecast};
 }
 
+magic::SeedRecast magic::RecastOf(bool linked, bool castInHand, bool linkedByCast)
+{
+	if (linked)
+	{
+		return castInHand ? SeedRecast::Reuse : SeedRecast::New;
+	}
+	return linkedByCast ? SeedRecast::Refused : SeedRecast::New;
+}
+
+bool magic::KeptAtUnlock(bool deleteOnceCast, bool enoughForRecast)
+{
+	return !deleteOnceCast && enoughForRecast;
+}
+
 bool magic::ClosesOutOfInfluence(bool shown, bool inInfluence, bool closedDown)
 {
 	return shown && !inInfluence && !closedDown;

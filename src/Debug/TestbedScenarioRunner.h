@@ -164,7 +164,7 @@ private:
 	/// The scenario's dispensers and lone bubbles, after the testbed's grid stays or goes as it asks
 	void PlaceDispensers(const Scenario& scenario);
 	/// A dispenser made as a challenge's reward makes one, at a point on the land
-	void PlaceRewardDispenser(const DispenserSetup& setup, glm::vec3 position);
+	entt::entity PlaceRewardDispenser(const DispenserSetup& setup, glm::vec3 position);
 	/// Casts the scenario's miracles as their times come, and lets go of held ones when theirs are up
 	void UpdateMiracles(float seconds);
 	/// The scenario's villagers set walking, and dropped on teleport stones, as their times come
@@ -316,6 +316,8 @@ private:
 	std::vector<uint32_t> _madeByNatives;
 	/// The globes that the scenario puts down on their own, in the order of its list
 	std::vector<entt::entity> _globes;
+	/// The scenario's dispensers in the order of the scenario. A lone bubble has none.
+	std::vector<entt::entity> _dispensers;
 	/// The scenario's temples, in its order
 	std::vector<entt::entity> _temples;
 	/// When each of the scenario's throws is next due, in seconds; none once done

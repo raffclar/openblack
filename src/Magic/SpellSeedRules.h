@@ -81,6 +81,24 @@ struct SeedTakeBack
 /// as a new seed. The hand keeps the seed only when its miracle had enough left for another cast (a seed with no
 /// miracle always has enough).
 [[nodiscard]] SeedTakeBack TakeBackOf(bool boundToSpell, bool enoughForRecast);
+/// What the cast of a held seed does, after the checks of where it may be cast
+enum class SeedRecast : uint8_t
+{
+	/// The seed is linked to the miracle that it cast, and that miracle runs from the hand: the cast gives that miracle
+	Reuse,
+	/// A cast linked the seed, and the seed lost the link with no store of the prayer power: the seed does not cast
+	Refused,
+	/// The seed casts a new miracle. A linked seed lets go of its old miracle first.
+	New,
+};
+/// The cast of a held seed:
+/// - a seed linked to a miracle that runs from the hand gives that miracle, also after it closed down;
+/// - a seed with no link that a cast linked before does not cast;
+/// - any other seed casts a new miracle.
+[[nodiscard]] SeedRecast RecastOf(bool linked, bool castInHand, bool linkedByCast);
+/// Whether the hand keeps a seed when it lets go of the miracle locked on in it. The seed goes if its record deletes it
+/// once cast, or if its miracle did not have enough for another cast. A closed miracle does not change this.
+[[nodiscard]] bool KeptAtUnlock(bool deleteOnceCast, bool enoughForRecast);
 /// A miracle whose seed is shown closes down once the seed stands where its player has no influence
 [[nodiscard]] bool ClosesOutOfInfluence(bool shown, bool inInfluence, bool closedDown);
 /// The place at which the turn finds a seed out of the hand for the check of its player's influence. A seed that

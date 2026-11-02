@@ -107,6 +107,28 @@ void AddCasting(std::vector<Scenario>& all)
 	});
 
 	all.push_back({
+	    .id = "miracles.unlock_closed_lightning",
+	    .name = "Lightning: the hand lets go of a held bolt that closed down",
+	    .facet = Facet::Miracles,
+	    .description = "The player's hand holds a lightning bolt from a bubble and holds it on the land north of the "
+	                   "camera. Two seconds into the hold, the bolt closes down. Then the hand lets go of it in the "
+	                   "same step, as when the bolt stops just before the let go.",
+	    .expected = "The bolt stops. The hand keeps the lightning seed, with the prayer power that the bolt had left, "
+	                "because a lightning bolt always has enough for another cast. The log line of the step says that the "
+	                "hand keeps the seed.",
+	    .environment = {.dispenserGrid = false},
+	    .framing = {.shot = Shot::Overview, .include = {{-15.0f, 15.0f}, {15.0f, 45.0f}}},
+	    .miracles = {{.type = MagicType::LightningBolt,
+	                  .point = {0.0f, 30.0f},
+	                  .handOffset = {0.0f, 30.0f},
+	                  .handHeight = 15.0f,
+	                  .delaySeconds = 2.0f,
+	                  .holdSeconds = 6.0f,
+	                  .byHand = true}},
+	    .commands = {{.kind = Command::Kind::CloseHeldMiracle, .delaySeconds = 4.0f}},
+	});
+
+	all.push_back({
 	    .id = "miracles.heal_creature",
 	    .name = "Heal a hurt creature",
 	    .facet = Facet::Miracles,

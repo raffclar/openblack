@@ -285,10 +285,7 @@ bool MagicSystem::TakeSeedBack(PlayerNames player, entt::entity entity)
 	}
 	else
 	{
-		seed.storedChants = -1.0f;
-		seed.storedAge = 0.0f;
-		seed.storedMaxObjects = -1;
-		seed.spell = entt::null;
+		ForgetStoredSpell(seed);
 	}
 	const auto takeBack = magic::TakeBackOf(spell != nullptr, enough);
 	if (own && Locator::helpProfileSystem::has_value())
@@ -308,6 +305,10 @@ bool MagicSystem::TakeSeedBack(PlayerNames player, entt::entity entity)
 	seed.followsSpell = false;
 	seed.ready = true;
 	seed.turnsInHand = 0;
+	// The seed counts as a seed that did not cast, so a dispenser of its player takes it again. The mark of the cast's
+	// link goes.
+	seed.castBefore = false;
+	seed.linkedByCast = false;
 	auto& transform = registry.Get<Transform>(entity);
 	transform.rotation = glm::mat3(1.0f);
 	transform.scale = glm::vec3(info.scale);

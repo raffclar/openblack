@@ -388,6 +388,11 @@ private:
 	/// A seed lets go of the miracle that it cast, which closes down when it still runs from the seed. The seed keeps
 	/// what the miracle had left and how long it ran. Whether the miracle had enough left for another cast.
 	bool StoreFromSpell(entt::entity entity, components::SpellSeed& seed, components::Spell& spell);
+	/// The store of a seed with no miracle: the seed keeps nothing of a miracle
+	static void ForgetStoredSpell(components::SpellSeed& seed);
+	/// Before a new cast, a linked seed lets go of its old miracle with no store. The old miracle closes down when it
+	/// still runs from the seed.
+	void ReleaseSpellLink(entt::entity entity, components::SpellSeed& seed);
 	/// The gesture events since the last frame: the circle remembered, a power-up, the seed dropped
 	void TakeGestures();
 	/// The icon that made the seed in the hand, or none

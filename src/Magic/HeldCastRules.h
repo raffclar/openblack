@@ -36,7 +36,7 @@ struct PointedThing
 	/// A miracle dispenser of a town of the hand's player
 	bool ownDispenser {false};
 	/// The held seed cast its miracle before. Such a seed does not go into a dispenser.
-	bool heldSeedHasCast {false};
+	bool heldSeedCastBefore {false};
 };
 
 /// Whether a held seed may be cast on the thing under the pointer:

@@ -38,7 +38,7 @@ bool magic::MayCastOn(SpellSeedType seed, const PointedThing& thing)
 	}
 	if (thing.ownDispenser)
 	{
-		return !thing.heldSeedHasCast;
+		return !thing.heldSeedCastBefore;
 	}
 	if (thing.fireBall)
 	{
