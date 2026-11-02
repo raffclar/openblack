@@ -109,6 +109,9 @@ constexpr size_t k_Talk = 205;
 /// milliseconds are multiplied by the rate of the size, and the result is cut to whole milliseconds. When a script
 /// sets real time, the animations move on by the turn's milliseconds.
 [[nodiscard]] int32_t TurnStepMs(int32_t turnMs, float size, bool realTime);
+/// The seconds of a game turn of some whole milliseconds, for the head's turn. The milliseconds multiply a thousandth, and
+/// the result is a float.
+[[nodiscard]] float TurnSeconds(int32_t turnMs);
 
 /// What the body plays
 struct BodyAction

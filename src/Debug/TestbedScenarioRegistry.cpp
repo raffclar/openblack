@@ -324,6 +324,24 @@ void AddExpressions(std::vector<Scenario>& all)
 	    .repeatFrom = 0,
 	});
 
+	// A creature that freezes lives fewer milliseconds in each game turn. Its face, its gesture and its head move on by
+	// these milliseconds, once a turn.
+	all.push_back({
+	    .id = "expressions.frozen_face_and_gesture",
+	    .name = "Face and gesture of a creature that freezes",
+	    .facet = Facet::Expressions,
+	    .description = "A tiger whose mind is paused, close up, pulls a grimace. The player casts the freeze spell on it. "
+	                   "While the ice grows, the tiger starts a yawn.",
+	    .expected = "The yawn plays more slowly and stops part of the way through. The grimace relaxes more slowly and "
+	                "stops. Nothing jumps: each part moves on by the time that the frozen body lives in the turn.",
+	    .environment = {.dispenserGrid = false},
+	    .framing = {.shot = Shot::Head, .distance = 1.6f},
+	    .creatures = {CreatureSetup {.species = CreatureType::Tiger, .needs = Content(), .hold = true, .pauseMind = true}},
+	    .miracles = {{.type = MagicType::CreatureSpellFreeze, .target = MiracleCast::Target::Creature, .delaySeconds = 2.0f}},
+	    .commands = {Play(Kind::PullFace, 0, animations::k_FirstFace + 1, 1.0f, false),
+	                 Play(Kind::PlayGesture, 0, animations::k_Yawn, 3.0f, false)},
+	});
+
 	// The creature draws gestures in the air: the spiral of the game with villagers, then the circle, the star and the
 	// heart, each a few seconds after the last
 	std::vector<Command> drawn;

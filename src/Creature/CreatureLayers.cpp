@@ -12,6 +12,7 @@
 #include <cmath>
 
 #include <algorithm>
+#include <bit>
 #include <ranges>
 
 #include <glm/geometric.hpp>
@@ -28,8 +29,11 @@ namespace
 /// Every animation but the stand plays this fast at size 0, and this much more slowly for each size bigger
 constexpr float k_PlaybackRateAtSizeZero = 1.6f;
 constexpr float k_PlaybackSlowingPerSize = 0.425f;
-/// Faces run back to their start this much more slowly when no other face is wanted
-constexpr float k_FaceRelaxSlowing = 4.0f;
+/// Faces run back to their start this much more slowly when no other face is wanted. The step is in whole
+/// milliseconds, and the division cuts the remainder.
+constexpr int32_t k_FaceRelaxSlowing = 4;
+/// A thousandth, as the float that the head turn uses to change milliseconds to seconds
+constexpr float k_SecondsPerMillisecond = std::bit_cast<float>(0x3A83126Fu);
 /// A face pulled with no time given is held for an hour
 constexpr float k_FaceHeldUnlessTold = 3'600'000.0f;
 /// The head settles on its target, and looks only sideways when its target is this far round
@@ -129,6 +133,11 @@ int32_t creature_layers::TurnStepMs(int32_t turnMs, float size, bool realTime)
 	}
 	// The rate is found first, then it multiplies the milliseconds
 	return map_coords::FtoL(PlaybackRate(size) * static_cast<float>(turnMs));
+}
+
+float creature_layers::TurnSeconds(int32_t turnMs)
+{
+	return static_cast<float>(turnMs) * k_SecondsPerMillisecond;
 }
 
 bool creature_layers::IsPlaying(const BodyAction& body)
@@ -451,7 +460,9 @@ FaceLayer creature_layers::AdvanceFace(FaceLayer face, float milliseconds, std::
 	}
 	if (face.current.has_value())
 	{
-		face.timeMs -= face.wanted.has_value() ? milliseconds : milliseconds / k_FaceRelaxSlowing;
+		// The face relaxes by a quarter of the whole milliseconds, and the remainder has no effect
+		face.timeMs -= face.wanted.has_value() ? milliseconds
+		                                       : static_cast<float>(static_cast<int32_t>(milliseconds) / k_FaceRelaxSlowing);
 		if (face.timeMs <= 0.0f)
 		{
 			face.timeMs = 0.0f;

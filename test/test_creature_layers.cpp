@@ -8,8 +8,10 @@
  *******************************************************************************/
 
 #include <cmath>
+#include <cstdint>
 
 #include <array>
+#include <bit>
 #include <numbers>
 #include <optional>
 #include <vector>
@@ -445,6 +447,52 @@ TEST(CreatureLayers, AGesturePlaysOnce)
 	EXPECT_EQ(played.animation, animations::k_Yawn);
 	played = AdvanceGesture(played, 100.0f, 1000);
 	EXPECT_FALSE(played.animation.has_value());
+}
+
+TEST(CreatureLayers, AFaceRelaxesByAQuarterOfTheWholeMillisecondsOfATurn)
+{
+	// A frozen creature lives 37 ms in the turn: the face relaxes by 9 ms, and the remainder has no effect
+	auto face = PullFace({}, 21, 300.0f);
+	face = AdvanceFace(face, 1.0f, 250);
+	face = AdvanceFace(face, 200.0f, 250);
+	face = AdvanceFace(face, 100.0f, 250);
+	ASSERT_FALSE(face.wanted.has_value());
+	ASSERT_EQ(face.timeMs, 175.0f);
+	face = AdvanceFace(face, 37.0f, 250);
+	EXPECT_EQ(face.timeMs, 166.0f);
+	face = AdvanceFace(face, 3.0f, 250);
+	EXPECT_EQ(face.timeMs, 166.0f);
+	// A pulled face runs back by all the milliseconds of the turn
+	face = PullFace(face, 16, 1000.0f);
+	face = AdvanceFace(face, 37.0f, 250);
+	EXPECT_EQ(face.current, 21u);
+	EXPECT_EQ(face.timeMs, 129.0f);
+}
+
+TEST(CreatureLayers, AGestureEndsInTheTurnThatReachesItsEnd)
+{
+	auto played = *PlayGesture({}, animations::k_Yawn);
+	// The body of size 1 moves on 117 ms in a turn of 100 ms
+	const auto stepMs = static_cast<float>(TurnStepMs(100, 1.0f, false));
+	ASSERT_EQ(stepMs, 117.0f);
+	for (int turn = 0; turn < 8; ++turn)
+	{
+		played = AdvanceGesture(played, stepMs, 1000);
+		ASSERT_EQ(played.animation, animations::k_Yawn);
+		EXPECT_EQ(played.timeMs, stepMs * static_cast<float>(turn + 1));
+	}
+	// 936 ms and one more step reaches 1000 ms: the gesture ends in this turn and adds nothing to the pose
+	played = AdvanceGesture(played, stepMs, 1000);
+	EXPECT_FALSE(played.animation.has_value());
+}
+
+TEST(CreatureLayers, TheHeadTurnsByTheSecondsOfTheTurnAsAFloatProduct)
+{
+	// The milliseconds multiply the float thousandth: 9 ms is one bit more than 9 divided by 1000
+	EXPECT_EQ(std::bit_cast<uint32_t>(TurnSeconds(9)), 0x3C1374BDu);
+	EXPECT_EQ(std::bit_cast<uint32_t>(TurnSeconds(37)), 0x3D178D50u);
+	EXPECT_EQ(std::bit_cast<uint32_t>(TurnSeconds(100)), 0x3DCCCCCDu);
+	EXPECT_EQ(TurnSeconds(0), 0.0f);
 }
 
 TEST(CreatureLayers, TheHeadSpeedsUpSteadily)
