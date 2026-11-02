@@ -2512,7 +2512,22 @@ void CreatureFightSystem::ForceFaint(entt::entity creature)
 	Faint(creature);
 }
 
-void CreatureFightSystem::Faint(entt::entity creature)
+void CreatureFightSystem::FaintForScript(entt::entity creature)
+{
+	auto& registry = Locator::entitiesRegistry::value();
+	if (!registry.Valid(creature) || !registry.AllOf<Creature, CreatureAnimation>(creature) ||
+	    registry.AllOf<CreatureKnockedOut>(creature))
+	{
+		return;
+	}
+	if (registry.AllOf<CreatureFighting>(creature))
+	{
+		Leave(creature);
+	}
+	Faint(creature, Leash::Keep);
+}
+
+void CreatureFightSystem::Faint(entt::entity creature, Leash leash)
 {
 	auto& registry = Locator::entitiesRegistry::value();
 	if (Locator::creatureLocomotionSystem::has_value())
@@ -2530,8 +2545,8 @@ void CreatureFightSystem::Faint(entt::entity creature)
 	{
 		Locator::creatureMindSystem::value().AbandonAction(creature);
 	}
-	// Fainting drops the leash
-	if (Locator::leashSystem::has_value() && Locator::leashSystem::value().IsLeashed(creature))
+	// Fainting drops the leash, but not when a script orders the creature dead
+	if (leash == Leash::TakeOff && Locator::leashSystem::has_value() && Locator::leashSystem::value().IsLeashed(creature))
 	{
 		Locator::leashSystem::value().TakeOff(creature);
 	}
