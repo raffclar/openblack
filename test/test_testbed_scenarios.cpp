@@ -915,3 +915,57 @@ TEST(TestbedScenarios, AChallengeTitleIsTheNumberOfTheHelpTextWithItsName)
 	EXPECT_EQ(HelpTextNumber(names, "HELP_TEXT_TITLE_15"), std::nullopt);
 	EXPECT_EQ(HelpTextNumber({}, "HELP_TEXT_TITLE_01"), std::nullopt);
 }
+
+TEST(TestbedScenarios, ANativeCallTakesATextAndAnEmptyTextIsAProblem)
+{
+	Scenario withText {
+	    .id = "story.text",
+	    .name = "Text",
+	    .description = "A native call with a text",
+	    .expected = "No problem",
+	    .commands = {{.kind = Command::Kind::CallNative,
+	                  .script = "LOAD_MAP",
+	                  .scriptArguments = {{.kind = ScriptArgument::Kind::Text, .text = "scripts/land2.txt"}}}},
+	};
+	EXPECT_TRUE(Problems(withText).empty());
+	withText.commands.front().scriptArguments.front().text = {};
+	EXPECT_FALSE(Problems(withText).empty());
+}
+
+TEST(TestbedScenarios, EachLandChangeOfTheStoryHasAScenario)
+{
+	const std::array<std::array<std::string_view, 3>, 4> crossings {{
+	    {"story.crossing_to_the_second_land", "Land1.txt", "scripts/land2.txt"},
+	    {"story.crossing_to_the_third_land", "Land2.txt", "scripts/land3.txt"},
+	    {"story.crossing_to_the_fourth_land", "Land3.txt", "scripts/land4.txt"},
+	    {"story.crossing_to_the_fifth_land", "Land4.txt", "scripts/land5.txt"},
+	}};
+	for (const auto& [id, from, to] : crossings)
+	{
+		const auto* scenario = Find(id);
+		ASSERT_NE(scenario, nullptr) << id;
+		EXPECT_EQ(scenario->environment.land, Land::Story) << id;
+		EXPECT_EQ(scenario->environment.storyLand, from) << id;
+		ASSERT_EQ(scenario->commands.size(), 2U) << id;
+		EXPECT_EQ(scenario->commands.front().script, "STOP_ALL_SCRIPTS_EXCLUDING") << id;
+		const auto& load = scenario->commands.back();
+		EXPECT_EQ(load.script, "LOAD_MAP") << id;
+		ASSERT_EQ(load.scriptArguments.size(), 1U) << id;
+		EXPECT_EQ(load.scriptArguments.front().kind, ScriptArgument::Kind::Text) << id;
+		EXPECT_EQ(load.scriptArguments.front().text, to) << id;
+	}
+}
+
+TEST(TestbedScenarios, OnlyANativeCallTakesAText)
+{
+	Scenario script {
+	    .id = "story.text_to_a_script",
+	    .name = "Text to a script",
+	    .description = "A script with a text",
+	    .expected = "A problem",
+	    .commands = {{.kind = Command::Kind::RunScript,
+	                  .script = "LandControlAll",
+	                  .scriptArguments = {{.kind = ScriptArgument::Kind::Text, .text = "scripts/land2.txt"}}}},
+	};
+	EXPECT_FALSE(Problems(script).empty());
+}

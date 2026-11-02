@@ -218,6 +218,16 @@ TEST_F(VillagerWalkStates, ThePlainWalkStepsAndThenArrivesInTheSameTurn)
 	EXPECT_EQ(Top(), k_Next);
 }
 
+// A football player that walks to its place goes into the wait for the kick-off when the walk ends
+// NOLINTNEXTLINE(cppcoreguidelines-avoid-non-const-global-variables): external macro
+TEST_F(VillagerWalkStates, AFootballPlayerArrivesInTheWaitForTheKickOff)
+{
+	_steps->arrives = true;
+	SetStates(VillagerStates::MoveToPos, VillagerStates::FootballWaitForKickOff);
+	Locator::livingActionSystem::value().VillagerCallState(Action(), LivingAction::Index::Top);
+	EXPECT_EQ(Top(), VillagerStates::FootballWaitForKickOff);
+}
+
 // A villager that the hand holds takes no step and does not arrive
 // NOLINTNEXTLINE(cppcoreguidelines-avoid-non-const-global-variables): external macro
 TEST_F(VillagerWalkStates, AVillagerInTheHandTakesNoStep)
@@ -371,9 +381,8 @@ TEST_F(VillagerWalkStates, AnArtefactDancerWhereTheWalkEndsStartsItsWalkWithNoSt
 // NOLINTNEXTLINE(cppcoreguidelines-avoid-non-const-global-variables): external macro
 TEST_F(VillagerWalkStates, TheStatesNotMadeYetTakeNoStep)
 {
-	for (const auto state :
-	     {VillagerStates::MoveOnStructure, VillagerStates::FootballWalkToPosition, VillagerStates::MoveTowardsObjectToLookAt,
-	      VillagerStates::DanceForEditingPurposes, VillagerStates::DanceButNotWorship, VillagerStates::FootballMoveToBall})
+	for (const auto state : {VillagerStates::MoveOnStructure, VillagerStates::MoveTowardsObjectToLookAt,
+	                         VillagerStates::DanceForEditingPurposes, VillagerStates::DanceButNotWorship})
 	{
 		SetStates(state, k_Next);
 		Locator::livingActionSystem::value().VillagerCallState(Action(), LivingAction::Index::Top);

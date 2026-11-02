@@ -170,6 +170,25 @@ bool creature_watching::SetKnown(Knowledge& knowledge, KnownList list, size_t in
 	return newlyKnown;
 }
 
+void creature_watching::LearnEverything(Knowledge& knowledge)
+{
+	const auto learn = [](std::vector<bool>& known, std::vector<uint32_t>& pastTable, size_t count) {
+		for (size_t index = 0; index < count; ++index)
+		{
+			if (index < known.size())
+			{
+				known[index] = true;
+			}
+			else if (std::ranges::find(pastTable, static_cast<uint32_t>(index)) == pastTable.end())
+			{
+				pastTable.push_back(static_cast<uint32_t>(index));
+			}
+		}
+	};
+	learn(knowledge.skillsKnown, knowledge.skillsKnownPastTable, k_EverythingSkills);
+	learn(knowledge.miraclesKnown, knowledge.miraclesKnownPastTable, k_EverythingMiracles);
+}
+
 bool creature_watching::IsKnown(const Knowledge& knowledge, KnownList list, size_t index)
 {
 	const auto& known = list == KnownList::Skill ? knowledge.skillsKnown : knowledge.miraclesKnown;

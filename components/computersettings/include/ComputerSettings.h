@@ -78,6 +78,8 @@ struct Settings
 	std::optional<std::string> windowMode;
 	std::optional<bool> vsync;
 	CustomDetail customDetail;
+	/// The football of the Soccer Add-On is on. It stays off in a multiplayer game.
+	std::optional<bool> footballAddOn;
 
 	bool operator==(const Settings&) const = default;
 };

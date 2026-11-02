@@ -226,6 +226,9 @@ public:
 	/// The creature faints where it stands whatever it is doing, as something overwhelming it does (caught by a tornado):
 	/// it is forced to lie helpless, then recovers as from a knock-out. A fight it is in is left, not lost.
 	virtual void ForceFaint(entt::entity /*creature*/) {}
+	/// A script orders the creature dead: it faints and recovers as from a knock-out, and a fight it is in is left. The
+	/// leash stays on.
+	virtual void FaintForScript(entt::entity /*creature*/) {}
 	/// Kills a creature for good: it faints and never gets up. Only scripts do this.
 	virtual void KillPermanently(entt::entity creature) = 0;
 	/// Brings a creature knocked out round at once, at 0.4 of its life

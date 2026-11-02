@@ -66,6 +66,7 @@
 #include "ECS/Systems/ArtefactSystemInterface.h"
 #include "ECS/Systems/EffectRequestSystemInterface.h"
 #include "ECS/Systems/FireSystemInterface.h"
+#include "ECS/Systems/FootballSystemInterface.h"
 #include "ECS/Systems/GameEndSystemInterface.h"
 #include "ECS/Systems/HandSystemInterface.h"
 #include "ECS/Systems/Implementations/VillagerHome.h"
@@ -1010,6 +1011,15 @@ void TownSystem::ProcessTownTurn(entt::entity townEntity)
 	if (Locator::worshipSiteSystem::has_value())
 	{
 		ecs::villager_worship::TownTurn(townEntity, turn);
+	}
+	if (!registry.Valid(townEntity))
+	{
+		return;
+	}
+	// The town's football pitch looks after its ball and its match
+	if (Locator::footballSystem::has_value())
+	{
+		Locator::footballSystem::value().ProcessTown(townEntity);
 	}
 	if (!registry.Valid(townEntity))
 	{

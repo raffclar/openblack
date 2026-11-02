@@ -38,6 +38,7 @@
 #include "Common/GUtilsDistance.h"
 #include "Common/GameRandom.h"
 #include "Creature/CreatureActionAgendas.h"
+#include "Creature/CreatureAnimation.h"
 #include "Creature/CreatureAttention.h"
 #include "Creature/CreatureDesireSources.h"
 #include "Creature/CreatureDesires.h"
@@ -2080,6 +2081,11 @@ void CreatureMindSystem::MindTurn(entt::entity entity)
 	}
 	for (const auto& teaching : std::exchange(mind.pendingTeaching, {}))
 	{
+		if (teaching.everything)
+		{
+			LearnEverything(entity);
+			continue;
+		}
 		SetKnowsAction(entity, teaching.type, teaching.action, teaching.knows);
 	}
 	++mind.turn;
@@ -3196,27 +3202,60 @@ void CreatureMindSystem::ReceiveFeedback(entt::entity creature, float feedback)
 	LearnFromFeedback(creature, *mind, feedback);
 }
 
+/// How far a body is through what it plays: the time of its action, or of its legs in a move, over the length of the
+/// animation that the game keeps for it
+static std::optional<float> BodyShareOf(entt::entity creature, const CreatureAnimation& body)
+{
+	// A creature in a move counts as a body that does an action: the time of its legs is read
+	const auto* legs = Locator::entitiesRegistry::value().TryGet<const CreatureLocomotion>(creature);
+	const bool moves = legs != nullptr && legs->motion != CreatureLocomotion::Motion::Standing;
+	const auto share = creature_layers::ShareOf(body.body, moves && legs->motion == CreatureLocomotion::Motion::Confused,
+	                                            moves ? std::optional(legs->legsTimeMs) : std::nullopt);
+	if (!share.has_value() || !Locator::creatureAnimationSystem::has_value())
+	{
+		return std::nullopt;
+	}
+	// The time and the duration are whole milliseconds, so the float divide gives the same share as the game
+	const auto duration = Locator::creatureAnimationSystem::value().AnimationDuration(creature, share->animation);
+	if (!duration.has_value() || !(*duration > 0.0f))
+	{
+		return std::nullopt;
+	}
+	return share->timeMs / *duration;
+}
+
+std::optional<float> CreatureMindSystem::BodyShare(entt::entity creature) const
+{
+	const auto* body = Locator::entitiesRegistry::value().TryGet<const CreatureAnimation>(creature);
+	if (body == nullptr)
+	{
+		return std::nullopt;
+	}
+	if (const auto share = BodyShareOf(creature, *body); share.has_value())
+	{
+		return share;
+	}
+	// A body that only stands shows its stand at the point of its breath. The script reads that share, so it goes up
+	// and down with each breath after an action ends.
+	if (!Locator::creatureAnimationSystem::has_value())
+	{
+		return std::nullopt;
+	}
+	const auto stand =
+	    Locator::creatureAnimationSystem::value().AnimationDuration(creature, creature_layers::animations::k_Stand);
+	if (!stand.has_value() || !(*stand > 0.0f))
+	{
+		return std::nullopt;
+	}
+	return creature_animation::StandShare(body->breathPhase, static_cast<uint32_t>(*stand));
+}
+
 bool CreatureMindSystem::MayInterrupt(entt::entity creature, const CreatureAnimation& body, double interruptsAfter)
 {
 	const auto objectActionShare = Locator::creatureObjectActionSystem::has_value()
 	                                   ? Locator::creatureObjectActionSystem::value().GetProgress(creature)
 	                                   : std::nullopt;
-	// A creature in a move counts as a body that does an action: the hand reads the time of its legs
-	const auto* legs = Locator::entitiesRegistry::value().TryGet<const CreatureLocomotion>(creature);
-	const bool moves = legs != nullptr && legs->motion != CreatureLocomotion::Motion::Standing;
-	const auto share = creature_layers::ShareOf(body.body, moves && legs->motion == CreatureLocomotion::Motion::Confused,
-	                                            moves ? std::optional(legs->legsTimeMs) : std::nullopt);
-	std::optional<float> bodyShare;
-	if (share.has_value() && Locator::creatureAnimationSystem::has_value())
-	{
-		// The time and the duration are whole milliseconds, so the float divide gives the same share as the game
-		const auto duration = Locator::creatureAnimationSystem::value().AnimationDuration(creature, share->animation);
-		if (duration.has_value() && *duration > 0.0f)
-		{
-			bodyShare = share->timeMs / *duration;
-		}
-	}
-	return creature_feedback::TakesForcedAction(objectActionShare, bodyShare, interruptsAfter);
+	return creature_feedback::TakesForcedAction(objectActionShare, BodyShareOf(creature, body), interruptsAfter);
 }
 
 bool CreatureMindSystem::CanForceAction(entt::entity creature, size_t animation, bool mirrored, double interruptsAfter) const

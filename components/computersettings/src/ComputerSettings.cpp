@@ -202,6 +202,7 @@ ParseResult Parse(std::string_view text)
 	read.Integer("height", settings.height, 1, std::numeric_limits<uint16_t>::max());
 	read.WindowMode("window_mode", settings.windowMode);
 	read.Bool("vsync", settings.vsync);
+	read.Bool("football_add_on", settings.footballAddOn);
 	if (const auto custom = json.find(k_CustomDetail); custom != json.end())
 	{
 		if (custom->is_object())
@@ -232,6 +233,7 @@ std::string Update(std::string_view oldText, const Settings& changed)
 	Put(json, "height", changed.height);
 	Put(json, "window_mode", changed.windowMode);
 	Put(json, "vsync", changed.vsync);
+	Put(json, "football_add_on", changed.footballAddOn);
 
 	const auto& detail = changed.customDetail;
 	if (detail != CustomDetail {})

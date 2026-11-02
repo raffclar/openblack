@@ -128,6 +128,9 @@ struct EngineConfig
 	/// Debug: the Creature Breeder's bonus creatures taken as unlocked. Vanilla only had them once an unlock from outside
 	/// the game was installed; none is unlocked by default, as on a normal install
 	creature_swap::Unlocked unlockedBonusCreatures;
+	/// Debug: the switch of the free Soccer Add-On, which lets towns build football pitches and play football. Off by
+	/// default, as on a normal install. It has no effect in a multiplayer game.
+	bool footballAddOn {false};
 
 	bool vsync {false};
 	/// Tools: the window is open but the renderer draws nothing (the no-renderer backend)

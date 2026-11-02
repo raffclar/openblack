@@ -142,6 +142,7 @@ bool parseOptions(int argc, char** argv, openblack::Arguments& args, int& return
 		("no-first-frame-warm-up", "Do not draw the first frame of a land behind the loading screen. Then the first frames of the game make the renderer's pipelines and render targets.")
 		("parallel-draw-encode", "Developer: let worker threads encode some of the draws at the same time as the game's thread, in the same order and with the same picture. By default the game's thread encodes all draws.")
 		("unlock-bonus-creatures", "Debug: take the Creature Breeder's bonus creatures as unlocked, which the game only had once an unlock from outside it was installed: all, or some of leopard, horse, mandrill, gorilla and rhino joined by commas. None by default, as on a normal install.", cxxopts::value<std::string>())
+		("football-add-on", "Debug: turn on the switch of the free Soccer Add-On. Towns then build football pitches, and their villagers play football. Off by default, as on a normal install. It has no effect in a multiplayer game.")
 		("no-draw", "Tools: open the window but draw nothing on the graphics card, so that a long run that the inspector drives does not wait on a busy graphics card. Screenshots are black.")
 		("skip-logos", "Leave out the logo pictures at start-up.")
 		("logo-effect", "For developers and tools: play the logo effect before the first game, as a plain start does. A developer's or a tool's run otherwise leaves it out.")
@@ -621,6 +622,7 @@ bool parseOptions(int argc, char** argv, openblack::Arguments& args, int& return
 			}
 			args.unlockedBonusCreatures = *unlocked;
 		}
+		args.footballAddOn = result.count("football-add-on") != 0;
 		args.playVideo = result["play-video"].as<std::string>();
 		args.filmSurface = result["film-surface"].as<std::string>();
 		args.preIntro = result.count("pre-intro") != 0;

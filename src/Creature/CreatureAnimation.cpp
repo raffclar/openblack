@@ -427,3 +427,13 @@ uint32_t creature_animation::BreathTime(float phase, uint32_t duration)
 	const auto time = static_cast<uint32_t>(std::max(phase, 0.0f) * static_cast<float>(duration));
 	return std::min(time, duration - 1);
 }
+
+float creature_animation::StandShare(float phase, uint32_t duration)
+{
+	if (duration == 0)
+	{
+		return 0.0f;
+	}
+	// Two whole numbers, so the float divide gives the same share as the game
+	return static_cast<float>(BreathTime(phase, duration)) / static_cast<float>(duration);
+}
