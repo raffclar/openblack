@@ -13,6 +13,8 @@
 #include <cmath>
 
 #include <algorithm>
+#include <ranges>
+#include <unordered_map>
 #include <vector>
 
 #include <entt/core/hashed_string.hpp>
@@ -39,6 +41,45 @@ bool NeedsBlend(std::optional<glm::vec2> blendedFor, glm::vec2 look, bool meshLo
 bool BlendsAfterLoad(std::optional<glm::vec2> blendedFor, std::optional<Blend> inCache, Blend wanted)
 {
 	return blendedFor.has_value() && inCache != wanted;
+}
+
+std::vector<std::optional<size_t>> MeshesToKeep(std::span<const MeshChange> changes, size_t groups,
+                                                std::span<const size_t> others)
+{
+	// The number of temples that have each mesh and do not have their mesh of the call yet
+	std::unordered_map<size_t, size_t> holders;
+	for (const auto& change : changes)
+	{
+		if (change.mesh.has_value())
+		{
+			++holders[*change.mesh];
+		}
+	}
+	for (const auto mesh : others)
+	{
+		++holders[mesh];
+	}
+	std::vector<std::optional<size_t>> kept(groups);
+	for (size_t group = 0; group < groups; ++group)
+	{
+		const auto inGroup = [group](const MeshChange& change) { return change.group == group && change.mesh.has_value(); };
+		for (const auto& change : changes | std::views::filter(inGroup))
+		{
+			const auto mesh = *change.mesh;
+			const auto sharers = std::ranges::count_if(
+			    changes, [&inGroup, mesh](const MeshChange& other) { return inGroup(other) && *other.mesh == mesh; });
+			if (holders[mesh] == static_cast<size_t>(sharers))
+			{
+				kept[group] = mesh;
+				break;
+			}
+		}
+		for (const auto& change : changes | std::views::filter(inGroup))
+		{
+			--holders[*change.mesh];
+		}
+	}
+	return kept;
 }
 
 float Step(float current, float target)

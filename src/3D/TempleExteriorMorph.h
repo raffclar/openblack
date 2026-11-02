@@ -9,6 +9,7 @@
 
 #pragma once
 
+#include <cstddef>
 #include <cstdint>
 
 #include <array>
@@ -58,6 +59,23 @@ struct Blend
 /// game loads the server's world. A mesh in the cache that is the blend of the same look and textures stays.
 /// @param inCache The blend of the mesh that the cache keeps for the temple, nothing when the cache keeps none
 [[nodiscard]] bool BlendsAfterLoad(std::optional<glm::vec2> blendedFor, std::optional<Blend> inCache, Blend wanted);
+
+/// The temples whose blends change in one call get one mesh for each blend, which all the temples of that blend share.
+/// Each temple that changes has a group, which is its blend. The groups have numbers in the order of their first
+/// temple. Each mesh that a temple has now has a number. A temple that has no mesh now has no number.
+struct MeshChange
+{
+	size_t group;
+	std::optional<size_t> mesh;
+};
+/// For each group, the mesh that the group changes and keeps, or nothing when the group gets a new mesh. A group can
+/// keep a mesh only when no other temple has that mesh after the call. Thus each other temple that has the mesh now must
+/// go to another group in the call. A group that comes later can keep a mesh that the temples of an earlier group
+/// leave. The temples of a group try their meshes in their order.
+/// @param changes The temples that change, in the order of the temples
+/// @param others The mesh of each temple that does not change, one number for each temple
+[[nodiscard]] std::vector<std::optional<size_t>> MeshesToKeep(std::span<const MeshChange> changes, size_t groups,
+                                                              std::span<const size_t> others);
 
 /// One of the meshes a temple's is blended from, and how much of it
 struct Corner
