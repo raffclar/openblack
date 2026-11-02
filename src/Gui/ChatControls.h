@@ -12,6 +12,7 @@
 #include <cstdint>
 
 #include <optional>
+#include <span>
 #include <string>
 #include <vector>
 
@@ -20,6 +21,11 @@
 #include "ChatControlsRules.h"
 #include "Dialog.h"
 #include "ECS/ChatRules.h"
+
+namespace openblack::graphics
+{
+class Texture2D;
+} // namespace openblack::graphics
 
 namespace openblack::gui
 {
@@ -34,6 +40,7 @@ class GameFont;
 /// - The quick chat button opens the quick chat list while the mouse button is held. The pointer picks a taunt, and the
 ///   taunt goes when the player lets go over the list.
 /// - The list of players selects the players that get the lines.
+/// - Under the list, the friend button makes the selected people friends, or no longer friends.
 class ChatControls
 {
 public:
@@ -56,14 +63,36 @@ public:
 		glm::ivec2 layoutSize {DialogPainter::k_Size};
 	};
 
-	explicit ChatControls(const GameFont& font);
+	/// The texts of the controls
+	struct Texts
+	{
+		/// The quick chat list
+		std::vector<std::u16string> taunts;
+		/// The headings of the groups of the list of people
+		std::u16string players;
+		std::u16string friends;
+		std::u16string others;
+		/// The labels of the friend button
+		std::u16string makeFriends;
+		std::u16string makeNotFriends;
+	};
+
+	/// The atmosphere texture gives the envelope of an online friend. With none, the envelope does not show.
+	ChatControls(const GameFont& font, const graphics::Texture2D* atmosphere);
 	ChatControls(const ChatControls&) = delete;
 	ChatControls& operator=(const ChatControls&) = delete;
 
-	/// The texts of the quick chat list and the heading of the list of players
-	void SetTexts(std::vector<std::u16string> taunts, std::u16string heading);
+	void SetTexts(Texts texts);
 	/// The other players of the game. A new set of players makes the list again, with each player selected.
 	void SetPlayers(std::vector<chat::people::Person> players);
+	/// The friend button shows only when the game knows the lasting numbers of the people
+	void SetFriendsOn(bool on);
+	/// The friends of the profile, as the game starts
+	void SetFriends(std::span<const chat::people::FriendRecord> records);
+	/// The friends that the profile must keep, after the friend button changed them
+	[[nodiscard]] std::optional<std::vector<chat::people::FriendRecord>> TakeChangedFriends();
+	/// The friends that were seen now, at this time of the online clock (see people::UpdateOnline)
+	void UpdateOnline(std::span<const chat::people::UserId> seen, uint32_t now);
 	/// The chat opens with the focus in its line, as a click on the speech button opens it
 	void Open() { OpenChat(false); }
 	/// Every frame, before the input. True when the controls came on the screen in this frame.
@@ -110,6 +139,7 @@ private:
 		Send,
 		QuickList,
 		Players,
+		Friend,
 	};
 
 	void OpenChat(bool closeAfterSend);
@@ -117,6 +147,8 @@ private:
 	void StartQuickChat(glm::ivec2 point);
 	void ClickPlayers(glm::ivec2 point, bool shift, bool ctrl, bool otherModifier);
 	void RebuildRows();
+	void MakeFriends();
+	[[nodiscard]] std::u16string HeadingOf(chat::people::Group group) const;
 	void Layout();
 	void FitQuickList();
 
@@ -128,10 +160,17 @@ private:
 	EditBox* _edit {nullptr};
 	List* _players {nullptr};
 	List* _quickList {nullptr};
+	Button* _friendButton {nullptr};
+	const graphics::Texture2D* _atmosphere {nullptr};
 
 	std::vector<std::u16string> _taunts;
-	std::u16string _heading;
+	Texts _texts;
 	chat::people::List _people;
+	/// The row of each item of the list of people
+	std::vector<chat::people::Row> _rows;
+	std::optional<std::vector<chat::people::FriendRecord>> _changedFriends;
+	bool _friendsOn {false};
+	chat::people::FriendButton _friendState;
 	std::vector<Sent> _sent;
 	Clicked _clicked {Clicked::None};
 	glm::ivec2 _pointer {-1, -1};

@@ -16,6 +16,7 @@
 
 #include "Controls.h"
 #include "GameFont.h"
+#include "Graphics/Texture2D.h"
 #include "Gui/MultiplayerFrontEndRules.h"
 #include "PlayerSlots.h"
 
@@ -34,6 +35,9 @@ constexpr std::u16string_view k_QuickName = u"Quick chat";
 constexpr float k_QuickScrollStep = 4.0f;
 /// The two spaces before the name of each player in the list
 constexpr std::u16string_view k_PlayerIndent = u"  ";
+/// The envelope of an online friend in the atmosphere texture
+constexpr glm::vec2 k_EnvelopeUvMin {0.875f, 0.375f};
+constexpr glm::vec2 k_EnvelopeUvMax {1.0f, 0.5f};
 
 /// A picture of a big button in the part of the button that the clip lets show, from top to bottom
 void DrawClipped(const DialogPainter& painter, DialogRect rect, Picture picture, int clipTop, int clipBottom)
@@ -88,8 +92,9 @@ private:
 	std::u16string_view _name;
 };
 
-ChatControls::ChatControls(const GameFont& font)
+ChatControls::ChatControls(const GameFont& font, const graphics::Texture2D* atmosphere)
     : _font(font)
+    , _atmosphere(atmosphere)
 {
 	const auto width = _layoutSize.x;
 	_sendButton = &_dialog.Add<PictureButton>(CornerButtonRect(width), Look::NoSpeech, k_SendName);
@@ -101,27 +106,41 @@ ChatControls::ChatControls(const GameFont& font)
 	_players->scrollBarWidth = k_ScrollBarWidth;
 	_players->onClick = [this]() { _clicked = Clicked::Players; };
 	_players->drawOver = [this](const DialogPainter& painter, const List::ItemPlace& place) {
-		// The heading has the speech button that turns the messages of its players on or off
-		if (place.index != 0)
+		if (place.index >= _rows.size())
 		{
 			return;
 		}
+		const auto& row = _rows[place.index];
+		const auto& group = _people.Of(row.group);
 		const auto left = HeadingButtonLeft(place.right);
-		const auto picture = PictureOf(_people.messagesOn ? Look::Speech : Look::NoSpeech, false);
-		DrawClipped(painter, ButtonAt({left, place.shownTop}), picture, place.top + 2, place.bottom - 2);
+		if (!row.person.has_value())
+		{
+			// The heading has the speech button that turns the messages of its people on or off
+			const auto picture = PictureOf(group.messagesOn ? Look::Speech : Look::NoSpeech, false);
+			DrawClipped(painter, ButtonAt({left, place.shownTop}), picture, place.top + 2, place.bottom - 2);
+			return;
+		}
+		// An online friend shows an envelope over the part of its row that shows, when that part is more than 4 high
+		if (_atmosphere != nullptr && group.people.at(*row.person).online && place.shownBottom - 4 > place.shownTop)
+		{
+			painter.DrawPicture({.min = {left, place.shownTop}, .max = {place.right - 2, place.shownBottom}}, *_atmosphere,
+			                    k_EnvelopeUvMin, k_EnvelopeUvMax, glm::vec4(1.0f));
+		}
 	};
 	_quickList = &_dialog.Add<List>(_font, QuickListRect(width, _layoutSize.y), k_TextSize, false, false, true);
 	_quickList->scrollBarWidth = k_ScrollBarWidth;
 	_quickList->onClick = [this]() { _clicked = Clicked::QuickList; };
+	_friendButton = &_dialog.Add<Button>(FriendButtonRect(width, _players->rect.max.y), std::u16string(), k_TextSize);
+	_friendButton->onClick = [this]() { _clicked = Clicked::Friend; };
 	_openButton = &_dialog.Add<PictureButton>(CornerButtonRect(width), Look::Speech, k_OpenName);
 	_openButton->onClick = [this]() { _clicked = Clicked::Open; };
 	Layout();
 }
 
-void ChatControls::SetTexts(std::vector<std::u16string> taunts, std::u16string heading)
+void ChatControls::SetTexts(Texts texts)
 {
-	_taunts = std::move(taunts);
-	_heading = std::move(heading);
+	_texts = std::move(texts);
+	_taunts = _texts.taunts;
 	std::vector<List::Item> items;
 	items.reserve(_taunts.size());
 	for (const auto& taunt : _taunts)
@@ -136,53 +155,91 @@ void ChatControls::SetTexts(std::vector<std::u16string> taunts, std::u16string h
 void ChatControls::SetPlayers(std::vector<chat::people::Person> players)
 {
 	const auto same = [this, &players]() {
-		if (players.size() != _people.players.size())
+		if (players.size() != _people.players.people.size())
 		{
 			return false;
 		}
 		auto sorted = players;
 		std::ranges::stable_sort(sorted, {}, &chat::people::Person::slot);
-		return std::ranges::equal(sorted, _people.players,
-		                          [](const auto& a, const auto& b) { return a.slot == b.slot && a.name == b.name; });
+		return std::ranges::equal(sorted, _people.players.people, [](const auto& a, const auto& b) {
+			return a.slot == b.slot && a.name == b.name && a.user == b.user;
+		});
 	};
 	if (same())
 	{
 		return;
 	}
+	// The chat colours count the gods of the room from 1, in the order of their slots
+	for (auto& player : players)
+	{
+		const auto god = player_slots::SlotOfPlayer(player.slot).value_or(0) + 1;
+		player.colour = PlayerColour(multiplayer::GodColourBits(static_cast<int32_t>(god)));
+	}
 	// The heading keeps whether it is expanded and whether its messages are on
-	const auto expanded = _people.expanded;
-	const auto messagesOn = _people.messagesOn;
-	_people = chat::people::MakeList(std::move(players));
-	_people.expanded = expanded;
-	_people.messagesOn = messagesOn;
+	const auto expanded = _people.players.expanded;
+	const auto messagesOn = _people.players.messagesOn;
+	_people.players = chat::people::MakePlayers(std::move(players));
+	_people.players.expanded = expanded;
+	_people.players.messagesOn = messagesOn;
+	chat::people::MarkFriends(_people);
+	RebuildRows();
+}
+
+void ChatControls::SetFriendsOn(bool on)
+{
+	_friendsOn = on;
+}
+
+void ChatControls::SetFriends(std::span<const chat::people::FriendRecord> records)
+{
+	chat::people::LoadFriends(_people, records);
+	RebuildRows();
+}
+
+std::optional<std::vector<chat::people::FriendRecord>> ChatControls::TakeChangedFriends()
+{
+	return std::exchange(_changedFriends, std::nullopt);
+}
+
+void ChatControls::UpdateOnline(std::span<const chat::people::UserId> seen, uint32_t now)
+{
+	chat::people::UpdateOnline(_people, seen, now);
+}
+
+void ChatControls::MakeFriends()
+{
+	chat::people::MakeFriends(_people);
+	_changedFriends = chat::people::KeptFriends(_people);
 	RebuildRows();
 }
 
 void ChatControls::RebuildRows()
 {
 	std::vector<List::Item> items;
-	if (!_people.players.empty())
+	_rows = chat::people::Rows(_people);
+	for (const auto& row : _rows)
 	{
-		auto heading = _heading;
-		if (!_people.expanded)
+		const auto& group = _people.Of(row.group);
+		if (!row.person.has_value())
 		{
-			heading += u"...";
-		}
-		items.push_back(
-		    {.text = std::move(heading), .mouseCell = std::nullopt, .colour = ToColour(k_HeadingColour), .bar = std::nullopt});
-		if (_people.expanded)
-		{
-			for (const auto& player : _people.players)
+			auto heading = HeadingOf(row.group);
+			if (!group.expanded)
 			{
-				// The chat colours count the gods of the room from 1, in the order of their slots
-				const auto god = player_slots::SlotOfPlayer(player.slot).value_or(0) + 1;
-				const auto colour = PlayerColour(multiplayer::GodColourBits(static_cast<int32_t>(god)));
-				items.push_back({.text = std::u16string(k_PlayerIndent) + player.name,
-				                 .mouseCell = std::nullopt,
-				                 .colour = ToColour(colour),
-				                 .bar = player.selected ? std::optional(ToColour(colour | k_SelectedBits)) : std::nullopt});
+				heading += u"...";
 			}
+			items.push_back({.text = std::move(heading),
+			                 .mouseCell = std::nullopt,
+			                 .colour = ToColour(k_HeadingColour),
+			                 .bar = std::nullopt});
+			continue;
 		}
+		// A row with full alpha in its colour has a bar: a selected person, or a person of the staff
+		const auto& person = group.people.at(*row.person);
+		const auto colour = person.colour | (person.selected ? k_SelectedBits : 0u);
+		items.push_back({.text = std::u16string(k_PlayerIndent) + person.name,
+		                 .mouseCell = std::nullopt,
+		                 .colour = ToColour(person.colour),
+		                 .bar = (colour & k_SelectedBits) != 0 ? std::optional(ToColour(colour)) : std::nullopt});
 	}
 	const auto scroll = _players->GetScroll();
 	// The list is as high as its items, up to half of the screen, with a scroll bar when they do not fit
@@ -196,6 +253,24 @@ void ChatControls::RebuildRows()
 		_players->SetItems(std::move(items));
 	}
 	_players->ScrollTo(scroll);
+	// The friend button is under the list
+	_friendButton->rect = FriendButtonRect(_layoutSize.x, _players->rect.max.y);
+	_friendState = chat::people::FriendButtonOf(_people);
+	_friendButton->label = _friendState.removes ? _texts.makeNotFriends : _texts.makeFriends;
+}
+
+std::u16string ChatControls::HeadingOf(chat::people::Group group) const
+{
+	switch (group)
+	{
+	case chat::people::Group::Friends:
+		return _texts.friends;
+	case chat::people::Group::Others:
+		return _texts.others;
+	case chat::people::Group::Players:
+		break;
+	}
+	return _texts.players;
 }
 
 void ChatControls::Layout()
@@ -264,6 +339,7 @@ bool ChatControls::Update(const Frame& frame)
 	_players->visible = _open && !_players->GetItems().empty() && !_quickOpen;
 	_sendButton->visible = _open;
 	_quickButton->visible = _open;
+	_friendButton->visible = _open && _friendsOn && _friendState.usable && !_quickOpen;
 	_openButton->visible = _shown && !_open;
 	if (!_boxShown)
 	{
@@ -298,6 +374,7 @@ void ChatControls::StartQuickChat(glm::ivec2 point)
 	_quickOpen = true;
 	_quickList->visible = true;
 	_players->visible = false;
+	_friendButton->visible = false;
 	_dialog.Hold(*_quickList);
 	_quickList->MouseDown(point);
 }
@@ -359,6 +436,9 @@ bool ChatControls::MouseUp(glm::ivec2 point, bool shift, bool ctrl, bool otherMo
 		break;
 	case Clicked::Players:
 		ClickPlayers(point, shift, ctrl, otherModifier);
+		break;
+	case Clicked::Friend:
+		MakeFriends();
 		break;
 	case Clicked::None:
 		break;
