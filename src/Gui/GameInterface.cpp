@@ -1665,6 +1665,11 @@ void GameInterface::Update(float deltaSeconds)
 	_landInfoBox->Update(deltaSeconds);
 	_saveGameBoxes->Update(deltaSeconds);
 	_endGameBox->Update(deltaSeconds);
+	// The OK of a message (the save error, a god out of the game) gives the keyboard back to the game at once
+	if (_saveGameBoxes->TakeMessageAnswered() && Locator::gameActionSystem::has_value())
+	{
+		Locator::gameActionSystem::value().BoxAnswered();
+	}
 	// The answer to the out-of-sync box: Yes plays on, No leaves the game
 	if (_outOfSyncAsked && !_saveGameBoxes->IsActive())
 	{

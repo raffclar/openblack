@@ -93,6 +93,9 @@ public:
 
 	/// The player's answer, once
 	[[nodiscard]] std::optional<Answer> TakeAnswer() { return std::exchange(_answer, std::nullopt); }
+	/// The player answered a message with an OK since this was last asked. A message taken away with no answer does not
+	/// count.
+	[[nodiscard]] bool TakeMessageAnswered() { return std::exchange(_messageAnswered, false); }
 	/// The name in the name's box
 	[[nodiscard]] std::u16string_view GetName() const;
 
@@ -126,6 +129,7 @@ private:
 	bool _nameActive {false};
 	Zoomer _nameFade;
 	std::optional<Answer> _answer;
+	bool _messageAnswered {false};
 };
 
 } // namespace openblack::gui

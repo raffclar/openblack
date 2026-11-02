@@ -108,3 +108,29 @@ TEST(SaveProblemBox, AQuestionStillTakesNeitherReturnNorEscape)
 	fixture.boxes.TextInput(u"y");
 	EXPECT_EQ(fixture.boxes.TakeAnswer(), SaveGameBoxes::Answer::Yes);
 }
+
+TEST(SaveProblemBox, TheOkOfAMessageIsToldOnceToGiveTheKeyboardBack)
+{
+	BoxFixture fixture;
+	EXPECT_FALSE(fixture.boxes.TakeMessageAnswered());
+	fixture.boxes.KeyDown(SDLK_ESCAPE);
+	EXPECT_TRUE(fixture.boxes.TakeMessageAnswered());
+	EXPECT_FALSE(fixture.boxes.TakeMessageAnswered());
+	// A click on OK counts too
+	fixture.boxes.Tell(u"An error has occurred!");
+	fixture.boxes.Update(1.0f);
+	EXPECT_TRUE(fixture.Click(Middle(SaveGameBoxes::k_MessageOk)));
+	EXPECT_TRUE(fixture.boxes.TakeMessageAnswered());
+}
+
+TEST(SaveProblemBox, AMessageTakenAwayOrAnAnsweredQuestionDoesNotGiveTheKeyboardBack)
+{
+	BoxFixture fixture;
+	fixture.boxes.WithdrawMessage();
+	EXPECT_FALSE(fixture.boxes.IsActive());
+	EXPECT_FALSE(fixture.boxes.TakeMessageAnswered());
+	fixture.boxes.Ask(u"Are you sure you want to load this game?");
+	fixture.boxes.TextInput(u"y");
+	EXPECT_EQ(fixture.boxes.TakeAnswer(), SaveGameBoxes::Answer::Yes);
+	EXPECT_FALSE(fixture.boxes.TakeMessageAnswered());
+}
