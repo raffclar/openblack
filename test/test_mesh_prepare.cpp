@@ -18,11 +18,14 @@
 #include <vector>
 
 #include <L3DFile.h>
+#include <entt/core/fwd.hpp>
 #include <gtest/gtest.h>
 
 #include "3D/L3DMesh.h"
 #include "Graphics/GraphicsDeviceInterface.h"
 #include "Locator.h"
+#include "Resources/Loaders.h"
+#include "Resources/ResourcesInterface.h"
 #include "Visual/UploadMode.h"
 
 using namespace openblack;
@@ -340,4 +343,32 @@ TEST_F(MeshPrepare, PreparedSkinTexelsGiveTheBitsOfTexelsGivenDirectly)
 	L3DMesh dataOnly("data", true, UploadMode::DataOnly);
 	ASSERT_TRUE(dataOnly.Load(model));
 	EXPECT_FALSE(dataOnly.Fits(prepared));
+}
+
+TEST_F(MeshPrepare, TempleMeshesOfOneBlendShareOneSetOfDeviceObjects)
+{
+	const auto model = Model();
+	resources::MeshManager meshes;
+	constexpr entt::id_type k_First = 1;
+	constexpr entt::id_type k_Second = 2;
+	meshes.Load(k_First, resources::L3DLoader::FromPreparedDynamicTag {}, "first", L3DMesh::Prepare(model, k_Device));
+	const auto fromFirst = Device().TakeMade();
+	// The skin with no texels, the texels, the vertices and the triangles
+	ASSERT_EQ(fromFirst.size(), 4U);
+
+	// The second temple takes the mesh of the first and makes no object on the graphics device
+	meshes.Load(k_Second, resources::L3DLoader::FromSharedTag {}, meshes.Handle(k_First).handle());
+	EXPECT_TRUE(Device().TakeMade().empty());
+	ASSERT_NE(meshes.Find(k_Second), nullptr);
+	EXPECT_EQ(meshes.Find(k_Second), meshes.Find(k_First));
+
+	// One change of the skin is a change of the skin of the two temples
+	std::vector<uint16_t> texels(256U * 256U, 0xF0F0U);
+	meshes.Handle(k_First)->UpdateSkin(7, texels);
+	EXPECT_EQ(Device().TakeMade().size(), 1U);
+
+	// The mesh stays while one of the temples has it
+	meshes.Erase(k_First);
+	ASSERT_NE(meshes.Find(k_Second), nullptr);
+	EXPECT_EQ(meshes.Find(k_Second)->GetSkinOrder().size(), 1U);
 }

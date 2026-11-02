@@ -171,6 +171,19 @@ public:
 	virtual void GetClan(int64_t clanId, LobbyCallback<lobby_api::ClanDetails> callback) = 0;
 	/// The logo of a clan: the bytes of a BMP file
 	virtual void GetClanLogo(int64_t clanId, LobbyCallback<std::vector<uint8_t>> callback) = 0;
+	/// The creature of a clan that the player uses in a room: the stored clan creature, the order to make a new one, or
+	/// none. The game of the god that plays for the clan sends it as its start creature. A lobby that does not give it
+	/// to a player gives an error.
+	virtual void GetClanCreature(int64_t /*clanId*/, LobbyCallback<lobby_api::ClanCreatureReply> callback)
+	{
+		callback({.value = std::nullopt, .error = {.kind = LobbyErrorKind::NotConfigured}});
+	}
+	/// Sends the clan creature at the end of a clan game: the alignment of the god, the creature file and the user data.
+	/// The lobby keeps it for the next clan game. A lobby that does not take it from a player gives an error.
+	virtual void PutClanCreature(int64_t /*clanId*/, lobby_api::ClanCreature /*creature*/, LobbyCallback<LobbyDone> callback)
+	{
+		callback({.value = std::nullopt, .error = {.kind = LobbyErrorKind::NotConfigured}});
+	}
 
 	virtual void GetPlayerRanking(int32_t page, LobbyCallback<lobby_api::RankingPage> callback) = 0;
 	virtual void GetClanRanking(int32_t page, LobbyCallback<lobby_api::RankingPage> callback) = 0;

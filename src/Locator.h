@@ -238,6 +238,7 @@ class CreatureCarryOverSystemInterface;
 class SaveGameSystemInterface;
 class CreatureWebPageSystemInterface;
 class LobbyClientSystemInterface;
+class ClanCreatureSystemInterface;
 class NetworkGameSystemInterface;
 class RealWeatherSystemInterface;
 class TornadoSystemInterface;
@@ -487,6 +488,8 @@ struct Locator
 	using onlineMapStore = entt::locator<online::OnlineMapStoreInterface>;
 	/// The client of the lobby (bwgame-service)
 	using lobbyClient = entt::locator<ecs::systems::LobbyClientSystemInterface>;
+	/// The clan creature of a network game on the internet: the fetch before the start and the upload at the end
+	using clanCreatureSystem = entt::locator<ecs::systems::ClanCreatureSystemInterface>;
 	/// The network game of this computer: the session with a game server, which gives the turns of the world
 	using networkGame = entt::locator<ecs::systems::NetworkGameSystemInterface>;
 	/// The real-world weather of a single-player game, off unless the player turns it on

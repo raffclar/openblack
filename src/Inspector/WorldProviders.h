@@ -21,6 +21,7 @@
 #include <glm/vec3.hpp>
 
 #include "3D/WaterRings.h"
+#include "Blast/CameraShake.h"
 #include "ECS/Components/Sky.h"
 #include "ECS/Systems/ParticleRuleSystemInterface.h"
 #include "ECS/Systems/ParticleSystemInterface.h"
@@ -65,6 +66,10 @@ using ParticleEffectInfo = ecs::systems::ParticleRuleSystemInterface::EffectInfo
 [[nodiscard]] Json SplashItems(std::span<const water_rings::Ring> rings, std::span<const ParticleEffectInfo> effects);
 /// The running particle effects as list items, of those whose file names hold the text when it is given
 [[nodiscard]] Json EffectItems(std::span<const ParticleEffectInfo> effects, std::optional<std::string_view> file);
+
+/// The camera shakes that go on now as list items: the place, the radius, the strength, the whole time and the time
+/// that stays (both in milliseconds), and whether the shake moves the camera up and down only
+[[nodiscard]] Json ShakeItems(std::span<const camera_shake::Shake> shakes);
 
 /// The running particle effects that follow an object as list items
 [[nodiscard]] Json EmitterItems(std::span<const ParticleEffectInfo> effects, entt::entity owner);

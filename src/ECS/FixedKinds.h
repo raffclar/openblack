@@ -29,11 +29,19 @@ class Registry;
 /// - The search for a clear place for a temporary pile of a town asks each thing near the place.
 /// - A creature that found no way to a thing waits longer before it tries a thing with the mark again.
 /// - A villager that lies down by a tree keeps away from a thing with the mark.
+/// - A scaffold that clears its ground removes a thing with the mark. It does not push it.
+/// - The fire of a thing with the mark lights the land when the thing is wide.
+/// - A builder disciple that looks at a thing with the mark tries to build or repair it.
 namespace openblack::ecs::fixed_kinds
 {
 
 /// Whether the game marks a thing as fixed to the land
 [[nodiscard]] bool IsFixedKind(const Registry& registry, entt::entity thing);
+
+/// Whether the game always counts a thing with the mark as built and repaired: a rock, a dead tree, a piece of a
+/// building, a big forest, a fish farm, a vortex or a teleport stone. For a building, a field, a feature, flowers, a
+/// worship site with its altar and icons, the game asks how much of it is built and how much life it has.
+[[nodiscard]] bool IsAlwaysWhole(const Registry& registry, entt::entity thing);
 
 /// Whether the first of the things that stay put in a cell has the mark. The game does not look at the other things of
 /// the cell. A cell with no thing that stays put has no mark.

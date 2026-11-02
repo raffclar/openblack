@@ -789,6 +789,37 @@ void LobbyClientSystem::GetClanLogo(int64_t clanId, LobbyCallback<std::vector<ui
 	                              });
 }
 
+void LobbyClientSystem::GetClanCreature(int64_t clanId, LobbyCallback<lobby_api::ClanCreatureReply> callback)
+{
+	CallFor<lobby_api::ClanCreatureReply>(
+	    HttpMethod::Get, fmt::format("/clans/{}/creature", clanId), std::move(callback),
+	    [](const HttpResponse& response) { return lobby_api::ParseClanCreatureReply(TextOf(response)); });
+}
+
+void LobbyClientSystem::PutClanCreature(int64_t clanId, lobby_api::ClanCreature creature, LobbyCallback<LobbyDone> callback)
+{
+	if (!_config.has_value())
+	{
+		Fail(callback, ErrorOfKind(LobbyErrorKind::NotConfigured));
+		return;
+	}
+	Authorized(Call {
+	    .method = HttpMethod::Put,
+	    .path = fmt::format("/clans/{}/creature", clanId),
+	    .headers = {{"Content-Type", std::string(k_JsonType)}, {"Accept", std::string(k_JsonType)}},
+	    .body = BytesOf(lobby_api::ToJson(creature)),
+	    .done =
+	        [callback = std::move(callback)](HttpResponse&& response) {
+		        if (auto error = LobbyErrorOf(response); error.kind != LobbyErrorKind::None)
+		        {
+			        Fail(callback, std::move(error));
+			        return;
+		        }
+		        Succeed(callback, LobbyDone {});
+	        },
+	});
+}
+
 void LobbyClientSystem::GetMaps(LobbyCallback<lobby_api::MapList> callback)
 {
 	CallFor<lobby_api::MapList>(HttpMethod::Get, "/maps", std::move(callback),

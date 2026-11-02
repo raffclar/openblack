@@ -360,11 +360,16 @@ float AbodeDesireToBeRepaired(const RepairInput& abode, const GTownInfo& town)
 	{
 		return 0.0f;
 	}
-	if (!(abode.life < 1.0f || std::isnan(abode.life)))
+	return FixedDesireToBeRepaired(abode.life, abode.desireToBeRepaired);
+}
+
+float FixedDesireToBeRepaired(float life, float desireToBeRepaired)
+{
+	if (!(life < 1.0f || std::isnan(life)))
 	{
 		return 0.0f;
 	}
-	const float v = ((1.0f - abode.life) * 0.5f + 0.5f) * abode.desireToBeRepaired;
+	const float v = ((1.0f - life) * 0.5f + 0.5f) * desireToBeRepaired;
 	return (v < 1.0f || std::isnan(v)) ? v : 1.0f;
 }
 

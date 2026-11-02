@@ -23,6 +23,7 @@
 #include "Common/GameRandom.h"
 #include "Common/RandomNumberManager.h"
 #include "ECS/ProfileAlignment.h"
+#include "ECS/Systems/ClanCreatureSystemInterface.h"
 #include "ECS/Systems/HandSystemInterface.h"
 #include "ECS/Systems/LandSystemInterface.h"
 #include "ECS/Systems/PlayerCommandSystemInterface.h"
@@ -37,6 +38,16 @@
 #include "PlayerSlots.h"
 
 using namespace openblack::ecs::systems;
+
+namespace
+{
+/// The start creature of a god that plays for a clan, when the lobby gave one
+std::optional<ClanStartCreature> ClanStart()
+{
+	return openblack::Locator::clanCreatureSystem::has_value() ? openblack::Locator::clanCreatureSystem::value().StartCreature()
+	                                                           : std::nullopt;
+}
+} // namespace
 
 namespace
 {
@@ -166,6 +177,17 @@ bool NetworkGameSystem::Join(NetworkJoin join)
 			return fileSystem.Exists(path) ? fileSystem.ReadAll(path) : std::vector<uint8_t> {};
 		};
 	}
+	else
+	{
+		// A god that plays for a clan sends the clan creature that the lobby gave, in place of the creature of the profile
+		readCreature = [profileCreature = std::move(readCreature)]() {
+			if (auto clan = ClanStart(); clan.has_value())
+			{
+				return std::move(clan->file);
+			}
+			return profileCreature ? profileCreature() : std::vector<uint8_t> {};
+		};
+	}
 	_session->Join(online::NetworkSessionSettings {
 	    .request = {.url = join.url, .headers = {}, .subprotocols = {}},
 	    .ticket = std::move(join.ticket),
@@ -180,6 +202,11 @@ bool NetworkGameSystem::Join(NetworkJoin join)
 	    .readCreature = std::move(readCreature),
 	    .readAlignment =
 	        []() {
+		        // The clan creature goes with the alignment that the lobby kept with it
+		        if (const auto clan = ClanStart(); clan.has_value())
+		        {
+			        return clan->alignment;
+		        }
 		        // The god starts the game at the alignment that the player's profile kept from earlier games
 		        const auto profile = Locator::playerProfileSystem::has_value()
 		                                 ? Locator::playerProfileSystem::value().GetCurrentProfile()

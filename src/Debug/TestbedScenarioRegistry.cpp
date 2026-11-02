@@ -315,12 +315,31 @@ void AddExpressions(std::vector<Scenario>& all)
 	    .facet = Facet::Expressions,
 	    .description = "A tiger whose mind is paused, close up, pulls each of its ten faces in turn, then plays each "
 	                   "gesture on top of its body.",
-	    .expected =
-	        "Smile, grimace, growl, scared, sad, amazed, puzzled, laugh, ooh and aah, each held then easing out of the last, "
-	        "then a nod, a shake of the head, a yawn, thirst, squirting water and talking.",
+	    .expected = "Smile, grimace, growl, scared, sad, amazed and puzzled, each held then easing out of the last. The "
+	                "tiger has no laugh, ooh or aah, so its face stays plain for those three. Then a nod, a shake of the "
+	                "head, a yawn, thirst, squirting water and talking.",
 	    .framing = {.shot = Shot::Head, .distance = 1.6f},
 	    .creatures = {CreatureSetup {.species = CreatureType::Tiger, .needs = Content(), .hold = true, .pauseMind = true}},
 	    .commands = faces,
+	    .repeatFrom = 0,
+	});
+
+	// The tiger has no clip for the laugh. The tiger keeps the face that it wants, but the face shows nothing. The smile
+	// after it starts at once.
+	constexpr size_t k_TigerLaugh = animations::k_FirstFace + 7;
+	all.push_back({
+	    .id = "expressions.face_without_clip",
+	    .name = "A face that the tiger has no clip for",
+	    .facet = Facet::Expressions,
+	    .description = "A tiger whose mind is paused, close up, pulls the laugh face, which the tiger has no clip for, "
+	                   "then the smile, three seconds later.",
+	    .expected = "For three seconds the face stays plain and does not move: the laugh shows nothing. Then the smile "
+	                "starts at once from its first frame and holds for one second. When the laugh comes again, the smile "
+	                "eases out and the face stays plain. This repeats. The clip log names the laugh as not found.",
+	    .framing = {.shot = Shot::Head, .distance = 1.6f},
+	    .creatures = {CreatureSetup {.species = CreatureType::Tiger, .needs = Content(), .hold = true, .pauseMind = true}},
+	    .commands = {Play(Kind::PullFace, 0, k_TigerLaugh, 1.0f, false),
+	                 Play(Kind::PullFace, 0, animations::k_FirstFace, 3.0f, false)},
 	    .repeatFrom = 0,
 	});
 
@@ -7700,6 +7719,95 @@ void AddHand(std::vector<Scenario>& all)
 	    .commands = poseThenTouch,
 	});
 
+	// The real button on the own creature while the leash is held loose: a short press is a tap, a long one holds
+	all.push_back({
+	    .id = "hand.loose_leash_tap_then_hold",
+	    .name = "With the leash held loose, a short press taps your creature and a long one holds it",
+	    .facet = Facet::Hand,
+	    .description = "Your tiger faces the camera in the middle of the screen and wears the learning leash, held loose "
+	                   "in the hand. The action button presses the tiger for 0.1 seconds. Then it presses the tiger again, "
+	                   "holds it for two seconds and lets go.",
+	    .expected = "The short press is a tap: the hand does not hold the tiger, the camera stays where it is and the "
+	                "leash stays on. The long press holds the tiger after a short wait, and the camera turns to it. The log "
+	                "shows \"let go soon: it is a tap\" and then \"waited long enough: the hand holds it\".",
+	    .environment = {.dispenserGrid = false, .cursor = glm::vec2(0.5f, 0.5f)},
+	    .framing = {.shot = Shot::Follow, .distance = 1.2f},
+	    .creatures = {Posed(CreatureType::Tiger, {0.0f, 0.0f})},
+	    .commands = {Leash(0, LeashType::Rope, 0.5f),
+	                 {.kind = Kind::PointerPress, .delaySeconds = 2.0f, .value = 3},
+	                 {.kind = Kind::PointerRelease, .delaySeconds = 0.1f, .value = 3},
+	                 {.kind = Kind::PointerPress, .delaySeconds = 2.0f, .value = 3},
+	                 {.kind = Kind::PointerRelease, .delaySeconds = 2.0f, .value = 3}},
+	});
+
+	// The real button on the own creature while it sleeps: a sleeping creature takes hold. Its tiredness stays high, so
+	// it does not wake by itself.
+	auto sleepy = Content(CreatureType::Tiger, {0.0f, 0.0f});
+	sleepy.needs.exhaustion = 0.75f;
+	all.push_back({
+	    .id = "hand.press_holds_sleeping_creature",
+	    .name = "The hand holds your sleeping creature",
+	    .facet = Facet::Hand,
+	    .description = "Your tiger lies down to sleep in the middle of the screen. The pointer is on the tiger where "
+	                   "it lies. The action button presses the tiger, holds it for three seconds and lets go.",
+	    .expected = "The hand holds the sleeping tiger as it holds an awake one: the camera turns to the tiger and the "
+	                "tiger turns to face you. The leash does not come on. The log shows \"The hand of player 0 holds "
+	                "creature\".",
+	    .environment = {.dispenserGrid = false, .cursor = glm::vec2(0.4375f, 0.625f)},
+	    .framing = {.shot = Shot::Follow, .distance = 1.2f},
+	    .creatures = {sleepy},
+	    .commands = {Act(Kind::Sleep, 0, 0.5f),
+	                 {.kind = Kind::PointerPress, .delaySeconds = 6.0f, .value = 3},
+	                 {.kind = Kind::PointerRelease, .delaySeconds = 3.0f, .value = 3}},
+	});
+
+	// The real button on the own creature while it is frozen: the hand does not hold it and the press sends no leash click
+	all.push_back({
+	    .id = "hand.press_frozen_creature_keeps_leash",
+	    .name = "A press on your frozen creature leaves its leash on",
+	    .facet = Facet::Hand,
+	    .description = "Your tiger faces the camera in the middle of the screen and wears the learning leash, held loose "
+	                   "in the hand. The freeze spell freezes it. The action button clicks the tiger, then presses it for "
+	                   "two seconds.",
+	    .expected = "The hand does not hold the frozen tiger and the camera stays where it is. The leash stays on after "
+	                "the click and after the long press: a rope still runs from the hand to the collar. The log shows no "
+	                "\"Leash command: player 0 taps a creature\".",
+	    .environment = {.dispenserGrid = false, .cursor = glm::vec2(0.5f, 0.5f)},
+	    .framing = {.shot = Shot::Follow, .distance = 1.2f},
+	    .creatures = {Posed(CreatureType::Tiger, {0.0f, 0.0f})},
+	    .miracles = {{.type = MagicType::CreatureSpellFreeze,
+	                  .target = MiracleCast::Target::Creature,
+	                  .creature = 0,
+	                  .delaySeconds = 1.0f}},
+	    .commands = {Leash(0, LeashType::Rope, 0.5f),
+	                 {.kind = Kind::PointerPress, .delaySeconds = 3.0f, .value = 3},
+	                 {.kind = Kind::PointerRelease, .delaySeconds = 0.1f, .value = 3},
+	                 {.kind = Kind::PointerPress, .delaySeconds = 1.5f, .value = 3},
+	                 {.kind = Kind::PointerRelease, .delaySeconds = 2.0f, .value = 3}},
+	});
+
+	// A script takes control of the own creature while the press waits for a tap. The press then sends the hold, and the
+	// turn holds the creature: only the press asks if the hand may hold it.
+	all.push_back({
+	    .id = "hand.turn_holds_creature_a_script_took",
+	    .name = "The hand holds your creature that a script took during the press",
+	    .facet = Facet::Hand,
+	    .description = "Your tiger faces the camera in the middle of the screen and wears the learning leash, held loose "
+	                   "in the hand. The action button presses the tiger. 0.1 seconds later a script tells the tiger to "
+	                   "be frightened on the spot. The press continues for two seconds and then the button lets go.",
+	    .expected = "The hand holds the tiger after the short wait of the press, although the script now controls the "
+	                "tiger. The camera turns to the tiger. The log shows \"waited long enough: the hand holds it\" and "
+	                "then \"The hand of player 0 holds creature\". The log does not show \"The turn does not hold\".",
+	    .environment = {.dispenserGrid = false, .cursor = glm::vec2(0.5f, 0.5f)},
+	    .framing = {.shot = Shot::Follow, .distance = 1.2f},
+	    .creatures = {Posed(CreatureType::Tiger, {0.0f, 0.0f})},
+	    .commands =
+	        {Leash(0, LeashType::Rope, 0.5f),
+	         {.kind = Kind::PointerPress, .delaySeconds = 2.0f, .value = 3},
+	         {.kind = Kind::DoAction, .creature = 0, .delaySeconds = 0.1f, .action = "BeFrightenedOnTheSpot", .atCreature = 0},
+	         {.kind = Kind::PointerRelease, .delaySeconds = 1.9f, .value = 3}},
+	});
+
 	all.push_back({
 	    .id = "hand.mesh_contact",
 	    .name = "The hand on the body",
@@ -9056,8 +9164,9 @@ void AddLeash(std::vector<Scenario>& all)
 	    .name = "A click on your leashed creature takes the leash off",
 	    .facet = Facet::Leash,
 	    .description = "Your tiger faces the camera in the middle of the screen and wears the learning leash. The action "
-	                   "button clicks the tiger and the hand moves to the right. Then the hand comes back, clicks the "
-	                   "tiger again and moves to the right again.",
+	                   "button clicks the tiger for 0.35 seconds and the hand moves to the right. Then the hand comes "
+	                   "back, clicks the tiger again and moves to the right again. With the leash held loose, a click "
+	                   "must be longer than the wait for a tap.",
 	    .expected = "After the first click no rope follows the hand: the click took the leash off. After the second "
 	                "click a rope runs from the hand to the collar again. The log shows \"The draw of the hand sends the "
 	                "leash tap\" for each click, and a turn later \"Leash command: player 0 taps a creature\".",
@@ -9066,11 +9175,11 @@ void AddLeash(std::vector<Scenario>& all)
 	    .creatures = {Posed(CreatureType::Tiger, {0.0f, 0.0f})},
 	    .commands = {Leash(0, LeashType::Rope, 0.5f),
 	                 {.kind = Kind::PointerPress, .delaySeconds = 2.0f, .value = 3},
-	                 {.kind = Kind::PointerRelease, .delaySeconds = 0.2f, .value = 3},
+	                 {.kind = Kind::PointerRelease, .delaySeconds = 0.35f, .value = 3},
 	                 {.kind = Kind::PointerSweep, .delaySeconds = 0.5f, .point = {0.25f, 0.0f}, .amount = 1.0f},
 	                 {.kind = Kind::PointerSweep, .delaySeconds = 2.5f, .point = {-0.25f, 0.0f}, .amount = 1.0f},
 	                 {.kind = Kind::PointerPress, .delaySeconds = 1.5f, .value = 3},
-	                 {.kind = Kind::PointerRelease, .delaySeconds = 0.2f, .value = 3},
+	                 {.kind = Kind::PointerRelease, .delaySeconds = 0.35f, .value = 3},
 	                 {.kind = Kind::PointerSweep, .delaySeconds = 0.5f, .point = {0.25f, 0.0f}, .amount = 1.0f}},
 	});
 
@@ -10418,6 +10527,47 @@ void AddCombat(std::vector<Scenario>& all)
 		                                       .number = static_cast<float>(script::ObjectPropertyType::Health)},
 		                                      {.kind = ScriptArgument::Kind::Creature, .index = 1},
 		                                      {.kind = ScriptArgument::Kind::Number, .number = 0.0f}}}},
+		});
+	}
+
+	{
+		// The same win by the life of the opponent, but after the win the script gives the blue tiger its life back and
+		// halves the life of the red tiger, so the blue tiger has more life when it responds
+		auto winner = red(PlayerNames::PLAYER_ONE, 0.6f, -0.2f);
+		winner.hold = false;
+		auto loser = blue(PlayerNames::PLAYER_TWO, 0.5f, -0.2f);
+		loser.hold = false;
+		const auto setLife = [](size_t creature, float life, float delay) {
+			return Command {.kind = Kind::CallNative,
+			                .delaySeconds = delay,
+			                .script = "SET_PROPERTY",
+			                .scriptArguments = {{.kind = ScriptArgument::Kind::Integer,
+			                                     .number = static_cast<float>(script::ObjectPropertyType::Health)},
+			                                    {.kind = ScriptArgument::Kind::Creature, .index = creature},
+			                                    {.kind = ScriptArgument::Kind::Number, .number = life}}};
+		};
+		all.push_back({
+		    .id = "combat.loser_waits_free_mind",
+		    .name = "The loser waits after its response until its own mind takes a plan",
+		    .facet = Facet::Combat,
+		    .description = "The red tiger of the player and a blue tiger fight by themselves, and the creatures do not faint. "
+		                   "When the duel is on, a script sets the life of the blue tiger to zero. A moment after the red "
+		                   "tiger wins, the script gives the blue tiger full life and sets the life of the red tiger to 0.5.",
+		    .expected =
+		        "The red tiger wins, finishes its move, orders the blue tiger to respond and plays no response. "
+		        "The blue tiger finishes its move, plays the happy response and does not fear the red tiger. Then "
+		        "it waits with its mind free. Its own plans do not take the place of the order, because each is "
+		        "worth less than two times the order. The red tiger goes home to get better. An order of another "
+		        "creature, such as to share a smile, can still take its place. The fight transcript shows order_respond.",
+		    .environment = {.fainting = false},
+		    .framing = ringside,
+		    .creatures = {winner, loser},
+		    .commands = {{.kind = Kind::EndGuidanceWaits, .delaySeconds = 0.5f},
+		                 Fight(Kind::StartFight, 0, 1, 0.5f),
+		                 Fight(Kind::FightAuto, 0, 1, 0.2f),
+		                 setLife(1, 0.0f, 18.0f),
+		                 setLife(1, 1.0f, 0.3f),
+		                 setLife(0, 0.5f, 0.0f)},
 		});
 	}
 
@@ -14170,6 +14320,30 @@ void AddWorkshopScenarios(std::vector<Scenario>& all)
 	    .objects = {{.type = ScaffoldInfo::Normal, .offset = k_FoundingScaffold, .scale = 0.7f, .clearsGround = true},
 	                {.type = TreeInfo::Bush, .offset = k_FoundingScaffold + glm::vec2 {1.0f, 1.0f}}},
 	    .commands = {{.kind = Kind::ScaffoldClearsGround, .delaySeconds = 1.0f, .object = 0}},
+	});
+
+	all.push_back({
+	    .id = "objects.scaffold_clears_ground_fixed_rock",
+	    .name = "A scaffold that clears its ground removes a rock and pushes a ball",
+	    .facet = Facet::Objects,
+	    .description = "A loose scaffold that a script marked to destroy the things in its way, away from every town. A "
+	                   "rock stands 1.5 m east of it and a ball 1.5 m north of it. After one second the scaffold clears "
+	                   "its ground, as when the hand lets it go.",
+	    .expected = "The rock has the fixed mark of the land, so the scaffold does not push it: the rock goes from the "
+	                "game at once. The ball has no mark, so it jumps out of the way and stays in the game. The game log "
+	                "tells of the removal of the rock and of the push of the ball.",
+	    .environment = {.dispenserGrid = false},
+	    .framing = {.shot = Shot::Overview,
+	                .include = {k_FoundingScaffold - glm::vec2 {15.0f}, k_FoundingScaffold + glm::vec2 {15.0f}}},
+	    .objects = {{.type = ScaffoldInfo::Normal, .offset = k_FoundingScaffold, .scale = 0.7f, .clearsGround = true},
+	                {.type = MobileStaticInfo::Rock, .offset = k_FoundingScaffold + glm::vec2 {1.5f, 0.0f}},
+	                {.type = MobileObjectInfo::Ball, .offset = k_FoundingScaffold + glm::vec2 {0.0f, 1.5f}}},
+	    .commands = {{.kind = Kind::ScaffoldClearsGround, .delaySeconds = 1.0f, .object = 0}},
+	    .checks = {{.label = "the rock goes; the scaffold and the ball stay in the game",
+	                .quantity = checks::Quantity::ObjectsAlive,
+	                .afterTurns = 50,
+	                .atLeast = 2,
+	                .atMost = 2}},
 	});
 
 	all.push_back({

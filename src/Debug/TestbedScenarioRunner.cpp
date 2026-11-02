@@ -269,6 +269,7 @@
 #include "Magic/ScriptCast.h"
 #include "Magic/SpellRules.h"
 #include "Magic/TownBelief.h"
+#include "PlayerSlots.h"
 #include "Resources/ResourceManager.h"
 #include "Resources/ResourcesInterface.h"
 #include "ScriptHeaders/ScriptInterfaceLevels.h"
@@ -4006,10 +4007,26 @@ void Runner::Give(const Command& command)
 	}
 	if (command.kind == Kind::DestroyTemple)
 	{
-		const bool known = command.value < _temples.size();
+		// The scenario's temple, or the land's temple of the god of the slot when the scenario made no temples
+		std::optional<entt::entity> temple;
+		if (command.value < _temples.size())
+		{
+			temple = _temples.at(command.value);
+		}
+		else if (const auto god = player_slots::PlayerOfSlot(command.value); _temples.empty() && god.has_value())
+		{
+			Locator::entitiesRegistry::value().Each<const ecs::components::Temple>(
+			    [&temple, god](entt::entity entity, const ecs::components::Temple& each) {
+				    if (each.owner == *god)
+				    {
+					    temple = entity;
+				    }
+			    });
+		}
+		const bool known = temple.has_value();
 		if (known && Locator::templeDestructionSystem::has_value())
 		{
-			Locator::templeDestructionSystem::value().Start(_temples.at(command.value));
+			Locator::templeDestructionSystem::value().Start(*temple);
 		}
 		Log(fmt::format("{:.1f}s: temple {} {}", _seconds, command.value, known ? "starts being destroyed" : "isn't there"));
 		return;

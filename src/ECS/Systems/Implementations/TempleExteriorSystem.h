@@ -72,9 +72,9 @@ private:
 			std::optional<graphics::L3DMesh::PreparedSkin> prepared;
 		};
 		std::vector<Skin> skins;
-		/// A temple whose own mesh is not in the cache. The threads prepare its mesh from its blended shape after the
-		/// other temples (see FinishMorphs).
-		struct Load
+		/// A temple whose blend changes. It gets its mesh after the other temples, which the temples of the same blend
+		/// share (see FinishMorphs).
+		struct Change
 		{
 			entt::id_type id;
 			std::string name;
@@ -83,16 +83,21 @@ private:
 			float alignment;
 			PlayerNames owner;
 		};
-		std::vector<Load> loads;
+		std::vector<Change> changes;
 	};
 
 	/// Blends the temple's own mesh from the four about its size and alignment, and its texture between
 	/// the two looks about its alignment, of its player's set
 	void Morph(entt::entity entity, components::Mesh& mesh, const components::TempleExterior& exterior, PlayerNames owner,
 	           MadeBlends& made);
-	/// Makes the own meshes of the temples that Morph could not find in the cache, in the order of the temples. The threads
-	/// do the work on the processor at the same time. Then this thread makes the objects on the graphics device.
+	/// Gives the temples that Morph changed their meshes: one mesh for each blend, which the temples of that blend share.
+	/// A blend keeps a mesh that only its temples have, and changes it. For each other blend, the threads do the work of
+	/// a new mesh on the processor, and then this thread makes the objects on the graphics device.
 	void FinishMorphs(MadeBlends& made);
+	/// Takes the temple's own mesh, the mesh of its worship sites and its shape out of the cache
+	static void Unbind(entt::id_type id);
+	/// Gives the temple the mesh and the shape that the cache keeps for the other temple
+	static void Share(entt::id_type id, entt::id_type source);
 	/// Keeps the temple's blended shape in the cache, and gives its own mesh the texture between the two looks about its
 	/// alignment, of its player's set. The shape is a copy of the blend that the threads made, or nothing for a copy here.
 	static void Dress(entt::id_type id, const l3d::L3DFile& blended, std::shared_ptr<l3d::L3DFile> copy, float alignment,

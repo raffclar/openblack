@@ -148,6 +148,11 @@ L3DLoader::result_type L3DLoader::operator()(FromPreparedDynamicTag, const std::
 	return mesh;
 }
 
+L3DLoader::result_type L3DLoader::operator()(FromSharedTag, std::shared_ptr<graphics::L3DMesh> shared) const
+{
+	return shared;
+}
+
 L3DLoader::result_type L3DLoader::operator()(FromMadeTag, const std::string& debugName, const graphics::L3DMesh& skinSource,
                                              std::span<const std::vector<graphics::L3DSubMesh::MadePrimitive>> subMeshes) const
 {

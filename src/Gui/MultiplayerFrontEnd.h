@@ -26,6 +26,7 @@
 
 namespace openblack::ecs::systems
 {
+class ClanCreatureSystemInterface;
 class LobbyClientSystemInterface;
 class NetworkGameSystemInterface;
 } // namespace openblack::ecs::systems
@@ -71,6 +72,8 @@ public:
 		std::function<void(MultiplayerFrontEnd& frontEnd)> poll;
 		/// Keeps the lands of network games that the lobby gives (deviation 169). With no store, the room gets no land.
 		online::OnlineMapStoreInterface* maps {nullptr};
+		/// The clan creature: the game asks the lobby for it when the player uses a clan in the room
+		ecs::systems::ClanCreatureSystemInterface* clanCreature {nullptr};
 	};
 
 	struct Settings

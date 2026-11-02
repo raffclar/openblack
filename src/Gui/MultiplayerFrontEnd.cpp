@@ -15,6 +15,7 @@
 #include <LobbyApiJson.h>
 #include <spdlog/spdlog.h>
 
+#include "ECS/Systems/ClanCreatureSystemInterface.h"
 #include "ECS/Systems/LobbyClientSystemInterface.h"
 #include "ECS/Systems/NetworkGameSystemInterface.h"
 #include "Online/LanDiscoveryInterface.h"
@@ -790,13 +791,10 @@ void MultiplayerFrontEnd::UpdateRoom()
 	});
 	_shownClan.reset();
 	_shownLogo.reset();
-	KeepUsedClan(std::nullopt);
 	_myClans.clear();
-	// The player's own clan in the room, from the server's list
-	if (const auto* own = GetOwnSeat(); own != nullptr)
-	{
-		KeepUsedClan(own->clan);
-	}
+	// The player's own clan in the room, from the server's list, or no clan
+	const auto* own = GetOwnSeat();
+	KeepUsedClan(own != nullptr ? own->clan : std::nullopt);
 	const auto land = GetServerLand();
 	_shownLand = land;
 	_conditions = land.has_value() ? FindConditions(_settings.conditionTemplate, _maps.at(*land).file) : std::nullopt;
@@ -1050,6 +1048,11 @@ void MultiplayerFrontEnd::KeepUsedClan(std::optional<int64_t> clan)
 	if (_services.network != nullptr)
 	{
 		_services.network->SetPlaysForClan(clan.has_value());
+	}
+	// The game asks the lobby for the creature of the clan, which the god sends at the start
+	if (_services.clanCreature != nullptr)
+	{
+		_services.clanCreature->UseClan(clan);
 	}
 }
 
