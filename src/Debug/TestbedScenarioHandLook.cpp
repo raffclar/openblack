@@ -314,4 +314,32 @@ void testbed_scenarios::AddHandLookScenarios(std::vector<Scenario>& all)
 	                 {.kind = Kind::HandRelease, .delaySeconds = 0.1f, .velocity = {0.0f, 0.0f, 0.0f}},
 	                 {.kind = Kind::PointerTo, .delaySeconds = 2.0f, .point = {0.5f, 0.6f}}},
 	});
+
+	// The frames of the hand test whether a creature would take what the hand holds. The test measures the reach of the
+	// creature, but it does not change the synced world: a server with no hand pointer stays the same as the game.
+	CreatureSetup stillTiger {.species = CreatureType::Tiger, .offset = {0.0f, 0.0f}, .pauseMind = true};
+	all.push_back({
+	    .id = "hand.offer_reach_read_only",
+	    .name = "The hand offering a rock and a villager to a creature that does not think",
+	    .facet = Facet::Hand,
+	    .description = "The mind of the tiger stops, so no turn of the tiger measures its reach. The player's hand takes "
+	                   "a rock. The pointer moves onto the tiger for two seconds, then onto the land near the camera for "
+	                   "two seconds, and the hand puts the rock down. Then the hand takes a villager, and the pointer "
+	                   "moves onto the tiger and away in the same way.",
+	    .expected = "The hand offers the rock and the villager to the tiger, and the tiger takes neither. A server check of "
+	                "this scene finds the same world on the game and on the server at each turn.",
+	    .environment = {.dispenserGrid = false, .cursor = glm::vec2(0.5f, 0.8f)},
+	    .framing = {.shot = Shot::Placed, .eye = {0.0f, 12.0f, -24.0f}, .look = {0.0f, 5.0f, 0.0f}},
+	    .creatures = {stillTiger},
+	    .objects = {{.type = MobileStaticInfo::Rock, .offset = {15.0f, -25.0f}},
+	                {.type = VillagerInfo::CelticFarmerMale, .offset = {-15.0f, -25.0f}, .inScript = true}},
+	    .commands = {{.kind = Kind::HandTake, .delaySeconds = 1.0f, .object = 0},
+	                 {.kind = Kind::PointerOnCreature, .creature = 0, .delaySeconds = 1.0f},
+	                 {.kind = Kind::PointerTo, .delaySeconds = 2.0f, .point = {0.5f, 0.9f}},
+	                 {.kind = Kind::HandRelease, .delaySeconds = 2.0f, .velocity = {0.0f, 0.0f, 0.0f}},
+	                 {.kind = Kind::HandTake, .delaySeconds = 1.0f, .object = 1},
+	                 {.kind = Kind::PointerOnCreature, .creature = 0, .delaySeconds = 1.0f},
+	                 {.kind = Kind::PointerTo, .delaySeconds = 2.0f, .point = {0.5f, 0.9f}},
+	                 {.kind = Kind::HandRelease, .delaySeconds = 2.0f, .velocity = {0.0f, 0.0f, 0.0f}}},
+	});
 }

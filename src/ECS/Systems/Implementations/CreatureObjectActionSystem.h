@@ -28,6 +28,15 @@ struct CreatureObjectAction;
 namespace openblack::ecs::systems
 {
 
+/// Whether a test that measures the reach of a creature keeps the new measure on the creature
+enum class ReachKeep : uint8_t
+{
+	/// A turn keeps the new measure in the synced world
+	Keep,
+	/// A frame only reads: it uses the kept measure, or it makes a new measure and does not keep it
+	ReadOnly,
+};
+
 class CreatureObjectActionSystem final: public CreatureObjectActionSystemInterface
 {
 public:
@@ -85,7 +94,7 @@ public:
 	[[nodiscard]] std::optional<creature_object_actions::LiftFacts> LiftFactsOf(entt::entity creature,
 	                                                                            entt::entity object) const override
 	{
-		return PickUpFactsOf(creature, object).lift;
+		return PickUpFactsOf(creature, object, ReachKeep::ReadOnly).lift;
 	}
 	[[nodiscard]] bool CanDestroy(entt::entity target) const override;
 	[[nodiscard]] bool CanStompOn(entt::entity creature, entt::entity target) const override;
@@ -99,7 +108,8 @@ private:
 	/// What the thing's kind says about a creature picking it up
 	[[nodiscard]] creature_object_actions::KindFacts KindFactsOf(entt::entity object) const;
 	/// What the rules for a creature picking the thing up depend on
-	[[nodiscard]] creature_object_actions::PickUpFacts PickUpFactsOf(entt::entity creature, entt::entity object) const;
+	[[nodiscard]] creature_object_actions::PickUpFacts PickUpFactsOf(entt::entity creature, entt::entity object,
+	                                                                 ReachKeep keep) const;
 	/// Whether the creature may pick the thing up, with the kind facts of the thing already found
 	[[nodiscard]] bool CanPickUpKind(entt::entity creature, entt::entity object,
 	                                 const creature_object_actions::KindFacts& kind) const;
