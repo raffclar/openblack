@@ -158,8 +158,11 @@ private:
 		std::optional<glm::vec3> land;
 	};
 	[[nodiscard]] Under TappedUnder(const glm::vec3& rayOrigin, const glm::vec3& rayDirection) const;
-	/// A single or double tap of the Action button with the leash, acting on what is under the cursor
-	void ActOnTap(PlayerNames player, entt::entity creature, const Under& under, bool doubleTap);
+	/// A single or double tap of the Action button with the leash, acting on what is under the cursor. The result is
+	/// what the tap did with the leash.
+	creature_leash_orders::Tap ActOnTap(PlayerNames player, entt::entity creature, const Under& under, bool doubleTap);
+	/// A tap on the land that the leash did not take goes to the maze puzzles, as a command of the player
+	static void SendPuzzleTap(const Under& under);
 	/// Sends an order of the player of this computer, which the world does at the start of a later turn
 	static void SendOrder(const player_commands::LeashOrder& order);
 	/// The clock every order's ring throbs by, in milliseconds of game time

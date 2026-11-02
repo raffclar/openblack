@@ -48,8 +48,57 @@ template <size_t Count>
 	return things;
 }
 
-/// A puzzle game that a script made. Each kind has its own pieces; the beach temple puzzle and the tree puzzles have
-/// pieces now. The player cannot solve a kind that has none.
+/// An animal of a maze puzzle: the villager, the sheep or the lion. It has no needs, decides nothing and moves only
+/// when its puzzle tells it to.
+struct PuzzlePiece
+{
+	/// The puzzle that the animal belongs to
+	entt::entity puzzle {entt::null};
+};
+
+/// A totem of a puzzle: a building of no town that the scripts or a puzzle make. A script can set its height, up to its
+/// greatest height. The hand can tap it only when its greatest height is -1, as for the bells of the lion maze, and the
+/// tap sets its height to -1.
+struct PuzzleTotem
+{
+	/// The puzzle that the totem belongs to, none for a totem that a script made
+	entt::entity puzzle {entt::null};
+	/// The greatest height and the height
+	int32_t highest {100};
+	int32_t height {0};
+};
+
+/// The state of a maze puzzle: a Theseus maze or the lion maze
+struct MazeState
+{
+	/// The fences on the side of each cell towards the next cell along, and towards the next cell across, nine to a row
+	std::array<entt::entity, 81> alongFences {NoThings<81>()};
+	std::array<entt::entity, 81> acrossFences {NoThings<81>()};
+	/// The palm tree at each corner
+	std::array<entt::entity, 4> palms {NoThings<4>()};
+	/// The villager of a Theseus maze or the sheep of the lion maze, and the lion
+	entt::entity hero {entt::null};
+	entt::entity lion {entt::null};
+	/// The cells of the villager or the sheep, and of the lion
+	int32_t heroAcross {0};
+	int32_t heroAlong {0};
+	int32_t lionAcross {0};
+	int32_t lionAlong {0};
+	/// The angle that each animal turns to before its next move, and how far its move got: 0 to start, 1 on its way and
+	/// 2 there
+	uint16_t lionAngle {0};
+	uint16_t heroAngle {0};
+	int16_t lionStage {0};
+	int16_t heroStage {0};
+	/// The spot visual that marks the last tapped cell of a Theseus maze, 0 for none
+	uint32_t marker {0};
+	/// The bells of the lion maze, the bell that puts the puzzle back last. A bell is a puzzle totem with a height of -1
+	/// after a tap.
+	std::array<entt::entity, 5> bells {NoThings<5>()};
+};
+
+/// A puzzle game that a script made. Each kind has its own pieces; the beach temple puzzle, the tree puzzles and the
+/// mazes have pieces now. The player cannot solve a kind that has none.
 struct PuzzleGame
 {
 	script::PuzzleGameType type {script::PuzzleGameType::None};
@@ -82,8 +131,10 @@ struct PuzzleGame
 	/// The puff of mist over each spot and the bat for each spot, until the solution
 	std::array<entt::entity, 9> mists {NoThings<9>()};
 	std::array<entt::entity, 9> bats {NoThings<9>()};
-	/// The lantern at each corner of the tree puzzle
+	/// The lantern at each corner of the tree puzzle, or at the middle of each edge of a maze
 	std::array<entt::entity, 4> lanterns {NoThings<4>()};
+	/// The fences, the animals and the bells of a maze
+	MazeState maze {};
 };
 
 } // namespace openblack::ecs::components

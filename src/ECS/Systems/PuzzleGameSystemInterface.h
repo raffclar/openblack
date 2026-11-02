@@ -16,6 +16,7 @@
 #include <entt/entity/fwd.hpp>
 #include <glm/vec3.hpp>
 
+#include "3D/MapCoords.h"
 #include "ScriptHeaders/ScriptEnums.h"
 
 namespace openblack::ecs::systems
@@ -44,6 +45,12 @@ public:
 	/// A script deletes a puzzle game, or the scripts stop: the puzzle game stays, but its pieces go from the world.
 	/// False for a thing that is not a puzzle game.
 	virtual bool DeletePieces(entt::entity puzzle) = 0;
+	/// A player tapped the land at a place in this turn. The maze puzzles read the place in their turn, and then the
+	/// place goes.
+	virtual void TapPlace(const map_coords::MapCoords& place) = 0;
+	/// A player tapped a puzzle totem, such as a bell of the lion maze. A totem that the hand can tap takes the tap as a
+	/// height of -1, and each tap makes a sound. False for a thing that is not a puzzle totem.
+	virtual bool TapTotem(entt::entity totem) = 0;
 };
 
 } // namespace openblack::ecs::systems

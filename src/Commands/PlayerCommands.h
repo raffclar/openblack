@@ -368,6 +368,17 @@ struct DialogueClick
 	bool operator==(const DialogueClick& other) const = default;
 };
 
+/// The hand tapped the land with nothing to take and no leash order to give. At the turn, the maze puzzles take the
+/// tapped place for that turn only.
+struct PuzzleTap
+{
+	/// The tapped place in the fixed units of the map
+	int32_t placeX {0};
+	int32_t placeZ {0};
+
+	bool operator==(const PuzzleTap& other) const = default;
+};
+
 /// Tools: the creature of the player starts a fight with the nearest creature, or a fight that it is in stops. Only a
 /// game server with its test commands on lets this command through.
 struct CreatureFightCheat
@@ -540,7 +551,7 @@ using Action =
                  FightCharge, CreatureReaction, HandClick, SeedGesture, PlayerLeft, HandPick, PlayerJoined, MiracleRequest,
                  MiracleRepeat, HandCast, HandCastUnlock, LeashPick, HandShakeOff, GripDust, HelpReport, HelpQuery,
                  CreatureFightCheat, ViewReport, TempleLeashOff, GiveCallOff, CreatureTattoo, LeashLength, ChatSpeech,
-                 ChatTaunt, QuickSave, QuickLoad, MusicMood, IconChargeStop, DialogueClick>;
+                 ChatTaunt, QuickSave, QuickLoad, MusicMood, IconChargeStop, DialogueClick, PuzzleTap>;
 
 /// A command and the player that sent it
 struct Command
