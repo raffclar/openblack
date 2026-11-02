@@ -7,6 +7,8 @@
  * openblack is licensed under the GNU General Public License version 3.
  *******************************************************************************/
 
+#include <algorithm>
+#include <optional>
 #include <string>
 #include <vector>
 
@@ -106,7 +108,7 @@ namespace
 struct ChatFixture: public ::testing::Test
 {
 	GameFont font = test::LoadFont();
-	ChatControls chat {font};
+	ChatControls chat {font, nullptr};
 	rules::ShowFacts network {.connected = true, .singlePlayer = false, .inGame = true};
 	static constexpr glm::ivec2 k_OpenButton {790, 10};
 	/// The first row of the quick chat list
@@ -114,7 +116,12 @@ struct ChatFixture: public ::testing::Test
 
 	ChatFixture()
 	{
-		chat.SetTexts({u"AB", u"BA", u"W"}, u"A");
+		chat.SetTexts({.taunts = {u"AB", u"BA", u"W"},
+		               .players = u"A",
+		               .friends = u"F",
+		               .others = u"O",
+		               .makeFriends = u"Make",
+		               .makeNotFriends = u"Unmake"});
 		chat.SetPlayers({{.slot = PlayerNames::PLAYER_THREE, .name = u"B", .selected = false},
 		                 {.slot = PlayerNames::PLAYER_TWO, .name = u"A", .selected = false}});
 	}
@@ -220,6 +227,60 @@ TEST_F(ChatFixture, AtFirstALineGoesToAllOfThePlayers)
 	const auto recipients = chat.Recipients();
 	EXPECT_EQ(recipients, (std::vector<PlayerNames> {PlayerNames::PLAYER_TWO, PlayerNames::PLAYER_THREE}));
 	// The list is in the order of the god slots
-	ASSERT_EQ(chat.GetPeople().players.size(), 2);
-	EXPECT_EQ(chat.GetPeople().players[0].slot, PlayerNames::PLAYER_TWO);
+	ASSERT_EQ(chat.GetPeople().players.people.size(), 2);
+	EXPECT_EQ(chat.GetPeople().players.people[0].slot, PlayerNames::PLAYER_TWO);
+}
+
+namespace
+{
+/// The name of the friend button, when it shows
+std::optional<std::u16string> FriendButtonName(const std::vector<Dialog::NamedControl>& controls)
+{
+	const auto found = std::ranges::find_if(
+	    controls, [](const auto& control) { return control.name == u"Make" || control.name == u"Unmake"; });
+	return found != controls.end() ? std::optional(found->name) : std::nullopt;
+}
+
+/// The centre of the friend button, when it shows
+std::optional<glm::ivec2> FriendButtonCentre(const std::vector<Dialog::NamedControl>& controls)
+{
+	const auto found = std::ranges::find_if(
+	    controls, [](const auto& control) { return control.name == u"Make" || control.name == u"Unmake"; });
+	return found != controls.end() ? std::optional((found->rect.min + found->rect.max) / 2) : std::nullopt;
+}
+} // namespace
+
+TEST_F(ChatFixture, TheFriendButtonShowsOnlyWithTheFriendsOn)
+{
+	Update();
+	Click(k_OpenButton);
+	Update();
+	// Both players are selected at first, and neither is a friend
+	EXPECT_FALSE(FriendButtonName(chat.GetNamedControls()).has_value());
+	chat.SetFriendsOn(true);
+	Update();
+	EXPECT_EQ(FriendButtonName(chat.GetNamedControls()), u"Make");
+}
+
+TEST_F(ChatFixture, TheFriendButtonMakesTheSelectedPlayersFriends)
+{
+	chat.SetPlayers({{.slot = PlayerNames::PLAYER_THREE, .user = 30u, .name = u"B"},
+	                 {.slot = PlayerNames::PLAYER_TWO, .user = 20u, .name = u"A"}});
+	chat.SetFriends(std::vector<openblack::chat::people::FriendRecord> {{.user = 7, .name = u"Old"}});
+	chat.SetFriendsOn(true);
+	Update();
+	Click(k_OpenButton);
+	Update();
+	const auto centre = FriendButtonCentre(chat.GetNamedControls());
+	ASSERT_TRUE(centre.has_value());
+	Click(*centre);
+	const auto kept = chat.TakeChangedFriends();
+	ASSERT_TRUE(kept.has_value());
+	// Each new friend goes to the top: the second player in the list comes first
+	EXPECT_EQ(*kept, (std::vector<openblack::chat::people::FriendRecord> {
+	                     {.user = 30, .name = u"B"}, {.user = 20, .name = u"A"}, {.user = 7, .name = u"Old"}}));
+	EXPECT_FALSE(chat.TakeChangedFriends().has_value());
+	// The players stay selected, and now they are friends
+	Update();
+	EXPECT_EQ(FriendButtonName(chat.GetNamedControls()), u"Unmake");
 }

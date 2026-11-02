@@ -12,6 +12,7 @@
 #include <algorithm>
 #include <string>
 #include <utility>
+#include <vector>
 
 #include <SDL_keycode.h>
 #include <fmt/format.h>
@@ -92,6 +93,24 @@ void TestbedGameStage::OpenChat(std::u16string_view line)
 	auto& controls = Game::Instance()->GetInterface()->GetChatControls();
 	controls.Open();
 	controls.TextInput(std::u16string(line));
+}
+
+std::string TestbedGameStage::OpenChatWithFriends()
+{
+	auto& controls = Game::Instance()->GetInterface()->GetChatControls();
+	// Carol was seen now and is online. Dave was never seen and is not online. Eve is a person of the staff.
+	constexpr chat::people::UserId k_Carol = 301;
+	constexpr chat::people::UserId k_Dave = 302;
+	constexpr chat::people::UserId k_Eve = 9999999;
+	const std::vector<chat::people::FriendRecord> friends {{.user = k_Carol, .name = u"Carol"},
+	                                                       {.user = k_Dave, .name = u"Dave"}};
+	controls.SetFriendsOn(true);
+	controls.SetFriends(friends);
+	controls.AddOther(u"Eve", k_Eve);
+	const std::vector seen {k_Carol};
+	controls.UpdateOnline(seen, chat::people::k_OnlineClockStart + 1000);
+	controls.Open();
+	return "the chat opens with the friends Carol (online) and Dave, and Eve in the others";
 }
 
 std::string TestbedGameStage::OpenMultiplayerBox(size_t stage)

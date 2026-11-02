@@ -137,12 +137,25 @@ public:
 			return;
 		}
 		const auto& controls = game->GetInterface()->GetChatControls();
+		const auto& people = controls.GetPeople();
 		Json players = Json::array();
-		for (const auto& person : controls.GetPeople().players)
+		for (const auto& person : people.players.people)
 		{
 			players.push_back(
 			    {{"slot", static_cast<int>(person.slot)}, {"name", gui::ToUtf8(person.name)}, {"selected", person.selected}});
 		}
+		const auto others = [](const chat::people::Category& group) {
+			Json listed = Json::array();
+			for (const auto& person : group.people)
+			{
+				listed.push_back({{"user", person.user.has_value() ? Json(*person.user) : Json(nullptr)},
+				                  {"name", gui::ToUtf8(person.name)},
+				                  {"selected", person.selected},
+				                  {"friend", person.isFriend},
+				                  {"online", person.online}});
+			}
+			return listed;
+		};
 		Json recipients = Json::array();
 		for (const auto player : controls.Recipients())
 		{
@@ -152,9 +165,11 @@ public:
 		                      {"open", controls.IsOpen()},
 		                      {"quick_chat", controls.IsQuickChatOpen()},
 		                      {"line", gui::ToUtf8(controls.GetLine())},
-		                      {"expanded", controls.GetPeople().expanded},
-		                      {"messages_on", controls.GetPeople().messagesOn},
+		                      {"expanded", people.players.expanded},
+		                      {"messages_on", people.players.messagesOn},
 		                      {"players", std::move(players)},
+		                      {"friends", others(people.friends)},
+		                      {"others", others(people.others)},
 		                      {"recipients", std::move(recipients)}};
 	}
 

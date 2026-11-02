@@ -276,8 +276,8 @@ public:
 	{
 		callback({.value = DemoLogo(), .error = {}});
 	}
-	void GetPlayerRanking(int32_t, LobbyCallback<lobby_api::RankingPage>) override {}
-	void GetClanRanking(int32_t, LobbyCallback<lobby_api::RankingPage>) override {}
+	void GetPlayerRanking(lobby_api::RankingQuery, LobbyCallback<lobby_api::RankingPage>) override {}
+	void GetClanRanking(lobby_api::RankingQuery, LobbyCallback<lobby_api::RankingPage>) override {}
 	void GetPlayer(int64_t, LobbyCallback<lobby_api::PlayerDetails>) override {}
 	/// The lobby defines each line. These lines only show the look of the tab.
 	void GetPlayerDetailLines(int64_t, std::string, LobbyCallback<lobby_api::PlayerDetailLines> callback) override
@@ -547,7 +547,7 @@ public:
 	[[nodiscard]] bool InGame() const override { return _session.GetState() != online::NetworkSession::State::Ended; }
 	[[nodiscard]] const online::NetworkSession* Session() const override { return &_session; }
 	[[nodiscard]] std::optional<online::StartEvent> TakeStartEvent() override { return _session.TakeStartEvent(); }
-	void SendRoomChat(std::string text) override { _session.SendRoomChat(text); }
+	void SendRoomChat(std::string text, std::string to, bool team) override { _session.SendRoomChat(text, to, team); }
 	[[nodiscard]] std::vector<game_socket::RoomChat> TakeRoomChat() override { return _session.TakeRoomChat(); }
 
 private:
@@ -595,7 +595,7 @@ void Begin(MultiplayerFrontEnd& frontEnd, DemoServices& demo)
 		return;
 	}
 	frontEnd.Next();
-	const bool lan = stage == Stage::LanGameList || stage == Stage::LanRoomChat;
+	const bool lan = stage == Stage::LanGameList || stage == Stage::LanRoomChat || stage == Stage::LanRoomPrivateChat;
 	frontEnd.SetLobbyKind(lan ? LobbyKind::Lan : LobbyKind::Internet);
 	if (stage == Stage::FindGames)
 	{
@@ -608,7 +608,7 @@ void Begin(MultiplayerFrontEnd& frontEnd, DemoServices& demo)
 		demo.staged = true;
 		return;
 	}
-	if (stage == Stage::LanRoomChat)
+	if (stage == Stage::LanRoomChat || stage == Stage::LanRoomPrivateChat)
 	{
 		// The player joins the first room of the local network by the profile's name
 		frontEnd.SelectGame(0);
@@ -698,6 +698,14 @@ void Finish(MultiplayerFrontEnd& frontEnd, DemoServices& demo)
 	case Stage::LanRoomChat:
 		// The room's game server sends a line of the host
 		demo.sockets.ServerSends(game_socket::RoomChat {.from = "Ian", .text = "Hello from the office!"});
+		break;
+	case Stage::LanRoomPrivateChat:
+		// The player picks Ian and sends a private line. Ian sends a line to all, then a private line to the player.
+		frontEnd.ShowSeat(0);
+		frontEnd.SendChat(u"Only for you, Ian.");
+		demo.sockets.ServerSends(game_socket::RoomChat {.from = "Ian", .text = "Hello from the office!"});
+		demo.sockets.ServerSends(game_socket::RoomChat {
+		    .from = "Ian", .text = "This line is only for you.", .to = {}, .privateLine = true, .team = false});
 		break;
 	default:
 		break;
