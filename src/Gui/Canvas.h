@@ -75,6 +75,19 @@ public:
 	/// The depth by which what is drawn from now on is sorted in the sorted view. Draws of one depth stay in the order
 	/// they are drawn in. Back to 0 with each frame
 	void SetSortDepth(uint32_t depth) noexcept { _sortDepth = depth; }
+	/// A rectangle of the window in pixels, from its left top corner, outside which nothing shows
+	struct Clip
+	{
+		uint16_t x {0};
+		uint16_t y {0};
+		uint16_t width {0};
+		uint16_t height {0};
+
+		bool operator==(const Clip&) const = default;
+	};
+	/// What is drawn from now on shows only inside a rectangle, its corners in pixels from the canvas's origin. With no
+	/// rectangle it shows everywhere again. Back to no rectangle with each frame
+	void SetClip(std::optional<std::array<glm::vec2, 2>> corners) noexcept;
 	/// A rectangle of a texture, tinted by colour (red, green, blue and alpha from 0 to 1). Without a texture it is
 	/// filled with the colour. Corners whose minimum is beyond the maximum flip the texture.
 	void DrawQuad(glm::vec2 min, glm::vec2 max, glm::vec2 uvMin, glm::vec2 uvMax, glm::vec4 colour,
@@ -112,6 +125,7 @@ private:
 		uint32_t firstVertex;
 		uint32_t vertexCount;
 		uint32_t sortDepth;
+		std::optional<Clip> clip;
 	};
 
 	/// Starts a batch of a texture unless the last batch can take more of it
@@ -125,6 +139,7 @@ private:
 	std::optional<graphics::RenderPass> _sortedView;
 	uint32_t _sortDepth {0};
 	glm::vec2 _origin {0.0f, 0.0f};
+	std::optional<Clip> _clip;
 	std::vector<Vertex> _vertices;
 	std::vector<Batch> _batches;
 	std::unique_ptr<graphics::Texture2D> _white;

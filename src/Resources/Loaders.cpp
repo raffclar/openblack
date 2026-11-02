@@ -137,6 +137,17 @@ L3DLoader::result_type L3DLoader::operator()(FromDynamicFileTag, const std::stri
 	return mesh;
 }
 
+L3DLoader::result_type L3DLoader::operator()(FromPreparedDynamicTag, const std::string& debugName,
+                                             graphics::PreparedL3DMesh prepared) const
+{
+	auto mesh = std::make_shared<graphics::L3DMesh>(debugName, true, Uploads());
+	if (!mesh->Finish(std::move(prepared)))
+	{
+		throw std::runtime_error("Unable to load mesh");
+	}
+	return mesh;
+}
+
 L3DLoader::result_type L3DLoader::operator()(FromMadeTag, const std::string& debugName, const graphics::L3DMesh& skinSource,
                                              std::span<const std::vector<graphics::L3DSubMesh::MadePrimitive>> subMeshes) const
 {
@@ -162,6 +173,11 @@ L3DLoader::result_type L3DLoader::operator()(FromFileWithSkinsOfTag, const std::
 L3DFileLoader::result_type L3DFileLoader::operator()(FromFileTag, const l3d::L3DFile& file) const
 {
 	return std::make_shared<l3d::L3DFile>(file);
+}
+
+L3DFileLoader::result_type L3DFileLoader::operator()(FromCopyTag, std::shared_ptr<l3d::L3DFile> copy) const
+{
+	return copy;
 }
 
 L3DFileLoader::result_type L3DFileLoader::operator()(FromDiskTag, const std::filesystem::path& path) const

@@ -36,6 +36,7 @@
 #include "ECS/Components/LivingListPlace.h"
 #include "ECS/Components/Temple.h"
 #include "ECS/Components/Villager.h"
+#include "ECS/CreatureCarried.h"
 #include "ECS/Map.h"
 #include "ECS/RealWeatherLand.h"
 #include "ECS/Registry.h"
@@ -300,6 +301,8 @@ void PlayCreatureTurnStep(game_turn::Step step, entt::entity creature)
 		{
 			Locator::entitiesMap::value().Moved(creature);
 		}
+		// What it carries takes its place in the world, but not the place of its hand
+		ecs::creature_carried::FollowCarrier(registry, creature);
 		// It ages, grows, gets hungry, tired and thirsty, and heals while it sleeps
 		auto creaturePhysiology = profiler.BeginScoped(Profiler::Stage::CreaturePhysiologyUpdate);
 		Locator::creaturePhysiologySystem::value().CreatureTurn(creature);

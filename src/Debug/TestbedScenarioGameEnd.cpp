@@ -37,6 +37,9 @@ constexpr glm::vec2 k_SecondTemple {0.0f, 90.0f};
 constexpr glm::vec2 k_ThirdTemple {120.0f, 20.0f};
 constexpr glm::vec2 k_FourthTemple {-120.0f, 20.0f};
 
+// The notches of the mouse wheel that scroll the window of gods part of the way along the gods
+constexpr size_t k_ScrollNotches = 7;
+
 const Framing k_Overview {.shot = Shot::Overview, .include = {{-60.0f, -100.0f}, {160.0f, 130.0f}}, .distance = 1.0f};
 } // namespace
 
@@ -197,7 +200,7 @@ void testbed_scenarios::AddGameEndScenarios(std::vector<Scenario>& all)
 	    .expected = "The Game Statistics box shows as the game shows it for four players: Game Over as its first tab, "
 	                "Player Stats open, the two line graphs and the bars of Final Area Of Influence with one line and one "
 	                "bar for each of the four gods in its colour, and each row with one value or one part of the bar for "
-	                "each god. No arrows and no \"Players\" text show at the bottom right.",
+	                "each god. No arrows, no \"Players\" text and no scroll bar show.",
 	    .environment = {.dispenserGrid = false,
 	                    .players = {PlayerNames::PLAYER_TWO, PlayerNames::PLAYER_THREE, PlayerNames::PLAYER_FOUR},
 	                    .skirmish = true},
@@ -216,19 +219,19 @@ void testbed_scenarios::AddGameEndScenarios(std::vector<Scenario>& all)
 	    .facet = Facet::Multiplayer,
 	    .description = "The network map for 32 gods loads on this computer alone and plays as a network game. Two seconds "
 	                   "in, the end box asks the question to leave. One second after that, the Statistics tab of the end "
-	                   "box opens. Two seconds after that, and two seconds after that again, the window of gods moves a "
-	                   "page on. The map needs the game's Online Maps folder.",
-	    .expected = "The Game Statistics box shows the first 4 gods as the box shows 4 gods. At the bottom right, "
-	                "\"Players 1-4 of 32\" shows with a right arrow after it. Each move shows the next 4 gods in the "
-	                "rows, the bars and the line graphs, and the text reads \"Players 5-8 of 32\", then \"Players 9-12 of "
-	                "32\", with a left arrow before it. A click on an arrow moves the window a page. The right arrow goes "
-	                "at \"Players 29-32 of 32\" (deviation 195).",
+	                   "box opens. One second after that, the god columns scroll on by seven notches of the mouse wheel. "
+	                   "The map needs the game's Online Maps folder.",
+	    .expected = "The Game Statistics box opens with the first 4 gods, in the places of the box with 4 gods. A scroll "
+	                "bar shows under the god columns of the rows, and the list of rows stops above it. The scroll moves "
+	                "the values of the gods to the left by 140, two and a third columns: the view cuts the columns at its "
+	                "edges. The text reads \"Players 3-6 of 32\" between a left and a right arrow, and the totals, the "
+	                "bars and the line graphs show those 4 gods. The thumb of the scroll bar is an eighth of the bar. A drag "
+	                "of the thumb, the wheel over the columns and the arrows scroll the view (deviation 195).",
 	    .environment = {.land = Land::GodsRingMap, .clockRuns = false, .dispenserGrid = false, .networkGame = true},
 	    .framing = {.shot = Shot::Placed, .eye = {0.0f, 5500.0f, -2600.0f}, .look = {0.0f, 0.0f, -200.0f}},
 	    .commands = {{.kind = Kind::EndBox, .delaySeconds = 2.0f, .value = 0},
 	                 {.kind = Kind::EndBox, .delaySeconds = 1.0f, .value = 2},
-	                 {.kind = Kind::EndBox, .delaySeconds = 2.0f, .value = 4},
-	                 {.kind = Kind::EndBox, .delaySeconds = 2.0f, .value = 4}},
+	                 {.kind = Kind::EndBox, .delaySeconds = 1.0f, .value = 3 + k_ScrollNotches}},
 	});
 	all.push_back({
 	    .id = "game_end.conditions_32_gods",
@@ -236,18 +239,18 @@ void testbed_scenarios::AddGameEndScenarios(std::vector<Scenario>& all)
 	    .facet = Facet::Multiplayer,
 	    .description = "The network map for 32 gods loads on this computer alone and plays as a network game. Two seconds "
 	                   "in, the end box asks the question to leave. One second after that, the Multiplayer tab of the end "
-	                   "box opens. Two seconds after that, and two seconds after that again, the window of gods moves a "
-	                   "page on. The map needs the game's Online Maps folder.",
-	    .expected = "The box of the winning conditions shows the check boxes Player 1 to Player 4 under the graph, and "
-	                "\"Players 1-4 of 32\" with a right arrow on the same line at the right. Each move puts the next 4 gods "
-	                "on the check boxes (Player 5 to Player 8, then Player 9 to Player 12) and in the graph, each god "
-	                "ticked as the player left it. A click on a check box takes the line of its god out of the graph or "
-	                "puts it back (deviation 195).",
+	                   "box opens. One second after that, the check boxes scroll on by seven notches of the mouse wheel. The "
+	                   "map needs the game's Online Maps folder.",
+	    .expected = "The box of the winning conditions opens with the check boxes Player 1 to Player 4 under the graph. A "
+	                "scroll bar shows under the check boxes, and the list starts below it. The scroll moves the check boxes "
+	                "to the left by 140: Player 2 shows cut at the left edge of the view and Player 6 at the right edge. "
+	                "\"Players 2-5 of 32\" shows between the arrows, and the graph shows those 4 gods, each ticked as the "
+	                "player left it. A click on a check box takes the line of its god out of the graph or puts it back "
+	                "(deviation 195).",
 	    .environment = {.land = Land::GodsRingMap, .clockRuns = false, .dispenserGrid = false, .networkGame = true},
 	    .framing = {.shot = Shot::Placed, .eye = {0.0f, 5500.0f, -2600.0f}, .look = {0.0f, 0.0f, -200.0f}},
 	    .commands = {{.kind = Kind::EndBox, .delaySeconds = 2.0f, .value = 0},
 	                 {.kind = Kind::EndBox, .delaySeconds = 1.0f, .value = 1},
-	                 {.kind = Kind::EndBox, .delaySeconds = 2.0f, .value = 4},
-	                 {.kind = Kind::EndBox, .delaySeconds = 2.0f, .value = 4}},
+	                 {.kind = Kind::EndBox, .delaySeconds = 1.0f, .value = 3 + k_ScrollNotches}},
 	});
 }

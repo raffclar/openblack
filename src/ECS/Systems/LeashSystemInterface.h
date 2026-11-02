@@ -139,8 +139,9 @@ public:
 
 	/// A player presses a leash shortcut, which acts on their creature. Returns whether it did anything.
 	virtual bool PressKey(PlayerNames player, creature_leash::LeashKey key) = 0;
-	/// A player clicks a creature with the right button: their own creature gets the picked leash put on; any other
-	/// is refused. Returns whether the leash went on.
+	/// A player clicks a creature with the right button. The click does to their own creature what the leash key does:
+	/// it puts the picked leash on, unties a tied leash back to the hand, or takes the leash off. The checks refuse any
+	/// other creature. Returns whether the click did anything.
 	virtual bool TapCreature(PlayerNames player, entt::entity creature) = 0;
 	/// The player shakes the leash off, drawing a scribble with the empty hand (see GestureSystemInterface): a leash held
 	/// in the hand comes off; one tied to something stays. Returns whether it came off.

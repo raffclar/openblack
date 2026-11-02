@@ -55,6 +55,7 @@
 #include "ECS/Components/Villager.h"
 #include "ECS/Components/Workshop.h"
 #include "ECS/DiscipleWorkRules.h"
+#include "ECS/FixedKinds.h"
 #include "ECS/GameEndConditions.h"
 #include "ECS/GamePlayers.h"
 #include "ECS/Map.h"
@@ -617,7 +618,7 @@ bool Blocks(const Registry& registry, entt::entity thing, TownSystemInterface::C
 	}
 	if (filter == TownSystemInterface::ClearAreaFilter::AnyFixed)
 	{
-		return registry.AllOf<Fixed>(thing);
+		return fixed_kinds::IsFixedKind(registry, thing);
 	}
 	// Of the things that stay put, all but trees
 	return registry.AllOf<Fixed>(thing) && !registry.AllOf<Tree>(thing);

@@ -81,6 +81,11 @@ public:
 		}
 	}
 	virtual void Wheel(int /*steps*/) {}
+	/// The horizontal wheel turned some notches over the control, to the right with a positive count
+	virtual void WheelAcross(int /*steps*/) {}
+	/// Whether the control takes the mouse wheel at a point. A control that takes the wheel but not the button can lie
+	/// over other controls.
+	[[nodiscard]] virtual bool WheelHitTest(glm::ivec2 point) const { return HitTest(point); }
 	/// Typing while the control has the focus, true when it took it
 	virtual bool TextInput(std::u16string_view /*text*/) { return false; }
 	virtual bool KeyDown(int /*key*/) { return false; }
@@ -90,6 +95,8 @@ public:
 	DialogRect rect;
 	bool visible {true};
 	std::function<void()> onClick;
+	/// A rectangle outside which the control does not show and does not take the mouse; none for the whole dialog
+	std::optional<DialogRect> clip;
 };
 
 /// Static text with a shadow, shrinking to fit

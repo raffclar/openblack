@@ -11,7 +11,9 @@
 
 #include "Creature/CreatureObjectActions.h"
 #include "ECS/Components/CreatureObjectAction.h"
+#include "ECS/Components/Transform.h"
 #include "ECS/Registry.h"
+#include "ECS/ThingMapPlace.h"
 
 using namespace openblack;
 using namespace openblack::ecs;
@@ -54,4 +56,21 @@ std::optional<entt::entity> creature_carried::CarrierOf(const Registry& registry
 bool creature_carried::Carries(const Registry& registry, entt::entity creature, entt::entity thing)
 {
 	return CarriedBy(registry, creature) == thing;
+}
+
+void creature_carried::FollowCarrier(Registry& registry, entt::entity creature)
+{
+	const auto thing = CarriedBy(registry, creature);
+	if (!thing.has_value())
+	{
+		return;
+	}
+	const auto* carrier = registry.TryGet<const Transform>(creature);
+	auto* at = registry.TryGet<Transform>(*thing);
+	if (carrier == nullptr || at == nullptr)
+	{
+		return;
+	}
+	at->position = carrier->position;
+	thing_map_place::Keep(registry, *thing, thing_map_place::Of(registry, creature));
 }

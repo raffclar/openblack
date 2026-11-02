@@ -150,14 +150,17 @@ DialogRect Dialog::GetTabRect(size_t index)
 Control* Dialog::HitTest(glm::ivec2 point) const
 {
 	// The control the mouse button is held down on keeps the pointer, as SetupPicture's ring over its neighbours
-	if (_pressed != nullptr && _pressed->HitTest(point))
+	const auto takes = [point](const Control& control) {
+		return (!control.clip.has_value() || control.clip->Contains(point)) && control.HitTest(point);
+	};
+	if (_pressed != nullptr && takes(*_pressed))
 	{
 		return _pressed;
 	}
 	// The last drawn is on top
 	for (auto it = _controls.rbegin(); it != _controls.rend(); ++it)
 	{
-		if ((*it)->IsInteractive() && (*it)->HitTest(point))
+		if ((*it)->IsInteractive() && takes(**it))
 		{
 			return it->get();
 		}
@@ -245,11 +248,31 @@ bool Dialog::IsPointerOverControl() const
 	return HitTest(_pointer) != nullptr;
 }
 
-void Dialog::Wheel(glm::ivec2 point, int steps)
+void Dialog::Wheel(glm::ivec2 point, int steps, int across)
 {
-	if (auto* control = HitTest(point))
+	const auto takes = [point](const Control& control) {
+		return (!control.clip.has_value() || control.clip->Contains(point)) && control.WheelHitTest(point);
+	};
+	// As for the mouse button, the control that the button is held down on keeps the pointer
+	Control* target = _pressed != nullptr && takes(*_pressed) ? _pressed : nullptr;
+	for (auto it = _controls.rbegin(); target == nullptr && it != _controls.rend(); ++it)
 	{
-		control->Wheel(steps);
+		if ((*it)->IsInteractive() && takes(**it))
+		{
+			target = it->get();
+		}
+	}
+	if (target == nullptr)
+	{
+		return;
+	}
+	if (steps != 0)
+	{
+		target->Wheel(steps);
+	}
+	if (across != 0)
+	{
+		target->WheelAcross(across);
 	}
 }
 
@@ -376,7 +399,15 @@ void Dialog::Draw(const DialogPainter& painter, bool active) const
 				continue;
 			}
 			const auto* c = control.get();
+			if (control->clip.has_value())
+			{
+				painter.SetClip(control->clip);
+			}
 			control->Draw(painter, active && _hovered == c, active && _focused == c, active && _pressed == c);
+			if (control->clip.has_value())
+			{
+				painter.SetClip(std::nullopt);
+			}
 			painter.SetAlpha(alpha);
 		}
 	}

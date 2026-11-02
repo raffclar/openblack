@@ -1224,7 +1224,7 @@ GameMenu::Action GameMenu::MouseUp(glm::ivec2 point)
 	return std::exchange(_action, Action::None);
 }
 
-void GameMenu::Wheel(glm::ivec2 point, int steps)
+void GameMenu::Wheel(glm::ivec2 point, int steps, int across)
 {
 	if (IsCapturing())
 	{
@@ -1233,7 +1233,7 @@ void GameMenu::Wheel(glm::ivec2 point, int steps)
 	}
 	if (_open && !_question)
 	{
-		CurrentDialog().Wheel(point, steps);
+		CurrentDialog().Wheel(point, steps, across);
 	}
 }
 

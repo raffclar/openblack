@@ -114,4 +114,9 @@ TEST(ConditionsBox, WithMoreThanFourGodsTheCheckBoxesFollowTheWindow)
 	ticked.at(0) = false;
 	ticked.at(7) = false;
 	EXPECT_EQ(ShownGods(last, ticked), (std::vector<size_t> {6, 8, 9}));
+	// A check box that the view shows has the label of its god, from the god's slot
+	EXPECT_EQ(GodLabel(figures, 0), u"Player 1");
+	EXPECT_EQ(GodLabel(figures, 7), u"Player 8");
+	EXPECT_EQ(GodLabel(figures, 9), u"Player 10");
+	EXPECT_EQ(GodLabel(figures, 12), u"Player 13");
 }

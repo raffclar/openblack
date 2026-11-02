@@ -15,6 +15,7 @@
 #include <optional>
 
 #include "ECS/Components/Scaffold.h"
+#include "Sound/SoundRequestInterface.h"
 
 /// How the phantom building of a scaffold looks in each frame: in the hand of the local player, the phantom grows,
 /// becomes small and turns. On a building site, the phantom of the building fades as the building grows, and the
@@ -44,6 +45,9 @@ inline constexpr int32_t k_GrowPitch = 110;
 inline constexpr int32_t k_GrowPitchStep = 3;
 /// The pitch of the sound for a building with no abode number
 inline constexpr int32_t k_PlainPitch = 100;
+/// The samples of the sounds of the phantom in the bank of the game's sounds
+inline constexpr uint32_t k_ShrinkSample = 50;
+inline constexpr uint32_t k_GrowSample = 51;
 
 /// The sound that a frame starts for the phantom in the hand
 enum class GhostSound : uint8_t
@@ -84,6 +88,14 @@ struct HeldLook
 
 /// The pitch in percent of the sound when a phantom of a building with an abode number grows
 [[nodiscard]] int32_t GrowPitchPercent(int32_t abodeNumber);
+
+/// The sample in the bank of the game's sounds that a phantom plays for this sound, or none
+[[nodiscard]] std::optional<uint32_t> SampleOf(GhostSound sound);
+
+/// How the frame plays the sound of the phantom. The sound has no owner and no place. The sound of a phantom that
+/// becomes small does not start again while it plays. The sound of a phantom that grows starts again, with the pitch of
+/// the abode number `abodeNumber`.
+[[nodiscard]] audio::SoundEffectOptions SoundOptionsOf(GhostSound sound, int32_t abodeNumber);
 
 /// The alpha of the phantom on a site whose building has the built part `built`, 0 to 1
 [[nodiscard]] uint8_t SiteAlpha(float built);

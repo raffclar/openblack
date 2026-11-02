@@ -11,6 +11,8 @@
 
 #include <algorithm>
 
+#include <PackFile.h>
+
 namespace openblack::ecs
 {
 
@@ -63,6 +65,29 @@ scaffold_ghost::HeldLook scaffold_ghost::Held(const components::ScaffoldPhantom&
 int32_t scaffold_ghost::GrowPitchPercent(int32_t abodeNumber)
 {
 	return abodeNumber < 0 ? k_PlainPitch : k_GrowPitch - (k_GrowPitchStep * abodeNumber);
+}
+
+std::optional<uint32_t> scaffold_ghost::SampleOf(GhostSound sound)
+{
+	switch (sound)
+	{
+	case GhostSound::Shrinks:
+		return k_ShrinkSample;
+	case GhostSound::Grows:
+		return k_GrowSample;
+	case GhostSound::None:
+		break;
+	}
+	return std::nullopt;
+}
+
+audio::SoundEffectOptions scaffold_ghost::SoundOptionsOf(GhostSound sound, int32_t abodeNumber)
+{
+	if (sound == GhostSound::Grows)
+	{
+		return {.pitchPercent = static_cast<uint32_t>(GrowPitchPercent(abodeNumber))};
+	}
+	return {.voicePlayType = pack::AudioBankLoop::Once};
 }
 
 uint8_t scaffold_ghost::SiteAlpha(float built)

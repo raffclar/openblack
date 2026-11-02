@@ -78,3 +78,8 @@ KeyCommand creature_leash::CommandFor(LeashKey key, const KeyState& state)
 	}
 	return {};
 }
+
+KeyCommand creature_leash::CommandForClick(const KeyState& state)
+{
+	return CommandFor(LeashKey::Leash, state);
+}

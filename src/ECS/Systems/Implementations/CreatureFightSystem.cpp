@@ -120,6 +120,7 @@
 #include "ECS/Systems/MagicSystemInterface.h"
 #include "ECS/Systems/PickingSystemInterface.h"
 #include "ECS/Systems/PlayerCommandSystemInterface.h"
+#include "ECS/Systems/PlayerSystemInterface.h"
 #include "ECS/Systems/ReactionSystemInterface.h"
 #include "ECS/Systems/TimeSystemInterface.h"
 #include "ECS/ThingCircles.h"
@@ -464,10 +465,14 @@ PlayerNames OwnPlayer()
 	return input::LocalPlayer(Locator::handSystem::has_value() ? &Locator::handSystem::value() : nullptr);
 }
 
-/// Whether a human god plays the player: the player has hands. Each computer has the same hands, thus the turns can
-/// read this.
+/// Whether a human god plays the player: the player has hands and no computer mind plays it. A computer god has hands
+/// too. Each computer has the same hands and minds, thus the turns can read this.
 bool IsHumanGod(PlayerNames player)
 {
+	if (Locator::playerSystem::has_value() && Locator::playerSystem::value().IsComputerPlayer(player))
+	{
+		return false;
+	}
 	if (!Locator::handSystem::has_value())
 	{
 		return player == PlayerNames::PLAYER_ONE;

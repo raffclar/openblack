@@ -121,6 +121,16 @@ glm::vec2 DialogPainter::ToScreen(glm::vec2 dialog) const
 	return dialog * _scale + _offset;
 }
 
+void DialogPainter::SetClip(const std::optional<DialogRect>& rect) const
+{
+	if (!rect.has_value())
+	{
+		_canvas.SetClip(std::nullopt);
+		return;
+	}
+	_canvas.SetClip(std::array {ToScreen(glm::vec2(rect->min)), ToScreen(glm::vec2(rect->max))});
+}
+
 void DialogPainter::DrawBox(const DialogRect& rect, glm::vec2 uvMin, glm::vec2 uvMax, glm::vec3 tint) const
 {
 	_canvas.DrawQuad(ToScreen(rect.min), ToScreen(rect.max), uvMin, uvMax, glm::vec4(tint, _alpha), &_atlas);

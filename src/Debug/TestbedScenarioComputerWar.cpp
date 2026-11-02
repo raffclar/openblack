@@ -193,6 +193,23 @@ void testbed_scenarios::AddComputerGodWarScenarios(std::vector<Scenario>& all)
 	                         .second = CreatureThing(PlayerNames::PLAYER_TWO)}},
 	});
 	all.push_back({
+	    .id = "mind.computer_god_chooses_creature_fight",
+	    .name = "A computer god that chooses to send its creature at a creature in its influence",
+	    .facet = Facet::Mind,
+	    .description = "The land of the scenario with the miracle at the town. The tiger of player two stands near the "
+	                   "temple, and the cow of player one stands in the town of player two, in the influence of player two. "
+	                   "No tool gives the god an action: the god chooses by its own mind, as the computer gods do on the "
+	                   "second land when the player's creature comes into their influence.",
+	    .expected = "Within a minute the god chooses to send its tiger at the cow. The hand puts the evil leash on the "
+	                "tiger and ties the leash to the cow. Soon the anger of the tiger makes it fight the cow. From the "
+	                "first move of the duel, the computer chooses the moves of the tiger, because a computer god plays "
+	                "player two.",
+	    .framing = BothTowns(),
+	    .creatures = {CreatureOf("player two's", CreatureType::Tiger, PlayerNames::PLAYER_TWO, {-30.0f, -60.0f}),
+	                  CreatureOf("player one's", CreatureType::Cow, PlayerNames::PLAYER_ONE, {-20.0f, 45.0f})},
+	    .landScript = k_WarScript,
+	});
+	all.push_back({
 	    .id = "mind.computer_god_throw_rock_at_creature",
 	    .name = "A computer god that throws a rock at the creature of another player",
 	    .facet = Facet::Mind,

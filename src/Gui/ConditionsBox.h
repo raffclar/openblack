@@ -12,6 +12,7 @@
 #include <array>
 #include <functional>
 #include <memory>
+#include <optional>
 #include <string>
 #include <vector>
 
@@ -39,8 +40,8 @@ class LineGraph;
 /// this computer (see conditions_box). The check boxes show only for the gods that play. A click on a check box shows
 /// or hides the god in the graph and in the list.
 ///
-/// A network game of more than 4 gods shows every god: the window of gods (GodWindow) on the line of the check boxes
-/// picks the 4 gods of the check boxes (deviation 195).
+/// A network game of more than 4 gods shows every god: the check boxes scroll along the gods under the window of gods
+/// (GodWindow). The graph and the list show the ticked gods among the 4 gods of the window (deviation 195).
 ///
 /// The figures are taken as the box opens and stay as they were while it is open.
 class ConditionsBox
@@ -67,7 +68,7 @@ public:
 	static constexpr DialogRect k_Box = TabbedBox({780, 500});
 
 private:
-	/// The check boxes show the gods of the window, ticked as the player left them
+	/// The check boxes show the gods of the view, ticked as the player left them
 	void ShowCheckBoxes();
 	/// The graph shows the score history of each god whose check box is ticked
 	void FillGraph();
@@ -82,9 +83,15 @@ private:
 	std::unique_ptr<Dialog> _dialog;
 	statistics_box::LineGraph* _graph {nullptr};
 	List* _list {nullptr};
-	std::array<CheckBox*, conditions_box::k_Gods> _checkBoxes {};
+	/// The check boxes: one for each of the first four players, and one more for the window of gods, which can show
+	/// parts of 5 god columns
+	static constexpr size_t k_CheckBoxes = conditions_box::k_Gods + 1;
+	std::array<CheckBox*, k_CheckBoxes> _checkBoxes {};
 	std::unique_ptr<GodWindow> _window;
+	/// The 4 gods of the window, which the graph and the list show when they are ticked
 	conditions_box::CheckBoxGods _checkBoxGods {};
+	/// The god of each check box
+	std::array<std::optional<size_t>, k_CheckBoxes> _boxGods {};
 	std::vector<bool> _ticked;
 	conditions_box::Figures _figures;
 };

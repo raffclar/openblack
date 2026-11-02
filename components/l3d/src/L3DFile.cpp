@@ -1259,6 +1259,11 @@ void L3DFile::AddIndices(const std::vector<uint16_t>& indices) noexcept
 	_indexSpans.emplace_back(&_indices[static_cast<uint32_t>(size)], static_cast<uint32_t>(indices.size()));
 }
 
+void L3DFile::AddSkin(const L3DTexture& skin) noexcept
+{
+	_skins.push_back(skin);
+}
+
 void L3DFile::AddBones(const std::vector<L3DBone>& bones) noexcept
 {
 	auto size = _boneSpans.size();
