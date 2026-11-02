@@ -1860,8 +1860,9 @@ TEST_F(LockstepTest, OnTheLocalNetworkAPrivateRoomChatLineGoesOnlyToItsPlayer)
 
 	// A private line goes only to the named player, also to an observer and to the sender self. A team line keeps its
 	// mark. A name that is not in the room gets no line.
-	alice.session.SendRoomChat("Hi Carol", "Carol");
 	bob.session.SendRoomChat("Our team", "Alice", true);
+	Frames({&alice, &bob, &carol}, 3);
+	alice.session.SendRoomChat("Hi Carol", "Carol");
 	alice.session.SendRoomChat("Note to self", "Alice");
 	alice.session.SendRoomChat("Anyone?", "Zed");
 	Frames({&alice, &bob, &carol}, 3);

@@ -1231,7 +1231,7 @@ TEST(MultiplayerRules, HalfwayToWhiteRemovesTheFraction)
 {
 	EXPECT_EQ(HalfwayToWhite(0xFFFF0000u), 0xFFFF7F7Fu);
 	EXPECT_EQ(HalfwayToWhite(0x00808080u), 0xFFBFBFBFu);
-	EXPECT_EQ(HalfwayToWhite(0xFF010203u), 0xFF808181u);
+	EXPECT_EQ(HalfwayToWhite(0xFF010203u), 0xFF808081u);
 	EXPECT_EQ(HalfwayToWhite(0xFFFFFFFFu), 0xFFFFFFFFu);
 }
 
