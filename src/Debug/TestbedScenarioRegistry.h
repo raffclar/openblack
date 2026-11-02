@@ -185,6 +185,8 @@ struct Environment
 	bool drawFootpaths {false};
 	/// Push scrolling is on, and works in the testbed's window as in full screen
 	bool pushScrolling {false};
+	/// The switch of the Soccer Add-On is on while the scenario runs, so that the towns play football
+	bool football {false};
 	/// The symbol that the world shows for the first player in place of the symbol of the player's profile
 	std::optional<uint32_t> profileSymbol;
 	/// The sheet of the players' symbols is made again after the lines of the land's script, as at the start of a land.
@@ -1167,6 +1169,9 @@ struct Command
 		/// The miracle that is locked on in the player's hand closes down. Then the hand lets go of it in the same step,
 		/// as when the miracle stops just before the let go. Needs no creature.
 		CloseHeldMiracle,
+		/// The scenario's villager (object) comes to the football pitch of its town, as a villager that relaxes and
+		/// chooses football. Needs no creature.
+		JoinFootball,
 	};
 	Kind kind {Kind::Stop};
 	/// Which creature, by its place in the scenario's creatures
@@ -1572,6 +1577,7 @@ void AddHandLookScenarios(std::vector<Scenario>& all);
 /// The Norse gate of the creatures' glade and the gate stone plinth: opening, closing and laying the stones
 void AddGateScenarios(std::vector<Scenario>& all);
 void AddKnockScenarios(std::vector<Scenario>& all);
+void AddFootballScenarios(std::vector<Scenario>& all);
 /// Villagers walking side by side, each at the speed its life, load, town and state give
 void AddVillagerSpeedScenarios(std::vector<Scenario>& all);
 void AddDiscipleScenarios(std::vector<Scenario>& all);

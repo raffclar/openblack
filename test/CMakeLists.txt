@@ -464,6 +464,9 @@ openblack_setup_and_add_test(
   test_magic_shield_forest test_magic_shield_forest.cpp
 )
 openblack_setup_and_add_test(test_reactions test_reactions.cpp)
+if(MSVC)
+  target_compile_options(test_reactions PRIVATE /bigobj)
+endif()
 openblack_setup_and_add_test(test_map_production test_map_production.cpp)
 openblack_setup_and_add_test(test_magic_heal test_magic_heal.cpp)
 openblack_setup_and_add_test(test_lightning_maths test_lightning_maths.cpp)
@@ -2322,3 +2325,4 @@ openblack_setup_and_add_test(
 openblack_setup_and_add_test(test_game_font_glyphs gui/test_game_font_glyphs.cpp)
 openblack_setup_and_add_test(test_designed_waterfall test_designed_waterfall.cpp)
 openblack_setup_and_add_test(test_leaver_hand test_leaver_hand.cpp)
+openblack_setup_and_add_test(test_football_rules test_football_rules.cpp)

@@ -1566,6 +1566,12 @@
   "query": "living.walk_paths"
  },
  {
+  "description": "The football of the Soccer Add-On: whether the game plays it, and each pitch's match state, score, ball, referee, teams, crowd and wave",
+  "kind": "object",
+  "parameters": [],
+  "query": "living.football"
+ },
+ {
   "description": "The dances: what they are danced for, whether dancing, their speed and clock, and each group's shape, move and dancers",
   "kind": "list",
   "parameters": [],

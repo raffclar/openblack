@@ -14702,6 +14702,7 @@ std::vector<Scenario> Build()
 	AddTempleVillagerScenarios(all);
 	AddFishScenarios(all);
 	AddKnockScenarios(all);
+	AddFootballScenarios(all);
 	AddVillagerSpeedScenarios(all);
 	AddDiscipleScenarios(all);
 	AddVillagerLabelScenarios(all);
@@ -14850,6 +14851,9 @@ std::string_view CommandProblem(const Command& command, std::span<const ObjectSe
 		return object != nullptr && !std::holds_alternative<FeatureInfo>(object->type) ? "" : "knocks down no thing or tree";
 	case Kind::TieLeash:
 		return object != nullptr ? "" : "ties the leash to nothing";
+	case Kind::JoinFootball:
+		return object != nullptr && std::holds_alternative<VillagerInfo>(object->type) ? ""
+		                                                                               : "sends no villager to the football";
 	case Kind::Examine:
 		return command.value < creature_object_actions::k_KeepAnimationCount ? "" : "no such way of looking it over";
 	case Kind::HandStroke:
@@ -14908,7 +14912,8 @@ bool testbed_scenarios::NeedsNoCreature(Command::Kind kind)
 	       kind == Kind::TattooEditorAsNetworkGame || kind == Kind::ShowDemoPing || kind == Kind::AddIncomingMessage ||
 	       kind == Kind::Chat || kind == Kind::ComputerPersonality || kind == Kind::ComputerUntaughtSends ||
 	       kind == Kind::SkirmishBox || kind == Kind::LookAtSaveGamePicture || kind == Kind::HandCastOnDispenser ||
-	       kind == Kind::HandCastOnCreature || kind == Kind::CloseHeldMiracle || IsPointerCommand(kind);
+	       kind == Kind::HandCastOnCreature || kind == Kind::CloseHeldMiracle || kind == Kind::JoinFootball ||
+	       IsPointerCommand(kind);
 }
 
 std::string_view testbed_scenarios::Name(Facet facet)
@@ -14936,7 +14941,7 @@ std::string_view testbed_scenarios::Name(Shot shot)
 
 std::string_view testbed_scenarios::Name(Command::Kind kind)
 {
-	constexpr std::array<std::string_view, 215> k_Names {
+	constexpr std::array<std::string_view, 216> k_Names {
 	    "walk to",
 	    "run to",
 	    "follow",
@@ -15152,6 +15157,7 @@ std::string_view testbed_scenarios::Name(Command::Kind kind)
 	    "cast the held miracle on a dispenser",
 	    "cast the held miracle on a creature",
 	    "close the held miracle and let go",
+	    "join the football of the town",
 	};
 	return k_Names.at(static_cast<size_t>(kind));
 }
