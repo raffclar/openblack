@@ -2322,3 +2322,6 @@ openblack_setup_and_add_test(
 openblack_setup_and_add_test(test_game_font_glyphs gui/test_game_font_glyphs.cpp)
 openblack_setup_and_add_test(test_designed_waterfall test_designed_waterfall.cpp)
 openblack_setup_and_add_test(test_leaver_hand test_leaver_hand.cpp)
+openblack_setup_and_add_test(
+  test_creature_environment_map test_creature_environment_map.cpp
+)

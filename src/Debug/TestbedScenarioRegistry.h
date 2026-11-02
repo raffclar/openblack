@@ -315,6 +315,8 @@ struct CreatureSetup
 	std::string_view mindFile;
 	/// The skills it knows as it starts, as a script teaches them
 	std::vector<CreatureActionKnownAbout> skills;
+	/// The environment map value that a mind file gives its body; not 0 draws the body with the environment map
+	uint32_t environmentMap {0};
 };
 
 /// Something put on the land for the creatures: an object, a tree, a feature such as a pillar of rock, a villager, a pot

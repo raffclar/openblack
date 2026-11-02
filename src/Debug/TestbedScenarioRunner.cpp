@@ -2066,6 +2066,14 @@ void Runner::PlaceCreatures(const Scenario& scenario, glm::vec2 middle)
 		{
 			LoadMindFile(entity, setup.mindFile);
 		}
+		// The value of a mind file, as the body takes it when it loads one
+		if (setup.environmentMap != 0)
+		{
+			if (auto* creature = registry.TryGet<ecs::components::Creature>(entity))
+			{
+				creature->environmentMap = setup.environmentMap;
+			}
+		}
 		if (Locator::creatureMindSystem::has_value())
 		{
 			for (const auto skill : setup.skills)

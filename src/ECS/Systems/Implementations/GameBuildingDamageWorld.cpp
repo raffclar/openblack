@@ -21,6 +21,7 @@
 #include "3D/L3DSubMesh.h"
 #include "3D/LandIslandInterface.h"
 #include "Common/GameRandom.h"
+#include "ECS/Archetypes/Utils.h"
 #include "ECS/Registry.h"
 #include "ECS/SnowDust.h"
 #include "ECS/Systems/CreatureMindSystemInterface.h"
@@ -263,6 +264,11 @@ void GameBuildingDamageWorld::ApplyEffect(entt::entity object, const magic::Effe
 	{
 		Locator::magicSystem::value().ApplyEffectToObject(object, values, source);
 	}
+}
+
+void GameBuildingDamageWorld::PieceMade(entt::entity /*piece*/)
+{
+	archetypes::TakeThingMadePlace();
 }
 
 void GameBuildingDamageWorld::PlayerDid(size_t deed, glm::vec3 point, entt::entity object, PlayerNames player)
