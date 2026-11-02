@@ -15,6 +15,7 @@
 #include <vector>
 
 #include <glm/geometric.hpp>
+#include <glm/mat3x3.hpp>
 #include <glm/mat4x4.hpp>
 #include <gtest/gtest.h>
 
@@ -436,4 +437,38 @@ TEST(BuildingSiteRules, JoiningAndLeavingWorkers)
 	EXPECT_TRUE(LeavesWorkers(false, true));
 	EXPECT_FALSE(LeavesWorkers(false, false));
 	EXPECT_FALSE(LeavesWorkers(true, true));
+}
+
+TEST(BuildingSiteRules, EveryThingWithTheFixedMarkKeepsOnePileBeyondIt)
+{
+	// A feature, flowers, an animated static, a rock, a field, a building of the abodes and an altar: each has the mark
+	EXPECT_EQ(PilesOf({.fixedKind = true}), SitePiles::Beyond);
+	EXPECT_EQ(PilesOf({.wonder = true, .fixedKind = true}), SitePiles::Wonder);
+	// A thing with no mark keeps no pile
+	EXPECT_EQ(PilesOf({}), SitePiles::None);
+	// The workshop, the worship site and the temple keep their own piles
+	EXPECT_EQ(PilesOf({.workshop = true, .fixedKind = true}), SitePiles::Workshop);
+	EXPECT_EQ(PilesOf({.worshipSite = true, .fixedKind = true}), SitePiles::WorshipSite);
+	EXPECT_EQ(PilesOf({.temple = true, .fixedKind = true}), SitePiles::Temple);
+	EXPECT_EQ(PilesOf({.workshop = true}), SitePiles::Workshop);
+}
+
+TEST(BuildingSiteRules, AWondersPileIsNineAcrossAndFiftyBack)
+{
+	const auto still = WonderPilePlace({100.0f, 5.0f, 200.0f}, glm::mat3(1.0f), glm::vec3(1.0f));
+	EXPECT_EQ(still.x, 109.0f);
+	EXPECT_EQ(still.y, 150.0f);
+	// Turned and sized with the wonder, each sum rounded to a float
+	const glm::mat3 turned(glm::vec3(0.6f, 0.0f, -0.8f), glm::vec3(0.0f, 1.0f, 0.0f), glm::vec3(0.8f, 0.0f, 0.6f));
+	const auto place = WonderPilePlace({1234.5f, 7.0f, 987.25f}, turned, glm::vec3(1.3f));
+	EXPECT_EQ(place.x, 1189.52001953125f);
+	EXPECT_EQ(place.y, 938.8900146484375f);
+}
+
+TEST(BuildingSiteRules, ABuilderWithNoWoodAtItsSiteGetsWoodAndOneWithWoodBuildsOn)
+{
+	EXPECT_EQ(AfterStrokeOf(true, 0), AfterStroke::GetWood);
+	EXPECT_EQ(AfterStrokeOf(true, 1), AfterStroke::BuildOn);
+	EXPECT_EQ(AfterStrokeOf(false, 0), AfterStroke::Leave);
+	EXPECT_EQ(AfterStrokeOf(false, 500), AfterStroke::Leave);
 }

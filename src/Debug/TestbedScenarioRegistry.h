@@ -396,7 +396,8 @@ struct ObjectSetup
 	/// A planned building is the plan of one that had been finished and went from the land, which its town wants
 	/// rebuilt as a repair
 	bool wasBuilt {false};
-	/// A building stands only this much built, a site open for its town's builders to finish it
+	/// A building stands only this much built, a site open for its town's builders to finish it. A feature stands only
+	/// this much built, with a site of the scenario's town at it.
 	std::optional<float> built;
 	/// A building starts with this part of the time to its next loss of life from neglect already gone
 	float neglect {0.0f};

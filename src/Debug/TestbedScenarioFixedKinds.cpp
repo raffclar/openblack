@@ -46,6 +46,11 @@ constexpr glm::vec2 k_BuilderDrop {k_Altar.x - 4.0f, k_Altar.y};
 constexpr glm::vec2 k_PotDrop {0.0f, 20.0f};
 constexpr glm::vec2 k_PotNearDrop {-2.0f, 20.0f};
 constexpr glm::vec2 k_UnbuiltHut {7.0f, 20.0f};
+/// A statue of the land that is only part built, east of the place where the hand puts a villager down
+constexpr glm::vec2 k_PartBuiltStatue {7.0f, 20.0f};
+/// The town's storage pit and village centre west of the place where the hand puts a villager down
+constexpr glm::vec2 k_DropPit {k_PotDrop.x - 30.0f, k_PotDrop.y - 15.0f};
+constexpr glm::vec2 k_DropCentre {k_PotDrop.x - 30.0f, k_PotDrop.y + 15.0f};
 
 /// Where the hand puts a villager down, south of a hurt temple, and the temple. The town stands north of the temple, so its
 /// worship site goes up on the far side of the temple.
@@ -148,7 +153,7 @@ void openblack::testbed_scenarios::AddFixedKindScenarios(std::vector<Scenario>& 
 	                "villager as one of the workers of the town's site at the worship site.",
 	    .environment = {.dispenserGrid = false, .cursor = glm::vec2 {0.5f, 0.5f}},
 	    .framing = {.shot = Shot::Placed,
-	                .eye = {k_BuilderDrop.x, 22.0f, k_BuilderDrop.y - 30.0f},
+	                .eye = {k_BuilderDrop.x, 22.0f, k_BuilderDrop.y + 30.0f},
 	                .look = {k_BuilderDrop.x, 0.0f, k_BuilderDrop.y}},
 	    .objects = std::move(builderTown),
 	    .temples = {{.offset = k_PileTemple}},
@@ -174,7 +179,7 @@ void openblack::testbed_scenarios::AddFixedKindScenarios(std::vector<Scenario>& 
 	                "all of it is built. Before, the altar showed when the script built the site.",
 	    .environment = {.dispenserGrid = false, .cursor = glm::vec2 {0.5f, 0.5f}},
 	    .framing = {.shot = Shot::Placed,
-	                .eye = {k_BuilderDrop.x, 22.0f, k_BuilderDrop.y - 30.0f},
+	                .eye = {k_BuilderDrop.x, 22.0f, k_BuilderDrop.y + 30.0f},
 	                .look = {k_BuilderDrop.x, 0.0f, k_BuilderDrop.y}},
 	    .objects = std::move(scriptBuiltTown),
 	    .temples = {{.offset = k_PileTemple}},
@@ -268,6 +273,65 @@ void openblack::testbed_scenarios::AddFixedKindScenarios(std::vector<Scenario>& 
 	    .objects = std::move(potTown),
 	    .commands = {{.kind = Kind::HandTake, .delaySeconds = 2.0f, .object = 4},
 	                 {.kind = Kind::HandRelease, .delaySeconds = 3.0f}},
+	    .townBeliefInPlayer = 1000.0f,
+	});
+
+	std::vector<ObjectSetup> statueTown {
+	    {.type = AbodeInfo::NorseTownCentre, .offset = k_DropCentre},
+	    {.type = AbodeInfo::NorseStoragePit, .offset = k_DropPit, .yawDegrees = 180.0f},
+	    {.type = FeatureInfo::AztcStatue, .offset = k_PartBuiltStatue, .yawDegrees = 90.0f, .built = 0.5f}};
+	all.push_back({
+	    .id = "building.feature_site_wood_pile",
+	    .name = "Wood poured on the site of a part built statue goes on a new pile by the statue",
+	    .facet = Facet::Hand,
+	    .description = "A Norse town of the player with a village centre and a storage pit, and a statue of the land that is "
+	                   "half built, with a site of the town at it. After three seconds the hand pours 300 wood over the "
+	                   "statue.",
+	    .expected = "The site of the statue takes the wood. It makes its one pile of wood for the first wood, about 4 "
+	                "metres beyond the statue, turned an eighth of a turn either way at random, and the pile holds the 300 "
+	                "wood: the inspector shows the pile in the BuildingSites piles of the statue. Every site of a thing "
+	                "with the fixed mark (a feature, flowers, an animated static, a field, a building) makes its pile so. "
+	                "Before, the site of a statue made no pile, and the wood brought to it was lost.",
+	    .environment = {.dispenserGrid = false},
+	    .framing = {.shot = Shot::Placed,
+	                .eye = {k_PartBuiltStatue.x - 3.0f, 6.0f, k_PartBuiltStatue.y - 10.0f},
+	                .look = {k_PartBuiltStatue.x, 0.0f, k_PartBuiltStatue.y}},
+	    .objects = std::move(statueTown),
+	    .commands = {{.kind = Kind::HandPour, .delaySeconds = 3.0f, .point = k_PartBuiltStatue, .value = 300}},
+	    .townBeliefInPlayer = 1000.0f,
+	});
+
+	std::vector<ObjectSetup> noWoodTown {
+	    {.type = AbodeInfo::NorseTownCentre, .offset = k_DropCentre},
+	    {.type = AbodeInfo::NorseStoragePit, .offset = k_DropPit, .yawDegrees = 180.0f, .storedWood = 0},
+	    {.type = AbodeInfo::NorseHut, .offset = k_UnbuiltHut, .yawDegrees = 270.0f, .built = 0.3f},
+	    {.type = VillagerInfo::NorseForesterMale, .offset = k_PotDrop, .joinTown = true}};
+	all.push_back({
+	    .id = "villagers.builder_waits_with_no_wood",
+	    .name = "A builder with no wood at its site and none to fetch stays at the site",
+	    .facet = Facet::Hand,
+	    .description = "A Norse town of the player with a village centre, an empty storage pit and a hut that is only part "
+	                   "built, and one villager of the town that carries no wood. No forest is near. After two seconds the "
+	                   "hand takes the villager, and three seconds later it puts the villager down at the same place. "
+	                   "Forty seconds later the hand pours 300 wood over the storage pit, and sixty seconds after that "
+	                   "300 wood again.",
+	    .expected = "The villager looks at the hut as a builder. It has nowhere to get wood, so it does not take up the site "
+	                "and has nothing to do. After the first pour the store holds more wood than the villager can carry: "
+	                "the villager takes as much as it can carry, puts it on the hut's site and builds until the site has "
+	                "no wood. The store now holds less wood than the villager can carry, and a builder takes wood from "
+	                "the store only when the store holds more. So the villager stays in the building state (Building in "
+	                "the inspector's LivingAction) at its place by the hut and plays its building clip again and again, "
+	                "with no wood used. Each time the clip ends, it tries again to get wood. After the second pour, at "
+	                "the end of its clip, it goes to the storage pit for wood and builds on.",
+	    .environment = {.dispenserGrid = false, .cursor = glm::vec2 {0.5f, 0.5f}},
+	    .framing = {.shot = Shot::Placed,
+	                .eye = {k_PotDrop.x, 22.0f, k_PotDrop.y - 30.0f},
+	                .look = {k_PotDrop.x, 0.0f, k_PotDrop.y}},
+	    .objects = std::move(noWoodTown),
+	    .commands = {{.kind = Kind::HandTake, .delaySeconds = 2.0f, .object = 3},
+	                 {.kind = Kind::HandRelease, .delaySeconds = 3.0f},
+	                 {.kind = Kind::HandPour, .delaySeconds = 40.0f, .point = k_DropPit, .value = 300},
+	                 {.kind = Kind::HandPour, .delaySeconds = 60.0f, .point = k_DropPit, .value = 300}},
 	    .townBeliefInPlayer = 1000.0f,
 	});
 
