@@ -141,6 +141,7 @@
 #include "ECS/Systems/ChatSystemInterface.h"
 #include "ECS/Systems/ChimneySmokeSystemInterface.h"
 #include "ECS/Systems/CinematicDirectorSystemInterface.h"
+#include "ECS/Systems/ClanCreatureSystemInterface.h"
 #include "ECS/Systems/CloudSystemInterface.h"
 #include "ECS/Systems/ComputerSettingsSystemInterface.h"
 #include "ECS/Systems/CreatureAnimationLogSystemInterface.h"
@@ -431,6 +432,7 @@ constexpr std::array k_Coverage {
     LocatorCoverage {"httpClient", "engine.online"},
     LocatorCoverage {"webSocketClient", "engine.online"},
     LocatorCoverage {"lobbyClient", "engine.online"},
+    LocatorCoverage {"clanCreatureSystem", "engine.online"},
     LocatorCoverage {"onlineMapStore", "engine.online"},
     LocatorCoverage {"networkGame", "engine.online"},
     LocatorCoverage {"realWeatherSystem", "land.real_weather"},
@@ -779,6 +781,23 @@ std::unique_ptr<ProviderInterface> EngineProvider()
 		    }
 		    // The store of the lands of network games that the lobby gives (deviation 169)
 		    result["online_map_store"] = Locator::onlineMapStore::has_value();
+		    // The clan creature: the clan that the player uses, the start creature and the creature file kept for the upload
+		    if (Locator::clanCreatureSystem::has_value())
+		    {
+			    const auto& clan = Locator::clanCreatureSystem::value();
+			    const auto used = clan.UsedClan();
+			    const auto start = clan.StartCreature();
+			    result["clan_creature"] = Json {
+			        {"clan", used.has_value() ? Json(*used) : Json(nullptr)},
+			        {"start_bytes", start.has_value() ? Json(start->file.size()) : Json(nullptr)},
+			        {"start_alignment", start.has_value() ? Json(start->alignment) : Json(nullptr)},
+			        {"kept_bytes", clan.KeptCreatureFile().size()},
+			    };
+		    }
+		    else
+		    {
+			    result["clan_creature"] = nullptr;
+		    }
 		    if (!Locator::lobbyClient::has_value())
 		    {
 			    result["lobby"] = nullptr;

@@ -53,6 +53,7 @@
 #include "ECS/Systems/Implementations/CameraZoneSystem.h"
 #include "ECS/Systems/Implementations/ChimneySmokeSystem.h"
 #include "ECS/Systems/Implementations/CinematicDirectorSystem.h"
+#include "ECS/Systems/Implementations/ClanCreatureSystem.h"
 #include "ECS/Systems/Implementations/ComputerSettingsSystem.h"
 #include "ECS/Systems/Implementations/CreatureAnimationLogSystem.h"
 #include "ECS/Systems/Implementations/CreatureAnimationSystem.h"
@@ -233,6 +234,7 @@ using openblack::ecs::systems::CameraZoneSystem;
 using openblack::ecs::systems::ChatSystem;
 using openblack::ecs::systems::ChimneySmokeSystem;
 using openblack::ecs::systems::CinematicDirectorSystem;
+using openblack::ecs::systems::ClanCreatureSystem;
 using openblack::ecs::systems::ComputerPlayerSystem;
 using openblack::ecs::systems::ComputerSettingsSystem;
 using openblack::ecs::systems::CreatureAnimationSystem;
@@ -283,6 +285,7 @@ using openblack::ecs::systems::LeashSystem;
 using openblack::ecs::systems::LivingActionSystem;
 using openblack::ecs::systems::LobbyClientConfig;
 using openblack::ecs::systems::LobbyClientSystem;
+using openblack::ecs::systems::LobbyClientSystemInterface;
 using openblack::ecs::systems::MagicShieldSystem;
 using openblack::ecs::systems::MagicSystem;
 using openblack::ecs::systems::MiracleFxSystem;
@@ -460,6 +463,9 @@ void InitializeOnline(const player_profiles::Store& profiles)
 	    std::make_unique<online::WebSocketPushChannel>(Locator::webSocketClient::value(), k_PushAuth),
 	    online::MakeTokenStore(Locator::filesystem::value(), profiles.folder),
 	    []() { return std::chrono::system_clock::now(); });
+	Locator::clanCreatureSystem::emplace<ClanCreatureSystem>([]() -> LobbyClientSystemInterface* {
+		return Locator::lobbyClient::has_value() ? &Locator::lobbyClient::value() : nullptr;
+	});
 	const bool internetWeather = Locator::config::has_value() && Locator::config::value().useInternetWeather;
 	const auto readScript = [](std::string_view file) -> std::optional<std::vector<uint8_t>> {
 		auto& files = Locator::filesystem::value();
@@ -873,6 +879,7 @@ void openblack::ShutDownServices()
 	Locator::landSystem::reset();
 	// The lobby client goes before the web client that it uses, and the real-world weather before the lobby client
 	Locator::realWeatherSystem::reset();
+	Locator::clanCreatureSystem::reset();
 	Locator::lobbyClient::reset();
 	Locator::onlineMapStore::reset();
 	Locator::networkGame::reset();

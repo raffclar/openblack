@@ -134,7 +134,6 @@
 #include "ECS/Systems/SoundTagSystemInterface.h"
 #include "ECS/Systems/TimeSystemInterface.h"
 #include "ECS/Systems/WorkshopSystemInterface.h"
-#include "ECS/ThingMapPlace.h"
 #include "ECS/WorldObjects.h"
 #include "InfoConstants.h"
 #include "Locator.h"
@@ -981,17 +980,6 @@ creature_object_actions::HoldStart IntoCreatureHand(ecs::Registry& registry, ent
 	return creature_object_actions::HoldStartFor(villager || animal, registry.AllOf<Creature>(object), accepted);
 }
 
-/// Where a thing is as a creature takes it, which the map keeps while the creature holds it
-std::optional<HeldByCreature::Taken> TakenFrom(const ecs::Registry& registry, entt::entity object)
-{
-	const auto* transform = registry.TryGet<const Transform>(object);
-	if (transform == nullptr)
-	{
-		return std::nullopt;
-	}
-	return HeldByCreature::Taken {.position = transform->position, .place = ecs::thing_map_place::Of(registry, object)};
-}
-
 /// The thing a creature catches is taken into its hand out of the air: it leaves the physics without going back on the
 /// map, and a person or animal is held
 void TakeInHand(ecs::Registry& registry, entt::entity creature, entt::entity object, const CreatureObjectAction& action,
@@ -1000,8 +988,7 @@ void TakeInHand(ecs::Registry& registry, entt::entity creature, entt::entity obj
 	registry.AssignOrReplace<CreatureHeldObject>(
 	    creature, CreatureHeldObject {
 	                  .object = object, .mirrored = action.mirrored, .bone = HandBone(points, animation, action.mirrored)});
-	registry.AssignOrReplace<HeldByCreature>(object,
-	                                         HeldByCreature {.creature = creature, .takenFrom = TakenFrom(registry, object)});
+	registry.AssignOrReplace<HeldByCreature>(object, HeldByCreature {.creature = creature});
 	// It leaves the physics with its end, not going back on the map
 	if (Locator::dynamicsSystem::has_value() && Locator::dynamicsSystem::value().Find(object) != nullptr)
 	{
@@ -3557,8 +3544,7 @@ void CreatureObjectActionSystem::AfterPoseTurn(entt::entity creature)
 			    creature, CreatureHeldObject {.object = object,
 			                                  .mirrored = action.mirrored,
 			                                  .bone = HandBone(*points, animation, action.mirrored)});
-			registry.AssignOrReplace<HeldByCreature>(
-			    object, HeldByCreature {.creature = creature, .takenFrom = TakenFrom(registry, object)});
+			registry.AssignOrReplace<HeldByCreature>(object, HeldByCreature {.creature = creature});
 			// A person or an animal stops what it did and is held, from the ground or out of the air. One that cannot go
 			// into its state for the hand is let go where it is, and the pick-up fails.
 			if (IntoCreatureHand(registry, object) == creature_object_actions::HoldStart::Refused)
@@ -3695,38 +3681,22 @@ void CreatureObjectActionSystem::AfterPoseTurn(entt::entity creature)
 void CreatureObjectActionSystem::PlaceHeld(bool drawn)
 {
 	auto& registry = Locator::entitiesRegistry::value();
-	// What is held rides in the hand, turned with it
+	// What is held is drawn in the hand, turned with it. Its place in the world does not follow the hand.
 	bool moved = false;
 	registry.Each<const Creature, const Transform, const CreatureAnimation, const CreatureHeldObject>(
 	    [&](entt::entity creature, const Creature&, const Transform& transform, const CreatureAnimation& animation,
 	        const CreatureHeldObject& held) {
-		    auto* at = registry.Valid(held.object) ? registry.TryGet<Transform>(held.object) : nullptr;
-		    if (at == nullptr)
+		    auto* holder = registry.Valid(held.object) ? registry.TryGet<HeldByCreature>(held.object) : nullptr;
+		    if (holder == nullptr || holder->creature != creature || !registry.AllOf<Transform>(held.object))
 		    {
 			    return;
 		    }
-		    auto* holder = registry.TryGet<HeldByCreature>(held.object);
-		    // It turns with the hand bone and hangs below the finger ends by its own distance
-		    if (drawn)
-		    {
-			    // The frame only draws it where the drawn hand is
-			    if (holder == nullptr || holder->creature != creature)
-			    {
-				    return;
-			    }
-			    const auto pose = HeldPoseOf(held, animation, DrawnPoseOf(animation, transform));
-			    holder->drawn = HeldByCreature::Drawn {.position = pose.position, .rotation = pose.rotation};
-			    moved = true;
-			    return;
-		    }
-		    const auto pose = HeldPoseOf(held, animation, TurnPoseOf(animation, transform));
-		    at->rotation = pose.rotation;
-		    at->position = pose.position;
-		    // The frames draw it where the turn put it until the next frame places it
-		    if (holder != nullptr)
-		    {
-			    holder->drawn.reset();
-		    }
+		    // It turns with the hand bone and hangs below the finger ends by its own distance. A frame draws it where the
+		    // drawn hand is. After a turn, it is drawn where the hand is in the pose of that turn, until the next frame
+		    // places it.
+		    const auto pose =
+		        HeldPoseOf(held, animation, drawn ? DrawnPoseOf(animation, transform) : TurnPoseOf(animation, transform));
+		    holder->drawn = HeldByCreature::Drawn {.position = pose.position, .rotation = pose.rotation};
 		    moved = true;
 	    });
 
@@ -3744,6 +3714,6 @@ void CreatureObjectActionSystem::UpdateHeld()
 
 void CreatureObjectActionSystem::ShowHeldAtTurnEnd()
 {
-	// The turn sees the thing in the hand as the last turn posed the body, at any frame rate
+	// The frames draw the thing in the hand as the last turn posed the body, at any frame rate
 	PlaceHeld(false);
 }

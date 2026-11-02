@@ -5968,6 +5968,22 @@ void AddObjects(std::vector<Scenario>& all)
 	});
 
 	all.push_back({
+	    .id = "objects.held_world_place",
+	    .name = "The world place of a thing in a creature's hand",
+	    .facet = Facet::Objects,
+	    .description = "A player's tiger picks up a rock, walks 20 with it and puts it down there.",
+	    .expected = "The rock stays in the tiger's hand while the tiger walks, and the draw shows it in the hand. In the "
+	                "inspector, the rock's Transform stays where the tiger took the rock until the next turn of the "
+	                "tiger. Then at each turn of the tiger it is the tiger's own place, on the land below the tiger, "
+	                "and its turn does not change. When the tiger lets go, the rock starts at the finger ends.",
+	    .framing = {.shot = Shot::Follow, .distance = 1.2f},
+	    .creatures = {CreatureSetup {.species = CreatureType::Tiger, .offset = {0.0f, 60.0f}}},
+	    .objects = {{.type = MobileStaticInfo::RockChalk, .offset = {4.0f, 54.0f}}},
+	    .commands = {OnObject(Kind::PickUp, 0, 0, 1.0f), Go(Kind::WalkTo, 0, {0.0f, 80.0f}, 0.5f),
+	                 Act(Kind::PutDown, 0, 1.0f, true)},
+	});
+
+	all.push_back({
 	    .id = "objects.pickup_head_look",
 	    .name = "The head look after the hold of a pick-up, close up",
 	    .facet = Facet::Objects,
@@ -7684,6 +7700,95 @@ void AddHand(std::vector<Scenario>& all)
 	    .commands = poseThenTouch,
 	});
 
+	// The real button on the own creature while the leash is held loose: a short press is a tap, a long one holds
+	all.push_back({
+	    .id = "hand.loose_leash_tap_then_hold",
+	    .name = "With the leash held loose, a short press taps your creature and a long one holds it",
+	    .facet = Facet::Hand,
+	    .description = "Your tiger faces the camera in the middle of the screen and wears the learning leash, held loose "
+	                   "in the hand. The action button presses the tiger for 0.1 seconds. Then it presses the tiger again, "
+	                   "holds it for two seconds and lets go.",
+	    .expected = "The short press is a tap: the hand does not hold the tiger, the camera stays where it is and the "
+	                "leash stays on. The long press holds the tiger after a short wait, and the camera turns to it. The log "
+	                "shows \"let go soon: it is a tap\" and then \"waited long enough: the hand holds it\".",
+	    .environment = {.dispenserGrid = false, .cursor = glm::vec2(0.5f, 0.5f)},
+	    .framing = {.shot = Shot::Follow, .distance = 1.2f},
+	    .creatures = {Posed(CreatureType::Tiger, {0.0f, 0.0f})},
+	    .commands = {Leash(0, LeashType::Rope, 0.5f),
+	                 {.kind = Kind::PointerPress, .delaySeconds = 2.0f, .value = 3},
+	                 {.kind = Kind::PointerRelease, .delaySeconds = 0.1f, .value = 3},
+	                 {.kind = Kind::PointerPress, .delaySeconds = 2.0f, .value = 3},
+	                 {.kind = Kind::PointerRelease, .delaySeconds = 2.0f, .value = 3}},
+	});
+
+	// The real button on the own creature while it sleeps: a sleeping creature takes hold. Its tiredness stays high, so
+	// it does not wake by itself.
+	auto sleepy = Content(CreatureType::Tiger, {0.0f, 0.0f});
+	sleepy.needs.exhaustion = 0.75f;
+	all.push_back({
+	    .id = "hand.press_holds_sleeping_creature",
+	    .name = "The hand holds your sleeping creature",
+	    .facet = Facet::Hand,
+	    .description = "Your tiger lies down to sleep in the middle of the screen. The pointer is on the tiger where "
+	                   "it lies. The action button presses the tiger, holds it for three seconds and lets go.",
+	    .expected = "The hand holds the sleeping tiger as it holds an awake one: the camera turns to the tiger and the "
+	                "tiger turns to face you. The leash does not come on. The log shows \"The hand of player 0 holds "
+	                "creature\".",
+	    .environment = {.dispenserGrid = false, .cursor = glm::vec2(0.4375f, 0.625f)},
+	    .framing = {.shot = Shot::Follow, .distance = 1.2f},
+	    .creatures = {sleepy},
+	    .commands = {Act(Kind::Sleep, 0, 0.5f),
+	                 {.kind = Kind::PointerPress, .delaySeconds = 6.0f, .value = 3},
+	                 {.kind = Kind::PointerRelease, .delaySeconds = 3.0f, .value = 3}},
+	});
+
+	// The real button on the own creature while it is frozen: the hand does not hold it and the press sends no leash click
+	all.push_back({
+	    .id = "hand.press_frozen_creature_keeps_leash",
+	    .name = "A press on your frozen creature leaves its leash on",
+	    .facet = Facet::Hand,
+	    .description = "Your tiger faces the camera in the middle of the screen and wears the learning leash, held loose "
+	                   "in the hand. The freeze spell freezes it. The action button clicks the tiger, then presses it for "
+	                   "two seconds.",
+	    .expected = "The hand does not hold the frozen tiger and the camera stays where it is. The leash stays on after "
+	                "the click and after the long press: a rope still runs from the hand to the collar. The log shows no "
+	                "\"Leash command: player 0 taps a creature\".",
+	    .environment = {.dispenserGrid = false, .cursor = glm::vec2(0.5f, 0.5f)},
+	    .framing = {.shot = Shot::Follow, .distance = 1.2f},
+	    .creatures = {Posed(CreatureType::Tiger, {0.0f, 0.0f})},
+	    .miracles = {{.type = MagicType::CreatureSpellFreeze,
+	                  .target = MiracleCast::Target::Creature,
+	                  .creature = 0,
+	                  .delaySeconds = 1.0f}},
+	    .commands = {Leash(0, LeashType::Rope, 0.5f),
+	                 {.kind = Kind::PointerPress, .delaySeconds = 3.0f, .value = 3},
+	                 {.kind = Kind::PointerRelease, .delaySeconds = 0.1f, .value = 3},
+	                 {.kind = Kind::PointerPress, .delaySeconds = 1.5f, .value = 3},
+	                 {.kind = Kind::PointerRelease, .delaySeconds = 2.0f, .value = 3}},
+	});
+
+	// A script takes control of the own creature while the press waits for a tap. The press then sends the hold, and the
+	// turn holds the creature: only the press asks if the hand may hold it.
+	all.push_back({
+	    .id = "hand.turn_holds_creature_a_script_took",
+	    .name = "The hand holds your creature that a script took during the press",
+	    .facet = Facet::Hand,
+	    .description = "Your tiger faces the camera in the middle of the screen and wears the learning leash, held loose "
+	                   "in the hand. The action button presses the tiger. 0.1 seconds later a script tells the tiger to "
+	                   "be frightened on the spot. The press continues for two seconds and then the button lets go.",
+	    .expected = "The hand holds the tiger after the short wait of the press, although the script now controls the "
+	                "tiger. The camera turns to the tiger. The log shows \"waited long enough: the hand holds it\" and "
+	                "then \"The hand of player 0 holds creature\". The log does not show \"The turn does not hold\".",
+	    .environment = {.dispenserGrid = false, .cursor = glm::vec2(0.5f, 0.5f)},
+	    .framing = {.shot = Shot::Follow, .distance = 1.2f},
+	    .creatures = {Posed(CreatureType::Tiger, {0.0f, 0.0f})},
+	    .commands =
+	        {Leash(0, LeashType::Rope, 0.5f),
+	         {.kind = Kind::PointerPress, .delaySeconds = 2.0f, .value = 3},
+	         {.kind = Kind::DoAction, .creature = 0, .delaySeconds = 0.1f, .action = "BeFrightenedOnTheSpot", .atCreature = 0},
+	         {.kind = Kind::PointerRelease, .delaySeconds = 1.9f, .value = 3}},
+	});
+
 	all.push_back({
 	    .id = "hand.mesh_contact",
 	    .name = "The hand on the body",
@@ -9040,8 +9145,9 @@ void AddLeash(std::vector<Scenario>& all)
 	    .name = "A click on your leashed creature takes the leash off",
 	    .facet = Facet::Leash,
 	    .description = "Your tiger faces the camera in the middle of the screen and wears the learning leash. The action "
-	                   "button clicks the tiger and the hand moves to the right. Then the hand comes back, clicks the "
-	                   "tiger again and moves to the right again.",
+	                   "button clicks the tiger for 0.35 seconds and the hand moves to the right. Then the hand comes "
+	                   "back, clicks the tiger again and moves to the right again. With the leash held loose, a click "
+	                   "must be longer than the wait for a tap.",
 	    .expected = "After the first click no rope follows the hand: the click took the leash off. After the second "
 	                "click a rope runs from the hand to the collar again. The log shows \"The draw of the hand sends the "
 	                "leash tap\" for each click, and a turn later \"Leash command: player 0 taps a creature\".",
@@ -9050,11 +9156,11 @@ void AddLeash(std::vector<Scenario>& all)
 	    .creatures = {Posed(CreatureType::Tiger, {0.0f, 0.0f})},
 	    .commands = {Leash(0, LeashType::Rope, 0.5f),
 	                 {.kind = Kind::PointerPress, .delaySeconds = 2.0f, .value = 3},
-	                 {.kind = Kind::PointerRelease, .delaySeconds = 0.2f, .value = 3},
+	                 {.kind = Kind::PointerRelease, .delaySeconds = 0.35f, .value = 3},
 	                 {.kind = Kind::PointerSweep, .delaySeconds = 0.5f, .point = {0.25f, 0.0f}, .amount = 1.0f},
 	                 {.kind = Kind::PointerSweep, .delaySeconds = 2.5f, .point = {-0.25f, 0.0f}, .amount = 1.0f},
 	                 {.kind = Kind::PointerPress, .delaySeconds = 1.5f, .value = 3},
-	                 {.kind = Kind::PointerRelease, .delaySeconds = 0.2f, .value = 3},
+	                 {.kind = Kind::PointerRelease, .delaySeconds = 0.35f, .value = 3},
 	                 {.kind = Kind::PointerSweep, .delaySeconds = 0.5f, .point = {0.25f, 0.0f}, .amount = 1.0f}},
 	});
 

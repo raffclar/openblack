@@ -33,6 +33,9 @@ class CreatureHandSystem final: public CreatureHandSystemInterface
 {
 public:
 	bool Grab() override;
+	void WaitForTap(entt::entity creature, uint32_t nowMs, uint32_t turn) override;
+	void WaitFrame(uint32_t nowMs, uint32_t turn) override;
+	std::optional<entt::entity> ReleaseWait() override;
 	[[nodiscard]] bool MayHold(entt::entity creature) const override;
 	[[nodiscard]] creature_hand::InteractTip InteractTipOver(entt::entity creature, bool handInInfluence) const override;
 	[[nodiscard]] bool IsClick() const override;
@@ -66,6 +69,8 @@ public:
 private:
 	/// The creature that a player holds looks at the hand that the player last reported
 	void LookAtReportedHandOf(PlayerNames player);
+	/// The hand holds itself to the creature and sends the hold, which the world does at the start of a later turn
+	void Hold(entt::entity creature);
 	/// Whether the hand of the player may take hold of the creature
 	[[nodiscard]] static bool MayHoldFor(PlayerNames player, entt::entity creature);
 	/// Takes hold of a creature by a command, keeping the session if already held to it

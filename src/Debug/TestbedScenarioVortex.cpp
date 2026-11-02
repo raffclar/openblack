@@ -238,6 +238,31 @@ void testbed_scenarios::AddVortexScenarios(std::vector<Scenario>& all)
 	                  .crowdForSeconds = 70.0f}},
 	});
 
+	// On the third land, 40 m west of the player's first town, from the middle of the land
+	static constexpr glm::vec2 k_LandThreeVortex {508.0f, 557.0f};
+	all.push_back({
+	    .id = "story.l3_vortex_town_villagers",
+	    .name = "Story: villagers that crossed from the second land come out into the towns of the third land",
+	    .facet = Facet::Story,
+	    .description = "The third land loads with its own scripts. A vortex into the land opens 40 m west of the player's "
+	                   "first town after a second, with a crossing file as the vortex out of the second land writes it: "
+	                   "a Norse farmer of town 0 by its tribe and job, and a shepherd of no tribe by its row of the "
+	                   "villagers' table and of no town. The vortex is told to fade out 3 seconds after it opens.",
+	    .expected = "The vortex throws out the farmer and the shepherd first, each where it was about the old vortex. The "
+	                "farmer joins the town with the number 0, the player's first town. The shepherd joins the town "
+	                "nearest to it, which is also the player's first town. Then new villagers come out until 30 have come "
+	                "out.",
+	    .environment = {.land = Land::Story, .storyLand = "Land3.txt", .dispenserGrid = false},
+	    .framing = {.shot = Shot::Overview,
+	                .include = {k_LandThreeVortex - glm::vec2(30.0f), k_LandThreeVortex + glm::vec2(50.0f, 30.0f)}},
+	    .vortices = {{.type = VortexType::Out,
+	                  .offset = k_LandThreeVortex,
+	                  .delaySeconds = 1.0f,
+	                  .fadeOutAfterSeconds = 3.0f,
+	                  .crossingLines = {"CREATE_TOWN_VILLAGER(0, \"-10.00,8.00\", NORSE_FARMER, 30)",
+	                                    "CREATE_SPECIAL_TOWN_VILLAGER(-1, \"8.00,-10.00\", 74, 40)"}}},
+	});
+
 	all.push_back({
 	    .id = "story.vortex_throws_out_the_last_crossing",
 	    .name = "A vortex into the land throws out the last crossing",

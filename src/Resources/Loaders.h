@@ -153,6 +153,11 @@ struct L3DLoader final: BaseLoader<graphics::L3DMesh>
 	};
 	[[nodiscard]] result_type operator()(FromPreparedDynamicTag, const std::string& debugName,
 	                                     graphics::PreparedL3DMesh prepared) const;
+	/// A mesh that the cache keeps already under another id, which the two ids share. No new object is made.
+	struct FromSharedTag
+	{
+	};
+	[[nodiscard]] result_type operator()(FromSharedTag, std::shared_ptr<graphics::L3DMesh> shared) const;
 };
 
 /// The data of an L3D file, .l3d or zipped .zzz, for what changes meshes on the CPU

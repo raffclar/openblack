@@ -1814,8 +1814,9 @@ def main():
     parser.add_argument("--conditions", help="the winning conditions of the network game (the server's --conditions), "
                         "[LAND:]NAME[=VALUE],... (a NAME with no VALUE keeps the first value of the land); the clients take "
                         "them from the start")
-    parser.add_argument("--temple-loss", help="PLAYER:TURN: at the turn the temple of the player (from 0) starts its "
-                        "destruction on the server and on every client, so that the game is decided and its turns stop")
+    parser.add_argument("--temple-loss", help="PLAYER:TURN or FIRST-LAST:TURN: at the turn the temple of the player "
+                        "(from 0), or of each god of the range, starts its destruction on the server and on every "
+                        "client, so that the game is decided and its turns stop")
     parser.add_argument("--leave", help="CLIENT:TURN: at the turn the client (from 0) leaves the game as a player does: "
                         "Escape, Exit Online Game and Leave Game")
     parser.add_argument("--box-back", help="CLIENT:TURN: at the turn the client (from 0) clicks Back in the information "

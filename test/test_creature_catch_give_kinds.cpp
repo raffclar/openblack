@@ -117,27 +117,27 @@ TEST_F(CreatureCatchKindsTest, AThingThatCannotBePickedUpIsNotCaught)
 	EXPECT_FALSE(hands.CanBeCaught(thing));
 }
 
-TEST_F(CreatureCatchKindsTest, ARingInACreaturesHandStaysWhereTheCreatureTookItForThePuzzle)
+TEST_F(CreatureCatchKindsTest, ARingInACreaturesHandIsWhereItsTransformPutsItForThePuzzle)
 {
 	auto& registry = Locator::entitiesRegistry::value();
 	const glm::vec3 home {10.0f, 9.0f, 20.0f};
 	const auto puzzle = registry.Create();
 	const auto ring = Make(MobileObject {.type = MobileObjectInfo::None});
 	registry.Assign<HanoiBlock>(ring, HanoiBlock {.puzzle = puzzle, .placedAt = home});
-	// The hand carries the ring away from its place
-	registry.Get<Transform>(ring).position = home + glm::vec3(30.0f, 5.0f, 0.0f);
-	registry.Assign<HeldByCreature>(ring, HeldByCreature {.takenFrom = HeldByCreature::Taken {.position = home}});
+	// The creature took the ring at its place, and the ring stays there until the next turn of the creature
+	registry.Get<Transform>(ring).position = home;
+	registry.Assign<HeldByCreature>(ring);
 	registry.Assign<PuzzleGame>(
 	    puzzle, PuzzleGame {.type = script::PuzzleGameType::Hanoi, .rings = {entt::null, entt::null, entt::null, ring}});
 	PuzzleGameSystem puzzles;
 
-	// The map keeps the ring at its place, so the puzzle stays calm and keeps the ring
+	// At its place, the puzzle stays calm and keeps the ring
 	puzzles.ProcessTurn();
 	EXPECT_TRUE(registry.Valid(ring));
 	EXPECT_EQ(registry.Get<const PuzzleGame>(puzzle).calmTurns, 5);
 
-	// A ring taken somewhere else is off its place, and the puzzle is not calm
-	registry.Get<HeldByCreature>(ring).takenFrom->position = home + glm::vec3(30.0f, 0.0f, 0.0f);
+	// The turn of the creature puts the ring where the creature is: it is off its place, and the puzzle is not calm
+	registry.Get<Transform>(ring).position = home + glm::vec3(30.0f, -9.0f, 0.0f);
 	puzzles.ProcessTurn();
 	EXPECT_EQ(registry.Get<const PuzzleGame>(puzzle).calmTurns, 4);
 }
