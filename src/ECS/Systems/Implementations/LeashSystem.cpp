@@ -904,6 +904,20 @@ bool LeashSystem::TakeOffAtTemple(PlayerNames player)
 	return true;
 }
 
+bool LeashSystem::TakeOffAtLeave(PlayerNames player)
+{
+	// The same rule as at the temple: the leash comes off only when the player holds it
+	if (!ComesOffAtTemple(player))
+	{
+		return false;
+	}
+	const auto creature = *PlayersCreature(player);
+	SPDLOG_LOGGER_INFO(spdlog::get("game"), "Player {} leaves the game: the leash comes off creature {}", PlayerNumber(player),
+	                   entt::to_integral(creature));
+	TakeOff(creature);
+	return true;
+}
+
 bool LeashSystem::TapCreature(PlayerNames player, entt::entity creature)
 {
 	// The click is the leash key on the clicked creature. The checks refuse a creature that the player cannot lead.

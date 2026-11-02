@@ -86,6 +86,7 @@ public:
 	bool Shake(PlayerNames player) override;
 	[[nodiscard]] bool ComesOffAtTemple(PlayerNames player) const override;
 	bool TakeOffAtTemple(PlayerNames player) override;
+	bool TakeOffAtLeave(PlayerNames player) override;
 
 private:
 	/// Ties the leash to the thing, and does what the source of the tie does in addition
