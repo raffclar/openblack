@@ -207,6 +207,8 @@ struct Arguments
 	bool background {false};
 	/// Debug: the Creature Breeder's bonus creatures taken as unlocked (none by default, as on a normal install)
 	creature_swap::Unlocked unlockedBonusCreatures;
+	/// Debug: the switch of the free Soccer Add-On (off by default, as on a normal install)
+	bool footballAddOn {false};
 	/// A full-screen video to play once the land is loaded: "intro", "fall" or a path under the game's folder
 	std::string playVideo;
 	/// Debug: the 16-bit surface of the films, "555", "565" or "none". Empty keeps the surface of the display cards of

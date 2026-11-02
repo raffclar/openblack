@@ -813,6 +813,7 @@ Game::Game(Arguments&& args) noexcept
 	config.showPing = args.showPing;
 	config.dynamicTreeShadows = args.dynamicTreeShadows;
 	config.unlockedBonusCreatures = args.unlockedBonusCreatures;
+	config.footballAddOn = args.footballAddOn;
 	// The settings of this computer give what the command line did not
 	InitializeComputerSettings(player_profiles::SettingsFileFor(
 	    {.profileFolder = _profileFolder, .userFolder = user_data::ProfileFolder(), .automated = _automatedRun},

@@ -67,6 +67,7 @@
 #include "ECS/Systems/DynamicsSystemInterface.h"
 #include "ECS/Systems/EffectRequestSystemInterface.h"
 #include "ECS/Systems/FireSystemInterface.h"
+#include "ECS/Systems/FootballSystemInterface.h"
 #include "ECS/Systems/ForestSystemInterface.h"
 #include "ECS/Systems/HandSystemInterface.h"
 #include "ECS/Systems/Implementations/ObjectMeasures.h"
@@ -1050,7 +1051,7 @@ bool WorkshopSystem::CanJoin(entt::entity held, entt::entity target) const
 	    .heldValue = workshop::ValueOfScale(registry.Get<const Transform>(held).scale.x),
 	    .targetValue = workshop::ValueOfScale(registry.Get<const Transform>(target).scale.x),
 	    .mostForCombining = Locator::infoConstants::value().scaffold.maxNumberForCombining,
-	    .football = ecs::planned_building::k_FootballEnabled,
+	    .football = Locator::footballSystem::has_value() && Locator::footballSystem::value().IsOn(),
 	    .heldScriptBuilding = heldData.scriptBuilding.has_value(),
 	    .targetScriptBuilding = targetData.scriptBuilding.has_value(),
 	    .targetInPhysics = registry.AllOf<InPhysics>(target),

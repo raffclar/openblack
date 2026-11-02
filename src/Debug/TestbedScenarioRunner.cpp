@@ -192,6 +192,7 @@
 #include "ECS/Systems/FightTranscriptSystemInterface.h"
 #include "ECS/Systems/FireSystemInterface.h"
 #include "ECS/Systems/FireflySystemInterface.h"
+#include "ECS/Systems/FootballSystemInterface.h"
 #include "ECS/Systems/FootpathSystemInterface.h"
 #include "ECS/Systems/FootprintSystemInterface.h"
 #include "ECS/Systems/ForestSystemInterface.h"
@@ -1460,6 +1461,11 @@ void Runner::SetUpEnvironment(const Environment& environment)
 			    }
 		    });
 	}
+	// The switch of the Soccer Add-On, which the next land reads again from the settings
+	if (environment.football && Locator::footballSystem::has_value())
+	{
+		Locator::footballSystem::value().StartGame(true, Locator::time::value().IsNetworkGame());
+	}
 	if (environment.pushScrolling && Locator::config::has_value())
 	{
 		Locator::config::value().pushScrolling = true;
@@ -2558,6 +2564,17 @@ std::string Runner::GivePlayerCommand(const Command& command)
 		return HandTakeFireBall();
 	case Kind::HandTapObject:
 		return HandTapObject(command.object);
+	case Kind::JoinFootball:
+	{
+		const auto object = ObjectAt(command.object);
+		auto& registry = Locator::entitiesRegistry::value();
+		const auto* villager = object.has_value() ? registry.TryGet<const ecs::components::Villager>(*object) : nullptr;
+		if (villager == nullptr || !Locator::footballSystem::has_value())
+		{
+			return "no villager to join the football";
+		}
+		return Locator::footballSystem::value().Join(villager->town, *object) ? "joined the football" : "the town has no pitch";
+	}
 	case Kind::ScriptRelease:
 	{
 		const auto object = ObjectAt(command.object);
@@ -3760,7 +3777,8 @@ void Runner::Give(const Command& command)
 	    command.kind == Kind::RemoveTeleportStone || command.kind == Kind::MakeDance || command.kind == Kind::OtherGodHand ||
 	    command.kind == Kind::OwnGod || command.kind == Kind::BringCreature || command.kind == Kind::ComputerPersonality ||
 	    command.kind == Kind::ComputerUntaughtSends || command.kind == Kind::HandCastOnDispenser ||
-	    command.kind == Kind::HandCastOnCreature || command.kind == Kind::CloseHeldMiracle)
+	    command.kind == Kind::HandCastOnCreature || command.kind == Kind::CloseHeldMiracle ||
+	    command.kind == Kind::JoinFootball)
 	{
 		const auto result = GivePlayerCommand(command);
 		Log(fmt::format("{:.1f}s: {}{}{}", _seconds, Name(command.kind), result.empty() ? "" : ": ", result));
@@ -4675,6 +4693,7 @@ void Runner::Give(const Command& command)
 	case Kind::HandCastOnDispenser:
 	case Kind::HandCastOnCreature:
 	case Kind::CloseHeldMiracle:
+	case Kind::JoinFootball:
 	case Kind::HandPour:
 	case Kind::HandRelease:
 	case Kind::SetReportLatency:
