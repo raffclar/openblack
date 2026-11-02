@@ -83,39 +83,51 @@ std::optional<std::vector<uint8_t>> DecodeBitmap(std::span<const uint8_t> runs, 
 
 /// The alpha of a pixel of the half height glyph, by how many of the four pixels it is made of are set
 constexpr std::array<uint8_t, 5> k_HalfGlyphAlpha {0x0, 0x4, 0x8, 0xC, 0xF};
-constexpr uint16_t k_HalfGlyphHeight = 40;
+} // namespace
 
-/// As the game caches a glyph: first at half height, a clear column either side, each pixel's alpha by how many of
-/// four pixels are set, reading on into the next row past the end of a row as the game does (the
-/// bitmap has two clear rows after it); then the small glyph at a quarter of the height from that, each pixel's alpha
-/// the average of four of the half height glyph's
-GameFont::SmallGlyph MakeSmallGlyph(const std::vector<uint8_t>& bitmap, uint16_t width)
+GameFont::HalfGlyph GameFont::MakeHalfGlyph(std::span<const uint8_t> bitmap, uint16_t width)
 {
-	std::vector<uint8_t> bits(bitmap);
-	bits.resize(bits.size() + (static_cast<size_t>(width) * 2), 0);
-	const auto halfWidth = static_cast<uint16_t>((width + 1) / 2);
-	const auto halfStride = static_cast<uint16_t>(halfWidth + 2);
-	std::vector<uint8_t> half(static_cast<size_t>(halfStride) * k_HalfGlyphHeight, 0);
-	const auto set = [&bits](size_t i) { return i < bits.size() ? bits[i] : uint8_t {0}; };
-	for (uint16_t y = 0; y < k_HalfGlyphHeight; ++y)
+	// The game reads the bitmap with two clear rows after it. Past them it reads memory that is not part of the bitmap;
+	// here all of that reads as clear.
+	const auto set = [bitmap](size_t i) -> uint32_t { return i < bitmap.size() && bitmap[i] != 0 ? 1 : 0; };
+	HalfGlyph half {.width = static_cast<uint16_t>((width + 1) / 2), .count = {}};
+	half.count.assign(static_cast<size_t>(half.width) * HalfGlyph::k_Height, 0);
+	// Each row of the half glyph starts where the last one stopped plus one bitmap row. A glyph of an odd width has
+	// one column more than half its bitmap, so each row starts one pixel further on in the bitmap than the row before.
+	size_t rowStart = 0;
+	for (uint16_t y = 0; y < HalfGlyph::k_Height; ++y)
 	{
-		const size_t top = static_cast<size_t>(y) * 2 * width;
-		const size_t bottom = top + width;
-		for (uint16_t x = 0; x < halfWidth; ++x)
+		size_t at = rowStart;
+		for (uint16_t x = 0; x < half.width; ++x, at += 2)
 		{
-			const size_t at = static_cast<size_t>(x) * 2;
-			const auto count = set(top + at) + set(top + at + 1) + set(bottom + at) + set(bottom + at + 1);
-			half[(static_cast<size_t>(y) * halfStride) + 1 + x] = k_HalfGlyphAlpha.at(count);
+			const auto bottom = at + width;
+			const auto count = set(at) + set(at + 1) + set(bottom) + set(bottom + 1);
+			half.count[(static_cast<size_t>(y) * half.width) + x] = static_cast<uint8_t>(count);
 		}
+		rowStart = at + width;
 	}
-	const auto halfAt = [&half, halfStride](int32_t x, int32_t y) -> uint32_t {
-		return x < 0 || x >= halfStride || y < 0 || y >= k_HalfGlyphHeight ? 0
-		                                                                   : half[(static_cast<size_t>(y) * halfStride) + x];
+	return half;
+}
+
+uint8_t GameFont::HalfGlyphAlpha(uint8_t count)
+{
+	return k_HalfGlyphAlpha.at(count);
+}
+
+GameFont::SmallGlyph GameFont::MakeSmallGlyph(const HalfGlyph& half, uint16_t width)
+{
+	// The half height glyph as the game keeps it: its alpha from 0 to 15 with a clear column either side
+	const auto halfAt = [&half](int32_t x, int32_t y) -> uint32_t {
+		const auto column = x - 1;
+		return column < 0 || column >= half.width || y < 0 || y >= HalfGlyph::k_Height
+		           ? 0
+		           : HalfGlyphAlpha(half.count[(static_cast<size_t>(y) * half.width) + column]);
 	};
 
-	GameFont::SmallGlyph small {.width = static_cast<uint16_t>(((width + 3) >> 2) + 2), .alpha = {}};
-	small.alpha.assign(static_cast<size_t>(small.width) * GameFont::SmallGlyph::k_Height, 0);
-	for (int32_t y = 0; y < GameFont::SmallGlyph::k_Height; ++y)
+	// The small glyph at a quarter of the height, each pixel's alpha the average of four of the half height glyph's
+	SmallGlyph small {.width = static_cast<uint16_t>(((width + 3) >> 2) + 2), .alpha = {}};
+	small.alpha.assign(static_cast<size_t>(small.width) * SmallGlyph::k_Height, 0);
+	for (int32_t y = 0; y < SmallGlyph::k_Height; ++y)
 	{
 		for (int32_t x = 0; x + 2 < small.width; ++x)
 		{
@@ -127,7 +139,6 @@ GameFont::SmallGlyph MakeSmallGlyph(const std::vector<uint8_t>& bitmap, uint16_t
 	}
 	return small;
 }
-} // namespace
 
 std::optional<GameFont> GameFont::Load(std::span<const uint8_t> met, std::span<const uint8_t> fnt)
 {
@@ -187,24 +198,18 @@ std::optional<GameFont> GameFont::Load(std::span<const uint8_t> met, std::span<c
 			return std::nullopt;
 		}
 
-		font._smallGlyphs.push_back(MakeSmallGlyph(*bitmap, glyph.width));
+		const auto half = MakeHalfGlyph(*bitmap, glyph.width);
+		font._smallGlyphs.push_back(MakeSmallGlyph(half, glyph.width));
 
-		const auto cellWidth = static_cast<uint16_t>((glyph.width + 1) / 2);
+		const auto cellWidth = half.width;
 		std::vector<uint8_t> cell(static_cast<size_t>(cellWidth) * cellHeight, 0);
-		for (uint16_t y = 0; y < cellHeight; ++y)
+		for (uint16_t y = 0; y < std::min(cellHeight, HalfGlyph::k_Height); ++y)
 		{
 			for (uint16_t x = 0; x < cellWidth; ++x)
 			{
-				uint32_t sum = 0;
-				for (uint16_t sy = y * 2u; sy < std::min<uint32_t>((y * 2u) + 2u, font._height); ++sy)
-				{
-					for (uint16_t sx = x * 2u; sx < std::min<uint32_t>((x * 2u) + 2u, glyph.width); ++sx)
-					{
-						sum += (*bitmap)[(static_cast<size_t>(sy) * glyph.width) + sx];
-					}
-				}
 				// The game keeps the glyph's alpha in four bits, read back as n fifteenths of 255
-				cell[(static_cast<size_t>(y) * cellWidth) + x] = static_cast<uint8_t>(k_HalfGlyphAlpha.at(sum) * 17);
+				cell[(static_cast<size_t>(y) * cellWidth) + x] =
+				    static_cast<uint8_t>(HalfGlyphAlpha(half.count[(static_cast<size_t>(y) * cellWidth) + x]) * 17);
 			}
 		}
 

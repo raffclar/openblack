@@ -2316,3 +2316,4 @@ openblack_setup_and_add_test(test_creature_reach_read_only test_creature_reach_r
 if(MSVC)
   target_compile_options(test_creature_reach_read_only PRIVATE /bigobj)
 endif()
+openblack_setup_and_add_test(test_game_font_glyphs gui/test_game_font_glyphs.cpp)
