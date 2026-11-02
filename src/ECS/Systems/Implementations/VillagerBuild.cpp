@@ -386,7 +386,7 @@ uint32_t SetupBuildingObject(LivingAction& action, entt::entity building)
 	{
 		return 0;
 	}
-	if (construction::IsBuilt(building) && world_objects::LifeOf(building) >= 1.0f)
+	if (construction::IsBuiltAndRepaired(building))
 	{
 		return 0;
 	}

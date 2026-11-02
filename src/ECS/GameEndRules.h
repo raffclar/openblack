@@ -24,13 +24,14 @@
 //   completed all of them decides the game. The time limit of a network game also decides it.
 // - When the game is decided, the god with the largest share wins. The share of the influence breaks a tie. The other
 //   gods are out, the worst first.
-// - A god among the first four players with no temple is out. Its creature goes from the land.
+// - A god that takes part and has no temple is out. Its creature goes from the land.
 // - For each god that is now out, the game counts the god out. When only one god is left, the game is decided.
 // - A god that the game finished with stops its computer mind. When the game is decided, every god finished.
 // - Each ten turns, each god keeps its score in a history: its share of the conditions in a game with conditions, or its
 //   share of the influence of the gods when no conditions are set or a god with no temple is not out yet.
 //
-// Only gods that a human or a computer mind plays take part. Players five to seven never lose by the temple rule.
+// Only gods that a human or a computer mind plays take part. In a skirmish, players five to seven never lose by the
+// temple rule. In a network game, every god takes part (deviation 193).
 //
 // Pure, tested with a fake world.
 
@@ -151,15 +152,17 @@ struct Event
 	PlayerNames god;
 };
 
-/// Whether a player takes part in the end of the game: only the first four players win or lose
-[[nodiscard]] constexpr bool CanLose(PlayerNames player)
+/// Whether a player takes part in the end of the game. In a skirmish, only the first four players win or lose. In a
+/// network game, every god wins or loses, also the gods after the fourth (deviation 193). A network game of four gods
+/// or fewer has its gods in the first four slots, so it does not change.
+[[nodiscard]] constexpr bool CanLose(PlayerNames player, bool networkGame)
 {
-	return static_cast<uint8_t>(player) < 4;
+	return networkGame || static_cast<uint8_t>(player) < 4;
 }
 
 /// A god is out: a human god gets its place. Every other human god that is not out counts one more god defeated, when
 /// the god is human or the game is a skirmish.
-void CountOut(World& world, State& state, PlayerNames god, ecs::components::OutReason reason, bool skirmish);
+void CountOut(World& world, State& state, PlayerNames god, ecs::components::OutReason reason, const Facts& facts);
 
 /// Whether a god has a temple, or the game needs none
 [[nodiscard]] bool HasTempleOrNeedsNone(const World& world, const Facts& facts, PlayerNames god);

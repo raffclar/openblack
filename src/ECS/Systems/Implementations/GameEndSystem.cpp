@@ -297,15 +297,17 @@ std::optional<PlayerNames> GameEndSystem::LastGodIn() const
 	const GameEndWorld world;
 	auto& registry = Locator::entitiesRegistry::value();
 	const auto gods = world.ActiveGods();
+	const bool networkGame = Locator::time::has_value() && Locator::time::value().IsNetworkGame();
 	std::vector<PlayerNames> in;
-	registry.Each<const components::Player>([&gods, &registry, &in](entt::entity entity, const components::Player& player) {
-		const auto* standing = registry.TryGet<const GameStanding>(entity);
-		if (game_end::CanLose(player.name) && std::ranges::find(gods, player.name) != gods.end() &&
-		    (standing == nullptr || !standing->out))
-		{
-			in.push_back(player.name);
-		}
-	});
+	registry.Each<const components::Player>(
+	    [&gods, &registry, &in, networkGame](entt::entity entity, const components::Player& player) {
+		    const auto* standing = registry.TryGet<const GameStanding>(entity);
+		    if (game_end::CanLose(player.name, networkGame) && std::ranges::find(gods, player.name) != gods.end() &&
+		        (standing == nullptr || !standing->out))
+		    {
+			    in.push_back(player.name);
+		    }
+	    });
 	return in.size() == 1 ? std::optional(in.front()) : std::nullopt;
 }
 

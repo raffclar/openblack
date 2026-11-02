@@ -13,14 +13,14 @@ using namespace openblack;
 
 bool creature_hand::TakesHold(const Holdable& creature)
 {
-	return creature.owner != PlayerNames::NEUTRAL && creature.species != CreatureType::Ogre && !creature.asleep &&
-	       !creature.frozen && !creature.scriptControlled && !creature.fainting;
+	return creature.owner != PlayerNames::NEUTRAL && creature.species != CreatureType::Ogre && !creature.frozen &&
+	       !creature.scriptControlled && !creature.fainting;
 }
 
 bool creature_hand::MayHold(const Holdable& creature, PlayerNames handPlayer, bool allied)
 {
 	// The creature of an allied god takes hold as the player's own creature does
-	return TakesHold(creature) && (creature.owner == handPlayer || allied);
+	return TakesHold(creature) && !creature.cannotBePickedUp && (creature.owner == handPlayer || allied);
 }
 
 bool creature_hand::ShowsInteractTip(PlayerNames player, const Holdable& creature, bool held, bool handInInfluence)
@@ -60,4 +60,23 @@ bool creature_hand::LetsGoOfCreature(bool rightLetGo, bool rightButtonUp)
 creature_hand::CreaturePress creature_hand::PressOn(bool playersOwnCreature, bool leashOn)
 {
 	return !playersOwnCreature && leashOn ? CreaturePress::Leash : CreaturePress::Hold;
+}
+
+creature_hand::PressStart creature_hand::PressStartOn(bool mayHold, bool leashHeldLoose)
+{
+	if (mayHold)
+	{
+		return leashHeldLoose ? PressStart::WaitForTap : PressStart::Hold;
+	}
+	return leashHeldLoose ? PressStart::TapAtOnce : PressStart::Nothing;
+}
+
+bool creature_hand::HoldsAfterWait(uint32_t elapsedMs)
+{
+	return elapsedMs > k_TapWaitMs;
+}
+
+bool creature_hand::TurnTakesHold(bool inWorld, bool heldByAHand)
+{
+	return inWorld && !heldByAHand;
 }

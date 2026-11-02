@@ -26,7 +26,10 @@ namespace
 constexpr auto k_One = PlayerNames::PLAYER_ONE;
 constexpr auto k_Two = PlayerNames::PLAYER_TWO;
 constexpr auto k_Three = PlayerNames::PLAYER_THREE;
+constexpr auto k_Five = PlayerNames::PLAYER_FIVE;
 constexpr auto k_Seven = PlayerNames::PLAYER_SEVEN;
+constexpr auto k_Neutral = PlayerNames::NEUTRAL;
+constexpr bool k_Network = true;
 
 const Titles k_Titles {
     .leave = u"Are you sure you want to quit this game?",
@@ -42,7 +45,7 @@ TEST(EndGameBox, TheLocalGodOutWhileTheGameGoesOnCanWatch)
 {
 	State state;
 	const std::array events {Event {.kind = Event::Kind::GodOut, .god = k_One}};
-	const auto opened = Follow(events, k_One, state);
+	const auto opened = Follow(events, k_One, k_Network, state);
 	ASSERT_TRUE(opened.endBox.has_value());
 	EXPECT_EQ(opened.endBox->kind, Kind::Lost);
 	EXPECT_TRUE(opened.endBox->watch);
@@ -54,7 +57,7 @@ TEST(EndGameBox, TheLocalGodOutAndDecidedStopsTheGame)
 {
 	State state;
 	const std::array events {Event {.kind = Event::Kind::GodOutAndDecided, .god = k_Two}};
-	const auto opened = Follow(events, k_Two, state);
+	const auto opened = Follow(events, k_Two, k_Network, state);
 	ASSERT_TRUE(opened.endBox.has_value());
 	EXPECT_EQ(opened.endBox->kind, Kind::LostAndDecided);
 	EXPECT_FALSE(opened.endBox->watch);
@@ -66,7 +69,7 @@ TEST(EndGameBox, AnotherGodOutAndDecidedIsWon)
 {
 	State state;
 	const std::array events {Event {.kind = Event::Kind::GodOutAndDecided, .god = k_Two}};
-	const auto opened = Follow(events, k_One, state);
+	const auto opened = Follow(events, k_One, k_Network, state);
 	ASSERT_TRUE(opened.endBox.has_value());
 	EXPECT_EQ(opened.endBox->kind, Kind::Won);
 	EXPECT_TRUE(StopsTheGame(*opened.endBox, state));
@@ -77,9 +80,9 @@ TEST(EndGameBox, APlayerWhoLostAndWatchesIsToldTheGameIsWon)
 {
 	State state;
 	const std::array first {Event {.kind = Event::Kind::GodOut, .god = k_One}};
-	std::ignore = Follow(first, k_One, state);
+	std::ignore = Follow(first, k_One, k_Network, state);
 	const std::array last {Event {.kind = Event::Kind::GodOutAndDecided, .god = k_Two}};
-	const auto opened = Follow(last, k_One, state);
+	const auto opened = Follow(last, k_One, k_Network, state);
 	ASSERT_TRUE(opened.endBox.has_value());
 	EXPECT_EQ(opened.endBox->kind, Kind::Won);
 	EXPECT_FALSE(opened.endBox->watch);
@@ -91,7 +94,7 @@ TEST(EndGameBox, AnotherGodOutOpensTheBoxWithOk)
 {
 	State state;
 	const std::array events {Event {.kind = Event::Kind::GodOut, .god = k_Three}};
-	const auto opened = Follow(events, k_One, state);
+	const auto opened = Follow(events, k_One, k_Network, state);
 	EXPECT_FALSE(opened.endBox.has_value());
 	EXPECT_EQ(opened.godOut, k_Three);
 }
@@ -101,11 +104,11 @@ TEST(EndGameBox, NoBoxWithOkWhileTheEndBoxShows)
 {
 	State state;
 	const std::array first {Event {.kind = Event::Kind::GodOut, .god = k_One}};
-	std::ignore = Follow(first, k_One, state);
+	std::ignore = Follow(first, k_One, k_Network, state);
 	const std::array next {Event {.kind = Event::Kind::GodOut, .god = k_Three}};
-	EXPECT_FALSE(Follow(next, k_One, state).godOut.has_value());
+	EXPECT_FALSE(Follow(next, k_One, k_Network, state).godOut.has_value());
 	StoppedShowing(state);
-	EXPECT_EQ(Follow(next, k_One, state).godOut, k_Three);
+	EXPECT_EQ(Follow(next, k_One, k_Network, state).godOut, k_Three);
 }
 
 // The question to leave is an end box: the game goes on for the player, and no box with OK opens while it shows
@@ -118,11 +121,11 @@ TEST(EndGameBox, TheQuestionToLeaveIsAnEndBoxOfItsOwn)
 	EXPECT_TRUE(state.gameGoesOn);
 	EXPECT_FALSE(StopsTheGame(box, state));
 	const std::array out {Event {.kind = Event::Kind::GodOut, .god = k_Three}};
-	EXPECT_FALSE(Follow(out, k_One, state).godOut.has_value());
+	EXPECT_FALSE(Follow(out, k_One, k_Network, state).godOut.has_value());
 	// A player who asked to leave and went back does not stop the turns when the game is decided later
 	StoppedShowing(state);
 	const std::array decided {Event {.kind = Event::Kind::GodOutAndDecided, .god = k_Two}};
-	const auto opened = Follow(decided, k_One, state);
+	const auto opened = Follow(decided, k_One, k_Network, state);
 	ASSERT_TRUE(opened.endBox.has_value());
 	EXPECT_EQ(opened.endBox->kind, Kind::Won);
 	EXPECT_FALSE(StopsTheGame(*opened.endBox, state));
@@ -134,24 +137,43 @@ TEST(EndGameBox, AnEndBoxClosesTheBoxWithOk)
 	State state;
 	const std::array events {Event {.kind = Event::Kind::GodOut, .god = k_Three},
 	                         Event {.kind = Event::Kind::GodOut, .god = k_One}};
-	const auto opened = Follow(events, k_One, state);
+	const auto opened = Follow(events, k_One, k_Network, state);
 	EXPECT_FALSE(opened.godOut.has_value());
 	ASSERT_TRUE(opened.endBox.has_value());
 	EXPECT_EQ(opened.endBox->kind, Kind::Lost);
 }
 
-// A game decided by its conditions: the winner won, each other god among the first four lost, a looker-on sees who won
+// A game decided by its conditions: the winner won, each other god lost, a looker-on sees who won
 TEST(EndGameBox, TheConditionsDecideForEachGod)
 {
 	const std::array events {Event {.kind = Event::Kind::Won, .god = k_Two}};
 	State winner;
-	EXPECT_EQ(Follow(events, k_Two, winner).endBox->kind, Kind::Won);
+	EXPECT_EQ(Follow(events, k_Two, k_Network, winner).endBox->kind, Kind::Won);
 	State loser;
-	const auto lost = Follow(events, k_One, loser).endBox;
+	const auto lost = Follow(events, k_One, k_Network, loser).endBox;
 	EXPECT_EQ(lost->kind, Kind::LostAndDecided);
 	EXPECT_TRUE(StopsTheGame(*lost, loser));
 	State onlooker;
-	EXPECT_EQ(Follow(events, k_Seven, onlooker).endBox->kind, Kind::Won);
+	EXPECT_EQ(Follow(events, k_Neutral, k_Network, onlooker).endBox->kind, Kind::Won);
+}
+
+// In a skirmish, players five to seven only look on. In a network game, every god takes part, and the observer has the
+// neutral player.
+TEST(EndGameBox, EveryGodOfANetworkGameTakesPart)
+{
+	EXPECT_TRUE(LooksOn(k_Five, false));
+	EXPECT_TRUE(LooksOn(k_Seven, false));
+	EXPECT_FALSE(LooksOn(k_Five, k_Network));
+	EXPECT_FALSE(LooksOn(k_Seven, k_Network));
+	EXPECT_TRUE(LooksOn(k_Neutral, k_Network));
+	EXPECT_TRUE(LooksOn(k_Neutral, false));
+	EXPECT_FALSE(LooksOn(k_One, false));
+	// A god after the fourth loses when another god wins a network game. In a skirmish, it sees who won.
+	const std::array events {Event {.kind = Event::Kind::Won, .god = k_Two}};
+	State network;
+	EXPECT_EQ(Follow(events, k_Five, k_Network, network).endBox->kind, Kind::LostAndDecided);
+	State skirmish;
+	EXPECT_EQ(Follow(events, k_Seven, false, skirmish).endBox->kind, Kind::Won);
 }
 
 // The titles of the end box, and the looker-on's title with the winner's name
