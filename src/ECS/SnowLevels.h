@@ -23,6 +23,11 @@ namespace openblack::ecs
 class Registry;
 }
 
+namespace openblack::ecs::components
+{
+struct SnowLevel;
+}
+
 /// The snow that each thing on the land shows (components::SnowLevel). When the land draws a thing, the level of the
 /// thing moves a small step towards the level of the snow where it stands. A thing that the land does not draw keeps
 /// its level. A new thing starts with no snow.
@@ -52,6 +57,10 @@ void Step(Registry& registry, std::span<const entt::entity> things, const std::f
 /// piece that broke off a building shows its own. Each of the two shows no snow below k_BrokenModelLevelShown. A villager
 /// that a script draws in high detail shows no snow.
 [[nodiscard]] int32_t ShownLevelOf(const Registry& registry, entt::entity entity);
+
+/// The snow that the drawn model shows, as ShownLevelOf, from the snow of the thing (none when it has no snow) and
+/// whether a script draws it in high detail
+[[nodiscard]] int32_t ShownLevel(const components::SnowLevel* snow, bool highDetail);
 
 /// Keeps the snow of the broken model of a building. When the building breaks, the snow of its broken model starts at
 /// the level of the building. When the building is whole again, it loses the snow of its broken model. `model` counts

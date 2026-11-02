@@ -75,6 +75,8 @@ private:
 	/// The parts that the draw of each village totem draws with it
 	void FindParts();
 	void OnLetGo(entt::registry& registry, entt::entity entity);
+	/// Whether the list decides if a thing that is not a part of another thing is drawn
+	[[nodiscard]] bool DecidesWhole(const Registry& registry, entt::entity entity) const;
 
 	Registry* _registry {nullptr};
 	entt::connection _letGo;

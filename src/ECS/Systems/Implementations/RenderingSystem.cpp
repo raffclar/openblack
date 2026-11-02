@@ -71,6 +71,7 @@
 #include "ECS/Components/Scaffold.h"
 #include "ECS/Components/ScriptHighlight.h"
 #include "ECS/Components/SeeThrough.h"
+#include "ECS/Components/SnowLevel.h"
 #include "ECS/Components/SpellIcon.h"
 #include "ECS/Components/StoragePit.h"
 #include "ECS/Components/Stream.h"
@@ -771,12 +772,17 @@ bool RenderingSystem::UploadInstances(bool drawBoundingBox)
 	const openblack::ecs::ComponentLookup<CreatureMorph> creatureMorphs(registry);
 	const openblack::ecs::ComponentLookup<MorphWithTerrain> terrainMorphs(registry);
 	const openblack::ecs::ComponentLookup<ScaffoldGhost> ghosts(registry);
+	const openblack::ecs::ComponentLookups<Abode, Field, Swayable, ResourcePile, InHand, Pot, CreatureSpells, Fire, ObjectGlow,
+	                                       SeeThrough, WorshipIcon, Temple, ChangedMaterials, TownDesireFlag, WorkshopFlag,
+	                                       WorshipSiteFlag, GateLantern, BuildProgress, Feature, AnimalPose, HeldByCreature,
+	                                       Villager, Animal, InPhysics, SnowLevel>
+	    stores(registry);
 	const auto lifelessTotemParts = LifelessTotemParts(registry);
 	EachBySegment(
 	    [this, &registry, &vegetation, &meshes, &fits, &fizzOrder, &segmentPlaced, &lastSegment, drawBoundingBox, camera, &view,
 	     modelDetail, drawList, drawnHand, &drawnPlaces, &villagerPoses, &highDetails, &drawnScales, &physicsPoses,
-	     &detailMeshes, &lifelessTotemParts, &hands, &highlights, &creatureMorphs, &terrainMorphs,
-	     &ghosts](entt::entity entity, const Mesh& mesh, const Transform& transform) {
+	     &detailMeshes, &lifelessTotemParts, &hands, &highlights, &creatureMorphs, &terrainMorphs, &ghosts,
+	     &stores](entt::entity entity, const Mesh& mesh, const Transform& transform) {
 		    // The hands of the other gods and the right hands have no model on the screen
 		    if (!graphics::drawn_hand::Drawn(hands.Has(entity), entity, drawnHand))
 		    {
@@ -824,7 +830,8 @@ bool RenderingSystem::UploadInstances(bool drawBoundingBox)
 		    // A thing on the land is drawn in less detail the further off it is, fades out, then isn't drawn; a villager
 		    // then shows only as a smudge on a blob while it stands above the sea. One flying in the physics or one that
 		    // is kept in view never fades, and one a script draws in high detail is drawn in full however far off.
-		    auto drawnMesh = DrawnMeshOf(entity, mesh);
+		    const auto ownDrawnMesh = DrawnMeshOf(entity, mesh);
+		    auto drawnMesh = ownDrawnMesh;
 		    auto* slotMap = &_instanceSlots;
 		    std::optional<uint8_t> fade;
 		    std::optional<uint8_t> seeThroughRef;
@@ -857,7 +864,7 @@ bool RenderingSystem::UploadInstances(bool drawBoundingBox)
 			    slotMap = &_fadingSlots;
 			    fade = ghost->alpha;
 			    _fadingThings.emplace(entity, ghost->alpha);
-			    seeThroughRef = openblack::ecs::scaffold_ghost::SeeThroughRef(registry.AllOf<InHand>(ghost->scaffold));
+			    seeThroughRef = openblack::ecs::scaffold_ghost::SeeThroughRef(stores.AllOf<InHand>(ghost->scaffold));
 		    }
 		    else if (openblack::ecs::high_detail_rules::DrawsHighMeshAtAnyDistance(detail != nullptr, highDetails.Has(entity),
 		                                                                           terrainMorphs.Has(entity)))
@@ -894,7 +901,7 @@ bool RenderingSystem::UploadInstances(bool drawBoundingBox)
 						    gone = true;
 						    _goneThings.push(entity);
 					    }
-					    else if (!registry.AllOf<Villager>(entity))
+					    else if (!stores.AllOf<Villager>(entity))
 					    {
 						    // Any other thing of several meshes, an animal, leaves nothing behind
 						    return;
@@ -982,13 +989,14 @@ bool RenderingSystem::UploadInstances(bool drawBoundingBox)
 			    return;
 		    }
 		    // A home with someone in lights its windows at night
-		    const auto* abode = registry.TryGet<const Abode>(entity);
+		    const auto* abode = stores.TryGet<Abode>(entity);
 		    // The w is the snow that the thing shows. A broken building shows the snow of its broken model.
 		    glm::vec4 look {abode != nullptr && abode->presentAtHome > 0 ? 1.0f : 0.0f, 0.0f, 0.0f,
-		                    static_cast<float>(openblack::ecs::snow_levels::ShownLevelOf(registry, entity))};
+		                    static_cast<float>(openblack::ecs::snow_levels::ShownLevel(stores.TryGet<SnowLevel>(entity),
+		                                                                               highDetail != nullptr))};
 		    // A field's crop shows once it has grown a little, in its colour for how ripe it is, sunk into the ground by
 		    // how empty it is, and sways once ripe
-		    if (const auto* field = registry.TryGet<const Field>(entity); field != nullptr)
+		    if (const auto* field = stores.TryGet<Field>(entity); field != nullptr)
 		    {
 			    const auto crop = Locator::fieldSystem::value().GetLook(*field);
 			    if (!crop.has_value())
@@ -1008,7 +1016,7 @@ bool RenderingSystem::UploadInstances(bool drawBoundingBox)
 					    modelMatrix = graphics::mesh_detail::PaperMatrix(glm::vec3(modelMatrix[3]), transform.scale.x,
 					                                                     camera->GetOrigin(), camera->GetFocus());
 				    }
-				    else if (const auto* swayable = registry.TryGet<const Swayable>(entity); swayable != nullptr && crop->sways)
+				    else if (const auto* swayable = stores.TryGet<Swayable>(entity); swayable != nullptr && crop->sways)
 				    {
 					    modelMatrix = vegetation.GetFieldMatrix(modelMatrix, transform.scale.y, swayable->swaySlot);
 				    }
@@ -1018,9 +1026,9 @@ bool RenderingSystem::UploadInstances(bool drawBoundingBox)
 		    // A pile of food or wood is drawn as far under the ground as it has sunk, not at all once wholly under, and the
 		    // grain of a pile of food flows down it as it rises. A handful in the hand is drawn whole where it is held.
 		    float grainFlow = 0.0f;
-		    if (const auto* pile = registry.TryGet<const ResourcePile>(entity); pile != nullptr && pile->height > 0.0f)
+		    if (const auto* pile = stores.TryGet<ResourcePile>(entity); pile != nullptr && pile->height > 0.0f)
 		    {
-			    const auto sink = magic::piles::DrawnSink(pile->rise, pile->height, registry.AllOf<InHand>(entity));
+			    const auto sink = magic::piles::DrawnSink(pile->rise, pile->height, stores.AllOf<InHand>(entity));
 			    if (!sink.has_value())
 			    {
 				    look.z = 1.0f;
@@ -1028,7 +1036,7 @@ bool RenderingSystem::UploadInstances(bool drawBoundingBox)
 			    else
 			    {
 				    modelMatrix[3].y += *sink;
-				    const auto* pot = registry.TryGet<const Pot>(entity);
+				    const auto* pot = stores.TryGet<Pot>(entity);
 				    if (pot != nullptr && magic::piles::GrainFlows(pot->type))
 				    {
 					    grainFlow = magic::piles::GrainFlow(*sink, pile->height);
@@ -1038,7 +1046,7 @@ bool RenderingSystem::UploadInstances(bool drawBoundingBox)
 
 		    // A frozen creature takes an icy look, tinted dark blue and sheened with ice as it freezes (one fizzing out of
 		    // sight is drawn through the static by the renderer)
-		    if (const auto* spells = registry.TryGet<const CreatureSpells>(entity))
+		    if (const auto* spells = stores.TryGet<CreatureSpells>(entity))
 		    {
 			    if (spells->freeze > 0.0f)
 			    {
@@ -1050,19 +1058,19 @@ bool RenderingSystem::UploadInstances(bool drawBoundingBox)
 		    // A colour added over it after its texture: the heal's glow on the people it heals, the glow of a fire on it
 		    // and the poison on a pot. A house's positive x is its windows' light, and a house's glow goes above it: 1 plus
 		    // the glow while someone is home.
-		    const bool onFire = registry.AllOf<Fire>(entity);
+		    const bool onFire = stores.AllOf<Fire>(entity);
 		    uint32_t added = 0;
-		    if (const auto* glow = registry.TryGet<const ObjectGlow>(entity); glow != nullptr && abode == nullptr)
+		    if (const auto* glow = stores.TryGet<ObjectGlow>(entity); glow != nullptr && abode == nullptr)
 		    {
 			    added = glow->Packed();
 		    }
 		    // A see-through copy is blended by its own alpha
-		    if (const auto* seeThrough = registry.TryGet<const SeeThrough>(entity))
+		    if (const auto* seeThrough = stores.TryGet<SeeThrough>(entity))
 		    {
 			    look.z = -(1.0f - static_cast<float>(seeThrough->alpha) / 255.0f);
 		    }
 		    // A poisoned pot with no fire on it is tinted green, on the ground and in the hand
-		    if (const auto* pot = registry.TryGet<const Pot>(entity); pot != nullptr)
+		    if (const auto* pot = stores.TryGet<Pot>(entity); pot != nullptr)
 		    {
 			    if (const auto poison = graphics::object_tint::PotColours(pot->poisoned, onFire))
 			    {
@@ -1070,8 +1078,8 @@ bool RenderingSystem::UploadInstances(bool drawBoundingBox)
 				    added = graphics::object_tint::SumAdded(added, poison->added);
 			    }
 		    }
-		    // Something charred by fire is drawn grey
-		    if (look.y == 0.0f && Locator::fireSystem::has_value())
+		    // Something charred by fire is drawn grey. Only a thing with a fire can be charred.
+		    if (look.y == 0.0f && onFire && Locator::fireSystem::has_value())
 		    {
 			    if (const auto charred = Locator::fireSystem::value().GetCharredColour(entity))
 			    {
@@ -1094,7 +1102,7 @@ bool RenderingSystem::UploadInstances(bool drawBoundingBox)
 			    }
 		    }
 		    // An icon at a worship site that shows its charge is lit through white, and it shines in its player's colour
-		    if (Locator::spellIconSystem::has_value() && registry.AllOf<WorshipIcon>(entity))
+		    if (Locator::spellIconSystem::has_value() && stores.AllOf<WorshipIcon>(entity))
 		    {
 			    if (const auto shine = Locator::spellIconSystem::value().ShownTint(entity); shine != 0)
 			    {
@@ -1104,7 +1112,7 @@ bool RenderingSystem::UploadInstances(bool drawBoundingBox)
 		    }
 		    // The heart of a temple is lit through white. In its destruction it glows in its player's colour, then fades
 		    // out, and it is not drawn just before the temple goes.
-		    if (const auto* temple = registry.TryGet<const Temple>(entity); temple != nullptr)
+		    if (const auto* temple = stores.TryGet<Temple>(entity); temple != nullptr)
 		    {
 			    namespace heart_look = graphics::temple_heart_look;
 			    if (look.y == 0.0f)
@@ -1127,7 +1135,7 @@ bool RenderingSystem::UploadInstances(bool drawBoundingBox)
 				    const auto colour = player_colour::Of(temple->owner);
 				    glow = heart_look::Glow(colour, heart_look::GlowStrength(temple->destructionClock, pulse));
 			    }
-			    if (registry.AllOf<ChangedMaterials>(entity))
+			    if (stores.AllOf<ChangedMaterials>(entity))
 			    {
 				    const auto alpha = heart_look::DrawnAlpha(temple_destruction::HeartAlpha(temple->destructionClock));
 				    look.z = -(1.0f - static_cast<float>(alpha) / 255.0f);
@@ -1146,9 +1154,9 @@ bool RenderingSystem::UploadInstances(bool drawBoundingBox)
 
 		    // A flag over a town's store, the wood flag of a workshop or a need flag of a worship site is not there at all
 		    // while it does not show
-		    const auto* townFlag = registry.TryGet<const TownDesireFlag>(entity);
-		    const auto* woodFlag = registry.TryGet<const WorkshopFlag>(entity);
-		    const auto* needFlag = registry.TryGet<const WorshipSiteFlag>(entity);
+		    const auto* townFlag = stores.TryGet<TownDesireFlag>(entity);
+		    const auto* woodFlag = stores.TryGet<WorkshopFlag>(entity);
+		    const auto* needFlag = stores.TryGet<WorshipSiteFlag>(entity);
 		    if ((townFlag != nullptr && !townFlag->shown) || (woodFlag != nullptr && !woodFlag->shown) ||
 		        (needFlag != nullptr && !needFlag->shown))
 		    {
@@ -1159,7 +1167,7 @@ bool RenderingSystem::UploadInstances(bool drawBoundingBox)
 		    // A lantern on the Norse gate shows only while the gate is in the draw list and on screen. It takes the land's
 		    // light of the point where the gate stands, and no snow.
 		    std::optional<glm::vec2> lightOffset;
-		    if (const auto* lantern = registry.TryGet<const GateLantern>(entity); lantern != nullptr)
+		    if (const auto* lantern = stores.TryGet<GateLantern>(entity); lantern != nullptr)
 		    {
 			    const auto* gatePose =
 			        registry.Valid(lantern->gate) ? registry.TryGet<const AnimatedStaticPose>(lantern->gate) : nullptr;
@@ -1191,10 +1199,10 @@ bool RenderingSystem::UploadInstances(bool drawBoundingBox)
 		    // A building going up is drawn only as far up as it stands, with the broken and the unfinished ones, though
 		    // what of it stands can still be pointed at. A building with all of it built is drawn whole, also before it
 		    // is finished.
-		    const auto* progress = registry.TryGet<const BuildProgress>(entity);
-		    const auto* feature = registry.TryGet<const Feature>(entity);
+		    const auto* progress = stores.TryGet<BuildProgress>(entity);
+		    const auto* feature = stores.TryGet<Feature>(entity);
 		    const bool goingUp =
-		        DrawnMeshOf(entity, mesh) == mesh.id &&
+		        ownDrawnMesh == mesh.id &&
 		        building_construction::DrawnGoingUp(progress != nullptr ? std::optional(progress->built) : std::nullopt,
 		                                            feature != nullptr ? std::optional(feature->type) : std::nullopt);
 		    if (goingUp)
@@ -1218,7 +1226,7 @@ bool RenderingSystem::UploadInstances(bool drawBoundingBox)
 		    // An animal finds its own bones by its place among its model's instances, kept in its first column's w, which
 		    // the model's affine matrix leaves at 0
 		    auto instanceModel = modelMatrix;
-		    if (registry.AllOf<AnimalPose>(entity))
+		    if (stores.AllOf<AnimalPose>(entity))
 		    {
 			    instanceModel[0].w = static_cast<float>(slots->second.filled);
 		    }
@@ -1246,12 +1254,12 @@ bool RenderingSystem::UploadInstances(bool drawBoundingBox)
 		    }
 		    // What a villager holds is drawn on the bone at the end of its arm, as its clip poses it, with the villager's
 		    // look; not while a hand or a creature holds it
-		    const auto holder = registry.AllOf<InHand>(entity)           ? openblack::ecs::villager_held::Holder::PlayersHand
-		                        : registry.AllOf<HeldByCreature>(entity) ? openblack::ecs::villager_held::Holder::Creature
-		                                                                 : openblack::ecs::villager_held::Holder::None;
-		    if (const auto* person = registry.TryGet<const Villager>(entity);
-		        person != nullptr && villagerPose != nullptr && look.z != 1.0f && placed.has_value() &&
-		        openblack::ecs::villager_held::DrawsHeldThing(holder))
+		    const auto holder = stores.AllOf<InHand>(entity)           ? openblack::ecs::villager_held::Holder::PlayersHand
+		                        : stores.AllOf<HeldByCreature>(entity) ? openblack::ecs::villager_held::Holder::Creature
+		                                                               : openblack::ecs::villager_held::Holder::None;
+		    if (const auto* person = stores.TryGet<Villager>(entity); person != nullptr && villagerPose != nullptr &&
+		                                                              look.z != 1.0f && placed.has_value() &&
+		                                                              openblack::ecs::villager_held::DrawsHeldThing(holder))
 		    {
 			    const auto heldMesh = openblack::ecs::villager_held::MeshOf(person->carried);
 			    const auto& rest = meshes.Handle(slots->first)->GetBoneMatrices();
@@ -1291,7 +1299,7 @@ bool RenderingSystem::UploadInstances(bool drawBoundingBox)
 						    heldLook.w = 0.0f;
 						    _heldThings.push_back({.meshId = heldId,
 						                           .fading = alpha.has_value(),
-						                           .reflected = registry.AllOf<InPhysics>(entity),
+						                           .reflected = stores.AllOf<InPhysics>(entity),
 						                           .instance = {.model = held, .look = heldLook}});
 					    }
 				    }
@@ -1300,7 +1308,7 @@ bool RenderingSystem::UploadInstances(bool drawBoundingBox)
 		    if (look.z != 1.0f || (goingUp && progress->built > 0.0f))
 		    {
 			    _renderContext.drawnObjects.push_back({.entity = entity, .model = modelMatrix});
-			    if (registry.AllOf<Animal>(entity))
+			    if (stores.AllOf<Animal>(entity))
 			    {
 				    _renderContext.animalDraws.push_back({.entity = entity, .mesh = drawnMesh, .model = modelMatrix});
 			    }
@@ -1320,7 +1328,7 @@ bool RenderingSystem::UploadInstances(bool drawBoundingBox)
 			    _renderContext.highDetailDraws.push_back(
 			        {.entity = entity, .mesh = drawnMesh, .model = modelMatrix, .castModel = castModel});
 		    }
-		    if (registry.AllOf<InHand>(entity) && look.z != 1.0f)
+		    if (stores.AllOf<InHand>(entity) && look.z != 1.0f)
 		    {
 			    // What a hand holds joins the hand's shadow
 			    _renderContext.inHandDraws.push_back(
@@ -1332,8 +1340,7 @@ bool RenderingSystem::UploadInstances(bool drawBoundingBox)
 		    }
 		    if (drawBoundingBox)
 		    {
-			    auto l3dMesh =
-			        entt::locator<resources::ResourcesInterface>::value().GetMeshes().Handle(DrawnMeshOf(entity, mesh));
+			    auto l3dMesh = entt::locator<resources::ResourcesInterface>::value().GetMeshes().Handle(ownDrawnMesh);
 			    auto box = l3dMesh->GetBoundingBox();
 			    auto boxMatrix = modelMatrix * glm::translate(box.Center()) * glm::scale(box.Size());
 			    _renderContext.instanceUniforms[idx + (_renderContext.instanceUniforms.size() / 2)] = {.model = boxMatrix};

@@ -269,6 +269,11 @@ bool ObjectDrawListSystem::Decides(const Registry& registry, entt::entity entity
 	{
 		return Decides(registry, part->owner);
 	}
+	return DecidesWhole(registry, entity);
+}
+
+bool ObjectDrawListSystem::DecidesWhole(const Registry& registry, entt::entity entity) const
+{
 	const auto* resident = registry.TryGet<const MapCellResident>(entity);
 	return _view.has_value() && resident != nullptr && !resident->cells.empty() && !DrawnOnTheirOwn(registry, entity);
 }
@@ -280,7 +285,7 @@ bool ObjectDrawListSystem::Drawn(const Registry& registry, entt::entity entity) 
 	{
 		return Drawn(registry, part->owner);
 	}
-	if (!Decides(registry, entity))
+	if (!DecidesWhole(registry, entity))
 	{
 		return true;
 	}
