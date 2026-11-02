@@ -1958,7 +1958,7 @@
   "query": "view.incoming_messages"
  },
  {
-  "description": "The chat of a network game: the names of the gods, the lines that came in (turn, sender, the players that get them, text or taunt, shown in the incoming messages), the speech bubbles over the creatures (lines, time to show, scroll), and the chat controls (shown, open, quick chat, the typed line, the list of players and who gets a line)",
+  "description": "The chat of a network game: the names of the gods, the lines that came in (turn, sender, the players that get them, text or taunt, shown in the incoming messages), the speech bubbles over the creatures (lines, time to show, scroll), and the chat controls (shown, open, quick chat, the typed line, the list of players with its friends and others, and who gets a line)",
   "kind": "object",
   "parameters": [],
   "query": "view.chat"

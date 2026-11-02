@@ -270,6 +270,26 @@ struct ServerStatus
 	std::vector<ServerStatusPlayer> players;
 };
 
+/// A god that plays for a clan, in the answer to a status report
+struct ServerStatusClan
+{
+	/// "account"
+	int64_t account {0};
+	/// "clan"
+	int64_t clan {0};
+};
+
+/// The answer to PUT /api/v1/servers/{id}/status
+struct ServerStatusReply
+{
+	/// "next_status_in": the seconds until the next report
+	int32_t nextStatusIn {0};
+	/// "listed": the server is in the players' list now
+	bool listed {false};
+	/// "clans": the gods of the room that play for a clan
+	std::vector<ServerStatusClan> clans;
+};
+
 /// GET /api/v1/servers: {"servers": [...]}
 struct ServerList
 {
@@ -371,23 +391,32 @@ struct RankingEntry
 {
 	/// "position": 1 for the first
 	int32_t position {0};
-	/// "id"
+	/// The player ("account" "id") or the clan ("id")
 	int64_t id {0};
-	/// "name"
+	/// The player ("account" "name") or the clan ("name")
 	std::string name;
 	/// "points"
 	double points {0.0};
+	/// "games_ranked" of a player. A clan has none.
+	int32_t gamesRanked {0};
 };
 
-/// GET /api/v1/rankings/players?page=N and GET /api/v1/rankings/clans?page=N. Not in the contract of the lobby
-/// yet.
+/// The rows of a ranking, from an offset
+struct RankingQuery
+{
+	/// At most this many rows, from 1 to 100
+	int32_t limit {50};
+	/// The rows to skip
+	int32_t offset {0};
+};
+
+/// GET /api/v1/rankings/players?limit=N&offset=M ("players") and GET /api/v1/rankings/clans?limit=N&offset=M
+/// ("clans")
 struct RankingPage
 {
-	/// "page": 1 for the first page
-	int32_t page {1};
-	/// "pages": the number of pages
-	int32_t pages {1};
-	/// "entries"
+	/// "count": the number of rows of the whole ranking
+	int32_t count {0};
+	/// "players" or "clans"
 	std::vector<RankingEntry> entries;
 };
 

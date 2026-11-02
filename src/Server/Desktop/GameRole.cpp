@@ -146,7 +146,8 @@ struct GameRole::Parts
 			return;
 		}
 		reporting = true;
-		nextReport = std::chrono::steady_clock::now() + lobby_status::k_ReportInterval;
+		const auto sentAt = std::chrono::steady_clock::now();
+		nextReport = sentAt + lobby_status::k_ReportInterval;
 		const auto text = lobby_api::ToJson(lobby_status::MakeStatus(room, phase, host->Seats()));
 		online::HttpRequest request {.method = online::HttpMethod::Put,
 		                             .url = statusAddress,
@@ -156,14 +157,24 @@ struct GameRole::Parts
 		{
 			bans->Fetch();
 		}
-		lobby->Send(std::move(request), [this](online::HttpResponse&& response) {
+		lobby->Send(std::move(request), [this, sentAt](online::HttpResponse&& response) {
 			reporting = false;
-			const bool ok = response.status == 200;
+			// The answer says whether the lobby lists the server, and when it wants the next report
+			const auto reply = response.status == 200 ? lobby_api::ParseServerStatusReply(response.Text()) : std::nullopt;
+			if (reply.has_value())
+			{
+				nextReport = sentAt + std::chrono::seconds(reply->nextStatusIn);
+			}
+			const bool ok = reply.has_value() && reply->listed;
 			if (ok != listed)
 			{
 				if (ok)
 				{
 					SPDLOG_LOGGER_INFO(spdlog::get("game"), "The lobby lists the server");
+				}
+				else if (reply.has_value())
+				{
+					SPDLOG_LOGGER_WARN(spdlog::get("game"), "The lobby took the status of the server but does not list it");
 				}
 				else
 				{

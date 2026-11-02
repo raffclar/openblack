@@ -25,6 +25,7 @@
 #include "ECS/Components/Dance.h"
 #include "ECS/Components/LivingListPlace.h"
 #include "ECS/Components/ScriptControl.h"
+#include "ECS/Components/Spell.h"
 #include "ECS/Components/Town.h"
 #include "ECS/Components/Transform.h"
 #include "ECS/Components/Villager.h"
@@ -346,5 +347,19 @@ TEST_F(ScriptContainerProperties, ACreatureSearchInAStateDoesNotLookAtTheState)
 	EXPECT_EQ(search(5.0f, 0), static_cast<uint32_t>(creature));
 	EXPECT_EQ(search(5.0f, 200), static_cast<uint32_t>(creature));
 	EXPECT_EQ(search(2.0f, 0), 0u);
+	EXPECT_EQ(_api.GetStubCalls().Total(), 0u);
+}
+
+// A script sets the strength of a miracle that it cast: the value multiplies the strength that the miracle gets
+// NOLINTNEXTLINE(cppcoreguidelines-avoid-non-const-global-variables): external macro
+TEST_F(ScriptContainerProperties, AStrengthSetOnACastMiracleMultipliesItsStrength)
+{
+	auto& registry = Locator::entitiesRegistry::value();
+	const auto spell = registry.Create();
+	registry.Assign<ecs::components::Spell>(spell);
+	EXPECT_EQ(AskProperty(spell, script::ObjectPropertyType::Strength), 1.0f);
+	Call(k_SetProperty, {Property(script::ObjectPropertyType::Strength), Object(spell), Float(2.0f)});
+	EXPECT_EQ(registry.Get<const ecs::components::Spell>(spell).chants.strengthMultiplier, 2.0f);
+	EXPECT_EQ(AskProperty(spell, script::ObjectPropertyType::Strength), 2.0f);
 	EXPECT_EQ(_api.GetStubCalls().Total(), 0u);
 }

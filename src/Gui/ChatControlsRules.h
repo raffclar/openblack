@@ -71,6 +71,11 @@ constexpr int k_ListMargin = 8;
 }
 /// The list of players: below the send button, as high as its items and 8 more, from 10 units to half of the screen
 [[nodiscard]] DialogRect PlayerListRect(int width, int height, int contentHeight) noexcept;
+/// The friend button: under the list of players, as wide as the list, 20 units high
+[[nodiscard]] constexpr DialogRect FriendButtonRect(int width, int listBottom) noexcept
+{
+	return {.min = {width - k_PlayerListWidth, listBottom}, .max = {width, listBottom + k_ButtonSize}};
+}
 /// The quick chat list: below the line, against the right of the screen, half of the screen high
 [[nodiscard]] DialogRect QuickListRect(int width, int height) noexcept;
 /// The speech button of the heading of the list of players: 22 units from the right of the box of the items

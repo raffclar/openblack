@@ -258,18 +258,27 @@ void LockstepHost::ChatInRoom(ConnectionId connection, const Peer& peer, const g
 	{
 		return;
 	}
-	std::string from;
-	if (peer.seat.has_value())
-	{
-		from = _seats[*peer.seat].name;
-	}
-	else if (const auto watcher = std::ranges::find(_watchers, std::optional(connection), &Watcher::connection);
-	         watcher != _watchers.end())
-	{
-		from = watcher->name;
-	}
+	auto from = PeerName(connection, peer);
 	if (from.empty())
 	{
+		return;
+	}
+	// A line with an addressee goes only to the joined player with that name, also when that player is the sender. A
+	// name that is not in the room gets no line.
+	if (!chat.to.empty())
+	{
+		const auto target = std::ranges::find_if(_peers, [this, &chat](const auto& entry) {
+			return entry.second.joined && PeerName(entry.first, entry.second) == chat.to;
+		});
+		if (target == _peers.end())
+		{
+			return;
+		}
+		const auto text = game_socket::ToJson(game_socket::RoomChat {
+		    .from = std::move(from), .text = chat.text, .to = {}, .privateLine = true, .team = chat.team});
+		_sockets.SendText(target->first, text);
+		Log(spdlog::level::info,
+		    fmt::format("A private chat line from connection {} goes to connection {}", connection, target->first));
 		return;
 	}
 	// The line goes to every other player in the room, as the host's lobby sends it. The sender's game shows its own line
@@ -283,6 +292,20 @@ void LockstepHost::ChatInRoom(ConnectionId connection, const Peer& peer, const g
 		}
 	}
 	Log(spdlog::level::info, fmt::format("A chat line from connection {} goes to the room", connection));
+}
+
+std::string LockstepHost::PeerName(ConnectionId connection, const Peer& peer) const
+{
+	if (peer.seat.has_value())
+	{
+		return _seats[*peer.seat].name;
+	}
+	if (const auto watcher = std::ranges::find(_watchers, std::optional(connection), &Watcher::connection);
+	    watcher != _watchers.end())
+	{
+		return watcher->name;
+	}
+	return {};
 }
 
 void LockstepHost::Join(ConnectionId connection, Peer& peer, const game_socket::Join& join)
