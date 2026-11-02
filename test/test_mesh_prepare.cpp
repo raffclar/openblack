@@ -353,7 +353,8 @@ TEST_F(MeshPrepare, TempleMeshesOfOneBlendShareOneSetOfDeviceObjects)
 	constexpr entt::id_type k_Second = 2;
 	meshes.Load(k_First, resources::L3DLoader::FromPreparedDynamicTag {}, "first", L3DMesh::Prepare(model, k_Device));
 	const auto fromFirst = Device().TakeMade();
-	ASSERT_EQ(fromFirst.size(), 3U);
+	// The skin with no texels, the texels, the vertices and the triangles
+	ASSERT_EQ(fromFirst.size(), 4U);
 
 	// The second temple takes the mesh of the first and makes no object on the graphics device
 	meshes.Load(k_Second, resources::L3DLoader::FromSharedTag {}, meshes.Handle(k_First).handle());
