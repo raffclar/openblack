@@ -45,6 +45,9 @@ struct PointSound
 	bool delayed {false};
 	/// The game turns since it was made
 	uint16_t turns {0};
+	/// The number of a sound that KeepPointSound keeps, which loops until EndPointSound. 0 for a sound that plays
+	/// one time.
+	uint32_t kept {0};
 };
 
 class SoundTagSystem final: public SoundTagSystemInterface
@@ -59,6 +62,8 @@ public:
 	void ProcessTurn(const glm::vec3& camera) override;
 	void SetActive(entt::entity entity, bool active) override;
 	void CreatePointSound(entt::id_type sound, const glm::vec3& position, bool delayed) override;
+	[[nodiscard]] uint32_t KeepPointSound(entt::id_type sound, const glm::vec3& position) override;
+	void EndPointSound(uint32_t kept) override;
 	entt::entity AttachObjectSound(entt::entity entity, entt::id_type sound, bool loops) override;
 	void DetachObjectSound(entt::entity entity, entt::id_type sound) override;
 	void ForgetSavedSounds() override;
@@ -80,6 +85,9 @@ private:
 	/// One turn of a sound at a point: a delayed sound starts when it reaches the camera. True when the sound goes,
 	/// because it no longer plays.
 	[[nodiscard]] bool ProcessPointSound(PointSound& point, const glm::vec3& camera) const;
+	/// One turn of a sound that KeepPointSound keeps: it starts again when it does not play, if it is heard and the
+	/// camera is within its reach
+	void ProcessKeptSound(PointSound& point, const glm::vec3& camera) const;
 	/// One turn of the tag of an object: its sound follows the object, or starts. True when the tag goes, because its
 	/// object is gone.
 	[[nodiscard]] bool ProcessObjectTag(entt::entity entity, components::SoundTag& tag, const glm::vec3& camera) const;
@@ -101,6 +109,8 @@ private:
 	/// The tags of the sounds attached to objects at a load of a saved game, until the load attaches each sound again or
 	/// forgets it
 	std::vector<entt::entity> _unclaimed;
+	/// The number of the last sound that KeepPointSound kept
+	uint32_t _lastKept {0};
 };
 
 } // namespace openblack::ecs::systems

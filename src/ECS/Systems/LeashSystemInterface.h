@@ -151,6 +151,9 @@ public:
 	/// The player goes into their temple: the leash of their creature comes off when the player holds it. Every computer
 	/// does this in the same game turn. Returns whether the leash came off.
 	virtual bool TakeOffAtTemple([[maybe_unused]] PlayerNames player) { return false; }
+	/// The human of the player leaves the network game: the leash of their creature comes off when the player holds it.
+	/// Every computer does this in the turn of the leave. Returns whether the leash came off.
+	virtual bool TakeOffAtLeave([[maybe_unused]] PlayerNames player) { return false; }
 
 	/// An order given with the leash held in the hand, as a tap of the Action button gives it: to go to a place on the land
 	/// (or what the creature makes of the place: drinking from the sea, working a field, sleeping at home), or to act on a

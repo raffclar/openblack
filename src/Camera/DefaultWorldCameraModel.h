@@ -157,8 +157,6 @@ private:
 	                        const Camera& camera);
 	/// Puts the camera back inside the zones' fence; whether it was outside
 	bool KeepInsideFence(const camera_zones::Zones& zones, glm::vec3 originAtFrameStart, glm::vec3 listener);
-	/// Whether the player is using any of the camera's controls this frame
-	[[nodiscard]] bool AnyControlHeld() const;
 
 	[[nodiscard]] glm::vec3 GetTargetForwardVector() const;
 	[[nodiscard]] glm::vec3 GetTargetForwardUnitVector() const;

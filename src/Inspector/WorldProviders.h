@@ -84,6 +84,17 @@ using ParticleEffectInfo = ecs::systems::ParticleRuleSystemInterface::EffectInfo
 /// and how many of the running effects have a number that the simulation gave
 [[nodiscard]] Json RequestSummary(std::optional<ecs::systems::EffectHandle> next, std::span<const ParticleEffectInfo> effects);
 
+/// The waterfall of the third land as the frames show it
+struct WaterfallInfo
+{
+	/// The model is on the land
+	bool model {false};
+	/// How far the water's texture has slid down it
+	float slide {0.0f};
+	/// The number of its sound, none when it is silent
+	std::optional<uint32_t> sound;
+};
+
 struct ParticleSources
 {
 	std::function<std::span<const water_rings::Ring>()> rings;
@@ -97,6 +108,8 @@ struct ParticleSources
 	std::function<std::optional<ecs::systems::EffectHandle>()> nextRequest;
 	/// What the last frame of the draw of the effects drew, none on a computer that does not draw them
 	std::function<std::optional<ecs::systems::ParticleSystemInterface::DrawStats>()> drawn;
+	/// The waterfall of the third land, none on a computer that does not draw the land
+	std::function<std::optional<WaterfallInfo>()> waterfall;
 };
 
 ///   particles.splash   near, radius          the splashes within the radius, nearest first, with their state
@@ -106,6 +119,7 @@ struct ParticleSources
 ///   particles.belief                         the symbols of belief that rose last, the newest first
 ///   particles.requests                       the effects that the turns and the scripts asked for
 ///   particles.drawn                          what the last frame of the draw of the effects drew
+///   particles.waterfall                      the waterfall of the third land: its model, slide and sound
 class ParticlesProvider final: public ProviderInterface
 {
 public:

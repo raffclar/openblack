@@ -2053,3 +2053,12 @@ bool creature_mind::AtOrPastMainStep(std::span<const Step> agenda, size_t step, 
 	}
 	return showingDesire || step >= MainStep(agenda);
 }
+
+Step creature_mind::OrderedStep(const Step& ordered, bool toItself)
+{
+	if (toItself)
+	{
+		return Object({.kind = ObjectOrder::Kind::PickUp});
+	}
+	return ordered;
+}

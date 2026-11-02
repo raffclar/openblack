@@ -137,6 +137,16 @@ float Need(const IconCharge& icon)
 	return icon.seedHeld ? icon.required : icon.required - icon.store;
 }
 
+bool CastStopsCharge(bool charging, float store, bool castByCharger)
+{
+	// An icon that does not charge and holds nothing has no charge to stop
+	if (!charging && store == 0.0f)
+	{
+		return false;
+	}
+	return castByCharger;
+}
+
 IconTurn ChargingIconTurn(float store, float required, std::optional<float> heldSeedStore)
 {
 	IconTurn turn {.store = store, .seedStore = heldSeedStore};

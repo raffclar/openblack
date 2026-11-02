@@ -2449,7 +2449,7 @@ void CreatureFightSystem::Recoil(entt::entity creature)
 	auto& fighter = fighting->fighter;
 	// Reeling already from a blow, recoiling in its block or fainting, it takes no more notice
 	using namespace fight::animations;
-	const bool reeling = fighter.animation >= k_RecoilHigh && fighter.animation < k_WobbleHighSide;
+	const bool reeling = fighter.animation >= k_RecoilHigh && fighter.animation < k_AfterRecoils;
 	if (reeling || fighter.state == fight::State::BlockRecoil || fighter.state == fight::State::Faint)
 	{
 		return;
@@ -4036,7 +4036,7 @@ void CreatureFightSystem::TestBlow(entt::entity creature, int32_t fromMs)
 	// A victim that reels from a blow already, recoils in its block or faints takes no blow
 	const auto& victim = registry.Get<const CreatureFighting>(opponent).fighter;
 	const bool reeling = victim.state == fight::State::Action && victim.animation >= fight::animations::k_RecoilHigh &&
-	                     victim.animation < fight::animations::k_WobbleHighSide;
+	                     victim.animation < fight::animations::k_AfterRecoils;
 	const bool open = !reeling && victim.state != fight::State::BlockRecoil && victim.state != fight::State::Faint;
 	const auto bones = BonesOf(opponent);
 	const auto reach = fight::BlowTestReach(size, special);
@@ -4248,12 +4248,6 @@ void CreatureFightSystem::LandBlow(entt::entity creature, const glm::vec3& point
 		_markHeld = false;
 	}
 
-	auto& victimAnimation = registry.Get<CreatureAnimation>(opponent);
-	victimAnimation.wobble = {
-	    .animation = fight::WobbleAnimation(result.band, direction == fight::RecoilDirection::Right ||
-	                                                         direction == fight::RecoilDirection::Left),
-	    .timeMs = 0.0f,
-	};
 	// Too close, the attacker is pushed back by half of how far they overlap
 	const auto* opponentMoves = registry.TryGet<const CreatureLocomotion>(opponent);
 	if (auto* moves = registry.TryGet<CreatureLocomotion>(creature); moves != nullptr && opponentMoves != nullptr)

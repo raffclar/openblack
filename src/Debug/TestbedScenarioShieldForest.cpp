@@ -241,6 +241,38 @@ void AddShields(std::vector<Scenario>& all)
 	                  .player = PlayerNames::PLAYER_TWO}},
 	});
 
+	all.push_back({
+	    .id = "miracles.reaction_flags",
+	    .name = "Villagers at home or in the hand do not take up a miracle",
+	    .facet = Facet::Miracles,
+	    .description = "A Celtic hut of the player's town at night, with two villagers of the town that go in to sleep. A "
+	                   "third villager of the town stands 25 south of the hut, and a villager of no town stands 25 east "
+	                   "of it. At 135 seconds the player's hand takes the third villager. At 137 seconds a lightning bolt "
+	                   "of the player strikes between the hut and the villager of no town. At 147 seconds the hand puts "
+	                   "the third villager down.",
+	    .expected = "The town celebrates for the first 120 seconds. Then the two villagers of the hut go in to sleep. The two "
+	                "villagers in the hut and the villager in the hand do not take up the reaction to the "
+	                "lightning: the two stay in the hut, and the third villager does not react when the hand puts it "
+	                "down. A villager in the hut is impressed by the miracle all the same: its memory of reactions keeps the "
+	                "lightning. The villager of no "
+	                "town is free to react, and it takes up the reaction to the lightning.",
+	    .environment = {.hour = 23.0f, .dispenserGrid = false},
+	    .framing = {.shot = Shot::Overview, .include = {{-10.0f, 0.0f}, {35.0f, 45.0f}}},
+	    .objects = {{.type = AbodeInfo::CelticHut, .offset = {0.0f, 30.0f}, .yawDegrees = 180.0f},
+	                {.type = VillagerInfo::CelticFarmerMale, .offset = {-6.0f, 22.0f}, .joinTown = true, .homeIn = 0},
+	                {.type = VillagerInfo::CelticHousewifeFemale, .offset = {6.0f, 22.0f}, .joinTown = true, .homeIn = 0},
+	                {.type = VillagerInfo::CelticForesterMale, .offset = {0.0f, 5.0f}, .joinTown = true},
+	                {.type = VillagerInfo::CelticFishermanMale, .offset = {25.0f, 30.0f}}},
+	    .miracles = {{.type = MagicType::LightningBolt,
+	                  .point = {14.0f, 30.0f},
+	                  .handOffset = {14.0f, 15.0f},
+	                  .handHeight = 15.0f,
+	                  .delaySeconds = 137.0f,
+	                  .holdSeconds = 2.0f}},
+	    .commands = {{.kind = Kind::HandTake, .delaySeconds = 135.0f, .object = 3},
+	                 {.kind = Kind::HandRelease, .delaySeconds = 12.0f}},
+	});
+
 	all.push_back(ShieldFall(
 	    "miracles.shield_fall_hide", "A town's people hide when their shield falls",
 	    "Four villagers of the player's town about a spiritual shield of radius 30, between two huts, one 50 to the "
@@ -410,6 +442,26 @@ void AddForests(std::vector<Scenario>& all)
 	                 {.kind = Kind::PointerTo, .delaySeconds = 2.0f, .point = {0.6f, 0.62f}},
 	                 {.kind = Kind::PointerPress, .delaySeconds = 2.0f, .value = k_Action},
 	                 {.kind = Kind::PointerRelease, .delaySeconds = 0.15f, .value = k_Action}},
+	});
+
+	all.push_back({
+	    .id = "miracles.forest_camera_path",
+	    .name = "Forest: the camera follows the miracle's path",
+	    .facet = Facet::Miracles,
+	    .description = "A forest cast by hand on grass north of the middle, as in the forest seed scenario. The player does "
+	                   "not touch the camera.",
+	    .expected = "At the cast the camera glides from where it is onto the start of the forest's path, which is put at "
+	                "the forest, and arrives about four seconds later. Then it follows the path a little behind, at the "
+	                "speed of the forest's animation sped up. When the animation comes to its last frame, the camera is "
+	                "the player's again at the end of the next turn, from where it is, and flies back to where it was "
+	                "going (the debug log says that the path came to its last frame and let go of the camera).",
+	    .environment = {.dispenserGrid = false},
+	    .framing = {.shot = Shot::Overview, .include = {{-20.0f, 20.0f}, {20.0f, 60.0f}}},
+	    .miracles = {{.type = MagicType::Forest,
+	                  .point = {0.0f, 40.0f},
+	                  .handOffset = {0.0f, 40.0f},
+	                  .delaySeconds = 0.5f,
+	                  .byHand = true}},
 	});
 
 	all.push_back({

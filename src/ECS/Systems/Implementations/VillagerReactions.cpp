@@ -314,8 +314,8 @@ bool villager_reactions::Available(entt::entity villager, Reaction type)
 	}
 	// Nor dying where it is now, nor under the control of a script, and too weak to react to anything but food
 	const auto now = StateOf(*action, LivingAction::Index::Top);
-	// TODO(raffclar): the game also keeps these villagers from reacting: one on a structure and one in a football match.
-	// openblack has no structures or football yet.
+	// TODO(raffclar): the game also keeps a villager in a football match from reacting. openblack has no football yet.
+	// The game also tests for a villager on a structure, but no code of the game puts a villager on a structure.
 	return magic::villager_reaction::Available({.stateLetsItReact = stateLetsItReact,
 	                                            .dyingNow = now == VillagerStates::SetDying || now == VillagerStates::Dying,
 	                                            .scriptControlled = registry.AllOf<ScriptControlled>(villager),

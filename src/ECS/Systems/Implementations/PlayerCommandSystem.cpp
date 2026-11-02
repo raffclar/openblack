@@ -32,6 +32,7 @@
 #include "ECS/Components/Player.h"
 #include "ECS/Components/VillageTotem.h"
 #include "ECS/CreatureFromFile.h"
+#include "ECS/LeaverHand.h"
 #include "ECS/ProfileAlignment.h"
 #include "ECS/Registry.h"
 #include "ECS/Statistics.h"
@@ -458,6 +459,8 @@ void Run(const Command& command, uint32_t turn)
 			    if (god.has_value() && !registry.AllOf<openblack::ecs::components::LeftGame>(*god))
 			    {
 				    registry.Assign<openblack::ecs::components::LeftGame>(*god, turn);
+				    // The hand of the human lets go: the leash comes off, the charges stop and what it holds goes
+				    std::ignore = openblack::ecs::leaver_hand::ReleaseHandInGame(command.player);
 			    }
 		    }
 		    else if constexpr (std::is_same_v<Kind, HandPick>)

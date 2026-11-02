@@ -80,6 +80,7 @@ Changes ChangeTracker::Step(const Frame& frame)
 		if (_mode.has_value())
 		{
 			++changes.count;
+			changes.left = _mode;
 		}
 		Enter(frame.mode);
 	}

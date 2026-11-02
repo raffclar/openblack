@@ -671,7 +671,7 @@ float SpellIconSystem::RequiredNow(const WorshipIcon& icon, entt::entity heldSee
 		return Required(icon);
 	}
 	const auto& seed = Entities().Get<const SpellSeed>(heldSeed);
-	return magic::ChantNeeded(Required(icon), magic::SeedChantStore(seed.chantStore, seed.storedChants, seed.hasCast));
+	return magic::ChantNeeded(Required(icon), seed.chantStore);
 }
 
 icons::IconCharge SpellIconSystem::ChargeOf(const WorshipIcon& icon, PlayerNames tapping) const
@@ -875,6 +875,18 @@ void SpellIconSystem::TakeCastCharge(entt::entity icon)
 	}
 	const float cost = RequiredNow(*component, HeldSeedOf(*component));
 	component->store -= std::min(cost, component->store);
+}
+
+bool SpellIconSystem::CancelSeedIconCharge(entt::entity seed, PlayerNames charger)
+{
+	const auto icon = IconOfSeed(seed);
+	auto* component = icon != entt::null ? Entities().TryGet<WorshipIcon>(icon) : nullptr;
+	if (component == nullptr || !icons::CastStopsCharge(component->charging, component->store, component->charger == charger))
+	{
+		return false;
+	}
+	CancelCharge(*component);
+	return true;
 }
 
 void SpellIconSystem::StartCharge(entt::entity icon, PlayerNames player)
@@ -1299,7 +1311,7 @@ std::optional<float> SpellIconSystem::ShownCharge(entt::entity icon) const
 	if (const auto held = HeldSeedOf(*component); held != entt::null)
 	{
 		const auto& seed = registry.Get<const SpellSeed>(held);
-		heldSeedCharge = magic::SeedChantStore(seed.chantStore, seed.storedChants, seed.hasCast);
+		heldSeedCharge = seed.chantStore;
 	}
 	return icons::ShownCharge(component->store, icons::ShownRequired(Required(*component), heldSeedCharge));
 }

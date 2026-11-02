@@ -71,9 +71,9 @@ struct Tapped
 	bool miracleBubble {false};
 };
 
-/// What a single tap does. Held untied, the leash gives an order on a thing or on the land. The creature itself gets no
-/// order, because its own taps put the leash on and take hold of it. While a teleport stone carries the creature, the
-/// tap is a normal tap.
+/// What a single tap does. Held untied, the leash gives an order on a thing or on the land. A tap on the creature itself
+/// is an order on the creature, as on any other thing. While a teleport stone carries the creature, the tap is a normal
+/// tap.
 [[nodiscard]] Tap OnTap(const Leash& leash, const Tapped& tapped);
 /// What the second tap of a double tap does. Tied, a double tap on what the leash is tied to, or on the creature,
 /// unties it, and on anything else does nothing. Untied, it ties the leash to the thing tapped; a miracle bubble that
@@ -232,7 +232,7 @@ struct Thing
 	/// It carries something, and it could lift the thing
 	bool carrying {false};
 	bool liftable {false};
-	/// The thing is another creature, and how far it is from the creature
+	/// The thing is a creature (another creature, or the creature itself), and how far it is from the creature
 	bool creature {false};
 	float distance {0.0f};
 	LeashType leash {LeashType::Rope};
@@ -256,6 +256,13 @@ enum class Attempt : uint8_t
 [[nodiscard]] std::vector<Attempt> OnThing(const Thing& thing);
 /// On the aggression leash, another creature within this many times the creature's height is fought
 constexpr float k_FightReachHeights = 8.0f;
+/// On the aggression leash, an order on the creature itself is a fight with itself, at no distance. The fight starts as
+/// each fight starts: the creature asks itself to fight and agrees, it makes itself stand still in its mind, then it
+/// gives itself the order to turn and face itself. An order to itself stops the agenda (see the creature's mind), so no
+/// step after the order occurs.
+[[nodiscard]] std::vector<creature_mind::Step> FightItself(uint32_t self);
+/// In the start of a fight, the other creature turns to face the creature that asked for this long
+constexpr float k_FightFaceSeconds = 0.1f;
 /// Answering an order on a fish farm, the creature doesn't nod
 [[nodiscard]] bool Acknowledges(const std::vector<Attempt>& attempts);
 

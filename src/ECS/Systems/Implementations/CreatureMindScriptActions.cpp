@@ -59,7 +59,8 @@ bool CreatureMindSystem::ObeyGodOrder(entt::entity creature, uint32_t action, en
 	                                              .activityObject = known ? BelongsTo(object) : std::nullopt,
 	                                              .action = tables->actions[action].name,
 	                                              .actionObject = known ? object : entt::null,
-	                                              .ordered = true});
+	                                              .ordered = true,
+	                                              .fightBodyEndsAgain = true});
 	// The order is forced and counts at its end, also when the creature could not make a plan for it. A mind that has
 	// not thought yet takes no order.
 	auto& state = registry.Get<CreatureMindState>(creature);

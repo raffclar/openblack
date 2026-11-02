@@ -184,3 +184,13 @@ TEST(ForceField, ScriptInfluenceOnlyInsideTheFence)
 	EXPECT_FALSE(camera_zones::ScriptInfluenceCounts(k_Square, true, {50.0f, 0.0f, -10.0f}));
 	EXPECT_TRUE(camera_zones::ScriptInfluenceCounts(k_Square, false, {150.0f, 0.0f, 50.0f}));
 }
+
+TEST(ForceField, TheCameraIsHeldBackUntilEveryHoldingControlIsLetGo)
+{
+	EXPECT_FALSE(camera_zones::HoldsBack({}));
+	EXPECT_TRUE(camera_zones::HoldsBack({.grippingLand = true}));
+	EXPECT_TRUE(camera_zones::HoldsBack({.actionButton = true}));
+	EXPECT_TRUE(camera_zones::HoldsBack({.bothButtons = true}));
+	EXPECT_TRUE(camera_zones::HoldsBack({.rotateAroundMouse = true}));
+	EXPECT_TRUE(camera_zones::HoldsBack({.keyStep = true}));
+}

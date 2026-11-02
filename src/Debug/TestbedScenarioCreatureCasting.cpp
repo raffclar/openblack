@@ -258,6 +258,25 @@ void testbed_scenarios::AddCreatureCastingScenarios(std::vector<Scenario>& all)
 	    .commands = {Know(MagicType::Water), CastAtObject(MagicType::Water, 0, 0.5f)},
 	});
 	all.push_back({
+	    .id = "hand.hold_ends_creature_cast_beams",
+	    .name = "The hand holds a creature that casts water",
+	    .facet = Facet::Hand,
+	    .description = "A tiger that knows the water miracle casts it at a tree eighty metres away. While it holds its "
+	                   "arms out in the scatter pose, the hand holds the tiger. Four seconds later the hand lets go.",
+	    .expected = "Before the hold, two beams go from the hands of the tiger to the point above the tree. When the "
+	                "hand holds the tiger, the two beams stop and fade. The water continues to rain on the tree. When "
+	                "the hand lets go, the beams do not come back. The log shows \"The cast beams from the hands of "
+	                "creature\" and \"stop\" at the hold.",
+	    .environment = {.dispenserGrid = false},
+	    .framing = {.shot = Shot::Follow, .distance = 1.0f},
+	    .creatures = {Caster({0.0f, 0.0f}, "caster")},
+	    .objects = {{.type = TreeInfo::Birch, .offset = {0.0f, 80.0f}}},
+	    .commands = {Know(MagicType::Water),
+	                 CastAtObject(MagicType::Water, 0, 0.5f),
+	                 {.kind = Kind::HandLock, .creature = 0, .delaySeconds = 9.0f},
+	                 {.kind = Kind::HandLetGo, .creature = 0, .delaySeconds = 4.0f}},
+	});
+	all.push_back({
 	    .id = "miracles.creature_casts_to_impress",
 	    .name = "Creature casting: a miracle to impress a villager",
 	    .facet = Facet::Miracles,
@@ -539,6 +558,27 @@ void testbed_scenarios::AddCreatureCastingScenarios(std::vector<Scenario>& all)
 	                  .delaySeconds = 1.0f,
 	                  .value = static_cast<size_t>(SpellSeedType::CreatureSpellItchy)}},
 	    .hand = HandHold {.offset = {0.0f, 30.0f}, .height = 8.0f},
+	});
+
+	all.push_back({
+	    .id = "miracles.hand_phial_recast",
+	    .name = "Creature spells: the hand casts its phial again on another creature",
+	    .facet = Facet::Miracles,
+	    .description = "Two cows stand side by side, ten apart. The player's hand is given the itchy creature spell. The "
+	                   "hand casts the phial on the west cow. One second later, while the phial is still in the hand, the "
+	                   "hand casts it on the east cow.",
+	    .expected = "At the first cast, the flies swarm round the west cow, and the phial stays in the hand. At the second "
+	                "cast, the itchy spell on the west cow stops, and the flies swarm round the east cow. The phial stays "
+	                "in the hand, linked to the new spell, and leaves the hand four seconds after the second cast.",
+	    .environment = {.dispenserGrid = false},
+	    .framing = {.shot = Shot::Overview, .include = {{-15.0f, 20.0f}, {15.0f, 40.0f}}},
+	    .creatures = {Other({-5.0f, 30.0f}, "west"), Other({5.0f, 30.0f}, "east")},
+	    .commands = {{.kind = Kind::HoldSeed,
+	                  .delaySeconds = 1.0f,
+	                  .value = static_cast<size_t>(SpellSeedType::CreatureSpellItchy)},
+	                 {.kind = Kind::HandCastOnCreature, .delaySeconds = 1.0f, .value = 0},
+	                 {.kind = Kind::HandCastOnCreature, .delaySeconds = 1.0f, .value = 1}},
+	    .hand = HandHold {.offset = {0.0f, 25.0f}, .height = 8.0f},
 	});
 
 	all.push_back({
