@@ -45,12 +45,15 @@ enum class HashDetail : uint8_t
 };
 
 /// Tests: at a turn, the temple of a player starts its destruction, as when its heart loses the last of its life. Each
-/// computer of a network game must have the same switch, so that every world does the same at the same turn.
+/// computer of a network game must have the same switch, so that every world does the same at the same turn. A range of
+/// players loses the temple of each god from the first player to the last player.
 struct TempleLoss
 {
 	/// The number of the player, from 0
 	uint8_t player {0};
 	uint32_t turn {0};
+	/// The number of the last player of a range. The same as the player for one player.
+	uint8_t lastPlayer {0};
 };
 
 /// Tools: the winning conditions that a test switch gives a network game, as the host picks them. The values are checked
@@ -189,6 +192,7 @@ constexpr uint32_t k_LongestFrameMs = 1000;
 [[nodiscard]] bool SkipsHeldFrame(bool steppedByTool, bool paused, bool workWaits);
 
 /// The loss of a temple from the text "player:turn", such as "1:300". None for another text or a player past the seventh.
+/// Reads PLAYER:TURN or FIRST-LAST:TURN. The players are numbers from 0 to the last god of a network game of 32 gods.
 [[nodiscard]] std::optional<TempleLoss> ParseTempleLoss(std::string_view text);
 
 /// The winning conditions from the text "[LAND:]NAME[=VALUE],...", such as "mpm_2p_1:WC_HOUSES_BUILT=3,WC_GROW_TREES".

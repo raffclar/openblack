@@ -79,7 +79,7 @@ struct Opened
 };
 
 /// The boxes that the events of a turn open on the computer of the local god
-[[nodiscard]] Opened Follow(std::span<const game_end::Event> events, PlayerNames local, State& state);
+[[nodiscard]] Opened Follow(std::span<const game_end::Event> events, PlayerNames local, bool networkGame, State& state);
 
 /// The question to leave a network game: the end box asks it. The game goes on for the player.
 [[nodiscard]] Box AskToLeave(State& state);
@@ -91,10 +91,11 @@ void StoppedShowing(State& state);
 /// cannot watch
 [[nodiscard]] bool StopsTheGame(const Box& box, const State& state);
 
-/// True when the player of this computer only looks on: players five to eight never win or lose
-[[nodiscard]] constexpr bool LooksOn(PlayerNames local)
+/// True when the player of this computer only looks on. In a skirmish, players five to eight never win or lose. In a
+/// network game, every god wins or loses, and an observer has the neutral player, which is no god.
+[[nodiscard]] constexpr bool LooksOn(PlayerNames local, bool networkGame)
 {
-	return !game_end::CanLose(local);
+	return local == PlayerNames::NEUTRAL || !game_end::CanLose(local, networkGame);
 }
 
 /// The title of the end box. The texts are the game's: leave is "Are you sure you want to quit this game?", lost is

@@ -28,7 +28,7 @@ void OpenEndBox(Opened& opened, State& state, Box box)
 }
 } // namespace
 
-Opened Follow(std::span<const game_end::Event> events, PlayerNames local, State& state)
+Opened Follow(std::span<const game_end::Event> events, PlayerNames local, bool networkGame, State& state)
 {
 	using game_end::Event;
 	Opened opened;
@@ -37,9 +37,10 @@ Opened Follow(std::span<const game_end::Event> events, PlayerNames local, State&
 		switch (event.kind)
 		{
 		case Event::Kind::Won:
-			// The game is decided by its conditions or its time: each other god among the first four lost
+			// The game is decided by its conditions or its time: each other god that takes part lost
 			OpenEndBox(opened, state,
-			           {.kind = event.god != local && !LooksOn(local) ? Kind::LostAndDecided : Kind::Won, .watch = false});
+			           {.kind = event.god != local && !LooksOn(local, networkGame) ? Kind::LostAndDecided : Kind::Won,
+			            .watch = false});
 			break;
 		case Event::Kind::GodOut:
 			if (event.god == local)

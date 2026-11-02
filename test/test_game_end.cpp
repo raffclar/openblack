@@ -69,6 +69,9 @@ constexpr auto k_One = PlayerNames::PLAYER_ONE;
 constexpr auto k_Two = PlayerNames::PLAYER_TWO;
 constexpr auto k_Three = PlayerNames::PLAYER_THREE;
 constexpr auto k_Five = PlayerNames::PLAYER_FIVE;
+// The gods after the neutral player have the numbers after it: the ninth god of a network game has the number 9
+constexpr auto k_God9 = static_cast<PlayerNames>(9);
+constexpr auto k_God32 = static_cast<PlayerNames>(32);
 
 FakeWorld TwoHumans()
 {
@@ -203,15 +206,108 @@ TEST(GameEnd, AComputerGodOutOfANetworkGameIsNotCountedDefeated)
 	EXPECT_EQ(world.gods[k_One].godsDefeated, 0u);
 }
 
-TEST(GameEnd, PlayersFiveToSevenNeverLoseByTheTempleRule)
+TEST(GameEnd, InASkirmishPlayersFiveToSevenNeverLoseByTheTempleRule)
+{
+	auto world = TwoHumans();
+	world.gods[k_Five] = {.computer = true, .mind = true};
+	world.gods[k_Five].temple = false;
+	State state;
+	EXPECT_TRUE(ProcessTurn(world, k_Skirmish, state).empty());
+	EXPECT_FALSE(world.gods[k_Five].standing.out);
+	EXPECT_TRUE(world.gods[k_Five].creature);
+	EXPECT_TRUE(world.gods[k_Five].mind);
+}
+
+TEST(GameEnd, OnlyTheFirstFourPlayersTakePartInASkirmish)
+{
+	EXPECT_TRUE(CanLose(k_One, false));
+	EXPECT_TRUE(CanLose(PlayerNames::PLAYER_FOUR, false));
+	EXPECT_FALSE(CanLose(k_Five, false));
+	EXPECT_FALSE(CanLose(PlayerNames::PLAYER_SEVEN, false));
+	EXPECT_TRUE(CanLose(k_Five, true));
+	EXPECT_TRUE(CanLose(k_God32, true));
+}
+
+// In a network game, a god after the fourth with no temple is out, as each god before it
+TEST(GameEnd, AGodAfterTheFourthOfANetworkGameIsOutWithNoTemple)
 {
 	auto world = TwoHumans();
 	world.gods[k_Five] = {.human = true};
 	world.gods[k_Five].temple = false;
 	State state;
-	EXPECT_TRUE(ProcessTurn(world, k_Network, state).empty());
-	EXPECT_FALSE(world.gods[k_Five].standing.out);
-	EXPECT_TRUE(world.gods[k_Five].creature);
+	const auto events = ProcessTurn(world, k_Network, state);
+	ASSERT_EQ(events.size(), 1u);
+	EXPECT_EQ(events[0].kind, Event::Kind::GodOut);
+	EXPECT_EQ(events[0].god, k_Five);
+	EXPECT_FALSE(state.decided);
+	EXPECT_TRUE(world.gods[k_Five].standing.out);
+	EXPECT_FALSE(world.gods[k_Five].creature);
+	EXPECT_EQ(world.gods[k_Five].standing.place, 1);
+	EXPECT_EQ(world.gods[k_One].godsDefeated, 1u);
+	EXPECT_EQ(world.gods[k_Two].godsDefeated, 1u);
+}
+
+// A network game of many gods is decided when one god is left, also when that god is after the fourth
+TEST(GameEnd, TheLastGodOfANetworkGameOfManyGodsDecidesTheGame)
+{
+	FakeWorld world;
+	const std::array gods {k_One, k_Two, k_Three, PlayerNames::PLAYER_FOUR, k_Five, k_God9, k_God32};
+	for (const auto god : gods)
+	{
+		world.gods[god] = {.human = true};
+	}
+	// Each god but the last loses its temple: first two gods after the fourth, then three gods, then one god
+	world.gods[k_Five].temple = false;
+	world.gods[k_God9].temple = false;
+	State state;
+	auto events = ProcessTurn(world, k_Network, state);
+	ASSERT_EQ(events.size(), 2u);
+	EXPECT_EQ(events[1].kind, Event::Kind::GodOut);
+	EXPECT_FALSE(state.decided);
+	for (const auto god : {k_One, k_Two, k_Three})
+	{
+		world.gods[god].temple = false;
+	}
+	events = ProcessTurn(world, k_Network, state);
+	ASSERT_EQ(events.size(), 3u);
+	EXPECT_EQ(events[2].kind, Event::Kind::GodOut);
+	EXPECT_FALSE(state.decided);
+	world.gods[PlayerNames::PLAYER_FOUR].temple = false;
+	events = ProcessTurn(world, k_Network, state);
+	ASSERT_EQ(events.size(), 1u);
+	EXPECT_EQ(events[0].kind, Event::Kind::GodOutAndDecided);
+	EXPECT_TRUE(state.decided);
+	EXPECT_FALSE(world.gods[k_God32].standing.out);
+	// The god that is left takes the place after the six gods out
+	EXPECT_EQ(world.gods[k_God32].standing.place, 7);
+	EXPECT_EQ(world.gods[k_God32].godsDefeated, 6u);
+}
+
+// In a network game, a god after the fourth gets its share of the conditions in its score history, and can win
+TEST(GameEnd, AGodAfterTheFourthOfANetworkGameGetsItsShareOfTheConditions)
+{
+	auto world = TwoHumans();
+	world.gods[k_God9] = {.human = true};
+	world.gods[k_One].standing.conditions[0] = WinCondition {.current = 1, .target = 4, .completed = false};
+	world.gods[k_Two].standing.conditions[0] = WinCondition {.current = 2, .target = 4, .completed = false};
+	world.gods[k_God9].standing.conditions[0] = WinCondition {.current = 3, .target = 4, .completed = false};
+	State state;
+	Facts facts = k_Network;
+	facts.turn = 30;
+	facts.conditionCount = 1;
+	EXPECT_TRUE(ProcessTurn(world, facts, state).empty());
+	EXPECT_EQ(world.gods[k_God9].standing.share, 0.75f);
+	EXPECT_EQ(world.gods[k_God9].standing.scoreHistoryIndex, 1);
+	EXPECT_EQ(world.gods[k_God9].standing.scoreHistory[1], 0.75f);
+	// The god completes its condition and wins
+	world.gods[k_God9].standing.conditions[0] = WinCondition {.current = 4, .target = 4, .completed = true};
+	facts.turn = 31;
+	const auto events = ProcessTurn(world, facts, state);
+	ASSERT_EQ(events.size(), 1u);
+	EXPECT_EQ(events[0].kind, Event::Kind::Won);
+	EXPECT_EQ(events[0].god, k_God9);
+	EXPECT_TRUE(world.gods[k_One].standing.out);
+	EXPECT_TRUE(world.gods[k_Two].standing.out);
 }
 
 TEST(GameEnd, TheTempleRuleRunsAtTheFirstTurnWithNoWaitForATemple)
