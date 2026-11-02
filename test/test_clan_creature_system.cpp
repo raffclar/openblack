@@ -119,6 +119,15 @@ TEST_F(ClanCreatureTest, AClanAsksTheLobbyForItsCreature)
 	EXPECT_FALSE(system.StartCreature().has_value());
 }
 
+TEST_F(ClanCreatureTest, TheSameClanAgainKeepsTheAnswer)
+{
+	system.UseClan(4);
+	lobby.Answer(0, Ok(Stored()));
+	system.UseClan(4);
+	EXPECT_EQ(lobby.asked.size(), 1u);
+	EXPECT_TRUE(system.StartCreature().has_value());
+}
+
 TEST_F(ClanCreatureTest, NoClanAsksForNothing)
 {
 	system.UseClan(std::nullopt);

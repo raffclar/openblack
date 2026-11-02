@@ -791,13 +791,10 @@ void MultiplayerFrontEnd::UpdateRoom()
 	});
 	_shownClan.reset();
 	_shownLogo.reset();
-	KeepUsedClan(std::nullopt);
 	_myClans.clear();
-	// The player's own clan in the room, from the server's list
-	if (const auto* own = GetOwnSeat(); own != nullptr)
-	{
-		KeepUsedClan(own->clan);
-	}
+	// The player's own clan in the room, from the server's list, or no clan
+	const auto* own = GetOwnSeat();
+	KeepUsedClan(own != nullptr ? own->clan : std::nullopt);
 	const auto land = GetServerLand();
 	_shownLand = land;
 	_conditions = land.has_value() ? FindConditions(_settings.conditionTemplate, _maps.at(*land).file) : std::nullopt;

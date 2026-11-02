@@ -54,7 +54,7 @@ public:
 	virtual ~ClanCreatureSystemInterface() = default;
 
 	/// The player uses a clan in the game room, or no clan. With a clan, the game asks the lobby for the clan creature
-	/// and keeps the answer. With no clan, the game forgets the answer.
+	/// and keeps the answer. With no clan, the game forgets the answer. The same clan again changes nothing.
 	virtual void UseClan(std::optional<int64_t> clan) = 0;
 	/// The clan that the player uses, if any
 	[[nodiscard]] virtual std::optional<int64_t> UsedClan() const = 0;

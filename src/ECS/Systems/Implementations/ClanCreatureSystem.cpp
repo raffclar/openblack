@@ -39,6 +39,11 @@ ClanCreatureSystem::ClanCreatureSystem(LobbyOf lobby)
 
 void ClanCreatureSystem::UseClan(std::optional<int64_t> clan)
 {
+	// The same clan again keeps the answer that the lobby gave for it
+	if (clan == _clan)
+	{
+		return;
+	}
 	++_generation;
 	_clan = clan;
 	_reply.reset();

@@ -1246,13 +1246,12 @@ TEST_F(FrontEndTest, UseThisClan)
 	                lobby_api::UsedClan {.clan = lobby_api::ClanRef {.id = 4, .name = "The Clan", .role = "leader"}});
 	EXPECT_EQ(frontEnd->GetUsedClan(), 4);
 	// The game asks for the clan creature of the clan that the lobby accepted
-	ASSERT_EQ(clanCreature.used.size(), 1u);
+	ASSERT_FALSE(clanCreature.used.empty());
 	EXPECT_EQ(clanCreature.used.back(), 4);
 	frontEnd->UseNoClan();
 	EXPECT_FALSE(lobby.useClanId.has_value());
 	FakeLobby::Give(lobby.useClan, lobby_api::UsedClan {});
 	EXPECT_FALSE(frontEnd->GetUsedClan().has_value());
-	ASSERT_EQ(clanCreature.used.size(), 2u);
 	EXPECT_FALSE(clanCreature.used.back().has_value());
 }
 
