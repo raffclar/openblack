@@ -283,6 +283,16 @@ void RemoveFromWorshipSite(entt::entity villager)
 	TidyWorshipper(villager);
 }
 
+/// The town counts the villager on its way to the site, once
+void CountOnTheWay(entt::entity town, entt::entity villager)
+{
+	auto& onTheWay = Entities().Get<Town>(town).onWayToWorship;
+	if (std::ranges::find(onTheWay, villager) == onTheWay.end())
+	{
+		onTheWay.push_back(villager);
+	}
+}
+
 /// The villager stops being on its way to the site
 void LeaveTheWay(entt::entity villager)
 {
@@ -803,11 +813,7 @@ uint32_t villager_worship::GotoWorshipSiteForWorship(LivingAction& action)
 		}
 		if (town != entt::null)
 		{
-			auto& onTheWay = registry.Get<Town>(town).onWayToWorship;
-			if (std::ranges::find(onTheWay, villager) == onTheWay.end())
-			{
-				onTheWay.push_back(villager);
-			}
+			CountOnTheWay(town, villager);
 		}
 		result = 1;
 	}
@@ -1152,4 +1158,15 @@ bool villager_worship::IsAvailableForWorshipSite(entt::entity villager, bool dis
 void villager_worship::LeaveTheWayToWorshipSite(entt::entity villager)
 {
 	LeaveTheWay(villager);
+}
+
+void villager_worship::BackOnTheWayToWorshipSite(entt::entity villager)
+{
+	const auto town = TownOf(villager);
+	if (town == entt::null)
+	{
+		return;
+	}
+	CountOnTheWay(town, villager);
+	WorshipperOf(villager).onTheWay = true;
 }

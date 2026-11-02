@@ -121,6 +121,24 @@ void testbed_scenarios::AddWorshipSiteScenarios(std::vector<Scenario>& all)
 	    .worshipShare = 1.0f,
 	});
 	all.push_back({
+	    .id = "worship.fire_near_gate",
+	    .name = "Villagers on their way to worship go round a fire near the gate and go on to worship",
+	    .facet = Facet::Miracles,
+	    .description = "The land of the ring scenario. All of the people go to worship at the site, which stands built. "
+	                   "Two oaks stand on the last part of the footpath, near the gate of the site. After twenty "
+	                   "seconds, when the first people come near the gate, both oaks catch fire.",
+	    .expected = "A villager that comes near the burning oaks goes round them and on to the gate, also after a second "
+	                "or third reaction to the fire. No villager stays still near the fire. The villagers go into the site "
+	                "and worship while the oaks burn.",
+	    .environment = {.dispenserGrid = false},
+	    .framing = {.shot = Shot::Overview, .include = {glm::vec2(-30.0f, -55.0f), glm::vec2(5.0f, -25.0f)}},
+	    .objects = {{.type = TreeInfo::Oak, .offset = {-20.0f, -36.0f}}, {.type = TreeInfo::Oak, .offset = {-6.0f, -34.0f}}},
+	    .landScript = k_PlayerOneTownScript,
+	    .commands = {{.kind = Command::Kind::SetAlight, .delaySeconds = 20.0f, .value = 1, .object = 0},
+	                 {.kind = Command::Kind::SetAlight, .delaySeconds = 0.0f, .value = 1, .object = 1}},
+	    .worshipShare = 1.0f,
+	});
+	all.push_back({
 	    .id = "worship.site_motes",
 	    .name = "The motes of prayer power from a worship site to its miracle",
 	    .facet = Facet::Miracles,

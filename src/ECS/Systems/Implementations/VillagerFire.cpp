@@ -76,11 +76,13 @@
 #include "VillagerDisciples.h"
 #include "VillagerHome.h"
 #include "VillagerReactions.h"
+#include "VillagerWorship.h"
 
 using namespace openblack;
 using namespace openblack::ecs::components;
 namespace villager_fire = openblack::ecs::villager_fire;
 namespace villager_home = openblack::ecs::villager_home;
+namespace villager_worship = openblack::ecs::villager_worship;
 namespace world_objects = openblack::ecs::world_objects;
 namespace villager_clips = openblack::ecs::villager_clips;
 
@@ -391,7 +393,8 @@ void WalkTo(LivingAction& action, glm::vec2 goal, VillagerStates destination)
 	villager_home::SetupMoveTo(action, goal, destination);
 }
 
-/// Goes round the fire it is about to a point, then on into a state
+/// Goes round the fire it is about to a point, then on into a state. A villager that goes on to its arrival at the
+/// worship site goes back on its way to the site, so that its town counts it on the way again
 bool SetupMoveAroundFire(LivingAction& action, glm::vec2 point, VillagerStates then)
 {
 	SetTopState(action, VillagerStates::MoveAroundFire);
@@ -399,8 +402,13 @@ bool SetupMoveAroundFire(LivingAction& action, glm::vec2 point, VillagerStates t
 	{
 		return false;
 	}
-	FireStateOf(EntityOf(action)).walkTarget = point;
+	const auto villager = EntityOf(action);
+	FireStateOf(villager).walkTarget = point;
 	SetPrevious(action, then);
+	if (ecs::worshipper_rules::BackOnTheWayAfterFire(then, VillagerStates::ArrivesAtWorshipSiteForWorship))
+	{
+		villager_worship::BackOnTheWayToWorshipSite(villager);
+	}
 	return true;
 }
 
