@@ -2016,6 +2016,45 @@ void AddThirdLandPrison(std::vector<Scenario>& all)
 	                  .script = "RELEASE_FROM_SCRIPT",
 	                  .scriptArguments = {{.kind = Argument::Kind::Made, .index = 3}}}},
 	});
+
+	// The campfire of the burning fishermen on the beach of the Japanese village, from the middle of the map
+	static constexpr glm::vec2 k_Campfire {376.11f, 36.22f};
+	all.push_back({
+	    .id = "story.l3_fishermen_in_reach",
+	    .name = "Story: the burning fishermen of the third land in reach of the hand",
+	    .facet = Facet::Story,
+	    .description = "The third land loads with its own scripts and sky, and the player's Tiger stands on it. Its set-up "
+	                   "script runs. Then a script ring of the player's influence with a radius of 80 metres goes on the "
+	                   "fishermen's campfire on the beach, and the script of Lethys's fireballs runs with no wait. When "
+	                   "his scene ends, the hand can take a burning fisherman during its first short runs.",
+	    .expected = "Lethys speaks three lines, throws his fireballs and sets 16 fishermen alight. The script makes 18 "
+	                "fishermen: it lets the first two of fishermen seven and eight go at the end of the turn that makes "
+	                "them, and they then live as homeless villagers. A fisherman that the hand takes during its short "
+	                "runs stays alight in the hand. When the hand puts it down, it lands and goes back to its script "
+	                "walk: it runs to the last place the script gave it, then does its other runs and runs to the "
+	                "village.",
+	    .environment = {.land = Land::Story, .storyLand = "Land3.txt", .dispenserGrid = false},
+	    .framing = {.shot = Shot::Overview, .include = {k_Campfire - glm::vec2 {30.0f}, k_Campfire + glm::vec2 {30.0f}}},
+	    .creatures = {{.label = "player's tiger",
+	                   .species = CreatureType::Tiger,
+	                   .phase = 3,
+	                   .needs = {.energy = 1.0f, .exhaustion = 0.0f, .dehydration = 0.0f, .poo = 0.0f, .life = 1.0f}}},
+	    .commands = {{.kind = Kind::RunScript,
+	                  .delaySeconds = 0.5f,
+	                  .script = "SetupLand3",
+	                  .scriptGlobals = {{"MyCreature", {.kind = Argument::Kind::Creature, .index = 0}}}},
+	                 {.kind = Kind::CallNative,
+	                  .delaySeconds = 1.0f,
+	                  .script = "INFLUENCE_POSITION",
+	                  .scriptArguments = {{.kind = Argument::Kind::Position, .point = k_Campfire},
+	                                      {.kind = Argument::Kind::Number, .number = 80.0f},
+	                                      {.kind = Argument::Kind::Integer, .number = 0.0f},
+	                                      {.kind = Argument::Kind::Integer, .number = 0.0f}}},
+	                 {.kind = Kind::RunScript,
+	                  .delaySeconds = 0.5f,
+	                  .script = "FanaticAttack",
+	                  .scriptArguments = {{.kind = Argument::Kind::Number, .number = 1.0f}}}},
+	});
 }
 
 /// The man of the third land who wants to be thrown: the land's own script makes him at his campfire, with the player's
