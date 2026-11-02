@@ -179,6 +179,8 @@ VillagerDisciple disciple::Offered(const NearFacts& near, const HeldFacts& held)
 			return Breeder;
 		}
 		return None;
+	case NearKind::Other:
+		return None;
 	}
 	return None;
 }

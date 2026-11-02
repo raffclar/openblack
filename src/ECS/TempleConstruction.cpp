@@ -636,28 +636,11 @@ void construction::SetBuilt(entt::entity building, float built)
 	}
 }
 
-void construction::BuildBy(entt::entity building, float amount)
+namespace
 {
-	const auto& registry = Entities();
-	if (!registry.Valid(building))
-	{
-		return;
-	}
-	// A worship site goes up with its altar, and its worship sites keep count of it
-	if (registry.AllOf<WorshipSite>(building))
-	{
-		if (Locator::worshipSiteSystem::has_value())
-		{
-			Locator::worshipSiteSystem::value().BuildBy(building, amount);
-		}
-		return;
-	}
-	if (!IsBuilt(building))
-	{
-		Apply(building, building_construction::BuildBy(BuiltOf(building), amount));
-		return;
-	}
-	// A built building short of its full life is mended instead, and repaired once whole
+/// A built building short of its full life is mended by the work, and repaired once whole
+void MendBy(entt::entity building, float amount)
+{
 	const float life = world_objects::LifeOf(building);
 	const auto mending = building_construction::RepairBy(life, amount);
 	if (mending.life == life)
@@ -669,6 +652,47 @@ void construction::BuildBy(entt::entity building, float amount)
 	{
 		Repaired(building);
 	}
+}
+} // namespace
+
+void construction::BuildBy(entt::entity building, float amount)
+{
+	const auto& registry = Entities();
+	if (!registry.Valid(building))
+	{
+		return;
+	}
+	// A worship site goes up with its altar, and its worship sites keep count of it. A built site short of its full life
+	// is mended first, as other buildings are, and its altar takes the work after it.
+	if (registry.AllOf<WorshipSite>(building))
+	{
+		if (!Locator::worshipSiteSystem::has_value())
+		{
+			return;
+		}
+		auto& sites = Locator::worshipSiteSystem::value();
+		if (sites.IsBuilt(building))
+		{
+			MendBy(building, amount);
+		}
+		sites.BuildBy(building, amount);
+		return;
+	}
+	// An altar keeps how much of it is built. It has no life to mend.
+	if (registry.AllOf<WorshipAltar>(building))
+	{
+		if (Locator::worshipSiteSystem::has_value())
+		{
+			Locator::worshipSiteSystem::value().BuildAltarBy(building, amount);
+		}
+		return;
+	}
+	if (!IsBuilt(building))
+	{
+		Apply(building, building_construction::BuildBy(BuiltOf(building), amount));
+		return;
+	}
+	MendBy(building, amount);
 }
 
 namespace
