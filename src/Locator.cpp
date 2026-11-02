@@ -139,6 +139,7 @@
 #include "ECS/Systems/Implementations/PlayerSystem.h"
 #include "ECS/Systems/Implementations/ProfileFolderSystem.h"
 #include "ECS/Systems/Implementations/PuzzleGameSystem.h"
+#include "ECS/Systems/Implementations/PuzzleTotemSystem.h"
 #include "ECS/Systems/Implementations/ReactionSystem.h"
 #include "ECS/Systems/Implementations/ResourceStoreSystem.h"
 #include "ECS/Systems/Implementations/RewardSystem.h"
@@ -302,6 +303,7 @@ using openblack::ecs::systems::PlayerSystem;
 using openblack::ecs::systems::PlaygroundTripSystem;
 using openblack::ecs::systems::ProfileFolderSystem;
 using openblack::ecs::systems::PuzzleGameSystem;
+using openblack::ecs::systems::PuzzleTotemSystem;
 using openblack::ecs::systems::ReactionSystem;
 using openblack::ecs::systems::RealWeatherSystem;
 using openblack::ecs::systems::ResourceStoreSystem;
@@ -675,6 +677,7 @@ bool openblack::InitializeSimulation(const player_profiles::Store& profiles) noe
 	Locator::boatLaunchSystem::emplace<BoatLaunchSystem>();
 	Locator::walkPathSystem::emplace<WalkPathSystem>();
 	Locator::puzzleGameSystem::emplace<PuzzleGameSystem>();
+	Locator::puzzleTotemSystem::emplace<PuzzleTotemSystem>();
 	Locator::wonderSystem::emplace<WonderSystem>();
 	Locator::danceSystem::emplace<DanceSystem>();
 	Locator::sharkSystem::emplace<SharkSystem>();
@@ -917,6 +920,7 @@ void openblack::ShutDownServices()
 	Locator::boatLaunchSystem::reset();
 	Locator::walkPathSystem::reset();
 	Locator::puzzleGameSystem::reset();
+	Locator::puzzleTotemSystem::reset();
 	Locator::wonderSystem::reset();
 	Locator::danceSystem::reset();
 	Locator::sharkSystem::reset();

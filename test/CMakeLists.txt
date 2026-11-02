@@ -2326,3 +2326,4 @@ openblack_setup_and_add_test(test_leaver_hand test_leaver_hand.cpp)
 openblack_setup_and_add_test(
   test_creature_environment_map test_creature_environment_map.cpp
 )
+openblack_setup_and_add_test(test_puzzle_totem_rules test_puzzle_totem_rules.cpp)

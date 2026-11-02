@@ -173,6 +173,7 @@ class IntroSystemInterface;
 class BoatLaunchSystemInterface;
 class WalkPathSystemInterface;
 class PuzzleGameSystemInterface;
+class PuzzleTotemSystemInterface;
 class WonderSystemInterface;
 class DanceSystemInterface;
 class SharkSystemInterface;
@@ -440,6 +441,7 @@ struct Locator
 	using boatLaunchSystem = entt::locator<ecs::systems::BoatLaunchSystemInterface>;
 	using walkPathSystem = entt::locator<ecs::systems::WalkPathSystemInterface>;
 	using puzzleGameSystem = entt::locator<ecs::systems::PuzzleGameSystemInterface>;
+	using puzzleTotemSystem = entt::locator<ecs::systems::PuzzleTotemSystemInterface>;
 	using wonderSystem = entt::locator<ecs::systems::WonderSystemInterface>;
 	using danceSystem = entt::locator<ecs::systems::DanceSystemInterface>;
 	using sharkSystem = entt::locator<ecs::systems::SharkSystemInterface>;
