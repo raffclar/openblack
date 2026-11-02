@@ -233,6 +233,16 @@ def make_ticket_key(folder):
     return key, kid, path
 
 
+def ticket_file(folder, ticket):
+    """Writes the join ticket into a file of the client's folder and gives the path. The desktop game reads the ticket
+    from the file (--join-ticket-file), so that the ticket is not in the list of processes."""
+    os.makedirs(folder, exist_ok=True)
+    path = os.path.join(folder, "join_ticket.txt")
+    with open(path, "w", encoding="ascii") as file:
+        file.write(ticket)
+    return path
+
+
 def make_ticket(key, kid, account, name, role, lifetime):
     """A PASETO v4.public join ticket as the lobby makes one, for this test server"""
     now = datetime.datetime.now(datetime.timezone.utc).replace(microsecond=0)
@@ -1305,7 +1315,8 @@ def leave_room(game_exe, options, url, key, kid, certs, out, server_log):
         os.remove(log)
     ticket = make_ticket(key, kid, 99, "Leaver", "god", 600)
     command = [game_exe, "-g", options.game_path, "--skip-logos", "--sim-still-hand", "-n", "4000000000",
-               "--background", "-l", log, "--join", url, "--join-ticket", ticket, "--join-test-ca", certs["ca.pem"]]
+               "--background", "-l", log, "--join", url, "--join-ticket-file", ticket_file(leaver_dir, ticket),
+               "--join-test-ca", certs["ca.pem"]]
     leaver = start(command, leaver_dir)
     try:
         if not wait_for_line(log, "Joined the game server", leaver):
@@ -2057,7 +2068,8 @@ def main():
                        "--sim-record-fields-every", "100",
                        "--inspect-lock-input", "-n", "4000000000", "--background",
                        "-l", os.path.join(client_dir, "client.log"),
-                       "--join", url, "--join-ticket", ticket, "--join-test-ca", certs["ca.pem"]]
+                       "--join", url, "--join-ticket-file", ticket_file(client_dir, ticket),
+                       "--join-test-ca", certs["ca.pem"]]
             command += options.all_clients_arg
             if options.trace_draws:
                 command += ["--sim-trace-draws", os.path.join(client_dir, "draws.tsv")]
@@ -2523,7 +2535,8 @@ def try_banned_join(options, game_exe, url, signer, certs, server_log, server, b
     ticket = make_ticket(signer[0], signer[1], options.ban_account, f"Player{options.ban_account}", "god", 600)
     command = [game_exe, "-g", options.game_path, "--skip-logos", "--sim-frame-ms", "20", "--sim-until-turn", "10",
                "--sim-still-hand", "-n", "4000000000", "--background", "-l", log,
-               "--join", url, "--join-ticket", ticket, "--join-test-ca", certs["ca.pem"]]
+               "--join", url, "--join-ticket-file", ticket_file(banned_dir, ticket), "--join-test-ca",
+               certs["ca.pem"]]
     client = start(command, banned_dir)
     processes.append(client)
     refused = wait_for_line(log, "The game server refused the client: kicked", client, limit=180) or bool(

@@ -8,6 +8,7 @@
  *******************************************************************************/
 
 #include <algorithm>
+#include <fstream>
 #include <iostream>
 #include <iterator>
 #include <map>
@@ -43,6 +44,7 @@
 #include "EngineConfig.h"
 #include "Game.h"
 #include "LaunchSwitches.h"
+#include "Online/GameOrigin.h"
 #if defined(__EMSCRIPTEN__)
 #include "Web/WebPlatform.h"
 #endif
@@ -77,6 +79,35 @@ bool AsksForVersion(int argc, char** argv)
 	return std::ranges::any_of(arguments.subspan(1),
 	                           [](const char* argument) { return std::string_view(argument) == "--version"; }) ||
 	       openblack::launch_switches::Scan(CommandLineText(argc, argv)).version;
+}
+
+/// The join ticket of the options: the text of the ticket file, with no space or line end around it. The web build takes
+/// the ticket itself. No ticket gives an empty text.
+std::string JoinTicketOf(const cxxopts::ParseResult& result)
+{
+#if defined(__EMSCRIPTEN__)
+	if (result.count("join-ticket") != 0)
+	{
+		return result["join-ticket"].as<std::string>();
+	}
+#endif
+	if (result.count("join-ticket-file") == 0)
+	{
+		return {};
+	}
+	const auto path = result["join-ticket-file"].as<std::string>();
+	std::ifstream file(path, std::ios::binary);
+	if (!file)
+	{
+		throw cxxopts::exceptions::parsing("--join-ticket-file: the file " + path + " does not open");
+	}
+	const std::string text {std::istreambuf_iterator<char>(file), std::istreambuf_iterator<char>()};
+	const auto ticket = openblack::online::TicketFileText(text);
+	if (!ticket.has_value())
+	{
+		throw cxxopts::exceptions::parsing("--join-ticket-file: the file " + path + " does not hold one ticket");
+	}
+	return *ticket;
 }
 } // namespace
 
@@ -120,10 +151,14 @@ bool parseOptions(int argc, char** argv, openblack::Arguments& args, int& return
 		("internet-weather", "The real-world weather of the place of the player's lobby account changes the weather of a single-player game, as the original game's internet weather did. It is on by default (--internet-weather=false turns it off). The game asks one time as a game starts and never waits; with no answer in 10 seconds, or no login, the land keeps its own weather.", cxxopts::value<bool>()->default_value("true")->implicit_value("true"))
 		("show-ping", "Show the round trip of this computer's game socket in milliseconds in a network game, as \"ping 48\": after the player's own name in the room's player list. The original game shows no ping, so it is off by default.")
 		("crash-dialogs", "Show the system's and C runtime's crash dialogs (Abort/Retry/Ignore) instead of writing a crash report to crashes/ and exiting.")
-		("join", "Join the game server at this wss:// address once the land loaded. The world then turns only with the turns of the server. Needs --join-ticket.", cxxopts::value<std::string>())
-		("join-ticket", "The lobby's join ticket for --join.", cxxopts::value<std::string>())
+		("join", "Join the game server at this wss:// address once the land loaded. The world then turns only with the turns of the server. Needs --join-ticket-file.", cxxopts::value<std::string>())
+		("join-ticket-file", "A file that holds the lobby's join ticket for --join. The ticket is not on the command line, so other users of the computer do not see it in the list of processes.", cxxopts::value<std::string>())
 		("join-test-ca", "Tests on this computer only: a PEM file of a certificate authority of a test game server on a loopback address (127.0.0.1).", cxxopts::value<std::string>())
 		("lobby-test-ca", "Tests on this computer only: a PEM file of a certificate authority of a test lobby on a loopback address (127.0.0.1). The lobby's calls, its push channel and the game sockets also trust it.", cxxopts::value<std::string>());
+#if defined(__EMSCRIPTEN__)
+	// The page of the web build gives the arguments, so no other user sees the ticket
+	options.add_options()("join-ticket", "The lobby's join ticket for --join.", cxxopts::value<std::string>());
+#endif
 	// The options that only developers and tools use. A build without the developer tools ignores them (see
 	// FilterDeveloperOptions), and its help does not show them.
 	options.add_options("Developer")
@@ -393,7 +428,7 @@ bool parseOptions(int argc, char** argv, openblack::Arguments& args, int& return
 		{
 			args.networkJoin = openblack::ecs::systems::NetworkJoin {
 			    .url = result["join"].as<std::string>(),
-			    .ticket = result.count("join-ticket") != 0 ? result["join-ticket"].as<std::string>() : std::string(),
+			    .ticket = JoinTicketOf(result),
 			    .gamePassword = {},
 			    .name = {},
 			    .testAuthorities =

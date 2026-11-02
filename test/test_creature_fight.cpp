@@ -48,6 +48,26 @@ Random Always(uint32_t value)
 }
 } // namespace
 
+// A changed client can send any move for its creature. The turn takes only the moves that the hand and the gestures of
+// a real player give.
+TEST(CreatureFight, TheHandGivesOnlyBlowsBlocksTheSpecialMoveAndKnownFightMiracles)
+{
+	const std::array known {MagicType::Heal, MagicType::Fireball};
+	for (const auto kind : {Move::Kind::High, Move::Kind::Mid, Move::Kind::Low, Move::Kind::Block, Move::Kind::Special})
+	{
+		EXPECT_TRUE(HandGives({.kind = kind}, known));
+		EXPECT_FALSE(HandGives({.kind = kind, .value = 7}, known));
+	}
+	EXPECT_TRUE(HandGives(AttackMove(Band::High), known));
+	EXPECT_TRUE(HandGives(BlockMove(), known));
+	EXPECT_TRUE(HandGives({.kind = Move::Kind::Spell, .value = static_cast<uint32_t>(MagicType::Fireball)}, known));
+	EXPECT_FALSE(HandGives({.kind = Move::Kind::Spell, .value = static_cast<uint32_t>(MagicType::LightningBolt)}, known));
+	EXPECT_FALSE(HandGives({.kind = Move::Kind::Spell, .value = static_cast<uint32_t>(MagicType::Heal)}, {}));
+	// A step is a press on the ground, never a move of the hand
+	EXPECT_FALSE(HandGives(StepMove(Step::Back), known));
+	EXPECT_FALSE(HandGives({.kind = Move::Kind::Animation, .value = 3}, known));
+}
+
 TEST(CreatureFight, ArenaIsSizedByTheBiggerCreatureAndCapped)
 {
 	EXPECT_FLOAT_EQ(ArenaRadius(1.0f, 0.5f), 39.0f);

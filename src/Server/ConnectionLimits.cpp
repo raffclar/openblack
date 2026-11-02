@@ -11,6 +11,8 @@
 
 #include <algorithm>
 
+#include "Online/HttpClientInterface.h"
+
 namespace openblack::server::connection_limits
 {
 namespace
@@ -36,7 +38,7 @@ constexpr size_t k_SentBytesToRemove = 64 * 1024;
 
 bool IsLoopback(std::string_view address) noexcept
 {
-	return address.starts_with("127.") || address == "localhost";
+	return online::http_policy::IsLoopbackHost(address);
 }
 
 std::string ClientAddress(std::string_view peer, std::string_view forwardedFor)

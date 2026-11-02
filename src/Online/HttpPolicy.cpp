@@ -7,7 +7,10 @@
  * openblack is licensed under the GNU General Public License version 3.
  *******************************************************************************/
 
+#include <cstdint>
+
 #include <algorithm>
+#include <array>
 
 #include "HttpClientInterface.h"
 
@@ -58,6 +61,44 @@ bool IsWssAddress(std::string_view url) noexcept
 	return IsAddressOf(url, "wss://");
 }
 
+bool IsLoopbackHost(std::string_view host) noexcept
+{
+	if (host == "localhost")
+	{
+		return true;
+	}
+	// Four parts, each of one to three decimal digits with a value of at most 255, and the first part is 127
+	constexpr size_t k_Parts = 4;
+	constexpr size_t k_MostDigits = 3;
+	constexpr uint32_t k_MostPart = 255;
+	constexpr uint32_t k_LoopbackPart = 127;
+	std::array<uint32_t, k_Parts> parts {};
+	size_t part = 0;
+	size_t digits = 0;
+	for (const char c : host)
+	{
+		if (c == '.')
+		{
+			if (digits == 0 || ++part == k_Parts)
+			{
+				return false;
+			}
+			digits = 0;
+			continue;
+		}
+		if (c < '0' || c > '9' || ++digits > k_MostDigits)
+		{
+			return false;
+		}
+		parts.at(part) = parts.at(part) * 10 + static_cast<uint32_t>(c - '0');
+		if (parts.at(part) > k_MostPart)
+		{
+			return false;
+		}
+	}
+	return part == k_Parts - 1 && digits != 0 && parts.front() == k_LoopbackPart;
+}
+
 bool IsLoopbackAddress(std::string_view url) noexcept
 {
 	std::string_view rest;
@@ -73,8 +114,7 @@ bool IsLoopbackAddress(std::string_view url) noexcept
 	{
 		return false;
 	}
-	const auto host = rest.substr(0, rest.find_first_of(":/?#"));
-	return host == "localhost" || host.starts_with("127.");
+	return IsLoopbackHost(rest.substr(0, rest.find_first_of(":/?#")));
 }
 
 bool IsSameOriginPath(std::string_view url) noexcept

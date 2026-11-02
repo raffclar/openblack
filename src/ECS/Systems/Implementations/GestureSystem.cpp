@@ -382,16 +382,11 @@ gesture::HandContext GestureSystem::ContextOf(const Frame& frame)
 		if (info != nullptr && knowledge != nullptr)
 		{
 			// The seeds marked for fights, by the miracle each casts unpowered, each with its seed for its hint
-			for (size_t seedIndex = 0; seedIndex < info->spellSeed.size(); ++seedIndex)
+			for (const auto& miracle : magic::KnownFightMiracles(*info, knowledge->miraclesKnown))
 			{
-				const auto& seed = info->spellSeed.at(seedIndex);
-				const auto magic = seed.magicTypes.front();
-				const auto index = static_cast<size_t>(magic);
-				if (seed.unknown0x17C != 0 && index < knowledge->miraclesKnown.size() && knowledge->miraclesKnown[index])
-				{
-					state.fightMiracles.push_back(
-					    {.gesture = seed.gesture, .magic = magic, .seed = static_cast<SpellSeedType>(seedIndex)});
-				}
+				state.fightMiracles.push_back({.gesture = magic::GetSpellSeedInfo(*info, miracle.seed).gesture,
+				                               .magic = miracle.magic,
+				                               .seed = miracle.seed});
 			}
 		}
 	}

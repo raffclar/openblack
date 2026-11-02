@@ -74,6 +74,9 @@ struct HostSettings
 	bool lanNames {false};
 	/// The most observers of the room, connected or away. The room refuses an observer over this with "full".
 	size_t mostObservers {k_MostObservers};
+	/// Whether the server sends the start data of a god (its creature file) to the players as it is. The server sends
+	/// empty data in place of data that this refuses. With none, the server sends all data as it is.
+	std::function<bool(std::span<const uint8_t> data)> relaysCreature;
 };
 
 /// The claims of a player who joins a room on the local network by the name of the profile, as a god. None when the name
@@ -82,6 +85,14 @@ struct HostSettings
 
 /// The most bytes of the name of a player who joins on the local network
 constexpr size_t k_MostLanNameBytes = 64;
+
+/// Whether the server leaves a command of a client out of its turns. A real client never sends these commands in a network
+/// game:
+/// - The commands that only the server sends (a player joins or leaves).
+/// - The commands that only a single player game sends (the quick save, the quick load, the music of the player and the
+///   tattoos, which stay on the computer of the player in a network game).
+/// - The commands of the test tools, when the test commands of the server are off.
+[[nodiscard]] bool LeavesOut(const player_commands::Action& action, bool testCommands) noexcept;
 
 /// True when a line of the room's chat can go to the players: it has a character above the space, as the game sends no
 /// line of only spaces, and it has at most the characters that the chat box of the game takes. The game counts the

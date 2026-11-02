@@ -23,6 +23,7 @@
 #include <glm/vec2.hpp>
 #include <glm/vec3.hpp>
 
+#include "Enums.h"
 #include "FightMarks.h"
 #include "Physics/Body.h"
 
@@ -245,6 +246,11 @@ struct Move
 [[nodiscard]] Move StepMove(Step step);
 [[nodiscard]] Move BlockMove();
 [[nodiscard]] bool IsBlow(Move::Kind kind);
+/// Whether the hand or a gesture of a player gives the move to the fighting creature of the player:
+/// - A press on a creature gives a blow at a band of the body, or a block.
+/// - A gesture gives the special move, or a fight miracle that the creature knows (knownMiracles).
+/// Only the miracle has a value: the miracle that the creature casts. A step is a press on the ground, not such a move.
+[[nodiscard]] bool HandGives(const Move& move, std::span<const MagicType> knownMiracles);
 
 /// A move as scripts number them: 0, 1 and 2 blows high, in the middle and low, 3 a block, 4 the special move; with the
 /// 0x8000 bit an animation played (a step), with the 0x4000 bit a miracle cast, each by the number in the low 14 bits.

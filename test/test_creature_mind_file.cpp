@@ -26,8 +26,10 @@
 #include <PhysiqueFile.h>
 #include <gtest/gtest.h>
 
+#include "Creature/ClanCreatureOrder.h"
 #include "Creature/CreatureDecisionTree.h"
 #include "Creature/CreatureDevelopment.h"
+#include "Creature/CreatureFileLoad.h"
 #include "Creature/CreatureLearning.h"
 #include "Creature/CreatureMindFileBody.h"
 #include "Creature/CreatureMindModel.h"
@@ -202,6 +204,22 @@ TEST(CreatureMindFile, RejectsWhatIsNotAMind)
 	bytes = Write(SampleMind());
 	bytes.resize(bytes.size() - 5);
 	EXPECT_EQ(Read(bytes, read), MindResult::ErrTruncated);
+}
+
+// A changed client can send any bytes as its creature file. The game server sends the file on only when it reads as a
+// creature file, or when it is the order to make a new clan creature, or when it is empty.
+TEST(CreatureMindFile, TheGameServerSendsOnOnlyAStartDataThatReads)
+{
+	using creature_file_load::ServerRelays;
+	EXPECT_TRUE(ServerRelays({}));
+	EXPECT_TRUE(ServerRelays(Write(SampleMind())));
+	const auto order = clan_creature_order::Write({.row = 3, .name = u"Bob"});
+	ASSERT_TRUE(order.has_value());
+	EXPECT_TRUE(ServerRelays(*order));
+	EXPECT_FALSE(ServerRelays(std::vector<uint8_t> {'A', 'L'}));
+	auto bytes = Write(SampleMind());
+	bytes.resize(bytes.size() - 5);
+	EXPECT_FALSE(ServerRelays(bytes));
 }
 
 // A file from the network can give a large count and end soon after it. The read stops before it makes the entries.

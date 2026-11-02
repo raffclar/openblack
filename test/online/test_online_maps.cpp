@@ -32,6 +32,7 @@
 #include "Online/GodsRingMapFile.h"
 #include "Online/MapDownload.h"
 #include "Online/OnlineMapStoreInterface.h"
+#include "Online/Sha256.h"
 #include "Online/StartRules.h"
 #include "Server/LobbyStatus.h"
 
@@ -49,16 +50,22 @@ std::vector<uint8_t> Bytes(std::string_view text)
 	return {text.begin(), text.end()};
 }
 
-lobby_api::OnlineMap Map(uint64_t checksum = 0)
+lobby_api::OnlineMap Map(uint64_t checksum = 0, std::string_view hash = k_Hash)
 {
 	return {.number = 1,
 	        .name = "Gods",
 	        .file = "obm_32p_1",
 	        .players = 32,
-	        .sha256 = std::string(k_Hash),
+	        .sha256 = std::string(hash),
 	        .checksum = checksum,
 	        .size = 3,
-	        .url = "/api/v1/maps/" + std::string(k_Hash)};
+	        .url = "/api/v1/maps/" + std::string(hash)};
+}
+
+/// The map of the list for a file of this text: its start checksum and its SHA-256
+lobby_api::OnlineMap MapOf(std::string_view text)
+{
+	return Map(online::start_rules::LandChecksum(Bytes(text)), online::sha256::HexOf(Bytes(text)));
 }
 
 /// A store in memory, which answers when the test lets it
@@ -251,9 +258,9 @@ TEST(MapDownload, AMissingMapComesFromTheLobbyAndGoesInTheStore)
 	store.files["obm_32p_1.map"] = Bytes("old");
 	FakeFetch fetch;
 	online::MapDownload download(store, fetch.Function());
-	download.Start(Map(online::start_rules::LandChecksum(Bytes("new"))));
+	download.Start(MapOf("new"));
 	EXPECT_EQ(download.GetState(), online::MapDownload::State::Downloading);
-	ASSERT_EQ(fetch.asked, (std::vector<std::string> {std::string(k_Hash)}));
+	ASSERT_EQ(fetch.asked, (std::vector<std::string> {online::sha256::HexOf(Bytes("new"))}));
 	fetch.Answer(Bytes("new"));
 	EXPECT_EQ(download.GetState(), online::MapDownload::State::Ready);
 	EXPECT_EQ(store.files.at("obm_32p_1.map"), Bytes("new"));
@@ -279,7 +286,7 @@ TEST(MapDownload, AStoreThatCannotKeepTheFileFails)
 	store.refuses = true;
 	FakeFetch fetch;
 	online::MapDownload download(store, fetch.Function());
-	download.Start(Map(online::start_rules::LandChecksum(Bytes("x"))));
+	download.Start(MapOf("x"));
 	fetch.Answer(Bytes("x"));
 	EXPECT_EQ(download.GetState(), online::MapDownload::State::Failed);
 }
@@ -289,12 +296,42 @@ TEST(MapDownload, AFileWithADifferentChecksumIsNotKept)
 	FakeStore store;
 	FakeFetch fetch;
 	online::MapDownload download(store, fetch.Function());
-	download.Start(Map(online::start_rules::LandChecksum(Bytes("right"))));
+	download.Start(MapOf("right"));
 	fetch.Answer(Bytes("wrong"));
 	EXPECT_EQ(download.GetState(), online::MapDownload::State::Downloading);
 	fetch.Answer(Bytes("wrong"));
 	EXPECT_EQ(download.GetState(), online::MapDownload::State::Failed);
 	EXPECT_TRUE(store.files.empty());
+}
+
+// The start checksum is a sum of the bytes, so the same bytes in another order have the same checksum. The SHA-256 of
+// the map list finds such a file.
+TEST(MapDownload, AFileWithTheChecksumOfTheMapButAnotherHashIsNotKept)
+{
+	ASSERT_EQ(online::start_rules::LandChecksum(Bytes("ab")), online::start_rules::LandChecksum(Bytes("ba")));
+	FakeStore store;
+	FakeFetch fetch;
+	online::MapDownload download(store, fetch.Function());
+	download.Start(MapOf("ab"));
+	fetch.Answer(Bytes("ba"));
+	fetch.Answer(Bytes("ba"));
+	EXPECT_EQ(download.GetState(), online::MapDownload::State::Failed);
+	EXPECT_TRUE(store.files.empty());
+}
+
+TEST(Sha256, TheHashOfTheStandardTextsIsTheHashOfTheStandard)
+{
+	using online::sha256::HexOf;
+	EXPECT_EQ(HexOf(Bytes("")), "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855");
+	EXPECT_EQ(HexOf(Bytes("abc")), "ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad");
+	EXPECT_EQ(HexOf(Bytes("abcdbcdecdefdefgefghfghighijhijkijkljklmklmnlmnomnopnopq")),
+	          "248d6a61d20638b8e5c026930c3e6039a33ce45964ff2167f6ecedd419db06c1");
+	// The lengths at the ends of a block: the length of the text goes in the same block or in the next block
+	EXPECT_EQ(HexOf(Bytes(std::string(55, 'a'))), "9f4390f8d30c2dd92ec9f095b65e2b9ae9b0a925a5258e241c9f1e910f734318");
+	EXPECT_EQ(HexOf(Bytes(std::string(56, 'a'))), "b35439a4ac6f0948b6d6f9e3c6af0f5f590ce20f1bde7090ef7970686ec6738a");
+	EXPECT_EQ(HexOf(Bytes(std::string(64, 'a'))), "ffe054fe7ae0cb6dc65c3af9b61d5209f439851db43d0ba5997337df154668eb");
+	EXPECT_EQ(HexOf(Bytes(std::string(1000, 'a'))), "41edece42d63e8d9bf515a9ba6932e1c20cbc9f5a5d134645adb5db1b9737ea3");
+	EXPECT_EQ(HexOf(std::vector<uint8_t> {1, 2, 3}), "039058c6f2c0cb492c533b0a4d14ef77cc0f78abccced5287d84a1a2011cfb81");
 }
 
 TEST(MapDownload, AnAnswerAfterTheStopDoesNothing)

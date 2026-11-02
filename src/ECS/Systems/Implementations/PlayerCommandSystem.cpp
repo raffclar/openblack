@@ -22,6 +22,7 @@
 
 #include <spdlog/spdlog.h>
 
+#include "Commands/CommandOwnerRules.h"
 #include "Creature/ClanCreatureOrder.h"
 #include "Creature/CreatureFileLoad.h"
 #include "Creature/CreatureHandRules.h"
@@ -181,6 +182,26 @@ void LogLeashCommand(openblack::PlayerNames player, std::string_view words, uint
 	return openblack::creature_hand::FeelsHandOf(body->owner, player, allied);
 }
 
+/// Write a command that the turn refuses to the log: the hand of a real player does not act on the thing
+void LogRefused(openblack::PlayerNames player, std::string_view command, entt::entity thing, std::string_view why)
+{
+	if (const auto logger = spdlog::get("game"); logger != nullptr)
+	{
+		SPDLOG_LOGGER_WARN(logger, "The turn refuses the {} of player {} on thing {}: {}", command, static_cast<int>(player),
+		                   entt::to_integral(thing), why);
+	}
+}
+
+/// Whether the hand of the player may take hold of the totem or set the share of its town: only a totem of a town of the
+/// player
+[[nodiscard]] bool MayUseTotem(openblack::PlayerNames player, entt::entity totem)
+{
+	const auto owner = openblack::Locator::villageTotemSystem::has_value()
+	                       ? openblack::Locator::villageTotemSystem::value().TownOwnerOf(totem)
+	                       : std::nullopt;
+	return openblack::player_commands::owner_rules::MayUseTotem(owner, player);
+}
+
 /// Do one command for the player that sent it, at a turn
 void Run(const Command& command, uint32_t turn)
 {
@@ -322,10 +343,21 @@ void Run(const Command& command, uint32_t turn)
 		    }
 		    else if constexpr (std::is_same_v<Kind, CreatureReaction>)
 		    {
-			    if (openblack::Locator::creatureHandSystem::has_value())
+			    if (!openblack::Locator::creatureHandSystem::has_value())
 			    {
-				    openblack::Locator::creatureHandSystem::value().DoReaction(command.player, action);
+				    return;
 			    }
+			    // Only the hand that can hold the creature strokes or slaps it, so only that hand makes it react. The
+			    // reaction of another hand counts as done for the reactions that its computer sent.
+			    if (registry.Valid(action.creature) && !FeelsHand(registry, command.player, action.creature))
+			    {
+				    LogRefused(command.player, "creature reaction", action.creature, "the hand cannot hold the creature");
+				    openblack::Locator::creatureHandSystem::value().DoReaction(
+				        command.player,
+				        CreatureReaction {.creature = entt::null, .animation = 0, .mirrored = false, .interruptsAfter = 0.0});
+				    return;
+			    }
+			    openblack::Locator::creatureHandSystem::value().DoReaction(command.player, action);
 		    }
 		    else if constexpr (std::is_same_v<Kind, FightGround>)
 		    {
@@ -357,6 +389,11 @@ void Run(const Command& command, uint32_t turn)
 		    {
 			    if (openblack::Locator::villageTotemSystem::has_value() && registry.Valid(action.totem))
 			    {
+				    if (!MayUseTotem(command.player, action.totem))
+				    {
+					    LogRefused(command.player, "totem share", action.totem, "the totem is not of a town of the player");
+					    return;
+				    }
 				    openblack::Locator::villageTotemSystem::value().DoShare(command.player, action.totem, action.share);
 			    }
 		    }
@@ -382,7 +419,11 @@ void Run(const Command& command, uint32_t turn)
 			    {
 				    if constexpr (std::is_same_v<Kind, HandLock>)
 				    {
-					    if (openblack::Locator::villageTotemSystem::has_value())
+					    if (!MayUseTotem(command.player, action.object))
+					    {
+						    LogRefused(command.player, "totem grip", action.object, "the totem is not of a town of the player");
+					    }
+					    else if (openblack::Locator::villageTotemSystem::has_value())
 					    {
 						    openblack::Locator::villageTotemSystem::value().DoGrip(command.player, action.object);
 					    }
@@ -566,10 +607,22 @@ void Run(const Command& command, uint32_t turn)
 		    }
 		    else if constexpr (std::is_same_v<Kind, GiveCallOff>)
 		    {
-			    if (openblack::Locator::handGrabSystem::has_value())
+			    if (!openblack::Locator::handGrabSystem::has_value())
 			    {
-				    openblack::Locator::handGrabSystem::value().DoGiveCallOff(command.player, action.creature);
+				    return;
 			    }
+			    // The hand gives things only to the creature of its own player. The call-off of a gift to another creature
+			    // does not stop what that creature does.
+			    const auto* body = registry.Valid(action.creature)
+			                           ? registry.TryGet<const openblack::ecs::components::Creature>(action.creature)
+			                           : nullptr;
+			    if (body != nullptr && !openblack::player_commands::owner_rules::MayCallOffGift(body->owner, command.player))
+			    {
+				    LogRefused(command.player, "gift call-off", action.creature, "the creature is not of the player");
+				    openblack::Locator::handGrabSystem::value().DoGiveCallOff(command.player, entt::null);
+				    return;
+			    }
+			    openblack::Locator::handGrabSystem::value().DoGiveCallOff(command.player, action.creature);
 		    }
 		    else if constexpr (std::is_same_v<Kind, CreatureTattoo>)
 		    {

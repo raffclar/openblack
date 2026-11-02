@@ -114,6 +114,15 @@ std::optional<join_ticket::Claims> LanClaims(std::string_view name)
 	return claims;
 }
 
+bool LeavesOut(const player_commands::Action& action, bool testCommands) noexcept
+{
+	using namespace player_commands;
+	return std::holds_alternative<PlayerLeft>(action) || std::holds_alternative<PlayerJoined>(action) ||
+	       std::holds_alternative<QuickSave>(action) || std::holds_alternative<QuickLoad>(action) ||
+	       std::holds_alternative<MusicMood>(action) || std::holds_alternative<CreatureTattoo>(action) ||
+	       (!testCommands && std::holds_alternative<CreatureFightCheat>(action));
+}
+
 bool IsRoomChatLine(std::string_view text) noexcept
 {
 	size_t units = 0;
@@ -719,12 +728,7 @@ void LockstepHost::Binary(ConnectionId connection, std::span<const uint8_t> byte
 			return;
 		}
 		const auto before = block->actions.size();
-		// A command of the test tools goes in only when the server's test commands are on
-		std::erase_if(block->actions, [this](const auto& action) {
-			return std::holds_alternative<player_commands::PlayerLeft>(action) ||
-			       std::holds_alternative<player_commands::PlayerJoined>(action) ||
-			       (!_settings.testCommands && std::holds_alternative<player_commands::CreatureFightCheat>(action));
-		});
+		std::erase_if(block->actions, [this](const auto& action) { return LeavesOut(action, _settings.testCommands); });
 		if (block->actions.size() != before)
 		{
 			++_refusedBlocks;
@@ -1000,9 +1004,17 @@ void LockstepHost::StartCreature(ConnectionId connection, const Peer& peer, cons
 	// world.
 	Log(spdlog::level::info, fmt::format("The god of slot {} sends a creature file of {} bytes and the alignment {}",
 	                                     *peer.seat, creature.file.size(), creature.alignment));
-	_startCreatures[*peer.seat] = creature.file;
+	auto file = creature.file;
+	// No computer brings a creature from a file that does not read, so the server sends no file in its place
+	if (_settings.relaysCreature && !_settings.relaysCreature(file))
+	{
+		Log(spdlog::level::warn,
+		    fmt::format("The creature file of slot {} does not read: the server sends no creature file for it", *peer.seat));
+		file.clear();
+	}
+	_startCreatures[*peer.seat] = file;
 	_startAlignments[*peer.seat] = creature.alignment;
-	Broadcast(game_socket::StartCreature {.slot = *peer.seat, .file = creature.file, .alignment = creature.alignment});
+	Broadcast(game_socket::StartCreature {.slot = *peer.seat, .file = std::move(file), .alignment = creature.alignment});
 	if (_awaited.empty())
 	{
 		StartGame();

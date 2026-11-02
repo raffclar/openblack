@@ -14,17 +14,19 @@
 #include <fstream>
 #include <iterator>
 #include <memory>
-#include <random>
 #include <set>
+#include <stdexcept>
 #include <thread>
 #include <utility>
 #include <vector>
 
 #include <JoinTicket.h>
 #include <LobbyApiJson.h>
+#include <openssl/rand.h>
 #include <spdlog/spdlog.h>
 
 #include "Common/BuildVersion.h"
+#include "Creature/CreatureFileLoad.h"
 #include "Online/Desktop/CurlHttpClient.h"
 #include "Online/Desktop/UdpLanDiscovery.h"
 #include "Online/LanDiscovery.h"
@@ -60,11 +62,12 @@ int64_t UnixSeconds()
 
 std::string MakeSecret()
 {
-	std::random_device device;
+	// The secret comes from the cryptographic random source of OpenSSL. A server with no such source cannot give a secret
+	// that no client can guess, so it stops.
 	std::array<uint8_t, 16> bytes {};
-	for (auto& byte : bytes)
+	if (RAND_bytes(bytes.data(), static_cast<int>(bytes.size())) != 1)
 	{
-		byte = static_cast<uint8_t>(device());
+		throw std::runtime_error("The random source of OpenSSL gives no bytes for the secret of a session");
 	}
 	return join_ticket::EncodeBase64Url(bytes);
 }
@@ -349,7 +352,8 @@ std::optional<std::string> GameRole::Start(const NetworkSettings& settings, game
 	                  .keptTurns = settings.comeBackSeconds * 10 + 200,
 	                  .testCommands = settings.testCommands,
 	                  .sessionHasher = std::make_shared<Sha256SessionHasher>(),
-	                  .lanNames = settings.lan});
+	                  .lanNames = settings.lan,
+	                  .relaysCreature = creature_file_load::ServerRelays});
 	return std::nullopt;
 }
 

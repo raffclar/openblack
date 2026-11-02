@@ -541,6 +541,73 @@ TEST_F(LockstepTest, AServerWithItsTestCommandsOnTakesTheFightCheat)
 	EXPECT_EQ(host->Seats()[0].commands.at(static_cast<uint8_t>(turn_codec::CommandTag::CreatureFightCheat)), 1u);
 }
 
+// A changed client can send the commands of a single player game in a network game. A real client never sends them, so
+// the server leaves them out of its turns, and the other commands of the block stay.
+TEST_F(LockstepTest, TheServerLeavesOutTheCommandsOfASinglePlayerGame)
+{
+	MakeHost(1);
+	Computer alice(network, now, "god:alice");
+	Frames({&alice}, 6);
+	alice.session.Send(QuickSave {});
+	alice.session.Send(QuickLoad {});
+	alice.session.Send(MusicMood {.creature = Entity(3), .track = 9, .mood = 0.5f});
+	alice.session.Send(CreatureTattoo {.creature = Entity(3)});
+	alice.session.Send(HandTap {.object = Entity(2)});
+	Frames({&alice}, 3);
+	EXPECT_EQ(host->RefusedBlocks(), 4u);
+	const auto& commands = host->Seats()[0].commands;
+	for (const auto tag : {turn_codec::CommandTag::QuickSave, turn_codec::CommandTag::QuickLoad,
+	                       turn_codec::CommandTag::MusicMood, turn_codec::CommandTag::CreatureTattoo})
+	{
+		EXPECT_EQ(commands.count(static_cast<uint8_t>(tag)), 0u);
+	}
+	EXPECT_EQ(commands.at(static_cast<uint8_t>(turn_codec::CommandTag::HandTap)), 1u);
+}
+
+TEST(LockstepRules, TheServerLeavesOutOnlyTheCommandsThatAClientNeverSends)
+{
+	EXPECT_TRUE(server::LeavesOut(PlayerJoined {}, true));
+	EXPECT_TRUE(server::LeavesOut(PlayerLeft {}, true));
+	EXPECT_TRUE(server::LeavesOut(QuickSave {}, true));
+	EXPECT_TRUE(server::LeavesOut(QuickLoad {}, true));
+	EXPECT_TRUE(server::LeavesOut(MusicMood {}, true));
+	EXPECT_TRUE(server::LeavesOut(CreatureTattoo {}, true));
+	EXPECT_TRUE(server::LeavesOut(CreatureFightCheat {}, false));
+	EXPECT_FALSE(server::LeavesOut(CreatureFightCheat {}, true));
+	EXPECT_FALSE(server::LeavesOut(HandTap {}, false));
+	EXPECT_FALSE(server::LeavesOut(TotemShare {}, false));
+}
+
+// A changed client can send bytes that are not a creature file. The server sends empty data in their place, so no
+// computer reads them, and each computer brings no creature for that god, as it does for a file that does not read.
+TEST_F(LockstepTest, TheServerSendsNoCreatureFileForAFileThatDoesNotRead)
+{
+	host = std::make_unique<LockstepHost>(
+	    network, CheckFakeTicket, [this] { return now; }, [this] { return "secret-" + std::to_string(++secrets); },
+	    server::HostSettings {
+	        .start = {.land = "Land1.txt", .testbed = false, .seed = 1, .turn = 0, .opening = "cow", .godsRingMap = false},
+	        .landChecksum = online::start_rules::LandChecksum(k_LandFile),
+	        .minGods = 2,
+	        .godSlots = 7,
+	        .comeBackMicroseconds = 5LL * 60 * 1'000'000,
+	        .keptTurns = 3200,
+	        .testCommands = false,
+	        .sessionHasher = hasher,
+	        .lanNames = false,
+	        .relaysCreature = [](std::span<const uint8_t> data) { return data.empty() || data.front() == 'C'; }});
+	Computer alice(network, now, "god:alice", k_LandFile, {'C', 'R'}, 0.0f);
+	Computer bob(network, now, "god:bob", k_LandFile, {'X', 'X'}, 0.0f);
+	Frames({&alice, &bob}, 8);
+	ASSERT_TRUE(host->Started());
+	for (const player_commands::TurnCommandSourceInterface* source :
+	     std::initializer_list<const player_commands::TurnCommandSourceInterface*> {host.get(), &alice.session, &bob.session})
+	{
+		const auto first = source->StartCreatureFile(PlayerNames::PLAYER_ONE);
+		EXPECT_EQ(std::vector<uint8_t>(first.begin(), first.end()), (std::vector<uint8_t> {'C', 'R'}));
+		EXPECT_TRUE(source->StartCreatureFile(PlayerNames::PLAYER_TWO).empty());
+	}
+}
+
 TEST_F(LockstepTest, AClientThatLosesTheSocketComesBackAndGetsTheTurnsThatItMissed)
 {
 	MakeHost(2);

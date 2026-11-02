@@ -1847,8 +1847,8 @@ TEST_F(FrontEndTest, TheRoomGivesTheRoundTripOfTheOwnGameSocket)
 
 namespace
 {
-/// The hash of the land of the room in the tests of the land's download
-constexpr std::string_view k_RoomMapHash = "aa00000000000000000000000000000000000000000000000000000000000000";
+/// The hash of the land of the room in the tests of the land's download: the SHA-256 of the bytes 1, 2 and 3
+constexpr std::string_view k_RoomMapHash = "039058c6f2c0cb492c533b0a4d14ef77cc0f78abccced5287d84a1a2011cfb81";
 
 lobby_api::OnlineMap RoomMap()
 {

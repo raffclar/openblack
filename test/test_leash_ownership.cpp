@@ -15,6 +15,7 @@
 #include <SDL_events.h>
 #include <gtest/gtest.h>
 
+#include "Commands/CommandOwnerRules.h"
 #include "Creature/CreatureHandRules.h"
 #include "Creature/LeashKeys.h"
 #include "Creature/LeashOwnership.h"
@@ -317,6 +318,29 @@ TEST(CreatureHand, TheFeedbackOfAReleaseComesOnlyToTheCreatureOfThePlayerOrOfAnA
 	EXPECT_FALSE(FeelsHandOf(PlayerNames::PLAYER_TWO, k_Hand, false));
 	EXPECT_FALSE(FeelsHandOf(PlayerNames::NEUTRAL, k_Hand, false));
 	EXPECT_FALSE(FeelsHandOf(PlayerNames::NEUTRAL, k_Hand, true));
+}
+
+// A changed client can send the grip or the share of the totem of any town. The hand of a real player takes only the
+// totem of a town of its player.
+TEST(CommandOwnerRules, OnlyTheTotemOfATownOfThePlayerTakesTheHand)
+{
+	using player_commands::owner_rules::MayUseTotem;
+	EXPECT_TRUE(MayUseTotem(PlayerNames::PLAYER_ONE, PlayerNames::PLAYER_ONE));
+	EXPECT_FALSE(MayUseTotem(PlayerNames::PLAYER_TWO, PlayerNames::PLAYER_ONE));
+	EXPECT_FALSE(MayUseTotem(PlayerNames::NEUTRAL, PlayerNames::PLAYER_ONE));
+	EXPECT_FALSE(MayUseTotem(std::nullopt, PlayerNames::PLAYER_ONE));
+	EXPECT_FALSE(MayUseTotem(PlayerNames::NEUTRAL, PlayerNames::NEUTRAL));
+}
+
+// A changed client can call off a gift to any creature, which makes that creature stop what it does. The hand gives
+// things only to the creature of its player.
+TEST(CommandOwnerRules, TheHandCallsOffAGiftOnlyToTheCreatureOfItsPlayer)
+{
+	using player_commands::owner_rules::MayCallOffGift;
+	EXPECT_TRUE(MayCallOffGift(PlayerNames::PLAYER_TWO, PlayerNames::PLAYER_TWO));
+	EXPECT_FALSE(MayCallOffGift(PlayerNames::PLAYER_ONE, PlayerNames::PLAYER_TWO));
+	EXPECT_FALSE(MayCallOffGift(PlayerNames::NEUTRAL, PlayerNames::PLAYER_TWO));
+	EXPECT_FALSE(MayCallOffGift(PlayerNames::NEUTRAL, PlayerNames::NEUTRAL));
 }
 
 TEST(CreatureHand, TheInteractTipIsForTheOwnCreatureAnywhereAndOthersInTheInfluence)

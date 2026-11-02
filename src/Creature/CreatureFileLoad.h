@@ -12,6 +12,7 @@
 #include <cstdint>
 
 #include <optional>
+#include <span>
 
 #include "Enums.h"
 
@@ -97,5 +98,10 @@ struct BroughtCreature
 /// game. Only the creature of this computer's own god can go there, and only when that god plays for no clan: the
 /// creature of a clan god belongs to the clan. A new clan creature never goes to the files.
 [[nodiscard]] bool KeptByThisComputer(const BroughtCreature& creature);
+
+/// Whether the game server sends the start data of a god to the players as it is. The data is empty, the order to make a
+/// new clan creature, or a creature file that reads. Each computer brings no creature from other data, so the server
+/// sends empty data in its place.
+[[nodiscard]] bool ServerRelays(std::span<const uint8_t> data);
 
 } // namespace openblack::creature_file_load

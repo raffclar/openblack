@@ -363,6 +363,24 @@ bool creature_fight::IsBlow(Move::Kind kind)
 	return kind == Move::Kind::High || kind == Move::Kind::Mid || kind == Move::Kind::Low;
 }
 
+bool creature_fight::HandGives(const Move& move, std::span<const MagicType> knownMiracles)
+{
+	switch (move.kind)
+	{
+	case Move::Kind::High:
+	case Move::Kind::Mid:
+	case Move::Kind::Low:
+	case Move::Kind::Block:
+	case Move::Kind::Special:
+		return move.value == 0;
+	case Move::Kind::Spell:
+		return std::ranges::find(knownMiracles, static_cast<MagicType>(move.value)) != knownMiracles.end();
+	case Move::Kind::Animation:
+		return false;
+	}
+	return false;
+}
+
 std::optional<float> creature_fight::InitialCharge(Move::Kind kind)
 {
 	switch (kind)

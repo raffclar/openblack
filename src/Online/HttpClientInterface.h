@@ -126,8 +126,11 @@ namespace http_policy
 [[nodiscard]] bool IsSameOriginPath(std::string_view url) noexcept;
 /// True when the address starts with wss:// and has a host
 [[nodiscard]] bool IsWssAddress(std::string_view url) noexcept;
-/// True when the host of an https:// or wss:// address is this computer: localhost or an IPv4 address 127.x.x.x. The
-/// test authorities of the tools are only for such addresses.
+/// True when the host is this computer: the name localhost, or an IPv4 address of four decimal numbers from 0 to 255 with
+/// 127 first. A name such as 127.example.com is not such a host.
+[[nodiscard]] bool IsLoopbackHost(std::string_view host) noexcept;
+/// True when the host of an https:// or wss:// address is this computer (IsLoopbackHost). The test authorities of the
+/// tools are only for such addresses.
 [[nodiscard]] bool IsLoopbackAddress(std::string_view url) noexcept;
 
 } // namespace http_policy

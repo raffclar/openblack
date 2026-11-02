@@ -17,6 +17,7 @@
 
 #include "Hand/HandReportRules.h"
 #include "Hand/ViewReportRules.h"
+#include "Online/GameOrigin.h"
 
 using namespace openblack;
 using namespace openblack::hand_report;
@@ -144,6 +145,18 @@ TEST(HandReportRules, AJoinWithATicketOfTheLobbyIsAGameOfTheInternetLobby)
 {
 	EXPECT_EQ(online::OriginOfJoin("ticket"), online::GameOrigin::InternetLobby);
 	EXPECT_EQ(online::OriginOfJoin(""), online::GameOrigin::Lan);
+}
+
+// The desktop game reads the ticket from a file, so that it is not on the command line. A line end after it is not part
+// of the ticket.
+TEST(HandReportRules, TheTicketFileGivesTheTicketWithNoSpaceAroundIt)
+{
+	EXPECT_EQ(online::TicketFileText("v4.public.abc"), "v4.public.abc");
+	EXPECT_EQ(online::TicketFileText("  v4.public.abc\r\n"), "v4.public.abc");
+	EXPECT_FALSE(online::TicketFileText("").has_value());
+	EXPECT_FALSE(online::TicketFileText(" \r\n").has_value());
+	EXPECT_FALSE(online::TicketFileText("v4.public.a\nv4.public.b").has_value());
+	EXPECT_FALSE(online::TicketFileText("v4.public.a b").has_value());
 }
 
 TEST(HandReportRules, AfterASendTheReportTestsAgainAfterTheWait)

@@ -32,6 +32,7 @@
 #include "ECS/Systems/TimeSystemInterface.h"
 #include "FileSystem/FileSystemInterface.h"
 #include "Locator.h"
+#include "Online/HttpClientInterface.h"
 #include "Online/NetworkLand.h"
 #include "Online/OnlineMapStoreInterface.h"
 #include "PlayerSlots.h"
@@ -52,11 +53,6 @@ std::string_view HostOf(std::string_view url)
 	url.remove_prefix(k_Scheme.size());
 	const auto end = url.find_first_of(":/?#");
 	return url.substr(0, end);
-}
-
-bool IsLoopbackHost(std::string_view host)
-{
-	return host == "localhost" || host.starts_with("127.");
 }
 
 int64_t Microseconds()
@@ -122,7 +118,7 @@ bool NetworkGameSystem::Join(NetworkJoin join)
 	if (join.testAuthorities.has_value())
 	{
 		// The extra authorities are only for a test server on this computer
-		if (!IsLoopbackHost(HostOf(join.url)) || !_makeTestClient)
+		if (!openblack::online::http_policy::IsLoopbackHost(HostOf(join.url)) || !_makeTestClient)
 		{
 			SPDLOG_LOGGER_ERROR(spdlog::get("game"), "The test authorities are only for a game server on a loopback address");
 			return false;
