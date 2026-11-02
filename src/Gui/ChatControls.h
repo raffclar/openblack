@@ -91,6 +91,8 @@ public:
 	void SetFriends(std::span<const chat::people::FriendRecord> records);
 	/// The friends that the profile must keep, after the friend button changed them
 	[[nodiscard]] std::optional<std::vector<chat::people::FriendRecord>> TakeChangedFriends();
+	/// A person that is not a player and not a friend sent a line, and goes to the others
+	void AddOther(std::u16string_view name, chat::people::UserId user);
 	/// The friends that were seen now, at this time of the online clock (see people::UpdateOnline)
 	void UpdateOnline(std::span<const chat::people::UserId> seen, uint32_t now);
 	/// The chat opens with the focus in its line, as a click on the speech button opens it

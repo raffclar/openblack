@@ -201,6 +201,12 @@ std::optional<std::vector<chat::people::FriendRecord>> ChatControls::TakeChanged
 	return std::exchange(_changedFriends, std::nullopt);
 }
 
+void ChatControls::AddOther(std::u16string_view name, chat::people::UserId user)
+{
+	chat::people::AddOther(_people, name, user, std::nullopt);
+	RebuildRows();
+}
+
 void ChatControls::UpdateOnline(std::span<const chat::people::UserId> seen, uint32_t now)
 {
 	chat::people::UpdateOnline(_people, seen, now);

@@ -761,6 +761,10 @@ std::string Chat(GameStageInterface* stage, PlayerNames player, size_t value, st
 	}
 	chat.SetNames(names);
 	const auto line = gui::ToUtf16(text);
+	if (value == k_ChatFriends)
+	{
+		return stage->OpenChatWithFriends();
+	}
 	if (value == k_ChatTypes)
 	{
 		stage->OpenChat(line);

@@ -196,9 +196,9 @@ TEST(LobbyApi, TicketClansRankingAndPlayer)
 	EXPECT_EQ(players->entries.at(0).name, "abc");
 	EXPECT_EQ(players->entries.at(0).gamesRanked, 7);
 	EXPECT_FALSE(ParsePlayerRanking(R"({"players":[{"position":1,"id":4,"name":"abc","points":1}],"count":1})").has_value());
-	const auto clans = ParseClanRanking(R"({"clans":[{"position":1,"id":3,"name":"A","points":1500.0}],"count":1})");
-	ASSERT_TRUE(clans.has_value());
-	EXPECT_EQ(clans->entries.at(0).id, 3);
+	const auto clanRanking = ParseClanRanking(R"({"clans":[{"position":1,"id":3,"name":"A","points":1500.0}],"count":1})");
+	ASSERT_TRUE(clanRanking.has_value());
+	EXPECT_EQ(clanRanking->entries.at(0).id, 3);
 	EXPECT_FALSE(ParseClanRanking(R"({"page":1,"pages":1,"entries":[]})").has_value());
 
 	const auto player = ParsePlayerDetails(R"({"id":4,"name":"abc","points":1000,"games_ranked":12})");
