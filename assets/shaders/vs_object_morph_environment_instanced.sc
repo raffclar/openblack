@@ -3,6 +3,5 @@
 #define USE_INSTANCING 1
 #define USE_MORPH 1
 #define USE_ENVIRONMENT 1
-#define USE_ENVIRONMENT_INSTANCE_AXES 1
 
 #include "vs_object.sc"
