@@ -38,6 +38,10 @@ constexpr float k_ItchySeedReward = 46.0f;
 
 /// The tilt puzzle of the wolf and the man who sits beside it, from the middle of the fifth land
 constexpr glm::vec2 k_TiltPuzzle = glm::vec2(1620.0453f, 2969.1855f) - k_FifthLandMiddle;
+/// The middle of the grid of the tilt puzzle, inside its fence
+constexpr glm::vec2 k_TiltMazeMiddle = k_TiltPuzzle + glm::vec2(14.0f, 14.0f);
+/// The radius of the influence that the scenario gives on the tilt puzzle, which covers the five bells
+constexpr float k_TiltMazeInfluence = 60.0f;
 
 /// The hut of the woman with the potions and the ridge of the ogre Morg, from the middle of the fourth land
 constexpr glm::vec2 k_WomansHut = glm::vec2(3703.723f, 3105.303f) - k_FourthLandMiddle;
@@ -115,18 +119,28 @@ void AddStanleyTheWolf(std::vector<Scenario>& all)
 	    .id = "story.l5_stanley_the_wolf",
 	    .name = "Story: Stanley the Wolf, the silver scroll of the tilt puzzle on the fifth land",
 	    .facet = Facet::Story,
-	    .description = "The fifth land loads with its own scripts and sky. The script of the silver scroll starts from its "
-	                   "own start. The camera looks at the puzzle. Click the Action button on the scroll to start the "
-	                   "introduction.",
+	    .description =
+	        "The fifth land loads with its own scripts and sky. The script of the silver scroll starts from its "
+	        "own start. The camera looks at the puzzle. Click the Action button on the scroll or ring a bell to start the "
+	        "introduction.",
 	    .expected = "The tilt puzzle comes with a silver scroll over it. A man sits beside a bonfire near the puzzle. When "
 	                "you click the scroll, a film starts: the man stands up and says three lines, a sign of advice comes "
 	                "at the corner of the fence, and the camera goes high over the grid. Then the evil advisor says "
-	                "\"Start ringing those bells, Boss.\" The man sits again.",
+	                "\"Start ringing those bells, Boss.\" The man sits again. The bells ring when you tap them. When the "
+	                "wolf stops on the cell of the sheep, the man thanks you, a lion comes and the swap offer starts.",
 	    .environment = {.land = Land::Story, .storyLand = "Land5.txt", .dispenserGrid = false},
 	    .framing = {.shot = Shot::Placed,
 	                .eye = {k_TiltPuzzle.x + 30.0f, 45.0f, k_TiltPuzzle.y - 40.0f},
 	                .look = {k_TiltPuzzle.x, 0.0f, k_TiltPuzzle.y}},
-	    .commands = {{.kind = Kind::RunScript, .delaySeconds = 0.5f, .script = "LionPuzzle"}},
+	    // The player's influence on the maze lets the hand ring the bells
+	    .commands = {{.kind = Kind::CallNative,
+	                  .delaySeconds = 0.5f,
+	                  .script = "INFLUENCE_POSITION",
+	                  .scriptArguments = {{.kind = Argument::Kind::Position, .point = k_TiltMazeMiddle},
+	                                      {.number = k_TiltMazeInfluence},
+	                                      {.kind = Argument::Kind::Integer, .number = 0.0f},
+	                                      {.kind = Argument::Kind::Integer, .number = 0.0f}}},
+	                 {.kind = Kind::RunScript, .delaySeconds = 0.5f, .script = "LionPuzzle"}},
 	});
 }
 
