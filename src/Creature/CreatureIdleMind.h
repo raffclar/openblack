@@ -1198,4 +1198,8 @@ void CarryDone(IdleMind& mind);
 [[nodiscard]] bool WatchedHandEnough(uint32_t turns, uint32_t limitTurns, uint32_t turnsPerSecond);
 /// The longest a creature watches the hand, in whole seconds
 constexpr float k_LongestHandWatchSeconds = 5.0f;
+/// The step that a creature does for the order of its partner in a joint action. A creature that gives the order to
+/// itself first stops what it does, and thus clears the agenda that holds the order. In place of the order it then reads
+/// a pick-up of no thing, and that pick-up fails as it starts.
+[[nodiscard]] Step OrderedStep(const Step& ordered, bool toItself);
 } // namespace openblack::creature_mind

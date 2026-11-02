@@ -7758,6 +7758,27 @@ void AddHand(std::vector<Scenario>& all)
 	                 {.kind = Kind::PointerRelease, .delaySeconds = 2.0f, .value = 3}},
 	});
 
+	// A tap of the hand on the own creature with the aggression leash held loose: the creature acts on itself, which on
+	// the aggression leash is a fight with itself
+	all.push_back({
+	    .id = "leash.tap_itself_aggression",
+	    .name = "A tap on your creature with the aggression leash tells it to fight itself",
+	    .facet = Facet::Leash,
+	    .description = "Your tiger faces the camera in the middle of the screen and wears the aggression leash, held loose "
+	                   "in the hand. The action button taps the tiger for 0.1 seconds.",
+	    .expected = "The tap is an order on the tiger itself. The tiger nods, the order ring shows above it and the help "
+	                "tells of its anger. It looks down at itself and stands still for some turns, then it stops the order "
+	                "and decides again by itself. The leash stays on and the hand does not hold the tiger. The log shows "
+	                "\"is told to act on\" with the tiger as the thing, then \"is the partner of creature\" with the "
+	                "tiger as its own partner.",
+	    .environment = {.dispenserGrid = false, .cursor = glm::vec2(0.5f, 0.5f)},
+	    .framing = {.shot = Shot::Follow, .distance = 1.2f},
+	    .creatures = {Content(CreatureType::Tiger, {0.0f, 0.0f})},
+	    .commands = {Leash(0, LeashType::Evil, 0.5f),
+	                 {.kind = Kind::PointerPress, .delaySeconds = 2.0f, .value = 3},
+	                 {.kind = Kind::PointerRelease, .delaySeconds = 0.1f, .value = 3}},
+	});
+
 	// The real button on the own creature while it sleeps: a sleeping creature takes hold. Its tiredness stays high, so
 	// it does not wake by itself.
 	auto sleepy = Content(CreatureType::Tiger, {0.0f, 0.0f});
