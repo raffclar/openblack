@@ -1223,7 +1223,7 @@ TEST(CreatureWatching, ACreatureWatchesVillagersWhenFreeToAndGrownUpEnough)
 TEST(CreatureWatching, LearnsAMiracleBySightingsAndSpecies)
 {
 	const std::vector<creature_watching::MiracleRule> miracles {{.name = "Heal", .timesToSee = 10, .minPhase = 8},
-	                                                            {.name = "Food", .knownAtStart = true}};
+	                                                            {.name = "Food", .teachable = true}};
 	auto knowledge = creature_watching::StartKnowledge({}, miracles);
 	// Nothing is known from the start
 	EXPECT_FALSE(knowledge.miraclesKnown[1]);

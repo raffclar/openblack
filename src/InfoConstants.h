@@ -328,86 +328,113 @@ struct CreatureDevelopmentPhaseEntry
 	float goHomeDistance;
 	float field0x34;
 	float field0x38;
-	uint32_t field0x3c;
-	uint32_t field0x40;
-	uint32_t field0x44;
-	uint32_t field0x48;
-	uint32_t field0x4c;
-	uint32_t field0x50;
-	uint32_t field0x54;
-	uint32_t field0x58;
-	uint32_t field0x5c;
-	uint32_t field0x60;
-	uint32_t field0x64;
-	uint32_t field0x68;
-	uint32_t field0x6c;
-	uint32_t field0x70;
+	/// When the creature moves to a phase, it starts the desires that this phase and each phase before it start, and
+	/// stops the desires that they stop, phase by phase. An empty slot holds no desire.
+	std::array<uint32_t, 10> desiresOn;
+	std::array<uint32_t, 4> desiresOff;
 };
+static_assert(offsetof(CreatureDevelopmentPhaseEntry, goHomeDistance) == 0x30);
+static_assert(offsetof(CreatureDevelopmentPhaseEntry, desiresOn) == 0x3c);
+static_assert(offsetof(CreatureDevelopmentPhaseEntry, desiresOff) == 0x64);
+static_assert(sizeof(CreatureDevelopmentPhaseEntry) == 0x74);
 
 struct CreatureInitialDesireInfo
 {
-	uint32_t field0x0;
-	uint32_t field0x4;
-	uint32_t field0x8;
-	uint32_t field0xc;
-	uint32_t field0x10;
-	uint32_t field0x14;
-	uint32_t field0x18;
-	uint32_t field0x1c;
-	uint32_t field0x20;
+	/// The kinds of source that feed the desire, in their order. A kind past the last kind is an empty slot.
+	std::array<uint32_t, 8> sources;
+	/// The desire is about something in itself, as a town to help or a creature to befriend
+	uint32_t aboutSomething;
 	uint32_t field0x24;
-	uint32_t field0x28;
-	uint32_t field0x2c;
+	/// The creature can learn from feedback about the desire
+	uint32_t learnable;
+	/// An action that the player made the creature do for the desire teaches approval when the creature forgets it
+	uint32_t approvesOrders;
 	uint32_t field0x30;
-	uint32_t field0x34;
-	uint32_t field0x38;
-	float field0x3c;
-	float field0x40;
-	float field0x44;
+	/// A desire of the body
+	uint32_t bodyDesire;
+	/// A desire that the player can help with
+	uint32_t canBeHelped;
+	/// The value that feedback keeps the desire's weight near, and the range of the desire's decay
+	float initialMax;
+	float decayMin;
+	float decayMax;
 	/// The change that a plan for this desire adds to the alignment of the creature on each game turn
 	float alignmentChange;
 	float field0x4c;
 	/// When the creature sees the hand do something that shows this desire, the desire grows this many times faster
 	float seenPlayerActionSpeedUp;
-	float field0x54;
-	float field0x58;
+	/// How strongly feedback changes how fast the desire grows
+	float lessonDivisor;
+	/// How much distance counts against a goal of the desire
+	float distanceWeight;
 	uint32_t field0x5c;
 	float field0x60;
 	float field0x64;
-	float field0x68;
-	uint32_t field0x6c;
-	std::array<char, 0x40> field0x70;
-	std::array<char, 0x40> field0xb0;
+	/// The weight the desire starts with, and whether feedback changes it
+	float initialWeight;
+	uint32_t learnsWeight;
+	/// The name of the desire, which the statistics show
+	std::array<char, 0x40> name;
+	/// The texts of the desire for the creature's thoughts: the desire, trying to satisfy it and satisfying it
+	std::array<char, 0x40> desireText;
 	/// The short name of the desire, as "impress", which the creature's web page uses
 	std::array<char, 0x40> shortName;
-	std::array<char, 0x40> field0x130;
-	std::array<char, 0x40> field0x170;
+	std::array<char, 0x40> tryingText;
+	std::array<char, 0x40> doingText;
 };
+static_assert(offsetof(CreatureInitialDesireInfo, sources) == 0x0);
+static_assert(offsetof(CreatureInitialDesireInfo, aboutSomething) == 0x20);
+static_assert(offsetof(CreatureInitialDesireInfo, learnable) == 0x28);
+static_assert(offsetof(CreatureInitialDesireInfo, approvesOrders) == 0x2c);
+static_assert(offsetof(CreatureInitialDesireInfo, bodyDesire) == 0x34);
+static_assert(offsetof(CreatureInitialDesireInfo, canBeHelped) == 0x38);
+static_assert(offsetof(CreatureInitialDesireInfo, initialMax) == 0x3c);
+static_assert(offsetof(CreatureInitialDesireInfo, decayMin) == 0x40);
+static_assert(offsetof(CreatureInitialDesireInfo, decayMax) == 0x44);
+static_assert(offsetof(CreatureInitialDesireInfo, alignmentChange) == 0x48);
+static_assert(offsetof(CreatureInitialDesireInfo, seenPlayerActionSpeedUp) == 0x50);
+static_assert(offsetof(CreatureInitialDesireInfo, lessonDivisor) == 0x54);
+static_assert(offsetof(CreatureInitialDesireInfo, distanceWeight) == 0x58);
+static_assert(offsetof(CreatureInitialDesireInfo, initialWeight) == 0x68);
+static_assert(offsetof(CreatureInitialDesireInfo, learnsWeight) == 0x6c);
+static_assert(offsetof(CreatureInitialDesireInfo, name) == 0x70);
+static_assert(offsetof(CreatureInitialDesireInfo, desireText) == 0xb0);
+static_assert(offsetof(CreatureInitialDesireInfo, shortName) == 0xf0);
+static_assert(offsetof(CreatureInitialDesireInfo, tryingText) == 0x130);
+static_assert(offsetof(CreatureInitialDesireInfo, doingText) == 0x170);
+static_assert(sizeof(CreatureInitialDesireInfo) == 0x1b0);
 
 struct CreatureActionKnownAboutEntry
 {
-	std::array<char, 0x40> field0x0;
-	uint32_t field0x40;
-	uint32_t field0x44;
-	float field0x48;
+	std::array<char, 0x40> name;
+	/// The desire that a miracle serves when a creature casts it from a one-shot globe
+	uint32_t desire;
+	/// How many times a creature must see a miracle before it knows it
+	uint32_t timesToSee;
+	/// How many seconds a creature must watch a skill, from when it first sees it
+	float watchSeconds;
 	uint32_t field0x4c;
-	uint32_t field0x50;
-	uint32_t field0x54;
+	/// The first development phase in which the creature can learn it
+	uint32_t minPhase;
+	/// A computer player can teach it to its creature
+	uint32_t teachable;
 };
+static_assert(offsetof(CreatureActionKnownAboutEntry, name) == 0x0);
+static_assert(offsetof(CreatureActionKnownAboutEntry, desire) == 0x40);
+static_assert(offsetof(CreatureActionKnownAboutEntry, timesToSee) == 0x44);
+static_assert(offsetof(CreatureActionKnownAboutEntry, watchSeconds) == 0x48);
+static_assert(offsetof(CreatureActionKnownAboutEntry, minPhase) == 0x50);
+static_assert(offsetof(CreatureActionKnownAboutEntry, teachable) == 0x54);
+static_assert(sizeof(CreatureActionKnownAboutEntry) == 0x58);
 
 struct CreatureDesireAttributeEntry
 {
-	uint32_t field0x0;
-	uint32_t field0x4;
-	uint32_t field0x8;
-	uint32_t field0xc;
-	uint32_t field0x10;
-	uint32_t field0x14;
-	uint32_t field0x18;
-	uint32_t field0x1c;
-	uint32_t field0x20;
-	uint32_t field0x24;
+	/// The attributes of things that the creature's opinion of acting on them for the desire depends on. A slot past
+	/// the last attribute is empty.
+	std::array<uint32_t, 10> attributes;
 };
+static_assert(offsetof(CreatureDesireAttributeEntry, attributes) == 0x0);
+static_assert(sizeof(CreatureDesireAttributeEntry) == 0x28);
 
 struct GMultiMapFixedInfo: GObjectInfo
 {
@@ -537,21 +564,12 @@ struct GCitadelInfo: GContainerInfo
 
 struct CreatureDevelopmentDurationEntry
 {
-	int field0x0;
-	int field0x4;
-	int field0x8;
-	int field0xc;
-	int field0x10;
-	int field0x14;
-	int field0x18;
-	int field0x1c;
-	int field0x20;
-	int field0x24;
-	int field0x28;
-	int field0x2c;
-	int field0x30;
-	int field0x34;
+	/// For a species, by its row in the creature tables, the time a creature stays in each development phase. Only
+	/// the phase change conditions read it, and nothing reads them.
+	std::array<int32_t, 14> durations;
 };
+static_assert(offsetof(CreatureDevelopmentDurationEntry, durations) == 0x0);
+static_assert(sizeof(CreatureDevelopmentDurationEntry) == 0x38);
 
 struct GTownInfo: GContainerInfo
 {
@@ -810,10 +828,12 @@ struct GCreaturePenInfo: GCitadelPartInfo
 
 struct GScriptOpposingCreature
 {
-	uint32_t field0x0;
-	uint32_t field0x4;
-	uint32_t field0x8;
+	/// For a species of the player's creature, the species of each god's creature against it, as the scripts number
+	/// them
+	std::array<uint32_t, 3> byGod;
 };
+static_assert(offsetof(GScriptOpposingCreature, byGod) == 0x0);
+static_assert(sizeof(GScriptOpposingCreature) == 0xc);
 
 struct GTotemStatueInfo: GMultiMapFixedInfo
 {
@@ -822,24 +842,11 @@ struct GTotemStatueInfo: GMultiMapFixedInfo
 
 struct CreatureDesireForType
 {
-	float field0x0;
-	float field0x4;
-	float field0x8;
-	float field0xc;
-	float field0x10;
-	float field0x14;
-	float field0x18;
-	float field0x1c;
-	float field0x20;
-	float field0x24;
-	float field0x28;
-	float field0x2c;
-	float field0x30;
-	float field0x34;
-	float field0x38;
-	float field0x3c;
-	float field0x40;
+	/// For each species, by its row in the creature tables, the seconds the desire takes to grow by 1 at the start
+	std::array<float, 17> increaseSecondsBySpecies;
 };
+static_assert(offsetof(CreatureDesireForType, increaseSecondsBySpecies) == 0x0);
+static_assert(sizeof(CreatureDesireForType) == 0x44);
 
 struct GVortexInfo
 {
@@ -1180,8 +1187,9 @@ struct GVillagerStateTableInfo
 {
 	/// The animation a villager plays in the state: -4 hides it, other negatives keep the clip it has
 	int32_t animation;
-	int field0x4;
-	float field0x8;
+	/// The town desire that a villager in the state works for, -1 for none, and how much it counts
+	int townDesire;
+	float townDesireWeight;
 	uint32_t isFinalState;
 	/// A villager storing its state to come back to stores the one it stored before instead of this one
 	int keepsPreviousState;
@@ -1195,10 +1203,13 @@ struct GVillagerStateTableInfo
 	/// Which of the villager's speeds it moves at in this state: 1 for fleeing
 	uint32_t speedIndex;
 	std::array<char, 0x80> name;
-	int field0xa8;
+	/// Bit 0 set: a villager in the state is free for other work, and for a partner
+	int availableFlags;
 	uint32_t field0xac;
 	uint32_t field0xb0;
-	uint32_t field0xb4;
+	/// When a villager in the state is called to make dinner, it stays in the state if this is not 0, else it goes
+	/// home
+	uint32_t staysForDinnerCall;
 	/// A state of reacting to something
 	int isReactionState;
 	uint32_t field0xbc;
@@ -1229,7 +1240,8 @@ struct GVillagerStateTableInfo
 	uint32_t availableForReaction;
 	/// Going into the state cuts short the clip of leaving the state before
 	uint32_t skipsOutOfClip;
-	uint32_t field0xf4;
+	/// A villager that lands after a throw returns to the state it had before, as one that a script controls does
+	uint32_t resumesAfterLanding;
 	/// The life a villager in the state loses each turn
 	float lifeDrain;
 	/// The help text telling what a villager in the state is doing, as its details show it
@@ -1237,6 +1249,12 @@ struct GVillagerStateTableInfo
 	/// The text the Help key gives about a villager in the state, 0 for none
 	uint32_t queryText;
 };
+static_assert(offsetof(GVillagerStateTableInfo, townDesire) == 0x4);
+static_assert(offsetof(GVillagerStateTableInfo, townDesireWeight) == 0x8);
+static_assert(offsetof(GVillagerStateTableInfo, availableFlags) == 0xa8);
+static_assert(offsetof(GVillagerStateTableInfo, staysForDinnerCall) == 0xb4);
+static_assert(offsetof(GVillagerStateTableInfo, resumesAfterLanding) == 0xf4);
+static_assert(sizeof(GVillagerStateTableInfo) == 0x104);
 
 struct GVillagerInfo: GLivingInfo
 {
@@ -1336,37 +1354,12 @@ struct GVillagerInfo: GLivingInfo
 
 struct CreatureDesireActionEntry
 {
-	uint32_t field0x0;
-	uint32_t field0x4;
-	uint32_t field0x8;
-	uint32_t field0xc;
-	uint32_t field0x10;
-	uint32_t field0x14;
-	uint32_t field0x18;
-	uint32_t field0x1c;
-	uint32_t field0x20;
-	uint32_t field0x24;
-	uint32_t field0x28;
-	uint32_t field0x2c;
-	uint32_t field0x30;
-	uint32_t field0x34;
-	uint32_t field0x38;
-	uint32_t field0x3c;
-	uint32_t field0x40;
-	uint32_t field0x44;
-	uint32_t field0x48;
-	uint32_t field0x4c;
-	uint32_t field0x50;
-	uint32_t field0x54;
-	uint32_t field0x58;
-	uint32_t field0x5c;
-	uint32_t field0x60;
-	uint32_t field0x64;
-	uint32_t field0x68;
-	uint32_t field0x6c;
-	uint32_t field0x70;
-	uint32_t field0x74;
+	/// The creature actions that can satisfy the desire, in the order the planner reads them. The list ends at the
+	/// first empty slot.
+	std::array<uint32_t, 30> actions;
 };
+static_assert(offsetof(CreatureDesireActionEntry, actions) == 0x0);
+static_assert(sizeof(CreatureDesireActionEntry) == 0x78);
 
 struct GMagicTeleportInfo: GMagicInfo
 {
@@ -1384,9 +1377,14 @@ struct GPlaytimeInfo
 
 struct CreatureMagicActionKnownAboutEntry: CreatureActionKnownAboutEntry
 {
-	uint32_t field0x58;
-	float field0x5c;
+	/// The creature action that the miracle lets the creature take
+	uint32_t action;
+	/// The share of the energy that the miracle costs a creature that maintains it
+	float energyShare;
 };
+static_assert(offsetof(CreatureMagicActionKnownAboutEntry, action) == 0x58);
+static_assert(offsetof(CreatureMagicActionKnownAboutEntry, energyShare) == 0x5c);
+static_assert(sizeof(CreatureMagicActionKnownAboutEntry) == 0x60);
 
 struct CreatureSourceBoundsInfo
 {
@@ -1452,14 +1450,19 @@ struct GAnimalStateTableInfo
 	/// A state an animal is in for itself rather than on its way into another, as moving somewhere is
 	uint32_t isFinalState;
 	uint32_t field0x10;
-	uint32_t field0x14;
-	uint32_t field0x18;
+	uint32_t isScriptState;
+	uint32_t isScriptInterruptableState;
 	/// The state that an animal goes into when a reaction ends, if the animal was in this state before the reaction
 	uint32_t resumeState;
 	uint32_t field0x20;
 	std::array<char, 0x80> name;
-	uint32_t field0xa4;
+	/// An animal in the state checks its needs
+	uint32_t seesToNeeds;
 };
+static_assert(offsetof(GAnimalStateTableInfo, isScriptState) == 0x14);
+static_assert(offsetof(GAnimalStateTableInfo, isScriptInterruptableState) == 0x18);
+static_assert(offsetof(GAnimalStateTableInfo, seesToNeeds) == 0xa4);
+static_assert(sizeof(GAnimalStateTableInfo) == 0xa8);
 
 struct GLeashSelectorInfo: GObjectInfo
 {
@@ -1468,24 +1471,12 @@ struct GLeashSelectorInfo: GObjectInfo
 
 struct CreatureInitialSourceInfo
 {
-	float field0x0;
-	float field0x4;
-	float field0x8;
-	float field0xc;
-	float field0x10;
-	float field0x14;
-	float field0x18;
-	float field0x1c;
-	float field0x20;
-	float field0x24;
-	float field0x28;
-	float field0x2c;
-	float field0x30;
-	float field0x34;
-	float field0x38;
-	float field0x3c;
-	float field0x40;
+	/// For each species, by its row in the creature tables, the starting value of the source (the first table) or
+	/// its starting threshold (the second table)
+	std::array<float, 17> bySpecies;
 };
+static_assert(offsetof(CreatureInitialSourceInfo, bySpecies) == 0x0);
+static_assert(sizeof(CreatureInitialSourceInfo) == 0x44);
 
 struct GMagicWaterInfo: GMagicInfo
 {
@@ -1832,47 +1823,12 @@ struct GFishFarmInfo: GMultiMapFixedInfo
 
 struct CreatureDesireDependency
 {
-	uint32_t field0x0;
-	float field0x4;
-	float field0x8;
-	float field0xc;
-	uint32_t field0x10;
-	uint32_t field0x14;
-	uint32_t field0x18;
-	uint32_t field0x1c;
-	uint32_t field0x20;
-	uint32_t field0x24;
-	uint32_t field0x28;
-	uint32_t field0x2c;
-	uint32_t field0x30;
-	uint32_t field0x34;
-	uint32_t field0x38;
-	uint32_t field0x3c;
-	float field0x40;
-	uint32_t field0x44;
-	uint32_t field0x48;
-	uint32_t field0x4c;
-	uint32_t field0x50;
-	uint32_t field0x54;
-	uint32_t field0x58;
-	float field0x5c;
-	float field0x60;
-	float field0x64;
-	float field0x68;
-	float field0x6c;
-	float field0x70;
-	float field0x74;
-	float field0x78;
-	float field0x7c;
-	float field0x80;
-	float field0x84;
-	float field0x88;
-	float field0x8c;
-	float field0x90;
-	float field0x94;
-	uint32_t field0x98;
-	uint32_t field0x9c;
+	/// For each other desire, how feedback on this desire changes how fast that one grows: above 0 the same way,
+	/// below 0 the other way, 0 not at all
+	std::array<float, 40> dependencies;
 };
+static_assert(offsetof(CreatureDesireDependency, dependencies) == 0x0);
+static_assert(sizeof(CreatureDesireDependency) == 0xa0);
 
 struct GPFootballPositionInfo: GFootballPositionInfo
 {
@@ -1881,19 +1837,26 @@ struct GPFootballPositionInfo: GFootballPositionInfo
 struct CreatureMimicInfo
 {
 	std::array<char, 0x80> name;
-	float field0x80;
-	uint32_t field0x84;
-	uint32_t field0x88;
-	uint32_t field0x8c;
-	uint32_t field0x90;
-	uint32_t field0x94;
-	uint32_t field0x98;
-	uint32_t field0x9c;
-	uint32_t field0xa0;
-	uint32_t field0xa4;
-	uint32_t field0xa8;
-	uint32_t field0xac;
+	/// How readily the creature copies it
+	float chance;
+	/// Only on the learning leash
+	uint32_t needsLearningLeash;
+	/// The action the creature notices it with and the actions it may copy it with
+	uint32_t noticeAction;
+	std::array<uint32_t, 6> copyActions;
+	/// The desire the creature may then want, how long each stage lasts in steps, and whether it copies the desire
+	uint32_t desire;
+	uint32_t stageSteps;
+	uint32_t copiesDesire;
 };
+static_assert(offsetof(CreatureMimicInfo, chance) == 0x80);
+static_assert(offsetof(CreatureMimicInfo, needsLearningLeash) == 0x84);
+static_assert(offsetof(CreatureMimicInfo, noticeAction) == 0x88);
+static_assert(offsetof(CreatureMimicInfo, copyActions) == 0x8c);
+static_assert(offsetof(CreatureMimicInfo, desire) == 0xa4);
+static_assert(offsetof(CreatureMimicInfo, stageSteps) == 0xa8);
+static_assert(offsetof(CreatureMimicInfo, copiesDesire) == 0xac);
+static_assert(sizeof(CreatureMimicInfo) == 0xb0);
 
 struct GPrayerSiteInfo: GFeatureInfo
 {
@@ -1907,14 +1870,24 @@ struct HelpSpiritInfo: GLivingInfo
 
 struct CreatureDesireSourceTable
 {
-	uint32_t field0x0;
-	uint32_t field0x4;
-	float field0x8;
-	float field0xc;
-	float field0x10;
+	/// The desire that the source feeds
+	uint32_t desire;
+	/// The source is cleared when the desire is satisfied
+	uint32_t clearedWhenSatisfied;
+	/// What the source's value is multiplied by as it feeds the desire
+	float multiplier;
+	/// How far a new creature's starting value and threshold of the source are spread at random either way
+	float valueSpread;
+	float thresholdSpread;
 	std::array<char, 0x40> field0x14;
 	std::array<char, 0x40> field0x54;
 };
+static_assert(offsetof(CreatureDesireSourceTable, desire) == 0x0);
+static_assert(offsetof(CreatureDesireSourceTable, clearedWhenSatisfied) == 0x4);
+static_assert(offsetof(CreatureDesireSourceTable, multiplier) == 0x8);
+static_assert(offsetof(CreatureDesireSourceTable, valueSpread) == 0xc);
+static_assert(offsetof(CreatureDesireSourceTable, thresholdSpread) == 0x10);
+static_assert(sizeof(CreatureDesireSourceTable) == 0x94);
 
 struct GSpellIconInfo: GMultiMapFixedInfo
 {
@@ -1946,7 +1919,8 @@ struct CreatureActionInfo
 	float strengthGain;
 	float energyCost;
 	float exhaustionCost;
-	uint32_t field0xc;
+	/// How impressive the action is to villagers who see it
+	uint32_t impressiveType;
 	/// How much doing the action impresses villagers watching the creature
 	float impressiveness;
 	std::array<char, 0x20> name;
@@ -1974,14 +1948,16 @@ struct CreatureActionInfo
 	uint32_t field0x88;
 	uint32_t field0x8c;
 	uint32_t field0x90;
-	uint32_t field0x94;
+	/// The action acts on a thing
+	uint32_t actsOnThing;
 	/// The desire the action satisfies
 	uint32_t desire;
 	/// The two ordinary skills the creature must know to do it, 6 for none
 	std::array<uint32_t, 2> skillsNeeded;
 	/// The miracle the action casts, 0 for none, which the creature must know to do it
 	uint32_t magicType;
-	uint32_t field0xa8;
+	/// The action never acts on the thing that the creature holds
+	uint32_t notOnWhatItHolds;
 	uint32_t field0xac;
 	uint32_t field0xb0;
 	/// The desire that the action shows to another creature that sees it: the other creature takes it as the strongest
@@ -1991,24 +1967,41 @@ struct CreatureActionInfo
 	uint32_t field0xbc;
 	/// The desire it satisfies is multiplied by this once it is done
 	float desireMultiplier;
-	float field0xc4;
-	uint32_t field0xc8;
+	/// The times the creature must complete the action for its full share of skill in it
+	float fullSkillTimes;
+	/// The desire multiplier applies however the action started
+	uint32_t alwaysApplies;
 	float field0xcc;
-	float field0xd0;
+	/// How many seconds after it finishes the action can still be learnt from
+	float learningWindowSeconds;
 	/// The opinion of the action that a new creature starts with, from -1 to 1
 	float startingOpinion;
 	uint32_t field0xd8;
-	uint32_t field0xdc;
-	uint32_t field0xe0;
+	/// A friend that does the action far enough away is worth following
+	uint32_t worthFollowing;
+	/// Stroked while holding something during the action, the creature learns to eat what it holds
+	uint32_t eatWhenStroked;
 	uint32_t field0xe4;
 	/// How much a picture of the action is worth for the creature's web page, from 0 to 1
 	float pictureWorth;
 	/// When the action ends well on another creature, how much nicer the creature finds the other creature, from -1 to 1
 	float creatureNicenessChange;
-	uint32_t field0xf0;
-	uint32_t field0xf4;
+	/// The creature can learn from the action at all
+	uint32_t learnable;
+	/// Done to its end, the action gives the creature full life
+	uint32_t fullRecovery;
 	uint32_t field0xf8;
 };
+static_assert(offsetof(CreatureActionInfo, impressiveType) == 0xc);
+static_assert(offsetof(CreatureActionInfo, actsOnThing) == 0x94);
+static_assert(offsetof(CreatureActionInfo, notOnWhatItHolds) == 0xa8);
+static_assert(offsetof(CreatureActionInfo, alwaysApplies) == 0xc8);
+static_assert(offsetof(CreatureActionInfo, learningWindowSeconds) == 0xd0);
+static_assert(offsetof(CreatureActionInfo, eatWhenStroked) == 0xe0);
+static_assert(offsetof(CreatureActionInfo, learnable) == 0xf0);
+static_assert(offsetof(CreatureActionInfo, fullRecovery) == 0xf4);
+static_assert(offsetof(CreatureActionInfo, fullSkillTimes) == 0xc4);
+static_assert(offsetof(CreatureActionInfo, worthFollowing) == 0xdc);
 static_assert(offsetof(CreatureActionInfo, desire) == 0x98);
 static_assert(offsetof(CreatureActionInfo, startingOpinion) == 0xd4);
 static_assert(offsetof(CreatureActionInfo, skillsNeeded) == 0x9c);

@@ -148,7 +148,7 @@ float CreatureSpellCaster::MaintainSpell(float amount)
 	// Each magic type's share of the energy it costs
 	const auto type = static_cast<size_t>(_type);
 	const float share = type < info.creatureMagicActionKnownAboutEntry.size()
-	                        ? info.creatureMagicActionKnownAboutEntry.at(type).field0x5c
+	                        ? info.creatureMagicActionKnownAboutEntry.at(type).energyShare
 	                        : 0.0f;
 	const float paid = creature_spell_casting::MaintainSpell(body, rates, amount, share);
 	needs->needs.energy = body.energy;

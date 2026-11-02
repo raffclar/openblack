@@ -44,7 +44,7 @@ struct MiracleRule
 	uint32_t timesToSee {10};
 	uint32_t minPhase {8};
 	/// Only a filter the computer players use choosing what to teach their creatures: it makes nothing known
-	bool knownAtStart {false};
+	bool teachable {false};
 	/// The creature action it lets the creature take
 	uint32_t action {0};
 	/// The desire that the miracle serves when a creature casts it from a one-shot globe that it was given

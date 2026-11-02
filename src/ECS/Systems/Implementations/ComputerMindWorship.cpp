@@ -471,7 +471,7 @@ bool StateTakesNewWork(entt::entity villager)
 	const auto state = Locator::livingActionSystem::value().VillagerGetFinalState(*action);
 	const auto& table = Locator::infoConstants::value().villagerStateTable;
 	const auto index = static_cast<size_t>(state);
-	return index < table.size() && table.at(index).field0x4 == -1;
+	return index < table.size() && table.at(index).townDesire == -1;
 }
 
 /// How good the villager is as a free builder for the god: none when it is not free. A better villager than the best

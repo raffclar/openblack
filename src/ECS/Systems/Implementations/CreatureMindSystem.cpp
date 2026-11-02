@@ -302,16 +302,13 @@ std::array<creature_desires::DesireSetup, creature_desires::k_DesireCount> Setup
 	{
 		const auto& initial = info.creatureInitialDesire.at(d);
 		auto& desire = setup.at(d);
-		desire.max = initial.field0x3c;
-		desire.decayMin = initial.field0x40;
-		desire.decayMax = initial.field0x44;
+		desire.max = initial.initialMax;
+		desire.decayMin = initial.decayMin;
+		desire.decayMax = initial.decayMax;
 		desire.increaseSeconds = PerSpecies(info.creatureDesireForType.at(d), row);
-		desire.weight = initial.field0x68;
-		const std::array<uint32_t, creature_desires::k_MaxSources> sourceTypes {
-		    initial.field0x0,  initial.field0x4,  initial.field0x8,  initial.field0xc,
-		    initial.field0x10, initial.field0x14, initial.field0x18, initial.field0x1c,
-		};
-		for (const auto type : sourceTypes)
+		desire.weight = initial.initialWeight;
+		static_assert(std::tuple_size_v<decltype(initial.sources)> == creature_desires::k_MaxSources);
+		for (const auto type : initial.sources)
 		{
 			if (type >= creature_desires::k_NoSource)
 			{
@@ -322,10 +319,10 @@ std::array<creature_desires::DesireSetup, creature_desires::k_DesireCount> Setup
 			    .type = type,
 			    .value = PerSpecies(info.creatureInitialSource1.at(type), row),
 			    .threshold = PerSpecies(info.creatureInitialSource2.at(type), row),
-			    .multiplier = table.field0x8,
-			    .clearedWhenSatisfied = table.field0x4 != 0,
+			    .multiplier = table.multiplier,
+			    .clearedWhenSatisfied = table.clearedWhenSatisfied != 0,
 			});
-			desire.spreads.push_back({.value = table.field0xc, .threshold = table.field0x10});
+			desire.spreads.push_back({.value = table.valueSpread, .threshold = table.thresholdSpread});
 		}
 	}
 	return setup;
@@ -342,7 +339,7 @@ creature_desires::DesireSetup::Spread SourceSpreadOf(uint32_t type)
 	{
 		return {};
 	}
-	return {.value = table.at(type).field0xc, .threshold = table.at(type).field0x10};
+	return {.value = table.at(type).valueSpread, .threshold = table.at(type).thresholdSpread};
 }
 
 /// The desires of the body, from the game's table of desires
@@ -356,7 +353,7 @@ std::array<bool, creature_desires::k_DesireCount> BodyDesires()
 	const auto& info = Locator::infoConstants::value();
 	for (size_t d = 0; d < body.size(); ++d)
 	{
-		body.at(d) = info.creatureInitialDesire.at(d).field0x34 != 0;
+		body.at(d) = info.creatureInitialDesire.at(d).bodyDesire != 0;
 	}
 	return body;
 }
@@ -400,15 +397,11 @@ std::vector<creature_desires::PhaseDesires> Phases()
 	for (const auto& entry : Locator::infoConstants::value().creatureDevelopmentPhaseEntry)
 	{
 		auto& phase = phases.emplace_back();
-		const std::array<uint32_t, 10> add {entry.field0x3c, entry.field0x40, entry.field0x44, entry.field0x48,
-		                                    entry.field0x4c, entry.field0x50, entry.field0x54, entry.field0x58,
-		                                    entry.field0x5c, entry.field0x60};
-		const std::array<uint32_t, 4> remove {entry.field0x64, entry.field0x68, entry.field0x6c, entry.field0x70};
-		for (const auto desire : add | std::views::filter(valid))
+		for (const auto desire : entry.desiresOn | std::views::filter(valid))
 		{
 			phase.add.push_back(static_cast<Desire>(desire));
 		}
-		for (const auto desire : remove | std::views::filter(valid))
+		for (const auto desire : entry.desiresOff | std::views::filter(valid))
 		{
 			phase.remove.push_back(static_cast<Desire>(desire));
 		}

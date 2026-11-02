@@ -699,7 +699,7 @@ bool villager_reactions::FreeForNewTask(entt::entity villager)
 	{
 		return false;
 	}
-	return (StateInfo(FinalStateOf(*action)).field0xa8 & 1) != 0;
+	return (StateInfo(FinalStateOf(*action)).availableFlags & 1) != 0;
 }
 
 bool villager_reactions::ReactionValidate(LivingAction& action)
