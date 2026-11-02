@@ -38,6 +38,7 @@
 #include "Common/GUtilsDistance.h"
 #include "Common/GameRandom.h"
 #include "Creature/CreatureActionAgendas.h"
+#include "Creature/CreatureAnimation.h"
 #include "Creature/CreatureAttention.h"
 #include "Creature/CreatureDesireSources.h"
 #include "Creature/CreatureDesires.h"
@@ -3226,7 +3227,27 @@ static std::optional<float> BodyShareOf(entt::entity creature, const CreatureAni
 std::optional<float> CreatureMindSystem::BodyShare(entt::entity creature) const
 {
 	const auto* body = Locator::entitiesRegistry::value().TryGet<const CreatureAnimation>(creature);
-	return body != nullptr ? BodyShareOf(creature, *body) : std::nullopt;
+	if (body == nullptr)
+	{
+		return std::nullopt;
+	}
+	if (const auto share = BodyShareOf(creature, *body); share.has_value())
+	{
+		return share;
+	}
+	// A body that only stands shows its stand at the point of its breath. The script reads that share, so it goes up
+	// and down with each breath after an action ends.
+	if (!Locator::creatureAnimationSystem::has_value())
+	{
+		return std::nullopt;
+	}
+	const auto stand =
+	    Locator::creatureAnimationSystem::value().AnimationDuration(creature, creature_layers::animations::k_Stand);
+	if (!stand.has_value() || !(*stand > 0.0f))
+	{
+		return std::nullopt;
+	}
+	return creature_animation::StandShare(body->breathPhase, static_cast<uint32_t>(*stand));
 }
 
 bool CreatureMindSystem::MayInterrupt(entt::entity creature, const CreatureAnimation& body, double interruptsAfter)

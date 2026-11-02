@@ -87,4 +87,6 @@ struct BlendTerm
 [[nodiscard]] float EaseBreathPeriod(float current, float target, float restingPeriod, float turnSeconds);
 /// The time in a looping animation of the stand pose that a point in the breath shows
 [[nodiscard]] uint32_t BreathTime(float phase, uint32_t duration);
+/// How far a body that only stands is through its stand: the time that the breath shows over the length of the stand
+[[nodiscard]] float StandShare(float phase, uint32_t duration);
 } // namespace openblack::creature_animation
