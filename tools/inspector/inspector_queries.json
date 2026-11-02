@@ -450,6 +450,12 @@
   "query": "particles.drawn"
  },
  {
+  "description": "The waterfall of the third land: whether its model is on the land, the slide of its water (-1 to 0) and the number of its sound (null when it is silent). Null on a computer that does not draw the land",
+  "kind": "object",
+  "parameters": [],
+  "query": "particles.waterfall"
+ },
+ {
   "description": "How many bodies the physics has: flying, resting and in water",
   "kind": "object",
   "parameters": [],

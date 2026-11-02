@@ -244,3 +244,12 @@ float script_weather::ThingSpeed(const components::Storm* storm)
 {
 	return storm != nullptr ? storm->speed : 0.0f;
 }
+
+bool script_weather::InKillArea(glm::vec3 stormPlace, float stormOuterRadius, glm::vec3 centre, float radius)
+{
+	// Each step is a float, in the order of the original game
+	const float acrossX = stormPlace.x - centre.x;
+	const float acrossZ = stormPlace.z - centre.z;
+	const float distance = std::sqrt((acrossZ * acrossZ) + (acrossX * acrossX));
+	return distance < radius + stormOuterRadius;
+}

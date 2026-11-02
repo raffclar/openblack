@@ -102,6 +102,8 @@ struct RenderContext
 		std::optional<glm::vec2> templeGrey;
 		/// How far the instances' textures have slid across them
 		glm::vec2 uvOffset {0.0f};
+		/// The textures slide only on the primitives whose materials let them slide, as the game slides a model's skin
+		bool uvOffsetByMaterial {false};
 		/// The instances are drawn with the first environment map, which each primitive takes as its material says: the
 		/// scripts' scrolls and signs
 		bool environmentMapped {false};

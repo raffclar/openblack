@@ -163,6 +163,7 @@
 #include "ECS/Systems/CreatureSkinSystemInterface.h"
 #include "ECS/Systems/CreatureWebPageSystemInterface.h"
 #include "ECS/Systems/DanceSystemInterface.h"
+#include "ECS/Systems/DesignedWaterfallSystemInterface.h"
 #include "ECS/Systems/DialogueControlSystemInterface.h"
 #include "ECS/Systems/DynamicsSystemInterface.h"
 #include "ECS/Systems/EditorSystemInterface.h"
@@ -378,6 +379,7 @@ constexpr std::array k_Coverage {
     LocatorCoverage {"snowSystem", "land.snow"},
     LocatorCoverage {"snowfallSystem", "land.precipitation"},
     LocatorCoverage {"waterRingSystem", "particles.splash"},
+    LocatorCoverage {"designedWaterfallSystem", "particles.waterfall"},
     LocatorCoverage {"creatureAnimationSystem", "creatures.status"},
     LocatorCoverage {"creatureMindSystem", "creature.desires"},
     LocatorCoverage {"creatureLocomotionSystem", "creatures.status"},
@@ -4875,6 +4877,14 @@ GameProvider* openblack::inspector::AddGameProviders(Inspector& inspector, const
 			    return std::nullopt;
 		    }
 		    return Locator::particleSystem::value().GetDrawStats();
+	    },
+	    .waterfall = []() -> std::optional<WaterfallInfo> {
+		    if (!Locator::designedWaterfallSystem::has_value())
+		    {
+			    return std::nullopt;
+		    }
+		    const auto& waterfall = Locator::designedWaterfallSystem::value();
+		    return WaterfallInfo {.model = waterfall.HasModel(), .slide = waterfall.GetSlide(), .sound = waterfall.GetSound()};
 	    },
 	}));
 

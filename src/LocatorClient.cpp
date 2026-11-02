@@ -33,6 +33,7 @@
 #include "ECS/Systems/Implementations/AdvisorVoiceSystem.h"
 #include "ECS/Systems/Implementations/CloudSystem.h"
 #include "ECS/Systems/Implementations/CreatureHairSystem.h"
+#include "ECS/Systems/Implementations/DesignedWaterfallSystem.h"
 #include "ECS/Systems/Implementations/FloatingNumberSystem.h"
 #include "ECS/Systems/Implementations/IncomingMessageSystem.h"
 #include "ECS/Systems/Implementations/LandShadeSystem.h"
@@ -62,6 +63,7 @@ using openblack::ecs::systems::AbodeSoundSystem;
 using openblack::ecs::systems::AdvisorVoiceSystem;
 using openblack::ecs::systems::CloudSystem;
 using openblack::ecs::systems::CreatureHairSystem;
+using openblack::ecs::systems::DesignedWaterfallSystem;
 using openblack::ecs::systems::FloatingNumberSystem;
 using openblack::ecs::systems::IncomingMessageSystem;
 using openblack::ecs::systems::LandShadeSystem;
@@ -156,6 +158,8 @@ void openblack::InitializePresentation()
 	// The rings on the water, the drops and the dust, and the numbers that float up. The turns ask for them, but they
 	// keep only what this computer shows, so the turns make no change when they are not there.
 	Locator::waterRingSystem::emplace<WaterRingSystem>();
+	// The waterfall of the third land, which only the frames make
+	Locator::designedWaterfallSystem::emplace<DesignedWaterfallSystem>();
 	Locator::liquidParticleSystem::emplace<LiquidParticleSystem>();
 	Locator::floatingNumberSystem::emplace<FloatingNumberSystem>();
 }

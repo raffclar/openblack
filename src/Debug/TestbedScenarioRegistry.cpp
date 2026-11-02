@@ -2127,6 +2127,27 @@ void AddThirdLandThrowBloke(std::vector<Scenario>& all)
 	});
 }
 
+/// The waterfall of the third land, which the draw of the land makes with no script
+void AddThirdLandWaterfall(std::vector<Scenario>& all)
+{
+	// The camera stands south-west of the waterfall, near enough to hear its sound, and looks at its foot. Both points
+	// are from the middle of the map.
+	constexpr glm::vec2 k_Eye = glm::vec2(2985.0f, 3082.0f) - flat_land::k_MapMiddle;
+	constexpr glm::vec2 k_Look = glm::vec2(3030.0f, 3135.0f) - flat_land::k_MapMiddle;
+	all.push_back({
+	    .id = "story.l3_waterfall",
+	    .name = "Story: the waterfall of the third land",
+	    .facet = Facet::Story,
+	    .description = "The third land loads with its own scripts and sky. The camera looks north-east at the waterfall "
+	                   "on the coast, which no script makes: the draw of the land makes it on its first frame.",
+	    .expected = "The water slides down the waterfall at half the height of its texture each second. The rock "
+	                "around it stays still. Every 0.7 seconds a ring of spray starts at its foot, grows to 60 metres "
+	                "across and fades. The sound of water that flows comes from the waterfall.",
+	    .environment = {.land = Land::Story, .storyLand = "Land3.txt", .dispenserGrid = false},
+	    .framing = {.shot = Shot::Placed, .eye = {k_Eye.x, 32.0f, k_Eye.y}, .look = {k_Look.x, 7.0f, k_Look.y}},
+	});
+}
+
 /// The Pied Piper of the first land. The game's script runs at the same map positions as on the first land, with the
 /// Norse town, the creche and the piper's cave made there. The scenario clicks the creche, and the round starts.
 void AddPiedPiperRound(std::vector<Scenario>& all)
@@ -2863,6 +2884,7 @@ CREATE_CITADEL("0.0,0.0", 0, "PLAYER_ONE", 4254, 1000)
 	AddRivalCreatureLoads(all);
 	AddThirdLandPrison(all);
 	AddThirdLandThrowBloke(all);
+	AddThirdLandWaterfall(all);
 	AddSingingStones(all);
 	AddBeachTemplePuzzle(all);
 	AddTreePuzzle(all);
@@ -7756,6 +7778,27 @@ void AddHand(std::vector<Scenario>& all)
 	                 {.kind = Kind::PointerRelease, .delaySeconds = 0.1f, .value = 3},
 	                 {.kind = Kind::PointerPress, .delaySeconds = 2.0f, .value = 3},
 	                 {.kind = Kind::PointerRelease, .delaySeconds = 2.0f, .value = 3}},
+	});
+
+	// A tap of the hand on the own creature with the aggression leash held loose: the creature acts on itself, which on
+	// the aggression leash is a fight with itself
+	all.push_back({
+	    .id = "leash.tap_itself_aggression",
+	    .name = "A tap on your creature with the aggression leash tells it to fight itself",
+	    .facet = Facet::Leash,
+	    .description = "Your tiger faces the camera in the middle of the screen and wears the aggression leash, held loose "
+	                   "in the hand. The action button taps the tiger for 0.1 seconds.",
+	    .expected = "The tap is an order on the tiger itself. The tiger nods, the order ring shows above it and the help "
+	                "tells of its anger. It looks down at itself and stands still for some turns, then it stops the order "
+	                "and decides again by itself. The leash stays on and the hand does not hold the tiger. The log shows "
+	                "\"is told to act on\" with the tiger as the thing, then \"is the partner of creature\" with the "
+	                "tiger as its own partner.",
+	    .environment = {.dispenserGrid = false, .cursor = glm::vec2(0.5f, 0.5f)},
+	    .framing = {.shot = Shot::Follow, .distance = 1.2f},
+	    .creatures = {Content(CreatureType::Tiger, {0.0f, 0.0f})},
+	    .commands = {Leash(0, LeashType::Evil, 0.5f),
+	                 {.kind = Kind::PointerPress, .delaySeconds = 2.0f, .value = 3},
+	                 {.kind = Kind::PointerRelease, .delaySeconds = 0.1f, .value = 3}},
 	});
 
 	// The real button on the own creature while it sleeps: a sleeping creature takes hold. Its tiredness stays high, so

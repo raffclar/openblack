@@ -25,9 +25,11 @@
 #include "ECS/Components/Mesh.h"
 #include "ECS/Components/MorphWithTerrain.h"
 #include "ECS/Components/Pot.h"
+#include "ECS/Components/SlidingTexture.h"
 #include "ECS/Components/Stream.h"
 #include "ECS/Components/Temple.h"
 #include "ECS/Components/Transform.h"
+#include "ECS/DrawnRegistry.h"
 #include "ECS/Registry.h"
 #include "ECS/Systems/ExplosionSystemInterface.h"
 #include "ECS/Systems/FireSystemInterface.h"
@@ -313,7 +315,29 @@ void RenderingSystemCommon::PrepareDraw(bool drawBoundingBox, bool drawFootpaths
 		_renderContext.hasBoundingBoxes = drawBoundingBox;
 	}
 
+	SlideTextures();
 	KeepHeldLights(use);
+}
+
+void RenderingSystemCommon::SlideTextures()
+{
+	if (!Locator::drawnRegistry::has_value())
+	{
+		return;
+	}
+	// The textures of the things that only the frames make slide in each frame, also while the draw lists stay as they
+	// are. Each thing slides its texture on the primitives whose materials let it slide.
+	Locator::drawnRegistry::value().Each<const SlidingTexture, const Mesh>(
+	    [this](const SlidingTexture& sliding, const Mesh& mesh) {
+		    for (auto* descs : {&_renderContext.instancedDrawDescs, &_renderContext.fadingDrawDescs})
+		    {
+			    if (const auto found = descs->find(mesh.id); found != descs->end())
+			    {
+				    found->second.uvOffset = sliding.offset;
+				    found->second.uvOffsetByMaterial = true;
+			    }
+		    }
+	    });
 }
 
 void RenderingSystemCommon::KeepHeldLights(DrawUse use)

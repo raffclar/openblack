@@ -204,6 +204,7 @@
 #include "ECS/Systems/CreatureSkinSystemInterface.h"
 #include "ECS/Systems/CreatureWebPageSystemInterface.h"
 #include "ECS/Systems/DanceSystemInterface.h"
+#include "ECS/Systems/DesignedWaterfallSystemInterface.h"
 #include "ECS/Systems/DialogueControlSystemInterface.h"
 #include "ECS/Systems/DynamicsSystemInterface.h"
 #include "ECS/Systems/EditorSystemInterface.h"
@@ -4395,6 +4396,13 @@ void Game::UpdateEntitiesFrame(std::chrono::microseconds deltaTime)
 					{
 						Locator::miracleFxSystem::value().UpdateDrawnGlobes(drawList, clock.GetFrameGameTime());
 					}
+				}
+				// The draw of the land makes the waterfall of the third land, slides its water and makes its spray
+				if (Locator::designedWaterfallSystem::has_value())
+				{
+					Locator::designedWaterfallSystem::value().UpdateFrame(
+					    Locator::entitiesRegistry::value().Context().mapScriptGlobals.landNumber, clock.GetFrameRealTime(),
+					    clock.GetFrameGameTime(), simulation::LandDrawn());
 				}
 				updateDrawnScenery();
 				// The static of each fizzing creature slides only when the frame draws its body on the screen
