@@ -75,6 +75,13 @@ public:
 	/// the start and the end of a hold. In a game alone it sends the leash tap of a click and then the feedback of the
 	/// strokes and slaps (see creature_hand_draw).
 	virtual void DrawFrame(const input_steps::Steps& /*steps*/) {}
+	/// Once a frame, as the draw of the hand starts and before DrawFrame, with the steps of the input that the frame
+	/// takes. The first draw after the turn that holds the creature turns the camera to it. The hand takes its pose when
+	/// the creature faces the player (see creature_hand_pose).
+	virtual void HoldFrame(const input_steps::Steps& /*steps*/) {}
+	/// Once a frame, before the turns: the hand lets go if the button let go before the world held the creature, and an
+	/// earlier draw turned the camera
+	virtual void InterfaceFrame() {}
 
 	/// As if the hand rested on a part of a creature's body, or swept across it at a height (as a share of its height)
 	/// hard or gently: it takes hold of the creature, held by a command rather than the button, and strokes or slaps it

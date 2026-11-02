@@ -455,6 +455,7 @@ void HandSystem::ReportView(PlayerNames player, const player_commands::ViewRepor
 	reported.gripsLand = report.gripsLand;
 	reported.otherButton = report.otherButton;
 	reported.mouseWheel = report.mouseWheel;
+	reported.cameraTurned = report.cameraTurned;
 	reported.cameraIcons = report.cameraIcons;
 	reported.keysHeld = report.keysHeld;
 }
@@ -487,6 +488,7 @@ std::optional<HandSystemInterface::ReportedView> HandSystem::GetReportedView(Pla
 	    .otherButton = reported->otherButton,
 	    .mouseWheel = reported->mouseWheel,
 	    .cameraIcons = reported->cameraIcons,
+	    .cameraTurned = reported->cameraTurned,
 	    .keysHeld = reported->keysHeld,
 	};
 }

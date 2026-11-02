@@ -51,6 +51,7 @@
 #include "ECS/Components/Scaffold.h"
 #include "ECS/Components/ScriptHighlight.h"
 #include "ECS/Components/SpellDispenser.h"
+#include "ECS/Components/SpellIcon.h"
 #include "ECS/Components/StreetLantern.h"
 #include "ECS/Components/TeleportStone.h"
 #include "ECS/Components/Temple.h"
@@ -101,6 +102,8 @@ void ForEachMapComponent(Func&& func)
 	func.template operator()<Temple>();
 	// A town centre's totem, which covers the outline of its icon
 	func.template operator()<VillageTotem>();
+	// A worship site's icons, which stand in the land as buildings do. A village centre's stone hands are not on the map.
+	func.template operator()<WorshipIcon>();
 	// Trees, shields and the scripts' scrolls and signs, each in one cell
 	func.template operator()<Tree>();
 	func.template operator()<MagicShield>();
@@ -204,7 +207,7 @@ std::optional<MapProduction::Kind> MapProduction::KindOf(const Registry& registr
 		return std::nullopt;
 	}
 	if (registry.AnyOf<Abode, Feature, AnimatedStatic, Flowers, BigForest, SpellDispenser, TeleportStone, WorshipSite,
-	                   WorshipAltar, Temple, VillageTotem>(entity))
+	                   WorshipAltar, Temple, VillageTotem, WorshipIcon>(entity))
 	{
 		return Kind {.placement = Placement::FixedFront, .coversOutline = true, .moves = false};
 	}

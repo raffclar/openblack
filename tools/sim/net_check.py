@@ -1467,6 +1467,19 @@ def decided_after_the_run(decided_at_turn, turns):
     return decided_at_turn is not None and decided_at_turn > turns
 
 
+# The game turns in one minute of the time limit of a network game (the game's own value)
+TURNS_PER_MINUTE = 600
+
+
+def stop_expected(temple_loss, time_limit, turns):
+    """Whether the server must stop the turns of the game before the run ends. A temple loss always decides the game.
+    A time limit decides the game only when its last turn comes before the last turn of the run. A run with a longer
+    time limit ends at its own turn count, and no stop of the turns comes."""
+    if temple_loss:
+        return True
+    return time_limit is not None and time_limit * TURNS_PER_MINUTE < turns
+
+
 def land_shows_info_box(game_path, land):
     """Whether the land script opens the information box of the land at the start (its game message). In a network
     game the box stays open until the player closes it, and it keeps the keys from the controls meanwhile."""
@@ -2237,7 +2250,7 @@ def main():
     stopped_after = int(re.search(r"after turn (\d+)", stop_lines[-1]).group(1)) if stop_lines else None
     summary["stopped_after"] = stopped_after
     all_same = True
-    if (options.temple_loss or options.time_limit is not None) and stopped_after is None:
+    if stop_expected(options.temple_loss, options.time_limit, options.turns) and stopped_after is None:
         all_same = False
     # An input of the hand on a game that was decided at its first turn compares nothing of the hand
     summary["decided_at_turn"] = sim_report.decided_at_turn_in_file(server_log)

@@ -117,9 +117,9 @@ struct PreyFacts
 	bool isVillager {false};
 	/// An animal of another kind than the hunter
 	bool isOtherAnimal {false};
-	bool uneatable {false};
 	/// Its height above the land
 	float heightAboveLand {0.0f};
+	/// The food of its kind is of a type that the hunter eats, and is worth something
 	bool hasMeat {true};
 	bool skeleton {false};
 	/// Dying, dead, downed or being eaten

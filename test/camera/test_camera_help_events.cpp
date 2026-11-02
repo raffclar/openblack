@@ -78,6 +78,18 @@ TEST(CameraHelpEvents, ATurnOfAHundredthOrLessIsNoTurn)
 	EXPECT_TRUE(InputEvents(frame).Contains(profile::k_CameraTurn));
 }
 
+TEST(CameraHelpEvents, TheTurnTestIsMoreThanAHundredthEitherWayWhateverTheFeatures)
+{
+	auto frame = Frame();
+	frame.turn = 0.01f;
+	EXPECT_FALSE(TurnAsked(frame));
+	frame.turn = -0.0101f;
+	EXPECT_TRUE(TurnAsked(frame));
+	// The test reads the turn asked for: the features take the turn away later
+	frame.features = 0;
+	EXPECT_TRUE(TurnAsked(frame));
+}
+
 TEST(CameraHelpEvents, FeaturesTakenAwayAreNotCounted)
 {
 	auto frame = Frame();

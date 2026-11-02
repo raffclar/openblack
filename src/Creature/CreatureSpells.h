@@ -152,6 +152,9 @@ struct Spells
 
 /// Seconds as whole turns
 [[nodiscard]] int32_t TurnsOf(float seconds, float turnsPerSecond);
+/// The turns that a spell holds for its time in seconds, cut to whole turns. A time of zero gives no turns. A time
+/// below zero gives "for ever" (negative).
+[[nodiscard]] int32_t HoldTurnsOf(float seconds, float turnsPerSecond);
 /// Every spell on a creature is brought to its end: none holds on once started, and one holding now finishes at its next
 /// turn. Whether none is on it any more.
 bool TryFinishAll(Spells& spells);

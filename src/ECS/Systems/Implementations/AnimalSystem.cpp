@@ -1723,15 +1723,20 @@ entt::entity AnimalSystem::FindPrey(entt::entity wolf, const Animal& animal)
 		prey.broughtDown = registry.AllOf<BroughtDown>(entity);
 		return prey;
 	};
-	registry.Each<const Villager, const Transform>([&](entt::entity entity, const Villager& /*villager*/, const Transform& t) {
+	// A villager or an animal has food for the hunter when the food of its kind is of a type that the hunter eats and is
+	// worth something
+	const auto eats = static_cast<uint32_t>(InfoOf(animal.type).needsFoodTypes);
+	const auto& villagerInfos = Locator::infoConstants::value().villager;
+	registry.Each<const Villager, const Transform>([&](entt::entity entity, const Villager& villager, const Transform& t) {
+		const auto& info = villagerInfos.at(static_cast<size_t>(RowOf(villager, GVillagerInfo::Find)));
+		const bool food = (eats & static_cast<uint32_t>(info.foodType)) != 0 && info.foodValue != 0.0f;
 		// A walking skeleton has no meat for it
 		add(entity, t,
-		    withCommonFacts(
-		        entity,
-		        {.isVillager = true, .skeleton = registry.AllOf<WalkingSkeleton>(entity), .helpless = OutOfTheHunt(entity)}));
+		    withCommonFacts(entity, {.isVillager = true,
+		                             .hasMeat = food,
+		                             .skeleton = registry.AllOf<WalkingSkeleton>(entity),
+		                             .helpless = OutOfTheHunt(entity)}));
 	});
-	// An animal has food for the hunter when its kind's food is of a type that the hunter eats and is worth something
-	const auto eats = static_cast<uint32_t>(InfoOf(animal.type).needsFoodTypes);
 	registry.Each<const Animal, const Transform>([&](entt::entity entity, const Animal& other, const Transform& t) {
 		if (entity != wolf)
 		{

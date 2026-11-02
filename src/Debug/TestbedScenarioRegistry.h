@@ -1088,7 +1088,8 @@ struct Command
 		JoinOnline,
 		/// The end box: the question to leave a network game opens (value 0), as Exit Online Game opens it, or the open
 		/// end box opens the box of one of its tabs (value 1 Multiplayer, 2 Statistics), as a click on the tab does.
-		/// Value 3 opens the main menu as it shows in a network game. Needs no creature.
+		/// Value 3 opens the main menu as it shows in a network game. Value 4 moves the window of gods of the open box of a
+		/// tab a page on, as a click on its right arrow does. Needs no creature.
 		EndBox,
 		/// The god of the player (player) brings a creature as it does at the start of a network game. The mind file
 		/// (mindFile) of the creature mind folder of the game takes the place of the creature file of the god's player.
@@ -1149,6 +1150,9 @@ struct Command
 		/// The player's hand taps the entrance of the player's temple, as the Action button does: the tap goes to the
 		/// game turn as the hand's command. Needs no creature.
 		TapTempleEntrance,
+		/// The town that the land's script made with a number (value) believes this much (amount) in the player and
+		/// nothing in the other gods. Then the town goes to the player at its next check. Needs no creature.
+		GiveLandTown,
 	};
 	Kind kind {Kind::Stop};
 	/// Which creature, by its place in the scenario's creatures

@@ -14,7 +14,9 @@
 
 #include <algorithm>
 #include <functional>
+#include <numeric>
 #include <string>
+#include <vector>
 
 #include "ECS/PlayerColour.h"
 
@@ -33,8 +35,9 @@ constexpr float k_Held = 1e20f;
 class PageMaker
 {
 public:
-	PageMaker(const BoxFigures& figures, PlayerNames local, Page& page)
+	PageMaker(const BoxFigures& figures, std::span<const size_t> shown, PlayerNames local, Page& page)
 	    : _figures(figures)
+	    , _shown(shown)
 	    , _local(local)
 	    , _page(page)
 	{
@@ -45,7 +48,7 @@ public:
 	             Display display)
 	{
 		Row row = Start(label, most, 0, show, display);
-		for (const auto& player : _figures.players)
+		for (const PlayerFigures& player : ShownPlayers())
 		{
 			row.values.push_back(static_cast<float>(value(player)));
 			row.players.push_back(player.player);
@@ -57,7 +60,7 @@ public:
 	             ShowMost show, Display display)
 	{
 		Row row = Start(label, most, decimals, show, display);
-		for (const auto& player : _figures.players)
+		for (const PlayerFigures& player : ShownPlayers())
 		{
 			row.values.push_back(Held(value(player)));
 			row.players.push_back(player.player);
@@ -96,6 +99,20 @@ public:
 	}
 
 private:
+	/// The players that the rows show, in order
+	[[nodiscard]] std::vector<std::reference_wrapper<const PlayerFigures>> ShownPlayers() const
+	{
+		std::vector<std::reference_wrapper<const PlayerFigures>> players;
+		for (const auto index : _shown)
+		{
+			if (index < _figures.players.size())
+			{
+				players.emplace_back(_figures.players[index]);
+			}
+		}
+		return players;
+	}
+
 	static Row Start(std::string_view label, float most, int decimals, ShowMost show, Display display)
 	{
 		return {.label = std::string(label), .most = most, .decimals = decimals, .show = show, .display = display};
@@ -112,6 +129,7 @@ private:
 	}
 
 	const BoxFigures& _figures;
+	std::span<const size_t> _shown;
 	PlayerNames _local;
 	Page& _page;
 };
@@ -277,8 +295,15 @@ void TechPage(PageMaker& make, const statistics::TechFigures& tech)
 
 Page MakePage(Tab tab, const statistics::BoxFigures& figures, PlayerNames local)
 {
+	std::vector<size_t> every(figures.players.size());
+	std::iota(every.begin(), every.end(), size_t {0});
+	return MakePage(tab, figures, local, every);
+}
+
+Page MakePage(Tab tab, const statistics::BoxFigures& figures, PlayerNames local, std::span<const size_t> shown)
+{
 	Page page;
-	PageMaker make(figures, local, page);
+	PageMaker make(figures, shown, local, page);
 	switch (tab)
 	{
 	case Tab::Player:

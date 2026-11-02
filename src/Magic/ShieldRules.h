@@ -115,8 +115,9 @@ inline constexpr float k_DomeLeastAlpha = 40.0f;
 [[nodiscard]] float ThrownMass(float weight, float scale);
 /// The dome's effect keeps its alpha while the dome fades, then goes at once
 [[nodiscard]] float DyingEffectAlpha(float alpha, float dieTime);
-/// The dome's solid shape follows its drawn size only once they differ by this much
-inline constexpr float k_DomeRescaleStep = 0.3f;
+/// The dome's solid shape follows its drawn size only once they differ by more than this much. The game compares the
+/// float difference with this double constant.
+inline constexpr double k_DomeRescaleStep = 0.3;
 [[nodiscard]] bool NeedsRescale(float drawnScale, float solidScale);
 
 /// The dome's solid shape: a cone as wide as its model's widest and twice its model's half height tall
