@@ -13880,6 +13880,29 @@ void AddWorkshopScenarios(std::vector<Scenario>& all)
 	                {.type = ScaffoldInfo::Normal, .offset = k_LooseScaffold, .scale = 0.7f}},
 	});
 
+	constexpr glm::vec2 k_JoinTarget {-25.0f, 18.0f};
+	all.push_back({
+	    .id = "hand.scaffold_phantom_sounds_and_join",
+	    .name = "A held scaffold plays the sounds of its phantom, names the building, and joins a scaffold",
+	    .facet = Facet::Hand,
+	    .description = "A Celtic town of the player's with a village centre, a loose scaffold of the value of two "
+	                   "scaffolds and, 12 m south of it, a loose scaffold of the value of one. Take the larger "
+	                   "scaffold and hold it still near the village centre. Then hold it over the smaller scaffold and "
+	                   "press the Action button. Run with the audio log at the debug level to see the sounds.",
+	    .expected = "Near the village centre the phantom of the building that the town wants grows below the scaffold, "
+	                "and the appear sound plays one time. The tooltip shows the name of that building, then \"Throw\". "
+	                "When the offer changes or goes, the phantom becomes small and the vanish sound plays one time. Over "
+	                "the smaller scaffold the tooltip shows \"Combine Scaffolds\". The press removes the held scaffold. "
+	                "The scaffold on the land now has the value of three. A puff shows at it, and the first of the four "
+	                "join sounds plays at the hand.",
+	    .environment = {.dispenserGrid = false},
+	    .framing = {.shot = Shot::Overview, .include = {k_JoinTarget - glm::vec2 {10.0f}, k_BuildPlace + glm::vec2 {10.0f}}},
+	    .objects = {{.type = AbodeInfo::CelticTownCentre, .offset = {0.0f, 50.0f}},
+	                {.type = ScaffoldInfo::Normal, .offset = k_LooseScaffold, .scale = 0.9f},
+	                {.type = ScaffoldInfo::Normal, .offset = k_JoinTarget, .scale = 0.7f}},
+	    .townBeliefInPlayer = 1.0f,
+	});
+
 	all.push_back({
 	    .id = "light.snow_on_scaffold_phantom",
 	    .name = "The phantom of a scaffold carries snow in the hand and none on its site",
