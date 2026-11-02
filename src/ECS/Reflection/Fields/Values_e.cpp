@@ -226,7 +226,8 @@ void openblack::ecs::reflection::RegisterFields_Values_e(entt::meta_ctx& context
 	Reflect<openblack::ecs::components::CreatureMindState::Teaching>(context, ValueOnly {})
 	    .Field<&openblack::ecs::components::CreatureMindState::Teaching::type>("type")
 	    .Field<&openblack::ecs::components::CreatureMindState::Teaching::action>("action")
-	    .Field<&openblack::ecs::components::CreatureMindState::Teaching::knows>("knows");
+	    .Field<&openblack::ecs::components::CreatureMindState::Teaching::knows>("knows")
+	    .Field<&openblack::ecs::components::CreatureMindState::Teaching::everything>("everything");
 	Reflect<openblack::ecs::components::CreatureSkin::Painted>(context, ValueOnly {})
 	    .Field<&openblack::ecs::components::CreatureSkin::Painted::baseMesh>("baseMesh")
 	    .Field<&openblack::ecs::components::CreatureSkin::Painted::variantMesh>("variantMesh")
