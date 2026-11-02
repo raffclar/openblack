@@ -15,6 +15,7 @@
 #include <array>
 #include <optional>
 #include <span>
+#include <vector>
 
 #include <PackFile.h>
 
@@ -82,11 +83,20 @@ public:
 	/// Marks the voice as free when its sample stops. A voice that played an MPEG sample forgets the sample.
 	void Finish(size_t slot, bool forgetSample);
 	[[nodiscard]] std::span<const VoiceSlot, k_VoiceCount> Slots() const { return _slots; }
+	/// The voices that a stop of a sample for an owner stops:
+	/// - For a sample number that is not 0, only the first voice that keeps the sample for the owner, if it plays.
+	///   A voice that keeps a stopped copy of the sample thus hides the copies on the voices after it.
+	/// - For sample number 0, each voice of the bank that plays for the owner.
+	[[nodiscard]] std::vector<size_t> VoicesToStop(uint64_t owner, uint32_t bank, uint32_t sample) const;
+	/// True when the first voice that keeps the sample for the owner plays
+	[[nodiscard]] bool IsPlaying(uint64_t owner, uint32_t bank, uint32_t sample) const;
 
 private:
 	/// The voice of the lowest priority if that priority is less than the priority of the request
 	[[nodiscard]] std::optional<size_t> Steal(uint16_t priority) const;
 	[[nodiscard]] std::optional<size_t> FirstFree() const;
+	/// The first voice that keeps the sample for the owner, also after the sample stopped
+	[[nodiscard]] std::optional<size_t> FirstKeeping(uint64_t owner, uint32_t bank, uint32_t sample) const;
 
 	std::array<VoiceSlot, k_VoiceCount> _slots {};
 };

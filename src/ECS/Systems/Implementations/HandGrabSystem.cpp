@@ -1003,7 +1003,7 @@ bool HandGrabSystem::AppliesTo(const HandGrab& grab, entt::entity target) const
 	const auto pot = _world->PotFactsOf(held);
 	if (!pot.has_value())
 	{
-		return _world->TakesWhole(target, held);
+		return _world->TakesWhole(target, held) || _world->DropsOnTeleport(target, held);
 	}
 	if (_world->StoresResource(target, pot->resource))
 	{
@@ -1052,6 +1052,18 @@ bool HandGrabSystem::ApplyTo(HandGrab& grab, entt::entity target)
 	case altar_offering::Answer::NotAnAltar:
 		break;
 	}
+	// A villager dropped onto a teleport stone of the hand's player leaves the hand on the stone and jumps at once
+	if (_world->DropsOnTeleport(target, held))
+	{
+		auto& registry = _world->Entities();
+		registry.Remove<InHand>(held);
+		registry.Remove<HeldLight>(held);
+		Empty(grab);
+		_world->HelpEvent(altar_sacrifice::k_UsedOnThingHelpEvent);
+		_world->DropOnTeleport(target, held);
+		_world->SpreadReactionsAgain(held);
+		return true;
+	}
 	// A held scaffold joins the scaffold under it and is gone from the hand
 	if (_world->JoinsScaffold(target, held))
 	{
@@ -1075,7 +1087,7 @@ bool HandGrabSystem::ApplyTo(HandGrab& grab, entt::entity target)
 			return true;
 		}
 		// A tree, a dead tree, a fence, a mushroom or an animal goes whole into a store of what it is worth
-		// TODO(stores): onto a teleport; openblack has none yet. A scaffold goes only into a built storage pit, as wood.
+		// A scaffold goes only into a built storage pit, as wood
 		if (!_world->TakeIntoStore(target, held))
 		{
 			return false;

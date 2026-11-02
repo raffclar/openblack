@@ -396,6 +396,18 @@ struct KindFacts
 };
 /// Whether a creature may pick the thing up from where it is, by its kind's own rule
 [[nodiscard]] bool MayPickUpKind(const KindFacts& kind, const PickUpFacts& facts);
+/// The part of the pick-up facts that the rule of a kind reads
+enum class PickUpFactsUsed : uint8_t
+{
+	/// The rule reads no pick-up facts
+	None,
+	/// The rule reads only whether a script said that the thing cannot be picked up
+	Refusal,
+	/// The rule reads all the pick-up facts
+	All,
+};
+/// The part of the pick-up facts that MayPickUpKind reads for a kind. The other facts do not change its answer.
+[[nodiscard]] PickUpFactsUsed PickUpFactsUsedBy(const KindFacts& kind);
 /// Whether a creature may take the thing from a hand that gives it
 [[nodiscard]] bool MayTakeKindFromHand(const KindFacts& kind, const PickUpFacts& facts);
 /// Whether a creature may catch the thing flying past

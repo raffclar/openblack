@@ -53,6 +53,7 @@ public:
 	void TownJoinedSite(entt::entity site, entt::entity town) override;
 	void TownLeftSite(entt::entity site, entt::entity town) override;
 	void SiteRemoved(entt::entity site) override;
+	void IconRemoved(entt::entity icon) override;
 
 	void SetMagicTypeEnabled(PlayerNames player, MagicType type, bool enable) override { SetEnabled(player, type, enable); }
 	[[nodiscard]] bool ValidToTap(entt::entity icon, PlayerNames player) const override;

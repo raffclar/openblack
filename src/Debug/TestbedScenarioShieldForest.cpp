@@ -28,6 +28,9 @@ using Kind = Command::Kind;
 
 /// Where the shields go, north of the dispenser grid
 constexpr glm::vec2 k_ShieldSpot {0.0f, 40.0f};
+/// On the second land, from the middle of the land: a hut east of the player's first town, and open land south east
+constexpr glm::vec2 k_LandTwoHut {1045.0f, 675.0f};
+constexpr glm::vec2 k_LandTwoDome {1100.0f, 640.0f};
 /// The patches of sand and snow, from the middle of the map
 const glm::vec2 k_Sand = flat_land::k_SandPatch.Centre() - flat_land::k_MapMiddle;
 const glm::vec2 k_Snow = flat_land::k_SnowPatch.Centre() - flat_land::k_MapMiddle;
@@ -501,10 +504,49 @@ void AddForests(std::vector<Scenario>& all)
 	                  .byHand = true}},
 	});
 }
+
+void AddLandTwoShields(std::vector<Scenario>& all)
+{
+	all.push_back({
+	    .id = "miracles.l2_shields_village",
+	    .name = "Both shields at a village of the second land",
+	    .facet = Facet::Miracles,
+	    .description = "The second land of the story. Five villagers of the player's first town stand about a hut east "
+	                   "of the town. Another player's lightning strikes by the hut, then a spiritual shield of radius 30 "
+	                   "rises over it, and a physical shield rises on open land to the south east. After 20 seconds "
+	                   "the hand holds a spiritual shield seed over the hut.",
+	    .expected = "The town's people walk in under the spiritual shield on their own side and face out, and point, look "
+	                "at the hand or stand as they shelter. A villager under the shield takes no notice of a reaction "
+	                "from outside it. The solid shape of the physical dome stays at its full size, and the hand never "
+	                "picks the dome: a press over it goes to the land. The held seed shows its patches that orbit it.",
+	    .environment = {.land = Land::Story, .storyLand = "Land2.txt", .dispenserGrid = false},
+	    .framing = {.shot = Shot::Overview,
+	                .include = {k_LandTwoHut + glm::vec2(-50.0f, -50.0f), k_LandTwoDome + glm::vec2(30.0f, 30.0f)}},
+	    .objects =
+	        {{.type = AbodeInfo::NorseHut, .offset = k_LandTwoHut},
+	         {.type = VillagerInfo::NorseFarmerMale, .offset = k_LandTwoHut + glm::vec2(-45.0f, 0.0f), .joinTown = true},
+	         {.type = VillagerInfo::NorseForesterMale, .offset = k_LandTwoHut + glm::vec2(25.0f, 5.0f), .joinTown = true},
+	         {.type = VillagerInfo::NorseHousewifeFemale, .offset = k_LandTwoHut + glm::vec2(0.0f, 28.0f), .joinTown = true},
+	         {.type = VillagerInfo::NorseFishermanMale, .offset = k_LandTwoHut + glm::vec2(10.0f, -25.0f), .joinTown = true},
+	         {.type = VillagerInfo::NorseLeaderMale, .offset = k_LandTwoHut + glm::vec2(12.0f, 5.0f), .joinTown = true}},
+	    .miracles = {{.type = MagicType::LightningBolt,
+	                  .point = k_LandTwoHut + glm::vec2(12.0f, 5.0f),
+	                  .handOffset = k_LandTwoHut + glm::vec2(12.0f, -10.0f),
+	                  .handHeight = 15.0f,
+	                  .delaySeconds = 0.5f,
+	                  .holdSeconds = 2.0f,
+	                  .player = PlayerNames::PLAYER_TWO},
+	                 {.type = MagicType::Shield, .point = k_LandTwoHut, .delaySeconds = 4.0f},
+	                 {.type = MagicType::PhysicalShield, .point = k_LandTwoDome, .delaySeconds = 5.0f}},
+	    .commands = {{.kind = Kind::HoldSeed, .delaySeconds = 20.0f, .value = static_cast<size_t>(SpellSeedType::Shield)}},
+	    .hand = HandHold {.offset = k_LandTwoHut + glm::vec2(0.0f, -10.0f), .height = 8.0f},
+	});
+}
 } // namespace
 
 void testbed_scenarios::AddShieldForestScenarios(std::vector<Scenario>& all)
 {
 	AddShields(all);
 	AddForests(all);
+	AddLandTwoShields(all);
 }

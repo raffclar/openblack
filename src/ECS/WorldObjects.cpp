@@ -88,6 +88,7 @@
 #include "ECS/Systems/LivingActionSystemInterface.h"
 #include "ECS/Systems/PuzzleGameSystemInterface.h"
 #include "ECS/Systems/ResourceStoreSystemInterface.h"
+#include "ECS/Systems/SpellIconSystemInterface.h"
 #include "ECS/Systems/TempleDestructionSystemInterface.h"
 #include "ECS/Systems/TimeSystemInterface.h"
 #include "ECS/Systems/TownSystemInterface.h"
@@ -799,7 +800,7 @@ bool world_objects::CanBeDestroyedBySpell(entt::entity object, entt::entity spel
 	const auto can = [&registry, object, spell] {
 		// Nor anything a script made indestructible
 		if (!registry.Valid(object) ||
-		    registry.AnyOf<Creature, Field, Temple, TeleportStone, OneOffSpellSeed, Indestructible>(object))
+		    registry.AnyOf<Creature, Field, Temple, TeleportStone, OneOffSpellSeed, Indestructible, WorshipIcon>(object))
 		{
 			return false;
 		}
@@ -992,6 +993,12 @@ void world_objects::Remove(entt::entity object)
 	if (registry.AllOf<PuzzleGame>(object) && Locator::puzzleGameSystem::has_value())
 	{
 		Locator::puzzleGameSystem::value().Forget(object);
+	}
+	// An icon at a worship site leaves its site, and the seeds out from it go with it
+	if (registry.AllOf<WorshipIcon>(object) && Locator::spellIconSystem::has_value())
+	{
+		Locator::spellIconSystem::value().IconRemoved(object);
+		return;
 	}
 	if (const auto* villager = registry.TryGet<const Villager>(object))
 	{

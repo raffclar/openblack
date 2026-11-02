@@ -146,6 +146,21 @@ constexpr float k_TallestThingNotToPooOn = 1.5f;
 /// - All other desires: any thing.
 [[nodiscard]] bool ThingSuits(creature_desires::Desire desire, const ThingFacts& thing);
 
+/// Whether a thing of a kind can suit a desire. When this is false, ThingSuits is false for each thing of the kind.
+[[nodiscard]] bool KindMaySuit(creature_desires::Desire desire, Thing kind);
+
+/// The facts of a thing that ThingSuits reads for a desire, other than the kind, the data of the thing, the height
+/// and the pick-up rule. The facts that ThingSuits does not read do not change its answer.
+struct ThingFactsRead
+{
+	/// Whether a villager is dead, dances or a hand can pick it up; whether an animal is dead or frightens; whether a
+	/// creature is dead or a friend of the creature
+	bool living {false};
+	/// Whether the thing is a magic mushroom or a toadstool
+	bool mushroom {false};
+};
+[[nodiscard]] ThingFactsRead FactsReadBy(creature_desires::Desire desire);
+
 /// A script makes two creatures friends: each creature goes in the list of friends of the other, once. Creatures are
 /// given by their entity numbers.
 void MakeFriends(std::vector<uint32_t>& friendsOfFirst, uint32_t first, std::vector<uint32_t>& friendsOfSecond,

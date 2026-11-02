@@ -343,15 +343,6 @@ bool TeleportSystem::CanPlaceStone(glm::vec3 point) const
 	return teleport::CanPlaceStone(point, fixed);
 }
 
-bool TeleportSystem::BlocksNewBuilding(glm::vec3 point) const
-{
-	bool blocked = false;
-	EntityRegistry().Each<const TeleportStone, const Transform>([&](const TeleportStone&, const Transform& transform) {
-		blocked = blocked || Across(point, transform.position) < teleport::k_StoneRadius;
-	});
-	return blocked;
-}
-
 std::vector<entt::entity> TeleportSystem::GetStones(PlayerNames player) const
 {
 	std::vector<std::pair<uint32_t, entt::entity>> found;
@@ -573,27 +564,34 @@ bool TeleportSystem::DoTeleport(entt::entity stone, entt::entity living, bool fo
 	return true;
 }
 
-bool TeleportSystem::DropOnStone(entt::entity villager, entt::entity stone, PlayerNames dropper)
+bool TeleportSystem::TakesDrop(entt::entity villager, entt::entity stone, PlayerNames dropper) const
 {
-	auto& registry = EntityRegistry();
+	const auto& registry = EntityRegistry();
 	if (!registry.Valid(villager) || !registry.Valid(stone) || !registry.AllOf<Villager, LivingAction, WallHug>(villager) ||
 	    !registry.AllOf<TeleportStone>(stone))
 	{
 		return false;
 	}
+	// The hand that drops it must be the hand of the stone's player, whoever the villager belongs to
 	const auto& component = registry.Get<const TeleportStone>(stone);
-	// The hand that dropped it must be the stone's player's, whoever the villager belongs to
-	if (!teleport::CanDropOnStone(dropper == component.player, GetStones(component.player).size()))
+	return teleport::CanDropOnStone(dropper == component.player, GetStones(component.player).size());
+}
+
+bool TeleportSystem::DropOnStone(entt::entity villager, entt::entity stone, PlayerNames dropper)
+{
+	if (!TakesDrop(villager, stone, dropper))
 	{
 		return false;
 	}
-	// Put down on the stone, it decides there and then what to do, then jumps towards where that takes it, whatever the
-	// way, and decides again once through. (The game first has it fly and land from the hand; openblack's hand doesn't
-	// hold villagers.)
+	auto& registry = EntityRegistry();
 	auto& action = registry.Get<LivingAction>(villager);
+	auto& living = Locator::livingActionSystem::value();
+	// The villager flies from the hand and lands on the stone. Then it decides what to do, and jumps towards the place
+	// that this decision gives, whatever the way. After the jump it decides again.
+	living.VillagerSetState(action, LivingAction::Index::Top, VillagerStates::Flying, false);
 	ecs::thing_map_place::Put(registry, villager, ecs::thing_map_place::Of(registry, stone),
 	                          registry.Get<const Transform>(stone).position.y);
-	auto& living = Locator::livingActionSystem::value();
+	living.VillagerSetState(action, LivingAction::Index::Top, VillagerStates::Landed, false);
 	const auto decide = [&] {
 		living.VillagerSetState(action, LivingAction::Index::Top, VillagerStates::DecideWhatToDo, true);
 		living.VillagerCallState(action, LivingAction::Index::Top);

@@ -40,36 +40,48 @@ TEST(SharedIndexLists, TheSameListIsMadeOnceAndShared)
 {
 	openblack::SharedIndexLists<FakeBuffer> lists;
 	int made = 0;
-	const auto& first = lists.Get({0, 1, 2, 2, 1, 3}, CountingMaker {&made});
-	const auto& second = lists.Get({0, 1, 2, 2, 1, 3}, CountingMaker {&made});
-	EXPECT_EQ(&first, &second);
+	const auto* first = lists.Get({0, 1, 2, 2, 1, 3}, CountingMaker {&made});
+	const auto* second = lists.Get({0, 1, 2, 2, 1, 3}, CountingMaker {&made});
+	ASSERT_NE(first, nullptr);
+	EXPECT_EQ(first, second);
 	EXPECT_EQ(made, 1);
 	EXPECT_EQ(lists.Size(), 1u);
-	EXPECT_EQ(first.indices, (std::vector<uint16_t> {0, 1, 2, 2, 1, 3}));
+	EXPECT_EQ(first->indices, (std::vector<uint16_t> {0, 1, 2, 2, 1, 3}));
 }
 
 TEST(SharedIndexLists, DifferentListsGetTheirOwnBuffers)
 {
 	openblack::SharedIndexLists<FakeBuffer> lists;
 	int made = 0;
-	const auto& first = lists.Get({0, 1, 2}, CountingMaker {&made});
+	const auto* first = lists.Get({0, 1, 2}, CountingMaker {&made});
 	// The same triangle turned the other way is another list
-	const auto& second = lists.Get({0, 2, 1}, CountingMaker {&made});
-	EXPECT_NE(&first, &second);
+	const auto* second = lists.Get({0, 2, 1}, CountingMaker {&made});
+	ASSERT_NE(second, nullptr);
+	EXPECT_NE(first, second);
 	EXPECT_EQ(made, 2);
 	EXPECT_EQ(lists.Size(), 2u);
-	EXPECT_EQ(second.indices, (std::vector<uint16_t> {0, 2, 1}));
+	EXPECT_EQ(second->indices, (std::vector<uint16_t> {0, 2, 1}));
 }
 
 TEST(SharedIndexLists, ABufferStaysPutAsMoreAreMade)
 {
 	openblack::SharedIndexLists<FakeBuffer> lists;
 	int made = 0;
-	const auto* first = &lists.Get({7}, CountingMaker {&made});
+	const auto* first = lists.Get({7}, CountingMaker {&made});
 	for (uint16_t i = 0; i < 100; ++i)
 	{
 		static_cast<void>(lists.Get({i, i, i}, CountingMaker {&made}));
 	}
-	EXPECT_EQ(first, &lists.Get({7}, CountingMaker {&made}));
+	EXPECT_EQ(first, lists.Get({7}, CountingMaker {&made}));
 	EXPECT_EQ(made, 101);
+}
+
+TEST(SharedIndexLists, AnEmptyListMakesNoBuffer)
+{
+	// A block of open sea only has no triangles, and the graphics library cannot make an empty buffer
+	openblack::SharedIndexLists<FakeBuffer> lists;
+	int made = 0;
+	EXPECT_EQ(lists.Get({}, CountingMaker {&made}), nullptr);
+	EXPECT_EQ(made, 0);
+	EXPECT_EQ(lists.Size(), 0u);
 }

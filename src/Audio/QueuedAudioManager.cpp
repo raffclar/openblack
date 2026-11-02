@@ -241,10 +241,15 @@ void QueuedAudioManager::StopSoundEffect(entt::id_type id)
 	Post([audio = _audio.get(), id] { audio->StopSoundEffect(id); });
 }
 
-bool QueuedAudioManager::IsSoundEffectPlaying(entt::id_type id) const
+void QueuedAudioManager::StopNumberedSoundEffect(entt::id_type id, uint32_t ownerNumber)
 {
-	Direct("IsSoundEffectPlaying");
-	return _audio->IsSoundEffectPlaying(id);
+	Post([audio = _audio.get(), id, ownerNumber] { audio->StopNumberedSoundEffect(id, ownerNumber); });
+}
+
+bool QueuedAudioManager::IsNumberedSoundEffectPlaying(entt::id_type id, uint32_t ownerNumber) const
+{
+	Direct("IsNumberedSoundEffectPlaying");
+	return _audio->IsNumberedSoundEffectPlaying(id, ownerNumber);
 }
 
 entt::entity QueuedAudioManager::StartSoundEffect(entt::id_type id, const SoundEffectOptions& options)

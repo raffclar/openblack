@@ -1934,7 +1934,7 @@ void Renderer::DrawTempleMapPass() const
 		{
 			for (const auto& block : Locator::terrainSystem::value().GetBlocks())
 			{
-				[[maybe_unused]] const auto& triangles = block.GetTriangles(land_detail::Mesh::Full, 0, true);
+				[[maybe_unused]] const auto* triangles = block.GetTriangles(land_detail::Mesh::Full, 0, true);
 			}
 		}
 		return;
@@ -1994,14 +1994,19 @@ void Renderer::DrawTempleMapPass() const
 	terrainShader->SetUniformValue("u_vortexGround", &noVortex);
 	for (size_t i = 0; const auto& block : island.GetBlocks())
 	{
+		const auto index = i++;
+		// The map shows every block in full. A block of open sea only has no triangles and the map does not draw it.
+		const auto* triangles = block.GetTriangles(land_detail::Mesh::Full, 0, true);
+		if (triangles == nullptr)
+		{
+			continue;
+		}
 		const glm::vec4 mapPositionAndSize = glm::vec4(block.GetMapPosition(), 160.0f, 160.0f);
 		terrainShader->SetUniformValue("u_blockPositionAndSize", &mapPositionAndSize);
-		const glm::vec4 u_block {static_cast<float>(i++), 0.0f, 0.0f, 0.0f};
+		const glm::vec4 u_block {static_cast<float>(index), 0.0f, 0.0f, 0.0f};
 		terrainShader->SetUniformValue("u_block", &u_block);
 		block.BindVertices();
-		// The map shows every block in full
-		const auto& triangles = block.GetTriangles(land_detail::Mesh::Full, 0, true);
-		triangles.Bind(triangles.GetCount());
+		triangles->Bind(triangles->GetCount());
 		bgfx::setState(BGFX_STATE_WRITE_RGB | BGFX_STATE_WRITE_A);
 		// The textures stay bound from one block to the next
 		terrainShader->Submit(viewId, 0,
@@ -6689,11 +6694,19 @@ void Renderer::DrawPass(const DrawSceneDesc& desc) const
 			    sharedMark != groundMarks.end() ? &ecs::components::Vortex::GroundTexturesOf(sharedMark->type) : nullptr;
 			const auto submitBlock = [&](size_t index) {
 				const auto& block = blocks[index];
-				const glm::vec4 mapPositionAndSize = glm::vec4(block.GetMapPosition(), 160.0f, 160.0f);
-				blockPositionUniform.Set(&mapPositionAndSize);
 				// The block's mesh and texture this frame: y how its corners morph, z its texture
 				const auto detail = index < _landDetail.blocks.size() ? _landDetail.blocks[index] : land_detail::BlockDetail {};
 				const uint8_t coarserSides = index < _landDetail.coarserSides.size() ? _landDetail.coarserSides[index] : 0;
+				// The game leaves out open sea only from blocks wholly before the first line
+				const bool dropOpenSea = detail.mesh == land_detail::Mesh::Full && detail.morph == land_detail::Morph::None;
+				// A block of open sea only then has no triangles, and nothing to draw
+				const auto* triangles = block.GetTriangles(detail.mesh, coarserSides, dropOpenSea);
+				if (triangles == nullptr)
+				{
+					return;
+				}
+				const glm::vec4 mapPositionAndSize = glm::vec4(block.GetMapPosition(), 160.0f, 160.0f);
+				blockPositionUniform.Set(&mapPositionAndSize);
 				const glm::vec4 u_block {static_cast<float>(index), static_cast<float>(detail.morph),
 				                         static_cast<float>(detail.texture), 0.0f};
 				blockUniform.Set(&u_block);
@@ -6730,10 +6743,7 @@ void Renderer::DrawPass(const DrawSceneDesc& desc) const
 				const glm::vec4 u_groundShadowBlock {shadows, 0.0f, 0.0f};
 				groundShadowBlockUniform.Set(&u_groundShadowBlock);
 				block.BindVertices();
-				// The game leaves out open sea only from blocks wholly before the first line
-				const bool dropOpenSea = detail.mesh == land_detail::Mesh::Full && detail.morph == land_detail::Morph::None;
-				const auto& triangles = block.GetTriangles(detail.mesh, coarserSides, dropOpenSea);
-				triangles.Bind(triangles.GetCount());
+				triangles->Bind(triangles->GetCount());
 				bgfx::setState(defaultState | (desc.cullBack ? BGFX_STATE_CULL_CCW : BGFX_STATE_CULL_CW), 0);
 				terrainShader->Submit(static_cast<bgfx::ViewId>(landViewId), blockDepth(block), discard);
 			};

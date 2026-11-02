@@ -12,39 +12,20 @@
 #include <cstdint>
 
 #include <functional>
-#include <span>
+#include <memory>
 
-#include "Online/Desktop/UdpSocket.h"
-#include "Online/LanDiscovery.h"
 #include "Online/LanDiscoveryInterface.h"
+#include "Online/LanResponder.h"
 
 namespace openblack::online
 {
 
-/// The search for game servers on the local network over UDP (deviation 113). The search goes to the broadcast address
-/// of the network again and again while the search runs.
-class UdpLanDiscovery final: public LanDiscoveryInterface
-{
-public:
-	/// Microseconds of a steady clock
-	using Clock = std::function<int64_t()>;
+/// The search for game servers on the local network over UDP (deviations 113 and 194), with the sockets, the network
+/// interfaces and the random numbers of this computer. The clock gives microseconds of a steady clock.
+[[nodiscard]] std::unique_ptr<LanDiscoveryInterface> MakeUdpLanDiscovery(std::function<int64_t()> clock);
 
-	explicit UdpLanDiscovery(Clock clock);
-
-	[[nodiscard]] bool IsAvailable() const override;
-	void Start() override;
-	void Stop() override;
-	void Poll() override;
-	[[nodiscard]] std::span<const lobby_api::ServerEntry> GetServers() const override { return _servers.Servers(); }
-
-private:
-	void SendSearch(int64_t now);
-
-	Clock _clock;
-	UdpSocket _socket;
-	bool _searching {false};
-	int64_t _nextSearch {0};
-	lan_discovery::ServerList _servers;
-};
+/// The answers of a game server to the search of the local network, on the port of the search. Gives none when the IPv4
+/// port of the search does not open. The IPv6 socket is optional.
+[[nodiscard]] std::unique_ptr<LanResponder> MakeUdpLanResponder(std::function<int64_t()> clock);
 
 } // namespace openblack::online

@@ -20,6 +20,7 @@
 #include "ECS/Components/Mesh.h"
 #include "ECS/Components/Mobile.h"
 #include "ECS/Components/SpellDispenser.h"
+#include "ECS/Components/SpellIcon.h"
 #include "ECS/Components/TeleportStone.h"
 #include "ECS/Components/Temple.h"
 #include "ECS/Components/Transform.h"
@@ -55,7 +56,7 @@ wall_hug::ThingShape thing_circles::ShapeOf(const Registry& registry, entt::enti
 	}
 	// A piece that broke off a building is a rock, with the outline of the rock model
 	if (registry.AnyOf<Abode, Feature, AnimatedStatic, Flowers, MobileStatic, DeadTree, SpellDispenser, TeleportStone,
-	                   WorshipAltar, BuildingPiece>(thing))
+	                   WorshipAltar, BuildingPiece, WorshipIcon>(thing))
 	{
 		return wall_hug::ThingShape::ModelBox;
 	}

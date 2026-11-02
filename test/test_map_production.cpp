@@ -18,6 +18,8 @@
 #include "ECS/Components/Ball.h"
 #include "ECS/Components/BuildingDamage.h"
 #include "ECS/Components/CreatureObjectAction.h"
+#include "ECS/Components/DeadTree.h"
+#include "ECS/Components/Feature.h"
 #include "ECS/Components/Field.h"
 #include "ECS/Components/Firefly.h"
 #include "ECS/Components/MapCellResident.h"
@@ -35,6 +37,7 @@
 #include "ECS/Components/Transform.h"
 #include "ECS/Components/VillageTotem.h"
 #include "ECS/Components/Villager.h"
+#include "ECS/Components/Vortex.h"
 #include "ECS/Components/WallHug.h"
 #include "ECS/LivingFacing.h"
 #include "ECS/Map.h"
@@ -43,6 +46,7 @@
 #include "ECS/Registry.h"
 #include "ECS/ThingMapPlace.h"
 #include "ECS/ThingModel.h"
+#include "ECS/TownPlanning.h"
 #include "Locator.h"
 #include "Magic/TeleportRules.h"
 
@@ -708,4 +712,29 @@ TEST_F(MapProductionFiling, AWhaleIsNeverPutOnTheMap)
 	map.Sync();
 	map.Refile(whale);
 	EXPECT_FALSE(registry.AllOf<MapCellResident>(whale));
+}
+
+TEST(MapProductionSolid, OnlyBuildingsAndOtherFixedThingsStopANewBuilding)
+{
+	Registry registry;
+	const auto abode = registry.Create();
+	registry.Assign<Abode>(abode);
+	const auto rock = registry.Create();
+	registry.Assign<MobileStatic>(rock);
+	const auto deadTree = registry.Create();
+	registry.Assign<DeadTree>(deadTree);
+	const auto piece = registry.Create();
+	registry.Assign<BuildingPiece>(piece);
+	const auto vortex = registry.Create();
+	registry.Assign<Vortex>(vortex);
+	const auto feature = registry.Create();
+	registry.Assign<Feature>(feature);
+	// A rock and the things of a rock kind cover their outline but do not stop a new building
+	for (const auto thing : {rock, deadTree, piece, vortex})
+	{
+		ASSERT_TRUE(MapProduction::KindOf(registry, thing).value().coversOutline);
+		EXPECT_FALSE(town_planning::SolidToNewBuilding(registry, thing));
+	}
+	EXPECT_TRUE(town_planning::SolidToNewBuilding(registry, abode));
+	EXPECT_TRUE(town_planning::SolidToNewBuilding(registry, feature));
 }

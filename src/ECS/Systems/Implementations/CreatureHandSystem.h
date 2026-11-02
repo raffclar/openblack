@@ -39,6 +39,9 @@ public:
 	std::optional<HandPose> Update(const glm::vec3& rayOrigin, const glm::vec3& rayDirection, glm::vec2 cursor,
 	                               float screenWidth, const input_steps::Steps& steps) override;
 	void Release() override;
+	void DrawFrame(const input_steps::Steps& steps) override;
+	void HoldFrame(const input_steps::Steps& steps) override;
+	void InterfaceFrame() override;
 	bool Stroke(entt::entity creature, creature_feedback::BodyPart part) override;
 	bool Slap(entt::entity creature, float heightShare, bool gentle, bool sweepsRight) override;
 	[[nodiscard]] std::optional<entt::entity> GetCreature() const override;
@@ -70,6 +73,15 @@ private:
 	/// Taking hold of a creature with the button turns the camera onto it, and letting go gives the camera back
 	void TakeCamera(entt::entity creature);
 	void GiveCameraBack();
+	/// The hand takes its pose on the creature: it starts again with no strokes and no slaps, and keeps the count of a
+	/// click
+	static void EnterPose(entt::entity hand, const components::HandOnCreature& contact);
+	/// The world did not hold the creature that the press of this computer asked for: the hold of the button ends and
+	/// sends nothing
+	static void EndRefusedHold(PlayerNames player, entt::entity creature);
+	/// The creature feels the strokes and the slaps that the hand let go with, as a command of the player, if it is not
+	/// still
+	void SendFeedback(entt::entity creature, float sum);
 	/// What a step of the hand on the creature goes on
 	struct StepInput
 	{

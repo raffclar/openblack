@@ -31,6 +31,7 @@
 #include "ECS/Components/Mobile.h"
 #include "ECS/Components/ScriptHighlight.h"
 #include "ECS/Components/SpellDispenser.h"
+#include "ECS/Components/SpellIcon.h"
 #include "ECS/Components/TeleportStone.h"
 #include "ECS/Components/Temple.h"
 #include "ECS/Components/Transform.h"
@@ -91,7 +92,7 @@ Shape ShapeOf(const Registry& registry, entt::entity entity)
 		return Shape::LeaningBox;
 	}
 	if (registry.AnyOf<Abode, Field, Feature, AnimatedStatic, Flowers, SpellDispenser, WorshipAltar, MagicShield, ShieldDome,
-	                   ScriptHighlight, VillageTotem>(entity))
+	                   ScriptHighlight, VillageTotem, WorshipIcon>(entity))
 	{
 		return Shape::UprightBox;
 	}

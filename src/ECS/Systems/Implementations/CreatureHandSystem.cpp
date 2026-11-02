@@ -25,6 +25,7 @@
 
 #include "3D/CreatureBody.h"
 #include "3D/LandIslandInterface.h"
+#include "3D/TempleInteriorInterface.h"
 #include "Camera/Camera.h"
 #include "Camera/CreatureCameraModel.h"
 #include "Camera/CreatureInteractCameraModel.h"
@@ -34,6 +35,8 @@
 #include "Common/X87.h"
 #include "Common/X87Vector.h"
 #include "Creature/CreatureFeedback.h"
+#include "Creature/CreatureHandDraw.h"
+#include "Creature/CreatureHandPose.h"
 #include "Creature/CreatureHandRules.h"
 #include "Creature/CreatureLocomotion.h"
 #include "Creature/CreatureRig.h"
@@ -46,6 +49,8 @@
 #include "ECS/Components/CreatureMind.h"
 #include "ECS/Components/CreatureNeeds.h"
 #include "ECS/Components/CreatureSpells.h"
+#include "ECS/Components/HandCreatureDraw.h"
+#include "ECS/Components/HandCreaturePose.h"
 #include "ECS/Components/HandLockedCreature.h"
 #include "ECS/Components/HandOnCreature.h"
 #include "ECS/Components/Mesh.h"
@@ -80,6 +85,13 @@ namespace
 PlayerNames OwnPlayer()
 {
 	return Locator::handSystem::has_value() ? Locator::handSystem::value().GetOwnPlayer() : PlayerNames::PLAYER_ONE;
+}
+
+/// Whether the draw of the hand sends the leash tap of a click and the feedback. It does in a game alone with commands.
+/// In a network game the input of the release sends them (deviation MI-2).
+bool SendsFromDraw()
+{
+	return Locator::playerCommandSystem::has_value() && !(Locator::time::has_value() && Locator::time::value().IsNetworkGame());
 }
 
 /// The left hand that this computer moves and draws. Only the frames keep their hold of a creature on it.
@@ -298,18 +310,10 @@ bool CreatureHandSystem::Grab()
 		return false;
 	}
 	auto& registry = Locator::entitiesRegistry::value();
-	auto& contact = registry.AssignOrReplace<HandOnCreature>(PlayerHand(), HandOnCreature {.creature = *nearest});
+	registry.AssignOrReplace<HandOnCreature>(PlayerHand(), HandOnCreature {.creature = *nearest});
 	registry.Remove<HandLastFeedback>(PlayerHand());
-	// The hand starts a little short of the creature, seen from where the camera is before it turns to the creature
-	if (Locator::camera::has_value() && registry.AllOf<Creature, Transform>(*nearest))
-	{
-		const auto cameraToCreature = x87::Distance<x87::SumOrder::Zyx>(Locator::camera::value().GetOrigin(),
-		                                                                registry.Get<const Transform>(*nearest).position);
-		contact.distance.Reset(
-		    feedback::HandStartDistance(cameraToCreature, ShownSize(registry.Get<const Creature>(*nearest))));
-		contact.distanceStarted = true;
-	}
-	TakeCamera(*nearest);
+	// The camera turns to the creature and the hand takes its pose only after the world holds the creature
+	registry.AssignOrReplace<HandCreaturePose>(PlayerHand());
 	// The world takes the hold at the start of a later turn, as a command of the player
 	if (Locator::playerCommandSystem::has_value())
 	{
@@ -348,6 +352,7 @@ void CreatureHandSystem::DoLock(PlayerNames player, entt::entity creature)
 	const auto hand = HandOf(player);
 	if (!hand.has_value() || !registry.Valid(*hand) || !registry.Valid(creature) || !MayHoldFor(player, creature))
 	{
+		EndRefusedHold(player, creature);
 		return;
 	}
 	registry.AssignOrReplace<HandLockedCreature>(*hand, HandLockedCreature {.creature = creature});
@@ -690,6 +695,12 @@ std::optional<CreatureHandSystem::HandPose> CreatureHandSystem::Update(const glm
 		return HandPose {.position = position, .onBody = true, .cycle = contact->cycle, .scale = handScale, .up = up};
 	}
 
+	// Before its pose on the creature, the hand is the usual hand. It does not stroke or slap.
+	if (const auto* pose = registry.TryGet<const HandCreaturePose>(PlayerHand()); pose == nullptr || !pose->posed)
+	{
+		return std::nullopt;
+	}
+
 	// The hand stays on the line of sight through the cursor, at a distance from the camera that eases to the body
 	const auto cameraNow = Locator::camera::has_value() ? Locator::camera::value().GetOrigin() : rayOrigin;
 	const auto parts = PartsOf(creature, animation, transform);
@@ -732,7 +743,6 @@ std::optional<CreatureHandSystem::HandPose> CreatureHandSystem::Update(const glm
 		}
 		onBody = hit.has_value();
 		const auto touch = onBody ? std::optional(hit->point) : std::nullopt;
-		contact->heldMs += input_steps::k_StepMs;
 
 		// Strokes and slaps are weighed at each step, as the game weighed them once a frame at the screen's refresh
 		const auto lastDirection = DirectionThroughAtStep(contact->lastCursor, now ? steps.count : i).value_or(direction);
@@ -800,6 +810,11 @@ void CreatureHandSystem::LookAtReportedHandOf(PlayerNames player)
 	const auto hand = handSystem.GetHandPositionsOf(player).at(static_cast<size_t>(HandSystemInterface::Side::Left));
 	const auto camera = handSystem.GetReportedCamera(player);
 	if (!hand.has_value() || !camera.has_value())
+	{
+		return;
+	}
+	// The hand makes the creature look at it only in its pose: after the creature finished what it did before the hold
+	if (const auto* mind = registry.TryGet<const CreatureMindState>(*creatureEntity); mind != nullptr && mind->showDesireOnHold)
 	{
 		return;
 	}
@@ -909,27 +924,34 @@ void CreatureHandSystem::Release()
 		GiveCameraBack();
 		return;
 	}
+	// Before the world holds the creature, the release waits for the draw that turns the camera
+	if (auto* pose = registry.TryGet<HandCreaturePose>(hand); pose != nullptr && !contact->byCommand)
+	{
+		if (!creature_hand_pose::LetsGoNow(*pose))
+		{
+			SPDLOG_LOGGER_INFO(spdlog::get("game"), "The release of creature {} waits for the hold of the world",
+			                   entt::to_integral(contact->creature));
+			return;
+		}
+	}
 	const auto creature = contact->creature;
 	const auto sum = contact->sum;
-	const auto delivered = feedback::Delivered(sum);
 	const bool byCommand = contact->byCommand;
+	const bool click = IsClick();
 	registry.Remove<HandOnCreature>(hand);
+	registry.Remove<HandCreaturePose>(hand);
 	registry.AssignOrReplace<HandLastFeedback>(hand, HandLastFeedback {.sum = sum});
 	GiveCameraBack();
-	if (registry.Valid(creature) && Locator::creatureMindSystem::has_value() && ReleaseGivesFeedback(creature))
+	// In a network game the hand sends the leash tap of a click and the feedback from the input of the release (deviation
+	// MI-2). In a game alone the draw of the hand sends them in this frame (see DrawFrame). The release of a hold that a
+	// debug command started sends the feedback at once, because the draw possibly did not see that hold.
+	if (!SendsFromDraw() || byCommand)
 	{
-		// The creature feels the strokes and the slaps at the start of the next turn, as a command of the player
-		if (Locator::playerCommandSystem::has_value())
+		if (click && Locator::playerCommandSystem::has_value())
 		{
-			Locator::playerCommandSystem::value().Submit(
-			    player_commands::CreatureFeedback {.creature = creature, .amount = delivered});
+			Locator::playerCommandSystem::value().Submit(player_commands::LeashTap {.creature = creature});
 		}
-		else
-		{
-			Locator::creatureMindSystem::value().SendReleaseFeedback(creature, delivered);
-		}
-		// Too slight to count, as a click is, the hand offers to focus on the creature
-		_focusTip = std::abs(delivered) <= feedback::k_SlightFeedback;
+		SendFeedback(creature, sum);
 	}
 	// The world lets go of the creature at the start of a later turn, as a command of the player. A hold that a command
 	// started ends at once.
@@ -941,6 +963,210 @@ void CreatureHandSystem::Release()
 	{
 		DoUnlock(OwnPlayer(), creature);
 	}
+}
+
+void CreatureHandSystem::SendFeedback(entt::entity creature, float sum)
+{
+	const auto& registry = Locator::entitiesRegistry::value();
+	if (!registry.Valid(creature) || !Locator::creatureMindSystem::has_value() || !ReleaseGivesFeedback(creature))
+	{
+		return;
+	}
+	const auto delivered = feedback::Delivered(sum);
+	// The creature feels the strokes and the slaps at the start of the next turn, as a command of the player
+	if (Locator::playerCommandSystem::has_value())
+	{
+		Locator::playerCommandSystem::value().Submit(
+		    player_commands::CreatureFeedback {.creature = creature, .amount = delivered});
+	}
+	else
+	{
+		Locator::creatureMindSystem::value().SendReleaseFeedback(creature, delivered);
+	}
+	// Too slight to count, as a click is, the hand offers to focus on the creature
+	_focusTip = std::abs(delivered) <= feedback::k_SlightFeedback;
+}
+
+void CreatureHandSystem::DrawFrame(const input_steps::Steps& steps)
+{
+	if (!Locator::handSystem::has_value() || !SendsFromDraw())
+	{
+		return;
+	}
+	// The hand is not drawn on the land while the player is in the temple. Its draw counts no time and sends nothing.
+	if (Locator::temple::has_value() && Locator::temple::value().Active())
+	{
+		return;
+	}
+	auto& registry = Locator::entitiesRegistry::value();
+	const auto hand = PlayerHand();
+	if (!registry.Valid(hand))
+	{
+		return;
+	}
+	auto* draw = registry.TryGet<HandCreatureDraw>(hand);
+	if (draw == nullptr)
+	{
+		draw = &registry.Assign<HandCreatureDraw>(hand);
+	}
+	creature_hand_draw::Frame frame;
+	for (uint32_t step = 0; step < steps.count; ++step)
+	{
+		frame.time += steps.Time(step);
+	}
+	// The draw sees the start of a hold of the button when the camera of the hold turns to the creature
+	const auto* pose = registry.TryGet<const HandCreaturePose>(hand);
+	if (const auto* contact = registry.TryGet<const HandOnCreature>(hand);
+	    contact != nullptr && (contact->byCommand || (pose != nullptr && pose->cameraTaken)))
+	{
+		frame.held = contact->creature;
+		frame.byCommand = contact->byCommand;
+		const auto* locked = registry.TryGet<const HandLockedCreature>(hand);
+		frame.worldHolds = locked != nullptr && locked->creature == contact->creature;
+		const auto* mind =
+		    registry.Valid(contact->creature) ? registry.TryGet<const CreatureMindState>(contact->creature) : nullptr;
+		frame.finishing = mind != nullptr && mind->showDesireOnHold;
+	}
+	const auto sends = creature_hand_draw::Step(*draw, frame);
+	// The leash tap goes first, then the feedback, as one draw sends them both
+	if (sends.click.has_value() && registry.Valid(*sends.click) && Locator::playerCommandSystem::has_value())
+	{
+		const auto* body = registry.TryGet<const Creature>(*sends.click);
+		if (body != nullptr && body->owner == OwnPlayer())
+		{
+			SPDLOG_LOGGER_INFO(spdlog::get("game"), "The draw of the hand sends the leash tap of creature {}",
+			                   entt::to_integral(*sends.click));
+			Locator::playerCommandSystem::value().Submit(player_commands::LeashTap {.creature = *sends.click});
+		}
+	}
+	if (sends.feedback.has_value())
+	{
+		const auto* last = registry.TryGet<const HandLastFeedback>(hand);
+		SPDLOG_LOGGER_INFO(spdlog::get("game"), "The draw of the hand sends the feedback to creature {}",
+		                   entt::to_integral(*sends.feedback));
+		SendFeedback(*sends.feedback, last != nullptr ? last->sum : 0.0f);
+	}
+}
+
+void CreatureHandSystem::HoldFrame(const input_steps::Steps& steps)
+{
+	if (!Locator::handSystem::has_value())
+	{
+		return;
+	}
+	// The hand is not drawn on the land while the player is in the temple. The hold does not go on there.
+	if (Locator::temple::has_value() && Locator::temple::value().Active())
+	{
+		return;
+	}
+	auto& registry = Locator::entitiesRegistry::value();
+	const auto hand = PlayerHand();
+	if (!registry.Valid(hand))
+	{
+		return;
+	}
+	auto* contact = registry.TryGet<HandOnCreature>(hand);
+	auto* pose = registry.TryGet<HandCreaturePose>(hand);
+	if (contact == nullptr || contact->byCommand || pose == nullptr)
+	{
+		return;
+	}
+	// After the camera of the hold turned, the hand counts the time of each frame for the click
+	if (pose->cameraTaken)
+	{
+		float frameMs = 0.0f;
+		for (uint32_t step = 0; step < steps.count; ++step)
+		{
+			frameMs += static_cast<float>(steps.Time(step).count());
+		}
+		contact->heldMs += frameMs;
+	}
+	const auto* locked = registry.TryGet<const HandLockedCreature>(hand);
+	const auto* mind =
+	    registry.Valid(contact->creature) ? registry.TryGet<const CreatureMindState>(contact->creature) : nullptr;
+	const auto changes =
+	    creature_hand_pose::Step(*pose, {
+	                                        .worldHolds = locked != nullptr && locked->creature == contact->creature,
+	                                        .finishing = mind != nullptr && mind->showDesireOnHold,
+	                                    });
+	if (changes.takeCamera)
+	{
+		SPDLOG_LOGGER_INFO(spdlog::get("game"), "The camera of the hold turns to creature {}",
+		                   entt::to_integral(contact->creature));
+		contact->heldMs = 0.0f;
+		TakeCamera(contact->creature);
+	}
+	if (changes.enterPose)
+	{
+		SPDLOG_LOGGER_INFO(spdlog::get("game"), "The hand takes its pose on creature {}", entt::to_integral(contact->creature));
+		EnterPose(hand, *contact);
+	}
+}
+
+void CreatureHandSystem::InterfaceFrame()
+{
+	if (!Locator::handSystem::has_value())
+	{
+		return;
+	}
+	auto& registry = Locator::entitiesRegistry::value();
+	const auto hand = PlayerHand();
+	if (!registry.Valid(hand))
+	{
+		return;
+	}
+	const auto* pose = registry.TryGet<const HandCreaturePose>(hand);
+	if (pose == nullptr)
+	{
+		return;
+	}
+	// The hold ended in another way, for example when the creature went away
+	if (!registry.AllOf<HandOnCreature>(hand))
+	{
+		registry.Remove<HandCreaturePose>(hand);
+		return;
+	}
+	if (creature_hand_pose::WaitedReleaseDue(*pose))
+	{
+		Release();
+	}
+}
+
+void CreatureHandSystem::EnterPose(entt::entity hand, const HandOnCreature& contact)
+{
+	// The hand starts again with no strokes and no slaps, caressing, with its back to the camera and a little short of the
+	// creature. The count of a click continues.
+	auto& registry = Locator::entitiesRegistry::value();
+	const HandOnCreature fresh {
+	    .creature = contact.creature,
+	    .byCommand = contact.byCommand,
+	    .heldMs = contact.heldMs,
+	};
+	registry.AssignOrReplace<HandOnCreature>(hand, fresh);
+}
+
+void CreatureHandSystem::EndRefusedHold(PlayerNames player, entt::entity creature)
+{
+	if (!Locator::handSystem::has_value() || player != OwnPlayer())
+	{
+		return;
+	}
+	auto& registry = Locator::entitiesRegistry::value();
+	const auto hand = PlayerHand();
+	if (!registry.Valid(hand))
+	{
+		return;
+	}
+	const auto* contact = registry.TryGet<const HandOnCreature>(hand);
+	const auto* pose = registry.TryGet<const HandCreaturePose>(hand);
+	if (contact == nullptr || contact->byCommand || contact->creature != creature || pose == nullptr || pose->cameraTaken)
+	{
+		return;
+	}
+	SPDLOG_LOGGER_INFO(spdlog::get("game"), "The world does not hold creature {}: the hold of the hand ends",
+	                   entt::to_integral(creature));
+	registry.Remove<HandOnCreature>(hand);
+	registry.Remove<HandCreaturePose>(hand);
 }
 
 std::optional<entt::entity> CreatureHandSystem::GetCreature() const
@@ -971,7 +1197,8 @@ HandOnCreature* CreatureHandSystem::HoldByCommand(entt::entity creature)
 		contact->byCommand = true;
 		return contact;
 	}
-	// Held to another creature, the hand lets go of it first, which tells it how it was treated
+	// Held to another creature, the hand lets go of it first, which tells it how it was treated. It lets go at once.
+	registry.Remove<HandCreaturePose>(hand);
 	Release();
 	registry.Remove<HandLastFeedback>(hand);
 	// A command holds it in the world at once
