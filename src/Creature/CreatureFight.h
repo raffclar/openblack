@@ -70,11 +70,8 @@ constexpr size_t k_EndBlock = 144;
 constexpr size_t k_RecoilHigh = 179;
 constexpr size_t k_RecoilMid = 184;
 constexpr size_t k_RecoilLow = 189;
-/// The wobbles a blow sends through the body, high and low, side to side and front to back, played on top of it
-constexpr size_t k_WobbleHighSide = 194;
-constexpr size_t k_WobbleHighFrontBack = 195;
-constexpr size_t k_WobbleLowSide = 196;
-constexpr size_t k_WobbleLowFrontBack = 197;
+/// The first clip after the reels. The sway poses of the body start at this clip, and a blow does not play them.
+constexpr size_t k_AfterRecoils = 194;
 /// Reeling back while blocking
 constexpr size_t k_RecoilBlock = 198;
 /// The actions played around a fight: the taunt or the rude gesture before it, and being happy, sad or showing off after
@@ -510,8 +507,6 @@ struct Hit
 /// swing that goes more across than up or down reels it: to -x gives the right reel, to +x the left reel. Else a swing
 /// down gives the top reel and a swing up the bottom reel.
 [[nodiscard]] RecoilDirection RecoilDirectionOf(const glm::vec3& swing);
-/// The wobble played on top of the body after a blow: high or low, side to side or front to back
-[[nodiscard]] size_t WobbleAnimation(Band band, bool sideways);
 /// Which step an animation is, if it is one
 [[nodiscard]] std::optional<Step> StepOf(size_t animation);
 /// The kind of wound a blow leaves: half the time the first kind, else by the blow's own wound type. Type 0 gives kind

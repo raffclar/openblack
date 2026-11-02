@@ -242,6 +242,13 @@ public:
 		removed.push_back(object);
 		registry.Destroy(object);
 	}
+	void PieceMade(entt::entity piece) override
+	{
+		// Each piece takes its place as it is made, before any piece that falls from it
+		EXPECT_TRUE(registry.Valid(piece));
+		EXPECT_FALSE(registry.AllOf<BuildingPiece>(piece));
+		placesTaken.push_back(piece);
+	}
 	[[nodiscard]] std::optional<magic::EffectValues> Crush() const override
 	{
 		magic::EffectValues values;
@@ -287,6 +294,8 @@ public:
 	std::vector<entt::entity> removed;
 	std::vector<Effect> effects;
 	std::vector<Deed> deeds;
+	/// The pieces that took a place in the count of things made, in the order they took it
+	std::vector<entt::entity> placesTaken;
 };
 
 struct Fixture
@@ -418,6 +427,28 @@ TEST(BuildingDamageSystem, ABreakingRockBreaksAHoleWhereItStrikesAsItsThrowersHa
 	EXPECT_EQ(effect.source.appliedBy, std::optional(impact.hitBy));
 	// The house's own resting body came from no hand, so no creature learns from the throw
 	EXPECT_TRUE(f.world->deeds.empty());
+}
+
+TEST(BuildingDamageSystem, EveryPieceOfABuildingTakesAPlaceInTheCountOfThingsMadeAsItIsMade)
+{
+	Fixture f;
+	const glm::vec3 wall = k_HousePosition + glm::vec3(0.0f, 2.0f, 0.0f);
+	// A blow that does not break the building makes no piece
+	f.RockStrikes(wall, damage::k_KnockMomentum + 1.0f, PlayerNames::PLAYER_ONE);
+	EXPECT_TRUE(f.world->placesTaken.empty());
+	f.RockStrikes(wall, damage::k_BreakingMomentum + 1.0f, PlayerNames::PLAYER_ONE);
+	// Each piece that flies takes one place, in the order the pieces are made
+	ASSERT_FALSE(f.world->placesTaken.empty());
+	EXPECT_EQ(f.world->placesTaken.size(), f.world->dynamics.launched.size());
+	std::vector<entt::entity> launched;
+	for (const auto& piece : f.world->dynamics.launched)
+	{
+		launched.push_back(piece.object);
+	}
+	std::ranges::sort(launched);
+	auto taken = f.world->placesTaken;
+	std::ranges::sort(taken);
+	EXPECT_EQ(taken, launched);
 }
 
 TEST(BuildingDamageSystem, ABuildingCountsItsBrokenModelsAndARepairedOneBreaksIntoANewModel)
@@ -615,4 +646,27 @@ TEST(BuildingDamageSystem, ALoadMakesTheModelOfABrokenBuildingAgainUnderTheSameV
 	const auto again = std::count(f.world->made.begin() + static_cast<std::ptrdiff_t>(madeBefore), f.world->made.end(), name);
 	EXPECT_EQ(again, 1);
 	EXPECT_TRUE(f.world->models.contains(after.drawMesh));
+}
+
+TEST(BuildingDamage, ABrokenBuildingIsDrawnWithItsBrokenModelOnceItHasOne)
+{
+	constexpr entt::id_type k_Own = 7;
+	EXPECT_EQ(building_damage::DrawnMeshOf(nullptr, k_Own), k_Own);
+	BuildingDamage broken {};
+	EXPECT_EQ(building_damage::DrawnMeshOf(&broken, k_Own), k_Own);
+	broken.drawMesh = 12;
+	EXPECT_EQ(building_damage::DrawnMeshOf(&broken, k_Own), 12u);
+}
+
+TEST(BuildingDamageSystem, OnlyABrokenBuildingOrOneWithARepairSiteOrABuiltAmountShowsAPart)
+{
+	Fixture f;
+	for (const float life : {0.0f, 0.3f, 1.0f})
+	{
+		f.world->life = life;
+		EXPECT_FALSE(f.system->PartialShare(f.house).has_value());
+	}
+	f.world->life = 1.0f;
+	f.world->registry.Assign<BuildProgress>(f.house, BuildProgress {.built = 0.5f});
+	EXPECT_TRUE(f.system->PartialShare(f.house).has_value());
 }

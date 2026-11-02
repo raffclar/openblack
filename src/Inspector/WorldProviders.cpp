@@ -63,6 +63,7 @@ Json EffectItem(const inspector::ParticleEffectInfo& effect)
 	    {"owned_by_spell", effect.ownedBySpell},
 	    {"seconds_left", effect.secondsLeft.has_value() ? Json(*effect.secondsLeft) : Json(nullptr)},
 	    {"owner", effect.owner == entt::null ? Json(nullptr) : Json(entt::to_integral(effect.owner))},
+	    {"magnitude", effect.magnitude},
 	};
 }
 
@@ -142,6 +143,23 @@ Json openblack::inspector::SplashItems(std::span<const water_rings::Ring> rings,
 		{
 			items.push_back(EffectItem(effect));
 		}
+	}
+	return items;
+}
+
+Json openblack::inspector::ShakeItems(std::span<const camera_shake::Shake> shakes)
+{
+	Json items = Json::array();
+	for (const auto& shake : shakes)
+	{
+		items.push_back({
+		    {"position", Point(shake.position)},
+		    {"radius", shake.radius},
+		    {"strength", shake.strength},
+		    {"ms", shake.milliseconds},
+		    {"ms_left", shake.millisecondsLeft},
+		    {"vertical_only", shake.verticalOnly},
+		});
 	}
 	return items;
 }
@@ -226,7 +244,7 @@ std::vector<QueryDescription> ParticlesProvider::Describe() const
 	     .kind = ResultKind::List,
 	     .needsNear = true},
 	    {.name = "effects",
-	     .description = "The running particle effects: file, place, age, particle count, closing",
+	     .description = "The running particle effects: file, place, age, particle count, closing, size",
 	     .parameters = {{.name = "file",
 	                     .type = "string",
 	                     .description = "Only effects whose file name holds this text, in any case",
@@ -264,6 +282,13 @@ std::vector<QueryDescription> ParticlesProvider::Describe() const
 	    {.name = "drawn",
 	     .description = "What the last frame of the draw of the particle effects drew: sprites, ribbons, models, mists, "
 	                    "light maps and effects. Null on a computer that does not draw the effects",
+	     .parameters = {},
+	     .kind = ResultKind::Object,
+	     .needsNear = false},
+	    {.name = "waterfall",
+	     .description = "The waterfall of the third land: whether its model is on the land, the slide of its water (-1 "
+	                    "to 0) and the number of its sound (null when it is silent). Null on a computer that does not "
+	                    "draw the land",
 	     .parameters = {},
 	     .kind = ResultKind::Object,
 	     .needsNear = false},
@@ -332,6 +357,19 @@ QueryResult ParticlesProvider::Run(std::string_view query, const QueryContext& c
 		    {"mists", stats->mists},
 		    {"lightMaps", stats->lightStamps},
 		    {"effects", stats->effects},
+		});
+	}
+	if (query == "waterfall")
+	{
+		const auto waterfall = _sources.waterfall ? _sources.waterfall() : std::nullopt;
+		if (!waterfall.has_value())
+		{
+			return QueryResult::Value(Json(nullptr));
+		}
+		return QueryResult::Value(Json {
+		    {"model", waterfall->model},
+		    {"slide", waterfall->slide},
+		    {"sound", waterfall->sound.has_value() ? Json(*waterfall->sound) : Json(nullptr)},
 		});
 	}
 	return QueryResult::Error("no query particles." + std::string(query));

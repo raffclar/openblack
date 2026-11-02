@@ -182,3 +182,15 @@ bool Runner::Update(const Frame& frame, float seconds)
 	             steps);
 	return _age <= k_ColumnSeconds;
 }
+
+bool openblack::magic::tribal_spin::Shows(const glm::mat4& worldToClip, float nearClip, glm::vec3 origin)
+{
+	const float depth = (worldToClip * glm::vec4(origin, 1.0f)).w;
+	return !(depth < nearClip);
+}
+
+glm::vec3 openblack::magic::tribal_spin::ColumnPlace(const map_coords::MapCoords& place)
+{
+	const auto metres = map_coords::ToMetres(place);
+	return {metres.x, place.altitude, metres.y};
+}

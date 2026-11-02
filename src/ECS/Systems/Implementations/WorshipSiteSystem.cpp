@@ -28,7 +28,9 @@
 #include "Common/GUtilsDistance.h"
 #include "Common/PortableRotations.h"
 #include "ECS/Archetypes/Utils.h"
+#include "ECS/Components/Construction.h"
 #include "ECS/Components/Dance.h"
+#include "ECS/Components/Fire.h"
 #include "ECS/Components/Fixed.h"
 #include "ECS/Components/Footpath.h"
 #include "ECS/Components/Mesh.h"
@@ -627,16 +629,53 @@ void WorshipSiteSystem::CountChantsUsed(entt::entity site, float amount)
 void WorshipSiteSystem::BuildBy(entt::entity site, float share)
 {
 	auto& registry = _world->Entities();
-	if (IsBuilt(site))
+	if (!registry.AllOf<WorshipSite>(site))
 	{
 		return;
 	}
-	// Its altar goes up with it, but isn't seen until it stands whole
-	auto& progress = registry.Get<BuildProgress>(site);
-	progress.built = std::max(progress.built + share, 0.0f);
-	if (progress.built >= 1.0f)
+	if (!IsBuilt(site))
 	{
-		Built(site);
+		auto& progress = registry.Get<BuildProgress>(site);
+		progress.built = std::max(progress.built + share, 0.0f);
+		if (progress.built >= 1.0f)
+		{
+			Built(site);
+		}
+	}
+	// Each share of work on the site, also work that mends a built site, builds its altar by the same share. The altar
+	// shows only when all of the altar is built.
+	BuildAltarBy(registry.Get<const WorshipSite>(site).altar, share);
+}
+
+void WorshipSiteSystem::BuildAltarBy(entt::entity altar, float share)
+{
+	auto& registry = _world->Entities();
+	auto* part = registry.Valid(altar) ? registry.TryGet<WorshipAltar>(altar) : nullptr;
+	if (part == nullptr)
+	{
+		return;
+	}
+	// The work on a built altar mends it while it is short of its full life
+	if (part->built >= 1.0f)
+	{
+		_world->MendBy(altar, share);
+		return;
+	}
+	part->built = std::max(share + part->built, 0.0f);
+	if (part->built < 1.0f)
+	{
+		return;
+	}
+	part->built = 1.0f;
+	// A site that a town opened at the altar for its builders goes
+	if (registry.AllOf<BuildingSites>(altar))
+	{
+		_world->CloseBuildingSite(altar);
+	}
+	// The altar shows from now on, also when its site is not built
+	if (!registry.AllOf<Mesh>(altar))
+	{
+		registry.Assign<Mesh>(altar, part->model, static_cast<int8_t>(0), static_cast<int8_t>(0));
 	}
 }
 
@@ -847,6 +886,8 @@ entt::entity WorshipSiteSystem::Make(entt::entity temple, Tribe tribe)
 		registry.Assign<Fixed>(altar, circle->first, circle->second);
 	}
 	registry.Assign<WorshipAltar>(altar, WorshipAltar {.site = site, .model = altarModel});
+	// The altar starts with the life of its tribe's row of the worship sites
+	registry.Assign<ObjectLife>(altar, ObjectLife {.life = _world->AltarStartLife(tribe)});
 	registry.Get<WorshipSite>(site).altar = altar;
 	// The altar makes the three need flags of the site: food, then rest, then hiding
 	for (uint8_t need = 0; need < worship_site_looks::k_NeedFlags; ++need)
@@ -950,13 +991,8 @@ void WorshipSiteSystem::Built(entt::entity site)
 	_world->CloseBuildingSite(site);
 	auto& component = registry.Get<WorshipSite>(site);
 	component.buildRequests.clear();
-	// It stands whole, drawn as itself, and its altar is seen from now on
+	// It stands whole and is drawn as itself. Its altar shows only when the altar itself is built.
 	registry.Remove<BuildProgress>(site);
-	if (registry.Valid(component.altar) && !registry.AllOf<Mesh>(component.altar))
-	{
-		registry.Assign<Mesh>(component.altar, registry.Get<const WorshipAltar>(component.altar).model, static_cast<int8_t>(0),
-		                      static_cast<int8_t>(0));
-	}
 }
 
 std::vector<entt::entity> WorshipSiteSystem::TownsOf(PlayerNames player) const

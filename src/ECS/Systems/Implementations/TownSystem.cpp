@@ -55,6 +55,7 @@
 #include "ECS/Components/Villager.h"
 #include "ECS/Components/Workshop.h"
 #include "ECS/DiscipleWorkRules.h"
+#include "ECS/FixedKinds.h"
 #include "ECS/GameEndConditions.h"
 #include "ECS/GamePlayers.h"
 #include "ECS/Map.h"
@@ -65,6 +66,7 @@
 #include "ECS/Systems/ArtefactSystemInterface.h"
 #include "ECS/Systems/EffectRequestSystemInterface.h"
 #include "ECS/Systems/FireSystemInterface.h"
+#include "ECS/Systems/FootballSystemInterface.h"
 #include "ECS/Systems/GameEndSystemInterface.h"
 #include "ECS/Systems/HandSystemInterface.h"
 #include "ECS/Systems/Implementations/VillagerHome.h"
@@ -617,7 +619,7 @@ bool Blocks(const Registry& registry, entt::entity thing, TownSystemInterface::C
 	}
 	if (filter == TownSystemInterface::ClearAreaFilter::AnyFixed)
 	{
-		return registry.AllOf<Fixed>(thing);
+		return fixed_kinds::IsFixedKind(registry, thing);
 	}
 	// Of the things that stay put, all but trees
 	return registry.AllOf<Fixed>(thing) && !registry.AllOf<Tree>(thing);
@@ -1009,6 +1011,15 @@ void TownSystem::ProcessTownTurn(entt::entity townEntity)
 	if (Locator::worshipSiteSystem::has_value())
 	{
 		ecs::villager_worship::TownTurn(townEntity, turn);
+	}
+	if (!registry.Valid(townEntity))
+	{
+		return;
+	}
+	// The town's football pitch looks after its ball and its match
+	if (Locator::footballSystem::has_value())
+	{
+		Locator::footballSystem::value().ProcessTown(townEntity);
 	}
 	if (!registry.Valid(townEntity))
 	{

@@ -238,6 +238,62 @@ void testbed_scenarios::AddVortexScenarios(std::vector<Scenario>& all)
 	                  .crowdForSeconds = 70.0f}},
 	});
 
+	// On the third land, 40 m west of the player's first town, from the middle of the land
+	static constexpr glm::vec2 k_LandThreeVortex {508.0f, 557.0f};
+	all.push_back({
+	    .id = "story.l3_vortex_town_villagers",
+	    .name = "Story: villagers that crossed from the second land come out into the towns of the third land",
+	    .facet = Facet::Story,
+	    .description = "The third land loads with its own scripts. A vortex into the land opens 40 m west of the player's "
+	                   "first town after a second, with a crossing file as the vortex out of the second land writes it: "
+	                   "a Norse farmer of town 0 by its tribe and job, and a shepherd of no tribe by its row of the "
+	                   "villagers' table and of no town. The vortex is told to fade out 3 seconds after it opens.",
+	    .expected = "The vortex throws out the farmer and the shepherd first, each where it was about the old vortex. The "
+	                "farmer joins the town with the number 0, the player's first town. The shepherd joins the town "
+	                "nearest to it, which is also the player's first town. Then new villagers come out until 30 have come "
+	                "out.",
+	    .environment = {.land = Land::Story, .storyLand = "Land3.txt", .dispenserGrid = false},
+	    .framing = {.shot = Shot::Overview,
+	                .include = {k_LandThreeVortex - glm::vec2(30.0f), k_LandThreeVortex + glm::vec2(50.0f, 30.0f)}},
+	    .vortices = {{.type = VortexType::Out,
+	                  .offset = k_LandThreeVortex,
+	                  .delaySeconds = 1.0f,
+	                  .fadeOutAfterSeconds = 3.0f,
+	                  .crossingLines = {"CREATE_TOWN_VILLAGER(0, \"-10.00,8.00\", NORSE_FARMER, 30)",
+	                                    "CREATE_SPECIAL_TOWN_VILLAGER(-1, \"8.00,-10.00\", 74, 40)"}}},
+	});
+
+	// The third land's arrival vortex in the player's valley, from the middle of the land
+	static constexpr glm::vec2 k_LandThreeArrival {690.39f, 590.5f};
+	all.push_back({
+	    .id = "story.l3_arrival_vortex_spread",
+	    .name = "Story: the third land's arrival vortex spreads the animals and lets the villagers join the town",
+	    .facet = Facet::Story,
+	    .description = "The third land loads with its own scripts. A vortex into the land opens in the player's valley, "
+	                   "where the arrival opens it, after a second, with the arrival's values: the gathering place is the "
+	                   "vortex, the distance 20, the radius 80, and no flock for the people. Its crossing file is as the "
+	                   "vortex out of the second land writes it when two cows and two villagers go in. The vortex is told "
+	                   "to fade out 15 seconds after it opens, as the arrival does.",
+	    .expected = "The vortex throws out the two cows and the two villagers first, then new villagers until 30 have "
+	                "come out. The two cows gather as one flock at the vortex, kept within 20 and 80. The villagers go "
+	                "in no flock: each one joins the player's first town, the nearest town, and then walks about as a "
+	                "villager of that town.",
+	    .environment = {.land = Land::Story, .storyLand = "Land3.txt", .dispenserGrid = false},
+	    .framing = {.shot = Shot::Overview,
+	                .include = {k_LandThreeArrival - glm::vec2(60.0f), k_LandThreeArrival + glm::vec2(60.0f)}},
+	    .vortices = {{.type = VortexType::Out,
+	                  .offset = k_LandThreeArrival,
+	                  .delaySeconds = 1.0f,
+	                  .fadeOutAfterSeconds = 15.0f,
+	                  .crossingLines = {"CREATE_NEW_ANIMAL(\"3.00,3.00\", 8, -1, -1, 22)",
+	                                    "CREATE_NEW_ANIMAL(\"3.00,3.00\", 8, -1, -1, 25)",
+	                                    "CREATE_TOWN_VILLAGER(-1, \"18.78,1.98\", NORSE_FARMER, 37)",
+	                                    "CREATE_TOWN_VILLAGER(-1, \"3.33,2.98\", NORSE_HOUSEWIFE, 20)"},
+	                  .gatheringOffset = k_LandThreeArrival,
+	                  .flockDistance = 20.0f,
+	                  .flockRadius = 80.0f}},
+	});
+
 	all.push_back({
 	    .id = "story.vortex_throws_out_the_last_crossing",
 	    .name = "A vortex into the land throws out the last crossing",
@@ -423,4 +479,33 @@ void testbed_scenarios::AddVortexScenarios(std::vector<Scenario>& all)
 	    .objects = {{.type = FieldTypeInfo::Wheat, .offset = k_OnThePlane + glm::vec2(0.0f, -40.0f)}},
 	    .landScript = k_PotOnFieldScript,
 	});
+
+	// The story's top script ends each land with two calls: all other scripts stop, then the next land loads
+	const auto crossing = [&all](std::string_view id, std::string_view name, std::string_view from, std::string_view to) {
+		all.push_back({
+		    .id = id,
+		    .name = name,
+		    .facet = Facet::Story,
+		    .description = "The land loads with its own scripts. After 3 seconds, every script stops and the next land "
+		                   "loads, with the two calls that the story's top script makes at the end of a land.",
+		    .expected = "The next land loads through the story's land change and draws. The log has the load of the land.",
+		    .environment = {.land = Land::Story, .storyLand = from, .dispenserGrid = false},
+		    .commands = {{.kind = Command::Kind::CallNative,
+		                  .delaySeconds = 3.0f,
+		                  .script = "STOP_ALL_SCRIPTS_EXCLUDING",
+		                  .scriptArguments = {{.kind = ScriptArgument::Kind::Text, .text = "NoScriptHasThisName.txt"}}},
+		                 {.kind = Command::Kind::CallNative,
+		                  .delaySeconds = 0.0f,
+		                  .script = "LOAD_MAP",
+		                  .scriptArguments = {{.kind = ScriptArgument::Kind::Text, .text = to}}}},
+		});
+	};
+	crossing("story.crossing_to_the_second_land", "Story: the first land's end loads the second land", "Land1.txt",
+	         "scripts/land2.txt");
+	crossing("story.crossing_to_the_third_land", "Story: the second land's end loads the third land", "Land2.txt",
+	         "scripts/land3.txt");
+	crossing("story.crossing_to_the_fourth_land", "Story: the third land's end loads the fourth land", "Land3.txt",
+	         "scripts/land4.txt");
+	crossing("story.crossing_to_the_fifth_land", "Story: the fourth land's end loads the fifth land", "Land4.txt",
+	         "scripts/land5.txt");
 }

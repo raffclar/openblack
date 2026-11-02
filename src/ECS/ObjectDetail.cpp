@@ -90,4 +90,74 @@ float Importance(const Registry& registry, entt::entity entity)
 	return importance != nullptr ? importance->importance : 0.0f;
 }
 
+Stores::Stores(const Registry& registry)
+    : _creatureMorph(registry)
+    , _hand(registry)
+    , _introHand(registry)
+    , _temple(registry)
+    , _templeInteriorPart(registry)
+    , _translucent(registry)
+    , _inHand(registry)
+    , _heldByCreature(registry)
+    , _highDetail(registry)
+    , _seeThrough(registry)
+    , _neverFades(registry)
+    , _inPhysics(registry)
+    , _ball(registry)
+    , _vortex(registry)
+    , _scriptHighlight(registry)
+    , _drawnIntoVortex(registry)
+    , _carriedByTornado(registry)
+    , _magicShield(registry)
+    , _animal(registry)
+    , _detailMeshes(registry)
+    , _drawImportance(registry)
+{
+}
+
+bool Stores::CarriedByVortex(entt::entity entity) const
+{
+	return _drawnIntoVortex.Has(entity) && _carriedByTornado.Has(entity);
+}
+
+bool Stores::Banded(entt::entity entity) const
+{
+	return !(_creatureMorph.Has(entity) || _hand.Has(entity) || _introHand.Has(entity) || _temple.Has(entity) ||
+	         _templeInteriorPart.Has(entity) || _translucent.Has(entity));
+}
+
+bool Stores::BandedNow(entt::entity entity) const
+{
+	return !(_inHand.Has(entity) || _heldByCreature.Has(entity) || _highDetail.Has(entity) || _seeThrough.Has(entity));
+}
+
+bool Stores::Disappears(entt::entity entity, bool townCentre) const
+{
+	if (townCentre || _neverFades.Has(entity) || _inPhysics.Has(entity) || _ball.Has(entity) || _vortex.Has(entity) ||
+	    _scriptHighlight.Has(entity) || CarriedByVortex(entity))
+	{
+		return false;
+	}
+	if (const auto* shield = _magicShield.TryGet(entity); shield != nullptr && shield->kind == MagicShield::Kind::Physical)
+	{
+		return false;
+	}
+	const auto* animal = _animal.TryGet(entity);
+	return animal == nullptr || !animals::birds::IsBird(animal->type);
+}
+
+float Stores::Importance(entt::entity entity) const
+{
+	if (CarriedByVortex(entity))
+	{
+		return k_CarriedByVortexImportance;
+	}
+	if (const auto* detail = _detailMeshes.TryGet(entity); detail != nullptr)
+	{
+		return detail->importance;
+	}
+	const auto* importance = _drawImportance.TryGet(entity);
+	return importance != nullptr ? importance->importance : 0.0f;
+}
+
 } // namespace openblack::ecs::object_detail

@@ -171,6 +171,9 @@ public:
 	virtual bool CastByCreatureAt(entt::entity /*creature*/, MagicType /*type*/, glm::vec3 /*place*/) { return false; }
 	/// The creature lets go of the miracle it cast: one that lasts only while it is held stops
 	virtual void ReleaseCreatureCast(entt::entity /*creature*/) {}
+	/// The beams from the hands of a creature that casts from above stop. The miracle that it casts continues. The hold
+	/// of the creature by a hand does this.
+	virtual void EndCreatureCastBeams(entt::entity /*creature*/) {}
 	/// An effect at a point that no miracle is behind, such as a lightning strike a script calls down: everything it
 	/// reaches takes it, as from the player
 	virtual void ApplyEffectAt(glm::vec3 /*point*/, const magic::EffectValues& /*values*/, PlayerNames /*player*/) {}
@@ -351,6 +354,9 @@ public:
 	virtual float ForcePayForSpell(entt::entity spell, float cost) = 0;
 	/// A miracle's strength now, 0 once it has gone
 	[[nodiscard]] virtual float SpellStrength(entt::entity spell) = 0;
+	/// A script sets a miracle's radius: its particle effect and its shield follow it at once. Anything that is not a
+	/// miracle does not change.
+	virtual void SetSpellRadius(entt::entity /*spell*/, float /*radius*/) {}
 
 	// Turns and frames
 

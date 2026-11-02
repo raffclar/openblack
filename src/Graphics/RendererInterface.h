@@ -28,6 +28,7 @@
 #include "HandReflection.h"
 #include "InstanceDesc.h"
 #include "InterfaceCreatures.h"
+#include "MaterialStages.h"
 #include "ScreenshotCapture.h"
 #include "Visual/RenderModes.h"
 #include "Visual/RenderPass.h"
@@ -153,6 +154,9 @@ public:
 		/// The environment map the mesh is drawn with where its program takes one (s_environment), each primitive taking
 		/// it as its material says
 		const Texture2D* environment;
+		/// When set, every primitive takes the environment map in this way, whatever its material says, as a creature's
+		/// body with the environment map does
+		std::optional<material_stages::EnvironmentStage> environmentStageForAll;
 		/// The villagers' bones, read by the instances of a program that takes them (s_bonePalette)
 		const Texture2D* bonePalette {nullptr};
 		/// Above 0, the mesh is drawn as its environment map alone in its light, at this alpha, where its program takes

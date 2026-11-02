@@ -322,6 +322,8 @@ constexpr auto k_PresentationParts = std::to_array<PresentationPart>({
     {.component = "HandCreatureDraw", .field = "", .marker = ""},
     // How far the hold of a creature by the button went: the camera of the hold, the pose of the hand, a release that waits
     {.component = "HandCreaturePose", .field = "", .marker = ""},
+    // A press of the button on a creature that waits for a tap while the leash is held loose
+    {.component = "HandCreaturePress", .field = "", .marker = ""},
     // The guidance that the player at this machine hears, weighed from this machine's camera with the local draws
     {.component = "GuidanceHeard", .field = "", .marker = ""},
     // The help of the creature is for the player at this machine only. Each computer keeps it for the creature of its

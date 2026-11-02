@@ -193,6 +193,11 @@ public:
 		return false;
 	}
 
+	/// How far the body is through what it plays, 0 to 1: the time of its action, or of its legs in a move, over the
+	/// length of the animation that the game keeps for it. A body that only stands gives the share of its stand that its
+	/// breath shows. None when the creature has no animations.
+	[[nodiscard]] virtual std::optional<float> BodyShare(entt::entity /*creature*/) const { return std::nullopt; }
+
 	/// Sees to a need now, in place of whatever it was doing: sleeps until rested, eats something (the nearest food when
 	/// none is given), goes and drinks at the nearest water, has a poo, is sick, or faints. Returns whether it could.
 	virtual bool Sleep(entt::entity creature) = 0;
@@ -256,7 +261,8 @@ public:
 		/// player and of watching a villager are not marked, but they also have the highest priority.
 		bool forced {true};
 		/// After a fight that is over, the stop for the plan ends the fight of the body again while the body still plays
-		/// a move of the fight, and the life pays again. Reactions, emergencies and teleport stones do this.
+		/// a move of the fight, and the life pays again. Reactions, emergencies, teleport stones, the gift uses, the globe
+		/// cast and the order of a computer god do this.
 		bool fightBodyEndsAgain {false};
 	};
 	/// What the creature was doing stops as a failure and it carries out the plan instead: whether it could. A plan
@@ -325,6 +331,8 @@ public:
 	/// knows it at once, and its sightings of a miracle do not change. A thing that it did not know before shows the
 	/// player the creature's lesson. A creature with no learning yet learns nothing.
 	virtual void LearnAction(entt::entity /*creature*/, CreatureActionLearningType /*type*/, uint32_t /*action*/) {}
+	/// A script makes the creature know every skill and every miracle, with no lesson shown
+	virtual void LearnEverything(entt::entity /*creature*/) {}
 	/// Whether the creature knows an ordinary skill or a miracle (by its row in the game's tables). A creature with no
 	/// learning yet knows nothing.
 	[[nodiscard]] virtual bool KnowsAction(entt::entity /*creature*/, CreatureActionLearningType /*type*/,
@@ -367,8 +375,8 @@ public:
 		bool stopsWalk {true};
 		bool endsBody {true};
 		/// After a fight that is over, the stop for the plan ends the fight of the body again while the body still plays
-		/// a move of the fight, and the life pays again. The plans that the feedback of the player forces, the follow-ups
-		/// and the teleport stones do this. The other forced plans have a stop of their own, or keep the body.
+		/// a move of the fight, and the life pays again. Almost all forced plans do this. The leash orders and the walk back
+		/// into an area stop the fight in their own way. The plan of a loaded file keeps the plain stop.
 		bool fightBodyEndsAgain {false};
 		/// The plan is the part of the creature in its own fight, so the plan keeps the fight. Each other forced plan
 		/// stops a fight that the creature sets up, for both creatures.

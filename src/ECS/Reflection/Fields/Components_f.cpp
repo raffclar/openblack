@@ -26,6 +26,7 @@
 #include "ECS/Components/Flock.h"
 #include "ECS/Components/FlockSpell.h"
 #include "ECS/Components/Flowers.h"
+#include "ECS/Components/Football.h"
 #include "ECS/Components/Footpath.h"
 #include "ECS/Components/Forest.h"
 #include "ECS/Components/ForestMember.h"
@@ -155,6 +156,30 @@ void openblack::ecs::reflection::RegisterFields_Components_f(entt::meta_ctx& con
 	    .Field<&components::FlockSpell::evil>("evil")
 	    .Field<&components::FlockSpell::closedDown>("closedDown");
 	Reflect<components::Flowers>(context).Field<&components::Flowers::type>("type");
+	Reflect<components::FootballPitch>(context)
+	    .Field<&components::FootballPitch::functional>("functional")
+	    .Field<&components::FootballPitch::match>("match")
+	    .Field<&components::FootballPitch::wave>("wave")
+	    .Field<&components::FootballPitch::ball>("ball")
+	    .Field<&components::FootballPitch::ballLastPlace>("ballLastPlace")
+	    .Field<&components::FootballPitch::referee>("referee")
+	    .Field<&components::FootballPitch::home>("home")
+	    .Field<&components::FootballPitch::away>("away")
+	    .Field<&components::FootballPitch::ranks>("ranks")
+	    .Field<&components::FootballPitch::crowd>("crowd")
+	    .Field<&components::FootballPitch::crowdPlaces>("crowdPlaces")
+	    .Field<&components::FootballPitch::deadBallFetcher>("deadBallFetcher")
+	    .Field<&components::FootballPitch::attackerMarks>("attackerMarks")
+	    .Field<&components::FootballPitch::defenderMarks>("defenderMarks")
+	    .Field<&components::FootballPitch::lastMatchTurn>("lastMatchTurn");
+	Reflect<components::Footballer>(context)
+	    .Field<&components::Footballer::pitch>("pitch")
+	    .Field<&components::Footballer::inMatch>("inMatch")
+	    .Field<&components::Footballer::task>("task")
+	    .Field<&components::Footballer::chooseTask>("chooseTask")
+	    .Field<&components::Footballer::lookTurns>("lookTurns")
+	    .Field<&components::Footballer::number>("number");
+	Reflect<components::TownFootballPitch>(context).Field<&components::TownFootballPitch::pitch>("pitch");
 	Reflect<components::Footpath>(context).Field<&components::Footpath::nodes>("nodes").Field<&components::Footpath::walkable>(
 	    "walkable");
 	Reflect<components::FootpathLink>(context)

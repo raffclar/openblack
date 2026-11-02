@@ -48,6 +48,9 @@
 #if defined(__EMSCRIPTEN__)
 #include "Web/WebPlatform.h"
 #endif
+#if defined(__APPLE__)
+#include <pthread/qos.h>
+#endif
 
 namespace
 {
@@ -174,6 +177,7 @@ bool parseOptions(int argc, char** argv, openblack::Arguments& args, int& return
 		("no-first-frame-warm-up", "Do not draw the first frame of a land behind the loading screen. Then the first frames of the game make the renderer's pipelines and render targets.")
 		("parallel-draw-encode", "Developer: let worker threads encode some of the draws at the same time as the game's thread, in the same order and with the same picture. By default the game's thread encodes all draws.")
 		("unlock-bonus-creatures", "Debug: take the Creature Breeder's bonus creatures as unlocked, which the game only had once an unlock from outside it was installed: all, or some of leopard, horse, mandrill, gorilla and rhino joined by commas. None by default, as on a normal install.", cxxopts::value<std::string>())
+		("football-add-on", "Debug: turn on the switch of the free Soccer Add-On. Towns then build football pitches, and their villagers play football. Off by default, as on a normal install. It has no effect in a multiplayer game.")
 		("no-draw", "Tools: open the window but draw nothing on the graphics card, so that a long run that the inspector drives does not wait on a busy graphics card. Screenshots are black.")
 		("skip-logos", "Leave out the logo pictures at start-up.")
 		("logo-effect", "For developers and tools: play the logo effect before the first game, as a plain start does. A developer's or a tool's run otherwise leaves it out.")
@@ -194,7 +198,7 @@ bool parseOptions(int argc, char** argv, openblack::Arguments& args, int& return
 		("sim-network-game", "Tools: play the world as a network game does, with no network: the P key, the menu, the temple and the films do not stop the game's clock, and the turns read no part of a frame.")
 		("throw-lead-latency-ms", "Tools: a fixed latency in milliseconds for the reports of the hand. A throw moves its start along the flight by one turn for each 100 ms, at most 5 turns. Without it the game measures the latency on its clock.", cxxopts::value<uint32_t>())
 		("sim-gods-need-no-temple", "Tests: a god with no temple stays in a network game, for a land that makes no temple at its start (a story land). Each computer of a network game needs the same switch.")
-		("sim-temple-loss", "Tests: at a turn, the temple of a player starts its destruction, as PLAYER:TURN (for example 1:300, the player from 0). Each computer of a network game needs the same switch.", cxxopts::value<std::string>())
+		("sim-temple-loss", "Tests: at a turn, the temple of a player starts its destruction, as PLAYER:TURN (for example 1:300, the player from 0), or of each god of a range of players, as FIRST-LAST:TURN. Each computer of a network game needs the same switch.", cxxopts::value<std::string>())
 		("sim-time-limit", "Tests: the time limit of a network game in minutes, in place of the default 30. A client of a game server takes the time limit of the server.", cxxopts::value<uint32_t>())
 		("sim-conditions", "Tools: the winning conditions of a network game, as the host picks them: [LAND:]NAME=VALUE,... with the names of Online Maps/ConditionTemplate.txt or their numbers from 0 (for example WC_HOUSES_BUILT=3,WC_GROW_TREES=5). A client of a game server takes the conditions of the server.", cxxopts::value<std::string>())
 		("sim-leave-at", "Tests: at this turn the player of a network game leaves it as a player does, by Escape, Exit Online Game and Leave Game.", cxxopts::value<uint32_t>())
@@ -653,6 +657,7 @@ bool parseOptions(int argc, char** argv, openblack::Arguments& args, int& return
 			}
 			args.unlockedBonusCreatures = *unlocked;
 		}
+		args.footballAddOn = result.count("football-add-on") != 0;
 		args.playVideo = result["play-video"].as<std::string>();
 		args.filmSurface = result["film-surface"].as<std::string>();
 		args.preIntro = result.count("pre-intro") != 0;
@@ -799,6 +804,12 @@ bool parseOptions(int argc, char** argv, openblack::Arguments& args, int& return
 
 int main(int argc, char* argv[]) noexcept
 {
+#if defined(__APPLE__)
+	// The game thread draws the frames that the player sees. Started from a shell, it otherwise gets the default class,
+	// and on a light load macOS then moves it to the slow cores between the turns. The threads that it starts take the
+	// same class.
+	pthread_set_qos_class_self_np(QOS_CLASS_USER_INTERACTIVE, 0);
+#endif
 	const bool crashDialogs = openblack::crash_handler::WantsCrashDialogs(std::span(argv, static_cast<size_t>(argc)));
 	if (!crashDialogs)
 	{

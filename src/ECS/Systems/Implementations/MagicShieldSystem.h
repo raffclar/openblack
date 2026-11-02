@@ -45,6 +45,7 @@ public:
 	[[nodiscard]] bool KeepsReactionOff(glm::vec3 watcher, glm::vec3 initiator) const override;
 	[[nodiscard]] std::optional<entt::entity> ShieldAt(glm::vec3 point) const override;
 	void RemoveWithSpell(entt::entity spell) override;
+	void FollowSpellRadius(entt::entity spell, float radius) override;
 	[[nodiscard]] std::optional<HeldReaction> HeldReactionOf(entt::entity villager) const override;
 	void LeaveForOtherReaction(entt::entity villager) override;
 	[[nodiscard]] std::vector<DomeDraw> GetDomes(float fraction) const override;

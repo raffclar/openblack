@@ -452,4 +452,5 @@ void CreatureHelpSystem::Fainting(entt::entity creature)
 		}
 	}
 	// The game also says it was knocked out, but only once it lies dying, which holds that message back: never heard
+	// For the same reason, the game also stops its message that the creature goes home: nobody hears it
 }

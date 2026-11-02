@@ -138,6 +138,40 @@ TEST(CreatureBlendStore, ABlendThatTheThreadsMadeIsTheBlendThatTheTurnMakes)
 	EXPECT_EQ(prepared.prepared.size(), wanted.size());
 }
 
+// A second Prepare uses the adjusted animations that the first one kept, and its blends have the bits of the turn
+TEST(CreatureBlendStore, ASecondPrepareWithKeptAdjustmentsMakesTheBlendsOfTheTurn)
+{
+	const auto rig = Species();
+	WorkerPool workers(3);
+	creature_blends::Stores prepared;
+	const auto wantedOf = [&rig](const std::vector<creature_morph::Morph>& bodies) {
+		std::vector<creature_blends::Wanted> wanted;
+		for (const auto& body : bodies)
+		{
+			for (const auto index : {size_t {0}, k_Walk, k_Wave})
+			{
+				wanted.push_back({.rig = &rig, .morph = body, .index = index});
+			}
+		}
+		return wanted;
+	};
+	creature_blends::Prepare(prepared, wantedOf({Body(-0.4f, -0.7f), Body(0.6f, 0.25f)}), workers, 1);
+	const auto adjustedBefore = prepared.adjusted.size();
+	const auto second = wantedOf({Body(-0.9f, -0.1f), Body(0.3f, 0.8f), Body(-0.2f, 0.5f)});
+	creature_blends::Prepare(prepared, second, workers, 2);
+	// The second bodies use the same variant meshes, so the stores keep the same adjusted animations
+	EXPECT_EQ(prepared.adjusted.size(), adjustedBefore);
+	creature_blends::Stores made;
+	for (const auto& [_, morph, index] : second)
+	{
+		const auto now = creature_blends::Blend(made, rig, morph, index);
+		const auto early = creature_blends::KeptBlend(prepared, rig, morph, index);
+		ASSERT_TRUE(now.has_value());
+		ASSERT_TRUE(early.has_value());
+		EXPECT_TRUE(SameBits(*now, *early)) << "animation " << index;
+	}
+}
+
 TEST(CreatureBlendStore, TheStoresGiveAKeptBlendToEachBodyOfItsShapeOnly)
 {
 	const auto rig = Species();

@@ -764,9 +764,12 @@ bool CreatureMindSystem::CastGivenGlobe(entt::entity creature, CreatureMindState
 	CountMiracleSighting(creature, *body, mind, index);
 	SPDLOG_LOGGER_DEBUG(spdlog::get("game"), "Creature {} casts the globe {} that it was given at {}",
 	                    entt::to_integral(creature), entt::to_integral(globe), entt::to_integral(*target));
-	ForceActivity(
-	    creature,
-	    {.desire = desire, .activityObject = whole, .action = cast->action, .actionObject = *target, .ordered = true});
+	ForceActivity(creature, {.desire = desire,
+	                         .activityObject = whole,
+	                         .action = cast->action,
+	                         .actionObject = *target,
+	                         .ordered = true,
+	                         .fightBodyEndsAgain = true});
 	return true;
 }
 
@@ -1248,7 +1251,7 @@ void CreatureMindSystem::SetKnowsAction(entt::entity creature, CreatureActionLea
 	{
 		return;
 	}
-	// Taught before its learning is set up, or with a mind file still to take up, it is taught once it has those
+	// Taught before its learning is ready, or before its mind file is read, it is taught once it has those
 	if (!mind->learnt.has_value() || mind->pendingFile != nullptr)
 	{
 		mind->pendingTeaching.push_back({.type = type, .action = action, .knows = knows});
@@ -1277,6 +1280,22 @@ void CreatureMindSystem::SetKnowsAction(entt::entity creature, CreatureActionLea
 		                                                                : creature_help::Kind::LessonNormalAction;
 		Locator::creatureHelpSystem::value().Raise(creature, {.kind = kind, .parameter = action});
 	}
+}
+
+void CreatureMindSystem::LearnEverything(entt::entity creature)
+{
+	auto* mind = Entities().TryGet<CreatureMindState>(creature);
+	if (mind == nullptr)
+	{
+		return;
+	}
+	// Taught before its learning is ready, or before its mind file is read, it is taught once it has those
+	if (!mind->learnt.has_value() || mind->pendingFile != nullptr)
+	{
+		mind->pendingTeaching.push_back({.everything = true});
+		return;
+	}
+	creature_watching::LearnEverything(mind->learnt->knowledge);
 }
 
 void CreatureMindSystem::LearnAction(entt::entity creature, CreatureActionLearningType type, uint32_t action)

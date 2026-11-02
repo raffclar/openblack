@@ -44,7 +44,7 @@ struct MiracleRule
 	uint32_t timesToSee {10};
 	uint32_t minPhase {8};
 	/// Only a filter the computer players use choosing what to teach their creatures: it makes nothing known
-	bool knownAtStart {false};
+	bool teachable {false};
 	/// The creature action it lets the creature take
 	uint32_t action {0};
 	/// The desire that the miracle serves when a creature casts it from a one-shot globe that it was given
@@ -182,6 +182,12 @@ enum class KnownList : uint8_t
 /// An index past the table does nothing: the creature does not know it, and does not forget it. Only a mind file can
 /// give the creature an index past the table.
 bool SetKnown(Knowledge& knowledge, KnownList list, size_t index, bool knows, uint32_t taughtSightings);
+/// How many ordinary skills and miracles a script's "learn everything" makes known, by their rows in the game's tables
+constexpr size_t k_EverythingSkills = 6;
+constexpr size_t k_EverythingMiracles = 42;
+/// A script makes the creature know every ordinary skill and every miracle, the skills first. Its sightings do not
+/// change and no lesson is shown. A row past the table is kept as known past the table, as a mind file keeps it.
+void LearnEverything(Knowledge& knowledge);
 /// Whether the creature knows the skill or miracle, also one with no row in its table
 [[nodiscard]] bool IsKnown(const Knowledge& knowledge, KnownList list, size_t index);
 

@@ -193,11 +193,12 @@ void NetworkSession::SetReady(bool ready)
 	}
 }
 
-void NetworkSession::SendRoomChat(std::string_view text)
+void NetworkSession::SendRoomChat(std::string_view text, std::string_view to, bool team)
 {
 	if (_state == State::Waiting && _stream && _stream->IsOpen())
 	{
-		_stream->SendText(game_socket::ToJson(game_socket::RoomChat {.from = {}, .text = std::string(text)}));
+		_stream->SendText(game_socket::ToJson(game_socket::RoomChat {
+		    .from = {}, .text = std::string(text), .to = std::string(to), .privateLine = false, .team = team}));
 	}
 }
 

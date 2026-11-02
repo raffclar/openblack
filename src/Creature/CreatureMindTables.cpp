@@ -64,16 +64,16 @@ Tables creature_mind_tables::Build(const InfoConstants& info)
 		    .name = Text(row.name),
 		    .desire = row.desire,
 		    .desireMultiplier = row.desireMultiplier,
-		    .alwaysApplies = row.field0xc8 != 0,
-		    .learningWindowSeconds = row.field0xd0,
-		    .learnable = row.field0xf0 != 0,
-		    .eatWhenStroked = row.field0xe0 != 0,
-		    .actsOnThing = row.field0x94 != 0,
-		    .notOnWhatItHolds = row.field0xa8 != 0,
+		    .alwaysApplies = row.alwaysApplies != 0,
+		    .learningWindowSeconds = row.learningWindowSeconds,
+		    .learnable = row.learnable != 0,
+		    .eatWhenStroked = row.eatWhenStroked != 0,
+		    .actsOnThing = row.actsOnThing != 0,
+		    .notOnWhatItHolds = row.notOnWhatItHolds != 0,
 		    .shownDesire = row.shownDesire,
 		    .creatureNicenessChange = row.creatureNicenessChange,
 		    .startingOpinion = row.startingOpinion,
-		    .fullRecovery = row.field0xf4 != 0,
+		    .fullRecovery = row.fullRecovery != 0,
 		    .needs = {.skills = {SkillNeeded(row.skillsNeeded[0]), SkillNeeded(row.skillsNeeded[1])},
 		              .miracle = row.magicType != k_NoMiracle ? std::optional<size_t>(row.magicType) : std::nullopt},
 		});
@@ -96,21 +96,21 @@ Tables creature_mind_tables::Build(const InfoConstants& info)
 		}
 		const auto& initial = info.creatureInitialDesire.at(d);
 		tables.rules.at(d) = {
-		    .initialMax = initial.field0x3c,
-		    .decayMin = initial.field0x40,
-		    .decayMax = initial.field0x44,
-		    .initialWeight = initial.field0x68,
-		    .learnsWeight = initial.field0x6c != 0,
-		    .lessonDivisor = initial.field0x54,
-		    .learnable = initial.field0x28 != 0,
-		    .distanceWeight = initial.field0x58,
-		    .aboutSomething = initial.field0x20 != 0,
-		    .approvesOrders = initial.field0x2c != 0,
+		    .initialMax = initial.initialMax,
+		    .decayMin = initial.decayMin,
+		    .decayMax = initial.decayMax,
+		    .initialWeight = initial.initialWeight,
+		    .learnsWeight = initial.learnsWeight != 0,
+		    .lessonDivisor = initial.lessonDivisor,
+		    .learnable = initial.learnable != 0,
+		    .distanceWeight = initial.distanceWeight,
+		    .aboutSomething = initial.aboutSomething != 0,
+		    .approvesOrders = initial.approvesOrders != 0,
 		};
 		tables.texts.at(d) = {
-		    .desire = Text(initial.field0xb0),
-		    .trying = Text(initial.field0x130),
-		    .doing = Text(initial.field0x170),
+		    .desire = Text(initial.desireText),
+		    .trying = Text(initial.tryingText),
+		    .doing = Text(initial.doingText),
 		};
 		const auto dependencies = Words<float>(info.creatureDesireDependency.at(d));
 		for (size_t e = 0; e < k_DesireCount && e < dependencies.size(); ++e)
@@ -145,35 +145,34 @@ Tables creature_mind_tables::Build(const InfoConstants& info)
 	for (const auto& entry : info.creatireActionKnownAboutEntry)
 	{
 		tables.skills.push_back({
-		    .name = Text(entry.field0x0),
-		    .watchSeconds = entry.field0x48,
-		    .minPhase = entry.field0x50,
+		    .name = Text(entry.name),
+		    .watchSeconds = entry.watchSeconds,
+		    .minPhase = entry.minPhase,
 		});
 	}
 	for (const auto& entry : info.creatureMagicActionKnownAboutEntry)
 	{
 		tables.miracles.push_back({
-		    .name = Text(entry.field0x0),
-		    .timesToSee = entry.field0x44,
-		    .minPhase = entry.field0x50,
-		    .knownAtStart = entry.field0x54 != 0,
-		    .action = entry.field0x58,
-		    .desire = entry.field0x40,
+		    .name = Text(entry.name),
+		    .timesToSee = entry.timesToSee,
+		    .minPhase = entry.minPhase,
+		    .teachable = entry.teachable != 0,
+		    .action = entry.action,
+		    .desire = entry.desire,
 		});
 	}
 	for (const auto& entry : info.creatureMimic)
 	{
 		creature_watching::MimicRule rule {
 		    .name = Text(entry.name),
-		    .chance = entry.field0x80,
-		    .needsLearningLeash = entry.field0x84 != 0,
-		    .noticeAction = entry.field0x88,
-		    .desire = entry.field0xa4,
-		    .stageSteps = entry.field0xa8,
-		    .copiesDesire = entry.field0xac != 0,
+		    .chance = entry.chance,
+		    .needsLearningLeash = entry.needsLearningLeash != 0,
+		    .noticeAction = entry.noticeAction,
+		    .desire = entry.desire,
+		    .stageSteps = entry.stageSteps,
+		    .copiesDesire = entry.copiesDesire != 0,
 		};
-		for (const auto action :
-		     {entry.field0x8c, entry.field0x90, entry.field0x94, entry.field0x98, entry.field0x9c, entry.field0xa0})
+		for (const auto action : entry.copyActions)
 		{
 			if (action != k_NoAction && action < actionCount)
 			{

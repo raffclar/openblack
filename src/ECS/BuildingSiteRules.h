@@ -17,6 +17,7 @@
 #include <optional>
 #include <span>
 
+#include <glm/mat3x3.hpp>
 #include <glm/mat4x4.hpp>
 #include <glm/vec2.hpp>
 #include <glm/vec3.hpp>
@@ -125,6 +126,77 @@ inline constexpr size_t k_TemplePiles = 6;
 inline constexpr float k_TemplePileDistance = 22.0f;
 [[nodiscard]] float TemplePileAngle(float heartYAngle, size_t pile);
 
+/// What a builder does at the end of each stroke at its site
+enum class AfterStroke
+{
+	/// The site has wood: the builder walks to its next place round the building and builds again
+	BuildOn,
+	/// The site has no wood: the builder gets wood from its store or a forest. When it has nowhere to get wood, it stays
+	/// in its building state at its place and tries again to get wood at the end of each building clip, with no wood
+	/// used, until wood comes or the site closes.
+	GetWood,
+	/// The site closed (the building is built or repaired, or the site went): the builder leaves it and decides again
+	Leave,
+};
+
+[[nodiscard]] constexpr AfterStroke AfterStrokeOf(bool siteOpen, uint32_t woodAtSite)
+{
+	if (!siteOpen)
+	{
+		return AfterStroke::Leave;
+	}
+	return woodAtSite == 0 ? AfterStroke::GetWood : AfterStroke::BuildOn;
+}
+
+/// The piles of wood that a site keeps, by the kind of thing it is at
+enum class SitePiles
+{
+	/// The site keeps no pile, and wood brought to it is lost: the thing has no fixed mark
+	None,
+	/// A workshop's site keeps its wood on the workshop's own wood pile
+	Workshop,
+	/// A worship site's one pile stands at a point of its model
+	WorshipSite,
+	/// A temple's six piles stand round its heart
+	Temple,
+	/// A wonder's one pile stands at a fixed point of the wonder
+	Wonder,
+	/// Each other thing with the fixed mark has one pile beyond it, away from its door: a building of the abodes, a
+	/// miracle dispenser, a field, a feature, flowers, an animated static, a rock or the altar of a worship site
+	Beyond,
+};
+
+/// What a site needs to know of its thing to choose its piles
+struct SiteThing
+{
+	bool workshop {false};
+	bool worshipSite {false};
+	bool temple {false};
+	bool wonder {false};
+	bool fixedKind {false};
+};
+
+[[nodiscard]] constexpr SitePiles PilesOf(const SiteThing& thing)
+{
+	if (thing.workshop)
+	{
+		return SitePiles::Workshop;
+	}
+	if (thing.worshipSite)
+	{
+		return SitePiles::WorshipSite;
+	}
+	if (thing.temple)
+	{
+		return SitePiles::Temple;
+	}
+	if (!thing.fixedKind)
+	{
+		return SitePiles::None;
+	}
+	return thing.wonder ? SitePiles::Wonder : SitePiles::Beyond;
+}
+
 /// Where any other building's site puts its one pile of wood, made for the first wood brought: beyond the building on
 /// the side away from its door, as far out from the building as the door is plus four metres, turned an eighth of a
 /// turn either way at random, and facing back towards the building
@@ -135,6 +207,13 @@ struct PilePlace
 };
 inline constexpr float k_PileBeyondDoor = 4.0f;
 [[nodiscard]] PilePlace StandardPilePlace(glm::vec2 building, glm::vec2 door, const FloatRandom& floatRandom);
+
+/// A wonder's site puts its one pile at a fixed point of the wonder: nine metres along its x axis and fifty metres back
+/// along its z axis, turned and sized with the wonder. The pile has the wonder's turn. The sums are made in this order,
+/// each one rounded to a float.
+inline constexpr float k_WonderPileSide = 9.0f;
+inline constexpr float k_WonderPileBack = 50.0f;
+[[nodiscard]] glm::vec2 WonderPilePlace(glm::vec3 position, const glm::mat3& rotation, glm::vec3 scale);
 
 /// Of a town's sites opened to mend its buildings, the one wanting its builders most, none when none wants them at all.
 /// The earlier one on a tie.

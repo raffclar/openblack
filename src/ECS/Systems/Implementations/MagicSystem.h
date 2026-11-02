@@ -150,6 +150,7 @@ public:
 	bool CastByCreature(entt::entity creature, MagicType type, entt::entity target) override;
 	bool CastByCreatureAt(entt::entity creature, MagicType type, glm::vec3 place) override;
 	void ReleaseCreatureCast(entt::entity creature) override;
+	void EndCreatureCastBeams(entt::entity creature) override;
 	entt::entity CastOnObject(MagicType type, PlayerNames player, entt::entity target, const magic::SpellCastData& cast,
 	                          const particles::ProcessInfo& info) override;
 	void CloseDown(entt::entity spell) override;
@@ -237,6 +238,7 @@ public:
 	bool SendSpellEvent(entt::entity spell, const particles::SpellEventInfo& event) override;
 	float ForcePayForSpell(entt::entity spell, float cost) override;
 	[[nodiscard]] float SpellStrength(entt::entity spell) override;
+	void SetSpellRadius(entt::entity spell, float radius) override;
 
 	void ProcessTurn() override;
 	void Update(float seconds) override;
@@ -388,6 +390,11 @@ private:
 	/// A seed lets go of the miracle that it cast, which closes down when it still runs from the seed. The seed keeps
 	/// what the miracle had left and how long it ran. Whether the miracle had enough left for another cast.
 	bool StoreFromSpell(entt::entity entity, components::SpellSeed& seed, components::Spell& spell);
+	/// The store of a seed with no miracle: the seed keeps nothing of a miracle
+	static void ForgetStoredSpell(components::SpellSeed& seed);
+	/// Before a new cast, a linked seed lets go of its old miracle with no store. The old miracle closes down when it
+	/// still runs from the seed.
+	void ReleaseSpellLink(entt::entity entity, components::SpellSeed& seed);
 	/// The gesture events since the last frame: the circle remembered, a power-up, the seed dropped
 	void TakeGestures();
 	/// The icon that made the seed in the hand, or none
@@ -437,8 +444,9 @@ private:
 	[[nodiscard]] particles::ProcessInfo HandEffectInfo() const;
 	/// The tribe whose power raises a player's miracle of a magic type, if any
 	[[nodiscard]] std::optional<Tribe> TribalPowerTribe(PlayerNames player, MagicType type) const;
-	/// A seed in the hand cast a new miracle: a tribe's power behind it is announced
-	void AfterSeedCast(const components::SpellSeed& seed, MagicType type);
+	/// A seed in the hand of a player cast a new miracle at a place: the announcer names the tribe's power behind it. The name
+	/// of the tribe rises from the hand of this computer, or from the place for the hand of another player.
+	void AfterSeedCast(const components::SpellSeed& seed, MagicType type, glm::vec3 place);
 	/// Whether the hand, holding no miracle, has its point on the land in its player's influence
 	[[nodiscard]] bool EmptyHandInInfluence() const;
 	void DestroyOrb(entt::entity orb);

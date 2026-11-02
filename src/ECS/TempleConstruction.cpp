@@ -35,7 +35,6 @@
 #include "ECS/Components/Construction.h"
 #include "ECS/Components/Feature.h"
 #include "ECS/Components/Fire.h"
-#include "ECS/Components/Mesh.h"
 #include "ECS/Components/Physics.h"
 #include "ECS/Components/Pot.h"
 #include "ECS/Components/SpellDispenser.h"
@@ -47,8 +46,10 @@
 #include "ECS/Components/Workshop.h"
 #include "ECS/Components/WorshipSite.h"
 #include "ECS/Creches.h"
+#include "ECS/FixedKinds.h"
 #include "ECS/GameEndConditions.h"
 #include "ECS/Graveyards.h"
+#include "ECS/PlacedTurn.h"
 #include "ECS/Registry.h"
 #include "ECS/Statistics.h"
 #include "ECS/Systems/BuildingDamageSystemInterface.h"
@@ -71,6 +72,7 @@
 #include "ECS/Systems/WorshipSiteSystemInterface.h"
 #include "ECS/TempleHeartOf.h"
 #include "ECS/ThingMapPlace.h"
+#include "ECS/ThingModel.h"
 #include "ECS/TownCentreParts.h"
 #include "ECS/WorldObjects.h"
 #include "ECS/WorshipSiteConstruction.h"
@@ -582,13 +584,24 @@ float construction::BuiltOf(entt::entity object)
 	{
 		return 1.0f;
 	}
+	// The altar of a worship site keeps how much of it is built
+	if (const auto* altar = registry.TryGet<const WorshipAltar>(object))
+	{
+		return altar->built;
+	}
 	const auto* progress = registry.TryGet<const BuildProgress>(object);
 	return progress != nullptr ? progress->built : 1.0f;
 }
 
 bool construction::IsBuilt(entt::entity object)
 {
-	return !Entities().AllOf<BuildProgress>(object);
+	const auto& registry = Entities();
+	// The altar of a worship site is built when all of the altar is built, not when its site is built
+	if (const auto* altar = registry.TryGet<const WorshipAltar>(object))
+	{
+		return altar->built >= 1.0f;
+	}
+	return !registry.AllOf<BuildProgress>(object);
 }
 
 void construction::SetBuilt(entt::entity building, float built)
@@ -636,28 +649,8 @@ void construction::SetBuilt(entt::entity building, float built)
 	}
 }
 
-void construction::BuildBy(entt::entity building, float amount)
+void construction::MendBy(entt::entity building, float amount)
 {
-	const auto& registry = Entities();
-	if (!registry.Valid(building))
-	{
-		return;
-	}
-	// A worship site goes up with its altar, and its worship sites keep count of it
-	if (registry.AllOf<WorshipSite>(building))
-	{
-		if (Locator::worshipSiteSystem::has_value())
-		{
-			Locator::worshipSiteSystem::value().BuildBy(building, amount);
-		}
-		return;
-	}
-	if (!IsBuilt(building))
-	{
-		Apply(building, building_construction::BuildBy(BuiltOf(building), amount));
-		return;
-	}
-	// A built building short of its full life is mended instead, and repaired once whole
 	const float life = world_objects::LifeOf(building);
 	const auto mending = building_construction::RepairBy(life, amount);
 	if (mending.life == life)
@@ -671,6 +664,46 @@ void construction::BuildBy(entt::entity building, float amount)
 	}
 }
 
+void construction::BuildBy(entt::entity building, float amount)
+{
+	const auto& registry = Entities();
+	if (!registry.Valid(building))
+	{
+		return;
+	}
+	// A worship site goes up with its altar, and its worship sites keep count of it. A built site short of its full life
+	// is mended first, as other buildings are, and its altar takes the work after it.
+	if (registry.AllOf<WorshipSite>(building))
+	{
+		if (!Locator::worshipSiteSystem::has_value())
+		{
+			return;
+		}
+		auto& sites = Locator::worshipSiteSystem::value();
+		if (sites.IsBuilt(building))
+		{
+			MendBy(building, amount);
+		}
+		sites.BuildBy(building, amount);
+		return;
+	}
+	// An altar keeps how much of it is built, and its builders mend it when it is built
+	if (registry.AllOf<WorshipAltar>(building))
+	{
+		if (Locator::worshipSiteSystem::has_value())
+		{
+			Locator::worshipSiteSystem::value().BuildAltarBy(building, amount);
+		}
+		return;
+	}
+	if (!IsBuilt(building))
+	{
+		Apply(building, building_construction::BuildBy(BuiltOf(building), amount));
+		return;
+	}
+	MendBy(building, amount);
+}
+
 namespace
 {
 /// The places round a building for its builders, from its model as it stands
@@ -678,15 +711,16 @@ building_site::Places PlacesRound(entt::entity building)
 {
 	auto& registry = Entities();
 	const auto& transform = registry.Get<const Transform>(building);
-	const auto* mesh = registry.TryGet<const Mesh>(building);
+	// An altar has its model also while the game does not show it
+	const auto modelId = thing_model::ModelOf(registry, building);
 	const auto& meshes = Locator::resources::value().GetMeshes();
 	building_site::Places places;
 	places.fill(transform.position);
-	if (mesh == nullptr || !meshes.Contains(mesh->id))
+	if (!modelId.has_value() || !meshes.Contains(*modelId))
 	{
 		return places;
 	}
-	const auto& model = *meshes.Handle(mesh->id);
+	const auto& model = *meshes.Handle(*modelId);
 	std::vector<building_site::Triangle> triangles;
 	for (const auto& surface : model.GetSurfaces())
 	{
@@ -798,70 +832,76 @@ void construction::OpenWorshipSite(entt::entity site, entt::entity town, float d
 void construction::MakeSitePiles(entt::entity building, BuildingSite& site)
 {
 	auto& registry = Entities();
-	// A workshop's site keeps its wood on the wood pile of the workshop. Thus the wood is the workshop's wood.
-	if (registry.AllOf<Workshop>(building))
-	{
-		if (Locator::workshopSystem::has_value())
-		{
-			site.piles.front() = Locator::workshopSystem::value().WoodPileOf(building);
-		}
-		return;
-	}
-	// A worship site's one pile stands at a point of its model, turned as the site is
-	if (const auto* worship = registry.TryGet<const WorshipSite>(building))
-	{
-		auto& pile = site.piles.front();
-		if (registry.Valid(pile) && registry.AllOf<Pot>(pile))
-		{
-			return;
-		}
-		const auto& at = registry.Get<const Transform>(building).position;
-		const auto ground = worship_site_construction::PilePlace({at.x, at.z}, worship->facing);
-		auto position = glm::vec3(ground.x, at.y, ground.y);
+	const auto* abodeInfo = world_objects::AbodeInfoOf(building);
+	const auto piles = building_site::PilesOf({.workshop = registry.AllOf<Workshop>(building),
+	                                           .worshipSite = registry.AllOf<WorshipSite>(building),
+	                                           .temple = registry.AllOf<Temple>(building),
+	                                           .wonder = abodeInfo != nullptr && abodeInfo->abodeType == AbodeType::Wonder,
+	                                           .fixedKind = fixed_kinds::IsFixedKind(registry, building)});
+	const auto livePile = [&registry](entt::entity pile) { return registry.Valid(pile) && registry.AllOf<Pot>(pile); };
+	// A pile stands on the land at its place and keeps its turn. With no land, it keeps the given height.
+	const auto makePile = [&registry](glm::vec2 ground, float yAngle, float height) {
+		auto position = glm::vec3(ground.x, height, ground.y);
 		if (Locator::terrainSystem::has_value())
 		{
 			position.y = Locator::terrainSystem::value().GetHeightAt(ground);
 		}
-		pile = archetypes::PotArchetype::CreateEmpty(position, worship->facing, PotInfo::MagicWood);
+		const auto pile = archetypes::PotArchetype::CreateEmpty(position, yAngle, PotInfo::MagicWood);
 		registry.Assign<SitePile>(pile);
+		return pile;
+	};
+	auto& first = site.piles.front();
+	switch (piles)
+	{
+	case building_site::SitePiles::None:
+		return;
+	case building_site::SitePiles::Workshop:
+		// The wood of a workshop's site is the workshop's wood
+		if (Locator::workshopSystem::has_value())
+		{
+			first = Locator::workshopSystem::value().WoodPileOf(building);
+		}
+		return;
+	case building_site::SitePiles::WorshipSite:
+		if (!livePile(first))
+		{
+			const auto& worship = registry.Get<const WorshipSite>(building);
+			const auto& at = registry.Get<const Transform>(building).position;
+			first = makePile(worship_site_construction::PilePlace({at.x, at.z}, worship.facing), worship.facing, at.y);
+		}
+		return;
+	case building_site::SitePiles::Temple:
+	{
+		const auto& centre = registry.Get<const Transform>(building).position;
+		const float heartYAngle = registry.Get<const Temple>(building).yAngle;
+		for (size_t i = 0; i < site.piles.size(); ++i)
+		{
+			auto& pile = site.piles.at(i);
+			if (!livePile(pile))
+			{
+				const auto position = centre + gutils::GetPointFromAngle(building_site::TemplePileAngle(heartYAngle, i),
+				                                                         building_site::k_TemplePileDistance);
+				pile = makePile({position.x, position.z}, 0.0f, position.y);
+			}
+		}
 		return;
 	}
-	const auto* temple = registry.TryGet<const Temple>(building);
-	if (temple == nullptr)
-	{
-		// Any other building's one pile stands beyond it, away from its door. A miracle dispenser is such a building.
-		auto& pile = site.piles.front();
-		if ((registry.Valid(pile) && registry.AllOf<Pot>(pile)) || !registry.AnyOf<Abode, SpellDispenser>(building))
+	case building_site::SitePiles::Wonder:
+		if (!livePile(first))
 		{
-			return;
+			const auto& transform = registry.Get<const Transform>(building);
+			first = makePile(building_site::WonderPilePlace(transform.position, transform.rotation, transform.scale),
+			                 placed_turn::AnglesOf(registry, building).y, 0.0f);
 		}
-		const auto random = [](float limit) { return Locator::gameRandom::value().GameFloatRand(limit); };
-		const auto at = glm::xz(registry.Get<const Transform>(building).position);
-		const auto place = building_site::StandardPilePlace(at, villager_home::DoorPosition(building), random);
-		auto position = glm::vec3(place.position.x, 0.0f, place.position.y);
-		if (Locator::terrainSystem::has_value())
-		{
-			position.y = Locator::terrainSystem::value().GetHeightAt(place.position);
-		}
-		pile = archetypes::PotArchetype::CreateEmpty(position, place.yAngle, PotInfo::MagicWood);
-		registry.Assign<SitePile>(pile);
 		return;
-	}
-	const auto& centre = registry.Get<const Transform>(building).position;
-	for (size_t i = 0; i < site.piles.size(); ++i)
-	{
-		auto& pile = site.piles.at(i);
-		if (registry.Valid(pile) && registry.AllOf<Pot>(pile))
+	case building_site::SitePiles::Beyond:
+		if (!livePile(first))
 		{
-			continue;
+			const auto random = [](float limit) { return Locator::gameRandom::value().GameFloatRand(limit); };
+			const auto at = glm::xz(registry.Get<const Transform>(building).position);
+			const auto place = building_site::StandardPilePlace(at, villager_home::DoorPosition(building), random);
+			first = makePile(place.position, place.yAngle, 0.0f);
 		}
-		auto position = centre + gutils::GetPointFromAngle(building_site::TemplePileAngle(temple->yAngle, i),
-		                                                   building_site::k_TemplePileDistance);
-		if (Locator::terrainSystem::has_value())
-		{
-			position.y = Locator::terrainSystem::value().GetHeightAt({position.x, position.z});
-		}
-		pile = archetypes::PotArchetype::CreateEmpty(position, 0.0f, PotInfo::MagicWood);
-		registry.Assign<SitePile>(pile);
+		return;
 	}
 }

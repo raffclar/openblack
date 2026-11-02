@@ -53,6 +53,7 @@
 #include "ECS/Systems/Implementations/CameraZoneSystem.h"
 #include "ECS/Systems/Implementations/ChimneySmokeSystem.h"
 #include "ECS/Systems/Implementations/CinematicDirectorSystem.h"
+#include "ECS/Systems/Implementations/ClanCreatureSystem.h"
 #include "ECS/Systems/Implementations/ComputerSettingsSystem.h"
 #include "ECS/Systems/Implementations/CreatureAnimationLogSystem.h"
 #include "ECS/Systems/Implementations/CreatureAnimationSystem.h"
@@ -121,6 +122,7 @@
 #include "ECS/Systems/Implementations/DanceSystem.h"
 #include "ECS/Systems/Implementations/FilmCreatureSystem.h"
 #include "ECS/Systems/Implementations/FixedOutlineSystem.h"
+#include "ECS/Systems/Implementations/FootballSystem.h"
 #include "ECS/Systems/Implementations/GameEndSystem.h"
 #include "ECS/Systems/Implementations/HeartbeatSystem.h"
 #include "ECS/Systems/Implementations/LandSystem.h"
@@ -233,6 +235,7 @@ using openblack::ecs::systems::CameraZoneSystem;
 using openblack::ecs::systems::ChatSystem;
 using openblack::ecs::systems::ChimneySmokeSystem;
 using openblack::ecs::systems::CinematicDirectorSystem;
+using openblack::ecs::systems::ClanCreatureSystem;
 using openblack::ecs::systems::ComputerPlayerSystem;
 using openblack::ecs::systems::ComputerSettingsSystem;
 using openblack::ecs::systems::CreatureAnimationSystem;
@@ -260,6 +263,7 @@ using openblack::ecs::systems::FilmCreatureSystem;
 using openblack::ecs::systems::FireflySystem;
 using openblack::ecs::systems::FishFarmSystem;
 using openblack::ecs::systems::FixedOutlineSystem;
+using openblack::ecs::systems::FootballSystem;
 using openblack::ecs::systems::FootpathSystem;
 using openblack::ecs::systems::FootprintSystem;
 using openblack::ecs::systems::ForestSystem;
@@ -283,6 +287,7 @@ using openblack::ecs::systems::LeashSystem;
 using openblack::ecs::systems::LivingActionSystem;
 using openblack::ecs::systems::LobbyClientConfig;
 using openblack::ecs::systems::LobbyClientSystem;
+using openblack::ecs::systems::LobbyClientSystemInterface;
 using openblack::ecs::systems::MagicShieldSystem;
 using openblack::ecs::systems::MagicSystem;
 using openblack::ecs::systems::MiracleFxSystem;
@@ -460,6 +465,9 @@ void InitializeOnline(const player_profiles::Store& profiles)
 	    std::make_unique<online::WebSocketPushChannel>(Locator::webSocketClient::value(), k_PushAuth),
 	    online::MakeTokenStore(Locator::filesystem::value(), profiles.folder),
 	    []() { return std::chrono::system_clock::now(); });
+	Locator::clanCreatureSystem::emplace<ClanCreatureSystem>([]() -> LobbyClientSystemInterface* {
+		return Locator::lobbyClient::has_value() ? &Locator::lobbyClient::value() : nullptr;
+	});
 	const bool internetWeather = Locator::config::has_value() && Locator::config::value().useInternetWeather;
 	const auto readScript = [](std::string_view file) -> std::optional<std::vector<uint8_t>> {
 		auto& files = Locator::filesystem::value();
@@ -671,6 +679,7 @@ bool openblack::InitializeSimulation(const player_profiles::Store& profiles) noe
 	Locator::puzzleGameSystem::emplace<PuzzleGameSystem>();
 	Locator::wonderSystem::emplace<WonderSystem>();
 	Locator::danceSystem::emplace<DanceSystem>();
+	Locator::footballSystem::emplace<FootballSystem>();
 	Locator::sharkSystem::emplace<SharkSystem>();
 	Locator::helpTextSystem::emplace<HelpTextSystem>();
 	Locator::helpProfileSystem::emplace<HelpProfileSystem>();
@@ -873,6 +882,7 @@ void openblack::ShutDownServices()
 	Locator::landSystem::reset();
 	// The lobby client goes before the web client that it uses, and the real-world weather before the lobby client
 	Locator::realWeatherSystem::reset();
+	Locator::clanCreatureSystem::reset();
 	Locator::lobbyClient::reset();
 	Locator::onlineMapStore::reset();
 	Locator::networkGame::reset();
@@ -912,6 +922,7 @@ void openblack::ShutDownServices()
 	Locator::puzzleGameSystem::reset();
 	Locator::wonderSystem::reset();
 	Locator::danceSystem::reset();
+	Locator::footballSystem::reset();
 	Locator::sharkSystem::reset();
 	Locator::videoSystem::reset();
 	Locator::helpTextSystem::reset();
@@ -936,6 +947,7 @@ void openblack::ShutDownServices()
 	Locator::rainSystem::reset();
 	Locator::snowfallSystem::reset();
 	Locator::waterRingSystem::reset();
+	Locator::designedWaterfallSystem::reset();
 	Locator::filmCreatureSystem::reset();
 	Locator::tattooMenuSystem::reset();
 	Locator::tattooEditorSystem::reset();

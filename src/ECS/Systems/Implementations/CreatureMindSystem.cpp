@@ -38,6 +38,7 @@
 #include "Common/GUtilsDistance.h"
 #include "Common/GameRandom.h"
 #include "Creature/CreatureActionAgendas.h"
+#include "Creature/CreatureAnimation.h"
 #include "Creature/CreatureAttention.h"
 #include "Creature/CreatureDesireSources.h"
 #include "Creature/CreatureDesires.h"
@@ -302,16 +303,13 @@ std::array<creature_desires::DesireSetup, creature_desires::k_DesireCount> Setup
 	{
 		const auto& initial = info.creatureInitialDesire.at(d);
 		auto& desire = setup.at(d);
-		desire.max = initial.field0x3c;
-		desire.decayMin = initial.field0x40;
-		desire.decayMax = initial.field0x44;
+		desire.max = initial.initialMax;
+		desire.decayMin = initial.decayMin;
+		desire.decayMax = initial.decayMax;
 		desire.increaseSeconds = PerSpecies(info.creatureDesireForType.at(d), row);
-		desire.weight = initial.field0x68;
-		const std::array<uint32_t, creature_desires::k_MaxSources> sourceTypes {
-		    initial.field0x0,  initial.field0x4,  initial.field0x8,  initial.field0xc,
-		    initial.field0x10, initial.field0x14, initial.field0x18, initial.field0x1c,
-		};
-		for (const auto type : sourceTypes)
+		desire.weight = initial.initialWeight;
+		static_assert(std::tuple_size_v<decltype(initial.sources)> == creature_desires::k_MaxSources);
+		for (const auto type : initial.sources)
 		{
 			if (type >= creature_desires::k_NoSource)
 			{
@@ -322,10 +320,10 @@ std::array<creature_desires::DesireSetup, creature_desires::k_DesireCount> Setup
 			    .type = type,
 			    .value = PerSpecies(info.creatureInitialSource1.at(type), row),
 			    .threshold = PerSpecies(info.creatureInitialSource2.at(type), row),
-			    .multiplier = table.field0x8,
-			    .clearedWhenSatisfied = table.field0x4 != 0,
+			    .multiplier = table.multiplier,
+			    .clearedWhenSatisfied = table.clearedWhenSatisfied != 0,
 			});
-			desire.spreads.push_back({.value = table.field0xc, .threshold = table.field0x10});
+			desire.spreads.push_back({.value = table.valueSpread, .threshold = table.thresholdSpread});
 		}
 	}
 	return setup;
@@ -342,7 +340,7 @@ creature_desires::DesireSetup::Spread SourceSpreadOf(uint32_t type)
 	{
 		return {};
 	}
-	return {.value = table.at(type).field0xc, .threshold = table.at(type).field0x10};
+	return {.value = table.at(type).valueSpread, .threshold = table.at(type).thresholdSpread};
 }
 
 /// The desires of the body, from the game's table of desires
@@ -356,7 +354,7 @@ std::array<bool, creature_desires::k_DesireCount> BodyDesires()
 	const auto& info = Locator::infoConstants::value();
 	for (size_t d = 0; d < body.size(); ++d)
 	{
-		body.at(d) = info.creatureInitialDesire.at(d).field0x34 != 0;
+		body.at(d) = info.creatureInitialDesire.at(d).bodyDesire != 0;
 	}
 	return body;
 }
@@ -400,15 +398,11 @@ std::vector<creature_desires::PhaseDesires> Phases()
 	for (const auto& entry : Locator::infoConstants::value().creatureDevelopmentPhaseEntry)
 	{
 		auto& phase = phases.emplace_back();
-		const std::array<uint32_t, 10> add {entry.field0x3c, entry.field0x40, entry.field0x44, entry.field0x48,
-		                                    entry.field0x4c, entry.field0x50, entry.field0x54, entry.field0x58,
-		                                    entry.field0x5c, entry.field0x60};
-		const std::array<uint32_t, 4> remove {entry.field0x64, entry.field0x68, entry.field0x6c, entry.field0x70};
-		for (const auto desire : add | std::views::filter(valid))
+		for (const auto desire : entry.desiresOn | std::views::filter(valid))
 		{
 			phase.add.push_back(static_cast<Desire>(desire));
 		}
-		for (const auto desire : remove | std::views::filter(valid))
+		for (const auto desire : entry.desiresOff | std::views::filter(valid))
 		{
 			phase.remove.push_back(static_cast<Desire>(desire));
 		}
@@ -2087,6 +2081,11 @@ void CreatureMindSystem::MindTurn(entt::entity entity)
 	}
 	for (const auto& teaching : std::exchange(mind.pendingTeaching, {}))
 	{
+		if (teaching.everything)
+		{
+			LearnEverything(entity);
+			continue;
+		}
 		SetKnowsAction(entity, teaching.type, teaching.action, teaching.knows);
 	}
 	++mind.turn;
@@ -2326,7 +2325,8 @@ void CreatureMindSystem::AgendaTurn(entt::entity entity)
 				ForcePlan(entity, {.desire = creature_desires::Desire::ObeyPlayer,
 				                   .action = creature_mind::k_CutSceneLookAction,
 				                   .object = entity,
-				                   .ordered = true});
+				                   .ordered = true,
+				                   .fightBodyEndsAgain = true});
 			}
 		}
 		// When the creature examines a different creature, it finds the desires of the two creatures each turn.
@@ -3202,27 +3202,60 @@ void CreatureMindSystem::ReceiveFeedback(entt::entity creature, float feedback)
 	LearnFromFeedback(creature, *mind, feedback);
 }
 
+/// How far a body is through what it plays: the time of its action, or of its legs in a move, over the length of the
+/// animation that the game keeps for it
+static std::optional<float> BodyShareOf(entt::entity creature, const CreatureAnimation& body)
+{
+	// A creature in a move counts as a body that does an action: the time of its legs is read
+	const auto* legs = Locator::entitiesRegistry::value().TryGet<const CreatureLocomotion>(creature);
+	const bool moves = legs != nullptr && legs->motion != CreatureLocomotion::Motion::Standing;
+	const auto share = creature_layers::ShareOf(body.body, moves && legs->motion == CreatureLocomotion::Motion::Confused,
+	                                            moves ? std::optional(legs->legsTimeMs) : std::nullopt);
+	if (!share.has_value() || !Locator::creatureAnimationSystem::has_value())
+	{
+		return std::nullopt;
+	}
+	// The time and the duration are whole milliseconds, so the float divide gives the same share as the game
+	const auto duration = Locator::creatureAnimationSystem::value().AnimationDuration(creature, share->animation);
+	if (!duration.has_value() || !(*duration > 0.0f))
+	{
+		return std::nullopt;
+	}
+	return share->timeMs / *duration;
+}
+
+std::optional<float> CreatureMindSystem::BodyShare(entt::entity creature) const
+{
+	const auto* body = Locator::entitiesRegistry::value().TryGet<const CreatureAnimation>(creature);
+	if (body == nullptr)
+	{
+		return std::nullopt;
+	}
+	if (const auto share = BodyShareOf(creature, *body); share.has_value())
+	{
+		return share;
+	}
+	// A body that only stands shows its stand at the point of its breath. The script reads that share, so it goes up
+	// and down with each breath after an action ends.
+	if (!Locator::creatureAnimationSystem::has_value())
+	{
+		return std::nullopt;
+	}
+	const auto stand =
+	    Locator::creatureAnimationSystem::value().AnimationDuration(creature, creature_layers::animations::k_Stand);
+	if (!stand.has_value() || !(*stand > 0.0f))
+	{
+		return std::nullopt;
+	}
+	return creature_animation::StandShare(body->breathPhase, static_cast<uint32_t>(*stand));
+}
+
 bool CreatureMindSystem::MayInterrupt(entt::entity creature, const CreatureAnimation& body, double interruptsAfter)
 {
 	const auto objectActionShare = Locator::creatureObjectActionSystem::has_value()
 	                                   ? Locator::creatureObjectActionSystem::value().GetProgress(creature)
 	                                   : std::nullopt;
-	// A creature in a move counts as a body that does an action: the hand reads the time of its legs
-	const auto* legs = Locator::entitiesRegistry::value().TryGet<const CreatureLocomotion>(creature);
-	const bool moves = legs != nullptr && legs->motion != CreatureLocomotion::Motion::Standing;
-	const auto share = creature_layers::ShareOf(body.body, moves && legs->motion == CreatureLocomotion::Motion::Confused,
-	                                            moves ? std::optional(legs->legsTimeMs) : std::nullopt);
-	std::optional<float> bodyShare;
-	if (share.has_value() && Locator::creatureAnimationSystem::has_value())
-	{
-		// The time and the duration are whole milliseconds, so the float divide gives the same share as the game
-		const auto duration = Locator::creatureAnimationSystem::value().AnimationDuration(creature, share->animation);
-		if (duration.has_value() && *duration > 0.0f)
-		{
-			bodyShare = share->timeMs / *duration;
-		}
-	}
-	return creature_feedback::TakesForcedAction(objectActionShare, bodyShare, interruptsAfter);
+	return creature_feedback::TakesForcedAction(objectActionShare, BodyShareOf(creature, body), interruptsAfter);
 }
 
 bool CreatureMindSystem::CanForceAction(entt::entity creature, size_t animation, bool mirrored, double interruptsAfter) const
@@ -3368,7 +3401,8 @@ bool CreatureMindSystem::Puke(entt::entity creature)
 	                            .object = creature,
 	                            .agenda = creature_mind::Puke(),
 	                            .activity = creature_mind::Activity::Puke,
-	                            .ordered = true});
+	                            .ordered = true,
+	                            .fightBodyEndsAgain = true});
 }
 
 bool CreatureMindSystem::Faint(entt::entity creature)
@@ -3653,6 +3687,8 @@ bool CreatureMindSystem::TakeFromHand(entt::entity creature, entt::entity object
 	{
 		mind->keptPlan = mind->planner.current;
 	}
+	// The take stops a fight out of its duel. After a fight that is over, it ends the fight of the body again.
+	EndFightForPlan(creature, true);
 	Abandon(*mind);
 	ReleaseCast(creature);
 	if (!Replan(creature, creature_mind::Activity::Planned,
@@ -3747,7 +3783,8 @@ void CreatureMindSystem::UseGift(entt::entity creature, entt::entity object)
 		                     .object = object,
 		                     .agenda = creature_mind::ExamineGiven(number),
 		                     .activityObject = owner,
-		                     .ordered = true});
+		                     .ordered = true,
+		                     .fightBodyEndsAgain = true});
 		break;
 	case creature_giving::Use::Eat:
 		ForcePlan(creature, {.desire = Desire::Hunger,
@@ -3755,7 +3792,8 @@ void CreatureMindSystem::UseGift(entt::entity creature, entt::entity object)
 		                     .object = object,
 		                     .agenda = creature_mind::EatGiven(),
 		                     .activityObject = owner,
-		                     .ordered = true});
+		                     .ordered = true,
+		                     .fightBodyEndsAgain = true});
 		break;
 	case creature_giving::Use::Throw:
 	{
@@ -3766,7 +3804,8 @@ void CreatureMindSystem::UseGift(entt::entity creature, entt::entity object)
 		                     .object = object,
 		                     .agenda = creature_mind::ThrowGiven(eye),
 		                     .activityObject = owner,
-		                     .ordered = true});
+		                     .ordered = true,
+		                     .fightBodyEndsAgain = true});
 		break;
 	}
 	case creature_giving::Use::AsLed:

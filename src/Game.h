@@ -207,6 +207,8 @@ struct Arguments
 	bool background {false};
 	/// Debug: the Creature Breeder's bonus creatures taken as unlocked (none by default, as on a normal install)
 	creature_swap::Unlocked unlockedBonusCreatures;
+	/// Debug: the switch of the free Soccer Add-On (off by default, as on a normal install)
+	bool footballAddOn {false};
 	/// A full-screen video to play once the land is loaded: "intro", "fall" or a path under the game's folder
 	std::string playVideo;
 	/// Debug: the 16-bit surface of the films, "555", "565" or "none". Empty keeps the surface of the display cards of
@@ -821,6 +823,10 @@ private:
 	bool _handKnocking {false};
 	/// The way the surface the cursor is on in the temple faces, which the hand turns to
 	Zoomer3 _handTempleNormal {glm::vec3(0.0f, 1.0f, 0.0f)};
+	/// The hand was in the temple in the last frame
+	bool _handInTemple {false};
+	/// The hand went into the normal mode, so it ignores the next sparkle of a fight
+	bool _handDropsSparkle {false};
 	/// The options screen's one-press actions: the temple and realm keys, the villagers' names and details
 	input::ShortcutKeys _shortcutKeys;
 	/// Which way the hand faces across the land, and its up, easing to the slope under it

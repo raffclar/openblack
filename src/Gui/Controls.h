@@ -293,6 +293,8 @@ public:
 	/// The scroll bar of a list is 24 units wide, for all sizes of text, unless the list gives another width
 	static constexpr int k_ScrollBarWidth = 24;
 	int scrollBarWidth {k_ScrollBarWidth};
+	/// A click in the box under the last item removes the selection
+	bool clearsOnEmptyPick {false};
 	/// Shows the scroll bar, or hides it
 	void SetScrollBar(bool scrollBar) noexcept { _scrollBar = scrollBar; }
 	[[nodiscard]] bool HasScrollBar() const noexcept { return _scrollBar; }

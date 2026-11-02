@@ -74,8 +74,15 @@ public:
 	virtual void UpdateTexts(int32_t milliseconds) = 0;
 	/// The texts on the screen, the newest first, in the order they are drawn
 	[[nodiscard]] virtual std::span<const gui::script_text::ScreenText> GetTexts() const = 0;
+	/// Opens the scripts' window: the screen goes black but for a box, its corner and size shares of the screen's width
+	/// and height, the black fading in over `seconds` or shown at once for none
+	virtual void OpenClipWindow(glm::vec2 /*corner*/, glm::vec2 /*extent*/, float /*seconds*/) {}
+	/// Fades the black of the scripts' window out over `seconds`, or removes it at once for none
+	virtual void CloseClipWindow(float /*seconds*/) {}
+	/// The scripts' window, which the texts are drawn over
+	[[nodiscard]] virtual gui::script_text::ClipWindow GetClipWindow() const { return {}; }
 
-	/// As a new land opens: no fade, no bars, no close clipping, and the texts are taken away
+	/// As a new land opens: no fade, no bars, no close clipping, no window, and the texts are taken away
 	virtual void Reset() = 0;
 	/// Moves the fade on by a game turn, and the bars that the scripts wait for
 	virtual void ProcessTurn() = 0;

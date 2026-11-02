@@ -2692,6 +2692,21 @@ TEST_F(HandGrabSystemGiving, OverACreatureThatWouldTakeItTheHandOffersAndTurnsIt
 	EXPECT_FALSE(system->GetOfferedCreature().has_value());
 }
 
+TEST_F(HandGrabSystemGiving, TheFrameThatRenewsTheOfferAlsoRunsItDown)
+{
+	HoldRock();
+	const auto creature = AddCreature(creature_giving::Verdict::Give);
+	world->underCursor = creature;
+	// The frame over the creature sets 1.1 s and then takes its own 0.5 s off, so 0.6 s is left
+	Frame(500);
+	EXPECT_EQ(system->GetOfferedCreature(), creature);
+	world->underCursor.reset();
+	Frame(599);
+	EXPECT_EQ(system->GetOfferedCreature(), creature);
+	Frame(2);
+	EXPECT_FALSE(system->GetOfferedCreature().has_value());
+}
+
 TEST_F(HandGrabSystemGiving, ThePressWhileOfferingGivesItToTheCreatureWithTheMatchingHand)
 {
 	const auto rock = HoldRock();

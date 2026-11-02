@@ -37,4 +37,9 @@ namespace openblack::ecs::creature_carried
 /// Whether the creature carries the thing
 [[nodiscard]] bool Carries(const Registry& registry, entt::entity creature, entt::entity thing);
 
+/// At each turn of the creature, the thing that it carries takes the place of the creature in the world and on the map.
+/// The thing keeps its own turn, and it stays out of the map's cells. Nothing changes when the creature carries
+/// nothing.
+void FollowCarrier(Registry& registry, entt::entity creature);
+
 } // namespace openblack::ecs::creature_carried

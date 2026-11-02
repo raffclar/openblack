@@ -78,8 +78,6 @@ struct CreatureAnimation
 	/// The face's expression and a gesture such as a nod, played on top of the body
 	creature_layers::FaceLayer face {};
 	creature_layers::GestureLayer gesture {};
-	/// The wobble a blow sends through the body, played once on top of it
-	creature_layers::GestureLayer wobble {};
 	/// The upper and lower body swaying from things thrown at it and the leash dragging it, drawn leaning on top
 	creature_sway::Sway sway {};
 	/// Where the head turns to look, if anywhere, and how far it is turned right to left and down to up

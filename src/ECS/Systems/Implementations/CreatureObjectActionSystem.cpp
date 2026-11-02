@@ -134,7 +134,6 @@
 #include "ECS/Systems/SoundTagSystemInterface.h"
 #include "ECS/Systems/TimeSystemInterface.h"
 #include "ECS/Systems/WorkshopSystemInterface.h"
-#include "ECS/ThingMapPlace.h"
 #include "ECS/WorldObjects.h"
 #include "InfoConstants.h"
 #include "Locator.h"
@@ -376,10 +375,12 @@ std::optional<creature_reach::Points> MeasureReach(entt::entity creature, const 
 
 /// Where the hand or foot gets to in the reaching animations, measured in the model's own size the first time it is
 /// wanted, and again the first time it is wanted after the animations follow a new body shape. None before the creature
-/// is posed.
+/// is posed. A measure is the same whenever it is made for the same body shape. Thus a frame that only reads uses the
+/// kept measure, or makes a new measure and does not keep it, and a turn keeps the new measure.
 template <typename Kept>
 std::optional<creature_reach::Points> KeptReachPoints(entt::entity creature, ReachWith with,
-                                                      const std::array<size_t, creature_reach::k_CornerCount>& animations)
+                                                      const std::array<size_t, creature_reach::k_CornerCount>& animations,
+                                                      ReachKeep keep = ReachKeep::Keep)
 {
 	auto& registry = Locator::entitiesRegistry::value();
 	if (!registry.Valid(creature))
@@ -409,7 +410,10 @@ std::optional<creature_reach::Points> KeptReachPoints(entt::entity creature, Rea
 	{
 		return std::nullopt;
 	}
-	registry.AssignOrReplace<Kept>(creature, Kept {.points = *reach, .bodyRevision = BodyRevision(registry, creature)});
+	if (keep == ReachKeep::Keep)
+	{
+		registry.AssignOrReplace<Kept>(creature, Kept {.points = *reach, .bodyRevision = BodyRevision(registry, creature)});
+	}
 	return *reach;
 }
 
@@ -417,9 +421,10 @@ std::optional<creature_reach::Points> KeptReachPoints(entt::entity creature, Rea
 /// is posed.
 template <typename Kept>
 std::optional<float> KeptStraightReach(entt::entity creature, ReachWith with,
-                                       const std::array<size_t, creature_reach::k_CornerCount>& animations)
+                                       const std::array<size_t, creature_reach::k_CornerCount>& animations,
+                                       ReachKeep keep = ReachKeep::Keep)
 {
-	const auto points = KeptReachPoints<Kept>(creature, with, animations);
+	const auto points = KeptReachPoints<Kept>(creature, with, animations, keep);
 	if (!points.has_value())
 	{
 		return std::nullopt;
@@ -981,17 +986,6 @@ creature_object_actions::HoldStart IntoCreatureHand(ecs::Registry& registry, ent
 	return creature_object_actions::HoldStartFor(villager || animal, registry.AllOf<Creature>(object), accepted);
 }
 
-/// Where a thing is as a creature takes it, which the map keeps while the creature holds it
-std::optional<HeldByCreature::Taken> TakenFrom(const ecs::Registry& registry, entt::entity object)
-{
-	const auto* transform = registry.TryGet<const Transform>(object);
-	if (transform == nullptr)
-	{
-		return std::nullopt;
-	}
-	return HeldByCreature::Taken {.position = transform->position, .place = ecs::thing_map_place::Of(registry, object)};
-}
-
 /// The thing a creature catches is taken into its hand out of the air: it leaves the physics without going back on the
 /// map, and a person or animal is held
 void TakeInHand(ecs::Registry& registry, entt::entity creature, entt::entity object, const CreatureObjectAction& action,
@@ -1000,8 +994,7 @@ void TakeInHand(ecs::Registry& registry, entt::entity creature, entt::entity obj
 	registry.AssignOrReplace<CreatureHeldObject>(
 	    creature, CreatureHeldObject {
 	                  .object = object, .mirrored = action.mirrored, .bone = HandBone(points, animation, action.mirrored)});
-	registry.AssignOrReplace<HeldByCreature>(object,
-	                                         HeldByCreature {.creature = creature, .takenFrom = TakenFrom(registry, object)});
+	registry.AssignOrReplace<HeldByCreature>(object, HeldByCreature {.creature = creature});
 	// It leaves the physics with its end, not going back on the map
 	if (Locator::dynamicsSystem::has_value() && Locator::dynamicsSystem::value().Find(object) != nullptr)
 	{
@@ -2735,7 +2728,8 @@ bool CreatureObjectActionSystem::ComputerCreatureNotScripted(entt::entity creatu
 	       Locator::playerSystem::value().IsComputerPlayer(body->owner) && !registry.AllOf<ScriptControlled>(creature);
 }
 
-creature_object_actions::PickUpFacts CreatureObjectActionSystem::PickUpFactsOf(entt::entity creature, entt::entity object) const
+creature_object_actions::PickUpFacts CreatureObjectActionSystem::PickUpFactsOf(entt::entity creature, entt::entity object,
+                                                                               ReachKeep keep) const
 {
 	const auto& registry = Locator::entitiesRegistry::value();
 	const auto* body = registry.Valid(creature) ? registry.TryGet<const Creature>(creature) : nullptr;
@@ -2756,7 +2750,8 @@ creature_object_actions::PickUpFacts CreatureObjectActionSystem::PickUpFactsOf(e
 	std::optional<creature_object_actions::LiftFacts> lift;
 	if (body != nullptr)
 	{
-		if (const auto reach = PickUpStraightReach(creature))
+		if (const auto reach =
+		        KeptStraightReach<PickUpReach>(creature, ReachWith::FingerEnds, creature_reach::k_PickUpAnimations, keep))
 		{
 			const auto* morph = registry.TryGet<const CreatureMorph>(creature);
 			lift = creature_object_actions::LiftFacts {
@@ -2808,7 +2803,7 @@ bool CreatureObjectActionSystem::CanPickUpKind(entt::entity creature, entt::enti
 	case PickUpFactsUsed::All:
 		break;
 	}
-	return creature_object_actions::MayPickUpKind(kind, PickUpFactsOf(creature, object));
+	return creature_object_actions::MayPickUpKind(kind, PickUpFactsOf(creature, object, ReachKeep::Keep));
 }
 
 bool CreatureObjectActionSystem::CanEat(entt::entity creature, entt::entity object) const
@@ -2840,8 +2835,9 @@ bool CreatureObjectActionSystem::CanEatHeld(entt::entity creature) const
 
 bool CreatureObjectActionSystem::CanTakeFromHand(entt::entity creature, entt::entity object) const
 {
+	// The frames of the hand ask this as it offers a thing, so the test only reads the synced world
 	const auto kind = KindFactsOf(object);
-	return creature_object_actions::MayTakeKindFromHand(kind, PickUpFactsOf(creature, object));
+	return creature_object_actions::MayTakeKindFromHand(kind, PickUpFactsOf(creature, object, ReachKeep::ReadOnly));
 }
 
 bool CreatureObjectActionSystem::CanBeCaught(entt::entity object) const
@@ -3557,8 +3553,7 @@ void CreatureObjectActionSystem::AfterPoseTurn(entt::entity creature)
 			    creature, CreatureHeldObject {.object = object,
 			                                  .mirrored = action.mirrored,
 			                                  .bone = HandBone(*points, animation, action.mirrored)});
-			registry.AssignOrReplace<HeldByCreature>(
-			    object, HeldByCreature {.creature = creature, .takenFrom = TakenFrom(registry, object)});
+			registry.AssignOrReplace<HeldByCreature>(object, HeldByCreature {.creature = creature});
 			// A person or an animal stops what it did and is held, from the ground or out of the air. One that cannot go
 			// into its state for the hand is let go where it is, and the pick-up fails.
 			if (IntoCreatureHand(registry, object) == creature_object_actions::HoldStart::Refused)
@@ -3695,38 +3690,22 @@ void CreatureObjectActionSystem::AfterPoseTurn(entt::entity creature)
 void CreatureObjectActionSystem::PlaceHeld(bool drawn)
 {
 	auto& registry = Locator::entitiesRegistry::value();
-	// What is held rides in the hand, turned with it
+	// What is held is drawn in the hand, turned with it. Its place in the world does not follow the hand.
 	bool moved = false;
 	registry.Each<const Creature, const Transform, const CreatureAnimation, const CreatureHeldObject>(
 	    [&](entt::entity creature, const Creature&, const Transform& transform, const CreatureAnimation& animation,
 	        const CreatureHeldObject& held) {
-		    auto* at = registry.Valid(held.object) ? registry.TryGet<Transform>(held.object) : nullptr;
-		    if (at == nullptr)
+		    auto* holder = registry.Valid(held.object) ? registry.TryGet<HeldByCreature>(held.object) : nullptr;
+		    if (holder == nullptr || holder->creature != creature || !registry.AllOf<Transform>(held.object))
 		    {
 			    return;
 		    }
-		    auto* holder = registry.TryGet<HeldByCreature>(held.object);
-		    // It turns with the hand bone and hangs below the finger ends by its own distance
-		    if (drawn)
-		    {
-			    // The frame only draws it where the drawn hand is
-			    if (holder == nullptr || holder->creature != creature)
-			    {
-				    return;
-			    }
-			    const auto pose = HeldPoseOf(held, animation, DrawnPoseOf(animation, transform));
-			    holder->drawn = HeldByCreature::Drawn {.position = pose.position, .rotation = pose.rotation};
-			    moved = true;
-			    return;
-		    }
-		    const auto pose = HeldPoseOf(held, animation, TurnPoseOf(animation, transform));
-		    at->rotation = pose.rotation;
-		    at->position = pose.position;
-		    // The frames draw it where the turn put it until the next frame places it
-		    if (holder != nullptr)
-		    {
-			    holder->drawn.reset();
-		    }
+		    // It turns with the hand bone and hangs below the finger ends by its own distance. A frame draws it where the
+		    // drawn hand is. After a turn, it is drawn where the hand is in the pose of that turn, until the next frame
+		    // places it.
+		    const auto pose =
+		        HeldPoseOf(held, animation, drawn ? DrawnPoseOf(animation, transform) : TurnPoseOf(animation, transform));
+		    holder->drawn = HeldByCreature::Drawn {.position = pose.position, .rotation = pose.rotation};
 		    moved = true;
 	    });
 
@@ -3744,6 +3723,6 @@ void CreatureObjectActionSystem::UpdateHeld()
 
 void CreatureObjectActionSystem::ShowHeldAtTurnEnd()
 {
-	// The turn sees the thing in the hand as the last turn posed the body, at any frame rate
+	// The frames draw the thing in the hand as the last turn posed the body, at any frame rate
 	PlaceHeld(false);
 }

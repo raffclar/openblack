@@ -141,6 +141,7 @@ class AnimalSystemInterface;
 class SnowSystemInterface;
 class SnowfallSystemInterface;
 class WaterRingSystemInterface;
+class DesignedWaterfallSystemInterface;
 class CreatureAnimationSystemInterface;
 class CreatureMindSystemInterface;
 class CreatureLocomotionSystemInterface;
@@ -174,6 +175,7 @@ class WalkPathSystemInterface;
 class PuzzleGameSystemInterface;
 class WonderSystemInterface;
 class DanceSystemInterface;
+class FootballSystemInterface;
 class SharkSystemInterface;
 class VideoSystemInterface;
 class HelpTextSystemInterface;
@@ -238,6 +240,7 @@ class CreatureCarryOverSystemInterface;
 class SaveGameSystemInterface;
 class CreatureWebPageSystemInterface;
 class LobbyClientSystemInterface;
+class ClanCreatureSystemInterface;
 class NetworkGameSystemInterface;
 class RealWeatherSystemInterface;
 class TornadoSystemInterface;
@@ -404,6 +407,7 @@ struct Locator
 	using snowSystem = entt::locator<ecs::systems::SnowSystemInterface>;
 	using snowfallSystem = entt::locator<ecs::systems::SnowfallSystemInterface>;
 	using waterRingSystem = entt::locator<ecs::systems::WaterRingSystemInterface>;
+	using designedWaterfallSystem = entt::locator<ecs::systems::DesignedWaterfallSystemInterface>;
 	using creatureAnimationSystem = entt::locator<ecs::systems::CreatureAnimationSystemInterface>;
 	using creatureMindSystem = entt::locator<ecs::systems::CreatureMindSystemInterface>;
 	using creatureLocomotionSystem = entt::locator<ecs::systems::CreatureLocomotionSystemInterface>;
@@ -439,6 +443,7 @@ struct Locator
 	using puzzleGameSystem = entt::locator<ecs::systems::PuzzleGameSystemInterface>;
 	using wonderSystem = entt::locator<ecs::systems::WonderSystemInterface>;
 	using danceSystem = entt::locator<ecs::systems::DanceSystemInterface>;
+	using footballSystem = entt::locator<ecs::systems::FootballSystemInterface>;
 	using sharkSystem = entt::locator<ecs::systems::SharkSystemInterface>;
 	using videoSystem = entt::locator<ecs::systems::VideoSystemInterface>;
 	using helpTextSystem = entt::locator<ecs::systems::HelpTextSystemInterface>;
@@ -487,6 +492,8 @@ struct Locator
 	using onlineMapStore = entt::locator<online::OnlineMapStoreInterface>;
 	/// The client of the lobby (bwgame-service)
 	using lobbyClient = entt::locator<ecs::systems::LobbyClientSystemInterface>;
+	/// The clan creature of a network game on the internet: the fetch before the start and the upload at the end
+	using clanCreatureSystem = entt::locator<ecs::systems::ClanCreatureSystemInterface>;
 	/// The network game of this computer: the session with a game server, which gives the turns of the world
 	using networkGame = entt::locator<ecs::systems::NetworkGameSystemInterface>;
 	/// The real-world weather of a single-player game, off unless the player turns it on

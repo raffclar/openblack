@@ -65,6 +65,7 @@ public:
 	bool StartPowerUpCharge(entt::entity icon, PlayerNames player, int powerUp) override;
 	[[nodiscard]] float ChantNeeded(entt::entity icon) const override;
 	void TakeCastCharge(entt::entity icon) override;
+	bool CancelSeedIconCharge(entt::entity seed, PlayerNames charger) override;
 	bool Tap(entt::entity icon, PlayerNames player) override;
 	[[nodiscard]] entt::entity SiteOfIcon(entt::entity icon) const override;
 	void EmptyIconStores(entt::entity site) override;

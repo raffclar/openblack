@@ -45,6 +45,7 @@ public:
 	[[nodiscard]] const std::optional<object_draw_list::View>& GetView() const override { return _view; }
 	[[nodiscard]] bool Listed(entt::entity entity) const override;
 	[[nodiscard]] bool Drawn(const Registry& registry, entt::entity entity) const override;
+	[[nodiscard]] bool DrawnWith(const Registry& registry, entt::entity entity, const DrawnStores& stores) const override;
 	[[nodiscard]] bool Decides(const Registry& registry, entt::entity entity) const override;
 	[[nodiscard]] bool NotesKept(entt::entity entity) const override;
 	void NoteFullFrame(entt::entity entity, bool staysDrawn) override;
@@ -75,6 +76,8 @@ private:
 	/// The parts that the draw of each village totem draws with it
 	void FindParts();
 	void OnLetGo(entt::registry& registry, entt::entity entity);
+	/// Whether the list decides if a thing that is not a part of another thing is drawn
+	[[nodiscard]] bool DecidesWhole(const Registry& registry, entt::entity entity) const;
 
 	Registry* _registry {nullptr};
 	entt::connection _letGo;

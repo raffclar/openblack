@@ -2303,3 +2303,30 @@ openblack_setup_and_add_test(test_god_window test_god_window.cpp)
 openblack_setup_and_add_test(test_creature_hand_pose test_creature_hand_pose.cpp)
 openblack_setup_and_add_test(test_worship_icons_map test_worship_icons_map.cpp)
 openblack_setup_and_add_test(test_connection_limits online/test_connection_limits.cpp)
+openblack_setup_and_add_test(test_fixed_kinds test_fixed_kinds.cpp)
+openblack_setup_and_add_test(test_mesh_prepare test_mesh_prepare.cpp)
+target_link_libraries(test_mesh_prepare PRIVATE l3d)
+openblack_setup_and_add_test(
+  test_clan_creature_system test_clan_creature_system.cpp
+)
+openblack_setup_and_add_test(
+  test_script_ally_natives test_script_ally_natives.cpp
+)
+target_link_libraries(test_script_ally_natives PRIVATE ScriptLibrary)
+openblack_setup_and_add_test(test_creature_reach_read_only test_creature_reach_read_only.cpp)
+if(MSVC)
+  target_compile_options(test_creature_reach_read_only PRIVATE /bigobj)
+endif()
+openblack_setup_and_add_test(
+  test_custom_music_decode audio/test_custom_music_decode.cpp
+)
+openblack_setup_and_add_test(test_game_font_glyphs gui/test_game_font_glyphs.cpp)
+openblack_setup_and_add_test(test_script_store_pile test_script_store_pile.cpp)
+openblack_setup_and_add_test(test_script_town_health script/test_script_town_health.cpp)
+openblack_setup_and_add_test(test_designed_waterfall test_designed_waterfall.cpp)
+openblack_setup_and_add_test(test_leaver_hand test_leaver_hand.cpp)
+openblack_setup_and_add_test(
+  test_creature_environment_map test_creature_environment_map.cpp
+)
+  target_compile_options(test_reactions PRIVATE /bigobj)
+openblack_setup_and_add_test(test_football_rules test_football_rules.cpp)

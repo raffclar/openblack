@@ -148,6 +148,10 @@ struct DesireFunctions
 /// An abode's wish to be repaired: none when whole enough, nor for an empty home
 [[nodiscard]] float AbodeDesireToBeRepaired(const RepairInput& abode, const GTownInfo& town);
 
+/// The wish of a thing with the fixed mark to be repaired, from its life and the desire of its kind: none when its life
+/// is full, else more the less life it has, at most 1
+[[nodiscard]] float FixedDesireToBeRepaired(float life, float desireToBeRepaired);
+
 /// The evening's ramp: 1 from `offset` hours before the day's full light, coming up over `width` hours, counted back from
 /// midnight
 [[nodiscard]] float EveningRamp(float visualHour, float dayFull, float width, float offset);

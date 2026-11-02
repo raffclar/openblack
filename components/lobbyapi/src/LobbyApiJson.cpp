@@ -263,7 +263,15 @@ bool ReadOnlineMap(const Json& object, OnlineMap& out)
 	       ReadString(object, "url", out.url) && !out.url.empty();
 }
 
-bool ReadRankingEntry(const Json& object, RankingEntry& out)
+bool ReadPlayerRankingEntry(const Json& object, RankingEntry& out)
+{
+	const auto* account = Member(object, "account");
+	return ReadInteger(object, "position", out.position) && account != nullptr && account->is_object() &&
+	       ReadInteger(*account, "id", out.id) && ReadString(*account, "name", out.name) &&
+	       ReadNumber(object, "points", out.points) && ReadInteger(object, "games_ranked", out.gamesRanked);
+}
+
+bool ReadClanRankingEntry(const Json& object, RankingEntry& out)
 {
 	return ReadInteger(object, "position", out.position) && ReadInteger(object, "id", out.id) &&
 	       ReadString(object, "name", out.name) && ReadNumber(object, "points", out.points);
@@ -605,6 +613,16 @@ std::string ToJson(const ServerStatus& status)
 	});
 }
 
+std::optional<ServerStatusReply> ParseServerStatusReply(std::string_view text)
+{
+	return ParseWith<ServerStatusReply>(text, [](const Json& object, ServerStatusReply& out) {
+		return ReadInteger(object, "next_status_in", out.nextStatusIn) && ReadBool(object, "listed", out.listed) &&
+		       ReadArray(object, "clans", out.clans, [](const Json& item, ServerStatusClan& clan) {
+			       return ReadInteger(item, "account", clan.account) && ReadInteger(item, "clan", clan.clan);
+		       });
+	});
+}
+
 std::string ToJson(const LanAnswer& answer)
 {
 	auto players = Json::array();
@@ -712,11 +730,17 @@ std::optional<ServerBanned> ParseServerBanned(std::string_view data)
 	});
 }
 
-std::optional<RankingPage> ParseRankingPage(std::string_view text)
+std::optional<RankingPage> ParsePlayerRanking(std::string_view text)
 {
 	return ParseWith<RankingPage>(text, [](const Json& object, RankingPage& out) {
-		return ReadInteger(object, "page", out.page) && ReadInteger(object, "pages", out.pages) &&
-		       ReadArray(object, "entries", out.entries, ReadRankingEntry);
+		return ReadInteger(object, "count", out.count) && ReadArray(object, "players", out.entries, ReadPlayerRankingEntry);
+	});
+}
+
+std::optional<RankingPage> ParseClanRanking(std::string_view text)
+{
+	return ParseWith<RankingPage>(text, [](const Json& object, RankingPage& out) {
+		return ReadInteger(object, "count", out.count) && ReadArray(object, "clans", out.entries, ReadClanRankingEntry);
 	});
 }
 

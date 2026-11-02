@@ -17,15 +17,20 @@
 #include "ECS/BuildingSiteList.h"
 #include "ECS/BuildingSiteRules.h"
 #include "ECS/Components/Abode.h"
+#include "ECS/Components/AnimatedStatic.h"
 #include "ECS/Components/Construction.h"
+#include "ECS/Components/Feature.h"
+#include "ECS/Components/Flowers.h"
 #include "ECS/Components/Physics.h"
 #include "ECS/Components/Pot.h"
 #include "ECS/Components/SpellDispenser.h"
+#include "ECS/Components/SpellIcon.h"
 #include "ECS/Components/StoragePit.h"
 #include "ECS/Components/Temple.h"
 #include "ECS/Components/Town.h"
 #include "ECS/Components/Transform.h"
 #include "ECS/Components/WorshipSite.h"
+#include "ECS/FixedKinds.h"
 #include "ECS/Registry.h"
 #include "ECS/Systems/Implementations/ObjectMeasures.h"
 #include "ECS/Systems/MagicSystemInterface.h"
@@ -78,6 +83,12 @@ const GMultiMapFixedInfo* InfoOf(entt::entity building)
 	{
 		return &info.worshipSite.at(static_cast<size_t>(site->tribe));
 	}
+	// An altar has the row of its worship site
+	if (const auto* altar = registry.TryGet<const WorshipAltar>(building))
+	{
+		const auto* site = registry.Valid(altar->site) ? registry.TryGet<const WorshipSite>(altar->site) : nullptr;
+		return site != nullptr ? &info.worshipSite.at(static_cast<size_t>(site->tribe)) : nullptr;
+	}
 	if (const auto* abode = registry.TryGet<const Abode>(building); abode != nullptr && abode->info != AbodeInfo::None)
 	{
 		return &info.abode.at(static_cast<size_t>(abode->info));
@@ -86,15 +97,37 @@ const GMultiMapFixedInfo* InfoOf(entt::entity building)
 	{
 		return world_objects::AbodeInfoOf(building);
 	}
+	// A feature, an animated thing of the land and flowers have rows that hold the building values of the fixed things
+	if (registry.AnyOf<Feature, AnimatedStatic>(building))
+	{
+		return static_cast<const GMultiMapFixedInfo*>(world_objects::InfoOf(building));
+	}
+	if (const auto* flowers = registry.TryGet<const Flowers>(building))
+	{
+		return &info.flowers.at(static_cast<size_t>(flowers->type));
+	}
 	return nullptr;
 }
 
-/// Whether the building stands whole: built, and its life full
-bool IsBuiltAndRepaired(entt::entity building)
-{
-	return construction::IsBuilt(building) && world_objects::LifeOf(building) >= 1.0f;
-}
 } // namespace
+
+bool construction::IsBuiltAndRepaired(entt::entity building)
+{
+	const auto& registry = Entities();
+	if (fixed_kinds::IsAlwaysWhole(registry, building))
+	{
+		return true;
+	}
+	// The altar of a worship site keeps how much of it is built
+	if (const auto* altar = registry.TryGet<const WorshipAltar>(building))
+	{
+		return altar->built >= 1.0f && world_objects::LifeOf(building) >= 1.0f;
+	}
+	// The icon of a worship site is built when its site is built
+	const auto* icon = registry.TryGet<const WorshipIcon>(building);
+	const auto builtPart = icon != nullptr && registry.Valid(icon->site) ? icon->site : building;
+	return IsBuilt(builtPart) && world_objects::LifeOf(building) >= 1.0f;
+}
 
 std::vector<entt::entity> construction::SitesOfTown(entt::entity town)
 {
@@ -199,6 +232,16 @@ float construction::DesireToBeRepaired(entt::entity building)
 	const auto& registry = Entities();
 	const auto* abode = registry.TryGet<const Abode>(building);
 	const auto* info = InfoOf(building);
+	// A thing with the mark that is not a building of the abodes, such as a worship site, the temple, a feature or
+	// flowers, wants to be mended by its lost life alone, with no town. A thing that is always whole wants nothing.
+	if (fixed_kinds::WantsRepairByLifeAlone(registry, building))
+	{
+		if (info == nullptr || fixed_kinds::IsAlwaysWhole(registry, building))
+		{
+			return 0.0f;
+		}
+		return town_desire::FixedDesireToBeRepaired(world_objects::LifeOf(building), info->desireToBeRepaired);
+	}
 	// The town wants to mend a miracle dispenser as one of its buildings with nobody in it
 	if ((abode == nullptr && !registry.AllOf<SpellDispenser>(building)) || info == nullptr ||
 	    TownOfSite(building) == entt::null)

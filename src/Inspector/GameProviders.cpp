@@ -89,6 +89,7 @@
 #include "ECS/Components/Firefly.h"
 #include "ECS/Components/FishFarm.h"
 #include "ECS/Components/Flock.h"
+#include "ECS/Components/Football.h"
 #include "ECS/Components/Footpath.h"
 #include "ECS/Components/GameStanding.h"
 #include "ECS/Components/GuidanceHeard.h"
@@ -141,6 +142,7 @@
 #include "ECS/Systems/ChatSystemInterface.h"
 #include "ECS/Systems/ChimneySmokeSystemInterface.h"
 #include "ECS/Systems/CinematicDirectorSystemInterface.h"
+#include "ECS/Systems/ClanCreatureSystemInterface.h"
 #include "ECS/Systems/CloudSystemInterface.h"
 #include "ECS/Systems/ComputerSettingsSystemInterface.h"
 #include "ECS/Systems/CreatureAnimationLogSystemInterface.h"
@@ -162,6 +164,7 @@
 #include "ECS/Systems/CreatureSkinSystemInterface.h"
 #include "ECS/Systems/CreatureWebPageSystemInterface.h"
 #include "ECS/Systems/DanceSystemInterface.h"
+#include "ECS/Systems/DesignedWaterfallSystemInterface.h"
 #include "ECS/Systems/DialogueControlSystemInterface.h"
 #include "ECS/Systems/DynamicsSystemInterface.h"
 #include "ECS/Systems/EditorSystemInterface.h"
@@ -173,6 +176,7 @@
 #include "ECS/Systems/FireflySystemInterface.h"
 #include "ECS/Systems/FishFarmSystemInterface.h"
 #include "ECS/Systems/FloatingNumberSystemInterface.h"
+#include "ECS/Systems/FootballSystemInterface.h"
 #include "ECS/Systems/FootpathSystemInterface.h"
 #include "ECS/Systems/FootprintSystemInterface.h"
 #include "ECS/Systems/ForestSystemInterface.h"
@@ -377,6 +381,7 @@ constexpr std::array k_Coverage {
     LocatorCoverage {"snowSystem", "land.snow"},
     LocatorCoverage {"snowfallSystem", "land.precipitation"},
     LocatorCoverage {"waterRingSystem", "particles.splash"},
+    LocatorCoverage {"designedWaterfallSystem", "particles.waterfall"},
     LocatorCoverage {"creatureAnimationSystem", "creatures.status"},
     LocatorCoverage {"creatureMindSystem", "creature.desires"},
     LocatorCoverage {"creatureLocomotionSystem", "creatures.status"},
@@ -403,6 +408,7 @@ constexpr std::array k_Coverage {
     LocatorCoverage {"puzzleGameSystem", "puzzle.list"},
     LocatorCoverage {"wonderSystem", "town.wonders"},
     LocatorCoverage {"danceSystem", "living.dances"},
+    LocatorCoverage {"footballSystem", "living.football"},
     LocatorCoverage {"sharkSystem", "living.sharks"},
     LocatorCoverage {"introSystem", "living.intro"},
     LocatorCoverage {"boatLaunchSystem", "living.boat_launch"},
@@ -431,6 +437,7 @@ constexpr std::array k_Coverage {
     LocatorCoverage {"httpClient", "engine.online"},
     LocatorCoverage {"webSocketClient", "engine.online"},
     LocatorCoverage {"lobbyClient", "engine.online"},
+    LocatorCoverage {"clanCreatureSystem", "engine.online"},
     LocatorCoverage {"onlineMapStore", "engine.online"},
     LocatorCoverage {"networkGame", "engine.online"},
     LocatorCoverage {"realWeatherSystem", "land.real_weather"},
@@ -779,6 +786,23 @@ std::unique_ptr<ProviderInterface> EngineProvider()
 		    }
 		    // The store of the lands of network games that the lobby gives (deviation 169)
 		    result["online_map_store"] = Locator::onlineMapStore::has_value();
+		    // The clan creature: the clan that the player uses, the start creature and the creature file kept for the upload
+		    if (Locator::clanCreatureSystem::has_value())
+		    {
+			    const auto& clan = Locator::clanCreatureSystem::value();
+			    const auto used = clan.UsedClan();
+			    const auto start = clan.StartCreature();
+			    result["clan_creature"] = Json {
+			        {"clan", used.has_value() ? Json(*used) : Json(nullptr)},
+			        {"start_bytes", start.has_value() ? Json(start->file.size()) : Json(nullptr)},
+			        {"start_alignment", start.has_value() ? Json(start->alignment) : Json(nullptr)},
+			        {"kept_bytes", clan.KeptCreatureFile().size()},
+			    };
+		    }
+		    else
+		    {
+			    result["clan_creature"] = nullptr;
+		    }
 		    if (!Locator::lobbyClient::has_value())
 		    {
 			    result["lobby"] = nullptr;
@@ -1567,6 +1591,45 @@ std::unique_ptr<ProviderInterface> LivingProvider()
 		                  }
 		                  return items;
 	                  }));
+	provider->Add(
+	    Query("football",
+	          "The football of the Soccer Add-On: whether the game plays it, and each pitch's match state, score, ball, "
+	          "referee, teams, crowd and wave",
+	          {}, ResultKind::Object),
+	    Serve<Locator::footballSystem>(
+	        "the football", [](const ecs::systems::FootballSystemInterface& football, const QueryContext&) {
+		        Json pitches = Json::array();
+		        if (const auto* registry = Registry(); registry != nullptr)
+		        {
+			        registry->Each<const ecs::components::FootballPitch>(
+			            [&pitches, registry](entt::entity entity, const ecs::components::FootballPitch& pitch) {
+				            auto item = Listed(*registry, entity);
+				            const auto ids = [](const std::vector<entt::entity>& team) {
+					            Json list = Json::array();
+					            for (const auto villager : team)
+					            {
+						            list.push_back(ToId(villager));
+					            }
+					            return list;
+				            };
+				            item["functional"] = pitch.functional;
+				            item["state"] = static_cast<int>(pitch.match.state);
+				            item["turns"] = pitch.match.turns;
+				            item["score"] = {pitch.match.score.at(0), pitch.match.score.at(1)};
+				            item["town_match"] = pitch.match.townMatch;
+				            item["ball"] = ToId(pitch.ball);
+				            item["referee"] = ToId(pitch.referee);
+				            item["home"] = ids(pitch.home);
+				            item["away"] = ids(pitch.away);
+				            item["crowd_places"] = pitch.crowdPlaces;
+				            item["wave_next"] = pitch.wave.next;
+				            item["wave_rest"] = pitch.wave.rest;
+				            item["dead_ball_fetcher"] = ToId(pitch.deadBallFetcher);
+				            pitches.push_back(std::move(item));
+			            });
+		        }
+		        return Json {{"on", football.IsOn()}, {"pitches", std::move(pitches)}};
+	        }));
 	provider->Add(
 	    Query("dances",
 	          "The dances: what they are danced for, whether dancing, their speed and clock, and each group's shape, move "
@@ -2551,7 +2614,7 @@ std::unique_ptr<ProviderInterface> MagicProvider()
 	});
 	provider->Add(
 	    Query("state", "The hand's miracle, the spells and dispensers there are, and the other miracles' "
-	                   "systems: shields, tornadoes, explosions and the piles of roots"),
+	                   "systems: shields, tornadoes, explosions, the camera shakes and the piles of roots"),
 	    Serve<Locator::magicSystem>("magic", [](const ecs::systems::MagicSystemInterface& magic, const QueryContext& /*c*/) {
 		    Json result = {{"spells", magic.GetSpells().size()},
 		                   {"dispensers", magic.GetDispensers().size()},
@@ -2570,6 +2633,7 @@ std::unique_ptr<ProviderInterface> MagicProvider()
 		    if (Locator::explosionSystem::has_value())
 		    {
 			    result["shaking"] = Locator::explosionSystem::value().IsShaking();
+			    result["shakes"] = ShakeItems(Locator::explosionSystem::value().Shakes());
 			    result["ghosts"] = Locator::explosionSystem::value().Ghosts().size();
 			    // The piles of roots that this computer draws, with the milliseconds that stay for each
 			    auto piles = Json::array();
@@ -2954,7 +3018,7 @@ std::unique_ptr<ProviderInterface> ViewProvider(const GameSeamInterface* seam)
 	                    "The chat of a network game: the names of the gods, the lines that came in (turn, sender, the "
 	                    "players that get them, text or taunt, shown in the incoming messages), the speech bubbles over "
 	                    "the creatures (lines, time to show, scroll), and the chat controls (shown, open, quick chat, "
-	                    "the typed line, the list of players and who gets a line)"),
+	                    "the typed line, the list of players with its friends and others, and who gets a line)"),
 	              [seam](const QueryContext& /*c*/) {
 		              Json result = {{"names", Json::object()}, {"received", Json::array()}, {"bubbles", Json::array()}};
 		              if (!Locator::chatSystem::has_value())
@@ -4855,6 +4919,14 @@ GameProvider* openblack::inspector::AddGameProviders(Inspector& inspector, const
 			    return std::nullopt;
 		    }
 		    return Locator::particleSystem::value().GetDrawStats();
+	    },
+	    .waterfall = []() -> std::optional<WaterfallInfo> {
+		    if (!Locator::designedWaterfallSystem::has_value())
+		    {
+			    return std::nullopt;
+		    }
+		    const auto& waterfall = Locator::designedWaterfallSystem::value();
+		    return WaterfallInfo {.model = waterfall.HasModel(), .slide = waterfall.GetSlide(), .sound = waterfall.GetSound()};
 	    },
 	}));
 

@@ -21,6 +21,7 @@
 #include <glm/vec3.hpp>
 
 #include "3D/WaterRings.h"
+#include "Blast/CameraShake.h"
 #include "ECS/Components/Sky.h"
 #include "ECS/Systems/ParticleRuleSystemInterface.h"
 #include "ECS/Systems/ParticleSystemInterface.h"
@@ -66,6 +67,10 @@ using ParticleEffectInfo = ecs::systems::ParticleRuleSystemInterface::EffectInfo
 /// The running particle effects as list items, of those whose file names hold the text when it is given
 [[nodiscard]] Json EffectItems(std::span<const ParticleEffectInfo> effects, std::optional<std::string_view> file);
 
+/// The camera shakes that go on now as list items: the place, the radius, the strength, the whole time and the time
+/// that stays (both in milliseconds), and whether the shake moves the camera up and down only
+[[nodiscard]] Json ShakeItems(std::span<const camera_shake::Shake> shakes);
+
 /// The running particle effects that follow an object as list items
 [[nodiscard]] Json EmitterItems(std::span<const ParticleEffectInfo> effects, entt::entity owner);
 
@@ -78,6 +83,17 @@ using ParticleEffectInfo = ecs::systems::ParticleRuleSystemInterface::EffectInfo
 /// The effects that the turns and the scripts asked for: the number that the next one gets, none without the requests,
 /// and how many of the running effects have a number that the simulation gave
 [[nodiscard]] Json RequestSummary(std::optional<ecs::systems::EffectHandle> next, std::span<const ParticleEffectInfo> effects);
+
+/// The waterfall of the third land as the frames show it
+struct WaterfallInfo
+{
+	/// The model is on the land
+	bool model {false};
+	/// How far the water's texture has slid down it
+	float slide {0.0f};
+	/// The number of its sound, none when it is silent
+	std::optional<uint32_t> sound;
+};
 
 struct ParticleSources
 {
@@ -92,6 +108,8 @@ struct ParticleSources
 	std::function<std::optional<ecs::systems::EffectHandle>()> nextRequest;
 	/// What the last frame of the draw of the effects drew, none on a computer that does not draw them
 	std::function<std::optional<ecs::systems::ParticleSystemInterface::DrawStats>()> drawn;
+	/// The waterfall of the third land, none on a computer that does not draw the land
+	std::function<std::optional<WaterfallInfo>()> waterfall;
 };
 
 ///   particles.splash   near, radius          the splashes within the radius, nearest first, with their state
@@ -101,6 +119,7 @@ struct ParticleSources
 ///   particles.belief                         the symbols of belief that rose last, the newest first
 ///   particles.requests                       the effects that the turns and the scripts asked for
 ///   particles.drawn                          what the last frame of the draw of the effects drew
+///   particles.waterfall                      the waterfall of the third land: its model, slide and sound
 class ParticlesProvider final: public ProviderInterface
 {
 public:

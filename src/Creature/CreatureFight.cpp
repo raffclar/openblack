@@ -726,15 +726,6 @@ std::optional<Step> creature_fight::StepOf(size_t animation)
 	}
 }
 
-size_t creature_fight::WobbleAnimation(Band band, bool sideways)
-{
-	if (band == Band::High)
-	{
-		return sideways ? animations::k_WobbleHighSide : animations::k_WobbleHighFrontBack;
-	}
-	return sideways ? animations::k_WobbleLowSide : animations::k_WobbleLowFrontBack;
-}
-
 uint8_t creature_fight::WoundKind(int32_t blowWoundType, const Random& random)
 {
 	if (random(2) == 0)

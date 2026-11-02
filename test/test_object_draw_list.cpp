@@ -8,6 +8,7 @@
  *******************************************************************************/
 
 #include <cmath>
+#include <cstdint>
 
 #include <algorithm>
 #include <array>
@@ -19,7 +20,13 @@
 #include <glm/ext/matrix_transform.hpp>
 #include <gtest/gtest.h>
 
+#include "ECS/Components/HighDetail.h"
+#include "ECS/Components/MapCellResident.h"
+#include "ECS/Components/Temple.h"
+#include "ECS/Components/WalkPath.h"
 #include "ECS/MapCells.h"
+#include "ECS/Registry.h"
+#include "ECS/Systems/ObjectDrawListSystemInterface.h"
 #include "Scenery/ObjectDrawList.h"
 
 using namespace openblack;
@@ -491,4 +498,46 @@ TEST(ObjectDrawList, TheBlockTestGivesTheSameAnswerAsATestOfEachCornerInTurn)
 	// Both answers come up many times
 	EXPECT_GT(seen, compared / 20);
 	EXPECT_LT(seen, compared - compared / 20);
+}
+
+TEST(ObjectDrawList, TheStoresOfAWalkGiveTheFactsOfTheRegistry)
+{
+	using namespace openblack::ecs::components;
+	// The first registry has no temple and no walking track, so those stores do not exist
+	for (const bool allKinds : {false, true})
+	{
+		openblack::ecs::Registry registry;
+		std::vector<entt::entity> things;
+		for (uint32_t kinds = 0; kinds < 16; ++kinds)
+		{
+			const auto thing = registry.Create();
+			if ((kinds & 1u) != 0)
+			{
+				registry.Assign<MapCellResident>(thing);
+			}
+			if ((kinds & 2u) != 0)
+			{
+				registry.Assign<HighDetail>(thing);
+			}
+			if (allKinds && (kinds & 4u) != 0)
+			{
+				registry.Assign<Temple>(thing);
+			}
+			if (allKinds && (kinds & 8u) != 0)
+			{
+				registry.Assign<WalkPath>(thing);
+			}
+			things.push_back(thing);
+		}
+		const openblack::ecs::systems::DrawnStores stores(registry);
+		for (const auto thing : things)
+		{
+			EXPECT_EQ(stores.Resident(thing), registry.TryGet<const MapCellResident>(thing));
+			EXPECT_EQ(stores.DrawnOnItsOwn(thing), DrawnOnItsOwn({
+			                                           .temple = registry.AllOf<Temple>(thing),
+			                                           .highDetail = registry.AllOf<HighDetail>(thing),
+			                                           .walkingTrack = registry.AllOf<WalkPath>(thing),
+			                                       }));
+		}
+	}
 }

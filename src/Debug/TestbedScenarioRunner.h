@@ -164,7 +164,7 @@ private:
 	/// The scenario's dispensers and lone bubbles, after the testbed's grid stays or goes as it asks
 	void PlaceDispensers(const Scenario& scenario);
 	/// A dispenser made as a challenge's reward makes one, at a point on the land
-	void PlaceRewardDispenser(const DispenserSetup& setup, glm::vec3 position);
+	entt::entity PlaceRewardDispenser(const DispenserSetup& setup, glm::vec3 position);
 	/// Casts the scenario's miracles as their times come, and lets go of held ones when theirs are up
 	void UpdateMiracles(float seconds);
 	/// The scenario's villagers set walking, and dropped on teleport stones, as their times come
@@ -199,6 +199,8 @@ private:
 	/// The explorers' boat film played on the testbed, the dry dock at the command's point
 	[[nodiscard]] std::string PlayBoatFilm(const Command& command) const;
 	/// Starts a land's script as another script's call starts it; what came of that
+	/// The player clicks the scroll nearest the command's point
+	[[nodiscard]] std::string ClickScroll(const Command& command);
 	[[nodiscard]] std::string RunScript(const Command& command);
 	/// Runs a script native with the command's arguments, and tells what it gave back
 	[[nodiscard]] std::string CallNative(const Command& command);
@@ -283,6 +285,8 @@ private:
 	/// The debug option's bonus creatures as they were before the scenario took some as unlocked
 	std::optional<creature_swap::Unlocked> _unlockedBefore;
 	std::optional<int32_t> _landNumberBefore;
+	/// Whether the scenario set camera zones, which go when it stops
+	bool _cameraZoneSet {false};
 	/// The date that the machine's clock was pinned to (none for the wall clock's) before a scenario set the date
 	std::optional<std::optional<int64_t>> _pinnedDateBefore;
 	/// Whether the game was a skirmish before a scenario made it one
@@ -316,6 +320,8 @@ private:
 	std::vector<uint32_t> _madeByNatives;
 	/// The globes that the scenario puts down on their own, in the order of its list
 	std::vector<entt::entity> _globes;
+	/// The scenario's dispensers in the order of the scenario. A lone bubble has none.
+	std::vector<entt::entity> _dispensers;
 	/// The scenario's temples, in its order
 	std::vector<entt::entity> _temples;
 	/// When each of the scenario's throws is next due, in seconds; none once done

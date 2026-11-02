@@ -519,7 +519,9 @@ std::optional<Frame> ParseObject(const Json& object, std::string_view type)
 	if (type == k_RoomChat)
 	{
 		RoomChat chat;
-		if (!ReadString(object, "text", chat.text) || !ReadString(object, "from", chat.from, false))
+		if (!ReadString(object, "text", chat.text) || !ReadString(object, "from", chat.from, false) ||
+		    !ReadString(object, "to", chat.to, false) || !ReadBool(object, "private", chat.privateLine, false) ||
+		    !ReadBool(object, "team", chat.team, false))
 		{
 			return std::nullopt;
 		}
@@ -657,6 +659,18 @@ std::string ToJson(const Frame& frame)
 			    if (!value.from.empty())
 			    {
 				    object["from"] = value.from;
+			    }
+			    if (!value.to.empty())
+			    {
+				    object["to"] = value.to;
+			    }
+			    if (value.privateLine)
+			    {
+				    object["private"] = true;
+			    }
+			    if (value.team)
+			    {
+				    object["team"] = true;
 			    }
 		    }
 		    else

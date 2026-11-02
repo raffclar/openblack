@@ -59,6 +59,7 @@
 #include "VillagerFisherman.h"
 #include "VillagerFlock.h"
 #include "VillagerFood.h"
+#include "VillagerFootball.h"
 #include "VillagerFootpath.h"
 #include "VillagerForester.h"
 #include "VillagerHome.h"
@@ -551,20 +552,76 @@ const static std::array<VillagerStateTableEntry, static_cast<size_t>(VillagerSta
         .exitState = &villager_farmer::ExitFarming,
     },
     /* MOVE_TO_FOOTBALL_PITCH_CONSTRUCTION */ k_TodoEntry,
-    /* FOOTBALL_WALK_TO_POSITION */ k_TodoEntry,
-    /* FOOTBALL_WAIT_FOR_KICK_OFF */ k_TodoEntry,
-    /* FOOTBALL_ATTACKER */ k_TodoEntry,
-    /* FOOTBALL_GOALIE */ k_TodoEntry,
-    /* FOOTBALL_DEFENDER */ k_TodoEntry,
-    /* FOOTBALL_WON_GOAL */ k_TodoEntry,
-    /* FOOTBALL_LOST_GOAL */ k_TodoEntry,
-    /* START_MOVE_TO_PICK_UP_BALL_FOR_DEAD_BALL */ k_TodoEntry,
-    /* ARRIVED_AT_PICK_UP_BALL_FOR_DEAD_BALL */ k_TodoEntry,
-    /* ARRIVED_AT_PUT_DOWN_BALL_FOR_DEAD_BALL_START */ k_TodoEntry,
-    /* ARRIVED_AT_PUT_DOWN_BALL_FOR_DEAD_BALL_END */ k_TodoEntry,
-    /* FOOTBALL_MATCH_PAUSED */ k_TodoEntry,
-    /* FOOTBALL_WATCH_MATCH */ k_TodoEntry,
-    /* FOOTBALL_MEXICAN_WAVE */ k_TodoEntry,
+    /* FOOTBALL_WALK_TO_POSITION */
+    VillagerStateTableEntry {
+        .state = &ecs::villager_football::WalkToPosition,
+        .exitState = &ecs::villager_football::ExitFootball,
+    },
+    /* FOOTBALL_WAIT_FOR_KICK_OFF */
+    VillagerStateTableEntry {
+        .state = &ecs::villager_football::WaitForKickOff,
+        .exitState = &ecs::villager_football::ExitFootball,
+    },
+    /* FOOTBALL_ATTACKER */
+    VillagerStateTableEntry {
+        .state = &ecs::villager_football::PlayRole,
+        .exitState = &ecs::villager_football::ExitFootball,
+    },
+    /* FOOTBALL_GOALIE */
+    VillagerStateTableEntry {
+        .state = &ecs::villager_football::PlayRole,
+        .exitState = &ecs::villager_football::ExitFootball,
+    },
+    /* FOOTBALL_DEFENDER */
+    VillagerStateTableEntry {
+        .state = &ecs::villager_football::PlayRole,
+        .exitState = &ecs::villager_football::ExitFootball,
+    },
+    /* FOOTBALL_WON_GOAL */
+    VillagerStateTableEntry {
+        .state = &ecs::villager_football::AfterGoal,
+        .exitState = &ecs::villager_football::ExitFootball,
+    },
+    /* FOOTBALL_LOST_GOAL */
+    VillagerStateTableEntry {
+        .state = &ecs::villager_football::AfterGoal,
+        .exitState = &ecs::villager_football::ExitFootball,
+    },
+    /* START_MOVE_TO_PICK_UP_BALL_FOR_DEAD_BALL */
+    VillagerStateTableEntry {
+        .state = &ecs::villager_football::StartMoveToPickUpBall,
+        .exitState = &ecs::villager_football::ExitFootball,
+    },
+    /* ARRIVED_AT_PICK_UP_BALL_FOR_DEAD_BALL */
+    VillagerStateTableEntry {
+        .state = &ecs::villager_football::ArrivedAtPickUpBall,
+        .exitState = &ecs::villager_football::ExitFootball,
+    },
+    /* ARRIVED_AT_PUT_DOWN_BALL_FOR_DEAD_BALL_START */
+    VillagerStateTableEntry {
+        .state = &ecs::villager_football::PutDownBallStart,
+        .exitState = &ecs::villager_football::ExitFootball,
+    },
+    /* ARRIVED_AT_PUT_DOWN_BALL_FOR_DEAD_BALL_END */
+    VillagerStateTableEntry {
+        .state = &ecs::villager_football::PutDownBallEnd,
+        .exitState = &ecs::villager_football::ExitFootball,
+    },
+    /* FOOTBALL_MATCH_PAUSED */
+    VillagerStateTableEntry {
+        .state = &ecs::villager_football::MatchPaused,
+        .exitState = &ecs::villager_football::ExitFootball,
+    },
+    /* FOOTBALL_WATCH_MATCH */
+    VillagerStateTableEntry {
+        .state = &ecs::villager_football::WatchMatch,
+        .exitState = &ecs::villager_football::ExitFootball,
+    },
+    /* FOOTBALL_MEXICAN_WAVE */
+    VillagerStateTableEntry {
+        .state = &ecs::villager_football::MexicanWave,
+        .exitState = &ecs::villager_football::ExitFootball,
+    },
     /* CREATED */
     VillagerStateTableEntry {
         .state = &VillagerCreated,
@@ -1079,7 +1136,11 @@ const static std::array<VillagerStateTableEntry, static_cast<size_t>(VillagerSta
         .state = &villager_disciple::DiscipleNothingToDo,
         .entryState = &villager_disciple::EnterDiscipleNothingToDo,
     },
-    /* FOOTBALL_MOVE_TO_BALL */ k_TodoEntry,
+    /* FOOTBALL_MOVE_TO_BALL */
+    VillagerStateTableEntry {
+        .state = &ecs::villager_football::MoveToBall,
+        .exitState = &villager_home::ExitMoveToPos,
+    },
     /* ARRIVES_AT_STORAGE_PIT_FOR_TRADER_PICK_UP */
     VillagerStateTableEntry {
         .state = &villager_disciple_work::TraderFetch,
@@ -1339,7 +1400,7 @@ void CountWhatTownIsDoing(entt::entity villager, VillagerStates previous, Villag
 		{
 			return;
 		}
-		const auto change = ecs::town_desire::DoingNowChange({.desire = row.field0x4, .weight = row.field0x8}, sign);
+		const auto change = ecs::town_desire::DoingNowChange({.desire = row.townDesire, .weight = row.townDesireWeight}, sign);
 		if (change.has_value())
 		{
 			desire->doingNow.at(change->desire) += change->amount;

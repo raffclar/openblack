@@ -10,11 +10,13 @@
 #include "MultiplayerFrontEnd.h"
 
 #include <algorithm>
+#include <iterator>
 #include <utility>
 
 #include <LobbyApiJson.h>
 #include <spdlog/spdlog.h>
 
+#include "ECS/Systems/ClanCreatureSystemInterface.h"
 #include "ECS/Systems/LobbyClientSystemInterface.h"
 #include "ECS/Systems/NetworkGameSystemInterface.h"
 #include "Online/LanDiscoveryInterface.h"
@@ -505,7 +507,7 @@ void MultiplayerFrontEnd::FollowLanRoom()
 	_room->players = found->players;
 	_room->numplayers = found->numplayers;
 	_room->gamemode = found->gamemode;
-	_seats = Seats(_room->players);
+	SetSeats(Seats(_room->players));
 }
 
 void MultiplayerFrontEnd::FollowLanChat()
@@ -520,12 +522,25 @@ void MultiplayerFrontEnd::FollowLanChat()
 	{
 		return;
 	}
-	const auto ownName = ToUtf8(_settings.profileName);
+	const auto names = SeatNames();
+	const auto ownPlace = FindChatName(names, _settings.profileName);
 	for (const auto& line : lines)
 	{
-		const auto seat = std::ranges::find(_seats, line.from, [](const Seat& s) { return s.account.name; });
-		const auto god = seat != _seats.end() ? seat->god : 0;
-		_chat.push_back(ChatLine(ToUtf16(line.from), ClampChat(ToUtf16(line.text)), line.from == ownName, god));
+		const auto from = ToUtf16(line.from);
+		const auto text = ClampChat(ToUtf16(line.text));
+		const auto place = FindChatName(names, from);
+		// A line from the player self, for example a private line to the player self, shows as an own line
+		if (place == ownPlace)
+		{
+			_chat.push_back(OwnChatLine(from, text));
+		}
+		else
+		{
+			const auto privacy =
+			    !line.privateLine ? ChatPrivacy::Public : (line.team ? ChatPrivacy::Team : ChatPrivacy::Private);
+			const auto god = place.has_value() ? std::optional(_seats[*place].god) : std::nullopt;
+			_chat.push_back(ReceivedChatLine(from, text, privacy, god));
+		}
 		// The log keeps who spoke, never the words
 		if (auto logger = spdlog::get("game"))
 		{
@@ -784,19 +799,17 @@ void MultiplayerFrontEnd::UpdateRoom()
 {
 	_seats = Seats(_room->players);
 	_shownSeat.reset();
+	_pickedName.reset();
 	// The lines of a player who left the room go. The game asks again when that player comes back.
 	std::erase_if(_details, [this](const auto& entry) {
 		return std::ranges::none_of(_seats, [&entry](const Seat& seat) { return seat.account.id == entry.first; });
 	});
 	_shownClan.reset();
 	_shownLogo.reset();
-	KeepUsedClan(std::nullopt);
 	_myClans.clear();
-	// The player's own clan in the room, from the server's list
-	if (const auto* own = GetOwnSeat(); own != nullptr)
-	{
-		KeepUsedClan(own->clan);
-	}
+	// The player's own clan in the room, from the server's list, or no clan
+	const auto* own = GetOwnSeat();
+	KeepUsedClan(own != nullptr ? own->clan : std::nullopt);
 	const auto land = GetServerLand();
 	_shownLand = land;
 	_conditions = land.has_value() ? FindConditions(_settings.conditionTemplate, _maps.at(*land).file) : std::nullopt;
@@ -892,18 +905,27 @@ void MultiplayerFrontEnd::SendChat(std::u16string_view text)
 	// sends the line back to the sender too, and the game leaves that copy out
 	if (_flow.kind == LobbyKind::Internet && _services.lobby != nullptr)
 	{
-		const auto* own = GetOwnSeat();
-		_chat.push_back(ChatLine(GetPlayerName(), line, true, own != nullptr ? own->god : 0));
+		_chat.push_back(OwnChatLine(GetPlayerName(), line));
 		_services.lobby->SendChatLine(ChannelOf(_room->id), ToUtf8(line),
 		                              [](ecs::systems::LobbyResult<ecs::systems::LobbyDone>&&) {});
 	}
-	// On the local network the game shows its own line at once, and the room's game server sends it to the other
-	// players, as the host's lobby does
+	// On the local network the room's game server sends the line to the other players, as the host's lobby does. A
+	// picked player gets a private line. The game shows its own line at once.
 	else if (_flow.kind == LobbyKind::Lan && _services.network != nullptr)
 	{
-		const auto* own = GetOwnSeat();
-		_chat.push_back(ChatLine(_settings.profileName, line, true, own != nullptr ? own->god : 0));
-		_services.network->SendRoomChat(ToUtf8(line));
+		const auto names = SeatNames();
+		const auto picked = _pickedName.has_value() ? std::optional(ToUtf16(*_pickedName)) : std::nullopt;
+		const auto plan =
+		    PlanRoomChat(names, _settings.profileName,
+		                 picked.has_value() ? std::optional<std::u16string_view>(*picked) : std::nullopt, std::nullopt);
+		if (plan.ownLine)
+		{
+			_chat.push_back(OwnChatLine(_settings.profileName, line));
+		}
+		for (const auto& send : plan.sends)
+		{
+			_services.network->SendRoomChat(ToUtf8(line), ToUtf8(send.to), send.team);
+		}
 	}
 }
 
@@ -928,8 +950,8 @@ void MultiplayerFrontEnd::HandleEvent(const lobby_api::PushEvent& event)
 			return;
 		}
 		const auto seat = std::ranges::find(_seats, line->from.id, [](const Seat& s) { return s.account.id; });
-		const auto god = seat != _seats.end() ? seat->god : 0;
-		_chat.push_back(ChatLine(ToUtf16(line->from.name), ClampChat(ToUtf16(line->text)), false, god));
+		const auto god = seat != _seats.end() ? std::optional(seat->god) : std::nullopt;
+		_chat.push_back(ReceivedChatLine(ToUtf16(line->from.name), ClampChat(ToUtf16(line->text)), ChatPrivacy::Public, god));
 		// The log keeps who spoke, never the words
 		if (auto logger = spdlog::get("game"))
 		{
@@ -951,7 +973,7 @@ void MultiplayerFrontEnd::HandleEvent(const lobby_api::PushEvent& event)
 		{
 			_room->gamemode = change->gamemode;
 		}
-		_seats = Seats(_room->players);
+		SetSeats(Seats(_room->players));
 		return;
 	}
 	if (event.type == lobby_api::events::k_ServerBanned)
@@ -994,9 +1016,35 @@ std::optional<size_t> MultiplayerFrontEnd::GetServerLand() const
 	return _room.has_value() ? FindLand(_maps, _room->land) : std::nullopt;
 }
 
+void MultiplayerFrontEnd::SetSeats(std::vector<Seat> seats)
+{
+	_seats = std::move(seats);
+	// The pick stays on its player when the list changes, and goes when the player left the room
+	const auto found = _pickedName.has_value()
+	                       ? std::ranges::find(_seats, *_pickedName, [](const Seat& s) { return s.account.name; })
+	                       : _seats.end();
+	if (found == _seats.end())
+	{
+		_pickedName.reset();
+		_shownSeat.reset();
+		return;
+	}
+	_shownSeat = static_cast<size_t>(found - _seats.begin());
+}
+
+std::vector<std::u16string> MultiplayerFrontEnd::SeatNames() const
+{
+	std::vector<std::u16string> names;
+	names.reserve(_seats.size());
+	std::ranges::transform(_seats, std::back_inserter(names), [](const Seat& s) { return ToUtf16(s.account.name); });
+	return names;
+}
+
 void MultiplayerFrontEnd::ShowSeat(std::optional<size_t> seat)
 {
 	_shownSeat = seat.has_value() && *seat < _seats.size() ? seat : std::nullopt;
+	// The picked player also gets the player's lines of the room's chat as private lines
+	_pickedName = _shownSeat.has_value() ? std::optional(_seats[*_shownSeat].account.name) : std::nullopt;
 	// The game asks for the lines of a player when the player picks that player on the Player Details tab, one time
 	if (!_shownSeat.has_value() || _tab != RoomTab::PlayerDetails || _flow.kind != LobbyKind::Internet ||
 	    _services.lobby == nullptr || !_room.has_value())
@@ -1050,6 +1098,11 @@ void MultiplayerFrontEnd::KeepUsedClan(std::optional<int64_t> clan)
 	if (_services.network != nullptr)
 	{
 		_services.network->SetPlaysForClan(clan.has_value());
+	}
+	// The game asks the lobby for the creature of the clan, which the god sends at the start
+	if (_services.clanCreature != nullptr)
+	{
+		_services.clanCreature->UseClan(clan);
 	}
 }
 

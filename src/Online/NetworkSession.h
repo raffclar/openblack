@@ -150,7 +150,9 @@ public:
 	void SetReady(bool ready);
 	/// A line of the room's chat on the local network goes to the server, which sends it to the other players in the
 	/// room. Only in the room, before the start.
-	void SendRoomChat(std::string_view text);
+	/// @param to The name of the one player who gets the line, empty for all the players
+	/// @param team The line goes to one player of a team that the player picked
+	void SendRoomChat(std::string_view text, std::string_view to = {}, bool team = false);
 	/// The lines of the room's chat that the server sent since the last call, in the order that they came
 	[[nodiscard]] std::vector<game_socket::RoomChat> TakeRoomChat();
 	/// The player leaves the game. The server defeats the god.

@@ -382,6 +382,8 @@ entt::entity MakePiece(building_world::World& world, damage::Primitive primitive
 	damage::Offset(primitive, -centre);
 	damage::LinkNeighbours(primitive);
 	const auto piece = registry.Create();
+	// It takes its place in the order of the things made before it lets go of its own loose parts
+	world.PieceMade(piece);
 	registry.Assign<Transform>(piece, offset + centre, glm::mat3(1.0f), glm::vec3(1.0f));
 	const auto triangles = static_cast<uint32_t>(primitive.triangles.size());
 	auto& part = registry.Assign<BuildingPiece>(piece);
@@ -845,10 +847,14 @@ bool BuildingDamageSystem::DrawsWhole(entt::entity object) const
 	return DrawShare(world, object) >= 1.0f;
 }
 
+entt::id_type building_damage::DrawnMeshOf(const BuildingDamage* broken, entt::id_type own)
+{
+	return broken != nullptr && broken->drawMesh != 0 ? broken->drawMesh : own;
+}
+
 entt::id_type BuildingDamageSystem::DrawnMesh(entt::entity object, entt::id_type own) const
 {
-	const auto* broken = _world->Entities().TryGet<const BuildingDamage>(object);
-	return broken != nullptr && broken->drawMesh != 0 ? broken->drawMesh : own;
+	return building_damage::DrawnMeshOf(_world->Entities().TryGet<const BuildingDamage>(object), own);
 }
 
 void BuildingDamageSystem::Repaired(entt::entity building)

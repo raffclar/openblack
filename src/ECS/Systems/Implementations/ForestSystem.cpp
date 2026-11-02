@@ -35,26 +35,19 @@
 #include "ECS/Archetypes/TreeArchetype.h"
 #include "ECS/Archetypes/Utils.h"
 #include "ECS/Components/Abode.h"
-#include "ECS/Components/AnimatedStatic.h"
-#include "ECS/Components/Feature.h"
 #include "ECS/Components/Field.h"
 #include "ECS/Components/Fixed.h"
-#include "ECS/Components/Flowers.h"
 #include "ECS/Components/Forest.h"
 #include "ECS/Components/ForestMember.h"
 #include "ECS/Components/LandForest.h"
 #include "ECS/Components/MagicForest.h"
-#include "ECS/Components/Mobile.h"
 #include "ECS/Components/Player.h"
 #include "ECS/Components/Spell.h"
-#include "ECS/Components/SpellDispenser.h"
-#include "ECS/Components/SpellIcon.h"
 #include "ECS/Components/StoragePit.h"
-#include "ECS/Components/Temple.h"
-#include "ECS/Components/TempleExterior.h"
 #include "ECS/Components/Town.h"
 #include "ECS/Components/Transform.h"
 #include "ECS/Components/Tree.h"
+#include "ECS/FixedKinds.h"
 #include "ECS/GameEndConditions.h"
 #include "ECS/GamePlayers.h"
 #include "ECS/LandForests.h"
@@ -90,6 +83,7 @@
 using namespace openblack;
 using namespace openblack::ecs::components;
 using namespace openblack::ecs::systems;
+namespace fixed_kinds = openblack::ecs::fixed_kinds;
 namespace forest = openblack::magic::forest;
 
 namespace
@@ -146,16 +140,8 @@ bool IsLand(glm::vec3 point)
 	return land != nullptr && land->properties.hasWater == 0;
 }
 
-/// Something fixed to the land over every cell it covers, as the game marks them: the buildings, fields, features and
-/// flowers, the statics that can be picked up such as rocks, the big forests and the citadel. Trees never are.
-bool IsMultiCellFixed(const ecs::Registry& registry, entt::entity entity)
-{
-	return registry.AnyOf<Abode, AnimatedStatic, BigForest, Feature, Field, Flowers, MobileStatic, StoragePit, SpellDispenser,
-	                      Temple, TempleExterior, WorshipIcon>(entity);
-}
-
-/// Where a tree may be planted: on land, in a cell no building or other large fixed thing stands in. Trees, even new
-/// ones, never stop another.
+/// Where a tree may be planted: on land, in a cell whose first thing that stays put has no fixed mark. The game does not
+/// look at the other things of the cell, so a building behind a tree or a pile in the list does not stop a tree.
 bool ValidPlaceForTree(glm::vec3 point)
 {
 	if (!IsLand(point) || !Locator::entitiesMap::has_value())
@@ -163,8 +149,8 @@ bool ValidPlaceForTree(glm::vec3 point)
 		return false;
 	}
 	const auto& registry = EntityRegistry();
-	const auto& fixed = Locator::entitiesMap::value().GetFixedInGridCell(point);
-	return std::ranges::none_of(fixed, [&registry](entt::entity entity) { return IsMultiCellFixed(registry, entity); });
+	return !fixed_kinds::CellIsFixed(Locator::entitiesMap::value().GetFixedInGridCell(point),
+	                                 [&registry](entt::entity thing) { return fixed_kinds::IsFixedKind(registry, thing); });
 }
 
 /// Where a tree may be added beside another: anywhere but on land where a small circle round the spot touches the

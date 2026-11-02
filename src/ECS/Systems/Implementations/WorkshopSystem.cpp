@@ -52,6 +52,7 @@
 #include "ECS/Components/Transform.h"
 #include "ECS/Components/Workshop.h"
 #include "ECS/DiscipleWorkRules.h"
+#include "ECS/FixedKinds.h"
 #include "ECS/GamePlayers.h"
 #include "ECS/Map.h"
 #include "ECS/NearestSearch.h"
@@ -66,6 +67,7 @@
 #include "ECS/Systems/DynamicsSystemInterface.h"
 #include "ECS/Systems/EffectRequestSystemInterface.h"
 #include "ECS/Systems/FireSystemInterface.h"
+#include "ECS/Systems/FootballSystemInterface.h"
 #include "ECS/Systems/ForestSystemInterface.h"
 #include "ECS/Systems/HandSystemInterface.h"
 #include "ECS/Systems/Implementations/ObjectMeasures.h"
@@ -637,10 +639,12 @@ WorkshopSystem::Cleared WorkshopSystem::ClearThing(entt::entity thing, const map
 	auto* dynamics = Locator::dynamicsSystem::has_value() ? &Locator::dynamicsSystem::value() : nullptr;
 	const bool creature = registry.AllOf<Creature>(thing);
 	const bool held = registry.AnyOf<InHand, Immovable>(thing);
+	const bool fixed = ecs::fixed_kinds::IsFixedKind(registry, thing);
 	const auto action = workshop::ClearingActionFor({
 	    .creature = creature,
 	    .held = held,
-	    .canFly = dynamics != nullptr && !creature && !held && dynamics->CanBecomePhysicsObject(thing),
+	    .fixed = fixed,
+	    .canFly = dynamics != nullptr && !creature && !held && !fixed && dynamics->CanBecomePhysicsObject(thing),
 	});
 	// A creature stays where it is and stays in the map
 	if (action == workshop::ClearingAction::LeaveAlone)
@@ -652,7 +656,7 @@ WorkshopSystem::Cleared WorkshopSystem::ClearThing(entt::entity thing, const map
 		}
 		return Cleared::LeftAlone;
 	}
-	// The scaffold pushes a thing that can fly and that no script holds still out of its way
+	// The scaffold pushes a thing that can fly, that has no fixed mark and that no script holds still out of its way
 	if (action == workshop::ClearingAction::Push)
 	{
 		const auto thingAt = thing_map_place::Of(registry, thing);
@@ -1047,7 +1051,7 @@ bool WorkshopSystem::CanJoin(entt::entity held, entt::entity target) const
 	    .heldValue = workshop::ValueOfScale(registry.Get<const Transform>(held).scale.x),
 	    .targetValue = workshop::ValueOfScale(registry.Get<const Transform>(target).scale.x),
 	    .mostForCombining = Locator::infoConstants::value().scaffold.maxNumberForCombining,
-	    .football = ecs::planned_building::k_FootballEnabled,
+	    .football = Locator::footballSystem::has_value() && Locator::footballSystem::value().IsOn(),
 	    .heldScriptBuilding = heldData.scriptBuilding.has_value(),
 	    .targetScriptBuilding = targetData.scriptBuilding.has_value(),
 	    .targetInPhysics = registry.AllOf<InPhysics>(target),

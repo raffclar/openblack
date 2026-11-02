@@ -7,12 +7,15 @@
  * openblack is licensed under the GNU General Public License version 3.
  *******************************************************************************/
 
+#include <algorithm>
 #include <chrono>
 #include <memory>
 #include <optional>
+#include <string_view>
 #include <vector>
 
 #include <glm/mat3x3.hpp>
+#include <glm/vec2.hpp>
 #include <glm/vec3.hpp>
 #include <gtest/gtest.h>
 #include <spdlog/sinks/null_sink.h>
@@ -108,7 +111,10 @@ protected:
 		}
 		_info = std::make_unique<InfoConstants>();
 		// One deed that a creature copies, and one action for its plans
-		_info->creatureMimic.at(0).field0x80 = 1.0f;
+		_info->creatureMimic.at(0).chance = 1.0f;
+		// The action of the take of a gift from the hand
+		constexpr std::string_view k_Take = "TakeObjectFromHand";
+		std::ranges::copy(k_Take, _info->creatureAction.at(1).name.begin());
 		Locator::infoConstants::emplace(*_info);
 		Locator::entitiesRegistry::emplace<Registry>();
 		fights = &static_cast<RecordedFights&>(Locator::creatureFightSystem::emplace<RecordedFights>());
@@ -163,6 +169,33 @@ TEST_F(CreatureForcedStopFightTest, TheOtherForcedActivitiesKeepThePlainCallOff)
 	static_cast<void>(minds.ForceActivity(creature, {.actionObject = creature}));
 	EXPECT_EQ(fights->calledOff, (std::vector<entt::entity> {creature}));
 	EXPECT_TRUE(fights->calledOffForPlan.empty());
+}
+
+// The puke, the order of a computer god and the take of a gift from the hand also end the fight of the body again
+// NOLINTNEXTLINE(cppcoreguidelines-avoid-non-const-global-variables): external macro
+TEST_F(CreatureForcedStopFightTest, ThePukeStopsTheFightForThePlan)
+{
+	static_cast<void>(minds.Puke(creature));
+	EXPECT_EQ(fights->calledOffForPlan, (std::vector<entt::entity> {creature}));
+	EXPECT_TRUE(fights->calledOff.empty());
+}
+
+// NOLINTNEXTLINE(cppcoreguidelines-avoid-non-const-global-variables): external macro
+TEST_F(CreatureForcedStopFightTest, TheOrderOfAComputerGodStopsTheFightForThePlan)
+{
+	static_cast<void>(minds.ObeyGodOrder(creature, 0, entt::null));
+	EXPECT_EQ(fights->calledOffForPlan, (std::vector<entt::entity> {creature}));
+	EXPECT_TRUE(fights->calledOff.empty());
+}
+
+// NOLINTNEXTLINE(cppcoreguidelines-avoid-non-const-global-variables): external macro
+TEST_F(CreatureForcedStopFightTest, TheTakeOfAGiftStopsTheFightForThePlan)
+{
+	auto& registry = Locator::entitiesRegistry::value();
+	const auto gift = registry.Create();
+	static_cast<void>(minds.TakeFromHand(creature, gift, true, glm::vec2(0.0f)));
+	EXPECT_EQ(fights->calledOffForPlan, (std::vector<entt::entity> {creature}));
+	EXPECT_TRUE(fights->calledOff.empty());
 }
 
 // The mind file keeps the fight health that the last fight left, also below 0, and a load gives it back

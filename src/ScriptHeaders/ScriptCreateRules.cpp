@@ -46,6 +46,15 @@ bool IsCreatableType(int32_t type)
 	return type >= k_FirstCreateType && type <= k_LastCreateType;
 }
 
+std::optional<ResourceType> StoreResource(uint32_t subtype)
+{
+	if (subtype > static_cast<uint32_t>(ResourceType::Wood))
+	{
+		return std::nullopt;
+	}
+	return static_cast<ResourceType>(subtype);
+}
+
 float AngleFromDegrees(float degrees)
 {
 	return degrees * k_RadiansPerDegree;
@@ -113,6 +122,25 @@ std::optional<ScriptRockStart> RockStartOf(ObjectType type, uint32_t subtype, bo
 bool IgnoresReactions(ObjectType type)
 {
 	return type == ObjectType::Creature;
+}
+
+std::optional<MobileObjectInfo> MobileObjectRowOf(ObjectType type, uint32_t subtype)
+{
+	switch (type)
+	{
+	case ObjectType::MobileObject:
+		if (!IsRow(subtype, static_cast<std::size_t>(MobileObjectInfo::_COUNT)))
+		{
+			return std::nullopt;
+		}
+		return static_cast<MobileObjectInfo>(subtype);
+	case ObjectType::Poo:
+		return MobileObjectInfo::LumpOfPoo;
+	case ObjectType::Ark:
+		return MobileObjectInfo::Ark;
+	default:
+		return std::nullopt;
+	}
 }
 
 ScriptVillager ScriptVillagerOf(bool child, uint32_t grownUpAge)

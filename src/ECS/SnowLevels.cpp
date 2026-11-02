@@ -118,8 +118,13 @@ int32_t LevelOf(const Registry& registry, entt::entity entity)
 int32_t ShownLevelOf(const Registry& registry, entt::entity entity)
 {
 	const auto* snow = registry.TryGet<const SnowLevel>(entity);
+	return ShownLevel(snow, snow != nullptr && registry.AllOf<HighDetail>(entity));
+}
+
+int32_t ShownLevel(const SnowLevel* snow, bool highDetail)
+{
 	// A villager in high detail shows a different model, and the land never gives snow to that model
-	if (snow == nullptr || registry.AllOf<HighDetail>(entity))
+	if (snow == nullptr || highDetail)
 	{
 		return 0;
 	}

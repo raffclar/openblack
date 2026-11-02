@@ -16,6 +16,7 @@
 #include <spdlog/spdlog.h>
 
 #include "ECS/Components/Dance.h"
+#include "ECS/Components/Fire.h"
 #include "ECS/Components/HandGrab.h"
 #include "ECS/Components/LivingAction.h"
 #include "ECS/Components/TeleportStone.h"
@@ -40,6 +41,7 @@
 #include "ECS/Systems/Implementations/VillagerCreatureDance.h"
 #include "ECS/Systems/Implementations/VillagerCreatureReactions.h"
 #include "ECS/Systems/Implementations/VillagerDance.h"
+#include "ECS/Systems/Implementations/VillagerFire.h"
 #include "ECS/Systems/Implementations/VillagerFootpath.h"
 #include "ECS/Systems/Implementations/VillagerForester.h"
 #include "ECS/Systems/Implementations/VillagerHome.h"
@@ -216,6 +218,16 @@ TEST_F(VillagerWalkStates, ThePlainWalkStepsAndThenArrivesInTheSameTurn)
 	EXPECT_EQ(Top(), k_Next);
 }
 
+// A football player that walks to its place goes into the wait for the kick-off when the walk ends
+// NOLINTNEXTLINE(cppcoreguidelines-avoid-non-const-global-variables): external macro
+TEST_F(VillagerWalkStates, AFootballPlayerArrivesInTheWaitForTheKickOff)
+{
+	_steps->arrives = true;
+	SetStates(VillagerStates::MoveToPos, VillagerStates::FootballWaitForKickOff);
+	Locator::livingActionSystem::value().VillagerCallState(Action(), LivingAction::Index::Top);
+	EXPECT_EQ(Top(), VillagerStates::FootballWaitForKickOff);
+}
+
 // A villager that the hand holds takes no step and does not arrive
 // NOLINTNEXTLINE(cppcoreguidelines-avoid-non-const-global-variables): external macro
 TEST_F(VillagerWalkStates, AVillagerInTheHandTakesNoStep)
@@ -369,9 +381,8 @@ TEST_F(VillagerWalkStates, AnArtefactDancerWhereTheWalkEndsStartsItsWalkWithNoSt
 // NOLINTNEXTLINE(cppcoreguidelines-avoid-non-const-global-variables): external macro
 TEST_F(VillagerWalkStates, TheStatesNotMadeYetTakeNoStep)
 {
-	for (const auto state :
-	     {VillagerStates::MoveOnStructure, VillagerStates::FootballWalkToPosition, VillagerStates::MoveTowardsObjectToLookAt,
-	      VillagerStates::DanceForEditingPurposes, VillagerStates::DanceButNotWorship, VillagerStates::FootballMoveToBall})
+	for (const auto state : {VillagerStates::MoveOnStructure, VillagerStates::MoveTowardsObjectToLookAt,
+	                         VillagerStates::DanceForEditingPurposes, VillagerStates::DanceButNotWorship})
 	{
 		SetStates(state, k_Next);
 		Locator::livingActionSystem::value().VillagerCallState(Action(), LivingAction::Index::Top);
@@ -501,4 +512,43 @@ TEST_F(VillagerWalkStates, AVillagerOnItsWayToTheSiteStopsOnlyForAStateThatItWor
 	EXPECT_FALSE(villager_worship::ExitMoveToWorshipSite(Action(), VillagerStates::WorshippingAtWorshipSite));
 	EXPECT_FALSE(registry.AllOf<Worshipper>(_villager));
 	EXPECT_TRUE(registry.Get<const Town>(town).onWayToWorship.empty());
+}
+
+// A villager that goes back on its way to the worship site is counted once by its town; one with no town does not change
+// NOLINTNEXTLINE(cppcoreguidelines-avoid-non-const-global-variables): external macro
+TEST_F(VillagerWalkStates, AVillagerBackOnItsWayToTheSiteIsCountedOnceByItsTown)
+{
+	auto& registry = Locator::entitiesRegistry::value();
+	villager_worship::BackOnTheWayToWorshipSite(_villager);
+	EXPECT_FALSE(registry.AllOf<Worshipper>(_villager));
+
+	const auto town = registry.Create();
+	registry.Assign<Town>(town);
+	registry.Get<Villager>(_villager).town = town;
+	villager_worship::BackOnTheWayToWorshipSite(_villager);
+	villager_worship::BackOnTheWayToWorshipSite(_villager);
+	ASSERT_TRUE(registry.AllOf<Worshipper>(_villager));
+	EXPECT_TRUE(registry.Get<const Worshipper>(_villager).onTheWay);
+	EXPECT_EQ(registry.Get<const Town>(town).onWayToWorship.size(), 1u);
+}
+
+// A villager with no fire that leaves the fire states for a final state with another exit is no longer on its town's list
+// of the way to worship. It keeps its own mark of the way. A change to another state that fights the fire keeps the list.
+// NOLINTNEXTLINE(cppcoreguidelines-avoid-non-const-global-variables): external macro
+TEST_F(VillagerWalkStates, AVillagerThatLeavesTheFireIsNoLongerOnItsTownsWayToWorship)
+{
+	auto& registry = Locator::entitiesRegistry::value();
+	const auto town = registry.Create();
+	registry.Assign<Town>(town).onWayToWorship.push_back(_villager);
+	registry.Get<Villager>(_villager).town = town;
+	registry.Assign<Worshipper>(_villager, Worshipper {.onTheWay = true});
+	registry.Assign<VillagerFireState>(_villager);
+	SetStates(VillagerStates::MoveAroundFire, VillagerStates::InvalidState);
+
+	EXPECT_FALSE(villager_fire::ExitPutOutFire(Action(), VillagerStates::PutOutFireByBeating));
+	EXPECT_EQ(registry.Get<const Town>(town).onWayToWorship.size(), 1u);
+
+	EXPECT_FALSE(villager_fire::ExitPutOutFire(Action(), VillagerStates::GotoWorshipSiteForWorship));
+	EXPECT_TRUE(registry.Get<const Town>(town).onWayToWorship.empty());
+	EXPECT_TRUE(registry.Get<const Worshipper>(_villager).onTheWay);
 }

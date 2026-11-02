@@ -11,6 +11,7 @@
 
 #include <cstdint>
 
+#include <algorithm>
 #include <optional>
 #include <span>
 #include <vector>
@@ -36,6 +37,7 @@
 #include "ECS/Components/LivingListPlace.h"
 #include "ECS/Components/Temple.h"
 #include "ECS/Components/Villager.h"
+#include "ECS/CreatureCarried.h"
 #include "ECS/Map.h"
 #include "ECS/RealWeatherLand.h"
 #include "ECS/Registry.h"
@@ -46,6 +48,7 @@
 #include "ECS/Systems/AnimalSystemInterface.h"
 #include "ECS/Systems/BuildingDamageSystemInterface.h"
 #include "ECS/Systems/CameraBookmarkSystemInterface.h"
+#include "ECS/Systems/CameraPathSystemInterface.h"
 #include "ECS/Systems/ChatSystemInterface.h"
 #include "ECS/Systems/ChimneySmokeSystemInterface.h"
 #include "ECS/Systems/CinematicDirectorSystemInterface.h"
@@ -300,6 +303,8 @@ void PlayCreatureTurnStep(game_turn::Step step, entt::entity creature)
 		{
 			Locator::entitiesMap::value().Moved(creature);
 		}
+		// What it carries takes its place in the world, but not the place of its hand
+		ecs::creature_carried::FollowCarrier(registry, creature);
 		// It ages, grows, gets hungry, tired and thirsty, and heals while it sleeps
 		auto creaturePhysiology = profiler.BeginScoped(Profiler::Stage::CreaturePhysiologyUpdate);
 		Locator::creaturePhysiologySystem::value().CreatureTurn(creature);
@@ -590,7 +595,15 @@ void PlayTurnStep(game_turn::Step step, TurnViewInterface& view)
 		if (const auto& loss = Locator::simulation::value().GetSettings().templeLoss;
 		    loss.has_value() && loss->turn == turn && Locator::templeDestructionSystem::has_value())
 		{
-			StartTempleLoss(static_cast<PlayerNames>(loss->player));
+			// The neutral player has no temple. A loss with no range has the player as its last player.
+			const auto lastPlayer = std::max(loss->player, loss->lastPlayer);
+			for (auto player = loss->player; player <= lastPlayer; ++player)
+			{
+				if (static_cast<PlayerNames>(player) != PlayerNames::NEUTRAL)
+				{
+					StartTempleLoss(static_cast<PlayerNames>(player));
+				}
+			}
 		}
 		// The players take their turns, each its temple and then its towns
 		PlayPlayerTurns();
@@ -997,6 +1010,11 @@ void PlayTurnStep(game_turn::Step step, TurnViewInterface& view)
 		if (Locator::danceSystem::has_value())
 		{
 			Locator::danceSystem::value().CheckCamera();
+		}
+		// The camera path of a miracle whose animation came to its end, or whose atom went, gives the camera back
+		if (Locator::cameraPathSystem::has_value())
+		{
+			Locator::cameraPathSystem::value().CheckPlaced();
 		}
 		break;
 	case Step::BuildingPieces:

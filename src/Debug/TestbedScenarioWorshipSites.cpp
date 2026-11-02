@@ -103,6 +103,44 @@ void testbed_scenarios::AddWorshipSiteScenarios(std::vector<Scenario>& all)
 	    .worshipShare = 1.0f,
 	});
 	all.push_back({
+	    .id = "worship.way_passes_fire",
+	    .name = "Villagers on their way to worship go round a fire and do not stop to fight it",
+	    .facet = Facet::Miracles,
+	    .description =
+	        "The land of the ring scenario. All of the people go to worship at the site, which stands built. "
+	        "Two oaks stand by the footpath from the village centre to the site. After twelve seconds, when the people "
+	        "are on their way, both oaks catch fire.",
+	    .expected = "A villager on its way to worship that comes near a burning oak goes round the fire and then on to "
+	                "the site. No villager on its way stops to beat out the fire or to fetch water. The oaks burn down.",
+	    .environment = {.dispenserGrid = false},
+	    .framing = {.shot = Shot::Overview, .include = {glm::vec2(-40.0f, -10.0f), glm::vec2(0.0f, 45.0f)}},
+	    .objects = {{.type = TreeInfo::Oak, .offset = {-26.0f, -5.0f}}, {.type = TreeInfo::Oak, .offset = {-28.0f, 22.0f}}},
+	    .landScript = k_PlayerOneTownScript,
+	    .commands = {{.kind = Command::Kind::SetAlight, .delaySeconds = 12.0f, .value = 1, .object = 0},
+	                 {.kind = Command::Kind::SetAlight, .delaySeconds = 0.0f, .value = 1, .object = 1}},
+	    .worshipShare = 1.0f,
+	});
+	all.push_back({
+	    .id = "worship.fire_near_gate",
+	    .name = "Villagers on their way to worship go round a fire near the gate and go on to worship",
+	    .facet = Facet::Miracles,
+	    .description = "The land of the ring scenario. All of the people go to worship at the site, which stands built. "
+	                   "Two oaks stand on the last part of the footpath, near the gate of the site. After twenty "
+	                   "seconds, when the first people come near the gate, both oaks catch fire.",
+	    .expected = "A villager on its way that comes near the burning oaks goes round them and stays on its way to the "
+	                "site. As in the game, the villagers at the gate stand still while the fire is in reach: each new "
+	                "reaction to the fire comes before their walk takes its first step. When the oaks burn down, they "
+	                "go on to the site and worship. The town counts them on the way to the site again only when their "
+	                "walk round the fire ends at their arrival.",
+	    .environment = {.dispenserGrid = false},
+	    .framing = {.shot = Shot::Overview, .include = {glm::vec2(-30.0f, -55.0f), glm::vec2(5.0f, -25.0f)}},
+	    .objects = {{.type = TreeInfo::Oak, .offset = {-20.0f, -36.0f}}, {.type = TreeInfo::Oak, .offset = {-6.0f, -34.0f}}},
+	    .landScript = k_PlayerOneTownScript,
+	    .commands = {{.kind = Command::Kind::SetAlight, .delaySeconds = 20.0f, .value = 1, .object = 0},
+	                 {.kind = Command::Kind::SetAlight, .delaySeconds = 0.0f, .value = 1, .object = 1}},
+	    .worshipShare = 1.0f,
+	});
+	all.push_back({
 	    .id = "worship.site_motes",
 	    .name = "The motes of prayer power from a worship site to its miracle",
 	    .facet = Facet::Miracles,
@@ -166,6 +204,38 @@ void testbed_scenarios::AddWorshipSiteScenarios(std::vector<Scenario>& all)
 	                  .holdBeforePress = 2.0f}},
 	    .landScript = k_HolderTownScript,
 	    .commands = {{.kind = Command::Kind::HandTakeShownSeed, .delaySeconds = 95.0f}},
+	    .worshipShare = 1.0f,
+	});
+	all.push_back({
+	    .id = "miracles.seed_take_back_to_dispenser",
+	    .name = "Shield: the hand puts a seed that it took back into a dispenser",
+	    .facet = Facet::Miracles,
+	    .description = "As miracles.seed_take_back, with a miracle dispenser of the player's town east of the shield. The "
+	                   "dispenser comes as a reward of a challenge, with no globe. At 95 seconds the hand takes the shield "
+	                   "seed back. At 98 seconds the hand casts the seed on the dispenser, as the Action button over it "
+	                   "does.",
+	    .expected = "At the take, the shield closes down and the seed goes into the hand. At the cast on the dispenser, the "
+	                "seed leaves the hand. A shield globe comes into view above the dispenser and floats there. The hand "
+	                "took the seed back as a seed that did not cast, so the dispenser takes it.",
+	    .environment = {.dispenserGrid = false},
+	    .framing = {.shot = Shot::Overview, .include = {glm::vec2(5.0f, -50.0f), glm::vec2(45.0f, -10.0f)}},
+	    .dispensers = {{.type = MagicType::LightningBolt,
+	                    .offset = {35.0f, -30.0f},
+	                    .charged = false,
+	                    .reward = true,
+	                    .globeTaken = true}},
+	    .miracles = {{.type = MagicType::Shield,
+	                  .point = {0.0f, -30.0f},
+	                  .handOffset = {0.0f, -30.0f},
+	                  .delaySeconds = 60.0f,
+	                  .byHand = true,
+	                  .fromWorship = true,
+	                  .fromSite = true,
+	                  .circleRadius = 25.0f,
+	                  .holdBeforePress = 2.0f}},
+	    .landScript = k_HolderTownScript,
+	    .commands = {{.kind = Command::Kind::HandTakeShownSeed, .delaySeconds = 95.0f},
+	                 {.kind = Command::Kind::HandCastOnDispenser, .delaySeconds = 3.0f, .value = 0}},
 	    .worshipShare = 1.0f,
 	});
 	all.push_back({

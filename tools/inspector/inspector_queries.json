@@ -395,7 +395,7 @@
   "query": "particles.splash"
  },
  {
-  "description": "The running particle effects: file, place, age, particle count, closing",
+  "description": "The running particle effects: file, place, age, particle count, closing, size",
   "kind": "list",
   "parameters": [
    {
@@ -448,6 +448,12 @@
   "kind": "object",
   "parameters": [],
   "query": "particles.drawn"
+ },
+ {
+  "description": "The waterfall of the third land: whether its model is on the land, the slide of its water (-1 to 0) and the number of its sound (null when it is silent). Null on a computer that does not draw the land",
+  "kind": "object",
+  "parameters": [],
+  "query": "particles.waterfall"
  },
  {
   "description": "How many bodies the physics has: flying, resting and in water",
@@ -654,7 +660,7 @@
   "query": "creature.plan"
  },
  {
-  "description": "The clips that a creature's body plays now: for each, its layer (body, blend, face, gesture, wobble), the clip's place and name in the creature spec file, the time in it, its speed (clip milliseconds for each millisecond of the turn), whether it loops, its weight and pair blend, and what asked for it (the mind's activity, plan and agenda step, the action with a thing, the fight)",
+  "description": "The clips that a creature's body plays now: for each, its layer (body, blend, face or gesture), the clip's place and name in the creature spec file, the time in it, its speed (clip milliseconds for each millisecond of the turn), whether it loops, its weight and pair blend, and what asked for it (the mind's activity, plan and agenda step, the action with a thing, the fight)",
   "kind": "object",
   "parameters": [
    {
@@ -683,7 +689,7 @@
   "query": "creature.animation_history"
  },
  {
-  "description": "The clips that something asked a creature's body for that did not play: missing (the species has no such clip: the body showed the stand, the action ended at once, or a face, gesture or wobble showed nothing) or refused (the body played another action), with the turn, what asked and how many turns in a row it came again",
+  "description": "The clips that something asked a creature's body for that did not play: missing (the species has no such clip: the body showed the stand, the action ended at once, or a face or gesture showed nothing) or refused (the body played another action), with the turn, what asked and how many turns in a row it came again",
   "kind": "object",
   "parameters": [
    {
@@ -1560,6 +1566,12 @@
   "query": "living.walk_paths"
  },
  {
+  "description": "The football of the Soccer Add-On: whether the game plays it, and each pitch's match state, score, ball, referee, teams, crowd and wave",
+  "kind": "object",
+  "parameters": [],
+  "query": "living.football"
+ },
+ {
   "description": "The dances: what they are danced for, whether dancing, their speed and clock, and each group's shape, move and dancers",
   "kind": "list",
   "parameters": [],
@@ -1863,7 +1875,7 @@
   "writes": true
  },
  {
-  "description": "The hand's miracle, the spells and dispensers there are, and the other miracles' systems: shields, tornadoes, explosions and the piles of roots",
+  "description": "The hand's miracle, the spells and dispensers there are, and the other miracles' systems: shields, tornadoes, explosions, the camera shakes and the piles of roots",
   "kind": "object",
   "parameters": [],
   "query": "magic.state"
@@ -1952,7 +1964,7 @@
   "query": "view.incoming_messages"
  },
  {
-  "description": "The chat of a network game: the names of the gods, the lines that came in (turn, sender, the players that get them, text or taunt, shown in the incoming messages), the speech bubbles over the creatures (lines, time to show, scroll), and the chat controls (shown, open, quick chat, the typed line, the list of players and who gets a line)",
+  "description": "The chat of a network game: the names of the gods, the lines that came in (turn, sender, the players that get them, text or taunt, shown in the incoming messages), the speech bubbles over the creatures (lines, time to show, scroll), and the chat controls (shown, open, quick chat, the typed line, the list of players with its friends and others, and who gets a line)",
   "kind": "object",
   "parameters": [],
   "query": "view.chat"

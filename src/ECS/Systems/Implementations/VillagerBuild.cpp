@@ -386,7 +386,7 @@ uint32_t SetupBuildingObject(LivingAction& action, entt::entity building)
 	{
 		return 0;
 	}
-	if (construction::IsBuilt(building) && world_objects::LifeOf(building) >= 1.0f)
+	if (construction::IsBuiltAndRepaired(building))
 	{
 		return 0;
 	}
@@ -717,13 +717,15 @@ uint32_t villager_build::Building(LivingAction& action)
 				player_statistics::CountWoodUsed(Entities(), data->owner, use);
 			}
 		}
-		// Building on while there is something to build and wood to build it with
-		if (construction::IsSiteValid(town, building))
+		// Building on while there is something to build and wood to build it with. A builder with nowhere to get wood
+		// stays in this state and tries again at the end of its next clip.
+		const bool open = construction::IsSiteValid(town, building);
+		switch (building_site::AfterStrokeOf(open, open ? construction::WoodAtSite(town, building) : 0))
 		{
-			if (construction::WoodAtSite(town, building) == 0)
-			{
-				return SetupGetBuildingSupplies(action, building);
-			}
+		case building_site::AfterStroke::GetWood:
+			return SetupGetBuildingSupplies(action, building);
+		case building_site::AfterStroke::BuildOn:
+		{
 			const auto randomFloat = [](float limit) { return Locator::gameRandom::value().GameFloatRand(limit); };
 			const auto randomInt = [](uint32_t limit) { return Locator::gameRandom::value().GameRand(limit); };
 			person.buildPlace = static_cast<int32_t>(building_site::NextPlace(
@@ -731,6 +733,9 @@ uint32_t villager_build::Building(LivingAction& action)
 			MoveTo(action, PlacePosition(town, building, static_cast<uint32_t>(person.buildPlace)),
 			       VillagerStates::ArrivesAtBuildingSite);
 			return 1;
+		}
+		case building_site::AfterStroke::Leave:
+			break;
 		}
 	}
 	VillagerOf(action).buildingSite = entt::null;

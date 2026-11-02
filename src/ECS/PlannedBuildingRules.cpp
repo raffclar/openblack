@@ -101,7 +101,7 @@ float DesireBeforeScaffolds(const PlannedKind& plan, const TownForPlans& town, u
 	case AbodeType::Creche:
 		return OneOnly(desire, Has(town, AbodeNumber::Creche), sites);
 	case AbodeType::FootballPitch:
-		if (!k_FootballEnabled)
+		if (!town.football)
 		{
 			return 0.0f;
 		}

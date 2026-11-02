@@ -34,6 +34,7 @@
 #include "ECS/Components/Dance.h"
 #include "ECS/Components/Disciple.h"
 #include "ECS/Components/Fire.h"
+#include "ECS/Components/Football.h"
 #include "ECS/Components/HandGrab.h"
 #include "ECS/Components/LivingAction.h"
 #include "ECS/Components/LivingReaction.h"
@@ -661,6 +662,19 @@ TEST_F(Reactions, AVillagerCountedAtWorshipTakesUpNoMiracle)
 	// The one right by the miracle is counted at worship; the next is only on its way to the site
 	registry.Assign<Worshipper>(_villagers[0], Worshipper {.atWorship = true});
 	registry.Assign<Worshipper>(_villagers[1], Worshipper {.onTheWay = true});
+	_reactions.Create(Miracle());
+	EXPECT_EQ(StateOf(_villagers[0]), VillagerStates::DecideWhatToDo);
+	const auto* held = registry.TryGet<const LivingReaction>(_villagers[0]);
+	EXPECT_TRUE(held == nullptr || held->reaction == 0u);
+	EXPECT_EQ(StateOf(_villagers[1]), VillagerStates::LookingAtObjectReaction);
+}
+
+TEST_F(Reactions, AVillagerInAFootballMatchTakesUpNoMiracle)
+{
+	auto& registry = Locator::entitiesRegistry::value();
+	// The one right by the miracle is in a match; the next left its match
+	registry.Assign<Footballer>(_villagers[0], Footballer {});
+	registry.Assign<Footballer>(_villagers[1], Footballer {.inMatch = false});
 	_reactions.Create(Miracle());
 	EXPECT_EQ(StateOf(_villagers[0]), VillagerStates::DecideWhatToDo);
 	const auto* held = registry.TryGet<const LivingReaction>(_villagers[0]);
@@ -1794,7 +1808,7 @@ TEST_F(Reactions, AVillagerIsFreeForANewTaskOnlyWhenNothingHoldsItAndItsStateLet
 	const auto state = Locator::livingActionSystem::value().VillagerGetFinalState(registry.Get<const LivingAction>(villager));
 	// The locator holds its own copy of the tables: give it the changed tables each time
 	const auto stateLetsGo = [this, state](int lets) {
-		_info->villagerStateTable.at(static_cast<size_t>(state)).field0xa8 = lets;
+		_info->villagerStateTable.at(static_cast<size_t>(state)).availableFlags = lets;
 		Locator::infoConstants::emplace(*_info);
 	};
 	stateLetsGo(1);
@@ -2229,7 +2243,7 @@ TEST_F(Reactions, AVillagerNearADiscipleFollowsItToItsWorkOneTime)
 	row.maxReactionDistance = 60.0f;
 	row.numGameTurnsForNormalThingsToReact = 80;
 	row.numGameTurnsForNormalThingsBeforeReactingAgain = 15;
-	_info->villagerStateTable.at(static_cast<size_t>(VillagerStates::DecideWhatToDo)).field0xa8 = 1;
+	_info->villagerStateTable.at(static_cast<size_t>(VillagerStates::DecideWhatToDo)).availableFlags = 1;
 	Locator::infoConstants::reset();
 	Locator::infoConstants::emplace(*_info);
 	for (const auto villager : _villagers)

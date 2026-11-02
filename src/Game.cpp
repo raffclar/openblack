@@ -118,6 +118,7 @@
 #include "ECS/Archetypes/PlayerArchetype.h"
 #include "ECS/Archetypes/SkyArchetype.h"
 #include "ECS/ChallengePictures.h"
+#include "ECS/Components/Alignment.h"
 #include "ECS/Components/Animal.h"
 #include "ECS/Components/AnimatedStatic.h"
 #include "ECS/Components/CameraBookmark.h"
@@ -181,6 +182,7 @@
 #include "ECS/Systems/ChatSystemInterface.h"
 #include "ECS/Systems/ChimneySmokeSystemInterface.h"
 #include "ECS/Systems/CinematicDirectorSystemInterface.h"
+#include "ECS/Systems/ClanCreatureSystemInterface.h"
 #include "ECS/Systems/CloudSystemInterface.h"
 #include "ECS/Systems/ComputerPlayerSystemInterface.h"
 #include "ECS/Systems/ComputerSettingsSystemInterface.h"
@@ -202,6 +204,7 @@
 #include "ECS/Systems/CreatureSkinSystemInterface.h"
 #include "ECS/Systems/CreatureWebPageSystemInterface.h"
 #include "ECS/Systems/DanceSystemInterface.h"
+#include "ECS/Systems/DesignedWaterfallSystemInterface.h"
 #include "ECS/Systems/DialogueControlSystemInterface.h"
 #include "ECS/Systems/DynamicsSystemInterface.h"
 #include "ECS/Systems/EditorSystemInterface.h"
@@ -367,6 +370,7 @@
 #include "Parsers/InfoFile.h"
 #include "Particles/LiquidParticles.h"
 #include "Physics/Materials.h"
+#include "PlayerSlots.h"
 #include "Profiler.h"
 #include "Resources/Loaders.h"
 #include "Resources/ResourcesInterface.h"
@@ -706,7 +710,7 @@ gui::conditions_box::Figures ConditionsFigures()
 				}
 			}
 		}
-		if (!game_end::CanLose(god) && !networkGame)
+		if (!game_end::CanLose(god, networkGame))
 		{
 			continue;
 		}
@@ -809,6 +813,7 @@ Game::Game(Arguments&& args) noexcept
 	config.showPing = args.showPing;
 	config.dynamicTreeShadows = args.dynamicTreeShadows;
 	config.unlockedBonusCreatures = args.unlockedBonusCreatures;
+	config.footballAddOn = args.footballAddOn;
 	// The settings of this computer give what the command line did not
 	InitializeComputerSettings(player_profiles::SettingsFileFor(
 	    {.profileFolder = _profileFolder, .userFolder = user_data::ProfileFolder(), .automated = _automatedRun},
@@ -1010,6 +1015,12 @@ bool Game::ProcessEvents(const SDL_Event& event) noexcept
 		magic.ReleaseAction();
 		// Let go quickly on a fireball, it is tapped
 		magic.ReleaseFireBall(machine_clock::Ticks(), Locator::time::value().GetTurn());
+		// Let go while a press on a creature waits, the press is a tap. The held leash takes it as an order to act on the
+		// creature.
+		if (const auto tapped = creatureHand.ReleaseWait(); tapped.has_value())
+		{
+			Locator::leashSystem::value().TapThing(LocalInputPlayer(), *tapped);
+		}
 	}
 	if (handTakesPresses && !inTemple && event.type == SDL_MOUSEBUTTONDOWN && event.button.button == SDL_BUTTON_RIGHT &&
 	    !Locator::debugGui::value().IsMouseOverWindow())
@@ -1097,11 +1108,23 @@ bool Game::ProcessEvents(const SDL_Event& event) noexcept
 				{
 					handGrab->ClickThing(*under);
 				}
-				if (!creatureHand.Grab())
+				// With the leash of the player's creature held loose (not tied), a press on a creature that the hand may
+				// hold first waits for a tap. A press on a creature that the hand may not hold sends no leash click.
+				const bool leashHeldLoose = own.has_value() && leashes.HolderPoint(*own).has_value();
+				switch (creature_hand::PressStartOn(creatureHand.MayHold(*under), leashHeldLoose))
 				{
-					// A creature the hand may not hold: a click on it still asks the leash, which says why not. The leash
-					// hears the click at the start of a later turn, as a command of the player.
-					Locator::playerCommandSystem::value().Submit(player_commands::LeashTap {.creature = *under});
+				case creature_hand::PressStart::Hold:
+					creatureHand.Grab();
+					break;
+				case creature_hand::PressStart::WaitForTap:
+					creatureHand.WaitForTap(*under, machine_clock::Ticks(), Locator::time::value().GetTurn());
+					break;
+				case creature_hand::PressStart::TapAtOnce:
+					// The leash takes the tap as an order to act on the creature
+					Locator::leashSystem::value().TapThing(LocalInputPlayer(), *under);
+					break;
+				case creature_hand::PressStart::Nothing:
+					break;
 				}
 			}
 		}
@@ -2710,8 +2733,12 @@ bool Game::PlayFrameStep(game_frame::Step step, FrameState& frame)
 		UpdateEntitiesFrame(frame.deltaTime);
 		break;
 	case Step::Audio:
+	{
+		// The frame stats show the time of the audio, with the music, as a stage of its own
+		auto audio = Locator::profiler::value().BeginScoped(Profiler::Stage::UpdateAudio);
 		Locator::audio::value().Update();
 		break;
+	}
 	case Step::Online:
 		UpdateOnline();
 		FollowGameEnd();
@@ -2819,7 +2846,8 @@ void Game::FollowGameEnd()
 		return;
 	}
 	const auto local = LocalGodForGameEnd();
-	const auto opened = end_game_box::Follow(events, local, _endGameBoxState);
+	const bool networkGame = Locator::time::has_value() && Locator::time::value().IsNetworkGame();
+	const auto opened = end_game_box::Follow(events, local, networkGame, _endGameBoxState);
 
 	// The name of a god: the name of the player of its slot in a network game, the profile's name for the god of this
 	// computer in another game
@@ -2828,10 +2856,11 @@ void Game::FollowGameEnd()
 		std::optional<std::u16string> human;
 		if (session != nullptr && session->GetStart().has_value())
 		{
+			// The names follow the god slots: the gods after the neutral player have the slot before their number
 			const auto& names = session->GetStart()->names;
-			if (static_cast<size_t>(god) < names.size())
+			if (const auto slot = player_slots::SlotOfPlayer(god); slot.has_value() && *slot < names.size())
 			{
-				human = gui::ToUtf16(names.at(static_cast<size_t>(god)));
+				human = gui::ToUtf16(names.at(*slot));
 			}
 		}
 		else if (god == local && profile.has_value())
@@ -2851,18 +2880,30 @@ void Game::FollowGameEnd()
 	const auto& texts = _interface->GetTexts();
 	const auto winner = gameEnd.LastGodIn();
 	const auto winnerName = winner.has_value() ? nameOf(*winner) : std::u16string();
-	const auto title = end_game_box::Title(opened.endBox->kind, end_game_box::LooksOn(local), winnerName,
+	const bool looksOn = end_game_box::LooksOn(local, networkGame);
+	const auto title = end_game_box::Title(opened.endBox->kind, looksOn, winnerName,
 	                                       {.leave = texts.Get("HELP_TEXT_DIALOG_AREYOUSUREQUIT"),
 	                                        .lost = texts.Get("HELP_TEXT_DIALOG_ADDITION_152"),
 	                                        .won = texts.Get("HELP_TEXT_WIN_GAME_04"),
 	                                        .gameOver = texts.Get("HELP_TEXT_GAME_OVER"),
 	                                        .winnerFormat = u"%s - %s Won"});
-	// The band under the title has the colour of the player's god. A looker-on has no god among the four, and its
-	// band is not drawn (vanilla-bugs 470).
+	// The band under the title has the colour of the player's god. A looker-on has no god that takes part, and the game
+	// does not draw its band (vanilla-bugs 470).
 	const auto landNumber = Locator::entitiesRegistry::value().Context().mapScriptGlobals.landNumber;
-	const auto colour = end_game_box::LooksOn(local) ? glm::vec4(0.0f) : gui::statistics_box::PlayerColour(local, landNumber);
+	const auto colour = looksOn ? glm::vec4(0.0f) : gui::statistics_box::PlayerColour(local, landNumber);
 	_interface->OpenEndGameBox({.box = *opened.endBox, .title = title, .colour = colour});
 	SPDLOG_LOGGER_INFO(spdlog::get("game"), "The end box opens for player {}: {}", static_cast<int>(local), gui::ToUtf8(title));
+	// In a game on the internet, an end box of a decided game or of a god that is out sends the clan creature of the god
+	// of this computer to the lobby, with the alignment that the god has now
+	if (session != nullptr && session->Origin() == online::GameOrigin::InternetLobby &&
+	    opened.endBox->kind != end_game_box::Kind::LeaveQuestion && session->OwnGod().has_value() &&
+	    Locator::clanCreatureSystem::has_value())
+	{
+		const auto player = Locator::playerSystem::value().FindPlayer(*session->OwnGod());
+		const auto* alignment =
+		    player.has_value() ? Locator::entitiesRegistry::value().TryGet<const ecs::components::Alignment>(*player) : nullptr;
+		static_cast<void>(Locator::clanCreatureSystem::value().SendAtGameEnd(alignment != nullptr ? alignment->value : 0.0f));
+	}
 	// The end box of a decided game asks the game server to stop the turns of the game
 	if (session != nullptr && end_game_box::StopsTheGame(*opened.endBox, _endGameBoxState))
 	{
@@ -3613,6 +3654,24 @@ void Game::UpdateHandFrame(std::chrono::microseconds deltaTime)
 				_cursorWorldPosition.reset();
 				_cursorLand.reset();
 				_handRestOnThing.reset();
+				// The hand that goes into the temple starts its distance again from where it is, with no speed, and
+				// stands straight up. The hand that comes out of the temple does the same, and ignores the last sparkle
+				// of a fight.
+				if (const bool inTemple = Locator::temple::has_value() && Locator::temple::value().Active();
+				    inTemple != _handInTemple)
+				{
+					_handInTemple = inTemple;
+					_handHoverZoomer.Reset(_handDistance);
+					if (inTemple)
+					{
+						_handTempleNormal.Reset(glm::vec3(0.0f, 1.0f, 0.0f));
+					}
+					else
+					{
+						_handUp.Reset(glm::vec3(0.0f, 1.0f, 0.0f));
+						_handDropsSparkle = true;
+					}
+				}
 				if (Locator::temple::has_value() && Locator::temple::value().Active())
 				{
 					// In the temple, the hand goes where the cursor meets the room, turning to its surface
@@ -3952,6 +4011,11 @@ void Game::UpdateHandFrame(std::chrono::microseconds deltaTime)
 			}
 			// A fireball pressed long enough is taken, which catches it
 			Locator::magicSystem::value().HoldFireBall(machine_clock::Ticks(), Locator::time::value().GetTurn());
+			// A press on a creature that waits for a tap and lasts long enough sends the hold
+			if (Locator::creatureHandSystem::has_value())
+			{
+				Locator::creatureHandSystem::value().WaitFrame(machine_clock::Ticks(), Locator::time::value().GetTurn());
+			}
 			{
 				// The hand and the piles show their miracles
 				auto miracleFx = profiler.BeginScoped(Profiler::Stage::MiracleFxUpdate);
@@ -4173,6 +4237,14 @@ void Game::UpdateHandFrame(std::chrono::microseconds deltaTime)
 				    .nothingUnderHand = nothingUnderHand,
 				});
 				const auto placed = handTransform->position;
+				// The hand that goes into the normal mode starts its hover distance and its up again. When the frame
+				// knows the mode only now, the reset applies from the next frame.
+				if (changes.left.has_value() && hand_blend::ResetsAfterPlacing(*changes.left, mode))
+				{
+					_handHoverZoomer.Reset(_handDistance);
+					_handUp.Reset(glm::vec3(0.0f, 1.0f, 0.0f));
+					_handDropsSparkle = true;
+				}
 				if (auto* hand = Locator::entitiesRegistry::value().TryGet<ecs::components::Hand>(handEntity))
 				{
 					// Only a thing in the hand hangs from the blended place of the hand, not a seed
@@ -4214,8 +4286,9 @@ void Game::UpdateHandFrame(std::chrono::microseconds deltaTime)
 			}
 			// The temples' leashes, the picked one round the wrist of the hand as it is drawn, after the blend of its pose
 			Locator::leashSystem::value().ShowPosts(IsHandDrawn());
-			// A tribe's power behind a miracle spins its name round the hand, or up from where it was cast
-			Locator::miracleFxSystem::value().UpdateTribalPower(std::chrono::duration<float>(gameTime).count());
+			// A tribe's power behind a miracle spins its name round the hand, or up from the place of the cast. Its step is
+			// the whole milliseconds of the game clock in this frame, times a thousandth.
+			Locator::miracleFxSystem::value().UpdateTribalPower(gameTime.count() * 0.001f);
 		}
 
 		// The hand shows its player's alignment, catching up with it each frame once it has moved far enough. Its skin is
@@ -4324,6 +4397,13 @@ void Game::UpdateEntitiesFrame(std::chrono::microseconds deltaTime)
 					{
 						Locator::miracleFxSystem::value().UpdateDrawnGlobes(drawList, clock.GetFrameGameTime());
 					}
+				}
+				// The draw of the land makes the waterfall of the third land, slides its water and makes its spray
+				if (Locator::designedWaterfallSystem::has_value())
+				{
+					Locator::designedWaterfallSystem::value().UpdateFrame(
+					    Locator::entitiesRegistry::value().Context().mapScriptGlobals.landNumber, clock.GetFrameRealTime(),
+					    clock.GetFrameGameTime(), simulation::LandDrawn());
 				}
 				updateDrawnScenery();
 				// The static of each fizzing creature slides only when the frame draws its body on the screen
@@ -6002,6 +6082,7 @@ std::unique_ptr<gui::MultiplayerFrontEnd> Game::MakeMultiplayerFrontEnd()
 	    .owner = {},
 	    .poll = {},
 	    .maps = Locator::onlineMapStore::has_value() ? &Locator::onlineMapStore::value() : nullptr,
+	    .clanCreature = Locator::clanCreatureSystem::has_value() ? &Locator::clanCreatureSystem::value() : nullptr,
 	};
 	gui::MultiplayerFrontEnd::Settings settings;
 	// The registration page is on the lobby's site: Register on the site, then log in in the game
@@ -6144,7 +6225,9 @@ void Game::AskToLeaveNetworkGame()
 	    {.leave = texts.Get("HELP_TEXT_DIALOG_AREYOUSUREQUIT"), .lost = {}, .won = {}, .gameOver = {}, .winnerFormat = {}});
 	const auto local = LocalGodForGameEnd();
 	const auto landNumber = Locator::entitiesRegistry::value().Context().mapScriptGlobals.landNumber;
-	const auto colour = end_game_box::LooksOn(local) ? glm::vec4(0.0f) : gui::statistics_box::PlayerColour(local, landNumber);
+	const bool networkGame = Locator::time::has_value() && Locator::time::value().IsNetworkGame();
+	const auto colour =
+	    end_game_box::LooksOn(local, networkGame) ? glm::vec4(0.0f) : gui::statistics_box::PlayerColour(local, landNumber);
 	_interface->OpenEndGameBox({.box = box, .title = title, .colour = colour});
 	SPDLOG_LOGGER_INFO(spdlog::get("game"), "The end box asks the question to leave the network game");
 }
@@ -6247,11 +6330,12 @@ void Game::LeaveAsAPlayerDoes()
 
 PlayerNames Game::LocalGodForGameEnd() const
 {
-	// A looker-on of a network game has no god: the game names it player seven
+	// A looker-on of a network game has no god. The original game names it player seven. In a network game every god
+	// takes part, and player seven can be a god, so the looker-on gets the neutral player, which is no god.
 	const auto* session = Locator::networkGame::has_value() ? Locator::networkGame::value().Session() : nullptr;
 	const bool looksOn =
 	    session != nullptr && session->GetJoined().has_value() && session->GetJoined()->role == game_socket::Role::Observer;
-	return looksOn ? PlayerNames::PLAYER_SEVEN : LocalInputPlayer();
+	return looksOn ? PlayerNames::NEUTRAL : LocalInputPlayer();
 }
 
 bool Game::OpenMultiplayerFrontEnd(std::unique_ptr<gui::MultiplayerFrontEnd> frontEnd)
@@ -7171,6 +7255,8 @@ void Game::PlaceHand(ecs::components::Transform& handTransform, float deltaSecon
 	// Tapping a house it knocked on, the hand stays where it knocked
 	if (_handKnocking)
 	{
+		// When the knock ends, the hover distance starts again from here with no speed
+		_handHoverZoomer.Reset(_handDistance);
 		_handPosition = _handKnock.Point().value_or(_handPosition);
 		_handCrossFade.Update(deltaSeconds);
 		handTransform.position = _handCrossFade.Apply(_handPosition);
@@ -7229,8 +7315,13 @@ void Game::PlaceHand(ecs::components::Transform& handTransform, float deltaSecon
 
 	// While a press on a body is held in a fight, the hand goes to a sparkle on the opponent's body that the last
 	// drawing found. That point takes the place of the cursor's point.
-	const auto sparkle =
+	auto sparkle =
 	    Locator::creatureFightSystem::has_value() ? Locator::creatureFightSystem::value().TakeHandSparkle() : std::nullopt;
+	// The hand that went into the normal mode ignores the sparkle that the drawing found before
+	if (std::exchange(_handDropsSparkle, false))
+	{
+		sparkle.reset();
+	}
 
 	// The cursor's point on the near plane, which the hand's line of sight goes through
 	std::optional<glm::vec3> cursorNearPoint;

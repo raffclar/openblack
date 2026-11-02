@@ -38,6 +38,8 @@ using creature_desires::Desire;
 namespace
 {
 constexpr std::string_view k_FightAction = "Fight";
+/// The action of a dead creature. When a script orders it, the creature faints where it stands.
+constexpr std::string_view k_DieAction = "Die";
 } // namespace
 
 bool CreatureMindSystem::ObeyGodOrder(entt::entity creature, uint32_t action, entt::entity object)
@@ -59,7 +61,8 @@ bool CreatureMindSystem::ObeyGodOrder(entt::entity creature, uint32_t action, en
 	                                              .activityObject = known ? BelongsTo(object) : std::nullopt,
 	                                              .action = tables->actions[action].name,
 	                                              .actionObject = known ? object : entt::null,
-	                                              .ordered = true});
+	                                              .ordered = true,
+	                                              .fightBodyEndsAgain = true});
 	// The order is forced and counts at its end, also when the creature could not make a plan for it. A mind that has
 	// not thought yet takes no order.
 	auto& state = registry.Get<CreatureMindState>(creature);
@@ -105,6 +108,16 @@ bool CreatureMindSystem::ScriptDoAction(entt::entity creature, uint32_t action, 
 	if (name == k_FightAction)
 	{
 		return FightForScript(creature, target);
+	}
+	// It faints, lies out cold, and recovers as a fight's loser does: a player's creature is taken to its pen after
+	// the time of its size, then it rests if it needs to
+	if (name == k_DieAction)
+	{
+		if (Locator::creatureFightSystem::has_value())
+		{
+			Locator::creatureFightSystem::value().FaintForScript(creature);
+		}
+		return true;
 	}
 	// The order of the script is not a forced plan. When the script lets the creature go, it can take up reactions while
 	// it does the order

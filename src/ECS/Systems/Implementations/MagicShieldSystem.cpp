@@ -523,6 +523,19 @@ std::optional<entt::entity> MagicShieldSystem::ShieldAt(glm::vec3 point) const
 	return found;
 }
 
+void MagicShieldSystem::FollowSpellRadius(entt::entity spell, float radius)
+{
+	const auto known = _objects.find(spell);
+	if (known == _objects.end())
+	{
+		return;
+	}
+	if (auto* shieldObject = EntityRegistry().TryGet<MagicShield>(known->second); shieldObject != nullptr)
+	{
+		shieldObject->radius = radius;
+	}
+}
+
 void MagicShieldSystem::RemoveWithSpell(entt::entity spell)
 {
 	const auto known = _objects.find(spell);

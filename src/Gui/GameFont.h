@@ -71,6 +71,27 @@ public:
 		}
 	};
 
+	/// The game's first level of a glyph, which it draws text from: the glyph at half its height, each pixel made of
+	/// four pixels of the bitmap. The game makes it in rows of 40, whatever the height of the font.
+	struct HalfGlyph
+	{
+		static constexpr uint16_t k_Height = 40;
+		/// Half the width of the bitmap, rounded up
+		uint16_t width;
+		/// Row by row, how many of the four pixels are set, 0 to 4
+		std::vector<uint8_t> count;
+	};
+
+	/// Makes the half height glyph from a bitmap of a width, one byte a pixel, as the game reads it. The game reads two
+	/// pixels across and two rows down for each pixel, and it starts each row after the last two pixels it read plus
+	/// one row of the bitmap. For a glyph of an odd width, the last pixel of each row comes from the start of the next
+	/// rows, and each row starts one pixel further on. No glyph of the game's fonts has an odd width.
+	[[nodiscard]] static HalfGlyph MakeHalfGlyph(std::span<const uint8_t> bitmap, uint16_t width);
+	/// The alpha from 0 to 15 that the game gives a pixel of the half height glyph, by how many of its four pixels are set
+	[[nodiscard]] static uint8_t HalfGlyphAlpha(uint8_t count);
+	/// Makes the small glyph of a bitmap of a width from its half height glyph
+	[[nodiscard]] static SmallGlyph MakeSmallGlyph(const HalfGlyph& half, uint16_t width);
+
 	/// Null when the files don't fit together
 	static std::optional<GameFont> Load(std::span<const uint8_t> met, std::span<const uint8_t> fnt);
 

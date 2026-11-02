@@ -26,6 +26,7 @@
 
 namespace openblack::ecs::systems
 {
+class ClanCreatureSystemInterface;
 class LobbyClientSystemInterface;
 class NetworkGameSystemInterface;
 } // namespace openblack::ecs::systems
@@ -71,6 +72,8 @@ public:
 		std::function<void(MultiplayerFrontEnd& frontEnd)> poll;
 		/// Keeps the lands of network games that the lobby gives (deviation 169). With no store, the room gets no land.
 		online::OnlineMapStoreInterface* maps {nullptr};
+		/// The clan creature: the game asks the lobby for it when the player uses a clan in the room
+		ecs::systems::ClanCreatureSystemInterface* clanCreature {nullptr};
 	};
 
 	struct Settings
@@ -260,6 +263,10 @@ private:
 	void TakeHostPicks(const std::optional<game_socket::Start>& start);
 	/// Puts the pick on the place of its game in a list that changed, or takes it away when its game went
 	void FollowSelectedGame();
+	/// Changes the places of the room's players and keeps the pick on its player
+	void SetSeats(std::vector<multiplayer::Seat> seats);
+	/// The names of the room's players, in the order of the roster
+	[[nodiscard]] std::vector<std::u16string> SeatNames() const;
 	/// On the local network, the search gives the players of the room: the room follows its server's answers
 	void FollowLanRoom();
 	/// On the local network, the room's game server sends the lines of the room's chat
@@ -311,6 +318,8 @@ private:
 	bool _logoChanged {false};
 	std::optional<int64_t> _usedClan;
 	std::optional<size_t> _shownSeat;
+	/// The name of the player picked in the roster. The pick follows the name when the list of the room changes.
+	std::optional<std::string> _pickedName;
 	/// The lines of the Player Details tab of each account in the room, which the lobby gave. An account in the map has a
 	/// request that the front end sent, so the front end does not ask again.
 	std::map<int64_t, std::vector<multiplayer::PlayerDetail>> _details;

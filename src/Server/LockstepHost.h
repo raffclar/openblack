@@ -279,6 +279,8 @@ private:
 	/// A line of the room's chat from a player: it goes to every other player in a room on the local network, until the
 	/// start
 	void ChatInRoom(ConnectionId connection, const Peer& peer, const game_socket::RoomChat& chat);
+	/// The name of a player in the room: the name of the god's seat, or the name of the observer. Empty for none.
+	[[nodiscard]] std::string PeerName(ConnectionId connection, const Peer& peer) const;
 	/// The salted hash of a secret. None when the secret is empty or the host has no hasher.
 	[[nodiscard]] std::optional<SessionHash> HashOf(std::string_view secret) const;
 	/// True when the secret that a client gives is the secret of a session. A session that a restore gave has only the
