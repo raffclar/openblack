@@ -51,6 +51,10 @@ void SetBuilt(entt::entity building, float built);
 /// starts working again as when it was built (a graveyard counts a burial and takes its town back).
 void BuildBy(entt::entity building, float amount);
 
+/// Builders mend a built building short of its full life: their work adds to its life, and once it is whole it is
+/// repaired. A whole building stays as it is.
+void MendBy(entt::entity building, float amount);
+
 /// A building going up gets a site of its own town's for its builders (a new one, even if the town has one there), with
 /// a desire, its builders' places worked out round its model and, for a temple, its six piles of wood
 void OpenSite(entt::entity building, float desire);

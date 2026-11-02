@@ -1155,6 +1155,9 @@ struct Command
 		/// The town that the land's script made with a number (value) believes this much (amount) in the player and
 		/// nothing in the other gods. Then the town goes to the player at its next check. Needs no creature.
 		GiveLandTown,
+		/// A script sets each worship site of the player as built (amount, the built share), as SET_PROPERTY does. The
+		/// altars of the sites stay as they are. Needs no creature.
+		ScriptBuildsWorshipSites,
 	};
 	Kind kind {Kind::Stop};
 	/// Which creature, by its place in the scenario's creatures

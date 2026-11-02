@@ -41,6 +41,12 @@ Mending RepairBy(float life, float amount)
 	return {.life = mended, .repaired = mended >= 1.0f};
 }
 
+UnbuiltHurt HurtUnbuilt(float built, float damage)
+{
+	const float left = built - damage <= 0.0f ? 0.0f : built - damage;
+	return {.built = left, .allLife = left == 0.0f};
+}
+
 std::optional<std::size_t> PlannedAt(std::span<const PlannedCandidate> planned, glm::vec2 place, float radius)
 {
 	std::optional<std::size_t> best;

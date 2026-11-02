@@ -636,10 +636,7 @@ void construction::SetBuilt(entt::entity building, float built)
 	}
 }
 
-namespace
-{
-/// A built building short of its full life is mended by the work, and repaired once whole
-void MendBy(entt::entity building, float amount)
+void construction::MendBy(entt::entity building, float amount)
 {
 	const float life = world_objects::LifeOf(building);
 	const auto mending = building_construction::RepairBy(life, amount);
@@ -653,7 +650,6 @@ void MendBy(entt::entity building, float amount)
 		Repaired(building);
 	}
 }
-} // namespace
 
 void construction::BuildBy(entt::entity building, float amount)
 {
@@ -678,7 +674,7 @@ void construction::BuildBy(entt::entity building, float amount)
 		sites.BuildBy(building, amount);
 		return;
 	}
-	// An altar keeps how much of it is built. It has no life to mend.
+	// An altar keeps how much of it is built, and its builders mend it when it is built
 	if (registry.AllOf<WorshipAltar>(building))
 	{
 		if (Locator::worshipSiteSystem::has_value())
