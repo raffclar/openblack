@@ -31,9 +31,9 @@
 /// condition, and in the right third of the line how far each god got: its value, or "Done" when it completed the
 /// condition. A check box for each god shows or hides the god in the graph and in the list.
 ///
-/// A network game of more than 4 gods shows every god that plays. The 4 check boxes are then the gods of the window of
-/// gods (god_window, deviation 195), each labelled with the number of its god, and the graph and the list show the
-/// ticked gods of the window.
+/// A network game of more than 4 gods shows every god that plays. The check boxes are then the god columns of the window
+/// of gods (god_window, deviation 195): they scroll along the gods, each labelled with the number of its god. The graph
+/// and the list show the ticked gods among the 4 gods of the window.
 namespace openblack::gui::conditions_box
 {
 
@@ -87,6 +87,10 @@ struct Columns
 /// the first god given.
 using CheckBoxGods = std::array<std::optional<size_t>, k_Gods>;
 [[nodiscard]] CheckBoxGods GodsOfCheckBoxes(const Figures& figures, size_t windowFirst);
+
+/// The label under the check box of a god in a game of more than 4 gods: "Player" and the god's place in the game room,
+/// from 1
+[[nodiscard]] std::u16string GodLabel(const Figures& figures, size_t god);
 
 /// The label under a check box: "Player" and the number of the player, from 1. With more than 4 gods the number is the
 /// god's place in the game room, else the place of the check box.
