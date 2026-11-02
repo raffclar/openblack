@@ -413,6 +413,26 @@ void AddForests(std::vector<Scenario>& all)
 	});
 
 	all.push_back({
+	    .id = "miracles.forest_camera_path",
+	    .name = "Forest: the camera follows the miracle's path",
+	    .facet = Facet::Miracles,
+	    .description = "A forest cast by hand on grass north of the middle, as in the forest seed scenario. The player does "
+	                   "not touch the camera.",
+	    .expected = "At the cast the camera glides from where it is onto the start of the forest's path, which is put at "
+	                "the forest, and arrives about four seconds later. Then it follows the path a little behind, at the "
+	                "speed of the forest's animation sped up. When the animation comes to its last frame, the camera is "
+	                "the player's again at the end of the next turn, from where it is, and flies back to where it was "
+	                "going (the debug log says that the path came to its last frame and let go of the camera).",
+	    .environment = {.dispenserGrid = false},
+	    .framing = {.shot = Shot::Overview, .include = {{-20.0f, 20.0f}, {20.0f, 60.0f}}},
+	    .miracles = {{.type = MagicType::Forest,
+	                  .point = {0.0f, 40.0f},
+	                  .handOffset = {0.0f, 40.0f},
+	                  .delaySeconds = 0.5f,
+	                  .byHand = true}},
+	});
+
+	all.push_back({
 	    .id = "miracles.forest_camera_taken_back",
 	    .name = "Forest: the camera taken back from its path",
 	    .facet = Facet::Miracles,

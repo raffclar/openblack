@@ -170,6 +170,7 @@
 #include "ECS/Systems/BoatLaunchSystemInterface.h"
 #include "ECS/Systems/CameraBookmarkSystemInterface.h"
 #include "ECS/Systems/CameraHelpSystemInterface.h"
+#include "ECS/Systems/CameraZoneSystemInterface.h"
 #include "ECS/Systems/ChatSystemInterface.h"
 #include "ECS/Systems/CinematicDirectorSystemInterface.h"
 #include "ECS/Systems/ComputerPlayerSystemInterface.h"
@@ -1223,6 +1224,12 @@ void Runner::Stop()
 		Locator::entitiesRegistry::value().Context().mapScriptGlobals.landNumber = *_landNumberBefore;
 	}
 	_landNumberBefore.reset();
+	// The camera zones that the scenario set go
+	if (_cameraZoneSet && Locator::cameraZoneSystem::has_value())
+	{
+		Locator::cameraZoneSystem::value().ClearZones();
+	}
+	_cameraZoneSet = false;
 	if (_skirmishBefore.has_value() && Locator::entitiesRegistry::has_value())
 	{
 		// The end of the skirmish goes too, so that the world turns again
@@ -1471,6 +1478,14 @@ void Runner::SetUpEnvironment(const Environment& environment)
 			_unlockedBefore = unlocked;
 		}
 		unlocked = *environment.unlockedBonusCreatures;
+	}
+	if (!environment.cameraZone.empty() && Locator::cameraZoneSystem::has_value())
+	{
+		_cameraZoneSet = true;
+		if (!Locator::cameraZoneSystem::value().SetZones(environment.cameraZone))
+		{
+			Log(fmt::format("The camera zones of {} did not load", environment.cameraZone));
+		}
 	}
 	if (environment.landNumber.has_value() && Locator::entitiesRegistry::has_value())
 	{

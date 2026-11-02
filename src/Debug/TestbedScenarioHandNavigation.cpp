@@ -10,6 +10,8 @@
 // The testbed's scenarios of the player's hand finding its way about: hovering over the land, dragging it, turning and
 // zooming the camera, and clicking. The mouse is driven through the same events the real one sends.
 
+#include <SDL_scancode.h>
+
 #include "TestbedScenarioRegistry.h"
 
 using namespace openblack;
@@ -47,6 +49,17 @@ Command Sweep(glm::vec2 by, float seconds, float delay)
 Command Wheel(size_t notches, bool towards, float delay)
 {
 	return {.kind = Kind::WheelTurn, .delaySeconds = delay, .value = notches, .ctrl = towards};
+}
+
+/// A key of the keyboard put down and held, or let go
+Command KeyDown(SDL_Scancode key, float delay)
+{
+	return {.kind = Kind::PlainKeyDown, .delaySeconds = delay, .value = static_cast<size_t>(key)};
+}
+
+Command KeyUp(SDL_Scancode key, float delay)
+{
+	return {.kind = Kind::PlainKeyUp, .delaySeconds = delay, .value = static_cast<size_t>(key)};
 }
 } // namespace
 
@@ -240,5 +253,26 @@ void testbed_scenarios::AddHandNavigationScenarios(std::vector<Scenario>& all)
 	    .framing = {.shot = Shot::Testbed},
 	    .commands = {PointerTo({0.6f, 0.75f}, 1.0f), Sweep({0.3f, 0.1f}, 1.0f, 0.5f), Press(k_Left, 1.5f),
 	                 Release(k_Left, 0.1f)},
+	});
+
+	all.push_back({
+	    .id = "hand.fence_force_field",
+	    .name = "Move the camera into the fence",
+	    .facet = Facet::Hand,
+	    .description = "The camera zones of the first land's glade (Land1Choose.exc) are set, so the camera is kept inside "
+	                   "the glade's fence. The wall stands on the heights of the first land's fence, which are above this flat "
+	                   "land, so the camera stands high inside the fence near its north side and looks north. The up "
+	                   "arrow key (Move Forwards) goes down and stays down for two seconds. While it is down, the wheel "
+	                   "turns two notches. Then the key comes up. Five seconds later, the key goes down again for a "
+	                   "second.",
+	    .expected = "The camera stops at the fence and is put back a little inside it. It shakes, and the fence lights up "
+	                "near the camera as a grey wall of light, 250 units high, which fades over about four seconds. While "
+	                "the key is down, the camera does not move, but the wheel zooms it. When the key comes up, the camera "
+	                "takes its controls again. The second press moves the camera into the fence again and lights the wall "
+	                "again. The inspector (view.zones) counts the hits and shows the camera inside the fence.",
+	    .environment = {.dispenserGrid = false, .cameraZone = "Land1Choose.exc"},
+	    .framing = {.shot = Shot::Placed, .eye = {-390.0f, 90.0f, 590.0f}, .look = {-390.0f, 70.0f, 700.0f}},
+	    .commands = {PointerTo({0.5f, 0.75f}, 0.5f), KeyDown(SDL_SCANCODE_UP, 0.5f), Wheel(2, false, 1.0f),
+	                 KeyUp(SDL_SCANCODE_UP, 1.0f), KeyDown(SDL_SCANCODE_UP, 5.0f), KeyUp(SDL_SCANCODE_UP, 1.0f)},
 	});
 }
