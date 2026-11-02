@@ -149,6 +149,8 @@ TEST(NetworkLandNames, AWorldStateOfAServerMustNameTheOpenLand)
 	// The server's own paths name the same files
 	EXPECT_TRUE(NamesOpenLand("C:/server/black/Scripts/Land1.txt", "C:\\server\\Data\\Landscape\\land1.lnd", land, landscape));
 	EXPECT_TRUE(NamesOpenLand("Land1.txt", "Land1.lnd", land, landscape));
+	// The path of a landscape that a script gives keeps its backslashes on every computer
+	EXPECT_TRUE(NamesOpenLand("Land1.txt", "Land1.lnd", land, std::filesystem::path(".\\DATA\\LANDSCAPE\\Land1.lnd")));
 	// Another land, another landscape or a share
 	EXPECT_FALSE(NamesOpenLand("Land2.txt", "Land1.lnd", land, landscape));
 	EXPECT_FALSE(NamesOpenLand("Land1.txt", "Land2.lnd", land, landscape));

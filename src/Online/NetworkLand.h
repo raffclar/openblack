@@ -118,12 +118,14 @@ inline constexpr std::array<std::string_view, 6> k_DeviceNames {"con", "prn", "a
 /// open on this computer. The world state keeps the paths of the server's own files. This computer never opens them: the
 /// name of each file must be a plain name (IsPlainPart) and the name of the open file. A land that the game builds has
 /// no landscape file, and then neither side has one.
+/// A path that a script gives keeps its backslashes. A computer that is not Windows does not read them as separators,
+/// so the name of the open file is the text after the last "/" or backslash.
 [[nodiscard]] inline bool NamesOpenLand(std::string_view serverLand, std::string_view serverLandscape,
                                         const std::filesystem::path& openLand, const std::filesystem::path& openLandscape)
 {
 	const auto sameFile = [](std::string_view server, const std::filesystem::path& open) {
 		const auto name = LastPart(server);
-		return IsPlainPart(name) && SameName(name, open.filename().generic_string());
+		return IsPlainPart(name) && SameName(name, LastPart(open.generic_string()));
 	};
 	if (openLand.empty() || !sameFile(serverLand, openLand))
 	{
