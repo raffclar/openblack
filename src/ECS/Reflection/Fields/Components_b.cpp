@@ -29,7 +29,9 @@ void RegisterFields_Components_b(entt::meta_ctx& context);
 
 void openblack::ecs::reflection::RegisterFields_Components_b(entt::meta_ctx& context)
 {
-	Reflect<components::Ball>(context).Field<&components::Ball::destination>("destination");
+	Reflect<components::Ball>(context)
+	    .Field<&components::Ball::destination>("destination")
+	    .Field<&components::Ball::canScore>("canScore");
 	Reflect<components::BlendedByMaterial>(context).Field<&components::BlendedByMaterial::shineColour>("shineColour");
 	Reflect<components::BoatFilmPart>(context)
 	    .Field<&components::BoatFilmPart::role>("role")

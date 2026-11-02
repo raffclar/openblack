@@ -122,6 +122,7 @@
 #include "ECS/Systems/Implementations/DanceSystem.h"
 #include "ECS/Systems/Implementations/FilmCreatureSystem.h"
 #include "ECS/Systems/Implementations/FixedOutlineSystem.h"
+#include "ECS/Systems/Implementations/FootballSystem.h"
 #include "ECS/Systems/Implementations/GameEndSystem.h"
 #include "ECS/Systems/Implementations/HeartbeatSystem.h"
 #include "ECS/Systems/Implementations/LandSystem.h"
@@ -262,6 +263,7 @@ using openblack::ecs::systems::FilmCreatureSystem;
 using openblack::ecs::systems::FireflySystem;
 using openblack::ecs::systems::FishFarmSystem;
 using openblack::ecs::systems::FixedOutlineSystem;
+using openblack::ecs::systems::FootballSystem;
 using openblack::ecs::systems::FootpathSystem;
 using openblack::ecs::systems::FootprintSystem;
 using openblack::ecs::systems::ForestSystem;
@@ -677,6 +679,7 @@ bool openblack::InitializeSimulation(const player_profiles::Store& profiles) noe
 	Locator::puzzleGameSystem::emplace<PuzzleGameSystem>();
 	Locator::wonderSystem::emplace<WonderSystem>();
 	Locator::danceSystem::emplace<DanceSystem>();
+	Locator::footballSystem::emplace<FootballSystem>();
 	Locator::sharkSystem::emplace<SharkSystem>();
 	Locator::helpTextSystem::emplace<HelpTextSystem>();
 	Locator::helpProfileSystem::emplace<HelpProfileSystem>();
@@ -919,6 +922,7 @@ void openblack::ShutDownServices()
 	Locator::puzzleGameSystem::reset();
 	Locator::wonderSystem::reset();
 	Locator::danceSystem::reset();
+	Locator::footballSystem::reset();
 	Locator::sharkSystem::reset();
 	Locator::videoSystem::reset();
 	Locator::helpTextSystem::reset();

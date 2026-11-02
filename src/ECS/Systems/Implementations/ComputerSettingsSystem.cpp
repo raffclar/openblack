@@ -52,6 +52,7 @@ bool TakeAll(openblack::computer_settings::Settings& kept, const openblack::comp
 	any = Take(kept.height, changed.height) || any;
 	any = Take(kept.windowMode, changed.windowMode) || any;
 	any = Take(kept.vsync, changed.vsync) || any;
+	any = Take(kept.footballAddOn, changed.footballAddOn) || any;
 	return any;
 }
 

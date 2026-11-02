@@ -912,6 +912,21 @@ TEST(CreatureActionAgendas, AForcedSleepAtHomeNeedsOnlyAHome)
 	EXPECT_FALSE(plan_actions::Buildable(*sleep, {}));
 }
 
+TEST(CreatureActionAgendas, AForcedLookAtHandNeedsNoMovingHand)
+{
+	const auto* look = plan_actions::For("LookAtHand");
+	ASSERT_NE(look, nullptr);
+	// With the hand still, the planner does not choose it
+	plan_actions::Situation situation;
+	situation.handMoving = false;
+	EXPECT_FALSE(plan_actions::Possible(*look, situation));
+	// A script that forces it gets the agenda all the same
+	EXPECT_TRUE(plan_actions::Buildable(*look, situation));
+	const auto agenda = plan_actions::Agenda(*look, std::nullopt, {}, situation, AlwaysFirst);
+	ASSERT_TRUE(agenda.has_value());
+	EXPECT_EQ(agenda->size(), 1u);
+}
+
 TEST(CreatureActionAgendas, DrinkingIsAlwaysPossibleButNeedsAPlaceToBeMade)
 {
 	const auto* drink = plan_actions::For("DrinkFromTheSea");

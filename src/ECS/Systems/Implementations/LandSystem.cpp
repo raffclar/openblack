@@ -77,6 +77,7 @@
 #include "ECS/Systems/CinematicDirectorSystemInterface.h"
 #include "ECS/Systems/CloudSystemInterface.h"
 #include "ECS/Systems/ComputerPlayerSystemInterface.h"
+#include "ECS/Systems/ComputerSettingsSystemInterface.h"
 #include "ECS/Systems/CreatureCarryOverSystemInterface.h"
 #include "ECS/Systems/CreatureFightSystemInterface.h"
 #include "ECS/Systems/DesignedWaterfallSystemInterface.h"
@@ -88,6 +89,7 @@
 #include "ECS/Systems/FireflySystemInterface.h"
 #include "ECS/Systems/FishFarmSystemInterface.h"
 #include "ECS/Systems/FloatingNumberSystemInterface.h"
+#include "ECS/Systems/FootballSystemInterface.h"
 #include "ECS/Systems/FootpathSystemInterface.h"
 #include "ECS/Systems/ForestSystemInterface.h"
 #include "ECS/Systems/GestureEventsInterface.h"
@@ -870,6 +872,15 @@ void LandSystem::PrepareNewLand(land_change::Kind change)
 	if (Locator::waterRingSystem::has_value())
 	{
 		Locator::waterRingSystem::value().Reset();
+	}
+	// The game reads the switch of the Soccer Add-On each time that a game starts. The settings file of the computer
+	// or the developer switch turns it on.
+	if (Locator::footballSystem::has_value())
+	{
+		const bool setting = Locator::computerSettingsSystem::has_value() &&
+		                     Locator::computerSettingsSystem::value().GetSettings().footballAddOn.value_or(false);
+		Locator::footballSystem::value().StartGame(Locator::config::value().footballAddOn || setting,
+		                                           Locator::time::value().IsNetworkGame());
 	}
 	// The scripts' hold on the screen goes on through the story's change of land: a fade to black made on the last land
 	// stays black while the next loads, for that land's scripts to fade in. It goes when the scripts start again

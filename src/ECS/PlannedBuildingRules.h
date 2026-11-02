@@ -29,14 +29,14 @@
 namespace openblack::ecs::planned_building
 {
 
-/// Football pitches are a hidden feature that a normal install never unlocks, so a town never wants one
-inline constexpr bool k_FootballEnabled = false;
-
 /// What a town has that its wants for planned buildings read
 struct TownForPlans
 {
 	/// The neutral player's town wants neither a totem nor a workshop
 	bool neutral {false};
+	/// The game plays football (the add-on switch is on in a game that is not a multiplayer game). Without football, a
+	/// town never wants a football pitch.
+	bool football {false};
 	/// The places left for adults in its built houses (below nothing when they are over full), its homeless, and its
 	/// people
 	int32_t adultRoom {0};

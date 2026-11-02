@@ -396,6 +396,9 @@ protected:
 	std::vector<L3DTexture> _skins;
 	/// If the flag HasDoorPosition is on the first extra point is the door
 	std::vector<L3DPoint> _extraPoints;
+	/// The boxes of the list that the header points to after the bounding box, such as the two goals of the football
+	/// model: a count, then each box
+	std::vector<L3DBoundingBox> _boxes;
 	std::vector<L3DPrimitiveHeader> _primitiveHeaders;
 	std::vector<L3DVertex> _vertices;
 	std::vector<uint16_t> _indices;
@@ -450,6 +453,7 @@ public:
 	[[nodiscard]] const std::vector<L3DSubmeshHeader>& GetSubmeshHeaders() const noexcept { return _submeshHeaders; }
 	[[nodiscard]] const std::vector<L3DTexture>& GetSkins() const noexcept { return _skins; }
 	[[nodiscard]] const std::vector<L3DPoint>& GetExtraPoints() const noexcept { return _extraPoints; }
+	[[nodiscard]] const std::vector<L3DBoundingBox>& GetBoxes() const noexcept { return _boxes; }
 	[[nodiscard]] const std::vector<L3DPrimitiveHeader>& GetPrimitiveHeaders() const noexcept { return _primitiveHeaders; }
 	[[nodiscard]] const std::vector<L3DVertex>& GetVertices() const noexcept { return _vertices; }
 	/// The vertices to change in place, all of the submeshes' in turn

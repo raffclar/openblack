@@ -89,6 +89,7 @@
 #include "ECS/Components/Firefly.h"
 #include "ECS/Components/FishFarm.h"
 #include "ECS/Components/Flock.h"
+#include "ECS/Components/Football.h"
 #include "ECS/Components/Footpath.h"
 #include "ECS/Components/GameStanding.h"
 #include "ECS/Components/GuidanceHeard.h"
@@ -175,6 +176,7 @@
 #include "ECS/Systems/FireflySystemInterface.h"
 #include "ECS/Systems/FishFarmSystemInterface.h"
 #include "ECS/Systems/FloatingNumberSystemInterface.h"
+#include "ECS/Systems/FootballSystemInterface.h"
 #include "ECS/Systems/FootpathSystemInterface.h"
 #include "ECS/Systems/FootprintSystemInterface.h"
 #include "ECS/Systems/ForestSystemInterface.h"
@@ -406,6 +408,7 @@ constexpr std::array k_Coverage {
     LocatorCoverage {"puzzleGameSystem", "puzzle.list"},
     LocatorCoverage {"wonderSystem", "town.wonders"},
     LocatorCoverage {"danceSystem", "living.dances"},
+    LocatorCoverage {"footballSystem", "living.football"},
     LocatorCoverage {"sharkSystem", "living.sharks"},
     LocatorCoverage {"introSystem", "living.intro"},
     LocatorCoverage {"boatLaunchSystem", "living.boat_launch"},
@@ -1588,6 +1591,45 @@ std::unique_ptr<ProviderInterface> LivingProvider()
 		                  }
 		                  return items;
 	                  }));
+	provider->Add(
+	    Query("football",
+	          "The football of the Soccer Add-On: whether the game plays it, and each pitch's match state, score, ball, "
+	          "referee, teams, crowd and wave",
+	          {}, ResultKind::Object),
+	    Serve<Locator::footballSystem>(
+	        "the football", [](const ecs::systems::FootballSystemInterface& football, const QueryContext&) {
+		        Json pitches = Json::array();
+		        if (const auto* registry = Registry(); registry != nullptr)
+		        {
+			        registry->Each<const ecs::components::FootballPitch>(
+			            [&pitches, registry](entt::entity entity, const ecs::components::FootballPitch& pitch) {
+				            auto item = Listed(*registry, entity);
+				            const auto ids = [](const std::vector<entt::entity>& team) {
+					            Json list = Json::array();
+					            for (const auto villager : team)
+					            {
+						            list.push_back(ToId(villager));
+					            }
+					            return list;
+				            };
+				            item["functional"] = pitch.functional;
+				            item["state"] = static_cast<int>(pitch.match.state);
+				            item["turns"] = pitch.match.turns;
+				            item["score"] = {pitch.match.score.at(0), pitch.match.score.at(1)};
+				            item["town_match"] = pitch.match.townMatch;
+				            item["ball"] = ToId(pitch.ball);
+				            item["referee"] = ToId(pitch.referee);
+				            item["home"] = ids(pitch.home);
+				            item["away"] = ids(pitch.away);
+				            item["crowd_places"] = pitch.crowdPlaces;
+				            item["wave_next"] = pitch.wave.next;
+				            item["wave_rest"] = pitch.wave.rest;
+				            item["dead_ball_fetcher"] = ToId(pitch.deadBallFetcher);
+				            pitches.push_back(std::move(item));
+			            });
+		        }
+		        return Json {{"on", football.IsOn()}, {"pitches", std::move(pitches)}};
+	        }));
 	provider->Add(
 	    Query("dances",
 	          "The dances: what they are danced for, whether dancing, their speed and clock, and each group's shape, move "

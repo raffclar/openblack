@@ -104,8 +104,14 @@ TEST(PlannedBuildingRules, CivicBuildingsAreWantedUntilTheTownHasOne)
 	// A graveyard going up still leaves the want of another, shared over the sites
 	EXPECT_FLOAT_EQ(DesireToBeBuilt(Civic(AbodeType::Graveyard, 0.3f, 2), With({})), 0.15f);
 	EXPECT_FLOAT_EQ(DesireToBeBuilt(Civic(AbodeType::Graveyard, 0.3f), With({AbodeNumber::Graveyard})), 0.0f);
-	// Football is never played
+	// Without football a town never wants a pitch. With football it wants one pitch only.
 	EXPECT_FLOAT_EQ(DesireToBeBuilt(Civic(AbodeType::FootballPitch, 1.0f), With({})), 0.0f);
+	auto football = With({});
+	football.football = true;
+	EXPECT_FLOAT_EQ(DesireToBeBuilt(Civic(AbodeType::FootballPitch, 1.0f), football), 1.0f);
+	auto withPitch = With({AbodeNumber::FootballPitch});
+	withPitch.football = true;
+	EXPECT_FLOAT_EQ(DesireToBeBuilt(Civic(AbodeType::FootballPitch, 1.0f), withPitch), 0.0f);
 }
 
 TEST(PlannedBuildingRules, AVillageCentreAndATotemShutEachOtherOut)

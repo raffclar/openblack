@@ -227,6 +227,9 @@ TEST(ParticleTypes, NameTheirFiles)
 {
 	EXPECT_EQ(ParticleTypeFile(ParticleType::Smoke), "SF_Smoke");
 	EXPECT_EQ(ParticleTypeFile(ParticleType::Bonfire), "SF_Bonfire");
+	// The town fireworks have their file. The single firework has none, so it shows nothing.
+	EXPECT_EQ(ParticleTypeFile(ParticleType::Firework), "SF_FireWorks");
+	EXPECT_TRUE(ParticleTypeFile(ParticleType::FireworkSingle).empty());
 	// Shared files
 	EXPECT_EQ(ParticleTypeFile(ParticleType::Food), ParticleTypeFile(ParticleType::FoodPoisoned));
 	EXPECT_EQ(ParticleTypeFile(ParticleType::Heal), ParticleTypeFile(ParticleType::HealFx));

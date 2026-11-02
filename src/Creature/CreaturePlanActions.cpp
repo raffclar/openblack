@@ -1104,6 +1104,9 @@ bool creature_plan_actions::Buildable(const Executor& executor, const Situation&
 	case Build::GoHome:
 		// The agendas of these actions need only the home
 		return situation.home.has_value();
+	case Build::LookAtHand:
+		// The agenda needs nothing. A script can make the creature look at the hand when the hand does not move.
+		return true;
 	default:
 		return Possible(executor, situation);
 	}

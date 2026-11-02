@@ -44,6 +44,7 @@
 #include "ECS/CreatureAttitudeRules.h"
 #include "ECS/FishPuzzleRules.h"
 #include "ECS/FixedOutlines.h"
+#include "ECS/FootballRules.h"
 #include "ECS/Heartbeat.h"
 #include "ECS/HighDetailRules.h"
 #include "ECS/PosedModel.h"
@@ -227,7 +228,8 @@ void openblack::ecs::reflection::RegisterFields_Values_e(entt::meta_ctx& context
 	Reflect<openblack::ecs::components::CreatureMindState::Teaching>(context, ValueOnly {})
 	    .Field<&openblack::ecs::components::CreatureMindState::Teaching::type>("type")
 	    .Field<&openblack::ecs::components::CreatureMindState::Teaching::action>("action")
-	    .Field<&openblack::ecs::components::CreatureMindState::Teaching::knows>("knows");
+	    .Field<&openblack::ecs::components::CreatureMindState::Teaching::knows>("knows")
+	    .Field<&openblack::ecs::components::CreatureMindState::Teaching::everything>("everything");
 	Reflect<openblack::ecs::components::CreatureSkin::Painted>(context, ValueOnly {})
 	    .Field<&openblack::ecs::components::CreatureSkin::Painted::baseMesh>("baseMesh")
 	    .Field<&openblack::ecs::components::CreatureSkin::Painted::variantMesh>("variantMesh")
@@ -340,6 +342,18 @@ void openblack::ecs::reflection::RegisterFields_Values_e(entt::meta_ctx& context
 	Reflect<openblack::ecs::fixed_outlines::Outline>(context, ValueOnly {})
 	    .Field<&openblack::ecs::fixed_outlines::Outline::bounds>("bounds")
 	    .Field<&openblack::ecs::fixed_outlines::Outline::parts>("parts");
+	Reflect<openblack::ecs::football_rules::Match>(context, ValueOnly {})
+	    .Field<&openblack::ecs::football_rules::Match::state>("state")
+	    .Field<&openblack::ecs::football_rules::Match::turns>("turns")
+	    .Field<&openblack::ecs::football_rules::Match::kickOffReady>("kickOffReady")
+	    .Field<&openblack::ecs::football_rules::Match::goalTurns>("goalTurns")
+	    .Field<&openblack::ecs::football_rules::Match::roleTurns>("roleTurns")
+	    .Field<&openblack::ecs::football_rules::Match::score>("score")
+	    .Field<&openblack::ecs::football_rules::Match::homeMournedLastGoal>("homeMournedLastGoal")
+	    .Field<&openblack::ecs::football_rules::Match::townMatch>("townMatch");
+	Reflect<openblack::ecs::football_rules::Wave>(context, ValueOnly {})
+	    .Field<&openblack::ecs::football_rules::Wave::rest>("rest")
+	    .Field<&openblack::ecs::football_rules::Wave::next>("next");
 	Reflect<openblack::ecs::heartbeat::State>(context, ValueOnly {})
 	    .Field<&openblack::ecs::heartbeat::State::stress>("stress")
 	    .Field<&openblack::ecs::heartbeat::State::rate>("rate")

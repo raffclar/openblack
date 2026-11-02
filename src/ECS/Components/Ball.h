@@ -21,6 +21,9 @@ struct Ball
 {
 	/// Where it was last kicked at
 	std::optional<glm::vec3> destination;
+	/// The last kick that sent it can score a goal: a kick in play can, the kick that starts play again after a dead
+	/// ball can not
+	bool canScore {false};
 };
 
 } // namespace openblack::ecs::components

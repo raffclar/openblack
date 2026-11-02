@@ -99,6 +99,7 @@ public:
 	void Recoil(entt::entity creature) override;
 	void KnockOut(entt::entity creature) override;
 	void ForceFaint(entt::entity creature) override;
+	void FaintForScript(entt::entity creature) override;
 	void KillPermanently(entt::entity creature) override;
 	void Resurrect(entt::entity creature) override;
 	[[nodiscard]] bool IsKnockedOut(entt::entity creature) const override;
@@ -192,8 +193,14 @@ private:
 	void StopPartnerAfterDuel(entt::entity partner, entt::entity creature);
 	void BeginDuel(entt::entity creature);
 	void MeasureBlows(entt::entity creature);
+	/// Whether the faint takes off the leash. Only the order of a script keeps it on.
+	enum class Leash : uint8_t
+	{
+		TakeOff,
+		Keep,
+	};
 	/// Faints and lies out cold, to be taken home later
-	void Faint(entt::entity creature);
+	void Faint(entt::entity creature, Leash leash = Leash::TakeOff);
 	/// The faint starts on the body: its side, the faint itself, and the reaction of those near it
 	void StartFaint(entt::entity creature);
 	/// The camera's fight view: started by looking at an arena with a fight on, it follows the fight and lingers a little

@@ -135,6 +135,7 @@
 #include "ECS/Components/PrayerPower.h"
 #include "ECS/Components/Scaffold.h"
 #include "ECS/Components/ScriptControl.h"
+#include "ECS/Components/ScriptHighlight.h"
 #include "ECS/Components/Spell.h"
 #include "ECS/Components/SpellDispenser.h"
 #include "ECS/Components/SpellIcon.h"
@@ -192,6 +193,7 @@
 #include "ECS/Systems/FightTranscriptSystemInterface.h"
 #include "ECS/Systems/FireSystemInterface.h"
 #include "ECS/Systems/FireflySystemInterface.h"
+#include "ECS/Systems/FootballSystemInterface.h"
 #include "ECS/Systems/FootpathSystemInterface.h"
 #include "ECS/Systems/FootprintSystemInterface.h"
 #include "ECS/Systems/ForestSystemInterface.h"
@@ -1460,6 +1462,11 @@ void Runner::SetUpEnvironment(const Environment& environment)
 			    }
 		    });
 	}
+	// The switch of the Soccer Add-On, which the next land reads again from the settings
+	if (environment.football && Locator::footballSystem::has_value())
+	{
+		Locator::footballSystem::value().StartGame(true, Locator::time::value().IsNetworkGame());
+	}
 	if (environment.pushScrolling && Locator::config::has_value())
 	{
 		Locator::config::value().pushScrolling = true;
@@ -2558,6 +2565,17 @@ std::string Runner::GivePlayerCommand(const Command& command)
 		return HandTakeFireBall();
 	case Kind::HandTapObject:
 		return HandTapObject(command.object);
+	case Kind::JoinFootball:
+	{
+		const auto object = ObjectAt(command.object);
+		auto& registry = Locator::entitiesRegistry::value();
+		const auto* villager = object.has_value() ? registry.TryGet<const ecs::components::Villager>(*object) : nullptr;
+		if (villager == nullptr || !Locator::footballSystem::has_value())
+		{
+			return "no villager to join the football";
+		}
+		return Locator::footballSystem::value().Join(villager->town, *object) ? "joined the football" : "the town has no pitch";
+	}
 	case Kind::ScriptRelease:
 	{
 		const auto object = ObjectAt(command.object);
@@ -3196,6 +3214,9 @@ std::optional<lhvm::VMValue> Runner::ScriptValueOf(const ScriptArgument& argumen
 			return std::nullopt;
 		}
 		return lhvm::VMValue(_madeByNatives.at(argument.index));
+	case ScriptArgument::Kind::Text:
+		// A text is not a value: only a native call gives it
+		return std::nullopt;
 	}
 	if (!object.has_value())
 	{
@@ -3236,6 +3257,11 @@ std::string Runner::CallNative(const Command& command)
 			}
 			continue;
 		}
+		if (argument.kind == ScriptArgument::Kind::Text)
+		{
+			arguments.emplace_back(std::string(argument.text));
+			continue;
+		}
 		const auto given = ScriptValueOf(argument);
 		if (!given.has_value())
 		{
@@ -3268,6 +3294,34 @@ std::string Runner::CallNative(const Command& command)
 		}
 	}
 	return fmt::format("{} ran and gave back {} values", command.script, results.size());
+}
+
+std::string Runner::ClickScroll(const Command& command)
+{
+	if (!Locator::handGrabSystem::has_value())
+	{
+		return "no hand";
+	}
+	// The scroll nearest the point, as the player clicks the one that the camera looks at
+	const auto at = MapPoint(_middle, command.point);
+	auto& registry = Locator::entitiesRegistry::value();
+	auto nearest = entt::entity {entt::null};
+	float best = std::numeric_limits<float>::max();
+	registry.Each<const ecs::components::ScriptHighlight, const ecs::components::Transform>(
+	    [&](entt::entity entity, const ecs::components::ScriptHighlight&, const ecs::components::Transform& transform) {
+		    const auto distance = glm::distance(glm::vec2(transform.position.x, transform.position.z), at);
+		    if (distance < best)
+		    {
+			    best = distance;
+			    nearest = entity;
+		    }
+	    });
+	if (nearest == entt::null)
+	{
+		return "no scroll";
+	}
+	Locator::handGrabSystem::value().ClickThing(nearest);
+	return fmt::format("clicked the scroll {} m from the point", best);
 }
 
 std::string Runner::RunScript(const Command& command)
@@ -3760,7 +3814,8 @@ void Runner::Give(const Command& command)
 	    command.kind == Kind::RemoveTeleportStone || command.kind == Kind::MakeDance || command.kind == Kind::OtherGodHand ||
 	    command.kind == Kind::OwnGod || command.kind == Kind::BringCreature || command.kind == Kind::ComputerPersonality ||
 	    command.kind == Kind::ComputerUntaughtSends || command.kind == Kind::HandCastOnDispenser ||
-	    command.kind == Kind::HandCastOnCreature || command.kind == Kind::CloseHeldMiracle)
+	    command.kind == Kind::HandCastOnCreature || command.kind == Kind::CloseHeldMiracle ||
+	    command.kind == Kind::JoinFootball)
 	{
 		const auto result = GivePlayerCommand(command);
 		Log(fmt::format("{:.1f}s: {}{}{}", _seconds, Name(command.kind), result.empty() ? "" : ": ", result));
@@ -3772,6 +3827,22 @@ void Runner::Give(const Command& command)
 		const auto line = fmt::format("{:.2f}s: {}: {}", _seconds, Name(command.kind), result);
 		SPDLOG_LOGGER_INFO(spdlog::get("game"), "Testbed {}", line);
 		Log(line);
+		return;
+	}
+	if (command.kind == Kind::CameraLooksAt)
+	{
+		const auto look = MapPoint(_middle, command.point);
+		const glm::vec2 eye {look.x, look.y - 40.0f};
+		const auto& land = Locator::terrainSystem::value();
+		Locator::camera::value()
+		    .SetOrigin({eye.x, land.GetHeightAt(eye) + 30.0f, eye.y})
+		    .SetFocus({look.x, land.GetHeightAt(look), look.y});
+		Log(fmt::format("{:.1f}s: {}", _seconds, Name(command.kind)));
+		return;
+	}
+	if (command.kind == Kind::ClickScroll)
+	{
+		Log(fmt::format("{:.1f}s: {}: {}", _seconds, Name(command.kind), ClickScroll(command)));
 		return;
 	}
 	if (command.kind == Kind::RunScript)
@@ -4675,6 +4746,7 @@ void Runner::Give(const Command& command)
 	case Kind::HandCastOnDispenser:
 	case Kind::HandCastOnCreature:
 	case Kind::CloseHeldMiracle:
+	case Kind::JoinFootball:
 	case Kind::HandPour:
 	case Kind::HandRelease:
 	case Kind::SetReportLatency:
@@ -4746,6 +4818,8 @@ void Runner::Give(const Command& command)
 	case Kind::ContinueGame:
 	case Kind::PlayLogoEffect:
 	case Kind::StopScript:
+	case Kind::ClickScroll:
+	case Kind::CameraLooksAt:
 	case Kind::RunScript:
 	case Kind::CallNative:
 	case Kind::StartScriptMusic:
