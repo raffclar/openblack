@@ -101,6 +101,9 @@ public:
 	[[nodiscard]] virtual float InfluenceShare(PlayerNames player) const = 0;
 	/// The influence of the player
 	[[nodiscard]] virtual float InfluencePower(PlayerNames player) const = 0;
+	/// When the player is the god of this computer and has a creature, the creature file of its creature as it is now
+	/// is kept for the clan upload at the end of the game
+	virtual void KeepCreatureFile(PlayerNames player) = 0;
 	/// The creature of the player goes from the land, if the player has one
 	virtual void RemoveCreature(PlayerNames player) = 0;
 	/// The statistics of the player count one more god defeated
