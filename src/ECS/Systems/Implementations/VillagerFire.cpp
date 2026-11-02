@@ -43,6 +43,7 @@
 #include "ECS/Components/Villager.h"
 #include "ECS/Components/VillagerDeath.h"
 #include "ECS/Components/WallHug.h"
+#include "ECS/Components/WorshipSite.h"
 #include "ECS/GameEndConditions.h"
 #include "ECS/GraveyardRules.h"
 #include "ECS/Graveyards.h"
@@ -66,6 +67,7 @@
 #include "ECS/WalkerPlacement.h"
 #include "ECS/WallHugRules.h"
 #include "ECS/WorldObjects.h"
+#include "ECS/WorshipperRules.h"
 #include "Fire/ViaPoint.h"
 #include "InfoConstants.h"
 #include "Locator.h"
@@ -152,6 +154,13 @@ void SetPrevious(LivingAction& action, VillagerStates state)
 const GVillagerStateTableInfo& StateInfo(VillagerStates state)
 {
 	return Locator::infoConstants::value().villagerStateTable.at(static_cast<size_t>(state));
+}
+
+/// Whether the villager started to go to the worship site of its town and is not there yet
+bool IsOnTheWayToWorship(entt::entity villager)
+{
+	const auto* worshipper = Entities().TryGet<const Worshipper>(villager);
+	return worshipper != nullptr && worshipper->onTheWay;
 }
 
 float GameFloatRandom(float range)
@@ -486,6 +495,11 @@ void villager_fire::SetupReactToFire(entt::entity villager, entt::entity object,
 	}
 	auto& state = FireStateOf(villager);
 	state.reactionTarget = object;
+	// A villager on its way to worship keeps the state that it heads for. It continues to that state after the fire
+	const bool onTheWay = IsOnTheWayToWorship(villager);
+	const auto heading = FinalState(*action);
+	const auto goOnTo = ecs::worshipper_rules::StateAfterFireOnTheWay(heading, StateInfo(heading).keepsPreviousState != 0,
+	                                                                  State(*action, LivingAction::Index::Previous));
 	// The villager remembers what it was doing, unless it was reacting already
 	if (state.reaction == 0)
 	{
@@ -495,6 +509,12 @@ void villager_fire::SetupReactToFire(entt::entity villager, entt::entity object,
 	SetTopState(*action, VillagerStates::ReactToFire);
 	// The reaction it takes up, which a fire spreads as soon as it makes it
 	FireStateOf(villager).reaction = reaction;
+	// A villager on its way to worship does not stop for the fire. It goes around the fire and then to its worship
+	if (onTheWay && registry.AllOf<Fire>(object))
+	{
+		FireStateOf(villager).fire = object;
+		SetupMoveAroundFire(*action, ecs::wall_hug::ToPoint(GoalOf(villager)), goOnTo);
+	}
 }
 
 uint32_t villager_fire::ReactToFire(LivingAction& action)
@@ -535,10 +555,11 @@ uint32_t villager_fire::ReactToFire(LivingAction& action)
 		EndReaction(action);
 		return 1;
 	}
-	// A villager of a town weighs whether the blaze needs it: by how urgent its fires are, how many more firemen fit round
-	// it and how near home it is
+	// A villager of a town that is not on its way to worship weighs whether the blaze needs it: by how urgent its fires
+	// are, how many more firemen fit round it and how near home it is
 	const auto* person = registry.TryGet<const Villager>(villager);
-	if (person != nullptr && person->town != entt::null && registry.Valid(person->town))
+	const bool hasTown = person != nullptr && person->town != entt::null && registry.Valid(person->town);
+	if (ecs::worshipper_rules::WeighsFireFight(hasTown, IsOnTheWayToWorship(villager)))
 	{
 		const auto* town = registry.TryGet<const Transform>(person->town);
 		const auto blaze = fires.GetBlaze(object);

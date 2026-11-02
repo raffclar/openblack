@@ -183,3 +183,19 @@ TEST(WorshipperRules, AVillagerStopsItsWayOnlyForAFinalStateWithAnotherExit)
 	EXPECT_FALSE(rules::LeavesTheWayToSite(false, false, false));
 	EXPECT_FALSE(rules::LeavesTheWayToSite(true, true, false));
 }
+
+TEST(WorshipperRules, AVillagerOnItsWayToWorshipDoesNotHelpToFightAFire)
+{
+	EXPECT_TRUE(rules::WeighsFireFight(true, false));
+	EXPECT_FALSE(rules::WeighsFireFight(true, true));
+	// A villager with no town never weighs the blaze
+	EXPECT_FALSE(rules::WeighsFireFight(false, false));
+	EXPECT_FALSE(rules::WeighsFireFight(false, true));
+}
+
+TEST(WorshipperRules, AVillagerOnItsWayToWorshipGoesOnToTheStateItHeadsForAfterAFire)
+{
+	EXPECT_EQ(rules::StateAfterFireOnTheWay(59, false, 7), 59);
+	// A state that keeps the remembered state sends it on to the remembered state
+	EXPECT_EQ(rules::StateAfterFireOnTheWay(59, true, 7), 7);
+}

@@ -13691,6 +13691,31 @@ void AddWorkshopScenarios(std::vector<Scenario>& all)
 	                {.type = AbodeInfo::CelticWorkshop, .offset = k_Workshop, .yawDegrees = 180.0f, .storedWood = 10000}},
 	});
 
+	all.push_back({
+	    .id = "objects.workshop_graveyard_burial_scaffold",
+	    .name = "A burial on a workshop that stands in for the graveyard makes a scaffold with no wood",
+	    .facet = Facet::Objects,
+	    .description = "A Celtic town of the player's with a village centre, a workshop with no wood, its yard towards the "
+	                   "camera, and a graveyard. After one second the graveyard goes, and the workshop becomes the "
+	                   "graveyard of the town. After two seconds a villager of the town with little life catches fire.",
+	    .expected = "The villager burns and dies. The workshop counts the burial: its scaffold shows over the workshop "
+	                "from then on. On the next turn of the workshop a small scaffold appears in the first place of the "
+	                "yard and a horn sounds, although the workshop has no wood. The work sound does not play. The "
+	                "inspector shows the stand-in graves count 1 on the workshop.",
+	    .environment = {.dispenserGrid = false},
+	    .framing = {.shot = Shot::Overview, .include = {k_Workshop - glm::vec2 {15.0f}, k_Workshop + glm::vec2 {15.0f}}},
+	    .objects = {{.type = AbodeInfo::CelticTownCentre, .offset = {0.0f, 50.0f}},
+	                {.type = AbodeInfo::CelticWorkshop, .offset = k_Workshop, .yawDegrees = 180.0f, .storedWood = 0},
+	                {.type = AbodeInfo::CelticGraveyard, .offset = {30.0f, 30.0f}},
+	                {.type = VillagerInfo::CelticFarmerMale,
+	                 .offset = k_Workshop + glm::vec2 {12.0f, -12.0f},
+	                 .joinTown = true,
+	                 .life = 0.05f}},
+	    .commands = {{.kind = Command::Kind::RemoveObject, .delaySeconds = 1.0f, .object = 2},
+	                 {.kind = Command::Kind::SetAlight, .delaySeconds = 1.0f, .value = 1, .object = 3}},
+	    .townBeliefInPlayer = 1.0f,
+	});
+
 	// The scenario turns the workshop so that its yard faces the camera. The first place of the Celtic workshop's yard is
 	// 7.8 m in front of the workshop.
 	constexpr glm::vec2 k_FirstPlace = k_Workshop + glm::vec2 {0.0f, -7.8f};
