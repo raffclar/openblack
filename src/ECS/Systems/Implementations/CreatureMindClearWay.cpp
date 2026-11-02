@@ -130,8 +130,10 @@ bool CreatureMindSystem::ClearWay(entt::entity creature, CreatureMindState& mind
 	}
 	const auto thing = static_cast<entt::entity>(kept[*chosen]);
 	const auto action = actionFor(kept[*chosen]);
-	if (!action.has_value() ||
-	    !ForcePlan(creature, {.desire = Desire::ObeyPlayer, .action = tables->actions[*action].name, .object = thing}))
+	if (!action.has_value() || !ForcePlan(creature, {.desire = Desire::ObeyPlayer,
+	                                                 .action = tables->actions[*action].name,
+	                                                 .object = thing,
+	                                                 .fightBodyEndsAgain = true}))
 	{
 		return false;
 	}
@@ -155,7 +157,8 @@ void CreatureMindSystem::WalkOn(entt::entity creature, const CreatureMindState& 
 	static_cast<void>(ForcePlan(creature, {.desire = Desire::ObeyPlayer,
 	                                       .action = k_WalkOnAction,
 	                                       .object = creature,
-	                                       .agenda = creature_clear_way::WalkOn(mind.walkOnTo, height)}));
+	                                       .agenda = creature_clear_way::WalkOn(mind.walkOnTo, height),
+	                                       .fightBodyEndsAgain = true}));
 }
 
 void CreatureMindSystem::StepClearingWay(entt::entity creature, CreatureMindState& mind)

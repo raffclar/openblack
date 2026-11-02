@@ -2319,7 +2319,8 @@ void CreatureMindSystem::AgendaTurn(entt::entity entity)
 				ForcePlan(entity, {.desire = creature_desires::Desire::ObeyPlayer,
 				                   .action = creature_mind::k_CutSceneLookAction,
 				                   .object = entity,
-				                   .ordered = true});
+				                   .ordered = true,
+				                   .fightBodyEndsAgain = true});
 			}
 		}
 		// When the creature examines a different creature, it finds the desires of the two creatures each turn.
@@ -3361,7 +3362,8 @@ bool CreatureMindSystem::Puke(entt::entity creature)
 	                            .object = creature,
 	                            .agenda = creature_mind::Puke(),
 	                            .activity = creature_mind::Activity::Puke,
-	                            .ordered = true});
+	                            .ordered = true,
+	                            .fightBodyEndsAgain = true});
 }
 
 bool CreatureMindSystem::Faint(entt::entity creature)
@@ -3646,6 +3648,8 @@ bool CreatureMindSystem::TakeFromHand(entt::entity creature, entt::entity object
 	{
 		mind->keptPlan = mind->planner.current;
 	}
+	// The take stops a fight out of its duel. After a fight that is over, it ends the fight of the body again.
+	EndFightForPlan(creature, true);
 	Abandon(*mind);
 	ReleaseCast(creature);
 	if (!Replan(creature, creature_mind::Activity::Planned,
@@ -3740,7 +3744,8 @@ void CreatureMindSystem::UseGift(entt::entity creature, entt::entity object)
 		                     .object = object,
 		                     .agenda = creature_mind::ExamineGiven(number),
 		                     .activityObject = owner,
-		                     .ordered = true});
+		                     .ordered = true,
+		                     .fightBodyEndsAgain = true});
 		break;
 	case creature_giving::Use::Eat:
 		ForcePlan(creature, {.desire = Desire::Hunger,
@@ -3748,7 +3753,8 @@ void CreatureMindSystem::UseGift(entt::entity creature, entt::entity object)
 		                     .object = object,
 		                     .agenda = creature_mind::EatGiven(),
 		                     .activityObject = owner,
-		                     .ordered = true});
+		                     .ordered = true,
+		                     .fightBodyEndsAgain = true});
 		break;
 	case creature_giving::Use::Throw:
 	{
@@ -3759,7 +3765,8 @@ void CreatureMindSystem::UseGift(entt::entity creature, entt::entity object)
 		                     .object = object,
 		                     .agenda = creature_mind::ThrowGiven(eye),
 		                     .activityObject = owner,
-		                     .ordered = true});
+		                     .ordered = true,
+		                     .fightBodyEndsAgain = true});
 		break;
 	}
 	case creature_giving::Use::AsLed:

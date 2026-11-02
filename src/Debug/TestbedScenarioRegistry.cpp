@@ -9458,9 +9458,22 @@ void AddCombat(std::vector<Scenario>& all)
 	    .description = "Two somewhat evil tigers, so aggressive fighters, the red one stronger, are told to fight, and both "
 	                   "fight by themselves.",
 	    .expected = "They walk to their places either side of the arena, face each other and maybe taunt, then duel: "
-	                "blows high, in the middle and low with their hit wobbles and reeling, blocks and steps. The panel at "
-	                "the top left shows both fight healths falling. The loser faints, and the winner finishes and shows "
+	                "blows high, in the middle and low with their reels, blocks and steps. The panel at the top left "
+	                " shows both fight healths falling. The loser faints, and the winner finishes and shows "
 	                "off.",
+	    .framing = ringside,
+	    .creatures = {red(PlayerNames::PLAYER_ONE, 0.9f, -0.45f), blue(PlayerNames::PLAYER_TWO, 0.3f, -0.45f)},
+	    .commands = {Fight(Kind::StartFight, 0, 1, 1.0f), Fight(Kind::FightAuto, 0, 1, 0.2f)},
+	});
+
+	all.push_back({
+	    .id = "combat.blow_no_wobble",
+	    .name = "A struck tiger reels with no wobble on top",
+	    .facet = Facet::Combat,
+	    .description = "Two tigers duel by themselves, the red one stronger, so that blows land on both bodies.",
+	    .expected = "Each blow that lands makes the struck body reel high, in the middle or low. No second clip shakes "
+	                "the body on top of the reel. The animation query shows only the body and blend layers, and maybe a "
+	                "face or a gesture.",
 	    .framing = ringside,
 	    .creatures = {red(PlayerNames::PLAYER_ONE, 0.9f, -0.45f), blue(PlayerNames::PLAYER_TWO, 0.3f, -0.45f)},
 	    .commands = {Fight(Kind::StartFight, 0, 1, 1.0f), Fight(Kind::FightAuto, 0, 1, 0.2f)},
