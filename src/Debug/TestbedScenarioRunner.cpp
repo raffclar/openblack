@@ -762,6 +762,10 @@ std::string Chat(GameStageInterface* stage, PlayerNames player, size_t value, st
 	}
 	chat.SetNames(names);
 	const auto line = gui::ToUtf16(text);
+	if (value == k_ChatFriends)
+	{
+		return stage->OpenChatWithFriends();
+	}
 	if (value == k_ChatTypes)
 	{
 		stage->OpenChat(line);
@@ -1772,7 +1776,15 @@ void Runner::PlaceObjects(const Scenario& scenario, glm::vec2 middle)
 			    }
 			    else
 			    {
-				    return ecs::archetypes::FeatureArchetype::Create(position, type, yaw, object.scale);
+				    const auto feature = ecs::archetypes::FeatureArchetype::Create(position, type, yaw, object.scale);
+				    // A feature that is only part built has a site of the scenario's town, which builds it up
+				    if (object.built.has_value())
+				    {
+					    ecs::construction::SetBuilt(feature, *object.built);
+					    static_cast<void>(ecs::construction::OpenSiteForTown(
+					        feature, Locator::entitiesRegistry::value().Context().towns.at(ScenarioTown(middle))));
+				    }
+				    return feature;
 			    }
 		    },
 		    object.type));
@@ -2057,6 +2069,14 @@ void Runner::PlaceCreatures(const Scenario& scenario, glm::vec2 middle)
 		if (!setup.mindFile.empty())
 		{
 			LoadMindFile(entity, setup.mindFile);
+		}
+		// The value of a mind file, as the body takes it when it loads one
+		if (setup.environmentMap != 0)
+		{
+			if (auto* creature = registry.TryGet<ecs::components::Creature>(entity))
+			{
+				creature->environmentMap = setup.environmentMap;
+			}
 		}
 		if (Locator::creatureMindSystem::has_value())
 		{
@@ -3038,6 +3058,23 @@ std::string Runner::GivePlayerCommand(const Command& command)
 		}
 		return fmt::format("{} worship sites built", unbuilt.size());
 	}
+	case Kind::ScriptBuildsWorshipSites:
+	{
+		auto& registry = Locator::entitiesRegistry::value();
+		std::vector<entt::entity> sites;
+		registry.Each<const ecs::components::WorshipSite>(
+		    [&](entt::entity site, const ecs::components::WorshipSite& component) {
+			    if (component.player == command.player)
+			    {
+				    sites.push_back(site);
+			    }
+		    });
+		for (const auto site : sites)
+		{
+			ecs::construction::SetBuilt(site, command.amount);
+		}
+		return fmt::format("{} worship sites set to {}", sites.size(), command.amount);
+	}
 	case Kind::HandRelease:
 		if (!Locator::handGrabSystem::has_value() || !Locator::handGrabSystem::value().LetGoAt(command.velocity))
 		{
@@ -3713,15 +3750,15 @@ void Runner::Give(const Command& command)
 	    command.kind == Kind::RemoveObject || command.kind == Kind::HandGripTotem ||
 	    command.kind == Kind::AttachObjectScriptSound || command.kind == Kind::SayLine ||
 	    command.kind == Kind::PlayGuidanceVoice || command.kind == Kind::ScriptRelease || command.kind == Kind::FillSiteIcons ||
-	    command.kind == Kind::BuildWorshipSites || command.kind == Kind::PressPlainKey || command.kind == Kind::PlainKeyDown ||
-	    command.kind == Kind::PlainKeyRepeat || command.kind == Kind::PlainKeyUp ||
-	    command.kind == Kind::ChargeIconWithSeedHeld || command.kind == Kind::TakeIconSeed ||
-	    command.kind == Kind::TapSiteIcon || command.kind == Kind::TapTempleEntrance || command.kind == Kind::FinishBuilding ||
-	    command.kind == Kind::ScaffoldStartsSite || command.kind == Kind::DestroyScaffoldSite ||
-	    command.kind == Kind::ScaffoldClearsGround || command.kind == Kind::FillBuiltAmount ||
-	    command.kind == Kind::PauseGame || command.kind == Kind::SetGameSpeed || command.kind == Kind::RemoveTeleportStone ||
-	    command.kind == Kind::MakeDance || command.kind == Kind::OtherGodHand || command.kind == Kind::OwnGod ||
-	    command.kind == Kind::BringCreature || command.kind == Kind::ComputerPersonality ||
+	    command.kind == Kind::BuildWorshipSites || command.kind == Kind::ScriptBuildsWorshipSites ||
+	    command.kind == Kind::PressPlainKey || command.kind == Kind::PlainKeyDown || command.kind == Kind::PlainKeyRepeat ||
+	    command.kind == Kind::PlainKeyUp || command.kind == Kind::ChargeIconWithSeedHeld ||
+	    command.kind == Kind::TakeIconSeed || command.kind == Kind::TapSiteIcon || command.kind == Kind::TapTempleEntrance ||
+	    command.kind == Kind::FinishBuilding || command.kind == Kind::ScaffoldStartsSite ||
+	    command.kind == Kind::DestroyScaffoldSite || command.kind == Kind::ScaffoldClearsGround ||
+	    command.kind == Kind::FillBuiltAmount || command.kind == Kind::PauseGame || command.kind == Kind::SetGameSpeed ||
+	    command.kind == Kind::RemoveTeleportStone || command.kind == Kind::MakeDance || command.kind == Kind::OtherGodHand ||
+	    command.kind == Kind::OwnGod || command.kind == Kind::BringCreature || command.kind == Kind::ComputerPersonality ||
 	    command.kind == Kind::ComputerUntaughtSends || command.kind == Kind::HandCastOnDispenser ||
 	    command.kind == Kind::HandCastOnCreature || command.kind == Kind::CloseHeldMiracle)
 	{
@@ -4647,6 +4684,7 @@ void Runner::Give(const Command& command)
 	case Kind::ScriptRelease:
 	case Kind::FillSiteIcons:
 	case Kind::BuildWorshipSites:
+	case Kind::ScriptBuildsWorshipSites:
 	case Kind::PressPlainKey:
 	case Kind::PlainKeyDown:
 	case Kind::PlainKeyRepeat:

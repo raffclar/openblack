@@ -29,6 +29,7 @@ public:
 	[[nodiscard]] std::optional<glm::vec3> SiteDoor() const override;
 	[[nodiscard]] entt::id_type SiteMesh(entt::entity temple) override;
 	[[nodiscard]] entt::id_type AltarMesh(Tribe tribe) const override;
+	[[nodiscard]] float AltarStartLife(Tribe tribe) const override;
 	[[nodiscard]] std::optional<std::pair<glm::vec2, float>> FixedCircleOf(entt::id_type model,
 	                                                                       const components::Transform& placed) const override;
 	[[nodiscard]] float LandHeightAt(glm::vec2 point) const override;
@@ -40,6 +41,7 @@ public:
 	void PowerUpArtefacts(entt::entity site, uint32_t dancers) override;
 	void OpenBuildingSite(entt::entity site, entt::entity town, float desire) override;
 	void CloseBuildingSite(entt::entity site) override;
+	void MendBy(entt::entity altar, float share) override;
 	void CloseTownsBuildingSite(entt::entity site, entt::entity town) override;
 	void RemoveSpellIcons(entt::entity site) override;
 	void RemoveDance(entt::entity dance) override;

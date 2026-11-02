@@ -56,6 +56,7 @@
 #include "ECS/Components/Tree.h"
 #include "ECS/Components/Villager.h"
 #include "ECS/Components/Vortex.h"
+#include "ECS/Components/WorshipSite.h"
 #include "ECS/PhysicsGround.h"
 #include "ECS/PlacedTurn.h"
 #include "ECS/Reflection/BinaryArchive.h"
@@ -134,6 +135,12 @@ float DynamicsSystem::InfoWeight(entt::entity object) const
 	{
 		// A vortex weighs what the statics' vortex row says
 		return row(info.mobileStatic, MobileStaticInfo::Vortex);
+	}
+	if (const auto* altar = registry.TryGet<const WorshipAltar>(object))
+	{
+		// An altar weighs what its tribe's row of the worship sites says
+		const auto* site = registry.Valid(altar->site) ? registry.TryGet<const WorshipSite>(altar->site) : nullptr;
+		return site != nullptr ? row(info.worshipSite, site->tribe) : 0.0f;
 	}
 	const auto* found = _world->InfoOf(object);
 	return found != nullptr ? found->weight : 0.0f;
@@ -364,9 +371,11 @@ physics_classes::ClassFacts DynamicsSystem::FactsOf(entt::entity object) const
 	}
 	const auto& registry = Entities();
 	const auto* progress = registry.TryGet<const BuildProgress>(object);
-	physics_classes::ClassInputs inputs {.life = _world->LifeOf(object),
-	                                     .percentBuilt = progress != nullptr ? progress->built : 1.0f,
-	                                     .immovable = registry.AllOf<Immovable>(object)};
+	// The altar of a worship site keeps how much of it is built
+	const auto* altar = registry.TryGet<const WorshipAltar>(object);
+	const float built = altar != nullptr ? altar->built : (progress != nullptr ? progress->built : 1.0f);
+	physics_classes::ClassInputs inputs {
+	    .life = _world->LifeOf(object), .percentBuilt = built, .immovable = registry.AllOf<Immovable>(object)};
 	if (registry.AllOf<Villager>(object))
 	{
 		// Not reachable at home, in a hand or hiding in a building
@@ -490,6 +499,11 @@ std::unique_ptr<physics::Body> DynamicsSystem::MakeBody(entt::entity object, con
 	else if (const auto* meshComponent = registry.TryGet<const Mesh>(object))
 	{
 		meshId = meshComponent->id;
+	}
+	else if (const auto* altar = registry.TryGet<const WorshipAltar>(object))
+	{
+		// An altar has the body of its model also before the model shows
+		meshId = altar->model;
 	}
 	else if (registry.AllOf<OneOffSpellSeed>(object))
 	{
@@ -941,7 +955,7 @@ void DynamicsSystem::RaiseClearOfWhatIsUnder(PhysicsEntry& entry)
 			}
 			for (const auto other : _world->AllInCell({x, z}))
 			{
-				if (other == entry.entity || other == entry.thrower || !registry.AllOf<Mesh>(other) ||
+				if (other == entry.entity || other == entry.thrower || !registry.AnyOf<Mesh, WorshipAltar>(other) ||
 				    !Hooks().RaisesObjects(other) || IndexOf(other).has_value() || !FactsOf(other).interacts)
 				{
 					continue;
@@ -1194,8 +1208,8 @@ void DynamicsSystem::WakeNearMovingBodies()
 		{
 			known->flags |= PhysicsEntry::k_Awake;
 		}
-		// Only a thing with a model, drawn or not, gets a body
-		else if (registry.AllOf<Mesh>(object) || facts.collisionMesh.has_value())
+		// Only a thing with a model, drawn or not, gets a body. An altar has its model before the model shows.
+		else if (registry.AnyOf<Mesh, WorshipAltar>(object) || facts.collisionMesh.has_value())
 		{
 			AddProxy(object);
 		}

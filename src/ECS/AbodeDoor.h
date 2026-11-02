@@ -9,6 +9,8 @@
 
 #pragma once
 
+#include <optional>
+
 #include <glm/mat3x3.hpp>
 #include <glm/vec2.hpp>
 #include <glm/vec3.hpp>
@@ -46,6 +48,17 @@ enum class Door
 	default:
 		return Door::Model;
 	}
+}
+
+/// The door of a thing at a site: a field and a fish farm have their middle; a building of the abodes has the door of its
+/// kind; any other thing has its model's door, or its middle when the model has none
+[[nodiscard]] constexpr Door DoorOfThing(std::optional<AbodeType> abode, bool fieldOrFishFarm)
+{
+	if (fieldOrFishFarm)
+	{
+		return Door::Middle;
+	}
+	return abode.has_value() ? DoorOf(*abode) : Door::Model;
 }
 
 /// Whether a villager reaching this kind of building stands at its middle and not at its door

@@ -170,6 +170,13 @@ entt::id_type GameWorshipSiteWorld::AltarMesh(Tribe tribe) const
 	return resources::HashIdentifier(row < sites.size() ? sites.at(row).meshType : MeshId::Dummy);
 }
 
+float GameWorshipSiteWorld::AltarStartLife(Tribe tribe) const
+{
+	const auto& sites = Locator::infoConstants::value().worshipSite;
+	const auto row = static_cast<size_t>(tribe);
+	return row < sites.size() ? sites.at(row).startLife : 1.0f;
+}
+
 std::optional<std::pair<glm::vec2, float>> GameWorshipSiteWorld::FixedCircleOf(entt::id_type model,
                                                                                const components::Transform& placed) const
 {
@@ -253,6 +260,11 @@ void GameWorshipSiteWorld::OpenBuildingSite(entt::entity site, entt::entity town
 void GameWorshipSiteWorld::CloseBuildingSite(entt::entity site)
 {
 	construction::CloseSite(site);
+}
+
+void GameWorshipSiteWorld::MendBy(entt::entity altar, float share)
+{
+	construction::MendBy(altar, share);
 }
 
 void GameWorshipSiteWorld::CloseTownsBuildingSite(entt::entity site, entt::entity town)

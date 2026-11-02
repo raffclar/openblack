@@ -14,8 +14,10 @@
 #include <algorithm>
 #include <array>
 #include <bitset>
+#include <functional>
 #include <future>
 #include <limits>
+#include <map>
 #include <memory>
 #include <optional>
 #include <regex>
@@ -24,6 +26,7 @@
 #include <string>
 #include <string_view>
 #include <unordered_map>
+#include <unordered_set>
 #include <utility>
 #include <variant>
 #include <vector>
@@ -253,6 +256,41 @@ TEST(WorldArchive, MapsGiveTheSameBytesInAnyOrder)
 	Save(a, first);
 	Save(b, second);
 	EXPECT_EQ(a.Bytes(), b.Bytes());
+}
+
+TEST(WorldArchive, AMapInKeyOrderGivesTheSameBytesAsAHashMap)
+{
+	entt::meta_ctx context;
+	Register(context);
+	// Keys of entities with versions, put in no order: the order of the keys of a map is the order of their numbers
+	std::unordered_map<entt::entity, uint32_t> hashed;
+	std::map<entt::entity, uint32_t> ordered;
+	std::unordered_set<entt::entity> hashedSet;
+	std::set<entt::entity> orderedSet;
+	for (uint32_t i = 0; i < 64; ++i)
+	{
+		const auto thing = entt::entity {((i * 37U) % 64U) | ((i % 3U) << 20U)};
+		hashed.emplace(thing, i);
+		ordered.emplace(thing, i);
+		hashedSet.insert(thing);
+		orderedSet.insert(thing);
+	}
+	BinaryWriter a(context);
+	BinaryWriter b(context);
+	Save(a, hashed);
+	Save(b, ordered);
+	EXPECT_EQ(a.Bytes(), b.Bytes());
+	BinaryWriter c(context);
+	BinaryWriter d(context);
+	Save(c, hashedSet);
+	Save(d, orderedSet);
+	EXPECT_EQ(c.Bytes(), d.Bytes());
+
+	// A map in another order of its keys still sorts them
+	std::map<entt::entity, uint32_t, std::greater<>> reversed(ordered.begin(), ordered.end());
+	BinaryWriter e(context);
+	Save(e, reversed);
+	EXPECT_EQ(a.Bytes(), e.Bytes());
 }
 
 TEST(WorldArchive, RemapChangesEveryReference)

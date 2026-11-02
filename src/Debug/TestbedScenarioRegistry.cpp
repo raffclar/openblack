@@ -2679,6 +2679,69 @@ void AddTreePuzzle(std::vector<Scenario>& all)
 	});
 }
 
+void AddFourthLandArrival(std::vector<Scenario>& all)
+{
+	using Argument = ScriptArgument;
+	// The fourth land's home village, from the middle of the map
+	static constexpr glm::vec2 k_Land4Village {-314.42f, 102.99f};
+	all.push_back({
+	    .id = "story.l4_arrival",
+	    .name = "Story: the player comes through the vortex to the fourth land",
+	    .facet = Facet::Story,
+	    .description = "The fourth land loads with its own scripts and sky, and the player's Tiger stands on it. Its set-up "
+	                   "script runs, then its arrival script with the whole scene.",
+	    .expected = "A vortex opens beside the home village and closes 23 seconds later; until it closes the Tiger points "
+	                "at it again and again. With Nemesis's music the camera starts in the vortex looking down, rises 65 "
+	                "metres in 10 seconds while the picture fades in over 6 seconds, then sweeps to the village. Five "
+	                "storms with lightning stand near the village, and the sky moves to evening. The advisors speak "
+	                "about the ruined land along a camera path, and both point when they speak about the gates and the "
+	                "temple.",
+	    .environment = {.land = Land::Story, .storyLand = "Land4.txt", .dispenserGrid = false},
+	    .framing = {.shot = Shot::Overview,
+	                .include = {{k_Land4Village.x - 60.0f, k_Land4Village.y - 60.0f},
+	                            {k_Land4Village.x + 60.0f, k_Land4Village.y + 100.0f}}},
+	    .creatures = {{.label = "player's tiger",
+	                   .species = CreatureType::Tiger,
+	                   .phase = 3,
+	                   .needs = {.energy = 1.0f, .exhaustion = 0.0f, .dehydration = 0.0f, .poo = 0.0f, .life = 1.0f}}},
+	    .commands = {{.kind = Kind::RunScript,
+	                  .delaySeconds = 0.5f,
+	                  .script = "SetupLand4",
+	                  .scriptGlobals = {{"MyCreature", {.kind = Argument::Kind::Creature, .index = 0}}}},
+	                 {.kind = Kind::RunScript,
+	                  .delaySeconds = 0.5f,
+	                  .script = "BeginLand4",
+	                  .scriptArguments = {{.kind = ScriptArgument::Kind::Number, .number = 1.0f}}}},
+	});
+	all.push_back({
+	    .id = "story.l4_aggressive_fireballs",
+	    .name = "Story: the fourth land's fireballs come in an aggressive wave",
+	    .facet = Facet::Story,
+	    .description = "The fourth land loads with its own scripts and sky, and the player's Tiger stands on it. Its set-up "
+	                   "script runs, then its arrival script without the scene, with the switch of the aggressive waves "
+	                   "already on.",
+	    .expected = "Five fireball throwers high in the sky to the north throw level one fireballs, one every 1 to 20 "
+	                "seconds each. Two throwers aim at the edge of the home village, and three at their own points west "
+	                "of it. Each fireball has two times the strength of a fireball of a plain wave. The log shows no "
+	                "\"Cannot set strength of this\" message.",
+	    .environment = {.land = Land::Story, .storyLand = "Land4.txt", .dispenserGrid = false},
+	    .framing = {.shot = Shot::Overview, .include = {{-720.0f, -130.0f}, {-300.0f, 350.0f}}},
+	    .creatures = {{.label = "player's tiger",
+	                   .species = CreatureType::Tiger,
+	                   .phase = 3,
+	                   .needs = {.energy = 1.0f, .exhaustion = 0.0f, .dehydration = 0.0f, .poo = 0.0f, .life = 1.0f}}},
+	    .commands = {{.kind = Kind::RunScript,
+	                  .delaySeconds = 0.5f,
+	                  .script = "SetupLand4",
+	                  .scriptGlobals = {{"MyCreature", {.kind = Argument::Kind::Creature, .index = 0}}}},
+	                 {.kind = Kind::RunScript,
+	                  .delaySeconds = 0.5f,
+	                  .script = "BeginLand4",
+	                  .scriptArguments = {{.kind = ScriptArgument::Kind::Number, .number = 0.0f}},
+	                  .scriptGlobals = {{"FireMeteorWaveAggressive", {.number = 1.0f}}}}},
+	});
+}
+
 void AddStory(std::vector<Scenario>& all)
 {
 	// The player's temple west of the middle, turned as Land 1's
@@ -2888,6 +2951,7 @@ CREATE_CITADEL("0.0,0.0", 0, "PLAYER_ONE", 4254, 1000)
 	AddSingingStones(all);
 	AddBeachTemplePuzzle(all);
 	AddTreePuzzle(all);
+	AddFourthLandArrival(all);
 }
 
 void AddExplorersBoat(std::vector<Scenario>& all)
@@ -3199,6 +3263,30 @@ void AddAppearance(std::vector<Scenario>& all)
 	          "and do their other gestures.",
 	          "The light that the hand carries at night lights each body as the game lights the bodies it poses. The side "
 	          "away from the hand keeps two fifths of the light. The eyes keep the usual light of the models.");
+	// A creature whose mind file gives its body the environment map, beside one whose mind file does not
+	{
+		auto plain = Content(CreatureType::GiantApe, {-12.0f, 0.0f}, 0.0f, "plain ape");
+		plain.pauseMind = true;
+		auto mapped = Content(CreatureType::GiantApe, {12.0f, 0.0f}, 0.0f, "environment-mapped ape");
+		mapped.pauseMind = true;
+		mapped.environmentMap = 1;
+		all.push_back({
+		    .id = "appearance.creature_environment_map",
+		    .name = "Creature body with the environment map",
+		    .facet = Facet::Appearance,
+		    .description = "At noon, the clock stopped, two giant apes stand side by side. The mind file of the ape on the "
+		                   "right gives its body the environment map. They nod, shake their heads and do their other "
+		                   "gestures.",
+		    .expected = "The ape on the right shows the environment map added over every part of its body, so it looks "
+		                "brighter and shiny. The shine moves over the body as it turns, as if it reflects the sky. The "
+		                "light on the body is the same as on the ape on the left. The eyes of the two apes look the same.",
+		    .environment = {.hour = 12.0f, .clockRuns = false, .dispenserGrid = false},
+		    .framing = {.shot = Shot::Overview, .include = {{-18.0f, -4.0f}, {18.0f, 4.0f}}, .distance = 0.6f},
+		    .creatures = {plain, mapped},
+		    .commands = headMoves,
+		    .repeatFrom = 0,
+		});
+	}
 	// The player's creature mirrored in the lake, beside a creature of no player that the game does not mirror
 	auto mirroredApe = Posed(CreatureType::GiantApe, {k_Lake.x - 15.0f, k_FarShallows}, 0.0f, "player's ape");
 	auto unmirroredCow = Posed(CreatureType::Cow, {k_Lake.x + 15.0f, k_FarShallows}, 0.0f, "cow of no player");
@@ -5461,6 +5549,27 @@ void AddAudio(std::vector<Scenario>& all)
 	                  .value = k_ChatSays,
 	                  .action = "Hello Bob"},
 	                 {.kind = Kind::Chat, .delaySeconds = 1.5f, .value = k_ChatTypes, .action = "Shall we trade"}},
+	});
+
+	all.push_back({
+	    .id = "multiplayer.chat_friends",
+	    .name = "Friends and others in the list of people of the chat",
+	    .facet = Facet::Interface,
+	    .description = "The chat opens. Its list of people has Bob, the god of the second player, under Players. It has "
+	                   "the made-up friends Carol and Dave under Friends, and Eve, a person of the staff, under Others. "
+	                   "Carol was seen now.",
+	    .expected = "Under the line of the chat, the list shows three headings: Players, Friends and Others, each with "
+	                "its speech button. Bob is selected and has a bar. Carol has an envelope at the right of her row. "
+	                "Dave has no envelope. Eve is yellow and has a bar. Under the list, the button \"Make Friends\" shows, "
+	                "because Bob is selected. Click the button: Bob goes to the top of the friends, and the button changes "
+	                "to \"Make Not Friends\".",
+	    .environment = {.players = {PlayerNames::PLAYER_TWO}},
+	    .commands = {{.kind = Kind::Chat,
+	                  .player = PlayerNames::PLAYER_TWO,
+	                  .delaySeconds = 1.0f,
+	                  .value = k_ChatSays,
+	                  .action = "Hello"},
+	                 {.kind = Kind::Chat, .delaySeconds = 0.5f, .value = k_ChatFriends}},
 	});
 
 	all.push_back({
@@ -11765,6 +11874,46 @@ void AddMind(std::vector<Scenario>& all)
 	                 {.kind = Kind::LoadGame, .delaySeconds = 3.0f, .value = 0}},
 	});
 
+	// A script casts two fireballs and doubles the strength of the second, as the fourth land's fireballs do in their
+	// aggressive waves
+	all.push_back({
+	    .id = "miracles.script_fireball_strength",
+	    .name = "A script doubles the strength of the fireball that it casts",
+	    .facet = Facet::Miracles,
+	    .description = "One second after the start, a script casts two level one fireballs from 30 metres above two "
+	                   "points 30 metres apart, as no player's miracle with radius 1 and time 30. Then SET_PROPERTY sets "
+	                   "the strength of the second fireball to 2.",
+	    .expected = "Both fireballs fall onto their points. The left fireball has the strength of a plain script "
+	                "fireball. The right fireball has two times that strength each turn. A script that reads the "
+	                "strength of the right fireball gets 2. The log shows no \"Cannot set strength of this\" message.",
+	    .environment = {.dispenserGrid = false},
+	    .framing = {.shot = Shot::Overview, .include = {{-25.0f, -10.0f}, {25.0f, 10.0f}}},
+	    .commands = {{.kind = Kind::CallNative,
+	                  .delaySeconds = 1.0f,
+	                  .script = "SPELL_AT_POS",
+	                  .scriptArguments = {{.kind = ScriptArgument::Kind::Integer, .number = 1.0f},
+	                                      {.kind = ScriptArgument::Kind::Position, .point = {-15.0f, 0.0f}},
+	                                      {.kind = ScriptArgument::Kind::Position, .point = {-15.0f, 0.0f}, .height = 30.0f},
+	                                      {.kind = ScriptArgument::Kind::Number, .number = 1.0f},
+	                                      {.kind = ScriptArgument::Kind::Number, .number = 30.0f},
+	                                      {.kind = ScriptArgument::Kind::Number, .number = 0.0f}}},
+	                 {.kind = Kind::CallNative,
+	                  .delaySeconds = 0.1f,
+	                  .script = "SPELL_AT_POS",
+	                  .scriptArguments = {{.kind = ScriptArgument::Kind::Integer, .number = 1.0f},
+	                                      {.kind = ScriptArgument::Kind::Position, .point = {15.0f, 0.0f}},
+	                                      {.kind = ScriptArgument::Kind::Position, .point = {15.0f, 0.0f}, .height = 30.0f},
+	                                      {.kind = ScriptArgument::Kind::Number, .number = 1.0f},
+	                                      {.kind = ScriptArgument::Kind::Number, .number = 30.0f},
+	                                      {.kind = ScriptArgument::Kind::Number, .number = 0.0f}}},
+	                 {.kind = Kind::CallNative,
+	                  .delaySeconds = 0.1f,
+	                  .script = "SET_PROPERTY",
+	                  .scriptArguments = {{.kind = ScriptArgument::Kind::Integer, .number = 17.0f},
+	                                      {.kind = ScriptArgument::Kind::Made, .index = 1, .kept = true},
+	                                      {.kind = ScriptArgument::Kind::Number, .number = 2.0f}}}},
+	});
+
 	// A physical shield stands in the physics as a solid dome from the turn that it goes up
 	all.push_back({
 	    .id = "miracles.physical_shield_stops_boulders",
@@ -14717,6 +14866,8 @@ std::vector<Scenario> Build()
 	AddBirdScenarios(all);
 	AddTeleportScenarios(all);
 	AddVortexScenarios(all);
+	AddLand4StoneScenarios(all);
+	AddLand4SlegScenarios(all);
 	AddRewardScenarios(all);
 	AddTornadoScenarios(all);
 	AddPhysicsScenarios(all);
@@ -14929,13 +15080,14 @@ bool testbed_scenarios::NeedsNoCreature(Command::Kind kind)
 	       kind == Kind::ScaffoldStartsSite || kind == Kind::DestroyScaffoldSite || kind == Kind::ScaffoldClearsGround ||
 	       kind == Kind::CallNative || kind == Kind::PauseGame || kind == Kind::SetGameSpeed ||
 	       kind == Kind::RemoveTeleportStone || kind == Kind::MakeDance || kind == Kind::OpenMultiplayerBox ||
-	       kind == Kind::BuildWorshipSites || kind == Kind::PressPlainKey || kind == Kind::PlainKeyDown ||
-	       kind == Kind::PlainKeyRepeat || kind == Kind::PlainKeyUp || kind == Kind::OtherGodHand || kind == Kind::OwnGod ||
-	       kind == Kind::JoinOnline || kind == Kind::EndBox || kind == Kind::BringCreature ||
-	       kind == Kind::TattooEditorAsNetworkGame || kind == Kind::ShowDemoPing || kind == Kind::AddIncomingMessage ||
-	       kind == Kind::Chat || kind == Kind::ComputerPersonality || kind == Kind::ComputerUntaughtSends ||
-	       kind == Kind::SkirmishBox || kind == Kind::LookAtSaveGamePicture || kind == Kind::HandCastOnDispenser ||
-	       kind == Kind::HandCastOnCreature || kind == Kind::CloseHeldMiracle || IsPointerCommand(kind);
+	       kind == Kind::BuildWorshipSites || kind == Kind::ScriptBuildsWorshipSites || kind == Kind::PressPlainKey ||
+	       kind == Kind::PlainKeyDown || kind == Kind::PlainKeyRepeat || kind == Kind::PlainKeyUp ||
+	       kind == Kind::OtherGodHand || kind == Kind::OwnGod || kind == Kind::JoinOnline || kind == Kind::EndBox ||
+	       kind == Kind::BringCreature || kind == Kind::TattooEditorAsNetworkGame || kind == Kind::ShowDemoPing ||
+	       kind == Kind::AddIncomingMessage || kind == Kind::Chat || kind == Kind::ComputerPersonality ||
+	       kind == Kind::ComputerUntaughtSends || kind == Kind::SkirmishBox || kind == Kind::LookAtSaveGamePicture ||
+	       kind == Kind::HandCastOnDispenser || kind == Kind::HandCastOnCreature || kind == Kind::CloseHeldMiracle ||
+	       IsPointerCommand(kind);
 }
 
 std::string_view testbed_scenarios::Name(Facet facet)
@@ -14963,7 +15115,7 @@ std::string_view testbed_scenarios::Name(Shot shot)
 
 std::string_view testbed_scenarios::Name(Command::Kind kind)
 {
-	constexpr std::array<std::string_view, 215> k_Names {
+	constexpr std::array<std::string_view, 216> k_Names {
 	    "walk to",
 	    "run to",
 	    "follow",
@@ -15179,6 +15331,7 @@ std::string_view testbed_scenarios::Name(Command::Kind kind)
 	    "cast the held miracle on a dispenser",
 	    "cast the held miracle on a creature",
 	    "close the held miracle and let go",
+	    "a script builds the worship sites",
 	};
 	return k_Names.at(static_cast<size_t>(kind));
 }

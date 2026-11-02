@@ -55,8 +55,8 @@ public:
 	void GetMyClans(LobbyCallback<lobby_api::ClanList>) override {}
 	void GetClan(int64_t, LobbyCallback<lobby_api::ClanDetails>) override {}
 	void GetClanLogo(int64_t, LobbyCallback<std::vector<uint8_t>>) override {}
-	void GetPlayerRanking(int32_t, LobbyCallback<lobby_api::RankingPage>) override {}
-	void GetClanRanking(int32_t, LobbyCallback<lobby_api::RankingPage>) override {}
+	void GetPlayerRanking(lobby_api::RankingQuery, LobbyCallback<lobby_api::RankingPage>) override {}
+	void GetClanRanking(lobby_api::RankingQuery, LobbyCallback<lobby_api::RankingPage>) override {}
 	void GetPlayer(int64_t, LobbyCallback<lobby_api::PlayerDetails>) override {}
 	void GetPlayerDetailLines(int64_t, std::string, LobbyCallback<lobby_api::PlayerDetailLines>) override {}
 	void GetWeather(lobby_api::Date, LobbyCallback<lobby_api::RealWeather>) override {}

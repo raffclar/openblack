@@ -240,9 +240,72 @@ struct ChatItem
 	glm::vec4 colour {1.0f};
 };
 
-/// The player's own lines read "name> text" in light grey; other players' lines read "name: text" in their god's
-/// colour
-[[nodiscard]] ChatItem ChatLine(std::u16string_view from, std::u16string_view text, bool own, int32_t god);
+/// Who gets a line of the room's chat
+enum class ChatPrivacy : uint8_t
+{
+	/// All the players in the room
+	Public,
+	/// One player that the sender picked
+	Private,
+	/// One player of a team that the sender picked
+	Team,
+};
+
+/// The player's own line: "name> text" in light grey
+[[nodiscard]] ChatItem OwnChatLine(std::u16string_view from, std::u16string_view text);
+
+/// A line from another player, as the game room shows it:
+/// - From a player in the room: "name: text". From a sender who is not in the room: only the text.
+/// - A public line is white. A private line is light red.
+/// - A team line has the colour of the sender's god, halfway to white. From a sender who is not in the room, it is
+///   light green.
+/// @param senderGod The god of the sender's seat (0 for an observer), none when the sender is not in the room
+[[nodiscard]] ChatItem ReceivedChatLine(std::u16string_view from, std::u16string_view text, ChatPrivacy privacy,
+                                        std::optional<int32_t> senderGod);
+
+/// A colour halfway to white: each part of the colour goes up by half of its distance to 255, with the fraction
+/// removed. The result is opaque.
+[[nodiscard]] uint32_t HalfwayToWhite(uint32_t argb) noexcept;
+
+/// The most characters of a name that the room's chat compares
+inline constexpr size_t k_ChatNameCompareLength = 128;
+/// True when two names are the same name for the room's chat: the first 128 characters agree, with no difference
+/// between upper case and lower case letters
+[[nodiscard]] bool SameChatName(std::u16string_view a, std::u16string_view b) noexcept;
+/// The place of a name in the names of the room's players, none when the room has no such player
+[[nodiscard]] std::optional<size_t> FindChatName(std::span<const std::u16string> names, std::u16string_view name) noexcept;
+
+/// One line that the game sends for a line that the player typed
+struct RoomChatSend
+{
+	/// The name of the one player who gets the line, empty for all the players
+	std::u16string to;
+	/// The line goes to one player of a team that the player picked
+	bool team {false};
+
+	[[nodiscard]] bool operator==(const RoomChatSend&) const = default;
+};
+
+/// What the game does with a line that the player typed in the room
+struct RoomChatPlan
+{
+	/// The player's own line shows at once in the chat box
+	bool ownLine {true};
+	std::vector<RoomChatSend> sends;
+};
+
+/// The lines that the game sends for a typed line, and whether the player's own line shows:
+/// - A picked team: one team line to each player of the team, in the order of the team. The own line shows only when
+///   the player is in the team.
+/// - Else a picked player: one private line to that player. The own line shows.
+/// - Else, or when the picked name is not in the room: one line to all the players. The own line shows.
+/// @param names The names of the players in the room
+/// @param own The player's own name
+/// @param player The name of the picked player, none for no player
+/// @param team The names of the players of the picked team, none for no team
+[[nodiscard]] RoomChatPlan PlanRoomChat(std::span<const std::u16string> names, std::u16string_view own,
+                                        std::optional<std::u16string_view> player,
+                                        std::optional<std::span<const std::u16string>> team);
 
 /// The text of a chat line, cut to the first 254 characters
 [[nodiscard]] std::u16string ClampChat(std::u16string_view text);
