@@ -87,6 +87,7 @@
 #include "ECS/Archetypes/MistArchetype.h"
 #include "ECS/Archetypes/MobileObjectArchetype.h"
 #include "ECS/Archetypes/MobileStaticArchetype.h"
+#include "ECS/Archetypes/PuzzleTotemArchetype.h"
 #include "ECS/Archetypes/ScriptMarkerArchetype.h"
 #include "ECS/Archetypes/SharkArchetype.h"
 #include "ECS/Archetypes/TreeArchetype.h"
@@ -168,6 +169,7 @@
 #include "ECS/Dances.h"
 #include "ECS/DiscipleRules.h"
 #include "ECS/Map.h"
+#include "ECS/MazePuzzleRules.h"
 #include "ECS/PhysicsEntry.h"
 #include "ECS/PlacedTurn.h"
 #include "ECS/PlayerTowns.h"
@@ -864,6 +866,22 @@ entt::entity CreateScriptObject(const ObjectType type, uint32_t subtype, const g
 			break;
 		}
 		return FeatureArchetype::Create(OnGround(position), static_cast<FeatureInfo>(subtype), yAngleRadians, scale);
+	}
+	case ObjectType::Totem:
+	{
+		// A puzzle totem: the building of the row, of no town, on the land under the place asked for
+		const auto& info = Locator::infoConstants::value();
+		if (!script::create_rules::IsRow(subtype, info.abode.size()))
+		{
+			break;
+		}
+		const auto made =
+		    PuzzleTotemArchetype::Create(OnGround(position), static_cast<AbodeInfo>(subtype), yAngleRadians, scale);
+		if (Locator::entitiesMap::has_value())
+		{
+			Locator::entitiesMap::value().Refile(made);
+		}
+		return made;
 	}
 	case ObjectType::Tree:
 	{
@@ -2280,7 +2298,12 @@ void GetProperty() // 021 GET_PROPERTY
 		Pushf(IsWorldObject(object) ? ScriptHeightOf(object) : 0.0f);
 		return;
 	case script::ObjectPropertyType::MaxHeight:
-		// Nothing keeps a greatest height
+		// A puzzle totem keeps a greatest height. Nothing else keeps one.
+		if (const auto* totem = registry.TryGet<const ecs::components::PuzzleTotem>(object); totem != nullptr)
+		{
+			Pushf(static_cast<float>(totem->highest));
+			return;
+		}
 		Pushf(0.0f);
 		return;
 	case script::ObjectPropertyType::CreatureMinSize:
@@ -2501,6 +2524,12 @@ static void SetPropertyOf(entt::entity object, script::ObjectPropertyType prop, 
 				Locator::villageTotemSystem::value().SetTownShare(town, value);
 			}
 			// TODO(script-natives): a totem with no town takes the share itself
+			return;
+		}
+		if (auto* totem = registry.TryGet<ecs::components::PuzzleTotem>(object); totem != nullptr)
+		{
+			// A puzzle totem takes the height, made whole towards zero, up to its greatest height
+			totem->height = ecs::maze_puzzle::TotemHeight(value, totem->highest);
 			return;
 		}
 		if (auto* creature = registry.TryGet<ecs::components::Creature>(object); creature != nullptr)

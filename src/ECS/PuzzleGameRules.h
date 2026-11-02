@@ -77,8 +77,11 @@ namespace openblack::ecs::puzzle_game
 }
 
 /// A script deletes a puzzle game. The puzzle game stays, but it lets go of these things, in this order:
-/// - each lantern that is still there,
+/// - each palm tree and each lantern that is still there, corner by corner,
 /// - its trees,
+/// - the lion and the villager or the sheep of a maze,
+/// - the fences of a maze, slot by slot, the fence towards the next cell across first,
+/// - the bells of the lion maze,
 /// - the bases and the rings of the beach temple puzzle.
 /// Its mists and its bats stay. The puzzle counts as played from then on, so its turn does nothing more.
 /// The result is the list of the things to remove from the world.
@@ -86,25 +89,40 @@ template <typename IsThere>
 [[nodiscard]] std::vector<entt::entity> TakePiecesForDelete(components::PuzzleGame& game, IsThere&& isThere)
 {
 	std::vector<entt::entity> pieces;
-	for (auto& lantern : game.lanterns)
-	{
-		if (lantern != entt::null && isThere(lantern))
+	const auto takeIfThere = [&pieces, &isThere](entt::entity& slot) {
+		if (slot != entt::null && isThere(slot))
 		{
-			pieces.push_back(lantern);
-			lantern = entt::null;
-		}
-	}
-	const auto takeAll = [&pieces](auto& slots) {
-		for (auto& slot : slots)
-		{
-			if (slot != entt::null)
-			{
-				pieces.push_back(slot);
-				slot = entt::null;
-			}
+			pieces.push_back(slot);
+			slot = entt::null;
 		}
 	};
+	const auto take = [&pieces](entt::entity& slot) {
+		if (slot != entt::null)
+		{
+			pieces.push_back(slot);
+			slot = entt::null;
+		}
+	};
+	const auto takeAll = [&take](auto& slots) {
+		for (auto& slot : slots)
+		{
+			take(slot);
+		}
+	};
+	for (size_t corner = 0; corner < game.lanterns.size(); ++corner)
+	{
+		takeIfThere(game.maze.palms.at(corner));
+		takeIfThere(game.lanterns.at(corner));
+	}
 	takeAll(game.trees);
+	take(game.maze.lion);
+	take(game.maze.hero);
+	for (size_t slot = 0; slot < game.maze.acrossFences.size(); ++slot)
+	{
+		take(game.maze.acrossFences.at(slot));
+		take(game.maze.alongFences.at(slot));
+	}
+	takeAll(game.maze.bells);
 	takeAll(game.bases);
 	takeAll(game.rings);
 	game.played = true;

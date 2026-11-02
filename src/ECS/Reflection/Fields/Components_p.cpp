@@ -114,6 +114,27 @@ void openblack::ecs::reflection::RegisterFields_Components_p(entt::meta_ctx& con
 	    .Field<&components::HanoiBlock::above>("above")
 	    .Field<&components::HanoiBlock::below>("below")
 	    .Field<&components::HanoiBlock::fixed>("fixed");
+	Reflect<components::PuzzlePiece>(context).Field<&components::PuzzlePiece::puzzle>("puzzle");
+	Reflect<components::PuzzleTotem>(context)
+	    .Field<&components::PuzzleTotem::puzzle>("puzzle")
+	    .Field<&components::PuzzleTotem::highest>("highest")
+	    .Field<&components::PuzzleTotem::height>("height");
+	Reflect<components::MazeState>(context)
+	    .Field<&components::MazeState::alongFences>("alongFences")
+	    .Field<&components::MazeState::acrossFences>("acrossFences")
+	    .Field<&components::MazeState::palms>("palms")
+	    .Field<&components::MazeState::hero>("hero")
+	    .Field<&components::MazeState::lion>("lion")
+	    .Field<&components::MazeState::heroAcross>("heroAcross")
+	    .Field<&components::MazeState::heroAlong>("heroAlong")
+	    .Field<&components::MazeState::lionAcross>("lionAcross")
+	    .Field<&components::MazeState::lionAlong>("lionAlong")
+	    .Field<&components::MazeState::lionAngle>("lionAngle")
+	    .Field<&components::MazeState::heroAngle>("heroAngle")
+	    .Field<&components::MazeState::lionStage>("lionStage")
+	    .Field<&components::MazeState::heroStage>("heroStage")
+	    .Field<&components::MazeState::marker>("marker")
+	    .Field<&components::MazeState::bells>("bells");
 	Reflect<components::PuzzleGame>(context)
 	    .Field<&components::PuzzleGame::type>("type")
 	    .Field<&components::PuzzleGame::place>("place")
@@ -133,5 +154,6 @@ void openblack::ecs::reflection::RegisterFields_Components_p(entt::meta_ctx& con
 	    .Field<&components::PuzzleGame::treesPlacedAt>("treesPlacedAt")
 	    .Field<&components::PuzzleGame::mists>("mists")
 	    .Field<&components::PuzzleGame::bats>("bats")
-	    .Field<&components::PuzzleGame::lanterns>("lanterns");
+	    .Field<&components::PuzzleGame::lanterns>("lanterns")
+	    .Field<&components::PuzzleGame::maze>("maze");
 }

@@ -57,6 +57,7 @@
 #include "ECS/Components/Physics.h"
 #include "ECS/Components/Player.h"
 #include "ECS/Components/Pot.h"
+#include "ECS/Components/PuzzleGame.h"
 #include "ECS/Components/ReportedHand.h"
 #include "ECS/Components/Reward.h"
 #include "ECS/Components/Scaffold.h"
@@ -72,6 +73,7 @@
 #include "ECS/Components/Villager.h"
 #include "ECS/GamePlayers.h"
 #include "ECS/Map.h"
+#include "ECS/MazePuzzleRules.h"
 #include "ECS/ObjectPhysics.h"
 #include "ECS/PhysicsClasses.h"
 #include "ECS/PhysicsEntry.h"
@@ -774,6 +776,13 @@ bool GameHandGrabWorld::TapThing(entt::entity object, glm::vec3 handPoint, Playe
 		countTap();
 		return Locator::workshopSystem::value().Tap(object, handPoint);
 	}
+	// A puzzle totem that takes taps, such as a bell of the lion maze, which rings at the next turn of its puzzle
+	if (const auto* totem = Entities().TryGet<const PuzzleTotem>(object);
+	    totem != nullptr && totem->highest == ecs::maze_puzzle::k_TappableHighest && Locator::puzzleGameSystem::has_value())
+	{
+		countTap();
+		return Locator::puzzleGameSystem::value().TapTotem(object);
+	}
 	// Other things' taps are the clicking and activating of the interface
 	return false;
 }
@@ -833,7 +842,9 @@ bool GameHandGrabWorld::ValidToTap(entt::entity object) const
 	{
 		return Locator::workshopSystem::has_value() && Locator::workshopSystem::value().ValidToTap(object);
 	}
-	return false;
+	// A puzzle totem takes the tap only when its greatest height is -1, as a bell of the lion maze
+	const auto* totem = registry.TryGet<const PuzzleTotem>(object);
+	return totem != nullptr && totem->highest == ecs::maze_puzzle::k_TappableHighest;
 }
 
 std::optional<creature_giving::Verdict> GameHandGrabWorld::GiveVerdict(entt::entity target, entt::entity held) const
