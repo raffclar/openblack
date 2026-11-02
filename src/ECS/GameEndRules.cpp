@@ -53,6 +53,11 @@ std::optional<PlayerNames> Decide(World& world, State& state, const std::vector<
 		world.Standing(god).finished = true;
 		world.StopMind(god);
 	}
+	// The creature of the god of this computer is kept as it is at the decision, for the clan upload
+	for (const auto god : gods)
+	{
+		world.KeepCreatureFile(god);
+	}
 	// The gods that are still in, best first: each time the god with the largest share of those left. Of two gods with
 	// the same share, the god with the larger share of the influence is the better.
 	std::vector<PlayerNames> best;
@@ -288,6 +293,8 @@ std::vector<Event> ProcessTurn(World& world, const Facts& facts, State& state)
 		if (CanLose(god) && !HasTempleOrNeedsNone(world, facts, god) && !standing.out)
 		{
 			standing.out = true;
+			// The creature of the god of this computer is kept as it is before it goes, for the clan upload
+			world.KeepCreatureFile(god);
 			world.RemoveCreature(god);
 		}
 	}

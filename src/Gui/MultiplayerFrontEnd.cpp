@@ -15,6 +15,7 @@
 #include <LobbyApiJson.h>
 #include <spdlog/spdlog.h>
 
+#include "ECS/Systems/ClanCreatureSystemInterface.h"
 #include "ECS/Systems/LobbyClientSystemInterface.h"
 #include "ECS/Systems/NetworkGameSystemInterface.h"
 #include "Online/LanDiscoveryInterface.h"
@@ -1050,6 +1051,11 @@ void MultiplayerFrontEnd::KeepUsedClan(std::optional<int64_t> clan)
 	if (_services.network != nullptr)
 	{
 		_services.network->SetPlaysForClan(clan.has_value());
+	}
+	// The game asks the lobby for the creature of the clan, which the god sends at the start
+	if (_services.clanCreature != nullptr)
+	{
+		_services.clanCreature->UseClan(clan);
 	}
 }
 

@@ -13,7 +13,9 @@
 
 #include <algorithm>
 #include <array>
+#include <optional>
 #include <string>
+#include <utility>
 
 #include <spdlog/spdlog.h>
 
@@ -34,11 +36,14 @@
 #include "ECS/Components/WorshipSite.h"
 #include "ECS/GamePlayers.h"
 #include "ECS/Registry.h"
+#include "ECS/Systems/ClanCreatureSystemInterface.h"
 #include "ECS/Systems/ComputerPlayerSystemInterface.h"
+#include "ECS/Systems/CreatureCarryOverSystemInterface.h"
 #include "ECS/Systems/HandSystemInterface.h"
 #include "ECS/Systems/InfluenceSystemInterface.h"
 #include "ECS/Systems/LandSystemInterface.h"
 #include "ECS/Systems/LobbyClientSystemInterface.h"
+#include "ECS/Systems/NetworkGameSystemInterface.h"
 #include "ECS/Systems/PlayerSystemInterface.h"
 #include "ECS/Systems/SimulationSystemInterface.h"
 #include "ECS/Systems/TimeSystemInterface.h"
@@ -46,7 +51,9 @@
 #include "ECS/Systems/WorshipSiteSystemInterface.h"
 #include "ECS/WorldObjects.h"
 #include "InfoConstants.h"
+#include "Input/LocalPlayer.h"
 #include "Locator.h"
+#include "Online/NetworkSession.h"
 #include "Online/SkirmishPing.h"
 #include "PlayerSlots.h"
 
@@ -127,6 +134,33 @@ public:
 	[[nodiscard]] float InfluencePower(PlayerNames player) const override
 	{
 		return Locator::influenceSystem::value().InfluencePower(player);
+	}
+
+	void KeepCreatureFile(PlayerNames player) override
+	{
+		if (!Locator::clanCreatureSystem::has_value() || !Locator::creatureCarryOverSystem::has_value())
+		{
+			return;
+		}
+		// The god of this computer: the god of the session in a network game, the god of the hand in a skirmish
+		const auto* session = Locator::networkGame::has_value() ? Locator::networkGame::value().Session() : nullptr;
+		const auto ownGod =
+		    session != nullptr
+		        ? session->OwnGod()
+		        : std::optional(input::LocalPlayer(Locator::handSystem::has_value() ? &Locator::handSystem::value() : nullptr));
+		if (ownGod != player)
+		{
+			return;
+		}
+		const auto creature = Locator::playerSystem::value().GetPrimaryCreature(player);
+		if (!creature.has_value())
+		{
+			return;
+		}
+		if (auto file = Locator::creatureCarryOverSystem::value().CreatureFile(*creature); file.has_value())
+		{
+			Locator::clanCreatureSystem::value().KeepCreatureFile(std::move(*file));
+		}
 	}
 
 	void RemoveCreature(PlayerNames player) override

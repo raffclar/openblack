@@ -93,6 +93,8 @@ public:
 	void GetMyClans(LobbyCallback<lobby_api::ClanList> callback) override;
 	void GetClan(int64_t clanId, LobbyCallback<lobby_api::ClanDetails> callback) override;
 	void GetClanLogo(int64_t clanId, LobbyCallback<std::vector<uint8_t>> callback) override;
+	void GetClanCreature(int64_t clanId, LobbyCallback<lobby_api::ClanCreatureReply> callback) override;
+	void PutClanCreature(int64_t clanId, lobby_api::ClanCreature creature, LobbyCallback<LobbyDone> callback) override;
 	void GetMaps(LobbyCallback<lobby_api::MapList> callback) override;
 	void DownloadMap(const lobby_api::OnlineMap& map, LobbyCallback<std::vector<uint8_t>> callback) override;
 

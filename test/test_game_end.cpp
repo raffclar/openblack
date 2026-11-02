@@ -42,6 +42,8 @@ class FakeWorld final: public World
 {
 public:
 	std::map<PlayerNames, FakeGod> gods;
+	/// Each god whose creature file the game kept, while the creature was on the land
+	std::vector<PlayerNames> kept;
 
 	[[nodiscard]] std::vector<PlayerNames> ActiveGods() const override
 	{
@@ -60,6 +62,13 @@ public:
 	[[nodiscard]] GameStanding& Standing(PlayerNames player) override { return gods.at(player).standing; }
 	[[nodiscard]] float InfluenceShare(PlayerNames player) const override { return gods.at(player).influence; }
 	[[nodiscard]] float InfluencePower(PlayerNames player) const override { return gods.at(player).power; }
+	void KeepCreatureFile(PlayerNames player) override
+	{
+		if (gods.at(player).creature)
+		{
+			kept.push_back(player);
+		}
+	}
 	void RemoveCreature(PlayerNames player) override { gods.at(player).creature = false; }
 	void CountGodDefeated(PlayerNames player) override { ++gods.at(player).godsDefeated; }
 	void StopMind(PlayerNames player) override { gods.at(player).mind = false; }
@@ -485,4 +494,41 @@ TEST(GameEnd, ANetworkGameWithNoConditionsEndsAtItsTimeLimitByTheInfluence)
 	EXPECT_EQ(events[0].kind, Event::Kind::Won);
 	EXPECT_EQ(events[0].god, k_One);
 	EXPECT_TRUE(state.decided);
+}
+
+TEST(GameEnd, TheDecisionKeepsTheCreatureFileOfEachGodWithACreature)
+{
+	auto world = TwoHumans();
+	world.gods[k_Two].creature = false;
+	world.gods[k_One].standing.conditions[0] = WinCondition {.current = 3, .target = 3, .completed = true};
+	world.gods[k_Two].standing.conditions[0] = WinCondition {.current = 1, .target = 3, .completed = false};
+	State state;
+	Facts facts = k_Network;
+	facts.conditionCount = 1;
+	static_cast<void>(ProcessTurn(world, facts, state));
+	ASSERT_TRUE(state.decided);
+	// The world keeps only the file of the god of this computer. A god with no creature gives no file.
+	EXPECT_EQ(world.kept, std::vector<PlayerNames> {k_One});
+}
+
+TEST(GameEnd, AGodOutKeepsTheCreatureFileBeforeTheCreatureGoes)
+{
+	auto world = TwoHumans();
+	world.gods[k_Three] = {.computer = true};
+	world.gods[k_Three].temple = false;
+	State state;
+	static_cast<void>(ProcessTurn(world, k_Network, state));
+	EXPECT_FALSE(world.gods[k_Three].creature);
+	EXPECT_EQ(world.kept, std::vector<PlayerNames> {k_Three});
+}
+
+TEST(GameEnd, TheLastGodLeftKeepsNoCreatureFile)
+{
+	// The god left wins when the other god is out, but the game keeps only the file of the god that went out
+	auto world = TwoHumans();
+	world.gods[k_Two].temple = false;
+	State state;
+	static_cast<void>(ProcessTurn(world, k_Network, state));
+	ASSERT_TRUE(state.decided);
+	EXPECT_EQ(world.kept, std::vector<PlayerNames> {k_Two});
 }

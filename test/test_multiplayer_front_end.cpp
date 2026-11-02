@@ -30,6 +30,7 @@
 #include "ColourDifference.h"
 #include "Commands/TurnCodec.h"
 #include "ECS/PlayerColour.h"
+#include "ECS/Systems/ClanCreatureSystemInterface.h"
 #include "ECS/Systems/LobbyClientSystemInterface.h"
 #include "ECS/Systems/NetworkGameSystemInterface.h"
 #include "Gui/LandThumbnail.h"
@@ -294,6 +295,20 @@ public:
 	int polls {0};
 };
 
+/// Keeps each clan that the front end gave
+class FakeClanCreature final: public ClanCreatureSystemInterface
+{
+public:
+	void UseClan(std::optional<int64_t> clan) override { used.push_back(clan); }
+	[[nodiscard]] std::optional<int64_t> UsedClan() const override { return used.empty() ? std::nullopt : used.back(); }
+	[[nodiscard]] std::optional<ClanStartCreature> StartCreature() const override { return std::nullopt; }
+	void KeepCreatureFile(std::vector<uint8_t> /*file*/) override {}
+	[[nodiscard]] std::span<const uint8_t> KeptCreatureFile() const override { return {}; }
+	ClanUpload SendAtGameEnd(float /*godAlignment*/) override { return ClanUpload::NoClan; }
+
+	std::vector<std::optional<int64_t>> used;
+};
+
 constexpr std::string_view k_LocalMaps =
     "1:Bombardment - 2 players:mpm_2p_1:2:\r\n2:King of the hill - 3 players:mpm_3p_1:3:\r\n";
 constexpr std::string_view k_Conditions = "FORMAP mpm_2p_1.txt\n"
@@ -317,6 +332,7 @@ struct FrontEndTest: public ::testing::Test
 	FakeMapStore store;
 	/// The store of the lands of network games, none when the test does not give one
 	online::OnlineMapStoreInterface* mapStore {nullptr};
+	FakeClanCreature clanCreature;
 
 	void Make(bool withLan = false)
 	{
@@ -328,6 +344,7 @@ struct FrontEndTest: public ::testing::Test
 		    .owner = {},
 		    .poll = {},
 		    .maps = mapStore,
+		    .clanCreature = &clanCreature,
 		};
 		MultiplayerFrontEnd::Settings settings {
 		    .registerPage = "https://lobby.test/register/",
@@ -1228,10 +1245,15 @@ TEST_F(FrontEndTest, UseThisClan)
 	FakeLobby::Give(lobby.useClan,
 	                lobby_api::UsedClan {.clan = lobby_api::ClanRef {.id = 4, .name = "The Clan", .role = "leader"}});
 	EXPECT_EQ(frontEnd->GetUsedClan(), 4);
+	// The game asks for the clan creature of the clan that the lobby accepted
+	ASSERT_EQ(clanCreature.used.size(), 1u);
+	EXPECT_EQ(clanCreature.used.back(), 4);
 	frontEnd->UseNoClan();
 	EXPECT_FALSE(lobby.useClanId.has_value());
 	FakeLobby::Give(lobby.useClan, lobby_api::UsedClan {});
 	EXPECT_FALSE(frontEnd->GetUsedClan().has_value());
+	ASSERT_EQ(clanCreature.used.size(), 2u);
+	EXPECT_FALSE(clanCreature.used.back().has_value());
 }
 
 TEST_F(FrontEndTest, PlayerDetailsAskTheLobbyOneTimeForThePickedPlayer)

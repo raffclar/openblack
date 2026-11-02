@@ -118,6 +118,7 @@
 #include "ECS/Archetypes/PlayerArchetype.h"
 #include "ECS/Archetypes/SkyArchetype.h"
 #include "ECS/ChallengePictures.h"
+#include "ECS/Components/Alignment.h"
 #include "ECS/Components/Animal.h"
 #include "ECS/Components/AnimatedStatic.h"
 #include "ECS/Components/CameraBookmark.h"
@@ -181,6 +182,7 @@
 #include "ECS/Systems/ChatSystemInterface.h"
 #include "ECS/Systems/ChimneySmokeSystemInterface.h"
 #include "ECS/Systems/CinematicDirectorSystemInterface.h"
+#include "ECS/Systems/ClanCreatureSystemInterface.h"
 #include "ECS/Systems/CloudSystemInterface.h"
 #include "ECS/Systems/ComputerPlayerSystemInterface.h"
 #include "ECS/Systems/ComputerSettingsSystemInterface.h"
@@ -2863,6 +2865,17 @@ void Game::FollowGameEnd()
 	const auto colour = end_game_box::LooksOn(local) ? glm::vec4(0.0f) : gui::statistics_box::PlayerColour(local, landNumber);
 	_interface->OpenEndGameBox({.box = *opened.endBox, .title = title, .colour = colour});
 	SPDLOG_LOGGER_INFO(spdlog::get("game"), "The end box opens for player {}: {}", static_cast<int>(local), gui::ToUtf8(title));
+	// In a game on the internet, an end box of a decided game or of a god that is out sends the clan creature of the god
+	// of this computer to the lobby, with the alignment that the god has now
+	if (session != nullptr && session->Origin() == online::GameOrigin::InternetLobby &&
+	    opened.endBox->kind != end_game_box::Kind::LeaveQuestion && session->OwnGod().has_value() &&
+	    Locator::clanCreatureSystem::has_value())
+	{
+		const auto player = Locator::playerSystem::value().FindPlayer(*session->OwnGod());
+		const auto* alignment =
+		    player.has_value() ? Locator::entitiesRegistry::value().TryGet<const ecs::components::Alignment>(*player) : nullptr;
+		static_cast<void>(Locator::clanCreatureSystem::value().SendAtGameEnd(alignment != nullptr ? alignment->value : 0.0f));
+	}
 	// The end box of a decided game asks the game server to stop the turns of the game
 	if (session != nullptr && end_game_box::StopsTheGame(*opened.endBox, _endGameBoxState))
 	{
@@ -6002,6 +6015,7 @@ std::unique_ptr<gui::MultiplayerFrontEnd> Game::MakeMultiplayerFrontEnd()
 	    .owner = {},
 	    .poll = {},
 	    .maps = Locator::onlineMapStore::has_value() ? &Locator::onlineMapStore::value() : nullptr,
+	    .clanCreature = Locator::clanCreatureSystem::has_value() ? &Locator::clanCreatureSystem::value() : nullptr,
 	};
 	gui::MultiplayerFrontEnd::Settings settings;
 	// The registration page is on the lobby's site: Register on the site, then log in in the game
