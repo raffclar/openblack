@@ -1486,6 +1486,8 @@ void AddJoinOnlineScenarios(std::vector<Scenario>& all);
 void AddWorldSoundScenarios(std::vector<Scenario>& all);
 /// A town given miracles by the debug tool, and its worship site going up
 void AddTownMiracleScenarios(std::vector<Scenario>& all);
+/// The things that the game marks as fixed to the land: a forest miracle by a hut, a temporary pile by a worship site
+void AddFixedKindScenarios(std::vector<Scenario>& all);
 /// The town of the player that the scenarios of worship site icons use: a Norse town centre with a hut and three
 /// villagers. With the temple at k_WorshipTemple, its worship site goes up by the temple.
 [[nodiscard]] std::vector<ObjectSetup> WorshipTown();
