@@ -608,9 +608,12 @@ struct ScriptArgument
 		/// An object that an earlier native call of the scenario gave back (index, counting the first as 0), as a
 		/// script keeps the thing that it made in a variable
 		Made,
+		/// The text, as a script gives a text in quotes, such as a file name. Only a native call takes it.
+		Text,
 	};
 	Kind kind {Kind::Number};
 	float number {0.0f};
+	std::string_view text;
 	glm::vec2 point {0.0f};
 	float height {0.0f};
 	size_t index {0};
