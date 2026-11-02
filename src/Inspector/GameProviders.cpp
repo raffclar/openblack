@@ -404,6 +404,7 @@ constexpr std::array k_Coverage {
     LocatorCoverage {"highDetailSystem", "view.script_control"},
     LocatorCoverage {"walkPathSystem", "living.walk_paths"},
     LocatorCoverage {"puzzleGameSystem", "puzzle.list"},
+    LocatorCoverage {"puzzleTotemSystem", "puzzle.totems"},
     LocatorCoverage {"wonderSystem", "town.wonders"},
     LocatorCoverage {"danceSystem", "living.dances"},
     LocatorCoverage {"sharkSystem", "living.sharks"},

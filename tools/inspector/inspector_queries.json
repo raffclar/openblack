@@ -849,6 +849,12 @@
   "query": "puzzle.list"
  },
  {
+  "description": "The puzzle totems that rise out of the land and sink back into it: height, greatest height (-1 for a totem that only takes taps), whether a hand holds it, and its place",
+  "kind": "list",
+  "parameters": [],
+  "query": "puzzle.totems"
+ },
+ {
   "description": "The worship sites: their temple, player, tribe, place round the temple, towns, altar, how far they are built, their worshippers (newest first) and food on its way, and their prayer power: dancers, battery, what can be drawn this turn and what has been, the dance's intensity and the strain",
   "kind": "list",
   "parameters": [],

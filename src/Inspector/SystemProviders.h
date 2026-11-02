@@ -217,6 +217,7 @@ struct MapSources
 // The puzzle games
 
 ///   puzzle.list                         the puzzle games: kind, state, calm turns and the links of their pieces
+///   puzzle.totems                       the puzzle totems: height, greatest height, held by a hand
 [[nodiscard]] std::unique_ptr<ProviderInterface> MakePuzzleProvider(WorldSources sources);
 
 // The worship sites
