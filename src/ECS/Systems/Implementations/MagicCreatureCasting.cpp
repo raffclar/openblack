@@ -18,6 +18,8 @@
 
 #include <algorithm>
 
+#include <spdlog/spdlog.h>
+
 #include "3D/CreatureBody.h"
 #include "Creature/CreatureRig.h"
 #include "Creature/CreatureSpellCasting.h"
@@ -262,20 +264,31 @@ bool MagicSystem::StartCreatureCast(entt::entity creature, MagicType type, std::
 	return true;
 }
 
+void MagicSystem::EndCreatureCastBeams(entt::entity creature)
+{
+	const auto beams = _creatureBeams.find(creature);
+	if (beams == _creatureBeams.end())
+	{
+		return;
+	}
+	if (Locator::effectRequestSystem::has_value())
+	{
+		for (const auto beam : beams->second)
+		{
+			Locator::effectRequestSystem::value().Stop(beam);
+		}
+	}
+	_creatureBeams.erase(beams);
+	if (const auto logger = spdlog::get("game"))
+	{
+		SPDLOG_LOGGER_INFO(logger, "The cast beams from the hands of creature {} stop", entt::to_integral(creature));
+	}
+}
+
 void MagicSystem::ReleaseCreatureCast(entt::entity creature)
 {
 	// Its beams from casting from above go
-	if (const auto beams = _creatureBeams.find(creature); beams != _creatureBeams.end())
-	{
-		if (Locator::effectRequestSystem::has_value())
-		{
-			for (const auto beam : beams->second)
-			{
-				Locator::effectRequestSystem::value().Stop(beam);
-			}
-		}
-		_creatureBeams.erase(beams);
-	}
+	EndCreatureCastBeams(creature);
 	const auto found = _creatureCasts.find(creature);
 	if (found == _creatureCasts.end())
 	{

@@ -150,6 +150,7 @@ public:
 	bool CastByCreature(entt::entity creature, MagicType type, entt::entity target) override;
 	bool CastByCreatureAt(entt::entity creature, MagicType type, glm::vec3 place) override;
 	void ReleaseCreatureCast(entt::entity creature) override;
+	void EndCreatureCastBeams(entt::entity creature) override;
 	entt::entity CastOnObject(MagicType type, PlayerNames player, entt::entity target, const magic::SpellCastData& cast,
 	                          const particles::ProcessInfo& info) override;
 	void CloseDown(entt::entity spell) override;

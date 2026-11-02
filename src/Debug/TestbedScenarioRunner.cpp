@@ -2303,13 +2303,23 @@ std::string Runner::GiveHandCommand(entt::entity creature, const Command& comman
 		return hand.IsLocked(creature) ? "held" : "busy";
 	}
 	case Kind::HandLetGo:
+	{
 		if (hand.GetCreature() == creature)
 		{
 			const auto sum = hand.GetFeedbackSum();
 			hand.Release();
 			return fmt::format("{:+.2f}", sum);
 		}
+		// A hold that the scenario took with no touch of the body ends as the turn ends it
+		const auto own =
+		    Locator::handSystem::has_value() ? Locator::handSystem::value().GetOwnPlayer() : PlayerNames::PLAYER_ONE;
+		if (hand.GetLockedCreature(own) == creature)
+		{
+			hand.DoUnlock(own, creature);
+			return "let go of the hold";
+		}
 		return "not held";
+	}
 	default:
 		return {};
 	}

@@ -56,6 +56,7 @@
 #include "ECS/Systems/Implementations/CreatureHandSystem.h"
 #include "ECS/Systems/Implementations/HandSystem.h"
 #include "ECS/Systems/Implementations/PlayerCommandSystem.h"
+#include "ECS/Systems/MagicSystemInterface.h"
 
 using namespace openblack;
 using namespace openblack::player_commands;
@@ -789,6 +790,110 @@ TEST_F(ReportedHands, TheTurnHoldsTheCreatureThatThePressSent)
 		creatures.DoUnlock(PlayerNames::PLAYER_ONE, creature);
 		EXPECT_FALSE(creatures.IsLocked(creature));
 	}
+	Locator::handSystem::reset();
+	if (log != nullptr)
+	{
+		spdlog::drop("game");
+	}
+}
+
+namespace
+{
+/// Magic that only notes the creatures whose cast beams stop
+class BeamMagic final: public ecs::systems::MagicSystemInterface
+{
+public:
+	entt::entity CastAtPoint(MagicType, PlayerNames, glm::vec3, const magic::SpellCastData&,
+	                         const particles::ProcessInfo&) override
+	{
+		return entt::null;
+	}
+	entt::entity CastOnObject(MagicType, PlayerNames, entt::entity, const magic::SpellCastData&,
+	                          const particles::ProcessInfo&) override
+	{
+		return entt::null;
+	}
+	void CloseDown(entt::entity) override {}
+	[[nodiscard]] bool CanCastAt(MagicType, PlayerNames, glm::vec3) override { return false; }
+	bool SpellEvent(entt::entity, const particles::SpellEventInfo&) override { return false; }
+	void PayForSpell(entt::entity, float) override {}
+	entt::entity CreateDispenser(glm::vec3, MagicType, float) override { return entt::null; }
+	void SetDispenserPeriod(entt::entity, float) override {}
+	entt::entity CreateOneOffSeed(glm::vec3, SpellSeedType, int, float) override { return entt::null; }
+	entt::entity CreateOneOffSeedFor(glm::vec3, MagicType) override { return entt::null; }
+	bool Remove(entt::entity) override { return false; }
+	entt::entity GiveSeedToHand(PlayerNames, SpellSeedType, int, float) override { return entt::null; }
+	entt::entity SummonSeed(PlayerNames, SpellSeedType, int) override { return entt::null; }
+	entt::entity SummonSeedAtSite(entt::entity, SpellSeedType, int) override { return entt::null; }
+	void DiscardHeldSeed() override {}
+	void DiscardHeldSeedOf(PlayerNames) override {}
+	void DeleteSeed(entt::entity) override {}
+	void UpdateHand(const HandFrame&, const input_steps::Steps&) override {}
+	bool TapFireBall(entt::entity) override { return false; }
+	bool TapGlobe(entt::entity, PlayerNames) override { return false; }
+	bool PressFireBall(uint32_t, uint32_t) override { return false; }
+	void HoldFireBall(uint32_t, uint32_t) override {}
+	void ReleaseFireBall(uint32_t, uint32_t) override {}
+	[[nodiscard]] std::optional<entt::entity> OrbUnderHand() const override { return std::nullopt; }
+	bool PressAction() override { return false; }
+	void ReleaseAction() override {}
+	[[nodiscard]] bool IsHandBusy() const override { return false; }
+	[[nodiscard]] bool IsHandBusyOf(PlayerNames) const override { return false; }
+	[[nodiscard]] magic::PourPose GetHandPour(float) const override { return {}; }
+	[[nodiscard]] HandCastState GetHandCastState() const override { return {}; }
+	[[nodiscard]] std::optional<entt::entity> GetHeldSeed() const override { return std::nullopt; }
+	[[nodiscard]] std::optional<entt::entity> GetHeldSeedOf(PlayerNames) const override { return std::nullopt; }
+	void SetIconSeedPowerUp(entt::entity, int) override {}
+	entt::entity TakeIconSeed(entt::entity, PlayerNames, SpellSeedType, int, float) override { return entt::null; }
+	[[nodiscard]] HandResult GetLastHandResult() const override { return {}; }
+	bool SendSpellEvent(entt::entity, const particles::SpellEventInfo&) override { return false; }
+	float ForcePayForSpell(entt::entity, float) override { return 0.0f; }
+	[[nodiscard]] float SpellStrength(entt::entity) override { return 0.0f; }
+	void ProcessTurn() override {}
+	void Update(float) override {}
+	void Reset() override {}
+	void SetIgnoreInfluence(bool) override {}
+	void DriveHand(std::optional<HandFrame>) override {}
+	[[nodiscard]] std::optional<HandFrame> GetDrivenHand() const override { return std::nullopt; }
+	[[nodiscard]] bool IsIgnoringInfluence() const override { return false; }
+	[[nodiscard]] std::vector<SpellInfo> GetSpells() const override { return {}; }
+	void RainOnFire(const glm::vec3&) override {}
+	[[nodiscard]] std::vector<DispenserInfo> GetDispensers() const override { return {}; }
+	void EndCreatureCastBeams(entt::entity creature) override { beamsEnded.push_back(creature); }
+
+	std::vector<entt::entity> beamsEnded;
+};
+} // namespace
+
+// The turn that holds a creature also stops the beams from its hands, as it casts from above. A refused hold does not.
+TEST_F(ReportedHands, TheHoldStopsTheCastBeamsOfTheCreature)
+{
+	auto& registry = Locator::entitiesRegistry::value();
+	Locator::handSystem::reset(&_hands, [](ecs::systems::HandSystemInterface* /*unowned*/) {});
+	BeamMagic magic;
+	Locator::magicSystem::reset(&magic, [](ecs::systems::MagicSystemInterface* /*unowned*/) {});
+	const auto log = spdlog::get("game") != nullptr ? nullptr : spdlog::null_logger_mt("game");
+	ecs::systems::CreatureHandSystem creatures;
+	const auto caster = registry.Create();
+	registry.Assign<ecs::components::Creature>(caster, ecs::components::Creature {.owner = PlayerNames::PLAYER_ONE});
+	creatures.DoLock(PlayerNames::PLAYER_ONE, caster);
+	ASSERT_EQ(magic.beamsEnded.size(), 1u);
+	EXPECT_EQ(magic.beamsEnded[0], caster);
+	// The hand lets go. The beams do not come back, and the release stops nothing more.
+	creatures.DoUnlock(PlayerNames::PLAYER_ONE, caster);
+	EXPECT_EQ(magic.beamsEnded.size(), 1u);
+	// The hand of another god holds the creature. The hold of the first god comes too late and stops nothing.
+	std::ignore = _hands.MakeHandsOf(PlayerNames::PLAYER_TWO);
+	creatures.DoLock(PlayerNames::PLAYER_TWO, caster);
+	creatures.DoLock(PlayerNames::PLAYER_ONE, caster);
+	EXPECT_EQ(magic.beamsEnded.size(), 2u);
+	// A creature that is gone stops nothing
+	const auto gone = registry.Create();
+	registry.Assign<ecs::components::Creature>(gone, ecs::components::Creature {.owner = PlayerNames::PLAYER_ONE});
+	registry.Destroy(gone);
+	creatures.DoLock(PlayerNames::PLAYER_ONE, gone);
+	EXPECT_EQ(magic.beamsEnded.size(), 2u);
+	Locator::magicSystem::reset();
 	Locator::handSystem::reset();
 	if (log != nullptr)
 	{
