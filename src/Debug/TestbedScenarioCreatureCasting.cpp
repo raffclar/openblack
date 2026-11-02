@@ -268,7 +268,7 @@ void testbed_scenarios::AddCreatureCastingScenarios(std::vector<Scenario>& all)
 	                "the hand lets go, the beams do not come back. The log shows \"The cast beams from the hands of "
 	                "creature\" and \"stop\" at the hold.",
 	    .environment = {.dispenserGrid = false},
-	    .framing = {.shot = Shot::Overview, .include = {{-30.0f, -10.0f}, {30.0f, 90.0f}}},
+	    .framing = {.shot = Shot::Follow, .distance = 1.0f},
 	    .creatures = {Caster({0.0f, 0.0f}, "caster")},
 	    .objects = {{.type = TreeInfo::Birch, .offset = {0.0f, 80.0f}}},
 	    .commands = {Know(MagicType::Water),

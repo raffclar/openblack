@@ -7785,7 +7785,7 @@ void AddHand(std::vector<Scenario>& all)
 	    .expected = "While the hand holds the barrel, it leans to the slope under it. When it lets go, it stands "
 	                "straight up and stays straight up while the pointer is still. When the pointer moves across the "
 	                "screen, the hand leans to the slope again in a short time.",
-	    .environment = {.dispenserGrid = false, .cursor = glm::vec2(0.4f, 0.5f)},
+	    .environment = {.dispenserGrid = false, .cursor = glm::vec2(0.4f, 0.2f)},
 	    .framing = {.shot = Shot::Overview, .include = {{k_Lake.x, k_FarShallows - 25.0f}}, .distance = 0.2f},
 	    .objects = {{.type = MobileObjectInfo::EgyptBarrel, .offset = {k_Lake.x + 10.0f, k_FarShallows + 10.0f}}},
 	    .commands = {{.kind = Kind::HandTake, .delaySeconds = 1.0f, .object = 0},
