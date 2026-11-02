@@ -2231,6 +2231,12 @@ void GetProperty() // 021 GET_PROPERTY
 			Pushf(seed->castMultiplier);
 			return;
 		}
+		// A miracle that is cast: what multiplies the strength its prayer power gives
+		if (const auto* spell = registry.TryGet<const ecs::components::Spell>(object); spell != nullptr)
+		{
+			Pushf(spell->chants.strengthMultiplier);
+			return;
+		}
 		// Anything else answers its life
 		SPDLOG_LOGGER_ERROR(spdlog::get("scripting"), "Script-Did you want the strength of this?");
 		Pushf(ecs::world_objects::LifeOf(object));
@@ -2450,6 +2456,12 @@ static void SetPropertyOf(entt::entity object, script::ObjectPropertyType prop, 
 		if (auto* seed = registry.TryGet<ecs::components::SpellSeed>(object); seed != nullptr)
 		{
 			seed->castMultiplier = value;
+			return;
+		}
+		// A miracle that is cast: the value multiplies each strength that it gets after this
+		if (auto* spell = registry.TryGet<ecs::components::Spell>(object); spell != nullptr)
+		{
+			spell->chants.strengthMultiplier = value;
 			return;
 		}
 		SPDLOG_LOGGER_ERROR(spdlog::get("scripting"), "Cannot set strength of this");
