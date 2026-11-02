@@ -11,7 +11,12 @@
 
 #include <algorithm>
 #include <array>
+#include <initializer_list>
+#include <optional>
+#include <span>
+#include <string>
 #include <utility>
+#include <vector>
 
 namespace openblack::chat
 {
@@ -193,66 +198,157 @@ std::string LogLine(std::u16string_view name, std::u16string_view text)
 	return line;
 }
 
-people::List people::MakeList(std::vector<Person> players)
+people::Category& people::List::Of(Group group) noexcept
+{
+	switch (group)
+	{
+	case Group::Friends:
+		return friends;
+	case Group::Others:
+		return others;
+	case Group::Players:
+		break;
+	}
+	return players;
+}
+
+const people::Category& people::List::Of(Group group) const noexcept
+{
+	switch (group)
+	{
+	case Group::Friends:
+		return friends;
+	case Group::Others:
+		return others;
+	case Group::Players:
+		break;
+	}
+	return players;
+}
+
+people::Category people::MakePlayers(std::vector<Person> players)
 {
 	std::ranges::stable_sort(players, {}, &Person::slot);
 	for (auto& player : players)
 	{
 		player.selected = true;
 	}
-	return {.expanded = true, .messagesOn = true, .players = std::move(players), .lastSelected = std::nullopt};
+	return {.expanded = true, .messagesOn = true, .people = std::move(players)};
 }
 
-size_t people::RowCount(const List& list) noexcept
+namespace
 {
-	return 1 + (list.expanded ? list.players.size() : 0);
+
+constexpr std::array<people::Group, 3> k_GroupOrder {people::Group::Players, people::Group::Friends, people::Group::Others};
+
+/// The first person of a group with the number, if any
+people::Person* FindUser(people::Category& category, const std::optional<people::UserId>& user)
+{
+	const auto found = std::ranges::find(category.people, user, &people::Person::user);
+	return found != category.people.end() ? &*found : nullptr;
+}
+
+/// Removes the first person of a group with the number
+void RemoveUser(people::Category& category, const std::optional<people::UserId>& user)
+{
+	if (const auto found = std::ranges::find(category.people, user, &people::Person::user); found != category.people.end())
+	{
+		category.people.erase(found);
+	}
+}
+
+void ClearSelection(people::List& list)
+{
+	for (const auto group : k_GroupOrder)
+	{
+		for (auto& person : list.Of(group).people)
+		{
+			person.selected = false;
+		}
+	}
+	list.lastSelected.reset();
+}
+
+} // namespace
+
+std::vector<people::Row> people::Rows(const List& list)
+{
+	std::vector<Row> rows;
+	for (const auto group : k_GroupOrder)
+	{
+		const auto& category = list.Of(group);
+		if (category.people.empty())
+		{
+			continue;
+		}
+		rows.push_back({.group = group, .person = std::nullopt});
+		if (category.expanded)
+		{
+			for (size_t i = 0; i < category.people.size(); ++i)
+			{
+				rows.push_back({.group = group, .person = i});
+			}
+		}
+	}
+	return rows;
+}
+
+size_t people::RowCount(const List& list)
+{
+	return Rows(list).size();
 }
 
 void people::Apply(List& list, const Click& click)
 {
-	const auto clearAll = [&list]() {
-		for (auto& player : list.players)
-		{
-			player.selected = false;
-		}
-		list.lastSelected.reset();
-	};
-	if (click.row == 0)
+	const auto rows = Rows(list);
+	if (click.row >= rows.size())
 	{
-		clearAll();
+		return;
+	}
+	const auto& row = rows[click.row];
+	if (!row.person.has_value())
+	{
+		ClearSelection(list);
+		auto& category = list.Of(row.group);
 		if (click.onSpeechButton)
 		{
-			list.messagesOn = !list.messagesOn;
-			list.expanded = list.messagesOn;
+			category.messagesOn = !category.messagesOn;
+			category.expanded = category.messagesOn;
 		}
 		else
 		{
-			list.expanded = !list.expanded;
+			category.expanded = !category.expanded;
 		}
 		return;
 	}
-	if (!list.expanded || click.row > list.players.size())
-	{
-		return;
-	}
+	const auto personAt = [&list, &rows](size_t index) -> Person* {
+		if (index >= rows.size() || !rows[index].person.has_value())
+		{
+			return nullptr;
+		}
+		return &list.Of(rows[index].group).people.at(*rows[index].person);
+	};
 	const auto last = list.lastSelected;
 	const bool modifier = click.shift || click.ctrl || click.otherModifier;
-	if (!modifier && list.players.at(click.row - 1).selected)
+	if (!modifier && personAt(click.row)->selected)
 	{
-		clearAll();
+		ClearSelection(list);
 		list.lastSelected = click.row;
 		return;
 	}
 	if (!click.ctrl)
 	{
-		clearAll();
+		ClearSelection(list);
 	}
-	// The players of the rows change to the opposite of the clicked player
-	const auto select = [&list](size_t first, size_t lastRow) {
-		const bool selected = !list.players.at(lastRow - 1).selected;
-		for (size_t row = std::min(first, lastRow); row <= std::max(first, lastRow); ++row)
+	// The people of the rows change to the opposite of the clicked person. The headings do not change.
+	const auto select = [&personAt](size_t first, size_t lastRow) {
+		const bool selected = !personAt(lastRow)->selected;
+		for (size_t index = std::min(first, lastRow); index <= std::max(first, lastRow); ++index)
 		{
-			list.players.at(row - 1).selected = selected;
+			if (auto* person = personAt(index); person != nullptr)
+			{
+				person->selected = selected;
+			}
 		}
 	};
 	if (click.shift)
@@ -270,12 +366,202 @@ void people::Apply(List& list, const Click& click)
 std::vector<ListedPlayer> people::Listed(const List& list)
 {
 	std::vector<ListedPlayer> listed;
-	listed.reserve(list.players.size());
-	for (const auto& player : list.players)
+	listed.reserve(list.players.people.size());
+	for (const auto& player : list.players.people)
 	{
 		listed.push_back({.slot = player.slot, .selected = player.selected});
 	}
 	return listed;
+}
+
+void people::MarkFriends(List& list)
+{
+	for (auto& friendPerson : list.friends.people)
+	{
+		for (auto* category : {&list.others, &list.players})
+		{
+			if (auto* person = FindUser(*category, friendPerson.user); person != nullptr)
+			{
+				person->isFriend = true;
+			}
+		}
+		friendPerson.isFriend = true;
+	}
+}
+
+people::FriendButton people::FriendButtonOf(const List& list)
+{
+	FriendButton button;
+	bool found = false;
+	for (const auto group : k_GroupOrder)
+	{
+		for (const auto& person : list.Of(group).people)
+		{
+			if (!person.selected)
+			{
+				continue;
+			}
+			if (!found)
+			{
+				found = true;
+				button = {.usable = true, .removes = person.isFriend};
+			}
+			else if (person.isFriend != button.removes)
+			{
+				button.usable = false;
+			}
+		}
+	}
+	return button;
+}
+
+void people::MakeFriends(List& list)
+{
+	auto& friends = list.friends.people;
+	// The selected players.
+	for (const auto& player : list.players.people)
+	{
+		if (!player.selected)
+		{
+			continue;
+		}
+		if (player.isFriend)
+		{
+			if (auto* friendPerson = FindUser(list.friends, player.user); friendPerson != nullptr)
+			{
+				friendPerson->selected = true;
+			}
+		}
+		else
+		{
+			auto copy = player;
+			copy.selected = false;
+			copy.isFriend = true;
+			friends.insert(friends.begin(), std::move(copy));
+		}
+	}
+	// The selected others. One that becomes a friend leaves the others, and the search starts again.
+	for (bool again = true; again;)
+	{
+		again = false;
+		for (const auto& other : list.others.people)
+		{
+			if (!other.selected)
+			{
+				continue;
+			}
+			if (other.isFriend)
+			{
+				if (auto* friendPerson = FindUser(list.friends, other.user); friendPerson != nullptr)
+				{
+					friendPerson->selected = true;
+				}
+				continue;
+			}
+			auto moved = other;
+			moved.selected = false;
+			friends.insert(friends.begin(), moved);
+			RemoveUser(list.others, moved.user);
+			again = true;
+			break;
+		}
+	}
+	// The selected friends go
+	for (auto found = std::ranges::find_if(friends, &Person::selected); found != friends.end();
+	     found = std::ranges::find_if(friends, &Person::selected))
+	{
+		const auto user = found->user;
+		RemoveUser(list.friends, user);
+		if (auto* player = FindUser(list.players, user); player != nullptr)
+		{
+			player->selected = false;
+			player->isFriend = false;
+		}
+	}
+	MarkFriends(list);
+}
+
+std::vector<people::FriendRecord> people::KeptFriends(const List& list)
+{
+	std::vector<FriendRecord> records;
+	for (const auto& friendPerson : list.friends.people)
+	{
+		if (records.size() == k_MostKeptFriends)
+		{
+			break;
+		}
+		records.push_back({.user = friendPerson.user.value_or(0), .name = friendPerson.name});
+	}
+	return records;
+}
+
+void people::LoadFriends(List& list, std::span<const FriendRecord> records)
+{
+	list.friends.people.clear();
+	for (const auto& record : records.first(std::min(records.size(), k_MostKeptFriends)))
+	{
+		list.friends.people.push_back({.slot = PlayerNames::PLAYER_ONE,
+		                               .user = record.user,
+		                               .name = record.name,
+		                               .selected = false,
+		                               .isFriend = false,
+		                               .online = false,
+		                               .lastSeen = 0,
+		                               .colour = k_NoGodColour});
+	}
+	MarkFriends(list);
+}
+
+void people::AddOther(List& list, std::u16string_view name, UserId user, std::optional<UserId> own)
+{
+	if (own == user || FindUser(list.friends, user) != nullptr)
+	{
+		return;
+	}
+	const bool staff = user > k_BeforeFirstStaff && user < k_AfterLastStaff;
+	list.others.people.insert(list.others.people.begin(), {.slot = PlayerNames::PLAYER_ONE,
+	                                                       .user = user,
+	                                                       .name = std::u16string(name),
+	                                                       .selected = false,
+	                                                       .isFriend = false,
+	                                                       .online = false,
+	                                                       .lastSeen = 0,
+	                                                       .colour = staff ? k_StaffColour : k_NoGodColour});
+	MarkFriends(list);
+}
+
+void people::UpdateOnline(List& list, std::span<const UserId> seen, uint32_t now)
+{
+	for (const auto user : seen)
+	{
+		for (auto& friendPerson : list.friends.people)
+		{
+			if (friendPerson.user == user)
+			{
+				friendPerson.lastSeen = now;
+			}
+		}
+	}
+	for (auto& friendPerson : list.friends.people)
+	{
+		if (friendPerson.lastSeen > now)
+		{
+			friendPerson.lastSeen = 0;
+		}
+		friendPerson.online =
+		    FindUser(list.players, friendPerson.user) != nullptr || now - friendPerson.lastSeen < k_OnlineTime;
+	}
+}
+
+std::vector<people::UserId> people::FriendNumbers(const List& list)
+{
+	std::vector<UserId> numbers;
+	numbers.reserve(list.friends.people.size());
+	for (const auto& friendPerson : list.friends.people)
+	{
+		numbers.push_back(friendPerson.user.value_or(0));
+	}
+	return numbers;
 }
 
 int EditWidth(float textWidth, int layoutWidth) noexcept

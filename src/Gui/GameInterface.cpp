@@ -455,7 +455,7 @@ GameInterface::GameInterface(TextDatabase texts, GameFont font, std::unique_ptr<
     , _multiplayerBoxes(std::make_unique<MultiplayerBoxes>(_texts, _font))
     , _musicControls(std::make_unique<CustomMusicControls>(_font, _atmos.get()))
     , _incomingMessages(std::make_unique<IncomingMessageStrip>())
-    , _chatControls(std::make_unique<ChatControls>(_font))
+    , _chatControls(std::make_unique<ChatControls>(_font, _atmos.get()))
     , _toolTips(ReadToolTipsInfo())
 {
 	_painter.SetPictures(_symbols.get(), _mice.get());
@@ -464,13 +464,19 @@ GameInterface::GameInterface(TextDatabase texts, GameFont font, std::unique_ptr<
 	_fullFontTexture = MakeGlyphTexture(_font.GetFullAtlas(), _font.GetFullAtlasSize(), "Font full height");
 	_painter.SetFullGlyphs(_fullFontTexture.get());
 	_menuCreaturePainter.SetFullGlyphs(_fullFontTexture.get());
-	// The quick chat list has the taunts, and the list of players has its heading
-	std::vector<std::u16string> taunts;
+	// The quick chat list has the taunts, the list of people has its headings, and the friend button its labels
+	ChatControls::Texts chatTexts;
 	for (uint32_t i = 0; i < chat::k_TauntCount; ++i)
 	{
-		taunts.emplace_back(_texts.GetHelpText(chat::k_FirstTauntText + i).text);
+		chatTexts.taunts.emplace_back(_texts.GetHelpText(chat::k_FirstTauntText + i).text);
 	}
-	_chatControls->SetTexts(std::move(taunts), std::u16string(_texts.GetHelpText(chat::k_PlayersText).text));
+	const auto text = [this](uint32_t number) { return std::u16string(_texts.GetHelpText(number).text); };
+	chatTexts.players = text(chat::k_PlayersText);
+	chatTexts.friends = text(chat::people::k_FriendsText);
+	chatTexts.others = text(chat::people::k_OthersText);
+	chatTexts.makeFriends = text(chat::people::k_MakeFriendsText);
+	chatTexts.makeNotFriends = text(chat::people::k_MakeNotFriendsText);
+	_chatControls->SetTexts(std::move(chatTexts));
 }
 
 GameInterface::~GameInterface() = default;

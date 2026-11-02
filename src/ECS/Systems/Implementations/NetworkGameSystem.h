@@ -59,11 +59,11 @@ public:
 	{
 		return _session ? _session->TakeStartEvent() : std::nullopt;
 	}
-	void SendRoomChat(std::string text) override
+	void SendRoomChat(std::string text, std::string to, bool team) override
 	{
 		if (_session)
 		{
-			_session->SendRoomChat(text);
+			_session->SendRoomChat(text, to, team);
 		}
 	}
 	[[nodiscard]] std::vector<game_socket::RoomChat> TakeRoomChat() override

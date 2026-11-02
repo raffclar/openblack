@@ -187,11 +187,19 @@ TEST(LobbyApi, TicketClansRankingAndPlayer)
 	EXPECT_EQ(clan->description, "motto");
 	EXPECT_EQ(clan->members, 4);
 
-	const auto ranking =
-	    ParseRankingPage(R"({"page":2,"pages":9,"entries":[{"position":26,"id":4,"name":"abc","points":1100.5}]})");
-	ASSERT_TRUE(ranking.has_value());
-	EXPECT_EQ(ranking->page, 2);
-	EXPECT_EQ(ranking->entries.at(0).position, 26);
+	const auto players = ParsePlayerRanking(
+	    R"({"players":[{"position":26,"account":{"id":4,"name":"abc"},"points":1100.5,"games_ranked":7}],"count":90})");
+	ASSERT_TRUE(players.has_value());
+	EXPECT_EQ(players->count, 90);
+	EXPECT_EQ(players->entries.at(0).position, 26);
+	EXPECT_EQ(players->entries.at(0).id, 4);
+	EXPECT_EQ(players->entries.at(0).name, "abc");
+	EXPECT_EQ(players->entries.at(0).gamesRanked, 7);
+	EXPECT_FALSE(ParsePlayerRanking(R"({"players":[{"position":1,"id":4,"name":"abc","points":1}],"count":1})").has_value());
+	const auto clanRanking = ParseClanRanking(R"({"clans":[{"position":1,"id":3,"name":"A","points":1500.0}],"count":1})");
+	ASSERT_TRUE(clanRanking.has_value());
+	EXPECT_EQ(clanRanking->entries.at(0).id, 3);
+	EXPECT_FALSE(ParseClanRanking(R"({"page":1,"pages":1,"entries":[]})").has_value());
 
 	const auto player = ParsePlayerDetails(R"({"id":4,"name":"abc","points":1000,"games_ranked":12})");
 	ASSERT_TRUE(player.has_value());

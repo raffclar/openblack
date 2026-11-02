@@ -63,6 +63,11 @@ struct ScriptRockStart
 /// does not react to what happens near it, and it does not catch what flies to it.
 [[nodiscard]] bool IgnoresReactions(ObjectType type);
 
+/// The row of the mobile object info table that a script's CREATE makes for the type, none for a type that does not
+/// make a mobile object. A mobile object takes the row that the script gives. A lump of poo and an ark always take
+/// their own rows.
+[[nodiscard]] std::optional<MobileObjectInfo> MobileObjectRowOf(ObjectType type, uint32_t subtype);
+
 /// CREATE_WITH_ANGLE_AND_SCALE gives its angle in degrees; things are turned in radians
 [[nodiscard]] float AngleFromDegrees(float degrees);
 

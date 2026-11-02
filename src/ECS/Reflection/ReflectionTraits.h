@@ -16,6 +16,7 @@
 #include <bitset>
 #include <chrono>
 #include <deque>
+#include <functional>
 #include <map>
 #include <memory>
 #include <optional>
@@ -136,6 +137,19 @@ template <typename Key, typename Compare, typename Allocator>
 inline constexpr bool k_IsSet<std::set<Key, Compare, Allocator>> = true;
 template <typename Key, typename Hash, typename Equal, typename Allocator>
 inline constexpr bool k_IsSet<std::unordered_set<Key, Hash, Equal, Allocator>> = true;
+
+/// A map or a set that keeps its keys in the order of the less-than operator of the key. A save can then write its
+/// entries as they are, with no sort.
+template <typename>
+inline constexpr bool k_KeepsKeyOrder = false;
+template <typename Key, typename Value, typename Allocator>
+inline constexpr bool k_KeepsKeyOrder<std::map<Key, Value, std::less<Key>, Allocator>> = true;
+template <typename Key, typename Value, typename Allocator>
+inline constexpr bool k_KeepsKeyOrder<std::map<Key, Value, std::less<>, Allocator>> = true;
+template <typename Key, typename Allocator>
+inline constexpr bool k_KeepsKeyOrder<std::set<Key, std::less<Key>, Allocator>> = true;
+template <typename Key, typename Allocator>
+inline constexpr bool k_KeepsKeyOrder<std::set<Key, std::less<>, Allocator>> = true;
 
 template <typename>
 inline constexpr bool k_IsPair = false;

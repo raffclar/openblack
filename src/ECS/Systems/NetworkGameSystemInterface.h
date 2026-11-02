@@ -80,9 +80,10 @@ public:
 	/// The god of the player plays for a clan in the game room, or for no clan. The start data of the god tells it to
 	/// the game, so that the creature of a clan god does not go to the files of the player's profile.
 	virtual void SetPlaysForClan(bool /*playsForClan*/) {}
-	/// A line of the chat of a room on the local network: the game server sends it to the other players in the room.
-	/// Only in the room, before the start.
-	virtual void SendRoomChat(std::string /*text*/) {}
+	/// A line of the chat of a room on the local network: the game server sends it to the other players in the room, or
+	/// to the one player that has the name in `to`. Only in the room, before the start.
+	/// @param team The line goes to one player of a team that the player picked
+	virtual void SendRoomChat(std::string /*text*/, std::string /*to*/, bool /*team*/) {}
 	/// The lines of the room's chat that the game server sent since the last call, in the order that they came
 	[[nodiscard]] virtual std::vector<game_socket::RoomChat> TakeRoomChat() { return {}; }
 	/// The player leaves the network game
