@@ -334,8 +334,8 @@ void AddExpressions(std::vector<Scenario>& all)
 	    .description = "A tiger whose mind is paused, close up, pulls the laugh face, which the tiger has no clip for, "
 	                   "then the smile, three seconds later.",
 	    .expected = "For three seconds the face stays plain and does not move: the laugh shows nothing. Then the smile "
-	                "starts at once from its first frame and holds. The readout of the face names the laugh, then the "
-	                "smile.",
+	                "starts at once from its first frame and holds for one second. When the laugh comes again, the smile "
+	                "eases out and the face stays plain. This repeats. The clip log names the laugh as not found.",
 	    .framing = {.shot = Shot::Head, .distance = 1.6f},
 	    .creatures = {CreatureSetup {.species = CreatureType::Tiger, .needs = Content(), .hold = true, .pauseMind = true}},
 	    .commands = {Play(Kind::PullFace, 0, k_TigerLaugh, 1.0f, false),
@@ -10425,17 +10425,19 @@ void AddCombat(std::vector<Scenario>& all)
 	}
 
 	{
-		// The same win by the life of the opponent, but the script gives the blue tiger its life back after the win, so
-		// it has more life than the red tiger when it responds
+		// The same win by the life of the opponent, but after the win the script gives the blue tiger its life back and
+		// halves the life of the red tiger, so the blue tiger has more life when it responds
+		auto winner = red(PlayerNames::PLAYER_ONE, 0.6f, -0.2f);
+		winner.hold = false;
 		auto loser = blue(PlayerNames::PLAYER_TWO, 0.5f, -0.2f);
 		loser.hold = false;
-		const auto setBlueLife = [](float life, float delay) {
+		const auto setLife = [](size_t creature, float life, float delay) {
 			return Command {.kind = Kind::CallNative,
 			                .delaySeconds = delay,
 			                .script = "SET_PROPERTY",
 			                .scriptArguments = {{.kind = ScriptArgument::Kind::Integer,
 			                                     .number = static_cast<float>(script::ObjectPropertyType::Health)},
-			                                    {.kind = ScriptArgument::Kind::Creature, .index = 1},
+			                                    {.kind = ScriptArgument::Kind::Creature, .index = creature},
 			                                    {.kind = ScriptArgument::Kind::Number, .number = life}}};
 		};
 		all.push_back({
@@ -10443,21 +10445,23 @@ void AddCombat(std::vector<Scenario>& all)
 		    .name = "The loser waits after its response until its own mind takes a plan",
 		    .facet = Facet::Combat,
 		    .description = "The red tiger of the player and a blue tiger fight by themselves, and the creatures do not faint. "
-		                   "When the duel is on, a script sets the life of the blue tiger to zero, and gives it full life "
-		                   "again a moment after the red tiger wins.",
-		    .expected = "The red tiger wins, finishes its move, orders the blue tiger to respond and plays no response. "
-		                "The blue tiger finishes its move, plays the happy response and does not fear the red tiger. Then "
-		                "it waits with its mind free. Its mind takes a new plan only when it wants that plan more than "
-		                "twice as much as the order, and that plan ends its fight. The fight transcript shows "
-		                "order_respond.",
+		                   "When the duel is on, a script sets the life of the blue tiger to zero. A moment after the red "
+		                   "tiger wins, the script gives the blue tiger full life and sets the life of the red tiger to 0.5.",
+		    .expected =
+		        "The red tiger wins, finishes its move, orders the blue tiger to respond and plays no response. "
+		        "The blue tiger finishes its move, plays the happy response and does not fear the red tiger. Then "
+		        "it waits with its mind free. Its own plans do not take the place of the order, because each is "
+		        "worth less than two times the order. The red tiger goes home to get better. An order of another "
+		        "creature, such as to share a smile, can still take its place. The fight transcript shows order_respond.",
 		    .environment = {.fainting = false},
 		    .framing = ringside,
-		    .creatures = {red(PlayerNames::PLAYER_ONE, 0.6f, -0.2f), loser},
+		    .creatures = {winner, loser},
 		    .commands = {{.kind = Kind::EndGuidanceWaits, .delaySeconds = 0.5f},
 		                 Fight(Kind::StartFight, 0, 1, 0.5f),
 		                 Fight(Kind::FightAuto, 0, 1, 0.2f),
-		                 setBlueLife(0.0f, 12.0f),
-		                 setBlueLife(1.0f, 0.3f)},
+		                 setLife(1, 0.0f, 18.0f),
+		                 setLife(1, 1.0f, 0.3f),
+		                 setLife(0, 0.5f, 0.0f)},
 		});
 	}
 
