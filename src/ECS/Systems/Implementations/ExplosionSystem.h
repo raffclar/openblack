@@ -29,6 +29,7 @@ public:
 	void AddSmoke(const glm::vec3& centre, float size, dust_puff::Kind kind, std::optional<uint32_t> colour) override;
 	void AddShake(const glm::vec3& position, float radius, float strength, int32_t milliseconds, bool verticalOnly) override;
 	[[nodiscard]] bool IsShaking() const override { return !_shakes.empty(); }
+	[[nodiscard]] std::span<const camera_shake::Shake> Shakes() const override { return _shakes; }
 	void Update(float milliseconds) override;
 	void AgeRootsPiles(std::chrono::milliseconds gameTime) override;
 	[[nodiscard]] std::span<const roots_pile::Pile> RootsPiles() const override { return _piles; }

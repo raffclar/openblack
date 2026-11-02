@@ -19,6 +19,7 @@
 #include <glm/mat3x3.hpp>
 #include <glm/vec3.hpp>
 
+#include "Blast/CameraShake.h"
 #include "Blast/DustPuff.h"
 #include "Blast/RootsPile.h"
 #include "ECS/Components/DestructionGhost.h"
@@ -76,6 +77,8 @@ public:
 	virtual void AddShake(const glm::vec3& position, float radius, float strength, int32_t milliseconds, bool verticalOnly) = 0;
 	/// Whether any shake is going on, near the camera or not
 	[[nodiscard]] virtual bool IsShaking() const = 0;
+	/// The shakes that go on now, near the camera or not, with the milliseconds that stay for each
+	[[nodiscard]] virtual std::span<const camera_shake::Shake> Shakes() const = 0;
 	/// Once a frame of the game's time: the dust flies and the camera shakes
 	virtual void Update(float milliseconds) = 0;
 	/// Once a frame that draws the land, before the draw: the piles of roots fade and go by the game time of the frame
