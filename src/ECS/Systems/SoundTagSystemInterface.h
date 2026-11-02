@@ -9,6 +9,8 @@
 
 #pragma once
 
+#include <cstdint>
+
 #include <entt/core/fwd.hpp>
 #include <entt/entity/fwd.hpp>
 #include <glm/vec3.hpp>
@@ -31,6 +33,12 @@ public:
 	/// Sounds once at a point: at once, or, when delayed, once it has travelled to the camera at the speed of sound.
 	/// Only this computer hears the sound, so it makes no entity of the world.
 	virtual void CreatePointSound(entt::id_type sound, const glm::vec3& position, bool delayed) = 0;
+	/// Keeps a sound at a point until EndPointSound: the sound of a thing that only the frames make. Only this
+	/// computer hears it, so it makes no entity of the world. It loops. Each game turn starts it again when it does not
+	/// play and the camera is within its reach. The number that it gives is never 0.
+	[[nodiscard]] virtual uint32_t KeepPointSound(entt::id_type sound, const glm::vec3& position) = 0;
+	/// Removes a sound that KeepPointSound keeps. A loop that plays continues to its end and does not start again.
+	virtual void EndPointSound(uint32_t kept) = 0;
 	/// Attaches a sound to an object, on, from the object's position, and returns the new tag. The object keeps all
 	/// the sounds it has: an object can keep up many sounds, also the same sound more than one time. When loops is
 	/// false, each start plays the sound one time.

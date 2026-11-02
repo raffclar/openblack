@@ -6914,6 +6914,7 @@ void Renderer::DrawPass(const DrawSceneDesc& desc) const
 				sd.useMaterialAddressing = creatureMaterials;
 				sd.mirrored = desc.cullBack;
 				sd.uvOffset = placers.uvOffset;
+				sd.uvOffsetByMaterial = placers.uvOffsetByMaterial;
 				sd.subMeshTextures = placers.subMeshTextures;
 				sd.pictureSubMeshes = placers.pictureSubMeshes;
 				sd.controlSubMeshes = placers.controlSubMeshes;
