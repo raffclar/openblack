@@ -53,8 +53,8 @@ struct Offer
 	int32_t ms {0};
 	/// The hand is over a creature that would take what it holds: it offers it for the full time again
 	void Renew() { ms = k_OfferMs; }
-	/// A frame without a creature that would take it: the offer runs down, unless the creature is already reaching for
-	/// the thing. Whether it ran out this frame.
+	/// Each frame, also the frame that renews it: the offer runs down, unless the creature is already reaching for the
+	/// thing. Whether it ran out this frame. An offer that comes to exactly zero stays at zero and does not run out.
 	bool RunDown(int32_t frameMs, bool reaching);
 	[[nodiscard]] bool Active() const { return ms > 0; }
 };

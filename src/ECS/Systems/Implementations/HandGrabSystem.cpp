@@ -1744,7 +1744,8 @@ glm::vec3 HandGrabSystem::UpdateOffer(HandGrab& grab, const Frame& frame)
 		ForgetOffer(grab);
 	}
 	const bool reaching = grab.givenTo != entt::null;
-	// Over a creature that would take it, the offer lasts its full time again; otherwise it runs down on the frame's time
+	// Over a creature that would take it, the offer lasts its full time again. Then it runs down on the frame's time in
+	// each frame, also in the frame that renews it.
 	const auto under = _world->ObjectUnderCursor();
 	const auto verdict =
 	    under.has_value() && *under != grab.object && Exists(*under) ? _world->GiveVerdict(*under, grab.object) : std::nullopt;
@@ -1753,17 +1754,14 @@ glm::vec3 HandGrabSystem::UpdateOffer(HandGrab& grab, const Frame& frame)
 		grab.offeredTo = *under;
 		grab.offer.Renew();
 	}
-	else
+	else if (verdict == creature_giving::Verdict::CantPickUp)
 	{
-		if (verdict == creature_giving::Verdict::CantPickUp)
-		{
-			_world->SayCantPickUp(*under);
-		}
-		const auto frameMs = static_cast<int32_t>(std::lround(frame.seconds * 1000.0f));
-		if (grab.offer.RunDown(frameMs, reaching))
-		{
-			grab.offeredTo = entt::null;
-		}
+		_world->SayCantPickUp(*under);
+	}
+	const auto frameMs = static_cast<int32_t>(std::lround(frame.seconds * 1000.0f));
+	if (grab.offer.RunDown(frameMs, reaching))
+	{
+		grab.offeredTo = entt::null;
 	}
 	// The held thing turns over towards the creature, and back as the offer ends
 	if (const auto turn = creature_giving::OfferTurn(grab.hold.type, _world->RightHanded(), grab.offer, reaching))
