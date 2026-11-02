@@ -10,6 +10,8 @@
 // The testbed's scenarios of the flock miracles: doves for a good caster, bats for an evil one, and a pack of wolves
 // swept out towards villagers, each cast through the hand and swept across the land as a player does
 
+#include <utility>
+
 #include "TestbedScenarioRegistry.h"
 
 using namespace openblack;
@@ -471,4 +473,75 @@ void testbed_scenarios::AddFlockScenarios(std::vector<Scenario>& all)
 	                  .handHeight = 15.0f,
 	                  .delaySeconds = 6.0f}},
 	});
+
+	// The ground flock of the second land, cast by hand as in the scenario above, at one villager in the way of the wolves
+	const auto wolvesAtOneVillager = [](std::string_view id, std::string_view name, std::string_view description,
+	                                    std::string_view expected, float takeSeconds, float holdSeconds) {
+		return Scenario {
+		    .id = id,
+		    .name = name,
+		    .facet = Facet::Miracles,
+		    .description = description,
+		    .expected = expected,
+		    .environment = {.land = Land::Story,
+		                    .storyLand = "Land2.txt",
+		                    .dispenserGrid = false,
+		                    .cursor = glm::vec2(0.5f, 0.5f)},
+		    .framing = {.shot = Shot::Overview,
+		                .include = {k_LandTwoBase + glm::vec2(-20.0f, 20.0f), k_LandTwoBase + glm::vec2(20.0f, 90.0f)},
+		                .distance = 0.7f},
+		    .objects = {{.type = VillagerInfo::NorseFarmerMale, .offset = k_LandTwoBase + glm::vec2(0.0f, 55.0f)}},
+		    .miracles = {{.type = MagicType::FlockGround,
+		                  .point = k_LandTwoBase + k_Spot,
+		                  .handOffset = k_LandTwoBase + k_HandFrom,
+		                  .handHeight = 12.0f,
+		                  .throwVelocity = k_SweepEast,
+		                  .delaySeconds = 1.0f,
+		                  .holdSeconds = k_HoldSeconds,
+		                  .byHand = true,
+		                  .sweepSeconds = k_SweepSeconds}},
+		    .commands = {{.kind = Command::Kind::HandTake, .delaySeconds = takeSeconds, .object = 0},
+		                 {.kind = Command::Kind::HandRelease, .delaySeconds = holdSeconds}},
+		};
+	};
+
+	// The hand takes a villager from the wolf that eats it. The villager lives on with little life
+	all.push_back(wolvesAtOneVillager(
+	    "villagers.l2_wolf_prey_taken", "Ground flock: the hand takes a villager from a wolf on the second land",
+	    "The second land of the story. The ground flock cast by hand south of the player's first town, with a Norse "
+	    "farmer in the way of the wolves. While a wolf eats the farmer, the hand takes the farmer and puts it down again "
+	    "below the hand half a second later.",
+	    "A wolf brings the farmer down. The farmer falls with the clip of a villager that a lion attacks, and a wolf eats "
+	    "it. The hand takes the farmer and puts it down. The farmer does not die: it lives on with a twentieth of its "
+	    "life and crawls. No wolf hunts it again, also when it crawls in the way of the wolves. Its wounds do not send it "
+	    "home.",
+	    7.5f, 0.5f));
+
+	// The hand takes a villager that a wolf chases. The wolf gives up its prey
+	all.push_back(wolvesAtOneVillager(
+	    "villagers.l2_wolf_chased_prey_taken", "Ground flock: the hand takes a villager that a wolf chases",
+	    "The second land of the story. The ground flock cast by hand south of the player's first town, with a Norse "
+	    "farmer in the way of the wolves. While a wolf chases the farmer, the hand takes the farmer. The hand puts the "
+	    "farmer down again below the hand 20 seconds later.",
+	    "A wolf chases the farmer. On the turn that the hand takes the farmer, the wolf stops the chase and runs to "
+	    "where the miracle sent it. The wolf does not go to the last place of its prey. When the hand puts the farmer "
+	    "down, the farmer has all of its life and continues its life in the town.",
+	    4.5f, 20.0f));
+
+	// The hand throws a fireball at the wolf that eats a villager. The wolf burns
+	auto burning = wolvesAtOneVillager(
+	    "miracles.l2_flock_wolf_burns", "Ground flock: a wolf burns on the second land",
+	    "The second land of the story. The ground flock cast by hand south of the player's first town, with a Norse "
+	    "farmer in the way of the wolves. While a wolf eats the farmer, the hand throws a fireball at the wolf.",
+	    "The fireball sets the wolf alight. The burning wolf is grey, as a charred thing is, with the red glow of the "
+	    "fire on it and flames on its body. It keeps its fade when the miracle ends.",
+	    0.0f, 0.0f);
+	burning.commands.clear();
+	burning.miracles.push_back({.type = MagicType::Fireball,
+	                            .point = k_LandTwoBase + glm::vec2(0.0f, 55.0f),
+	                            .handOffset = k_LandTwoBase + glm::vec2(0.0f, 42.0f),
+	                            .handHeight = 8.0f,
+	                            .throwVelocity = {0.0f, 0.0f, 10.0f},
+	                            .delaySeconds = 6.0f});
+	all.push_back(std::move(burning));
 }
