@@ -68,6 +68,8 @@ struct PuzzleTotem
 	/// The greatest height and the height
 	int32_t highest {100};
 	int32_t height {0};
+	/// A hand holds it, as the turn last saw it
+	bool held {false};
 };
 
 /// The state of a maze puzzle: a Theseus maze or the lion maze

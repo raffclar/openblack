@@ -118,7 +118,8 @@ void openblack::ecs::reflection::RegisterFields_Components_p(entt::meta_ctx& con
 	Reflect<components::PuzzleTotem>(context)
 	    .Field<&components::PuzzleTotem::puzzle>("puzzle")
 	    .Field<&components::PuzzleTotem::highest>("highest")
-	    .Field<&components::PuzzleTotem::height>("height");
+	    .Field<&components::PuzzleTotem::height>("height")
+	    .Field<&components::PuzzleTotem::held>("held");
 	Reflect<components::MazeState>(context)
 	    .Field<&components::MazeState::alongFences>("alongFences")
 	    .Field<&components::MazeState::acrossFences>("acrossFences")

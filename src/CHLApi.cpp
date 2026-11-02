@@ -241,6 +241,7 @@
 #include "ECS/Systems/PlayerSystemInterface.h"
 #include "ECS/Systems/PlaygroundTripSystemInterface.h"
 #include "ECS/Systems/PuzzleGameSystemInterface.h"
+#include "ECS/Systems/PuzzleTotemSystemInterface.h"
 #include "ECS/Systems/ReactionSystemInterface.h"
 #include "ECS/Systems/ResourceStoreSystemInterface.h"
 #include "ECS/Systems/RewardSystemInterface.h"
@@ -877,6 +878,11 @@ entt::entity CreateScriptObject(const ObjectType type, uint32_t subtype, const g
 		}
 		const auto made =
 		    PuzzleTotemArchetype::Create(OnGround(position), static_cast<AbodeInfo>(subtype), yAngleRadians, scale);
+		// It starts at height 0, down in the land
+		if (Locator::puzzleTotemSystem::has_value())
+		{
+			Locator::puzzleTotemSystem::value().Place(made);
+		}
 		if (Locator::entitiesMap::has_value())
 		{
 			Locator::entitiesMap::value().Refile(made);
@@ -2300,6 +2306,12 @@ void GetProperty() // 021 GET_PROPERTY
 		return;
 	}
 	case script::ObjectPropertyType::Height:
+		// A puzzle totem answers its height, a whole number
+		if (const auto* totem = registry.TryGet<const ecs::components::PuzzleTotem>(object); totem != nullptr)
+		{
+			Pushf(static_cast<float>(totem->height));
+			return;
+		}
 		// A town's totem answers the share of its people it was last set to send to worship
 		if (const auto* totem = registry.TryGet<const ecs::components::VillageTotem>(object); totem != nullptr)
 		{
@@ -2539,8 +2551,17 @@ static void SetPropertyOf(entt::entity object, script::ObjectPropertyType prop, 
 		}
 		if (auto* totem = registry.TryGet<ecs::components::PuzzleTotem>(object); totem != nullptr)
 		{
-			// A puzzle totem takes the height, made whole towards zero, up to its greatest height
-			totem->height = ecs::maze_puzzle::TotemHeight(value, totem->highest);
+			// A puzzle totem takes the height, made whole towards zero, up to its greatest height, and stands where that
+			// height puts it
+			const auto height = ecs::maze_puzzle::TotemHeight(value, totem->highest);
+			if (Locator::puzzleTotemSystem::has_value())
+			{
+				Locator::puzzleTotemSystem::value().SetHeight(object, height);
+			}
+			else
+			{
+				totem->height = height;
+			}
 			return;
 		}
 		if (auto* creature = registry.TryGet<ecs::components::Creature>(object); creature != nullptr)
@@ -9147,11 +9168,14 @@ void IsLockedInteraction() // 342 IS_LOCKED_INTERACTION
 	const bool heldCreature = Locator::creatureHandSystem::has_value() && Locator::creatureHandSystem::value().IsLocked(object);
 	const bool grippedTotem =
 	    Locator::villageTotemSystem::has_value() && Locator::villageTotemSystem::value().GetGripped() == object;
+	// A puzzle totem that a hand holds, as the turn last saw it
+	const auto* puzzleTotem = Locator::entitiesRegistry::value().TryGet<const ecs::components::PuzzleTotem>(object);
+	const bool heldPuzzleTotem = puzzleTotem != nullptr && puzzleTotem->held;
 	const auto player =
 	    Locator::playerSystem::has_value() ? Locator::playerSystem::value().GetLocalPlayer() : PlayerNames::PLAYER_ONE;
 	const bool scooped =
 	    Locator::handGrabSystem::has_value() && Locator::handGrabSystem::value().GetLockedOnOf(player) == std::optional(object);
-	Pushb(heldCreature || grippedTotem || scooped);
+	Pushb(heldCreature || grippedTotem || heldPuzzleTotem || scooped);
 }
 
 void SetCreatureName() // 343 SET_CREATURE_NAME
