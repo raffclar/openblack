@@ -20,10 +20,32 @@
 /// size: buildings, trees, features, fields, piles, animals, villagers. The creatures, the hand and the temple are always
 /// drawn whole. Some things never fade: whatever a script made or keeps in view, the birds, the village centre, the ball,
 /// the physical shield, a script's highlight, the vortex, and anything moving in the physics while it does.
-namespace openblack::ecs
+#include "ECS/Registry.h"
+
+namespace openblack::ecs::components
 {
-class Registry;
-} // namespace openblack::ecs
+struct Animal;
+struct Ball;
+struct CarriedByTornado;
+struct CreatureMorph;
+struct DetailMeshes;
+struct DrawImportance;
+struct DrawnIntoVortex;
+struct Hand;
+struct HeldByCreature;
+struct HighDetail;
+struct InHand;
+struct InPhysics;
+struct IntroHand;
+struct MagicShield;
+struct NeverFades;
+struct ScriptHighlight;
+struct SeeThrough;
+struct Temple;
+struct TempleInteriorPart;
+struct Translucent;
+struct Vortex;
+} // namespace openblack::ecs::components
 
 namespace openblack::ecs::object_detail
 {
@@ -56,5 +78,43 @@ inline constexpr float k_DeadTreeImportance = 1.0f;
 /// vortex carries to the next land has the vortex importance. Another thing has the importance it got when it was made:
 /// a villager's comes from its age. A thing with no importance has 0.
 [[nodiscard]] float Importance(const Registry& registry, entt::entity entity);
+
+/// The same questions for many things in one walk. It finds the stores of the components one time and gives the same
+/// answers as the functions above while those stores exist. Make it again when the walk can make the first component of
+/// one of these kinds.
+class Stores
+{
+public:
+	explicit Stores(const Registry& registry);
+	[[nodiscard]] bool Banded(entt::entity entity) const;
+	[[nodiscard]] bool BandedNow(entt::entity entity) const;
+	[[nodiscard]] bool Disappears(entt::entity entity, bool townCentre) const;
+	[[nodiscard]] float Importance(entt::entity entity) const;
+
+private:
+	[[nodiscard]] bool CarriedByVortex(entt::entity entity) const;
+
+	ComponentLookup<components::CreatureMorph> _creatureMorph;
+	ComponentLookup<components::Hand> _hand;
+	ComponentLookup<components::IntroHand> _introHand;
+	ComponentLookup<components::Temple> _temple;
+	ComponentLookup<components::TempleInteriorPart> _templeInteriorPart;
+	ComponentLookup<components::Translucent> _translucent;
+	ComponentLookup<components::InHand> _inHand;
+	ComponentLookup<components::HeldByCreature> _heldByCreature;
+	ComponentLookup<components::HighDetail> _highDetail;
+	ComponentLookup<components::SeeThrough> _seeThrough;
+	ComponentLookup<components::NeverFades> _neverFades;
+	ComponentLookup<components::InPhysics> _inPhysics;
+	ComponentLookup<components::Ball> _ball;
+	ComponentLookup<components::Vortex> _vortex;
+	ComponentLookup<components::ScriptHighlight> _scriptHighlight;
+	ComponentLookup<components::DrawnIntoVortex> _drawnIntoVortex;
+	ComponentLookup<components::CarriedByTornado> _carriedByTornado;
+	ComponentLookup<components::MagicShield> _magicShield;
+	ComponentLookup<components::Animal> _animal;
+	ComponentLookup<components::DetailMeshes> _detailMeshes;
+	ComponentLookup<components::DrawImportance> _drawImportance;
+};
 
 } // namespace openblack::ecs::object_detail

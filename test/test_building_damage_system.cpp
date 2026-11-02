@@ -616,3 +616,26 @@ TEST(BuildingDamageSystem, ALoadMakesTheModelOfABrokenBuildingAgainUnderTheSameV
 	EXPECT_EQ(again, 1);
 	EXPECT_TRUE(f.world->models.contains(after.drawMesh));
 }
+
+TEST(BuildingDamage, ABrokenBuildingIsDrawnWithItsBrokenModelOnceItHasOne)
+{
+	constexpr entt::id_type k_Own = 7;
+	EXPECT_EQ(building_damage::DrawnMeshOf(nullptr, k_Own), k_Own);
+	BuildingDamage broken {};
+	EXPECT_EQ(building_damage::DrawnMeshOf(&broken, k_Own), k_Own);
+	broken.drawMesh = 12;
+	EXPECT_EQ(building_damage::DrawnMeshOf(&broken, k_Own), 12u);
+}
+
+TEST(BuildingDamageSystem, OnlyABrokenBuildingOrOneWithARepairSiteOrABuiltAmountShowsAPart)
+{
+	Fixture f;
+	for (const float life : {0.0f, 0.3f, 1.0f})
+	{
+		f.world->life = life;
+		EXPECT_FALSE(f.system->PartialShare(f.house).has_value());
+	}
+	f.world->life = 1.0f;
+	f.world->registry.Assign<BuildProgress>(f.house, BuildProgress {.built = 0.5f});
+	EXPECT_TRUE(f.system->PartialShare(f.house).has_value());
+}

@@ -20,6 +20,7 @@
 #include <gtest/gtest.h>
 
 #include "Common/GameRandom.h"
+#include "Creature/CreatureActionAgendas.h"
 #include "Creature/CreatureDesires.h"
 #include "Creature/CreatureIdleMind.h"
 #include "Creature/CreatureLayers.h"
@@ -1416,6 +1417,30 @@ TEST(CreatureNeedsMind, FaintedItLiesFourSecondsASizeAndEightMoreThenComesRound)
 	ASSERT_TRUE(cameRound.has_value());
 	EXPECT_EQ(*cameRound,
 	          static_cast<int>((creature_mind::k_FaintSecondsPerSize + creature_mind::k_FaintExtraSeconds) * k_TurnsPerSecond));
+}
+
+// A creature that a script makes die for good falls once and lies still. Those near it react to the death one time,
+// in the turn that it falls, and not again while it lies there.
+TEST(CreatureNeedsMind, DyingForGoodMakesTheDeathReactionOnlyAsItFalls)
+{
+	creature_mind::IdleMind mind;
+	creature_mind::Plan(mind, creature_mind::Activity::Planned, creature_mind::DiePermanently());
+	FakeBody body;
+	std::vector<int> faintTurns;
+	for (int turn = 0; turn < 2000; ++turn)
+	{
+		const auto commands = creature_mind::Think(mind, body.Senses(), Always(1));
+		if (commands.fainted)
+		{
+			faintTurns.push_back(turn);
+		}
+		EXPECT_NE(commands.effect, creature_mind::Effect::CameRound);
+		body.Obey(commands, 1);
+	}
+	ASSERT_EQ(faintTurns.size(), 1u);
+	EXPECT_EQ(faintTurns.front(), 0);
+	// It still lies there, far from the end of its wait
+	EXPECT_LT(mind.step, mind.agenda.size());
 }
 
 TEST(CreatureNeedsMind, AnActionOnTheBodyOfAFaintedCreatureStopsTheWaitAndDoesNotStartItAgain)
