@@ -784,6 +784,11 @@ void VortexSystem::WriteCrossing(const Vortex& vortex, entt::entity thing)
 		        const auto* objectInfo = world_objects::InfoOf(object);
 		        return objectInfo != nullptr && objectInfo->type == ObjectType::MobileStatic;
 	        },
+	    .filedAsMobileObject =
+	        [](entt::entity object) {
+		        const auto* objectInfo = world_objects::InfoOf(object);
+		        return objectInfo != nullptr && objectInfo->type == ObjectType::MobileObject;
+	        },
 	};
 	auto place = map_coords::FromMetres({vortex.centre.x, vortex.centre.z});
 	place.altitude = vortex.altitude;
@@ -794,6 +799,13 @@ void VortexSystem::WriteCrossing(const Vortex& vortex, entt::entity thing)
 		if (std::holds_alternative<vortex::crossing::MobileStaticLine>(*line))
 		{
 			for (const auto identical : ecs::vortex_crossing::IdenticalStatics(registry, thing, world))
+			{
+				std::ignore = _crossing.MarkWritten(identical);
+			}
+		}
+		if (std::holds_alternative<vortex::crossing::MobileObjectLine>(*line))
+		{
+			for (const auto identical : ecs::vortex_crossing::IdenticalMobileObjects(registry, thing, world))
 			{
 				std::ignore = _crossing.MarkWritten(identical);
 			}
