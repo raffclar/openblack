@@ -136,3 +136,31 @@ TEST(HandBlend, TheCameraIconsShowForTheEmptyTheCameraAndTheHoldingHand)
 		EXPECT_FALSE(AllowsCameraIcons(mode, false));
 	}
 }
+
+TEST(HandBlend, TheChangeTellsTheModeThatTheHandLeft)
+{
+	ChangeTracker tracker;
+	EXPECT_FALSE(tracker.Step({.mode = HandMode::Holding, .held = static_cast<entt::entity>(1)}).left.has_value());
+	EXPECT_FALSE(tracker.Step({.mode = HandMode::Holding, .held = static_cast<entt::entity>(1)}).left.has_value());
+	EXPECT_EQ(tracker.Step({.mode = HandMode::Normal}).left, HandMode::Holding);
+	EXPECT_FALSE(tracker.Step({.mode = HandMode::Normal}).left.has_value());
+	EXPECT_EQ(tracker.Step({.mode = HandMode::Creature}).left, HandMode::Normal);
+}
+
+TEST(HandBlend, TheNormalModeResetsAfterPlacingOnlyFromTheModesThatTheFrameKnowsLate)
+{
+	for (const auto left :
+	     {HandMode::Hidden, HandMode::Pulling, HandMode::Holding, HandMode::Totem, HandMode::Creature, HandMode::Seed})
+	{
+		EXPECT_TRUE(ResetsAfterPlacing(left, HandMode::Normal));
+	}
+	// The camera mode, a knock and the temple reset before the hand places itself
+	for (const auto left : {HandMode::Camera, HandMode::Knocking, HandMode::Temple, HandMode::Normal})
+	{
+		EXPECT_FALSE(ResetsAfterPlacing(left, HandMode::Normal));
+	}
+	// A different mode does not reset the eases of the normal mode
+	EXPECT_FALSE(ResetsAfterPlacing(HandMode::Normal, HandMode::Holding));
+	EXPECT_FALSE(ResetsAfterPlacing(HandMode::Holding, HandMode::Seed));
+	EXPECT_FALSE(ResetsAfterPlacing(HandMode::Hidden, HandMode::Holding));
+}

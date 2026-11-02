@@ -3631,6 +3631,24 @@ void Game::UpdateHandFrame(std::chrono::microseconds deltaTime)
 				_cursorWorldPosition.reset();
 				_cursorLand.reset();
 				_handRestOnThing.reset();
+				// The hand that goes into the temple starts its distance again from where it is, with no speed, and
+				// stands straight up. The hand that comes out of the temple does the same, and ignores the last sparkle
+				// of a fight.
+				if (const bool inTemple = Locator::temple::has_value() && Locator::temple::value().Active();
+				    inTemple != _handInTemple)
+				{
+					_handInTemple = inTemple;
+					_handHoverZoomer.Reset(_handDistance);
+					if (inTemple)
+					{
+						_handTempleNormal.Reset(glm::vec3(0.0f, 1.0f, 0.0f));
+					}
+					else
+					{
+						_handUp.Reset(glm::vec3(0.0f, 1.0f, 0.0f));
+						_handDropsSparkle = true;
+					}
+				}
 				if (Locator::temple::has_value() && Locator::temple::value().Active())
 				{
 					// In the temple, the hand goes where the cursor meets the room, turning to its surface
@@ -4196,6 +4214,14 @@ void Game::UpdateHandFrame(std::chrono::microseconds deltaTime)
 				    .nothingUnderHand = nothingUnderHand,
 				});
 				const auto placed = handTransform->position;
+				// The hand that goes into the normal mode starts its hover distance and its up again. When the frame
+				// knows the mode only now, the reset applies from the next frame.
+				if (changes.left.has_value() && hand_blend::ResetsAfterPlacing(*changes.left, mode))
+				{
+					_handHoverZoomer.Reset(_handDistance);
+					_handUp.Reset(glm::vec3(0.0f, 1.0f, 0.0f));
+					_handDropsSparkle = true;
+				}
 				if (auto* hand = Locator::entitiesRegistry::value().TryGet<ecs::components::Hand>(handEntity))
 				{
 					// Only a thing in the hand hangs from the blended place of the hand, not a seed
@@ -7194,6 +7220,8 @@ void Game::PlaceHand(ecs::components::Transform& handTransform, float deltaSecon
 	// Tapping a house it knocked on, the hand stays where it knocked
 	if (_handKnocking)
 	{
+		// When the knock ends, the hover distance starts again from here with no speed
+		_handHoverZoomer.Reset(_handDistance);
 		_handPosition = _handKnock.Point().value_or(_handPosition);
 		_handCrossFade.Update(deltaSeconds);
 		handTransform.position = _handCrossFade.Apply(_handPosition);
@@ -7252,8 +7280,13 @@ void Game::PlaceHand(ecs::components::Transform& handTransform, float deltaSecon
 
 	// While a press on a body is held in a fight, the hand goes to a sparkle on the opponent's body that the last
 	// drawing found. That point takes the place of the cursor's point.
-	const auto sparkle =
+	auto sparkle =
 	    Locator::creatureFightSystem::has_value() ? Locator::creatureFightSystem::value().TakeHandSparkle() : std::nullopt;
+	// The hand that went into the normal mode ignores the sparkle that the drawing found before
+	if (std::exchange(_handDropsSparkle, false))
+	{
+		sparkle.reset();
+	}
 
 	// The cursor's point on the near plane, which the hand's line of sight goes through
 	std::optional<glm::vec3> cursorNearPoint;

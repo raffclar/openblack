@@ -110,7 +110,34 @@ struct Changes
 	/// The pose of this frame goes in place of the kept pose, and not in place of the drawn pose. This occurs when the
 	/// camera mode changes its animation after the frame chose where its pose goes.
 	bool poseIntoKept {false};
+	/// The mode that the hand left in this frame, when it changed from one mode to a different mode
+	std::optional<HandMode> left;
 };
+
+/// Whether the hand resets its eases for the normal mode after it places itself in the frame of the change. When the
+/// hand goes into the normal mode, its hover distance starts again from where the hand is, with no speed. Its up
+/// starts again straight up, and the hand ignores the last sparkle of a fight. The frame decides these modes only after
+/// it placed the hand, so the reset applies from the next frame. The hand that leaves the camera mode, a knock or the
+/// temple does these resets before it places itself, because the frame knows these modes first.
+[[nodiscard]] constexpr bool ResetsAfterPlacing(HandMode left, HandMode entered)
+{
+	if (entered != HandMode::Normal)
+	{
+		return false;
+	}
+	switch (left)
+	{
+	case HandMode::Hidden:
+	case HandMode::Pulling:
+	case HandMode::Holding:
+	case HandMode::Totem:
+	case HandMode::Creature:
+	case HandMode::Seed:
+		return true;
+	default:
+		return false;
+	}
+}
 
 /// Finds the changes of the hand that start a blend, frame by frame
 class ChangeTracker

@@ -7773,6 +7773,27 @@ void AddHand(std::vector<Scenario>& all)
 	         {.kind = Kind::PointerRelease, .delaySeconds = 1.9f, .value = 3}},
 	});
 
+	// The hand lets go of a thing over the slope of the lake's far shallows. The empty hand starts its up and its hover
+	// distance again.
+	all.push_back({
+	    .id = "hand.lets_go_stands_straight",
+	    .name = "The empty hand stands straight up after it lets go",
+	    .facet = Facet::Hand,
+	    .description = "The hand takes a barrel over the slope of the lake's far shallows. The pointer moves slowly "
+	                   "across the slope, and the hand puts the barrel down. The pointer stays still for two seconds. "
+	                   "Then the pointer moves across the slope again.",
+	    .expected = "While the hand holds the barrel, it leans to the slope under it. When it lets go, it stands "
+	                "straight up and stays straight up while the pointer is still. When the pointer moves across the "
+	                "screen, the hand leans to the slope again in a short time.",
+	    .environment = {.dispenserGrid = false, .cursor = glm::vec2(0.4f, 0.5f)},
+	    .framing = {.shot = Shot::Overview, .include = {{k_Lake.x, k_FarShallows - 25.0f}}, .distance = 0.2f},
+	    .objects = {{.type = MobileObjectInfo::EgyptBarrel, .offset = {k_Lake.x + 10.0f, k_FarShallows + 10.0f}}},
+	    .commands = {{.kind = Kind::HandTake, .delaySeconds = 1.0f, .object = 0},
+	                 {.kind = Kind::PointerSweep, .delaySeconds = 0.5f, .point = {0.2f, 0.0f}, .amount = 2.0f},
+	                 {.kind = Kind::HandRelease, .delaySeconds = 2.5f},
+	                 {.kind = Kind::PointerSweep, .delaySeconds = 2.0f, .point = {-0.2f, 0.0f}, .amount = 2.0f}},
+	});
+
 	all.push_back({
 	    .id = "hand.mesh_contact",
 	    .name = "The hand on the body",
