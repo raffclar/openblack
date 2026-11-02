@@ -2327,5 +2327,7 @@ openblack_setup_and_add_test(test_leaver_hand test_leaver_hand.cpp)
 openblack_setup_and_add_test(
   test_creature_environment_map test_creature_environment_map.cpp
 )
+if(MSVC)
   target_compile_options(test_reactions PRIVATE /bigobj)
+endif()
 openblack_setup_and_add_test(test_football_rules test_football_rules.cpp)
