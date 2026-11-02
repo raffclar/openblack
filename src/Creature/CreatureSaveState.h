@@ -61,8 +61,19 @@ inline constexpr uint16_t k_CreatureSpeedWord = 0x05C3;
 /// A queued spell gets its turns from its seconds, as when the game starts it
 [[nodiscard]] std::optional<creature_spells::Waiting> FromQueued(const gamesave::QueuedSpell& queued, float turnsPerSecond);
 
-/// The fizz that the save writes: the creature's fizz while the invisibility spell is on it, else none
-[[nodiscard]] creature_fizz::Fizz FizzToSave(const creature_fizz::Fizz& fizz, const creature_spells::Spells& spells);
+/// The copy of the world that writes the record of the creature
+enum class SaveKind : uint8_t
+{
+	/// A saved game of the player
+	SavedGame,
+	/// The world state of a game server. It must not change the world, because the other computers make no copy.
+	WorldState,
+};
+
+/// The fizz that the copy writes. A saved game writes the fizz of the creature while the invisibility spell is on it,
+/// else no fizz. A world state writes the fizz as it is.
+[[nodiscard]] creature_fizz::Fizz FizzToSave(const creature_fizz::Fizz& fizz, const creature_spells::Spells& spells,
+                                             SaveKind kind);
 
 /// The leash types that a creature knows, as the save keeps them
 [[nodiscard]] gamesave::KnownLeashes ToKnown(const std::bitset<creature_leash::k_Types.size()>& known);

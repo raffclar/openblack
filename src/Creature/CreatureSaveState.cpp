@@ -85,9 +85,10 @@ std::optional<creature_spells::Waiting> creature_save_state::FromQueued(const ga
 	                                 .seconds = queued.seconds};
 }
 
-creature_fizz::Fizz creature_save_state::FizzToSave(const creature_fizz::Fizz& fizz, const creature_spells::Spells& spells)
+creature_fizz::Fizz creature_save_state::FizzToSave(const creature_fizz::Fizz& fizz, const creature_spells::Spells& spells,
+                                                    SaveKind kind)
 {
-	if (spells.IsActive(creature_spells::Spell::Invisible))
+	if (kind == SaveKind::WorldState || spells.IsActive(creature_spells::Spell::Invisible))
 	{
 		return fizz;
 	}
