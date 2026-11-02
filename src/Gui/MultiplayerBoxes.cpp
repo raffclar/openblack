@@ -452,7 +452,6 @@ void MultiplayerBoxes::BuildRoom()
 	// The gods and the observers of the room, one line each in their colour
 	_roster = &dialog.Add<List>(_font, DialogRect {.min = {40, 95}, .max = {760, 370}}, Mid(), false, true, true);
 	// A click on a player picks that player, and a click under the players removes the pick
-	_roster->clearsOnEmptyPick = true;
 	_roster->onClick = [this] { _frontEnd->ShowSeat(_roster->GetSelection()); };
 
 	// The Chat tab
