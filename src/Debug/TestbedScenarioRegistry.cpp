@@ -2016,6 +2016,45 @@ void AddThirdLandPrison(std::vector<Scenario>& all)
 	                  .script = "RELEASE_FROM_SCRIPT",
 	                  .scriptArguments = {{.kind = Argument::Kind::Made, .index = 3}}}},
 	});
+
+	// The campfire of the burning fishermen on the beach of the Japanese village, from the middle of the map
+	static constexpr glm::vec2 k_Campfire {376.11f, 36.22f};
+	all.push_back({
+	    .id = "story.l3_fishermen_in_reach",
+	    .name = "Story: the burning fishermen of the third land in reach of the hand",
+	    .facet = Facet::Story,
+	    .description = "The third land loads with its own scripts and sky, and the player's Tiger stands on it. Its set-up "
+	                   "script runs. Then a script ring of the player's influence with a radius of 80 metres goes on the "
+	                   "fishermen's campfire on the beach, and the script of Lethys's fireballs runs with no wait. When "
+	                   "his scene ends, the hand can take a burning fisherman during its first short runs.",
+	    .expected = "Lethys speaks three lines, throws his fireballs and sets 16 fishermen alight. The script makes 18 "
+	                "fishermen: it lets the first two of fishermen seven and eight go at the end of the turn that makes "
+	                "them, and they then live as homeless villagers. A fisherman that the hand takes during its short "
+	                "runs stays alight in the hand. When the hand puts it down, it lands and goes back to its script "
+	                "walk: it runs to the last place the script gave it, then does its other runs and runs to the "
+	                "village.",
+	    .environment = {.land = Land::Story, .storyLand = "Land3.txt", .dispenserGrid = false},
+	    .framing = {.shot = Shot::Overview, .include = {k_Campfire - glm::vec2 {30.0f}, k_Campfire + glm::vec2 {30.0f}}},
+	    .creatures = {{.label = "player's tiger",
+	                   .species = CreatureType::Tiger,
+	                   .phase = 3,
+	                   .needs = {.energy = 1.0f, .exhaustion = 0.0f, .dehydration = 0.0f, .poo = 0.0f, .life = 1.0f}}},
+	    .commands = {{.kind = Kind::RunScript,
+	                  .delaySeconds = 0.5f,
+	                  .script = "SetupLand3",
+	                  .scriptGlobals = {{"MyCreature", {.kind = Argument::Kind::Creature, .index = 0}}}},
+	                 {.kind = Kind::CallNative,
+	                  .delaySeconds = 1.0f,
+	                  .script = "INFLUENCE_POSITION",
+	                  .scriptArguments = {{.kind = Argument::Kind::Position, .point = k_Campfire},
+	                                      {.kind = Argument::Kind::Number, .number = 80.0f},
+	                                      {.kind = Argument::Kind::Integer, .number = 0.0f},
+	                                      {.kind = Argument::Kind::Integer, .number = 0.0f}}},
+	                 {.kind = Kind::RunScript,
+	                  .delaySeconds = 0.5f,
+	                  .script = "FanaticAttack",
+	                  .scriptArguments = {{.kind = Argument::Kind::Number, .number = 1.0f}}}},
+	});
 }
 
 /// The man of the third land who wants to be thrown: the land's own script makes him at his campfire, with the player's
@@ -8986,13 +9025,37 @@ void AddLeash(std::vector<Scenario>& all)
 	    .name = "Leash your creature with the hand",
 	    .facet = Facet::Leash,
 	    .description = "Your tiger stands to the north. The hand clicks it with the right button, putting the learning "
-	                   "leash on. Move the hand about to lead it; press L or shake the hand to take the leash off "
-	                   "again, or right click it yourself to put it back on.",
+	                   "leash on. Move the hand about to lead it; press L, right click it or shake the hand to "
+	                   "take the leash off again, and right click it again to put it back on.",
 	    .expected = "A rope runs from the hand to its collar; pulled taut, the tiger walks to the hand. The readout says "
 	                "\"on\".",
 	    .framing = {.shot = Shot::Testbed},
 	    .creatures = {Content(CreatureType::Tiger, {0.0f, 60.0f})},
 	    .commands = {{.kind = Kind::HandTapLeash, .creature = 0, .delaySeconds = 1.0f}},
+	});
+
+	// The real button clicks the creature that wears the leash: the click is the leash key, so the leash comes off
+	all.push_back({
+	    .id = "leash.click_takes_off",
+	    .name = "A click on your leashed creature takes the leash off",
+	    .facet = Facet::Leash,
+	    .description = "Your tiger faces the camera in the middle of the screen and wears the learning leash. The action "
+	                   "button clicks the tiger and the hand moves to the right. Then the hand comes back, clicks the "
+	                   "tiger again and moves to the right again.",
+	    .expected = "After the first click no rope follows the hand: the click took the leash off. After the second "
+	                "click a rope runs from the hand to the collar again. The log shows \"The draw of the hand sends the "
+	                "leash tap\" for each click, and a turn later \"Leash command: player 0 taps a creature\".",
+	    .environment = {.dispenserGrid = false, .cursor = glm::vec2(0.5f, 0.5f)},
+	    .framing = {.shot = Shot::Follow, .distance = 1.2f},
+	    .creatures = {Posed(CreatureType::Tiger, {0.0f, 0.0f})},
+	    .commands = {Leash(0, LeashType::Rope, 0.5f),
+	                 {.kind = Kind::PointerPress, .delaySeconds = 2.0f, .value = 3},
+	                 {.kind = Kind::PointerRelease, .delaySeconds = 0.2f, .value = 3},
+	                 {.kind = Kind::PointerSweep, .delaySeconds = 0.5f, .point = {0.25f, 0.0f}, .amount = 1.0f},
+	                 {.kind = Kind::PointerSweep, .delaySeconds = 2.5f, .point = {-0.25f, 0.0f}, .amount = 1.0f},
+	                 {.kind = Kind::PointerPress, .delaySeconds = 1.5f, .value = 3},
+	                 {.kind = Kind::PointerRelease, .delaySeconds = 0.2f, .value = 3},
+	                 {.kind = Kind::PointerSweep, .delaySeconds = 0.5f, .point = {0.25f, 0.0f}, .amount = 1.0f}},
 	});
 
 	all.push_back({
@@ -13815,6 +13878,29 @@ void AddWorkshopScenarios(std::vector<Scenario>& all)
 	    .framing = {.shot = Shot::Overview, .include = {k_LooseScaffold - glm::vec2 {10.0f}, k_BuildPlace + glm::vec2 {10.0f}}},
 	    .objects = {{.type = AbodeInfo::CelticTownCentre, .offset = {0.0f, 50.0f}},
 	                {.type = ScaffoldInfo::Normal, .offset = k_LooseScaffold, .scale = 0.7f}},
+	});
+
+	constexpr glm::vec2 k_JoinTarget {-25.0f, 18.0f};
+	all.push_back({
+	    .id = "hand.scaffold_phantom_sounds_and_join",
+	    .name = "A held scaffold plays the sounds of its phantom, names the building, and joins a scaffold",
+	    .facet = Facet::Hand,
+	    .description = "A Celtic town of the player's with a village centre, a loose scaffold of the value of two "
+	                   "scaffolds and, 12 m south of it, a loose scaffold of the value of one. Take the larger "
+	                   "scaffold and hold it still near the village centre. Then hold it over the smaller scaffold and "
+	                   "press the Action button. Run with the audio log at the debug level to see the sounds.",
+	    .expected = "Near the village centre the phantom of the building that the town wants grows below the scaffold, "
+	                "and the appear sound plays one time. The tooltip shows the name of that building, then \"Throw\". "
+	                "When the offer changes or goes, the phantom becomes small and the vanish sound plays one time. Over "
+	                "the smaller scaffold the tooltip shows \"Combine Scaffolds\". The press removes the held scaffold. "
+	                "The scaffold on the land now has the value of three. A puff shows at it, and the first of the four "
+	                "join sounds plays at the hand.",
+	    .environment = {.dispenserGrid = false},
+	    .framing = {.shot = Shot::Overview, .include = {k_JoinTarget - glm::vec2 {10.0f}, k_BuildPlace + glm::vec2 {10.0f}}},
+	    .objects = {{.type = AbodeInfo::CelticTownCentre, .offset = {0.0f, 50.0f}},
+	                {.type = ScaffoldInfo::Normal, .offset = k_LooseScaffold, .scale = 0.9f},
+	                {.type = ScaffoldInfo::Normal, .offset = k_JoinTarget, .scale = 0.7f}},
+	    .townBeliefInPlayer = 1.0f,
 	});
 
 	all.push_back({

@@ -15,6 +15,7 @@
 #include <map>
 #include <memory>
 #include <optional>
+#include <set>
 #include <stdexcept>
 #include <string>
 #include <utility>
@@ -50,6 +51,7 @@
 #include "ECS/Systems/CreaturePhysiologySystemInterface.h"
 #include "ECS/Systems/GuidanceSystemInterface.h"
 #include "ECS/Systems/HandSystemInterface.h"
+#include "ECS/Systems/PlayerSystemInterface.h"
 #include "ECS/Systems/ReactionSystemInterface.h"
 #include "ECS/Systems/TimeSystemInterface.h"
 #include "Locator.h"
@@ -337,6 +339,25 @@ public:
 	PlayerNames own {PlayerNames::PLAYER_ONE};
 };
 
+/// The players of a land where computer minds play some of the gods
+class FakePlayers final: public ecs::systems::PlayerSystemInterface
+{
+public:
+	void RegisterPlayers() override {}
+	void AddPlayer(entt::entity /*playerEntity*/) override {}
+	[[nodiscard]] std::optional<entt::entity> FindPlayer(PlayerNames /*name*/) const override { return std::nullopt; }
+	entt::entity EnsurePlayer(PlayerNames /*name*/) override { return entt::null; }
+	void AddCreature(entt::entity /*creature*/) override {}
+	[[nodiscard]] std::optional<entt::entity> GetPrimaryCreature(PlayerNames /*name*/) const override { return std::nullopt; }
+	void KeepForNextLand() override {}
+	void ForgetKept() override {}
+	[[nodiscard]] bool KeepAlignmentAt(uint32_t /*turn*/) override { return false; }
+	void TakeUpKept(entt::entity /*playerEntity*/) override {}
+	[[nodiscard]] bool IsComputerPlayer(PlayerNames name) const override { return computers.contains(name); }
+
+	std::set<PlayerNames> computers;
+};
+
 /// A clock that only tells if the game is a network game
 class FakeTime final: public ecs::systems::TimeSystemInterface
 {
@@ -405,6 +426,7 @@ protected:
 	{
 		fights.Reset();
 		Locator::handSystem::reset();
+		Locator::playerSystem::reset();
 		Locator::time::reset();
 		Locator::camera::reset();
 		Locator::entitiesRegistry::reset();
@@ -1623,6 +1645,23 @@ TEST_F(CreatureFightSystemTest, AGodWithNoHandsLeavesItsCreatureToTheComputer)
 	ASSERT_EQ(fights.StartFight(first, second), ecs::systems::CreatureFightSystemInterface::StartResult::Started);
 	EXPECT_EQ(registry.Get<const CreatureFighting>(first).fighter.control, fight::Control::Computer);
 	EXPECT_EQ(registry.Get<const CreatureFighting>(second).fighter.control, fight::Control::Player);
+}
+
+TEST_F(CreatureFightSystemTest, AComputerGodLeavesItsCreatureToTheComputerAlsoWithHands)
+{
+	auto& registry = Locator::entitiesRegistry::value();
+	auto& hands = static_cast<FakeHands&>(Locator::handSystem::emplace<FakeHands>());
+	hands.hands[PlayerNames::PLAYER_ONE] = {registry.Create(), registry.Create()};
+	hands.hands[PlayerNames::PLAYER_THREE] = {registry.Create(), registry.Create()};
+	auto& players = static_cast<FakePlayers&>(Locator::playerSystem::emplace<FakePlayers>());
+	players.computers.insert(PlayerNames::PLAYER_THREE);
+	registry.Get<Creature>(second).owner = PlayerNames::PLAYER_THREE;
+	registry.Remove<CreatureFighting>(first);
+	registry.Remove<CreatureFighting>(second);
+	// The computer god's creature starts the fight with the creature of the player
+	ASSERT_EQ(fights.StartFight(second, first), ecs::systems::CreatureFightSystemInterface::StartResult::Started);
+	EXPECT_EQ(registry.Get<const CreatureFighting>(first).fighter.control, fight::Control::Player);
+	EXPECT_EQ(registry.Get<const CreatureFighting>(second).fighter.control, fight::Control::Computer);
 }
 
 TEST_F(CreatureFightSystemTest, TheHandOfThisComputerDirectsTheCreatureOfItsOwnGod)

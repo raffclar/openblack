@@ -357,3 +357,26 @@ TEST(WorkshopRules, AClearingScaffoldPushesOrRemovesThingsAndLeavesCreaturesAlon
 	EXPECT_EQ(workshop::ClearingActionFor({.creature = true}), ClearingAction::LeaveAlone);
 	EXPECT_EQ(workshop::ClearingActionFor({.creature = true, .held = true}), ClearingAction::LeaveAlone);
 }
+
+TEST(WorkshopRules, AJoinPlaysTheFourSoundsInTurnAtTheHandForTheHeldScaffold)
+{
+	const auto held = static_cast<entt::entity>(42);
+	const glm::vec3 hand {10.0f, 2.0f, -3.0f};
+	uint32_t step = 0;
+	for (const uint32_t sample : {201u, 202u, 203u, 204u, 201u})
+	{
+		const auto sound = workshop::JoinSoundOf(step, held, hand);
+		EXPECT_EQ(sound.sample, sample);
+		ASSERT_TRUE(sound.options.position.has_value());
+		EXPECT_EQ(*sound.options.position, hand);
+		EXPECT_EQ(sound.options.owner, held);
+		EXPECT_EQ(sound.options.follows, openblack::audio::Follows::Nothing);
+		EXPECT_FALSE(sound.options.voicePlayType.has_value());
+		step = workshop::NextJoinSound(step);
+	}
+}
+
+TEST(WorkshopRules, ThePuffOfAJoinShowsTheColourOfTheNeutralPlayer)
+{
+	EXPECT_EQ(workshop::k_JoinPuffPlayer, openblack::PlayerNames::NEUTRAL);
+}
