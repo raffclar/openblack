@@ -2742,6 +2742,99 @@ void AddFourthLandArrival(std::vector<Scenario>& all)
 	});
 }
 
+/// The mazes of the fourth and fifth lands, as their scripts make them: not turned, at their normal size
+void AddMazePuzzles(std::vector<Scenario>& all)
+{
+	// The place of each maze, from the middle of the map. A cell is four metres across, so the first Theseus maze and
+	// the lion maze are 28 metres to a side.
+	constexpr glm::vec2 k_Puzzle {-14.0f, -54.0f};
+	constexpr glm::vec2 k_Middle {k_Puzzle.x + 14.0f, k_Puzzle.y + 14.0f};
+	// The player's temple stands north of the maze, so that the hand reaches the maze in its influence
+	constexpr glm::vec2 k_Temple {0.0f, 20.0f};
+	constexpr float k_PuzzleObjectType = 32.0f;
+	constexpr float k_FirstTheseusKind = 10.0f;
+	constexpr float k_SecondTheseusKind = 11.0f;
+	constexpr float k_LionMazeKind = 12.0f;
+	const auto makeMaze = [&](float kind) {
+		return Command {.kind = Kind::CallNative,
+		                .delaySeconds = 0.5f,
+		                .script = "CREATE_WITH_ANGLE_AND_SCALE",
+		                .scriptArguments = {{.number = 0.0f},
+		                                    {.number = 1.0f},
+		                                    {.kind = ScriptArgument::Kind::Integer, .number = k_PuzzleObjectType},
+		                                    {.kind = ScriptArgument::Kind::Integer, .number = kind},
+		                                    {.kind = ScriptArgument::Kind::Position, .point = k_Puzzle}}};
+	};
+	const Framing above {
+	    .shot = Shot::Placed, .eye = {k_Middle.x, 48.0f, k_Middle.y - 22.0f}, .look = {k_Middle.x, 0.0f, k_Middle.y}};
+	all.push_back({
+	    .id = "story.theseus_maze",
+	    .name = "The first Theseus maze of the fourth land",
+	    .facet = Facet::Story,
+	    .description = "A script makes the fourth land's first Theseus maze south of the middle: fences on a grid of seven "
+	                   "by seven cells, a palm tree at each corner, a lantern at the middle of each edge, a villager and "
+	                   "a lion.",
+	    .expected = "Fences stand on the walls of the maze. A sparkle shows the villager and the lion for one second. A tap "
+	                "on the land in line with the villager moves the villager one cell that way, and then the lion goes "
+	                "up to two cells towards the villager. A sparkle marks the tapped cell. When the lion catches the "
+	                "villager, the two animals start again on their first cells. The hand can not take a fence or an "
+	                "animal.",
+	    .environment = {.dispenserGrid = false, .temple = k_Temple},
+	    .framing = above,
+	    .commands = {makeMaze(k_FirstTheseusKind)},
+	});
+	all.push_back({
+	    .id = "story.theseus_maze_two",
+	    .name = "The second Theseus maze of the fourth land",
+	    .facet = Facet::Story,
+	    .description = "A script makes the fourth land's second Theseus maze south of the middle: fences on a grid of "
+	                   "eight by eight cells, with its villager and its lion.",
+	    .expected = "Fences stand on the walls of the larger maze, which has its exit at the far end along. The villager "
+	                "starts in the third column, the lion in the second. Taps move them as in the first maze.",
+	    .environment = {.dispenserGrid = false, .temple = k_Temple},
+	    .framing = above,
+	    .commands = {makeMaze(k_SecondTheseusKind)},
+	});
+	all.push_back({
+	    .id = "story.lion_maze",
+	    .name = "The lion maze of the fifth land",
+	    .facet = Facet::Story,
+	    .description = "A script makes the fifth land's lion maze south of the middle: fences on a grid of seven by seven "
+	                   "cells, a large sheep, a large wolf and five small bell towers around the maze.",
+	    .expected = "A small bell tower stands at the middle of each edge and one at a corner. A tap on a bell at an edge "
+	                "rings it with a sparkle, and the wolf turns and slides that way, cell after cell, until a fence "
+	                "stops it. A tap on the bell at the corner puts the wolf and the sheep back on their first cells. "
+	                "When the wolf stops on the cell of the sheep, the two animals go in a sparkle.",
+	    .environment = {.dispenserGrid = false, .temple = k_Temple},
+	    .framing = above,
+	    .commands = {makeMaze(k_LionMazeKind)},
+	});
+	// The bell towers of the fourth land's Totem Puzzle are puzzle totems that a script makes
+	constexpr float k_TotemObjectType = 34.0f;
+	constexpr float k_BellTowerRow = 146.0f;
+	all.push_back({
+	    .id = "story.script_puzzle_totem",
+	    .name = "A bell tower that a script makes as a puzzle totem",
+	    .facet = Facet::Story,
+	    .description = "A script makes a puzzle totem of the bell tower row south of the middle, turned a quarter turn, "
+	                   "as the fourth land's Totem Puzzle makes its five towers.",
+	    .expected = "A bell tower of full size stands on the land. It belongs to no town. A click of the hand on it counts "
+	                "as a click for the scripts, but a tap does not ring it.",
+	    .environment = {.dispenserGrid = false, .temple = k_Temple},
+	    .framing = {.shot = Shot::Placed,
+	                .eye = {k_Middle.x + 20.0f, 18.0f, k_Middle.y - 20.0f},
+	                .look = {k_Middle.x, 4.0f, k_Middle.y}},
+	    .commands = {{.kind = Kind::CallNative,
+	                  .delaySeconds = 0.5f,
+	                  .script = "CREATE_WITH_ANGLE_AND_SCALE",
+	                  .scriptArguments = {{.number = 90.0f},
+	                                      {.number = 1.0f},
+	                                      {.kind = ScriptArgument::Kind::Integer, .number = k_TotemObjectType},
+	                                      {.kind = ScriptArgument::Kind::Integer, .number = k_BellTowerRow},
+	                                      {.kind = ScriptArgument::Kind::Position, .point = k_Middle}}}},
+	});
+}
+
 void AddStory(std::vector<Scenario>& all)
 {
 	// The player's temple west of the middle, turned as Land 1's
@@ -2952,6 +3045,7 @@ CREATE_CITADEL("0.0,0.0", 0, "PLAYER_ONE", 4254, 1000)
 	AddBeachTemplePuzzle(all);
 	AddTreePuzzle(all);
 	AddFourthLandArrival(all);
+	AddMazePuzzles(all);
 }
 
 void AddExplorersBoat(std::vector<Scenario>& all)

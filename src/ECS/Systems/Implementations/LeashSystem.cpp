@@ -73,6 +73,7 @@
 #include "ECS/Components/MiracleImpression.h"
 #include "ECS/Components/Mobile.h"
 #include "ECS/Components/OneOffSpellSeed.h"
+#include "ECS/Components/PuzzleGame.h"
 #include "ECS/Components/ReportedHand.h"
 #include "ECS/Components/ScriptControl.h"
 #include "ECS/Components/Sprite.h"
@@ -84,6 +85,7 @@
 #include "ECS/Components/VillageTotem.h"
 #include "ECS/Components/Villager.h"
 #include "ECS/Components/WorshipSite.h"
+#include "ECS/MazePuzzleRules.h"
 #include "ECS/NeedFlagRules.h"
 #include "ECS/Registry.h"
 #include "ECS/Systems/CameraBookmarkSystemInterface.h"
@@ -122,6 +124,7 @@ using namespace openblack::ecs::systems;
 using openblack::ecs::Registry;
 namespace leash = openblack::creature_leash;
 namespace orders = openblack::creature_leash_orders;
+namespace maze_puzzle = openblack::ecs::maze_puzzle;
 using creature_desires::Desire;
 
 namespace
@@ -2085,11 +2088,39 @@ void LeashSystem::HandleInput(const glm::vec3& rayOrigin, const glm::vec3& rayDi
 			return;
 		}
 	}
-	if (!creature.has_value() || doubleTap)
+	if (doubleTap)
 	{
 		return;
 	}
-	ActOnTap(player, *creature, TappedUnder(rayOrigin, rayDirection), false);
+	const auto under = TappedUnder(rayOrigin, rayDirection);
+	// A tap that the leash does not take is a usual tap. On the land, it goes to the maze puzzles.
+	if (!creature.has_value() || ActOnTap(player, *creature, under, false) == orders::Tap::Normal)
+	{
+		SendPuzzleTap(under);
+	}
+}
+
+void LeashSystem::SendPuzzleTap(const Under& under)
+{
+	if (under.object.has_value() || !under.land.has_value() || !Locator::playerCommandSystem::has_value())
+	{
+		return;
+	}
+	// Only a Theseus maze reads the tapped place. With no such maze, the tap sends nothing.
+	const auto& registry = Locator::entitiesRegistry::value();
+	bool maze = false;
+	registry.Each<const PuzzleGame>([&maze](const PuzzleGame& game) { maze = maze || maze_puzzle::IsTheseus(game.type); });
+	if (!maze)
+	{
+		return;
+	}
+	const auto place = map_coords::FromMetres(glm::xz(*under.land));
+	// A tap at the corner of the map is no tap
+	if (place.x == 0 && place.z == 0)
+	{
+		return;
+	}
+	Locator::playerCommandSystem::value().Submit(player_commands::PuzzleTap {.placeX = place.x, .placeZ = place.z});
 }
 
 LeashSystem::Under LeashSystem::TappedUnder(const glm::vec3& rayOrigin, const glm::vec3& rayDirection) const
@@ -2125,7 +2156,7 @@ LeashSystem::Under LeashSystem::TappedUnder(const glm::vec3& rayOrigin, const gl
 	return under;
 }
 
-void LeashSystem::ActOnTap(PlayerNames player, entt::entity creature, const Under& under, bool doubleTap)
+orders::Tap LeashSystem::ActOnTap(PlayerNames player, entt::entity creature, const Under& under, bool doubleTap)
 {
 	auto& registry = Locator::entitiesRegistry::value();
 	const auto& object = under.object;
@@ -2146,7 +2177,8 @@ void LeashSystem::ActOnTap(PlayerNames player, entt::entity creature, const Unde
 	};
 	// The tap sends the order. The world does it at the start of a later turn.
 	using player_commands::LeashOrder;
-	switch (doubleTap ? orders::OnDoubleTap(state, tapped) : orders::OnTap(state, tapped))
+	const auto tap = doubleTap ? orders::OnDoubleTap(state, tapped) : orders::OnTap(state, tapped);
+	switch (tap)
 	{
 	case orders::Tap::OrderOnThing:
 		SendOrder({.kind = LeashOrder::Kind::OnThing, .object = *object});
@@ -2167,6 +2199,7 @@ void LeashSystem::ActOnTap(PlayerNames player, entt::entity creature, const Unde
 	case orders::Tap::Nothing:
 		break;
 	}
+	return tap;
 }
 
 void LeashSystem::SendOrder(const player_commands::LeashOrder& order)

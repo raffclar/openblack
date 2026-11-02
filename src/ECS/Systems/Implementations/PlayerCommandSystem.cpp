@@ -52,6 +52,7 @@
 #include "ECS/Systems/LeashSystemInterface.h"
 #include "ECS/Systems/MagicSystemInterface.h"
 #include "ECS/Systems/MusicMoodSystemInterface.h"
+#include "ECS/Systems/PuzzleGameSystemInterface.h"
 #include "ECS/Systems/SaveGameSystemInterface.h"
 #include "ECS/Systems/SpellIconSystemInterface.h"
 #include "ECS/Systems/TimeSystemInterface.h"
@@ -419,6 +420,15 @@ void Run(const Command& command, uint32_t turn)
 			    if (openblack::Locator::helpProfileSystem::has_value() && PlayerOfThisComputer(command.player))
 			    {
 				    openblack::Locator::helpProfileSystem::value().DoReport(action);
+			    }
+		    }
+		    else if constexpr (std::is_same_v<Kind, PuzzleTap>)
+		    {
+			    // The maze puzzles of every computer take the tapped place in this turn
+			    if (openblack::Locator::puzzleGameSystem::has_value())
+			    {
+				    openblack::Locator::puzzleGameSystem::value().TapPlace(
+				        openblack::map_coords::MapCoords {.x = action.placeX, .z = action.placeZ});
 			    }
 		    }
 		    else if constexpr (std::is_same_v<Kind, DialogueClick>)

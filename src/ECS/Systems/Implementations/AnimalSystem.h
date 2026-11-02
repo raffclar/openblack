@@ -44,6 +44,12 @@ public:
 	entt::entity CreateHunter(AnimalInfo type, glm::vec2 position, uint32_t age, entt::entity flock) override;
 	entt::entity CreateScriptAnimal(AnimalInfo type, glm::vec2 position) override;
 	entt::entity CreateStillAnimal(AnimalInfo type, glm::vec3 position, float heading, float scale) override;
+	entt::entity CreatePuzzlePiece(AnimalInfo type, glm::ivec2 place, uint32_t age, std::optional<float> scale,
+	                               entt::entity puzzle) override;
+	uint16_t TurnPieceTowards(entt::entity animal, uint16_t angle) override;
+	void MovePieceTo(entt::entity animal, glm::ivec2 place, float metresPerSecond) override;
+	[[nodiscard]] bool PieceArrived(entt::entity animal) const override;
+	void PutPiece(entt::entity animal, glm::ivec2 place) override;
 	entt::entity CreateLoadedAnimal(const LoadedAnimal& loaded) override;
 	entt::entity TempleFlock(entt::entity temple) override;
 	void SetFlockTown(entt::entity flock, entt::entity town) override;
@@ -135,6 +141,8 @@ private:
 
 	// The grazers
 	void GrazerTurn(entt::entity entity, components::Animal& animal, components::Grazer& grazer);
+	/// The turn of an animal of a puzzle game: it reacts to things and goes where its puzzle sends it
+	void PuzzlePieceTurn(entt::entity entity, components::Animal& animal);
 	/// The needs of an animal of each kind grow, and a young animal grows, in the states that see to the needs
 	void NeedsTurn(entt::entity entity, components::Animal& animal);
 	/// An animal lets go of its target when the target is gone or in the player's hand. Whether it let go
