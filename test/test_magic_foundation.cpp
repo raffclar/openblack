@@ -497,6 +497,34 @@ TEST(AreaEffect, HeatCountsOnlyWithAChangeOfLifeAndInFull)
 	EXPECT_NEAR(outcome.alignmentChange, (0.1f * -0.8f * weight) + (1.0f * -1.0f * weight), k_Epsilon);
 }
 
+TEST(AreaEffect, EachKindHasItsOwnChangeInTheOrderCrushHitHealFlyAwayThenBurn)
+{
+	const auto table = AlignmentTable();
+	auto receiver = Villager(static_cast<entt::entity>(1), {}, 1.0f);
+	receiver.defence.combustionTemperature = 100.0f;
+	receiver.defence.multipliers.at(static_cast<size_t>(EffectKind::Burn)) = 1.0f;
+	EffectValues values;
+	values[EffectKind::Burn] = 1100.0f;
+	values[EffectKind::Hit] = 0.1f;
+	const auto outcome = ApplyEffectTo(values, receiver, table, 0.75f, 0.0f);
+	const float weight = 0.1f + 0.75f;
+	EXPECT_FLOAT_EQ(outcome.alignmentChanges.at(0), 0.0f);
+	EXPECT_FLOAT_EQ(outcome.alignmentChanges.at(1), 0.1f * -0.8f * weight);
+	EXPECT_FLOAT_EQ(outcome.alignmentChanges.at(2), 0.0f);
+	EXPECT_FLOAT_EQ(outcome.alignmentChanges.at(3), 0.0f);
+	EXPECT_FLOAT_EQ(outcome.alignmentChanges.at(4), 1.0f * -1.0f * weight);
+	EXPECT_EQ(outcome.alignmentChange, AddAlignmentChanges(0.0f, outcome.alignmentChanges));
+}
+
+TEST(AreaEffect, EachChangeGoesIntoTheWaitingChangeOneAfterTheOther)
+{
+	// Two changes too small to move 1 each by itself: the sum of the two first would move it
+	constexpr float k_Small = 0x1p-24f;
+	const AlignmentChanges changes {k_Small, k_Small, 0.0f, 0.0f, 0.0f};
+	EXPECT_EQ(AddAlignmentChanges(1.0f, changes), 1.0f);
+	EXPECT_NE(1.0f + (k_Small + k_Small), 1.0f);
+}
+
 TEST(AreaEffect, TheChangeIsDampedByHowFarTheCasterLeans)
 {
 	// An evil caster turns more evil less, and good more

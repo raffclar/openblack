@@ -611,7 +611,26 @@ void GameMagicWorld::Apply(const magic::EffectValues& values, std::span<const ma
 	const float burn = values[magic::EffectKind::Burn];
 	const bool byCreature = source.casterCreature != entt::null && registry.Valid(source.casterCreature) &&
 	                        registry.AllOf<Creature>(source.casterCreature);
-	float alignment = 0.0f;
+	// What a creature's miracle did moves its own alignment, what a player's did the player's, over the turns to come.
+	// The change of each kind goes into the change that waits one after the other, thing by thing.
+	const auto addAlignment = [&registry, &source, byCreature](const magic::AlignmentChanges& changes) {
+		if (std::ranges::all_of(changes, [](float change) { return change == 0.0f; }))
+		{
+			return;
+		}
+		if (byCreature)
+		{
+			auto& pending = registry.Get<Creature>(source.casterCreature).pendingAlignment;
+			pending = magic::AddAlignmentChanges(pending, changes);
+		}
+		else if (!source.playerless && source.player != PlayerNames::NEUTRAL && Locator::alignmentSystem::has_value())
+		{
+			for (const float change : changes)
+			{
+				Locator::alignmentSystem::value().AddPendingAlignment(source.player, change);
+			}
+		}
+	};
 	// The cry of a town that the harm attacks: none when nothing burns, crushes, hits or throws
 	std::optional<guidance::TownAttackVoice> cry;
 	if (const auto fire = guidance::FireLeads(values); fire.has_value())
@@ -656,7 +675,7 @@ void GameMagicWorld::Apply(const magic::EffectValues& values, std::span<const ma
 			}
 		}
 		magic_living::AfterEffect(outcome.entity, values, source);
-		alignment += outcome.alignmentChange;
+		addAlignment(outcome.alignmentChanges);
 		// What applied the effect, when no miracle did: none for a fall onto the land
 		const bool appliedByNothing =
 		    source.appliedBy.has_value() && (*source.appliedBy == entt::null || !PositionOf(*source.appliedBy).has_value());
@@ -712,19 +731,6 @@ void GameMagicWorld::Apply(const magic::EffectValues& values, std::span<const ma
 			DestroyedByEffect(outcome.entity, {.killer = source.playerless ? std::nullopt : std::optional(source.player),
 			                                   .weight = outcome.lifeBefore.value_or(0.0f)});
 		}
-	}
-	if (alignment == 0.0f)
-	{
-		return;
-	}
-	// What a creature's miracle did moves its own alignment, what a player's did the player's, over the turns to come
-	if (byCreature)
-	{
-		registry.Get<Creature>(source.casterCreature).pendingAlignment += alignment;
-	}
-	else if (!source.playerless && source.player != PlayerNames::NEUTRAL && Locator::alignmentSystem::has_value())
-	{
-		Locator::alignmentSystem::value().AddPendingAlignment(source.player, alignment);
 	}
 }
 

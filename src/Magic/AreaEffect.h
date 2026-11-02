@@ -101,8 +101,10 @@ struct EffectOutcome
 	bool destroyed {false};
 	/// It was crushed hard enough for people to react
 	bool crushed {false};
-	/// How much the caster's alignment moves for it, before the turn's limit
+	/// How much the caster's alignment moves for it, before the turn's limit: the sum of alignmentChanges
 	float alignmentChange {0.0f};
+	/// The change of each kind of effect, in the order that the game adds them to the change that waits
+	std::array<float, 5> alignmentChanges {};
 	/// What was done to it counts as an attack: it burnt, crushed, hit or threw it, and it was hurt
 	bool aggression {false};
 };
@@ -134,8 +136,21 @@ struct EffectOutcome
 /// How much a change of alignment moves a caster who already leans: less the same way, more the other way
 [[nodiscard]] float DampAlignmentChange(float change, float current);
 
+/// The change of the caster's alignment for each kind of effect, in the order that the game adds them to the change
+/// that waits: crush, hit, heal, fly away, then burn
+using AlignmentChanges = std::array<float, 5>;
+
+/// The caster's alignment moves for what an effect did to a thing whose life changed by so much, a change for each kind
+/// of effect. Its heat counts by the harm it did. All are 0 when the life did not change.
+[[nodiscard]] AlignmentChanges EffectAlignmentChanges(const EffectValues& values, float burnDamage, AlignmentType type,
+                                                      float lifeChange, std::span<const GAlignmentInfo> alignmentTable,
+                                                      float alignmentAddition, float casterAlignment);
+
+/// Adds the change of each kind to the change that waits, one after the other in their order. Returns the new value.
+[[nodiscard]] float AddAlignmentChanges(float pending, const AlignmentChanges& changes);
+
 /// The caster's alignment moves for what an effect did to a thing whose life changed by so much; its heat counts by the
-/// harm it did
+/// harm it did. The sum of EffectAlignmentChanges, added in their order.
 [[nodiscard]] float EffectAlignmentChange(const EffectValues& values, float burnDamage, AlignmentType type, float lifeChange,
                                           std::span<const GAlignmentInfo> alignmentTable, float alignmentAddition,
                                           float casterAlignment);

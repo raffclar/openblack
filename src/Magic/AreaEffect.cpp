@@ -12,6 +12,7 @@
 #include <cmath>
 
 #include <algorithm>
+#include <array>
 
 #include <glm/geometric.hpp>
 
@@ -111,19 +112,22 @@ float magic::DampAlignmentChange(float change, float current)
 	return sameWay ? change * (1.0f - lean) : change * (1.0f + lean);
 }
 
-float magic::EffectAlignmentChange(const EffectValues& values, float burnDamage, AlignmentType type, float lifeChange,
-                                   std::span<const GAlignmentInfo> alignmentTable, float alignmentAddition,
-                                   float casterAlignment)
+magic::AlignmentChanges magic::EffectAlignmentChanges(const EffectValues& values, float burnDamage, AlignmentType type,
+                                                      float lifeChange, std::span<const GAlignmentInfo> alignmentTable,
+                                                      float alignmentAddition, float casterAlignment)
 {
+	AlignmentChanges changes {};
 	const float change = std::abs(lifeChange);
 	if (change == 0.0f)
 	{
-		return 0.0f;
+		return changes;
 	}
 	const float weight = change + alignmentAddition;
-	float total = 0.0f;
-	for (const auto kind : {EffectKind::Burn, EffectKind::Crush, EffectKind::Hit, EffectKind::Heal, EffectKind::FlyAway})
+	// The game takes the kinds in the order of their values and the heat last
+	constexpr std::array k_Order {EffectKind::Crush, EffectKind::Hit, EffectKind::Heal, EffectKind::FlyAway, EffectKind::Burn};
+	for (size_t index = 0; index < k_Order.size(); ++index)
 	{
+		const auto kind = k_Order.at(index);
 		const auto row = static_cast<size_t>(kind);
 		if (row >= alignmentTable.size())
 		{
@@ -132,9 +136,26 @@ float magic::EffectAlignmentChange(const EffectValues& values, float burnDamage,
 		// Heat counts by the harm it does rather than by how hot it is
 		const float amount = kind == EffectKind::Burn ? burnDamage : values[kind];
 		const float value = amount * AlignmentWeight(alignmentTable[row], type) * weight;
-		total += DampAlignmentChange(value, casterAlignment);
+		changes.at(index) = DampAlignmentChange(value, casterAlignment);
 	}
-	return total;
+	return changes;
+}
+
+float magic::AddAlignmentChanges(float pending, const AlignmentChanges& changes)
+{
+	for (const float change : changes)
+	{
+		pending += change;
+	}
+	return pending;
+}
+
+float magic::EffectAlignmentChange(const EffectValues& values, float burnDamage, AlignmentType type, float lifeChange,
+                                   std::span<const GAlignmentInfo> alignmentTable, float alignmentAddition,
+                                   float casterAlignment)
+{
+	return AddAlignmentChanges(
+	    0.0f, EffectAlignmentChanges(values, burnDamage, type, lifeChange, alignmentTable, alignmentAddition, casterAlignment));
 }
 
 float magic::CreatureLifeAfterEffect(float before, float healed, float damaged)
@@ -183,8 +204,9 @@ EffectOutcome magic::ApplyEffectTo(const EffectValues& values, const EffectRecei
 		outcome.destroyed = life == 0.0f && before != 0.0f;
 		// Heat takes no life by itself: it heats what it reaches, which then burns. The alignment moves only when the heal
 		// or the harm changed the life, and then heat counts too, by the harm it would do.
-		outcome.alignmentChange = EffectAlignmentChange(values, outcome.burnt, receiver.alignmentType, before - life,
-		                                                alignmentTable, alignmentAddition, casterAlignment);
+		outcome.alignmentChanges = EffectAlignmentChanges(values, outcome.burnt, receiver.alignmentType, before - life,
+		                                                  alignmentTable, alignmentAddition, casterAlignment);
+		outcome.alignmentChange = AddAlignmentChanges(0.0f, outcome.alignmentChanges);
 	}
 	outcome.aggression = values.IsDestructive() && (outcome.damaged + outcome.burnt) > 0.0f;
 	return outcome;
