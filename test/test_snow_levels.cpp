@@ -8,6 +8,7 @@
  *******************************************************************************/
 
 #include <algorithm>
+#include <array>
 #include <chrono>
 #include <optional>
 #include <span>
@@ -410,4 +411,35 @@ TEST(SnowLevels, APhantomBuildingCarriesSnowInAHandUntilASiteShowsItAndNoneFromT
 	registry.Assign<InHand>(scaffold);
 	snow_levels::StepScaffoldPhantoms(registry, DeepSnow, 1);
 	EXPECT_EQ(snow_levels::ShownLevelOf(registry, phantom), 0);
+}
+
+TEST(SnowLevels, TheShownLevelOfTheSnowItselfIsTheShownLevelOfTheThing)
+{
+	ecs::Registry registry;
+	const std::array snows {
+	    std::optional<SnowLevel> {},
+	    std::optional<SnowLevel> {SnowLevel {.level = 120}},
+	    std::optional<SnowLevel> {SnowLevel {.level = 20}},
+	    std::optional<SnowLevel> {SnowLevel {.level = 120, .broken = 100}},
+	    std::optional<SnowLevel> {SnowLevel {.level = 120, .broken = 10}},
+	    std::optional<SnowLevel> {SnowLevel {.level = 90, .piece = true}},
+	    std::optional<SnowLevel> {SnowLevel {.level = 10, .piece = true}},
+	};
+	for (const auto& snow : snows)
+	{
+		for (const bool highDetail : {false, true})
+		{
+			const auto thing = Thing(registry);
+			if (snow.has_value())
+			{
+				registry.Assign<SnowLevel>(thing, *snow);
+			}
+			if (highDetail)
+			{
+				registry.Assign<HighDetail>(thing);
+			}
+			const auto* stored = registry.TryGet<const SnowLevel>(thing);
+			EXPECT_EQ(snow_levels::ShownLevel(stored, highDetail), snow_levels::ShownLevelOf(registry, thing));
+		}
+	}
 }
