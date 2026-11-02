@@ -2329,3 +2329,4 @@ openblack_setup_and_add_test(
 )
   target_compile_options(test_reactions PRIVATE /bigobj)
 openblack_setup_and_add_test(test_football_rules test_football_rules.cpp)
+openblack_setup_and_add_test(test_memory_use test_memory_use.cpp)
