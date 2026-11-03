@@ -89,7 +89,7 @@ TEST(DeveloperTools, TheFilterKeepsThePlayerAndWindowOptions)
 	                                               "game.log",
 	                                               "--join",
 	                                               "wss://127.0.0.1:1/game/a",
-	                                               "--join-ticket",
+	                                               "--join-ticket-file",
 	                                               "t",
 	                                               "--backend-type",
 	                                               "Vulkan",

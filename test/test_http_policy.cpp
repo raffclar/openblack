@@ -46,6 +46,27 @@ TEST(HttpPolicy, GameSocketsAreWssOnly)
 	EXPECT_FALSE(http_policy::IsWssAddress("https://bw.example/game/5"));
 }
 
+// The test authorities of the tools trust only this computer. A name that starts with "127." is a host of the internet.
+TEST(HttpPolicy, OnlyLocalhostAndAnAddressOf127AreThisComputer)
+{
+	EXPECT_TRUE(http_policy::IsLoopbackHost("localhost"));
+	EXPECT_TRUE(http_policy::IsLoopbackHost("127.0.0.1"));
+	EXPECT_TRUE(http_policy::IsLoopbackHost("127.255.0.9"));
+	EXPECT_FALSE(http_policy::IsLoopbackHost("127.evil.com"));
+	EXPECT_FALSE(http_policy::IsLoopbackHost("127.0.0.1.evil.com"));
+	EXPECT_FALSE(http_policy::IsLoopbackHost("127.0.0"));
+	EXPECT_FALSE(http_policy::IsLoopbackHost("127.0.0.256"));
+	EXPECT_FALSE(http_policy::IsLoopbackHost("127.0.0.0001"));
+	EXPECT_FALSE(http_policy::IsLoopbackHost("127..0.1"));
+	EXPECT_FALSE(http_policy::IsLoopbackHost("127.0.0.1."));
+	EXPECT_FALSE(http_policy::IsLoopbackHost("128.0.0.1"));
+	EXPECT_FALSE(http_policy::IsLoopbackHost(""));
+	EXPECT_TRUE(http_policy::IsLoopbackAddress("wss://127.0.0.1:7650/game/a"));
+	EXPECT_TRUE(http_policy::IsLoopbackAddress("https://localhost/api"));
+	EXPECT_FALSE(http_policy::IsLoopbackAddress("wss://127.evil.com/game/a"));
+	EXPECT_FALSE(http_policy::IsLoopbackAddress("https://127.0.0.1.evil.com:443/api"));
+}
+
 TEST(HttpPolicy, AResponseFindsItsHeadersByLowerCaseName)
 {
 	const HttpResponse response {.status = 200, .headers = {{"etag", "\"1\""}}, .body = {'o', 'k'}};

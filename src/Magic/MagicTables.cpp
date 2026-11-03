@@ -202,6 +202,22 @@ const GSpellSeedInfo& magic::GetSpellSeedInfo(const InfoConstants& info, SpellSe
 	return info.spellSeed.at(static_cast<size_t>(seed));
 }
 
+std::vector<magic::FightMiracle> magic::KnownFightMiracles(const InfoConstants& info, const std::vector<bool>& miraclesKnown)
+{
+	std::vector<FightMiracle> known;
+	for (size_t seedIndex = 0; seedIndex < info.spellSeed.size(); ++seedIndex)
+	{
+		const auto& seed = info.spellSeed.at(seedIndex);
+		const auto magic = seed.magicTypes.front();
+		const auto index = static_cast<size_t>(magic);
+		if (seed.unknown0x17C != 0 && index < miraclesKnown.size() && miraclesKnown[index])
+		{
+			known.push_back({.seed = static_cast<SpellSeedType>(seedIndex), .magic = magic});
+		}
+	}
+	return known;
+}
+
 std::optional<MeshId> magic::GetSeedModel(const InfoConstants& info, SpellSeedType seed, float ownerAlignment)
 {
 	const auto& record = GetSpellSeedInfo(info, seed);
