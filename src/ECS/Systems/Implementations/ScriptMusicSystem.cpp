@@ -84,10 +84,8 @@ bool ScriptMusicSystem::HasMusic() const
 
 float ScriptMusicSystem::PlayDistance(audio::MusicType type) const
 {
-	// A type outside the table of banks has no bank. The banks are there only when this computer had a sound device at
-	// the start, also in a network game (see docs/vanilla-bugs.md).
-	const bool soundDevice = Locator::sounds::has_value() && Locator::sounds::value().IsInstalled();
-	if (!soundDevice || type < audio::MusicType::None || type >= audio::MusicType::_COUNT)
+	// A type outside the table of banks has no bank. Without the music of the world, no bank is there.
+	if (!HasMusic() || type < audio::MusicType::None || type >= audio::MusicType::_COUNT)
 	{
 		return audio::MusicPlayDistance(nullptr);
 	}

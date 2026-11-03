@@ -52,3 +52,13 @@ TEST(ScriptNativesRows5, WindMagicIsAStormWithNoCloudsNearThePoint)
 	EXPECT_TRUE(weather::WindMagicNear({point.x + 30.0f, 900.0f, point.z + 40.0f}, 25.5f, 0, point, 25.0f));
 	EXPECT_FALSE(weather::WindMagicNear({point.x + 30.0f, 900.0f, point.z + 40.0f}, 24.5f, 0, point, 25.0f));
 }
+
+TEST(ScriptNativesRows5, EveryComputerOfANetworkGameHasTheBanksOfTheMusicDistances)
+{
+	// A lone computer with no sound device has no banks, so the distances read 100 there
+	EXPECT_FALSE(audio::WorldHasMusic(false, false, false));
+	EXPECT_TRUE(audio::WorldHasMusic(true, false, false));
+	// In a network game and on the server, each computer reads the distances of the banks
+	EXPECT_TRUE(audio::WorldHasMusic(false, true, false));
+	EXPECT_TRUE(audio::WorldHasMusic(false, false, true));
+}
