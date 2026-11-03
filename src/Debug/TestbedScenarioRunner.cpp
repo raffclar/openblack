@@ -127,12 +127,14 @@
 #include "ECS/Components/MagicPile.h"
 #include "ECS/Components/Mesh.h"
 #include "ECS/Components/MiracleImpression.h"
+#include "ECS/Components/Mobile.h"
 #include "ECS/Components/Physics.h"
 #include "ECS/Components/Player.h"
 #include "ECS/Components/PlayerStatistics.h"
 #include "ECS/Components/Poisoned.h"
 #include "ECS/Components/Pot.h"
 #include "ECS/Components/PrayerPower.h"
+#include "ECS/Components/Reward.h"
 #include "ECS/Components/Scaffold.h"
 #include "ECS/Components/ScriptControl.h"
 #include "ECS/Components/ScriptHighlight.h"
@@ -3320,8 +3322,103 @@ std::string Runner::ClickScroll(const Command& command)
 	{
 		return "no scroll";
 	}
+	// A short press on the scroll taps it, which replays the reminder of a challenge that has started, and clicks it for
+	// the scripts
+	const auto player =
+	    Locator::playerSystem::has_value() ? Locator::playerSystem::value().GetLocalPlayer() : PlayerNames::PLAYER_ONE;
+	Locator::handGrabSystem::value().DoTap(player, nearest);
 	Locator::handGrabSystem::value().ClickThing(nearest);
 	return fmt::format("clicked the scroll {} m from the point", best);
+}
+
+std::string Runner::ClickCreatureNear(const Command& command)
+{
+	if (!Locator::handGrabSystem::has_value())
+	{
+		return "no hand";
+	}
+	const auto at = MapPoint(_middle, command.point);
+	auto& registry = Locator::entitiesRegistry::value();
+	auto nearest = entt::entity {entt::null};
+	float best = std::numeric_limits<float>::max();
+	registry.Each<const ecs::components::Creature, const ecs::components::Transform>(
+	    [&](entt::entity entity, const ecs::components::Creature&, const ecs::components::Transform& transform) {
+		    const auto distance = glm::distance(glm::vec2(transform.position.x, transform.position.z), at);
+		    if (distance < best)
+		    {
+			    best = distance;
+			    nearest = entity;
+		    }
+	    });
+	if (nearest == entt::null)
+	{
+		return "no creature";
+	}
+	Locator::handGrabSystem::value().ClickThing(nearest);
+	return fmt::format("clicked the creature {} {} m from the point", entt::to_integral(nearest), best);
+}
+
+std::string Runner::TapRewardNear(const Command& command)
+{
+	if (!Locator::handGrabSystem::has_value())
+	{
+		return "no hand";
+	}
+	const auto at = MapPoint(_middle, command.point);
+	auto& registry = Locator::entitiesRegistry::value();
+	auto nearest = entt::entity {entt::null};
+	float best = std::numeric_limits<float>::max();
+	registry.Each<const ecs::components::Reward, const ecs::components::Transform>(
+	    [&](entt::entity entity, const ecs::components::Reward&, const ecs::components::Transform& transform) {
+		    const auto distance = glm::distance(glm::vec2(transform.position.x, transform.position.z), at);
+		    if (distance < best)
+		    {
+			    best = distance;
+			    nearest = entity;
+		    }
+	    });
+	if (nearest == entt::null)
+	{
+		return "no reward chest";
+	}
+	// A short press on the chest taps it open and clicks it for the scripts
+	auto& hand = Locator::handGrabSystem::value();
+	const auto player =
+	    Locator::playerSystem::has_value() ? Locator::playerSystem::value().GetLocalPlayer() : PlayerNames::PLAYER_ONE;
+	hand.DoTap(player, nearest);
+	hand.ClickThing(nearest);
+	return fmt::format("tapped the reward chest {} m from the point", best);
+}
+
+std::string Runner::HandTakeNear(const Command& command)
+{
+	if (!Locator::handGrabSystem::has_value())
+	{
+		return "no hand";
+	}
+	// The mobile object nearest the point, as the player picks up the one under the pointer
+	constexpr float k_Reach = 10.0f;
+	const auto at = MapPoint(_middle, command.point);
+	auto& registry = Locator::entitiesRegistry::value();
+	auto nearest = entt::entity {entt::null};
+	float best = k_Reach;
+	registry.Each<const ecs::components::MobileObject, const ecs::components::Transform>(
+	    [&](entt::entity entity, const ecs::components::MobileObject&, const ecs::components::Transform& transform) {
+		    const auto distance = glm::distance(glm::vec2(transform.position.x, transform.position.z), at);
+		    if (distance < best)
+		    {
+			    best = distance;
+			    nearest = entity;
+		    }
+	    });
+	if (nearest == entt::null)
+	{
+		return "no mobile object near the point";
+	}
+	auto& hand = Locator::handGrabSystem::value();
+	const auto why = hand.WhyNotTake(nearest);
+	return hand.TakeIntoHand(nearest) ? fmt::format("took the mobile object {} m from the point", best)
+	                                  : fmt::format("the hand can't take it: {}", why);
 }
 
 std::string Runner::RunScript(const Command& command)
@@ -3832,17 +3929,32 @@ void Runner::Give(const Command& command)
 	if (command.kind == Kind::CameraLooksAt)
 	{
 		const auto look = MapPoint(_middle, command.point);
-		const glm::vec2 eye {look.x, look.y - 40.0f};
+		// The eye is 15 m south of the point and 15 m above it, so that a script that waits for the camera within 30 m
+		// of the point goes on
 		const auto& land = Locator::terrainSystem::value();
-		Locator::camera::value()
-		    .SetOrigin({eye.x, land.GetHeightAt(eye) + 30.0f, eye.y})
-		    .SetFocus({look.x, land.GetHeightAt(look), look.y});
+		const auto height = land.GetHeightAt(look);
+		Locator::camera::value().SetOrigin({look.x, height + 15.0f, look.y - 15.0f}).SetFocus({look.x, height, look.y});
 		Log(fmt::format("{:.1f}s: {}", _seconds, Name(command.kind)));
 		return;
 	}
 	if (command.kind == Kind::ClickScroll)
 	{
 		Log(fmt::format("{:.1f}s: {}: {}", _seconds, Name(command.kind), ClickScroll(command)));
+		return;
+	}
+	if (command.kind == Kind::TapRewardNear)
+	{
+		Log(fmt::format("{:.1f}s: {}: {}", _seconds, Name(command.kind), TapRewardNear(command)));
+		return;
+	}
+	if (command.kind == Kind::ClickCreatureNear)
+	{
+		Log(fmt::format("{:.1f}s: {}: {}", _seconds, Name(command.kind), ClickCreatureNear(command)));
+		return;
+	}
+	if (command.kind == Kind::HandTakeNear)
+	{
+		Log(fmt::format("{:.1f}s: {}: {}", _seconds, Name(command.kind), HandTakeNear(command)));
 		return;
 	}
 	if (command.kind == Kind::RunScript)
@@ -4820,6 +4932,9 @@ void Runner::Give(const Command& command)
 	case Kind::StopScript:
 	case Kind::ClickScroll:
 	case Kind::CameraLooksAt:
+	case Kind::HandTakeNear:
+	case Kind::ClickCreatureNear:
+	case Kind::TapRewardNear:
 	case Kind::RunScript:
 	case Kind::CallNative:
 	case Kind::StartScriptMusic:
