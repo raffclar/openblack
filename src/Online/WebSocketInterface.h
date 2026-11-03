@@ -12,12 +12,14 @@
 #include <cstdint>
 
 #include <functional>
+#include <optional>
 #include <span>
 #include <string>
 #include <string_view>
 #include <vector>
 
 #include "Online/HttpClientInterface.h"
+#include "Online/ServerKeyPin.h"
 
 /// The secure WebSocket (WSS) client of the game. The push channel of the lobby and the socket of a game server use it.
 /// The desktop client accepts only wss:// addresses and uses the TLS rules of the HTTPS client. The browser client
@@ -72,6 +74,10 @@ struct WebSocketRequest
 	std::vector<HttpHeader> headers;
 	/// The subprotocols that the handshake asks for, in the order of preference
 	std::vector<std::string> subprotocols;
+	/// The desktop only: the pin of the public key of the own certificate of a game server on the local network, from
+	/// its answer to the search (deviation 113). The client then accepts only a certificate with that public key, and no
+	/// authority or host name is checked. None: the certificate must come from an authority and name the host.
+	std::optional<server_key::Pin> serverKey;
 };
 
 /// The handlers of a connection. They run from Poll, never in Connect, SendText, SendBinary or Close.

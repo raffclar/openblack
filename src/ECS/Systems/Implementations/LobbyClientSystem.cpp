@@ -501,6 +501,7 @@ void LobbyClientSystem::Dispatch(Call call)
 	    .headers = call.headers,
 	    .body = call.body,
 	    .large = call.large,
+	    .mostBytes = call.mostBytes,
 	};
 	request.headers.emplace_back("Authorization", "Bearer " + _accessToken);
 	const auto generation = _generation;
@@ -521,7 +522,8 @@ void LobbyClientSystem::Dispatch(Call call)
 }
 
 template <typename Value, typename Parser>
-void LobbyClientSystem::CallFor(HttpMethod method, std::string path, LobbyCallback<Value> callback, Parser parse, bool large)
+void LobbyClientSystem::CallFor(HttpMethod method, std::string path, LobbyCallback<Value> callback, Parser parse, bool large,
+                                size_t mostBytes)
 {
 	if (!_config.has_value())
 	{
@@ -548,6 +550,7 @@ void LobbyClientSystem::CallFor(HttpMethod method, std::string path, LobbyCallba
 		        Succeed(callback, std::move(*value));
 	        },
 	    .large = large,
+	    .mostBytes = mostBytes,
 	});
 }
 
@@ -828,10 +831,19 @@ void LobbyClientSystem::GetMaps(LobbyCallback<lobby_api::MapList> callback)
 
 void LobbyClientSystem::DownloadMap(const lobby_api::OnlineMap& map, LobbyCallback<std::vector<uint8_t>> callback)
 {
-	// The file has its place on the lobby by its hash, which the list checked
+	// The file has its place on the lobby by its hash, which the list checked. The transfer stops at the size that the list
+	// gave, and an answer of another size is a bad answer. A list with no size keeps the limit of a large file.
+	const auto size = static_cast<size_t>(std::max<int64_t>(map.size, 0));
 	CallFor<std::vector<uint8_t>>(
 	    HttpMethod::Get, "/maps/" + map.sha256, std::move(callback),
-	    [](const HttpResponse& response) -> std::optional<std::vector<uint8_t>> { return response.body; }, true);
+	    [size](const HttpResponse& response) -> std::optional<std::vector<uint8_t>> {
+		    if (size != 0 && response.body.size() != size)
+		    {
+			    return std::nullopt;
+		    }
+		    return response.body;
+	    },
+	    true, size);
 }
 
 void LobbyClientSystem::GetPlayerRanking(lobby_api::RankingQuery query, LobbyCallback<lobby_api::RankingPage> callback)

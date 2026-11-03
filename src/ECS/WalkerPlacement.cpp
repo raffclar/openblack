@@ -11,6 +11,7 @@
 
 #include <glm/gtx/vec_swizzle.hpp>
 
+#include "ECS/Components/Animal.h"
 #include "ECS/Components/Transform.h"
 #include "ECS/Components/VillagerPose.h"
 #include "ECS/Components/WallHug.h"
@@ -32,6 +33,13 @@ void walker_placement::Place(Registry& registry, entt::entity entity, glm::vec3 
 	if (auto* pose = registry.TryGet<VillagerPose>(entity); pose != nullptr)
 	{
 		pose->turnStart = position;
+	}
+	// An animal is at the new place at the start and at the end of its turn. So it is drawn there at once, and it has
+	// not moved across the land in its last turn.
+	if (auto* animal = registry.TryGet<Animal>(entity); animal != nullptr)
+	{
+		animal->previousPosition = position;
+		animal->position = position;
 	}
 	auto* wallHug = registry.TryGet<WallHug>(entity);
 	if (wallHug == nullptr)

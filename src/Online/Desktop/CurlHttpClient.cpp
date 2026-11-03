@@ -92,7 +92,8 @@ struct CurlHttpClient::Transfer
 	{
 		auto& transfer = *static_cast<Transfer*>(user);
 		const auto bytes = size * count;
-		const auto most = transfer.request.large ? k_MostLargeAnswerBytes : tls_settings::k_MostAnswerBytes;
+		const auto most = MostAnswerBytes(transfer.request,
+		                                  transfer.request.large ? k_MostLargeAnswerBytes : tls_settings::k_MostAnswerBytes);
 		if (transfer.response.body.size() + bytes > most)
 		{
 			transfer.tooLarge = true;

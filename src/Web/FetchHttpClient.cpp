@@ -77,7 +77,8 @@ void Done(emscripten_fetch_t* fetch)
 	else
 	{
 		response.status = static_cast<int32_t>(fetch->status);
-		const auto most = transfer.request.large ? online::k_MostLargeAnswerBytes : k_MostAnswerBytes;
+		const auto most = online::MostAnswerBytes(transfer.request,
+		                                          transfer.request.large ? online::k_MostLargeAnswerBytes : k_MostAnswerBytes);
 		if (fetch->numBytes > most)
 		{
 			// The game keeps no answer that is larger than its limit

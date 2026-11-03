@@ -4908,7 +4908,7 @@ GameProvider* openblack::inspector::AddGameProviders(Inspector& inspector, const
 		    {
 			    return {};
 		    }
-		    return Locator::liquidParticleSystem::value().PlayerParticles(player);
+		    return Locator::liquidParticleSystem::value().PlayerParticles({.player = player});
 	    },
 	    .belief = []() -> ecs::systems::ParticleRuleSystemInterface::BeliefSpritesSeen {
 		    if (!Locator::particleRuleSystem::has_value())

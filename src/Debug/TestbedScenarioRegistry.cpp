@@ -15351,12 +15351,12 @@ bool testbed_scenarios::NeedsNoCreature(Command::Kind kind)
 	       kind == Kind::RemoveTeleportStone || kind == Kind::MakeDance || kind == Kind::OpenMultiplayerBox ||
 	       kind == Kind::BuildWorshipSites || kind == Kind::ScriptBuildsWorshipSites || kind == Kind::PressPlainKey ||
 	       kind == Kind::PlainKeyDown || kind == Kind::PlainKeyRepeat || kind == Kind::PlainKeyUp ||
-	       kind == Kind::OtherGodHand || kind == Kind::OwnGod || kind == Kind::JoinOnline || kind == Kind::EndBox ||
-	       kind == Kind::BringCreature || kind == Kind::TattooEditorAsNetworkGame || kind == Kind::ShowDemoPing ||
-	       kind == Kind::AddIncomingMessage || kind == Kind::Chat || kind == Kind::ComputerPersonality ||
-	       kind == Kind::ComputerUntaughtSends || kind == Kind::SkirmishBox || kind == Kind::LookAtSaveGamePicture ||
-	       kind == Kind::HandCastOnDispenser || kind == Kind::HandCastOnCreature || kind == Kind::CloseHeldMiracle ||
-	       kind == Kind::JoinFootball || IsPointerCommand(kind);
+	       kind == Kind::OtherGodHand || kind == Kind::ObserverCamera || kind == Kind::OwnGod || kind == Kind::JoinOnline ||
+	       kind == Kind::EndBox || kind == Kind::BringCreature || kind == Kind::TattooEditorAsNetworkGame ||
+	       kind == Kind::ShowDemoPing || kind == Kind::AddIncomingMessage || kind == Kind::Chat ||
+	       kind == Kind::ComputerPersonality || kind == Kind::ComputerUntaughtSends || kind == Kind::SkirmishBox ||
+	       kind == Kind::LookAtSaveGamePicture || kind == Kind::HandCastOnDispenser || kind == Kind::HandCastOnCreature ||
+	       kind == Kind::CloseHeldMiracle || kind == Kind::JoinFootball || IsPointerCommand(kind);
 }
 
 std::string_view testbed_scenarios::Name(Facet facet)
@@ -15384,7 +15384,7 @@ std::string_view testbed_scenarios::Name(Shot shot)
 
 std::string_view testbed_scenarios::Name(Command::Kind kind)
 {
-	constexpr std::array<std::string_view, 223> k_Names {
+	constexpr std::array<std::string_view, 224> k_Names {
 	    "walk to",
 	    "run to",
 	    "follow",
@@ -15576,6 +15576,7 @@ std::string_view testbed_scenarios::Name(Command::Kind kind)
 	    "build the worship sites",
 	    "press a key on the keyboard",
 	    "show another god's hand",
+	    "show an observer's camera",
 	    "be the god of a player at this computer",
 	    "press Join Online Game of the page",
 	    "end box",

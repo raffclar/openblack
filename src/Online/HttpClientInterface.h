@@ -48,10 +48,19 @@ struct HttpRequest
 	/// time of the stall limit. The client asks for the file as it is, with no compression, so that a small compressed
 	/// answer cannot expand to a very large body.
 	bool large {false};
+	/// A smaller limit of the answer, such as the size of a file that a list gave, so that a larger answer stops at that
+	/// size. 0 keeps the limit of the kind of the request.
+	size_t mostBytes {0};
 };
 
 /// The most bytes of the answer to a transfer of a large file. The lobby keeps maps of at most 1 MiB.
 inline constexpr size_t k_MostLargeAnswerBytes = 64 * 1024 * 1024;
+
+/// The limit of the answer to a request: the smaller limit of the request when it has one, else the limit of its kind
+[[nodiscard]] constexpr size_t MostAnswerBytes(const HttpRequest& request, size_t kindLimit) noexcept
+{
+	return request.mostBytes != 0 && request.mostBytes < kindLimit ? request.mostBytes : kindLimit;
+}
 
 /// Why a request got no answer from the server
 enum class HttpError : uint8_t

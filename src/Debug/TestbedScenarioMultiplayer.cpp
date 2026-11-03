@@ -254,6 +254,33 @@ void testbed_scenarios::AddOtherGodScenarios(std::vector<Scenario>& all)
 	                  .heldSeed = SpellSeedType::Food,
 	                  .radius = 5.0f}},
 	});
+	// Two observers watch the game. Each observer has a camera of its own, and sparkles in orange come out at each camera.
+	all.push_back({
+	    .id = "multiplayer.observer_sparkles",
+	    .name = "The sparkles of two observers",
+	    .facet = Facet::Multiplayer,
+	    .description = "The testbed acts as a network game. After a second, the god of the observers comes in as the god "
+	                   "of the eighth player. Observer 1 reports its hand 5 m above the land to the west and observer 2 "
+	                   "reports its hand 5 m above the land to the east. The camera of each observer is 30 m above its "
+	                   "hand.",
+	    .expected = "High above the land to the west and high above the land to the east, orange sparkles come out one "
+	                "after another and fall down slowly. The two groups of sparkles have the same orange as the seventh "
+	                "player. They do not stop while the scenario runs.",
+	    .environment = {.clockRuns = false, .dispenserGrid = false, .networkGame = true},
+	    .framing = {.shot = Shot::Placed, .eye = {0.0f, 25.0f, -60.0f}, .look = {0.0f, 20.0f, 0.0f}},
+	    .commands = {{.kind = Kind::ObserverCamera,
+	                  .player = static_cast<PlayerNames>(8),
+	                  .delaySeconds = 1.0f,
+	                  .point = {-20.0f, 0.0f},
+	                  .value = 1,
+	                  .radius = 5.0f},
+	                 {.kind = Kind::ObserverCamera,
+	                  .player = static_cast<PlayerNames>(8),
+	                  .delaySeconds = 1.0f,
+	                  .point = {20.0f, 0.0f},
+	                  .value = 2,
+	                  .radius = 5.0f}},
+	});
 	// A computer god whose mind stopped keeps its hands and its last camera, but it shows no sparkles
 	all.push_back({
 	    .id = "multiplayer.stopped_god_sparkles",

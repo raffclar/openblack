@@ -131,6 +131,33 @@ TEST(SentBlocks, OnlyTheBlocksOfTheOwnGodThatThePlayerSentCount)
 	EXPECT_EQ(KeptNumbers(sent), (std::vector<uint16_t> {1}));
 }
 
+TEST(SentBlocks, OnlyTheBlocksOfTheOwnObserverCount)
+{
+	SentBlocks sent;
+	SendTap(sent, 1);
+	SendTap(sent, 2);
+	turn_codec::TurnBundle turn {.turn = 4, .blocks = {}};
+	// The server makes the come of the observer with the number 0, and another observer of the same god sends its block 1
+	turn.blocks.push_back(
+	    {.sender = PlayerNames::PLAYER_SEVEN, .sequence = 0, .actions = {ObserverIn {.name = u"a"}}, .observer = 2});
+	turn.blocks.push_back({.sender = PlayerNames::PLAYER_SEVEN,
+	                       .sequence = 1,
+	                       .actions = {ChatTaunt {.recipients = {}, .taunt = 1}},
+	                       .observer = 3});
+	sent.HeldInOfObserver(turn, 2);
+	EXPECT_EQ(KeptNumbers(sent), (std::vector<uint16_t> {0, 1}));
+	// A god never holds the blocks of an observer
+	sent.HeldIn(turn, PlayerNames::PLAYER_SEVEN);
+	EXPECT_EQ(KeptNumbers(sent), (std::vector<uint16_t> {0, 1}));
+
+	turn.blocks.push_back({.sender = PlayerNames::PLAYER_SEVEN,
+	                       .sequence = 0,
+	                       .actions = {ChatTaunt {.recipients = {}, .taunt = 1}},
+	                       .observer = 2});
+	sent.HeldInOfObserver(turn, 2);
+	EXPECT_EQ(KeptNumbers(sent), (std::vector<uint16_t> {1}));
+}
+
 TEST(SentBlocks, ABlockBeforeTheStartIsNotKeptAndANewSessionCountsFromZero)
 {
 	SentBlocks sent;

@@ -65,6 +65,8 @@ struct FakeWorld
 	std::map<uint32_t, uint32_t> taps;
 	/// The commands that bring the god of the observers into the game and take it out, in the order of the turns
 	std::vector<Command> observersGod;
+	/// The commands of the observers and the commands of their comes and goes, in the order of the turns
+	std::vector<Command> observerCommands;
 
 	uint64_t Play(uint32_t turn, const std::vector<Command>& commands)
 	{
@@ -82,7 +84,12 @@ struct FakeWorld
 			{
 				observersGod.push_back(command);
 			}
+			if (command.observer != 0)
+			{
+				observerCommands.push_back(command);
+			}
 			hash = (hash ^ (static_cast<uint64_t>(command.player) + 1) * 31 + command.action.index()) * 1099511628211ull;
+			hash = (hash ^ command.observer) * 1099511628211ull;
 		}
 		return partsAfter.has_value() && turn >= *partsAfter ? hash ^ 0xFF : hash;
 	}
@@ -150,7 +157,7 @@ struct Computer
 	    , session(*sockets, [&now] { return now; })
 	{
 		session.Join(online::NetworkSessionSettings {
-		    .request = {.url = "wss://127.0.0.1/game/1", .headers = {}, .subprotocols = {}},
+		    .request = {.url = "wss://127.0.0.1/game/1", .headers = {}, .subprotocols = {}, .serverKey = std::nullopt},
 		    .ticket = std::move(ticket),
 		    .gamePassword = {},
 		    .name = std::move(name),
@@ -1428,6 +1435,150 @@ TEST_F(LockstepTest, TheGodOfTheObserversComesWithTheFirstObserverAndGoesWithThe
 	EXPECT_EQ(alice.world.hash, serverWorld.hash);
 }
 
+// Each observer gets its own number. The turns tell every world of each observer that comes in, with its name, and
+// stamp the report of its hand and camera and its lines of the chat with its number.
+TEST_F(LockstepTest, EachObserverHasANumberAndSendsItsReportAndItsChat)
+{
+	MakeHost(1);
+	GiveWorldState();
+	Computer alice(network, now, "god:alice");
+	Frames({&alice}, 30);
+	ASSERT_TRUE(host->Started());
+	Computer carol(network, now, "observer:carol");
+	Computer dave(network, now, "observer:dave");
+	Frames({&alice, &carol, &dave}, 20);
+	EXPECT_EQ(carol.session.OwnObserver(), uint8_t {1});
+	EXPECT_EQ(dave.session.OwnObserver(), uint8_t {2});
+	EXPECT_FALSE(alice.session.OwnObserver().has_value());
+	EXPECT_EQ(host->ObserverNumbers(), (std::vector<uint8_t> {1, 2}));
+	const auto god = static_cast<PlayerNames>(8);
+	ASSERT_EQ(serverWorld.observerCommands.size(), 2u);
+	EXPECT_EQ(serverWorld.observerCommands[0].player, god);
+	EXPECT_EQ(serverWorld.observerCommands[0].observer, 1u);
+	EXPECT_EQ(std::get<ObserverIn>(serverWorld.observerCommands[0].action).name, u"carol");
+	EXPECT_EQ(serverWorld.observerCommands[1].observer, 2u);
+	EXPECT_EQ(std::get<ObserverIn>(serverWorld.observerCommands[1].action).name, u"dave");
+
+	// The hand of an observer does not act on things, so its computer sends only its report and its chat
+	const HandReport report {.collidePoint = {1.0f, 2.0f, 3.0f},
+	                         .handPoint = {4.0f, 5.0f, 6.0f},
+	                         .camera = {7.0f, 8.0f, 9.0f},
+	                         .focus = {10.0f, 11.0f, 12.0f}};
+	dave.session.Send(report);
+	dave.session.Send(HandTap {.object = Entity(1)});
+	dave.session.Send(ChatSpeech {.recipients = {}, .text = u"Hi"});
+	Frames({&alice, &carol, &dave}, 10);
+	ASSERT_EQ(serverWorld.observerCommands.size(), 4u);
+	EXPECT_EQ(serverWorld.observerCommands[2].observer, 2u);
+	EXPECT_EQ(serverWorld.observerCommands[2].player, god);
+	EXPECT_EQ(std::get<HandReport>(serverWorld.observerCommands[2].action), report);
+	EXPECT_EQ(serverWorld.observerCommands[3].observer, 2u);
+	EXPECT_EQ(std::get<ChatSpeech>(serverWorld.observerCommands[3].action).text, u"Hi");
+	EXPECT_TRUE(serverWorld.taps.empty());
+	EXPECT_EQ(alice.world.hash, serverWorld.hash);
+	EXPECT_EQ(carol.world.hash, serverWorld.hash);
+	EXPECT_EQ(dave.world.hash, serverWorld.hash);
+	EXPECT_EQ(dave.session.GetCompares().compared, dave.session.GetCompares().same);
+}
+
+// A changed client of an observer can send any command. The server leaves out each command that an observer does not
+// send, and keeps the rest of the block.
+TEST_F(LockstepTest, TheServerLeavesOutTheCommandsThatAnObserverDoesNotSend)
+{
+	MakeHost(1);
+	GiveWorldState();
+	Computer alice(network, now, "god:alice");
+	Frames({&alice}, 30);
+	Computer carol(network, now, "observer:carol");
+	Frames({&alice, &carol}, 20);
+	const auto refused = host->RefusedBlocks();
+	const auto block = turn_codec::Encode(turn_codec::CommandBlock {
+	    .sequence = 0, .turn = 0, .actions = {HandTap {.object = Entity(1)}, ChatTaunt {.recipients = {}, .taunt = 3}}});
+	ASSERT_TRUE(carol.sockets->SendBinary(carol.sockets->Ids().back(), block));
+	Frames({&alice, &carol}, 10);
+	EXPECT_EQ(host->RefusedBlocks(), refused + 1);
+	EXPECT_TRUE(serverWorld.taps.empty());
+	ASSERT_FALSE(serverWorld.observerCommands.empty());
+	EXPECT_EQ(std::get<ChatTaunt>(serverWorld.observerCommands.back().action).taunt, 3u);
+	EXPECT_EQ(serverWorld.observerCommands.back().observer, 1u);
+}
+
+// The leave of an observer goes in the next turn. Its number is free again after that turn, so no other observer has
+// the number while a world still knows the observer that left.
+TEST_F(LockstepTest, TheLeaveOfAnObserverGoesInTheNextTurnAndThenItsNumberIsFree)
+{
+	MakeHost(1);
+	GiveWorldState();
+	Computer alice(network, now, "god:alice");
+	Frames({&alice}, 30);
+	Computer carol(network, now, "observer:carol");
+	Computer dave(network, now, "observer:dave");
+	Frames({&alice, &carol, &dave}, 20);
+	carol.session.Leave();
+	Frames({&alice, &carol, &dave}, 10);
+	ASSERT_EQ(serverWorld.observerCommands.size(), 3u);
+	EXPECT_TRUE(std::holds_alternative<ObserverOut>(serverWorld.observerCommands[2].action));
+	EXPECT_EQ(serverWorld.observerCommands[2].observer, 1u);
+	EXPECT_EQ(host->ObserverNumbers(), (std::vector<uint8_t> {2}));
+	// The god of the observers stays while an observer is in the game
+	EXPECT_EQ(serverWorld.observersGod.size(), 1u);
+	Computer erin(network, now, "observer:erin");
+	Frames({&alice, &dave, &erin}, 20);
+	EXPECT_EQ(erin.session.OwnObserver(), uint8_t {1});
+	EXPECT_EQ(std::get<ObserverIn>(serverWorld.observerCommands.back().action).name, u"erin");
+	EXPECT_EQ(alice.world.hash, serverWorld.hash);
+	EXPECT_EQ(erin.world.hash, serverWorld.hash);
+}
+
+// An observer that joins before the start comes into every world in the first turn, after the god of the observers
+TEST_F(LockstepTest, AnObserverOfTheRoomComesInAfterItsGodInTheFirstTurn)
+{
+	MakeHost(1);
+	Computer carol(network, now, "observer:carol");
+	Computer alice(network, now, "god:alice");
+	Frames({&carol, &alice}, 30);
+	ASSERT_TRUE(host->Started());
+	EXPECT_EQ(carol.session.OwnObserver(), uint8_t {1});
+	ASSERT_EQ(serverWorld.observersGod.size(), 1u);
+	ASSERT_EQ(serverWorld.observerCommands.size(), 1u);
+	EXPECT_TRUE(std::holds_alternative<ObserverIn>(serverWorld.observerCommands[0].action));
+	EXPECT_EQ(carol.world.observerCommands.size(), 1u);
+	EXPECT_EQ(carol.world.hash, serverWorld.hash);
+}
+
+// A restored server gives each observer its old number back, and keeps the blocks that the sent turns hold
+TEST_F(LockstepTest, ARestoredServerKeepsTheNumbersOfItsObservers)
+{
+	MakeHost(2);
+	GiveWorldState();
+	KeepJournal();
+	Computer alice(network, now, "god:alice");
+	Computer bob(network, now, "god:bob");
+	Computer carol(network, now, "observer:carol");
+	Computer dave(network, now, "observer:dave");
+	Frames({&alice, &bob, &carol, &dave}, 30);
+	ASSERT_TRUE(host->Started());
+	dave.session.Send(ChatTaunt {.recipients = {}, .taunt = 4});
+	Frames({&alice, &bob, &carol, &dave}, 10);
+	const auto room = host->RoomRecord();
+	EXPECT_EQ(room.watcherNumbers, (std::vector<uint8_t> {1, 2}));
+	const auto blocks = host->BlocksInTurns();
+	EXPECT_TRUE(blocks.contains(static_cast<uint8_t>(server::snapshots::k_ObserverBlocksKey + 2)));
+	RestartFrom(room, host->TurnsDone(), serverWorld, {&alice, &bob, &carol, &dave}, 0, blocks);
+	EXPECT_EQ(host->ObserverNumbers(), (std::vector<uint8_t> {1, 2}));
+	Frames({&alice, &bob, &carol, &dave}, 40);
+	EXPECT_EQ(dave.session.Resumes(), 1u);
+	const auto taunts = std::ranges::count_if(
+	    serverWorld.observerCommands, [](const Command& command) { return std::holds_alternative<ChatTaunt>(command.action); });
+	EXPECT_EQ(taunts, 1);
+	dave.session.Send(ChatTaunt {.recipients = {}, .taunt = 5});
+	Frames({&alice, &bob, &carol, &dave}, 10);
+	ASSERT_FALSE(serverWorld.observerCommands.empty());
+	EXPECT_EQ(serverWorld.observerCommands.back().observer, 2u);
+	EXPECT_EQ(std::get<ChatTaunt>(serverWorld.observerCommands.back().action).taunt, 5u);
+	EXPECT_EQ(alice.world.hash, serverWorld.hash);
+}
+
 // An observer that loses its socket can come back, so its god stays in the game until its session ends
 TEST_F(LockstepTest, TheGodOfTheObserversWaitsForAnObserverThatCanComeBack)
 {
@@ -2215,7 +2366,8 @@ TEST_F(LockstepTest, AConnectionThatDoesNotJoinInItsTimeCloses)
 {
 	MakeHost(1);
 	auto client = network.MakeClient();
-	const auto id = client->Connect({.url = "wss://127.0.0.1/game/1", .headers = {}, .subprotocols = {}}, {});
+	const auto id =
+	    client->Connect({.url = "wss://127.0.0.1/game/1", .headers = {}, .subprotocols = {}, .serverKey = std::nullopt}, {});
 	Frames({}, 2);
 	EXPECT_EQ(network.Count(), 1u);
 	Frames({}, 200);

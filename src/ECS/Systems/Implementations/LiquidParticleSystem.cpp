@@ -104,20 +104,20 @@ void LiquidParticleSystem::Add(glm::vec3 position, glm::vec3 velocity, float siz
 	AddTo(_pool, position, velocity, size, argb, kind);
 }
 
-void LiquidParticleSystem::AddForPlayer(PlayerNames player, glm::vec3 position, glm::vec3 velocity, float size, uint32_t argb,
-                                        Kind kind)
+void LiquidParticleSystem::AddForPlayer(liquid_particles::Interface interface, glm::vec3 position, glm::vec3 velocity,
+                                        float size, uint32_t argb, Kind kind)
 {
-	AddTo(_playerPools[player].particles, position, velocity, size, argb, kind);
+	AddTo(_playerPools[interface].particles, position, velocity, size, argb, kind);
 }
 
-void LiquidParticleSystem::SetPlayerPoint(PlayerNames player, glm::vec3 point)
+void LiquidParticleSystem::SetPlayerPoint(liquid_particles::Interface interface, glm::vec3 point)
 {
-	_playerPools[player].point = point;
+	_playerPools[interface].point = point;
 }
 
-std::span<const Particle> LiquidParticleSystem::PlayerParticles(PlayerNames player) const
+std::span<const Particle> LiquidParticleSystem::PlayerParticles(liquid_particles::Interface interface) const
 {
-	const auto found = _playerPools.find(player);
+	const auto found = _playerPools.find(interface);
 	return found != _playerPools.end() ? std::span<const Particle>(found->second.particles) : std::span<const Particle> {};
 }
 

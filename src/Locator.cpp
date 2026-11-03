@@ -113,6 +113,7 @@
 #include "ECS/Systems/Implementations/InspectorSystem.h"
 #include "Inspector/GameSeamInterface.h"
 #endif
+#include "ECS/Components/ObserverInterfaces.h"
 #include "ECS/IncomingMessageRules.h"
 #include "ECS/Systems/GuidanceSystemInterface.h"
 #include "ECS/Systems/HandSystemInterface.h"
@@ -607,6 +608,20 @@ void EmplaceChat(bool developer)
 				{
 					names[*player] = gui::ToUtf16(god.name);
 				}
+			}
+		}
+		// The god of the observers has the name of the last observer that came in, so the lines of each observer have it
+		if (Locator::gameEndSystem::has_value() && Locator::playerSystem::has_value())
+		{
+			const auto god = Locator::gameEndSystem::value().ObserversGod();
+			const auto player = god.has_value() ? Locator::playerSystem::value().FindPlayer(*god) : std::nullopt;
+			const auto* observers =
+			    player.has_value()
+			        ? Locator::entitiesRegistry::value().TryGet<const ecs::components::ObserverInterfaces>(*player)
+			        : nullptr;
+			if (observers != nullptr && !observers->name.empty())
+			{
+				names[*god] = observers->name;
 			}
 		}
 		return names;
