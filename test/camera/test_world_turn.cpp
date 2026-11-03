@@ -132,3 +132,25 @@ TEST(WorldTurn, TheGameAnglesOfTheTurnPointPutTheCameraBackWhereItWas)
 	    world_turn::TurnAbout(k_Origin, k_TurnPoint, k_TurnPoint, distance, k_SightDistance, look.heading, look.pitch, true);
 	EXPECT_LT(glm::distance(view.origin, k_Origin), 1e-3f);
 }
+
+TEST(WorldTurn, TheKeysMoveOverTheLandAlongTheHeading)
+{
+	// With a heading of 0 the camera looks along the depth. A strafe input moves it across, a forwards input along.
+	const float speed = 300.0f;
+	const float scale = speed * 0.001f;
+	const auto across = world_turn::KeyMove(0.0f, 0.5f, speed, 0.0f, 10.0f);
+	EXPECT_NEAR(across.x, -(scale * 10.0f), 1e-6f);
+	EXPECT_EQ(across.y, 0.0f);
+	EXPECT_NEAR(across.z, 0.0f, 1e-6f);
+	// The forwards input moves less when the slope of the pitch is larger, between 0.2 and 2
+	const auto along = world_turn::KeyMove(0.0f, 0.5f, speed, 10.0f, 0.0f);
+	EXPECT_NEAR(along.z, (scale * 10.0f) / std::tan(0.5f), 1e-5f);
+	const auto steep = world_turn::KeyMove(0.0f, 1.3f, speed, 10.0f, 0.0f);
+	EXPECT_NEAR(steep.z, (scale * 10.0f) / 2.0f, 1e-5f);
+	const auto flat = world_turn::KeyMove(0.0f, 0.05f, speed, 10.0f, 0.0f);
+	EXPECT_NEAR(flat.z, (scale * 10.0f) / 0.2f, 1e-4f);
+	// A quarter turn of the heading turns the move with it
+	const auto turned = world_turn::KeyMove(std::numbers::pi_v<float> * 0.5f, 0.5f, speed, 10.0f, 0.0f);
+	EXPECT_NEAR(turned.x, (scale * 10.0f) / std::tan(0.5f), 1e-4f);
+	EXPECT_NEAR(turned.z, 0.0f, 1e-4f);
+}

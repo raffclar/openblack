@@ -163,13 +163,10 @@ void DefaultWorldCameraModel::TiltZoom(glm::vec3& eulerAngles, float scalingFact
 		}
 	}
 
+	// The movement keys move the camera, what it looks at and the turn point over the land
 	{
-		// Compute a keyboard input offset based on the current pitch and yaw.
-		const auto clampedTan = glm::clamp(glm::tan(eulerAngles.y), 0.2f, 2.0f);
-		const auto localMovement = _keyBoardMoveDelta * glm::vec2(1.0f / clampedTan, -1.0f) * scalingFactor * 0.001f;
-		const auto planarMovement = glm::vec2(glm::cos(-eulerAngles.x), glm::sin(-eulerAngles.x));
-		const auto offset = glm::vec3(localMovement.y * planarMovement.x - localMovement.x * planarMovement.y, 0.0,
-		                              glm::dot(localMovement, planarMovement));
+		const auto offset =
+		    world_turn::KeyMove(eulerAngles.x, eulerAngles.y, scalingFactor, _keyBoardMoveDelta.x, _keyBoardMoveDelta.y);
 		_targetOrigin += offset;
 		_targetFocus += offset;
 		_focusAtClick += offset;
@@ -692,9 +689,9 @@ std::optional<CameraModel::CameraInterpolationUpdateInfo> DefaultWorldCameraMode
 
 	ComputeDistanceFromBoundY();
 
-	// Get step size
-	const auto scalingFactor = k_StepScaleMin;
-	const auto zoomDelta = _rotateAroundDelta.z * 0.0015f * GetZoomScale();
+	// The zoom and the movement keys step further when the camera is higher above what it looks at
+	const auto scalingFactor = GetZoomScale();
+	const auto zoomDelta = _rotateAroundDelta.z * 0.0015f * scalingFactor;
 
 	if (_mode == Mode::Polar || _mode == Mode::ArcBall)
 	{

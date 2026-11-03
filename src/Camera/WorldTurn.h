@@ -43,6 +43,10 @@ struct View
 /// The pitch after a tilt: the tilt input times the tilt of one unit, less the pitch, inside the limits
 [[nodiscard]] float Tilted(float pitch, float tiltInput);
 
+/// The move over the land of one step of the movement keys. The speed grows with the height of the camera. The forwards
+/// input moves less when the camera looks down less steeply. The move turns with the heading. The move has no height.
+[[nodiscard]] glm::vec3 KeyMove(float heading, float pitch, float speed, float forwards, float strafe);
+
 /// The vector with a length of one. The squares add in the order x, z, y. A vector of zero length stays the same.
 [[nodiscard]] glm::vec3 Unit(glm::vec3 vector);
 

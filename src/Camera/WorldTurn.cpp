@@ -40,6 +40,30 @@ float world_turn::Tilted(float pitch, float tiltInput)
 	return ClampPitch(pitch - tilt);
 }
 
+glm::vec3 world_turn::KeyMove(float heading, float pitch, float speed, float forwards, float strafe)
+{
+	// The slope is the tangent of the pitch, kept wide, between 0.2 and 2
+	constexpr double k_LeastSlope = 0.2000000029802322387695312;
+	constexpr double k_MostSlope = 2.0;
+	double slope = x87::Tan(pitch);
+	if (!(slope > k_LeastSlope))
+	{
+		slope = k_LeastSlope;
+	}
+	else if (!(slope < k_MostSlope))
+	{
+		slope = k_MostSlope;
+	}
+	constexpr float k_SpeedScale = std::bit_cast<float>(uint32_t {0x3A83126Fu});
+	const float scale = speed * k_SpeedScale;
+	const float across = -(scale * strafe);
+	const float along = x87::Div(scale * forwards, slope);
+	// The move turns by the heading. The cosine is kept as a float, the sine stays wide.
+	const float cosine = x87::RoundToFloat(x87::Cos(-heading));
+	const double sine = x87::Sin(-heading);
+	return {(across * cosine) + x87::Mul(along, -sine), 0.0f, x87::Mul(across, sine) + (along * cosine)};
+}
+
 glm::vec3 world_turn::Unit(glm::vec3 vector)
 {
 	if (x87::EqualOrUnordered(vector.x, 0.0f) && x87::EqualOrUnordered(vector.y, 0.0f) && x87::EqualOrUnordered(vector.z, 0.0f))
