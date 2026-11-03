@@ -85,3 +85,8 @@ bool creature_hand::TurnTakesHold(bool inWorld, bool heldByAHand)
 {
 	return inWorld && !heldByAHand;
 }
+
+bool creature_hand::SendsLockEnd(const LockAfterRelease& lock)
+{
+	return lock.released && !lock.endSent && (!lock.inWorld || lock.still);
+}

@@ -365,6 +365,7 @@ void WriteAction(Writer& out, const Action& action)
 		               }
 	               },
 	               [](const ObserverOut& /*command*/) {},
+	               [&out](const HandLockRelease& command) { out.Entity(command.creature); },
 	               [&out](const MusicMood& command) {
 		               out.Entity(command.creature);
 		               out.Number(command.track);
@@ -842,6 +843,9 @@ DecodeError ReadAction(Reader& in, Action& action)
 	case CommandTag::FishScare:
 		action = FishScare {.point = in.Vector()};
 		return DecodeError::None;
+	case CommandTag::HandLockRelease:
+		action = HandLockRelease {.creature = in.Entity()};
+		return DecodeError::None;
 	case CommandTag::MusicMood:
 	{
 		const auto creature = in.Entity();
@@ -1012,6 +1016,7 @@ CommandTag TagOf(const Action& action) noexcept
 	                      [](const ObserversLeft& /*command*/) { return CommandTag::ObserversLeft; },
 	                      [](const ObserverIn& /*command*/) { return CommandTag::ObserverIn; },
 	                      [](const ObserverOut& /*command*/) { return CommandTag::ObserverOut; },
+	                      [](const HandLockRelease& /*command*/) { return CommandTag::HandLockRelease; },
 	                  },
 	                  action);
 }
@@ -1079,6 +1084,7 @@ size_t SizeOf(const Action& action) noexcept
 	                   [](const ObserversLeft& /*command*/) { return size_t {0}; },
 	                   [](const ObserverIn& command) { return 1 + (2 * command.name.size()); },
 	                   [](const ObserverOut& /*command*/) { return size_t {0}; },
+	                   [](const HandLockRelease& /*command*/) { return k_Entity; },
 	               },
 	               action);
 	return 1 + fields;

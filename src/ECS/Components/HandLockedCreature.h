@@ -20,6 +20,9 @@ namespace openblack::ecs::components
 struct HandLockedCreature
 {
 	entt::entity creature {entt::null};
+	/// The button that holds the creature let go (player_commands::HandLockRelease). The creature does not look at the
+	/// hand. The lock stays until the hand sends its end, when the creature is still.
+	bool released {false};
 };
 
 } // namespace openblack::ecs::components

@@ -116,6 +116,12 @@ public:
 	virtual void DoLock(PlayerNames /*player*/, entt::entity /*creature*/) {}
 	/// At the turn: the lock on the creature ends (player_commands::HandUnlock)
 	virtual void DoUnlock(PlayerNames /*player*/, entt::entity /*creature*/) {}
+	/// At the turn: the button that holds the creature let go (player_commands::HandLockRelease). The creature stops its
+	/// look at the hand. The lock stays until the hand sends its end, when the creature is still.
+	virtual void DoLockRelease(PlayerNames /*player*/, entt::entity /*creature*/) {}
+	/// Whether the hand of this computer's player waits for the end of the lock on a creature: the button let go of it,
+	/// and the world did not end the lock yet
+	[[nodiscard]] virtual bool WaitsForLockEnd() const { return false; }
 	/// At the turn: a hard slap bruised a creature (player_commands::CreatureBruise)
 	virtual void DoBruise(PlayerNames /*player*/, const player_commands::CreatureBruise& /*bruise*/) {}
 	/// The turn of a stroke or a slap that a player sent in a network game: the creature plays its reaction

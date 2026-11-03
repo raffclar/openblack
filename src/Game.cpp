@@ -1040,7 +1040,8 @@ bool Game::ProcessEvents(const SDL_Event& event) noexcept
 	if (handTakesPresses && !inTemple && event.type == SDL_MOUSEBUTTONDOWN && event.button.button == SDL_BUTTON_RIGHT &&
 	    !Locator::debugGui::value().IsMouseOverWindow())
 	{
-		_actionPressTaken = magic.IsHandBusy() && magic.PressAction();
+		// After the button let go of a creature, the Action button does nothing until the world ends the lock on it
+		_actionPressTaken = creatureHand.WaitsForLockEnd() || (magic.IsHandBusy() && magic.PressAction());
 		// While the camera shows a duel of the player's creature and the hand is empty, every Action press goes to the
 		// fight and to nothing else
 		const bool fightTakesPress = fights.DirectsFight();
