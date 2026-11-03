@@ -50,6 +50,18 @@ void SwitchOn(ecs::components::ComputerPlayer& player, bool on);
 /// - A stronger need can stop the action of the hand again.
 void StartAgainAfterLoad(ecs::components::ComputerPlayer& player);
 
+/// The computer player that the next land of the story gets, as the game clears it at the end of a land. The game does
+/// not make the player again:
+/// - The mind is off, the player is not marked as a computer player and the mind starts on the next land again.
+/// - The player that a land script named for the size of the creature goes.
+/// - The tree of needs stays, with the suppression, the weight, the turn stamps and the values of each node, the
+///   miracle requests, the counts of the creature's lessons, the pause and the hold of a script.
+/// - The queue of script actions, the miracles that the god cast and the things that it saw go, and the turn of the
+///   last empty choice goes to 0. The mind waits one turn.
+/// - The hand stops its action. Its place, target and speed stay, and so does the speed of the god.
+/// - No thing of the last land stays: each node and the hand let go of the thing that they kept.
+[[nodiscard]] ecs::components::ComputerPlayer AfterLandCleared(const ecs::components::ComputerPlayer& player);
+
 /// The mind starts at its first turn while it is switched on, one time on each land
 [[nodiscard]] bool DueToStart(const ecs::components::ComputerPlayer& player);
 

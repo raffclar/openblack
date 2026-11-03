@@ -18,7 +18,9 @@
 
 #include "Common/VirtualInfluence.h"
 #include "ECS/Components/Alignment.h"
+#include "ECS/Components/ComputerPlayer.h"
 #include "ECS/Components/Player.h"
+#include "ECS/Components/PlayerRelations.h"
 #include "ECS/StatisticsRules.h"
 #include "ECS/Systems/PlayerSystemInterface.h"
 
@@ -68,6 +70,10 @@ private:
 		/// Their histories of influence and population, which run on over the whole game
 		statistics::History influenceHistory;
 		statistics::History populationHistory;
+		/// Their computer mind as the end of the land cleared it, and what it thinks of each player. The game does not
+		/// make the computer player again on the next land.
+		std::optional<components::ComputerPlayer> computerPlayer;
+		std::optional<components::ComputerAttitudes> computerAttitudes;
 	};
 
 	std::unordered_map<PlayerNames, entt::entity> _players;

@@ -230,8 +230,11 @@ ScriptCommandParameter GetParameter(Token& argument, glm::vec3 origin, const map
 				const auto z = std::strtof(floatEnd + 1, &floatEnd) + origin.z;
 				if (static_cast<size_t>(floatEnd - str.c_str()) == static_cast<size_t>(str.length()))
 				{
+					// The game keeps a script place as a place on the map, and finds the height of the land there only
+					// when it uses the place. A line before the line that loads the landscape has no land under it yet.
 					const auto& island = Locator::terrainSystem::value();
-					ScriptCommandParameter place {x, island.GetHeightAt(glm::vec2(x, z)) + origin.y, z};
+					const float ground = island.IsLoaded() ? island.GetHeightAt(glm::vec2(x, z)) : 0.0f;
+					ScriptCommandParameter place {x, ground + origin.y, z};
 					// The game reads the same text to its exact map position, then moves it by the origin's map position
 					const auto onMap = map_coords::ScriptPlace(std::strtod(str.c_str(), nullptr),
 					                                           std::strtod(str.c_str() + delim + 1, nullptr));
