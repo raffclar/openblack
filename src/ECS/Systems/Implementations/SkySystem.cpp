@@ -16,6 +16,7 @@
 #include "3D/LandLightFrame.h"
 #include "3D/LandLightTable.h"
 #include "3D/SkyFrame.h"
+#include "3D/TempleInteriorInterface.h"
 #include "Common/MachineClock.h"
 #include "ECS/Components/Sky.h"
 #include "ECS/Registry.h"
@@ -31,6 +32,11 @@ using namespace openblack::ecs::components;
 
 void SkySystem::UpdateFrame(bool skyDrawn)
 {
+	// The temple hides the sun while the player is in it, and after that the sun shows again
+	if (Locator::temple::has_value() && Locator::temple::value().Active())
+	{
+		_sunHidden = false;
+	}
 	auto& registry = Locator::entitiesRegistry::value();
 	const auto& skyClock = Locator::skyClockSystem::value();
 	const auto& entities = skyClock.GetEntities();

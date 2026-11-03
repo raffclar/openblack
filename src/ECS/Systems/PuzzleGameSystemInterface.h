@@ -45,6 +45,9 @@ public:
 	/// A script deletes a puzzle game, or the scripts stop: the puzzle game stays, but its pieces go from the world.
 	/// False for a thing that is not a puzzle game.
 	virtual bool DeletePieces(entt::entity puzzle) = 0;
+	/// A script starts a maze puzzle again: its animals go back to their first cells. A puzzle game of another kind does
+	/// not change. False for a thing that is not a puzzle game.
+	virtual bool Restart(entt::entity puzzle) = 0;
 	/// A player tapped the land at a place in this turn. The maze puzzles read the place in their turn, and then the
 	/// place goes.
 	virtual void TapPlace(const map_coords::MapCoords& place) = 0;

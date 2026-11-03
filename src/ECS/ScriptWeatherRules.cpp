@@ -17,6 +17,8 @@
 #include <string>
 #include <type_traits>
 
+#include "Common/GUtilsDistance.h"
+
 using namespace openblack::ecs;
 
 namespace
@@ -252,4 +254,15 @@ bool script_weather::InKillArea(glm::vec3 stormPlace, float stormOuterRadius, gl
 	const float acrossZ = stormPlace.z - centre.z;
 	const float distance = std::sqrt((acrossZ * acrossZ) + (acrossX * acrossX));
 	return distance < radius + stormOuterRadius;
+}
+
+bool script_weather::WindMagicNear(glm::vec3 stormPlace, float stormOuterRadius, int32_t cloudCount, glm::vec3 point,
+                                   float radius)
+{
+	if (cloudCount != 0)
+	{
+		return false;
+	}
+	// The radius of the question comes first in the sum, then the outer radius of the storm
+	return radius + stormOuterRadius > gutils::GetDistance(point, stormPlace);
 }
