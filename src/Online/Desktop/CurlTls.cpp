@@ -57,6 +57,14 @@ void Apply(CURL* easy, const char* extraAuthorities)
 #endif
 }
 
+void PinKey(CURL* easy, const server_key::Pin& pin)
+{
+	curl_easy_setopt(easy, CURLOPT_SSL_VERIFYPEER, 0L);
+	curl_easy_setopt(easy, CURLOPT_SSL_VERIFYHOST, 0L);
+	// libcurl keeps a copy of the text
+	curl_easy_setopt(easy, CURLOPT_PINNEDPUBLICKEY, server_key::CurlPinOf(pin).c_str());
+}
+
 HttpError ErrorOf(CURLcode code) noexcept
 {
 	switch (code)

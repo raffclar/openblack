@@ -325,6 +325,12 @@ WebSocketId CurlWebSocketClient::Connect(WebSocketRequest request, WebSocketHand
 	// The transfer stops after the upgrade, and the client then sends and receives the messages itself
 	curl_easy_setopt(easy, CURLOPT_CONNECT_ONLY, 2L);
 	tls_settings::Apply(easy, _extraAuthorities.has_value() ? _extraAuthorities->c_str() : nullptr);
+	if (request.serverKey.has_value())
+	{
+		// A game server on the local network with a certificate of its own: no authority signs it and it names no host,
+		// so the client accepts only the public key that the answer of the server gave (deviation 113)
+		tls_settings::PinKey(easy, *request.serverKey);
+	}
 	curl_easy_setopt(easy, CURLOPT_CONNECTTIMEOUT_MS, tls_settings::k_ConnectTimeoutMs);
 	curl_easy_setopt(easy, CURLOPT_NOSIGNAL, 1L);
 	curl_easy_setopt(easy, CURLOPT_USERAGENT, "openblack");

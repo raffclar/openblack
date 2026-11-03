@@ -157,7 +157,7 @@ struct Computer
 	    , session(*sockets, [&now] { return now; })
 	{
 		session.Join(online::NetworkSessionSettings {
-		    .request = {.url = "wss://127.0.0.1/game/1", .headers = {}, .subprotocols = {}},
+		    .request = {.url = "wss://127.0.0.1/game/1", .headers = {}, .subprotocols = {}, .serverKey = std::nullopt},
 		    .ticket = std::move(ticket),
 		    .gamePassword = {},
 		    .name = std::move(name),
@@ -2366,7 +2366,8 @@ TEST_F(LockstepTest, AConnectionThatDoesNotJoinInItsTimeCloses)
 {
 	MakeHost(1);
 	auto client = network.MakeClient();
-	const auto id = client->Connect({.url = "wss://127.0.0.1/game/1", .headers = {}, .subprotocols = {}}, {});
+	const auto id =
+	    client->Connect({.url = "wss://127.0.0.1/game/1", .headers = {}, .subprotocols = {}, .serverKey = std::nullopt}, {});
 	Frames({}, 2);
 	EXPECT_EQ(network.Count(), 1u);
 	Frames({}, 200);

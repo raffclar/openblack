@@ -24,8 +24,10 @@ namespace openblack::server::lan_room
 {
 
 /// The answer to a search: the room as the lobby's list shows it, the gods by the names of their players, and the TCP
-/// port of the game socket. The host is the computer name of the game socket, empty for the address of the server.
+/// port of the game socket. The host is the computer name of the game socket, empty for the address of the server. The key
+/// is the pin of the public key of the server's own certificate as hex digits, empty for a certificate of an authority.
 [[nodiscard]] lobby_api::LanAnswer AnswerOf(const lobby_status::Room& room, bool started,
-                                            std::span<const LockstepHost::Seat> seats, uint16_t port, const std::string& host);
+                                            std::span<const LockstepHost::Seat> seats, uint16_t port, const std::string& host,
+                                            const std::string& key);
 
 } // namespace openblack::server::lan_room

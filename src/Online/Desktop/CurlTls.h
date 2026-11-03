@@ -16,6 +16,7 @@
 #include <curl/curl.h>
 
 #include "Online/HttpClientInterface.h"
+#include "Online/ServerKeyPin.h"
 
 /// The TLS rules of the desktop clients. The HTTPS client and the WSS client use the same rules.
 namespace openblack::online::tls_settings
@@ -45,6 +46,11 @@ void StartLibrary();
 /// store of the system. A file of more authorities is for the tests on this computer only, and it does not remove the
 /// checks.
 void Apply(CURL* easy, const char* extraAuthorities = nullptr);
+
+/// Changes the check of the certificate on a transfer that has the rules above: the transfer accepts only a certificate
+/// with the public key of the pin, and it does not check the authority or the host name. It is for the own certificate
+/// of a game server on the local network (deviation 113).
+void PinKey(CURL* easy, const server_key::Pin& pin);
 
 /// The error of the HTTPS client for a result of libcurl
 [[nodiscard]] HttpError ErrorOf(CURLcode code) noexcept;

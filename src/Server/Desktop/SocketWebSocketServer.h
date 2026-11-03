@@ -17,6 +17,7 @@
 #include <optional>
 #include <string>
 
+#include "Online/ServerKeyPin.h"
 #include "Server/ConnectionLimits.h"
 #include "Server/WebSocketServerInterface.h"
 
@@ -33,6 +34,9 @@ struct ListenSettings
 	/// allows only on a loopback address, behind a reverse proxy that does the TLS.
 	std::optional<std::filesystem::path> certificate;
 	std::optional<std::filesystem::path> key;
+	/// With no certificate file: the server makes a key and a certificate of its own for TLS, which no authority signs
+	/// (a room on the local network, deviation 113). A client then checks the pin of its public key.
+	bool ownCertificate {false};
 };
 
 /// The WebSocket server of the desktop: non-blocking TCP sockets, with TLS 1.2 or 1.3 from OpenSSL (AEAD suites only).
@@ -50,6 +54,8 @@ public:
 	[[nodiscard]] std::optional<std::string> Listen(const ListenSettings& settings);
 	/// The port that the server listens on
 	[[nodiscard]] uint16_t Port() const { return _port; }
+	/// The pin of the public key of the certificate that the server made for itself, none for another certificate
+	[[nodiscard]] std::optional<online::server_key::Pin> OwnKeyPin() const { return _ownKeyPin; }
 
 	void SetHandlers(ServerSocketHandlers handlers) override { _handlers = std::move(handlers); }
 	bool SendText(ConnectionId connection, std::string_view text) override;
@@ -69,6 +75,7 @@ private:
 
 	ServerSocketHandlers _handlers;
 	std::unique_ptr<Tls> _tls;
+	std::optional<online::server_key::Pin> _ownKeyPin;
 	intptr_t _listener {-1};
 	uint16_t _port {0};
 	ConnectionId _nextId {1};

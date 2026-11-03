@@ -650,6 +650,7 @@ std::string ToJson(const LanAnswer& answer)
 	    {"port", answer.port},
 	    {"host", answer.host},
 	    {"players", players},
+	    {"key", answer.key},
 	});
 }
 
@@ -808,7 +809,8 @@ std::optional<LanAnswer> ParseLanAnswer(std::string_view text)
 		       ReadString(object, "gamemode", out.gamemode) && ReadBool(object, "password", out.password) &&
 		       ReadInteger(object, "numplayers", out.numplayers) && ReadInteger(object, "maxplayers", out.maxplayers) &&
 		       ReadString(object, "gamever", out.gamever) && ReadInteger(object, "port", out.port) && out.port != 0 &&
-		       ReadString(object, "host", out.host, false) && ReadArray(object, "players", out.players, ReadRoomPlayer);
+		       ReadString(object, "host", out.host, false) && ReadArray(object, "players", out.players, ReadRoomPlayer) &&
+		       ReadString(object, "key", out.key, false);
 	});
 }
 
