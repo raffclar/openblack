@@ -8585,6 +8585,23 @@ uint32_t Renderer::GetDrawsOfLastFrame() const noexcept
 	return bgfx::getStats()->numDraw;
 }
 
+bool Renderer::SetPipelinePrefetch(bool enabled) noexcept
+{
+	MainThreadQueue::CheckDirect(MainThreadApi::Renderer, "Renderer::SetPipelinePrefetch");
+	// Only the WebGPU backend makes its pipelines in the background
+	if (bgfx::getRendererType() != bgfx::RendererType::WebGPU)
+	{
+		return false;
+	}
+	bgfx::setPipelinePrefetch(enabled);
+	return true;
+}
+
+uint32_t Renderer::GetPipelinePrefetchPending() const noexcept
+{
+	return bgfx::getPipelinePrefetchPending();
+}
+
 void Renderer::ReleaseGpuWorkMemory() noexcept
 {
 	// The read of a texture waits until the GPU did all the work before it, and then the backend releases the memory
