@@ -4012,11 +4012,37 @@ void FocusFollow() // 049 FOCUS_FOLLOW
 	SetFocusFollow();
 }
 
+/// The thing a following command is given, and the script's camera, each complained of when missing
+std::pair<entt::entity, ScriptCameraModel*> FollowCommand(entt::entity thing)
+{
+	auto* camera = OrderedScriptCamera();
+	if (camera == nullptr)
+	{
+		ScriptMessage("Script camera has been removed! - Exception happened?");
+	}
+	const bool valid = thing != entt::null && Locator::entitiesRegistry::value().Valid(thing);
+	if (!valid)
+	{
+		ObjectNoLongerValid();
+	}
+	// While a two-thing camera has taken over, the script's own commands don't reach the camera
+	if (valid && camera != nullptr && camera->InDualView())
+	{
+		ScriptMessage("We are in the wrong camera mode!");
+		camera = nullptr;
+	}
+	return {valid ? thing : entt::null, camera};
+}
+
 void PositionFollow() // 050 POSITION_FOLLOW
 {
-	// const auto target = Pop().uintVal;
-	// TODO(Daniels118): implement this
-	NotImplemented();
+	const auto [thing, camera] = FollowCommand(PopObject());
+	if (thing != entt::null && camera != nullptr)
+	{
+		// As SET_POSITION_FOLLOW, but the script's camera moves behind the thing as it follows, and does not go there at
+		// once
+		camera->Follow({.id = static_cast<uint32_t>(thing), .lookup = FollowedThing(thing)}, false);
+	}
 }
 
 void CallNear() // 051 CALL_NEAR
@@ -4912,11 +4938,16 @@ void CreatureSetPlayer() // 083 CREATURE_SET_PLAYER
 	MakePlayersCreature(object);
 }
 
+/// The scripts' countdown timer
+script::timers::CountdownTimer& ScriptCountdown()
+{
+	return Locator::scriptControlSystem::value().GetCountdownTimer();
+}
+
 void StartCountdownTimer() // 084 START_COUNTDOWN_TIMER
 {
-	// const auto timeout = Popf();
-	// TODO(Daniels118): implement this
-	NotImplemented();
+	// The timer starts again for the seconds and shows. The game says nothing about a time of zero or less.
+	ScriptCountdown().Start(Popf());
 }
 
 void CreatureInitialiseNumTimesPerformedAction() // 085 CREATURE_INITIALISE_NUM_TIMES_PERFORMED_ACTION
@@ -4938,8 +4969,7 @@ void CreatureGetNumTimesActionPerformed() // 086 CREATURE_GET_NUM_TIMES_ACTION_P
 
 void RemoveCountdownTimer() // 087 REMOVE_COUNTDOWN_TIMER
 {
-	// TODO(Daniels118): implement this
-	NotImplemented();
+	ScriptCountdown().Remove();
 }
 
 void GetObjectDropped() // 088 GET_OBJECT_DROPPED
@@ -5022,9 +5052,8 @@ void RemoveReaction() // 091 REMOVE_REACTION
 
 void GetCountdownTimer() // 092 GET_COUNTDOWN_TIMER
 {
-	// TODO(Daniels118): implement this
-	NotImplemented();
-	Pushf(0.0f);
+	// The whole seconds left, also after the timer stops or when it never started
+	Pushf(ScriptCountdown().GetSecondsLeft());
 }
 
 /// One of a two-thing camera's things, as the camera sees it while the thing is there: where the game holds it, its
@@ -5157,9 +5186,8 @@ void CreatureDesireIs() // 098 CREATURE_DESIRE_IS
 
 void CountdownTimerExists() // 099 COUNTDOWN_TIMER_EXISTS
 {
-	// TODO(Daniels118): implement this
-	NotImplemented();
-	Pushb(false);
+	// The timer runs: it started and did not get to zero, and no script removed it
+	Pushb(ScriptCountdown().IsRunning());
 }
 
 void LookGameThing() // 100 LOOK_GAME_THING
@@ -5206,8 +5234,8 @@ void CreatureForceFinish() // 102 CREATURE_FORCE_FINISH
 
 void HideCountdownTimer() // 103 HIDE_COUNTDOWN_TIMER
 {
-	// TODO(Daniels118): implement this
-	NotImplemented();
+	// Only the flag changes: the game does not draw the timer
+	ScriptCountdown().Hide();
 }
 
 void GetActionTextForObject() // 104 GET_ACTION_TEXT_FOR_OBJECT
@@ -5219,10 +5247,15 @@ void GetActionTextForObject() // 104 GET_ACTION_TEXT_FOR_OBJECT
 
 void CreateDualCameraWithPoint() // 105 CREATE_DUAL_CAMERA_WITH_POINT
 {
-	// const auto position = PopVec();
-	// const auto obj = Pop().uintVal;
-	// TODO(Daniels118): implement this
-	NotImplemented();
+	const auto point = PopVec();
+	const auto thing = PopObject();
+	// The game does not check the thing. A camera on a thing that is not there lets go at the next turn.
+	if (auto* camera = OrderedScriptCamera(); camera != nullptr)
+	{
+		// The camera keeps the thing and the point in view, from the side of the line between them, until the script lets
+		// it go
+		camera->StartDualViewWithPoint(DualSubjectOf(thing), point);
+	}
 }
 
 /// The way a thing faces, as a camera sent to face it reads it: a walker by its game angle, a creature by its body's
@@ -5848,8 +5881,8 @@ void GetObjectState() // 143 GET_OBJECT_STATE
 
 void RevealCountdownTimer() // 144 REVEAL_COUNTDOWN_TIMER
 {
-	// TODO(Daniels118): implement this
-	NotImplemented();
+	// Only the flag changes: the game does not draw the timer
+	ScriptCountdown().Reveal();
 }
 
 /// The game's turn now, by which the scripts' timers count
@@ -6385,10 +6418,14 @@ void WalkPath() // 177 WALK_PATH
 
 void FocusAndPositionFollow() // 178 FOCUS_AND_POSITION_FOLLOW
 {
-	// const auto unk1 = Pop().intVal;
-	// const auto unk0 = Pop().intVal;
-	// TODO(Daniels118): implement this
-	NotImplemented();
+	const auto distance = Popf();
+	const auto [thing, camera] = FollowCommand(PopObject());
+	if (thing != entt::null && camera != nullptr)
+	{
+		// As SET_FOCUS_AND_POSITION_FOLLOW, but the script's camera moves to the distance as it follows, and does not go
+		// there at once
+		camera->FollowAndLookAt({.id = static_cast<uint32_t>(thing), .lookup = FollowedThing(thing)}, distance, false);
+	}
 }
 
 void GetWalkPathPercentage() // 179 GET_WALK_PATH_PERCENTAGE
@@ -6440,10 +6477,13 @@ void CameraProperties() // 180 CAMERA_PROPERTIES
 
 void EnableDisableMusic() // 181 ENABLE_DISABLE_MUSIC
 {
-	// const auto unk1 = Pop().intVal;
-	// const auto unk0 = Pop().intVal;
-	// TODO(Daniels118): implement this
-	NotImplemented();
+	const auto object = PopMusicObject("ENABLE_DISABLE_MUSIC");
+	const auto enable = Pop().intVal != 0;
+	// Music that is off does not play, but near the camera it keeps the music of the land from a start
+	if (auto* gameMusic = ScriptGameMusic(); object && gameMusic != nullptr)
+	{
+		gameMusic->SetAttachedMusicActive(*object, enable);
+	}
 }
 
 void GetMusicObjDistance() // 182 GET_MUSIC_OBJ_DISTANCE
@@ -6464,12 +6504,14 @@ void GetMusicEnumDistance() // 183 GET_MUSIC_ENUM_DISTANCE
 
 void SetMusicPlayPosition() // 184 SET_MUSIC_PLAY_POSITION
 {
-	// const auto unk3 = Pop().intVal;
-	// const auto unk2 = Pop().intVal;
-	// const auto unk1 = Pop().intVal;
-	// const auto unk0 = Pop().intVal;
-	// TODO(Daniels118): implement this
-	NotImplemented();
+	const auto position = PopVec();
+	const auto object = PopMusicObject("SET_MUSIC_PLAY_POSITION");
+	// The music of the object sounds from the place. The game keeps the place as a map position with its height above
+	// the ground there.
+	if (auto* gameMusic = ScriptGameMusic(); object && gameMusic != nullptr && Locator::terrainSystem::has_value())
+	{
+		gameMusic->SetAttachedMusicPlace(*object, map_coords::FromWorld(Locator::terrainSystem::value(), position));
+	}
 }
 
 void AttachObjectLeashToObject() // 185 ATTACH_OBJECT_LEASH_TO_OBJECT
@@ -8349,28 +8391,6 @@ void GetObjectLeashType() // 275 GET_OBJECT_LEASH_TYPE
 	Pushi(script::creature_rules::LeashTypeForScripts(posts));
 }
 
-/// The thing a following command is given, and the script's camera, each complained of when missing
-std::pair<entt::entity, ScriptCameraModel*> FollowCommand(entt::entity thing)
-{
-	auto* camera = OrderedScriptCamera();
-	if (camera == nullptr)
-	{
-		ScriptMessage("Script camera has been removed! - Exception happened?");
-	}
-	const bool valid = thing != entt::null && Locator::entitiesRegistry::value().Valid(thing);
-	if (!valid)
-	{
-		ObjectNoLongerValid();
-	}
-	// While a two-thing camera has taken over, the script's own commands don't reach the camera
-	if (valid && camera != nullptr && camera->InDualView())
-	{
-		ScriptMessage("We are in the wrong camera mode!");
-		camera = nullptr;
-	}
-	return {valid ? thing : entt::null, camera};
-}
-
 void SetFocusFollow() // 276 SET_FOCUS_FOLLOW
 {
 	const auto [thing, camera] = FollowCommand(PopObject());
@@ -8387,7 +8407,7 @@ void SetPositionFollow() // 277 SET_POSITION_FOLLOW
 	if (thing != entt::null && camera != nullptr)
 	{
 		// The script's camera is put behind the thing, as far as eight times its height, and follows it
-		camera->Follow({.id = static_cast<uint32_t>(thing), .lookup = FollowedThing(thing)});
+		camera->Follow({.id = static_cast<uint32_t>(thing), .lookup = FollowedThing(thing)}, true);
 	}
 }
 
@@ -8398,7 +8418,7 @@ void SetFocusAndPositionFollow() // 278 SET_FOCUS_AND_POSITION_FOLLOW
 	if (thing != entt::null && camera != nullptr)
 	{
 		// The script's camera is put at a distance from the thing, follows it and looks at it
-		camera->FollowAndLookAt({.id = static_cast<uint32_t>(thing), .lookup = FollowedThing(thing)}, distance);
+		camera->FollowAndLookAt({.id = static_cast<uint32_t>(thing), .lookup = FollowedThing(thing)}, distance, true);
 	}
 }
 
@@ -8913,20 +8933,14 @@ void SetComputerPlayerPosition() // 313 SET_COMPUTER_PLAYER_POSITION
 
 void GetStoredCameraPosition() // 314 GET_STORED_CAMERA_POSITION
 {
-	// TODO(Daniels118): implement this
-	NotImplemented();
-	Pushv(0.0f); // x
-	Pushv(0.0f); // y
-	Pushv(0.0f); // z
+	// The camera position that STORE_CAMERA_DETAILS kept last. Before the first store, it is at zero.
+	PushVec(Locator::scriptControlSystem::value().GetCameraDetails().origin);
 }
 
 void GetStoredCameraFocus() // 315 GET_STORED_CAMERA_FOCUS
 {
-	// TODO(Daniels118): implement this
-	NotImplemented();
-	Pushv(0.0f); // x
-	Pushv(0.0f); // y
-	Pushv(0.0f); // z
+	// The camera focus that STORE_CAMERA_DETAILS kept last. Before the first store, it is at zero.
+	PushVec(Locator::scriptControlSystem::value().GetCameraDetails().focus);
 }
 
 void CallNearInState() // 316 CALL_NEAR_IN_STATE

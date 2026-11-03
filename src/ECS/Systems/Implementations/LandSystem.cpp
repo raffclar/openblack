@@ -919,16 +919,17 @@ void LandSystem::PrepareNewLand(land_change::Kind change)
 	Locator::introSystem::value().ReleaseAll();
 	// Nor the explorers' boat
 	Locator::boatLaunchSystem::value().Stop();
-	// Nor does any script keep the camera, the game's speed or the dialogue
+	// Nor does any script keep the camera, the game's speed, the countdown timer or the dialogue. A computer with no
+	// camera also resets the rest, so that every computer has the same world.
+	auto& scriptControl = Locator::scriptControlSystem::value();
 	if (Locator::camera::has_value())
 	{
-		auto& scriptControl = Locator::scriptControlSystem::value();
 		if (const auto owner = scriptControl.GetCameraOwner(); owner != 0)
 		{
 			scriptControl.EndCameraControl(Locator::camera::value(), owner);
 		}
-		scriptControl.Reset();
 	}
+	scriptControl.Reset();
 	Locator::dialogueControlSystem::value().Reset();
 	// The camera's bookmarks a script put away come back (a land's first load makes them anew)
 	if (Locator::cameraBookmarkSystem::has_value())
