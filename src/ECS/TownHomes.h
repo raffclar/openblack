@@ -17,6 +17,7 @@
 #include <vector>
 
 #include <entt/entity/entity.hpp>
+#include <glm/vec2.hpp>
 
 /// Where a town's people live, as the game has it: a villager joining a town moves into the building that suits it best,
 /// or is one of the town's homeless; a building's people are made homeless when it goes. A building's people and a town's
@@ -143,6 +144,26 @@ struct Occupancy
 /// A villager joins a town: one without a home there moves into the building that suits it best, or is one of the
 /// homeless. False for a town nobody can live in.
 bool AddVillagerToTown(Registry& registry, const Homes& homes, entt::entity town, entt::entity villager);
+
+/// The home of a villager that a land script makes with the place of its home
+struct ScriptHome
+{
+	/// The building that the villager moves into, none when the building is full or there is no building
+	entt::entity abode {entt::null};
+	/// The town of the building, none when no building has its door in the cell of the place
+	entt::entity town {entt::null};
+};
+
+/// Finds the home of a villager that a land script makes with the place of its home. The first building with its door in
+/// the cell of the place gives the town. The towns go in the given order, and the buildings of each town go newest first.
+/// The building is the home when the count of its people is not equal to its count of places for adults.
+[[nodiscard]] ScriptHome FindScriptHome(const Registry& registry, const Homes& homes, std::span<const entt::entity> towns,
+                                        glm::ivec2 cell, const std::function<glm::ivec2(entt::entity abode)>& doorCell);
+
+/// Puts a new villager in its script home and gives the town that it joins. The villager moves into the building. When
+/// the building is full, the villager moves into the best building of the town, or it is homeless in the town. With no
+/// town, the villager has no town and no home.
+entt::entity SettleScriptVillager(Registry& registry, const Homes& homes, const ScriptHome& home, entt::entity villager);
 
 /// A villager moves into a building, leaving the homeless or its old home, and joins the building's town
 void AddVillagerToAbode(Registry& registry, const Homes& homes, entt::entity abode, entt::entity villager);

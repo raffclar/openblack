@@ -35,6 +35,16 @@
 //                            {"do": "shot", "name": "grip"}    {"do": "eval", "expression": "..."}
 //                            {"do": "synth-move", "dx", "dy", "count", "ms", "buttons"}
 //                            {"do": "synth-button", "type": "mousedown" | "mouseup", "button": 0 | 1 | 2}
+//                            {"do": "synth-click", "button": 0 | 1 | 2, "hold": 80}   (a press and release under the
+//                            lock, timed by the page)
+//                            {"do": "pointer-to", "x", "y", "count": 10, "ms": 200, "buttons": 0}
+//                            {"do": "pointer-to-colour", "low": [r, g, b], "high": [r, g, b], "box": [l, t, r, b],
+//                            "minCount": 50}   (as pointer-to, to the middle of the pixels of a colour range in a
+//                            screenshot; nothing moves when fewer pixels than minCount match)
+//                            The pointer-to step moves the game's own pointer onto a place of the page (CSS pixels)
+//                            with page movements, while the page has the lock. The script follows the pointer from the
+//                            mouse press that took the lock, with the pointer speed of the game; a pointer that the
+//                            game moves itself (a hand demonstration) is not followed.
 //                            {"do": "wait-log", "text": "...", "seconds": 60}
 //                            {"do": "resize", "width": 1920, "height": 1080, "dpr": 2}   (the new size of the window;
 //                            the device pixel ratio stays the same when the step has no "dpr")
@@ -51,13 +61,17 @@
 //                            can be behind the page by seconds on a busy computer. Like wait-log, each moves the next
 //                            steps later by the wait.
 //   --run-all-steps          do not end the run before the last step is done
+//                            player-run.json beside this script is the run of a new player on a 1280x1024 window,
+//                            with no developer parameters and a new Chrome profile: the name box, the first question
+//                            (skip all of the creature tutorial), the ape chosen with two Action clicks, a leash tap
+//                            and a leash order. The last step prints the loudness of the sound each second.
 //                            The synth steps send page events to the game canvas. Use them while the pointer is
 //                            locked: headless Chrome gives no movement for its own mouse events then.
 import { spawn } from 'node:child_process';
 import { createHash } from 'node:crypto';
 import { appendFileSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
-import { decodePng, findPointer } from './png.mjs';
+import { decodePng, findColour, findPointer } from './png.mjs';
 
 const [chromePath, url, secondsText, out, ...rest] = process.argv.slice(2);
 const option = (name, fallback) => {
@@ -231,6 +245,30 @@ const mouseEvent = (type, x, y, button = 'none', buttons = 0) => {
   return send('Input.dispatchMouseEvent', { type, x, y, button, buttons, clickCount: type === 'mouseMoved' ? 0 : 1 });
 };
 const k_Buttons = { none: 0, left: 1, right: 2, middle: 4 };
+// The game's own pointer while the page has the lock, in the pixels of the back buffer. The game puts it at the click
+// that took the lock, and moves it by each page movement times the device pixel ratio times its pointer speed (see
+// src/Input/PointerSpeed.h: half of the height of the 4:3 middle of the screen over 600). It stays on the canvas.
+let gamePointer = null;
+const canvasBox = () => evaluate(`(() => { const r = document.getElementById('canvas').getBoundingClientRect();
+  return { left: r.left, top: r.top, width: r.width, height: r.height }; })()`);
+const pointerScale = (box) => 0.5 * Math.min(box.height * pixelRatio, box.width * pixelRatio * 0.75) / 600;
+const moveGamePointer = (dx, dy, scale, box) => {
+  const clamp = (v, high) => Math.min(Math.max(v, 0.5), Math.max(high - 0.5, 0.5));
+  gamePointer = { x: clamp(gamePointer.x + dx * pixelRatio * scale, box.width * pixelRatio),
+    y: clamp(gamePointer.y + dy * pixelRatio * scale, box.height * pixelRatio) };
+};
+// A press while the page has no lock takes the lock, and the game pointer starts at its place
+const followLockClick = async (x, y) => {
+  if (await evaluate("document.pointerLockElement === document.getElementById('canvas')")) {
+    return;
+  }
+  const box = await canvasBox();
+  if (!box || x < box.left || y < box.top || x >= box.left + box.width || y >= box.top + box.height) {
+    return;
+  }
+  gamePointer = { x: Math.floor(Math.max(0, Math.round(x - box.left)) * pixelRatio) + 0.5,
+    y: Math.floor(Math.max(0, Math.round(y - box.top)) * pixelRatio) + 0.5 };
+};
 // A screenshot of a page that Chrome has not drawn for a long time can take very long. The waiting steps ask again.
 const screenshotWithin = (ms) => Promise.race([send('Page.captureScreenshot', { format: 'png' }), sleep(ms).then(() => undefined)]);
 const shot = async (name) => {
@@ -251,8 +289,49 @@ const runStep = async (step) => {
   record(`[step] ${JSON.stringify(step)}`);
   switch (step.do) {
   case 'mouse':
+    if (step.type === 'mousePressed') {
+      await followLockClick(step.x, step.y);
+    }
     await mouseEvent(step.type, step.x, step.y, step.button ?? 'none', k_Buttons[step.button ?? 'none']);
     break;
+  case 'pointer-to-colour': {
+    // Finds the pixels of a colour range in a screenshot (in a box of CSS pixels), then moves the pointer to their middle
+    const picture = await screenshotWithin(20000);
+    const box = (step.box ?? [0, 0, width, height]).map((v) => Math.round(v * pixelRatio));
+    const seen = picture?.data ? findColour(decodePng(Buffer.from(picture.data, 'base64')), step.low, step.high, box)
+      : { x: -1, y: -1, count: 0 };
+    record(`[pointer-to-colour] ${seen.count} pixels, middle at ${seen.x}, ${seen.y}`);
+    if (seen.count < (step.minCount ?? 50)) {
+      break;
+    }
+    step = { ...step, x: seen.x / pixelRatio, y: seen.y / pixelRatio };
+  }
+  // falls through
+  case 'pointer-to': {
+    // Moves the game's own pointer onto a place of the page with page movements, as a mouse does under the lock
+    if (!gamePointer) {
+      record('[pointer-to] the game has no pointer of its own yet: click the game first');
+      break;
+    }
+    const box = await canvasBox();
+    const scale = pointerScale(box);
+    const target = { x: (step.x - box.left) * pixelRatio, y: (step.y - box.top) * pixelRatio };
+    const count = step.count ?? 10;
+    let sent = { x: 0, y: 0 };
+    const total = { x: Math.round((target.x - gamePointer.x) / (scale * pixelRatio)),
+      y: Math.round((target.y - gamePointer.y) / (scale * pixelRatio)) };
+    for (let i = 1; i <= count; ++i) {
+      const dx = Math.round(total.x * i / count) - sent.x;
+      const dy = Math.round(total.y * i / count) - sent.y;
+      sent = { x: sent.x + dx, y: sent.y + dy };
+      await evaluate(`document.getElementById('canvas').dispatchEvent(new MouseEvent('mousemove', { bubbles: true,
+        movementX: ${dx}, movementY: ${dy}, buttons: ${step.buttons ?? 0} }))`);
+      moveGamePointer(dx, dy, scale, box);
+      await sleep((step.ms ?? 200) / count);
+    }
+    record(`[pointer-to] the game pointer is at ${Math.floor(gamePointer.x)}, ${Math.floor(gamePointer.y)} pixels of the canvas (wanted ${Math.floor(target.x)}, ${Math.floor(target.y)})`);
+    break;
+  }
   case 'drag': {
     const button = step.button ?? 'left';
     const count = step.steps ?? 20;
@@ -286,6 +365,10 @@ const runStep = async (step) => {
     for (let i = 0; i < (step.count ?? 1); ++i) {
       await evaluate(`document.getElementById('canvas').dispatchEvent(new MouseEvent('mousemove', { bubbles: true,
         movementX: ${step.dx ?? 0}, movementY: ${step.dy ?? 0}, buttons: ${step.buttons ?? 0} }))`);
+      if (gamePointer) {
+        const box = await canvasBox();
+        moveGamePointer(step.dx ?? 0, step.dy ?? 0, pointerScale(box), box);
+      }
       await sleep((step.ms ?? 0) / (step.count ?? 1));
     }
     break;
@@ -293,6 +376,18 @@ const runStep = async (step) => {
     const target = step.type === 'mouseup' ? 'document' : "document.getElementById('canvas')";
     await evaluate(`${target}.dispatchEvent(new MouseEvent('${step.type}', { bubbles: true, button: ${step.button ?? 0},
       buttons: ${step.type === 'mouseup' ? 0 : [1, 4, 2][step.button ?? 0]} }))`);
+    break;
+  }
+  case 'synth-click': {
+    // The press and the release in the page itself, so the time between them is the hold and not the time of two calls
+    // of this script (the game takes a press of at most 225 ms as a tap)
+    const button = step.button ?? 0;
+    await evaluate(`new Promise((resolve) => {
+      document.getElementById('canvas').dispatchEvent(new MouseEvent('mousedown', { bubbles: true, button: ${button},
+        buttons: ${[1, 4, 2][button]} }));
+      setTimeout(() => { document.dispatchEvent(new MouseEvent('mouseup', { bubbles: true, button: ${button}, buttons: 0 }));
+        resolve(); }, ${step.hold ?? 80});
+    })`);
     break;
   }
   case 'resize':

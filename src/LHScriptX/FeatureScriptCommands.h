@@ -48,6 +48,9 @@ public:
 	static void CreateTownVillager(int32_t townId, glm::vec3 position, const std::string& villagerType, int32_t age);
 	static void CreateSpecialTownVillager(int32_t, glm::vec3, int32_t, int32_t);
 	static void CreateVillagerPos(glm::vec3, glm::vec3, const std::string&, int32_t);
+	/// A villager that a land script makes with the exact map position of its home
+	static void CreateVillagerAtHome(const map_coords::MapCoords& homePlace, glm::vec3 position,
+	                                 const std::string& tribeAndNumber, int32_t age);
 	static void CreateCitadel(glm::vec3 position, int32_t, const std::string&, int32_t, int32_t);
 	static void CreatePlannedCitadel(int32_t, glm::vec3 position, int32_t, const std::string&, int32_t, int32_t);
 	static void CreateCreaturePen(glm::vec3 position, int32_t, int32_t, int32_t, int32_t, int32_t);
