@@ -56,6 +56,9 @@ public:
 	void Ping() override;
 	void AskOnline(std::span<const gathering_box::UserId> friends) override;
 	void SendLine(gathering_box::UserId user, std::u16string_view text) override;
+	/// The lobby takes no line and no announcement of the staff code (deviation 225)
+	void SendStaffLine(std::u16string_view name, std::u16string_view text) override;
+	void SendAnnouncement(gathering_box::UserId user, std::u16string_view name) override;
 	void SendHostReport(std::span<const uint8_t> report) override;
 	[[nodiscard]] std::vector<Message> TakeMessages() override;
 

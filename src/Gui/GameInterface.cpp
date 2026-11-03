@@ -1491,6 +1491,11 @@ void GameInterface::UpdateChat(bool dialogOpen, glm::u16vec2 resolution)
 			}
 			else if (sent.line.has_value())
 			{
+				// A line with the staff code goes also to the ping server, before it goes to the players
+				if (gathering != nullptr)
+				{
+					gathering->SendStaffCode(*sent.line);
+				}
 				chat.SendLine(*sent.line, recipients);
 				if (gathering != nullptr)
 				{
@@ -2447,8 +2452,13 @@ void GameInterface::DrawChatBubbles(glm::u16vec2 resolution, glm::ivec2 mouse)
 	const auto screen = glm::vec2(resolution);
 	const auto pixelScale = ReferenceScale(resolution.x, resolution.y);
 	const auto viewProjection = Locator::camera::value().GetViewProjectionMatrix();
-	// The colour of a god in the world: none for a number that has no colour
-	const auto colourOf = [](PlayerNames god) -> std::optional<uint32_t> {
+	// The colour of a god in the world: none for a number that has no colour, and none with no god
+	const auto colourOf = [](std::optional<PlayerNames> sender) -> std::optional<uint32_t> {
+		if (!sender.has_value())
+		{
+			return std::nullopt;
+		}
+		const auto god = *sender;
 		if (const auto later = player_colour::LaterGodColour(god); later.has_value())
 		{
 			return later;

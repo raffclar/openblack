@@ -46,6 +46,8 @@ struct ServerLog
 	std::vector<std::vector<UserId>> asked;
 	std::vector<std::pair<UserId, std::u16string>> lines;
 	std::vector<std::vector<uint8_t>> reports;
+	std::vector<std::pair<std::u16string, std::u16string>> staffLines;
+	std::vector<std::pair<UserId, std::u16string>> announcements;
 	std::vector<online::PingServerInterface::Message> messages;
 };
 
@@ -60,6 +62,14 @@ public:
 	void Ping() override { ++_log.pings; }
 	void AskOnline(std::span<const UserId> friends) override { _log.asked.emplace_back(friends.begin(), friends.end()); }
 	void SendLine(UserId user, std::u16string_view text) override { _log.lines.emplace_back(user, std::u16string(text)); }
+	void SendStaffLine(std::u16string_view name, std::u16string_view text) override
+	{
+		_log.staffLines.emplace_back(std::u16string(name), std::u16string(text));
+	}
+	void SendAnnouncement(UserId user, std::u16string_view name) override
+	{
+		_log.announcements.emplace_back(user, std::u16string(name));
+	}
 	void SendHostReport(std::span<const uint8_t> report) override { _log.reports.emplace_back(report.begin(), report.end()); }
 	[[nodiscard]] std::vector<Message> TakeMessages() override { return std::exchange(_log.messages, {}); }
 
@@ -87,6 +97,7 @@ struct Fixture
 	{
 		ecs::systems::GatheringBoxSystem::Services services;
 		services.ownUser = []() { return std::optional<UserId>(k_Own); };
+		services.ownName = []() { return std::u16string(u"Me"); };
 		services.showLine = [this](std::u16string_view name, std::u16string_view text) {
 			shown.push_back(chat::NamedLine(name, text));
 		};
@@ -441,4 +452,107 @@ TEST(GatheringBoxSystem, WithNoPingServerTheSystemNeverTouchesTheFriendButton)
 	    {.people = [&fixture]() { return &fixture.people; }, .setFriendsOn = [&calls](bool on) { calls.push_back(on); }});
 	fixture.system->Update(1000);
 	EXPECT_TRUE(calls.empty());
+}
+
+TEST(GatheringBoxRules, OnlyTheSettingFiveMakesTheQuestionsPlainLines)
+{
+	EXPECT_FALSE(question::IsPlainChat(std::nullopt));
+	EXPECT_FALSE(question::IsPlainChat(0));
+	EXPECT_FALSE(question::IsPlainChat(4));
+	EXPECT_TRUE(question::IsPlainChat(5));
+	EXPECT_FALSE(question::IsPlainChat(6));
+}
+
+TEST(GatheringBoxRules, StaffCodeNeedsTheWholeCodeAtTheStart)
+{
+	EXPECT_FALSE(staff_code::Parse(u"").has_value());
+	EXPECT_FALSE(staff_code::Parse(u"!SGR hello").has_value());
+	EXPECT_FALSE(staff_code::Parse(u" !SGRBhello").has_value());
+	EXPECT_FALSE(staff_code::Parse(u"!sgrbhello").has_value());
+	EXPECT_EQ(staff_code::Parse(u"!SGRB"), (staff_code::Send {}));
+	EXPECT_EQ(staff_code::Parse(u"!SGRBHello all"), (staff_code::Send {.text = u"Hello all"}));
+}
+
+TEST(GatheringBoxRules, StaffCodeReadsTheAnnounceMarkAndTheName)
+{
+	EXPECT_EQ(staff_code::Parse(u"!SGRBOHello"), (staff_code::Send {.announce = true, .text = u"Hello"}));
+	EXPECT_EQ(staff_code::Parse(u"!SGRBNBoss#Hello"), (staff_code::Send {.name = u"Boss", .text = u"Hello"}));
+	EXPECT_EQ(staff_code::Parse(u"!SGRBONBoss#Hello"),
+	          (staff_code::Send {.announce = true, .name = u"Boss", .text = u"Hello"}));
+	// The name mark before the announce mark makes the 'O' a part of the name
+	EXPECT_EQ(staff_code::Parse(u"!SGRBNO#Hello"), (staff_code::Send {.name = u"O", .text = u"Hello"}));
+	// An empty name
+	EXPECT_EQ(staff_code::Parse(u"!SGRBN#Hello"), (staff_code::Send {.name = u"", .text = u"Hello"}));
+}
+
+TEST(GatheringBoxRules, StaffCodeNameKeeps19CharactersAndSkipsTheNextCharacter)
+{
+	// 19 characters and the end mark
+	EXPECT_EQ(staff_code::Parse(u"!SGRBNabcdefghijklmnopqrs#Hello"),
+	          (staff_code::Send {.name = u"abcdefghijklmnopqrs", .text = u"Hello"}));
+	// 20 characters: the name keeps 19, the 20th is skipped, and the end mark is the first character of the words
+	EXPECT_EQ(staff_code::Parse(u"!SGRBNabcdefghijklmnopqrst#Hello"),
+	          (staff_code::Send {.name = u"abcdefghijklmnopqrs", .text = u"#Hello"}));
+	// A name with no end mark goes to the end of the line and gives no words
+	EXPECT_EQ(staff_code::Parse(u"!SGRBNBoss"), (staff_code::Send {.name = u"Boss"}));
+	EXPECT_EQ(staff_code::Parse(u"!SGRBN"), (staff_code::Send {.name = u""}));
+}
+
+TEST(GatheringBoxRules, AnnouncementLinesCloseAtSpacesAnd14Characters)
+{
+	using Lines = std::vector<std::u16string>;
+	EXPECT_EQ(staff_code::AnnouncementLines(u""), (Lines {u""}));
+	EXPECT_EQ(staff_code::AnnouncementLines(u"hi"), (Lines {u"hi"}));
+	EXPECT_EQ(staff_code::AnnouncementLines(u"New maps"), (Lines {u"New ", u"maps"}));
+	// A space at the end gives an empty last line
+	EXPECT_EQ(staff_code::AnnouncementLines(u"hi "), (Lines {u"hi ", u""}));
+	// The 14th character closes a line, and a space after it makes a line of its own
+	EXPECT_EQ(staff_code::AnnouncementLines(u"abcdefghijklmnop"), (Lines {u"abcdefghijklmn", u"op"}));
+	EXPECT_EQ(staff_code::AnnouncementLines(u"abcdefghijklmn x"), (Lines {u"abcdefghijklmn", u" ", u"x"}));
+	EXPECT_EQ(staff_code::AnnouncerOf(0), k_AdminUser);
+	EXPECT_EQ(staff_code::AnnouncerOf(14), k_AdminUser + 14);
+}
+
+TEST(GatheringBoxRules, AnnouncementsKeep15Lines)
+{
+	std::u16string words;
+	for (int word = 0; word < 20; ++word)
+	{
+		words += u"w ";
+	}
+	const auto lines = staff_code::AnnouncementLines(words);
+	ASSERT_EQ(lines.size(), staff_code::k_MostAnnouncements);
+	EXPECT_EQ(lines.front(), u"w ");
+	EXPECT_EQ(lines.back(), u"w ");
+}
+
+TEST(GatheringBoxSystem, AStaffLineGoesToTheServerWithTheNameOfTheCodeOrOfThePlayer)
+{
+	Fixture fixture;
+	fixture.system->SendStaffCode(u"Hello");
+	fixture.system->SendStaffCode(u"!SGRBHello all");
+	fixture.system->SendStaffCode(u"!SGRBNBoss#Listen");
+	using Lines = std::vector<std::pair<std::u16string, std::u16string>>;
+	EXPECT_EQ(fixture.log.staffLines, (Lines {{u"Me", u"Hello all"}, {u"Boss", u"Listen"}}));
+	EXPECT_TRUE(fixture.log.lines.empty());
+	EXPECT_TRUE(fixture.log.announcements.empty());
+}
+
+TEST(GatheringBoxSystem, AnnouncementsGoLastLineFirstFromTheStaffNumbers)
+{
+	Fixture fixture;
+	fixture.system->SendStaffCode(u"!SGRBONBoss#New maps");
+	using Lines = std::vector<std::pair<UserId, std::u16string>>;
+	EXPECT_EQ(fixture.log.announcements, (Lines {{k_AdminUser + 1, u"maps"}, {k_AdminUser, u"New "}}));
+	EXPECT_TRUE(fixture.log.staffLines.empty());
+}
+
+TEST(GatheringBoxSystem, TheStaffCodeSendsNothingWithNoConnection)
+{
+	Fixture fixture;
+	fixture.log.connected = false;
+	fixture.system->SendStaffCode(u"!SGRBHello");
+	fixture.system->SendStaffCode(u"!SGRBOHello");
+	EXPECT_TRUE(fixture.log.staffLines.empty());
+	EXPECT_TRUE(fixture.log.announcements.empty());
 }

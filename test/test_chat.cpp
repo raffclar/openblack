@@ -477,6 +477,42 @@ TEST(ChatSystem, ALineOfThePingServerShowsAndGoesToTheLog)
 	EXPECT_TRUE(chat.GetReceived().empty());
 }
 
+TEST(ChatSystem, ALineOfThePingServerGoesInTheBubbleOfThePlayersCreature)
+{
+	FakeGame game;
+	game.here = P::PLAYER_TWO;
+	ChatSystem chat(game.Services());
+	chat.ReceiveFromPingServer(u"Staff", u"Welcome");
+	const auto* bubble = chat.GetBubble(CreatureOf(P::PLAYER_TWO));
+	ASSERT_NE(bubble, nullptr);
+	ASSERT_EQ(bubble->lines.size(), 1u);
+	EXPECT_EQ(bubble->lines[0].text, u"Staff: Welcome");
+	// The line has no god, so it is white
+	EXPECT_FALSE(bubble->lines[0].sender.has_value());
+	EXPECT_EQ(speech_bubble::LineColour(std::nullopt), 0xFFFFFFFFu);
+	// At least the least time, then the time of a line
+	EXPECT_FLOAT_EQ(bubble->displayTime, speech_bubble::k_LeastTime + speech_bubble::k_LineTime);
+	// Only the creature of this computer says it
+	EXPECT_EQ(chat.GetBubbles().size(), 1u);
+}
+
+TEST(ChatSystem, ALineOfThePingServerGoesToTheLogOnlyWithACreature)
+{
+	FakeGame game;
+	// This player has no creature
+	game.here = P::PLAYER_FOUR;
+	ChatSystem chat(game.Services());
+	chat.ReceiveFromPingServer(u"Staff", u"Welcome");
+	EXPECT_EQ(game.incoming, (std::vector<std::u16string> {u"Staff: Welcome"}));
+	EXPECT_TRUE(game.log.empty());
+	EXPECT_TRUE(chat.GetBubbles().empty());
+	// An observer has no player
+	game.here = std::nullopt;
+	chat.ReceiveFromPingServer(u"Staff", u"Again");
+	EXPECT_TRUE(game.log.empty());
+	EXPECT_TRUE(chat.GetBubbles().empty());
+}
+
 TEST(ChatSystem, ATauntSpeaksOnEveryComputer)
 {
 	FakeGame game;

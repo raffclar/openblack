@@ -58,6 +58,10 @@ public:
 	virtual void AskOnline(std::span<const gathering_box::UserId> friends) = 0;
 	/// Sends a line to a person
 	virtual void SendLine(gathering_box::UserId user, std::u16string_view text) = 0;
+	/// Sends a line of the staff to the server itself, with the name that the line shows (see staff_code)
+	virtual void SendStaffLine(std::u16string_view name, std::u16string_view text) = 0;
+	/// Tells all the people that a person with the staff number and this name is here (see staff_code)
+	virtual void SendAnnouncement(gathering_box::UserId user, std::u16string_view name) = 0;
 	/// Sends the report of the host (see host_report::Encode)
 	virtual void SendHostReport(std::span<const uint8_t> report) = 0;
 	/// The messages that came since the last call, in the order that they came

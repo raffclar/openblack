@@ -119,7 +119,69 @@ enum class Push : uint8_t
 /// for a line, the line, from either button
 [[nodiscard]] std::u16string AnswerOf(Kind kind, Push push, std::u16string_view line);
 
+/// The setting that makes the questions plain lines of the chat. Only this value of the setting does it.
+constexpr uint32_t k_PlainChatSetting = 5;
+
+/// True when the setting makes the questions plain lines of the chat. With no setting, the lines can ask questions.
+[[nodiscard]] constexpr bool IsPlainChat(std::optional<uint32_t> setting) noexcept
+{
+	return setting == k_PlainChatSetting;
+}
+
 } // namespace question
+
+/// The staff code. A typed line that starts with the code goes also to the ping server, as a line of the staff or as
+/// announcements. The line also goes to the players and to the picked people as each typed line does.
+namespace staff_code
+{
+
+/// The start of a line of the staff
+constexpr std::u16string_view k_Code = u"!SGRB";
+/// After the code, this letter makes the words announcements
+constexpr char16_t k_AnnounceMark = u'O';
+/// After the code and the letter of the announcements, this letter starts a name that ends at k_NameEnd
+constexpr char16_t k_NameMark = u'N';
+constexpr char16_t k_NameEnd = u'#';
+/// The name keeps at most this many characters
+constexpr size_t k_MostNameCharacters = 19;
+/// The announcements have at most this many lines, each with at most this many characters
+constexpr size_t k_MostAnnouncements = 15;
+constexpr size_t k_MostAnnouncementCharacters = 14;
+/// The ping server gets a line of the staff for this number
+constexpr UserId k_ServerUser = 0;
+
+struct Send
+{
+	/// The words are announcements, not a line
+	bool announce {false};
+	/// The name that the line shows in place of the name of the player
+	std::optional<std::u16string> name;
+	/// The words after the code
+	std::u16string text;
+	bool operator==(const Send&) const = default;
+};
+
+/// What a typed line sends with the staff code, none when the line does not start with the code. After the code:
+/// 1. An optional k_AnnounceMark.
+/// 2. An optional k_NameMark, then the name. The name stops before k_NameEnd, or after k_MostNameCharacters
+///    characters. The character after the name is not a part of the words. The game skips it also when it is not
+///    k_NameEnd.
+/// 3. The words. A name that goes to the end of the line gives no words.
+[[nodiscard]] std::optional<Send> Parse(std::u16string_view line);
+
+/// The lines of the announcements in the words. Each space, the end of the words and the last character that a line
+/// keeps close a line. A space stays at the end of its line. The end of the words closes a line also when the line has
+/// no characters. The words after the last line that the announcements keep do not go.
+[[nodiscard]] std::vector<std::u16string> AnnouncementLines(std::u16string_view words);
+
+/// The staff number of an announcement line: the first line has the number of the admin, and each next line has the
+/// next number. The game sends the last line first, so the first line goes to the top of the others.
+[[nodiscard]] constexpr UserId AnnouncerOf(size_t line) noexcept
+{
+	return k_AdminUser + static_cast<UserId>(line);
+}
+
+} // namespace staff_code
 
 /// A line from the ping server keeps its first 254 characters
 [[nodiscard]] std::u16string_view ClippedLine(std::u16string_view text) noexcept;
