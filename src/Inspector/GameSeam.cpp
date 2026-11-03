@@ -17,8 +17,10 @@
 
 #include "Game.h"
 #include "GameGui.h"
+#include "Graphics/RendererInterface.h"
 #include "Gui/GameInterface.h"
 #include "Gui/TextDatabase.h"
+#include "Locator.h"
 
 namespace openblack::inspector
 {
@@ -72,6 +74,28 @@ public:
 		return game != nullptr ? game->GetScreenshotRoot() : std::nullopt;
 	}
 
+	[[nodiscard]] Json GraphicsDevice() const override
+	{
+		if (!Locator::rendererInterface::has_value())
+		{
+			return nullptr;
+		}
+		const auto& renderer = Locator::rendererInterface::value();
+		return {
+		    {"renderer", GetRendererBackend()},
+		    {"restores", renderer.GetDeviceRestores()},
+		    {"kept_bytes", renderer.GetDeviceRestoreBytes()},
+		};
+	}
+	bool RestoreGraphicsDevice() override
+	{
+		if (!Locator::rendererInterface::has_value())
+		{
+			return false;
+		}
+		Locator::rendererInterface::value().RequestDeviceRestore();
+		return true;
+	}
 	[[nodiscard]] std::string GetRendererBackend() const override
 	{
 		switch (bgfx::getRendererType())

@@ -158,6 +158,13 @@ enum class BookmarkMove : uint8_t
 	return platform == Platform::Web ? SDLK_INSERT : SDLK_F11;
 }
 
+/// The keys that make the graphics device again, as after a lost device, to test the recovery: Ctrl and Shift with the
+/// key of the renderer's statistics, and no Alt
+[[nodiscard]] constexpr bool IsDeviceRestoreKey(Platform platform, SDL_Keycode key, Modifiers held) noexcept
+{
+	return key == RendererStatisticsKey(platform) && held.ctrl && held.shift && !held.alt;
+}
+
 /// The key that opens and closes the editor: F10 on the desktop, and End on the web, because the browser uses F10 for
 /// its menu. The game uses F2 for the trip to the Gods' Playground.
 [[nodiscard]] constexpr SDL_Scancode EditorToggleKey(Platform platform) noexcept

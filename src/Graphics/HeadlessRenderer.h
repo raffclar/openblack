@@ -52,6 +52,9 @@ public:
 		return std::nullopt;
 	}
 	[[nodiscard]] uint32_t GetPipelinesMade() const noexcept override { return 0; }
+	void RequestDeviceRestore() noexcept override {}
+	[[nodiscard]] uint32_t GetDeviceRestores() const noexcept override { return 0; }
+	[[nodiscard]] uint64_t GetDeviceRestoreBytes() const noexcept override { return 0; }
 	[[nodiscard]] uint32_t GetDrawsOfLastFrame() const noexcept override { return 0; }
 	[[nodiscard]] bool GetDebug() const noexcept override { return _debug; }
 	void SetDebug(bool value) noexcept override { _debug = value; }

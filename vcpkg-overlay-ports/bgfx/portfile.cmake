@@ -55,6 +55,13 @@ vcpkg_download_distfile(
 # - submit-order: an encoder can set the submit order of its next draws. Draws with equal sort keys and the draws of a
 #   sequential view then render in that order, also when many encoders submit at the same time. Without it, that
 #   order follows the thread that submits first. A frame in which no encoder sets an order sorts as before.
+# A change to the recovery from a lost device, for all renderers:
+# - device-restore: when the device is lost, or when the application asks, the render thread makes the same
+#   renderer again on the same window, and makes each live resource again with its handle. It keeps the data of
+#   each create command, and copies the texture and dynamic buffer updates into kept copies. Before, a lost device
+#   changed the renderer to the noop renderer for the remainder of the run. When the device cannot be made, the
+#   frames go to the noop renderer and the renderer tries again after one second. The contents that only the GPU
+#   wrote, as in render targets, are not kept: the application draws them again.
 vcpkg_extract_source_archive(
   SOURCE_PATH
   ARCHIVE "${ARCHIVE_FILE}"
@@ -74,6 +81,7 @@ vcpkg_extract_source_archive(
     d3d12-upload-pages.patch
     d3d12-screenshot-frame.patch
     submit-order.patch
+    device-restore.patch
 )
 
 # Replaces text in a file of the bgfx source. The build stops when the text is not there, so that a new bgfx

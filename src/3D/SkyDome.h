@@ -102,6 +102,10 @@ public:
 	}
 };
 
+/// The rows that a dome draws when its picture is gone, as after the graphics device is made again: the whole dome at the
+/// sky type that it follows
+[[nodiscard]] FrameRows WholeDomeAt(const Follow& follow);
+
 /// Two of three pictures and how much of the second there is, of 255
 struct Pair
 {

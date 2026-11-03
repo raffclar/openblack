@@ -234,6 +234,8 @@ struct Arguments
 	/// A testbed scenario to run as the game starts, by its id, and how to measure its crowd if it has one
 	std::optional<ScenarioRequest> scenario;
 	std::optional<std::pair</* frame number */ uint32_t, /* output */ std::filesystem::path>> requestScreenshot;
+	/// For tests: the frame at which the renderer makes the graphics device again, as after a lost device
+	std::optional<uint32_t> deviceRestoreFrame;
 	/// For developers: what the check does when turn code uses the graphics, the renderer or the audio directly (see
 	/// MainThreadQueue). Off by default.
 	TurnApiCheck turnApiCheck {};
@@ -1052,6 +1054,8 @@ private:
 	void PlaceScreenLabels();
 
 	std::optional<std::pair</* frame number */ uint32_t, /* output */ std::filesystem::path>> _requestScreenshot;
+	/// For tests: the frame at which the renderer makes the graphics device again
+	std::optional<uint32_t> _deviceRestoreFrame;
 	/// What the check of the turn's calls does
 	TurnApiCheck _turnApiCheck {};
 	/// The turns of the next frame play beside the draw of this frame (deviation row 153)
