@@ -277,6 +277,6 @@ void GameRewardOpeningWorld::ShowGesture(MagicType type)
 	const auto gesture = magic::GetMagicInfo(Locator::infoConstants::value(), type).gestureType;
 	if (gesture != GestureType::None)
 	{
-		Locator::gestureSystem::value().ShowGestureOnLand(gesture, Position(), reward::k_GestureSize);
+		Locator::gestureSystem::value().ShowGestureOnLand(gesture, Position(), reward::k_GestureSize, std::nullopt);
 	}
 }

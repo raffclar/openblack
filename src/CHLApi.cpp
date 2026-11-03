@@ -213,6 +213,7 @@
 #include "ECS/Systems/ExplosionSystemInterface.h"
 #include "ECS/Systems/FightTranscriptSystemInterface.h"
 #include "ECS/Systems/FireSystemInterface.h"
+#include "ECS/Systems/FootballSystemInterface.h"
 #include "ECS/Systems/HandDemoSystemInterface.h"
 #include "ECS/Systems/HandGrabSystemInterface.h"
 #include "ECS/Systems/HandSystemInterface.h"
@@ -7010,74 +7011,182 @@ void GetArena() // 211 GET_ARENA
 	Pusho(0);
 }
 
+/// The football pitch a native is given. A thing that is not a pitch gives a message, and the native does nothing.
+entt::entity PitchOfScript(entt::entity thing)
+{
+	if (!Locator::footballSystem::has_value() || !Locator::footballSystem::value().IsPitch(thing))
+	{
+		ScriptMessage("Must be footy.");
+		return entt::null;
+	}
+	return thing;
+}
+
+/// The villager a native is given for football. A thing that is not a villager gives a message.
+bool IsFootballVillager(entt::entity thing)
+{
+	auto& registry = Locator::entitiesRegistry::value();
+	if (!registry.Valid(thing) || !registry.AllOf<ecs::components::Villager>(thing))
+	{
+		ScriptMessage("Must be villager.");
+		return false;
+	}
+	return true;
+}
+
 void GetFootballPitch() // 212 GET_FOOTBALL_PITCH
 {
-	// const auto town = Pop().uintVal;
-	// TODO(Daniels118): implement this
-	NotImplemented();
+	// The pitch that the town uses, or none with a message
+	const auto town = PopObject();
+	auto& registry = Locator::entitiesRegistry::value();
+	if (!registry.Valid(town))
+	{
+		ScriptMessage("Object no longer valid.");
+	}
+	else
+	{
+		const bool isTown = registry.AllOf<ecs::components::Town>(town);
+		if (!isTown)
+		{
+			ScriptMessage("Must look in a town.");
+		}
+		const auto pitch =
+		    isTown && Locator::footballSystem::has_value() ? Locator::footballSystem::value().TownPitch(town) : entt::null;
+		if (pitch != entt::null)
+		{
+			if (Locator::scriptObjects::has_value())
+			{
+				Locator::scriptObjects::value().Register(pitch, false);
+			}
+			PushObject(pitch);
+			return;
+		}
+	}
+	ScriptMessage("No pitch.");
 	Pusho(0);
 }
 
 void StopAllGames() // 213 STOP_ALL_GAMES
 {
-	// const auto unk0 = Pop().intVal;
-	// TODO(Daniels118): implement this
-	NotImplemented();
+	// The match of the pitch stops, as when its town stops it
+	const auto thing = PopObject();
+	if (!Locator::entitiesRegistry::value().Valid(thing))
+	{
+		ScriptMessage("Object no longer valid.");
+		return;
+	}
+	if (const auto pitch = PitchOfScript(thing); pitch != entt::null)
+	{
+		Locator::footballSystem::value().StopAllGames(pitch);
+	}
 }
 
 void AttachToGame() // 214 ATTACH_TO_GAME
 {
 	// The team, the football pitch and the villager joining it; the native takes control of both objects
-	[[maybe_unused]] const auto team = Pop().intVal;
-	[[maybe_unused]] const auto pitch = PopObject();
-	[[maybe_unused]] const auto villager = PopObject();
-	// TODO(Daniels118): implement this
-	NotImplemented();
+	const auto team = Pop().intVal;
+	const auto thing = PopObject();
+	const auto villager = PopObject();
+	auto& registry = Locator::entitiesRegistry::value();
+	if (!registry.Valid(thing) || !registry.Valid(villager))
+	{
+		ScriptMessage("Object no longer valid.");
+		return;
+	}
+	const auto pitch = PitchOfScript(thing);
+	if (IsFootballVillager(villager) && pitch != entt::null &&
+	    !Locator::footballSystem::value().AttachToGame(pitch, villager, team != 0))
+	{
+		ScriptMessage("Cannot add to team.");
+	}
 }
 
 void DetachFromGame() // 215 DETACH_FROM_GAME
 {
 	// A value the game ignores, the football pitch and the villager leaving it; the native takes control of both objects
 	[[maybe_unused]] const auto unused = Pop().intVal;
-	[[maybe_unused]] const auto pitch = PopObject();
-	[[maybe_unused]] const auto villager = PopObject();
-	// TODO(Daniels118): implement this
-	NotImplemented();
+	const auto thing = PopObject();
+	const auto villager = PopObject();
+	auto& registry = Locator::entitiesRegistry::value();
+	if (!registry.Valid(thing) || !registry.Valid(villager))
+	{
+		ScriptMessage("Object no longer valid.");
+		return;
+	}
+	const auto pitch = PitchOfScript(thing);
+	if (IsFootballVillager(villager) && pitch != entt::null &&
+	    !Locator::footballSystem::value().DetachFromGame(pitch, villager))
+	{
+		ScriptMessage("Cannot detach.");
+	}
 }
 
 void DetachUndefinedFromGame() // 216 DETACH_UNDEFINED_FROM_GAME
 {
-	// A value and the football pitch, of which the native takes control
-	[[maybe_unused]] const auto value = Pop().intVal;
-	[[maybe_unused]] const auto pitch = PopObject();
-	// TODO(Daniels118): implement this
-	NotImplemented();
+	// The team and the football pitch, of which the native takes control. The first player of the team leaves it.
+	const auto team = Pop().intVal;
+	const auto thing = PopObject();
+	if (!Locator::entitiesRegistry::value().Valid(thing))
+	{
+		ScriptMessage("Object no longer valid.");
+		return;
+	}
+	if (const auto pitch = PitchOfScript(thing);
+	    pitch != entt::null && !Locator::footballSystem::value().DetachFirstPlayer(pitch, team != 0))
+	{
+		ScriptMessage("Cannot detach.");
+	}
 }
 
 void SetOnlyForScripts() // 217 SET_ONLY_FOR_SCRIPTS
 {
 	// The football pitch, of which the native takes control, then whether only the scripts play on it
-	[[maybe_unused]] const auto pitch = PopObject();
-	[[maybe_unused]] const auto onlyForScripts = Pop().intVal;
-	// TODO(Daniels118): implement this
-	NotImplemented();
+	const auto thing = PopObject();
+	const auto onlyForScripts = Pop().intVal;
+	if (!Locator::entitiesRegistry::value().Valid(thing))
+	{
+		ScriptMessage("Object no longer valid.");
+		return;
+	}
+	if (const auto pitch = PitchOfScript(thing); pitch != entt::null)
+	{
+		Locator::footballSystem::value().SetOnlyForScripts(pitch, onlyForScripts != 0);
+	}
 }
 
 void StartMatchWithReferee() // 218 START_MATCH_WITH_REFEREE
 {
 	// The villager refereeing and the football pitch; the native takes control of both
-	[[maybe_unused]] const auto referee = PopObject();
-	[[maybe_unused]] const auto pitch = PopObject();
-	// TODO(Daniels118): implement this
-	NotImplemented();
+	const auto referee = PopObject();
+	const auto thing = PopObject();
+	auto& registry = Locator::entitiesRegistry::value();
+	if (!registry.Valid(referee) || !registry.Valid(thing))
+	{
+		ScriptMessage("Object no longer valid.");
+		return;
+	}
+	const auto pitch = PitchOfScript(thing);
+	if (IsFootballVillager(referee) && pitch != entt::null &&
+	    !Locator::footballSystem::value().StartWithReferee(pitch, referee))
+	{
+		ScriptMessage("Cannot start game with ref.");
+	}
 }
 
 void GameTeamSize() // 219 GAME_TEAM_SIZE
 {
-	// const auto unk1 = Pop().intVal;
-	// const auto unk0 = Pop().intVal;
-	// TODO(Daniels118): implement this
-	NotImplemented();
+	// The team and the football pitch. The game gives the size of the team as a number, although the function table
+	// says that the native gives nothing.
+	const auto team = Pop().intVal;
+	const auto thing = PopObject();
+	if (!Locator::entitiesRegistry::value().Valid(thing))
+	{
+		ScriptMessage("Object no longer valid.");
+		Pushf(0.0f);
+		return;
+	}
+	const auto pitch = PitchOfScript(thing);
+	Pushf(pitch != entt::null ? static_cast<float>(Locator::footballSystem::value().TeamSize(pitch, team != 0)) : 0.0f);
 }
 
 void GameType() // 220 GAME_TYPE

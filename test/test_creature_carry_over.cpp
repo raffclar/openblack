@@ -18,6 +18,8 @@
 #include <string>
 #include <string_view>
 #include <system_error>
+#include <tuple>
+#include <utility>
 #include <vector>
 
 #include <MindFile.h>
@@ -28,6 +30,7 @@
 
 #include "3D/MapCoords.h"
 #include "Creature/CreatureCarryOver.h"
+#include "Creature/CreatureHandGlow.h"
 #include "Creature/CreatureMarks.h"
 #include "Creature/CreatureMindFileBody.h"
 #include "Creature/CreatureMorph.h"
@@ -36,6 +39,7 @@
 #include "ECS/Components/Creature.h"
 #include "ECS/Components/CreatureBody.h"
 #include "ECS/Components/CreatureFileSave.h"
+#include "ECS/Components/CreatureHandGlows.h"
 #include "ECS/Components/CreatureNeeds.h"
 #include "ECS/Components/CreatureSkin.h"
 #include "ECS/CreatureBodyFile.h"
@@ -688,6 +692,39 @@ TEST_F(CreatureCarryOverSaves, TheKeptFileHasTheTattoosThatThisComputerShows)
 	EXPECT_EQ(carryOver.Kept()->tattooHeader->at(0), creature_tattoo::ToWord(shown.at(0)));
 	EXPECT_EQ(carryOver.Kept()->tattooHeader->at(1), creature_tattoo::ToWord(creature_tattoo::Slot {}));
 	EXPECT_EQ(carryOver.Kept()->tattoo, std::optional(std::vector<uint8_t> {1, 2}));
+}
+
+TEST_F(CreatureCarryOverSaves, TheKeptFilesHoldNoCreedGlowSoTheNextLandStartsTheCreatureWithNone)
+{
+	// The same creature is kept twice: once with no glows and once with the glow of the Creed at full power
+	const auto keep = [](std::string_view name, bool glowing) {
+		const TestFolder folder(name);
+		ecs::systems::CreatureCarryOverSystem carryOver(folder.Path(), ProfileFile);
+		const auto creature = MakeCreature(PlayerNames::PLAYER_ONE, 1199);
+		if (glowing)
+		{
+			auto& glows = Locator::entitiesRegistry::value().Assign<ecs::components::CreatureHandGlows>(creature);
+			std::ignore = creature_hand_glow::SetCreedPower(glows.glows, creature_hand_glow::Place::Circling, 5.0f, 1.0f);
+			std::ignore = creature_hand_glow::SetCreedPower(glows.glows, creature_hand_glow::Place::LeftHand, 1.0f, 2.0f);
+		}
+		carryOver.ProcessTurn();
+		Live(creature, 1200);
+		carryOver.ProcessTurn();
+		carryOver.FinishWrites();
+		Locator::entitiesRegistry::value().Destroy(creature);
+		EXPECT_NE(carryOver.Kept(), nullptr);
+		const auto files = KeptFilesIn(folder.Path(), k_ProfileFile);
+		return std::pair {carryOver.Kept() != nullptr ? creaturemind::Write(*carryOver.Kept()) : std::vector<uint8_t> {},
+		                  creaturemind::ReadPhysiqueFile(files.physique)};
+	};
+	const auto plain = keep("carry_over_no_glow", false);
+	const auto glowing = keep("carry_over_creed_glow", true);
+
+	// The mind file and the physique file have no place for a glow, so the next land loads a creature with no glow
+	EXPECT_FALSE(plain.first.empty());
+	ASSERT_TRUE(plain.second.has_value());
+	EXPECT_EQ(glowing.first, plain.first);
+	EXPECT_EQ(glowing.second, plain.second);
 }
 
 TEST_F(CreatureCarryOverSaves, ALandThatKeepsNoCreaturesWritesNoneAsTheyLiveNorAtTheEnd)

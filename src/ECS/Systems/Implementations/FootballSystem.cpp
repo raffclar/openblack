@@ -398,6 +398,187 @@ std::optional<rules::PlayState> FootballSystem::PlayStateOf(entt::entity pitch) 
 	return football != nullptr ? std::optional(football->match.state) : std::nullopt;
 }
 
+bool FootballSystem::IsPlaying(entt::entity villager) const
+{
+	const auto& registry = Entities();
+	if (!registry.Valid(villager) || !registry.AllOf<Villager, LivingAction>(villager))
+	{
+		return false;
+	}
+	return rules::IsMatchState(Living().VillagerGetFinalState(registry.Get<const LivingAction>(villager)));
+}
+
+std::optional<bool> FootballSystem::HomeMournsGoal(entt::entity pitch) const
+{
+	const auto* football = IsThere(pitch) ? Entities().TryGet<const FootballPitch>(pitch) : nullptr;
+	if (football == nullptr || football->match.state != rules::PlayState::Scored)
+	{
+		return std::nullopt;
+	}
+	return football->match.homeMournedLastGoal;
+}
+
+glm::vec3 FootballSystem::AttackedGoalPosition(entt::entity pitch, bool homeTeam)
+{
+	return GoalPosition(pitch, rules::AttackedGoal(homeTeam ? rules::Side::Home : rules::Side::Away));
+}
+
+entt::entity FootballSystem::FirstPlayer(entt::entity pitch, bool homeTeam) const
+{
+	const auto* football = IsThere(pitch) ? Entities().TryGet<const FootballPitch>(pitch) : nullptr;
+	if (football == nullptr)
+	{
+		return entt::null;
+	}
+	const auto& team = homeTeam ? football->home : football->away;
+	return team.empty() ? entt::null : team.front();
+}
+
+bool FootballSystem::IsPitch(entt::entity thing) const
+{
+	const auto& registry = Entities();
+	const auto* building = registry.Valid(thing) ? registry.TryGet<const Abode>(thing) : nullptr;
+	if (building == nullptr || building->info == AbodeInfo::None || !Locator::infoConstants::has_value())
+	{
+		return false;
+	}
+	const auto& table = Locator::infoConstants::value().abode;
+	const auto row = static_cast<size_t>(building->info);
+	return row < table.size() && table.at(row).abodeType == AbodeType::FootballPitch;
+}
+
+entt::entity FootballSystem::TownPitch(entt::entity town) const
+{
+	const auto& registry = Entities();
+	const auto* own = registry.Valid(town) ? registry.TryGet<const TownFootballPitch>(town) : nullptr;
+	return own != nullptr && IsThere(own->pitch) ? own->pitch : entt::null;
+}
+
+FootballPitch* FootballSystem::PitchData(entt::entity pitch)
+{
+	if (!IsPitch(pitch) || !IsThere(pitch))
+	{
+		return nullptr;
+	}
+	auto& registry = Entities();
+	if (!registry.AllOf<FootballPitch>(pitch))
+	{
+		registry.Assign<FootballPitch>(pitch);
+	}
+	return &registry.Get<FootballPitch>(pitch);
+}
+
+void FootballSystem::SendToKickOff(entt::entity pitch, entt::entity villager)
+{
+	// The player waits for the kick-off at a random place near the centre spot
+	const auto centre = CoordsOf(pitch);
+	const auto x = ScatterBy(centre.x, rules::k_KickOffScatter);
+	const auto z = ScatterBy(centre.z, rules::k_KickOffScatter);
+	ecs::villager_home::SetupMoveTo(ActionOf(villager), glm::ivec2(x, z), VillagerStates::FootballWaitForKickOff);
+}
+
+void FootballSystem::StopAllGames(entt::entity pitch)
+{
+	auto* football = PitchData(pitch);
+	if (football == nullptr)
+	{
+		return;
+	}
+	const auto* building = Entities().TryGet<const Abode>(pitch);
+	const auto& towns = Entities().Context().towns;
+	const auto town = building != nullptr ? towns.find(building->townId) : towns.end();
+	StopMatch(town != towns.end() && Entities().Valid(town->second) ? town->second : entt::null, pitch, *football);
+}
+
+bool FootballSystem::AttachToGame(entt::entity pitch, entt::entity villager, bool homeTeam)
+{
+	auto* football = PitchData(pitch);
+	if (football == nullptr || IsGone(villager))
+	{
+		return false;
+	}
+	const auto side =
+	    rules::ScriptTeam(homeTeam, static_cast<uint32_t>(football->home.size()), static_cast<uint32_t>(football->away.size()));
+	if (side.has_value())
+	{
+		auto& team = *side == rules::Side::Home ? football->home : football->away;
+		team.insert(team.begin(), villager);
+		SendToKickOff(pitch, villager);
+	}
+	// The villager is in the match also when no team took it
+	Entities().AssignOrReplace<Footballer>(villager, Footballer {.pitch = pitch});
+	return side.has_value();
+}
+
+bool FootballSystem::DetachFromGame(entt::entity pitch, entt::entity villager)
+{
+	auto* football = PitchData(pitch);
+	if (football == nullptr || IsGone(villager))
+	{
+		return false;
+	}
+	const auto drop = [villager](std::vector<entt::entity>& list) { std::erase(list, villager); };
+	drop(football->home);
+	drop(football->away);
+	drop(football->ranks.at(0));
+	drop(football->ranks.at(1));
+	return true;
+}
+
+bool FootballSystem::DetachFirstPlayer(entt::entity pitch, bool homeTeam)
+{
+	auto* football = PitchData(pitch);
+	if (football == nullptr || (football->home.empty() && football->away.empty()))
+	{
+		return false;
+	}
+	auto& team = homeTeam ? football->home : football->away;
+	if (!team.empty())
+	{
+		const auto first = team.front();
+		team.erase(team.begin());
+		std::erase(football->ranks.at(0), first);
+		std::erase(football->ranks.at(1), first);
+	}
+	return true;
+}
+
+void FootballSystem::SetOnlyForScripts(entt::entity pitch, bool onlyForScripts)
+{
+	if (auto* football = PitchData(pitch))
+	{
+		football->match.townMatch = !onlyForScripts;
+	}
+}
+
+bool FootballSystem::StartWithReferee(entt::entity pitch, entt::entity referee)
+{
+	auto* football = PitchData(pitch);
+	if (football == nullptr || IsGone(referee))
+	{
+		return false;
+	}
+	BallOf(pitch);
+	const bool became = football->referee == entt::null;
+	if (became)
+	{
+		football->referee = referee;
+	}
+	// The villager is in the match also when the pitch had a referee
+	Entities().AssignOrReplace<Footballer>(referee, Footballer {.pitch = pitch});
+	return became;
+}
+
+uint32_t FootballSystem::TeamSize(entt::entity pitch, bool homeTeam) const
+{
+	const auto* football = IsThere(pitch) ? Entities().TryGet<const FootballPitch>(pitch) : nullptr;
+	if (football == nullptr)
+	{
+		return 0;
+	}
+	return static_cast<uint32_t>(homeTeam ? football->home.size() : football->away.size());
+}
+
 entt::entity FootballSystem::PitchOf(entt::entity villager) const
 {
 	const auto* player = Entities().Valid(villager) ? Entities().TryGet<const Footballer>(villager) : nullptr;
@@ -456,10 +637,7 @@ bool FootballSystem::Join(entt::entity town, entt::entity villager)
 	{
 		auto& team = joins == rules::Joins::Home ? football.home : football.away;
 		team.insert(team.begin(), villager);
-		// The player waits for the kick-off at a random place near the centre spot
-		const auto x = ScatterBy(centre.x, rules::k_KickOffScatter);
-		const auto z = ScatterBy(centre.z, rules::k_KickOffScatter);
-		ecs::villager_home::SetupMoveTo(action, glm::ivec2(x, z), VillagerStates::FootballWaitForKickOff);
+		SendToKickOff(pitch, villager);
 		break;
 	}
 	case rules::Joins::Crowd:
@@ -891,7 +1069,7 @@ void FootballSystem::StopMatch(entt::entity town, entt::entity pitch, FootballPi
 	// The game measures the match against the town's match length, but nothing counts that measure, so the belief is 0
 	const auto& townInfo = Locator::infoConstants::value().town;
 	const float belief = rules::MatchBelief(townInfo.beliefForFooballMatch, 0, townInfo.footballMatchDuration);
-	if (Locator::reactionSystem::has_value())
+	if (Locator::reactionSystem::has_value() && town != entt::null && Entities().AllOf<Town>(town))
 	{
 		Locator::reactionSystem::value().GiveTownBelief(town, Entities().Get<const Town>(town).owner, belief, pitch,
 		                                                GuidanceAlignment::Good);

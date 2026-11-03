@@ -254,6 +254,12 @@ std::optional<obstacles::Thing> creature_obstacle_things::ThingOf(const Registry
 	{
 		thing.shape = obstacles::Shape::AtPlace;
 	}
+	else if (const auto* abode = registry.TryGet<const Abode>(entity);
+	         abode != nullptr && abode->type == AbodeNumber::FootballPitch)
+	{
+		// A creature walks over a football pitch, and the footpaths go across it
+		thing.avoidance = obstacles::Avoidance::Never;
+	}
 	else if (registry.AnyOf<Abode, Feature, Flowers, SpellDispenser, VillageTotem, WorshipSite, WorshipAltar, WorshipIcon>(
 	             entity))
 	{

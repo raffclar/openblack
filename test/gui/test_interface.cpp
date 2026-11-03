@@ -12,12 +12,14 @@
 #include <cstring>
 
 #include <algorithm>
+#include <optional>
 #include <span>
 #include <string>
 #include <string_view>
 #include <utility>
 #include <vector>
 
+#include <Gui/Controls.h>
 #include <Gui/GameFont.h>
 #include <Gui/GameMenu.h>
 #include <Gui/StatisticsBox.h>
@@ -1221,4 +1223,40 @@ TEST(GameMenu, TheHelpTextSpeedSliderShowsOnlyWithoutSound)
 	Click(f.menu, {540, 380});
 	EXPECT_GT(f.menu.GetSettings().readSpeed, 0.5f);
 	EXPECT_TRUE(f.menu.TakeSettingsChanged());
+}
+
+TEST(ListControl, APressUnderTheLastItemRemovesTheSelectionAndADragPicksTheItemUnderThePointer)
+{
+	const auto font = LoadFont();
+	List list(font, DialogRect {.min = {0, 0}, .max = {200, 200}}, 8, false, false, true);
+	list.SetItems({List::Item {.text = u"AB"}, List::Item {.text = u"BA"}});
+	const auto first = list.ItemAt(1);
+	ASSERT_TRUE(first.has_value());
+	list.MouseDown({10, 1});
+	list.Drag({10, 1});
+	EXPECT_EQ(list.GetSelection(), first);
+	// Held down and moved under the last item, the list picks none
+	list.Drag({10, 190});
+	EXPECT_FALSE(list.GetSelection().has_value());
+	list.Release({10, 190});
+	list.MouseDown({10, 1});
+	list.Release({10, 1});
+	EXPECT_EQ(list.GetSelection(), first);
+	list.MouseDown({10, 190});
+	EXPECT_FALSE(list.GetSelection().has_value());
+}
+
+TEST(ListControl, APressOnTheScrollBarHidesTheSelectionUntilTheButtonComesUp)
+{
+	const auto font = LoadFont();
+	List list(font, DialogRect {.min = {0, 0}, .max = {200, 200}}, 8, false, true, true);
+	list.SetItems({List::Item {.text = u"AB"}, List::Item {.text = u"BA"}});
+	list.SetSelection(1);
+	ASSERT_TRUE(list.ShowsScrollBar());
+	const glm::ivec2 bar {list.GetBoxRight() + 2, 100};
+	list.MouseDown(bar);
+	list.Drag(bar);
+	EXPECT_FALSE(list.GetSelection().has_value());
+	list.Release(bar);
+	EXPECT_EQ(list.GetSelection(), std::optional<size_t> {1});
 }

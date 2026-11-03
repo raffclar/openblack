@@ -77,6 +77,7 @@
 #include "Locator.h"
 #include "Magic.h"
 #include "Magic/MagicTables.h"
+#include "MemoryUse.h"
 #include "MeshViewer.h"
 #include "Moon.h"
 #include "PathFinding.h"
@@ -153,6 +154,7 @@ std::unique_ptr<DebugGuiInterface> DebugGuiInterface::Create(graphics::RenderPas
 	debugWindows.emplace_back(new Weather);
 	debugWindows.emplace_back(new Moon);
 	debugWindows.emplace_back(std::make_unique<StateHash>());
+	debugWindows.emplace_back(std::make_unique<MemoryUse>());
 	debugWindows.emplace_back(std::make_unique<AlignmentHistory>());
 	debugWindows.emplace_back(new Advisors);
 	debugWindows.emplace_back(std::make_unique<Challenges>());

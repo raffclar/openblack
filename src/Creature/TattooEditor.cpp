@@ -210,3 +210,8 @@ void creature_tattoo_editor::Turn(Orbit& orbit, float milliseconds)
 	orbit.tipSpeed *= decay;
 	orbit.eye = orbit.focus + glm::vec3(across, height, along);
 }
+
+bool creature_tattoo_editor::OfferedInCave(bool networkGame, bool decided)
+{
+	return !networkGame || !decided;
+}

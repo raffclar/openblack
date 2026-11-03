@@ -130,6 +130,7 @@ std::u16string_view SaveGameBoxes::GetName() const
 
 void SaveGameBoxes::Answered(Answer answer)
 {
+	_messageAnswered = _messageAnswered || (_question.has_value() && _question->message);
 	// The question goes at once
 	_question.reset();
 	_holdingFade.Reset(0.0f);

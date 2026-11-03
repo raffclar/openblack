@@ -159,8 +159,12 @@ public:
 	virtual void StepHints(float seconds, bool wordsShowing) = 0;
 	/// A gesture's shape shown on the land as if it had just been drawn and recognised, without anyone drawing it (a
 	/// reward showing the gesture of a power-up): its square, so many metres across, laid on the land from a corner
-	/// towards the east and south
-	virtual void ShowGestureOnLand(GestureType /*gesture*/, glm::vec3 /*corner*/, float /*size*/) {}
+	/// towards the east and south. The gesture of another player is heard at the place of that player's hand; none for a
+	/// gesture of this computer's player.
+	virtual void ShowGestureOnLand(GestureType /*gesture*/, glm::vec3 /*corner*/, float /*size*/,
+	                               std::optional<glm::vec3> /*heardAt*/)
+	{
+	}
 	/// A gesture's shape from its symbol file, or the circle's shape when the gesture has no file
 	[[nodiscard]] virtual std::optional<gesture::TrailSymbol> GetSymbol(GestureType /*gesture*/) const { return std::nullopt; }
 };

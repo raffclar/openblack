@@ -254,6 +254,14 @@ void GameParticleWorld::PlayListenerSound(uint32_t inGameSample, bool playsOnce)
 	}
 }
 
+void GameParticleWorld::PlayPointSound(uint32_t inGameSample, glm::vec3 point)
+{
+	if (Locator::sounds::has_value() && Locator::sounds::value().HasAudio())
+	{
+		audio::PlayGameSoundEffect(entt::hashed_string(fmt::format("InGame.sad/{}", inGameSample).c_str()).value(), point);
+	}
+}
+
 std::optional<particles::ParticleWorldInterface::TargetInfo> GameParticleWorld::Target(entt::entity target, bool centre) const
 {
 	if (!Locator::entitiesRegistry::has_value())
@@ -2168,8 +2176,10 @@ namespace
 {
 
 /// The forms of the two parts of the save of the particles. A load refuses a part of another form.
-constexpr uint32_t k_SyncedPartVersion = 3;
-constexpr uint32_t k_LocalPartVersion = 3;
+constexpr uint32_t k_SyncedPartVersion = 4;
+constexpr uint32_t k_LocalPartVersion = 4;
+/// The form of the two parts before a gesture trail kept the place where it is heard. A load reads it too.
+constexpr uint32_t k_NoTrailSoundVersion = 3;
 /// The form of the two parts before the effects of this computer took numbers of their own. A load reads it too.
 constexpr uint32_t k_NoNextNumberVersion = 2;
 /// The form of the two parts before the waits of the sounds went to the part of this computer. A load reads it too.
@@ -2178,7 +2188,7 @@ constexpr uint32_t k_WaitWithSoundVersion = 1;
 /// The form of the world in a part of a save of a given version
 std::optional<GameParticleWorld::SavedForm> WorldForm(uint32_t version, uint32_t current)
 {
-	if (version == current || version == k_NoNextNumberVersion)
+	if (version == current || version == k_NoTrailSoundVersion || version == k_NoNextNumberVersion)
 	{
 		return GameParticleWorld::SavedForm::WaitOnThisComputer;
 	}
@@ -2469,11 +2479,11 @@ void ParticleRuleSystem::RestoreCarried(std::span<const std::shared_ptr<particle
 	}
 }
 
-bool ParticleRuleSystem::LoadSyncedBody(reflection::BinaryReader& in, GameParticleWorld::SavedForm form)
+bool ParticleRuleSystem::LoadSyncedBody(reflection::BinaryReader& in, GameParticleWorld::SavedForm form, bool trailSound)
 {
 	particles::SharedTables tables;
 	particles::EffectReader reader(in, tables);
-	particles::LoadSharedTables(reader);
+	particles::LoadSharedTables(reader, trailSound);
 	_effects.clear();
 	if (_lifeListener != nullptr)
 	{
@@ -2523,7 +2533,7 @@ bool ParticleRuleSystem::LoadState(reflection::BinaryReader& in)
 		return false;
 	}
 	EffectId savedNext = 1;
-	if (version == k_SyncedPartVersion)
+	if (version >= k_NoTrailSoundVersion)
 	{
 		reflection::Load(in, savedNext);
 	}
@@ -2533,7 +2543,7 @@ bool ParticleRuleSystem::LoadState(reflection::BinaryReader& in)
 	reflection::Load(in, _pendingStormBolts);
 	// The effect of the gesture trails is an effect of this computer. An older save keeps it in the synced part.
 	_gestureTrails = k_NoEffect;
-	if (version != k_SyncedPartVersion)
+	if (version < k_NoTrailSoundVersion)
 	{
 		reflection::Load(in, _gestureTrails);
 	}
@@ -2543,7 +2553,7 @@ bool ParticleRuleSystem::LoadState(reflection::BinaryReader& in)
 	_selectionEffect = k_NoEffect;
 	_handManaPath = k_NoEffect;
 	_chainScrollPace = {};
-	if (!LoadSyncedBody(in, *form))
+	if (!LoadSyncedBody(in, *form, version > k_NoTrailSoundVersion))
 	{
 		return false;
 	}
@@ -2576,7 +2586,7 @@ bool ParticleRuleSystem::LoadLocalState(reflection::BinaryReader& in)
 	}
 	EffectId savedNext = k_NoEffect;
 	reflection::Load(in, savedNext);
-	if (version == k_LocalPartVersion)
+	if (version >= k_NoTrailSoundVersion)
 	{
 		_nextLocalId = std::max(savedNext, k_FirstLocalEffect);
 	}
@@ -2586,7 +2596,7 @@ bool ParticleRuleSystem::LoadLocalState(reflection::BinaryReader& in)
 		// effect of this computer comes again.
 		_nextId = std::max(_nextId, savedNext);
 	}
-	if (version == k_LocalPartVersion)
+	if (version >= k_NoTrailSoundVersion)
 	{
 		reflection::Load(in, _gestureTrails);
 	}
@@ -2609,7 +2619,7 @@ bool ParticleRuleSystem::LoadLocalState(reflection::BinaryReader& in)
 	}
 	tables.StartLocal();
 	particles::EffectReader reader(in, tables);
-	particles::LoadSharedTables(reader);
+	particles::LoadSharedTables(reader, version > k_NoTrailSoundVersion);
 	const auto count = in.ReadSize();
 	for (size_t i = 0; count.has_value() && i < *count && !in.Failed(); ++i)
 	{
@@ -2684,7 +2694,7 @@ bool ParticleRuleSystem::LoadOldState(reflection::BinaryReader& in)
 	reflection::Load(in, _handManaPath);
 	reflection::Load(in, _beliefWanted);
 	reflection::Load(in, _chainScrollPace);
-	const bool read = LoadSyncedBody(in, GameParticleWorld::SavedForm::WaitWithSound);
+	const bool read = LoadSyncedBody(in, GameParticleWorld::SavedForm::WaitWithSound, false);
 	_loadedSynced.reset();
 	return read;
 }

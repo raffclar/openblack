@@ -76,7 +76,7 @@ public:
 	[[nodiscard]] bool IsGesturing() const override { return _gesturing; }
 	[[nodiscard]] const gesture_hints::Row& GetHints() const override { return _hints; }
 	void StepHints(float seconds, bool wordsShowing) override;
-	void ShowGestureOnLand(GestureType gesture, glm::vec3 corner, float size) override;
+	void ShowGestureOnLand(GestureType gesture, glm::vec3 corner, float size, std::optional<glm::vec3> heardAt) override;
 	[[nodiscard]] std::optional<gesture::TrailSymbol> GetSymbol(GestureType gesture) const override;
 
 private:

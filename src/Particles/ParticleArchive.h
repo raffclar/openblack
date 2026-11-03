@@ -366,6 +366,7 @@ void AddLinkedBolts(SharedTables& tables);
 /// a local start, a table writes only the things from that start. The load adds the things after the things that the
 /// tables have.
 void SaveSharedTables(EffectWriter& out);
-void LoadSharedTables(EffectReader& in);
+/// An older save has gesture trails with no place where they are heard: trailSound is then false.
+void LoadSharedTables(EffectReader& in, bool trailSound = true);
 
 } // namespace openblack::particles

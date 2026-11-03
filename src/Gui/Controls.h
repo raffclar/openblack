@@ -262,8 +262,13 @@ public:
 	List(const GameFont& font, DialogRect rect, int size, bool centred, bool scrollBar, bool showSelection);
 	void Draw(const DialogPainter& painter, bool hovered, bool focused, bool pressed) const override;
 	void MouseMove(glm::ivec2 point) override { _pointer = point; }
+	/// A press on the scroll bar removes the selection until the button comes up. A press in the box picks the item under
+	/// the pointer, and a press under the last item removes the selection.
 	void MouseDown(glm::ivec2 point) override;
+	/// While the button stays down after a press in the box, the item under the pointer is picked, and none under the last
+	/// item
 	void Drag(glm::ivec2 point) override;
+	void Release(glm::ivec2 point) override;
 	void Wheel(int steps) override;
 	/// In a list that shows its selection, Home, End and the up and down arrows pick another item and scroll to it. The
 	/// item picked so does not act as a click on it does.
@@ -293,8 +298,6 @@ public:
 	/// The scroll bar of a list is 24 units wide, for all sizes of text, unless the list gives another width
 	static constexpr int k_ScrollBarWidth = 24;
 	int scrollBarWidth {k_ScrollBarWidth};
-	/// A click in the box under the last item removes the selection
-	bool clearsOnEmptyPick {false};
 	/// Shows the scroll bar, or hides it
 	void SetScrollBar(bool scrollBar) noexcept { _scrollBar = scrollBar; }
 	[[nodiscard]] bool HasScrollBar() const noexcept { return _scrollBar; }
@@ -336,6 +339,8 @@ private:
 	std::optional<size_t> _selection;
 	float _scroll {0.0f};
 	bool _draggingThumb {false};
+	/// The press went down on the scroll bar: the selection before it comes back when the button comes up
+	std::optional<std::optional<size_t>> _selectionBeforeBar;
 	int _grabY {0};
 	float _grabScroll {0.0f};
 	glm::ivec2 _pointer {-1, -1};

@@ -1245,10 +1245,11 @@ void openblack::particles::SaveSharedTables(EffectWriter& out)
 	SaveItems(out, tables.trails, [&out](const GestureTrail& trail) {
 		out.WriteValue(trail.drawn);
 		out.WriteValue(trail.ideal);
+		out.WriteValue(trail.heardAt);
 	});
 }
 
-void openblack::particles::LoadSharedTables(EffectReader& in)
+void openblack::particles::LoadSharedTables(EffectReader& in, bool trailSound)
 {
 	auto& tables = in.Tables();
 	LoadItems(in, tables.sounds, [&in](ParticleSoundLink& link) {
@@ -1288,9 +1289,13 @@ void openblack::particles::LoadSharedTables(EffectReader& in)
 		in.ReadValue(carried.position);
 		in.ReadValue(carried.rotation);
 	});
-	LoadItems(in, tables.trails, [&in](GestureTrail& trail) {
+	LoadItems(in, tables.trails, [&in, trailSound](GestureTrail& trail) {
 		in.ReadValue(trail.drawn);
 		in.ReadValue(trail.ideal);
+		if (trailSound)
+		{
+			in.ReadValue(trail.heardAt);
+		}
 	});
 }
 

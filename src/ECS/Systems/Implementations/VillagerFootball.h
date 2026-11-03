@@ -22,6 +22,8 @@ struct LivingAction;
 namespace openblack::ecs::villager_football
 {
 
+/// The state to go and build the pitch does nothing. Builders build a pitch as they build any building.
+uint32_t MoveToPitchConstruction(components::LivingAction& action);
 /// The player walks to its place for the kick-off
 uint32_t WalkToPosition(components::LivingAction& action);
 /// The player waits, and takes the attacker's role when the match plays

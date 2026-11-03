@@ -11,6 +11,7 @@
 
 #include <cstdint>
 
+#include <optional>
 #include <vector>
 
 #include <glm/vec3.hpp>
@@ -103,6 +104,9 @@ struct GestureTrail
 	TrailPath drawn;
 	/// The gesture's shape laid over the land where it was drawn, through as many points
 	TrailPath ideal;
+	/// Where the gesture of another player is heard as its trail appears: the place of that player's hand. None for a
+	/// gesture of this computer's player, which is heard with no position.
+	std::optional<glm::vec3> heardAt;
 };
 
 } // namespace openblack::particles

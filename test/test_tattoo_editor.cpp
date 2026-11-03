@@ -235,3 +235,12 @@ TEST(TattooEditor, ThePlaceCountsOnlyWhenItFacesTheCameraEnough)
 	                        SiteOnScreen {.site = 5, .screen = {130, 100}, .facingCamera = -0.19f}};
 	EXPECT_EQ(SiteUnderPointer(sites, {100, 100}), 5);
 }
+
+TEST(TattooEditor, TheCaveDoesNotOfferTheEditorInADecidedNetworkGame)
+{
+	EXPECT_TRUE(OfferedInCave(false, false));
+	// A game alone, as a skirmish, offers it also when it is decided
+	EXPECT_TRUE(OfferedInCave(false, true));
+	EXPECT_TRUE(OfferedInCave(true, false));
+	EXPECT_FALSE(OfferedInCave(true, true));
+}

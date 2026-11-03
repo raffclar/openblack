@@ -30,6 +30,7 @@
 #include "Common/GameRandom.h"
 #include "ECS/Reflection/BinaryArchive.h"
 #include "ECS/Reflection/ComponentReflection.h"
+#include "Particles/GestureTrail.h"
 #include "Particles/ParticleArchive.h"
 #include "Particles/ParticleClassRegistry.h"
 #include "Particles/ParticleEffect.h"
@@ -583,12 +584,12 @@ std::vector<uint8_t> SaveTables(SharedTables& tables)
 }
 
 /// Reads the tables of one part of a save after the things that the tables have
-void LoadTables(SharedTables& tables, std::span<const uint8_t> bytes)
+void LoadTables(SharedTables& tables, std::span<const uint8_t> bytes, bool trailSound = true)
 {
 	const reflection::EntityRemap identity;
 	reflection::BinaryReader in(Context(), bytes, identity);
 	EffectReader reader(in, tables);
-	LoadSharedTables(reader);
+	LoadSharedTables(reader, trailSound);
 	EXPECT_EQ(in.Remaining(), 0u);
 }
 
@@ -604,6 +605,29 @@ std::pair<std::vector<uint8_t>, std::vector<uint8_t>> SaveShields(float syncedRa
 }
 
 } // namespace
+
+TEST(ParticleSaveTables, AGestureTrailKeepsWhereItIsHeardAndAnOlderSaveLoadsWithNone)
+{
+	SharedTables tables;
+	tables.trails.Add(std::make_shared<GestureTrail>(GestureTrail {.heardAt = glm::vec3 {1.0f, 2.0f, 3.0f}}));
+	const auto bytes = SaveTables(tables);
+	SharedTables loaded;
+	LoadTables(loaded, bytes);
+	ASSERT_EQ(loaded.trails.items.size(), 1u);
+	EXPECT_EQ(loaded.trails.items[0]->heardAt, std::optional(glm::vec3 {1.0f, 2.0f, 3.0f}));
+
+	// An older save has no place in its trails
+	SharedTables old;
+	old.trails.Add(std::make_shared<GestureTrail>());
+	auto oldBytes = SaveTables(old);
+	// The save of no place is one flag byte at the end
+	ASSERT_EQ(oldBytes.back(), 0u);
+	oldBytes.pop_back();
+	SharedTables oldLoaded;
+	LoadTables(oldLoaded, oldBytes, false);
+	ASSERT_EQ(oldLoaded.trails.items.size(), 1u);
+	EXPECT_FALSE(oldLoaded.trails.items[0]->heardAt.has_value());
+}
 
 TEST(ParticleSaveTables, ThePartOfThisComputerKeepsOnlyItsOwnThings)
 {
