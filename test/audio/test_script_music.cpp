@@ -300,6 +300,7 @@ TEST(ScriptMusicClock, TheTimesOfABankComeFromItsHeadersAndTheFramesOfItsChunks)
 	headers[0].sampleRate = k_Rate;
 	headers[0].overrideFlags = static_cast<uint32_t>(openblack::pack::AudioBankOverride::Loop);
 	headers[0].loop = -1;
+	headers[0].maxDist = 250.0f;
 	headers[0].description = {};
 	headers[1].description = {};
 	const std::string text = "!2303=p!18815=L2";
@@ -309,6 +310,8 @@ TEST(ScriptMusicClock, TheTimesOfABankComeFromItsHeadersAndTheFramesOfItsChunks)
 	ASSERT_TRUE(timing.has_value());
 	EXPECT_EQ(timing->sampleRate, k_Rate);
 	EXPECT_EQ(timing->loopOverride, -1);
+	// The far distance of the first header counts also when its flags do not set it
+	EXPECT_EQ(timing->maxDistance, 250.0f);
 	EXPECT_EQ(timing->chunkFrames, (std::vector<uint32_t> {k_CueChunkFrames, 8064}));
 	ASSERT_EQ(timing->cues.size(), 2U);
 	EXPECT_EQ(timing->cues[0].text, "L2");

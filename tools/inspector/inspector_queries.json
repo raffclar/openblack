@@ -2024,7 +2024,7 @@
   "query": "view.draw_list"
  },
  {
-  "description": "The tasks with the camera and the dialogue, the scripts' spoken lines and the villagers drawn in high detail",
+  "description": "The tasks with the camera and the dialogue, the scripts' countdown timer, the scripts' spoken lines and the villagers drawn in high detail",
   "kind": "object",
   "parameters": [],
   "query": "view.script_control"

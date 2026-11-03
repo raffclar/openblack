@@ -199,6 +199,8 @@ enum class Step : uint8_t
 	IntroLift,
 	/// The scripts' clock of their spoken lines and texts, and the player's clicks on the dialogue
 	ScriptVoices,
+	/// The scripts' countdown timer counts down by a turn, just before the scripts run
+	ScriptCountdown,
 	Scripts,
 	ScriptObjects,
 	ScriptFade,
@@ -347,6 +349,7 @@ inline constexpr std::array k_Turn = std::to_array<Place>({
     {.step = Step::IntroLift, .stage = std::nullopt},
     // The scripts' clock moves on, and the dialogue takes the player's clicks, just before the scripts look at the world
     {.step = Step::ScriptVoices, .stage = Stage::Scripts},
+    {.step = Step::ScriptCountdown, .stage = Stage::Scripts},
     {.step = Step::Scripts, .stage = Stage::Scripts},
     {.step = Step::ScriptObjects, .stage = Stage::Scripts},
     {.step = Step::ScriptFade, .stage = Stage::Scripts},

@@ -186,8 +186,11 @@ View script_camera::DualView(const DualThing& first, const DualThing& second, Du
 {
 	const auto& a = first.position;
 	const auto& b = second.position;
-	const float averageHeight = (first.height + second.height) * 0.5f;
-	const float tallest = first.height > second.height ? first.height : second.height;
+	// A point counts as a little high for the middle, and as flat for the distance
+	const auto middleHeight = [](const DualThing& thing) { return thing.point ? k_DualPointMiddleHeight : thing.height; };
+	const auto distanceHeight = [](const DualThing& thing) { return thing.point ? 0.0f : thing.height; };
+	const float averageHeight = (middleHeight(first) + middleHeight(second)) * 0.5f;
+	const float tallest = distanceHeight(first) > distanceHeight(second) ? distanceHeight(first) : distanceHeight(second);
 	const glm::vec3 focus {(b.x + a.x) * 0.5f, ((b.y + a.y) * 0.5f) + (averageHeight * 0.5f), (b.z + a.z) * 0.5f};
 	settings.pitch = settings.pitch > k_DualLowestPitch ? settings.pitch : k_DualLowestPitch;
 	const float dx = a.x - b.x;
@@ -235,7 +238,8 @@ ScriptCameraModel::Saved ScriptCameraModel::GetSaved() const
 		                       .second = dual.second.id,
 		                       .settings = dual.settings,
 		                       .lastFirst = dual.lastFirst,
-		                       .lastSecond = dual.lastSecond});
+		                       .lastSecond = dual.lastSecond,
+		                       .secondPoint = dual.second.point});
 	}
 	return saved;
 }
@@ -269,8 +273,10 @@ void ScriptCameraModel::Restore(const Saved& saved, const Lookups& lookups)
 	for (const auto& dual : saved.duals)
 	{
 		const auto lookup = [&lookups](uint32_t id) { return lookups.dual ? lookups.dual(id) : DualLookup {}; };
-		_duals.push_back({.first = {.id = dual.first, .lookup = lookup(dual.first)},
-		                  .second = {.id = dual.second, .lookup = lookup(dual.second)},
+		_duals.push_back({.first = {.id = dual.first, .lookup = lookup(dual.first), .point = std::nullopt},
+		                  .second = dual.secondPoint.has_value()
+		                                ? PointSubject(*dual.secondPoint)
+		                                : DualSubject {.id = dual.second, .lookup = lookup(dual.second), .point = std::nullopt},
 		                  .settings = dual.settings,
 		                  .lastFirst = dual.lastFirst,
 		                  .lastSecond = dual.lastSecond});
@@ -341,7 +347,7 @@ std::optional<uint32_t> ScriptCameraModel::GetFocusedThing() const
 	return _lookedAtId.has_value() ? _lookedAtId : _followedId;
 }
 
-void ScriptCameraModel::FollowAndLookAt(Subject thing, float distance)
+void ScriptCameraModel::FollowAndLookAt(Subject thing, float distance, bool atOnce)
 {
 	_followed = std::move(thing.lookup);
 	_followedId = _followed ? std::optional(thing.id) : std::nullopt;
@@ -352,10 +358,13 @@ void ScriptCameraModel::FollowAndLookAt(Subject thing, float distance)
 		_follow.pitch = view.pitch;
 		_follow.viewingDistance = distance;
 	}
-	SnapToFollowed();
+	if (atOnce)
+	{
+		SnapToFollowed();
+	}
 }
 
-void ScriptCameraModel::Follow(Subject thing)
+void ScriptCameraModel::Follow(Subject thing, bool atOnce)
 {
 	_followed = std::move(thing.lookup);
 	_followedId = _followed ? std::optional(thing.id) : std::nullopt;
@@ -371,7 +380,10 @@ void ScriptCameraModel::Follow(Subject thing)
 	{
 		_follow.heading = 0.0f;
 	}
-	SnapToFollowed();
+	if (atOnce)
+	{
+		SnapToFollowed();
+	}
 }
 
 void ScriptCameraModel::LookAt(Subject thing)
@@ -442,11 +454,34 @@ void ScriptCameraModel::UpdateTrack()
 void ScriptCameraModel::StartDualView(DualSubject first, DualSubject second)
 {
 	// The same two things again change nothing
-	if (!_duals.empty() && _duals.back().first.id == first.id && _duals.back().second.id == second.id)
+	if (!_duals.empty() && !_duals.back().second.point.has_value() && _duals.back().first.id == first.id &&
+	    _duals.back().second.id == second.id)
 	{
 		return;
 	}
 	_duals.push_back({.first = std::move(first), .second = std::move(second), .settings = {}});
+	_seconds = 0.0f;
+}
+
+ScriptCameraModel::DualSubject ScriptCameraModel::PointSubject(const glm::vec3& point)
+{
+	return {.id = 0,
+	        .lookup = [point]() -> std::optional<script_camera::DualThing> {
+		        return script_camera::DualThing {
+		            .position = point, .height = 0.0f, .radius = script_camera::k_DualNoModelRadius, .point = true};
+	        },
+	        .point = point};
+}
+
+void ScriptCameraModel::StartDualViewWithPoint(DualSubject thing, const glm::vec3& point)
+{
+	// The same thing and point again change nothing
+	if (!_duals.empty() && _duals.back().second.point == point && _duals.back().first.id == thing.id)
+	{
+		return;
+	}
+	_duals.push_back(
+	    {.first = std::move(thing), .second = PointSubject(point), .settings = {.zoom = script_camera::k_DualPointZoom}});
 	_seconds = 0.0f;
 }
 

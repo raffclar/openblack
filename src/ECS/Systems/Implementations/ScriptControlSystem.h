@@ -39,6 +39,10 @@ public:
 	void StoreCameraDetails(const CameraDetails& details) override { _cameraDetails = details; }
 	[[nodiscard]] const CameraDetails& GetCameraDetails() const override { return _cameraDetails; }
 
+	[[nodiscard]] script::timers::CountdownTimer& GetCountdownTimer() override { return _countdown; }
+	[[nodiscard]] const script::timers::CountdownTimer& GetCountdownTimer() const override { return _countdown; }
+	void ProcessTurn() override { _countdown.ProcessTurn(); }
+
 	void Reset() override;
 	void SaveState(reflection::BinaryWriter& out) const override;
 	bool LoadState(reflection::BinaryReader& in) override;
@@ -52,6 +56,7 @@ private:
 	std::unique_ptr<CameraModel> _danceCamera;
 	uint32_t _gameSpeedOwner {0};
 	CameraDetails _cameraDetails;
+	script::timers::CountdownTimer _countdown;
 };
 
 } // namespace openblack::ecs::systems

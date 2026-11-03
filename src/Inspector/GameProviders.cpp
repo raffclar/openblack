@@ -3318,13 +3318,18 @@ std::unique_ptr<ProviderInterface> ViewProvider(const GameSeamInterface* seam)
 		        return result;
 	        }));
 	provider->Add(
-	    Query("script_control", "The tasks with the camera and the dialogue, the scripts' spoken lines and the "
-	                            "villagers drawn in high detail"),
+	    Query("script_control", "The tasks with the camera and the dialogue, the scripts' countdown timer, the scripts' "
+	                            "spoken lines and the villagers drawn in high detail"),
 	    [](const QueryContext& /*c*/) {
 		    Json result = Json::object();
 		    if (Locator::scriptControlSystem::has_value())
 		    {
-			    result["camera_owner"] = Locator::scriptControlSystem::value().GetCameraOwner();
+			    const auto& control = Locator::scriptControlSystem::value();
+			    result["camera_owner"] = control.GetCameraOwner();
+			    const auto& countdown = control.GetCountdownTimer();
+			    result["countdown"] = {{"running", countdown.IsRunning()},
+			                           {"visible", countdown.IsVisible()},
+			                           {"turns_left", countdown.GetTurnsLeft()}};
 		    }
 		    if (Locator::dialogueControlSystem::has_value())
 		    {

@@ -111,6 +111,17 @@ bool openblack::audio::ReachedMusicLine(int32_t lastLine, int32_t line)
 	return static_cast<uint32_t>(lastLine) >= static_cast<uint32_t>(line);
 }
 
+float openblack::audio::MusicPlayDistance(const MusicTiming* bank)
+{
+	constexpr float k_NoBankDistance = 100.0f;
+	if (bank == nullptr)
+	{
+		return k_NoBankDistance;
+	}
+	// A distance that is not a number also gives the distance for no bank
+	return bank->maxDistance >= 0.0f ? bank->maxDistance : k_NoBankDistance;
+}
+
 void ScriptMusic::Start(MusicType type)
 {
 	_type = type;

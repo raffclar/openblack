@@ -28,6 +28,7 @@ std::optional<MusicTiming> openblack::audio::MakeMusicTiming(std::span<const pac
 	MusicTiming timing;
 	const auto& first = headers.front();
 	timing.sampleRate = first.sampleRate;
+	timing.maxDistance = first.maxDist;
 	if ((first.overrideFlags & static_cast<uint32_t>(pack::AudioBankOverride::Loop)) != 0)
 	{
 		timing.loopOverride = first.loop;

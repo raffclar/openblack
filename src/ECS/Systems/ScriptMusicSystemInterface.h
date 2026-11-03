@@ -42,6 +42,9 @@ public:
 	/// Whether the world has the game's music (see audio::WorldHasMusic). Without it, no piece plays, and the scripts
 	/// that wait on music wait on the help text.
 	[[nodiscard]] virtual bool HasMusic() const = 0;
+	/// How far the music of a type carries (see audio::MusicPlayDistance). Without the music, or for a type with no bank,
+	/// it is 100. A computer with no sound device has no banks, also in a network game and on the server.
+	[[nodiscard]] virtual float PlayDistance(audio::MusicType type) const = 0;
 };
 
 } // namespace openblack::ecs::systems

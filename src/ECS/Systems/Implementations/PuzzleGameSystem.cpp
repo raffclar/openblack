@@ -1646,6 +1646,23 @@ void PuzzleGameSystem::Forget(entt::entity puzzle)
 	}
 }
 
+bool PuzzleGameSystem::Restart(entt::entity puzzle)
+{
+	auto& registry = Entities();
+	auto* game = puzzle != entt::null && registry.Valid(puzzle) ? registry.TryGet<PuzzleGame>(puzzle) : nullptr;
+	if (game == nullptr)
+	{
+		return false;
+	}
+	// Only a maze has a start to go back to. The game also starts a puzzle of other kinds, but not a totem, as a maze,
+	// with data that is not maze data (see docs/vanilla-bugs.md). Such a puzzle does not change.
+	if (maze_puzzle::IsMaze(game->type))
+	{
+		ResetMaze(puzzle, *game);
+	}
+	return true;
+}
+
 bool PuzzleGameSystem::DeletePieces(entt::entity puzzle)
 {
 	auto& registry = Entities();
