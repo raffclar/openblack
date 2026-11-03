@@ -34,9 +34,12 @@ function (openblack_compile_shaders)
     ARGS "${options}" "${oneValueArgs}" "${multiValueArgs}" "${ARGN}"
   )
 
-  # Renderers per platform, as bgfx_compile_shaders() picks them. WGSL is for the WebGPU renderer, which bgfx can
-  # use on every desktop platform and in the browser.
-  set(profiles 430 300_es spirv wgsl)
+  # Renderers per platform, as bgfx_compile_shaders() picks them. WGSL is for the WebGPU renderer, which only the web
+  # build uses.
+  set(profiles 430 300_es spirv)
+  if (EMSCRIPTEN)
+    list(APPEND profiles wgsl)
+  endif ()
   if (IOS)
     set(platform IOS)
     list(APPEND profiles metal)
@@ -90,7 +93,7 @@ function (openblack_compile_shaders)
       set(output_dir "${ARGS_OUTPUT_DIR}/${profile_dir}")
       set(output "${output_dir}/${shader_file_name}.bin.h")
       set(profile_platform ${platform})
-      if (profile STREQUAL "spirv" OR (profile STREQUAL "wgsl" AND APPLE))
+      if (profile STREQUAL "spirv")
         set(profile_platform LINUX)
       endif ()
 

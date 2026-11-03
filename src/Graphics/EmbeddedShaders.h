@@ -13,6 +13,12 @@
 
 #include <bgfx/embedded_shader.h>
 
+// Only the web build draws with WebGPU, so only it embeds the WGSL shaders.
+#if !defined(__EMSCRIPTEN__)
+#undef BGFX_EMBEDDED_SHADER_WGSL
+#define BGFX_EMBEDDED_SHADER_WGSL(...)
+#endif
+
 // bgfx can use the Direct3D of Windows through WSL on Linux. The Linux build does not use it, so it embeds no Direct3D
 // shaders.
 #if BX_PLATFORM_LINUX
