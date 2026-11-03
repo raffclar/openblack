@@ -11,6 +11,7 @@
 
 #include <cctype>
 #include <cmath>
+#include <cstddef>
 
 #include <algorithm>
 #include <string_view>
@@ -90,11 +91,38 @@ void Follow::Jump(float skyType)
 	_wholeDome = skyType;
 }
 
-FrameRows WholeDomeAt(const Follow& follow)
+void Picture::Drew(std::span<const Rows> rows)
 {
-	FrameRows frame;
-	frame.rows.at(frame.count++) = {.skyType = follow.Following(), .first = 0, .count = k_Rows};
-	return frame;
+	for (const auto& band : rows)
+	{
+		const auto first = std::min<size_t>(band.first, k_Rows);
+		const auto last = std::min<size_t>(static_cast<size_t>(band.first) + band.count, k_Rows);
+		std::fill(_skyTypes.begin() + static_cast<std::ptrdiff_t>(first), _skyTypes.begin() + static_cast<std::ptrdiff_t>(last),
+		          band.skyType);
+	}
+}
+
+std::vector<Rows> Picture::Again() const
+{
+	std::vector<Rows> bands;
+	for (uint16_t row = 0; row < k_Rows; ++row)
+	{
+		const auto& skyType = _skyTypes.at(row);
+		if (!skyType.has_value())
+		{
+			continue;
+		}
+		// The row continues the band above it when that band ends at this row and has the same sky type
+		if (!bands.empty() && bands.back().first + bands.back().count == row && bands.back().skyType == *skyType)
+		{
+			++bands.back().count;
+		}
+		else
+		{
+			bands.push_back({.skyType = *skyType, .first = row, .count = 1});
+		}
+	}
+	return bands;
 }
 
 Pair TimePair(float skyType)

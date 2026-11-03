@@ -81,19 +81,29 @@ public:
 			return nullptr;
 		}
 		const auto& renderer = Locator::rendererInterface::value();
+		const auto kept = renderer.GetDeviceRestoreKept();
 		return {
 		    {"renderer", GetRendererBackend()},
 		    {"restores", renderer.GetDeviceRestores()},
-		    {"kept_bytes", renderer.GetDeviceRestoreBytes()},
+		    {"kept_bytes", kept.Total()},
+		    {"kept",
+		     {
+		         {"buffers", kept.buffers},
+		         {"dynamic_buffers", kept.dynamicBuffers},
+		         {"shaders", kept.shaders},
+		         {"textures", kept.textures},
+		         {"texture_changes", kept.textureChanges},
+		     }},
 		};
 	}
-	bool RestoreGraphicsDevice() override
+	bool RestoreGraphicsDevice(bool lose) override
 	{
 		if (!Locator::rendererInterface::has_value())
 		{
 			return false;
 		}
-		Locator::rendererInterface::value().RequestDeviceRestore();
+		Locator::rendererInterface::value().RequestDeviceRestore(lose ? graphics::device_restore::Request::Lose
+		                                                              : graphics::device_restore::Request::MakeAgain);
 		return true;
 	}
 	[[nodiscard]] std::string GetRendererBackend() const override

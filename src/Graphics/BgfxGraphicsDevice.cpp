@@ -137,6 +137,11 @@ void BgfxGraphicsDevice::SetName(TextureHandle texture, std::string_view name) c
 	bgfx::setName(toBgfx(texture), name.data(), static_cast<int32_t>(name.size()));
 }
 
+void BgfxGraphicsDevice::SetTexelsGivenAgain(TextureHandle texture) const
+{
+	bgfx::setDeviceRestoreByApplication(toBgfx(texture));
+}
+
 void BgfxGraphicsDevice::Destroy(TextureHandle texture) const
 {
 	bgfx::destroy(toBgfx(texture));

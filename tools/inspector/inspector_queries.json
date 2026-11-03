@@ -2518,7 +2518,13 @@
  {
   "description": "Makes the graphics device again with all its textures, buffers and shaders, as after a lost device, at the start of a next frame. Poll game.device until restores goes up. Null device when the game has none",
   "kind": "object",
-  "parameters": [],
+  "parameters": [
+   {
+    "description": "Lose the device first: Direct3D 12 removes its device, Vulkan acts as if a call gave a lost device (false by default)",
+    "name": "lose",
+    "type": "boolean"
+   }
+  ],
   "query": "game.restore_device",
   "writes": true
  },

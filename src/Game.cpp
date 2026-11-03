@@ -793,6 +793,7 @@ Game::Game(Arguments&& args) noexcept
 #endif
     , _requestScreenshot(args.requestScreenshot)
     , _deviceRestoreFrame(args.deviceRestoreFrame)
+    , _deviceLossFrame(args.deviceLossFrame)
     , _turnApiCheck(args.turnApiCheck)
     , _turnBesideDraw(args.turnBesideDraw)
 {
@@ -1319,7 +1320,7 @@ bool Game::ProcessEvents(const SDL_Event& event) noexcept
 					auto& renderer = Locator::rendererInterface::value();
 					if (keys::IsDeviceRestoreKey(k_Platform, key, held))
 					{
-						renderer.RequestDeviceRestore();
+						renderer.RequestDeviceRestore(graphics::device_restore::Request::MakeAgain);
 					}
 					else
 					{
@@ -5555,7 +5556,11 @@ bool Game::RunFrame() noexcept
 			}
 			if (_deviceRestoreFrame == _frameCount)
 			{
-				Locator::rendererInterface::value().RequestDeviceRestore();
+				Locator::rendererInterface::value().RequestDeviceRestore(graphics::device_restore::Request::MakeAgain);
+			}
+			if (_deviceLossFrame == _frameCount)
+			{
+				Locator::rendererInterface::value().RequestDeviceRestore(graphics::device_restore::Request::Lose);
 			}
 			// A picture without the debug windows: the frame's windows are made as ever but not drawn
 			// nor in a challenge's picture
