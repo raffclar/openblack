@@ -42,6 +42,11 @@ vcpkg_download_distfile(
 # - essl-no-inline: the ESSL shaders do not get the passes that inline functions. The inline of a function that
 #   returns early makes a block that runs one time, which SPIRV-Cross writes as a do-while(false) loop. ANGLE on
 #   Direct3D compiled the land shader with these loops for more than a minute, and Chrome then lost the context.
+# A change to the OpenGL renderer (WebGL 2 in the browser):
+# - gl-parallel-link: with KHR_parallel_shader_compile, the renderer does not wait for each shader compile and
+#   program link when it makes them. The driver links in the background, and the first draw with a program reads
+#   the link result. Thus the browser links the programs in parallel while the game loads its resources.
+#   Without the extension, the renderer links as before.
 # A change to the Vulkan renderer:
 # - vulkan-one-pipeline-cache: the renderer reads the application's kept pipeline cache one time, when it starts, and
 #   makes all pipelines in that one cache. It gives the cache back one time, when it stops. Before, each new pipeline
@@ -80,6 +85,7 @@ vcpkg_extract_source_archive(
     d3d12-screenshot-frame.patch
     submit-order.patch
     webgpu-pipeline-prefetch.patch
+    gl-parallel-link.patch
 )
 
 # Replaces text in a file of the bgfx source. The build stops when the text is not there, so that a new bgfx
