@@ -450,6 +450,100 @@ std::optional<PlayerNames> PlayerOfInterface(const VanillaWorld& world, uint32_t
 	return std::nullopt;
 }
 
+/// A record of the file with the number and the type, or none
+const VanillaRecord* RecordOf(const VanillaWorld& world, uint32_t number, VanillaType type)
+{
+	const auto* record = number != 0 ? world.Record(number) : nullptr;
+	return record != nullptr && record->Is(type) ? record : nullptr;
+}
+
+/// The first word of an array of words of the record, or nothing for an empty array
+std::optional<uint32_t> FirstWordOf(const VanillaWorld& world, const VanillaRecord& record, std::string_view name)
+{
+	const auto* field = world.Field(record, name);
+	const auto bytes = world.Raw(record, name);
+	if (field == nullptr || field->size != sizeof(uint32_t) || field->count == 0 || bytes.size() < sizeof(uint32_t))
+	{
+		return std::nullopt;
+	}
+	uint32_t word = 0;
+	std::memcpy(&word, bytes.data(), sizeof(word));
+	return word;
+}
+
+/// A worship site of the file with its prayer power, its needs, its altar and the food in its pot
+std::optional<ImportedWorshipSite> ReadWorshipSite(const VanillaWorld& world, const VanillaRecord& record, std::string& why)
+{
+	const auto citadel = world.Ref(record, "partCitadel");
+	const auto tribe = TribeRowOf(world.Word(record, "siteTribe").value_or(0));
+	const auto place = world.Byte(record, "sitePlace");
+	if (!citadel.has_value() || *citadel == 0 || !tribe.has_value() || !place.has_value())
+	{
+		why = "the worship site has no temple, no tribe of the table or no place";
+		return std::nullopt;
+	}
+	ImportedWorshipSite site {
+	    .number = record.number,
+	    .citadel = *citadel,
+	    .tribe = *tribe,
+	    .place = *place,
+	    .built = world.Float(record, "built").value_or(0.0f),
+	    .dance = world.Ref(record, "siteDance").value_or(0),
+	    .foodPot = world.Ref(record, "siteFoodPot").value_or(0),
+	    .worshipCount = world.Word(record, "siteWorshipCount").value_or(0),
+	    .foodOnTheWay = std::bit_cast<int32_t>(FirstWordOf(world, record, "siteFoodOnTheWay").value_or(0)),
+	    .chants = {.battery = world.Float(record, "siteBattery").value_or(0.0f),
+	               .sacrificed = world.Float(record, "siteSacrificed").value_or(0.0f),
+	               .available = world.Float(record, "siteAvailable").value_or(0.0f),
+	               .used = world.Float(record, "siteUsed").value_or(0.0f),
+	               .requested = world.Float(record, "siteRequested").value_or(0.0f),
+	               .chantsPerDancer = world.Float(record, "siteChantsPerDancer").value_or(0.0f),
+	               .strain = world.Float(record, "siteStrain").value_or(0.0f),
+	               .infinite = world.Word(record, "siteInfinite").value_or(0) != 0,
+	               .freeMaintenance = world.Word(record, "siteFreeMaintenance").value_or(0) != 0},
+	    .footpathLink = world.Ref(record, "footpathLink").value_or(0),
+	    .goHome = static_cast<uint32_t>(world.Refs(record, "siteGoHome").size()),
+	};
+	const auto towns = world.Refs(record, "siteTowns");
+	site.towns.assign(towns.begin(), towns.end());
+	const auto icons = world.Refs(record, "siteIcons");
+	site.icons.assign(icons.begin(), icons.end());
+	const auto worshippers = world.Refs(record, "siteWorshippers");
+	site.worshippers.assign(worshippers.begin(), worshippers.end());
+	// The pot is a pot of any kind that keeps an amount
+	if (const auto* pot = site.foodPot != 0 ? world.Record(site.foodPot) : nullptr; pot != nullptr)
+	{
+		site.food = world.Word(*pot, "potAmount");
+	}
+	// The needs display keeps the three flags in the order food, rest and hiding
+	if (const auto* needs = RecordOf(world, world.Ref(record, "siteNeeds").value_or(0), VanillaType::ShowNeeds);
+	    needs != nullptr)
+	{
+		const auto flags = world.Refs(*needs, "needFlags");
+		std::array<float, k_SiteNeedFlags> values {};
+		bool whole = flags.size() == k_SiteNeedFlags;
+		for (size_t i = 0; whole && i < k_SiteNeedFlags; ++i)
+		{
+			const auto* flag = RecordOf(world, flags[i], VanillaType::ShowNeedsVisuals);
+			const auto need = flag != nullptr ? world.Float(*flag, "needFlagNeed") : std::nullopt;
+			whole = need.has_value();
+			values.at(i) = need.value_or(0.0f);
+		}
+		if (whole)
+		{
+			site.needs = values;
+		}
+	}
+	const auto altarNumber = world.Ref(record, "siteAltar").value_or(0);
+	if (const auto* altar = RecordOf(world, altarNumber, VanillaType::WorshipTotem); altar != nullptr)
+	{
+		site.altar = ImportedAltar {.number = altarNumber,
+		                            .built = world.Float(*altar, "built").value_or(0.0f),
+		                            .life = world.Float(*altar, "life").value_or(1.0f)};
+	}
+	return site;
+}
+
 std::optional<ImportedScaffold> ReadScaffold(const VanillaWorld& world, const VanillaRecord& record, std::string& why)
 {
 	const auto position = PositionOf(world, record);
@@ -619,6 +713,16 @@ std::optional<AbodeInfo> AbodeRowOf(uint32_t number)
 		return std::nullopt;
 	}
 	return static_cast<AbodeInfo>(k_FirstAbodeRowNumber - number);
+}
+
+std::optional<Tribe> TribeRowOf(uint32_t number)
+{
+	const auto count = static_cast<uint32_t>(Tribe::_COUNT);
+	if (number > k_FirstTribeRowNumber || number <= k_FirstTribeRowNumber - count)
+	{
+		return std::nullopt;
+	}
+	return static_cast<Tribe>(k_FirstTribeRowNumber - number);
 }
 
 std::optional<VillagerInfo> VillagerRowOf(uint32_t number)
@@ -960,6 +1064,14 @@ ImportedTowns ReadTowns(const VanillaWorld& world)
 			if (auto site = ReadSite(world, record, why); site.has_value())
 			{
 				imported.sites.push_back(std::move(*site));
+				continue;
+			}
+		}
+		else if (record.Is(VanillaType::WorshipSite))
+		{
+			if (auto site = ReadWorshipSite(world, record, why); site.has_value())
+			{
+				imported.worshipSites.push_back(std::move(*site));
 				continue;
 			}
 		}

@@ -41,8 +41,15 @@ namespace openblack::ecs::vanilla_world_import
 constexpr uint32_t k_FirstAbodeRowNumber = 2394;
 constexpr uint32_t k_FirstVillagerRowNumber = k_FirstAbodeRowNumber - static_cast<uint32_t>(AbodeInfo::_COUNT);
 
+/// The number of the first row of the table of the tribes. The game loads the 9 tribes, then the speeds (10 rows), the
+/// ball (1), the football (1), the places of the football players (10), the dances (25), the states of the villagers
+/// (255) and the states of the animals (53). The first totem comes right after them.
+constexpr uint32_t k_FirstTribeRowNumber = 742;
+
 /// The building row that has the number, or nothing for a number of another table
 [[nodiscard]] std::optional<AbodeInfo> AbodeRowOf(uint32_t number);
+/// The tribe that has the number, or nothing for a number of another table
+[[nodiscard]] std::optional<Tribe> TribeRowOf(uint32_t number);
 /// The villager row that has the number, or nothing for a number of another table
 [[nodiscard]] std::optional<VillagerInfo> VillagerRowOf(uint32_t number);
 
@@ -581,6 +588,73 @@ struct ImportedDesireFlag
 	float level {0.0f};
 };
 
+/// The altar of a worship site of the file
+struct ImportedAltar
+{
+	uint32_t number {0};
+	/// How much of the altar is built, and its life
+	float built {0.0f};
+	float life {1.0f};
+};
+
+/// The prayer power of a worship site of the file
+struct ImportedChants
+{
+	float battery {0.0f};
+	/// All the prayer power that sacrifices at the altar gave
+	float sacrificed {0.0f};
+	/// What the site can give this turn, what it gave and what was asked for
+	float available {0.0f};
+	float used {0.0f};
+	float requested {0.0f};
+	/// What each dancer chanted last turn
+	float chantsPerDancer {0.0f};
+	/// How far the requests are more than the dancers can give
+	float strain {0.0f};
+	/// The two cheats: prayer power with no end, and miracles that cost nothing to keep
+	bool infinite {false};
+	bool freeMaintenance {false};
+};
+
+/// The number of need flags of a worship site: food, rest and hiding
+constexpr size_t k_SiteNeedFlags = 3;
+
+/// A worship site of the file
+struct ImportedWorshipSite
+{
+	uint32_t number {0};
+	/// The number of the object of its temple in the file
+	uint32_t citadel {0};
+	Tribe tribe {Tribe::NORSE};
+	/// Its place round the temple, 0 to 5
+	uint8_t place {0};
+	/// How much of it is built
+	float built {0.0f};
+	/// The numbers of the objects of its towns, of its dance, of its food pot and of its spell icons in the file, each
+	/// list in the order of the file
+	std::vector<uint32_t> towns;
+	uint32_t dance {0};
+	uint32_t foodPot {0};
+	std::vector<uint32_t> icons;
+	/// The villagers at worship in the order of the file, and the count of the site. The game changes the count also
+	/// when it removes a villager that is not in the list, so the two can be different.
+	std::vector<uint32_t> worshippers;
+	uint32_t worshipCount {0};
+	/// The food in its pot. Nothing when the file has no pot or no amount for it.
+	std::optional<uint32_t> food;
+	/// Food on its way from its towns
+	int32_t foodOnTheWay {0};
+	ImportedChants chants;
+	/// What its need flags show: food, rest and hiding. Nothing when the file has no need flags for the site.
+	std::optional<std::array<float, k_SiteNeedFlags>> needs;
+	/// Its altar. Nothing when the file has no altar for the site.
+	std::optional<ImportedAltar> altar;
+	/// The number of its footpath link in the file, 0 for none
+	uint32_t footpathLink {0};
+	/// The count of the villagers that ask to go home. No villager of this version of the game asks.
+	uint32_t goHome {0};
+};
+
 /// The towns, buildings and villagers of a world file, in the order of the file
 struct ImportedTowns
 {
@@ -605,6 +679,8 @@ struct ImportedTowns
 	std::vector<ImportedTribalPower> tribalPowers;
 	/// The flags of the desires of the towns
 	std::vector<ImportedDesireFlag> desireFlags;
+	/// The worship sites, in the order of the file
+	std::vector<ImportedWorshipSite> worshipSites;
 	/// Each record that the import does not take, and why
 	std::vector<std::string> skipped;
 };
