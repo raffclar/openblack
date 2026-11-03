@@ -30,7 +30,6 @@
 #include "ECS/Components/Transform.h"
 #include "ECS/Registry.h"
 #include "ECS/Systems/FishFarmSystemInterface.h"
-#include "ECS/Systems/PuzzleGameSystemInterface.h"
 #include "Locator.h"
 #include "Resources/ResourcesInterface.h"
 
@@ -140,14 +139,11 @@ void FootprintSystem::Step(entt::entity creature)
 	{
 		++_dropped;
 	}
-	// A step low enough to be in the water scares the fish near it
+	// A step low enough to be in the water scares the fish of a farm near it. The game turns find the steps that scare
+	// the fish of a fish puzzle.
 	if (foot.position.y < k_FishScareFootHeight && Locator::fishFarmSystem::has_value())
 	{
 		Locator::fishFarmSystem::value().Scare(foot.position);
-	}
-	if (foot.position.y < k_FishScareFootHeight && Locator::puzzleGameSystem::has_value())
-	{
-		Locator::puzzleGameSystem::value().ScareFish(foot.position);
 	}
 }
 

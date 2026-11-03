@@ -30,7 +30,6 @@
 #include "Creature/CreatureAudio.h"
 #include "Creature/CreatureFootstepPuffs.h"
 #include "Creature/CreatureLayers.h"
-#include "Creature/CreaturePointing.h"
 #include "Creature/CreatureRig.h"
 #include "Creature/CreatureShownFace.h"
 #include "ECS/Components/Creature.h"
@@ -38,6 +37,7 @@
 #include "ECS/Components/CreatureBody.h"
 #include "ECS/Components/ShownCreatureFace.h"
 #include "ECS/Components/Transform.h"
+#include "ECS/CreatureTurnSteps.h"
 #include "ECS/Reflection/BinaryArchive.h"
 #include "ECS/Registry.h"
 #include "ECS/SnowDust.h"
@@ -171,41 +171,6 @@ void SoundIfAsked(entt::entity entity, const Creature& creature, const Transform
 	}
 }
 
-/// The layers of the body as they are posed this frame, with the face that the body shows
-creature_audio::Layers LayersOf(const CreatureAnimation& animation, const creature_layers::FaceLayer& face)
-{
-	creature_audio::Layers layers;
-	// The animations played by weight stand in for the body's own action
-	const auto& slots = DrawnSlots(animation);
-	if (slots.empty() && creature_layers::IsPlaying(animation.body))
-	{
-		layers.body = creature_audio::Played {creature_layers::CurrentAnimation(animation.body), animation.body.timeMs};
-	}
-	if (animation.gesture.animation.has_value())
-	{
-		layers.gesture = creature_audio::Played {*animation.gesture.animation, animation.gesture.timeMs};
-	}
-	// A face being run back to its start to change makes no sound
-	if (face.current.has_value() && face.wanted == face.current)
-	{
-		layers.face = creature_audio::Played {*face.current, face.timeMs};
-	}
-	std::vector<float> weights;
-	std::vector<size_t> animations;
-	for (const auto& slot : slots)
-	{
-		layers.slots.push_back({slot.animation, slot.timeMs});
-		weights.push_back(slot.weight);
-		animations.push_back(slot.animation);
-	}
-	// The game moves the four animations of a point on as the first of them, so only its events sound, whatever the
-	// weights
-	const auto pointing =
-	    creature_audio::BlendSoundingSlot(animations, creature_pointing::k_Animations, creature_pointing::k_Animations.front());
-	layers.soundingSlot = pointing.has_value() ? pointing : creature_audio::SoundingSlot(weights);
-	return layers;
-}
-
 /// The dust that a footstep throws up at the creature's place on the ground. Where snow lies, it shows the colour of
 /// the land's light
 void FootstepPuffs(const Creature& creature, const Transform& transform, int32_t count)
@@ -271,8 +236,9 @@ void CreatureAudioSystem::Update(std::chrono::duration<float, std::milli> gameTi
 		    const auto* rig = RigOf(creature);
 		    // The face that this computer shows can be the face of a stroke of its own hand
 		    const auto* shown = registry.TryGet<const ShownCreatureFace>(entity);
-		    const auto layers =
-		        LayersOf(animation, creature_shown_face::Shown(animation.face, shown != nullptr ? &shown->face : nullptr));
+		    const auto layers = ecs::creature_turn_steps::LayersOf(
+		        animation, DrawnSlots(animation),
+		        creature_shown_face::Shown(animation.face, shown != nullptr ? &shown->face : nullptr));
 		    if (rig == nullptr)
 		    {
 			    return;

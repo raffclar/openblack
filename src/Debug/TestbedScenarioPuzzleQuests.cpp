@@ -8,7 +8,7 @@
  *******************************************************************************/
 
 // The testbed's scenarios of the puzzle quests of the fourth and fifth lands: the two Theseus mazes and their prize,
-// the fish puzzle, the bronze totem puzzle, and the lion maze of Stanley the wolf
+// the fish puzzle and the steps of a creature in it, the bronze totem puzzle, and the lion maze of Stanley the wolf
 
 #include <glm/vec2.hpp>
 
@@ -31,6 +31,10 @@ constexpr glm::vec2 k_FishPuzzle = glm::vec2(2497.891f, 3628.35f) - k_Land4Middl
 /// The script's kind of object of a puzzle game, and the kind of the fish puzzle
 constexpr float k_PuzzleObjectType = 32.0f;
 constexpr float k_FishPuzzleKind = 14.0f;
+/// A creature starts its walk on the shore west of the fish puzzle, and walks to the edge of the sea, where the land is
+/// less than a metre high
+constexpr glm::vec2 k_FishWalkStart = glm::vec2(2432.0f, 3592.0f) - k_Land4Middle;
+constexpr glm::vec2 k_FishWalkEnd = glm::vec2(2447.0f, 3618.0f) - k_Land4Middle;
 /// The place of the bronze totem puzzle north-west of the Japanese village, from the middle of the fourth land
 constexpr glm::vec2 k_TotemPuzzle = glm::vec2(2286.4448f, 3588.0894f) - k_Land4Middle;
 /// The middle of the blocks of the fifth land
@@ -83,6 +87,34 @@ void AddFishHerding(std::vector<Scenario>& all)
 	                                      {.kind = Argument::Kind::Integer, .number = k_PuzzleObjectType},
 	                                      {.kind = Argument::Kind::Integer, .number = k_FishPuzzleKind},
 	                                      {.kind = Argument::Kind::Position, .point = k_FishPuzzle}}}},
+	});
+}
+
+void AddFishCreatureSteps(std::vector<Scenario>& all)
+{
+	all.push_back({
+	    .id = "story.l4_fish_creature_steps",
+	    .name = "Story: a creature walks to the edge of the sea by the fish puzzle and its steps scare the fish",
+	    .facet = Facet::Story,
+	    .description = "The fourth land loads with its own scripts and sky. The fish puzzle is made in the bay, as its "
+	                   "script makes it. A tiger comes on the shore west of the puzzle and walks to the edge of the sea.",
+	    .expected = "The tiger walks to the edge of the sea. Each step of a foot lower than 1 m scares the fish: each "
+	                "shoal goes to a new point near its centre, and fish near the foot dart away. The scare comes in the "
+	                "game turn after the step, the same on each computer.",
+	    .environment = {.land = Land::Story, .storyLand = "Land4.txt", .dispenserGrid = false},
+	    .framing = {.shot = Shot::Placed,
+	                .eye = {k_FishWalkEnd.x - 10.0f, 45.0f, k_FishWalkEnd.y - 45.0f},
+	                .look = {(k_FishWalkEnd.x + k_FishPuzzle.x) * 0.5f, 0.0f, k_FishPuzzle.y}},
+	    .creatures = {{.label = "player's tiger", .species = CreatureType::Tiger, .offset = k_FishWalkStart}},
+	    .commands = {{.kind = Kind::CallNative,
+	                  .delaySeconds = 0.5f,
+	                  .script = "CREATE_WITH_ANGLE_AND_SCALE",
+	                  .scriptArguments = {{.number = 0.0f},
+	                                      {.number = 1.0f},
+	                                      {.kind = Argument::Kind::Integer, .number = k_PuzzleObjectType},
+	                                      {.kind = Argument::Kind::Integer, .number = k_FishPuzzleKind},
+	                                      {.kind = Argument::Kind::Position, .point = k_FishPuzzle}}},
+	                 {.kind = Kind::WalkTo, .creature = 0, .delaySeconds = 1.0f, .point = k_FishWalkEnd}},
 	});
 }
 
@@ -145,6 +177,7 @@ void testbed_scenarios::AddPuzzleQuestScenarios(std::vector<Scenario>& all)
 {
 	AddTheseusQuest(all);
 	AddFishHerding(all);
+	AddFishCreatureSteps(all);
 	AddBronzeTotemPuzzle(all);
 	AddLionMazeQuest(all);
 }

@@ -12,6 +12,9 @@
 #include "PuzzleGameSystem.h"
 
 #include <algorithm>
+#include <chrono>
+#include <optional>
+#include <span>
 #include <utility>
 #include <vector>
 
@@ -20,10 +23,12 @@
 #include <glm/vec2.hpp>
 #include <spdlog/spdlog.h>
 
+#include "3D/CreatureBody.h"
 #include "3D/LandIslandInterface.h"
 #include "3D/MapCoords.h"
 #include "Common/GUtilsDistance.h"
 #include "Common/GameRandom.h"
+#include "Creature/CreatureRig.h"
 #include "ECS/Archetypes/MistArchetype.h"
 #include "ECS/Archetypes/MobileObjectArchetype.h"
 #include "ECS/Archetypes/MobileStaticArchetype.h"
@@ -31,6 +36,9 @@
 #include "ECS/Archetypes/PuzzleTotemArchetype.h"
 #include "ECS/Archetypes/StreetLanternArchetype.h"
 #include "ECS/Archetypes/TreeArchetype.h"
+#include "ECS/Components/Creature.h"
+#include "ECS/Components/CreatureBody.h"
+#include "ECS/Components/CreatureTurnSteps.h"
 #include "ECS/Components/Fixed.h"
 #include "ECS/Components/HandGrab.h"
 #include "ECS/Components/Indestructible.h"
@@ -41,6 +49,7 @@
 #include "ECS/Components/ScriptControl.h"
 #include "ECS/Components/Transform.h"
 #include "ECS/Components/Tree.h"
+#include "ECS/CreatureTurnSteps.h"
 #include "ECS/FishPuzzleRules.h"
 #include "ECS/HanoiRules.h"
 #include "ECS/Map.h"
@@ -1433,6 +1442,106 @@ entt::entity PuzzleGameSystem::Create(script::PuzzleGameType type, glm::vec3 poi
 	return puzzle;
 }
 
+namespace
+{
+/// The feet of a creature where the last game turn posed its body, the right foot first; none for a creature without
+/// feet or with no pose of a turn yet
+std::optional<creature_footprints::Feet> TurnFeetOf(const Creature& creature, const CreatureAnimation& animation)
+{
+	const auto& rigs = Locator::resources::value().GetCreatureRigs();
+	const auto rigId = creature::GetRigId(creature.species);
+	if (!rigs.Contains(rigId))
+	{
+		return std::nullopt;
+	}
+	const auto& points = rigs.Handle(rigId)->actionPoints;
+	const auto& pose = animation.newerTurnPose;
+	if (!points.has_value() || points->rightFoot >= pose.size())
+	{
+		return std::nullopt;
+	}
+	const auto rightBone = points->rightFoot;
+	const auto leftBone = rightBone < animation.mirror.size() ? animation.mirror[rightBone] : rightBone;
+	if (leftBone >= pose.size())
+	{
+		return std::nullopt;
+	}
+	return creature_footprints::Feet {.right = pose[rightBone], .left = pose[leftBone]};
+}
+
+/// What the events of a species' animations need to know of each animation
+creature_audio::InfoOf InfoOfRig(const creature::CreatureRig* rig)
+{
+	return [rig](size_t index) -> std::optional<creature_audio::AnimationInfo> {
+		const auto* played = rig != nullptr ? rig->GetAnimation(creature::CreatureRig::Mesh::Base, index) : nullptr;
+		if (played == nullptr)
+		{
+			return std::nullopt;
+		}
+		return creature_audio::AnimationInfo {
+		    .events = index < rig->soundEvents.size() ? std::span(rig->soundEvents[index])
+		                                              : std::span<const creature_audio::SoundEvent> {},
+		    .durationMs = played->duration,
+		    .looping = played->looping,
+		};
+	};
+}
+
+/// The point where the creatures' footsteps of the last game turn scare the fish of a fish puzzle. The steps come from
+/// the bodies as the turns posed them, so every computer finds the same steps. When steps of several creatures scare
+/// the fish, the step of the creature with the highest entity number is the scare. Each creature keeps its layers for
+/// the next turn. A creature that the puzzle sees for the first time makes no step.
+std::optional<glm::vec3> CreatureStepScare(Registry& registry)
+{
+	std::vector<entt::entity> creatures;
+	registry.Each<const Creature, const CreatureAnimation>(
+	    [&creatures](entt::entity entity, const Creature&, const CreatureAnimation&) { creatures.push_back(entity); });
+	std::ranges::sort(creatures);
+	const auto& rigs = Locator::resources::value().GetCreatureRigs();
+	constexpr auto k_TurnMilliseconds = std::chrono::duration<float, std::milli>(TimeSystemInterface::k_TurnDuration).count();
+	std::optional<glm::vec3> scare;
+	for (const auto entity : creatures)
+	{
+		const auto& creature = registry.Get<const Creature>(entity);
+		const auto& animation = registry.Get<const CreatureAnimation>(entity);
+		const auto current = ecs::creature_turn_steps::TurnLayersOf(animation);
+		auto* steps = registry.TryGet<CreatureTurnSteps>(entity);
+		if (steps == nullptr)
+		{
+			registry.Assign<CreatureTurnSteps>(entity, CreatureTurnSteps {.last = current});
+			continue;
+		}
+		const auto rigId = creature::GetRigId(creature.species);
+		const auto* rig = rigs.Contains(rigId) ? &*rigs.Handle(rigId) : nullptr;
+		const auto step = ecs::creature_turn_steps::StepScare(steps->last, current, k_TurnMilliseconds, InfoOfRig(rig),
+		                                                      TurnFeetOf(creature, animation));
+		if (step.has_value())
+		{
+			SPDLOG_LOGGER_DEBUG(spdlog::get("game"), "The footstep of creature {} scares the fish at ({:.2f}, {:.2f}, {:.2f})",
+			                    static_cast<uint32_t>(entity), step->x, step->y, step->z);
+			scare = step;
+		}
+	}
+	return scare;
+}
+
+/// Removes the layers that the creatures keep for a fish puzzle, when no fish puzzle is on the land
+void ForgetCreatureSteps(Registry& registry)
+{
+	if (registry.Size<CreatureTurnSteps>() == 0)
+	{
+		return;
+	}
+	std::vector<entt::entity> creatures;
+	registry.Each<const CreatureTurnSteps>(
+	    [&creatures](entt::entity entity, const CreatureTurnSteps&) { creatures.push_back(entity); });
+	for (const auto entity : creatures)
+	{
+		registry.Remove<CreatureTurnSteps>(entity);
+	}
+}
+} // namespace
+
 void PuzzleGameSystem::ProcessTurn()
 {
 	auto& registry = Entities();
@@ -1440,6 +1549,19 @@ void PuzzleGameSystem::ProcessTurn()
 	registry.Each<const PuzzleGame>(
 	    [&puzzles](entt::entity puzzle, const PuzzleGame& game) { puzzles.emplace_back(game.order, puzzle); });
 	std::ranges::sort(puzzles, std::ranges::greater {});
+	// The creatures' footsteps of the last turn scare the fish. When a command of this turn or a fall in the sea of the
+	// last turn scared the fish, that scare stays.
+	if (HasFishPuzzle())
+	{
+		if (const auto step = CreatureStepScare(registry); step.has_value() && !_fishScare.has_value())
+		{
+			_fishScare = step;
+		}
+	}
+	else
+	{
+		ForgetCreatureSteps(registry);
+	}
 	for (const auto& [order, puzzle] : puzzles)
 	{
 		if (auto* game = registry.Valid(puzzle) ? registry.TryGet<PuzzleGame>(puzzle) : nullptr)
