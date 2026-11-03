@@ -317,4 +317,18 @@ void testbed_scenarios::AddHandNavigationScenarios(std::vector<Scenario>& all)
 	    .commands = {KeyDown(SDL_SCANCODE_Z, 1.0f), KeyUp(SDL_SCANCODE_Z, 2.0f), KeyDown(SDL_SCANCODE_U, 0.5f),
 	                 KeyUp(SDL_SCANCODE_U, 2.0f)},
 	});
+	all.push_back({
+	    .id = "hand.key_move_high",
+	    .name = "Move the high camera with the arrow keys",
+	    .facet = Facet::Hand,
+	    .description = "The camera stands 300 above the land and looks down at the middle of the map. After a second the "
+	                   "left arrow key (Move Left) goes down for two seconds. Then the up arrow key (Move Forwards) goes "
+	                   "down for two seconds.",
+	    .expected = "The camera moves to the left and then forwards over the land. It moves fast, because the step of "
+	                "the keys grows with the height of the camera above what it looks at, up to a limit. A camera near "
+	                "the land moves slowly.",
+	    .framing = {.shot = Shot::Placed, .eye = {0.0f, 300.0f, -250.0f}, .look = {0.0f, 0.0f, 0.0f}},
+	    .commands = {KeyDown(SDL_SCANCODE_LEFT, 1.0f), KeyUp(SDL_SCANCODE_LEFT, 2.0f), KeyDown(SDL_SCANCODE_UP, 0.5f),
+	                 KeyUp(SDL_SCANCODE_UP, 2.0f)},
+	});
 }
