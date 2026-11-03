@@ -770,6 +770,10 @@ std::string Chat(GameStageInterface* stage, PlayerNames player, size_t value, st
 	{
 		return stage->OpenChatWithFriends();
 	}
+	if (value == k_ChatStaffSays || value == k_ChatAnnouncement)
+	{
+		return stage->PingServerSays(value, line);
+	}
 	if (value == k_ChatTypes)
 	{
 		stage->OpenChat(line);

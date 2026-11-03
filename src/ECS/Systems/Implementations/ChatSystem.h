@@ -62,6 +62,7 @@ public:
 
 	void Receive(PlayerNames sender, const player_commands::ChatSpeech& speech) override;
 	void Receive(PlayerNames sender, const player_commands::ChatTaunt& taunt) override;
+	void ReceiveFromPingServer(std::u16string_view name, std::u16string_view text) override;
 	void ProcessTurn() override;
 	void UpdateFrame(float gameMilliseconds) override;
 

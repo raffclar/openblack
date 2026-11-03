@@ -83,6 +83,18 @@ void ChatSystem::Receive(PlayerNames sender, const player_commands::ChatTaunt& t
 	Arrive(sender, taunt.recipients, {}, taunt.taunt);
 }
 
+void ChatSystem::ReceiveFromPingServer(std::u16string_view name, std::u16string_view text)
+{
+	if (_services.incoming)
+	{
+		_services.incoming(NamedLine(name, text));
+	}
+	if (_services.log)
+	{
+		_services.log(LogLine(name, text));
+	}
+}
+
 void ChatSystem::Arrive(PlayerNames sender, std::span<const PlayerNames> recipients, std::u16string_view text,
                         std::optional<uint32_t> taunt)
 {

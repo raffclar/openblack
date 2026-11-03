@@ -220,6 +220,7 @@
 #include "ECS/Systems/FootprintSystemInterface.h"
 #include "ECS/Systems/ForestSystemInterface.h"
 #include "ECS/Systems/GameEndSystemInterface.h"
+#include "ECS/Systems/GatheringBoxSystemInterface.h"
 #include "ECS/Systems/GestureEventsInterface.h"
 #include "ECS/Systems/GestureSystemInterface.h"
 #include "ECS/Systems/GuidanceSystemInterface.h"
@@ -867,6 +868,10 @@ Game::~Game() noexcept
 	if (Locator::chatSystem::has_value())
 	{
 		Locator::chatSystem::value().SetTexts(nullptr);
+	}
+	if (Locator::gatheringBoxSystem::has_value())
+	{
+		Locator::gatheringBoxSystem::value().SetBox({});
 	}
 	if (Locator::saveGameSystem::has_value())
 	{
@@ -2773,6 +2778,11 @@ void Game::UpdateOnline()
 	if (Locator::lobbyClient::has_value())
 	{
 		Locator::lobbyClient::value().Update();
+	}
+	// The gathering box talks to the ping server with the time of the computer, not the time of the turns
+	if (Locator::gatheringBoxSystem::has_value())
+	{
+		Locator::gatheringBoxSystem::value().Update(SDL_GetTicks());
 	}
 	// The network game takes the turns and the checksums that came, and comes back after a loss
 	if (Locator::networkGame::has_value())
@@ -4826,6 +4836,15 @@ const gui::TextDatabase* Game::MakeInterface()
 		if (Locator::chatSystem::has_value())
 		{
 			Locator::chatSystem::value().SetTexts(&_interface->GetTexts());
+		}
+		if (Locator::gatheringBoxSystem::has_value())
+		{
+			auto* controls = &_interface->GetChatControls();
+			Locator::gatheringBoxSystem::value().SetBox({
+			    .people = [controls]() { return &controls->GetPeople(); },
+			    .peopleChanged = [controls]() { controls->PeopleChanged(); },
+			    .open = [controls]() { controls->Open(); },
+			});
 		}
 	}
 	return _interface ? &_interface->GetTexts() : nullptr;

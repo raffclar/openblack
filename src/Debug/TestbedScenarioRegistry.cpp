@@ -5616,6 +5616,52 @@ void AddAudio(std::vector<Scenario>& all)
 	});
 
 	all.push_back({
+	    .id = "multiplayer.staff_line",
+	    .name = "A line of the staff and an announcement in the gathering box",
+	    .facet = Facet::Interface,
+	    .description = "A ping server of the testbed sends a line from the admin of the server, and then an "
+	                   "announcement of two lines.",
+	    .expected = "The chat opens by itself. The incoming message at the bottom left says \"Staff: Welcome to the "
+	                "server\". The list of people shows the heading Others, with Staff and the two lines of the "
+	                "announcement as yellow names with a bar, the last line at the top.",
+	    .environment = {.players = {PlayerNames::PLAYER_TWO}},
+	    .commands =
+	        {{.kind = Kind::Chat, .delaySeconds = 1.0f, .value = k_ChatStaffSays, .action = "Welcome to the server"},
+	         {.kind = Kind::Chat, .delaySeconds = 0.5f, .value = k_ChatAnnouncement, .action = "New maps this week|Have fun"}},
+	});
+
+	all.push_back({
+	    .id = "multiplayer.staff_question",
+	    .name = "A question of the staff with a Yes and a No",
+	    .facet = Facet::Interface,
+	    .description = "A ping server of the testbed sends a question from the admin of the server, with the secret word "
+	                   "at its start.",
+	    .expected = "A framed box of 700 by 250 opens in the middle of the screen. Its top says \"Staff Do you like the "
+	                "game?\". At the bottom, the button \"Yes.\" is at the right and the button \"NO\" at the left. The "
+	                "box shows no line to type into. The question does not show as a line of the chat. Click a button: "
+	                "the box goes at once.",
+	    .environment = {.players = {PlayerNames::PLAYER_TWO}},
+	    .commands =
+	        {{.kind = Kind::Chat, .delaySeconds = 1.0f, .value = k_ChatStaffSays, .action = "!SaMuElGRDo you like the game?"}},
+	});
+
+	all.push_back({
+	    .id = "multiplayer.staff_line_question",
+	    .name = "A question of the staff that asks for a line",
+	    .facet = Facet::Interface,
+	    .description = "A ping server of the testbed sends a question from the admin of the server. A '!' after the "
+	                   "secret word asks for a line.",
+	    .expected = "A framed box of 700 by 250 opens in the middle of the screen. Its top says \"Staff Where do you "
+	                "play from?\". Under it is a line to type into, and the button \"OK\" is at the bottom right. The "
+	                "box has no No button. Type a line and press Return two times: the box goes at once.",
+	    .environment = {.players = {PlayerNames::PLAYER_TWO}},
+	    .commands = {{.kind = Kind::Chat,
+	                  .delaySeconds = 1.0f,
+	                  .value = k_ChatStaffSays,
+	                  .action = "!SaMuElGR!Where do you play from?"}},
+	});
+
+	all.push_back({
 	    .id = "interface.controls_rebind",
 	    .name = "The Controls page asks for a new key",
 	    .facet = Facet::Interface,
