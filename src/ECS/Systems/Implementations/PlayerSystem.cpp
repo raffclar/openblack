@@ -23,6 +23,7 @@
 #include "ECS/Components/PlayerCreatures.h"
 #include "ECS/Components/PlayerRelations.h"
 #include "ECS/Components/PlayerStatistics.h"
+#include "ECS/ComputerPlayerStart.h"
 #include "ECS/PlayerMiracles.h"
 #include "ECS/ProfileAlignment.h"
 #include "ECS/Registry.h"
@@ -175,6 +176,8 @@ void PlayerSystem::KeepForNextLand()
 		const auto* alignment = registry.TryGet<const Alignment>(entity);
 		const auto* virtualInfluence = registry.TryGet<const VirtualInfluence>(entity);
 		const auto* statistics = registry.TryGet<const PlayerStatistics>(entity);
+		const auto* mind = registry.TryGet<const ComputerPlayer>(entity);
+		const auto* attitudes = registry.TryGet<const ComputerAttitudes>(entity);
 		_kept.insert_or_assign(
 		    player.name,
 		    Kept {.alignment = alignment != nullptr ? std::optional(*alignment) : std::nullopt,
@@ -184,7 +187,9 @@ void PlayerSystem::KeepForNextLand()
 		          .virtualInfluence = virtualInfluence != nullptr ? std::optional(virtualInfluence->state) : std::nullopt,
 		          .virtualInfluenceShown = virtualInfluence != nullptr ? virtualInfluence->shown : virtual_influence::Shown {},
 		          .influenceHistory = statistics != nullptr ? statistics->influenceHistory : statistics::History {},
-		          .populationHistory = statistics != nullptr ? statistics->populationHistory : statistics::History {}});
+		          .populationHistory = statistics != nullptr ? statistics->populationHistory : statistics::History {},
+		          .computerPlayer = mind != nullptr ? std::optional(computer_player::AfterLandCleared(*mind)) : std::nullopt,
+		          .computerAttitudes = attitudes != nullptr ? std::optional(*attitudes) : std::nullopt});
 	});
 }
 
@@ -231,6 +236,15 @@ void PlayerSystem::TakeUpKept(entt::entity playerEntity)
 	if (kept.virtualInfluence.has_value())
 	{
 		registry.AssignOrReplace<VirtualInfluence>(playerEntity, *kept.virtualInfluence, kept.virtualInfluenceShown);
+	}
+	// Their computer mind goes on as the end of the last land cleared it, and so does what it thinks of each player
+	if (kept.computerPlayer.has_value())
+	{
+		registry.AssignOrReplace<ComputerPlayer>(playerEntity, *kept.computerPlayer);
+	}
+	if (kept.computerAttitudes.has_value())
+	{
+		registry.AssignOrReplace<ComputerAttitudes>(playerEntity, *kept.computerAttitudes);
 	}
 	// Their histories go on, though their statistics' counters start again
 	if (auto* statistics = registry.TryGet<PlayerStatistics>(playerEntity))
