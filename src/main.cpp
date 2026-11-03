@@ -45,6 +45,7 @@
 #include "Game.h"
 #include "LaunchSwitches.h"
 #include "Online/GameOrigin.h"
+#include "Online/JoinName.h"
 #include "Online/ServerKeyPin.h"
 #if defined(__EMSCRIPTEN__)
 #include "Web/WebPlatform.h"
@@ -127,6 +128,24 @@ std::optional<openblack::online::server_key::Pin> JoinKeyOf(const cxxopts::Parse
 		throw cxxopts::exceptions::parsing("--join-key: the key is not 64 hex digits");
 	}
 	return pin;
+}
+
+/// The profile name of the developer option --join-name, none without the option. A name that a game server on the local
+/// network refuses stops the start.
+std::string JoinNameOf([[maybe_unused]] const cxxopts::ParseResult& result)
+{
+#if defined(OPENBLACK_DEVELOPER_TOOLS)
+	if (result.count("join-name") != 0)
+	{
+		const auto parsed = openblack::online::join_name::Parse(result["join-name"].as<std::string>());
+		if (!parsed.valid)
+		{
+			throw cxxopts::exceptions::parsing("--join-name: the name is empty, has a control character or is too long");
+		}
+		return *parsed.name;
+	}
+#endif
+	return {};
 }
 } // namespace
 
@@ -239,6 +258,7 @@ bool parseOptions(int argc, char** argv, openblack::Arguments& args, int& return
 	options.add_options("Developer")
 		("testbed", "Start on the flat creature testbed, a plane with a lake, instead of a level.")
 		("scenario", "Start on the testbed and run the testbed scenario of this id, such as benchmark.creatures_100.", cxxopts::value<std::string>())
+		("join-name", "With --join on the local network (no ticket), send this profile name to the game server in place of the name of a profile. The server refuses an empty name, a name with a control character and a name of more than 64 bytes.", cxxopts::value<std::string>())
 		("scenario-check", "With --scenario, run the scenario's checks of its own outcome, write their report to the console, and quit with the exit code 0 when they pass, 1 when one fails, 2 when the scenario states none. Tools and the merge train use this.")
 		("benchmark-warmup", "With --scenario, the frames a benchmark's crowd settles for once spawned, before it is measured.", cxxopts::value<uint32_t>()->default_value("120"))
 		("benchmark-frames", "With --scenario, the frames of a benchmark measured.", cxxopts::value<uint32_t>()->default_value("600"))
@@ -451,7 +471,7 @@ bool parseOptions(int argc, char** argv, openblack::Arguments& args, int& return
 			    .url = result["join"].as<std::string>(),
 			    .ticket = JoinTicketOf(result),
 			    .gamePassword = {},
-			    .name = {},
+			    .name = JoinNameOf(result),
 			    .testAuthorities =
 			        result.count("join-test-ca") != 0 ? std::optional(result["join-test-ca"].as<std::string>()) : std::nullopt,
 			    .partAt =
