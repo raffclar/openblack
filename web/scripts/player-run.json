@@ -1,0 +1,207 @@
+[
+ {
+  "at": 6,
+  "do": "eval",
+  "expression": "(() => { const S = Module.SDL2; const node = S && S.audio && S.audio.scriptProcessorNode; if (!node) return 'no sound node'; const an = S.audioContext.createAnalyser(); an.fftSize = 2048; node.connect(an); const buf = new Float32Array(2048); globalThis.playerRunLoudness = []; setInterval(() => { an.getFloatTimeDomainData(buf); let s = 0; for (const v of buf) s += v * v; globalThis.playerRunLoudness.push(Math.round(Math.sqrt(s / buf.length) * 10000)); }, 1000); return 'loudness probe on, ' + S.audioContext.state + ' at ' + S.audioContext.sampleRate + ' Hz'; })()"
+ },
+ {
+  "at": 7,
+  "do": "wait-log",
+  "text": "asking the new player for their name",
+  "seconds": 400
+ },
+ {
+  "at": 10,
+  "do": "key",
+  "key": "T",
+  "code": "KeyT",
+  "keyCode": 84
+ },
+ {
+  "at": 10.5,
+  "do": "key",
+  "key": "e",
+  "code": "KeyE",
+  "keyCode": 69
+ },
+ {
+  "at": 11.0,
+  "do": "key",
+  "key": "s",
+  "code": "KeyS",
+  "keyCode": 83
+ },
+ {
+  "at": 11.5,
+  "do": "key",
+  "key": "t",
+  "code": "KeyT",
+  "keyCode": 84
+ },
+ {
+  "at": 12.0,
+  "do": "key",
+  "key": "e",
+  "code": "KeyE",
+  "keyCode": 69
+ },
+ {
+  "at": 12.5,
+  "do": "key",
+  "key": "r",
+  "code": "KeyR",
+  "keyCode": 82
+ },
+ {
+  "at": 14,
+  "do": "key",
+  "key": "Enter",
+  "code": "Enter",
+  "keyCode": 13
+ },
+ {
+  "at": 15,
+  "do": "wait-log",
+  "text": "The logo effect ends",
+  "seconds": 300
+ },
+ {
+  "at": 18,
+  "do": "shot",
+  "name": "question"
+ },
+ {
+  "at": 19,
+  "do": "mouse",
+  "type": "mouseMoved",
+  "x": 419,
+  "y": 523
+ },
+ {
+  "at": 19.3,
+  "do": "mouse",
+  "type": "mousePressed",
+  "x": 419,
+  "y": 523,
+  "button": "left"
+ },
+ {
+  "at": 19.4,
+  "do": "mouse",
+  "type": "mouseReleased",
+  "x": 419,
+  "y": 523,
+  "button": "left"
+ },
+ {
+  "at": 22,
+  "do": "pointer-to",
+  "x": 400,
+  "y": 736
+ },
+ {
+  "at": 23,
+  "do": "shot",
+  "name": "question-ok"
+ },
+ {
+  "at": 23.5,
+  "do": "synth-click"
+ },
+ {
+  "at": 100,
+  "do": "shot",
+  "name": "glade"
+ },
+ {
+  "at": 101,
+  "do": "pointer-to",
+  "x": 573,
+  "y": 420
+ },
+ {
+  "at": 104,
+  "do": "synth-click",
+  "button": 2
+ },
+ {
+  "at": 110,
+  "do": "synth-click",
+  "button": 2
+ },
+ {
+  "at": 116,
+  "do": "synth-click",
+  "button": 2
+ },
+ {
+  "at": 122,
+  "do": "synth-click",
+  "button": 2
+ },
+ {
+  "at": 124,
+  "do": "wait-log",
+  "text": "removed from the game",
+  "count": 2,
+  "seconds": 120
+ },
+ {
+  "at": 150,
+  "do": "shot",
+  "name": "chosen"
+ },
+ {
+  "at": 151,
+  "do": "pointer-to-colour",
+  "low": [
+   150,
+   0,
+   0
+  ],
+  "high": [
+   255,
+   90,
+   70
+  ],
+  "box": [
+   0,
+   40,
+   1280,
+   860
+  ]
+ },
+ {
+  "at": 153,
+  "do": "synth-click",
+  "button": 2
+ },
+ {
+  "at": 155,
+  "do": "shot",
+  "name": "leashed"
+ },
+ {
+  "at": 156,
+  "do": "pointer-to",
+  "x": 1000,
+  "y": 820,
+  "count": 20,
+  "ms": 2000
+ },
+ {
+  "at": 160,
+  "do": "synth-click",
+  "button": 2
+ },
+ {
+  "at": 166,
+  "do": "shot",
+  "name": "led"
+ },
+ {
+  "at": 170,
+  "do": "eval",
+  "expression": "JSON.stringify(globalThis.playerRunLoudness)"
+ }
+]
