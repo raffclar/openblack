@@ -14,6 +14,7 @@
 #include <array>
 #include <functional>
 #include <optional>
+#include <span>
 #include <string>
 #include <vector>
 
@@ -194,6 +195,11 @@ struct ImportedTemple
 
 /// The temple of each player in the file, in the order of the file. The heart owns the site of a temple that goes up.
 [[nodiscard]] std::vector<ImportedTemple> ReadTemples(const gamesave::VanillaWorld& world);
+
+/// The owners of the temples of the land that a load removes, in the order of the land. The game clears the land
+/// before it reads the file, so a temple stays only when its player has a temple in the file.
+[[nodiscard]] std::vector<PlayerNames> LandTemplesToRemove(std::span<const PlayerNames> land,
+                                                           std::span<const ImportedTemple> file);
 
 /// The running scripts with the values that hold objects changed from places of the table into entities
 struct ImportedScripts

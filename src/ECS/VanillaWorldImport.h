@@ -13,6 +13,7 @@
 
 #include <array>
 #include <optional>
+#include <span>
 #include <string>
 #include <unordered_map>
 #include <vector>
@@ -54,6 +55,11 @@ namespace openblack::ecs::vanilla_world_import
 /// has the number 0, and each row before it has the number of the next row plus 1. The rows of the buildings come
 /// first, and the rows of the villagers come next.
 constexpr uint32_t k_FirstAbodeRowNumber = 2394;
+
+/// The things of the land that a load removes, in the order of the land. The game clears the land before it reads the
+/// file, so a thing of the land stays only when a thing of the file takes it.
+[[nodiscard]] std::vector<entt::entity> LandThingsToRemove(std::span<const entt::entity> land,
+                                                           std::span<const entt::entity> taken);
 constexpr uint32_t k_FirstVillagerRowNumber = k_FirstAbodeRowNumber - static_cast<uint32_t>(AbodeInfo::_COUNT);
 
 /// The number of the first row of the table of the tribes. The game loads the 9 tribes, then the speeds (10 rows), the

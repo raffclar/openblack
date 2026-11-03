@@ -36,6 +36,7 @@
 #include "ECS/Components/Breeding.h"
 #include "ECS/Components/Construction.h"
 #include "ECS/Components/CreatureDance.h"
+#include "ECS/Components/CreatureLeash.h"
 #include "ECS/Components/Dance.h"
 #include "ECS/Components/Disciple.h"
 #include "ECS/Components/Field.h"
@@ -69,6 +70,7 @@
 #include "ECS/Systems/DanceSystemInterface.h"
 #include "ECS/Systems/PlayerSystemInterface.h"
 #include "ECS/Systems/SpellIconSystemInterface.h"
+#include "ECS/Systems/TempleDestructionSystemInterface.h"
 #include "ECS/Systems/TimeSystemInterface.h"
 #include "ECS/Systems/TownSystemInterface.h"
 #include "ECS/Systems/VillageTotemSystemInterface.h"
@@ -782,13 +784,56 @@ entt::entity LandTempleOf(ecs::Registry& registry, PlayerNames player)
 	return found;
 }
 
+/// The game clears the land before it reads the file. So a temple of the land goes when its player has no temple in the
+/// file. The leash posts of that player go with it, because they hang on the temple.
+void RemoveLandTemples(ecs::Registry& registry, std::span<const ecs::vanilla_script_import::ImportedTemple> file)
+{
+	std::vector<std::pair<entt::entity, PlayerNames>> land;
+	registry.Each<const Temple>(
+	    [&land](entt::entity entity, const Temple& temple) { land.emplace_back(entity, temple.owner); });
+	std::vector<PlayerNames> owners;
+	std::ranges::transform(land, std::back_inserter(owners), &std::pair<entt::entity, PlayerNames>::second);
+	const auto removed = ecs::vanilla_script_import::LandTemplesToRemove(owners, file);
+	for (const auto& [temple, owner] : land)
+	{
+		if (std::ranges::find(removed, owner) == removed.end())
+		{
+			continue;
+		}
+		if (Locator::templeDestructionSystem::has_value())
+		{
+			Locator::templeDestructionSystem::value().Remove(temple);
+		}
+		std::vector<entt::entity> posts;
+		registry.Each<const LeashPost>([&posts, owner](entt::entity entity, const LeashPost& post) {
+			if (post.owner == owner)
+			{
+				posts.push_back(entity);
+				posts.push_back(post.glow);
+			}
+		});
+		for (const auto post : posts)
+		{
+			if (registry.Valid(post))
+			{
+				registry.Destroy(post);
+			}
+		}
+		SPDLOG_LOGGER_INFO(ImportLog(),
+		                   "The temple of the player {} of the land goes, because the file has no temple of that player",
+		                   static_cast<int>(owner));
+	}
+}
+
 /// Each temple of the file is the temple of its player in the land. When the land has only the plan of the temple, the
 /// temple goes up on the plan: a whole temple with no site, no music and no save, or a temple that goes up with its site
 /// and as much of it built as the file has. The temple and its heart in the file become the temple of the land.
 void RaiseFileTemples(ecs::Registry& registry, const gamesave::VanillaWorld& world,
                       const std::vector<world_import::ImportedSite>& sites, std::unordered_map<uint32_t, entt::entity>& made)
 {
-	for (const auto& file : ecs::vanilla_script_import::ReadTemples(world))
+	const auto files = ecs::vanilla_script_import::ReadTemples(world);
+	RemoveLandTemples(registry, files);
+	for (const auto& file : files)
 	{
 		auto temple = LandTempleOf(registry, file.player);
 		if (temple == entt::null)

@@ -29,6 +29,7 @@
 #include "ECS/Components/Fire.h"
 #include "ECS/Components/Temple.h"
 #include "ECS/Components/Transform.h"
+#include "ECS/Components/VillageLight.h"
 #include "ECS/Registry.h"
 #include "ECS/Systems/Implementations/TempleDestructionSystem.h"
 #include "ECS/TempleDestructionWorld.h"
@@ -587,4 +588,44 @@ TEST_F(TempleDestructionSystemTest, AWholeHeartKeepsItsMaterials)
 		Turn();
 	}
 	EXPECT_FALSE(_world->registry.AllOf<ChangedMaterials>(temple));
+}
+
+// A load removes a temple at once, with its way in, its heart, its lanterns, their lights and the flames of the lights,
+// and its worship sites. Other things stay, nothing plays and the game does not end.
+TEST_F(TempleDestructionSystemTest, RemoveTakesTheTempleAndItsPartsAtOnce)
+{
+	auto& registry = _world->registry;
+	const auto temple = MakeTemple(PlayerNames::PLAYER_ONE);
+	const auto heart = registry.Create();
+	registry.Assign<TempleHeart>(heart, temple);
+	const auto light = registry.Create();
+	const auto lantern = registry.Create();
+	registry.Assign<TempleLantern>(lantern, temple, light);
+	const auto flame = registry.Create();
+	registry.Assign<VillageLightSprite>(flame, light, uint8_t {0});
+	const auto other = MakeTemple(PlayerNames::PLAYER_TWO);
+	_system->Remove(temple);
+	for (const auto gone : {temple, heart, light, lantern, flame})
+	{
+		EXPECT_FALSE(registry.Valid(gone));
+	}
+	EXPECT_EQ(registry.Size<TempleEntrance>(), 1U);
+	EXPECT_TRUE(registry.Valid(other));
+	EXPECT_EQ(_world->sitesRemoved, (std::vector<std::pair<int, entt::entity>> {{0, temple}}));
+	Turn();
+	EXPECT_TRUE(_world->loopsStarted.empty());
+	EXPECT_TRUE(_world->visuals.empty());
+	EXPECT_TRUE(_world->scripts.empty());
+	EXPECT_FALSE(registry.Context().gameOver);
+}
+
+// Remove does nothing to a thing that is not a temple
+TEST_F(TempleDestructionSystemTest, RemoveLeavesAThingThatIsNotATemple)
+{
+	auto& registry = _world->registry;
+	const auto thing = registry.Create();
+	registry.Assign<Transform>(thing, glm::vec3(0.0f), glm::mat3(1.0f), glm::vec3(1.0f));
+	_system->Remove(thing);
+	EXPECT_TRUE(registry.Valid(thing));
+	EXPECT_TRUE(_world->sitesRemoved.empty());
 }

@@ -12,6 +12,7 @@
 #include <cstring>
 
 #include <algorithm>
+#include <iterator>
 #include <span>
 #include <string_view>
 
@@ -206,6 +207,16 @@ std::optional<PlayerNames> vanilla_script_import::HeartPlayer(const gamesave::Va
 		}
 	}
 	return std::nullopt;
+}
+
+std::vector<PlayerNames> vanilla_script_import::LandTemplesToRemove(std::span<const PlayerNames> land,
+                                                                    std::span<const ImportedTemple> file)
+{
+	std::vector<PlayerNames> removed;
+	std::ranges::copy_if(land, std::back_inserter(removed), [file](PlayerNames owner) {
+		return std::ranges::find(file, owner, &ImportedTemple::player) == file.end();
+	});
+	return removed;
 }
 
 std::vector<vanilla_script_import::ImportedTemple> vanilla_script_import::ReadTemples(const gamesave::VanillaWorld& world)

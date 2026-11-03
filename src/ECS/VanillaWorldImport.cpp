@@ -14,6 +14,7 @@
 
 #include <algorithm>
 #include <bit>
+#include <iterator>
 #include <limits>
 #include <ranges>
 #include <span>
@@ -1641,3 +1642,12 @@ magic::piles::Rise PileRiseOf(std::span<const uint8_t, k_PileRiseBytes> bytes)
 }
 
 } // namespace openblack::ecs::vanilla_world_import
+
+std::vector<entt::entity> openblack::ecs::vanilla_world_import::LandThingsToRemove(std::span<const entt::entity> land,
+                                                                                   std::span<const entt::entity> taken)
+{
+	std::vector<entt::entity> removed;
+	std::ranges::copy_if(land, std::back_inserter(removed),
+	                     [taken](entt::entity thing) { return std::ranges::find(taken, thing) == taken.end(); });
+	return removed;
+}
