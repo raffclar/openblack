@@ -72,7 +72,7 @@ TEST_F(ScriptCameraComputerHand, TheCameraLooksAtTheHand)
 
 TEST_F(ScriptCameraComputerHand, AFollowedThingComesBeforeTheHand)
 {
-	_model.Follow(ThingAt(k_Thing));
+	_model.Follow(ThingAt(k_Thing), true);
 	_model.LookAtComputerHand(HandAt(k_Hand));
 	Frame();
 	EXPECT_EQ(_model.GetTargetFocus(), k_Thing);
@@ -132,9 +132,11 @@ TEST_F(ScriptCameraComputerHand, AnotherFollowOfAThingKeepsTheFollowOfTheHand)
 	bool thingThere = true;
 	_model.LookAtComputerHand(HandAt(k_Hand));
 	_model.FollowComputerHand(HandAt(k_Hand));
-	_model.Follow({.id = 9, .lookup = [&thingThere]() -> std::optional<FollowedThing> {
+	_model.Follow({.id = 9,
+	               .lookup = [&thingThere]() -> std::optional<FollowedThing> {
 		               return thingThere ? std::optional(FollowedThing {.point = k_Thing}) : std::nullopt;
-	               }});
+	               }},
+	              true);
 	Settings();
 	Frame();
 	EXPECT_EQ(_model.GetTargetOrigin(), BackFrom(k_Thing));

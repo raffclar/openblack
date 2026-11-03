@@ -37,6 +37,11 @@ enum class PlaceKind : uint8_t
 	Dispenser,
 	/// A one-shot miracle's bubble floating over the land, its type the miracle it gives
 	MiracleBubble,
+	/// A point that the scripts mark to come back to. It is not drawn in the game.
+	ScriptMarker,
+	/// A scroll or sign that the scripts put up, its type its kind: a plain scroll, a tip sign, a silver scroll or a
+	/// gold scroll, which marks the place of a challenge
+	Highlight,
 };
 
 /// Something picked in the palette to place: its kind and its type within the kind
@@ -44,6 +49,8 @@ struct PlaceItem
 {
 	PlaceKind kind {PlaceKind::Tree};
 	int32_t type {0};
+	/// The challenge that a scroll belongs to, or the text of a tip sign
+	uint32_t challenge {0};
 
 	friend bool operator==(const PlaceItem&, const PlaceItem&) = default;
 };

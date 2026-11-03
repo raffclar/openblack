@@ -41,6 +41,9 @@ public:
 	[[nodiscard]] const editor::EditorSelection& GetSelection() const override { return _selection; }
 	[[nodiscard]] editor::EditorHistory& GetHistory() override { return _history; }
 	[[nodiscard]] const editor::EditorHistory& GetHistory() const override { return _history; }
+	[[nodiscard]] editor::paths::DrawnPaths& GetDrawnPaths() override { return _drawnPaths; }
+	[[nodiscard]] const editor::paths::DrawnPaths& GetDrawnPaths() const override { return _drawnPaths; }
+	[[nodiscard]] editor::land_brush::Brush& GetLandBrush() override { return _landBrush; }
 	void SetTool(Tool tool) override { _tool = tool; }
 	[[nodiscard]] Tool GetTool() const override { return _tool; }
 	[[nodiscard]] editor::Snapping& GetSnapping() override { return _snapping; }
@@ -67,6 +70,8 @@ private:
 	bool _open {false};
 	editor::EditorSelection _selection;
 	editor::EditorHistory _history;
+	editor::paths::DrawnPaths _drawnPaths;
+	editor::land_brush::Brush _landBrush;
 	/// The count of the registry's resets that the picks and the history belong to
 	std::optional<uint32_t> _registryResets;
 	Tool _tool {Tool::Select};

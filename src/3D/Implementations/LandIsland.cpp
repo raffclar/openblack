@@ -469,15 +469,37 @@ const lnd::LNDCell* LandIsland::FindCell(const glm::u16vec2& coordinates) const
 
 void LandIsland::SetCellAltitude(glm::u16vec2 coordinates, uint8_t altitude)
 {
+	SetCorner(coordinates,
+	          [this, altitude](size_t block, int x, int z) { return SetBlockCellAltitude(block, x, z, altitude); });
+}
+
+void LandIsland::SetCellCountry(glm::u16vec2 coordinates, uint8_t country)
+{
+	SetCorner(coordinates, [this, country](size_t block, int x, int z) {
+		if (!_landBlocks.at(block).SetCellCountry(static_cast<size_t>(x * 17 + z), country))
+		{
+			return false;
+		}
+		// The country paints the ground of the cells round the corner
+		auto& cells = _changedCells.at(block);
+		constexpr int k_LastCell = block_texture::k_BlockCells - 1;
+		cells.Add(glm::clamp(glm::ivec2(x - 1, z - 1), 0, k_LastCell));
+		cells.Add(glm::clamp(glm::ivec2(x, z), 0, k_LastCell));
+		return true;
+	});
+}
+
+void LandIsland::SetCorner(glm::u16vec2 coordinates, const std::function<bool(size_t, int, int)>& change)
+{
 	if (coordinates.x >= k_MapSize || coordinates.y >= k_MapSize)
 	{
 		return;
 	}
 	// A block keeps a 17th row and column of its neighbours' first cells: a corner on a block's edge is in up to four
 	// blocks, and each copy changes, with the cells of each block it is a corner of. A copy that already has the
-	// altitude does not change, so its block is not built and painted again for no change.
+	// value does not change, so its block is not built and painted again for no change.
 	bool changedAny = false;
-	const auto setIn = [this, altitude, &changedAny](int blockX, int blockZ, int x, int z) {
+	const auto setIn = [this, &change, &changedAny](int blockX, int blockZ, int x, int z) {
 		if (blockX < 0 || blockZ < 0 || blockX >= 32 || blockZ >= 32)
 		{
 			return;
@@ -487,7 +509,7 @@ void LandIsland::SetCellAltitude(glm::u16vec2 coordinates, uint8_t altitude)
 		{
 			return;
 		}
-		changedAny = SetBlockCellAltitude(blockIndex - 1u, x, z, altitude) || changedAny;
+		changedAny = change(blockIndex - 1u, x, z) || changedAny;
 	};
 	const int blockX = coordinates.x >> 4;
 	const int blockZ = coordinates.y >> 4;

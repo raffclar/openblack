@@ -147,3 +147,14 @@ bool LandBlock::SetCellAltitude(size_t index, uint8_t altitude)
 	_block->cells.at(index).altitude = altitude;
 	return true;
 }
+
+bool LandBlock::SetCellCountry(size_t index, uint8_t country)
+{
+	assert(_block);
+	if (!_block || index >= _block->cells.size() || _block->cells.at(index).properties.country == country)
+	{
+		return false;
+	}
+	_block->cells.at(index).properties.country = country & 0xFu;
+	return true;
+}

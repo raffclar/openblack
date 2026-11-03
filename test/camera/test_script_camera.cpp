@@ -289,7 +289,7 @@ TEST(ScriptCamera, ItFollowsAThingAtOnceWithNoGlideUntilSentElsewhere)
 	const auto thing = [&at]() {
 		return std::optional(script_camera::FollowedThing {.point = at, .gameAngle = std::nullopt, .height = 1.0f});
 	};
-	model.FollowAndLookAt({.id = 7, .lookup = thing}, 3.0f);
+	model.FollowAndLookAt({.id = 7, .lookup = thing}, 3.0f, true);
 	model.SetFollowSettings(3.0f, 0.0f, 0.0f, false);
 	at += glm::vec3(4.0f, 0.0f, 0.0f);
 	Camera camera;
@@ -315,7 +315,7 @@ TEST(ScriptCamera, ItIsAboutTheThingItLooksAtElseTheOneItFollows)
 	};
 	const auto lookedAt = []() { return std::optional(script_camera::FollowedThing {.point = {1010.0f, 5.0f, 1000.0f}}); };
 	EXPECT_FALSE(model.GetFocusedThing().has_value());
-	model.Follow({.id = 3, .lookup = followed});
+	model.Follow({.id = 3, .lookup = followed}, true);
 	EXPECT_EQ(model.GetFocusedThing(), 3u);
 	model.LookAt({.id = 5, .lookup = lookedAt});
 	EXPECT_EQ(model.GetFocusedThing(), 5u);

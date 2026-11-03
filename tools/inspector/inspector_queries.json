@@ -2024,13 +2024,13 @@
   "query": "view.draw_list"
  },
  {
-  "description": "The tasks with the camera and the dialogue, the scripts' spoken lines and the villagers drawn in high detail",
+  "description": "The tasks with the camera and the dialogue, the scripts' countdown timer, the scripts' spoken lines and the villagers drawn in high detail",
   "kind": "object",
   "parameters": [],
   "query": "view.script_control"
  },
  {
-  "description": "The editor: open, its tool, its camera, what is selected (the main pick and all picks) and the steps to undo and redo with their labels",
+  "description": "The editor: open, its tool, its camera, what is selected (the main pick and all picks), the steps to undo and redo with their labels, and the counts of the streams and footpaths that it drew",
   "kind": "object",
   "parameters": [],
   "query": "view.editor"

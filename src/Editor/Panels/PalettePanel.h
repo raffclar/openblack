@@ -32,6 +32,8 @@ private:
 	void DrawCreatures(EditorContext& context) noexcept;
 	/// The miracles' dispensers, or their bubbles on their own
 	void DrawMiracles(EditorContext& context) noexcept;
+	/// The scripts' markers, and their scrolls and signs with the challenge that each belongs to
+	void DrawScriptThings(EditorContext& context) noexcept;
 	/// A searchable grid of a kind's types, those the filter lets through
 	void DrawList(EditorContext& context, PlaceKind kind, const std::vector<int32_t>& types) noexcept;
 	void LayOut(EditorContext& context, PlaceKind kind, const std::vector<int32_t>& types) noexcept;
@@ -41,6 +43,10 @@ private:
 	int _tribe {0};
 	/// Placing the miracles' dispensers (0) or their bubbles (1)
 	int _miracleKind {0};
+	/// Placing the scripts' markers (0) or their scrolls and signs (1)
+	int _scriptKind {0};
+	/// The challenge of the scrolls placed, or the text of the tip signs
+	int _challenge {0};
 	std::string _lastLayout;
 };
 

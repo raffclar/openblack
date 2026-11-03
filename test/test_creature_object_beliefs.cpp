@@ -11,6 +11,7 @@
 #include <cstdint>
 #include <cstdlib>
 
+#include <algorithm>
 #include <array>
 #include <optional>
 #include <set>
@@ -211,6 +212,56 @@ TEST(CreatureObjectBeliefs, ItLooksThroughTheWholeThingsFirstThenTheOtherThingsE
 	EXPECT_TRUE(InListOfWholeThings(k_Temple));
 	EXPECT_FALSE(InListOfWholeThings(k_Villager));
 	EXPECT_FALSE(InListOfWholeThings(4));
+}
+
+TEST(CreatureObjectBeliefs, TheKeptNewestFirstListFollowsEachBeliefThatComesOrGoes)
+{
+	constexpr uint32_t k_Villager = 6;
+	constexpr uint32_t k_Town = 0;
+	// The list that the store keeps must be the list that a new sort of all the beliefs gives
+	const auto expectSorted = [](const Store& store) {
+		auto all = store.All();
+		std::ranges::sort(all, std::ranges::greater {}, &Belief::order);
+		const auto held = store.HeldNewestFirst();
+		ASSERT_EQ(held.size(), all.size());
+		for (size_t i = 0; i < all.size(); ++i)
+		{
+			EXPECT_EQ(held[i]->thing, all[i].thing);
+		}
+		const auto listed = store.HeldInListOrder();
+		ASSERT_EQ(listed.size(), all.size());
+		std::ranges::stable_partition(all, [](const Belief& belief) { return InListOfWholeThings(belief.kind); });
+		for (size_t i = 0; i < all.size(); ++i)
+		{
+			EXPECT_EQ(listed[i]->thing, all[i].thing);
+		}
+	};
+	Store store;
+	expectSorted(store);
+	store.Add(Thing(1), k_Villager, {});
+	store.Add(Thing(2), k_Town, {});
+	expectSorted(store);
+	// A sighting again of a known thing changes no order
+	store.Add(Thing(1), k_Villager, {});
+	expectSorted(store);
+	store.Forget(Thing(1));
+	expectSorted(store);
+	// A full kind replaces the belief at its oldest place
+	const auto capacity = static_cast<uint32_t>(k_Capacity.at(k_Villager));
+	for (uint32_t n = 10; n < 10 + capacity + 3; ++n)
+	{
+		store.Add(Thing(n), k_Villager, {});
+		expectSorted(store);
+	}
+	// A copy keeps the same beliefs in the same places, and a store that takes saved contents sorts them again
+	const auto copy = store;
+	expectSorted(copy);
+	Store loaded;
+	loaded.Add(Thing(99), k_Town, {});
+	expectSorted(loaded);
+	loaded.SetContents(store.Contents());
+	expectSorted(loaded);
+	EXPECT_EQ(loaded.HeldNewestFirst().size(), store.Size());
 }
 
 TEST(CreatureObjectBeliefs, AThingWithNoWayToItIsLeftAloneForTenOrSixtySeconds)

@@ -3318,13 +3318,18 @@ std::unique_ptr<ProviderInterface> ViewProvider(const GameSeamInterface* seam)
 		        return result;
 	        }));
 	provider->Add(
-	    Query("script_control", "The tasks with the camera and the dialogue, the scripts' spoken lines and the "
-	                            "villagers drawn in high detail"),
+	    Query("script_control", "The tasks with the camera and the dialogue, the scripts' countdown timer, the scripts' "
+	                            "spoken lines and the villagers drawn in high detail"),
 	    [](const QueryContext& /*c*/) {
 		    Json result = Json::object();
 		    if (Locator::scriptControlSystem::has_value())
 		    {
-			    result["camera_owner"] = Locator::scriptControlSystem::value().GetCameraOwner();
+			    const auto& control = Locator::scriptControlSystem::value();
+			    result["camera_owner"] = control.GetCameraOwner();
+			    const auto& countdown = control.GetCountdownTimer();
+			    result["countdown"] = {{"running", countdown.IsRunning()},
+			                           {"visible", countdown.IsVisible()},
+			                           {"turns_left", countdown.GetTurnsLeft()}};
 		    }
 		    if (Locator::dialogueControlSystem::has_value())
 		    {
@@ -3369,8 +3374,8 @@ std::unique_ptr<ProviderInterface> ViewProvider(const GameSeamInterface* seam)
 		    return QueryResult::Value(std::move(result));
 	    });
 	provider->Add(
-	    Query("editor", "The editor: open, its tool, its camera, what is selected (the main pick and all picks) and the steps "
-	                    "to undo and redo with their labels"),
+	    Query("editor", "The editor: open, its tool, its camera, what is selected (the main pick and all picks), the steps "
+	                    "to undo and redo with their labels, and the counts of the streams and footpaths that it drew"),
 	    Serve<Locator::editorSystem>("the editor",
 	                                 [](const ecs::systems::EditorSystemInterface& editor, const QueryContext& /*c*/) {
 		                                 auto picks = Json::array();
@@ -3388,7 +3393,9 @@ std::unique_ptr<ProviderInterface> ViewProvider(const GameSeamInterface* seam)
 		                                              {"undo_steps", history.UndoCount()},
 		                                              {"redo_steps", history.RedoCount()},
 		                                              {"undo_label", history.UndoLabel().value_or("")},
-		                                              {"redo_label", history.RedoLabel().value_or("")}};
+		                                              {"redo_label", history.RedoLabel().value_or("")},
+		                                              {"drawn_streams", editor.GetDrawnPaths().streams.size()},
+		                                              {"drawn_footpaths", editor.GetDrawnPaths().footpaths.size()}};
 	                                 }));
 	return provider;
 }
