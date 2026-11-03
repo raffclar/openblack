@@ -128,6 +128,8 @@ public:
 	void SetKnowsAction(entt::entity creature, CreatureActionLearningType type, uint32_t action, bool knows) override;
 	void LearnAction(entt::entity creature, CreatureActionLearningType type, uint32_t action) override;
 	void LearnEverything(entt::entity creature) override;
+	void LearnEverythingExcluding(entt::entity creature, uint32_t excluded) override;
+	void LearnDistinction(entt::entity creature, uint32_t desire, uint32_t attribute, uint32_t value) override;
 	[[nodiscard]] std::optional<float> BodyShare(entt::entity creature) const override;
 	[[nodiscard]] bool KnowsAction(entt::entity creature, CreatureActionLearningType type, uint32_t action) const override;
 	bool TellCast(entt::entity creature, MagicType type, entt::entity target) override;

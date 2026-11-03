@@ -51,6 +51,8 @@ uint32_t ArrivesAtStoragePitForBuildingMaterials(components::LivingAction& actio
 uint32_t ArrivesAtBuildingSite(components::LivingAction& action);
 uint32_t Building(components::LivingAction& action);
 uint32_t ReenterBuildingState(components::LivingAction& action);
+/// A builder that a script told to wait for wood waits where it stepped back to, until it holds wood
+uint32_t WaitForWood(components::LivingAction& action);
 /// Going into building work when it was working towards something else, a villager joins its site's workers
 bool EnterBuilding(components::LivingAction& action, VillagerStates workedTowards, VillagerStates next);
 /// Going on to something else to work towards, it leaves its site's workers and is let go of the site; a state passed

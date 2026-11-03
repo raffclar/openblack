@@ -246,6 +246,16 @@ constexpr float k_MostUsefulness = 0.125f;
 /// good it is and falling to 0 for the worst, but never above k_MostUsefulness, so that anything a little better than
 /// unknown is as useful as the best
 [[nodiscard]] float Usefulness(float utility);
+/// How many values a script's forced tree gives each attribute a branch for, by attribute. These are the ranges of
+/// the game's attribute tests. The game tests the "on fire" attribute with the test of the dominant desire, so that
+/// attribute has the range of the dominant desire. A mobile object type and an abode type each have one value for each
+/// bit of a 15 bit number.
+constexpr std::array<uint32_t, k_AttributeCount> k_ScriptValueRanges {3,  3, 2,  8,  2, 17, 24, 2,  9,     4, 17, 3,
+                                                                      41, 4, 43, 45, 3, 17, 2,  32, 32768, 2, 41};
+/// The tree that a script forces on a creature: the root tests the attribute, with a leaf for each value in the
+/// attribute's range. The leaf of the value given has the best step of the feedback scale, and the other leaves have
+/// the worst step. A value out of the range gives only leaves with the worst step.
+[[nodiscard]] Tree DistinctionTree(Attribute attribute, uint32_t value);
 /// The tree as lines of text, for the debug readouts
 [[nodiscard]] std::vector<std::string> Describe(const Tree& tree);
 

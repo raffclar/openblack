@@ -536,6 +536,8 @@ struct ViewReport
 	uint16_t cameraIcons {0};
 	/// The keys held, by the game's key number (the keyboard's scan code, with 0x80 added for the extended keys)
 	std::bitset<255> keysHeld;
+	/// How many buttons the computer's system says the mouse has
+	uint32_t mouseButtons {0};
 
 	bool operator==(const ViewReport& other) const = default;
 };
@@ -592,14 +594,14 @@ struct MusicMood
 };
 
 /// What a command does
-using Action = std::variant<LeashKey, LeashTap, CreatureFeedback, HandTake, HandLetGo, HandTap, HandGive, LeashOrder,
-                            LeashPostTap, HandReport, HandTwist, HandLock, HandUnlock, HandApply, TotemShare, CreatureBruise,
-                            FightGround, FightMove, FightCharge, CreatureReaction, HandClick, SeedGesture, PlayerLeft, HandPick,
-                            PlayerJoined, MiracleRequest, MiracleRepeat, HandCast, HandCastUnlock, LeashPick, HandShakeOff,
-                            GripDust, HelpReport, HelpQuery, CreatureFightCheat, ViewReport, TempleLeashOff, GiveCallOff,
-                            CreatureTattoo, LeashLength, ChatSpeech, ChatTaunt, QuickSave, QuickLoad, MusicMood, IconChargeStop,
-                            DialogueClick, PuzzleTap, FishScare, ObserversJoined, ObserversLeft, ObserverIn, ObserverOut,
-                            HandLockRelease>;
+using Action =
+    std::variant<LeashKey, LeashTap, CreatureFeedback, HandTake, HandLetGo, HandTap, HandGive, LeashOrder, LeashPostTap,
+                 HandReport, HandTwist, HandLock, HandUnlock, HandApply, TotemShare, CreatureBruise, FightGround, FightMove,
+                 FightCharge, CreatureReaction, HandClick, SeedGesture, PlayerLeft, HandPick, PlayerJoined, MiracleRequest,
+                 MiracleRepeat, HandCast, HandCastUnlock, LeashPick, HandShakeOff, GripDust, HelpReport, HelpQuery,
+                 CreatureFightCheat, ViewReport, TempleLeashOff, GiveCallOff, CreatureTattoo, LeashLength, ChatSpeech,
+                 ChatTaunt, QuickSave, QuickLoad, MusicMood, IconChargeStop, DialogueClick, PuzzleTap, FishScare,
+                 ObserversJoined, ObserversLeft, ObserverIn, ObserverOut, HandLockRelease>;
 
 /// A command and the player that sent it
 struct Command

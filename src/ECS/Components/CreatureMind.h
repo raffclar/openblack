@@ -218,6 +218,14 @@ struct CreatureMindState
 		bool knows {false};
 		/// Every skill and every miracle, in place of the one action
 		bool everything {false};
+		/// Of every skill and every miracle, the kinds that the creature learns
+		bool everySkill {true};
+		bool everyMiracle {true};
+		/// A tree that the script forces on a desire, in place of the action: the desire, the attribute and the value
+		bool distinction {false};
+		uint32_t desire {0};
+		uint32_t attribute {0};
+		uint32_t value {0};
 	};
 	std::vector<Teaching> pendingTeaching;
 

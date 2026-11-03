@@ -54,6 +54,8 @@ struct Creature
 	uint32_t magicMushroomsEaten {0};
 	/// How many objects its miracles have destroyed
 	float objectsDestroyed {0.0f};
+	/// How many times it started to eat a thing that its hand held
+	float timesEaten {0.0f};
 	/// Whether a miracle that takes the last of its life knocks it out; a script can make it unable to die, when such a
 	/// miracle gives it back all its life instead
 	bool canDie {true};

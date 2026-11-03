@@ -41,6 +41,7 @@ void openblack::ecs::reflection::RegisterFields_Components_creature(entt::meta_c
 	    .Field<&components::Creature::autoScale>("autoScale")
 	    .Field<&components::Creature::magicMushroomsEaten>("magicMushroomsEaten")
 	    .Field<&components::Creature::objectsDestroyed>("objectsDestroyed")
+	    .Field<&components::Creature::timesEaten>("timesEaten")
 	    .Field<&components::Creature::canDie>("canDie")
 	    .Field<&components::Creature::mayGoThroughVortex>("mayGoThroughVortex")
 	    .Field<&components::Creature::name>("name")

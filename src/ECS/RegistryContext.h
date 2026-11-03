@@ -57,6 +57,8 @@ struct RegistryContext
 	/// The scripts let the player go into their temple by tapping its entrance. They allow it until they say otherwise, and
 	/// every land starts allowing it again.
 	bool scriptLetsTempleBeEntered {true};
+	/// A script tells a builder that needs wood to first walk away from its site to wait for wood (SET_INTRO_BUILDING)
+	bool scriptBuildersWaitForWood {false};
 	/// How many orders the scripts gave the camera: each command that takes, moves, turns or gives back the camera adds
 	/// one. The view report of a player tells how many of them its camera got, so that the turns know when the camera's
 	/// arrival in the report comes after the last order.

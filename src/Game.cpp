@@ -3432,6 +3432,7 @@ void Game::ReportView()
 	    // The icons that the last draw kept, or the world camera's own when the draw did not run
 	    .cameraIcons =
 	        static_cast<uint16_t>((_interface ? _interface->GetDrawnCameraIcons() : std::nullopt).value_or(_cameraIcons)),
+	    .mouseButtons = platform_mouse::SystemMouseButtons(),
 	};
 	// The keys held, by the game's number of each key
 	if (Locator::gameActionSystem::has_value())

@@ -176,6 +176,7 @@
 #include "ECS/Registry.h"
 #include "ECS/ReportedCamera.h"
 #include "ECS/ScriptContainerWalk.h"
+#include "ECS/ScriptCreatureCounts.h"
 #include "ECS/ScriptDelete.h"
 #include "ECS/ScriptFind.h"
 #include "ECS/ScriptFlocks.h"
@@ -4722,12 +4723,40 @@ void CreatureTurnOffAllDesires() // 073 CREATURE_TURN_OFF_ALL_DESIRES
 
 void CreatureLearnDistinctionAboutActivityObject() // 074 CREATURE_LEARN_DISTINCTION_ABOUT_ACTIVITY_OBJECT
 {
-	// const auto unk3 = Pop().intVal;
-	// const auto unk2 = Pop().intVal;
-	// const auto unk1 = Pop().intVal;
-	// const auto unk0 = Pop().intVal;
-	// TODO(Daniels118): implement this
-	NotImplemented();
+	// The value is on top of the stack, then the attribute, the desire and the creature. The tree of the desire that
+	// tells which things to act on then tests only the attribute, and only the value is good. The game tells of an
+	// attribute or a desire out of its range, or of a thing that is not a creature, and then uses it. openblack
+	// does nothing then.
+	const auto value = Pop().uintVal;
+	const auto attribute = Pop().intVal;
+	const bool attributeValid = attribute >= 0 && attribute < static_cast<int32_t>(creature_tree::k_AttributeCount);
+	if (!attributeValid)
+	{
+		ScriptMessage("Invalid type");
+	}
+	const auto desire = Pop().intVal;
+	const bool desireValid = desire >= 0 && desire < static_cast<int32_t>(creature_desires::k_DesireCount);
+	if (!desireValid)
+	{
+		ScriptMessage("Invalid creature desire");
+	}
+	const auto creature = PopObject();
+	const auto& registry = Locator::entitiesRegistry::value();
+	if (creature == entt::null || !registry.Valid(creature))
+	{
+		ScriptMessage("No creature for script");
+		return;
+	}
+	if (!registry.AllOf<ecs::components::Creature>(creature))
+	{
+		ScriptMessage("No script for creature");
+		return;
+	}
+	if (attributeValid && desireValid && Locator::creatureMindSystem::has_value())
+	{
+		Locator::creatureMindSystem::value().LearnDistinction(creature, static_cast<uint32_t>(desire),
+		                                                      static_cast<uint32_t>(attribute), value);
+	}
 }
 
 void CreatureDoAction() // 075 CREATURE_DO_ACTION
@@ -4956,21 +4985,46 @@ void StartCountdownTimer() // 084 START_COUNTDOWN_TIMER
 	ScriptCountdown().Start(Popf());
 }
 
+/// The creature of a native that reads or clears a count of actions. The game tells of a thing that is not a creature,
+/// then uses it and fails. openblack does nothing with such a thing.
+static ecs::components::Creature* CreatureForCount(entt::entity thing)
+{
+	auto& registry = Locator::entitiesRegistry::value();
+	if (thing == entt::null || !registry.Valid(thing))
+	{
+		ScriptMessage("no creature");
+		return nullptr;
+	}
+	auto* creature = registry.TryGet<ecs::components::Creature>(thing);
+	if (creature == nullptr)
+	{
+		ScriptMessage("not a creature");
+	}
+	return creature;
+}
+
 void CreatureInitialiseNumTimesPerformedAction() // 085 CREATURE_INITIALISE_NUM_TIMES_PERFORMED_ACTION
 {
-	// const auto unk1 = Pop().intVal;
-	// const auto unk0 = Pop().intVal;
-	// TODO(Daniels118): implement this
-	NotImplemented();
+	// The creature is on top of the stack, the number of the count under it. The game takes the number as it is, with
+	// no test of its range.
+	auto* creature = CreatureForCount(PopObject());
+	const auto number = Pop().uintVal;
+	if (creature != nullptr && !ecs::script_creature_counts::Clear(*creature, number))
+	{
+		ScriptMessage("not a count of actions");
+	}
 }
 
 void CreatureGetNumTimesActionPerformed() // 086 CREATURE_GET_NUM_TIMES_ACTION_PERFORMED
 {
-	// const auto unk1 = Pop().intVal;
-	// const auto unk0 = Pop().intVal;
-	// TODO(Daniels118): implement this
-	NotImplemented();
-	Pushf(0.0f);
+	const auto* creature = CreatureForCount(PopObject());
+	const auto number = Pop().uintVal;
+	const auto count = creature != nullptr ? ecs::script_creature_counts::Count(*creature, number) : std::nullopt;
+	if (creature != nullptr && !count.has_value())
+	{
+		ScriptMessage("not a count of actions");
+	}
+	Pushf(count.value_or(0.0f));
 }
 
 void RemoveCountdownTimer() // 087 REMOVE_COUNTDOWN_TIMER
@@ -6080,9 +6134,17 @@ void ReleaseFromScript() // 159 RELEASE_FROM_SCRIPT
 
 void GetObjectHandIsOver() // 160 GET_OBJECT_HAND_IS_OVER
 {
-	// TODO(Daniels118): implement this
-	NotImplemented();
-	Pusho(0);
+	// The thing under the cursor of the player's hand, from the last pick that a turn did. The game warns that a network
+	// game gives each computer the thing under its own hand.
+	if (Locator::time::has_value() && Locator::time::value().IsNetworkGame())
+	{
+		ScriptMessage("This is not multiplayer friendly");
+	}
+	const auto object = Locator::handSystem::has_value()
+	                        ? Locator::handSystem::value().GetReportedPickOf(PlayerNames::PLAYER_ONE)
+	                        : entt::entity {entt::null};
+	const auto& registry = Locator::entitiesRegistry::value();
+	PushObject(object != entt::null && registry.Valid(object) ? object : entt::entity {entt::null});
 }
 
 void IdPoisonedSize() // 161 ID_POISONED_SIZE
@@ -7061,9 +7123,9 @@ void HasMouseWheel() // 206 HAS_MOUSE_WHEEL
 
 void NumMouseButtons() // 207 NUM_MOUSE_BUTTONS
 {
-	// TODO(Daniels118): implement this
-	NotImplemented();
-	Pushf(0.0f);
+	// The view report of the player tells how many buttons its mouse has
+	const auto view = ScriptView();
+	Pushf(view.has_value() ? static_cast<float>(view->mouseButtons) : 0.0f);
 }
 
 void SetCreatureDevStage() // 208 SET_CREATURE_DEV_STAGE
@@ -7557,12 +7619,17 @@ void SetMagicRadius() // 230 SET_MAGIC_RADIUS
 
 void TempTextWithNumber() // 231 TEMP_TEXT_WITH_NUMBER
 {
-	// const auto withInteraction = Pop().intVal;
-	// const auto value = Popf();
-	// const auto format = PopString();
-	// const auto singleLine = static_cast<bool>(Pop().intVal);
-	// TODO(Daniels118): implement this
-	NotImplemented();
+	// As TEMP_TEXT, with a number that the $D or $P code of the words writes into them. The game gives no warning about
+	// the words of the script here.
+	const auto withInteraction = Pop().intVal;
+	const auto number = Popf();
+	const auto words = PopString();
+	const auto singleLine = Pop().uintVal != 0;
+	if (Locator::time::has_value() && Locator::time::value().IsNetworkGame() && withInteraction != 0)
+	{
+		ScriptMessage("This is not multiplayer friendly");
+	}
+	Locator::helpTextSystem::value().TempTextWithNumber(singleLine, words, number, withInteraction);
 }
 
 void RunTextWithNumber() // 232 RUN_TEXT_WITH_NUMBER
@@ -8124,10 +8191,15 @@ void RemoveReactionOfType() // 258 REMOVE_REACTION_OF_TYPE
 
 void CreatureLearnEverythingExcluding() // 259 CREATURE_LEARN_EVERYTHING_EXCLUDING
 {
-	// const auto unk1 = Pop().intVal;
-	// const auto unk0 = Pop().intVal;
-	// TODO(Daniels118): implement this
-	NotImplemented();
+	// The creature is on top of the stack, the kind to omit under it: 0 omits the skills, 1 the miracles. The
+	// game reads the value as it is.
+	const auto object = PopObject();
+	const auto excluded = Pop().uintVal;
+	const auto creature = CreatureForNative(object);
+	if (creature.has_value() && Locator::creatureMindSystem::has_value())
+	{
+		Locator::creatureMindSystem::value().LearnEverythingExcluding(*creature, excluded);
+	}
 }
 
 void PlayedPercentage() // 260 PLAYED_PERCENTAGE
@@ -8886,9 +8958,8 @@ void SetOpenClose() // 307 SET_OPEN_CLOSE
 
 void SetIntroBuilding() // 308 SET_INTRO_BUILDING
 {
-	// const auto enable = static_cast<bool>(Pop().intVal);
-	// TODO(Daniels118): implement this
-	NotImplemented();
+	// The lowest bit of the value tells the builders that need wood to walk away from their sites and wait for it
+	Locator::entitiesRegistry::value().Context().scriptBuildersWaitForWood = (Pop().uintVal & 1u) != 0;
 }
 
 void CreatureForceFriends() // 309 CREATURE_FORCE_FRIENDS
@@ -9013,11 +9084,26 @@ void SetCreatureSound() // 317 SET_CREATURE_SOUND
 
 void CreatureInteractingWith() // 318 CREATURE_INTERACTING_WITH
 {
-	// const auto unk1 = Pop().intVal;
-	// const auto unk0 = Pop().intVal;
-	// TODO(Daniels118): implement this
-	NotImplemented();
-	Pushb(false);
+	// The creature is on top of the stack, the thing under it. The answer is yes only while the creature raises or
+	// lowers that thing as a totem.
+	const auto creature = PopObject();
+	const auto thing = PopObject();
+	const auto& registry = Locator::entitiesRegistry::value();
+	if (creature == entt::null || thing == entt::null || !registry.Valid(creature) || !registry.Valid(thing))
+	{
+		ScriptMessage("Thing not found!");
+		Pushb(false);
+		return;
+	}
+	const auto* mind = registry.TryGet<const ecs::components::CreatureMindState>(creature);
+	if (!registry.AllOf<ecs::components::Creature>(creature))
+	{
+		ScriptMessage("Thing not creature!");
+		Pushb(false);
+		return;
+	}
+	const auto object = mind != nullptr ? creature_mind::InteractingWith(mind->idle) : std::nullopt;
+	Pushb(object.has_value() && *object == static_cast<uint32_t>(thing));
 }
 
 void SetSunDraw() // 319 SET_SUN_DRAW

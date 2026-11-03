@@ -1190,6 +1190,9 @@ void CarryDone(IdleMind& mind);
 /// Whether a step of an agenda is at or after the main step. When the creature shows the player what it wants, every
 /// step counts. An empty agenda has no such step.
 [[nodiscard]] bool AtOrPastMainStep(std::span<const Step> agenda, size_t step, bool showingDesire);
+/// The thing that the creature works on now, as the scripts ask (CREATURE_INTERACTING_WITH): the totem of a step that
+/// raises or lowers a totem, from the start of the step until the step ends. None at all other times.
+[[nodiscard]] std::optional<uint32_t> InteractingWith(const IdleMind& mind);
 /// Whether a creature goes on watching a flying thing: while the thing is still flying and the whole seconds of the
 /// turns it has watched come under the limit
 [[nodiscard]] bool KeepsWatchingFlying(uint32_t turns, uint32_t turnsPerSecond, float limit, bool flying);
