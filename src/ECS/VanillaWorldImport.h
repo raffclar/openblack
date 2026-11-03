@@ -30,6 +30,12 @@ class VanillaWorld;
 struct VanillaRecord;
 } // namespace openblack::gamesave
 
+namespace openblack::ecs::components
+{
+struct Dance;
+struct WorshipIcon;
+} // namespace openblack::ecs::components
+
 // The towns, the buildings of the towns and the villagers of a world file of the game, as values that openblack can
 // make again. The rules here use no service of the game, so that tests can give them a world that they make.
 namespace openblack::ecs::vanilla_world_import
@@ -46,12 +52,18 @@ constexpr uint32_t k_FirstVillagerRowNumber = k_FirstAbodeRowNumber - static_cas
 /// (255) and the states of the animals (53). The first totem comes right after them.
 constexpr uint32_t k_FirstTribeRowNumber = 742;
 
+/// The number of the first row of the table of the spell seeds. The game loads the spell seeds right before the
+/// animals, so the last spell seed has the number that comes after the number of the first animal.
+constexpr uint32_t k_FirstSpellSeedRowNumber = 2548 + static_cast<uint32_t>(SpellSeedType::BeamExplosion) + 1;
+
 /// The building row that has the number, or nothing for a number of another table
 [[nodiscard]] std::optional<AbodeInfo> AbodeRowOf(uint32_t number);
 /// The tribe that has the number, or nothing for a number of another table
 [[nodiscard]] std::optional<Tribe> TribeRowOf(uint32_t number);
 /// The villager row that has the number, or nothing for a number of another table
 [[nodiscard]] std::optional<VillagerInfo> VillagerRowOf(uint32_t number);
+/// The spell seed that has the number, or nothing for a number of another table
+[[nodiscard]] std::optional<SpellSeedType> SpellSeedRowOf(uint32_t number);
 
 /// True when the import makes buildings of the row from the file: the abodes, the storage pit, the creche, the
 /// wonder, the graveyard and the town centre of each tribe. The import removes the buildings of these rows that the land made.
@@ -616,6 +628,57 @@ struct ImportedChants
 	bool freeMaintenance {false};
 };
 
+/// A dance of the file. The groups of the dance and their dancers are not in these values.
+struct ImportedDance
+{
+	uint32_t number {0};
+	/// The row of the table of the dances
+	DanceInfo type {DanceInfo::None};
+	/// The clock of the dance and how many lengths of the clock it takes before it starts again
+	float clock {0.0f};
+	uint32_t loopLength {1};
+	/// The speed that the dance was asked to go at, the rate of its groups, and the rate at which it last started to
+	/// dance
+	float speed {0.0f};
+	float rate {1.0f};
+	float dancingRate {1.0f};
+	float angle {0.0f};
+	bool stopped {true};
+	/// How many turns it lasts once started, 0 for as long as it is wanted, and the turn when it last started
+	uint32_t duration {0};
+	uint32_t startTurn {0};
+	/// The turn when its first dancer came, nothing before the first dancer came
+	std::optional<uint32_t> firstDancerTurn;
+	/// The count of its dancers and of the dancers on their way
+	uint32_t dancers {0};
+	uint32_t onTheirWay {0};
+	/// How many turns in a row the hand of the player was near it, whether the hand stayed near long enough, and whether
+	/// the dance made its camera
+	uint32_t handTurns {0};
+	bool cameraWanted {false};
+	bool cameraMade {false};
+};
+
+/// A spell icon of a worship site of the file
+struct ImportedWorshipIcon
+{
+	uint32_t number {0};
+	SpellSeedType seed {SpellSeedType::None};
+	/// Its place at its site
+	int16_t slot {0};
+	/// It charges its miracle, at a power-up level, for the hand of a player, since a turn
+	bool charging {false};
+	int32_t powerUp {-1};
+	std::optional<PlayerNames> charger;
+	uint32_t chargeStartTurn {0};
+	/// The prayer power that it stored
+	float store {0.0f};
+	/// The numbers of the seeds made from it that are still out, in the order of the file
+	std::vector<uint32_t> seedsOut;
+	/// The turns until it goes. Nothing in the game starts this countdown, so it is always 0.
+	uint16_t removeTurns {0};
+};
+
 /// The number of need flags of a worship site: food, rest and hiding
 constexpr size_t k_SiteNeedFlags = 3;
 
@@ -653,6 +716,10 @@ struct ImportedWorshipSite
 	uint32_t footpathLink {0};
 	/// The count of the villagers that ask to go home. No villager of this version of the game asks.
 	uint32_t goHome {0};
+	/// The values of its dance. Nothing when the file has no dance for the site.
+	std::optional<ImportedDance> danceValues;
+	/// The values of its spell icons, in the order of the file
+	std::vector<ImportedWorshipIcon> iconValues;
 };
 
 /// The towns, buildings and villagers of a world file, in the order of the file
@@ -688,5 +755,21 @@ struct ImportedTowns
 /// The towns, the buildings of the towns and the villagers of the world. A record that has a row of another table, or
 /// no value that the import needs, goes into the list of records that the import does not take.
 [[nodiscard]] ImportedTowns ReadTowns(const gamesave::VanillaWorld& world);
+
+/// The values of a dance record of the file. Nothing for a record that is not a dance or has a row of another table.
+[[nodiscard]] std::optional<ImportedDance> ReadDance(const gamesave::VanillaWorld& world,
+                                                     const gamesave::VanillaRecord& record);
+/// A dance takes the values of a dance of the file: its clock, its speed and rates, its state, its duration, its start,
+/// the turn of its first dancer and the hand of the player. The hand of a game with one player is the hand of the first
+/// god slot. The dancers stay as the dance has them, as only the villagers that keep their states can dance.
+void PutDanceValues(components::Dance& dance, const ImportedDance& file);
+/// An icon of a worship site takes the charge and the store of an icon of the file. The seeds out from the icon are not
+/// in these values.
+void PutIconValues(components::WorshipIcon& icon, const ImportedWorshipIcon& file);
+
+/// The values of a spell icon of a worship site of the file. Nothing for a record that is not such an icon or has no
+/// spell seed of the table.
+[[nodiscard]] std::optional<ImportedWorshipIcon> ReadWorshipIcon(const gamesave::VanillaWorld& world,
+                                                                 const gamesave::VanillaRecord& record);
 
 } // namespace openblack::ecs::vanilla_world_import

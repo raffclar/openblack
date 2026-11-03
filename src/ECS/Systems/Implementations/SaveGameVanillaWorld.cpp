@@ -35,6 +35,7 @@
 #include "ECS/Components/Abode.h"
 #include "ECS/Components/AtHome.h"
 #include "ECS/Components/Construction.h"
+#include "ECS/Components/Dance.h"
 #include "ECS/Components/Disciple.h"
 #include "ECS/Components/Field.h"
 #include "ECS/Components/Footpath.h"
@@ -46,6 +47,7 @@
 #include "ECS/Components/Scaffold.h"
 #include "ECS/Components/ScriptAnimation.h"
 #include "ECS/Components/ScriptStateArguments.h"
+#include "ECS/Components/SpellIcon.h"
 #include "ECS/Components/StoragePit.h"
 #include "ECS/Components/Temple.h"
 #include "ECS/Components/Town.h"
@@ -508,6 +510,75 @@ glm::vec3 openblack::ecs::systems::vanilla_import::GroundPosition(const gamesave
 
 namespace
 {
+/// The dance of a worship site takes the values of the dance of the file. Its dancers and the dancers on their way are
+/// only the villagers that keep their states, so the counts stay as the dance has them.
+void PutSiteDance(ecs::Registry& registry, entt::entity dance, const world_import::ImportedWorshipSite& file)
+{
+	if (!file.danceValues.has_value() || !registry.AllOf<Dance>(dance))
+	{
+		return;
+	}
+	auto& values = registry.Get<Dance>(dance);
+	if (values.type != file.danceValues->type)
+	{
+		SPDLOG_LOGGER_WARN(ImportLog(), "The dance {} of the worship site {} is the dance {} of the table, and the site has {}",
+		                   file.dance, file.number, static_cast<int>(file.danceValues->type), static_cast<int>(values.type));
+	}
+	world_import::PutDanceValues(values, *file.danceValues);
+	if (file.danceValues->dancers != values.dancers || file.danceValues->onTheirWay != values.onTheirWay)
+	{
+		SPDLOG_LOGGER_WARN(
+		    ImportLog(), "The dance {} has {} dancers and {} on their way in the file, and the import keeps {} and {}",
+		    file.dance, file.danceValues->dancers, file.danceValues->onTheirWay, values.dancers, values.onTheirWay);
+	}
+}
+
+/// Each spell icon of a worship site of the file is the icon of its seed that the site made for its towns. The icon takes
+/// the charge and the store of the file, and the seeds out from it that the import made.
+void PutSiteIcons(ecs::Registry& registry, entt::entity site, const world_import::ImportedWorshipSite& file,
+                  std::unordered_map<uint32_t, entt::entity>& made)
+{
+	const auto* siteIcons = registry.TryGet<const SiteIcons>(site);
+	for (const auto& values : file.iconValues)
+	{
+		entt::entity icon = entt::null;
+		if (siteIcons != nullptr)
+		{
+			const auto found = std::ranges::find_if(siteIcons->icons, [&registry, &values](entt::entity candidate) {
+				const auto* component = registry.TryGet<const WorshipIcon>(candidate);
+				return component != nullptr && component->seed == values.seed;
+			});
+			icon = found != siteIcons->icons.end() ? *found : entt::null;
+		}
+		if (icon == entt::null)
+		{
+			SPDLOG_LOGGER_WARN(ImportLog(), "The worship site {} has no icon of the seed {} of the icon {} of the file",
+			                   file.number, static_cast<int>(values.seed), values.number);
+			continue;
+		}
+		made.emplace(values.number, icon);
+		auto& component = registry.Get<WorshipIcon>(icon);
+		world_import::PutIconValues(component, values);
+		if (values.charging && !values.charger.has_value())
+		{
+			SPDLOG_LOGGER_WARN(ImportLog(), "The icon {} of the file charges for no hand of a player", values.number);
+		}
+		component.seedsOut.clear();
+		for (const auto number : values.seedsOut)
+		{
+			if (const auto seed = EntityOf(made, number); seed != entt::null)
+			{
+				component.seedsOut.push_back(seed);
+			}
+			else
+			{
+				SPDLOG_LOGGER_WARN(ImportLog(), "The seed {} out from the icon {} of the file is not made", number,
+				                   values.number);
+			}
+		}
+	}
+}
+
 /// A worship site of the file takes the values of the file: how much of it is built, its altar, the food in its pot,
 /// its prayer power and its needs
 void PutWorshipSiteValues(ecs::Registry& registry, WorshipSiteSystemInterface& sites, entt::entity site,
@@ -521,6 +592,7 @@ void PutWorshipSiteValues(ecs::Registry& registry, WorshipSiteSystemInterface& s
 	if (file.dance != 0 && dance != entt::null)
 	{
 		made.emplace(file.dance, dance);
+		PutSiteDance(registry, dance, file);
 	}
 	if (file.foodPot != 0 && foodPot != entt::null)
 	{
@@ -613,6 +685,7 @@ void PutWorshipSites(ecs::Registry& registry, const world_import::ImportedTowns&
 				Locator::spellIconSystem::value().TownJoinedSite(site, town);
 			}
 		}
+		PutSiteIcons(registry, site, file, made);
 		// A site with footpaths links them at its gate. The footpaths of the file come later.
 		if (file.footpathLink != 0 && !registry.AllOf<FootpathLink>(site))
 		{
