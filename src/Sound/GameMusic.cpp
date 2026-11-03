@@ -18,6 +18,7 @@
 #include <glm/gtx/vec_swizzle.hpp>
 #include <spdlog/spdlog.h>
 
+#include "3D/LandIslandInterface.h"
 #include "Common/GUtilsDistance.h"
 #include "Common/X87Vector.h"
 #include "ECS/Reflection/BinaryArchive.h"
@@ -225,6 +226,12 @@ void GameMusic::SaveState(ecs::reflection::BinaryWriter& out) const
 	{
 		Save(out, music.thing);
 		Save(out, music.type);
+		Save(out, music.active);
+		Save(out, music.playPlace.has_value());
+		const auto place = music.playPlace.value_or(map_coords::MapCoords {});
+		Save(out, place.x);
+		Save(out, place.z);
+		Save(out, place.altitude);
 	}
 	Save(out, _rememberedTown);
 	Save(out, _alignmentMusicEnabled);
@@ -244,6 +251,14 @@ bool GameMusic::LoadState(ecs::reflection::BinaryReader& in)
 	{
 		Load(in, music.thing);
 		Load(in, music.type);
+		Load(in, music.active);
+		bool hasPlace = false;
+		map_coords::MapCoords place;
+		Load(in, hasPlace);
+		Load(in, place.x);
+		Load(in, place.z);
+		Load(in, place.altitude);
+		music.playPlace = hasPlace ? std::optional(place) : std::nullopt;
 	}
 	std::optional<uint32_t> rememberedTown;
 	bool alignmentMusicEnabled {true};
@@ -265,16 +280,43 @@ float GameMusic::AttachedMusicRange(float bankMaxDistance)
 	return bankMaxDistance < 0.0f ? k_AttachedMusicDefaultRange : bankMaxDistance;
 }
 
-std::optional<size_t> GameMusic::SelectAttachedMusic(std::span<const AttachedMusicCandidate> candidates)
+GameMusic::AttachedChoice GameMusic::SelectAttachedMusic(std::span<const AttachedMusicCandidate> candidates)
 {
-	const auto heard = std::ranges::find_if(candidates, [](const AttachedMusicCandidate& candidate) {
-		return candidate.hasBank && candidate.distance < candidate.range;
-	});
-	if (heard == candidates.end())
+	AttachedChoice choice;
+	for (size_t index = 0; index < candidates.size(); ++index)
 	{
-		return std::nullopt;
+		const auto& candidate = candidates[index];
+		const bool inRange = candidate.hasBank && candidate.distance < candidate.range;
+		if (!candidate.active)
+		{
+			choice.held = choice.held || inRange;
+			continue;
+		}
+		if (inRange)
+		{
+			choice.heard = index;
+			return choice;
+		}
 	}
-	return static_cast<size_t>(heard - candidates.begin());
+	return choice;
+}
+
+void GameMusic::SetAttachedMusicActive(uint32_t thing, bool active)
+{
+	const auto found = std::ranges::find(_attached, thing, &AttachedMusic::thing);
+	if (found != _attached.end())
+	{
+		found->active = active;
+	}
+}
+
+void GameMusic::SetAttachedMusicPlace(uint32_t thing, const map_coords::MapCoords& place)
+{
+	const auto found = std::ranges::find(_attached, thing, &AttachedMusic::thing);
+	if (found != _attached.end())
+	{
+		found->playPlace = place;
+	}
 }
 
 void GameMusic::AttachMusic(uint32_t thing, MusicType type)
@@ -588,14 +630,23 @@ bool GameMusic::ProcessAttached(const TurnInputs& inputs)
 		    .hasBank = info.has_value() && position.has_value(),
 		    .distance = position ? x87::Distance<x87::SumOrder::Zyx>(inputs.camera, *position) : 0.0f,
 		    .range = info ? AttachedMusicRange(info->maxDistance) : 0.0f,
+		    .active = music.active,
 		});
-		heard.push_back({.path = std::move(path), .info = info, .position = position.value_or(glm::vec3(0.0f))});
+		// The sound comes from the place that a script gave, at the height of the ground there now, else from the object
+		auto soundPosition = position.value_or(glm::vec3(0.0f));
+		if (music.playPlace.has_value() && Locator::terrainSystem::has_value())
+		{
+			soundPosition = map_coords::ToWorld(Locator::terrainSystem::value(), *music.playPlace);
+		}
+		heard.push_back({.path = std::move(path), .info = info, .position = soundPosition});
 	}
-	const auto selected = SelectAttachedMusic(candidates);
-	if (!selected)
+	const auto choice = SelectAttachedMusic(candidates);
+	if (!choice.heard)
 	{
-		return false;
+		// Music that is off near the camera keeps the music of the land from a start. The music that plays continues.
+		return choice.held;
 	}
+	const auto selected = choice.heard;
 	const auto& music = heard.at(*selected);
 	const auto groupId = music.info->groupId;
 	SaveResumeChunks();

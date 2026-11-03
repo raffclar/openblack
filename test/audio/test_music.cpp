@@ -433,9 +433,34 @@ TEST(GameMusic, TheMostRecentlyAttachedMusicInRangeIsHeard)
 	    {.hasBank = true, .distance = 119.0f, .range = 120.0f},
 	    {.hasBank = true, .distance = 5.0f, .range = 100.0f},
 	}};
-	EXPECT_EQ(GameMusic::SelectAttachedMusic(candidates), std::optional<size_t>(2));
-	EXPECT_EQ(GameMusic::SelectAttachedMusic(std::span(candidates).first(2)), std::nullopt);
-	EXPECT_EQ(GameMusic::SelectAttachedMusic({}), std::nullopt);
+	EXPECT_EQ(GameMusic::SelectAttachedMusic(candidates).heard, std::optional<size_t>(2));
+	EXPECT_EQ(GameMusic::SelectAttachedMusic(std::span(candidates).first(2)).heard, std::nullopt);
+	EXPECT_EQ(GameMusic::SelectAttachedMusic({}).heard, std::nullopt);
+	EXPECT_FALSE(GameMusic::SelectAttachedMusic(candidates).held);
+}
+
+TEST(GameMusic, AttachedMusicThatIsOffDoesNotPlayButHoldsInRange)
+{
+	using Candidate = GameMusic::AttachedMusicCandidate;
+	const std::array<Candidate, 3> candidates {{
+	    // Off and in range: it does not play, but it holds the music of the land
+	    {.hasBank = true, .distance = 10.0f, .range = 100.0f, .active = false},
+	    // On and in range: it plays, after the music that is off
+	    {.hasBank = true, .distance = 50.0f, .range = 100.0f, .active = true},
+	    {.hasBank = true, .distance = 5.0f, .range = 100.0f, .active = true},
+	}};
+	const auto choice = GameMusic::SelectAttachedMusic(candidates);
+	EXPECT_EQ(choice.heard, std::optional<size_t>(1));
+	EXPECT_TRUE(choice.held);
+	const auto offOnly = GameMusic::SelectAttachedMusic(std::span(candidates).first(1));
+	EXPECT_EQ(offOnly.heard, std::nullopt);
+	EXPECT_TRUE(offOnly.held);
+	// Off and out of range: nothing holds
+	const std::array<Candidate, 1> far {{{.hasBank = true, .distance = 100.0f, .range = 100.0f, .active = false}}};
+	EXPECT_FALSE(GameMusic::SelectAttachedMusic(far).held);
+	// Off with no bank: nothing holds
+	const std::array<Candidate, 1> noBank {{{.hasBank = false, .distance = 1.0f, .range = 100.0f, .active = false}}};
+	EXPECT_FALSE(GameMusic::SelectAttachedMusic(noBank).held);
 }
 
 TEST(GameMusic, ScriptsAttachChangeMoveAndDetachMusic)

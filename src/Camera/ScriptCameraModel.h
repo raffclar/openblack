@@ -190,6 +190,10 @@ inline constexpr float k_DualHeightFactor = 1.4f;
 inline constexpr double k_DualSameSpot = static_cast<double>(0.01f);
 /// A thing with no model of its own (a marker, a group) counts as this wide
 inline constexpr float k_DualNoModelRadius = 30.0f;
+/// The camera on a thing and a point stands 1.2 times as far back. For the middle, the point counts as 1 high. For the
+/// distance, the point counts as 0 high.
+inline constexpr float k_DualPointZoom = 1.2f;
+inline constexpr float k_DualPointMiddleHeight = 1.0f;
 
 /// What the two-thing camera needs to know of each thing
 struct DualThing
@@ -199,12 +203,14 @@ struct DualThing
 	float height;
 	/// Its radius on the ground
 	float radius;
+	/// A point that a script gives, not a thing. Its height is not used.
+	bool point {false};
 
 	/// Gives the values that a saved game keeps to a visitor
 	template <typename Self, typename Visitor>
 	static void VisitSaved(Self& self, Visitor&& visit)
 	{
-		visit(self.position, self.height, self.radius);
+		visit(self.position, self.height, self.radius, self.point);
 	}
 };
 /// How the two-thing camera is turned and how far it is zoomed out
@@ -279,11 +285,12 @@ public:
 		uint32_t id;
 		ThingLookup lookup;
 	};
-	/// The camera is placed behind a thing at a distance, the heading and pitch it looks at it now, and follows it and
-	/// looks at it
-	void FollowAndLookAt(Subject thing, float distance);
-	/// The camera is placed behind a thing, from eight times its height, and follows it
-	void Follow(Subject thing);
+	/// The camera follows a thing and looks at it, at a distance, from the heading and pitch it looks at the thing now.
+	/// When atOnce is true, the camera goes there at once. Otherwise it moves there as it follows.
+	void FollowAndLookAt(Subject thing, float distance, bool atOnce);
+	/// The camera follows a thing from eight times its height. When atOnce is true, the camera goes behind the thing at
+	/// once. Otherwise it moves there as it follows.
+	void Follow(Subject thing, bool atOnce);
 	/// The camera looks at a thing and keeps looking at it
 	void LookAt(Subject thing);
 	/// Finds the place of the hand of a computer god now; nothing when the god has no hand
@@ -308,10 +315,15 @@ public:
 	{
 		uint32_t id;
 		DualLookup lookup;
+		/// The point, when the subject is a point that a script gives and not a thing
+		std::optional<glm::vec3> point;
 	};
 	/// The two-thing camera takes over from the script's own: it keeps both things in view until let go. Asked again
 	/// for the same two things while it has them, nothing changes. Asked for others, another one takes over on top of it.
 	void StartDualView(DualSubject first, DualSubject second);
+	/// A two-thing camera on a thing and a point takes over, as StartDualView does. It stands farther back. Asked again
+	/// for the same thing and point while it has them, nothing changes.
+	void StartDualViewWithPoint(DualSubject thing, const glm::vec3& point);
 	/// The two-thing camera on top looks at two other things, its turn and zoom kept; nothing without one
 	void UpdateDualView(DualSubject first, DualSubject second);
 	/// The two-thing camera on top lets go, and the one below it, or the script's own, takes over again; false without
@@ -332,12 +344,14 @@ public:
 		script_camera::DualSettings settings;
 		std::optional<script_camera::DualThing> lastFirst;
 		std::optional<script_camera::DualThing> lastSecond;
+		/// The point that is the second subject, when it is a point
+		std::optional<glm::vec3> secondPoint;
 
 		/// Gives the values that a saved game keeps to a visitor
 		template <typename Self, typename Visitor>
 		static void VisitSaved(Self& self, Visitor&& visit)
 		{
-			visit(self.first, self.second, self.settings, self.lastFirst, self.lastSecond);
+			visit(self.first, self.second, self.settings, self.lastFirst, self.lastSecond, self.secondPoint);
 		}
 	};
 	/// What a saved game keeps of the script's camera. The things that it follows and looks at are kept by their
@@ -397,6 +411,8 @@ private:
 
 	/// The camera is moved at once to where following and looking at the things puts it
 	void SnapToFollowed();
+	/// The second subject of a two-thing camera on a point
+	[[nodiscard]] static DualSubject PointSubject(const glm::vec3& point);
 	/// Sends the camera after the things it follows and looks at
 	void UpdateFollowing();
 	/// The point that the camera looks at now: the thing that it looks at, else the thing that it follows, else the hand

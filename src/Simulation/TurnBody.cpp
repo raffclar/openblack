@@ -882,6 +882,10 @@ void PlayTurnStep(game_turn::Step step, TurnViewInterface& view)
 			    static_cast<uint32_t>(ecs::systems::TimeSystemInterface::k_TurnDuration.count()));
 		}
 		break;
+	case Step::ScriptCountdown:
+		// The scripts' countdown timer counts down, also in a turn where the scripts do not run
+		Locator::scriptControlSystem::value().ProcessTurn();
+		break;
 	case Step::Scripts:
 		// The scripts see the world after its turn
 		Locator::vm::value().LookIn(lhvm::ScriptType::All);
