@@ -206,6 +206,7 @@ void EditorSystem::Update([[maybe_unused]] std::chrono::microseconds dt)
 		{
 			_selection.Clear();
 			_history.Clear();
+			_drawnPaths = {};
 		}
 		_registryResets = resets;
 	}

@@ -2030,7 +2030,7 @@
   "query": "view.script_control"
  },
  {
-  "description": "The editor: open, its tool, its camera, what is selected (the main pick and all picks) and the steps to undo and redo with their labels",
+  "description": "The editor: open, its tool, its camera, what is selected (the main pick and all picks), the steps to undo and redo with their labels, and the counts of the streams and footpaths that it drew",
   "kind": "object",
   "parameters": [],
   "query": "view.editor"

@@ -11,6 +11,7 @@
 
 #include <array>
 #include <filesystem>
+#include <functional>
 #include <limits>
 #include <memory>
 #include <span>
@@ -53,6 +54,7 @@ public:
 	[[nodiscard]] const lnd::LNDCell& GetCell(const glm::u16vec2& coordinates) const override;
 	[[nodiscard]] const lnd::LNDCell* FindCell(const glm::u16vec2& coordinates) const override;
 	void SetCellAltitude(glm::u16vec2 coordinates, uint8_t altitude) override;
+	void SetCellCountry(glm::u16vec2 coordinates, uint8_t country) override;
 	void CommitAltitudeChanges() override;
 	size_t RestoreBuiltAltitudes() override;
 	[[nodiscard]] std::vector<land_reuse::CellAltitude> ChangedAltitudes() const override;
@@ -98,6 +100,9 @@ private:
 	/// Sets the altitude of a cell of a block, [x * 17 + z], and notes the cells that its drawing must make again.
 	/// Returns true when the altitude changed.
 	bool SetBlockCellAltitude(size_t block, int x, int z, uint8_t altitude);
+	/// Gives each copy of a cell corner to a change of one block's cell, (block, x, z), which returns true when the cell
+	/// changed. A changed corner is drawn again at the next commit.
+	void SetCorner(glm::u16vec2 coordinates, const std::function<bool(size_t, int, int)>& change);
 
 	// Renderer, Dynamics
 public:

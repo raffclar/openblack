@@ -54,6 +54,14 @@ void EditorHistory::Push(HistoryStep step)
 		return;
 	}
 	_redo.clear();
+	for (const auto& change : step.changes)
+	{
+		if (const auto* made = std::get_if<MakeChange>(&change);
+		    made != nullptr && std::ranges::find(_made, made->ref) == _made.end())
+		{
+			_made.push_back(made->ref);
+		}
+	}
 	_undo.push_back(std::move(step));
 	while (_undo.size() > k_MaxSteps)
 	{
@@ -93,6 +101,7 @@ void EditorHistory::Clear()
 	_redo.clear();
 	_entities.clear();
 	_refs.clear();
+	_made.clear();
 }
 
 std::optional<std::string> EditorHistory::UndoLabel() const

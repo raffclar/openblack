@@ -17,6 +17,7 @@
 
 #include "Editor/EditorHistory.h"
 #include "Editor/EditorMath.h"
+#include "Editor/EditorPaths.h"
 #include "Editor/EditorSelection.h"
 
 namespace openblack::ecs::systems
@@ -39,6 +40,10 @@ public:
 		Rotate,
 		/// Leaves the mouse to the game's hand
 		GameHand,
+		/// Raises and lowers the land and paints its countries with a brush
+		Land,
+		/// Draws footpaths and streams point by point
+		Paths,
 	};
 	enum class CameraMode : uint8_t
 	{
@@ -66,6 +71,9 @@ public:
 	/// again empty when the land loads again.
 	[[nodiscard]] virtual editor::EditorHistory& GetHistory() = 0;
 	[[nodiscard]] virtual const editor::EditorHistory& GetHistory() const = 0;
+	/// The streams and footpaths that the editor drew, to save. They start again empty when the land loads again.
+	[[nodiscard]] virtual editor::paths::DrawnPaths& GetDrawnPaths() = 0;
+	[[nodiscard]] virtual const editor::paths::DrawnPaths& GetDrawnPaths() const = 0;
 
 	virtual void SetTool(Tool tool) = 0;
 	[[nodiscard]] virtual Tool GetTool() const = 0;

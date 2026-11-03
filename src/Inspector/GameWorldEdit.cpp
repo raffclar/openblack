@@ -45,7 +45,7 @@ namespace
 {
 
 /// The kinds the editor's palette places, by the names the inspector gives them
-constexpr std::array<std::pair<std::string_view, editor::PlaceKind>, 9> k_Kinds {{
+constexpr std::array<std::pair<std::string_view, editor::PlaceKind>, 11> k_Kinds {{
     {"creature", editor::PlaceKind::Creature},
     {"villager", editor::PlaceKind::Villager},
     {"building", editor::PlaceKind::Building},
@@ -55,6 +55,8 @@ constexpr std::array<std::pair<std::string_view, editor::PlaceKind>, 9> k_Kinds 
     {"mobile_static", editor::PlaceKind::MobileStatic},
     {"dispenser", editor::PlaceKind::Dispenser},
     {"miracle_bubble", editor::PlaceKind::MiracleBubble},
+    {"script_marker", editor::PlaceKind::ScriptMarker},
+    {"highlight", editor::PlaceKind::Highlight},
 }};
 
 std::optional<editor::PlaceKind> PlaceKindOf(std::string_view kind)

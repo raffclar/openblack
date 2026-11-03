@@ -60,6 +60,9 @@ public:
 	/// Sets a cell corner's altitude while the game runs, in every block that shares the corner. The land the game reads
 	/// changes at once; its drawing follows at the next CommitAltitudeChanges. Lands that can't change ignore it.
 	virtual void SetCellAltitude(glm::u16vec2 /*coordinates*/, uint8_t /*altitude*/) {}
+	/// Sets the country of a cell corner while the game runs, in every block that shares the corner. The ground's texture
+	/// follows at the next CommitAltitudeChanges. Lands that can't change ignore it.
+	virtual void SetCellCountry(glm::u16vec2 /*coordinates*/, uint8_t /*country*/) {}
 	/// The land's drawing catches up with the altitudes set since the last time: the shapes of the blocks that changed,
 	/// the height map, and the blocks' textures, whose ground follows the height
 	virtual void CommitAltitudeChanges() {}

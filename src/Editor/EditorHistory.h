@@ -151,6 +151,9 @@ public:
 	[[nodiscard]] std::optional<std::string> UndoLabel() const;
 	/// The label of the step that the next redo does
 	[[nodiscard]] std::optional<std::string> RedoLabel() const;
+	/// The numbers of the things that the editor made, in the order that it made them. A number stays after its step
+	/// leaves the history, until the history is cleared. Resolve gives the thing that has the number now.
+	[[nodiscard]] const std::vector<HistoryRef>& MadeRefs() const { return _made; }
 
 private:
 	enum class Direction : uint8_t
@@ -168,6 +171,7 @@ private:
 	std::unordered_map<HistoryRef, entt::entity> _entities;
 	std::unordered_map<entt::entity, HistoryRef> _refs;
 	HistoryRef _nextRef {1};
+	std::vector<HistoryRef> _made;
 };
 
 } // namespace openblack::editor
