@@ -29,7 +29,16 @@ constexpr std::array<uint8_t, 8> k_SnapshotMagic {'O', 'B', 'S', 'N', 'A', 'P', 
 constexpr std::array<uint8_t, 8> k_JournalMagic {'O', 'B', 'J', 'O', 'U', 'R', 'N', 'L'};
 /// Version 2 keeps a salted hash of each secret of a session. The files of version 1 kept the secrets, and do not load.
 /// Version 3 keeps the last block of commands of each god. The files of version 2 do not load.
-constexpr uint32_t k_FormatVersion = 3;
+/// Version 4 keeps the names of the observers and whether the god of the observers is in the game. The files of version 3
+/// still load, with no names and with the god of the observers out of the game.
+constexpr uint32_t k_FormatVersion = 4;
+constexpr uint32_t k_OldestFormatVersion = 3;
+
+/// True for a version of the format that the server reads
+[[nodiscard]] bool ReadsVersion(uint32_t version) noexcept
+{
+	return version >= k_OldestFormatVersion && version <= k_FormatVersion;
+}
 constexpr std::string_view k_SnapshotPrefix = "snapshot-";
 constexpr std::string_view k_SnapshotExtension = ".obsnap";
 constexpr std::string_view k_JournalPrefix = "journal-";
@@ -286,6 +295,12 @@ std::vector<uint8_t> EncodeRoom(const Room& room)
 	PutU32(out, room.stoppedAfter.value_or(0));
 	PutBytes(out, room.leaving);
 	PutBytes(out, room.joining);
+	PutU32(out, static_cast<uint32_t>(room.watcherNames.size()));
+	for (const auto& name : room.watcherNames)
+	{
+		PutText(out, name);
+	}
+	PutU8(out, room.observersIn ? 1 : 0);
 	return out;
 }
 
@@ -320,6 +335,16 @@ std::optional<Room> DecodeRoom(std::span<const uint8_t> bytes)
 	}
 	room.leaving = reader.Bytes();
 	room.joining = reader.Bytes();
+	// The room of a file of format 3 ends here
+	if (reader.Good() && !reader.AtEnd())
+	{
+		const auto names = reader.U32();
+		for (uint32_t i = 0; i < names && reader.Good(); ++i)
+		{
+			room.watcherNames.push_back(reader.Text());
+		}
+		room.observersIn = reader.U8() != 0;
+	}
 	if (!reader.Good() || !reader.AtEnd())
 	{
 		return std::nullopt;
@@ -361,7 +386,7 @@ std::optional<Snapshot> DecodeSnapshot(std::span<const uint8_t> bytes)
 	}
 	Reader reader(body);
 	const auto magic = reader.Take(k_SnapshotMagic.size());
-	if (!std::ranges::equal(magic, k_SnapshotMagic) || reader.U32() != k_FormatVersion)
+	if (!std::ranges::equal(magic, k_SnapshotMagic) || !ReadsVersion(reader.U32()))
 	{
 		return std::nullopt;
 	}
@@ -425,7 +450,7 @@ std::pair<std::vector<Record>, bool> ReadJournal(std::span<const uint8_t> bytes)
 	std::vector<Record> records;
 	Reader reader(bytes);
 	const auto magic = reader.Take(k_JournalMagic.size());
-	if (!std::ranges::equal(magic, k_JournalMagic) || reader.U32() != k_FormatVersion)
+	if (!std::ranges::equal(magic, k_JournalMagic) || !ReadsVersion(reader.U32()))
 	{
 		return {records, true};
 	}

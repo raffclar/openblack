@@ -187,6 +187,14 @@ public:
 		}
 	}
 
+	void SwitchOnMind(PlayerNames player) override
+	{
+		if (Entity(player) != entt::null && Locator::computerPlayerSystem::has_value())
+		{
+			Locator::computerPlayerSystem::value().SwitchOn(player, true);
+		}
+	}
+
 private:
 	/// The entity of a player, none for a player that the land has not made
 	[[nodiscard]] entt::entity Entity(PlayerNames player) const { return _players.at(static_cast<size_t>(player)); }
@@ -207,13 +215,26 @@ private:
 };
 } // namespace
 
-void GameEndSystem::ProcessTurn(uint32_t turn)
+void GameEndSystem::HumanLeft(PlayerNames god)
 {
-	_events.clear();
+	// What was true before the leave: the god was out, and the game was decided. The turn counts the god out after this.
 	auto& registry = Locator::entitiesRegistry::value();
-	auto& context = registry.Context();
+	bool out = false;
+	registry.Each<const components::Player>([&registry, &out, god](entt::entity entity, const components::Player& player) {
+		if (player.name == god)
+		{
+			const auto* standing = registry.TryGet<const GameStanding>(entity);
+			out = out || (standing != nullptr && standing->out);
+		}
+	});
+	_leavesToShow.push_back({.god = god, .godOut = out, .decided = registry.Context().gameEnd.decided});
+}
+
+game_end::Facts GameEndSystem::FactsOf(uint32_t turn) const
+{
+	const auto& context = Locator::entitiesRegistry::value().Context();
 	const bool networkGame = Locator::time::value().IsNetworkGame();
-	const game_end::Facts facts {
+	return {
 	    .networkGame = networkGame,
 	    .skirmish = context.skirmish && !networkGame,
 	    .turn = turn,
@@ -222,6 +243,41 @@ void GameEndSystem::ProcessTurn(uint32_t turn)
 	    .templesNeeded = !(networkGame && Locator::landSystem::has_value() && Locator::landSystem::value().OnTestbed()) &&
 	                     !(Locator::simulation::has_value() && Locator::simulation::value().GetSettings().godsNeedNoTemple),
 	};
+}
+
+void GameEndSystem::ObserversJoined(PlayerNames god)
+{
+	Locator::entitiesRegistry::value().Context().gameEnd.observersGod = god;
+}
+
+void GameEndSystem::ObserversLeft()
+{
+	auto& context = Locator::entitiesRegistry::value().Context();
+	const auto facts = FactsOf(Locator::time::value().GetTurn());
+	GameEndWorld world;
+	const bool ranked = game_end::ObserversLeft(world, context.gameEnd, facts);
+	if (const auto logger = spdlog::get("game"); logger && context.gameEnd.observersGod.has_value())
+	{
+		const auto god = *context.gameEnd.observersGod;
+		const auto& standing = world.Standing(god);
+		SPDLOG_LOGGER_INFO(logger, "The last observer left: the god of player {} {}", static_cast<int>(god),
+		                   ranked ? fmt::format("takes place {} and a computer mind plays it",
+		                                        standing.place.has_value() ? std::to_string(*standing.place) : "none")
+		                          : std::string("keeps its standing"));
+	}
+}
+
+std::optional<PlayerNames> GameEndSystem::ObserversGod() const
+{
+	return Locator::entitiesRegistry::value().Context().gameEnd.observersGod;
+}
+
+void GameEndSystem::ProcessTurn(uint32_t turn)
+{
+	_events.clear();
+	auto& registry = Locator::entitiesRegistry::value();
+	auto& context = registry.Context();
+	const auto facts = FactsOf(turn);
 	if ((!facts.networkGame && !facts.skirmish) || context.gameEnd.decided)
 	{
 		return;
@@ -332,11 +388,12 @@ std::optional<PlayerNames> GameEndSystem::LastGodIn() const
 	auto& registry = Locator::entitiesRegistry::value();
 	const auto gods = world.ActiveGods();
 	const bool networkGame = Locator::time::has_value() && Locator::time::value().IsNetworkGame();
+	const auto& state = registry.Context().gameEnd;
 	std::vector<PlayerNames> in;
 	registry.Each<const components::Player>(
-	    [&gods, &registry, &in, networkGame](entt::entity entity, const components::Player& player) {
+	    [&gods, &registry, &in, &state, networkGame](entt::entity entity, const components::Player& player) {
 		    const auto* standing = registry.TryGet<const GameStanding>(entity);
-		    if (game_end::CanLose(player.name, networkGame) && std::ranges::find(gods, player.name) != gods.end() &&
+		    if (game_end::TakesPart(player.name, networkGame, state) && std::ranges::find(gods, player.name) != gods.end() &&
 		        (standing == nullptr || !standing->out))
 		    {
 			    in.push_back(player.name);

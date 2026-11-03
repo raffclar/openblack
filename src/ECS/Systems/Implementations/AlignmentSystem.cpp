@@ -202,7 +202,8 @@ void AlignmentSystem::UpdatePlayersTurn()
 		reported = hands.GetReportedCamera(hands.GetOwnPlayer());
 	}
 	const auto eye = reported.has_value() ? reported->origin : glm::vec3(0.0f);
-	std::array<alignment::PlayerAtPlace, player_slots::k_MaxPlayers> players {};
+	// Each god of the game: the gods of the slots and the god of the observers
+	std::array<alignment::PlayerAtPlace, player_slots::k_PlayerNumbers> players {};
 	size_t count = 0;
 	if (Locator::influenceSystem::has_value())
 	{

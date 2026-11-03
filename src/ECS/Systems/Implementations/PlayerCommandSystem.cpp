@@ -48,6 +48,7 @@
 #include "ECS/Systems/CreatureMindSystemInterface.h"
 #include "ECS/Systems/CreatureSkinSystemInterface.h"
 #include "ECS/Systems/EffectRequestSystemInterface.h"
+#include "ECS/Systems/GameEndSystemInterface.h"
 #include "ECS/Systems/HandGrabSystemInterface.h"
 #include "ECS/Systems/HandSystemInterface.h"
 #include "ECS/Systems/HelpMessageSystemInterface.h"
@@ -564,9 +565,41 @@ void Run(const Command& command, uint32_t turn)
 			        });
 			    if (god.has_value() && !registry.AllOf<openblack::ecs::components::LeftGame>(*god))
 			    {
+				    // The view of each computer tells the players, with the standing of the god before the leave
+				    if (openblack::Locator::gameEndSystem::has_value())
+				    {
+					    openblack::Locator::gameEndSystem::value().HumanLeft(command.player);
+				    }
 				    registry.Assign<openblack::ecs::components::LeftGame>(*god, turn);
 				    // The hand of the human lets go: the leash comes off, the charges stop and what it holds goes
 				    std::ignore = openblack::ecs::leaver_hand::ReleaseHandInGame(command.player);
+			    }
+		    }
+		    else if constexpr (std::is_same_v<Kind, ObserversJoined>)
+		    {
+			    // The god of the observers is a human god with no citadel: the land makes its player when it has none,
+			    // and the god gets hands of its own
+			    if (openblack::Locator::playerSystem::has_value())
+			    {
+				    std::ignore = openblack::Locator::playerSystem::value().EnsurePlayer(command.player);
+			    }
+			    if (openblack::Locator::handSystem::has_value())
+			    {
+				    std::ignore = openblack::Locator::handSystem::value().MakeHandsOf(command.player);
+			    }
+			    if (openblack::Locator::gameEndSystem::has_value())
+			    {
+				    openblack::Locator::gameEndSystem::value().ObserversJoined(command.player);
+			    }
+		    }
+		    else if constexpr (std::is_same_v<Kind, ObserversLeft>)
+		    {
+			    // The hand of the last observer lets go, as the hand of any human who leaves. The box that tells the
+			    // players comes from the leave of the observer itself.
+			    std::ignore = openblack::ecs::leaver_hand::ReleaseHandInGame(command.player);
+			    if (openblack::Locator::gameEndSystem::has_value())
+			    {
+				    openblack::Locator::gameEndSystem::value().ObserversLeft();
 			    }
 		    }
 		    else if constexpr (std::is_same_v<Kind, HandPick>)

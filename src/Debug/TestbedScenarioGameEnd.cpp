@@ -13,6 +13,7 @@
 #include <string_view>
 #include <vector>
 
+#include "TestbedGameStageInterface.h"
 #include "TestbedScenarioRegistry.h"
 
 using namespace openblack;
@@ -152,6 +153,21 @@ void testbed_scenarios::AddGameEndScenarios(std::vector<Scenario>& all)
 	    .temples = {{.offset = k_OwnTemple}, {.offset = k_SecondTemple, .owner = PlayerNames::PLAYER_TWO}},
 	    .landScript = k_TwoComputerGods,
 	    .commands = {{.kind = Kind::EndBox, .delaySeconds = 1.0f, .value = 0}},
+	});
+	all.push_back({
+	    .id = "game_end.player_left",
+	    .name = "The box that tells the player that another player left the network game",
+	    .facet = Facet::Multiplayer,
+	    .description = "A skirmish of two gods: the player and the computer god of player two, each with a temple. One "
+	                   "second in, the box opens that a network game shows when a god's player or an observer of another "
+	                   "computer leaves, with the name Carol.",
+	    .expected = "The white box with OK says \"Carol has left game.\" in front of a dimmed box. The world goes on. OK "
+	                "closes the box.",
+	    .environment = {.dispenserGrid = false, .players = {PlayerNames::PLAYER_TWO}, .skirmish = true},
+	    .framing = k_Overview,
+	    .temples = {{.offset = k_OwnTemple}, {.offset = k_SecondTemple, .owner = PlayerNames::PLAYER_TWO}},
+	    .landScript = k_TwoComputerGods,
+	    .commands = {{.kind = Kind::EndBox, .delaySeconds = 1.0f, .value = k_EndBoxPlayerLeft}},
 	});
 	all.push_back({
 	    .id = "game_end.conditions",

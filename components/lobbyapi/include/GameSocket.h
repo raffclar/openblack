@@ -259,8 +259,16 @@ struct RoomChat
 	[[nodiscard]] bool operator==(const RoomChat&) const = default;
 };
 
+/// Server to client: "observer.left". The session of an observer ended after the start: the observer left, or did not
+/// come back in time. The other players see that the observer left the game.
+struct ObserverLeft
+{
+	/// The name of the observer's account
+	std::string name;
+};
+
 using Frame = std::variant<Join, Resume, Ready, Leave, Joined, Refused, Start, Resumed, PlayerState, StartQuery, StartReply,
-                           StartCancel, StartStop, StartTransfer, StartCreature, StopRequest, GameStop, RoomChat>;
+                           StartCancel, StartStop, StartTransfer, StartCreature, StopRequest, GameStop, RoomChat, ObserverLeft>;
 
 [[nodiscard]] std::string ToJson(const Frame& frame);
 [[nodiscard]] std::optional<Frame> Parse(std::string_view text);

@@ -295,6 +295,20 @@ struct PlayerJoined
 {
 };
 
+/// The player of the command is the god of the observers: the first observer is in the network game. Only the game
+/// server sends it. The world makes the player when the land has none and gives it hands of its own. The god has no
+/// citadel, so it has no influence, no miracles and no creature. All the observers are humans of this god.
+struct ObserversJoined
+{
+};
+
+/// The player of the command is the god of the observers, and the last observer left the network game. Only the game
+/// server sends it. The god gets the next finishing place, each other human god that is still in counts one more god
+/// defeated, and a computer mind plays the god. The god is not out of the game.
+struct ObserversLeft
+{
+};
+
 /// The miracle selection chose a miracle: the player's icons give the miracle of the seed to the hand, or one of them
 /// starts to charge it. The turn checks again that an icon may do it.
 struct MiracleRequest
@@ -555,13 +569,13 @@ struct MusicMood
 };
 
 /// What a command does
-using Action =
-    std::variant<LeashKey, LeashTap, CreatureFeedback, HandTake, HandLetGo, HandTap, HandGive, LeashOrder, LeashPostTap,
-                 HandReport, HandTwist, HandLock, HandUnlock, HandApply, TotemShare, CreatureBruise, FightGround, FightMove,
-                 FightCharge, CreatureReaction, HandClick, SeedGesture, PlayerLeft, HandPick, PlayerJoined, MiracleRequest,
-                 MiracleRepeat, HandCast, HandCastUnlock, LeashPick, HandShakeOff, GripDust, HelpReport, HelpQuery,
-                 CreatureFightCheat, ViewReport, TempleLeashOff, GiveCallOff, CreatureTattoo, LeashLength, ChatSpeech,
-                 ChatTaunt, QuickSave, QuickLoad, MusicMood, IconChargeStop, DialogueClick, PuzzleTap, FishScare>;
+using Action = std::variant<LeashKey, LeashTap, CreatureFeedback, HandTake, HandLetGo, HandTap, HandGive, LeashOrder,
+                            LeashPostTap, HandReport, HandTwist, HandLock, HandUnlock, HandApply, TotemShare, CreatureBruise,
+                            FightGround, FightMove, FightCharge, CreatureReaction, HandClick, SeedGesture, PlayerLeft, HandPick,
+                            PlayerJoined, MiracleRequest, MiracleRepeat, HandCast, HandCastUnlock, LeashPick, HandShakeOff,
+                            GripDust, HelpReport, HelpQuery, CreatureFightCheat, ViewReport, TempleLeashOff, GiveCallOff,
+                            CreatureTattoo, LeashLength, ChatSpeech, ChatTaunt, QuickSave, QuickLoad, MusicMood, IconChargeStop,
+                            DialogueClick, PuzzleTap, FishScare, ObserversJoined, ObserversLeft>;
 
 /// A command and the player that sent it
 struct Command
