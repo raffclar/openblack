@@ -176,4 +176,31 @@ void CountOut(World& world, State& state, PlayerNames god, ecs::components::OutR
 /// The number of events of a turn that decide the game. The game tells the lobby one time for each of these events.
 [[nodiscard]] size_t DecidingEvents(std::span<const Event> events);
 
+/// A human who left the network game, as the other computers tell their players
+struct Leave
+{
+	/// The god of the human. None for an observer, which has no god.
+	std::optional<PlayerNames> god;
+	/// The god was out of the game before its human left. The god of the observers is never out.
+	bool godOut {false};
+	/// The game was decided before the human left
+	bool decided {false};
+};
+
+/// What a computer shows when a human of another computer leaves the network game
+struct LeaveNotice
+{
+	/// The advisors can say that an enemy leaves the game (a remark said at most one time a game)
+	bool remark {false};
+	/// A box with OK tells the name of the player who left
+	bool box {false};
+};
+
+/// The notice of a leave: a human whose god was out gives no notice. Once the game is decided, the box does not show,
+/// but the advisors can still say the remark.
+[[nodiscard]] constexpr LeaveNotice NoticeOf(const Leave& leave) noexcept
+{
+	return {.remark = !leave.godOut, .box = !leave.godOut && !leave.decided};
+}
+
 } // namespace openblack::game_end

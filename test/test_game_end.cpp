@@ -9,6 +9,7 @@
 
 #include <array>
 #include <map>
+#include <optional>
 #include <span>
 #include <tuple>
 #include <vector>
@@ -627,4 +628,22 @@ TEST(GameEnd, TheLastGodLeftKeepsNoCreatureFile)
 	static_cast<void>(ProcessTurn(world, k_Network, state));
 	ASSERT_TRUE(state.decided);
 	EXPECT_EQ(world.kept, std::vector<PlayerNames> {k_Two});
+}
+
+// A human whose god is still in gives the remark and the box; once the game is decided, only the remark. A human whose
+// god was out gives neither. An observer's god is never out.
+TEST(GameEnd, ALeaveGivesTheRemarkAndTheBoxOnlyWhileTheGodIsIn)
+{
+	const auto in = NoticeOf({.god = PlayerNames::PLAYER_TWO, .godOut = false, .decided = false});
+	EXPECT_TRUE(in.remark);
+	EXPECT_TRUE(in.box);
+	const auto decided = NoticeOf({.god = PlayerNames::PLAYER_TWO, .godOut = false, .decided = true});
+	EXPECT_TRUE(decided.remark);
+	EXPECT_FALSE(decided.box);
+	const auto out = NoticeOf({.god = PlayerNames::PLAYER_TWO, .godOut = true, .decided = false});
+	EXPECT_FALSE(out.remark);
+	EXPECT_FALSE(out.box);
+	const auto observer = NoticeOf({.god = std::nullopt, .godOut = false, .decided = false});
+	EXPECT_TRUE(observer.remark);
+	EXPECT_TRUE(observer.box);
 }

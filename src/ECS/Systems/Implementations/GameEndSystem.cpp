@@ -207,6 +207,21 @@ private:
 };
 } // namespace
 
+void GameEndSystem::HumanLeft(PlayerNames god)
+{
+	// What was true before the leave: the god was out, and the game was decided. The turn counts the god out after this.
+	auto& registry = Locator::entitiesRegistry::value();
+	bool out = false;
+	registry.Each<const components::Player>([&registry, &out, god](entt::entity entity, const components::Player& player) {
+		if (player.name == god)
+		{
+			const auto* standing = registry.TryGet<const GameStanding>(entity);
+			out = out || (standing != nullptr && standing->out);
+		}
+	});
+	_leavesToShow.push_back({.god = god, .godOut = out, .decided = registry.Context().gameEnd.decided});
+}
+
 void GameEndSystem::ProcessTurn(uint32_t turn)
 {
 	_events.clear();

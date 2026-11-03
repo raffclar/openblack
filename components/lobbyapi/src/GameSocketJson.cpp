@@ -41,6 +41,7 @@ constexpr std::string_view k_StartCreature = "start.creature";
 constexpr std::string_view k_StopRequest = "game.stop_request";
 constexpr std::string_view k_GameStop = "game.stop";
 constexpr std::string_view k_RoomChat = "room.chat";
+constexpr std::string_view k_ObserverLeft = "observer.left";
 
 /// The most god slots that a frame can name
 constexpr uint64_t k_MostSlots = 32;
@@ -422,6 +423,15 @@ std::optional<Frame> ParseObject(const Json& object, std::string_view type)
 		}
 		return Resumed {.turn = static_cast<uint32_t>(turn), .world = world};
 	}
+	if (type == k_ObserverLeft)
+	{
+		ObserverLeft left;
+		if (!ReadString(object, "name", left.name))
+		{
+			return std::nullopt;
+		}
+		return left;
+	}
 	if (type == k_PlayerState)
 	{
 		uint64_t slot = 0;
@@ -672,6 +682,10 @@ std::string ToJson(const Frame& frame)
 			    {
 				    object["team"] = true;
 			    }
+		    }
+		    else if constexpr (std::is_same_v<Kind, ObserverLeft>)
+		    {
+			    object = Json {{"type", k_ObserverLeft}, {"name", value.name}};
 		    }
 		    else
 		    {

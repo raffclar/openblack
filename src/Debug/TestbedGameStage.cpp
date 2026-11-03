@@ -212,6 +212,11 @@ std::string TestbedGameStage::OpenEndBox(size_t value)
 		game->AskToLeaveNetworkGame();
 		return "the question to leave opens";
 	}
+	if (value == k_EndBoxPlayerLeft)
+	{
+		game->GetInterface()->ShowPlayerLeft(u"Carol");
+		return "the box that tells that Carol left opens";
+	}
 	if (value >= 4)
 	{
 		const auto notches = static_cast<int>(value) - 3;

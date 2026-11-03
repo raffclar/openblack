@@ -173,7 +173,7 @@ public:
 		std::optional<ConnectionId> connection;
 		int64_t awaySince {0};
 		uint32_t resumes {0};
-		/// The name of the player, for the room's chat. Empty after a restore from a snapshot.
+		/// The name of the observer's account, for the room's chat and for the leave. Empty for a session that a restore gave.
 		std::string name;
 	};
 
@@ -261,6 +261,8 @@ private:
 		std::optional<uint8_t> seat;
 		/// The time that the connection opened. A connection that does not join in its time closes.
 		int64_t openedAt {0};
+		/// The name of the player's account
+		std::string name;
 	};
 
 	void Opened(ConnectionId connection);
@@ -281,6 +283,9 @@ private:
 	void ChatInRoom(ConnectionId connection, const Peer& peer, const game_socket::RoomChat& chat);
 	/// The name of a player in the room: the name of the god's seat, or the name of the observer. Empty for none.
 	[[nodiscard]] std::string PeerName(ConnectionId connection, const Peer& peer) const;
+	[[nodiscard]] std::string NewWatcher(ConnectionId connection, std::string_view name);
+	/// The session of an observer ended after the start: the other players see that the observer left the game
+	void ObserverLeft(std::string_view name);
 	/// The salted hash of a secret. None when the secret is empty or the host has no hasher.
 	[[nodiscard]] std::optional<SessionHash> HashOf(std::string_view secret) const;
 	/// True when the secret that a client gives is the secret of a session. A session that a restore gave has only the

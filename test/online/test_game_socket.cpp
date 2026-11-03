@@ -305,3 +305,12 @@ TEST(GameSocket, TheLinesOfTheRoomsChatGoToJsonAndBack)
 	EXPECT_FALSE(Parse(R"({"type":"room.chat","text":1})").has_value());
 	EXPECT_FALSE(Parse(R"({"type":"room.chat","text":"Hi","from":2})").has_value());
 }
+
+// The server tells the clients the name of an observer that left the game
+TEST(GameSocket, TheLeaveOfAnObserverGoesToJsonAndBack)
+{
+	EXPECT_EQ(RoundTrip(ObserverLeft {.name = "carol"}).name, "carol");
+	EXPECT_EQ(ToJson(ObserverLeft {.name = "carol"}), R"({"name":"carol","type":"observer.left"})");
+	EXPECT_FALSE(Parse(R"({"type":"observer.left"})").has_value());
+	EXPECT_FALSE(Parse(R"({"type":"observer.left","name":7})").has_value());
+}
