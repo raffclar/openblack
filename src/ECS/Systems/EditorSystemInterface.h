@@ -19,6 +19,7 @@
 #include "Editor/EditorMath.h"
 #include "Editor/EditorPaths.h"
 #include "Editor/EditorSelection.h"
+#include "Editor/LandBrush.h"
 
 namespace openblack::ecs::systems
 {
@@ -74,6 +75,8 @@ public:
 	/// The streams and footpaths that the editor drew, to save. They start again empty when the land loads again.
 	[[nodiscard]] virtual editor::paths::DrawnPaths& GetDrawnPaths() = 0;
 	[[nodiscard]] virtual const editor::paths::DrawnPaths& GetDrawnPaths() const = 0;
+	/// The settings of the land brush. A land script's height change, country change and brush size commands set them.
+	[[nodiscard]] virtual editor::land_brush::Brush& GetLandBrush() = 0;
 
 	virtual void SetTool(Tool tool) = 0;
 	[[nodiscard]] virtual Tool GetTool() const = 0;

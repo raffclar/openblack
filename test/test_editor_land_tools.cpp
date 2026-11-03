@@ -165,6 +165,49 @@ TEST(EditorLandBrush, ADragStrokesAgainAfterOneCornerSpacing)
 	EXPECT_TRUE(land_brush::MovedFarEnough({0.0f, 0.0f}, {6.0f, 8.0f}));
 }
 
+TEST(EditorLandBrush, AHeightChangeCommandGivesTheDirectionAndTheStep)
+{
+	land_brush::Brush brush {.mode = land_brush::Mode::Paint, .step = 4};
+	land_brush::TakeHeightChange(brush, 0);
+	EXPECT_EQ(brush.mode, land_brush::Mode::Paint);
+	EXPECT_EQ(brush.step, 4);
+	land_brush::TakeHeightChange(brush, 7);
+	EXPECT_EQ(brush.mode, land_brush::Mode::Raise);
+	EXPECT_EQ(brush.step, 7);
+	land_brush::TakeHeightChange(brush, -3);
+	EXPECT_EQ(brush.mode, land_brush::Mode::Lower);
+	EXPECT_EQ(brush.step, 3);
+	land_brush::TakeHeightChange(brush, INT32_MIN);
+	EXPECT_EQ(brush.mode, land_brush::Mode::Lower);
+	EXPECT_EQ(brush.step, land_brush::k_MostStep);
+}
+
+TEST(EditorLandBrush, ACountryChangeCommandGivesACountryThatACellCanKeep)
+{
+	land_brush::Brush brush {.mode = land_brush::Mode::Raise, .country = 2};
+	land_brush::TakeCountryChange(brush, 15);
+	EXPECT_EQ(brush.country, 15);
+	EXPECT_EQ(brush.mode, land_brush::Mode::Raise);
+	land_brush::TakeCountryChange(brush, 16);
+	EXPECT_EQ(brush.country, 15);
+	land_brush::TakeCountryChange(brush, -1);
+	EXPECT_EQ(brush.country, 15);
+}
+
+TEST(EditorLandBrush, ABrushSizeCommandGivesTheInnerAndTheOuterRadius)
+{
+	land_brush::Brush brush;
+	land_brush::TakeBrushSize(brush, 5.0f, 25.0f);
+	EXPECT_FLOAT_EQ(brush.innerRadius, 5.0f);
+	EXPECT_FLOAT_EQ(brush.outerRadius, 25.0f);
+	land_brush::TakeBrushSize(brush, 30.0f, 10.0f);
+	EXPECT_FLOAT_EQ(brush.innerRadius, 30.0f);
+	EXPECT_FLOAT_EQ(brush.outerRadius, 30.0f);
+	land_brush::TakeBrushSize(brush, -2.0f, 1000.0f);
+	EXPECT_FLOAT_EQ(brush.innerRadius, 0.0f);
+	EXPECT_FLOAT_EQ(brush.outerRadius, land_brush::k_MostRadius);
+}
+
 TEST(EditorPaths, ADraftSkipsAPointTooNearTheLast)
 {
 	paths::Draft draft;

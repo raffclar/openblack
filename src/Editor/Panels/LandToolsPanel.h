@@ -45,7 +45,8 @@ public:
 	/// The path being drawn ends and becomes a footpath or a stream on the land
 	void FinishPath(EditorContext& context) noexcept;
 
-	[[nodiscard]] land_brush::Brush& GetBrush() noexcept { return _brush; }
+	/// The brush is the editor's, so that the land script can set it
+	[[nodiscard]] static land_brush::Brush& GetBrush() noexcept;
 	[[nodiscard]] paths::Kind GetPathKind() const noexcept { return _pathKind; }
 	void SetPathKind(paths::Kind kind) noexcept;
 	[[nodiscard]] const paths::Draft& GetDraft() const noexcept { return _draft; }
@@ -59,7 +60,6 @@ public:
 private:
 	void Stroke(glm::vec2 centre) noexcept;
 
-	land_brush::Brush _brush;
 	/// The point of the last stroke of a drag of the brush
 	std::optional<glm::vec2> _lastStroke;
 	paths::Kind _pathKind {paths::Kind::Footpath};

@@ -67,6 +67,9 @@
 #include "ECS/Systems/AnimalSystemInterface.h"
 #include "ECS/Systems/ArtefactSystemInterface.h"
 #include "ECS/Systems/ComputerPlayerSystemInterface.h"
+#if defined(OPENBLACK_DEVELOPER_TOOLS)
+#include "ECS/Systems/EditorSystemInterface.h"
+#endif
 #include "ECS/Systems/FireflySystemInterface.h"
 #include "ECS/Systems/FootpathSystemInterface.h"
 #include "ECS/Systems/ForestSystemInterface.h"
@@ -860,16 +863,26 @@ void FeatureScriptCommands::CreateScaffold(int32_t townId, glm::vec3 position, [
 	    onLand, TownWithId(townId), entt::null, static_cast<float>(rotation) * 0.001f, static_cast<float>(size) * 0.001f);
 }
 
-void FeatureScriptCommands::CountryChange([[maybe_unused]] glm::vec3 position, int32_t)
+void FeatureScriptCommands::CountryChange([[maybe_unused]] glm::vec3 position, [[maybe_unused]] int32_t country)
 {
-	// SPDLOG_LOGGER_ERROR(spdlog::get("scripting"), "LHScriptX: {}:{}: Function {} not implemented.", __FILE__, __LINE__,
-	// __func__);
+	// The game reads this command and does not change the land. Only the editor's brush takes the country.
+#if defined(OPENBLACK_DEVELOPER_TOOLS)
+	if (Locator::editorSystem::has_value())
+	{
+		editor::land_brush::TakeCountryChange(Locator::editorSystem::value().GetLandBrush(), country);
+	}
+#endif
 }
 
-void FeatureScriptCommands::HeightChange([[maybe_unused]] glm::vec3 position, int32_t)
+void FeatureScriptCommands::HeightChange([[maybe_unused]] glm::vec3 position, [[maybe_unused]] int32_t change)
 {
-	// SPDLOG_LOGGER_ERROR(spdlog::get("scripting"), "LHScriptX: {}:{}: Function {} not implemented.", __FILE__, __LINE__,
-	// __func__);
+	// The game reads this command and does not change the land. Only the editor's brush takes the change.
+#if defined(OPENBLACK_DEVELOPER_TOOLS)
+	if (Locator::editorSystem::has_value())
+	{
+		editor::land_brush::TakeHeightChange(Locator::editorSystem::value().GetLandBrush(), change);
+	}
+#endif
 }
 
 void FeatureScriptCommands::CreateCreature(glm::vec3 position, int32_t param2, int32_t param3)
@@ -1013,10 +1026,15 @@ void FeatureScriptCommands::CreateWeatherStorm(int32_t climateIndex, glm::vec3 p
 	Locator::weatherSystem::value().AddLandStorm(climateIndex, storm);
 }
 
-void FeatureScriptCommands::BrushSize(float, float)
+void FeatureScriptCommands::BrushSize([[maybe_unused]] float inner, [[maybe_unused]] float outer)
 {
-	// SPDLOG_LOGGER_ERROR(spdlog::get("scripting"), "LHScriptX: {}:{}: Function {} not implemented.", __FILE__, __LINE__,
-	// __func__);
+	// The game reads this command and does nothing with it. Only the editor's brush takes the sizes.
+#if defined(OPENBLACK_DEVELOPER_TOOLS)
+	if (Locator::editorSystem::has_value())
+	{
+		editor::land_brush::TakeBrushSize(Locator::editorSystem::value().GetLandBrush(), inner, outer);
+	}
+#endif
 }
 
 void FeatureScriptCommands::CreateStream(int32_t streamId)

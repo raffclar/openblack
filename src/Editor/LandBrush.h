@@ -51,6 +51,8 @@ constexpr int k_MapCorners = 512;
 constexpr int k_MostCountries = 16;
 /// The largest radius of the brush, in metres
 constexpr float k_MostRadius = 400.0f;
+/// The largest step of the brush, in altitude steps
+constexpr int k_MostStep = 64;
 
 struct AltitudeChange
 {
@@ -91,6 +93,18 @@ using CountryAt = std::function<std::optional<uint8_t>(glm::u16vec2)>;
 /// The corners that a paint of the brush gives its country at a point in metres. Corners with no land and corners
 /// that already have the country are not in the list. A country past the countries of the land paints nothing.
 [[nodiscard]] std::vector<CountryChange> Paint(const Brush& brush, glm::vec2 centre, int countries, const CountryAt& countryAt);
+
+/// Gives the brush the change of a land script's height change command. A positive change raises and a negative
+/// change lowers, by its size in altitude steps, up to the largest step. A change of 0 keeps the brush as it is.
+void TakeHeightChange(Brush& brush, int32_t change);
+
+/// Gives the brush the country of a land script's country change command. A country that a cell cannot keep does
+/// not change the brush.
+void TakeCountryChange(Brush& brush, int32_t country);
+
+/// Gives the brush the two sizes of a land script's brush size command, in metres: the inner radius, then the outer
+/// radius. Each stays between 0 and the largest radius, and the outer radius is not less than the inner radius.
+void TakeBrushSize(Brush& brush, float inner, float outer);
 
 /// Whether a drag of the brush moved far enough from the point of the last stroke to make the next stroke: one
 /// corner spacing

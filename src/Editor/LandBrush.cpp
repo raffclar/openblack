@@ -100,6 +100,31 @@ std::vector<CountryChange> Paint(const Brush& brush, glm::vec2 centre, int count
 	return changes;
 }
 
+void TakeHeightChange(Brush& brush, int32_t change)
+{
+	if (change == 0)
+	{
+		return;
+	}
+	brush.mode = change > 0 ? Mode::Raise : Mode::Lower;
+	brush.step = static_cast<int>(std::min<int64_t>(std::abs(static_cast<int64_t>(change)), k_MostStep));
+}
+
+void TakeCountryChange(Brush& brush, int32_t country)
+{
+	if (country < 0 || country >= k_MostCountries)
+	{
+		return;
+	}
+	brush.country = static_cast<uint8_t>(country);
+}
+
+void TakeBrushSize(Brush& brush, float inner, float outer)
+{
+	brush.innerRadius = std::clamp(inner, 0.0f, k_MostRadius);
+	brush.outerRadius = std::clamp(outer, brush.innerRadius, k_MostRadius);
+}
+
 bool MovedFarEnough(glm::vec2 lastStroke, glm::vec2 now)
 {
 	return glm::distance(lastStroke, now) >= k_CornerSpacing;

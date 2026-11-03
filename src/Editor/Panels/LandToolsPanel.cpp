@@ -183,6 +183,11 @@ std::optional<std::filesystem::path> SaveFolder()
 
 } // namespace
 
+land_brush::Brush& LandToolsPanel::GetBrush() noexcept
+{
+	return Locator::editorSystem::value().GetLandBrush();
+}
+
 void LandToolsPanel::SetPathKind(paths::Kind kind) noexcept
 {
 	if (kind != _pathKind)
@@ -203,10 +208,10 @@ void LandToolsPanel::Stroke(glm::vec2 centre) noexcept
 	auto& land = Locator::terrainSystem::value();
 	auto& registry = Locator::entitiesRegistry::value();
 	const auto cellAt = [&land](glm::u16vec2 corner) { return land.FindCell(corner); };
-	if (_brush.mode == land_brush::Mode::Paint)
+	if (GetBrush().mode == land_brush::Mode::Paint)
 	{
 		const auto changes =
-		    land_brush::Paint(_brush, centre, static_cast<int>(land.GetCountries().size()), [&cellAt](glm::u16vec2 corner) {
+		    land_brush::Paint(GetBrush(), centre, static_cast<int>(land.GetCountries().size()), [&cellAt](glm::u16vec2 corner) {
 			    const auto* cell = cellAt(corner);
 			    return cell != nullptr ? std::optional<uint8_t>(cell->properties.country) : std::nullopt;
 		    });
@@ -215,10 +220,10 @@ void LandToolsPanel::Stroke(glm::vec2 centre) noexcept
 			land.SetCellCountry(change.corner, change.country);
 		}
 		land.CommitAltitudeChanges();
-		_status = fmt::format("Painted {} corners with country {}", changes.size(), _brush.country);
+		_status = fmt::format("Painted {} corners with country {}", changes.size(), GetBrush().country);
 		return;
 	}
-	const auto changes = land_brush::Stroke(_brush, centre, [&cellAt](glm::u16vec2 corner) {
+	const auto changes = land_brush::Stroke(GetBrush(), centre, [&cellAt](glm::u16vec2 corner) {
 		const auto* cell = cellAt(corner);
 		return cell != nullptr ? std::optional<uint8_t>(cell->altitude) : std::nullopt;
 	});
@@ -227,7 +232,7 @@ void LandToolsPanel::Stroke(glm::vec2 centre) noexcept
 		return;
 	}
 	// The things on the land in reach keep their heights above it, so that they are not buried or left in the air
-	const auto reach = glm::vec2(_brush.outerRadius + land_brush::k_CornerSpacing);
+	const auto reach = glm::vec2(GetBrush().outerRadius + land_brush::k_CornerSpacing);
 	const auto lowest = centre - reach;
 	const auto highest = centre + reach;
 	std::vector<std::pair<entt::entity, float>> standing;
@@ -250,7 +255,7 @@ void LandToolsPanel::Stroke(glm::vec2 centre) noexcept
 		auto& transform = registry.Get<Transform>(entity);
 		transform.position.y += land.GetHeightAt({transform.position.x, transform.position.z}) - before;
 	}
-	_status = fmt::format("{} {} corners", _brush.mode == land_brush::Mode::Raise ? "Raised" : "Lowered", changes.size());
+	_status = fmt::format("{} {} corners", GetBrush().mode == land_brush::Mode::Raise ? "Raised" : "Lowered", changes.size());
 }
 
 void LandToolsPanel::PressAt(EditorContext& context, std::optional<glm::vec3> land, std::optional<entt::entity> picked) noexcept
@@ -556,17 +561,17 @@ void LandToolsPanel::Draw(EditorContext& context) noexcept
 	{
 		ImGui::TableNextColumn();
 		ImGui::SeparatorText("Brush");
-		auto mode = static_cast<int>(_brush.mode);
+		auto mode = static_cast<int>(GetBrush().mode);
 		ImGui::RadioButton("Raise", &mode, static_cast<int>(land_brush::Mode::Raise));
 		ImGui::SameLine();
 		ImGui::RadioButton("Lower", &mode, static_cast<int>(land_brush::Mode::Lower));
 		ImGui::SameLine();
 		ImGui::RadioButton("Paint country", &mode, static_cast<int>(land_brush::Mode::Paint));
-		_brush.mode = static_cast<land_brush::Mode>(mode);
-		ImGui::SliderFloat("Inner radius", &_brush.innerRadius, 0.0f, land_brush::k_MostRadius, "%.0f m");
-		ImGui::SliderFloat("Outer radius", &_brush.outerRadius, 0.0f, land_brush::k_MostRadius, "%.0f m");
-		_brush.outerRadius = std::max(_brush.outerRadius, _brush.innerRadius);
-		ImGui::SliderInt("Step", &_brush.step, 1, 64);
+		GetBrush().mode = static_cast<land_brush::Mode>(mode);
+		ImGui::SliderFloat("Inner radius", &GetBrush().innerRadius, 0.0f, land_brush::k_MostRadius, "%.0f m");
+		ImGui::SliderFloat("Outer radius", &GetBrush().outerRadius, 0.0f, land_brush::k_MostRadius, "%.0f m");
+		GetBrush().outerRadius = std::max(GetBrush().outerRadius, GetBrush().innerRadius);
+		ImGui::SliderInt("Step", &GetBrush().step, 1, land_brush::k_MostStep);
 		ImGui::SetItemTooltip("The altitude steps that the inner circle goes up or down for each stroke");
 		if (Locator::terrainSystem::has_value())
 		{
@@ -575,13 +580,13 @@ void LandToolsPanel::Draw(EditorContext& context) noexcept
 			const auto label = [&countries](int i) {
 				return fmt::format("Country {} (ground {})", i, countries.at(static_cast<size_t>(i)).type);
 			};
-			if (ImGui::BeginCombo("Country", _brush.country < count ? label(_brush.country).c_str() : "None"))
+			if (ImGui::BeginCombo("Country", GetBrush().country < count ? label(GetBrush().country).c_str() : "None"))
 			{
 				for (int i = 0; i < count; ++i)
 				{
-					if (ImGui::Selectable(label(i).c_str(), _brush.country == i))
+					if (ImGui::Selectable(label(i).c_str(), GetBrush().country == i))
 					{
-						_brush.country = static_cast<uint8_t>(i);
+						GetBrush().country = static_cast<uint8_t>(i);
 					}
 				}
 				ImGui::EndCombo();
@@ -657,8 +662,8 @@ void LandToolsPanel::DrawOverlays(const EditorContext& context, std::optional<gl
 	if (tool == Tool::Land && mouseLand.has_value() && !ImGui::GetIO().WantCaptureMouse)
 	{
 		const glm::vec2 centre {mouseLand->x, mouseLand->z};
-		DrawLandCircle(centre, _brush.innerRadius, k_InnerCircle, 2.0f);
-		DrawLandCircle(centre, _brush.outerRadius, k_OuterCircle, 1.5f);
+		DrawLandCircle(centre, GetBrush().innerRadius, k_InnerCircle, 2.0f);
+		DrawLandCircle(centre, GetBrush().outerRadius, k_OuterCircle, 1.5f);
 	}
 	if (tool != Tool::Paths)
 	{
