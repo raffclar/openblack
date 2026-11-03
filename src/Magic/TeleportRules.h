@@ -102,8 +102,8 @@ struct Jump
 /// power back and only a backwards jump costs
 [[nodiscard]] float JumpCost(float saving, float costPerKilometre);
 
-/// Whether a stone may be put at a point: nothing fixed on the land (a building, a field, a feature, another stone)
-/// stands within its reach
+/// Whether a stone may be put at a point: no thing that stands fixed over the map's cells (a building, a field, a
+/// feature, another stone; not a tree) has its place nearer than the stone's reach
 [[nodiscard]] bool CanPlaceStone(glm::vec3 point, std::span<const glm::vec3> fixedObjects);
 
 /// The stone a worshipper heads for to reach a far worship site: the stone nearest it, when going through the stones

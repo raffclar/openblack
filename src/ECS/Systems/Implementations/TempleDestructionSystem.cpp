@@ -251,7 +251,7 @@ void TempleDestructionSystem::Step(entt::entity entity, Temple& temple)
 		temple.destructionBeamSource.reset();
 	}
 	// The local player's heartbeat quickens with the clock (the heartbeat system reads it)
-	// TODO(physics): the heart fades out from fourteen seconds under a shell drawn over it; openblack draws no shell yet
+	// From fourteen seconds the renderer draws a shell of the creed's light over the heart (see the temple glows)
 	// The heart fades out from fourteen seconds. Once it is a little faded, the materials of its model change for good.
 	namespace heart_look = graphics::temple_heart_look;
 	auto* registry = _world->Entities();
