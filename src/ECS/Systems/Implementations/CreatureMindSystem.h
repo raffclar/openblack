@@ -374,7 +374,7 @@ private:
 	                      const std::function<bool(entt::entity)>& suitsAction);
 	/// What the planning of one desire found out about the believed things: the things that suit the desire, in the order
 	/// of the lists, each with its worth once an action asked for it. The next action of the same desire uses them again
-	/// while the creature comes across nothing, because only that changes the answers.
+	/// while no come-across changes what the tests read, because only that changes the answers.
 	struct BelievedFacts
 	{
 		struct Suiting
@@ -385,8 +385,13 @@ private:
 		std::vector<Suiting> suiting;
 		/// The things of the beliefs, in the order of the lists, as the facts were found
 		std::vector<entt::entity> things;
-		/// The count of the things come across when the facts were found, none before they were found
+		/// The count of the come-acrosses that changed what the tests read, when the facts were found. None before they
+		/// were found.
 		std::optional<uint64_t> foundAt;
+		/// The things that the tests came across, in their sequence. These come-acrosses changed nothing that the tests
+		/// read, but they can change other things, such as the desire sources. Each later use of the facts comes across
+		/// them again in the same sequence, as the tests do.
+		std::vector<entt::entity> comeAcross;
 	};
 	/// The same, with the facts kept from the last action of the same desire when they are still true
 	[[nodiscard]] std::vector<creature_planner::ObjectCandidate>
@@ -480,6 +485,8 @@ private:
 	/// thing belongs to. If the thing moves and is not the creature itself, it becomes the last moving thing that the
 	/// creature noticed.
 	void ComeAcross(entt::entity creature, components::CreatureMindState& mind, entt::entity thing);
+	/// The work of a come-across, after the tests of the beliefs that run now have noted the thing
+	void ComeAcrossThing(entt::entity creature, components::CreatureMindState& mind, entt::entity thing);
 	/// It comes across a thing and then across the whole thing that the thing belongs to, also when its belief about the
 	/// thing is not new. Another creature is its own whole thing.
 	void ComeAcrossWithWhole(entt::entity creature, components::CreatureMindState& mind, entt::entity thing);
@@ -615,8 +622,14 @@ private:
 	std::vector<entt::entity> _thinking;
 	/// The creatures whose minds do the step of their agendas after the second part, until the last part
 	std::vector<entt::entity> _acting;
-	/// How many times a creature came across a thing. Facts kept about beliefs stay true while this does not change.
+	/// How many times a creature came across a thing and this changed what the tests of the beliefs read: a new belief,
+	/// a new place or new attributes, a noticed mover, a first sighting in the turn, a villager or a creature seen again.
+	/// Facts kept about beliefs stay true while this does not change.
 	uint64_t _comeAcrossCount {0};
+	/// How deep the come-acrosses go now: a new belief comes across the whole thing too
+	uint32_t _comeAcrossDepth {0};
+	/// While the tests of the beliefs run, the things that they come across, in their sequence
+	std::vector<entt::entity>* _comeAcrossLog {nullptr};
 };
 
 } // namespace openblack::ecs::systems

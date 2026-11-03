@@ -123,11 +123,12 @@ void Recorder::Clear()
 	_stageTimes.clear();
 }
 
-std::vector<float> Recorder::Column(const std::vector<float>& values, size_t stride, size_t offset) const
+std::vector<float> Recorder::Column(const std::vector<float>& values, size_t stride, size_t offset, size_t frames) const
 {
+	const auto taken = std::min(frames, _count);
 	std::vector<float> column;
-	column.reserve(_count);
-	for (size_t i = 0; i < _count; ++i)
+	column.reserve(taken);
+	for (size_t i = _count - taken; i < _count; ++i)
 	{
 		const auto frame = (_next + i) % _count;
 		column.push_back(values.at((frame * stride) + offset));
@@ -137,15 +138,20 @@ std::vector<float> Recorder::Column(const std::vector<float>& values, size_t str
 
 Results Recorder::Summarise() const
 {
+	return SummariseNewest(_count);
+}
+
+Results Recorder::SummariseNewest(size_t frames) const
+{
 	Results results {
-	    .frame = frame_stats::Summarise(_frames),
-	    .update = frame_stats::Summarise(_updates),
-	    .render = frame_stats::Summarise(_renders),
-	    .draws = frame_stats::Summarise(_draws),
+	    .frame = frame_stats::Summarise(Column(_frames, 1, 0, frames)),
+	    .update = frame_stats::Summarise(Column(_updates, 1, 0, frames)),
+	    .render = frame_stats::Summarise(Column(_renders, 1, 0, frames)),
+	    .draws = frame_stats::Summarise(Column(_draws, 1, 0, frames)),
 	};
 	for (size_t stage = 0; stage < _stages.size(); ++stage)
 	{
-		const auto times = Column(_stageTimes, _stages.size(), stage);
+		const auto times = Column(_stageTimes, _stages.size(), stage, frames);
 		const auto framesRun = static_cast<size_t>(std::ranges::count_if(times, [](float ms) { return ms > 0.0f; }));
 		if (framesRun == 0)
 		{

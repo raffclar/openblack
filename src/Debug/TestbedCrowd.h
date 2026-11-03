@@ -13,6 +13,7 @@
 #include <cstdint>
 
 #include <array>
+#include <span>
 #include <vector>
 
 #include <glm/vec2.hpp>
@@ -41,6 +42,9 @@ struct Crowd
 	uint32_t seed {1};
 	/// How many members are spawned each frame, so that spawning them doesn't make one frame take seconds
 	size_t perFrame {100};
+	/// With creatures, villagers in towns among them, so that the creatures have homes, food, people and the towns' work
+	/// to act on. The towns, their homes and their villagers spawn before the creatures.
+	size_t villagers {0};
 };
 
 /// A small random number generator that gives the same numbers from the same seed on every platform and build, which
@@ -63,9 +67,11 @@ private:
 [[nodiscard]] bool NearLake(glm::vec2 offset, float margin);
 
 /// Points on a square grid of the spacing round the middle of the map, the nearest to the middle first, leaving out
-/// those within the margin of the lake, nudged off the grid by up to the jitter, a share of the spacing
+/// those within the margin of the lake and those within the clear radius of a point to keep clear, nudged off the grid by
+/// up to the jitter, a share of the spacing
 [[nodiscard]] std::vector<glm::vec2> SpreadPoints(size_t count, float spacing, float lakeMargin, float jitter,
-                                                  CrowdRandom& random);
+                                                  CrowdRandom& random, std::span<const glm::vec2> keepClear = {},
+                                                  float clearRadius = 0.0f);
 
 struct CrowdCreature
 {
@@ -122,11 +128,18 @@ constexpr float k_VillagerSpread = 55.0f;
 constexpr std::array<PlayerNames, 4> k_CrowdOwners {PlayerNames::PLAYER_ONE, PlayerNames::PLAYER_TWO, PlayerNames::PLAYER_THREE,
                                                     PlayerNames::PLAYER_FOUR};
 
-/// The creatures of a crowd: every species in turn as the random choices have it, their owners mixed
-[[nodiscard]] std::vector<CrowdCreature> LayOutCreatures(size_t count, uint32_t seed);
+/// The creatures of a crowd: every species in turn as the random choices have it, their owners mixed, none within the
+/// clear radius of a point to keep clear
+[[nodiscard]] std::vector<CrowdCreature> LayOutCreatures(size_t count, uint32_t seed, std::span<const glm::vec2> keepClear = {},
+                                                         float clearRadius = 0.0f);
 /// The villagers of a crowd, in towns of each tribe, each with a storage pit in its middle and homes round it, the
 /// villagers of each home of mixed roles and ages
 [[nodiscard]] VillageLayout LayOutVillagers(size_t count, uint32_t seed);
+
+/// How far from the middle of a town the creatures among the towns stay: its homes, and a creature's stride past them
+constexpr float k_TownClearRadius = k_HomeRing + k_CreatureSpacing;
+/// The middles of the towns of a layout
+[[nodiscard]] std::vector<glm::vec2> TownCentres(const VillageLayout& layout);
 
 /// The villager of a tribe in a role: the housewife first, then the forester, fisherman, farmer, shepherd, leader and
 /// trader

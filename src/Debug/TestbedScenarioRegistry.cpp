@@ -13305,6 +13305,29 @@ void AddCrowd(std::vector<Scenario>& all, Crowd::Kind kind, size_t count, std::s
 	});
 }
 
+/// A benchmark of 100 creatures that live their usual lives among towns, the most creatures a frame must hold at 100
+/// frames a second
+void AddCreaturesAtWork(std::vector<Scenario>& all)
+{
+	all.push_back({
+	    .id = "benchmark.creatures_at_work",
+	    .name = "100 creatures among towns",
+	    .facet = Facet::Benchmark,
+	    .description = "100 creatures of every species and of four players, spread evenly round four towns of 50 "
+	                   "villagers each, clear of the homes and the lake, the same way every run. Nothing holds them: they "
+	                   "eat, play, rest, look at the villagers and the buildings, walk and fight as in the game.",
+	    .expected = "The towns spawn first, then the creatures, a batch a frame. Then the frames are measured once they "
+	                "have settled. Every frame must be under 10 ms on the processor.",
+	    .environment = {.dispenserGrid = false},
+	    .framing = {.shot = Shot::Testbed},
+	    .crowd = Crowd {.kind = Crowd::Kind::Creatures,
+	                    .count = 100,
+	                    .seed = k_BenchmarkSeed,
+	                    .perFrame = 100,
+	                    .villagers = 4 * k_VillagersPerTown},
+	});
+}
+
 void AddBenchmark(std::vector<Scenario>& all)
 {
 	// Steps close enough together that a cost growing faster than the crowd shows between them
@@ -13316,6 +13339,7 @@ void AddBenchmark(std::vector<Scenario>& all)
 	AddCrowd(all, Crowd::Kind::Villagers, 250, "benchmark.villagers_250", "250 active villagers");
 	AddCrowd(all, Crowd::Kind::Villagers, 500, "benchmark.villagers_500", "500 active villagers");
 	AddCrowd(all, Crowd::Kind::Villagers, 1'000, "benchmark.villagers_1000", "1,000 active villagers");
+	AddCreaturesAtWork(all);
 }
 
 /// A creature rests to get better, heals itself, goes or runs home, and goes into, prays at or looks at its temple

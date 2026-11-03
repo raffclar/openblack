@@ -12,6 +12,7 @@
 #include <cstddef>
 #include <cstdint>
 
+#include <array>
 #include <chrono>
 #include <optional>
 #include <span>
@@ -84,6 +85,14 @@ public:
 	/// posed yet
 	[[nodiscard]] virtual std::optional<glm::vec3> BoneInAnimation(entt::entity creature, size_t animation, float timeMs,
 	                                                               uint32_t bone, bool mirrored) = 0;
+	/// Where two bones of a creature are in one of its animations at the same time, each as BoneInAnimation gives it.
+	/// The animation is sampled one time for both bones.
+	[[nodiscard]] virtual std::array<std::optional<glm::vec3>, 2>
+	TwoBonesInAnimation(entt::entity creature, size_t animation, float timeMs, uint32_t first, uint32_t second, bool mirrored)
+	{
+		return {BoneInAnimation(creature, animation, timeMs, first, mirrored),
+		        BoneInAnimation(creature, animation, timeMs, second, mirrored)};
+	}
 	/// The middle of some bones of a creature in one of its animations at a time, in its mesh's space, the animation
 	/// blended as the body is drawn; nothing when the creature has no such animation or bones, or hasn't been posed yet
 	[[nodiscard]] virtual std::optional<glm::vec3> MiddleOfBonesInAnimation(entt::entity creature, size_t animation,
