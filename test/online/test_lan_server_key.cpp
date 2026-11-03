@@ -22,6 +22,8 @@
 
 #include <LobbyApiJson.h>
 #include <gtest/gtest.h>
+#include <spdlog/sinks/null_sink.h>
+#include <spdlog/spdlog.h>
 
 #include "Online/Desktop/CurlWebSocketClient.h"
 #include "Online/LanDiscovery.h"
@@ -118,7 +120,7 @@ TEST(LanServerKey, ThePinOfLibcurlIsBase64OfThePin)
 
 TEST(LanServerKey, TheAnswerOfTheServerCarriesTheKeyToTheLineOfTheList)
 {
-	const lobby_status::Room room {
+	const server::lobby_status::Room room {
 	    .hostname = "Office game", .land = "Online Maps/mpm_2p_1.map", .maxGods = 2, .version = "0.1.0"};
 	const auto answer = server::lan_room::AnswerOf(room, false, {}, 4433, "", std::string(k_Key));
 	EXPECT_EQ(answer.key, k_Key);
@@ -132,7 +134,7 @@ TEST(LanServerKey, TheAnswerOfTheServerCarriesTheKeyToTheLineOfTheList)
 
 TEST(LanServerKey, AnAnswerWithNoKeyOrABadKeyGivesALineWithNoKey)
 {
-	const lobby_status::Room room {
+	const server::lobby_status::Room room {
 	    .hostname = "Office game", .land = "Online Maps/mpm_2p_1.map", .maxGods = 2, .version = "0.1.0"};
 	auto answer = server::lan_room::AnswerOf(room, false, {}, 4433, "office.example", "");
 	// An answer of an older server has no key field
@@ -178,6 +180,11 @@ TEST(LanServerKey, TheServerRefusesItsOwnCertificateWithACertificateFile)
 
 TEST(LanServerKey, AClientWithThePinJoinsAndAClientWithAnotherPinOrNoPinIsRefused)
 {
+	// The server writes its log lines to the game's log
+	if (spdlog::get("game") == nullptr)
+	{
+		spdlog::create<spdlog::sinks::null_sink_st>("game");
+	}
 	server::SocketWebSocketServer sockets;
 	size_t opened = 0;
 	sockets.SetHandlers({.opened = [&opened](server::ConnectionId) { ++opened; }, .text = {}, .binary = {}, .closed = {}});
