@@ -15,6 +15,7 @@
 
 #include <entt/entity/fwd.hpp>
 
+#include "ECS/Components/TownArtefact.h"
 #include "Enums.h"
 
 namespace openblack::ecs::systems
@@ -58,6 +59,9 @@ public:
 	                          float /*worth*/)
 	{
 	}
+	/// The load of a saved game of the game puts an artefact back with its values. An artefact in its town joins the list
+	/// of the town as the newest. Its glow starts again when it is worth enough. No creature learns from the load.
+	virtual void Restore(entt::entity /*object*/, const components::TownArtefact& /*artefact*/) {}
 	/// An artefact's worth is set, as dancing would raise it: it starts glowing once worth enough. Whether it is one.
 	virtual bool SetWorth(entt::entity /*object*/, float /*worth*/) { return false; }
 

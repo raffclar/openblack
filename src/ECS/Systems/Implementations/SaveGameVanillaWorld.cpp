@@ -34,6 +34,7 @@
 #include "ECS/Components/Abode.h"
 #include "ECS/Components/AtHome.h"
 #include "ECS/Components/Breeding.h"
+#include "ECS/Components/ComputerPlayer.h"
 #include "ECS/Components/Construction.h"
 #include "ECS/Components/CreatureDance.h"
 #include "ECS/Components/CreatureLeash.h"
@@ -44,6 +45,7 @@
 #include "ECS/Components/MiracleImpression.h"
 #include "ECS/Components/Physics.h"
 #include "ECS/Components/Player.h"
+#include "ECS/Components/PlayerRelations.h"
 #include "ECS/Components/Pot.h"
 #include "ECS/Components/ResourcePile.h"
 #include "ECS/Components/Scaffold.h"
@@ -53,6 +55,7 @@
 #include "ECS/Components/StoragePit.h"
 #include "ECS/Components/Temple.h"
 #include "ECS/Components/Town.h"
+#include "ECS/Components/TownArtefact.h"
 #include "ECS/Components/TownDesire.h"
 #include "ECS/Components/TownDesireFlag.h"
 #include "ECS/Components/Transform.h"
@@ -65,8 +68,10 @@
 #include "ECS/Components/WorshipChants.h"
 #include "ECS/Components/WorshipSite.h"
 #include "ECS/Dances.h"
+#include "ECS/ListOrder.h"
 #include "ECS/PlayerTowns.h"
 #include "ECS/Registry.h"
+#include "ECS/Systems/ArtefactSystemInterface.h"
 #include "ECS/Systems/DanceSystemInterface.h"
 #include "ECS/Systems/PlayerSystemInterface.h"
 #include "ECS/Systems/SpellIconSystemInterface.h"
@@ -79,6 +84,7 @@
 #include "ECS/Systems/WorshipSiteSystemInterface.h"
 #include "ECS/TempleConstruction.h"
 #include "ECS/ThingCircles.h"
+#include "ECS/VanillaPlayerImport.h"
 #include "ECS/VanillaScriptImport.h"
 #include "ECS/VanillaWorldImport.h"
 #include "ECS/WallHugRules.h"
@@ -1382,6 +1388,7 @@ bool SaveGameSystem::ImportVanillaTowns(const gamesave::VanillaWorld& world, Van
 	// The other dances come when the things that they are for are made. Only a villager that keeps the states of the
 	// file can dance in them.
 	dances.dances = imported.dances;
+	dances.artefacts = imported.artefacts;
 	for (const auto& villager : imported.villagers)
 	{
 		if (const auto entity = EntityOf(made, villager.number);
@@ -1409,7 +1416,7 @@ void SaveGameSystem::ImportVanillaDances(const VanillaDances& dances, VanillaMad
 	for (const auto number : dances.dances.notMade)
 	{
 		SPDLOG_LOGGER_WARN(ImportLog(),
-		                   "The dance {} of the file is for a reaction or an artefact of a town, which the "
+		                   "The dance {} of the file is for a reaction, which the "
 		                   "import does not make, so the dance is not made",
 		                   number);
 	}
@@ -1501,10 +1508,42 @@ void SaveGameSystem::ImportVanillaDances(const VanillaDances& dances, VanillaMad
 		}
 	}
 
+	// Each artefact of a town of the file goes on its thing, with its dance. The game does not keep the worship site of
+	// an artefact in the file, so the artefact is in no site after the load.
+	size_t artefacts = 0;
+	for (const auto& file : dances.artefacts)
+	{
+		const auto object = EntityOf(made, file.object);
+		if (object == entt::null || !Locator::artefactSystem::has_value())
+		{
+			SPDLOG_LOGGER_WARN(ImportLog(), "The artefact {} of the file is for the thing {}, which the import does not make",
+			                   file.number, file.object);
+			continue;
+		}
+		const auto dance = EntityOf(made, file.dance);
+		Locator::artefactSystem::value().Restore(
+		    object, TownArtefact {.town = EntityOf(made, file.town),
+		                          .inTown = file.inTown,
+		                          .player = file.player,
+		                          .value = file.value,
+		                          .dance = dance != entt::null && registry.AllOf<Dance>(dance) ? dance : entt::null,
+		                          .dancing = file.dancing,
+		                          .danceStarted = file.danceStarted});
+		++artefacts;
+	}
+	SPDLOG_LOGGER_INFO(ImportLog(), "Imported {} artefacts of towns of the game's file", artefacts);
+
 	// A dance whose thing is gone stops at once, as the game stops it, and its dancers decide again
 	for (const auto dance : ownerGone)
 	{
 		system.Destroy(dance);
+	}
+	// The game's load keeps the order of the list of dances of the file. The dances of the sites and the other dances
+	// join the list again in that order, so the newest dance of the file is first in the list.
+	const auto all = ecs::list_order::Walk<Dance>(registry);
+	for (const auto dance : world_import::DancesToJoin(dances.dances.gameList, made, all))
+	{
+		ecs::list_order::Join(registry, dance);
 	}
 	SPDLOG_LOGGER_INFO(ImportLog(), "Imported {} dances of creatures and scripts of the game's file ({} stopped)",
 	                   dances.dances.made.size() - ownerGone.size(), ownerGone.size());
@@ -1570,4 +1609,51 @@ void SaveGameSystem::ImportVanillaCircles(const VanillaCircles& circles, const V
 	                   "{} walkers of the file have circles: {} take circles of things, {} take circles of the landscape "
 	                   "and {} have things that are not made",
 	                   circles.size(), onThings, onLandscape, lost);
+}
+
+void SaveGameSystem::ImportVanillaPlayers(const gamesave::VanillaWorld& world)
+{
+	namespace player_import = ecs::vanilla_player_import;
+	auto& registry = Locator::entitiesRegistry::value();
+	const auto players = player_import::ReadPlayers(world);
+	std::vector<std::pair<entt::entity, PlayerNames>> entities;
+	registry.Each<const Player>(
+	    [&entities](entt::entity entity, const Player& player) { entities.emplace_back(entity, player.name); });
+	for (const auto& [entity, name] : entities)
+	{
+		const auto file = std::ranges::find(players, name, &player_import::ImportedPlayer::player);
+		if (file == players.end() || !file->computer.has_value())
+		{
+			// The game deletes the computer god of the land, and the file gives the player no computer god
+			if (registry.AllOf<ComputerPlayer>(entity))
+			{
+				SPDLOG_LOGGER_INFO(ImportLog(), "The computer god of the player {} of the land goes, because the file has none",
+				                   static_cast<int>(name));
+				registry.Remove<ComputerPlayer>(entity);
+			}
+			continue;
+		}
+		const auto& god = *file->computer;
+		if (auto* attitudes = registry.TryGet<ComputerAttitudes>(entity); attitudes != nullptr)
+		{
+			player_import::PutAttitudes(*attitudes, god);
+		}
+		// A god that never played has no mind in openblack until a land script asks for it
+		if (!registry.AllOf<ComputerPlayer>(entity) && player_import::IsUnusedGod(*file, god))
+		{
+			continue;
+		}
+		const float land =
+		    Locator::terrainSystem::has_value() ? Locator::terrainSystem::value().GetAltitude(god.hand.x, god.hand.z) : 0.0f;
+		registry.AssignOrReplace<ComputerPlayer>(entity, player_import::ComputerOf(*file, god, land));
+		if (god.casts + god.seen + god.queue != 0)
+		{
+			SPDLOG_LOGGER_WARN(ImportLog(),
+			                   "The computer god of the player {} has {} miracles, {} seen things and {} queued actions in the "
+			                   "file, which the import does not take",
+			                   static_cast<int>(name), god.casts, god.seen, god.queue);
+		}
+		SPDLOG_LOGGER_INFO(ImportLog(), "The player {} takes the computer god of the file (switched on {}, started {})",
+		                   static_cast<int>(name), god.switchedOn, god.started);
+	}
 }

@@ -80,6 +80,8 @@ constexpr std::array k_ShepherdStates = {VillagerStates::ShepherdLookForFlock,
 constexpr std::array k_DanceStates = {VillagerStates::InDance, VillagerStates::MoveToDancePos,
                                       VillagerStates::WorshippingCreature, VillagerStates::RestartWorshippingCreature,
                                       VillagerStates::ControlledByCreature};
+/// The states of the dance of an artefact of a town. They keep the same values as the other dance states.
+constexpr std::array k_ArtefactDanceStates = {VillagerStates::ArtifactDance, VillagerStates::WaitForArtifactDance};
 /// The state of a dance that a reaction holds. The import does not make the reactions, so a villager in this state
 /// decides again.
 constexpr std::array k_ReactionDanceStates = {VillagerStates::DanceWhileReacting};
@@ -971,17 +973,6 @@ ImportedDances ReadOtherDances(const VanillaWorld& world)
 		{
 			held.insert(world.Ref(record, "reactionDance").value_or(0));
 		}
-		else if (record.Is(VanillaType::TownArtifact))
-		{
-			// The artefact refers to its dance, to itself and to its town. Only the dance is a dance.
-			for (const auto& field : record.fields)
-			{
-				if (field.kind == gamesave::VanillaValue::Reference)
-				{
-					held.insert(field.number);
-				}
-			}
-		}
 	}
 	ImportedDances dances;
 	for (const auto& record : world.Records())
@@ -1393,7 +1384,7 @@ std::array<uint8_t, 3> StartStates(const ImportedVillager& villager)
 		{
 			return villager.importedWorshipper;
 		}
-		if (IsOneOf(state, k_DanceStates))
+		if (IsOneOf(state, k_DanceStates) || IsOneOf(state, k_ArtefactDanceStates))
 		{
 			return villager.importedDancer;
 		}
@@ -1459,6 +1450,63 @@ std::optional<ImportedSite> ReadSite(const VanillaWorld& world, const VanillaRec
 
 namespace
 {
+/// The player of a player record of the file, none for no player
+std::optional<PlayerNames> PlayerOfRecord(const VanillaWorld& world, uint32_t number)
+{
+	const auto* record = RecordOf(world, number, VanillaType::Player);
+	const auto player = record != nullptr ? world.Byte(*record, "number") : std::nullopt;
+	if (!player.has_value() || *player >= static_cast<uint8_t>(PlayerNames::_COUNT))
+	{
+		return std::nullopt;
+	}
+	return static_cast<PlayerNames>(*player);
+}
+
+/// The artefacts of the towns of the file. The artefacts of each town come in the reverse order of the list of the
+/// town, the oldest first. The artefacts that no town lists come after them, in the order of the file.
+std::vector<ImportedTownArtefact> ReadTownArtefacts(const VanillaWorld& world)
+{
+	std::vector<uint32_t> order;
+	for (const auto* town : world.OfType(VanillaType::Town))
+	{
+		const auto listed = world.Refs(*town, "artifacts");
+		for (const auto number : listed | std::views::reverse)
+		{
+			if (std::ranges::find(order, number) == order.end())
+			{
+				order.push_back(number);
+			}
+		}
+	}
+	const auto inTowns = order.size();
+	for (const auto* record : world.OfType(VanillaType::TownArtifact))
+	{
+		if (std::ranges::find(order, record->number) == order.end())
+		{
+			order.push_back(record->number);
+		}
+	}
+	std::vector<ImportedTownArtefact> artefacts;
+	for (size_t i = 0; i < order.size(); ++i)
+	{
+		const auto* record = RecordOf(world, order[i], VanillaType::TownArtifact);
+		if (record == nullptr)
+		{
+			continue;
+		}
+		artefacts.push_back({.number = record->number,
+		                     .object = world.Ref(*record, "artefactObject").value_or(0),
+		                     .town = world.Ref(*record, "artefactTown").value_or(0),
+		                     .dance = world.Ref(*record, "artefactDance").value_or(0),
+		                     .player = PlayerOfRecord(world, world.Ref(*record, "artefactPlayer").value_or(0)),
+		                     .value = world.Float(*record, "artefactValue").value_or(0.0f),
+		                     .dancing = world.Word(*record, "artefactDancing").value_or(0) != 0,
+		                     .danceStarted = world.Word(*record, "artefactDanceStarted").value_or(0),
+		                     .inTown = i < inTowns});
+	}
+	return artefacts;
+}
+
 /// Marks each villager that dances in a group of a dance that the import makes, and each villager at worship at a worship
 /// site of the file. A dancer is in the list of its group, and its group is its group.
 void MarkDancersAndWorshippers(ImportedTowns& imported)
@@ -1620,6 +1668,15 @@ ImportedTowns ReadTowns(const VanillaWorld& world)
 	}
 	PutPiles(world, imported);
 	imported.dances = ReadOtherDances(world);
+	imported.artefacts = ReadTownArtefacts(world);
+	if (!world.Records().empty() && world.Game().Is(VanillaType::Game))
+	{
+		if (const auto lists = world.Fields(world.Game(), "lists"); lists.size() == k_GameObjectLists)
+		{
+			const auto dances = world.Refs(*lists.at(k_GameDanceList));
+			imported.dances.gameList.assign(dances.begin(), dances.end());
+		}
+	}
 	MarkDancersAndWorshippers(imported);
 	return imported;
 }
@@ -1650,4 +1707,23 @@ std::vector<entt::entity> openblack::ecs::vanilla_world_import::LandThingsToRemo
 	std::ranges::copy_if(land, std::back_inserter(removed),
 	                     [taken](entt::entity thing) { return std::ranges::find(taken, thing) == taken.end(); });
 	return removed;
+}
+
+std::vector<entt::entity>
+openblack::ecs::vanilla_world_import::DancesToJoin(std::span<const uint32_t> gameList,
+                                                   const std::unordered_map<uint32_t, entt::entity>& made,
+                                                   std::span<const entt::entity> dances)
+{
+	std::vector<entt::entity> order;
+	// The last dance of the game's list is the oldest, so it joins first
+	for (const auto number : gameList | std::views::reverse)
+	{
+		const auto entity = made.find(number);
+		if (entity != made.end() && std::ranges::find(dances, entity->second) != dances.end() &&
+		    std::ranges::find(order, entity->second) == order.end())
+		{
+			order.push_back(entity->second);
+		}
+	}
+	return order;
 }
