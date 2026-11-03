@@ -8,9 +8,11 @@
  *******************************************************************************/
 
 #include <cmath>
+#include <cstdint>
 #include <cstdlib>
 
 #include <algorithm>
+#include <array>
 #include <bit>
 #include <filesystem>
 #include <fstream>
@@ -20,6 +22,7 @@
 #include <optional>
 #include <set>
 #include <string>
+#include <utility>
 #include <vector>
 
 #include <ParticleFile.h>
@@ -27,11 +30,13 @@
 
 #include "Common/GameRandom.h"
 #include "Common/Zip.h"
+#include "Particles/ParticleBlast.h"
 #include "Particles/ParticleClassRegistry.h"
 #include "Particles/ParticleCreators.h"
 #include "Particles/ParticleDrawFrame.h"
 #include "Particles/ParticleEffect.h"
 #include "Particles/ParticleImport.h"
+#include "Particles/ParticleObjectEffects.h"
 
 using namespace openblack;
 using namespace openblack::particles;
@@ -77,12 +82,72 @@ public:
 		}
 	}
 	void SetTargetGlow(entt::entity target, glm::u8vec3 rgb) override { glows[target] = rgb; }
+	[[nodiscard]] ObjectEffectsInterface* ObjectEffects() override { return objects; }
+	[[nodiscard]] FragmentSourceInterface* FragmentSource() override { return fragments; }
 
 	float landHeight {0.0f};
 	std::vector<std::string> sounds;
 	std::vector<std::pair<entt::entity, glm::vec3>> targets;
 	std::set<entt::entity> claimed;
 	std::map<entt::entity, glm::u8vec3> glows;
+	ObjectEffectsInterface* objects {nullptr};
+	FragmentSourceInterface* fragments {nullptr};
+};
+
+/// The models that break: each one breaks into the same pieces
+class FakeFragments final: public FragmentSourceInterface
+{
+public:
+	explicit FakeFragments(std::vector<blast::FragmentPiece> pieces)
+	    : _pieces(std::make_shared<const std::vector<blast::FragmentPiece>>(std::move(pieces)))
+	{
+	}
+	[[nodiscard]] std::shared_ptr<const std::vector<blast::FragmentPiece>> Fragments(entt::id_type /*mesh*/) override
+	{
+		return _pieces;
+	}
+
+private:
+	std::shared_ptr<const std::vector<blast::FragmentPiece>> _pieces;
+};
+
+/// Gives the models that wait to break once, and does nothing else
+class FakeObjectEffects final: public ObjectEffectsInterface
+{
+public:
+	std::optional<entt::entity> AttachFireBall(glm::vec3 /*position*/, float /*strength*/, float /*radius*/,
+	                                           bool /*affectedByRain*/, std::optional<PlayerNames> /*player*/,
+	                                           int /*powerUpLevel*/) override
+	{
+		return std::nullopt;
+	}
+	FireBallState FollowFireBall(entt::entity /*ball*/, glm::vec3 /*position*/, float /*radius*/, float /*strength*/,
+	                             std::optional<glm::vec3> /*handTarget*/) override
+	{
+		return FireBallState::Gone;
+	}
+	uint32_t StartSpotVisual(SpotVisualType /*type*/, glm::vec3 /*position*/, float /*magnitude*/, int /*turns*/) override
+	{
+		return 0;
+	}
+	void CloseSpotVisual(uint32_t /*id*/) override {}
+	[[nodiscard]] std::vector<WaveTarget> FixedObjectsNear(glm::vec3 /*centre*/, float /*range*/) const override { return {}; }
+	[[nodiscard]] std::optional<WaveTarget> Available(entt::entity /*object*/) const override { return std::nullopt; }
+	[[nodiscard]] bool CanBeDestroyedBySpell(entt::entity /*object*/) const override { return false; }
+	[[nodiscard]] bool IsCreature(entt::entity /*object*/) const override { return false; }
+	void ExplodeObject(entt::entity /*object*/, glm::vec3 /*origin*/, float /*speed*/) override {}
+	void ExplodeMesh(entt::id_type /*mesh*/, const glm::mat4& /*transform*/, glm::vec3 /*origin*/, float /*speed*/) override {}
+	[[nodiscard]] std::vector<ExplodeRecord> TakeExplodeRecords(int queue) override
+	{
+		return queue == 0 ? std::exchange(records, {}) : std::vector<ExplodeRecord> {};
+	}
+	void DestroyByBeam(entt::entity /*object*/) override {}
+	void AddRubbleMark(glm::vec3 /*centre*/) override {}
+	void AddWaterRing(glm::vec3 /*centre*/, float /*size*/) override {}
+	void ShakeCamera(glm::vec3 /*position*/, float /*radius*/, float /*strength*/, int32_t /*milliseconds*/) override {}
+	[[nodiscard]] bool IsDryLand(glm::vec3 /*point*/) const override { return true; }
+
+	std::vector<ExplodeRecord> records;
 };
 
 /// The game's generator on seeds of its own
@@ -285,6 +350,39 @@ TEST_F(ParticleEffectTest, RulesFadeScaleAndMoveAtoms)
 	effect->Collect(0.5f, between);
 	ASSERT_EQ(between.size(), 1u);
 	EXPECT_GT(between[0].position.y, atoms[0].position.y);
+}
+
+TEST_F(ParticleEffectTest, ThePiecesOfABrokenModelStartWhiteAndOnlyTheirAlphaFades)
+{
+	// A model of one triangle breaks, as a script deletes a one-shot globe with explode
+	const std::array positions {glm::vec3(0.0f, 0.0f, 0.0f), glm::vec3(1.0f, 0.0f, 0.0f), glm::vec3(0.0f, 1.0f, 0.0f)};
+	const std::array uvs {glm::vec2(0.0f), glm::vec2(0.0f), glm::vec2(0.0f)};
+	const std::array<uint16_t, 3> indices {0, 1, 2};
+	const std::array primitives {blast::SourcePrimitive {.positions = positions, .uvs = uvs, .indices = indices, .skin = 1}};
+	FakeFragments fragments(blast::BreakIntoPieces(primitives));
+	FakeObjectEffects objects;
+	objects.records.push_back({.mesh = 5, .origin = {0.0f, -5.0f, 0.0f}, .speed = 10.0f});
+	world.objects = &objects;
+	world.fragments = &fragments;
+	// The rules of the game's effect for a broken model: no rule changes the colour of a piece
+	auto effect = Make(
+	    Header() +
+	    Object("UR_ExplodeObject", "UR_ExplodeObject0", "PROPERTY Group INTEGER 0\nPROPERTY RandomFactor FLOAT 0.889381\n") +
+	    Object("AR_FadeAlpha", "AR_FadeAlpha_Fragments",
+	           "PROPERTY Group INTEGER 0\nPROPERTY StartAlpha INTEGER 255\nPROPERTY StartTime FLOAT 0\n"
+	           "PROPERTY StopAlpha INTEGER 0\nPROPERTY StopTime FLOAT 3\n"));
+	effect->Step(k_Step); // made
+	for (int i = 0; i < 15; ++i)
+	{
+		effect->Step(k_Step);
+	}
+	std::vector<Effect::DrawAtom> atoms;
+	effect->Collect(1.0f, atoms, Creator::Kind::Fragment);
+	ASSERT_EQ(atoms.size(), 1u);
+	EXPECT_NE(atoms[0].fragment, nullptr);
+	// A new particle is white, and the piece keeps that colour. Only its alpha fades, to half after a second and a half.
+	EXPECT_EQ(atoms[0].rgb, (std::array<uint8_t, 3> {0xFF, 0xFF, 0xFF}));
+	EXPECT_NEAR(atoms[0].alpha, 127.5f, 1.0f);
 }
 
 TEST_F(ParticleEffectTest, AnEffectToldSoStepsTwiceTheFirstTime)
