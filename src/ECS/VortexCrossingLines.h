@@ -62,7 +62,7 @@ struct World
 
 /// The line making the thing again relative to the vortex's place: a villager, an animal, a pot (not one of a storage
 /// pit's piles), a tree, a rock or other static thing, a thing lying about, a dead tree, a globe holding a miracle or a
-/// scaffold that no workshop counts. None for anything else.
+/// scaffold that no workshop counts, or a reward chest on the land that is ready to open. None for anything else.
 [[nodiscard]] std::optional<vortex::crossing::Line> LineFor(const Registry& registry, entt::entity thing,
                                                             const map_coords::MapCoords& vortex, const World& world);
 
@@ -74,5 +74,9 @@ struct World
 /// land: once its line is written they count as written too
 [[nodiscard]] std::vector<entt::entity> IdenticalMobileObjects(const Registry& registry, entt::entity thing,
                                                                const World& world);
+
+/// The town of a reward chest that a vortex into the land makes again: the town of that vortex, so that the chest gives
+/// belief or a scaffold to it. None when the vortex has no town.
+[[nodiscard]] entt::entity CarriedChestTown(const Registry& registry, entt::entity vortexTown);
 
 } // namespace openblack::ecs::vortex_crossing

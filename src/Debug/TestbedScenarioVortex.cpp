@@ -418,6 +418,66 @@ void testbed_scenarios::AddVortexScenarios(std::vector<Scenario>& all)
 	});
 
 	all.push_back({
+	    .id = "story.vortex_takes_a_reward_chest",
+	    .name = "A vortex out of the land takes a reward chest",
+	    .facet = Facet::Miracles,
+	    .description = "A way out of a land opens on the flat plane at once, as Land 1's opens for the player to leave by. "
+	                   "A closed reward chest of food for the player stands on the land 60 m to its west, out of its "
+	                   "reach. The player's hand throws the chest at the vortex 9 seconds in, once the vortex is fully "
+	                   "open.",
+	    .expected = "The chest strikes the vortex's cylinder as it flies and the vortex takes it. The chest is drawn round "
+	                "the middle and goes into the middle some seconds later. The crossing file vortex.txt in the "
+	                "profile's saved games gets one line for the chest: CREATE_REWARD_CHEST with its place, its kind (4), "
+	                "its player (0) and its angle. This line is openblack's own (deviation: the game writes a line that "
+	                "the next land cannot read). Play the scenario that throws out the last crossing after it: the same "
+	                "chest comes out, closed, for the same player, and opens when the player taps it.",
+	    .environment = {.dispenserGrid = false},
+	    .framing = {.shot = Shot::Placed,
+	                .eye = {k_OnThePlane.x - 30.0f, 40.0f, k_OnThePlane.y - 75.0f},
+	                .look = {k_OnThePlane.x - 20.0f, 0.0f, k_OnThePlane.y}},
+	    .vortices = {{.type = VortexType::In, .offset = k_OnThePlane}},
+	    .rewards = {{.type = RewardObjectInfo::MediumFood, .offset = k_OnThePlane + glm::vec2(-60.0f, 0.0f), .fromSky = false}},
+	    .throws = {{.object = 0,
+	                .reward = true,
+	                .from = k_OnThePlane + glm::vec2(-60.0f, 0.0f),
+	                .height = 6.0f,
+	                .velocity = {25.0f, 6.0f, 0.0f},
+	                .delaySeconds = 9.0f}},
+	});
+
+	all.push_back({
+	    .id = "story.vortex_throws_out_a_reward_chest",
+	    .name = "A vortex into the land throws out a reward chest that crossed",
+	    .facet = Facet::Miracles,
+	    .description = "A vortex into a land opens on the flat plane after a second, as Land 2's opens when the player "
+	                   "arrives, with a crossing file that holds a closed reward chest of food for the player and a cow. A "
+	                   "hut stands 40 m off.",
+	    .expected =
+	        "The chest comes out first, thrown out of the vortex about 16 m from its middle, tumbling, and lands "
+	        "closed. It is the same chest that the old land's vortex took: the same kind, for the same player, "
+	        "in the hut's town, the vortex's town (deviation: the game makes a thing of other data). The player taps it "
+	        "and it opens and gives its food. Then the cow comes out, then new villagers until 30 have come out.",
+	    .environment = {.dispenserGrid = false},
+	    .framing = {.shot = Shot::Placed,
+	                .eye = {k_OnThePlane.x - 40.0f, 50.0f, k_OnThePlane.y - 70.0f},
+	                .look = {k_OnThePlane.x, 0.0f, k_OnThePlane.y}},
+	    .objects = {{.type = AbodeInfo::NorseHut, .offset = k_OnThePlane + glm::vec2(40.0f, 0.0f), .yawDegrees = 90.0f}},
+	    .vortices = {{.type = VortexType::Out,
+	                  .offset = k_OnThePlane,
+	                  .delaySeconds = 1.0f,
+	                  .crossingLines = {"CREATE_REWARD_CHEST(\"-20.46,0.00\", 4, 0, 0.500000)",
+	                                    "CREATE_NEW_ANIMAL(\"12.00,-6.00\", 8, -1, -1, 6)"},
+	                  .gatheringOffset = k_OnThePlane + glm::vec2(0.0f, -30.0f),
+	                  .flockDistance = 27.0f,
+	                  .flockRadius = 48.0f}},
+	    .checks = {{.label = "the chest comes out in the town of the vortex",
+	                .quantity = checks::Quantity::RewardChestsInATown,
+	                .afterTurns = 10,
+	                .byTurn = 100,
+	                .atLeast = 1.0}},
+	});
+
+	all.push_back({
 	    .id = "story.vortex_creature_keeps_clear",
 	    .name = "The creature walks round a vortex out of the land",
 	    .facet = Facet::Miracles,

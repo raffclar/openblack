@@ -57,6 +57,8 @@ enum class Quantity : uint8_t
 	ObjectTemperature,
 	/// 1 when a script's test for a fire near the point finds a burning thing within the radius, else 0
 	FireNear,
+	/// How many reward chests in the world have a town
+	RewardChestsInATown,
 };
 
 /// One statement about the world. It is read once at its turn; with byTurn it is read again at each frame from its

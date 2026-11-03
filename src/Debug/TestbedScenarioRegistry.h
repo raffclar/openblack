@@ -1357,6 +1357,9 @@ struct ThrowSetup
 {
 	/// The object, by its place in the scenario's objects
 	size_t object {0};
+	/// The object is a reward chest, by its place in the scenario's reward chests. A chest that is not given yet is not
+	/// thrown.
+	bool reward {false};
 	/// It is lifted to this point, from the middle of the map, before it is thrown; none to throw it from where it lies
 	std::optional<glm::vec2> from;
 	/// How high above the land it is let go
