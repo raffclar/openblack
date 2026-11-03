@@ -427,7 +427,20 @@ TEST(CreatureReleaseFeedback, ACreatureThatIsNotStillGetsFeedback)
 	    ReleaseBody {.headStraight = true, .bodyBusy = true, .lyingDead = true, .faceShown = true}));
 }
 
-TEST(CreatureReleaseFeedback, TheFeedbackWaitsOneTurnAfterTheCreatureIsFree)
+// The hand sends the end of the lock only for a still creature: head straight, no face, the body idle or lying dead
+TEST(CreatureReleaseFeedback, ACreatureIsStillOnlyWithItsHeadStraightNoFaceAndNoBodyAction)
+{
+	using creature_feedback::IsStill;
+	using creature_feedback::ReleaseBody;
+	EXPECT_TRUE(IsStill(ReleaseBody {.headStraight = true}));
+	EXPECT_TRUE(IsStill(ReleaseBody {.headStraight = true, .bodyBusy = true, .lyingDead = true}));
+	EXPECT_FALSE(IsStill(ReleaseBody {}));
+	EXPECT_FALSE(IsStill(ReleaseBody {.headStraight = true, .bodyBusy = true}));
+	EXPECT_FALSE(IsStill(ReleaseBody {.headStraight = true, .faceShown = true}));
+	EXPECT_FALSE(IsStill(ReleaseBody {.headStraight = true, .bodyBusy = true, .lyingDead = true, .faceShown = true}));
+}
+
+TEST(CreatureReleaseFeedback, TheFeedbackOfAReleaseWaitsOneTurn)
 {
 	EXPECT_EQ(creature_feedback::k_ReleaseFeedbackTurns, 1u);
 }

@@ -135,6 +135,7 @@ std::vector<Action> EachCommand()
 	    ObserversLeft {},
 	    ObserverIn {.name = u"Ann"},
 	    ObserverOut {},
+	    HandLockRelease {.creature = Entity(31)},
 	};
 }
 
@@ -175,7 +176,7 @@ Action RandomAction(std::mt19937& random)
 		return value;
 	};
 	const auto vector = [&]() { return glm::vec3 {number(), number(), number()}; };
-	switch (bits(random) % 53)
+	switch (bits(random) % 54)
 	{
 	case 0:
 		return LeashKey {.key = static_cast<creature_leash::LeashKey>(bits(random) % 3)};
@@ -370,6 +371,8 @@ Action RandomAction(std::mt19937& random)
 	}
 	case 51:
 		return ObserverOut {};
+	case 52:
+		return HandLockRelease {.creature = entity()};
 	default:
 		return PlayerLeft {};
 	}
@@ -434,7 +437,7 @@ TEST(TurnCodec, EachCommandHasItsSize)
 {
 	const std::vector<size_t> sizes {2,  5, 9,  5,  53, 5, 10, 18, 5,  49, 17, 5, 5,  5,  9,  12, 1, 18,
 	                                 11, 5, 18, 15, 7,  5, 1,  2,  1,  61, 5,  2, 1,  13, 10, 18, 1, 54,
-	                                 1,  5, 51, 5,  16, 7, 1,  1,  13, 1,  2,  9, 13, 1,  1,  8,  1};
+	                                 1,  5, 51, 5,  16, 7, 1,  1,  13, 1,  2,  9, 13, 1,  1,  8,  1,  5};
 	const auto commands = EachCommand();
 	ASSERT_EQ(commands.size(), sizes.size());
 	for (size_t i = 0; i < commands.size(); ++i)
@@ -454,6 +457,11 @@ TEST(TurnCodec, EachCommandHasItsSize)
 		if (std::holds_alternative<ChatTaunt>(commands[i]))
 		{
 			tag = 42;
+		}
+		// The release of the hold of a creature has the tag 54
+		if (std::holds_alternative<HandLockRelease>(commands[i]))
+		{
+			tag = 54;
 		}
 		EXPECT_EQ(static_cast<size_t>(TagOf(commands[i])), tag) << i;
 	}

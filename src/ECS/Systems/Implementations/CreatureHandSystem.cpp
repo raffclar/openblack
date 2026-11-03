@@ -53,6 +53,7 @@
 #include "ECS/Components/HandCreaturePose.h"
 #include "ECS/Components/HandCreaturePress.h"
 #include "ECS/Components/HandGrab.h"
+#include "ECS/Components/HandLockEndSent.h"
 #include "ECS/Components/HandLockedCreature.h"
 #include "ECS/Components/HandOnCreature.h"
 #include "ECS/Components/Mesh.h"
@@ -142,25 +143,39 @@ void PullShownFace(entt::entity creature, const creature_face::Request& face)
 	                                             });
 }
 
-/// Whether the hand tells the mind how it treated the creature as it lets go, from how still the creature is now
-bool ReleaseGivesFeedback(entt::entity creature)
+/// How the body of the creature is now, for the release of the hand: none for a creature with no animated body
+std::optional<feedback::ReleaseBody> ReleaseBodyOf(entt::entity creature)
 {
 	const auto& registry = Locator::entitiesRegistry::value();
-	const auto* animation = registry.TryGet<const CreatureAnimation>(creature);
+	const auto* animation = registry.Valid(creature) ? registry.TryGet<const CreatureAnimation>(creature) : nullptr;
 	if (animation == nullptr)
 	{
-		return true;
+		return std::nullopt;
 	}
 	const bool moving =
 	    Locator::creatureLocomotionSystem::has_value() && Locator::creatureLocomotionSystem::value().IsMoving(creature);
 	// The face that this computer shows, which can be the face of a stroke
 	const auto* shown = registry.TryGet<const ShownCreatureFace>(creature);
-	return feedback::ReleaseGivesFeedback({
+	return feedback::ReleaseBody {
 	    .headStraight = animation->yaw.angle == 0.0f && animation->pitch.angle == 0.0f,
 	    .bodyBusy = creature_layers::IsPlaying(animation->body) || moving,
 	    .lyingDead = creature_layers::IsLooping(animation->body) && animation->body.holdLoop,
 	    .faceShown = creature_shown_face::Shown(animation->face, shown != nullptr ? &shown->face : nullptr).current.has_value(),
-	});
+	};
+}
+
+/// Whether the hand tells the mind how it treated the creature as it lets go, from how still the creature is now
+bool ReleaseGivesFeedback(entt::entity creature)
+{
+	const auto body = ReleaseBodyOf(creature);
+	return !body.has_value() || feedback::ReleaseGivesFeedback(*body);
+}
+
+/// Whether the creature is still now, so that the hand can send the end of the lock on it
+bool IsStill(entt::entity creature)
+{
+	const auto body = ReleaseBodyOf(creature);
+	return !body.has_value() || feedback::IsStill(*body);
 }
 
 const CreatureRig::ActionPoints* PointsOf(const Creature& creature)
@@ -474,6 +489,83 @@ void CreatureHandSystem::DoUnlock(PlayerNames player, entt::entity creature)
 			                   entt::to_integral(creature));
 		}
 	}
+}
+
+void CreatureHandSystem::DoLockRelease(PlayerNames player, entt::entity creature)
+{
+	auto& registry = Locator::entitiesRegistry::value();
+	const auto hand = HandOf(player);
+	if (!hand.has_value() || !registry.Valid(*hand))
+	{
+		return;
+	}
+	auto* locked = registry.TryGet<HandLockedCreature>(*hand);
+	if (locked == nullptr || locked->creature != creature || locked->released)
+	{
+		return;
+	}
+	locked->released = true;
+	// The creature looks at no point, so its head turns back to look straight ahead
+	if (registry.Valid(creature))
+	{
+		if (auto* animation = registry.TryGet<CreatureAnimation>(creature))
+		{
+			animation->lookAt.reset();
+		}
+		if (auto* eyes = registry.TryGet<CreatureEyes>(creature))
+		{
+			eyes->lookAt.reset();
+		}
+	}
+	if (const auto logger = spdlog::get("game"))
+	{
+		SPDLOG_LOGGER_INFO(logger, "The button of player {} let go of creature {}: the lock stays until it is still",
+		                   static_cast<int>(player), entt::to_integral(creature));
+	}
+}
+
+bool CreatureHandSystem::WaitsForLockEnd() const
+{
+	const auto& registry = Locator::entitiesRegistry::value();
+	if (!Locator::handSystem::has_value())
+	{
+		return false;
+	}
+	const auto hand = PlayerHand();
+	const auto* locked = registry.Valid(hand) ? registry.TryGet<const HandLockedCreature>(hand) : nullptr;
+	return locked != nullptr && locked->released;
+}
+
+void CreatureHandSystem::WaitForLockEnd(entt::entity hand)
+{
+	auto& registry = Locator::entitiesRegistry::value();
+	const auto* locked = registry.TryGet<const HandLockedCreature>(hand);
+	// The world ended the lock, or has a new lock: the hand forgets the end that it sent
+	if (const auto* sent = registry.TryGet<const HandLockEndSent>(hand);
+	    sent != nullptr && (locked == nullptr || !locked->released || locked->creature != sent->creature))
+	{
+		registry.Remove<HandLockEndSent>(hand);
+	}
+	if (locked == nullptr)
+	{
+		return;
+	}
+	const auto creature = locked->creature;
+	const bool inWorld = registry.Valid(creature) && registry.AllOf<Creature>(creature);
+	if (!creature_hand::SendsLockEnd({
+	        .released = locked->released,
+	        .endSent = registry.AllOf<HandLockEndSent>(hand),
+	        .inWorld = inWorld,
+	        .still = inWorld && IsStill(creature),
+	    }) ||
+	    !Locator::playerCommandSystem::has_value())
+	{
+		return;
+	}
+	SPDLOG_LOGGER_INFO(spdlog::get("game"), "Creature {} is still: the hand sends the end of the lock",
+	                   entt::to_integral(creature));
+	registry.AssignOrReplace<HandLockEndSent>(hand, HandLockEndSent {.creature = creature});
+	Locator::playerCommandSystem::value().Submit(player_commands::HandUnlock {.object = creature});
 }
 
 void CreatureHandSystem::TakeCamera(entt::entity creature)
@@ -895,6 +987,11 @@ void CreatureHandSystem::LookAtReportedHandOf(PlayerNames player)
 	{
 		return;
 	}
+	// After the button let go, the creature does not look at the hand while the lock stays
+	if (const auto* locked = registry.TryGet<const HandLockedCreature>(*HandOf(player)); locked != nullptr && locked->released)
+	{
+		return;
+	}
 	const auto& handSystem = Locator::handSystem::value();
 	const auto hand = handSystem.GetHandPositionsOf(player).at(static_cast<size_t>(HandSystemInterface::Side::Left));
 	const auto camera = handSystem.GetReportedCamera(player);
@@ -1042,11 +1139,12 @@ void CreatureHandSystem::Release()
 		}
 		SendFeedback(creature, sum);
 	}
-	// The world lets go of the creature at the start of a later turn, as a command of the player. A hold that a command
-	// started ends at once.
+	// The world sees the release of the button at the start of a later turn, as a command of the player. The creature then
+	// stops its look at the hand, but the world keeps the lock. The hand sends the end of the lock when the creature is
+	// still (see WaitForLockEnd). A hold that a command started ends at once.
 	if (!byCommand && Locator::playerCommandSystem::has_value())
 	{
-		Locator::playerCommandSystem::value().Submit(player_commands::HandUnlock {.object = creature});
+		Locator::playerCommandSystem::value().Submit(player_commands::HandLockRelease {.creature = creature});
 	}
 	else
 	{
@@ -1204,6 +1302,7 @@ void CreatureHandSystem::InterfaceFrame()
 	{
 		return;
 	}
+	WaitForLockEnd(hand);
 	const auto* pose = registry.TryGet<const HandCreaturePose>(hand);
 	if (pose == nullptr)
 	{

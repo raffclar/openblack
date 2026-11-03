@@ -159,10 +159,15 @@ float creature_feedback::Delivered(float sum)
 	return std::clamp(sum, -1.0f, 1.0f);
 }
 
-bool creature_feedback::ReleaseGivesFeedback(const ReleaseBody& body)
+bool creature_feedback::IsStill(const ReleaseBody& body)
 {
 	const bool bodyStill = !body.bodyBusy || body.lyingDead;
-	return !(body.headStraight && bodyStill && !body.faceShown);
+	return body.headStraight && bodyStill && !body.faceShown;
+}
+
+bool creature_feedback::ReleaseGivesFeedback(const ReleaseBody& body)
+{
+	return !IsStill(body);
 }
 
 float creature_feedback::AttitudeAfter(float attitude, float feedback)

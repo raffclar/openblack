@@ -304,6 +304,21 @@ TEST(CreatureHand, TheTurnRefusesOnlyAGoneCreatureOrAHeldOne)
 	EXPECT_FALSE(TurnTakesHold(false, true));
 }
 
+// After the button let go, the hand sends the end of the lock once, when the creature is still or not in the world
+TEST(CreatureHand, TheHandSendsTheEndOfTheLockOnceWhenTheCreatureIsStill)
+{
+	using creature_hand::SendsLockEnd;
+	EXPECT_TRUE(SendsLockEnd({.released = true, .inWorld = true, .still = true}));
+	EXPECT_FALSE(SendsLockEnd({.released = true, .inWorld = true, .still = false}));
+	// A gone creature does not make the hand wait
+	EXPECT_TRUE(SendsLockEnd({.released = true, .inWorld = false, .still = false}));
+	// The button still holds the creature
+	EXPECT_FALSE(SendsLockEnd({.released = false, .inWorld = true, .still = true}));
+	// The hand sent the end before
+	EXPECT_FALSE(SendsLockEnd({.released = true, .endSent = true, .inWorld = true, .still = true}));
+	EXPECT_FALSE(SendsLockEnd({.released = true, .endSent = true, .inWorld = false}));
+}
+
 TEST(CreatureHand, TheHandHoldsTheCreatureOfAnAlliedGodAsItsOwn)
 {
 	using creature_hand::MayHold;

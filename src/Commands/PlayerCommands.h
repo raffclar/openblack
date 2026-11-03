@@ -172,6 +172,13 @@ struct HandUnlock
 	entt::entity object;
 };
 
+/// The player let go of the button that holds a creature. The creature stops its look at the hand, and the world keeps
+/// the lock until the hand sends its end (HandUnlock). The hand sends the end only when the creature is still.
+struct HandLockRelease
+{
+	entt::entity creature;
+};
+
 /// The press of the hand that holds a thing on a target that the thing is used on: a pot goes into a store or a pile,
 /// a thing goes whole to an altar, a gate stone plinth or a store
 struct HandApply
@@ -591,7 +598,8 @@ using Action = std::variant<LeashKey, LeashTap, CreatureFeedback, HandTake, Hand
                             PlayerJoined, MiracleRequest, MiracleRepeat, HandCast, HandCastUnlock, LeashPick, HandShakeOff,
                             GripDust, HelpReport, HelpQuery, CreatureFightCheat, ViewReport, TempleLeashOff, GiveCallOff,
                             CreatureTattoo, LeashLength, ChatSpeech, ChatTaunt, QuickSave, QuickLoad, MusicMood, IconChargeStop,
-                            DialogueClick, PuzzleTap, FishScare, ObserversJoined, ObserversLeft, ObserverIn, ObserverOut>;
+                            DialogueClick, PuzzleTap, FishScare, ObserversJoined, ObserversLeft, ObserverIn, ObserverOut,
+                            HandLockRelease>;
 
 /// A command and the player that sent it
 struct Command
