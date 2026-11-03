@@ -32,6 +32,14 @@ constexpr glm::vec2 k_NearTheFight = glm::vec2(1560.0f, 2650.0f) - k_LandMiddle;
 /// A point inside the ring that sends the creature back: 200 metres from the place of the speech and 132 metres from the
 /// lair, from the middle of the land
 constexpr glm::vec2 k_FenceSpot = glm::vec2(1798.0f, 2695.0f) - k_LandMiddle;
+/// The spot on the road near the home village where the script sends a creature that went too near the ogre, from the
+/// middle of the land
+/// The place of the gold scroll over the lair, from the middle of the land, its kind of highlight and the challenge
+/// that the Heartbroken Man's ending gives it
+constexpr glm::vec2 k_OgreScroll = glm::vec2(1682.351f, 2841.488f) - k_LandMiddle;
+constexpr float k_GoldScroll = 3.0f;
+constexpr float k_HeartbrokenChallenge = 45.0f;
+constexpr glm::vec2 k_RoadRetreat = glm::vec2(2183.6868f, 3095.9983f) - k_LandMiddle;
 /// The middle of the undead village and the radius that the land's script uses to find it
 constexpr glm::vec2 k_UndeadVillage = glm::vec2(3001.083f, 3457.676f) - k_LandMiddle;
 constexpr float k_UndeadVillageSearch = 100.0f;
@@ -69,6 +77,38 @@ void AddSlegFight(std::vector<Scenario>& all)
 	                  .delaySeconds = 0.5f,
 	                  .script = "Land4Ogre",
 	                  .scriptGlobals = {{"MyCreature", {.kind = Argument::Kind::Creature, .index = 0}}}}},
+	});
+}
+
+void AddSlegBeatenScroll(std::vector<Scenario>& all)
+{
+	all.push_back({
+	    .id = "story.l4_sleg_scroll_removed",
+	    .name = "Story: the gold scroll over Sleg's lair goes when Sleg is beaten on the fourth land",
+	    .facet = Facet::Story,
+	    .description = "The fourth land loads with its own scripts and sky. The gold scroll over the lair is made as the "
+	                   "end of the Heartbroken Man's quest makes it, and the ogre's script keeps it. Then the set-up "
+	                   "script of the land runs, then the script of the ogre. The player's Tiger stands 55 metres from "
+	                   "the place where the ogre speaks. Win the fight for the Tiger.",
+	    .expected = "The gold scroll turns above the lair. Sleg says his lines and fights the Tiger. When the Tiger "
+	                "wins, the scroll goes before the scene of the beaten ogre starts.",
+	    .environment = {.land = Land::Story, .storyLand = "Land4.txt", .dispenserGrid = false},
+	    .framing = {.shot = Shot::Placed,
+	                .eye = {k_FightIntro.x - 30.0f, 35.0f, k_FightIntro.y - 40.0f},
+	                .look = {k_FightIntro.x, 5.0f, k_FightIntro.y}},
+	    .creatures = {PlayersTiger(k_NearTheFight)},
+	    .commands = {{.kind = Kind::CallNative,
+	                  .delaySeconds = 0.5f,
+	                  .script = "CREATE_HIGHLIGHT",
+	                  .scriptArguments = {{.kind = Argument::Kind::Integer, .number = k_GoldScroll},
+	                                      {.kind = Argument::Kind::Position, .point = k_OgreScroll},
+	                                      {.kind = Argument::Kind::Integer, .number = k_HeartbrokenChallenge}}},
+	                 {.kind = Kind::RunScript, .delaySeconds = 0.0f, .script = "SetupLand4"},
+	                 {.kind = Kind::RunScript,
+	                  .delaySeconds = 0.5f,
+	                  .script = "Land4Ogre",
+	                  .scriptGlobals = {{"MyCreature", {.kind = Argument::Kind::Creature, .index = 0}},
+	                                    {"OgreHighlight", {.kind = Argument::Kind::LastResult}}}}},
 	});
 }
 
@@ -125,6 +165,66 @@ void AddOgreFence(std::vector<Scenario>& all)
 	});
 }
 
+void AddCreatureSentBack(std::vector<Scenario>& all)
+{
+	all.push_back({
+	    .id = "story.l4_creature_sent_back",
+	    .name = "Story: the creature that went too near Sleg is sent back to the road on the fourth land",
+	    .facet = Facet::Story,
+	    .description = "The fourth land loads with its own scripts and sky. The player's Tiger stands 132 metres from "
+	                   "the lair of the ogre. The script that stops the player's exploring runs with the flag that the "
+	                   "creature went too far already raised. The camera is far from the lair and from the Japanese "
+	                   "village.",
+	    .expected = "The script lowers its watch at once and sends the Tiger back: the Tiger walks to a place on the "
+	                "road within 50 metres of the spot near the home village, and stays there.",
+	    .environment = {.land = Land::Story, .storyLand = "Land4.txt", .dispenserGrid = false},
+	    .framing = {.shot = Shot::Placed,
+	                .eye = {k_RoadRetreat.x - 60.0f, 120.0f, k_RoadRetreat.y + 60.0f},
+	                .look = {k_RoadRetreat.x, 8.0f, k_RoadRetreat.y}},
+	    .creatures = {PlayersTiger(k_FenceSpot)},
+	    .commands = {{.kind = Kind::RunScript,
+	                  .delaySeconds = 0.5f,
+	                  .script = "StopPlayerExploring",
+	                  .scriptGlobals = {{"MyCreature", {.kind = Argument::Kind::Creature, .index = 0}},
+	                                    {"CreatureVenturedTooFar", {.number = 1.0f}}}}},
+	});
+}
+
+void AddSlegEatsVillagers(std::vector<Scenario>& all)
+{
+	all.push_back({
+	    .id = "story.l4_sleg_eats_villagers",
+	    .name = "Story: Sleg the ogre eats the villagers near his lair on the fourth land",
+	    .facet = Facet::Story,
+	    .description = "The fourth land loads with its own scripts and sky. The set-up script of the land runs, then the "
+	                   "script of the ogre. The player's Tiger stands far from the lair. Two villagers stand 4 and 8 "
+	                   "metres from the place where Sleg comes. 5 seconds after the ogre's script starts, an empty "
+	                   "script raises the flag of the man's story. Thus the ogre's first sit starts before the family "
+	                   "script starts, as in the game.",
+	    .expected = "Sleg comes at his lair with his four gremlins. The family script chooses the nearer villager, and "
+	                "Sleg walks to him, picks him up and eats him. Then the script chooses the other villager if he is "
+	                "within 50 metres, and orders the meal 20 seconds after the first meal. It does not look again "
+	                "where he is. If he walked away to work in that time, Sleg follows him for a short time and stops, "
+	                "and the script waits for ever, as in the game.",
+	    .environment = {.land = Land::Story, .storyLand = "Land4.txt", .dispenserGrid = false},
+	    .framing = {.shot = Shot::Placed,
+	                .eye = {k_Lair.x - 30.0f, 30.0f, k_Lair.y - 30.0f},
+	                .look = {k_Lair.x, 5.0f, k_Lair.y}},
+	    .creatures = {PlayersTiger(glm::vec2(2236.0f, 2652.0f) - k_LandMiddle)},
+	    .objects = {{.type = VillagerInfo::CelticFarmerMale, .offset = k_Lair + glm::vec2(4.0f, 0.0f)},
+	                {.type = VillagerInfo::CelticFarmerMale, .offset = k_Lair + glm::vec2(0.0f, 8.0f)}},
+	    .commands = {{.kind = Kind::RunScript, .delaySeconds = 0.5f, .script = "SetupLand4"},
+	                 {.kind = Kind::RunScript,
+	                  .delaySeconds = 0.5f,
+	                  .script = "Land4Ogre",
+	                  .scriptGlobals = {{"MyCreature", {.kind = Argument::Kind::Creature, .index = 0}}}},
+	                 {.kind = Kind::RunScript,
+	                  .delaySeconds = 5.0f,
+	                  .script = "CreatureNullReminder",
+	                  .scriptGlobals = {{"ManHasExplainedAboutNemesis", {.number = 1.0f}}}}},
+	});
+}
+
 void AddUndeadVillageCreed(std::vector<Scenario>& all)
 {
 	all.push_back({
@@ -163,7 +263,10 @@ void AddUndeadVillageCreed(std::vector<Scenario>& all)
 void testbed_scenarios::AddLand4SlegScenarios(std::vector<Scenario>& all)
 {
 	AddSlegFight(all);
+	AddSlegBeatenScroll(all);
 	AddGremlins(all);
 	AddOgreFence(all);
+	AddCreatureSentBack(all);
+	AddSlegEatsVillagers(all);
 	AddUndeadVillageCreed(all);
 }
