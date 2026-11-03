@@ -14,12 +14,15 @@
 
 #include <algorithm>
 #include <bit>
+#include <iterator>
 #include <limits>
 #include <ranges>
 #include <span>
 #include <unordered_map>
+#include <unordered_set>
 
 #include "3D/MapCoords.h"
+#include "DanceFile.h"
 #include "ECS/Components/Dance.h"
 #include "ECS/Components/SpellIcon.h"
 #include "ECS/VanillaSceneryImport.h"
@@ -71,6 +74,13 @@ constexpr std::array k_ShepherdStates = {VillagerStates::ShepherdLookForFlock,
                                          VillagerStates::ShepherdFetchStray,
                                          VillagerStates::ShepherdGotoFlock,
                                          VillagerStates::ShepherdCheckAnimalForSlaughter};
+/// The states of a dance that the import keeps for a dancer of a group that it makes. The two values of these states are
+/// left over from other states: no part of a dance reads them.
+constexpr std::array k_DanceStates = {VillagerStates::InDance, VillagerStates::MoveToDancePos};
+/// The states of worship at a worship site. Each keeps one value: whether the villager asked to go home. Only code
+/// that the game never runs sets it, and no villager asks to go home, so the value changes nothing.
+constexpr std::array k_WorshipStates = {VillagerStates::WorshippingAtWorshipSite, VillagerStates::HidingAtWorshipSite,
+                                        VillagerStates::GetFoodAtWorshipSite};
 /// The flags of a villager that is a disciple, and of a villager that follows a disciple one time
 constexpr uint16_t k_DiscipleFlag = 0x0200;
 constexpr uint16_t k_FollowerFlag = 0x0400;
@@ -633,7 +643,8 @@ std::optional<ImportedVillager> ReadVillager(const VanillaWorld& world, const Va
 	                           .villagerFlags = world.Half(record, "villagerFlags").value_or(0),
 	                           .status = world.Half(record, "status").value_or(0),
 	                           .turnsSinceStateChange = static_cast<uint16_t>(action[4] | (action[5] << 8)),
-	                           .turnsUntilStateChange = world.Half(record, "turnsToStateChange").value_or(0)};
+	                           .turnsUntilStateChange = world.Half(record, "turnsToStateChange").value_or(0),
+	                           .danceGroup = world.Ref(record, "danceGroup").value_or(0)};
 	villager.walk = WalkOf(world, record);
 	villager.footpathWalk = {.footpath = world.Ref(record, "walkFootpath").value_or(0),
 	                         .node = world.Ref(record, "walkFootpathNode").value_or(0),
@@ -772,6 +783,126 @@ std::optional<SpellSeedType> SpellSeedRowOf(uint32_t number)
 	return static_cast<SpellSeedType>(k_FirstSpellSeedRowNumber - number);
 }
 
+namespace
+{
+/// The words of a value of bytes or of an array, in the order of the file
+std::vector<uint32_t> WordsOf(std::span<const uint8_t> bytes)
+{
+	std::vector<uint32_t> words(bytes.size() / sizeof(uint32_t));
+	std::memcpy(words.data(), bytes.data(), words.size() * sizeof(uint32_t));
+	return words;
+}
+
+/// A text of the file that ends at its first zero byte
+std::string TextOf(std::span<const uint8_t> bytes)
+{
+	const auto end = std::ranges::find(bytes, uint8_t {0});
+	return {bytes.begin(), end};
+}
+
+std::optional<ImportedDanceGroup> ReadDanceGroup(const VanillaWorld& world, uint32_t number)
+{
+	const auto* record = number != 0 ? world.Record(number) : nullptr;
+	if (record == nullptr || !record->Is(VanillaType::DanceGroup))
+	{
+		return std::nullopt;
+	}
+	ImportedDanceGroup group {
+	    .number = number,
+	    .id = world.Word(*record, "groupId").value_or(0),
+	    .name = TextOf(world.Raw(*record, "groupName")),
+	    .dancers = {},
+	    .limited = false,
+	    .quota = 100,
+	    .weight = 100,
+	    .limitedDancers = world.Word(*record, "groupLimitedDancers").value_or(0),
+	    .danceType = world.Word(*record, "groupDanceType").value_or(0),
+	    .sexes = world.Word(*record, "groupSexes").value_or(3),
+	    .formation = world.Word(*record, "groupFormation").value_or(0),
+	    .inFormation = world.Word(*record, "groupInFormation").value_or(0),
+	    .flag = world.Word(*record, "groupFlag").value_or(1) != 0,
+	    .shape = world.Word(*record, "groupShape").value_or(0),
+	    .radius = world.Float(*record, "groupRadius").value_or(20.0f),
+	    .offset = {0.0f, 0.0f},
+	    .rotation = world.Float(*record, "groupRotation").value_or(0.0f),
+	    .spin = world.Float(*record, "groupSpin").value_or(0.0f),
+	    .move = {},
+	    .moved = world.Word(*record, "groupMoved").value_or(0) != 0,
+	    .parent = world.Ref(*record, "groupParent").value_or(0),
+	    .indexInParent = world.Byte(*record, "groupIndexInParent").value_or(0),
+	    .children = WordsOf(world.Raw(*record, "groupChildren")),
+	};
+	const auto dancers = world.Refs(*record, "groupDancers");
+	group.dancers.assign(dancers.begin(), dancers.end());
+	if (const auto offset = world.Raw(*record, "groupOffset"); offset.size() == sizeof(float) * 2)
+	{
+		std::memcpy(&group.offset.x, offset.data(), sizeof(float));
+		std::memcpy(&group.offset.y, offset.data() + sizeof(float), sizeof(float));
+	}
+	if (const auto membership = WordsOf(world.Raw(*record, "groupMembership")); membership.size() == 3)
+	{
+		group.limited = membership[0] != 0;
+		group.quota = membership[1];
+		group.weight = membership[2];
+	}
+	if (const auto move = WordsOf(world.Raw(*record, "groupMove")); move.size() == 4)
+	{
+		group.move = {.action = move[0], .first = move[1], .second = move[2], .end = move[3]};
+	}
+	return group;
+}
+
+std::vector<ImportedDanceKeyFrame> ReadDanceKeyFrames(const VanillaWorld& world, const VanillaRecord& dance)
+{
+	std::vector<ImportedDanceKeyFrame> keyFrames;
+	for (const auto number : world.Refs(dance, "danceKeyFrames"))
+	{
+		const auto* record = number != 0 ? world.Record(number) : nullptr;
+		if (record == nullptr || !record->Is(VanillaType::DanceKeyFrame))
+		{
+			continue;
+		}
+		ImportedDanceKeyFrame keyFrame {.time = world.Float(*record, "keyFrameTime").value_or(0.0f),
+		                                .flags = world.Word(*record, "keyFrameFlags").value_or(0),
+		                                .actions = {}};
+		for (const auto actionNumber : world.Refs(*record, "keyFrameActions"))
+		{
+			const auto* action = actionNumber != 0 ? world.Record(actionNumber) : nullptr;
+			if (action == nullptr || !action->Is(VanillaType::DanceKeyAction))
+			{
+				continue;
+			}
+			ImportedDanceAction values {.groups = WordsOf(world.Raw(*action, "keyActionGroups")),
+			                            .type = world.Word(*action, "keyActionType").value_or(0),
+			                            .arguments = {}};
+			if (const auto arguments = WordsOf(world.Raw(*action, "keyActionArguments"));
+			    arguments.size() == values.arguments.size())
+			{
+				std::ranges::copy(arguments, values.arguments.begin());
+			}
+			keyFrame.actions.push_back(std::move(values));
+		}
+		keyFrames.push_back(std::move(keyFrame));
+	}
+	return keyFrames;
+}
+
+/// The places in the list of all groups of the groups of a list of the file
+std::vector<size_t> GroupPlaces(const std::vector<ImportedDanceGroup>& groups, std::span<const uint32_t> numbers)
+{
+	std::vector<size_t> places;
+	for (const auto number : numbers)
+	{
+		const auto found = std::ranges::find(groups, number, &ImportedDanceGroup::number);
+		if (found != groups.end())
+		{
+			places.push_back(static_cast<size_t>(std::distance(groups.begin(), found)));
+		}
+	}
+	return places;
+}
+} // namespace
+
 std::optional<ImportedDance> ReadDance(const VanillaWorld& world, const VanillaRecord& record)
 {
 	const auto row = world.Word(record, "danceRow");
@@ -802,6 +933,18 @@ std::optional<ImportedDance> ReadDance(const VanillaWorld& world, const VanillaR
 	{
 		dance.firstDancerTurn = world.Word(record, "danceFirstDancerTurn").value_or(0);
 	}
+	for (const auto number : world.Refs(record, "danceGroups"))
+	{
+		if (auto group = ReadDanceGroup(world, number); group.has_value())
+		{
+			dance.groups.push_back(std::move(*group));
+		}
+	}
+	dance.limitedGroups = GroupPlaces(dance.groups, world.Refs(record, "danceLimitedGroups"));
+	dance.sharedGroups = GroupPlaces(dance.groups, world.Refs(record, "danceSharedGroups"));
+	dance.round = world.Byte(record, "danceRound").value_or(0);
+	dance.roundLength = world.Word(record, "danceRoundLength").value_or(0);
+	dance.keyFrames = ReadDanceKeyFrames(world, record);
 	return dance;
 }
 
@@ -847,6 +990,96 @@ void PutDanceValues(components::Dance& dance, const ImportedDance& file)
 	hand.cameraAsked = false;
 }
 
+std::vector<PlacedDancer> PutDanceGroups(components::Dance& dance, const ImportedDance& file,
+                                         const std::unordered_map<uint32_t, entt::entity>& kept)
+{
+	// The parts of a group name their groups by the number of the group in the dance
+	std::unordered_map<uint32_t, size_t> places;
+	for (size_t place = 0; place < file.groups.size(); ++place)
+	{
+		places.emplace(file.groups[place].id, place);
+	}
+	std::vector<PlacedDancer> placed;
+	auto& groups = dance.groups;
+	groups.all.clear();
+	dance.dancers = 0;
+	for (size_t place = 0; place < file.groups.size(); ++place)
+	{
+		const auto& values = file.groups[place];
+		// The file keeps no rates of a move, so a group starts with no rate until a key frame starts its move again
+		components::DanceGroup group {
+		    .name = values.name,
+		    .dancers = {},
+		    .limited = values.limited,
+		    .quota = values.quota,
+		    .weight = values.weight,
+		    .limitedDancers = values.limitedDancers,
+		    .danceType = values.danceType,
+		    .sexes = values.sexes,
+		    .formation = values.formation,
+		    .inFormation = values.inFormation,
+		    .flag = values.flag,
+		    .shape = values.shape,
+		    .radius = values.radius,
+		    .offset = values.offset,
+		    .rotation = values.rotation,
+		    .spin = values.spin,
+		    .move = {.action = values.move.action,
+		             .first = values.move.first,
+		             .second = values.move.second,
+		             .end = values.move.end},
+		    .moved = values.moved,
+		};
+		if (const auto parent = std::ranges::find(file.groups, values.parent, &ImportedDanceGroup::number);
+		    values.parent != 0 && parent != file.groups.end())
+		{
+			group.parent = static_cast<size_t>(std::distance(file.groups.begin(), parent));
+			group.indexInParent = values.indexInParent;
+		}
+		for (const auto child : values.children)
+		{
+			if (const auto found = places.find(child); found != places.end())
+			{
+				group.children.push_back(found->second);
+			}
+		}
+		for (const auto number : values.dancers)
+		{
+			const auto found = kept.find(number);
+			if (found == kept.end())
+			{
+				// The dancer leaves the group as when it leaves the dance
+				if (group.limited && group.limitedDancers > 0)
+				{
+					--group.limitedDancers;
+				}
+				continue;
+			}
+			group.dancers.push_back(found->second);
+			placed.push_back({.dancer = found->second, .group = place});
+			++dance.dancers;
+		}
+		groups.all.push_back(std::move(group));
+	}
+	groups.limited = file.limitedGroups;
+	groups.shared = file.sharedGroups;
+	groups.round = file.round;
+	groups.roundLength = file.roundLength;
+	return placed;
+}
+
+bool SameKeyFrames(const dance::DanceFile& file, const std::vector<ImportedDanceKeyFrame>& keyFrames)
+{
+	const auto sameAction = [](const dance::DanceAction& a, const ImportedDanceAction& b) {
+		return a.type == b.type && a.arguments == b.arguments && a.groups == b.groups;
+	};
+	const auto sameKeyFrame = [&sameAction](const dance::DanceKeyFrame& a, const ImportedDanceKeyFrame& b) {
+		return std::bit_cast<uint32_t>(a.time) == std::bit_cast<uint32_t>(b.time) && a.flags == b.flags &&
+		       std::ranges::equal(a.actions, b.actions, sameAction);
+	};
+	return std::ranges::equal(file.keyFrames, keyFrames, sameKeyFrame);
+}
+
 void PutIconValues(components::WorshipIcon& icon, const ImportedWorshipIcon& file)
 {
 	icon.charging = file.charging;
@@ -876,7 +1109,8 @@ bool CanKeepStateValues(uint8_t state)
 	return !gamesave::VillagerStateKeepsValues(state) || IsOneOf(state, k_FishermanStates) || IsOneOf(state, k_FarmerStates) ||
 	       IsOneOf(state, k_ShepherdStates) || IsOneOf(state, k_ScriptValueStates) ||
 	       state == static_cast<uint8_t>(VillagerStates::MoveOnPath) || state == static_cast<uint8_t>(VillagerStates::Dead) ||
-	       state == static_cast<uint8_t>(VillagerStates::DiscipleNothingToDo);
+	       state == static_cast<uint8_t>(VillagerStates::DiscipleNothingToDo) ||
+	       state == static_cast<uint8_t>(VillagerStates::BreederDisciple);
 }
 
 bool CanKeepWalk(uint8_t moveState)
@@ -989,6 +1223,21 @@ std::optional<ImportedShepherdValues> ShepherdValuesOf(uint8_t state, const std:
 	return ImportedShepherdValues {.countdown = *countdown, .pending = *pending};
 }
 
+std::optional<ImportedBreederValues> BreederValuesOf(uint8_t state, const std::vector<ImportedStateValue>& values)
+{
+	if (state != static_cast<uint8_t>(VillagerStates::BreederDisciple) || values.size() != 2 || !values[0].object.has_value())
+	{
+		return std::nullopt;
+	}
+	// The lover, then the place (x, z)
+	const auto place = ValueOf<std::array<int32_t, 2>>(values[1]);
+	if (!place.has_value())
+	{
+		return std::nullopt;
+	}
+	return ImportedBreederValues {.lover = *values[0].object, .x = (*place)[0], .z = (*place)[1]};
+}
+
 std::optional<DeathReason> DeathReasonOf(uint8_t state, const std::vector<ImportedStateValue>& values)
 {
 	if (state != static_cast<uint8_t>(VillagerStates::Dead) || values.size() != 1)
@@ -1068,6 +1317,30 @@ std::array<uint8_t, 3> StartStates(const std::array<uint8_t, 3>& states, uint8_t
 	return states;
 }
 
+std::array<uint8_t, 3> StartStates(const ImportedVillager& villager)
+{
+	const auto canKeep = [&villager](uint8_t state) {
+		if (state == static_cast<uint8_t>(VillagerStates::WorshippingAtWorshipSite))
+		{
+			return villager.importedWorshipper && villager.importedDancer;
+		}
+		if (IsOneOf(state, k_WorshipStates))
+		{
+			return villager.importedWorshipper;
+		}
+		if (IsOneOf(state, k_DanceStates))
+		{
+			return villager.importedDancer;
+		}
+		return CanKeepStateValues(state);
+	};
+	if (!CanKeepWalk(villager.moveState) || !canKeep(villager.states[0]) || !canKeep(villager.states[1]))
+	{
+		return DecideAgain();
+	}
+	return villager.states;
+}
+
 std::optional<ImportedPlan> ReadPlan(const VanillaWorld& world, const VanillaRecord& record, std::string& why)
 {
 	const auto position = PositionOf(world, record);
@@ -1114,6 +1387,38 @@ std::optional<ImportedSite> ReadSite(const VanillaWorld& world, const VanillaRec
 	}
 	return site;
 }
+
+namespace
+{
+/// Marks each villager that dances in a group of the dance of a worship site of the file, and each villager at worship
+/// at such a site. A dancer is in the list of its group, and its group is its group.
+void MarkDancersAndWorshippers(ImportedTowns& imported)
+{
+	std::unordered_set<uint32_t> worshippers;
+	std::unordered_map<uint32_t, uint32_t> groupOf;
+	for (const auto& site : imported.worshipSites)
+	{
+		worshippers.insert(site.worshippers.begin(), site.worshippers.end());
+		if (!site.danceValues.has_value())
+		{
+			continue;
+		}
+		for (const auto& group : site.danceValues->groups)
+		{
+			for (const auto dancer : group.dancers)
+			{
+				groupOf.emplace(dancer, group.number);
+			}
+		}
+	}
+	for (auto& villager : imported.villagers)
+	{
+		const auto group = groupOf.find(villager.number);
+		villager.importedDancer = group != groupOf.end() && villager.danceGroup == group->second;
+		villager.importedWorshipper = worshippers.contains(villager.number);
+	}
+}
+} // namespace
 
 ImportedTowns ReadTowns(const VanillaWorld& world)
 {
@@ -1242,6 +1547,7 @@ ImportedTowns ReadTowns(const VanillaWorld& world)
 		imported.skipped.push_back(Skip(record, why));
 	}
 	PutPiles(world, imported);
+	MarkDancersAndWorshippers(imported);
 	return imported;
 }
 
@@ -1263,3 +1569,12 @@ magic::piles::Rise PileRiseOf(std::span<const uint8_t, k_PileRiseBytes> bytes)
 }
 
 } // namespace openblack::ecs::vanilla_world_import
+
+std::vector<entt::entity> openblack::ecs::vanilla_world_import::LandThingsToRemove(std::span<const entt::entity> land,
+                                                                                   std::span<const entt::entity> taken)
+{
+	std::vector<entt::entity> removed;
+	std::ranges::copy_if(land, std::back_inserter(removed),
+	                     [taken](entt::entity thing) { return std::ranges::find(taken, thing) == taken.end(); });
+	return removed;
+}

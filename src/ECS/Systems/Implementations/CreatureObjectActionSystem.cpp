@@ -1980,6 +1980,8 @@ bool CreatureObjectActionSystem::Start(entt::entity creature, CreatureObjectActi
 			if (action.kind == Kind::Eat && held != nullptr)
 			{
 				action.mealEnergy = TakeInFood(creature, FoodValueOf(held->object));
+				// The scripts can read how many times the creature started to eat
+				registry.Get<Creature>(creature).timesEaten += 1.0f;
 			}
 		}
 	}

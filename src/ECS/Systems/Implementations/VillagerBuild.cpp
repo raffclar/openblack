@@ -50,6 +50,7 @@
 #include "ECS/TempleConstruction.h"
 #include "ECS/TownPlanning.h"
 #include "ECS/VillagerCarry.h"
+#include "ECS/VillagerWorkRules.h"
 #include "ECS/WallHugRules.h"
 #include "ECS/WorldObjects.h"
 #include "InfoConstants.h"
@@ -362,6 +363,14 @@ uint32_t SetupGetBuildingSupplies(LivingAction& action, entt::entity building)
 	if (!ShouldIGetWood(villager, building))
 	{
 		return ToBuildingSite(action, building);
+	}
+	// A script can tell the builder to walk away from the site and wait for wood. A way to get wood that the villager
+	// finds after this walk takes its place.
+	if (Entities().Context().scriptBuildersWaitForWood)
+	{
+		const float random = Locator::gameRandom::value().GameFloatRand(2.0f);
+		const auto goal = villager_work::WaitForWoodPosition(PositionOf(villager), PositionOf(building), random);
+		villager_home::SetupMoveTo(action, goal, VillagerStates::WaitForWood);
 	}
 	const auto plan = villager_forester::DecideHowToGetWood(villager, true);
 	switch (plan.source)
@@ -740,6 +749,16 @@ uint32_t villager_build::Building(LivingAction& action)
 	}
 	VillagerOf(action).buildingSite = entt::null;
 	SetTopState(action, VillagerStates::DecideWhatToDo);
+	return 1;
+}
+
+uint32_t villager_build::WaitForWood(LivingAction& action)
+{
+	// Once its clip has played and it holds wood, it goes back to its building
+	if (Locator::livingActionSystem::value().VillagerIsReadyForNewAnimation(action, 1) && VillagerOf(action).woodHeld != 0)
+	{
+		Locator::livingActionSystem::value().VillagerChangeTopState(action, VillagerStates::ReenterBuildingState);
+	}
 	return 1;
 }
 

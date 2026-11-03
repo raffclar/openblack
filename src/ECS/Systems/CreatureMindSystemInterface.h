@@ -333,6 +333,13 @@ public:
 	virtual void LearnAction(entt::entity /*creature*/, CreatureActionLearningType /*type*/, uint32_t /*action*/) {}
 	/// A script makes the creature know every skill and every miracle, with no lesson shown
 	virtual void LearnEverything(entt::entity /*creature*/) {}
+	/// A script makes the creature know every skill and every miracle, with no lesson shown, but it omits one of the
+	/// two kinds: 0 omits the skills and 1 omits the miracles. Any other value omits nothing.
+	virtual void LearnEverythingExcluding(entt::entity /*creature*/, uint32_t /*excluded*/) {}
+	/// A script replaces the tree of a desire that tells which things to act on: the tree tests one attribute, and only
+	/// the value given is good (see creature_tree::DistinctionTree). The next example that the tree learns grows it
+	/// again from its examples.
+	virtual void LearnDistinction(entt::entity /*creature*/, uint32_t /*desire*/, uint32_t /*attribute*/, uint32_t /*value*/) {}
 	/// Whether the creature knows an ordinary skill or a miracle (by its row in the game's tables). A creature with no
 	/// learning yet knows nothing.
 	[[nodiscard]] virtual bool KnowsAction(entt::entity /*creature*/, CreatureActionLearningType /*type*/,

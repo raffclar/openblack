@@ -344,6 +344,16 @@ void TempleDestructionSystem::Start(entt::entity temple)
 	_world->RemoveWorshipSites(temple);
 }
 
+void TempleDestructionSystem::Remove(entt::entity temple)
+{
+	auto* registry = _world->Entities();
+	if (registry == nullptr || !registry->Valid(temple) || !registry->AllOf<Temple>(temple))
+	{
+		return;
+	}
+	RemoveTemple(temple);
+}
+
 void TempleDestructionSystem::EndTurn()
 {
 	auto* registry = _world->Entities();

@@ -1284,18 +1284,43 @@ void CreatureMindSystem::SetKnowsAction(entt::entity creature, CreatureActionLea
 
 void CreatureMindSystem::LearnEverything(entt::entity creature)
 {
+	// This value omits no kind
+	LearnEverythingExcluding(creature, 2);
+}
+
+void CreatureMindSystem::LearnEverythingExcluding(entt::entity creature, uint32_t excluded)
+{
 	auto* mind = Entities().TryGet<CreatureMindState>(creature);
 	if (mind == nullptr)
+	{
+		return;
+	}
+	const bool skills = excluded != 0;
+	const bool miracles = excluded != 1;
+	// Taught before its learning is ready, or before its mind file is read, it is taught once it has those
+	if (!mind->learnt.has_value() || mind->pendingFile != nullptr)
+	{
+		mind->pendingTeaching.push_back({.everything = true, .everySkill = skills, .everyMiracle = miracles});
+		return;
+	}
+	creature_watching::LearnEverything(mind->learnt->knowledge, skills, miracles);
+}
+
+void CreatureMindSystem::LearnDistinction(entt::entity creature, uint32_t desire, uint32_t attribute, uint32_t value)
+{
+	auto* mind = Entities().TryGet<CreatureMindState>(creature);
+	if (mind == nullptr || desire >= creature_desires::k_DesireCount || attribute >= creature_tree::k_AttributeCount)
 	{
 		return;
 	}
 	// Taught before its learning is ready, or before its mind file is read, it is taught once it has those
 	if (!mind->learnt.has_value() || mind->pendingFile != nullptr)
 	{
-		mind->pendingTeaching.push_back({.everything = true});
+		mind->pendingTeaching.push_back({.distinction = true, .desire = desire, .attribute = attribute, .value = value});
 		return;
 	}
-	creature_watching::LearnEverything(mind->learnt->knowledge);
+	mind->learnt->trees.at(static_cast<size_t>(creature_mind_model::TreeKind::Activity)).at(desire) =
+	    creature_tree::DistinctionTree(static_cast<creature_tree::Attribute>(attribute), value);
 }
 
 void CreatureMindSystem::LearnAction(entt::entity creature, CreatureActionLearningType type, uint32_t action)
