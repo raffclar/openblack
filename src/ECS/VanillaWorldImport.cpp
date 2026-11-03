@@ -20,6 +20,8 @@
 #include <unordered_map>
 
 #include "3D/MapCoords.h"
+#include "ECS/Components/Dance.h"
+#include "ECS/Components/SpellIcon.h"
 #include "ECS/VanillaSceneryImport.h"
 #include "ECS/VillagerWalkRules.h"
 #include "ECS/WallHugRules.h"
@@ -450,6 +452,17 @@ std::optional<PlayerNames> PlayerOfInterface(const VanillaWorld& world, uint32_t
 	return std::nullopt;
 }
 
+/// The player whose hand the interface status or the interface with the number is, nothing for none
+std::optional<PlayerNames> PlayerOfHand(const VanillaWorld& world, uint32_t number)
+{
+	const auto* record = number != 0 ? world.Record(number) : nullptr;
+	if (record != nullptr && record->Is(VanillaType::PlayerInterfaceStatus))
+	{
+		return PlayerOfInterface(world, world.Ref(*record, "interface").value_or(0));
+	}
+	return PlayerOfInterface(world, number);
+}
+
 /// A record of the file with the number and the type, or none
 const VanillaRecord* RecordOf(const VanillaWorld& world, uint32_t number, VanillaType type)
 {
@@ -508,6 +521,20 @@ std::optional<ImportedWorshipSite> ReadWorshipSite(const VanillaWorld& world, co
 	site.towns.assign(towns.begin(), towns.end());
 	const auto icons = world.Refs(record, "siteIcons");
 	site.icons.assign(icons.begin(), icons.end());
+	for (const auto number : site.icons)
+	{
+		if (const auto* icon = number != 0 ? world.Record(number) : nullptr; icon != nullptr)
+		{
+			if (auto values = ReadWorshipIcon(world, *icon); values.has_value())
+			{
+				site.iconValues.push_back(std::move(*values));
+			}
+		}
+	}
+	if (const auto* dance = site.dance != 0 ? world.Record(site.dance) : nullptr; dance != nullptr)
+	{
+		site.danceValues = ReadDance(world, *dance);
+	}
 	const auto worshippers = world.Refs(record, "siteWorshippers");
 	site.worshippers.assign(worshippers.begin(), worshippers.end());
 	// The pot is a pot of any kind that keeps an amount
@@ -733,6 +760,100 @@ std::optional<VillagerInfo> VillagerRowOf(uint32_t number)
 		return std::nullopt;
 	}
 	return static_cast<VillagerInfo>(k_FirstVillagerRowNumber - number);
+}
+
+std::optional<SpellSeedType> SpellSeedRowOf(uint32_t number)
+{
+	const auto count = static_cast<uint32_t>(SpellSeedType::BeamExplosion) + 1;
+	if (number > k_FirstSpellSeedRowNumber || number <= k_FirstSpellSeedRowNumber - count)
+	{
+		return std::nullopt;
+	}
+	return static_cast<SpellSeedType>(k_FirstSpellSeedRowNumber - number);
+}
+
+std::optional<ImportedDance> ReadDance(const VanillaWorld& world, const VanillaRecord& record)
+{
+	const auto row = world.Word(record, "danceRow");
+	if (!record.Is(VanillaType::Dance) || !row.has_value() || *row > static_cast<uint32_t>(DanceInfo::CitadelDance_6))
+	{
+		return std::nullopt;
+	}
+	ImportedDance dance {
+	    .number = record.number,
+	    .type = static_cast<DanceInfo>(*row),
+	    .clock = world.Float(record, "danceClock").value_or(0.0f),
+	    .loopLength = world.Word(record, "danceLoopLength").value_or(1),
+	    .speed = world.Float(record, "danceSpeed").value_or(0.0f),
+	    .rate = world.Float(record, "danceRate").value_or(1.0f),
+	    .dancingRate = world.Float(record, "danceDancingRate").value_or(1.0f),
+	    .angle = world.Float(record, "danceAngle").value_or(0.0f),
+	    // The game reads only 0 as dancing
+	    .stopped = world.Word(record, "danceState").value_or(1) != 0,
+	    .duration = world.Word(record, "danceDuration").value_or(0),
+	    .startTurn = world.Word(record, "danceStartTurn").value_or(0),
+	    .dancers = world.Word(record, "danceDancers").value_or(0),
+	    .onTheirWay = world.Word(record, "danceOnTheirWay").value_or(0),
+	    .handTurns = world.Word(record, "danceHandTurns").value_or(0),
+	    .cameraWanted = world.Word(record, "danceCameraWanted").value_or(0) != 0,
+	    .cameraMade = world.Word(record, "danceCameraMade").value_or(0) != 0,
+	};
+	if (world.Word(record, "danceFirstDancerCame").value_or(0) != 0)
+	{
+		dance.firstDancerTurn = world.Word(record, "danceFirstDancerTurn").value_or(0);
+	}
+	return dance;
+}
+
+std::optional<ImportedWorshipIcon> ReadWorshipIcon(const VanillaWorld& world, const VanillaRecord& record)
+{
+	const auto seed = SpellSeedRowOf(world.Word(record, "iconSeed").value_or(0));
+	if (!record.Is(VanillaType::WorshipSpellIcon) || !seed.has_value())
+	{
+		return std::nullopt;
+	}
+	ImportedWorshipIcon icon {
+	    .number = record.number,
+	    .seed = *seed,
+	    .slot = static_cast<int16_t>(world.Half(record, "iconSlot").value_or(0)),
+	    .charging = world.Byte(record, "iconCharging").value_or(0) != 0,
+	    .powerUp = std::bit_cast<int32_t>(world.Word(record, "iconPowerUp").value_or(0xFFFFFFFFU)),
+	    .charger = PlayerOfHand(world, world.Ref(record, "iconCharger").value_or(0)),
+	    .chargeStartTurn = world.Word(record, "iconChargeStart").value_or(0),
+	    .store = world.Float(record, "iconStore").value_or(0.0f),
+	    .removeTurns = world.Half(record, "iconRemoveTurns").value_or(0),
+	};
+	const auto seeds = world.Refs(record, "iconSeedsOut");
+	icon.seedsOut.assign(seeds.begin(), seeds.end());
+	return icon;
+}
+
+void PutDanceValues(components::Dance& dance, const ImportedDance& file)
+{
+	dance.clock = file.clock;
+	dance.loopLength = file.loopLength;
+	dance.speed = file.speed;
+	dance.rate = file.rate;
+	dance.dancingRate = file.dancingRate;
+	dance.angle = file.angle;
+	dance.state = file.stopped ? components::Dance::State::Stopped : components::Dance::State::Dancing;
+	dance.duration = file.duration;
+	dance.startTurn = file.startTurn;
+	dance.firstDancerTurn = file.firstDancerTurn;
+	auto& hand = dance.hands.front();
+	hand.nearTurns = file.handTurns;
+	hand.cameraWanted = file.cameraWanted;
+	hand.cameraMade = file.cameraMade;
+	hand.cameraAsked = false;
+}
+
+void PutIconValues(components::WorshipIcon& icon, const ImportedWorshipIcon& file)
+{
+	icon.charging = file.charging;
+	icon.powerUp = file.powerUp;
+	icon.charger = file.charger.value_or(PlayerNames::NEUTRAL);
+	icon.chargeStartTurn = file.chargeStartTurn;
+	icon.store = file.store;
 }
 
 bool IsImportedBuilding(AbodeInfo row)
