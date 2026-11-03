@@ -1769,6 +1769,49 @@ void AddBreederOffers(std::vector<Scenario>& all)
 	                 {.kind = Kind::PointerRelease, .delaySeconds = 0.1f, .value = 3}},
 	});
 
+	// The first land's breeder on the first land itself, played to the swap: the land's own launcher of the breeder,
+	// the kennels' scroll, the Leopard's scroll with the Tiger near, then the Leopard itself. The places are the
+	// script's, from the middle of the first land's extent.
+	constexpr glm::vec2 k_LandOneMiddle {2240.0f, 2640.0f};
+	const auto onLandOne = [k_LandOneMiddle](float x, float z) { return glm::vec2(x, z) - k_LandOneMiddle; };
+	const auto landOneKennels = onLandOne(1899.27f, 3411.21f);
+	const auto landOneShowPlace = onLandOne(1892.885f, 3403.713f);
+	all.push_back({
+	    .id = "story.lone_breeder_swap",
+	    .name = "Story: a swap at the creature breeder of the first land",
+	    .facet = Facet::Story,
+	    .description = "The first land loads with its own scripts. The Leopard and the Horse are taken as unlocked. The "
+	                   "land's own launcher of the breeder runs. Eleven seconds in, the kennels' scroll is clicked. Ten "
+	                   "seconds later the Tiger walks to a point 20 metres south of the Leopard. Eight seconds later the "
+	                   "Leopard's scroll is clicked, and eight seconds after that the Leopard itself.",
+	    .expected = "At the click on the Leopard's scroll the Tiger walks up to the Leopard and the good advisor asks to "
+	                "confirm. At the click on the Leopard a cinema starts. Both creatures walk up the hill to two spots "
+	                "about 100 metres north of the kennels and about 20 metres higher. When the Leopard is within 10 "
+	                "metres of its spot, or after 20 seconds, they face each other, sparkles show and they change bodies "
+	                "with the swap sound, which takes about ten seconds. The Tiger then walks back to where the Leopard "
+	                "stood, and the Leopard stays as the player's creature, on the ground.",
+	    .environment =
+	        {.land = Land::Story, .storyLand = "Land1.txt", .dispenserGrid = false, .unlockedBonusCreatures = leopardAndHorse},
+	    .framing = {.shot = Shot::Placed,
+	                .eye = {landOneKennels.x - 20.0f, 30.0f, landOneKennels.y - 22.0f},
+	                .look = {landOneKennels.x, 10.0f, landOneKennels.y}},
+	    .creatures = {{.label = "player's tiger",
+	                   .species = CreatureType::Tiger,
+	                   .offset = landOneShowPlace + glm::vec2 {10.0f, -12.0f},
+	                   .phase = 3,
+	                   .needs = {.energy = 1.0f, .exhaustion = 0.0f, .dehydration = 0.0f, .poo = 0.0f, .life = 1.0f}}},
+	    .commands =
+	        {{.kind = Kind::RunScript,
+	          .delaySeconds = 0.5f,
+	          .script = "RunCreatureBreederLand",
+	          .scriptArguments = {{.kind = Argument::Kind::Number, .number = 1.0f}},
+	          .scriptGlobals = runBreeder.scriptGlobals},
+	         {.kind = Kind::ClickScroll, .delaySeconds = 11.0f, .point = landOneKennels},
+	         {.kind = Kind::WalkTo, .creature = 0, .delaySeconds = 10.0f, .point = landOneShowPlace + glm::vec2 {0.0f, -20.0f}},
+	         {.kind = Kind::ClickScroll, .delaySeconds = 8.0f, .point = landOneShowPlace},
+	         {.kind = Kind::ClickCreatureAt, .delaySeconds = 8.0f, .point = landOneShowPlace}},
+	});
+
 	// The end of a cinema, as the films of the creature trainer end: the script sends the camera up and away, and gives
 	// the camera back before it arrives
 	const auto move = [](std::string_view native, glm::vec2 point, float height, float seconds, float delay) {
@@ -15075,13 +15118,14 @@ bool testbed_scenarios::NeedsNoCreature(Command::Kind kind)
 	       kind == Kind::RunHelpMessage || kind == Kind::EndGuidanceWaits || kind == Kind::SetTownBeliefInRival ||
 	       kind == Kind::GiveLandTown || kind == Kind::RecordChallenge || kind == Kind::EnterTemple || kind == Kind::HandTake ||
 	       kind == Kind::HandApply || kind == Kind::HandTakeShownSeed || kind == Kind::RunScript || kind == Kind::ClickScroll ||
-	       kind == Kind::CameraLooksAt || kind == Kind::PlayBoatFilm || kind == Kind::HandPour || kind == Kind::HandRelease ||
-	       kind == Kind::SetReportLatency || kind == Kind::RemoveObject || kind == Kind::ReadTip ||
-	       kind == Kind::LookAtTempleScroll || kind == Kind::HandGripTotem || kind == Kind::ProfileFolderCheck ||
-	       kind == Kind::PlayCustomMusic || kind == Kind::ShowCustomMusicControls || kind == Kind::OwnTattooPicture ||
-	       kind == Kind::OpenTattooMenu || kind == Kind::OpenControlsBox || kind == Kind::OpenMenuPage ||
-	       kind == Kind::PressMenuKey || kind == Kind::StopScript || kind == Kind::StartScriptMusic || kind == Kind::SaveGame ||
-	       kind == Kind::LoadGame || kind == Kind::QuickSave || kind == Kind::ContinueGame || kind == Kind::PlayLogoEffect ||
+	       kind == Kind::ClickCreatureAt || kind == Kind::CameraLooksAt || kind == Kind::PlayBoatFilm ||
+	       kind == Kind::HandPour || kind == Kind::HandRelease || kind == Kind::SetReportLatency ||
+	       kind == Kind::RemoveObject || kind == Kind::ReadTip || kind == Kind::LookAtTempleScroll ||
+	       kind == Kind::HandGripTotem || kind == Kind::ProfileFolderCheck || kind == Kind::PlayCustomMusic ||
+	       kind == Kind::ShowCustomMusicControls || kind == Kind::OwnTattooPicture || kind == Kind::OpenTattooMenu ||
+	       kind == Kind::OpenControlsBox || kind == Kind::OpenMenuPage || kind == Kind::PressMenuKey ||
+	       kind == Kind::StopScript || kind == Kind::StartScriptMusic || kind == Kind::SaveGame || kind == Kind::LoadGame ||
+	       kind == Kind::QuickSave || kind == Kind::ContinueGame || kind == Kind::PlayLogoEffect ||
 	       kind == Kind::PlayFallingSpellFilm || kind == Kind::PlayIntroFilm || kind == Kind::SayLine ||
 	       kind == Kind::PlayGuidanceVoice || kind == Kind::ScriptRelease || kind == Kind::FillSiteIcons ||
 	       kind == Kind::ChargeIconWithSeedHeld || kind == Kind::TakeIconSeed || kind == Kind::TapSiteIcon ||
@@ -15124,7 +15168,7 @@ std::string_view testbed_scenarios::Name(Shot shot)
 
 std::string_view testbed_scenarios::Name(Command::Kind kind)
 {
-	constexpr std::array<std::string_view, 219> k_Names {
+	constexpr std::array<std::string_view, 220> k_Names {
 	    "walk to",
 	    "run to",
 	    "follow",
@@ -15344,6 +15388,7 @@ std::string_view testbed_scenarios::Name(Command::Kind kind)
 	    "put the camera to look at a point",
 	    "join the football of the town",
 	    "a script builds the worship sites",
+	    "click a creature",
 	};
 	return k_Names.at(static_cast<size_t>(kind));
 }

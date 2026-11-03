@@ -3324,6 +3324,34 @@ std::string Runner::ClickScroll(const Command& command)
 	return fmt::format("clicked the scroll {} m from the point", best);
 }
 
+std::string Runner::ClickCreatureAt(const Command& command)
+{
+	if (!Locator::handGrabSystem::has_value())
+	{
+		return "no hand";
+	}
+	// The creature nearest the point, as the player clicks the one under the pointer
+	const auto at = MapPoint(_middle, command.point);
+	auto& registry = Locator::entitiesRegistry::value();
+	auto nearest = entt::entity {entt::null};
+	float best = std::numeric_limits<float>::max();
+	registry.Each<const ecs::components::Creature, const ecs::components::Transform>(
+	    [&](entt::entity entity, const ecs::components::Creature&, const ecs::components::Transform& transform) {
+		    const auto distance = glm::distance(glm::vec2(transform.position.x, transform.position.z), at);
+		    if (distance < best)
+		    {
+			    best = distance;
+			    nearest = entity;
+		    }
+	    });
+	if (nearest == entt::null)
+	{
+		return "no creature";
+	}
+	Locator::handGrabSystem::value().ClickThing(nearest);
+	return fmt::format("clicked the creature {} m from the point", best);
+}
+
 std::string Runner::RunScript(const Command& command)
 {
 	if (!Locator::vm::has_value() || !Locator::scriptObjects::has_value())
@@ -3843,6 +3871,11 @@ void Runner::Give(const Command& command)
 	if (command.kind == Kind::ClickScroll)
 	{
 		Log(fmt::format("{:.1f}s: {}: {}", _seconds, Name(command.kind), ClickScroll(command)));
+		return;
+	}
+	if (command.kind == Kind::ClickCreatureAt)
+	{
+		Log(fmt::format("{:.1f}s: {}: {}", _seconds, Name(command.kind), ClickCreatureAt(command)));
 		return;
 	}
 	if (command.kind == Kind::RunScript)
@@ -4819,6 +4852,7 @@ void Runner::Give(const Command& command)
 	case Kind::PlayLogoEffect:
 	case Kind::StopScript:
 	case Kind::ClickScroll:
+	case Kind::ClickCreatureAt:
 	case Kind::CameraLooksAt:
 	case Kind::RunScript:
 	case Kind::CallNative:

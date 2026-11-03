@@ -1191,6 +1191,9 @@ struct Command
 		/// A script sets each worship site of the player as built (amount, the built share), as SET_PROPERTY does. The
 		/// altars of the sites stay as they are. Needs no creature.
 		ScriptBuildsWorshipSites,
+		/// The player clicks the creature nearest a point (point, from the middle of the map), as the Action button
+		/// pressed and let go on the creature does. A script that waits for a click on it goes on. Needs no creature
+		ClickCreatureAt,
 	};
 	Kind kind {Kind::Stop};
 	/// Which creature, by its place in the scenario's creatures
