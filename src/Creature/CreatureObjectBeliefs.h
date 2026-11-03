@@ -15,6 +15,7 @@
 #include <algorithm>
 #include <array>
 #include <map>
+#include <numeric>
 #include <optional>
 #include <span>
 #include <tuple>
@@ -43,6 +44,8 @@ inline constexpr uint32_t k_KindCount = 24;
 /// and so on, one of the kind that stands for what it is doing, forty flocks
 inline constexpr std::array<uint32_t, k_KindCount> k_Capacity {40,  50,  20,  100, 50,  100, 100, 100, 100, 30,  100, 40,
                                                                100, 100, 100, 100, 100, 100, 100, 100, 1,   100, 40,  20};
+/// How many beliefs a creature keeps at most, of all the kinds together
+inline constexpr size_t k_MostBeliefs = std::accumulate(k_Capacity.begin(), k_Capacity.end(), size_t {0});
 
 /// A creature keeps its beliefs in two lists. The first list holds the whole things that a desire can be about:
 /// towns, forests, temples, creatures and flocks. The second list holds all other things.

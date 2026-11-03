@@ -115,6 +115,9 @@ private:
 /// items, and it gets to a number of times its size at the start of the window
 struct GrowthRule
 {
+	/// The number of first records of each list that the tracker does not use. The first record of a run shows the
+	/// world before the first turn, thus before the scripts start.
+	size_t warmUp {1};
 	size_t window {50};
 	size_t leastSize {32};
 	float factor {2.0f};
@@ -126,8 +129,10 @@ class GrowthTracker
 public:
 	explicit GrowthTracker(GrowthRule rule = {});
 
-	/// A flag once when the list starts to grow without a bound; a list that gets smaller can flag again later
-	std::optional<Flag> Observe(std::string_view what, size_t size, uint32_t turn);
+	/// A flag once when the list starts to grow without a bound; a list that gets smaller can flag again later.
+	/// A list can have a limit: the maximum number of items that it can hold. A list in its limit cannot grow without a
+	/// bound, thus it does not flag. A list above its limit can flag.
+	std::optional<Flag> Observe(std::string_view what, size_t size, uint32_t turn, std::optional<size_t> limit = std::nullopt);
 
 	[[nodiscard]] size_t SeriesCount() const { return _series.size(); }
 
@@ -135,6 +140,7 @@ private:
 	struct Series
 	{
 		std::deque<size_t> sizes;
+		size_t skipped {0};
 		bool flagged {false};
 	};
 	GrowthRule _rule;
