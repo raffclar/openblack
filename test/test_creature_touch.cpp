@@ -440,7 +440,7 @@ TEST(CreatureReleaseFeedback, ACreatureIsStillOnlyWithItsHeadStraightNoFaceAndNo
 	EXPECT_FALSE(IsStill(ReleaseBody {.headStraight = true, .bodyBusy = true, .lyingDead = true, .faceShown = true}));
 }
 
-TEST(CreatureReleaseFeedback, TheFeedbackWaitsOneTurnAfterTheCreatureIsFree)
+TEST(CreatureReleaseFeedback, TheFeedbackOfAReleaseWaitsOneTurn)
 {
 	EXPECT_EQ(creature_feedback::k_ReleaseFeedbackTurns, 1u);
 }
