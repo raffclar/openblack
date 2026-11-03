@@ -182,6 +182,10 @@ public:
 	[[nodiscard]] float GetModelSeconds() const { return _modelSeconds; }
 	/// Sets the count, for a model that gives control to a different model for a time and then continues its count
 	void SetModelSeconds(float seconds) { _modelSeconds = seconds; }
+	/// The point that a script gives the player's camera to turn about and look at. The camera keeps the point when
+	/// another model has control for a time. None when the camera has no point.
+	[[nodiscard]] std::optional<glm::vec3> GetForcedTurnPoint() const { return _forcedTurnPoint; }
+	void SetForcedTurnPoint(std::optional<glm::vec3> point) { _forcedTurnPoint = point; }
 
 	/// Where the camera is and how it is moving there, whole: a tool showing the camera elsewhere for a frame puts this
 	/// back before the camera next moves, so that its movement carries on as if it hadn't
@@ -230,6 +234,8 @@ protected:
 	void CountModelTime(std::chrono::microseconds dt);
 	/// The camera keeps its eye and its view after a step of the input
 	void KeepStepView();
+	/// After a step of the fight view that follows the fighters, the camera has no point to turn about
+	void ForgetForcedTurnPoint();
 	static void Deproject(glm::vec2 screenCoord, const glm::mat4& viewProjection, glm::vec3& outWorldOrigin,
 	                      glm::vec3& outWorldDirection);
 	/// The eye and the focus set off from where they are, at their speed, for the place that the model tells
@@ -262,6 +268,7 @@ protected:
 	glm::mat4 _projectionMatrixReversedZ = glm::mat4 {1.0f};
 	std::unique_ptr<CameraModel> _model;
 	float _modelSeconds = 0.0f;
+	std::optional<glm::vec3> _forcedTurnPoint;
 	Projection _cameraProjection = Projection::ReversedZ;
 	glm::vec3 _shakeEye {0.0f};
 	glm::vec3 _shakeFocus {0.0f};

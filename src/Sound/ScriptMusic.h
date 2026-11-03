@@ -63,6 +63,8 @@ struct MusicTiming
 	std::vector<uint32_t> chunkFrames;
 	uint32_t sampleRate {0};
 	std::optional<int32_t> loopOverride;
+	/// How far the music carries: the far distance of the first chunk's header, -1 when the bank has no chunks
+	float maxDistance {-1.0f};
 
 	/// The frames of sound in one pass through all the chunks
 	[[nodiscard]] uint64_t PieceFrames() const;
@@ -105,6 +107,10 @@ void ApplyMusicCue(MusicLyrics& lyrics, std::string_view cue);
 {
 	return soundDevice || networkGame || dedicatedServer;
 }
+
+/// How far the music of a bank carries, as the scripts read it: the far distance of the bank, or 100 when the world has
+/// no bank for the type, or when the bank gives a distance below 0
+[[nodiscard]] float MusicPlayDistance(const MusicTiming* bank);
 
 /// The music that the scripts start, as the world sees it: which piece the scripts want, the line and word that the
 /// piece has reached, and whether it is over.

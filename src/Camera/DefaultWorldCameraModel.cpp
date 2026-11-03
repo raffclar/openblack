@@ -45,6 +45,7 @@
 #include "ECS/Systems/TurnCheerSystemInterface.h"
 #include "EngineConfig.h"
 #include "FightView.h"
+#include "ForcedTurnPoint.h"
 #include "Help/HelpProfile.h"
 #include "Input/GameActionMapInterface.h"
 #include "Locator.h"
@@ -659,6 +660,14 @@ std::optional<CameraModel::CameraInterpolationUpdateInfo> DefaultWorldCameraMode
 	_flewThisFrame = false;
 
 	UpdateCameraInterpolationValues(camera);
+	// A script gave the camera a point: this step looks at the point and turns about it. The push scroll below moves
+	// the point with the camera, so the step measures its heading and pitch as before the push.
+	const auto forcedTurnPoint = camera.GetForcedTurnPoint();
+	if (forcedTurnPoint.has_value())
+	{
+		_targetFocus = *forcedTurnPoint;
+		_focusAtClick = *forcedTurnPoint;
+	}
 	const auto originAtFrameStart = _targetOrigin;
 	const auto focusAtFrameStart = _targetFocus;
 	// Push scrolling moves the camera over the land after the start of the frame is kept, so that a camera that keeps
@@ -744,6 +753,15 @@ std::optional<CameraModel::CameraInterpolationUpdateInfo> DefaultWorldCameraMode
 	UpdateClearView(originAtFrameStart, focusAtFrameStart);
 
 	const auto moved = ApplyLimits(originAtFrameStart, camera.GetOrigin(), dt, zoomDelta, camera);
+	// At the end of the step the camera looks at the point again. It keeps its distance from the point and looks back
+	// along the heading and the pitch of this step. The limits of the step come before this and do not move it again.
+	if (forcedTurnPoint.has_value())
+	{
+		const auto view = forced_turn::AboutPoint(*forcedTurnPoint, _targetOrigin, eulerAngles.x, eulerAngles.y);
+		_targetOrigin = view.origin;
+		_targetFocus = view.focus;
+		_focusAtClick = view.focus;
+	}
 
 	// The self-tilting camera eases over a second while it keeps to its place, or is tilted, unless a flight's first frame
 	// was pushed

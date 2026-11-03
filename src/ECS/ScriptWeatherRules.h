@@ -144,4 +144,10 @@ enum class ThingAfterTurn : uint8_t
 /// than the sum of the two radii.
 [[nodiscard]] bool InKillArea(glm::vec3 stormPlace, float stormOuterRadius, glm::vec3 centre, float radius);
 
+/// A script asks if a storm with no clouds of its own is near a point. The question uses the place of the storm after
+/// the wind moved it, and the full outer radius of the storm. The answer is true when the distance across the land from
+/// the point to the storm is less than the sum of the two radii.
+[[nodiscard]] bool WindMagicNear(glm::vec3 stormPlace, float stormOuterRadius, int32_t cloudCount, glm::vec3 point,
+                                 float radius);
+
 } // namespace openblack::ecs::script_weather

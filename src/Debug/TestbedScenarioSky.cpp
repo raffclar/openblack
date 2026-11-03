@@ -150,4 +150,21 @@ void testbed_scenarios::AddSkyScenarios(std::vector<Scenario>& all)
 	    .temples = {{.offset = {-300.0f, 100.0f}, .angle = 36.0f}},
 	    .commands = {{.kind = Command::Kind::EnterTemple, .delaySeconds = 10.0f, .value = 3}},
 	});
+
+	all.push_back({
+	    .id = "sky.script_hides_sun",
+	    .name = "A script hides the sun",
+	    .facet = Facet::Sky,
+	    .description = "The clock stands at noon under a clear sky, the camera low on the land looking at the sun in the north "
+	                   "west. After five seconds a script calls SET_SUN_DRAW with 1.",
+	    .expected = "For five seconds the sun and its orange glare show in the north west. Then both go at once, and the "
+	                "sky shows no sun and no glare. The value 1 hides the sun, opposite to the name of the native.",
+	    .environment = {.hour = 12.0f, .clockRuns = false, .dispenserGrid = false},
+	    .framing = {.shot = Shot::Placed, .eye = {0.0f, 40.0f, 0.0f}, .look = {-100.0f, 65.0f, -100.0f}},
+	    .objects = TreesToTheEast(),
+	    .commands = {{.kind = Command::Kind::CallNative,
+	                  .delaySeconds = 5.0f,
+	                  .script = "SET_SUN_DRAW",
+	                  .scriptArguments = {{.kind = ScriptArgument::Kind::Integer, .number = 1.0f}}}},
+	});
 }

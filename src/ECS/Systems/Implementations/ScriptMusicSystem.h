@@ -32,6 +32,7 @@ public:
 	void RegisterTimings() override;
 	[[nodiscard]] const audio::ScriptMusic& GetMusic() const override { return _music; }
 	[[nodiscard]] bool HasMusic() const override;
+	[[nodiscard]] float PlayDistance(audio::MusicType type) const override;
 
 	/// A save keeps the piece that the scripts want, whether it played, and the line and word that it reached
 	void SaveState(reflection::BinaryWriter& out) const override;

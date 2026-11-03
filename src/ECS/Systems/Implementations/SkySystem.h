@@ -26,6 +26,11 @@ public:
 	[[nodiscard]] entt::entity GetDome() const override;
 	[[nodiscard]] entt::entity GetSun() const override;
 	[[nodiscard]] entt::entity GetMoon() const override;
+	void SetSunHidden(bool hidden) override { _sunHidden = hidden; }
+	[[nodiscard]] bool IsSunHidden() const override { return _sunHidden; }
+
+private:
+	bool _sunHidden {false};
 };
 
 } // namespace openblack::ecs::systems
