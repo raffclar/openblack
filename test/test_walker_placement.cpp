@@ -14,12 +14,14 @@
 #include <glm/vec3.hpp>
 #include <gtest/gtest.h>
 
+#include "ECS/Components/Animal.h"
 #include "ECS/Components/Transform.h"
 #include "ECS/Components/VillagerPose.h"
 #include "ECS/Components/WallHug.h"
 #include "ECS/Registry.h"
 #include "ECS/WalkerPlacement.h"
 #include "ECS/WallHugRules.h"
+#include "ScriptHeaders/ScriptPropertyRules.h"
 
 using namespace openblack;
 using namespace openblack::ecs::components;
@@ -164,4 +166,22 @@ TEST(WalkerPlacement, AVillagerPutSomewhereIsDrawnThereAtOnce)
 	registry.Assign<VillagerPose>(walker).turnStart = k_Old;
 	ecs::walker_placement::Place(registry, walker, k_New);
 	EXPECT_EQ(registry.Get<const VillagerPose>(walker).turnStart, k_New);
+}
+
+// An animal that a script puts somewhere is there at the start and at the end of its turn: it is drawn there at once, and
+// a script that asks whether it moved gets no
+TEST(WalkerPlacement, AnAnimalPutSomewhereHasNotMoved)
+{
+	ecs::Registry registry;
+	const auto cow = registry.Create();
+	registry.Assign<Transform>(cow, k_Old, glm::mat3(1.0f), glm::vec3(1.0f));
+	auto& animal = registry.Assign<Animal>(cow);
+	animal.previousPosition = k_Old;
+	animal.position = k_Old;
+	ecs::walker_placement::Place(registry, cow, k_New);
+	const auto& placed = registry.Get<const Animal>(cow);
+	EXPECT_EQ(placed.previousPosition, k_New);
+	EXPECT_EQ(placed.position, k_New);
+	EXPECT_EQ(registry.Get<const Transform>(cow).position, k_New);
+	EXPECT_FALSE(script::property_rules::MovedAcross(placed.previousPosition, placed.position));
 }
