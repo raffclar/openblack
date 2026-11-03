@@ -10,10 +10,13 @@
 #include <cstdint>
 #include <cstring>
 
+#include <filesystem>
 #include <memory>
 #include <mutex>
 #include <span>
+#include <string>
 #include <thread>
+#include <tuple>
 #include <utility>
 #include <vector>
 
@@ -25,6 +28,7 @@
 #include "Graphics/GraphicsDeviceInterface.h"
 #include "Locator.h"
 #include "Resources/Loaders.h"
+#include "Resources/Rereads.h"
 #include "Resources/ResourcesInterface.h"
 #include "Visual/UploadMode.h"
 
@@ -47,6 +51,8 @@ public:
 			VertexBuffer,
 			DynamicVertexBuffer,
 			IndexBuffer,
+			GivenVertices,
+			GivenIndices,
 		};
 		Kind kind;
 		std::vector<uint8_t> bytes;
@@ -105,6 +111,11 @@ public:
 	[[nodiscard]] VertexLayoutHandle CreateVertexLayout(const VertexDecl&) const override { return {1}; }
 	void Update(DynamicVertexBufferHandle, uint32_t, const DeviceMemory*) const override {}
 	void SetName(VertexBufferHandle, std::string_view) const override {}
+	void SetContentsGivenAgain(VertexBufferHandle) const override {}
+	void GiveContentsAgain(VertexBufferHandle, const DeviceMemory* vertices) const override
+	{
+		Keep(Made::Kind::GivenVertices, vertices);
+	}
 	void Destroy(VertexBufferHandle) const override {}
 	void Destroy(DynamicVertexBufferHandle) const override {}
 	void Destroy(VertexLayoutHandle) const override {}
@@ -119,8 +130,14 @@ public:
 		return {static_cast<uint32_t>(_made.size())};
 	}
 	void SetName(IndexBufferHandle, std::string_view) const override {}
+	void SetContentsGivenAgain(IndexBufferHandle) const override {}
+	void GiveContentsAgain(IndexBufferHandle, const DeviceMemory* indices) const override
+	{
+		Keep(Made::Kind::GivenIndices, indices);
+	}
 	void Destroy(IndexBufferHandle) const override {}
 	void Destroy(DynamicIndexBufferHandle) const override {}
+	[[nodiscard]] DeviceDataGivers& GetDataGivers() const override { return _givers; }
 
 	/// The calls that ask the device for memory, a format or an object
 	[[nodiscard]] size_t Calls() const
@@ -157,6 +174,7 @@ private:
 	mutable size_t _calls {0};
 	mutable std::vector<std::unique_ptr<std::vector<uint8_t>>> _memories;
 	mutable std::vector<Made> _made;
+	mutable DeviceDataGivers _givers;
 };
 
 /// Puts a fake device in the locator for the life of the test
@@ -372,4 +390,70 @@ TEST_F(MeshPrepare, TempleMeshesOfOneBlendShareOneSetOfDeviceObjects)
 	meshes.Erase(k_First);
 	ASSERT_NE(meshes.Find(k_Second), nullptr);
 	EXPECT_EQ(meshes.Find(k_Second)->GetSkinOrder().size(), 1U);
+}
+
+TEST_F(MeshPrepare, AMeshGivesTheBitsOfItsLoadAgainFromItsFile)
+{
+	const auto model = Model();
+	L3DMesh mesh("given again", false, UploadMode::Device);
+	ASSERT_TRUE(mesh.Load(model));
+	const auto fromLoad = Device().TakeMade();
+	ASSERT_EQ(fromLoad.size(), 3U);
+
+	// The skin, the vertices and the triangles again, with the bytes of the load
+	mesh.GiveDeviceDataAgain(model);
+	const auto given = Device().TakeMade();
+	ASSERT_EQ(given.size(), 3U);
+	EXPECT_EQ(given[0].kind, FakeDevice::Made::Kind::TextureUpdate);
+	EXPECT_EQ(given[1].kind, FakeDevice::Made::Kind::GivenVertices);
+	EXPECT_EQ(given[2].kind, FakeDevice::Made::Kind::GivenIndices);
+	for (size_t i = 0; i < given.size(); ++i)
+	{
+		EXPECT_EQ(given[i].bytes, fromLoad[i].bytes);
+	}
+}
+
+TEST_F(MeshPrepare, AMeshWithAFileSourceIsAGiverOfTheDeviceUntilItIsDeleted)
+{
+	auto mesh = std::make_unique<L3DMesh>("given again", false, UploadMode::Device);
+	ASSERT_TRUE(mesh->Load(Model()));
+	std::ignore = Device().TakeMade();
+	mesh->SetFileSource([](resources::Rereads& rereads) { return rereads.File("mesh.l3d"); });
+	auto& givers = Locator::graphicsDevice::value().GetDataGivers();
+	ASSERT_EQ(givers.Count(), 1U);
+
+	// The mesh reads its file through the rereads of the restore. A file that cannot be read gives nothing again.
+	resources::Rereads rereads([](const std::filesystem::path& path) {
+		EXPECT_EQ(path, std::filesystem::path("mesh.l3d"));
+		return std::vector<uint8_t> {};
+	});
+	givers.GiveAll(rereads);
+	EXPECT_EQ(rereads.ReadCount(), 1U);
+	EXPECT_TRUE(Device().TakeMade().empty());
+
+	mesh.reset();
+	EXPECT_EQ(givers.Count(), 0U);
+}
+
+TEST_F(MeshPrepare, ADynamicMeshGivesOnlyItsTrianglesAgain)
+{
+	const auto model = Model();
+	L3DMesh mesh("dynamic", true, UploadMode::Device);
+	ASSERT_TRUE(mesh.Load(model));
+	const auto fromLoad = Device().TakeMade();
+
+	// The skin and the vertices of a dynamic mesh change, thus the device keeps them
+	mesh.GiveDeviceDataAgain(model);
+	const auto given = Device().TakeMade();
+	ASSERT_EQ(given.size(), 1U);
+	EXPECT_EQ(given[0].kind, FakeDevice::Made::Kind::GivenIndices);
+	EXPECT_EQ(given[0].bytes, fromLoad.back().bytes);
+}
+
+TEST_F(MeshPrepare, AMeshOfDataOnlyIgnoresAFileSource)
+{
+	L3DMesh mesh("data only", false, UploadMode::DataOnly);
+	ASSERT_TRUE(mesh.Load(Model()));
+	mesh.SetFileSource([](resources::Rereads& rereads) { return rereads.File("mesh.l3d"); });
+	EXPECT_EQ(Locator::graphicsDevice::value().GetDataGivers().Count(), 0U);
 }
