@@ -2332,3 +2332,4 @@ openblack_setup_and_add_test(
   target_compile_options(test_reactions PRIVATE /bigobj)
 openblack_setup_and_add_test(test_football_rules test_football_rules.cpp)
 openblack_setup_and_add_test(test_puzzle_totem_rules test_puzzle_totem_rules.cpp)
+openblack_setup_and_add_test(test_totem_puzzle_rules test_totem_puzzle_rules.cpp)

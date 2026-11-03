@@ -119,7 +119,13 @@ void openblack::ecs::reflection::RegisterFields_Components_p(entt::meta_ctx& con
 	    .Field<&components::PuzzleTotem::puzzle>("puzzle")
 	    .Field<&components::PuzzleTotem::highest>("highest")
 	    .Field<&components::PuzzleTotem::height>("height")
-	    .Field<&components::PuzzleTotem::held>("held");
+	    .Field<&components::PuzzleTotem::held>("held")
+	    .Field<&components::PuzzleTotem::previousHeight>("previousHeight")
+	    .Field<&components::PuzzleTotem::slideSteps>("slideSteps")
+	    .Field<&components::PuzzleTotem::slides>("slides");
+	Reflect<components::PuzzleTotemDrawnSlide>(context)
+	    .Field<&components::PuzzleTotemDrawnSlide::slide>("slide")
+	    .Field<&components::PuzzleTotemDrawnSlide::frameSteps>("frameSteps");
 	Reflect<components::MazeState>(context)
 	    .Field<&components::MazeState::alongFences>("alongFences")
 	    .Field<&components::MazeState::acrossFences>("acrossFences")
@@ -157,5 +163,8 @@ void openblack::ecs::reflection::RegisterFields_Components_p(entt::meta_ctx& con
 	    .Field<&components::PuzzleGame::bats>("bats")
 	    .Field<&components::PuzzleGame::lanterns>("lanterns")
 	    .Field<&components::PuzzleGame::maze>("maze")
-	    .Field<&components::PuzzleGame::fish>("fish");
+	    .Field<&components::PuzzleGame::fish>("fish")
+	    .Field<&components::PuzzleGame::totems>("totems")
+	    .Field<&components::PuzzleGame::totemHeights>("totemHeights")
+	    .Field<&components::PuzzleGame::totemMarks>("totemMarks");
 }

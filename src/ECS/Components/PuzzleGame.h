@@ -70,6 +70,21 @@ struct PuzzleTotem
 	int32_t height {0};
 	/// A hand holds it, as the turn last saw it
 	bool held {false};
+	/// A totem that its puzzle changed slides from its last height to its height. The turns count the steps left, and
+	/// each new slide adds one to the count of slides. A saved game keeps none of these values.
+	int32_t previousHeight {0};
+	int32_t slideSteps {0};
+	uint32_t slides {0};
+};
+
+/// How the frames show the slide of a puzzle totem. Each frame that draws the totem takes one step of the slide, and the
+/// turns take their steps too. It is not a part of the synced world.
+struct PuzzleTotemDrawnSlide
+{
+	/// The slide that the frames show, from the count of slides of the totem
+	uint32_t slide {0};
+	/// The steps that the frames took in this slide
+	int32_t frameSteps {0};
 };
 
 /// The state of a maze puzzle: a Theseus maze or the lion maze
@@ -141,6 +156,11 @@ struct PuzzleGame
 	MazeState maze {};
 	/// The ring of floats and the two shoals of the fish puzzle, made in its first turn
 	std::optional<fish_puzzle::FishNet> fish;
+	/// The six totems of a totem puzzle, the height that the puzzle keeps for each totem, and the spot visual over each
+	/// totem that stands fully up (0 for none)
+	std::array<entt::entity, 6> totems {NoThings<6>()};
+	std::array<int32_t, 6> totemHeights {};
+	std::array<uint32_t, 6> totemMarks {};
 };
 
 } // namespace openblack::ecs::components

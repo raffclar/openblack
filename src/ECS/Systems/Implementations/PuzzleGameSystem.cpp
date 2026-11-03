@@ -51,9 +51,11 @@
 #include "ECS/Systems/EffectRequestSystemInterface.h"
 #include "ECS/Systems/FireSystemInterface.h"
 #include "ECS/Systems/HelpSpeechSystemInterface.h"
+#include "ECS/Systems/PuzzleTotemSystemInterface.h"
 #include "ECS/Systems/TimeSystemInterface.h"
 #include "ECS/Systems/WaterRingSystemInterface.h"
 #include "ECS/ThingMapPlace.h"
+#include "ECS/TotemPuzzleRules.h"
 #include "ECS/TreePuzzleRules.h"
 #include "ECS/WorldObjects.h"
 #include "FileSystem/FileSystemInterface.h"
@@ -72,6 +74,7 @@ namespace world_objects = openblack::ecs::world_objects;
 namespace hanoi = openblack::ecs::hanoi;
 namespace tree_puzzle = openblack::ecs::tree_puzzle;
 namespace maze_puzzle = openblack::ecs::maze_puzzle;
+namespace totem_puzzle = openblack::ecs::totem_puzzle;
 
 namespace
 {
@@ -1000,6 +1003,155 @@ bool IsTreePuzzle(script::PuzzleGameType type)
 }
 
 /// The test of a solution. A solved beach temple puzzle fixes its rings, which the hand can then not take.
+/// The place of a totem of a totem puzzle: on the curve round the puzzle's place, or in a row across the puzzle's grid
+map_coords::MapCoords TotemPlace(const PuzzleGame& game, size_t totem)
+{
+	if (totem_puzzle::OnCurve(game.type))
+	{
+		const auto offset = totem_puzzle::CurveOffset(totem, game.scale);
+		return {.x = game.place.x + offset.x, .z = game.place.z + offset.z, .altitude = game.place.altitude};
+	}
+	return hanoi::GridPlace(game.place, GridSteps(game), static_cast<int32_t>(totem), 0);
+}
+
+/// The totem is put where its height and its slide put it
+void PlaceTotem(entt::entity totem)
+{
+	if (Locator::puzzleTotemSystem::has_value())
+	{
+		Locator::puzzleTotemSystem::value().Place(totem);
+	}
+}
+
+/// A totem of a totem puzzle on its place, at a height. Nothing destroys it, and nothing moves it except the hand.
+entt::entity MakeTotem(entt::entity puzzle, const PuzzleGame& game, size_t index, float yAngleRadians)
+{
+	auto& registry = Entities();
+	const auto place = TotemPlace(game, index);
+	const auto made =
+	    archetypes::PuzzleTotemArchetype::Create(map_coords::ToWorld(Locator::terrainSystem::value(), place),
+	                                             totem_puzzle::k_TotemKind, yAngleRadians, totem_puzzle::k_TotemScale, puzzle);
+	auto& totem = registry.Get<PuzzleTotem>(made);
+	totem.highest = totem_puzzle::k_Highest;
+	totem.height = game.totemHeights.at(index);
+	registry.Assign<Immovable>(made);
+	ecs::thing_map_place::Keep(registry, made, place);
+	FileInMap(made);
+	PlaceTotem(made);
+	return made;
+}
+
+/// A totem puzzle starts: six totems, all fully down. The totems on the curve turn their faces away from the puzzle's
+/// place.
+void StartTotems(entt::entity puzzle, PuzzleGame& game)
+{
+	game.totemHeights.fill(0);
+	for (size_t index = 0; index < totem_puzzle::k_Totems; ++index)
+	{
+		const float facing =
+		    totem_puzzle::OnCurve(game.type) ? totem_puzzle::CurveFacing(game.place, TotemPlace(game, index)) : 0.0f;
+		game.totems.at(index) = MakeTotem(puzzle, game, index, facing);
+	}
+}
+
+/// The spot visual over a totem of a totem puzzle goes
+void RemoveTotemMark(uint32_t& mark)
+{
+	if (mark != k_NoEffectHandle && Locator::effectRequestSystem::has_value())
+	{
+		Locator::effectRequestSystem::value().Remove(mark);
+	}
+	mark = k_NoEffectHandle;
+}
+
+/// One turn of a totem puzzle. It makes again each totem that went, up to the first totem that the player changed. The
+/// puzzle keeps the change and gives the new heights to the totems; the other totems that change slide to theirs. A
+/// spot visual then shows each totem that stands fully up. Only one change comes in each turn. A totem that the puzzle
+/// makes again faces angle 0 and stays in the scripts' hold.
+void ProcessTotems(entt::entity puzzle, PuzzleGame& game)
+{
+	auto& registry = Entities();
+	for (size_t index = 0; index < totem_puzzle::k_Totems; ++index)
+	{
+		auto& slot = game.totems.at(index);
+		if (slot != entt::null && !registry.Valid(slot))
+		{
+			slot = MakeTotem(puzzle, game, index, 0.0f);
+			registry.Assign<ScriptControlled>(slot);
+		}
+		const auto* totem = IsThere(registry, slot) ? registry.TryGet<const PuzzleTotem>(slot) : nullptr;
+		if (totem == nullptr || totem->height == game.totemHeights.at(index))
+		{
+			// A totem that slides takes its next step
+			if (totem != nullptr && totem->slideSteps != 0 && Locator::puzzleTotemSystem::has_value())
+			{
+				Locator::puzzleTotemSystem::value().StepSlide(slot);
+			}
+			continue;
+		}
+		game.started = true;
+		auto shown = game.totemHeights;
+		shown.at(index) = totem->height;
+		const auto change = totem_puzzle::Step(game.type, game.totemHeights, shown);
+		if (!change.has_value())
+		{
+			return;
+		}
+		game.totemHeights = change->kept;
+		for (size_t other = 0; other < totem_puzzle::k_Totems; ++other)
+		{
+			const auto thing = game.totems.at(other);
+			auto* changed = IsThere(registry, thing) ? registry.TryGet<PuzzleTotem>(thing) : nullptr;
+			if (changed == nullptr)
+			{
+				continue;
+			}
+			changed->previousHeight = changed->height;
+			changed->height = game.totemHeights.at(other);
+			if (other != change->moved)
+			{
+				changed->slideSteps = totem_puzzle::k_SlideSteps;
+				++changed->slides;
+			}
+			if (Locator::puzzleTotemSystem::has_value())
+			{
+				Locator::puzzleTotemSystem::value().StepSlide(thing);
+			}
+		}
+		const auto& terrain = Locator::terrainSystem::value();
+		for (size_t other = 0; other < totem_puzzle::k_Totems; ++other)
+		{
+			auto& mark = game.totemMarks.at(other);
+			RemoveTotemMark(mark);
+			if (game.totemHeights.at(other) == totem_puzzle::k_Highest)
+			{
+				mark = StartSparkle(map_coords::ToWorld(terrain, TotemPlace(game, other)), totem_puzzle::k_MarkMagnitude,
+				                    std::nullopt);
+			}
+		}
+		return;
+	}
+}
+
+/// The test of a totem puzzle's solution: all totems fully up. The spot visuals over the totems go, and each totem
+/// shows a spot visual for some turns.
+bool TotemsSolved(PuzzleGame& game)
+{
+	if (!totem_puzzle::Solved(game.totemHeights))
+	{
+		return false;
+	}
+	std::ranges::for_each(game.totemMarks, RemoveTotemMark);
+	const auto& terrain = Locator::terrainSystem::value();
+	for (size_t index = 0; index < totem_puzzle::k_Totems; ++index)
+	{
+		StartSparkle(map_coords::ToWorld(terrain, TotemPlace(game, index)), totem_puzzle::k_MarkMagnitude,
+		             totem_puzzle::k_SolvedMarkTurns);
+	}
+	game.played = true;
+	return true;
+}
+
 bool TestSolution(entt::entity puzzle, PuzzleGame& game)
 {
 	if (IsTreePuzzle(game.type))
@@ -1015,6 +1167,10 @@ bool TestSolution(entt::entity puzzle, PuzzleGame& game)
 	if (maze_puzzle::IsMaze(game.type))
 	{
 		return TestMaze(game);
+	}
+	if (totem_puzzle::IsTotemPuzzle(game.type))
+	{
+		return TotemsSolved(game);
 	}
 	// The fish puzzle is solved when its fish are caught
 	if (game.type == script::PuzzleGameType::Fishes1)
@@ -1232,6 +1388,10 @@ void Process(entt::entity puzzle, PuzzleGame& game, const std::optional<map_coor
 	{
 		ProcessTilt(puzzle, game);
 	}
+	else if (totem_puzzle::IsTotemPuzzle(game.type))
+	{
+		ProcessTotems(puzzle, game);
+	}
 }
 } // namespace
 
@@ -1265,6 +1425,10 @@ entt::entity PuzzleGameSystem::Create(script::PuzzleGameType type, glm::vec3 poi
 	else if (maze_puzzle::IsMaze(type))
 	{
 		StartMaze(puzzle, registry.Get<PuzzleGame>(puzzle));
+	}
+	else if (totem_puzzle::IsTotemPuzzle(type))
+	{
+		StartTotems(puzzle, registry.Get<PuzzleGame>(puzzle));
 	}
 	return puzzle;
 }

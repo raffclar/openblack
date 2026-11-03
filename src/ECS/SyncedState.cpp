@@ -142,6 +142,8 @@ constexpr auto k_PresentationParts = std::to_array<PresentationPart>({
     {.component = "VillageTotem", .field = "quietOnce", .marker = ""},
     // The height where the frames draw a town's totem and its icon as they ease by the computer's clock
     {.component = "DrawnHeight", .field = "", .marker = ""},
+    // The steps of the slide of a puzzle totem that the frames took, which only the drawn height reads
+    {.component = "PuzzleTotemDrawnSlide", .field = "", .marker = ""},
     // The frames show the phantom building of a scaffold by its see-through copy, and the size of a scaffold on a site
     {.component = "*", .field = "", .marker = "ScaffoldGhost"},
     {.component = "ScaffoldDrawnScale", .field = "", .marker = ""},

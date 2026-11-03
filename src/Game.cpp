@@ -4378,6 +4378,11 @@ void Game::UpdateEntitiesFrame(std::chrono::microseconds deltaTime)
 				{
 					Locator::villageTotemSystem::value().Update(static_cast<uint32_t>(clock.GetElapsedTime().count()));
 				}
+				// The puzzle totems that the list draws take the steps of their slides
+				if (Locator::puzzleTotemSystem::has_value())
+				{
+					Locator::puzzleTotemSystem::value().UpdateFrame(clock.GetFrameRealTime());
+				}
 			};
 			if (config.drawEntities)
 			{

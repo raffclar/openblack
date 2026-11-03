@@ -11,17 +11,23 @@
 
 #include "PuzzleTotemSystem.h"
 
+#include <algorithm>
+#include <vector>
+
 #include <glm/vec2.hpp>
 
 #include "3D/LandIslandInterface.h"
 #include "Commands/PlayerCommands.h"
+#include "ECS/Components/DrawnHeight.h"
 #include "ECS/Components/Mesh.h"
 #include "ECS/Components/PuzzleGame.h"
 #include "ECS/Components/Transform.h"
 #include "ECS/PuzzleTotemRules.h"
 #include "ECS/Registry.h"
 #include "ECS/Systems/InfluenceSystemInterface.h"
+#include "ECS/Systems/ObjectDrawListSystemInterface.h"
 #include "ECS/Systems/PlayerCommandSystemInterface.h"
+#include "ECS/TotemPuzzleRules.h"
 #include "ECS/VillageTotem.h"
 #include "ECS/WorldObjects.h"
 #include "Locator.h"
@@ -63,6 +69,16 @@ bool Rises(const PuzzleTotem& totem)
 	return totem.highest != ecs::puzzle_totem::k_TapOnly;
 }
 
+/// The part of its greatest height that a totem stands at, with the steps of its slide that are left
+float ShareWith(const PuzzleTotem& totem, int32_t stepsLeft)
+{
+	if (stepsLeft != 0 && Rises(totem))
+	{
+		return ecs::totem_puzzle::SlideShare(totem.height, totem.previousHeight, stepsLeft, totem.highest);
+	}
+	return ecs::puzzle_totem::ShareOf(totem.height, totem.highest);
+}
+
 /// Where the totem stands drawn, and the hand above it, while the hand holds it
 float DrawnY(const ecs::Registry& registry, entt::entity totem)
 {
@@ -95,13 +111,89 @@ void PuzzleTotemSystem::Place(entt::entity totem)
 	const float depth = DepthOf(registry, totem);
 	// It stands where its height puts it. A totem that the hand holds moves when the turn takes each new height that the
 	// hand gives it, so that every computer has it at the same place.
-	const float offset = ecs::puzzle_totem::OffsetFor(ecs::puzzle_totem::ShareOf(component->height, component->highest), depth);
+	const float offset = ecs::puzzle_totem::OffsetFor(ShareWith(*component, component->slideSteps), depth);
 	const float y = LandUnder(transform->position) + offset;
 	if (transform->position.y != y)
 	{
 		transform->position.y = y;
 		registry.SetDirty();
 	}
+}
+
+void PuzzleTotemSystem::StepSlide(entt::entity totem)
+{
+	auto& registry = Locator::entitiesRegistry::value();
+	auto* component = registry.Valid(totem) ? registry.TryGet<PuzzleTotem>(totem) : nullptr;
+	if (component == nullptr)
+	{
+		return;
+	}
+	// A totem that only takes taps does not slide, and its count stays
+	if (component->slideSteps != 0 && Rises(*component))
+	{
+		--component->slideSteps;
+	}
+	Place(totem);
+}
+
+void PuzzleTotemSystem::UpdateFrame(std::chrono::milliseconds frameRealTime)
+{
+	auto& registry = Locator::entitiesRegistry::value();
+	const bool due = frame_pace::Due(_framePace, frameRealTime);
+	std::vector<entt::entity> done;
+	registry.Each<const PuzzleTotem, const Transform>(
+	    [this, &registry, &done, due](entt::entity totem, const PuzzleTotem& component, const Transform& transform) {
+		    if (component.slideSteps == 0 || !Rises(component))
+		    {
+			    if (registry.AnyOf<DrawnHeight, PuzzleTotemDrawnSlide>(totem))
+			    {
+				    done.push_back(totem);
+			    }
+			    return;
+		    }
+		    auto* slide = registry.TryGet<PuzzleTotemDrawnSlide>(totem);
+		    if (slide == nullptr)
+		    {
+			    slide = &registry.Assign<PuzzleTotemDrawnSlide>(totem, PuzzleTotemDrawnSlide {.slide = component.slides});
+		    }
+		    if (slide->slide != component.slides)
+		    {
+			    *slide = {.slide = component.slides};
+		    }
+		    // Only a frame that draws the totem takes a step. The steps of the turns and of the frames count from one total.
+		    const bool drawn =
+		        !Locator::objectDrawListSystem::has_value() || Locator::objectDrawListSystem::value().Drawn(registry, totem);
+		    if (due && drawn && component.slideSteps - slide->frameSteps > 0)
+		    {
+			    ++slide->frameSteps;
+		    }
+		    const int32_t left = std::max(component.slideSteps - slide->frameSteps, 0);
+		    const float y = LandUnder(transform.position) +
+		                    ecs::puzzle_totem::OffsetFor(ShareWith(component, left), DepthOf(registry, totem));
+		    if (auto* height = registry.TryGet<DrawnHeight>(totem))
+		    {
+			    height->y = y;
+		    }
+		    else
+		    {
+			    registry.Assign<DrawnHeight>(totem, y);
+		    }
+	    });
+	// A totem at the end of its slide is drawn where the turns put it
+	for (const auto totem : done)
+	{
+		registry.Remove<DrawnHeight>(totem);
+		registry.Remove<PuzzleTotemDrawnSlide>(totem);
+	}
+}
+
+void PuzzleTotemSystem::AfterLoad()
+{
+	auto& registry = Locator::entitiesRegistry::value();
+	registry.Each<PuzzleTotem>([](PuzzleTotem& component) {
+		component.previousHeight = 0;
+		component.slideSteps = 0;
+	});
 }
 
 bool PuzzleTotemSystem::Grip(entt::entity totem, PlayerNames player, glm::vec3 hand)

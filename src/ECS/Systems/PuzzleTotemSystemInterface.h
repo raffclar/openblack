@@ -11,6 +11,7 @@
 
 #include <cstdint>
 
+#include <chrono>
 #include <optional>
 
 #include <entt/entity/fwd.hpp>
@@ -33,8 +34,16 @@ public:
 	/// A totem takes a height: a script, a creature or the hand sets it. The totem is put at the place that the height
 	/// gives it.
 	virtual void SetHeight(entt::entity totem, int32_t height) = 0;
-	/// The totem is put where its height puts it: under the land by a part of its sink depth
+	/// The totem is put where its height puts it: under the land by a part of its sink depth. A totem that slides stands
+	/// at the part of its slide that the turns reached.
 	virtual void Place(entt::entity totem) = 0;
+	/// At the turn: a totem that slides takes one step of its slide, then it is put where it stands
+	virtual void StepSlide(entt::entity totem) = 0;
+	/// Each frame: each totem that slides and that the frame draws takes one step of its slide, at most at the screen's
+	/// refresh. The frame draws it at the height that this gives.
+	virtual void UpdateFrame(std::chrono::milliseconds frameRealTime) = 0;
+	/// After a load of a saved game: no totem slides, and the last height of each totem is 0
+	virtual void AfterLoad() = 0;
 
 	/// The hand of a player, at a point, takes hold of a totem. Only a totem that rises and sinks and that no hand holds
 	/// can be taken, with the hand in the player's influence. Whether it took hold.

@@ -8,7 +8,7 @@
  *******************************************************************************/
 
 // The testbed's scenarios of the puzzle quests of the fourth and fifth lands: the two Theseus mazes and their prize,
-// the fish puzzle, and the lion maze of Stanley the wolf
+// the fish puzzle, the bronze totem puzzle, and the lion maze of Stanley the wolf
 
 #include <glm/vec2.hpp>
 
@@ -31,6 +31,8 @@ constexpr glm::vec2 k_FishPuzzle = glm::vec2(2497.891f, 3628.35f) - k_Land4Middl
 /// The script's kind of object of a puzzle game, and the kind of the fish puzzle
 constexpr float k_PuzzleObjectType = 32.0f;
 constexpr float k_FishPuzzleKind = 14.0f;
+/// The place of the bronze totem puzzle north-west of the Japanese village, from the middle of the fourth land
+constexpr glm::vec2 k_TotemPuzzle = glm::vec2(2286.4448f, 3588.0894f) - k_Land4Middle;
 /// The middle of the blocks of the fifth land
 constexpr glm::vec2 k_Land5Middle {2720.0f, 3040.0f};
 /// The middle of the lion maze, from the middle of the fifth land
@@ -84,6 +86,27 @@ void AddFishHerding(std::vector<Scenario>& all)
 	});
 }
 
+void AddBronzeTotemPuzzle(std::vector<Scenario>& all)
+{
+	all.push_back({
+	    .id = "story.l4_bronze_totem_puzzle",
+	    .name = "Story: the bronze totem puzzle of the fourth land",
+	    .facet = Facet::Story,
+	    .description = "The fourth land loads with its own scripts and sky. The script of the bronze totem puzzle starts as "
+	                   "the land's script starts it. Take hold of a totem with the Action button and move the mouse up or "
+	                   "down to change its height. Do this until all six totems are fully up.",
+	    .expected = "Six bronze totems stand on a half circle in a ring of influence, all fully down, with a sign beside "
+	                "them. When a totem changes height, some of the other totems slide to new heights. A sparkle stays "
+	                "over each totem that is fully up. When all six are fully up, each totem sparkles, the sign and the "
+	                "ring go, and a shield miracle dispenser comes in a new ring of influence.",
+	    .environment = {.land = Land::Story, .storyLand = "Land4.txt", .dispenserGrid = false},
+	    .framing = {.shot = Shot::Placed,
+	                .eye = {k_TotemPuzzle.x + 10.0f, 40.0f, k_TotemPuzzle.y - 30.0f},
+	                .look = {k_TotemPuzzle.x + 10.0f, 0.0f, k_TotemPuzzle.y + 5.0f}},
+	    .commands = {{.kind = Kind::RunScript, .delaySeconds = 0.5f, .script = "JapaneseTotemPuzzle"}},
+	});
+}
+
 void AddLionMazeQuest(std::vector<Scenario>& all)
 {
 	all.push_back({
@@ -122,5 +145,6 @@ void testbed_scenarios::AddPuzzleQuestScenarios(std::vector<Scenario>& all)
 {
 	AddTheseusQuest(all);
 	AddFishHerding(all);
+	AddBronzeTotemPuzzle(all);
 	AddLionMazeQuest(all);
 }

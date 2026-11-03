@@ -116,6 +116,7 @@
 #include "ECS/Systems/PlayerProfileSystemInterface.h"
 #include "ECS/Systems/PlayerSystemInterface.h"
 #include "ECS/Systems/PuzzleGameSystemInterface.h"
+#include "ECS/Systems/PuzzleTotemSystemInterface.h"
 #include "ECS/Systems/ReactionSystemInterface.h"
 #include "ECS/Systems/RealWeatherSystemInterface.h"
 #include "ECS/Systems/SaveGameSystemInterface.h"
@@ -681,6 +682,11 @@ bool LandSystem::LoadSavedLand(const std::filesystem::path& landPath, const std:
 	if (use == SavedLandUse::SavedGame && Locator::puzzleGameSystem::has_value())
 	{
 		Locator::puzzleGameSystem::value().AfterLoad();
+	}
+	// A saved game keeps no slide of a puzzle totem
+	if (use == SavedLandUse::SavedGame && Locator::puzzleTotemSystem::has_value())
+	{
+		Locator::puzzleTotemSystem::value().AfterLoad();
 	}
 	if (Locator::appleBarrelSystem::has_value())
 	{

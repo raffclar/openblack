@@ -16,6 +16,7 @@
 #include <entt/entity/entity.hpp>
 
 #include "ECS/Components/PuzzleGame.h"
+#include "ECS/TotemPuzzleRules.h"
 #include "ScriptHeaders/ScriptEnums.h"
 
 /// What the scripts read from a puzzle game before the player solves it
@@ -82,9 +83,10 @@ namespace openblack::ecs::puzzle_game
 /// - the lion and the villager or the sheep of a maze,
 /// - the fences of a maze, slot by slot, the fence towards the next cell across first,
 /// - the bells of the lion maze,
+/// - the totems of a totem puzzle, but not for the kind that the fourth land uses,
 /// - the bases and the rings of the beach temple puzzle.
-/// Its mists and its bats stay. The puzzle counts as played from then on, so its turn does nothing more.
-/// The result is the list of the things to remove from the world.
+/// Its mists, its bats and the spot visuals over its totems stay. The puzzle counts as played from then on, so its turn does
+/// nothing more. The result is the list of the things to remove from the world.
 template <typename IsThere>
 [[nodiscard]] std::vector<entt::entity> TakePiecesForDelete(components::PuzzleGame& game, IsThere&& isThere)
 {
@@ -123,6 +125,10 @@ template <typename IsThere>
 		take(game.maze.alongFences.at(slot));
 	}
 	takeAll(game.maze.bells);
+	if (totem_puzzle::DeleteRemovesTotems(game.type))
+	{
+		takeAll(game.totems);
+	}
 	takeAll(game.bases);
 	takeAll(game.rings);
 	game.played = true;
@@ -137,9 +143,11 @@ constexpr int32_t k_CalmTurnsAfterLoad = 5;
 /// - a maze has no marker on the last tapped cell, and its two animals turn to angle 0 before their next move,
 /// - a maze has no fences towards the next cell across. These fences stay in the world, but the maze does not put them
 ///   back and does not delete them,
-/// - the fish puzzle has no ring of floats and no shoals. It makes them again, as at its start, in its next turn.
+/// - the fish puzzle has no ring of floats and no shoals. It makes them again, as at its start, in its next turn,
+/// - a totem puzzle has no spot visuals over its totems until a totem changes.
 inline void ForgetUnsavedState(components::PuzzleGame& game) noexcept
 {
+	game.totemMarks.fill(0);
 	game.calmTurns = k_CalmTurnsAfterLoad;
 	game.maze.marker = components::MazeState {}.marker;
 	game.maze.heroAngle = 0;
