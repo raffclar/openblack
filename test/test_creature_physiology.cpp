@@ -559,7 +559,7 @@ TEST(CreatureBalance, BalanceRowOverridesTheCreatureRow)
 	balance.defenceMultiplierHit = 0.11f;
 	balance.secondsPerAgeTick = 3600;
 	balance.pooPerEnergy = 0.6f;
-	balance.field0x54 = 1.03f;
+	balance.neverRead0x54 = 1.03f;
 	balance.alignmentChangeScale = 0.2f;
 	ApplyCreatureBalance(*creature, balance);
 	EXPECT_FLOAT_EQ(creature->startScale, 0.22f);
@@ -570,7 +570,7 @@ TEST(CreatureBalance, BalanceRowOverridesTheCreatureRow)
 	EXPECT_FLOAT_EQ(creature->defenceMultiplierHit, 0.11f);
 	EXPECT_EQ(creature->secondsPerAgeTick, 3600u);
 	EXPECT_FLOAT_EQ(creature->pooPerEnergy, 0.6f);
-	EXPECT_FLOAT_EQ(creature->field0x36c, 1.03f);
+	EXPECT_FLOAT_EQ(creature->neverRead0x36c, 1.03f);
 	EXPECT_FLOAT_EQ(creature->headTurnRate, 28.0f);
 	EXPECT_FLOAT_EQ(creature->alignmentChangeScale, 0.2f);
 	// What the balance row doesn't hold stays as it was

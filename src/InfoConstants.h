@@ -326,8 +326,9 @@ struct CreatureDevelopmentPhaseEntry
 	std::array<char, 0x30> name;
 	/// At this distance from home, a creature at this stage wants to go home most
 	float goHomeDistance;
-	float field0x34;
-	float field0x38;
+	/// The game never reads these values
+	float neverRead0x34;
+	float neverRead0x38;
 	/// When the creature moves to a phase, it starts the desires that this phase and each phase before it start, and
 	/// stops the desires that they stop, phase by phase. An empty slot holds no desire.
 	std::array<uint32_t, 10> desiresOn;
@@ -344,12 +345,14 @@ struct CreatureInitialDesireInfo
 	std::array<uint32_t, 8> sources;
 	/// The desire is about something in itself, as a town to help or a creature to befriend
 	uint32_t aboutSomething;
-	uint32_t field0x24;
+	/// A search for the strongest desire that has this mark set reads it, but the game never calls the search
+	uint32_t markedForStrongestSearch;
 	/// The creature can learn from feedback about the desire
 	uint32_t learnable;
 	/// An action that the player made the creature do for the desire teaches approval when the creature forgets it
 	uint32_t approvesOrders;
-	uint32_t field0x30;
+	/// The game never reads this value
+	uint32_t neverRead0x30;
 	/// A desire of the body
 	uint32_t bodyDesire;
 	/// A desire that the player can help with
@@ -360,16 +363,18 @@ struct CreatureInitialDesireInfo
 	float decayMax;
 	/// The change that a plan for this desire adds to the alignment of the creature on each game turn
 	float alignmentChange;
-	float field0x4c;
+	/// The part of the desire above this pulls the alignment in a sum that the game never calls
+	float alignmentThreshold;
 	/// When the creature sees the hand do something that shows this desire, the desire grows this many times faster
 	float seenPlayerActionSpeedUp;
 	/// How strongly feedback changes how fast the desire grows
 	float lessonDivisor;
 	/// How much distance counts against a goal of the desire
 	float distanceWeight;
-	uint32_t field0x5c;
-	float field0x60;
-	float field0x64;
+	/// The game never reads these values
+	uint32_t neverRead0x5c;
+	float neverRead0x60;
+	float neverRead0x64;
 	/// The weight the desire starts with, and whether feedback changes it
 	float initialWeight;
 	uint32_t learnsWeight;
@@ -413,7 +418,8 @@ struct CreatureActionKnownAboutEntry
 	uint32_t timesToSee;
 	/// How many seconds a creature must watch a skill, from when it first sees it
 	float watchSeconds;
-	uint32_t field0x4c;
+	/// The game never reads this value
+	uint32_t neverRead0x4c;
 	/// The first development phase in which the creature can learn it
 	uint32_t minPhase;
 	/// A computer player can teach it to its creature
@@ -890,7 +896,8 @@ struct GCreatureInfo: GLivingInfo
 {
 	/// The species' row in the creature tables, the Giant Ape's first
 	uint32_t row;
-	float field0x1e8;
+	/// The game never reads this value
+	float neverRead0x1e8;
 	/// How big a new creature of the species is, and how fat, 0 to 1
 	float startScale;
 	float startFatness;
@@ -903,7 +910,8 @@ struct GCreatureInfo: GLivingInfo
 	uint32_t secondsPerAgeTick;
 	/// It grows fast for most of this many minutes of age, then slowly
 	float growUpMinutes;
-	float field0x208;
+	/// The game never reads this value
+	float neverRead0x208;
 	/// Walking while its energy is below this tires it faster
 	float lowEnergyThreshold;
 	/// How much moving tires it each game turn, before its youth makes that faster
@@ -923,34 +931,51 @@ struct GCreatureInfo: GLivingInfo
 	/// Asleep, the life it regains and the exhaustion it sheds each game turn
 	float sleepHeal;
 	float sleepRecover;
-	std::array<uint8_t, 0xc> field0x234;
+	/// The game never reads these values
+	std::array<uint8_t, 0xc> neverRead0x234;
 	/// How fast the creature goes, each a fraction of its top speed: slowly (when exhausted), walking and running
 	float slowSpeed;
 	float walkSpeed;
 	float runSpeed;
 	/// How fast its head speeds up as it turns to look, in radians a second each second, before its size slows it
 	float headTurnRate;
-	std::array<uint8_t, 0x14> field0x250;
+	/// The game never reads these values
+	std::array<uint8_t, 0x14> neverRead0x250;
 	/// The least any of its desires can be
 	float desireFloor;
-	std::array<uint8_t, 0x4> field0x268;
+	/// The game never reads this value
+	std::array<uint8_t, 0x4> neverRead0x268;
 	/// The least and the most seconds that one of its desires can take to grow by 1
 	float minDesireIncreaseSeconds;
 	float maxDesireIncreaseSeconds;
-	std::array<uint8_t, 0xc> field0x274;
+	/// The game never reads these values
+	std::array<uint8_t, 0xc> neverRead0x274;
 	/// When the creature sees the hand do something, the desire that the action shows grows this many times faster
 	float seenPlayerActionSpeedUp;
 	/// A creature casting a miracle pays for it with its energy: it has this many chants for each of its size and strength
 	/// above its energy's floor, below which it can't pay
 	float chantsPerEnergy;
 	float spellEnergyFloor;
-	std::array<uint8_t, 0x4> field0x28c;
+	/// The game never reads this value
+	std::array<uint8_t, 0x4> neverRead0x28c;
 	/// The approval that an action the player made the creature do teaches, when the creature forgets the action
 	float orderApproval;
-	std::array<uint8_t, 0x38> field0x294;
+	/// The game never reads this value
+	std::array<uint8_t, 0x4> neverRead0x294;
+	/// An action not done for this many game turns gets its full novelty back. The planner keeps the same number
+	uint32_t noveltyTurns;
+	/// The game never reads these values
+	std::array<uint8_t, 0x18> neverRead0x29c;
+	/// The distance in metres past which a goal is no nearer for the plan, and the priority of a goal that the creature
+	/// holds. The planner keeps the same numbers
+	float maxGoalDistance;
+	float heldGoalPriority;
+	/// The game never reads these values
+	std::array<uint8_t, 0x10> neverRead0x2bc;
 	/// A creature looks another creature over again only once more than this many seconds have gone by since it last did
 	float inspectCreatureSeconds;
-	std::array<uint8_t, 0x8> field0x2d0;
+	/// The game never reads these values
+	std::array<uint8_t, 0x8> neverRead0x2d0;
 	/// Running away, the creature goes at least this far from what it flees, and up to 40 further
 	float runAwayDistance;
 	/// The look of a creature that walks to a place (see creature_look::WhileGoingInfo): the sweep's angle from ahead
@@ -967,7 +992,8 @@ struct GCreatureInfo: GLivingInfo
 	float lookAtPlaceRange;
 	/// The help tells of a problem with its body at most once in this many seconds
 	float helpBodyProblemSeconds;
-	float field0x300;
+	/// The game never reads this value
+	float neverRead0x300;
 	/// The help prompts on how to look after it at most once in this many seconds
 	float helpTutorialSeconds;
 	/// The help says it is low on energy, hurt, tired or thirsty past these, each with a "very" step
@@ -979,12 +1005,17 @@ struct GCreatureInfo: GLivingInfo
 	float helpVeryTired;
 	float helpThirsty;
 	float helpVeryThirsty;
-	std::array<uint8_t, 0xc> field0x328;
+	/// The change to a desire source when the creature shares a feeling of its player. Only code that the game never
+	/// calls reads it
+	float empathySourceChange;
+	/// The game never reads these values
+	std::array<uint8_t, 0x8> neverRead0x32c;
 	/// The mesh of its species' icon that stands on its player's town totems (the game's creature info +0x344)
 	MeshId totemIcon;
 	/// Each turn the change waiting for its alignment, held between -1 and 1, moves it by that share of this
 	float alignmentChangePerTurn;
-	float field0x33c;
+	/// The game never reads this value
+	float neverRead0x33c;
 	/// The personality the species is born with, each 0 to 1: kindness, aggression, lethargy, friendliness,
 	/// communicativeness, and a sixth trait that no desire reads
 	std::array<float, 6> innateTraits;
@@ -996,7 +1027,8 @@ struct GCreatureInfo: GLivingInfo
 	float sleepLength;
 	/// A meal's food value over this, and over its size, is the energy it gains
 	float foodToEnergy;
-	float field0x36c;
+	/// The species balance writes this value, but the game never reads it
+	float neverRead0x36c;
 	/// The poo a meal builds up for each unit of energy it gains
 	float pooPerEnergy;
 	/// Multiplies the alignment change that the plans of the creature make on each game turn
@@ -1037,7 +1069,10 @@ static_assert(offsetof(GCreatureInfo, strength) == 0x11c);
 static_assert(offsetof(GCreatureInfo, defenceMultiplierBurn) == 0x80);
 static_assert(offsetof(GCreatureInfo, secondsPerAgeTick) == 0x200);
 static_assert(offsetof(GCreatureInfo, headTurnRate) == 0x24c);
-static_assert(offsetof(GCreatureInfo, field0x36c) == 0x36c);
+static_assert(offsetof(GCreatureInfo, neverRead0x36c) == 0x36c);
+static_assert(offsetof(GCreatureInfo, noveltyTurns) == 0x298);
+static_assert(offsetof(GCreatureInfo, maxGoalDistance) == 0x2b4);
+static_assert(offsetof(GCreatureInfo, empathySourceChange) == 0x328);
 static_assert(offsetof(GCreatureInfo, alignmentChangeScale) == 0x374);
 static_assert(offsetof(GCreatureInfo, impressiveSizeAddition) == 0x378);
 static_assert(offsetof(GCreatureInfo, impressiveSizeMultiplier) == 0x37c);
@@ -1108,13 +1143,8 @@ struct GWallSectionInfo: GFeatureInfo
 
 struct GArrowInfo: GMobileObjectInfo
 {
-	uint32_t field0x104;
-	uint32_t field0x108;
-	uint32_t field0x10c;
-	uint32_t field0x110;
-	uint32_t field0x114;
-	uint32_t field0x118;
-	uint32_t field0x11c;
+	/// The game never reads these values
+	std::array<uint32_t, 7> neverRead0x104;
 };
 
 struct GFieldInfo: GMultiMapFixedInfo
@@ -1205,14 +1235,17 @@ struct GVillagerStateTableInfo
 	std::array<char, 0x80> name;
 	/// Bit 0 set: a villager in the state is free for other work, and for a partner
 	int availableFlags;
-	uint32_t field0xac;
-	uint32_t field0xb0;
+	/// The game never reads this value
+	uint32_t neverRead0xac;
+	/// A getter reads it, but the game never calls the getter
+	uint32_t uncalledGetterValue;
 	/// When a villager in the state is called to make dinner, it stays in the state if this is not 0, else it goes
 	/// home
 	uint32_t staysForDinnerCall;
 	/// A state of reacting to something
 	int isReactionState;
-	uint32_t field0xbc;
+	/// The game never reads this value
+	uint32_t neverRead0xbc;
 	/// A villager leaving a home state for this one stays inside
 	int staysAtHomeOnExit;
 	/// A villager going into the state may pause for a second first
@@ -1444,17 +1477,20 @@ struct GMagicFlockGroundInfo: GMagicInfo
 
 struct GAnimalStateTableInfo
 {
-	uint32_t field0x0;
-	int field0x4;
-	float field0x8;
+	/// The game never reads these values
+	uint32_t neverRead0x0;
+	int neverRead0x4;
+	float neverRead0x8;
 	/// A state an animal is in for itself rather than on its way into another, as moving somewhere is
 	uint32_t isFinalState;
-	uint32_t field0x10;
+	/// The game never reads this value
+	uint32_t neverRead0x10;
 	uint32_t isScriptState;
 	uint32_t isScriptInterruptableState;
 	/// The state that an animal goes into when a reaction ends, if the animal was in this state before the reaction
 	uint32_t resumeState;
-	uint32_t field0x20;
+	/// The game never reads this value
+	uint32_t neverRead0x20;
 	std::array<char, 0x80> name;
 	/// An animal in the state checks its needs
 	uint32_t seesToNeeds;
@@ -1572,8 +1608,8 @@ struct DifferentCreatureInfo
 	float sleepHeal;
 	uint32_t secondsPerAgeTick;
 	float pooPerEnergy;
-	/// Overrides the creature row's field0x36c
-	float field0x54;
+	/// Overrides the value of the creature row that the game never reads
+	float neverRead0x54;
 	/// Overrides the alignment change scale of the creature row
 	float alignmentChangeScale;
 };
@@ -1879,8 +1915,9 @@ struct CreatureDesireSourceTable
 	/// How far a new creature's starting value and threshold of the source are spread at random either way
 	float valueSpread;
 	float thresholdSpread;
-	std::array<char, 0x40> field0x14;
-	std::array<char, 0x40> field0x54;
+	/// The name of the source, as "TirednessFromLaziness", and its short name, as "Laziness". The game never reads them
+	std::array<char, 0x40> name;
+	std::array<char, 0x40> shortName;
 };
 static_assert(offsetof(CreatureDesireSourceTable, desire) == 0x0);
 static_assert(offsetof(CreatureDesireSourceTable, clearedWhenSatisfied) == 0x4);
@@ -1924,30 +1961,8 @@ struct CreatureActionInfo
 	/// How much doing the action impresses villagers watching the creature
 	float impressiveness;
 	std::array<char, 0x20> name;
-	uint32_t field0x34;
-	uint32_t field0x38;
-	uint32_t field0x3c;
-	uint32_t field0x40;
-	uint32_t field0x44;
-	uint32_t field0x48;
-	uint32_t field0x4c;
-	uint32_t field0x50;
-	uint32_t field0x54;
-	uint32_t field0x58;
-	uint32_t field0x5c;
-	uint32_t field0x60;
-	uint32_t field0x64;
-	uint32_t field0x68;
-	uint32_t field0x6c;
-	uint32_t field0x70;
-	uint32_t field0x74;
-	uint32_t field0x78;
-	uint32_t field0x7c;
-	uint32_t field0x80;
-	uint32_t field0x84;
-	uint32_t field0x88;
-	uint32_t field0x8c;
-	uint32_t field0x90;
+	/// The game never reads these values
+	std::array<uint32_t, 24> neverRead0x34;
 	/// The action acts on a thing
 	uint32_t actsOnThing;
 	/// The desire the action satisfies
@@ -1958,30 +1973,40 @@ struct CreatureActionInfo
 	uint32_t magicType;
 	/// The action never acts on the thing that the creature holds
 	uint32_t notOnWhatItHolds;
-	uint32_t field0xac;
-	uint32_t field0xb0;
+	/// The game never reads this value
+	uint32_t neverRead0xac;
+	/// While the creature does the action, each new sweep of its eyes tells its beliefs where the moving things of its
+	/// plan are now
+	uint32_t refreshesTargetsInSight;
 	/// The desire that the action shows to another creature that sees it: the other creature takes it as the strongest
 	/// desire of the creature that does it
 	uint32_t shownDesire;
-	uint32_t field0xb8;
-	uint32_t field0xbc;
+	/// The game never reads this value
+	uint32_t neverRead0xb8;
+	/// The action, done, sets this mark of the creature, 14 for none. The creature clears its marks when it starts, and
+	/// the game never reads them
+	uint32_t completionMark;
 	/// The desire it satisfies is multiplied by this once it is done
 	float desireMultiplier;
 	/// The times the creature must complete the action for its full share of skill in it
 	float fullSkillTimes;
 	/// The desire multiplier applies however the action started
 	uint32_t alwaysApplies;
-	float field0xcc;
+	/// For this many seconds of the next action, feedback goes to this action. Only code that the game never calls
+	/// reads it
+	float feedbackHoldSeconds;
 	/// How many seconds after it finishes the action can still be learnt from
 	float learningWindowSeconds;
 	/// The opinion of the action that a new creature starts with, from -1 to 1
 	float startingOpinion;
-	uint32_t field0xd8;
+	/// The game never reads this value
+	uint32_t neverRead0xd8;
 	/// A friend that does the action far enough away is worth following
 	uint32_t worthFollowing;
 	/// Stroked while holding something during the action, the creature learns to eat what it holds
 	uint32_t eatWhenStroked;
-	uint32_t field0xe4;
+	/// The help tells which source drives the desire of the action. Only code that the game never calls reads it
+	uint32_t reportsDominantSource;
 	/// How much a picture of the action is worth for the creature's web page, from 0 to 1
 	float pictureWorth;
 	/// When the action ends well on another creature, how much nicer the creature finds the other creature, from -1 to 1
@@ -1990,7 +2015,8 @@ struct CreatureActionInfo
 	uint32_t learnable;
 	/// Done to its end, the action gives the creature full life
 	uint32_t fullRecovery;
-	uint32_t field0xf8;
+	/// The game never reads this value
+	uint32_t neverRead0xf8;
 };
 static_assert(offsetof(CreatureActionInfo, impressiveType) == 0xc);
 static_assert(offsetof(CreatureActionInfo, actsOnThing) == 0x94);
@@ -2124,7 +2150,9 @@ namespace v120 // official patch 1.20
 {
 struct CreatureActionInfo: v100::CreatureActionInfo
 {
-	uint32_t field0xfc;
+	/// The row of the copy table that a creature uses to copy this action when it watches another creature do it. Only
+	/// code that the game never calls reads it
+	uint32_t mimicRow;
 };
 
 struct InfoConstants
