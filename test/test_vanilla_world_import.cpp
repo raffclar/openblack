@@ -32,6 +32,8 @@
 #include "Animals/AnimalMove.h"
 #include "Animals/BirdRules.h"
 #include "Animals/GrazerRules.h"
+#include "ECS/Components/Dance.h"
+#include "ECS/Components/SpellIcon.h"
 #include "ECS/Systems/Implementations/AnimalSystemDetail.h"
 #include "ECS/VanillaFootpathImport.h"
 #include "ECS/VanillaParticleImport.h"
@@ -1955,6 +1957,226 @@ TEST(VanillaWorldImport, ReadsTheValuesOfAWorshipSite)
 	EXPECT_FLOAT_EQ(site.altar->life, 0.75f);
 	EXPECT_EQ(site.footpathLink, 40U);
 	EXPECT_EQ(site.goHome, 0U);
+}
+
+// The spell seeds come right before the animals in the order that the game loads its tables
+TEST(VanillaWorldImport, SpellSeedsCountBackFromTheirFirstRow)
+{
+	EXPECT_EQ(world_import::SpellSeedRowOf(world_import::k_FirstSpellSeedRowNumber), SpellSeedType::Storm);
+	EXPECT_EQ(world_import::SpellSeedRowOf(2549), SpellSeedType::BeamExplosion);
+	EXPECT_EQ(world_import::SpellSeedRowOf(2548), std::nullopt);
+	EXPECT_EQ(world_import::SpellSeedRowOf(world_import::k_FirstSpellSeedRowNumber + 1), std::nullopt);
+}
+
+// The dance and the spell icons of a worship site come with their values
+TEST(VanillaWorldImport, ReadsTheDanceAndTheIconsOfAWorshipSite)
+{
+	static constexpr auto k_Seed = [](SpellSeedType seed) {
+		return world_import::k_FirstSpellSeedRowNumber - static_cast<uint32_t>(seed);
+	};
+	auto fake = GameAtTurn(100);
+	// 2: the site, 3: its dance, 4 and 5: its icons, 6: the player, 7: its interface, 8: the status of its hand
+	fake.Record(VanillaType::WorshipSite)
+	    .Ref("partCitadel", 30)
+	    .Value<uint32_t>("siteTribe", world_import::k_FirstTribeRowNumber - static_cast<uint32_t>(Tribe::NORSE))
+	    .Ref("siteDance", 3)
+	    .Refs("siteIcons", {4, 5})
+	    .Value<uint8_t>("sitePlace", 2);
+	fake.Record(VanillaType::Dance)
+	    .Value<float>("danceClock", 37.0f)
+	    .Value<uint32_t>("danceLoopLength", 4)
+	    .Value<uint32_t>("danceDancers", 6)
+	    .Value<float>("danceRate", 1.4f)
+	    .Value<float>("danceDancingRate", 1.0f)
+	    .Value<float>("danceAngle", 2.5f)
+	    .Value<uint32_t>("danceCameraWanted", 1)
+	    .Value<uint32_t>("danceCameraMade", 0)
+	    .Value<uint32_t>("danceHandTurns", 101)
+	    .Value<uint32_t>("danceRow", static_cast<uint32_t>(DanceInfo::CitadelDance_3))
+	    .Value<float>("danceSpeed", 0.5f)
+	    .Value<uint32_t>("danceState", 0)
+	    .Value<uint32_t>("danceDuration", 0)
+	    .Value<uint32_t>("danceStartTurn", 80)
+	    .Value<uint32_t>("danceFirstDancerCame", 1)
+	    .Value<uint32_t>("danceFirstDancerTurn", 82)
+	    .Value<uint32_t>("danceOnTheirWay", 3);
+	fake.Record(VanillaType::WorshipSpellIcon)
+	    .Value<uint32_t>("iconSeed", k_Seed(SpellSeedType::Water))
+	    .Value<uint16_t>("iconRemoveTurns", 0)
+	    .Ref("iconSite", 2)
+	    .Value<uint32_t>("iconChargeStart", 95)
+	    .Value<uint16_t>("iconSlot", 11)
+	    .Value<uint8_t>("iconCharging", 1)
+	    .Value<uint32_t>("iconPowerUp", 1)
+	    .Ref("iconCharger", 8)
+	    .Value<float>("iconStore", 42.5f)
+	    .Refs("iconSeedsOut", {40});
+	fake.Record(VanillaType::WorshipSpellIcon)
+	    .Value<uint32_t>("iconSeed", k_Seed(SpellSeedType::Food))
+	    .Ref("iconSite", 2)
+	    .Value<uint16_t>("iconSlot", 10)
+	    .Value<uint8_t>("iconCharging", 0)
+	    .Value<uint32_t>("iconPowerUp", 0xFFFFFFFFU)
+	    .Ref("iconCharger", 0)
+	    .Value<float>("iconStore", 0.0f)
+	    .Refs("iconSeedsOut", {});
+	fake.Record(VanillaType::Player).Value<uint8_t>("number", 1).Refs("interfaces", {7});
+	fake.Record(VanillaType::PlayerInterface);
+	fake.Record(VanillaType::PlayerInterfaceStatus).Ref("interface", 7);
+	const auto imported = world_import::ReadTowns(fake.Make());
+	ASSERT_EQ(imported.worshipSites.size(), 1U);
+	const auto& site = imported.worshipSites[0];
+	ASSERT_TRUE(site.danceValues.has_value());
+	const auto& dance = *site.danceValues;
+	EXPECT_EQ(dance.number, 3U);
+	EXPECT_EQ(dance.type, DanceInfo::CitadelDance_3);
+	EXPECT_FLOAT_EQ(dance.clock, 37.0f);
+	EXPECT_EQ(dance.loopLength, 4U);
+	EXPECT_FLOAT_EQ(dance.speed, 0.5f);
+	EXPECT_FLOAT_EQ(dance.rate, 1.4f);
+	EXPECT_FLOAT_EQ(dance.dancingRate, 1.0f);
+	EXPECT_FLOAT_EQ(dance.angle, 2.5f);
+	EXPECT_FALSE(dance.stopped);
+	EXPECT_EQ(dance.duration, 0U);
+	EXPECT_EQ(dance.startTurn, 80U);
+	EXPECT_EQ(dance.firstDancerTurn, 82U);
+	EXPECT_EQ(dance.dancers, 6U);
+	EXPECT_EQ(dance.onTheirWay, 3U);
+	EXPECT_EQ(dance.handTurns, 101U);
+	EXPECT_TRUE(dance.cameraWanted);
+	EXPECT_FALSE(dance.cameraMade);
+	ASSERT_EQ(site.iconValues.size(), 2U);
+	const auto& water = site.iconValues[0];
+	EXPECT_EQ(water.number, 4U);
+	EXPECT_EQ(water.seed, SpellSeedType::Water);
+	EXPECT_EQ(water.slot, 11);
+	EXPECT_TRUE(water.charging);
+	EXPECT_EQ(water.powerUp, 1);
+	EXPECT_EQ(water.charger, PlayerNames::PLAYER_TWO);
+	EXPECT_EQ(water.chargeStartTurn, 95U);
+	EXPECT_FLOAT_EQ(water.store, 42.5f);
+	EXPECT_EQ(water.seedsOut, (std::vector<uint32_t> {40}));
+	EXPECT_EQ(water.removeTurns, 0U);
+	const auto& food = site.iconValues[1];
+	EXPECT_EQ(food.seed, SpellSeedType::Food);
+	EXPECT_FALSE(food.charging);
+	EXPECT_EQ(food.powerUp, -1);
+	EXPECT_EQ(food.charger, std::nullopt);
+	EXPECT_TRUE(food.seedsOut.empty());
+}
+
+// A dance with no first dancer keeps no turn of its first dancer, and a stopped dance stays stopped
+TEST(VanillaWorldImport, ADanceWithNoFirstDancerHasNoTurnForIt)
+{
+	auto fake = GameAtTurn(100);
+	fake.Record(VanillaType::Dance)
+	    .Value<uint32_t>("danceRow", static_cast<uint32_t>(DanceInfo::Worship))
+	    .Value<uint32_t>("danceState", 1)
+	    .Value<uint32_t>("danceFirstDancerCame", 0)
+	    .Value<uint32_t>("danceFirstDancerTurn", 55);
+	fake.Record(VanillaType::Dance).Value<uint32_t>("danceRow", 25);
+	const auto world = fake.Make();
+	const auto dance = world_import::ReadDance(world, *world.Record(2));
+	ASSERT_TRUE(dance.has_value());
+	EXPECT_TRUE(dance->stopped);
+	EXPECT_EQ(dance->firstDancerTurn, std::nullopt);
+	EXPECT_FALSE(world_import::ReadDance(world, *world.Record(3)).has_value());
+}
+
+// A dance and an icon take the values of the file. The hand of a game with one player is the hand of the first god.
+TEST(VanillaWorldImport, ADanceAndAnIconTakeTheValuesOfTheFile)
+{
+	ecs::components::Dance dance;
+	dance.dancers = 2;
+	world_import::PutDanceValues(dance, {.clock = 12.0f,
+	                                     .loopLength = 3,
+	                                     .speed = 0.75f,
+	                                     .rate = 2.2f,
+	                                     .dancingRate = 1.8f,
+	                                     .angle = 1.5f,
+	                                     .stopped = false,
+	                                     .duration = 500,
+	                                     .startTurn = 40,
+	                                     .firstDancerTurn = 44,
+	                                     .dancers = 9,
+	                                     .onTheirWay = 4,
+	                                     .handTurns = 7,
+	                                     .cameraWanted = true,
+	                                     .cameraMade = true});
+	EXPECT_FLOAT_EQ(dance.clock, 12.0f);
+	EXPECT_EQ(dance.loopLength, 3U);
+	EXPECT_FLOAT_EQ(dance.speed, 0.75f);
+	EXPECT_FLOAT_EQ(dance.rate, 2.2f);
+	EXPECT_FLOAT_EQ(dance.dancingRate, 1.8f);
+	EXPECT_FLOAT_EQ(dance.angle, 1.5f);
+	EXPECT_EQ(dance.state, ecs::components::Dance::State::Dancing);
+	EXPECT_EQ(dance.duration, 500U);
+	EXPECT_EQ(dance.startTurn, 40U);
+	EXPECT_EQ(dance.firstDancerTurn, 44U);
+	// The dancers stay as the dance has them
+	EXPECT_EQ(dance.dancers, 2U);
+	EXPECT_EQ(dance.onTheirWay, 0U);
+	EXPECT_EQ(dance.hands[0].nearTurns, 7U);
+	EXPECT_TRUE(dance.hands[0].cameraWanted);
+	EXPECT_TRUE(dance.hands[0].cameraMade);
+	EXPECT_FALSE(dance.hands[0].cameraAsked);
+	EXPECT_EQ(dance.hands[1].nearTurns, 0U);
+
+	ecs::components::WorshipIcon icon {.seed = SpellSeedType::Heal};
+	world_import::PutIconValues(icon, {.seed = SpellSeedType::Heal,
+	                                   .charging = true,
+	                                   .powerUp = 2,
+	                                   .charger = PlayerNames::PLAYER_ONE,
+	                                   .chargeStartTurn = 60,
+	                                   .store = 15.0f});
+	EXPECT_TRUE(icon.charging);
+	EXPECT_EQ(icon.powerUp, 2);
+	EXPECT_EQ(icon.charger, PlayerNames::PLAYER_ONE);
+	EXPECT_EQ(icon.chargeStartTurn, 60U);
+	EXPECT_FLOAT_EQ(icon.store, 15.0f);
+	// An icon of the file that charges for no hand charges for no player
+	world_import::PutIconValues(icon, {.seed = SpellSeedType::Heal});
+	EXPECT_FALSE(icon.charging);
+	EXPECT_EQ(icon.powerUp, -1);
+	EXPECT_EQ(icon.charger, PlayerNames::NEUTRAL);
+	EXPECT_FLOAT_EQ(icon.store, 0.0f);
+}
+
+// Each spell icon of a saved game of Land 1 has a spell seed of the table, and each dance of the saves has a row of
+// the table of the dances
+TEST(VanillaWorldImport, SavedGamesOfLandOneHaveASpellSeedForEachIconAndARowForEachDance)
+{
+	std::map<SpellSeedType, size_t> seeds;
+	size_t dances = 0;
+	const auto files = ForEachLandOneSave([&seeds, &dances](const std::filesystem::path& path, const VanillaWorld& world) {
+		for (const auto& record : world.Records())
+		{
+			if (record.Is(VanillaType::TownCentreSpellIcon) || record.Is(VanillaType::TownSpellIcon) ||
+			    record.Is(VanillaType::WorshipSpellIcon))
+			{
+				const auto number = world.Word(record, "iconSeed").value_or(0);
+				const auto seed = world_import::SpellSeedRowOf(number);
+				ASSERT_TRUE(seed.has_value()) << path << " " << record.number << " " << number;
+				++seeds[*seed];
+			}
+			if (record.Is(VanillaType::Dance))
+			{
+				++dances;
+				EXPECT_TRUE(world_import::ReadDance(world, record).has_value()) << path << " " << record.number;
+			}
+		}
+	});
+	if (!files.has_value())
+	{
+		GTEST_SKIP() << "Set OPENBLACK_VANILLA_SAVES to a copy of a Profiles folder of the game to check its saved games";
+	}
+	// The saves of Land 1 here have no spell icon and no dance: no save has a worship site
+	size_t icons = 0;
+	for (const auto& [seed, count] : seeds)
+	{
+		icons += count;
+	}
+	std::cout << icons << " spell icons and " << dances << " dances in the saves\n";
 }
 
 // A site with a tribe that the table does not have is not taken

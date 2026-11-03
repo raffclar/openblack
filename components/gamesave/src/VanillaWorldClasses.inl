@@ -988,16 +988,22 @@ void ReadShowNeedsVisuals(WorldReader& r)
 void ReadDance(WorldReader& r)
 {
 	ReadGroupBehaviour(r);
+	// The row of the table of the dances, a word that only the start of a dance sets to 0, and the speed that the dance
+	// was asked to go at
+	r.Word("danceRow");
 	r.Word();
-	r.Word();
-	r.Word();
-	r.Ref();
-	r.Word();
-	r.Word();
-	r.Word();
-	r.Word();
-	r.Word();
-	r.Word();
+	r.Float("danceSpeed");
+	// The thing that the dance is for, the state of the dance (0 dancing, 1 stopped), how many turns it lasts and the
+	// turn when it started
+	r.Ref("danceOwner");
+	r.Word("danceState");
+	r.Word("danceDuration");
+	r.Word("danceStartTurn");
+	// Whether the first dancer came, the turn when it came, and the count of the dancers on their way
+	r.Word("danceFirstDancerCame");
+	r.Word("danceFirstDancerTurn");
+	r.Word("danceOnTheirWay");
+	// The name of a key frame, and a flag that makes the dance follow its owner. Every maker sets the flag to 0.
 	r.Bytes(16);
 	r.Word();
 	// The footpaths that lead to the dance
@@ -1007,31 +1013,40 @@ void ReadDance(WorldReader& r)
 void ReadGroupBehaviour(WorldReader& r)
 {
 	ReadPositioned(r);
+	// The clock of the dance, then three words that only the maker and the load write
+	r.Float("danceClock");
 	r.Word();
 	r.Word();
 	r.Word();
+	// The key frames
+	r.Refs("danceKeyFrames");
 	r.Word();
+	r.Word();
+	r.Word();
+	// How many lengths of the clock the dance takes before it starts again
+	r.Word("danceLoopLength");
+	// All the groups, the groups that share the dancers and the groups with a fixed number of dancers
+	r.Refs("danceGroups");
+	r.Refs("danceSharedGroups");
+	r.Refs("danceLimitedGroups");
+	// The count of the dancers, the round of the newcomers and its length
+	r.Word("danceDancers");
+	r.Byte("danceRound");
+	r.Word("danceRoundLength");
+	// The rate of the groups, and the rate at which the dance last started to dance
+	r.Float("danceRate");
+	r.Float("danceDancingRate");
 	r.Refs();
+	r.Float("danceAngle");
+	// The hand stayed near long enough, a word that only the makers write, the dance made its camera, and the dance is
+	// deleted
+	r.Word("danceCameraWanted");
+	r.Word();
+	r.Word("danceCameraMade");
 	r.Word();
 	r.Word();
-	r.Word();
-	r.Word();
-	r.Refs();
-	r.Refs();
-	r.Refs();
-	r.Word();
-	r.Byte();
-	r.Word();
-	r.Word();
-	r.Word();
-	r.Refs();
-	r.Word();
-	r.Word();
-	r.Word();
-	r.Word();
-	r.Word();
-	r.Word();
-	r.Word();
+	// How many turns in a row the hand of the player was near the dance
+	r.Word("danceHandTurns");
 }
 
 void ReadDanceKeyFrame(WorldReader& r)
@@ -1469,8 +1484,9 @@ void ReadReward(WorldReader& r)
 void ReadSpellIcon(WorldReader& r)
 {
 	ReadMultiMapFixed(r);
-	r.Word();
-	r.Bytes(12);
+	// The row of the table of the spell seeds, and the place where its seed shows
+	r.Word("iconSeed");
+	r.Bytes(12, "iconSeedPlace");
 	r.Word();
 }
 
@@ -1539,16 +1555,21 @@ void ReadPlannedFeature(WorldReader& r)
 void ReadWorshipSpellIcon(WorldReader& r)
 {
 	ReadSpellIcon(r);
-	r.Half();
-	r.Ref();
-	r.Word();
-	r.Word();
-	r.Half();
-	r.Byte();
-	r.Word();
-	r.Ref();
-	r.Word();
-	r.Refs();
+	// The turns until the icon goes and its size before it started to go. Nothing in the game starts this countdown, so
+	// it is always 0.
+	r.Half("iconRemoveTurns");
+	r.Ref("iconSite");
+	r.Float("iconRemoveScale");
+	// The turn when the charge started, and the place of the icon at its site
+	r.Word("iconChargeStart");
+	r.Half("iconSlot");
+	// Whether the icon charges, the power-up level of the charge, and the interface status of the hand that asked for it
+	r.Byte("iconCharging");
+	r.Word("iconPowerUp");
+	r.Ref("iconCharger");
+	// The prayer power that the icon stored, and the seeds made from it that are still out
+	r.Float("iconStore");
+	r.Refs("iconSeedsOut");
 }
 
 // No save file of the tests has this type. This layout comes only from the game's save code.
