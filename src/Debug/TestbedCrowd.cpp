@@ -12,10 +12,12 @@
 #include <cmath>
 
 #include <algorithm>
+#include <iterator>
 #include <numbers>
 #include <tuple>
 
 #include <glm/common.hpp>
+#include <glm/geometric.hpp>
 #include <glm/trigonometric.hpp>
 
 #include "3D/FlatLand.h"
@@ -110,8 +112,13 @@ bool testbed_scenarios::NearLake(glm::vec2 offset, float margin)
 }
 
 std::vector<glm::vec2> testbed_scenarios::SpreadPoints(size_t count, float spacing, float lakeMargin, float jitter,
-                                                       CrowdRandom& random)
+                                                       CrowdRandom& random, std::span<const glm::vec2> keepClear,
+                                                       float clearRadius)
 {
+	const auto clear = [keepClear, clearRadius](glm::vec2 point) {
+		return std::ranges::none_of(keepClear,
+		                            [point, clearRadius](glm::vec2 kept) { return glm::distance(point, kept) < clearRadius; });
+	};
 	std::vector<glm::vec2> points;
 	if (count == 0 || spacing <= 0.0f)
 	{
@@ -135,7 +142,7 @@ std::vector<glm::vec2> testbed_scenarios::SpreadPoints(size_t count, float spaci
 			for (int x = -radius; x <= radius; ++x)
 			{
 				const glm::vec2 point {static_cast<float>(x) * spacing, static_cast<float>(y) * spacing};
-				if ((x * x) + (y * y) <= radius * radius && !NearLake(point, lakeMargin))
+				if ((x * x) + (y * y) <= radius * radius && !NearLake(point, lakeMargin) && clear(point))
 				{
 					cells.push_back({x, y});
 				}
@@ -163,6 +170,14 @@ std::vector<glm::vec2> testbed_scenarios::SpreadPoints(size_t count, float spaci
 	return points;
 }
 
+std::vector<glm::vec2> testbed_scenarios::TownCentres(const VillageLayout& layout)
+{
+	std::vector<glm::vec2> centres;
+	centres.reserve(layout.towns.size());
+	std::ranges::transform(layout.towns, std::back_inserter(centres), &CrowdTown::offset);
+	return centres;
+}
+
 VillagerInfo testbed_scenarios::VillagerOf(Tribe tribe, size_t role)
 {
 	return static_cast<VillagerInfo>((static_cast<size_t>(tribe) * k_RolesPerTribe) + (role % k_RolesPerTribe));
@@ -178,11 +193,12 @@ AbodeInfo testbed_scenarios::StoragePitOf(Tribe tribe)
 	return static_cast<AbodeInfo>((static_cast<size_t>(tribe) * k_AbodesPerTribe) + k_StoragePitIndex);
 }
 
-std::vector<CrowdCreature> testbed_scenarios::LayOutCreatures(size_t count, uint32_t seed)
+std::vector<CrowdCreature> testbed_scenarios::LayOutCreatures(size_t count, uint32_t seed, std::span<const glm::vec2> keepClear,
+                                                              float clearRadius)
 {
 	CrowdRandom random(seed);
 	// Creatures are big: keep the lake's bank clear of them by a creature's stride
-	const auto points = SpreadPoints(count, k_CreatureSpacing, k_CreatureSpacing, 0.3f, random);
+	const auto points = SpreadPoints(count, k_CreatureSpacing, k_CreatureSpacing, 0.3f, random, keepClear, clearRadius);
 	constexpr auto k_Species = static_cast<size_t>(CreatureType::_COUNT) - 1;
 	std::vector<CrowdCreature> creatures;
 	creatures.reserve(points.size());

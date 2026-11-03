@@ -115,6 +115,9 @@ public:
 	[[nodiscard]] const BenchmarkSettings& GetBenchmarkSettings() const { return _benchmark; }
 	/// The frames still to settle before the crowd's frames are measured, and how many have been
 	[[nodiscard]] uint32_t GetWarmUpLeft() const;
+	/// The live results sum up only this many of the newest frames, so that they cost the same in a long run. The results
+	/// that are saved sum up all the frames kept.
+	static constexpr size_t k_LiveFrames = 600;
 	[[nodiscard]] size_t GetMeasuredFrames() const { return _recorder ? _recorder->Count() : 0; }
 	/// The frames measured so far, summed up every so often as they are
 	[[nodiscard]] const benchmark::Results& GetLiveResults() const { return _liveResults; }

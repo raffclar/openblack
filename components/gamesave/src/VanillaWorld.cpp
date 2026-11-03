@@ -1430,12 +1430,14 @@ void ReadFootball(WorldReader& r)
 void ReadWorkshop(WorldReader& r)
 {
 	ReadAbode(r);
-	r.Ref();
-	r.Ref();
-	r.Word();
-	r.Word();
-	r.Array(1);
-	r.Refs();
+	// The wood pile and the wood flag, the turns until the scaffold that it makes is finished, the count of its
+	// scaffolds, what each of the three places of its yard holds, and its scaffolds
+	r.Ref("workshopWoodPile");
+	r.Ref("workshopFlag");
+	r.Word("workshopMakingTurns");
+	r.Word("workshopCounted");
+	r.Array(1, "workshopPlaces");
+	r.Refs("workshopScaffolds");
 }
 
 void ReadTownCentreSpellIcon(WorldReader& r)

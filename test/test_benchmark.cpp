@@ -11,6 +11,7 @@
 
 #include <algorithm>
 #include <array>
+#include <numbers>
 #include <set>
 #include <string>
 #include <vector>
@@ -144,6 +145,35 @@ TEST(TestbedCrowd, CreaturesMixSpeciesAndOwnersAndKeepApart)
 	EXPECT_EQ(species.count(CreatureType::Unknown), 0u);
 }
 
+TEST(TestbedCrowd, CreaturesKeepClearOfTheTownsAmongThem)
+{
+	const auto village = LayOutVillagers(4 * k_VillagersPerTown, 2026);
+	const auto centres = TownCentres(village);
+	ASSERT_EQ(centres.size(), 4u);
+	EXPECT_EQ(centres.front(), village.towns.front().offset);
+	const auto creatures = LayOutCreatures(100, 2026, centres, k_TownClearRadius);
+	ASSERT_EQ(creatures.size(), 100u);
+	// A creature is nudged off its grid point by at most 30% of the spacing on each axis
+	const auto nudge = 0.3f * k_CreatureSpacing * std::numbers::sqrt2_v<float>;
+	for (const auto& creature : creatures)
+	{
+		EXPECT_FALSE(InLake(creature.offset));
+		for (const auto& centre : centres)
+		{
+			EXPECT_GE(glm::distance(creature.offset, centre), k_TownClearRadius - nudge);
+		}
+	}
+	// With nothing to keep clear, the layout is that of the plain crowd
+	const auto plain = LayOutCreatures(100, 2026, {}, k_TownClearRadius);
+	const auto old = LayOutCreatures(100, 2026);
+	ASSERT_EQ(plain.size(), old.size());
+	for (size_t i = 0; i < plain.size(); ++i)
+	{
+		EXPECT_EQ(plain[i].offset, old[i].offset);
+		EXPECT_EQ(plain[i].species, old[i].species);
+	}
+}
+
 TEST(TestbedCrowd, VillagersLiveInTownsOfHomes)
 {
 	const auto layout = LayOutVillagers(1234, 2026);
@@ -244,6 +274,31 @@ TEST(BenchmarkRecorder, KeepsOnlyTheLastFrames)
 	recorder.Clear();
 	EXPECT_EQ(recorder.Count(), 0u);
 	EXPECT_EQ(recorder.Summarise().frame.count, 0u);
+}
+
+TEST(BenchmarkRecorder, SummarisesOnlyTheNewestFramesWhenAsked)
+{
+	Recorder recorder(TwoStages(), 10);
+	for (int i = 0; i < 25; ++i)
+	{
+		// The first stage runs only in frames 0 to 19
+		const std::array<float, 2> stages {i < 20 ? 1.0f : 0.0f, 0.5f};
+		recorder.Add(static_cast<float>(i), 0.0f, 0.0f, stages);
+	}
+	// Frames 21 to 24
+	const auto newest = recorder.SummariseNewest(4);
+	EXPECT_EQ(newest.frame.count, 4u);
+	EXPECT_NEAR(newest.frame.average, 22.5f, k_Epsilon);
+	EXPECT_EQ(newest.frame.max, 24.0f);
+	ASSERT_EQ(newest.stages.size(), 1u);
+	EXPECT_EQ(newest.stages[0].stage, 1u);
+	// More frames than it keeps is all of them, the same as the full summary
+	const auto all = recorder.SummariseNewest(1'000);
+	EXPECT_EQ(all.frame.count, 10u);
+	EXPECT_EQ(all.frame.average, recorder.Summarise().frame.average);
+	EXPECT_EQ(all.stages.size(), 2u);
+	recorder.Clear();
+	EXPECT_EQ(recorder.SummariseNewest(4).frame.count, 0u);
 }
 
 TEST(BenchmarkRecorder, WritesJsonAndCsv)

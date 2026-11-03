@@ -1653,6 +1653,32 @@ std::optional<glm::vec3> CreatureAnimationSystem::BoneInAnimation(entt::entity c
 	return bone < matrices.size() ? std::optional(glm::vec3(matrices[bone][3])) : std::nullopt;
 }
 
+std::array<std::optional<glm::vec3>, 2> CreatureAnimationSystem::TwoBonesInAnimation(entt::entity creature, size_t animation,
+                                                                                     float timeMs, uint32_t first,
+                                                                                     uint32_t second, bool mirrored)
+{
+	const auto* played = PosedAnimationOf(BlendStores(), creature, animation);
+	const auto* stand = PosedAnimationOf(BlendStores(), creature, creature_layers::animations::k_Stand);
+	if (played == nullptr || stand == nullptr)
+	{
+		return {};
+	}
+	const auto& body = Locator::entitiesRegistry::value().Get<CreatureAnimation>(creature);
+	const auto bones = body.skeleton.parents.size();
+	if (first >= bones && second >= bones)
+	{
+		return {};
+	}
+	const auto time = static_cast<uint32_t>(std::clamp(timeMs, 0.0f, static_cast<float>(std::max(played->duration, 1u) - 1)));
+	const auto poses = skeletal_animation::SampleCycle(
+	    *played, *stand, time, body.skeleton, mirrored ? std::span<const uint32_t>(body.mirror) : std::span<const uint32_t> {});
+	const auto matrices = skeletal_animation::ComposeBoneMatrices(poses, body.skeleton.parents);
+	const auto at = [&](uint32_t bone) {
+		return bone < bones && bone < matrices.size() ? std::optional(glm::vec3(matrices[bone][3])) : std::nullopt;
+	};
+	return {at(first), at(second)};
+}
+
 std::optional<glm::vec3> CreatureAnimationSystem::MiddleOfBonesInAnimation(entt::entity creature, size_t animation,
                                                                            float timeMs, std::span<const uint32_t> bones)
 {

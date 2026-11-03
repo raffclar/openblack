@@ -4068,10 +4068,12 @@ void CreatureFightSystem::TestBlow(entt::entity creature, int32_t fromMs)
 	const auto& transform = registry.Get<const Transform>(creature);
 	// The bone that strikes leans with the slope of the land, as the body does
 	const auto placement = ecs::creature_placement::PlacementOf(registry, creature, transform);
-	const auto worldBone = [&](uint32_t which, int32_t timeMs) -> std::optional<glm::vec3> {
-		const auto point =
-		    animations.BoneInAnimation(creature, attacker.animation, static_cast<float>(timeMs), which, attacker.mirrored);
+	const auto toWorld = [&placement](const std::optional<glm::vec3>& point) -> std::optional<glm::vec3> {
 		return point.has_value() ? std::optional(glm::vec3(placement * glm::vec4(*point, 1.0f))) : std::nullopt;
+	};
+	const auto worldBone = [&](uint32_t which, int32_t timeMs) {
+		return toWorld(
+		    animations.BoneInAnimation(creature, attacker.animation, static_cast<float>(timeMs), which, attacker.mirrored));
 	};
 	auto before = worldBone(bone, fromMs);
 	if (!before.has_value())
@@ -4088,7 +4090,10 @@ void CreatureFightSystem::TestBlow(entt::entity creature, int32_t fromMs)
 	std::optional<std::pair<glm::vec3, glm::vec3>> landed;
 	for (const auto time : times)
 	{
-		const auto at = worldBone(bone, time);
+		// The bone that strikes and the groin come from one sample of the animation at the time
+		const auto [strikes, groinAt] = animations.TwoBonesInAnimation(creature, attacker.animation, static_cast<float>(time),
+		                                                               bone, groin, attacker.mirrored);
+		const auto at = toWorld(strikes);
 		if (!at.has_value())
 		{
 			continue;
@@ -4098,7 +4103,7 @@ void CreatureFightSystem::TestBlow(entt::entity creature, int32_t fromMs)
 			Locator::liquidParticleSystem::value().Add(*at, glm::vec3(0.0f), fight::SwingPuffSize(size, special),
 			                                           fight::k_SwingPuffColour, liquid_particles::Kind::Dust);
 		}
-		const auto from = worldBone(groin, time);
+		const auto from = toWorld(groinAt);
 		if (open && !landed.has_value() && from.has_value() && !bones.empty())
 		{
 			// All five lines are tested, and the last line that meets the body within its length gives the point

@@ -323,6 +323,94 @@ inline constexpr size_t k_PileRiseBytes = 48;
 /// its curve. The speed of the target is always 0 for a pile.
 [[nodiscard]] magic::piles::Rise PileRiseOf(std::span<const uint8_t, k_PileRiseBytes> bytes);
 
+/// The values of a workshop of the file
+struct ImportedWorkshop
+{
+	/// The game turns until the scaffold that the workshop makes is finished, 0 when it makes none
+	int32_t makingTurns {0};
+	/// The scaffolds that the workshop counts as its own
+	uint32_t counted {0};
+	/// What each of the three places of its yard holds: 0 free, 1 away in the hand, 2 holds its scaffold
+	std::array<uint8_t, 3> places {};
+	/// The numbers of the objects of its scaffolds in the file, the newest first
+	std::vector<uint32_t> scaffolds;
+	/// The number of the object of its wood pile in the file, 0 for none
+	uint32_t woodPile {0};
+};
+
+/// The values that the flags of a scaffold give
+struct ImportedScaffoldFlags
+{
+	/// The phantom grows, or has its full size
+	bool grows {false};
+	/// The scaffold looked for an offer since the hand last moved
+	bool looked {false};
+	/// The game turns since the scaffold last showed that it has no offer
+	uint8_t noOfferTurns {0};
+	/// Its place in the yard of its workshop, 0 to 3
+	uint8_t place {0};
+	/// The offer is a village centre that starts a new town
+	bool foundsTown {false};
+	/// The phantom does not turn
+	bool fixedAngle {false};
+	/// The hand let the scaffold go onto the land, not by force
+	bool gentle {false};
+	/// A script marked the scaffold to destroy the things in its way
+	bool destroysThingsInWay {false};
+};
+
+/// The values of the flags of a scaffold of the file
+[[nodiscard]] constexpr ImportedScaffoldFlags ScaffoldFlagsOf(uint16_t flags)
+{
+	return {.grows = (flags & 0x0001U) != 0,
+	        .looked = (flags & 0x0002U) != 0,
+	        .noOfferTurns = static_cast<uint8_t>((flags >> 2U) & 0x0FU),
+	        .place = static_cast<uint8_t>((flags >> 6U) & 0x03U),
+	        .foundsTown = (flags & 0x0100U) != 0,
+	        .fixedAngle = (flags & 0x0200U) != 0,
+	        .gentle = (flags & 0x0400U) != 0,
+	        .destroysThingsInWay = (flags & 0x0800U) != 0};
+}
+
+/// The game turn that the load gives each scaffold as the turn that a hand last put it down. The file does not keep
+/// that turn.
+inline constexpr uint32_t k_ScaffoldPutDownTurnAfterLoad = 1;
+
+/// A building that the phantom of a scaffold of the file offers
+struct ImportedScaffoldOffer
+{
+	AbodeInfo row {AbodeInfo::None};
+	/// The turn of the building about the up axis, in radians
+	float heading {0.0f};
+	float scale {1.0f};
+};
+
+/// A scaffold of the file
+struct ImportedScaffold
+{
+	uint32_t number {0};
+	gamesave::MapCoords position {};
+	float heading {0.0f};
+	/// Its size, which gives how many scaffolds it is worth
+	float scale {1.0f};
+	/// The numbers of the objects of its town and of the building of its site in the file, 0 for none
+	uint32_t town {0};
+	uint32_t site {0};
+	/// The building that its phantom shows, and the building that shows next, nothing for none
+	std::optional<ImportedScaffoldOffer> offer;
+	std::optional<ImportedScaffoldOffer> nextOffer;
+	/// The milliseconds until the phantom has its full size, or until it is small again
+	int32_t changeMs {0};
+	/// The player whose hand holds the scaffold, or let it go last until it came to rest, nothing for none
+	std::optional<PlayerNames> handPlayer;
+	/// The turn of the phantom about the up axis, in radians, and the size of the phantom at its full size
+	float phantomAngle {0.0f};
+	float phantomScale {0.0f};
+	ImportedScaffoldFlags flags {};
+	/// The abode number of the building that a script gave the scaffold, nothing when no script gave one
+	std::optional<AbodeNumber> scriptBuilding;
+};
+
 struct ImportedAbode
 {
 	uint32_t number {0};
@@ -343,8 +431,10 @@ struct ImportedAbode
 	uint8_t present {0};
 	/// The power of a wonder, nothing for another building
 	std::optional<float> wonderPower;
-	/// The piles of a storage pit, in the order of the file
+	/// The piles of a storage pit or the wood pile of a workshop, in the order of the file
 	std::vector<ImportedPile> piles;
+	/// The values of a workshop, nothing for another building
+	std::optional<ImportedWorkshop> workshop;
 };
 
 /// The totem of a town centre
@@ -499,6 +589,8 @@ struct ImportedTowns
 	std::vector<ImportedAbode> abodes;
 	/// The totems of the town centres
 	std::vector<ImportedTotem> totems;
+	/// The scaffolds, in the order of the file
+	std::vector<ImportedScaffold> scaffolds;
 	std::vector<ImportedVillager> villagers;
 	/// The plans and the building sites of the towns. The lists of each town give their order.
 	std::vector<ImportedPlan> plans;

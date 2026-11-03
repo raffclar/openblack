@@ -70,10 +70,14 @@ public:
 	[[nodiscard]] size_t Capacity() const { return _capacity; }
 	[[nodiscard]] std::span<const StageInfo> Stages() const { return _stages; }
 	[[nodiscard]] Results Summarise() const;
+	/// Only the newest frames, up to the number given, so that a summary made while it runs costs the same however many
+	/// frames it keeps
+	[[nodiscard]] Results SummariseNewest(size_t frames) const;
 
 private:
-	/// The frames in the order they came, the oldest first
-	[[nodiscard]] std::vector<float> Column(const std::vector<float>& values, size_t stride, size_t offset) const;
+	/// The newest frames, up to the number given, in the order they came, the oldest first
+	[[nodiscard]] std::vector<float> Column(const std::vector<float>& values, size_t stride, size_t offset,
+	                                        size_t frames) const;
 
 	std::vector<StageInfo> _stages;
 	size_t _capacity;
