@@ -803,7 +803,8 @@ void ReadReaction(WorldReader& r)
 	r.Refs();
 	r.Word();
 	r.Word();
-	r.Ref();
+	// The dance that the villagers dance as they react, if any
+	r.Ref("reactionDance");
 	r.Word();
 	r.Word();
 	r.Ref();
@@ -1039,10 +1040,10 @@ void ReadGroupBehaviour(WorldReader& r)
 	r.Float("danceDancingRate");
 	r.Refs();
 	r.Float("danceAngle");
-	// The hand stayed near long enough, a word that only the makers write, the dance made its camera, and the dance is
-	// deleted
+	// The hand stayed near long enough, a word that only a dance of a script sets, the dance made its camera, and the
+	// dance is deleted
 	r.Word("danceCameraWanted");
-	r.Word();
+	r.Word("danceCameraOff");
 	r.Word("danceCameraMade");
 	r.Word();
 	r.Word();

@@ -149,7 +149,7 @@ struct Dance
 	State state {State::Stopped};
 	/// Whether it starts by itself once its dancers have come
 	bool autostart {false};
-	/// Made by a script, rather than by a town or a site
+	/// Made by a script, rather than by a town or a site. Such a dance never makes its camera.
 	bool madeByScript {false};
 	/// How fast it is asked to go, 0 to 1, as the worship sets it; every dance is made at a quarter
 	float speed {0.0f};
