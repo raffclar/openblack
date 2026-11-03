@@ -53,6 +53,26 @@ CreatureSetup Tiger()
 void testbed_scenarios::AddGestureScenarios(std::vector<Scenario>& all)
 {
 	all.push_back({
+	    .id = "miracles.script_plays_gesture",
+	    .name = "A script shows a gesture on the land",
+	    .facet = Facet::Miracles,
+	    .description = "After two seconds a script calls PLAY_GESTURE with the star gesture, a corner at -15, -15 "
+	                   "metres from the middle of the testbed and a size of 30 metres.",
+	    .expected = "The trail of the star gesture shows on the land, as the trail of a gesture that the hand drew and "
+	                "the game knew. Its square is 30 metres across and starts at the corner, towards the east and the "
+	                "south. The trail follows the land and then fades. No miracle starts and no hand moves.",
+	    .environment = {.dispenserGrid = false},
+	    .framing = {.shot = Shot::Testbed},
+	    .commands = {{.kind = Kind::CallNative,
+	                  .delaySeconds = 2.0f,
+	                  .script = "PLAY_GESTURE",
+	                  .scriptArguments = {{.kind = ScriptArgument::Kind::Integer,
+	                                       .number = static_cast<float>(GestureType::Star)},
+	                                      {.kind = ScriptArgument::Kind::Position, .point = {-15.0f, -15.0f}},
+	                                      {.kind = ScriptArgument::Kind::Number, .number = 30.0f}}}},
+	});
+
+	all.push_back({
 	    .id = "miracles.gesture_circle_shield",
 	    .name = "Size a shield with a circle",
 	    .facet = Facet::Miracles,
