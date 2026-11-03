@@ -36,6 +36,7 @@
 #include "ECS/Components/Hand.h"
 #include "ECS/Components/HandCreaturePress.h"
 #include "ECS/Components/HandGrab.h"
+#include "ECS/Components/HandLockEndSent.h"
 #include "ECS/Components/HandLockedCreature.h"
 #include "ECS/Components/HandStillness.h"
 #include "ECS/Components/Player.h"
@@ -57,6 +58,7 @@
 #include "ECS/Systems/Implementations/HandSystem.h"
 #include "ECS/Systems/Implementations/PlayerCommandSystem.h"
 #include "ECS/Systems/MagicSystemInterface.h"
+#include "ECS/Systems/PlayerCommandSystemInterface.h"
 
 using namespace openblack;
 using namespace openblack::player_commands;
@@ -931,4 +933,136 @@ TEST_F(ReportedHands, TheTurnRefusesAGoneCreatureAndOneThatAHandHolds)
 	{
 		spdlog::drop("game");
 	}
+}
+
+namespace
+{
+/// Keeps the commands that the hand sends, in order
+class SentCommands final: public ecs::systems::PlayerCommandSystemInterface
+{
+public:
+	void Submit(player_commands::Action action) override { sent.push_back(std::move(action)); }
+	void SendOpenBlock() override {}
+	void RunSent(uint32_t /*turn*/) override {}
+	void Reset() override {}
+	void SetTurnListener(TurnListener /*listener*/) override {}
+	void Receive(uint32_t /*turn*/, std::vector<player_commands::Command> /*commands*/) override {}
+	void SetSender(PlayerNames /*player*/) override {}
+	[[nodiscard]] PlayerNames GetSender() const override { return PlayerNames::PLAYER_ONE; }
+	[[nodiscard]] size_t PendingCount() const override { return sent.size(); }
+	void SetSource(player_commands::TurnCommandSourceInterface* /*source*/) override {}
+	[[nodiscard]] bool TurnReady(uint32_t /*turn*/) const override { return true; }
+	[[nodiscard]] bool HasSource() const override { return false; }
+
+	std::vector<player_commands::Action> sent;
+};
+} // namespace
+
+// After the button let go, the world keeps the lock and the creature stops its look at the hand. The hand sends the end
+// of the lock once, when the creature is still. Until the world ends the lock, the hand waits.
+TEST_F(ReportedHands, TheLockStaysAfterTheReleaseUntilTheCreatureIsStill)
+{
+	auto& registry = Locator::entitiesRegistry::value();
+	Locator::handSystem::reset(&_hands, [](ecs::systems::HandSystemInterface* /*unowned*/) {});
+	SentCommands commands;
+	Locator::playerCommandSystem::reset(&commands, [](ecs::systems::PlayerCommandSystemInterface* /*unowned*/) {});
+	const auto log = spdlog::get("game") != nullptr ? nullptr : spdlog::null_logger_mt("game");
+	const auto creature = registry.Create();
+	registry.Assign<ecs::components::Creature>(creature, ecs::components::Creature {.owner = PlayerNames::PLAYER_ONE});
+	auto& animation = registry.Assign<ecs::components::CreatureAnimation>(creature);
+	animation.lookAt = glm::vec3(1.0f, 2.0f, 3.0f);
+	animation.yaw.angle = 0.5f;
+	auto& eyes = registry.Assign<ecs::components::CreatureEyes>(creature);
+	eyes.lookAt = animation.lookAt;
+	ecs::systems::CreatureHandSystem creatures;
+	creatures.DoLock(PlayerNames::PLAYER_ONE, creature);
+	EXPECT_FALSE(creatures.WaitsForLockEnd());
+
+	// The release of another creature changes nothing
+	creatures.DoLockRelease(PlayerNames::PLAYER_ONE, registry.Create());
+	EXPECT_FALSE(creatures.WaitsForLockEnd());
+	EXPECT_TRUE(registry.Get<const ecs::components::CreatureAnimation>(creature).lookAt.has_value());
+
+	creatures.DoLockRelease(PlayerNames::PLAYER_ONE, creature);
+	EXPECT_TRUE(creatures.IsLocked(creature));
+	EXPECT_TRUE(creatures.WaitsForLockEnd());
+	EXPECT_TRUE(registry.Get<const ecs::components::HandLockedCreature>(_hand).released);
+	EXPECT_FALSE(registry.Get<const ecs::components::CreatureAnimation>(creature).lookAt.has_value());
+	EXPECT_FALSE(registry.Get<const ecs::components::CreatureEyes>(creature).lookAt.has_value());
+
+	// The head still turns back: the hand waits
+	creatures.InterfaceFrame();
+	EXPECT_TRUE(commands.sent.empty());
+
+	// The head looks straight ahead: the hand sends the end of the lock, once
+	registry.Get<ecs::components::CreatureAnimation>(creature).yaw.angle = 0.0f;
+	creatures.InterfaceFrame();
+	creatures.InterfaceFrame();
+	ASSERT_EQ(commands.sent.size(), 1u);
+	ASSERT_TRUE(std::holds_alternative<player_commands::HandUnlock>(commands.sent.front()));
+	EXPECT_EQ(std::get<player_commands::HandUnlock>(commands.sent.front()).object, creature);
+	EXPECT_TRUE(creatures.WaitsForLockEnd());
+
+	// The world ends the lock: the hand waits no more and forgets the end that it sent
+	creatures.DoUnlock(PlayerNames::PLAYER_ONE, creature);
+	EXPECT_FALSE(creatures.IsLocked(creature));
+	EXPECT_FALSE(creatures.WaitsForLockEnd());
+	creatures.InterfaceFrame();
+	EXPECT_FALSE(registry.AllOf<ecs::components::HandLockEndSent>(_hand));
+	EXPECT_EQ(commands.sent.size(), 1u);
+
+	Locator::playerCommandSystem::reset();
+	Locator::handSystem::reset();
+	if (log != nullptr)
+	{
+		spdlog::drop("game");
+	}
+}
+
+// A creature that went from the world does not make the hand wait after the release
+TEST_F(ReportedHands, TheHandSendsTheEndOfTheLockAtOnceForAGoneCreature)
+{
+	auto& registry = Locator::entitiesRegistry::value();
+	Locator::handSystem::reset(&_hands, [](ecs::systems::HandSystemInterface* /*unowned*/) {});
+	SentCommands commands;
+	Locator::playerCommandSystem::reset(&commands, [](ecs::systems::PlayerCommandSystemInterface* /*unowned*/) {});
+	const auto log = spdlog::get("game") != nullptr ? nullptr : spdlog::null_logger_mt("game");
+	const auto creature = registry.Create();
+	registry.Assign<ecs::components::Creature>(creature, ecs::components::Creature {.owner = PlayerNames::PLAYER_ONE});
+	registry.Assign<ecs::components::CreatureAnimation>(creature).yaw.angle = 0.5f;
+	ecs::systems::CreatureHandSystem creatures;
+	creatures.DoLock(PlayerNames::PLAYER_ONE, creature);
+	creatures.DoLockRelease(PlayerNames::PLAYER_ONE, creature);
+	registry.Destroy(creature);
+	creatures.InterfaceFrame();
+	ASSERT_EQ(commands.sent.size(), 1u);
+	EXPECT_EQ(std::get<player_commands::HandUnlock>(commands.sent.front()).object, creature);
+	Locator::playerCommandSystem::reset();
+	Locator::handSystem::reset();
+	if (log != nullptr)
+	{
+		spdlog::drop("game");
+	}
+}
+
+// The world save keeps the release of the button on the lock. The hand of this computer does not save the end that it
+// sent, so after a load it sends the end again.
+TEST_F(ReportedHands, TheSaveKeepsTheReleaseOfTheLockButNotTheSentEnd)
+{
+	auto& registry = Locator::entitiesRegistry::value();
+	registry.Assign<ecs::components::HandLockedCreature>(
+	    _hand, ecs::components::HandLockedCreature {.creature = _hand, .released = true});
+	registry.Assign<ecs::components::HandLockEndSent>(_hand, ecs::components::HandLockEndSent {.creature = _hand});
+	entt::meta_ctx context;
+	ecs::reflection::RegisterComponents(context);
+	const auto saved = ecs::reflection::SaveWorld(registry.Underlying(), context);
+	Locator::entitiesRegistry::emplace<ecs::Registry>();
+	auto& loaded = Locator::entitiesRegistry::value();
+	ASSERT_TRUE(
+	    ecs::reflection::LoadWorld(loaded.Underlying(), context, saved, ecs::reflection::WorldLoadMode::Exact).has_value());
+	const auto* locked = loaded.TryGet<const ecs::components::HandLockedCreature>(_hand);
+	ASSERT_NE(locked, nullptr);
+	EXPECT_EQ(locked->creature, _hand);
+	EXPECT_TRUE(locked->released);
+	EXPECT_FALSE(loaded.AllOf<ecs::components::HandLockEndSent>(_hand));
 }

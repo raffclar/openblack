@@ -52,6 +52,8 @@ public:
 	[[nodiscard]] bool IsLocked(entt::entity creature) const override;
 	void DoLock(PlayerNames player, entt::entity creature) override;
 	void DoUnlock(PlayerNames player, entt::entity creature) override;
+	void DoLockRelease(PlayerNames player, entt::entity creature) override;
+	[[nodiscard]] bool WaitsForLockEnd() const override;
 	void DoBruise(PlayerNames player, const player_commands::CreatureBruise& bruise) override;
 	void DoReaction(PlayerNames player, const player_commands::CreatureReaction& reaction) override;
 	/// The held creature reacts to a stroke or a slap. This computer shows the face of a stroke at once. The body action
@@ -84,6 +86,9 @@ private:
 	/// The world did not hold the creature that the press of this computer asked for: the hold of the button ends and
 	/// sends nothing
 	static void EndRefusedHold(PlayerNames player, entt::entity creature);
+	/// After the button let go of a creature that the world still holds, the hand sends the end of the lock once the
+	/// creature is still
+	static void WaitForLockEnd(entt::entity hand);
 	/// The creature feels the strokes and the slaps that the hand let go with, as a command of the player, if it is not
 	/// still
 	void SendFeedback(entt::entity creature, float sum);

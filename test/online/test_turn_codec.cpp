@@ -131,6 +131,7 @@ std::vector<Action> EachCommand()
 	    DialogueClick {.click = true, .skipKey = true},
 	    PuzzleTap {.placeX = -0x12345678, .placeZ = 0x7FEDCBA9},
 	    FishScare {.point = {2497.875f, 0.2f, -3628.25f}},
+	    HandLockRelease {.creature = Entity(31)},
 	};
 }
 
@@ -171,7 +172,7 @@ Action RandomAction(std::mt19937& random)
 		return value;
 	};
 	const auto vector = [&]() { return glm::vec3 {number(), number(), number()}; };
-	switch (bits(random) % 49)
+	switch (bits(random) % 50)
 	{
 	case 0:
 		return LeashKey {.key = static_cast<creature_leash::LeashKey>(bits(random) % 3)};
@@ -350,6 +351,8 @@ Action RandomAction(std::mt19937& random)
 		return PuzzleTap {.placeX = static_cast<int32_t>(bits(random)), .placeZ = static_cast<int32_t>(bits(random))};
 	case 47:
 		return FishScare {.point = vector()};
+	case 48:
+		return HandLockRelease {.creature = entity()};
 	default:
 		return PlayerLeft {};
 	}

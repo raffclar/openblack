@@ -118,4 +118,21 @@ constexpr uint32_t k_TapWaitMs = 225;
 /// already holds. So the turn holds a creature that changed after the press: frozen, out cold, under a script's control.
 [[nodiscard]] bool TurnTakesHold(bool inWorld, bool heldByAHand);
 
+/// The lock on a creature after the button let go of it, as the hand of this computer sees it in a frame
+struct LockAfterRelease
+{
+	/// The world holds the creature for the hand, and the button that held it let go (see player_commands::HandLockRelease)
+	bool released {false};
+	/// The hand sent the end of this lock before
+	bool endSent {false};
+	/// The creature is in the world
+	bool inWorld {false};
+	/// The creature is still (see creature_feedback::IsStill)
+	bool still {false};
+};
+/// Whether the hand sends the end of the lock (player_commands::HandUnlock) in this frame. After the button let go, the
+/// hand waits until the creature is still, then sends the end once. A creature that is not in the world any more does
+/// not make the hand wait.
+[[nodiscard]] bool SendsLockEnd(const LockAfterRelease& lock);
+
 } // namespace openblack::creature_hand

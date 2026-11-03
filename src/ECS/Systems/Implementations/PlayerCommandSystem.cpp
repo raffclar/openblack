@@ -481,6 +481,14 @@ void Run(const Command& command, uint32_t turn)
 				    openblack::Locator::handGrabSystem::value().DoUnlock(command.player, action.object);
 			    }
 		    }
+		    else if constexpr (std::is_same_v<Kind, HandLockRelease>)
+		    {
+			    // The button that holds a creature let go: the creature stops its look at the hand, and the lock stays
+			    if (openblack::Locator::creatureHandSystem::has_value())
+			    {
+				    openblack::Locator::creatureHandSystem::value().DoLockRelease(command.player, action.creature);
+			    }
+		    }
 		    else if constexpr (std::is_same_v<Kind, HandTwist>)
 		    {
 			    if (openblack::Locator::handGrabSystem::has_value())
