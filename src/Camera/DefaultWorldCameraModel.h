@@ -76,6 +76,7 @@ public:
 		        .controlsUsed = _controlsUsed,
 		        .landGripped = _landGripped,
 		        .landHeld = _landHeld,
+		        .keysMove = _keysMove,
 		        .dragTurn = _dragTurn,
 		        .dragTilt = _dragTilt};
 	}
@@ -251,6 +252,7 @@ private:
 	bool _controlsUsed {false};
 	bool _landGripped {false};
 	bool _landHeld {false};
+	bool _keysMove {false};
 	float _dragTurn {0.0f};
 	float _dragTilt {0.0f};
 	/// The self-tilting camera goes back over where it stood at the start of the frame: it tilted itself, or nothing was

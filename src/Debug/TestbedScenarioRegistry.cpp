@@ -10193,6 +10193,23 @@ void AddCombat(std::vector<Scenario>& all)
 	});
 
 	all.push_back({
+	    .id = "combat.fight_view_keys_held",
+	    .name = "A fight starts while the left arrow key moves the camera",
+	    .facet = Facet::Combat,
+	    .description = "As Watching a fight, but the left arrow key (Move Left) goes down half a second before the tigers "
+	                   "are told to fight, and stays down for three seconds. In a fight the arrow keys turn the camera.",
+	    .expected = "Before the fight the camera moves to the left. In the first step of the fight the keys of the last "
+	                "step still move the camera to the left, and the view of the fight does not follow the fighters in "
+	                "that step. Then the arrow key turns the view round the fighters, and the view follows them.",
+	    .framing = {.shot = Shot::Placed, .eye = {0.0f, 80.0f, 10.0f}, .look = {0.0f, 0.0f, 40.0f}},
+	    .creatures = {red(PlayerNames::PLAYER_ONE, 0.6f, -0.2f), blue(PlayerNames::PLAYER_TWO, 0.5f, -0.2f)},
+	    .commands = {Command {
+	                     .kind = Kind::PlainKeyDown, .delaySeconds = 0.5f, .value = static_cast<size_t>(SDL_SCANCODE_LEFT)},
+	                 Fight(Kind::StartFight, 0, 1, 0.5f), Fight(Kind::FightAuto, 0, 1, 0.2f),
+	                 Command {.kind = Kind::PlainKeyUp, .delaySeconds = 2.3f, .value = static_cast<size_t>(SDL_SCANCODE_LEFT)}},
+	});
+
+	all.push_back({
 	    .id = "combat.gesture_view_moves",
 	    .name = "Drawing a gesture while the fight view moves",
 	    .facet = Facet::Combat,

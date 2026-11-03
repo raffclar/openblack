@@ -120,6 +120,8 @@ public:
 		/// zooms the camera
 		bool landGripped {false};
 		bool landHeld {false};
+		/// Whether the movement keys move the camera to the side or forwards, with no grip of the land
+		bool keysMove {false};
 		/// What a drag of the land turned the camera across and tilted it this frame, in radians
 		float dragTurn {0.0f};
 		float dragTilt {0.0f};

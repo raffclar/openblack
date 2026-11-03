@@ -181,11 +181,15 @@ bool fight_view::WithinArena(glm::vec2 eye, glm::vec2 looking, glm::vec2 arenaCe
 	return glm::dot(eyeAway, eyeAway) < radiusSquared && glm::dot(lookAway, lookAway) < radiusSquared;
 }
 
-Tracker::Step Tracker::Follow(const Fighter& first, const Fighter& second, const Input& input, float seconds)
+void Tracker::Turn(const Input& input)
 {
-	// The player turns and tilts it
 	_headingOffset += (input.turn * k_TurnPerScreen) / input.screenWidth;
 	_pitch -= input.tilt * k_TiltPerInput;
+}
+
+Tracker::Step Tracker::Follow(const Fighter& first, const Fighter& second, const Input& input, float seconds)
+{
+	Turn(input);
 
 	const auto middle = (first.position + second.position) * 0.5f;
 	const auto focus = glm::vec3(middle.x, ((first.height + second.height) * k_HeightShare) + middle.y, middle.z);

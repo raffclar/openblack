@@ -303,4 +303,18 @@ void testbed_scenarios::AddHandNavigationScenarios(std::vector<Scenario>& all)
 		                 KeyDown(SDL_SCANCODE_LEFT, 1.0f), KeyUp(SDL_SCANCODE_LEFT, 1.0f)},
 		});
 	}
+	all.push_back({
+	    .id = "hand.key_turn_from_above",
+	    .name = "Turn the camera that looks straight down",
+	    .facet = Facet::Hand,
+	    .description = "The camera stands high over the middle of the map and looks almost straight down. After a second "
+	                   "the Z key (Rotate Left) goes down for two seconds. Then the U key (Rotate Right) goes down for two "
+	                   "seconds.",
+	    .expected = "When the turn starts, the camera tilts up to its highest pitch of 78.75 degrees and keeps its "
+	                "distance from the point that it looks at. Then it turns round that point at that pitch. The second "
+	                "key turns it back. The inspector (camera.state) shows the pitch.",
+	    .framing = {.shot = Shot::Placed, .eye = {0.0f, 160.0f, -2.0f}, .look = {0.0f, 0.0f, 0.0f}},
+	    .commands = {KeyDown(SDL_SCANCODE_Z, 1.0f), KeyUp(SDL_SCANCODE_Z, 2.0f), KeyDown(SDL_SCANCODE_U, 0.5f),
+	                 KeyUp(SDL_SCANCODE_U, 2.0f)},
+	});
 }

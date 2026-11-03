@@ -22,7 +22,6 @@
 #include <glm/gtc/constants.hpp>
 #include <glm/gtc/matrix_transform.hpp>
 #include <glm/gtx/norm.hpp>
-#include <glm/gtx/polar_coordinates.hpp>
 #include <glm/gtx/vec_swizzle.hpp>
 #include <spdlog/spdlog.h>
 
@@ -49,10 +48,12 @@
 #include "Help/HelpProfile.h"
 #include "Input/GameActionMapInterface.h"
 #include "Locator.h"
+#include "ScriptCameraModel.h"
 #include "Sound/GameSoundEffects.h"
 #include "Sound/SoundId.h"
 #include "Sound/SoundRequestInterface.h"
 #include "Windowing/WindowingInterface.h"
+#include "WorldTurn.h"
 #include "ZoomToPlaces.h"
 
 using namespace openblack;
@@ -68,14 +69,12 @@ constexpr auto k_StepScaleHeightFactor = 3.0f;
 constexpr auto k_StepScaleMin = 60.0f;
 constexpr auto k_ZoomScaleMax = 2000.0f;
 constexpr auto k_ZoomScaleMaxBelowFocus = 4.0f * k_StepScaleMin;
-// Vanilla black and white uses a pretty bad PI/2 approximation
-constexpr auto k_CameraModelHalfPi = 1.53938043f;
 constexpr auto k_RotateOnSpeedMultiplier = glm::vec2(1.9f, -1.7f);
 constexpr auto k_TwoButtonZoomFactor = 1.9f;
 // Both buttons turn the camera by the same amount for the mouse's movement across, once it has moved far enough
 constexpr auto k_TwoButtonTurnFactor = 1.9f;
 // The tilt of a unit of pitch input, in radians
-constexpr auto k_PitchPerInput = 0.002f;
+constexpr auto k_PitchPerInput = world_turn::k_TiltPerInput;
 // The clear view eases in and out over this long, and the hand grips while it is further in than this
 constexpr auto k_ClearViewSeconds = 0.5f;
 constexpr auto k_ClearViewGrips = 0.01f;
@@ -84,16 +83,12 @@ constexpr auto k_FlightHeightFactor = 0.1f;
 // The self-tilting camera eases to its place over a second
 constexpr auto k_SelfTiltEaseSeconds = 1.0f;
 
-glm::vec3 EulerFromPoints(glm::vec3 p0, glm::vec3 p1)
+/// The heading and the pitch from the camera to the point that it turns about, with the game's own angle maths. The
+/// third angle is always 0.
+glm::vec3 EulerFromPoints(glm::vec3 origin, glm::vec3 turnPoint)
 {
-	const auto diff = p0 - p1;
-	// If the camera is directly above the focus point, set pitch to 90 degrees.
-	if (glm::all(glm::lessThan(glm::abs(glm::xz(diff)), glm::vec2(0.01f, 0.01f))))
-	{
-		return {0.0f, k_CameraModelHalfPi, 0.0f};
-	}
-	// Otherwise, calculate yaw and pitch based on the direction to the focus point.
-	return {glm::pi<float>() - glm::atan(diff.x, -diff.z), glm::atan(diff.y, glm::length(glm::xz(diff))), 0.0f};
+	const auto view = script_camera::HeadingAndPitchFromPoints(origin, turnPoint);
+	return {view.heading, view.pitch, 0.0f};
 }
 
 /// Calculates the projection length of a vector onto another vector.
@@ -141,23 +136,21 @@ DefaultWorldCameraModel::~DefaultWorldCameraModel() = default;
 
 void DefaultWorldCameraModel::TiltZoom(glm::vec3& eulerAngles, float scalingFactor, float zoomDelta)
 {
-	// Update the camera's yaw if there's significant horizontal movement.
-	if (glm::abs(_rotateAroundDelta.y) > glm::epsilon<float>())
+	// A turn input turns the heading by a half turn for each width of the screen
+	if (_rotateAroundDelta.y != 0.0f)
 	{
 		const auto windowSize = Locator::windowing::value().GetSize();
-		eulerAngles.x += _rotateAroundDelta.y * glm::pi<float>() / windowSize.x;
+		eulerAngles.x = world_turn::Turned(eulerAngles.x, _rotateAroundDelta.y, static_cast<float>(windowSize.x));
 	}
 
 	// Push scrolling turns the camera by its own turn
 	eulerAngles.x += _pushTurn;
 
-	// Update the camera's pitch if there's significant vertical movement.
-	if (glm::abs(_rotateAroundDelta.x) > glm::epsilon<float>())
+	// A tilt input tilts the camera, and the pitch stays between -30 and 78.75 degrees
+	if (_rotateAroundDelta.x != 0.0f)
 	{
-		const auto pitchStep = _rotateAroundDelta.x * k_PitchPerInput;
-		eulerAngles.y -= pitchStep;
-		// Clamp the pitch angle to keep the camera within between -30 and 78.75 degrees.
-		eulerAngles.y = glm::clamp(eulerAngles.y, -1.0f / 6.0f * glm::pi<float>(), 7.0f / 16.0f * glm::pi<float>());
+		const auto pitchStep = k_PitchPerInput * _rotateAroundDelta.x;
+		eulerAngles.y = world_turn::Tilted(eulerAngles.y, _rotateAroundDelta.x);
 		if (_mode == Mode::ArcBall)
 		{
 			const auto distanceFromBound = (2.0f * camera_limits::k_Clearance) - _distanceFromBoundY;
@@ -412,22 +405,12 @@ void DefaultWorldCameraModel::UpdateModeCartesian()
 
 void DefaultWorldCameraModel::UpdateModePolar(glm::vec3 eulerAngles, bool recalculatePoint)
 {
-	// Pitch should already be clamped in TiltZoom
-
-	// Put average distance point on half-line from camera
-	const auto averageIslandPoint = _targetOrigin + _averageIslandDistance * glm::normalize(GetTargetForwardVector());
-
-	// Rotate camera origin based on euler angles as polar coordinates and focus and distance at interaction
-	_targetOrigin = _focusAtClick + _originFocusDistanceAtInteractionStart * glm::euclidean(glm::yx(eulerAngles));
-
-	if (recalculatePoint)
-	{
-		// The new line of sight goes to the point that the camera turns about
-		const auto diff =
-		    averageIslandPoint - (_targetOrigin + _averageIslandDistance * glm::normalize(_focusAtClick - _targetOrigin));
-		_targetOrigin += diff;
-		_focusAtClick += diff;
-	}
+	// The camera goes round the turn point. Without a zoom, the point on the line of sight at the distance to the land
+	// stays where it was.
+	const auto view = world_turn::TurnAbout(_targetOrigin, _targetFocus, _focusAtClick, _originFocusDistanceAtInteractionStart,
+	                                        _averageIslandDistance, eulerAngles.x, eulerAngles.y, !recalculatePoint);
+	_targetOrigin = view.origin;
+	_focusAtClick = view.turnPoint;
 	_targetFocus = _focusAtClick;
 }
 
@@ -437,7 +420,8 @@ void DefaultWorldCameraModel::UpdateModeArcBall(glm::vec3 eulerAngles, glm::u16v
 	{
 		return;
 	}
-	const auto point = _focusAtClick + _originFocusDistanceAtInteractionStart * glm::euclidean(glm::yx(eulerAngles));
+	const auto point = script_camera::PointFromDistanceHeadingAndPitch(_focusAtClick, _originFocusDistanceAtInteractionStart,
+	                                                                   eulerAngles.x, world_turn::ClampPitch(eulerAngles.y));
 
 	const auto basisZ = glm::normalize(point - _focusAtClick);
 	const auto basisX = glm::normalize(glm::cross(glm::vec3(0.0f, 1.0f, 0.0f), basisZ));
@@ -722,6 +706,11 @@ std::optional<CameraModel::CameraInterpolationUpdateInfo> DefaultWorldCameraMode
 	_originFocusDistanceAtInteractionStart =
 	    glm::max(_originFocusDistanceAtInteractionStart + zoomDelta, camera_limits::k_ClosestZoom);
 
+	// A turn about the turn point keeps the pitch inside the limits, also for the rest of the step
+	if (_mode == Mode::Polar)
+	{
+		eulerAngles.y = world_turn::ClampPitch(eulerAngles.y);
+	}
 	UpdateMode(camera, eulerAngles, zoomDelta, mouseCurrent);
 	// Land gripped too far ahead flies the camera there, and the double click waiting is taken with it
 	if (_flyToGrip)
@@ -1132,6 +1121,8 @@ void DefaultWorldCameraModel::HandleActions(std::chrono::microseconds dt)
 		_controlsUsed =
 		    !_heldBack && (keyMoving || asked.move != glm::vec2() || _landGripped || rotateAroundMouse || twoButtons);
 		_landHeld = _landGripped && !keyMoving;
+		// The movement keys count after the features and the fence remove the steps that they do not allow
+		_keysMove = !_landGripped && _keyBoardMoveDelta != glm::vec2();
 		if (_heldBack)
 		{
 			_dragTurn = 0.0f;
