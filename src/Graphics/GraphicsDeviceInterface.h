@@ -90,6 +90,9 @@ public:
 	/// library needs to read them.
 	virtual void ReadTexture(TextureHandle texture, uint16_t layer, void* texels) const = 0;
 	virtual void SetName(TextureHandle texture, std::string_view name) const = 0;
+	/// Tells the device that the game gives the texels of the texture again after the device is made again. The device
+	/// then keeps no copy of the updates of the texture.
+	virtual void SetTexelsGivenAgain(TextureHandle texture) const = 0;
 	virtual void Destroy(TextureHandle texture) const = 0;
 
 	/// Makes a vertex buffer whose vertices have the attributes of the declaration

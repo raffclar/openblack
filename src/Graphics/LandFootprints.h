@@ -54,6 +54,8 @@ public:
 
 	/// Paints again the blocks whose footprints changed since the last time
 	void Update();
+	/// The next update paints again each block that has footprints, as after the land painted all of its blocks again
+	void PaintAgain();
 
 private:
 	/// A thing with a footprint, as it was the last time

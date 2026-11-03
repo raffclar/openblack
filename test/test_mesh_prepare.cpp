@@ -91,6 +91,7 @@ public:
 	}
 	void ReadTexture(TextureHandle, uint16_t, void*) const override {}
 	void SetName(TextureHandle, std::string_view) const override {}
+	void SetTexelsGivenAgain(TextureHandle) const override {}
 	void Destroy(TextureHandle) const override {}
 	[[nodiscard]] VertexBufferHandle CreateVertexBuffer(const DeviceMemory* vertices, const VertexDecl&) const override
 	{

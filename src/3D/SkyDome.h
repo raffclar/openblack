@@ -15,6 +15,7 @@
 #include <optional>
 #include <span>
 #include <string>
+#include <vector>
 
 #include <glm/gtc/type_precision.hpp>
 #include <glm/mat4x4.hpp>
@@ -102,9 +103,22 @@ public:
 	}
 };
 
-/// The rows that a dome draws when its picture is gone, as after the graphics device is made again: the whole dome at the
-/// sky type that it follows
-[[nodiscard]] FrameRows WholeDomeAt(const Follow& follow);
+/// The sky type that each row of the dome's picture has. A follow blends the rows from the top down, thus part of the
+/// picture can have the new sky type and the remainder the old sky type. The renderer keeps this record beside its
+/// picture. When the picture is gone, as after the renderer makes the graphics device again, the renderer blends the
+/// same rows again at their own sky types.
+class Picture
+{
+public:
+	/// Records the rows that a frame blends into the picture, in their order
+	void Drew(std::span<const Rows> rows);
+	/// The rows that make all of the picture again, top down, one band for each sky type. A row that no frame blended
+	/// is not in a band.
+	[[nodiscard]] std::vector<Rows> Again() const;
+
+private:
+	std::array<std::optional<float>, k_Rows> _skyTypes {};
+};
 
 /// Two of three pictures and how much of the second there is, of 255
 struct Pair

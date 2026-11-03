@@ -396,6 +396,17 @@ void LandFootprints::PaintBlock(size_t block, const BlockPaint& paint, std::span
 	}
 }
 
+void LandFootprints::PaintAgain()
+{
+	for (size_t block = 0; block < _painted.size(); ++block)
+	{
+		if (_painted[block])
+		{
+			_dirty.insert(block);
+		}
+	}
+}
+
 void LandFootprints::Update()
 {
 	if (!Locator::terrainSystem::has_value() || !Locator::entitiesRegistry::has_value() || !Locator::entitiesMap::has_value() ||

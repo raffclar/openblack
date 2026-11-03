@@ -1,8 +1,8 @@
 diff --git a/bgfx/include/bgfx/bgfx.h b/bgfx/include/bgfx/bgfx.h
-index ff66119..3e260db 100644
+index ff66119..b2b0ac1 100644
 --- a/bgfx/include/bgfx/bgfx.h
 +++ b/bgfx/include/bgfx/bgfx.h
-@@ -2689,6 +2689,20 @@ namespace bgfx
+@@ -2689,6 +2689,49 @@ namespace bgfx
  	///
  	const Stats* getStats();
  
@@ -20,24 +20,48 @@ index ff66119..3e260db 100644
 +	///
 +	uint64_t getDeviceRestoreKeptBytes();
 +
++	/// The bytes of resource data that the renderer keeps to make its device again, by kind.
++	///
++	struct DeviceRestoreKept
++	{
++		uint64_t buffers;        //!< Index and vertex buffers.
++		uint64_t dynamicBuffers; //!< Dynamic index and vertex buffers.
++		uint64_t shaders;        //!< Shaders.
++		uint64_t textures;       //!< The create data of textures, with the updates that go into it.
++		uint64_t textureChanges; //!< The updates of textures that do not go into their create data.
++	};
++
++	/// Returns the bytes of resource data that the renderer keeps to make its device again, by kind.
++	///
++	DeviceRestoreKept getDeviceRestoreKept();
++
++	/// Tells the renderer that the application gives the texels of a texture again after a restore of the device.
++	/// The renderer then keeps no copy of the updates of the texture. After a restore, the texture has the texels
++	/// that it was made with, or texels that are not defined, until the application updates it.
++	///
++	/// @param[in] _handle Texture handle.
++	///
++	void setDeviceRestoreByApplication(TextureHandle _handle);
++
++	/// Loses the device, to test the recovery from a lost device. The renderer does it at the start of the next
++	/// frame that it renders, and then makes its device again. Direct3D 12 removes its device. Vulkan has no call
++	/// for this, thus it acts as if a call gave a lost device. The other renderers make their device again.
++	///
++	void requestDeviceLoss();
++
  	/// Allocate buffer to pass to bgfx calls. Data will be freed inside bgfx.
  	///
  	/// @param[in] _size Size to allocate.
 diff --git a/bgfx/src/bgfx.cpp b/bgfx/src/bgfx.cpp
-index acfb6fe..fa55f8a 100644
+index acfb6fe..40763a0 100644
 --- a/bgfx/src/bgfx.cpp
 +++ b/bgfx/src/bgfx.cpp
-@@ -3432,14 +3432,23 @@ namespace bgfx
+@@ -3432,13 +3432,35 @@ namespace bgfx
  					g_caps.supported &= ~BGFX_CAPS_LOW_LATENCY;
  				}
  
 -				// Something horribly went wrong, fallback to noop renderer.
 -				rendererDestroy(m_renderCtx);
--
--				Init init;
--				init.type = RendererType::Noop;
--				m_renderCtx = rendererCreate(init);
--				g_caps.rendererType = RendererType::Noop;
 +				// The device is lost: make the renderer again with all its resources
 +				restoreDevice(m_renderCtx->getRendererType() );
 +			}
@@ -52,13 +76,29 @@ index acfb6fe..fa55f8a 100644
 +			else if (m_restoreRequested.exchange(false) )
 +			{
 +				restoreDevice(m_renderCtx->getRendererType() );
- 			}
-+
++			}
++			else if (m_lossRequested.exchange(false) )
++			{
++				// The renderer finds the lost device in the next frame. bgfx makes a renderer that cannot lose
++				// its device again at once.
++				if (!m_renderCtx->loseDevice() )
++				{
++					restoreDevice(m_renderCtx->getRendererType() );
++				}
++			}
+ 
+-				Init init;
+-				init.type = RendererType::Noop;
+-				m_renderCtx = rendererCreate(init);
+-				g_caps.rendererType = RendererType::Noop;
 +			m_restoreKeptBytes.store(m_deviceRestore.keptBytes() );
++			for (uint32_t ii = 0; ii < DeviceRestore::KeptCount; ++ii)
++			{
++				m_restoreKept[ii].store(m_deviceRestore.keptBytes(DeviceRestore::Kept(ii) ) );
+ 			}
  		}
  	}
- 
-@@ -3634,6 +3643,7 @@ namespace bgfx
+@@ -3634,6 +3656,7 @@ namespace bgfx
  				_cmdbuf.read(mem);
  
  				m_renderCtx->updateTexture(handle, side, mip, rect, zz, depth, pitch, mem);
@@ -66,7 +106,7 @@ index acfb6fe..fa55f8a 100644
  
  				release(mem);
  			}
-@@ -3924,6 +3934,50 @@ namespace bgfx
+@@ -3924,6 +3947,50 @@ namespace bgfx
  		}
  	}
  
@@ -117,7 +157,7 @@ index acfb6fe..fa55f8a 100644
  	void Context::rendererExecCommands(CommandBuffer& _cmdbuf)
  	{
  		_cmdbuf.reset();
-@@ -3992,6 +4046,7 @@ namespace bgfx
+@@ -3992,6 +4059,7 @@ namespace bgfx
  
  					rendererDestroy(m_renderCtx);
  					m_renderCtx = NULL;
@@ -125,7 +165,7 @@ index acfb6fe..fa55f8a 100644
  
  					m_exit = true;
  				}
-@@ -4016,7 +4071,7 @@ namespace bgfx
+@@ -4016,7 +4084,7 @@ namespace bgfx
  
  					m_renderCtx->createIndexBuffer(handle, mem, flags);
  
@@ -134,7 +174,7 @@ index acfb6fe..fa55f8a 100644
  				}
  				break;
  
-@@ -4028,6 +4083,7 @@ namespace bgfx
+@@ -4028,6 +4096,7 @@ namespace bgfx
  					_cmdbuf.read(handle);
  
  					m_renderCtx->destroyIndexBuffer(handle);
@@ -142,7 +182,7 @@ index acfb6fe..fa55f8a 100644
  				}
  				break;
  
-@@ -4042,6 +4098,7 @@ namespace bgfx
+@@ -4042,6 +4111,7 @@ namespace bgfx
  					_cmdbuf.read(layout);
  
  					m_renderCtx->createVertexLayout(handle, layout);
@@ -150,7 +190,7 @@ index acfb6fe..fa55f8a 100644
  				}
  				break;
  
-@@ -4053,6 +4110,7 @@ namespace bgfx
+@@ -4053,6 +4123,7 @@ namespace bgfx
  					_cmdbuf.read(handle);
  
  					m_renderCtx->destroyVertexLayout(handle);
@@ -158,7 +198,7 @@ index acfb6fe..fa55f8a 100644
  				}
  				break;
  
-@@ -4074,7 +4132,7 @@ namespace bgfx
+@@ -4074,7 +4145,7 @@ namespace bgfx
  
  					m_renderCtx->createVertexBuffer(handle, mem, layoutHandle, flags);
  
@@ -167,7 +207,7 @@ index acfb6fe..fa55f8a 100644
  				}
  				break;
  
-@@ -4086,6 +4144,7 @@ namespace bgfx
+@@ -4086,6 +4157,7 @@ namespace bgfx
  					_cmdbuf.read(handle);
  
  					m_renderCtx->destroyVertexBuffer(handle);
@@ -175,7 +215,7 @@ index acfb6fe..fa55f8a 100644
  				}
  				break;
  
-@@ -4103,6 +4162,7 @@ namespace bgfx
+@@ -4103,6 +4175,7 @@ namespace bgfx
  					_cmdbuf.read(flags);
  
  					m_renderCtx->createDynamicIndexBuffer(handle, size, flags);
@@ -183,7 +223,7 @@ index acfb6fe..fa55f8a 100644
  				}
  				break;
  
-@@ -4123,6 +4183,7 @@ namespace bgfx
+@@ -4123,6 +4196,7 @@ namespace bgfx
  					_cmdbuf.read(mem);
  
  					m_renderCtx->updateDynamicIndexBuffer(handle, offset, size, mem);
@@ -191,7 +231,7 @@ index acfb6fe..fa55f8a 100644
  
  					release(mem);
  				}
-@@ -4136,6 +4197,7 @@ namespace bgfx
+@@ -4136,6 +4210,7 @@ namespace bgfx
  					_cmdbuf.read(handle);
  
  					m_renderCtx->destroyDynamicIndexBuffer(handle);
@@ -199,7 +239,7 @@ index acfb6fe..fa55f8a 100644
  				}
  				break;
  
-@@ -4153,6 +4215,7 @@ namespace bgfx
+@@ -4153,6 +4228,7 @@ namespace bgfx
  					_cmdbuf.read(flags);
  
  					m_renderCtx->createDynamicVertexBuffer(handle, size, flags);
@@ -207,7 +247,7 @@ index acfb6fe..fa55f8a 100644
  				}
  				break;
  
-@@ -4173,6 +4236,7 @@ namespace bgfx
+@@ -4173,6 +4249,7 @@ namespace bgfx
  					_cmdbuf.read(mem);
  
  					m_renderCtx->updateDynamicVertexBuffer(handle, offset, size, mem);
@@ -215,7 +255,7 @@ index acfb6fe..fa55f8a 100644
  
  					release(mem);
  				}
-@@ -4186,6 +4250,7 @@ namespace bgfx
+@@ -4186,6 +4263,7 @@ namespace bgfx
  					_cmdbuf.read(handle);
  
  					m_renderCtx->destroyDynamicVertexBuffer(handle);
@@ -223,7 +263,7 @@ index acfb6fe..fa55f8a 100644
  				}
  				break;
  
-@@ -4201,7 +4266,7 @@ namespace bgfx
+@@ -4201,7 +4279,7 @@ namespace bgfx
  
  					m_renderCtx->createShader(handle, mem);
  
@@ -232,7 +272,7 @@ index acfb6fe..fa55f8a 100644
  				}
  				break;
  
-@@ -4213,6 +4278,7 @@ namespace bgfx
+@@ -4213,6 +4291,7 @@ namespace bgfx
  					_cmdbuf.read(handle);
  
  					m_renderCtx->destroyShader(handle);
@@ -240,7 +280,7 @@ index acfb6fe..fa55f8a 100644
  				}
  				break;
  
-@@ -4230,6 +4296,7 @@ namespace bgfx
+@@ -4230,6 +4309,7 @@ namespace bgfx
  					_cmdbuf.read(fsh);
  
  					m_renderCtx->createProgram(handle, vsh, fsh);
@@ -248,7 +288,7 @@ index acfb6fe..fa55f8a 100644
  				}
  				break;
  
-@@ -4241,6 +4308,7 @@ namespace bgfx
+@@ -4241,6 +4321,7 @@ namespace bgfx
  					_cmdbuf.read(handle);
  
  					m_renderCtx->destroyProgram(handle);
@@ -256,7 +296,7 @@ index acfb6fe..fa55f8a 100644
  				}
  				break;
  
-@@ -4270,24 +4338,7 @@ namespace bgfx
+@@ -4270,24 +4351,7 @@ namespace bgfx
  						setDirectAccessPtr(handle, ptr);
  					}
  
@@ -282,7 +322,7 @@ index acfb6fe..fa55f8a 100644
  				}
  				break;
  
-@@ -4411,6 +4462,7 @@ namespace bgfx
+@@ -4411,6 +4475,7 @@ namespace bgfx
  					_cmdbuf.read(numLayers);
  
  					m_renderCtx->resizeTexture(handle, width, height, numMips, numLayers);
@@ -290,7 +330,7 @@ index acfb6fe..fa55f8a 100644
  				}
  				break;
  
-@@ -4422,6 +4474,7 @@ namespace bgfx
+@@ -4422,6 +4487,7 @@ namespace bgfx
  					_cmdbuf.read(handle);
  
  					m_renderCtx->destroyTexture(handle);
@@ -298,7 +338,7 @@ index acfb6fe..fa55f8a 100644
  				}
  				break;
  
-@@ -4437,7 +4490,9 @@ namespace bgfx
+@@ -4437,7 +4503,9 @@ namespace bgfx
  
  					if (1 == type) // window (nwh) swap chain
  					{
@@ -309,7 +349,7 @@ index acfb6fe..fa55f8a 100644
  					}
  					else
  					{
-@@ -4448,6 +4503,7 @@ namespace bgfx
+@@ -4448,6 +4516,7 @@ namespace bgfx
  						_cmdbuf.read(attachment, sizeof(Attachment) * num);
  
  						m_renderCtx->createFrameBuffer(handle, num, attachment);
@@ -317,7 +357,7 @@ index acfb6fe..fa55f8a 100644
  					}
  				}
  				break;
-@@ -4459,7 +4515,9 @@ namespace bgfx
+@@ -4459,7 +4528,9 @@ namespace bgfx
  					FrameBufferHandle handle;
  					_cmdbuf.read(handle);
  
@@ -328,7 +368,7 @@ index acfb6fe..fa55f8a 100644
  				}
  				break;
  
-@@ -4471,6 +4529,7 @@ namespace bgfx
+@@ -4471,6 +4542,7 @@ namespace bgfx
  					_cmdbuf.read(handle);
  
  					m_renderCtx->destroyFrameBuffer(handle);
@@ -336,7 +376,7 @@ index acfb6fe..fa55f8a 100644
  				}
  				break;
  
-@@ -4493,6 +4552,7 @@ namespace bgfx
+@@ -4493,6 +4565,7 @@ namespace bgfx
  					const char* name = (const char*)_cmdbuf.skip(len);
  
  					m_renderCtx->createUniform(handle, type, num, name);
@@ -344,7 +384,7 @@ index acfb6fe..fa55f8a 100644
  				}
  				break;
  
-@@ -4504,6 +4564,7 @@ namespace bgfx
+@@ -4504,6 +4577,7 @@ namespace bgfx
  					_cmdbuf.read(handle);
  
  					m_renderCtx->destroyUniform(handle);
@@ -352,7 +392,23 @@ index acfb6fe..fa55f8a 100644
  				}
  				break;
  
-@@ -5727,6 +5788,22 @@ namespace bgfx
+@@ -4553,6 +4627,15 @@ namespace bgfx
+ 				}
+ 				break;
+ 
++			case CommandBuffer::SetDeviceRestoreByApplication:
++				{
++					TextureHandle handle;
++					_cmdbuf.read(handle);
++
++					m_deviceRestore.restoreByApplication(handle);
++				}
++				break;
++
+ 			default:
+ 				BX_ASSERT(false, "Invalid command: %d", command);
+ 				break;
+@@ -5727,6 +5810,39 @@ namespace bgfx
  		return s_ctx->getPerfStats();
  	}
  
@@ -372,14 +428,60 @@ index acfb6fe..fa55f8a 100644
 +		return s_ctx->m_restoreKeptBytes.load();
 +	}
 +
++	DeviceRestoreKept getDeviceRestoreKept()
++	{
++		DeviceRestoreKept kept;
++		kept.buffers        = s_ctx->m_restoreKept[DeviceRestore::KeptBuffers].load();
++		kept.dynamicBuffers = s_ctx->m_restoreKept[DeviceRestore::KeptDynamicBuffers].load();
++		kept.shaders        = s_ctx->m_restoreKept[DeviceRestore::KeptShaders].load();
++		kept.textures       = s_ctx->m_restoreKept[DeviceRestore::KeptTextures].load();
++		kept.textureChanges = s_ctx->m_restoreKept[DeviceRestore::KeptTextureChanges].load();
++		return kept;
++	}
++
++	void requestDeviceLoss()
++	{
++		BGFX_CHECK_API_THREAD();
++		s_ctx->m_lossRequested.store(true);
++	}
++
  	RendererType::Enum getRendererType()
  	{
  		return g_caps.rendererType;
+@@ -6928,6 +7044,11 @@ namespace bgfx
+ 		s_ctx->setName(_handle, bx::StringView(_name, _len) );
+ 	}
+ 
++	void setDeviceRestoreByApplication(TextureHandle _handle)
++	{
++		s_ctx->setDeviceRestoreByApplication(_handle);
++	}
++
+ 	void* getDirectAccessPtr(TextureHandle _handle)
+ 	{
+ 		return s_ctx->getDirectAccessPtr(_handle);
 diff --git a/bgfx/src/bgfx_p.h b/bgfx/src/bgfx_p.h
-index 316b49d..98002e1 100644
+index 316b49d..b25b919 100644
 --- a/bgfx/src/bgfx_p.h
 +++ b/bgfx/src/bgfx_p.h
-@@ -6046,6 +6046,13 @@ namespace bgfx
+@@ -1194,6 +1194,7 @@ namespace bgfx
+ 			UpdateViewName,
+ 			InvalidateOcclusionQuery,
+ 			SetName,
++			SetDeviceRestoreByApplication,
+ 			End,
+ 			RendererShutdownEnd,
+ 			DestroyVertexLayout,
+@@ -5946,6 +5947,8 @@ namespace bgfx
+ 		virtual RendererType::Enum getRendererType() const = 0;
+ 		virtual const char* getRendererName() const = 0;
+ 		virtual bool isDeviceRemoved() = 0;
++		// Loses the device, to test the recovery. False when the renderer cannot lose its device.
++		virtual bool loseDevice() { return false; }
+ 		virtual void flip() = 0;
+ 		virtual void createIndexBuffer(IndexBufferHandle _handle, const Memory* _mem, uint16_t _flags) = 0;
+ 		virtual void destroyIndexBuffer(IndexBufferHandle _handle) = 0;
+@@ -6046,6 +6049,13 @@ namespace bgfx
  #	define BGFX_API_FUNC(_func) _func
  #endif // BGFX_CONFIG_DEBUG
  
@@ -393,7 +495,23 @@ index 316b49d..98002e1 100644
  	struct Context
  	{
  		static constexpr uint32_t kAlignment = 64;
-@@ -8740,6 +8747,7 @@ namespace bgfx
+@@ -7719,6 +7729,15 @@ namespace bgfx
+ 			return handle;
+ 		}
+ 
++		BGFX_API_FUNC(void setDeviceRestoreByApplication(TextureHandle _handle) )
++		{
++			BGFX_MUTEX_SCOPE(m_resourceApiLock);
++			BGFX_CHECK_HANDLE("setDeviceRestoreByApplication", m_textureHandle, _handle);
++
++			CommandBuffer& cmdbuf = getCommandBuffer(CommandBuffer::SetDeviceRestoreByApplication);
++			cmdbuf.write(_handle);
++		}
++
+ 		BGFX_API_FUNC(void setName(TextureHandle _handle, const bx::StringView& _name) )
+ 		{
+ 			BGFX_MUTEX_SCOPE(m_resourceApiLock);
+@@ -8740,6 +8759,7 @@ namespace bgfx
  
  		// render thread
  		void flip();
@@ -401,7 +519,7 @@ index 316b49d..98002e1 100644
  		RenderFrame::Enum renderFrame(int32_t _msecs = -1);
  		void flushTextureUpdateBatch(CommandBuffer& _cmdbuf);
  		void rendererExecCommands(CommandBuffer& _cmdbuf);
-@@ -8986,6 +8994,15 @@ namespace bgfx
+@@ -8986,6 +9006,17 @@ namespace bgfx
  
  		typedef UpdateBatchT<256> TextureUpdateBatch;
  		BX_ALIGN_DECL_CACHE_LINE(TextureUpdateBatch m_textureUpdateBatch);
@@ -412,6 +530,8 @@ index 316b49d..98002e1 100644
 +		RendererType::Enum m_restoreType = RendererType::Count;
 +		int64_t m_restoreRetryAt = 0;
 +		std::atomic<bool> m_restoreRequested {false};
++		std::atomic<bool> m_lossRequested {false};
++		std::atomic<uint64_t> m_restoreKept[DeviceRestore::KeptCount] = {};
 +		std::atomic<uint32_t> m_restoreCount {0};
 +		std::atomic<uint64_t> m_restoreKeptBytes {0};
  	};
@@ -419,10 +539,10 @@ index 316b49d..98002e1 100644
  #undef BGFX_API_FUNC
 diff --git a/bgfx/src/device_restore.h b/bgfx/src/device_restore.h
 new file mode 100644
-index 0000000..ce9bebe
+index 0000000..5e23188
 --- /dev/null
 +++ b/bgfx/src/device_restore.h
-@@ -0,0 +1,845 @@
+@@ -0,0 +1,902 @@
 +/*
 + * Copyright 2026 openblack developers. All rights reserved.
 + * License: https://github.com/bkaradzic/bgfx/blob/master/LICENSE
@@ -464,24 +584,48 @@ index 0000000..ce9bebe
 +			clear();
 +		}
 +
++		// The kinds of kept data
++		enum Kept
++		{
++			KeptBuffers,
++			KeptDynamicBuffers,
++			KeptShaders,
++			KeptTextures,
++			KeptTextureChanges,
++
++			KeptCount
++		};
++
 +		// The number of bytes of resource data that are kept
 +		uint64_t keptBytes() const
 +		{
-+			return m_keptBytes;
++			uint64_t sum = 0;
++			for (uint64_t bytes : m_kept)
++			{
++				sum += bytes;
++			}
++
++			return sum;
++		}
++
++		// The number of bytes of one kind of kept data
++		uint64_t keptBytes(Kept _kind) const
++		{
++			return m_kept[_kind];
 +		}
 +
 +		void createIndexBuffer(IndexBufferHandle _handle, const Memory* _mem, uint16_t _flags)
 +		{
 +			Buffer& buffer = m_indexBuffers[_handle.idx];
-+			freeBuffer(buffer);
++			freeBuffer(buffer, KeptBuffers);
 +			buffer.mem   = own(_mem);
 +			buffer.flags = _flags;
-+			m_keptBytes += buffer.mem->size;
++			m_kept[KeptBuffers] += buffer.mem->size;
 +		}
 +
 +		void destroyIndexBuffer(IndexBufferHandle _handle)
 +		{
-+			freeBuffer(m_indexBuffers[_handle.idx]);
++			freeBuffer(m_indexBuffers[_handle.idx], KeptBuffers);
 +		}
 +
 +		void createVertexLayout(VertexLayoutHandle _handle, const VertexLayout& _layout)
@@ -498,16 +642,16 @@ index 0000000..ce9bebe
 +		void createVertexBuffer(VertexBufferHandle _handle, const Memory* _mem, VertexLayoutHandle _layoutHandle, uint16_t _flags)
 +		{
 +			Buffer& buffer = m_vertexBuffers[_handle.idx];
-+			freeBuffer(buffer);
++			freeBuffer(buffer, KeptBuffers);
 +			buffer.mem    = own(_mem);
 +			buffer.layout = _layoutHandle;
 +			buffer.flags  = _flags;
-+			m_keptBytes += buffer.mem->size;
++			m_kept[KeptBuffers] += buffer.mem->size;
 +		}
 +
 +		void destroyVertexBuffer(VertexBufferHandle _handle)
 +		{
-+			freeBuffer(m_vertexBuffers[_handle.idx]);
++			freeBuffer(m_vertexBuffers[_handle.idx], KeptBuffers);
 +		}
 +
 +		void createDynamicIndexBuffer(IndexBufferHandle _handle, uint32_t _size, uint16_t _flags)
@@ -543,14 +687,14 @@ index 0000000..ce9bebe
 +		void createShader(ShaderHandle _handle, const Memory* _mem)
 +		{
 +			Buffer& shader = m_shaders[_handle.idx];
-+			freeBuffer(shader);
++			freeBuffer(shader, KeptShaders);
 +			shader.mem = own(_mem);
-+			m_keptBytes += shader.mem->size;
++			m_kept[KeptShaders] += shader.mem->size;
 +		}
 +
 +		void destroyShader(ShaderHandle _handle)
 +		{
-+			freeBuffer(m_shaders[_handle.idx]);
++			freeBuffer(m_shaders[_handle.idx], KeptShaders);
 +		}
 +
 +		void createProgram(ProgramHandle _handle, ShaderHandle _vsh, ShaderHandle _fsh)
@@ -593,21 +737,22 @@ index 0000000..ce9bebe
 +				{
 +					tc.m_mem = own(tc.m_mem);
 +					bx::memCopy(_mem->data + sizeof(uint32_t), &tc, sizeof(TextureCreate) );
-+					m_keptBytes += tc.m_mem->size;
++					m_kept[KeptTextures] += tc.m_mem->size;
 +				}
 +			}
 +
 +			texture.mem   = _mem;
 +			texture.flags = _flags;
 +			texture.skip  = _skip;
-+			m_keptBytes += _mem->size;
++			m_kept[KeptTextures] += _mem->size;
 +		}
 +
 +		// Copies the texels of an update into the kept copy of the texture. The caller keeps the memory.
 +		void updateTexture(TextureHandle _handle, uint8_t _side, uint8_t _mip, const Rect& _rect, uint16_t _z, uint16_t _depth, uint16_t _pitch, const Memory* _mem)
 +		{
 +			Texture& texture = m_textures[_handle.idx];
-+			if (NULL == texture.mem)
++			if (NULL == texture.mem
++			||  texture.byApplication)
 +			{
 +				return;
 +			}
@@ -630,7 +775,7 @@ index 0000000..ce9bebe
 +				&&  _z <= update.z
 +				&&  update.z + update.depth <= _z + _depth)
 +				{
-+					m_keptBytes -= update.mem->size;
++					m_kept[KeptTextureChanges] -= update.mem->size;
 +					release(update.mem);
 +					texture.updates.erase(texture.updates.begin() + ii);
 +				}
@@ -648,8 +793,22 @@ index 0000000..ce9bebe
 +			update.depth = _depth;
 +			update.pitch = _pitch;
 +			update.mem   = copy(_mem->data, _mem->size);
-+			m_keptBytes += update.mem->size;
++			m_kept[KeptTextureChanges] += update.mem->size;
 +			texture.updates.push_back(update);
++		}
++
++		// The application gives the texels of the texture again after a restore. The kept changes go, and the
++		// next updates are not kept.
++		void restoreByApplication(TextureHandle _handle)
++		{
++			Texture& texture = m_textures[_handle.idx];
++			if (NULL == texture.mem)
++			{
++				return;
++			}
++
++			freeChanges(texture);
++			texture.byApplication = true;
 +		}
 +
 +		// The contents of a resized texture are not defined, thus the kept changes go
@@ -811,9 +970,16 @@ index 0000000..ce9bebe
 +					_renderCtx->resizeTexture(handle, texture.width, texture.height, texture.numMips, texture.numLayers);
 +				}
 +
++				if (texture.byApplication)
++				{
++					continue;
++				}
++
 +				for (const Slice& slice : texture.slices)
 +				{
-+					if (0 == slice.dirty.m_width)
++					// The texels of a slice in the create memory come with the create
++					if (NULL != slice.place
++					||  0 == slice.dirty.m_width)
 +					{
 +						continue;
 +					}
@@ -863,17 +1029,17 @@ index 0000000..ce9bebe
 +		{
 +			for (Buffer& buffer : m_indexBuffers)
 +			{
-+				freeBuffer(buffer);
++				freeBuffer(buffer, KeptBuffers);
 +			}
 +
 +			for (Buffer& buffer : m_vertexBuffers)
 +			{
-+				freeBuffer(buffer);
++				freeBuffer(buffer, KeptBuffers);
 +			}
 +
 +			for (Buffer& shader : m_shaders)
 +			{
-+				freeBuffer(shader);
++				freeBuffer(shader, KeptShaders);
 +			}
 +
 +			for (Dynamic& buffer : m_dynamicIndexBuffers)
@@ -942,9 +1108,11 @@ index 0000000..ce9bebe
 +			ShaderHandle fsh = BGFX_INVALID_HANDLE;
 +		};
 +
-+		// The texels of one mip of one side or layer, with the rectangle that updates changed
++		// The texels of one mip of one side or layer, with the rectangle that updates changed. The texels are in the
++		// create memory of the texture when it has them, else in a copy of the slice's own.
 +		struct Slice
 +		{
++			uint8_t* place = NULL;
 +			uint8_t side = 0;
 +			uint8_t mip = 0;
 +			uint16_t z = 0;
@@ -973,6 +1141,7 @@ index 0000000..ce9bebe
 +			uint64_t flags = 0;
 +			uint8_t skip = 0;
 +			bool resized = false;
++			bool byApplication = false;
 +			uint16_t width = 0;
 +			uint16_t height = 0;
 +			uint8_t numMips = 0;
@@ -1043,6 +1212,11 @@ index 0000000..ce9bebe
 +
 +		// Puts the texels of an update of an uncompressed texture into its slice. False when the texture or the
 +		// update does not fit a slice.
++		static uint8_t* texels(Slice& _slice)
++		{
++			return NULL != _slice.place ? _slice.place : _slice.bytes.data();
++		}
++
 +		bool copyIntoSlice(Texture& _texture, uint8_t _side, uint8_t _mip, const Rect& _rect, uint16_t _z, uint16_t _pitch, const Memory* _mem)
 +		{
 +			Slice* slice = NULL;
@@ -1083,7 +1257,7 @@ index 0000000..ce9bebe
 +			for (uint32_t yy = 0; yy < _rect.m_height; ++yy)
 +			{
 +				bx::memCopy(
-+					  slice->bytes.data() + (_rect.m_y + yy) * slice->pitch + _rect.m_x * slice->texelBytes
++					  texels(*slice) + (_rect.m_y + yy) * slice->pitch + _rect.m_x * slice->texelBytes
 +					, _mem->data + yy * srcPitch
 +					, rowBytes
 +					);
@@ -1142,29 +1316,32 @@ index 0000000..ce9bebe
 +			slice.texelBytes = blockInfo.bitsPerPixel / 8;
 +			slice.pitch      = slice.width * slice.texelBytes;
 +			slice.dirty.clear();
-+			slice.bytes.resize(size_t(slice.pitch) * slice.height, 0);
 +
++			// The updates go into the texels of the create memory, which the renderer keeps as its own copy. A
++			// texture without texels gets a slice of zeros.
++			const uint32_t size = slice.pitch * slice.height;
 +			bimg::ImageMip mip;
-+			if (NULL != container.m_data
-+			||  UINT32_MAX != container.m_offset)
++			if ( (NULL != container.m_data || UINT32_MAX != container.m_offset)
++			&&  bimg::imageGetRawData(container, uint16_t(_z * sides + _side), _mip, _texture.mem->data, _texture.mem->size, mip)
++			&&  mip.m_size == size)
 +			{
-+				if (bimg::imageGetRawData(container, uint16_t(_z * sides + _side), _mip, _texture.mem->data, _texture.mem->size, mip)
-+				&&  mip.m_size == slice.bytes.size() )
-+				{
-+					bx::memCopy(slice.bytes.data(), mip.m_data, mip.m_size);
-+				}
++				slice.place = const_cast<uint8_t*>(mip.m_data);
++			}
++			else
++			{
++				slice.bytes.resize(size, 0);
++				m_kept[KeptTextureChanges] += slice.bytes.size();
 +			}
 +
-+			m_keptBytes += slice.bytes.size();
 +			_texture.slices.push_back(std::move(slice) );
 +			return &_texture.slices.back();
 +		}
 +
-+		void freeBuffer(Buffer& _buffer)
++		void freeBuffer(Buffer& _buffer, Kept _kind)
 +		{
 +			if (NULL != _buffer.mem)
 +			{
-+				m_keptBytes -= _buffer.mem->size;
++				m_kept[_kind] -= _buffer.mem->size;
 +				release(_buffer.mem);
 +				_buffer.mem = NULL;
 +			}
@@ -1189,7 +1366,7 @@ index 0000000..ce9bebe
 +			if (_buffer.bytes.empty() )
 +			{
 +				_buffer.bytes.resize(_buffer.size, 0);
-+				m_keptBytes += _buffer.size;
++				m_kept[KeptDynamicBuffers] += _buffer.size;
 +			}
 +
 +			const uint32_t size = bx::min(bx::min(_size, _mem->size), _buffer.size - _offset);
@@ -1200,7 +1377,7 @@ index 0000000..ce9bebe
 +		{
 +			if (!_buffer.bytes.empty() )
 +			{
-+				m_keptBytes -= _buffer.bytes.size();
++				m_kept[KeptDynamicBuffers] -= _buffer.bytes.size();
 +			}
 +
 +			_buffer.live = false;
@@ -1211,12 +1388,12 @@ index 0000000..ce9bebe
 +		{
 +			for (const Slice& slice : _texture.slices)
 +			{
-+				m_keptBytes -= slice.bytes.size();
++				m_kept[KeptTextureChanges] -= slice.bytes.size();
 +			}
 +
 +			for (const Update& update : _texture.updates)
 +			{
-+				m_keptBytes -= update.mem->size;
++				m_kept[KeptTextureChanges] -= update.mem->size;
 +				release(update.mem);
 +			}
 +
@@ -1232,7 +1409,7 @@ index 0000000..ce9bebe
 +			}
 +
 +			freeChanges(_texture);
-+			m_keptBytes -= _texture.mem->size;
++			m_kept[KeptTextures] -= _texture.mem->size;
 +			if (sizeof(uint32_t) + sizeof(TextureCreate) <= _texture.mem->size)
 +			{
 +				uint32_t magic;
@@ -1243,7 +1420,7 @@ index 0000000..ce9bebe
 +					bx::memCopy(&tc, _texture.mem->data + sizeof(uint32_t), sizeof(TextureCreate) );
 +					if (NULL != tc.m_mem)
 +					{
-+						m_keptBytes -= tc.m_mem->size;
++						m_kept[KeptTextures] -= tc.m_mem->size;
 +					}
 +				}
 +			}
@@ -1262,9 +1439,149 @@ index 0000000..ce9bebe
 +		std::vector<Texture>          m_textures;
 +		std::vector<FrameBuffer>      m_frameBuffers;
 +		std::vector<Uniform>          m_uniforms;
-+		uint64_t                      m_keptBytes = 0;
++		uint64_t                      m_kept[KeptCount] = {};
 +	};
 +
 +} // namespace bgfx
 +
 +#endif // BGFX_DEVICE_RESTORE_H_HEADER_GUARD
+diff --git a/bgfx/src/renderer_d3d12.cpp b/bgfx/src/renderer_d3d12.cpp
+index 71678c1..a1e5e9d 100644
+--- a/bgfx/src/renderer_d3d12.cpp
++++ b/bgfx/src/renderer_d3d12.cpp
+@@ -24,6 +24,21 @@ PFN_PIX_EVENTS_REPLACE_BLOCK bgfx_PIXEventsReplaceBlock;
+ 
+ namespace bgfx { namespace d3d12
+ {
++	static bool reportDeviceLost(HRESULT _hr);
++
++#if BGFX_CONFIG_DEBUG
++	// A lost device is not an error of the code: the debug check tells the renderer, and bgfx makes the renderer again
++#	undef DX_CHECK
++#	define DX_CHECK(_call) \
++		BX_MACRO_BLOCK_BEGIN \
++			HRESULT __hr__ = _call; \
++			BX_ASSERT(SUCCEEDED(__hr__) || reportDeviceLost(__hr__), #_call " FAILED 0x%08x" DX_CHECK_EXTRA_F "\n" \
++				, (uint32_t)__hr__ \
++				DX_CHECK_EXTRA_ARGS \
++				); \
++		BX_MACRO_BLOCK_END
++#endif // BGFX_CONFIG_DEBUG
++
+ 	struct PrimInfo
+ 	{
+ 		D3D_PRIMITIVE_TOPOLOGY m_topology;
+@@ -2216,6 +2231,19 @@ namespace bgfx { namespace d3d12
+ 			return m_lost;
+ 		}
+ 
++		bool loseDevice() override
++		{
++			ID3D12Device5* device5 = NULL;
++			if (FAILED(m_device->QueryInterface(IID_ID3D12Device5, (void**)&device5) ) )
++			{
++				return false;
++			}
++
++			device5->RemoveDevice();
++			DX_RELEASE_I(device5);
++			return true;
++		}
++
+ 		static const char* getBreadcrumbOpName(D3D12_AUTO_BREADCRUMB_OP _op)
+ 		{
+ 			static const char* s_names[] =
+diff --git a/bgfx/src/renderer_vk.cpp b/bgfx/src/renderer_vk.cpp
+index 2208add..b5bb668 100644
+--- a/bgfx/src/renderer_vk.cpp
++++ b/bgfx/src/renderer_vk.cpp
+@@ -2863,6 +2863,14 @@ VK_IMPORT_DEVICE
+ 			return m_lost;
+ 		}
+ 
++		// Vulkan has no call that loses the device. The renderer acts as if a call gave a lost device: it raises the
++		// same fatal error, and bgfx makes the renderer again at the next flip.
++		bool loseDevice() override
++		{
++			handleDeviceLost(VK_ERROR_DEVICE_LOST);
++			return true;
++		}
++
+ 		bool handleDeviceLost(VkResult _result)
+ 		{
+ 			const bool lost = VK_ERROR_DEVICE_LOST == _result;
+@@ -5147,7 +5155,7 @@ VK_IMPORT_DEVICE
+ 				result = vkAllocateDescriptorSets(m_device, &dsai, &descriptorSet);
+ 			}
+ 
+-			BX_ASSERT(VK_SUCCESS == result
++			BX_ASSERT(VK_SUCCESS == result || reportDeviceLost(result)
+ 				, "vkAllocateDescriptorSets: VK error %d: %s"
+ 				, result
+ 				, getName(result)
+@@ -5979,6 +5987,13 @@ VK_IMPORT_DEVICE
+ 
+ 	static RendererContextVK* s_renderVK;
+ 
++	bool reportDeviceLost(VkResult _result)
++	{
++		return NULL != s_renderVK
++			&& s_renderVK->handleDeviceLost(_result)
++			;
++	}
++
+ 	bool videoIsExtensionSupported(RendererContextVK* _renderer, const char* _name)
+ 	{
+ 		BX_UNUSED(_renderer);
+@@ -10091,8 +10106,11 @@ VK_DESTROY
+ 				return false;
+ 
+ 			default:
+-				s_renderVK->handleDeviceLost(result);
+-				BX_ASSERT(VK_SUCCESS == result, "vkAcquireNextImageKHR(...); VK error 0x%x: %s", result, getName(result) );
++				// A lost device is not an error of the code: bgfx makes the renderer again
++				if (!s_renderVK->handleDeviceLost(result) )
++				{
++					BX_ASSERT(VK_SUCCESS == result, "vkAcquireNextImageKHR(...); VK error 0x%x: %s", result, getName(result) );
++				}
+ 				return false;
+ 			}
+ 
+@@ -10206,8 +10224,11 @@ VK_DESTROY
+ 				break;
+ 
+ 			default:
+-				s_renderVK->handleDeviceLost(result);
+-				BX_ASSERT(VK_SUCCESS == result, "vkQueuePresentKHR(...); VK error 0x%x: %s", result, getName(result) );
++				// A lost device is not an error of the code: bgfx makes the renderer again
++				if (!s_renderVK->handleDeviceLost(result) )
++				{
++					BX_ASSERT(VK_SUCCESS == result, "vkQueuePresentKHR(...); VK error 0x%x: %s", result, getName(result) );
++				}
+ 				break;
+ 			}
+ 
+diff --git a/bgfx/src/renderer_vk.h b/bgfx/src/renderer_vk.h
+index 7665380..d53becb 100644
+--- a/bgfx/src/renderer_vk.h
++++ b/bgfx/src/renderer_vk.h
+@@ -276,7 +276,7 @@
+ 				BX_MACRO_BLOCK_BEGIN                                                                          \
+ 					/*BX_TRACE(#_call);*/                                                                     \
+ 					VkResult vkresult = _call;                                                                \
+-					_check(VK_SUCCESS == vkresult, #_call "; VK error %d: %s", vkresult, getName(vkresult) ); \
++					_check(VK_SUCCESS == vkresult || reportDeviceLost(vkresult), #_call "; VK error %d: %s", vkresult, getName(vkresult) ); \
+ 				BX_MACRO_BLOCK_END
+ 
+ #if BGFX_CONFIG_DEBUG
+@@ -330,6 +330,10 @@
+ 
+ namespace bgfx { namespace vk
+ {
++	// Tells the renderer that a call gave a lost device, and returns true when the result is a lost device. The debug
++	// checks take a lost device as a result to recover from, not as an error of the code.
++	bool reportDeviceLost(VkResult _result);
++
+ 
+ #define VK_IMPORT_FUNC(_optional, _func) extern PFN_##_func _func
+ #define VK_IMPORT_INSTANCE_FUNC VK_IMPORT_FUNC

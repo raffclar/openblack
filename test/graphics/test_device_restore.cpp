@@ -33,3 +33,11 @@ TEST(DeviceRestore, TheWatchSeesEachNewRestoreOneTime)
 	EXPECT_TRUE(watch.Saw(3));
 	EXPECT_FALSE(watch.Saw(3));
 }
+
+TEST(DeviceRestore, TheKeptBytesAddUpToTheTotal)
+{
+	constexpr device_restore::Kept k_Kept {
+	    .buffers = 1, .dynamicBuffers = 20, .shaders = 300, .textures = 4000, .textureChanges = 50000};
+	static_assert(k_Kept.Total() == 54321);
+	EXPECT_EQ(device_restore::Kept {}.Total(), 0u);
+}
