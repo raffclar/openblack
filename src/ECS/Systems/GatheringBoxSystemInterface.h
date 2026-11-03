@@ -72,6 +72,10 @@ public:
 
 	/// The player sent a typed line or the words of a taunt: they go also to the picked friends and others
 	virtual void SendToPicked(std::u16string_view text) = 0;
+	/// The player sent a typed line. A line with the staff code goes also to the ping server (see staff_code):
+	/// - Announcements: each line goes to all the people as a staff person that is here, the last line first.
+	/// - Else: a line of the staff to the server, with the name of the code or the name of the player.
+	virtual void SendStaffCode(std::u16string_view text) = 0;
 	/// The host tells the server the state of the game at once, as when the game is decided
 	virtual void SendHostReport() = 0;
 

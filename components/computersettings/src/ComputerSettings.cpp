@@ -203,6 +203,7 @@ ParseResult Parse(std::string_view text)
 	read.WindowMode("window_mode", settings.windowMode);
 	read.Bool("vsync", settings.vsync);
 	read.Bool("football_add_on", settings.footballAddOn);
+	read.Integer("ignore_special", settings.ignoreSpecial, 0, std::numeric_limits<uint32_t>::max());
 	if (const auto custom = json.find(k_CustomDetail); custom != json.end())
 	{
 		if (custom->is_object())
@@ -234,6 +235,7 @@ std::string Update(std::string_view oldText, const Settings& changed)
 	Put(json, "window_mode", changed.windowMode);
 	Put(json, "vsync", changed.vsync);
 	Put(json, "football_add_on", changed.footballAddOn);
+	Put(json, "ignore_special", changed.ignoreSpecial);
 
 	const auto& detail = changed.customDetail;
 	if (detail != CustomDetail {})

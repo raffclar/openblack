@@ -11,6 +11,7 @@
 
 #include <algorithm>
 #include <ranges>
+#include <utility>
 
 using namespace openblack::gathering_box;
 using openblack::chat::people::Category;
@@ -94,6 +95,70 @@ std::u16string question::AnswerOf(Kind kind, Push push, std::u16string_view line
 		return std::u16string(k_NoAnswer);
 	default:
 		return {};
+	}
+}
+
+std::optional<staff_code::Send> staff_code::Parse(std::u16string_view line)
+{
+	if (!line.starts_with(k_Code))
+	{
+		return std::nullopt;
+	}
+	// The game reads the characters after the end of the line as zero
+	const auto at = [line](size_t index) { return index < line.size() ? line[index] : u'\0'; };
+	Send send;
+	auto next = k_Code.size();
+	if (at(next) == k_AnnounceMark)
+	{
+		send.announce = true;
+		++next;
+	}
+	if (at(next) == k_NameMark)
+	{
+		const auto start = next + 1;
+		size_t count = 0;
+		if (at(start) != k_NameEnd)
+		{
+			while (count < k_MostNameCharacters)
+			{
+				++count;
+				if (at(start + count) == k_NameEnd)
+				{
+					break;
+				}
+			}
+		}
+		send.name =
+		    start < line.size() ? std::u16string(line.substr(start, std::min(count, line.size() - start))) : std::u16string {};
+		next = start + count + 1;
+	}
+	// A name that goes past the end of the line gives no words. The game reads the memory after the line (vanilla bug).
+	if (next < line.size())
+	{
+		send.text = line.substr(next);
+	}
+	return send;
+}
+
+std::vector<std::u16string> staff_code::AnnouncementLines(std::u16string_view words)
+{
+	std::vector<std::u16string> lines;
+	std::u16string current;
+	for (size_t index = 0;; ++index)
+	{
+		const auto character = index < words.size() ? words[index] : u'\0';
+		if (character != u'\0')
+		{
+			current += character;
+		}
+		if (current.size() == k_MostAnnouncementCharacters || character == u' ' || character == u'\0')
+		{
+			lines.push_back(std::exchange(current, {}));
+		}
+		if (character == u'\0' || lines.size() == k_MostAnnouncements)
+		{
+			return lines;
+		}
 	}
 }
 

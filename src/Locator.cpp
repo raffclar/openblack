@@ -695,7 +695,20 @@ void EmplaceGatheringBox(bool developer)
 			Locator::chatSystem::value().ReceiveFromPingServer(name, text);
 		}
 	};
-	services.plainChat = []() { return false; };
+	// The setting of this computer makes the questions of the staff plain lines of the chat
+	services.plainChat = []() {
+		return Locator::computerSettingsSystem::has_value() &&
+		       gathering_box::question::IsPlainChat(Locator::computerSettingsSystem::value().GetSettings().ignoreSpecial);
+	};
+	// The name of the player on the lobby, which is the ping server
+	services.ownName = []() -> std::u16string {
+		if (!Locator::lobbyClient::has_value())
+		{
+			return {};
+		}
+		const auto account = Locator::lobbyClient::value().GetAccount();
+		return account.has_value() ? gui::ToUtf16(account->name) : std::u16string {};
+	};
 	Locator::gatheringBoxSystem::emplace<GatheringBoxSystem>(std::move(services));
 	// With the address of a lobby, the lobby is the ping server
 	if (Locator::lobbyClient::has_value() && Locator::lobbyClient::value().IsConfigured())

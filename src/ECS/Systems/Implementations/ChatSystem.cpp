@@ -89,6 +89,14 @@ void ChatSystem::ReceiveFromPingServer(std::u16string_view name, std::u16string_
 	{
 		_services.incoming(NamedLine(name, text));
 	}
+	const auto here = _services.localPlayer ? _services.localPlayer() : std::nullopt;
+	const auto creature = here.has_value() && _services.creatureOf ? _services.creatureOf(*here) : std::nullopt;
+	if (!creature.has_value())
+	{
+		return;
+	}
+	// The line has no god, so its colour is white. The chat log gets the line only with the bubble.
+	speech_bubble::Say(_bubbles[*creature], {.text = NamedLine(name, text), .sender = std::nullopt}, false);
 	if (_services.log)
 	{
 		_services.log(LogLine(name, text));

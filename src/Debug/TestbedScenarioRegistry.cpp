@@ -5781,6 +5781,26 @@ void AddAudio(std::vector<Scenario>& all)
 	});
 
 	all.push_back({
+	    .id = "multiplayer.staff_line_bubble",
+	    .name = "A line of the staff in the bubble of the player's creature",
+	    .facet = Facet::Interface,
+	    .description = "A ping server of the testbed sends a line from the admin of the server. The god of this computer "
+	                   "has a tiger.",
+	    .expected = "The chat opens by itself, and the incoming message at the bottom left says \"Staff: Welcome to the "
+	                "server\". A bubble comes over the tiger with the line \"Staff: Welcome to the server\" in white, on "
+	                "a box of half of the colour of the god. The bubble fades after some seconds.",
+	    .environment = {.players = {PlayerNames::PLAYER_TWO}},
+	    .framing = {.shot = Shot::Placed, .eye = {0.0f, 40.0f, -60.0f}, .look = {0.0f, 10.0f, 0.0f}},
+	    .creatures = {{.label = "Alice's tiger",
+	                   .species = CreatureType::Tiger,
+	                   .offset = {0.0f, 0.0f},
+	                   .owner = PlayerNames::PLAYER_ONE,
+	                   .size = 0.5f,
+	                   .pauseMind = true}},
+	    .commands = {{.kind = Kind::Chat, .delaySeconds = 1.0f, .value = k_ChatStaffSays, .action = "Welcome to the server"}},
+	});
+
+	all.push_back({
 	    .id = "interface.controls_rebind",
 	    .name = "The Controls page asks for a new key",
 	    .facet = Facet::Interface,

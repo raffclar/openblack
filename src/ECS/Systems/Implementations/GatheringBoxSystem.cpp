@@ -169,6 +169,30 @@ void GatheringBoxSystem::SendToPicked(std::u16string_view text)
 	}
 }
 
+void GatheringBoxSystem::SendStaffCode(std::u16string_view text)
+{
+	if (_server == nullptr || !_server->IsConnected())
+	{
+		return;
+	}
+	const auto send = staff_code::Parse(text);
+	if (!send.has_value())
+	{
+		return;
+	}
+	if (send->announce)
+	{
+		const auto lines = staff_code::AnnouncementLines(send->text);
+		for (auto line = lines.size(); line-- > 0;)
+		{
+			_server->SendAnnouncement(staff_code::AnnouncerOf(line), lines.at(line));
+		}
+		return;
+	}
+	const auto name = send->name.has_value() ? *send->name : (_services.ownName ? _services.ownName() : std::u16string {});
+	_server->SendStaffLine(name, send->text);
+}
+
 void GatheringBoxSystem::SendHostReport()
 {
 	if (_server == nullptr || !_server->IsConnected() || !_services.hostFacts)
