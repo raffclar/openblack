@@ -66,4 +66,36 @@ float SecondsSinceSet(const Timer& timer, uint32_t turn)
 	return TurnsToSeconds(TurnsSince(timer, turn));
 }
 
+void CountdownTimer::Start(float seconds)
+{
+	_running = true;
+	_visible = true;
+	// The turns round to a float, then they are cut towards zero. The low 32 bits of the whole number stay.
+	const float turns = x87::Mul(static_cast<double>(k_TurnsPerSecond), seconds < 0.0f ? 0.0f : seconds);
+	_turnsLeft = static_cast<uint32_t>(x87::ToInteger(turns));
+}
+
+void CountdownTimer::ProcessTurn()
+{
+	if (_running)
+	{
+		--_turnsLeft;
+		if (_turnsLeft == 0)
+		{
+			_running = false;
+		}
+	}
+}
+
+void CountdownTimer::Reset()
+{
+	_running = false;
+	_visible = false;
+}
+
+float CountdownTimer::GetSecondsLeft() const
+{
+	return static_cast<float>(_turnsLeft / static_cast<uint32_t>(k_TurnsPerSecond));
+}
+
 } // namespace openblack::script::timers

@@ -16,6 +16,7 @@
 #include <glm/vec3.hpp>
 
 #include "ECS/Systems/SavedStateInterface.h"
+#include "ScriptHeaders/ScriptTimers.h"
 
 namespace openblack
 {
@@ -94,7 +95,14 @@ public:
 	/// The camera details that a script kept last. Before the first store, the two points are at zero.
 	[[nodiscard]] virtual const CameraDetails& GetCameraDetails() const = 0;
 
-	/// As a new land opens: nobody has the camera or the speed. The kept camera details do not change.
+	/// The countdown timer of the scripts
+	[[nodiscard]] virtual script::timers::CountdownTimer& GetCountdownTimer() = 0;
+	[[nodiscard]] virtual const script::timers::CountdownTimer& GetCountdownTimer() const = 0;
+	/// Counts the countdown timer down by one game turn, before the scripts run
+	virtual void ProcessTurn() = 0;
+
+	/// As a new land opens: nobody has the camera or the speed, and the countdown timer stops and hides. The kept camera
+	/// details do not change.
 	virtual void Reset() = 0;
 };
 

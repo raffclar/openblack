@@ -178,6 +178,7 @@ void ScriptControlSystem::SaveState(reflection::BinaryWriter& out) const
 	reflection::Save(out, _cameraOwner);
 	reflection::Save(out, _gameSpeedOwner);
 	reflection::Save(out, _cameraDetails);
+	reflection::Save(out, _countdown);
 	// The script's camera, with what it follows, looks at and runs. It is the camera of this computer: the frames move it,
 	// and the turns read only the camera that the view report of each player tells.
 	const auto* model =
@@ -190,6 +191,7 @@ bool ScriptControlSystem::LoadState(reflection::BinaryReader& in)
 	reflection::Load(in, _cameraOwner);
 	reflection::Load(in, _gameSpeedOwner);
 	reflection::Load(in, _cameraDetails);
+	reflection::Load(in, _countdown);
 	std::optional<ScriptCameraModel::Saved> saved;
 	reflection::Load(in, saved);
 	if (in.Failed())
@@ -214,4 +216,5 @@ void ScriptControlSystem::Reset()
 	_cameraOwner = 0;
 	_danceCamera.reset();
 	_gameSpeedOwner = 0;
+	_countdown.Reset();
 }

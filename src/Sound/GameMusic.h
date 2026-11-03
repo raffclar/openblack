@@ -21,6 +21,7 @@
 
 #include <glm/vec3.hpp>
 
+#include "3D/MapCoords.h"
 #include "ECS/Systems/SavedStateInterface.h"
 #include "Sound/MusicType.h"
 #include "Sound/ScriptMusic.h"
@@ -45,6 +46,12 @@ public:
 		/// The object's entity
 		uint32_t thing;
 		MusicType type;
+		/// A script can turn the music off. Music that is off does not play. Near the camera, it stops the music of the
+		/// land.
+		bool active {true};
+		/// The place that a script gives for the sound of the music. The music plays from the object without one. The
+		/// object stays the place for the distance to the camera.
+		std::optional<map_coords::MapCoords> playPlace;
 	};
 
 	/// How an attached piece stands this turn, for choosing the one heard
@@ -56,14 +63,23 @@ public:
 		float distance;
 		/// How near the camera must be to hear it
 		float range;
+		/// A script did not turn it off
+		bool active {true};
+	};
+	/// The attached music that plays, if any, and whether music that is off is near the camera
+	struct AttachedChoice
+	{
+		std::optional<size_t> heard;
+		/// Music that is off has its bank and the camera is in its range
+		bool held {false};
 	};
 
 	/// How near the camera must be to an object to hear the music attached to it: as far as its bank says it carries,
 	/// or 100 for a bank that says nothing
 	[[nodiscard]] static float AttachedMusicRange(float bankMaxDistance);
-	/// The attached piece heard, if any: the first, from the most recently attached, whose bank is there and whose
-	/// object is in range
-	[[nodiscard]] static std::optional<size_t> SelectAttachedMusic(std::span<const AttachedMusicCandidate> candidates);
+	/// The attached piece heard, if any: the first that is on, from the most recently attached, whose bank is there and
+	/// whose object is in range. Music that is off and in range before it is held.
+	[[nodiscard]] static AttachedChoice SelectAttachedMusic(std::span<const AttachedMusicCandidate> candidates);
 
 	struct Town
 	{
@@ -160,6 +176,10 @@ public:
 	void DetachMusic(uint32_t thing);
 	/// A script moves an object's music to another object
 	void MoveMusic(uint32_t from, uint32_t to);
+	/// A script turns an object's music on or off. Nothing changes for an object without music.
+	void SetAttachedMusicActive(uint32_t thing, bool active);
+	/// A script gives the place for the sound of an object's music. Nothing changes for an object without music.
+	void SetAttachedMusicPlace(uint32_t thing, const map_coords::MapCoords& place);
 	[[nodiscard]] const std::vector<AttachedMusic>& GetAttachedMusic() const { return _attached; }
 	/// Whether the music attached to an object has finished: an object without music counts as finished, and attached
 	/// music never finishes while it stays attached
