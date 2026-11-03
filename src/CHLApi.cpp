@@ -251,6 +251,7 @@
 #include "ECS/Systems/ScriptMusicSystemInterface.h"
 #include "ECS/Systems/ScriptObjectsSystemInterface.h"
 #include "ECS/Systems/SkyClockSystemInterface.h"
+#include "ECS/Systems/SkySystemInterface.h"
 #include "ECS/Systems/SoundTagSystemInterface.h"
 #include "ECS/Systems/SpellIconSystemInterface.h"
 #include "ECS/Systems/TempleDestructionSystemInterface.h"
@@ -1258,6 +1259,11 @@ void CHLApi::ResetSwitches()
 	_gameSoundOn = true;
 	_highlightDrawOn = true;
 	_scriptHelpOn = true;
+	// The sun that a script hid shows again
+	if (Locator::skySystem::has_value())
+	{
+		Locator::skySystem::value().SetSunHidden(false);
+	}
 	if (Locator::creatureAudioSystem::has_value())
 	{
 		Locator::creatureAudioSystem::value().SetOtherVoicesEnabled(true);
@@ -6486,20 +6492,39 @@ void EnableDisableMusic() // 181 ENABLE_DISABLE_MUSIC
 	}
 }
 
+/// How far the music of a type carries, as the world reads it, 100 without the music
+static float WorldMusicPlayDistance(audio::MusicType type)
+{
+	const auto* music = WorldScriptMusic();
+	return music != nullptr ? music->PlayDistance(type) : audio::MusicPlayDistance(nullptr);
+}
+
 void GetMusicObjDistance() // 182 GET_MUSIC_OBJ_DISTANCE
 {
-	// const auto source = Pop().uintVal;
-	// TODO(Daniels118): implement this
-	NotImplemented();
-	Pushf(0.0f);
+	// How far the music attached to the object carries. An object with no attached music gives 0.
+	const auto object = PopMusicObject("GET_MUSIC_OBJ_DISTANCE");
+	const auto* gameMusic = ScriptGameMusic();
+	if (!object || gameMusic == nullptr)
+	{
+		Pushf(0.0f);
+		return;
+	}
+	const auto& attached = gameMusic->GetAttachedMusic();
+	const auto found = std::ranges::find(attached, *object, &audio::GameMusic::AttachedMusic::thing);
+	Pushf(found != attached.end() ? WorldMusicPlayDistance(found->type) : 0.0f);
 }
 
 void GetMusicEnumDistance() // 183 GET_MUSIC_ENUM_DISTANCE
 {
-	// const auto type = Pop().intVal;
-	// TODO(Daniels118): implement this
-	NotImplemented();
-	Pushf(0.0f);
+	// How far the music of a type carries. For a type that is not a music type, the game pushes 0 and then also pushes
+	// the distance of no bank, so the script gets two values (see docs/vanilla-bugs.md).
+	const auto music = Pop().intVal;
+	if (music < 1 || music >= static_cast<int32_t>(audio::MusicType::_COUNT))
+	{
+		SPDLOG_LOGGER_ERROR(spdlog::get("scripting"), "GET_MUSIC_ENUM_DISTANCE: no music type {}", music);
+		Pushf(0.0f);
+	}
+	Pushf(WorldMusicPlayDistance(static_cast<audio::MusicType>(music)));
 }
 
 void SetMusicPlayPosition() // 184 SET_MUSIC_PLAY_POSITION
@@ -7451,10 +7476,23 @@ void SpellAtPoint() // 227 SPELL_AT_POINT
 
 void SetAttackOwnTown() // 228 SET_ATTACK_OWN_TOWN
 {
-	// const auto unk1 = Pop().intVal;
-	// const auto unk0 = Pop().intVal;
-	// TODO(Daniels118): implement this
-	NotImplemented();
+	// The creature can be angry with the things of its own player, or it cannot
+	const auto object = PopObject();
+	const auto allow = Pop().uintVal != 0;
+	auto& registry = Locator::entitiesRegistry::value();
+	if (object == entt::null || !registry.Valid(object))
+	{
+		ScriptMessage("Thing not found!");
+		return;
+	}
+	if (auto* mind = registry.TryGet<CreatureMindState>(object))
+	{
+		mind->mayAttackOwnPlayer = allow;
+	}
+	else
+	{
+		ScriptMessage("Thing not creature!");
+	}
 }
 
 /// The creature a fight native is given, or none (logged) when it is not a creature
@@ -8126,10 +8164,17 @@ void ObjectCastByObject() // 261 OBJECT_CAST_BY_OBJECT
 
 void IsWindMagicAtPos() // 262 IS_WIND_MAGIC_AT_POS
 {
-	// const auto unk0 = Pop().intVal;
-	// TODO(Daniels118): implement this
-	NotImplemented();
-	Pushb(false);
+	// Whether a storm with no clouds of its own, as the wind miracle makes, is near the point. Every storm counts, also
+	// one that ended.
+	const auto radius = Popf();
+	const auto position = PopVec();
+	bool found = false;
+	Locator::entitiesRegistry::value().Each<const ecs::components::Storm>(
+	    [&found, position, radius](const ecs::components::Storm& storm) {
+		    found = found ||
+		            ecs::script_weather::WindMagicNear(storm.position, storm.outerRadius, storm.cloudCount, position, radius);
+	    });
+	Pushb(found);
 }
 
 void CreateMist() // 263 CREATE_MIST
@@ -8977,9 +9022,13 @@ void CreatureInteractingWith() // 318 CREATURE_INTERACTING_WITH
 
 void SetSunDraw() // 319 SET_SUN_DRAW
 {
-	// const auto unk0 = Pop().intVal;
-	// TODO(Daniels118): implement this
-	NotImplemented();
+	// Any value other than 0 hides the sun and its glare, and 0 shows them. The name of the native says the opposite
+	// (see docs/vanilla-bugs.md).
+	const auto hide = Pop().uintVal != 0;
+	if (Locator::skySystem::has_value())
+	{
+		Locator::skySystem::value().SetSunHidden(hide);
+	}
 }
 
 void ObjectInfoBits() // 320 OBJECT_INFO_BITS
@@ -10459,9 +10508,17 @@ void InsideTemple() // 405 INSIDE_TEMPLE
 
 void RestartObject() // 406 RESTART_OBJECT
 {
-	// const auto object = Pop().uintVal;
-	// TODO(Daniels118): implement this
-	NotImplemented();
+	// A maze puzzle starts again. Any other thing does not change.
+	const auto object = PopObject();
+	if (object == entt::null || !Locator::entitiesRegistry::value().Valid(object))
+	{
+		ScriptMessage("Object should be alive!");
+		return;
+	}
+	if (Locator::puzzleGameSystem::has_value())
+	{
+		Locator::puzzleGameSystem::value().Restart(object);
+	}
 }
 
 void SetGameTimeProperties() // 407 SET_GAME_TIME_PROPERTIES

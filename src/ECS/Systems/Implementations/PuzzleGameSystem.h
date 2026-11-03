@@ -28,6 +28,7 @@ public:
 	void TakenInHand(entt::entity piece) override;
 	void Forget(entt::entity puzzle) override;
 	bool DeletePieces(entt::entity puzzle) override;
+	bool Restart(entt::entity puzzle) override;
 	void TapPlace(const map_coords::MapCoords& place) override;
 	bool TapTotem(entt::entity totem) override;
 	void ScareFish(glm::vec3 point) override;
