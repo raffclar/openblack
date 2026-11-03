@@ -40,6 +40,7 @@
 #include "Creature/CreatureDesireSources.h"
 #include "Creature/CreatureDesires.h"
 #include "Creature/CreatureHelp.h"
+#include "Creature/CreatureLayers.h"
 #include "Creature/CreatureLearning.h"
 #include "Creature/CreatureLook.h"
 #include "Creature/CreatureLostThing.h"
@@ -53,6 +54,7 @@
 #include "ECS/Components/AnimatedStatic.h"
 #include "ECS/Components/Ball.h"
 #include "ECS/Components/BuildingDamage.h"
+#include "ECS/Components/CarriedByTornado.h"
 #include "ECS/Components/Construction.h"
 #include "ECS/Components/Creature.h"
 #include "ECS/Components/CreatureBody.h"
@@ -68,6 +70,7 @@
 #include "ECS/Components/FishFarm.h"
 #include "ECS/Components/Flock.h"
 #include "ECS/Components/Flowers.h"
+#include "ECS/Components/HandGrab.h"
 #include "ECS/Components/LandForest.h"
 #include "ECS/Components/MagicFireBall.h"
 #include "ECS/Components/MagicShield.h"
@@ -126,6 +129,27 @@ using openblack::creature_desires::Desire;
 
 namespace
 {
+/// The two things of the plan that it carries out, by the order of creature_object_beliefs::k_PlanThingActedOn; none
+/// for each with no plan
+beliefs::PlanThings PlanThingsOf(const CreatureMindState& mind)
+{
+	beliefs::PlanThings things {};
+	if (!mind.planner.current.has_value())
+	{
+		return things;
+	}
+	const auto& plan = *mind.planner.current;
+	if (plan.object.has_value())
+	{
+		things.at(beliefs::k_PlanThingActedOn) = static_cast<entt::entity>(*plan.object);
+	}
+	if (plan.instrument.has_value())
+	{
+		things.at(beliefs::k_PlanThingUsed) = static_cast<entt::entity>(*plan.instrument);
+	}
+	return things;
+}
+
 /// The kind of belief for a thing that lies about and can move, by the kind of thing that its data row says it is: poo,
 /// magic food, or any other thing
 uint32_t KindOfLooseThing(MobileObjectInfo type)
@@ -476,6 +500,15 @@ void CreatureMindSystem::ComeAcross(entt::entity creature, components::CreatureM
 	{
 		return;
 	}
+	// It came across a thing of its plan in this sweep
+	const auto planThings = PlanThingsOf(mind);
+	for (size_t i = 0; i < beliefs::k_PlanThings; ++i)
+	{
+		if (planThings.at(i) == thing)
+		{
+			mind.sweep.targets.cameAcross.at(i) = true;
+		}
+	}
 	// The last moving thing that it comes across is the one that it noticed last, whatever the thing is
 	if (creature_look::Notices(thing == creature, MovedLastTurn(registry, thing)))
 	{
@@ -819,6 +852,35 @@ void CreatureMindSystem::LookAtLand(entt::entity entity, const Creature& creatur
 	}
 }
 
+void CreatureMindSystem::TellPlanThingsWhereNow(CreatureMindState& mind, const beliefs::PlanThings& things, bool bodyActs)
+{
+	const auto* tables = GetTables();
+	if (tables == nullptr || !mind.planner.current.has_value() || mind.planner.current->action >= tables->actions.size() ||
+	    !tables->actions[mind.planner.current->action].refreshesTargetsInSight)
+	{
+		return;
+	}
+	const auto& registry = Locator::entitiesRegistry::value();
+	for (size_t i = 0; i < beliefs::k_PlanThings; ++i)
+	{
+		if (!things.at(i).has_value() || !registry.Valid(*things.at(i)))
+		{
+			continue;
+		}
+		const auto thing = *things.at(i);
+		auto* belief = mind.beliefs.Find(thing);
+		if (belief == nullptr)
+		{
+			continue;
+		}
+		const bool inMap = ecs::InMapCells(registry, thing) && !registry.AnyOf<InHand, InPhysics, CarriedByTornado>(thing);
+		if (beliefs::TellsWhereNow(mind.sweep.targets, i, mind.idle.stepStarted, bodyActs, inMap))
+		{
+			belief->place = ecs::thing_map_place::Of(registry, thing);
+		}
+	}
+}
+
 void CreatureMindSystem::SweepEyes(entt::entity entity, const Creature& creature, components::CreatureMindState& mind,
                                    const CreatureAnimation& animation, const Transform& transform)
 {
@@ -843,6 +905,11 @@ void CreatureMindSystem::SweepEyes(entt::entity entity, const Creature& creature
 		return std::pair {inView, gutils::GetDistanceInMetres(from, coords)};
 	};
 	const auto view = [&](entt::entity thing) { return viewOf(glm::xz(PlaceOf(registry, thing))); };
+	const auto planThings = PlanThingsOf(mind);
+	if (beliefs::StartsAgain(mind.sweep))
+	{
+		TellPlanThingsWhereNow(mind, planThings, creature_layers::IsPlaying(animation.body));
+	}
 	for (const auto cell : beliefs::NextCells(mind.sweep, centre, ShownSize(creature)))
 	{
 		if (!map_coords::InBounds(cell))
@@ -853,6 +920,15 @@ void CreatureMindSystem::SweepEyes(entt::entity entity, const Creature& creature
 		if (!beliefs::CanSee(looking, gutils::GetAngleFromXZ(from, corner), cell == centre))
 		{
 			continue;
+		}
+		// It looks at the cell where it believes each thing of its plan is, before it comes across what is in the cell
+		for (size_t i = 0; i < beliefs::k_PlanThings; ++i)
+		{
+			const auto* belief = planThings.at(i).has_value() ? mind.beliefs.Find(*planThings.at(i)) : nullptr;
+			if (belief != nullptr && map_coords::Cell(belief->place) == cell)
+			{
+				mind.sweep.targets.believedCellSeen.at(i) = true;
+			}
 		}
 		// The things that stay put, then the things that move
 		for (const auto thing : map.GetAllInCell(cell))

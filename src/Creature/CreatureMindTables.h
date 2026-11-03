@@ -56,6 +56,9 @@ struct ActionInfo
 	/// The action acts on a thing, and it never acts on the thing that the creature holds
 	bool actsOnThing {false};
 	bool notOnWhatItHolds {false};
+	/// While the creature does the action, each new sweep of its eyes can tell its beliefs where the things of its plan
+	/// are now (see creature_object_beliefs::TellsWhereNow)
+	bool refreshesTargetsInSight {false};
 	/// The desire that another creature takes the action to show
 	uint32_t shownDesire {0};
 	/// When the action ends well on another creature, how much nicer the creature finds the other creature
