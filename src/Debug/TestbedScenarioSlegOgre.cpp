@@ -29,6 +29,9 @@ constexpr glm::vec2 k_FightIntro = glm::vec2(1597.958f, 2689.638f) - k_LandMiddl
 constexpr glm::vec2 k_Lair = glm::vec2(1705.717f, 2790.110f) - k_LandMiddle;
 /// A point 55 metres from the place of the speech, nearer than the 150 metres that start the fight
 constexpr glm::vec2 k_NearTheFight = glm::vec2(1560.0f, 2650.0f) - k_LandMiddle;
+/// A point inside the ring that sends the creature back: 200 metres from the place of the speech and 132 metres from the
+/// lair, from the middle of the land
+constexpr glm::vec2 k_FenceSpot = glm::vec2(1798.0f, 2695.0f) - k_LandMiddle;
 /// The middle of the undead village and the radius that the land's script uses to find it
 constexpr glm::vec2 k_UndeadVillage = glm::vec2(3001.083f, 3457.676f) - k_LandMiddle;
 constexpr float k_UndeadVillageSearch = 100.0f;
@@ -96,6 +99,32 @@ void AddGremlins(std::vector<Scenario>& all)
 	});
 }
 
+void AddOgreFence(std::vector<Scenario>& all)
+{
+	all.push_back({
+	    .id = "story.l4_ogre_fence",
+	    .name = "Story: the creature of the fourth land is sent back from the way to Sleg",
+	    .facet = Facet::Story,
+	    .description = "The fourth land loads with its own scripts and sky. The set-up script of the land runs, then the "
+	                   "script that keeps the creature away from the ogre. The player's Tiger is not on the leash. It "
+	                   "stands 200 metres from the place where the ogre speaks and 132 metres from his lair.",
+	    .expected = "The Tiger is near the way to the ogre, but not near enough to start the fight, and it is not on the "
+	                "leash. So the script sends it back to the home village. The Tiger walks to a place within 50 "
+	                "metres of the village, and after 3 seconds the script lets it go. It is sent back again each time it "
+	                "comes into that ring.",
+	    .environment = {.land = Land::Story, .storyLand = "Land4.txt", .dispenserGrid = false},
+	    .framing = {.shot = Shot::Placed,
+	                .eye = {k_FenceSpot.x + 40.0f, 60.0f, k_FenceSpot.y - 60.0f},
+	                .look = {k_FenceSpot.x, 20.0f, k_FenceSpot.y}},
+	    .creatures = {PlayersTiger(k_FenceSpot)},
+	    .commands = {{.kind = Kind::RunScript, .delaySeconds = 0.5f, .script = "SetupLand4"},
+	                 {.kind = Kind::RunScript,
+	                  .delaySeconds = 0.5f,
+	                  .script = "KeepCreatureAwayFromOgre",
+	                  .scriptGlobals = {{"MyCreature", {.kind = Argument::Kind::Creature, .index = 0}}}}},
+	});
+}
+
 void AddUndeadVillageCreed(std::vector<Scenario>& all)
 {
 	all.push_back({
@@ -135,5 +164,6 @@ void testbed_scenarios::AddLand4SlegScenarios(std::vector<Scenario>& all)
 {
 	AddSlegFight(all);
 	AddGremlins(all);
+	AddOgreFence(all);
 	AddUndeadVillageCreed(all);
 }

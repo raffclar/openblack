@@ -167,6 +167,26 @@ void testbed_scenarios::AddCreatureActionScenarios(std::vector<Scenario>& all)
 	    .commands = {Do("HoldObject", 1.0f), Do("PutDown", 8.0f)},
 	});
 	all.push_back({
+	    .id = "actions.evil_ogre_holds_villager",
+	    .name = "A small ogre with a fully evil body picks up a villager",
+	    .facet = Facet::Objects,
+	    .description = "An ogre with a fully evil body, at the size of the gremlins of the fourth land, is told to hold "
+	                   "a villager who stands 2 metres in front of it, in its reach.",
+	    .expected = "The ogre bends down and picks the villager up in its hand. Its hand does not stop above the "
+	                "villager's head.",
+	    .environment = {.dispenserGrid = false},
+	    .framing = Near(),
+	    .creatures = {{.label = "evil ogre",
+	                   .species = CreatureType::Ogre,
+	                   .facingDegrees = 0.0f,
+	                   .alignment = -1.0f,
+	                   .size = 0.3f,
+	                   .phase = 3,
+	                   .needs = {.energy = 1.0f, .exhaustion = 0.0f, .dehydration = 0.0f, .poo = 0.0f, .life = 1.0f}}},
+	    .objects = {{.type = VillagerInfo::CelticFarmerMale, .offset = {0.0f, -2.0f}}},
+	    .commands = {Do("HoldObject", 1.0f)},
+	});
+	all.push_back({
 	    .id = "actions.run_away_from_player",
 	    .name = "Runs away from the player",
 	    .facet = Facet::Mind,
