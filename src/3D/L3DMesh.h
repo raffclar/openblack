@@ -11,6 +11,7 @@
 
 #include <array>
 #include <filesystem>
+#include <functional>
 #include <limits>
 #include <optional>
 #include <span>
@@ -29,6 +30,11 @@
 #include "Visual/LightBeams.h"
 #include "Visual/TreeShadows.h"
 #include "Visual/UploadMode.h"
+
+namespace openblack::resources
+{
+class Rereads;
+}
 
 namespace openblack
 {
@@ -267,12 +273,24 @@ public:
 	/// prepared load must have the upload mode of the mesh. The result tells whether all the submeshes opened.
 	bool Finish(Prepared prepared) noexcept;
 
+	/// Gives the bytes of the file of the mesh, read again from the game files
+	using FileSource = std::function<std::vector<uint8_t>(resources::Rereads&)>;
+	/// Gives the mesh a source of its file. The graphics device then keeps no copy of the skins and buffers of the mesh.
+	/// After a restore of the device, the mesh gives them again from the file. A dynamic mesh keeps the copies of its
+	/// skins and vertices on the device, because they change. A mesh of data only ignores the source.
+	void SetFileSource(FileSource source);
+	/// Gives the skins and the buffers to the graphics device again, from the file that the mesh loaded
+	void GiveDeviceDataAgain(const l3d::L3DFile& l3d) const;
+
 private:
 	l3d::L3DMeshFlags _flags;
 	std::string _debugName;
 	bool _dynamic;
 	bool _facesSplit {false};
 	UploadMode _upload;
+	FileSource _fileSource;
+	/// Whether the mesh is one of the owners that give their data to the graphics device again
+	bool _givesDataAgain {false};
 
 	std::unordered_map<SkinId, std::unique_ptr<graphics::Texture2D>> _skins;
 	std::vector<SkinId> _skinOrder;

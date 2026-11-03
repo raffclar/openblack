@@ -41,6 +41,8 @@ public:
 	[[nodiscard]] VertexLayoutHandle CreateVertexLayout(const VertexDecl& decl) const override;
 	void Update(DynamicVertexBufferHandle buffer, uint32_t firstVertex, const DeviceMemory* vertices) const override;
 	void SetName(VertexBufferHandle buffer, std::string_view name) const override;
+	void SetContentsGivenAgain(VertexBufferHandle buffer) const override;
+	void GiveContentsAgain(VertexBufferHandle buffer, const DeviceMemory* vertices) const override;
 	void Destroy(VertexBufferHandle buffer) const override;
 	void Destroy(DynamicVertexBufferHandle buffer) const override;
 	void Destroy(VertexLayoutHandle layout) const override;
@@ -48,8 +50,15 @@ public:
 	[[nodiscard]] IndexBufferHandle CreateIndexBuffer(const DeviceMemory* indices, bool wide) const override;
 	[[nodiscard]] DynamicIndexBufferHandle CreateSharedIndexBuffer(const DeviceMemory* indices, bool wide) const override;
 	void SetName(IndexBufferHandle buffer, std::string_view name) const override;
+	void SetContentsGivenAgain(IndexBufferHandle buffer) const override;
+	void GiveContentsAgain(IndexBufferHandle buffer, const DeviceMemory* indices) const override;
 	void Destroy(IndexBufferHandle buffer) const override;
 	void Destroy(DynamicIndexBufferHandle buffer) const override;
+
+	[[nodiscard]] DeviceDataGivers& GetDataGivers() const override { return _givers; }
+
+private:
+	mutable DeviceDataGivers _givers;
 };
 
 } // namespace openblack::graphics

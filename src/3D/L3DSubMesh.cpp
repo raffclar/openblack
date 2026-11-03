@@ -426,6 +426,35 @@ void L3DSubMesh::Finish(Prepared prepared) noexcept
 	}
 }
 
+void L3DSubMesh::SetDeviceDataGivenAgain() const
+{
+	if (!_mesh || _made || _facesSplit)
+	{
+		return;
+	}
+	_mesh->GetVertexBuffer().SetContentsGivenAgain();
+	if (_mesh->IsIndexed())
+	{
+		_mesh->GetIndexBuffer().SetContentsGivenAgain();
+	}
+}
+
+void L3DSubMesh::GiveDeviceDataAgain(const Prepared& prepared) const
+{
+	// The buffers of new faces for the snow are not the buffers that the device does not keep
+	if (!_mesh || _made || _facesSplit || prepared.vertices.empty())
+	{
+		return;
+	}
+	_mesh->GetVertexBuffer().GiveContentsAgain(prepared.vertices);
+	if (_mesh->IsIndexed())
+	{
+		const auto& indices = prepared.data.bodyGeometry.indices;
+		const auto* first = reinterpret_cast<const uint8_t*>(indices.data());
+		_mesh->GetIndexBuffer().GiveContentsAgain(std::vector<uint8_t>(first, first + (indices.size() * sizeof(indices[0]))));
+	}
+}
+
 bool L3DSubMesh::LoadMade(std::span<const MadePrimitive> primitives) noexcept
 {
 	_data.flags = {};
