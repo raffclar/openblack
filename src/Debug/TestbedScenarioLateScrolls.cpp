@@ -46,6 +46,13 @@ constexpr float k_TiltMazeInfluence = 60.0f;
 /// The hut of the woman with the potions and the ridge of the ogre Morg, from the middle of the fourth land
 constexpr glm::vec2 k_WomansHut = glm::vec2(3703.723f, 3105.303f) - k_FourthLandMiddle;
 constexpr glm::vec2 k_OgreRidge = glm::vec2(3209.364f, 3277.383f) - k_FourthLandMiddle;
+/// The grass below the ridge of Morg, where he aims his boulders when the creature is not near
+constexpr glm::vec2 k_OgreTargetZone = glm::vec2(3182.678f, 3320.0588f) - k_FourthLandMiddle;
+/// The kind of thing that the scripts make for a villager, and the kind of villager that the woman of the quest is
+constexpr float k_VillagerType = 4.0f;
+constexpr float k_HealingWomanKind = 14.0f;
+/// The property of a thing that the scripts read and write as its life
+constexpr float k_LifeProperty = 1.0f;
 /// The player's creature, fully grown, at the place given from the middle of the land
 CreatureSetup PlayersTiger(glm::vec2 offset)
 {
@@ -142,6 +149,20 @@ void AddStanleyTheWolf(std::vector<Scenario>& all)
 	                                      {.kind = Argument::Kind::Integer, .number = 0.0f}}},
 	                 {.kind = Kind::RunScript, .delaySeconds = 0.5f, .script = "LionPuzzle"}},
 	});
+
+	// The same puzzle with the player's tiger more than 50 from the place of the lion
+	auto withTiger = all.back();
+	withTiger.id = "story.l5_stanley_the_wolf_swap";
+	withTiger.name = "Story: Stanley the Wolf with the player's tiger, for the lion swap after the puzzle";
+	withTiger.description =
+	    "As the Stanley the Wolf scenario, but the player's tiger stands west of the puzzle, more than 50 from the place "
+	    "of the lion. Solve the puzzle. Then click the lion, move the tiger near the lion and click the lion again.";
+	withTiger.expected = "The film after the puzzle ends with the lion and the swap offer. The first click on the lion "
+	                     "gives the line of the evil advisor about the creature. With the tiger near, the tiger walks to "
+	                     "the lion and the good advisor asks if you are sure. A click on the lion swaps the creatures and "
+	                     "the evil advisor says that you can come back for your old creature.";
+	withTiger.creatures = {PlayersTiger(k_TiltPuzzle + glm::vec2(-110.0f, 20.0f))};
+	all.push_back(std::move(withTiger));
 }
 
 /// The commands that run the set-up script of the land, which names the Aztec village, then start the script of the
@@ -239,6 +260,58 @@ void AddTreacherousPath(std::vector<Scenario>& all)
 	                .look = {k_OgreRidge.x, 0.0f, k_OgreRidge.y}},
 	    .creatures = {PlayersTiger(k_OgreRidge + glm::vec2(-40.0f, 0.0f))},
 	    .commands = StartTreacherousPath(),
+	});
+	all.push_back({
+	    .id = "story.l4_treacherous_path_woman_target",
+	    .name = "Story: Morg the ogre of the Treacherous Path aims at the woman on the grass below him",
+	    .facet = Facet::Story,
+	    .description = "The fourth land loads with its own scripts and sky. A woman stands on the grass below the ridge of "
+	                   "Morg, and the script of the silver scroll takes her as the woman of the quest. The set-up script of "
+	                   "the land runs, then the script of the scroll starts from its own start. The player's Tiger stands "
+	                   "far from the ridge.",
+	    .expected = "Morg comes on his ridge at half size. Each 10 seconds he takes a small boulder and throws it at the "
+	                "woman, not at the sheep on the grass.",
+	    .environment = {.land = Land::Story, .storyLand = "Land4.txt", .dispenserGrid = false},
+	    .framing = {.shot = Shot::Placed,
+	                .eye = {k_OgreTargetZone.x - 50.0f, 60.0f, k_OgreTargetZone.y - 50.0f},
+	                .look = {k_OgreTargetZone.x, 0.0f, k_OgreTargetZone.y}},
+	    .creatures = {PlayersTiger(k_WomansHut + glm::vec2(-40.0f, -30.0f))},
+	    .commands = {{.kind = Kind::CallNative,
+	                  .delaySeconds = 0.5f,
+	                  .script = "CREATE",
+	                  .scriptArguments = {{.kind = Argument::Kind::Integer, .number = k_VillagerType},
+	                                      {.kind = Argument::Kind::Integer, .number = k_HealingWomanKind},
+	                                      {.kind = Argument::Kind::Position, .point = k_OgreTargetZone}}},
+	                 {.kind = Kind::RunScript, .delaySeconds = 0.5f, .script = "SetupLand4"},
+	                 {.kind = Kind::RunScript,
+	                  .delaySeconds = 0.5f,
+	                  .script = "BlindWomanMain",
+	                  .scriptGlobals = {{"BlindWoman", {.kind = Argument::Kind::Made, .index = 0}}}}},
+	});
+	all.push_back({
+	    .id = "story.l4_treacherous_path_victor_heals",
+	    .name = "Story: the creature that won a fight heals over time, as Morg does after he wins",
+	    .facet = Facet::Story,
+	    .description = "The fourth land loads with its own scripts and sky. The player's Tiger has 90% of its life. The "
+	                   "shared script that heals the winner of a fight runs on it, as the script of Morg runs it on him "
+	                   "after he wins.",
+	    .expected = "Each 6 seconds the life of the Tiger goes up by 1%, until it is full after about one minute. When "
+	                "the Tiger fights, the healing stops.",
+	    .environment = {.land = Land::Story, .storyLand = "Land4.txt", .dispenserGrid = false},
+	    .framing = {.shot = Shot::Placed,
+	                .eye = {k_OgreRidge.x - 30.0f, 40.0f, k_OgreRidge.y - 70.0f},
+	                .look = {k_OgreRidge.x - 40.0f, 0.0f, k_OgreRidge.y - 40.0f}},
+	    .creatures = {PlayersTiger(k_OgreRidge + glm::vec2(-40.0f, -40.0f))},
+	    .commands = {{.kind = Kind::CallNative,
+	                  .delaySeconds = 0.5f,
+	                  .script = "SET_PROPERTY",
+	                  .scriptArguments = {{.kind = Argument::Kind::Integer, .number = k_LifeProperty},
+	                                      {.kind = Argument::Kind::Creature, .index = 0},
+	                                      {.number = 0.9f}}},
+	                 {.kind = Kind::RunScript,
+	                  .delaySeconds = 0.5f,
+	                  .script = "HealFightVictorOverTime",
+	                  .scriptArguments = {{.kind = Argument::Kind::Creature, .index = 0}}}},
 	});
 	const Framing soapBox {.shot = Shot::Placed,
 	                       .eye = {k_WomansSoapBox.x - 30.0f, 25.0f, k_WomansSoapBox.y - 30.0f},
