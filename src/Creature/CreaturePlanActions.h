@@ -158,11 +158,17 @@ enum class Target : uint8_t
 	/// The totem of a town of the player who watches: the town centre and the town's worship site built, and the
 	/// player's temple there
 	PlayerTotem,
+	/// A villager that plays football: a player, the referee or one of the crowd
+	Footballer,
+	/// A villager that plays football while its pitch pauses after a goal of the creature's side, as the game sees it
+	FootballerMySideScored,
+	/// A villager that plays football while its pitch pauses after a goal of the other side, as the game sees it
+	FootballerOtherSideScored,
 };
 /// A creature poos only by a thing taller than this, in metres
 constexpr float k_PooedOnTallerThan = 1.5f;
 /// How many kinds of target there are
-constexpr size_t k_TargetCount = static_cast<size_t>(Target::PlayerTotem) + 1;
+constexpr size_t k_TargetCount = static_cast<size_t>(Target::FootballerOtherSideScored) + 1;
 
 /// How the agenda is made
 enum class Build : uint8_t
@@ -429,6 +435,13 @@ enum class Build : uint8_t
 	StealAndPutInTown,
 	StealFoodFromStore,
 	StealWoodFromStore,
+	/// The football actions (see creature_football): the creature throws the ball at a goal, stomps on the ball or on
+	/// the first player of the other team, and is happy or sad about a goal
+	ThrowBallAtGoal,
+	StompOnBall,
+	GoalkeeperFoul,
+	CelebrateGoal,
+	CommiserateGoal,
 };
 
 /// What tells the planner that the creature did an action too recently to choose it again
@@ -676,6 +689,16 @@ struct Situation
 	/// Where the head of the creature is, and where its home is on the ground
 	std::optional<glm::vec3> head;
 	std::optional<glm::vec3> homePlace;
+	/// For the football actions: the ball of the pitch where the villager plays, the goal that the creature's side
+	/// attacks, and the first player of the other team (none when that team has no player). None when the villager
+	/// plays on no pitch.
+	struct Football
+	{
+		uint32_t ball {0};
+		glm::vec2 goal {0.0f};
+		std::optional<uint32_t> otherFirstPlayer;
+	};
+	std::optional<Football> football;
 };
 /// What a casting action casts, from its row of the game's table and the creature
 struct CastInfo

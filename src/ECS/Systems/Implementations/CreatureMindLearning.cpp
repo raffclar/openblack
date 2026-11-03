@@ -81,6 +81,7 @@
 #include "Creature/CreatureWatching.h"
 #include "Creature/LeashOrders.h"
 #include "Creature/LeashRules.h"
+#include "CreatureMindFootball.h"
 #include "CreatureMindSystem.h"
 #include "CreatureMindSystemDetail.h"
 #include "CreatureMindTownHelp.h"
@@ -436,6 +437,10 @@ bool Accepts(const ecs::Registry& registry, Target target, entt::entity entity, 
 	case Target::VillagerFarFromHome:
 	case Target::PlayerTotem:
 		return mind_town_help::Accepts(registry, target, entity, self, heldByOther);
+	case Target::Footballer:
+	case Target::FootballerMySideScored:
+	case Target::FootballerOtherSideScored:
+		return mind_football::Accepts(registry, target, entity, self);
 	case Target::Creature:
 		return registry.AllOf<Creature>(entity);
 	case Target::CreatureFreeForJoint:
@@ -2024,6 +2029,7 @@ CreatureMindSystem::PlanAgenda(entt::entity creature, uint32_t action, std::opti
 		SituateDance(creature, *executor, point, situated);
 	}
 	mind_town_help::Situate(Locator::entitiesRegistry::value(), creature, *executor, object, situated);
+	mind_football::Situate(Locator::entitiesRegistry::value(), creature, *executor, object, situated);
 	if (object.has_value())
 	{
 		SituateFriend(creature, *executor, static_cast<entt::entity>(*object), situated);
@@ -2203,19 +2209,17 @@ float CreatureMindSystem::ObjectToActOnUsefulness(entt::entity creature, const C
 		}
 	}
 	const auto belief = ActedOnBeliefOf(registry, object, creature);
-	// Curious, it finds a thing that does something interesting five times as useful. Playful, it finds a toy three
-	// times as useful. Curious, it finds a kind that it has had a good look at a hundredth as useful, in place of the
-	// multiplier.
-	// TODO(creature-coverage-check): a playful creature finds a villager that plays football five times as useful. The
-	// villagers of openblack do not play football yet.
+	// Curious, it finds a thing that does something interesting five times as useful. Playful, it finds a villager that
+	// plays football five times as useful, and a toy three times as useful. Curious, it finds a kind that it has had a
+	// good look at a hundredth as useful, in place of the multiplier.
 	const float observed = ObservedShare(registry, mind, desire, object, belief);
-	const float share = observed < 1.0f
-	                        ? observed
-	                        : creature_mind::DesireMultiplier(
-	                              desire, {.doingSomethingInteresting =
-	                                           desire == Desire::Curiosity && DoingSomethingInteresting(registry, mind, object),
-	                                       .playingFootball = false,
-	                                       .toy = desire == Desire::Play && ToyOf(registry, object).has_value()});
+	const float share =
+	    observed < 1.0f ? observed
+	                    : creature_mind::DesireMultiplier(
+	                          desire, {.doingSomethingInteresting =
+	                                       desire == Desire::Curiosity && DoingSomethingInteresting(registry, mind, object),
+	                                   .playingFootball = desire == Desire::Play && mind_football::IsPlaying(registry, object),
+	                                   .toy = desire == Desire::Play && ToyOf(registry, object).has_value()});
 	const auto distance =
 	    Nearness(registry, creature, at, object, *place, tables->rules.at(static_cast<size_t>(desire)).distanceWeight);
 	float learnt = creature_planner::k_DefaultUsefulness;
@@ -3676,6 +3680,9 @@ bool CreatureMindSystem::ForcePlan(entt::entity creature, const ForcedPlan& plan
 			mind_town_help::Situate(registry, creature, *executor,
 			                        plan.object.has_value() ? std::optional(entt::to_integral(*plan.object)) : std::nullopt,
 			                        situation);
+			mind_football::Situate(registry, creature, *executor,
+			                       plan.object.has_value() ? std::optional(entt::to_integral(*plan.object)) : std::nullopt,
+			                       situation);
 			if (plan.object.has_value())
 			{
 				SituateFriend(creature, *executor, *plan.object, situation);

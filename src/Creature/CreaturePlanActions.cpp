@@ -23,6 +23,7 @@
 #include "Creature/CreatureEmoteAgendas.h"
 #include "Creature/CreatureExplorationAgendas.h"
 #include "Creature/CreatureFireAgenda.h"
+#include "Creature/CreatureFootball.h"
 #include "Creature/CreatureFriendAgendas.h"
 #include "Creature/CreatureKindAgendas.h"
 #include "Creature/CreatureLayers.h"
@@ -506,6 +507,16 @@ constexpr std::array k_Executors {
               .target = Target::OwnStoragePit,
               .use = Target::OthersStoragePit,
               .build = Build::StealWoodFromStore},
+    // The football actions on a villager that plays football. To kick the ball at a goal, to clear it and to catch it
+    // all throw the ball at the goal that the creature's side attacks.
+    Executor {.action = "AttackerThrowBallAtGoal", .target = Target::Footballer, .build = Build::ThrowBallAtGoal},
+    Executor {.action = "AttackerKickBallAtGoal", .target = Target::Footballer, .build = Build::ThrowBallAtGoal},
+    Executor {.action = "DefenderStompOnBall", .target = Target::Footballer, .build = Build::StompOnBall},
+    Executor {.action = "DefenderClearBall", .target = Target::Footballer, .build = Build::ThrowBallAtGoal},
+    Executor {.action = "GoalieCatchBall", .target = Target::Footballer, .build = Build::ThrowBallAtGoal},
+    Executor {.action = "GoalieFoul", .target = Target::Footballer, .build = Build::GoalkeeperFoul},
+    Executor {.action = "CelebrateGoal", .target = Target::FootballerMySideScored, .build = Build::CelebrateGoal},
+    Executor {.action = "CommiserateGoal", .target = Target::FootballerOtherSideScored, .build = Build::CommiserateGoal},
 };
 
 /// The actions of the game's table that need a thing to use, by their names there
@@ -1708,6 +1719,29 @@ std::optional<std::vector<creature_mind::Step>> creature_plan_actions::Agenda(co
 		                                               ? creature_mind::ObjectOrder::Handful::Logs
 		                                               : creature_mind::ObjectOrder::Handful::Wheat,
 		                                           situation.height);
+	case Build::ThrowBallAtGoal:
+		if (!situation.football.has_value())
+		{
+			return std::nullopt;
+		}
+		return creature_football::ThrowBallAtGoal(situation.football->ball, situation.football->goal, situation.handFull,
+		                                          random);
+	case Build::StompOnBall:
+		if (!situation.football.has_value())
+		{
+			return std::nullopt;
+		}
+		return creature_football::StompOn(situation.football->ball);
+	case Build::GoalkeeperFoul:
+		if (!situation.football.has_value() || !situation.football->otherFirstPlayer.has_value())
+		{
+			return std::nullopt;
+		}
+		return creature_football::StompOn(*situation.football->otherFirstPlayer);
+	case Build::CelebrateGoal:
+		return creature_football::CelebrateGoal();
+	case Build::CommiserateGoal:
+		return creature_football::CommiserateGoal();
 	case Build::Never:
 	case Build::MimicPlayer:
 		return std::nullopt;

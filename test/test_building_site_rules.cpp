@@ -472,3 +472,21 @@ TEST(BuildingSiteRules, ABuilderWithNoWoodAtItsSiteGetsWoodAndOneWithWoodBuildsO
 	EXPECT_EQ(AfterStrokeOf(false, 0), AfterStroke::Leave);
 	EXPECT_EQ(AfterStrokeOf(false, 500), AfterStroke::Leave);
 }
+
+// The builders of a football pitch stand on a circle of its reach about the middle of its box, at the land's height.
+// The first place is straight down the z axis, and each next place is a 128th of a turn on.
+TEST(BuildingSiteRules, APitchPutsItsBuildersOnACircle)
+{
+	const auto places = CirclePlaces({10.0f, 3.0f, -20.0f}, 30.0f, [](glm::vec2 ground) { return ground.x * 0.5f; });
+	EXPECT_FLOAT_EQ(places.front().x, 10.0f);
+	EXPECT_FLOAT_EQ(places.front().z, 10.0f);
+	EXPECT_FLOAT_EQ(places.front().y, 5.0f);
+	// A quarter turn on, the place is at the reach along the x axis
+	EXPECT_NEAR(places.at(k_Places / 4).x, 40.0f, 1e-3f);
+	EXPECT_NEAR(places.at(k_Places / 4).z, -20.0f, 1e-3f);
+	EXPECT_NEAR(places.at(k_Places / 4).y, 20.0f, 1e-3f);
+	for (const auto& place : places)
+	{
+		EXPECT_NEAR(glm::distance(glm::vec2(place.x, place.z), glm::vec2(10.0f, -20.0f)), 30.0f, 1e-3f);
+	}
+}

@@ -20,6 +20,8 @@
 #include <glm/vec2.hpp>
 #include <glm/vec3.hpp>
 
+#include "Enums.h"
+
 /// The rules of the football that the free Soccer Add-On switches on: the switch, the teams, the match on the pitch,
 /// the crowd and its wave, and how each footballer picks what it does next. Pure rules, free of the game's state, so
 /// that tests can check them with made-up values.
@@ -117,6 +119,9 @@ enum class Joins : uint8_t
 	Crowd,
 };
 [[nodiscard]] Joins JoinAs(bool hasReferee, uint32_t homePlayers, uint32_t awayPlayers);
+/// The team that a script adds a villager to: the home team when the script asks for it and that team has room, else the
+/// away team when that team has room. None when no team has room.
+[[nodiscard]] std::optional<Side> ScriptTeam(bool homeTeam, uint32_t homePlayers, uint32_t awayPlayers);
 
 /// The angle round the pitch of a new place in the crowd, from the number of filled places that the new place makes
 [[nodiscard]] float CrowdPlaceAngle(uint32_t filledPlaces);
@@ -339,5 +344,9 @@ struct TaskTests
 /// The belief that a town gets when its match stops: the belief for a match, times a measure of how long the match ran
 /// against the match length of the town's info, at most two times
 [[nodiscard]] float MatchBelief(float beliefForMatch, uint32_t matchMeasure, float matchDuration);
+
+/// Whether a state of a villager is a state of the match, which a player, the referee or one of the crowd has. Each of
+/// these states makes the villager leave its team when the villager goes into a state outside the match.
+[[nodiscard]] bool IsMatchState(VillagerStates state);
 
 } // namespace openblack::ecs::football_rules
