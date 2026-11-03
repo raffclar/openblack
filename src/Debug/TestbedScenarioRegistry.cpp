@@ -15007,7 +15007,6 @@ std::vector<Scenario> Build()
 	AddLandsFourFiveScrollScenarios(all);
 	AddLand4StoneScenarios(all);
 	AddLand4SlegScenarios(all);
-	AddLandsFourFiveScrollScenarios(all);
 	AddUndeadTotemScenarios(all);
 	AddRewardScenarios(all);
 	AddTornadoScenarios(all);
