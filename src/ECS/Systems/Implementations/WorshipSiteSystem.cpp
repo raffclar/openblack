@@ -842,8 +842,42 @@ entt::entity WorshipSiteSystem::Make(entt::entity temple, Tribe tribe)
 		return entt::null;
 	}
 
+	const auto site = Place(temple, tribe, static_cast<uint8_t>(*place));
+
+	// Every town of the player of the tribe worships there
+	for (const auto town : TownsOf(templeOwner))
+	{
+		if (registry.Get<const Tribe>(town) == tribe)
+		{
+			AddTown(site, town);
+		}
+	}
+	Furnish(site);
+	return site;
+}
+
+entt::entity WorshipSiteSystem::MakeLoaded(entt::entity temple, Tribe tribe, uint8_t place)
+{
+	auto& registry = _world->Entities();
+	auto* worship = registry.Valid(temple) ? registry.TryGet<const CitadelWorship>(temple) : nullptr;
+	if (worship == nullptr || place >= ws::k_Places || worship->sites.at(place) != entt::null)
+	{
+		return entt::null;
+	}
+	const auto site = Place(temple, tribe, place);
+	Furnish(site);
+	return site;
+}
+
+entt::entity WorshipSiteSystem::Place(entt::entity temple, Tribe tribe, uint8_t place)
+{
+	auto& registry = _world->Entities();
+	const auto templePosition = registry.Get<const Transform>(temple).position;
+	const auto templeOwner = registry.Get<const Temple>(temple).owner;
+	auto& worship = registry.Get<CitadelWorship>(temple);
+
 	// The site stands at the temple's own place, turned to face out from its place around it
-	const auto facing = ws::PlaceFacing(worship.facing, *place);
+	const auto facing = ws::PlaceFacing(worship.facing, place);
 	const auto site = registry.Create();
 	// It takes its place in the order of the things made
 	openblack::ecs::archetypes::TakeThingMadePlace();
@@ -856,20 +890,21 @@ entt::entity WorshipSiteSystem::Make(entt::entity temple, Tribe tribe)
 	                                       .temple = temple,
 	                                       .player = templeOwner,
 	                                       .tribe = tribe,
-	                                       .place = static_cast<uint8_t>(*place),
+	                                       .place = place,
 	                                       .made = worship.sitesMade++,
 	                                       .facing = facing,
 	                                   });
-	worship.sites.at(*place) = site;
+	worship.sites.at(place) = site;
+	return site;
+}
 
-	// Every town of the player of the tribe worships there
-	for (const auto town : TownsOf(templeOwner))
-	{
-		if (registry.Get<const Tribe>(town) == tribe)
-		{
-			AddTown(site, town);
-		}
-	}
+void WorshipSiteSystem::Furnish(entt::entity site)
+{
+	auto& registry = _world->Entities();
+	const auto& component = registry.Get<const WorshipSite>(site);
+	const auto tribe = component.tribe;
+	const auto facing = component.facing;
+	const auto templePosition = registry.Get<const Transform>(site).position;
 
 	// The tribe's altar stands at the head of the site, facing as it does
 	const auto altarPoint = _world->SitePoint(ws::k_AltarPoint).value_or(glm::vec3(0.0f));
@@ -899,10 +934,10 @@ entt::entity WorshipSiteSystem::Make(entt::entity temple, Tribe tribe)
 	Init(site);
 	if (const auto logger = spdlog::get("game"))
 	{
+		const auto& made = registry.Get<const WorshipSite>(site);
 		logger->debug("Worship site of tribe {} made for player {} in place {}", static_cast<int>(tribe),
-		              static_cast<int>(templeOwner), *place);
+		              static_cast<int>(made.player), made.place);
 	}
-	return site;
 }
 
 void WorshipSiteSystem::Init(entt::entity site)
