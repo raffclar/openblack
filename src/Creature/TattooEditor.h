@@ -131,6 +131,10 @@ constexpr glm::vec3 k_MenuFocus {0.0f, 7.0f, 0.0f};
 /// between 1 and 20
 [[nodiscard]] Orbit CaveView(const glm::vec3& creature, float scale);
 
+/// The Creature Cave offers the editor on the creature unless a network game is decided: then the press on the
+/// creature does not open it
+[[nodiscard]] bool OfferedInCave(bool networkGame, bool decided);
+
 /// Holding the rotation button down and moving away from where it was pressed speeds the turning up for as long as it
 /// is held: sideways turns it round, up and down tips it, by how far from that point the pointer is
 void Steer(Orbit& orbit, glm::ivec2 grab, glm::ivec2 pointer, float milliseconds);

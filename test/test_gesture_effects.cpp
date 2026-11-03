@@ -12,6 +12,7 @@
 #include <memory>
 #include <numbers>
 #include <string>
+#include <utility>
 #include <vector>
 
 #include <ParticleFile.h>
@@ -51,6 +52,7 @@ public:
 	[[nodiscard]] glm::vec3 CameraUp() const override { return {0.0f, 1.0f, 0.0f}; }
 	[[nodiscard]] glm::vec3 CameraPosition() const override { return {50.0f, 1000.0f, 50.0f}; }
 	void PlayListenerSound(uint32_t sample, bool /*playsOnce*/) override { sounds.push_back(sample); }
+	void PlayPointSound(uint32_t sample, glm::vec3 point) override { pointSounds.emplace_back(sample, point); }
 	[[nodiscard]] std::shared_ptr<GestureTrail> TakeGestureTrail() override
 	{
 		auto taken = std::move(waiting);
@@ -62,6 +64,7 @@ public:
 
 	std::shared_ptr<GestureTrail> waiting;
 	std::vector<uint32_t> sounds;
+	std::vector<std::pair<uint32_t, glm::vec3>> pointSounds;
 	std::vector<std::weak_ptr<LightSheet>> sheets;
 	uint32_t glow {0xDEADu};
 };
@@ -211,6 +214,24 @@ TEST_F(GestureEffects, ATrailIsHeardAndItsParticlesFlowToTheShape)
 		EXPECT_LE(glm::distance(glm::vec2(sprite.position.x, sprite.position.z), glm::vec2(20.0f, 0.0f)), 26.0f);
 	}
 	EXPECT_EQ(world.glow, 0xDEADu);
+}
+
+TEST_F(GestureEffects, AnotherPlayersTrailIsHeardAtTheirHandAndNotAtTheListener)
+{
+	auto effect = Make(GestureFile());
+	auto trail = ATrail();
+	trail->heardAt = glm::vec3 {300.0f, 12.0f, 400.0f};
+	world.waiting = trail;
+	effect->Step(0.1f);
+	EXPECT_TRUE(world.sounds.empty());
+	ASSERT_EQ(world.pointSounds.size(), 1u);
+	EXPECT_EQ(world.pointSounds.front().first, 36u);
+	EXPECT_EQ(world.pointSounds.front().second, glm::vec3(300.0f, 12.0f, 400.0f));
+	// The trail of this computer's player is heard with no position
+	world.waiting = ATrail();
+	effect->Step(0.1f);
+	EXPECT_EQ(world.sounds, std::vector<uint32_t> {36});
+	EXPECT_EQ(world.pointSounds.size(), 1u);
 }
 
 TEST_F(GestureEffects, TheHandGlowsAsTheTrailFlashesAndTheTrailGoes)

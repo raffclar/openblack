@@ -64,6 +64,7 @@ public:
 	[[nodiscard]] glm::vec3 CameraUp() const override;
 	[[nodiscard]] glm::vec3 CameraPosition() const override;
 	void PlayListenerSound(uint32_t inGameSample, bool playsOnce) override;
+	void PlayPointSound(uint32_t inGameSample, glm::vec3 point) override;
 	[[nodiscard]] std::optional<TargetInfo> Target(entt::entity target, bool centre) const override;
 	[[nodiscard]] bool IsTargetHeld(entt::entity target) const override;
 	[[nodiscard]] bool IsTargetClaimed(entt::entity target) const override { return _claimed.contains(target); }
@@ -499,7 +500,8 @@ private:
 	bool LoadLocalState(reflection::BinaryReader& in);
 	bool LoadOldState(reflection::BinaryReader& in);
 	/// Reads the tables, the effects and the world of the synced part, or of the one part of an old save
-	bool LoadSyncedBody(reflection::BinaryReader& in, GameParticleWorld::SavedForm form);
+	/// trailSound tells if the gesture trails in the save keep the place where they are heard
+	bool LoadSyncedBody(reflection::BinaryReader& in, GameParticleWorld::SavedForm form, bool trailSound);
 	ReadResult ReadRunning(reflection::BinaryReader& in, particles::EffectReader& reader, Running& running);
 	static void RestoreCarried(std::span<const std::shared_ptr<particles::CarriedObject>> carried);
 

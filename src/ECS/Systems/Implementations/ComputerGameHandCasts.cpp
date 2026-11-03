@@ -35,8 +35,6 @@
 #include "Locator.h"
 #include "Magic/MagicTables.h"
 #include "Magic/SpellRules.h"
-#include "Sound/GameSoundEffects.h"
-#include "Sound/SoundId.h"
 
 using namespace openblack;
 using namespace openblack::ecs::components;
@@ -235,10 +233,9 @@ void GameHandCasts::ShowGesture(uint32_t gesture, glm::vec3 corner, float size)
 	{
 		return;
 	}
+	// The gesture of a computer god is heard at the place of its hand as its trail appears
 	if (Locator::gestureSystem::has_value())
 	{
-		Locator::gestureSystem::value().ShowGestureOnLand(static_cast<GestureType>(gesture), corner, size);
+		Locator::gestureSystem::value().ShowGestureOnLand(static_cast<GestureType>(gesture), corner, size, corner);
 	}
-	// The sound of a recognised gesture plays at the god's hand
-	audio::PlayGameSoundEffect(static_cast<entt::id_type>(audio::SoundId::G_SpellGestureRecognise), corner);
 }

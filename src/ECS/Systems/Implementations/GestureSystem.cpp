@@ -672,7 +672,7 @@ void GestureSystem::LayTrail(GestureType gesture, const gesture::Match& match, c
 	}
 }
 
-void GestureSystem::ShowGestureOnLand(GestureType gesture, glm::vec3 corner, float size)
+void GestureSystem::ShowGestureOnLand(GestureType gesture, glm::vec3 corner, float size, std::optional<glm::vec3> heardAt)
 {
 	if (gesture == GestureType::None || !Locator::particleRuleSystem::has_value())
 	{
@@ -686,8 +686,9 @@ void GestureSystem::ShowGestureOnLand(GestureType gesture, glm::vec3 corner, flo
 	const auto landHeight = [](float x, float z) {
 		return Locator::terrainSystem::has_value() ? Locator::terrainSystem::value().GetHeightAt({x, z}) : 0.0f;
 	};
-	Locator::particleRuleSystem::value().AddGestureTrail(
-	    std::make_shared<particles::GestureTrail>(gesture::LandGestureTrail(*symbol, corner, size, landHeight)));
+	auto trail = gesture::LandGestureTrail(*symbol, corner, size, landHeight);
+	trail.heardAt = heardAt;
+	Locator::particleRuleSystem::value().AddGestureTrail(std::make_shared<particles::GestureTrail>(std::move(trail)));
 }
 
 bool GestureSystem::Act(const gesture::Request& request, const gesture::Match& match, const Frame& frame)

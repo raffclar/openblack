@@ -596,8 +596,10 @@ void List::Draw(const DialogPainter& painter, bool hovered, bool focused, bool /
 void List::MouseDown(glm::ivec2 point)
 {
 	_draggingThumb = false;
+	_selectionBeforeBar.reset();
 	if (ShowsScrollBar() && point.x >= GetBoxRight())
 	{
+		_selectionBeforeBar = std::exchange(_selection, std::nullopt);
 		const auto track = static_cast<float>(rect.Height() - 6);
 		const auto content = static_cast<float>(std::max(GetContentHeight(), rect.Height()));
 		const auto thumbTop = rect.min.y + 3 + static_cast<int>(track * _scroll / content);
@@ -616,14 +618,7 @@ void List::MouseDown(glm::ivec2 point)
 		}
 		return;
 	}
-	if (const auto item = ItemAt(point.y))
-	{
-		_selection = item;
-	}
-	else if (clearsOnEmptyPick)
-	{
-		_selection.reset();
-	}
+	_selection = ItemAt(point.y);
 }
 
 void List::Drag(glm::ivec2 point)
@@ -633,6 +628,20 @@ void List::Drag(glm::ivec2 point)
 		const auto track = static_cast<float>(rect.Height() - 6);
 		const auto content = static_cast<float>(std::max(GetContentHeight(), rect.Height()));
 		ScrollTo(_grabScroll + (static_cast<float>(point.y - _grabY) * content / track));
+		return;
+	}
+	if (!_selectionBeforeBar.has_value() && HitTest(point))
+	{
+		_selection = ItemAt(point.y);
+	}
+}
+
+void List::Release(glm::ivec2 /*point*/)
+{
+	_draggingThumb = false;
+	if (_selectionBeforeBar.has_value())
+	{
+		_selection = *std::exchange(_selectionBeforeBar, std::nullopt);
 	}
 }
 

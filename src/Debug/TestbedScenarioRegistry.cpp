@@ -5771,6 +5771,21 @@ void AddAudio(std::vector<Scenario>& all)
 	});
 
 	all.push_back({
+	    .id = "interface.list_press_under_items",
+	    .name = "A press under the last item of a list",
+	    .facet = Facet::Interface,
+	    .description = "After a second the menu opens on its Players page, with the list of the profiles of this "
+	                   "computer. Press on a profile, then press in the list under the last profile. Hold the button "
+	                   "down and move the pointer over the profiles and under them.",
+	    .expected = "A press on a profile picks it, and a press under the last profile removes the pick, so no line "
+	                "shows as picked. While the button stays down, the pick follows the pointer, and goes under the "
+	                "last profile. A press on the scroll bar of a long list removes the pick until the button comes "
+	                "up.",
+	    .framing = {.shot = Shot::Overview},
+	    .commands = {{.kind = Kind::OpenMenuPage, .delaySeconds = 1.0f, .value = 2}},
+	});
+
+	all.push_back({
 	    .id = "interface.read_speed_slider",
 	    .name = "The help text speed slider of a game with no sound",
 	    .facet = Facet::Interface,
