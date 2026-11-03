@@ -803,7 +803,8 @@ void ReadReaction(WorldReader& r)
 	r.Refs();
 	r.Word();
 	r.Word();
-	r.Ref();
+	// The dance that the villagers dance as they react, if any
+	r.Ref("reactionDance");
 	r.Word();
 	r.Word();
 	r.Ref();
@@ -1025,10 +1026,11 @@ void ReadGroupBehaviour(WorldReader& r)
 	r.Word();
 	// How many lengths of the clock the dance takes before it starts again
 	r.Word("danceLoopLength");
-	// All the groups, the groups that share the dancers and the groups with a fixed number of dancers
+	// All the groups, the groups with a fixed number of dancers and the groups that share the dancers. A newcomer tries
+	// the groups with a fixed number first.
 	r.Refs("danceGroups");
-	r.Refs("danceSharedGroups");
 	r.Refs("danceLimitedGroups");
+	r.Refs("danceSharedGroups");
 	// The count of the dancers, the round of the newcomers and its length
 	r.Word("danceDancers");
 	r.Byte("danceRound");
@@ -1038,10 +1040,10 @@ void ReadGroupBehaviour(WorldReader& r)
 	r.Float("danceDancingRate");
 	r.Refs();
 	r.Float("danceAngle");
-	// The hand stayed near long enough, a word that only the makers write, the dance made its camera, and the dance is
-	// deleted
+	// The hand stayed near long enough, a word that only a dance of a script sets, the dance made its camera, and the
+	// dance is deleted
 	r.Word("danceCameraWanted");
-	r.Word();
+	r.Word("danceCameraOff");
 	r.Word("danceCameraMade");
 	r.Word();
 	r.Word();
@@ -1051,47 +1053,62 @@ void ReadGroupBehaviour(WorldReader& r)
 
 void ReadDanceKeyFrame(WorldReader& r)
 {
-	r.Word();
-	r.Refs();
-	r.Word();
+	// The beat of the clock when the key frame applies, its actions and its flags. The load puts the key frames in the
+	// order of their beats.
+	r.Float("keyFrameTime");
+	r.Refs("keyFrameActions");
+	r.Word("keyFrameFlags");
 }
 
 void ReadDanceKeyAction(WorldReader& r)
 {
-	r.Array(4);
-	r.Word();
-	r.Bytes(56);
+	// The numbers of the groups that the action changes, the type of the action and its arguments
+	r.Array(4, "keyActionGroups");
+	r.Word("keyActionType");
+	r.Bytes(56, "keyActionArguments");
 }
 
 void ReadDanceGroup(WorldReader& r)
 {
-	r.Ref();
-	r.Ref();
-	r.Refs();
+	// The dance of the group, two times: as the dance and as the group behaviour
+	r.Ref("groupDance");
+	r.Ref("groupBehaviour");
+	// The dancers in the order that they joined. The place of a dancer in the group is its place in this list.
+	r.Refs("groupDancers");
+	// The number of the group, the flag that key frames set and clear, the formation and the shape
+	r.Word("groupId");
+	r.Word("groupFlag");
+	r.Word("groupFormation");
+	r.Word("groupShape");
+	// How far it is set off from its centre (x, z), how far out it reaches and how far it is turned
+	r.Bytes(8, "groupOffset");
+	r.Float("groupRadius");
 	r.Word();
-	r.Word();
-	r.Word();
-	r.Word();
-	r.Bytes(8);
-	r.Word();
-	r.Word();
-	r.Word();
-	r.Bytes(16);
-	r.Word();
-	r.Ref();
-	r.Byte();
-	r.Word();
-	r.Word();
+	r.Float("groupRotation");
+	// The move: the action, its two arguments and the beat when it ends
+	r.Bytes(16, "groupMove");
+	// How far round its shape its dancers have gone, its parent group and its place among the parts of the parent
+	r.Float("groupSpin");
+	r.Ref("groupParent");
+	r.Byte("groupIndexInParent");
+	// The dancers that it took as a group with a fixed number, and whether its move changed it this turn
+	r.Word("groupLimitedDancers");
+	r.Word("groupMoved");
+	// The places of its first dancer, which only the camera of the dance uses
 	r.Word();
 	r.Word();
 	r.Bytes(12);
 	r.Bytes(12);
-	r.Word();
-	r.Word();
-	r.Bytes(64);
-	r.Bytes(12);
-	r.Array(4);
-	r.Word();
+	// The dance type of its dancers, the places in its formation and its name
+	r.Word("groupDanceType");
+	r.Word("groupInFormation");
+	r.Bytes(64, "groupName");
+	// Three words written as one value: whether it takes a fixed number of dancers, its quota and its weight
+	r.Bytes(12, "groupMembership");
+	// The numbers of the groups that stand about it as its parts
+	r.Array(4, "groupChildren");
+	// The sexes that it takes: 1 men, 2 women
+	r.Word("groupSexes");
 }
 
 void ReadLandscapeVortexIn(WorldReader& r)

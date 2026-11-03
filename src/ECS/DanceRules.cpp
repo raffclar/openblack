@@ -321,7 +321,7 @@ dance_rules::HandsNear dance_rules::GodsNear(const glm::vec3& point,
 	return near;
 }
 
-void dance_rules::CountHand(DanceHand& hand, bool near)
+void dance_rules::CountHand(DanceHand& hand, bool near, bool madeByScript)
 {
 	if (!near)
 	{
@@ -329,7 +329,8 @@ void dance_rules::CountHand(DanceHand& hand, bool near)
 		return;
 	}
 	++hand.nearTurns;
-	if (hand.nearTurns > k_CameraTurns)
+	// A dance that a script made counts the turns but never wants its camera
+	if (!madeByScript && hand.nearTurns > k_CameraTurns)
 	{
 		hand.cameraWanted = true;
 	}
@@ -352,7 +353,7 @@ std::vector<std::size_t> dance_rules::ProcessTurn(Dance& dance, uint32_t turn, c
 	}
 	for (std::size_t god = 0; god < dance.hands.size(); ++god)
 	{
-		CountHand(dance.hands.at(god), handsNear.test(god));
+		CountHand(dance.hands.at(god), handsNear.test(god), dance.madeByScript);
 	}
 	std::vector<std::size_t> moving;
 	if (dance.file != nullptr)

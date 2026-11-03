@@ -140,9 +140,21 @@ private:
 	using VanillaCircles = std::vector<std::pair<entt::entity, ecs::vanilla_world_import::ImportedCircle>>;
 	/// Each villager that walks a footpath in the file, and its walk
 	using VanillaFootpathWalks = std::vector<std::pair<entt::entity, ecs::vanilla_footpath_import::FileWalk>>;
+	/// The dances of the file that are not the dances of worship sites, and the villagers of the file that dance in them
+	/// and keep their states, by their numbers in the file
+	struct VanillaDances
+	{
+		ecs::vanilla_world_import::ImportedDances dances;
+		VanillaMade dancers;
+	};
 	/// Puts the turn, the towns, the buildings of the towns and the villagers of the world file into the world
 	bool ImportVanillaTowns(const gamesave::VanillaWorld& world, VanillaMade& made, VanillaWorks& works,
-	                        VanillaCircles& circles, VanillaFootpathWalks& footpathWalks);
+	                        VanillaCircles& circles, VanillaFootpathWalks& footpathWalks, VanillaDances& dances);
+	/// Puts the dances of the file that are not the dances of worship sites into the world, with their groups and their
+	/// dancers: the dances of the creatures and of the scripts, and the dances that nothing holds. Each creature of the
+	/// file takes its dance and the villagers that it called to dance. The import makes the things that the dances are
+	/// for first.
+	void ImportVanillaDances(const VanillaDances& dances, VanillaMade& made);
 	/// The footpaths of the file replace all the footpaths. Each thing of the file takes its link to its footpaths, and
 	/// each villager that walks a footpath goes on along it. The import makes all the things of the file first.
 	void ImportVanillaFootpaths(const gamesave::VanillaWorld& world, const VanillaMade& made,
