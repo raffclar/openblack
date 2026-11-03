@@ -34,7 +34,9 @@
 #include "ECS/Components/DeadTree.h"
 #include "ECS/Components/Feature.h"
 #include "ECS/Components/Field.h"
+#include "ECS/Components/FishFarm.h"
 #include "ECS/Components/Flowers.h"
+#include "ECS/Components/Football.h"
 #include "ECS/Components/Forest.h"
 #include "ECS/Components/LivingAction.h"
 #include "ECS/Components/LivingReaction.h"
@@ -42,12 +44,16 @@
 #include "ECS/Components/ScriptControl.h"
 #include "ECS/Components/Spell.h"
 #include "ECS/Components/SpellDispenser.h"
+#include "ECS/Components/SpellIcon.h"
 #include "ECS/Components/TeleportStone.h"
 #include "ECS/Components/Temple.h"
 #include "ECS/Components/Town.h"
 #include "ECS/Components/Transform.h"
+#include "ECS/Components/VillageTotem.h"
 #include "ECS/Components/Villager.h"
 #include "ECS/Components/WallHug.h"
+#include "ECS/Components/Wonder.h"
+#include "ECS/Components/WorshipSite.h"
 #include "ECS/Map.h"
 #include "ECS/Reflection/BinaryArchive.h"
 #include "ECS/Registry.h"
@@ -319,9 +325,10 @@ void TeleportSystem::RemoveStonesOf(entt::entity spell)
 
 bool TeleportSystem::CanPlaceStone(glm::vec3 point) const
 {
-	// Anything that stands fixed over the land's cells: buildings and fields, features, the things that stand still and
-	// dead trees, big forests, the temple, the miracle dispensers and other stones. (The game counts worship sites,
-	// totems and football pitches too; openblack has none yet.)
+	// Anything that stands fixed over several of the map's cells: buildings and fields, wonders, features, the things that
+	// stand still and dead trees, big forests, the temple, its worship sites, the miracle dispensers, the village
+	// totems and their icons, the miracle icons on the village centres, fish farms, football pitches and other stones.
+	// Trees stand in one cell only and do not count.
 	std::vector<glm::vec3> fixed;
 	const auto& registry = EntityRegistry();
 	const auto add = [&fixed](entt::entity, const Transform& transform) { fixed.push_back(transform.position); };
@@ -340,6 +347,18 @@ bool TeleportSystem::CanPlaceStone(glm::vec3 point) const
 	    [&](entt::entity e, const SpellDispenser&, const Transform& t) { add(e, t); });
 	registry.Each<const TeleportStone, const Transform>(
 	    [&](entt::entity e, const TeleportStone&, const Transform& t) { add(e, t); });
+	registry.Each<const Wonder, const Transform>([&](entt::entity e, const Wonder&, const Transform& t) { add(e, t); });
+	registry.Each<const WorshipSite, const Transform>(
+	    [&](entt::entity e, const WorshipSite&, const Transform& t) { add(e, t); });
+	registry.Each<const VillageTotem, const Transform>(
+	    [&](entt::entity e, const VillageTotem&, const Transform& t) { add(e, t); });
+	// The icon is a mark with no data, so the view does not pass it
+	registry.Each<const VillageTotemIcon, const Transform>([&](entt::entity e, const Transform& t) { add(e, t); });
+	registry.Each<const TownCentreIcon, const Transform>(
+	    [&](entt::entity e, const TownCentreIcon&, const Transform& t) { add(e, t); });
+	registry.Each<const FishFarm, const Transform>([&](entt::entity e, const FishFarm&, const Transform& t) { add(e, t); });
+	registry.Each<const FootballPitch, const Transform>(
+	    [&](entt::entity e, const FootballPitch&, const Transform& t) { add(e, t); });
 	return teleport::CanPlaceStone(point, fixed);
 }
 

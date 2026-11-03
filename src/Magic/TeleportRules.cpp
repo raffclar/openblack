@@ -137,7 +137,9 @@ float teleport::JumpCost(float saving, float costPerKilometre)
 
 bool teleport::CanPlaceStone(glm::vec3 point, std::span<const glm::vec3> fixedObjects)
 {
-	return std::ranges::none_of(fixedObjects, [point](glm::vec3 object) { return Across(point, object) < k_StoneRadius; });
+	// The game measures from the place of each thing in whole map units, as it measures a jump
+	return std::ranges::none_of(fixedObjects,
+	                            [point](glm::vec3 object) { return JumpDistance(point, object) < k_StoneRadius; });
 }
 
 std::optional<size_t> teleport::FindRouteStone(glm::vec3 worshipper, glm::vec3 site, std::span<const glm::vec3> stones,

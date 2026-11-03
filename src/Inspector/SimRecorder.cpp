@@ -16,6 +16,7 @@
 #include <map>
 #include <mutex>
 #include <numeric>
+#include <optional>
 #include <string>
 #include <system_error>
 #include <utility>
@@ -33,7 +34,9 @@
 #include "Creature/CreatureFeedback.h"
 #include "Creature/CreatureIdleMind.h"
 #include "Creature/CreatureMindTables.h"
+#include "Creature/CreatureObjectBeliefs.h"
 #include "Creature/CreaturePhysiology.h"
+#include "ECS/Components/Animal.h"
 #include "ECS/Components/Creature.h"
 #include "ECS/Components/CreatureFriends.h"
 #include "ECS/Components/CreatureLeash.h"
@@ -41,6 +44,7 @@
 #include "ECS/Components/CreatureNeeds.h"
 #include "ECS/Components/LivingReaction.h"
 #include "ECS/Components/Transform.h"
+#include "ECS/Components/Villager.h"
 #include "ECS/Reflection/WorldArchive.h"
 #include "ECS/Registry.h"
 #include "ECS/SyncedState.h"
@@ -876,6 +880,14 @@ Json SimProvider::Sample(uint32_t turn, uint64_t frame, bool track, std::vector<
 	// The counts of the entities by their components, and the reactions now in the world
 	Json counts = Json::object();
 	size_t entities = 0;
+	const auto sizeOf = [registry](const entt::type_info& type) {
+		const auto* storage = registry->Underlying().storage(type.hash());
+		return storage != nullptr ? storage->size() : size_t {0};
+	};
+	// A villager, an animal or a creature keeps what it is reacting to and its memory of reactions for all its life. The
+	// count of these cannot be more than the count of the villagers, animals and creatures.
+	const auto livings =
+	    sizeOf(entt::type_id<Villager>()) + sizeOf(entt::type_id<Animal>()) + sizeOf(entt::type_id<Creature>());
 	for (const auto& [id, storage] : registry->Underlying().storage())
 	{
 		const auto& type = reflection::StorageType(storage);
@@ -890,7 +902,8 @@ Json SimProvider::Sample(uint32_t turn, uint64_t frame, bool track, std::vector<
 		}
 		if (track)
 		{
-			if (auto flag = _growth.Observe("count:" + std::string(name), storage.size(), turn); flag.has_value())
+			const auto limit = type == entt::type_id<LivingReaction>() ? std::optional(livings) : std::nullopt;
+			if (auto flag = _growth.Observe("count:" + std::string(name), storage.size(), turn, limit); flag.has_value())
 			{
 				flags.push_back(std::move(*flag));
 			}
@@ -1128,36 +1141,39 @@ Json SimProvider::CreatureRecord(uint32_t turn, bool track, std::vector<sim_chec
 		creature["opinions"] = std::move(opinions);
 		creature["attitudes"] = learnt.creatures.size();
 		creature["thoughts"] = learnt.thoughts.size();
-		// The newest thing it did that feedback can be credited to, as a player sees it: the action, its desire, the kind
-		// of thing it acted on, and whether it can learn from it
-		if (!learnt.contexts.empty())
-		{
-			const auto& newest = learnt.contexts.back();
+		// A thing it did that feedback can be credited to, as a player sees it: the action, its desire, the kind of
+		// thing it acted on, and whether it can learn from it
+		const auto contextJson = [&tables](const creature_learning::Context& context) -> Json {
 			// How the game's table of desires says a plan for the desire moves the creature's alignment each turn
 			std::optional<float> alignmentChange;
 			if (Locator::infoConstants::has_value())
 			{
 				const auto& desires = Locator::infoConstants::value().creatureInitialDesire;
-				if (const auto index = static_cast<size_t>(newest.desire); index < desires.size())
+				if (const auto index = static_cast<size_t>(context.desire); index < desires.size())
 				{
 					alignmentChange = desires.at(index).alignmentChange;
 				}
 			}
-			creature["context"] = {
-			    {"action", ActionName(newest.action, tables)},
-			    {"desire", std::string(creature_desires::Name(newest.desire))},
-			    {"object_kind", newest.belief.has_value() ? Json(newest.belief->type) : Json(nullptr)},
+			return {
+			    {"action", ActionName(context.action, tables)},
+			    {"desire", std::string(creature_desires::Name(context.desire))},
+			    {"object", context.object.has_value() ? Json(*context.object) : Json(nullptr)},
+			    {"object_kind", context.belief.has_value() ? Json(context.belief->type) : Json(nullptr)},
 			    {"alignment_change", alignmentChange.has_value() ? Json(*alignmentChange) : Json(nullptr)},
-			    {"learnable", newest.learnable},
-			    {"running", newest.running},
-			    {"done", newest.done},
-			    {"seconds_since", newest.secondsSince},
+			    {"learnable", context.learnable},
+			    {"running", context.running},
+			    {"done", context.done},
+			    {"seconds_since", context.secondsSince},
+			    {"window_seconds", context.windowSeconds},
 			};
-		}
-		else
-		{
-			creature["context"] = nullptr;
-		}
+		};
+		// The newest thing it did
+		creature["context"] = learnt.contexts.empty() ? Json(nullptr) : contextJson(learnt.contexts.back());
+		// The newest thing that it finished and that feedback can still be credited to
+		const auto finished = std::ranges::find_if(learnt.contexts.rbegin(), learnt.contexts.rend(), [](const auto& context) {
+			return !context.running && context.secondsSince <= context.windowSeconds;
+		});
+		creature["last_finished"] = finished != learnt.contexts.rend() ? contextJson(*finished) : Json(nullptr);
 		check("learnt.alignment", learnt.alignment, k_Signed);
 		for (size_t i = 0; i < learnt.opinions.size(); ++i)
 		{
@@ -1166,7 +1182,9 @@ Json SimProvider::CreatureRecord(uint32_t turn, bool track, std::vector<sim_chec
 	}
 	if (track)
 	{
-		if (auto flag = _growth.Observe("list:beliefs", mind.beliefs.Size(), turn); flag.has_value())
+		// The creature keeps only so many beliefs of each kind: a new belief then takes the place of an old one
+		if (auto flag = _growth.Observe("list:beliefs", mind.beliefs.Size(), turn, creature_object_beliefs::k_MostBeliefs);
+		    flag.has_value())
 		{
 			flags.push_back(std::move(*flag));
 		}

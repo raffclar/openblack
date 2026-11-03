@@ -34,6 +34,7 @@
 #include "3D/CreatureBody.h"
 #include "3D/LandIslandInterface.h"
 #include "3D/MapCoords.h"
+#include "Animals/AnimalRules.h"
 #include "Camera/Camera.h"
 #include "Common/GUtilsAngle.h"
 #include "Common/GUtilsDistance.h"
@@ -1421,7 +1422,8 @@ void CreatureMindSystem::Abandon(CreatureMindState& mind)
 		mind.planner.lastAction = mind.planner.current->action;
 	}
 	mind.planner.current.reset();
-	// To stop what it does clears the marks of the plan
+	// To stop what it does clears the marks of the plan, also what the sweep of its eyes found of the plan's things
+	mind.sweep.targets = {};
 	mind.ownPlanSinceStop = false;
 	mind.planForced = false;
 	mind.forcedPlanCounts = false;
@@ -2440,25 +2442,6 @@ bool LetsCreatureActOnUnliving(const ecs::Registry& registry, entt::entity thing
 	return info != nullptr && info->canCreatureInteractWithMe != 0;
 }
 
-/// Whether an animal of this kind frightens a creature: the lions, tigers, wolves and leopards, the bats and the vultures
-bool Frightens(AnimalInfo type)
-{
-	switch (type)
-	{
-	case AnimalInfo::Lion:
-	case AnimalInfo::Tiger:
-	case AnimalInfo::Wolf:
-	case AnimalInfo::Leopard:
-	case AnimalInfo::SpellWolf:
-	case AnimalInfo::Bat:
-	case AnimalInfo::SpellBat:
-	case AnimalInfo::Vulture:
-		return true;
-	default:
-		return false;
-	}
-}
-
 /// The data that tells if a creature can act on a thing. A field has the data of its town's field building, a village
 /// totem the data of its statue, the temple the data of its heart, and the altar of a worship site the data of its site.
 /// A town's desire flag has the data of the prayer site.
@@ -2653,7 +2636,7 @@ creature_activity::ThingFacts ThingFactsOf(const ecs::Registry& registry, entt::
 		{
 			const auto& animal = registry.Get<const Animal>(thing);
 			facts.dead = animal.Dead();
-			facts.frightening = Frightens(animal.type);
+			facts.frightening = animals::FrightensCreatures(animal.type);
 		}
 		else if (kind == Thing::Creature)
 		{

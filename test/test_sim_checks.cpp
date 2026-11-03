@@ -96,7 +96,7 @@ TEST(SimChecks, WithNoLimitTheTrackerKeepsTheLongestTime)
 
 TEST(SimChecks, AListThatAlwaysGrowsFlags)
 {
-	GrowthTracker growth({.window = 5, .leastSize = 8, .factor = 2.0f});
+	GrowthTracker growth({.warmUp = 0, .window = 5, .leastSize = 8, .factor = 2.0f});
 	std::optional<Flag> flag;
 	for (uint32_t i = 0; i < 5 && !flag.has_value(); ++i)
 	{
@@ -129,6 +129,48 @@ TEST(SimChecks, ASmallOrSteadyListDoesNotFlag)
 	{
 		EXPECT_FALSE(growth.Observe("steady", 500, 0).has_value());
 	}
+}
+
+TEST(SimChecks, AListThatFillsOnceAtTheStartDoesNotFlag)
+{
+	// The list is empty before the first turn, then it fills and stays the same
+	GrowthTracker growth({.warmUp = 1, .window = 4, .leastSize = 8, .factor = 2.0f});
+	for (const auto size : {0u, 159u, 160u, 160u, 160u, 160u, 160u})
+	{
+		EXPECT_FALSE(growth.Observe("list", size, 0).has_value());
+	}
+}
+
+TEST(SimChecks, TheFirstRecordsOfTheWarmUpAreNotUsed)
+{
+	GrowthTracker growth({.warmUp = 1, .window = 4, .leastSize = 8, .factor = 2.0f});
+	EXPECT_FALSE(growth.Observe("list", 0, 0).has_value());
+	EXPECT_FALSE(growth.Observe("list", 10, 1).has_value());
+	EXPECT_FALSE(growth.Observe("list", 12, 2).has_value());
+	EXPECT_FALSE(growth.Observe("list", 16, 3).has_value());
+	// The window starts at the first record after the warm up
+	const auto flag = growth.Observe("list", 20, 4);
+	ASSERT_TRUE(flag.has_value());
+	EXPECT_EQ(flag->turn, 4u);
+}
+
+TEST(SimChecks, AListInItsLimitDoesNotFlag)
+{
+	GrowthTracker growth({.warmUp = 0, .window = 4, .leastSize = 8, .factor = 2.0f});
+	for (const auto size : {10u, 20u, 40u, 80u, 100u})
+	{
+		EXPECT_FALSE(growth.Observe("list", size, 0, 100).has_value());
+	}
+}
+
+TEST(SimChecks, AListAboveItsLimitFlags)
+{
+	GrowthTracker growth({.warmUp = 0, .window = 4, .leastSize = 8, .factor = 2.0f});
+	for (const auto size : {10u, 20u, 40u})
+	{
+		EXPECT_FALSE(growth.Observe("list", size, 0, 50).has_value());
+	}
+	EXPECT_TRUE(growth.Observe("list", 80, 1, 50).has_value());
 }
 
 TEST(SimChecks, ATurnTimeThatGoesUpFlags)

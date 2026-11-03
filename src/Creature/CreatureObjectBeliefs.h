@@ -15,6 +15,7 @@
 #include <algorithm>
 #include <array>
 #include <map>
+#include <numeric>
 #include <optional>
 #include <span>
 #include <tuple>
@@ -43,6 +44,8 @@ inline constexpr uint32_t k_KindCount = 24;
 /// and so on, one of the kind that stands for what it is doing, forty flocks
 inline constexpr std::array<uint32_t, k_KindCount> k_Capacity {40,  50,  20,  100, 50,  100, 100, 100, 100, 30,  100, 40,
                                                                100, 100, 100, 100, 100, 100, 100, 100, 1,   100, 40,  20};
+/// How many beliefs a creature keeps at most, of all the kinds together
+inline constexpr size_t k_MostBeliefs = std::accumulate(k_Capacity.begin(), k_Capacity.end(), size_t {0});
 
 /// A creature keeps its beliefs in two lists. The first list holds the whole things that a desire can be about:
 /// towns, forests, temples, creatures and flocks. The second list holds all other things.
@@ -262,12 +265,31 @@ private:
 /// How a creature's eyes sweep about it: the cells of a square around its own, its own cell first and then ring after
 /// ring outwards, a ninth of them each turn (at most nine), starting again from its own cell once all have been looked
 /// at
+/// The two things of a plan, in the order that a sweep keeps them: the thing that the plan acts on, then the thing that
+/// it uses
+inline constexpr size_t k_PlanThingActedOn = 0;
+inline constexpr size_t k_PlanThingUsed = 1;
+inline constexpr size_t k_PlanThings = 2;
+/// The two things of a plan, none for each that the plan does not have
+using PlanThings = std::array<std::optional<entt::entity>, k_PlanThings>;
+
+/// What a sweep of the eyes found of the two things of the plan (see k_PlanThingActedOn)
+struct SweepTargets
+{
+	/// It looked at the cell of the place where it believes the thing is
+	std::array<bool, k_PlanThings> believedCellSeen {};
+	/// It came across the thing itself
+	std::array<bool, k_PlanThings> cameAcross {};
+};
+
 struct Sweep
 {
 	/// The cells still to look at in this sweep, the ring it is on (1 for its own cell) and the place in the ring
 	uint32_t left {0};
 	uint32_t ring {1};
 	uint32_t step {0};
+	/// What this sweep found of the two things of the plan. A new sweep starts with none, and so does a new plan.
+	SweepTargets targets {};
 };
 
 /// The cells a sweep covers for a creature shown at a size: a square whose side is the odd number the square root of
@@ -279,6 +301,22 @@ struct Sweep
 /// The cells to look at this turn, moving the sweep on; a sweep that has finished starts again with the cells for the
 /// creature's size now. Cells beyond the map are among them, and are only passed over.
 [[nodiscard]] std::vector<glm::ivec2> NextCells(Sweep& sweep, glm::ivec2 centre, float shownSize);
+
+/// Whether the eyes start a new sweep on this turn, before they look at its first cells
+[[nodiscard]] constexpr bool StartsAgain(const Sweep& sweep)
+{
+	return sweep.left == 0;
+}
+/// As a new sweep starts, during an action that tells the beliefs where the things of its plan are: the belief about a
+/// thing of the plan takes the place of the thing now when all these are true:
+/// - The sweep that finished looked at the cell where the creature believes the thing is.
+/// - That sweep did not come across the thing itself.
+/// - The step of the plan did not start yet, or the body plays no action now (it stands or it walks).
+/// - The thing is in the map.
+[[nodiscard]] constexpr bool TellsWhereNow(const SweepTargets& found, size_t thing, bool stepStarted, bool bodyActs, bool inMap)
+{
+	return found.believedCellSeen.at(thing) && !found.cameAcross.at(thing) && (!stepStarted || !bodyActs) && inMap;
+}
 
 /// A creature can see a point in a direction (as a game angle) no more than a third of a circle either side of the way
 /// it looks (`looking`, a game angle), and anything in its own cell
