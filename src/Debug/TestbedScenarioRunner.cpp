@@ -5584,6 +5584,14 @@ std::optional<double> Runner::ReadCheck(const checks::Check& check) const
 		const auto point = MapPoint(_middle, check.point);
 		return Locator::fireSystem::value().IsFireNear({point.x, 0.0f, point.y}, check.radius) ? 1.0 : 0.0;
 	}
+	case checks::Quantity::RewardChestsInATown:
+	{
+		size_t inATown = 0;
+		registry.Each<const ecs::components::Reward>([&registry, &inATown](const ecs::components::Reward& chest) {
+			inATown += registry.Valid(chest.town) && registry.AllOf<ecs::components::Town>(chest.town) ? 1 : 0;
+		});
+		return static_cast<double>(inATown);
+	}
 	}
 	return std::nullopt;
 }
@@ -5654,7 +5662,13 @@ void Runner::UpdateThrows()
 			continue;
 		}
 		const auto& setup = _scenario->throws.at(i);
-		const auto object = setup.object < _objects.size() ? _objects.at(setup.object) : entt::null;
+		const auto& pool = setup.reward ? _rewards : _objects;
+		const auto object = setup.object < pool.size() ? pool.at(setup.object) : entt::null;
+		// A chest that is not given yet waits
+		if (setup.reward && object == entt::null)
+		{
+			continue;
+		}
 		// What broke or went is thrown no more
 		if (!registry.Valid(object) || !registry.AllOf<ecs::components::Transform>(object))
 		{

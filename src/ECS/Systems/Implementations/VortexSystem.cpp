@@ -35,6 +35,7 @@
 #include "3D/LandIslandInterface.h"
 #include "Common/GUtilsDistance.h"
 #include "Common/GameRandom.h"
+#include "Common/X87Angle.h"
 #include "ECS/Archetypes/VillagerArchetype.h"
 #include "ECS/Archetypes/VortexArchetype.h"
 #include "ECS/Components/Animal.h"
@@ -63,10 +64,12 @@
 #include "ECS/Systems/CreatureFizzSystemInterface.h"
 #include "ECS/Systems/DynamicsSystemInterface.h"
 #include "ECS/Systems/EffectRequestSystemInterface.h"
+#include "ECS/Systems/FixedOutlineSystemInterface.h"
 #include "ECS/Systems/Implementations/VillagerDisciples.h"
 #include "ECS/Systems/LeashSystemInterface.h"
 #include "ECS/Systems/ObjectDrawListSystemInterface.h"
 #include "ECS/Systems/PlayerProfileSystemInterface.h"
+#include "ECS/Systems/RewardSystemInterface.h"
 #include "ECS/Systems/ScriptObjectsSystemInterface.h"
 #include "ECS/Systems/TimeSystemInterface.h"
 #include "ECS/Systems/TornadoSystemInterface.h"
@@ -1019,6 +1022,39 @@ void VortexSystem::ReadCrossingFile(Vortex& vortex)
 	}
 }
 
+namespace
+{
+/// Makes again the reward chest of a line of the crossing file, on the land about the place where the vortex throws
+/// things out. The place test of a loose object applies, so the chest does not come out on a fixed thing. The chest
+/// joins the town of the vortex. Returns the chest, or none when the place test refuses it.
+entt::entity MakeCarriedChest(const vortex::crossing::ReadReward& chest, const map_coords::MapCoords& place,
+                              glm::vec2 placeMetres, entt::entity vortexTown)
+{
+	const auto onMap = chest.onMap + map_coords::MapCoords {.x = place.x, .z = place.z};
+	if (Locator::fixedOutlineSystem::has_value() && !Locator::fixedOutlineSystem::value().IsOkToCreateAt(onMap))
+	{
+		if (const auto logger = spdlog::get("game"); logger != nullptr)
+		{
+			logger->info("Vortex: a fixed thing is at the place of the crossing reward chest, so the chest does not come out");
+		}
+		return entt::null;
+	}
+	if (!Locator::rewardSystem::has_value() || !Locator::terrainSystem::has_value())
+	{
+		return entt::null;
+	}
+	const glm::vec2 at = placeMetres + chest.offset;
+	const glm::vec3 position {at.x, Locator::terrainSystem::value().GetHeightAt(at) + place.altitude, at.y};
+	// The old town does not cross, so the chest joins the town of the vortex
+	auto& registry = Locator::entitiesRegistry::value();
+	const auto town = ecs::vortex_crossing::CarriedChestTown(registry, vortexTown);
+	const auto made = Locator::rewardSystem::value().Create(position, chest.type, chest.player, town, false);
+	registry.Get<Transform>(made).rotation = x87::GameTurnMatrix(0.0f, chest.yAngle, 0.0f);
+	ecs::placed_turn::KeepAngles(registry, made, glm::vec3(0.0f, chest.yAngle, 0.0f));
+	return made;
+}
+} // namespace
+
 void VortexSystem::ThrowOut(entt::entity entity, Vortex& vortex)
 {
 	auto& registry = Locator::entitiesRegistry::value();
@@ -1079,16 +1115,27 @@ void VortexSystem::ThrowOut(entt::entity entity, Vortex& vortex)
 			return;
 		}
 		const auto& line = progress.lines.at(progress.nextLine++);
-		try
+		// The line of a reward chest is openblack's own, and the land scripts do not know it
+		if (const auto chest = vortex::crossing::ReadRewardLine(line); chest.has_value())
 		{
-			lhscriptx::Script script(glm::vec3(placeMetres.x, place.altitude, placeMetres.y), place);
-			script.Load(line);
-		}
-		catch (const std::runtime_error& error)
-		{
-			if (const auto logger = spdlog::get("game"); logger != nullptr)
+			if (const auto made = MakeCarriedChest(*chest, place, placeMetres, arrival.town); made != entt::null)
 			{
-				logger->warn("Vortex: the crossing line \"{}\" failed: {}", line, error.what());
+				lastObject = made;
+			}
+		}
+		else
+		{
+			try
+			{
+				lhscriptx::Script script(glm::vec3(placeMetres.x, place.altitude, placeMetres.y), place);
+				script.Load(line);
+			}
+			catch (const std::runtime_error& error)
+			{
+				if (const auto logger = spdlog::get("game"); logger != nullptr)
+				{
+					logger->warn("Vortex: the crossing line \"{}\" failed: {}", line, error.what());
+				}
 			}
 		}
 		// The thing the line made or, when it made none, the last thing made before it that is still there

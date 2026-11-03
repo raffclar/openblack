@@ -9,6 +9,8 @@
 
 #include <algorithm>
 #include <array>
+#include <string>
+#include <string_view>
 
 #include <glm/geometric.hpp>
 #include <glm/gtc/constants.hpp>
@@ -198,4 +200,42 @@ TEST(VortexCrossing, HalfTheNewVillagersAreHousewives)
 	EXPECT_EQ(NewVillagerRow(7, 0.5f, 0), 50);
 	EXPECT_EQ(NewVillagerRow(7, 0.9f, 4), 54);
 	EXPECT_EQ(NewVillagerRow(0, 0.7f, 2), 3);
+}
+
+TEST(VortexCrossing, AChestLineIsReadBackAsTheSameChest)
+{
+	const RewardLine line {.offset = map_coords::FromMetres({-6.0f, 4.0f}),
+	                       .type = static_cast<int32_t>(RewardObjectInfo::MediumFood),
+	                       .player = 1,
+	                       .yAngle = 0.5f};
+	const auto text = Text(line);
+	EXPECT_EQ(text, "CREATE_REWARD_CHEST(\"-6.00,4.00\", 4, 1, 0.500000)\n");
+	// The reader takes the line without its new line, as the vortex reads the file
+	const auto read = ReadRewardLine(std::string_view(text).substr(0, text.size() - 1));
+	ASSERT_TRUE(read.has_value());
+	EXPECT_EQ(read->offset, glm::vec2(-6.0f, 4.0f));
+	EXPECT_EQ(read->onMap, map_coords::ScriptPlace(-6.0, 4.0));
+	EXPECT_EQ(read->type, RewardObjectInfo::MediumFood);
+	EXPECT_EQ(read->player, PlayerNames::PLAYER_TWO);
+	EXPECT_FLOAT_EQ(read->yAngle, 0.5f);
+}
+
+TEST(VortexCrossing, AChestOfNoPlayerIsReadWithNoPlayer)
+{
+	const auto read = ReadRewardLine("CREATE_REWARD_CHEST(\"0.00,0.00\", 60, -1, 0.000000)");
+	ASSERT_TRUE(read.has_value());
+	EXPECT_EQ(read->type, RewardObjectInfo::RewardObjectToyDie);
+	EXPECT_FALSE(read->player.has_value());
+}
+
+TEST(VortexCrossing, OnlyAWholeChestLineOfAKnownKindAndPlayerIsAChest)
+{
+	EXPECT_FALSE(ReadRewardLine("CREATE_MOBILEOBJECT(\"0.00,0.00\", 4, 0, 1000)").has_value());
+	EXPECT_FALSE(ReadRewardLine("CREATE_REWARD_CHEST(\"0.00,0.00\", 0, 0, 0.000000)").has_value());
+	EXPECT_FALSE(ReadRewardLine("CREATE_REWARD_CHEST(\"0.00,0.00\", 61, 0, 0.000000)").has_value());
+	EXPECT_FALSE(ReadRewardLine("CREATE_REWARD_CHEST(\"0.00,0.00\", 4, 8, 0.000000)").has_value());
+	EXPECT_FALSE(ReadRewardLine("CREATE_REWARD_CHEST(\"0.00,0.00\", 4, -2, 0.000000)").has_value());
+	EXPECT_FALSE(ReadRewardLine("CREATE_REWARD_CHEST(\"0.00,0.00\", 4, 0)").has_value());
+	EXPECT_FALSE(ReadRewardLine("CREATE_REWARD_CHEST(\"0.00,0.00\", 4, 0, 0.000000) junk").has_value());
+	EXPECT_FALSE(ReadRewardLine("").has_value());
 }

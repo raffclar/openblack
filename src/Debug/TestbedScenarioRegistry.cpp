@@ -15807,8 +15807,8 @@ std::vector<std::string> testbed_scenarios::Problems(const Scenario& scenario)
 	}
 	for (const auto& throwing : scenario.throws)
 	{
-		if (throwing.object >= scenario.objects.size() || (throwing.from.has_value() && !ValidOffset(*throwing.from)) ||
-		    throwing.height < 0.0f)
+		const auto things = throwing.reward ? scenario.rewards.size() : scenario.objects.size();
+		if (throwing.object >= things || (throwing.from.has_value() && !ValidOffset(*throwing.from)) || throwing.height < 0.0f)
 		{
 			problems.emplace_back("a throw of no such object, or from no such place");
 		}

@@ -135,3 +135,17 @@ TEST(ScriptRandom, NumberFromAddsInFloat)
 	(void)NumberFrom(0.0f, 16777216.0f, random);
 	EXPECT_EQ(random.floatWidths.back(), 16777216.0f);
 }
+
+TEST(ScriptRandom, NumberFromAReversedRangeDrawsDownFromTheLow)
+{
+	// The fire throwers of the fourth land ask for a number from 30 to 0, because their script never sets the upper
+	// end. The width is then negative, the draw keeps that sign, and the result goes down from 30
+	WidthRecordingRandom random;
+	random.floatAnswer = -12.5f;
+	EXPECT_EQ(NumberFrom(30.0f, 0.0f, random), 17.0f);
+	random.floatAnswer = -28.99f;
+	EXPECT_EQ(NumberFrom(30.0f, 0.0f, random), 1.0f);
+	random.floatAnswer = 0.0f;
+	EXPECT_EQ(NumberFrom(30.0f, 0.0f, random), 30.0f);
+	EXPECT_EQ(random.floatWidths, (std::vector<float> {-29.0f, -29.0f, -29.0f}));
+}
