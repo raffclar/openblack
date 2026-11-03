@@ -2189,3 +2189,17 @@ TEST(HostileGameServer, AWorldStateLargerThanTheLimitEndsTheGame)
 	Exchange(network, alice);
 	EXPECT_EQ(alice.session.GetEnd(), NetworkSession::End::ServerLimit);
 }
+
+TEST_F(LockstepTest, TheStartGivesTheAccountOfEachGodWhoseTicketHasOne)
+{
+	MakeHost(2);
+	Computer alice(network, now, "god:100");
+	Computer bob(network, now, "god:bob");
+	Frames({&alice, &bob}, 9);
+	ASSERT_TRUE(alice.session.GetStart().has_value());
+	const auto& gods = alice.session.GetStart()->gods;
+	ASSERT_EQ(gods.size(), 2);
+	// A subject that is not an account id gives no account
+	EXPECT_EQ(gods[0].account, std::optional<int64_t>(100));
+	EXPECT_EQ(gods[1].account, std::nullopt);
+}

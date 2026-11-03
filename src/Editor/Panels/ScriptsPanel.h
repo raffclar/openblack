@@ -60,6 +60,8 @@ private:
 		int sortColumn {0};
 		bool sortAscending {true};
 		std::map<uint32_t, std::optional<scripts::DecompiledSource>> decompiled;
+		/// Each script's original source file, or none when the source folder does not have it
+		std::map<uint32_t, std::optional<scripts::DecompiledSource>> original;
 	};
 
 	/// Loading another program, or the game's own again
@@ -70,6 +72,10 @@ private:
 	void DrawDisassembly(lhvm::LHVM& vm, const scripts::Program& program, const lhvm::VMScript& script,
 	                     scripts::CodeRange range) noexcept;
 	void DrawDecompiled(const scripts::Program& program, const lhvm::VMScript& script) noexcept;
+	void DrawOriginal(const scripts::Program& program, const lhvm::VMScript& script, scripts::CodeRange range) noexcept;
+	/// Draws lines of source, each leading to its instruction, with the picked task's line and the current line marked
+	void DrawSourceLines(const scripts::Program& program, const scripts::DecompiledSource& source,
+	                     std::optional<size_t> taskLine, std::optional<size_t> currentLine) noexcept;
 	void DrawSide(lhvm::LHVM& vm, const scripts::Program& program) noexcept;
 	void DrawDetails(lhvm::LHVM& vm, const scripts::Program& program) noexcept;
 	void DrawTasks(lhvm::LHVM& vm, const scripts::Program& program) noexcept;

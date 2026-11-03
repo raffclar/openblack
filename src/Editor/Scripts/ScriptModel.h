@@ -190,4 +190,18 @@ struct SourceToken
 /// making the whole line
 [[nodiscard]] std::vector<SourceToken> HighlightSource(std::string_view line);
 
+/// Cuts a text into its lines, with no line ends (a new line, or a carriage return and a new line). A last line with no
+/// end is a line too
+[[nodiscard]] std::vector<std::string> SplitLines(std::string_view text);
+/// Puts the original source file of a script beside its code. Each line of the file leads to the first instruction of
+/// the script that the compiler recorded on that line. A diagnostic tells when the script names lines past the end of
+/// the file, because then the file is not the one that the program came from
+[[nodiscard]] DecompiledSource MatchOriginal(std::span<const lhvm::VMInstruction> code, CodeRange range, std::string_view text);
+/// The line of the original source file (from 0) that the compiler recorded for an address of the script. An
+/// instruction with no recorded line takes the line of the nearest instruction before it in the script
+[[nodiscard]] std::optional<size_t> OriginalLineOf(std::span<const lhvm::VMInstruction> code, CodeRange range,
+                                                   uint32_t address);
+/// The name in a list that is the same as the wanted name, with no attention to case
+[[nodiscard]] std::optional<std::string> SameNameIgnoringCase(std::span<const std::string> names, std::string_view wanted);
+
 } // namespace openblack::editor::scripts

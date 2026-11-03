@@ -83,6 +83,18 @@ void ChatSystem::Receive(PlayerNames sender, const player_commands::ChatTaunt& t
 	Arrive(sender, taunt.recipients, {}, taunt.taunt);
 }
 
+void ChatSystem::ReceiveFromPingServer(std::u16string_view name, std::u16string_view text)
+{
+	if (_services.incoming)
+	{
+		_services.incoming(NamedLine(name, text));
+	}
+	if (_services.log)
+	{
+		_services.log(LogLine(name, text));
+	}
+}
+
 void ChatSystem::Arrive(PlayerNames sender, std::span<const PlayerNames> recipients, std::u16string_view text,
                         std::optional<uint32_t> taunt)
 {
@@ -211,6 +223,15 @@ std::map<PlayerNames, std::u16string> ChatSystem::GetNames() const
 		return _names;
 	}
 	return _services.names();
+}
+
+std::map<PlayerNames, openblack::chat::people::UserId> ChatSystem::GetAccounts() const
+{
+	if (!_names.empty() || !_services.accounts)
+	{
+		return {};
+	}
+	return _services.accounts();
 }
 
 std::u16string ChatSystem::NameOf(PlayerNames god) const

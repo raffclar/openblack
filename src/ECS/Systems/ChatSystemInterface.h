@@ -64,6 +64,9 @@ public:
 	/// network game.
 	virtual void SetNames(std::map<PlayerNames, std::u16string> names) = 0;
 	[[nodiscard]] virtual std::map<PlayerNames, std::u16string> GetNames() const = 0;
+	/// The lasting numbers of the human gods of the game, by god slot: the ids of their lobby accounts (deviation 220).
+	/// A god with no account has no number. The names of the testbed have no numbers.
+	[[nodiscard]] virtual std::map<PlayerNames, chat::people::UserId> GetAccounts() const { return {}; }
 
 	/// The player sends a typed line to these players. An empty line does not go, and a line with no player does not go.
 	virtual void SendLine(std::u16string_view text, std::span<const PlayerNames> recipients) = 0;
@@ -73,6 +76,9 @@ public:
 	/// At the turn of the command: the line or the taunt of a sender comes in on this computer
 	virtual void Receive(PlayerNames sender, const player_commands::ChatSpeech& speech) = 0;
 	virtual void Receive(PlayerNames sender, const player_commands::ChatTaunt& taunt) = 0;
+	/// A line of a person came from the ping server: it shows in the incoming messages as "name: text" and goes to the
+	/// chat log
+	virtual void ReceiveFromPingServer(std::u16string_view name, std::u16string_view text) = 0;
 	/// Once a game turn: what the player sent since the last turn makes the advisors of this computer speak
 	virtual void ProcessTurn() = 0;
 	/// Each frame, with the frame's game milliseconds: the time to show of each bubble runs down

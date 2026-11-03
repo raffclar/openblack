@@ -917,6 +917,71 @@ void LobbyClientSystem::UploadCreature(lobby_api::CreatureUpload upload, LobbyCa
 	});
 }
 
+void LobbyClientSystem::SendPing(std::vector<int64_t> friends, LobbyCallback<lobby_api::PingReply> callback)
+{
+	if (!_config.has_value())
+	{
+		Fail(callback, ErrorOfKind(LobbyErrorKind::NotConfigured));
+		return;
+	}
+	// The lobby takes at most 100 friends in one ping
+	if (friends.size() > lobby_api::k_MostPingFriends)
+	{
+		friends.resize(lobby_api::k_MostPingFriends);
+	}
+	Authorized(Call {
+	    .method = HttpMethod::Post,
+	    .path = "/me/pings",
+	    .headers = {{"Content-Type", std::string(k_JsonType)}, {"Accept", std::string(k_JsonType)}},
+	    .body = BytesOf(lobby_api::ToJson(lobby_api::PingRequest {.friends = std::move(friends)})),
+	    .done =
+	        [callback = std::move(callback)](HttpResponse&& response) {
+		        if (auto error = LobbyErrorOf(response); error.kind != LobbyErrorKind::None)
+		        {
+			        Fail(callback, std::move(error));
+			        return;
+		        }
+		        auto reply = lobby_api::ParsePingReply(TextOf(response));
+		        if (!reply.has_value())
+		        {
+			        Fail(callback, LobbyError {.kind = LobbyErrorKind::BadAnswer, .status = response.status});
+			        return;
+		        }
+		        Succeed(callback, std::move(*reply));
+	        },
+	});
+}
+
+void LobbyClientSystem::SendPersonLine(int64_t account, std::string text, LobbyCallback<LobbyDone> callback)
+{
+	if (!_config.has_value())
+	{
+		Fail(callback, ErrorOfKind(LobbyErrorKind::NotConfigured));
+		return;
+	}
+	// The lobby refuses an empty line and a line of more than 254 characters
+	if (text.empty() || text.size() > lobby_api::k_MostChatCharacters)
+	{
+		Fail(callback, LobbyError {.kind = LobbyErrorKind::Refused, .status = 0});
+		return;
+	}
+	Authorized(Call {
+	    .method = HttpMethod::Post,
+	    .path = fmt::format("/accounts/{}/lines", account),
+	    .headers = {{"Content-Type", std::string(k_JsonType)}, {"Accept", std::string(k_JsonType)}},
+	    .body = BytesOf(lobby_api::ToJson(lobby_api::ChatLineRequest {.text = std::move(text)})),
+	    .done =
+	        [callback = std::move(callback)](HttpResponse&& response) {
+		        if (auto error = LobbyErrorOf(response); error.kind != LobbyErrorKind::None)
+		        {
+			        Fail(callback, std::move(error));
+			        return;
+		        }
+		        Succeed(callback, LobbyDone {});
+	        },
+	});
+}
+
 void LobbyClientSystem::SendSkirmishPing(LobbyCallback<LobbyDone> callback)
 {
 	if (!_config.has_value())

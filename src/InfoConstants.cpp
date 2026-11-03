@@ -177,7 +177,7 @@ void openblack::ApplyCreatureBalance(GCreatureInfo& creature, const DifferentCre
 	creature.sleepHeal = balance.sleepHeal;
 	creature.secondsPerAgeTick = balance.secondsPerAgeTick;
 	creature.pooPerEnergy = balance.pooPerEnergy;
-	creature.field0x36c = balance.field0x54;
+	creature.neverRead0x36c = balance.neverRead0x54;
 	creature.alignmentChangeScale = balance.alignmentChangeScale;
 }
 
@@ -192,8 +192,8 @@ void openblack::ApplyCreatureBalance(InfoConstants& info)
 void openblack::UpdateInfo(CreatureActionInfo& info, const v100::CreatureActionInfo& old)
 {
 	memcpy(&info, &old, sizeof(old));
-	// TODO(#684): Figure out what field0xfc is and what value it should hold
-	info.field0xfc = 0;
+	// The old file has no copy table row. Only code that the game never calls reads it, so 0 is safe
+	info.mimicRow = 0;
 }
 
 void openblack::UpdateInfo(InfoConstants& info, const v100::InfoConstants& old)

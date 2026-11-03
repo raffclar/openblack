@@ -107,6 +107,8 @@ public:
 	void GetWeather(lobby_api::Date date, LobbyCallback<lobby_api::RealWeather> callback) override;
 	void UploadCreature(lobby_api::CreatureUpload upload, LobbyCallback<lobby_api::CreatureUploadReply> callback) override;
 	void SendSkirmishPing(LobbyCallback<LobbyDone> callback) override;
+	void SendPing(std::vector<int64_t> friends, LobbyCallback<lobby_api::PingReply> callback) override;
+	void SendPersonLine(int64_t account, std::string text, LobbyCallback<LobbyDone> callback) override;
 
 	uint32_t AddEventListener(LobbyEventListener listener) override;
 	void RemoveEventListener(uint32_t id) override;

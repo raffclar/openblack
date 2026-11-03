@@ -47,6 +47,8 @@ public:
 		std::function<void(std::string_view line)> log;
 		/// The names of the human gods of the network game, by god slot
 		std::function<std::map<PlayerNames, std::u16string>()> names;
+		/// The lasting numbers of the human gods of the network game, by god slot
+		std::function<std::map<PlayerNames, chat::people::UserId>()> accounts;
 		/// The turn now, for the inspector
 		std::function<uint32_t()> turn;
 	};
@@ -56,12 +58,14 @@ public:
 	void SetTexts(const gui::TextDatabase* texts) override { _texts = texts; }
 	void SetNames(std::map<PlayerNames, std::u16string> names) override;
 	[[nodiscard]] std::map<PlayerNames, std::u16string> GetNames() const override;
+	[[nodiscard]] std::map<PlayerNames, chat::people::UserId> GetAccounts() const override;
 
 	void SendLine(std::u16string_view text, std::span<const PlayerNames> recipients) override;
 	void SendTaunt(uint32_t taunt, std::span<const PlayerNames> recipients) override;
 
 	void Receive(PlayerNames sender, const player_commands::ChatSpeech& speech) override;
 	void Receive(PlayerNames sender, const player_commands::ChatTaunt& taunt) override;
+	void ReceiveFromPingServer(std::u16string_view name, std::u16string_view text) override;
 	void ProcessTurn() override;
 	void UpdateFrame(float gameMilliseconds) override;
 

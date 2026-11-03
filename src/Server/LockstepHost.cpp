@@ -21,6 +21,7 @@
 #include "PlayerSlots.h"
 #include "Server/ConnectionLimits.h"
 #include "Server/LobbyBans.h"
+#include "Server/LobbyStatus.h"
 
 namespace openblack::server
 {
@@ -1079,7 +1080,9 @@ std::vector<game_socket::God> LockstepHost::Gods() const
 	{
 		if (_seats[i].state == SeatState::Taken || _seats[i].state == SeatState::Away)
 		{
-			gods.push_back({.slot = static_cast<uint8_t>(i), .name = _seats[i].name});
+			gods.push_back({.slot = static_cast<uint8_t>(i),
+			                .name = _seats[i].name,
+			                .account = lobby_status::AccountId(_seats[i].account)});
 		}
 	}
 	return gods;

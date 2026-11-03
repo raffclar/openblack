@@ -10,6 +10,7 @@
 #include "TestbedGameStage.h"
 
 #include <algorithm>
+#include <memory>
 #include <string>
 #include <utility>
 #include <vector>
@@ -18,10 +19,14 @@
 #include <fmt/format.h>
 
 #include "Debug/TestbedMultiplayer.h"
+#include "Debug/TestbedPingServer.h"
+#include "Debug/TestbedScenarioRegistry.h"
+#include "ECS/Systems/GatheringBoxSystemInterface.h"
 #include "ECS/Systems/TattooMenuSystemInterface.h"
 #include "Game.h"
 #include "Gui/GameInterface.h"
 #include "Gui/OnlineMapTexts.h"
+#include "Gui/TextDatabase.h"
 #include "Locator.h"
 
 namespace openblack::testbed_scenarios
@@ -111,6 +116,39 @@ std::string TestbedGameStage::OpenChatWithFriends()
 	controls.UpdateOnline(seen, chat::people::k_OnlineClockStart + 1000);
 	controls.Open();
 	return "the chat opens with the friends Carol (online) and Dave, and Eve in the others";
+}
+
+std::string TestbedGameStage::PingServerSays(size_t value, std::u16string_view text)
+{
+	if (!Locator::gatheringBoxSystem::has_value())
+	{
+		return "failed: no gathering box";
+	}
+	// The testbed ping server stays for the run, so that the lines of the game go to the same mailbox
+	auto& mailbox = _pingMailbox;
+	auto& gathering = Locator::gatheringBoxSystem::value();
+	if (mailbox == nullptr || !gathering.HasPingServer())
+	{
+		mailbox = std::make_shared<TestbedPingServer::Mailbox>();
+		gathering.SetPingServer(std::make_unique<TestbedPingServer>(mailbox));
+	}
+	if (value == k_ChatAnnouncement)
+	{
+		// Each part of the text between the '|' marks is the name of one person of the staff
+		gathering_box::UserId user = gathering_box::k_AdminUser + 1;
+		size_t count = 0;
+		for (size_t start = 0; start <= text.size(); ++user, ++count)
+		{
+			const auto end = std::min(text.find(u'|', start), text.size());
+			mailbox->toGame.emplace_back(
+			    online::PingServerInterface::Here {.user = user, .name = std::u16string(text.substr(start, end - start))});
+			start = end + 1;
+		}
+		return fmt::format("the ping server announces {} lines", count);
+	}
+	mailbox->toGame.emplace_back(
+	    online::PingServerInterface::Line {.user = gathering_box::k_AdminUser, .name = u"Staff", .text = std::u16string(text)});
+	return fmt::format("the admin of the ping server says \"{}\"", gui::ToUtf8(text));
 }
 
 std::string TestbedGameStage::OpenMultiplayerBox(size_t stage)

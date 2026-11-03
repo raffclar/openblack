@@ -364,6 +364,11 @@ std::optional<UsedChoice> creature_planner::ChooseUsed(std::span<const UsedCandi
 	return chosen;
 }
 
+uint32_t creature_planner::ActionInView(const PlannerState& state)
+{
+	return state.current.has_value() ? state.current->action : state.lastAction;
+}
+
 std::vector<Desire> creature_planner::NextGoals(PlannerState& state,
                                                 const std::array<bool, creature_desires::k_DesireCount>& eligible, size_t count)
 {

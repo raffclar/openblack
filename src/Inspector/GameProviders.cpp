@@ -181,6 +181,7 @@
 #include "ECS/Systems/FootprintSystemInterface.h"
 #include "ECS/Systems/ForestSystemInterface.h"
 #include "ECS/Systems/GameEndSystemInterface.h"
+#include "ECS/Systems/GatheringBoxSystemInterface.h"
 #include "ECS/Systems/GestureEventsInterface.h"
 #include "ECS/Systems/GestureSystemInterface.h"
 #include "ECS/Systems/GuidanceSystemInterface.h"
@@ -460,6 +461,7 @@ constexpr std::array k_Coverage {
     LocatorCoverage {"pauseTextSystem", "view.pause_text"},
     LocatorCoverage {"incomingMessageSystem", "view.incoming_messages"},
     LocatorCoverage {"chatSystem", "view.chat"},
+    LocatorCoverage {"gatheringBoxSystem", "view.chat"},
     LocatorCoverage {"fireSystem", "magic.fires"},
     LocatorCoverage {"explosionSystem", "magic.state"},
     LocatorCoverage {"floatingNumberSystem", "magic.state"},
@@ -3015,54 +3017,60 @@ std::unique_ptr<ProviderInterface> ViewProvider(const GameSeamInterface* seam)
 		    }
 		    return QueryResult::Value(std::move(result));
 	    });
-	provider->Add(Query("chat",
-	                    "The chat of a network game: the names of the gods, the lines that came in (turn, sender, the "
-	                    "players that get them, text or taunt, shown in the incoming messages), the speech bubbles over "
-	                    "the creatures (lines, time to show, scroll), and the chat controls (shown, open, quick chat, "
-	                    "the typed line, the list of players with its friends and others, and who gets a line)"),
-	              [seam](const QueryContext& /*c*/) {
-		              Json result = {{"names", Json::object()}, {"received", Json::array()}, {"bubbles", Json::array()}};
-		              if (!Locator::chatSystem::has_value())
-		              {
-			              return QueryResult::Value(std::move(result));
-		              }
-		              auto& chat = Locator::chatSystem::value();
-		              for (const auto& [slot, name] : chat.GetNames())
-		              {
-			              result["names"][std::to_string(static_cast<int>(slot))] = gui::ToUtf8(name);
-		              }
-		              for (const auto& line : chat.GetReceived())
-		              {
-			              Json recipients = Json::array();
-			              for (const auto player : line.recipients)
-			              {
-				              recipients.push_back(static_cast<int>(player));
-			              }
-			              result["received"].push_back({{"turn", line.turn},
-			                                            {"sender", static_cast<int>(line.sender)},
-			                                            {"recipients", std::move(recipients)},
-			                                            {"text", gui::ToUtf8(line.text)},
-			                                            {"taunt", line.taunt.has_value() ? Json(*line.taunt) : Json(nullptr)},
-			                                            {"shown", line.shown}});
-		              }
-		              for (const auto& [creature, bubble] : chat.GetBubbles())
-		              {
-			              Json lines = Json::array();
-			              for (const auto& line : bubble.lines)
-			              {
-				              lines.push_back({{"text", gui::ToUtf8(line.text)}, {"sender", static_cast<int>(line.sender)}});
-			              }
-			              result["bubbles"].push_back({{"creature", entt::to_integral(creature)},
-			                                           {"lines", std::move(lines)},
-			                                           {"display_time", bubble.displayTime},
-			                                           {"scroll", bubble.scroll}});
-		              }
-		              if (seam != nullptr)
-		              {
-			              seam->AddChatControls(result);
-		              }
-		              return QueryResult::Value(std::move(result));
-	              });
+	provider->Add(
+	    Query("chat", "The chat of a network game: the names of the gods, the lines that came in (turn, sender, the "
+	                  "players that get them, text or taunt, shown in the incoming messages), the speech bubbles over "
+	                  "the creatures (lines, time to show, scroll), and the chat controls (shown, open, quick chat, "
+	                  "the typed line, the list of players with its friends and others, and who gets a line), and the "
+	                  "ping server of the gathering box (there or not, the online clock)"),
+	    [seam](const QueryContext& /*c*/) {
+		    Json result = {{"names", Json::object()}, {"received", Json::array()}, {"bubbles", Json::array()}};
+		    if (Locator::gatheringBoxSystem::has_value())
+		    {
+			    const auto& gathering = Locator::gatheringBoxSystem::value();
+			    result["ping_server"] = {{"present", gathering.HasPingServer()}, {"online_time", gathering.GetOnlineTime()}};
+		    }
+		    if (!Locator::chatSystem::has_value())
+		    {
+			    return QueryResult::Value(std::move(result));
+		    }
+		    auto& chat = Locator::chatSystem::value();
+		    for (const auto& [slot, name] : chat.GetNames())
+		    {
+			    result["names"][std::to_string(static_cast<int>(slot))] = gui::ToUtf8(name);
+		    }
+		    for (const auto& line : chat.GetReceived())
+		    {
+			    Json recipients = Json::array();
+			    for (const auto player : line.recipients)
+			    {
+				    recipients.push_back(static_cast<int>(player));
+			    }
+			    result["received"].push_back({{"turn", line.turn},
+			                                  {"sender", static_cast<int>(line.sender)},
+			                                  {"recipients", std::move(recipients)},
+			                                  {"text", gui::ToUtf8(line.text)},
+			                                  {"taunt", line.taunt.has_value() ? Json(*line.taunt) : Json(nullptr)},
+			                                  {"shown", line.shown}});
+		    }
+		    for (const auto& [creature, bubble] : chat.GetBubbles())
+		    {
+			    Json lines = Json::array();
+			    for (const auto& line : bubble.lines)
+			    {
+				    lines.push_back({{"text", gui::ToUtf8(line.text)}, {"sender", static_cast<int>(line.sender)}});
+			    }
+			    result["bubbles"].push_back({{"creature", entt::to_integral(creature)},
+			                                 {"lines", std::move(lines)},
+			                                 {"display_time", bubble.displayTime},
+			                                 {"scroll", bubble.scroll}});
+		    }
+		    if (seam != nullptr)
+		    {
+			    seam->AddChatControls(result);
+		    }
+		    return QueryResult::Value(std::move(result));
+	    });
 	provider->Add(Query("tooltip", "The tooltip that the hand shows: its index and text name, its mouse button and arrows, "
 	                               "its fade, and the numbers or other words that it shows"),
 	              [seam](const QueryContext& /*c*/) {

@@ -633,6 +633,10 @@ constexpr size_t k_ChatSays = 0;
 constexpr size_t k_ChatTypes = 1;
 /// The value of a Chat command that gives the list of people made-up friends and others, and opens the chat
 constexpr size_t k_ChatFriends = 2;
+/// The values of a Chat command that make a ping server of the testbed send to the gathering box: the admin says
+/// the action, or the action is an announcement with its lines between '|' marks
+constexpr size_t k_ChatStaffSays = 3;
+constexpr size_t k_ChatAnnouncement = 4;
 /// The names that a Chat command gives the first gods
 constexpr std::array<std::u16string_view, 4> k_ChatNames {u"Alice", u"Bob", u"Carol", u"Dave"};
 
@@ -1128,7 +1132,8 @@ struct Command
 		/// The chat of a network game, with the names that the testbed gives the gods (k_ChatNames). With value
 		/// k_ChatSays, the god (player) says the action to all of the players. With value k_ChatTypes, the chat of this
 		/// computer opens and the action is in its line. With value k_ChatFriends, the list of people gets made-up
-		/// friends and others and the chat opens. Needs no creature.
+		/// friends and others and the chat opens. With value k_ChatStaffSays or k_ChatAnnouncement, a ping server of the
+		/// testbed sends the action to the gathering box. Needs no creature.
 		Chat,
 		/// The god of the player (player) gets the weight (amount) for each node of its mind of the name (action), as a
 		/// script's SET_COMPUTER_PLAYER_PERSONALITY gives it. Needs no creature.

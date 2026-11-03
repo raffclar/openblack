@@ -84,6 +84,9 @@ struct God
 	uint8_t slot {0};
 	/// The name of the account
 	std::string name;
+	/// The id of the lobby account of the player ("account", optional). It is the lasting number of the player, for
+	/// example in the friend list. None on the local network, where no ticket names an account.
+	std::optional<int64_t> account;
 	bool operator==(const God&) const = default;
 };
 
