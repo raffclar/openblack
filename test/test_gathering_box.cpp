@@ -390,8 +390,8 @@ TEST(GatheringBoxSystem, TheBoxGetsTheKeptFriendsAndTheProfileKeepsTheChanges)
 	std::vector<FriendRecord> loaded;
 	std::optional<std::vector<FriendRecord>> changed;
 	system.SetBox(
-	    {.setFriends = [&loaded](std::span<const FriendRecord> friends) { loaded.assign(friends.begin(), friends.end()); },
-	     .takeChangedFriends = [&changed]() { return std::exchange(changed, std::nullopt); }});
+	    {.takeChangedFriends = [&changed]() { return std::exchange(changed, std::nullopt); },
+	     .setFriends = [&loaded](std::span<const FriendRecord> friends) { loaded.assign(friends.begin(), friends.end()); }});
 	EXPECT_EQ(loaded, kept);
 
 	// The profile keeps the friends only after a change of the player
