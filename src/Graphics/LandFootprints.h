@@ -103,7 +103,7 @@ private:
 	[[nodiscard]] BlockPaint FindBlockPaint(size_t block) const;
 	/// Paints the block's own texture with its footprints into texels. It changes only the block's own texture that is
 	/// kept, which must already have its place in the kept textures, and texels.
-	void PaintBlock(size_t block, const BlockPaint& paint, std::vector<uint16_t>& texels);
+	void PaintBlock(size_t block, const BlockPaint& paint, std::span<uint16_t> texels);
 	/// The threads that share the work of many blocks, made the first time that many blocks change at once
 	[[nodiscard]] WorkerPool& Workers();
 	void Reset(size_t blockCount);
@@ -128,8 +128,8 @@ private:
 	std::set<size_t> _dirty;
 	/// The own texture of each block that holds footprints, with no footprints, as the land paints it
 	std::unordered_map<size_t, std::vector<uint16_t>> _ownTexels;
-	/// The painted texels of each block of the last paint, kept to use their memory again
-	std::vector<std::vector<uint16_t>> _texels;
+	/// The texels of a block that this thread paints alone, kept to use their memory again
+	std::vector<uint16_t> _texels;
 	std::unique_ptr<WorkerPool> _workers;
 };
 

@@ -364,7 +364,7 @@ LandFootprints::BlockPaint LandFootprints::FindBlockPaint(size_t block) const
 	return paint;
 }
 
-void LandFootprints::PaintBlock(size_t block, const BlockPaint& paint, std::vector<uint16_t>& texels)
+void LandFootprints::PaintBlock(size_t block, const BlockPaint& paint, std::span<uint16_t> texels)
 {
 	const auto& island = Locator::terrainSystem::value();
 	const auto& registry = Locator::entitiesRegistry::value();
@@ -378,7 +378,7 @@ void LandFootprints::PaintBlock(size_t block, const BlockPaint& paint, std::vect
 		own.resize(static_cast<size_t>(side) * static_cast<size_t>(side));
 		island.PaintBlockTexels(block, own);
 	}
-	texels = own;
+	std::ranges::copy(own, texels.begin());
 	for (const auto entity : paint.things)
 	{
 		const auto& transform = registry.Get<const Transform>(entity);
@@ -445,55 +445,55 @@ void LandFootprints::Update()
 	{
 		_ownTexels.try_emplace(block);
 	}
-	if (_texels.size() < blocks.size())
-	{
-		_texels.resize(blocks.size());
-	}
-	// Each lane writes its results only to the places of its blocks. The bits of a vector of bools share their memory,
-	// so the blocks to paint are bytes.
+	// First the things and the prints over each block. A block with no footprints that held none before keeps its
+	// texture. Each lane writes only to the places of its blocks, so the blocks to paint are bytes, not the bits of a
+	// vector of bools.
 	std::vector<BlockPaint> paints(blocks.size());
 	std::vector<uint8_t> toPaint(blocks.size(), 0);
-	const auto paintOne = [&](size_t i, size_t /*lane*/) {
+	const auto findOne = [&](size_t i, size_t /*lane*/) {
 		paints[i] = FindBlockPaint(blocks[i]);
-		// A block with no footprints that held none before keeps its texture
-		const bool hasFootprints = !paints[i].things.empty() || !paints[i].loose.empty();
-		if (hasFootprints || _painted.at(blocks[i]))
-		{
-			toPaint[i] = 1;
-			PaintBlock(blocks[i], paints[i], _texels[i]);
-		}
+		toPaint[i] = !paints[i].things.empty() || !paints[i].loose.empty() || _painted.at(blocks[i]) ? 1 : 0;
 	};
 	if (blocks.size() < k_LeastBlocksToShare)
 	{
-		paintOne(0, 0);
+		findOne(0, 0);
 	}
 	else
 	{
-		Workers().ForEach(blocks.size(), paintOne);
+		Workers().ForEach(blocks.size(), findOne);
 	}
 
-	std::vector<LandIslandInterface::BlockTexels> painted;
+	std::vector<size_t> painted;
+	std::vector<const BlockPaint*> paintOf;
 	for (size_t i = 0; i < blocks.size(); ++i)
 	{
 		if (toPaint[i] == 0)
 		{
 			continue;
 		}
-		painted.push_back({.block = blocks[i], .texels = _texels[i]});
+		painted.push_back(blocks[i]);
+		paintOf.push_back(&paints[i]);
 		SPDLOG_LOGGER_DEBUG(spdlog::get("graphics"), "Land footprints: block {} painted with {} things and {} loose prints",
 		                    blocks[i], paints[i].things.size(), paints[i].loose.size());
 		_painted.at(blocks[i]) = !paints[i].things.empty() || !paints[i].loose.empty();
 	}
+	// Then the paint of each block, which goes straight to the block's texture
 	if (painted.size() < k_LeastBlocksToShare)
 	{
-		for (const auto& block : painted)
+		const auto side = static_cast<size_t>(island.GetBlockTextureSide());
+		_texels.resize(side * side);
+		for (size_t i = 0; i < painted.size(); ++i)
 		{
-			island.SetBlockTexels(block.block, block.texels);
+			PaintBlock(painted[i], *paintOf[i], _texels);
+			island.SetBlockTexels(painted[i], _texels);
 		}
 	}
 	else
 	{
-		island.SetBlocksTexels(painted, Workers());
+		island.PaintBlocksTexels(
+		    painted,
+		    [this, &painted, &paintOf](size_t i, std::span<uint16_t> texels) { PaintBlock(painted[i], *paintOf[i], texels); },
+		    Workers());
 	}
 }
 

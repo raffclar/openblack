@@ -12,6 +12,7 @@
 #include <cstdint>
 
 #include <filesystem>
+#include <functional>
 #include <optional>
 #include <span>
 #include <vector>
@@ -103,19 +104,18 @@ public:
 	virtual void PaintBlockTexels(size_t /*block*/, std::span<uint16_t> /*texels*/) const {}
 	/// Puts ARGB texels at 4 bits a channel in place of a block's texture, for example with its footprints painted in
 	virtual void SetBlockTexels(size_t /*block*/, std::span<const uint16_t> /*texels*/) {}
-	/// The texels of a block to put in place of its texture
-	struct BlockTexels
+	/// Paints the texels of the block at an index of the blocks, GetBlockTextureSide on each side. The lanes of a pool
+	/// call it at the same time for different indices.
+	using PaintTexels = std::function<void(size_t index, std::span<uint16_t> texels)>;
+	/// Puts the texels that paint gives for each block in place of its texture, as SetBlockTexels does. The lanes of the
+	/// pool share the work.
+	virtual void PaintBlocksTexels(std::span<const size_t> blocks, const PaintTexels& paint, WorkerPool& /*pool*/)
 	{
-		size_t block {0};
-		std::span<const uint16_t> texels;
-	};
-	/// Puts the texels of each block in place of its texture, as SetBlockTexels does. The lanes of the pool share the
-	/// work.
-	virtual void SetBlocksTexels(std::span<const BlockTexels> blocks, WorkerPool& /*pool*/)
-	{
-		for (const auto& block : blocks)
+		std::vector<uint16_t> texels(static_cast<size_t>(GetBlockTextureSide()) * static_cast<size_t>(GetBlockTextureSide()));
+		for (size_t i = 0; i < blocks.size(); ++i)
 		{
-			SetBlockTexels(block.block, block.texels);
+			paint(i, texels);
+			SetBlockTexels(blocks[i], texels);
 		}
 	}
 	/// A block whose texture the land painted again with no footprints

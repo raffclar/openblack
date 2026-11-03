@@ -779,32 +779,46 @@ void LandIsland::SetBlockTexels(size_t block, std::span<const uint16_t> texels)
 	_blockTextures->UpdateLayerFromMemory(static_cast<uint16_t>(block), memory);
 }
 
-void LandIsland::SetBlocksTexels(std::span<const BlockTexels> blocks, WorkerPool& pool)
+void LandIsland::PaintBlocksTexels(std::span<const size_t> blocks, const PaintTexels& paint, WorkerPool& pool)
 {
 	if (_blockTextures == nullptr)
 	{
 		return;
 	}
-	// The memory comes from the device on this thread. The lanes then fill it, and this thread gives it to the device.
+	// The memory comes from the device on this thread. Each lane paints a block into its own texels, then puts them into
+	// the memory of the block, and this thread gives the memory to the device.
 	const auto& device = Locator::graphicsDevice::value();
 	const auto bytes = static_cast<uint32_t>(block_texture::BlockBytesOf(_textureResolution));
 	std::vector<const graphics::DeviceMemory*> memories(blocks.size(), nullptr);
 	std::vector<std::span<uint8_t>> rgba(blocks.size());
 	for (size_t i = 0; i < blocks.size(); ++i)
 	{
-		if (blocks[i].block < _landBlocks.size())
+		if (blocks[i] < _landBlocks.size())
 		{
 			memories[i] = device.Alloc(bytes);
 			rgba[i] = device.Bytes(memories[i]);
 		}
 	}
-	pool.ForEach(blocks.size(),
-	             [&blocks, &rgba](size_t i, size_t /*lane*/) { block_texture::ToBlockRgba(blocks[i].texels, rgba[i]); });
+	const auto side = static_cast<size_t>(block_texture::SideOf(_textureResolution));
+	_laneTexels.resize(std::max(_laneTexels.size(), pool.GetLaneCount()));
+	for (auto& texels : _laneTexels)
+	{
+		texels.resize(side * side);
+	}
+	pool.ForEach(blocks.size(), [this, &paint, &rgba, &memories](size_t i, size_t lane) {
+		if (memories[i] == nullptr)
+		{
+			return;
+		}
+		auto& texels = _laneTexels[lane];
+		paint(i, texels);
+		block_texture::ToBlockRgba(texels, rgba[i]);
+	});
 	for (size_t i = 0; i < blocks.size(); ++i)
 	{
 		if (memories[i] != nullptr)
 		{
-			_blockTextures->UpdateLayerFromMemory(static_cast<uint16_t>(blocks[i].block), memories[i]);
+			_blockTextures->UpdateLayerFromMemory(static_cast<uint16_t>(blocks[i]), memories[i]);
 		}
 	}
 }

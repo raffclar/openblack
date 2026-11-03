@@ -118,7 +118,7 @@ public:
 	}
 	void PaintBlockTexels(size_t block, std::span<uint16_t> texels) const override;
 	void SetBlockTexels(size_t block, std::span<const uint16_t> texels) override;
-	void SetBlocksTexels(std::span<const BlockTexels> blocks, WorkerPool& pool) override;
+	void PaintBlocksTexels(std::span<const size_t> blocks, const PaintTexels& paint, WorkerPool& pool) override;
 	[[nodiscard]] std::vector<RepaintedBlock> TakeRepaintedBlocks() override;
 
 	[[nodiscard]] glm::mat4 GetOrthoView() const override { return _view; }
@@ -133,6 +133,8 @@ private:
 	std::unique_ptr<graphics::Texture2D> _luminosityMap;
 	std::unique_ptr<graphics::Texture2D> _cellColourMap;
 	std::unique_ptr<graphics::Texture2D> _blockTextures;
+	/// The texels that each lane of a pool paints a block into, kept to use their memory again
+	std::vector<std::vector<uint16_t>> _laneTexels;
 	/// The resolution the blocks' textures are painted at, from the detail level when the land loads
 	block_texture::Resolution _textureResolution {block_texture::Resolution::Full};
 	std::unique_ptr<graphics::Texture2D> _coarsePages;
