@@ -11,8 +11,11 @@
 
 #include <cmath>
 #include <cstddef>
+#include <cstdint>
+#include <cstring>
 
 #include <algorithm>
+#include <bit>
 #include <vector>
 
 #include <LNDFile.h>
@@ -206,14 +209,37 @@ void block_texture::ToRgba(std::span<const uint16_t> texels, std::span<uint8_t> 
 {
 	const auto count = std::min(texels.size(), rgba.size() / 4);
 	auto* out = rgba.data();
-	for (const auto texel : texels.first(count))
+	if constexpr (std::endian::native == std::endian::little)
 	{
-		out[0] = static_cast<uint8_t>(((texel >> 8) & 0xF) * 17);
-		out[1] = static_cast<uint8_t>(((texel >> 4) & 0xF) * 17);
-		out[2] = static_cast<uint8_t>((texel & 0xF) * 17);
-		out[3] = static_cast<uint8_t>(((texel >> 12) & 0xF) * 17);
-		out += 4;
+		for (const uint32_t texel : texels.first(count))
+		{
+			// Each channel goes into its own byte: red, green, blue and alpha from the lowest byte. A channel times 17 is
+			// at most 255, so the multiply does not carry into the next byte.
+			const uint32_t spread =
+			    ((texel >> 8) & 0xFu) | ((texel << 4) & 0xF00u) | ((texel << 16) & 0xF0000u) | ((texel << 12) & 0xF000000u);
+			const uint32_t bytes = spread * 17u;
+			std::memcpy(out, &bytes, sizeof(bytes));
+			out += 4;
+		}
 	}
+	else
+	{
+		for (const auto texel : texels.first(count))
+		{
+			out[0] = static_cast<uint8_t>(((texel >> 8) & 0xF) * 17);
+			out[1] = static_cast<uint8_t>(((texel >> 4) & 0xF) * 17);
+			out[2] = static_cast<uint8_t>((texel & 0xF) * 17);
+			out[3] = static_cast<uint8_t>(((texel >> 12) & 0xF) * 17);
+			out += 4;
+		}
+	}
+}
+
+void block_texture::ToBlockRgba(std::span<const uint16_t> texels, std::span<uint8_t> rgba)
+{
+	const auto written = std::min(texels.size() * 4, rgba.size() - (rgba.size() % 4));
+	ToRgba(texels, rgba);
+	std::ranges::fill(rgba.subspan(written), uint8_t {0});
 }
 
 void block_texture::PaintCellTexels(std::span<const lnd::LNDCell> cells, const Sources& sources, glm::ivec2 firstCell,

@@ -10,6 +10,9 @@
 #include "GameRandom.h"
 
 #include <cmath>
+#include <cstdint>
+
+#include <bit>
 
 using namespace openblack;
 
@@ -19,19 +22,6 @@ namespace
 bool ZeroOrNaN(float x) noexcept
 {
 	return x == 0.0f || std::isnan(x);
-}
-
-/// A double rounded to 24 bits of mantissa, to the nearest and to even at a tie, as the FPU at 24-bit precision rounds.
-/// The exponent stays as wide as the double's.
-double RoundTo24Bits(double value) noexcept
-{
-	if (value == 0.0 || !std::isfinite(value))
-	{
-		return value;
-	}
-	int exponent = 0;
-	const double mantissa = std::frexp(value, &exponent);
-	return std::ldexp(std::nearbyint(std::ldexp(mantissa, 24)), exponent - 24);
 }
 
 /// Particles' (u * k) * x, the other way round from the game's (u * x) * k
@@ -44,12 +34,41 @@ float ParticleFloat(uint32_t u, float x) noexcept
 }
 } // namespace
 
+double game_random::RoundTo24Bits(double value) noexcept
+{
+	// The 52 stored bits of a normal double keep their top 23 bits. The low 29 bits round to the nearest, to even at a tie.
+	// A carry out of the stored bits goes into the exponent, which gives the next power of 2.
+	constexpr uint64_t k_DroppedBits = 29;
+	constexpr uint64_t k_DroppedMask = (uint64_t {1} << k_DroppedBits) - 1;
+	constexpr uint64_t k_ExponentMask = uint64_t {0x7FF} << 52;
+	const auto bits = std::bit_cast<uint64_t>(value);
+	const auto exponent = bits & k_ExponentMask;
+	if (exponent == k_ExponentMask)
+	{
+		// Infinite or NaN
+		return value;
+	}
+	if (exponent == 0)
+	{
+		// Zero, or a subnormal double, whose precision is less than its stored bits show
+		if (value == 0.0)
+		{
+			return value;
+		}
+		int power = 0;
+		const double mantissa = std::frexp(value, &power);
+		return std::ldexp(std::nearbyint(std::ldexp(mantissa, 24)), power - 24);
+	}
+	const uint64_t lowestKept = (bits >> k_DroppedBits) & 1;
+	return std::bit_cast<double>((bits + (k_DroppedMask >> 1) + lowestKept) & ~k_DroppedMask);
+}
+
 float game_random::FloatOf(uint32_t u, float x) noexcept
 {
 	// Each product of a 16-bit draw and two floats is exact in a double. Each step then rounds to the 24 bits of the
 	// FPU, with the FPU's wide exponent.
-	double r = RoundTo24Bits(static_cast<double>(u) * static_cast<double>(x));
-	r = RoundTo24Bits(r * static_cast<double>(k_FloatRandScale));
+	double r = game_random::RoundTo24Bits(static_cast<double>(u) * static_cast<double>(x));
+	r = game_random::RoundTo24Bits(r * static_cast<double>(k_FloatRandScale));
 	return static_cast<float>(r);
 }
 

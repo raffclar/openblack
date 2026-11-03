@@ -112,6 +112,8 @@ void PaintCellTexels(std::span<const lnd::LNDCell> cells, const Sources& sources
 void PutCellTexels(std::span<const uint16_t> part, glm::ivec2 firstCell, glm::ivec2 cellCount, std::span<uint16_t> block);
 /// ARGB words at 4 bits a channel as RGBA8 texels, each 4-bit channel times 17
 void ToRgba(std::span<const uint16_t> texels, std::span<uint8_t> rgba);
+/// The texels as ToRgba makes them, and 0 in the bytes of rgba past the last texel
+void ToBlockRgba(std::span<const uint16_t> texels, std::span<uint8_t> rgba);
 /// Paints the texels of a rectangle of a block's cells, cellCount (along x, along z) from firstCell, as BuildBlock
 /// would, into rgba: a row for each texel along x, each row the rectangle's texels along z, so the rectangle can replace
 /// that part of the block's texture
@@ -120,8 +122,8 @@ void PaintCells(std::span<const lnd::LNDCell> cells, const Sources& sources, glm
 
 /// The cells of a block by its index
 using CellsOfBlock = std::function<std::span<const lnd::LNDCell>(size_t block)>;
-/// The memory of a block's texture, BlockBytesOf(sources.resolution) long, that BuildBlocks paints into. The lanes of the pool call it, so it
-/// must only give memory that is ready for the block.
+/// The memory of a block's texture, BlockBytesOf(sources.resolution) long, that BuildBlocks paints into. The lanes of the pool
+/// call it, so it must only give memory that is ready for the block.
 using MemoryOfBlock = std::function<std::span<uint8_t>(size_t block)>;
 
 /// Paints the blocks as BuildBlock does, each into its own memory, and shares the work among the pool's lanes. It

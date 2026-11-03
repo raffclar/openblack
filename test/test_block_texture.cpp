@@ -8,6 +8,7 @@
  *******************************************************************************/
 
 #include <cstddef>
+#include <cstdint>
 
 #include <algorithm>
 #include <array>
@@ -418,4 +419,33 @@ TEST(BlockTexture, PutCellTexelsLeavesABlockAsItIsForARectangleOutsideIt)
 	const std::vector<uint16_t> part(static_cast<size_t>(2 * 2) * 16 * 16, 9);
 	block_texture::PutCellTexels(part, {15, 0}, {2, 2}, block);
 	EXPECT_TRUE(std::ranges::all_of(block, [](uint16_t texel) { return texel == 7; }));
+}
+
+TEST(BlockTexture, ToRgbaGivesEachChannelTimes17)
+{
+	std::vector<uint16_t> texels(0x10000);
+	std::iota(texels.begin(), texels.end(), uint16_t {0});
+	std::vector<uint8_t> rgba(texels.size() * 4, 0xAB);
+	block_texture::ToRgba(texels, rgba);
+	for (size_t i = 0; i < texels.size(); ++i)
+	{
+		const auto texel = texels[i];
+		const std::array<uint8_t, 4> expected {
+		    static_cast<uint8_t>(((texel >> 8) & 0xF) * 17), static_cast<uint8_t>(((texel >> 4) & 0xF) * 17),
+		    static_cast<uint8_t>((texel & 0xF) * 17), static_cast<uint8_t>(((texel >> 12) & 0xF) * 17)};
+		ASSERT_TRUE(std::ranges::equal(std::span(rgba).subspan(i * 4, 4), expected)) << texel;
+	}
+}
+
+TEST(BlockTexture, ToBlockRgbaClearsTheBytesPastTheTexels)
+{
+	const std::vector<uint16_t> texels {0xF000, 0x0123};
+	std::vector<uint8_t> rgba(14, 0xAB);
+	block_texture::ToBlockRgba(texels, rgba);
+	const std::vector<uint8_t> expected {0, 0, 0, 255, 17, 34, 51, 0, 0, 0, 0, 0, 0, 0};
+	EXPECT_EQ(rgba, expected);
+	// Fewer bytes than the texels need take only the texels that fit
+	std::vector<uint8_t> few(6, 0xAB);
+	block_texture::ToBlockRgba(texels, few);
+	EXPECT_EQ(few, (std::vector<uint8_t> {0, 0, 0, 255, 0, 0}));
 }
