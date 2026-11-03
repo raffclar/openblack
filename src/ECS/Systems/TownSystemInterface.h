@@ -45,6 +45,10 @@ public:
 	virtual bool AddVillagerToTown(entt::entity town, entt::entity villager) = 0;
 	/// A villager moves into a building, leaving the homeless or its old home
 	virtual void AddVillagerToAbode(entt::entity abode, entt::entity villager) = 0;
+	/// A new villager that a land script makes with the place of its home moves into the building with its door in the
+	/// cell of the place, or into the town of that building. Gives the town that it joins, none when no door is in the
+	/// cell.
+	virtual entt::entity SettleScriptVillager(glm::ivec2 homeCell, entt::entity villager) = 0;
 	/// A villager leaves its home, keeping its town, and joins the town's homeless; false with no town or when it
 	/// already is one of them
 	virtual bool MakeHomeless(entt::entity villager) = 0;

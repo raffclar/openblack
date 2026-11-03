@@ -45,6 +45,7 @@ public:
 	                                       const std::function<bool(entt::entity)>& accepts) const override;
 	bool AddVillagerToTown(entt::entity town, entt::entity villager) override;
 	void AddVillagerToAbode(entt::entity abode, entt::entity villager) override;
+	entt::entity SettleScriptVillager(glm::ivec2 homeCell, entt::entity villager) override;
 	bool MakeHomeless(entt::entity villager) override;
 	void MoveInAnyway(entt::entity abode, entt::entity villager) override;
 	bool MoveInByBuilding(entt::entity abode, entt::entity villager) override;

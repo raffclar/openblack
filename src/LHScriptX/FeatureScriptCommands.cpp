@@ -218,7 +218,21 @@ const std::array<const ScriptCommandSignature, 106> FeatureScriptCommands::k_Sig
     CREATE_COMMAND_BINDING("CREATE_VILLAGER", CreateVillager),
     CREATE_COMMAND_BINDING("CREATE_TOWN_VILLAGER", CreateTownVillager),
     CREATE_COMMAND_BINDING("CREATE_SPECIAL_TOWN_VILLAGER", CreateSpecialTownVillager),
-    CREATE_COMMAND_BINDING("CREATE_VILLAGER_POS", CreateVillagerPos),
+    {{"CREATE_VILLAGER_POS"},
+     [](const ScriptCommandParameters& ctx) {
+	     // The home place is the exact map position that the game reads from the text
+	     if (ctx.size() >= 4 && ctx[0].GetMapPlace().has_value())
+	     {
+		     float x = 0.0f;
+		     float y = 0.0f;
+		     float z = 0.0f;
+		     ctx[1].GetVector(x, y, z);
+		     CreateVillagerAtHome(*ctx[0].GetMapPlace(), {x, y, z}, ctx[2].GetString(), ctx[3].GetNumber());
+		     return;
+	     }
+	     InvokeCallableFromContext(ctx, std::function(CreateVillagerPos));
+     },
+     GetScriptCommandParameters(CreateVillagerPos)},
     {{"CREATE_CITADEL"},
      [](const ScriptCommandParameters& ctx) {
 	     InvokeCallableFromContext(ctx, std::function(CreateCitadel));
@@ -578,8 +592,27 @@ void FeatureScriptCommands::CreateSpecialTownVillager(int32_t townId, glm::vec3 
 void FeatureScriptCommands::CreateVillagerPos(glm::vec3 abodePosition, glm::vec3 position, const std::string& tribeAndNumber,
                                               int32_t age)
 {
+	CreateVillagerAtHome(map_coords::FromMetres({abodePosition.x, abodePosition.z}), position, tribeAndNumber, age);
+}
+
+void FeatureScriptCommands::CreateVillagerAtHome(const map_coords::MapCoords& homePlace, glm::vec3 position,
+                                                 const std::string& tribeAndNumber, int32_t age)
+{
+	// The villager comes into the world with no town. Then it moves into the building with its door in the cell of the
+	// home place, or into the town of that building. A town that gets its first person this way can get its worship site.
 	auto [tribe, number] = GetVillagerTribeAndNumber(tribeAndNumber);
-	VillagerArchetype::Create(abodePosition, position, GVillagerInfo::Find(tribe, number), age);
+	const auto villager = VillagerArchetype::Create(position, position, GVillagerInfo::Find(tribe, number),
+	                                                static_cast<uint32_t>(age), VillagerArchetype::Joins::Nobody);
+	LastObject() = villager;
+	if (!Locator::townSystem::has_value())
+	{
+		return;
+	}
+	const auto town = Locator::townSystem::value().SettleScriptVillager(map_coords::Cell(homePlace), villager);
+	if (town != entt::null && Locator::worshipSiteSystem::has_value())
+	{
+		Locator::worshipSiteSystem::value().PersonJoinedTown(town);
+	}
 }
 
 void FeatureScriptCommands::CreateCitadel(glm::vec3 position, int32_t, const std::string& playerOwner, int32_t rotation,

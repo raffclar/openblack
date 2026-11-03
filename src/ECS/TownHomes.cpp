@@ -246,6 +246,55 @@ bool town_homes::AddVillagerToTown(Registry& registry, const Homes& homes, entt:
 	return true;
 }
 
+town_homes::ScriptHome town_homes::FindScriptHome(const Registry& registry, const Homes& homes,
+                                                  std::span<const entt::entity> towns, glm::ivec2 cell,
+                                                  const std::function<glm::ivec2(entt::entity abode)>& doorCell)
+{
+	for (const auto town : towns)
+	{
+		const auto* data = registry.Valid(town) ? registry.TryGet<const Town>(town) : nullptr;
+		if (data == nullptr)
+		{
+			continue;
+		}
+		for (const auto abode : data->abodes)
+		{
+			const auto* building = registry.Valid(abode) ? registry.TryGet<const Abode>(abode) : nullptr;
+			if (building == nullptr || doorCell(abode) != cell)
+			{
+				continue;
+			}
+			// Only a count of people equal to the count of places for adults makes the building full
+			const auto room = homes.room(abode);
+			const uint32_t places = room.has_value() ? room->maxAdults : 0;
+			const bool full = building->inhabitants.size() == places;
+			return {.abode = full ? entt::null : abode, .town = town};
+		}
+	}
+	return {};
+}
+
+entt::entity town_homes::SettleScriptVillager(Registry& registry, const Homes& homes, const ScriptHome& home,
+                                              entt::entity villager)
+{
+	if (home.abode != entt::null)
+	{
+		AddVillagerToAbode(registry, homes, home.abode, villager);
+	}
+	else if (home.town != entt::null)
+	{
+		if (const auto best = FindAbodeWithSpace(registry, homes, home.town, villager, 0.0f); best != entt::null)
+		{
+			AddVillagerToAbode(registry, homes, best, villager);
+		}
+		else
+		{
+			AddVillagerToTown(registry, homes, home.town, villager);
+		}
+	}
+	return registry.Get<const Villager>(villager).town;
+}
+
 void town_homes::AddVillagerToAbode(Registry& registry, const Homes& homes, entt::entity abode, entt::entity villager)
 {
 	auto& person = registry.Get<Villager>(villager);
