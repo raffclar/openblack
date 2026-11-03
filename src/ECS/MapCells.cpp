@@ -185,12 +185,18 @@ std::span<const entt::entity> CellLists::Mobile(uint32_t cell) const
 
 std::vector<entt::entity> CellLists::All(uint32_t cell) const
 {
-	const auto& lists = _cells.at(cell);
 	std::vector<entt::entity> all;
-	all.reserve(lists.fixed.size() + lists.mobile.size());
-	all.insert(all.end(), lists.fixed.begin(), lists.fixed.end());
-	all.insert(all.end(), lists.mobile.begin(), lists.mobile.end());
+	AllInto(cell, all);
 	return all;
+}
+
+void CellLists::AllInto(uint32_t cell, std::vector<entt::entity>& out) const
+{
+	const auto& lists = _cells.at(cell);
+	out.clear();
+	out.reserve(lists.fixed.size() + lists.mobile.size());
+	out.insert(out.end(), lists.fixed.begin(), lists.fixed.end());
+	out.insert(out.end(), lists.mobile.begin(), lists.mobile.end());
 }
 
 std::vector<CellLists::SavedCell> CellLists::SavedCells() const

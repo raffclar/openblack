@@ -56,6 +56,19 @@ TEST(MapCells, TheLastToComeIntoACellIsMetFirstAfterWhatStaysPut)
 	EXPECT_EQ(lists.All(cell), (std::vector {E(1), E(11), E(10)}));
 }
 
+TEST(MapCells, AListFilledWithACellHoldsWhatAllGivesAndNothingElse)
+{
+	CellLists lists(8);
+	const auto cell = *lists.IndexOf({1, 1});
+	lists.Insert(cell, E(10), Placement::MobileFront);
+	lists.Insert(cell, E(1), Placement::FixedFront);
+	std::vector<entt::entity> out {E(99), E(98), E(97), E(96)};
+	lists.AllInto(cell, out);
+	EXPECT_EQ(out, lists.All(cell));
+	lists.AllInto(*lists.IndexOf({0, 0}), out);
+	EXPECT_TRUE(out.empty());
+}
+
 TEST(MapCells, TakingOneOutKeepsTheOthersInOrderAndMovingPutsItInFront)
 {
 	CellLists lists(8);
