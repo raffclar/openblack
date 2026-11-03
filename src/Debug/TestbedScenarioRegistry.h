@@ -1564,6 +1564,8 @@ void AddComputerPlayerScenarios(std::vector<Scenario>& all);
 void AddGameEndScenarios(std::vector<Scenario>& all);
 /// The end of the story on the fifth land: the last fight, the volcano, the fall of the temple and the credits
 void AddEndingScenarios(std::vector<Scenario>& all);
+/// The last stand of Nemesis on the fifth land: the spiritual shield and the defence of his last town
+void AddLastStandScenarios(std::vector<Scenario>& all);
 /// The joint actions of two friends, each close up
 void AddFriendActionScenarios(std::vector<Scenario>& all);
 /// Creature Mode's and the Creature Cave's scenarios

@@ -242,7 +242,7 @@ bool ReadStart(const Json& object, Start& start)
 	{
 		return true;
 	}
-	if (!gods->is_array())
+	if (!gods->is_array() || gods->size() > k_MostSlots)
 	{
 		return false;
 	}

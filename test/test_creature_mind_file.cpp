@@ -26,8 +26,10 @@
 #include <PhysiqueFile.h>
 #include <gtest/gtest.h>
 
+#include "Creature/ClanCreatureOrder.h"
 #include "Creature/CreatureDecisionTree.h"
 #include "Creature/CreatureDevelopment.h"
+#include "Creature/CreatureFileLoad.h"
 #include "Creature/CreatureLearning.h"
 #include "Creature/CreatureMindFileBody.h"
 #include "Creature/CreatureMindModel.h"
@@ -202,6 +204,41 @@ TEST(CreatureMindFile, RejectsWhatIsNotAMind)
 	bytes = Write(SampleMind());
 	bytes.resize(bytes.size() - 5);
 	EXPECT_EQ(Read(bytes, read), MindResult::ErrTruncated);
+}
+
+// A changed client can send any bytes as its creature file. The game server sends the file on only when it reads as a
+// creature file, or when it is the order to make a new clan creature, or when it is empty.
+TEST(CreatureMindFile, TheGameServerSendsOnOnlyAStartDataThatReads)
+{
+	using creature_file_load::ServerRelays;
+	EXPECT_TRUE(ServerRelays({}));
+	EXPECT_TRUE(ServerRelays(Write(SampleMind())));
+	const auto order = clan_creature_order::Write({.row = 3, .name = u"Bob"});
+	ASSERT_TRUE(order.has_value());
+	EXPECT_TRUE(ServerRelays(*order));
+	EXPECT_FALSE(ServerRelays(std::vector<uint8_t> {'A', 'L'}));
+	auto bytes = Write(SampleMind());
+	bytes.resize(bytes.size() - 5);
+	EXPECT_FALSE(ServerRelays(bytes));
+}
+
+// A file from the network can give a large count and end soon after it. The read stops before it makes the entries.
+TEST(CreatureMindFile, ACountLargerThanTheRestOfTheFileIsTruncated)
+{
+	auto more = SampleMind();
+	more.desires.push_back(more.desires.back());
+	const auto bytes = Write(SampleMind());
+	const auto moreBytes = Write(more);
+	const auto at = std::ranges::mismatch(bytes, moreBytes).in1;
+	ASSERT_NE(at, bytes.end());
+	const auto count = static_cast<size_t>(std::distance(bytes.begin(), at));
+	ASSERT_EQ(bytes[count], 3);
+	std::vector<uint8_t> hostile(bytes.begin(), bytes.begin() + static_cast<std::ptrdiff_t>(count));
+	const std::array<uint8_t, 4> large {0x00, 0x00, 0x08, 0x00};
+	hostile.insert(hostile.end(), large.begin(), large.end());
+	hostile.resize(hostile.size() + 16, 0);
+	MindFileData read;
+	EXPECT_EQ(Read(hostile, read), MindResult::ErrTruncated);
 }
 
 TEST(CreatureMindFile, KeepsTrailingBytes)

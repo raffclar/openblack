@@ -13,6 +13,7 @@
 
 #include "OnlineMapLand.h"
 #include "OnlineMapStoreInterface.h"
+#include "Sha256.h"
 #include "StartRules.h"
 
 namespace openblack::online
@@ -105,8 +106,9 @@ void MapDownload::Download(int tries)
 		{
 			return;
 		}
-		// A file that is not the room's map counts as a failure of the lobby: the start check would refuse it
-		if (!bytes.has_value() || start_rules::LandChecksum(*bytes) != _map->checksum)
+		// A file that is not the room's map counts as a failure of the lobby: the start check would refuse it. The SHA-256
+		// of the map list finds also a changed file that has the start checksum of the map.
+		if (!bytes.has_value() || start_rules::LandChecksum(*bytes) != _map->checksum || sha256::HexOf(*bytes) != _map->sha256)
 		{
 			if (tries > 1)
 			{

@@ -2302,6 +2302,7 @@ target_link_libraries(test_script_sound_stop PRIVATE pack lnd)
 openblack_setup_and_add_test(test_god_window test_god_window.cpp)
 openblack_setup_and_add_test(test_creature_hand_pose test_creature_hand_pose.cpp)
 openblack_setup_and_add_test(test_worship_icons_map test_worship_icons_map.cpp)
+openblack_setup_and_add_test(test_connection_limits online/test_connection_limits.cpp)
 openblack_setup_and_add_test(test_fixed_kinds test_fixed_kinds.cpp)
 openblack_setup_and_add_test(test_mesh_prepare test_mesh_prepare.cpp)
 target_link_libraries(test_mesh_prepare PRIVATE l3d)
@@ -2327,7 +2328,9 @@ openblack_setup_and_add_test(test_leaver_hand test_leaver_hand.cpp)
 openblack_setup_and_add_test(
   test_creature_environment_map test_creature_environment_map.cpp
 )
+if(MSVC)
   target_compile_options(test_reactions PRIVATE /bigobj)
+endif()
 openblack_setup_and_add_test(test_football_rules test_football_rules.cpp)
 openblack_setup_and_add_test(
   test_oracle_effect_alignment_order oracle/test_oracle_effect_alignment_order.cpp
@@ -2337,3 +2340,7 @@ set_tests_properties(
   PROPERTIES ENVIRONMENT
              "OPENBLACK_ORACLE_DATA=${CMAKE_CURRENT_SOURCE_DIR}/oracle/data"
 )
+openblack_setup_and_add_test(test_data_report test_data_report.cpp)
+target_link_libraries(test_data_report PRIVATE datareport)
+openblack_setup_and_add_test(test_morph_file_write test_morph_file_write.cpp)
+target_link_libraries(test_morph_file_write PRIVATE morph)

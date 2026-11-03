@@ -33,6 +33,7 @@
 #include "ECS/Systems/TimeSystemInterface.h"
 #include "FileSystem/FileSystemInterface.h"
 #include "Locator.h"
+#include "Online/HttpClientInterface.h"
 #include "Online/NetworkLand.h"
 #include "Online/OnlineMapStoreInterface.h"
 #include "PlayerSlots.h"
@@ -63,11 +64,6 @@ std::string_view HostOf(std::string_view url)
 	url.remove_prefix(k_Scheme.size());
 	const auto end = url.find_first_of(":/?#");
 	return url.substr(0, end);
-}
-
-bool IsLoopbackHost(std::string_view host)
-{
-	return host == "localhost" || host.starts_with("127.");
 }
 
 int64_t Microseconds()
@@ -133,7 +129,7 @@ bool NetworkGameSystem::Join(NetworkJoin join)
 	if (join.testAuthorities.has_value())
 	{
 		// The extra authorities are only for a test server on this computer
-		if (!IsLoopbackHost(HostOf(join.url)) || !_makeTestClient)
+		if (!openblack::online::http_policy::IsLoopbackHost(HostOf(join.url)) || !_makeTestClient)
 		{
 			SPDLOG_LOGGER_ERROR(spdlog::get("game"), "The test authorities are only for a game server on a loopback address");
 			return false;
@@ -478,7 +474,7 @@ void NetworkGameSystem::LoadWorld(const online::NetworkSession::WorldState& worl
 	// The checksum of the last turn takes the world of that turn, before the load replaces it
 	Locator::syncChecksumSystem::value().FinishHash();
 	const auto start = std::chrono::steady_clock::now();
-	if (!Locator::saveGameSystem::has_value() || !Locator::saveGameSystem::value().LoadWorldState(world.bytes))
+	if (!Locator::saveGameSystem::has_value() || !Locator::saveGameSystem::value().LoadServerWorldState(world.bytes))
 	{
 		SPDLOG_LOGGER_ERROR(spdlog::get("game"), "The world state of turn {} from the game server did not load", world.turn);
 		_session->Leave();

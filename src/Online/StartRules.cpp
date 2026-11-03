@@ -9,6 +9,8 @@
 
 #include "StartRules.h"
 
+#include "Online/NetworkLand.h"
+
 namespace openblack::online::start_rules
 {
 
@@ -30,7 +32,9 @@ uint64_t LandChecksum(std::span<const uint8_t> file) noexcept
 
 bool IsLandPath(std::string_view land) noexcept
 {
-	if (land.empty() || land.front() == '/' || land.front() == '\\' || land.find(':') != std::string_view::npos)
+	// A name that a server gives is a plain relative name before any other check
+	if (!network_land::IsPlainWireName(land) || land.front() == '/' || land.front() == '\\' ||
+	    land.find(':') != std::string_view::npos)
 	{
 		return false;
 	}
