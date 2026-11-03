@@ -32,6 +32,8 @@
 ///   "temple_lightmaps", "temple_glows", "temple_volume_light", "temple_people", "rain_splashes" (0 to 255), "fog",
 ///   "weather", "object_lighting", "object_shadows", "low_res_textures", "coarse_land", "light_boost" (at most 1.53; a larger
 ///   value would divide the light by zero)
+/// - "ignore_special": 0 to 4294967295; the value 5 makes the questions of the staff plain lines of the chat. The game
+///   only reads it.
 namespace openblack::computer_settings
 {
 
@@ -80,6 +82,8 @@ struct Settings
 	CustomDetail customDetail;
 	/// The football of the Soccer Add-On is on. It stays off in a multiplayer game.
 	std::optional<bool> footballAddOn;
+	/// The value 5 makes the questions of the staff on the ping server plain lines of the chat
+	std::optional<uint32_t> ignoreSpecial;
 
 	bool operator==(const Settings&) const = default;
 };

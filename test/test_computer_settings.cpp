@@ -326,3 +326,19 @@ TEST(ComputerSettings, TheFootballOfTheSoccerAddOnIsOffUnlessTheFileTurnsItOn)
 	const auto written = Parse(Update("{}", Settings {.footballAddOn = true}));
 	EXPECT_EQ(written.settings.footballAddOn, true);
 }
+
+TEST(ComputerSettings, TheSettingOfTheQuestionsOfTheStaffIsAWholeNumber)
+{
+	EXPECT_FALSE(Parse("{}").settings.ignoreSpecial.has_value());
+	const auto [settings, problems] = Parse(R"({"ignore_special": 5})");
+	EXPECT_TRUE(problems.empty());
+	EXPECT_EQ(settings.ignoreSpecial, 5u);
+	EXPECT_EQ(Parse(R"({"ignore_special": 4294967295})").settings.ignoreSpecial, 4294967295u);
+	// A value that is not a whole number, or is out of its range, is refused
+	EXPECT_FALSE(Parse(R"({"ignore_special": true})").settings.ignoreSpecial.has_value());
+	EXPECT_FALSE(Parse(R"({"ignore_special": -1})").settings.ignoreSpecial.has_value());
+	EXPECT_FALSE(Parse(R"({"ignore_special": 4294967296})").settings.ignoreSpecial.has_value());
+	// The value stays when the game writes the file again
+	const auto written = Parse(Update(R"({"ignore_special": 5})", Settings {.detailLevel = 2}));
+	EXPECT_EQ(written.settings.ignoreSpecial, 5u);
+}
