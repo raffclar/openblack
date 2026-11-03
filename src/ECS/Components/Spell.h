@@ -85,6 +85,8 @@ struct Spell
 	entt::entity seed {entt::null};
 	/// The object it was cast on, if any: a creature spell goes once its creature has
 	entt::entity target {entt::null};
+	/// The thing that cast it, as the scripts see it (see spell_creator::CreatorOf). None once its caster is gone.
+	entt::entity creator {entt::null};
 	bool closedDown {false};
 	/// Its magic type starts a particle effect: it lives while that does
 	bool hasParticleType {false};

@@ -95,6 +95,7 @@
 #include "ECS/ObjectPhysics.h"
 #include "ECS/Reflection/BinaryArchive.h"
 #include "ECS/Registry.h"
+#include "ECS/SpellCreator.h"
 #include "ECS/Statistics.h"
 #include "ECS/Systems/AlignmentSystemInterface.h"
 #include "ECS/Systems/CreatureFightSystemInterface.h"
@@ -1299,6 +1300,7 @@ entt::entity MagicSystem::Cast(MagicType type, const components::SpellCaster& ca
 	spell.magicType = type;
 	spell.spellClass = magic::ClassOf(type);
 	spell.caster = caster;
+	spell.creator = ecs::spell_creator::CreatorOf(caster);
 	// A person casts it: the hand of a player that a person plays
 	spell.humanCasting = caster.kind == SpellCaster::Kind::Player && player != PlayerNames::NEUTRAL &&
 	                     (Locator::playerSystem::has_value() ? Locator::playerSystem::value().IsHumanPlayer(player)
@@ -1497,10 +1499,11 @@ void MagicSystem::Maintain(entt::entity entity, Spell& spell)
 	{
 		CloseDown(entity);
 	}
-	// Its caster gone, it closes down and is left as it is
+	// Its caster gone, it closes down and is left as it is. From then on it has no creator.
 	if (CasterOf(spell) == nullptr)
 	{
 		CloseDown(entity);
+		spell.creator = entt::null;
 		return;
 	}
 	if (spell.target != entt::null && !EntityRegistry().Valid(spell.target))

@@ -15,6 +15,7 @@
 #include <span>
 
 #include <glm/vec2.hpp>
+#include <glm/vec3.hpp>
 
 #include "3D/MapCoords.h"
 #include "Enums.h"
@@ -49,6 +50,11 @@ inline constexpr float k_EmpathyForWork = 0.5f;
 [[nodiscard]] glm::vec2 EdgeWorkingPosition(glm::vec2 thing, glm::vec2 villager, float thingRadius, float villagerRadius);
 /// Where a villager takes wood from a big forest: halfway in from its edge, on the villager's side
 [[nodiscard]] glm::vec2 BigForestArrivePosition(glm::vec2 bigForest, glm::vec2 villager, float radius);
+
+/// Where a builder that a script tells to wait for wood walks to: away from the building, along the line from the
+/// building through the villager, by 2 metres and a random distance of up to 2 metres more. The points are the 3D
+/// places of the villager and the building, and the random value is from 0 to 2.
+[[nodiscard]] glm::vec2 WaitForWoodPosition(glm::vec3 villager, glm::vec3 building, float random);
 
 /// Whether a villager is touching a point: its edge is nearer the point than it walks in a turn
 [[nodiscard]] bool Touching(float distanceToPoint, float villagerRadius, float speedInMetres);

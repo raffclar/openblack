@@ -799,6 +799,35 @@ void construction::OpenSite(entt::entity building, float desire)
 	}
 }
 
+bool construction::ShareSite(entt::entity building, entt::entity town)
+{
+	auto& registry = Entities();
+	if (!registry.Valid(building) || !registry.Valid(town) || !registry.AllOf<Town>(town))
+	{
+		return false;
+	}
+	// The building's site is its newest site
+	auto* sites = registry.TryGet<BuildingSites>(building);
+	if (sites == nullptr || sites->sites.empty())
+	{
+		return false;
+	}
+	auto& site = sites->sites.front();
+	auto& receiver = registry.Get<Town>(town);
+	// The site goes first in the list of the town's sites
+	if (!building_site_list::Share(site, town, receiver.sitesOpened + 1))
+	{
+		return true;
+	}
+	++receiver.sitesOpened;
+	// A site added to a town changes what it wants
+	if (Locator::townSystem::has_value())
+	{
+		Locator::townSystem::value().MarkDesiresChanged(town);
+	}
+	return true;
+}
+
 bool construction::OpenSiteForTown(entt::entity building, entt::entity town)
 {
 	auto& registry = Entities();

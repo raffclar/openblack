@@ -83,6 +83,8 @@ public:
 	virtual bool RunTextWithNumber(bool singleLine, uint32_t text, float number, int32_t withInteraction) = 0;
 	/// A script shows words of its own rather than a help text, with no voice
 	virtual void TempText(bool singleLine, std::string_view words, int32_t withInteraction) = 0;
+	/// TempText with a number that the $D or $P code of the words writes into them
+	virtual void TempTextWithNumber(bool singleLine, std::string_view words, float number, int32_t withInteraction) = 0;
 	/// The text the scripts last showed has been read
 	[[nodiscard]] virtual bool IsTextRead() const = 0;
 	/// Every text is taken away

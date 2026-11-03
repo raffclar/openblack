@@ -310,6 +310,7 @@ void WriteAction(Writer& out, const Action& action)
 				               out.Byte(static_cast<uint8_t>(key));
 			               }
 		               }
+		               out.Number(command.mouseButtons);
 	               },
 	               [&out](const GiveCallOff& command) { out.Entity(command.creature); },
 	               [&out](const CreatureTattoo& command) {
@@ -729,6 +730,7 @@ DecodeError ReadAction(Reader& in, Action& action)
 			}
 			report.keysHeld.set(key);
 		}
+		report.mouseButtons = in.Number<uint32_t>();
 		action = report;
 		return DecodeError::None;
 	}
@@ -1063,8 +1065,9 @@ size_t SizeOf(const Action& action) noexcept
 	                   [](const HelpReport& /*command*/) { return size_t {8 + 1}; },
 	                   [](const HelpQuery& /*command*/) { return k_Entity + 1 + k_Vector; },
 	                   [](const ViewReport& command) {
-		                   // The camera icons, the count of keys held and each key held follow the flags
-		                   return 2 * k_Vector + 6 * 4 + 1 + 2 + 1 + command.keysHeld.count();
+		                   // The camera icons, the count of keys held, each key held and the count of mouse buttons follow the
+		                   // flags
+		                   return 2 * k_Vector + 7 * 4 + 1 + 2 + 1 + command.keysHeld.count();
 	                   },
 	                   [](const GiveCallOff& /*command*/) { return k_Entity; },
 	                   [](const CreatureTattoo& command) {

@@ -9,6 +9,8 @@
 
 #pragma once
 
+#include <cstdint>
+
 /// What the computer's system tells of the mouse
 namespace openblack::platform_mouse
 {
@@ -29,5 +31,15 @@ enum class System
 
 /// Whether the system part of the wheel answer is yes, on the system that the game runs on.
 [[nodiscard]] bool SystemSaysWheel();
+
+/// How many buttons the mouse has, as the system says. Windows gives what its own query says, 0 when it finds no mouse.
+/// The other systems have no such query and give 0.
+[[nodiscard]] constexpr uint32_t SystemMouseButtonsFor(System system, int32_t windowsQueryButtons) noexcept
+{
+	return system == System::Windows && windowsQueryButtons > 0 ? static_cast<uint32_t>(windowsQueryButtons) : 0;
+}
+
+/// How many buttons the mouse has, on the system that the game runs on
+[[nodiscard]] uint32_t SystemMouseButtons();
 
 } // namespace openblack::platform_mouse

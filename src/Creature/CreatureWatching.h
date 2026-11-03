@@ -187,7 +187,8 @@ constexpr size_t k_EverythingSkills = 6;
 constexpr size_t k_EverythingMiracles = 42;
 /// A script makes the creature know every ordinary skill and every miracle, the skills first. Its sightings do not
 /// change and no lesson is shown. A row past the table is kept as known past the table, as a mind file keeps it.
-void LearnEverything(Knowledge& knowledge);
+/// The script can omit the skills or the miracles.
+void LearnEverything(Knowledge& knowledge, bool skills = true, bool miracles = true);
 /// Whether the creature knows the skill or miracle, also one with no row in its table
 [[nodiscard]] bool IsKnown(const Knowledge& knowledge, KnownList list, size_t index);
 

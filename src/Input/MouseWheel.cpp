@@ -19,6 +19,15 @@
 namespace openblack::platform_mouse
 {
 
+uint32_t SystemMouseButtons()
+{
+#if defined(_WIN32)
+	return SystemMouseButtonsFor(System::Windows, GetSystemMetrics(SM_CMOUSEBUTTONS));
+#else
+	return SystemMouseButtonsFor(System::Other, 0);
+#endif
+}
+
 bool SystemSaysWheel()
 {
 #if defined(_WIN32)

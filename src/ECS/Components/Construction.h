@@ -49,10 +49,20 @@ struct PlannedAbode
 /// and its builders, their places round it and the wood brought for it
 struct BuildingSite
 {
+	/// Another town that has the site in its list of sites, and the place of the site in that list
+	struct Listing
+	{
+		entt::entity town {entt::null};
+		uint32_t number {0};
+	};
+
 	/// The town whose builders work at it
 	entt::entity town {entt::null};
 	/// Its place among the sites that its town opened: a newer site has a higher number
 	uint32_t number {0};
+	/// The other towns that a script gave the site to. Their builders also work at it, and when one of these towns
+	/// removes the site, the site closes. Only its own town counts the wood and the builders that it needs.
+	std::vector<Listing> sharedWith;
 	float desire {0.0f};
 	/// Opened for a building already built, to mend it
 	bool repair {false};
