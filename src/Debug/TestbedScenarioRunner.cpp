@@ -5580,6 +5580,14 @@ std::optional<double> Runner::ReadCheck(const checks::Check& check) const
 		const auto point = MapPoint(_middle, check.point);
 		return Locator::fireSystem::value().IsFireNear({point.x, 0.0f, point.y}, check.radius) ? 1.0 : 0.0;
 	}
+	case checks::Quantity::RewardChestsInATown:
+	{
+		size_t inATown = 0;
+		registry.Each<const ecs::components::Reward>([&registry, &inATown](const ecs::components::Reward& chest) {
+			inATown += registry.Valid(chest.town) && registry.AllOf<ecs::components::Town>(chest.town) ? 1 : 0;
+		});
+		return static_cast<double>(inATown);
+	}
 	}
 	return std::nullopt;
 }

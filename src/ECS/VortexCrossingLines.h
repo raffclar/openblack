@@ -75,4 +75,8 @@ struct World
 [[nodiscard]] std::vector<entt::entity> IdenticalMobileObjects(const Registry& registry, entt::entity thing,
                                                                const World& world);
 
+/// The town of a reward chest that a vortex into the land makes again: the town of that vortex, so that the chest gives
+/// belief or a scaffold to it. None when the vortex has no town.
+[[nodiscard]] entt::entity CarriedChestTown(const Registry& registry, entt::entity vortexTown);
+
 } // namespace openblack::ecs::vortex_crossing

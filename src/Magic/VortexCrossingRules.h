@@ -212,7 +212,7 @@ struct ScaffoldLine
 };
 /// A reward chest of a player that is ready to open. This line is openblack's own: the land scripts do not know it,
 /// and only the vortex that reads the crossing file makes the chest. The chest keeps its kind, its player and its angle.
-/// A town does not cross, so the chest comes out with no town.
+/// Its old town does not cross: the chest joins the town of the vortex that makes it again.
 struct RewardLine
 {
 	map_coords::MapCoords offset;

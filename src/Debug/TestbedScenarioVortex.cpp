@@ -452,10 +452,11 @@ void testbed_scenarios::AddVortexScenarios(std::vector<Scenario>& all)
 	    .description = "A vortex into a land opens on the flat plane after a second, as Land 2's opens when the player "
 	                   "arrives, with a crossing file that holds a closed reward chest of food for the player and a cow. A "
 	                   "hut stands 40 m off.",
-	    .expected = "The chest comes out first, thrown out of the vortex about 16 m from its middle, tumbling, and lands "
-	                "closed. It is the same chest that the old land's vortex took: the same kind, for the same player, "
-	                "with no town (deviation: the game makes a thing of other data). The player taps it and it opens and "
-	                "gives its food. Then the cow comes out, then new villagers until 30 have come out.",
+	    .expected =
+	        "The chest comes out first, thrown out of the vortex about 16 m from its middle, tumbling, and lands "
+	        "closed. It is the same chest that the old land's vortex took: the same kind, for the same player, "
+	        "in the hut's town, the vortex's town (deviation: the game makes a thing of other data). The player taps it "
+	        "and it opens and gives its food. Then the cow comes out, then new villagers until 30 have come out.",
 	    .environment = {.dispenserGrid = false},
 	    .framing = {.shot = Shot::Placed,
 	                .eye = {k_OnThePlane.x - 40.0f, 50.0f, k_OnThePlane.y - 70.0f},
@@ -464,11 +465,16 @@ void testbed_scenarios::AddVortexScenarios(std::vector<Scenario>& all)
 	    .vortices = {{.type = VortexType::Out,
 	                  .offset = k_OnThePlane,
 	                  .delaySeconds = 1.0f,
-	                  .crossingLines = {"CREATE_REWARD_CHEST(\"-6.00,4.00\", 4, 0, 0.500000)",
+	                  .crossingLines = {"CREATE_REWARD_CHEST(\"-20.46,0.00\", 4, 0, 0.500000)",
 	                                    "CREATE_NEW_ANIMAL(\"12.00,-6.00\", 8, -1, -1, 6)"},
 	                  .gatheringOffset = k_OnThePlane + glm::vec2(0.0f, -30.0f),
 	                  .flockDistance = 27.0f,
 	                  .flockRadius = 48.0f}},
+	    .checks = {{.label = "the chest comes out in the town of the vortex",
+	                .quantity = checks::Quantity::RewardChestsInATown,
+	                .afterTurns = 10,
+	                .byTurn = 100,
+	                .atLeast = 1.0}},
 	});
 
 	all.push_back({

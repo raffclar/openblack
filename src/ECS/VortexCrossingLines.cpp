@@ -289,3 +289,8 @@ std::vector<entt::entity> ecs::vortex_crossing::IdenticalMobileObjects(const Reg
 	    });
 	return identical;
 }
+
+entt::entity ecs::vortex_crossing::CarriedChestTown(const Registry& registry, entt::entity vortexTown)
+{
+	return registry.Valid(vortexTown) && registry.AllOf<Town>(vortexTown) ? vortexTown : entt::entity {entt::null};
+}

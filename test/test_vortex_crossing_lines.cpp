@@ -445,3 +445,17 @@ TEST(VortexCrossingLines, AChestThatFallsOrIsOpenHasNoLine)
 	EXPECT_EQ(LineText(registry, falling), "");
 	EXPECT_EQ(LineText(registry, opened), "");
 }
+
+TEST(VortexCrossingLines, ACarriedChestJoinsTheTownOfTheVortex)
+{
+	Registry registry;
+	const auto town = registry.Create();
+	registry.Assign<Town>(town, Town {.id = 2});
+	EXPECT_EQ(vortex_crossing::CarriedChestTown(registry, town), town);
+	// A vortex with no town, or a town that has gone, gives the chest no town
+	EXPECT_EQ(vortex_crossing::CarriedChestTown(registry, entt::null), entt::entity {entt::null});
+	const auto notATown = registry.Create();
+	EXPECT_EQ(vortex_crossing::CarriedChestTown(registry, notATown), entt::entity {entt::null});
+	registry.Destroy(town);
+	EXPECT_EQ(vortex_crossing::CarriedChestTown(registry, town), entt::entity {entt::null});
+}
