@@ -48,7 +48,11 @@ void openblack::ecs::reflection::RegisterFields_Values_creatureo(entt::meta_ctx&
 	Reflect<openblack::creature_object_beliefs::Sweep>(context, ValueOnly {})
 	    .Field<&openblack::creature_object_beliefs::Sweep::left>("left")
 	    .Field<&openblack::creature_object_beliefs::Sweep::ring>("ring")
-	    .Field<&openblack::creature_object_beliefs::Sweep::step>("step");
+	    .Field<&openblack::creature_object_beliefs::Sweep::step>("step")
+	    .Field<&openblack::creature_object_beliefs::Sweep::targets>("targets");
+	Reflect<openblack::creature_object_beliefs::SweepTargets>(context, ValueOnly {})
+	    .Field<&openblack::creature_object_beliefs::SweepTargets::believedCellSeen>("believedCellSeen")
+	    .Field<&openblack::creature_object_beliefs::SweepTargets::cameAcross>("cameAcross");
 	Reflect<openblack::creature_obstacles::Walker>(context, ValueOnly {})
 	    .Field<&openblack::creature_obstacles::Walker::position>("position")
 	    .Field<&openblack::creature_obstacles::Walker::height>("height")

@@ -143,6 +143,23 @@ void testbed_scenarios::AddVortexScenarios(std::vector<Scenario>& all)
 	});
 
 	all.push_back({
+	    .id = "story.vortex_under_the_hand",
+	    .name = "The hand held over an open vortex",
+	    .facet = Facet::Miracles,
+	    .description = "A way out of a land opens on the flat plane after a second, with nothing near it. The camera looks "
+	                   "down on its middle, and the cursor stays in the middle of the window, so the hand is over the "
+	                   "vortex the whole time.",
+	    .expected = "The pointer picks the vortex, but the hand does not take it and holds nothing. The hand stays at its "
+	                "height over the land and does not rest on the funnel. A click with the hand there does not pick the "
+	                "vortex up.",
+	    .environment = {.dispenserGrid = false, .cursor = glm::vec2(0.5f, 0.5f)},
+	    .framing = {.shot = Shot::Placed,
+	                .eye = {k_OnThePlane.x, 40.0f, k_OnThePlane.y - 30.0f},
+	                .look = {k_OnThePlane.x, 0.0f, k_OnThePlane.y}},
+	    .vortices = {{.type = VortexType::In, .offset = k_OnThePlane, .delaySeconds = 1.0f}},
+	});
+
+	all.push_back({
 	    .id = "story.vortex_pulls_things_in",
 	    .name = "A vortex out of the land pulls things in",
 	    .facet = Facet::Miracles,

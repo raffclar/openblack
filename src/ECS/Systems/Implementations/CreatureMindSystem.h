@@ -495,6 +495,10 @@ private:
 	/// As it moves, the nearest mountains and water on its map may take over what it watches
 	void LookAtLand(entt::entity entity, const components::Creature& creature, components::CreatureMindState& mind,
 	                const components::Transform& transform);
+	/// As a new sweep of its eyes starts, during an action that the game's table marks so: the beliefs about the things
+	/// of its plan take the places of the things now, when the last sweep missed them where it believed they were
+	void TellPlanThingsWhereNow(components::CreatureMindState& mind, const creature_object_beliefs::PlanThings& things,
+	                            bool bodyActs);
 	/// Its eyes sweep this turn's cells about it, and it comes across everything in those it can see
 	void SweepEyes(entt::entity entity, const components::Creature& creature, components::CreatureMindState& mind,
 	               const components::CreatureAnimation& animation, const components::Transform& transform);

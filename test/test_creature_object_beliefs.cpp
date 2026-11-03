@@ -611,3 +611,40 @@ TEST(CreatureObjectBeliefs, AStoreFindsItsBeliefsAfterItsContentsArePutBack)
 	EXPECT_EQ(copy.Find(Thing(30)), nullptr);
 	EXPECT_NE(copy.Find(Thing(59)), nullptr);
 }
+
+TEST(CreatureObjectBeliefs, ANewSweepTellsWhereAThingOfThePlanIsOnlyWhenTheLastSweepMissedItWhereItWasBelieved)
+{
+	SweepTargets found {};
+	// Not looked at where it was believed: nothing is told
+	EXPECT_FALSE(TellsWhereNow(found, k_PlanThingActedOn, false, false, true));
+	found.believedCellSeen.at(k_PlanThingActedOn) = true;
+	EXPECT_TRUE(TellsWhereNow(found, k_PlanThingActedOn, false, false, true));
+	// The other thing of the plan keeps its own marks
+	EXPECT_FALSE(TellsWhereNow(found, k_PlanThingUsed, false, false, true));
+	// Seen where it is: the belief knows the place already
+	found.cameAcross.at(k_PlanThingActedOn) = true;
+	EXPECT_FALSE(TellsWhereNow(found, k_PlanThingActedOn, false, false, true));
+}
+
+TEST(CreatureObjectBeliefs, ANewSweepTellsNothingWhileTheBodyActsInAStartedStepOrTheThingIsOutOfTheMap)
+{
+	SweepTargets found {};
+	found.believedCellSeen.at(k_PlanThingUsed) = true;
+	// A step that did not start yet, or a body that only stands or walks
+	EXPECT_TRUE(TellsWhereNow(found, k_PlanThingUsed, false, true, true));
+	EXPECT_TRUE(TellsWhereNow(found, k_PlanThingUsed, true, false, true));
+	EXPECT_FALSE(TellsWhereNow(found, k_PlanThingUsed, true, true, true));
+	EXPECT_FALSE(TellsWhereNow(found, k_PlanThingUsed, false, false, false));
+}
+
+TEST(CreatureObjectBeliefs, ASweepStartsAgainWithNoMarksForTheThingsOfThePlan)
+{
+	Sweep sweep {};
+	EXPECT_TRUE(StartsAgain(sweep));
+	sweep.targets.believedCellSeen.at(k_PlanThingActedOn) = true;
+	sweep.targets.cameAcross.at(k_PlanThingUsed) = true;
+	static_cast<void>(NextCells(sweep, {50, 50}, 0.0f));
+	EXPECT_FALSE(StartsAgain(sweep));
+	EXPECT_FALSE(sweep.targets.believedCellSeen.at(k_PlanThingActedOn));
+	EXPECT_FALSE(sweep.targets.cameAcross.at(k_PlanThingUsed));
+}

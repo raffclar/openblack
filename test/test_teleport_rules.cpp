@@ -92,6 +92,16 @@ TEST(TeleportRules, NoStoneNextToSomethingFixed)
 	EXPECT_TRUE(CanPlaceStone({5.0f, 0.0f, 0.0f}, {}));
 }
 
+TEST(TeleportRules, AThingJustBeyondTheStonesReachLetsTheStoneBePut)
+{
+	// Nearer than six metres keeps the stone off; farther lets it be put
+	const std::array fixed {glm::vec3 {10.0f, 3.0f, 20.0f}};
+	EXPECT_TRUE(CanPlaceStone({16.1f, 0.0f, 20.0f}, fixed));
+	EXPECT_FALSE(CanPlaceStone({15.9f, 0.0f, 20.0f}, fixed));
+	// Only the place across the land counts, not the height
+	EXPECT_FALSE(CanPlaceStone({10.0f, 40.0f, 20.0f}, fixed));
+}
+
 TEST(TeleportRules, WorshippersGoThroughTheNearestStone)
 {
 	const std::array stones {glm::vec3 {200.0f, 0.0f, 0.0f}, glm::vec3 {10.0f, 0.0f, 0.0f}, glm::vec3 {490.0f, 0.0f, 0.0f}};

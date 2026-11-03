@@ -2575,6 +2575,31 @@ void AddBeachTemplePuzzle(std::vector<Scenario>& all)
 	                                      {.kind = ScriptArgument::Kind::Integer, .number = k_HanoiKind},
 	                                      {.kind = ScriptArgument::Kind::Position, .point = k_Puzzle}}}},
 	});
+	// A tiger stands by the puzzle for a check of a ring in a creature's hand
+	all.push_back({
+	    .id = "story.beach_temple_ring_in_a_creature_hand",
+	    .name = "A ring of The Beach Temple Puzzle in a creature's hand",
+	    .facet = Facet::Story,
+	    .description = "A script makes the second land's beach temple puzzle south of the middle, turned a half turn. A "
+	                   "content tiger stands 12 m east of the stack. Give the tiger the order creature.pick_up on the "
+	                   "smallest ring.",
+	    .expected = "The tiger reaches out and takes the top ring in its hand. From its next turn the puzzle sees the "
+	                "ring where the tiger is. No base and no larger ring is within 10 of that place, so after a short "
+	                "calm the ring goes out of the hand and back to the top of its stack.",
+	    .environment = {.dispenserGrid = false},
+	    .framing = {.shot = Shot::Placed,
+	                .eye = {k_Puzzle.x + 40.0f, 25.0f, k_Puzzle.y - 20.0f},
+	                .look = {k_Puzzle.x + 6.0f, 3.0f, k_Puzzle.y + 2.0f}},
+	    .creatures = {Content(CreatureType::Tiger, {k_Puzzle.x + 12.0f, k_Puzzle.y + 4.0f}, 270.0f)},
+	    .commands = {{.kind = Kind::CallNative,
+	                  .delaySeconds = 0.5f,
+	                  .script = "CREATE_WITH_ANGLE_AND_SCALE",
+	                  .scriptArguments = {{.number = 180.0f},
+	                                      {.number = 1.0f},
+	                                      {.kind = ScriptArgument::Kind::Integer, .number = k_PuzzleObjectType},
+	                                      {.kind = ScriptArgument::Kind::Integer, .number = k_HanoiKind},
+	                                      {.kind = ScriptArgument::Kind::Position, .point = k_Puzzle}}}},
+	});
 	// A script takes the smallest ring off the stack and puts it on open ground, then the game stops
 	constexpr float k_MobileObjectType = 20.0f;
 	constexpr float k_SmallestRing = 30.0f;

@@ -70,6 +70,7 @@ Tables creature_mind_tables::Build(const InfoConstants& info)
 		    .eatWhenStroked = row.eatWhenStroked != 0,
 		    .actsOnThing = row.actsOnThing != 0,
 		    .notOnWhatItHolds = row.notOnWhatItHolds != 0,
+		    .refreshesTargetsInSight = row.refreshesTargetsInSight != 0,
 		    .shownDesire = row.shownDesire,
 		    .creatureNicenessChange = row.creatureNicenessChange,
 		    .startingOpinion = row.startingOpinion,
