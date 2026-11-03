@@ -11,6 +11,7 @@
 
 #include <cstdint>
 
+#include <array>
 #include <functional>
 #include <memory>
 #include <optional>
@@ -52,6 +53,9 @@ public:
 	void PoseTurns() override;
 	void HoldTurnPose(entt::entity creature) override;
 	void PoseCopy(Registry& copies, entt::entity copy, float milliseconds, const Registry& bodies) override;
+	[[nodiscard]] std::array<std::optional<glm::vec3>, 2> TwoBonesInAnimation(entt::entity creature, size_t animation,
+	                                                                          float timeMs, uint32_t first, uint32_t second,
+	                                                                          bool mirrored) override;
 	[[nodiscard]] std::optional<glm::vec3> BoneInAnimation(entt::entity creature, size_t animation, float timeMs, uint32_t bone,
 	                                                       bool mirrored) override;
 	[[nodiscard]] std::optional<glm::vec3> MiddleOfBonesInAnimation(entt::entity creature, size_t animation, float timeMs,
