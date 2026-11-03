@@ -960,16 +960,17 @@ float InfluenceSystem::PlayerRawInfluence(PlayerNames player, const map_coords::
 			sum = reach;
 		}
 	}
-	// And each of the player's towns', where it reaches, in the order of the player's town list
-	for (const auto town : player_towns::InOrder(registry, player))
-	{
-		const auto* influence = registry.TryGet<const TownInfluence>(town);
-		const auto* transform = registry.TryGet<const Transform>(town);
-		if (influence != nullptr && transform != nullptr && distanceTo(transform->position) < influence->radius)
-		{
-			sum += influence->radius;
-		}
-	}
+	// And each of the player's towns', where it reaches, in the order of the player's town list. Only the towns that
+	// reach go into the list, so most questions make no list.
+	std::vector<openblack::influence_rules::ReachingTown> reaching;
+	registry.Each<const Town, const TownInfluence, const Transform>(
+	    [&](const Town& town, const TownInfluence& influence, const Transform& transform) {
+		    if (town.owner == player && distanceTo(transform.position) < influence.radius)
+		    {
+			    reaching.push_back({.gained = town.gained, .radius = influence.radius});
+		    }
+	    });
+	sum = openblack::influence_rules::AddReachingTowns(sum, reaching);
 	// And any other source of the player's, where it reaches
 	registry.Each<const InfluenceSource, const Transform>([&](const InfluenceSource& source, const Transform& transform) {
 		if (scriptsCount && source.player == player && !source.anti &&

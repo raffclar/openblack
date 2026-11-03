@@ -12,12 +12,14 @@
 #include <cstddef>
 #include <cstdint>
 
+#include <algorithm>
+#include <array>
+
 #include "ECS/GamePlayers.h"
 #include "ECS/PlayerRelations.h"
 #include "ECS/Systems/InfluenceSystemInterface.h"
 #include "ECS/Systems/PlayerSystemInterface.h"
 #include "Locator.h"
-#include "ScriptHeaders/ScriptInfluence.h"
 
 namespace openblack::ecs::ally_influence
 {
@@ -48,8 +50,25 @@ float InfluenceWithAllies(PlayerNames player, const map_coords::MapCoords& place
 	{
 		return 0.0f;
 	}
-	const float own = Locator::influenceSystem::value().PlayerOwnInfluence(player, place);
-	return script::influence::Answer(own, false, LentInfluence(player, place));
+	const auto& influence = Locator::influenceSystem::value();
+	const float own = influence.PlayerOwnInfluence(player, place);
+	if (own > 0.0f || !Locator::playerSystem::has_value())
+	{
+		return own > 0.0f ? own : 0.0f;
+	}
+	// The alliances of the player come from one search. When no alliance lends influence, no ally can lend some here.
+	const auto strengths = Locator::playerSystem::value().AllyStrengths(player);
+	if (std::ranges::none_of(strengths, [](float strength) { return player_relations::LendsInfluence(strength); }))
+	{
+		return 0.0f;
+	}
+	// The rule asks each player, the neutral player too, in the order of the numbers, as the lent influence lists them
+	const auto lends = [&strengths](PlayerNames ally) {
+		const auto index = static_cast<size_t>(ally);
+		return player_relations::LendsInfluence(index < strengths.size() ? strengths.at(index) : 0.0f);
+	};
+	return OwnOrFirstLent(own, game_players::All(), lends,
+	                      [&influence, &place](PlayerNames ally) { return influence.PlayerRawInfluence(ally, place); });
 }
 
 } // namespace openblack::ecs::ally_influence

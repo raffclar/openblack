@@ -105,3 +105,13 @@ TEST(FrameStats, TheCsvHasALineForEachFrame)
 	};
 	EXPECT_EQ(ToCsv(frames), "frame,ms,processor_ms,turn,played,work_ms\n1,3.500,3.250,7,0,2.750\n2,12.000,11.500,8,1,9.500\n");
 }
+
+TEST(FrameStats, AFrameThatOnlyWaitsIsNoSpike)
+{
+	// A paced frame of 20 ms with 6 ms of work is not slow
+	EXPECT_FALSE(IsSpike(6.0f));
+	EXPECT_FALSE(IsSpike(k_SlowMilliseconds - 0.01f));
+	EXPECT_TRUE(IsSpike(k_SlowMilliseconds));
+	EXPECT_TRUE(IsSpike(25.0f));
+	static_assert(IsSpike(k_SlowMilliseconds) && !IsSpike(0.0f));
+}

@@ -12,6 +12,7 @@
 #include <cstddef>
 #include <cstdint>
 
+#include <array>
 #include <optional>
 
 #include <entt/fwd.hpp>
@@ -69,6 +70,17 @@ public:
 	virtual void SetAlly(PlayerNames /*player*/, PlayerNames /*other*/, float /*strength*/) {}
 	/// How strongly the player is the ally of the other player; 0 when the land has no such player
 	[[nodiscard]] virtual float AllyStrength(PlayerNames /*player*/, PlayerNames /*other*/) const { return 0.0f; }
+	/// How strongly the player is the ally of each player, by player number: the AllyStrength of each. A question about
+	/// many players finds the alliances of the player one time.
+	[[nodiscard]] virtual std::array<float, player_slots::k_PlayerNumbers> AllyStrengths(PlayerNames player) const
+	{
+		std::array<float, player_slots::k_PlayerNumbers> strengths {};
+		for (size_t other = 0; other < strengths.size(); ++other)
+		{
+			strengths.at(other) = AllyStrength(player, static_cast<PlayerNames>(other));
+		}
+		return strengths;
+	}
 	/// The first player: the player that the scripts and the turns take as the player of a game alone. It is the same on
 	/// every computer of a network game. The frames, the input and the sounds of a computer use the player of that
 	/// computer instead (see HandSystemInterface::GetOwnPlayer).

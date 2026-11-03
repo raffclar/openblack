@@ -38,6 +38,13 @@ struct Summary
 /// A frame that takes this time or more is too slow for 100 frames a second
 constexpr float k_SlowMilliseconds = 10.0f;
 
+/// The log shows the stages of a frame whose work takes the slow time or more. The work time does not include the wait
+/// for the display frame or for the pace of a simulation run, because a frame that only waits is not slow.
+[[nodiscard]] constexpr bool IsSpike(float workMilliseconds)
+{
+	return workMilliseconds >= k_SlowMilliseconds;
+}
+
 /// One frame of a run: how long it took, its time on the processor, the game turn at its end, and its work time
 struct FrameRecord
 {

@@ -59,7 +59,7 @@ public:
 	/// renderer made since it started
 	void Frame(FrameTime time, const openblack::Profiler& profiler, uint32_t pipelinesMade);
 
-	/// The log shows each frame that takes this time or more, with its stages
+	/// The log shows each frame whose work takes this time or more, with its stages
 	static constexpr float k_SpikeMilliseconds = frame_stats::k_SlowMilliseconds;
 
 private:
