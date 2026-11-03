@@ -115,26 +115,25 @@ float magic::EffectAlignmentChange(const EffectValues& values, float burnDamage,
                                    std::span<const GAlignmentInfo> alignmentTable, float alignmentAddition,
                                    float casterAlignment)
 {
-	const float change = std::abs(lifeChange);
-	if (change == 0.0f)
+	const auto terms = EffectAlignmentChanges(values, burnDamage, type, lifeChange, alignmentTable, alignmentAddition);
+	return AddEffectAlignmentChanges(0.0f, DampEffectAlignmentChanges(terms, casterAlignment));
+}
+
+EffectAlignmentTerms magic::DampEffectAlignmentChanges(const EffectAlignmentTerms& terms, float casterAlignment)
+{
+	EffectAlignmentTerms damped {};
+	std::ranges::transform(terms, damped.begin(),
+	                       [casterAlignment](float term) { return DampAlignmentChange(term, casterAlignment); });
+	return damped;
+}
+
+float magic::AddEffectAlignmentChanges(float pending, const EffectAlignmentTerms& damped)
+{
+	for (const float term : damped)
 	{
-		return 0.0f;
+		pending += term;
 	}
-	const float weight = change + alignmentAddition;
-	float total = 0.0f;
-	for (const auto kind : {EffectKind::Burn, EffectKind::Crush, EffectKind::Hit, EffectKind::Heal, EffectKind::FlyAway})
-	{
-		const auto row = static_cast<size_t>(kind);
-		if (row >= alignmentTable.size())
-		{
-			continue;
-		}
-		// Heat counts by the harm it does rather than by how hot it is
-		const float amount = kind == EffectKind::Burn ? burnDamage : values[kind];
-		const float value = amount * AlignmentWeight(alignmentTable[row], type) * weight;
-		total += DampAlignmentChange(value, casterAlignment);
-	}
-	return total;
+	return pending;
 }
 
 EffectAlignmentTerms magic::EffectAlignmentChanges(const EffectValues& values, float burnDamage, AlignmentType type,
@@ -210,10 +209,10 @@ EffectOutcome magic::ApplyEffectTo(const EffectValues& values, const EffectRecei
 		outcome.destroyed = life == 0.0f && before != 0.0f;
 		// Heat takes no life by itself: it heats what it reaches, which then burns. The alignment moves only when the heal
 		// or the harm changed the life, and then heat counts too, by the harm it would do.
-		outcome.alignmentChange = EffectAlignmentChange(values, outcome.burnt, receiver.alignmentType, before - life,
-		                                                alignmentTable, alignmentAddition, casterAlignment);
 		outcome.alignmentTerms = EffectAlignmentChanges(values, outcome.burnt, receiver.alignmentType, before - life,
 		                                                alignmentTable, alignmentAddition);
+		outcome.alignmentDamped = DampEffectAlignmentChanges(outcome.alignmentTerms, casterAlignment);
+		outcome.alignmentChange = AddEffectAlignmentChanges(0.0f, outcome.alignmentDamped);
 	}
 	outcome.aggression = values.IsDestructive() && (outcome.damaged + outcome.burnt) > 0.0f;
 	return outcome;

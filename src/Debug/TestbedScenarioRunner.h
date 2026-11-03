@@ -201,6 +201,7 @@ private:
 	/// Starts a land's script as another script's call starts it; what came of that
 	/// The player clicks the scroll nearest the command's point
 	[[nodiscard]] std::string ClickScroll(const Command& command);
+	[[nodiscard]] std::string ClickCreatureAt(const Command& command);
 	[[nodiscard]] std::string HandTakeNear(const Command& command);
 	[[nodiscard]] std::string ClickCreatureNear(const Command& command);
 	[[nodiscard]] std::string TapRewardNear(const Command& command);

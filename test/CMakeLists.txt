@@ -2332,6 +2332,14 @@ if(MSVC)
   target_compile_options(test_reactions PRIVATE /bigobj)
 endif()
 openblack_setup_and_add_test(test_football_rules test_football_rules.cpp)
+openblack_setup_and_add_test(
+  test_oracle_effect_alignment_order oracle/test_oracle_effect_alignment_order.cpp
+)
+set_tests_properties(
+  test_oracle_effect_alignment_order
+  PROPERTIES ENVIRONMENT
+             "OPENBLACK_ORACLE_DATA=${CMAKE_CURRENT_SOURCE_DIR}/oracle/data"
+)
 openblack_setup_and_add_test(test_data_report test_data_report.cpp)
 target_link_libraries(test_data_report PRIVATE datareport)
 openblack_setup_and_add_test(test_morph_file_write test_morph_file_write.cpp)
