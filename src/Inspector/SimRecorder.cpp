@@ -16,6 +16,7 @@
 #include <map>
 #include <mutex>
 #include <numeric>
+#include <optional>
 #include <string>
 #include <system_error>
 #include <utility>
@@ -33,7 +34,9 @@
 #include "Creature/CreatureFeedback.h"
 #include "Creature/CreatureIdleMind.h"
 #include "Creature/CreatureMindTables.h"
+#include "Creature/CreatureObjectBeliefs.h"
 #include "Creature/CreaturePhysiology.h"
+#include "ECS/Components/Animal.h"
 #include "ECS/Components/Creature.h"
 #include "ECS/Components/CreatureFriends.h"
 #include "ECS/Components/CreatureLeash.h"
@@ -41,6 +44,7 @@
 #include "ECS/Components/CreatureNeeds.h"
 #include "ECS/Components/LivingReaction.h"
 #include "ECS/Components/Transform.h"
+#include "ECS/Components/Villager.h"
 #include "ECS/Reflection/WorldArchive.h"
 #include "ECS/Registry.h"
 #include "ECS/SyncedState.h"
@@ -876,6 +880,14 @@ Json SimProvider::Sample(uint32_t turn, uint64_t frame, bool track, std::vector<
 	// The counts of the entities by their components, and the reactions now in the world
 	Json counts = Json::object();
 	size_t entities = 0;
+	const auto sizeOf = [registry](const entt::type_info& type) {
+		const auto* storage = registry->Underlying().storage(type.hash());
+		return storage != nullptr ? storage->size() : size_t {0};
+	};
+	// A villager, an animal or a creature keeps what it is reacting to and its memory of reactions for all its life. The
+	// count of these cannot be more than the count of the villagers, animals and creatures.
+	const auto livings =
+	    sizeOf(entt::type_id<Villager>()) + sizeOf(entt::type_id<Animal>()) + sizeOf(entt::type_id<Creature>());
 	for (const auto& [id, storage] : registry->Underlying().storage())
 	{
 		const auto& type = reflection::StorageType(storage);
@@ -890,7 +902,8 @@ Json SimProvider::Sample(uint32_t turn, uint64_t frame, bool track, std::vector<
 		}
 		if (track)
 		{
-			if (auto flag = _growth.Observe("count:" + std::string(name), storage.size(), turn); flag.has_value())
+			const auto limit = type == entt::type_id<LivingReaction>() ? std::optional(livings) : std::nullopt;
+			if (auto flag = _growth.Observe("count:" + std::string(name), storage.size(), turn, limit); flag.has_value())
 			{
 				flags.push_back(std::move(*flag));
 			}
@@ -1169,7 +1182,9 @@ Json SimProvider::CreatureRecord(uint32_t turn, bool track, std::vector<sim_chec
 	}
 	if (track)
 	{
-		if (auto flag = _growth.Observe("list:beliefs", mind.beliefs.Size(), turn); flag.has_value())
+		// The creature keeps only so many beliefs of each kind: a new belief then takes the place of an old one
+		if (auto flag = _growth.Observe("list:beliefs", mind.beliefs.Size(), turn, creature_object_beliefs::k_MostBeliefs);
+		    flag.has_value())
 		{
 			flags.push_back(std::move(*flag));
 		}

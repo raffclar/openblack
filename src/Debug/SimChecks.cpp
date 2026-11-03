@@ -166,7 +166,7 @@ GrowthTracker::GrowthTracker(GrowthRule rule)
 {
 }
 
-std::optional<Flag> GrowthTracker::Observe(std::string_view what, size_t size, uint32_t turn)
+std::optional<Flag> GrowthTracker::Observe(std::string_view what, size_t size, uint32_t turn, std::optional<size_t> limit)
 {
 	auto found = _series.find(what);
 	if (found == _series.end())
@@ -174,6 +174,11 @@ std::optional<Flag> GrowthTracker::Observe(std::string_view what, size_t size, u
 		found = _series.emplace(std::string(what), Series {}).first;
 	}
 	auto& series = found->second;
+	if (series.skipped < _rule.warmUp)
+	{
+		++series.skipped;
+		return std::nullopt;
+	}
 	if (!series.sizes.empty() && size < series.sizes.back())
 	{
 		series.flagged = false;
@@ -183,7 +188,8 @@ std::optional<Flag> GrowthTracker::Observe(std::string_view what, size_t size, u
 	{
 		series.sizes.pop_front();
 	}
-	if (series.flagged || series.sizes.size() < _rule.window || size < _rule.leastSize)
+	const bool inLimit = limit.has_value() && size <= *limit;
+	if (series.flagged || inLimit || series.sizes.size() < _rule.window || size < _rule.leastSize)
 	{
 		return std::nullopt;
 	}
