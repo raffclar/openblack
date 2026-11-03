@@ -275,4 +275,32 @@ void testbed_scenarios::AddHandNavigationScenarios(std::vector<Scenario>& all)
 	    .commands = {PointerTo({0.5f, 0.75f}, 0.5f), KeyDown(SDL_SCANCODE_UP, 0.5f), Wheel(2, false, 1.0f),
 	                 KeyUp(SDL_SCANCODE_UP, 1.0f), KeyDown(SDL_SCANCODE_UP, 5.0f), KeyUp(SDL_SCANCODE_UP, 1.0f)},
 	});
+	{
+		const auto fixedTurn = [](float fixed, float delay) {
+			return Command {.kind = Kind::CallNative,
+			                .delaySeconds = delay,
+			                .script = "SET_FIXED_CAM_ROTATION",
+			                .scriptArguments = {{.kind = ScriptArgument::Kind::Integer, .number = fixed},
+			                                    {.kind = ScriptArgument::Kind::Position, .point = {80.0f, 0.0f}}}};
+		};
+		all.push_back({
+		    .id = "hand.script_turn_point",
+		    .name = "A script gives the camera a point to turn about",
+		    .facet = Facet::Hand,
+		    .description = "The camera stands south of the middle of the map and looks at the middle. After two seconds a "
+		                   "script calls SET_FIXED_CAM_ROTATION with 1 and a point on the land 80 to the side of the middle. "
+		                   "One second later the Z key (Rotate Left) goes down for three seconds. Then the left arrow key "
+		                   "(Move Left) goes down for a second. Then the script calls the native with 0, and the left arrow "
+		                   "key goes down again for a second.",
+		    .expected = "After the first call the camera stays where it is and turns to look at the point. While Z is "
+		                "down, the camera goes round the point at the same distance and always looks at it. While the left "
+		                "arrow key is down the first time, the camera does not move to the side: it stays on its line to the "
+		                "point and looks at it. After the call with 0, the left arrow key moves the camera to the side as "
+		                "usual. The inspector (camera.state) shows the point as turn_point while the camera has it.",
+		    .framing = {.shot = Shot::Placed, .eye = {0.0f, 60.0f, -160.0f}, .look = {0.0f, 0.0f, 0.0f}},
+		    .commands = {fixedTurn(1.0f, 2.0f), KeyDown(SDL_SCANCODE_Z, 1.0f), KeyUp(SDL_SCANCODE_Z, 3.0f),
+		                 KeyDown(SDL_SCANCODE_LEFT, 1.0f), KeyUp(SDL_SCANCODE_LEFT, 1.0f), fixedTurn(0.0f, 1.0f),
+		                 KeyDown(SDL_SCANCODE_LEFT, 1.0f), KeyUp(SDL_SCANCODE_LEFT, 1.0f)},
+		});
+	}
 }
