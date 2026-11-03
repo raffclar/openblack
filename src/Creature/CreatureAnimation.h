@@ -51,13 +51,15 @@ struct BlendTerm
 };
 
 /// The base animation pulled towards an evil or good and a thin or fat animation, keyframe by keyframe. Rotations blend
-/// on their matrices' elements. A bone a variant doesn't move takes the first frame of that variant's stand. The
-/// blend keeps the base's keyframes and length.
-[[nodiscard]] Animation Blend(const Animation& base, const BlendTerm& evilGood, const BlendTerm& thinFat);
+/// on their matrices' elements. The blend moves each bone that the base or a variant moves. A bone the base doesn't
+/// move takes the first frame of the base's stand, and a bone a variant doesn't move takes the first frame of that
+/// variant's stand. The blend keeps the base's keyframes and length.
+[[nodiscard]] Animation Blend(const Animation& base, const Animation& baseStand, const BlendTerm& evilGood,
+                              const BlendTerm& thinFat);
 
 /// The same blend with the frame turns of the base that FrameTurns made. The result has the same bits.
 [[nodiscard]] Animation Blend(const Animation& base, std::span<const skeletal_animation::Matrix> baseTurns,
-                              const BlendTerm& evilGood, const BlendTerm& thinFat);
+                              const Animation& baseStand, const BlendTerm& evilGood, const BlendTerm& thinFat);
 
 /// Two animations of a move blended into one, keyframe by keyframe, as a turn on the spot or a step off blends its
 /// pair of 0, 90 and 180 degree animations for the angle. Each keyframe's rotations blend on their matrices' elements

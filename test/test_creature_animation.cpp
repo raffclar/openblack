@@ -86,7 +86,7 @@ TEST(CreatureAnimation, NoWeightKeepsTheBase)
 {
 	const auto base = OneBone({0.2f}, {1.0f});
 	const auto evil = OneBone({0.8f}, {5.0f});
-	const auto blended = creature_animation::Blend(base, {.animation = &evil, .stand = &evil, .weight = 0.0f},
+	const auto blended = creature_animation::Blend(base, base, {.animation = &evil, .stand = &evil, .weight = 0.0f},
 	                                               {.animation = nullptr, .stand = nullptr, .weight = 0.0f});
 	EXPECT_NEAR(blended.frames[0].eulerAngles[0].y, 0.2f, k_Tolerance);
 	EXPECT_NEAR(blended.frames[0].translations[0].x, 1.0f, k_Tolerance);
@@ -96,7 +96,7 @@ TEST(CreatureAnimation, FullWeightTakesTheVariant)
 {
 	const auto base = OneBone({0.2f}, {1.0f});
 	const auto evil = OneBone({0.8f}, {5.0f});
-	const auto blended = creature_animation::Blend(base, {.animation = &evil, .stand = &evil, .weight = 1.0f},
+	const auto blended = creature_animation::Blend(base, base, {.animation = &evil, .stand = &evil, .weight = 1.0f},
 	                                               {.animation = nullptr, .stand = nullptr, .weight = 0.0f});
 	EXPECT_NEAR(blended.frames[0].eulerAngles[0].y, 0.8f, k_Tolerance);
 	EXPECT_NEAR(blended.frames[0].translations[0].x, 5.0f, k_Tolerance);
@@ -107,7 +107,7 @@ TEST(CreatureAnimation, TranslationsBlendLinearlyOnBothAxes)
 	const auto base = OneBone({0.0f}, {0.0f});
 	const auto good = OneBone({0.0f}, {4.0f});
 	const auto fat = OneBone({0.0f}, {-2.0f});
-	const auto blended = creature_animation::Blend(base, {.animation = &good, .stand = &good, .weight = 0.5f},
+	const auto blended = creature_animation::Blend(base, base, {.animation = &good, .stand = &good, .weight = 0.5f},
 	                                               {.animation = &fat, .stand = &fat, .weight = 0.5f});
 	EXPECT_NEAR(blended.frames[0].translations[0].x, 1.0f, k_Tolerance);
 }
@@ -117,7 +117,7 @@ TEST(CreatureAnimation, RotationsBlendOnTheMatrices)
 	// Halfway between two turns about y on the matrices' elements is the halfway turn, only shorter
 	const auto base = OneBone({0.0f}, {0.0f});
 	const auto evil = OneBone({0.6f}, {0.0f});
-	const auto blended = creature_animation::Blend(base, {.animation = &evil, .stand = &evil, .weight = 0.5f},
+	const auto blended = creature_animation::Blend(base, base, {.animation = &evil, .stand = &evil, .weight = 0.5f},
 	                                               {.animation = nullptr, .stand = nullptr, .weight = 0.0f});
 	EXPECT_NEAR(blended.frames[0].eulerAngles[0].y, 0.3f, k_Tolerance);
 }
@@ -127,9 +127,70 @@ TEST(CreatureAnimation, BonesAVariantDoesNotMoveTakeItsStand)
 	const auto base = OneBone({0.0f}, {0.0f});
 	Animation variant {.duration = 1000, .looping = true, .rotatedJoints = {}, .translatedJoints = {}, .frames = {{}}};
 	const auto stand = OneBone({0.0f}, {6.0f});
-	const auto blended = creature_animation::Blend(base, {.animation = &variant, .stand = &stand, .weight = 1.0f},
+	const auto blended = creature_animation::Blend(base, base, {.animation = &variant, .stand = &stand, .weight = 1.0f},
 	                                               {.animation = nullptr, .stand = nullptr, .weight = 0.0f});
 	EXPECT_NEAR(blended.frames[0].translations[0].x, 6.0f, k_Tolerance);
+}
+
+// The base moves only bone 0. The evil variant also moves bone 1, so the blend moves bone 1 too.
+TEST(CreatureAnimation, ABoneOnlyAVariantMovesIsInTheBlend)
+{
+	const Animation base {.duration = 1000,
+	                      .looping = false,
+	                      .rotatedJoints = {0},
+	                      .translatedJoints = {0},
+	                      .frames = {{.eulerAngles = {glm::vec3(0.0f)}, .translations = {glm::vec3(1.0f, 0.0f, 0.0f)}}}};
+	const Animation baseStand {.duration = 1000,
+	                           .looping = true,
+	                           .rotatedJoints = {0, 1},
+	                           .translatedJoints = {0, 1},
+	                           .frames = {{.eulerAngles = {glm::vec3(0.0f), glm::vec3(0.0f, 0.2f, 0.0f)},
+	                                       .translations = {glm::vec3(0.0f), glm::vec3(0.0f, 10.0f, 0.0f)}}}};
+	const Animation evil {
+	    .duration = 1000,
+	    .looping = false,
+	    .rotatedJoints = {1},
+	    .translatedJoints = {1},
+	    .frames = {{.eulerAngles = {glm::vec3(0.0f, 0.6f, 0.0f)}, .translations = {glm::vec3(0.0f, 2.0f, 0.0f)}}}};
+	const auto full = creature_animation::Blend(base, baseStand, {.animation = &evil, .stand = &baseStand, .weight = 1.0f},
+	                                            {.animation = nullptr, .stand = nullptr, .weight = 0.0f});
+	ASSERT_EQ(full.rotatedJoints, (std::vector<uint32_t> {0, 1}));
+	ASSERT_EQ(full.translatedJoints, (std::vector<uint32_t> {0, 1}));
+	EXPECT_NEAR(full.frames[0].eulerAngles[1].y, 0.6f, k_Tolerance);
+	EXPECT_NEAR(full.frames[0].translations[1].y, 2.0f, k_Tolerance);
+	// Halfway, the base side of bone 1 is the base's stand
+	const auto half = creature_animation::Blend(base, baseStand, {.animation = &evil, .stand = &baseStand, .weight = 0.5f},
+	                                            {.animation = nullptr, .stand = nullptr, .weight = 0.0f});
+	EXPECT_NEAR(half.frames[0].translations[1].y, 6.0f, k_Tolerance);
+	// The variant does not move bone 0, so its side of bone 0 is its stand
+	EXPECT_NEAR(half.frames[0].translations[0].x, 0.5f, k_Tolerance);
+}
+
+// A bone that a variant moves but that the base's stand does not give stays out of the blend
+TEST(CreatureAnimation, ABoneTheBaseStandDoesNotGiveStaysOut)
+{
+	const auto base = OneBone({0.0f}, {0.0f});
+	const Animation evil {.duration = 1000,
+	                      .looping = false,
+	                      .rotatedJoints = {3},
+	                      .translatedJoints = {3},
+	                      .frames = {{.eulerAngles = {glm::vec3(0.1f)}, .translations = {glm::vec3(1.0f)}}}};
+	const auto blended = creature_animation::Blend(base, base, {.animation = &evil, .stand = &base, .weight = 1.0f},
+	                                               {.animation = nullptr, .stand = nullptr, .weight = 0.0f});
+	EXPECT_EQ(blended.rotatedJoints, (std::vector<uint32_t> {0}));
+	EXPECT_EQ(blended.translatedJoints, (std::vector<uint32_t> {0}));
+}
+
+// The two pulls add first and the base last: two pulls of half a step at 1 give the next float, not 1
+TEST(CreatureAnimation, ThePullsAddBeforeTheBase)
+{
+	const auto base = OneBone({0.0f}, {1.0f});
+	const auto evil = OneBone({0.0f}, {2.0f});
+	const auto fat = OneBone({0.0f}, {2.0f});
+	const float halfStep = std::ldexp(1.0f, -24);
+	const auto blended = creature_animation::Blend(base, base, {.animation = &evil, .stand = &evil, .weight = halfStep},
+	                                               {.animation = &fat, .stand = &fat, .weight = halfStep});
+	EXPECT_EQ(blended.frames[0].translations[0].x, std::nextafter(1.0f, 2.0f));
 }
 
 TEST(CreatureAnimation, AVariantWithoutItsOwnMovesByItsStand)
@@ -496,20 +557,46 @@ glm::vec3 SideTranslation(const creature_animation::BlendTerm& term, uint32_t jo
 	return StandTranslation(term.stand, joint).value_or(base);
 }
 
-Animation Blend(const Animation& base, const creature_animation::BlendTerm& a, const creature_animation::BlendTerm& b)
+/// The blend as the plain rule says it: every bone that the base or a variant moves (the base's stand must give it), in
+/// bone order, each side from its own frame or its stand, the two pulls added first and then the base
+Animation Blend(const Animation& base, const Animation& baseStand, const creature_animation::BlendTerm& a,
+                const creature_animation::BlendTerm& b)
 {
-	auto blended = base;
 	if (a.weight == 0.0f && b.weight == 0.0f)
 	{
-		return blended;
+		return base;
 	}
+	const auto joined = [&](bool rotated) {
+		std::vector<uint32_t> all;
+		for (uint32_t joint = 0; joint < 64; ++joint)
+		{
+			const auto moves = [&](const Animation* animation) {
+				return animation != nullptr && !animation->frames.empty() &&
+				       SlotOf(rotated ? animation->rotatedJoints : animation->translatedJoints, joint).has_value();
+			};
+			const bool standHas =
+			    rotated ? StandEuler(&baseStand, joint).has_value() : StandTranslation(&baseStand, joint).has_value();
+			if (moves(&base) || ((moves(a.animation) || moves(b.animation)) && standHas))
+			{
+				all.push_back(joint);
+			}
+		}
+		return all;
+	};
+	auto blended = base;
+	blended.rotatedJoints = joined(true);
+	blended.translatedJoints = joined(false);
 	for (size_t f = 0; f < blended.frames.size(); ++f)
 	{
 		auto& frame = blended.frames[f];
+		frame.eulerAngles.assign(blended.rotatedJoints.size(), glm::vec3(0.0f));
+		frame.translations.assign(blended.translatedJoints.size(), glm::vec3(0.0f));
 		for (size_t i = 0; i < blended.rotatedJoints.size(); ++i)
 		{
 			const auto joint = blended.rotatedJoints[i];
-			const auto rotation = skeletal_animation::RotationYXZ(frame.eulerAngles[i]);
+			const auto slot = SlotOf(base.rotatedJoints, joint);
+			const auto rotation =
+			    skeletal_animation::RotationYXZ(slot ? base.frames[f].eulerAngles[*slot] : *StandEuler(&baseStand, joint));
 			const auto towardsA = SideRotation(a, joint, f, rotation);
 			const auto towardsB = SideRotation(b, joint, f, rotation);
 			Matrix result {};
@@ -517,9 +604,11 @@ Animation Blend(const Animation& base, const creature_animation::BlendTerm& a, c
 			{
 				for (size_t c = 0; c < 3; ++c)
 				{
-					const auto value = rotation.at(r).at(c);
-					result.at(r).at(c) =
-					    value + (a.weight * (towardsA.at(r).at(c) - value)) + (b.weight * (towardsB.at(r).at(c) - value));
+					const float value = rotation.at(r).at(c);
+					const float pullA = (towardsA.at(r).at(c) - value) * a.weight;
+					const float pullB = (towardsB.at(r).at(c) - value) * b.weight;
+					const float pulls = pullA + pullB;
+					result.at(r).at(c) = pulls + value;
 				}
 			}
 			frame.eulerAngles[i] = skeletal_animation::EulerYXZ(result);
@@ -527,9 +616,11 @@ Animation Blend(const Animation& base, const creature_animation::BlendTerm& a, c
 		for (size_t i = 0; i < blended.translatedJoints.size(); ++i)
 		{
 			const auto joint = blended.translatedJoints[i];
-			const auto translation = frame.translations[i];
-			frame.translations[i] = translation + (a.weight * (SideTranslation(a, joint, f, translation) - translation)) +
-			                        (b.weight * (SideTranslation(b, joint, f, translation) - translation));
+			const auto slot = SlotOf(base.translatedJoints, joint);
+			const auto translation = slot ? base.frames[f].translations[*slot] : *StandTranslation(&baseStand, joint);
+			const glm::vec3 pulls = ((SideTranslation(a, joint, f, translation) - translation) * a.weight) +
+			                        ((SideTranslation(b, joint, f, translation) - translation) * b.weight);
+			frame.translations[i] = pulls + translation;
 		}
 	}
 	return blended;
@@ -612,7 +703,8 @@ TEST(CreatureAnimation, TheBlendAndTheStandAdjustmentGiveTheBitsOfTheOldWay)
 		const creature_animation::BlendTerm b {.animation = present(random) ? &baseStand : nullptr,
 		                                       .stand = present(random) ? &baseStand : nullptr,
 		                                       .weight = round % 7 == 0 ? 0.0f : std::abs(weight(random))};
-		EXPECT_TRUE(SameBits(creature_animation::Blend(base, a, b), reference::Blend(base, a, b))) << "round " << round;
+		EXPECT_TRUE(SameBits(creature_animation::Blend(base, baseStand, a, b), reference::Blend(base, baseStand, a, b)))
+		    << "round " << round;
 	}
 }
 
@@ -647,7 +739,8 @@ TEST(CreatureAnimation, TheSharedFrameTurnsGiveTheBitsOfTheOldWay)
 		                                       .weight = round % 7 == 0 ? 0.0f : std::abs(weight(random)),
 		                                       .turns = hasB ? std::span<const skeletal_animation::Matrix>(standTurns)
 		                                                     : std::span<const skeletal_animation::Matrix> {}};
-		EXPECT_TRUE(SameBits(creature_animation::Blend(base, baseTurns, a, b), reference::Blend(base, a, b)))
+		EXPECT_TRUE(
+		    SameBits(creature_animation::Blend(base, baseTurns, baseStand, a, b), reference::Blend(base, baseStand, a, b)))
 		    << "round " << round;
 	}
 }

@@ -135,11 +135,18 @@ Variant VariantOf(Stores& stores, const CreatureRig& rig, CreatureRig::Mesh mesh
 	return FindVariant(stores, rig, mesh, index);
 }
 
-/// The base animation blended toward the two variants as the body is drawn
-Animation BlendVariants(const Animation& base, const creature_morph::Morph& morph, const Variant& evilGood,
-                        const Variant& thinFat)
+/// The base's stand, which gives the base side of a bone that only a variant moves. Without a stand, the base itself.
+const Animation& BaseStandOf(const CreatureRig& rig, const Animation& base)
 {
-	return creature_animation::Blend(base,
+	const auto* stand = rig.GetAnimation(CreatureRig::Mesh::Base, creature_animation::k_StandAnimation);
+	return stand != nullptr ? *stand : base;
+}
+
+/// The base animation blended toward the two variants as the body is drawn
+Animation BlendVariants(const Animation& base, const Animation& baseStand, const creature_morph::Morph& morph,
+                        const Variant& evilGood, const Variant& thinFat)
+{
+	return creature_animation::Blend(base, baseStand,
 	                                 {.animation = evilGood.animation,
 	                                  .stand = evilGood.stand,
 	                                  .weight = evilGood.animation != nullptr ? std::abs(morph.evilGood) : 0.0f},
@@ -159,8 +166,8 @@ std::span<const Matrix> TurnsOf(const TurnsOfAnimations& turns, const Animation*
 }
 
 /// The same blend as BlendVariants, with the frame turns that the Prepare made
-Animation BlendVariants(const Animation& base, const creature_morph::Morph& morph, const Variant& evilGood,
-                        const Variant& thinFat, const TurnsOfAnimations& turns)
+Animation BlendVariants(const Animation& base, const Animation& baseStand, const creature_morph::Morph& morph,
+                        const Variant& evilGood, const Variant& thinFat, const TurnsOfAnimations& turns)
 {
 	const auto weightOf = [](const Variant& variant, float value) {
 		return variant.animation != nullptr ? std::abs(value) : 0.0f;
@@ -174,8 +181,8 @@ Animation BlendVariants(const Animation& base, const creature_morph::Morph& morp
 	                                                    .weight = weightOf(thinFat, morph.thinFat),
 	                                                    .turns = TurnsOf(turns, thinFat.animation)};
 	const auto baseTurns = TurnsOf(turns, &base);
-	return baseTurns.empty() ? creature_animation::Blend(base, towardsEvilGood, towardsThinFat)
-	                         : creature_animation::Blend(base, baseTurns, towardsEvilGood, towardsThinFat);
+	return baseTurns.empty() ? creature_animation::Blend(base, baseStand, towardsEvilGood, towardsThinFat)
+	                         : creature_animation::Blend(base, baseTurns, baseStand, towardsEvilGood, towardsThinFat);
 }
 
 } // namespace
@@ -198,7 +205,7 @@ std::optional<Animation> creature_blends::Blend(Stores& stores, const CreatureRi
 	}
 	const auto evilGood = VariantOf(stores, rig, EvilGoodMesh(morph.evilGood), index);
 	const auto thinFat = VariantOf(stores, rig, ThinFatMesh(morph.thinFat), index);
-	return BlendVariants(*base, morph, evilGood, thinFat);
+	return BlendVariants(*base, BaseStandOf(rig, *base), morph, evilGood, thinFat);
 }
 
 std::optional<Animation> creature_blends::KeptBlend(Stores& stores, const CreatureRig& rig, const creature_morph::Morph& morph,
@@ -311,7 +318,8 @@ void creature_blends::Prepare(Stores& stores, std::span<const Wanted> wanted, Wo
 	std::vector<Animation> made(blends.size());
 	workers.ForEach(blends.size(), [&stores, &blends, &made, &turns](size_t index, size_t /*lane*/) {
 		const auto& [rig, morph, animation] = blends[index];
-		made[index] = BlendVariants(*rig->GetAnimation(CreatureRig::Mesh::Base, animation), morph,
+		const auto& base = *rig->GetAnimation(CreatureRig::Mesh::Base, animation);
+		made[index] = BlendVariants(base, BaseStandOf(*rig, base), morph,
 		                            FindVariant(stores, *rig, EvilGoodMesh(morph.evilGood), animation),
 		                            FindVariant(stores, *rig, ThinFatMesh(morph.thinFat), animation), turns);
 	});
