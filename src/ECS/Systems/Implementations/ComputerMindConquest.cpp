@@ -739,7 +739,8 @@ entt::entity computer_world::BestThingNear(RuleContext& context, const map_coord
 	const auto zs = computer_mind_rules::SearchCells(centre.z, radius);
 	float best = 0.0f;
 	entt::entity found = entt::null;
-	const auto look = [&](std::span<const entt::entity> things) {
+	const auto look = [&centre, radius, &score](std::span<const entt::entity> things, float& cellBest,
+	                                            entt::entity& cellFound) {
 		for (const auto thing : things)
 		{
 			const auto coords = CoordsOfThing(thing);
@@ -748,10 +749,10 @@ entt::entity computer_world::BestThingNear(RuleContext& context, const map_coord
 				continue;
 			}
 			const float distance = gutils::GetDistanceInMetres(centre, *coords);
-			if (const auto kept = computer_mind_rules::SearchKeeps(score(thing), distance, radius, best))
+			if (const auto kept = computer_mind_rules::SearchKeeps(score(thing), distance, radius, cellBest))
 			{
-				best = *kept;
-				found = thing;
+				cellBest = *kept;
+				cellFound = thing;
 			}
 		}
 	};
@@ -778,17 +779,31 @@ entt::entity computer_world::BestThingNear(RuleContext& context, const map_coord
 			}
 			const auto key = (static_cast<uint32_t>(x) << 16u) | static_cast<uint32_t>(z);
 			auto known = context.searchCells.find(key);
+			if (known != context.searchCells.end() && !known->second)
+			{
+				continue;
+			}
+			// The search looks at the things of the cell as if the cell were in the influence. When it keeps none of them,
+			// the cell changes nothing whatever its influence, so the search does not ask for it. A question about
+			// influence and the scores of the things change nothing in the world.
+			float cellBest = best;
+			entt::entity cellFound = entt::null;
+			look(fixed, cellBest, cellFound);
+			look(mobile, cellBest, cellFound);
+			if (cellFound == entt::null)
+			{
+				continue;
+			}
 			if (known == context.searchCells.end())
 			{
 				known = context.searchCells.emplace(key, ecs::ally_influence::InfluenceWithAllies(context.player, cell) > 0.0f)
 				            .first;
 			}
-			if (!known->second)
+			if (known->second)
 			{
-				continue;
+				best = cellBest;
+				found = cellFound;
 			}
-			look(fixed);
-			look(mobile);
 		}
 	}
 	return found;
