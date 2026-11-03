@@ -16,6 +16,7 @@
 #include <ranges>
 #include <span>
 #include <unordered_map>
+#include <unordered_set>
 #include <utility>
 #include <vector>
 
@@ -36,7 +37,9 @@
 #include "ECS/Components/Construction.h"
 #include "ECS/Components/Disciple.h"
 #include "ECS/Components/Field.h"
+#include "ECS/Components/Footpath.h"
 #include "ECS/Components/MiracleImpression.h"
+#include "ECS/Components/Physics.h"
 #include "ECS/Components/Player.h"
 #include "ECS/Components/Pot.h"
 #include "ECS/Components/ResourcePile.h"
@@ -55,14 +58,18 @@
 #include "ECS/Components/VillagerWork.h"
 #include "ECS/Components/WallHug.h"
 #include "ECS/Components/Workshop.h"
+#include "ECS/Components/WorshipChants.h"
+#include "ECS/Components/WorshipSite.h"
 #include "ECS/PlayerTowns.h"
 #include "ECS/Registry.h"
 #include "ECS/Systems/PlayerSystemInterface.h"
+#include "ECS/Systems/SpellIconSystemInterface.h"
 #include "ECS/Systems/TimeSystemInterface.h"
 #include "ECS/Systems/TownSystemInterface.h"
 #include "ECS/Systems/VillageTotemSystemInterface.h"
 #include "ECS/Systems/WonderSystemInterface.h"
 #include "ECS/Systems/WorkshopSystemInterface.h"
+#include "ECS/Systems/WorshipSiteSystemInterface.h"
 #include "ECS/TempleConstruction.h"
 #include "ECS/ThingCircles.h"
 #include "ECS/VanillaScriptImport.h"
@@ -248,6 +255,16 @@ void PutSites(ecs::Registry& registry, const world_import::ImportedTowns& import
 			}
 			auto* opened = ecs::construction::SiteOf(townEntity, building);
 			opened->desire = file.desire;
+			// A worship site that goes up has the town among the towns asked to build it, the newest first
+			if (auto* worship = registry.TryGet<WorshipSite>(building);
+			    worship != nullptr && registry.AllOf<BuildProgress>(building))
+			{
+				auto& requests = worship->buildRequests;
+				if (std::ranges::none_of(requests, [townEntity](const auto& asked) { return asked.town == townEntity; }))
+				{
+					requests.insert(requests.begin(), {.town = townEntity, .desireBoost = file.desire});
+				}
+			}
 			opened->places = file.places;
 			opened->workerCount = file.workerCount;
 			opened->workers.clear();
@@ -491,6 +508,152 @@ glm::vec3 openblack::ecs::systems::vanilla_import::GroundPosition(const gamesave
 
 namespace
 {
+/// A worship site of the file takes the values of the file: how much of it is built, its altar, the food in its pot,
+/// its prayer power and its needs
+void PutWorshipSiteValues(ecs::Registry& registry, WorshipSiteSystemInterface& sites, entt::entity site,
+                          const world_import::ImportedWorshipSite& file, std::unordered_map<uint32_t, entt::entity>& made)
+{
+	sites.SetBuilt(site, file.built);
+	const auto dance = registry.Get<const WorshipSite>(site).dance;
+	const auto foodPot = registry.Get<const WorshipSite>(site).foodPot;
+	const auto altar = registry.Get<const WorshipSite>(site).altar;
+	// The dance and the food pot of the site are the dance and the pot of the file
+	if (file.dance != 0 && dance != entt::null)
+	{
+		made.emplace(file.dance, dance);
+	}
+	if (file.foodPot != 0 && foodPot != entt::null)
+	{
+		made.emplace(file.foodPot, foodPot);
+		if (file.food.has_value() && registry.AllOf<Pot>(foodPot))
+		{
+			registry.Get<Pot>(foodPot).amount = *file.food;
+		}
+	}
+	// The altar shows when all of it is built, as when its builders finish it
+	if (file.altar.has_value() && altar != entt::null)
+	{
+		made.emplace(file.altar->number, altar);
+		sites.BuildAltarBy(altar, file.altar->built);
+		ecs::world_objects::SetLife(altar, file.altar->life);
+	}
+	auto& chants = registry.Get<WorshipChants>(site);
+	chants.battery = file.chants.battery;
+	chants.sacrificed = file.chants.sacrificed;
+	chants.available = file.chants.available;
+	chants.used = file.chants.used;
+	chants.requested = file.chants.requested;
+	chants.chantsPerDancer = file.chants.chantsPerDancer;
+	chants.strain = file.chants.strain;
+	chants.infinite = file.chants.infinite;
+	chants.freeMaintenance = file.chants.freeMaintenance;
+	auto& worship = registry.Get<WorshipSite>(site);
+	worship.foodOnTheWay = file.foodOnTheWay;
+	if (file.needs.has_value())
+	{
+		std::ranges::copy(*file.needs, worship.needs.begin());
+	}
+}
+
+/// The game clears the map before it reads the world of a file, so the worship sites of the land go. Then each worship
+/// site of the file stands in its place round the temple of its player, in the order of the file, with its towns, its
+/// worshippers and the values of the file.
+void PutWorshipSites(ecs::Registry& registry, const world_import::ImportedTowns& imported,
+                     std::unordered_map<uint32_t, entt::entity>& made)
+{
+	if (!Locator::worshipSiteSystem::has_value())
+	{
+		return;
+	}
+	auto& sites = Locator::worshipSiteSystem::value();
+	std::vector<entt::entity> temples;
+	registry.Each<const CitadelWorship>([&temples](entt::entity temple, const CitadelWorship&) { temples.push_back(temple); });
+	for (const auto temple : temples)
+	{
+		sites.RemoveSites(temple);
+	}
+	// Only a villager that keeps the states of the file can be at worship. A villager that decides again is not.
+	std::unordered_set<uint32_t> kept;
+	for (const auto& villager : imported.villagers)
+	{
+		if (world_import::StartStates(villager.states, villager.moveState) == villager.states)
+		{
+			kept.insert(villager.number);
+		}
+	}
+	for (const auto& file : imported.worshipSites)
+	{
+		const auto temple = EntityOf(made, file.citadel);
+		const auto site = temple != entt::null ? sites.MakeLoaded(temple, file.tribe, file.place) : entt::null;
+		if (site == entt::null)
+		{
+			SPDLOG_LOGGER_WARN(ImportLog(), "The worship site {} of the file has no temple or no free place {}", file.number,
+			                   file.place);
+			continue;
+		}
+		made.emplace(file.number, site);
+		PutWorshipSiteValues(registry, sites, site, file, made);
+
+		// The towns of the site in the order of the file. Each town keeps the site, and the site keeps an icon for each
+		// miracle that the town shows, the oldest town first.
+		std::vector<entt::entity> towns;
+		for (const auto number : file.towns)
+		{
+			if (const auto town = EntityOf(made, number); town != entt::null && registry.AllOf<Town>(town))
+			{
+				towns.push_back(town);
+				registry.Get<Town>(town).worshipSite = site;
+			}
+		}
+		registry.Get<WorshipSite>(site).towns = towns;
+		if (Locator::spellIconSystem::has_value())
+		{
+			for (const auto town : std::views::reverse(towns))
+			{
+				Locator::spellIconSystem::value().TownJoinedSite(site, town);
+			}
+		}
+		// A site with footpaths links them at its gate. The footpaths of the file come later.
+		if (file.footpathLink != 0 && !registry.AllOf<FootpathLink>(site))
+		{
+			if (const auto gate = sites.PlaceAt(site, WorshipSiteSystemInterface::SitePlace::Gate); gate.has_value())
+			{
+				const auto height =
+				    Locator::terrainSystem::has_value() ? Locator::terrainSystem::value().GetHeightAt(*gate) : 0.0f;
+				registry.Assign<FootpathLink>(site, glm::vec3(gate->x, height, gate->y), std::vector<Footpath::Id> {});
+			}
+		}
+
+		// The villagers at worship, in the order of the file. Each town counts its own.
+		std::vector<entt::entity> worshippers;
+		for (const auto number : file.worshippers)
+		{
+			const auto villager = EntityOf(made, number);
+			if (villager == entt::null || !kept.contains(number) || !registry.AllOf<Villager>(villager))
+			{
+				continue;
+			}
+			worshippers.push_back(villager);
+			registry.AssignOrReplace<Worshipper>(villager, Worshipper {.atWorship = true});
+			if (const auto town = registry.Get<const Villager>(villager).town; town != entt::null && registry.AllOf<Town>(town))
+			{
+				registry.Get<Town>(town).worshippers.push_back(villager);
+			}
+		}
+		if (worshippers.size() != file.worshipCount)
+		{
+			SPDLOG_LOGGER_WARN(ImportLog(), "The worship site {} counts {} villagers at worship, and the import keeps {}",
+			                   file.number, file.worshipCount, worshippers.size());
+		}
+		registry.Get<WorshipSite>(site).worshippers = std::move(worshippers);
+		if (file.goHome != 0)
+		{
+			SPDLOG_LOGGER_WARN(ImportLog(), "The worship site {} has {} villagers that ask to go home", file.number,
+			                   file.goHome);
+		}
+	}
+}
+
 /// The temple of the player in the land, or none
 entt::entity LandTempleOf(ecs::Registry& registry, PlayerNames player)
 {
@@ -1035,6 +1198,7 @@ bool SaveGameSystem::ImportVanillaTowns(const gamesave::VanillaWorld& world, Van
 		                     [&ordered](entt::entity abode) { return std::ranges::find(ordered, abode) == ordered.end(); });
 		component.abodes = std::move(ordered);
 	}
+	PutWorshipSites(registry, imported, made);
 	PutDesireFlags(registry, imported, made);
 	PutPlans(registry, imported, made);
 	PutSites(registry, imported, made);

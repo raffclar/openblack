@@ -1873,6 +1873,103 @@ TEST(VanillaWorldImport, ReadsTheValuesOfAWorkshopAndItsWoodPile)
 	EXPECT_EQ(abode.piles[0].amount, 450U);
 }
 
+TEST(VanillaWorldImport, TheTribesCountBackFromTheirFirstRow)
+{
+	EXPECT_EQ(world_import::TribeRowOf(742), Tribe::CELTIC);
+	EXPECT_EQ(world_import::TribeRowOf(735), Tribe::NORSE);
+	EXPECT_EQ(world_import::TribeRowOf(734), Tribe::TIBETAN);
+	EXPECT_EQ(world_import::TribeRowOf(733), std::nullopt);
+	EXPECT_EQ(world_import::TribeRowOf(743), std::nullopt);
+	// The 355 rows of the 8 tables between the last tribe and the first totem
+	EXPECT_EQ(world_import::k_FirstTribeRowNumber - static_cast<uint32_t>(Tribe::_COUNT) - 355,
+	          world_import::k_FirstTotemStatueRowNumber);
+}
+
+TEST(VanillaWorldImport, ReadsTheValuesOfAWorshipSite)
+{
+	auto fake = GameAtTurn(100);
+	// 2: the site, 3: its needs display, 4 to 6: its flags, 7: its altar, 8: its food pot
+	fake.Record(VanillaType::WorshipSite)
+	    .Position(0, 0)
+	    .Value<float>("built", 0.25f)
+	    .Ref("footpathLink", 40)
+	    .Ref("partCitadel", 30)
+	    .Value<uint32_t>("siteTribe", world_import::k_FirstTribeRowNumber - static_cast<uint32_t>(Tribe::NORSE))
+	    .Ref("siteNeeds", 3)
+	    .Ref("siteDance", 31)
+	    .Refs("siteTowns", {20, 21})
+	    .Ref("siteFoodPot", 8)
+	    .Value<uint32_t>("siteWorshipCount", 3)
+	    .Refs("siteWorshippers", {50, 51})
+	    .Refs("siteIcons", {60, 61, 62})
+	    .Words("siteFoodOnTheWay", {std::bit_cast<uint32_t>(-12), 0})
+	    .Value<float>("siteBattery", 120.0f)
+	    .Value<float>("siteSacrificed", 7.5f)
+	    .Value<float>("siteAvailable", 130.0f)
+	    .Value<float>("siteUsed", 10.0f)
+	    .Value<float>("siteRequested", 14.0f)
+	    .Value<float>("siteChantsPerDancer", 0.5f)
+	    .Value<uint32_t>("siteInfinite", 1)
+	    .Value<uint32_t>("siteFreeMaintenance", 0)
+	    .Value<uint8_t>("sitePlace", 5)
+	    .Refs("siteGoHome", {})
+	    .Ref("siteAltar", 7)
+	    .Value<float>("siteStrain", 0.4f);
+	fake.Record(VanillaType::ShowNeeds).Ref("needsOwner", 2).Refs("needFlags", {4, 5, 6});
+	for (const float need : {0.1f, 0.2f, 0.3f})
+	{
+		fake.Record(VanillaType::ShowNeedsVisuals).Ref("needFlagOwner", 2).Value<float>("needFlagNeed", need);
+	}
+	fake.Record(VanillaType::WorshipTotem).Value<float>("built", 1.0f).Value<float>("life", 0.75f).Ref("altarSite", 2);
+	fake.Record(VanillaType::PileFood).Value<uint32_t>("potAmount", 90);
+	const auto imported = world_import::ReadTowns(fake.Make());
+	ASSERT_EQ(imported.worshipSites.size(), 1U);
+	const auto& site = imported.worshipSites[0];
+	EXPECT_EQ(site.number, 2U);
+	EXPECT_EQ(site.citadel, 30U);
+	EXPECT_EQ(site.tribe, Tribe::NORSE);
+	EXPECT_EQ(site.place, 5);
+	EXPECT_FLOAT_EQ(site.built, 0.25f);
+	EXPECT_EQ(site.towns, (std::vector<uint32_t> {20, 21}));
+	EXPECT_EQ(site.dance, 31U);
+	EXPECT_EQ(site.foodPot, 8U);
+	EXPECT_EQ(site.icons, (std::vector<uint32_t> {60, 61, 62}));
+	EXPECT_EQ(site.worshippers, (std::vector<uint32_t> {50, 51}));
+	EXPECT_EQ(site.worshipCount, 3U);
+	EXPECT_EQ(site.food, 90U);
+	EXPECT_EQ(site.foodOnTheWay, -12);
+	EXPECT_FLOAT_EQ(site.chants.battery, 120.0f);
+	EXPECT_FLOAT_EQ(site.chants.sacrificed, 7.5f);
+	EXPECT_FLOAT_EQ(site.chants.available, 130.0f);
+	EXPECT_FLOAT_EQ(site.chants.used, 10.0f);
+	EXPECT_FLOAT_EQ(site.chants.requested, 14.0f);
+	EXPECT_FLOAT_EQ(site.chants.chantsPerDancer, 0.5f);
+	EXPECT_FLOAT_EQ(site.chants.strain, 0.4f);
+	EXPECT_TRUE(site.chants.infinite);
+	EXPECT_FALSE(site.chants.freeMaintenance);
+	ASSERT_TRUE(site.needs.has_value());
+	EXPECT_EQ(*site.needs, (std::array<float, world_import::k_SiteNeedFlags> {0.1f, 0.2f, 0.3f}));
+	ASSERT_TRUE(site.altar.has_value());
+	EXPECT_EQ(site.altar->number, 7U);
+	EXPECT_FLOAT_EQ(site.altar->built, 1.0f);
+	EXPECT_FLOAT_EQ(site.altar->life, 0.75f);
+	EXPECT_EQ(site.footpathLink, 40U);
+	EXPECT_EQ(site.goHome, 0U);
+}
+
+// A site with a tribe that the table does not have is not taken
+TEST(VanillaWorldImport, AWorshipSiteWithNoTribeOfTheTableIsNotTaken)
+{
+	auto fake = GameAtTurn(100);
+	fake.Record(VanillaType::WorshipSite)
+	    .Ref("partCitadel", 30)
+	    .Value<uint32_t>("siteTribe", world_import::k_FirstTotemStatueRowNumber)
+	    .Value<uint8_t>("sitePlace", 0);
+	const auto imported = world_import::ReadTowns(fake.Make());
+	EXPECT_TRUE(imported.worshipSites.empty());
+	EXPECT_EQ(imported.skipped.size(), 1U);
+}
+
 // A pile whose building is the workshop is not taken twice
 TEST(VanillaWorldImport, TheWoodPileOfAWorkshopComesOnce)
 {

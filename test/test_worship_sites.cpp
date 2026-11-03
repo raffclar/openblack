@@ -697,6 +697,34 @@ TEST(WorshipSiteSystem, BuildingUpASiteFinishesItAtTheWhole)
 	EXPECT_TRUE(f.registry.Get<const WorshipSite>(site).buildRequests.empty());
 }
 
+// A saved game puts a site in the place of the file: the site has its altar, its flags, its dance and its pot, but no
+// town and no request to build it
+TEST(WorshipSiteSystem, ASavedGamePutsASiteInItsPlaceWithNoTown)
+{
+	Fixture f;
+	const auto town = f.Town(0, PlayerNames::PLAYER_ONE, Tribe::NORSE, {0.0f, 0.0f, -50.0f});
+	const auto temple = f.Temple(PlayerNames::PLAYER_ONE);
+	f.system->AddTemple(temple, 0.5f, false);
+	const auto site = f.system->MakeLoaded(temple, Tribe::NORSE, 4);
+	ASSERT_TRUE(site != entt::null);
+	EXPECT_EQ(f.registry.Get<const CitadelWorship>(temple).sites.at(4), site);
+	const auto& component = f.registry.Get<const WorshipSite>(site);
+	EXPECT_EQ(component.tribe, Tribe::NORSE);
+	EXPECT_EQ(component.player, PlayerNames::PLAYER_ONE);
+	EXPECT_EQ(component.place, 4);
+	EXPECT_FLOAT_EQ(component.facing, ws::PlaceFacing(0.5f, 4));
+	EXPECT_TRUE(component.towns.empty());
+	EXPECT_TRUE(component.buildRequests.empty());
+	EXPECT_TRUE(component.altar != entt::null);
+	EXPECT_TRUE(component.dance != entt::null);
+	EXPECT_TRUE(component.foodPot != entt::null);
+	EXPECT_FALSE(f.system->IsBuilt(site));
+	EXPECT_TRUE(f.registry.Get<const components::Town>(town).worshipSite == entt::null);
+	// A place that is taken or out of the places gets no site
+	EXPECT_TRUE(f.system->MakeLoaded(temple, Tribe::CELTIC, 4) == entt::null);
+	EXPECT_TRUE(f.system->MakeLoaded(temple, Tribe::CELTIC, 6) == entt::null);
+}
+
 TEST(WorshipSiteSystem, AScriptSetsHowMuchOfASiteIsBuiltAndAtTheWholeItStandsBuilt)
 {
 	Fixture f;

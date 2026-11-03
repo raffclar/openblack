@@ -49,6 +49,7 @@ public:
 	void TownRemoved(entt::entity town) override;
 	void LandLaidOut() override;
 	entt::entity MakeBuiltSite(PlayerNames player, Tribe tribe) override;
+	entt::entity MakeLoaded(entt::entity temple, Tribe tribe, uint8_t place) override;
 	void SetCanHaveSites(entt::entity townOrTemple, bool can) override;
 	entt::entity DebugAllowSite(entt::entity town, bool anyLand) override;
 	void RemoveSites(entt::entity temple) override;
@@ -101,6 +102,10 @@ private:
 	[[nodiscard]] entt::entity FindForTribe(entt::entity temple, Tribe tribe) const;
 	/// A new site in the free place nearest the town of the tribe nearest the temple
 	entt::entity Make(entt::entity temple, Tribe tribe);
+	/// A new site of the tribe stands in the place round the temple, with no town, altar, dance or pot yet
+	entt::entity Place(entt::entity temple, Tribe tribe, uint8_t place);
+	/// A new site gets its altar, its need flags, its dance and its food pot
+	void Furnish(entt::entity site);
 	/// A site goes, with everything of it, leaving its towns and its place round the temple
 	void Remove(entt::entity site);
 	/// A site's dance, if it has one

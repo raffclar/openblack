@@ -19,6 +19,7 @@
 #include "3D/MapCoords.h"
 #include "ECS/Components/Footpath.h"
 #include "ECS/Components/Transform.h"
+#include "ECS/Components/WorshipSite.h"
 #include "ECS/Registry.h"
 #include "ECS/Systems/FootpathSystemInterface.h"
 #include "ECS/VanillaFootpathImport.h"
@@ -113,6 +114,13 @@ void SaveGameSystem::ImportVanillaFootpaths(const gamesave::VanillaWorld& world,
 			{
 				ids.push_back(static_cast<Footpath::Id>(entity));
 			}
+		}
+		// A worship site keeps its link at its gate, where the import put it
+		if (auto* gate = registry.TryGet<FootpathLink>(holder); gate != nullptr && registry.AllOf<WorshipSite>(holder))
+		{
+			gate->footpaths = std::move(ids);
+			++linked;
+			continue;
 		}
 		const auto* transform = registry.TryGet<const Transform>(holder);
 		registry.AssignOrReplace<FootpathLink>(holder, transform != nullptr ? transform->position : glm::vec3 {0.0f},

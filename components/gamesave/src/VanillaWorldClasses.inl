@@ -326,7 +326,8 @@ void ReadCitadelPart(WorldReader& r)
 {
 	ReadMultiMapFixed(r);
 	r.Word();
-	r.Ref();
+	// The temple that the part is a part of
+	r.Ref("partCitadel");
 	r.Ref();
 }
 
@@ -915,49 +916,63 @@ void ReadScriptTimer(WorldReader& r)
 void ReadWorshipSite(WorldReader& r)
 {
 	ReadCitadelPart(r);
-	r.Word();
-	r.Ref();
-	r.Ref();
-	r.Refs();
-	r.Ref();
-	r.Word();
-	r.Word();
-	r.Byte();
-	r.Word();
-	r.Word();
-	r.Word();
-	r.Refs();
-	r.Refs();
-	r.Array(4);
-	r.Word();
-	r.Word();
-	r.Word();
-	r.Word();
-	r.Word();
-	r.Word();
-	r.Word();
-	r.Word();
-	r.Byte();
-	r.Byte();
-	r.Refs();
-	r.Ref();
-	r.Word();
-	r.Ref();
-	r.Word();
-	r.Word();
+	// The row of the table of the tribes, the needs display, the dance and the towns of the site
+	r.Word("siteTribe");
+	r.Ref("siteNeeds");
+	r.Ref("siteDance");
+	r.Refs("siteTowns");
+	r.Ref("siteFoodPot");
+	// A turn that only a function that the game never calls writes, then two values that the code of the site does not
+	// use
+	r.Word("siteWordBC");
+	r.Word("siteWordC0");
+	r.Byte("siteByteC4");
+	// The count of the villagers at worship, a word that the code of the site only sets to 0, and the next spell of the
+	// cheat that gives each site all the miracles
+	r.Word("siteWorshipCount");
+	r.Word("siteWordCC");
+	r.Word("siteCheatSpell");
+	r.Refs("siteWorshippers");
+	r.Refs("siteIcons");
+	// The food on its way from the towns, and a word that is always 0
+	r.Array(4, "siteFoodOnTheWay");
+	// The prayer power: the battery, all that sacrifices gave, what the site can give this turn, what it gave, what was
+	// asked for, and what each dancer chanted last turn
+	r.Float("siteBattery");
+	r.Float("siteSacrificed");
+	r.Float("siteAvailable");
+	r.Float("siteUsed");
+	r.Float("siteRequested");
+	r.Float("siteChantsPerDancer");
+	// The two cheats: prayer power with no end, and miracles that cost nothing to keep
+	r.Word("siteInfinite");
+	r.Word("siteFreeMaintenance");
+	// The place round the temple, and whether the site gave its spell icons prayer power this turn
+	r.Byte("sitePlace");
+	r.Byte("siteSupplied");
+	// The villagers that ask to go home. No villager of this version of the game asks, so the list is always empty.
+	r.Refs("siteGoHome");
+	r.Ref("siteAltar");
+	r.Float("siteStrain");
+	// The effect of the motes of prayer power, and the throb of the strain that the frames move
+	r.Ref("siteManaPath");
+	r.Float("siteThrobPhase");
+	r.Float("siteThrobPulse");
 }
 
 void ReadShowNeeds(WorldReader& r)
 {
-	r.Ref();
-	r.Refs();
+	// The thing that shows its needs, and its need flags: food, rest and hiding
+	r.Ref("needsOwner");
+	r.Refs("needFlags");
 }
 
 void ReadWorshipTotem(WorldReader& r)
 {
 	ReadCitadelPart(r);
 	r.Word();
-	r.Ref();
+	// The worship site of the altar
+	r.Ref("altarSite");
 }
 
 void ReadShowNeedsVisuals(WorldReader& r)
@@ -965,8 +980,9 @@ void ReadShowNeedsVisuals(WorldReader& r)
 	ReadObject(r);
 	r.Word();
 	r.Word();
-	r.Ref();
-	r.Word();
+	r.Ref("needFlagOwner");
+	// How much the owner needs the thing that the flag shows
+	r.Float("needFlagNeed");
 }
 
 void ReadDance(WorldReader& r)
