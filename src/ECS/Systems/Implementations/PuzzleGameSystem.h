@@ -28,6 +28,12 @@ public:
 	void TakenInHand(entt::entity piece) override;
 	void Forget(entt::entity puzzle) override;
 	bool DeletePieces(entt::entity puzzle) override;
+	void TapPlace(const map_coords::MapCoords& place) override;
+	bool TapTotem(entt::entity totem) override;
+
+private:
+	/// The place on the land that a player tapped in this turn, until the puzzles took their turns
+	std::optional<map_coords::MapCoords> _tappedPlace;
 };
 
 } // namespace openblack::ecs::systems

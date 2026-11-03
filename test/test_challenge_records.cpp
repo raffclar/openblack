@@ -97,6 +97,23 @@ TEST(ChallengeRecords, AnUpdateOfAChallengeNotYetStartedStartsItsRecord)
 	EXPECT_FALSE(record.position.has_value());
 }
 
+TEST(ChallengeRecords, AWinBeforeTheStartStaysDoneWhenTheStartComesLater)
+{
+	// The creature beats the ogre of the fourth land before the man tells his story. The win updates a challenge
+	// that has no record, and the story's start at 0 comes after it.
+	openblack::ecs::Registry registry;
+	records::Record(registry, LostBrotherSnapshot(1.0f, 0.0f, 2526), snapshots::Call::Update, 100, {});
+	const auto outcome = records::Record(registry, LostBrotherSnapshot(0.0f, 0.0f, 2526), snapshots::Call::Start, 500, {});
+	const auto& record = registry.Get<ChallengeRecord>(outcome.record);
+	EXPECT_FLOAT_EQ(record.success, 1.0f);
+	EXPECT_EQ(record.title, k_Title);
+	EXPECT_EQ(record.startedTurn, 100u);
+	EXPECT_EQ(record.doneTurn, 500u);
+	// Only a record that a start makes is a quest
+	EXPECT_FALSE(record.quest);
+	EXPECT_EQ(records::List(registry).completed, 1);
+}
+
 TEST(ChallengeRecords, ThingsTheRecordHoldsAreKeptAliveUntilReplaced)
 {
 	openblack::ecs::Registry registry;

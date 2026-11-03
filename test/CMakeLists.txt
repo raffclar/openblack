@@ -2164,6 +2164,7 @@ openblack_setup_and_add_test(
 )
 target_link_libraries(test_resource_data_only PRIVATE l3d)
 openblack_setup_and_add_test(test_creature_catch_while_busy test_creature_catch_while_busy.cpp)
+openblack_setup_and_add_test(test_maze_puzzle_rules test_maze_puzzle_rules.cpp)
 openblack_setup_and_add_test(test_puzzle_game_rules test_puzzle_game_rules.cpp)
 openblack_setup_and_add_test(
   test_script_prayer_natives test_script_prayer_natives.cpp
@@ -2344,3 +2345,4 @@ openblack_setup_and_add_test(test_data_report test_data_report.cpp)
 target_link_libraries(test_data_report PRIVATE datareport)
 openblack_setup_and_add_test(test_morph_file_write test_morph_file_write.cpp)
 target_link_libraries(test_morph_file_write PRIVATE morph)
+openblack_setup_and_add_test(test_puzzle_totem_rules test_puzzle_totem_rules.cpp)

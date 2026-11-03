@@ -350,6 +350,10 @@ void WriteAction(Writer& out, const Action& action)
 	               [&out](const DialogueClick& command) {
 		               out.Byte(static_cast<uint8_t>((command.click ? 1u : 0u) | (command.skipKey ? 2u : 0u)));
 	               },
+	               [&out](const PuzzleTap& command) {
+		               out.Number(static_cast<uint32_t>(command.placeX));
+		               out.Number(static_cast<uint32_t>(command.placeZ));
+	               },
 	               [&out](const MusicMood& command) {
 		               out.Entity(command.creature);
 		               out.Number(command.track);
@@ -789,6 +793,12 @@ DecodeError ReadAction(Reader& in, Action& action)
 		action = DialogueClick {.click = (flags & 1u) != 0, .skipKey = (flags & 2u) != 0};
 		return DecodeError::None;
 	}
+	case CommandTag::PuzzleTap:
+	{
+		const auto placeX = static_cast<int32_t>(in.Number<uint32_t>());
+		action = PuzzleTap {.placeX = placeX, .placeZ = static_cast<int32_t>(in.Number<uint32_t>())};
+		return DecodeError::None;
+	}
 	case CommandTag::MusicMood:
 	{
 		const auto creature = in.Entity();
@@ -947,6 +957,7 @@ CommandTag TagOf(const Action& action) noexcept
 	                      [](const MusicMood& /*command*/) { return CommandTag::MusicMood; },
 	                      [](const IconChargeStop& /*command*/) { return CommandTag::IconChargeStop; },
 	                      [](const DialogueClick& /*command*/) { return CommandTag::DialogueClick; },
+	                      [](const PuzzleTap& /*command*/) { return CommandTag::PuzzleTap; },
 	                  },
 	                  action);
 }
@@ -1008,6 +1019,7 @@ size_t SizeOf(const Action& action) noexcept
 	                   [](const MusicMood& /*command*/) { return k_Entity + 4 + 4; },
 	                   [](const IconChargeStop& /*command*/) { return size_t {0}; },
 	                   [](const DialogueClick& /*command*/) { return size_t {1}; },
+	                   [](const PuzzleTap& /*command*/) { return size_t {4 + 4}; },
 	               },
 	               action);
 	return 1 + fields;

@@ -23,6 +23,7 @@
 #include "ECS/Components/Fire.h"
 #include "ECS/Components/Physics.h"
 #include "ECS/Components/Pot.h"
+#include "ECS/Components/PuzzleGame.h"
 #include "ECS/Components/ScriptControl.h"
 #include "ECS/Components/Temple.h"
 #include "ECS/Components/Town.h"
@@ -31,9 +32,11 @@
 #include "ECS/Components/Villager.h"
 #include "ECS/Components/VillagerDeath.h"
 #include "ECS/Components/WorshipSite.h"
+#include "ECS/PuzzleTotemRules.h"
 #include "ECS/Registry.h"
 #include "ECS/Systems/CreatureObjectActionSystemInterface.h"
 #include "ECS/Systems/PlayerSystemInterface.h"
+#include "ECS/Systems/PuzzleTotemSystemInterface.h"
 #include "ECS/Systems/TimeSystemInterface.h"
 #include "ECS/Systems/VillageTotemSystemInterface.h"
 #include "ECS/VillageTotem.h"
@@ -239,6 +242,12 @@ std::optional<float> ecs::systems::mind_town_help::TotemShareOf(const ecs::Regis
 		return std::nullopt;
 	}
 	const auto totem = static_cast<entt::entity>(*step.object);
+	// A puzzle totem stands at the part of its greatest height that its height is
+	if (const auto* puzzleTotem = registry.Valid(totem) ? registry.TryGet<const PuzzleTotem>(totem) : nullptr;
+	    puzzleTotem != nullptr)
+	{
+		return puzzle_totem::ShareOf(puzzleTotem->height, puzzleTotem->highest);
+	}
 	const auto town = registry.Valid(totem) ? TownOfTotem(registry, totem) : entt::null;
 	const auto* townComponent = town != entt::null ? registry.TryGet<const Town>(town) : nullptr;
 	if (townComponent == nullptr || !registry.Valid(townComponent->worshipSite))
@@ -250,6 +259,17 @@ std::optional<float> ecs::systems::mind_town_help::TotemShareOf(const ecs::Regis
 
 void ecs::systems::mind_town_help::Apply(ecs::Registry& registry, const creature_mind::Commands& commands)
 {
+	// A puzzle totem takes the height for the share that the creature moved it to
+	if (commands.totem.has_value())
+	{
+		const auto totem = static_cast<entt::entity>(commands.totem->totem);
+		if (const auto* puzzleTotem = registry.Valid(totem) ? registry.TryGet<const PuzzleTotem>(totem) : nullptr;
+		    puzzleTotem != nullptr && Locator::puzzleTotemSystem::has_value())
+		{
+			Locator::puzzleTotemSystem::value().SetHeight(
+			    totem, puzzle_totem::HeightForShare(commands.totem->share, puzzleTotem->highest));
+		}
+	}
 	if (commands.totem.has_value() && Locator::villageTotemSystem::has_value())
 	{
 		const auto totem = static_cast<entt::entity>(commands.totem->totem);

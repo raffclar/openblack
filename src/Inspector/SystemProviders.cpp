@@ -1382,6 +1382,27 @@ std::unique_ptr<ProviderInterface> openblack::inspector::MakePuzzleProvider(Worl
 		              });
 		              return QueryResult::Value(std::move(items));
 	              });
+	provider->Add(Query("totems",
+	                    "The puzzle totems that rise out of the land and sink back into it: height, greatest height (-1 "
+	                    "for a totem that only takes taps), whether a hand holds it, and its place",
+	                    {}, ResultKind::List),
+	              [sources](const QueryContext& /*context*/) {
+		              const auto* registry = Registry(sources);
+		              if (registry == nullptr)
+		              {
+			              return QueryResult::Error(std::string(k_NoRegistry));
+		              }
+		              Json items = Json::array();
+		              registry->Each<const PuzzleTotem>([&](entt::entity entity, const PuzzleTotem& totem) {
+			              auto item = ToListItem(entity, Describe(*registry, entity, Info(sources)));
+			              item["height"] = totem.height;
+			              item["highest"] = totem.highest;
+			              item["held"] = totem.held;
+			              item["puzzle"] = ToId(totem.puzzle);
+			              items.push_back(std::move(item));
+		              });
+		              return QueryResult::Value(std::move(items));
+	              });
 	return provider;
 }
 
