@@ -1186,7 +1186,10 @@ const static std::array<VillagerStateTableEntry, static_cast<size_t>(VillagerSta
         .exitState = &villager_reactions::ExitReaction,
         .validate = &villager_reactions::ReactionValidate,
     },
-    /* WAIT_FOR_WOOD */ k_TodoEntry,
+    /* WAIT_FOR_WOOD */
+    VillagerStateTableEntry {
+        .state = &villager_build::WaitForWood,
+    },
     /* INSPECT_OBJECT */
     VillagerStateTableEntry {
         .state = &villager_disciple::InspectObject,

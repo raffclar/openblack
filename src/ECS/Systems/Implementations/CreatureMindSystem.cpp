@@ -2081,9 +2081,16 @@ void CreatureMindSystem::MindTurn(entt::entity entity)
 	}
 	for (const auto& teaching : std::exchange(mind.pendingTeaching, {}))
 	{
+		if (teaching.distinction)
+		{
+			LearnDistinction(entity, teaching.desire, teaching.attribute, teaching.value);
+			continue;
+		}
 		if (teaching.everything)
 		{
-			LearnEverything(entity);
+			// A value of 2 omits nothing, 0 omits the skills and 1 omits the miracles
+			const uint32_t excluded = !teaching.everySkill ? 0u : !teaching.everyMiracle ? 1u : 2u;
+			LearnEverythingExcluding(entity, excluded);
 			continue;
 		}
 		SetKnowsAction(entity, teaching.type, teaching.action, teaching.knows);

@@ -2045,6 +2045,20 @@ size_t creature_mind::MainStep(std::span<const Step> agenda)
 	return main == agenda.rend() ? agenda.size() - 1 : static_cast<size_t>(std::distance(main, agenda.rend()) - 1);
 }
 
+std::optional<uint32_t> creature_mind::InteractingWith(const IdleMind& mind)
+{
+	if (!mind.stepStarted || mind.step >= mind.agenda.size())
+	{
+		return std::nullopt;
+	}
+	const auto& step = mind.agenda[mind.step];
+	if (step.kind != Step::Kind::RaiseTotem && step.kind != Step::Kind::LowerTotem)
+	{
+		return std::nullopt;
+	}
+	return step.object;
+}
+
 bool creature_mind::AtOrPastMainStep(std::span<const Step> agenda, size_t step, bool showingDesire)
 {
 	if (agenda.empty())

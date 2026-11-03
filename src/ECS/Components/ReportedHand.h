@@ -64,6 +64,8 @@ struct ReportedHand
 	uint16_t cameraIcons {0};
 	/// The keys held, by the game's key number
 	std::bitset<255> keysHeld;
+	/// How many buttons the computer's system says the mouse has
+	uint32_t mouseButtons {0};
 };
 
 } // namespace openblack::ecs::components
