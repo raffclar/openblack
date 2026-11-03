@@ -77,30 +77,32 @@ void testbed_scenarios::AddTeleportScenarios(std::vector<Scenario>& all)
 	                  .byHand = true}},
 	});
 
-	// A fish farm stands fixed over the map's cells, so no stone goes within six metres of it
-	constexpr glm::vec2 k_FishFarm {5.0f, 145.0f};
-	constexpr glm::vec2 k_ByTheFarm {5.0f, 149.0f};
-	constexpr glm::vec2 k_ClearOfTheFarm {5.0f, 155.0f};
+	// A fish farm stands fixed over the map's cells, so no stone goes within six metres of its place. The staging puts
+	// the farm on open land, where the hand casts the stones.
+	constexpr glm::vec2 k_FishFarm {0.0f, 30.0f};
+	constexpr glm::vec2 k_ByTheFarm {0.0f, 34.0f};
+	constexpr glm::vec2 k_ClearOfTheFarm {0.0f, 40.0f};
 	all.push_back({
 	    .id = "miracles.teleport_kept_off_a_fish_farm",
 	    .name = "A teleport stone kept off a fish farm",
 	    .facet = Facet::Miracles,
-	    .description = "A fish farm by the town. The hand casts a teleport miracle four metres from the farm, then a second "
-	                   "one ten metres from the farm.",
-	    .expected = "The first cast makes no stone and no pool, because the farm is nearer than six metres. The second "
-	                "cast makes a stone with its turning pool of land.",
+	    .description =
+	        "A fish farm put on open land. The hand casts a teleport miracle ten metres from the farm, then a second "
+	        "one four metres from the farm.",
+	    .expected = "The first cast makes a stone with its turning pool of land. The second cast makes no stone and no "
+	                "pool, because the farm is nearer than six metres.",
 	    .environment = {.dispenserGrid = false},
 	    .framing = {.shot = Shot::Overview, .include = {k_FishFarm, k_ClearOfTheFarm}, .distance = 0.8f},
 	    .objects = {{.type = FishFarmInfo::Normal, .offset = k_FishFarm}},
 	    .miracles = {{.type = MagicType::Teleport,
-	                  .point = k_ByTheFarm,
-	                  .handOffset = k_ByTheFarm,
+	                  .point = k_ClearOfTheFarm,
+	                  .handOffset = k_ClearOfTheFarm,
 	                  .handHeight = 12.0f,
 	                  .delaySeconds = 1.0f,
 	                  .byHand = true},
 	                 {.type = MagicType::Teleport,
-	                  .point = k_ClearOfTheFarm,
-	                  .handOffset = k_ClearOfTheFarm,
+	                  .point = k_ByTheFarm,
+	                  .handOffset = k_ByTheFarm,
 	                  .handHeight = 12.0f,
 	                  .delaySeconds = 4.0f,
 	                  .byHand = true}},
