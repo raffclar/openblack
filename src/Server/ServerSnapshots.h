@@ -85,6 +85,13 @@ struct Room
 	std::vector<std::string> watcherNames;
 	/// The turns sent the god of the observers into the game, and no turn sent it out again. False in a file of format 3.
 	bool observersIn {false};
+	/// The number of each observer of `watchers` in the game, in the same order. A file of format 4 or older has none.
+	std::vector<uint8_t> watcherNumbers;
+	/// The observers that came and that no turn told yet, with their names, and the numbers of the observers that left and
+	/// that no turn told yet. A file of format 4 or older has none.
+	std::vector<uint8_t> arrivingNumbers;
+	std::vector<std::string> arrivingNames;
+	std::vector<uint8_t> departingNumbers;
 
 	bool operator==(const Room&) const = default;
 };
@@ -95,8 +102,13 @@ struct Room
 
 /// The number of the last block of commands of each god slot that a closed turn holds, by god slot. A slot whose
 /// session has no block in a turn has no number. The client of a player sends again the blocks that no turn held, and
-/// the server leaves out the blocks up to this number.
+/// the server leaves out the blocks up to this number. The blocks of an observer have the key k_ObserverBlocksKey plus
+/// the number of the observer.
 using BlockSequences = std::map<uint8_t, uint16_t>;
+
+/// The key of the blocks of the observer with number 0 in BlockSequences. The god slots are all below it, and the
+/// numbers of the observers fit above it.
+constexpr uint8_t k_ObserverBlocksKey = 0x80;
 
 /// True when the start of a snapshot is the start of the game that the server makes now: the same land, seed and modes
 [[nodiscard]] bool SameGame(const game_socket::Start& saved, const game_socket::Start& now);

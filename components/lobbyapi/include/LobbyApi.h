@@ -179,6 +179,10 @@ struct ServerEntry
 	/// "map": the SHA-256 (64 hex digits) of the land of the room that the players get from the lobby (an entry of GET
 	/// /api/v1/maps), or empty when the room plays a land of the game
 	std::string map;
+	/// Not in the lobby's list: the pin of the public key of the own certificate of a game server on the local network,
+	/// from its answer to the search, as 64 hex digits. The client accepts only that key at the address. Empty for a room
+	/// of the lobby, and for a server on the local network with a certificate of an authority.
+	std::string key;
 };
 
 /// The answer of a game server on the local network to a search (deviation 113), with the room in the shape of the
@@ -206,6 +210,9 @@ struct LanAnswer
 	std::string host;
 	/// "players": the gods and the observers, each with the account id 0
 	std::vector<RoomPlayer> players;
+	/// "key": the SHA-256 of the public key of the certificate that the server made for itself, as 64 hex digits. Empty:
+	/// the certificate of the game socket comes from an authority and names the host.
+	std::string key;
 };
 
 /// A land of a network game in GET /api/v1/maps: a land that the players do not have, which the lobby gives to the

@@ -18,6 +18,7 @@
 #include <GameSocket.h>
 
 #include "Online/GameOrigin.h"
+#include "Online/ServerKeyPin.h"
 
 namespace openblack::online
 {
@@ -54,6 +55,9 @@ struct NetworkJoin
 	std::optional<std::string> testCreatureFile;
 	/// Where the game came from: the lobby on the internet or the local network
 	online::GameOrigin origin {online::GameOrigin::Lan};
+	/// A game server on the local network with a certificate of its own: the pin of its public key, from its answer to
+	/// the search (deviation 113)
+	std::optional<online::server_key::Pin> serverKey;
 };
 
 /// The network game of this computer: the session with the game server, which gives the turns of the world. A join

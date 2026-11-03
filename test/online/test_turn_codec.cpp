@@ -133,6 +133,8 @@ std::vector<Action> EachCommand()
 	    FishScare {.point = {2497.875f, 0.2f, -3628.25f}},
 	    ObserversJoined {},
 	    ObserversLeft {},
+	    ObserverIn {.name = u"Ann"},
+	    ObserverOut {},
 	};
 }
 
@@ -173,7 +175,7 @@ Action RandomAction(std::mt19937& random)
 		return value;
 	};
 	const auto vector = [&]() { return glm::vec3 {number(), number(), number()}; };
-	switch (bits(random) % 51)
+	switch (bits(random) % 53)
 	{
 	case 0:
 		return LeashKey {.key = static_cast<creature_leash::LeashKey>(bits(random) % 3)};
@@ -356,6 +358,18 @@ Action RandomAction(std::mt19937& random)
 		return ObserversJoined {};
 	case 49:
 		return ObserversLeft {};
+	case 50:
+	{
+		ObserverIn observer;
+		observer.name.resize(bits(random) % (k_MostObserverNameCharacters + 1));
+		for (auto& character : observer.name)
+		{
+			character = static_cast<char16_t>(bits(random));
+		}
+		return observer;
+	}
+	case 51:
+		return ObserverOut {};
 	default:
 		return PlayerLeft {};
 	}
@@ -385,8 +399,10 @@ Frame RandomFrame(std::mt19937& random)
 		turn.blocks.resize(random() % 40);
 		for (auto& block : turn.blocks)
 		{
-			block = StampedBlock {
-			    .sender = GodOf(random()), .sequence = static_cast<uint16_t>(random()), .actions = RandomActions(random)};
+			block = StampedBlock {.sender = GodOf(random()),
+			                      .sequence = static_cast<uint16_t>(random()),
+			                      .actions = RandomActions(random),
+			                      .observer = static_cast<uint8_t>(random() % (k_MostObserverNumber + 1))};
 		}
 		return turn;
 	}
@@ -416,9 +432,9 @@ std::vector<Action> BusyCommands()
 
 TEST(TurnCodec, EachCommandHasItsSize)
 {
-	const std::vector<size_t> sizes {2,  5,  9, 5,  53, 5, 10, 18, 5, 49, 17, 5, 5, 5, 9,  12, 1,
-	                                 18, 11, 5, 18, 15, 7, 5,  1,  2, 1,  61, 5, 2, 1, 13, 10, 18,
-	                                 1,  54, 1, 5,  51, 5, 16, 7,  1, 1,  13, 1, 2, 9, 13, 1,  1};
+	const std::vector<size_t> sizes {2,  5, 9,  5,  53, 5, 10, 18, 5,  49, 17, 5, 5,  5,  9,  12, 1, 18,
+	                                 11, 5, 18, 15, 7,  5, 1,  2,  1,  61, 5,  2, 1,  13, 10, 18, 1, 54,
+	                                 1,  5, 51, 5,  16, 7, 1,  1,  13, 1,  2,  9, 13, 1,  1,  8,  1};
 	const auto commands = EachCommand();
 	ASSERT_EQ(commands.size(), sizes.size());
 	for (size_t i = 0; i < commands.size(); ++i)
@@ -503,8 +519,8 @@ TEST(TurnCodec, TheFieldsOfTheCommandsComeBackExactly)
 	    }},
 	};
 	auto bytes = Encode(turn);
-	ASSERT_EQ(bytes.size(), 94u);
-	// The velocity's y is at byte 21, and the amount is at byte 70
+	ASSERT_EQ(bytes.size(), 95u);
+	// The velocity's y is at byte 22, and the amount is at byte 71
 	const auto put = [](std::vector<uint8_t> into, size_t at, uint32_t value) {
 		for (size_t i = 0; i < 4; ++i)
 		{
@@ -512,13 +528,13 @@ TEST(TurnCodec, TheFieldsOfTheCommandsComeBackExactly)
 		}
 		return into;
 	};
-	ASSERT_EQ(bytes[12], static_cast<uint8_t>(CommandTag::HandLetGo));
+	ASSERT_EQ(bytes[13], static_cast<uint8_t>(CommandTag::HandLetGo));
 	// A command with a number that is not finite, or an amount out of its range, does not read. The test puts the NaNs in
 	// the bytes, because a NaN constant of the compiler can lose its signalling bit.
-	EXPECT_EQ(Decode(put(bytes, 21, 0x7F800001U)).error, DecodeError::Value);
-	EXPECT_EQ(Decode(put(bytes, 21, 0x7F800000U)).error, DecodeError::Value);
-	EXPECT_EQ(Decode(put(bytes, 70, 0xFFC12345U)).error, DecodeError::Value);
-	EXPECT_EQ(Decode(put(bytes, 70, std::bit_cast<uint32_t>(1.5f))).error, DecodeError::Value);
+	EXPECT_EQ(Decode(put(bytes, 22, 0x7F800001U)).error, DecodeError::Value);
+	EXPECT_EQ(Decode(put(bytes, 22, 0x7F800000U)).error, DecodeError::Value);
+	EXPECT_EQ(Decode(put(bytes, 71, 0xFFC12345U)).error, DecodeError::Value);
+	EXPECT_EQ(Decode(put(bytes, 71, std::bit_cast<uint32_t>(1.5f))).error, DecodeError::Value);
 	// The share of a totem is from 0 to 1
 	const auto share = [](float value) {
 		return Encode(TurnBundle {.turn = 1,
@@ -538,11 +554,11 @@ TEST(TurnCodec, TheFieldsOfTheCommandsComeBackExactly)
 		}
 		return value;
 	};
-	EXPECT_EQ(at(29), 0x80000000U);
-	EXPECT_EQ(at(37), std::bit_cast<uint32_t>(5.0f));
-	EXPECT_EQ(at(41), std::bit_cast<uint32_t>(11.0f));
-	EXPECT_EQ(at(53), std::bit_cast<uint32_t>(0.5f));
-	EXPECT_EQ(at(61), std::bit_cast<uint32_t>(2.0f));
+	EXPECT_EQ(at(30), 0x80000000U);
+	EXPECT_EQ(at(38), std::bit_cast<uint32_t>(5.0f));
+	EXPECT_EQ(at(42), std::bit_cast<uint32_t>(11.0f));
+	EXPECT_EQ(at(54), std::bit_cast<uint32_t>(0.5f));
+	EXPECT_EQ(at(62), std::bit_cast<uint32_t>(2.0f));
 	const auto decoded = Decode(bytes);
 	ASSERT_EQ(decoded.error, DecodeError::None);
 	EXPECT_EQ(Encode(*decoded.frame), bytes);
@@ -813,12 +829,12 @@ TEST(TurnCodec, ATurnOf32BusyPlayersFitsTheBudgetOfTheReport)
 	const auto encoded = Encode(turn);
 	// The commands without the hand report
 	EXPECT_EQ(encoded.size(), sizes::k_Header + sizes::k_TurnBody + 32 * (sizes::k_Stamp + commandBytes));
-	EXPECT_EQ(encoded.size(), 2408u);
-	// With the hand report: 3976 bytes. The stamps and the counts add less than 4 percent to the 3840 bytes
+	EXPECT_EQ(encoded.size(), 2440u);
+	// With the hand report: 4008 bytes. The stamps and the counts add less than 5 percent to the 3840 bytes
 	// (32 x 120) of the report.
 	const auto withReport = encoded.size() + 32 * k_HandReport;
-	EXPECT_EQ(withReport, 3976u);
-	EXPECT_LT(withReport * 100, 3840u * 104);
+	EXPECT_EQ(withReport, 4008u);
+	EXPECT_LT(withReport * 100, 3840u * 105);
 
 	// The block that one busy client sends, and its checksum
 	const auto up = Encode(CommandBlock {.sequence = 0, .turn = 1, .actions = commands});
@@ -1104,9 +1120,11 @@ TEST(TurnCodec, TheFrameCarriesTheGodSlotOfEachPlayer)
 	ASSERT_FALSE(bytes.empty());
 	// Version, kind, turn (4 bytes), count (2 bytes), then the first sender
 	EXPECT_EQ(bytes[8], 6u);
-	// The sender's sequence (2 bytes), the count of the commands, the tag and the count of the players
-	EXPECT_EQ(bytes[14], 7u);
-	EXPECT_EQ(bytes[15], 31u);
+	// The observer of the sender, the sender's sequence (2 bytes), the count of the commands, the tag and the count of
+	// the players
+	EXPECT_EQ(bytes[9], 0u);
+	EXPECT_EQ(bytes[15], 7u);
+	EXPECT_EQ(bytes[16], 31u);
 	const auto decoded = Decode(bytes);
 	ASSERT_EQ(decoded.error, DecodeError::None);
 	const auto& back = std::get<TurnBundle>(*decoded.frame);
@@ -1116,6 +1134,53 @@ TEST(TurnCodec, TheFrameCarriesTheGodSlotOfEachPlayer)
 	EXPECT_EQ(back.blocks[2].sender, static_cast<PlayerNames>(32));
 	const auto& taunt = std::get<ChatTaunt>(back.blocks[0].actions[0]);
 	EXPECT_EQ(taunt.recipients, (std::vector<PlayerNames> {static_cast<PlayerNames>(8), static_cast<PlayerNames>(32)}));
+}
+
+TEST(TurnCodec, ABlockOfAnObserverCarriesTheNumberOfTheObserver)
+{
+	const TurnBundle turn {
+	    .turn = 9,
+	    .blocks = {{.sender = PlayerNames::PLAYER_SEVEN, .sequence = 0, .actions = {ObserverIn {.name = u"Bo"}}, .observer = 3},
+	               {.sender = PlayerNames::PLAYER_SEVEN,
+	                .sequence = 0x0102,
+	                .actions = {ChatTaunt {.recipients = {}, .taunt = 2}},
+	                .observer = k_MostObserverNumber},
+	               {.sender = PlayerNames::PLAYER_SEVEN, .sequence = 0, .actions = {ObserverOut {}}, .observer = 3}},
+	};
+	const auto bytes = Encode(turn);
+	ASSERT_FALSE(bytes.empty());
+	// The sender, then the observer, then the sequence, the count, the tag, the count of the characters and each
+	// character
+	const std::vector<uint8_t> first {6, 3, 0, 0, 1, 52, 2, u'B', 0, u'o', 0};
+	EXPECT_TRUE(std::equal(first.begin(), first.end(), bytes.begin() + 8));
+	EXPECT_EQ(bytes.size(), SizeOf(Frame {turn}));
+	const auto decoded = Decode(bytes);
+	ASSERT_EQ(decoded.error, DecodeError::None);
+	const auto& back = std::get<TurnBundle>(*decoded.frame);
+	ASSERT_EQ(back.blocks.size(), 3u);
+	EXPECT_EQ(back.blocks[0].observer, 3u);
+	EXPECT_EQ(std::get<ObserverIn>(back.blocks[0].actions[0]).name, u"Bo");
+	EXPECT_EQ(back.blocks[1].observer, k_MostObserverNumber);
+	EXPECT_EQ(back.blocks[1].sequence, 0x0102);
+	EXPECT_TRUE(std::holds_alternative<ObserverOut>(back.blocks[2].actions[0]));
+}
+
+TEST(TurnCodec, TheNumberOfAnObserverAndItsNameKeepToTheirLimits)
+{
+	// An observer past the highest number is refused by the encoder and the decoder
+	TurnBundle turn {.turn = 1, .blocks = {{.sender = PlayerNames::PLAYER_SEVEN, .sequence = 0, .actions = {}, .observer = 1}}};
+	auto bytes = Encode(turn);
+	ASSERT_FALSE(bytes.empty());
+	bytes[9] = k_MostObserverNumber + 1;
+	EXPECT_EQ(Decode(bytes).error, DecodeError::Value);
+	turn.blocks[0].observer = k_MostObserverNumber + 1;
+	EXPECT_TRUE(Encode(turn).empty());
+	// A name of an observer longer than the limit is refused
+	turn.blocks[0].observer = 1;
+	turn.blocks[0].actions = {ObserverIn {.name = std::u16string(k_MostObserverNameCharacters + 1, u'a')}};
+	EXPECT_TRUE(Encode(turn).empty());
+	turn.blocks[0].actions = {ObserverIn {.name = std::u16string(k_MostObserverNameCharacters, u'a')}};
+	EXPECT_FALSE(Encode(turn).empty());
 }
 
 TEST(TurnCodec, TheGodsOfALandHaveTheBytesOfTheirNumbers)

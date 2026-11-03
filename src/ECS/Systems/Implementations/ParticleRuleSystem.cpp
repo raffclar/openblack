@@ -67,6 +67,7 @@
 #include "ECS/Systems/AlignmentSystemInterface.h"
 #include "ECS/Systems/CameraPathSystemInterface.h"
 #include "ECS/Systems/CreatureHandSystemInterface.h"
+#include "ECS/Systems/GameEndSystemInterface.h"
 #include "ECS/Systems/PickingSystemInterface.h"
 #include "ECS/Systems/PlayerSystemInterface.h"
 #include "ECS/Systems/TimeSystemInterface.h"
@@ -165,8 +166,11 @@ float GameParticleWorld::LandHeightAtMap(int32_t x, int32_t z) const
 
 uint32_t GameParticleWorld::PlayerColour(int player) const
 {
-	// A god after the seventh has the land colour of its god slot (deviation 164)
-	return player_colour::Of(static_cast<PlayerNames>(player)) & 0xFFFFFFu;
+	// A god after the seventh has the land colour of its god slot (deviation 164). The god of the observers shows the
+	// colour of player seven (deviation 218).
+	const auto observersGod =
+	    Locator::gameEndSystem::has_value() ? Locator::gameEndSystem::value().ObserversGod() : std::nullopt;
+	return player_colour::Of(player_colour::ShownAs(static_cast<PlayerNames>(player), observersGod)) & 0xFFFFFFu;
 }
 
 std::optional<particles::TownCentreBelief> GameParticleWorld::TownCentreBeliefOf(entt::entity centre) const

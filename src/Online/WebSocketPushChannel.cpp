@@ -19,7 +19,7 @@ namespace push_channel
 
 WebSocketRequest Handshake(std::string url, std::string_view accessToken, PushAuth auth)
 {
-	WebSocketRequest request {.url = std::move(url), .headers = {}, .subprotocols = {}};
+	WebSocketRequest request {.url = std::move(url), .headers = {}, .subprotocols = {}, .serverKey = std::nullopt};
 	switch (auth)
 	{
 	case PushAuth::Header:

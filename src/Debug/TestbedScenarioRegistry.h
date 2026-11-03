@@ -1098,6 +1098,10 @@ struct Command
 		/// player reports its hand at the point (point), so high above the land (radius), and its camera 30 m above the
 		/// hand. This computer does not move these hands. Needs no creature.
 		OtherGodHand,
+		/// An observer of a network game, as the turns tell it: the god of the observers (player) comes into the game
+		/// with hands of its own, and the observer with the number (value) comes in. Then the observer reports its hand at
+		/// the point (point), so high above the land (radius), and its camera 30 m above the hand. Needs no creature.
+		ObserverCamera,
 		/// This computer is the computer of the god of the player (player), as in a network game: that player gets hands
 		/// of its own, and this computer moves and draws them. The next scenario starts with the first player as the god
 		/// of this computer again. Needs no creature.

@@ -606,7 +606,7 @@ TEST(LanRoom, TheAnswerListsTheGodsByTheNamesOfTheirPlayers)
 	seats[1].name = "Gone";
 	seats[2].state = server::LockstepHost::SeatState::Away;
 	seats[2].name = "Bob";
-	const auto answer = server::lan_room::AnswerOf(room, false, seats, 4433, "");
+	const auto answer = server::lan_room::AnswerOf(room, false, seats, 4433, "", "");
 	EXPECT_EQ(answer.gamemode, "openstaging");
 	EXPECT_EQ(answer.numplayers, 2);
 	EXPECT_EQ(answer.maxplayers, 2);
@@ -614,5 +614,5 @@ TEST(LanRoom, TheAnswerListsTheGodsByTheNamesOfTheirPlayers)
 	ASSERT_EQ(answer.players.size(), 2u);
 	EXPECT_EQ(answer.players[0].account.name, "Alice");
 	EXPECT_EQ(answer.players[1].account.name, "Bob");
-	EXPECT_EQ(server::lan_room::AnswerOf(room, true, seats, 4433, "").gamemode, "closedplaying");
+	EXPECT_EQ(server::lan_room::AnswerOf(room, true, seats, 4433, "", "").gamemode, "closedplaying");
 }

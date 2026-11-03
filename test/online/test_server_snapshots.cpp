@@ -52,7 +52,11 @@ Room MakeRoom()
 	             .leaving = {1},
 	             .joining = {},
 	             .watcherNames = {"carol"},
-	             .observersIn = true};
+	             .observersIn = true,
+	             .watcherNumbers = {2},
+	             .arrivingNumbers = {3},
+	             .arrivingNames = {"dave"},
+	             .departingNumbers = {1}};
 }
 
 /// True when the bytes have the text in them
@@ -148,9 +152,14 @@ TEST(ServerSnapshots, TheRoomOfTheThirdFormatReadsWithNoNames)
 	auto room = MakeRoom();
 	room.watcherNames.clear();
 	room.observersIn = false;
+	room.watcherNumbers.clear();
+	room.arrivingNumbers.clear();
+	room.arrivingNames.clear();
+	room.departingNumbers.clear();
 	auto bytes = EncodeRoom(room);
-	// The count of the names (4 bytes) and the god of the observers (1 byte) end the room of format 4
-	bytes.resize(bytes.size() - 5);
+	// The four empty lists of the observers (4 bytes each) end the room of format 5. The count of the names (4 bytes)
+	// and the god of the observers (1 byte) end the room of format 4.
+	bytes.resize(bytes.size() - 16 - 5);
 	const auto old = DecodeRoom(bytes);
 	ASSERT_TRUE(old.has_value());
 	EXPECT_EQ(old->watchers, room.watchers);
@@ -371,25 +380,43 @@ TEST_F(SnapshotStoreTest, TheFilesKeepNoSecretOfASessionButTheHashesFindTheRight
 	EXPECT_TRUE(hasher.Matches(restored->room.watchers[0], "observer-secret-carol"));
 }
 
+// A room of format 4 has no numbers of the observers. It still reads.
+TEST(ServerSnapshots, TheRoomOfTheFourthFormatReadsWithNoNumbersOfObservers)
+{
+	auto room = MakeRoom();
+	room.watcherNumbers.clear();
+	room.arrivingNumbers.clear();
+	room.arrivingNames.clear();
+	room.departingNumbers.clear();
+	auto bytes = EncodeRoom(room);
+	bytes.resize(bytes.size() - 16);
+	const auto old = DecodeRoom(bytes);
+	ASSERT_TRUE(old.has_value());
+	EXPECT_EQ(old->watcherNames, room.watcherNames);
+	EXPECT_TRUE(old->observersIn);
+	EXPECT_TRUE(old->watcherNumbers.empty());
+	EXPECT_TRUE(old->arrivingNumbers.empty());
+}
+
 TEST(ServerSnapshots, ASnapshotOfAnEarlierFormatDoesNotLoad)
 {
 	const auto now = EncodeSnapshot({.turn = 300, .room = MakeRoom(), .world = World(300), .blocks = {}});
 	ASSERT_TRUE(DecodeSnapshot(now).has_value());
 	// The first format kept the secrets of the sessions, and the second format kept no blocks of commands. The version is
 	// after the 8 bytes of the magic text.
-	// The third format still loads.
-	for (const uint8_t version : {1, 2, 3})
+	// The third and the fourth formats still load.
+	for (const uint8_t version : {1, 2, 3, 4})
 	{
 		auto bytes = now;
 		bytes.resize(bytes.size() - sizeof(uint64_t));
-		ASSERT_EQ(bytes[8], 4);
+		ASSERT_EQ(bytes[8], 5);
 		bytes[8] = version;
 		const auto checksum = Checksum(bytes);
 		for (int shift = 0; shift < 64; shift += 8)
 		{
 			bytes.push_back(static_cast<uint8_t>(checksum >> shift));
 		}
-		EXPECT_EQ(DecodeSnapshot(bytes).has_value(), version == 3) << static_cast<int>(version);
+		EXPECT_EQ(DecodeSnapshot(bytes).has_value(), version >= 3) << static_cast<int>(version);
 	}
 }
 

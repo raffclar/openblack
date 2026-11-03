@@ -821,3 +821,46 @@ TEST_F(LobbyClientTest, ALineToAnAccountGoesToItsAddress)
 	_client->SendPersonLine(301, "", [&](auto&& result) { kind = result.error.kind; });
 	EXPECT_EQ(kind, LobbyErrorKind::Refused);
 }
+
+TEST_F(LobbyClientTest, AMapDownloadStopsAtTheSizeOfTheListAndRefusesAnotherSize)
+{
+	Make();
+	LogIn();
+	lobby_api::OnlineMap map;
+	map.sha256 = std::string(64, 'a');
+	map.size = 4;
+	std::optional<std::vector<uint8_t>> file;
+	_client->DownloadMap(map, [&](auto&& result) { file = result.value; });
+	EXPECT_EQ(_http.Next().url, "https://bw.example/api/v1/maps/" + map.sha256);
+	EXPECT_TRUE(_http.Next().large);
+	EXPECT_EQ(_http.Next().mostBytes, 4u);
+	_http.Answer(200, "abcd");
+	ASSERT_TRUE(file.has_value());
+	EXPECT_EQ(file->size(), 4u);
+
+	// An answer of another size is a bad answer
+	std::optional<LobbyErrorKind> kind;
+	_client->DownloadMap(map, [&](auto&& result) { kind = result.error.kind; });
+	_http.Answer(200, "abc");
+	EXPECT_EQ(kind, LobbyErrorKind::BadAnswer);
+
+	// A list with no size keeps the limit of a large file
+	map.size = 0;
+	file.reset();
+	_client->DownloadMap(map, [&](auto&& result) { file = result.value; });
+	EXPECT_EQ(_http.Next().mostBytes, 0u);
+	_http.Answer(200, "abcdef");
+	ASSERT_TRUE(file.has_value());
+	EXPECT_EQ(file->size(), 6u);
+}
+
+TEST(HttpLimits, ASmallerLimitOfTheRequestTakesThePlaceOfTheLimitOfItsKind)
+{
+	online::HttpRequest request;
+	EXPECT_EQ(online::MostAnswerBytes(request, 100), 100u);
+	request.mostBytes = 40;
+	EXPECT_EQ(online::MostAnswerBytes(request, 100), 40u);
+	// A limit of the request cannot make the limit of its kind larger
+	request.mostBytes = 400;
+	EXPECT_EQ(online::MostAnswerBytes(request, 100), 100u);
+}

@@ -31,11 +31,13 @@
 #include "ECS/Components/CreatureLeash.h"
 #include "ECS/Components/LeftGame.h"
 #include "ECS/Components/MagicFireBall.h"
+#include "ECS/Components/ObserverInterfaces.h"
 #include "ECS/Components/Player.h"
 #include "ECS/Components/PuzzleGame.h"
 #include "ECS/Components/VillageTotem.h"
 #include "ECS/CreatureFromFile.h"
 #include "ECS/LeaverHand.h"
+#include "ECS/ObserverInterfaceRules.h"
 #include "ECS/PlayerRelations.h"
 #include "ECS/ProfileAlignment.h"
 #include "ECS/Registry.h"
@@ -207,9 +209,77 @@ void LogRefused(openblack::PlayerNames player, std::string_view command, entt::e
 	return openblack::player_commands::owner_rules::MayUseTotem(owner, player);
 }
 
+/// The observers of the god of the observers, on the player of the god. The world adds them to the player at the first
+/// command that needs them. None when the world has no player of the god.
+openblack::ecs::components::ObserverInterfaces* ObserversOf(openblack::PlayerNames god)
+{
+	if (!openblack::Locator::playerSystem::has_value())
+	{
+		return nullptr;
+	}
+	const auto player = openblack::Locator::playerSystem::value().FindPlayer(god);
+	if (!player.has_value())
+	{
+		return nullptr;
+	}
+	auto& registry = openblack::Locator::entitiesRegistry::value();
+	if (auto* observers = registry.TryGet<openblack::ecs::components::ObserverInterfaces>(*player); observers != nullptr)
+	{
+		return observers;
+	}
+	return &registry.Assign<openblack::ecs::components::ObserverInterfaces>(*player);
+}
+
+/// Do one command of an observer at a turn. Each observer has its own hand and camera, so its report changes only the
+/// place of its own hand and camera, never the hand of the god. The game server sends only the commands that an observer
+/// sends (player_commands::ObserverSends), and the come and the go of an observer. The world leaves out any other
+/// command of an observer.
+void RunObserver(const Command& command)
+{
+	std::visit(
+	    [&command](const auto& action) {
+		    using Kind = std::decay_t<decltype(action)>;
+		    if constexpr (std::is_same_v<Kind, ObserverIn>)
+		    {
+			    if (auto* observers = ObserversOf(command.player); observers != nullptr)
+			    {
+				    openblack::observer_interfaces::Come(*observers, command.observer, action.name);
+			    }
+		    }
+		    else if constexpr (std::is_same_v<Kind, ObserverOut>)
+		    {
+			    if (auto* observers = ObserversOf(command.player); observers != nullptr)
+			    {
+				    openblack::observer_interfaces::Go(*observers, command.observer);
+			    }
+		    }
+		    else if constexpr (std::is_same_v<Kind, HandReport>)
+		    {
+			    if (auto* observers = ObserversOf(command.player); observers != nullptr)
+			    {
+				    openblack::observer_interfaces::Report(*observers, command.observer, action.handPoint, action.camera);
+			    }
+		    }
+		    else if constexpr (std::is_same_v<Kind, ChatSpeech> || std::is_same_v<Kind, ChatTaunt>)
+		    {
+			    // A line of the chat changes nothing of the synced world. It has the name of the god of the observers.
+			    if (openblack::Locator::chatSystem::has_value())
+			    {
+				    openblack::Locator::chatSystem::value().Receive(command.player, action);
+			    }
+		    }
+	    },
+	    command.action);
+}
+
 /// Do one command for the player that sent it, at a turn
 void Run(const Command& command, uint32_t turn)
 {
+	if (command.observer != 0)
+	{
+		RunObserver(command);
+		return;
+	}
 	auto& registry = openblack::Locator::entitiesRegistry::value();
 	std::visit(
 	    [&](const auto& action) {
@@ -597,6 +667,10 @@ void Run(const Command& command, uint32_t turn)
 			    // The hand of the last observer lets go, as the hand of any human who leaves. The box that tells the
 			    // players comes from the leave of the observer itself.
 			    std::ignore = openblack::ecs::leaver_hand::ReleaseHandInGame(command.player);
+			    if (auto* observers = ObserversOf(command.player); observers != nullptr)
+			    {
+				    openblack::observer_interfaces::AllGone(*observers);
+			    }
 			    if (openblack::Locator::gameEndSystem::has_value())
 			    {
 				    openblack::Locator::gameEndSystem::value().ObserversLeft();

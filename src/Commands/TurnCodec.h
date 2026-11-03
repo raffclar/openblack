@@ -27,8 +27,9 @@
 /// The format:
 /// - Frame: version (u8), kind (u8), then the body of the kind.
 /// - Commands (client to server): sequence (u16), turn (u32), count (u8), then the commands.
-/// - Turn (server to clients): turn (u32), block count (u16), then each block: sender (u8), sequence (u16), count (u8),
-///   then the commands. The sender is the god slot of the player (player_slots::SlotOfPlayer).
+/// - Turn (server to clients): turn (u32), block count (u16), then each block: sender (u8), observer (u8), sequence
+///   (u16), count (u8), then the commands. The sender is the god slot of the player (player_slots::SlotOfPlayer). The
+///   observer is the number of the observer that sent the block, from 1, and 0 for the player of a god.
 /// - Checksum (both ways): turn (u32), checksum (u64). The server sends its checksum of each turn, and each client sends
 ///   its own.
 /// - Ping and pong: id (u32), time (u64). A pong sends back the id and the time of its ping.
@@ -39,11 +40,12 @@
 ///   angles of the start. A seed or a leash is its number (u8).
 /// - A line of the chat: the count of the players that get it (u8), the god slot of each (u8), then the count of its
 ///   characters (u16) and each character as UTF-16 (u16). A taunt has its number (u32) in place of the characters.
+/// - An observer that comes in: the count of the characters of its name (u8), then each character as UTF-16 (u16).
 namespace openblack::turn_codec
 {
 
 /// The version of the format. A change of the format gives a new version.
-inline constexpr uint8_t k_Version = 30;
+inline constexpr uint8_t k_Version = 31;
 /// The largest frame that a computer sends or accepts
 inline constexpr size_t k_MostFrameBytes = 64 * 1024;
 /// The most commands in one block, as a client sends them
@@ -113,6 +115,8 @@ enum class CommandTag : uint8_t
 	FishScare = 49,
 	ObserversJoined = 50,
 	ObserversLeft = 51,
+	ObserverIn = 52,
+	ObserverOut = 53,
 };
 
 /// The sizes of the parts of the frames, in bytes
@@ -125,8 +129,8 @@ inline constexpr size_t k_Vector = 12;
 inline constexpr size_t k_CommandsBody = 7;
 /// The turn and the block count of a turn
 inline constexpr size_t k_TurnBody = 6;
-/// The sender, the sequence and the count of a block in a turn
-inline constexpr size_t k_Stamp = 4;
+/// The sender, the observer, the sequence and the count of a block in a turn
+inline constexpr size_t k_Stamp = 5;
 inline constexpr size_t k_Checksum = k_Header + 12;
 inline constexpr size_t k_Ping = k_Header + 12;
 /// The turn, the part and the count of the parts of a world part, before its bytes
@@ -135,6 +139,12 @@ inline constexpr size_t k_WorldPartHead = k_Header + 8;
 
 /// The most characters in a line of the chat. The game keeps this many characters of a line that comes in.
 inline constexpr size_t k_MostChatCharacters = 1023;
+
+/// The most characters of the name of an observer that comes in
+inline constexpr size_t k_MostObserverNameCharacters = 64;
+
+/// The highest number of an observer. The numbers of the observers that are in the game are all different.
+inline constexpr uint8_t k_MostObserverNumber = 127;
 
 /// The most bytes of the world state in one world part
 inline constexpr size_t k_WorldPartBytes = 60 * 1024;
@@ -158,12 +168,15 @@ struct CommandBlock
 	return distance != 0 && distance < 0x8000;
 }
 
-/// A block in a turn, with the stamp of the server: the player that sent it and the number of the block
+/// A block in a turn, with the stamp of the server: the player that sent it, the observer that sent it and the number of
+/// the block
 struct StampedBlock
 {
 	PlayerNames sender {PlayerNames::PLAYER_ONE};
 	uint16_t sequence {0};
 	std::vector<player_commands::Action> actions;
+	/// The number of the observer of the god of the observers that sent the block, from 1. 0 for the player of a god.
+	uint8_t observer {0};
 };
 
 /// One turn: the blocks of all the players, in the order that the server got them

@@ -20,6 +20,7 @@
 #include <span>
 #include <string>
 #include <string_view>
+#include <utility>
 #include <vector>
 
 #include <GameSocket.h>
@@ -175,6 +176,8 @@ public:
 		uint32_t resumes {0};
 		/// The name of the observer's account, for the room's chat and for the leave. Empty for a session that a restore gave.
 		std::string name;
+		/// The number of the observer in the game, from 1. The turns stamp the blocks of the observer with it.
+		uint8_t number {0};
 	};
 
 	LockstepHost(WebSocketServerInterface& sockets, CheckTicket checkTicket, Clock clock, MakeSecret makeSecret,
@@ -251,9 +254,11 @@ public:
 	[[nodiscard]] PlayerNames ObserversGod() const;
 	/// True when the turns sent the god of the observers into the game, and no turn sent it out again
 	[[nodiscard]] bool ObserversIn() const { return _observersIn; }
-	/// The blocks of commands that the server did not accept: from an observer, before the start, or a command that only
-	/// the server sends
+	/// The blocks of commands that the server did not accept: before the start, a command that only the server sends, or
+	/// a command that an observer does not send
 	[[nodiscard]] uint32_t RefusedBlocks() const { return _refusedBlocks; }
+	/// The numbers of the observers that the server gave and whose leave is not in a turn yet, in order
+	[[nodiscard]] std::vector<uint8_t> ObserverNumbers() const;
 	/// One line for each god slot that had a player: the checksums compared and the same ones
 	[[nodiscard]] std::vector<std::string> SummaryLines() const;
 
@@ -267,6 +272,17 @@ private:
 		int64_t openedAt {0};
 		/// The name of the player's account
 		std::string name;
+		/// The number of an observer in the game, from 1. 0 for a god, and for an observer that has no number yet.
+		uint8_t observer {0};
+	};
+
+	/// The blocks of commands of an observer that the server took, as the seat of a god keeps them
+	struct ObserverBlocks
+	{
+		/// The number of the last block of the observer that the server took
+		std::optional<uint16_t> lastBlock;
+		/// The number of the last block of the observer that a closed turn holds
+		std::optional<uint16_t> lastBlockInTurn;
 	};
 
 	void Opened(ConnectionId connection);
@@ -279,17 +295,28 @@ private:
 	bool ResumeObserver(ConnectionId connection, Peer& peer, const game_socket::Resume& resume, bool world);
 	/// Sends the kept turns from a turn, with the server's checksums, and the stop of the turns if they stopped
 	void SendKeptTurns(ConnectionId connection, uint32_t from);
-	/// Gives a new session to an observer on a connection, and returns its secret. With no secrets, the observer cannot
-	/// come back.
-	[[nodiscard]] std::string NewWatcher(ConnectionId connection, std::string name);
+	/// Gives a new session to an observer on a connection, with the number of the observer, and returns its secret. With
+	/// no secrets, the observer cannot come back.
+	[[nodiscard]] std::string NewWatcher(ConnectionId connection, std::string name, uint8_t number);
 	/// A line of the room's chat from a player: it goes to every other player in a room on the local network, until the
 	/// start
 	void ChatInRoom(ConnectionId connection, const Peer& peer, const game_socket::RoomChat& chat);
 	/// The name of a player in the room: the name of the god's seat, or the name of the observer. Empty for none.
 	[[nodiscard]] std::string PeerName(ConnectionId connection, const Peer& peer) const;
-	[[nodiscard]] std::string NewWatcher(ConnectionId connection, std::string_view name);
 	/// The session of an observer ended after the start: the other players see that the observer left the game
 	void ObserverLeft(std::string_view name);
+	/// A new observer comes into the game: it gets the lowest number that no observer has, and the next turn tells the
+	/// worlds. 0 when every number is taken.
+	[[nodiscard]] uint8_t ObserverCame(std::string_view name);
+	/// The session of the observer with the number ended: the next turn tells the worlds. The number is free again after
+	/// that turn.
+	void ObserverGone(uint8_t number);
+	/// The lowest number that no observer has, none when every number is taken
+	[[nodiscard]] std::optional<uint8_t> FreeObserverNumber() const;
+	/// Takes a block of commands from an observer into the next turn
+	void ObserverBlock(const Peer& peer, turn_codec::CommandBlock& block);
+	/// The blocks of the server that tell the worlds of the god of the observers and of the observers that came and left
+	void AddObserverBlocks(turn_codec::TurnBundle& bundle, uint32_t turn);
 	/// The observers that are in the game: each observer that is connected, and each observer that can come back
 	[[nodiscard]] size_t ObserversInGame() const;
 	/// The salted hash of a secret. None when the secret is empty or the host has no hasher.
@@ -368,17 +395,28 @@ private:
 	uint32_t _turnsDone {0};
 	/// The last turn of the game, once the turns stopped
 	std::optional<uint32_t> _stoppedAfter;
-	/// A block that came since the last turn, with the god slot and the session that sent it
+	/// A block that came since the last turn, with the god slot and the session that sent it, or the number of the
+	/// observer that sent it
 	struct PendingBlock
 	{
 		turn_codec::StampedBlock block;
 		uint8_t seat {0};
 		uint32_t session {0};
+		uint8_t observer {0};
 	};
 	/// The blocks that came since the last turn
 	std::vector<PendingBlock> _pending;
 	/// The bytes of the commands of each god slot in the blocks that came since the last turn
 	std::map<uint8_t, size_t> _pendingBytes;
+	/// The bytes of the commands of each observer in the blocks that came since the last turn, by its number
+	std::map<uint8_t, size_t> _pendingObserverBytes;
+	/// The blocks of each observer by its number. A number is in the map from the come of the observer until a turn holds
+	/// its leave, so that no other observer gets the number before the worlds know of the leave.
+	std::map<uint8_t, ObserverBlocks> _observerBlocks;
+	/// The observers that came and that no turn told yet: the number and the name of each
+	std::vector<std::pair<uint8_t, std::string>> _observerArrivals;
+	/// The numbers of the observers that left and that no turn told yet
+	std::vector<uint8_t> _observerDepartures;
 	/// The number of the last session that a god's player got
 	uint32_t _sessions {0};
 	/// The slots whose god leaves at the next turn

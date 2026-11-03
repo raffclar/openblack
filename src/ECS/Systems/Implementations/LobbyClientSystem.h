@@ -127,6 +127,8 @@ private:
 		bool retried {false};
 		/// A large file (online::HttpRequest::large)
 		bool large {false};
+		/// A smaller limit of the answer (online::HttpRequest::mostBytes), 0 for none
+		size_t mostBytes {0};
 	};
 
 	[[nodiscard]] std::string Address(std::string_view apiPath) const;
@@ -141,7 +143,8 @@ private:
 	void EndSession();
 	/// Sends a call that needs the session, and reads its answer with a parser
 	template <typename Value, typename Parser>
-	void CallFor(online::HttpMethod method, std::string path, LobbyCallback<Value> callback, Parser parse, bool large = false);
+	void CallFor(online::HttpMethod method, std::string path, LobbyCallback<Value> callback, Parser parse, bool large = false,
+	             size_t mostBytes = 0);
 
 	void OpenPush();
 	void HandlePush(std::string_view text);

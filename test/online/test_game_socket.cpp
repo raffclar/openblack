@@ -58,6 +58,13 @@ TEST(GameSocket, EachFrameGoesToJsonAndBack)
 	    RoundTrip(Joined {.role = Role::Observer, .slot = std::nullopt, .session = "o", .name = {}, .start = std::nullopt});
 	EXPECT_EQ(observer.role, Role::Observer);
 	EXPECT_FALSE(observer.slot.has_value());
+	EXPECT_EQ(observer.observer, 0u);
+	// An observer of a server that gives numbers has its number. A god never has one.
+	const auto numbered = RoundTrip(Joined {
+	    .role = Role::Observer, .slot = std::nullopt, .session = "o", .name = {}, .start = std::nullopt, .observer = 127});
+	EXPECT_EQ(numbered.observer, 127u);
+	EXPECT_FALSE(Parse(R"({"type":"room.joined","role":"observer","slot":null,"session":"x","observer":128})").has_value());
+	EXPECT_FALSE(Parse(R"({"type":"room.joined","role":"god","slot":1,"session":"x","observer":1})").has_value());
 
 	EXPECT_EQ(RoundTrip(Refused {.reason = "full"}).reason, "full");
 	const auto start =

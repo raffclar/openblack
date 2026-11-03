@@ -309,6 +309,22 @@ struct ObserversLeft
 {
 };
 
+/// An observer came into the network game. Only the game server sends it, stamped with the god of the observers and the
+/// number of the observer. The observer is a human of that god, with its own hand and camera. The god takes the name of
+/// the observer, so the god has the name of the last observer that came in.
+struct ObserverIn
+{
+	std::u16string name;
+
+	[[nodiscard]] bool operator==(const ObserverIn&) const = default;
+};
+
+/// An observer left the network game: its session ended. Only the game server sends it, stamped with the god of the
+/// observers and the number of the observer. The other computers stop the sparkle at the camera of the observer.
+struct ObserverOut
+{
+};
+
 /// The miracle selection chose a miracle: the player's icons give the miracle of the seed to the hand, or one of them
 /// starts to charge it. The turn checks again that an icon may do it.
 struct MiracleRequest
@@ -575,14 +591,26 @@ using Action = std::variant<LeashKey, LeashTap, CreatureFeedback, HandTake, Hand
                             PlayerJoined, MiracleRequest, MiracleRepeat, HandCast, HandCastUnlock, LeashPick, HandShakeOff,
                             GripDust, HelpReport, HelpQuery, CreatureFightCheat, ViewReport, TempleLeashOff, GiveCallOff,
                             CreatureTattoo, LeashLength, ChatSpeech, ChatTaunt, QuickSave, QuickLoad, MusicMood, IconChargeStop,
-                            DialogueClick, PuzzleTap, FishScare, ObserversJoined, ObserversLeft>;
+                            DialogueClick, PuzzleTap, FishScare, ObserversJoined, ObserversLeft, ObserverIn, ObserverOut>;
 
 /// A command and the player that sent it
 struct Command
 {
 	PlayerNames player;
 	Action action;
+	/// The observer of the god of the observers that sent the command, from 1. 0 for the human of a god and for the
+	/// commands that the server makes for a god.
+	uint8_t observer {0};
 };
+
+/// Whether an observer sends a command. An observer is a human of the god of the observers, which has no citadel and
+/// so no influence: its hand does not act on things. Only the report of its hand and camera and the lines of the chat
+/// go from an observer. The game server leaves out every other command of an observer.
+[[nodiscard]] constexpr bool ObserverSends(const Action& action) noexcept
+{
+	return std::holds_alternative<HandReport>(action) || std::holds_alternative<ChatSpeech>(action) ||
+	       std::holds_alternative<ChatTaunt>(action);
+}
 
 /// The commands that the players made and that the world did not see yet. The queue keeps no other game state, so that
 /// the game and the tests use it both.

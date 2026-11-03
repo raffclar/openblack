@@ -30,6 +30,7 @@
 #include "Online/Desktop/CurlHttpClient.h"
 #include "Online/Desktop/UdpLanDiscovery.h"
 #include "Online/LanDiscovery.h"
+#include "Online/ServerKeyPin.h"
 #include "Server/Desktop/Sha256SessionHasher.h"
 #include "Server/Desktop/SocketWebSocketServer.h"
 #include "Server/Ed25519.h"
@@ -106,6 +107,8 @@ struct GameRole::Parts
 	/// The answers to the search of the clients on the local network
 	std::unique_ptr<online::LanResponder> lan;
 	std::string lanHost;
+	/// The pin of the key of the server's own certificate as hex digits, empty for a certificate file
+	std::string lanKey;
 
 	void AnswerSearches()
 	{
@@ -113,7 +116,7 @@ struct GameRole::Parts
 		{
 			return;
 		}
-		lan->Poll([this] { return lan_room::AnswerOf(room, host->Started(), host->Seats(), sockets.Port(), lanHost); });
+		lan->Poll([this] { return lan_room::AnswerOf(room, host->Started(), host->Seats(), sockets.Port(), lanHost, lanKey); });
 	}
 
 	void SendMap()
@@ -282,14 +285,24 @@ std::optional<std::string> GameRole::Start(const NetworkSettings& settings, game
 		return "the server has no key to check the tickets (--ticket-keys)";
 	}
 
-	ListenSettings listen {
-	    .address = settings.address, .port = settings.port, .certificate = settings.certificate, .key = settings.key};
+	// A room on the local network with no certificate file makes a certificate of its own, and its answers give the pin
+	// of its key (deviation 113)
+	const bool ownCertificate = settings.lan && !settings.certificate.has_value();
+	ListenSettings listen {.address = settings.address,
+	                       .port = settings.port,
+	                       .certificate = settings.certificate,
+	                       .key = settings.key,
+	                       .ownCertificate = ownCertificate};
 	if (auto error = parts.sockets.Listen(listen); error.has_value())
 	{
 		return error;
 	}
+	const auto keyPin = parts.sockets.OwnKeyPin();
+	parts.lanKey = keyPin.has_value() ? online::server_key::HexOf(*keyPin) : std::string();
 	SPDLOG_LOGGER_INFO(spdlog::get("game"), "The game server listens on {}:{} ({})", settings.address, parts.sockets.Port(),
-	                   settings.certificate.has_value() ? "wss" : "ws behind a proxy");
+	                   ownCertificate                     ? "wss with its own certificate, key " + parts.lanKey
+	                   : settings.certificate.has_value() ? std::string("wss")
+	                                                      : std::string("ws behind a proxy"));
 
 	auto check = [&parts](std::string_view token) {
 		auto result = parts.tickets.Check(token, UnixSeconds());

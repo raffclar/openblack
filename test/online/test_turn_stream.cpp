@@ -39,7 +39,7 @@ struct Player
 	explicit Player(uint64_t& clock)
 	    : stream(sockets, [&clock]() { return clock; })
 	{
-		stream.Open({.url = "wss://bw.example/game/1", .headers = {}, .subprotocols = {}},
+		stream.Open({.url = "wss://bw.example/game/1", .headers = {}, .subprotocols = {}, .serverKey = std::nullopt},
 		            online::TurnStreamHandlers {
 		                .opened = {},
 		                .turn = [this](const turn_codec::TurnBundle& turn) { turns.push_back(turn_codec::Encode(turn)); },
@@ -199,7 +199,7 @@ TEST(TurnStream, TheClientGetsTheChecksumsOfTheServer)
 	FakeWebSocketClient sockets;
 	TurnStream stream(sockets, [] { return uint64_t {0}; });
 	std::vector<turn_codec::TurnChecksum> checksums;
-	stream.Open({.url = "wss://bw.example/game/1", .headers = {}, .subprotocols = {}},
+	stream.Open({.url = "wss://bw.example/game/1", .headers = {}, .subprotocols = {}, .serverKey = std::nullopt},
 	            online::TurnStreamHandlers {
 	                .opened = {},
 	                .turn = {},
@@ -224,7 +224,7 @@ TEST(TurnStream, NothingGoesBeforeTheSocketOpensOrAfterItCloses)
 	EXPECT_FALSE(stream.SendPing());
 	bool closed = false;
 	stream.Open(
-	    {.url = "wss://bw.example/game/1", .headers = {}, .subprotocols = {}},
+	    {.url = "wss://bw.example/game/1", .headers = {}, .subprotocols = {}, .serverKey = std::nullopt},
 	    online::TurnStreamHandlers {.opened = {}, .turn = {}, .text = {}, .closed = [&](auto&& /*end*/) { closed = true; }});
 	EXPECT_FALSE(stream.SendCommands(1, std::vector<Action> {HandTake {.object = Entity(1)}}));
 	sockets.Accept(sockets.Last());

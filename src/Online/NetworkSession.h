@@ -175,6 +175,9 @@ public:
 	[[nodiscard]] std::optional<float> StartAlignment(PlayerNames god) const override;
 	/// The god of the slot that the server gave to this computer. None for an observer.
 	[[nodiscard]] std::optional<PlayerNames> OwnGod() const override;
+	/// The number of the observer that the server gave to this computer. None for a god, and for an observer of a
+	/// server that gives no numbers.
+	[[nodiscard]] std::optional<uint8_t> OwnObserver() const;
 	/// Whether the god of this computer played for a clan as the start began
 	[[nodiscard]] bool OwnGodPlaysForClan() const override { return _ownGodPlaysForClan; }
 
@@ -247,6 +250,8 @@ private:
 	void SendWaiting();
 	/// Sends a block of commands with the next number of the session. False when the block did not go.
 	bool SendNewBlock(std::span<const player_commands::Action> actions);
+	/// True when this computer sends commands: the player of a god, or an observer with its number
+	[[nodiscard]] bool SendsCommands() const;
 	/// After the client came back: sends again the blocks that no turn holds. The server leaves out the blocks that it had.
 	void SendKeptAgain();
 	/// Closes the socket and starts the attempts to come back

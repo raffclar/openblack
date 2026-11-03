@@ -33,11 +33,16 @@
 #include <unistd.h>
 #endif
 
+#include <openssl/bio.h>
+#include <openssl/crypto.h>
 #include <openssl/err.h>
+#include <openssl/pem.h>
 #include <openssl/sha.h>
 #include <openssl/ssl.h>
+#include <openssl/x509.h>
 #include <spdlog/spdlog.h>
 
+#include "OwnCertificate.h"
 #include "Server/ConnectionLimits.h"
 #include "Server/WebSocketFrames.h"
 
@@ -159,6 +164,38 @@ struct ContextDeleter
 {
 	void operator()(SSL_CTX* context) const { SSL_CTX_free(context); }
 };
+struct BioDeleter
+{
+	void operator()(BIO* bio) const { BIO_free(bio); }
+};
+struct CertificateDeleter
+{
+	void operator()(X509* certificate) const { X509_free(certificate); }
+};
+struct KeyDeleter
+{
+	void operator()(EVP_PKEY* key) const { EVP_PKEY_free(key); }
+};
+
+/// Gives the TLS context the certificate and the key that the server made for itself. The text of the key is then
+/// cleared from memory.
+bool UseOwnCertificate(SSL_CTX* context, own_certificate::OwnCertificate& own)
+{
+	const std::unique_ptr<BIO, BioDeleter> certificateText(
+	    BIO_new_mem_buf(own.certificatePem.data(), static_cast<int>(own.certificatePem.size())));
+	const std::unique_ptr<BIO, BioDeleter> keyText(BIO_new_mem_buf(own.keyPem.data(), static_cast<int>(own.keyPem.size())));
+	if (certificateText == nullptr || keyText == nullptr)
+	{
+		return false;
+	}
+	const std::unique_ptr<X509, CertificateDeleter> certificate(
+	    PEM_read_bio_X509(certificateText.get(), nullptr, nullptr, nullptr));
+	const std::unique_ptr<EVP_PKEY, KeyDeleter> key(PEM_read_bio_PrivateKey(keyText.get(), nullptr, nullptr, nullptr));
+	OPENSSL_cleanse(own.keyPem.data(), own.keyPem.size());
+	own.keyPem.clear();
+	return certificate != nullptr && key != nullptr && SSL_CTX_use_certificate(context, certificate.get()) == 1 &&
+	       SSL_CTX_use_PrivateKey(context, key.get()) == 1 && SSL_CTX_check_private_key(context) == 1;
+}
 
 } // namespace
 
@@ -298,11 +335,15 @@ std::optional<std::string> SocketWebSocketServer::Listen(const ListenSettings& s
 	{
 		return "TLS needs both a certificate and a key";
 	}
-	if (!settings.certificate.has_value() && !IsLoopbackAddress(settings.address))
+	if (settings.ownCertificate && settings.certificate.has_value())
+	{
+		return "the server makes its own certificate only when it has no certificate file";
+	}
+	if (!settings.certificate.has_value() && !settings.ownCertificate && !IsLoopbackAddress(settings.address))
 	{
 		return "plain WebSocket is only for a loopback address; give a certificate and a key for TLS";
 	}
-	if (settings.certificate.has_value())
+	if (settings.certificate.has_value() || settings.ownCertificate)
 	{
 		auto tls = std::make_unique<Tls>();
 		tls->context.reset(SSL_CTX_new(TLS_server_method()));
@@ -314,9 +355,18 @@ std::optional<std::string> SocketWebSocketServer::Listen(const ListenSettings& s
 		}
 		SSL_CTX_set_mode(context, SSL_MODE_ENABLE_PARTIAL_WRITE | SSL_MODE_ACCEPT_MOVING_WRITE_BUFFER);
 		SSL_CTX_set_options(context, SSL_OP_NO_COMPRESSION | SSL_OP_NO_RENEGOTIATION);
-		if (SSL_CTX_use_certificate_chain_file(context, settings.certificate->string().c_str()) != 1 ||
-		    SSL_CTX_use_PrivateKey_file(context, settings.key->string().c_str(), SSL_FILETYPE_PEM) != 1 ||
-		    SSL_CTX_check_private_key(context) != 1)
+		if (settings.ownCertificate)
+		{
+			auto own = own_certificate::Make("openblack game server");
+			if (!own.has_value() || !UseOwnCertificate(context, *own))
+			{
+				return "the server cannot make its own certificate";
+			}
+			_ownKeyPin = own->pin;
+		}
+		else if (SSL_CTX_use_certificate_chain_file(context, settings.certificate->string().c_str()) != 1 ||
+		         SSL_CTX_use_PrivateKey_file(context, settings.key->string().c_str(), SSL_FILETYPE_PEM) != 1 ||
+		         SSL_CTX_check_private_key(context) != 1)
 		{
 			return "the certificate or the key of TLS does not load";
 		}

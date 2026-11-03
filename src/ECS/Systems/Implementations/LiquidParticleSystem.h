@@ -41,10 +41,11 @@ public:
 	explicit LiquidParticleSystem(Sources sources);
 
 	void Add(glm::vec3 position, glm::vec3 velocity, float size, uint32_t argb, liquid_particles::Kind kind) override;
-	void AddForPlayer(PlayerNames player, glm::vec3 position, glm::vec3 velocity, float size, uint32_t argb,
+	void AddForPlayer(liquid_particles::Interface interface, glm::vec3 position, glm::vec3 velocity, float size, uint32_t argb,
 	                  liquid_particles::Kind kind) override;
-	void SetPlayerPoint(PlayerNames player, glm::vec3 point) override;
-	[[nodiscard]] std::span<const liquid_particles::Particle> PlayerParticles(PlayerNames player) const override;
+	void SetPlayerPoint(liquid_particles::Interface interface, glm::vec3 point) override;
+	[[nodiscard]] std::span<const liquid_particles::Particle>
+	PlayerParticles(liquid_particles::Interface interface) const override;
 	void UpdateFrame(float seconds, bool drawsDrops) override;
 	void CollectDrawFrame(particles::draw::Frame& frame) const override;
 	void Clear() override;
@@ -68,8 +69,9 @@ private:
 
 	Sources _sources;
 	std::vector<liquid_particles::Particle> _pool;
-	/// The pools of the other players of a network game, in the order of their players
-	std::map<PlayerNames, PlayerPool> _playerPools;
+	/// The pools of the interfaces of the other players of a network game, in the order of their players and their
+	/// observers
+	std::map<liquid_particles::Interface, PlayerPool> _playerPools;
 	frame_pace::Pace _drawPace;
 	/// What the drops of liquid, the dust and smoke, and the motes are drawn as
 	particles::Creator _liquidCreator;
