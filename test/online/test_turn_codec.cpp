@@ -416,8 +416,9 @@ std::vector<Action> BusyCommands()
 
 TEST(TurnCodec, EachCommandHasItsSize)
 {
-	const std::vector<size_t> sizes {2, 5, 9,  5, 53, 5, 10, 18, 5,  49, 17, 5, 5, 5,  9, 12, 1, 18, 11, 5,  18, 15, 7, 5, 1,
-	                                 2, 1, 61, 5, 2,  1, 13, 10, 18, 1,  54, 1, 5, 51, 5, 16, 7, 1,  1,  13, 1,  2,  9, 13};
+	const std::vector<size_t> sizes {2,  5,  9, 5,  53, 5, 10, 18, 5, 49, 17, 5, 5, 5, 9,  12, 1,
+	                                 18, 11, 5, 18, 15, 7, 5,  1,  2, 1,  61, 5, 2, 1, 13, 10, 18,
+	                                 1,  54, 1, 5,  51, 5, 16, 7,  1, 1,  13, 1, 2, 9, 13, 1,  1};
 	const auto commands = EachCommand();
 	ASSERT_EQ(commands.size(), sizes.size());
 	for (size_t i = 0; i < commands.size(); ++i)
@@ -594,7 +595,7 @@ TEST(TurnCodec, TheEncoderRefusesAFrameThatBreaksALimit)
 	commands.resize(k_MostBlockCommands + 1, HandTake {.object = Entity(1)});
 	EXPECT_TRUE(Encode(CommandBlock {.sequence = 0, .turn = 0, .actions = commands}).empty());
 	EXPECT_TRUE(
-	    Encode(TurnBundle {.turn = 0, .blocks = {{.sender = static_cast<PlayerNames>(33), .sequence = 0, .actions = {}}}})
+	    Encode(TurnBundle {.turn = 0, .blocks = {{.sender = static_cast<PlayerNames>(34), .sequence = 0, .actions = {}}}})
 	        .empty());
 	EXPECT_TRUE(
 	    Encode(TurnBundle {.turn = 0, .blocks = {{.sender = PlayerNames::NEUTRAL, .sequence = 0, .actions = {}}}}).empty());
@@ -688,7 +689,7 @@ TEST(TurnCodec, TheDecoderRefusesABadFrame)
 	EXPECT_EQ(Decode(tattoo).error, DecodeError::Value);
 
 	auto turn = Encode(TurnBundle {.turn = 1, .blocks = {{.sender = PlayerNames::PLAYER_ONE, .sequence = 0, .actions = {}}}});
-	turn[8] = 32;
+	turn[8] = 33;
 	EXPECT_EQ(Decode(turn).error, DecodeError::Value);
 
 	std::vector<uint8_t> tooLarge(k_MostFrameBytes + 1, 0);
@@ -1048,7 +1049,7 @@ TEST(TurnCodec, ALineOfTheChatKeepsToItsLimits)
 	// A player past the slots of the game does not go
 	EXPECT_TRUE(Encode(CommandBlock {.sequence = 0,
 	                                 .turn = 0,
-	                                 .actions = {ChatTaunt {.recipients = {static_cast<PlayerNames>(33)}, .taunt = 0}}})
+	                                 .actions = {ChatTaunt {.recipients = {static_cast<PlayerNames>(34)}, .taunt = 0}}})
 	                .empty());
 	// The neutral player has no god slot, so it gets no line
 	EXPECT_TRUE(Encode(CommandBlock {
@@ -1056,7 +1057,7 @@ TEST(TurnCodec, ALineOfTheChatKeepsToItsLimits)
 	                .empty());
 
 	// The reader refuses the same: a slot out of range, too many players, and a line that is too long
-	const std::vector<uint8_t> badSlot {k_Version, 1, 0, 0, 0, 0, 0, 0, 1, 42, 1, 32, 0, 0, 0, 0};
+	const std::vector<uint8_t> badSlot {k_Version, 1, 0, 0, 0, 0, 0, 0, 1, 42, 1, 33, 0, 0, 0, 0};
 	EXPECT_EQ(Decode(badSlot).error, DecodeError::Value);
 	std::vector<uint8_t> tooMany {k_Version, 1, 0, 0, 0, 0, 0, 0, 1, 42, 33};
 	tooMany.insert(tooMany.end(), 33 + 4, 0);

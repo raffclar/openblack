@@ -1400,6 +1400,7 @@ TEST_F(LockstepTest, AnObserverThatJoinsTheRunningGameGetsTheNamesOfTheGods)
 TEST_F(LockstepTest, TheGodOfTheObserversComesWithTheFirstObserverAndGoesWithTheLast)
 {
 	MakeHost(1);
+	GiveWorldState();
 	Computer alice(network, now, "god:alice");
 	Frames({&alice}, 30);
 	ASSERT_TRUE(host->Started());
