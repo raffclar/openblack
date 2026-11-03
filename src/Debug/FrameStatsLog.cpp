@@ -174,6 +174,7 @@ void FrameStatsLog::Frame(FrameTime time, const openblack::Profiler& profiler, u
 		                    .workMilliseconds = time.workMilliseconds});
 	}
 	std::string spikeStages;
+	const bool spike = frame_stats::IsSpike(time.workMilliseconds);
 
 	// The stages timed in this frame: those that started since the frame did
 	const auto& entry = profiler.GetEntries().at(profiler.GetEntryIndex(0));
@@ -185,7 +186,7 @@ void FrameStatsLog::Frame(FrameTime time, const openblack::Profiler& profiler, u
 			const auto ms = std::chrono::duration<double, std::milli>(stage.end - stage.start).count();
 			_stageTotals.at(i) += ms;
 			_stageMax.at(i) = std::max(_stageMax.at(i), ms);
-			if (milliseconds >= k_SpikeMilliseconds && ms >= 0.25)
+			if (spike && ms >= 0.25)
 			{
 				spikeStages += fmt::format(" {}={:.2f}", openblack::Profiler::k_StageNames.at(i), ms);
 			}
@@ -205,9 +206,10 @@ void FrameStatsLog::Frame(FrameTime time, const openblack::Profiler& profiler, u
 	_lastResourceCount = made;
 	const auto newPipelines = pipelinesMade - std::exchange(_lastPipelinesMade, pipelinesMade);
 	_pipelinesSinceReport += newPipelines;
-	if (milliseconds >= k_SpikeMilliseconds)
+	if (spike)
 	{
 		// A slow frame: which stages took its time, and what the renderer waited for. Only such a frame makes this text.
+		// A paced frame that only waits does not make it, so the text does not slow each frame of a paced run.
 		const auto onCpu =
 		    onCpuMilliseconds.has_value() ? fmt::format("{:.2f} ms", *onCpuMilliseconds) : std::string("unknown");
 		SPDLOG_LOGGER_INFO(spdlog::get("game"),
