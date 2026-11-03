@@ -611,7 +611,6 @@ void GameMagicWorld::Apply(const magic::EffectValues& values, std::span<const ma
 	const float burn = values[magic::EffectKind::Burn];
 	const bool byCreature = source.casterCreature != entt::null && registry.Valid(source.casterCreature) &&
 	                        registry.AllOf<Creature>(source.casterCreature);
-	float alignment = 0.0f;
 	// The cry of a town that the harm attacks: none when nothing burns, crushes, hits or throws
 	std::optional<guidance::TownAttackVoice> cry;
 	if (const auto fire = guidance::FireLeads(values); fire.has_value())
@@ -656,7 +655,7 @@ void GameMagicWorld::Apply(const magic::EffectValues& values, std::span<const ma
 			}
 		}
 		magic_living::AfterEffect(outcome.entity, values, source);
-		alignment += outcome.alignmentChange;
+		AddEffectAlignment(outcome, source, byCreature);
 		// The alignment history of the effect's player keeps each kind of change before the damping, also for a creature's
 		// miracle
 		if (!source.playerless && Locator::alignmentSystem::has_value())
@@ -722,18 +721,28 @@ void GameMagicWorld::Apply(const magic::EffectValues& values, std::span<const ma
 			                                   .weight = outcome.lifeBefore.value_or(0.0f)});
 		}
 	}
-	if (alignment == 0.0f)
+}
+
+void GameMagicWorld::AddEffectAlignment(const magic::EffectOutcome& outcome, const magic::EffectSource& source, bool byCreature)
+{
+	// No change of life moves no alignment
+	if (outcome.alignmentTerms == magic::EffectAlignmentTerms {})
 	{
 		return;
 	}
-	// What a creature's miracle did moves its own alignment, what a player's did the player's, over the turns to come
+	// What a creature's miracle did moves its own alignment, what a player's did the player's, over the turns to come.
+	// The waiting alignment takes the change of each kind of effect one at a time, in the order of the outcome.
 	if (byCreature)
 	{
-		registry.Get<Creature>(source.casterCreature).pendingAlignment += alignment;
+		auto& pending = EntityRegistry().Get<Creature>(source.casterCreature).pendingAlignment;
+		pending = magic::AddEffectAlignmentChanges(pending, outcome.alignmentDamped);
 	}
 	else if (!source.playerless && source.player != PlayerNames::NEUTRAL && Locator::alignmentSystem::has_value())
 	{
-		Locator::alignmentSystem::value().AddPendingAlignment(source.player, alignment);
+		for (const float change : outcome.alignmentDamped)
+		{
+			Locator::alignmentSystem::value().AddPendingAlignment(source.player, change);
+		}
 	}
 }
 
