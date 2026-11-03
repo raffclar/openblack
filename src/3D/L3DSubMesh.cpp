@@ -410,8 +410,12 @@ void L3DSubMesh::Finish(Prepared prepared) noexcept
 	const auto& indices = _data.bodyGeometry.indices;
 	const auto* verticesMem = device.Copy(prepared.vertices.data(), static_cast<uint32_t>(prepared.vertices.size()));
 	const auto* indicesMem = device.Copy(indices.data(), static_cast<uint32_t>(indices.size() * sizeof(indices[0])));
-	auto vertexBuffer = std::make_unique<VertexBuffer>(_l3dMesh.GetDebugName(), verticesMem, decl, _l3dMesh.IsDynamic());
-	auto indexBuffer = std::make_unique<IndexBuffer>(_l3dMesh.GetDebugName(), indicesMem, IndexBuffer::Type::Uint16);
+	// The buffers go in the shared buffers of bgfx. A model that the game makes during play, such as a creature or a
+	// temple, then gets no new memory from the driver for each part, and the next frame does not wait for that memory.
+	auto vertexBuffer = std::make_unique<VertexBuffer>(_l3dMesh.GetDebugName(), verticesMem, decl, _l3dMesh.IsDynamic(),
+	                                                   VertexBuffer::Storage::Shared);
+	auto indexBuffer = std::make_unique<IndexBuffer>(_l3dMesh.GetDebugName(), indicesMem, IndexBuffer::Type::Uint16,
+	                                                 IndexBuffer::Storage::Shared);
 	// The mesh owns its buffers from here on
 	_mesh = std::make_unique<graphics::Mesh>(vertexBuffer.release(), indexBuffer.release());
 
@@ -709,8 +713,11 @@ bool L3DSubMesh::SplitFacesForSnow()
 	decl.emplace_back(VertexAttrib::Attribute::Indices, static_cast<uint8_t>(4), VertexAttrib::Type::Int16,
 	                  /*normalized=*/false, /*asInt=*/true);
 	const auto* indicesMem = device.Copy(indices.data(), static_cast<uint32_t>(indices.size() * sizeof(indices[0])));
-	auto vertexBuffer = std::make_unique<VertexBuffer>(_l3dMesh.GetDebugName(), verticesMem, decl, false);
-	auto indexBuffer = std::make_unique<IndexBuffer>(_l3dMesh.GetDebugName(), indicesMem, IndexBuffer::Type::Uint16);
+	// As the other submeshes: the buffers go in the shared buffers of bgfx
+	auto vertexBuffer =
+	    std::make_unique<VertexBuffer>(_l3dMesh.GetDebugName(), verticesMem, decl, false, VertexBuffer::Storage::Shared);
+	auto indexBuffer = std::make_unique<IndexBuffer>(_l3dMesh.GetDebugName(), indicesMem, IndexBuffer::Type::Uint16,
+	                                                 IndexBuffer::Storage::Shared);
 	// The mesh owns its buffers from here on
 	_mesh = std::make_unique<graphics::Mesh>(vertexBuffer.release(), indexBuffer.release());
 	_facesSplit = true;

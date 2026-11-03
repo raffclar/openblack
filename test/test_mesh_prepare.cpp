@@ -23,6 +23,7 @@
 
 #include "3D/L3DMesh.h"
 #include "Graphics/GraphicsDeviceInterface.h"
+#include "Graphics/VertexBuffer.h"
 #include "Locator.h"
 #include "Resources/Loaders.h"
 #include "Resources/ResourcesInterface.h"
@@ -47,6 +48,7 @@ public:
 			VertexBuffer,
 			DynamicVertexBuffer,
 			IndexBuffer,
+			SharedIndexBuffer,
 		};
 		Kind kind;
 		std::vector<uint8_t> bytes;
@@ -114,7 +116,7 @@ public:
 	}
 	[[nodiscard]] DynamicIndexBufferHandle CreateSharedIndexBuffer(const DeviceMemory* indices, bool) const override
 	{
-		Keep(Made::Kind::IndexBuffer, indices);
+		Keep(Made::Kind::SharedIndexBuffer, indices);
 		return {static_cast<uint32_t>(_made.size())};
 	}
 	void SetName(IndexBufferHandle, std::string_view) const override {}
@@ -245,8 +247,9 @@ TEST_F(MeshPrepare, AMeshFinishedFromAPreparationHasTheBitsOfALoadedMesh)
 		EXPECT_EQ(fromFinish[i].bytes, fromLoad[i].bytes);
 	}
 	EXPECT_EQ(fromLoad[0].kind, FakeDevice::Made::Kind::Texture);
-	EXPECT_EQ(fromLoad[1].kind, FakeDevice::Made::Kind::VertexBuffer);
-	EXPECT_EQ(fromLoad[2].kind, FakeDevice::Made::Kind::IndexBuffer);
+	// The vertices and the triangles go in the shared buffers, thus a new mesh gets no new memory from the driver
+	EXPECT_EQ(fromLoad[1].kind, FakeDevice::Made::Kind::DynamicVertexBuffer);
+	EXPECT_EQ(fromLoad[2].kind, FakeDevice::Made::Kind::SharedIndexBuffer);
 	const std::vector<uint16_t> indices {0, 1, 2, 5, 4, 3};
 	ASSERT_EQ(fromLoad[2].bytes.size(), indices.size() * sizeof(uint16_t));
 	EXPECT_EQ(std::memcmp(fromLoad[2].bytes.data(), indices.data(), fromLoad[2].bytes.size()), 0);
@@ -371,4 +374,33 @@ TEST_F(MeshPrepare, TempleMeshesOfOneBlendShareOneSetOfDeviceObjects)
 	meshes.Erase(k_First);
 	ASSERT_NE(meshes.Find(k_Second), nullptr);
 	EXPECT_EQ(meshes.Find(k_Second)->GetSkinOrder().size(), 1U);
+}
+
+TEST_F(MeshPrepare, ASharedVertexBufferUsesTheSharedBufferAndStaysFixed)
+{
+	const std::vector<uint8_t> bytes(3U * 12U, 0x5AU);
+	const VertexDecl decl {VertexAttrib(VertexAttrib::Attribute::Position, 3, VertexAttrib::Type::Float)};
+
+	const VertexBuffer own("own", Device().Copy(bytes.data(), static_cast<uint32_t>(bytes.size())), decl);
+	const VertexBuffer shared("shared", Device().Copy(bytes.data(), static_cast<uint32_t>(bytes.size())), decl, false,
+	                          VertexBuffer::Storage::Shared);
+	const VertexBuffer dynamic("dynamic", Device().Copy(bytes.data(), static_cast<uint32_t>(bytes.size())), decl, true);
+	const auto made = Device().TakeMade();
+
+	// A buffer of its own, then two parts of the shared buffer, each with the same bytes
+	ASSERT_EQ(made.size(), 3U);
+	EXPECT_EQ(made[0].kind, FakeDevice::Made::Kind::VertexBuffer);
+	EXPECT_EQ(made[1].kind, FakeDevice::Made::Kind::DynamicVertexBuffer);
+	EXPECT_EQ(made[2].kind, FakeDevice::Made::Kind::DynamicVertexBuffer);
+	for (const auto& one : made)
+	{
+		EXPECT_EQ(one.bytes, bytes);
+	}
+	EXPECT_FALSE(own.IsShared());
+	EXPECT_TRUE(shared.IsShared());
+	EXPECT_FALSE(shared.IsDynamic());
+	EXPECT_TRUE(dynamic.IsShared());
+	EXPECT_TRUE(dynamic.IsDynamic());
+	EXPECT_TRUE(shared.IsValid());
+	EXPECT_EQ(shared.GetCount(), 3U);
 }
