@@ -249,8 +249,8 @@ float Desire(entt::entity town, ResourceType type)
 }
 
 /// A player's alignment moves by a change to a store, scaled as giving or taking and damped by how far it already is
-/// that way
-void MoveAlignment(PlayerNames player, int64_t amount, float value)
+/// that way. The alignment history of the owner of the store keeps the change.
+void MoveAlignment(PlayerNames player, PlayerNames storeOwner, int64_t amount, float value)
 {
 	if (!Locator::alignmentSystem::has_value() || player == PlayerNames::NEUTRAL)
 	{
@@ -259,7 +259,9 @@ void MoveAlignment(PlayerNames player, int64_t amount, float value)
 	const auto& town = Locator::infoConstants::value().town;
 	const float multiplier = amount < 1 ? town.takeResourceAligmnetChangeMultiplier : town.giveResourceAligmnetChangeMultiplier;
 	auto& alignment = Locator::alignmentSystem::value();
-	alignment.AddPendingAlignment(player, magic::DampAlignmentChange(value * multiplier, alignment.GetPlayerAlignment(player)));
+	const float change = magic::DampAlignmentChange(value * multiplier, alignment.GetPlayerAlignment(player));
+	alignment.AddToHistory(storeOwner, AlignmentCause::Storage, change);
+	alignment.AddPendingAlignment(player, change);
 }
 
 uint32_t& CountOf(Abode& abode, ResourceType type)
@@ -689,7 +691,7 @@ uint32_t ResourceStoreSystem::AddToStore(entt::entity store, ResourceType type, 
 	    lastTaken != nullptr ? lastTaken->turn.at(static_cast<size_t>(*giver)).at(static_cast<size_t>(type)) : std::nullopt;
 	float value = ecs::store_rules::LastTakenModifier(taken, now, townInfo.maxGameturnsForBeliefAfterRemovingFromStoragePit) *
 	              (before - after);
-	MoveAlignment(*giver, added, value);
+	MoveAlignment(*giver, registry.Get<const Town>(town).owner, added, value);
 	if (registry.Get<const Town>(town).owner != *giver)
 	{
 		value *= townInfo.multiplierForNonOwnerAddingResource;
@@ -732,7 +734,8 @@ uint32_t ResourceStoreSystem::RemovedFromStore(entt::entity store, ResourceType 
 	lastTaken.turn.at(static_cast<size_t>(*taker)).at(static_cast<size_t>(type)) =
 	    Locator::time::has_value() ? std::optional(Locator::time::value().GetTurn()) : std::nullopt;
 	const float after = Desire(town, type);
-	MoveAlignment(registry.Get<const Town>(town).owner, -static_cast<int64_t>(amount), before - after);
+	const auto owner = registry.Get<const Town>(town).owner;
+	MoveAlignment(owner, owner, -static_cast<int64_t>(amount), before - after);
 	return removed;
 }
 
@@ -1032,18 +1035,35 @@ bool ResourceStoreSystem::PourAt(ResourceType type, glm::vec3 point, uint32_t am
 	}
 
 	// What is left makes a new pile, which thuds as it lands
-	const auto potType = type == ResourceType::Food ? PotInfo::MagicFood : PotInfo::MagicWood;
 	point.y = LandHeight(at);
-	const auto created = ecs::archetypes::PotArchetype::Create(point, 0.0f, potType, static_cast<int32_t>(left));
-	if (created == entt::null)
+	if (NewPile(type, point, left, speedUp, player, poisoned) == entt::null)
 	{
 		return left != amount;
+	}
+	// The town near a new pile can answer the gift to the player here
+	if (Locator::guidanceSystem::has_value())
+	{
+		Locator::guidanceSystem::value().ResourceDropped(
+		    player, point, type == ResourceType::Food ? guidance::Gift::Food : guidance::Gift::Wood);
+	}
+	return true;
+}
+
+entt::entity ResourceStoreSystem::NewPile(ResourceType type, glm::vec3 point, uint32_t amount, bool speedUp, PlayerNames player,
+                                          bool poisoned)
+{
+	auto& registry = Locator::entitiesRegistry::value();
+	const auto potType = type == ResourceType::Food ? PotInfo::MagicFood : PotInfo::MagicWood;
+	const auto created = ecs::archetypes::PotArchetype::Create(point, 0.0f, potType, static_cast<int32_t>(amount));
+	if (created == entt::null)
+	{
+		return entt::null;
 	}
 	registry.Get<Transform>(created).scale =
 	    glm::vec3(type == ResourceType::Food ? piles::k_MagicFoodScale : piles::k_MagicWoodScale);
 	registry.Assign<MagicPile>(created, type, player);
 	registry.Get<Pot>(created).poisoned = poisoned;
-	Thud(created, type, left, point);
+	Thud(created, type, amount, point);
 	// A power-up's food speeds up the people who take from the new pile, and sparkles over it for as long as it lasts
 	auto& pile = registry.Get<ResourcePile>(created);
 	if (speedUp && type == ResourceType::Food)
@@ -1068,13 +1088,18 @@ bool ResourceStoreSystem::PourAt(ResourceType type, glm::vec3 point, uint32_t am
 		                                         .magicType = MagicType::None,
 		                                         .casterCreature = entt::null});
 	}
-	// The town near a new pile can answer the gift to the player here
-	if (Locator::guidanceSystem::has_value())
+	return created;
+}
+
+entt::entity ResourceStoreSystem::MakePile(ResourceType type, glm::vec3 point, uint32_t amount)
+{
+	if ((type != ResourceType::Food && type != ResourceType::Wood) || amount == 0)
 	{
-		Locator::guidanceSystem::value().ResourceDropped(
-		    player, point, type == ResourceType::Food ? guidance::Gift::Food : guidance::Gift::Wood);
+		return entt::null;
 	}
-	return true;
+	// The pile stands on the land under the point, and belongs to nobody
+	point.y = LandHeight(glm::vec2(point.x, point.z));
+	return NewPile(type, point, amount, false, PlayerNames::NEUTRAL, false);
 }
 
 namespace

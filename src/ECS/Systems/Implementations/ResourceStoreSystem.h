@@ -38,6 +38,7 @@ public:
 	void ReportGift(entt::entity store, ResourceType type, PlayerNames giver) override;
 	void AnswerDrop(entt::entity store, PlayerNames giver) override;
 	bool PourAt(ResourceType type, glm::vec3 point, uint32_t amount, bool speedUp, PlayerNames player, bool poisoned) override;
+	entt::entity MakePile(ResourceType type, glm::vec3 point, uint32_t amount) override;
 	[[nodiscard]] std::optional<entt::entity> StoreOf(entt::entity pile) const override;
 	[[nodiscard]] uint32_t GetResource(entt::entity object, ResourceType type) const override;
 	uint32_t AddResource(entt::entity object, ResourceType type, uint32_t amount, std::optional<glm::vec3> at) override;
@@ -56,6 +57,9 @@ public:
 	uint32_t TakeFromSite(entt::entity building, components::BuildingSite& site, ResourceType type, uint32_t amount);
 
 private:
+	/// A new pile of food or wood of a player at a point, holding an amount: it thuds as it lands, and the people come
+	/// to look at it. A power-up's food sparkles over it.
+	entt::entity NewPile(ResourceType type, glm::vec3 point, uint32_t amount, bool speedUp, PlayerNames player, bool poisoned);
 	/// A storage pit takes what it will into its piles, without the giving's count in its town
 	uint32_t FillPit(entt::entity store, ResourceType type, uint32_t amount, bool poisoned);
 	/// A workshop takes wood into its pile: what the pile took

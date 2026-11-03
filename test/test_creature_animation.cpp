@@ -163,6 +163,14 @@ TEST(CreatureAnimation, BreathingTakesFiveSecondsAtSizeOne)
 	EXPECT_EQ(creature_animation::BreathTime(1.0f, 2208), 2207u);
 }
 
+TEST(CreatureAnimation, AStandingBodyIsAsFarThroughItsStandAsItsBreath)
+{
+	EXPECT_FLOAT_EQ(creature_animation::StandShare(0.5f, 2208), 1104.0f / 2208.0f);
+	// The time stops one millisecond short of the end, so the share stays under 1
+	EXPECT_FLOAT_EQ(creature_animation::StandShare(1.0f, 2208), 2207.0f / 2208.0f);
+	EXPECT_FLOAT_EQ(creature_animation::StandShare(0.9f, 0), 0.0f);
+}
+
 TEST(CreatureAnimation, AWalkThatStartsMakesTheCreatureBreatheFaster)
 {
 	EXPECT_FLOAT_EQ(creature_animation::WalkBreathPeriod(1.0f, false), 3.0f);

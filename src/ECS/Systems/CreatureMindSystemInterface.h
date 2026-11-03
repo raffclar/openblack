@@ -194,7 +194,8 @@ public:
 	}
 
 	/// How far the body is through what it plays, 0 to 1: the time of its action, or of its legs in a move, over the
-	/// length of the animation that the game keeps for it. None when the body plays nothing and does not move.
+	/// length of the animation that the game keeps for it. A body that only stands gives the share of its stand that its
+	/// breath shows. None when the creature has no animations.
 	[[nodiscard]] virtual std::optional<float> BodyShare(entt::entity /*creature*/) const { return std::nullopt; }
 
 	/// Sees to a need now, in place of whatever it was doing: sleeps until rested, eats something (the nearest food when

@@ -199,6 +199,8 @@ private:
 	/// The explorers' boat film played on the testbed, the dry dock at the command's point
 	[[nodiscard]] std::string PlayBoatFilm(const Command& command) const;
 	/// Starts a land's script as another script's call starts it; what came of that
+	/// The player clicks the scroll nearest the command's point
+	[[nodiscard]] std::string ClickScroll(const Command& command);
 	[[nodiscard]] std::string RunScript(const Command& command);
 	/// Runs a script native with the command's arguments, and tells what it gave back
 	[[nodiscard]] std::string CallNative(const Command& command);

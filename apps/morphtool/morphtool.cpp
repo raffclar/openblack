@@ -11,7 +11,9 @@
 
 #include <fstream>
 #include <iostream>
+#include <iterator>
 #include <string>
+#include <vector>
 
 #include <MorphFile.h>
 #include <cxxopts.hpp>
@@ -319,9 +321,12 @@ struct Arguments
 		ShowVariantAnimationSets,
 		ShowHairGroups,
 		ShowExtraData,
+		RoundTrip,
+		Rewrite,
 	};
 	Mode mode;
 	std::filesystem::path specDirectory;
+	std::filesystem::path outFilename;
 	struct Read
 	{
 		std::vector<std::filesystem::path> filenames;
@@ -349,6 +354,11 @@ bool parseOptions(int argc, char** argv, Arguments& args, int& returnCode) noexc
 	     cxxopts::value<std::vector<std::filesystem::path>>())                                                       //
 	    ("g,show-hair-groups", "Display hair group data.", cxxopts::value<std::vector<std::filesystem::path>>())     //
 	    ("e,show-extra-data", "Display extra data.", cxxopts::value<std::vector<std::filesystem::path>>())           //
+	    ("round-trip", "Write: read each file and check that it writes back byte for byte.",                         //
+	     cxxopts::value<std::vector<std::filesystem::path>>())                                                       //
+	    ("r,rewrite", "Write: read a file and write it to the output file.",                                         //
+	     cxxopts::value<std::vector<std::filesystem::path>>())                                                       //
+	    ("o,output", "Output file of rewrite.", cxxopts::value<std::filesystem::path>())                             //
 	    ;
 
 	options.parse_positional({"subcommand"});
@@ -417,6 +427,23 @@ bool parseOptions(int argc, char** argv, Arguments& args, int& returnCode) noexc
 			args.mode = Arguments::Mode::ShowExtraData;
 			args.read.filenames = result["show-extra-data"].as<std::vector<std::filesystem::path>>();
 			return true;
+		}
+	}
+
+	if (result["subcommand"].as<std::string>() == "write")
+	{
+		if (result["round-trip"].count() > 0)
+		{
+			args.mode = Arguments::Mode::RoundTrip;
+			args.read.filenames = result["round-trip"].as<std::vector<std::filesystem::path>>();
+			return true;
+		}
+		if (result["rewrite"].count() > 0 && result["output"].count() > 0)
+		{
+			args.mode = Arguments::Mode::Rewrite;
+			args.read.filenames = result["rewrite"].as<std::vector<std::filesystem::path>>();
+			args.outFilename = result["output"].as<std::filesystem::path>();
+			return args.read.filenames.size() == 1;
 		}
 	}
 
@@ -496,6 +523,28 @@ int main(int argc, char* argv[]) noexcept
 			std::printf("file: %s\n", filename.generic_string().c_str());
 			returnCode |= ShowExtraData(morph);
 			break;
+		case Arguments::Mode::RoundTrip:
+		{
+			// Compare with the file as it is on disk
+			std::ifstream stream(filename, std::ios::binary);
+			const std::vector<uint8_t> original((std::istreambuf_iterator<char>(stream)), std::istreambuf_iterator<char>());
+			const auto written = morph.Write();
+			const bool same = written == original;
+			std::printf("%s: %s (%zu bytes read, %zu written)\n", filename.generic_string().c_str(),
+			            same ? "identical" : "DIFFERENT", original.size(), written.size());
+			returnCode |= same ? EXIT_SUCCESS : EXIT_FAILURE;
+			break;
+		}
+		case Arguments::Mode::Rewrite:
+		{
+			const auto written = morph.Write(args.outFilename);
+			if (written != openblack::morph::MorphResult::Success)
+			{
+				std::cerr << openblack::morph::ResultToStr(written) << "\n";
+				returnCode |= EXIT_FAILURE;
+			}
+			break;
+		}
 		default:
 			returnCode = EXIT_FAILURE;
 			break;

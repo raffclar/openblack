@@ -175,6 +175,7 @@ class WalkPathSystemInterface;
 class PuzzleGameSystemInterface;
 class WonderSystemInterface;
 class DanceSystemInterface;
+class FootballSystemInterface;
 class SharkSystemInterface;
 class VideoSystemInterface;
 class HelpTextSystemInterface;
@@ -442,6 +443,7 @@ struct Locator
 	using puzzleGameSystem = entt::locator<ecs::systems::PuzzleGameSystemInterface>;
 	using wonderSystem = entt::locator<ecs::systems::WonderSystemInterface>;
 	using danceSystem = entt::locator<ecs::systems::DanceSystemInterface>;
+	using footballSystem = entt::locator<ecs::systems::FootballSystemInterface>;
 	using sharkSystem = entt::locator<ecs::systems::SharkSystemInterface>;
 	using videoSystem = entt::locator<ecs::systems::VideoSystemInterface>;
 	using helpTextSystem = entt::locator<ecs::systems::HelpTextSystemInterface>;

@@ -185,6 +185,8 @@ struct Environment
 	bool drawFootpaths {false};
 	/// Push scrolling is on, and works in the testbed's window as in full screen
 	bool pushScrolling {false};
+	/// The switch of the Soccer Add-On is on while the scenario runs, so that the towns play football
+	bool football {false};
 	/// The symbol that the world shows for the first player in place of the symbol of the player's profile
 	std::optional<uint32_t> profileSymbol;
 	/// The sheet of the players' symbols is made again after the lines of the land's script, as at the start of a land.
@@ -606,9 +608,12 @@ struct ScriptArgument
 		/// An object that an earlier native call of the scenario gave back (index, counting the first as 0), as a
 		/// script keeps the thing that it made in a variable
 		Made,
+		/// The text, as a script gives a text in quotes, such as a file name. Only a native call takes it.
+		Text,
 	};
 	Kind kind {Kind::Number};
 	float number {0.0f};
+	std::string_view text;
 	glm::vec2 point {0.0f};
 	float height {0.0f};
 	size_t index {0};
@@ -1173,6 +1178,16 @@ struct Command
 		/// The miracle that is locked on in the player's hand closes down. Then the hand lets go of it in the same step,
 		/// as when the miracle stops just before the let go. Needs no creature.
 		CloseHeldMiracle,
+		/// The player clicks the scroll that a script put up nearest a point (point, from the middle of the map), as the
+		/// Action button pressed and let go on the scroll does. The script that waits for a click on it goes on. Needs no
+		/// creature
+		ClickScroll,
+		/// The player puts the camera at once 40 metres south of a point (point, from the middle of the map) and 30 metres
+		/// above the land there, looking at the point. Needs no creature
+		CameraLooksAt,
+		/// The scenario's villager (object) comes to the football pitch of its town, as a villager that relaxes and
+		/// chooses football. Needs no creature.
+		JoinFootball,
 		/// A script sets each worship site of the player as built (amount, the built share), as SET_PROPERTY does. The
 		/// altars of the sites stay as they are. Needs no creature.
 		ScriptBuildsWorshipSites,
@@ -1544,6 +1559,10 @@ void AddCreatureCastingScenarios(std::vector<Scenario>& all);
 /// A computer player's creature at the start of the computer mind
 void AddComputerPlayerScenarios(std::vector<Scenario>& all);
 void AddGameEndScenarios(std::vector<Scenario>& all);
+/// The end of the story on the fifth land: the last fight, the volcano, the fall of the temple and the credits
+void AddEndingScenarios(std::vector<Scenario>& all);
+/// The last stand of Nemesis on the fifth land: the spiritual shield and the defence of his last town
+void AddLastStandScenarios(std::vector<Scenario>& all);
 /// The joint actions of two friends, each close up
 void AddFriendActionScenarios(std::vector<Scenario>& all);
 /// Creature Mode's and the Creature Cave's scenarios
@@ -1560,6 +1579,8 @@ void AddBirdScenarios(std::vector<Scenario>& all);
 void AddTeleportScenarios(std::vector<Scenario>& all);
 /// The vortices between the lands: opening, levelling the ground and closing
 void AddVortexScenarios(std::vector<Scenario>& all);
+/// Three quests of the fifth land: the crusaders and the dragon, the brown bear's trail, and Nemesis's curse
+void AddLandFiveQuestScenarios(std::vector<Scenario>& all);
 /// Three silver scrolls of the fourth and fifth lands, each from its own script: the fish puzzle, the stranger who
 /// prays at the forest fire, and the explorers who come back
 void AddLandsFourFiveScrollScenarios(std::vector<Scenario>& all);
@@ -1588,6 +1609,7 @@ void AddHandLookScenarios(std::vector<Scenario>& all);
 /// The Norse gate of the creatures' glade and the gate stone plinth: opening, closing and laying the stones
 void AddGateScenarios(std::vector<Scenario>& all);
 void AddKnockScenarios(std::vector<Scenario>& all);
+void AddFootballScenarios(std::vector<Scenario>& all);
 /// Villagers walking side by side, each at the speed its life, load, town and state give
 void AddVillagerSpeedScenarios(std::vector<Scenario>& all);
 void AddDiscipleScenarios(std::vector<Scenario>& all);

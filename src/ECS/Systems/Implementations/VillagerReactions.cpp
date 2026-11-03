@@ -33,6 +33,7 @@
 #include "ECS/Components/Dance.h"
 #include "ECS/Components/Disciple.h"
 #include "ECS/Components/Fire.h"
+#include "ECS/Components/Football.h"
 #include "ECS/Components/HandGrab.h"
 #include "ECS/Components/LivingAction.h"
 #include "ECS/Components/LivingReaction.h"
@@ -314,8 +315,12 @@ bool villager_reactions::Available(entt::entity villager, Reaction type)
 	}
 	// Nor dying where it is now, nor under the control of a script, and too weak to react to anything but food
 	const auto now = StateOf(*action, LivingAction::Index::Top);
-	// TODO(raffclar): the game also keeps a villager in a football match from reacting. openblack has no football yet.
-	// The game also tests for a villager on a structure, but no code of the game puts a villager on a structure.
+	// A villager in a football match does not react. The game also tests for a villager on a structure, but no code of the game
+	// puts a villager on a structure.
+	if (const auto* player = registry.TryGet<const Footballer>(villager); player != nullptr && player->inMatch)
+	{
+		stateLetsItReact = false;
+	}
 	return magic::villager_reaction::Available({.stateLetsItReact = stateLetsItReact,
 	                                            .dyingNow = now == VillagerStates::SetDying || now == VillagerStates::Dying,
 	                                            .scriptControlled = registry.AllOf<ScriptControlled>(villager),

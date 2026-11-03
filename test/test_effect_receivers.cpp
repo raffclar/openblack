@@ -262,3 +262,20 @@ TEST_F(EffectReceivers, AVillageTotemGivesHarmAndLifeToItsTownCentreAndKeepsItsO
 	EXPECT_FLOAT_EQ(ecs::world_objects::LifeOf(totem), 0.0f);
 	EXPECT_FLOAT_EQ(ecs::world_objects::LifeOf(centre), 0.875f);
 }
+
+// A football pitch that is built takes no damage, but harm takes away what is built of an unfinished pitch
+TEST_F(EffectReceivers, ABuiltFootballPitchTakesNoDamage)
+{
+	auto& registry = Locator::entitiesRegistry::value();
+	const auto pitch = Made();
+	registry.Assign<Abode>(pitch, Abode {.type = AbodeNumber::FootballPitch, .townId = 7});
+	registry.Assign<ObjectLife>(pitch, ObjectLife {.life = 1.0f});
+	EXPECT_FLOAT_EQ(ecs::world_objects::ReduceLife(pitch, 0.5f), 1.0f);
+	EXPECT_FLOAT_EQ(ecs::world_objects::LifeOf(pitch), 1.0f);
+
+	const auto unfinished = Made();
+	registry.Assign<Abode>(unfinished, Abode {.type = AbodeNumber::FootballPitch, .townId = 7});
+	registry.Assign<BuildProgress>(unfinished, BuildProgress {.built = 0.5f});
+	ecs::world_objects::ReduceLife(unfinished, 0.25f);
+	EXPECT_FLOAT_EQ(registry.Get<const BuildProgress>(unfinished).built, 0.25f);
+}

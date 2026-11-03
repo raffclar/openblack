@@ -51,6 +51,7 @@
 #include "ECS/Systems/CreaturePhysiologySystemInterface.h"
 #include "ECS/Systems/GuidanceSystemInterface.h"
 #include "ECS/Systems/HandSystemInterface.h"
+#include "ECS/Systems/LeashSystemInterface.h"
 #include "ECS/Systems/PlayerSystemInterface.h"
 #include "ECS/Systems/ReactionSystemInterface.h"
 #include "ECS/Systems/TimeSystemInterface.h"
@@ -397,6 +398,80 @@ public:
 
 	bool networkGame {false};
 	input_steps::Steps inputSteps {};
+};
+
+/// A leash that is on every creature, and counts the creatures it is taken off
+class HeldLeash final: public ecs::systems::LeashSystemInterface
+{
+public:
+	void ProcessTurn() override {}
+	void Update(float /*seconds*/) override {}
+	void ShowPosts(bool /*handShown*/) override {}
+	bool PressAction(PlayerNames /*player*/, const glm::vec3& /*rayOrigin*/, const glm::vec3& /*rayDirection*/,
+	                 glm::vec2 /*cursor*/, uint32_t /*milliseconds*/) override
+	{
+		return false;
+	}
+	bool TapThing(PlayerNames /*player*/, entt::entity /*object*/) override { return false; }
+	[[nodiscard]] bool TakesTap(PlayerNames /*player*/, entt::entity /*object*/) const override { return false; }
+	[[nodiscard]] std::optional<float> RopeUnderCursor(PlayerNames /*player*/, const RopeFrame& /*frame*/) override
+	{
+		return std::nullopt;
+	}
+	void SetRopeHovered(PlayerNames /*player*/, bool /*hovered*/) override {}
+	[[nodiscard]] leash_snap::Hand RopeHand(PlayerNames /*player*/) const override { return leash_snap::Hand::Away; }
+	bool PressRope(PlayerNames /*player*/) override { return false; }
+	void LetGoOfRope(PlayerNames /*player*/, std::optional<glm::vec3> /*place*/) override {}
+	void HandleInput(const glm::vec3& /*rayOrigin*/, const glm::vec3& /*rayDirection*/, bool /*actionTaken*/) override {}
+	[[nodiscard]] bool Knows(entt::entity /*creature*/, LeashType /*type*/) const override { return false; }
+	void SetKnown(entt::entity /*creature*/, LeashType /*type*/, bool /*known*/) override {}
+	[[nodiscard]] bool IsLeashable(entt::entity /*creature*/) const override { return false; }
+	bool SetLeashable(entt::entity /*creature*/, bool /*leashable*/) override { return false; }
+	void SetOwner(entt::entity /*creature*/, PlayerNames /*owner*/) override {}
+	void ClaimOnArrival(entt::entity /*creature*/) override {}
+	[[nodiscard]] creature_leash::Refusal WhyNot(PlayerNames /*player*/, entt::entity /*creature*/,
+	                                             LeashType /*type*/) const override
+	{
+		return {};
+	}
+	[[nodiscard]] std::optional<Refused> LastRefusal() const override { return std::nullopt; }
+	bool PutOn(entt::entity /*creature*/, LeashType /*type*/) override { return false; }
+	void TakeOff(entt::entity creature) override { takenOff.push_back(creature); }
+	bool Toggle(entt::entity /*creature*/) override { return false; }
+	bool ChangeType(entt::entity /*creature*/, LeashType /*type*/) override { return false; }
+	bool PickType(PlayerNames /*player*/, LeashType /*type*/) override { return false; }
+	bool TieTo(entt::entity /*creature*/, entt::entity /*object*/) override { return false; }
+	void UntieToHand(entt::entity /*creature*/) override {}
+	void PlayHandAttachSound(entt::entity /*creature*/) override {}
+	void SetWorks(entt::entity /*creature*/, bool /*works*/) override {}
+	void SetDrawn(bool /*drawn*/) override {}
+	void ConfineToHome(entt::entity /*creature*/, float /*radius*/) override {}
+	void ClearConfinement(entt::entity /*creature*/) override {}
+	[[nodiscard]] bool FreeOfHome(entt::entity /*creature*/) const override { return true; }
+	[[nodiscard]] bool IsLeashed(entt::entity /*creature*/) const override { return true; }
+	[[nodiscard]] std::optional<entt::entity> TiedTo(entt::entity /*creature*/) const override { return std::nullopt; }
+	[[nodiscard]] std::optional<glm::vec3> HolderPoint(entt::entity /*creature*/) const override { return std::nullopt; }
+	[[nodiscard]] LeashType TypeOf(entt::entity /*creature*/) const override { return {}; }
+	[[nodiscard]] std::optional<entt::entity> PlayersCreature(PlayerNames player) const override
+	{
+		return player == PlayerNames::PLAYER_ONE ? playersCreature : std::nullopt;
+	}
+	bool PressKey(PlayerNames /*player*/, creature_leash::LeashKey /*key*/) override { return false; }
+	bool TapCreature(PlayerNames /*player*/, entt::entity /*creature*/) override { return false; }
+	bool Shake(PlayerNames /*player*/) override { return false; }
+	void PlacePosts(PlayerNames /*owner*/, const std::array<glm::vec3, 3>& /*points*/) override {}
+	bool OrderAt(PlayerNames /*player*/, const glm::vec3& /*place*/) override { return false; }
+	bool OrderOn(PlayerNames /*player*/, entt::entity /*object*/) override { return false; }
+	[[nodiscard]] std::optional<glm::vec3> OrderTarget(entt::entity /*creature*/) const override { return std::nullopt; }
+	[[nodiscard]] std::optional<uint32_t> ToolTip(PlayerNames /*player*/,
+	                                              std::optional<entt::entity> /*hovered*/) const override
+	{
+		return std::nullopt;
+	}
+	bool TapPost(PlayerNames /*player*/, entt::entity /*post*/) override { return false; }
+
+	std::optional<entt::entity> playersCreature;
+	std::vector<entt::entity> takenOff;
 };
 
 class CreatureFightSystemTest: public ::testing::Test
@@ -2569,4 +2644,19 @@ TEST_F(CreatureFightSystemTest, AHoldInTheDuelGivesBothCreaturesTheStrengthOfThe
 	EXPECT_EQ(body.gains[second], 1u);
 	Locator::creatureHandSystem::reset();
 	Locator::creaturePhysiologySystem::reset();
+}
+
+// A faint that a script orders keeps the leash on. Any other faint takes it off. Both knock the creature out.
+// NOLINTNEXTLINE(cppcoreguidelines-avoid-non-const-global-variables): external macro
+TEST_F(CreatureFightSystemTest, AFaintThatAScriptOrdersKeepsTheLeash)
+{
+	auto& registry = Locator::entitiesRegistry::value();
+	auto& leash = static_cast<HeldLeash&>(Locator::leashSystem::emplace<HeldLeash>());
+	fights.FaintForScript(second);
+	EXPECT_TRUE(registry.AllOf<CreatureKnockedOut>(second));
+	EXPECT_TRUE(leash.takenOff.empty());
+	fights.ForceFaint(first);
+	EXPECT_TRUE(registry.AllOf<CreatureKnockedOut>(first));
+	EXPECT_EQ(leash.takenOff, (std::vector<entt::entity> {first}));
+	Locator::leashSystem::reset();
 }

@@ -14960,6 +14960,7 @@ std::vector<Scenario> Build()
 	AddBirdScenarios(all);
 	AddTeleportScenarios(all);
 	AddVortexScenarios(all);
+	AddLandFiveQuestScenarios(all);
 	AddLandsFourFiveScrollScenarios(all);
 	AddLand4StoneScenarios(all);
 	AddLand4SlegScenarios(all);
@@ -14974,6 +14975,7 @@ std::vector<Scenario> Build()
 	AddTempleVillagerScenarios(all);
 	AddFishScenarios(all);
 	AddKnockScenarios(all);
+	AddFootballScenarios(all);
 	AddVillagerSpeedScenarios(all);
 	AddDiscipleScenarios(all);
 	AddVillagerLabelScenarios(all);
@@ -14993,6 +14995,8 @@ std::vector<Scenario> Build()
 	AddCreatureLearningScenarios(all);
 	AddComputerPlayerScenarios(all);
 	AddGameEndScenarios(all);
+	AddEndingScenarios(all);
+	AddLastStandScenarios(all);
 	AddWorldSoundScenarios(all);
 	AddTownMiracleScenarios(all);
 	AddFixedKindScenarios(all);
@@ -15067,7 +15071,7 @@ bool ScriptArgumentsFit(const Command& command, const Scenario& scenario)
 	    std::ranges::find_if(scenario.commands, [&command](const Command& other) { return &other == &command; });
 	const auto earlierCalls = static_cast<size_t>(
 	    std::count_if(scenario.commands.begin(), before, [](const Command& other) { return other.kind == Kind::CallNative; }));
-	const auto fits = [&scenario, earlierCalls](const ScriptArgument& argument) {
+	const auto fits = [&scenario, &command, earlierCalls](const ScriptArgument& argument) {
 		switch (argument.kind)
 		{
 		case ScriptArgument::Kind::Number:
@@ -15092,6 +15096,8 @@ bool ScriptArgumentsFit(const Command& command, const Scenario& scenario)
 			});
 		case ScriptArgument::Kind::Made:
 			return argument.index < earlierCalls;
+		case ScriptArgument::Kind::Text:
+			return command.kind == Command::Kind::CallNative && !argument.text.empty();
 		}
 		return false;
 	};
@@ -15123,6 +15129,9 @@ std::string_view CommandProblem(const Command& command, std::span<const ObjectSe
 		return object != nullptr && !std::holds_alternative<FeatureInfo>(object->type) ? "" : "knocks down no thing or tree";
 	case Kind::TieLeash:
 		return object != nullptr ? "" : "ties the leash to nothing";
+	case Kind::JoinFootball:
+		return object != nullptr && std::holds_alternative<VillagerInfo>(object->type) ? ""
+		                                                                               : "sends no villager to the football";
 	case Kind::Examine:
 		return command.value < creature_object_actions::k_KeepAnimationCount ? "" : "no such way of looking it over";
 	case Kind::HandStroke:
@@ -15160,8 +15169,8 @@ bool testbed_scenarios::NeedsNoCreature(Command::Kind kind)
 	       kind == Kind::RunText || kind == Kind::PlayHandDemo || kind == Kind::Reframe || kind == Kind::DestroyTemple ||
 	       kind == Kind::RunHelpMessage || kind == Kind::EndGuidanceWaits || kind == Kind::SetTownBeliefInRival ||
 	       kind == Kind::GiveLandTown || kind == Kind::RecordChallenge || kind == Kind::EnterTemple || kind == Kind::HandTake ||
-	       kind == Kind::HandApply || kind == Kind::HandTakeShownSeed || kind == Kind::RunScript ||
-	       kind == Kind::PlayBoatFilm || kind == Kind::HandPour || kind == Kind::HandRelease ||
+	       kind == Kind::HandApply || kind == Kind::HandTakeShownSeed || kind == Kind::RunScript || kind == Kind::ClickScroll ||
+	       kind == Kind::CameraLooksAt || kind == Kind::PlayBoatFilm || kind == Kind::HandPour || kind == Kind::HandRelease ||
 	       kind == Kind::SetReportLatency || kind == Kind::RemoveObject || kind == Kind::ReadTip ||
 	       kind == Kind::LookAtTempleScroll || kind == Kind::HandGripTotem || kind == Kind::ProfileFolderCheck ||
 	       kind == Kind::PlayCustomMusic || kind == Kind::ShowCustomMusicControls || kind == Kind::OwnTattooPicture ||
@@ -15182,7 +15191,7 @@ bool testbed_scenarios::NeedsNoCreature(Command::Kind kind)
 	       kind == Kind::AddIncomingMessage || kind == Kind::Chat || kind == Kind::ComputerPersonality ||
 	       kind == Kind::ComputerUntaughtSends || kind == Kind::SkirmishBox || kind == Kind::LookAtSaveGamePicture ||
 	       kind == Kind::HandCastOnDispenser || kind == Kind::HandCastOnCreature || kind == Kind::CloseHeldMiracle ||
-	       IsPointerCommand(kind);
+	       kind == Kind::JoinFootball || IsPointerCommand(kind);
 }
 
 std::string_view testbed_scenarios::Name(Facet facet)
@@ -15210,7 +15219,7 @@ std::string_view testbed_scenarios::Name(Shot shot)
 
 std::string_view testbed_scenarios::Name(Command::Kind kind)
 {
-	constexpr std::array<std::string_view, 216> k_Names {
+	constexpr std::array<std::string_view, 219> k_Names {
 	    "walk to",
 	    "run to",
 	    "follow",
@@ -15426,6 +15435,9 @@ std::string_view testbed_scenarios::Name(Command::Kind kind)
 	    "cast the held miracle on a dispenser",
 	    "cast the held miracle on a creature",
 	    "close the held miracle and let go",
+	    "click a scroll",
+	    "put the camera to look at a point",
+	    "join the football of the town",
 	    "a script builds the worship sites",
 	};
 	return k_Names.at(static_cast<size_t>(kind));

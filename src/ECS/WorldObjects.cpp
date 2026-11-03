@@ -717,6 +717,15 @@ float world_objects::ReduceLife(entt::entity object, float damage, std::optional
 		}
 		damage = LifeOf(object);
 	}
+	// A football pitch that is built takes no damage. Its life stays full.
+	if (const auto* abode = registry.TryGet<const Abode>(object); abode != nullptr && abode->type == AbodeNumber::FootballPitch)
+	{
+		const auto* progress = registry.TryGet<const BuildProgress>(object);
+		if (progress == nullptr || progress->built >= 1.0f)
+		{
+			return LifeOf(object);
+		}
+	}
 	const float before = LifeOf(object);
 	if (const auto* villager = registry.TryGet<const Villager>(object))
 	{

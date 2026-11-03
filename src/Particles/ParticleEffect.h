@@ -271,6 +271,8 @@ struct TornadoCandidate
 	float radius {0.0f};
 	/// A liftable pile, as a pile the hand dropped: when it doesn't fit the funnel, some of it is taken up as a pot
 	bool pile {false};
+	/// A script holds it where it is: it never fits the funnel, thus a pile of this kind only gives up a pot
+	bool immovable {false};
 };
 
 /// What the effects need from the world. The game backs it with the land, the players and the camera; tests use a fake.

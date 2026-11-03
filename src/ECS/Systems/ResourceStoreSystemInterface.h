@@ -13,6 +13,7 @@
 
 #include <optional>
 
+#include <entt/entity/entity.hpp>
 #include <entt/fwd.hpp>
 #include <glm/vec3.hpp>
 
@@ -67,6 +68,10 @@ public:
 	/// pile. A poisoned pour poisons every pile it goes into or makes. Whether anything was taken or made.
 	virtual bool PourAt(ResourceType type, glm::vec3 point, uint32_t amount, bool speedUp, PlayerNames player,
 	                    bool poisoned) = 0;
+	/// A new pile of food or wood on the land under a point, holding an amount and belonging to nobody, as a script makes
+	/// a store: it does not go into the stores and piles near it. It thuds as it lands, and the people come to look at
+	/// it. None for any other resource or for an amount of 0.
+	virtual entt::entity MakePile(ResourceType /*type*/, glm::vec3 /*point*/, uint32_t /*amount*/) { return entt::null; }
 	/// The store a pile is part of, none for a pile on its own
 	[[nodiscard]] virtual std::optional<entt::entity> StoreOf(entt::entity pile) const = 0;
 
