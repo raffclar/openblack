@@ -108,10 +108,10 @@ bool DialogueText::RunText(bool singleLine, uint32_t number, int32_t withInterac
 	return valid;
 }
 
-void DialogueText::TempText(bool singleLine, std::string_view words, int32_t withInteraction)
+void DialogueText::TempText(bool singleLine, std::string_view words, int32_t withInteraction, float number)
 {
 	StartLine(singleLine);
-	AddText(ScriptWordsText(words), 0.0f, k_NarratorScriptWords, 0, withInteraction);
+	AddText(ScriptWordsText(words), number, k_NarratorScriptWords, 0, withInteraction);
 }
 
 void DialogueText::StartLine(bool singleLine)

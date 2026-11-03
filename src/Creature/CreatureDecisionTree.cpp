@@ -405,6 +405,21 @@ float creature_tree::Usefulness(float utility)
 	return std::clamp(usefulness, 0.0f, k_MostUsefulness);
 }
 
+Tree creature_tree::DistinctionTree(Attribute attribute, uint32_t value)
+{
+	const auto range = k_ScriptValueRanges.at(static_cast<size_t>(attribute));
+	Tree tree;
+	tree.nodes.reserve(static_cast<size_t>(range) + 1);
+	tree.nodes.push_back({.test = attribute});
+	tree.nodes.front().children.reserve(range);
+	for (uint32_t each = 0; each < range; ++each)
+	{
+		tree.nodes.front().children.emplace_back(each, tree.nodes.size());
+		tree.nodes.push_back({.bucket = each == value ? k_Buckets.size() - 1 : 0});
+	}
+	return tree;
+}
+
 std::vector<std::string> creature_tree::Describe(const Tree& tree)
 {
 	std::vector<std::string> lines;

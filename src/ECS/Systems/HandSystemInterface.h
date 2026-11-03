@@ -111,6 +111,8 @@ public:
 		/// The controls of the world camera asked for a turn of more than a hundredth in the turn of the report
 		bool cameraTurned;
 		std::bitset<255> keysHeld;
+		/// How many buttons the computer's system says the mouse has
+		uint32_t mouseButtons {0};
 	};
 	/// The view of a player: from the last view report of the player that a turn did, none before the first view
 	/// report or for a player with no hands. The world never reads the camera or the input of the frames.

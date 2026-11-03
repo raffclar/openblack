@@ -86,6 +86,7 @@ void openblack::ecs::reflection::RegisterFields_Values_e(entt::meta_ctx& context
 	    .Field<&openblack::ecs::RegistryContext::nextHandRockTap>("nextHandRockTap")
 	    .Field<&openblack::ecs::RegistryContext::nextCreatureRockSmash>("nextCreatureRockSmash")
 	    .Field<&openblack::ecs::RegistryContext::scriptLetsTempleBeEntered>("scriptLetsTempleBeEntered")
+	    .Field<&openblack::ecs::RegistryContext::scriptBuildersWaitForWood>("scriptBuildersWaitForWood")
 	    .Field<&openblack::ecs::RegistryContext::scriptCameraOrders>("scriptCameraOrders")
 	    .Field<&openblack::ecs::RegistryContext::templeEntrancesTakeCursor>("templeEntrancesTakeCursor", {k_PlayerNamesNames})
 	    .Field<&openblack::ecs::RegistryContext::gameOver>("gameOver")
@@ -229,7 +230,13 @@ void openblack::ecs::reflection::RegisterFields_Values_e(entt::meta_ctx& context
 	    .Field<&openblack::ecs::components::CreatureMindState::Teaching::type>("type")
 	    .Field<&openblack::ecs::components::CreatureMindState::Teaching::action>("action")
 	    .Field<&openblack::ecs::components::CreatureMindState::Teaching::knows>("knows")
-	    .Field<&openblack::ecs::components::CreatureMindState::Teaching::everything>("everything");
+	    .Field<&openblack::ecs::components::CreatureMindState::Teaching::everything>("everything")
+	    .Field<&openblack::ecs::components::CreatureMindState::Teaching::everySkill>("everySkill")
+	    .Field<&openblack::ecs::components::CreatureMindState::Teaching::everyMiracle>("everyMiracle")
+	    .Field<&openblack::ecs::components::CreatureMindState::Teaching::distinction>("distinction")
+	    .Field<&openblack::ecs::components::CreatureMindState::Teaching::desire>("desire")
+	    .Field<&openblack::ecs::components::CreatureMindState::Teaching::attribute>("attribute")
+	    .Field<&openblack::ecs::components::CreatureMindState::Teaching::value>("value");
 	Reflect<openblack::ecs::components::CreatureSkin::Painted>(context, ValueOnly {})
 	    .Field<&openblack::ecs::components::CreatureSkin::Painted::baseMesh>("baseMesh")
 	    .Field<&openblack::ecs::components::CreatureSkin::Painted::variantMesh>("variantMesh")

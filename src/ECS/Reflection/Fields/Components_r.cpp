@@ -62,7 +62,8 @@ void openblack::ecs::reflection::RegisterFields_Components_r(entt::meta_ctx& con
 	    .Field<&components::ReportedHand::mouseWheel>("mouseWheel")
 	    .Field<&components::ReportedHand::cameraTurned>("cameraTurned")
 	    .Field<&components::ReportedHand::cameraIcons>("cameraIcons")
-	    .Field<&components::ReportedHand::keysHeld>("keysHeld");
+	    .Field<&components::ReportedHand::keysHeld>("keysHeld")
+	    .Field<&components::ReportedHand::mouseButtons>("mouseButtons");
 	Reflect<components::ResourceLastTaken>(context).Field<&components::ResourceLastTaken::turn>(
 	    "turn", {k_PlayerNamesNames, std::span<const std::string_view> {}});
 	Reflect<components::ResourcePile>(context)

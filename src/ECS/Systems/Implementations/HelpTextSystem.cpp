@@ -325,6 +325,14 @@ void HelpTextSystem::TempText(bool singleLine, std::string_view words, int32_t w
 	}
 }
 
+void HelpTextSystem::TempTextWithNumber(bool singleLine, std::string_view words, float number, int32_t withInteraction)
+{
+	if (_dialogue)
+	{
+		_dialogue->TempText(singleLine, words, withInteraction, number);
+	}
+}
+
 bool HelpTextSystem::IsTextRead() const
 {
 	// Without the help texts there is nothing to wait for

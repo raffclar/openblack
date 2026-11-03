@@ -146,7 +146,7 @@ public:
 	bool RunText(bool singleLine, uint32_t number, int32_t withInteraction, float value = 0.0f);
 	/// A script shows words of its own (ScriptWordsText) in the plain font, as RunText shows a help text but with no voice.
 	/// It counts as text 0 for the reading time's end, the draw gate and whether it is read.
-	void TempText(bool singleLine, std::string_view words, int32_t withInteraction);
+	void TempText(bool singleLine, std::string_view words, int32_t withInteraction, float number = 0.0f);
 	/// The text the scripts last showed has been read
 	[[nodiscard]] bool IsTextRead() const;
 	/// Every text is taken away
