@@ -69,6 +69,18 @@ constexpr std::array<glm::vec2, 4> k_Wonders {{
     {430.26f, -430.18f},
 }};
 
+/// Where the land's script puts the player's creature in its opening film, by the home town
+constexpr glm::vec2 k_CreatureStart {-1421.77f, 535.33f};
+/// The land's numbers of Nemesis's towns with a Wonder that the land's script watches: the Tibetan town behind the
+/// spiritual shield, the Greek town, and the second Tibetan town
+constexpr size_t k_ShieldedTown = 3;
+constexpr size_t k_GreekTown = 4;
+constexpr size_t k_TibetanTown = 5;
+/// The place where the land's script finds Nemesis's own town, in the town's west
+constexpr glm::vec2 k_NemesisOwnTownPlace {403.78f, -414.25f};
+/// The middle of Nemesis's own town. The land's script speaks only when this point is in the camera's view.
+constexpr glm::vec2 k_NemesisOwnTownMiddle {431.21f, -431.19f};
+
 /// The player's creature, at the home town of the fifth land
 CreatureSetup PlayersTiger(glm::vec2 offset)
 {
@@ -89,6 +101,19 @@ Command FindBuilding(glm::vec2 at, float delaySeconds)
 	                            {.kind = Argument::Kind::Integer, .number = 5000.0f},
 	                            {.kind = Argument::Kind::Position, .point = at},
 	                            {.kind = Argument::Kind::Number, .number = 0.0f}}};
+}
+
+/// A script's call for the town within 100 metres of a place, as the land's script finds each town
+Command FindTown(glm::vec2 at, float delaySeconds)
+{
+	return {.kind = Kind::CallNative,
+	        .delaySeconds = delaySeconds,
+	        .script = "CALL_NEAR",
+	        .scriptArguments = {{.kind = Argument::Kind::Integer, .number = 9.0f},
+	                            {.kind = Argument::Kind::Integer, .number = 5000.0f},
+	                            {.kind = Argument::Kind::Position, .point = at},
+	                            {.kind = Argument::Kind::Number, .number = 100.0f},
+	                            {.kind = Argument::Kind::Integer, .number = 0.0f}}};
 }
 
 /// A script's order to the town at a place to build its Wonder there, with the desire that the land's script gives
@@ -367,5 +392,84 @@ void testbed_scenarios::AddLandFiveQuestScenarios(std::vector<Scenario>& all)
 	                 {.kind = Kind::GiveLandTown, .delaySeconds = 80.0f, .value = k_JapaneseVillage, .amount = 5.0f},
 	                 {.kind = Kind::CameraLooksAt, .delaySeconds = 10.0f, .point = k_FarmersHouse},
 	                 {.kind = Kind::RunScript, .delaySeconds = 0.5f, .script = "SwapToBrownBear"}},
+	});
+	all.push_back({
+	    .id = "story.l5_opening_film",
+	    .name = "Story: Nemesis's opening film and his curse on the creature on the fifth land",
+	    .facet = Facet::Story,
+	    .description = "The fifth land loads with its own scripts and the player's tiger by the home town. The land's "
+	                   "control script starts as the start of the land starts it. Click the texts to go on.",
+	    .expected = "The time of day goes to 13:00 and the four Wonders stand at 60% built. The film opens at the vortex "
+	                "with Nemesis's music and a 6-second fade in. The evil advisor speaks, then Nemesis. The lens widens "
+	                "while the camera pans across the land. After a dark red fade, three fly-pasts of his Wonders follow, "
+	                "each with a red fade. The music stops and Nemesis says \"I have a surprise for you.\" Then the curse: "
+	                "the tiger looks confused, the camera shakes and runs along the ground, the tiger sneezes and scratches, "
+	                "the camera dives into its head, a red fade and a punch, and the tiger recoils and faints. A high pan, "
+	                "Nemesis's line and his laugh (sound only). The quest goes into the story log. The good advisor ends "
+	                "the film. Then the home town is told to build the citadel and the town centre.",
+	    .environment = {.land = Land::Story, .storyLand = "Land5.txt", .dispenserGrid = false},
+	    .framing = {.shot = Shot::Follow},
+	    .creatures = {PlayersTiger(k_CreatureStart)},
+	    .commands = {{.kind = Kind::RunScript, .delaySeconds = 0.5f, .script = "LandControl5"}},
+	});
+	all.push_back({
+	    .id = "story.l5_wonder_villages",
+	    .name = "Story: the three Wonder villages are won and the creature is healed on the fifth land",
+	    .facet = Facet::Story,
+	    .description = "The fifth land loads with its own scripts and the player's tiger by the home town. Nemesis's "
+	                   "second Tibetan town, his Greek town and the Tibetan town behind the shield believe only in the "
+	                   "player. Then the land's control script starts. Click the texts to go on.",
+	    .expected = "After the opening film, the film of each town plays in the land script's order: the second Tibetan "
+	                "town (Nemesis's hand over the Wonder and a blast on it), the Greek town (the farmer's lines, the blast, "
+	                "Nemesis's hand and the tornado that takes the farmer) and the shielded Tibetan town (both advisors, "
+	                "the blast and Nemesis's lines). The story log's progress goes to 0.33, 0.66 and 0.99. Then the healing "
+	                "scene: a man dressed as a crusader walks to the place of healing, waves and speaks; four beams circle "
+	                "the tiger and close in; the tiger's strength, height and alignment go back to their values after the "
+	                "opening film; the tiger sits; the quest is complete. A heal dispenser appears above the healing place "
+	                "and its reward scene plays after the healing scene.",
+	    .environment = {.land = Land::Story, .storyLand = "Land5.txt", .dispenserGrid = false},
+	    .framing = {.shot = Shot::Follow},
+	    .creatures = {PlayersTiger(k_CreatureStart)},
+	    .commands = {{.kind = Kind::GiveLandTown, .delaySeconds = 0.5f, .value = k_TibetanTown, .amount = 5.0f},
+	                 {.kind = Kind::GiveLandTown, .delaySeconds = 0.0f, .value = k_GreekTown, .amount = 5.0f},
+	                 {.kind = Kind::GiveLandTown, .delaySeconds = 0.0f, .value = k_ShieldedTown, .amount = 5.0f},
+	                 {.kind = Kind::RunScript, .delaySeconds = 10.0f, .script = "LandControl5"}},
+	});
+	all.push_back({
+	    .id = "story.l5_control_loop_towns",
+	    .name = "Story: the land's town checks while the curse is on, on the fifth land",
+	    .facet = Facet::Story,
+	    .description =
+	        "The fifth land loads with its own scripts and the player's tiger by the home town. The Japanese village "
+	        "believes only in the player, and the land's control script starts. 300 seconds later, after the opening "
+	        "film, the camera looks at Nemesis's own town and a script sets the town's belief in the player to 0.2 of its "
+	        "belief in Nemesis. 30 seconds later the "
+	        "Japanese village believes only in Nemesis, and 30 seconds after that only in the player again. Click the "
+	        "texts to go on.",
+	    .expected = "When the film ends, the brown bear quest starts (its scroll appears over the farmer's house). The "
+	                "belief in Nemesis's own town goes back to 0, and the good advisor points at the town and says the people "
+	                "there are frantically zealous about Nemesis. When the Japanese village is lost and won again, the brown "
+	                "bear quest does not start again.",
+	    .environment = {.land = Land::Story, .storyLand = "Land5.txt", .dispenserGrid = false},
+	    .framing = {.shot = Shot::Placed,
+	                .eye = {k_CreatureStart.x + 40.0f, 60.0f, k_CreatureStart.y - 80.0f},
+	                .look = {k_CreatureStart.x, 20.0f, k_CreatureStart.y}},
+	    .creatures = {PlayersTiger(k_CreatureStart)},
+	    .commands = {{.kind = Kind::GiveLandTown, .delaySeconds = 0.5f, .value = k_JapaneseVillage, .amount = 5.0f},
+	                 {.kind = Kind::RunScript, .delaySeconds = 10.0f, .script = "LandControl5"},
+	                 {.kind = Kind::CameraLooksAt, .delaySeconds = 300.0f, .point = k_NemesisOwnTownMiddle},
+	                 FindTown(k_NemesisOwnTownPlace, 0.5f),
+	                 {.kind = Kind::CallNative,
+	                  .delaySeconds = 0.0f,
+	                  .script = "SET_PLAYER_BELIEF",
+	                  .scriptArguments = {{.kind = Argument::Kind::Made, .index = 0},
+	                                      {.kind = Argument::Kind::Number, .number = 1.0f},
+	                                      {.kind = Argument::Kind::Number, .number = 0.2f}}},
+	                 {.kind = Kind::GiveLandTown,
+	                  .player = PlayerNames::PLAYER_TWO,
+	                  .delaySeconds = 30.0f,
+	                  .value = k_JapaneseVillage,
+	                  .amount = 5.0f},
+	                 {.kind = Kind::GiveLandTown, .delaySeconds = 30.0f, .value = k_JapaneseVillage, .amount = 5.0f}},
 	});
 }

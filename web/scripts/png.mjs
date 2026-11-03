@@ -79,6 +79,27 @@ export function findPointer(picture) {
   return count > 0 ? { x: Math.round(sumX / count), y: Math.round(sumY / count), count } : { x: -1, y: -1, count };
 }
 
+// The middle of the pixels of a screenshot whose colour is between two colours (each channel at least the low and at
+// most the high value), inside a box [left, top, right, bottom], and how many there are. The count is 0 when no pixel
+// matches.
+export function findColour(picture, low, high, box = [0, 0, picture.width, picture.height]) {
+  const { width, height, channels, pixels } = picture;
+  let count = 0;
+  let sumX = 0;
+  let sumY = 0;
+  for (let y = Math.max(0, box[1]); y < Math.min(height, box[3]); ++y) {
+    for (let x = Math.max(0, box[0]); x < Math.min(width, box[2]); ++x) {
+      const i = (y * width + x) * channels;
+      if ([0, 1, 2].every((c) => pixels[i + c] >= low[c] && pixels[i + c] <= high[c])) {
+        ++count;
+        sumX += x;
+        sumY += y;
+      }
+    }
+  }
+  return count > 0 ? { x: Math.round(sumX / count), y: Math.round(sumY / count), count } : { x: -1, y: -1, count };
+}
+
 // The share of the pixels whose colour changed by more than 24 in one channel
 export function changedShare(folder, a, b) {
   const first = path.join(folder, `${a}.png`);
