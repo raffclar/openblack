@@ -12,6 +12,7 @@
 #include <cstdint>
 
 #include <array>
+#include <chrono>
 
 #include "Visual/RenderPass.h"
 
@@ -73,5 +74,28 @@ constexpr auto k_CoverView = RenderPass::Interface;
 constexpr float k_CreatureFizz = 0.5f;
 /// How frozen the creatures that a warm-up draws fizzing are: wholly, which adds the ice over them
 constexpr float k_CreatureFreeze = 1.0f;
+
+/// The loading frames after the last frame of a pipeline prefetch before the count of the pipelines that are not ready
+/// is correct. The renderer draws a frame on its own thread while the game makes the next frame.
+constexpr uint32_t k_PrefetchSettleFrames = 2;
+
+/// The longest time that the loading screen waits for the pipelines of a prefetch. After this time, the warm-up makes
+/// the pipelines that are not ready itself.
+constexpr std::chrono::milliseconds k_PrefetchWaitLimit {20000};
+
+/// The time between two loading frames while the loading screen waits for the pipelines of a prefetch. The renderer
+/// takes the ready pipelines in each frame. More frames only make more work for the device that makes the pipelines.
+constexpr std::chrono::milliseconds k_PrefetchFrameInterval {4};
+
+/// Gives true while the loading screen must wait for the pipelines of a prefetch. framesAfter is the number of loading
+/// frames after the prefetch, pending is the number of pipelines that are not ready and waited is the time of the wait.
+[[nodiscard]] constexpr bool PrefetchWaits(uint32_t framesAfter, uint32_t pending, std::chrono::milliseconds waited) noexcept
+{
+	if (waited >= k_PrefetchWaitLimit)
+	{
+		return false;
+	}
+	return framesAfter < k_PrefetchSettleFrames || pending > 0;
+}
 
 } // namespace openblack::graphics::warm_up

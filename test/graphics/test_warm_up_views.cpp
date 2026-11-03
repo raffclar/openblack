@@ -9,6 +9,7 @@
 
 #include <algorithm>
 #include <array>
+#include <chrono>
 
 #include <gtest/gtest.h>
 
@@ -56,4 +57,24 @@ TEST(WarmUpViews, TargetViewsAreDrawnWhole)
 	{
 		EXPECT_FALSE(Kept(view));
 	}
+}
+
+// The loading screen waits for some frames after a prefetch, then while pipelines are not ready
+TEST(WarmUpViews, PrefetchWaitsForSettleFramesThenPipelines)
+{
+	using std::chrono::milliseconds;
+	for (uint32_t frames = 0; frames < warm_up::k_PrefetchSettleFrames; ++frames)
+	{
+		EXPECT_TRUE(warm_up::PrefetchWaits(frames, 0, milliseconds {0})) << frames;
+	}
+	EXPECT_FALSE(warm_up::PrefetchWaits(warm_up::k_PrefetchSettleFrames, 0, milliseconds {0}));
+	EXPECT_TRUE(warm_up::PrefetchWaits(warm_up::k_PrefetchSettleFrames, 3, milliseconds {100}));
+	EXPECT_TRUE(warm_up::PrefetchWaits(50, 1, warm_up::k_PrefetchWaitLimit - milliseconds {1}));
+}
+
+// After the limit, the loading screen stops the wait. The warm-up then makes the pipelines that are not ready.
+TEST(WarmUpViews, PrefetchStopsAtTheLimit)
+{
+	EXPECT_FALSE(warm_up::PrefetchWaits(0, 0, warm_up::k_PrefetchWaitLimit));
+	EXPECT_FALSE(warm_up::PrefetchWaits(10, 25, warm_up::k_PrefetchWaitLimit));
 }

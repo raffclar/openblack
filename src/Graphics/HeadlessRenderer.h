@@ -40,6 +40,8 @@ public:
 	{
 		return false;
 	}
+	bool SetPipelinePrefetch(bool /*enabled*/) noexcept override { return false; }
+	[[nodiscard]] uint32_t GetPipelinePrefetchPending() const noexcept override { return 0; }
 	void ReleaseGpuWorkMemory() noexcept override {}
 	void RequestScreenshot(const std::filesystem::path& /*filepath*/) noexcept override {}
 	[[nodiscard]] std::optional<std::string> TakeScreenshotFailure(const std::filesystem::path& /*filepath*/) noexcept override
