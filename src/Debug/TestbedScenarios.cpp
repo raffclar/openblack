@@ -400,6 +400,8 @@ void TestbedScenarios::DrawBenchmark() noexcept
 	const auto& settings = _runner.GetBenchmarkSettings();
 	const auto& results = _runner.GetLiveResults();
 	ImGui::Text("Measured the last %zu of up to %u frames", _runner.GetMeasuredFrames(), settings.frames);
+	ImGui::SetItemTooltip("The figures below show the newest %zu frames. The saved results use all the measured frames.",
+	                      Runner::k_LiveFrames);
 	const auto frame = results.frame;
 	const auto colour = frame.average <= k_TargetFrameMs ? ImVec4(0.4f, 0.85f, 0.4f, 1.0f) : ImVec4(0.95f, 0.45f, 0.35f, 1.0f);
 	ImGui::TextColored(colour, "Frame: mean %.2f ms (%.0f FPS), p95 %.2f, max %.2f", static_cast<double>(frame.average),

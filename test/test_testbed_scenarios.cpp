@@ -837,12 +837,27 @@ TEST(TestbedScenarios, BenchmarksMeasureCrowdsOfEachSize)
 			EXPECT_LE(scenario.crowd->count, scenario.crowd->kind == Crowd::Kind::Creatures ? 100u : 1'000u) << scenario.id;
 		}
 	}
-	EXPECT_EQ(crowds, benchmarks.size());
+	// The creatures among towns too
+	EXPECT_EQ(crowds, benchmarks.size() + 1);
 	// Only benchmarks have crowds
 	for (const auto& scenario : All())
 	{
 		EXPECT_EQ(scenario.crowd.has_value(), scenario.facet == Facet::Benchmark) << scenario.id;
 	}
+}
+
+TEST(TestbedScenarios, TheCreaturesAtWorkLiveAmongTowns)
+{
+	const auto* scenario = Find("benchmark.creatures_at_work");
+	ASSERT_NE(scenario, nullptr);
+	EXPECT_EQ(scenario->facet, Facet::Benchmark);
+	ASSERT_TRUE(scenario->crowd.has_value());
+	EXPECT_EQ(scenario->crowd->kind, Crowd::Kind::Creatures);
+	EXPECT_EQ(scenario->crowd->count, 100u);
+	EXPECT_EQ(scenario->crowd->villagers, 4 * k_VillagersPerTown);
+	EXPECT_TRUE(Problems(*scenario).empty());
+	// No digit in its id, so that tools that name files after it take it
+	EXPECT_FALSE(std::ranges::any_of(scenario->id, [](char c) { return c >= '0' && c <= '9'; }));
 }
 
 TEST(TestbedScenarios, CrowdsAreChecked)

@@ -929,14 +929,19 @@ void Runner::Start(const Scenario& scenario)
 		const auto& crowd = *scenario.crowd;
 		if (crowd.kind == Crowd::Kind::Creatures)
 		{
-			_crowdCreatures = LayOutCreatures(crowd.count, crowd.seed);
-			_crowdProgress.total = _crowdCreatures.size();
+			// The towns among the creatures first, so that the creatures keep clear of their homes
+			if (crowd.villagers > 0)
+			{
+				_village = LayOutVillagers(crowd.villagers, crowd.seed);
+			}
+			_crowdCreatures = LayOutCreatures(crowd.count, crowd.seed, TownCentres(_village), k_TownClearRadius);
 		}
 		else
 		{
 			_village = LayOutVillagers(crowd.count, crowd.seed);
-			_crowdProgress.total = _village.towns.size() + _village.abodes.size() + _village.villagers.size();
 		}
+		_crowdProgress.total =
+		    _village.towns.size() + _village.abodes.size() + _village.villagers.size() + _crowdCreatures.size();
 		_recorder = std::make_unique<benchmark::Recorder>(BenchmarkStages(), _benchmark.frames);
 	}
 
@@ -6845,17 +6850,18 @@ void Runner::SpawnCrowdMember(size_t index)
 		const auto point = MapPoint(_middle, offset);
 		return glm::vec3(point.x, land.GetHeightAt(point), point.y);
 	};
-	if (!_crowdCreatures.empty())
+	// The towns first, then their homes and stores, then the villagers who live in them, then the creatures
+	const auto towns = _village.towns.size();
+	const auto abodes = _village.abodes.size();
+	const auto village = towns + abodes + _village.villagers.size();
+	if (index >= village)
 	{
-		const auto& member = _crowdCreatures.at(index);
+		const auto& member = _crowdCreatures.at(index - village);
 		_crowdEntities.push_back(CreatureArchetype::Create(onLand(member.offset), member.owner, member.species, 0,
 		                                                   glm::radians(member.facingDegrees), k_DefaultSize,
 		                                                   CreatureArchetype::StartBody(member.species)));
 		return;
 	}
-	// The towns first, then their homes and stores, then the villagers who live in them
-	const auto towns = _village.towns.size();
-	const auto abodes = _village.abodes.size();
 	if (index < towns)
 	{
 		const auto& town = _village.towns.at(index);
@@ -6915,10 +6921,10 @@ void Runner::Measure()
 	const auto draws = Locator::rendererRequests::has_value() ? Locator::rendererRequests::value().GetDrawsOfLastFrame() : 0u;
 	_recorder->Add(static_cast<float>(Milliseconds(frame)), static_cast<float>(Milliseconds(update)),
 	               static_cast<float>(Milliseconds(frame - update)), stages, static_cast<float>(draws));
-	if (++_framesSinceSummary >= k_FramesPerSummary || _recorder->Count() == _recorder->Capacity())
+	if (++_framesSinceSummary >= k_FramesPerSummary)
 	{
 		_framesSinceSummary = 0;
-		_liveResults = _recorder->Summarise();
+		_liveResults = _recorder->SummariseNewest(Runner::k_LiveFrames);
 	}
 	if (_benchmark.autoSave.has_value() && !_saved && _recorder->Count() >= _recorder->Capacity())
 	{
