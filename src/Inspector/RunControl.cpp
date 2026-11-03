@@ -125,7 +125,11 @@ std::vector<QueryDescription> GameProvider::Describe() const
 	                      .description = "Makes the graphics device again with all its textures, buffers and shaders, "
 	                                     "as after a lost device, at the start of a next frame. Poll game.device until "
 	                                     "restores goes up. Null device when the game has none",
-	                      .parameters = {},
+	                      .parameters = {{.name = "lose",
+	                                      .type = "boolean",
+	                                      .description = "Lose the device first: Direct3D 12 removes its device, Vulkan "
+	                                                     "acts as if a call gave a lost device (false by default)",
+	                                      .required = false}},
 	                      .kind = ResultKind::Object,
 	                      .needsNear = false,
 	                      .writes = true},
@@ -341,7 +345,9 @@ QueryResult GameProvider::Run(std::string_view query, const QueryContext& contex
 	if (query == "restore_device")
 	{
 		const auto before = _target.GraphicsDevice();
-		if (!_target.RestoreGraphicsDevice())
+		const auto loseParam = params.find("lose");
+		const bool lose = loseParam != params.end() && loseParam->is_boolean() && loseParam->get<bool>();
+		if (!_target.RestoreGraphicsDevice(lose))
 		{
 			return QueryResult::Error("the game has no graphics device");
 		}

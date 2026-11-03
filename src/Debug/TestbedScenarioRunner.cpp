@@ -47,6 +47,7 @@
 #include "3D/LandIslandInterface.h"
 #include "3D/MapCoords.h"
 #include "3D/ScreenPick.h"
+#include "3D/SkyDome.h"
 #include "3D/TempleInteriorInterface.h"
 #include "Animals/BirdRules.h"
 #include "Animals/GrazerRules.h"
@@ -140,6 +141,7 @@
 #include "ECS/Components/Scaffold.h"
 #include "ECS/Components/ScriptControl.h"
 #include "ECS/Components/ScriptHighlight.h"
+#include "ECS/Components/Sky.h"
 #include "ECS/Components/Spell.h"
 #include "ECS/Components/SpellDispenser.h"
 #include "ECS/Components/SpellIcon.h"
@@ -905,6 +907,7 @@ void Runner::Start(const Scenario& scenario)
 	_temples.clear();
 	_throwsDue.clear();
 	_turnsAsked.clear();
+	_deviceRestoreAsked.reset();
 	for (const auto& setup : scenario.throws)
 	{
 		_throwsDue.emplace_back(setup.delaySeconds);
@@ -4247,6 +4250,13 @@ void Runner::Give(const Command& command)
 		Log(fmt::format("{:.1f}s: the camera is put back", _seconds));
 		return;
 	}
+	if (command.kind == Kind::RestoreDeviceInDomeFollow)
+	{
+		_deviceRestoreAsked =
+		    command.value == 1 ? graphics::device_restore::Request::Lose : graphics::device_restore::Request::MakeAgain;
+		Log(fmt::format("{:.1f}s: the graphics device is made again when the dome next follows the sky", _seconds));
+		return;
+	}
 	if (command.kind == Kind::SetHour)
 	{
 		if (Locator::skyClockSystem::has_value())
@@ -5454,6 +5464,7 @@ void Runner::Update(float seconds)
 	UpdateMiracles(seconds);
 	UpdateVillagerWalks();
 	UpdateTurnsAsked();
+	UpdateDeviceRestore();
 	UpdateThrows();
 	UpdateComputerActions();
 	WatchGesture();
@@ -5682,6 +5693,30 @@ void Runner::UpdateTurnsAsked()
 	std::erase_if(_turnsAsked, [&](const std::pair<entt::entity, glm::vec2>& asked) {
 		return !registry.Valid(asked.first) || locomotion.TurnToFace(asked.first, asked.second);
 	});
+}
+
+void Runner::UpdateDeviceRestore()
+{
+	if (!_deviceRestoreAsked.has_value() || !Locator::rendererRequests::has_value() || !Locator::skyClockSystem::has_value())
+	{
+		return;
+	}
+	const auto* dome = Locator::entitiesRegistry::value().TryGet<const ecs::components::SkyDome>(
+	    Locator::skyClockSystem::value().GetEntities().dome);
+	if (dome == nullptr)
+	{
+		return;
+	}
+	// Part way: the follow blended its first band and has more rows to blend
+	const auto rowsDone = dome->follow.RowsDone();
+	if (rowsDone == 0 || rowsDone >= sky_dome::k_Rows)
+	{
+		return;
+	}
+	Locator::rendererRequests::value().RequestDeviceRestore(*_deviceRestoreAsked);
+	_deviceRestoreAsked.reset();
+	Log(fmt::format("{:.1f}s: the graphics device is made again with {} rows of the dome blended for the sky type {:.3f}",
+	                _seconds, rowsDone, dome->follow.Following()));
 }
 
 void Runner::UpdateThrows()

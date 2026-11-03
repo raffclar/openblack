@@ -77,6 +77,8 @@ private:
 	std::vector<uint16_t> _materialTexels;
 	std::vector<uint8_t> _bump;
 	[[nodiscard]] block_texture::Sources TextureSources() const;
+	/// Paints the texture of each block from the land into the layers of the block textures
+	void PaintBlockTextures(const block_texture::Sources& sources);
 	/// A rectangle of cells or corners, empty until something is added to it
 	struct ChangedArea
 	{
@@ -119,6 +121,7 @@ public:
 	void PaintBlockTexels(size_t block, std::span<uint16_t> texels) const override;
 	void SetBlockTexels(size_t block, std::span<const uint16_t> texels) override;
 	[[nodiscard]] std::vector<RepaintedBlock> TakeRepaintedBlocks() override;
+	void PaintBlockTexturesAgain() override;
 
 	[[nodiscard]] glm::mat4 GetOrthoView() const override { return _view; }
 	[[nodiscard]] glm::mat4 GetOrthoProj() const override { return _proj; }

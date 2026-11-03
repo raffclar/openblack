@@ -16,6 +16,7 @@
 #include <string>
 #include <vector>
 
+#include "DeviceRestoreRequest.h"
 #include "ScreenView.h"
 
 namespace openblack::graphics
@@ -44,6 +45,10 @@ public:
 	[[nodiscard]] virtual std::optional<std::vector<uint8_t>> TakeScreenPicture(const std::string& name) noexcept = 0;
 	/// How many draws the last frame had. A renderer that draws nothing gives 0.
 	[[nodiscard]] virtual uint32_t GetDrawsOfLastFrame() const noexcept = 0;
+	/// Asks the renderer to make its graphics device again, or to lose it and then make it again, to test the recovery
+	/// from a lost device. The renderer does it at the start of a next frame. Each texture, buffer and shader keeps its
+	/// handle and contents.
+	virtual void RequestDeviceRestore(device_restore::Request request) noexcept = 0;
 	[[nodiscard]] virtual bool GetDebug() const noexcept = 0;
 	[[nodiscard]] virtual bool GetProfile() const noexcept = 0;
 };

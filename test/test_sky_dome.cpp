@@ -9,6 +9,7 @@
 
 #include <cstdint>
 
+#include <array>
 #include <bit>
 
 #include <glm/vec4.hpp>
@@ -68,18 +69,55 @@ TEST(SkyDome, JumpRebuildsTheWholeDome)
 	EXPECT_FLOAT_EQ(follow.Following(), 0.5f);
 }
 
-TEST(SkyDome, ALostPictureIsTheWholeDomeAtTheSkyTypeItFollows)
+TEST(SkyDome, APictureNeverDrawnHasNoRowsToDrawAgain)
+{
+	const sky_dome::Picture picture;
+	EXPECT_TRUE(picture.Again().empty());
+}
+
+TEST(SkyDome, ALostPictureAfterAWholeDomeIsTheWholeDomeAgain)
+{
+	sky_dome::Follow follow(1.0f);
+	sky_dome::Picture picture;
+	picture.Drew(follow.Advance(1.0f).Get());
+	const auto again = picture.Again();
+	ASSERT_EQ(again.size(), 1u);
+	EXPECT_EQ(again[0], (Rows {.skyType = 1.0f, .first = 0, .count = 256}));
+}
+
+TEST(SkyDome, ALostPicturePartWayThroughAFollowKeepsTheOldRowsBelowTheBand)
 {
 	sky_dome::Follow follow(2.0f);
-	(void)follow.Advance(2.0f);
-	// While it follows a new sky type, all the rows come back at the sky type of the band
-	(void)follow.Advance(1.5f);
-	const auto frame = sky_dome::WholeDomeAt(follow);
-	ASSERT_EQ(frame.Get().size(), 1u);
-	EXPECT_EQ(frame.Get()[0], (Rows {.skyType = 1.5f, .first = 0, .count = 256}));
-	// The follow stays as it was
+	sky_dome::Picture picture;
+	// The whole dome by day, then three bands of a follow of a new sky type
+	picture.Drew(follow.Advance(2.0f).Get());
+	for (int frame = 0; frame < 3; ++frame)
+	{
+		picture.Drew(follow.Advance(1.5f).Get());
+	}
+	ASSERT_EQ(follow.RowsDone(), 96u);
+	const auto again = picture.Again();
+	ASSERT_EQ(again.size(), 2u);
+	EXPECT_EQ(again[0], (Rows {.skyType = 1.5f, .first = 0, .count = 96}));
+	EXPECT_EQ(again[1], (Rows {.skyType = 2.0f, .first = 96, .count = 160}));
+	// The record does not change the follow
 	EXPECT_FLOAT_EQ(follow.Following(), 1.5f);
-	EXPECT_EQ(follow.RowsDone(), 32u);
+}
+
+TEST(SkyDome, ALostPictureKeepsEachBandThatHasItsOwnSkyType)
+{
+	sky_dome::Picture picture;
+	const std::array<Rows, 3> bands {Rows {.skyType = 0.0f, .first = 0, .count = 256},
+	                                 Rows {.skyType = 1.0f, .first = 32, .count = 32},
+	                                 Rows {.skyType = 0.5f, .first = 224, .count = 64}};
+	picture.Drew(bands);
+	const auto again = picture.Again();
+	ASSERT_EQ(again.size(), 4u);
+	EXPECT_EQ(again[0], (Rows {.skyType = 0.0f, .first = 0, .count = 32}));
+	EXPECT_EQ(again[1], (Rows {.skyType = 1.0f, .first = 32, .count = 32}));
+	EXPECT_EQ(again[2], (Rows {.skyType = 0.0f, .first = 64, .count = 160}));
+	// A band past the last row stops at the last row
+	EXPECT_EQ(again[3], (Rows {.skyType = 0.5f, .first = 224, .count = 32}));
 }
 
 TEST(SkyDome, TimePairs)

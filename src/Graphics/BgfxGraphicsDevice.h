@@ -32,6 +32,7 @@ public:
 	void UpdateTexture2D(TextureHandle texture, uint16_t layer, glm::u16vec2 origin, glm::u16vec2 size,
 	                     const DeviceMemory* texels) const override;
 	void SetName(TextureHandle texture, std::string_view name) const override;
+	void SetTexelsGivenAgain(TextureHandle texture) const override;
 	void Destroy(TextureHandle texture) const override;
 
 	[[nodiscard]] VertexBufferHandle CreateVertexBuffer(const DeviceMemory* vertices, const VertexDecl& decl) const override;

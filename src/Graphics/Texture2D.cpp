@@ -120,6 +120,16 @@ void Texture2D::UpdateLayerRegion(uint16_t layer, glm::u16vec2 origin, glm::u16v
 	});
 }
 
+void Texture2D::SetTexelsGivenAgain() const
+{
+	PostToMainThread(MainThreadApi::Graphics, [this] {
+		if (IsValidHandle(_handle))
+		{
+			Locator::graphicsDevice::value().SetTexelsGivenAgain(_handle);
+		}
+	});
+}
+
 void Texture2D::UpdateLayer(uint16_t layer, const void* data, uint32_t size) const
 {
 	UpdateLayerFromMemory(layer, Locator::graphicsDevice::value().Copy(data, size), std::nullopt);

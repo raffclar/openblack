@@ -1215,6 +1215,10 @@ struct Command
 		/// short press of the Action button on it does: the chest opens and the script that waits for a click on it goes on.
 		/// Needs no creature
 		TapRewardNear,
+		/// The renderer makes the graphics device again, as after a lost device, at the first frame at which the dome of
+		/// the sky is part way through a follow of the sky. With value 1, the renderer loses the device first. Needs no
+		/// creature
+		RestoreDeviceInDomeFollow,
 	};
 	Kind kind {Kind::Stop};
 	/// Which creature, by its place in the scenario's creatures

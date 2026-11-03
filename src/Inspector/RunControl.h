@@ -89,9 +89,9 @@ public:
 	/// The graphics device: how many times the renderer made it again and the bytes that it keeps for that. Null when
 	/// the game has no graphics device.
 	[[nodiscard]] virtual Json GraphicsDevice() const { return nullptr; }
-	/// Asks the renderer to make its graphics device again, as after a lost device. False when the game has no graphics
-	/// device.
-	virtual bool RestoreGraphicsDevice() { return false; }
+	/// Asks the renderer to make its graphics device again, as after a lost device, or to lose the device first. False
+	/// when the game has no graphics device.
+	virtual bool RestoreGraphicsDevice(bool /*lose*/) { return false; }
 };
 
 ///   game.state                       paused, turn, frame, speed and any stepping
@@ -103,7 +103,7 @@ public:
 ///   game.scenarios                   the testbed scenarios there are
 ///   game.scenario_checks             the verdict of the last scenario's own checks (passed, failed, waiting)
 ///   game.device                      the graphics device: its restores and the bytes kept for them
-///   game.restore_device              makes the graphics device again, as after a lost device
+///   game.restore_device {lose?}      makes the graphics device again, as after a lost device; with lose, loses it first
 ///   game.seed {seed?, date?, wall_clock?}   the run's seed; with seed, every random number starts again from it and
 ///                                    the date is pinned, for two runs to go the same way
 class GameProvider final: public ProviderInterface

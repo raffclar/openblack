@@ -4124,6 +4124,45 @@ void AddLight(std::vector<Scenario>& all)
 	    .objects = {{.type = TreeInfo::Birch, .offset = {k_Lake.x + 8.0f, k_NearShallows - 14.0f}}},
 	});
 
+	// The same dawn with no restore of the device: the picture that the restore scenarios must give
+	all.push_back({
+	    .id = "light.sky_dawn_clock_runs",
+	    .name = "The sky at dawn as the clock runs",
+	    .facet = Facet::Light,
+	    .description = "Six in the morning, and the clock runs. The camera looks low over the testbed's lake to the sky, "
+	                   "past a birch on the shore.",
+	    .expected = "The dome blends the sky of dawn into the next light, a band of rows at a time from the top down.",
+	    .environment = {.hour = 6.0f, .clockRuns = true, .dispenserGrid = false},
+	    .framing = {.shot = Shot::Placed,
+	                .eye = {k_Lake.x, 6.0f, k_NearShallows - 30.0f},
+	                .look = {k_Lake.x, 12.0f, k_NearShallows + 10.0f}},
+	    .objects = {{.type = TreeInfo::Birch, .offset = {k_Lake.x + 8.0f, k_NearShallows - 14.0f}}},
+	});
+
+	for (const bool lost : {false, true})
+	{
+		all.push_back({
+		    .id = lost ? "light.sky_dome_device_lost" : "light.sky_dome_device_restored",
+		    .name = lost ? "The sky dome after a lost graphics device" : "The sky dome after the graphics device is made again",
+		    .facet = Facet::Light,
+		    .description = lost ? "Six in the morning, and the clock runs. After two seconds, at the next frame at which "
+		                          "the dome is part way through a change to the new light, the graphics device is lost. "
+		                          "The renderer finds the loss and makes the device again."
+		                        : "Six in the morning, and the clock runs. After two seconds, at the next frame at which "
+		                          "the dome is part way through a change to the new light, the renderer makes the "
+		                          "graphics device again, as after a lost device.",
+		    .expected = "The sky does not jump. The top of the dome keeps the new light and the bottom keeps the old "
+		                "light, and the change continues down the dome as before. The log gives the rows of the dome "
+		                "that had the new light.",
+		    .environment = {.hour = 6.0f, .clockRuns = true, .dispenserGrid = false},
+		    .framing = {.shot = Shot::Placed,
+		                .eye = {k_Lake.x, 6.0f, k_NearShallows - 30.0f},
+		                .look = {k_Lake.x, 12.0f, k_NearShallows + 10.0f}},
+		    .objects = {{.type = TreeInfo::Birch, .offset = {k_Lake.x + 8.0f, k_NearShallows - 14.0f}}},
+		    .commands = {{.kind = Kind::RestoreDeviceInDomeFollow, .delaySeconds = 2.0f, .value = lost ? 1U : 0U}},
+		});
+	}
+
 	all.push_back({
 	    .id = "light.snow_close",
 	    .name = "Heavy snow near the camera",
@@ -15374,14 +15413,15 @@ std::string_view CommandProblem(const Command& command, std::span<const ObjectSe
 
 bool testbed_scenarios::NeedsNoCreature(Command::Kind kind)
 {
-	return kind == Kind::SetHour || kind == Kind::HoldSeed || kind == Kind::DrawGesture || kind == Kind::SummonSeed ||
-	       kind == Kind::PressKey || kind == Kind::HandTakeFireBall || kind == Kind::SetAlignment || kind == Kind::WideScreen ||
-	       kind == Kind::SetInterfaceLevel || kind == Kind::FlyToBookmark || kind == Kind::TabToTown ||
-	       kind == Kind::SetOpenClose || kind == Kind::LayGateStone || kind == Kind::HandTapObject || kind == Kind::Advisor ||
-	       kind == Kind::RunText || kind == Kind::PlayHandDemo || kind == Kind::Reframe || kind == Kind::DestroyTemple ||
-	       kind == Kind::RunHelpMessage || kind == Kind::EndGuidanceWaits || kind == Kind::SetTownBeliefInRival ||
-	       kind == Kind::GiveLandTown || kind == Kind::RecordChallenge || kind == Kind::EnterTemple || kind == Kind::HandTake ||
-	       kind == Kind::HandApply || kind == Kind::HandTakeShownSeed || kind == Kind::RunScript || kind == Kind::ClickScroll ||
+	return kind == Kind::SetHour || kind == Kind::RestoreDeviceInDomeFollow || kind == Kind::HoldSeed ||
+	       kind == Kind::DrawGesture || kind == Kind::SummonSeed || kind == Kind::PressKey || kind == Kind::HandTakeFireBall ||
+	       kind == Kind::SetAlignment || kind == Kind::WideScreen || kind == Kind::SetInterfaceLevel ||
+	       kind == Kind::FlyToBookmark || kind == Kind::TabToTown || kind == Kind::SetOpenClose || kind == Kind::LayGateStone ||
+	       kind == Kind::HandTapObject || kind == Kind::Advisor || kind == Kind::RunText || kind == Kind::PlayHandDemo ||
+	       kind == Kind::Reframe || kind == Kind::DestroyTemple || kind == Kind::RunHelpMessage ||
+	       kind == Kind::EndGuidanceWaits || kind == Kind::SetTownBeliefInRival || kind == Kind::GiveLandTown ||
+	       kind == Kind::RecordChallenge || kind == Kind::EnterTemple || kind == Kind::HandTake || kind == Kind::HandApply ||
+	       kind == Kind::HandTakeShownSeed || kind == Kind::RunScript || kind == Kind::ClickScroll ||
 	       kind == Kind::ClickCreatureAt || kind == Kind::CameraLooksAt || kind == Kind::HandTakeNear ||
 	       kind == Kind::ClickCreatureNear || kind == Kind::TapRewardNear || kind == Kind::PlayBoatFilm ||
 	       kind == Kind::HandPour || kind == Kind::HandRelease || kind == Kind::SetReportLatency ||
@@ -15433,7 +15473,7 @@ std::string_view testbed_scenarios::Name(Shot shot)
 
 std::string_view testbed_scenarios::Name(Command::Kind kind)
 {
-	constexpr std::array<std::string_view, 224> k_Names {
+	constexpr std::array<std::string_view, 225> k_Names {
 	    "walk to",
 	    "run to",
 	    "follow",
@@ -15658,6 +15698,7 @@ std::string_view testbed_scenarios::Name(Command::Kind kind)
 	    "click the creature nearest a point",
 	    "tap the reward chest nearest a point",
 	    "click a creature",
+	    "make the graphics device again while the dome follows the sky",
 	};
 	return k_Names.at(static_cast<size_t>(kind));
 }

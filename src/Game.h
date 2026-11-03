@@ -236,6 +236,8 @@ struct Arguments
 	std::optional<std::pair</* frame number */ uint32_t, /* output */ std::filesystem::path>> requestScreenshot;
 	/// For tests: the frame at which the renderer makes the graphics device again, as after a lost device
 	std::optional<uint32_t> deviceRestoreFrame;
+	/// For tests: the frame at which the renderer loses the graphics device, finds the loss and makes the device again
+	std::optional<uint32_t> deviceLossFrame;
 	/// For developers: what the check does when turn code uses the graphics, the renderer or the audio directly (see
 	/// MainThreadQueue). Off by default.
 	TurnApiCheck turnApiCheck {};
@@ -1056,6 +1058,8 @@ private:
 	std::optional<std::pair</* frame number */ uint32_t, /* output */ std::filesystem::path>> _requestScreenshot;
 	/// For tests: the frame at which the renderer makes the graphics device again
 	std::optional<uint32_t> _deviceRestoreFrame;
+	/// For tests: the frame at which the renderer loses the graphics device
+	std::optional<uint32_t> _deviceLossFrame;
 	/// What the check of the turn's calls does
 	TurnApiCheck _turnApiCheck {};
 	/// The turns of the next frame play beside the draw of this frame (deviation row 153)
