@@ -137,6 +137,33 @@ float magic::EffectAlignmentChange(const EffectValues& values, float burnDamage,
 	return total;
 }
 
+EffectAlignmentTerms magic::EffectAlignmentChanges(const EffectValues& values, float burnDamage, AlignmentType type,
+                                                   float lifeChange, std::span<const GAlignmentInfo> alignmentTable,
+                                                   float alignmentAddition)
+{
+	EffectAlignmentTerms terms {};
+	const float change = std::abs(lifeChange);
+	if (change == 0.0f)
+	{
+		return terms;
+	}
+	const float weight = change + alignmentAddition;
+	constexpr std::array k_Order {EffectKind::Crush, EffectKind::Hit, EffectKind::Heal, EffectKind::FlyAway, EffectKind::Burn};
+	for (size_t i = 0; i < k_Order.size(); ++i)
+	{
+		const auto kind = k_Order.at(i);
+		const auto row = static_cast<size_t>(kind);
+		if (row >= alignmentTable.size())
+		{
+			continue;
+		}
+		// Heat counts by the harm it does rather than by how hot it is
+		const float amount = kind == EffectKind::Burn ? burnDamage : values[kind];
+		terms.at(i) = amount * AlignmentWeight(alignmentTable[row], type) * weight;
+	}
+	return terms;
+}
+
 float magic::CreatureLifeAfterEffect(float before, float healed, float damaged)
 {
 	float life = before;
@@ -185,6 +212,8 @@ EffectOutcome magic::ApplyEffectTo(const EffectValues& values, const EffectRecei
 		// or the harm changed the life, and then heat counts too, by the harm it would do.
 		outcome.alignmentChange = EffectAlignmentChange(values, outcome.burnt, receiver.alignmentType, before - life,
 		                                                alignmentTable, alignmentAddition, casterAlignment);
+		outcome.alignmentTerms = EffectAlignmentChanges(values, outcome.burnt, receiver.alignmentType, before - life,
+		                                                alignmentTable, alignmentAddition);
 	}
 	outcome.aggression = values.IsDestructive() && (outcome.damaged + outcome.burnt) > 0.0f;
 	return outcome;

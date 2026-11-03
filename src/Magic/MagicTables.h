@@ -16,6 +16,7 @@
 #include <span>
 #include <string_view>
 #include <type_traits>
+#include <vector>
 
 #include "Enums.h"
 #include "InfoConstants.h"
@@ -112,6 +113,18 @@ template <class T>
 
 /// A spell seed's record
 [[nodiscard]] const GSpellSeedInfo& GetSpellSeedInfo(const InfoConstants& info, SpellSeedType seed);
+
+/// A miracle that a creature casts in a fight by a gesture of the player, and the seed of the miracle
+struct FightMiracle
+{
+	SpellSeedType seed;
+	/// The miracle that the seed casts with no power-up
+	MagicType magic;
+};
+
+/// The fight miracles that a creature knows: the seeds that the table marks for fights, each with the miracle that it
+/// casts with no power-up, when the creature knows that miracle (miraclesKnown, by magic type). In the order of the seeds.
+[[nodiscard]] std::vector<FightMiracle> KnownFightMiracles(const InfoConstants& info, const std::vector<bool>& miraclesKnown);
 
 /// The model a seed shows spinning in its globe or above its icon, none for a seed that shows no model. The flying
 /// flock's is a bat for an owner evil enough, otherwise a dove.

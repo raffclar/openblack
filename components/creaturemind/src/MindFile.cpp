@@ -109,6 +109,13 @@ public:
 				Fail(MindResult::ErrBadCount);
 				return;
 			}
+			// Each entry has one byte or more, so a count larger than the bytes that remain is a file that ends too
+			// early. The check comes before the vector gets the memory.
+			if (static_cast<uint64_t>(count) > Remaining())
+			{
+				Fail(MindResult::ErrTruncated);
+				return;
+			}
 			values.assign(static_cast<size_t>(count), T {});
 		}
 		for (auto& value : values)

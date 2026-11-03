@@ -147,3 +147,28 @@ TEST_F(LhvmProgramCopy, ASaveInANativeCallKeepsTheTextOfTheCall)
 	EXPECT_EQ(_vm.ProgramFile()->GetData(), RunningProgram().GetData());
 	EXPECT_EQ(_vm.StateFile().GetData(), RunningProgram().GetData());
 }
+
+// A world state from a game server can carry any program. The game restores only the state of the program that it loaded.
+TEST_F(LhvmProgramCopy, OnlyTheStateOfTheLoadedProgramRuns)
+{
+	EXPECT_TRUE(_vm.RunsLoadedProgram(RunningProgram()));
+	EXPECT_TRUE(_vm.RunsLoadedProgram(_vm.StateFile()));
+	// Another program, or the same program with other code
+	EXPECT_FALSE(_vm.RunsLoadedProgram(LongerProgram()));
+	const auto running = RunningProgram();
+	auto changed = running.GetInstructions();
+	changed.at(0).data = VMValue(2.0f);
+	EXPECT_FALSE(
+	    _vm.RunsLoadedProgram({LHVMVersion::BlackAndWhite, running.GetVariablesNames(), changed, running.GetAutostart(),
+	                           running.GetScripts(), running.GetData(), running.GetStack(), running.GetVariablesValues(),
+	                           running.GetTasks(), running.GetTicks(), running.GetCurrentLineNumber(),
+	                           running.GetHighestTaskId(), running.GetHighestScriptId(), running.GetExecutedInstructions()}));
+	// A task that goes on at an instruction that the program does not have
+	auto tasks = running.GetTasks();
+	tasks.at(0).instructionAddress = 2;
+	EXPECT_FALSE(
+	    _vm.RunsLoadedProgram({LHVMVersion::BlackAndWhite, running.GetVariablesNames(), running.GetInstructions(),
+	                           running.GetAutostart(), running.GetScripts(), running.GetData(), running.GetStack(),
+	                           running.GetVariablesValues(), tasks, running.GetTicks(), running.GetCurrentLineNumber(),
+	                           running.GetHighestTaskId(), running.GetHighestScriptId(), running.GetExecutedInstructions()}));
+}
