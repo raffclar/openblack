@@ -210,8 +210,20 @@ struct ScaffoldLine
 	float yAngle {0.0f};
 	float scale {1.0f};
 };
+/// A reward chest of a player that is ready to open. This line is openblack's own: the land scripts do not know it,
+/// and only the vortex that reads the crossing file makes the chest. The chest keeps its kind, its player and its angle.
+/// A town does not cross, so the chest comes out with no town.
+struct RewardLine
+{
+	map_coords::MapCoords offset;
+	/// Its row of the reward chests' table
+	int32_t type {0};
+	/// The number of its player, -1 for none
+	int32_t player {-1};
+	float yAngle {0.0f};
+};
 using Line = std::variant<VillagerLine, SpecialVillagerLine, AnimalLine, PotLine, TreeLine, MobileStaticLine, MobileObjectLine,
-                          DeadTreeLine, OneOffSpellLine, ScaffoldLine>;
+                          DeadTreeLine, OneOffSpellLine, ScaffoldLine, RewardLine>;
 
 /// The land scripts' text for a command: its name, then each parameter by its letter (A a place or plain text, N a whole
 /// number, F a number, L quoted text), comma separated in brackets, ending the line
@@ -220,6 +232,25 @@ using Line = std::variant<VillagerLine, SpecialVillagerLine, AnimalLine, PotLine
 [[nodiscard]] std::string PlaceText(const map_coords::MapCoords& offset);
 /// The line, ending in a new line
 [[nodiscard]] std::string Text(const Line& line);
+
+/// The command name of the line of a reward chest
+inline constexpr std::string_view k_RewardLineCommand = "CREATE_REWARD_CHEST";
+
+/// A reward chest as the vortex that reads the crossing file makes it again
+struct ReadReward
+{
+	/// Its place in metres across the land, relative to the place where the vortex throws things out
+	glm::vec2 offset {0.0f};
+	/// The same place as a map position, as the land scripts read the text of a place
+	map_coords::MapCoords onMap;
+	RewardObjectInfo type {RewardObjectInfo::None};
+	std::optional<PlayerNames> player;
+	float yAngle {0.0f};
+};
+
+/// The reward chest that a line of the crossing file makes. None when the line is not the line of a reward chest, or
+/// when its kind or its player is not a known one.
+[[nodiscard]] std::optional<ReadReward> ReadRewardLine(std::string_view line);
 
 // The vortex the player arrives through on the next land throws things out: every second game turn, at a random angle,
 // the next line of the crossing file makes its thing again about a place 16 m out, which is then thrown out across the

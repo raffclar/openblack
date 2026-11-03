@@ -5650,7 +5650,13 @@ void Runner::UpdateThrows()
 			continue;
 		}
 		const auto& setup = _scenario->throws.at(i);
-		const auto object = setup.object < _objects.size() ? _objects.at(setup.object) : entt::null;
+		const auto& pool = setup.reward ? _rewards : _objects;
+		const auto object = setup.object < pool.size() ? pool.at(setup.object) : entt::null;
+		// A chest that is not given yet waits
+		if (setup.reward && object == entt::null)
+		{
+			continue;
+		}
 		// What broke or went is thrown no more
 		if (!registry.Valid(object) || !registry.AllOf<ecs::components::Transform>(object))
 		{

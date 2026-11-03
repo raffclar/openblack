@@ -27,6 +27,7 @@
 #include "ECS/Components/OneOffSpellSeed.h"
 #include "ECS/Components/Physics.h"
 #include "ECS/Components/Pot.h"
+#include "ECS/Components/Reward.h"
 #include "ECS/Components/Scaffold.h"
 #include "ECS/Components/StoragePit.h"
 #include "ECS/Components/Town.h"
@@ -179,6 +180,18 @@ std::optional<Line> ecs::vortex_crossing::LineFor(const Registry& registry, entt
 		                         .zAngle = angles.z,
 		                         .scale = scale,
 		                         .artefact = artefactLine};
+	}
+	if (const auto* chest = registry.TryGet<const Reward>(thing))
+	{
+		// Only a chest on the land that is ready to open crosses, as the same chest of the same player
+		if (chest->state != Reward::State::Landed)
+		{
+			return std::nullopt;
+		}
+		return RewardLine {.offset = offset,
+		                   .type = static_cast<int32_t>(chest->type),
+		                   .player = chest->player.has_value() ? static_cast<int32_t>(*chest->player) : -1,
+		                   .yAngle = YAngleOf(transform->rotation)};
 	}
 	if (const auto* mobile = registry.TryGet<const MobileObject>(thing))
 	{

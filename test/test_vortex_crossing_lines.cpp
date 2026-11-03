@@ -9,6 +9,9 @@
 
 // The crossing file's line for each kind of thing a vortex takes, read from its components
 
+#include <string>
+#include <string_view>
+
 #include <fmt/format.h>
 #include <glm/gtx/euler_angles.hpp>
 #include <gtest/gtest.h>
@@ -20,6 +23,7 @@
 #include "ECS/Components/OneOffSpellSeed.h"
 #include "ECS/Components/Physics.h"
 #include "ECS/Components/Pot.h"
+#include "ECS/Components/Reward.h"
 #include "ECS/Components/Scaffold.h"
 #include "ECS/Components/StoragePit.h"
 #include "ECS/Components/Town.h"
@@ -406,4 +410,38 @@ TEST(VortexCrossingLines, EachToyIsWrittenAsTheSameToyAtItsSize)
 		                                                 static_cast<int>(toy)));
 		registry.Destroy(thing);
 	}
+}
+
+TEST(VortexCrossingLines, AChestReadyToOpenIsWrittenAsTheSameChest)
+{
+	Registry registry;
+	const auto chest = Thing(registry, {1000.0f, k_Ground, 1990.0f}, glm::mat3(1.0f), 1.0f);
+	registry.Assign<Reward>(chest, Reward {.type = RewardObjectInfo::MediumFood, .player = PlayerNames::PLAYER_ONE});
+	const auto text = LineText(registry, chest);
+	EXPECT_EQ(text, "CREATE_REWARD_CHEST(\"0.00,-10.00\", 4, 0, 0.000000)\n");
+	// The land scripts do not know the line: only the vortex makes the chest
+	EXPECT_FALSE(ReaderTakes(Read(text)));
+	const auto read = vortex::crossing::ReadRewardLine(std::string_view(text).substr(0, text.size() - 1));
+	ASSERT_TRUE(read.has_value());
+	EXPECT_EQ(read->type, RewardObjectInfo::MediumFood);
+	EXPECT_EQ(read->player, PlayerNames::PLAYER_ONE);
+}
+
+TEST(VortexCrossingLines, AChestOfNoPlayerIsWrittenWithNoPlayer)
+{
+	Registry registry;
+	const auto chest = Thing(registry, {1000.0f, k_Ground, 2000.0f}, glm::mat3(1.0f), 1.0f);
+	registry.Assign<Reward>(chest, Reward {.type = RewardObjectInfo::RewardObjectToyBall});
+	EXPECT_EQ(LineText(registry, chest), "CREATE_REWARD_CHEST(\"0.00,0.00\", 58, -1, 0.000000)\n");
+}
+
+TEST(VortexCrossingLines, AChestThatFallsOrIsOpenHasNoLine)
+{
+	Registry registry;
+	const auto falling = Thing(registry, {1000.0f, k_Ground, 2000.0f}, glm::mat3(1.0f), 1.0f);
+	registry.Assign<Reward>(falling, Reward {.type = RewardObjectInfo::MediumFood, .state = Reward::State::Falling});
+	const auto opened = Thing(registry, {1000.0f, k_Ground, 2000.0f}, glm::mat3(1.0f), 1.0f);
+	registry.Assign<Reward>(opened, Reward {.type = RewardObjectInfo::MediumFood, .state = Reward::State::Opened});
+	EXPECT_EQ(LineText(registry, falling), "");
+	EXPECT_EQ(LineText(registry, opened), "");
 }

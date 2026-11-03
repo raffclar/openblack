@@ -9,9 +9,11 @@
 
 #include "VortexCrossingRules.h"
 
+#include <charconv>
 #include <cmath>
 
 #include <algorithm>
+#include <system_error>
 #include <type_traits>
 
 #include <fmt/printf.h>
@@ -203,6 +205,11 @@ std::string Text(const Line& line)
 		    {
 			    return fmt::sprintf(CommandFormat("CREATE_ONE_SHOT_SPELL_PU", "AL"), place, l.magic);
 		    }
+		    else if constexpr (std::is_same_v<T, RewardLine>)
+		    {
+			    return fmt::sprintf(CommandFormat(k_RewardLineCommand, "ANNF"), place, l.type, l.player,
+			                        static_cast<double>(l.yAngle));
+		    }
 		    else if constexpr (std::is_same_v<T, ScaffoldLine>)
 		    {
 			    // The angle and the size in thousandths, truncated
@@ -219,6 +226,109 @@ std::string Text(const Line& line)
 		    }
 	    },
 	    line);
+}
+
+namespace
+{
+/// Reads the text of a line in its order. Each step removes what it read from the start of the text.
+class LineReader
+{
+public:
+	explicit LineReader(std::string_view text)
+	    : _text(text)
+	{
+	}
+
+	/// Removes the spaces at the start of the text
+	void SkipSpaces()
+	{
+		const auto first = _text.find_first_not_of(' ');
+		_text.remove_prefix(first == std::string_view::npos ? _text.size() : first);
+	}
+
+	/// Whether the text starts with the word. If it does, the reader removes the word.
+	[[nodiscard]] bool Expect(std::string_view word)
+	{
+		SkipSpaces();
+		if (!_text.starts_with(word))
+		{
+			return false;
+		}
+		_text.remove_prefix(word.size());
+		return true;
+	}
+
+	/// The number at the start of the text, none when the text does not start with one
+	template <typename T>
+	[[nodiscard]] std::optional<T> Number()
+	{
+		SkipSpaces();
+		T value {};
+		const auto [end, error] = std::from_chars(_text.data(), _text.data() + _text.size(), value);
+		if (error != std::errc {})
+		{
+			return std::nullopt;
+		}
+		_text.remove_prefix(static_cast<size_t>(end - _text.data()));
+		return value;
+	}
+
+	/// Whether only spaces stay
+	[[nodiscard]] bool AtEnd()
+	{
+		SkipSpaces();
+		return _text.empty();
+	}
+
+private:
+	std::string_view _text;
+};
+} // namespace
+
+std::optional<ReadReward> ReadRewardLine(std::string_view line)
+{
+	LineReader reader(line);
+	if (!reader.Expect(k_RewardLineCommand) || !reader.Expect("(\""))
+	{
+		return std::nullopt;
+	}
+	const auto x = reader.Number<double>();
+	if (!x.has_value() || !reader.Expect(","))
+	{
+		return std::nullopt;
+	}
+	const auto z = reader.Number<double>();
+	if (!z.has_value() || !reader.Expect("\"") || !reader.Expect(","))
+	{
+		return std::nullopt;
+	}
+	const auto type = reader.Number<int32_t>();
+	if (!type.has_value() || !reader.Expect(","))
+	{
+		return std::nullopt;
+	}
+	const auto player = reader.Number<int32_t>();
+	if (!player.has_value() || !reader.Expect(","))
+	{
+		return std::nullopt;
+	}
+	const auto yAngle = reader.Number<float>();
+	if (!yAngle.has_value() || !reader.Expect(")") || !reader.AtEnd())
+	{
+		return std::nullopt;
+	}
+	// Only a known kind of chest and a known player, or no player
+	constexpr auto k_LastType = static_cast<int32_t>(RewardObjectInfo::RewardObjectToyDie);
+	constexpr auto k_Players = static_cast<int32_t>(PlayerNames::_COUNT);
+	if (*type <= static_cast<int32_t>(RewardObjectInfo::None) || *type > k_LastType || *player < -1 || *player >= k_Players)
+	{
+		return std::nullopt;
+	}
+	return ReadReward {.offset = {static_cast<float>(*x), static_cast<float>(*z)},
+	                   .onMap = map_coords::ScriptPlace(*x, *z),
+	                   .type = static_cast<RewardObjectInfo>(*type),
+	                   .player = *player < 0 ? std::nullopt : std::optional(static_cast<PlayerNames>(*player)),
+	                   .yAngle = *yAngle};
 }
 
 map_coords::MapCoords ThrowOutPlace(const map_coords::MapCoords& vortex, float angle)
