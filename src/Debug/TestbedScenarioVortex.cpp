@@ -418,6 +418,26 @@ void testbed_scenarios::AddVortexScenarios(std::vector<Scenario>& all)
 	});
 
 	all.push_back({
+	    .id = "story.vortex_throws_back_the_indestructible",
+	    .name = "A vortex out of the land throws back a thing that a script made indestructible",
+	    .facet = Facet::Miracles,
+	    .description = "A way out of a land opens on the flat plane after a second, as Land 1's opens for the player to "
+	                   "leave by. Within 15 m of it lie two rocks: a script made the first one indestructible, the "
+	                   "second one is a plain rock.",
+	    .expected = "Once the vortex is fully open, both rocks are drawn round and in. The plain rock goes into the "
+	                "middle and is gone. The indestructible rock does not cross: at the middle it is thrown back out at "
+	                "a random angle, at two times the speeds of the things that the vortex lets out, and it lands some "
+	                "hundreds of metres away.",
+	    .environment = {.dispenserGrid = false},
+	    .framing = {.shot = Shot::Placed,
+	                .eye = {k_OnThePlane.x - 30.0f, 45.0f, k_OnThePlane.y - 60.0f},
+	                .look = {k_OnThePlane.x, 0.0f, k_OnThePlane.y}},
+	    .objects = {{.type = MobileStaticInfo::Rock, .offset = k_OnThePlane + glm::vec2(-12.0f, 6.0f), .indestructible = true},
+	                {.type = MobileStaticInfo::Rock, .offset = k_OnThePlane + glm::vec2(10.0f, -8.0f)}},
+	    .vortices = {{.type = VortexType::In, .offset = k_OnThePlane, .delaySeconds = 1.0f}},
+	});
+
+	all.push_back({
 	    .id = "story.vortex_takes_a_reward_chest",
 	    .name = "A vortex out of the land takes a reward chest",
 	    .facet = Facet::Miracles,
