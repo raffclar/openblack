@@ -163,7 +163,7 @@ TEST(VanillaWorldImport, ImportsTheBuildingsOfTheTownOnly)
 	EXPECT_TRUE(world_import::IsImportedBuilding(AbodeInfo::NorseGraveyard));
 	EXPECT_TRUE(world_import::IsImportedBuilding(AbodeInfo::NorseTownCentre));
 	EXPECT_FALSE(world_import::IsImportedBuilding(AbodeInfo::NorseTotem));
-	EXPECT_FALSE(world_import::IsImportedBuilding(AbodeInfo::NorseWorkshop));
+	EXPECT_TRUE(world_import::IsImportedBuilding(AbodeInfo::NorseWorkshop));
 	EXPECT_FALSE(world_import::IsImportedBuilding(AbodeInfo::NorseField));
 	EXPECT_FALSE(world_import::IsImportedBuilding(AbodeInfo::Belltower));
 	EXPECT_FALSE(world_import::IsImportedBuilding(AbodeInfo::None));
@@ -1828,6 +1828,177 @@ TEST(VanillaWorldImport, ReadsThePilesOfAStoragePit)
 	EXPECT_EQ(piles[1].rise.acceleration, 9.5f);
 	EXPECT_EQ(piles[1].rise.jerk, 10.5f);
 	EXPECT_EQ(piles[1].rise.snap, 11.5f);
+}
+
+// A workshop keeps the turns until its scaffold is finished, the count of its scaffolds, the places of its yard, its
+// scaffolds in the order of the file and its wood pile
+TEST(VanillaWorldImport, ReadsTheValuesOfAWorkshopAndItsWoodPile)
+{
+	static constexpr auto k_PotRow = [](PotInfo row) { return world_import::k_FirstPotRowNumber - static_cast<uint32_t>(row); };
+	auto fake = GameAtTurn(100);
+	// 2: the town, 3: its workshop, 4: the wood pile of the workshop
+	fake.Record(VanillaType::Town).Position(0, 0).Value<uint32_t>("id", 0).Refs("abodes", {3});
+	fake.Record(VanillaType::Workshop)
+	    .Position(1000, 2000)
+	    .Value("info", AbodeRowNumber(AbodeInfo::NorseWorkshop))
+	    .Ref("town", 2)
+	    .Refs("villagers", {})
+	    .Words("resources", {0, 0})
+	    .Ref("workshopWoodPile", 4)
+	    .Ref("workshopFlag", 0)
+	    .Value<int32_t>("workshopMakingTurns", 37)
+	    .Value<uint32_t>("workshopCounted", 2)
+	    .Value("workshopPlaces", std::array<uint8_t, 3> {2, 0, 1})
+	    .Refs("workshopScaffolds", {9, 7});
+	fake.Record(VanillaType::MagicWood)
+	    .Position(1100, 2000)
+	    .Value("info", k_PotRow(PotInfo::MagicWood))
+	    .Value<uint32_t>("potAmount", 450)
+	    .Value<uint8_t>("potFlags", 0)
+	    .Ref("potBuilding", 0)
+	    .Value("pileRise", std::array<float, 12> {});
+	const auto imported = world_import::ReadTowns(fake.Make());
+	ASSERT_EQ(imported.abodes.size(), 1U);
+	const auto& abode = imported.abodes[0];
+	EXPECT_EQ(abode.row, AbodeInfo::NorseWorkshop);
+	ASSERT_TRUE(abode.workshop.has_value());
+	EXPECT_EQ(abode.workshop->makingTurns, 37);
+	EXPECT_EQ(abode.workshop->counted, 2U);
+	EXPECT_EQ(abode.workshop->places, (std::array<uint8_t, 3> {2, 0, 1}));
+	EXPECT_EQ(abode.workshop->scaffolds, (std::vector<uint32_t> {9, 7}));
+	EXPECT_EQ(abode.workshop->woodPile, 4U);
+	ASSERT_EQ(abode.piles.size(), 1U);
+	EXPECT_EQ(abode.piles[0].number, 4U);
+	EXPECT_EQ(abode.piles[0].row, PotInfo::MagicWood);
+	EXPECT_EQ(abode.piles[0].amount, 450U);
+}
+
+// A pile whose building is the workshop is not taken twice
+TEST(VanillaWorldImport, TheWoodPileOfAWorkshopComesOnce)
+{
+	static constexpr auto k_PotRow = [](PotInfo row) { return world_import::k_FirstPotRowNumber - static_cast<uint32_t>(row); };
+	auto fake = GameAtTurn(100);
+	fake.Record(VanillaType::Town).Position(0, 0).Value<uint32_t>("id", 0).Refs("abodes", {3});
+	fake.Record(VanillaType::Workshop)
+	    .Position(1000, 2000)
+	    .Value("info", AbodeRowNumber(AbodeInfo::NorseWorkshop))
+	    .Ref("town", 2)
+	    .Refs("villagers", {})
+	    .Ref("workshopWoodPile", 4)
+	    .Refs("workshopScaffolds", {});
+	fake.Record(VanillaType::MagicWood)
+	    .Position(1100, 2000)
+	    .Value("info", k_PotRow(PotInfo::MagicWood))
+	    .Value<uint32_t>("potAmount", 10)
+	    .Ref("potBuilding", 3)
+	    .Value("pileRise", std::array<float, 12> {});
+	const auto imported = world_import::ReadTowns(fake.Make());
+	ASSERT_EQ(imported.abodes.size(), 1U);
+	EXPECT_EQ(imported.abodes[0].piles.size(), 1U);
+}
+
+TEST(VanillaWorldImport, TheFlagsOfAScaffoldGiveEachValue)
+{
+	constexpr auto none = world_import::ScaffoldFlagsOf(0);
+	EXPECT_FALSE(none.grows);
+	EXPECT_FALSE(none.looked);
+	EXPECT_EQ(none.noOfferTurns, 0U);
+	EXPECT_EQ(none.place, 0U);
+	EXPECT_FALSE(none.foundsTown);
+	EXPECT_FALSE(none.fixedAngle);
+	EXPECT_FALSE(none.gentle);
+	EXPECT_FALSE(none.destroysThingsInWay);
+	// The phantom grows, 9 turns with no offer, the place 2, a fixed angle and the destroy flag
+	constexpr auto some = world_import::ScaffoldFlagsOf(0x0001 | (9 << 2) | (2 << 6) | 0x0200 | 0x0800);
+	EXPECT_TRUE(some.grows);
+	EXPECT_FALSE(some.looked);
+	EXPECT_EQ(some.noOfferTurns, 9U);
+	EXPECT_EQ(some.place, 2U);
+	EXPECT_FALSE(some.foundsTown);
+	EXPECT_TRUE(some.fixedAngle);
+	EXPECT_FALSE(some.gentle);
+	EXPECT_TRUE(some.destroysThingsInWay);
+	// It looked for an offer, the place 1, it founds a town and the hand let it go gently
+	constexpr auto other = world_import::ScaffoldFlagsOf(0x0002 | (1 << 6) | 0x0100 | 0x0400);
+	EXPECT_FALSE(other.grows);
+	EXPECT_TRUE(other.looked);
+	EXPECT_EQ(other.place, 1U);
+	EXPECT_TRUE(other.foundsTown);
+	EXPECT_TRUE(other.gentle);
+	EXPECT_FALSE(other.destroysThingsInWay);
+	EXPECT_EQ(world_import::k_ScaffoldPutDownTurnAfterLoad, 1U);
+}
+
+// A scaffold keeps its place, its size, its town, its site, the buildings that its phantom offers, the player whose hand
+// holds it, the values of its phantom, its flags and the building that a script gave it
+TEST(VanillaWorldImport, ReadsTheScaffoldsWithTheirValues)
+{
+	auto fake = GameAtTurn(100);
+	// 2: the player with its interface 3, 4: the plan that the phantom shows, 5 and 6: two scaffolds
+	fake.Record(VanillaType::Player).Value<uint8_t>("number", 1).Refs("towns", {}).Refs("interfaces", {3});
+	fake.Record(VanillaType::PlayerInterfaceStatus);
+	fake.Record(VanillaType::PlannedAbode)
+	    .Position(500, 600)
+	    .Value("info", AbodeRowNumber(AbodeInfo::NorseCreche))
+	    .Value("heading", 1.25f)
+	    .Value("scale", 0.75f);
+	fake.Record(VanillaType::Scaffold)
+	    .Position(1000, 2000)
+	    .Value("heading", 0.5f)
+	    .Value("scale", 1.4f)
+	    .Ref("scaffoldSite", 0)
+	    .Ref("scaffoldOffer", 4)
+	    .Ref("scaffoldNextOffer", 0)
+	    .Value<int32_t>("scaffoldChangeMs", 250)
+	    .Ref("scaffoldHolder", 3)
+	    .Value("scaffoldAngle", 2.5f)
+	    .Value("scaffoldScale", 1.5f)
+	    .Value<uint16_t>("scaffoldFlags", 0x0001 | (3 << 2))
+	    .Ref("scaffoldTown", 0)
+	    .Value<uint32_t>("scaffoldScriptBuilding", 0xFFFFFFFFU);
+	fake.Record(VanillaType::Scaffold)
+	    .Position(3000, 4000)
+	    .Value("heading", 0.0f)
+	    .Value("scale", 0.7f)
+	    .Ref("scaffoldSite", 8)
+	    .Ref("scaffoldOffer", 0)
+	    .Ref("scaffoldNextOffer", 0)
+	    .Value<int32_t>("scaffoldChangeMs", 0)
+	    .Ref("scaffoldHolder", 0)
+	    .Value("scaffoldAngle", 0.0f)
+	    .Value("scaffoldScale", 0.7f)
+	    .Value<uint16_t>("scaffoldFlags", 2 << 6)
+	    .Ref("scaffoldTown", 7)
+	    .Value<uint32_t>("scaffoldScriptBuilding", static_cast<uint32_t>(AbodeNumber::Creche));
+	const auto imported = world_import::ReadTowns(fake.Make());
+	ASSERT_EQ(imported.scaffolds.size(), 2U);
+	const auto& held = imported.scaffolds[0];
+	EXPECT_EQ(held.number, 5U);
+	EXPECT_EQ(held.position.x, 1000);
+	EXPECT_EQ(held.position.z, 2000);
+	EXPECT_EQ(held.heading, 0.5f);
+	EXPECT_EQ(held.scale, 1.4f);
+	EXPECT_EQ(held.town, 0U);
+	EXPECT_EQ(held.site, 0U);
+	ASSERT_TRUE(held.offer.has_value());
+	EXPECT_EQ(held.offer->row, AbodeInfo::NorseCreche);
+	EXPECT_EQ(held.offer->heading, 1.25f);
+	EXPECT_EQ(held.offer->scale, 0.75f);
+	EXPECT_FALSE(held.nextOffer.has_value());
+	EXPECT_EQ(held.changeMs, 250);
+	EXPECT_EQ(held.handPlayer, PlayerNames::PLAYER_TWO);
+	EXPECT_EQ(held.phantomAngle, 2.5f);
+	EXPECT_EQ(held.phantomScale, 1.5f);
+	EXPECT_TRUE(held.flags.grows);
+	EXPECT_EQ(held.flags.noOfferTurns, 3U);
+	EXPECT_FALSE(held.scriptBuilding.has_value());
+	const auto& onSite = imported.scaffolds[1];
+	EXPECT_EQ(onSite.town, 7U);
+	EXPECT_EQ(onSite.site, 8U);
+	EXPECT_FALSE(onSite.offer.has_value());
+	EXPECT_FALSE(onSite.handPlayer.has_value());
+	EXPECT_EQ(onSite.flags.place, 2U);
+	EXPECT_EQ(onSite.scriptBuilding, AbodeNumber::Creche);
 }
 
 // A building site takes the values of its wood pile, and the site of a temple the values of each of its piles, nothing

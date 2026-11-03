@@ -1477,16 +1477,19 @@ void ReadCitadelBuildingSite(WorldReader& r)
 void ReadScaffold(WorldReader& r)
 {
 	ReadMobileObject(r);
-	r.Ref();
-	r.Ref();
-	r.Ref();
-	r.Word();
-	r.Ref();
-	r.Word();
-	r.Word();
-	r.Half();
-	r.Ref();
-	r.Word();
+	// The building of its site, the building that its phantom shows and the next one, the milliseconds until the
+	// phantom changes size, the interface whose hand holds it, the angle and the size of the phantom, its flags, its
+	// town and the building that a script gave it
+	r.Ref("scaffoldSite");
+	r.Ref("scaffoldOffer");
+	r.Ref("scaffoldNextOffer");
+	r.Word("scaffoldChangeMs");
+	r.Ref("scaffoldHolder");
+	r.Float("scaffoldAngle");
+	r.Float("scaffoldScale");
+	r.Half("scaffoldFlags");
+	r.Ref("scaffoldTown");
+	r.Word("scaffoldScriptBuilding");
 }
 
 // No save file of the tests has this type. This layout comes only from the game's save code.

@@ -40,6 +40,7 @@
 #include "ECS/Components/Player.h"
 #include "ECS/Components/Pot.h"
 #include "ECS/Components/ResourcePile.h"
+#include "ECS/Components/Scaffold.h"
 #include "ECS/Components/ScriptAnimation.h"
 #include "ECS/Components/ScriptStateArguments.h"
 #include "ECS/Components/StoragePit.h"
@@ -53,6 +54,7 @@
 #include "ECS/Components/VillagerDeath.h"
 #include "ECS/Components/VillagerWork.h"
 #include "ECS/Components/WallHug.h"
+#include "ECS/Components/Workshop.h"
 #include "ECS/PlayerTowns.h"
 #include "ECS/Registry.h"
 #include "ECS/Systems/PlayerSystemInterface.h"
@@ -60,12 +62,14 @@
 #include "ECS/Systems/TownSystemInterface.h"
 #include "ECS/Systems/VillageTotemSystemInterface.h"
 #include "ECS/Systems/WonderSystemInterface.h"
+#include "ECS/Systems/WorkshopSystemInterface.h"
 #include "ECS/TempleConstruction.h"
 #include "ECS/ThingCircles.h"
 #include "ECS/VanillaScriptImport.h"
 #include "ECS/VanillaWorldImport.h"
 #include "ECS/WallHugRules.h"
 #include "ECS/WorldObjects.h"
+#include "InfoConstants.h"
 #include "Locator.h"
 #include "SaveGameSystem.h"
 #include "SaveGameVanillaPlaces.h"
@@ -122,6 +126,14 @@ void RemoveLandTownsContents(ecs::Registry& registry)
 	}
 	registry.Context().namedVillagersUsed = {};
 
+	// The file gives the scaffolds
+	std::vector<entt::entity> scaffolds;
+	registry.Each<const Scaffold>([&scaffolds](entt::entity entity, const Scaffold&) { scaffolds.push_back(entity); });
+	for (const auto scaffold : scaffolds)
+	{
+		ecs::world_objects::Remove(scaffold);
+	}
+
 	// The file gives the plans of buildings of the towns. A building that goes also puts a plan of itself into its town.
 	// The import removes all these plans, but keeps the plans of temples.
 	std::vector<entt::entity> buildings;
@@ -133,6 +145,12 @@ void RemoveLandTownsContents(ecs::Registry& registry)
 	});
 	for (const auto building : buildings)
 	{
+		// The wood pile of a workshop goes with the workshop
+		if (const auto* workshop = registry.TryGet<const Workshop>(building);
+		    workshop != nullptr && registry.Valid(workshop->woodPile))
+		{
+			ecs::world_objects::Remove(workshop->woodPile);
+		}
 		ecs::world_objects::Remove(building);
 	}
 	registry.Each<Town>([&registry](entt::entity, Town& town) {
@@ -559,6 +577,13 @@ uint32_t PutPiles(ecs::Registry& registry, entt::entity pit, std::span<const wor
 				entity = storage->foodPile;
 			}
 		}
+		// The wood pile of a workshop
+		if (const auto* workshop = registry.TryGet<const Workshop>(pit);
+		    workshop != nullptr && registry.Valid(workshop->woodPile) &&
+		    registry.Get<const Pot>(workshop->woodPile).type == file.row)
+		{
+			entity = workshop->woodPile;
+		}
 		if (entity == entt::null)
 		{
 			++lost;
@@ -615,6 +640,127 @@ void PutTotems(ecs::Registry& registry, const world_import::ImportedTowns& impor
 		++put;
 	}
 	SPDLOG_LOGGER_INFO(ImportLog(), "Put {} totems of the file on their town centres", put);
+}
+
+/// A workshop takes the turns until its scaffold is finished, the count of its scaffolds and the places of its yard
+/// from the file. A workshop of the file with no wood pile loses the pile that it made, because the load gives it only
+/// the pile of the file.
+void PutWorkshop(ecs::Registry& registry, entt::entity entity, const world_import::ImportedWorkshop& file)
+{
+	auto* workshop = registry.TryGet<Workshop>(entity);
+	if (workshop == nullptr)
+	{
+		return;
+	}
+	workshop->makingTurns = file.makingTurns;
+	workshop->counted = file.counted;
+	for (size_t place = 0; place < workshop->places.size(); ++place)
+	{
+		workshop->places.at(place) = static_cast<Workshop::Place>(file.places.at(place));
+	}
+	workshop->scaffolds.clear();
+	if (file.woodPile == 0 && registry.Valid(workshop->woodPile))
+	{
+		const auto pile = std::exchange(workshop->woodPile, entt::null);
+		ecs::world_objects::Remove(pile);
+	}
+}
+
+/// The building that a scaffold offers, from the row of the plan of the file. Nothing for no plan.
+std::optional<ScaffoldOffer> OfferOf(const std::optional<world_import::ImportedScaffoldOffer>& file)
+{
+	if (!file.has_value() || !Locator::infoConstants::has_value())
+	{
+		return std::nullopt;
+	}
+	const auto& rows = Locator::infoConstants::value().abode;
+	const auto index = static_cast<size_t>(file->row);
+	if (index >= rows.size())
+	{
+		return std::nullopt;
+	}
+	const auto& info = rows.at(index);
+	return ScaffoldOffer {
+	    .info = file->row, .number = info.abodeNumber, .mesh = info.meshId, .yAngle = file->heading, .scale = file->scale};
+}
+
+/// Makes the scaffolds of the file with their values. Each workshop takes its scaffolds in the order of its list in the
+/// file, and a scaffold on a site shows the phantom of the building of the site. The load gives each scaffold the turn
+/// 1 as the turn that a hand put it down.
+void PutScaffolds(ecs::Registry& registry, const world_import::ImportedTowns& imported,
+                  std::unordered_map<uint32_t, entt::entity>& made)
+{
+	if (!Locator::workshopSystem::has_value())
+	{
+		return;
+	}
+	auto& workshops = Locator::workshopSystem::value();
+	std::unordered_map<uint32_t, uint32_t> owners;
+	for (const auto& abode : imported.abodes)
+	{
+		if (abode.workshop.has_value())
+		{
+			for (const auto number : abode.workshop->scaffolds)
+			{
+				owners.emplace(number, abode.number);
+			}
+		}
+	}
+	uint32_t put = 0;
+	for (const auto& file : imported.scaffolds)
+	{
+		const auto owner = owners.find(file.number);
+		const auto workshop = owner != owners.end() ? EntityOf(made, owner->second) : entt::null;
+		const auto entity = workshops.CreateScaffold(GroundPosition(file.position), EntityOf(made, file.town), workshop,
+		                                             file.heading, file.scale);
+		if (entity == entt::null)
+		{
+			continue;
+		}
+		auto& data = registry.Get<Scaffold>(entity);
+		data.place = file.flags.place;
+		data.putDownTurn = world_import::k_ScaffoldPutDownTurnAfterLoad;
+		data.scriptBuilding = file.scriptBuilding;
+		data.destroysThingsInWay = file.flags.destroysThingsInWay;
+		data.gentle = file.flags.gentle;
+		data.handPlayer = file.handPlayer;
+		data.phantom = ScaffoldPhantom {.shown = OfferOf(file.offer),
+		                                .next = OfferOf(file.nextOffer),
+		                                .changeMs = file.changeMs,
+		                                .grows = file.flags.grows,
+		                                .yAngle = file.phantomAngle,
+		                                .scale = file.phantomScale,
+		                                .looked = file.flags.looked,
+		                                .noOfferTurns = file.flags.noOfferTurns,
+		                                .foundsTown = file.flags.foundsTown,
+		                                .fixedAngle = file.flags.fixedAngle};
+		made.emplace(file.number, entity);
+		++put;
+		if (const auto site = EntityOf(made, file.site); site != entt::null)
+		{
+			workshops.PutLoadedOnSite(entity, site);
+		}
+	}
+	for (const auto& abode : imported.abodes)
+	{
+		const auto entity = EntityOf(made, abode.number);
+		auto* workshop = abode.workshop.has_value() && entity != entt::null ? registry.TryGet<Workshop>(entity) : nullptr;
+		if (workshop == nullptr)
+		{
+			continue;
+		}
+		for (const auto number : abode.workshop->scaffolds)
+		{
+			if (const auto scaffold = EntityOf(made, number); scaffold != entt::null)
+			{
+				workshop->scaffolds.push_back(scaffold);
+			}
+		}
+	}
+	if (!imported.scaffolds.empty())
+	{
+		SPDLOG_LOGGER_INFO(ImportLog(), "Made {} of the {} scaffolds of the file", put, imported.scaffolds.size());
+	}
 }
 
 /// Gives a villager whose states the import keeps the values of its top state and of its final state. The game's load
@@ -747,17 +893,23 @@ bool SaveGameSystem::ImportVanillaTowns(const gamesave::VanillaWorld& world, Van
 			                   abode.number);
 			continue;
 		}
-		const auto entity =
-		    ecs::archetypes::AbodeArchetype::Create(townId->second, GroundPosition(abode.position), abode.row, abode.heading,
-		                                            abode.scale, abode.food, abode.wood, abode.built);
+		// A workshop keeps its wood in its pile, which takes the amount of the pile of the file below
+		const bool workshop = abode.workshop.has_value();
+		const auto entity = ecs::archetypes::AbodeArchetype::Create(townId->second, GroundPosition(abode.position), abode.row,
+		                                                            abode.heading, abode.scale, workshop ? 0U : abode.food,
+		                                                            workshop ? 0U : abode.wood, abode.built);
 		if (entity == entt::null)
 		{
 			continue;
 		}
 		ecs::world_objects::SetLife(entity, abode.life);
+		if (workshop)
+		{
+			PutWorkshop(registry, entity, *abode.workshop);
+		}
 		if (const auto lost = PutPiles(registry, entity, abode.piles, made); lost != 0)
 		{
-			SPDLOG_LOGGER_WARN(ImportLog(), "The storage pit {} has no pile for {} piles of the file", abode.number, lost);
+			SPDLOG_LOGGER_WARN(ImportLog(), "The building {} has no pile for {} piles of the file", abode.number, lost);
 		}
 		// A wonder keeps the power of the file. The game reads the power and the tribal powers of the players from the
 		// file and adds no power again, so the tribal powers below replace what the new wonder added.
@@ -886,6 +1038,7 @@ bool SaveGameSystem::ImportVanillaTowns(const gamesave::VanillaWorld& world, Van
 	PutDesireFlags(registry, imported, made);
 	PutPlans(registry, imported, made);
 	PutSites(registry, imported, made);
+	PutScaffolds(registry, imported, made);
 	registry.SetDirty();
 	SPDLOG_LOGGER_INFO(ImportLog(),
 	                   "Imported {} towns, {} buildings, {} plans, {} building sites and {} villagers of the game's file at "
