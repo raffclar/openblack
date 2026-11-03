@@ -51,6 +51,7 @@
 #include "3D/Mists.h"
 #include "3D/ScreenPick.h"
 #include "3D/TempleInteriorInterface.h"
+#include "Animals/AnimalMove.h"
 #include "Blast/CameraShake.h"
 #include "Camera/Camera.h"
 #include "Camera/ScriptCameraModel.h"
@@ -293,6 +294,7 @@
 #include "Help/Spirits.h"
 #include "InfoConstants.h"
 #include "Input/GameActionMapInterface.h"
+#include "LHScriptX/FeatureScriptCommands.h"
 #include "LHScriptX/Script.h"
 #include "Locator.h"
 #include "Magic/MagicTables.h"
@@ -302,6 +304,7 @@
 #include "Physics/Body.h"
 #include "Resources/ResourcesInterface.h"
 #include "ScriptHeaders/ScriptCameraLookups.h"
+#include "ScriptHeaders/ScriptCastHistory.h"
 #include "ScriptHeaders/ScriptChallengeSnapshots.h"
 #include "ScriptHeaders/ScriptCreateRules.h"
 #include "ScriptHeaders/ScriptCreatureRules.h"
@@ -4993,9 +4996,28 @@ void CreateReaction() // 090 CREATE_REACTION
 
 void RemoveReaction() // 091 REMOVE_REACTION
 {
-	// const auto object = Pop().uintVal;
-	// TODO(Daniels118): implement this
-	NotImplemented();
+	// The reactions that the thing started stop. A group stops the reactions of each of its members, not its own.
+	const auto object = PopObject();
+	auto& registry = Locator::entitiesRegistry::value();
+	if (object == entt::null || !registry.Valid(object))
+	{
+		ScriptMessage("no reaction for thing");
+		return;
+	}
+	if (!Locator::reactionSystem::has_value())
+	{
+		return;
+	}
+	auto& reactions = Locator::reactionSystem::value();
+	if (IsScriptContainer(registry, object))
+	{
+		for (const auto member : ContainerMembers(registry, object))
+		{
+			reactions.RemoveFrom(member);
+		}
+		return;
+	}
+	reactions.RemoveFrom(object);
 }
 
 void GetCountdownTimer() // 092 GET_COUNTDOWN_TIMER
@@ -6738,12 +6760,44 @@ void CallPlayerCreature() // 197 CALL_PLAYER_CREATURE
 	PushObject(*creature);
 }
 
+/// The walk speed of a thing in metres a turn, as the slowest speed of a group reads it: an animal's speed also when it
+/// is dead, a villager's speed of its walk, and 0 for a thing that does not walk
+static float WalkSpeedOf(const ecs::Registry& registry, entt::entity thing)
+{
+	if (const auto* animal = registry.TryGet<const ecs::components::Animal>(thing); animal != nullptr)
+	{
+		return animals::SpeedForScript(animal->move.speed, false);
+	}
+	if (const auto* wallHug = registry.TryGet<const ecs::components::WallHug>(thing); wallHug != nullptr)
+	{
+		return ecs::villager_script_rules::WalkSpeedToScriptSpeed(wallHug->speed);
+	}
+	return 0.0f;
+}
+
 void GetSlowestSpeed() // 198 GET_SLOWEST_SPEED
 {
-	// const auto flock = Pop().uintVal;
-	// TODO(Daniels118): implement this
-	NotImplemented();
-	Pushf(0.0f);
+	// The lowest walk speed of the members of a town, a flock or a dance
+	const auto container = PopObject();
+	const auto& registry = Locator::entitiesRegistry::value();
+	if (container == entt::null || !registry.Valid(container))
+	{
+		ObjectNoLongerValid();
+		Pushf(0.0f);
+		return;
+	}
+	if (!IsScriptContainer(registry, container))
+	{
+		ScriptMessage("Object not container");
+		Pushf(0.0f);
+		return;
+	}
+	std::vector<float> speeds;
+	for (const auto member : ContainerMembers(registry, container))
+	{
+		speeds.push_back(WalkSpeedOf(registry, member));
+	}
+	Pushf(ecs::script_containers::SlowestSpeed(speeds));
 }
 
 void GetObjectHeld199() // 199 GET_OBJECT_HELD
@@ -8534,28 +8588,41 @@ void IsSkeleton() // 292 IS_SKELETON
 
 void PlayerSpellCastTime() // 293 PLAYER_SPELL_CAST_TIME
 {
-	// const auto player = Popf();
-	// TODO(Daniels118): implement this
-	NotImplemented();
-	Pushf(0.0f);
+	// The seconds since the last cast of the player. The record of the last cast always keeps its start values.
+	const auto* player = ScriptPlayer(Popf());
+	if (player == nullptr)
+	{
+		Pushf(script::cast_history::k_NoPlayerTime);
+		return;
+	}
+	const auto turn = Locator::time::has_value() ? Locator::time::value().GetTurn() : 0;
+	constexpr auto k_MillisecondsPerTurn = static_cast<int32_t>(ecs::systems::TimeSystemInterface::k_TurnDuration.count());
+	Pushf(script::cast_history::SecondsSinceCast(static_cast<uint32_t>(turn), {}, k_MillisecondsPerTurn));
 }
 
 void PlayerSpellLastCast() // 294 PLAYER_SPELL_LAST_CAST
 {
-	// const auto player = Popf();
-	// TODO(Daniels118): implement this
-	NotImplemented();
-	Pushi(0);
+	// The magic type of the last cast of the player, from the record that always keeps its start values
+	const auto* player = ScriptPlayer(Popf());
+	Pushi(player != nullptr ? static_cast<int32_t>(script::cast_history::LastCast {}.type) : 0);
 }
 
 void GetLastSpellCastPos() // 295 GET_LAST_SPELL_CAST_POS
 {
-	// const auto player = Popf();
-	// TODO(Daniels118): implement this
-	NotImplemented();
-	Pushv(0.0f); // x
-	Pushv(0.0f); // y
-	Pushv(0.0f); // z
+	// The place of the last cast of the player, from the record that always keeps its start values. The height is the
+	// height of the land at the place, plus the height of the record above the land.
+	const auto* player = ScriptPlayer(Popf());
+	glm::vec3 place {0.0f};
+	if (player != nullptr)
+	{
+		constexpr script::cast_history::LastCast k_Cast {};
+		const map_coords::MapCoords coords {k_Cast.x, k_Cast.z};
+		place = Locator::terrainSystem::has_value()
+		            ? map_coords::ToWorld(Locator::terrainSystem::value(), coords)
+		            : glm::vec3(map_coords::ToMetres(coords).x, 0.0f, map_coords::ToMetres(coords).y);
+		place.y += k_Cast.height;
+	}
+	PushVec(place);
 }
 
 void AddSpotVisualTargetPos() // 296 ADD_SPOT_VISUAL_TARGET_POS
@@ -8968,10 +9035,23 @@ void ClearConfinedObject() // 323 CLEAR_CONFINED_OBJECT
 
 void GetObjectFlock() // 324 GET_OBJECT_FLOCK
 {
-	// const auto member = Pop().uintVal;
-	// TODO(Daniels118): implement this
-	NotImplemented();
-	Pusho(0);
+	// The flock of a living thing, none when it is in no flock
+	const auto object = PopObject();
+	const auto& registry = Locator::entitiesRegistry::value();
+	if (object == entt::null || !registry.Valid(object) || !IsLivingThing(object))
+	{
+		ScriptMessage("Cannot find flock");
+		Pusho(0);
+		return;
+	}
+	const auto flock = ecs::script_flocks::FlockOf(registry, object);
+	if (flock == entt::null || !registry.Valid(flock))
+	{
+		Pusho(0);
+		return;
+	}
+	Locator::scriptObjects::value().Register(flock, false);
+	Pusho(static_cast<uint32_t>(flock));
 }
 
 void SetPlayerBelief() // 325 SET_PLAYER_BELIEF
@@ -9130,10 +9210,22 @@ void OpposingCreature() // 332 OPPOSING_CREATURE
 
 void FlockWithinLimits() // 333 FLOCK_WITHIN_LIMITS
 {
-	// const auto object = Pop().uintVal;
-	// TODO(Daniels118): implement this
-	NotImplemented();
-	Pushb(false);
+	// Whether each member of a flock is within the flock's distance of the flock. A thing that is not a flock gives true.
+	const auto object = PopObject();
+	const auto& registry = Locator::entitiesRegistry::value();
+	if (object == entt::null || !registry.Valid(object))
+	{
+		ScriptMessage("Thing no longer valid");
+		Pushb(true);
+		return;
+	}
+	if (!ecs::script_flocks::IsFlock(registry, object))
+	{
+		ScriptMessage("Invalid thing");
+		Pushb(true);
+		return;
+	}
+	Pushb(ecs::script_flocks::AllMembersWithinFlockDistance(registry, object));
 }
 
 void HighlightProperties() // 334 HIGHLIGHT_PROPERTIES
@@ -9795,13 +9887,43 @@ void CallComputerPlayer() // 374 CALL_COMPUTER_PLAYER
 
 void CallBuildingInTown() // 375 CALL_BUILDING_IN_TOWN
 {
-	// const auto unk3 = Pop().intVal;
-	// const auto unk2 = Pop().intVal;
-	// const auto unk1 = Pop().intVal;
-	// const auto unk0 = Pop().intVal;
-	// TODO(Daniels118): implement this
-	NotImplemented();
-	Pushi(0);
+	// The newest building of the town of the kind given that is built at least as much as given and that no script
+	// holds. Without "excluding scripted" the game gives the newest building of the town of any kind (vanilla-bugs 927).
+	const bool excludingScripted = Pop().intVal != 0;
+	const auto minBuilt = Popf();
+	const auto town = PopObject();
+	const auto number = static_cast<AbodeNumber>(Pop().intVal);
+	const auto& registry = Locator::entitiesRegistry::value();
+	const auto* data =
+	    town != entt::null && registry.Valid(town) ? registry.TryGet<const ecs::components::Town>(town) : nullptr;
+	if (data == nullptr)
+	{
+		ScriptMessage("Must be town");
+		Pusho(0);
+		return;
+	}
+	std::vector<ecs::script_containers::TownBuilding> buildings;
+	for (const auto entity : data->abodes)
+	{
+		if (!registry.Valid(entity))
+		{
+			continue;
+		}
+		const auto* abode = registry.TryGet<const ecs::components::Abode>(entity);
+		const auto* progress = registry.TryGet<const ecs::components::BuildProgress>(entity);
+		buildings.push_back({.entity = entity,
+		                     .number = abode != nullptr ? abode->type : AbodeNumber::Invalid,
+		                     .built = progress != nullptr ? progress->built : 1.0f,
+		                     .inScript = registry.AllOf<ecs::components::InScript>(entity)});
+	}
+	const auto found = ecs::script_containers::BuildingInTown(buildings, number, minBuilt, excludingScripted);
+	if (found == entt::null)
+	{
+		Pusho(0);
+		return;
+	}
+	Locator::scriptObjects::value().Register(found, false);
+	Pusho(static_cast<uint32_t>(found));
 }
 
 void SetCanBuildWorshipsite() // 376 SET_CAN_BUILD_WORSHIPSITE
@@ -10030,17 +10152,24 @@ static uint32_t TownAdultsNow(const ecs::Registry& registry, entt::entity town)
 	return adults;
 }
 
-/// The room for adults in the built buildings of a town now: the adult places of each building of its tribe's table that
-/// has a place for anyone, as the town stats count them
-static int32_t TownAdultRoomNow(const ecs::Registry& registry, entt::entity townEntity, const ecs::components::Town& town)
+/// The room for adults and for children in the built buildings of a town
+struct TownRoom
+{
+	int32_t adults {0};
+	int32_t children {0};
+};
+
+/// The room in the built buildings of a town now: the places of each building of its tribe's table that has a place
+/// for anyone, as the town stats count them
+static TownRoom TownRoomNow(const ecs::Registry& registry, entt::entity townEntity, const ecs::components::Town& town)
 {
 	const auto* tribe = registry.TryGet<const Tribe>(townEntity);
 	if (tribe == nullptr || !Locator::infoConstants::has_value())
 	{
-		return 0;
+		return {};
 	}
 	const auto& rows = Locator::infoConstants::value().abode;
-	int32_t room = 0;
+	TownRoom room;
 	registry.Each<const ecs::components::Abode>([&](entt::entity entity, const ecs::components::Abode& abode) {
 		if (abode.townId != town.id)
 		{
@@ -10055,7 +10184,8 @@ static int32_t TownAdultRoomNow(const ecs::Registry& registry, entt::entity town
 		    rows, [&](const GAbodeInfo& info) { return info.tribeType == *tribe && info.abodeNumber == abode.type; });
 		if (row != rows.end() && row->maxVillagersInAbode + row->maxChildrenInAbode != 0)
 		{
-			room += static_cast<int32_t>(row->maxVillagersInAbode);
+			room.adults += static_cast<int32_t>(row->maxVillagersInAbode);
+			room.children += static_cast<int32_t>(row->maxChildrenInAbode);
 		}
 	});
 	return room;
@@ -10077,7 +10207,7 @@ static void PushAdultCount(bool room)
 	{
 		// The town keeps these counts up to date at all times, so they are counted now and not taken from the turn's
 		// town stats
-		Pushf(room ? ecs::script_containers::TownAdultRoom(TownAdultRoomNow(registry, object, *town))
+		Pushf(room ? ecs::script_containers::TownAdultRoom(TownRoomNow(registry, object, *town).adults)
 		           : ecs::script_containers::TownAdults(TownAdultsNow(registry, object)));
 		return;
 	}
@@ -10104,10 +10234,29 @@ void IdAdultSize() // 387 ID_ADULT_SIZE
 
 void ObjectCapacity() // 388 OBJECT_CAPACITY
 {
-	// const auto container = Pop().uintVal;
-	// TODO(Daniels118): implement this
-	NotImplemented();
-	Pushf(0.0f);
+	// The room for adults and children of a town or of a building. Any other thing gives 0 and a message.
+	const auto object = PopObject();
+	const auto& registry = Locator::entitiesRegistry::value();
+	if (object == entt::null || !registry.Valid(object))
+	{
+		ScriptMessage("Object should be alive!");
+		Pushf(0.0f);
+		return;
+	}
+	if (const auto* town = registry.TryGet<const ecs::components::Town>(object); town != nullptr)
+	{
+		const auto room = TownRoomNow(registry, object, *town);
+		Pushf(ecs::script_containers::TownCapacity(room.adults, room.children));
+		return;
+	}
+	if (!IsAdultHolderBuilding(registry, object))
+	{
+		ScriptMessage("Object should be town, or abode");
+		Pushf(0.0f);
+		return;
+	}
+	const auto* info = ecs::world_objects::AbodeInfoOf(object);
+	Pushf(info != nullptr ? ecs::script_containers::AbodeCapacity(info->maxVillagersInAbode, info->maxChildrenInAbode) : 0.0f);
 }
 
 void ObjectAdultCapacity() // 389 OBJECT_ADULT_CAPACITY
@@ -10535,18 +10684,28 @@ void SetSetOnFire() // 426 SET_SET_ON_FIRE
 
 void SetLandBalance() // 427 SET_LAND_BALANCE
 {
-	// const auto unk1 = Pop().intVal;
-	// const auto unk0 = Pop().intVal;
-	// TODO(Daniels118): implement this
-	NotImplemented();
+	// One of the eight balances of the land, as the land script sets it. The game writes outside the eight balances for
+	// an index out of the range; openblack ignores such an index (vanilla-bugs 928).
+	const auto value = Popf();
+	const auto index = static_cast<int32_t>(Popf());
+	lhscriptx::FeatureScriptCommands::SetGlobalLandBalance(index, value);
 }
 
 void SetObjectBeliefScale() // 428 SET_OBJECT_BELIEF_SCALE
 {
-	// const auto unk1 = Pop().intVal;
-	// const auto unk0 = Pop().intVal;
-	// TODO(Daniels118): implement this
-	NotImplemented();
+	// The scale of the belief that a town gives to each player at its turn
+	const auto scale = Popf();
+	const auto object = PopObject();
+	auto& registry = Locator::entitiesRegistry::value();
+	auto* impression = object != entt::null && registry.Valid(object) && registry.AllOf<ecs::components::Town>(object)
+	                       ? registry.TryGet<ecs::components::TownImpression>(object)
+	                       : nullptr;
+	if (impression == nullptr)
+	{
+		ScriptMessage("Town invalid!");
+		return;
+	}
+	impression->belief.scale = scale;
 }
 
 void StartImmersion() // 429 START_IMMERSION

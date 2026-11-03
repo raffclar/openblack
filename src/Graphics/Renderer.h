@@ -36,6 +36,7 @@
 
 #include "3D/SkyDome.h"
 #include "Enums.h"
+#include "Graphics/DeviceRestore.h"
 #include "Graphics/DrawEncoder.h"
 #include "Graphics/GroundShadow.h"
 #include "Graphics/HandReflection.h"
@@ -120,6 +121,9 @@ public:
 	[[nodiscard]] bool GetDebug() const noexcept final { return _bgfxDebug; }
 	void SetDebug(bool value) noexcept final { _bgfxDebug = value; }
 	[[nodiscard]] uint32_t GetPipelinesMade() const noexcept final;
+	void RequestDeviceRestore() noexcept final;
+	[[nodiscard]] uint32_t GetDeviceRestores() const noexcept final;
+	[[nodiscard]] uint64_t GetDeviceRestoreBytes() const noexcept final;
 	[[nodiscard]] uint32_t GetDrawsOfLastFrame() const noexcept final;
 	[[nodiscard]] bool GetProfile() const noexcept final { return _bgfxProfile; }
 	void SetProfile(bool value) noexcept final { _bgfxProfile = value; }
@@ -662,6 +666,11 @@ private:
 	mutable std::unique_ptr<FrameBuffer> _skyDomeFrameBuffer;
 	/// The rows of each alignment's dome in the frame buffer above
 	mutable uint16_t _skyDomeRows {sky_dome::k_Rows};
+	/// The dome's picture is gone because the graphics device was made again, thus the next draw of the dome draws all
+	/// of it
+	mutable bool _skyDomeLost {false};
+	/// Finds each new restore of the graphics device
+	device_restore::Watch _deviceRestores;
 	/// The glow lightning stamps on the land, made the first time it is drawn
 	mutable std::optional<TextureHandle> _lightningGlowTexture;
 	/// How strongly the sun glares, 0 to 255, easing towards how much of the sun shows

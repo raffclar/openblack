@@ -47,6 +47,10 @@ inline constexpr float k_CrtRandomScale = std::bit_cast<float>(0x38000100u);
 	return seed % n;
 }
 
+/// A double rounded to 24 bits of mantissa, to the nearest and to even at a tie, as the FPU at 24-bit precision rounds.
+/// The exponent stays as wide as the double's.
+[[nodiscard]] double RoundTo24Bits(double value) noexcept;
+
 /// The float of a draw u up to x, as the game's FPU computes it: (u * x) * k. The FPU keeps a wider exponent than a float,
 /// so a product above the float range does not become infinite before the multiply by k
 [[nodiscard]] float FloatOf(uint32_t u, float x) noexcept;

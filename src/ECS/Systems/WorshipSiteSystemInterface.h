@@ -50,6 +50,10 @@ public:
 	/// there, is built and given to the first of the player's towns of that tribe. The site, none without the player's
 	/// temple or a place for it.
 	virtual entt::entity MakeBuiltSite(PlayerNames player, Tribe tribe) = 0;
+	/// A saved game puts a worship site of the tribe in a place round a temple. The site gets its altar, its need flags,
+	/// its dance and its empty food pot, as a new site does, but no town worships at it and no town is asked to build
+	/// it. The site, none when the temple has no worship sites or the place is taken.
+	virtual entt::entity MakeLoaded(entt::entity /*temple*/, Tribe /*tribe*/, uint8_t /*place*/) { return entt::null; }
 	/// A script lets a town or a temple have worship sites made, or stops it
 	virtual void SetCanHaveSites(entt::entity townOrTemple, bool can) = 0;
 	/// For the debug tools only. A town is let have its worship site as a land's script lets it: first the town, then its

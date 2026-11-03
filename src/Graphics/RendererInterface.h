@@ -339,6 +339,13 @@ public:
 	/// How many pipelines the renderer made since it started. The renderer makes a pipeline the first time that a draw
 	/// uses a new set of program, state, vertex layouts and target formats, and that frame is slower.
 	[[nodiscard]] virtual uint32_t GetPipelinesMade() const noexcept = 0;
+	/// Asks the renderer to make its graphics device again, as after a lost device, to test the recovery. The
+	/// renderer does it at the start of a next frame. Each texture, buffer and shader keeps its handle and contents.
+	virtual void RequestDeviceRestore() noexcept = 0;
+	/// How many times the renderer made its graphics device again, after a lost device or a request
+	[[nodiscard]] virtual uint32_t GetDeviceRestores() const noexcept = 0;
+	/// The bytes of data of the textures, buffers and shaders that the renderer keeps to make its device again
+	[[nodiscard]] virtual uint64_t GetDeviceRestoreBytes() const noexcept = 0;
 	virtual void SetDebug(bool value) noexcept = 0;
 	virtual void SetProfile(bool value) noexcept = 0;
 

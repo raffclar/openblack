@@ -119,6 +119,16 @@ std::vector<QueryDescription> GameProvider::Describe() const
 	          {{.name = "speed", .type = "number", .description = "1 is normal, 2 twice as fast", .required = true}}),
 	    state("scenario", "Loads a testbed scenario on a fresh testbed",
 	          {{.name = "id", .type = "string", .description = "The scenario's id, from game.scenarios", .required = true}}),
+	    state("device", "The graphics device: the renderer, how many times the renderer made the device again and the "
+	                    "bytes that it keeps for that. Null when the game has no graphics device"),
+	    QueryDescription {.name = "restore_device",
+	                      .description = "Makes the graphics device again with all its textures, buffers and shaders, "
+	                                     "as after a lost device, at the start of a next frame. Poll game.device until "
+	                                     "restores goes up. Null device when the game has none",
+	                      .parameters = {},
+	                      .kind = ResultKind::Object,
+	                      .needsNear = false,
+	                      .writes = true},
 	    QueryDescription {.name = "scenarios",
 	                      .description = "The testbed scenarios: id, name, facet and what each sets up",
 	                      .parameters = {},
@@ -323,6 +333,19 @@ QueryResult GameProvider::Run(std::string_view query, const QueryContext& contex
 		_frameTimeAfterStep.reset();
 		_target.SetFixedFrameTime(*ms == 0.0 ? std::nullopt : std::optional(static_cast<uint32_t>(*ms)));
 		return QueryResult::Value(State());
+	}
+	if (query == "device")
+	{
+		return QueryResult::Value(_target.GraphicsDevice());
+	}
+	if (query == "restore_device")
+	{
+		const auto before = _target.GraphicsDevice();
+		if (!_target.RestoreGraphicsDevice())
+		{
+			return QueryResult::Error("the game has no graphics device");
+		}
+		return QueryResult::Value({{"asked", true}, {"device", before}});
 	}
 	if (query == "scenario")
 	{

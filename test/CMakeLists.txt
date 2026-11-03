@@ -2358,3 +2358,8 @@ openblack_setup_and_add_test(test_lobby_ping_server online/test_lobby_ping_serve
 openblack_setup_and_add_test(test_observer_interfaces test_observer_interfaces.cpp)
 openblack_setup_and_add_test(test_lan_server_key online/test_lan_server_key.cpp)
 openblack_setup_and_add_test(test_join_name online/test_join_name.cpp)
+openblack_setup_and_add_test(test_device_restore graphics/test_device_restore.cpp)
+openblack_setup_and_add_test(
+  test_script_natives_rows_3 test_script_natives_rows_3.cpp
+)
+target_link_libraries(test_script_natives_rows_3 PRIVATE ScriptLibrary)

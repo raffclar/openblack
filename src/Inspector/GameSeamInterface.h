@@ -69,6 +69,12 @@ public:
 	virtual void AddChatControls(Json& result) const = 0;
 	/// Adds the tooltip that the hand shows to the answer of a query
 	virtual void AddToolTip(Json& result) const = 0;
+	/// The graphics device: its renderer, how many times the renderer made it again and the bytes that it keeps for
+	/// that. Null when the game has no graphics device.
+	[[nodiscard]] virtual Json GraphicsDevice() const { return nullptr; }
+	/// Asks the renderer to make its graphics device again, as after a lost device. False when the game has no graphics
+	/// device.
+	virtual bool RestoreGraphicsDevice() { return false; }
 };
 
 } // namespace openblack::inspector

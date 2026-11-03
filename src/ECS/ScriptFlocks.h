@@ -69,6 +69,10 @@ void MoveTo(Registry& registry, entt::entity flock, const map_coords::MapCoords&
 /// left. The flock it left stays, also when it is empty. The new flock, or none when the living was in no flock.
 entt::entity SeparateIntoNewFlock(Registry& registry, entt::entity living);
 
+/// Whether each member of a flock is within the flock's distance of the flock's position, in metres, as the game measures
+/// distance on the map. An empty flock gives true.
+[[nodiscard]] bool AllMembersWithinFlockDistance(const Registry& registry, entt::entity flock);
+
 /// The position of a living as the flocks measure it
 [[nodiscard]] map_coords::MapCoords PositionOf(const Registry& registry, entt::entity living);
 
