@@ -8,6 +8,7 @@
  *******************************************************************************/
 
 #include <array>
+#include <initializer_list>
 #include <string>
 #include <vector>
 
@@ -420,4 +421,77 @@ TEST_F(DebuggerTest, HoldsByHandAndChangesVariables)
 	_vm.HoldTask(_task);
 	_vm.StopTask(_task);
 	EXPECT_FALSE(_vm.IsTaskHeld(_task));
+}
+
+namespace
+{
+/// Code of push instructions, each with the source line that the compiler recorded for it (0 for none)
+std::vector<VMInstruction> CodeOnLines(std::initializer_list<uint32_t> lines)
+{
+	std::vector<VMInstruction> code;
+	for (const auto line : lines)
+	{
+		code.emplace_back(Opcode::Push, VMMode::Immediate, DataType::Int, VMValue(uint32_t {0}), line);
+	}
+	return code;
+}
+} // namespace
+
+TEST(EditorScripts, CutsATextIntoItsLines)
+{
+	EXPECT_EQ(SplitLines("a\r\nb\n\nc"), (std::vector<std::string> {"a", "b", "", "c"}));
+	EXPECT_EQ(SplitLines("one\n"), (std::vector<std::string> {"one"}));
+	EXPECT_TRUE(SplitLines("").empty());
+}
+
+TEST(EditorScripts, EachLineOfTheOriginalFileLeadsToItsFirstInstruction)
+{
+	const auto code = CodeOnLines({3, 0, 3, 5, 4});
+	const auto source = MatchOriginal(code, {.begin = 0, .end = 5}, "begin\n\nwait\nsay\nend\nrem\n");
+	ASSERT_EQ(source.lines.size(), 6U);
+	EXPECT_EQ(source.lines[2], "wait");
+	EXPECT_FALSE(source.lineAddresses[0].has_value());
+	EXPECT_EQ(source.lineAddresses[2], 0U);
+	EXPECT_EQ(source.lineAddresses[3], 4U);
+	EXPECT_EQ(source.lineAddresses[4], 3U);
+	EXPECT_FALSE(source.lineAddresses[5].has_value());
+	EXPECT_TRUE(source.diagnostics.empty());
+}
+
+TEST(EditorScripts, OnlyTheCodeOfTheScriptLeadsFromTheOriginalFile)
+{
+	const auto code = CodeOnLines({1, 2, 3});
+	const auto source = MatchOriginal(code, {.begin = 1, .end = 3}, "a\nb\nc\n");
+	EXPECT_FALSE(source.lineAddresses[0].has_value());
+	EXPECT_EQ(source.lineAddresses[1], 1U);
+	EXPECT_EQ(source.lineAddresses[2], 2U);
+}
+
+TEST(EditorScripts, AnOriginalFileThatIsTooShortIsNotTheFileOfTheProgram)
+{
+	const auto code = CodeOnLines({1, 9});
+	const auto source = MatchOriginal(code, {.begin = 0, .end = 2}, "a\nb\n");
+	ASSERT_EQ(source.diagnostics.size(), 1U);
+	EXPECT_NE(source.diagnostics[0].find("line 9"), std::string::npos);
+	EXPECT_EQ(source.lineAddresses[0], 0U);
+}
+
+TEST(EditorScripts, AnAddressShowsTheLineThatTheCompilerRecordedForIt)
+{
+	const auto code = CodeOnLines({0, 3, 0, 5});
+	const CodeRange range {.begin = 0, .end = 4};
+	EXPECT_FALSE(OriginalLineOf(code, range, 0).has_value());
+	EXPECT_EQ(OriginalLineOf(code, range, 1), 2U);
+	EXPECT_EQ(OriginalLineOf(code, range, 2), 2U);
+	EXPECT_EQ(OriginalLineOf(code, range, 3), 4U);
+	EXPECT_FALSE(OriginalLineOf(code, range, 4).has_value());
+	EXPECT_FALSE(OriginalLineOf(code, {.begin = 2, .end = 3}, 2).has_value());
+}
+
+TEST(EditorScripts, FindsTheFileOfAScriptWithNoAttentionToCase)
+{
+	const std::vector<std::string> names {"LandControl1.txt", "readme.md"};
+	EXPECT_EQ(SameNameIgnoringCase(names, "landcontrol1.TXT"), "LandControl1.txt");
+	EXPECT_FALSE(SameNameIgnoringCase(names, "LandControl2.txt").has_value());
+	EXPECT_FALSE(SameNameIgnoringCase(names, "LandControl1.tx").has_value());
 }

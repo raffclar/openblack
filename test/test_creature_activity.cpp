@@ -332,3 +332,13 @@ TEST(CreatureActivity, TheKindAndTheFactsThatADesireReadsGiveTheSameAnswer)
 		}
 	}
 }
+
+TEST(CreatureActivity, ScriptsSeeTheActionOfThePlanCarriedOutElseOfTheLastPlan)
+{
+	creature_planner::PlannerState state;
+	EXPECT_EQ(creature_planner::ActionInView(state), 0U);
+	state.lastAction = 12;
+	EXPECT_EQ(creature_planner::ActionInView(state), 12U);
+	state.current = creature_planner::Plan {.action = 40};
+	EXPECT_EQ(creature_planner::ActionInView(state), 40U);
+}
