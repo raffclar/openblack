@@ -591,4 +591,86 @@ std::vector<SourceToken> HighlightSource(std::string_view line)
 	return tokens;
 }
 
+std::vector<std::string> SplitLines(std::string_view text)
+{
+	std::vector<std::string> lines;
+	while (!text.empty())
+	{
+		const auto end = text.find('\n');
+		auto line = text.substr(0, end);
+		if (line.ends_with('\r'))
+		{
+			line.remove_suffix(1);
+		}
+		lines.emplace_back(line);
+		text = end == std::string_view::npos ? std::string_view {} : text.substr(end + 1);
+	}
+	return lines;
+}
+
+DecompiledSource MatchOriginal(std::span<const lhvm::VMInstruction> code, CodeRange range, std::string_view text)
+{
+	DecompiledSource source;
+	source.lines = SplitLines(text);
+	source.lineAddresses.resize(source.lines.size());
+	uint32_t pastEnd = 0;
+	const auto end = std::min(range.end, static_cast<uint32_t>(code.size()));
+	for (auto address = range.begin; address < end; ++address)
+	{
+		const auto line = code[address].line;
+		if (line == 0)
+		{
+			continue;
+		}
+		if (line > source.lines.size())
+		{
+			pastEnd = std::max(pastEnd, line);
+			continue;
+		}
+		auto& lineAddress = source.lineAddresses[line - 1];
+		if (!lineAddress.has_value())
+		{
+			lineAddress = address;
+		}
+	}
+	if (pastEnd != 0)
+	{
+		source.diagnostics.push_back(fmt::format("The script names line {}, but the file has only {} lines: this is not "
+		                                         "the file that the program came from",
+		                                         pastEnd, source.lines.size()));
+	}
+	return source;
+}
+
+std::optional<size_t> OriginalLineOf(std::span<const lhvm::VMInstruction> code, CodeRange range, uint32_t address)
+{
+	if (!range.Contains(address) || address >= code.size())
+	{
+		return std::nullopt;
+	}
+	// Look back from the address to the start of the script
+	for (auto next = address + 1; next > range.begin; --next)
+	{
+		if (const auto line = code[next - 1].line; line != 0)
+		{
+			return static_cast<size_t>(line - 1);
+		}
+	}
+	return std::nullopt;
+}
+
+std::optional<std::string> SameNameIgnoringCase(std::span<const std::string> names, std::string_view wanted)
+{
+	const auto sameIgnoringCase = [wanted](const std::string& name) {
+		return std::ranges::equal(name, wanted, [](char a, char b) {
+			return std::tolower(static_cast<unsigned char>(a)) == std::tolower(static_cast<unsigned char>(b));
+		});
+	};
+	if (const auto found = std::ranges::find_if(names, sameIgnoringCase); found != names.end())
+	{
+		return *found;
+	}
+	return std::nullopt;
+}
+
 } // namespace openblack::editor::scripts

@@ -114,6 +114,24 @@ const VMScript* ScriptById(const Program& program, uint32_t id)
 
 /// The folder a program was last opened from, remembered between runs
 constexpr std::string_view k_ProgramFolderKey = "script_program_folder";
+/// The folder that holds the original source files of the scripts, remembered between runs
+constexpr std::string_view k_SourceFolderKey = "script_source_folder";
+
+/// The file in a folder with the name that a script records. The case of the name does not count, because the names
+/// in the program and on the disk do not always agree
+std::optional<std::filesystem::path> FindSourceFile(const std::filesystem::path& folder, std::string_view name)
+{
+	std::error_code error;
+	std::vector<std::string> names;
+	for (std::filesystem::directory_iterator entry(folder, error), end; !error && entry != end; entry.increment(error))
+	{
+		if (entry->is_regular_file(error))
+		{
+			names.push_back(entry->path().filename().string());
+		}
+	}
+	return SameNameIgnoringCase(names, name).transform([&folder](const std::string& found) { return folder / found; });
+}
 
 constexpr ImGuiTableFlags k_ListFlags = ImGuiTableFlags_Resizable | ImGuiTableFlags_RowBg | ImGuiTableFlags_ScrollY |
                                         ImGuiTableFlags_BordersInnerV | ImGuiTableFlags_SizingStretchProp;
@@ -548,6 +566,11 @@ void ScriptsPanel::DrawCode(lhvm::LHVM& vm, const Program& program) noexcept
 			DrawDecompiled(program, *script);
 			ImGui::EndTabItem();
 		}
+		if (ImGui::BeginTabItem("Original"))
+		{
+			DrawOriginal(program, *script, range);
+			ImGui::EndTabItem();
+		}
 		ImGui::EndTabBar();
 	}
 }
@@ -703,6 +726,84 @@ void ScriptsPanel::DrawDecompiled(const Program& program, const VMScript& script
 	const auto taskLine =
 	    TaskAddress(Locator::vm::value()).and_then([&source](uint32_t address) { return LineOf(source, address); });
 	const auto currentLine = _address.and_then([&source](uint32_t address) { return LineOf(source, address); });
+	DrawSourceLines(program, source, taskLine, currentLine);
+}
+
+void ScriptsPanel::DrawOriginal(const Program& program, const VMScript& script, CodeRange range) noexcept
+{
+	std::filesystem::path quests;
+	if (Locator::filesystem::has_value())
+	{
+		quests = Locator::filesystem::value().GetPath<filesystem::Path::Quests>(true);
+	}
+	const auto remembered = file_dialog::RememberedPath(k_SourceFolderKey);
+	const auto folder = remembered.value_or(quests);
+	if (ImGui::SmallButton("Source folder..."))
+	{
+		const auto exists = [](const std::filesystem::path& path) {
+			std::error_code error;
+			return std::filesystem::is_directory(path, error);
+		};
+		const auto outcome = file_dialog::Show({
+		    .mode = file_dialog::Mode::Open,
+		    .title = "Pick one of the original source files of the scripts",
+		    .filters = {{.name = "Script source (*.txt)", .patterns = {"*.txt"}}, {.name = "All files", .patterns = {"*"}}},
+		    .startFolder = file_dialog::StartFolder(remembered, quests, exists),
+		    .owner = Locator::windowing::has_value() ? Locator::windowing::value().GetNativeHandles().nativeWindow : nullptr,
+		});
+		if (outcome.status == file_dialog::Status::Chosen)
+		{
+			file_dialog::RememberPath(k_SourceFolderKey, outcome.path.parent_path());
+			_caches.original.clear();
+		}
+	}
+	ImGui::SetItemTooltip("Picks the folder that holds the source files of the scripts, by one file in it");
+	ImGui::SameLine();
+	ImGui::TextColored(style::k_Muted, "%s", script.filename.c_str());
+
+	auto cached = _caches.original.find(script.scriptId);
+	if (cached == _caches.original.end())
+	{
+		std::optional<DecompiledSource> original;
+		const auto path = FindSourceFile(folder, script.filename);
+		if (path.has_value() && Locator::filesystem::has_value())
+		{
+			try
+			{
+				const auto bytes = Locator::filesystem::value().ReadAll(*path);
+				const std::string_view text(reinterpret_cast<const char*>(bytes.data()), bytes.size());
+				original = MatchOriginal(program.code, range, text);
+			}
+			catch (const std::exception& error)
+			{
+				original =
+				    DecompiledSource {.diagnostics = {fmt::format("Couldn't read {}: {}", path->string(), error.what())}};
+			}
+		}
+		cached = _caches.original.emplace(script.scriptId, std::move(original)).first;
+	}
+	if (!cached->second.has_value())
+	{
+		ImGui::TextWrapped("The game does not come with the source files of its scripts. If you have them, pick their "
+		                   "folder: the file that the script names then shows here, each line leading to its code.");
+		return;
+	}
+	const auto& source = *cached->second;
+	for (const auto& diagnostic : source.diagnostics)
+	{
+		ImGui::TextColored(style::k_Warning, "%s", diagnostic.c_str());
+	}
+	const auto taskLine = TaskAddress(Locator::vm::value()).and_then([&program, range](uint32_t address) {
+		return OriginalLineOf(program.code, range, address);
+	});
+	const auto currentLine =
+	    _address.and_then([&program, range](uint32_t address) { return OriginalLineOf(program.code, range, address); });
+	DrawSourceLines(program, source, taskLine, currentLine);
+}
+
+void ScriptsPanel::DrawSourceLines(const Program& program, const DecompiledSource& source, std::optional<size_t> taskLine,
+                                   std::optional<size_t> currentLine) noexcept
+{
 	ImGui::PushStyleColor(ImGuiCol_ChildBg, style::k_CodeBackground);
 	ImGui::BeginChild("Source");
 	ImGuiListClipper clipper;
