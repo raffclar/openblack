@@ -1630,6 +1630,32 @@ const Animation* PosedAnimationOf(AnimationStores& stores, entt::entity creature
 	}
 	return AnimationOf(stores, *animation, *rigs.Handle(rigId), morph->drawn, index);
 }
+
+/// A creature's animation, only for its length and its travel. A blend changes only the turns and the moves of the
+/// bones in each frame. Thus an animation that the body did not blend yet has the length, the frames and the travel of
+/// the species' base animation, and the code does not blend it for them.
+const Animation* MeasuredAnimationOf(entt::entity creature, size_t index)
+{
+	const auto& registry = Locator::entitiesRegistry::value();
+	const auto* body = registry.TryGet<const Creature>(creature);
+	const auto* animation = registry.TryGet<const CreatureAnimation>(creature);
+	if (body == nullptr || !registry.AllOf<CreatureMorph>(creature) || animation == nullptr || animation->skeleton.Empty())
+	{
+		return nullptr;
+	}
+	if (const auto kept = animation->animations.find(index); kept != animation->animations.end())
+	{
+		return kept->second.frames.empty() ? nullptr : &kept->second;
+	}
+	const auto& rigs = Locator::resources::value().GetCreatureRigs();
+	const auto rigId = creature::GetRigId(body->species);
+	if (!rigs.Contains(rigId))
+	{
+		return nullptr;
+	}
+	const auto* base = rigs.Handle(rigId)->GetAnimation(CreatureRig::Mesh::Base, index);
+	return base != nullptr && !base->frames.empty() ? base : nullptr;
+}
 } // namespace
 
 std::optional<glm::vec3> CreatureAnimationSystem::BoneInAnimation(entt::entity creature, size_t animation, float timeMs,
@@ -1706,13 +1732,13 @@ std::optional<glm::vec3> CreatureAnimationSystem::MiddleOfBonesInAnimation(entt:
 
 std::optional<float> CreatureAnimationSystem::AnimationDuration(entt::entity creature, size_t animation)
 {
-	const auto* played = PosedAnimationOf(BlendStores(), creature, animation);
+	const auto* played = MeasuredAnimationOf(creature, animation);
 	return played != nullptr ? std::optional(static_cast<float>(played->duration)) : std::nullopt;
 }
 
 std::optional<glm::vec3> CreatureAnimationSystem::AnimationTravel(entt::entity creature, size_t animation)
 {
-	const auto* played = PosedAnimationOf(BlendStores(), creature, animation);
+	const auto* played = MeasuredAnimationOf(creature, animation);
 	return played != nullptr ? std::optional(played->displacement) : std::nullopt;
 }
 
