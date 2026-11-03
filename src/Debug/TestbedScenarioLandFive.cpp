@@ -300,7 +300,7 @@ void testbed_scenarios::AddLandFiveQuestScenarios(std::vector<Scenario>& all)
 	    .description = "The fifth land loads with its own scripts. The brown bear quest starts and its scroll is clicked. "
 	                   "50 seconds later the hand picks up the eight piles of dung one after another. 45 seconds after the "
 	                   "last pile the player opens the reward chest, and 15 seconds later clicks the bear's scroll while the "
-	                   "tiger is far away. The tiger then walks to "
+	                   "tiger is far away. 10 seconds later a script puts the tiger near "
 	                   "the bear, the player clicks the bear's scroll again, and then clicks the bear to say yes. Click "
 	                   "the texts to go on.",
 	    .expected = "The trail plays as in the trail scenario. After the last pile the bear appears with a sparkle and "
@@ -317,16 +317,11 @@ void testbed_scenarios::AddLandFiveQuestScenarios(std::vector<Scenario>& all)
 		        auto commands = BrownBearTrail(50.0f);
 		        commands.push_back({.kind = Kind::TapRewardNear, .delaySeconds = 45.0f, .point = k_BearAppears});
 		        commands.push_back({.kind = Kind::ClickScroll, .delaySeconds = 15.0f, .point = k_BearStands});
-		        commands.push_back({.kind = Kind::WalkTo,
+		        commands.push_back({.kind = Kind::ScriptPlace,
 		                            .creature = 0,
 		                            .delaySeconds = 10.0f,
-		                            .point = k_BearStands + glm::vec2(8.0f, -12.0f)});
-		        // The second click comes as soon as the tiger stands near the bear, before it walks off on its own
-		        commands.push_back({.kind = Kind::ClickScroll,
-		                            .creature = 0,
-		                            .delaySeconds = 0.5f,
-		                            .waitUntilFree = true,
-		                            .point = k_BearStands});
+		                            .point = k_BearAppears + glm::vec2(10.0f, -10.0f)});
+		        commands.push_back({.kind = Kind::ClickScroll, .delaySeconds = 2.0f, .point = k_BearStands});
 		        commands.push_back({.kind = Kind::ClickCreatureNear, .delaySeconds = 30.0f, .point = k_BearStands});
 		        return commands;
 	        }(),
@@ -362,10 +357,8 @@ void testbed_scenarios::AddLandFiveQuestScenarios(std::vector<Scenario>& all)
 	    .facet = Facet::Story,
 	    .description = "The fifth land loads with its own scripts. The crusaders' quest starts, and 90 seconds later the "
 	                   "camera goes to the farmer's house and the brown bear quest starts. Nobody clicks a scroll.",
-	    .expected = "While the camera is near the camp, the evil advisor steps out, points at the camp's scroll and says "
-	                "\"Hey. There's a job for you. Wanna do it?\", at most once every 30 seconds. Near the farmer's house, "
-	                "the good advisor steps out, points at its scroll and says \"We've got something to do. Let's see "
-	                "what it is.\", at most once every 30 seconds.",
+	    .expected = "No advisor steps out to point at a scroll. The notice for a waiting scroll needs the camera within a "
+	                "distance that no script of the game sets, so the distance stays 0, as in the original game.",
 	    .environment = {.land = Land::Story, .storyLand = "Land5.txt", .dispenserGrid = false},
 	    .framing = {.shot = Shot::Placed,
 	                .eye = {k_Camp.x + 10.0f, 25.0f, k_Camp.y - 40.0f},
