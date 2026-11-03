@@ -27,6 +27,9 @@
 // always starts that way, whatever place the script gives. Without a temple, the camera stays at the place of the
 // script.
 //
+// The script's line only keeps the place. The game puts the camera there after the whole script has run, so the line
+// can come before the line that loads the landscape.
+//
 // Pure, tested on made-up starts.
 
 namespace openblack::start_camera
@@ -40,6 +43,13 @@ inline constexpr glm::vec2 k_OriginAngles {glm::radians(12.8571f), glm::radians(
 [[nodiscard]] inline glm::vec3 OriginOver(glm::vec3 focus)
 {
 	return focus + (k_OriginDistance * glm::euclidean(k_OriginAngles));
+}
+
+/// The point that the camera looks at from the script's place (in metres along the two map axes), on the land of the
+/// given height there
+[[nodiscard]] constexpr glm::vec3 FocusOnLand(glm::vec2 scriptFocus, float landHeight)
+{
+	return {scriptFocus.x, landHeight, scriptFocus.y};
 }
 
 /// How a land starts

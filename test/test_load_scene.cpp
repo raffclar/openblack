@@ -7,6 +7,7 @@
  * openblack is licensed under the GNU General Public License version 3.
  *******************************************************************************/
 
+#include <3D/LandIslandInterface.h>
 #include <ECS/Components/Abode.h>
 #include <ECS/Components/MiracleImpression.h>
 #include <ECS/Components/Mobile.h>
@@ -70,11 +71,25 @@ LOAD_LANDSCAPE(".\Data\Landscape\Land1.lnd")
 
 TEST_F(LoadScene, load_abode_no_landscape)
 {
+	// A place on a line is read with no land under it, as the game reads it. The abode has no town to join.
 	const char* sceneScript = R""""(
 VERSION(2.300000)
 CREATE_ABODE(0, "2224.63,2372.52", "CELTIC_ABODE_F", 11100, 1095, 0, 0)
 )"""";
-	ASSERT_THROW(LoadTestScene(sceneScript), std::runtime_error);
+	ASSERT_NO_THROW(LoadTestScene(sceneScript));
+}
+
+TEST_F(LoadScene, a_camera_line_before_the_landscape_line_loads_the_land)
+{
+	// The camera line only keeps its place, so the land loads as the game loads it
+	LoadTestScene(R""""(
+VERSION(2.200000)
+SET_LAND_NUMBER(3)
+START_CAMERA_POS("3237.21,3157.85")
+LOAD_LANDSCAPE(".\Data\Landscape\Land1.lnd")
+CREATE_TOWN(0, "2829.13,2822.80", "PLAYER_ONE", 3, "CELTIC")
+)"""");
+	EXPECT_TRUE(openblack::Locator::terrainSystem::value().IsLoaded());
 }
 
 TEST_F(LoadScene, load_celtic_abode_f)

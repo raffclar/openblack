@@ -698,7 +698,7 @@ glm::ivec2 AnimalSystem::RandomPos(const Animal& animal, glm::ivec2 centre, floa
 		       Locator::terrainSystem::value().FindCell(glm::u16vec2(map_coords::CellOf(point))) != nullptr;
 	};
 	// A point it may go to: on the map, where its kind can stand, one it can reach without circling, and for a bird, over
-	// the land all the way. (The game also turns down a point the map's walls block; openblack's map has none of them.)
+	// the land all the way. The game's test of the cell never marks a wall, so no wall turns down a point.
 	const auto mask = static_cast<uint32_t>(InfoOf(animal.type).collideType);
 	const auto reachable = [&](glm::ivec2 point) {
 		return animals::OutsideTurningCircles(here, animal.move.angle, animal.move.speed, TurnAngleOf(animal), Metres(point));

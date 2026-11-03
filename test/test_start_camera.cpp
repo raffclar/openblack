@@ -56,3 +56,9 @@ TEST(StartCamera, TheCameraLooksAtThePointFromTheStartDistance)
 	const auto origin = openblack::start_camera::OriginOver(focus);
 	EXPECT_NEAR(glm::length(origin - focus), openblack::start_camera::k_OriginDistance, 1e-3f);
 }
+
+TEST(StartCamera, TheScriptPlaceLooksAtTheLandUnderIt)
+{
+	const auto focus = openblack::start_camera::FocusOnLand({3237.21f, 3157.85f}, 42.5f);
+	EXPECT_EQ(focus, glm::vec3(3237.21f, 42.5f, 3157.85f));
+}

@@ -516,3 +516,65 @@ TEST(ComputerPlayerStart, WithNoTempleTheHandStartsAtTheFixedPlace)
 	EXPECT_EQ(hand, glm::vec3(2150.0f, 0.0f, 2620.0f));
 	EXPECT_EQ(hand, k_HandWithoutTemple);
 }
+
+TEST(ComputerPlayerAfterLand, TheEndOfALandKeepsTheMindButSwitchesItOff)
+{
+	ComputerPlayer player;
+	player.mind = computer_mind::MakeMind();
+	SwitchOn(player, true);
+	player.started = true;
+	player.creatureLike = PlayerNames::PLAYER_ONE;
+	player.speed = 400.0f;
+	player.hand.speed = 400.0f;
+	player.hand.hand = {100.0f, 20.0f, 200.0f};
+	player.hand.locked = true;
+	player.hand.steps.push_back({});
+	player.casts.push_back(static_cast<entt::entity>(7));
+	player.seen.push_back({.thing = static_cast<entt::entity>(8), .turn = 3});
+	player.mind.paused = true;
+	player.mind.scriptHold = true;
+	player.mind.wasBusy = false;
+	player.mind.lastEmptyTurn = 90;
+	player.mind.castRequested.at(4) = 6;
+	player.mind.untaughtSends.at(1) = 2;
+	player.mind.queue.push_back({});
+	auto& node = player.mind.nodes.at(1);
+	node.weight = 0.25f;
+	node.suppression = 0.5f;
+	node.lastPerformed = 40;
+	node.object = static_cast<entt::entity>(9);
+	node.argument = static_cast<entt::entity>(10);
+	node.siteTown = static_cast<entt::entity>(11);
+
+	const auto cleared = AfterLandCleared(player);
+
+	// The mind is off and starts again on the next land
+	EXPECT_FALSE(cleared.switchedOn);
+	EXPECT_FALSE(cleared.marked);
+	EXPECT_FALSE(cleared.started);
+	EXPECT_FALSE(cleared.creatureLike.has_value());
+	EXPECT_TRUE(cleared.casts.empty());
+	EXPECT_TRUE(cleared.seen.empty());
+	EXPECT_TRUE(cleared.mind.queue.empty());
+	EXPECT_EQ(cleared.mind.lastEmptyTurn, 0u);
+	EXPECT_TRUE(cleared.mind.wasBusy);
+	// The tree and what the scripts set stay
+	ASSERT_EQ(cleared.mind.nodes.size(), player.mind.nodes.size());
+	EXPECT_FLOAT_EQ(cleared.mind.nodes.at(1).weight, 0.25f);
+	EXPECT_FLOAT_EQ(cleared.mind.nodes.at(1).suppression, 0.5f);
+	EXPECT_EQ(cleared.mind.nodes.at(1).lastPerformed, 40u);
+	EXPECT_TRUE(cleared.mind.paused);
+	EXPECT_TRUE(cleared.mind.scriptHold);
+	EXPECT_EQ(cleared.mind.castRequested.at(4), 6u);
+	EXPECT_EQ(cleared.mind.untaughtSends.at(1), 2u);
+	EXPECT_FLOAT_EQ(cleared.speed, 400.0f);
+	// The things of the last land are gone
+	EXPECT_EQ(cleared.mind.nodes.at(1).object, entt::entity {entt::null});
+	EXPECT_EQ(cleared.mind.nodes.at(1).argument, entt::entity {entt::null});
+	EXPECT_EQ(cleared.mind.nodes.at(1).siteTown, entt::entity {entt::null});
+	// The hand stops its action where it is, at its speed
+	EXPECT_FALSE(cleared.hand.locked);
+	EXPECT_TRUE(cleared.hand.steps.empty());
+	EXPECT_EQ(cleared.hand.hand, glm::vec3(100.0f, 20.0f, 200.0f));
+	EXPECT_FLOAT_EQ(cleared.hand.speed, 400.0f);
+}

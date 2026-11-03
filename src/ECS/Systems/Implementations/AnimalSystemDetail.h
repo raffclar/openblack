@@ -438,8 +438,8 @@ inline void SyncWorld(Animal& animal)
 }
 
 /// Whether a map position is somewhere an animal of a collision mask can't stand: off the map or on no land, or in the
-/// sea or on dry land as its mask says. (The game also marks the trees and fields in a cell and the map's edge; no
-/// animal's mask takes them.)
+/// sea or on dry land as its mask says. (The game also marks the trees and fields in a cell and the map's edge, but
+/// never a wall. The mask of each kind of animal takes only the sea or nothing.)
 inline bool CellCollides(glm::ivec2 point, uint32_t mask)
 {
 	const map_coords::MapCoords place {.x = point.x, .z = point.y};
