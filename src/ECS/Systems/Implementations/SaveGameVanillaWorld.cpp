@@ -16,7 +16,6 @@
 #include <ranges>
 #include <span>
 #include <unordered_map>
-#include <unordered_set>
 #include <utility>
 #include <vector>
 
@@ -34,6 +33,7 @@
 #include "ECS/BuildingSites.h"
 #include "ECS/Components/Abode.h"
 #include "ECS/Components/AtHome.h"
+#include "ECS/Components/Breeding.h"
 #include "ECS/Components/Construction.h"
 #include "ECS/Components/Dance.h"
 #include "ECS/Components/Disciple.h"
@@ -510,9 +510,17 @@ glm::vec3 openblack::ecs::systems::vanilla_import::GroundPosition(const gamesave
 
 namespace
 {
-/// The dance of a worship site takes the values of the dance of the file. Its dancers and the dancers on their way are
-/// only the villagers that keep their states, so the counts stay as the dance has them.
-void PutSiteDance(ecs::Registry& registry, entt::entity dance, const world_import::ImportedWorshipSite& file)
+/// The villagers of the file that keep their states, by their numbers in the file
+using KeptVillagers = std::unordered_map<uint32_t, const world_import::ImportedVillager*>;
+
+/// The flag of a villager that is on its way to the dance of its worship site. Its first turn at worship clears it.
+constexpr uint16_t k_OnTheWayToDanceFlag = 0x0010;
+
+/// The dance of a worship site takes the values and the groups of the dance of the file. Its dancers are only the
+/// villagers that keep their states, and the dancers on their way are only those of its dancers that have not had their
+/// first turn at worship.
+void PutSiteDance(ecs::Registry& registry, entt::entity dance, const world_import::ImportedWorshipSite& file,
+                  const std::unordered_map<uint32_t, entt::entity>& made, const KeptVillagers& kept)
 {
 	if (!file.danceValues.has_value() || !registry.AllOf<Dance>(dance))
 	{
@@ -525,6 +533,32 @@ void PutSiteDance(ecs::Registry& registry, entt::entity dance, const world_impor
 		                   file.dance, file.number, static_cast<int>(file.danceValues->type), static_cast<int>(values.type));
 	}
 	world_import::PutDanceValues(values, *file.danceValues);
+	if (values.file != nullptr && !world_import::SameKeyFrames(*values.file, file.danceValues->keyFrames))
+	{
+		SPDLOG_LOGGER_WARN(ImportLog(), "The key frames of the dance {} are not the key frames of its dance file", file.dance);
+	}
+
+	std::unordered_map<uint32_t, entt::entity> dancers;
+	for (const auto& [number, villager] : kept)
+	{
+		if (const auto entity = EntityOf(made, number); villager->importedDancer && entity != entt::null)
+		{
+			dancers.emplace(number, entity);
+		}
+	}
+	values.onTheirWay = 0;
+	for (const auto& placed : world_import::PutDanceGroups(values, *file.danceValues, dancers))
+	{
+		registry.AssignOrReplace<Dancer>(placed.dancer, Dancer {.dance = dance, .group = placed.group});
+	}
+	for (const auto& [number, entity] : dancers)
+	{
+		if ((kept.at(number)->villagerFlags & k_OnTheWayToDanceFlag) != 0)
+		{
+			++values.onTheirWay;
+			registry.AssignOrReplace<Worshipper>(entity, Worshipper {.atWorship = false, .onTheWay = true});
+		}
+	}
 	if (file.danceValues->dancers != values.dancers || file.danceValues->onTheirWay != values.onTheirWay)
 	{
 		SPDLOG_LOGGER_WARN(
@@ -582,7 +616,8 @@ void PutSiteIcons(ecs::Registry& registry, entt::entity site, const world_import
 /// A worship site of the file takes the values of the file: how much of it is built, its altar, the food in its pot,
 /// its prayer power and its needs
 void PutWorshipSiteValues(ecs::Registry& registry, WorshipSiteSystemInterface& sites, entt::entity site,
-                          const world_import::ImportedWorshipSite& file, std::unordered_map<uint32_t, entt::entity>& made)
+                          const world_import::ImportedWorshipSite& file, std::unordered_map<uint32_t, entt::entity>& made,
+                          const KeptVillagers& kept)
 {
 	sites.SetBuilt(site, file.built);
 	const auto dance = registry.Get<const WorshipSite>(site).dance;
@@ -592,7 +627,7 @@ void PutWorshipSiteValues(ecs::Registry& registry, WorshipSiteSystemInterface& s
 	if (file.dance != 0 && dance != entt::null)
 	{
 		made.emplace(file.dance, dance);
-		PutSiteDance(registry, dance, file);
+		PutSiteDance(registry, dance, file, made, kept);
 	}
 	if (file.foodPot != 0 && foodPot != entt::null)
 	{
@@ -644,13 +679,14 @@ void PutWorshipSites(ecs::Registry& registry, const world_import::ImportedTowns&
 	{
 		sites.RemoveSites(temple);
 	}
-	// Only a villager that keeps the states of the file can be at worship. A villager that decides again is not.
-	std::unordered_set<uint32_t> kept;
+	// Only a villager that keeps the states of the file can be at worship or dance. A villager that decides again
+	// cannot.
+	KeptVillagers kept;
 	for (const auto& villager : imported.villagers)
 	{
-		if (world_import::StartStates(villager.states, villager.moveState) == villager.states)
+		if (world_import::StartStates(villager) == villager.states)
 		{
-			kept.insert(villager.number);
+			kept.emplace(villager.number, &villager);
 		}
 	}
 	for (const auto& file : imported.worshipSites)
@@ -664,7 +700,7 @@ void PutWorshipSites(ecs::Registry& registry, const world_import::ImportedTowns&
 			continue;
 		}
 		made.emplace(file.number, site);
-		PutWorshipSiteValues(registry, sites, site, file, made);
+		PutWorshipSiteValues(registry, sites, site, file, made, kept);
 
 		// The towns of the site in the order of the file. Each town keeps the site, and the site keeps an icon for each
 		// miracle that the town shows, the oldest town first.
@@ -707,7 +743,10 @@ void PutWorshipSites(ecs::Registry& registry, const world_import::ImportedTowns&
 				continue;
 			}
 			worshippers.push_back(villager);
-			registry.AssignOrReplace<Worshipper>(villager, Worshipper {.atWorship = true});
+			// A dancer on its way to the dance stays on its way until its first turn at worship
+			const auto* dancer = registry.TryGet<const Worshipper>(villager);
+			registry.AssignOrReplace<Worshipper>(
+			    villager, Worshipper {.atWorship = true, .onTheWay = dancer != nullptr && dancer->onTheWay});
 			if (const auto town = registry.Get<const Villager>(villager).town; town != entt::null && registry.AllOf<Town>(town))
 			{
 				registry.Get<Town>(town).worshippers.push_back(villager);
@@ -1026,6 +1065,12 @@ void PutStateValues(ecs::Registry& registry, entt::entity entity, const world_im
 			    entity,
 			    ShepherdWork {.countdown = shepherd->countdown, .pending = static_cast<VillagerStates>(shepherd->pending)});
 		}
+		if (const auto breeder = world_import::BreederValuesOf(state, *values); breeder.has_value())
+		{
+			// The lover can come later in the file, so the import gives it after it made all the villagers
+			registry.AssignOrReplace<BreederSpot>(entity, BreederSpot {.spot = {world_import::MetresOfMapUnits(breeder->x),
+			                                                                    world_import::MetresOfMapUnits(breeder->z)}});
+		}
 		if (const auto reason = world_import::DeathReasonOf(state, *values); reason.has_value())
 		{
 			// The body lies for the turns that its state still counts. The people about it knew of the death as it fell.
@@ -1161,7 +1206,7 @@ bool SaveGameSystem::ImportVanillaTowns(const gamesave::VanillaWorld& world, Van
 	uint32_t present = 0;
 	for (const auto& villager : imported.villagers)
 	{
-		const auto states = world_import::StartStates(villager.states, villager.moveState);
+		const auto states = world_import::StartStates(villager);
 		const auto entity =
 		    ecs::archetypes::VillagerArchetype::CreateLoaded({.position = GroundPosition(villager.position),
 		                                                      .heading = villager.heading,
@@ -1213,10 +1258,24 @@ bool SaveGameSystem::ImportVanillaTowns(const gamesave::VanillaWorld& world, Van
 			++present;
 		}
 	}
-	// The mothers come after all the villagers, because a mother can come later in the file
+	// The mothers and the lovers of breeders come after all the villagers, because they can come later in the file
 	for (const auto& villager : imported.villagers)
 	{
-		registry.Get<Villager>(EntityOf(made, villager.number)).mother = EntityOf(made, villager.mother);
+		const auto entity = EntityOf(made, villager.number);
+		registry.Get<Villager>(entity).mother = EntityOf(made, villager.mother);
+		if (world_import::StartStates(villager) != villager.states)
+		{
+			continue;
+		}
+		auto breeder = world_import::BreederValuesOf(villager.states[0], villager.topValues);
+		if (!breeder.has_value())
+		{
+			breeder = world_import::BreederValuesOf(villager.states[1], villager.finalValues);
+		}
+		if (const auto lover = breeder.has_value() ? EntityOf(made, breeder->lover) : entt::null; lover != entt::null)
+		{
+			registry.AssignOrReplace<Lover>(entity, Lover {.partner = lover});
+		}
 	}
 
 	// Each building takes its villagers in the order of the file, and the villagers that are in it
