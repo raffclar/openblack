@@ -118,6 +118,7 @@ bool LeavesOut(const player_commands::Action& action, bool testCommands) noexcep
 {
 	using namespace player_commands;
 	return std::holds_alternative<PlayerLeft>(action) || std::holds_alternative<PlayerJoined>(action) ||
+	       std::holds_alternative<ObserversJoined>(action) || std::holds_alternative<ObserversLeft>(action) ||
 	       std::holds_alternative<QuickSave>(action) || std::holds_alternative<QuickLoad>(action) ||
 	       std::holds_alternative<MusicMood>(action) || std::holds_alternative<CreatureTattoo>(action) ||
 	       (!testCommands && std::holds_alternative<CreatureFightCheat>(action));
@@ -1259,6 +1260,19 @@ std::vector<player_commands::Command> LockstepHost::TakeTurn(uint32_t turn)
 		    turn_codec::StampedBlock {.sender = SeatPlayer(seat), .sequence = 0, .actions = {player_commands::PlayerLeft {}}});
 	}
 	_leaving.clear();
+	// The god of the observers comes into the game with its first observer, and goes when its last observer left
+	if (const bool in = ObserversInGame() > 0; in != _observersIn)
+	{
+		_observersIn = in;
+		const auto god = ObserversGod();
+		bundle.blocks.push_back(
+		    turn_codec::StampedBlock {.sender = god,
+		                              .sequence = 0,
+		                              .actions = {in ? player_commands::Action {player_commands::ObserversJoined {}}
+		                                             : player_commands::Action {player_commands::ObserversLeft {}}}});
+		Log(spdlog::level::info, fmt::format("Turn {}: the god of player {} of the observers {} the game", turn,
+		                                     static_cast<int>(god), in ? "comes into" : "leaves"));
+	}
 	// The joins and the leaves of the gods always go in the turn
 	const auto fixedBlocks = bundle.blocks.size();
 	for (auto& pending : _pending)
@@ -1350,6 +1364,14 @@ std::vector<player_commands::Command> LockstepHost::TakeReplayedTurn(uint32_t tu
 				{
 					std::erase(_joining, *seat);
 				}
+				if (std::holds_alternative<player_commands::ObserversJoined>(action))
+				{
+					_observersIn = true;
+				}
+				if (std::holds_alternative<player_commands::ObserversLeft>(action))
+				{
+					_observersIn = false;
+				}
 				commands.push_back(player_commands::Command {.player = block.sender, .action = std::move(action)});
 			}
 		}
@@ -1375,7 +1397,9 @@ snapshots::Room LockstepHost::RoomRecord() const
 	                      .watchers = {},
 	                      .stoppedAfter = _stoppedAfter,
 	                      .leaving = _leaving,
-	                      .joining = _joining};
+	                      .joining = _joining,
+	                      .watcherNames = {},
+	                      .observersIn = _observersIn};
 	for (const auto& seat : _seats)
 	{
 		room.seats.push_back({.state = static_cast<uint8_t>(seat.state),
@@ -1388,6 +1412,7 @@ snapshots::Room LockstepHost::RoomRecord() const
 		if (watcher.sessionHash.has_value())
 		{
 			room.watchers.push_back(*watcher.sessionHash);
+			room.watcherNames.push_back(watcher.name);
 		}
 	}
 	return room;
@@ -1418,6 +1443,7 @@ void LockstepHost::Restore(const snapshots::Room& room, uint32_t turnsDone, std:
 	_stoppedAfter = room.stoppedAfter;
 	_leaving = room.leaving;
 	_joining = room.joining;
+	_observersIn = room.observersIn;
 	// No player is connected yet: each god with a player waits for the player to come back
 	for (size_t i = 0; i < _seats.size() && i < room.seats.size(); ++i)
 	{
@@ -1453,10 +1479,14 @@ void LockstepHost::Restore(const snapshots::Room& room, uint32_t turnsDone, std:
 	_watchers.clear();
 	// The players and the observers come back with the secrets of their sessions, which the server checks against the
 	// hashes
-	for (const auto& hash : room.watchers)
+	for (size_t i = 0; i < room.watchers.size(); ++i)
 	{
-		_watchers.push_back(Watcher {
-		    .session = {}, .sessionHash = hash, .connection = std::nullopt, .awaySince = now, .resumes = 0, .name = {}});
+		_watchers.push_back(Watcher {.session = {},
+		                             .sessionHash = room.watchers[i],
+		                             .connection = std::nullopt,
+		                             .awaySince = now,
+		                             .resumes = 0,
+		                             .name = i < room.watcherNames.size() ? room.watcherNames[i] : std::string()});
 	}
 	// A room with no human god turned before the restart, so it turns again when an observer comes back
 	_observersJoined = true;
@@ -1524,6 +1554,21 @@ void LockstepHost::CompareClient(uint8_t seat, uint32_t turn, uint64_t checksum)
 		Log(spdlog::level::info,
 		    fmt::format("Slot {}: {} checksums compared, {} the same", seat, compares.compared, compares.same));
 	}
+}
+
+PlayerNames LockstepHost::ObserversGod() const
+{
+	return player_slots::ObserversGodOf(_seats.size());
+}
+
+size_t LockstepHost::ObserversInGame() const
+{
+	if (!_started)
+	{
+		return 0;
+	}
+	const auto away = std::ranges::count_if(_watchers, [](const Watcher& watcher) { return !watcher.connection.has_value(); });
+	return Observers() + static_cast<size_t>(away);
 }
 
 size_t LockstepHost::Observers() const

@@ -42,6 +42,13 @@ public:
 	virtual void HumanLeft(PlayerNames god) { std::ignore = god; }
 	/// The humans of the gods who left the network game in the turns since the last call, which the view tells
 	[[nodiscard]] virtual std::vector<game_end::Leave> TakeLeavesToShow() { return {}; }
+	/// The first observer is in the network game in this turn: the god is the god of the observers
+	virtual void ObserversJoined(PlayerNames god) { std::ignore = god; }
+	/// The last observer left the network game in this turn: the god of the observers gets its place, and a computer
+	/// mind plays it on
+	virtual void ObserversLeft() {}
+	/// The god of the observers of the network game, from the time that its first observer was in the game
+	[[nodiscard]] virtual std::optional<PlayerNames> ObserversGod() const { return std::nullopt; }
 	/// The one god among the first four players that is still in, when every other god is out
 	[[nodiscard]] virtual std::optional<PlayerNames> LastGodIn() const = 0;
 	/// Where each god stands, for the gods that a human or a computer mind plays, in the order of the players. A god with

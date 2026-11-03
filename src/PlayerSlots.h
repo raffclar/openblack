@@ -30,6 +30,10 @@
 /// The neutral player keeps its number 7 on every land, as the lands and the scripts of the game name it. The first 7
 /// gods of a network game have the numbers of the gods of a land (0 to 6). The gods after them take the numbers after the
 /// neutral player (8 to 32). Thus every land of the game and every game alone keep their player numbers.
+///
+/// The observers of a network game are the humans of one more god: the god of the slot after the last god slot of the
+/// land. On a land with fewer than 7 god slots that god is player seven, as in the original game (deviation 218). On
+/// the map for 32 gods it is player 33, the only player with a number after the last god.
 namespace openblack::player_slots
 {
 
@@ -39,18 +43,21 @@ inline constexpr size_t k_LandSlots = static_cast<size_t>(PlayerNames::_COUNT);
 inline constexpr size_t k_LandGods = static_cast<size_t>(PlayerNames::NEUTRAL);
 /// The most players in a network game
 inline constexpr size_t k_MaxPlayers = 32;
-/// The player numbers of a network game with the most players: each god and the neutral player
-inline constexpr size_t k_PlayerNumbers = k_MaxPlayers + 1;
+/// The slots of a network game with the most players: each god slot, then the slot of the god of the observers
+inline constexpr size_t k_Slots = k_MaxPlayers + 1;
+/// The player numbers of a network game with the most players: each god, the god of the observers and the neutral player
+inline constexpr size_t k_PlayerNumbers = k_Slots + 1;
 
 static_assert(k_MaxPlayers >= k_LandSlots, "A network game has at least the player slots of a land");
 static_assert(k_LandGods + 1 == k_LandSlots, "The neutral player is the last player slot of a land");
 static_assert(k_PlayerNumbers <= 0xFFu, "A player number fits in the type of the player names");
 
 /// The player of a god slot of a network game. The slots count the gods in the order of the game room, from 0. Each
-/// slot before the neutral player has the god of the same number. Each later slot has the number after it.
+/// slot before the neutral player has the god of the same number. Each later slot has the number after it. The slot
+/// after the last god slot of the map for 32 gods is the slot of the god of the observers.
 [[nodiscard]] constexpr std::optional<PlayerNames> PlayerOfSlot(size_t slot) noexcept
 {
-	if (slot >= k_MaxPlayers)
+	if (slot >= k_Slots)
 	{
 		return std::nullopt;
 	}
@@ -66,6 +73,20 @@ static_assert(k_PlayerNumbers <= 0xFFu, "A player number fits in the type of the
 		return std::nullopt;
 	}
 	return number < k_LandGods ? number : number - 1;
+}
+
+/// The slot of the god of the observers on a land with this many god slots: the slot after the last god slot, and at
+/// least the slot of player seven, as the original game has it
+[[nodiscard]] constexpr size_t ObserversSlotOf(size_t godSlots) noexcept
+{
+	return std::clamp(godSlots, k_LandGods - 1, k_MaxPlayers);
+}
+
+/// The god of the observers on a land with this many god slots
+[[nodiscard]] constexpr PlayerNames ObserversGodOf(size_t godSlots) noexcept
+{
+	const auto slot = ObserversSlotOf(godSlots);
+	return static_cast<PlayerNames>(slot < k_LandGods ? slot : slot + 1);
 }
 
 /// True for a player number that a network game with the most players can have

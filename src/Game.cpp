@@ -712,7 +712,8 @@ gui::conditions_box::Figures ConditionsFigures()
 				}
 			}
 		}
-		if (!game_end::CanLose(god, networkGame))
+		// The god of the observers has no column of its own, as in the original game
+		if (!game_end::CanLose(god, networkGame) || god == Locator::gameEndSystem::value().ObserversGod())
 		{
 			continue;
 		}

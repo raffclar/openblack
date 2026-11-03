@@ -168,8 +168,8 @@ struct BeliefSprite
 struct TownCentreBelief
 {
 	glm::vec3 totemTop {0.0f};
-	/// The player numbers of a network game with the most players: 32 gods and the neutral player
-	static constexpr size_t k_MostPlayerNumbers = 33;
+	/// The player numbers of a network game with the most players: 32 gods, the god of the observers and the neutral player
+	static constexpr size_t k_MostPlayerNumbers = 34;
 	/// The player numbers of a land: 7 gods and the neutral player
 	static constexpr size_t k_LandPlayerNumbers = 8;
 

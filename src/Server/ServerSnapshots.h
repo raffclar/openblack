@@ -81,6 +81,10 @@ struct Room
 	/// The slots of the gods that leave at the next turn, and the slots of the gods that get their hands at the next turn
 	std::vector<uint8_t> leaving;
 	std::vector<uint8_t> joining;
+	/// The name of the account of each observer of `watchers`, in the same order. A file of format 3 has no names.
+	std::vector<std::string> watcherNames;
+	/// The turns sent the god of the observers into the game, and no turn sent it out again. False in a file of format 3.
+	bool observersIn {false};
 
 	bool operator==(const Room&) const = default;
 };

@@ -247,6 +247,10 @@ public:
 	[[nodiscard]] size_t Observers() const;
 	/// The sessions of the observers that are connected or can come back
 	[[nodiscard]] const std::vector<Watcher>& Watchers() const { return _watchers; }
+	/// The god of the observers: the god of the slot after the last god slot of the room, and at least player seven
+	[[nodiscard]] PlayerNames ObserversGod() const;
+	/// True when the turns sent the god of the observers into the game, and no turn sent it out again
+	[[nodiscard]] bool ObserversIn() const { return _observersIn; }
 	/// The blocks of commands that the server did not accept: from an observer, before the start, or a command that only
 	/// the server sends
 	[[nodiscard]] uint32_t RefusedBlocks() const { return _refusedBlocks; }
@@ -286,6 +290,8 @@ private:
 	[[nodiscard]] std::string NewWatcher(ConnectionId connection, std::string_view name);
 	/// The session of an observer ended after the start: the other players see that the observer left the game
 	void ObserverLeft(std::string_view name);
+	/// The observers that are in the game: each observer that is connected, and each observer that can come back
+	[[nodiscard]] size_t ObserversInGame() const;
 	/// The salted hash of a secret. None when the secret is empty or the host has no hasher.
 	[[nodiscard]] std::optional<SessionHash> HashOf(std::string_view secret) const;
 	/// True when the secret that a client gives is the secret of a session. A session that a restore gave has only the
@@ -379,6 +385,8 @@ private:
 	std::vector<uint8_t> _leaving;
 	/// The slots of the gods that get their hands at the first turn
 	std::vector<uint8_t> _joining;
+	/// The turns sent the god of the observers into the game, and no turn sent it out again
+	bool _observersIn {false};
 	/// The bytes of each turn, to send again to a player who comes back
 	std::map<uint32_t, std::vector<uint8_t>> _history;
 	/// The server's checksum of each turn

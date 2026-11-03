@@ -31,7 +31,9 @@
 //   share of the influence of the gods when no conditions are set or a god with no temple is not out yet.
 //
 // Only gods that a human or a computer mind plays take part. In a skirmish, players five to seven never lose by the
-// temple rule. In a network game, every god takes part (deviation 193).
+// temple rule. In a network game, every god takes part (deviation 193), but the god of the observers never wins or loses
+// by the conditions or the temple rule, and the count of the gods that are left does not count it. When its last observer
+// leaves, the god of the observers gets a finishing place, and a computer mind plays it on.
 //
 // Pure, tested with a fake world.
 
@@ -110,6 +112,8 @@ public:
 	virtual void CountGodDefeated(PlayerNames player) = 0;
 	/// The computer mind of the player stops, if the player has one
 	virtual void StopMind(PlayerNames player) = 0;
+	/// A computer mind plays the player from now on
+	virtual void SwitchOnMind(PlayerNames player) = 0;
 };
 
 /// The kind of game
@@ -137,6 +141,9 @@ struct State
 	/// The number of the winning conditions that each god got at the start of a network game. 0: the gods did not get
 	/// conditions yet, or the game has none.
 	uint32_t conditionCount {0};
+	/// The god of the observers of a network game, from the time that its first observer was in the game. None in a game
+	/// that had no observer.
+	std::optional<PlayerNames> observersGod;
 };
 
 /// What happened in the turn, which the players see
@@ -163,6 +170,13 @@ struct Event
 	return networkGame || static_cast<uint8_t>(player) < 4;
 }
 
+/// Whether a god takes part in the conditions, the temple rule and the count of the gods that are left. The god of the
+/// observers never does.
+[[nodiscard]] constexpr bool TakesPart(PlayerNames god, bool networkGame, const State& state)
+{
+	return CanLose(god, networkGame) && state.observersGod != god;
+}
+
 /// A god is out: a human god gets its place. Every other human god that is not out counts one more god defeated, when
 /// the god is human or the game is a skirmish.
 void CountOut(World& world, State& state, PlayerNames god, ecs::components::OutReason reason, const Facts& facts);
@@ -172,6 +186,12 @@ void CountOut(World& world, State& state, PlayerNames god, ecs::components::OutR
 
 /// The end of the game for one turn
 [[nodiscard]] std::vector<Event> ProcessTurn(World& world, const Facts& facts, State& state);
+
+/// The last observer left the network game. While the game is not decided and a human still plays the god of the
+/// observers, the god gets the next finishing place as a god that left, each other human god that is still in counts one
+/// more god defeated, and a computer mind plays the god from now on. The god does not go out of the game. True when the
+/// god got its place.
+bool ObserversLeft(World& world, State& state, const Facts& facts);
 
 /// The number of events of a turn that decide the game. The game tells the lobby one time for each of these events.
 [[nodiscard]] size_t DecidingEvents(std::span<const Event> events);

@@ -32,6 +32,9 @@ public:
 	[[nodiscard]] std::vector<game_end::Event> TakeEventsToShow() override { return std::exchange(_eventsToShow, {}); }
 	void HumanLeft(PlayerNames god) override;
 	[[nodiscard]] std::vector<game_end::Leave> TakeLeavesToShow() override { return std::exchange(_leavesToShow, {}); }
+	void ObserversJoined(PlayerNames god) override;
+	void ObserversLeft() override;
+	[[nodiscard]] std::optional<PlayerNames> ObserversGod() const override;
 	[[nodiscard]] std::optional<PlayerNames> LastGodIn() const override;
 	[[nodiscard]] std::vector<GodStanding> Standings() const override;
 	void SetTimeLimit(uint32_t minutes) override { _timeLimitMinutes = minutes; }
@@ -43,6 +46,9 @@ public:
 	void BuildingWorks(entt::entity building) override;
 
 private:
+	/// The kind of game at a turn
+	[[nodiscard]] game_end::Facts FactsOf(uint32_t turn) const;
+
 	/// The time limit that the game server sent. None: the time limit of a test switch, or the default time limit.
 	std::optional<uint32_t> _timeLimitMinutes;
 	/// The winning conditions that the game server sent. None: the conditions of a test switch, or none.
