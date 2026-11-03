@@ -285,3 +285,17 @@ float PlayerSystem::AllyStrength(PlayerNames player, PlayerNames other) const
 	const auto* allies = registry.TryGet<const PlayerAllies>(entity);
 	return allies != nullptr ? allies->strength.at(otherIndex) : 0.0f;
 }
+
+std::array<float, openblack::player_slots::k_PlayerNumbers> PlayerSystem::AllyStrengths(PlayerNames player) const
+{
+	// The same answers as AllyStrength for each player, with one search for the player
+	static_assert(k_PlayerRecordSize == openblack::player_slots::k_PlayerNumbers);
+	const auto entity = FindPlayer(player).value_or(entt::null);
+	const auto& registry = Locator::entitiesRegistry::value();
+	if (!registry.Valid(entity))
+	{
+		return {};
+	}
+	const auto* allies = registry.TryGet<const PlayerAllies>(entity);
+	return allies != nullptr ? allies->strength : std::array<float, openblack::player_slots::k_PlayerNumbers> {};
+}

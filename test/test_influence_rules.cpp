@@ -10,14 +10,18 @@
 #include <cstddef>
 
 #include <array>
+#include <filesystem>
 #include <limits>
 #include <vector>
 
 #include <gtest/gtest.h>
 
+#include "ECS/AllyInfluence.h"
 #include "ECS/InfluenceRules.h"
 #include "ECS/Systems/InfluenceSystemInterface.h"
+#include "ECS/Systems/LandSystemInterface.h"
 #include "Enums.h"
+#include "ScriptHeaders/ScriptInfluence.h"
 
 using openblack::PlayerNames;
 using openblack::influence_rules::CanHaveInfluence;
@@ -113,4 +117,80 @@ TEST(InfluenceRules, APlayerThatIsNotInTheListIsNeverTheMostInfluential)
 	EXPECT_FALSE(influence_rules::IsMostInfluentialPlayer(PlayerNames::PLAYER_FOUR, players, fake));
 	EXPECT_FALSE(influence_rules::IsMostInfluentialPlayer(PlayerNames::NEUTRAL, players, fake));
 	EXPECT_EQ(fake.asked, 0u);
+}
+
+TEST(InfluenceRules, TheReachingTownsAddInTheOrderTheyWereGained)
+{
+	// The order changes the sum: 1e8 + 1 rounds to 1e8, then the last town takes it back to 0
+	std::array<openblack::influence_rules::ReachingTown, 3> towns {{
+	    {.gained = 9, .radius = -1.0e8f},
+	    {.gained = 2, .radius = 1.0e8f},
+	    {.gained = 5, .radius = 1.0f},
+	}};
+	EXPECT_EQ(openblack::influence_rules::AddReachingTowns(0.0f, towns), 0.0f);
+	EXPECT_EQ(towns[0].gained, 2u);
+	EXPECT_EQ(towns[2].gained, 9u);
+	// The order of the gained numbers, not the order of the list that came in, decides it
+	std::array<openblack::influence_rules::ReachingTown, 3> other {{
+	    {.gained = 1, .radius = -1.0e8f},
+	    {.gained = 2, .radius = 1.0e8f},
+	    {.gained = 3, .radius = 1.0f},
+	}};
+	EXPECT_EQ(openblack::influence_rules::AddReachingTowns(0.0f, other), 1.0f);
+	EXPECT_EQ(openblack::influence_rules::AddReachingTowns(0.25f, {}), 0.25f);
+}
+
+TEST(InfluenceRules, TheOwnInfluenceOrTheFirstLentGivesTheAnswerOfTheScriptRule)
+{
+	constexpr std::array<PlayerNames, 4> k_Players {PlayerNames::PLAYER_ONE, PlayerNames::PLAYER_TWO, PlayerNames::PLAYER_THREE,
+	                                                PlayerNames::PLAYER_FOUR};
+	const std::array<std::array<float, 4>, 4> lentCases {{
+	    {0.0f, 0.5f, 0.75f, 0.0f},
+	    {-0.5f, 0.0f, 0.0f, 0.0f},
+	    {0.0f, 0.0f, 0.0f, 0.25f},
+	    {0.0f, 0.0f, 0.0f, 0.0f},
+	}};
+	const std::array<std::array<bool, 4>, 2> lendsCases {{{true, true, true, true}, {false, false, true, true}}};
+	for (const float own : {0.5f, 0.0f, -0.25f})
+	{
+		for (const auto& lent : lentCases)
+		{
+			for (const auto& lends : lendsCases)
+			{
+				std::vector<float> lentList;
+				for (size_t i = 0; i < k_Players.size(); ++i)
+				{
+					if (lends.at(i))
+					{
+						lentList.push_back(lent.at(i));
+					}
+				}
+				size_t asked = 0;
+				const auto answer = openblack::ecs::ally_influence::OwnOrFirstLent(
+				    own, k_Players, [&](PlayerNames ally) { return lends.at(static_cast<size_t>(ally)); },
+				    [&](PlayerNames ally) {
+					    ++asked;
+					    return lent.at(static_cast<size_t>(ally));
+				    });
+				EXPECT_EQ(answer, openblack::script::influence::Answer(own, false, lentList));
+				// A player with influence of its own asks no ally
+				if (own > 0.0f)
+				{
+					EXPECT_EQ(asked, 0u);
+				}
+			}
+		}
+	}
+}
+
+TEST(InfluenceRules, OnlyThePathOfTheTestbedIsTheTestbed)
+{
+	using openblack::ecs::systems::IsTestbedPath;
+	EXPECT_TRUE(IsTestbedPath(std::filesystem::path("testbed")));
+	EXPECT_FALSE(IsTestbedPath(std::filesystem::path("Testbed")));
+	EXPECT_FALSE(IsTestbedPath(std::filesystem::path("testbed2")));
+	EXPECT_FALSE(IsTestbedPath(std::filesystem::path("testbe")));
+	EXPECT_FALSE(IsTestbedPath(std::filesystem::path()));
+	EXPECT_FALSE(IsTestbedPath(std::filesystem::path("Scripts/Land1.txt")));
+	EXPECT_FALSE(IsTestbedPath(std::filesystem::path(u8"t\u00e9stbed")));
 }

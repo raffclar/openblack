@@ -175,3 +175,18 @@ TEST_F(ScriptAllyNatives, ANumberThatNamesNoPlayerDoesNothingAndGivesZero)
 	EXPECT_EQ(GetAlly(1.0f, 9.0f), 0.0f);
 	EXPECT_TRUE(Allies().asked.empty());
 }
+
+// NOLINTNEXTLINE(cppcoreguidelines-avoid-non-const-global-variables): external macro
+TEST_F(ScriptAllyNatives, TheStrengthsOfAllAlliancesAreTheStrengthOfEach)
+{
+	Allies().SetAlly(PlayerNames::PLAYER_ONE, PlayerNames::PLAYER_THREE, 0.75f);
+	Allies().SetAlly(PlayerNames::PLAYER_TWO, PlayerNames::PLAYER_ONE, 0.25f);
+	const auto strengths = Allies().AllyStrengths(PlayerNames::PLAYER_ONE);
+	for (size_t other = 0; other < strengths.size(); ++other)
+	{
+		EXPECT_EQ(strengths.at(other), Allies().AllyStrength(PlayerNames::PLAYER_ONE, static_cast<PlayerNames>(other)));
+	}
+	EXPECT_EQ(strengths.at(static_cast<size_t>(PlayerNames::PLAYER_THREE)), 0.75f);
+	EXPECT_EQ(strengths.at(static_cast<size_t>(PlayerNames::PLAYER_TWO)), 0.25f);
+	EXPECT_EQ(strengths.at(static_cast<size_t>(PlayerNames::PLAYER_FOUR)), 0.0f);
+}

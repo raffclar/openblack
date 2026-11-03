@@ -32,6 +32,15 @@ namespace openblack::ecs::systems
 /// What the path of the land reads while the testbed is loaded
 inline constexpr std::string_view k_TestbedLandPath = "testbed";
 
+/// The path is the path of the testbed. The test reads the characters of the path as they are and makes no copy of the
+/// path as other text, because the influence questions of each turn ask it.
+[[nodiscard]] inline bool IsTestbedPath(const std::filesystem::path& path)
+{
+	return std::ranges::equal(path.native(), k_TestbedLandPath, [](auto own, char wanted) {
+		return own == static_cast<std::filesystem::path::value_type>(wanted);
+	});
+}
+
 /// The parts of a change of land that belong to the view of one player: the loading screen, the menu and its boxes,
 /// the sheet of the players' symbols and the sounds of the land. The game's client does them. A server has no view.
 class LandViewInterface
@@ -144,7 +153,7 @@ public:
 	/// The map script of the land that loaded last, or the path of the testbed. Empty before a land loads.
 	[[nodiscard]] virtual const std::filesystem::path& GetLandPath() const = 0;
 	/// The land is the testbed. It has no temples, so a developer tool's network game on it asks for none.
-	[[nodiscard]] bool OnTestbed() const { return GetLandPath().string() == k_TestbedLandPath; }
+	[[nodiscard]] bool OnTestbed() const { return IsTestbedPath(GetLandPath()); }
 	/// The landscape file of the land, as the map script of the land gave it
 	[[nodiscard]] virtual const std::filesystem::path& GetLandscapePath() const = 0;
 	/// The challenge file of the scripts
