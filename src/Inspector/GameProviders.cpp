@@ -3058,7 +3058,9 @@ std::unique_ptr<ProviderInterface> ViewProvider(const GameSeamInterface* seam)
 			    Json lines = Json::array();
 			    for (const auto& line : bubble.lines)
 			    {
-				    lines.push_back({{"text", gui::ToUtf8(line.text)}, {"sender", static_cast<int>(line.sender)}});
+				    lines.push_back(
+				        {{"text", gui::ToUtf8(line.text)},
+				         {"sender", line.sender.has_value() ? Json(static_cast<int>(*line.sender)) : Json(nullptr)}});
 			    }
 			    result["bubbles"].push_back({{"creature", entt::to_integral(creature)},
 			                                 {"lines", std::move(lines)},

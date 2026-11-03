@@ -104,8 +104,8 @@ struct Line
 {
 	/// The words: the text alone for the creature of the sender, else the name of the sender and the text
 	std::u16string text;
-	/// The god of the sender, which gives the colour of the line
-	PlayerNames sender {PlayerNames::PLAYER_ONE};
+	/// The god of the sender, which gives the colour of the line. A line of the ping server has no god and is white.
+	std::optional<PlayerNames> sender {PlayerNames::PLAYER_ONE};
 };
 
 struct Bubble

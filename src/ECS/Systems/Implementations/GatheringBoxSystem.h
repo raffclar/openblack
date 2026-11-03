@@ -17,6 +17,7 @@
 #include <memory>
 #include <optional>
 #include <span>
+#include <string>
 #include <utility>
 #include <vector>
 
@@ -34,6 +35,8 @@ public:
 	{
 		/// The lasting number of the player, none while the game does not know it
 		std::function<std::optional<gathering_box::UserId>()> ownUser;
+		/// The name of the player on the ping server
+		std::function<std::u16string()> ownName;
 		/// A line of a person shows in the incoming messages and goes to the chat log
 		std::function<void(std::u16string_view name, std::u16string_view text)> showLine;
 		/// The player made the questions of the staff plain lines of the chat
@@ -53,6 +56,7 @@ public:
 	[[nodiscard]] bool HasPingServer() const override { return _server != nullptr; }
 	void Update(uint32_t now) override;
 	void SendToPicked(std::u16string_view text) override;
+	void SendStaffCode(std::u16string_view text) override;
 	void SendHostReport() override;
 	[[nodiscard]] std::optional<gathering_box::question::Question> TakeQuestion() override;
 	void Answer(const gathering_box::question::Question& question, std::u16string_view answer) override;

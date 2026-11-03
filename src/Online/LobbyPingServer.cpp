@@ -151,6 +151,10 @@ void LobbyPingServer::SendLine(gathering_box::UserId user, std::u16string_view t
 	lobby->SendPersonLine(user, gui::ToUtf8(text), [](LobbyResult<ecs::systems::LobbyDone>&&) {});
 }
 
+void LobbyPingServer::SendStaffLine(std::u16string_view /*name*/, std::u16string_view /*text*/) {}
+
+void LobbyPingServer::SendAnnouncement(gathering_box::UserId /*user*/, std::u16string_view /*name*/) {}
+
 void LobbyPingServer::SendHostReport(std::span<const uint8_t> /*report*/)
 {
 	// The game server is the host of a network game of openblack, and it sends the report

@@ -28,6 +28,10 @@ public:
 	{
 		std::vector<Message> toGame;
 		std::vector<std::pair<gathering_box::UserId, std::u16string>> lines;
+		/// The lines of the staff, with their names
+		std::vector<std::pair<std::u16string, std::u16string>> staffLines;
+		/// The announcements, with their staff numbers
+		std::vector<std::pair<gathering_box::UserId, std::u16string>> announcements;
 		int pings {0};
 	};
 
@@ -41,6 +45,14 @@ public:
 	void SendLine(gathering_box::UserId user, std::u16string_view text) override
 	{
 		_mailbox->lines.emplace_back(user, std::u16string(text));
+	}
+	void SendStaffLine(std::u16string_view name, std::u16string_view text) override
+	{
+		_mailbox->staffLines.emplace_back(std::u16string(name), std::u16string(text));
+	}
+	void SendAnnouncement(gathering_box::UserId user, std::u16string_view name) override
+	{
+		_mailbox->announcements.emplace_back(user, std::u16string(name));
 	}
 	void SendHostReport(std::span<const uint8_t> /*report*/) override {}
 	[[nodiscard]] std::vector<Message> TakeMessages() override { return std::exchange(_mailbox->toGame, {}); }
