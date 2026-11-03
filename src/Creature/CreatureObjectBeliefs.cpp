@@ -49,6 +49,17 @@ void openblack::creature_object_beliefs::TakeIn(Belief& belief, bool isNew, cons
 	}
 }
 
+openblack::creature_object_beliefs::Tested openblack::creature_object_beliefs::TestedOf(const Belief& belief)
+{
+	return {.place = belief.place, .attributes = belief.attributes};
+}
+
+bool openblack::creature_object_beliefs::SightChangesTests(const std::optional<Tested>& before, const Belief& after)
+{
+	return !before.has_value() || after.kind == creature_tree::belief_types::k_Villager ||
+	       after.kind == creature_tree::belief_types::k_Creature || TestedOf(after) != *before;
+}
+
 bool openblack::creature_object_beliefs::BlockedRecently(const Belief& belief, uint32_t turn, bool fixed)
 {
 	return belief.blockedTurn.has_value() && turn - *belief.blockedTurn <= (fixed ? k_BlockedTurnsFixed : k_BlockedTurns);

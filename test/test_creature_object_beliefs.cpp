@@ -611,3 +611,35 @@ TEST(CreatureObjectBeliefs, AStoreFindsItsBeliefsAfterItsContentsArePutBack)
 	EXPECT_EQ(copy.Find(Thing(30)), nullptr);
 	EXPECT_NE(copy.Find(Thing(59)), nullptr);
 }
+
+TEST(CreatureObjectBeliefs, OnlyASightThatChangesWhatTheTestsReadChangesThem)
+{
+	namespace kinds = openblack::creature_tree::belief_types;
+	openblack::creature_tree::Belief attributes {.type = kinds::k_Town};
+	attributes.values.at(0) = 3;
+	const Belief town {.thing = Thing(1), .kind = kinds::k_Town, .place = {.x = 10, .z = 20}, .attributes = attributes};
+	const auto before = TestedOf(town);
+	// The same town seen again, though its desire sources moved on, changes nothing that the tests read
+	auto again = town;
+	again.sourcesTurn = 7;
+	again.order = 9;
+	EXPECT_FALSE(SightChangesTests(before, again));
+	// A new belief, a new place and new attributes change it
+	EXPECT_TRUE(SightChangesTests(std::nullopt, town));
+	auto moved = town;
+	moved.place.x = 11;
+	EXPECT_TRUE(SightChangesTests(before, moved));
+	auto changed = town;
+	changed.attributes->values.at(0) = 4;
+	EXPECT_TRUE(SightChangesTests(before, changed));
+	auto taken = town;
+	taken.attributes.reset();
+	EXPECT_TRUE(SightChangesTests(before, taken));
+	// A villager or a creature seen again can teach or give attention
+	auto villager = town;
+	villager.kind = kinds::k_Villager;
+	EXPECT_TRUE(SightChangesTests(TestedOf(villager), villager));
+	auto creature = town;
+	creature.kind = kinds::k_Creature;
+	EXPECT_TRUE(SightChangesTests(TestedOf(creature), creature));
+}

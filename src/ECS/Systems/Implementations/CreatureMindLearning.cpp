@@ -2859,10 +2859,21 @@ CreatureMindSystem::BelievedThingsToActOn(entt::entity creature, CreatureMindSta
                                           const std::function<bool(entt::entity)>& suitsAction, BelievedFacts& kept)
 {
 	std::vector<creature_planner::ObjectCandidate> found;
-	// The facts stay true while the creature comes across nothing. The test of a thing for the desire reads only the
-	// beliefs and the world, and nothing else in the planning of a desire changes them.
+	// The facts stay true while no come-across changes what the tests read. The test of a thing for the desire reads only
+	// the beliefs and the world, and nothing else in the planning of a desire changes them. The tests came across some
+	// things that changed nothing that they read. The creature comes across these things again in the same sequence, so
+	// that what else the come-acrosses change, such as the desire sources, changes as when the tests run again.
 	if (kept.foundAt == _comeAcrossCount)
 	{
+		for (const auto thing : kept.comeAcross)
+		{
+			ComeAcross(creature, mind, thing);
+		}
+		if (kept.foundAt != _comeAcrossCount)
+		{
+			SPDLOG_LOGGER_ERROR(spdlog::get("game"),
+			                    "A come-across that changed nothing changed the beliefs when it came again");
+		}
 		for (auto& suiting : kept.suiting)
 		{
 			if (!suitsAction(suiting.thing))
@@ -2880,6 +2891,8 @@ CreatureMindSystem::BelievedThingsToActOn(entt::entity creature, CreatureMindSta
 	// The tests come in the same sequence as without the kept facts
 	const auto startAt = _comeAcrossCount;
 	kept.suiting.clear();
+	kept.comeAcross.clear();
+	auto* const outerLog = std::exchange(_comeAcrossLog, &kept.comeAcross);
 	const auto& registry = Locator::entitiesRegistry::value();
 	// The tests can come across things and change the beliefs. Thus the code takes the things to examine first.
 	const auto held = mind.beliefs.HeldInListOrder();
@@ -2903,9 +2916,14 @@ CreatureMindSystem::BelievedThingsToActOn(entt::entity creature, CreatureMindSta
 		suiting.worth = GoalWorth(creature, mind, desire, *thing, std::nullopt);
 		found.push_back(*suiting.worth);
 	}
-	// When the creature comes across a thing during this search, the facts can change. The next action then does not
-	// use them.
+	_comeAcrossLog = outerLog;
+	// When a come-across during this search changes what the tests read, the facts can change. The next action then does
+	// not use them.
 	kept.foundAt = _comeAcrossCount == startAt ? std::optional(startAt) : std::nullopt;
+	if (outerLog != nullptr)
+	{
+		outerLog->insert(outerLog->end(), kept.comeAcross.begin(), kept.comeAcross.end());
+	}
 	return found;
 }
 

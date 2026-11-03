@@ -117,6 +117,8 @@ struct Belief
 
 	[[nodiscard]] std::optional<uint32_t> Value(Attribute attribute) const { return values.at(static_cast<size_t>(attribute)); }
 	void Set(Attribute attribute, uint32_t value) { values.at(static_cast<size_t>(attribute)) = value; }
+
+	bool operator==(const Belief& other) const = default;
 };
 /// A belief from the values listed in its kind's order, as mind files keep them
 [[nodiscard]] Belief FromSlots(uint32_t type, std::span<const uint32_t> slots);

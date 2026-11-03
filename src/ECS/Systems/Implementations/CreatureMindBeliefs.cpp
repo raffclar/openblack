@@ -470,7 +470,17 @@ const GWorshipSiteInfo* mind_detail::AltarInfoOf(const ecs::Registry& registry, 
 
 void CreatureMindSystem::ComeAcross(entt::entity creature, components::CreatureMindState& mind, entt::entity thing)
 {
-	++_comeAcrossCount;
+	if (_comeAcrossLog != nullptr && _comeAcrossDepth == 0)
+	{
+		_comeAcrossLog->push_back(thing);
+	}
+	++_comeAcrossDepth;
+	ComeAcrossThing(creature, mind, thing);
+	--_comeAcrossDepth;
+}
+
+void CreatureMindSystem::ComeAcrossThing(entt::entity creature, components::CreatureMindState& mind, entt::entity thing)
+{
 	const auto& registry = Locator::entitiesRegistry::value();
 	if (!registry.Valid(thing))
 	{
@@ -479,6 +489,7 @@ void CreatureMindSystem::ComeAcross(entt::entity creature, components::CreatureM
 	// The last moving thing that it comes across is the one that it noticed last, whatever the thing is
 	if (creature_look::Notices(thing == creature, MovedLastTurn(registry, thing)))
 	{
+		++_comeAcrossCount;
 		// An animal is drawn between its last two turns: the creature notices where the animal is now
 		const auto* animal = registry.TryGet<const Animal>(thing);
 		const auto at = animal != nullptr ? animal->position : PlaceOf(registry, thing);
@@ -489,6 +500,12 @@ void CreatureMindSystem::ComeAcross(entt::entity creature, components::CreatureM
 	{
 		return;
 	}
+	// What the tests of the beliefs read of a belief that the creature has already, to know if this sight changes it
+	std::optional<beliefs::Tested> before;
+	if (const auto* known = mind.beliefs.Find(thing))
+	{
+		before = beliefs::TestedOf(*known);
+	}
 	const auto added = mind.beliefs.Add(thing, *kind, ecs::thing_map_place::Of(registry, thing));
 	// The belief takes in the attributes of the thing now
 	if (added.belief != nullptr)
@@ -498,9 +515,19 @@ void CreatureMindSystem::ComeAcross(entt::entity creature, components::CreatureM
 			beliefs::TakeIn(*added.belief, added.isNew, *now);
 		}
 	}
+	if (added.isNew || added.belief == nullptr || beliefs::SightChangesTests(before, *added.belief))
+	{
+		++_comeAcrossCount;
+	}
 	if (!added.isNew && added.belief != nullptr)
 	{
+		const auto sourcesTurn = added.belief->sourcesTurn;
 		SeeAgain(creature, mind, *added.belief);
+		// The sight looks for more sources only one time in each turn. The belief can be gone after the sight.
+		if (const auto* seen = mind.beliefs.Find(thing); seen == nullptr || seen->sourcesTurn != sourcesTurn)
+		{
+			++_comeAcrossCount;
+		}
 	}
 	// A new belief leads it on to what the thing belongs to, but for another creature, which is its own
 	if (!added.isNew || *kind == kinds::k_Creature)

@@ -79,6 +79,21 @@ struct Belief
 /// creature has already takes only the attributes that change with the thing, if its kind takes in the thing again.
 void TakeIn(Belief& belief, bool isNew, const creature_tree::Belief& now);
 
+/// What the tests of the beliefs read of a belief: they find whether a thing suits a desire from these values, the
+/// world and the creature's learning
+struct Tested
+{
+	map_coords::MapCoords place {};
+	std::optional<creature_tree::Belief> attributes;
+
+	bool operator==(const Tested& other) const = default;
+};
+[[nodiscard]] Tested TestedOf(const Belief& belief);
+/// Whether a sight of a thing changes what the tests of the beliefs read. A new belief, a new place and new attributes
+/// change it. A sight of a villager can teach a skill, and a sight of a creature can give attention, thus these sights
+/// change it too. The belief before the sight is none for a new belief.
+[[nodiscard]] bool SightChangesTests(const std::optional<Tested>& before, const Belief& after);
+
 /// After the creature finds no way to a thing, it does not choose the thing for a time: 10 seconds for a thing that
 /// moves, 60 seconds for a thing that is fixed in the land (a building, a tree), at 10 game turns each second
 inline constexpr uint32_t k_BlockedTurns = 100;
