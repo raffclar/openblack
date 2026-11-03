@@ -1,0 +1,235 @@
+diff --git a/bgfx/include/bgfx/bgfx.h b/bgfx/include/bgfx/bgfx.h
+index ff66119..c1f58ce 100644
+--- a/bgfx/include/bgfx/bgfx.h
++++ b/bgfx/include/bgfx/bgfx.h
+@@ -2761,6 +2761,21 @@ namespace bgfx
+ 		, uint8_t _scale = 0
+ 		);
+ 
++	/// While on, the next frames start each new render pipeline of their draws in the background and leave out
++	/// the draws whose pipeline is not ready. The background makes the pipelines in parallel. Later frames that
++	/// draw with the same states then get the ready pipelines without a wait. Only the WebGPU renderer uses it;
++	/// the other renderers draw as usual.
++	///
++	/// @param[in] _enabled True starts the new pipelines in the background.
++	///
++	void setPipelinePrefetch(bool _enabled);
++
++	/// The number of render pipelines that the background still makes.
++	///
++	/// @returns The number of pipelines that are not ready. Zero for renderers other than WebGPU.
++	///
++	uint32_t getPipelinePrefetchPending();
++
+ 	/// Clear internal debug text buffer.
+ 	///
+ 	/// @param[in] _attr Background color.
+diff --git a/bgfx/src/bgfx.cpp b/bgfx/src/bgfx.cpp
+index acfb6fe..f0e3e8b 100644
+--- a/bgfx/src/bgfx.cpp
++++ b/bgfx/src/bgfx.cpp
+@@ -2551,6 +2551,7 @@ namespace bgfx
+ 		m_exit    = false;
+ 		m_flipped = true;
+ 		m_debug   = BGFX_DEBUG_NONE;
++		m_pipelinePrefetch = false;
+ 		m_debugFrameBuffer = BGFX_INVALID_HANDLE;
+ 		m_debugTextScale   = 1;
+ 		m_frameTimeLast = bx::getHPCounter();
+@@ -3277,6 +3278,7 @@ namespace bgfx
+ 		m_submit->m_reset         = m_init.reset;
+ 		m_init.reset &= ~BGFX_RESET_INTERNAL_FORCE;
+ 		m_submit->m_debug            = m_debug;
++		m_submit->m_pipelinePrefetch = m_pipelinePrefetch;
+ 		m_submit->m_debugFrameBuffer = m_debugFrameBuffer;
+ 		m_submit->m_debugTextScale   = m_debugTextScale;
+ 		m_submit->m_perfStats.numViews = 0;
+@@ -5792,6 +5794,21 @@ namespace bgfx
+ 		s_ctx->setDebug(_debug, _handle, _scale);
+ 	}
+ 
++	void setPipelinePrefetch(bool _enabled)
++	{
++		BGFX_CHECK_API_THREAD();
++		s_ctx->m_pipelinePrefetch = _enabled;
++	}
++
++	uint32_t getPipelinePrefetchPending()
++	{
++		BGFX_CHECK_API_THREAD();
++		return NULL != s_ctx->m_renderCtx
++			? s_ctx->m_renderCtx->getPipelinePrefetchPending()
++			: 0
++			;
++	}
++
+ 	void dbgTextClear(uint8_t _attr, bool _small)
+ 	{
+ 		BGFX_CHECK_API_THREAD();
+diff --git a/bgfx/src/bgfx_p.h b/bgfx/src/bgfx_p.h
+index 316b49d..0fcb2e2 100644
+--- a/bgfx/src/bgfx_p.h
++++ b/bgfx/src/bgfx_p.h
+@@ -4544,6 +4544,7 @@ namespace bgfx
+ 		SwapChain m_mainSwapChain;
+ 		uint32_t  m_reset;
+ 		uint32_t m_debug;
++		bool     m_pipelinePrefetch = false;
+ 
+ 		FrameBufferHandle m_debugFrameBuffer;
+ 		uint8_t m_debugTextScale;
+@@ -5994,6 +5995,11 @@ namespace bgfx
+ 		{
+ 		}
+ 
++		virtual uint32_t getPipelinePrefetchPending()
++		{
++			return 0;
++		}
++
+ 		virtual void setLatencyMarker(LatencyMarker::Enum _marker, uint64_t _frameId)
+ 		{
+ 			BX_UNUSED(_marker, _frameId);
+@@ -8956,6 +8962,7 @@ namespace bgfx
+ 		int64_t  m_frameTimeLast;
+ 		uint32_t m_frames;
+ 		uint32_t m_debug;
++		bool     m_pipelinePrefetch;
+ 		FrameBufferHandle m_debugFrameBuffer;
+ 		uint8_t  m_debugTextScale;
+ 
+diff --git a/bgfx/src/renderer_webgpu.cpp b/bgfx/src/renderer_webgpu.cpp
+index 676690e..65422a1 100644
+--- a/bgfx/src/renderer_webgpu.cpp
++++ b/bgfx/src/renderer_webgpu.cpp
+@@ -1577,6 +1577,8 @@ WGPU_IMPORT
+ 		{
+ 			preReset();
+ 
++			releasePrefetched();
++
+ 			invalidateBindGroupCache();
+ 
+ 			for (uint32_t ii = 0; ii < BX_COUNTOF(m_mipGenStubTexture); ++ii)
+@@ -3562,6 +3564,7 @@ WGPU_IMPORT
+ 			, float _biasClamp = 0.0f
+ 			, uint32_t _sampleMask = UINT32_MAX
+ 			, uint8_t _mrtMask = UINT8_MAX
++			, bool _prefetch = false
+ 			)
+ 		{
+ 			const ProgramWGPU& program = m_program[_program.idx];
+@@ -3676,6 +3679,13 @@ WGPU_IMPORT
+ 				return renderPipeline;
+ 			}
+ 
++			// A prefetch starts each pipeline one time. The draw that needs it is left out.
++			if (_prefetch
++			&&  m_prefetchHashes.end() != m_prefetchHashes.find(hash) )
++			{
++				return NULL;
++			}
++
+ 			WGPUVertexBufferLayout vertexBufferLayout[BGFX_CONFIG_MAX_VERTEX_STREAMS];
+ 			WGPUVertexAttribute vertexAttribute[Attrib::Count+1+BGFX_CONFIG_MAX_INSTANCE_DATA_COUNT];
+ 
+@@ -3878,6 +3888,40 @@ WGPU_IMPORT
+ 				.fragment = hasFragmentShader ? &fragmentState : NULL,
+ 			};
+ 
++			if (_prefetch)
++			{
++				// The device makes the pipeline in the background and keeps it in its own cache while the renderer
++				// holds it. A later make of the same pipeline then gets it from that cache.
++				m_prefetchHashes.insert(hash);
++				bx::atomicFetchAndAdd<int32_t>(&m_prefetchPending, 1);
++
++				const WGPUCreateRenderPipelineAsyncCallbackInfo callbackInfo =
++				{
++					.nextInChain = NULL,
++					.mode        = WGPUCallbackMode_AllowProcessEvents,
++					.callback    = [](WGPUCreatePipelineAsyncStatus _status, WGPURenderPipeline _pipeline, WGPUStringView /*_message*/, void* _userdata1, void* /*_userdata2*/)
++					{
++						RendererContextWGPU* context = static_cast<RendererContextWGPU*>(_userdata1);
++
++						if (WGPUCreatePipelineAsyncStatus_Success == _status
++						&&  NULL != _pipeline)
++						{
++							context->m_prefetched.push_back(_pipeline);
++						}
++
++						bx::atomicFetchAndAdd<int32_t>(&context->m_prefetchPending, -1);
++					},
++					.userdata1   = this,
++					.userdata2   = NULL,
++				};
++
++				wgpuDeviceCreateRenderPipelineAsync(m_device, &renderPipelineDesc, callbackInfo);
++
++				wgpuRelease(pipelineLayout);
++				wgpuRelease(bindGroupLayout);
++				return NULL;
++			}
++
+ 			const WGPURenderPipeline pipeline = wgpuDeviceCreateRenderPipeline(m_device, &renderPipelineDesc);
+ 
+ 			BGFX_FATAL(NULL != pipeline, Fatal::InvalidShader, "Failed to create graphics PSO!");
+@@ -4326,6 +4370,28 @@ WGPU_IMPORT
+ 
+ 		StateCacheLru<ComputePipeline, 1024> m_computePipelineCache;
+ 		StateCacheLru<RenderPipeline, 1024>  m_renderPipelineCache;
++
++		// The pipelines that a prefetch started, the ones that are ready and the number that are not ready
++		stl::unordered_set<uint32_t>   m_prefetchHashes;
++		stl::vector<WGPURenderPipeline> m_prefetched;
++		int32_t                        m_prefetchPending = 0;
++		bool                           m_pipelinePrefetch = false;
++
++		uint32_t getPipelinePrefetchPending() override
++		{
++			return uint32_t(bx::max<int32_t>(0, bx::atomicFetchAndAdd<int32_t>(&m_prefetchPending, 0) ) );
++		}
++
++		void releasePrefetched()
++		{
++			for (WGPURenderPipeline pipeline : m_prefetched)
++			{
++				wgpuRelease(pipeline);
++			}
++
++			m_prefetched.clear();
++			m_prefetchHashes.clear();
++		}
+ 		StateCacheT<WGPUTextureView>         m_textureViewStateCache;
+ 		StateCacheT<WGPUSampler>             m_samplerStateCache;
+ 
+@@ -7312,6 +7378,9 @@ WGPU_IMPORT
+ 		m_occlusionQuery.readResultsAsync(_render);
+ 		m_gpuTimer.readResultsAsync();
+ 		WGPU_CHECK(wgpuInstanceProcessEvents(s_renderWGPU->m_instance) );
++
++		// The renderer keeps the prefetched pipelines until it stops, so that the device keeps them in its cache
++		m_pipelinePrefetch = _render->m_pipelinePrefetch;
+ 		m_gpuTimer.resize(getNumTimerQueries(_render, m_gpuTimer.m_control.getSize() ) );
+ 
+ 		if (updateResolution(_render->m_mainSwapChain, _render->m_reset) )
+@@ -8002,8 +8071,19 @@ WGPU_IMPORT
+ 						, depthControl.m_slopeScale
+ 						, depthControl.m_clamp
+ 						, sampleMask
++						, UINT8_MAX
++						, m_pipelinePrefetch
+ 						);
+ 
++					// The pipeline is not ready yet: leave out the draw. The next draw sets its program, its
++					// constants and its stencil reference again.
++					if (NULL == renderPipelinePtr)
++					{
++						currentState.m_stencil = newStencil ^ changedStencil;
++						currentProgram = BGFX_INVALID_HANDLE;
++						continue;
++					}
++
+ 					pipelineState.valid           = true;
+ 					pipelineState.program         = key.m_program.idx;
+ 					pipelineState.fbh             = fbh.idx;

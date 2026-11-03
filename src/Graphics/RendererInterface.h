@@ -330,6 +330,13 @@ public:
 	/// the draws of the loading frame, so that the first frames of the game do not make them. Some renderers divide the
 	/// draws between some frames: call it with part 0, then with the next part in each frame while it gives true.
 	[[nodiscard]] virtual bool WarmUpScene(const DrawSceneDesc& drawDesc, uint32_t part) const noexcept = 0;
+	/// Starts or stops a pipeline prefetch. During a prefetch, the frames start each new pipeline of their draws in the
+	/// background, where the renderer makes many pipelines at the same time. The frames do not draw the draws whose
+	/// pipeline is not ready. Then a warm-up after it gets the ready pipelines without a wait. Gives false when the
+	/// renderer cannot make pipelines in the background: then the frames draw as usual.
+	virtual bool SetPipelinePrefetch(bool enabled) noexcept = 0;
+	/// The number of pipelines that a prefetch started and that are not ready
+	[[nodiscard]] virtual uint32_t GetPipelinePrefetchPending() const noexcept = 0;
 	/// Makes the next frame wait until the GPU did all the work that the renderer sent before it. Then the renderer
 	/// releases all the memory that it kept for that work. Without this, some backends keep that memory for hundreds of
 	/// command lists and then release all of it in one frame of the game. Call it behind the loading screen.

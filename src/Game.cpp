@@ -316,6 +316,7 @@
 #include "Gestures/GestureTrailBuilder.h"
 #include "Graphics/FrameBuffer.h"
 #include "Graphics/RendererInterface.h"
+#include "Graphics/WarmUpViews.h"
 #include "Gui/Canvas.h"
 #include "Gui/DialogPainter.h"
 #include "Gui/EscapeKeyRules.h"
@@ -1449,12 +1450,6 @@ void Game::WarmUpFirstFrame()
 	}
 	auto& renderer = Locator::rendererInterface::value();
 	auto& rendering = Locator::rendereringSystem::value();
-	// The draw lists of the land's things, as the first frame makes them
-	if (config.drawEntities)
-	{
-		rendering.PrepareDraw(config.drawBoundingBoxes, config.drawFootpaths, config.drawStreams,
-		                      ecs::systems::DrawUse::WarmUp);
-	}
 	const auto start = std::chrono::steady_clock::now();
 	// Some renderers divide the warm-up between some frames, each with a part of the draws
 	bool shown = false;
@@ -1482,23 +1477,54 @@ void Game::WarmUpFirstFrame()
 			shown = shown || partShown;
 		}
 	};
-	warmUp(SceneDrawDesc(config, 0, IsHandDrawn()));
-	// The temple's rooms show only while the player is in the temple. A visit draws them with the temple's own pipelines
-	// and targets, thus the warm-up draws a visit too. The temple draws no island and no sea.
-	if (Locator::temple::has_value())
+	const auto warmUpAll = [&config, &rendering, &warmUp, this]() {
+		// The draw lists of the land's things, as the first frame makes them
+		if (config.drawEntities)
+		{
+			rendering.PrepareDraw(config.drawBoundingBoxes, config.drawFootpaths, config.drawStreams,
+			                      ecs::systems::DrawUse::WarmUp);
+		}
+		warmUp(SceneDrawDesc(config, 0, IsHandDrawn()));
+		// The temple's rooms show only while the player is in the temple. A visit draws them with the temple's own
+		// pipelines and targets, thus the warm-up draws a visit too. The temple draws no island and no sea.
+		if (Locator::temple::has_value())
+		{
+			Locator::temple::value().WarmUpVisit([&config, &rendering, &warmUp, this]() {
+				if (config.drawEntities)
+				{
+					rendering.PrepareDraw(config.drawBoundingBoxes, config.drawFootpaths, config.drawStreams,
+					                      ecs::systems::DrawUse::WarmUp);
+				}
+				auto desc = SceneDrawDesc(config, 0, IsHandDrawn());
+				desc.drawIsland = false;
+				desc.drawWater = false;
+				warmUp(desc);
+			});
+		}
+	};
+	// Some renderers can make the pipelines of the warm-up in the background, many at the same time. A first pass of
+	// the warm-up starts them, and the loading screen shows while the renderer makes them. The second pass then gets
+	// the ready pipelines and draws all of the warm-up.
+	if (renderer.SetPipelinePrefetch(true))
 	{
-		Locator::temple::value().WarmUpVisit([&config, &warmUp, this]() {
-			if (config.drawEntities)
-			{
-				Locator::rendereringSystem::value().PrepareDraw(config.drawBoundingBoxes, config.drawFootpaths,
-				                                                config.drawStreams, ecs::systems::DrawUse::WarmUp);
-			}
-			auto desc = SceneDrawDesc(config, 0, IsHandDrawn());
-			desc.drawIsland = false;
-			desc.drawWater = false;
-			warmUp(desc);
-		});
+		warmUpAll();
+		renderer.SetPipelinePrefetch(false);
+		const auto waitStart = std::chrono::steady_clock::now();
+		uint32_t framesAfter = 0;
+		const auto waited = [&waitStart]() {
+			return std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now() - waitStart);
+		};
+		while (graphics::warm_up::PrefetchWaits(framesAfter, renderer.GetPipelinePrefetchPending(), waited()) &&
+		       !_quitRequested && RenderLoadingFrame(true))
+		{
+			++framesAfter;
+			std::this_thread::sleep_for(graphics::warm_up::k_PrefetchFrameInterval);
+		}
+		SPDLOG_LOGGER_INFO(spdlog::get("game"),
+		                   "Load: the pipelines of the warm-up made in the background in {} ms, {} not ready", waited().count(),
+		                   renderer.GetPipelinePrefetchPending());
 	}
+	warmUpAll();
 	// The first frame makes the draw lists again from what the game's first update changed
 	if (config.drawEntities)
 	{
@@ -1509,6 +1535,30 @@ void Game::WarmUpFirstFrame()
 		SPDLOG_LOGGER_INFO(spdlog::get("game"), "Load: the first frame drawn behind the loading screen in {:.1f} ms",
 		                   std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - start).count());
 	}
+}
+
+void Game::StartLandPipelines()
+{
+	const auto& config = Locator::config::value();
+	if (!config.warmUpFirstFrame || !Locator::rendererInterface::has_value() || !Locator::camera::has_value())
+	{
+		return;
+	}
+	auto& renderer = Locator::rendererInterface::value();
+	if (!renderer.SetPipelinePrefetch(true))
+	{
+		return;
+	}
+	// The pipelines include the formats of the targets, which follow the window's size
+	SizeSceneToWindow();
+	// Only the land, the sky and the sea: the things on the land need resources that are not loaded yet
+	auto desc = SceneDrawDesc(config, 0, false);
+	desc.drawEntities = false;
+	desc.drawSprites = false;
+	desc.drawVegetation = false;
+	desc.drawBoundingBoxes = false;
+	RenderLoadingFrame(true, [&renderer, &desc]() { [[maybe_unused]] const bool partsLeft = renderer.WarmUpScene(desc, 0); });
+	renderer.SetPipelinePrefetch(false);
 }
 
 bool Game::IsHandDrawn() const

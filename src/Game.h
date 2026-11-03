@@ -623,6 +623,9 @@ private:
 	/// Draws the first frame of the land under a loading frame, which hides it, so that the renderer makes the
 	/// pipelines and render targets of the scene behind the loading screen. Nothing that the game's frames use changes.
 	void WarmUpFirstFrame();
+	/// Starts in the background the pipelines of the land, the sky and the sea, before the other resources load. The
+	/// pipelines of the land take the longest time to make. Only renderers that make pipelines in the background do it.
+	void StartLandPipelines();
 	/// Draws one frame outside the game's loop over a black screen and shows it
 	void PresentStartupFrame(const std::function<void(glm::u16vec2 resolution)>& draw);
 	/// Draws at the window's size from this frame on if it changed: the back buffer, the views over the whole screen,
