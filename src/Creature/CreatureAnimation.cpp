@@ -12,6 +12,7 @@
 #include <cmath>
 
 #include <algorithm>
+#include <iterator>
 #include <optional>
 #include <span>
 #include <utility>
@@ -223,49 +224,99 @@ Animation creature_animation::AdjustFromStand(const Animation& animation, std::s
 	return adjusted;
 }
 
-Animation creature_animation::Blend(const Animation& base, const BlendTerm& evilGood, const BlendTerm& thinFat)
+Animation creature_animation::Blend(const Animation& base, const Animation& baseStand, const BlendTerm& evilGood,
+                                    const BlendTerm& thinFat)
 {
 	if (evilGood.weight == 0.0f && thinFat.weight == 0.0f)
 	{
 		return base;
 	}
-	return Blend(base, FrameTurns(base), evilGood, thinFat);
+	return Blend(base, FrameTurns(base), baseStand, evilGood, thinFat);
 }
 
-Animation creature_animation::Blend(const Animation& base, std::span<const Matrix> baseTurns, const BlendTerm& evilGood,
-                                    const BlendTerm& thinFat)
+Animation creature_animation::Blend(const Animation& base, std::span<const Matrix> baseTurns, const Animation& baseStand,
+                                    const BlendTerm& evilGood, const BlendTerm& thinFat)
 {
-	auto blended = base;
 	if (evilGood.weight == 0.0f && thinFat.weight == 0.0f)
 	{
-		return blended;
+		return base;
 	}
 	const Side a(evilGood);
 	const Side b(thinFat);
-	// The turns of the joints that a side does not animate are the same in every frame, so each joint finds them once
-	std::vector<std::pair<std::optional<Side::FixedTurn>, std::optional<Side::FixedTurn>>> fixed;
+	const StandPose standOfBase(&baseStand);
+	const auto baseRotated = JointSlots(base.rotatedJoints);
+	const auto baseTranslated = JointSlots(base.translatedJoints);
+
+	// The blend moves each bone that the base or a variant moves, in the order of the bones. For a bone that the base
+	// does not move, the base side is the first frame of the base's stand.
+	const auto joined = [](const std::vector<uint32_t>& own, const Side& first, const Side& second, auto joints,
+	                       auto standHas) {
+		std::vector<uint32_t> all = own;
+		for (const auto* side : {&first, &second})
+		{
+			if (side->animation != nullptr)
+			{
+				std::ranges::copy_if(joints(*side->animation), std::back_inserter(all), standHas);
+			}
+		}
+		std::ranges::sort(all);
+		const auto [from, to] = std::ranges::unique(all);
+		all.erase(from, to);
+		return all;
+	};
+	const auto rotatedOf = [](const Animation& animation) -> const std::vector<uint32_t>& { return animation.rotatedJoints; };
+	const auto translatedOf = [](const Animation& animation) -> const std::vector<uint32_t>& {
+		return animation.translatedJoints;
+	};
+
+	auto blended = base;
+	blended.rotatedJoints = joined(base.rotatedJoints, a, b, rotatedOf,
+	                               [&standOfBase](uint32_t joint) { return standOfBase.Euler(joint).has_value(); });
+	blended.translatedJoints = joined(base.translatedJoints, a, b, translatedOf,
+	                                  [&standOfBase](uint32_t joint) { return standOfBase.Translation(joint).has_value(); });
+
+	// The turns of the joints that a side does not animate, and of the base's stand, are the same in every frame, so
+	// each joint finds them once
+	struct JointTurns
+	{
+		std::optional<size_t> baseSlot;
+		Matrix standOfBase;
+		std::optional<Side::FixedTurn> a;
+		std::optional<Side::FixedTurn> b;
+	};
+	std::vector<JointTurns> fixed;
 	fixed.reserve(blended.rotatedJoints.size());
 	for (const auto joint : blended.rotatedJoints)
 	{
-		fixed.emplace_back(a.Fixed(joint), b.Fixed(joint));
+		const auto slot = SlotOf(baseRotated, joint);
+		fixed.push_back({.baseSlot = slot,
+		                 .standOfBase = slot ? k_Identity : RotationYXZ(*standOfBase.Euler(joint)),
+		                 .a = a.Fixed(joint),
+		                 .b = b.Fixed(joint)});
 	}
 	for (size_t f = 0; f < blended.frames.size(); ++f)
 	{
+		const auto& source = base.frames[f];
 		auto& frame = blended.frames[f];
+		frame.eulerAngles.resize(blended.rotatedJoints.size());
+		frame.translations.resize(blended.translatedJoints.size());
 		for (size_t i = 0; i < blended.rotatedJoints.size(); ++i)
 		{
 			const auto joint = blended.rotatedJoints[i];
-			const auto& rotation = baseTurns[(f * blended.rotatedJoints.size()) + i];
-			const auto towardsA = a.Rotation(joint, f, rotation, fixed[i].first);
-			const auto towardsB = b.Rotation(joint, f, rotation, fixed[i].second);
+			const auto& turns = fixed[i];
+			const auto& rotation =
+			    turns.baseSlot ? baseTurns[(f * base.rotatedJoints.size()) + *turns.baseSlot] : turns.standOfBase;
+			const auto towardsA = a.Rotation(joint, f, rotation, turns.a);
+			const auto towardsB = b.Rotation(joint, f, rotation, turns.b);
 			Matrix result {};
 			for (size_t r = 0; r < 3; ++r)
 			{
 				for (size_t c = 0; c < 3; ++c)
 				{
+					// The two pulls add first, then the base
 					const auto value = rotation.at(r).at(c);
 					result.at(r).at(c) =
-					    value + (a.weight * (towardsA.at(r).at(c) - value)) + (b.weight * (towardsB.at(r).at(c) - value));
+					    (((towardsA.at(r).at(c) - value) * a.weight) + ((towardsB.at(r).at(c) - value) * b.weight)) + value;
 				}
 			}
 			frame.eulerAngles[i] = EulerYXZ(result);
@@ -273,9 +324,11 @@ Animation creature_animation::Blend(const Animation& base, std::span<const Matri
 		for (size_t i = 0; i < blended.translatedJoints.size(); ++i)
 		{
 			const auto joint = blended.translatedJoints[i];
-			const auto translation = frame.translations[i];
-			frame.translations[i] = translation + (a.weight * (a.Translation(joint, f, translation) - translation)) +
-			                        (b.weight * (b.Translation(joint, f, translation) - translation));
+			const auto slot = SlotOf(baseTranslated, joint);
+			const auto translation = slot ? source.translations[*slot] : *standOfBase.Translation(joint);
+			frame.translations[i] = (((a.Translation(joint, f, translation) - translation) * a.weight) +
+			                         ((b.Translation(joint, f, translation) - translation) * b.weight)) +
+			                        translation;
 		}
 	}
 	return blended;
