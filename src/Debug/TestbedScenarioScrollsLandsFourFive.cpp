@@ -188,6 +188,44 @@ void testbed_scenarios::AddLandsFourFiveScrollScenarios(std::vector<Scenario>& a
 	    .commands = breederCommands,
 	});
 
+	// The same breeder, played to the swap: the kennels' scroll, then the Leopard's scroll with the Tiger 25 metres
+	// away, then the Leopard itself
+	std::vector<Command> swapCommands {breederCommands.front()};
+	swapCommands.push_back(
+	    {.kind = Kind::ClickScroll, .delaySeconds = 11.0f, .point = FromMiddle(k_Land4Middle, k_Kennels.x, k_Kennels.z)});
+	swapCommands.push_back({.kind = Kind::WalkTo,
+	                        .creature = 0,
+	                        .delaySeconds = 10.0f,
+	                        .point = FromMiddle(k_Land4Middle, k_ShowPlace.x + 25.0f, k_ShowPlace.z - 3.0f)});
+	swapCommands.push_back(
+	    {.kind = Kind::ClickScroll, .delaySeconds = 8.0f, .point = FromMiddle(k_Land4Middle, k_ShowPlace.x, k_ShowPlace.z)});
+	swapCommands.push_back({.kind = Kind::ClickCreatureAt,
+	                        .delaySeconds = 8.0f,
+	                        .point = FromMiddle(k_Land4Middle, k_ShowPlace.x, k_ShowPlace.z)});
+	all.push_back({
+	    .id = "story.lfour_breeder_swap",
+	    .name = "Story: a swap at the creature breeder of the fourth land",
+	    .facet = Facet::Story,
+	    .description = "As story.lfour_breeder, with the Leopard and the Horse taken as unlocked. Eleven seconds in, the "
+	                   "kennels' scroll is clicked. Ten seconds later the Tiger walks to a point 25 metres east of the "
+	                   "Leopard. Eight seconds later the Leopard's scroll is clicked, and eight seconds after that the "
+	                   "Leopard itself.",
+	    .expected = "At the first click on the Leopard's scroll the Tiger walks up to the Leopard and the good advisor asks "
+	                "to confirm. At the click on the Leopard a cinema starts with both creatures in view. The Tiger walks "
+	                "to a spot about 51 metres east of the kennels and the Leopard to a spot about 35 metres east, both "
+	                "on the ground. When the Leopard is at its spot, or after 20 seconds, they face each other, sparkles "
+	                "show and they change bodies with the swap sound, which takes about ten seconds. The Tiger then walks "
+	                "back to where the Leopard "
+	                "stood, and the Leopard stays as the player's creature.",
+	    .environment =
+	        {.land = Land::Story, .storyLand = "Land4.txt", .dispenserGrid = false, .unlockedBonusCreatures = leopardAndHorse},
+	    .framing = LookingFrom(k_Land4Middle, {k_Kennels.x, k_Kennels.z}, {-20.0f, 10.0f, 22.0f}, 5.0f),
+	    .creatures = {PlayersCreature(CreatureType::Tiger,
+	                                  FromMiddle(k_Land4Middle, k_ShowPlace.x + 10.0f, k_ShowPlace.z - 12.0f), 0.0f,
+	                                  "player's tiger")},
+	    .commands = swapCommands,
+	});
+
 	// The stranger of the fifth land: his praying place at the fire, as the quest's script gives it
 	constexpr glm::vec3 k_PrayingPlace {2197.82f, 26.609f, 3502.809f};
 	// The set-up of the fifth land, the Wonders, a time of day and then the stranger's script
