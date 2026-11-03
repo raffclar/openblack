@@ -525,7 +525,7 @@ public:
 	bool Join(ecs::systems::NetworkJoin join) override
 	{
 		_session.Join(online::NetworkSessionSettings {
-		    .request = {.url = std::move(join.url), .headers = {}, .subprotocols = {}},
+		    .request = {.url = std::move(join.url), .headers = {}, .subprotocols = {}, .serverKey = std::nullopt},
 		    .ticket = std::move(join.ticket),
 		    .gamePassword = std::move(join.gamePassword),
 		    .name = std::move(join.name),

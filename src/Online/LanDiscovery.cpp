@@ -19,6 +19,8 @@
 #include <LobbyApiJson.h>
 #include <fmt/format.h>
 
+#include "ServerKeyPin.h"
+
 namespace openblack::online::lan_discovery
 {
 namespace
@@ -365,6 +367,11 @@ std::optional<HeardAnswer> ParseAnswer(std::span<const uint8_t> bytes)
 
 lobby_api::ServerEntry EntryOf(const lobby_api::LanAnswer& answer, uint64_t server, const Address& address)
 {
+	// A key that is not 64 hex digits is no key
+	const auto keyOf = [](std::string_view text) {
+		const auto pin = server_key::ParseHex(text);
+		return pin.has_value() ? server_key::HexOf(*pin) : std::string();
+	};
 	std::string host = answer.host;
 	if (host.empty())
 	{
@@ -399,6 +406,7 @@ lobby_api::ServerEntry EntryOf(const lobby_api::LanAnswer& answer, uint64_t serv
 	    .url = fmt::format("wss://{}:{}/game", host, answer.port),
 	    .updated = 0,
 	    .map = {},
+	    .key = keyOf(answer.key),
 	};
 }
 

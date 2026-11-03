@@ -44,6 +44,7 @@
 #include "Online/MapDownload.h"
 #include "Online/NetworkSession.h"
 #include "Online/OnlineMapStoreInterface.h"
+#include "Online/ServerKeyPin.h"
 #include "Online/StartRules.h"
 #include "gui/FakeGameFont.h"
 #include "online/FakeWebSocketClient.h"
@@ -251,7 +252,7 @@ public:
 	{
 		joins.push_back(join);
 		session.Join(online::NetworkSessionSettings {
-		    .request = {.url = join.url, .headers = {}, .subprotocols = {}},
+		    .request = {.url = join.url, .headers = {}, .subprotocols = {}, .serverKey = std::nullopt},
 		    .ticket = join.ticket,
 		    .gamePassword = join.gamePassword,
 		    .name = join.name,
@@ -902,6 +903,8 @@ TEST_F(FrontEndTest, JoinTakesATicketThenOpensTheGameSocket)
 	// The network game joins for the front end: the server's land loads only after the start
 	ASSERT_EQ(network.joins.size(), 1u);
 	EXPECT_FALSE(network.joins[0].fromCommandLine);
+	// A room of the lobby has no key: its certificate must come from an authority
+	EXPECT_FALSE(network.joins[0].serverKey.has_value());
 	EXPECT_EQ(lobby.ticketRoles, (std::vector<game_socket::Role> {game_socket::Role::God}));
 	EXPECT_TRUE(frontEnd->IsJoined());
 	EXPECT_FALSE(frontEnd->IsObserver());
@@ -1494,6 +1497,7 @@ TEST_F(FrontEndTest, TheLanListComesFromTheSearch)
 	Make(true);
 	lan.servers = {Server("l1", "LAN game", 1, 32)};
 	lan.servers[0].url = "wss://192.168.1.5/game/l1";
+	lan.servers[0].key = "000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f";
 	frontEnd->Next();
 	frontEnd->SetLobbyKind(LobbyKind::Lan);
 	frontEnd->Next();
@@ -1504,6 +1508,10 @@ TEST_F(FrontEndTest, TheLanListComesFromTheSearch)
 	ASSERT_EQ(frontEnd->GetGames().size(), 1u);
 	frontEnd->SelectGame(0);
 	frontEnd->Join(u"");
+	// The join takes the key of the server's own certificate from the answer of the search
+	ASSERT_EQ(network.joins.size(), 1u);
+	ASSERT_TRUE(network.joins[0].serverKey.has_value());
+	EXPECT_EQ(online::server_key::HexOf(*network.joins[0].serverKey), lan.servers[0].key);
 	// On the LAN there is no ticket: the profile's name goes in the join
 	ASSERT_FALSE(sockets.order.empty());
 	sockets.Accept(sockets.order.back());

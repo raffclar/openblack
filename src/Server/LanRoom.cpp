@@ -15,7 +15,7 @@ namespace openblack::server::lan_room
 {
 
 lobby_api::LanAnswer AnswerOf(const lobby_status::Room& room, bool started, std::span<const LockstepHost::Seat> seats,
-                              uint16_t port, const std::string& host)
+                              uint16_t port, const std::string& host, const std::string& key)
 {
 	lobby_api::LanAnswer answer {
 	    .hostname = room.hostname,
@@ -28,6 +28,7 @@ lobby_api::LanAnswer AnswerOf(const lobby_status::Room& room, bool started, std:
 	    .port = port,
 	    .host = host,
 	    .players = {},
+	    .key = key,
 	};
 	for (const auto& seat : seats)
 	{

@@ -45,6 +45,7 @@
 #include "Game.h"
 #include "LaunchSwitches.h"
 #include "Online/GameOrigin.h"
+#include "Online/ServerKeyPin.h"
 #if defined(__EMSCRIPTEN__)
 #include "Web/WebPlatform.h"
 #endif
@@ -112,6 +113,21 @@ std::string JoinTicketOf(const cxxopts::ParseResult& result)
 	}
 	return *ticket;
 }
+
+/// The key of the option --join-key, none without the option. A key that is not 64 hex digits stops the start.
+std::optional<openblack::online::server_key::Pin> JoinKeyOf(const cxxopts::ParseResult& result)
+{
+	if (result.count("join-key") == 0)
+	{
+		return std::nullopt;
+	}
+	const auto pin = openblack::online::server_key::ParseHex(result["join-key"].as<std::string>());
+	if (!pin.has_value())
+	{
+		throw cxxopts::exceptions::parsing("--join-key: the key is not 64 hex digits");
+	}
+	return pin;
+}
 } // namespace
 
 bool parseOptions(int argc, char** argv, openblack::Arguments& args, int& returnCode)
@@ -156,6 +172,7 @@ bool parseOptions(int argc, char** argv, openblack::Arguments& args, int& return
 		("crash-dialogs", "Show the system's and C runtime's crash dialogs (Abort/Retry/Ignore) instead of writing a crash report to crashes/ and exiting.")
 		("join", "Join the game server at this wss:// address once the land loaded. The world then turns only with the turns of the server. Needs --join-ticket-file.", cxxopts::value<std::string>())
 		("join-ticket-file", "A file that holds the lobby's join ticket for --join. The ticket is not on the command line, so other users of the computer do not see it in the list of processes.", cxxopts::value<std::string>())
+		("join-key", "The SHA-256 of the public key of a game server on the local network that made its own certificate, as 64 hex digits (its log and its answer to the search give it). The join then accepts only that key, and checks no authority or host name.", cxxopts::value<std::string>())
 		("join-test-ca", "Tests on this computer only: a PEM file of a certificate authority of a test game server on a loopback address (127.0.0.1).", cxxopts::value<std::string>())
 		("lobby-test-ca", "Tests on this computer only: a PEM file of a certificate authority of a test lobby on a loopback address (127.0.0.1). The lobby's calls, its push channel and the game sockets also trust it.", cxxopts::value<std::string>());
 #if defined(__EMSCRIPTEN__)
@@ -444,6 +461,7 @@ bool parseOptions(int argc, char** argv, openblack::Arguments& args, int& return
 			                            ? std::optional(result["join-creature"].as<std::string>())
 			                            : std::nullopt,
 			    .origin = openblack::online::GameOrigin::Lan,
+			    .serverKey = JoinKeyOf(result),
 			};
 			// A ticket of the lobby makes the game a game of the internet lobby
 			args.networkJoin->origin = openblack::online::OriginOfJoin(args.networkJoin->ticket);

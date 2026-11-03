@@ -185,7 +185,7 @@ bool NetworkGameSystem::Join(NetworkJoin join)
 		};
 	}
 	_session->Join(online::NetworkSessionSettings {
-	    .request = {.url = join.url, .headers = {}, .subprotocols = {}},
+	    .request = {.url = join.url, .headers = {}, .subprotocols = {}, .serverKey = join.serverKey},
 	    .ticket = std::move(join.ticket),
 	    .gamePassword = std::move(join.gamePassword),
 	    .name = std::move(join.name),

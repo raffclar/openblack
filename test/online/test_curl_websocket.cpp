@@ -77,7 +77,7 @@ TEST(CurlWebSocketClient, AnAddressThatIsNotWssIsRefused)
 {
 	online::CurlWebSocketClient client;
 	std::optional<online::WebSocketClosed> closed;
-	client.Connect({.url = "ws://127.0.0.1:1/x", .headers = {}, .subprotocols = {}},
+	client.Connect({.url = "ws://127.0.0.1:1/x", .headers = {}, .subprotocols = {}, .serverKey = std::nullopt},
 	               {.opened = {}, .text = {}, .binary = {}, .closed = [&](const auto& end) { closed = end; }});
 	client.Poll();
 	ASSERT_TRUE(closed.has_value());
@@ -98,7 +98,7 @@ TEST(CurlWebSocketClient, TheEchoServerSendsBackTextAndLargeBinaryMessages)
 	std::vector<std::vector<uint8_t>> binaries;
 	std::optional<online::WebSocketClosed> closed;
 	const auto id =
-	    client.Connect({.url = *url, .headers = {}, .subprotocols = {"bwgame.v1"}},
+	    client.Connect({.url = *url, .headers = {}, .subprotocols = {"bwgame.v1"}, .serverKey = std::nullopt},
 	                   {
 	                       .opened = [&]() { opened = true; },
 	                       .text = [&](std::string_view text) { texts.emplace_back(text); },
@@ -135,7 +135,7 @@ TEST(CurlWebSocketClient, TheEchoServerCertificateMustMatchAnAuthority)
 	// With no file of the test authority, the certificate of the test server is not trusted
 	online::CurlWebSocketClient client;
 	std::optional<online::WebSocketClosed> closed;
-	client.Connect({.url = *url, .headers = {}, .subprotocols = {}},
+	client.Connect({.url = *url, .headers = {}, .subprotocols = {}, .serverKey = std::nullopt},
 	               {.opened = {}, .text = {}, .binary = {}, .closed = [&](const auto& end) { closed = end; }});
 	ASSERT_TRUE(PollUntil(client, [&]() { return closed.has_value(); }));
 	EXPECT_EQ(closed->end, online::WebSocketEnd::Tls);
