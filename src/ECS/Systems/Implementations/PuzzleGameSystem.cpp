@@ -12,6 +12,9 @@
 #include "PuzzleGameSystem.h"
 
 #include <algorithm>
+#include <chrono>
+#include <optional>
+#include <span>
 #include <utility>
 #include <vector>
 
@@ -20,15 +23,22 @@
 #include <glm/vec2.hpp>
 #include <spdlog/spdlog.h>
 
+#include "3D/CreatureBody.h"
 #include "3D/LandIslandInterface.h"
 #include "3D/MapCoords.h"
 #include "Common/GUtilsDistance.h"
 #include "Common/GameRandom.h"
+#include "Creature/CreatureRig.h"
 #include "ECS/Archetypes/MistArchetype.h"
 #include "ECS/Archetypes/MobileObjectArchetype.h"
+#include "ECS/Archetypes/MobileStaticArchetype.h"
 #include "ECS/Archetypes/PuzzleGameArchetype.h"
+#include "ECS/Archetypes/PuzzleTotemArchetype.h"
 #include "ECS/Archetypes/StreetLanternArchetype.h"
 #include "ECS/Archetypes/TreeArchetype.h"
+#include "ECS/Components/Creature.h"
+#include "ECS/Components/CreatureBody.h"
+#include "ECS/Components/CreatureTurnSteps.h"
 #include "ECS/Components/Fixed.h"
 #include "ECS/Components/HandGrab.h"
 #include "ECS/Components/Indestructible.h"
@@ -39,17 +49,28 @@
 #include "ECS/Components/ScriptControl.h"
 #include "ECS/Components/Transform.h"
 #include "ECS/Components/Tree.h"
+#include "ECS/CreatureTurnSteps.h"
+#include "ECS/FishPuzzleRules.h"
 #include "ECS/HanoiRules.h"
 #include "ECS/Map.h"
+#include "ECS/MazePuzzleRules.h"
 #include "ECS/PuzzleGameRules.h"
 #include "ECS/Registry.h"
 #include "ECS/Systems/AnimalSystemInterface.h"
+#include "ECS/Systems/EffectRequestSystemInterface.h"
 #include "ECS/Systems/FireSystemInterface.h"
 #include "ECS/Systems/HelpSpeechSystemInterface.h"
+#include "ECS/Systems/PuzzleTotemSystemInterface.h"
+#include "ECS/Systems/TimeSystemInterface.h"
+#include "ECS/Systems/WaterRingSystemInterface.h"
 #include "ECS/ThingMapPlace.h"
+#include "ECS/TotemPuzzleRules.h"
 #include "ECS/TreePuzzleRules.h"
 #include "ECS/WorldObjects.h"
+#include "FileSystem/FileSystemInterface.h"
 #include "Locator.h"
+#include "Resources/Loaders.h"
+#include "Resources/ResourcesInterface.h"
 #include "Sound/GameSoundEffects.h"
 #include "Sound/HelpSpeech.h"
 
@@ -61,6 +82,8 @@ namespace archetypes = openblack::ecs::archetypes;
 namespace world_objects = openblack::ecs::world_objects;
 namespace hanoi = openblack::ecs::hanoi;
 namespace tree_puzzle = openblack::ecs::tree_puzzle;
+namespace maze_puzzle = openblack::ecs::maze_puzzle;
+namespace totem_puzzle = openblack::ecs::totem_puzzle;
 
 namespace
 {
@@ -68,6 +91,9 @@ namespace
 constexpr std::string_view k_PieceBank = "editor.sad";
 constexpr uint32_t k_PieceSound = 413;
 constexpr uint32_t k_PieceSounds = 9;
+/// The bank of the sounds of the scripts, and the bank of the game's own sounds
+constexpr std::string_view k_ScriptBank = "Scriptsfx.sad";
+constexpr std::string_view k_GameBank = "InGame.sad";
 /// The hand that takes the largest ring says one of these lines
 constexpr uint32_t k_LargestRingLine = 5267;
 constexpr uint32_t k_LargestRingLines = 8;
@@ -515,6 +541,470 @@ void ProcessTrees(PuzzleGame& game)
 	}
 }
 
+/// The grid of a maze
+maze_puzzle::Grid MazeGrid(const PuzzleGame& game)
+{
+	return {.place = game.place, .steps = GridSteps(game), .angle = game.angle, .scale = game.scale};
+}
+
+/// A place on the grid of a puzzle, in grid steps
+map_coords::MapCoords StepPlace(const PuzzleGame& game, maze_puzzle::GridStep step)
+{
+	return hanoi::GridPlace(game.place, GridSteps(game), step.across, step.along);
+}
+
+/// The middle of a cell of a maze, in map units
+glm::ivec2 CellPlace(const PuzzleGame& game, maze_puzzle::Cell cell)
+{
+	const auto place = StepPlace(game, maze_puzzle::MiddleOf(cell));
+	return {place.x, place.z};
+}
+
+/// Whether a thing is there: it was made, and it did not go from the world
+bool IsThere(const Registry& registry, entt::entity thing)
+{
+	return thing != entt::null && registry.Valid(thing);
+}
+
+/// Where a thing is in the world, on the land at its map position
+glm::vec3 WorldOf(entt::entity thing)
+{
+	return map_coords::ToWorld(Locator::terrainSystem::value(), ecs::thing_map_place::Of(Entities(), thing));
+}
+
+/// A spot visual of the mazes at a point, for some turns or for its own life
+EffectHandle StartSparkle(glm::vec3 point, float magnitude, std::optional<int> turns)
+{
+	if (!Locator::effectRequestSystem::has_value())
+	{
+		return k_NoEffectHandle;
+	}
+	return Locator::effectRequestSystem::value().Start({
+	    .type = maze_puzzle::k_SpotVisual,
+	    .position = point,
+	    .magnitude = magnitude,
+	    .turns = turns,
+	});
+}
+
+/// The spot visual that marks the tapped cell of a Theseus maze goes
+void RemoveMarker(MazeState& maze)
+{
+	if (maze.marker != k_NoEffectHandle && Locator::effectRequestSystem::has_value())
+	{
+		Locator::effectRequestSystem::value().Remove(maze.marker);
+	}
+	maze.marker = k_NoEffectHandle;
+}
+
+/// A fence of a maze on its place, at the angle of the puzzle and with its size. Nothing destroys it.
+entt::entity MakeFence(const PuzzleGame& game, const maze_puzzle::Fence& fence)
+{
+	auto& registry = Entities();
+	const auto place = StepPlace(game, maze_puzzle::FenceStep(fence));
+	const auto world = map_coords::ToWorld(Locator::terrainSystem::value(), place);
+	const auto made = archetypes::MobileStaticArchetype::Create(
+	    world, maze_puzzle::k_FenceKind, 0.0f, 0.0f, maze_puzzle::FenceAngle(game.angle, fence.facesAcross), 0.0f, game.scale);
+	ecs::thing_map_place::Keep(registry, made, place);
+	registry.Assign<Indestructible>(made);
+	FileInMap(made);
+	return made;
+}
+
+/// The slot of a fence in the lists of a maze
+entt::entity& FenceSlot(MazeState& maze, const maze_puzzle::Fence& fence)
+{
+	auto& fences = fence.facesAcross ? maze.acrossFences : maze.alongFences;
+	return fences.at(maze_puzzle::SlotOf(fence));
+}
+
+/// Each turn of a maze, each fence cools down. The maze makes again a fence that went. A fence off its place goes, leaves
+/// a ghost, and the maze makes it again on its place, where the hand can not take it.
+void PutBackFences(PuzzleGame& game)
+{
+	auto& registry = Entities();
+	for (int32_t across = 0; across <= maze_puzzle::k_MostSide; ++across)
+	{
+		for (int32_t along = 0; along <= maze_puzzle::k_MostSide; ++along)
+		{
+			for (const bool facesAcross : {true, false})
+			{
+				const maze_puzzle::Fence fence {.across = across, .along = along, .facesAcross = facesAcross};
+				auto& slot = FenceSlot(game.maze, fence);
+				if (slot == entt::null)
+				{
+					continue;
+				}
+				if (registry.Valid(slot) && Locator::fireSystem::has_value())
+				{
+					Locator::fireSystem::value().SetTemperature(slot, 0.0f, entt::null);
+				}
+				if (!registry.Valid(slot))
+				{
+					// A fence that the maze makes again after it went is not held from the hand
+					slot = MakeFence(game, fence);
+					continue;
+				}
+				if (ecs::thing_map_place::Of(registry, slot) == StepPlace(game, maze_puzzle::FenceStep(fence)))
+				{
+					continue;
+				}
+				world_objects::LeaveGhost(slot);
+				world_objects::Remove(slot);
+				slot = MakeFence(game, fence);
+				registry.Assign<CannotBePickedUp>(slot);
+			}
+		}
+	}
+}
+
+/// A bell of the lion maze on its place. Nothing destroys it, and nothing moves it.
+entt::entity MakeBell(entt::entity puzzle, const PuzzleGame& game, size_t bell)
+{
+	auto& registry = Entities();
+	const auto& [step, angle] = maze_puzzle::BellPlaces(maze_puzzle::SideOf(game.type)).at(bell);
+	const auto place = StepPlace(game, step);
+	const auto made =
+	    archetypes::PuzzleTotemArchetype::Create(map_coords::ToWorld(Locator::terrainSystem::value(), place),
+	                                             maze_puzzle::k_BellKind, angle, maze_puzzle::k_BellScale, puzzle);
+	// The hand can tap it, nothing moves it, and the scripts hold it
+	registry.Get<PuzzleTotem>(made).highest = maze_puzzle::k_TappableHighest;
+	registry.Assign<Immovable>(made);
+	registry.Assign<ScriptControlled>(made);
+	ecs::thing_map_place::Keep(registry, made, place);
+	FileInMap(made);
+	return made;
+}
+
+/// The animals of a maze go, each with a ghost, and the maze makes them again on their first cells. A sparkle shows
+/// each of them for some turns. The angles and the moves of the animals stay as they were.
+void ResetMaze(entt::entity puzzle, PuzzleGame& game)
+{
+	auto& registry = Entities();
+	auto& maze = game.maze;
+	for (const auto animal : {maze.hero, maze.lion})
+	{
+		if (IsThere(registry, animal))
+		{
+			world_objects::LeaveGhost(animal);
+			world_objects::Remove(animal);
+		}
+	}
+	maze.hero = entt::null;
+	maze.lion = entt::null;
+	const auto hero = maze_puzzle::HeroStart(game.type);
+	const auto lion = maze_puzzle::LionStart(game.type);
+	maze.heroAcross = hero.across;
+	maze.heroAlong = hero.along;
+	maze.lionAcross = lion.across;
+	maze.lionAlong = lion.along;
+	if (!Locator::animalSystem::has_value())
+	{
+		return;
+	}
+	auto& animals = Locator::animalSystem::value();
+	// The villager has the size of its age. The sheep and the lion are larger.
+	const bool theseus = maze_puzzle::IsTheseus(game.type);
+	maze.hero = animals.CreatePuzzlePiece(theseus ? maze_puzzle::k_TheseusHeroKind : maze_puzzle::k_SheepKind,
+	                                      CellPlace(game, hero), maze_puzzle::k_PieceAge,
+	                                      theseus ? std::nullopt : std::optional(maze_puzzle::k_LargePieceScale), puzzle);
+	maze.lion = animals.CreatePuzzlePiece(maze_puzzle::k_LionKind, CellPlace(game, lion), maze_puzzle::k_PieceAge,
+	                                      maze_puzzle::k_LargePieceScale, puzzle);
+	// The hand can not take them, and nothing destroys them
+	for (const auto animal : {maze.hero, maze.lion})
+	{
+		if (IsThere(registry, animal))
+		{
+			registry.AssignOrReplace<CannotBePickedUp>(animal);
+			registry.AssignOrReplace<Indestructible>(animal);
+		}
+	}
+	for (const auto animal : {maze.hero, maze.lion})
+	{
+		if (IsThere(registry, animal))
+		{
+			StartSparkle(WorldOf(animal), maze_puzzle::k_SparkleMagnitude, maze_puzzle::k_StartSparkleTurns);
+		}
+	}
+}
+
+/// A maze at its start:
+/// - a fence on each wall of its layout, which the hand can not take,
+/// - a palm tree at each corner and a street lantern at the middle of each edge,
+/// - its animals on their first cells,
+/// - for the lion maze, five bells around the maze.
+void StartMaze(entt::entity puzzle, PuzzleGame& game)
+{
+	auto& registry = Entities();
+	const auto steps = maze_puzzle::MazeSteps(GridSteps(game));
+	game.cosineStep = steps.cosine;
+	game.sineStep = steps.sine;
+	for (const auto& fence : maze_puzzle::FencesOf(game.type))
+	{
+		const auto made = MakeFence(game, fence);
+		registry.Assign<CannotBePickedUp>(made);
+		FenceSlot(game.maze, fence) = made;
+	}
+	const auto side = maze_puzzle::SideOf(game.type);
+	const auto& terrain = Locator::terrainSystem::value();
+	const auto corners = maze_puzzle::CornerSteps(side);
+	for (size_t corner = 0; corner < corners.size(); ++corner)
+	{
+		const auto place = StepPlace(game, corners.at(corner));
+		const auto palm = archetypes::TreeArchetype::Create(0, map_coords::ToWorld(terrain, place),
+		                                                    maze_puzzle::k_CornerTreeKind, false, 0.0f, 1.0f, 1.0f);
+		ecs::thing_map_place::Keep(registry, palm, place);
+		FileInMap(palm);
+		registry.Assign<ScriptControlled>(palm);
+		game.maze.palms.at(corner) = palm;
+	}
+	const auto edges = maze_puzzle::LanternSteps(side);
+	for (size_t edge = 0; edge < edges.size(); ++edge)
+	{
+		const auto place = StepPlace(game, edges.at(edge));
+		const auto lantern =
+		    archetypes::StreetLanternArchetype::Create(map_coords::ToWorld(terrain, place), maze_puzzle::k_LanternKind);
+		if (lantern != entt::null)
+		{
+			ecs::thing_map_place::Keep(registry, lantern, place);
+			FileInMap(lantern);
+		}
+		game.lanterns.at(edge) = lantern;
+	}
+	ResetMaze(puzzle, game);
+	if (maze_puzzle::IsTilt(game.type))
+	{
+		for (size_t bell = 0; bell < maze_puzzle::k_Bells; ++bell)
+		{
+			game.maze.bells.at(bell) = MakeBell(puzzle, game, bell);
+		}
+	}
+}
+
+/// An animal of a maze turns to the angle of its next move. When it faces that angle, it starts to go to its cell, and
+/// then it arrives there.
+void MovePiece(const PuzzleGame& game, entt::entity animal, uint16_t angle, int16_t& stage, maze_puzzle::Cell cell)
+{
+	if (!IsThere(Entities(), animal) || !Locator::animalSystem::has_value())
+	{
+		return;
+	}
+	auto& animals = Locator::animalSystem::value();
+	if (animals.TurnPieceTowards(animal, angle) != angle)
+	{
+		return;
+	}
+	if (stage == 0)
+	{
+		animals.MovePieceTo(animal, CellPlace(game, cell), maze_puzzle::k_PieceMetresPerSecond);
+		stage = 1;
+	}
+	else if (stage == 1 && animals.PieceArrived(animal))
+	{
+		stage = 2;
+	}
+}
+
+/// Whether an animal of a maze goes to a place now
+bool MovingToPlace(entt::entity animal)
+{
+	if (!Locator::animalSystem::has_value())
+	{
+		return false;
+	}
+	return Locator::animalSystem::value().TopGameStateOf(animal) == maze_puzzle::k_MoveToPosState;
+}
+
+/// One turn of a Theseus maze. When the two animals stand still on their cells, a tap on the land in line with the
+/// villager moves the villager one cell, and then the lion up to two cells. Then the animals turn and go to their cells.
+void ProcessTheseus(entt::entity puzzle, PuzzleGame& game, const std::optional<map_coords::MapCoords>& tapped)
+{
+	auto& registry = Entities();
+	auto& maze = game.maze;
+	if (maze.marker != k_NoEffectHandle && Locator::effectRequestSystem::has_value() &&
+	    !Locator::effectRequestSystem::value().IsRunning(maze.marker))
+	{
+		RemoveMarker(maze);
+	}
+	PutBackFences(game);
+	// An animal that went puts the maze back to its start
+	if ((maze.hero != entt::null && !registry.Valid(maze.hero)) || (maze.lion != entt::null && !registry.Valid(maze.lion)))
+	{
+		ResetMaze(puzzle, game);
+		return;
+	}
+	if (!IsThere(registry, maze.hero) || !IsThere(registry, maze.lion))
+	{
+		return;
+	}
+	const bool still = !MovingToPlace(maze.hero) && !MovingToPlace(maze.lion) && maze.lionStage == 2 && maze.heroStage == 2;
+	if (still)
+	{
+		RemoveMarker(maze);
+		// The lion caught the villager
+		if (ecs::thing_map_place::Of(registry, maze.hero) == ecs::thing_map_place::Of(registry, maze.lion))
+		{
+			ResetMaze(puzzle, game);
+			return;
+		}
+		if (!tapped.has_value())
+		{
+			return;
+		}
+		const auto step = maze_puzzle::TappedStep(MazeGrid(game), maze_puzzle::SideOf(game.type), tapped->x, tapped->z);
+		if (!step.has_value())
+		{
+			return;
+		}
+		maze.marker = StartSparkle(map_coords::ToWorld(Locator::terrainSystem::value(), StepPlace(game, *step)),
+		                           maze_puzzle::k_MarkerMagnitude, std::nullopt);
+		const maze_puzzle::Cell hero {.across = maze.heroAcross, .along = maze.heroAlong};
+		const auto choice = maze_puzzle::ChooseHeroMove(game.type, *step, hero);
+		if (choice.move == maze_puzzle::HeroMove::None)
+		{
+			return;
+		}
+		if (choice.move == maze_puzzle::HeroMove::Step)
+		{
+			const auto moved = maze_puzzle::Moved(hero, choice.direction);
+			maze.heroAcross = moved.across;
+			maze.heroAlong = moved.along;
+			maze.heroAngle = maze_puzzle::AngleOfDirection(choice.direction);
+			maze.heroStage = 0;
+		}
+		game.started = true;
+		const auto lion = maze_puzzle::MoveLion(game.type, {.across = maze.lionAcross, .along = maze.lionAlong},
+		                                        {.across = maze.heroAcross, .along = maze.heroAlong});
+		maze.lionAcross = lion.cell.across;
+		maze.lionAlong = lion.cell.along;
+		if (lion.angle.has_value())
+		{
+			maze.lionAngle = *lion.angle;
+			maze.lionStage = 0;
+		}
+	}
+	MovePiece(game, maze.lion, maze.lionAngle, maze.lionStage, {.across = maze.lionAcross, .along = maze.lionAlong});
+	MovePiece(game, maze.hero, maze.heroAngle, maze.heroStage, {.across = maze.heroAcross, .along = maze.heroAlong});
+}
+
+/// One turn of the lion maze. When the two animals stand still, the first bell that the hand tapped rings, and the lion
+/// slides in the direction of the bell until a fence stops it. The fifth bell puts the maze back to its start.
+void ProcessTilt(entt::entity puzzle, PuzzleGame& game)
+{
+	auto& registry = Entities();
+	auto& maze = game.maze;
+	PutBackFences(game);
+	if (maze.hero == entt::null || maze.lion == entt::null)
+	{
+		return;
+	}
+	if (!registry.Valid(maze.hero) || !registry.Valid(maze.lion))
+	{
+		ResetMaze(puzzle, game);
+	}
+	if (IsThere(registry, maze.hero) && IsThere(registry, maze.lion) && !MovingToPlace(maze.hero) && !MovingToPlace(maze.lion))
+	{
+		// The sheep stays on its cell
+		const auto sheep = CellPlace(game, {.across = maze.heroAcross, .along = maze.heroAlong});
+		const auto at = ecs::thing_map_place::Of(registry, maze.hero);
+		if ((at.x != sheep.x || at.z != sheep.y) && Locator::animalSystem::has_value())
+		{
+			Locator::animalSystem::value().PutPiece(maze.hero, sheep);
+		}
+		for (size_t index = 0; index < maze_puzzle::k_MoveBells; ++index)
+		{
+			auto& bell = maze.bells.at(index);
+			if (bell != entt::null && !registry.Valid(bell))
+			{
+				bell = MakeBell(puzzle, game, index);
+			}
+			const auto* state = IsThere(registry, bell) ? registry.TryGet<const PuzzleTotem>(bell) : nullptr;
+			if (state == nullptr || state->height == 0)
+			{
+				continue;
+			}
+			const auto point = WorldOf(bell);
+			StartSparkle(point, maze_puzzle::k_SparkleMagnitude, maze_puzzle::k_SparkleTurns);
+			if (Locator::sounds::has_value())
+			{
+				audio::StartGameSoundEffect(
+				    entt::hashed_string(fmt::format("{}/{}", k_ScriptBank, maze_puzzle::k_BellSound).c_str()).value(),
+				    {.position = point, .owner = bell});
+			}
+			game.started = true;
+			const auto direction = static_cast<int32_t>(index);
+			const maze_puzzle::Cell from {.across = maze.lionAcross, .along = maze.lionAlong};
+			const auto to = maze_puzzle::Slide(game.type, from, direction);
+			if (to != from)
+			{
+				maze.lionAcross = to.across;
+				maze.lionAlong = to.along;
+				maze.lionAngle = maze_puzzle::AngleOfDirection(direction);
+				maze.lionStage = 0;
+			}
+			break;
+		}
+		MovePiece(game, maze.lion, maze.lionAngle, maze.lionStage, {.across = maze.lionAcross, .along = maze.lionAlong});
+		const auto reset = maze.bells.at(maze_puzzle::k_ResetBell);
+		const auto* state = IsThere(registry, reset) ? registry.TryGet<const PuzzleTotem>(reset) : nullptr;
+		if (state != nullptr && state->height != 0)
+		{
+			ResetMaze(puzzle, game);
+		}
+	}
+	// The taps of this turn go
+	for (const auto bell : maze.bells)
+	{
+		if (auto* state = IsThere(registry, bell) ? registry.TryGet<PuzzleTotem>(bell) : nullptr)
+		{
+			state->height = 0;
+		}
+	}
+}
+
+/// Whether a maze shows a solution. The solution ends the maze: a sparkle shows where it ended, and its animals go.
+bool TestMaze(PuzzleGame& game)
+{
+	auto& registry = Entities();
+	auto& maze = game.maze;
+	if (maze_puzzle::IsTheseus(game.type))
+	{
+		if (!maze_puzzle::Escaped(game.type, {.across = maze.heroAcross, .along = maze.heroAlong}))
+		{
+			return false;
+		}
+		// The game reads the villager also when it went. Here the sparkle needs a villager.
+		if (IsThere(registry, maze.hero))
+		{
+			StartSparkle(WorldOf(maze.hero), maze_puzzle::k_SparkleMagnitude, maze_puzzle::k_SparkleTurns);
+		}
+	}
+	else
+	{
+		if (!IsThere(registry, maze.lion) || !IsThere(registry, maze.hero) || MovingToPlace(maze.lion) || maze.lionStage != 2)
+		{
+			return false;
+		}
+		const bool arrived = Locator::animalSystem::has_value() && Locator::animalSystem::value().PieceArrived(maze.lion);
+		if (!arrived || maze.lionAcross != maze.heroAcross || maze.lionAlong != maze.heroAlong)
+		{
+			return false;
+		}
+		StartSparkle(WorldOf(maze.hero), maze_puzzle::k_SparkleMagnitude, maze_puzzle::k_SparkleTurns);
+	}
+	for (auto* animal : {&maze.hero, &maze.lion})
+	{
+		if (IsThere(registry, *animal))
+		{
+			world_objects::Remove(*animal);
+		}
+		*animal = entt::null;
+	}
+	RemoveMarker(maze);
+	game.played = true;
+	return true;
+}
+
 /// Whether the puzzle is one of the tree puzzles
 bool IsTreePuzzle(script::PuzzleGameType type)
 {
@@ -522,6 +1012,155 @@ bool IsTreePuzzle(script::PuzzleGameType type)
 }
 
 /// The test of a solution. A solved beach temple puzzle fixes its rings, which the hand can then not take.
+/// The place of a totem of a totem puzzle: on the curve round the puzzle's place, or in a row across the puzzle's grid
+map_coords::MapCoords TotemPlace(const PuzzleGame& game, size_t totem)
+{
+	if (totem_puzzle::OnCurve(game.type))
+	{
+		const auto offset = totem_puzzle::CurveOffset(totem, game.scale);
+		return {.x = game.place.x + offset.x, .z = game.place.z + offset.z, .altitude = game.place.altitude};
+	}
+	return hanoi::GridPlace(game.place, GridSteps(game), static_cast<int32_t>(totem), 0);
+}
+
+/// The totem is put where its height and its slide put it
+void PlaceTotem(entt::entity totem)
+{
+	if (Locator::puzzleTotemSystem::has_value())
+	{
+		Locator::puzzleTotemSystem::value().Place(totem);
+	}
+}
+
+/// A totem of a totem puzzle on its place, at a height. Nothing destroys it, and nothing moves it except the hand.
+entt::entity MakeTotem(entt::entity puzzle, const PuzzleGame& game, size_t index, float yAngleRadians)
+{
+	auto& registry = Entities();
+	const auto place = TotemPlace(game, index);
+	const auto made =
+	    archetypes::PuzzleTotemArchetype::Create(map_coords::ToWorld(Locator::terrainSystem::value(), place),
+	                                             totem_puzzle::k_TotemKind, yAngleRadians, totem_puzzle::k_TotemScale, puzzle);
+	auto& totem = registry.Get<PuzzleTotem>(made);
+	totem.highest = totem_puzzle::k_Highest;
+	totem.height = game.totemHeights.at(index);
+	registry.Assign<Immovable>(made);
+	ecs::thing_map_place::Keep(registry, made, place);
+	FileInMap(made);
+	PlaceTotem(made);
+	return made;
+}
+
+/// A totem puzzle starts: six totems, all fully down. The totems on the curve turn their faces away from the puzzle's
+/// place.
+void StartTotems(entt::entity puzzle, PuzzleGame& game)
+{
+	game.totemHeights.fill(0);
+	for (size_t index = 0; index < totem_puzzle::k_Totems; ++index)
+	{
+		const float facing =
+		    totem_puzzle::OnCurve(game.type) ? totem_puzzle::CurveFacing(game.place, TotemPlace(game, index)) : 0.0f;
+		game.totems.at(index) = MakeTotem(puzzle, game, index, facing);
+	}
+}
+
+/// The spot visual over a totem of a totem puzzle goes
+void RemoveTotemMark(uint32_t& mark)
+{
+	if (mark != k_NoEffectHandle && Locator::effectRequestSystem::has_value())
+	{
+		Locator::effectRequestSystem::value().Remove(mark);
+	}
+	mark = k_NoEffectHandle;
+}
+
+/// One turn of a totem puzzle. It makes again each totem that went, up to the first totem that the player changed. The
+/// puzzle keeps the change and gives the new heights to the totems; the other totems that change slide to theirs. A
+/// spot visual then shows each totem that stands fully up. Only one change comes in each turn. A totem that the puzzle
+/// makes again faces angle 0 and stays in the scripts' hold.
+void ProcessTotems(entt::entity puzzle, PuzzleGame& game)
+{
+	auto& registry = Entities();
+	for (size_t index = 0; index < totem_puzzle::k_Totems; ++index)
+	{
+		auto& slot = game.totems.at(index);
+		if (slot != entt::null && !registry.Valid(slot))
+		{
+			slot = MakeTotem(puzzle, game, index, 0.0f);
+			registry.Assign<ScriptControlled>(slot);
+		}
+		const auto* totem = IsThere(registry, slot) ? registry.TryGet<const PuzzleTotem>(slot) : nullptr;
+		if (totem == nullptr || totem->height == game.totemHeights.at(index))
+		{
+			// A totem that slides takes its next step
+			if (totem != nullptr && totem->slideSteps != 0 && Locator::puzzleTotemSystem::has_value())
+			{
+				Locator::puzzleTotemSystem::value().StepSlide(slot);
+			}
+			continue;
+		}
+		game.started = true;
+		auto shown = game.totemHeights;
+		shown.at(index) = totem->height;
+		const auto change = totem_puzzle::Step(game.type, game.totemHeights, shown);
+		if (!change.has_value())
+		{
+			return;
+		}
+		game.totemHeights = change->kept;
+		for (size_t other = 0; other < totem_puzzle::k_Totems; ++other)
+		{
+			const auto thing = game.totems.at(other);
+			auto* changed = IsThere(registry, thing) ? registry.TryGet<PuzzleTotem>(thing) : nullptr;
+			if (changed == nullptr)
+			{
+				continue;
+			}
+			changed->previousHeight = changed->height;
+			changed->height = game.totemHeights.at(other);
+			if (other != change->moved)
+			{
+				changed->slideSteps = totem_puzzle::k_SlideSteps;
+				++changed->slides;
+			}
+			if (Locator::puzzleTotemSystem::has_value())
+			{
+				Locator::puzzleTotemSystem::value().StepSlide(thing);
+			}
+		}
+		const auto& terrain = Locator::terrainSystem::value();
+		for (size_t other = 0; other < totem_puzzle::k_Totems; ++other)
+		{
+			auto& mark = game.totemMarks.at(other);
+			RemoveTotemMark(mark);
+			if (game.totemHeights.at(other) == totem_puzzle::k_Highest)
+			{
+				mark = StartSparkle(map_coords::ToWorld(terrain, TotemPlace(game, other)), totem_puzzle::k_MarkMagnitude,
+				                    std::nullopt);
+			}
+		}
+		return;
+	}
+}
+
+/// The test of a totem puzzle's solution: all totems fully up. The spot visuals over the totems go, and each totem
+/// shows a spot visual for some turns.
+bool TotemsSolved(PuzzleGame& game)
+{
+	if (!totem_puzzle::Solved(game.totemHeights))
+	{
+		return false;
+	}
+	std::ranges::for_each(game.totemMarks, RemoveTotemMark);
+	const auto& terrain = Locator::terrainSystem::value();
+	for (size_t index = 0; index < totem_puzzle::k_Totems; ++index)
+	{
+		StartSparkle(map_coords::ToWorld(terrain, TotemPlace(game, index)), totem_puzzle::k_MarkMagnitude,
+		             totem_puzzle::k_SolvedMarkTurns);
+	}
+	game.played = true;
+	return true;
+}
+
 bool TestSolution(entt::entity puzzle, PuzzleGame& game)
 {
 	if (IsTreePuzzle(game.type))
@@ -533,6 +1172,19 @@ bool TestSolution(entt::entity puzzle, PuzzleGame& game)
 		}
 		SolveTrees(game);
 		return true;
+	}
+	if (maze_puzzle::IsMaze(game.type))
+	{
+		return TestMaze(game);
+	}
+	if (totem_puzzle::IsTotemPuzzle(game.type))
+	{
+		return TotemsSolved(game);
+	}
+	// The fish puzzle is solved when its fish are caught
+	if (game.type == script::PuzzleGameType::Fishes1)
+	{
+		return game.fish.has_value() && game.fish->net.caught;
 	}
 	if (game.type != script::PuzzleGameType::Hanoi)
 	{
@@ -648,18 +1300,74 @@ void ProcessHanoi(entt::entity puzzle, PuzzleGame& game)
 	}
 }
 
-/// One turn of a puzzle game
-void Process(entt::entity puzzle, PuzzleGame& game)
+/// The model of the floats goes into the mesh cache the first time a fish puzzle needs it
+void LoadFloatModel()
 {
+	if (!Locator::resources::has_value() || !Locator::filesystem::has_value())
+	{
+		return;
+	}
+	auto& meshes = Locator::resources::value().GetMeshes();
+	if (meshes.Contains(ecs::fish_puzzle::k_FloatMeshId.value()))
+	{
+		return;
+	}
+	auto& fileSystem = Locator::filesystem::value();
+	const auto path = fileSystem.GetPath<filesystem::Path::Misc>() / ecs::fish_puzzle::k_FloatModelFile;
+	if (!fileSystem.Exists(path))
+	{
+		SPDLOG_LOGGER_ERROR(spdlog::get("game"), "Model {} not found", path.generic_string());
+		return;
+	}
+	meshes.Load(ecs::fish_puzzle::k_FloatMeshId.value(), resources::L3DLoader::FromDiskTag {}, path);
+}
+
+/// One turn of the fish puzzle. Its first turn makes the ring of floats and the two shoals. Then the shoals swim, also
+/// after the solution, until the fish are caught; each fish that is caught makes a ring on the water.
+void ProcessFish(PuzzleGame& game, const std::optional<glm::vec3>& scare)
+{
+	auto& random = Locator::gameRandom::value();
+	// The draws come from the seed that every computer of a game shares
+	const fish_shoal::Random draw = [&random](float low, float high) { return low + random.GameFloatRand(high - low); };
+	if (!game.fish.has_value())
+	{
+		const glm::vec3 middle {map_coords::ToMetres(game.place.x), game.place.altitude, map_coords::ToMetres(game.place.z)};
+		game.fish = ecs::fish_puzzle::Make(middle, draw);
+		LoadFloatModel();
+	}
+	constexpr auto k_TurnMilliseconds = static_cast<uint32_t>(TimeSystemInterface::k_TurnDuration.count());
+	const auto caught = ecs::fish_puzzle::StepTurn(*game.fish, k_TurnMilliseconds, scare, draw);
+	if (caught.empty() || !Locator::waterRingSystem::has_value())
+	{
+		return;
+	}
+	for (const auto& point : caught)
+	{
+		Locator::waterRingSystem::value().Add({.position = point, .growth = ecs::fish_puzzle::k_CaughtRingGrowth});
+	}
+}
+
+/// One turn of a puzzle game, with the place on the land that a player tapped in this turn and the last scare of the
+/// fish
+void Process(entt::entity puzzle, PuzzleGame& game, const std::optional<map_coords::MapCoords>& tapped,
+             const std::optional<glm::vec3>& fishScare)
+{
+	if (game.type == script::PuzzleGameType::Fishes1)
+	{
+		ProcessFish(game, fishScare);
+	}
 	if (ecs::puzzle_game::LetsGoOfThingsThatWent(game.type))
 	{
-		// The puzzle lets go of each lantern that went. It does not make the lantern again.
+		// The puzzle lets go of each palm tree and each lantern that went. It does not make them again.
 		const auto& registry = Entities();
-		for (auto& lantern : game.lanterns)
+		for (size_t corner = 0; corner < game.lanterns.size(); ++corner)
 		{
-			if (lantern != entt::null && !registry.Valid(lantern))
+			for (auto* thing : {&game.maze.palms.at(corner), &game.lanterns.at(corner)})
 			{
-				lantern = entt::null;
+				if (*thing != entt::null && !registry.Valid(*thing))
+				{
+					*thing = entt::null;
+				}
 			}
 		}
 	}
@@ -680,6 +1388,18 @@ void Process(entt::entity puzzle, PuzzleGame& game)
 	else if (IsTreePuzzle(game.type))
 	{
 		ProcessTrees(game);
+	}
+	else if (maze_puzzle::IsTheseus(game.type))
+	{
+		ProcessTheseus(puzzle, game, tapped);
+	}
+	else if (maze_puzzle::IsTilt(game.type))
+	{
+		ProcessTilt(puzzle, game);
+	}
+	else if (totem_puzzle::IsTotemPuzzle(game.type))
+	{
+		ProcessTotems(puzzle, game);
 	}
 }
 } // namespace
@@ -711,8 +1431,116 @@ entt::entity PuzzleGameSystem::Create(script::PuzzleGameType type, glm::vec3 poi
 	{
 		StartTrees(registry.Get<PuzzleGame>(puzzle));
 	}
+	else if (maze_puzzle::IsMaze(type))
+	{
+		StartMaze(puzzle, registry.Get<PuzzleGame>(puzzle));
+	}
+	else if (totem_puzzle::IsTotemPuzzle(type))
+	{
+		StartTotems(puzzle, registry.Get<PuzzleGame>(puzzle));
+	}
 	return puzzle;
 }
+
+namespace
+{
+/// The feet of a creature where the last game turn posed its body, the right foot first; none for a creature without
+/// feet or with no pose of a turn yet
+std::optional<creature_footprints::Feet> TurnFeetOf(const Creature& creature, const CreatureAnimation& animation)
+{
+	const auto& rigs = Locator::resources::value().GetCreatureRigs();
+	const auto rigId = creature::GetRigId(creature.species);
+	if (!rigs.Contains(rigId))
+	{
+		return std::nullopt;
+	}
+	const auto& points = rigs.Handle(rigId)->actionPoints;
+	const auto& pose = animation.newerTurnPose;
+	if (!points.has_value() || points->rightFoot >= pose.size())
+	{
+		return std::nullopt;
+	}
+	const auto rightBone = points->rightFoot;
+	const auto leftBone = rightBone < animation.mirror.size() ? animation.mirror[rightBone] : rightBone;
+	if (leftBone >= pose.size())
+	{
+		return std::nullopt;
+	}
+	return creature_footprints::Feet {.right = pose[rightBone], .left = pose[leftBone]};
+}
+
+/// What the events of a species' animations need to know of each animation
+creature_audio::InfoOf InfoOfRig(const creature::CreatureRig* rig)
+{
+	return [rig](size_t index) -> std::optional<creature_audio::AnimationInfo> {
+		const auto* played = rig != nullptr ? rig->GetAnimation(creature::CreatureRig::Mesh::Base, index) : nullptr;
+		if (played == nullptr)
+		{
+			return std::nullopt;
+		}
+		return creature_audio::AnimationInfo {
+		    .events = index < rig->soundEvents.size() ? std::span(rig->soundEvents[index])
+		                                              : std::span<const creature_audio::SoundEvent> {},
+		    .durationMs = played->duration,
+		    .looping = played->looping,
+		};
+	};
+}
+
+/// The point where the creatures' footsteps of the last game turn scare the fish of a fish puzzle. The steps come from
+/// the bodies as the turns posed them, so every computer finds the same steps. When steps of several creatures scare
+/// the fish, the step of the creature with the highest entity number is the scare. Each creature keeps its layers for
+/// the next turn. A creature that the puzzle sees for the first time makes no step.
+std::optional<glm::vec3> CreatureStepScare(Registry& registry)
+{
+	std::vector<entt::entity> creatures;
+	registry.Each<const Creature, const CreatureAnimation>(
+	    [&creatures](entt::entity entity, const Creature&, const CreatureAnimation&) { creatures.push_back(entity); });
+	std::ranges::sort(creatures);
+	const auto& rigs = Locator::resources::value().GetCreatureRigs();
+	constexpr auto k_TurnMilliseconds = std::chrono::duration<float, std::milli>(TimeSystemInterface::k_TurnDuration).count();
+	std::optional<glm::vec3> scare;
+	for (const auto entity : creatures)
+	{
+		const auto& creature = registry.Get<const Creature>(entity);
+		const auto& animation = registry.Get<const CreatureAnimation>(entity);
+		const auto current = ecs::creature_turn_steps::TurnLayersOf(animation);
+		auto* steps = registry.TryGet<CreatureTurnSteps>(entity);
+		if (steps == nullptr)
+		{
+			registry.Assign<CreatureTurnSteps>(entity, CreatureTurnSteps {.last = current});
+			continue;
+		}
+		const auto rigId = creature::GetRigId(creature.species);
+		const auto* rig = rigs.Contains(rigId) ? &*rigs.Handle(rigId) : nullptr;
+		const auto step = ecs::creature_turn_steps::StepScare(steps->last, current, k_TurnMilliseconds, InfoOfRig(rig),
+		                                                      TurnFeetOf(creature, animation));
+		if (step.has_value())
+		{
+			SPDLOG_LOGGER_DEBUG(spdlog::get("game"), "The footstep of creature {} scares the fish at ({:.2f}, {:.2f}, {:.2f})",
+			                    static_cast<uint32_t>(entity), step->x, step->y, step->z);
+			scare = step;
+		}
+	}
+	return scare;
+}
+
+/// Removes the layers that the creatures keep for a fish puzzle, when no fish puzzle is on the land
+void ForgetCreatureSteps(Registry& registry)
+{
+	if (registry.Size<CreatureTurnSteps>() == 0)
+	{
+		return;
+	}
+	std::vector<entt::entity> creatures;
+	registry.Each<const CreatureTurnSteps>(
+	    [&creatures](entt::entity entity, const CreatureTurnSteps&) { creatures.push_back(entity); });
+	for (const auto entity : creatures)
+	{
+		registry.Remove<CreatureTurnSteps>(entity);
+	}
+}
+} // namespace
 
 void PuzzleGameSystem::ProcessTurn()
 {
@@ -721,13 +1549,29 @@ void PuzzleGameSystem::ProcessTurn()
 	registry.Each<const PuzzleGame>(
 	    [&puzzles](entt::entity puzzle, const PuzzleGame& game) { puzzles.emplace_back(game.order, puzzle); });
 	std::ranges::sort(puzzles, std::ranges::greater {});
+	// The creatures' footsteps of the last turn scare the fish. When a command of this turn or a fall in the sea of the
+	// last turn scared the fish, that scare stays.
+	if (HasFishPuzzle())
+	{
+		if (const auto step = CreatureStepScare(registry); step.has_value() && !_fishScare.has_value())
+		{
+			_fishScare = step;
+		}
+	}
+	else
+	{
+		ForgetCreatureSteps(registry);
+	}
 	for (const auto& [order, puzzle] : puzzles)
 	{
 		if (auto* game = registry.Valid(puzzle) ? registry.TryGet<PuzzleGame>(puzzle) : nullptr)
 		{
-			Process(puzzle, *game);
+			Process(puzzle, *game, _tappedPlace, _fishScare);
 		}
 	}
+	// The tapped place and the scare of the fish are for this turn only
+	_tappedPlace.reset();
+	_fishScare.reset();
 }
 
 std::optional<bool> PuzzleGameSystem::Played(entt::entity puzzle)
@@ -819,4 +1663,51 @@ bool PuzzleGameSystem::DeletePieces(entt::entity puzzle)
 		}
 	}
 	return true;
+}
+
+void PuzzleGameSystem::TapPlace(const map_coords::MapCoords& place)
+{
+	_tappedPlace = place;
+}
+
+bool PuzzleGameSystem::TapTotem(entt::entity totem)
+{
+	auto& registry = Entities();
+	auto* state = totem != entt::null && registry.Valid(totem) ? registry.TryGet<PuzzleTotem>(totem) : nullptr;
+	if (state == nullptr)
+	{
+		return false;
+	}
+	if (state->highest == maze_puzzle::k_TappableHighest)
+	{
+		state->height = maze_puzzle::k_TappableHighest;
+	}
+	// Each tap makes a sound that the player hears everywhere
+	if (Locator::sounds::has_value())
+	{
+		audio::StartGameSoundEffect(
+		    entt::hashed_string(fmt::format("{}/{}", k_GameBank, maze_puzzle::k_BellTapSound).c_str()).value(), {});
+	}
+	return true;
+}
+
+void PuzzleGameSystem::ScareFish(glm::vec3 point)
+{
+	_fishScare = point;
+}
+
+bool PuzzleGameSystem::HasFishPuzzle() const
+{
+	bool found = false;
+	Entities().Each<const PuzzleGame>(
+	    [&found](const PuzzleGame& game) { found = found || game.type == script::PuzzleGameType::Fishes1; });
+	return found;
+}
+
+void PuzzleGameSystem::AfterLoad()
+{
+	_tappedPlace.reset();
+	_fishScare.reset();
+	auto& registry = Entities();
+	registry.Each<PuzzleGame>([](PuzzleGame& game) { ecs::puzzle_game::ForgetUnsavedState(game); });
 }

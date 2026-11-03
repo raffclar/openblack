@@ -51,6 +51,7 @@
 #include "ECS/Components/LivingAction.h"
 #include "ECS/Components/Mesh.h"
 #include "ECS/Components/Physics.h"
+#include "ECS/Components/PuzzleGame.h"
 #include "ECS/Components/ScriptControl.h"
 #include "ECS/Components/Temple.h"
 #include "ECS/Components/TempleExterior.h"
@@ -298,6 +299,83 @@ entt::entity AnimalSystem::CreateStillAnimal(AnimalInfo type, glm::vec3 position
 	}
 	registry.Assign<AnimalPose>(entity, AnimalPose {.light = light});
 	return entity;
+}
+
+entt::entity AnimalSystem::CreatePuzzlePiece(AnimalInfo type, glm::ivec2 place, uint32_t age, std::optional<float> scale,
+                                             entt::entity puzzle)
+{
+	auto& registry = EntityRegistry();
+	const auto position = Metres(place);
+	if (!OnMap(position))
+	{
+		return entt::null;
+	}
+	const auto& info = InfoOf(type);
+	// The day it was born a random part of its starting age back, then its size for its age. A puzzle can give it
+	// another size after that.
+	(void)RandomWhole(info.startAge / 2);
+	const float aged = animals::BirthScale(age, info.grownUpAge, info.ageToScale.values, Random);
+	const glm::vec3 point(position.x, Ground(position), position.y);
+	const auto entity = ecs::archetypes::AnimalArchetype::Create(type, point, gutils::ConvertGameAngleTo3D(0),
+	                                                             scale.value_or(aged), PlayerNames::NEUTRAL);
+	auto& animal = registry.Get<Animal>(entity);
+	animal.birthTurn = villager_age::BirthTurnFor(Locator::time::value().GetTurn(), age);
+	animal.move.position = place;
+	animal.move.goal = place;
+	animal.move.angle = 0;
+	animal.move.speed = SpeedStateOf(info, 0);
+	SetTopState(animal, AnimalState::DecideWhatToDo);
+	SyncWorld(animal);
+	animal.previousPosition = animal.position;
+	animal.previousHeading = animal.heading;
+	registry.Assign<AnimalPose>(entity, AnimalPose {.light = AnimalLight::Land});
+	registry.Assign<PuzzlePiece>(entity, PuzzlePiece {.puzzle = puzzle});
+	return entity;
+}
+
+uint16_t AnimalSystem::TurnPieceTowards(entt::entity entity, uint16_t angle)
+{
+	auto* animal = EntityRegistry().TryGet<Animal>(entity);
+	if (animal == nullptr)
+	{
+		return angle;
+	}
+	// It turns harder when it is near the place that it goes to, so an animal on that place turns at once
+	const float distance = glm::length(glm::vec2(animal->move.goal - animal->move.position)) * map_coords::k_MetresPerFixed;
+	const auto turn = animals::TurnTowards(animal->move.angle, angle, TurnAngleOf(*animal), animal->move.speed, distance);
+	animal->move.angle = turn.angle;
+	SyncWorld(*animal);
+	return turn.angle;
+}
+
+void AnimalSystem::MovePieceTo(entt::entity entity, glm::ivec2 place, float metresPerSecond)
+{
+	auto* animal = EntityRegistry().TryGet<Animal>(entity);
+	if (animal == nullptr)
+	{
+		return;
+	}
+	// The speed in metres a second becomes a speed in metres a turn
+	constexpr float k_SecondsPerTurn = 0.1f;
+	SetSpeedFromScript(entity, metresPerSecond * k_SecondsPerTurn);
+	SetupMoveToFixed(*animal, place, 0.0f, AnimalState::DecideWhatToDo);
+}
+
+bool AnimalSystem::PieceArrived(entt::entity entity) const
+{
+	const auto* animal = EntityRegistry().TryGet<const Animal>(entity);
+	return animal != nullptr && animals::AreWeThere(animal->move.position, animal->move.goal, animal->move.speed);
+}
+
+void AnimalSystem::PutPiece(entt::entity entity, glm::ivec2 place)
+{
+	auto* animal = EntityRegistry().TryGet<Animal>(entity);
+	if (animal == nullptr)
+	{
+		return;
+	}
+	animal->move.position = place;
+	SyncWorld(*animal);
 }
 
 entt::entity AnimalSystem::CreateLoadedAnimal(const LoadedAnimal& loaded)
@@ -767,6 +845,12 @@ void AnimalSystem::AnimalTurn(entt::entity entity)
 	animal.previousPosition = animal.position;
 	animal.previousHeading = animal.heading;
 	++animal.turnsInState;
+	// An animal of a puzzle game has no needs and decides nothing. It only moves to where its puzzle sends it.
+	if (registry.AllOf<PuzzlePiece>(entity))
+	{
+		PuzzlePieceTurn(entity, animal);
+		return;
+	}
 	// The needs of every kind come first, and then the target. A target that it lets go of ends its turn
 	NeedsTurn(entity, animal);
 	if (DropTarget(entity, animal))
@@ -816,6 +900,43 @@ void AnimalSystem::AnimalTurn(entt::entity entity)
 	{
 		// Any other kind goes into its next state when its clip ends
 		SetTopState(animal, animal.afterClip);
+	}
+}
+
+void AnimalSystem::PuzzlePieceTurn(entt::entity entity, Animal& animal)
+{
+	// Every kind is brought down, eaten and lands in the same way
+	if (CommonStateTurn(entity, animal))
+	{
+		return;
+	}
+	if (animal.state == AnimalState::Dying || animal.state == AnimalState::Dead)
+	{
+		ProcessDeath(entity, animal);
+		return;
+	}
+	// It reacts to things as any animal does
+	if (Flee(entity, animal) || LookOrGoToFood(entity, animal))
+	{
+		return;
+	}
+	switch (animal.state)
+	{
+	case AnimalState::MoveToPos:
+		// It goes straight to its place, and there it takes its final state
+		if (MoveTo3D(animal))
+		{
+			SetTopState(animal, animal.finalState);
+		}
+		break;
+	case AnimalState::WaitForClip:
+		if (animal.turnsInState * k_TurnMilliseconds >= PlayTimeOf(animal.animation))
+		{
+			SetTopState(animal, animal.afterClip);
+		}
+		break;
+	default:
+		break;
 	}
 }
 

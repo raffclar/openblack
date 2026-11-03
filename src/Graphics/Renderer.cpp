@@ -8511,8 +8511,10 @@ void Renderer::DrawPass(const DrawSceneDesc& desc) const
 	{
 		DrawHandWaterGlow(desc);
 	}
-	// So do the fish farms' shoals, swimming under it
+	// So do the fish farms' shoals and the shoals of the fish puzzle, swimming under it
 	DrawFishShoals(desc);
+	// And the parts of the floats of the fish puzzle under the sea's level
+	DrawFishPuzzleFloats(desc);
 
 	// Enable stats or debug text.
 	auto debugMode = BGFX_DEBUG_NONE;

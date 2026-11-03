@@ -13,13 +13,18 @@
 #include <cstring>
 
 #include <array>
+#include <limits>
 #include <vector>
 
 #include <bgfx/bgfx.h>
+#include <glm/gtc/matrix_transform.hpp>
 
 #include "3D/TempleInteriorInterface.h"
 #include "Animals/FishShoal.h"
+#include "Camera/Camera.h"
 #include "ECS/Components/FishFarm.h"
+#include "ECS/Components/PuzzleGame.h"
+#include "ECS/FishPuzzleRules.h"
 #include "ECS/Registry.h"
 #include "Graphics/GraphicsHandleBgfx.h"
 #include "Graphics/ShaderManager.h"
@@ -41,6 +46,9 @@ struct Vertex
 
 /// The two triangles of a fish's square
 constexpr std::array<size_t, 6> k_Triangles {0, 1, 2, 0, 2, 3};
+/// An opaque model with depth, the nearest in front
+constexpr uint64_t k_OpaqueState = BGFX_STATE_WRITE_RGB | BGFX_STATE_WRITE_A | BGFX_STATE_WRITE_Z | BGFX_STATE_CULL_CW |
+                                   BGFX_STATE_DEPTH_TEST_GREATER | BGFX_STATE_MSAA;
 } // namespace
 
 void Renderer::DrawFishShoals(const DrawSceneDesc& desc) const
@@ -59,18 +67,13 @@ void Renderer::DrawFishShoals(const DrawSceneDesc& desc) const
 	}
 
 	std::vector<Vertex> vertices;
-	const auto& registry = Locator::entitiesRegistry::value();
-	registry.Each<const ecs::components::FishFarm>([&vertices](const ecs::components::FishFarm& farm) {
-		if (!farm.shoal.has_value() || !farm.shownAlpha.has_value())
-		{
-			return;
-		}
+	const auto addShoal = [&vertices](const fish_shoal::Shoal& shoal, uint8_t alpha) {
 		// White, as opaque as the shoal is at its distance
-		const auto colour = (static_cast<uint32_t>(*farm.shownAlpha) << 24u) | 0x00FFFFFFu;
-		const auto shown = fish_shoal::ShownCount(farm.shoal->fullness);
+		const auto colour = (static_cast<uint32_t>(alpha) << 24u) | 0x00FFFFFFu;
+		const auto shown = fish_shoal::ShownCount(shoal.fullness);
 		for (uint32_t i = 0; i < shown; ++i)
 		{
-			const auto& fish = farm.shoal->fish.at(i);
+			const auto& fish = shoal.fish.at(i);
 			const auto corners = fish_shoal::Corners(fish);
 			const auto uvs = fish_shoal::AtlasCorners(fish.frame);
 			for (const auto corner : k_Triangles)
@@ -79,6 +82,30 @@ void Renderer::DrawFishShoals(const DrawSceneDesc& desc) const
 				// back, each corner falls where it is seen from above
 				const auto& at = corners.at(corner);
 				vertices.push_back({{at.x, -at.y, at.z}, uvs.at(corner), colour});
+			}
+		}
+	};
+	const auto& registry = Locator::entitiesRegistry::value();
+	registry.Each<const ecs::components::FishFarm>([&addShoal](const ecs::components::FishFarm& farm) {
+		if (farm.shoal.has_value() && farm.shownAlpha.has_value())
+		{
+			addShoal(*farm.shoal, *farm.shownAlpha);
+		}
+	});
+	// The shoals of the fish puzzle swim in the turns wherever the camera is, but show only as near as a farm's shoal.
+	// After the fish are caught, they do not show.
+	const auto eye = desc.camera->GetOrigin();
+	registry.Each<const ecs::components::PuzzleGame>([&addShoal, eye](const ecs::components::PuzzleGame& game) {
+		if (!game.fish.has_value() || game.fish->net.caught)
+		{
+			return;
+		}
+		for (const auto& shoal : game.fish->shoals)
+		{
+			const auto offset = eye - shoal.centre;
+			if (const auto alpha = fish_shoal::AlphaAt(glm::dot(offset, offset)))
+			{
+				addShoal(shoal, *alpha);
 			}
 		}
 	});
@@ -113,4 +140,43 @@ void Renderer::DrawFishShoals(const DrawSceneDesc& desc) const
 	// Unlit, blended over what lies under the sea, both sides, for the sea to be blended over them in turn
 	bgfx::setState(BGFX_STATE_WRITE_RGB | BGFX_STATE_BLEND_ALPHA | BGFX_STATE_MSAA);
 	program->Submit(static_cast<bgfx::ViewId>(desc.viewId));
+}
+
+void Renderer::DrawFishPuzzleFloats(const DrawSceneDesc& desc) const
+{
+	if (desc.viewId != RenderPass::Main || !desc.drawWater ||
+	    (Locator::temple::has_value() && Locator::temple::value().Active()))
+	{
+		return;
+	}
+	const auto& meshes = Locator::resources::value().GetMeshes();
+	if (!meshes.Contains(ecs::fish_puzzle::k_FloatMeshId.value()))
+	{
+		return;
+	}
+	const auto& mesh = *meshes.Handle(ecs::fish_puzzle::k_FloatMeshId.value());
+	const auto* program = _shaderManager->GetShader("Object");
+	Locator::entitiesRegistry::value().Each<const ecs::components::PuzzleGame>(
+	    [this, &mesh, program](const ecs::components::PuzzleGame& game) {
+		    if (!game.fish.has_value())
+		    {
+			    return;
+		    }
+		    // Only what of each float is under the sea's level is drawn, beneath the sea's surface, which the sea is then
+		    // blended over. The float keeps its own colour.
+		    for (const auto& point : ecs::fish_puzzle::FloatPoints(game.fish->net))
+		    {
+			    const auto model = glm::translate(glm::mat4(1.0f), point);
+			    L3DMeshSubmitDesc submitDesc = {};
+			    submitDesc.viewId = RenderPass::UnderSea;
+			    submitDesc.program = program;
+			    submitDesc.state = k_OpaqueState;
+			    submitDesc.modelMatrices = &model;
+			    submitDesc.matrixCount = 1;
+			    submitDesc.useMaterialBlending = true;
+			    submitDesc.useMaterialCulling = true;
+			    submitDesc.cutAbove = 0.0f;
+			    DrawMesh(mesh, submitDesc, std::numeric_limits<uint8_t>::max());
+		    }
+	    });
 }

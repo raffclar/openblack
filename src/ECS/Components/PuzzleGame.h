@@ -12,11 +12,13 @@
 #include <cstdint>
 
 #include <array>
+#include <optional>
 
 #include <entt/entity/entity.hpp>
 #include <glm/vec3.hpp>
 
 #include "3D/MapCoords.h"
+#include "ECS/FishPuzzleRules.h"
 #include "ScriptHeaders/ScriptEnums.h"
 
 namespace openblack::ecs::components
@@ -48,8 +50,74 @@ template <size_t Count>
 	return things;
 }
 
-/// A puzzle game that a script made. Each kind has its own pieces; the beach temple puzzle and the tree puzzles have
-/// pieces now. The player cannot solve a kind that has none.
+/// An animal of a maze puzzle: the villager, the sheep or the lion. It has no needs, decides nothing and moves only
+/// when its puzzle tells it to.
+struct PuzzlePiece
+{
+	/// The puzzle that the animal belongs to
+	entt::entity puzzle {entt::null};
+};
+
+/// A totem of a puzzle: a building of no town that the scripts or a puzzle make. A script can set its height, up to its
+/// greatest height. The hand can tap it only when its greatest height is -1, as for the bells of the lion maze, and the
+/// tap sets its height to -1.
+struct PuzzleTotem
+{
+	/// The puzzle that the totem belongs to, none for a totem that a script made
+	entt::entity puzzle {entt::null};
+	/// The greatest height and the height
+	int32_t highest {100};
+	int32_t height {0};
+	/// A hand holds it, as the turn last saw it
+	bool held {false};
+	/// A totem that its puzzle changed slides from its last height to its height. The turns count the steps left, and
+	/// each new slide adds one to the count of slides. A saved game keeps none of these values.
+	int32_t previousHeight {0};
+	int32_t slideSteps {0};
+	uint32_t slides {0};
+};
+
+/// How the frames show the slide of a puzzle totem. Each frame that draws the totem takes one step of the slide, and the
+/// turns take their steps too. It is not a part of the synced world.
+struct PuzzleTotemDrawnSlide
+{
+	/// The slide that the frames show, from the count of slides of the totem
+	uint32_t slide {0};
+	/// The steps that the frames took in this slide
+	int32_t frameSteps {0};
+};
+
+/// The state of a maze puzzle: a Theseus maze or the lion maze
+struct MazeState
+{
+	/// The fences on the side of each cell towards the next cell along, and towards the next cell across, nine to a row
+	std::array<entt::entity, 81> alongFences {NoThings<81>()};
+	std::array<entt::entity, 81> acrossFences {NoThings<81>()};
+	/// The palm tree at each corner
+	std::array<entt::entity, 4> palms {NoThings<4>()};
+	/// The villager of a Theseus maze or the sheep of the lion maze, and the lion
+	entt::entity hero {entt::null};
+	entt::entity lion {entt::null};
+	/// The cells of the villager or the sheep, and of the lion
+	int32_t heroAcross {0};
+	int32_t heroAlong {0};
+	int32_t lionAcross {0};
+	int32_t lionAlong {0};
+	/// The angle that each animal turns to before its next move, and how far its move got: 0 to start, 1 on its way and
+	/// 2 there
+	uint16_t lionAngle {0};
+	uint16_t heroAngle {0};
+	int16_t lionStage {0};
+	int16_t heroStage {0};
+	/// The spot visual that marks the last tapped cell of a Theseus maze, 0 for none
+	uint32_t marker {0};
+	/// The bells of the lion maze, the bell that puts the puzzle back last. A bell is a puzzle totem with a height of -1
+	/// after a tap.
+	std::array<entt::entity, 5> bells {NoThings<5>()};
+};
+
+/// A puzzle game that a script made. Each kind has its own pieces; the beach temple puzzle, the tree puzzles and the
+/// mazes have pieces now. The player cannot solve a kind that has none.
 struct PuzzleGame
 {
 	script::PuzzleGameType type {script::PuzzleGameType::None};
@@ -82,8 +150,17 @@ struct PuzzleGame
 	/// The puff of mist over each spot and the bat for each spot, until the solution
 	std::array<entt::entity, 9> mists {NoThings<9>()};
 	std::array<entt::entity, 9> bats {NoThings<9>()};
-	/// The lantern at each corner of the tree puzzle
+	/// The lantern at each corner of the tree puzzle, or at the middle of each edge of a maze
 	std::array<entt::entity, 4> lanterns {NoThings<4>()};
+	/// The fences, the animals and the bells of a maze
+	MazeState maze {};
+	/// The ring of floats and the two shoals of the fish puzzle, made in its first turn
+	std::optional<fish_puzzle::FishNet> fish;
+	/// The six totems of a totem puzzle, the height that the puzzle keeps for each totem, and the spot visual over each
+	/// totem that stands fully up (0 for none)
+	std::array<entt::entity, 6> totems {NoThings<6>()};
+	std::array<int32_t, 6> totemHeights {};
+	std::array<uint32_t, 6> totemMarks {};
 };
 
 } // namespace openblack::ecs::components
