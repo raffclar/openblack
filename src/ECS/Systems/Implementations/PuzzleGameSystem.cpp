@@ -662,7 +662,7 @@ void PutBackFences(PuzzleGame& game)
 entt::entity MakeBell(entt::entity puzzle, const PuzzleGame& game, size_t bell)
 {
 	auto& registry = Entities();
-	const auto& [step, angle] = maze_puzzle::BellPlaces(maze_puzzle::SideOf(game.type)).at(bell);
+	const auto [step, angle] = maze_puzzle::BellPlaces(maze_puzzle::SideOf(game.type)).at(bell);
 	const auto place = StepPlace(game, step);
 	const auto made =
 	    archetypes::PuzzleTotemArchetype::Create(map_coords::ToWorld(Locator::terrainSystem::value(), place),

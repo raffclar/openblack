@@ -141,44 +141,44 @@ void PuzzleTotemSystem::UpdateFrame(std::chrono::milliseconds frameRealTime)
 	auto& registry = Locator::entitiesRegistry::value();
 	const bool due = frame_pace::Due(_framePace, frameRealTime);
 	std::vector<entt::entity> done;
-	registry.Each<const PuzzleTotem, const Transform>(
-	    [this, &registry, &done, due](entt::entity totem, const PuzzleTotem& component, const Transform& transform) {
-		    if (component.slideSteps == 0 || !Rises(component))
-		    {
-			    if (registry.AnyOf<DrawnHeight, PuzzleTotemDrawnSlide>(totem))
-			    {
-				    done.push_back(totem);
-			    }
-			    return;
-		    }
-		    auto* slide = registry.TryGet<PuzzleTotemDrawnSlide>(totem);
-		    if (slide == nullptr)
-		    {
-			    slide = &registry.Assign<PuzzleTotemDrawnSlide>(totem, PuzzleTotemDrawnSlide {.slide = component.slides});
-		    }
-		    if (slide->slide != component.slides)
-		    {
-			    *slide = {.slide = component.slides};
-		    }
-		    // Only a frame that draws the totem takes a step. The steps of the turns and of the frames count from one total.
-		    const bool drawn =
-		        !Locator::objectDrawListSystem::has_value() || Locator::objectDrawListSystem::value().Drawn(registry, totem);
-		    if (due && drawn && component.slideSteps - slide->frameSteps > 0)
-		    {
-			    ++slide->frameSteps;
-		    }
-		    const int32_t left = std::max(component.slideSteps - slide->frameSteps, 0);
-		    const float y = LandUnder(transform.position) +
-		                    ecs::puzzle_totem::OffsetFor(ShareWith(component, left), DepthOf(registry, totem));
-		    if (auto* height = registry.TryGet<DrawnHeight>(totem))
-		    {
-			    height->y = y;
-		    }
-		    else
-		    {
-			    registry.Assign<DrawnHeight>(totem, y);
-		    }
-	    });
+	registry.Each<const PuzzleTotem, const Transform>([&registry, &done, due](entt::entity totem, const PuzzleTotem& component,
+	                                                                          const Transform& transform) {
+		if (component.slideSteps == 0 || !Rises(component))
+		{
+			if (registry.AnyOf<DrawnHeight, PuzzleTotemDrawnSlide>(totem))
+			{
+				done.push_back(totem);
+			}
+			return;
+		}
+		auto* slide = registry.TryGet<PuzzleTotemDrawnSlide>(totem);
+		if (slide == nullptr)
+		{
+			slide = &registry.Assign<PuzzleTotemDrawnSlide>(totem, PuzzleTotemDrawnSlide {.slide = component.slides});
+		}
+		if (slide->slide != component.slides)
+		{
+			*slide = {.slide = component.slides};
+		}
+		// Only a frame that draws the totem takes a step. The steps of the turns and of the frames count from one total.
+		const bool drawn =
+		    !Locator::objectDrawListSystem::has_value() || Locator::objectDrawListSystem::value().Drawn(registry, totem);
+		if (due && drawn && component.slideSteps - slide->frameSteps > 0)
+		{
+			++slide->frameSteps;
+		}
+		const int32_t left = std::max(component.slideSteps - slide->frameSteps, 0);
+		const float y =
+		    LandUnder(transform.position) + ecs::puzzle_totem::OffsetFor(ShareWith(component, left), DepthOf(registry, totem));
+		if (auto* height = registry.TryGet<DrawnHeight>(totem))
+		{
+			height->y = y;
+		}
+		else
+		{
+			registry.Assign<DrawnHeight>(totem, y);
+		}
+	});
 	// A totem at the end of its slide is drawn where the turns put it
 	for (const auto totem : done)
 	{
