@@ -17,6 +17,7 @@
 #include <fmt/format.h>
 #include <spdlog/spdlog.h>
 
+#include "Gui/TextDatabase.h"
 #include "Online/StartRules.h"
 #include "PlayerSlots.h"
 #include "Server/ConnectionLimits.h"
@@ -275,10 +276,12 @@ void LockstepHost::Text(ConnectionId connection, std::string_view text)
 		}
 		const bool observer = peer.joined && peer.role == game_socket::Role::Observer;
 		const auto name = peer.name;
+		const auto number = peer.observer;
 		_sockets.Close(connection, server_close::k_Normal);
 		_peers.erase(connection);
 		if (observer)
 		{
+			ObserverGone(number);
 			ObserverLeft(name);
 		}
 	}
@@ -481,8 +484,10 @@ void LockstepHost::Join(ConnectionId connection, Peer& peer, const game_socket::
 			Refuse(connection, "full");
 			return;
 		}
-		joined.session = NewWatcher(connection, claims.name);
-		Log(spdlog::level::info, fmt::format("{} joins as an observer", claims.name));
+		peer.observer = ObserverCame(claims.name);
+		joined.observer = peer.observer;
+		joined.session = NewWatcher(connection, claims.name, peer.observer);
+		Log(spdlog::level::info, fmt::format("{} joins as observer {}", claims.name, peer.observer));
 	}
 	peer.joined = true;
 	peer.role = claims.role;
@@ -492,7 +497,7 @@ void LockstepHost::Join(ConnectionId connection, Peer& peer, const game_socket::
 
 bool LockstepHost::ObserversFull() const
 {
-	return std::max(Observers(), _watchers.size()) >= _settings.mostObservers;
+	return std::max(Observers(), _watchers.size()) >= _settings.mostObservers || !FreeObserverNumber().has_value();
 }
 
 void LockstepHost::Resume(ConnectionId connection, Peer& peer, const game_socket::Resume& resume)
@@ -582,6 +587,7 @@ bool LockstepHost::ResumeObserver(ConnectionId connection, Peer& peer, const gam
 	peer.role = game_socket::Role::Observer;
 	peer.name = found->name;
 	peer.seat.reset();
+	peer.observer = found->number;
 	// An observer comes back as a god does: the world of the server when its world parted, else the turns that it missed.
 	// An observer has no god, so the other players get no message.
 	if (world && SendWorld(connection))
@@ -614,7 +620,7 @@ void LockstepHost::SendKeptTurns(ConnectionId connection, uint32_t from)
 	}
 }
 
-std::string LockstepHost::NewWatcher(ConnectionId connection, std::string name)
+std::string LockstepHost::NewWatcher(ConnectionId connection, std::string name, uint8_t number)
 {
 	if (!_makeSecret)
 	{
@@ -626,8 +632,135 @@ std::string LockstepHost::NewWatcher(ConnectionId connection, std::string name)
 	                             .connection = connection,
 	                             .awaySince = 0,
 	                             .resumes = 0,
-	                             .name = std::move(name)});
+	                             .name = std::move(name),
+	                             .number = number});
 	return session;
+}
+
+std::optional<uint8_t> LockstepHost::FreeObserverNumber() const
+{
+	for (uint8_t number = 1; number <= turn_codec::k_MostObserverNumber; ++number)
+	{
+		if (!_observerBlocks.contains(number))
+		{
+			return number;
+		}
+	}
+	return std::nullopt;
+}
+
+uint8_t LockstepHost::ObserverCame(std::string_view name)
+{
+	const auto number = FreeObserverNumber();
+	if (!number.has_value())
+	{
+		return 0;
+	}
+	_observerBlocks.emplace(*number, ObserverBlocks {});
+	_observerArrivals.emplace_back(*number, std::string(name));
+	return *number;
+}
+
+void LockstepHost::ObserverGone(uint8_t number)
+{
+	if (number == 0 || !_observerBlocks.contains(number))
+	{
+		return;
+	}
+	// An observer that leaves before a turn told of its come is not told at all, and its number is free at once
+	if (std::erase_if(_observerArrivals, [number](const auto& arrival) { return arrival.first == number; }) > 0)
+	{
+		_observerBlocks.erase(number);
+		return;
+	}
+	_observerDepartures.push_back(number);
+}
+
+std::vector<uint8_t> LockstepHost::ObserverNumbers() const
+{
+	std::vector<uint8_t> numbers;
+	for (const auto& [number, blocks] : _observerBlocks)
+	{
+		numbers.push_back(number);
+	}
+	return numbers;
+}
+
+void LockstepHost::ObserverBlock(const Peer& peer, turn_codec::CommandBlock& block)
+{
+	const auto found = _observerBlocks.find(peer.observer);
+	if (found == _observerBlocks.end())
+	{
+		++_refusedBlocks;
+		return;
+	}
+	// An observer sends only the report of its hand and camera and the lines of the chat
+	if (std::erase_if(block.actions, [](const auto& action) { return !player_commands::ObserverSends(action); }) > 0)
+	{
+		++_refusedBlocks;
+	}
+	auto& blocks = found->second;
+	// An observer that came back sends again the blocks that no turn held, as the player of a god does
+	if (blocks.lastBlock.has_value() && !turn_codec::SequenceAfter(block.sequence, *blocks.lastBlock))
+	{
+		return;
+	}
+	blocks.lastBlock = block.sequence;
+	turn_codec::StampedBlock stamped {
+	    .sender = ObserversGod(), .sequence = block.sequence, .actions = std::move(block.actions), .observer = peer.observer};
+	auto& used = _pendingObserverBytes[peer.observer];
+	const auto blockBytes = turn_codec::BlockSize(stamped);
+	if (used + blockBytes > k_MostGodBytesInTurn)
+	{
+		++_refusedBlocks;
+		stamped.actions.clear();
+	}
+	else
+	{
+		used += blockBytes;
+	}
+	_pending.push_back(PendingBlock {.block = std::move(stamped), .seat = 0, .session = 0, .observer = peer.observer});
+}
+
+void LockstepHost::AddObserverBlocks(turn_codec::TurnBundle& bundle, uint32_t turn)
+{
+	const auto god = ObserversGod();
+	const bool in = ObserversInGame() > 0;
+	// The god of the observers comes into the game with its first observer
+	if (in && !_observersIn)
+	{
+		_observersIn = true;
+		bundle.blocks.push_back(
+		    turn_codec::StampedBlock {.sender = god, .sequence = 0, .actions = {player_commands::ObserversJoined {}}});
+		Log(spdlog::level::info,
+		    fmt::format("Turn {}: the god of player {} of the observers comes into the game", turn, static_cast<int>(god)));
+	}
+	for (const auto number : _observerDepartures)
+	{
+		bundle.blocks.push_back(turn_codec::StampedBlock {
+		    .sender = god, .sequence = 0, .actions = {player_commands::ObserverOut {}}, .observer = number});
+		_observerBlocks.erase(number);
+	}
+	_observerDepartures.clear();
+	for (const auto& [number, name] : _observerArrivals)
+	{
+		auto text = gui::ToUtf16(name);
+		text.resize(std::min(text.size(), turn_codec::k_MostObserverNameCharacters));
+		bundle.blocks.push_back(turn_codec::StampedBlock {.sender = god,
+		                                                  .sequence = 0,
+		                                                  .actions = {player_commands::ObserverIn {.name = std::move(text)}},
+		                                                  .observer = number});
+	}
+	_observerArrivals.clear();
+	// The god goes when its last observer left
+	if (!in && _observersIn)
+	{
+		_observersIn = false;
+		bundle.blocks.push_back(
+		    turn_codec::StampedBlock {.sender = god, .sequence = 0, .actions = {player_commands::ObserversLeft {}}});
+		Log(spdlog::level::info,
+		    fmt::format("Turn {}: the god of player {} of the observers leaves the game", turn, static_cast<int>(god)));
+	}
 }
 
 void LockstepHost::ObserverLeft(std::string_view name)
@@ -749,8 +882,11 @@ void LockstepHost::JoinRunning(ConnectionId connection, Peer& peer, const join_t
 	{
 		// Any other player who joins after the start is an observer (MP-Q12)
 		peer.role = game_socket::Role::Observer;
-		joined.session = NewWatcher(connection, claims.name);
-		Log(spdlog::level::info, fmt::format("{} joins the game at turn {} as an observer", claims.name, _turnsDone));
+		peer.observer = ObserverCame(claims.name);
+		joined.observer = peer.observer;
+		joined.session = NewWatcher(connection, claims.name, peer.observer);
+		Log(spdlog::level::info,
+		    fmt::format("{} joins the game at turn {} as observer {}", claims.name, _turnsDone, peer.observer));
 	}
 	peer.joined = true;
 	peer.name = claims.name;
@@ -775,8 +911,18 @@ void LockstepHost::Binary(ConnectionId connection, std::span<const uint8_t> byte
 	}
 	if (auto* block = std::get_if<turn_codec::CommandBlock>(&*decoded.frame))
 	{
-		// Only a god sends commands, and only during the game. A command that only the server sends is left out.
-		if (peer.role != game_socket::Role::God || !peer.seat.has_value() || !_started)
+		// A god and an observer send commands, only during the game. A command that only the server sends is left out.
+		if (!_started)
+		{
+			++_refusedBlocks;
+			return;
+		}
+		if (peer.role == game_socket::Role::Observer)
+		{
+			ObserverBlock(peer, *block);
+			return;
+		}
+		if (peer.role != game_socket::Role::God || !peer.seat.has_value())
 		{
 			++_refusedBlocks;
 			return;
@@ -854,6 +1000,7 @@ void LockstepHost::Closed(ConnectionId connection)
 	const auto seat = found->second.seat;
 	const bool observer = found->second.joined && found->second.role == game_socket::Role::Observer;
 	const auto name = found->second.name;
+	const auto number = found->second.observer;
 	_peers.erase(found);
 	if (const auto watcher = std::ranges::find(_watchers, std::optional(connection), &Watcher::connection);
 	    watcher != _watchers.end())
@@ -861,6 +1008,7 @@ void LockstepHost::Closed(ConnectionId connection)
 		// Before the start, the session of the observer ends. After the start, the observer can come back for a time.
 		if (!_started)
 		{
+			ObserverGone(watcher->number);
 			_watchers.erase(watcher);
 		}
 		else
@@ -874,6 +1022,7 @@ void LockstepHost::Closed(ConnectionId connection)
 	// An observer with no session cannot come back: it left the game
 	if (observer)
 	{
+		ObserverGone(number);
 		ObserverLeft(name);
 		return;
 	}
@@ -937,20 +1086,21 @@ void LockstepHost::Update()
 		Refuse(connection, "protocol");
 	}
 	// An observer that does not come back in the time to come back loses its session, and so leaves the game
-	std::vector<std::string> gone;
+	std::vector<std::pair<std::string, uint8_t>> gone;
 	if (std::erase_if(_watchers, [this, now, &gone](const Watcher& watcher) {
 		    const bool ends = !watcher.connection.has_value() && now - watcher.awaySince > _settings.comeBackMicroseconds;
 		    if (ends)
 		    {
-			    gone.push_back(watcher.name);
+			    gone.emplace_back(watcher.name, watcher.number);
 		    }
 		    return ends;
 	    }) > 0)
 	{
 		Log(spdlog::level::info, "An observer did not come back: its session ends");
 	}
-	for (const auto& name : gone)
+	for (const auto& [name, number] : gone)
 	{
+		ObserverGone(number);
 		ObserverLeft(name);
 	}
 	if (AllComputerGods())
@@ -1260,26 +1410,22 @@ std::vector<player_commands::Command> LockstepHost::TakeTurn(uint32_t turn)
 		    turn_codec::StampedBlock {.sender = SeatPlayer(seat), .sequence = 0, .actions = {player_commands::PlayerLeft {}}});
 	}
 	_leaving.clear();
-	// The god of the observers comes into the game with its first observer, and goes when its last observer left
-	if (const bool in = ObserversInGame() > 0; in != _observersIn)
-	{
-		_observersIn = in;
-		const auto god = ObserversGod();
-		bundle.blocks.push_back(
-		    turn_codec::StampedBlock {.sender = god,
-		                              .sequence = 0,
-		                              .actions = {in ? player_commands::Action {player_commands::ObserversJoined {}}
-		                                             : player_commands::Action {player_commands::ObserversLeft {}}}});
-		Log(spdlog::level::info, fmt::format("Turn {}: the god of player {} of the observers {} the game", turn,
-		                                     static_cast<int>(god), in ? "comes into" : "leaves"));
-	}
-	// The joins and the leaves of the gods always go in the turn
+	// The god of the observers comes into the game with its first observer, and goes when its last observer left. Each
+	// observer that came or left goes in the turn between them.
+	AddObserverBlocks(bundle, turn);
+	// The joins and the leaves of the gods and of the observers always go in the turn
 	const auto fixedBlocks = bundle.blocks.size();
 	for (auto& pending : _pending)
 	{
 		// The turn holds the block even when the turn is too large and drops its commands. The client never sends it again.
-		auto& seat = _seats[pending.seat];
-		if (pending.session == seat.sessionNumber)
+		if (pending.observer != 0)
+		{
+			if (const auto blocks = _observerBlocks.find(pending.observer); blocks != _observerBlocks.end())
+			{
+				blocks->second.lastBlockInTurn = pending.block.sequence;
+			}
+		}
+		else if (auto& seat = _seats[pending.seat]; pending.session == seat.sessionNumber)
 		{
 			seat.lastBlockInTurn = pending.block.sequence;
 		}
@@ -1290,6 +1436,7 @@ std::vector<player_commands::Command> LockstepHost::TakeTurn(uint32_t turn)
 	}
 	_pending.clear();
 	_pendingBytes.clear();
+	_pendingObserverBytes.clear();
 	auto bytes = turn_codec::Encode(bundle);
 	// A turn larger than a frame drops the commands of the god with the most bytes in the turn, until the turn fits. The
 	// commands of the other gods stay in the turn. The turn itself always goes.
@@ -1331,7 +1478,8 @@ std::vector<player_commands::Command> LockstepHost::TakeTurn(uint32_t turn)
 	{
 		for (auto& action : block.actions)
 		{
-			commands.push_back(player_commands::Command {.player = block.sender, .action = std::move(action)});
+			commands.push_back(
+			    player_commands::Command {.player = block.sender, .action = std::move(action), .observer = block.observer});
 		}
 	}
 	return commands;
@@ -1372,7 +1520,18 @@ std::vector<player_commands::Command> LockstepHost::TakeReplayedTurn(uint32_t tu
 				{
 					_observersIn = false;
 				}
-				commands.push_back(player_commands::Command {.player = block.sender, .action = std::move(action)});
+				// The replayed turn already told of the observers that came and left in the room of the snapshot
+				if (std::holds_alternative<player_commands::ObserverIn>(action))
+				{
+					std::erase_if(_observerArrivals, [&block](const auto& arrival) { return arrival.first == block.observer; });
+				}
+				if (std::holds_alternative<player_commands::ObserverOut>(action))
+				{
+					std::erase(_observerDepartures, block.observer);
+					_observerBlocks.erase(block.observer);
+				}
+				commands.push_back(
+				    player_commands::Command {.player = block.sender, .action = std::move(action), .observer = block.observer});
 			}
 		}
 	}
@@ -1413,8 +1572,15 @@ snapshots::Room LockstepHost::RoomRecord() const
 		{
 			room.watchers.push_back(*watcher.sessionHash);
 			room.watcherNames.push_back(watcher.name);
+			room.watcherNumbers.push_back(watcher.number);
 		}
 	}
+	for (const auto& [number, name] : _observerArrivals)
+	{
+		room.arrivingNumbers.push_back(number);
+		room.arrivingNames.push_back(name);
+	}
+	room.departingNumbers = _observerDepartures;
 	return room;
 }
 
@@ -1426,6 +1592,13 @@ snapshots::BlockSequences LockstepHost::BlocksInTurns() const
 		if (_seats[i].lastBlockInTurn.has_value())
 		{
 			blocks.emplace(static_cast<uint8_t>(i), *_seats[i].lastBlockInTurn);
+		}
+	}
+	for (const auto& [number, observer] : _observerBlocks)
+	{
+		if (observer.lastBlockInTurn.has_value())
+		{
+			blocks.emplace(static_cast<uint8_t>(snapshots::k_ObserverBlocksKey + number), *observer.lastBlockInTurn);
 		}
 	}
 	return blocks;
@@ -1477,16 +1650,57 @@ void LockstepHost::Restore(const snapshots::Room& room, uint32_t turnsDone, std:
 		}
 	}
 	_watchers.clear();
+	_observerBlocks.clear();
+	_observerArrivals.clear();
+	_observerDepartures = room.departingNumbers;
+	for (const auto number : room.departingNumbers)
+	{
+		_observerBlocks.emplace(number, ObserverBlocks {});
+	}
+	for (size_t i = 0; i < room.arrivingNumbers.size(); ++i)
+	{
+		_observerBlocks.emplace(room.arrivingNumbers[i], ObserverBlocks {});
+		_observerArrivals.emplace_back(room.arrivingNumbers[i],
+		                               i < room.arrivingNames.size() ? room.arrivingNames[i] : std::string());
+	}
 	// The players and the observers come back with the secrets of their sessions, which the server checks against the
 	// hashes
 	for (size_t i = 0; i < room.watchers.size(); ++i)
 	{
+		auto name = i < room.watcherNames.size() ? room.watcherNames[i] : std::string();
+		const auto saved = i < room.watcherNumbers.size() ? room.watcherNumbers[i] : uint8_t {0};
+		uint8_t number = 0;
+		if (saved != 0 && saved <= turn_codec::k_MostObserverNumber && !_observerBlocks.contains(saved))
+		{
+			number = saved;
+			_observerBlocks.emplace(number, ObserverBlocks {});
+		}
+		else
+		{
+			// An observer of a file of format 4 or older has no number: it gets one, and the next turn tells the worlds
+			number = ObserverCame(name);
+		}
 		_watchers.push_back(Watcher {.session = {},
 		                             .sessionHash = room.watchers[i],
 		                             .connection = std::nullopt,
 		                             .awaySince = now,
 		                             .resumes = 0,
-		                             .name = i < room.watcherNames.size() ? room.watcherNames[i] : std::string()});
+		                             .name = std::move(name),
+		                             .number = number});
+	}
+	// The server takes only the blocks of each observer after the last block that the sent turns hold
+	for (const auto& [key, sequence] : blocks)
+	{
+		if (key <= snapshots::k_ObserverBlocksKey)
+		{
+			continue;
+		}
+		if (const auto found = _observerBlocks.find(static_cast<uint8_t>(key - snapshots::k_ObserverBlocksKey));
+		    found != _observerBlocks.end())
+		{
+			found->second.lastBlock = sequence;
+			found->second.lastBlockInTurn = sequence;
+		}
 	}
 	// A room with no human god turned before the restart, so it turns again when an observer comes back
 	_observersJoined = true;

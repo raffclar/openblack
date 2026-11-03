@@ -24,6 +24,7 @@
 #include "Common/RandomNumberManager.h"
 #include "ECS/ProfileAlignment.h"
 #include "ECS/Systems/ClanCreatureSystemInterface.h"
+#include "ECS/Systems/GameEndSystemInterface.h"
 #include "ECS/Systems/HandSystemInterface.h"
 #include "ECS/Systems/LandSystemInterface.h"
 #include "ECS/Systems/PlayerCommandSystemInterface.h"
@@ -359,11 +360,20 @@ void NetworkGameSystem::Update()
 		                   Locator::time::value().GetTurn());
 	}
 
-	// The god of this computer's slot: its pointer moves that god's hand. An observer has no god of its own.
+	// The god of this computer's slot: its pointer moves that god's hand. An observer with a number is a human of the god
+	// of the observers, from the turn that gave that god its hands: its pointer moves its own hand of that god.
 	if (const auto& joined = _session->GetJoined(); joined.has_value() && Locator::handSystem::has_value())
 	{
 		auto& hands = Locator::handSystem::value();
-		const auto own = joined->slot.has_value() ? player_slots::PlayerOfSlot(*joined->slot) : std::nullopt;
+		auto own = joined->slot.has_value() ? player_slots::PlayerOfSlot(*joined->slot) : std::nullopt;
+		if (!own.has_value() && _session->OwnObserver().has_value() && Locator::gameEndSystem::has_value())
+		{
+			const auto god = Locator::gameEndSystem::value().ObserversGod();
+			if (god.has_value() && hands.GetHandsOf(*god).has_value())
+			{
+				own = god;
+			}
+		}
 		if (!own.has_value())
 		{
 			hands.ClearOwnPlayer();

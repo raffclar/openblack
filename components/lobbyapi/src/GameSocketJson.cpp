@@ -45,6 +45,8 @@ constexpr std::string_view k_ObserverLeft = "observer.left";
 
 /// The most god slots that a frame can name
 constexpr uint64_t k_MostSlots = 32;
+/// The highest number of an observer, as the turn codec of the game takes it
+constexpr uint64_t k_MostObserverNumber = 127;
 /// The number of the winning conditions of a network game
 constexpr uint64_t k_ConditionCount = 15;
 /// The largest value of a winning condition: the largest whole number that the game keeps for it
@@ -384,6 +386,14 @@ std::optional<Frame> ParseObject(const Json& object, std::string_view type)
 		{
 			return std::nullopt;
 		}
+		// Only an observer has a number of an observer
+		uint64_t observer = 0;
+		if (!ReadUnsigned(object, "observer", k_MostObserverNumber, observer, false) ||
+		    (observer != 0 && joined.role != Role::Observer))
+		{
+			return std::nullopt;
+		}
+		joined.observer = static_cast<uint8_t>(observer);
 		if (const auto* startMember = Member(object, "start"); startMember != nullptr && !startMember->is_null())
 		{
 			Start start;
@@ -602,6 +612,10 @@ std::string ToJson(const Frame& frame)
 		    {
 			    object = Json {{"type", k_Joined}, {"role", RoleName(value.role)}, {"session", value.session}};
 			    object["slot"] = value.slot.has_value() ? Json(*value.slot) : Json(nullptr);
+			    if (value.observer != 0)
+			    {
+				    object["observer"] = value.observer;
+			    }
 			    if (!value.name.empty())
 			    {
 				    object["name"] = value.name;

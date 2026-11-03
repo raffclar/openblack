@@ -56,6 +56,7 @@
 #include "Camera/CameraModel.h"
 #include "Camera/DoubleClickFlight.h"
 #include "Commands/PlayerCommands.h"
+#include "Commands/TurnCodec.h"
 #include "Common/FileDialog.h"
 #include "Common/MachineClock.h"
 #include "Common/PortableMath.h"
@@ -128,6 +129,7 @@
 #include "ECS/Components/Mesh.h"
 #include "ECS/Components/MiracleImpression.h"
 #include "ECS/Components/Mobile.h"
+#include "ECS/Components/ObserverInterfaces.h"
 #include "ECS/Components/Physics.h"
 #include "ECS/Components/Player.h"
 #include "ECS/Components/PlayerStatistics.h"
@@ -162,6 +164,7 @@
 #include "ECS/Dances.h"
 #include "ECS/Map.h"
 #include "ECS/ObjectPhysics.h"
+#include "ECS/ObserverInterfaceRules.h"
 #include "ECS/Registry.h"
 #include "ECS/ScriptFind.h"
 #include "ECS/ScriptFlocks.h"
@@ -199,6 +202,7 @@
 #include "ECS/Systems/FootpathSystemInterface.h"
 #include "ECS/Systems/FootprintSystemInterface.h"
 #include "ECS/Systems/ForestSystemInterface.h"
+#include "ECS/Systems/GameEndSystemInterface.h"
 #include "ECS/Systems/GestureEventsInterface.h"
 #include "ECS/Systems/GestureSystemInterface.h"
 #include "ECS/Systems/GuidanceSystemInterface.h"
@@ -2706,6 +2710,35 @@ std::string Runner::GivePlayerCommand(const Command& command)
 		                              .focus = ground});
 		return held;
 	}
+	case Kind::ObserverCamera:
+	{
+		if (!Locator::handSystem::has_value() || !Locator::terrainSystem::has_value() || !Locator::playerSystem::has_value() ||
+		    !Locator::gameEndSystem::has_value())
+		{
+			return "no hands";
+		}
+		if (command.value == 0 || command.value > turn_codec::k_MostObserverNumber)
+		{
+			return "no observer number";
+		}
+		// The god of the observers comes in as the turns bring it: it gets its player and its hands
+		const auto player = Locator::playerSystem::value().EnsurePlayer(command.player);
+		std::ignore = Locator::handSystem::value().MakeHandsOf(command.player);
+		Locator::gameEndSystem::value().ObserversJoined(command.player);
+		auto& registry = Locator::entitiesRegistry::value();
+		auto* observers = registry.TryGet<ecs::components::ObserverInterfaces>(player);
+		if (observers == nullptr)
+		{
+			observers = &registry.Assign<ecs::components::ObserverInterfaces>(player);
+		}
+		const auto number = static_cast<uint8_t>(command.value);
+		observer_interfaces::Come(*observers, number, gui::ToUtf16(fmt::format("Observer {}", command.value)));
+		const auto at = MapPoint(_middle, command.point);
+		const glm::vec3 ground {at.x, Locator::terrainSystem::value().GetHeightAt(at), at.y};
+		const auto hand = ground + glm::vec3(0.0f, command.radius, 0.0f);
+		observer_interfaces::Report(*observers, number, hand, hand + glm::vec3(0.0f, k_OtherGodCameraAbove, 0.0f));
+		return fmt::format("observer {} of player {}", command.value, static_cast<int>(command.player));
+	}
 	case Kind::ComputerPersonality:
 		if (!Locator::computerPlayerSystem::has_value())
 		{
@@ -3937,10 +3970,10 @@ void Runner::Give(const Command& command)
 	    command.kind == Kind::DestroyScaffoldSite || command.kind == Kind::ScaffoldClearsGround ||
 	    command.kind == Kind::FillBuiltAmount || command.kind == Kind::PauseGame || command.kind == Kind::SetGameSpeed ||
 	    command.kind == Kind::RemoveTeleportStone || command.kind == Kind::MakeDance || command.kind == Kind::OtherGodHand ||
-	    command.kind == Kind::OwnGod || command.kind == Kind::BringCreature || command.kind == Kind::ComputerPersonality ||
-	    command.kind == Kind::ComputerUntaughtSends || command.kind == Kind::HandCastOnDispenser ||
-	    command.kind == Kind::HandCastOnCreature || command.kind == Kind::CloseHeldMiracle ||
-	    command.kind == Kind::JoinFootball)
+	    command.kind == Kind::ObserverCamera || command.kind == Kind::OwnGod || command.kind == Kind::BringCreature ||
+	    command.kind == Kind::ComputerPersonality || command.kind == Kind::ComputerUntaughtSends ||
+	    command.kind == Kind::HandCastOnDispenser || command.kind == Kind::HandCastOnCreature ||
+	    command.kind == Kind::CloseHeldMiracle || command.kind == Kind::JoinFootball)
 	{
 		const auto result = GivePlayerCommand(command);
 		Log(fmt::format("{:.1f}s: {}{}{}", _seconds, Name(command.kind), result.empty() ? "" : ": ", result));
@@ -4924,6 +4957,7 @@ void Runner::Give(const Command& command)
 	case Kind::EndBox:
 	case Kind::SkirmishBox:
 	case Kind::OtherGodHand:
+	case Kind::ObserverCamera:
 	case Kind::OwnGod:
 	case Kind::JoinOnline:
 	case Kind::BringCreature:

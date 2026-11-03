@@ -439,6 +439,20 @@ std::optional<float> NetworkSession::StartAlignment(PlayerNames god) const
 	return alignment != _startAlignments.end() ? std::optional<float>(alignment->second) : std::nullopt;
 }
 
+std::optional<uint8_t> NetworkSession::OwnObserver() const
+{
+	if (!_joined.has_value() || _joined->role != game_socket::Role::Observer || _joined->observer == 0)
+	{
+		return std::nullopt;
+	}
+	return _joined->observer;
+}
+
+bool NetworkSession::SendsCommands() const
+{
+	return _joined.has_value() && (_joined->role == game_socket::Role::God || OwnObserver().has_value());
+}
+
 std::optional<PlayerNames> NetworkSession::OwnGod() const
 {
 	if (!_joined.has_value() || _joined->role != game_socket::Role::God || !_joined->slot.has_value())
@@ -525,7 +539,7 @@ void NetworkSession::Update()
 
 void NetworkSession::SendWaiting()
 {
-	if (!_stream || !_stream->IsOpen() || _joined.has_value() == false || _joined->role != game_socket::Role::God)
+	if (!_stream || !_stream->IsOpen() || !SendsCommands())
 	{
 		return;
 	}
@@ -552,7 +566,7 @@ bool NetworkSession::SendNewBlock(std::span<const player_commands::Action> actio
 void NetworkSession::SendKeptAgain()
 {
 	const auto& kept = _sent.Kept();
-	if (kept.empty() || !_stream || !_stream->IsOpen() || !_joined.has_value() || _joined->role != game_socket::Role::God)
+	if (kept.empty() || !_stream || !_stream->IsOpen() || !SendsCommands())
 	{
 		return;
 	}
@@ -570,8 +584,10 @@ void NetworkSession::SendKeptAgain()
 
 void NetworkSession::Send(const player_commands::Action& action)
 {
-	// An observer sends no commands
-	if (_joined.has_value() && _joined->role != game_socket::Role::God)
+	// An observer sends only the report of its hand and camera and the lines of the chat. An observer with no number of
+	// an observer sends no commands.
+	if (_joined.has_value() &&
+	    (!SendsCommands() || (_joined->role == game_socket::Role::Observer && !player_commands::ObserverSends(action))))
 	{
 		return;
 	}
@@ -615,7 +631,8 @@ std::vector<player_commands::Command> NetworkSession::TakeTurn(uint32_t turn)
 	{
 		for (auto& action : block.actions)
 		{
-			commands.push_back(player_commands::Command {.player = block.sender, .action = std::move(action)});
+			commands.push_back(
+			    player_commands::Command {.player = block.sender, .action = std::move(action), .observer = block.observer});
 		}
 	}
 	for (auto done = _turns.begin(); done != std::next(found); ++done)
@@ -634,6 +651,10 @@ void NetworkSession::Turn(const turn_codec::TurnBundle& turn)
 	if (const auto god = OwnGod(); god.has_value())
 	{
 		_sent.HeldIn(turn, *god);
+	}
+	else if (const auto observer = OwnObserver(); observer.has_value())
+	{
+		_sent.HeldInOfObserver(turn, *observer);
 	}
 	// While the world of the server comes, the session keeps the turns from the turn of that world. After a restart of the
 	// server, that turn can come before the turns that this computer did.

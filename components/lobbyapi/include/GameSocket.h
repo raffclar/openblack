@@ -134,6 +134,9 @@ struct Joined
 	/// The land, the seed and the start of the server's world ("start", optional). A client that joins from the command
 	/// line loads this land with this seed before it is ready, so the game starts from the same world on each computer.
 	std::optional<Start> start;
+	/// The number of an observer in the game, from 1 ("observer", optional). The turns stamp the commands of the
+	/// observer with it. 0 for a god, and for an observer of an older server.
+	uint8_t observer {0};
 };
 
 /// Server to client: "room.refused". The server closes the socket after this frame.

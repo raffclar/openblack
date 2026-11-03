@@ -31,7 +31,7 @@ constexpr std::array<uint8_t, 8> k_JournalMagic {'O', 'B', 'J', 'O', 'U', 'R', '
 /// Version 3 keeps the last block of commands of each god. The files of version 2 do not load.
 /// Version 4 keeps the names of the observers and whether the god of the observers is in the game. The files of version 3
 /// still load, with no names and with the god of the observers out of the game.
-constexpr uint32_t k_FormatVersion = 4;
+constexpr uint32_t k_FormatVersion = 5;
 constexpr uint32_t k_OldestFormatVersion = 3;
 
 /// True for a version of the format that the server reads
@@ -301,6 +301,14 @@ std::vector<uint8_t> EncodeRoom(const Room& room)
 		PutText(out, name);
 	}
 	PutU8(out, room.observersIn ? 1 : 0);
+	PutBytes(out, room.watcherNumbers);
+	PutBytes(out, room.arrivingNumbers);
+	PutU32(out, static_cast<uint32_t>(room.arrivingNames.size()));
+	for (const auto& name : room.arrivingNames)
+	{
+		PutText(out, name);
+	}
+	PutBytes(out, room.departingNumbers);
 	return out;
 }
 
@@ -344,6 +352,18 @@ std::optional<Room> DecodeRoom(std::span<const uint8_t> bytes)
 			room.watcherNames.push_back(reader.Text());
 		}
 		room.observersIn = reader.U8() != 0;
+	}
+	// The room of a file of format 4 ends here
+	if (reader.Good() && !reader.AtEnd())
+	{
+		room.watcherNumbers = reader.Bytes();
+		room.arrivingNumbers = reader.Bytes();
+		const auto names = reader.U32();
+		for (uint32_t i = 0; i < names && reader.Good(); ++i)
+		{
+			room.arrivingNames.push_back(reader.Text());
+		}
+		room.departingNumbers = reader.Bytes();
 	}
 	if (!reader.Good() || !reader.AtEnd())
 	{
