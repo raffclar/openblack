@@ -85,6 +85,10 @@ CALLS = [
     }),
     ("post", "/api/v1/me/creatures", None, {"url": (S, True)}),
     ("post", "/api/v1/me/skirmish-pings", None, None),
+    # The ping server of the gathering box (deviation 220)
+    ("post", "/api/v1/me/pings", {"friends": (None, False)},
+     {"online": (None, True), "here": ([{"id": (I, True), "name": (S, True)}], True)}),
+    ("post", "/api/v1/accounts/{account}/lines", {"text": (S, True)}, None),
     # The game server
     ("put", "/api/v1/servers/{server_id}/status", {
         "hostname": (S, True), "land": (S, False), "gamemode": (S, True), "locked": (B, False),
