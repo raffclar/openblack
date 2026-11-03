@@ -9,7 +9,10 @@
 
 #pragma once
 
+#include <memory>
+
 #include "TestbedGameStageInterface.h"
+#include "TestbedPingServer.h"
 
 namespace openblack::testbed_scenarios
 {
@@ -27,6 +30,7 @@ public:
 	[[nodiscard]] std::string OpenControlsBox(size_t row) override;
 	void OpenChat(std::u16string_view line) override;
 	[[nodiscard]] std::string OpenChatWithFriends() override;
+	[[nodiscard]] std::string PingServerSays(size_t value, std::u16string_view text) override;
 	[[nodiscard]] std::string OpenMultiplayerBox(size_t stage) override;
 	[[nodiscard]] std::string OpenMenuPage(size_t page, bool noSound) override;
 	[[nodiscard]] std::string PressMenuKey(size_t key, bool shift) override;
@@ -43,6 +47,10 @@ public:
 	[[nodiscard]] bool ContinueFromExitSave() override;
 	void RequestQuit() override;
 	void ReportChecks(checks::Report report, bool quit) override;
+
+private:
+	/// The messages of the ping server of the testbed, once a scenario uses it
+	std::shared_ptr<TestbedPingServer::Mailbox> _pingMailbox;
 };
 
 } // namespace openblack::testbed_scenarios

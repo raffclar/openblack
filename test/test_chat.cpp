@@ -467,6 +467,16 @@ TEST(ChatSystem, ALineComesInForItsPlayers)
 	EXPECT_TRUE(game.incoming.empty());
 }
 
+TEST(ChatSystem, ALineOfThePingServerShowsAndGoesToTheLog)
+{
+	FakeGame game;
+	ChatSystem chat(game.Services());
+	chat.ReceiveFromPingServer(u"Staff", u"Welcome");
+	EXPECT_EQ(game.incoming, (std::vector<std::u16string> {u"Staff: Welcome"}));
+	EXPECT_EQ(game.log, (std::vector<std::string> {"Staff: Welcome\n"}));
+	EXPECT_TRUE(chat.GetReceived().empty());
+}
+
 TEST(ChatSystem, ATauntSpeaksOnEveryComputer)
 {
 	FakeGame game;

@@ -124,6 +124,7 @@
 #include "ECS/Systems/Implementations/FixedOutlineSystem.h"
 #include "ECS/Systems/Implementations/FootballSystem.h"
 #include "ECS/Systems/Implementations/GameEndSystem.h"
+#include "ECS/Systems/Implementations/GatheringBoxSystem.h"
 #include "ECS/Systems/Implementations/HeartbeatSystem.h"
 #include "ECS/Systems/Implementations/LandSystem.h"
 #include "ECS/Systems/Implementations/LeashSystem.h"
@@ -269,6 +270,7 @@ using openblack::ecs::systems::FootpathSystem;
 using openblack::ecs::systems::FootprintSystem;
 using openblack::ecs::systems::ForestSystem;
 using openblack::ecs::systems::GameEndSystem;
+using openblack::ecs::systems::GatheringBoxSystem;
 using openblack::ecs::systems::GestureEventsInterface;
 using openblack::ecs::systems::GestureSystem;
 using openblack::ecs::systems::GuidanceSystem;
@@ -608,6 +610,22 @@ void EmplaceChat(bool developer)
 	Locator::chatSystem::emplace<ChatSystem>(std::move(services));
 }
 
+/// The gathering box talks to the ping server only when the game has a connection to one (question GBX-1). The game
+/// has no lasting number of its player and no report of a host yet.
+void EmplaceGatheringBox()
+{
+	GatheringBoxSystem::Services services;
+	services.ownUser = []() { return std::optional<gathering_box::UserId> {}; };
+	services.showLine = [](std::u16string_view name, std::u16string_view text) {
+		if (Locator::chatSystem::has_value())
+		{
+			Locator::chatSystem::value().ReceiveFromPingServer(name, text);
+		}
+	};
+	services.plainChat = []() { return false; };
+	Locator::gatheringBoxSystem::emplace<GatheringBoxSystem>(std::move(services));
+}
+
 } // namespace
 } // namespace openblack
 
@@ -737,6 +755,7 @@ bool openblack::InitializeSimulation(const player_profiles::Store& profiles) noe
 	Locator::magicSystem::emplace<MagicSystem>();
 	Locator::miracleFxSystem::emplace<MiracleFxSystem>();
 	EmplaceChat(profiles.developer);
+	EmplaceGatheringBox();
 	Locator::fireSystem::emplace<ecs::systems::FireSystem>();
 	Locator::explosionSystem::emplace<ecs::systems::ExplosionSystem>();
 	Locator::rewardSystem::emplace<ecs::systems::RewardSystem>();
@@ -986,6 +1005,7 @@ void openblack::ShutDownServices()
 	Locator::pauseTextSystem::reset();
 	Locator::incomingMessageSystem::reset();
 	Locator::chatSystem::reset();
+	Locator::gatheringBoxSystem::reset();
 	Locator::fireSystem::reset();
 	Locator::explosionSystem::reset();
 	Locator::floatingNumberSystem::reset();

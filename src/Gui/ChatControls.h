@@ -95,6 +95,10 @@ public:
 	void AddOther(std::u16string_view name, chat::people::UserId user);
 	/// The friends that were seen now, at this time of the online clock (see people::UpdateOnline)
 	void UpdateOnline(std::span<const chat::people::UserId> seen, uint32_t now);
+	/// The people of the list, for the ping server. Call PeopleChanged after a change.
+	[[nodiscard]] chat::people::List& GetPeople() noexcept { return _people; }
+	/// The list shows the changed people
+	void PeopleChanged() { RebuildRows(); }
 	/// The chat opens with the focus in its line, as a click on the speech button opens it
 	void Open() { OpenChat(false); }
 	/// Every frame, before the input. True when the controls came on the screen in this frame.

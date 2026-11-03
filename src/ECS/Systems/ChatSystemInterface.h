@@ -73,6 +73,9 @@ public:
 	/// At the turn of the command: the line or the taunt of a sender comes in on this computer
 	virtual void Receive(PlayerNames sender, const player_commands::ChatSpeech& speech) = 0;
 	virtual void Receive(PlayerNames sender, const player_commands::ChatTaunt& taunt) = 0;
+	/// A line of a person came from the ping server: it shows in the incoming messages as "name: text" and goes to the
+	/// chat log
+	virtual void ReceiveFromPingServer(std::u16string_view name, std::u16string_view text) = 0;
 	/// Once a game turn: what the player sent since the last turn makes the advisors of this computer speak
 	virtual void ProcessTurn() = 0;
 	/// Each frame, with the frame's game milliseconds: the time to show of each bubble runs down

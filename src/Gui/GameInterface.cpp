@@ -50,6 +50,7 @@
 #include "ECS/Systems/CinematicDirectorSystemInterface.h"
 #include "ECS/Systems/CreatureHandSystemInterface.h"
 #include "ECS/Systems/CreatureModeSystemInterface.h"
+#include "ECS/Systems/GatheringBoxSystemInterface.h"
 #include "ECS/Systems/HandSystemInterface.h"
 #include "ECS/Systems/HelpTextSystemInterface.h"
 #include "ECS/Systems/IncomingMessageSystemInterface.h"
@@ -451,6 +452,7 @@ GameInterface::GameInterface(TextDatabase texts, GameFont font, std::unique_ptr<
     , _skirmishBox(std::make_unique<SkirmishBox>(_texts, _font))
     , _landInfoBox(std::make_unique<LandInfoBox>(_texts, _font))
     , _saveGameBoxes(std::make_unique<SaveGameBoxes>(_texts, _font))
+    , _staffQuestionBox(std::make_unique<StaffQuestionBox>(_texts, _font))
     , _endGameBox(std::make_unique<EndGameBox>(_texts, _font))
     , _multiplayerBoxes(std::make_unique<MultiplayerBoxes>(_texts, _font))
     , _musicControls(std::make_unique<CustomMusicControls>(_font, _atmos.get()))
@@ -775,6 +777,57 @@ bool GameInterface::ProcessSaveGameBoxesEvent(const SDL_Event& event)
 		return true;
 	default:
 		return false;
+	}
+}
+
+bool GameInterface::ProcessStaffQuestionEvent(const SDL_Event& event)
+{
+	switch (event.type)
+	{
+	case SDL_MOUSEMOTION:
+		_staffQuestionBox->MouseMove(_painter.ToDialog({event.motion.x, event.motion.y}));
+		return true;
+	case SDL_MOUSEBUTTONDOWN:
+		if (event.button.button == SDL_BUTTON_LEFT)
+		{
+			_staffQuestionBox->MouseDown(_painter.ToDialog({event.button.x, event.button.y}));
+		}
+		return true;
+	case SDL_MOUSEBUTTONUP:
+		if (event.button.button == SDL_BUTTON_LEFT &&
+		    _staffQuestionBox->MouseUp(_painter.ToDialog({event.button.x, event.button.y})))
+		{
+			audio::PlayGameSoundEffect(static_cast<entt::id_type>(audio::SoundId::G_MenuButton), std::nullopt);
+		}
+		return true;
+	case SDL_TEXTINPUT:
+		_staffQuestionBox->TextInput(ToUtf16(event.text.text));
+		return true;
+	case SDL_KEYDOWN:
+		_staffQuestionBox->KeyDown(event.key.keysym.sym,
+		                           (event.key.keysym.mod & (KMOD_SHIFT | KMOD_CTRL | KMOD_ALT | KMOD_GUI)) != 0);
+		return true;
+	default:
+		return false;
+	}
+}
+
+void GameInterface::UpdateStaffQuestion(float deltaSeconds)
+{
+	_staffQuestionBox->Update(deltaSeconds);
+	if (!Locator::gatheringBoxSystem::has_value())
+	{
+		return;
+	}
+	auto& gathering = Locator::gatheringBoxSystem::value();
+	if (const auto answer = _staffQuestionBox->TakeAnswer(); answer.has_value())
+	{
+		gathering.Answer(answer->first, answer->second);
+	}
+	// A new question replaces the question on the screen, as the game has one box for them
+	if (auto asked = gathering.TakeQuestion(); asked.has_value())
+	{
+		_staffQuestionBox->Ask(std::move(*asked));
 	}
 }
 
@@ -1411,18 +1464,28 @@ void GameInterface::UpdateChat(bool dialogOpen, glm::u16vec2 resolution)
 		const auto recipients = _chatControls->Recipients();
 		for (const auto& sent : _chatControls->TakeSent())
 		{
+			// With people picked, the line or the words of the taunt go also to the picked friends and others
+			auto* gathering = Locator::gatheringBoxSystem::has_value() ? &Locator::gatheringBoxSystem::value() : nullptr;
 			if (sent.taunt.has_value())
 			{
 				chat.SendTaunt(*sent.taunt, recipients);
+				if (gathering != nullptr)
+				{
+					gathering->SendToPicked(_texts.GetHelpText(chat::k_FirstTauntText + *sent.taunt).text);
+				}
 			}
 			else if (sent.line.has_value())
 			{
 				chat.SendLine(*sent.line, recipients);
+				if (gathering != nullptr)
+				{
+					gathering->SendToPicked(*sent.line);
+				}
 			}
 		}
 	}
 	// The window gives the typed letters while the line has the keys
-	const bool keys = ChatWantsKeys();
+	const bool keys = ChatWantsKeys() || _staffQuestionBox->IsActive();
 	if (keys != _chatTextInput)
 	{
 		_chatTextInput = keys;
@@ -1487,6 +1550,10 @@ bool GameInterface::ProcessEvent(const SDL_Event& event, glm::u16vec2 resolution
 	if (_saveGameBoxes->IsActive())
 	{
 		return ProcessSaveGameBoxesEvent(event);
+	}
+	if (_staffQuestionBox->IsActive())
+	{
+		return ProcessStaffQuestionEvent(event);
 	}
 	if (_multiplayerBoxes->IsActive())
 	{
@@ -1664,6 +1731,7 @@ void GameInterface::Update(float deltaSeconds)
 	_skirmishBox->Update(deltaSeconds);
 	_landInfoBox->Update(deltaSeconds);
 	_saveGameBoxes->Update(deltaSeconds);
+	UpdateStaffQuestion(deltaSeconds);
 	_endGameBox->Update(deltaSeconds);
 	// The OK of a message (the save error, a god out of the game) gives the keyboard back to the game at once
 	if (_saveGameBoxes->TakeMessageAnswered() && Locator::gameActionSystem::has_value())
@@ -1754,7 +1822,8 @@ void GameInterface::Draw(glm::u16vec2 resolution, glm::ivec2 mouse, uint32_t mil
 	DrawGestureHints(resolution);
 	const bool menuOpen = (_menu->IsVisible() && _menu->IsOpen()) || _skipBox->IsActive() || _tattooEditor->IsOpen() ||
 	                      _newPlayerBox->IsActive() || _skirmishBox->IsActive() || _saveGameBoxes->IsActive() ||
-	                      _multiplayerBoxes->IsActive() || _endGameBox->IsOpen() || _landInfoBox->IsActive();
+	                      _staffQuestionBox->IsActive() || _multiplayerBoxes->IsActive() || _endGameBox->IsOpen() ||
+	                      _landInfoBox->IsActive();
 	UpdateChat(menuOpen || _boxOverGameFade.has_value(), resolution);
 	// The custom music controls go while the chat is open
 	UpdateMusicControls(menuOpen || _boxOverGameFade.has_value() || (_chatControls->IsActive() && _chatControls->IsOpen()));
@@ -1847,6 +1916,7 @@ void GameInterface::Draw(glm::u16vec2 resolution, glm::ivec2 mouse, uint32_t mil
 			                  DialogPainter::k_TextColour);
 		}
 		_saveGameBoxes->Draw(_painter);
+		_staffQuestionBox->Draw(_painter);
 		_multiplayerBoxes->Draw(_painter);
 		_endGameBox->Draw(_painter);
 		_landInfoBox->Draw(_painter);
