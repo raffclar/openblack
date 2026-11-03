@@ -273,22 +273,10 @@ void LandIsland::Build(const LandData& data)
 	{
 		_blockTextures->Create(side, side, static_cast<uint16_t>(_landBlocks.size()), TextureFormat::RGBA8, Wrapping::ClampEdge,
 		                       Filter::Linear, nullptr);
-		// Threads that live as long as the build paint the blocks, each straight into the memory that the device then takes
-		std::vector<const graphics::DeviceMemory*> painted(_landBlocks.size());
-		const auto blockBytes = static_cast<uint32_t>(block_texture::BlockBytesOf(_textureResolution));
-		std::ranges::generate(painted, [blockBytes] { return Locator::graphicsDevice::value().Alloc(blockBytes); });
-		std::vector<std::span<uint8_t>> paintedBytes(painted.size());
-		std::ranges::transform(painted, paintedBytes.begin(),
-		                       [](const auto* memory) { return Locator::graphicsDevice::value().Bytes(memory); });
-		WorkerPool painters(WorkerPool::DefaultThreadCount());
-		block_texture::BuildBlocks(
-		    _landBlocks.size(),
-		    [this](size_t block) { return std::span<const lnd::LNDCell>(_landBlocks[block].GetLndBlock()->cells); }, sources,
-		    painters, [&paintedBytes](size_t block) { return paintedBytes[block]; });
-		for (size_t block = 0; block < painted.size(); ++block)
-		{
-			_blockTextures->UpdateLayerFromMemory(static_cast<uint16_t>(block), painted[block]);
-		}
+		// The land paints the blocks again from its data after a restore of the graphics device. Thus the device keeps
+		// no copy of the texels, which are hundreds of megabytes on a large land.
+		_blockTextures->SetTexelsGivenAgain();
+		PaintBlockTextures(sources);
 		// The footprints are painted into the blocks after
 		for (size_t i = 0; i < _landBlocks.size(); ++i)
 		{
@@ -766,6 +754,35 @@ void LandIsland::DumpMaps() const
 	FILE* fptr = fopen("dump.raw", "wb");
 	fwrite(data.data(), data.size() * sizeof(data[0]), 1, fptr);
 	fclose(fptr);
+}
+
+void LandIsland::PaintBlockTextures(const block_texture::Sources& sources)
+{
+	// A pool of threads paints the blocks, each block straight into the memory that the device then takes
+	std::vector<const graphics::DeviceMemory*> painted(_landBlocks.size());
+	const auto blockBytes = static_cast<uint32_t>(block_texture::BlockBytesOf(_textureResolution));
+	std::ranges::generate(painted, [blockBytes] { return Locator::graphicsDevice::value().Alloc(blockBytes); });
+	std::vector<std::span<uint8_t>> paintedBytes(painted.size());
+	std::ranges::transform(painted, paintedBytes.begin(),
+	                       [](const auto* memory) { return Locator::graphicsDevice::value().Bytes(memory); });
+	WorkerPool painters(WorkerPool::DefaultThreadCount());
+	block_texture::BuildBlocks(
+	    _landBlocks.size(),
+	    [this](size_t block) { return std::span<const lnd::LNDCell>(_landBlocks[block].GetLndBlock()->cells); }, sources,
+	    painters, [&paintedBytes](size_t block) { return paintedBytes[block]; });
+	for (size_t block = 0; block < painted.size(); ++block)
+	{
+		_blockTextures->UpdateLayerFromMemory(static_cast<uint16_t>(block), painted[block]);
+	}
+}
+
+void LandIsland::PaintBlockTexturesAgain()
+{
+	if (_uploads == graphics::UploadMode::DataOnly || _blockTextures == nullptr || _landBlocks.empty())
+	{
+		return;
+	}
+	PaintBlockTextures(TextureSources());
 }
 
 block_texture::Sources LandIsland::TextureSources() const

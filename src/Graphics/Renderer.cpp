@@ -4985,12 +4985,18 @@ void Renderer::DrawSkyDomePass(const DrawSceneDesc& drawDesc) const
 	const bool lowResolution = Locator::config::value().detail.lowResTextures;
 	// A warm-up makes the target and draws a band of no rows when the dome has none this frame: it changes no texel. The
 	// low resolution dome is made once and stays.
-	// After a restore of the device the dome's picture is gone, and all of the dome is drawn again.
+	// After a restore of the device the dome's picture is gone. The renderer blends the rows of the picture again at their
+	// own sky types, and then the rows of this frame.
 	const bool lowDomeMade = lowResolution && _skyDomeFrameBuffer && _skyDomeRows == sky_dome::k_LowRows && !_skyDomeLost;
-	const auto frameRows = dome == nullptr ? sky_dome::FrameRows {}
-	                       : _skyDomeLost  ? sky_dome::WholeDomeAt(dome->follow)
-	                                       : dome->frameRows;
-	if (dome == nullptr || (!lowResolution && frameRows.Get().empty() && !_warmingUp) || (lowDomeMade && !_warmingUp))
+	const auto frameRows = dome != nullptr ? dome->frameRows.Get() : std::span<const sky_dome::Rows> {};
+	std::vector<sky_dome::Rows> again;
+	if (dome != nullptr && _skyDomeLost)
+	{
+		again = _skyDomePicture.Again();
+		again.insert(again.end(), frameRows.begin(), frameRows.end());
+	}
+	const auto rowsToDraw = _skyDomeLost ? std::span<const sky_dome::Rows>(again) : frameRows;
+	if (dome == nullptr || (!lowResolution && rowsToDraw.empty() && !_warmingUp) || (lowDomeMade && !_warmingUp))
 	{
 		return;
 	}
@@ -4999,7 +5005,6 @@ void Renderer::DrawSkyDomePass(const DrawSceneDesc& drawDesc) const
 	{
 		return;
 	}
-	_skyDomeLost = false;
 	constexpr uint16_t k_Alignments = 3;
 	const uint16_t domeRows = lowResolution ? sky_dome::k_LowRows : sky_dome::k_Rows;
 	const glm::u16vec2 size {domeRows, static_cast<uint16_t>(domeRows * k_Alignments)};
@@ -5008,7 +5013,9 @@ void Renderer::DrawSkyDomePass(const DrawSceneDesc& drawDesc) const
 		_skyDomeFrameBuffer = std::make_unique<FrameBuffer>("SkyDome", size.x, size.y, graphics::TextureFormat::RGBA8,
 		                                                    std::nullopt, 1, Wrapping::ClampEdge);
 		_skyDomeRows = domeRows;
+		_skyDomePicture = {};
 	}
+	_skyDomeLost = false;
 	const auto viewId = SetUpLandView(RenderPass::SkyDome, *_skyDomeFrameBuffer, size);
 	const auto& program = *_shaderManager->GetShader("SkyDome");
 	const auto rowsAcross = static_cast<float>(domeRows);
@@ -5026,12 +5033,13 @@ void Renderer::DrawSkyDomePass(const DrawSceneDesc& drawDesc) const
 		}
 		return;
 	}
-	if (frameRows.Get().empty())
+	if (rowsToDraw.empty())
 	{
 		program.SetTextureSampler("s_diffuse", 0, *pictures);
 		SubmitLandQuad(viewId, program, {0.0f, 0.0f}, {rowsAcross, 0.0f}, {0.0f, 0.0f}, {1.0f, 0.0f}, BGFX_STATE_WRITE_RGB);
 	}
-	for (const auto& rows : frameRows.Get())
+	_skyDomePicture.Drew(rowsToDraw);
+	for (const auto& rows : rowsToDraw)
 	{
 		const auto times = sky_dome::TimePair(rows.skyType);
 		const auto first = static_cast<float>(rows.first);
@@ -8567,10 +8575,18 @@ uint32_t Renderer::GetPipelinesMade() const noexcept
 	return _bgfxCallback->pipelinesMade.load();
 }
 
-void Renderer::RequestDeviceRestore() noexcept
+void Renderer::RequestDeviceRestore(device_restore::Request request) noexcept
 {
 	MainThreadQueue::CheckDirect(MainThreadApi::Renderer, "Renderer::RequestDeviceRestore");
-	bgfx::requestDeviceRestore();
+	switch (request)
+	{
+	case device_restore::Request::MakeAgain:
+		bgfx::requestDeviceRestore();
+		break;
+	case device_restore::Request::Lose:
+		bgfx::requestDeviceLoss();
+		break;
+	}
 }
 
 uint32_t Renderer::GetDeviceRestores() const noexcept
@@ -8578,9 +8594,16 @@ uint32_t Renderer::GetDeviceRestores() const noexcept
 	return bgfx::getDeviceRestoreCount();
 }
 
-uint64_t Renderer::GetDeviceRestoreBytes() const noexcept
+device_restore::Kept Renderer::GetDeviceRestoreKept() const noexcept
 {
-	return bgfx::getDeviceRestoreKeptBytes();
+	const auto kept = bgfx::getDeviceRestoreKept();
+	return {
+	    .buffers = kept.buffers,
+	    .dynamicBuffers = kept.dynamicBuffers,
+	    .shaders = kept.shaders,
+	    .textures = kept.textures,
+	    .textureChanges = kept.textureChanges,
+	};
 }
 
 uint32_t Renderer::GetDrawsOfLastFrame() const noexcept
@@ -8656,10 +8679,24 @@ void Renderer::Frame() noexcept
 	// next frames draw the sky's dome and the temple's map again.
 	if (_deviceRestores.Saw(bgfx::getDeviceRestoreCount()))
 	{
-		SPDLOG_LOGGER_INFO(spdlog::get("graphics"), "The renderer made the graphics device again ({} restores, {} kept bytes)",
-		                   bgfx::getDeviceRestoreCount(), bgfx::getDeviceRestoreKeptBytes());
+		const auto kept = GetDeviceRestoreKept();
+		SPDLOG_LOGGER_INFO(spdlog::get("graphics"),
+		                   "The renderer made the graphics device again ({} restores, {} kept bytes: buffers {}, dynamic "
+		                   "buffers {}, shaders {}, textures {}, texture changes {})",
+		                   bgfx::getDeviceRestoreCount(), kept.Total(), kept.buffers, kept.dynamicBuffers, kept.shaders,
+		                   kept.textures, kept.textureChanges);
 		_skyDomeLost = true;
 		_templeMapVisit.reset();
+		// The graphics device keeps no copy of the textures of the land's blocks: the land paints them again, and then
+		// the footprints on them
+		if (Locator::terrainSystem::has_value())
+		{
+			Locator::terrainSystem::value().PaintBlockTexturesAgain();
+		}
+		if (_landFootprints)
+		{
+			_landFootprints->PaintAgain();
+		}
 	}
 }
 

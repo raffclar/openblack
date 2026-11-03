@@ -72,9 +72,9 @@ public:
 	/// The graphics device: its renderer, how many times the renderer made it again and the bytes that it keeps for
 	/// that. Null when the game has no graphics device.
 	[[nodiscard]] virtual Json GraphicsDevice() const { return nullptr; }
-	/// Asks the renderer to make its graphics device again, as after a lost device. False when the game has no graphics
-	/// device.
-	virtual bool RestoreGraphicsDevice() { return false; }
+	/// Asks the renderer to make its graphics device again, as after a lost device, or to lose the device first. False
+	/// when the game has no graphics device.
+	virtual bool RestoreGraphicsDevice(bool /*lose*/) { return false; }
 };
 
 } // namespace openblack::inspector

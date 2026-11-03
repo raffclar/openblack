@@ -32,6 +32,7 @@
 #include "ECS/Systems/MagicSystemInterface.h"
 #include "TestbedGameStageInterface.h"
 #include "TestbedScenarioRegistry.h"
+#include "Visual/DeviceRestoreRequest.h"
 
 namespace openblack::testbed_scenarios
 {
@@ -176,6 +177,8 @@ private:
 	void UpdateThrows();
 	/// Asks again for the turns that did not start while their creatures walked to a stop
 	void UpdateTurnsAsked();
+	/// Asks the renderer to make the graphics device again once the dome of the sky is part way through a follow
+	void UpdateDeviceRestore();
 	void UpdateChecks();
 	[[nodiscard]] std::optional<double> ReadCheck(const checks::Check& check) const;
 	/// Casts the scenario's miracle of that index; the running miracle, or none
@@ -335,6 +338,8 @@ private:
 	std::vector<std::optional<float>> _throwsDue;
 	/// The turns to face a point that wait until their creatures stand
 	std::vector<std::pair<entt::entity, glm::vec2>> _turnsAsked;
+	/// The restore of the graphics device that waits until the dome of the sky is part way through a follow
+	std::optional<graphics::device_restore::Request> _deviceRestoreAsked;
 	/// For each object, when it next walks, whether it next walks out or back, and whether it has been dropped yet; and
 	/// the walk it is on: where to and the game turn it set off, until it gets there
 	struct ObjectWalk

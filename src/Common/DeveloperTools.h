@@ -110,6 +110,7 @@ inline constexpr std::array k_DeveloperOptions {
     DeveloperOption {.name = "screenshot-frame", .takesValue = true},
     DeveloperOption {.name = "screenshot-path", .takesValue = true},
     DeveloperOption {.name = "device-restore-frame", .takesValue = true},
+    DeveloperOption {.name = "device-loss-frame", .takesValue = true},
     DeveloperOption {.name = "frame-stats", .takesValue = true},
     DeveloperOption {.name = "frame-stats-views"},
     DeveloperOption {.name = "frame-stats-out", .takesValue = true},

@@ -123,9 +123,9 @@ public:
 	[[nodiscard]] bool GetDebug() const noexcept final { return _bgfxDebug; }
 	void SetDebug(bool value) noexcept final { _bgfxDebug = value; }
 	[[nodiscard]] uint32_t GetPipelinesMade() const noexcept final;
-	void RequestDeviceRestore() noexcept final;
+	void RequestDeviceRestore(device_restore::Request request) noexcept final;
 	[[nodiscard]] uint32_t GetDeviceRestores() const noexcept final;
-	[[nodiscard]] uint64_t GetDeviceRestoreBytes() const noexcept final;
+	[[nodiscard]] device_restore::Kept GetDeviceRestoreKept() const noexcept final;
 	[[nodiscard]] uint32_t GetDrawsOfLastFrame() const noexcept final;
 	[[nodiscard]] bool GetProfile() const noexcept final { return _bgfxProfile; }
 	void SetProfile(bool value) noexcept final { _bgfxProfile = value; }
@@ -668,9 +668,11 @@ private:
 	mutable std::unique_ptr<FrameBuffer> _skyDomeFrameBuffer;
 	/// The rows of each alignment's dome in the frame buffer above
 	mutable uint16_t _skyDomeRows {sky_dome::k_Rows};
-	/// The dome's picture is gone because the graphics device was made again, thus the next draw of the dome draws all
-	/// of it
+	/// The dome's picture is gone because the renderer made the graphics device again, thus the next draw of the dome
+	/// draws all of it again
 	mutable bool _skyDomeLost {false};
+	/// The sky type of each row in the dome's frame buffer, to blend the rows again when the picture is gone
+	mutable sky_dome::Picture _skyDomePicture;
 	/// Finds each new restore of the graphics device
 	device_restore::Watch _deviceRestores;
 	/// The glow lightning stamps on the land, made the first time it is drawn

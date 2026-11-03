@@ -13,6 +13,8 @@
 
 #include <bgfx/bgfx.h>
 
+#include "Visual/DeviceRestoreRequest.h"
+
 /// The recovery from a lost graphics device. The graphics library makes the device again with all the textures,
 /// buffers, shaders and render targets that it has, and each one keeps its handle. Only the pictures that the GPU drew
 /// into render targets are gone, thus the renderer draws again the pictures that it keeps from one frame to the next.
