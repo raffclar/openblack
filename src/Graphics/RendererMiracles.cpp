@@ -96,20 +96,31 @@ constexpr uint64_t k_BlendedState = BGFX_STATE_WRITE_RGB | BGFX_STATE_DEPTH_TEST
 constexpr uint64_t k_AddedState = k_BlendedState | BGFX_STATE_BLEND_FUNC(BGFX_STATE_BLEND_SRC_ALPHA, BGFX_STATE_BLEND_ONE);
 } // namespace
 
+Renderer::SeedModelLooks Renderer::FindSeedModelLooks() const
+{
+	const auto& textures = Locator::resources::value().GetTextures();
+	const auto envmap = entt::hashed_string("raw/envmap").value();
+	const auto ice = entt::hashed_string("raw/S_IceEnvMap").value();
+	return {
+	    .object = _shaderManager->GetShader("Object"),
+	    .environment = _shaderManager->GetShader("ObjectEnvironment"),
+	    .environmentMap = textures.Contains(envmap) ? &*textures.Handle(envmap) : nullptr,
+	    .iceMap = textures.Contains(ice) ? &*textures.Handle(ice) : nullptr,
+	};
+}
+
 void Renderer::DrawSeedModel(const DrawSceneDesc& desc, const SeedModelDraw& shown, const view_frustum::Frustum* seenBy,
-                             DrawEncoder* encoder) const
+                             DrawEncoder* encoder, const SeedModelLooks* looks) const
 {
 	const bool reflection = desc.viewId == RenderPass::Reflection;
 	const auto& meshes = Locator::resources::value().GetMeshes();
-	const auto& textures = Locator::resources::value().GetTextures();
 	const auto& info = Locator::infoConstants::value();
 	const auto eye = desc.camera->GetOrigin();
-	const auto envmap = entt::hashed_string("raw/envmap").value();
-	const auto* environment = textures.Contains(envmap) ? &*textures.Handle(envmap) : nullptr;
-	const auto ice = entt::hashed_string("raw/S_IceEnvMap").value();
-	const auto* iceMap = textures.Contains(ice) ? &*textures.Handle(ice) : nullptr;
-	const auto* objectProgram = _shaderManager->GetShader("Object");
-	const auto* environmentProgram = _shaderManager->GetShader("ObjectEnvironment");
+	const auto found = looks != nullptr ? *looks : FindSeedModelLooks();
+	const auto* environment = found.environmentMap;
+	const auto* iceMap = found.iceMap;
+	const auto* objectProgram = found.object;
+	const auto* environmentProgram = found.environment;
 	const auto translucent = TranslucentView(desc.viewId);
 	const auto& seed = magic::GetSpellSeedInfo(info, shown.seed);
 
@@ -478,6 +489,7 @@ void Renderer::DrawIconSeeds(const DrawSceneDesc& desc) const
 	static_cast<void>(textures.Find(entt::hashed_string("raw/envmap").value()));
 	static_cast<void>(textures.Find(entt::hashed_string("raw/S_IceEnvMap").value()));
 	const auto* ring = haveRing ? meshes.Find(ecs::components::OneOffSpellSeed::k_RingMeshId.value()) : nullptr;
+	const auto looks = FindSeedModelLooks();
 	EncodeInOrder(icons.size(), [&](size_t index, DrawEncoder& to) {
 		const auto& [shown, player, alignment] = icons[index];
 		DrawSeedModel(desc,
@@ -489,7 +501,7 @@ void Renderer::DrawIconSeeds(const DrawSceneDesc& desc) const
 		               .phialFrame = shown->phialFrame,
 		               .phialAlpha = std::numeric_limits<uint8_t>::max(),
 		               .ownerAlignment = alignment},
-		              &seenBy, &to);
+		              &seenBy, &to, &looks);
 		// A power-up level shown has its rings, each drawn twice over, added without writing depth, in the player's colour
 		const int rings = magic::visuals::RingCount(shown->powerUp);
 		if (ring == nullptr || rings <= 0)

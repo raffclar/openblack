@@ -236,10 +236,19 @@ private:
 		/// The seed is drawn at once in white, with no light from the land, as the seeds over the gestures' hints are
 		bool drawnAtOnce {false};
 	};
+	/// The programs and the maps that each seed model can use. A draw of many seeds finds them one time.
+	struct SeedModelLooks
+	{
+		const ShaderProgram* object;
+		const ShaderProgram* environment;
+		const Texture2D* environmentMap;
+		const Texture2D* iceMap;
+	};
+	[[nodiscard]] SeedModelLooks FindSeedModelLooks() const;
 	/// With `seenBy`, the function does not send a draw of the model that is out of that view. The draws go into the
-	/// encoder given, or into the game thread's encoder without one.
+	/// encoder given, or into the game thread's encoder without one. Without `looks`, the function finds them.
 	void DrawSeedModel(const DrawSceneDesc& desc, const SeedModelDraw& shown, const view_frustum::Frustum* seenBy = nullptr,
-	                   DrawEncoder* encoder = nullptr) const;
+	                   DrawEncoder* encoder = nullptr, const SeedModelLooks* looks = nullptr) const;
 	/// The pass what blends in a scene goes to: its own pass after the scene's, but in the temple the scene's own
 	[[nodiscard]] static RenderPass TranslucentView(RenderPass scene);
 	/// The seeds of the creature's best-learnt miracles hovering by the plinths in the creature's room
