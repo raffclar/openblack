@@ -243,6 +243,9 @@ struct PlannerState
 	/// replace it, the same plan too.
 	bool currentHasNoSteps {false};
 };
+/// The action of the plan carried out, else of the last plan, as scripts and other creatures see it. A creature that
+/// never had a plan shows the first action
+[[nodiscard]] uint32_t ActionInView(const PlannerState& state);
 /// The next desires to plan this turn, going round those that may be planned
 [[nodiscard]] std::vector<creature_desires::Desire> NextGoals(PlannerState& state,
                                                               const std::array<bool, creature_desires::k_DesireCount>& eligible,

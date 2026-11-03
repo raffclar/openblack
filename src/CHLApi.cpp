@@ -5104,11 +5104,22 @@ void GetTargetObject() // 097 GET_TARGET_OBJECT
 
 void CreatureDesireIs() // 098 CREATURE_DESIRE_IS
 {
-	// const auto unk1 = Pop().intVal;
-	// const auto unk0 = Pop().intVal;
-	// TODO(Daniels118): implement this
-	NotImplemented();
-	Pushi(0);
+	// Whether the desire that the action of the creature's plan shows is the desire. The action is that of the plan
+	// carried out, else of the last plan. The native gives false for a thing that is not a creature.
+	const auto desire = Pop().intVal;
+	const auto object = PopObject();
+	const auto& registry = Locator::entitiesRegistry::value();
+	const auto* mind = registry.Valid(object) && registry.AllOf<ecs::components::Creature>(object)
+	                       ? registry.TryGet<const CreatureMindState>(object)
+	                       : nullptr;
+	if (mind == nullptr || !Locator::infoConstants::has_value())
+	{
+		Pushb(false);
+		return;
+	}
+	const auto& actions = Locator::infoConstants::value().creatureAction;
+	const auto action = creature_planner::ActionInView(mind->planner);
+	Pushb(action < actions.size() && static_cast<int32_t>(actions.at(action).shownDesire) == desire);
 }
 
 void CountdownTimerExists() // 099 COUNTDOWN_TIMER_EXISTS
@@ -10295,9 +10306,8 @@ void ResetGameTimeProperties() // 408 RESET_GAME_TIME_PROPERTIES
 
 void SoundExists() // 409 SOUND_EXISTS
 {
-	// TODO(Daniels118): implement this
-	NotImplemented();
-	Pushb(false);
+	// Whether the game has a sound device to play through
+	Pushb(Locator::sounds::has_value() && Locator::sounds::value().IsInstalled());
 }
 
 void GetTownWorshipDeaths() // 410 GET_TOWN_WORSHIP_DEATHS
