@@ -15,6 +15,7 @@
 
 #include "ECS/Components/CreatureTallies.h"
 #include "ECS/Components/CreatureTarget.h"
+#include "ECS/Components/CreatureTurnSteps.h"
 #include "ECS/Reflection/ComponentReflection.h"
 
 namespace components = openblack::ecs::components;
@@ -34,4 +35,5 @@ void openblack::ecs::reflection::RegisterFields_Components_creaturet(entt::meta_
 	    .Field<&components::CreatureTarget::point>("point")
 	    .Field<&components::CreatureTarget::object>("object")
 	    .Field<&components::CreatureTarget::has>("has");
+	Reflect<components::CreatureTurnSteps>(context).Field<&components::CreatureTurnSteps::last>("last");
 }

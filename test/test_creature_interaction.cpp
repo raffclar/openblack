@@ -558,7 +558,8 @@ TEST(CreatureObjectActions, OfOtherStaticsOnlyTheToysArePickedUp)
 	}
 	EXPECT_FALSE(creature_object_actions::CanBePickedUp(Thing::Lantern));
 	EXPECT_FALSE(creature_object_actions::CanBePickedUp(Thing::Shield));
-	EXPECT_TRUE(creature_object_actions::CanBePickedUp(Thing::Vortex));
+	// The kind of a vortex says no as well, so nothing gives a vortex to a creature or lets a creature catch it
+	EXPECT_FALSE(creature_object_actions::CanBePickedUp(Thing::Vortex));
 }
 
 TEST(CreatureObjectActions, AMagicMushroomIsPickedUpUnlessAScriptSaidNo)
@@ -635,16 +636,16 @@ TEST(CreatureObjectActions, AScaffoldIsPickedUpOnlyWhenAHandCanTakeIt)
 TEST(CreatureObjectActions, BuildingsFeaturesLanternsAndShieldsSayNoToAnyPickUp)
 {
 	using creature_object_actions::Thing;
-	for (const auto thing : {Thing::Other, Thing::Fixture, Thing::Lantern, Thing::Shield, Thing::MagicMushroom})
+	for (const auto thing : {Thing::Other, Thing::Fixture, Thing::Lantern, Thing::Shield, Thing::MagicMushroom, Thing::Vortex})
 	{
 		EXPECT_FALSE(creature_object_actions::CanBePickedUp(thing));
 		const creature_object_actions::KindFacts kind {.thing = thing, .canBePickedUp = false};
 		EXPECT_FALSE(creature_object_actions::MayCatchKind(kind, {}));
 		EXPECT_FALSE(creature_object_actions::MayTakeKindFromHand(kind, {}));
 	}
-	for (const auto thing : {Thing::Villager, Thing::Animal, Thing::Bird, Thing::Ball, Thing::Creed, Thing::MobileObject,
-	                         Thing::Pot, Thing::Pile, Thing::Rock, Thing::Bonfire, Thing::DeadTree, Thing::Tree, Thing::Static,
-	                         Thing::Vortex, Thing::TeleportStone, Thing::Creature})
+	for (const auto thing :
+	     {Thing::Villager, Thing::Animal, Thing::Bird, Thing::Ball, Thing::Creed, Thing::MobileObject, Thing::Pot, Thing::Pile,
+	      Thing::Rock, Thing::Bonfire, Thing::DeadTree, Thing::Tree, Thing::Static, Thing::TeleportStone, Thing::Creature})
 	{
 		EXPECT_TRUE(creature_object_actions::CanBePickedUp(thing));
 	}

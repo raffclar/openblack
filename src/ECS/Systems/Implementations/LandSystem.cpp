@@ -115,6 +115,8 @@
 #include "ECS/Systems/PlayerCommandSystemInterface.h"
 #include "ECS/Systems/PlayerProfileSystemInterface.h"
 #include "ECS/Systems/PlayerSystemInterface.h"
+#include "ECS/Systems/PuzzleGameSystemInterface.h"
+#include "ECS/Systems/PuzzleTotemSystemInterface.h"
 #include "ECS/Systems/ReactionSystemInterface.h"
 #include "ECS/Systems/RealWeatherSystemInterface.h"
 #include "ECS/Systems/SaveGameSystemInterface.h"
@@ -236,6 +238,7 @@ bool LandSystem::LoadMap(const std::filesystem::path& path, loading::LoadingCloc
 
 	PrepareNewLand(change);
 	// The script of the land gives the start place of the camera again, if it gives one
+	_startCameraFocus.reset();
 	_startCameraPlace.reset();
 	timer.Step("reset");
 	View().ShowLoadingFrame();
@@ -262,6 +265,15 @@ bool LandSystem::LoadMap(const std::filesystem::path& path, loading::LoadingCloc
 	_mapLandscape.clear();
 
 	timer.Step("map script");
+	// A script that loads no landscape leaves no land to lay out
+	if (!Locator::terrainSystem::value().IsLoaded())
+	{
+		SPDLOG_LOGGER_ERROR(spdlog::get("game"), "The map script {} loads no landscape", path.generic_string());
+		View().EndLoadingScreen();
+		return false;
+	}
+	// The camera goes to the start place of the script when the whole script has run, on the land that it loaded
+	PutCameraAtStartPlace();
 	// Every land of a network game fills its slots with no human when the land is laid out. Without a network session,
 	// only a land made for network play does.
 	const bool fillsSlots = _humansFromSession || _allComputerGods || online_map_land::IsOnlineMap(path.generic_string());
@@ -286,6 +298,17 @@ bool LandSystem::LoadMap(const std::filesystem::path& path, loading::LoadingCloc
 	timer.Step("start");
 	View().EndLoadingScreen();
 	return true;
+}
+
+void LandSystem::PutCameraAtStartPlace()
+{
+	if (!_startCameraFocus.has_value() || !Locator::camera::has_value() || !Locator::terrainSystem::value().IsLoaded())
+	{
+		return;
+	}
+	const auto focus =
+	    start_camera::FocusOnLand(*_startCameraFocus, Locator::terrainSystem::value().GetHeightAt(*_startCameraFocus));
+	Locator::camera::value().SetFocus(focus).SetOrigin(start_camera::OriginOver(focus));
 }
 
 bool LandSystem::IsPlaygroundLand(const std::filesystem::path& path) const
@@ -675,6 +698,17 @@ bool LandSystem::LoadSavedLand(const std::filesystem::path& landPath, const std:
 	Locator::handSystem::value().FindAfterLoad();
 	Locator::skyClockSystem::value().FindAfterLoad();
 	Locator::cameraBookmarkSystem::value().FindAfterLoad();
+	// The puzzle games of a saved game lose the state that a save does not keep. The world of a game server continues
+	// as the server has it.
+	if (use == SavedLandUse::SavedGame && Locator::puzzleGameSystem::has_value())
+	{
+		Locator::puzzleGameSystem::value().AfterLoad();
+	}
+	// A saved game keeps no slide of a puzzle totem
+	if (use == SavedLandUse::SavedGame && Locator::puzzleTotemSystem::has_value())
+	{
+		Locator::puzzleTotemSystem::value().AfterLoad();
+	}
 	if (Locator::appleBarrelSystem::has_value())
 	{
 		Locator::appleBarrelSystem::value().FindAfterLoad();

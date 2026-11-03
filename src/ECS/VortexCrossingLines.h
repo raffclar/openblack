@@ -52,6 +52,9 @@ struct World
 	/// Whether its kind is filed among the land's static things, which is how its fellows standing where it stands are
 	/// found
 	std::function<bool(entt::entity)> filedAsStatic;
+	/// Whether its kind is filed among the land's loose objects, which is how its fellows standing where it stands are
+	/// found
+	std::function<bool(entt::entity)> filedAsMobileObject;
 };
 
 /// Where a thing stands as a map position: across the land, and its height above the land there
@@ -66,5 +69,10 @@ struct World
 /// The other static things of the same kind standing exactly where a static thing stands, at the same height above the
 /// land: once its line is written they count as written too, so a pile of them in one place comes out as one
 [[nodiscard]] std::vector<entt::entity> IdenticalStatics(const Registry& registry, entt::entity thing, const World& world);
+
+/// The other loose objects of the same kind standing exactly where a loose object stands, at the same height above the
+/// land: once its line is written they count as written too
+[[nodiscard]] std::vector<entt::entity> IdenticalMobileObjects(const Registry& registry, entt::entity thing,
+                                                               const World& world);
 
 } // namespace openblack::ecs::vortex_crossing

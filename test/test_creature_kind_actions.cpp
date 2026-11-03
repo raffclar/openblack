@@ -112,8 +112,8 @@ TEST(CreatureKindActions, WhatLiesAboutStaticsAndTreesGoIntoTheSea)
 	{
 		EXPECT_TRUE(creature_object_actions::CanBeThrownInTheSea(thing));
 	}
-	for (const auto thing :
-	     {Thing::Villager, Thing::Animal, Thing::Creature, Thing::MagicMushroom, Thing::Fixture, Thing::Lantern, Thing::Shield})
+	for (const auto thing : {Thing::Villager, Thing::Animal, Thing::Creature, Thing::MagicMushroom, Thing::Fixture,
+	                         Thing::Lantern, Thing::Shield, Thing::Vortex})
 	{
 		EXPECT_FALSE(creature_object_actions::CanBeThrownInTheSea(thing));
 	}

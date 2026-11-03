@@ -16,6 +16,7 @@
 #include <entt/entity/entity.hpp>
 
 #include "ECS/Components/PuzzleGame.h"
+#include "ECS/TotemPuzzleRules.h"
 #include "ScriptHeaders/ScriptEnums.h"
 
 /// What the scripts read from a puzzle game before the player solves it
@@ -77,37 +78,81 @@ namespace openblack::ecs::puzzle_game
 }
 
 /// A script deletes a puzzle game. The puzzle game stays, but it lets go of these things, in this order:
-/// - each lantern that is still there,
+/// - each palm tree and each lantern that is still there, corner by corner,
 /// - its trees,
+/// - the lion and the villager or the sheep of a maze,
+/// - the fences of a maze, slot by slot, the fence towards the next cell across first,
+/// - the bells of the lion maze,
+/// - the totems of a totem puzzle, but not for the kind that the fourth land uses,
 /// - the bases and the rings of the beach temple puzzle.
-/// Its mists and its bats stay. The puzzle counts as played from then on, so its turn does nothing more.
-/// The result is the list of the things to remove from the world.
+/// Its mists, its bats and the spot visuals over its totems stay. The puzzle counts as played from then on, so its turn does
+/// nothing more. The result is the list of the things to remove from the world.
 template <typename IsThere>
 [[nodiscard]] std::vector<entt::entity> TakePiecesForDelete(components::PuzzleGame& game, IsThere&& isThere)
 {
 	std::vector<entt::entity> pieces;
-	for (auto& lantern : game.lanterns)
-	{
-		if (lantern != entt::null && isThere(lantern))
+	const auto takeIfThere = [&pieces, &isThere](entt::entity& slot) {
+		if (slot != entt::null && isThere(slot))
 		{
-			pieces.push_back(lantern);
-			lantern = entt::null;
-		}
-	}
-	const auto takeAll = [&pieces](auto& slots) {
-		for (auto& slot : slots)
-		{
-			if (slot != entt::null)
-			{
-				pieces.push_back(slot);
-				slot = entt::null;
-			}
+			pieces.push_back(slot);
+			slot = entt::null;
 		}
 	};
+	const auto take = [&pieces](entt::entity& slot) {
+		if (slot != entt::null)
+		{
+			pieces.push_back(slot);
+			slot = entt::null;
+		}
+	};
+	const auto takeAll = [&take](auto& slots) {
+		for (auto& slot : slots)
+		{
+			take(slot);
+		}
+	};
+	for (size_t corner = 0; corner < game.lanterns.size(); ++corner)
+	{
+		takeIfThere(game.maze.palms.at(corner));
+		takeIfThere(game.lanterns.at(corner));
+	}
 	takeAll(game.trees);
+	take(game.maze.lion);
+	take(game.maze.hero);
+	for (size_t slot = 0; slot < game.maze.acrossFences.size(); ++slot)
+	{
+		take(game.maze.acrossFences.at(slot));
+		take(game.maze.alongFences.at(slot));
+	}
+	takeAll(game.maze.bells);
+	if (totem_puzzle::DeleteRemovesTotems(game.type))
+	{
+		takeAll(game.totems);
+	}
 	takeAll(game.bases);
 	takeAll(game.rings);
 	game.played = true;
 	return pieces;
+}
+
+/// The calm count of each puzzle game after a load of a saved game
+constexpr int32_t k_CalmTurnsAfterLoad = 5;
+
+/// A load of a saved game gives back a puzzle game without some of its state, as the game does:
+/// - the calm count of the beach temple puzzle is 5,
+/// - a maze has no marker on the last tapped cell, and its two animals turn to angle 0 before their next move,
+/// - a maze has no fences towards the next cell across. These fences stay in the world, but the maze does not put them
+///   back and does not delete them,
+/// - the fish puzzle has no ring of floats and no shoals. It makes them again, as at its start, in its next turn,
+/// - a totem puzzle has no spot visuals over its totems until a totem changes.
+inline void ForgetUnsavedState(components::PuzzleGame& game) noexcept
+{
+	game.totemMarks.fill(0);
+	game.calmTurns = k_CalmTurnsAfterLoad;
+	game.maze.marker = components::MazeState {}.marker;
+	game.maze.heroAngle = 0;
+	game.maze.lionAngle = 0;
+	game.maze.acrossFences.fill(entt::null);
+	game.fish.reset();
 }
 } // namespace openblack::ecs::puzzle_game

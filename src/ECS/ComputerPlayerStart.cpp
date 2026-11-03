@@ -15,6 +15,7 @@
 #include <tuple>
 
 #include "Creature/CreatureMindFileBody.h"
+#include "ECS/ComputerHand.h"
 #include "ECS/ComputerPlayerPersonality.h"
 #include "ECS/PlayerMiracles.h"
 
@@ -35,6 +36,29 @@ void StartAgainAfterLoad(ecs::components::ComputerPlayer& player)
 	player.mind = computer_mind::StartAgain(player.mind);
 	player.creatureLike.reset();
 	player.hand.locked = false;
+}
+
+ecs::components::ComputerPlayer AfterLandCleared(const ecs::components::ComputerPlayer& player)
+{
+	auto cleared = player;
+	cleared.switchedOn = false;
+	cleared.marked = false;
+	cleared.started = false;
+	cleared.creatureLike.reset();
+	cleared.casts.clear();
+	cleared.seen.clear();
+	cleared.mind.queue.clear();
+	cleared.mind.lastEmptyTurn = 0;
+	cleared.mind.wasBusy = true;
+	// The things of the last land are gone
+	for (auto& node : cleared.mind.nodes)
+	{
+		node.object = entt::null;
+		node.siteTown = entt::null;
+		node.argument = entt::null;
+	}
+	computer_hand::Clear(cleared.hand);
+	return cleared;
 }
 
 bool DueToStart(const ecs::components::ComputerPlayer& player)

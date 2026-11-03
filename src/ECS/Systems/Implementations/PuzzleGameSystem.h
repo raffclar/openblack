@@ -28,6 +28,17 @@ public:
 	void TakenInHand(entt::entity piece) override;
 	void Forget(entt::entity puzzle) override;
 	bool DeletePieces(entt::entity puzzle) override;
+	void TapPlace(const map_coords::MapCoords& place) override;
+	bool TapTotem(entt::entity totem) override;
+	void ScareFish(glm::vec3 point) override;
+	[[nodiscard]] bool HasFishPuzzle() const override;
+	void AfterLoad() override;
+
+private:
+	/// The place on the land that a player tapped in this turn, until the puzzles took their turns
+	std::optional<map_coords::MapCoords> _tappedPlace;
+	/// The last scare of the fish since the last turn
+	std::optional<glm::vec3> _fishScare;
 };
 
 } // namespace openblack::ecs::systems

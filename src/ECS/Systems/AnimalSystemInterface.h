@@ -123,6 +123,26 @@ public:
 	/// An animal of any kind that stays at its position, with a size and a heading. It is in no flock and does not move.
 	/// It shows the clip and the light of an animal that a script holds still.
 	virtual entt::entity CreateStillAnimal(AnimalInfo type, glm::vec3 position, float heading, float scale) = 0;
+	/// An animal of a puzzle game on a place in map units, at an age, deciding what to do. It takes its size from its age,
+	/// or the given size. It has no needs, decides nothing and moves only when its puzzle tells it to. None for a place
+	/// off the map.
+	virtual entt::entity CreatePuzzlePiece([[maybe_unused]] AnimalInfo type, [[maybe_unused]] glm::ivec2 place,
+	                                       [[maybe_unused]] uint32_t age, [[maybe_unused]] std::optional<float> scale,
+	                                       [[maybe_unused]] entt::entity puzzle)
+	{
+		return entt::null;
+	}
+	/// An animal turns towards a game angle, as far as its kind turns at a time, and gives the angle that it then faces
+	virtual uint16_t TurnPieceTowards([[maybe_unused]] entt::entity animal, uint16_t angle) { return angle; }
+	/// An animal goes straight to a place in map units at a speed in metres a second, and then decides what to do
+	virtual void MovePieceTo([[maybe_unused]] entt::entity animal, [[maybe_unused]] glm::ivec2 place,
+	                         [[maybe_unused]] float metresPerSecond)
+	{
+	}
+	/// Whether an animal is nearer than one step of its speed to the place that it goes to
+	[[nodiscard]] virtual bool PieceArrived([[maybe_unused]] entt::entity animal) const { return true; }
+	/// An animal stands at once on a place in map units
+	virtual void PutPiece([[maybe_unused]] entt::entity animal, [[maybe_unused]] glm::ivec2 place) {}
 	/// An animal of a saved game, as the save keeps it. It joins its flock last in the line, so that the members of a
 	/// flock made in the order of their line keep that order. None for a kind that is not a land animal.
 	virtual entt::entity CreateLoadedAnimal([[maybe_unused]] const LoadedAnimal& loaded) { return entt::null; }

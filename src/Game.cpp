@@ -261,6 +261,8 @@
 #include "ECS/Systems/PlayerSystemInterface.h"
 #include "ECS/Systems/PlaygroundTripSystemInterface.h"
 #include "ECS/Systems/ProfileFolderSystemInterface.h"
+#include "ECS/Systems/PuzzleGameSystemInterface.h"
+#include "ECS/Systems/PuzzleTotemSystemInterface.h"
 #include "ECS/Systems/RainSystemInterface.h"
 #include "ECS/Systems/ReactionSystemInterface.h"
 #include "ECS/Systems/RealWeatherSystemInterface.h"
@@ -987,6 +989,13 @@ bool Game::ProcessEvents(const SDL_Event& event) noexcept
 		Locator::villageTotemSystem::value().LetGo();
 		_totemPointer.reset();
 	}
+	// It also lets go of a puzzle totem, at the height it was slid to
+	if (Locator::puzzleTotemSystem::has_value() && Locator::puzzleTotemSystem::value().GetGripped().has_value() &&
+	    (rightLetGo || (event.type == SDL_MOUSEBUTTONUP && event.button.button == SDL_BUTTON_RIGHT)))
+	{
+		Locator::puzzleTotemSystem::value().LetGo();
+		_totemPointer.reset();
+	}
 	// Letting go of the Action button lets go of what the hand was taking, or puts down or throws what it holds
 	if (handGrab != nullptr && (rightLetGo || (event.type == SDL_MOUSEBUTTONUP && event.button.button == SDL_BUTTON_RIGHT)))
 	{
@@ -1140,6 +1149,17 @@ bool Game::ProcessEvents(const SDL_Event& event) noexcept
 					_actionPressTaken = true;
 					_totemPointer = _mousePosition;
 				}
+			}
+		}
+		// A puzzle totem under the hand is taken hold of, to slide it up out of the land and down into it
+		if (!_actionPressTaken && !magic.IsHandBusy() && !handHoldsThing && mayHold && picked.has_value() &&
+		    Locator::puzzleTotemSystem::has_value() && Locator::pickingSystem::has_value())
+		{
+			const auto point = Locator::pickingSystem::value().GetPick().point;
+			if (point.has_value() && Locator::puzzleTotemSystem::value().Grip(*picked, LocalInputPlayer(), *point))
+			{
+				_actionPressTaken = true;
+				_totemPointer = _mousePosition;
 			}
 		}
 		// Otherwise the hand takes hold of a thing under it, if the lesson lets it
@@ -3973,16 +3993,32 @@ void Game::UpdateHandFrame(std::chrono::microseconds deltaTime)
 					                std::chrono::duration_cast<std::chrono::duration<float>>(deltaTime).count());
 				}
 				// Holding a town's totem, the mouse slides it up and down and the hand stays on its icon
-				if (Locator::villageTotemSystem::has_value() && Locator::villageTotemSystem::value().GetGripped().has_value())
+				// A puzzle totem too
+				const bool townTotem =
+				    Locator::villageTotemSystem::has_value() && Locator::villageTotemSystem::value().GetGripped().has_value();
+				const bool puzzleTotem =
+				    Locator::puzzleTotemSystem::has_value() && Locator::puzzleTotemSystem::value().GetGripped().has_value();
+				if (townTotem || puzzleTotem)
 				{
-					auto& totems = Locator::villageTotemSystem::value();
 					const auto screenSize =
 					    Locator::windowing::has_value() ? Locator::windowing::value().GetSize() : glm::ivec2(0);
 					// The pointer is put back on the hand every frame, so how far it went from there is how far the mouse
 					// moved
 					const int up = _totemPointer.has_value() ? _totemPointer->y - _mousePosition.y : 0;
-					totems.Slide(static_cast<float>(up), static_cast<float>(screenSize.y));
-					if (const auto hold = totems.GetHandHold())
+					std::optional<ecs::systems::VillageTotemSystemInterface::HandHold> hold;
+					if (townTotem)
+					{
+						auto& totems = Locator::villageTotemSystem::value();
+						totems.Slide(static_cast<float>(up), static_cast<float>(screenSize.y));
+						hold = totems.GetHandHold();
+					}
+					else
+					{
+						auto& totems = Locator::puzzleTotemSystem::value();
+						totems.Slide(static_cast<float>(up), static_cast<float>(screenSize.y));
+						hold = totems.GetHandHold();
+					}
+					if (hold.has_value())
 					{
 						handTransform.position = hold->position;
 						TraceHand("totem", handTransform.position);
@@ -4135,8 +4171,12 @@ void Game::UpdateHandFrame(std::chrono::microseconds deltaTime)
 			const auto* pullClip =
 			    pullCycle.has_value() ? _handAnimation->GetAnimation(static_cast<size_t>(*pullCycle)) : nullptr;
 			// Holding a town's totem, the hand takes its side hold on the icon, closed by how wide the icon is
-			const auto totemHold =
+			auto totemHold =
 			    Locator::villageTotemSystem::has_value() ? Locator::villageTotemSystem::value().GetHandHold() : std::nullopt;
+			if (!totemHold.has_value() && Locator::puzzleTotemSystem::has_value())
+			{
+				totemHold = Locator::puzzleTotemSystem::value().GetHandHold();
+			}
 			handCycle = cycle;
 			gripsTotem = totemHold.has_value();
 			pulls = pull.has_value();
@@ -4337,6 +4377,11 @@ void Game::UpdateEntitiesFrame(std::chrono::microseconds deltaTime)
 				if (Locator::villageTotemSystem::has_value())
 				{
 					Locator::villageTotemSystem::value().Update(static_cast<uint32_t>(clock.GetElapsedTime().count()));
+				}
+				// The puzzle totems that the list draws take the steps of their slides
+				if (Locator::puzzleTotemSystem::has_value())
+				{
+					Locator::puzzleTotemSystem::value().UpdateFrame(clock.GetFrameRealTime());
 				}
 			};
 			if (config.drawEntities)
@@ -7867,6 +7912,12 @@ void Game::PlayHandGrabSound()
 			}
 			// The fish near where the hand went in dart away
 			Locator::fishFarmSystem::value().Scare({position.x, k_HandSplashHeight, position.z});
+			// The shoals of the fish puzzle get the scare at the next turn, on each computer of a network game
+			if (Locator::puzzleGameSystem::has_value() && Locator::puzzleGameSystem::value().HasFishPuzzle())
+			{
+				Locator::playerCommandSystem::value().Submit(
+				    player_commands::FishScare {.point = {position.x, k_HandSplashHeight, position.z}});
+			}
 		}
 		// G_HandInWater_01 to _10 in turn, on the water's surface where the hand went in
 		const auto id = fmt::format("InGame.sad/{}", 99 + _handInWaterSample);
