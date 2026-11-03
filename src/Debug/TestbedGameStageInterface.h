@@ -56,6 +56,8 @@ public:
 	virtual void OpenChat(std::u16string_view line) = 0;
 	/// The list of people of the chat gets made-up friends and others, and the chat opens
 	[[nodiscard]] virtual std::string OpenChatWithFriends() = 0;
+	/// A ping server of the testbed sends a message to the gathering box (k_ChatStaffSays or k_ChatAnnouncement)
+	[[nodiscard]] virtual std::string PingServerSays(size_t value, std::u16string_view text) = 0;
 	/// The multiplayer front end opens over the temple's future room with the demonstration lobby, on its way to a stage
 	[[nodiscard]] virtual std::string OpenMultiplayerBox(size_t stage) = 0;
 	/// The game's menu opens on a page. With no sound, the menu shows what a game with no sound shows.

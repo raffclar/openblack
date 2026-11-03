@@ -46,6 +46,7 @@
 #include "ScreenFade.h"
 #include "SkipBox.h"
 #include "SkirmishBox.h"
+#include "StaffQuestionBox.h"
 #include "Story/PlaygroundTrip.h"
 #include "StoryHistoryBox.h"
 #include "TattooEditorDialog.h"
@@ -171,8 +172,8 @@ public:
 	[[nodiscard]] bool IsBoxWithBackgroundActive() const noexcept
 	{
 		return _menu->IsOpen() || _skipBox->IsActive() || _newPlayerBox->IsActive() || _saveGameBoxes->IsActive() ||
-		       _endGameBox->IsOpen() || _multiplayerBoxes->IsActive() || _landInfoBox->IsActive() ||
-		       (_tattooEditor->IsOpen() && _tattooEditor->IsFramed());
+		       _staffQuestionBox->IsActive() || _endGameBox->IsOpen() || _multiplayerBoxes->IsActive() ||
+		       _landInfoBox->IsActive() || (_tattooEditor->IsOpen() && _tattooEditor->IsFramed());
 	}
 	/// The boxes of the multiplayer front end over the temple's future room
 	[[nodiscard]] MultiplayerBoxes& GetMultiplayerBoxes() noexcept { return *_multiplayerBoxes; }
@@ -204,6 +205,8 @@ public:
 	[[nodiscard]] bool ShowsBoxOverGame() const noexcept { return _boxOverGameFade.has_value(); }
 	/// The save game room's question and name box, over the temple
 	[[nodiscard]] SaveGameBoxes& GetSaveGameBoxes() noexcept { return *_saveGameBoxes; }
+	/// The box that asks a question of the staff of the game
+	[[nodiscard]] StaffQuestionBox& GetStaffQuestionBox() noexcept { return *_staffQuestionBox; }
 	/// A save did not write its world files completely: the box tells the player "An error has occurred!" with an OK
 	void ShowSaveProblem();
 	/// The script of the land gives a command for the land information box: a title that shows the box with an empty
@@ -242,6 +245,9 @@ public:
 	[[nodiscard]] bool BoxRefusesTrip() const noexcept;
 	/// The save game room's boxes take the mouse and the keyboard while one is up; true when they took the event
 	bool ProcessSaveGameBoxesEvent(const SDL_Event& event);
+	bool ProcessStaffQuestionEvent(const SDL_Event& event);
+	/// The questions of the staff of the game, and their answers
+	void UpdateStaffQuestion(float deltaSeconds);
 	/// The name of a saved game that the named zoom tooltip shows. The tooltip keeps the last name given.
 	void SetToolTipName(std::u16string name) override { _toolTipName = std::move(name); }
 	/// The screen of the front end: the backdrop that swirls by the milliseconds of the frame, the new player's box or the
@@ -535,6 +541,7 @@ private:
 	std::unique_ptr<SkirmishBox> _skirmishBox;
 	std::unique_ptr<LandInfoBox> _landInfoBox;
 	std::unique_ptr<SaveGameBoxes> _saveGameBoxes;
+	std::unique_ptr<StaffQuestionBox> _staffQuestionBox;
 	std::unique_ptr<EndGameBox> _endGameBox;
 	bool _resyncShown {false};
 	/// The out-of-sync box is up and waits for its answer

@@ -467,6 +467,16 @@ TEST(ChatSystem, ALineComesInForItsPlayers)
 	EXPECT_TRUE(game.incoming.empty());
 }
 
+TEST(ChatSystem, ALineOfThePingServerShowsAndGoesToTheLog)
+{
+	FakeGame game;
+	ChatSystem chat(game.Services());
+	chat.ReceiveFromPingServer(u"Staff", u"Welcome");
+	EXPECT_EQ(game.incoming, (std::vector<std::u16string> {u"Staff: Welcome"}));
+	EXPECT_EQ(game.log, (std::vector<std::string> {"Staff: Welcome\n"}));
+	EXPECT_TRUE(chat.GetReceived().empty());
+}
+
 TEST(ChatSystem, ATauntSpeaksOnEveryComputer)
 {
 	FakeGame game;
@@ -496,4 +506,15 @@ TEST(ChatSystem, TheBubblesRunDownAndTheTestbedNamesWin)
 	EXPECT_EQ(chat.GetNames().at(P::PLAYER_ONE), u"Zed");
 	chat.Reset();
 	EXPECT_TRUE(chat.GetBubbles().empty());
+}
+
+TEST(ChatSystem, TheAccountsOfTheGodsAreTheirNumbersButTheTestbedNamesHaveNone)
+{
+	FakeGame game;
+	auto services = game.Services();
+	services.accounts = []() { return std::map<PlayerNames, chat::people::UserId> {{P::PLAYER_TWO, 42}}; };
+	ChatSystem chat(std::move(services));
+	EXPECT_EQ(chat.GetAccounts().at(P::PLAYER_TWO), 42u);
+	chat.SetNames({{P::PLAYER_ONE, u"Zed"}});
+	EXPECT_TRUE(chat.GetAccounts().empty());
 }

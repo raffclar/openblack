@@ -247,6 +247,7 @@ bool ReadStart(const Json& object, Start& start)
 		return false;
 	}
 	constexpr uint64_t k_MostSlot = std::numeric_limits<uint8_t>::max();
+	constexpr auto k_MostAccount = static_cast<uint64_t>(std::numeric_limits<int64_t>::max());
 	for (const auto& entry : *gods)
 	{
 		God god;
@@ -254,6 +255,15 @@ bool ReadStart(const Json& object, Start& start)
 		if (!entry.is_object() || !ReadUnsigned(entry, "slot", k_MostSlot, slot) || !ReadString(entry, "name", god.name))
 		{
 			return false;
+		}
+		if (const auto* member = Member(entry, "account"); member != nullptr && !member->is_null())
+		{
+			uint64_t value = 0;
+			if (!ReadUnsigned(entry, "account", k_MostAccount, value))
+			{
+				return false;
+			}
+			god.account = static_cast<int64_t>(value);
 		}
 		god.slot = static_cast<uint8_t>(slot);
 		start.gods.push_back(std::move(god));
@@ -310,7 +320,12 @@ void WriteStart(const Start& start, Json& object)
 		auto& gods = object["gods"] = Json::array();
 		for (const auto& god : start.gods)
 		{
-			gods.push_back({{"slot", god.slot}, {"name", god.name}});
+			auto entry = Json {{"slot", god.slot}, {"name", god.name}};
+			if (god.account.has_value())
+			{
+				entry["account"] = *god.account;
+			}
+			gods.push_back(std::move(entry));
 		}
 	}
 }

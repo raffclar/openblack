@@ -606,6 +606,8 @@ constexpr std::string_view k_AccountMuted = "account.muted";
 constexpr std::string_view k_AccountBanned = "account.banned";
 constexpr std::string_view k_PointsChanged = "points.changed";
 constexpr std::string_view k_RoomClanChosen = "room.clan_chosen";
+constexpr std::string_view k_PingLine = "ping.line";
+constexpr std::string_view k_PingHere = "ping.here";
 } // namespace events
 
 /// The data of "hello" (the first frame on each connection), "resumed" and "resync": the epoch of the push process
@@ -670,6 +672,44 @@ struct ChatLine
 	AccountRef from;
 	/// "text"
 	std::string text;
+};
+
+/// The ping server of the game goes through the lobby (user answer GBX-1 b): the ping, the lines to one account, and the
+/// lines and announcements of the staff as push events.
+/// POST /api/v1/me/pings: the ping, with the account ids of the player's friends
+struct PingRequest
+{
+	/// "friends"
+	std::vector<int64_t> friends;
+};
+
+/// The most friends that one ping can send
+constexpr size_t k_MostPingFriends = 100;
+
+/// The answer of a ping: {"online": [...], "here": [{"id": n, "name": "..."}, ...]}
+struct PingReply
+{
+	/// "online": the friends that are online
+	std::vector<int64_t> online;
+	/// "here": the announcements, each a number of the staff with its line as the name
+	std::vector<AccountRef> here;
+};
+
+/// The data of "ping.line": {"from": {"id": n, "name": "..."}, "text": "..."}. A line from a person to the player, or a
+/// line of the staff. POST /api/v1/accounts/{id}/lines sends a line to one account, with a ChatLineRequest.
+struct PingLine
+{
+	/// "from"
+	AccountRef from;
+	/// "text"
+	std::string text;
+};
+
+/// The data of "ping.here": {"people": [{"id": n, "name": "..."}, ...]}, the announcements
+struct PingHere
+{
+	/// "people"
+	std::vector<AccountRef> people;
 };
 
 /// GET /api/v1/account-names/{name}: whether a name can have a new account
