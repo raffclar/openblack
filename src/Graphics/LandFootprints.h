@@ -12,6 +12,7 @@
 #include <cstdint>
 
 #include <map>
+#include <memory>
 #include <optional>
 #include <set>
 #include <unordered_map>
@@ -29,6 +30,11 @@
 #include "ECS/Components/Transform.h"
 #include "ECS/LandFootprintRules.h"
 
+namespace openblack
+{
+class WorkerPool;
+}
+
 namespace openblack::graphics
 {
 
@@ -41,6 +47,11 @@ namespace openblack::graphics
 class LandFootprints
 {
 public:
+	LandFootprints();
+	LandFootprints(const LandFootprints&) = delete;
+	LandFootprints& operator=(const LandFootprints&) = delete;
+	~LandFootprints();
+
 	/// Paints again the blocks whose footprints changed since the last time
 	void Update();
 
@@ -68,8 +79,18 @@ private:
 		bool channel {false};
 	};
 
+	/// What paints a block: its things and its loose prints in the order that they paint it
+	struct BlockPaint
+	{
+		std::vector<entt::entity> things;
+		std::vector<const LoosePrint*> loose;
+	};
+
 	/// The footprint of a model, none for a model without one
 	[[nodiscard]] const L3DMesh::Footprint* FootprintOf(entt::id_type mesh);
+	/// The footprint of a model that FootprintOf found before, none for a model without one or not found before. It
+	/// changes nothing, so the lanes of a pool can ask it at the same time.
+	[[nodiscard]] const L3DMesh::Footprint* FoundFootprintOf(entt::id_type mesh) const;
 	/// Finds the things with footprints that changed, and the blocks that take their footprints
 	void FindChangedThings();
 	/// Finds whether the rivers changed, and the blocks that take their footprints
@@ -78,7 +99,13 @@ private:
 	void FindChangedGroundPrints();
 	/// Adds the blocks within the bounds of a footprint to the blocks to paint again
 	void MarkBlocks(glm::ivec2 lowBlock, glm::ivec2 highBlock);
-	void PaintBlock(size_t block);
+	/// The things and loose prints that paint a block. It changes nothing.
+	[[nodiscard]] BlockPaint FindBlockPaint(size_t block) const;
+	/// Paints the block's own texture with its footprints into texels. It changes only the block's own texture that is
+	/// kept, which must already have its place in the kept textures, and texels.
+	void PaintBlock(size_t block, const BlockPaint& paint, std::vector<uint16_t>& texels);
+	/// The threads that share the work of many blocks, made the first time that many blocks change at once
+	[[nodiscard]] WorkerPool& Workers();
 	void Reset(size_t blockCount);
 
 	std::unordered_map<entt::id_type, const L3DMesh::Footprint*> _footprints;
@@ -101,7 +128,9 @@ private:
 	std::set<size_t> _dirty;
 	/// The own texture of each block that holds footprints, with no footprints, as the land paints it
 	std::unordered_map<size_t, std::vector<uint16_t>> _ownTexels;
-	std::vector<uint16_t> _texels;
+	/// The painted texels of each block of the last paint, kept to use their memory again
+	std::vector<std::vector<uint16_t>> _texels;
+	std::unique_ptr<WorkerPool> _workers;
 };
 
 } // namespace openblack::graphics

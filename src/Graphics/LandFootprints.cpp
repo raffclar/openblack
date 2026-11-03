@@ -23,6 +23,7 @@
 #include "3D/LandBlock.h"
 #include "3D/LandIslandInterface.h"
 #include "3D/MapCoords.h"
+#include "Common/WorkerPool.h"
 #include "Common/X87Angle.h"
 #include "ECS/Components/GroundPrint.h"
 #include "ECS/Components/MapCellResident.h"
@@ -82,7 +83,28 @@ void Paint(std::span<uint16_t> texels, glm::ivec2 block, const L3DMesh::Footprin
 	const footprint_paint::Picture picture {.width = footprint.width, .height = footprint.height, .texels = footprint.texels};
 	footprint_paint::PaintFootprint(texels, block, picture, footprint.triangles, placement, mix, side);
 }
+/// With fewer blocks to paint than this, this thread paints them all
+constexpr size_t k_LeastBlocksToShare = 2;
 } // namespace
+
+LandFootprints::LandFootprints() = default;
+
+LandFootprints::~LandFootprints() = default;
+
+WorkerPool& LandFootprints::Workers()
+{
+	if (!_workers)
+	{
+		_workers = std::make_unique<WorkerPool>(WorkerPool::DefaultThreadCount());
+	}
+	return *_workers;
+}
+
+const L3DMesh::Footprint* LandFootprints::FoundFootprintOf(entt::id_type mesh) const
+{
+	const auto found = _footprints.find(mesh);
+	return found != _footprints.end() ? found->second : nullptr;
+}
 
 const L3DMesh::Footprint* LandFootprints::FootprintOf(entt::id_type mesh)
 {
@@ -308,70 +330,70 @@ void LandFootprints::FindChangedGroundPrints()
 	}
 }
 
-void LandFootprints::PaintBlock(size_t block)
+LandFootprints::BlockPaint LandFootprints::FindBlockPaint(size_t block) const
 {
-	auto& island = Locator::terrainSystem::value();
+	const auto& island = Locator::terrainSystem::value();
 	const auto& registry = Locator::entitiesRegistry::value();
 	const auto& map = Locator::entitiesMap::value();
 	const auto& landBlock = island.GetBlocks().at(block);
 	const auto position = landBlock.GetBlockPosition();
 	const auto corner = landBlock.GetMapPosition();
-	const auto side = island.GetBlockTextureSide();
 
-	const auto things = land_footprints::ThingsOverBlock(
+	// Each thing filed in the map's cells went through FindChangedThings, which found the footprint of its model
+	BlockPaint paint;
+	paint.things = land_footprints::ThingsOverBlock(
 	    position, [&map](glm::ivec2 cell) { return map.GetFiledFixedInGridCell(ecs::MapInterface::CellId(cell)); },
 	    [&map](glm::ivec2 cell) { return map.GetFiledMobileInGridCell(ecs::MapInterface::CellId(cell)); },
 	    [&](entt::entity entity) {
 		    const auto* mesh = registry.TryGet<const MeshComponent>(entity);
-		    return mesh != nullptr && registry.AllOf<Transform, MapCellResident>(entity) && FootprintOf(mesh->id) != nullptr;
+		    return mesh != nullptr && registry.AllOf<Transform, MapCellResident>(entity) &&
+		           FoundFootprintOf(mesh->id) != nullptr;
 	    });
 	// After the things come the loose prints, the newest first: the prints of the things that show only as prints, then
 	// the rivers, which the land made before its scripts started
-	std::vector<const LoosePrint*> loose;
 	for (const auto* prints : {&_groundPrints, &_rivers})
 	{
 		for (const auto& print : *prints)
 		{
 			if (land_footprints::ReachesBlock(print.bounds, corner))
 			{
-				loose.push_back(&print);
+				paint.loose.push_back(&print);
 			}
 		}
 	}
-	const bool hasFootprints = !things.empty() || !loose.empty();
-	if (!hasFootprints && !_painted.at(block))
-	{
-		return;
-	}
+	return paint;
+}
+
+void LandFootprints::PaintBlock(size_t block, const BlockPaint& paint, std::vector<uint16_t>& texels)
+{
+	const auto& island = Locator::terrainSystem::value();
+	const auto& registry = Locator::entitiesRegistry::value();
+	const auto position = island.GetBlocks().at(block).GetBlockPosition();
+	const auto side = island.GetBlockTextureSide();
 
 	// The block's own texture, painted once and kept until the land paints the block again
-	auto& own = _ownTexels[block];
+	auto& own = _ownTexels.at(block);
 	if (own.empty())
 	{
 		own.resize(static_cast<size_t>(side) * static_cast<size_t>(side));
 		island.PaintBlockTexels(block, own);
 	}
-	_texels = own;
-	for (const auto entity : things)
+	texels = own;
+	for (const auto entity : paint.things)
 	{
 		const auto& transform = registry.Get<const Transform>(entity);
-		const auto* footprint = FootprintOf(registry.Get<const MeshComponent>(entity).id);
+		const auto* footprint = FoundFootprintOf(registry.Get<const MeshComponent>(entity).id);
 		const auto* known = _known.contains(entity) ? &_known.get(entity) : nullptr;
 		const auto placement = known != nullptr && SameTransform(known->transform, transform)
 		                           ? known->placement
 		                           : PlacementFor(registry, entity, transform);
-		Paint(_texels, position, *footprint, placement, footprint_paint::Mix::Colour, side);
+		Paint(texels, position, *footprint, placement, footprint_paint::Mix::Colour, side);
 	}
-	for (const auto* print : loose)
+	for (const auto* print : paint.loose)
 	{
-		Paint(_texels, position, *print->footprint, print->placement,
+		Paint(texels, position, *print->footprint, print->placement,
 		      print->channel ? footprint_paint::Mix::LowerAlpha : footprint_paint::Mix::Colour, side);
 	}
-	island.SetBlockTexels(block, _texels);
-	SPDLOG_LOGGER_DEBUG(spdlog::get("graphics"),
-	                    "Land footprints: block {} ({}, {}) painted with {} things and {} loose prints", block, position.x,
-	                    position.y, things.size(), loose.size());
-	_painted.at(block) = hasFootprints;
 }
 
 void LandFootprints::Update()
@@ -410,14 +432,69 @@ void LandFootprints::Update()
 	FindChangedThings();
 	FindChangedRivers();
 	FindChangedGroundPrints();
-	for (const auto block : _dirty)
+	std::vector<size_t> blocks;
+	std::ranges::copy_if(_dirty, std::back_inserter(blocks), [blockCount](size_t block) { return block < blockCount; });
+	_dirty.clear();
+	if (blocks.empty())
 	{
-		if (block < blockCount)
+		return;
+	}
+
+	// Each block gets its place in the kept textures first, so the lanes only change what is in a place
+	for (const auto block : blocks)
+	{
+		_ownTexels.try_emplace(block);
+	}
+	if (_texels.size() < blocks.size())
+	{
+		_texels.resize(blocks.size());
+	}
+	// Each lane writes its results only to the places of its blocks. The bits of a vector of bools share their memory,
+	// so the blocks to paint are bytes.
+	std::vector<BlockPaint> paints(blocks.size());
+	std::vector<uint8_t> toPaint(blocks.size(), 0);
+	const auto paintOne = [&](size_t i, size_t /*lane*/) {
+		paints[i] = FindBlockPaint(blocks[i]);
+		// A block with no footprints that held none before keeps its texture
+		const bool hasFootprints = !paints[i].things.empty() || !paints[i].loose.empty();
+		if (hasFootprints || _painted.at(blocks[i]))
 		{
-			PaintBlock(block);
+			toPaint[i] = 1;
+			PaintBlock(blocks[i], paints[i], _texels[i]);
+		}
+	};
+	if (blocks.size() < k_LeastBlocksToShare)
+	{
+		paintOne(0, 0);
+	}
+	else
+	{
+		Workers().ForEach(blocks.size(), paintOne);
+	}
+
+	std::vector<LandIslandInterface::BlockTexels> painted;
+	for (size_t i = 0; i < blocks.size(); ++i)
+	{
+		if (toPaint[i] == 0)
+		{
+			continue;
+		}
+		painted.push_back({.block = blocks[i], .texels = _texels[i]});
+		SPDLOG_LOGGER_DEBUG(spdlog::get("graphics"), "Land footprints: block {} painted with {} things and {} loose prints",
+		                    blocks[i], paints[i].things.size(), paints[i].loose.size());
+		_painted.at(blocks[i]) = !paints[i].things.empty() || !paints[i].loose.empty();
+	}
+	if (painted.size() < k_LeastBlocksToShare)
+	{
+		for (const auto& block : painted)
+		{
+			island.SetBlockTexels(block.block, block.texels);
 		}
 	}
-	_dirty.clear();
+	else
+	{
+		island.SetBlocksTexels(painted, Workers());
+	}
 }
 
 } // namespace openblack::graphics

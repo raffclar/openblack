@@ -772,9 +772,41 @@ void LandIsland::SetBlockTexels(size_t block, std::span<const uint16_t> texels)
 	{
 		return;
 	}
-	std::vector<uint8_t> rgba(block_texture::BlockBytesOf(_textureResolution));
-	block_texture::ToRgba(texels, rgba);
-	_blockTextures->UpdateLayer(static_cast<uint16_t>(block), rgba.data(), static_cast<uint32_t>(rgba.size()));
+	// The texels go straight into the memory that the device then takes, with no copy between
+	const auto& device = Locator::graphicsDevice::value();
+	const auto* memory = device.Alloc(static_cast<uint32_t>(block_texture::BlockBytesOf(_textureResolution)));
+	block_texture::ToBlockRgba(texels, device.Bytes(memory));
+	_blockTextures->UpdateLayerFromMemory(static_cast<uint16_t>(block), memory);
+}
+
+void LandIsland::SetBlocksTexels(std::span<const BlockTexels> blocks, WorkerPool& pool)
+{
+	if (_blockTextures == nullptr)
+	{
+		return;
+	}
+	// The memory comes from the device on this thread. The lanes then fill it, and this thread gives it to the device.
+	const auto& device = Locator::graphicsDevice::value();
+	const auto bytes = static_cast<uint32_t>(block_texture::BlockBytesOf(_textureResolution));
+	std::vector<const graphics::DeviceMemory*> memories(blocks.size(), nullptr);
+	std::vector<std::span<uint8_t>> rgba(blocks.size());
+	for (size_t i = 0; i < blocks.size(); ++i)
+	{
+		if (blocks[i].block < _landBlocks.size())
+		{
+			memories[i] = device.Alloc(bytes);
+			rgba[i] = device.Bytes(memories[i]);
+		}
+	}
+	pool.ForEach(blocks.size(),
+	             [&blocks, &rgba](size_t i, size_t /*lane*/) { block_texture::ToBlockRgba(blocks[i].texels, rgba[i]); });
+	for (size_t i = 0; i < blocks.size(); ++i)
+	{
+		if (memories[i] != nullptr)
+		{
+			_blockTextures->UpdateLayerFromMemory(static_cast<uint16_t>(blocks[i].block), memories[i]);
+		}
+	}
 }
 
 std::vector<LandIslandInterface::RepaintedBlock> LandIsland::TakeRepaintedBlocks()

@@ -26,6 +26,7 @@
 namespace openblack
 {
 class LandBlock;
+class WorkerPool;
 namespace graphics
 {
 class FrameBuffer;
@@ -102,6 +103,21 @@ public:
 	virtual void PaintBlockTexels(size_t /*block*/, std::span<uint16_t> /*texels*/) const {}
 	/// Puts ARGB texels at 4 bits a channel in place of a block's texture, for example with its footprints painted in
 	virtual void SetBlockTexels(size_t /*block*/, std::span<const uint16_t> /*texels*/) {}
+	/// The texels of a block to put in place of its texture
+	struct BlockTexels
+	{
+		size_t block {0};
+		std::span<const uint16_t> texels;
+	};
+	/// Puts the texels of each block in place of its texture, as SetBlockTexels does. The lanes of the pool share the
+	/// work.
+	virtual void SetBlocksTexels(std::span<const BlockTexels> blocks, WorkerPool& /*pool*/)
+	{
+		for (const auto& block : blocks)
+		{
+			SetBlockTexels(block.block, block.texels);
+		}
+	}
 	/// A block whose texture the land painted again with no footprints
 	struct RepaintedBlock
 	{

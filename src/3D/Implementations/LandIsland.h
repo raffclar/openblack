@@ -118,6 +118,7 @@ public:
 	}
 	void PaintBlockTexels(size_t block, std::span<uint16_t> texels) const override;
 	void SetBlockTexels(size_t block, std::span<const uint16_t> texels) override;
+	void SetBlocksTexels(std::span<const BlockTexels> blocks, WorkerPool& pool) override;
 	[[nodiscard]] std::vector<RepaintedBlock> TakeRepaintedBlocks() override;
 
 	[[nodiscard]] glm::mat4 GetOrthoView() const override { return _view; }
