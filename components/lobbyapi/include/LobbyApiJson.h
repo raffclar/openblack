@@ -30,6 +30,7 @@ namespace openblack::lobby_api
 [[nodiscard]] std::string ToJson(const ClanCreature& creature);
 [[nodiscard]] std::string ToJson(const ClanCreatureReply& reply);
 [[nodiscard]] std::string ToJson(const ChatLineRequest& request);
+[[nodiscard]] std::string ToJson(const PingRequest& request);
 [[nodiscard]] std::string ToJson(const UseClanRequest& request);
 [[nodiscard]] std::string ToJson(const TicketRequest& request);
 [[nodiscard]] std::string ToJson(const ServerStatus& status);
@@ -71,6 +72,11 @@ namespace openblack::lobby_api
 [[nodiscard]] std::optional<UsedClan> ParseUsedClan(std::string_view text);
 /// The data of "chat.line"
 [[nodiscard]] std::optional<ChatLine> ParseChatLine(std::string_view data);
+[[nodiscard]] std::optional<PingReply> ParsePingReply(std::string_view text);
+/// The data of "ping.line"
+[[nodiscard]] std::optional<PingLine> ParsePingLine(std::string_view data);
+/// The data of "ping.here"
+[[nodiscard]] std::optional<PingHere> ParsePingHere(std::string_view data);
 /// The data of "room.changed"
 [[nodiscard]] std::optional<RoomChange> ParseRoomChange(std::string_view data);
 /// The data of "room.clan_chosen"

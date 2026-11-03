@@ -11,6 +11,7 @@
 
 #include <memory>
 #include <optional>
+#include <span>
 #include <string>
 #include <utility>
 #include <vector>
@@ -373,4 +374,71 @@ TEST(GatheringBoxSystem, HostReportGoesWithEachPing)
 	EXPECT_EQ(fixture.log.reports[0].size(), 72u);
 	fixture.system->SendHostReport();
 	EXPECT_EQ(fixture.log.reports.size(), 2u);
+}
+
+TEST(GatheringBoxSystem, TheBoxGetsTheKeptFriendsAndTheProfileKeepsTheChanges)
+{
+	using chat::people::FriendRecord;
+	const std::vector<FriendRecord> kept {{.user = k_Ann, .name = u"Ann"}};
+	std::vector<std::vector<FriendRecord>> written;
+	ecs::systems::GatheringBoxSystem::Services services;
+	services.readFriends = [&kept]() { return kept; };
+	services.writeFriends = [&written](std::span<const FriendRecord> friends) {
+		written.emplace_back(friends.begin(), friends.end());
+	};
+	ecs::systems::GatheringBoxSystem system(std::move(services));
+	std::vector<FriendRecord> loaded;
+	std::optional<std::vector<FriendRecord>> changed;
+	system.SetBox(
+	    {.setFriends = [&loaded](std::span<const FriendRecord> friends) { loaded.assign(friends.begin(), friends.end()); },
+	     .takeChangedFriends = [&changed]() { return std::exchange(changed, std::nullopt); }});
+	EXPECT_EQ(loaded, kept);
+
+	// The profile keeps the friends only after a change of the player
+	system.Update(1000);
+	EXPECT_TRUE(written.empty());
+	changed = std::vector<FriendRecord> {{.user = k_Bob, .name = u"Bob"}, {.user = k_Ann, .name = u"Ann"}};
+	system.Update(1001);
+	ASSERT_EQ(written.size(), 1u);
+	EXPECT_EQ(written[0], (std::vector<FriendRecord> {{.user = k_Bob, .name = u"Bob"}, {.user = k_Ann, .name = u"Ann"}}));
+	system.Update(1002);
+	EXPECT_EQ(written.size(), 1u);
+}
+
+TEST(GatheringBoxSystem, TheFriendButtonNeedsAConnectionAndNumberedPlayers)
+{
+	Fixture fixture;
+	std::vector<bool> calls;
+	fixture.system->SetBox(
+	    {.people = [&fixture]() { return &fixture.people; }, .setFriendsOn = [&calls](bool on) { calls.push_back(on); }});
+	fixture.people.players.people.push_back({.user = k_Ann, .name = u"Ann"});
+
+	// The button comes on with the connection, and the hook runs only on a change
+	fixture.system->Update(1000);
+	fixture.system->Update(1001);
+	EXPECT_EQ(calls, std::vector<bool> {true});
+
+	// A player with no lasting number turns the button off
+	fixture.people.players.people.push_back({.user = std::nullopt, .name = u"Lan"});
+	fixture.system->Update(1002);
+	EXPECT_EQ(calls, (std::vector<bool> {true, false}));
+	fixture.people.players.people.pop_back();
+	fixture.system->Update(1003);
+	EXPECT_EQ(calls, (std::vector<bool> {true, false, true}));
+
+	// The loss of the connection turns it off
+	fixture.log.connected = false;
+	fixture.system->Update(1004);
+	EXPECT_EQ(calls, (std::vector<bool> {true, false, true, false}));
+}
+
+TEST(GatheringBoxSystem, WithNoPingServerTheSystemNeverTouchesTheFriendButton)
+{
+	Fixture fixture;
+	fixture.system->SetPingServer(nullptr);
+	std::vector<bool> calls;
+	fixture.system->SetBox(
+	    {.people = [&fixture]() { return &fixture.people; }, .setFriendsOn = [&calls](bool on) { calls.push_back(on); }});
+	fixture.system->Update(1000);
+	EXPECT_TRUE(calls.empty());
 }

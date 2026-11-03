@@ -1435,12 +1435,19 @@ void GameInterface::UpdateChat(bool dialogOpen, glm::u16vec2 resolution)
 	}
 	if (Locator::chatSystem::has_value())
 	{
+		// The ids of the lobby accounts are the lasting numbers of the players (deviation 220)
+		const auto& chatSystem = Locator::chatSystem::value();
+		const auto accounts = chatSystem.GetAccounts();
 		std::vector<chat::people::Person> others;
-		for (const auto& [slot, name] : Locator::chatSystem::value().GetNames())
+		for (const auto& [slot, name] : chatSystem.GetNames())
 		{
 			if (slot != here)
 			{
-				others.push_back({.slot = slot, .name = name, .selected = false});
+				const auto account = accounts.find(slot);
+				others.push_back({.slot = slot,
+				                  .user = account != accounts.end() ? std::optional(account->second) : std::nullopt,
+				                  .name = name,
+				                  .selected = false});
 			}
 		}
 		_chatControls->SetPlayers(std::move(others));

@@ -64,6 +64,9 @@ public:
 	/// network game.
 	virtual void SetNames(std::map<PlayerNames, std::u16string> names) = 0;
 	[[nodiscard]] virtual std::map<PlayerNames, std::u16string> GetNames() const = 0;
+	/// The lasting numbers of the human gods of the game, by god slot: the ids of their lobby accounts (deviation 220).
+	/// A god with no account has no number. The names of the testbed have no numbers.
+	[[nodiscard]] virtual std::map<PlayerNames, chat::people::UserId> GetAccounts() const { return {}; }
 
 	/// The player sends a typed line to these players. An empty line does not go, and a line with no player does not go.
 	virtual void SendLine(std::u16string_view text, std::span<const PlayerNames> recipients) = 0;

@@ -507,3 +507,14 @@ TEST(ChatSystem, TheBubblesRunDownAndTheTestbedNamesWin)
 	chat.Reset();
 	EXPECT_TRUE(chat.GetBubbles().empty());
 }
+
+TEST(ChatSystem, TheAccountsOfTheGodsAreTheirNumbersButTheTestbedNamesHaveNone)
+{
+	FakeGame game;
+	auto services = game.Services();
+	services.accounts = []() { return std::map<PlayerNames, chat::people::UserId> {{P::PLAYER_TWO, 42}}; };
+	ChatSystem chat(std::move(services));
+	EXPECT_EQ(chat.GetAccounts().at(P::PLAYER_TWO), 42u);
+	chat.SetNames({{P::PLAYER_ONE, u"Zed"}});
+	EXPECT_TRUE(chat.GetAccounts().empty());
+}

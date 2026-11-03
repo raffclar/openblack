@@ -16,7 +16,9 @@
 #include <functional>
 #include <memory>
 #include <optional>
+#include <span>
 #include <utility>
+#include <vector>
 
 #include "ECS/Systems/GatheringBoxSystemInterface.h"
 #include "Online/PingServerInterface.h"
@@ -38,11 +40,15 @@ public:
 		std::function<bool()> plainChat;
 		/// The facts of the report, none when this computer is not the host of an internet game
 		std::function<std::optional<gathering_box::host_report::Facts>()> hostFacts;
+		/// The friends that the profile of the player keeps
+		std::function<std::vector<chat::people::FriendRecord>()> readFriends;
+		/// The profile of the player keeps these friends
+		std::function<void(std::span<const chat::people::FriendRecord> friends)> writeFriends;
 	};
 
 	explicit GatheringBoxSystem(Services services);
 
-	void SetBox(Box box) override { _box = std::move(box); }
+	void SetBox(Box box) override;
 	void SetPingServer(std::unique_ptr<online::PingServerInterface> server) override;
 	[[nodiscard]] bool HasPingServer() const override { return _server != nullptr; }
 	void Update(uint32_t now) override;
@@ -55,6 +61,7 @@ public:
 private:
 	void Receive(const online::PingServerInterface::Message& message);
 	void Changed();
+	void UpdateFriends();
 
 	[[nodiscard]] chat::people::List* People() const;
 
@@ -66,6 +73,8 @@ private:
 	std::optional<uint32_t> _onlineStart;
 	uint32_t _onlineTime {chat::people::k_OnlineClockStart};
 	std::optional<gathering_box::question::Question> _question;
+	/// The friend button is on because of the connection
+	bool _friendsOn {false};
 };
 
 } // namespace openblack::ecs::systems

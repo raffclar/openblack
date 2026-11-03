@@ -225,6 +225,15 @@ std::map<PlayerNames, std::u16string> ChatSystem::GetNames() const
 	return _services.names();
 }
 
+std::map<PlayerNames, openblack::chat::people::UserId> ChatSystem::GetAccounts() const
+{
+	if (!_names.empty() || !_services.accounts)
+	{
+		return {};
+	}
+	return _services.accounts();
+}
+
 std::u16string ChatSystem::NameOf(PlayerNames god) const
 {
 	const auto names = GetNames();

@@ -11,6 +11,7 @@
 
 #include "GatheringBoxSystem.h"
 
+#include <algorithm>
 #include <type_traits>
 #include <utility>
 #include <variant>
@@ -23,6 +24,38 @@ GatheringBoxSystem::GatheringBoxSystem(Services services)
 {
 }
 
+void GatheringBoxSystem::SetBox(Box box)
+{
+	_box = std::move(box);
+	_friendsOn = false;
+	if (_box.setFriends && _services.readFriends)
+	{
+		const auto friends = _services.readFriends();
+		_box.setFriends(friends);
+	}
+}
+
+void GatheringBoxSystem::UpdateFriends()
+{
+	if (_box.takeChangedFriends && _services.writeFriends)
+	{
+		if (const auto friends = _box.takeChangedFriends(); friends.has_value())
+		{
+			_services.writeFriends(*friends);
+		}
+	}
+	// A player with no lasting number cannot be a friend, so the button stays off in such a game
+	const auto* people = People();
+	const bool numbered = people != nullptr && std::ranges::all_of(people->players.people,
+	                                                               [](const auto& player) { return player.user.has_value(); });
+	const bool on = _server != nullptr && _server->IsConnected() && numbered;
+	if (on != _friendsOn && _box.setFriendsOn)
+	{
+		_box.setFriendsOn(on);
+	}
+	_friendsOn = on;
+}
+
 void GatheringBoxSystem::SetPingServer(std::unique_ptr<online::PingServerInterface> server)
 {
 	_server = std::move(server);
@@ -30,6 +63,7 @@ void GatheringBoxSystem::SetPingServer(std::unique_ptr<online::PingServerInterfa
 
 void GatheringBoxSystem::Update(uint32_t now)
 {
+	UpdateFriends();
 	if (_server == nullptr)
 	{
 		return;

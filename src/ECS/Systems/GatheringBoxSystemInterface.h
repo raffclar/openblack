@@ -14,7 +14,9 @@
 #include <functional>
 #include <memory>
 #include <optional>
+#include <span>
 #include <string_view>
+#include <vector>
 
 #include "ECS/GatheringBoxRules.h"
 
@@ -40,11 +42,18 @@ public:
 		std::function<void()> peopleChanged;
 		/// The box opens
 		std::function<void()> open;
+		/// The friend button can show, or not
+		std::function<void(bool on)> setFriendsOn;
+		/// The friends of the box, once after each change of the player
+		std::function<std::optional<std::vector<chat::people::FriendRecord>>()> takeChangedFriends;
+		/// The friends that the profile keeps replace the friends of the box
+		std::function<void(std::span<const chat::people::FriendRecord> friends)> setFriends;
 	};
 
 	virtual ~GatheringBoxSystemInterface() = default;
 
-	/// The box of the interface, an empty box while the game has no interface
+	/// The box of the interface, an empty box while the game has no interface. The box gets the friends that the
+	/// profile keeps.
 	virtual void SetBox(Box box) = 0;
 
 	/// The connection to the ping server, none to stop
@@ -52,6 +61,9 @@ public:
 	[[nodiscard]] virtual bool HasPingServer() const = 0;
 
 	/// Each frame, with the time of the computer in milliseconds:
+	/// 0. The profile keeps the friends that the player changed. The friend button comes on when the game has a
+	///    connection to the ping server and each player of the game has a lasting number, and goes off when this
+	///    stops.
 	/// 1. When the ping is due and the game has a connection: the ping, the report of the host, and the question
 	///    about the friends that are online, when the player has friends.
 	/// 2. When the ping is due: the friends that the server did not see for 450 seconds are no longer online.

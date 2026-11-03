@@ -9,6 +9,7 @@
 
 #include <cstdint>
 
+#include <algorithm>
 #include <chrono>
 #include <deque>
 #include <memory>
@@ -778,4 +779,45 @@ TEST_F(LobbyClientTest, TheSkirmishMessageNeedsALobbyAndASession)
 	_client->SendSkirmishPing([&](auto&& result) { kind = result.error.kind; });
 	EXPECT_EQ(kind, LobbyErrorKind::NotLoggedIn);
 	EXPECT_TRUE(_http.sent.empty());
+}
+
+TEST_F(LobbyClientTest, ThePingSendsTheFriendsAndReadsTheOnlineFriends)
+{
+	Make();
+	LogIn();
+	std::optional<lobby_api::PingReply> reply;
+	_client->SendPing({3, 4}, [&](auto&& result) { reply = result.value; });
+	EXPECT_EQ(_http.Next().method, HttpMethod::Post);
+	EXPECT_EQ(_http.Next().url, "https://bw.example/api/v1/me/pings");
+	EXPECT_EQ(_http.NextHeader("Authorization"), "Bearer access1");
+	EXPECT_EQ(_http.NextBody(), R"({"friends":[3,4]})");
+	_http.Answer(200, R"({"online": [4], "here": [{"id": 10000000, "name": "Hi"}]})");
+	ASSERT_TRUE(reply.has_value());
+	EXPECT_EQ(reply->online, std::vector<int64_t> {4});
+	EXPECT_EQ(reply->here.at(0).name, "Hi");
+}
+
+TEST_F(LobbyClientTest, APingSendsAtMost100Friends)
+{
+	Make();
+	LogIn();
+	std::vector<int64_t> friends(120, 9);
+	_client->SendPing(std::move(friends), [](auto&&) {});
+	const auto body = _http.NextBody();
+	EXPECT_EQ(std::ranges::count(body, '9'), 100);
+}
+
+TEST_F(LobbyClientTest, ALineToAnAccountGoesToItsAddress)
+{
+	Make();
+	LogIn();
+	std::optional<bool> ok;
+	_client->SendPersonLine(301, "hello", [&](auto&& result) { ok = result.Ok(); });
+	EXPECT_EQ(_http.Next().url, "https://bw.example/api/v1/accounts/301/lines");
+	EXPECT_EQ(_http.NextBody(), R"({"text":"hello"})");
+	_http.Answer(201, R"({"seq": 3})");
+	EXPECT_EQ(ok, true);
+	std::optional<LobbyErrorKind> kind;
+	_client->SendPersonLine(301, "", [&](auto&& result) { kind = result.error.kind; });
+	EXPECT_EQ(kind, LobbyErrorKind::Refused);
 }

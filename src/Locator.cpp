@@ -185,7 +185,9 @@
 #include "Input/GameActionMap.h"
 #include "Input/InputDeviceInterface.h"
 #include "LHVM.h"
+#include "Online/FriendList.h"
 #include "Online/HttpClientInterface.h"
+#include "Online/LobbyPingServer.h"
 #include "Online/NetworkSession.h"
 #include "Online/OnlineMapStoreInterface.h"
 #include "Online/PushChannelInterface.h"
@@ -517,6 +519,19 @@ void InitializeOnline(const player_profiles::Store& profiles)
 }
 
 /// The chat of a network game, and what it asks of the rest of the game
+/// The human gods of the network game, as the game started or as the player joined. None out of a network game.
+const std::vector<game_socket::God>* NetworkGods()
+{
+	if (!Locator::networkGame::has_value() || Locator::networkGame::value().Session() == nullptr)
+	{
+		return nullptr;
+	}
+	const auto& session = *Locator::networkGame::value().Session();
+	const auto& start = session.GetStart();
+	const auto& joined = session.GetJoined();
+	return start.has_value() ? &start->gods : joined.has_value() && joined->start.has_value() ? &joined->start->gods : nullptr;
+}
+
 void EmplaceChat(bool developer)
 {
 	ChatSystem::Services services;
@@ -584,17 +599,7 @@ void EmplaceChat(bool developer)
 	};
 	services.names = []() {
 		std::map<PlayerNames, std::u16string> names;
-		if (!Locator::networkGame::has_value() || Locator::networkGame::value().Session() == nullptr)
-		{
-			return names;
-		}
-		const auto& session = *Locator::networkGame::value().Session();
-		const auto& start = session.GetStart();
-		const auto& joined = session.GetJoined();
-		const auto* gods = start.has_value()                                 ? &start->gods
-		                   : joined.has_value() && joined->start.has_value() ? &joined->start->gods
-		                                                                     : nullptr;
-		if (gods != nullptr)
+		if (const auto* gods = NetworkGods(); gods != nullptr)
 		{
 			for (const auto& god : *gods)
 			{
@@ -606,16 +611,69 @@ void EmplaceChat(bool developer)
 		}
 		return names;
 	};
+	// The ids of the lobby accounts of the gods are their lasting numbers (deviation 220)
+	services.accounts = []() {
+		std::map<PlayerNames, chat::people::UserId> accounts;
+		if (const auto* gods = NetworkGods(); gods != nullptr)
+		{
+			for (const auto& god : *gods)
+			{
+				const auto player = player_slots::PlayerOfSlot(god.slot);
+				const auto user = god.account.has_value() ? online::lobby_ping::UserOf(*god.account) : std::nullopt;
+				if (player.has_value() && user.has_value())
+				{
+					accounts[*player] = *user;
+				}
+			}
+		}
+		return accounts;
+	};
 	services.turn = []() { return Locator::time::has_value() ? Locator::time::value().GetTurn() : 0u; };
 	Locator::chatSystem::emplace<ChatSystem>(std::move(services));
 }
 
-/// The gathering box talks to the ping server only when the game has a connection to one (question GBX-1). The game
-/// has no lasting number of its player and no report of a host yet.
-void EmplaceGatheringBox()
+/// The gathering box talks to the ping server through the lobby (deviation 220). The number of the player is the id of
+/// its lobby account. A game is not the host of a network game, so it makes no report of a host.
+void EmplaceGatheringBox(bool developer)
 {
 	GatheringBoxSystem::Services services;
-	services.ownUser = []() { return std::optional<gathering_box::UserId> {}; };
+	services.ownUser = []() -> std::optional<gathering_box::UserId> {
+		if (!Locator::lobbyClient::has_value())
+		{
+			return std::nullopt;
+		}
+		const auto account = Locator::lobbyClient::value().GetAccount();
+		return account.has_value() ? online::lobby_ping::UserOf(account->id) : std::nullopt;
+	};
+	// The friends go in a file in the folder of the current profile. A developer's run keeps no files for its player.
+	services.readFriends = []() -> std::vector<chat::people::FriendRecord> {
+		if (!Locator::playerProfileSystem::has_value() || !Locator::profileFolderSystem::has_value())
+		{
+			return {};
+		}
+		const auto profile = Locator::playerProfileSystem::value().GetCurrentProfile();
+		if (!profile.has_value())
+		{
+			return {};
+		}
+		const auto bytes =
+		    Locator::profileFolderSystem::value().ReadPlayerFile(gui::ToUtf16(profile->name), online::friend_list::k_FileName);
+		return bytes.has_value() ? online::friend_list::Decode(*bytes) : std::vector<chat::people::FriendRecord> {};
+	};
+	services.writeFriends = [developer](std::span<const chat::people::FriendRecord> friends) {
+		if (developer || !Locator::playerProfileSystem::has_value() || !Locator::profileFolderSystem::has_value())
+		{
+			return;
+		}
+		const auto profile = Locator::playerProfileSystem::value().GetCurrentProfile();
+		if (profile.has_value())
+		{
+			const auto text = online::friend_list::Encode(friends);
+			const auto* bytes = reinterpret_cast<const uint8_t*>(text.data());
+			Locator::profileFolderSystem::value().WritePlayerFile(gui::ToUtf16(profile->name), online::friend_list::k_FileName,
+			                                                      {bytes, text.size()});
+		}
+	};
 	services.showLine = [](std::u16string_view name, std::u16string_view text) {
 		if (Locator::chatSystem::has_value())
 		{
@@ -624,6 +682,14 @@ void EmplaceGatheringBox()
 	};
 	services.plainChat = []() { return false; };
 	Locator::gatheringBoxSystem::emplace<GatheringBoxSystem>(std::move(services));
+	// With the address of a lobby, the lobby is the ping server
+	if (Locator::lobbyClient::has_value() && Locator::lobbyClient::value().IsConfigured())
+	{
+		Locator::gatheringBoxSystem::value().SetPingServer(
+		    std::make_unique<online::LobbyPingServer>([]() -> ecs::systems::LobbyClientSystemInterface* {
+			    return Locator::lobbyClient::has_value() ? &Locator::lobbyClient::value() : nullptr;
+		    }));
+	}
 }
 
 } // namespace
@@ -755,7 +821,7 @@ bool openblack::InitializeSimulation(const player_profiles::Store& profiles) noe
 	Locator::magicSystem::emplace<MagicSystem>();
 	Locator::miracleFxSystem::emplace<MiracleFxSystem>();
 	EmplaceChat(profiles.developer);
-	EmplaceGatheringBox();
+	EmplaceGatheringBox(profiles.developer);
 	Locator::fireSystem::emplace<ecs::systems::FireSystem>();
 	Locator::explosionSystem::emplace<ecs::systems::ExplosionSystem>();
 	Locator::rewardSystem::emplace<ecs::systems::RewardSystem>();

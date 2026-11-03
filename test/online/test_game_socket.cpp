@@ -87,6 +87,21 @@ TEST(GameSocket, TheStartNamesTheGods)
 	EXPECT_FALSE(Parse(R"({"type":"game.start","seed":1,"gods":[{"slot":256,"name":"a"}]})").has_value());
 }
 
+TEST(GameSocket, AGodCanGiveItsLobbyAccount)
+{
+	Start start {.land = {}, .testbed = true, .seed = 1, .turn = 0, .opening = {}, .godsRingMap = false};
+	start.gods = {{.slot = 0, .name = "Ann", .account = 42}, {.slot = 1, .name = "Lan"}};
+	EXPECT_EQ(RoundTrip(start).gods, start.gods);
+	EXPECT_EQ(ToJson(start), R"({"gods":[{"account":42,"name":"Ann","slot":0},{"name":"Lan","slot":1}],"land":"",)"
+	                         R"("seed":1,"testbed":true,"turn":0,"type":"game.start"})");
+	// A null account is no account, and an account that is not a whole number above -1 does not read
+	const auto parsed = Parse(R"({"type":"game.start","seed":1,"gods":[{"slot":1,"name":"a","account":null}]})");
+	ASSERT_TRUE(parsed.has_value());
+	EXPECT_FALSE(std::get<Start>(*parsed).gods[0].account.has_value());
+	EXPECT_FALSE(Parse(R"({"type":"game.start","seed":1,"gods":[{"slot":1,"name":"a","account":"42"}]})").has_value());
+	EXPECT_FALSE(Parse(R"({"type":"game.start","seed":1,"gods":[{"slot":1,"name":"a","account":-1}]})").has_value());
+}
+
 TEST(GameSocket, TheReplyToAJoinGivesTheServersWorld)
 {
 	const auto joined = RoundTrip(Joined {.role = Role::God,

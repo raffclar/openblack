@@ -200,6 +200,18 @@ public:
 	/// Tells the lobby that a skirmish of the player is decided. The call sends no data: the session tells the lobby
 	/// which account sends it.
 	virtual void SendSkirmishPing(LobbyCallback<LobbyDone> callback) = 0;
+	/// The ping of the gathering box, with the account ids of the player's friends (at most 100). The answer gives the
+	/// friends that are online and the announcements. A lobby with no ping server gives an error.
+	virtual void SendPing(std::vector<int64_t> /*friends*/, LobbyCallback<lobby_api::PingReply> callback)
+	{
+		callback({.value = std::nullopt, .error = {.kind = LobbyErrorKind::NotConfigured}});
+	}
+	/// Sends a line of 1 to 254 characters to one account. The account gets it as a "ping.line" event. A line to a
+	/// number of the staff answers the question of that staff. A lobby with no ping server gives an error.
+	virtual void SendPersonLine(int64_t /*account*/, std::string /*text*/, LobbyCallback<LobbyDone> callback)
+	{
+		callback({.value = std::nullopt, .error = {.kind = LobbyErrorKind::NotConfigured}});
+	}
 
 	/// A listener gets each event of the push channel, after the client used it. Returns the id of the listener.
 	virtual uint32_t AddEventListener(LobbyEventListener listener) = 0;

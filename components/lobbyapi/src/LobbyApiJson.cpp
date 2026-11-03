@@ -576,6 +576,11 @@ std::string ToJson(const ChatLineRequest& request)
 	return Dump(Json {{"text", request.text}});
 }
 
+std::string ToJson(const PingRequest& request)
+{
+	return Dump(Json {{"friends", request.friends}});
+}
+
 std::string ToJson(const UseClanRequest& request)
 {
 	auto object = Json::object();
@@ -686,6 +691,40 @@ std::optional<ChatLine> ParseChatLine(std::string_view data)
 		return from != nullptr && from->is_object() && ReadAccountRef(*from, out.from) &&
 		       ReadString(object, "channel", out.channel) && ReadString(object, "text", out.text);
 	});
+}
+
+std::optional<PingReply> ParsePingReply(std::string_view text)
+{
+	return ParseWith<PingReply>(text, [](const Json& object, PingReply& out) {
+		const auto* online = Member(object, "online");
+		if (online == nullptr || !online->is_array())
+		{
+			return false;
+		}
+		for (const auto& each : *online)
+		{
+			if (!each.is_number_integer())
+			{
+				return false;
+			}
+			out.online.push_back(each.get<int64_t>());
+		}
+		return ReadArray(object, "here", out.here, ReadAccountRef, false);
+	});
+}
+
+std::optional<PingLine> ParsePingLine(std::string_view data)
+{
+	return ParseWith<PingLine>(data, [](const Json& object, PingLine& out) {
+		const auto* from = Member(object, "from");
+		return from != nullptr && from->is_object() && ReadAccountRef(*from, out.from) && ReadString(object, "text", out.text);
+	});
+}
+
+std::optional<PingHere> ParsePingHere(std::string_view data)
+{
+	return ParseWith<PingHere>(
+	    data, [](const Json& object, PingHere& out) { return ReadArray(object, "people", out.people, ReadAccountRef); });
 }
 
 std::optional<RoomChange> ParseRoomChange(std::string_view data)

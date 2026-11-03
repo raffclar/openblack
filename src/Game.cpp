@@ -4889,6 +4889,10 @@ const gui::TextDatabase* Game::MakeInterface()
 			    .people = [controls]() { return &controls->GetPeople(); },
 			    .peopleChanged = [controls]() { controls->PeopleChanged(); },
 			    .open = [controls]() { controls->Open(); },
+			    .setFriendsOn = [controls](bool on) { controls->SetFriendsOn(on); },
+			    .takeChangedFriends = [controls]() { return controls->TakeChangedFriends(); },
+			    .setFriends =
+			        [controls](std::span<const chat::people::FriendRecord> friends) { controls->SetFriends(friends); },
 			});
 		}
 	}
