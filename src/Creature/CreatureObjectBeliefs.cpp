@@ -109,6 +109,7 @@ Store::Added Store::Add(entt::entity thing, uint32_t kind, map_coords::MapCoords
 		_contents.index.erase(replaced);
 		_places.Erase(replaced);
 	}
+	_orders.reset();
 	pool.slots.at(slot) = Belief {.thing = thing, .kind = kind, .place = place, .order = ++_contents.made};
 	_contents.index[thing] = Place {.kind = kind, .slot = slot};
 	_places.Set(thing, Place {.kind = kind, .slot = slot});
@@ -253,6 +254,7 @@ bool Store::Forget(entt::entity thing)
 		return false;
 	}
 	const auto [kind, slot] = known->second;
+	_orders.reset();
 	_contents.index.erase(known);
 	_places.Erase(thing);
 	auto& pool = _contents.pools.at(kind);
@@ -291,24 +293,33 @@ std::vector<Belief> Store::PartsOf(entt::entity whole) const
 
 namespace
 {
-/// Every belief that the pools hold, the newest first. The sort moves pointers to the beliefs, not the beliefs. It
-/// compares the same values in the same sequence as a sort of the beliefs, thus it gives the same order.
-std::vector<const Belief*> NewestFirstOf(const std::array<BeliefPool, k_KindCount>& pools, size_t count)
+/// The place of every belief that the pools hold, the newest first. The sort compares the same values in the same
+/// sequence as a sort of the beliefs, thus it gives the same order.
+std::vector<BeliefPlace> NewestFirstOf(const std::array<BeliefPool, k_KindCount>& pools, size_t count)
 {
-	std::vector<const Belief*> held;
-	held.reserve(count);
-	for (const auto& pool : pools)
+	struct Held
 	{
-		for (const auto& slot : pool.slots)
+		uint64_t order;
+		BeliefPlace place;
+	};
+	std::vector<Held> held;
+	held.reserve(count);
+	for (uint32_t kind = 0; kind < pools.size(); ++kind)
+	{
+		const auto& slots = pools.at(kind).slots;
+		for (size_t slot = 0; slot < slots.size(); ++slot)
 		{
-			if (slot.has_value())
+			if (slots[slot].has_value())
 			{
-				held.push_back(&*slot);
+				held.push_back({.order = slots[slot]->order, .place = {.kind = kind, .slot = slot}});
 			}
 		}
 	}
-	std::ranges::sort(held, std::ranges::greater {}, [](const Belief* belief) { return belief->order; });
-	return held;
+	std::ranges::sort(held, std::ranges::greater {}, &Held::order);
+	std::vector<BeliefPlace> places;
+	places.reserve(held.size());
+	std::ranges::transform(held, std::back_inserter(places), &Held::place);
+	return places;
 }
 
 std::vector<Belief> Copies(std::span<const Belief* const> held)
@@ -330,16 +341,38 @@ std::vector<Belief> Store::InListOrder() const
 	return Copies(HeldInListOrder());
 }
 
+const Store::KeptOrders& Store::Orders() const
+{
+	if (!_orders.has_value())
+	{
+		auto newest = NewestFirstOf(_contents.pools, _contents.index.size());
+		// The list of whole things comes first, then the list of all other things. Each list keeps the newest first.
+		auto listed = newest;
+		std::ranges::stable_partition(listed, [this](const Place& at) {
+			return InListOfWholeThings(_contents.pools.at(at.kind).slots.at(at.slot)->kind);
+		});
+		_orders = KeptOrders {.newestFirst = std::move(newest), .inListOrder = std::move(listed)};
+	}
+	return *_orders;
+}
+
+std::vector<const Belief*> Store::HeldAt(std::span<const Place> places) const
+{
+	std::vector<const Belief*> held;
+	held.reserve(places.size());
+	std::ranges::transform(places, std::back_inserter(held),
+	                       [this](const Place& at) { return &*_contents.pools.at(at.kind).slots.at(at.slot); });
+	return held;
+}
+
 std::vector<const Belief*> Store::HeldNewestFirst() const
 {
-	return NewestFirstOf(_contents.pools, _contents.index.size());
+	return HeldAt(Orders().newestFirst);
 }
 
 std::vector<const Belief*> Store::HeldInListOrder() const
 {
-	auto held = NewestFirstOf(_contents.pools, _contents.index.size());
-	std::ranges::stable_partition(held, [](const Belief* belief) { return InListOfWholeThings(belief->kind); });
-	return held;
+	return HeldAt(Orders().inListOrder);
 }
 
 std::vector<Belief> Store::All() const

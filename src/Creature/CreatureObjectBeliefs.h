@@ -246,6 +246,7 @@ public:
 	{
 		_contents = contents;
 		_lookedAt = {};
+		_orders.reset();
 		Reindex();
 	}
 
@@ -260,6 +261,21 @@ private:
 	ThingIndex _places;
 	/// Makes the fast index again from the index of the contents
 	void Reindex();
+	/// The places of the beliefs in the two orders that the store gives. The kind and the order of a belief do not
+	/// change, thus the lists stay true until a belief comes or goes. A copy of the store has the same beliefs in the
+	/// same places, thus it keeps the lists.
+	struct KeptOrders
+	{
+		/// The newest first
+		std::vector<Place> newestFirst;
+		/// The list of whole things first, then the list of all other things, each the newest first
+		std::vector<Place> inListOrder;
+	};
+	mutable std::optional<KeptOrders> _orders;
+	/// The kept lists of the places, made again after a belief came or went
+	[[nodiscard]] const KeptOrders& Orders() const;
+	/// The beliefs at the places
+	[[nodiscard]] std::vector<const Belief*> HeldAt(std::span<const Place> places) const;
 	/// The count of the things gone from the world when the store last looked for beliefs about gone things. A copy of a
 	/// store has not looked yet, as it can go to another world.
 	struct LookedAt
