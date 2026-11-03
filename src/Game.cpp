@@ -6833,15 +6833,15 @@ void Game::MakePlayersSymbols(std::optional<uint32_t> symbolInPlace)
 		}
 	}
 	// The square of each computer player takes the picture of its god. At the low detail levels the picture comes from
-	// the god's file of half size.
+	// the god's file of half size. A computer god after the seventh takes the last picture (deviation 222).
 	const auto landNumber = Locator::entitiesRegistry::value().Context().mapScriptGlobals.landNumber;
-	for (uint8_t number = 0; number < static_cast<uint8_t>(PlayerNames::_COUNT); ++number)
+	for (const auto player : ecs::game_players::Gods())
 	{
-		if (!Locator::playerSystem::has_value() ||
-		    !Locator::playerSystem::value().IsComputerPlayer(static_cast<PlayerNames>(number)))
+		if (!Locator::playerSystem::has_value() || !Locator::playerSystem::value().IsComputerPlayer(player))
 		{
 			continue;
 		}
+		const auto number = static_cast<uint32_t>(player);
 		const auto god = players_symbols::k_GodPictures.at(players_symbols::GodPictureOf(number, landNumber));
 		const auto name = fmt::format("{}{}.cps", god, halve ? players_symbols::k_LowDetailLetter : "");
 		players_symbols::PutPicture(players, read(textures / name), number);

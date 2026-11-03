@@ -58,8 +58,8 @@ void testbed_scenarios::AddGodsRingMapScenarios(std::vector<Scenario>& all)
 	                   "32, each by a different amount. The camera is still, a little above the top of the totem.",
 	    .expected = "A symbol for each of the seven gods: the god believed in most sits over the totem, and the others "
 	                "circle it at their levels, each in the land colour of its god. The symbols of the later gods show "
-	                "their squares of the wider sheet of the players' symbols. Until the user picks the pictures of the "
-	                "later computer gods, their squares are clear, so only their glows show.",
+	                "their squares of the wider sheet of the players' symbols. Each later computer god shows the picture "
+	                "of Nemesis, the last of the three pictures of the computer gods.",
 	    .environment = {.land = Land::GodsRingMap, .clockRuns = false, .dispenserGrid = false},
 	    .framing = {.shot = Shot::Placed,
 	                .eye = {k_Centre.x - 12.7f, 24.0f, k_Centre.y - 27.2f},

@@ -149,6 +149,23 @@ TEST(PlayersSymbols, EachComputerPlayerTakesTheGodBeforeItsNumber)
 	EXPECT_EQ(GodPictureOf(6, 2), 2u);
 }
 
+TEST(PlayersSymbols, EachComputerGodAfterTheSeventhTakesNemesis)
+{
+	// The gods after the neutral player have the numbers 8 to 32. Each takes the last picture on every land.
+	for (const auto player : openblack::player_slots::Gods(openblack::player_slots::k_PlayerNumbers))
+	{
+		const auto number = static_cast<uint32_t>(player);
+		if (number <= static_cast<uint32_t>(openblack::PlayerNames::NEUTRAL))
+		{
+			continue;
+		}
+		for (int32_t land = 1; land <= 5; ++land)
+		{
+			EXPECT_EQ(k_GodPictures.at(GodPictureOf(number, land)), "nemesis") << number << " " << land;
+		}
+	}
+}
+
 TEST(PlayersSymbols, OnTheThirdAndFifthLandsTheSecondPlayerTakesKhazarAndNemesis)
 {
 	EXPECT_EQ(k_GodPictures.at(GodPictureOf(1, 3)), "Kazarr");
