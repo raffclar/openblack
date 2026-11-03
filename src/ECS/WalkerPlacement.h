@@ -24,7 +24,8 @@ namespace openblack::ecs::walker_placement
 /// Puts a thing at a place on the land. A walker's walk takes up its new place: where the walk holds it, and the step,
 /// circle and way of going round that it had worked out from the old one are dropped. One that was on its way heads
 /// for the same goal from there, working its way out afresh on its next turn, as when a walk is set up; one that had
-/// arrived stays where it is put. Anything else only moves.
+/// arrived stays where it is put. An animal is at the new place at the start and at the end of its turn.
+/// Anything else only moves.
 void Place(Registry& registry, entt::entity entity, glm::vec3 position);
 /// The walker's walk ends where it stands: it no longer heads for its goal, and the step, circle and way of going
 /// round it had worked out are dropped. Anything not walking is left as it is.

@@ -2823,6 +2823,17 @@ void SetPosition() // 024 SET_POSITION
 			return;
 		}
 		ecs::thing_map_place::Put(registry, object, place, position.y);
+		// The place where the thing was before is now the new place. An animal under the script's control goes back to
+		// its script state.
+		if (registry.AllOf<ecs::components::Animal>(object))
+		{
+			ecs::walker_placement::Place(registry, object, position);
+			if (registry.AllOf<ecs::components::ScriptControlled>(object) && Locator::animalSystem::has_value())
+			{
+				Locator::animalSystem::value().SetScriptState(object, LivingStates::LivingInScript);
+			}
+			registry.SetDirty();
+		}
 	}
 }
 
