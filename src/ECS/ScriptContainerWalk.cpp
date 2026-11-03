@@ -11,6 +11,7 @@
 
 #include <algorithm>
 #include <iterator>
+#include <limits>
 
 using namespace openblack::ecs;
 
@@ -58,6 +59,43 @@ float script_containers::AbodeAdults(uint32_t adults)
 float script_containers::AbodeAdultRoom(uint32_t room)
 {
 	return static_cast<float>(room);
+}
+
+float script_containers::TownCapacity(int32_t adultRoom, int32_t childRoom)
+{
+	return static_cast<float>(adultRoom + childRoom);
+}
+
+float script_containers::AbodeCapacity(uint32_t adultRoom, uint32_t childRoom)
+{
+	return static_cast<float>(adultRoom + childRoom);
+}
+
+float script_containers::SlowestSpeed(std::span<const float> speeds)
+{
+	float slowest = std::numeric_limits<float>::max();
+	for (const float speed : speeds)
+	{
+		if (speed < slowest)
+		{
+			slowest = speed;
+		}
+	}
+	return slowest;
+}
+
+entt::entity script_containers::BuildingInTown(std::span<const TownBuilding> buildings, AbodeNumber number, float minBuilt,
+                                               bool excludingScripted)
+{
+	for (const auto& building : buildings)
+	{
+		const bool agrees = building.number == number && !(building.built < minBuilt) && !building.inScript;
+		if (agrees || !excludingScripted)
+		{
+			return building.entity;
+		}
+	}
+	return entt::null;
 }
 
 uint8_t script_containers::CarriedObjectFromScript(uint32_t value)

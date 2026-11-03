@@ -15,6 +15,7 @@
 
 #include <glm/gtx/vec_swizzle.hpp>
 
+#include "Common/GUtilsDistance.h"
 #include "ECS/Components/Animal.h"
 #include "ECS/Components/Flock.h"
 #include "ECS/Components/ScriptControl.h"
@@ -258,6 +259,20 @@ MapCoords script_flocks::PositionOf(const Registry& registry, entt::entity livin
 {
 	const auto* transform = registry.TryGet<const Transform>(living);
 	return transform != nullptr ? map_coords::FromMetres(glm::xz(transform->position)) : MapCoords {};
+}
+
+bool script_flocks::AllMembersWithinFlockDistance(const Registry& registry, entt::entity flock)
+{
+	if (!IsFlock(registry, flock))
+	{
+		return true;
+	}
+	const auto& data = registry.Get<const Flock>(flock);
+	const auto centre = Position(registry, flock);
+	const auto limit = static_cast<float>(data.flockDistance);
+	return std::ranges::none_of(data.members, [&](entt::entity member) {
+		return limit < gutils::GetDistanceInMetres(centre, PositionOf(registry, member));
+	});
 }
 
 MapCoords script_flocks::Position(const Registry& registry, entt::entity flock)
