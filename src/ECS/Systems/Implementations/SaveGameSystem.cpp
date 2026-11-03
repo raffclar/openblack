@@ -96,6 +96,8 @@
 #include "ECS/Systems/ProfileFolderSystemInterface.h"
 #include "ECS/Systems/TimeSystemInterface.h"
 #include "ECS/ThingMapPlace.h"
+#include "ECS/VanillaWorldImport.h"
+#include "ECS/WorldObjects.h"
 #include "ECS/WorldSave.h"
 #include "FileSystem/FileSystemInterface.h"
 #include "Gui/SavingBoxRules.h"
@@ -1639,6 +1641,14 @@ bool SaveGameSystem::LoadVanilla(uint32_t slot, const std::filesystem::path& slo
 		                   entt::to_integral(entity));
 	}
 	SPDLOG_LOGGER_INFO(Log(), "Loaded {} creatures from the game's file of slot {}", matched.size(), slot);
+	// The game clears the land before it reads the file. So a creature of the land goes when no creature of the file
+	// takes it.
+	for (const auto creature : ecs::vanilla_world_import::LandThingsToRemove(CreaturesInOrder(), used))
+	{
+		SPDLOG_LOGGER_INFO(Log(), "The creature {} of the land goes, because no creature of the file takes it",
+		                   entt::to_integral(creature));
+		ecs::world_objects::Remove(creature);
+	}
 	VanillaMade creatures;
 	for (const auto& [creature, entity] : matched)
 	{

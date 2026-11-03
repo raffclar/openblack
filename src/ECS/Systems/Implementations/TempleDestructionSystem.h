@@ -38,6 +38,7 @@ public:
 	~TempleDestructionSystem() override;
 
 	void Start(entt::entity temple) override;
+	void Remove(entt::entity temple) override;
 	void StartTurn() override;
 	void ProcessPlayerTurn(PlayerNames player) override;
 	void ProcessTurn() override;

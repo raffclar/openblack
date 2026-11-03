@@ -26,6 +26,9 @@ public:
 	/// The temple's heart has lost the last of its life: its destruction starts, or starts again from
 	/// nothing
 	virtual void Start(entt::entity temple) = 0;
+	/// The temple goes at once, with its way in, its heart, its lanterns and its worship sites. A load removes a temple
+	/// of the land in this way when the saved world does not have the temple. Nothing plays and the game does not end.
+	virtual void Remove(entt::entity temple) = 0;
 	/// At the start of each game turn: the sound loops of temples that went some other way stop
 	virtual void StartTurn() = 0;
 	/// At the start of a player's turn: the player's temple, if it is being destroyed, moves on a turn, and then its

@@ -1690,6 +1690,28 @@ TEST(VanillaScriptImport, ATempleOfTheFileTakesTheValuesOfItsHeart)
 	EXPECT_EQ(temple.beamTurn, 80U);
 }
 
+// A load removes each thing of the land that no thing of the file takes, in the order of the land
+TEST(VanillaWorldImport, ALandThingGoesWhenNoThingOfTheFileTakesIt)
+{
+	const std::array land {entt::entity {4}, entt::entity {7}, entt::entity {9}};
+	const std::array taken {entt::entity {7}, entt::entity {12}};
+	EXPECT_EQ(world_import::LandThingsToRemove(land, taken), (std::vector<entt::entity> {entt::entity {4}, entt::entity {9}}));
+	EXPECT_EQ(world_import::LandThingsToRemove(land, {}).size(), land.size());
+	EXPECT_TRUE(world_import::LandThingsToRemove({}, taken).empty());
+}
+
+// A load removes each temple of the land whose player has no temple in the file. The temples of the other players stay.
+TEST(VanillaScriptImport, ALandTempleGoesWhenItsPlayerHasNoTempleInTheFile)
+{
+	const std::array land {PlayerNames::PLAYER_ONE, PlayerNames::PLAYER_TWO, PlayerNames::PLAYER_THREE};
+	const std::array file {script_import::ImportedTemple {.player = PlayerNames::PLAYER_ONE},
+	                       script_import::ImportedTemple {.player = PlayerNames::PLAYER_FOUR}};
+	EXPECT_EQ(script_import::LandTemplesToRemove(land, file),
+	          (std::vector<PlayerNames> {PlayerNames::PLAYER_TWO, PlayerNames::PLAYER_THREE}));
+	EXPECT_EQ(script_import::LandTemplesToRemove(land, {}).size(), land.size());
+	EXPECT_TRUE(script_import::LandTemplesToRemove({}, file).empty());
+}
+
 /// Each saved game of Land 1 has the whole temple of the first player
 TEST(VanillaScriptImport, SavedGamesOfLandOneHaveTheWholeTempleOfThePlayer)
 {
